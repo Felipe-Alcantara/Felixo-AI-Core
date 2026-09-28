@@ -125,6 +125,26 @@ test('contas diferentes no mesmo domínio ficam distinguíveis na tela', () => {
   assert.notEqual(uma.identityKey, outra.identityKey)
 })
 
+test('Claude guarda o nome da fonte de chave de API como fato de cobrança, nunca a chave', () => {
+  const withKey = parseAgentAuth(
+    'claude',
+    JSON.stringify({ loggedIn: true, authMethod: 'claude.ai', apiKeySource: 'ANTHROPIC_API_KEY' }),
+  )
+  const without = parseAgentAuth(
+    'claude',
+    JSON.stringify({ loggedIn: true, authMethod: 'claude.ai', apiKeySource: 'none' }),
+  )
+  const leaked = parseAgentAuth(
+    'claude',
+    JSON.stringify({ loggedIn: true, apiKeySource: 'sk-ant-api03-segredo-que-nao-sai-0123' }),
+  )
+
+  assert.equal(withKey.apiKeySource, 'ANTHROPIC_API_KEY')
+  assert.equal(without.apiKeySource, null)
+  assert.doesNotMatch(JSON.stringify(leaked), /segredo-que-nao-sai/)
+  assert.equal(parseAgentAuth('codex', 'Logged in using ChatGPT').apiKeySource, null)
+})
+
 test('agent auth report never turns a redacted Openia key into an account identity', () => {
   const result = parseAgentAuth(
     'openia',

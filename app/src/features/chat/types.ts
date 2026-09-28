@@ -3,6 +3,7 @@
 // continuarem valendo.
 import type {
   Model,
+  ModelAvailabilityStatus,
   ModelId,
   OrchestrationCliType,
 } from '../shared/types/models'
@@ -131,8 +132,97 @@ export type OrchestrationRun = {
   updatedAt: string
 }
 
+/**
+ * Classe de falha decidida no processo principal pela taxonomia única
+ * (`electron/services/accounts/failure-taxonomy.cjs`).
+ */
+export type CliFailureClass =
+  | 'limit'
+  | 'billing'
+  | 'auth'
+  | 'network'
+  | 'provider'
+  | 'timeout'
+  | 'cancelled'
+  | 'unknown'
+
+/**
+ * O que o processo principal anexa a um evento de erro: a classe e o status
+ * de disponibilidade que o orquestrador aplicou. O chat não reclassifica o
+ * texto.
+ */
+export type CliErrorFailure = {
+  failureClass: CliFailureClass
+  availabilityStatus: Extract<ModelAvailabilityStatus, 'limit_reached' | 'no_login'> | null
+}
+
+/** Quando o orquestrador pediu a troca: no spawn ou no meio da tarefa. */
+export type ProviderSwitchDecisionKind = 'initial' | 'mid-task'
+
+/** Como uma pergunta de troca de provedor terminou (decidido no main). */
+export type ProviderSwitchOutcome =
+  | 'accepted'
+  | 'refused'
+  | 'expired'
+  | 'cancelled'
+  | 'run_finished'
+  | 'superseded'
+
+/**
+ * Pergunta do orquestrador antes de rodar um sub-agente em outro provedor
+ * (outra conta de cobrança). O processo principal decide e executa; o chat só
+ * mostra e devolve a resposta da pessoa.
+ */
+export type ProviderSwitchRequest = {
+  decisionId: string
+  kind: ProviderSwitchDecisionKind
+  runId: string
+  agentId: string
+  parentThreadId: string
+  sessionId: string
+  fromCliType: OrchestrationCliType
+  toCliType: OrchestrationCliType
+  toModelId: string | null
+  toModelName: string | null
+  rule: string | null
+  reason: string | null
+  requestedAt: string
+  expiresAt: string
+}
+
+export type ProviderSwitchRequestStreamEvent = ProviderSwitchRequest & {
+  type: 'provider_switch_request'
+  threadId?: string
+}
+
+export type ProviderSwitchResolvedStreamEvent = StreamEventBase & {
+  type: 'provider_switch_resolved'
+  decisionId: string
+  agentId: string
+  outcome: ProviderSwitchOutcome
+  message: string | null
+}
+
+export type ProviderSwitchErrorCode =
+  | 'DECISION_NOT_PENDING'
+  | 'RUN_FINISHED'
+  | 'RUN_FAILED'
+  | 'INVALID_PARAMS'
+
+export type ProviderSwitchRespondResult = {
+  ok: boolean
+  code?: ProviderSwitchErrorCode
+  message?: string
+  decisionId?: string
+  outcome?: ProviderSwitchOutcome
+  nextDecisionId?: string
+  spawned?: boolean
+}
+
 export type StreamEvent =
   | (StreamEventBase & { type: 'text'; text: string; streamItemId?: string })
+  | ProviderSwitchRequestStreamEvent
+  | ProviderSwitchResolvedStreamEvent
   | (StreamEventBase & { type: 'tool_use'; tool: string; input: string })
   | (StreamEventBase & { type: 'tool_result'; output: string })
   | OrchestrationStreamEvent
@@ -147,6 +237,7 @@ export type StreamEvent =
   | (StreamEventBase & {
       type: 'error'
       message: string
+      failure?: CliErrorFailure
     })
 
 // O tipo do log do backend mora em shared/; re-exportado para os imports

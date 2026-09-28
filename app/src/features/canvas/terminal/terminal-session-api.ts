@@ -33,11 +33,17 @@ export type SessionOptions = {
   args?: string[]
   cwd?: string
   initialText?: string
+  /** O `initialText` é uma passagem: o relançamento automático nunca o reenvia. */
+  initialTextIsHandoff?: boolean
   sourceLabel?: string
   fallbackCommand?: string
   keepShellOpen?: boolean
   accountId?: string
   providerId?: string
+  /** Fixa (padrão) ou da cadeia de contas. */
+  accountMode?: 'pinned' | 'chain'
+  /** Ticket de uso único da cadeia; só no primeiro spawn do bloco. */
+  chainTicket?: string
   startedAt?: number
   onOpenWebpage?: (url: string) => void
   agentSession?: AgentSessionReference

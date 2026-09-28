@@ -6,6 +6,12 @@ export type AgentSessionReference = {
   sessionId: string
   cwd: string
   capturedAt: number
+  /**
+   * Conta própria em que a conversa nasceu, carimbada pelo processo
+   * principal. Ausente = login do sistema (e toda referência gravada antes
+   * deste campo existir).
+   */
+  accountId?: string
 }
 
 const SESSION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,255}$/
@@ -23,14 +29,29 @@ export function isAgentSessionReference(value: unknown): value is AgentSessionRe
     typeof reference.cwd === 'string' &&
     reference.cwd.trim().length > 0 &&
     typeof reference.capturedAt === 'number' &&
-    Number.isFinite(reference.capturedAt)
+    Number.isFinite(reference.capturedAt) &&
+    (reference.accountId === undefined ||
+      (typeof reference.accountId === 'string' && reference.accountId.trim().length > 0))
   )
 }
 
+/** Conta do bloco comparada com a da conversa; vazio e ausente são o login do sistema. */
+function isSameAccount(reference: AgentSessionReference, accountId: string | undefined): boolean {
+  return (reference.accountId?.trim() ?? '') === (accountId?.trim() ?? '')
+}
+
+/**
+ * Retomar só vale no mesmo provedor, diretório e conta. A conta é obrigatória
+ * no parâmetro (pode ser `undefined`, o login do sistema) para nenhum
+ * chamador esquecer de passá-la: retomar em outra conta abriria o histórico
+ * de uma conta na cobrança de outra. Referência antiga, sem conta, só vale em
+ * bloco sem conta.
+ */
 export function canResumeAgentSession(
   command: string | undefined,
   cwd: string | undefined,
   reference: AgentSessionReference | undefined,
+  accountId: string | undefined,
 ): boolean {
   // Gemini CLI 0.57's help only guarantees `latest` or a current numeric
   // index. The UUID remains in the persisted reference, but using it here
@@ -46,7 +67,8 @@ export function canResumeAgentSession(
       command === reference.provider &&
       cwd &&
       cwd === reference.cwd &&
-      isAgentSessionReference(reference),
+      isAgentSessionReference(reference) &&
+      isSameAccount(reference, accountId),
   )
 }
 
@@ -64,8 +86,9 @@ export function buildAgentResumeArgs(
   args: readonly string[] = [],
   cwd: string | undefined,
   reference: AgentSessionReference | undefined,
+  accountId: string | undefined,
 ): string[] | undefined {
-  if (!reference || !canResumeAgentSession(command, cwd, reference)) return undefined
+  if (!reference || !canResumeAgentSession(command, cwd, reference, accountId)) return undefined
 
   switch (command) {
     case 'codex':
@@ -80,12 +103,15 @@ export function buildAgentResumeArgs(
 export function buildResumeFallbackNotice(
   reference: AgentSessionReference,
   cwd: string | undefined,
+  accountId: string | undefined,
 ): string {
   return [
     'A conversa anterior não pôde ser retomada automaticamente.',
     `Provider associado: ${reference.provider}.`,
     cwd && cwd !== reference.cwd
       ? 'O diretório atual não coincide com o diretório da conversa; nenhum ID foi usado para evitar abrir a conversa errada.'
+      : !isSameAccount(reference, accountId)
+        ? 'A conversa foi aberta em outra conta; nenhum ID foi usado para não retomar a conversa de uma conta na cobrança de outra.'
       : reference.provider === 'gemini'
         ? 'A versão instalada do Gemini só documenta --resume com "latest" ou índice; o índice muda quando a lista de sessões muda, então nenhum índice foi adivinhado.'
         : 'A CLI não confirmou que esse ID está disponível nesta conta.',

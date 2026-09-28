@@ -1,3 +1,4 @@
+import type { AccountFailureClass } from '../shared/types/account-chain'
 import type { AgentSessionReference } from './services/agent-session'
 import type { PromptInsertionMetadata } from '../shared/types/prompt-insertion'
 
@@ -95,6 +96,16 @@ export type DiagnosisRequestStatus =
   | 'no-file'
   | 'resolve-failed'
 
+/** Origem de um bloco criado por uma troca confirmada da cadeia de contas. */
+export type TerminalChainOrigin = {
+  /** Id da proposta/troca no registro do main (também o ticket). */
+  switchEventId: string
+  fromNodeId: string
+  reasonClass: AccountFailureClass
+  /** ISO da confirmação. */
+  decidedAt: string
+}
+
 export type TerminalNodeData = {
   /** Optional binary to launch; defaults to the shell on the backend. */
   command?: string
@@ -113,6 +124,11 @@ export type TerminalNodeData = {
   initialText?: string
   /** One-shot in-memory prompt used by responsibility handoff; never persisted. */
   handoffText?: string
+  /**
+   * Render-time flag (never persisted): the `initialText` handed to the
+   * session carries a handoff, so an automatic relaunch must not resend it.
+   */
+  initialTextIsHandoff?: boolean
   /** Render-time flag: waits for canvas connections/path resolution before spawning. */
   initialTextReady?: boolean
   /** Interpreter to try when `command` isn't installed (Windows `py`/`python`). */
@@ -132,6 +148,21 @@ export type TerminalNodeData = {
   accountId?: string
   /** Provedor da CLI que criou este terminal; usado para validar a conta no PTY. */
   providerId?: string
+  /**
+   * Modo da conta do bloco. Ausente vale `pinned` (decisão 5): só é `chain` o
+   * bloco aberto com "Automática (cadeia)" ou criado como continuação
+   * confirmada. Persistido; a pessoa troca pelo painel de detalhes.
+   */
+  accountMode?: 'pinned' | 'chain'
+  /**
+   * Ticket de uso único da cadeia para o primeiro spawn deste bloco.
+   * Transitório: nunca é persistido (reload e restart são spawn comum).
+   */
+  chainTicket?: string
+  /** De onde veio esta continuação da cadeia; persistido, sem segredo. */
+  chainOrigin?: TerminalChainOrigin
+  /** No bloco antigo: o bloco que continuou o trabalho ("continuado em…"). */
+  chainSuccessorNodeId?: string
   /** Start timestamp of the current PTY instance, persisted for reopen. */
   sessionStartedAt?: number
   /** Provider-owned conversation identity used only after exact compatibility checks. */

@@ -23,7 +23,7 @@ import {
   formatOrchestrationRunStatus,
   formatOrchestrationStatusLabel,
   inferAvailabilityCliType,
-  inferAvailabilityStatus,
+  resolveErrorAvailabilityStatus,
 } from '../services/stream-status'
 import { createSystemDesignPromptBlock } from '../services/system-design-prompt'
 import { useSystemDesignSettings } from '../../shared/system-design/useSystemDesignSettings'
@@ -82,6 +82,8 @@ import { useTerminalOutput } from '../hooks/useTerminalOutput'
 import { useAutomations } from '../hooks/useAutomations'
 import { useNotes } from '../hooks/useNotes'
 import { useProjects } from '../hooks/useProjects'
+import { useProviderSwitchRequests } from '../hooks/useProviderSwitchRequests'
+import { formatProviderSwitchWaitingStatus } from '../services/provider-switch'
 import { AutomationsModal } from './AutomationsModal'
 import { AgentUsageLimitsModal } from './AgentUsageLimitsModal'
 import { ChatExportModal } from './ChatExportModal'
@@ -92,6 +94,7 @@ import { ModelManagerModal } from './ModelManagerModal'
 import { NotesModal } from './NotesModal'
 import { OrchestratorSettingsModal } from './OrchestratorSettingsModal'
 import { ProjectsModal } from './ProjectsModal'
+import { ProviderSwitchRequestList } from './ProviderSwitchRequest'
 import { AppSidebar } from './AppSidebar'
 import { ChatThread } from './ChatThread'
 import { Composer } from './Composer'
@@ -148,6 +151,11 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [activeOrchestrationRunId, setActiveOrchestrationRunId] = useState<string | null>(null)
   const [orchestrationStatusText, setOrchestrationStatusText] = useState<string | null>(null)
+  const providerSwitches = useProviderSwitchRequests()
+  // Enquanto uma troca de provedor espera a pessoa, a linha de status diz isso
+  // (a sondagem do run só enxergaria "aguardando sub-agentes").
+  const statusLineText =
+    formatProviderSwitchWaitingStatus(providerSwitches.requests) ?? orchestrationStatusText
   const [modelAvailability, setModelAvailability] = useState<
     Record<string, ModelAvailabilityStatus>
   >({})
@@ -967,6 +975,11 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
   }
 
   function handleStreamEvent(event: StreamEvent) {
+    // Pedidos e resoluções de troca de provedor são do useProviderSwitchRequests.
+    if (event.type === 'provider_switch_request' || event.type === 'provider_switch_resolved') {
+      return
+    }
+
     if (event.type === 'spawn_agent') {
       setActiveOrchestrationRunId(event.runId ?? null)
       setOrchestrationStatusText(
@@ -1035,7 +1048,7 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
   function updateModelAvailabilityFromError(
     event: Extract<StreamEvent, { type: 'error' }>,
   ) {
-    const status = inferAvailabilityStatus(event.message)
+    const status = resolveErrorAvailabilityStatus(event)
 
     if (!status) {
       return
@@ -1340,10 +1353,16 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
           {hasMessages ? (
             <>
               <ChatThread models={models} messages={messages} />
-              {orchestrationStatusText && (
+              <ProviderSwitchRequestList
+                requests={providerSwitches.requests}
+                getCardState={providerSwitches.getCardState}
+                onRespond={providerSwitches.respond}
+                onDismiss={providerSwitches.dismiss}
+              />
+              {statusLineText && (
                 <div className="flex shrink-0 items-center gap-2 border-t border-white/[0.07] bg-(--color-status-bg) px-5 py-2 text-[12px] text-zinc-400">
                   <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-(--color-warning)" />
-                  <span className="min-w-0 truncate">{orchestrationStatusText}</span>
+                  <span className="min-w-0 truncate">{statusLineText}</span>
                 </div>
               )}
               <Composer
@@ -1375,6 +1394,13 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
                   <span className="felixo-chat-hero-eyebrow">Felixo AI Core</span>
                   <h1>O que vamos construir hoje?</h1>
                 </div>
+
+                <ProviderSwitchRequestList
+                  requests={providerSwitches.requests}
+                  getCardState={providerSwitches.getCardState}
+                  onRespond={providerSwitches.respond}
+                  onDismiss={providerSwitches.dismiss}
+                />
 
                 <Composer
                   input={input}

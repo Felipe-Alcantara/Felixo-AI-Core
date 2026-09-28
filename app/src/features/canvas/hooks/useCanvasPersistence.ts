@@ -194,7 +194,11 @@ export function toPersistedNode(node: CanvasFlowNode): PersistedCanvasNode {
 const TRANSIENT_DATA_KEYS = new Set<string>([
   'initialTextReady',
   'handoffText',
+  'initialTextIsHandoff',
   'resumeAgentSession',
+  // Ticket da cadeia: vale uma vez, no primeiro spawn. Persistido, um reload
+  // tentaria reusá-lo; sem ele, o bloco reabre como spawn comum na mesma conta.
+  'chainTicket',
 ])
 
 function stripFunctions(data: Record<string, unknown>): CanvasNodeData {

@@ -3,7 +3,9 @@
 const os = require('node:os')
 const platform = require('../core/platform/index.cjs')
 const { createCliEnv } = require('./cli-process-manager.cjs')
+const { buildAccountProcessEnv } = require('./cli-account-profiles.cjs')
 const { redactSecrets } = require('./official-cli-account-status.cjs')
+const { parseClaudeReset } = require('./accounts/reset-time.cjs')
 const {
   createPtyLaunchSpec,
   resolvePtyCommand,
@@ -59,7 +61,7 @@ function createClaudeUsageQuery({
     resultSettleMs = DEFAULT_RESULT_SETTLE_MS,
   } = {}) {
     return new Promise((resolve) => {
-      const queryEnv = createCliEnv({ ...process.env, ...accountEnv })
+      const queryEnv = createCliEnv(buildAccountProcessEnv(process.env, { providerId: 'claude', profileEnv: accountEnv }))
       // A quota check must not create a resumable conversation just to read a
       // local status view. This flag is supported by Claude Code and also
       // makes the query safe to repeat from the refresh button.
@@ -683,175 +685,6 @@ function findPreviousWindowReset(text, match) {
   }
 
   return null
-}
-
-function parseClaudeReset(value, nowMs, timeZone = null) {
-  const text = String(value).replace(/\s+/g, ' ').trim()
-  const dateMatch = text.match(
-    /^([A-Za-z]{3,9})\s+(\d{1,2})(?:,\s*(\d{4}))?(?:,\s*)?(\d{1,2})(?::(\d{2}))?\s*([ap]m)$/i,
-  )
-  const clockMatch = text.match(
-    /^(\d{1,2})(?::(\d{2}))?\s*([ap]m)$/i,
-  )
-
-  if (!dateMatch && !clockMatch) {
-    return null
-  }
-
-  const current = timeZone
-    ? getDatePartsInTimeZone(Number(nowMs), timeZone)
-    : getLocalDateParts(Number(nowMs))
-  if (!current) {
-    return null
-  }
-
-  const year = dateMatch ? Number(dateMatch[3] ?? current.year) : current.year
-  const month = dateMatch ? monthNumber(dateMatch[1]) : current.month
-  const day = dateMatch ? Number(dateMatch[2]) : current.day
-  const hour = to24Hour(
-    Number(dateMatch ? dateMatch[4] : clockMatch[1]),
-    dateMatch ? dateMatch[6] : clockMatch[3],
-  )
-  const minute = Number(dateMatch ? dateMatch[5] ?? 0 : clockMatch[2] ?? 0)
-
-  if (month === null || !Number.isFinite(day) || !Number.isFinite(hour)) {
-    return null
-  }
-
-  let target = { year, month, day, hour, minute }
-  if (
-    !dateMatch &&
-    (hour < current.hour || (hour === current.hour && minute <= current.minute))
-  ) {
-    target = shiftCalendarDay(target, 1)
-  }
-
-  const timestamp = timeZone
-    ? zonedDateToTimestamp(target, timeZone)
-    : new Date(
-        target.year,
-        target.month,
-        target.day,
-        target.hour,
-        target.minute,
-        0,
-        0,
-      ).getTime()
-
-  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null
-}
-
-function getLocalDateParts(timestamp) {
-  const date = new Date(timestamp)
-  return Number.isNaN(date.getTime())
-    ? null
-    : {
-        year: date.getFullYear(),
-        month: date.getMonth(),
-        day: date.getDate(),
-        hour: date.getHours(),
-        minute: date.getMinutes(),
-      }
-}
-
-function getDatePartsInTimeZone(timestamp, timeZone) {
-  try {
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone,
-      calendar: 'gregory',
-      year: 'numeric',
-      month: 'numeric',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: 'numeric',
-      hourCycle: 'h23',
-    }).formatToParts(new Date(timestamp))
-    const values = Object.fromEntries(
-      parts
-        .filter(({ type }) => type !== 'literal')
-        .map(({ type, value }) => [type, Number(value)]),
-    )
-
-    return {
-      year: values.year,
-      month: values.month - 1,
-      day: values.day,
-      hour: values.hour,
-      minute: values.minute,
-    }
-  } catch {
-    return null
-  }
-}
-
-function shiftCalendarDay(value, days) {
-  const date = new Date(Date.UTC(value.year, value.month, value.day + days))
-  return {
-    ...value,
-    year: date.getUTCFullYear(),
-    month: date.getUTCMonth(),
-    day: date.getUTCDate(),
-  }
-}
-
-/** Converte componentes de uma data local do fuso informado para UTC. */
-function zonedDateToTimestamp(value, timeZone) {
-  let guess = Date.UTC(
-    value.year,
-    value.month,
-    value.day,
-    value.hour,
-    value.minute,
-  )
-
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    const actual = getDatePartsInTimeZone(guess, timeZone)
-    if (!actual) {
-      return NaN
-    }
-
-    const actualAsUtc = Date.UTC(
-      actual.year,
-      actual.month,
-      actual.day,
-      actual.hour,
-      actual.minute,
-    )
-    const desiredAsUtc = Date.UTC(
-      value.year,
-      value.month,
-      value.day,
-      value.hour,
-      value.minute,
-    )
-    const difference = desiredAsUtc - actualAsUtc
-    guess += difference
-
-    if (difference === 0) {
-      break
-    }
-  }
-
-  return guess
-}
-
-function monthNumber(value) {
-  const month = String(value).slice(0, 3).toLowerCase()
-  const index = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'].indexOf(month)
-  return index >= 0 ? index : null
-}
-
-function to24Hour(value, meridiem) {
-  if (!Number.isFinite(value) || value < 1 || value > 12) {
-    return NaN
-  }
-
-  const normalized = String(meridiem).toLowerCase()
-  if (normalized === 'am') {
-    return value === 12 ? 0 : value
-  }
-
-  return value === 12 ? 12 : value + 12
 }
 
 function hasClaudePrompt(text) {

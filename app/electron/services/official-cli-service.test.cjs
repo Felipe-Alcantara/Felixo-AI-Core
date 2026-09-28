@@ -7,6 +7,7 @@ const {
   listOfficialCliAccountSessions,
   openOfficialCliLogin,
   parseCodexLoginStatus,
+  runBufferedCommand,
   switchOfficialCliAccount,
 } = require('./official-cli-service.cjs')
 
@@ -307,6 +308,21 @@ describe('listOfficialCliAccountSessions', () => {
     assert.equal(result.sessions[1].elementId, null)
   })
 
+  it('terminal com conta própria não é afetado pela troca do login do sistema', () => {
+    const result = listOfficialCliAccountSessions('codex', {
+      listSessions: () => [
+        { sessionId: 'canvas:sistema', command: 'codex', cwd: '/p', startedAt: 1, accountId: null },
+        { sessionId: 'canvas:perfil', command: 'codex', cwd: '/p', startedAt: 2, accountId: 'conta-trabalho' },
+      ],
+      platformName: 'linux',
+    })
+
+    assert.deepEqual(
+      result.sessions.map((session) => session.sessionId),
+      ['canvas:sistema'],
+    )
+  })
+
   it('não confunde o shell padrão com a CLI', () => {
     const result = listOfficialCliAccountSessions('codex', {
       listSessions: () => [
@@ -344,5 +360,43 @@ describe('listOfficialCliAccountSessions', () => {
 
     assert.equal(result.ok, false)
     assert.deepEqual(result.sessions, [])
+  })
+})
+
+describe('runBufferedCommand', () => {
+  it('marca timedOut quando o prazo vence, sem confundir com erro do executável', async () => {
+    const result = await runBufferedCommand({
+      command: process.execPath,
+      args: ['-e', 'setTimeout(() => {}, 10_000)'],
+      timeoutMs: 100,
+    })
+
+    assert.equal(result.ok, false)
+    assert.equal(result.timedOut, true)
+    assert.equal(result.errorCode, undefined)
+  })
+
+  it('devolve o errorCode do evento error quando o executável não existe', async () => {
+    const result = await runBufferedCommand({
+      command: 'felixo-cli-que-nao-existe-7c1d',
+      timeoutMs: 5_000,
+    })
+
+    assert.equal(result.ok, false)
+    assert.equal(result.errorCode, 'ENOENT')
+    assert.equal(result.timedOut, undefined)
+  })
+
+  it('saída com código diferente de zero continua trazendo o stdout', async () => {
+    const result = await runBufferedCommand({
+      command: process.execPath,
+      args: ['-e', 'process.stdout.write(JSON.stringify({ loggedIn: false })); process.exit(1)'],
+      timeoutMs: 5_000,
+    })
+
+    assert.equal(result.ok, false)
+    assert.deepEqual(JSON.parse(result.stdout), { loggedIn: false })
+    assert.equal(result.timedOut, undefined)
+    assert.equal(result.errorCode, undefined)
   })
 })

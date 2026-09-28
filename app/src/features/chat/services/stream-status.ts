@@ -1,8 +1,9 @@
 // Interpretação de status de streaming/orquestração para exibição no chat:
-// rótulos de progresso de runs e inferência de disponibilidade de modelo a
-// partir de mensagens de erro das CLIs. Funções puras.
+// rótulos de progresso de runs e a disponibilidade de modelo que o processo
+// principal decidiu para um erro de CLI. Funções puras.
 import { normalizePromptText } from './cli-prompt'
 import type {
+  CliErrorFailure,
   Model,
   ModelAvailabilityStatus,
   OrchestrationRun,
@@ -45,37 +46,16 @@ export function formatOrchestrationRunStatus(run: OrchestrationRun) {
   return formatOrchestrationStatusLabel(run.status)
 }
 
-export function inferAvailabilityStatus(
-  message: string,
-): ModelAvailabilityStatus | null {
-  const normalizedMessage = normalizePromptText(message)
-
-  if (
-    normalizedMessage.includes('out of extra usage') ||
-    normalizedMessage.includes('usage limit') ||
-    normalizedMessage.includes('rate limit') ||
-    normalizedMessage.includes('too many requests') ||
-    normalizedMessage.includes('quota exceeded') ||
-    normalizedMessage.includes('exceeded your current quota') ||
-    normalizedMessage.includes('resource exhausted') ||
-    /\b429\b/.test(normalizedMessage)
-  ) {
-    return 'limit_reached'
-  }
-
-  if (
-    normalizedMessage.includes('not logged in') ||
-    normalizedMessage.includes('please login') ||
-    normalizedMessage.includes('please log in') ||
-    normalizedMessage.includes('authentication failed') ||
-    normalizedMessage.includes('unauthorized') ||
-    normalizedMessage.includes('invalid api key') ||
-    /\b401\b/.test(normalizedMessage)
-  ) {
-    return 'no_login'
-  }
-
-  return null
+/**
+ * Status de disponibilidade de um evento de erro, como o processo principal o
+ * decidiu (`failure`, anexado em `sendCliEvent`). O chat não classifica o
+ * texto: um erro sem `failure` não muda a disponibilidade, em vez de ser
+ * adivinhado por palavra solta ("line 429" não é limite).
+ */
+export function resolveErrorAvailabilityStatus(event: {
+  failure?: CliErrorFailure
+}): ModelAvailabilityStatus | null {
+  return event.failure?.availabilityStatus ?? null
 }
 
 export function inferAvailabilityCliType(

@@ -8,6 +8,8 @@
  * Os cenarios do tutorial do canvas ficam em `canvas-smoke-onboarding.cjs`:
  * a sessao A (esta) com a abertura automatica suprimida, e uma sessao B com
  * perfil novo e `FELIXO_DEVTOOLS_ONBOARDING=1` para o primeiro uso de verdade.
+ * A cadeia de contas fica em `canvas-smoke-contas.cjs` (sessão C, perfil novo
+ * com a CLI roteirizada no processo principal).
  */
 
 const path = require('node:path')
@@ -21,6 +23,7 @@ const {
   measureStableGeometry,
 } = require('./canvas-smoke-visual.cjs')
 const { corromperEstadoNoPerfil, criarCenariosDoTutorial, registrarPerguntaNoPerfil } = require('./canvas-smoke-onboarding.cjs')
+const { criarSessaoDaCadeia } = require('./canvas-smoke-contas.cjs')
 
 const APP_DIR = path.resolve(__dirname, '..')
 const FELIXO_CLI = path.join(APP_DIR, 'electron', 'cli', 'felixo.cjs')
@@ -43,6 +46,13 @@ const ONBOARDING_TIMEOUT_MS = Math.max(INTERACTION_TIMEOUT_MS, 15_000)
 const ONBOARDING_SESSION_ENV = {
   FELIXO_DEVTOOLS_ONBOARDING: '1',
   FELIXO_DEVTOOLS_HARDWARE_NOTICES: '1',
+}
+// Variáveis da sessão C: o renderer usa o store real de terminais (sem o PTY
+// fake do renderer) e o main troca o node-pty pela CLI roteirizada, para a
+// cadeia de contas ouvir as falhas no onData de verdade. Nenhuma CLI real roda.
+const CONTAS_SESSION_ENV = {
+  FELIXO_DEVTOOLS_MOCK_PTY: '0',
+  FELIXO_DEVTOOLS_FAKE_CLI_PTY: '1',
 }
 const DEVTOOLS_LAUNCH_TIMEOUT_MS = 60_000
 const THEME_STORAGE_KEY = 'felixo-ai-core.theme'
@@ -1109,6 +1119,15 @@ async function main() {
     () => comPaginaDaSessao('canvas-smoke-failure-onboarding', (page) => cenariosDoTutorial(page).sessaoB()),
     { env: ONBOARDING_SESSION_ENV },
   )
+  // Sessão C: perfil novo com a CLI roteirizada no main; a cadeia de contas de
+  // ponta a ponta (§13.6 do plano da cadeia).
+  const inicioDaCadeia = Date.now()
+  await withDevtoolsSession(
+    () => comPaginaDaSessao('canvas-smoke-failure-contas', (page) =>
+      criarSessaoDaCadeia({ page, checarMontagem, timeoutMs: ONBOARDING_TIMEOUT_MS }).executar()),
+    { env: CONTAS_SESSION_ENV },
+  )
+  console.log(`[canvas-smoke] cadeia de contas: sessão C (C1–C13) em ${Date.now() - inicioDaCadeia} ms`)
   const report = writeVisualReport()
   console.log('[canvas-visual] relatório e capturas: ' + report)
   console.log('[canvas-smoke] fixture, interações, recuperação, resize, matriz visual de viewport/tema/DPR, elementos abertos (tools/menu/modal) e dimensões de acessibilidade (fonte/reduced-motion/locale): ok')

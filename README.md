@@ -53,6 +53,7 @@ Base funcional entregue:
 - Canvas visual para organizar agentes, arquivos compartilhados, notas, grupos e páginas web (mini-navegador embutido)
 - Launcher **Agente** com reutilização das últimas configurações e arquivo de planejamento opcional
 - **Conta por terminal**: cada conta tem login próprio, então duas contas da mesma CLI convivem sem logout e o terminal escolhe em qual nasce
+- **Cadeia de contas**, desligada por padrão: quando uma conta bate o limite, propõe continuar em outra, sempre com a sua confirmação, num bloco novo com o contexto e sem tocar no terminal antigo
 - Entrega de contexto inicial por artefatos somente leitura, com trilha persistida `written → path-typed → read` em `logs/qa` para diagnosticar reinícios e trocas de terminal/agente
 - Painel **Limites e uso** no canvas, com consumo por janela, conta, plano e horário de reset de cada CLI; no Codex, também mostra a quantidade, validade e detalhes dos resets bancados por conta, com uso protegido por confirmação
 - Bloco **Tarefas Notion** no canvas (**Ferramentas → Tarefas Notion** cria o bloco ou foca o que já existe), com conexão própria cifrada, seleção de database compartilhada, cache offline e CRUD de tarefas
@@ -567,6 +568,12 @@ Como cada CLI isola o login (medido, não presumido):
 | Gemini | `HOME` próprio | não tem variável dedicada; o perfil recebe cópia de `.gitconfig`, `.ssh` e `.npmrc` para o trabalho no repositório continuar funcionando |
 | Openia | `OPENROUTER_API_KEY` por conta; chave global sem conta | é o único caso em que o app guarda um segredo, cifrado pelo `safeStorage` do sistema; sem chaveiro disponível, o app recusa guardar em vez de salvar em texto |
 
+Um terminal com conta própria não herda as chaves de API do ambiente do app
+(`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY` e afins): quem paga é a
+conta escolhida, não uma chave que estava no ambiente. O Login do sistema
+continua igual. A lista completa está na
+[Política de Contas](docs/projeto/POLITICA-CONTAS.md#isolamento-de-credenciais).
+
 Se um terminal for reiniciado pelo drawer lateral, o `accountId` e o provedor
 persistidos no bloco acompanham o novo PTY. Assim, o restart mantém o perfil
 selecionado; quando o bloco não tem `accountId`, ele continua usando o login do
@@ -584,6 +591,40 @@ Cada conta cadastrada também vira uma linha própria no painel **Limites e uso*
 com a quota lida da pasta dela — é assim que duas contas do mesmo provedor
 aparecem com números separados. Enquanto a conta não tiver sido usada, a linha
 diz isso em vez de mostrar zero.
+
+### Cadeia de contas
+
+Quando a conta de um terminal bate o limite de uso, perde o login ou fica sem
+crédito, a **cadeia de contas** propõe continuar o trabalho em outra conta
+cadastrada, inclusive de outro provedor. Ela vem **desligada** e nunca troca
+sozinha: toda troca mostra de qual conta sai, para qual vai e por quê, e só
+acontece depois da sua confirmação. Para ligar, abra **Ferramentas → Limites e
+uso → Cadeia** e habilite as contas que podem receber uma troca.
+
+- **Quatro estratégias:** Ordem manual, Rodízio, Mais quota primeiro e
+  Assinatura antes de uso. "Mais quota" compara a capacidade absoluta
+  (`restante% × multiplicador do plano`): 50% num plano 20x vem antes de 100%
+  num plano 1x.
+- **Só conta apta recebe uma troca:** login conferido pela própria CLI naquela
+  conta nos últimos 15 minutos, fora de espera. Quota só pesa com medição
+  recente.
+- **O terminal antigo fica intacto.** A troca abre um bloco novo na conta de
+  destino, com o histórico mascarado como contexto; o processo que está rodando
+  nunca troca de conta, e o app não escreve nele.
+- **Limite não se confunde com rede.** Queda de rede, servidor sobrecarregado e
+  tempo esgotado não põem a conta em espera nem geram proposta.
+- **Um bloco escolhido à mão continua fixo** na conta dele, e toda troca fica
+  registrada com motivo e horário na aba **Trocas**.
+- O orquestrador do chat também pede confirmação antes de trocar de provedor.
+
+Como usar, passo a passo, no [Guia do Usuário](docs/guias/GUIA-USUARIO.md#cadeia-de-contas-seguir-em-outra-conta-com-a-sua-confirmação);
+a regra completa na [Política de Contas](docs/projeto/POLITICA-CONTAS.md); as
+camadas e o fluxo na [Arquitetura](docs/projeto/ARQUITETURA.md#cadeia-de-contas).
+
+Ideias para quem quiser contribuir: checagem de login por conta para o Gemini
+(que hoje fica fora da cadeia), captura do aviso de limite como ele aparece de
+verdade no terminal em Linux, macOS e Windows, e medição de uso por conta sob
+demanda para "Mais quota" comparar mais contas.
 
 ### Identidade das inserções de prompt
 

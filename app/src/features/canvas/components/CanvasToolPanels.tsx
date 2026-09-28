@@ -258,7 +258,14 @@ export function CanvasToolPanels({
       case 'fetchAll':
         return <LazyFetchAllPanel onClose={closeActiveTool} toolsMenuOpen={toolsMenuOpen} />
       case 'agentUsage':
-        return <LazyAgentUsagePanel onClose={closeActiveTool} toolsMenuOpen={toolsMenuOpen} />
+        return (
+          <LazyAgentUsagePanel
+            onClose={closeActiveTool}
+            toolsMenuOpen={toolsMenuOpen}
+            onFocusNode={onFocusNode}
+            existingNodeIds={new Set(nodes.map((node) => node.id))}
+          />
+        )
       case 'orchestrator':
         return <LazyOrchestratorPanel onClose={closeActiveTool} toolsMenuOpen={toolsMenuOpen} />
       case 'qaLogger':

@@ -16,6 +16,8 @@ compatibilidade com histórico legado.
 | [projeto/ARQUITETURA.md](projeto/ARQUITETURA.md) | Arquitetura vigente do canvas, terminais, providers, persistência e fronteiras do modo legado. |
 | [projeto/ROADMAP.md](projeto/ROADMAP.md) | Direção e próximos passos. |
 | [projeto/PLANO-TUTORIAL-CANVAS.md](projeto/PLANO-TUTORIAL-CANVAS.md) | Plano do tutorial do canvas, da Ajuda e das novidades: estado versionado no SQLite, gatilhos, UX acessível, automação e mapa de testes por aceite. |
+| [projeto/POLITICA-CONTAS.md](projeto/POLITICA-CONTAS.md) | Política da cadeia de contas: decisões do dono, classes de falha, elegibilidade, estratégias, espera, confirmação, isolamento de credenciais e privacidade. |
+| [projeto/PLANO-CADEIA-CONTAS.md](projeto/PLANO-CADEIA-CONTAS.md) | Plano de implementação da cadeia de contas: arquitetura em camadas, dados, máquina de estados, sequência de commits e mapa de testes. |
 | [projeto/POLITICA-VERSIONAMENTO.md](projeto/POLITICA-VERSIONAMENTO.md) | Política de branches e commits do projeto. |
 | [projeto/RODAR-VIA-CODIGO-FONTE.md](projeto/RODAR-VIA-CODIGO-FONTE.md) | Como rodar o app a partir do código-fonte. |
 | [design/BRAND-SYSTEM.md](design/BRAND-SYSTEM.md) | Tokens e princípios visuais do Felixo AI Core. |

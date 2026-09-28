@@ -18,7 +18,16 @@ function fakeSafeStorage(backend = 'kwallet') {
   }
 }
 
-function createEnvironment({ backend = 'kwallet', comHome = false, fileSystem = fs } = {}) {
+/** Remoção confirmada, sem terminal vivo na conta. */
+const CONFIRMADO = Object.freeze({ confirmed: true })
+
+function createEnvironment({
+  backend = 'kwallet',
+  comHome = false,
+  fileSystem = fs,
+  listLiveSessions,
+  forgetChainAccount,
+} = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-contas-'))
   const userData = path.join(root, 'userData')
   const homeDir = path.join(root, 'home')
@@ -41,6 +50,8 @@ function createEnvironment({ backend = 'kwallet', comHome = false, fileSystem = 
       homeDir,
       fileSystem,
       safeStorage: fakeSafeStorage(backend),
+      listLiveSessions,
+      forgetChainAccount,
     }),
     cleanup: () => fs.rmSync(root, { recursive: true, force: true }),
   }
@@ -144,7 +155,7 @@ test('remover a conta apaga a pasta de login junto', () => {
     const dir = path.join(env.userData, 'cli-profiles', 'claude', conta.id)
     fs.writeFileSync(path.join(dir, '.credentials.json'), '{"token":"x"}', 'utf8')
 
-    assert.equal(env.store.remove(conta.id), true)
+    assert.equal(env.store.remove(conta.id, CONFIRMADO).removed, true)
     assert.equal(fs.existsSync(dir), false)
     assert.deepEqual(env.store.list('claude'), [])
   } finally {
@@ -174,7 +185,7 @@ test('falha ao apagar o perfil preserva conta e chave para nova tentativa', () =
     const dir = path.join(env.userData, 'cli-profiles', 'openia', conta.id)
 
     assert.throws(
-      () => env.store.remove(conta.id),
+      () => env.store.remove(conta.id, CONFIRMADO),
       (error) => {
         assert.equal(error.code, 'CLI_ACCOUNT_PROFILE_REMOVE_FAILED')
         assert.equal(
@@ -196,7 +207,7 @@ test('falha ao apagar o perfil preserva conta e chave para nova tentativa', () =
     )
 
     falhar = false
-    assert.equal(env.store.remove(conta.id), true)
+    assert.equal(env.store.remove(conta.id, CONFIRMADO).removed, true)
     assert.equal(fs.existsSync(dir), false)
     assert.deepEqual(env.store.list('openia'), [])
   } finally {
@@ -219,7 +230,7 @@ test('pasta ausente com ENOENT continua permitindo a remoção', () => {
   try {
     const conta = env.store.create({ providerId: 'codex', label: 'pessoal' })
 
-    assert.equal(env.store.remove(conta.id), true)
+    assert.equal(env.store.remove(conta.id, CONFIRMADO).removed, true)
     assert.deepEqual(env.store.list('codex'), [])
   } finally {
     env.cleanup()
@@ -318,7 +329,7 @@ test('remover a conta do Openia esquece a chave dela', () => {
     env.store.setSecret(conta.id, 'sk-uma')
     env.store.setSecret(outra.id, 'sk-outra')
 
-    env.store.remove(conta.id)
+    env.store.remove(conta.id, CONFIRMADO)
 
     assert.deepEqual(env.store.buildEnv(conta.id), {})
     // A chave da outra conta continua valendo.
@@ -350,7 +361,7 @@ test('criar a conta que falha ao gravar o registro não deixa pasta de perfil ó
   const fileSystem = {
     ...fs,
     writeFileSync(caminho, ...resto) {
-      if (falhar && String(caminho).endsWith('cli-accounts.json')) {
+      if (falhar && String(caminho).includes('cli-accounts.json')) {
         const erro = new Error('ENOSPC: no space left on device')
         erro.code = 'ENOSPC'
         throw erro
@@ -381,7 +392,7 @@ test('se a limpeza do perfil também falhar, o erro que sobe continua sendo o da
   const fileSystem = {
     ...fs,
     writeFileSync(caminho, ...resto) {
-      if (String(caminho).endsWith('cli-accounts.json')) throw Object.assign(new Error('ENOSPC original'), { code: 'ENOSPC' })
+      if (String(caminho).includes('cli-accounts.json')) throw Object.assign(new Error('ENOSPC original'), { code: 'ENOSPC' })
       return fs.writeFileSync(caminho, ...resto)
     },
     rmSync() {
@@ -392,6 +403,345 @@ test('se a limpeza do perfil também falhar, o erro que sobe continua sendo o da
 
   try {
     assert.throws(() => env.store.create({ providerId: 'codex', label: 'x' }), /ENOSPC original/)
+  } finally {
+    env.cleanup()
+  }
+})
+
+test('falha no meio da gravação preserva o registro anterior (escrita atômica)', () => {
+  let falhar = false
+  const fileSystem = {
+    ...fs,
+    // Simula o disco enchendo no meio: grava um pedaço e então falha.
+    writeFileSync(caminho, dados, ...resto) {
+      if (falhar && String(caminho).includes('cli-accounts.json')) {
+        fs.writeFileSync(caminho, String(dados).slice(0, 12), ...resto)
+        throw Object.assign(new Error('ENOSPC: no space left on device'), { code: 'ENOSPC' })
+      }
+      return fs.writeFileSync(caminho, dados, ...resto)
+    },
+  }
+  const env = createEnvironment({ fileSystem })
+
+  try {
+    const pessoal = env.store.create({ providerId: 'codex', label: 'pessoal' })
+    const antes = fs.readFileSync(env.store.storePath, 'utf8')
+
+    falhar = true
+    assert.throws(() => env.store.create({ providerId: 'codex', label: 'trabalho' }), /ENOSPC/)
+
+    assert.equal(fs.readFileSync(env.store.storePath, 'utf8'), antes, 'o registro anterior foi truncado')
+    assert.deepEqual(env.store.list('codex'), [pessoal], 'a conta que já existia sumiu')
+    assert.deepEqual(
+      fs.readdirSync(path.dirname(env.store.storePath)).filter((nome) => nome.endsWith('.tmp')),
+      [],
+      'o arquivo temporário ficou para trás',
+    )
+  } finally {
+    env.cleanup()
+  }
+})
+
+test('registro corrompido não é sobrescrito: criar e remover recusam, a barreira explica e o login do sistema segue', () => {
+  const env = createEnvironment()
+
+  try {
+    const conta = env.store.create({ providerId: 'codex', label: 'pessoal' })
+    const corrompido = '{"accounts": [{"id": "' + conta.id + '", "providerId": "codex"'
+    fs.writeFileSync(env.store.storePath, corrompido, 'utf8')
+    const perfis = path.join(env.userData, 'cli-profiles', 'codex')
+    const pastasAntes = fs.readdirSync(perfis).sort()
+
+    const ilegivel = (error) => {
+      assert.equal(error.code, 'CLI_ACCOUNTS_STORE_UNREADABLE')
+      assert.match(error.message, /ilegível/)
+      return true
+    }
+    assert.throws(() => env.store.create({ providerId: 'codex', label: 'trabalho' }), ilegivel)
+    assert.throws(() => env.store.remove(conta.id, CONFIRMADO), ilegivel)
+    assert.throws(() => env.store.list(), ilegivel, 'lista vazia faria a interface cair no login do sistema')
+    assert.throws(() => env.store.buildEnv(conta.id, 'codex'), ilegivel)
+
+    const barreira = env.store.validateAccount(conta.id, 'codex')
+    assert.equal(barreira.ok, false)
+    assert.match(barreira.message, /ilegível/)
+
+    // O terminal sem conta não depende do registro.
+    assert.deepEqual(env.store.buildEnv(undefined, 'codex'), {})
+    assert.deepEqual(env.store.buildEnv('', 'claude'), {})
+
+    assert.equal(fs.readFileSync(env.store.storePath, 'utf8'), corrompido, 'o arquivo corrompido foi sobrescrito')
+    assert.deepEqual(fs.readdirSync(perfis).sort(), pastasAntes, 'a pasta de login foi criada ou apagada')
+  } finally {
+    env.cleanup()
+  }
+})
+
+test('formato inesperado também é ilegível; arquivo ausente é lista vazia', () => {
+  const env = createEnvironment()
+
+  try {
+    assert.deepEqual(env.store.list(), [])
+    fs.mkdirSync(path.dirname(env.store.storePath), { recursive: true })
+    fs.writeFileSync(env.store.storePath, '{"contas": []}', 'utf8')
+    assert.throws(() => env.store.list(), { code: 'CLI_ACCOUNTS_STORE_UNREADABLE' })
+    fs.writeFileSync(env.store.storePath, '', 'utf8')
+    assert.throws(() => env.store.list(), { code: 'CLI_ACCOUNTS_STORE_UNREADABLE' })
+  } finally {
+    env.cleanup()
+  }
+})
+
+// --- Remoção com terminal vivo (decisão 6: processo vivo nunca troca de conta)
+
+/** Sessões como `listarSessoesVivas` devolve, com o que não pode vazar. */
+function sessaoViva(sessionId, accountId, extra = {}) {
+  return {
+    sessionId,
+    command: 'codex',
+    args: ['--api-key', 'sk-nao-pode-sair'],
+    cwd: '/projetos/felixo',
+    startedAt: 1_000,
+    accountId,
+    providerId: 'codex',
+    accountMode: 'pinned',
+    ...extra,
+  }
+}
+
+test('remover sem confirmação não apaga nada e lista só os terminais vivos da conta, sem argumento nem ambiente', () => {
+  let sessoes = []
+  const esquecidas = []
+  const env = createEnvironment({
+    listLiveSessions: () => sessoes,
+    forgetChainAccount: (accountId) => esquecidas.push(accountId),
+  })
+
+  try {
+    const conta = env.store.create({ providerId: 'codex', label: 'pessoal' })
+    const outra = env.store.create({ providerId: 'codex', label: 'trabalho' })
+    const dir = path.join(env.userData, 'cli-profiles', 'codex', conta.id)
+    sessoes = [
+      sessaoViva('canvas:terminal-a', conta.id),
+      sessaoViva('canvas:terminal-b', outra.id),
+      sessaoViva('canvas:terminal-c', null),
+      sessaoViva('canvas:terminal-d', conta.id, { cwd: undefined, startedAt: undefined }),
+    ]
+
+    const semConfirmar = env.store.remove(conta.id)
+    assert.deepEqual(semConfirmar, {
+      removed: false,
+      requiresConfirmation: true,
+      sessions: [
+        { sessionId: 'canvas:terminal-a', cwd: '/projetos/felixo', startedAt: 1_000 },
+        { sessionId: 'canvas:terminal-d', cwd: '', startedAt: null },
+      ],
+    })
+    assert.doesNotMatch(JSON.stringify(semConfirmar), /sk-nao-pode-sair|cli-profiles/)
+
+    // `confirmed` precisa ser `true` estrito: string e número não confirmam.
+    for (const confirmed of ['true', 1, undefined]) {
+      assert.equal(
+        env.store.remove(conta.id, {
+          confirmed,
+          acknowledgedSessionIds: ['canvas:terminal-a', 'canvas:terminal-d'],
+        }).requiresConfirmation,
+        true,
+      )
+    }
+
+    assert.equal(fs.existsSync(dir), true)
+    assert.deepEqual(env.store.list('codex').map((item) => item.id), [conta.id, outra.id])
+    assert.deepEqual(esquecidas, [], 'a cadeia só é limpa quando a conta sai de fato')
+  } finally {
+    env.cleanup()
+  }
+})
+
+test('confirmação que não viu um terminal aberto depois da pergunta é recusada; a que cobre todos remove e limpa a cadeia', () => {
+  let sessoes = []
+  const esquecidas = []
+  const env = createEnvironment({
+    listLiveSessions: () => sessoes,
+    forgetChainAccount: (accountId) => esquecidas.push(accountId),
+  })
+
+  try {
+    const conta = env.store.create({ providerId: 'codex', label: 'pessoal' })
+    const dir = path.join(env.userData, 'cli-profiles', 'codex', conta.id)
+    sessoes = [sessaoViva('canvas:terminal-a', conta.id)]
+    const vistos = env.store.remove(conta.id).sessions.map((sessao) => sessao.sessionId)
+
+    // Outro terminal abre na conta enquanto a pergunta está na tela.
+    sessoes = [...sessoes, sessaoViva('canvas:terminal-novo', conta.id)]
+    const atrasada = env.store.remove(conta.id, { confirmed: true, acknowledgedSessionIds: vistos })
+    assert.equal(atrasada.removed, false)
+    assert.equal(atrasada.requiresConfirmation, true)
+    assert.deepEqual(
+      atrasada.sessions.map((sessao) => sessao.sessionId),
+      ['canvas:terminal-a', 'canvas:terminal-novo'],
+    )
+    assert.equal(fs.existsSync(dir), true)
+
+    const confirmada = env.store.remove(conta.id, {
+      confirmed: true,
+      acknowledgedSessionIds: ['canvas:terminal-a', 'canvas:terminal-novo'],
+    })
+    assert.equal(confirmada.removed, true)
+    assert.equal(confirmada.chainCleaned, true)
+    assert.equal(fs.existsSync(dir), false)
+    assert.deepEqual(env.store.list('codex'), [])
+    assert.deepEqual(esquecidas, [conta.id])
+  } finally {
+    env.cleanup()
+  }
+})
+
+test('sem saber quem está na conta, nada é removido', () => {
+  const env = createEnvironment({
+    listLiveSessions: () => {
+      throw new Error('gerenciador indisponível')
+    },
+  })
+
+  try {
+    const conta = env.store.create({ providerId: 'claude', label: 'pessoal' })
+
+    assert.throws(() => env.store.remove(conta.id, CONFIRMADO), /gerenciador indisponível/)
+    assert.deepEqual(env.store.list('claude').map((item) => item.id), [conta.id])
+  } finally {
+    env.cleanup()
+  }
+})
+
+test('falha ao limpar a cadeia não desfaz a remoção e volta sinalizada', () => {
+  const env = createEnvironment({
+    forgetChainAccount: () => {
+      throw new Error('SQLITE_BUSY')
+    },
+  })
+
+  try {
+    const conta = env.store.create({ providerId: 'codex', label: 'pessoal' })
+
+    assert.deepEqual(env.store.remove(conta.id, CONFIRMADO), {
+      removed: true,
+      sessions: [],
+      chainCleaned: false,
+    })
+    assert.deepEqual(env.store.list('codex'), [])
+  } finally {
+    env.cleanup()
+  }
+})
+
+test('remover a conta tira membro, espera e checagem da cadeia no SQLite e mantém o registro de trocas', () => {
+  const { createStorageDatabase } = require('./storage/sqlite-database.cjs')
+  const { createAccountChainRepository } = require('./storage/account-chain-repository.cjs')
+  const agora = '2026-09-28T12:00:00.000Z'
+  const databaseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-contas-cadeia-'))
+  const database = createStorageDatabase({ databaseDir })
+  const repo = createAccountChainRepository(database)
+  const env = createEnvironment({
+    forgetChainAccount: (accountId) => repo.forgetAccount(accountId, agora),
+  })
+
+  try {
+    const conta = env.store.create({ providerId: 'codex', label: 'pessoal' })
+    const outra = env.store.create({ providerId: 'codex', label: 'trabalho' })
+    repo.replaceMembers({
+      members: [
+        { accountId: conta.id, providerId: 'codex', enabled: true },
+        { accountId: outra.id, providerId: 'codex', enabled: true },
+      ],
+      expectedRevision: 0,
+      nowIso: agora,
+    })
+    repo.upsertCooldown({
+      accountId: conta.id,
+      providerId: 'codex',
+      failureClass: 'limit',
+      detectedAt: agora,
+      untilAt: '2026-09-28T16:40:00.000Z',
+      untilSource: 'texto',
+      evidence: 'You’ve hit your usage limit.',
+      evidenceHash: 'abc123',
+      sessionId: 'canvas:terminal-a',
+    })
+    repo.recordLoginCheck({
+      accountId: conta.id,
+      providerId: 'codex',
+      status: 'logged_in',
+      checkedAt: agora,
+      source: 'checagem',
+    })
+    repo.insertSwitchEvent({
+      id: 'troca-1',
+      kind: 'continuation',
+      state: 'declined',
+      sourceSessionId: 'canvas:terminal-a',
+      lineageId: 'linhagem-1',
+      fromAccountId: conta.id,
+      fromProviderId: 'codex',
+      fromLabel: 'pessoal',
+      toAccountId: outra.id,
+      toProviderId: 'codex',
+      toLabel: 'trabalho',
+      failureClass: 'limit',
+      reason: 'Limite de uso da conta pessoal',
+      strategy: 'manual',
+      chosenBy: 'chain',
+      candidates: [{ accountId: outra.id, eligible: true }],
+      detectedAt: agora,
+      proposedAt: agora,
+      expiresAt: '2026-09-28T12:30:00.000Z',
+    })
+
+    assert.equal(env.store.remove(conta.id, CONFIRMADO).chainCleaned, true)
+
+    assert.deepEqual(repo.listMembers().map((item) => item.accountId), [outra.id])
+    assert.equal(repo.getCooldown(conta.id), null)
+    assert.equal(repo.getLoginCheck(conta.id), null)
+    const troca = repo.getSwitchEvent('troca-1')
+    assert.equal(troca.fromLabel, 'pessoal', 'o registro guarda o rótulo da conta que saiu')
+    assert.equal(troca.fromAccountId, conta.id)
+  } finally {
+    env.cleanup()
+    database.close()
+    fs.rmSync(databaseDir, { recursive: true, force: true })
+  }
+})
+
+test('arquivo de chaves ilegível não é regravado: gravar, esquecer e remover conta do Openia recusam', () => {
+  // Antes: readSecrets devolvia {} em silêncio, e setSecret(C) regravava o
+  // arquivo só com C — as chaves de A e B sumiam.
+  const env = createEnvironment()
+
+  try {
+    const a = env.store.create({ providerId: 'openia', label: 'a' })
+    const b = env.store.create({ providerId: 'openia', label: 'b' })
+    const c = env.store.create({ providerId: 'openia', label: 'c' })
+    const codex = env.store.create({ providerId: 'codex', label: 'codex' })
+    env.store.setSecret(a.id, 'chave-a')
+    env.store.setSecret(b.id, 'chave-b')
+
+    const secretsPath = path.join(env.userData, 'config', 'cli-account-secrets.bin')
+    const ilegivel = Buffer.from('cifrado-por-outro-chaveiro\u0000\u0001', 'utf8')
+    fs.writeFileSync(secretsPath, ilegivel)
+
+    assert.throws(() => env.store.setSecret(c.id, 'chave-c'), (error) => {
+      assert.equal(error.code, 'CLI_ACCOUNT_SECRETS_UNREADABLE')
+      assert.match(error.message, /ilegível/)
+      return true
+    })
+    assert.throws(() => env.store.forgetSecret(a.id), { code: 'CLI_ACCOUNT_SECRETS_UNREADABLE' })
+    assert.throws(() => env.store.remove(b.id, { confirmed: true }), { code: 'CLI_ACCOUNT_SECRETS_UNREADABLE' })
+    assert.deepEqual(fs.readFileSync(secretsPath), ilegivel, 'o arquivo de chaves foi regravado')
+    assert.ok(env.store.list().some((conta) => conta.id === b.id), 'a conta do Openia sumiu sem apagar a chave')
+
+    // Uma conta sem chave (Codex) continua removível, e a lista segue legível.
+    assert.equal(env.store.remove(codex.id, { confirmed: true }).removed, true)
+    assert.equal(env.store.list().find((conta) => conta.id === a.id)?.secretConfigured, false)
   } finally {
     env.cleanup()
   }

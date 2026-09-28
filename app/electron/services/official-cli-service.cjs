@@ -228,7 +228,7 @@ async function getOfficialCliAccountStatus(
  *
  * @param {string} id
  * @param {object} [dependencies]
- * @param {() => Array<{ sessionId: string, command: string | null, cwd?: string, startedAt?: number }>} [dependencies.listSessions]
+ * @param {() => Array<{ sessionId: string, command: string | null, cwd?: string, startedAt?: number, accountId?: string | null }>} [dependencies.listSessions]
  * @param {string} [dependencies.platformName]
  */
 function listOfficialCliAccountSessions(
@@ -247,6 +247,10 @@ function listOfficialCliAccountSessions(
     ),
   )
   const sessions = listSessions()
+    // Terminal com conta própria lê a credencial da pasta do perfil: sair ou
+    // trocar o login do sistema não o afeta, e listá-lo aqui faria a pessoa
+    // reiniciar à toa um terminal que não corria risco.
+    .filter((session) => !session.accountId)
     .filter((session) => aliases.has(commandBasename(session.command)))
     .map((session) => ({
       sessionId: session.sessionId,
@@ -392,6 +396,22 @@ function getPlatformCommand(descriptor, platformName = platform.name) {
   return descriptor.command
 }
 
+/**
+ * Roda um comando curto e devolve a saída inteira quando ele termina.
+ *
+ * Além de `ok`, o resultado diz POR QUE falhou quando o processo nem chegou a
+ * responder: `errorCode` (o código do evento `error`, como `ENOENT` quando o
+ * executável não existe) e `timedOut: true` quando o prazo venceu. Quem só
+ * olha `ok` continua igual; quem precisa separar "CLI ausente" de "CLI demorou"
+ * de "CLI respondeu que não há login" (a checagem de login da cadeia de
+ * contas) não precisa adivinhar pela mensagem.
+ *
+ * `ok: false` não significa saída vazia: `claude auth status` sai com código 1
+ * quando não há login e imprime o JSON mesmo assim, então stdout e stderr
+ * sempre voltam.
+ *
+ * @returns {Promise<{ ok: boolean, message: string, stdout: string, stderr: string, errorCode?: string, timedOut?: true }>}
+ */
 function runBufferedCommand({
   command,
   args = [],
@@ -421,6 +441,7 @@ function runBufferedCommand({
         message: `${command} excedeu o tempo limite de execucao.`,
         stdout,
         stderr,
+        timedOut: true,
       })
     }, timeoutMs)
 
@@ -441,11 +462,13 @@ function runBufferedCommand({
 
       didSettle = true
       clearTimeout(timer)
+      const errorCode = typeof error?.code === 'string' ? error.code : undefined
       resolve({
         ok: false,
         message: error instanceof Error ? error.message : String(error),
         stdout,
         stderr,
+        ...(errorCode ? { errorCode } : {}),
       })
     })
 

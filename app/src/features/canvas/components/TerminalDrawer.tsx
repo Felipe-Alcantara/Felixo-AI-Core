@@ -47,11 +47,15 @@ type TerminalDrawerProps = {
     args?: string[]
     cwd?: string
     initialText?: string
+    /** O `initialText` é uma passagem: um relançamento automático não o reenvia. */
+    initialTextIsHandoff?: boolean
     sourceLabel?: string
     /** Conta cujo ambiente deve continuar valendo quando o drawer reiniciar. */
     accountId?: string
     /** Provedor da conta; acompanha o restart até a validação do PTY. */
     providerId?: string
+    /** Modo da conta do bloco; o restart nunca leva ticket da cadeia. */
+    accountMode?: 'pinned' | 'chain'
     agentSession?: AgentSessionReference
     resumeAgentSession?: boolean
     /** Render-time total used only when this drawer creates a fresh xterm. */

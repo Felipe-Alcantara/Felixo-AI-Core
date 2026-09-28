@@ -6732,3 +6732,135 @@ descartar dados visuais") e o aceite "benchmark mostra ganho".
   recálculo por quadro de arrasto no canvas; bancadas do estado real e latência de input; logs do chat
   legado/orquestrador; store órfão ao trocar para o Chat; teste de symlink no Windows; retenção de
   `agent_usage_samples`.
+
+## Registro de trabalho — 2026-09-28: Contas — cadeia de contas (commits 1–14 de 30)
+
+Registro gravado às 13:48. Esta entrada fica aberta: a validação final entra numa entrada nova ao fim da branch.
+
+### Contexto
+
+Task "Felixo AI Core/Contas — definir política de cadeia, elegibilidade e ordem de fallback", com as irmãs de
+failover no PTY, isolamento por conta, falhas injetadas e retomada. Branch `feat/cadeia-contas`, a partir de
+`origin/main` `116f0569`. O app guardava várias contas por CLI, cada uma na própria pasta de login, mas quando uma
+conta batia o limite nada ajudava a seguir em outra, e trocar de conta pode mudar quem paga. As 8 decisões do dono
+(tomadas em 28/09 pelo AskUserQuestion) e as alternativas estão no Resumo de Decisão de 28/09 em
+[`docs/projeto/IA.md`](docs/projeto/IA.md). A regra está em
+[`docs/projeto/POLITICA-CONTAS.md`](docs/projeto/POLITICA-CONTAS.md) e o plano de 30 commits em
+[`docs/projeto/PLANO-CADEIA-CONTAS.md`](docs/projeto/PLANO-CADEIA-CONTAS.md).
+
+### O que já está na branch (commits 1–14 do plano)
+
+- `b92adfb1` — política da cadeia com as decisões do dono e o plano versionado; índice de `docs/` atualizado.
+- `488ff8f8` — vocabulário de falha das CLIs instaladas como fixture versionada
+  (`app/electron/__fixtures__/cli-failure-vocabulary.json`: Claude Code 2.1.283, Codex 0.156.1, Gemini CLI 0.57.0,
+  Openia 0.1.0) e o script que a confere só lendo os pacotes: 28/28 frases no Claude, 30/30 no Codex, 4/4 no
+  Gemini; o Openia fica sem detecção.
+- `82e5ba62` — taxonomia única de falhas no processo principal (`accounts/failure-taxonomy.cjs`), com as origens
+  `pty` (só frases do provedor) e `fluxo`; "line 429" deixa de ser limite; evidência redigida antes do corte.
+- `a9d916dd` — leitor único de horário de reset (`accounts/reset-time.cjs`): fuso impresso e o formato do Codex
+  ("try again at Oct 2, 2026 8:04 PM").
+- `bb956380` — **(muda comportamento)** o orquestrador delega à taxonomia: 429 solto deixa de ser limite,
+  `no_login` ganha prazo de 30 min, cobrança vira "Sem crédito", o limite por modelo do Codex fica no modelo e a
+  capacidade do servidor preserva o fallback de modelo.
+- `9a385acc` — o evento `error` do chat traz `failure: {failureClass, availabilityStatus}` decidido no main; sai o
+  classificador do renderer.
+- `dfb0e6c9` — o motivo de disponibilidade sai redigido na origem (`createTextPreview`), antes do log QA e do log
+  de terminal.
+- `00c8f3bb` — migração 017 e repositório compare-and-set (`storage/account-chain-repository.cjs`): uma proposta
+  aberta por sessão garantida no banco, espera que nunca encurta, recuperação no início e retenção.
+- `fcc75756` — `cli-accounts.json` (e a chave cifrada do Openia) gravados de forma atômica; arquivo ilegível vira
+  erro tipado e nunca é sobrescrito.
+- `c9f5bfac` — **(muda comportamento)** terminal com conta própria não herda credencial de API do ambiente
+  (`applyProfileEnv` e `CREDENCIAIS_HERDADAS`).
+- `64d6c43a` — a sessão do PTY guarda conta, provedor e modo; reanexar em outra conta é recusado
+  (`PTY_SESSION_ACCOUNT_MISMATCH`).
+- `a4001a2a` — **(muda comportamento)** descoberta de sessão com as pastas da conta e retomada só na mesma conta.
+- `ead1b13e` — **(muda comportamento)** o relançamento automático do Codex não reenvia o texto de passagem.
+- `3c56a26e` — **(muda comportamento)** falha ao listar contas ou conta salva ausente não vira Login do sistema em
+  silêncio.
+
+Desvios do plano, cada um explicado no commit: `parseClaudeReset` mudou de casa para `reset-time.cjs` (reusar no
+lugar fecharia um ciclo de `require`); a redação do motivo foi para a origem, não só antes do log QA (o vazamento
+também chegava ao push ao vivo e ao log de terminal); a escrita atômica cobre também a chave do Openia; o filtro de
+credenciais ficou na junção do spawn, não no `buildEnv` (o `node-pty` serializa `undefined` como texto); tirar o
+`chainTicket` das opções de lançamento ficou para o commit que cria o ticket. A conferência das fixtures corrigiu o
+plano em dois pontos: o `codex login status` imprime "Not logged in" sem ponto, e a oferta "Upgrade to Max 20x" é
+montada em partes.
+
+### Validação até aqui
+
+Cada correção tem um teste que falha antes, com a saída na mensagem do commit. Exemplos: 6 de 9 testes novos do
+orquestrador falham contra o código anterior; o teste do PTY acusa `OPENAI_API_KEY` vazando para o terminal de uma
+conta Codex; 6 testes do PTY, do IPC e da CLI oficial falham antes da sessão guardar a conta. O repositório da cadeia
+tem teste com dois processos Node reais (15 rodadas: uma proposta por sessão e um único `confirm` aplicado) e o teste
+de compatibilidade da 017 sobre um banco na versão 16 com dados.
+
+**Validação final: registrada ao fim da branch.** Ficam para lá: suíte node completa, vitest, lint e build no último
+commit; `npm run test:native`; a bancada `benchmark:pty-output` com os números da vigia e a CPU do processo principal
+com Modo Performance ligado e desligado; o smoke de ponta a ponta nos 4 sistemas; e a verificação manual no Linux com
+duas contas Codex reais.
+
+### NÃO verificado / limitações (até aqui)
+
+- Os commits 15–30 (elegibilidade, política, vigia no `onData`, serviço, IPC, ticket no spawn, interface,
+  orquestrador pedindo confirmação, smoke, matriz de falhas e documentação) estão em andamento. A arquitetura e o
+  guia do usuário já descrevem esses pontos como o plano define.
+- Não dá para forçar um limite real sob demanda: a troca por limite vai ser provada pelo smoke com CLI roteirizada,
+  alimentada pelas frases reais das fixtures.
+- Nota de ambiente: um teste de tela do PTY ("classicScreen") falha quando o processo herda
+  `CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1`, o que acontece ao rodar a suíte de dentro do Claude Code. Sem a variável,
+  passa. Não tem relação com a cadeia.
+
+## 2026-09-28 — Cadeia de contas: validação final da branch feat/cadeia-contas
+
+Registro gravado às 15:43. Completa o marcador "Validação final: registrada ao fim da branch" da entrada anterior.
+
+**Como a branch foi feita.** Para caber no prazo, a implementação dos commits 15–30 rodou em trilhas paralelas, cada uma num worktree próprio: elegibilidade e política, vigia do terminal, serviço, orquestrador, remoção de conta, interface, documentação, PTY roteirizado, integração do processo principal e matriz de falhas. Os commits foram trazidos para a branch em ordem, com os conflitos resolvidos à mão e conferidos pelos testes de cada arquivo. Houve quatro rodadas de verificação adversarial:
+- uma sobre os commits 1–14;
+- quatro lentes sobre a branch integrada: custo e ticket, fiação e regressão com a cadeia desligada, interface e acessibilidade, política e orquestrador.
+
+**Achados corrigidos antes do PR**, todos com teste que falhava antes:
+- Faltavam no vocabulário as mensagens principais de limite do Claude ("You've hit your session/weekly limit").
+- O filtro de credenciais não cobria as variáveis que trocam quem cobra (Bedrock/Vertex/Foundry e tokens de sessão do Claude, GCA e ADC do Gemini) nem os spawns do painel.
+- Uma frase de limite citada num diff ou num teste disparava a detecção. Agora ela vale só no começo da linha.
+- Um arquivo de chaves ilegível era regravado por cima.
+- A redação não mascarava chave do Google, rótulo entre aspas nem token do GitHub.
+- O diálogo trocava em silêncio a conta escolhida pela recomendada. Isso cobraria outra conta.
+- Delete com o diálogo aberto apagava o bloco de origem por baixo, porque faltava `.nokey`.
+- O foco caía no body depois da recusa.
+- A lista da cadeia anunciava uma reordenação recusada.
+- Um bloco da cadeia não reabria sem ticket na mesma conta.
+- Uma espera vencida pelo prazo liberava a conta sem nova checagem de login.
+- O serviço e a política conversavam por contratos diferentes. A porta `account-chain-port.cjs` faz a tradução.
+- O aviso "limit has reset" não chegava ao serviço.
+- O `transcriptChars` do renderer era descartado.
+
+**Validação no HEAD final** (93e2ef0a, em `app/`):
+- `npm run lint`: 0 erros e 0 avisos.
+- `npm run build`: ok.
+- Suíte node (`scripts/run-node-unit-tests.cjs`, com `env -u CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN` e stdin fechado): 2166 de 2166.
+- `npx vitest run`: 169 arquivos, 2251 testes e 1 pulado.
+- Matriz de falhas injetadas: 18 de 18, sobre as peças reais (porta, pty:spawn com ticket e manager).
+- Smoke real (`npm run test:canvas-smoke`, sob lock, perfil isolado, antes da última rodada de correções): sessões A, B e C passaram. A sessão C, da cadeia de ponta a ponta com a CLI roteirizada, cobriu os passos C1–C13 em 140–192 s. O total levou 18,8 min nesta máquina de 2c/4t, carregada pelas trilhas paralelas. A medida no runner fica com a CI do PR.
+- Bancada da vigia (`pty-output-path-benchmark`, parâmetros do CI, com carga média de 14 a 19): custo extra por pedaço de p50 +8,1% no fluxo spinner (teto de 10%); varredura p95 de 0,109 ms no spinner e 0,714 ms no pior caso (teto de 1 ms); CPU com 20 sessões em 3,57% de um núcleo (teto de 5%). `--check` com exit 0. Os números oficiais com a máquina livre, e com o Modo Performance ligado e desligado, ficam como pendência.
+- Regressão com a cadeia desligada, que é o padrão, conferida por sonda sobre a fiação real: nenhuma checagem de login, nenhuma proposta e nenhum diálogo. No Login do sistema e em bloco fixo, só aviso.
+
+**O que ficou de fora, com task aberta:**
+- a validação com contas reais;
+- a medição oficial da bancada;
+- o tempo do smoke na CI;
+- as decisões de produto levantadas pelas trilhas: fila com "Automática", permissões na continuação entre provedores, aviso depois de "Agora não" e se o stop do chat encerra o run;
+- a segunda instância no mesmo perfil;
+- o Openia sem crédito por medição;
+- as propostas de prévia que se acumulam;
+- os testes `classicScreen` e `openia-image-service`, que dependem do ambiente.
+
+## 2026-09-28 — Cadeia de contas: duas falhas da primeira CI do PR #97
+
+Registro gravado às 15:51.
+
+- **Validate nos 4 sistemas:** um teste de descoberta de sessão foi cancelado no Node 22. A promessa esperada dependia de um timer `unref`, e os 30 testes seguintes do arquivo caíram junto. Localmente usamos o Node 25, onde passava. O teste agora segura o processo com um timer que tem ref (precedente do PR #95). No Node 22.22.3, a suíte inteira passa: 2166 de 2166.
+- **Bancada da vigia (ubuntu-latest):** o custo extra por pedaço deu p50 +14,6%, acima do teto de 10%. Em valor absoluto, são 0,478 contra 0,354 µs por pedaço, ou seja, 0,124 µs, cerca de 0,025% de um núcleo com 20 sessões. A CPU medida da vigia foi 0,915% (teto de 5%), e a varredura p95 de 0,183 ms (teto de 1 ms).
+  - **Correção:** o `--check` passou a exigir, como o gate de regressão do terminal já exige, que o custo passe do limiar percentual **e** de um piso absoluto de 0,5 µs por pedaço. Esse piso equivale a 0,1% de um núcleo com 20 sessões a 100 pedaços/s.
+  - **Motivo:** abaixo de ~1 µs a VM do CI mede ruído, porque a base sem vigia oscila entre 0,35 e 0,56 µs de uma rodada para outra. O teto relativo continua o mesmo, e uma regressão real (uma regex por pedaço, por exemplo) soma vários µs e reprova.
+- O macOS reprovou de novo no `renderer-xterm count=1` (+81,4%). É o ruído conhecido, que já tem task.

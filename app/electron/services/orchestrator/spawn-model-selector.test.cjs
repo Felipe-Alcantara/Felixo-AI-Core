@@ -6,7 +6,9 @@ const {
   createOrchestrationModel,
   getFallbackOrderForCliType,
   getPriorityOrderFor,
+  getProviderFamily,
   getProviderModelTierBonus,
+  requiresProviderSwitchConfirmation,
   resolveOrchestrationSpawnModel,
   scoreSpawnModel,
   selectBestSpawnModel,
@@ -569,4 +571,29 @@ test('tier fallback inside cliType: opus rate-limited, sonnet wins over haiku', 
   if (result.model.cliType === 'claude') {
     assert.notEqual(result.model.providerModel, 'haiku')
   }
+})
+
+test('getProviderFamily agrupa transportes da mesma CLI na mesma família', () => {
+  assert.equal(getProviderFamily('claude'), 'anthropic')
+  assert.equal(getProviderFamily('codex'), 'openai')
+  assert.equal(getProviderFamily('codex-app-server'), 'openai')
+  assert.equal(getProviderFamily('gemini'), 'google')
+  assert.equal(getProviderFamily('gemini-acp'), 'google')
+  assert.equal(getProviderFamily('openia'), null)
+  assert.equal(getProviderFamily(undefined), null)
+  assert.equal(getProviderFamily('toString'), null, 'não herda chave do protótipo')
+})
+
+test('requiresProviderSwitchConfirmation só pergunta quando a família muda', () => {
+  // Troca de provedor: pergunta, inclusive no last-resort.
+  assert.equal(requiresProviderSwitchConfirmation('claude', 'codex'), true)
+  assert.equal(requiresProviderSwitchConfirmation('codex-app-server', 'gemini-acp'), true)
+  assert.equal(requiresProviderSwitchConfirmation('gemini', 'claude'), true)
+  // Mesma família: só transporte ou modelo, sem pergunta.
+  assert.equal(requiresProviderSwitchConfirmation('codex', 'codex-app-server'), false)
+  assert.equal(requiresProviderSwitchConfirmation('gemini-acp', 'gemini'), false)
+  assert.equal(requiresProviderSwitchConfirmation('claude', 'claude'), false)
+  // Família desconhecida numa ponta: pergunta (fail-closed).
+  assert.equal(requiresProviderSwitchConfirmation('claude', 'desconhecido'), true)
+  assert.equal(requiresProviderSwitchConfirmation(undefined, 'codex'), true)
 })

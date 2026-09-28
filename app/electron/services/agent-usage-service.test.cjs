@@ -14,6 +14,7 @@ const {
   listAgentUsageSources,
 } = require('./agent-usage-sources.cjs')
 const {
+  collectProviderSnapshot,
   createAgentUsageService,
 } = require('./agent-usage-service.cjs')
 
@@ -1205,3 +1206,67 @@ function hasNodeSqlite() {
     return false
   }
 }
+
+test('login da conta com perfil é conferido sem a chave de API herdada; o login do sistema fica igual', async (t) => {
+  const previous = process.env.OPENAI_API_KEY
+  process.env.OPENAI_API_KEY = 'sentinela-openai-do-ambiente'
+  t.after(() => {
+    if (previous === undefined) delete process.env.OPENAI_API_KEY
+    else process.env.OPENAI_API_KEY = previous
+  })
+  const authEnvs = []
+  const runCommand = async ({ args, env }) => {
+    if (args[0] === 'login') authEnvs.push(env)
+    return { ok: true, stdout: 'Logged in using ChatGPT', stderr: '' }
+  }
+  const common = {
+    providerId: 'codex',
+    runCommand,
+    now: () => Date.parse('2026-09-28T12:00:00.000Z'),
+    probe: () => null,
+    queryLiveUsage: async () => ({ ok: false, message: 'sem consulta ao vivo no teste' }),
+  }
+
+  const perfil = await collectProviderSnapshot({
+    ...common,
+    profileEnv: { CODEX_HOME: '/perfis/codex-pessoal' },
+    targetAccountId: 'codex-pessoal',
+  })
+  await collectProviderSnapshot(common)
+
+  assert.equal(perfil.auth.authStatus, 'logged_in')
+  assert.equal(authEnvs[0].CODEX_HOME, '/perfis/codex-pessoal')
+  assert.equal(authEnvs[0].OPENAI_API_KEY, undefined)
+  assert.equal(authEnvs[1].OPENAI_API_KEY, 'sentinela-openai-do-ambiente')
+})
+
+test('checagem de uma conta com perfil não herda as credenciais do app; a do login do sistema herda', async () => {
+  // Antes: createCommandEnv juntava process.env inteiro, e o `claude auth
+  // status` de uma conta com perfil lia a chave de API (ou o Bedrock) do app.
+  const herdadas = { ANTHROPIC_API_KEY: 'sk-ant-herdada', CLAUDE_CODE_USE_BEDROCK: '1' }
+  const anteriores = Object.fromEntries(Object.keys(herdadas).map((nome) => [nome, process.env[nome]]))
+  Object.assign(process.env, herdadas)
+  try {
+    const ambientes = []
+    const runCommand = async ({ env }) => {
+      ambientes.push(env)
+      return { ok: true, stdout: JSON.stringify({ loggedIn: true }), stderr: '' }
+    }
+    const base = { providerId: 'claude', runCommand, now: () => 0, probe: () => null }
+
+    await collectProviderSnapshot({ ...base, profileEnv: { CLAUDE_CONFIG_DIR: '/perfis/pessoal' } })
+    await collectProviderSnapshot({ ...base, profileEnv: {} })
+
+    const [perfil, sistema] = ambientes
+    assert.equal(perfil.CLAUDE_CONFIG_DIR, '/perfis/pessoal')
+    assert.equal(Object.hasOwn(perfil, 'ANTHROPIC_API_KEY'), false)
+    assert.equal(Object.hasOwn(perfil, 'CLAUDE_CODE_USE_BEDROCK'), false)
+    assert.equal(sistema.ANTHROPIC_API_KEY, 'sk-ant-herdada', 'o login do sistema continua intacto')
+    assert.equal(sistema.CLAUDE_CODE_USE_BEDROCK, '1')
+  } finally {
+    for (const [nome, valor] of Object.entries(anteriores)) {
+      if (valor === undefined) delete process.env[nome]
+      else process.env[nome] = valor
+    }
+  }
+})

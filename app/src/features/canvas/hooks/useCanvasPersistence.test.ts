@@ -99,11 +99,45 @@ describe('canvas persistence boundaries', () => {
         command: 'codex',
         initialText: 'standing instruction',
         handoffText: 'terminal output that may contain a secret',
+        initialTextIsHandoff: true,
       },
     })
 
     expect(persisted.data.initialText).toBe('standing instruction')
     expect(persisted.data.handoffText).toBeUndefined()
+    // Derivado da passagem a cada render; gravado, sobreviveria à passagem.
+    expect(persisted.data).not.toHaveProperty('initialTextIsHandoff')
+  })
+
+  it('não persiste o ticket da cadeia; modo e origem da continuação ficam', () => {
+    const origin = {
+      switchEventId: 'proposta-1',
+      fromNodeId: 'bloco-1',
+      reasonClass: 'limit' as const,
+      decidedAt: '2026-09-28T17:33:00.000Z',
+    }
+    const persisted = toPersistedNode({
+      id: 'continuacao',
+      type: 'terminal',
+      position: { x: 0, y: 0 },
+      data: {
+        command: 'codex',
+        accountId: 'conta-b',
+        accountMode: 'chain',
+        chainTicket: 'proposta-1',
+        chainOrigin: origin,
+        chainSuccessorNodeId: 'bloco-3',
+      },
+    })
+
+    // Um ticket gravado seria reapresentado no reload; ele vale uma vez.
+    expect(persisted.data).not.toHaveProperty('chainTicket')
+    expect(persisted.data).toMatchObject({
+      accountId: 'conta-b',
+      accountMode: 'chain',
+      chainOrigin: origin,
+      chainSuccessorNodeId: 'bloco-3',
+    })
   })
 
   it('persiste identidade da inserção sem guardar o corpo do prompt', () => {

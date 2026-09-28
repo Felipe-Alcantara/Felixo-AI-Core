@@ -147,6 +147,10 @@ export type SendTextResult =
 
 type SessionListener = (snapshot: SessionSnapshot) => void
 
+/** Aviso do bloco quando o relançamento do Codex retém o texto de passagem. */
+export const CODEX_RELAUNCH_HANDOFF_NOTICE =
+  'O Codex reiniciou após se atualizar. O contexto de passagem não foi reenviado; use /resume ou reenvie manualmente.'
+
 /** Ms of output silence after which a running session is considered idle. */
 const IDLE_AFTER_MS = 1500
 /** A configured agent should not terminate silently immediately after launch. */
@@ -232,6 +236,12 @@ type SessionOptions = {
   cwd?: string
   /** Text submitted to the PTY shortly after spawn (e.g. a standing instruction). */
   initialText?: string
+  /**
+   * O `initialText` carrega uma passagem de responsabilidade: é um pedido de
+   * verdade, não uma instrução de largada. Um relançamento automático nunca o
+   * reenvia (a tarefa rodaria de novo e o débito dobraria).
+   */
+  initialTextIsHandoff?: boolean
   /** Human label used in the generated context-file header. */
   sourceLabel?: string
   /** Interpreter to try when `command` isn't installed (Windows `py`/`python`). */
@@ -245,6 +255,14 @@ type SessionOptions = {
   accountId?: string
   /** Provedor da CLI, para impedir ambiente de outra conta no boundary do PTY. */
   providerId?: string
+  /** Fixa (padrão) ou da cadeia de contas; o main confere e lista por sessão. */
+  accountMode?: 'pinned' | 'chain'
+  /**
+   * Ticket de uso único da cadeia (só no primeiro spawn do bloco criado pela
+   * cadeia). Sai das opções guardadas assim que o spawn é aceito: um
+   * relançamento ou reinício é spawn comum na mesma conta, nunca uma troca.
+   */
+  chainTicket?: string
   /** Restored timestamp; omitted on restart so a fresh clock is created. */
   startedAt?: number
   /** Cria um bloco Página Web quando a pessoa abre um link do terminal. */
@@ -630,6 +648,7 @@ export class TerminalSessionStore {
           options.args ?? [],
           options.cwd,
           options.agentSession,
+          options.accountId,
         ) ?? options.args ?? []
       : options.args ?? []
 
@@ -874,6 +893,8 @@ export class TerminalSessionStore {
         classicScreen: shouldUseClassicScreen(options.command, loadClaudeTerminalScroll()),
         accountId: options.accountId,
         providerId: options.providerId,
+        ...(options.accountMode ? { accountMode: options.accountMode } : {}),
+        ...(options.chainTicket ? { chainTicket: options.chainTicket } : {}),
       })
       .then((result) => {
         if (session.disposed) {
@@ -887,6 +908,9 @@ export class TerminalSessionStore {
         // sempre, e o spawn bem-sucedido era marcado como erro, o que ainda
         // impedia `scheduleInitialText` de enviar o texto inicial.
         if (result?.ok) {
+          if (session.launchOptions.chainTicket) {
+            session.launchOptions = { ...session.launchOptions, chainTicket: undefined }
+          }
           if (result.reused) {
             // The PTY already contains the original agent turn. Replaying the
             // initial instruction here would submit a duplicate task after a
@@ -1777,13 +1801,26 @@ export class TerminalSessionStore {
       // `startedAt` fica de fora para o relógio da sessão começar do zero.
       const agentSession = session.agentSession ?? session.launchOptions.agentSession
       const resumeAgentSession = Boolean(agentSession)
+      // Sem conversa para retomar, reenviar a instrução de largada é o certo;
+      // reenviar uma PASSAGEM não: ela é um pedido de verdade, o agente o
+      // executaria de novo do zero e o débito dobraria. Retido, o bloco diz
+      // por quê e o que fazer.
+      const handoffWithheld =
+        !resumeAgentSession &&
+        session.launchOptions.initialTextIsHandoff === true &&
+        Boolean(session.launchOptions.initialText)
       this.restart(session.id, {
         ...session.launchOptions,
         startedAt: undefined,
         agentSession,
         resumeAgentSession,
-        initialText: resumeAgentSession ? undefined : session.launchOptions.initialText,
+        initialText:
+          resumeAgentSession || handoffWithheld ? undefined : session.launchOptions.initialText,
       })
+      const relaunched = handoffWithheld ? this.sessions.get(session.id) : undefined
+      if (relaunched) {
+        this.update(relaunched, { contextWarning: CODEX_RELAUNCH_HANDOFF_NOTICE })
+      }
       return
     }
 

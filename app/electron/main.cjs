@@ -10,6 +10,13 @@ const {
 const { registerPtyIpcHandlers } = require('./services/pty-ipc-handlers.cjs')
 const { PtyProcessManager } = require('./services/pty-process-manager.cjs')
 const { createCliAccountStore } = require('./services/cli-account-store.cjs')
+const { createAccountChainRepository } = require('./services/storage/account-chain-repository.cjs')
+const { listPresentInheritedCredentialNames } = require('./services/cli-account-profiles.cjs')
+const { createAccountChainRuntime } = require('./services/accounts/account-chain-runtime.cjs')
+const { createAccountOutputWatcher } = require('./services/accounts/account-output-watcher.cjs')
+const {
+  registerAccountChainIpcHandlers,
+} = require('./services/account-chain-ipc-handlers.cjs')
 const {
   registerCliAccountIpcHandlers,
 } = require('./services/cli-account-ipc-handlers.cjs')
@@ -93,6 +100,7 @@ const {
 const { registerOnboardingIpcHandlers } = require('./services/onboarding-ipc-handlers.cjs')
 const { resolveOnboardingAutomation } = require('./core/onboarding-automation.cjs')
 const { installIpcInvokeProbe } = require('./core/ipc-invoke-probe.cjs')
+const { loadDevtoolsFakeCliPty } = require('./core/devtools-fake-cli-pty-guard.cjs')
 const { createAgentUsageService } = require('./services/agent-usage-service.cjs')
 const { queryClaudeUsage } = require('./services/claude-usage-query.cjs')
 const {
@@ -155,6 +163,7 @@ let agentBrowserWatching = null
 let agentCanvasReadWatching = null
 let agentCanvasWriteWatching = null
 let agentQuestionWatching = null
+let stopAccountChainSweeper = null
 
 const SUPPORTED_EXTENSIONS = new Set(['.fxai', '.fxchat', '.fxworkflow'])
 let pendingFilePath = null
@@ -172,6 +181,12 @@ const ipcProbe =
   Number.isInteger(devtoolsPort) && devtoolsPort > 0 && devtoolsPort <= 65535
     ? installIpcInvokeProbe(ipcMain)
     : null
+
+// PTY roteirizado no lugar do node-pty, só na instância de automação que pediu
+// (FELIXO_DEVTOOLS_FAKE_CLI_PTY=1, mesma guarda do hardware:get-profile): o
+// smoke da cadeia de contas passa pelo onData real do main sem abrir CLI
+// nenhuma. O app normal recebe null aqui e nunca carrega o módulo.
+const devtoolsFakeCliPty = loadDevtoolsFakeCliPty({ env: process.env, devtoolsPort })
 
 // O Chromium só aceita a porta de depuração antes de ficar pronto. A flag é
 // exclusiva da instância que o `felixo devtools` criou; o app normal não abre
@@ -341,20 +356,41 @@ app.whenReady().then(async () => {
   terminalLogStore = createTerminalLogStore({
     directory: path.join(appPaths.logs, 'terminal-output'),
   })
+  // Remover uma conta também a tira da cadeia (membro, espera e checagem).
+  const accountChainRepository = createAccountChainRepository(storageDatabase)
   // A loja vem antes do serviço de uso: é ela que diz quais contas têm login
-  // próprio, e é da pasta de cada uma que a quota é lida.
+  // próprio, e é da pasta de cada uma que a quota é lida. Os terminais vivos
+  // entram por getter porque o gerenciador de PTY nasce depois.
   const cliAccounts = createCliAccountStore({
     userData: appPaths.userData,
     safeStorage,
+    listLiveSessions: () => ptyHandlers?.manager?.listarSessoesVivas?.() ?? [],
+    forgetChainAccount: (accountId) =>
+      accountChainRepository.forgetAccount(accountId, new Date().toISOString()),
   })
+  // Na instância de automação com a CLI roteirizada nenhuma CLI real roda:
+  // nem a detecção do catálogo, nem as consultas de uso, nem a checagem de
+  // login da cadeia. O executor falso responde só ao `codex login status`.
+  const fakeAuthCommandRunner = devtoolsFakeCliPty?.createFakeAuthCommandRunner() ?? null
+  const usageCliOptions = fakeAuthCommandRunner
+    ? {
+        runCommand: fakeAuthCommandRunner,
+        listCatalog: async () => [],
+        queryLiveUsage: {},
+        queryResetCredits: null,
+        consumeResetCreditQuery: null,
+      }
+    : {
+        queryLiveUsage: {
+          'claude-status': queryClaudeUsage,
+          'codex-rate-limits': queryCodexRateLimits,
+        },
+        queryResetCredits: queryCodexRateLimits,
+        consumeResetCreditQuery: consumeCodexRateLimitReset,
+      }
   const agentUsageService = createAgentUsageService({
     database: storageDatabase,
-    queryLiveUsage: {
-      'claude-status': queryClaudeUsage,
-      'codex-rate-limits': queryCodexRateLimits,
-    },
-    queryResetCredits: queryCodexRateLimits,
-    consumeResetCreditQuery: consumeCodexRateLimitReset,
+    ...usageCliOptions,
     // Task Limites (mais reportado no Mac): "às vezes falha, sem motivo
     // aparente" não tinha nenhum log — sem isso, a próxima falha real
     // continua sem evidência pra fechar a causa raiz.
@@ -554,20 +590,72 @@ app.whenReady().then(async () => {
       reportsDirectory: appPaths.reports,
     }),
   })
-  registerCliIpcHandlers(getMainWindow, { terminalLogStore })
+  registerCliIpcHandlers(getMainWindow, { terminalLogStore, database: storageDatabase })
   registerOfficialCliAccountIpcHandlers({
     getPtyManager: () => ptyHandlers?.manager ?? null,
   })
   registerOpeniaIpcHandlers()
   registerCliAccountIpcHandlers({ store: cliAccounts })
+  // Cadeia de contas: nasce desligada (sem linha no banco). O serviço lê os
+  // terminais vivos do PTY, que é montado logo abaixo, por isso o acesso é
+  // preguiçoso; os pushes passam pelos canais registrados em seguida.
+  let accountChainIpc = null
+  const accountChain = createAccountChainRuntime({
+    database: storageDatabase,
+    repository: accountChainRepository,
+    cliAccounts,
+    listLiveSessions: () => ptyHandlers?.manager?.listarSessoesVivas?.() ?? [],
+    setSessionAccountMode: (sessionId, mode) => ptyHandlers?.manager?.setAccountMode?.(sessionId, mode) === true,
+    emit: (channel, payload) => accountChainIpc?.emit(channel, payload),
+    // Só a transição (sem texto cru da CLI): o serviço já redige a mensagem.
+    log: ({ scope, transition, ...details }) =>
+      logQaEvent({ level: 'info', scope, message: transition ?? 'account-chain', details }),
+    ...(fakeAuthCommandRunner ? { runCommand: fakeAuthCommandRunner } : {}),
+  })
+  accountChainIpc = registerAccountChainIpcHandlers({
+    getService: () => accountChain.service,
+    view: accountChain.view,
+    getMainWindow,
+    listEnvCredentialNames: () => listPresentInheritedCredentialNames(process.env),
+  })
+  // Limitação conhecida: sem trava de instância única, uma segunda instância
+  // no MESMO perfil invalida as propostas e tickets abertos pela primeira
+  // (fail-closed: vencem, nada é executado). A instância de automação usa
+  // perfil isolado.
+  try {
+    accountChain.service.recoverOnStartup()
+  } catch (error) {
+    logQaEvent({
+      level: 'warn',
+      scope: 'account-chain',
+      message: 'recover-failed',
+      details: { message: error instanceof Error ? error.message.slice(0, 200) : 'erro' },
+    })
+  }
+  stopAccountChainSweeper = accountChain.service.startExpirySweeper()
   ptyHandlers = registerPtyIpcHandlers(getMainWindow, {
     validateAccount: (accountId, providerId) =>
       cliAccounts.validateAccount(accountId, providerId),
+    onSessionExit: (sessionId) => accountChain.service.onSessionExit(sessionId),
+    // A troca só abre o bloco novo com o ticket confirmado, uma vez, na conta
+    // confirmada; o bloco que reabre sem ticket mantém a linhagem da troca.
+    chainTickets: {
+      begin: (request) => accountChain.service.beginTicketSpawn(request),
+      finish: (request) => accountChain.service.finishTicketSpawn(request),
+      lineage: (request) => accountChain.service.lineageForSession(request),
+    },
     manager: new PtyProcessManager({
+      spawnPty: devtoolsFakeCliPty?.createFakeCliPtyFactory(),
       validateAccount: (accountId, providerId) =>
         cliAccounts.validateAccount(accountId, providerId),
       buildAccountEnv: (accountId, providerId) =>
         cliAccounts.buildEnv(accountId, providerId),
+      // Vigia de falha por conta no onData: limite, login e crédito da CLI
+      // viram detecção para o serviço da cadeia (que nunca troca sozinho).
+      createOutputWatcher: createAccountOutputWatcher,
+      onOutputFailure: (detection) => {
+        void accountChain.service.onOutputFailure(detection)
+      },
     }),
   })
   registerFileAttachmentIpcHandlers(appPaths, { getMainWindow })
@@ -695,7 +783,8 @@ app.whenReady().then(async () => {
     }
   })
 
-  detectAllClis(createCliEnv()).then((results) => {
+  // A detecção roda `--version` de cada CLI: a instância roteirizada não roda nenhuma.
+  ;(fakeAuthCommandRunner ? Promise.resolve([]) : detectAllClis(createCliEnv())).then((results) => {
     logQaEvent({
       level: 'info',
       scope: 'app:startup',
@@ -772,6 +861,11 @@ app.on('before-quit', () => {
   }
 
   notionHandlers = null
+
+  if (stopAccountChainSweeper) {
+    stopAccountChainSweeper()
+    stopAccountChainSweeper = null
+  }
 
   if (cliAutoInstall) {
     try {

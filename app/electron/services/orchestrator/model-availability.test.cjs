@@ -228,3 +228,148 @@ test('parseResetInfo calcula o horário de reset em America/Sao_Paulo, não no f
   // 16:40 em São Paulo (UTC-3) é 19:40 UTC.
   assert.equal(resetInfo.expiresAt, new Date('2026-05-02T19:40:00Z').getTime())
 })
+
+// Tabela do §5.6 do plano da cadeia de contas: a disponibilidade do
+// orquestrador passa a vir da taxonomia única (accounts/failure-taxonomy.cjs).
+const NOW_UTC = Date.parse('2026-09-28T12:00:00Z')
+
+function issueFor(message, cliType = 'codex') {
+  return detectAvailabilityIssue({ message, cliType, nowMs: NOW_UTC })
+}
+
+test('um 429 solto deixou de ser limite; com contexto, continua sendo', () => {
+  // Antes: "line 429" e "exit 429" viravam limit_reached de modelo por 15 min.
+  assert.equal(issueFor('Error: failed to parse line 429'), null)
+  assert.equal(issueFor('exit 429'), null)
+  assert.equal(issueFor('unexpected status 429').status, 'limit_reached')
+  assert.equal(issueFor('429 too many requests').status, 'limit_reached')
+})
+
+test('limite de uso, rate limit e quota continuam limit_reached com o mesmo escopo', () => {
+  assert.equal(issueFor('rate limit exceeded').scope, 'model')
+  assert.equal(issueFor('Quota exceeded for quota metric', 'gemini').scope, 'cli')
+  assert.equal(issueFor('usage limit reached', 'claude').scope, 'cli')
+  assert.equal(issueFor('rate limit exceeded', 'claude').scope, 'cli', 'limite do Claude vale para a CLI inteira')
+})
+
+test('limite do Codex por modelo fica no modelo; o da conta, na CLI, até o horário impresso', () => {
+  // Antes: os dois eram cli-wide e duravam os 15 min padrão, ignorando o
+  // "try again at" (formato que o leitor antigo não entendia).
+  const model = issueFor('You’ve hit your usage limit for gpt-5.5-codex. Switch to another model now, or try again at 8:04 PM.')
+  assert.equal(model.status, 'limit_reached')
+  assert.equal(model.scope, 'model')
+
+  const account = issueFor(
+    'You’ve hit your usage limit. Upgrade to Plus to continue using Codex, or try again at Oct 2, 2026 8:04 PM.',
+  )
+  assert.equal(account.scope, 'cli')
+  assert.equal(account.resetLabel, 'Oct 2, 2026 8:04 PM')
+  assert.equal(
+    account.expiresAt,
+    parseResetInfo('try again at Oct 2, 2026 8:04 PM', NOW_UTC, { cliType: 'codex' }).expiresAt,
+  )
+})
+
+test('o fuso impresso pela CLI vence o fuso de reserva', () => {
+  // Antes: 2026-09-29T06:00Z (3h lidas em America/Sao_Paulo).
+  const issue = issueFor('Claude usage limit reached · resets 3am (Europe/Lisbon)', 'claude')
+  assert.equal(new Date(issue.expiresAt).toISOString(), '2026-09-29T02:00:00.000Z')
+})
+
+test('cobrança vira limit_reached da CLI inteira com motivo de crédito', () => {
+  for (const message of [
+    'You exceeded your current quota, please check your plan and billing details.',
+    'Credit balance is too low',
+    "You're out of extra usage · resets 4:40pm (America/Sao_Paulo)",
+  ]) {
+    const issue = issueFor(message, 'claude')
+    assert.equal(issue.status, 'limit_reached', message)
+    assert.equal(issue.scope, 'cli', message)
+    assert.match(issue.reason, /^Sem crédito: /, message)
+  }
+})
+
+test('perda de login vira no_login com prazo, e o registro a libera sozinho', () => {
+  // Antes: no_login sem expiresAt — a CLI ficava fora até reiniciar o app.
+  const issue = issueFor('API Error: 401 Unauthorized', 'claude')
+  assert.equal(issue.status, 'no_login')
+  assert.equal(issue.expiresAt, NOW_UTC + 30 * 60 * 1000)
+
+  let now = NOW_UTC
+  const registry = createModelAvailabilityRegistry({ now: () => now })
+  const model = { id: 'claude-sonnet', cliType: 'claude' }
+  registry.recordError({ model, cliType: 'claude', message: 'Not logged in · Please run /login' })
+  assert.equal(registry.getModelAvailability(model).status, 'no_login')
+
+  now = NOW_UTC + 31 * 60 * 1000
+  assert.equal(registry.getModelAvailability(model).status, 'available')
+})
+
+test('403 continua sem efeito: pode ser login ou permissão', () => {
+  assert.equal(issueFor('API Error: 403 Forbidden'), null)
+})
+
+test('capacidade do servidor é limite só do modelo, com motivo próprio', () => {
+  // Antes: MODEL_CAPACITY_EXHAUSTED sem 429 era null.
+  for (const message of ['429 RESOURCE_EXHAUSTED', 'MODEL_CAPACITY_EXHAUSTED: no capacity', 'API Error: 429 MODEL_CAPACITY_EXHAUSTED']) {
+    const issue = issueFor(message, 'gemini')
+    assert.equal(issue.status, 'limit_reached', message)
+    assert.equal(issue.scope, 'model', message)
+    assert.match(issue.reason, /^Capacidade do servidor: /, message)
+  }
+})
+
+test('servidor, rede e tempo esgotado nunca mudam a disponibilidade', () => {
+  for (const message of [
+    'API Error: 529 {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}',
+    'status 503 Service Unavailable',
+    'stream disconnected before completion: ECONNRESET',
+    'getaddrinfo ENOTFOUND api.anthropic.com',
+    'claude não gerou resposta textual em 90s. A execução foi interrompida.',
+  ]) {
+    assert.equal(issueFor(message, 'claude'), null, message)
+  }
+})
+
+test('o motivo guardado e emitido pelo registro sai redigido', () => {
+  const registry = createModelAvailabilityRegistry({ now: () => NOW_UTC })
+  const events = []
+  registry.subscribe((event) => events.push(event))
+  const model = { id: 'codex-redacao', name: 'Codex', cliType: 'codex' }
+
+  const entry = registry.recordError({
+    model,
+    cliType: 'codex',
+    message: 'unexpected status 429 Too Many Requests: Authorization: Bearer SENTINELA-0123456789 key sk-proj-SENTINELA0123456789',
+  })
+
+  const emitted = JSON.stringify({ entry, events, snapshot: registry.getSnapshot() })
+  assert.equal(entry.status, 'limit_reached')
+  assert.doesNotMatch(emitted, /SENTINELA/)
+  assert.match(entry.reason, /\[oculto\]/)
+})
+
+test('a mensagem principal de limite do Claude ("You\'ve hit your …") vira limit_reached até o reset impresso', () => {
+  // Antes: null — o orquestrador só percebia o limite pelo banner de
+  // continuação automática, que o Claude Code só mostra em uma fase.
+  const session = issueFor("You've hit your session limit · resets 4:40pm (America/Sao_Paulo)", 'claude')
+  assert.equal(session.status, 'limit_reached')
+  assert.equal(session.scope, 'cli')
+  assert.equal(new Date(session.expiresAt).toISOString(), '2026-09-28T19:40:00.000Z')
+
+  const weekly = issueFor("You've hit your weekly limit · resets Oct 2, 9am (America/Sao_Paulo)", 'claude')
+  assert.equal(weekly.status, 'limit_reached')
+  assert.equal(weekly.scope, 'cli')
+  assert.equal(new Date(weekly.expiresAt).toISOString(), '2026-10-02T12:00:00.000Z')
+
+  const opus = issueFor("You've hit your Opus limit · resets Oct 2, 9am (America/Sao_Paulo)", 'claude')
+  assert.equal(opus.status, 'limit_reached')
+  assert.equal(opus.scope, 'model', 'o limite semanal de um modelo fica no modelo')
+
+  const credit = issueFor("You've hit your org's monthly spend limit · visit claude.ai/admin-settings/usage to raise it", 'claude')
+  assert.equal(credit.status, 'limit_reached')
+  assert.match(credit.reason, /^Sem crédito: /)
+
+  assert.equal(issueFor("You've used 90% of your session limit · resets 4:40pm (America/Sao_Paulo)", 'claude'), null)
+  assert.equal(issueFor("You've hit your fast limit", 'claude'), null)
+})

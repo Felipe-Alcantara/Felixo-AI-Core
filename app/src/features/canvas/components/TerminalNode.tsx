@@ -36,6 +36,14 @@ import {
   resolvePromptDisplayLabel,
   toPromptInsertionMetadata,
 } from '../../shared/types/prompt-insertion'
+import { useAccountChain, useCliAccountLabel } from '../hooks/useAccountChain'
+import { useAccountChainActions } from '../hooks/account-chain-actions-context'
+import {
+  BANNER_ACTION_LABELS,
+  accountChipLabel,
+  buildTerminalChainBanners,
+  ptySessionIdForNode,
+} from '../services/account-chain-view'
 
 type TerminalNodeDataWithHandlers = TerminalNodeData & {
   onExpand?: (nodeId: string) => void
@@ -81,11 +89,14 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
       cwd: nodeData.cwd,
       startedAt: nodeData.sessionStartedAt,
       initialText: nodeData.resumeAgentSession ? undefined : nodeData.initialText,
+      initialTextIsHandoff: nodeData.initialTextIsHandoff,
       sourceLabel: nodeData.label,
       fallbackCommand: nodeData.fallbackCommand,
       keepShellOpen: nodeData.keepShellOpen,
       accountId: nodeData.accountId,
       providerId: nodeData.providerId,
+      accountMode: nodeData.accountMode,
+      chainTicket: nodeData.chainTicket,
       agentSession: nodeData.agentSession,
       resumeAgentSession: nodeData.resumeAgentSession,
       terminalCount: nodeData.terminalCount,
@@ -101,11 +112,14 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
     nodeData.cwd,
     nodeData.label,
     nodeData.initialText,
+    nodeData.initialTextIsHandoff,
     nodeData.initialTextReady,
     nodeData.fallbackCommand,
     nodeData.keepShellOpen,
     nodeData.accountId,
     nodeData.providerId,
+    nodeData.accountMode,
+    nodeData.chainTicket,
     nodeData.agentSession,
     nodeData.resumeAgentSession,
     nodeData.terminalCount,
@@ -138,6 +152,40 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
   )
   const repository = repositoryLabel(nodeData.cwd)
   const provider = providerIdentity(nodeData.command)
+  const accountLabel = useCliAccountLabel(nodeData.accountId)
+  const chainActions = useAccountChainActions()
+  const { snapshot: chainSnapshot } = useAccountChain()
+  const chainSessionId = ptySessionIdForNode(id)
+  const successorId = nodeData.chainSuccessorNodeId
+  const successor = successorId ? chainActions?.nodeSummary(successorId) : null
+  // Faixas da cadeia: proposta aberta, última detecção e "continuado em".
+  // Moram fora do botão da prévia (a prévia inteira é um botão) e nenhuma
+  // abre diálogo sozinha.
+  const chainBanners = buildTerminalChainBanners({
+    proposal:
+      chainSnapshot.state?.pendingProposals.find(
+        (proposal) =>
+          proposal.kind === 'continuation' &&
+          proposal.state === 'proposed' &&
+          proposal.sourceSessionId === chainSessionId,
+      ) ?? null,
+    detection: chainSnapshot.detections[chainSessionId] ?? null,
+    successor:
+      successorId && successor
+        ? { nodeId: successorId, label: successor.label, at: successor.decidedAt, reasonClass: successor.reasonClass }
+        : null,
+  })
+  const chainError = chainActions?.errorFor(id) ?? null
+  // Hoje nenhuma outra UI mostra em que conta o bloco roda; o selo diz a conta
+  // e o modo (fixa/cadeia) sem abrir nada.
+  const accountChip =
+    provider.id === 'terminal'
+      ? null
+      : accountChipLabel({
+          accountId: nodeData.accountId,
+          accountLabel,
+          accountMode: nodeData.accountMode,
+        })
   const configuredModel = configuredAgentModel(nodeData.command, nodeData.args)
   const activity = snapshot?.activity ?? 'starting'
   const preview = snapshot?.previewLines ?? []
@@ -147,6 +195,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
     nodeData.command,
     nodeData.cwd,
     nodeData.agentSession,
+    nodeData.accountId,
   )
 
   const restart = () => {
@@ -158,11 +207,14 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
       args: nodeData.args,
       cwd: nodeData.cwd,
       initialText: canResume ? undefined : nodeData.initialText,
+      initialTextIsHandoff: !canResume && nodeData.initialTextIsHandoff,
       sourceLabel: nodeData.label,
       fallbackCommand: nodeData.fallbackCommand,
       keepShellOpen: nodeData.keepShellOpen,
       accountId: nodeData.accountId,
       providerId: nodeData.providerId,
+      // Reiniciar é spawn comum na mesma conta: nunca leva ticket da cadeia.
+      accountMode: nodeData.accountMode,
       agentSession: nodeData.agentSession,
       resumeAgentSession: canResume,
       terminalCount: nodeData.terminalCount,
@@ -228,7 +280,56 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
         {typeof nodeData.terminalIndex === 'number' && <span className="felixo-node-index">#{nodeData.terminalIndex}</span>}
         <span className="felixo-node-context-name">{repository || provider.label}</span>
         {configuredModel && <span className="felixo-node-model" title={`Modelo configurado na criação: ${configuredModel}`}>{configuredModel}</span>}
+        {accountChip && (
+          <span className="felixo-node-account" title={accountChip.title}>
+            {accountChip.text}
+          </span>
+        )}
       </div>
+
+      {(chainBanners.length > 0 || chainError) && (
+        <div className="nodrag nowheel nopan flex shrink-0 flex-col gap-1 px-2 pt-2">
+          {chainBanners.map((banner) => (
+            <div
+              key={banner.key}
+              role="status"
+              className={`rounded-sm border px-1.5 py-1 text-[10px] leading-snug ${
+                banner.tone === 'warning'
+                  ? 'border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] text-(--color-warning)'
+                  : 'border-white/10 bg-white/4 text-(--f-core-white-soft)'
+              }`}
+            >
+              <p>{banner.text}</p>
+              {chainActions && banner.actions.length > 0 && (
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {banner.actions.map((action) => (
+                    <button
+                      key={action}
+                      type="button"
+                      onClick={(event) =>
+                        chainActions.onBannerAction({
+                          nodeId: id,
+                          banner,
+                          action,
+                          trigger: event.currentTarget,
+                        })
+                      }
+                      className="felixo-btn rounded-sm bg-black/25 px-1.5 py-0.5 text-[10px] text-zinc-100 hover:bg-black/40"
+                    >
+                      {BANNER_ACTION_LABELS[action]}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+          {chainError && (
+            <p role="alert" className="text-[10px] text-theme-error">
+              {chainError}
+            </p>
+          )}
+        </div>
+      )}
 
       <button
         type="button"

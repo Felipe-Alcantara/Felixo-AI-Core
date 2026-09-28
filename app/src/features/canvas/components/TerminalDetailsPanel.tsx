@@ -1,8 +1,13 @@
+import { useState } from 'react'
 import { Copy, Info, Terminal as TerminalIcon } from 'lucide-react'
 import { CanvasPanel } from './tools/CanvasPanel'
+import { AccountSwitchHistory } from './tools/AccountSwitchHistory'
 import { useSessionMetadata } from '../terminal/terminal-session-context'
 import { activityLabel, formatSessionAge, formatSessionStart } from '../terminal/session-metadata'
 import type { TerminalNodeData } from '../types'
+import { useAccountChain, useCliAccountLabel } from '../hooks/useAccountChain'
+import { changeSessionAccountMode } from '../services/account-chain-client'
+import { accountChipLabel, ptySessionIdForNode } from '../services/account-chain-view'
 
 export function TerminalDetailsPanel({
   nodeId,
@@ -10,12 +15,17 @@ export function TerminalDetailsPanel({
   onClose,
   toolsMenuOpen,
   onClearAgentSession,
+  onAccountModeChange,
+  onFocusNode,
 }: {
   nodeId: string
   data: TerminalNodeData
   onClose: () => void
   toolsMenuOpen: boolean
   onClearAgentSession: () => void
+  /** Grava o modo da conta no bloco (persistido). */
+  onAccountModeChange: (mode: 'pinned' | 'chain') => void
+  onFocusNode: (nodeId: string) => void
 }) {
   const metadata = useSessionMetadata(nodeId)
   const value = (text: string | undefined, fallback = 'não informado') => text?.trim() || fallback
@@ -77,6 +87,14 @@ export function TerminalDetailsPanel({
           </button>
         )}
         {data.args && data.args.length > 0 && <Detail label="Argumentos" value={data.args.join(' ')} mono />}
+        {data.command && (
+          <AccountModeDetails
+            nodeId={nodeId}
+            data={data}
+            onAccountModeChange={onAccountModeChange}
+            onFocusNode={onFocusNode}
+          />
+        )}
         <p className="border-t border-white/10 pt-2 text-[11px] leading-relaxed text-zinc-500">
           “Aberto há” mede a instância atual da PTY. Ao reiniciar, o relógio recomeça; o ID do elemento continua estável. A associação da conversa só é usada quando provider e diretório coincidem.
         </p>
@@ -94,5 +112,91 @@ function Detail({ label, value, copy, mono = false }: { label: string; value: st
         {copy && <button type="button" className="shrink-0 text-zinc-500 hover:text-zinc-100" aria-label={`Copiar ${label}`} onClick={() => void navigator.clipboard?.writeText(copy)}><Copy size={12} /></button>}
       </div>
     </div>
+  )
+}
+
+/**
+ * Conta e modo do bloco, com [Fixar nesta conta] / [Voltar para a cadeia] e
+ * as trocas deste bloco. Mudar o modo nunca toca o processo vivo: vale para
+ * as próximas detecções e o próximo spawn.
+ */
+function AccountModeDetails({
+  nodeId,
+  data,
+  onAccountModeChange,
+  onFocusNode,
+}: {
+  nodeId: string
+  data: TerminalNodeData
+  onAccountModeChange: (mode: 'pinned' | 'chain') => void
+  onFocusNode: (nodeId: string) => void
+}) {
+  const { snapshot, store } = useAccountChain()
+  const accountLabel = useCliAccountLabel(data.accountId)
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState<string | null>(null)
+  const chip = accountChipLabel({ accountId: data.accountId, accountLabel, accountMode: data.accountMode })
+  const mode = data.accountMode === 'chain' ? 'chain' : 'pinned'
+  const chainEnabled = snapshot.state?.settings.enabled === true
+  const sessionId = ptySessionIdForNode(nodeId)
+
+  const change = async (next: 'pinned' | 'chain') => {
+    if (busy) return
+    setBusy(true)
+    setMessage(null)
+    try {
+      const result = await changeSessionAccountMode(store.bridge, sessionId, next)
+      if (result.persist) onAccountModeChange(next)
+      setMessage(result.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <>
+      <Detail label="Conta" value={data.accountId ? (accountLabel ?? 'conta sem nome') : 'Login do sistema'} />
+      <div className="space-y-1">
+        <div className="text-[10px] uppercase tracking-wide text-zinc-500">Modo</div>
+        <div className="flex flex-wrap items-center gap-2 rounded-sm border border-white/5 bg-black/20 px-2 py-1.5">
+          <span className="min-w-0 flex-1" title={chip.title}>
+            {!data.accountId
+              ? 'Login do sistema: só recebe aviso, nunca proposta de troca.'
+              : mode === 'chain'
+                ? 'Cadeia: se a conta bater o limite, a cadeia propõe outra e pede sua confirmação.'
+                : 'Fixa: se a conta bater o limite, você recebe um aviso; nada troca sozinho.'}
+          </span>
+          {data.accountId && mode === 'chain' && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void change('pinned')}
+              className="felixo-btn rounded-sm bg-white/6 px-2 py-1 text-[11px] text-zinc-200 hover:bg-white/12 disabled:opacity-50"
+            >
+              Fixar nesta conta
+            </button>
+          )}
+          {data.accountId && mode === 'pinned' && chainEnabled && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void change('chain')}
+              className="felixo-btn rounded-sm bg-white/6 px-2 py-1 text-[11px] text-zinc-200 hover:bg-white/12 disabled:opacity-50"
+            >
+              Voltar para a cadeia
+            </button>
+          )}
+        </div>
+        {message && (
+          <p role="alert" className="text-[11px] text-theme-error">
+            {message}
+          </p>
+        )}
+      </div>
+      <div className="space-y-1">
+        <div className="text-[10px] uppercase tracking-wide text-zinc-500">Trocas deste bloco</div>
+        <AccountSwitchHistory sessionFilter={sessionId} onFocusNode={onFocusNode} compact />
+      </div>
+    </>
   )
 }

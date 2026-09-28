@@ -863,6 +863,223 @@ expõe os dados completos e redigidos do `/status`; Codex e Openia usam suas
 fontes locais/oficiais disponíveis; providers sem cota consultável são
 apresentados como indisponíveis ou sem informação.
 
+### Cadeia de contas
+
+A regra (decisões do dono, classes de falha, elegibilidade, estratégias, espera,
+confirmação e privacidade) está em [`POLITICA-CONTAS.md`](POLITICA-CONTAS.md). O
+plano, com o mapa de arquivos, a sequência de commits e o mapa de testes, está em
+[`PLANO-CADEIA-CONTAS.md`](PLANO-CADEIA-CONTAS.md). Esta seção mostra como as
+peças se encaixam.
+
+A cadeia nasce **desligada** ao instalar e ao atualizar. Desligada, nenhum bloco
+troca de conta: uma falha detectada só gera aviso e, numa conta própria, a
+espera dela. Ligada, a cadeia **só propõe**; toda troca passa por uma confirmação
+da pessoa, e quem cria a proposta, confere a confirmação e emite o ticket é o
+processo principal.
+
+**Camadas no processo principal (`app/electron/services/`).**
+
+| Módulo | Tipo | Papel |
+| --- | --- | --- |
+| `accounts/account-chain-constants.cjs` | dados | Números e vocabulário num lugar só (tetos, prazos, estados, estratégias). As listas espelham os `CHECK`s da migração 017 |
+| `accounts/cli-failure-patterns.cjs` | dados | Frases de falha por provedor e exclusões, escritas como cada CLI imprime |
+| `accounts/failure-taxonomy.cjs` | puro | Texto ou sinal → `{failureClass, scope, ambiguous, evidence, evidenceHash}`. A evidência é redigida antes do corte (≤ 200 caracteres) |
+| `accounts/reset-time.cjs` | puro | Leitor único do horário de reset: fuso impresso, formatos do Claude e do Codex, "try again in N", epoch e a retomada automática do Claude |
+| `accounts/account-chain-policy.cjs` | puro | Elegibilidade (primeira razão que bloqueia), as quatro estratégias, capacidade, fim da espera e classe de cobrança |
+| `accounts/account-output-watcher.cjs` | caminho quente | Vigia por sessão: marca no `onData` e lê depois a cauda do buffer de replay |
+| `accounts/account-eligibility.cjs` | efeito | Checagem de login por conta, com o mesmo ambiente do spawn daquela conta |
+| `accounts/account-chain-service.cjs` | efeito | Detecção → espera → proposta → ticket → registro, e a recuperação no início do app |
+| `storage/account-chain-repository.cjs` e `storage/migrations/017_account_chain.sql` | persistência | Compare-and-set por revisão, índice parcial único e retenção |
+| `account-chain-ipc-handlers.cjs` | IPC fino | Valida só o formato (string, enum, uuid, faixa), chama o serviço e devolve `{ok, …}` |
+
+O vocabulário das CLIs tem um oráculo versionado:
+`app/electron/__fixtures__/cli-failure-vocabulary.json` guarda, por provedor e
+versão, cada frase com classe, escopo e uma linha de exemplo.
+`app/scripts/extract-cli-failure-vocabulary.cjs` confere a fixture de novo nos
+pacotes instalados, só lendo arquivos (sem executar CLI nem tocar credencial). O
+CI não tem as CLIs, então os testes rodam sobre a fixture.
+
+No renderer ficam o contrato tipado (`shared/types/account-chain.ts`), os
+formatadores e o modelo de visão puros (`canvas/services/account-chain-view.ts`
+e `account-switch-dialog.ts`), os hooks `useAccountChain` e
+`useAccountContinuation`, o `AccountSwitchDialog`, as abas **Cadeia** e
+**Trocas** do painel **Limites e uso** e, no chat, o card
+`ProviderSwitchRequest`. O renderer só consome: não classifica falha, não
+escolhe conta e não emite ticket.
+
+**Um classificador só, com duas origens.** A taxonomia fecha as classes em
+`limit | billing | auth | network | provider | timeout | cancelled | unknown`,
+mais a marca `ambiguous` e o escopo (`account` ou `model`). A precedência é
+`cancelled > auth > billing > limit > provider > network > timeout > unknown`.
+
+- **Origem `pty`** (saída do terminal): valem só as frases inteiras do provedor
+  da sessão, com as exclusões conferidas antes. Um agente pode imprimir
+  "401 Unauthorized" ou "rate limit" como parte do trabalho, e isso não é falha
+  da conta.
+- **Origem `fluxo`** (erro de execução one-shot do orquestrador e do chat):
+  valem também os códigos e as frases genéricas. Um código HTTP só conta colado
+  a `status`, `error`, `http` ou `code`, então "line 429" não é limite.
+
+O orquestrador e o chat já consomem essa taxonomia: `detectAvailabilityIssue`
+(`orchestrator/model-availability.cjs`) e `account-limit-detector.cjs` mantêm a
+assinatura e delegam a ela, e `sendCliEvent` (`ipc-handlers.cjs`) anexa
+`failure: {failureClass, availabilityStatus}` aos eventos `error`. O chat lê esse
+campo e não adivinha mais a classe por palavra solta. O motivo que vai para o
+log QA e para o log de terminal sai redigido na origem (`createTextPreview`).
+
+**Fluxo de uma detecção no terminal.**
+
+```
+ptyProcess.onData ─► entry.outputBuffer.append(data)                  (como antes)
+                  ├► entry.onData?.(data)  → renderer                 (vai primeiro)
+                  └► entry.watcher?.push()                            (flag + horário; 1 timer por sessão, unref)
+watcher.scan()  (debounce de 400 ms, espera máxima de 2 s)
+   └─ outputBuffer.tail(4096) → normaliza → pré-filtro do provedor
+        └─ failure-taxonomy (origem 'pty') → dedupe pela impressão digital da evidência
+             └─ onOutputFailure({sessionId, accountId|null, providerId, accountMode, lineageId, failure})
+accountChainService
+   ├─ limit/auth/billing numa conta própria → espera da conta (SQLite)
+   ├─ registro: 'noticed' (bloco fixo, Login do sistema ou cadeia desligada),
+   │            'proposed' ou 'no_candidate'
+   ├─ bloco 'chain' com a cadeia ligada → política + checagem de login preguiçosa → proposta
+   └─ push account-chain:detection / account-chain:proposal → faixa no bloco + item nas notificações
+pessoa → "Ver opções" → AccountSwitchDialog → accountChain.confirm
+   └─ o main revalida → proposed→confirmed (CAS) → ticket
+renderer (useAccountContinuation) → redige o histórico no main → cria o bloco novo
+   └─ pty:spawn {accountId: destino, accountMode: 'chain', chainTicket}
+        └─ o main confere o ticket → confirmed→spawning→spawned (CAS)
+```
+
+A vigia só existe em terminal de agente cujo provedor tem frases (Claude, Codex e
+Gemini). Shell e Openia não pagam nada além de um `if`. Rede, servidor, tempo
+esgotado e cancelamento nunca põem conta em espera nem geram proposta. O limite
+de um **modelo** do Codex ("usage limit for ‹modelo›") também não: trocar de
+modelo resolve.
+
+**Máquina de estados da troca** (`account_switch_events`, tipos `continuation`,
+`launch` e `manual`).
+
+```
+detecção em bloco 'chain' com a cadeia ligada
+  ├─ teto de saltos da linhagem ou nenhum candidato apto ──► no_candidate
+  ▼
+proposed ──confirm──► confirmed ──pty:spawn com ticket──► spawning ──► spawned
+  │                      │                                    └──────► spawn_failed (sem nova tentativa)
+  ├─ Agora não ──────► declined    (a mesma evidência fica silenciada)
+  ├─ Não era limite ─► dismissed   (libera a espera da origem)
+  ├─ destino mudou ──► superseded  (nasce outra proposta; nada troca sozinho)
+  └─ 30 min, origem encerrada, cadeia desligada, bloco fixado ou espera liberada ──► expired
+confirmed ── ticket sem uso em 2 min ou reinício ──► expired
+spawning  ── reinício do app ──► spawn_failed
+bloco fixo, Login do sistema ou cadeia desligada: detecção ──► noticed (registro + aviso)
+```
+
+- Toda transição é `UPDATE … WHERE id = ? AND state = ? AND revision = ?` e só
+  vale com uma linha alterada. Um índice parcial único garante no próprio banco
+  no máximo **uma** proposta aberta (`proposed`, `confirmed` ou `spawning`) por
+  sessão de origem, inclusive com dois Felixo no mesmo perfil.
+- O `confirm` revalida tudo no main: prazo, destino entre os aptos, login ainda
+  dentro do prazo, destino fora de espera, cadeia ligada, bloco ainda `chain`,
+  teto de saltos e conta não visitada na linhagem. Se a origem produziu saída há
+  menos de 5 s, o resultado é `SOURCE_ACTIVE` e a interface pede um segundo
+  "abrir mesmo assim", que fica gravado. Confirmar duas vezes devolve o mesmo
+  ticket.
+- No `pty:spawn`, um ticket inexistente, vencido, de outro tipo ou para outra
+  conta é recusado. Um ticket já `spawned` só é aceito de novo para a mesma
+  sessão (recarga e reinício). Sem ticket, o spawn é o comum de sempre.
+- No início do app, `recoverOnStartup` passa `proposed` e `confirmed` para
+  `expired` e `spawning` para `spawn_failed` (o PTY morre com o app). Nada
+  pendente é executado depois de um reinício. Esperas vencidas saem, e linhas de
+  conta removida saem das tabelas de membros, espera e checagem; o registro de
+  trocas fica.
+
+**IPC (`account-chain-ipc-handlers.cjs`, namespace `accountChain` no preload).**
+
+| Canal | O que faz |
+| --- | --- |
+| `account-chain:get-state` | Configuração, revisão, membros (rótulo, provedor, aptidão e motivo, login, espera, capacidade, cobrança e multiplicador com fonte), propostas pendentes, esperas e os **nomes** das variáveis de credencial presentes no ambiente. Nada de caminho, env ou segredo |
+| `account-chain:update-settings` e `:update-members` | Ligar/desligar, estratégia, teto de saltos e a lista ordenada, sempre com `expectedRevision`. Conflito devolve `REVISION_CONFLICT` e o estado atual |
+| `account-chain:check-login` | Confere o login de até 5 contas |
+| `account-chain:preview-launch` | Proposta `launch` para um bloco "Automática (cadeia)", ou os motivos de não haver conta apta |
+| `account-chain:confirm`, `:decline`, `:resolve-ambiguous` | Decisão da pessoa sobre uma proposta ou uma detecção ambígua |
+| `account-chain:set-session-mode` | Fixa o bloco na conta atual ou devolve à cadeia; fixar expira as propostas abertas |
+| `account-chain:release-cooldown` | "Não era limite", "Já recarreguei" ou liberação manual (login e cobrança exigem nova checagem) |
+| `account-chain:redact-transcript` | Redige o histórico que vai para o bloco novo, no main |
+| `account-chain:record-manual` | Registra uma "Passar responsabilidade" feita por causa de uma detecção |
+| `account-chain:history` | Página do registro de trocas (até 50) |
+| push `account-chain:changed`, `:proposal`, `:detection` | Avisos ao renderer, já redigidos |
+
+**Dados.** A migração `017_account_chain.sql` só acrescenta tabelas, então uma
+versão antiga do app as ignora e voltar de versão é seguro. O
+`cli-accounts.json` não muda de formato.
+
+| Tabela | Guarda |
+| --- | --- |
+| `account_chain_settings` | Uma linha: ligada, estratégia, teto de saltos e revisão. Sem a linha, a cadeia está desligada |
+| `account_chain_members` | A lista global ordenada, que pode cruzar provedores: habilitada, cobrança e multiplicador declarados. Sem índice único na posição: a lista é regravada inteira sob a revisão |
+| `account_cooldowns` | A espera atual de cada conta, com classe, fim, fonte do fim e evidência redigida. Uma espera nova nunca encurta uma ativa |
+| `account_login_checks` | A última checagem de login por conta: status, horário, fonte, plano e impressão digital da identidade (nunca e-mail ou token) |
+| `account_switch_events` | O registro de trocas, avisos e decisões do orquestrador, com motivo redigido e os horários de detecção, proposta, decisão e spawn. Nunca guarda histórico do terminal, ambiente, caminho de perfil ou segredo. Ficam as 1.000 linhas mais recentes, e a poda nunca apaga linha aberta |
+
+No canvas, `TerminalNodeData` ganha `accountMode` (`pinned` ou `chain`; ausente
+vale `pinned`), `chainOrigin` e `chainSuccessorNodeId`, persistidos. O
+`chainTicket` é transitório e nunca é salvo. `AgentSessionReference` ganha
+`accountId`.
+
+**Sessão, isolamento e retomada.**
+
+- A entrada de sessão do `PtyProcessManager` guarda `accountId`, `providerId` e
+  `accountMode`, e `listarSessoesVivas` os expõe. Reanexar um bloco a uma sessão
+  viva de outra conta lança `PTY_SESSION_ACCOUNT_MISMATCH` ("A sessão viva deste
+  bloco está em outra conta…"), sem matar a sessão viva. O card oferece
+  reiniciar na conta do bloco, e nenhum ambiente antigo é reaproveitado.
+- Um spawn com conta própria monta o ambiente por `applyProfileEnv`
+  (`cli-account-profiles.cjs`). A função devolve um objeto novo **sem** as
+  credenciais herdadas do provedor (`CREDENCIAIS_HERDADAS`: `ANTHROPIC_API_KEY`,
+  `OPENAI_API_KEY`, `GEMINI_API_KEY` e as demais da política) e com as variáveis
+  do perfil. O filtro fica nessa junção, e não no `buildEnv` da loja, porque o
+  `node-pty` serializa um valor `undefined` como o texto `"undefined"`. No
+  Windows o nome não diferencia maiúsculas. O Login do sistema não muda.
+- A descoberta de conversa recebe só as pastas de histórico do ambiente da conta
+  (`selectDiscoveryContext`: `CODEX_HOME`, `CLAUDE_CONFIG_DIR`, `GEMINI_HOME` e a
+  HOME do perfil). O Claude procura em `${CLAUDE_CONFIG_DIR || ~/.claude}/projects`.
+  A referência achada sai com o `accountId` do processo, e `canResumeAgentSession`
+  só retoma na mesma conta.
+- O `cli-accounts.json` é gravado num temporário e entra com `rename`. Arquivo
+  ausente é lista vazia. Arquivo ilegível lança `CLI_ACCOUNTS_STORE_UNREADABLE`
+  e nunca é sobrescrito.
+- O configurador de agente não cai no Login do sistema em silêncio:
+  `selectAccountFromList` devolve `ok`, `saved-missing` ou `list-failed`, a
+  seleção é mantida, e a abertura fica bloqueada até uma escolha explícita.
+- O relançamento automático do Codex, depois de ele se atualizar, não reenvia o
+  texto de uma passagem de responsabilidade (`initialTextIsHandoff`, transitório):
+  reenviar faria o agente recomeçar a tarefa e cobrar de novo.
+- A troca do login do sistema pelo gerenciador de CLIs não lista mais, entre os
+  afetados, os terminais com conta própria.
+
+**Orquestrador do chat.** `getProviderFamily(cliType)` (`claude` → Anthropic;
+`codex` e `codex-app-server` → OpenAI; `gemini` e `gemini-acp` → Google) e
+`requiresProviderSwitchConfirmation(from, to)` ficam puros em
+`spawn-model-selector.cjs`. Quando a família muda (fallback entre provedores,
+último recurso para outra família ou novo spawn no meio da tarefa), o runner não
+chama `spawnAgent`: registra uma decisão pendente, emite
+`provider_switch_request` e segue sem bloquear. O job fica `pending` até a
+resposta por `cli:provider-switch:respond`. As pendentes são recuperadas por
+`cli:provider-switch:list`. Sem resposta em 10 minutos, a varredura de 60 s que já
+existia trata a decisão como recusa. O store do orquestrador é em memória, então
+um reinício apaga a decisão sem executá-la. Cada decisão vai para o registro de
+trocas como `provider_switch`, com `accepted` ou `refused`. Codex → Codex App
+Server é só troca de transporte e não pergunta.
+
+**Custo no caminho quente.** Por pedaço de saída, a vigia só marca uma flag,
+guarda o horário e agenda um timer quando ainda não há um: sem regex, cópia ou
+alocação. A varredura lê no máximo 4 KiB, no máximo uma vez a cada 400 ms por
+sessão. Os tetos foram definidos antes de medir, e o `--check` da bancada
+`benchmark:pty-output` reprova acima deles: custo extra por pedaço ≤ 10% (p50),
+varredura no pior caso ≤ 1 ms (p95) e ≤ 5% de um núcleo com 20 sessões. Os
+números medidos ficam no `IA.md`. O Modo Performance é do renderer e **não**
+desliga a vigia, que tem orçamento fixo no processo principal.
+
 ## Cache offline do gerenciador de CLIs
 
 Decisão registrada em 12/09/2026, fatia 1/5 de "Arquitetura — Desenhar e

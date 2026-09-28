@@ -77,6 +77,11 @@ function parseAgentAuth(providerId, output) {
       account: identity,
       plan: firstString(payload, ['subscriptionType', 'subscription_type', 'plan']),
       organization: firstString(payload, ['orgName', 'organization', 'organizationName']),
+      // De onde a CLI tiraria uma chave de API (o NOME da fonte, como
+      // `ANTHROPIC_API_KEY` ou `apiKeyHelper`; nunca a chave). É fato de
+      // cobrança: com uma fonte de chave presente, a conta pode estar
+      // cobrando por uso mesmo com login de assinatura.
+      apiKeySource: readApiKeySource(payload),
     })
   }
 
@@ -310,9 +315,16 @@ function createAuthSnapshot(providerId, values) {
     account: cleanValue(values.account),
     plan: cleanValue(values.plan),
     organization: cleanValue(values.organization),
+    apiKeySource: cleanValue(values.apiKeySource),
     identityKey: fingerprint?.identityKey ?? null,
     identityDisplay: fingerprint?.identityDisplay ?? null,
   }
+}
+
+/** `apiKeySource` do `claude auth status --json`; "none" vale ausência. */
+function readApiKeySource(payload) {
+  const value = firstString(payload, ['apiKeySource', 'api_key_source'])
+  return value && value.trim().toLowerCase() !== 'none' ? value : null
 }
 
 function isSafeIdentity(value) {

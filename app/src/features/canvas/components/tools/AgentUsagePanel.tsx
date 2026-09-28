@@ -1,6 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { ExternalLink, Gauge, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { CanvasPanel } from './CanvasPanel'
+import { AccountChainSection } from './AccountChainSection'
+import { AccountSwitchHistory } from './AccountSwitchHistory'
+import { rovingIndex } from '../../services/keyboard-focus'
+import {
+  consumeRequestedAgentUsageTab,
+  type AgentUsagePanelTab,
+} from '../../services/agent-usage-panel-tab'
 import { FelixoSelect, type FelixoSelectOption } from '../../../shared/components/FelixoSelect'
 import { AgentUsageResetCreditsView } from '../../../shared/agent-usage/AgentUsageResetCredits'
 import { AgentUsageStatusDetailsView } from '../../../shared/agent-usage/AgentUsageStatusDetails'
@@ -32,7 +39,19 @@ type AgentUsagePanelProps = {
   onClose: () => void
   /** Widens the toolbar column; the panel slides over to clear it. */
   toolsMenuOpen?: boolean
+  /** "Ir para o bloco" da aba Trocas; só foca, não abre nada. */
+  onFocusNode?: (nodeId: string) => void
+  /** Blocos que ainda existem, para não oferecer ir a um bloco já fechado. */
+  existingNodeIds?: ReadonlySet<string>
 }
+
+type UsageTab = AgentUsagePanelTab
+
+const USAGE_TABS: ReadonlyArray<{ id: UsageTab; label: string }> = [
+  { id: 'uso', label: 'Uso agora' },
+  { id: 'cadeia', label: 'Cadeia' },
+  { id: 'trocas', label: 'Trocas' },
+]
 
 /**
  * A consulta ao `/status` do Claude abre uma sessão PTY descartável por conta
@@ -65,7 +84,15 @@ const AUTO_REFRESH_SELECT_OPTIONS: FelixoSelectOption[] = AUTO_REFRESH_OPTIONS.m
  * A regra da fonte continua valendo: número só aparece quando a CLI publicou —
  * ausência vira a limitação escrita por extenso, nunca zero.
  */
-export function AgentUsagePanel({ onClose, toolsMenuOpen }: AgentUsagePanelProps) {
+export function AgentUsagePanel({
+  onClose,
+  toolsMenuOpen,
+  onFocusNode,
+  existingNodeIds,
+}: AgentUsagePanelProps) {
+  const [tab, setTab] = useState<UsageTab>(() => consumeRequestedAgentUsageTab() ?? 'uso')
+  const tabsId = useId()
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
   const [dashboard, setDashboard] = useState<AgentUsageDashboard>({ ok: true })
   const [loading, setLoading] = useState(true)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
@@ -296,74 +323,125 @@ export function AgentUsagePanel({ onClose, toolsMenuOpen }: AgentUsagePanelProps
       size="lg"
       toolsMenuOpen={toolsMenuOpen}
     >
-      <div className="mb-3 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => void load(true)}
-          disabled={loading}
-          className="felixo-btn flex items-center gap-1.5 rounded-md bg-zinc-800 px-2 py-1 text-xs text-zinc-200 ring-1 ring-white/10 hover:bg-zinc-700 disabled:opacity-50"
-        >
-          <RefreshCw size={12} className={loading ? 'animate-spin' : undefined} />
-          Atualizar
-        </button>
-
-        {liveAt && (
-          <span
-            title={`Última atualização ao vivo às ${liveAt.toLocaleTimeString('pt-BR')}`}
-            className="flex items-center gap-1 text-[10px] text-theme-success"
+      <div
+        role="tablist"
+        aria-label="Seções de limites e uso"
+        className="mb-3 flex items-center gap-1 border-b border-white/10 pb-1.5"
+        onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
+          const current = USAGE_TABS.findIndex((item) => item.id === tab)
+          const next = rovingIndex(current, event.key, USAGE_TABS.length)
+          if (next === null) return
+          event.preventDefault()
+          setTab(USAGE_TABS[next].id)
+          tabRefs.current[next]?.focus()
+        }}
+      >
+        {USAGE_TABS.map((item, index) => (
+          <button
+            key={item.id}
+            ref={(element) => {
+              tabRefs.current[index] = element
+            }}
+            type="button"
+            role="tab"
+            id={`${tabsId}-tab-${item.id}`}
+            aria-selected={tab === item.id}
+            aria-controls={`${tabsId}-panel-${item.id}`}
+            tabIndex={tab === item.id ? 0 : -1}
+            onClick={() => setTab(item.id)}
+            className={`felixo-btn rounded-sm px-2 py-1 text-[11px] transition-colors ${
+              tab === item.id ? 'bg-white/10 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
+            }`}
           >
-            <span className="inline-block h-1.5 w-1.5 rounded-full bg-theme-success" />
-            ao vivo
-          </span>
-        )}
-
-        <div className="ml-auto flex items-center gap-1.5 text-[11px] text-zinc-500">
-          Reconsultar
-          <FelixoSelect
-            value={String(autoRefreshMinutes)}
-            options={AUTO_REFRESH_SELECT_OPTIONS}
-            onChange={(value) => setAutoRefreshMinutes(Number(value))}
-            aria-label="Intervalo de reconsulta"
-            className="min-w-40"
-          />
-        </div>
-      </div>
-
-      {statusMessage && (
-        <p className="mb-3 rounded-md border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-2 py-1.5 text-[11px] text-(--color-warning)">
-          {statusMessage}
-        </p>
-      )}
-
-      {!hasContent && (
-        <p className="rounded-md border border-white/10 bg-white/2 px-3 py-4 text-center text-[12px] text-zinc-500">
-          {loading ? 'Consultando as CLIs instaladas…' : 'Nenhuma CLI foi detectada nesta máquina.'}
-        </p>
-      )}
-
-      <div className="space-y-2.5">
-        {groups.map((group) => (
-          <ProviderCard
-            key={group.id}
-            group={group}
-            onRemoveAccount={removeAccount}
-            onUseResetCredit={useResetCredit}
-            statusline={group.id === 'claude' ? statusline : null}
-            onToggleStatusline={toggleStatusline}
-          />
+            {item.label}
+          </button>
         ))}
       </div>
 
-      {hasContent && (
-        <AddAccountForm
-          isOpen={isAddingAccount}
-          providers={groups}
-          onToggle={() => setIsAddingAccount((value) => !value)}
-          onAdded={(next) => {
-            setDashboard(next)
-            setIsAddingAccount(false)
-          }}
-        />
+      {tab === 'cadeia' && (
+        <div role="tabpanel" id={`${tabsId}-panel-cadeia`} aria-labelledby={`${tabsId}-tab-cadeia`}>
+          <AccountChainSection />
+        </div>
+      )}
+
+      {tab === 'trocas' && (
+        <div role="tabpanel" id={`${tabsId}-panel-trocas`} aria-labelledby={`${tabsId}-tab-trocas`}>
+          <AccountSwitchHistory onFocusNode={onFocusNode} existingNodeIds={existingNodeIds} />
+        </div>
+      )}
+
+      {tab === 'uso' && (
+        <div role="tabpanel" id={`${tabsId}-panel-uso`} aria-labelledby={`${tabsId}-tab-uso`}>
+        <div className="mb-3 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void load(true)}
+            disabled={loading}
+            className="felixo-btn flex items-center gap-1.5 rounded-md bg-zinc-800 px-2 py-1 text-xs text-zinc-200 ring-1 ring-white/10 hover:bg-zinc-700 disabled:opacity-50"
+          >
+            <RefreshCw size={12} className={loading ? 'animate-spin' : undefined} />
+            Atualizar
+          </button>
+
+          {liveAt && (
+            <span
+              title={`Última atualização ao vivo às ${liveAt.toLocaleTimeString('pt-BR')}`}
+              className="flex items-center gap-1 text-[10px] text-theme-success"
+            >
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-theme-success" />
+              ao vivo
+            </span>
+          )}
+
+          <div className="ml-auto flex items-center gap-1.5 text-[11px] text-zinc-500">
+            Reconsultar
+            <FelixoSelect
+              value={String(autoRefreshMinutes)}
+              options={AUTO_REFRESH_SELECT_OPTIONS}
+              onChange={(value) => setAutoRefreshMinutes(Number(value))}
+              aria-label="Intervalo de reconsulta"
+              className="min-w-40"
+            />
+          </div>
+        </div>
+
+        {statusMessage && (
+          <p className="mb-3 rounded-md border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-2 py-1.5 text-[11px] text-(--color-warning)">
+            {statusMessage}
+          </p>
+        )}
+
+        {!hasContent && (
+          <p className="rounded-md border border-white/10 bg-white/2 px-3 py-4 text-center text-[12px] text-zinc-500">
+            {loading ? 'Consultando as CLIs instaladas…' : 'Nenhuma CLI foi detectada nesta máquina.'}
+          </p>
+        )}
+
+        <div className="space-y-2.5">
+          {groups.map((group) => (
+            <ProviderCard
+              key={group.id}
+              group={group}
+              onRemoveAccount={removeAccount}
+              onUseResetCredit={useResetCredit}
+              statusline={group.id === 'claude' ? statusline : null}
+              onToggleStatusline={toggleStatusline}
+            />
+          ))}
+        </div>
+
+        {hasContent && (
+          <AddAccountForm
+            isOpen={isAddingAccount}
+            providers={groups}
+            onToggle={() => setIsAddingAccount((value) => !value)}
+            onAdded={(next) => {
+              setDashboard(next)
+              setIsAddingAccount(false)
+            }}
+          />
+        )}
+        </div>
       )}
     </CanvasPanel>
   )

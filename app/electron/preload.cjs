@@ -102,6 +102,11 @@ contextBridge.exposeInMainWorld('felixo', {
       ipcRenderer.invoke('cli:switch-official-account', params),
     orchestrationStatus: (params) =>
       ipcRenderer.invoke('cli:orchestration-status', params),
+    // Troca de provedor do orquestrador: o renderer só lista e responde; quem
+    // decide e executa é o runner no main.
+    listProviderSwitches: () => ipcRenderer.invoke('cli:provider-switch:list'),
+    respondProviderSwitch: (params) =>
+      ipcRenderer.invoke('cli:provider-switch:respond', params),
     getTerminalLogs: () => ipcRenderer.invoke('cli:terminal-logs:get'),
     clearTerminalLogs: (params) =>
       ipcRenderer.invoke('cli:terminal-logs:clear', params),
@@ -325,8 +330,43 @@ contextBridge.exposeInMainWorld('felixo', {
   cliAccounts: {
     list: (providerId) => ipcRenderer.invoke('cli-accounts:list', providerId),
     create: (params) => ipcRenderer.invoke('cli-accounts:create', params),
-    remove: (accountId) => ipcRenderer.invoke('cli-accounts:remove', accountId),
+    // Sem `{ confirmed: true }` nada é apagado: a resposta lista os terminais
+    // vivos na conta para a confirmação nomeá-los.
+    remove: (accountId, options) =>
+      ipcRenderer.invoke('cli-accounts:remove', accountId, options),
     setSecret: (params) => ipcRenderer.invoke('cli-accounts:set-secret', params),
+  },
+  // Cadeia de contas: o main decide tudo (elegibilidade, ordem, espera,
+  // proposta, ticket); a interface só lê, confirma e recusa.
+  accountChain: {
+    getState: () => ipcRenderer.invoke('account-chain:get-state'),
+    updateSettings: (params) => ipcRenderer.invoke('account-chain:update-settings', params),
+    updateMembers: (params) => ipcRenderer.invoke('account-chain:update-members', params),
+    checkLogin: (params) => ipcRenderer.invoke('account-chain:check-login', params),
+    previewLaunch: (params) => ipcRenderer.invoke('account-chain:preview-launch', params),
+    confirm: (params) => ipcRenderer.invoke('account-chain:confirm', params),
+    decline: (params) => ipcRenderer.invoke('account-chain:decline', params),
+    resolveAmbiguous: (params) => ipcRenderer.invoke('account-chain:resolve-ambiguous', params),
+    setSessionMode: (params) => ipcRenderer.invoke('account-chain:set-session-mode', params),
+    releaseCooldown: (params) => ipcRenderer.invoke('account-chain:release-cooldown', params),
+    redactTranscript: (params) => ipcRenderer.invoke('account-chain:redact-transcript', params),
+    recordManual: (params) => ipcRenderer.invoke('account-chain:record-manual', params),
+    history: (params) => ipcRenderer.invoke('account-chain:history', params),
+    onChanged: (callback) => {
+      const handler = (_event, state) => callback(state)
+      ipcRenderer.on('account-chain:changed', handler)
+      return () => ipcRenderer.removeListener('account-chain:changed', handler)
+    },
+    onProposal: (callback) => {
+      const handler = (_event, proposalEvent) => callback(proposalEvent)
+      ipcRenderer.on('account-chain:proposal', handler)
+      return () => ipcRenderer.removeListener('account-chain:proposal', handler)
+    },
+    onDetection: (callback) => {
+      const handler = (_event, detection) => callback(detection)
+      ipcRenderer.on('account-chain:detection', handler)
+      return () => ipcRenderer.removeListener('account-chain:detection', handler)
+    },
   },
   agentUsage: {
     list: () => ipcRenderer.invoke('agent-usage:list'),

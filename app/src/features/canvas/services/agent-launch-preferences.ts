@@ -8,6 +8,13 @@ import {
 /** Sentinel used by the launcher when the user explicitly selects a plain shell. */
 export const SHELL_AGENT_VALUE = '__shell__'
 
+/**
+ * Valor especial do campo Conta: "Automática (cadeia)". Só vale com a cadeia
+ * ligada e um provedor com checagem de login; o main escolhe a conta e a
+ * abertura confirma. Nunca cai no Login do sistema.
+ */
+export const CHAIN_ACCOUNT_VALUE = '@cadeia'
+
 const STORAGE_KEY = 'felixo:last-agent-launch-preferences'
 const LEGACY_AGENT_STORAGE_KEY = 'felixo:last-agent'
 
@@ -32,6 +39,11 @@ export type AgentLaunchPreferences = {
    * reescolher a cada terminal.
    */
   accountId: string
+  /**
+   * Nome dado pela pessoa à conta salva, guardado junto do id: se a conta
+   * sumir, o aviso "a conta salva X não existe mais" ainda sabe dizer qual.
+   */
+  accountLabel?: string
 }
 
 type StorageReader = Pick<Storage, 'getItem'>
@@ -110,6 +122,7 @@ function normalizePreferences(
     openiaInterface: stringValue(value.openiaInterface) || fallback.openiaInterface,
     openiaModel: stringValue(value.openiaModel),
     accountId: stringValue(value.accountId),
+    ...(stringValue(value.accountLabel) ? { accountLabel: stringValue(value.accountLabel) } : {}),
   }
 }
 

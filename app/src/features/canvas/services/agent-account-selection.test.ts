@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { CliAccount } from '../../shared/types/cli-accounts'
 import {
+  describeAccountSelectionIssue,
+  describeChainSelectionIssue,
+  resolveIssueAfterExplicitChoice,
   resolveOpeniaKeyStatus,
   selectAccountFromList,
+  selectionAfterAccountRemoved,
   shouldApplyAccountListResult,
 } from './agent-account-selection'
 
@@ -36,6 +40,57 @@ const openiaAccountWithoutKey: CliAccount = {
   secretConfigured: false,
 }
 
+describe('Automática (cadeia) no campo Conta', () => {
+  it('não é tratada como conta sumida nem cai no login do sistema', () => {
+    expect(selectAccountFromList({ ok: true, accounts: [codexAccount] }, '', '@cadeia')).toEqual({
+      status: 'ok',
+      accountId: '@cadeia',
+    })
+    expect(selectAccountFromList({ ok: true, accounts: [] }, '@cadeia', '')).toEqual({
+      status: 'ok',
+      accountId: '@cadeia',
+    })
+  })
+
+  it('com a lista ilegível continua bloqueando', () => {
+    expect(selectAccountFromList({ ok: false }, '@cadeia', '').status).toBe('list-failed')
+  })
+
+  const pronta = {
+    chainStatus: 'ready' as const,
+    enabled: true,
+    providerHasLoginCheck: true,
+    preview: { status: 'ready' as const },
+  }
+
+  it('só abre com a cadeia pronta, ligada, provedor conferível e prévia com conta', () => {
+    expect(describeChainSelectionIssue('@cadeia', pronta)).toBeNull()
+    expect(describeChainSelectionIssue('@cadeia', { ...pronta, preview: { status: 'pending' } })).toBeNull()
+  })
+
+  it('qualquer impedimento bloqueia com o motivo, nunca cai no login do sistema', () => {
+    const casos = [
+      { ...pronta, chainStatus: 'loading' as const },
+      { ...pronta, chainStatus: 'unavailable' as const },
+      { ...pronta, enabled: false },
+      { ...pronta, providerHasLoginCheck: false },
+      { ...pronta, preview: { status: 'refused' as const, message: 'Nenhuma conta apta agora.' } },
+    ]
+    for (const caso of casos) {
+      expect(describeChainSelectionIssue('@cadeia', caso)?.status).toBe('chain-blocked')
+    }
+    expect(
+      describeChainSelectionIssue('@cadeia', { ...pronta, preview: { status: 'refused', message: 'Nenhuma conta apta agora.' } })
+        ?.message,
+    ).toBe('Nenhuma conta apta agora.')
+  })
+
+  it('conta escolhida à mão não passa pela cadeia', () => {
+    expect(describeChainSelectionIssue('codex-conta', { ...pronta, enabled: false })).toBeNull()
+    expect(describeChainSelectionIssue('', { ...pronta, chainStatus: 'unavailable' })).toBeNull()
+  })
+})
+
 describe('seleção de conta por agente', () => {
   it('ignora a resposta antiga quando a troca de agente já iniciou outra carga', () => {
     expect(
@@ -57,10 +112,82 @@ describe('seleção de conta por agente', () => {
     ).toBe(true)
   })
 
-  it('não carrega a conta stale para a lista do novo provedor', () => {
-    expect(selectAccountFromList([codexAccount], 'claude-conta', 'claude-conta')).toBe('')
-    expect(selectAccountFromList([codexAccount], '', 'codex-conta')).toBe('codex-conta')
-    expect(selectAccountFromList([claudeAccount], 'claude-conta', '')).toBe('claude-conta')
+  it('escolhe a conta atual ou a salva quando elas estão na lista', () => {
+    const codex = { ok: true as const, accounts: [codexAccount] }
+    expect(selectAccountFromList(codex, '', 'codex-conta')).toEqual({ status: 'ok', accountId: 'codex-conta' })
+    expect(selectAccountFromList({ ok: true, accounts: [claudeAccount] }, 'claude-conta', '')).toEqual({
+      status: 'ok',
+      accountId: 'claude-conta',
+    })
+    // Na troca de agente a seleção é limpa e a conta salva de outro provedor
+    // não é passada: o novo provedor abre no login do sistema, sem aviso.
+    expect(selectAccountFromList(codex, '', '')).toEqual({ status: 'ok', accountId: '' })
+  })
+
+  it('lista que falha mantém a seleção e bloqueia a abertura, sem cair no login do sistema', () => {
+    const selection = selectAccountFromList(
+      { ok: false, message: 'O registro de contas (cli-accounts.json) está ilegível.' },
+      'codex-conta',
+      'codex-conta',
+    )
+    expect(selection).toEqual({
+      status: 'list-failed',
+      accountId: 'codex-conta',
+      message: 'O registro de contas (cli-accounts.json) está ilegível.',
+    })
+
+    const issue = describeAccountSelectionIssue(selection)
+    expect(issue?.status).toBe('list-failed')
+    expect(issue?.message).toContain('não vai abrir no login do sistema por engano')
+    expect(issue?.message).toContain('ilegível')
+
+    // Antes de a lista chegar a seleção era a conta salva; ela continua.
+    expect(selectAccountFromList({ ok: false }, '', 'codex-conta').accountId).toBe('codex-conta')
+  })
+
+  it('conta salva que sumiu continua escolhida (a preferência não vira "") e avisa pelo nome guardado', () => {
+    const selection = selectAccountFromList({ ok: true, accounts: [codexAccount] }, '', 'conta-removida')
+    expect(selection).toEqual({ status: 'saved-missing', accountId: 'conta-removida' })
+
+    expect(describeAccountSelectionIssue(selection, 'Trabalho')).toEqual({
+      status: 'saved-missing',
+      message: 'A conta salva "Trabalho" não existe mais. Escolha outra conta ou o login do sistema.',
+    })
+    expect(describeAccountSelectionIssue(selection)?.message).toBe(
+      'A conta salva não existe mais. Escolha outra conta ou o login do sistema.',
+    )
+    // A conta escolhida que some depois (removida em outra janela) também avisa.
+    expect(selectAccountFromList({ ok: true, accounts: [] }, 'codex-conta', '').status).toBe('saved-missing')
+    expect(describeAccountSelectionIssue({ status: 'ok', accountId: '' })).toBeNull()
+  })
+
+  it('só uma escolha explícita resolve o aviso; lista ilegível só se resolve com o login do sistema', () => {
+    const ausente = { status: 'saved-missing' as const, message: 'x' }
+    expect(resolveIssueAfterExplicitChoice(ausente, 'codex-conta')).toBeNull()
+    expect(resolveIssueAfterExplicitChoice(ausente, '')).toBeNull()
+
+    const ilegivel = { status: 'list-failed' as const, message: 'y' }
+    expect(resolveIssueAfterExplicitChoice(ilegivel, 'codex-conta')).toBe(ilegivel)
+    expect(resolveIssueAfterExplicitChoice(ilegivel, '')).toBeNull()
+    expect(resolveIssueAfterExplicitChoice(null, 'qualquer')).toBeNull()
+  })
+
+  it('remover a conta escolhida não grava o login do sistema: fica "Selecionar…" com a abertura bloqueada', () => {
+    // Antes: removeAccount fazia `atual === id ? '' : atual`, e o efeito de
+    // persistência gravava '' (login do sistema) sem a pessoa escolher.
+    const depois = selectionAfterAccountRemoved('codex-conta', 'codex-conta', 'Pessoal')
+    expect(depois?.accountId).toBe('codex-conta')
+    expect(depois?.accountId).not.toBe('')
+    expect(depois?.issue).toEqual({
+      status: 'saved-missing',
+      message: 'A conta "Pessoal" foi removida. Escolha outra conta ou o login do sistema.',
+    })
+    // Qualquer escolha explícita resolve, inclusive o login do sistema.
+    expect(resolveIssueAfterExplicitChoice(depois!.issue, '')).toBeNull()
+    expect(resolveIssueAfterExplicitChoice(depois!.issue, 'outra')).toBeNull()
+
+    expect(selectionAfterAccountRemoved('outra', 'codex-conta', 'Pessoal')).toBeNull()
+    expect(selectionAfterAccountRemoved('', 'codex-conta')).toBeNull()
   })
 
   it('usa a chave da conta selecionada e nunca herda a chave global', () => {

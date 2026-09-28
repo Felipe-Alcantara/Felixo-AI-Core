@@ -13,6 +13,8 @@ import type {
   Project,
   ProjectNote,
   OrchestrationStreamEvent,
+  ProviderSwitchRequest,
+  ProviderSwitchRespondResult,
   QaLogEntry,
   QaLogEntryInput,
   StreamEvent,
@@ -34,7 +36,12 @@ import type {
   FetchAllScanScope,
   FetchAllSettings,
 } from './features/canvas/types'
-import type { CliAccount } from './features/shared/types/cli-accounts'
+import type {
+  CliAccount,
+  CliAccountRemoveOptions,
+  CliAccountRemoveResult,
+} from './features/shared/types/cli-accounts'
+import type { AccountChainBridge } from './features/shared/types/account-chain'
 import type { GpuPreference, GpuPreferenceStatus } from './features/shared/graphics/gpu-preference'
 import type { HardwareProfile } from './features/shared/performance/performance-suggestion'
 import type { PromptInsertionMetadata } from './features/shared/types/prompt-insertion'
@@ -471,6 +478,14 @@ declare global {
           runId?: string
           threadId?: string
         }) => Promise<CliOrchestrationStatusResult>
+        /** Trocas de provedor esperando a pessoa (para recuperar ao montar). */
+        listProviderSwitches: () => Promise<
+          CliInvokeResult & { requests?: ProviderSwitchRequest[] }
+        >
+        respondProviderSwitch: (params: {
+          decisionId: string
+          accept: boolean
+        }) => Promise<ProviderSwitchRespondResult>
         getTerminalLogs: () => Promise<TerminalLogsResult>
         clearTerminalLogs: (params?: {
           ignoreSessionIds?: string[]
@@ -510,7 +525,25 @@ declare global {
           accountId?: string
           /** Provider of the CLI; validated against the account in the main process. */
           providerId?: string
-        }) => Promise<CliInvokeResult & { sessionId?: string; reused?: boolean }>
+          /** Fixa (padrão) ou da cadeia de contas; `chain` exige conta. */
+          accountMode?: 'pinned' | 'chain'
+          /**
+           * Ticket de uso único devolvido por `accountChain.confirm`. Só o bloco
+           * criado pela cadeia o leva; o main recusa ticket inexistente, vencido,
+           * de outra conta ou já usado por outra sessão.
+           */
+          chainTicket?: string
+        }) => Promise<
+          CliInvokeResult & {
+            sessionId?: string
+            reused?: boolean
+            /**
+             * `PTY_SESSION_ACCOUNT_MISMATCH`: a sessão viva deste bloco nasceu em outra conta.
+             * `CHAIN_TICKET_REFUSED`: o ticket da cadeia não vale para este spawn.
+             */
+            code?: string
+          }
+        >
         write: (params: {
           sessionId: string
           data: string
@@ -541,6 +574,8 @@ declare global {
           cwd: string
           capturedAt: number
           source?: string
+          /** Conta própria em que a conversa nasceu; ausente = login do sistema. */
+          accountId?: string
         }) => void) => () => void
       }
       projects?: {
@@ -930,16 +965,20 @@ declare global {
           account?: CliAccount
           message?: string
         }>
-        remove: (accountId: string) => Promise<{
-          ok: boolean
-          removed?: boolean
-          message?: string
-        }>
+        remove: (
+          accountId: string,
+          options?: CliAccountRemoveOptions,
+        ) => Promise<CliAccountRemoveResult>
         setSecret: (params: { accountId: string; secret: string }) => Promise<{
           ok: boolean
           message?: string
         }>
       }
+      /**
+       * Cadeia de contas (§2.5 do plano). Opcional: numa versão sem o serviço,
+       * a UI mostra a cadeia como indisponível e nada troca de conta.
+       */
+      accountChain?: AccountChainBridge
       agentUsage?: {
         list: () => Promise<AgentUsageDashboard>
         refresh: () => Promise<AgentUsageDashboard>

@@ -1,0 +1,1140 @@
+{
+  "schemaVersion": 1,
+  "description": "Vocabulário de falha das CLIs de agente, conferido nos pacotes instalados só por leitura de arquivo (nenhuma CLI é executada). É o oráculo dos testes da taxonomia de falhas (accounts/failure-taxonomy.cjs). Depois de atualizar uma CLI, confira com `node scripts/extract-cli-failure-vocabulary.cjs` e grave com `--write`. Campos: `literals` são os trechos procurados no pacote; `example` é uma linha como a CLI a imprime; `terminal` diz se a frase vale no terminal interativo (origem pty) ou só na saída de erro one-shot (origem fluxo); `sourceLiterals` são trechos do código do pacote que montam uma frase composta (o molde `You've hit your ${…}` e a entrada da tabela de nomes de limite), procurados no pacote mas ausentes da linha impressa; `inPackage` e `version` são gravados pelo script.",
+  "providers": {
+    "claude": {
+      "package": "@anthropic-ai/claude-code",
+      "version": "2.1.283",
+      "scannedFiles": [
+        "@anthropic-ai/claude-code/bin/claude.exe"
+      ],
+      "phrases": [
+        {
+          "id": "claude.limit.continuing-automatically-at",
+          "kind": "include",
+          "failureClass": "limit",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "Usage limit reached · continuing automatically at "
+          ],
+          "example": "Usage limit reached · continuing automatically at 4:40pm · esc to cancel",
+          "inPackage": true
+        },
+        {
+          "id": "claude.limit.continuing-automatically-when-resets",
+          "kind": "include",
+          "failureClass": "limit",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "Usage limit reached · continuing automatically when it resets · esc to cancel"
+          ],
+          "example": "Usage limit reached · continuing automatically when it resets · esc to cancel",
+          "inPackage": true
+        },
+        {
+          "id": "claude.limit.continuing-shortly",
+          "kind": "include",
+          "failureClass": "limit",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "Usage limit reached · continuing shortly · esc to cancel"
+          ],
+          "example": "Usage limit reached · continuing shortly · esc to cancel",
+          "inPackage": true
+        },
+        {
+          "id": "claude.limit.again-after-continue",
+          "kind": "include",
+          "failureClass": "limit",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "Usage limit reached again after you continued · continuing automatically "
+          ],
+          "example": "Usage limit reached again after you continued · continuing automatically at 9:10pm · the automatic-continue setting no longer ends this wait (esc or /rate-limit-options still can)",
+          "inPackage": true
+        },
+        {
+          "id": "claude.notice.limit-has-reset",
+          "kind": "notice",
+          "notice": "limit_reset",
+          "terminal": true,
+          "literals": [
+            "Your usage limit has reset · press enter to continue"
+          ],
+          "example": "Your usage limit has reset · press enter to continue",
+          "inPackage": true,
+          "note": "Não é falha: é o sinal de que o terminal antigo pode retomar na conta antiga."
+        },
+        {
+          "id": "claude.billing.out-of-extra-usage",
+          "kind": "include",
+          "failureClass": "billing",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "You're out of extra usage"
+          ],
+          "example": "You're out of extra usage · resets 4:40pm (America/Sao_Paulo)",
+          "inPackage": true
+        },
+        {
+          "id": "claude.billing.credit-balance-too-low",
+          "kind": "include",
+          "failureClass": "billing",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "Credit balance is too low"
+          ],
+          "example": "Credit balance is too low",
+          "inPackage": true
+        },
+        {
+          "id": "claude.billing.seat-without-usage-credits",
+          "kind": "include",
+          "failureClass": "billing",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "Your seat type doesn't include usage credits"
+          ],
+          "example": "Your seat type doesn't include usage credits",
+          "inPackage": true
+        },
+        {
+          "id": "claude.billing.seat-without-extra-usage",
+          "kind": "include",
+          "failureClass": "billing",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "Your seat type doesn't include extra usage"
+          ],
+          "example": "Your seat type doesn't include extra usage",
+          "inPackage": true,
+          "note": "Irmã da frase de usage credits, na mesma lista do pacote; não estava na tabela do plano."
+        },
+        {
+          "id": "claude.billing.group-limit-zero",
+          "kind": "include",
+          "failureClass": "billing",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "Your group's usage limit is set to $0"
+          ],
+          "example": "Your group's usage limit is set to $0",
+          "inPackage": true
+        },
+        {
+          "id": "claude.auth.not-logged-in",
+          "kind": "include",
+          "failureClass": "auth",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "Not logged in · Please run /login"
+          ],
+          "example": "Not logged in · Please run /login",
+          "inPackage": true
+        },
+        {
+          "id": "claude.auth.authentication-required",
+          "kind": "include",
+          "failureClass": "auth",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "Authentication required · Sign in again to continue"
+          ],
+          "example": "Authentication required · Sign in again to continue",
+          "inPackage": true
+        },
+        {
+          "id": "claude.auth.invalid-api-key",
+          "kind": "include",
+          "failureClass": "auth",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "Invalid API key · Fix external API key"
+          ],
+          "example": "Invalid API key · Fix external API key",
+          "inPackage": true
+        },
+        {
+          "id": "claude.auth.invalid-auth-token",
+          "kind": "include",
+          "failureClass": "auth",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "Invalid auth token · Fix external auth token"
+          ],
+          "example": "Invalid auth token · Fix external auth token",
+          "inPackage": true,
+          "note": "Vizinha das outras mensagens de login no pacote; não estava na tabela do plano."
+        },
+        {
+          "id": "claude.limit.code-rate-limit-error",
+          "kind": "include",
+          "failureClass": "limit",
+          "scope": "account",
+          "terminal": false,
+          "literals": [
+            "rate_limit_error"
+          ],
+          "example": "API Error: 429 {\"type\":\"error\",\"error\":{\"type\":\"rate_limit_error\",\"message\":\"This request would exceed your account's rate limit. Please try again later.\"}}",
+          "inPackage": true
+        },
+        {
+          "id": "claude.billing.code-billing-error",
+          "kind": "include",
+          "failureClass": "billing",
+          "scope": "account",
+          "terminal": false,
+          "literals": [
+            "billing_error"
+          ],
+          "example": "API Error: 400 {\"type\":\"error\",\"error\":{\"type\":\"billing_error\",\"message\":\"Your credit balance is too low to access the Anthropic API.\"}}",
+          "inPackage": true
+        },
+        {
+          "id": "claude.auth.code-authentication-error",
+          "kind": "include",
+          "failureClass": "auth",
+          "scope": "account",
+          "terminal": false,
+          "literals": [
+            "authentication_error"
+          ],
+          "example": "API Error: 401 {\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"}}",
+          "inPackage": true
+        },
+        {
+          "id": "claude.provider.code-overloaded-error",
+          "kind": "include",
+          "failureClass": "provider",
+          "scope": "account",
+          "terminal": false,
+          "literals": [
+            "overloaded_error"
+          ],
+          "example": "API Error: 529 {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"Overloaded\"}}",
+          "inPackage": true
+        },
+        {
+          "id": "claude.limit.hit-session-limit",
+          "kind": "include",
+          "failureClass": "limit",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "You've hit your",
+            "session limit"
+          ],
+          "sourceLiterals": [
+            "`You've hit your ${",
+            "five_hour:\"session limit\""
+          ],
+          "example": "You've hit your session limit · resets 4:40pm (America/Sao_Paulo)",
+          "inPackage": true,
+          "note": "Mensagem principal do limite de 5 horas (status 'rejected'): o binário monta `You've hit your ${nome}${sufixo}` com o nome tirado da tabela de janelas."
+        },
+        {
+          "id": "claude.limit.hit-weekly-limit",
+          "kind": "include",
+          "failureClass": "limit",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "You've hit your",
+            "weekly limit"
+          ],
+          "sourceLiterals": [
+            "`You've hit your ${",
+            "seven_day:\"weekly limit\""
+          ],
+          "example": "You've hit your weekly limit · resets Oct 2, 9am (America/Sao_Paulo)",
+          "inPackage": true
+        },
+        {
+          "id": "claude.limit.hit-usage-limit",
+          "kind": "include",
+          "failureClass": "limit",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "You've hit your",
+            "usage limit"
+          ],
+          "sourceLiterals": [
+            "`You've hit your ${",
+            "(\"usage limit\","
+          ],
+          "example": "You've hit your usage limit · resets 4:40pm (America/Sao_Paulo)",
+          "inPackage": true
+        },
+        {
+          "id": "claude.limit.hit-limit",
+          "kind": "include",
+          "failureClass": "limit",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "You've hit your",
+            "limit"
+          ],
+          "sourceLiterals": [
+            "`You've hit your ${",
+            "(\"limit\","
+          ],
+          "example": "You've hit your limit · resets 4:40pm (America/Sao_Paulo)",
+          "inPackage": true
+        },
+        {
+          "id": "claude.limit.hit-opus-limit",
+          "kind": "include",
+          "failureClass": "limit",
+          "scope": "model",
+          "terminal": true,
+          "literals": [
+            "You've hit your",
+            "Opus limit"
+          ],
+          "sourceLiterals": [
+            "`You've hit your ${",
+            "seven_day_opus:\"Opus limit\""
+          ],
+          "example": "You've hit your Opus limit · resets Oct 2, 9am (America/Sao_Paulo)",
+          "inPackage": true,
+          "note": "Limite semanal de um modelo: fica no modelo, como o limite por modelo do Codex."
+        },
+        {
+          "id": "claude.limit.hit-sonnet-limit",
+          "kind": "include",
+          "failureClass": "limit",
+          "scope": "model",
+          "terminal": true,
+          "literals": [
+            "You've hit your",
+            "Sonnet limit"
+          ],
+          "sourceLiterals": [
+            "`You've hit your ${",
+            "seven_day_sonnet:\"Sonnet limit\""
+          ],
+          "example": "You've hit your Sonnet limit · resets Oct 2, 9am (America/Sao_Paulo)",
+          "inPackage": true
+        },
+        {
+          "id": "claude.limit.hit-fable-limit",
+          "kind": "include",
+          "failureClass": "limit",
+          "scope": "model",
+          "terminal": true,
+          "literals": [
+            "You've hit your",
+            "Fable limit"
+          ],
+          "sourceLiterals": [
+            "`You've hit your ${",
+            "seven_day_overage_included:\"Fable limit\""
+          ],
+          "example": "You've hit your Fable limit · resets Oct 2, 9am (America/Sao_Paulo)",
+          "inPackage": true
+        },
+        {
+          "id": "claude.billing.hit-usage-credit-limit",
+          "kind": "include",
+          "failureClass": "billing",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "You've hit your",
+            "usage credit limit"
+          ],
+          "sourceLiterals": [
+            "`You've hit your ${",
+            "overage:\"usage credit limit\""
+          ],
+          "example": "You've hit your usage credit limit · resets Nov 1 (America/Sao_Paulo)",
+          "inPackage": true
+        },
+        {
+          "id": "claude.billing.hit-org-monthly-spend-limit",
+          "kind": "include",
+          "failureClass": "billing",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "You've hit your",
+            "org's monthly spend limit"
+          ],
+          "sourceLiterals": [
+            "`You've hit your ${",
+            "\"org's monthly spend limit\""
+          ],
+          "example": "You've hit your org's monthly spend limit · visit claude.ai/admin-settings/usage to raise it",
+          "inPackage": true
+        },
+        {
+          "id": "claude.billing.hit-org-monthly-usage-limit",
+          "kind": "include",
+          "failureClass": "billing",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "You've hit your",
+            "org's monthly usage limit"
+          ],
+          "sourceLiterals": [
+            "`You've hit your ${",
+            "\"org's monthly usage limit\""
+          ],
+          "example": "You've hit your org's monthly usage limit",
+          "inPackage": true
+        },
+        {
+          "id": "claude.billing.hit-individual-spend-limit",
+          "kind": "include",
+          "failureClass": "billing",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "You've hit your",
+            "individual spend limit"
+          ],
+          "sourceLiterals": [
+            "`You've hit your ${",
+            "\"individual spend limit\""
+          ],
+          "example": "You've hit your individual spend limit",
+          "inPackage": true
+        },
+        {
+          "id": "claude.billing.hit-monthly-spend-limit",
+          "kind": "include",
+          "failureClass": "billing",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "You've hit your monthly spend limit"
+          ],
+          "example": "You've hit your monthly spend limit",
+          "inPackage": true
+        },
+        {
+          "id": "claude.billing.hit-channel-monthly-spend-limit",
+          "kind": "include",
+          "failureClass": "billing",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "You've hit your channel's monthly spend limit"
+          ],
+          "example": "You've hit your channel's monthly spend limit",
+          "inPackage": true
+        },
+        {
+          "id": "claude.billing.hit-team-shared-budget",
+          "kind": "include",
+          "failureClass": "billing",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "You've hit your team's shared budget"
+          ],
+          "example": "You've hit your team's shared budget · ask your admin to raise it at claude.ai/admin-settings/usage",
+          "inPackage": true
+        },
+        {
+          "id": "claude.billing.out-of-usage-credits",
+          "kind": "include",
+          "failureClass": "billing",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "You're out of usage credits"
+          ],
+          "example": "You're out of usage credits. /model to switch models.",
+          "inPackage": true
+        },
+        {
+          "id": "claude.billing.org-out-of-usage",
+          "kind": "include",
+          "failureClass": "billing",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "Your org is out of usage · add funds to continue"
+          ],
+          "example": "Your org is out of usage · add funds to continue",
+          "inPackage": true
+        },
+        {
+          "id": "claude.exclude.wrapping-up",
+          "kind": "exclude",
+          "terminal": true,
+          "literals": [
+            "Usage limit reached · wrapping up"
+          ],
+          "example": "Usage limit reached · wrapping up",
+          "inPackage": true,
+          "note": "Janela de tolerância: o agente ainda está trabalhando."
+        },
+        {
+          "id": "claude.exclude.brief-wrap-up-then-credits",
+          "kind": "exclude",
+          "terminal": true,
+          "literals": [
+            "Usage limit reached · brief included wrap-up, then usage credits"
+          ],
+          "example": "Usage limit reached · brief included wrap-up, then usage credits",
+          "inPackage": true
+        },
+        {
+          "id": "claude.exclude.fast-limit",
+          "kind": "exclude",
+          "terminal": true,
+          "literals": [
+            "Fast limit reached"
+          ],
+          "example": "Fast limit reached and temporarily disabled · resets in 8m",
+          "inPackage": true
+        },
+        {
+          "id": "claude.exclude.context-limit",
+          "kind": "exclude",
+          "terminal": true,
+          "literals": [
+            "Context limit reached"
+          ],
+          "example": "Context limit reached · /compact or /clear to continue",
+          "inPackage": true
+        },
+        {
+          "id": "claude.exclude.budget-limit",
+          "kind": "exclude",
+          "terminal": true,
+          "literals": [
+            "Budget limit reached"
+          ],
+          "example": "Budget limit reached ($4.20 spent of the $5 maximum). New agents cannot be started.",
+          "inPackage": true
+        },
+        {
+          "id": "claude.exclude.subagent-nesting",
+          "kind": "exclude",
+          "terminal": true,
+          "literals": [
+            "Subagent nesting limit"
+          ],
+          "example": "Subagent nesting limit reached (depth 3 of 3). Complete this task directly using your tools instead of spawning another agent.",
+          "inPackage": true
+        },
+        {
+          "id": "claude.exclude.concurrent-subagents",
+          "kind": "exclude",
+          "terminal": true,
+          "literals": [
+            "Concurrent subagent limit"
+          ],
+          "example": "Concurrent subagent limit reached. You can run 4 subagents at once. Do not retry.",
+          "inPackage": true
+        },
+        {
+          "id": "claude.exclude.approaching-limit",
+          "kind": "exclude",
+          "terminal": true,
+          "literals": [
+            "Approaching your 5-hour usage limit"
+          ],
+          "example": "Approaching your 5-hour usage limit — Claude will wrap up the current step.",
+          "inPackage": true
+        },
+        {
+          "id": "claude.exclude.upgrade-offer",
+          "kind": "exclude",
+          "terminal": true,
+          "literals": [
+            "Upgrade to Max",
+            "for higher session limits every month"
+          ],
+          "example": "Upgrade to Max 20x for higher session limits every month",
+          "inPackage": true,
+          "note": "Oferta de upgrade: aparece para quem NÃO tem o plano, então nunca serve de limite nem de multiplicador."
+        },
+        {
+          "id": "claude.exclude.hit-fast-limit",
+          "kind": "exclude",
+          "terminal": true,
+          "literals": [
+            "You've hit your fast limit"
+          ],
+          "example": "You've hit your fast limit",
+          "inPackage": true,
+          "note": "Modo rápido: não é limite da conta."
+        },
+        {
+          "id": "claude.exclude.used-percent",
+          "kind": "exclude",
+          "terminal": true,
+          "literals": [
+            "You've used "
+          ],
+          "sourceLiterals": [
+            "\"You've used\",\"You're close to\""
+          ],
+          "example": "You've used 90% of your session limit · resets 4:40pm (America/Sao_Paulo)",
+          "inPackage": true,
+          "note": "Aviso de aproximação: a própria CLI separa 'You've used' e 'You're close to' da lista de mensagens de limite."
+        },
+        {
+          "id": "claude.exclude.close-to",
+          "kind": "exclude",
+          "terminal": true,
+          "literals": [
+            "You're close to your "
+          ],
+          "example": "You're close to your usage credit limit",
+          "inPackage": true
+        },
+        {
+          "id": "claude.observed.grace-stopped",
+          "kind": "observed",
+          "terminal": true,
+          "literals": [
+            "Usage limit reached"
+          ],
+          "example": "Usage limit reached",
+          "inPackage": true,
+          "note": "Rótulo sozinho do estado 'stopped' da tolerância de uso. Sem a captura dos bytes reais da TUI não dá para separá-lo do agente escrevendo a frase; fica fora da detecção (fail-closed) até essa captura."
+        }
+      ]
+    },
+    "codex": {
+      "package": "@openai/codex",
+      "version": "0.156.1",
+      "scannedFiles": [
+        "@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex"
+      ],
+      "phrases": [
+        {
+          "id": "codex.limit.upgrade-to-plus",
+          "kind": "include",
+          "failureClass": "limit",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "You’ve hit your usage limit. Upgrade to Plus to continue using Codex"
+          ],
+          "example": "■ You’ve hit your usage limit. Upgrade to Plus to continue using Codex (https://chatgpt.com/explore/plus), or try again at Oct 2, 2026 8:04 PM.",
+          "inPackage": true
+        },
+        {
+          "id": "codex.limit.purchase-credits",
+          "kind": "include",
+          "failureClass": "limit",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "You’ve hit your usage limit. Visit https://chatgpt.com/codex/settings/usage to purchase more credits"
+          ],
+          "example": "■ You’ve hit your usage limit. Visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at 8:04 PM.",
+          "inPackage": true
+        },
+        {
+          "id": "codex.limit.request-admin",
+          "kind": "include",
+          "failureClass": "limit",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "You’ve hit your usage limit. To get more access now, send a request to your admin"
+          ],
+          "example": "■ You’ve hit your usage limit. To get more access now, send a request to your admin or try again at 8:04 PM.",
+          "inPackage": true
+        },
+        {
+          "id": "codex.limit.ascii-apostrophe",
+          "kind": "include",
+          "failureClass": "limit",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "You’ve hit your usage limit. "
+          ],
+          "example": "You've hit your usage limit. Try again later.",
+          "inPackage": true,
+          "note": "O pacote usa U+2019; a renderização pode chegar com apóstrofo ASCII. As duas formas precisam casar."
+        },
+        {
+          "id": "codex.limit.increase-limits",
+          "kind": "include",
+          "failureClass": "limit",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "Usage limit reached. You've reached your usage limit. Increase your limits to continue using codex."
+          ],
+          "example": "Usage limit reached. You've reached your usage limit. Increase your limits to continue using codex.",
+          "inPackage": true
+        },
+        {
+          "id": "codex.limit.model",
+          "kind": "include",
+          "failureClass": "limit",
+          "scope": "model",
+          "terminal": true,
+          "literals": [
+            "You’ve hit your usage limit for ",
+            "Switch to another model now"
+          ],
+          "example": "■ You’ve hit your usage limit for gpt-5.5-codex. Switch to another model now, or try again at 8:04 PM.",
+          "inPackage": true,
+          "note": "Limite de um modelo: a conta segue apta com outro modelo; nunca põe a conta em espera."
+        },
+        {
+          "id": "codex.limit.code-usage-limit-reached",
+          "kind": "include",
+          "failureClass": "limit",
+          "scope": "account",
+          "terminal": false,
+          "literals": [
+            "usage_limit_reached"
+          ],
+          "example": "unexpected status 429 Too Many Requests: {\"error\":{\"type\":\"usage_limit_reached\",\"message\":\"The usage limit has been reached\"}}",
+          "inPackage": true
+        },
+        {
+          "id": "codex.limit.code-usage-limit-exceeded",
+          "kind": "include",
+          "failureClass": "limit",
+          "scope": "account",
+          "terminal": false,
+          "literals": [
+            "usage_limit_exceeded"
+          ],
+          "example": "stream error: usage_limit_exceeded",
+          "inPackage": true
+        },
+        {
+          "id": "codex.limit.code-workspace-owner",
+          "kind": "include",
+          "failureClass": "limit",
+          "scope": "account",
+          "terminal": false,
+          "literals": [
+            "workspace_owner_usage_limit_reached"
+          ],
+          "example": "error: workspace_owner_usage_limit_reached",
+          "inPackage": true
+        },
+        {
+          "id": "codex.limit.code-workspace-member",
+          "kind": "include",
+          "failureClass": "limit",
+          "scope": "account",
+          "terminal": false,
+          "literals": [
+            "workspace_member_usage_limit_reached"
+          ],
+          "example": "error: workspace_member_usage_limit_reached",
+          "inPackage": true
+        },
+        {
+          "id": "codex.billing.out-of-credits",
+          "kind": "include",
+          "failureClass": "billing",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "You're out of credits. Your workspace is out of credits."
+          ],
+          "example": "■ You're out of credits. Your workspace is out of credits. Add credits to continue using Codex.",
+          "inPackage": true
+        },
+        {
+          "id": "codex.billing.workspace-out-of-credits",
+          "kind": "include",
+          "failureClass": "billing",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "Your workspace is out of credits. Ask your workspace owner to refill in order to continue."
+          ],
+          "example": "■ Your workspace is out of credits. Ask your workspace owner to refill in order to continue.",
+          "inPackage": true,
+          "note": "Variante para membro de workspace; não estava na tabela do plano."
+        },
+        {
+          "id": "codex.billing.code-credits-depleted",
+          "kind": "include",
+          "failureClass": "billing",
+          "scope": "account",
+          "terminal": false,
+          "literals": [
+            "workspace_member_credits_depleted"
+          ],
+          "example": "error: workspace_member_credits_depleted",
+          "inPackage": true
+        },
+        {
+          "id": "codex.auth.not-logged-in",
+          "kind": "include",
+          "failureClass": "auth",
+          "scope": "account",
+          "terminal": true,
+          "anchor": "line",
+          "literals": [
+            "Not logged in"
+          ],
+          "example": "Not logged in",
+          "inPackage": true,
+          "note": "Saída de `codex login status`. Frase curta e comum em código de agente: no terminal só vale como linha inteira."
+        },
+        {
+          "id": "codex.auth.access-token-not-refreshed",
+          "kind": "include",
+          "failureClass": "auth",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "Your access token could not be refreshed"
+          ],
+          "example": "■ Your access token could not be refreshed. Please log out and sign in again.",
+          "inPackage": true,
+          "note": "Mensagem de login perdido que a TUI mostra; não estava na tabela do plano."
+        },
+        {
+          "id": "codex.auth.session-not-refreshed",
+          "kind": "include",
+          "failureClass": "auth",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "Your authentication session could not be refreshed automatically"
+          ],
+          "example": "■ Your authentication session could not be refreshed automatically. Please log out and sign in again.",
+          "inPackage": true,
+          "note": "Mensagem de login perdido que a TUI mostra; não estava na tabela do plano."
+        },
+        {
+          "id": "codex.auth.code-refresh-token-failed",
+          "kind": "include",
+          "failureClass": "auth",
+          "scope": "account",
+          "terminal": false,
+          "literals": [
+            "RefreshTokenFailed"
+          ],
+          "example": "error: RefreshTokenFailed(Expired)",
+          "inPackage": true
+        },
+        {
+          "id": "codex.auth.code-unauthorized",
+          "kind": "include",
+          "failureClass": "auth",
+          "scope": "account",
+          "terminal": false,
+          "literals": [
+            "unauthorized"
+          ],
+          "example": "unexpected status 401 Unauthorized: {\"error\":{\"code\":\"unauthorized\"}}",
+          "inPackage": true
+        },
+        {
+          "id": "codex.provider.high-load",
+          "kind": "include",
+          "failureClass": "provider",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "Codex is currently experiencing high load."
+          ],
+          "example": "■ Codex is currently experiencing high load.",
+          "inPackage": true,
+          "note": "Carga do servidor; não estava na tabela do plano."
+        },
+        {
+          "id": "codex.provider.code-server-overloaded",
+          "kind": "include",
+          "failureClass": "provider",
+          "scope": "account",
+          "terminal": false,
+          "literals": [
+            "server_overloaded"
+          ],
+          "example": "stream error: server_overloaded",
+          "inPackage": true
+        },
+        {
+          "id": "codex.provider.code-internal-server-error",
+          "kind": "include",
+          "failureClass": "provider",
+          "scope": "account",
+          "terminal": false,
+          "literals": [
+            "internal_server_error"
+          ],
+          "example": "stream error: internal_server_error",
+          "inPackage": true
+        },
+        {
+          "id": "codex.network.stream-disconnected",
+          "kind": "include",
+          "failureClass": "network",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "stream disconnected before completion"
+          ],
+          "example": "■ stream disconnected before completion: error sending request for url (https://chatgpt.com/backend-api/codex/responses)",
+          "inPackage": true
+        },
+        {
+          "id": "codex.network.reconnecting",
+          "kind": "include",
+          "failureClass": "network",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "Reconnecting..."
+          ],
+          "example": "⚠ Reconnecting... 2/5",
+          "inPackage": true
+        },
+        {
+          "id": "codex.network.code-http-connection-failed",
+          "kind": "include",
+          "failureClass": "network",
+          "scope": "account",
+          "terminal": false,
+          "literals": [
+            "http_connection_failed"
+          ],
+          "example": "error: http_connection_failed",
+          "inPackage": true
+        },
+        {
+          "id": "codex.network.code-response-stream-connection-failed",
+          "kind": "include",
+          "failureClass": "network",
+          "scope": "account",
+          "terminal": false,
+          "literals": [
+            "response_stream_connection_failed"
+          ],
+          "example": "error: response_stream_connection_failed",
+          "inPackage": true
+        },
+        {
+          "id": "codex.exclude.goal-budget",
+          "kind": "exclude",
+          "terminal": true,
+          "literals": [
+            "Goal budget reached"
+          ],
+          "example": "Goal budget reached - the turn was stopped.",
+          "inPackage": true
+        },
+        {
+          "id": "codex.exclude.conversation-interrupted",
+          "kind": "exclude",
+          "terminal": true,
+          "literals": [
+            "Conversation interrupted"
+          ],
+          "example": "Conversation interrupted - tell the model what to do differently.",
+          "inPackage": true
+        },
+        {
+          "id": "codex.exclude.context-window-exceeded",
+          "kind": "exclude",
+          "terminal": true,
+          "literals": [
+            "context_window_exceeded"
+          ],
+          "example": "error: context_window_exceeded",
+          "inPackage": true
+        },
+        {
+          "id": "codex.exclude.session-budget-exceeded",
+          "kind": "exclude",
+          "terminal": true,
+          "literals": [
+            "session_budget_exceeded"
+          ],
+          "example": "error: session_budget_exceeded",
+          "inPackage": true
+        },
+        {
+          "id": "codex.exclude.mcp-auth-status",
+          "kind": "exclude",
+          "terminal": true,
+          "literals": [
+            "Auth: Not logged in"
+          ],
+          "example": "  • Auth: Not logged in",
+          "inPackage": true,
+          "note": "Linha da listagem de servidores MCP (/mcp): fala do servidor MCP, não da conta do Codex."
+        }
+      ]
+    },
+    "gemini": {
+      "package": "@google/gemini-cli",
+      "version": "0.57.0",
+      "scannedFiles": [
+        "@google/gemini-cli/bundle/chunk-34MYV7JD.js",
+        "@google/gemini-cli/bundle/chunk-4H4K2RBL.js",
+        "@google/gemini-cli/bundle/chunk-5AUYMPVF.js",
+        "@google/gemini-cli/bundle/chunk-5PS3AYFU.js",
+        "@google/gemini-cli/bundle/chunk-664ZODQF.js",
+        "@google/gemini-cli/bundle/chunk-7HKQGPWB.js",
+        "@google/gemini-cli/bundle/chunk-7IKUWYZO.js",
+        "@google/gemini-cli/bundle/chunk-7ZGWPQVZ.js",
+        "@google/gemini-cli/bundle/chunk-AOE6E7MU.js",
+        "@google/gemini-cli/bundle/chunk-ASZFEU6C.js",
+        "@google/gemini-cli/bundle/chunk-DAHVX5MI.js",
+        "@google/gemini-cli/bundle/chunk-DFPYJMVX.js",
+        "@google/gemini-cli/bundle/chunk-FVC4WCSP.js",
+        "@google/gemini-cli/bundle/chunk-FYAMITQ2.js",
+        "@google/gemini-cli/bundle/chunk-GAROUUGQ.js",
+        "@google/gemini-cli/bundle/chunk-GAS2GAYB.js",
+        "@google/gemini-cli/bundle/chunk-GPOBVDAD.js",
+        "@google/gemini-cli/bundle/chunk-HY6GN2F7.js",
+        "@google/gemini-cli/bundle/chunk-IKHAM2LG.js",
+        "@google/gemini-cli/bundle/chunk-ISXOUBN5.js",
+        "@google/gemini-cli/bundle/chunk-IUUIT4SU.js",
+        "@google/gemini-cli/bundle/chunk-L5V3KIDT.js",
+        "@google/gemini-cli/bundle/chunk-LQJHQ4BU.js",
+        "@google/gemini-cli/bundle/chunk-MNBBUQQS.js",
+        "@google/gemini-cli/bundle/chunk-O7TOZUUB.js",
+        "@google/gemini-cli/bundle/chunk-QJ33O2NH.js",
+        "@google/gemini-cli/bundle/chunk-RLDNVR77.js",
+        "@google/gemini-cli/bundle/chunk-S3MXVTTY.js",
+        "@google/gemini-cli/bundle/chunk-TAWZWX2B.js",
+        "@google/gemini-cli/bundle/chunk-TUDYL3X4.js",
+        "@google/gemini-cli/bundle/chunk-XG56CL6B.js",
+        "@google/gemini-cli/bundle/chunk-YW7SDLZQ.js",
+        "@google/gemini-cli/bundle/cleanup-2HUWGXK6.js",
+        "@google/gemini-cli/bundle/cleanup-7N2HFE2E.js",
+        "@google/gemini-cli/bundle/cleanup-DA7OSZS5.js",
+        "@google/gemini-cli/bundle/core-2NMRPWUN.js",
+        "@google/gemini-cli/bundle/core-CFPIDJ4Z.js",
+        "@google/gemini-cli/bundle/devtools-TYCPOPV3.js",
+        "@google/gemini-cli/bundle/devtoolsService-7YYOUGVF.js",
+        "@google/gemini-cli/bundle/devtoolsService-VQSLUOYF.js",
+        "@google/gemini-cli/bundle/devtoolsService-WMEEEXY6.js",
+        "@google/gemini-cli/bundle/dist-AMP5W5P2.js",
+        "@google/gemini-cli/bundle/events-XB7DADIJ.js",
+        "@google/gemini-cli/bundle/gemini-5LF4JAP7.js",
+        "@google/gemini-cli/bundle/gemini-OYYGXMHL.js",
+        "@google/gemini-cli/bundle/gemini-PSRJNVY5.js",
+        "@google/gemini-cli/bundle/gemini.js",
+        "@google/gemini-cli/bundle/getMachineId-bsd-TXG52NKR.js",
+        "@google/gemini-cli/bundle/getMachineId-darwin-7OE4DDZ6.js",
+        "@google/gemini-cli/bundle/getMachineId-linux-SHIFKOOX.js",
+        "@google/gemini-cli/bundle/getMachineId-unsupported-5U5DOEYY.js",
+        "@google/gemini-cli/bundle/getMachineId-win-6KLLGOI4.js",
+        "@google/gemini-cli/bundle/https-proxy-agent-AVGR4LHR.js",
+        "@google/gemini-cli/bundle/interactiveCli-5E2C3XOC.js",
+        "@google/gemini-cli/bundle/interactiveCli-5O6FZS57.js",
+        "@google/gemini-cli/bundle/interactiveCli-PP7WTUZL.js",
+        "@google/gemini-cli/bundle/liteRtServerManager-5QBFCLBK.js",
+        "@google/gemini-cli/bundle/liteRtServerManager-LK6HOSMO.js",
+        "@google/gemini-cli/bundle/liteRtServerManager-ZPDALIDY.js",
+        "@google/gemini-cli/bundle/multipart-parser-E7RMVJWU.js",
+        "@google/gemini-cli/bundle/multipart-parser-KPBZEGQU.js",
+        "@google/gemini-cli/bundle/oauth2-provider-BGMEA7RS.js",
+        "@google/gemini-cli/bundle/oauth2-provider-BYKBBEKI.js",
+        "@google/gemini-cli/bundle/oauth2-provider-CO22I6UM.js",
+        "@google/gemini-cli/bundle/src-65GKNWUJ.js",
+        "@google/gemini-cli/bundle/src-U45KTUYT.js",
+        "@google/gemini-cli/bundle/src-XZYPU6PJ.js",
+        "@google/gemini-cli/bundle/start-JRTTCV3K.js",
+        "@google/gemini-cli/bundle/start-KH6WSP5C.js",
+        "@google/gemini-cli/bundle/start-O6LWZY6K.js",
+        "@google/gemini-cli/bundle/tree-sitter-XSXMMIUZ.js",
+        "@google/gemini-cli/bundle/tree-sitter-bash-LMFXTVOP.js"
+      ],
+      "phrases": [
+        {
+          "id": "gemini.provider.model-capacity-exhausted",
+          "kind": "include",
+          "failureClass": "provider",
+          "scope": "model",
+          "capacity": true,
+          "terminal": true,
+          "literals": [
+            "MODEL_CAPACITY_EXHAUSTED"
+          ],
+          "example": "✕ [API Error: 429 MODEL_CAPACITY_EXHAUSTED: No capacity available for model gemini-2.5-pro on the server]",
+          "inPackage": true
+        },
+        {
+          "id": "gemini.provider.exhausted-your-capacity",
+          "kind": "include",
+          "failureClass": "provider",
+          "scope": "model",
+          "capacity": true,
+          "terminal": true,
+          "literals": [
+            "exhausted your capacity"
+          ],
+          "example": "✕ [API Error: You have exhausted your capacity on this model. Please try again later.]",
+          "inPackage": true
+        },
+        {
+          "id": "gemini.limit.resource-exhausted-quota",
+          "kind": "include",
+          "failureClass": "limit",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "RESOURCE_EXHAUSTED"
+          ],
+          "example": "✕ [API Error: 429 RESOURCE_EXHAUSTED: Quota exceeded for quota metric 'Gemini 2.5 Pro Requests' and limit 'Gemini 2.5 Pro Requests per day']",
+          "inPackage": true,
+          "note": "O código está no pacote; 'Quota exceeded' vem do servidor. Só vale limite com os dois na mesma linha."
+        },
+        {
+          "id": "gemini.limit.daily-quota-model",
+          "kind": "include",
+          "failureClass": "limit",
+          "scope": "model",
+          "terminal": true,
+          "literals": [
+            "You have exhausted your daily quota on this model."
+          ],
+          "example": "✕ [API Error: You have exhausted your daily quota on this model.]",
+          "inPackage": true,
+          "note": "Cota diária de um modelo; não estava na tabela do plano."
+        }
+      ]
+    },
+    "openia": {
+      "package": "openia",
+      "version": "0.1.0",
+      "scannedFiles": [
+        "openia/__init__.py",
+        "openia/__main__.py",
+        "openia/cli.py",
+        "openia/config.py",
+        "openia/interfaces/base.py",
+        "openia/interfaces/registry.py",
+        "openia/models.py",
+        "openia/runner.py",
+        "openia/ui.py",
+        "openia/usage.py"
+      ],
+      "phrases": [],
+      "note": "O pacote não tem mensagem própria de falta de crédito nem de limite: o Openia fica sem detecção no terminal (fail-closed). A falta de crédito só aparece pela medição de créditos."
+    }
+  }
+}

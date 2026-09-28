@@ -100,6 +100,15 @@ function createStderrTitle(severity) {
   return 'Aviso da CLI'
 }
 
+const PROVIDER_SWITCH_OUTCOME_LABELS = Object.freeze({
+  accepted: 'Aceita pela pessoa',
+  refused: 'Recusada pela pessoa',
+  expired: 'Sem resposta no prazo (conta como recusa)',
+  cancelled: 'Cancelada pela interrupção da execução',
+  run_finished: 'Encerrada com o fim da orquestração',
+  superseded: 'Substituída',
+})
+
 function createOrchestrationTerminalEvent(event) {
   if (event.type === 'orchestration_agent_spawn') {
     return {
@@ -272,6 +281,66 @@ function createOrchestrationTerminalEvent(event) {
         availabilityType: event.availabilityType,
         expiresAt: event.expiresAt,
         resetLabel: event.resetLabel,
+      }),
+    }
+  }
+
+  if (event.type === 'orchestration_provider_switch_request') {
+    const target = event.toModelName
+      ? `${event.toCliType} (${event.toModelName})`
+      : event.toCliType
+    const details = [
+      `${event.agentId}: ${event.fromCliType} → ${target}.`,
+      'Aguardando a confirmação da pessoa no chat; nada roda antes da resposta.',
+      `Motivo: ${event.reason ?? 'limite ou indisponibilidade detectada'}.`,
+    ]
+
+    if (event.rule) {
+      details.push(`Regra: ${event.rule}.`)
+    }
+
+    if (event.expiresAt) {
+      details.push(`Sem resposta até ${event.expiresAt}, conta como recusa.`)
+    }
+
+    return {
+      source: 'system',
+      kind: 'lifecycle',
+      severity: 'warn',
+      title: 'Troca de provedor pede confirmação',
+      chunk: details.join('\n'),
+      metadata: compactObject({
+        runId: event.runId,
+        parentThreadId: event.parentThreadId,
+        agentId: event.agentId,
+        decisionId: event.decisionId,
+        decisionKind: event.kind,
+        fromCliType: event.fromCliType,
+        toCliType: event.toCliType,
+        toModelId: event.toModelId,
+        rule: event.rule,
+        expiresAt: event.expiresAt,
+      }),
+    }
+  }
+
+  if (event.type === 'orchestration_provider_switch_resolved') {
+    const label = PROVIDER_SWITCH_OUTCOME_LABELS[event.outcome] ?? 'Decisão encerrada'
+    const note = event.note ? ` ${event.note}` : ''
+    return {
+      source: 'system',
+      kind: 'lifecycle',
+      severity: event.outcome === 'accepted' ? 'info' : 'warn',
+      title: 'Troca de provedor',
+      chunk: `${event.agentId}: ${event.fromCliType} → ${event.toCliType}. ${label}.${note}`,
+      metadata: compactObject({
+        runId: event.runId,
+        parentThreadId: event.parentThreadId,
+        agentId: event.agentId,
+        decisionId: event.decisionId,
+        fromCliType: event.fromCliType,
+        toCliType: event.toCliType,
+        outcome: event.outcome,
       }),
     }
   }

@@ -7,20 +7,27 @@ const {
   collectThreadFamily,
   createOrchestrationModel,
   createOrchestrationStatusResponse,
+  createProviderSwitchListResponse,
+  createProviderSwitchRecorder,
   createToolLoopLimitMessage,
   createToolLoopProgressState,
   getPersistentCloseLogLevel,
+  recordModelAvailabilityEvent,
   resolveOrchestrationSpawnModel,
+  respondToProviderSwitch,
+  sendCliEvent,
   spawnOrchestrationAgent,
   shouldAbortForToolLoop,
   shouldSuppressPersistentTrailingOutput,
 } = require('./ipc-handlers.cjs')
 const {
   createModelAvailabilityRegistry,
+  detectAvailabilityIssue,
 } = require('./orchestrator/model-availability.cjs')
 const {
   createOrchestrationTerminalEvent,
 } = require('./terminal-event-formatter.cjs')
+const qaLogger = require('./qa-logger.cjs')
 
 test('ipc handlers use spawn args when native resume is disabled', () => {
   const adapter = {
@@ -401,4 +408,206 @@ test('spawnOrchestrationAgent fails fast when no model available', () => {
   })
 
   assert.equal(result.ok, false)
+})
+
+test('sendCliEvent anexa a classe de falha decidida no processo principal aos eventos de erro', () => {
+  const sent = []
+  const webContents = {
+    isDestroyed: () => false,
+    send: (channel, payload) => sent.push({ channel, payload }),
+  }
+
+  sendCliEvent(webContents, {
+    type: 'error',
+    sessionId: 's-1',
+    message: 'API Error: 401 Unauthorized — rate limit headers missing',
+  })
+  sendCliEvent(webContents, { type: 'error', sessionId: 's-1', message: 'Error: failed to parse line 429' })
+  sendCliEvent(webContents, { type: 'error', sessionId: 's-1', message: 'stream disconnected before completion: ECONNRESET' })
+  sendCliEvent(webContents, { type: 'error', sessionId: 's-1', message: 'Credit balance is too low' })
+  sendCliEvent(webContents, { type: 'text', sessionId: 's-1', text: 'rate limit exceeded' })
+  sendCliEvent(webContents, {
+    type: 'error',
+    sessionId: 's-1',
+    message: 'qualquer',
+    failure: { failureClass: 'limit', availabilityStatus: 'limit_reached' },
+  })
+
+  assert.deepEqual(sent.map(({ channel }) => channel), Array(6).fill('cli:stream'))
+  assert.deepEqual(sent.map(({ payload }) => payload.failure), [
+    { failureClass: 'auth', availabilityStatus: 'no_login' },
+    { failureClass: 'unknown', availabilityStatus: null },
+    { failureClass: 'network', availabilityStatus: null },
+    { failureClass: 'billing', availabilityStatus: 'limit_reached' },
+    undefined,
+    { failureClass: 'limit', availabilityStatus: 'limit_reached' },
+  ])
+  assert.equal(sent[0].payload.message, 'API Error: 401 Unauthorized — rate limit headers missing')
+  assert.equal('failure' in sent[4].payload, false, 'evento que não é erro passa intacto')
+})
+
+test('sendCliEvent passa a CLI para a taxonomia: chat e orquestrador concordam nas frases do provedor', () => {
+  // Antes: withCliFailure chamava describeCliFailure sem cliType, e só as
+  // frases genéricas valiam no chat — "Your access token could not be
+  // refreshed" do Codex dava unknown no chat e no_login no orquestrador.
+  const sent = []
+  const webContents = { isDestroyed: () => false, send: (_channel, payload) => sent.push(payload) }
+  const casos = [
+    ['codex', 'Your access token could not be refreshed. Please log out and sign in again.'],
+    ['claude', "You've hit your session limit · resets 4:40pm (America/Sao_Paulo)"],
+  ]
+
+  for (const [cliType, message] of casos) {
+    sendCliEvent(webContents, { type: 'error', sessionId: 's-1', message }, cliType)
+    const esperado = detectAvailabilityIssue({ message, cliType })
+    assert.ok(esperado, `${cliType}: o orquestrador reconhece a frase`)
+    assert.equal(sent.at(-1).failure.availabilityStatus, esperado.status, cliType)
+  }
+  assert.deepEqual(sent.map((payload) => payload.failure.failureClass), ['auth', 'limit'])
+})
+
+test('sendCliEvent não envia para uma janela destruída', () => {
+  let sends = 0
+  sendCliEvent({ isDestroyed: () => true, send: () => { sends += 1 } }, { type: 'error', message: 'x' })
+  sendCliEvent(null, { type: 'error', message: 'x' })
+  assert.equal(sends, 0)
+})
+
+test('o motivo de disponibilidade sai redigido no log QA e no evento de terminal', (t) => {
+  const qaEntries = []
+  qaLogger.__setDiskStoreForTests(null)
+  qaLogger.__setMainWindowGetterForTests(() => ({
+    isDestroyed: () => false,
+    webContents: {
+      isDestroyed: () => false,
+      send: (channel, payload) => {
+        if (channel === 'qa-logger:entry') qaEntries.push(payload)
+      },
+    },
+  }))
+  t.after(() => qaLogger.__setMainWindowGetterForTests(null))
+
+  const terminalEvents = []
+  const targetWebContents = {
+    isDestroyed: () => false,
+    send: (channel, payload) => {
+      if (channel === 'cli:terminal-output') terminalEvents.push(payload)
+    },
+  }
+
+  const sentinels = [
+    'Authorization: Bearer SENTINELA-bearer-0123456789',
+    'sk-ant-api03-SENTINELA0123456789',
+    'sk-or-v1-SENTINELA0123456789abcdef',
+    'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJTRU5USU5FTEEifQ.U0VOVElORUxBLWFzc2luYXR1cmE',
+  ]
+
+  const issue = recordModelAvailabilityEvent({
+    cliEvent: {
+      type: 'error',
+      message: `API Error: 401 Unauthorized ${sentinels.join(' ')}`,
+    },
+    cliType: 'claude',
+    model: { id: 'claude-redacao', name: 'Claude', cliType: 'claude' },
+    targetWebContents,
+    threadId: 'thread-redacao',
+  })
+
+  assert.equal(issue.status, 'no_login')
+  const availabilityLog = qaEntries.find((entry) => entry.scope === 'model:availability')
+  assert.ok(availabilityLog, 'o evento de disponibilidade vai para o log QA')
+  assert.equal(terminalEvents.length, 1)
+
+  const emitted = JSON.stringify({ issue, availabilityLog, terminalEvents })
+  assert.doesNotMatch(emitted, /SENTINELA|U0VOVElORUxB/, 'nenhum segredo sai do processo principal')
+  assert.match(availabilityLog.details.reason, /\[oculto\]/)
+})
+
+test('cli:provider-switch:respond valida o formato antes de chegar ao runner', async () => {
+  const calls = []
+  const runner = {
+    resolveProviderSwitch: async (params) => {
+      calls.push(params)
+      return params.accept
+        ? { ok: true, outcome: 'accepted', run: { runId: 'run-1', agentJobs: [] } }
+        : { ok: false, code: 'DECISION_NOT_PENDING' }
+    },
+  }
+  const decisionId = '6f1b1c1e-6a8e-4f4e-9a36-0f9d6f0c2b11'
+
+  for (const params of [
+    undefined,
+    { decisionId: 'decision-1', accept: true },
+    { decisionId, accept: 'true' },
+    { decisionId, accept: 1 },
+    { decisionId: `${decisionId}x`, accept: false },
+  ]) {
+    const result = await respondToProviderSwitch(runner, params)
+    assert.deepEqual(
+      { ok: result.ok, code: result.code },
+      { ok: false, code: 'INVALID_PARAMS' },
+    )
+  }
+  assert.equal(calls.length, 0)
+
+  const result = await respondToProviderSwitch(runner, {
+    decisionId,
+    accept: false,
+    extra: 'ignorado',
+  })
+  assert.equal(result.code, 'DECISION_NOT_PENDING')
+  assert.deepEqual(calls, [{ decisionId, accept: false }])
+
+  const accepted = await respondToProviderSwitch(runner, { decisionId, accept: true })
+  assert.deepEqual(accepted, { ok: true, outcome: 'accepted' }, 'o run não atravessa o IPC')
+})
+
+test('cli:provider-switch:list devolve as decisões pendentes do runner', () => {
+  const requests = [{ decisionId: 'a' }]
+  assert.deepEqual(
+    createProviderSwitchListResponse({ listProviderSwitches: () => requests }),
+    { ok: true, requests },
+  )
+})
+
+test('o registro de trocas de provedor não quebra sem banco e loga falha de gravação', (t) => {
+  const withoutDatabase = createProviderSwitchRecorder(null)
+  assert.doesNotThrow(() => withoutDatabase({ decisionId: 'x' }))
+
+  const qaEntries = []
+  qaLogger.__setDiskStoreForTests(null)
+  qaLogger.__setMainWindowGetterForTests(() => ({
+    isDestroyed: () => false,
+    webContents: {
+      isDestroyed: () => false,
+      send: (channel, payload) => {
+        if (channel === 'qa-logger:entry') qaEntries.push(payload)
+      },
+    },
+  }))
+  t.after(() => qaLogger.__setMainWindowGetterForTests(null))
+  const broken = createProviderSwitchRecorder({
+    connection: {
+      prepare() {
+        throw new Error('banco travado')
+      },
+      exec() {
+        throw new Error('banco travado')
+      },
+    },
+  })
+  assert.doesNotThrow(() =>
+    broken({
+      decisionId: '6f1b1c1e-6a8e-4f4e-9a36-0f9d6f0c2b11',
+      state: 'accepted',
+      fromCliType: 'claude',
+      toCliType: 'codex',
+      requestedAt: '2026-05-01T12:00:00.000Z',
+      decidedAt: '2026-05-01T12:01:00.000Z',
+      expiresAt: '2026-05-01T12:10:00.000Z',
+    }),
+  )
+  const failure = qaEntries.find((entry) => entry.scope === 'orchestration:provider-switch')
+  assert.ok(failure, 'a falha de gravação vai para o log QA')
+  assert.match(failure.message, /banco travado/)
 })

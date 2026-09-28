@@ -7,6 +7,7 @@ const win32Platform = require('../core/platform/win32.cjs')
 const {
   PtyProcessManager,
   MAX_REPLAY_BUFFER_CHARS,
+  PTY_SESSION_ACCOUNT_MISMATCH,
   isClaudeCommandName,
   DEFAULT_COLS,
   DEFAULT_ROWS,
@@ -16,6 +17,9 @@ const {
   resolveWorkingDirectory,
   resolveWindowsCodexPath,
 } = require('./pty-process-manager.cjs')
+const { createCliAccountStore } = require('./cli-account-store.cjs')
+const { createAccountOutputWatcher } = require('./accounts/account-output-watcher.cjs')
+const { OUTPUT_WATCHER_DEBOUNCE_MS } = require('./accounts/account-chain-constants.cjs')
 
 /**
  * Cria um diretório real acima do MAX_PATH clássico. No Windows,
@@ -672,6 +676,161 @@ test('reuseExisting reattaches without spawning or replaying the initial process
   assert.deepEqual(fakePty.kills, [])
 })
 
+test('a sessão guarda conta, provedor e modo, e a lista de sessões vivas os expõe', () => {
+  const { fakePty, spawnPty } = createFakePty()
+  const manager = new PtyProcessManager({ spawnPty, platform: fakePosixPlatform })
+
+  try {
+    manager.spawn('canvas:cadeia', { command: 'codex', accountId: ' conta-trabalho ', providerId: 'codex', accountMode: 'chain' })
+    manager.spawn('canvas:fixa', { command: 'claude', accountId: 'conta-max' })
+    manager.spawn('canvas:sistema', { command: 'codex', accountMode: 'chain' })
+    manager.spawn('canvas:modo-estranho', { command: 'codex', accountId: 'conta-x', accountMode: 'automatica' })
+    manager.spawn('canvas:shell', {})
+
+    const porId = new Map(manager.listarSessoesVivas().map((sessao) => [sessao.sessionId, sessao]))
+    const conta = (id) => {
+      const { accountId, providerId, accountMode } = porId.get(id)
+      return { accountId, providerId, accountMode }
+    }
+    assert.deepEqual(conta('canvas:cadeia'), { accountId: 'conta-trabalho', providerId: 'codex', accountMode: 'chain' })
+    // Bloco antigo, sem o campo novo: nasce fixo na conta escolhida.
+    assert.deepEqual(conta('canvas:fixa'), { accountId: 'conta-max', providerId: 'claude', accountMode: 'pinned' })
+    // Login do sistema não é membro da cadeia, mesmo que peçam.
+    assert.deepEqual(conta('canvas:sistema'), { accountId: null, providerId: 'codex', accountMode: 'pinned' })
+    assert.equal(conta('canvas:modo-estranho').accountMode, 'pinned')
+    assert.deepEqual(conta('canvas:shell'), { accountId: null, providerId: null, accountMode: 'pinned' })
+    // Nada de caminho de perfil nem ambiente na lista.
+    assert.doesNotMatch(JSON.stringify([...porId.values()]), /CODEX_HOME|cli-profiles|env/)
+
+    fakePty.emitExit({ exitCode: 0 })
+  } finally {
+    manager.killAll({ force: true })
+  }
+})
+
+test('reanexar a sessão viva em outra conta é recusado; na mesma conta reanexa', () => {
+  const { fakePty, spawnPty, calls } = createFakePty()
+  const manager = new PtyProcessManager({ spawnPty })
+  const originalOutput = []
+  const reattachedOutput = []
+
+  try {
+    manager.spawn('canvas:bloco', {
+      command: 'codex',
+      accountId: 'conta-pessoal',
+      onData: (data) => originalOutput.push(data),
+    })
+    fakePty.emitData('trabalho na conta pessoal\r\n')
+
+    for (const outraConta of ['conta-trabalho', undefined, '']) {
+      assert.throws(
+        () =>
+          manager.spawn('canvas:bloco', {
+            command: 'codex',
+            accountId: outraConta,
+            reuseExisting: true,
+            onData: (data) => reattachedOutput.push(data),
+          }),
+        (error) => {
+          assert.equal(error.code, PTY_SESSION_ACCOUNT_MISMATCH)
+          assert.match(error.message, /outra conta/)
+          return true
+        },
+      )
+    }
+
+    // Nada nasceu, nada morreu, e o renderer antigo continua recebendo a saída.
+    assert.equal(calls.length, 1)
+    assert.deepEqual(fakePty.kills, [])
+    assert.deepEqual(reattachedOutput, [])
+    fakePty.emitData('ainda na conta pessoal\r\n')
+    assert.deepEqual(originalOutput, ['trabalho na conta pessoal\r\n', 'ainda na conta pessoal\r\n'])
+
+    manager.spawn('canvas:bloco', {
+      command: 'codex',
+      accountId: 'conta-pessoal',
+      reuseExisting: true,
+      onData: (data) => reattachedOutput.push(data),
+    })
+    assert.equal(calls.length, 1)
+    assert.equal(reattachedOutput.length, 1, 'a mesma conta reanexa com o replay')
+  } finally {
+    manager.killAll({ force: true })
+  }
+})
+
+test('a descoberta de conversa recebe as pastas do perfil da conta e a referência leva a conta', async () => {
+  const { spawnPty } = createFakePty()
+  const pedidos = []
+  const manager = new PtyProcessManager({
+    spawnPty,
+    platform: fakePosixPlatform,
+    buildAccountEnv: (accountId) => (accountId === 'conta-trabalho' ? { CODEX_HOME: '/perfis/codex/trabalho' } : {}),
+    discoverAgentSession: (request) => {
+      pedidos.push(request)
+      return { version: 1, provider: 'codex', sessionId: `sessao-${pedidos.length}-abcdef`, cwd: request.cwd, capturedAt: 1 }
+    },
+  })
+  const referencias = new Map()
+  const recebida = (id) =>
+    new Promise((resolve) => {
+      referencias.set(id, resolve)
+    })
+  const daConta = recebida('conta')
+  const doSistema = recebida('sistema')
+
+  try {
+    manager.spawn('canvas:conta', {
+      command: 'codex',
+      cwd: process.cwd(),
+      accountId: 'conta-trabalho',
+      onSession: (reference) => referencias.get('conta')(reference),
+    })
+    manager.spawn('canvas:sistema', {
+      command: 'codex',
+      cwd: process.cwd(),
+      onSession: (reference) => referencias.get('sistema')(reference),
+    })
+
+    // A descoberta roda num timer `unref` (não segura o app aberto). No Node 22,
+    // com só esse timer pendente, o laço de eventos termina e o teste é
+    // cancelado; um timer com ref mantém o processo vivo durante a espera.
+    const segura = setInterval(() => {}, 1_000)
+    let referenciaConta
+    let referenciaSistema
+    try {
+      ;[referenciaConta, referenciaSistema] = await Promise.all([daConta, doSistema])
+    } finally {
+      clearInterval(segura)
+    }
+    const pedidoConta = pedidos.find((pedido) => pedido.env?.CODEX_HOME === '/perfis/codex/trabalho')
+    assert.ok(pedidoConta, `a descoberta não recebeu a pasta do perfil: ${JSON.stringify(pedidos.map((p) => p.env))}`)
+    assert.equal(Object.hasOwn(pedidoConta.env, 'PATH'), false, 'só as pastas de histórico vão para a descoberta')
+    assert.equal(referenciaConta.accountId, 'conta-trabalho')
+    assert.equal(Object.hasOwn(referenciaSistema, 'accountId'), false, 'login do sistema não tem conta')
+    assert.deepEqual(manager.listarSessoesVivas().length, 2)
+  } finally {
+    manager.killAll({ force: true })
+  }
+})
+
+test('sessão do login do sistema também não reanexa numa conta própria', () => {
+  const { spawnPty, calls } = createFakePty()
+  const manager = new PtyProcessManager({ spawnPty })
+
+  try {
+    manager.spawn('canvas:sistema', { command: 'claude' })
+    assert.throws(
+      () => manager.spawn('canvas:sistema', { command: 'claude', accountId: 'conta-max', reuseExisting: true }),
+      { code: PTY_SESSION_ACCOUNT_MISMATCH },
+    )
+    manager.spawn('canvas:sistema', { command: 'claude', reuseExisting: true })
+    assert.equal(calls.length, 1)
+  } finally {
+    manager.killAll({ force: true })
+  }
+})
+
 test('reattach depois de mais saída que o limite reenvia exatamente a cauda, na ordem', () => {
   const { fakePty, spawnPty } = createFakePty()
   const manager = new PtyProcessManager({ spawnPty })
@@ -1042,6 +1201,66 @@ test('o terminal nasce na conta escolhida, e sem conta segue o login do sistema'
   }
 })
 
+test('terminal com conta própria não herda chave de API do ambiente do app; o login do sistema fica igual', () => {
+  // Com a chave no ambiente, o Codex de uma conta ChatGPT cobraria pela chave
+  // (e o Claude Max, por uso): a conta escolhida deixaria de ser quem paga.
+  const sentinelas = {
+    OPENAI_API_KEY: 'sk-sentinela-openai',
+    CODEX_API_KEY: 'sk-sentinela-codex',
+    CODEX_ACCESS_TOKEN: 'eyJsentinela.codex',
+    ANTHROPIC_API_KEY: 'sk-ant-sentinela',
+    CLAUDE_CODE_OAUTH_TOKEN: 'sentinela-oauth',
+  }
+  const anteriores = Object.fromEntries(Object.keys(sentinelas).map((nome) => [nome, process.env[nome]]))
+  Object.assign(process.env, sentinelas)
+  const raiz = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-pty-credenciais-'))
+
+  try {
+    // A loja real de contas, montada como no processo principal.
+    const store = createCliAccountStore({ userData: path.join(raiz, 'userData'), homeDir: path.join(raiz, 'home') })
+    const codex = store.create({ providerId: 'codex', label: 'trabalho' })
+    const claude = store.create({ providerId: 'claude', label: 'max' })
+    const { spawnPty, calls } = createFakePty()
+    const manager = new PtyProcessManager({
+      spawnPty,
+      platform: fakePosixPlatform,
+      validateAccount: (accountId, providerId) => store.validateAccount(accountId, providerId),
+      buildAccountEnv: (accountId, providerId) => store.buildEnv(accountId, providerId),
+    })
+
+    try {
+      manager.spawn('com-conta-codex', { command: 'codex', accountId: codex.id })
+      manager.spawn('com-conta-claude', { command: 'claude', accountId: claude.id })
+      manager.spawn('login-do-sistema', { command: 'codex' })
+
+      const [envCodex, envClaude, envSistema] = calls.map((call) => call.options.env)
+      assert.match(envCodex.CODEX_HOME, new RegExp(codex.id))
+      for (const nome of ['OPENAI_API_KEY', 'CODEX_API_KEY', 'CODEX_ACCESS_TOKEN']) {
+        assert.equal(Object.hasOwn(envCodex, nome), false, `${nome} vazou para o terminal da conta Codex`)
+      }
+      assert.match(envClaude.CLAUDE_CONFIG_DIR, new RegExp(claude.id))
+      for (const nome of ['ANTHROPIC_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN']) {
+        assert.equal(Object.hasOwn(envClaude, nome), false, `${nome} vazou para o terminal da conta Claude`)
+      }
+      // Nenhum valor virou o texto "undefined" (o node-pty serializa assim).
+      assert.ok(!Object.values(envCodex).includes(undefined) && !Object.values(envClaude).includes(undefined))
+
+      for (const [nome, valor] of Object.entries(sentinelas)) {
+        assert.equal(envSistema[nome], valor, `o login do sistema perdeu ${nome}`)
+      }
+      assert.ok(envCodex.PATH && envSistema.PATH)
+    } finally {
+      manager.killAll({ force: true })
+    }
+  } finally {
+    for (const [nome, valor] of Object.entries(anteriores)) {
+      if (valor === undefined) delete process.env[nome]
+      else process.env[nome] = valor
+    }
+    fs.rmSync(raiz, { recursive: true, force: true })
+  }
+})
+
 test('o PTY recusa conta incompatível antes de compor o ambiente', () => {
   const { spawnPty, calls } = createFakePty()
   let ambienteMontado = false
@@ -1081,4 +1300,252 @@ test('classicScreen: só o Claude Code recebe CLAUDE_CODE_DISABLE_ALTERNATE_SCRE
 test('isClaudeCommandName reconhece só o executável do Claude Code', () => {
   for (const c of ['claude', 'claude.exe', 'C:\\a\\claude.cmd', '/usr/bin/claude']) assert.equal(isClaudeCommandName(c), true, c)
   for (const c of ['codex', 'bash', 'claude-helper', 'myclaude', '', undefined, 3]) assert.equal(isClaudeCommandName(c), false, String(c))
+})
+
+/**
+ * Manager com a vigia real de falha por conta, relógio fixo e agendador
+ * manual: os testes disparam os timers quando querem.
+ */
+function criarManagerComVigia(extra = {}) {
+  const { fakePty, spawnPty, calls } = createFakePty()
+  const timers = []
+  const detections = []
+  const created = []
+  const manager = new PtyProcessManager({
+    spawnPty,
+    platform: fakePosixPlatform,
+    discoverAgentSession: () => null,
+    now: () => 5_000,
+    createOutputWatcher: (options) => {
+      created.push(options.providerId)
+      return createAccountOutputWatcher({
+        ...options,
+        now: () => 5_000 + OUTPUT_WATCHER_DEBOUNCE_MS,
+        setTimer: (callback) => {
+          const timer = { callback, active: true }
+          timers.push(timer)
+          return timer
+        },
+        clearTimer: (timer) => {
+          timer.active = false
+        },
+      })
+    },
+    onOutputFailure: (detection) => detections.push(detection),
+    ...extra,
+  })
+  const fireTimers = () => {
+    for (const timer of timers.filter((item) => item.active)) {
+      timer.active = false
+      timer.callback()
+    }
+  }
+  return { manager, fakePty, calls, timers, detections, created, fireTimers }
+}
+
+const LIMITE_CODEX = '■ You’ve hit your usage limit. Upgrade to Plus to continue using Codex, or try again at 8:04 PM.\r\n'
+
+test('vigia: a detecção sai com a sessão, a conta, o provedor e o modo do bloco', () => {
+  const { manager, fakePty, detections, fireTimers } = criarManagerComVigia()
+  try {
+    manager.spawn('canvas:cadeia', { command: 'codex', accountId: 'conta-a', providerId: 'codex', accountMode: 'chain' })
+    fakePty.emitData('trabalhando...\r\n')
+    fakePty.emitData(LIMITE_CODEX)
+    fireTimers()
+
+    assert.equal(detections.length, 1)
+    const [detection] = detections
+    assert.equal(detection.kind, 'failure')
+    assert.equal(detection.sessionId, 'canvas:cadeia')
+    assert.equal(detection.accountId, 'conta-a')
+    assert.equal(detection.providerId, 'codex')
+    assert.equal(detection.accountMode, 'chain')
+    assert.equal(detection.lineageId, null)
+    assert.equal(detection.failure.failureClass, 'limit')
+    assert.equal(detection.failure.scope, 'account')
+    // O horário do último pedaço fica na entrada para a cadeia saber se a
+    // origem ainda está produzindo saída.
+    assert.equal(manager.sessions.get('canvas:cadeia').lastOutputAt, 5_000)
+  } finally {
+    manager.killAll({ force: true })
+  }
+})
+
+test('vigia: o login do sistema também é vigiado (só aviso); shell, Openia e manager sem consumidor não têm vigia', () => {
+  const { manager, fakePty, detections, created, fireTimers } = criarManagerComVigia()
+  try {
+    manager.spawn('canvas:sistema', { command: 'codex' })
+    manager.spawn('canvas:shell', {})
+    manager.spawn('canvas:openia', { command: 'openia' })
+    fakePty.emitData(LIMITE_CODEX)
+    fireTimers()
+
+    // O PTY falso é o mesmo para as três sessões; só a do Codex tem vigia.
+    assert.deepEqual(created, ['codex', 'openia'])
+    assert.equal(detections.length, 1)
+    assert.equal(detections[0].sessionId, 'canvas:sistema')
+    assert.equal(detections[0].accountId, null)
+    assert.equal(detections[0].accountMode, 'pinned')
+  } finally {
+    manager.killAll({ force: true })
+  }
+
+  let criadas = 0
+  const semConsumidor = new PtyProcessManager({
+    spawnPty: createFakePty().spawnPty,
+    platform: fakePosixPlatform,
+    discoverAgentSession: () => null,
+    createOutputWatcher: () => {
+      criadas += 1
+      return null
+    },
+  })
+  semConsumidor.spawn('canvas:x', { command: 'codex' })
+  semConsumidor.killAll({ force: true })
+  assert.equal(criadas, 0)
+})
+
+test('vigia: os bytes entregues ao renderer são idênticos com e sem vigia, na mesma ordem', () => {
+  const pedacos = [
+    '\x1b[2K\r⠋ Thinking… ',
+    'ç😀\r\n',
+    LIMITE_CODEX,
+    '\x1b[?1049h\x1b[H\x1b[2J',
+    'Not logged in\r\n',
+    '',
+    'fim',
+  ]
+  const entregar = (manager, fakePty) => {
+    const recebidos = []
+    manager.spawn('canvas:bytes', { command: 'codex', onData: (data) => recebidos.push(data) })
+    for (const pedaco of pedacos) fakePty.emitData(pedaco)
+    manager.killAll({ force: true })
+    return recebidos
+  }
+
+  const semVigia = createFakePty()
+  const comVigia = criarManagerComVigia()
+  const esperado = entregar(
+    new PtyProcessManager({ spawnPty: semVigia.spawnPty, platform: fakePosixPlatform, discoverAgentSession: () => null }),
+    semVigia.fakePty,
+  )
+  const obtido = entregar(comVigia.manager, comVigia.fakePty)
+
+  assert.deepEqual(obtido, pedacos)
+  assert.deepEqual(obtido, esperado)
+})
+
+test('vigia: o replay do attach não realimenta a vigia', () => {
+  const { manager, fakePty, detections, timers, fireTimers } = criarManagerComVigia()
+  try {
+    manager.spawn('canvas:replay', { command: 'codex' })
+    fakePty.emitData(LIMITE_CODEX)
+    fireTimers()
+    assert.equal(detections.length, 1)
+    const armados = timers.length
+
+    let replay = ''
+    manager.spawn('canvas:replay', { command: 'codex', reuseExisting: true, onData: (data) => { replay += data } })
+    assert.equal(replay, LIMITE_CODEX)
+    assert.equal(timers.length, armados, 'o replay armou a vigia')
+    fireTimers()
+    assert.equal(detections.length, 1)
+  } finally {
+    manager.killAll({ force: true })
+  }
+})
+
+test('vigia: a saída do processo varre na hora a última mensagem e desliga a vigia; o kill forçado só desliga', () => {
+  const { manager, fakePty, detections, timers } = criarManagerComVigia()
+  manager.spawn('canvas:sai', { command: 'codex' })
+  fakePty.emitData('Not logged in\r\n')
+  assert.equal(timers.filter((timer) => timer.active).length, 1)
+
+  fakePty.emitExit({ exitCode: 1 })
+
+  assert.equal(detections.length, 1, 'a última mensagem se perdeu na saída')
+  assert.equal(detections[0].failure.failureClass, 'auth')
+  assert.equal(timers.filter((timer) => timer.active).length, 0, 'timer ficou armado depois da saída')
+  manager.killAll({ force: true })
+
+  const outro = criarManagerComVigia()
+  outro.manager.spawn('canvas:morto', { command: 'codex' })
+  outro.fakePty.emitData(LIMITE_CODEX)
+  outro.manager.kill('canvas:morto', { force: true })
+  assert.equal(outro.timers.filter((timer) => timer.active).length, 0)
+  assert.deepEqual(outro.detections, [])
+})
+
+test('vigia: falha dentro da vigia ou do consumidor não derruba o terminal nem a entrega', () => {
+  const { spawnPty, fakePty } = createFakePty()
+  const recebidos = []
+  const manager = new PtyProcessManager({
+    spawnPty,
+    platform: fakePosixPlatform,
+    discoverAgentSession: () => null,
+    createOutputWatcher: () => ({
+      push() {
+        throw new Error('vigia quebrada')
+      },
+      flush() {
+        throw new Error('vigia quebrada')
+      },
+      dispose() {
+        throw new Error('vigia quebrada')
+      },
+    }),
+    onOutputFailure: () => {},
+  })
+  manager.spawn('canvas:robusto', { command: 'claude', onData: (data) => recebidos.push(data) })
+
+  assert.doesNotThrow(() => fakePty.emitData('a'))
+  assert.doesNotThrow(() => fakePty.emitData('b'))
+  assert.doesNotThrow(() => fakePty.emitExit({ exitCode: 0 }))
+  assert.deepEqual(recebidos, ['a', 'b'])
+  manager.killAll({ force: true })
+})
+
+test('a lista de sessões vivas expõe a última saída e a linhagem; o modo muda só em sessão viva com conta', () => {
+  const { fakePty, spawnPty } = createFakePty()
+  let clock = 1_000
+  const manager = new PtyProcessManager({ spawnPty, platform: fakePosixPlatform, now: () => clock })
+
+  try {
+    manager.spawn('canvas:conta', { command: 'codex', accountId: 'conta-a', providerId: 'codex' })
+    manager.spawn('canvas:sistema', { command: 'codex' })
+    const antes = new Map(manager.listarSessoesVivas().map((sessao) => [sessao.sessionId, sessao]))
+    // Sem saída ainda: a cadeia nunca bloqueia por uma origem que não imprimiu nada.
+    assert.equal(antes.get('canvas:conta').lastOutputAt, null)
+    assert.equal(antes.get('canvas:conta').lineageId, null)
+
+    clock = 5_000
+    fakePty.emitData('trabalhando\r\n')
+    const depois = new Map(manager.listarSessoesVivas().map((sessao) => [sessao.sessionId, sessao]))
+    assert.equal(depois.get('canvas:conta').lastOutputAt, 5_000)
+
+    assert.equal(manager.setAccountMode('canvas:conta', 'chain'), true)
+    assert.equal(manager.listarSessoesVivas().find((s) => s.sessionId === 'canvas:conta').accountMode, 'chain')
+    assert.equal(manager.setAccountMode('canvas:conta', 'pinned'), true)
+    // Login do sistema não entra na cadeia; modo fora do contrato e sessão inexistente são recusados.
+    assert.equal(manager.setAccountMode('canvas:sistema', 'chain'), false)
+    assert.equal(manager.setAccountMode('canvas:conta', 'automatica'), false)
+    assert.equal(manager.setAccountMode('canvas:nenhuma', 'pinned'), false)
+  } finally {
+    manager.killAll({ force: true })
+  }
+})
+
+test('a linhagem da cadeia fica na sessão só com conta própria e sai na lista de sessões vivas', () => {
+  const { spawnPty } = createFakePty()
+  const manager = new PtyProcessManager({ spawnPty, platform: fakePosixPlatform })
+
+  try {
+    manager.spawn('canvas:continuacao', { command: 'codex', accountId: 'conta-b', providerId: 'codex', accountMode: 'chain', lineageId: 'linhagem-1' })
+    manager.spawn('canvas:sistema', { command: 'codex', lineageId: 'linhagem-2' })
+    const porId = new Map(manager.listarSessoesVivas().map((sessao) => [sessao.sessionId, sessao]))
+    assert.equal(porId.get('canvas:continuacao').lineageId, 'linhagem-1')
+    assert.equal(porId.get('canvas:sistema').lineageId, null)
+  } finally {
+    manager.killAll({ force: true })
+  }
 })

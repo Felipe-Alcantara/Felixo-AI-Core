@@ -11,6 +11,12 @@
  * The two managers intentionally coexist: the pipe-based path keeps powering
  * structured orchestration, while this path powers human-driven terminal nodes.
  *
+ * Exceção medida (28/09/2026): terminal de agente com vigia injetada
+ * (`createOutputWatcher`) tem a cauda de replay lida, fora do `onData`, pela
+ * vigia de falha por conta (`accounts/account-output-watcher.cjs`). Os bytes
+ * entregues ao renderer continuam intocados e saem antes da vigia; o custo
+ * por pedaço é medido em `scripts/pty-output-path-benchmark.cjs`.
+ *
  * `node-pty` is a native addon compiled against a specific ABI. To keep this
  * module loadable under both the test runner (Node) and the app (Electron), the
  * binding is required lazily and can be replaced with an injected factory in
@@ -24,8 +30,9 @@ const path = require('node:path')
 const fs = require('node:fs')
 const platform = require('../core/platform/index.cjs')
 const { createCliEnv } = require('./cli-process-manager.cjs')
-const { discoverAgentSession } = require('./agent-session-discovery.cjs')
+const { discoverAgentSession, selectDiscoveryContext } = require('./agent-session-discovery.cjs')
 const { validatePtyAccountSelection } = require('./pty-account-validation.cjs')
+const { applyProfileEnv } = require('./cli-account-profiles.cjs')
 const { ensureNodePtySpawnHelperExecutable } = require('./pty-native-assets.cjs')
 
 const DEFAULT_COLS = 80
@@ -47,6 +54,13 @@ const SHELL_STARTUP_RECOVERY_WINDOW_MS = 3000
 const MAX_REPLAY_BUFFER_CHARS = 200_000
 const AGENT_SESSION_DISCOVERY_WINDOW_MS = 15_000
 const AGENT_SESSION_DISCOVERY_INTERVAL_MS = 250
+/**
+ * Modo da conta do bloco. `pinned` (fixa) é o padrão, inclusive de bloco
+ * antigo sem o campo: só vira `chain` o bloco aberto pela cadeia de contas.
+ */
+const PTY_ACCOUNT_MODES = Object.freeze(['pinned', 'chain'])
+const DEFAULT_PTY_ACCOUNT_MODE = 'pinned'
+const PTY_SESSION_ACCOUNT_MISMATCH = 'PTY_SESSION_ACCOUNT_MISMATCH'
 
 /**
  * @typedef {object} PtyHandle
@@ -74,8 +88,10 @@ class PtyProcessManager {
    * @param {(options: object) => object | null} [dependencies.discoverAgentSession] - Provider history resolver.
    * @param {(accountId: string, providerId?: string) => Record<string, string>} [dependencies.buildAccountEnv] - Ambiente da conta escolhida.
    * @param {(accountId: string, providerId: string) => {ok: boolean, message?: string}} [dependencies.validateAccount] - Confere a conta antes de montar o ambiente.
+   * @param {((options: object) => import('./accounts/account-output-watcher.cjs').AccountOutputWatcher | null) | null} [dependencies.createOutputWatcher] - Fábrica da vigia de falha por conta; sem ela nenhum terminal é vigiado.
+   * @param {((detection: object) => void) | null} [dependencies.onOutputFailure] - Recebe cada detecção da vigia, com a sessão, a conta e o modo.
    */
-  constructor({ spawnPty, now, platform: platformAdapter, logger, resolveCodexPath, isDebugSession, discoverAgentSession: discover = discoverAgentSession, buildAccountEnv, validateAccount } = {}) {
+  constructor({ spawnPty, now, platform: platformAdapter, logger, resolveCodexPath, isDebugSession, discoverAgentSession: discover = discoverAgentSession, buildAccountEnv, validateAccount, createOutputWatcher = null, onOutputFailure = null } = {}) {
     this.sessions = new Map()
     this.injectedSpawnPty = spawnPty ?? null
     this.now = now ?? (() => Date.now())
@@ -87,6 +103,10 @@ class PtyProcessManager {
     this.buildAccountEnv = buildAccountEnv ?? (() => ({}))
     this.validateAccount = validateAccount
     this.discoverAgentSession = discover
+    // Vigia de falha por conta: só existe com a fábrica e um consumidor. Sem
+    // eles (testes antigos, bancada `atual`) o onData fica como era.
+    this.createOutputWatcher = typeof createOutputWatcher === 'function' ? createOutputWatcher : null
+    this.onOutputFailure = typeof onOutputFailure === 'function' ? onOutputFailure : null
   }
 
   /**
@@ -109,6 +129,10 @@ class PtyProcessManager {
    * @param {boolean} [options.keepShellOpen] - Leave an interactive shell behind
    *   once the command exits, for "run this file" sessions where the command is
    *   the whole job and its output must remain readable.
+   * @param {string} [options.accountId] - Conta própria do terminal; ausente = login do sistema.
+   * @param {string} [options.providerId] - Provedor já validado contra a conta.
+   * @param {'pinned' | 'chain'} [options.accountMode] - Modo da conta do bloco; ausente = `pinned`.
+   * @param {string} [options.lineageId] - Linhagem da cadeia, devolvida pelo ticket confirmado.
    * @param {boolean} [isFallbackRetry] - Internal: true when this call is a
    *   recovery retry after an early exit or Windows PTY backend error. Callers
    *   should never pass this themselves.
@@ -134,9 +158,18 @@ class PtyProcessManager {
       throw new Error(accountValidation.message)
     }
 
+    const accountId = normalizeSessionAccountId(options.accountId)
+
     if (!isFallbackRetry && options.reuseExisting) {
       const existing = this.sessions.get(sessionId)
       if (existing) {
+        // Processo vivo nunca troca de conta: o ambiente da conta só entra no
+        // spawn. Reanexar um bloco cuja conta mudou (recarga depois de trocar
+        // a conta no configurador) entregaria à pessoa um terminal que ainda
+        // cobra da conta antiga, com a nova escrita no card.
+        if ((existing.accountId ?? null) !== accountId) {
+          throw createAccountMismatchError()
+        }
         this.attach(sessionId, options)
         return existing.ptyProcess
       }
@@ -148,12 +181,18 @@ class PtyProcessManager {
 
     const spawnPty = this.resolveSpawnPty()
     // A conta escolhida entra por variável de ambiente, depois do PATH: é o
-    // que faz duas contas do mesmo provedor conviverem sem logout. Sem conta
-    // escolhida o objeto vem vazio e nada muda.
-    const env = {
-      ...createCliEnv(),
-      ...this.buildAccountEnv(options.accountId, accountValidation.providerId),
-    }
+    // que faz duas contas do mesmo provedor conviverem sem logout. Com conta
+    // própria o terminal também deixa de herdar as chaves de API do ambiente
+    // do app (senão a CLI cobraria pela chave, não pela conta escolhida). Sem
+    // conta escolhida o objeto vem vazio e nada muda: é o login do sistema.
+    const accountEnv = this.buildAccountEnv(options.accountId, accountValidation.providerId)
+    const env = accountId
+      ? applyProfileEnv(
+          createCliEnv(),
+          { providerId: accountValidation.providerId, profileEnv: accountEnv },
+          this.platform.name,
+        )
+      : { ...createCliEnv(), ...accountEnv }
     // Rolagem no Claude Code: sem alternate screen o xterm guarda scrollback.
     if (options.classicScreen === true && isClaudeCommandName(options.command)) {
       env.CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN = '1'
@@ -285,7 +324,25 @@ class PtyProcessManager {
       discoveryTimer: null,
       agentSession: null,
       filaDeEscrita: null,
+      // Conta com que o processo nasceu. Não muda depois do spawn: é o que o
+      // reattach confere e o que a cadeia de contas lê para saber de quem é
+      // cada terminal vivo. Sem conta = login do sistema.
+      accountId,
+      providerId: accountValidation.providerId ?? null,
+      accountMode: accountId ? normalizeAccountMode(options.accountMode) : DEFAULT_PTY_ACCOUNT_MODE,
+      // Sequência de trocas da cadeia que criou este bloco (entra com o
+      // ticket confirmado); `null` em todo bloco aberto à mão.
+      lineageId: accountId && typeof options.lineageId === 'string' && options.lineageId ? options.lineageId : null,
+      // Onde a CLI deste terminal grava o histórico (pasta do perfil da conta,
+      // ou a do login do sistema). Só as variáveis de pasta, nunca o ambiente.
+      agentSessionContext: selectDiscoveryContext(env),
+      // Horário do último pedaço de saída; `null` = ainda não imprimiu nada.
+      // A cadeia de contas pergunta por ele antes de abrir a continuação de um
+      // terminal que ainda está trabalhando.
+      lastOutputAt: null,
+      watcher: null,
     }
+    entry.watcher = this.createSessionOutputWatcher(sessionId, entry, options)
 
     // Escrita grande vai fatiada e em ordem: o ConPTY do Windows descarta em
     // silêncio o excedente de uma escrita única grande, e era isso que cortava
@@ -300,6 +357,7 @@ class PtyProcessManager {
 
     ptyProcess.onData((data) => {
       entry.outputBuffer.append(String(data))
+      entry.lastOutputAt = this.now()
       try {
         // ConPTY can start a default shell successfully and only then report
         // an invalid path. Only handle the platform's own startup text here:
@@ -334,6 +392,15 @@ class PtyProcessManager {
       } catch {
         // A renderer callback must not bring down the PTY process.
       }
+      // Depois do renderer, nunca antes: a vigia não atrasa o pedaço que a
+      // pessoa vê. Por pedaço ela só marca "há texto novo" (O(1)).
+      if (entry.watcher !== null) {
+        try {
+          entry.watcher.push(entry.lastOutputAt)
+        } catch {
+          // A vigia é segurança de custo, não pode derrubar o terminal.
+        }
+      }
     })
 
     ptyProcess.onExit((event) => {
@@ -345,6 +412,10 @@ class PtyProcessManager {
       if (!isCurrentAttempt) {
         return
       }
+
+      // A última mensagem antes de sair costuma ser o motivo ("Not logged
+      // in", o aviso de limite): varre já, sem esperar o debounce, e desliga.
+      this.finishSessionOutputWatcher(entry, { flush: true })
 
       const exitedEarly =
         isCurrentAttempt &&
@@ -501,7 +572,14 @@ class PtyProcessManager {
    * saber "esta sessão é do Codex?", e é o comando pedido que responde isso de
    * forma estável entre plataformas.
    *
-   * @returns {Array<{ sessionId: string, command: string | null, args: string[], cwd: string, startedAt: number }>}
+   * A conta, o provedor e o modo vão junto: a troca do login do sistema só
+   * afeta terminal sem conta própria, e a cadeia precisa saber de quem é cada
+   * terminal vivo. Nunca sai caminho de perfil nem ambiente.
+   *
+   * `lastOutputAt` (ms) diz à cadeia se a origem ainda trabalha, e
+   * `lineageId` liga o bloco à sequência de trocas que o criou.
+   *
+   * @returns {Array<{ sessionId: string, command: string | null, args: string[], cwd: string, startedAt: number, accountId: string | null, providerId: string | null, accountMode: 'pinned' | 'chain', lastOutputAt: number | null, lineageId: string | null }>}
    */
   listarSessoesVivas() {
     const sessoes = []
@@ -517,10 +595,36 @@ class PtyProcessManager {
         args: [...(entry.args ?? [])],
         cwd: entry.cwd ?? '',
         startedAt: entry.spawnedAt,
+        accountId: entry.accountId ?? null,
+        providerId: entry.providerId ?? null,
+        accountMode: entry.accountMode ?? DEFAULT_PTY_ACCOUNT_MODE,
+        lastOutputAt: entry.lastOutputAt ?? null,
+        lineageId: entry.lineageId ?? null,
       })
     }
 
     return sessoes
+  }
+
+  /**
+   * Muda o modo da conta de um terminal vivo (fixar ou pôr na cadeia). A
+   * conta do processo não muda: só quem decide o que fazer numa falha. Sem
+   * conta própria (login do sistema) não há `chain`.
+   *
+   * @param {string} sessionId
+   * @param {'pinned' | 'chain'} mode
+   * @returns {boolean} `true` quando a sessão viva aceitou o modo.
+   */
+  setAccountMode(sessionId, mode) {
+    const entry = this.sessions.get(sessionId)
+    if (!entry || entry.exitEvent || !PTY_ACCOUNT_MODES.includes(mode)) {
+      return false
+    }
+    if (mode === 'chain' && !entry.accountId) {
+      return false
+    }
+    entry.accountMode = mode
+    return true
   }
 
   /** Replaces renderer callbacks and replays output after an HMR/navigation reload. */
@@ -688,8 +792,65 @@ class PtyProcessManager {
       clearTimeout(entry.discoveryTimer)
     }
     entry.filaDeEscrita?.descartar()
+    this.finishSessionOutputWatcher(entry, { flush: false })
 
     this.sessions.delete(sessionId)
+  }
+
+  /**
+   * Cria a vigia de falha por conta de um terminal de agente. Shell (sem
+   * comando), comando sem provedor conhecido e provedor sem frase para vigiar
+   * (Openia) ficam sem vigia e não pagam nada além de um `if` por pedaço.
+   *
+   * A vigia vale também para o login do sistema (sem conta): lá a detecção
+   * só vira aviso; quem decide é o consumidor.
+   *
+   * @returns {import('./accounts/account-output-watcher.cjs').AccountOutputWatcher | null}
+   */
+  createSessionOutputWatcher(sessionId, entry, options) {
+    if (!this.createOutputWatcher || !this.onOutputFailure || !options.command || !entry.providerId) {
+      return null
+    }
+
+    try {
+      return this.createOutputWatcher({
+        providerId: entry.providerId,
+        readTail: (count) => entry.outputBuffer.tail(count),
+        now: this.now,
+        logger: this.logger,
+        // Conta e modo são lidos na hora da detecção: o modo do bloco pode
+        // mudar depois do spawn (fixar ou pôr na cadeia).
+        onDetection: (detection) => this.onOutputFailure?.({
+          ...detection,
+          sessionId,
+          accountId: entry.accountId ?? null,
+          providerId: entry.providerId,
+          accountMode: entry.accountMode ?? DEFAULT_PTY_ACCOUNT_MODE,
+          // A linhagem só existe em bloco aberto pela cadeia (entra com o ticket).
+          lineageId: entry.lineageId ?? null,
+        }),
+      }) ?? null
+    } catch (error) {
+      this.logger?.warn?.('[pty] vigia de contas indisponível para este terminal:', error instanceof Error ? error.message : error)
+      return null
+    }
+  }
+
+  /** Desliga a vigia da entrada; com `flush`, varre antes o que ainda não foi lido. */
+  finishSessionOutputWatcher(entry, { flush }) {
+    const watcher = entry.watcher
+    if (!watcher) return
+    entry.watcher = null
+    try {
+      if (flush) watcher.flush()
+    } catch {
+      // A última varredura é o melhor esforço; a saída do processo segue.
+    }
+    try {
+      watcher.dispose()
+    } catch {
+      // Idem.
+    }
   }
 
   /**
@@ -717,14 +878,18 @@ class PtyProcessManager {
           cwd: current.cwd,
           startedAt: current.spawnedAt,
           now: this.now(),
+          env: current.agentSessionContext?.env,
+          homeDir: current.agentSessionContext?.homeDir,
         })
       } catch {
         reference = null
       }
 
       if (reference?.sessionId) {
-        current.agentSession = reference
-        current.onSession?.(reference)
+        // A conversa pertence à conta em que o processo nasceu: retomá-la em
+        // outra conta abriria o histórico de uma pessoa na cobrança de outra.
+        current.agentSession = current.accountId ? { ...reference, accountId: current.accountId } : reference
+        current.onSession?.(current.agentSession)
         return
       }
 
@@ -993,6 +1158,28 @@ function createPtyLaunchSpec(command, args, env, adapter = platform, keepShellOp
   return { command, args }
 }
 
+/** Mesma regra de "tem conta" da validação: string não vazia. */
+function hasSelectedAccount(accountId) {
+  return typeof accountId === 'string' && accountId.trim() !== ''
+}
+
+/** Conta como a sessão a guarda: id aparado, ou `null` no login do sistema. */
+function normalizeSessionAccountId(accountId) {
+  return hasSelectedAccount(accountId) ? accountId.trim() : null
+}
+
+function normalizeAccountMode(mode) {
+  return PTY_ACCOUNT_MODES.includes(mode) ? mode : DEFAULT_PTY_ACCOUNT_MODE
+}
+
+function createAccountMismatchError() {
+  const error = new Error(
+    'A sessão viva deste bloco está em outra conta. Reinicie o terminal para abri-lo na conta do bloco.',
+  )
+  error.code = PTY_SESSION_ACCOUNT_MISMATCH
+  return error
+}
+
 /**
  * Clamp a terminal dimension to a sane positive integer.
  *
@@ -1138,6 +1325,8 @@ function isClaudeCommandName(command) {
 module.exports = {
   PtyProcessManager,
   MAX_REPLAY_BUFFER_CHARS,
+  PTY_ACCOUNT_MODES,
+  PTY_SESSION_ACCOUNT_MISMATCH,
   isClaudeCommandName,
   DEFAULT_COLS,
   DEFAULT_ROWS,

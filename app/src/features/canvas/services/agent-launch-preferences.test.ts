@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  CHAIN_ACCOUNT_VALUE,
   readAgentLaunchPreferences,
   saveAgentLaunchPreferences,
 } from './agent-launch-preferences'
@@ -59,6 +60,50 @@ describe('agent launch preferences', () => {
       openiaInterface: 'aichat',
       openiaModel: 'anthropic/claude-sonnet-4',
     })
+  })
+
+  it('guarda o nome da conta salva junto do id, e só quando existe', () => {
+    const storage = createStorage()
+    const base = {
+      agentValue: 'codex' as const,
+      model: '',
+      effort: '',
+      yolo: false,
+      fast: false,
+      projectId: '',
+      planningFile: '',
+      openiaInterface: 'orchat',
+      openiaModel: '',
+    }
+    saveAgentLaunchPreferences({ ...base, accountId: 'conta-trabalho', accountLabel: 'Trabalho' }, storage)
+    expect(readAgentLaunchPreferences(storage)).toMatchObject({
+      accountId: 'conta-trabalho',
+      accountLabel: 'Trabalho',
+    })
+
+    saveAgentLaunchPreferences({ ...base, accountId: '' }, storage)
+    expect(readAgentLaunchPreferences(storage)).not.toHaveProperty('accountLabel')
+  })
+
+  it('lembra "Automática (cadeia)" como o valor especial, sem nome de conta', () => {
+    const storage = createStorage()
+    saveAgentLaunchPreferences(
+      {
+        agentValue: 'codex',
+        model: '',
+        effort: '',
+        yolo: false,
+        fast: false,
+        projectId: '',
+        planningFile: '',
+        openiaInterface: 'orchat',
+        openiaModel: '',
+        accountId: CHAIN_ACCOUNT_VALUE,
+      },
+      storage,
+    )
+    expect(readAgentLaunchPreferences(storage).accountId).toBe('@cadeia')
+    expect(readAgentLaunchPreferences(storage)).not.toHaveProperty('accountLabel')
   })
 
   it('discards corrupted or no-longer-supported agent options', () => {

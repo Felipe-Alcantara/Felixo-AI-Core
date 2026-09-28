@@ -105,3 +105,80 @@ test('com o buffer cheio, cada pedaço custa uma inserção, não uma cópia da 
   assert.equal(buffer.toString().length, limit)
   assert.ok(buffer.toString().endsWith(chunk))
 })
+
+test('tail(n) devolve o mesmo que toString().slice(-n), em fluxos aleatórios', () => {
+  for (let seed = 1; seed <= 200; seed += 1) {
+    const random = criarAleatorio(seed * 7919)
+    const limit = 1 + Math.floor(random() * 300)
+    const chunks = Array.from({ length: Math.floor(random() * 120) }, () =>
+      pedacoAleatorio(random, Math.floor(random() * 3) === 0 ? limit * 2 : 40),
+    )
+    const buffer = createReplayBuffer(limit)
+    const esperado = oraculo(chunks, limit)
+    chunks.forEach((chunk) => buffer.append(chunk))
+
+    for (const count of [1, 5, Math.floor(limit / 2), limit - 1, limit, limit + 50, esperado.length]) {
+      const n = Math.max(0, count)
+      assert.equal(buffer.tail(n), n === 0 ? '' : esperado.slice(-n), `seed ${seed}, limite ${limit}, n ${n}`)
+    }
+  }
+})
+
+test('tail não compacta nem muda o estado: length e o próximo toString() ficam iguais', () => {
+  for (let seed = 1; seed <= 200; seed += 1) {
+    const random = criarAleatorio(seed * 104729)
+    const limit = 1 + Math.floor(random() * 300)
+    const chunks = Array.from({ length: Math.floor(random() * 120) }, () => pedacoAleatorio(random, 60))
+    // Dois buffers com a mesma entrada; só um deles é lido pela cauda, no
+    // meio do fluxo e no fim. Qualquer efeito colateral apareceria na
+    // comparação com o gêmeo que nunca foi lido.
+    const lido = createReplayBuffer(limit)
+    const gemeo = createReplayBuffer(limit)
+    chunks.forEach((chunk, index) => {
+      lido.append(chunk)
+      gemeo.append(chunk)
+      if (index % 5 === 0) {
+        const antes = lido.length
+        lido.tail(1 + Math.floor(random() * limit))
+        assert.equal(lido.length, antes, `seed ${seed}: tail mudou o length`)
+      }
+    })
+
+    lido.tail(limit)
+    assert.equal(lido.length, gemeo.length, `seed ${seed}`)
+    assert.equal(lido.toString(), gemeo.toString(), `seed ${seed}`)
+    assert.equal(lido.toString(), oraculo(chunks, limit), `seed ${seed}`)
+  }
+})
+
+test('tail com zero, negativo, inválido ou maior que o limite não lança', () => {
+  const buffer = createReplayBuffer(6)
+  assert.equal(buffer.tail(3), '')
+  buffer.append('abc')
+  buffer.append('defgh')
+
+  assert.equal(buffer.tail(0), '')
+  assert.equal(buffer.tail(-4), '')
+  assert.equal(buffer.tail(Number.NaN), '')
+  assert.equal(buffer.tail(undefined), '')
+  assert.equal(buffer.tail(2.9), 'gh')
+  assert.equal(buffer.tail(1_000), 'cdefgh')
+  assert.equal(buffer.tail(Number.POSITIVE_INFINITY), 'cdefgh')
+})
+
+test('ler a cauda curta com o buffer cheio só junta os pedaços do fim', () => {
+  // Cauda de 4 KiB sobre 200.000 caracteres retidos em pedaços de 100: juntar
+  // tudo (o toString) custaria a cópia inteira a cada varredura da vigia.
+  const limit = 200_000
+  const buffer = createReplayBuffer(limit)
+  const chunk = '\x1b[2K\r⠋ Thinking… (12s · esc to interrupt) '.padEnd(100, 'x')
+  for (let index = 0; index < limit / 100 + 10; index += 1) buffer.append(chunk)
+
+  const startedAt = performance.now()
+  let last = ''
+  for (let index = 0; index < 5_000; index += 1) last = buffer.tail(4096)
+  const elapsedMs = performance.now() - startedAt
+
+  assert.equal(last, buffer.toString().slice(-4096))
+  assert.ok(elapsedMs < 1_000, `5.000 leituras de 4 KiB levaram ${elapsedMs.toFixed(1)} ms`)
+})

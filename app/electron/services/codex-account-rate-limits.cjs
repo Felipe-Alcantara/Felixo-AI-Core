@@ -3,6 +3,7 @@
 const { randomUUID } = require('node:crypto')
 const spawnChildProcess = require('cross-spawn')
 const { createCliEnv } = require('./cli-process-manager.cjs')
+const { buildAccountProcessEnv } = require('./cli-account-profiles.cjs')
 
 /**
  * Resets bancados ("banked resets") do Codex: um crédito único, concedido
@@ -197,7 +198,7 @@ function requestCodexAppServer({
 
     try {
       child = spawnProcess('codex', ['app-server', '--stdio'], {
-        env: createCliEnv({ ...process.env, ...accountEnv }),
+        env: createCliEnv(buildAccountProcessEnv(process.env, { providerId: 'codex', profileEnv: accountEnv })),
         stdio: ['pipe', 'pipe', 'pipe'],
         windowsHide: true,
       })

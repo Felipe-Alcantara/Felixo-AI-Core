@@ -2587,6 +2587,24 @@
   color: var(--f-core-secondary);
 }
 
+/* Selo da conta do bloco ("Pessoal · fixa"). Vai para a direita quando não
+   há modelo configurado ocupando esse lugar. */
+.felixo-node-account {
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 var(--f-space-1);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--f-core-white) 6%, transparent);
+  color: var(--f-core-white-soft);
+}
+
+.felixo-node-context-name + .felixo-node-account {
+  margin-left: auto;
+}
+
 .felixo-node-index {
   color: var(--f-core-secondary);
   font-variant-numeric: tabular-nums;
