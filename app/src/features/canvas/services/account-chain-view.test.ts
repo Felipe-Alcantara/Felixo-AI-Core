@@ -19,6 +19,7 @@ import {
   isUsageBilling,
   moveChainMember,
   moveMember,
+  rowMoveDelta,
   nodeIdFromPtySessionId,
   parseMultiplierInput,
   positionAnnouncement,
@@ -290,6 +291,16 @@ describe('ordem da lista', () => {
     })
     expect(outcome).toEqual({ moved: false })
     expect(calls).toBe(0)
+  })
+
+  it('Alt+setas só reordenam com o foco na própria linha', () => {
+    expect(rowMoveDelta({ key: 'ArrowUp', altKey: true, onRow: true })).toBe(-1)
+    expect(rowMoveDelta({ key: 'ArrowDown', altKey: true, onRow: true })).toBe(1)
+    // Alt+↓ no seletor de cobrança abre o seletor; no multiplicador e no checkbox, nada move.
+    expect(rowMoveDelta({ key: 'ArrowDown', altKey: true, onRow: false })).toBeNull()
+    expect(rowMoveDelta({ key: 'ArrowUp', altKey: true, onRow: false })).toBeNull()
+    expect(rowMoveDelta({ key: 'ArrowDown', altKey: false, onRow: true })).toBeNull()
+    expect(rowMoveDelta({ key: 'Enter', altKey: true, onRow: true })).toBeNull()
   })
 
   it('anuncia a posição nova em ordinal', () => {

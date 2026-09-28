@@ -444,6 +444,19 @@ export function positionAnnouncement(label: string, index: number): string {
   return `${label.trim() || 'Conta'} agora é a ${index + 1}ª`
 }
 
+/**
+ * Alt+↑/↓ reordena só com o foco na própria linha. Nos controles dela o gesto
+ * é deles: Alt+↓ abre o seletor de cobrança, e no multiplicador ou no
+ * checkbox não pode mover a conta sem querer. `null` = a tecla segue o
+ * caminho normal.
+ */
+export function rowMoveDelta(event: { key: string; altKey: boolean; onRow: boolean }): -1 | 1 | null {
+  if (!event.altKey || !event.onRow) return null
+  if (event.key === 'ArrowUp') return -1
+  if (event.key === 'ArrowDown') return 1
+  return null
+}
+
 export type ChainMoveOutcome = { moved: true; accountId: string; announcement: string } | { moved: false }
 
 /**

@@ -45,6 +45,14 @@ describe('modais sobre o canvas', () => {
     expect(outerClasses(html)).toContain('nokey')
   })
 
+  it('com o confirm em curso, o X ("Agora não") fica inativo, como o botão de texto', () => {
+    const idle = renderToStaticMarkup(createElement(AccountSwitchDialog, { binding: binding() }))
+    const busy = renderToStaticMarkup(createElement(AccountSwitchDialog, { binding: binding({ busy: true }) }))
+    const closeButton = (html: string) => /<button[^>]*aria-label="Agora não"[^>]*>/.exec(html)?.[0] ?? ''
+    expect(closeButton(idle)).not.toMatch(/\sdisabled=""/)
+    expect(closeButton(busy)).toMatch(/\sdisabled=""/)
+  })
+
   afterEach(() => {
     vi.unstubAllGlobals()
   })

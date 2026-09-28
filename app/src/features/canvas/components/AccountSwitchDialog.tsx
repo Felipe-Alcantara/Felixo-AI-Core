@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
 import { ArrowRightLeft, X } from 'lucide-react'
 import { getFocusableElements, tabTrapTarget } from '../services/keyboard-focus'
-import { buildAccountSwitchDialogModel, initialDialogSelection } from '../services/account-switch-dialog'
+import { buildAccountSwitchDialogModel, escapeDeclines, initialDialogSelection } from '../services/account-switch-dialog'
 import type { AccountSwitchDialogBinding } from '../hooks/useAccountContinuation'
 import { useClockTick } from '../hooks/useAccountChain'
 
@@ -39,6 +39,7 @@ export function AccountSwitchDialog({ binding }: { binding: AccountSwitchDialogB
   })
   const chosenId = model.initialFocusAccountId
   const onLater = binding.onLater
+  const busy = binding.busy
   const selectionLost = model.selectionLost
 
   // Foco inicial no rádio recomendado (ou no primeiro); sem opções, no painel.
@@ -64,7 +65,7 @@ export function AccountSwitchDialog({ binding }: { binding: AccountSwitchDialogB
       if (event.key === 'Escape') {
         event.preventDefault()
         event.stopPropagation()
-        onLater()
+        if (escapeDeclines(busy)) onLater()
         return
       }
       if (event.key !== 'Tab') return
@@ -88,7 +89,7 @@ export function AccountSwitchDialog({ binding }: { binding: AccountSwitchDialogB
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [onLater])
+  }, [busy, onLater])
 
   // Enter sobre o rádio não confirma nada: só as setas escolhem e só o botão
   // confirma. Sem isto um Enter apressado abriria o bloco na conta errada.
@@ -140,7 +141,8 @@ export function AccountSwitchDialog({ binding }: { binding: AccountSwitchDialogB
           <button
             type="button"
             onClick={binding.onLater}
-            className="felixo-btn-icon shrink-0 rounded-sm p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+            disabled={binding.busy}
+            className="felixo-btn-icon shrink-0 rounded-sm p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100 disabled:opacity-50"
             aria-label="Agora não"
           >
             <X size={15} />

@@ -262,6 +262,15 @@ export function initialDialogSelection(proposal: AccountSwitchProposal): string 
   return (recommended ?? proposal.candidates[0])?.accountId ?? null
 }
 
+/**
+ * Esc vale "Agora não" — menos enquanto o confirm está em curso: recusar ali
+ * fecharia o diálogo como recusado e o bloco novo abriria mesmo assim quando
+ * o confirm voltasse.
+ */
+export function escapeDeclines(busy: boolean): boolean {
+  return !busy
+}
+
 function lostSelectionText(proposal: AccountSwitchProposal, accountId: string): string {
   const excluded = proposal.excluded.find((item) => item.accountId === accountId)
   if (!excluded) return 'A conta escolhida saiu da lista. Escolha outra para continuar.'

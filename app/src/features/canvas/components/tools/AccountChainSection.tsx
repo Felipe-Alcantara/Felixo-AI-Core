@@ -14,6 +14,7 @@ import {
   ineligibilityText,
   moveChainMember,
   parseMultiplierInput,
+  rowMoveDelta,
   providerLabel,
   summarizeChain,
 } from '../../services/account-chain-view'
@@ -231,9 +232,14 @@ function ChainMemberRow({
   const provider = providerLabel(member.providerId)
 
   const onRowKeyDown = (event: KeyboardEvent<HTMLLIElement>) => {
-    if (!event.altKey || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return
+    const delta = rowMoveDelta({
+      key: event.key,
+      altKey: event.altKey,
+      onRow: event.target === event.currentTarget,
+    })
+    if (delta === null) return
     event.preventDefault()
-    onMove(event.key === 'ArrowUp' ? -1 : 1)
+    onMove(delta)
   }
 
   const commitMultiplier = () => {

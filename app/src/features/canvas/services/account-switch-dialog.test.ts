@@ -3,6 +3,7 @@ import {
   buildAccountSwitchDialogModel,
   buildContinuationLaunch,
   countLines,
+  escapeDeclines,
   formatTranscriptSize,
   initialDialogSelection,
 } from './account-switch-dialog'
@@ -137,6 +138,13 @@ describe('buildAccountSwitchDialogModel', () => {
   it('login em checagem aparece como tal', () => {
     const view = model({ candidates: [makeCandidate({ accountId: 'conta-b', checkingLogin: true })] })
     expect(view.options[0].login).toBe('Conferindo login…')
+  })
+})
+
+describe('escapeDeclines', () => {
+  it('Esc vale "Agora não", menos com o confirm em curso', () => {
+    expect(escapeDeclines(false)).toBe(true)
+    expect(escapeDeclines(true)).toBe(false)
   })
 })
 
