@@ -76,8 +76,19 @@ test('login conferido pela CLI vira checagem logged_in com método, plano e iden
   assert.equal(check.identityKey, bound)
   assert.equal(check.identityStatus, 'matched')
   assert.equal(check.apiKeySourcePresent, false)
-  assert.equal(check.billingDetected, null)
+  // claude.ai é login de assinatura; "max" não diz se é 5x ou 20x.
+  assert.equal(check.billingDetected, 'assinatura')
   assert.equal(check.multiplierDetected, null)
+})
+
+test('multiplicador só é detectado no campo de plano que a CLI publicou', async () => {
+  const { checker } = createChecker({
+    runCommand: async () => ({ ok: true, stdout: claudeStatus({ subscriptionType: 'Max 20x' }), stderr: '' }),
+  })
+
+  const check = await checker.checkLogin('claude-trabalho')
+
+  assert.equal(check.multiplierDetected, 20)
 })
 
 test('Claude sem login sai com código 1 e JSON válido: vira logged_out, não erro', async () => {

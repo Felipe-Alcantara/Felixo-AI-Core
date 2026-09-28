@@ -38,6 +38,7 @@ const {
   LOGIN_CHECK_MAX_CONCURRENCY,
   SWITCH_LABEL_MAX_CHARS,
 } = require('./account-chain-constants.cjs')
+const { classifyBilling, detectPlanMultiplier } = require('./account-chain-policy.cjs')
 const { checkAccountAuth, createProfileCommandEnv } = require('../agent-usage-service.cjs')
 const { getAgentUsageSource } = require('../agent-usage-sources.cjs')
 const { runLocalProbe } = require('../agent-usage-local-probes.cjs')
@@ -177,6 +178,9 @@ function createAccountEligibilityChecker({
   }
 
   function createCheck(account, values) {
+    const method = clipText(values.method)
+    const plan = clipText(values.plan)
+    const apiKeySourcePresent = Boolean(values.apiKeySource)
     return {
       accountId: account.accountId,
       providerId: account.providerId,
@@ -184,13 +188,13 @@ function createAccountEligibilityChecker({
       checkedAt: values.checkedAt,
       source: values.source,
       durationMs: values.durationMs ?? null,
-      method: clipText(values.method),
-      plan: clipText(values.plan),
-      // Cobrança e multiplicador detectados são decididos pela política
-      // (`classifyBilling`, `detectPlanMultiplier`) sobre método e plano.
-      billingDetected: null,
-      apiKeySourcePresent: Boolean(values.apiKeySource),
-      multiplierDetected: null,
+      method,
+      plan,
+      // Cobrança e multiplicador detectados vêm da política, só sobre o que a
+      // CLI publicou nos campos de método e plano.
+      billingDetected: classifyBilling({ providerId: account.providerId, method, apiKeySourcePresent }).detected,
+      apiKeySourcePresent,
+      multiplierDetected: detectPlanMultiplier([plan]),
       identityKey: values.identityKey ?? null,
       identityStatus: resolveIdentityStatus(values.identityKey ?? null, readBoundIdentityKey(account.accountId)),
     }
