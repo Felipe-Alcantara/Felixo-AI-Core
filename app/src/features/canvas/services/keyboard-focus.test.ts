@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { tabTrapTarget } from './keyboard-focus'
+import { rovingIndex, tabTrapTarget } from './keyboard-focus'
 
 describe('tabTrapTarget', () => {
   const focusable = ['fechar', 'campo', 'confirmar']
@@ -26,5 +26,22 @@ describe('tabTrapTarget', () => {
 
   it('devolve null quando o diálogo não tem controles focáveis', () => {
     expect(tabTrapTarget([], null, false, false)).toBeNull()
+  })
+})
+
+describe('rovingIndex', () => {
+  it('circula com as setas da orientação e vai às pontas com Home/End', () => {
+    expect(rovingIndex(0, 'ArrowRight', 3)).toBe(1)
+    expect(rovingIndex(2, 'ArrowRight', 3)).toBe(0)
+    expect(rovingIndex(0, 'ArrowLeft', 3)).toBe(2)
+    expect(rovingIndex(1, 'Home', 3)).toBe(0)
+    expect(rovingIndex(1, 'End', 3)).toBe(2)
+    expect(rovingIndex(0, 'ArrowDown', 3, 'vertical')).toBe(1)
+  })
+
+  it('não navega com tecla de outra orientação, outra tecla ou grupo vazio', () => {
+    expect(rovingIndex(0, 'ArrowDown', 3)).toBeNull()
+    expect(rovingIndex(0, 'Enter', 3)).toBeNull()
+    expect(rovingIndex(0, 'ArrowRight', 0)).toBeNull()
   })
 })

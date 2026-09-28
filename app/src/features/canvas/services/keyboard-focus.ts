@@ -52,3 +52,24 @@ export function getFocusableElements(container: HTMLElement): HTMLElement[] {
       element.getClientRects().length > 0,
   )
 }
+
+/**
+ * Próximo índice de um grupo com foco itinerante (por exemplo, `role="tablist"`):
+ * as setas da orientação circulam e Home/End vão às pontas. `null` = a tecla
+ * não navega o grupo e segue o caminho normal.
+ */
+export function rovingIndex(
+  current: number,
+  key: string,
+  count: number,
+  orientation: 'horizontal' | 'vertical' = 'horizontal',
+): number | null {
+  if (count <= 0) return null
+  const previousKey = orientation === 'horizontal' ? 'ArrowLeft' : 'ArrowUp'
+  const nextKey = orientation === 'horizontal' ? 'ArrowRight' : 'ArrowDown'
+  if (key === 'Home') return 0
+  if (key === 'End') return count - 1
+  if (key === previousKey) return (current - 1 + count) % count
+  if (key === nextKey) return (current + 1) % count
+  return null
+}
