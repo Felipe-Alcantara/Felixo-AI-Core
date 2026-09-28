@@ -330,7 +330,10 @@ contextBridge.exposeInMainWorld('felixo', {
   cliAccounts: {
     list: (providerId) => ipcRenderer.invoke('cli-accounts:list', providerId),
     create: (params) => ipcRenderer.invoke('cli-accounts:create', params),
-    remove: (accountId) => ipcRenderer.invoke('cli-accounts:remove', accountId),
+    // Sem `{ confirmed: true }` nada é apagado: a resposta lista os terminais
+    // vivos na conta para a confirmação nomeá-los.
+    remove: (accountId, options) =>
+      ipcRenderer.invoke('cli-accounts:remove', accountId, options),
     setSecret: (params) => ipcRenderer.invoke('cli-accounts:set-secret', params),
   },
   agentUsage: {

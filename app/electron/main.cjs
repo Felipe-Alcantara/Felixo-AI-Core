@@ -10,6 +10,7 @@ const {
 const { registerPtyIpcHandlers } = require('./services/pty-ipc-handlers.cjs')
 const { PtyProcessManager } = require('./services/pty-process-manager.cjs')
 const { createCliAccountStore } = require('./services/cli-account-store.cjs')
+const { createAccountChainRepository } = require('./services/storage/account-chain-repository.cjs')
 const {
   registerCliAccountIpcHandlers,
 } = require('./services/cli-account-ipc-handlers.cjs')
@@ -348,11 +349,17 @@ app.whenReady().then(async () => {
   terminalLogStore = createTerminalLogStore({
     directory: path.join(appPaths.logs, 'terminal-output'),
   })
+  // Remover uma conta também a tira da cadeia (membro, espera e checagem).
+  const accountChainRepository = createAccountChainRepository(storageDatabase)
   // A loja vem antes do serviço de uso: é ela que diz quais contas têm login
-  // próprio, e é da pasta de cada uma que a quota é lida.
+  // próprio, e é da pasta de cada uma que a quota é lida. Os terminais vivos
+  // entram por getter porque o gerenciador de PTY nasce depois.
   const cliAccounts = createCliAccountStore({
     userData: appPaths.userData,
     safeStorage,
+    listLiveSessions: () => ptyHandlers?.manager?.listarSessoesVivas?.() ?? [],
+    forgetChainAccount: (accountId) =>
+      accountChainRepository.forgetAccount(accountId, new Date().toISOString()),
   })
   const agentUsageService = createAgentUsageService({
     database: storageDatabase,

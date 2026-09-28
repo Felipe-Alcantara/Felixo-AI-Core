@@ -36,7 +36,11 @@ import type {
   FetchAllScanScope,
   FetchAllSettings,
 } from './features/canvas/types'
-import type { CliAccount } from './features/shared/types/cli-accounts'
+import type {
+  CliAccount,
+  CliAccountRemoveOptions,
+  CliAccountRemoveResult,
+} from './features/shared/types/cli-accounts'
 import type { AccountChainBridge } from './features/shared/types/account-chain'
 import type { GpuPreference, GpuPreferenceStatus } from './features/shared/graphics/gpu-preference'
 import type { HardwareProfile } from './features/shared/performance/performance-suggestion'
@@ -961,11 +965,10 @@ declare global {
           account?: CliAccount
           message?: string
         }>
-        remove: (accountId: string) => Promise<{
-          ok: boolean
-          removed?: boolean
-          message?: string
-        }>
+        remove: (
+          accountId: string,
+          options?: CliAccountRemoveOptions,
+        ) => Promise<CliAccountRemoveResult>
         setSecret: (params: { accountId: string; secret: string }) => Promise<{
           ok: boolean
           message?: string

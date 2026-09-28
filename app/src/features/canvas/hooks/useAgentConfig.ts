@@ -21,6 +21,10 @@ import { useAgentPresets } from './useAgentPresets'
 import type { AgentPreset, AgentPresetAgentId } from '../services/agent-preset'
 import type { NewTerminalOptions } from '../services/new-terminal-options'
 import {
+  removeAccountWithConfirmation,
+  type AccountRemovalOutcome,
+} from '../services/account-removal'
+import {
   buildOpeniaRunArgs,
   normalizeOpeniaInterfaces,
   normalizeOpeniaModels,
@@ -424,7 +428,9 @@ export function useAgentConfig(
         if (!guardada?.ok) {
           // A conta existe, mas sem a chave ela não serve: desfaz para não
           // deixar uma conta pela metade na lista.
-          await window.felixo?.cliAccounts?.remove(criada.account.id)
+          // Desfazer a criação não é uma remoção escolhida pela pessoa: a
+          // conta acabou de nascer e nenhum terminal abriu nela.
+          await window.felixo?.cliAccounts?.remove(criada.account.id, { confirmed: true })
           return { ok: false, message: guardada?.message ?? 'Não foi possível guardar a chave.' }
         }
       }
@@ -441,26 +447,41 @@ export function useAgentConfig(
     [carregarContas, providerId, setAccountId],
   )
 
+  /**
+   * Remove a conta depois da confirmação que nomeia os terminais vivos nela.
+   * `confirm` é quem pergunta (o componente decide como); a trava que exige a
+   * resposta fica no processo principal.
+   */
   const removeAccount = useCallback(
-    async (id: string) => {
-      const removida = await window.felixo?.cliAccounts?.remove(id)
-      if (!removida?.ok || removida.removed !== true) {
-        return {
-          ok: false,
-          message: removida?.message ?? 'Não foi possível remover a conta.',
-        }
+    async (
+      id: string,
+      label: string,
+      confirm: (message: string) => boolean | Promise<boolean>,
+    ): Promise<AccountRemovalOutcome> => {
+      const bridge = window.felixo?.cliAccounts
+      if (!bridge) {
+        return { status: 'failed', message: 'Não foi possível remover a conta.' }
+      }
+
+      const resultado = await removeAccountWithConfirmation({
+        accountLabel: label,
+        remove: (options) => bridge.remove(id, options),
+        confirm,
+      })
+      if (resultado.status !== 'removed') {
+        return resultado
       }
 
       const provedorDaOperacao = providerId
       await carregarContas()
       if (providerIdRef.current !== provedorDaOperacao) {
-        return { ok: true, message: null }
+        return resultado
       }
       // Só a conta removida sai da seleção. Decidir pela lista recarregada
       // faria uma falha de listagem derrubar outra conta para o login do
       // sistema sem ninguém escolher isso.
       setAccountId((atual) => (atual === id ? '' : atual))
-      return { ok: true, message: null }
+      return resultado
     },
     [carregarContas, providerId, setAccountId],
   )

@@ -29,6 +29,12 @@ const {
  * vira erro tipado (`CLI_ACCOUNTS_STORE_UNREADABLE`). Tratar os dois como
  * "nenhuma conta" fazia a próxima criação sobrescrever o registro inteiro e a
  * interface cair no login do sistema sem avisar.
+ *
+ * Remover conta é sempre confirmado, e a trava mora aqui (no molde de
+ * `switchOfficialCliAccount`): o primeiro pedido só devolve os terminais vivos
+ * na conta para a confirmação nomeá-los, e a remoção exige `confirmed === true`
+ * cobrindo todos eles. O app não encerra esses terminais (decisão 6: processo
+ * vivo nunca troca de conta), mas a pasta de login some debaixo deles.
  */
 
 const STORE_FILE = 'cli-accounts.json'
@@ -65,11 +71,37 @@ function writeFileAtomically(fileSystem, filePath, content, encoding) {
   }
 }
 
+/**
+ * Terminal vivo que usa a conta, na forma que a confirmação mostra: nada de
+ * ambiente, argumento ou caminho de perfil, só o que identifica o bloco.
+ *
+ * @returns {{ sessionId: string, cwd: string, startedAt: number | null }}
+ */
+function toAffectedSession(session) {
+  return {
+    sessionId: String(session.sessionId),
+    cwd: typeof session.cwd === 'string' ? session.cwd : '',
+    startedAt: Number.isFinite(session.startedAt) ? session.startedAt : null,
+  }
+}
+
+/**
+ * @param {object} options
+ * @param {() => Array<{ sessionId: string, accountId?: string | null, cwd?: string, startedAt?: number }>} [options.listLiveSessions]
+ *   Terminais vivos, lidos na hora de cada remoção (o gerenciador de PTY nasce
+ *   depois da loja). Se a leitura falhar, a remoção falha junto: sem saber
+ *   quem está na conta, não há o que confirmar.
+ * @param {(accountId: string) => unknown} [options.forgetChainAccount]
+ *   Tira a conta removida da cadeia (membro, espera e checagem de login). O
+ *   registro de trocas fica, com o rótulo guardado.
+ */
 function createCliAccountStore({
   userData,
   homeDir = os.homedir(),
   fileSystem = fs,
   safeStorage = null,
+  listLiveSessions = () => [],
+  forgetChainAccount = null,
 } = {}) {
   if (!userData) {
     throw new Error('createCliAccountStore requer userData.')
@@ -224,6 +256,13 @@ function createCliAccountStore({
     return account
   }
 
+  /** Terminais vivos que nasceram nesta conta. */
+  function listAccountSessions(accountId) {
+    return listLiveSessions()
+      .filter((session) => session?.accountId === accountId)
+      .map(toAffectedSession)
+  }
+
   /**
    * Remove a conta e apaga a pasta de login dela.
    *
@@ -231,17 +270,34 @@ function createCliAccountStore({
    * pasta órfã com token válido é pior que perder o login. A pessoa refaz o
    * login se recriar a conta.
    *
+   * Sem `confirmed === true`, nada é apagado: a resposta traz os terminais
+   * vivos na conta para a confirmação listá-los. Com a confirmação, todo
+   * terminal vivo precisa estar em `acknowledgedSessionIds`; um que abriu
+   * depois da pergunta devolve a confirmação com a lista nova, porque a
+   * pessoa não aceitou perder o login dele.
+   *
    * `ENOENT` é sucesso idempotente: a pasta pode ter sido removida por fora
    * antes da confirmação. Qualquer outro erro interrompe a operação antes de
    * esquecer a chave ou atualizar o registro, para que a conta continue
    * disponível para uma nova tentativa.
+   *
+   * @param {string} accountId
+   * @param {{ confirmed?: boolean, acknowledgedSessionIds?: string[] }} [options]
+   * @returns {{ removed: boolean, requiresConfirmation?: true, sessions: Array<{ sessionId: string, cwd: string, startedAt: number | null }>, chainCleaned?: boolean }}
    */
-  function remove(accountId) {
+  function remove(accountId, { confirmed = false, acknowledgedSessionIds = [] } = {}) {
     const accounts = readStore()
     const account = accounts.find((item) => item.id === accountId)
 
     if (!account) {
-      return false
+      return { removed: false, sessions: [] }
+    }
+
+    const sessions = listAccountSessions(account.id)
+    const acknowledged = new Set(Array.isArray(acknowledgedSessionIds) ? acknowledgedSessionIds : [])
+
+    if (confirmed !== true || sessions.some((session) => !acknowledged.has(session.sessionId))) {
+      return { removed: false, requiresConfirmation: true, sessions }
     }
 
     try {
@@ -262,7 +318,26 @@ function createCliAccountStore({
     forgetSecret(account.id)
     writeStore(accounts.filter((item) => item.id !== accountId))
 
-    return true
+    return { removed: true, sessions, chainCleaned: forgetInChain(account.id) }
+  }
+
+  /**
+   * Limpa a conta nas tabelas da cadeia depois que ela já saiu do registro.
+   * Uma falha aqui não desfaz a remoção (a pasta de login já foi apagada):
+   * volta como `false` para o chamador registrar, e a recuperação do início
+   * tira as linhas de conta que não existe mais.
+   */
+  function forgetInChain(accountId) {
+    if (typeof forgetChainAccount !== 'function') {
+      return true
+    }
+
+    try {
+      forgetChainAccount(accountId)
+      return true
+    } catch {
+      return false
+    }
   }
 
   /**

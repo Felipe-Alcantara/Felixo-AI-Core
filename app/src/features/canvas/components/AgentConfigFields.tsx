@@ -459,22 +459,16 @@ function CampoConta({ prefixo, config }: { prefixo: string; config: AgentConfig 
       return
     }
 
-    const nomeDaConta = contaAtual.label
-    if (
-      !window.confirm(
-        `Remover a conta "${nomeDaConta}"? A pasta de login dela será apagada. ` +
-          'Terminais já abertos podem perder esse login.',
-      )
-    ) {
-      return
-    }
-
     setRemovendo(true)
     setErroRemocao(null)
 
     try {
-      const resultado = await config.removeAccount(contaAtual.id)
-      if (!resultado.ok) {
+      // A pergunta só sai depois que o processo principal diz quais terminais
+      // estão vivos nesta conta, para nomear cada bloco que perde o login.
+      const resultado = await config.removeAccount(contaAtual.id, contaAtual.label, (mensagem) =>
+        window.confirm(mensagem),
+      )
+      if (resultado.status === 'failed') {
         setErroRemocao(resultado.message)
       }
     } catch {
