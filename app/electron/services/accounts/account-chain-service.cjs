@@ -984,6 +984,18 @@ function createAccountChainService({
     return { ok: true, alreadySpawned: false, eventId: event.id, lineageId: event.lineageId, hop: event.hop }
   }
 
+  /**
+   * Linhagem de um bloco da cadeia que reabre sem ticket (reinício do app,
+   * "Reiniciar", reanexo depois de recarregar a janela): a da troca que o fez
+   * nascer, só se foi para esta mesma conta. Mantém o teto de saltos e as
+   * contas já visitadas; `null` = bloco sem troca registrada (linhagem nova).
+   */
+  function lineageForSession({ sessionId, accountId } = {}) {
+    if (!isNonEmptyText(sessionId) || !isNonEmptyText(accountId)) return null
+    const origin = repository.findSpawnedSwitchEventForTarget(sessionId)
+    return origin && origin.toAccountId === accountId && isNonEmptyText(origin.lineageId) ? origin.lineageId : null
+  }
+
   /** Fim do spawn com ticket: nasceu ou falhou. Falha não tem retry (P9). */
   function finishTicketSpawn({ ticket, sessionId, ok } = {}) {
     if (!isNonEmptyText(ticket) || !isNonEmptyText(sessionId)) return failure('INVALID')
@@ -1338,6 +1350,7 @@ function createAccountChainService({
     confirm,
     decline,
     finishTicketSpawn,
+    lineageForSession,
     getState,
     history,
     onOutputFailure,

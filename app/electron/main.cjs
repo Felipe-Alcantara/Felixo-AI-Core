@@ -637,10 +637,12 @@ app.whenReady().then(async () => {
     validateAccount: (accountId, providerId) =>
       cliAccounts.validateAccount(accountId, providerId),
     onSessionExit: (sessionId) => accountChain.service.onSessionExit(sessionId),
-    // Bloco da cadeia só nasce com o ticket confirmado, uma vez, na conta confirmada.
+    // A troca só abre o bloco novo com o ticket confirmado, uma vez, na conta
+    // confirmada; o bloco que reabre sem ticket mantém a linhagem da troca.
     chainTickets: {
       begin: (request) => accountChain.service.beginTicketSpawn(request),
       finish: (request) => accountChain.service.finishTicketSpawn(request),
+      lineage: (request) => accountChain.service.lineageForSession(request),
     },
     manager: new PtyProcessManager({
       spawnPty: devtoolsFakeCliPty?.createFakeCliPtyFactory(),

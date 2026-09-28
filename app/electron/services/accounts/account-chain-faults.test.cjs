@@ -190,6 +190,7 @@ function montarCadeia({ databaseDir = null, hooks = {} } = {}) {
         return result
       },
       finish: (input) => service.finishTicketSpawn(input),
+      lineage: (input) => service.lineageForSession(input),
     },
   })
 

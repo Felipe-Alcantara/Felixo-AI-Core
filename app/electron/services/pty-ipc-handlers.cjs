@@ -33,7 +33,6 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 
 /** Motivo pt-BR de cada recusa do serviço da cadeia (`beginTicketSpawn`). */
 const CHAIN_TICKET_MESSAGES = Object.freeze({
-  MISSING: 'Um bloco da cadeia de contas só abre com a troca confirmada.',
   TICKET_INVALID: 'O ticket da cadeia de contas é inválido.',
   TICKET_NOT_FOUND: 'O ticket da cadeia de contas não existe.',
   TICKET_EXPIRED: 'A confirmação da troca venceu; confirme de novo.',
@@ -58,7 +57,7 @@ function refuseChainTicket(reason) {
  * @param {PtyProcessManager} [dependencies.manager] - Injectable for tests.
  * @param {(accountId: string, providerId: string) => {ok: boolean, message?: string}} [dependencies.validateAccount]
  * @param {(sessionId: string) => void} [dependencies.onSessionExit] - Avisado quando o processo da sessão sai.
- * @param {{ begin: Function, finish: Function } | null} [dependencies.chainTickets] - `beginTicketSpawn`/`finishTicketSpawn` do serviço da cadeia.
+ * @param {{ begin: Function, finish: Function, lineage?: Function } | null} [dependencies.chainTickets] - `beginTicketSpawn`/`finishTicketSpawn`/`lineageForSession` do serviço da cadeia.
  * @returns {{ manager: PtyProcessManager, dispose: () => void }}
  */
 function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
@@ -91,9 +90,12 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
         return accountMode
       }
 
-      // Bloco da cadeia só nasce com o ticket que o `confirm` devolveu (§4.1):
-      // uso único, só para a conta confirmada. Sem ticket é recusado; bloco
-      // fixo sem ticket segue como sempre.
+      // A troca da cadeia só abre o bloco novo com o ticket que o `confirm`
+      // devolveu (§4.1): uso único, só para a conta confirmada. Sem ticket é
+      // o spawn comum na conta pedida (conferida acima por validateAccount):
+      // é assim que um bloco da cadeia reabre no reinício, no "Reiniciar" e
+      // no reanexo depois de recarregar a janela; reanexar a um processo vivo
+      // de outra conta continua barrado pelo gerenciador.
       const ticket = beginChainTicket(params, sessionId, accountMode.value)
       if (!ticket.ok) {
         return ticket
@@ -121,7 +123,7 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
   function beginChainTicket(params, sessionId, mode) {
     const hasTicket = params.chainTicket !== undefined && params.chainTicket !== null
     if (!hasTicket) {
-      return mode === 'chain' ? refuseChainTicket('MISSING') : { ok: true, ticket: null, lineageId: null }
+      return { ok: true, ticket: null, lineageId: mode === 'chain' ? lineageFor(sessionId, params.accountId) : null }
     }
     if (typeof params.chainTicket !== 'string' || !UUID_PATTERN.test(params.chainTicket) || mode !== 'chain') {
       return refuseChainTicket('TICKET_INVALID')
@@ -140,6 +142,17 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
       // Ticket já usado por esta mesma sessão (reload, reinício): spawn comum.
       pending: result.alreadySpawned !== true,
       lineageId: typeof result.lineageId === 'string' ? result.lineageId : null,
+    }
+  }
+
+  /** Linhagem da troca que fez nascer esta sessão, na mesma conta; senão, nenhuma. */
+  function lineageFor(sessionId, accountId) {
+    try {
+      const lineageId = dependencies.chainTickets?.lineage?.({ sessionId, accountId })
+      return typeof lineageId === 'string' && lineageId ? lineageId : null
+    } catch {
+      // Sem a linhagem o bloco abre do mesmo jeito; a detecção começa uma nova.
+      return null
     }
   }
 

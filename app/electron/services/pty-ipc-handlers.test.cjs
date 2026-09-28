@@ -172,21 +172,23 @@ test('pty:spawn repassa o modo de conta e recusa modo fora do contrato ou cadeia
     invoke('pty:spawn', { sessionId: 'fixa-explicita', command: 'codex', accountId: 'conta-a', accountMode: 'pinned' }).ok,
     true,
   )
+  // `chain` sem ticket é o spawn comum na conta pedida (reinício do bloco);
+  // a troca em si só abre com o ticket confirmado (ver os testes abaixo).
+  assert.equal(
+    invoke('pty:spawn', { sessionId: 'cadeia', command: 'codex', accountId: 'conta-a', accountMode: 'chain' }).ok,
+    true,
+  )
   const spawns = manager.calls.filter((call) => call.method === 'spawn')
   assert.equal(spawns[0].options.accountMode, undefined, 'ausente fica para o gerenciador decidir (fixa)')
   assert.equal(spawns[1].options.accountMode, 'pinned')
-  // `chain` só nasce com ticket confirmado (ver os testes do ticket abaixo).
-  assert.equal(
-    invoke('pty:spawn', { sessionId: 'cadeia', command: 'codex', accountId: 'conta-a', accountMode: 'chain' }).code,
-    'CHAIN_TICKET_REFUSED',
-  )
+  assert.equal(spawns[2].options.accountMode, 'chain')
 
   const invalido = invoke('pty:spawn', { sessionId: 'x', command: 'codex', accountId: 'conta-a', accountMode: 'automatica' })
   assert.deepEqual(invalido, { ok: false, message: 'Modo de conta do terminal inválido.' })
   const semConta = invoke('pty:spawn', { sessionId: 'y', command: 'codex', accountMode: 'chain' })
   assert.equal(semConta.ok, false)
   assert.match(semConta.message, /precisa de uma conta/)
-  assert.equal(manager.calls.filter((call) => call.method === 'spawn').length, 2)
+  assert.equal(manager.calls.filter((call) => call.method === 'spawn').length, 3)
 })
 
 test('pty:spawn devolve o código quando a sessão viva é de outra conta', () => {
@@ -356,6 +358,7 @@ function setupChainTicket(t) {
     chainTickets: {
       begin: (request) => service.beginTicketSpawn(request),
       finish: (request) => service.finishTicketSpawn(request),
+      lineage: (request) => service.lineageForSession(request),
     },
   })
   const spawn = (params) =>
@@ -363,19 +366,20 @@ function setupChainTicket(t) {
   return { repository, manager, spawn }
 }
 
-test('bloco da cadeia sem ticket é recusado; bloco fixo sem ticket segue como hoje', (t) => {
+test('sem ticket é o spawn comum na conta pedida, fixo ou da cadeia; ticket inválido é recusado', (t) => {
   const { manager, spawn } = setupChainTicket(t)
 
-  const refused = spawn({ sessionId: 'canvas:novo', accountId: 'conta-b', accountMode: 'chain' })
-  assert.equal(refused.ok, false)
-  assert.equal(refused.code, CHAIN_TICKET_REFUSED)
-  assert.equal(manager.calls.length, 0)
+  // O ticket protege só o 1º spawn da troca: sem ele, o bloco da cadeia abre
+  // como um fixo, na conta pedida (conferida por validateAccount), sem linhagem.
+  const chain = spawn({ sessionId: 'canvas:sem-troca', accountId: 'conta-b', accountMode: 'chain' })
+  assert.deepEqual(chain, { ok: true, sessionId: 'canvas:sem-troca' })
+  assert.equal(manager.calls[0].options.accountMode, 'chain')
 
   const pinned = spawn({ sessionId: 'canvas:fixo', accountId: 'conta-b', accountMode: 'pinned' })
   assert.deepEqual(pinned, { ok: true, sessionId: 'canvas:fixo' })
   const plain = spawn({ sessionId: 'canvas:sem-modo', accountId: 'conta-b' })
   assert.equal(plain.ok, true)
-  assert.equal(manager.calls.length, 2)
+  assert.equal(manager.calls.length, 3)
   assert.equal(manager.calls.every((call) => call.options.lineageId === undefined), true)
 
   // Ticket mal formado, ticket em bloco fixo e ticket inexistente também não passam.
@@ -386,7 +390,30 @@ test('bloco da cadeia sem ticket é recusado; bloco fixo sem ticket segue como h
   ]) {
     assert.equal(spawn(params).code, CHAIN_TICKET_REFUSED)
   }
+  assert.equal(manager.calls.length, 3)
+})
+
+test('bloco da cadeia reabre sem ticket na mesma conta e mantém a linhagem da troca', (t) => {
+  const { repository, manager, spawn } = setupChainTicket(t)
+
+  const opened = spawn({ sessionId: 'canvas:novo', accountId: 'conta-b', accountMode: 'chain', chainTicket: TICKET })
+  assert.equal(opened.ok, true)
+
+  // Reinício do app, "Reiniciar" e reanexo depois de recarregar a janela: o
+  // renderer não guarda o ticket (é de uso único) e manda o spawn sem ele.
+  const reopened = spawn({ sessionId: 'canvas:novo', accountId: 'conta-b', accountMode: 'chain', reuseExisting: true })
+  assert.deepEqual(reopened, { ok: true, sessionId: 'canvas:novo' })
   assert.equal(manager.calls.length, 2)
+  assert.equal(manager.calls[1].options.accountMode, 'chain')
+  assert.equal(manager.calls[1].options.accountId, 'conta-b')
+  // A linhagem segue: o teto de saltos e as contas visitadas não recomeçam.
+  assert.equal(manager.calls[1].options.lineageId, 'linhagem-1')
+  assert.equal(repository.getSwitchEvent(TICKET).state, 'spawned')
+
+  // Em outra conta o bloco abre como qualquer outro, sem herdar a linhagem.
+  const other = spawn({ sessionId: 'canvas:novo', accountId: 'conta-c', accountMode: 'chain' })
+  assert.equal(other.ok, true)
+  assert.equal(manager.calls[2].options.lineageId, undefined)
 })
 
 test('ticket confirmado abre um bloco só, na conta confirmada, e grava a linhagem', (t) => {
