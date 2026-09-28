@@ -202,6 +202,16 @@ test('"Not logged in" do Codex só vale como linha inteira', () => {
   }
 })
 
+test('"Not logged in" do Codex citado (aspas, diff, comentário) não vale; só glifos da TUI antes', () => {
+  // Um git diff mostrado no TUI não pode pôr a conta em espera de login.
+  for (const text of ["  │ +      'Not logged in',", '+ Not logged in', '// Not logged in', '"Not logged in"', '- Not logged in', '# Not logged in']) {
+    assert.equal(classifyFailure({ text, origin: 'pty', providerId: 'codex' }).failureClass, 'unknown', text)
+  }
+  for (const text of ['Not logged in', '  Not logged in.', '■ Not logged in', '│ ⚠ Not logged in']) {
+    assert.equal(classifyFailure({ text, origin: 'pty', providerId: 'codex' }).failureClass, 'auth', text)
+  }
+})
+
 test('a evidência sai redigida e limitada', () => {
   const secrets = [
     'Authorization: Bearer abcdefghijklmnopqrstuvwxyz0123456789',

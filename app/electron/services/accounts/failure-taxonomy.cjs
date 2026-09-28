@@ -190,12 +190,31 @@ function compileTerminalPhrase(phrase, linePrefixes = []) {
   return new RegExp(`^${TUI_LINE_LEAD}(?:${alternatives.join('|')})`)
 }
 
+/**
+ * Frase curta que só vale como linha inteira, na origem `pty`: antes dela só
+ * espaços e glifos da TUI, depois dela no máximo um ponto final. Aspas, sinal
+ * de diff e comentário antes indicam que ela está sendo citada (um git diff
+ * no terminal, um trecho de código), e quem cita não perdeu o login.
+ *
+ * @param {string} phrase
+ * @returns {RegExp}
+ */
+function compileTerminalLinePhrase(phrase) {
+  const { body } = compilePhraseBody(phrase)
+  return new RegExp(`^${TUI_LINE_LEAD}${body}\\s*[.!]?\\s*$`)
+}
+
+function compileTerminalRegex(rule, linePrefixes, regex) {
+  if (rule.anchor === 'line') return compileTerminalLinePhrase(rule.phrase)
+  return linePrefixes ? compileTerminalPhrase(rule.phrase, linePrefixes) : regex
+}
+
 function compileRule(rule, linePrefixes) {
   const regex = compilePhrase(rule.phrase, { anchor: rule.anchor })
   return {
     ...rule,
     regex,
-    terminalRegex: rule.anchor === 'line' || !linePrefixes ? regex : compileTerminalPhrase(rule.phrase, linePrefixes),
+    terminalRegex: compileTerminalRegex(rule, linePrefixes, regex),
     alsoRequiresRegex: rule.alsoRequires ? compilePhrase(rule.alsoRequires) : null,
     terminal: rule.terminal !== false,
   }
