@@ -160,9 +160,15 @@ function toMemberInput(member) {
  */
 function normalizeDetection(input) {
   if (!input || typeof input !== 'object') return null
-  const { failure: detected } = input
   if (!isNonEmptyText(input.sessionId) || !isNonEmptyText(input.providerId)) return null
-  if (!detected || typeof detected !== 'object' || !FAILURE_CLASSES.includes(detected.failureClass)) return null
+  // A vigia entrega o aviso "o limite voltou" como `{ kind: 'notice' }`, sem
+  // `failure`: vira uma detecção sem classe que só serve ao `source_resumed`.
+  const detected =
+    input.kind === 'notice' && input.notice === LIMIT_RESET_NOTICE
+      ? { failureClass: null, notice: LIMIT_RESET_NOTICE }
+      : input.failure
+  if (!detected || typeof detected !== 'object') return null
+  if (detected.notice !== LIMIT_RESET_NOTICE && !FAILURE_CLASSES.includes(detected.failureClass)) return null
 
   const accountId = isNonEmptyText(input.accountId) ? input.accountId : null
   const evidence = typeof detected.evidence === 'string' && detected.evidence ? redactSecrets(detected.evidence) : null
@@ -173,7 +179,7 @@ function normalizeDetection(input) {
     accountMode: accountId && input.accountMode === CHAIN_ACCOUNT_MODE ? CHAIN_ACCOUNT_MODE : 'pinned',
     lineageId: isNonEmptyText(input.lineageId) ? input.lineageId : input.sessionId,
     failure: {
-      failureClass: detected.failureClass,
+      failureClass: FAILURE_CLASSES.includes(detected.failureClass) ? detected.failureClass : null,
       scope: detected.scope === 'model' ? 'model' : 'account',
       ambiguous: detected.ambiguous === true,
       evidence: evidence ? evidence.slice(0, EVIDENCE_MAX_CHARS) : null,

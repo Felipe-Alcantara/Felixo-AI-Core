@@ -905,7 +905,7 @@ test(
   },
 )
 
-test('aviso "Your usage limit has reset" da vigia sem troca feita não vira detecção inválida nem troca', { todo: 'a vigia entrega { kind: "notice" } sem `failure`, e normalizeDetection descarta' }, async () => {
+test('aviso "Your usage limit has reset" da vigia sem troca feita não vira detecção inválida nem troca', async () => {
   await comCadeia(async (env) => {
     env.ligarCadeia()
     env.abrir('origem', { accountId: 'conta-d' })
@@ -917,7 +917,7 @@ test('aviso "Your usage limit has reset" da vigia sem troca feita não vira dete
   })
 })
 
-test('aviso "Your usage limit has reset" na origem que já trocou chega ao serviço como source_resumed, sem escrever em nada', { todo: 'a vigia entrega { kind: "notice" } sem `failure`, e normalizeDetection descarta' }, async () => {
+test('aviso "Your usage limit has reset" na origem que já trocou chega ao serviço como source_resumed, sem escrever em nada', async () => {
   await comCadeia(async (env) => {
     env.ligarCadeia()
     env.abrir('origem', { accountId: 'conta-d' })
