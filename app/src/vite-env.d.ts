@@ -37,6 +37,7 @@ import type {
   FetchAllSettings,
 } from './features/canvas/types'
 import type { CliAccount } from './features/shared/types/cli-accounts'
+import type { AccountChainBridge } from './features/shared/types/account-chain'
 import type { GpuPreference, GpuPreferenceStatus } from './features/shared/graphics/gpu-preference'
 import type { HardwareProfile } from './features/shared/performance/performance-suggestion'
 import type { PromptInsertionMetadata } from './features/shared/types/prompt-insertion'
@@ -522,11 +523,20 @@ declare global {
           providerId?: string
           /** Fixa (padrão) ou da cadeia de contas; `chain` exige conta. */
           accountMode?: 'pinned' | 'chain'
+          /**
+           * Ticket de uso único devolvido por `accountChain.confirm`. Só o bloco
+           * criado pela cadeia o leva; o main recusa ticket inexistente, vencido,
+           * de outra conta ou já usado por outra sessão.
+           */
+          chainTicket?: string
         }) => Promise<
           CliInvokeResult & {
             sessionId?: string
             reused?: boolean
-            /** `PTY_SESSION_ACCOUNT_MISMATCH`: a sessão viva deste bloco nasceu em outra conta. */
+            /**
+             * `PTY_SESSION_ACCOUNT_MISMATCH`: a sessão viva deste bloco nasceu em outra conta.
+             * `CHAIN_TICKET_REFUSED`: o ticket da cadeia não vale para este spawn.
+             */
             code?: string
           }
         >
@@ -961,6 +971,11 @@ declare global {
           message?: string
         }>
       }
+      /**
+       * Cadeia de contas (§2.5 do plano). Opcional: numa versão sem o serviço,
+       * a UI mostra a cadeia como indisponível e nada troca de conta.
+       */
+      accountChain?: AccountChainBridge
       agentUsage?: {
         list: () => Promise<AgentUsageDashboard>
         refresh: () => Promise<AgentUsageDashboard>
