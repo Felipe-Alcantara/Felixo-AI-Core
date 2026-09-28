@@ -119,6 +119,38 @@ export function resolveIssueAfterExplicitChoice(
   return chosenAccountId.trim() === '' ? null : issue
 }
 
+/**
+ * Seleção depois de remover uma conta pelo configurador.
+ *
+ * Remover a conta que estava escolhida não é escolher o login do sistema
+ * (§11: nenhum caminho grava o login do sistema sem escolha explícita). A
+ * seleção fica na conta removida — o campo mostra "Selecionar…" e a
+ * preferência salva não vira '' — e a abertura fica bloqueada até uma escolha
+ * explícita, como no caso da conta salva que sumiu. Remover outra conta não
+ * muda nada (`null`).
+ */
+export function selectionAfterAccountRemoved(
+  currentAccountId: string,
+  removedAccountId: string,
+  removedLabel = '',
+): { accountId: string; issue: AccountSelectionIssue } | null {
+  const removed = removedAccountId.trim()
+  if (!removed || currentAccountId.trim() !== removed) {
+    return null
+  }
+
+  const label = removedLabel.trim()
+  return {
+    accountId: removed,
+    issue: {
+      status: 'saved-missing',
+      message: label
+        ? `A conta "${label}" foi removida. Escolha outra conta ou o login do sistema.`
+        : 'A conta escolhida foi removida. Escolha outra conta ou o login do sistema.',
+    },
+  }
+}
+
 export type OpeniaKeyStatus = {
   source: 'account' | 'system'
   accountId?: string

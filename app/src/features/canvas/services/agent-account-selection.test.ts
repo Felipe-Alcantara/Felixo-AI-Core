@@ -5,6 +5,7 @@ import {
   resolveIssueAfterExplicitChoice,
   resolveOpeniaKeyStatus,
   selectAccountFromList,
+  selectionAfterAccountRemoved,
   shouldApplyAccountListResult,
 } from './agent-account-selection'
 
@@ -117,6 +118,24 @@ describe('seleção de conta por agente', () => {
     expect(resolveIssueAfterExplicitChoice(ilegivel, 'codex-conta')).toBe(ilegivel)
     expect(resolveIssueAfterExplicitChoice(ilegivel, '')).toBeNull()
     expect(resolveIssueAfterExplicitChoice(null, 'qualquer')).toBeNull()
+  })
+
+  it('remover a conta escolhida não grava o login do sistema: fica "Selecionar…" com a abertura bloqueada', () => {
+    // Antes: removeAccount fazia `atual === id ? '' : atual`, e o efeito de
+    // persistência gravava '' (login do sistema) sem a pessoa escolher.
+    const depois = selectionAfterAccountRemoved('codex-conta', 'codex-conta', 'Pessoal')
+    expect(depois?.accountId).toBe('codex-conta')
+    expect(depois?.accountId).not.toBe('')
+    expect(depois?.issue).toEqual({
+      status: 'saved-missing',
+      message: 'A conta "Pessoal" foi removida. Escolha outra conta ou o login do sistema.',
+    })
+    // Qualquer escolha explícita resolve, inclusive o login do sistema.
+    expect(resolveIssueAfterExplicitChoice(depois!.issue, '')).toBeNull()
+    expect(resolveIssueAfterExplicitChoice(depois!.issue, 'outra')).toBeNull()
+
+    expect(selectionAfterAccountRemoved('outra', 'codex-conta', 'Pessoal')).toBeNull()
+    expect(selectionAfterAccountRemoved('', 'codex-conta')).toBeNull()
   })
 
   it('usa a chave da conta selecionada e nunca herda a chave global', () => {

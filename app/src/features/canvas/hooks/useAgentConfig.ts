@@ -36,6 +36,7 @@ import {
   describeAccountSelectionIssue,
   resolveIssueAfterExplicitChoice,
   selectAccountFromList,
+  selectionAfterAccountRemoved,
   shouldApplyAccountListResult,
   type AccountListing,
   type AccountSelectionIssue,
@@ -477,13 +478,17 @@ export function useAgentConfig(
       if (providerIdRef.current !== provedorDaOperacao) {
         return resultado
       }
-      // Só a conta removida sai da seleção. Decidir pela lista recarregada
-      // faria uma falha de listagem derrubar outra conta para o login do
-      // sistema sem ninguém escolher isso.
-      setAccountId((atual) => (atual === id ? '' : atual))
+      // Só a remoção da conta escolhida mexe na seleção, e mesmo assim não
+      // vira login do sistema: a seleção fica na conta removida ("Selecionar…")
+      // e a abertura fica bloqueada até uma escolha explícita. Decidir pela
+      // lista recarregada faria uma falha de listagem derrubar outra conta.
+      const depois = selectionAfterAccountRemoved(accountIdRef.current, id, label)
+      if (depois) {
+        setAccountSelectionIssue(depois.issue)
+      }
       return resultado
     },
-    [carregarContas, providerId, setAccountId],
+    [accounts, carregarContas, providerId, setAccountSelectionIssue],
   )
 
   useEffect(() => {
