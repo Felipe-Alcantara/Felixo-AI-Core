@@ -11,6 +11,7 @@ const {
   getAppliedStorageMigrations,
 } = require('./sqlite-database.cjs')
 const { listStorageMigrations } = require('./migration-loader.cjs')
+const { createAccountChainRepository } = require('./account-chain-repository.cjs')
 
 /**
  * Os testes de repositorio abrem sempre um banco novo, entao provam que o
@@ -105,5 +106,55 @@ test('reabrir um banco ja atualizado nao reaplica migration nem duplica dado', (
       'reabrir o banco duplicou ou apagou registro',
     )
     segundo.close()
+  })
+})
+
+test('a migration 017 (cadeia de contas) sobre um banco na versao 16 com dados: nada some e a cadeia nasce desligada', () => {
+  comDiretorioTemporario((diretorio) => {
+    const todas = listStorageMigrations()
+    const ate16 = todas.filter((migration) => migration.version <= 16)
+    assert.ok(todas.some((migration) => migration.version === 17), 'a migration 017 precisa existir')
+    const agora = new Date().toISOString()
+
+    // 1. Quem estava na versao 16 ja tinha contas medidas no painel e perfis do navegador.
+    const antigo = createStorageDatabase({ databaseDir: diretorio, migrations: ate16 })
+    antigo.connection
+      .prepare('INSERT INTO agent_usage_accounts (id, provider_id, label, identity_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .run('conta-pessoal', 'codex', 'Pessoal', 'fp-pessoal', agora, agora)
+    antigo.connection
+      .prepare('INSERT INTO webview_profiles (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)')
+      .run('trabalho-ab12', 'Trabalho', agora, agora)
+    antigo.close()
+
+    // 2. A atualizacao aplica a 017 no mesmo arquivo.
+    const atualizado = createStorageDatabase({ databaseDir: diretorio, migrations: todas })
+    try {
+      assert.equal(contarAplicadas(atualizado.connection), todas.length)
+      assert.equal(
+        atualizado.connection.prepare('SELECT label FROM agent_usage_accounts WHERE id = ?').get('conta-pessoal').label,
+        'Pessoal',
+        'a conta medida antes da atualizacao sumiu ou mudou',
+      )
+      assert.equal(atualizado.connection.prepare('SELECT COUNT(*) AS total FROM webview_profiles').get().total, 1)
+
+      const tabelas = atualizado.connection
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'account_%' ORDER BY name")
+        .all()
+        .map((linha) => linha.name)
+      assert.deepEqual(tabelas, [
+        'account_chain_members',
+        'account_chain_settings',
+        'account_cooldowns',
+        'account_login_checks',
+        'account_switch_events',
+      ])
+
+      // Ausencia da linha de settings = cadeia DESLIGADA: atualizar nunca liga nada sozinho.
+      const cadeia = createAccountChainRepository(atualizado)
+      assert.equal(cadeia.readSettings().enabled, false)
+      assert.deepEqual(cadeia.listMembers(), [])
+    } finally {
+      atualizado.close()
+    }
   })
 })
