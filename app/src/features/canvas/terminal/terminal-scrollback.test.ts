@@ -5,6 +5,8 @@ import {
   TERMINAL_ADAPTIVE_THRESHOLD,
   TERMINAL_REPLAY_BUFFER_CHARS,
   TERMINAL_SCROLLBACK,
+  TERMINAL_SCROLLBACK_WARNING_RATIO,
+  describeTerminalScrollbackUsage,
   formatTerminalScrollbackLines,
   terminalScrollbackForSessionCount,
   terminalScrollbackNotice,
@@ -31,24 +33,57 @@ describe('política de scrollback do terminal', () => {
     expect(terminalScrollbackForSessionCount(Number.NaN)).toBe(TERMINAL_SCROLLBACK)
   })
 
-  it('explica o rollover visual e o caminho do replay', () => {
-    expect(terminalScrollbackNotice(undefined)).toBeUndefined()
-    expect(
-      terminalScrollbackNotice({
-        limit: TERMINAL_ADAPTIVE_SCROLLBACK,
-        retainedRows: 5_032,
-        outputLines: 8_000,
-        historyTruncated: true,
-        replayLimitChars: TERMINAL_REPLAY_BUFFER_CHARS,
-      }),
-    ).toContain('5.000 linhas')
-    expect(terminalScrollbackNotice({
-      limit: 20_000,
-      retainedRows: 32,
-      outputLines: 1,
+  it('avisa antes de descartar, avisa no descarte e não promete recuperação que não existe', () => {
+    const base = {
+      limit: TERMINAL_ADAPTIVE_SCROLLBACK,
+      retainedRows: 0,
+      outputLines: 0,
       historyTruncated: false,
+      nearLimit: false,
       replayLimitChars: TERMINAL_REPLAY_BUFFER_CHARS,
-    })).toBeUndefined()
+    }
+    expect(terminalScrollbackNotice(undefined)).toBeUndefined()
+    expect(terminalScrollbackNotice(base)).toBeUndefined()
+
+    const perto = terminalScrollbackNotice({ ...base, nearLimit: true })
+    expect(perto).toContain('perto do limite de 5.000 linhas')
+    expect(perto).toContain('antes')
+
+    const cheio = terminalScrollbackNotice({ ...base, historyTruncated: true })
+    expect(cheio).toContain('no limite de 5.000 linhas')
+    expect(cheio).toContain('não consegue trazê-las de volta')
+
+    // Reabrir a gaveta não reaplica nada e fechar o bloco mata o processo: o
+    // texto antigo mandava "fechar e reabrir" como se isso recuperasse algo.
+    for (const texto of [perto, cheio]) {
+      expect(texto).not.toMatch(/reabr/i)
+      expect(texto).not.toMatch(/replay/i)
+    }
     expect(formatTerminalScrollbackLines(TERMINAL_REPLAY_BUFFER_CHARS)).toBe('200.000')
+  })
+})
+
+describe('describeTerminalScrollbackUsage', () => {
+  it('só acusa descarte quando o buffer normal chega à capacidade (linhas visíveis + scrollback)', () => {
+    expect(describeTerminalScrollbackUsage({ retainedRows: 5_023, rows: 24, limit: 5_000 }))
+      .toEqual({ historyTruncated: false, nearLimit: true })
+    expect(describeTerminalScrollbackUsage({ retainedRows: 5_024, rows: 24, limit: 5_000 }))
+      .toEqual({ historyTruncated: true, nearLimit: false })
+  })
+
+  it('avisa a partir da fração configurada da capacidade, não antes', () => {
+    const capacity = 24 + 5_000
+    const limiar = Math.ceil(capacity * TERMINAL_SCROLLBACK_WARNING_RATIO)
+    expect(describeTerminalScrollbackUsage({ retainedRows: limiar - 1, rows: 24, limit: 5_000 }).nearLimit)
+      .toBe(false)
+    expect(describeTerminalScrollbackUsage({ retainedRows: limiar, rows: 24, limit: 5_000 }).nearLimit)
+      .toBe(true)
+  })
+
+  it('sem scrollback configurado, ou com entrada hostil, não acende nada', () => {
+    expect(describeTerminalScrollbackUsage({ retainedRows: 100, rows: 24, limit: 0 }))
+      .toEqual({ historyTruncated: false, nearLimit: false })
+    expect(describeTerminalScrollbackUsage({ retainedRows: Number.NaN, rows: Number.NaN, limit: 5_000 }))
+      .toEqual({ historyTruncated: false, nearLimit: false })
   })
 })

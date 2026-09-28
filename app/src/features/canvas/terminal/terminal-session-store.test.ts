@@ -258,8 +258,29 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
     })
   })
 
-  it('marca quando a saída ultrapassa o buffer visual compacto', async () => {
+  // A capacidade real do xterm é linhas visíveis (24) + scrollback (5.000).
+  // Cada teste abaixo confere o marcador contra o próprio buffer: a primeira
+  // linha ainda está lá (nada descartado) ou já saiu (descartado).
+  it('marca quando a saída passa da capacidade do buffer visual compacto', async () => {
     harness = createHarness('', 'claude', true, false, 10)
+    const output = `${Array.from({ length: 5_100 }, (_, index) => `output-${index}`).join('\r\n')}\r\n`
+
+    harness.feed(output)
+    await vi.advanceTimersByTimeAsync(50)
+
+    expect(harness.store.getSnapshot(SESSION_ID)?.scrollback).toMatchObject({
+      limit: 5_000,
+      outputLines: 5_100,
+      historyTruncated: true,
+      nearLimit: false,
+    })
+    expect(harness.store.getTranscript(SESSION_ID).text).not.toMatch(/^output-0$/m)
+  })
+
+  it('não acusa descarte quando a saída ainda cabe, mas avisa que está perto do limite', async () => {
+    harness = createHarness('', 'claude', true, false, 10)
+    // Mais linhas lógicas que o scrollback, menos que a capacidade: nada saiu.
+    // A contagem anterior (`\n` > limite) acusava descarte aqui.
     const output = `${Array.from({ length: 5_001 }, (_, index) => `output-${index}`).join('\r\n')}\r\n`
 
     harness.feed(output)
@@ -267,8 +288,42 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
 
     expect(harness.store.getSnapshot(SESSION_ID)?.scrollback).toMatchObject({
       limit: 5_000,
-      outputLines: 5_001,
+      historyTruncated: false,
+      nearLimit: true,
+    })
+    expect(harness.store.getTranscript(SESSION_ID).text).toMatch(/^output-0$/m)
+  })
+
+  it('conta linhas quebradas pela largura: 3.000 linhas longas já descartam o começo', async () => {
+    harness = createHarness('', 'claude', true, false, 10)
+    // 120 caracteres em 80 colunas: cada linha lógica ocupa duas visuais.
+    const output = `${Array.from({ length: 3_000 }, (_, index) =>
+      `linha-${String(index).padStart(5, '0')} ${'x'.repeat(108)}`,
+    ).join('\r\n')}\r\n`
+
+    harness.feed(output)
+    await vi.advanceTimersByTimeAsync(50)
+
+    expect(harness.store.getSnapshot(SESSION_ID)?.scrollback).toMatchObject({
+      limit: 5_000,
+      outputLines: 3_000,
       historyTruncated: true,
+    })
+    expect(harness.store.getTranscript(SESSION_ID).text).not.toContain('linha-00000')
+  })
+
+  it('saída na tela alternativa não entra no histórico e não acende aviso', async () => {
+    harness = createHarness('', 'claude', true, false, 10)
+    harness.feed('antes da tela cheia\r\n\x1b[?1049h')
+    harness.feed(`${Array.from({ length: 6_000 }, (_, index) => `repintura-${index}`).join('\r\n')}\r\n`)
+    await vi.advanceTimersByTimeAsync(50)
+
+    // Nenhuma transição de estado: o snapshot nem é republicado (a contagem de
+    // `\n` segue só no store), que é exatamente o que evita render por pedaço.
+    expect(harness.store.getSnapshot(SESSION_ID)?.scrollback).toMatchObject({
+      limit: 5_000,
+      historyTruncated: false,
+      nearLimit: false,
     })
   })
 

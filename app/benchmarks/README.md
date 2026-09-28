@@ -14,10 +14,14 @@ sessão. O xterm usa 20.000 linhas até 9 terminais e 5.000 linhas quando um
 canvas já tem 10 ou mais terminais; o limite é escolhido quando a sessão nasce
 e não muda depois, para nunca apagar histórico existente silenciosamente.
 
-Quando o buffer visual rola além do limite, o terminal informa isso no cartão e
-na gaveta. Fechar e reabrir a sessão reaplica o replay vivo que o processo
-principal ainda mantém (até 200.000 caracteres); as ações Copiar e Handoff
-continuam deliberadamente limitadas ao trecho visual atualmente disponível.
+O terminal avisa no cartão e na gaveta quando o histórico visual passa de 80%
+da capacidade (linhas visíveis + scrollback, contadas em linhas visuais do
+buffer normal) e de novo quando chega nela. O replay do processo principal
+(até 200.000 caracteres, cerca de 1.700 linhas de 120 colunas) só é reaplicado
+quando o renderer se reconecta e é menor que o histórico visual: não serve para
+recuperar linhas descartadas, e reabrir a gaveta não reaplica nada. As ações
+Copiar e Handoff continuam deliberadamente limitadas ao trecho visual
+atualmente disponível.
 
 ## Como executar
 

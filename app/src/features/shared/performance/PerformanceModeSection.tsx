@@ -25,9 +25,11 @@ export function PerformanceModeSection() {
           </div>
           <p className="mt-2 text-xs leading-relaxed text-zinc-500">
             Desliga o céu animado do canvas, o minimapa e as transições de
-            painéis, menus, docas e controles. A interface fica mais simples
-            visualmente, mas nada muda de lugar nem some de verdade — pensado
-            pra rodar liso em máquinas mais fracas.
+            painéis, menus, docas e controles, e os terminais abertos com ele
+            ligado guardam até 5.000 linhas de histórico visual (em vez de
+            20.000) — o terminal avisa antes de chegar no limite. Nenhum
+            processo, conversa ou bloco é fechado — pensado pra rodar liso em
+            máquinas mais fracas.
           </p>
         </div>
         <FelixoToggle

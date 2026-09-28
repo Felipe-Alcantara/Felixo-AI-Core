@@ -208,7 +208,7 @@ continua manual, como hoje. **Não implementado — task de acompanhamento.**
 |---|---|---|
 | Céu animado, minimapa | sim, no Performance Mode | — |
 | Transições de painel/dock/toolbar | sim, no Performance Mode | — |
-| Scrollback visual do terminal | sim, reduz para 5.000 linhas | o replay do processo principal (200.000 chars) continua intacto — reabrir o terminal reaplica |
+| Scrollback visual do terminal | sim, reduz para 5.000 linhas, com aviso antes de chegar no limite (80% da capacidade) e no limite | o replay do processo principal (200.000 chars) continua intacto, mas só é reaplicado quando o renderer se reconecta e é menor que o histórico visual — não recupera linhas descartadas |
 | `AgentUsagePanel` (preview de uso) | pode cair para polling mais espaçado | nunca parar de existir — usuário precisa saber que o dado está atrasado, não sumido |
 | PTY, sessão de terminal, handoff, prompt em andamento | — | nunca. Nenhum modo aqui mata processo ou perde estado — só decoração e buffer visual |
 

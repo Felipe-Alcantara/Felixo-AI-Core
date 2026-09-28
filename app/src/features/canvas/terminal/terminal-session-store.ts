@@ -79,6 +79,7 @@ import { createPtyEventRouter, type PtyEventRouter } from './pty-event-router'
 import { loadClaudeTerminalScroll, shouldUseClassicScreen } from '../services/terminal-scroll-preference'
 import {
   TERMINAL_REPLAY_BUFFER_CHARS,
+  describeTerminalScrollbackUsage,
   terminalScrollbackForSessionCount,
   type TerminalScrollbackStatus,
 } from './terminal-scrollback'
@@ -480,17 +481,16 @@ function readScrollbackStatus(
   outputLines: number,
 ): TerminalScrollbackStatus {
   const limit = Math.max(0, Math.floor(Number(terminal.options.scrollback) || 0))
-  const buffer = terminal.buffer.active
+  // O histórico mora no buffer normal: a tela alternativa (apps de tela cheia,
+  // o Claude Code por padrão) nunca tem scrollback, então medir o buffer ativo
+  // dava 24 linhas nela e escondia o que o normal já tinha acumulado.
+  const retainedRows = terminal.buffer.normal.length
 
   return {
-    retainedRows: buffer.length,
+    retainedRows,
     outputLines,
     limit,
-    // Count logical output lines rather than `baseY`: xterm reaches a baseY of
-    // `scrollback` even when wrapped rows still fit exactly, which would show a
-    // false warning at the boundary. Agent output is line-oriented, and this
-    // conservative signal avoids claiming that the limit was exceeded early.
-    historyTruncated: outputLines > limit,
+    ...describeTerminalScrollbackUsage({ retainedRows, rows: terminal.rows, limit }),
     replayLimitChars: TERMINAL_REPLAY_BUFFER_CHARS,
   }
 }
@@ -2407,7 +2407,8 @@ export class TerminalSessionStore {
     if (
       previous &&
       previous.limit === next.limit &&
-      previous.historyTruncated === next.historyTruncated
+      previous.historyTruncated === next.historyTruncated &&
+      previous.nearLimit === next.nearLimit
     ) {
       return
     }
