@@ -9,6 +9,7 @@ import {
   formatProviderSwitchRoute,
   formatProviderSwitchRule,
   formatProviderSwitchStage,
+  isProviderSwitchExpired,
 } from '../services/provider-switch'
 import type { ProviderSwitchRequest as ProviderSwitchRequestData } from '../types'
 
@@ -44,6 +45,9 @@ export function ProviderSwitchRequest({
   const rule = formatProviderSwitchRule(request.rule)
   const deadline = formatProviderSwitchDeadline(request.expiresAt, now)
   const target = formatProviderLabel(request.toCliType)
+  // Depois do prazo o main trata qualquer resposta como recusa: nada de
+  // "Trocar" clicável mostrando "vencida" até a varredura fechar a decisão.
+  const expired = isProviderSwitchExpired(request.expiresAt, now)
 
   return (
     <section
@@ -60,10 +64,15 @@ export function ProviderSwitchRequest({
         {request.reason && <p>Motivo: {request.reason}</p>}
         {rule && <p className="text-zinc-400">Regra: {rule}</p>}
         <p className="text-zinc-400">{PROVIDER_SWITCH_COST_NOTICE}</p>
-        {deadline && (
+        {deadline && !expired && (
           <p className="text-zinc-400">
             Responda <time dateTime={request.expiresAt}>{deadline}</time>; sem resposta, conta
             como recusa e nada é trocado.
+          </p>
+        )}
+        {expired && (
+          <p className="text-zinc-400">
+            Prazo vencido: sem resposta a tempo conta como recusa e nada é trocado.
           </p>
         )}
       </div>
@@ -85,7 +94,7 @@ export function ProviderSwitchRequest({
           <>
             <button
               type="button"
-              disabled={state.busy}
+              disabled={state.busy || expired}
               aria-busy={state.busy}
               onClick={() => onRespond(request.decisionId, true)}
               className={`felixo-btn rounded-sm border border-white/20 bg-white/10 px-3 py-1.5 font-medium text-zinc-100 hover:bg-white/15 disabled:opacity-50 ${BUTTON_FOCUS}`}
@@ -94,7 +103,7 @@ export function ProviderSwitchRequest({
             </button>
             <button
               type="button"
-              disabled={state.busy}
+              disabled={state.busy || expired}
               onClick={() => onRespond(request.decisionId, false)}
               className={`felixo-btn rounded-sm border border-white/10 px-3 py-1.5 hover:border-white/30 disabled:opacity-50 ${BUTTON_FOCUS}`}
             >

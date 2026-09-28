@@ -13,6 +13,7 @@ import {
   formatProviderSwitchRoute,
   formatProviderSwitchRule,
   formatProviderSwitchWaitingStatus,
+  isProviderSwitchExpired,
   mergeProviderSwitchList,
 } from './provider-switch'
 
@@ -64,9 +65,17 @@ describe('provider-switch', () => {
     const now = Date.parse('2026-05-01T12:01:00.000Z')
     expect(formatProviderSwitchDeadline('2026-05-01T12:10:00.000Z', now)).toMatch(/\(em 9 min\)$/)
     expect(formatProviderSwitchDeadline('2026-05-01T12:10:00.000Z', Date.parse('2026-05-01T12:11:00.000Z'))).toMatch(
-      /\(vencendo\)$/,
+      /\(vencida\)$/,
     )
     expect(formatProviderSwitchDeadline('não é data')).toBeNull()
+  })
+
+  it('prazo vencido: o card deixa de oferecer a troca', () => {
+    const expiresAt = '2026-05-01T12:10:00.000Z'
+    expect(isProviderSwitchExpired(expiresAt, Date.parse('2026-05-01T12:09:59.000Z'))).toBe(false)
+    expect(isProviderSwitchExpired(expiresAt, Date.parse('2026-05-01T12:10:00.000Z'))).toBe(true)
+    expect(isProviderSwitchExpired(expiresAt, Date.parse('2026-05-01T12:10:30.000Z'))).toBe(true)
+    expect(isProviderSwitchExpired('não é data', Date.parse('2026-05-01T12:10:30.000Z'))).toBe(false)
   })
 
   it('aplica pedido e resolução sem duplicar', () => {

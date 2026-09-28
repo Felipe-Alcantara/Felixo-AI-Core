@@ -75,9 +75,19 @@ export function formatProviderSwitchDeadline(expiresAt: string, now: number = Da
     minute: '2-digit',
   })
   const minutesLeft = Math.max(0, Math.ceil((expiresAtMs - now) / 60_000))
-  const remaining = minutesLeft === 0 ? 'vencendo' : `em ${minutesLeft} min`
+  const remaining = minutesLeft === 0 ? 'vencida' : `em ${minutesLeft} min`
 
   return `até ${time} (${remaining})`
+}
+
+/**
+ * O prazo da pergunta passou: o main já trata a resposta como recusa, então
+ * o card não oferece mais "Trocar" (vale mesmo antes de a varredura fechar
+ * a decisão). Data inválida não vence: quem decide é o main.
+ */
+export function isProviderSwitchExpired(expiresAt: string, now: number = Date.now()) {
+  const expiresAtMs = Date.parse(expiresAt)
+  return Number.isFinite(expiresAtMs) && now >= expiresAtMs
 }
 
 /** Texto da linha de status do chat enquanto há pergunta pendente. */

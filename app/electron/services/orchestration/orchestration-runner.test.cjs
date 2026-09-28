@@ -1318,6 +1318,32 @@ test('failExpiredRuns vence a decisão sem resposta como recusa', async () => {
   assert.equal(calls.spawn.length, 0)
 })
 
+test('aceite depois do prazo, antes da varredura, vence como recusa e não troca de provedor', async () => {
+  const { runner, calls, advance } = createSwitchHarness({
+    validateSpawnAgent: () =>
+      choice(CODEX_MODEL, 'provider-fallback', { fallbackFromCliType: 'claude' }),
+  })
+  await runner.handleOrchestrationEvent(createSpawnEvent(), createContext())
+
+  // 10 min 30 s: o prazo passou e a varredura (a cada 60 s) ainda não rodou.
+  advance(10 * 60 * 1000 + 30 * 1000)
+  const late = await runner.resolveProviderSwitch({ decisionId: 'decision-1', accept: true })
+  await flushAsync()
+
+  assert.equal(late.ok, false)
+  assert.equal(late.code, 'DECISION_NOT_PENDING')
+  assert.match(late.message, /prazo/)
+  assert.equal(calls.spawn.length, 0, 'sem resposta no prazo conta como recusa')
+  assert.equal(runner.listProviderSwitches().length, 0)
+  assert.deepEqual(
+    calls.records.map((record) => [record.state, record.outcome]),
+    [['refused', 'expired']],
+  )
+  const again = await runner.resolveProviderSwitch({ decisionId: 'decision-1', accept: true })
+  assert.equal(again.code, 'DECISION_NOT_PENDING')
+  assert.equal(calls.spawn.length, 0)
+})
+
 test('o prazo da decisão não passa do prazo do run', async () => {
   const { runner, calls } = createSwitchHarness({
     validateSpawnAgent: () =>

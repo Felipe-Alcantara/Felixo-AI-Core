@@ -772,7 +772,9 @@ class OrchestrationRunner {
   /**
    * Resposta da pessoa. Idempotente: a decisão sai do mapa antes de qualquer
    * await, então um clique duplo ou um IPC repetido recebe
-   * `DECISION_NOT_PENDING` e nunca gera um segundo spawn.
+   * `DECISION_NOT_PENDING` e nunca gera um segundo spawn. Resposta depois do
+   * prazo não espera a varredura: vence ali mesmo como recusa ("sem resposta
+   * em 10 minutos conta como recusa").
    */
   async resolveProviderSwitch({ decisionId, accept } = {}) {
     const decision = this.pendingProviderSwitches.get(decisionId)
@@ -797,6 +799,18 @@ class OrchestrationRunner {
         ok: false,
         code: 'RUN_FINISHED',
         message: 'A orquestração já terminou; nenhum provedor foi trocado.',
+      }
+    }
+
+    if (decision.expiresAtMs <= getTimeMs(this.now())) {
+      await this.settleRefusalSafely(decision, {
+        outcome: PROVIDER_SWITCH_OUTCOMES.expired,
+        note: 'Sem resposta no prazo; conta como recusa e nenhum provedor foi trocado.',
+      })
+      return {
+        ok: false,
+        code: 'DECISION_NOT_PENDING',
+        message: 'O prazo desta troca de provedor venceu; nenhum provedor foi trocado.',
       }
     }
 
