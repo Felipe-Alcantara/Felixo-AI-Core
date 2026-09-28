@@ -23,7 +23,7 @@ import {
   formatOrchestrationRunStatus,
   formatOrchestrationStatusLabel,
   inferAvailabilityCliType,
-  inferAvailabilityStatus,
+  resolveErrorAvailabilityStatus,
 } from '../services/stream-status'
 import { createSystemDesignPromptBlock } from '../services/system-design-prompt'
 import { useSystemDesignSettings } from '../../shared/system-design/useSystemDesignSettings'
@@ -1035,7 +1035,7 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
   function updateModelAvailabilityFromError(
     event: Extract<StreamEvent, { type: 'error' }>,
   ) {
-    const status = inferAvailabilityStatus(event.message)
+    const status = resolveErrorAvailabilityStatus(event)
 
     if (!status) {
       return

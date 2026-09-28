@@ -12,6 +12,7 @@ const {
 } = require('./orchestrator/cli-execution-planner.cjs')
 const {
   createModelAvailabilityRegistry,
+  describeCliFailure,
 } = require('./orchestrator/model-availability.cjs')
 const {
   createOrchestrationModel,
@@ -1048,7 +1049,20 @@ function sendCliEvent(webContents, event) {
     return
   }
 
-  webContents.send('cli:stream', event)
+  webContents.send('cli:stream', withCliFailure(event))
+}
+
+/**
+ * Eventos de erro saem com a classe decidida aqui (`failure`), para o chat
+ * não manter um classificador próprio. Os outros eventos passam intactos, e
+ * uma classe já anexada não é trocada.
+ */
+function withCliFailure(event) {
+  if (event?.type !== 'error' || event.failure) {
+    return event
+  }
+
+  return { ...event, failure: describeCliFailure({ message: event.message }) }
 }
 
 function getTargetWebContents(getMainWindow, fallbackWebContents) {
@@ -1137,6 +1151,7 @@ module.exports = {
   getPersistentCloseLogLevel,
   registerCliIpcHandlers,
   resolveOrchestrationSpawnModel,
+  sendCliEvent,
   spawnOrchestrationAgent,
   shouldAbortForToolLoop,
   shouldSuppressPersistentTrailingOutput,

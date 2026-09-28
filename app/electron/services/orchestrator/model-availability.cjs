@@ -201,7 +201,29 @@ function detectAvailabilityIssue({ message, cliType, nowMs = Date.now() } = {}) 
   }
 
   const failure = classifyFailure({ text, origin: 'fluxo', providerId: cliType })
+  return availabilityFromFailure(failure, { text, cliType, nowMs })
+}
 
+/**
+ * Resumo da falha de um evento de erro para quem está fora do processo
+ * principal (o chat): a classe da taxonomia e o status de disponibilidade que
+ * o orquestrador aplicaria. Só classe e status — nunca o texto do erro.
+ *
+ * @param {{ message?: unknown, cliType?: string, nowMs?: number }} [input]
+ * @returns {{ failureClass: string, availabilityStatus: 'limit_reached' | 'no_login' | null }}
+ */
+function describeCliFailure({ message, cliType, nowMs = Date.now() } = {}) {
+  const text = String(message ?? '').trim()
+  const failure = classifyFailure({ text, origin: 'fluxo', providerId: cliType })
+  const issue = text ? availabilityFromFailure(failure, { text, cliType, nowMs }) : null
+
+  return {
+    failureClass: failure.failureClass,
+    availabilityStatus: issue?.status ?? null,
+  }
+}
+
+function availabilityFromFailure(failure, { text, cliType, nowMs }) {
   if (failure.failureClass === 'auth') {
     return failure.ambiguous
       ? null
@@ -353,6 +375,7 @@ function getNowMs(now) {
 
 module.exports = {
   createModelAvailabilityRegistry,
+  describeCliFailure,
   detectAvailabilityIssue,
   parseResetInfo,
 }

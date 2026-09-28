@@ -3,6 +3,7 @@
 // continuarem valendo.
 import type {
   Model,
+  ModelAvailabilityStatus,
   ModelId,
   OrchestrationCliType,
 } from '../shared/types/models'
@@ -131,6 +132,30 @@ export type OrchestrationRun = {
   updatedAt: string
 }
 
+/**
+ * Classe de falha decidida no processo principal pela taxonomia única
+ * (`electron/services/accounts/failure-taxonomy.cjs`).
+ */
+export type CliFailureClass =
+  | 'limit'
+  | 'billing'
+  | 'auth'
+  | 'network'
+  | 'provider'
+  | 'timeout'
+  | 'cancelled'
+  | 'unknown'
+
+/**
+ * O que o processo principal anexa a um evento de erro: a classe e o status
+ * de disponibilidade que o orquestrador aplicou. O chat não reclassifica o
+ * texto.
+ */
+export type CliErrorFailure = {
+  failureClass: CliFailureClass
+  availabilityStatus: Extract<ModelAvailabilityStatus, 'limit_reached' | 'no_login'> | null
+}
+
 export type StreamEvent =
   | (StreamEventBase & { type: 'text'; text: string; streamItemId?: string })
   | (StreamEventBase & { type: 'tool_use'; tool: string; input: string })
@@ -147,6 +172,7 @@ export type StreamEvent =
   | (StreamEventBase & {
       type: 'error'
       message: string
+      failure?: CliErrorFailure
     })
 
 // O tipo do log do backend mora em shared/; re-exportado para os imports

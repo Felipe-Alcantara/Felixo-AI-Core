@@ -11,6 +11,7 @@ const {
   createToolLoopProgressState,
   getPersistentCloseLogLevel,
   resolveOrchestrationSpawnModel,
+  sendCliEvent,
   spawnOrchestrationAgent,
   shouldAbortForToolLoop,
   shouldSuppressPersistentTrailingOutput,
@@ -401,4 +402,47 @@ test('spawnOrchestrationAgent fails fast when no model available', () => {
   })
 
   assert.equal(result.ok, false)
+})
+
+test('sendCliEvent anexa a classe de falha decidida no processo principal aos eventos de erro', () => {
+  const sent = []
+  const webContents = {
+    isDestroyed: () => false,
+    send: (channel, payload) => sent.push({ channel, payload }),
+  }
+
+  sendCliEvent(webContents, {
+    type: 'error',
+    sessionId: 's-1',
+    message: 'API Error: 401 Unauthorized — rate limit headers missing',
+  })
+  sendCliEvent(webContents, { type: 'error', sessionId: 's-1', message: 'Error: failed to parse line 429' })
+  sendCliEvent(webContents, { type: 'error', sessionId: 's-1', message: 'stream disconnected before completion: ECONNRESET' })
+  sendCliEvent(webContents, { type: 'error', sessionId: 's-1', message: 'Credit balance is too low' })
+  sendCliEvent(webContents, { type: 'text', sessionId: 's-1', text: 'rate limit exceeded' })
+  sendCliEvent(webContents, {
+    type: 'error',
+    sessionId: 's-1',
+    message: 'qualquer',
+    failure: { failureClass: 'limit', availabilityStatus: 'limit_reached' },
+  })
+
+  assert.deepEqual(sent.map(({ channel }) => channel), Array(6).fill('cli:stream'))
+  assert.deepEqual(sent.map(({ payload }) => payload.failure), [
+    { failureClass: 'auth', availabilityStatus: 'no_login' },
+    { failureClass: 'unknown', availabilityStatus: null },
+    { failureClass: 'network', availabilityStatus: null },
+    { failureClass: 'billing', availabilityStatus: 'limit_reached' },
+    undefined,
+    { failureClass: 'limit', availabilityStatus: 'limit_reached' },
+  ])
+  assert.equal(sent[0].payload.message, 'API Error: 401 Unauthorized — rate limit headers missing')
+  assert.equal('failure' in sent[4].payload, false, 'evento que não é erro passa intacto')
+})
+
+test('sendCliEvent não envia para uma janela destruída', () => {
+  let sends = 0
+  sendCliEvent({ isDestroyed: () => true, send: () => { sends += 1 } }, { type: 'error', message: 'x' })
+  sendCliEvent(null, { type: 'error', message: 'x' })
+  assert.equal(sends, 0)
 })
