@@ -561,7 +561,7 @@ app.whenReady().then(async () => {
       reportsDirectory: appPaths.reports,
     }),
   })
-  registerCliIpcHandlers(getMainWindow, { terminalLogStore })
+  registerCliIpcHandlers(getMainWindow, { terminalLogStore, database: storageDatabase })
   registerOfficialCliAccountIpcHandlers({
     getPtyManager: () => ptyHandlers?.manager ?? null,
   })

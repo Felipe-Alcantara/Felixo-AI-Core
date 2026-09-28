@@ -102,6 +102,11 @@ contextBridge.exposeInMainWorld('felixo', {
       ipcRenderer.invoke('cli:switch-official-account', params),
     orchestrationStatus: (params) =>
       ipcRenderer.invoke('cli:orchestration-status', params),
+    // Troca de provedor do orquestrador: o renderer só lista e responde; quem
+    // decide e executa é o runner no main.
+    listProviderSwitches: () => ipcRenderer.invoke('cli:provider-switch:list'),
+    respondProviderSwitch: (params) =>
+      ipcRenderer.invoke('cli:provider-switch:respond', params),
     getTerminalLogs: () => ipcRenderer.invoke('cli:terminal-logs:get'),
     clearTerminalLogs: (params) =>
       ipcRenderer.invoke('cli:terminal-logs:clear', params),

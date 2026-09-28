@@ -13,6 +13,8 @@ import type {
   Project,
   ProjectNote,
   OrchestrationStreamEvent,
+  ProviderSwitchRequest,
+  ProviderSwitchRespondResult,
   QaLogEntry,
   QaLogEntryInput,
   StreamEvent,
@@ -471,6 +473,14 @@ declare global {
           runId?: string
           threadId?: string
         }) => Promise<CliOrchestrationStatusResult>
+        /** Trocas de provedor esperando a pessoa (para recuperar ao montar). */
+        listProviderSwitches: () => Promise<
+          CliInvokeResult & { requests?: ProviderSwitchRequest[] }
+        >
+        respondProviderSwitch: (params: {
+          decisionId: string
+          accept: boolean
+        }) => Promise<ProviderSwitchRespondResult>
         getTerminalLogs: () => Promise<TerminalLogsResult>
         clearTerminalLogs: (params?: {
           ignoreSessionIds?: string[]

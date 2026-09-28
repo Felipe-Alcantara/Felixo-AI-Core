@@ -443,3 +443,56 @@ test("formatter renders model availability events", () => {
   })
   assert.equal(back.severity, "info")
 })
+
+test('terminal formatter descreve o pedido e o fim de uma troca de provedor', () => {
+  const request = createOrchestrationTerminalEvent({
+    type: 'orchestration_provider_switch_request',
+    runId: 'run-1',
+    parentThreadId: 'thread-1',
+    agentId: 'reviewer-1',
+    decisionId: 'decision-1',
+    kind: 'mid-task',
+    fromCliType: 'claude',
+    toCliType: 'codex',
+    toModelId: 'codex-main',
+    toModelName: 'Codex Main',
+    rule: 'provider-fallback',
+    reason: 'Claude com limite de uso',
+    expiresAt: '2026-05-01T12:10:00.000Z',
+  })
+
+  assert.equal(request.title, 'Troca de provedor pede confirmação')
+  assert.equal(request.severity, 'warn')
+  assert.match(request.chunk, /reviewer-1: claude → codex \(Codex Main\)\./)
+  assert.match(request.chunk, /nada roda antes da resposta/)
+  assert.match(request.chunk, /conta como recusa/)
+  assert.equal(request.metadata.decisionId, 'decision-1')
+  assert.equal(request.metadata.decisionKind, 'mid-task')
+
+  const resolved = createOrchestrationTerminalEvent({
+    type: 'orchestration_provider_switch_resolved',
+    runId: 'run-1',
+    parentThreadId: 'thread-1',
+    agentId: 'reviewer-1',
+    decisionId: 'decision-1',
+    fromCliType: 'claude',
+    toCliType: 'codex',
+    outcome: 'expired',
+    note: 'Sem resposta no prazo; conta como recusa e nenhum provedor foi trocado.',
+  })
+
+  assert.equal(resolved.title, 'Troca de provedor')
+  assert.equal(resolved.severity, 'warn')
+  assert.match(resolved.chunk, /Sem resposta no prazo \(conta como recusa\)\./)
+  assert.equal(resolved.metadata.outcome, 'expired')
+
+  const accepted = createOrchestrationTerminalEvent({
+    type: 'orchestration_provider_switch_resolved',
+    agentId: 'reviewer-1',
+    fromCliType: 'claude',
+    toCliType: 'codex',
+    outcome: 'accepted',
+  })
+  assert.equal(accepted.severity, 'info')
+  assert.match(accepted.chunk, /Aceita pela pessoa\.$/)
+})

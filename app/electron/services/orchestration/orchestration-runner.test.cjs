@@ -496,15 +496,23 @@ test('orchestration runner re-spawns sub-agent on mid-task quota error', async (
 
   await runner.handleOrchestrationEvent(createSpawnEvent(), createContext())
 
-  const result = await runner.onAgentJobCompleted({
+  const waiting = await runner.onAgentJobCompleted({
     runId: 'run-1',
     agentId: 'reviewer-1',
     error: "You're out of extra usage · resets 4:40pm (America/Sao_Paulo)",
     partialOutput: 'Revisei até o arquivo X.',
   })
 
+  // Claude → Codex troca de provedor: pergunta antes, sem re-spawn sozinho.
+  assert.equal(waiting.ok, true)
+  assert.equal(waiting.awaitingConfirmation, true)
+  assert.equal(spawnCalls.length, 1, 'nada roda antes da resposta da pessoa')
+  assert.equal(waiting.run.agentJobs[0].status, 'running', 'o job não falha enquanto espera')
+
+  const result = await acceptPendingSwitch(runner)
+
   assert.equal(result.ok, true)
-  assert.equal(result.respawned, true)
+  assert.equal(result.outcome, 'accepted')
   assert.equal(spawnCalls.length, 2, 'agent should be re-spawned')
   assert.equal(spawnCalls[1].event.cliType, 'codex')
   assert.match(spawnCalls[1].event.prompt, /Tarefa original do sub-agente/)
@@ -533,6 +541,8 @@ test('orchestration runner stops fallback after max attempts', async () => {
   })
 
   await runner.handleOrchestrationEvent(createSpawnEvent(), createContext())
+  // O spawn inicial pediu claude e o seletor ofereceu codex: a pessoa aceita.
+  await acceptPendingSwitch(runner)
 
   await runner.onAgentJobCompleted({
     runId: 'run-1',
@@ -680,17 +690,16 @@ test('orchestration runner spreads simultaneous fallbacks across providers', asy
   }
   const availableModels = [claudeModel, codexModel, geminiModel]
 
-  let validateCallCount = 0
   const runner = createTestRunner({
     fallbackLoadThreshold: 2,
     spawnAgent: async (params) => {
       spawnCalls.push(params)
       return { ok: true, threadId: params.threadId }
     },
-    validateSpawnAgent: () => {
-      validateCallCount += 1
-      // Initial spawn for each agent: keep claude. Mid-task fallback: redirect to codex.
-      const isFallbackCall = validateCallCount % 2 === 0
+    validateSpawnAgent: ({ event }) => {
+      // Initial spawn for each agent: keep claude. Mid-task fallback (and its
+      // revalidation on accept): redirect to codex.
+      const isFallbackCall = /Tarefa original do sub-agente/.test(event.prompt)
       return isFallbackCall
         ? {
             ok: true,
@@ -724,6 +733,8 @@ test('orchestration runner spreads simultaneous fallbacks across providers', asy
       agentId,
       error: "You're out of extra usage · resets 4:40pm",
     })
+    // Sair do Claude é troca de provedor: cada uma é aceita explicitamente.
+    await acceptPendingSwitch(runner)
   }
 
   assert.equal(fallbackEvents.length, 3)
@@ -772,6 +783,12 @@ test('orchestration runner relays availability registry events to terminal', asy
   assert.equal(availabilityEvent.cliType, 'claude')
   assert.equal(availabilityEvent.modelId, 'claude-sonnet')
 })
+
+async function acceptPendingSwitch(runner) {
+  const pending = runner.listProviderSwitches()
+  assert.equal(pending.length, 1, 'deveria haver exatamente uma troca esperando a pessoa')
+  return runner.resolveProviderSwitch({ decisionId: pending[0].decisionId, accept: true })
+}
 
 function createTestRunner(options = {}) {
   const now = options.now ?? (() => new Date('2026-05-01T12:00:00.000Z'))
@@ -984,13 +1001,22 @@ test('respawn de fallback usa uma thread nova, soltando a do processo que falhou
 
   await runner.handleOrchestrationEvent(createSpawnEvent(), createContext())
 
-  const result = await runner.onAgentJobCompleted({
+  const waiting = await runner.onAgentJobCompleted({
     runId: 'run-1',
     agentId: 'reviewer-1',
     error: "You're out of extra usage · resets 4:40pm",
   })
 
-  assert.equal(result.respawned, true)
+  assert.equal(waiting.awaitingConfirmation, true)
+  assert.equal(
+    runner.getAgentJobByThreadId('thread-reviewer-1'),
+    null,
+    'enquanto a pessoa decide, um evento atrasado do processo que falhou não acha o job',
+  )
+
+  const result = await acceptPendingSwitch(runner)
+
+  assert.equal(result.spawned, true)
 
   const threadNova = spawnCalls[1].threadId
   assert.notEqual(
@@ -1009,3 +1035,434 @@ test('respawn de fallback usa uma thread nova, soltando a do processo que falhou
   })
 })
 
+
+// ── Troca de provedor com confirmação (decisão 7 do dono) ──────────────────
+
+const CLAUDE_MODEL = { id: 'claude-main', name: 'Claude Main', cliType: 'claude' }
+const CODEX_MODEL = { id: 'codex-main', name: 'Codex Main', cliType: 'codex' }
+const CODEX_APP_SERVER_MODEL = {
+  id: 'codex-app',
+  name: 'Codex App Server',
+  cliType: 'codex-app-server',
+}
+const GEMINI_MODEL = { id: 'gemini-main', name: 'Gemini Main', cliType: 'gemini' }
+
+function choice(model, selectionRule, extra = {}) {
+  return {
+    ok: true,
+    selectedModel: model,
+    modelChoice: {
+      selectionRule,
+      selectedCliType: model.cliType,
+      reason: `Regra ${selectionRule}.`,
+      ...extra,
+    },
+  }
+}
+
+function createSwitchHarness(options = {}) {
+  const calls = {
+    spawn: [],
+    invoke: [],
+    chat: [],
+    terminal: [],
+    records: [],
+  }
+  let clock = new Date('2026-05-01T12:00:00.000Z')
+  let decisionCounter = 0
+  const runner = createTestRunner({
+    now: () => clock,
+    createDecisionId: () => `decision-${(decisionCounter += 1)}`,
+    spawnAgent: async (params) => {
+      calls.spawn.push(params)
+      return { ok: true, threadId: params.threadId }
+    },
+    invokeOrchestrator: async (params) => {
+      calls.invoke.push(params)
+      return { ok: true }
+    },
+    sendChatEvent: (event) => calls.chat.push(event),
+    emitTerminalEvent: (event) => calls.terminal.push(event),
+    recordSwitchDecision: (record) => calls.records.push(record),
+    ...options,
+  })
+
+  return {
+    runner,
+    calls,
+    advance(ms) {
+      clock = new Date(clock.getTime() + ms)
+    },
+  }
+}
+
+function flushAsync() {
+  return new Promise((resolve) => setImmediate(resolve))
+}
+
+test('provider-fallback no spawn inicial pergunta e não chama spawnAgent', async () => {
+  const { runner, calls } = createSwitchHarness({
+    validateSpawnAgent: () =>
+      choice(CODEX_MODEL, 'provider-fallback', { fallbackFromCliType: 'claude' }),
+  })
+
+  const result = await runner.handleOrchestrationEvent(createSpawnEvent(), createContext())
+
+  assert.equal(result.ok, true)
+  assert.equal(result.awaitingConfirmation, true)
+  assert.equal(calls.spawn.length, 0, 'nenhum processo sobe antes da resposta')
+  assert.equal(result.run.agentJobs[0].status, 'pending')
+
+  const request = calls.chat.find((event) => event.type === 'provider_switch_request')
+  assert.ok(request, 'o chat recebe o pedido de confirmação')
+  assert.equal(request.decisionId, 'decision-1')
+  assert.equal(request.kind, 'initial')
+  assert.equal(request.fromCliType, 'claude')
+  assert.equal(request.toCliType, 'codex')
+  assert.equal(request.toModelName, 'Codex Main')
+  assert.equal(request.rule, 'provider-fallback')
+  assert.equal(request.sessionId, 'session-codex-1')
+  assert.equal(request.threadId, 'thread-codex-1')
+  assert.equal(request.expiresAt, '2026-05-01T12:10:00.000Z')
+  assert.equal('payload' in request, false, 'estado interno não sai do main')
+  assert.ok(
+    calls.terminal.some((event) => event.type === 'orchestration_provider_switch_request'),
+  )
+  assert.equal(
+    calls.terminal.some((event) => event.type === 'orchestration_agent_spawn'),
+    false,
+    'o log não diz que o sub-agente iniciou antes de iniciar',
+  )
+  assert.deepEqual(
+    runner.listProviderSwitches().map((entry) => entry.decisionId),
+    ['decision-1'],
+  )
+})
+
+test('aceite gera um spawn só; aceite duplo recebe DECISION_NOT_PENDING', async () => {
+  const { runner, calls } = createSwitchHarness({
+    validateSpawnAgent: () =>
+      choice(CODEX_MODEL, 'provider-fallback', { fallbackFromCliType: 'claude' }),
+  })
+  await runner.handleOrchestrationEvent(createSpawnEvent(), createContext())
+
+  const [first, second] = await Promise.all([
+    runner.resolveProviderSwitch({ decisionId: 'decision-1', accept: true }),
+    runner.resolveProviderSwitch({ decisionId: 'decision-1', accept: true }),
+  ])
+
+  assert.equal(first.ok, true)
+  assert.equal(first.outcome, 'accepted')
+  assert.deepEqual(
+    { ok: second.ok, code: second.code },
+    { ok: false, code: 'DECISION_NOT_PENDING' },
+  )
+  assert.equal(calls.spawn.length, 1)
+  assert.equal(calls.spawn[0].event.cliType, 'codex')
+  assert.equal(runner.getRun('run-1').agentJobs[0].status, 'running')
+  assert.deepEqual(
+    calls.records.map((record) => [record.decisionId, record.state, record.outcome]),
+    [['decision-1', 'accepted', 'accepted']],
+  )
+  assert.equal(calls.records[0].decidedAt, '2026-05-01T12:00:00.000Z')
+  const resolved = calls.chat.find((event) => event.type === 'provider_switch_resolved')
+  assert.equal(resolved.outcome, 'accepted')
+  assert.equal(runner.listProviderSwitches().length, 0)
+})
+
+test('recusa no spawn inicial falha o job e reinvoca o orquestrador', async () => {
+  const { runner, calls } = createSwitchHarness({
+    validateSpawnAgent: () =>
+      choice(CODEX_MODEL, 'last-resort', { fallbackFromCliType: 'claude' }),
+  })
+  await runner.handleOrchestrationEvent(createSpawnEvent(), createContext())
+  await runner.handleOrchestrationEvent(
+    { type: 'awaiting_agents', agentIds: ['reviewer-1'] },
+    createContext({ runId: 'run-1' }),
+  )
+
+  const result = await runner.resolveProviderSwitch({ decisionId: 'decision-1', accept: false })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.outcome, 'refused')
+  assert.equal(calls.spawn.length, 0, 'last-resort em outra família também não roda sozinho')
+  const job = runner.getRun('run-1').agentJobs[0]
+  assert.equal(job.status, 'error')
+  assert.match(job.error, /claude → codex recusada pela pessoa/)
+  assert.equal(calls.invoke.length, 1, 'o orquestrador recebe o resultado e decide')
+  assert.match(calls.invoke[0].prompt, /recusada pela pessoa/)
+  assert.deepEqual(
+    calls.records.map((record) => record.state),
+    ['refused'],
+  )
+})
+
+test('meio da tarefa: pergunta, conta a tentativa só no aceite e a recusa segue com o erro original', async () => {
+  const { runner, calls } = createSwitchHarness({
+    validateSpawnAgent: ({ event }) =>
+      /Tarefa original do sub-agente/.test(event.prompt)
+        ? choice(CODEX_MODEL, 'provider-fallback', { fallbackFromCliType: 'claude' })
+        : choice(CLAUDE_MODEL, 'best-available-model'),
+  })
+  await runner.handleOrchestrationEvent(createSpawnEvent(), createContext())
+  await runner.handleOrchestrationEvent(
+    { type: 'awaiting_agents', agentIds: ['reviewer-1'] },
+    createContext({ runId: 'run-1' }),
+  )
+  const originalError = "You're out of extra usage · resets 4:40pm"
+
+  const waiting = await runner.onAgentJobCompleted({
+    runId: 'run-1',
+    agentId: 'reviewer-1',
+    error: originalError,
+  })
+
+  assert.equal(waiting.awaitingConfirmation, true)
+  assert.equal(calls.spawn.length, 1)
+  assert.equal(runner.getFallbackLoad('run-1', 'codex'), 0, 'carga só anda no aceite')
+  assert.equal(runner.agentFallbackAttempts.get('run-1:reviewer-1'), undefined)
+  assert.equal(
+    calls.terminal.some((event) => event.type === 'orchestration_agent_fallback'),
+    false,
+  )
+  assert.equal(runner.listProviderSwitches()[0].kind, 'mid-task')
+
+  const refused = await runner.resolveProviderSwitch({ decisionId: 'decision-1', accept: false })
+
+  assert.equal(refused.outcome, 'refused')
+  assert.equal(calls.spawn.length, 1, 'nenhum provedor foi trocado')
+  const job = runner.getRun('run-1').agentJobs[0]
+  assert.equal(job.status, 'error')
+  assert.equal(job.error, originalError)
+  assert.equal(calls.invoke.length, 1)
+  assert.equal(runner.agentFallbackAttempts.get('run-1:reviewer-1'), undefined)
+})
+
+test('meio da tarefa: aceite re-spawna no destino e conta a tentativa', async () => {
+  const { runner, calls } = createSwitchHarness({
+    validateSpawnAgent: ({ event }) =>
+      /Tarefa original do sub-agente/.test(event.prompt)
+        ? choice(CODEX_MODEL, 'provider-fallback', { fallbackFromCliType: 'claude' })
+        : choice(CLAUDE_MODEL, 'best-available-model'),
+  })
+  await runner.handleOrchestrationEvent(createSpawnEvent(), createContext())
+  await runner.onAgentJobCompleted({
+    runId: 'run-1',
+    agentId: 'reviewer-1',
+    error: 'rate limit exceeded',
+  })
+
+  const accepted = await runner.resolveProviderSwitch({ decisionId: 'decision-1', accept: true })
+
+  assert.equal(accepted.outcome, 'accepted')
+  assert.equal(accepted.spawned, true)
+  assert.equal(calls.spawn.length, 2)
+  assert.equal(calls.spawn[1].event.cliType, 'codex')
+  assert.equal(runner.getFallbackLoad('run-1', 'codex'), 1)
+  assert.equal(runner.agentFallbackAttempts.get('run-1:reviewer-1'), 1)
+  assert.deepEqual(calls.records.map((record) => record.state), ['accepted'])
+})
+
+test('codex → codex-app-server e last-resort na mesma família não perguntam', async () => {
+  const transport = createSwitchHarness({
+    validateSpawnAgent: () =>
+      choice(CODEX_APP_SERVER_MODEL, 'provider-fallback', { fallbackFromCliType: 'codex' }),
+  })
+  const viaTransport = await transport.runner.handleOrchestrationEvent(
+    createSpawnEvent({ cliType: 'codex' }),
+    createContext(),
+  )
+  assert.equal(viaTransport.awaitingConfirmation, undefined)
+  assert.equal(transport.calls.spawn.length, 1)
+  assert.equal(transport.calls.spawn[0].event.cliType, 'codex-app-server')
+
+  const lastResort = createSwitchHarness({
+    validateSpawnAgent: () => choice(CLAUDE_MODEL, 'last-resort', { fallbackFromCliType: 'claude' }),
+  })
+  await lastResort.runner.handleOrchestrationEvent(createSpawnEvent(), createContext())
+  assert.equal(lastResort.calls.spawn.length, 1)
+  assert.equal(lastResort.runner.listProviderSwitches().length, 0)
+  assert.equal(
+    lastResort.calls.chat.some((event) => event.type === 'provider_switch_request'),
+    false,
+  )
+})
+
+test('failExpiredRuns vence a decisão sem resposta como recusa', async () => {
+  const { runner, calls, advance } = createSwitchHarness({
+    validateSpawnAgent: () =>
+      choice(CODEX_MODEL, 'provider-fallback', { fallbackFromCliType: 'claude' }),
+  })
+  await runner.handleOrchestrationEvent(createSpawnEvent(), createContext())
+
+  advance(9 * 60 * 1000)
+  runner.failExpiredRuns()
+  assert.equal(runner.listProviderSwitches().length, 1, 'antes do prazo nada vence')
+
+  advance(60 * 1000)
+  const failedRuns = runner.failExpiredRuns()
+  await flushAsync()
+
+  assert.equal(failedRuns.length, 0, 'o run segue vivo; só a decisão venceu')
+  assert.equal(runner.listProviderSwitches().length, 0)
+  assert.equal(calls.spawn.length, 0, 'nenhum provedor foi trocado')
+  const job = runner.getRun('run-1').agentJobs[0]
+  assert.equal(job.status, 'error')
+  assert.match(job.error, /sem resposta no prazo/)
+  assert.deepEqual(
+    calls.records.map((record) => [record.state, record.outcome]),
+    [['refused', 'expired']],
+  )
+  const late = await runner.resolveProviderSwitch({ decisionId: 'decision-1', accept: true })
+  assert.equal(late.code, 'DECISION_NOT_PENDING')
+  assert.equal(calls.spawn.length, 0)
+})
+
+test('o prazo da decisão não passa do prazo do run', async () => {
+  const { runner, calls } = createSwitchHarness({
+    validateSpawnAgent: () =>
+      choice(CODEX_MODEL, 'provider-fallback', { fallbackFromCliType: 'claude' }),
+  })
+  await runner.handleOrchestrationEvent(
+    createSpawnEvent(),
+    createContext({ limits: { maxRuntimeMinutes: 4 } }),
+  )
+
+  const request = calls.chat.find((event) => event.type === 'provider_switch_request')
+  assert.equal(request.expiresAt, '2026-05-01T12:04:00.000Z')
+})
+
+test('resposta depois do fim do run devolve RUN_FINISHED e não roda nada', async () => {
+  const { runner, calls, advance } = createSwitchHarness({
+    validateSpawnAgent: () =>
+      choice(CODEX_MODEL, 'provider-fallback', { fallbackFromCliType: 'claude' }),
+  })
+  await runner.handleOrchestrationEvent(createSpawnEvent(), createContext())
+
+  advance(21 * 60 * 1000)
+  const result = await runner.resolveProviderSwitch({ decisionId: 'decision-1', accept: true })
+
+  assert.deepEqual({ ok: result.ok, code: result.code }, { ok: false, code: 'RUN_FINISHED' })
+  assert.equal(calls.spawn.length, 0)
+  assert.deepEqual(calls.records.map((record) => record.state), ['refused'])
+})
+
+test('cli:stop na conversa cancela a decisão sem reinvocar o orquestrador', async () => {
+  const { runner, calls } = createSwitchHarness({
+    validateSpawnAgent: () =>
+      choice(CODEX_MODEL, 'provider-fallback', { fallbackFromCliType: 'claude' }),
+  })
+  await runner.handleOrchestrationEvent(createSpawnEvent(), createContext())
+
+  const cancelled = runner.cancelProviderSwitchesForThread('thread-codex-1')
+  await flushAsync()
+
+  assert.deepEqual(cancelled, ['decision-1'])
+  assert.equal(runner.listProviderSwitches().length, 0)
+  assert.equal(runner.getRun('run-1').agentJobs[0].status, 'error')
+  assert.equal(calls.invoke.length, 0, 'a pessoa parou: o orquestrador não volta sozinho')
+  assert.equal(calls.spawn.length, 0)
+  const resolved = calls.chat.find((event) => event.type === 'provider_switch_resolved')
+  assert.equal(resolved.outcome, 'cancelled')
+  assert.deepEqual(runner.cancelProviderSwitchesForThread('outra-thread'), [])
+})
+
+test('fim do run (reset da thread) limpa as decisões dele', async () => {
+  const { runner, calls } = createSwitchHarness({
+    validateSpawnAgent: () =>
+      choice(CODEX_MODEL, 'provider-fallback', { fallbackFromCliType: 'claude' }),
+  })
+  await runner.handleOrchestrationEvent(createSpawnEvent(), createContext())
+
+  runner.resetThread('thread-codex-1')
+
+  assert.equal(runner.listProviderSwitches().length, 0)
+  const resolved = calls.chat.find((event) => event.type === 'provider_switch_resolved')
+  assert.equal(resolved.outcome, 'run_finished')
+  assert.equal(resolved.sessionId, 'session-codex-1')
+  const late = await runner.resolveProviderSwitch({ decisionId: 'decision-1', accept: true })
+  assert.equal(late.code, 'DECISION_NOT_PENDING')
+  assert.equal(calls.spawn.length, 0)
+})
+
+test('aceite com destino que mudou de família vira superseded e faz nova pergunta', async () => {
+  let target = CODEX_MODEL
+  const { runner, calls } = createSwitchHarness({
+    validateSpawnAgent: () =>
+      choice(target, 'provider-fallback', { fallbackFromCliType: 'claude' }),
+  })
+  await runner.handleOrchestrationEvent(createSpawnEvent(), createContext())
+
+  target = GEMINI_MODEL
+  const result = await runner.resolveProviderSwitch({ decisionId: 'decision-1', accept: true })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.outcome, 'superseded')
+  assert.equal(result.nextDecisionId, 'decision-2')
+  assert.equal(calls.spawn.length, 0, 'aceitar Codex não autoriza rodar no Gemini')
+  const pending = runner.listProviderSwitches()
+  assert.deepEqual(
+    pending.map((entry) => [entry.decisionId, entry.toCliType]),
+    [['decision-2', 'gemini']],
+  )
+  assert.equal(calls.records.length, 0, 'superseded não é uma resposta registrada')
+
+  await runner.resolveProviderSwitch({ decisionId: 'decision-2', accept: true })
+  assert.equal(calls.spawn.length, 1)
+  assert.equal(calls.spawn[0].event.cliType, 'gemini')
+  assert.deepEqual(calls.records.map((record) => record.decisionId), ['decision-2'])
+})
+
+test('aceite quando o provedor original voltou roda nele, sem trocar', async () => {
+  let target = CODEX_MODEL
+  const { runner, calls } = createSwitchHarness({
+    validateSpawnAgent: () =>
+      target === CODEX_MODEL
+        ? choice(CODEX_MODEL, 'provider-fallback', { fallbackFromCliType: 'claude' })
+        : choice(CLAUDE_MODEL, 'best-available-model'),
+  })
+  await runner.handleOrchestrationEvent(createSpawnEvent(), createContext())
+
+  target = CLAUDE_MODEL
+  const result = await runner.resolveProviderSwitch({ decisionId: 'decision-1', accept: true })
+
+  assert.equal(result.outcome, 'superseded')
+  assert.equal(calls.spawn.length, 1)
+  assert.equal(calls.spawn[0].event.cliType, 'claude')
+  assert.equal(runner.getRun('run-1').agentJobs[0].cliType, 'claude')
+  assert.equal(calls.records.length, 0)
+})
+
+test('o motivo da troca sai redigido no chat e no registro', async () => {
+  const { runner, calls } = createSwitchHarness({
+    validateSpawnAgent: () =>
+      choice(CODEX_MODEL, 'provider-fallback', {
+        fallbackFromCliType: 'claude',
+        reason: 'Claude falhou: Authorization: Bearer abcdef123456 e sk-proj1234567890',
+      }),
+  })
+  await runner.handleOrchestrationEvent(createSpawnEvent(), createContext())
+  await runner.resolveProviderSwitch({ decisionId: 'decision-1', accept: false })
+
+  const request = calls.chat.find((event) => event.type === 'provider_switch_request')
+  for (const text of [request.reason, calls.records[0].reason]) {
+    assert.doesNotMatch(text, /abcdef123456|sk-proj1234567890/)
+    assert.match(text, /\[oculto\]/)
+  }
+})
+
+test('uma falha ao gravar o registro não trava a decisão', async () => {
+  const { runner, calls } = createSwitchHarness({
+    validateSpawnAgent: () =>
+      choice(CODEX_MODEL, 'provider-fallback', { fallbackFromCliType: 'claude' }),
+    recordSwitchDecision: () => {
+      throw new Error('disco cheio')
+    },
+  })
+  await runner.handleOrchestrationEvent(createSpawnEvent(), createContext())
+
+  const result = await runner.resolveProviderSwitch({ decisionId: 'decision-1', accept: true })
+
+  assert.equal(result.ok, true)
+  assert.equal(calls.spawn.length, 1)
+})

@@ -42,6 +42,12 @@ const {
   startExpiredRunsSweeper,
 } = require('./orchestration/expired-runs-sweeper.cjs')
 const {
+  buildProviderSwitchEventRecord,
+} = require('./orchestration/provider-switch-record.cjs')
+const {
+  createAccountChainRepository,
+} = require('./storage/account-chain-repository.cjs')
+const {
   createErrorTerminalEvent,
   createOrchestrationTerminalEvent,
   createStartTerminalEvent,
@@ -136,7 +142,9 @@ function registerCliIpcHandlers(getMainWindow, dependencies = {}) {
     return sendCliRequest(params, targetWebContents)
   })
 
+  const recordSwitchDecision = createProviderSwitchRecorder(dependencies.database)
   const orchestrationRunner = createOrchestrationRunner({
+    recordSwitchDecision,
     validateSpawnAgent: ({ event, context }) =>
       validateOrchestrationSpawnModel(event, context),
     spawnAgent: ({ run, event, threadId, context }) =>
@@ -778,6 +786,15 @@ function registerCliIpcHandlers(getMainWindow, dependencies = {}) {
     createOrchestrationStatusResponse(orchestrationRunner, params),
   )
 
+  // Troca de provedor do orquestrador: a pessoa confirma ou recusa no chat.
+  ipcMain.handle('cli:provider-switch:list', () =>
+    createProviderSwitchListResponse(orchestrationRunner),
+  )
+
+  ipcMain.handle('cli:provider-switch:respond', (_event, params) =>
+    respondToProviderSwitch(orchestrationRunner, params),
+  )
+
   ipcMain.handle('cli:stop', (event, params) => {
     const streamSessionId = getRequiredString(params?.sessionId)
     const threadId = getRequiredString(params?.threadId) || streamSessionId
@@ -791,6 +808,10 @@ function registerCliIpcHandlers(getMainWindow, dependencies = {}) {
       return { ok: false, message: 'Sessão inválida.' }
     }
 
+    // Parar a conversa também encerra as perguntas de troca de provedor do
+    // run dela: nenhuma resposta tardia pode subir um sub-agente depois.
+    const cancelledProviderSwitches =
+      orchestrationRunner.cancelProviderSwitchesForThread(threadId)
     stoppedSessions.add(threadId)
     const killed = cliManager.kill(threadId)
     const targetWebContents = getTargetWebContents(getMainWindow, event.sender)
@@ -801,6 +822,7 @@ function registerCliIpcHandlers(getMainWindow, dependencies = {}) {
       message: killed ? 'Stop signal sent.' : 'No process found to stop.',
       details: {
         streamSessionId,
+        cancelledProviderSwitches: cancelledProviderSwitches.length,
       },
     })
 
@@ -1117,6 +1139,69 @@ function spawnOrchestrationAgent({
   )
 }
 
+// O main gera o id da decisão com randomUUID: qualquer outra coisa vinda do
+// renderer é descartada antes de chegar ao runner.
+const DECISION_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+function createProviderSwitchListResponse(orchestrationRunner) {
+  return { ok: true, requests: orchestrationRunner.listProviderSwitches() }
+}
+
+/**
+ * `cli:provider-switch:respond`: só valida o formato e repassa ao runner, que
+ * decide (e é idempotente).
+ */
+async function respondToProviderSwitch(orchestrationRunner, params) {
+  const decisionId = typeof params?.decisionId === 'string' ? params.decisionId : ''
+
+  if (!DECISION_ID_PATTERN.test(decisionId) || typeof params?.accept !== 'boolean') {
+    return {
+      ok: false,
+      code: 'INVALID_PARAMS',
+      message: 'Resposta de troca de provedor inválida.',
+    }
+  }
+
+  const result = {
+    ...(await orchestrationRunner.resolveProviderSwitch({
+      decisionId,
+      accept: params.accept,
+    })),
+  }
+  // O run inteiro não atravessa o IPC: o renderer só precisa do desfecho.
+  delete result.run
+  return result
+}
+
+/**
+ * Grava cada decisão de troca de provedor no registro de trocas da cadeia de
+ * contas (`account_switch_events`, kind `provider_switch`). Sem banco (testes,
+ * boot sem storage) a decisão segue valendo; só não fica registrada.
+ */
+function createProviderSwitchRecorder(database) {
+  const repository = database ? createAccountChainRepository(database) : null
+
+  return (decision) => {
+    if (!repository) {
+      return
+    }
+
+    try {
+      repository.insertSwitchEvent(buildProviderSwitchEventRecord(decision))
+    } catch (error) {
+      logQaEvent({
+        level: 'warn',
+        scope: 'orchestration:provider-switch',
+        message: `Falha ao registrar a troca de provedor: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        details: { decisionId: decision?.decisionId ?? null },
+      })
+    }
+  }
+}
+
 function createOrchestrationStatusResponse(orchestrationRunner, params = {}) {
   const runId = getRequiredString(params?.runId)
   const threadId = getRequiredString(params?.threadId)
@@ -1145,6 +1230,8 @@ module.exports = {
   collectThreadFamily,
   createOrchestrationModel,
   createOrchestrationStatusResponse,
+  createProviderSwitchListResponse,
+  createProviderSwitchRecorder,
   createToolLoopLimitMessage,
   createToolLoopProgressState,
   getAdapterSpawnArgs,
@@ -1152,6 +1239,7 @@ module.exports = {
   recordModelAvailabilityEvent,
   registerCliIpcHandlers,
   resolveOrchestrationSpawnModel,
+  respondToProviderSwitch,
   sendCliEvent,
   spawnOrchestrationAgent,
   shouldAbortForToolLoop,

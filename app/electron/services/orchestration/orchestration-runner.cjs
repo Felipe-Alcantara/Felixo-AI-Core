@@ -1,3 +1,4 @@
+const { randomUUID } = require('node:crypto')
 const {
   OrchestrationLimitError,
   createOrchestrationStore,
@@ -11,7 +12,10 @@ const {
 const {
   applyVariantDefaults,
   getFallbackOrderForCliType,
+  getProviderFamily,
+  requiresProviderSwitchConfirmation,
 } = require('../orchestrator/spawn-model-selector.cjs')
+const { redactSecrets } = require('../official-cli-account-status.cjs')
 const {
   requiresDelegation,
 } = require('../orchestrator/delegation-policy.cjs')
@@ -23,6 +27,22 @@ const DEFAULT_MAX_AGENT_FALLBACK_ATTEMPTS = 2
 // this many redirects per cliType in a run, prefer the next provider in the
 // fallback queue that still has spare capacity.
 const DEFAULT_FALLBACK_LOAD_THRESHOLD = 2
+// Prazo para a pessoa responder se o sub-agente pode trocar de provedor. Sem
+// resposta, conta como recusa (decisão do dono). Não há timer próprio: quem
+// vence as decisões é a varredura de `failExpiredRuns`, que já roda a cada
+// 60 s (`expired-runs-sweeper.cjs`).
+const PROVIDER_SWITCH_TIMEOUT_MS = 10 * 60 * 1000
+// O motivo mostrado no card e gravado no registro de trocas vem do texto de
+// erro da CLI: vai redigido e curto (o registro aceita até 400 caracteres).
+const PROVIDER_SWITCH_REASON_MAX_CHARS = 300
+const PROVIDER_SWITCH_OUTCOMES = Object.freeze({
+  accepted: 'accepted',
+  refused: 'refused',
+  expired: 'expired',
+  cancelled: 'cancelled',
+  runFinished: 'run_finished',
+  superseded: 'superseded',
+})
 
 class OrchestrationRunner {
   constructor(options = {}) {
@@ -48,6 +68,13 @@ class OrchestrationRunner {
     this.delegationGuardAttempts = new Map()
     this.maxDelegationGuardAttempts = options.maxDelegationGuardAttempts ?? 1
     this.availabilitySubscriptions = new WeakMap()
+    this.createDecisionId = options.createDecisionId ?? (() => randomUUID())
+    this.recordSwitchDecision = options.recordSwitchDecision ?? (() => {})
+    this.providerSwitchTimeoutMs =
+      options.providerSwitchTimeoutMs ?? PROVIDER_SWITCH_TIMEOUT_MS
+    // Decisões de troca de provedor esperando a pessoa. Em memória, como o
+    // store: um reinício do app apaga a pergunta sem executar nada.
+    this.pendingProviderSwitches = new Map()
   }
 
   async handleOrchestrationEvent(event, context = {}) {
@@ -75,32 +102,8 @@ class OrchestrationRunner {
 
     try {
       this.assertRunNotTimedOut(run)
-      const spawnValidation = this.validateSpawnAgent({
-        run,
-        event,
-        context: this.getRunContext(run.runId),
-      })
-
-      if (spawnValidation?.ok === false) {
-        throw new OrchestrationLimitError(
-          spawnValidation.message ?? 'Modelo indisponivel para spawn.',
-          spawnValidation.code ?? 'SPAWN_MODEL_UNAVAILABLE',
-        )
-      }
-
-      const resolvedModel = spawnValidation?.selectedModel ?? null
-      const resolvedCliType =
-        resolvedModel?.cliType ??
-        spawnValidation?.modelChoice?.selectedCliType ??
-        event.cliType
-      const resolvedEvent = resolvedModel
-        ? {
-            ...event,
-            requestedCliType: event.cliType,
-            cliType: resolvedCliType,
-            selectedModel: resolvedModel,
-          }
-        : event
+      const { resolvedModel, resolvedCliType, resolvedEvent, modelChoice } =
+        this.resolveSpawnTarget(run, event)
 
       run = this.store.createAgentJob(run.runId, {
         agentId: event.agentId,
@@ -108,73 +111,168 @@ class OrchestrationRunner {
         prompt: event.prompt,
       })
 
-      const job = findAgentJob(run, event.agentId)
       const threadId = this.createThreadId(run, event)
 
-      this.emitTerminalEvent({
-        type: 'orchestration_agent_spawn',
-        runId: run.runId,
-        parentThreadId: run.parentThreadId,
-        agentId: event.agentId,
-        cliType: resolvedCliType,
-        requestedCliType: event.cliType,
-        threadId,
-      })
-
-      if (spawnValidation?.modelChoice) {
-        this.emitTerminalEvent({
-          type: 'orchestration_model_choice',
-          runId: run.runId,
-          parentThreadId: run.parentThreadId,
+      if (requiresProviderSwitchConfirmation(event.cliType, resolvedCliType)) {
+        // O job fica `pending` enquanto a pessoa decide: o turno não fecha
+        // (`areCurrentTurnJobsTerminal`) e o run espera, sem bloquear nada.
+        this.emitModelChoice({ run, event, threadId, modelChoice })
+        this.requestProviderSwitch({
+          kind: 'initial',
+          run,
           agentId: event.agentId,
-          requestedCliType: event.cliType,
-          threadId,
-          ...spawnValidation.modelChoice,
+          fromCliType: event.cliType,
+          toCliType: resolvedCliType,
+          toModel: resolvedModel,
+          rule: modelChoice?.selectionRule,
+          reason: modelChoice?.reason,
+          payload: { event, threadId },
         })
-      }
 
-      const result = await this.spawnAgent({
-        run,
-        job,
-        threadId,
-        event: resolvedEvent,
-        context: this.getRunContext(run.runId),
-      })
-
-      if (result?.ok === false) {
-        run = this.store.failAgentJob(run.runId, event.agentId, {
-          error: result.message ?? 'Falha ao iniciar sub-agente.',
-        })
         return {
           handled: true,
-          ok: false,
-          run,
-          message: result.message ?? 'Falha ao iniciar sub-agente.',
+          ok: true,
+          run: this.store.get(run.runId),
+          awaitingConfirmation: true,
         }
       }
 
-      const childThreadId = result?.threadId ?? threadId
-      run = this.store.startAgentJob(run.runId, event.agentId, {
-        threadId: childThreadId,
+      return await this.startSpawnedJob({
+        run,
+        event,
+        resolvedEvent,
+        resolvedCliType,
+        threadId,
+        modelChoice,
       })
-      this.threadAgentJobs.set(childThreadId, {
-        runId: run.runId,
-        agentId: event.agentId,
-      })
-      this.sendChatEvent({
-        type: 'spawn_agent',
-        agentId: event.agentId,
-        cliType: resolvedCliType,
-        prompt: event.prompt,
-        sessionId: getResponseSessionId(run, this.getRunContext(run.runId)),
-        threadId: run.parentThreadId,
-        runId: run.runId,
-      })
-
-      return { handled: true, ok: true, run }
     } catch (error) {
       return this.failRunFromError(run?.runId, error, context)
     }
+  }
+
+  /**
+   * Resolve em que modelo/cliType o sub-agente rodaria. Lança quando nenhum
+   * modelo serve, como o spawn sempre fez.
+   */
+  resolveSpawnTarget(run, event) {
+    const spawnValidation = this.validateSpawnAgent({
+      run,
+      event,
+      context: this.getRunContext(run.runId),
+    })
+
+    if (spawnValidation?.ok === false) {
+      throw new OrchestrationLimitError(
+        spawnValidation.message ?? 'Modelo indisponivel para spawn.',
+        spawnValidation.code ?? 'SPAWN_MODEL_UNAVAILABLE',
+      )
+    }
+
+    const resolvedModel = spawnValidation?.selectedModel ?? null
+    const resolvedCliType =
+      resolvedModel?.cliType ??
+      spawnValidation?.modelChoice?.selectedCliType ??
+      event.cliType
+    const resolvedEvent = resolvedModel
+      ? {
+          ...event,
+          requestedCliType: event.cliType,
+          cliType: resolvedCliType,
+          selectedModel: resolvedModel,
+        }
+      : event
+
+    return {
+      resolvedModel,
+      resolvedCliType,
+      resolvedEvent,
+      modelChoice: spawnValidation?.modelChoice,
+    }
+  }
+
+  /**
+   * Inicia o processo do sub-agente de um job já criado. Usado no spawn direto
+   * e no aceite de uma troca de provedor.
+   */
+  async startSpawnedJob({ run, event, resolvedEvent, resolvedCliType, threadId, modelChoice }) {
+    const job = findAgentJob(run, event.agentId)
+
+    if (job && job.cliType !== resolvedCliType) {
+      // A revalidação no aceite pode ter escolhido outro cliType da mesma
+      // família (ou o provedor original de volta).
+      run = this.store.updateAgentJob(run.runId, event.agentId, (draft, now) => {
+        draft.cliType = resolvedCliType
+        draft.updatedAt = now
+      })
+    }
+
+    this.emitTerminalEvent({
+      type: 'orchestration_agent_spawn',
+      runId: run.runId,
+      parentThreadId: run.parentThreadId,
+      agentId: event.agentId,
+      cliType: resolvedCliType,
+      requestedCliType: event.cliType,
+      threadId,
+    })
+
+    this.emitModelChoice({ run, event, threadId, modelChoice })
+
+    const result = await this.spawnAgent({
+      run,
+      job: findAgentJob(run, event.agentId),
+      threadId,
+      event: resolvedEvent,
+      context: this.getRunContext(run.runId),
+    })
+
+    if (result?.ok === false) {
+      run = this.store.failAgentJob(run.runId, event.agentId, {
+        error: result.message ?? 'Falha ao iniciar sub-agente.',
+      })
+      return {
+        handled: true,
+        ok: false,
+        run,
+        message: result.message ?? 'Falha ao iniciar sub-agente.',
+      }
+    }
+
+    const childThreadId = result?.threadId ?? threadId
+    run = this.store.startAgentJob(run.runId, event.agentId, {
+      threadId: childThreadId,
+    })
+    this.threadAgentJobs.set(childThreadId, {
+      runId: run.runId,
+      agentId: event.agentId,
+    })
+    this.sendChatEvent({
+      type: 'spawn_agent',
+      agentId: event.agentId,
+      cliType: resolvedCliType,
+      prompt: event.prompt,
+      sessionId: getResponseSessionId(run, this.getRunContext(run.runId)),
+      threadId: run.parentThreadId,
+      runId: run.runId,
+    })
+
+    return { handled: true, ok: true, run }
+  }
+
+  emitModelChoice({ run, event, threadId, modelChoice }) {
+    if (!modelChoice) {
+      return
+    }
+
+    this.emitTerminalEvent({
+      type: 'orchestration_model_choice',
+      runId: run.runId,
+      parentThreadId: run.parentThreadId,
+      agentId: event.agentId,
+      requestedCliType: event.cliType,
+      threadId,
+      ...modelChoice,
+    })
   }
 
   async handleAwaitingAgents(event, context = {}) {
@@ -362,34 +460,58 @@ class OrchestrationRunner {
         if (fallback?.respawned) {
           return { handled: true, ok: true, run: fallback.run, respawned: true }
         }
+
+        // Esperando a pessoa decidir a troca de provedor: como num respawn, o
+        // job segue `running` e não falha agora.
+        if (fallback?.awaitingConfirmation) {
+          return {
+            handled: true,
+            ok: true,
+            run: fallback.run,
+            respawned: false,
+            awaitingConfirmation: true,
+          }
+        }
       }
 
-      run = params.error
-        ? this.store.failAgentJob(locatedJob.runId, locatedJob.agentId, {
-            error: params.error,
-          })
-        : this.store.completeAgentJob(locatedJob.runId, locatedJob.agentId, {
-            result: params.result ?? '',
-          })
-
-      this.emitTerminalEvent({
-        type: 'orchestration_agent_result',
-        runId: run.runId,
-        parentThreadId: run.parentThreadId,
+      return await this.finishAgentJob({
+        runId: locatedJob.runId,
         agentId: locatedJob.agentId,
-        status: params.error ? 'error' : 'completed',
-        result: params.error ? null : params.result ?? '',
-        error: params.error ?? null,
+        error: params.error,
+        result: params.result,
       })
-
-      if (!areCurrentTurnJobsTerminal(run)) {
-        return { handled: true, ok: true, run }
-      }
-
-      return this.reinvokeOrchestrator(run.runId)
     } catch (error) {
       return this.failRunFromError(run?.runId, error, this.getRunContext(run?.runId))
     }
+  }
+
+  /**
+   * Fecha o job com resultado ou erro e, se o turno inteiro terminou,
+   * reinvoca o orquestrador com os resultados.
+   *
+   * @param {{ reinvoke?: boolean }} params - `reinvoke: false` fecha sem
+   *   chamar o orquestrador (execução interrompida pela pessoa).
+   */
+  async finishAgentJob({ runId, agentId, error, result, reinvoke = true }) {
+    const run = error
+      ? this.store.failAgentJob(runId, agentId, { error })
+      : this.store.completeAgentJob(runId, agentId, { result: result ?? '' })
+
+    this.emitTerminalEvent({
+      type: 'orchestration_agent_result',
+      runId: run.runId,
+      parentThreadId: run.parentThreadId,
+      agentId,
+      status: error ? 'error' : 'completed',
+      result: error ? null : result ?? '',
+      error: error ?? null,
+    })
+
+    if (!reinvoke || !areCurrentTurnJobsTerminal(run)) {
+      return { handled: true, ok: true, run }
+    }
+
+    return this.reinvokeOrchestrator(run.runId)
   }
 
   async tryMidTaskFallback({ run, locatedJob, error, partialOutput }) {
@@ -433,20 +555,58 @@ class OrchestrationRunner {
       })
     }
 
-    const continuationPrompt = buildContinuationPrompt({
-      originalPrompt: job.prompt,
-      partialOutput,
-      previousCliType: job.cliType,
-      previousModelName: null,
-    })
-
     const continuationEvent = {
       type: 'spawn_agent',
       agentId: locatedJob.agentId,
       cliType: job.cliType,
-      prompt: continuationPrompt,
+      prompt: buildContinuationPrompt({
+        originalPrompt: job.prompt,
+        partialOutput,
+        previousCliType: job.cliType,
+        previousModelName: null,
+      }),
+    }
+    const plan = this.planMidTaskFallback({ run, job, continuationEvent })
+
+    if (!plan) {
+      return null
     }
 
+    const fallback = {
+      locatedJob,
+      continuationEvent,
+      originalError: error,
+      reason: issue.reason ?? errorMessage,
+    }
+
+    if (requiresProviderSwitchConfirmation(job.cliType, plan.newCliType)) {
+      // A thread do processo que falhou é solta já: um `close` atrasado dele
+      // não pode concluir nem falhar o job enquanto a pessoa decide.
+      this.threadAgentJobs.delete(job.threadId)
+      this.requestProviderSwitch({
+        kind: 'mid-task',
+        run,
+        agentId: locatedJob.agentId,
+        fromCliType: job.cliType,
+        toCliType: plan.newCliType,
+        toModel: plan.newModel,
+        rule: plan.selectionRule,
+        reason: fallback.reason,
+        payload: fallback,
+      })
+
+      return { awaitingConfirmation: true, run: this.store.get(run.runId) }
+    }
+
+    return this.executeMidTaskFallback({ run, plan, ...fallback })
+  }
+
+  /**
+   * Decide para onde o sub-agente que falhou iria (validação + espalhamento
+   * de carga), sem efeito nenhum. `null` quando não há alternativa real.
+   */
+  planMidTaskFallback({ run, job, continuationEvent }) {
+    const runContext = this.getRunContext(run.runId)
     const validation = this.validateSpawnAgent({
       run,
       event: continuationEvent,
@@ -459,11 +619,11 @@ class OrchestrationRunner {
 
     const validatedModel = validation.selectedModel ?? null
     const validatedCliType = validatedModel?.cliType ?? job.cliType
-    const newSelectionRule = validation.modelChoice?.selectionRule
+    const selectionRule = validation.modelChoice?.selectionRule
 
     // If the selector could only offer the same cliType that just failed AND no
     // alternative was found via fallback rules, abort to avoid a noop respawn.
-    if (validatedCliType === job.cliType && newSelectionRule !== 'last-resort') {
+    if (validatedCliType === job.cliType && selectionRule !== 'last-resort') {
       const sameType = validatedModel?.cliType === job.cliType
       const noAlternative = !validation.modelChoice?.fallbackFromCliType
       if (sameType && noAlternative) {
@@ -482,7 +642,25 @@ class OrchestrationRunner {
       validatedCliType,
     })
     const newModel = spreadChoice.model
-    const newCliType = newModel?.cliType ?? validatedCliType
+
+    return {
+      newModel,
+      newCliType: newModel?.cliType ?? validatedCliType,
+      selectionRule,
+      spreadFromCliType: spreadChoice.spreadFromCliType ?? null,
+    }
+  }
+
+  /**
+   * Re-spawna o sub-agente no destino do plano. A carga por cliType e o
+   * contador de tentativas só andam aqui — numa troca de provedor, só depois
+   * do aceite.
+   */
+  async executeMidTaskFallback({ run, plan, locatedJob, continuationEvent, reason }) {
+    const job = findAgentJob(run, locatedJob.agentId)
+    const attemptKey = `${locatedJob.runId}:${locatedJob.agentId}`
+    const attempts = this.agentFallbackAttempts.get(attemptKey) ?? 0
+    const { newModel, newCliType } = plan
 
     this.bumpFallbackLoad(run.runId, newCliType)
 
@@ -496,9 +674,9 @@ class OrchestrationRunner {
       previousCliType: job.cliType,
       nextCliType: newCliType,
       nextModelId: newModel?.id ?? null,
-      reason: issue.reason ?? errorMessage,
+      reason,
       attempt: attempts + 1,
-      spreadFromCliType: spreadChoice.spreadFromCliType ?? null,
+      spreadFromCliType: plan.spreadFromCliType ?? null,
     })
 
     const resolvedEvent = {
@@ -529,7 +707,7 @@ class OrchestrationRunner {
       job,
       threadId: fallbackThreadId,
       event: resolvedEvent,
-      context: runContext,
+      context: this.getRunContext(locatedJob.runId),
     })
 
     if (spawnResult?.ok === false) {
@@ -537,6 +715,354 @@ class OrchestrationRunner {
     }
 
     return { respawned: true, run }
+  }
+
+  // ── Troca de provedor com confirmação (decisão do dono) ──────────────────
+
+  /**
+   * Registra a pergunta e avisa o chat e o log de terminal. Não bloqueia: o
+   * runner continua reagindo a eventos, e a resposta chega por
+   * `resolveProviderSwitch` (ou vence pela varredura).
+   */
+  requestProviderSwitch({ kind, run, agentId, fromCliType, toCliType, toModel, rule, reason, payload }) {
+    const nowMs = getTimeMs(this.now())
+    const expiresAtMs = getProviderSwitchDeadlineMs(run, nowMs, this.providerSwitchTimeoutMs)
+    const decision = {
+      decisionId: this.createDecisionId(),
+      kind,
+      runId: run.runId,
+      agentId,
+      parentThreadId: run.parentThreadId,
+      sessionId: getResponseSessionId(run, this.getRunContext(run.runId)),
+      fromCliType,
+      toCliType,
+      toModelId: toModel?.id ?? null,
+      toModelName: toModel?.name ?? null,
+      rule: rule ?? null,
+      reason: createSwitchReason(reason),
+      requestedAt: new Date(nowMs).toISOString(),
+      expiresAt: new Date(expiresAtMs).toISOString(),
+      expiresAtMs,
+      payload,
+    }
+
+    this.pendingProviderSwitches.set(decision.decisionId, decision)
+
+    const view = toPublicProviderSwitch(decision)
+    this.emitTerminalEvent({
+      ...view,
+      type: 'orchestration_provider_switch_request',
+    })
+    this.sendChatEvent({
+      ...view,
+      type: 'provider_switch_request',
+      threadId: run.parentThreadId,
+    })
+
+    return decision
+  }
+
+  /** Decisões esperando a pessoa, para o renderer recuperar ao montar. */
+  listProviderSwitches() {
+    return [...this.pendingProviderSwitches.values()]
+      .map(toPublicProviderSwitch)
+      .sort((left, right) => left.requestedAt.localeCompare(right.requestedAt))
+  }
+
+  /**
+   * Resposta da pessoa. Idempotente: a decisão sai do mapa antes de qualquer
+   * await, então um clique duplo ou um IPC repetido recebe
+   * `DECISION_NOT_PENDING` e nunca gera um segundo spawn.
+   */
+  async resolveProviderSwitch({ decisionId, accept } = {}) {
+    const decision = this.pendingProviderSwitches.get(decisionId)
+
+    if (!decision) {
+      return {
+        ok: false,
+        code: 'DECISION_NOT_PENDING',
+        message: 'Essa troca de provedor já foi respondida ou expirou.',
+      }
+    }
+
+    this.pendingProviderSwitches.delete(decisionId)
+    const run = this.store.get(decision.runId)
+
+    if (!isRunActive(run) || this.isRunTimedOut(run)) {
+      this.closeProviderSwitch(decision, {
+        outcome: PROVIDER_SWITCH_OUTCOMES.runFinished,
+        note: 'A orquestração terminou antes da resposta; nenhum provedor foi trocado.',
+      })
+      return {
+        ok: false,
+        code: 'RUN_FINISHED',
+        message: 'A orquestração já terminou; nenhum provedor foi trocado.',
+      }
+    }
+
+    try {
+      const result =
+        accept === true
+          ? await this.acceptProviderSwitch(decision, run)
+          : await this.refuseProviderSwitch(decision, {
+              outcome: PROVIDER_SWITCH_OUTCOMES.refused,
+            })
+
+      return { ok: true, decisionId, ...result }
+    } catch (error) {
+      const failed = this.failRunFromError(run.runId, error, this.getRunContext(run.runId))
+      return { ok: false, code: 'RUN_FAILED', message: failed.message }
+    }
+  }
+
+  async acceptProviderSwitch(decision, run) {
+    // Revalida: até 10 min se passaram, e a disponibilidade pode ter mudado.
+    const target =
+      decision.kind === 'initial'
+        ? this.revalidateInitialSwitch(decision, run)
+        : this.revalidateMidTaskSwitch(decision, run)
+
+    if (!target) {
+      return this.refuseProviderSwitch(decision, {
+        outcome: PROVIDER_SWITCH_OUTCOMES.refused,
+        note: 'Aceita, mas a revalidação não achou modelo disponível; nenhum provedor foi trocado.',
+      })
+    }
+
+    const stillSwitches = requiresProviderSwitchConfirmation(decision.fromCliType, target.cliType)
+
+    if (
+      stillSwitches &&
+      getProviderFamily(target.cliType) !== getProviderFamily(decision.toCliType)
+    ) {
+      // O destino mudou de provedor: a resposta dada valia para outro. Nova
+      // pergunta, sem executar nada.
+      this.closeProviderSwitch(decision, {
+        outcome: PROVIDER_SWITCH_OUTCOMES.superseded,
+        note: `O destino mudou para ${target.cliType}; a troca precisa de nova confirmação.`,
+      })
+      const next = this.requestProviderSwitch({
+        kind: decision.kind,
+        run,
+        agentId: decision.agentId,
+        fromCliType: decision.fromCliType,
+        toCliType: target.cliType,
+        toModel: target.model,
+        rule: target.rule,
+        reason: decision.reason,
+        payload: decision.payload,
+      })
+      return { outcome: PROVIDER_SWITCH_OUTCOMES.superseded, nextDecisionId: next.decisionId }
+    }
+
+    this.closeProviderSwitch(
+      decision,
+      stillSwitches
+        ? { outcome: PROVIDER_SWITCH_OUTCOMES.accepted }
+        : {
+            outcome: PROVIDER_SWITCH_OUTCOMES.superseded,
+            note: 'O provedor original voltou a ficar disponível; seguiu sem trocar.',
+          },
+    )
+
+    if (decision.kind === 'initial') {
+      const started = await this.startSpawnedJob({
+        run,
+        event: decision.payload.event,
+        resolvedEvent: target.resolvedEvent,
+        resolvedCliType: target.cliType,
+        threadId: decision.payload.threadId,
+      })
+      return { outcome: stillSwitches ? 'accepted' : 'superseded', run: started.run, spawned: started.ok }
+    }
+
+    const respawn = await this.executeMidTaskFallback({
+      run,
+      plan: target.plan,
+      ...decision.payload,
+    })
+
+    if (!respawn) {
+      const finished = await this.finishAgentJob({
+        runId: run.runId,
+        agentId: decision.agentId,
+        error: decision.payload.originalError,
+      })
+      return { outcome: stillSwitches ? 'accepted' : 'superseded', run: finished.run, spawned: false }
+    }
+
+    return { outcome: stillSwitches ? 'accepted' : 'superseded', run: respawn.run, spawned: true }
+  }
+
+  revalidateInitialSwitch(decision, run) {
+    let target
+    try {
+      target = this.resolveSpawnTarget(run, decision.payload.event)
+    } catch {
+      return null
+    }
+
+    return {
+      cliType: target.resolvedCliType,
+      model: target.resolvedModel,
+      rule: target.modelChoice?.selectionRule,
+      resolvedEvent: target.resolvedEvent,
+    }
+  }
+
+  revalidateMidTaskSwitch(decision, run) {
+    const job = findAgentJob(run, decision.agentId)
+    if (!job) {
+      return null
+    }
+
+    const plan = this.planMidTaskFallback({
+      run,
+      job,
+      continuationEvent: decision.payload.continuationEvent,
+    })
+
+    return plan
+      ? { cliType: plan.newCliType, model: plan.newModel, rule: plan.selectionRule, plan }
+      : null
+  }
+
+  /**
+   * Recusa (da pessoa, por prazo ou por interrupção): nenhum provedor é
+   * trocado. O spawn inicial falha com o motivo; o meio da tarefa segue com o
+   * erro original. Com `reinvoke`, o orquestrador recebe o resultado quando o
+   * turno fecha.
+   */
+  async refuseProviderSwitch(decision, { outcome, note, reinvoke = true }) {
+    this.closeProviderSwitch(decision, { outcome, note })
+
+    const finished = await this.finishAgentJob({
+      runId: decision.runId,
+      agentId: decision.agentId,
+      error: describeRefusedSwitchError(decision, outcome),
+      reinvoke,
+    })
+
+    return { outcome, run: finished.run }
+  }
+
+  /**
+   * Vence as decisões com prazo até `now` como recusa. Chamado pela varredura
+   * de `failExpiredRuns`; devolve a promessa das recusas para quem quiser
+   * esperar (os testes).
+   */
+  expirePendingProviderSwitches(now = this.now()) {
+    const nowMs = getTimeMs(now)
+    const due = [...this.pendingProviderSwitches.values()].filter(
+      (decision) => decision.expiresAtMs <= nowMs,
+    )
+
+    return Promise.all(
+      due.map((decision) => {
+        this.pendingProviderSwitches.delete(decision.decisionId)
+        return this.settleRefusalSafely(decision, {
+          outcome: PROVIDER_SWITCH_OUTCOMES.expired,
+          note: 'Sem resposta no prazo; conta como recusa e nenhum provedor foi trocado.',
+        })
+      }),
+    )
+  }
+
+  /**
+   * `cli:stop` na conversa: as decisões do run daquela thread saem como
+   * recusa, sem reinvocar o orquestrador que a pessoa acabou de parar.
+   *
+   * @returns {string[]} Os ids das decisões canceladas.
+   */
+  cancelProviderSwitchesForThread(threadId) {
+    const runId = this.runContexts.get(threadId)?.runId ?? null
+    const cancelled = []
+
+    for (const decision of [...this.pendingProviderSwitches.values()]) {
+      if (decision.parentThreadId !== threadId && decision.runId !== runId) {
+        continue
+      }
+
+      this.pendingProviderSwitches.delete(decision.decisionId)
+      cancelled.push(decision.decisionId)
+      void this.settleRefusalSafely(decision, {
+        outcome: PROVIDER_SWITCH_OUTCOMES.cancelled,
+        note: 'Execução interrompida pela pessoa; nenhum provedor foi trocado.',
+        reinvoke: false,
+      })
+    }
+
+    return cancelled
+  }
+
+  async settleRefusalSafely(decision, options) {
+    try {
+      return await this.refuseProviderSwitch(decision, options)
+    } catch (error) {
+      return this.failRunFromError(decision.runId, error, this.getRunContext(decision.runId))
+    }
+  }
+
+  /** Fim do run: as perguntas dele deixam de valer, sem mexer em job. */
+  dropProviderSwitchesForRun(runId) {
+    for (const decision of [...this.pendingProviderSwitches.values()]) {
+      if (decision.runId !== runId) {
+        continue
+      }
+
+      this.pendingProviderSwitches.delete(decision.decisionId)
+      this.closeProviderSwitch(decision, {
+        outcome: PROVIDER_SWITCH_OUTCOMES.runFinished,
+        note: 'A orquestração terminou antes da resposta; nenhum provedor foi trocado.',
+      })
+    }
+  }
+
+  /**
+   * Registra a decisão (quando é uma resposta de fato) e avisa chat e
+   * terminal. `superseded` não vai ao registro: a pergunta nova que a
+   * substitui é que terá a resposta.
+   */
+  closeProviderSwitch(decision, { outcome, note = null }) {
+    const view = toPublicProviderSwitch(decision)
+    const decidedAt = new Date(getTimeMs(this.now())).toISOString()
+
+    if (outcome !== PROVIDER_SWITCH_OUTCOMES.superseded) {
+      try {
+        this.recordSwitchDecision({
+          ...view,
+          outcome,
+          state: outcome === PROVIDER_SWITCH_OUTCOMES.accepted ? 'accepted' : 'refused',
+          note,
+          decidedAt,
+        })
+      } catch {
+        // O registro é auditoria: uma falha ao gravar não pode travar a
+        // decisão da pessoa. Quem injeta o registro loga o erro.
+      }
+    }
+
+    this.emitTerminalEvent({
+      type: 'orchestration_provider_switch_resolved',
+      decisionId: view.decisionId,
+      runId: view.runId,
+      parentThreadId: view.parentThreadId,
+      agentId: view.agentId,
+      fromCliType: view.fromCliType,
+      toCliType: view.toCliType,
+      outcome,
+      note,
+    })
+    this.sendChatEvent({
+      type: 'provider_switch_resolved',
+      decisionId: view.decisionId,
+      runId: view.runId,
+      agentId: view.agentId,
+      outcome,
+      message: note,
+      sessionId: view.sessionId,
+      threadId: view.parentThreadId,
+    })
   }
 
   pickSpreadFallbackModel({ run, runContext, job, validatedModel, validatedCliType }) {
@@ -636,6 +1162,7 @@ class OrchestrationRunner {
 
   failExpiredRuns() {
     const failedRuns = []
+    const now = this.now()
 
     for (const run of this.store.list()) {
       if (run.status === 'completed' || run.status === 'failed') {
@@ -654,6 +1181,10 @@ class OrchestrationRunner {
       this.sendRunError(failedRun, 'Timeout de orquestracao atingido.')
       this.forgetRunContext(failedRun.runId)
     }
+
+    // Depois dos runs: um run vencido já levou suas decisões junto. As
+    // restantes vencem como recusa, sem timer próprio.
+    void this.expirePendingProviderSwitches(now)
 
     return failedRuns
   }
@@ -863,6 +1394,9 @@ class OrchestrationRunner {
   }
 
   forgetRunContext(runId) {
+    // Antes de soltar o contexto: o aviso ao chat usa a janela guardada nele.
+    this.dropProviderSwitchesForRun(runId)
+
     for (const [key, value] of this.runContexts) {
       if (value?.runId === runId) {
         this.runContexts.delete(key)
@@ -996,6 +1530,77 @@ function buildContinuationPrompt({
   ].join('\n\n')
 }
 
+function isRunActive(run) {
+  return Boolean(run) && run.status !== 'completed' && run.status !== 'failed'
+}
+
+// O prazo é o menor entre 10 min e o fim do próprio run: uma decisão não
+// sobrevive ao run que a pediu.
+function getProviderSwitchDeadlineMs(run, nowMs, timeoutMs) {
+  const deadlineMs = nowMs + timeoutMs
+  const createdAtMs = Date.parse(run?.createdAt ?? '')
+
+  if (!Number.isFinite(createdAtMs) || !run?.maxRuntimeMinutes) {
+    return deadlineMs
+  }
+
+  return Math.min(deadlineMs, createdAtMs + run.maxRuntimeMinutes * 60 * 1000)
+}
+
+function createSwitchReason(reason) {
+  const text = redactSecrets(String(reason ?? ''))
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  if (!text) {
+    return null
+  }
+
+  return text.length > PROVIDER_SWITCH_REASON_MAX_CHARS
+    ? `${text.slice(0, PROVIDER_SWITCH_REASON_MAX_CHARS - 1)}…`
+    : text
+}
+
+function toPublicProviderSwitch(decision) {
+  return {
+    decisionId: decision.decisionId,
+    kind: decision.kind,
+    runId: decision.runId,
+    agentId: decision.agentId,
+    parentThreadId: decision.parentThreadId,
+    sessionId: decision.sessionId,
+    fromCliType: decision.fromCliType,
+    toCliType: decision.toCliType,
+    toModelId: decision.toModelId,
+    toModelName: decision.toModelName,
+    rule: decision.rule,
+    reason: decision.reason,
+    requestedAt: decision.requestedAt,
+    expiresAt: decision.expiresAt,
+  }
+}
+
+function describeRefusedSwitchError(decision, outcome) {
+  const route = `${decision.fromCliType} → ${decision.toCliType}`
+  const why =
+    outcome === PROVIDER_SWITCH_OUTCOMES.expired
+      ? `Troca de provedor ${route} sem resposta no prazo`
+      : outcome === PROVIDER_SWITCH_OUTCOMES.cancelled
+        ? `Execução interrompida pela pessoa antes da troca de provedor ${route}`
+        : `Troca de provedor ${route} recusada pela pessoa`
+
+  if (decision.kind === 'initial') {
+    return `${why}; o sub-agente não rodou e nenhum provedor foi trocado.`
+  }
+
+  // Meio da tarefa: o orquestrador recebe o erro original do sub-agente,
+  // com a nota do que aconteceu com a troca.
+  const originalError = stringifyAgentError(decision.payload.originalError)
+  return outcome === PROVIDER_SWITCH_OUTCOMES.refused
+    ? originalError || `${why}.`
+    : `${originalError}\n\n(${why}; nenhum provedor foi trocado.)`.trim()
+}
+
 function getResponseSessionId(run, context = {}) {
   return (
     context.responseSessionId ??
@@ -1027,6 +1632,7 @@ function noopValidateSpawnAgent() {
 
 module.exports = {
   OrchestrationRunner,
+  PROVIDER_SWITCH_TIMEOUT_MS,
   areCurrentTurnJobsTerminal,
   createAgentResultsPrompt,
   createOrchestrationRunner,

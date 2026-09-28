@@ -10,6 +10,54 @@ const CLI_TYPE_VARIANT_DEFAULTS = {
   'gemini-acp': { providerModel: 'gemini-3-pro-preview', reasoningEffort: 'high' },
 }
 
+// Família de provedor de cada cliType do orquestrador (o mesmo conjunto de
+// `VALID_CLI_TYPES` em orchestration-store.cjs). Transporte diferente da mesma
+// CLI (codex → codex-app-server, gemini → gemini-acp) fica na mesma família:
+// mesmo login do sistema e mesma conta de cobrança.
+const CLI_TYPE_PROVIDER_FAMILY = Object.freeze({
+  claude: 'anthropic',
+  codex: 'openai',
+  'codex-app-server': 'openai',
+  gemini: 'google',
+  'gemini-acp': 'google',
+})
+
+/**
+ * @param {unknown} cliType
+ * @returns {'anthropic' | 'openai' | 'google' | null}
+ */
+function getProviderFamily(cliType) {
+  return typeof cliType === 'string' && Object.hasOwn(CLI_TYPE_PROVIDER_FAMILY, cliType)
+    ? CLI_TYPE_PROVIDER_FAMILY[cliType]
+    : null
+}
+
+/**
+ * Trocar de família de provedor muda a conta de cobrança e o login usado, então
+ * pede a confirmação da pessoa (decisão do dono: nenhuma troca de provedor
+ * acontece sozinha, nem como last-resort). Trocar só de transporte ou de modelo
+ * dentro da mesma família continua sem pergunta. Família desconhecida numa das
+ * pontas pergunta: sem saber o provedor, não dá para afirmar que é o mesmo.
+ *
+ * @param {unknown} fromCliType - O cliType pedido (ou o que falhou).
+ * @param {unknown} toCliType - O cliType em que o sub-agente rodaria.
+ * @returns {boolean}
+ */
+function requiresProviderSwitchConfirmation(fromCliType, toCliType) {
+  if (fromCliType === toCliType) {
+    return false
+  }
+
+  const fromFamily = getProviderFamily(fromCliType)
+  const toFamily = getProviderFamily(toCliType)
+
+  if (!fromFamily || !toFamily) {
+    return true
+  }
+
+  return fromFamily !== toFamily
+}
+
 function createOrchestrationModel(cliType) {
   return {
     id: `orchestration-${cliType}`,
@@ -154,8 +202,10 @@ function resolveOrchestrationSpawnModel(cliType, context = {}, event = {}) {
   }
 
   // Last-resort: nothing operational anywhere. Still try to spawn on a non-blocked
-  // model even if rate-limited — the orchestrator's principle is that the task must
-  // complete somehow. User-blocked models are still respected.
+  // model even if rate-limited. User-blocked models are still respected. O antigo
+  // princípio "a tarefa deve concluir de alguma forma" mudou por decisão do dono:
+  // se o last-resort cair em outra família de provedor, o runner pede
+  // confirmação antes de rodar (`requiresProviderSwitchConfirmation`).
   const lastResortCandidates = availableModels.filter(
     (model) => !blockedModelIds.has(model.id),
   )
@@ -535,13 +585,16 @@ function sortByScore(models, scoringOptions) {
 
 module.exports = {
   CATEGORY_PRIORITY_ORDER,
+  CLI_TYPE_PROVIDER_FAMILY,
   CLI_TYPE_VARIANT_DEFAULTS,
   applyVariantDefaults,
   createOrchestrationModel,
   createOrchestrationModelChoice,
   getFallbackOrderForCliType,
   getPriorityOrderFor,
+  getProviderFamily,
   getProviderModelTierBonus,
+  requiresProviderSwitchConfirmation,
   resolveOrchestrationSpawnModel,
   validateOrchestrationSpawnModel,
   isModelOperational,
