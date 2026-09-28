@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
 import { ArrowRightLeft, X } from 'lucide-react'
 import { getFocusableElements, tabTrapTarget } from '../services/keyboard-focus'
-import { buildAccountSwitchDialogModel } from '../services/account-switch-dialog'
+import { buildAccountSwitchDialogModel, initialDialogSelection } from '../services/account-switch-dialog'
 import type { AccountSwitchDialogBinding } from '../hooks/useAccountContinuation'
 import { useClockTick } from '../hooks/useAccountChain'
 
@@ -14,15 +14,18 @@ const BOTAO_SECUNDARIO =
  * "Trocar de conta?" (§8.2). Só abre por clique em "Ver opções" — nunca
  * sozinho. O foco inicial fica no rádio recomendado, nunca no botão
  * primário; Enter sobre um rádio não confirma; Esc vale "Agora não"; ao
- * fechar, o foco volta a quem abriu.
+ * fechar, o foco volta a quem abriu. O destino marcado ao abrir já conta
+ * como a escolha da pessoa: se a conta escolhida sai da proposta ao vivo, o
+ * diálogo avisa e fica sem destino até ela escolher outra (decisão 1).
  */
 export function AccountSwitchDialog({ binding }: { binding: AccountSwitchDialogBinding }) {
   const { proposal } = binding
   const nowMs = useClockTick(5_000)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(() => initialDialogSelection(proposal))
   const [autoSubmit, setAutoSubmit] = useState(true)
   const [acknowledged, setAcknowledged] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
+  const radiogroupRef = useRef<HTMLDivElement>(null)
   const titleId = useId()
   const summaryId = useId()
   const radioName = useId()
@@ -36,6 +39,7 @@ export function AccountSwitchDialog({ binding }: { binding: AccountSwitchDialogB
   })
   const chosenId = model.initialFocusAccountId
   const onLater = binding.onLater
+  const selectionLost = model.selectionLost
 
   // Foco inicial no rádio recomendado (ou no primeiro); sem opções, no painel.
   useEffect(() => {
@@ -45,6 +49,13 @@ export function AccountSwitchDialog({ binding }: { binding: AccountSwitchDialogB
     ;(radio ?? panel).focus()
     // Só na abertura: re-renderizar não pode roubar o foco de quem já navegou.
   }, [])
+
+  // A escolha saiu da proposta: o botão que estava focado perdeu o destino.
+  // O foco vai para a lista, onde a pessoa escolhe de novo (o aviso é alert).
+  useEffect(() => {
+    if (!selectionLost) return
+    ;(radiogroupRef.current ?? panelRef.current)?.focus()
+  }, [selectionLost])
 
   useEffect(() => {
     const panel = panelRef.current
@@ -194,7 +205,13 @@ export function AccountSwitchDialog({ binding }: { binding: AccountSwitchDialogB
                 </button>
               )}
             </legend>
-            <div role="radiogroup" aria-label="Conta de destino" className="space-y-1.5">
+            <div
+              ref={radiogroupRef}
+              role="radiogroup"
+              aria-label="Conta de destino"
+              tabIndex={-1}
+              className="space-y-1.5 rounded-sm focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-sky-400"
+            >
               {model.options.map((option) => (
                 <label
                   key={option.accountId}
@@ -245,6 +262,12 @@ export function AccountSwitchDialog({ binding }: { binding: AccountSwitchDialogB
               </details>
             )}
           </fieldset>
+        )}
+
+        {selectionLost && (
+          <p role="alert" className="mb-3 text-xs text-theme-error">
+            {selectionLost}
+          </p>
         )}
 
         {transcript === null && (

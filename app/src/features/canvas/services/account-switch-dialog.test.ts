@@ -5,6 +5,7 @@ import {
   countLines,
   dialogFocusReturnTarget,
   formatTranscriptSize,
+  initialDialogSelection,
 } from './account-switch-dialog'
 import { makeCandidate, makeProposal } from './__fixtures__/account-chain-fixtures'
 
@@ -42,6 +43,35 @@ describe('buildAccountSwitchDialogModel', () => {
     expect(view.initialFocusAccountId).toBe('conta-c')
     expect(view.confirmLabel).toBe('Abrir bloco novo em Reserva')
     expect(view.options.find((option) => option.recommended)?.accountId).toBe('conta-b')
+  })
+
+  it('a conta escolhida sai da proposta: sem destino, com o motivo, e nunca cai na recomendada', () => {
+    // A checagem em curso de "Reserva" terminou deslogada: a proposta ao vivo
+    // passa a vir sem ela e com ela em "Fora agora".
+    const view = model(
+      {
+        candidates: [makeCandidate({ accountId: 'conta-b', label: 'Trabalho', position: 1 })],
+        excluded: [{ accountId: 'conta-c', providerId: 'codex', label: 'Reserva', reason: 'deslogada', reasonText: null }],
+      },
+      'conta-c',
+    )
+    expect(view.initialFocusAccountId).toBeNull()
+    expect(view.selectionLost).toBe('A conta escolhida (Reserva) deixou de estar apta: sem login. Escolha outra para continuar.')
+    expect(view.confirmLabel).toBe('Abrir bloco novo')
+    expect(view.costNotice).toBeNull()
+    expect(view.providerSwitchNotice).toBeNull()
+
+    const gone = model({ candidates: [makeCandidate({ accountId: 'conta-b', label: 'Trabalho' })] }, 'conta-c')
+    expect(gone.initialFocusAccountId).toBeNull()
+    expect(gone.selectionLost).toBe('A conta escolhida saiu da lista. Escolha outra para continuar.')
+  })
+
+  it('sem escolha perdida não há aviso; ao abrir, o destino marcado é o recomendado', () => {
+    expect(model().selectionLost).toBeNull()
+    expect(model({}, 'conta-c').selectionLost).toBeNull()
+    expect(initialDialogSelection(makeProposal())).toBe('conta-b')
+    expect(initialDialogSelection(makeProposal({ recommendedAccountId: null }))).toBe('conta-b')
+    expect(initialDialogSelection(makeProposal({ candidates: [], recommendedAccountId: null }))).toBeNull()
   })
 
   it('custo com todas as letras: tamanho do contexto e o que será consumido', () => {

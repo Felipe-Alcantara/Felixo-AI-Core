@@ -60,8 +60,17 @@ export type AccountSwitchDialogModel = {
     cooldown: string
   }
   options: DialogOption[]
-  /** Rádio que recebe o foco ao abrir: o recomendado, nunca o botão primário. */
+  /**
+   * Destino marcado: o que a pessoa escolheu; sem escolha, o recomendado.
+   * Recebe o foco ao abrir (nunca o botão primário). `null` = nada marcado.
+   */
   initialFocusAccountId: string | null
+  /**
+   * A conta escolhida saiu da proposta ao vivo (por exemplo, a checagem de
+   * login terminou deslogada). O destino NÃO cai na recomendada: fica sem
+   * destino, com este aviso, até a pessoa escolher outra (decisão 1).
+   */
+  selectionLost: string | null
   excluded: Array<{ name: string; reason: string }>
   empty: boolean
   emptyText: string
@@ -171,11 +180,16 @@ export function buildAccountSwitchDialogModel(params: {
   const recommended = proposal.candidates.find(
     (candidate) => candidate.accountId === proposal.recommendedAccountId,
   )
+  // A escolha da pessoa vale sozinha: se ela some da proposta, não há destino
+  // (nunca "a recomendada no lugar"). Sem escolha, vale a recomendada.
   const selected =
-    proposal.candidates.find((candidate) => candidate.accountId === params.selectedAccountId) ??
-    recommended ??
-    proposal.candidates[0] ??
-    null
+    params.selectedAccountId !== null
+      ? (proposal.candidates.find((candidate) => candidate.accountId === params.selectedAccountId) ?? null)
+      : (recommended ?? proposal.candidates[0] ?? null)
+  const selectionLost =
+    params.selectedAccountId !== null && selected === null
+      ? lostSelectionText(proposal, params.selectedAccountId)
+      : null
 
   const fromDescribed = from.accountId
     ? `${from.label?.trim() || 'conta sem nome'} (${providerLabel(from.providerId)}, ${fromBilling})`
@@ -231,6 +245,7 @@ export function buildAccountSwitchDialogModel(params: {
     },
     options,
     initialFocusAccountId: selected?.accountId ?? null,
+    selectionLost,
     excluded: proposal.excluded.map((item) => ({
       name: accountName(item.label, item.accountId, item.providerId),
       reason: ineligibilityText(item.reason, item.reasonText),
@@ -252,6 +267,26 @@ export function buildAccountSwitchDialogModel(params: {
       ? `Abrir bloco novo em ${selected.label.trim() || 'conta sem nome'}`
       : 'Abrir bloco novo',
   }
+}
+
+/**
+ * Destino marcado ao abrir o diálogo: o recomendado (ou o primeiro apto). O
+ * diálogo guarda isto como a escolha da pessoa, para que o destino que ela
+ * viu nunca mude em silêncio quando a proposta ao vivo muda.
+ */
+export function initialDialogSelection(proposal: AccountSwitchProposal): string | null {
+  const recommended = proposal.candidates.find(
+    (candidate) => candidate.accountId === proposal.recommendedAccountId,
+  )
+  return (recommended ?? proposal.candidates[0])?.accountId ?? null
+}
+
+function lostSelectionText(proposal: AccountSwitchProposal, accountId: string): string {
+  const excluded = proposal.excluded.find((item) => item.accountId === accountId)
+  if (!excluded) return 'A conta escolhida saiu da lista. Escolha outra para continuar.'
+  const name = excluded.label.trim() || 'conta sem nome'
+  const reason = ineligibilityText(excluded.reason, excluded.reasonText)
+  return `A conta escolhida (${name}) deixou de estar apta${reason ? `: ${reason}` : ''}. Escolha outra para continuar.`
 }
 
 function capitalize(text: string): string {
