@@ -533,7 +533,8 @@ function createAccountChainRepository(database) {
    * Põe a conta em espera. Uma espera ativa nunca encurta: a linha nova só
    * vence se o fim dela for mais tarde (`null`, até checagem, vence qualquer
    * horário). Várias sessões da mesma conta batendo o limite juntas viram uma
-   * espera só, com o `detected_at` da primeira (a chave do incidente).
+   * espera só, com o `detected_at` da primeira (a chave do incidente), mesmo
+   * quando uma detecção posterior estende o fim.
    *
    * @returns {{ applied: boolean, cooldown: object }}
    */
@@ -565,7 +566,13 @@ function createAccountChainRepository(database) {
            ON CONFLICT(account_id) DO UPDATE SET
              provider_id = excluded.provider_id,
              failure_class = excluded.failure_class,
-             detected_at = excluded.detected_at,
+             -- Estender uma espera ativa da mesma classe não muda o início do
+             -- incidente (incident_key); classe nova ou espera liberada, sim.
+             detected_at = CASE
+               WHEN account_cooldowns.released_at IS NULL AND account_cooldowns.failure_class = excluded.failure_class
+                 THEN account_cooldowns.detected_at
+               ELSE excluded.detected_at
+             END,
              until_at = excluded.until_at,
              until_source = excluded.until_source,
              evidence = excluded.evidence,

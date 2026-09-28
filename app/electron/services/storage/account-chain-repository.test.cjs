@@ -522,3 +522,20 @@ test('sobrevive a reabrir o banco (depois de reiniciar o app)', () => {
     fs.rmSync(databaseDir, { recursive: true, force: true })
   }
 })
+
+test('espera: estender uma espera ativa da mesma classe mantém o detected_at da primeira detecção (chave do incidente)', () => {
+  withRepository((repo) => {
+    repo.upsertCooldown(limitCooldown())
+    const extended = repo.upsertCooldown(
+      limitCooldown({ detectedAt: LATER, untilAt: '2026-09-28T17:00:00.000Z', sessionId: 'sessao-2' }),
+    )
+    assert.equal(extended.applied, true)
+    assert.equal(extended.cooldown.untilAt, '2026-09-28T17:00:00.000Z')
+    assert.equal(extended.cooldown.detectedAt, NOW, 'outra sessão da mesma conta entra no mesmo incidente')
+
+    const auth = repo.upsertCooldown(
+      limitCooldown({ failureClass: 'auth', detectedAt: LATER, untilAt: null, untilSource: 'checagem' }),
+    )
+    assert.equal(auth.cooldown.detectedAt, LATER, 'classe nova abre incidente novo: checagem antiga não a libera')
+  })
+})
