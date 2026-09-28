@@ -523,6 +523,51 @@ test('sobrevive a reabrir o banco (depois de reiniciar o app)', () => {
   }
 })
 
+test('evidência por sessão: devolve o evento mais recente da mesma sessão e da mesma evidência', () => {
+  withRepository((repo) => {
+    repo.insertSwitchEvent(proposal('antigo', { state: 'declined', evidenceHash: 'hash-1', proposedAt: NOW }))
+    repo.insertSwitchEvent(proposal('novo', { state: 'dismissed', evidenceHash: 'hash-1', proposedAt: LATER }))
+    repo.insertSwitchEvent(proposal('outra-sessao', { state: 'declined', sourceSessionId: 'sessao-2', evidenceHash: 'hash-1' }))
+    repo.insertSwitchEvent(proposal('outra-evidencia', { state: 'declined', evidenceHash: 'hash-2' }))
+
+    assert.equal(repo.findLatestSwitchEventForEvidence({ sessionId: 'sessao-1', evidenceHash: 'hash-1' }).id, 'novo')
+    assert.equal(repo.findLatestSwitchEventForEvidence({ sessionId: 'sessao-3', evidenceHash: 'hash-1' }), null)
+  })
+})
+
+test('troca que fez nascer a sessão, sessão sucedida e cursor do rodízio saem do registro', () => {
+  withRepository((repo) => {
+    assert.equal(repo.findLastSpawnedDestination(), null)
+    assert.equal(repo.hasSpawnedFromSession('sessao-1'), false)
+
+    repo.insertSwitchEvent(
+      proposal('nasceu', { state: 'spawned', targetSessionId: 'sessao-nova', spawnedAt: NOW, toAccountId: 'conta-b' }),
+    )
+    repo.insertSwitchEvent(
+      proposal('falhou', {
+        state: 'spawn_failed',
+        sourceSessionId: 'sessao-2',
+        targetSessionId: 'sessao-outra',
+        spawnedAt: LATER,
+        toAccountId: 'conta-c',
+      }),
+    )
+    repo.insertSwitchEvent(
+      proposal('manual', { kind: 'manual', state: 'accepted', sourceSessionId: 'sessao-3', toAccountId: 'conta-d', proposedAt: LATER }),
+    )
+
+    assert.equal(repo.findSpawnedSwitchEventForTarget('sessao-nova').id, 'nasceu')
+    assert.equal(repo.findSpawnedSwitchEventForTarget('sessao-outra'), null, 'spawn que falhou não é a origem da sessão')
+    assert.equal(repo.hasSpawnedFromSession('sessao-1'), true)
+    assert.equal(repo.hasSpawnedFromSession('sessao-2'), false)
+    assert.deepEqual(
+      repo.findLastSpawnedDestination(),
+      { accountId: 'conta-b', providerId: 'codex', spawnedAt: NOW },
+      'falha de spawn e passagem manual não gastam a vez do rodízio',
+    )
+  })
+})
+
 test('espera: estender uma espera ativa da mesma classe mantém o detected_at da primeira detecção (chave do incidente)', () => {
   withRepository((repo) => {
     repo.upsertCooldown(limitCooldown())

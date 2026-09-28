@@ -177,6 +177,31 @@ const SWITCH_EVENTS_RETENTION = 1000
 /** Maior página do histórico de trocas pedida pela interface. */
 const SWITCH_HISTORY_PAGE_MAX = 50
 
+/** Uma proposta de troca sem resposta vence em 30 min (a pessoa vê o motivo e decide de novo). */
+const PROPOSAL_TTL_MS = 30 * 60 * 1000
+
+/** O ticket de uma troca confirmada vale 2 min: sem spawn nesse prazo, vence e nada nasce. */
+const TICKET_TTL_MS = 2 * 60 * 1000
+
+/**
+ * A origem conta como "ainda produzindo saída" se escreveu há menos disto; aí
+ * a confirmação pede um segundo aceite explícito, nunca bloqueia.
+ */
+const SOURCE_ACTIVE_QUIET_MS = 5 * 1000
+
+/**
+ * Janela depois do nascimento do bloco novo em que uma falha de login ou de
+ * crédito nele volta ao evento que o criou ("a conta de destino falhou logo
+ * após a troca").
+ */
+const POST_SWITCH_FAILURE_WINDOW_MS = 3 * 60 * 1000
+
+/** No máximo tantas checagens de login por proposta, na ordem da estratégia, parando na primeira apta. */
+const MAX_LOGIN_CHECKS_PER_PROPOSAL = 3
+
+/** Detecções ambíguas à espera de escolha ("Tratar como limite?"), só em memória. */
+const MAX_PENDING_AMBIGUOUS_DETECTIONS = 32
+
 module.exports = Object.freeze({
   BILLING_CLASSES,
   CHAIN_PROVIDER_IDS,
@@ -197,7 +222,9 @@ module.exports = Object.freeze({
   LOGIN_CHECK_MAX_CONCURRENCY,
   LOGIN_CHECK_SOURCES,
   LOGIN_CHECK_STATUSES,
+  MAX_LOGIN_CHECKS_PER_PROPOSAL,
   MAX_MAX_HOPS_PER_LINEAGE,
+  MAX_PENDING_AMBIGUOUS_DETECTIONS,
   MAX_PLAN_MULTIPLIER,
   MIN_MAX_HOPS_PER_LINEAGE,
   MIN_PLAN_MULTIPLIER,
@@ -208,7 +235,10 @@ module.exports = Object.freeze({
   OUTPUT_WATCHER_MAX_WAIT_MS,
   OUTPUT_WATCHER_SEEN_EVIDENCE_MAX,
   OUTPUT_WATCHER_TAIL_CHARS,
+  POST_SWITCH_FAILURE_WINDOW_MS,
+  PROPOSAL_TTL_MS,
   RESET_MAX_AHEAD_MS,
+  SOURCE_ACTIVE_QUIET_MS,
   SWITCH_EVENTS_RETENTION,
   SWITCH_EVENT_KINDS,
   SWITCH_EVENT_STATES,
@@ -216,4 +246,5 @@ module.exports = Object.freeze({
   SWITCH_HISTORY_PAGE_MAX,
   SWITCH_LABEL_MAX_CHARS,
   SWITCH_REASON_MAX_CHARS,
+  TICKET_TTL_MS,
 })

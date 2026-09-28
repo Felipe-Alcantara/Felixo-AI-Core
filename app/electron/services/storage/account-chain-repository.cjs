@@ -741,6 +741,66 @@ function createAccountChainRepository(database) {
   }
 
   /**
+   * Evento mais recente desta sessão de origem com a mesma evidência. É o que
+   * silencia uma evidência recusada (I6) e impede que o mesmo aviso, visto de
+   * novo, vire outra linha no registro.
+   */
+  function findLatestSwitchEventForEvidence({ sessionId, evidenceHash }) {
+    const row = connection
+      .prepare(
+        `SELECT * FROM account_switch_events
+         WHERE source_session_id = ? AND evidence_hash = ?
+         ORDER BY proposed_at DESC, rowid DESC LIMIT 1`,
+      )
+      .get(requireText(sessionId, 'sessionId'), requireText(evidenceHash, 'evidenceHash', SHORT_TEXT_MAX_CHARS))
+    return row ? mapSwitchEventRow(row) : null
+  }
+
+  /**
+   * Troca que fez nascer esta sessão (`target_session_id`), para a verificação
+   * logo depois da troca: uma falha de login ou de crédito no bloco novo volta
+   * ao evento que o criou.
+   */
+  function findSpawnedSwitchEventForTarget(sessionId) {
+    const row = connection
+      .prepare(
+        `SELECT * FROM account_switch_events
+         WHERE target_session_id = ? AND state = 'spawned'
+         ORDER BY spawned_at DESC, rowid DESC LIMIT 1`,
+      )
+      .get(requireText(sessionId, 'sessionId'))
+    return row ? mapSwitchEventRow(row) : null
+  }
+
+  /** A sessão já foi origem de uma continuação que nasceu: fica "sucedida" e não recebe outra proposta. */
+  function hasSpawnedFromSession(sessionId) {
+    const row = connection
+      .prepare(`SELECT 1 AS found FROM account_switch_events WHERE source_session_id = ? AND state = 'spawned' LIMIT 1`)
+      .get(requireText(sessionId, 'sessionId'))
+    return row !== undefined
+  }
+
+  /**
+   * Último destino da cadeia que de fato nasceu: o cursor do rodízio sai do
+   * próprio registro, sem campo próprio. Proposta recusada e spawn que falhou
+   * não contam, então não gastam a vez.
+   *
+   * @returns {{ accountId: string, providerId: string | null, spawnedAt: string | null } | null}
+   */
+  function findLastSpawnedDestination() {
+    const row = connection
+      .prepare(
+        `SELECT to_account_id, to_provider_id, spawned_at FROM account_switch_events
+         WHERE state = 'spawned' AND kind IN ('continuation', 'launch') AND to_account_id IS NOT NULL
+         ORDER BY spawned_at DESC, rowid DESC LIMIT 1`,
+      )
+      .get()
+    return row
+      ? { accountId: row.to_account_id, providerId: row.to_provider_id ?? null, spawnedAt: row.spawned_at ?? null }
+      : null
+  }
+
+  /**
    * Histórico, do mais novo para o mais antigo.
    *
    * @param {{ limit?: number, before?: string }} [options] - `before` pagina pelo horário da proposta.
@@ -926,11 +986,15 @@ function createAccountChainRepository(database) {
 
   return {
     expireDueSwitchEvents,
+    findLastSpawnedDestination,
+    findLatestSwitchEventForEvidence,
     findOpenSwitchEventForSession,
+    findSpawnedSwitchEventForTarget,
     forgetAccount,
     getCooldown,
     getLoginCheck,
     getSwitchEvent,
+    hasSpawnedFromSession,
     insertSwitchEvent,
     listCooldowns,
     listLoginChecks,
