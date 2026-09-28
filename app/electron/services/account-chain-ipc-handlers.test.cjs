@@ -184,10 +184,16 @@ test('canais da cadeia: estado, liga, proposta por detecção, confirma e histó
   assert.equal(state.pendingProposals.length, 1)
   assert.equal(state.cooldowns.length, 1)
 
-  for (const params of [{ proposalId: 'nao-e-uuid', destinationAccountId: 'conta-b' }, { proposalId: outcome.event.id }]) {
+  for (const params of [
+    { proposalId: 'nao-e-uuid', destinationAccountId: 'conta-b' },
+    { proposalId: outcome.event.id },
+    { proposalId: outcome.event.id, destinationAccountId: 'conta-b', transcriptChars: -1 },
+    { proposalId: outcome.event.id, destinationAccountId: 'conta-b', transcriptChars: 'muito' },
+  ]) {
     assert.equal((await invoke('account-chain:confirm', params)).code, 'INVALID')
   }
-  const confirmed = await invoke('account-chain:confirm', { proposalId: outcome.event.id, destinationAccountId: 'conta-b' })
+  // O renderer manda o tamanho do contexto redigido (contrato `AccountChainConfirmParams`).
+  const confirmed = await invoke('account-chain:confirm', { proposalId: outcome.event.id, destinationAccountId: 'conta-b', transcriptChars: 1234 })
   assert.deepEqual(Object.keys(confirmed).sort(), ['destination', 'ok', 'ticket'])
   assert.equal(confirmed.ticket, outcome.event.id)
   assert.deepEqual(confirmed.destination, { accountId: 'conta-b', providerId: 'codex', label: 'Trabalho' })

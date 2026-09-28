@@ -492,9 +492,16 @@ test('SOURCE_ACTIVE: origem ainda escrevendo pede um segundo aceite; com o aceit
     })
     assert.equal(env.repository.getSwitchEvent(proposal.id).state, 'proposed', 'sem bloqueio: a proposta continua')
 
-    const acked = await env.service.confirm({ proposalId: proposal.id, destinationAccountId: 'conta-b', acknowledgeSourceActive: true })
+    const acked = await env.service.confirm({
+      proposalId: proposal.id,
+      destinationAccountId: 'conta-b',
+      acknowledgeSourceActive: true,
+      transcriptChars: 1234,
+    })
     assert.equal(acked.ok, true)
     assert.equal(env.repository.getSwitchEvent(proposal.id).sourceActiveAck, true)
+    // O tamanho do contexto que o renderer vai levar fica no registro (só o número).
+    assert.equal(env.repository.getSwitchEvent(proposal.id).transcriptChars, 1234)
   })
 })
 

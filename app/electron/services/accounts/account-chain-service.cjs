@@ -837,7 +837,7 @@ function createAccountChainService({
    * Confirma uma proposta com o destino escolhido e devolve o ticket. Todas as
    * revalidações são daqui (§4.1); a interface só devolve a escolha.
    */
-  async function confirm({ proposalId, destinationAccountId, acknowledgeSourceActive = false } = {}) {
+  async function confirm({ proposalId, destinationAccountId, acknowledgeSourceActive = false, transcriptChars = null } = {}) {
     if (!isNonEmptyText(proposalId) || !isNonEmptyText(destinationAccountId)) return failure('INVALID')
     const event = repository.getSwitchEvent(proposalId)
     if (!event || !CHAIN_EVENT_KINDS.includes(event.kind)) return failure('NOT_PENDING')
@@ -912,6 +912,8 @@ function createAccountChainService({
         decidedAt: toIso(decidedMs),
         expiresAt: toIso(decidedMs + TICKET_TTL_MS),
         sourceActiveAck: sourceActive,
+        // Tamanho do contexto redigido que o bloco novo leva: só o número.
+        transcriptChars: Number.isSafeInteger(transcriptChars) && transcriptChars >= 0 ? transcriptChars : null,
       },
     })
     if (!result.applied) {

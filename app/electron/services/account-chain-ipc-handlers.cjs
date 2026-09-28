@@ -237,10 +237,15 @@ function registerAccountChainIpcHandlers({
   handle('account-chain:confirm', async (service, params) => {
     if (!isPlainObject(params) || !isUuid(params.proposalId) || !isText(params.destinationAccountId)) return invalid()
     if (params.acknowledgeSourceActive !== undefined && typeof params.acknowledgeSourceActive !== 'boolean') return invalid()
+    // Só o tamanho do contexto redigido atravessa, nunca o texto.
+    if (params.transcriptChars !== undefined && !(Number.isSafeInteger(params.transcriptChars) && params.transcriptChars >= 0)) {
+      return invalid()
+    }
     const result = await service.confirm({
       proposalId: params.proposalId,
       destinationAccountId: params.destinationAccountId,
       acknowledgeSourceActive: params.acknowledgeSourceActive === true,
+      ...(params.transcriptChars !== undefined ? { transcriptChars: params.transcriptChars } : {}),
     })
     if (result?.ok) {
       return {
