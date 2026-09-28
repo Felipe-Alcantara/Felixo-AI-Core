@@ -444,6 +444,35 @@ export function positionAnnouncement(label: string, index: number): string {
   return `${label.trim() || 'Conta'} agora é a ${index + 1}ª`
 }
 
+export type ChainMoveOutcome = { moved: true; accountId: string; announcement: string } | { moved: false }
+
+/**
+ * Move uma conta na ordem da cadeia e diz o que anunciar. Só um `ok` do main
+ * move de fato: recusa, conflito de revisão ou tela ocupada (`busy`, por
+ * exemplo durante "Conferir agora") não anunciam posição nova nem fazem o
+ * foco seguir a linha — senão o leitor de tela ouviria uma ordem que não
+ * mudou e um push qualquer tiraria o foco de onde a pessoa está.
+ */
+export async function moveChainMember<T extends { accountId: string; label: string }>(params: {
+  members: readonly T[]
+  accountId: string
+  delta: -1 | 1
+  busy: boolean
+  save: (next: T[]) => Promise<{ ok: boolean } | null>
+}): Promise<ChainMoveOutcome> {
+  if (params.busy) return { moved: false }
+  const next = moveMember(params.members, params.accountId, params.delta)
+  if (!next) return { moved: false }
+  const result = await params.save(next)
+  if (!result?.ok) return { moved: false }
+  const index = next.findIndex((item) => item.accountId === params.accountId)
+  return {
+    moved: true,
+    accountId: params.accountId,
+    announcement: positionAnnouncement(next[index].label, index),
+  }
+}
+
 /**
  * Lê o multiplicador digitado. Vazio = não declarado (`null`); fora de 1 a
  * 100 ou não numérico = inválido (a UI não manda).

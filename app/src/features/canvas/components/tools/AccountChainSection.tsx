@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
+import { useId, useRef, useState, type KeyboardEvent } from 'react'
 import { ArrowDown, ArrowUp, RefreshCw } from 'lucide-react'
 import { FelixoToggle } from '../../../shared/components/FelixoToggle'
 import { FelixoSelect, type FelixoSelectOption } from '../../../shared/components/FelixoSelect'
@@ -12,12 +12,12 @@ import {
   formatLogin,
   formatMultiplier,
   ineligibilityText,
-  moveMember,
+  moveChainMember,
   parseMultiplierInput,
-  positionAnnouncement,
   providerLabel,
   summarizeChain,
 } from '../../services/account-chain-view'
+import { focusWasLost } from '../../services/keyboard-focus'
 
 const STRATEGY_SELECT_OPTIONS: FelixoSelectOption[] = STRATEGY_OPTIONS.map((option) => ({
   value: option.value,
@@ -46,22 +46,10 @@ export function AccountChainSection() {
   const { snapshot, store } = useAccountChain()
   const [announcement, setAnnouncement] = useState('')
   const [busy, setBusy] = useState(false)
-  // Depois de mover, o foco segue a linha movida (a lista é re-renderizada
-  // com o estado novo do main e a linha focada teria sumido do lugar).
-  const focusAfterMoveRef = useRef<string | null>(null)
   const listRef = useRef<HTMLOListElement>(null)
   const helpId = useId()
   const state = snapshot.state
   const nowMs = useClockTick()
-
-  useEffect(() => {
-    const accountId = focusAfterMoveRef.current
-    if (!accountId) return
-    focusAfterMoveRef.current = null
-    listRef.current
-      ?.querySelector<HTMLElement>(`[data-chain-member="${CSS.escape(accountId)}"]`)
-      ?.focus()
-  }, [state])
 
   if (snapshot.status === 'unavailable' || snapshot.status === 'error' || !state) {
     return (
@@ -74,11 +62,12 @@ export function AccountChainSection() {
     )
   }
 
-  const run = async (action: () => Promise<unknown>) => {
-    if (busy) return
+  /** Uma ação por vez; `null` = não rodou porque outra estava em curso. */
+  const run = async <T,>(action: () => Promise<T>): Promise<T | null> => {
+    if (busy) return null
     setBusy(true)
     try {
-      await action()
+      return await action()
     } finally {
       setBusy(false)
     }
@@ -93,13 +82,29 @@ export function AccountChainSection() {
       ),
     )
 
+  // Depois de mover, o foco segue a linha movida (a lista é re-renderizada
+  // com o estado novo do main e a linha focada sai do lugar). Só quando o
+  // main aceitou, e sem tirar o foco de quem já foi para outro controle.
+  const focusMovedRow = (accountId: string) => {
+    window.requestAnimationFrame(() => {
+      const list = listRef.current
+      const active = document.activeElement
+      if (!list || !(focusWasLost(active, document.body) || (active && list.contains(active)))) return
+      list.querySelector<HTMLElement>(`[data-chain-member="${CSS.escape(accountId)}"]`)?.focus()
+    })
+  }
+
   const move = (member: AccountChainMember, delta: -1 | 1) => {
-    const next = moveMember(state.members, member.accountId, delta)
-    if (!next) return
-    const index = next.findIndex((item) => item.accountId === member.accountId)
-    focusAfterMoveRef.current = member.accountId
-    void saveMembers(next).then(() => {
-      setAnnouncement(positionAnnouncement(member.label, index))
+    void moveChainMember({
+      members: state.members,
+      accountId: member.accountId,
+      delta,
+      busy,
+      save: (next) => run(() => store.updateMembers(next)),
+    }).then((outcome) => {
+      if (!outcome.moved) return
+      setAnnouncement(outcome.announcement)
+      focusMovedRow(outcome.accountId)
     })
   }
 

@@ -17,6 +17,7 @@ import {
   formatMultiplier,
   ineligibilityText,
   isUsageBilling,
+  moveChainMember,
   moveMember,
   nodeIdFromPtySessionId,
   parseMultiplierInput,
@@ -250,6 +251,45 @@ describe('ordem da lista', () => {
     expect(moveMember(members, 'a', -1)).toBeNull()
     expect(moveMember(members, 'c', 1)).toBeNull()
     expect(moveMember(members, 'x', 1)).toBeNull()
+  })
+
+  it('só move, anuncia e leva o foco quando o main aceita', async () => {
+    const saved: string[][] = []
+    const save = (ok: boolean) => async (next: typeof members) => {
+      saved.push(next.map((item) => item.accountId))
+      return ok ? { ok: true } : { ok: false }
+    }
+
+    await expect(moveChainMember({ members, accountId: 'c', delta: -1, busy: false, save: save(true) })).resolves.toEqual({
+      moved: true,
+      accountId: 'c',
+      announcement: 'Reserva agora é a 2ª',
+    })
+    // O main recusou (ou deu conflito): nada anunciado, o foco fica onde está.
+    await expect(moveChainMember({ members, accountId: 'c', delta: -1, busy: false, save: save(false) })).resolves.toEqual({
+      moved: false,
+    })
+    // `run` já ocupado devolve null: também não moveu.
+    await expect(moveChainMember({ members, accountId: 'c', delta: -1, busy: false, save: async () => null })).resolves.toEqual({
+      moved: false,
+    })
+    expect(saved).toEqual([['a', 'c', 'b'], ['a', 'c', 'b']])
+  })
+
+  it('com a tela ocupada (checagem em curso) nem pede ao main', async () => {
+    let calls = 0
+    const outcome = await moveChainMember({
+      members,
+      accountId: 'c',
+      delta: -1,
+      busy: true,
+      save: async () => {
+        calls += 1
+        return { ok: true }
+      },
+    })
+    expect(outcome).toEqual({ moved: false })
+    expect(calls).toBe(0)
   })
 
   it('anuncia a posição nova em ordinal', () => {
