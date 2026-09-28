@@ -574,7 +574,7 @@ export function useAgentConfig(
       }
       return resultado
     },
-    [accounts, carregarContas, providerId, setAccountSelectionIssue],
+    [carregarContas, providerId, setAccountSelectionIssue],
   )
 
   useEffect(() => {
