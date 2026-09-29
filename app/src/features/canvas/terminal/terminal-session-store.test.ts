@@ -1299,3 +1299,193 @@ describe('TerminalSessionStore: portão hasTypedInputSelection', () => {
     expect(gate(store, session)).toBe(false)
   })
 })
+
+/**
+ * Os dois caminhos de link do xterm — texto que parece URL (WebLinksAddon) e
+ * hyperlink OSC 8 (`linkHandler`) — precisam cair no mesmo portão. Sem o
+ * `linkHandler`, o xterm abre OSC 8 com clique simples, `confirm()` e um
+ * `window.open()` sem URL que o processo principal recebe como about:blank.
+ */
+describe('TerminalSessionStore: links do terminal', () => {
+  type LinkHandler = {
+    activate: (event: MouseEvent, text: string, range: unknown) => void
+    hover?: (event: MouseEvent, text: string, range: unknown) => void
+    leave?: (event: MouseEvent, text: string, range: unknown) => void
+    allowNonHttpProtocols?: boolean
+  }
+  type LinkSession = {
+    hoveredLink?: string
+    linkGestureOrigin?: { clientX: number; clientY: number }
+    terminal: { options: { linkHandler?: LinkHandler | null }; hasSelection: () => boolean }
+  }
+
+  const RANGE = { start: { x: 1, y: 1 }, end: { x: 10, y: 1 } }
+  const ZERO_WIDTH_SPACE = String.fromCharCode(0x200b)
+  let harness: Harness | undefined
+
+  function mouse(init: Partial<MouseEvent> = {}) {
+    return { ctrlKey: false, metaKey: false, ...init } as MouseEvent
+  }
+
+  function linkSession(current: Harness): LinkSession {
+    const session = (current.store as unknown as { sessions: Map<string, LinkSession> }).sessions.get(SESSION_ID)
+    if (!session) throw new Error('sessão não criada')
+    return session
+  }
+
+  beforeEach(() => {
+    harness = undefined
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    harness?.store.clear()
+    vi.useRealTimers()
+  })
+
+  it('hyperlink OSC 8 exige Ctrl/Cmd+clique e passa pela política antes do window.open', () => {
+    harness = createHarness('', 'claude', true, false, 1)
+    const opened: string[] = []
+    ;(globalThis as unknown as { window: { open: (url: string) => null } }).window.open = (url) => {
+      opened.push(url)
+      return null
+    }
+
+    const session = linkSession(harness)
+    const handler = session.terminal.options.linkHandler
+    // `true` só faz o xterm entregar ao app o OSC 8 fora da web, em vez de
+    // descartá-lo em silêncio; quem decide abrir continua sendo o portão.
+    expect(handler?.allowNonHttpProtocols).toBe(true)
+
+    handler?.activate(mouse(), 'https://example.com/a', RANGE)
+    handler?.activate(mouse({ ctrlKey: true }), `https://exa${ZERO_WIDTH_SPACE}mple.com/`, RANGE)
+    handler?.activate(mouse({ ctrlKey: true }), 'file:///C:/x', RANGE)
+    handler?.activate(mouse({ ctrlKey: true }), 'vscode://file/C:/x', RANGE)
+    handler?.activate(mouse({ ctrlKey: true }), 'HTTPS://Example.com/a', RANGE)
+
+    expect(opened).toEqual(['https://example.com/a'])
+
+    // O `file:` agora chega ao hover: fica guardado para o menu, que para ele
+    // só oferece "Copiar link" (`terminalLinkMenuItems`).
+    handler?.hover?.(mouse(), 'file:///C:/x', RANGE)
+    expect(session.hoveredLink).toBe('file:///C:/x')
+  })
+
+  /*
+   * O ponto do `mousedown` é gravado pelo listener de `bindMouseSelection`,
+   * preso ao `terminal.element` — que só existe depois de `terminal.open()`
+   * num DOM real, e esta suíte roda sem DOM. Aqui o ponto é posto na sessão
+   * como o listener o poria; o teste logo abaixo exercita o listener em si
+   * contra um elemento falso.
+   */
+  it('Ctrl+arrastar dentro de uma URL seleciona texto e não abre o link', () => {
+    harness = createHarness('', 'claude', true, false, 1)
+    const opened: string[] = []
+    ;(globalThis as unknown as { window: { open: (url: string) => null } }).window.open = (url) => {
+      opened.push(url)
+      return null
+    }
+    const session = linkSession(harness)
+    session.terminal.hasSelection = () => true
+
+    // Desceu num ponto da URL e subiu 60 px adiante, ainda sobre ela: arrasto.
+    session.linkGestureOrigin = { clientX: 100, clientY: 40 }
+    session.terminal.options.linkHandler?.activate(
+      mouse({ ctrlKey: true, clientX: 160, clientY: 40 }),
+      'https://example.com/docs',
+      RANGE,
+    )
+    expect(opened).toEqual([])
+
+    // O gesto seguinte desceu e subiu no mesmo lugar: clique, abre.
+    session.linkGestureOrigin = { clientX: 120, clientY: 40 }
+    session.terminal.options.linkHandler?.activate(
+      mouse({ ctrlKey: true, clientX: 121, clientY: 41 }),
+      'https://example.com/docs',
+      RANGE,
+    )
+    expect(opened).toEqual(['https://example.com/docs'])
+  })
+
+  it('Ctrl+clique sem arrasto abre mesmo com seleção existente (o 2º clique seleciona a URL)', () => {
+    harness = createHarness('', 'claude', true, false, 1)
+    const opened: string[] = []
+    ;(globalThis as unknown as { window: { open: (url: string) => null } }).window.open = (url) => {
+      opened.push(url)
+      return null
+    }
+    const session = linkSession(harness)
+    // Clique simples e logo depois Ctrl+clique: o 2º `mousedown` chega com
+    // `detail=2`, o xterm seleciona a palavra — a própria URL — e no `mouseup`
+    // já há seleção. O gesto não andou, então é pedido de abrir.
+    session.terminal.hasSelection = () => true
+    session.linkGestureOrigin = { clientX: 100, clientY: 40 }
+
+    session.terminal.options.linkHandler?.activate(
+      mouse({ ctrlKey: true, clientX: 100, clientY: 40 }),
+      'https://example.com/docs',
+      RANGE,
+    )
+    expect(opened).toEqual(['https://example.com/docs'])
+  })
+
+  it('o mousedown do botão principal grava a origem do gesto; o de outro botão não', () => {
+    const previousWindow = (globalThis as { window?: unknown }).window
+    // `bindMouseSelection` consulta a plataforma antes de ligar o listener.
+    ;(globalThis as { window?: unknown }).window = { navigator: { platform: 'Win32' } }
+    try {
+      const listeners: Array<{ type: string; listener: (event: unknown) => void }> = []
+      const session: {
+        linkGestureOrigin?: { clientX: number; clientY: number }
+        mouseSelectionBound: boolean
+        terminal: object
+      } = {
+        mouseSelectionBound: false,
+        terminal: {
+          element: {
+            addEventListener: (type: string, listener: (event: unknown) => void) => {
+              listeners.push({ type, listener })
+            },
+          },
+          // Sem mouse tracking o gesto não é retido — o listener sai cedo, mas
+          // só depois de gravar a origem.
+          modes: { mouseTrackingMode: 'none' },
+        },
+      }
+      const store = new TerminalSessionStore()
+      ;(store as unknown as { bindMouseSelection: (session: unknown) => void }).bindMouseSelection(session)
+      const onMouseDown = listeners.find((entry) => entry.type === 'mousedown')?.listener
+      if (!onMouseDown) throw new Error('listener de mousedown não ligado')
+
+      const down = (init: { button: number; clientX: number; clientY: number }) => ({
+        type: 'mousedown',
+        isTrusted: true,
+        shiftKey: false,
+        altKey: false,
+        ...init,
+      })
+
+      onMouseDown(down({ button: 0, clientX: 42, clientY: 17 }))
+      expect(session.linkGestureOrigin).toEqual({ clientX: 42, clientY: 17 })
+
+      // Clique direito abre o menu, não começa gesto de link: não mexe na origem.
+      onMouseDown(down({ button: 2, clientX: 300, clientY: 200 }))
+      expect(session.linkGestureOrigin).toEqual({ clientX: 42, clientY: 17 })
+    } finally {
+      ;(globalThis as { window?: unknown }).window = previousWindow
+    }
+  })
+
+  it('o hover guarda o link para o menu e o leave o esquece', () => {
+    harness = createHarness('', 'claude', true, false, 1)
+    const session = linkSession(harness)
+    const handler = session.terminal.options.linkHandler
+
+    handler?.hover?.(mouse(), 'https://example.com/', RANGE)
+    expect(session.hoveredLink).toBe('https://example.com/')
+
+    // Sem limpar, um clique direito longe do link ainda abriria o menu dele.
+    handler?.leave?.(mouse(), 'https://example.com/', RANGE)
+    expect(session.hoveredLink).toBeUndefined()
+  })
+})

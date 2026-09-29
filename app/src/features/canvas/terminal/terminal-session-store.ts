@@ -3,8 +3,12 @@ import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import {
   activateTerminalExternalLink,
-  isAllowedTerminalExternalLink,
+  describeTerminalLinkHover,
+  isTerminalLinkDragGesture,
   openAllowedTerminalExternalLink,
+  terminalLinkClipboardText,
+  terminalLinkMenuItems,
+  type TerminalLinkMenuItem,
 } from './terminal-external-link'
 import { buildDroppedFileReference } from './terminal-dropped-files'
 import { splitTerminalSubmission, toSubmittedTerminalText } from './terminal-input'
@@ -16,6 +20,7 @@ import {
   isMacPlatform,
   shouldDeferMouseDown,
   xtermAlreadyForcesSelection,
+  type PointerPosition,
 } from './terminal-mouse-selection'
 import {
   buildClearInputSequence,
@@ -278,6 +283,7 @@ type SessionOptions = {
 
 type LinkMenuActions = {
   onOpenWebpage: (url: string) => void
+  onCopy: (text: string) => void
 }
 
 function mountTerminalLinkMenu(
@@ -331,10 +337,22 @@ function mountTerminalLinkMenu(
     menu.appendChild(button)
   }
 
-  addAction('Abrir no canvas', () => actions.onOpenWebpage(url))
-  addAction('Abrir no navegador', () => {
-    openAllowedTerminalExternalLink(url)
-  })
+  // Quais itens aparecem é decisão de `terminalLinkMenuItems` (testada lá);
+  // aqui só mora o que cada um faz. Link recusado fica só com "Copiar link".
+  const menuActions: Record<TerminalLinkMenuItem, [label: string, action: () => void]> = {
+    'abrir-no-canvas': ['Abrir no canvas', () => actions.onOpenWebpage(url)],
+    'abrir-no-navegador': [
+      'Abrir no navegador',
+      () => {
+        openAllowedTerminalExternalLink(url)
+      },
+    ],
+    'copiar-link': ['Copiar link', () => actions.onCopy(terminalLinkClipboardText(url))],
+  }
+  for (const item of terminalLinkMenuItems(url)) {
+    const [label, action] = menuActions[item]
+    addAction(label, action)
+  }
   document.body.appendChild(menu)
 
   const cleanup = () => {
@@ -451,6 +469,15 @@ type Session = {
   /** O interceptador de clique-arrastar é ligado ao elemento do xterm, como o de colar imagem. */
   mouseSelectionBound: boolean
   hoveredLink?: string
+  /**
+   * Onde o último `mousedown` do botão principal aconteceu no terminal.
+   *
+   * O xterm ativa um link no `mouseup` sempre que o botão desceu e subiu sobre
+   * o mesmo link, inclusive depois de um Ctrl+arrastar que só queria
+   * selecionar parte da URL. Comparar este ponto com o do `mouseup` é o que
+   * separa o arrasto do clique (ver `linkEvents.activate`).
+   */
+  linkGestureOrigin?: PointerPosition
   offLinkContextMenu?: () => void
   /** Encerra um gesto de mouse retido e solta os listeners do documento. */
   offMouseSelection?: () => void
@@ -592,8 +619,48 @@ export class TerminalSessionStore {
     }
 
     const pty = window.felixo?.pty
+    let createdSession: Session | null = null
+    // Os dois caminhos de link — texto que parece URL (WebLinksAddon) e
+    // hyperlink OSC 8 (`linkHandler`) — usam o mesmo portão e a mesma dica.
+    // Sem `linkHandler`, o xterm abriria o OSC 8 com um clique simples, um
+    // `confirm()` em inglês e um `window.open()` sem política.
+    const linkEvents = {
+      // Embrulhado: o xterm passa o `range` como terceiro argumento, que
+      // cairia no parâmetro `openExternalLink` do portão.
+      activate: (event: MouseEvent, text: string) => {
+        // Ctrl+arrastar dentro de uma URL é seleção, não pedido de abrir: o
+        // xterm ativa o link no mouseup mesmo assim. O critério é o gesto ter
+        // andado, e não existir seleção — ver `isTerminalLinkDragGesture` para
+        // o Ctrl+clique legítimo que `hasSelection()` recusava.
+        if (isTerminalLinkDragGesture(createdSession?.linkGestureOrigin, event)) return
+        activateTerminalExternalLink(event, text)
+      },
+      hover: (_event: MouseEvent, text: string) => {
+        if (!createdSession) return
+        createdSession.hoveredLink = text
+        if (createdSession.terminal.element) {
+          createdSession.terminal.element.title =
+            describeTerminalLinkHover(text) ??
+            'Link recusado pela política de segurança · clique direito: copiar'
+        }
+      },
+      leave: () => {
+        if (!createdSession) return
+        // Sem limpar, um clique direito longe do link ainda abriria o menu dele.
+        createdSession.hoveredLink = undefined
+        if (createdSession.terminal.element) {
+          createdSession.terminal.element.title = ''
+        }
+      },
+    }
     const terminal = new Terminal({
       convertEol: false,
+      // `true` não abre nada a mais: só impede o xterm de descartar em silêncio
+      // o OSC 8 com `file:`/`vscode:`. Com `false`, esse link sumia sem dica,
+      // sem menu e sem "Copiar link". Assim ele aparece, a dica diz que foi
+      // recusado e o menu oferece só copiar; abrir continua passando pelo
+      // portão acima, cuja política web recusa esses esquemas.
+      linkHandler: { ...linkEvents, allowNonHttpProtocols: true },
       cursorBlink: true,
       // A canvas with 10+ terminals gets the compact candidate. The decision is
       // made once per xterm: changing this option later would discard old rows.
@@ -619,24 +686,8 @@ export class TerminalSessionStore {
     })
     const fitAddon = new FitAddon()
     terminal.loadAddon(fitAddon)
-    let createdSession: Session | null = null
     terminal.loadAddon(
-      new WebLinksAddon(activateTerminalExternalLink, {
-        hover: (_event, text) => {
-          if (createdSession && isAllowedTerminalExternalLink(text)) {
-            createdSession.hoveredLink = text
-            if (createdSession.terminal.element) {
-              createdSession.terminal.element.title =
-                'Ctrl/Cmd+clique: abrir no navegador · clique direito: mais opções'
-            }
-          }
-        },
-        leave: () => {
-          if (createdSession?.terminal.element) {
-            createdSession.terminal.element.title = ''
-          }
-        },
-      }),
+      new WebLinksAddon(linkEvents.activate, { hover: linkEvents.hover, leave: linkEvents.leave }),
     )
 
     const generation = (this.generations.get(id) ?? 0) + 1
@@ -705,6 +756,7 @@ export class TerminalSessionStore {
       imagePasteBound: false,
       mouseSelectionBound: false,
       hoveredLink: undefined,
+      linkGestureOrigin: undefined,
       fileDropBound: false,
       lastImagePasteAt: 0,
       codexTrustBuffer: '',
@@ -979,12 +1031,15 @@ export class TerminalSessionStore {
 
     const onContextMenu = (event: MouseEvent) => {
       const url = session.hoveredLink
-      if (!url || !isAllowedTerminalExternalLink(url)) return
+      if (!url) return
       event.preventDefault()
       event.stopPropagation()
       session.linkMenuCleanup?.()
       session.linkMenuCleanup = mountTerminalLinkMenu(event, url, {
         onOpenWebpage: (link) => session.optionsOnOpenWebpage?.(link),
+        onCopy: (text) => {
+          void navigator.clipboard?.writeText(text).catch(() => {})
+        },
       })
     }
     element.addEventListener('contextmenu', onContextMenu)
@@ -1161,6 +1216,15 @@ export class TerminalSessionStore {
       'mousedown',
       (event) => {
         const mouseEvent = event as MouseEvent
+
+        // Origem do gesto para o portão dos links (`linkEvents.activate`),
+        // guardada antes de qualquer retenção e com ou sem mouse tracking: o
+        // xterm ativa o link nos dois casos. O sintético que redisparamos
+        // depois traz as coordenadas do original, então passar de novo por
+        // aqui não muda o ponto.
+        if (mouseEvent.button === 0) {
+          session.linkGestureOrigin = { clientX: mouseEvent.clientX, clientY: mouseEvent.clientY }
+        }
 
         const mouseTrackingActive = session.terminal.modes.mouseTrackingMode !== 'none'
 
