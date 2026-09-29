@@ -698,6 +698,116 @@ desconhecidos são recusados. A suíte testa o renderer estaticamente; a
 validação de execução em Electron deve ser registrada separadamente quando
 houver uma sessão gráfica disponível.
 
+### Links externos: uma política e um portão
+
+Todo link que pode sair do app passa pela mesma decisão, `classifyExternalUrl`.
+Isso vale para:
+
+- texto que parece URL e hyperlink OSC 8 no terminal;
+- Markdown de agente ou de arquivo;
+- links dos painéis;
+- popup de página no bloco "Página Web";
+- pedido `abrir-pagina` de agente.
+
+A allowlist vive num único JSON de fronteira,
+`electron/services/external-url-policy.json`, com `http:`, `https:` e
+`mailto:`, cada um com justificativa escrita. Página web (`http:`/`https:`) é o
+subconjunto aceito pelo terminal, pelo bloco "Página Web" e pelos pedidos de
+agente. O `mailto:` só leva `to`, `cc`, `bcc`, `subject` e `body`, porque
+clientes de e-mail já anexaram arquivo local por `attach=`. Um teste falha se
+a lista ganhar um esquema sem justificativa.
+
+A decisão existe duas vezes, de propósito:
+
+- `src/features/shared/external-url-policy.ts` decide, no renderer, o que vira
+  link clicável;
+- `electron/services/external-url-policy.cjs` decide, no processo principal, o
+  que abre.
+
+O renderer não é o portão: qualquer conteúdo que chegue a ele consegue pedir um
+`window.open`. As duas implementações rodam a mesma tabela de casos
+(`external-url-policy.cases.json`). Um teste diferencial compara as duas em
+20.000 entradas aleatórias com controles, invisíveis, entidades e esquemas
+disfarçados.
+
+A política recusa:
+
+- controles C0/C1 e separadores de linha;
+- caracteres invisíveis e de direção, por propriedade Unicode
+  (`Default_Ignorable_Code_Point` e `Cf`), crus ou percent-codificados no
+  host: o IDNA apagaria um `U+200B` e abriria outro domínio. No Markdown, que
+  codifica a URL antes da política, um plugin remark recusa o link ainda cru;
+- espaço interno;
+- falta de esquema, ou esquema fora da lista;
+- URL que o parser não aceita;
+- falta de host (web) ou de destinatário (mailto);
+- usuário ou senha no endereço: `https://google.com@evil.example` diz um
+  domínio e abre outro, e uma senha iria em texto claro para o histórico do
+  navegador;
+- `mailto:` com fragmento: `#&attach=…` ficaria fora da checagem de campos;
+- mais de 8.192 caracteres, na entrada ou no `href` serializado (cada
+  ideograma vira `%XX%XX%XX`).
+
+O que é aprovado sai na serialização do parser (`URL.href`), então o opener
+recebe exatamente o que foi validado: IP decimal vira o IP canônico e IDN vira
+punycode.
+
+Portões do processo principal:
+
+- `external-links.cjs` é o único caminho até `shell.openExternal`. A recusa
+  registra só esquema e host (`describeExternalUrlForLog`), porque caminho,
+  query e userinfo podem carregar token.
+- `navigation-guard.cjs`:
+  - a janela principal nega `will-navigate`/`will-redirect` para fora do
+    próprio documento, porque o preload exporia a API do app a qualquer página
+    carregada ali;
+  - todo `<webview>` anexado perde preload e Node e só nasce em página web
+    (`will-attach-webview`), não importa o que o atributo `webpreferences`
+    peça.
+- `webview-lifecycle.cjs`: popup e `target=_blank` dentro do bloco só abrem
+  página web. O `loadURL` feito pelo main não passa pelo filtro que o Chromium
+  aplica à navegação do próprio site.
+- `session-security.cjs`: o Chromium pede a permissão `openExternal` quando uma
+  página navega para `vscode:`, `ms-msdt:` e afins. Em toda sessão, inclusive
+  nas partições dos perfis, essa permissão passa pela mesma política. As outras
+  permissões mantêm o padrão do Electron.
+
+No terminal, os dois caminhos de link usam o mesmo `linkHandler`: exigem
+Ctrl/Cmd+clique, passam pela política, e a dica mostra o destino real (num OSC
+8, o texto exibido pode dizer outra coisa). O menu do link tem "Copiar link",
+que nunca abre nada; um link recusado perde só as ações que abrem.
+
+No Markdown, link recusado vira texto. Um esquema em maiúsculas (`HTTPS://`)
+também vira texto, porque o `rehype-sanitize` diferencia caixa ao comparar o
+esquema. É uma diferença conhecida, e no sentido seguro.
+
+#### CSP do renderer
+
+O build injeta uma `<meta http-equiv="Content-Security-Policy">` no
+`dist/index.html`, pelo plugin `felixo-renderer-csp` do `vite.config.ts`. A
+política e os `sha256` dos scripts inline vêm de `scripts/renderer-csp.cjs`,
+calculados sobre o HTML final. O `generateBundle` confere o arquivo que vai
+para o disco, e o build falha se algum script inline ficar sem hash. Sem essa
+conferência, o botão "Recarregar interface" do fallback de boot seria
+bloqueado em silêncio.
+
+- `script-src 'self'` com hashes, sem `'unsafe-inline'` e sem `'unsafe-eval'`.
+- `object-src`, `base-uri`, `form-action` e `frame-src` como `'none'`.
+- `connect-src 'self'`: o renderer não fala com a rede, tudo que é remoto
+  passa por IPC.
+- `style-src` precisa de `'unsafe-inline'` por causa do xterm, do Excalidraw e
+  do `<style>` do boot.
+- A única origem de rede é `https://esm.sh`, e só em `font-src`: são as fontes
+  dos desenhos do Excalidraw. Fonte não executa código, e servi-las pelo build
+  é uma task aberta.
+
+O dev server fica sem CSP. Ele usa scripts inline do React Refresh e o
+WebSocket do HMR, e uma política afrouxada para caber nele não provaria nada
+sobre o instalador. Sob `file://`, `'self'` casa com qualquer URL `file:`. Esse
+limite é da origem, não da política, e fechá-lo exigiria um protocolo próprio.
+`frame-src` não controla `<webview>`, então o isolamento do webview continua
+sendo do processo principal.
+
 ### Sincronização segura do Felixo System Design
 
 `system-design-service.cjs` executa `git` com `execFile` e argumentos

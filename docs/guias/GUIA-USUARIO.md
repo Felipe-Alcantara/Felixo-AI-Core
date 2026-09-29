@@ -517,7 +517,9 @@ O preview de Markdown trata o conteúdo recebido de agentes, arquivos e
 histórico como externo: sequências ANSI de terminal são removidas, o texto é
 limitado a 200.000 caracteres antes do parser e HTML bruto é sanitizado antes
 de virar interface, sem scripts, iframes, CSS remoto ou atributos de evento.
-Links aceitam somente `http:`, `https:`, `mailto:` e âncoras locais. Imagens
+Links aceitam somente `http:`, `https:`, `mailto:` e âncoras locais; um
+`mailto:` só pode trazer destinatário, cópia, cópia oculta, assunto e corpo. Um
+link recusado continua aparecendo como texto, sem abrir nada. Imagens
 remotas viram texto alternativo e não geram request automático; uma imagem
 `data:` precisa ser rasterizada e ter no máximo 2 MiB. Imagens relativas só
 viram `file://` quando o bloco tem o `baseDir` de um arquivo já autorizado; sem
@@ -547,6 +549,10 @@ Por segurança, o app só abre arquivos que estejam dentro de um projeto registr
 - Ao reiniciar um terminal pelo drawer lateral, o app reaproveita o `accountId` e o provedor persistidos no bloco. O restart continua no perfil selecionado; sem `accountId`, o terminal usa o login do sistema.
 - O histórico visual usa 20.000 linhas quando há até 9 terminais e 5.000 linhas quando o canvas já tem 10 ou mais. O limite é escolhido ao criar a sessão; terminais que já estavam abertos não são redimensionados nem perdem linhas quando outro terminal é adicionado.
 - Se o histórico visual ultrapassar o limite, o cartão e a gaveta avisam. Fechar e reabrir o terminal reaplica o replay vivo mantido pelo processo principal, de até 200.000 caracteres; **Copiar** e **Handoff** usam o trecho que ainda está no buffer visual.
+
+### Links no terminal
+
+Um endereço `http://` ou `https://` na saída do terminal vira link. Ao passar o mouse, a dica mostra para onde ele leva de verdade: um link pode exibir um texto e apontar para outro endereço. Para abrir no navegador, segure `Ctrl` (ou `Cmd` no macOS) e clique. Um clique simples não abre nada. O clique direito sobre o link mostra **Abrir no canvas**, **Abrir no navegador** e **Copiar link**. Copiar nunca abre o endereço. Se o app recusar o link por segurança (por exemplo, por ter caracteres invisíveis), o menu mostra só **Copiar link**.
 
 ### Colar imagens em um agente
 
