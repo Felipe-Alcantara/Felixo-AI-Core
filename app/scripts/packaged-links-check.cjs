@@ -516,6 +516,8 @@ async function main(argv = process.argv.slice(2)) {
       if (options.navegador === 'ausente') {
         report.avisoDeFalha = await conferirAvisoDeFalha(page, url, options.timeoutMs)
         await capturar(page, 'aviso-de-falha')
+        // Sem navegador, o caso passa quando o app avisa (e nada chega ao servidor).
+        registro.ok = report.avisoDeFalha.ok && servidor.pedidos.slice(antes).every(pedidoDoApp)
         report.casos.push(registro)
         break
       }
