@@ -7067,3 +7067,68 @@ A política única de URL (entrada anterior) decidia **se** um link podia sair d
 - **Botões do app que já dizem o destino** ("Abrir no Notion" no painel, links do painel de uso) não perguntam. A escolha já está no rótulo.
 - **Telemetria:** nenhuma foi adicionada. O único log continua o de recusa do opener, que leva só esquema e host.
 - **Nota de ambiente:** a nota da entrada anterior (Ryzen 7 5700G, 16 threads) não vale para a máquina desta sessão, que tem 4 threads (`nproc`). Provavelmente é outra máquina.
+
+## 2026-09-29 — Links: revisão adversarial da escolha de destino e consertos
+
+Completa a entrada anterior. Registrada durante a validação final (horário no fim).
+
+### Como foi revisado
+
+Sete lentes independentes leram o diff (`fff6e998..77575049`): menu e acessibilidade, convivência com painéis e diálogos, terminal, Markdown e Página Web, main e pedido de agente, docs, e mutação (18 mutantes num worktree isolado). Saíram 48 achados. Os 29 de código e comportamento, sem os duplicados, passaram por um verificador cético cada, que lia um snapshot congelado do ramo e tentava refutá-los. Vários verificadores provaram o achado rodando o código de verdade: o Electron 41.10.7 do app, o React 19 e o xyflow reais, e sondas nos módulos do main. **Todos se confirmaram; nenhum foi refutado.** Os consertos foram feitos em quatro trilhas paralelas, cada uma num worktree próprio, integradas por cherry-pick sem conflito:
+
+- A: main e cartão;
+- B: menu;
+- C: terminal;
+- D: Página Web e Markdown.
+
+### O que estava errado e foi corrigido
+
+- **Grave: um arquivo de pedido malformado derrubava o app.** Com `perfil` que não é texto, o registro do main lançava e o resto do boot não registrava mais nada. O cartão também lançava no render e levava a interface para a tela de falha, a cada abertura do app. Hoje o pedido malformado é recusado na chegada, e nada no caminho lança.
+- **TOCTOU no cartão.** A decisão executava o arquivo com o nome do id, não o pedido mostrado. Um id no conteúdo diferente do nome, ou o arquivo reescrito entre mostrar e clicar, abria outro endereço. Uma sonda mostrou `docs.python.org` no cartão e abriu `evil.example/login`. Agora o cartão manda `{id, destino, url, perfil}` do que mostrou, e o main só executa se o gravado ainda for isso. A fila inteira passou a descartar arquivo cujo id não bate com o nome.
+- **Cartão.**
+  - Duplo clique decidia o pedido seguinte, sem leitura. Os botões agora esperam 600 ms e ignoram `detail > 1`.
+  - Clicar nele fechava a gaveta do terminal.
+  - A URL ficava cortada em 3 linhas.
+  - Falha ao abrir virava "recusado" em silêncio.
+  - Um pedido vencido ficava aceitável para sempre, com `browser status` "pendente".
+  - Duas decisões concorrentes abriam duas vezes.
+  - Cada evento da pasta custava duas varreduras e um IPC.
+- **Menu.**
+  - Clicar no resumo soltava o teclado para o `body`, e o Esc fechava o modal de trás. No canvas, o Backspace apagava o bloco selecionado.
+  - Roda, redimensionamento e Alt+Tab deixavam o foco no `body`.
+  - Um diálogo que abria por cima ficava sob o menu.
+  - Enter segurado escolhia "Abrir no navegador" sem leitura.
+  - Um host gigante empurrava as opções para fora da janela. O corte agora é **no meio**: cortar no fim esconderia o domínio de um `login.banco.com.aaa….evil.example`.
+  - O e-mail escondia cc/bcc.
+  - Na Página Web, o menu dizia que mailto "não abre", mas o clique abria.
+  - "Link copiado" não se repetia.
+  - O alvo de toque não crescia em notebook com tela sensível.
+  - O foco no bloco novo se perdia (ver abaixo).
+- **Terminal.**
+  - O toque não abria o menu com o mouse tracking ligado, porque o replay do mousedown perdia `sourceCapabilities`.
+  - No macOS, o Ctrl+clique pedia o menu duas vezes.
+- **Página Web.**
+  - O menu nascia longe do clique, porque `params.x/y` já vêm no espaço da janela.
+  - Um link `javascript:` chegava como `about:blank#blocked`, com motivo errado.
+  - A recusa na barra tirava o foco, e o Backspace para corrigir apagava o bloco.
+  - O aviso sobrevivia à navegação.
+  - "Abrir como Página Web" de uma página de outro perfil abria no Padrão, logado como outra pessoa.
+- **Markdown.** O link em volta de um bloco de código punha o "copiar" dentro de outro botão.
+- **Fora da feature, mas afetando o menu.** A gravação do atalho do ditado continuava ligada depois de clicar fora e engolia as teclas do menu no mesmo painel.
+- **Testes que não pegavam.**
+  - O gravador de `window.open` nos testes do store ficava no `window` velho, porque a bancada troca o global, e toda asserção "nada abre" passava vazia. Agora pega: com um `window.open` no gesto, 5 testes falham.
+  - Três mutantes vivos ganharam teste: a marca de camada flutuante, copiar recusado que abre, e a Página Web com texto cru.
+  - O fuzz do Markdown ganhou prazo de 60 s.
+
+### Achados que mudaram a correção
+
+- **Foco no bloco novo.** A trilha tentou mais quadros (24), mas o verificador mostrou com as funções reais do xyflow que não era isso. O nó entra no DOM na hora (ainda sem medida), é focado, e sai quando o ResizeObserver o mede fora do container: o foco cai no `body`. O conserto espera a câmera (`setCenter` devolve a promessa; prazo de 450 ms para a câmera interrompida) e foca com `preventScroll`.
+- **Marca de foco.** A trilha fez o `useFocusRestore` esquecer toda camada flutuante. O verificador apontou que o cartão também é camada flutuante, mas continua na tela. A marca ficou separada: `data-felixo-focus-transient`, só no menu.
+- **Quirk do xterm no smoke.** O Linkifier só pede link quando o ponteiro muda de célula do buffer, e o `mouseleave` não esquece a última célula. Um toque na mesma célula em que o mouse esteve não conta. O smoke toca na linha recém-impressa. É comportamento do xterm, não do app.
+
+### NÃO verificado / limitações
+
+- macOS e Windows só pela CI; o Ctrl+clique do macOS foi lido do código do Chromium, sem Mac aqui.
+- Tela sensível ao toque real e leitor de tela real não foram usados. O toque vem do CDP, e a ARIA é conferida no smoke.
+- O `AgentQuestionDialog` (anterior a esta task) também fecha uma gaveta não fixada no clique e não pega o foco. Com ele aberto, o menu de link fica por cima. Há task aberta.
+- Na Página Web, o ponto do `context-menu` foi medido com o link na página e num `<iframe>` interno. Um PDF ou um `<embed>` não foram testados.

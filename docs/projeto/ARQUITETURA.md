@@ -780,38 +780,72 @@ dentro de uma "Página Web". O gesto abre um menu único, que mostra o destino e
 oferece três escolhas: **Abrir no navegador**, **Abrir como Página Web** e
 **Copiar link**. O gesto varia por superfície:
 
-- Ctrl/Cmd+clique, toque ou clique direito no terminal;
+- Ctrl/Cmd+clique, toque, clique direito ou tecla de menu no terminal;
 - clique, Enter ou clique direito no Markdown;
 - clique direito num link da "Página Web".
 
 Nenhuma preferência de destino fica guardada.
 
-Peças, todas em `src/features/shared/links/`:
+Peças, quase todas em `src/features/shared/links/`:
 
-- `link-destination.ts` (puro) traduz a decisão da política. A tradução diz
-  para onde o link vai (host em punycode, ou destinatário do e-mail), quais
-  escolhas cabem e, na recusa, o motivo em português comum. O texto recusado
-  aparece com os invisíveis à mostra (`⟨U+200B⟩`). `runLinkChoice` classifica
-  de novo antes de agir, e "Copiar" só conhece a área de transferência.
+- `link-destination.ts` (puro) traduz a decisão da política:
+  - para onde o link vai: host em punycode, ou os destinatários do e-mail,
+    incluindo to/cc/bcc da query, lidos à mão porque `URLSearchParams` troca
+    `+` por espaço;
+  - quais escolhas cabem;
+  - na recusa, o motivo em português comum.
+
+  O título é encurtado **no meio** (`shortenAddress`): num host como
+  `login.banco.com.aaa….evil.example`, o fim é o domínio de verdade. O texto
+  recusado aparece com os invisíveis à mostra (`⟨U+200B⟩`). `runLinkChoice`
+  classifica de novo antes de agir, e "Copiar" só conhece a área de
+  transferência.
 - `link-chooser-store.ts` guarda o pedido fora do React, porque o terminal é
   um store imperativo. O pedido é uma cópia do link no instante do gesto: se a
   saída rolar ou uma resposta em streaming reescrever o texto, o menu continua
   mostrando e abrindo o mesmo endereço. O canvas registra ali o criador de
-  bloco Página Web. Sem canvas montado (tela do chat), o menu não oferece essa
-  escolha.
+  bloco Página Web, que devolve `{ id, cameraSettled }`. Sem canvas montado
+  (tela do chat), o menu não oferece essa escolha.
 - `LinkChooserHost.tsx`, montado uma vez no `App`, desenha o menu:
-  - `role=menu`, com setas, Home/End, Enter/Espaço, Esc e Tab;
-  - o foco volta a quem abriu o menu (a entrada do xterm, o link ou o
-    webview), ou vai para o bloco novo quando a escolha cria um;
-  - fecha com clique fora, roda, redimensionamento ou perda de foco da janela;
-  - a região `status` anuncia "Link copiado".
+  - `role=menu` (com `aria-describedby` no resumo do destino), setas,
+    Home/End, Enter/Espaço, Esc e Tab. Enter ou Espaço repetidos pela tecla
+    segurada não escolhem nada. O container tem `tabIndex=-1`, então clicar no
+    resumo não solta o teclado para o que está atrás;
+  - fecha com clique fora, roda, redimensionamento, perda de foco da janela ou
+    foco levado a outro elemento (um diálogo que abre por cima). Na roda e no
+    redimensionamento, o foco volta a quem abriu;
+  - a escolha devolve o foco a quem abriu (a entrada do xterm, o link, o
+    webview). Com "Abrir como Página Web", o foco só vai ao bloco novo depois
+    que a câmera chega (`afterCamera`). O React Flow desenha o nó ainda sem
+    medida e o desmonta quando o mede fora da tela, então focar antes jogaria
+    o foco no `body`;
+  - a região `status` anuncia "Link copiado" a cada cópia.
+- `shared/focus/floating-layer.ts` define duas marcas.
+  - `data-felixo-floating-layer` está no menu e no cartão de pedido. Clicar
+    ali não é "clicar fora" da gaveta do terminal: sem ela, "Copiar link" ou
+    "Recusar" fechavam a gaveta com o agente.
+  - `data-felixo-focus-transient` está só no menu. O `useFocusRestore` não
+    troca o dono do foco por um item que some no blur da janela.
 
-Esquemas aceitos por origem: o terminal e a "Página Web" só aceitam página web;
-o Markdown aceita também `mailto:`, que abre como "Abrir no app de e-mail". Um
-link recusado nunca some: o menu diz o motivo e oferece só "Copiar link". No
-Markdown ele vira um botão tracejado, com o motivo na dica. Um destino escrito
-que a política aprova, mas que o `rehype-sanitize` apagou (ele diferencia
-caixa: `HTTPS://`), volta a ser link pela forma serializada da política.
+  Um teste estático trava as duas marcas no JSX.
+
+Esquemas aceitos por origem: o terminal só aceita página web. O Markdown e os
+links de dentro da "Página Web" aceitam também `mailto:`, que abre como "Abrir
+no app de e-mail". Na página, o clique simples num `mailto:` já abre o app de
+e-mail pela permissão `openExternal` da partição, e o menu diz o mesmo.
+
+Um link recusado nunca some: o menu diz o motivo e oferece só "Copiar link".
+No Markdown, o rótulo vira texto com o motivo na dica, e um botão pequeno ao
+lado abre o menu. Um botão que embrulhasse os filhos poria o "copiar" de um
+bloco de código dentro de outro botão.
+
+A exceção é o destino com caracteres invisíveis, que vira só texto, sem botão:
+o plugin remark o recusa ainda cru, e mostrar o endereço seria o disfarce.
+
+Um destino escrito que a política aprova, mas que o `rehype-sanitize` apagou
+(ele diferencia caixa: `HTTPS://`), volta a ser link pela forma serializada da
+política. No `<a>` aprovado, o clique num controle de dentro do link (o
+"copiar" de um bloco de código) é do controle, não pede o menu.
 
 Os botões do app que já dizem o destino ("Abrir no Notion", "Abrir esta página
 no navegador" no bloco) não perguntam. A escolha já está no rótulo.
@@ -819,14 +853,34 @@ no navegador" no bloco) não perguntam. A escolha já está no rótulo.
 No terminal, os dois caminhos de link (WebLinksAddon e OSC 8) usam o mesmo
 `linkHandler`. Um clique simples de mouse continua sendo do terminal (foco,
 seleção, mouse das CLIs de tela cheia). Ctrl/Cmd+arrastar é seleção, não
-pedido. O toque vale como gesto porque um dedo não tem Ctrl: o Chromium marca
-o evento de mouse que vem de toque em `sourceCapabilities.firesTouchEvents`. A
-dica do link mostra o destino real (num OSC 8, o texto exibido pode dizer
-outra coisa) e, na recusa, o motivo.
+pedido. As regras de gesto e plataforma:
+
+- **Toque.** Vale como gesto porque um dedo não tem Ctrl: o Chromium marca o
+  evento de mouse que vem de toque em `sourceCapabilities.firesTouchEvents`.
+  Com o mouse tracking ligado (Claude Code, Codex), o replay do mousedown
+  retido copia essa marca.
+- **Ctrl no macOS.** Só Cmd é modificador de link. O Ctrl+clique é o clique
+  secundário do sistema: chega como `contextmenu` já no mousedown, e contá-lo
+  de novo no mouseup pedia o menu duas vezes. Por isso, com o mouse tracking,
+  o Ctrl+clique do macOS também não é retido.
+- **Dica.** Mostra o destino real (num OSC 8, o texto exibido pode dizer outra
+  coisa) e, na recusa, o motivo.
+- **Shift+F10.** Não abre o menu no terminal: o xterm entrega o F10 à CLI.
+
+Na "Página Web", o menu nasce do evento `context-menu` do `<webview>`. Os
+`params.x/y` já chegam no espaço da janela do app, em DIP: o Electron soma a
+posição do webview, o iframe e a escala do canvas. A âncora é o ponto
+dividido pelo zoom da janela (`window.felixo.windowZoom.getFactor()`, via
+`webFrame`); isso foi medido num experimento isolado no Electron 41.10.7 e é
+conferido pelo smoke. Um link `javascript:` chega como `about:blank#blocked` e
+não abre o menu. "Abrir como Página Web" a partir de uma Página Web herda o
+perfil do bloco de origem.
 
 A barra de endereço da "Página Web" e o formulário "Criar Página Web" usam
 `explainUrlInput`, com o mesmo motivo do menu. Antes, um `file:///…` na barra
-não fazia nada, e o formulário só dizia "endereço inválido".
+não fazia nada, e o formulário só dizia "endereço inválido". Na recusa, o foco
+fica na barra, para um Backspace apagar texto e não o bloco selecionado
+(`deleteKeyCode` do React Flow). O aviso some quando a página navega.
 
 #### Pedido de agente para abrir página
 
@@ -834,26 +888,54 @@ não fazia nada, e o formulário só dizia "endereço inválido".
 fila `agent-requests`, e o cartão `AgentBrowserRequestCard` mostra à pessoa:
 
 - de onde o pedido veio;
-- o endereço inteiro;
-- a sugestão do agente (`--embedded`);
+- o endereço inteiro, numa caixa com rolagem;
+- a sugestão do agente (`--embedded`, `--profile`);
 - três botões: navegador, Página Web ou recusar.
 
-Um agente enganado por uma página que leu não consegue abrir nada no navegador
-logado da pessoa.
+Pelo `felixo browser open`, um agente enganado por uma página que leu não abre
+nada sozinho: quem abre é a pessoa, no cartão. O cartão não é barreira contra o
+shell do agente. A CLI roda como a pessoa, no ambiente gráfico dela, e pode
+chamar o abridor do sistema (`xdg-open`, `open`, `start`) diretamente. Isso
+segue as permissões da própria CLI.
 
-O renderer manda só o id e o destino (`agent-browser:decide`). A URL e o perfil
-são relidos do pedido gravado e passam de novo pela política. O cartão não
-rouba o foco nem responde a teclas globais, para um Enter digitado no terminal
-não confirmar nada.
+O renderer manda só o que a pessoa viu: `{ id, destino, url, perfil }`
+(`agent-browser:decide`). O main relê o pedido gravado e só executa se ele
+ainda for esse:
 
-O cartão é montado no `CanvasView`, porque a Página Web precisa do canvas. Com
-a tela do chat aberta, o pedido fica na fila até a pessoa voltar. Pedido com
-mais de uma hora sai da lista (`VALIDADE_MS` da fila de intenções).
+- mesmo id no nome e no conteúdo do arquivo (`ler` recusa id inseguro e
+  conteúdo com outro id, e `lerTodos` descarta arquivo fora do padrão; isso
+  vale para todas as intenções da fila);
+- a mesma URL serializada;
+- o mesmo perfil;
+- dentro da validade.
 
-O que não tem o que perguntar continua recusado na hora: URL fora da web e
-perfil que não existe. O resultado gravado diz o destino sugerido
-(`modoPedido`) e o escolhido (`modo`), e `felixo browser status` mostra os dois
-e o motivo de uma recusa.
+Um arquivo reescrito depois de o cartão aparecer não abre, e o cartão recebe a
+lista atual. Outras garantias:
+
+- **Concorrência.** Duas decisões do mesmo pedido ao mesmo tempo abrem uma vez
+  só (reserva em memória antes do primeiro `await`).
+- **Falha ao abrir.** Se o navegador falha, ou se o perfil sumiu, o pedido não
+  é resolvido: o cartão mostra o motivo, e a pessoa escolhe de novo.
+- **Quem recusou.** Toda recusa grava `recusadoPor: 'pessoa' | 'app'`.
+- **Robustez.** Pedido malformado (url, modo, perfil ou pedidoEm que não são
+  texto, ou perfil com modo externo) é recusado pelo app na chegada. Ele nunca
+  derruba o registro do main nem o render do cartão, e o log de recusa não
+  leva a URL.
+- **Custo.** Eventos da pasta viram uma rodada agrupada, com uma varredura, e
+  o IPC só sai quando a lista muda.
+- **Validade.** Um timer resolve cada pedido vencido (1 h) como expirado, pelo
+  app, e o cartão o tira da tela.
+
+O cartão não rouba o foco nem responde a teclas globais, para um Enter
+digitado no terminal não confirmar nada. Os botões esperam 600 ms depois que o
+pedido mostrado muda, e cliques repetidos (`detail > 1`) são ignorados: um
+duplo clique não decide o pedido seguinte. O cartão é montado no `CanvasView`,
+porque a Página Web precisa do canvas. Com a tela do chat aberta, o pedido fica
+na fila até a pessoa voltar.
+
+O resultado gravado diz o destino sugerido (`modoPedido`) e o escolhido
+(`modo`). `felixo browser status` mostra quem recusou, o motivo ou a
+expiração.
 
 #### CSP do renderer
 
