@@ -772,14 +772,84 @@ Portões do processo principal:
   nas partições dos perfis, essa permissão passa pela mesma política. As outras
   permissões mantêm o padrão do Electron.
 
-No terminal, os dois caminhos de link usam o mesmo `linkHandler`: exigem
-Ctrl/Cmd+clique, passam pela política, e a dica mostra o destino real (num OSC
-8, o texto exibido pode dizer outra coisa). O menu do link tem "Copiar link",
-que nunca abre nada; um link recusado perde só as ações que abrem.
+#### Escolha de destino: nenhum link abre direto
 
-No Markdown, link recusado vira texto. Um esquema em maiúsculas (`HTTPS://`)
-também vira texto, porque o `rehype-sanitize` diferencia caixa ao comparar o
-esquema. É uma diferença conhecida, e no sentido seguro.
+Todo link que vem de conteúdo pergunta antes de abrir. Vale para a saída do
+terminal, o Markdown (notas, arquivos, chat, painel do Notion) e os links
+dentro de uma "Página Web". O gesto abre um menu único, que mostra o destino e
+oferece três escolhas: **Abrir no navegador**, **Abrir como Página Web** e
+**Copiar link**. O gesto varia por superfície:
+
+- Ctrl/Cmd+clique, toque ou clique direito no terminal;
+- clique, Enter ou clique direito no Markdown;
+- clique direito num link da "Página Web".
+
+Nenhuma preferência de destino fica guardada.
+
+Peças, todas em `src/features/shared/links/`:
+
+- `link-destination.ts` (puro) traduz a decisão da política. A tradução diz
+  para onde o link vai (host em punycode, ou destinatário do e-mail), quais
+  escolhas cabem e, na recusa, o motivo em português comum. O texto recusado
+  aparece com os invisíveis à mostra (`⟨U+200B⟩`). `runLinkChoice` classifica
+  de novo antes de agir, e "Copiar" só conhece a área de transferência.
+- `link-chooser-store.ts` guarda o pedido fora do React, porque o terminal é
+  um store imperativo. O pedido é uma cópia do link no instante do gesto: se a
+  saída rolar ou uma resposta em streaming reescrever o texto, o menu continua
+  mostrando e abrindo o mesmo endereço. O canvas registra ali o criador de
+  bloco Página Web. Sem canvas montado (tela do chat), o menu não oferece essa
+  escolha.
+- `LinkChooserHost.tsx`, montado uma vez no `App`, desenha o menu:
+  - `role=menu`, com setas, Home/End, Enter/Espaço, Esc e Tab;
+  - o foco volta a quem abriu o menu (a entrada do xterm, o link ou o
+    webview), ou vai para o bloco novo quando a escolha cria um;
+  - fecha com clique fora, roda, redimensionamento ou perda de foco da janela;
+  - a região `status` anuncia "Link copiado".
+
+Esquemas aceitos por origem: o terminal e a "Página Web" só aceitam página web;
+o Markdown aceita também `mailto:`, que abre como "Abrir no app de e-mail". Um
+link recusado nunca some: o menu diz o motivo e oferece só "Copiar link". No
+Markdown ele vira um botão tracejado, com o motivo na dica. Um destino escrito
+que a política aprova, mas que o `rehype-sanitize` apagou (ele diferencia
+caixa: `HTTPS://`), volta a ser link pela forma serializada da política.
+
+Os botões do app que já dizem o destino ("Abrir no Notion", "Abrir esta página
+no navegador" no bloco) não perguntam. A escolha já está no rótulo.
+
+No terminal, os dois caminhos de link (WebLinksAddon e OSC 8) usam o mesmo
+`linkHandler`. Um clique simples de mouse continua sendo do terminal (foco,
+seleção, mouse das CLIs de tela cheia). Ctrl/Cmd+arrastar é seleção, não
+pedido. O toque vale como gesto porque um dedo não tem Ctrl: o Chromium marca
+o evento de mouse que vem de toque em `sourceCapabilities.firesTouchEvents`. A
+dica do link mostra o destino real (num OSC 8, o texto exibido pode dizer
+outra coisa) e, na recusa, o motivo.
+
+A barra de endereço da "Página Web" e o formulário "Criar Página Web" usam
+`explainUrlInput`, com o mesmo motivo do menu. Antes, um `file:///…` na barra
+não fazia nada, e o formulário só dizia "endereço inválido".
+
+#### Pedido de agente para abrir página
+
+`felixo browser open` não abre nada sozinho. O pedido válido fica pendente na
+fila `agent-requests`, e o cartão `AgentBrowserRequestCard` mostra à pessoa:
+
+- de onde o pedido veio;
+- o endereço inteiro;
+- a sugestão do agente (`--embedded`);
+- três botões: navegador, Página Web ou recusar.
+
+Um agente enganado por uma página que leu não consegue abrir nada no navegador
+logado da pessoa.
+
+O renderer manda só o id e o destino (`agent-browser:decide`). A URL e o perfil
+são relidos do pedido gravado e passam de novo pela política. O cartão não
+rouba o foco nem responde a teclas globais, para um Enter digitado no terminal
+não confirmar nada.
+
+O que não tem o que perguntar continua recusado na hora: URL fora da web e
+perfil que não existe. O resultado gravado diz o destino sugerido
+(`modoPedido`) e o escolhido (`modo`), e `felixo browser status` mostra os dois
+e o motivo de uma recusa.
 
 #### CSP do renderer
 
