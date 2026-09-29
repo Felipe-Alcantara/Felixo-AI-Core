@@ -135,6 +135,29 @@ export function focusLeavesLinkChooser(
  */
 export const NODE_FOCUS_FRAMES = 24
 
+/**
+ * Tempo máximo de espera pela câmera. Ela anda 220 ms (`centerNodeInSafeArea`),
+ * mas interrompida (roda, arrasto) o d3 dispara `interrupt` e não `end`, e a
+ * promessa do `setCenter` nunca resolve: o prazo segura esse caso.
+ */
+export const CAMERA_SETTLE_TIMEOUT_MS = 450
+
+/**
+ * Resolve quando a câmera chega (a promessa do `setCenter`) ou quando o prazo
+ * acaba, o que vier primeiro. Nunca rejeita.
+ */
+export function afterCamera(
+  cameraSettled: Promise<unknown> | undefined,
+  setTimer: (callback: () => void, ms: number) => unknown = (callback, ms) => setTimeout(callback, ms),
+  timeoutMs: number = CAMERA_SETTLE_TIMEOUT_MS,
+): Promise<void> {
+  const deadline = new Promise<void>((resolve) => {
+    setTimer(resolve, timeoutMs)
+  })
+  if (!cameraSettled) return deadline
+  return Promise.race([cameraSettled.then(() => undefined, () => undefined), deadline])
+}
+
 export type FocusWhenReadyOptions = {
   /** O elemento, se já está no DOM. */
   find: () => { focus: () => void } | null

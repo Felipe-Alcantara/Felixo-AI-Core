@@ -67,7 +67,15 @@ export function subscribeLinkChooser(listener: () => void): () => void {
  * Cria um bloco Página Web e devolve o id dele. O canvas registra o seu ao
  * montar; sem canvas (tela do chat), o menu não oferece essa escolha.
  */
-export type WebpageOpener = (url: string, sourceNodeId?: string) => string | undefined
+export type WebpageOpener = (url: string, sourceNodeId?: string) => OpenedWebpage | undefined
+
+/**
+ * O bloco criado e a câmera indo até ele. O foco só vai ao bloco quando ela
+ * chega: um bloco que nasce fora da tela entra no DOM na hora (o React Flow
+ * desenha nó ainda sem medida), sai quando é medido fora do container e volta
+ * quando a câmera o alcança — focado cedo demais, o foco cai no `body`.
+ */
+export type OpenedWebpage = { id: string; cameraSettled?: Promise<unknown> }
 
 let webpageOpener: WebpageOpener | null = null
 

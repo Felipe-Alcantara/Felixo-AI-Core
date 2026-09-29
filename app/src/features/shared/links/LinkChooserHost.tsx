@@ -21,6 +21,7 @@ import {
 } from './link-destination'
 import {
   focusLeavesLinkChooser,
+  afterCamera,
   focusWhenReady,
   linkChooserKeyAction,
   placeLinkChooser,
@@ -34,6 +35,7 @@ import {
   subscribeLinkChooser,
   type FocusReturn,
   type LinkChooserRequest,
+  type OpenedWebpage,
 } from './link-chooser-store'
 
 /** O texto de um endereço gigante (até 8.192 caracteres) não precisa ir inteiro para a tela. */
@@ -179,7 +181,7 @@ function LinkChooserMenu({ request, onCopied }: MenuProps) {
   }, [dismiss])
 
   const choose = (choice: LinkChoice) => {
-    let openedNodeId: string | undefined
+    let opened: OpenedWebpage | undefined
     runLinkChoice(choice, request.url, request.origin, {
       openExternal: (url) => {
         // O processo principal recebe o pedido de janela, aplica a política de
@@ -188,7 +190,7 @@ function LinkChooserMenu({ request, onCopied }: MenuProps) {
       },
       openWebpage: webpageOpener
         ? (url) => {
-            openedNodeId = webpageOpener(url, request.sourceNodeId)
+            opened = webpageOpener(url, request.sourceNodeId)
           }
         : undefined,
       copy: (text) => {
@@ -200,8 +202,10 @@ function LinkChooserMenu({ request, onCopied }: MenuProps) {
       },
     })
     closeLinkChooser()
-    if (openedNodeId) focusCanvasNodeSoon(openedNodeId, request.returnFocus)
-    else restoreFocus(request.returnFocus)
+    // O foco volta já para quem abriu: com o menu desmontado, ele cairia no
+    // `body` durante o voo da câmera até o bloco novo.
+    restoreFocus(request.returnFocus)
+    if (opened) focusCanvasNodeAfterCamera(opened, request.returnFocus)
   }
 
   const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
@@ -342,20 +346,29 @@ function restoreFocus(target: FocusReturn | null | undefined): void {
 }
 
 /**
- * O bloco novo recebe o foco assim que o React Flow o desenha, para quem está
- * no teclado continuar dali. O bloco que nasce fora da tela só entra no DOM
- * quando a câmera chega nele, então a espera cobre a animação inteira (ver
- * `NODE_FOCUS_FRAMES`). Se ele não aparecer, o foco volta para onde o link
- * estava, em vez de ficar no `body`.
+ * O bloco novo recebe o foco quando a câmera chega nele, para quem está no
+ * teclado continuar dali. Antes disso não adianta: o bloco nascido fora da
+ * tela entra no DOM na hora, sai quando o React Flow o mede fora do container
+ * e só volta com a câmera (ver `OpenedWebpage`). Enquanto isso o foco fica em
+ * quem abriu o menu; se a pessoa levar o foco a outro lugar no meio, ele fica
+ * lá. `preventScroll`: focar um nó não pode rolar o container do React Flow.
  */
-function focusCanvasNodeSoon(nodeId: string, fallback: FocusReturn | null | undefined): void {
-  focusWhenReady({
-    find: () =>
-      document.querySelector<HTMLElement>(`.react-flow__node[data-id="${CSS.escape(nodeId)}"]`),
-    // O menu fechou com o foco dentro, e ele caiu no `body`. Em outro lugar
-    // é porque a pessoa já seguiu durante a espera.
-    isFocusFree: () => !document.activeElement || document.activeElement === document.body,
-    giveUp: () => restoreFocus(fallback),
-    requestFrame: (callback) => window.requestAnimationFrame(callback),
-  })
+function focusCanvasNodeAfterCamera(opened: OpenedWebpage, origin: FocusReturn | null | undefined): void {
+  void afterCamera(opened.cameraSettled).then(() =>
+    focusWhenReady({
+      find: () => {
+        const node = document.querySelector<HTMLElement>(
+          `.react-flow__node[data-id="${CSS.escape(opened.id)}"]`,
+        )
+        return node ? { focus: () => node.focus({ preventScroll: true }) } : null
+      },
+      isFocusFree: () => {
+        const active = document.activeElement
+        return !active || active === document.body || active === (origin as unknown as Element | null)
+      },
+      // O foco já está em quem abriu o menu.
+      giveUp: () => undefined,
+      requestFrame: (callback) => window.requestAnimationFrame(callback),
+    }),
+  )
 }

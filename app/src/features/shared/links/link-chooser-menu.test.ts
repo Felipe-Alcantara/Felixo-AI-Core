@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import {
+  CAMERA_SETTLE_TIMEOUT_MS,
   NODE_FOCUS_FRAMES,
+  afterCamera,
   focusLeavesLinkChooser,
   focusWhenReady,
   isKeyboardContextMenu,
@@ -211,5 +213,44 @@ describe('origem do gesto', () => {
     expect(isTouchGesture({ sourceCapabilities: { firesTouchEvents: true } })).toBe(true)
     expect(isTouchGesture({ pointerType: 'mouse', sourceCapabilities: { firesTouchEvents: false } })).toBe(false)
     expect(isTouchGesture({})).toBe(false)
+  })
+})
+
+describe('afterCamera', () => {
+  it('segue quando a câmera chega, antes do prazo', async () => {
+    const timers: Array<() => void> = []
+    let chegou!: () => void
+    const camera = new Promise<void>((resolve) => {
+      chegou = resolve
+    })
+    const done = vi.fn()
+    void afterCamera(camera, (callback) => timers.push(callback)).then(done)
+
+    await Promise.resolve()
+    expect(done).not.toHaveBeenCalled()
+    chegou()
+    await vi.waitFor(() => expect(done).toHaveBeenCalledTimes(1))
+    // O prazo nem precisou rodar.
+    expect(timers).toHaveLength(1)
+  })
+
+  it('câmera interrompida (a promessa nunca resolve): segue no prazo', async () => {
+    const timers: Array<{ callback: () => void; ms: number }> = []
+    const done = vi.fn()
+    void afterCamera(new Promise(() => {}), (callback, ms) => timers.push({ callback, ms })).then(done)
+
+    await Promise.resolve()
+    expect(done).not.toHaveBeenCalled()
+    expect(timers[0].ms).toBe(CAMERA_SETTLE_TIMEOUT_MS)
+    // Mais que os 220 ms da câmera: o prazo só vale quando ela não chega.
+    expect(CAMERA_SETTLE_TIMEOUT_MS).toBeGreaterThan(220)
+    timers[0].callback()
+    await vi.waitFor(() => expect(done).toHaveBeenCalledTimes(1))
+  })
+
+  it('câmera que falha também libera, sem rejeitar', async () => {
+    const done = vi.fn()
+    await afterCamera(Promise.reject(new Error('sem viewport')), () => undefined).then(done)
+    expect(done).toHaveBeenCalledTimes(1)
   })
 })

@@ -203,11 +203,12 @@ type FlowPositionMapper = {
     x: number
     y: number
   }
+  /** O React Flow devolve a promessa que resolve quando a câmera chega. */
   setCenter: (
     x: number,
     y: number,
     options?: { zoom?: number; duration?: number },
-  ) => void
+  ) => Promise<boolean> | void
   fitView: (options?: { padding?: number; duration?: number }) => void
   /** Enquadra uma área do canvas — usado para mostrar a matriz recém-organizada. */
   fitBounds: (
@@ -1041,10 +1042,12 @@ function CanvasInner({
       size: { width: number; height: number },
       zoom: number,
       duration: number,
-    ) => {
+    ): Promise<boolean> | undefined => {
+      const settledOrVoid = (value: Promise<boolean> | void) =>
+        value instanceof Promise ? value : undefined
       const flowInstance = flowInstanceRef.current
       if (!flowInstance) {
-        return
+        return undefined
       }
 
       const nodeCenter = {
@@ -1054,8 +1057,7 @@ function CanvasInner({
       const container = flowContainerRef.current
       const safeArea = getSafeCanvasScreenRect()
       if (!container || !safeArea) {
-        flowInstance.setCenter(nodeCenter.x, nodeCenter.y, { zoom, duration })
-        return
+        return settledOrVoid(flowInstance.setCenter(nodeCenter.x, nodeCenter.y, { zoom, duration }))
       }
 
       const target = flowCenterForSafeArea(
@@ -1064,7 +1066,9 @@ function CanvasInner({
         safeArea,
         zoom,
       )
-      flowInstance.setCenter(target.x, target.y, { zoom, duration })
+      // A promessa resolve quando a câmera chega (o menu de link espera por
+      // ela para focar o bloco novo; ver `OpenedWebpage`).
+      return settledOrVoid(flowInstance.setCenter(target.x, target.y, { zoom, duration }))
     },
     [getSafeCanvasScreenRect],
   )
@@ -2081,8 +2085,8 @@ function CanvasInner({
       setNodes((current) =>
         current.map((node) => ({ ...node, selected: node.id === id })),
       )
-      centerNodeInSafeArea(position, webpageSize, 0.9, 220)
-      return id
+      const cameraSettled = centerNodeInSafeArea(position, webpageSize, 0.9, 220)
+      return { id, cameraSettled }
     },
     [addNode, centerNodeInSafeArea, nodes, setNodes, visibleCanvasBounds],
   )

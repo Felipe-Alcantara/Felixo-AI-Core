@@ -55,8 +55,8 @@ describe('link-chooser-store', () => {
   })
 
   it('o abridor de Página Web só sai do registro pelo mesmo canvas que o pôs', () => {
-    const first = vi.fn(() => 'webpage-1')
-    const second = vi.fn(() => 'webpage-2')
+    const first = vi.fn(() => ({ id: 'webpage-1' }))
+    const second = vi.fn(() => ({ id: 'webpage-2' }))
 
     const unregisterFirst = registerWebpageOpener(first)
     const unregisterSecond = registerWebpageOpener(second)
