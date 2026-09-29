@@ -7,9 +7,18 @@ function elemento(isConnected = true): Focusable {
   return { isConnected, focus: () => {}, blur: () => {} }
 }
 
+/** Elemento com `closest`, dentro ou fora de uma camada flutuante. */
+function elementoDoDom(dentroDeCamadaFlutuante: boolean): Element {
+  return {
+    closest: (seletor: string) =>
+      dentroDeCamadaFlutuante && seletor === '[data-felixo-floating-layer]' ? ({} as Element) : null,
+  } as unknown as Element
+}
+
 describe('deveLembrarFoco', () => {
   it('lembra um elemento comum', () => {
     expect(deveLembrarFoco({} as Element, documento)).toBe(true)
+    expect(deveLembrarFoco(elementoDoDom(false), documento)).toBe(true)
   })
 
   it('não lembra o body: é o estado quebrado que queremos desfazer', () => {
@@ -18,6 +27,13 @@ describe('deveLembrarFoco', () => {
 
   it('não lembra quando não há foco nenhum', () => {
     expect(deveLembrarFoco(null, documento)).toBe(false)
+  })
+
+  it('não lembra um item de camada flutuante: o menu de link some antes de a janela voltar', () => {
+    // O foco foi do xterm para o menu (o xterm ficou lembrado) e a janela
+    // perdeu o foco com ele no menu. Lembrar o item trocaria o xterm por um
+    // nó que o menu leva embora ao fechar.
+    expect(deveLembrarFoco(elementoDoDom(true), documento)).toBe(false)
   })
 })
 

@@ -17,11 +17,24 @@
 export type Focusable = Pick<HTMLElement, 'isConnected' | 'focus' | 'blur'>
 
 /**
+ * Camada flutuante: o menu de destino de um link, desenhado num portal. O
+ * mesmo atributo diz à gaveta do terminal que clicar nele não é clicar fora
+ * (`FLOATING_LAYER_SELECTOR`, em `terminal-drawer-pin.ts`).
+ */
+const CAMADA_FLUTUANTE = '[data-felixo-floating-layer]'
+
+/**
  * Se um elemento merece ser lembrado como "quem tinha o foco".
  *
  * O `<body>` é o que o Chromium deixa focado quando não há mais nada, então
  * lembrá-lo seria lembrar justamente o estado quebrado que queremos desfazer.
  * O mesmo vale para um elemento já fora do documento.
+ *
+ * Nem um elemento de camada flutuante: o menu de link fecha quando a janela
+ * perde o foco, e quando ela volta o item lembrado já saiu do documento — o
+ * foco ficaria no `<body>`, com o terminal surdo e Backspace/Delete chegando
+ * ao canvas. Quem abriu o menu foi lembrado quando o foco entrou nele, e é a
+ * esse elemento (a entrada do xterm, o link) que o foco volta.
  */
 export function deveLembrarFoco(
   elemento: Element | null,
@@ -31,7 +44,17 @@ export function deveLembrarFoco(
     return false
   }
 
+  if (estaEmCamadaFlutuante(elemento)) {
+    return false
+  }
+
   return true
+}
+
+function estaEmCamadaFlutuante(elemento: Element): boolean {
+  // A instalação é testada com um DOM de mentira (`useFocusRestore.test.ts`),
+  // de objetos sem `closest`: esses contam como fora de qualquer camada.
+  return typeof elemento.closest === 'function' && elemento.closest(CAMADA_FLUTUANTE) !== null
 }
 
 /**
