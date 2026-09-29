@@ -95,6 +95,13 @@ export function xtermAlreadyForcesSelection(event: Pick<MouseEvent, 'shiftKey' |
  * Só o botão primário: botão direito é menu de contexto, botão do meio tem uso
  * próprio (colar no X11) — nenhum dos dois é "arrastar para selecionar".
  *
+ * No macOS, Ctrl com o botão primário também é menu de contexto: é o clique
+ * secundário do sistema, e o Chromium dispara o `contextmenu` já no
+ * `mousedown`. Retido, esse `mousedown` só chegaria ao xterm.js no `mouseup`,
+ * depois de o menu de link ter aberto e pegado o foco — e o xterm.js se foca a
+ * cada `mousedown`, tirando o foco do menu. Segue direto, como o do botão
+ * direito.
+ *
  * `isTrusted` é o que impede um laço infinito: os eventos sintéticos que este
  * módulo dispara passam por este mesmo caminho, mas nascem de `dispatchEvent` e
  * todo evento criado por script tem `isTrusted: false`. É a mesma distinção
@@ -110,11 +117,16 @@ export function xtermAlreadyForcesSelection(event: Pick<MouseEvent, 'shiftKey' |
  * seleciona nada.
  */
 export function shouldDeferMouseDown(
-  event: Pick<MouseEvent, 'type' | 'button' | 'isTrusted'>,
+  event: Pick<MouseEvent, 'type' | 'button' | 'ctrlKey' | 'isTrusted'>,
   mouseTrackingActive: boolean,
+  isMac: boolean,
 ): boolean {
   return (
-    mouseTrackingActive && event.type === 'mousedown' && event.button === 0 && event.isTrusted
+    mouseTrackingActive &&
+    event.type === 'mousedown' &&
+    event.button === 0 &&
+    !(isMac && event.ctrlKey) &&
+    event.isTrusted
   )
 }
 

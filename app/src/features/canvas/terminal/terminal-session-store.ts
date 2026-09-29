@@ -1155,7 +1155,7 @@ export class TerminalSessionStore {
         const mouseTrackingActive = session.terminal.modes.mouseTrackingMode !== 'none'
 
         if (
-          !shouldDeferMouseDown(mouseEvent, mouseTrackingActive) ||
+          !shouldDeferMouseDown(mouseEvent, mouseTrackingActive, isMac) ||
           xtermAlreadyForcesSelection(mouseEvent, isMac)
         ) {
           return

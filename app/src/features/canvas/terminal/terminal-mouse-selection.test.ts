@@ -65,7 +65,7 @@ describe('xtermAlreadyForcesSelection', () => {
 
 describe('shouldDeferMouseDown', () => {
   it('retém um mousedown real de botão primário quando o mouse tracking está ligado', () => {
-    expect(shouldDeferMouseDown(mouseEvent(), true)).toBe(true)
+    expect(shouldDeferMouseDown(mouseEvent(), true, false)).toBe(true)
   })
 
   it('não retém nada quando o mouse tracking está desligado', () => {
@@ -73,21 +73,35 @@ describe('shouldDeferMouseDown', () => {
     // desligado, seleção já normal) cai em "estender seleção existente"
     // (_handleIncrementalClick), que sem âncora prévia não seleciona nada — o
     // primeiro clique-arrastar comum deixaria de funcionar.
-    expect(shouldDeferMouseDown(mouseEvent(), false)).toBe(false)
+    expect(shouldDeferMouseDown(mouseEvent(), false, false)).toBe(false)
   })
 
   it('ignora os eventos sintéticos que este próprio módulo dispara — sem isso, laço infinito', () => {
-    expect(shouldDeferMouseDown(mouseEvent({ isTrusted: false }), true)).toBe(false)
+    expect(shouldDeferMouseDown(mouseEvent({ isTrusted: false }), true, false)).toBe(false)
   })
 
   it('ignora botão direito e do meio: menu de contexto e colar do X11 continuam intactos', () => {
-    expect(shouldDeferMouseDown(mouseEvent({ button: 1 }), true)).toBe(false)
-    expect(shouldDeferMouseDown(mouseEvent({ button: 2 }), true)).toBe(false)
+    expect(shouldDeferMouseDown(mouseEvent({ button: 1 }), true, false)).toBe(false)
+    expect(shouldDeferMouseDown(mouseEvent({ button: 2 }), true, false)).toBe(false)
+  })
+
+  it('no macOS, Ctrl+clique é o clique secundário: segue direto, como o botão direito', () => {
+    // O Chromium dispara o `contextmenu` já no mousedown, e sobre um link o
+    // menu de destino abre ali. Retido, o mousedown só chegaria ao xterm.js no
+    // mouseup, e o xterm.js, que se foca a cada mousedown, tiraria o foco do
+    // menu já aberto.
+    expect(shouldDeferMouseDown(mouseEvent({ ctrlKey: true }), true, true)).toBe(false)
+    expect(shouldDeferMouseDown(mouseEvent({ ctrlKey: true, metaKey: true }), true, true)).toBe(false)
+    // Cmd+clique (o gesto do link no macOS) e o clique simples continuam retidos.
+    expect(shouldDeferMouseDown(mouseEvent({ metaKey: true }), true, true)).toBe(true)
+    expect(shouldDeferMouseDown(mouseEvent(), true, true)).toBe(true)
+    // Fora do macOS, Ctrl+clique é o gesto do link e segue retido.
+    expect(shouldDeferMouseDown(mouseEvent({ ctrlKey: true }), true, false)).toBe(true)
   })
 
   it('ignora outros tipos de evento de mouse', () => {
-    expect(shouldDeferMouseDown(mouseEvent({ type: 'mouseup' }), true)).toBe(false)
-    expect(shouldDeferMouseDown(mouseEvent({ type: 'click' }), true)).toBe(false)
+    expect(shouldDeferMouseDown(mouseEvent({ type: 'mouseup' }), true, false)).toBe(false)
+    expect(shouldDeferMouseDown(mouseEvent({ type: 'click' }), true, false)).toBe(false)
   })
 })
 

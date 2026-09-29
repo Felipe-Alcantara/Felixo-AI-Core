@@ -1604,6 +1604,67 @@ describe('TerminalSessionStore: links do terminal', () => {
     }
   })
 
+  it('no macOS, com o mouse tracking ligado, Ctrl+clique segue direto para o xterm, como o clique direito', () => {
+    // O `contextmenu` do Ctrl+clique sai já no mousedown e, sobre um link,
+    // abre o menu de destino. Retido, o mousedown só chegaria ao xterm no
+    // mouseup, e o xterm, que se foca a cada mousedown, tiraria o foco do menu.
+    const globals = globalThis as { window?: unknown; document?: unknown }
+    const previousWindow = globals.window
+    const previousDocument = globals.document
+    const documentListeners: string[] = []
+    globals.window = { navigator: { platform: 'MacIntel' }, addEventListener: () => {}, removeEventListener: () => {} }
+    globals.document = {
+      addEventListener: (type: string) => documentListeners.push(type),
+      removeEventListener: () => {},
+    }
+    try {
+      const elementListeners = new Map<string, (event: unknown) => void>()
+      const session = {
+        mouseSelectionBound: false,
+        terminal: {
+          element: {
+            addEventListener: (type: string, listener: (event: unknown) => void) => {
+              elementListeners.set(type, listener)
+            },
+          },
+          modes: { mouseTrackingMode: 'vt200' },
+        },
+      }
+      const store = new TerminalSessionStore()
+      ;(store as unknown as { bindMouseSelection: (session: unknown) => void }).bindMouseSelection(session)
+      const onMouseDown = elementListeners.get('mousedown')
+      if (!onMouseDown) throw new Error('listener de mousedown não ligado')
+
+      /** Aperta o botão principal e diz se o store reteve o mousedown. */
+      const press = (modifiers: { ctrlKey?: boolean; metaKey?: boolean }) => {
+        const preventDefault = vi.fn()
+        onMouseDown({
+          type: 'mousedown',
+          isTrusted: true,
+          button: 0,
+          ctrlKey: false,
+          metaKey: false,
+          shiftKey: false,
+          altKey: false,
+          clientX: 30,
+          clientY: 40,
+          ...modifiers,
+          preventDefault,
+          stopImmediatePropagation: () => {},
+        })
+        return preventDefault.mock.calls.length > 0
+      }
+
+      expect(press({ ctrlKey: true })).toBe(false)
+      expect(documentListeners).toEqual([])
+      // Cmd+clique, o gesto do link no macOS, continua retido até o mouseup.
+      expect(press({ metaKey: true })).toBe(true)
+    } finally {
+      globals.window = previousWindow
+      globals.document = previousDocument
+    }
+  })
+
   it('o WebLinksAddon usa o mesmo gesto, dica e limpeza do hyperlink OSC 8', () => {
     harness = createHarness('', 'claude', true, false, 1)
     const terminal = linkSession(harness).terminal as unknown as {
