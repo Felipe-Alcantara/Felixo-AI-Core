@@ -345,8 +345,14 @@ function shorten(text: string): string {
   return text.length > MAX_SHOWN_CHARS ? `${text.slice(0, MAX_SHOWN_CHARS - 1)}…` : text
 }
 
+/**
+ * `preventScroll`: quem abriu o menu pode estar só em parte na tela (o webview
+ * de uma Página Web grande, um link na borda). Sem isto, o navegador rolava o
+ * container do React Flow para mostrar o elemento, e o canvas inteiro saía do
+ * lugar — com o painel de baixo e a barra lateral por cima dos controles.
+ */
 function restoreFocus(target: FocusReturn | null | undefined): void {
-  if (target?.isConnected) target.focus()
+  if (target?.isConnected) target.focus({ preventScroll: true })
 }
 
 /**

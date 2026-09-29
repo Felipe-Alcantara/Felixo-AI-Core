@@ -11,7 +11,7 @@ import type { LinkOrigin } from './link-destination'
 /** Ponto (clique) ou retângulo (o link inteiro, quando o pedido veio do teclado). */
 export type LinkChooserAnchor = { x: number; y: number; width?: number; height?: number }
 
-export type FocusReturn = { focus: () => void; isConnected: boolean }
+export type FocusReturn = { focus: (options?: FocusOptions) => void; isConnected: boolean }
 
 export type LinkChooserRequest = {
   /**

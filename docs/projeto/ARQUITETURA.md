@@ -815,7 +815,8 @@ Peças, quase todas em `src/features/shared/links/`:
     foco levado a outro elemento (um diálogo que abre por cima). Na roda e no
     redimensionamento, o foco volta a quem abriu;
   - a escolha devolve o foco a quem abriu (a entrada do xterm, o link, o
-    webview). Com "Abrir como Página Web", o foco só vai ao bloco novo depois
+    webview), com `preventScroll`: focar um elemento só em parte visível
+    rolava o container do React Flow e tirava o canvas inteiro do lugar. Com "Abrir como Página Web", o foco só vai ao bloco novo depois
     que a câmera chega (`afterCamera`). O React Flow desenha o nó ainda sem
     medida e o desmonta quando o mede fora da tela, então focar antes jogaria
     o foco no `body`;
