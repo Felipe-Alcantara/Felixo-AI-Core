@@ -7,7 +7,9 @@ const { openExternalUrl } = require('./external-links.cjs')
 const { EXTERNAL_WEB_SCHEMES, classifyExternalUrl } = require('./external-url-policy.cjs')
 const {
   MODOS_ABERTURA_PAGINA,
+  VALIDADE_MS,
   criarRepositorioDePedidos,
+  pedidoAindaVale,
 } = require('./fetch-all/agent-requests.cjs')
 
 const BROWSER_REQUEST_ACTION = 'abrir-pagina'
@@ -21,6 +23,7 @@ const URL_FORA_DA_WEB = 'A URL do pedido nao e http:// ou https://.'
 const NAO_PENDENTE = 'Esse pedido não está mais pendente.'
 const EM_ANDAMENTO = 'Esse pedido já está sendo atendido.'
 const MUDOU = 'O pedido mudou depois de aparecer no cartão. Confira de novo.'
+const EXPIROU = 'O pedido expirou sem resposta da pessoa.'
 
 /**
  * Pedidos de agente para abrir uma página (`felixo browser open`), pela mesma
@@ -40,15 +43,21 @@ const MUDOU = 'O pedido mudou depois de aparecer no cartão. Confira de novo.'
  * Pedido que não tem o que perguntar é recusado na hora, como antes: formato
  * que o `felixo browser open` não grava, URL fora da web e perfil que não
  * existe. Um arquivo torto na pasta nunca derruba o registro nem chega ao
- * renderer.
+ * renderer. Pedido sem resposta em `VALIDADE_MS` sai do cartão como
+ * expirado, e o agente lê esse desfecho em vez de "pendente" para sempre.
  *
  * @param {() => import('electron').BrowserWindow | undefined} getMainWindow
  * @param {{ agentRequests: string }} appPaths
- * @param {{ createRequests?: typeof criarRepositorioDePedidos, shell?: object, openExternal?: Function, findProfileByName?: Function, ipcMain?: { handle: Function }, logger?: { warn: (message: string) => void } }} [dependencies]
+ * @param {{ createRequests?: typeof criarRepositorioDePedidos, shell?: object, openExternal?: Function, findProfileByName?: Function, ipcMain?: { handle: Function }, logger?: { warn: (message: string) => void }, agora?: () => number, timers?: { setTimeout: Function, clearTimeout: Function } }} [dependencies]
  */
 function registerAgentBrowserIpcHandlers(getMainWindow, appPaths, dependencies = {}) {
+  // Relógio e timers injetáveis, como o `agora` da fila: o teste anda o tempo
+  // até o vencimento sem esperar uma hora.
+  const agora = dependencies.agora ?? (() => Date.now())
+  const timers = dependencies.timers ?? { setTimeout, clearTimeout }
   const pedidos = (dependencies.createRequests ?? criarRepositorioDePedidos)({
     pasta: appPaths.agentRequests,
+    agora,
   })
   const openExternal =
     dependencies.openExternal ??
@@ -64,35 +73,52 @@ function registerAgentBrowserIpcHandlers(getMainWindow, appPaths, dependencies =
    * explicada, e o navegador e recusar continuam valendo.
    */
   let admitidos = new Set()
+  /** O timer até o próximo vencimento (ver `agendarVencimento`). */
+  let vencimentoAgendado = null
+  let parado = false
 
   /**
    * Recusa o que não tem o que perguntar; o resto fica para a pessoa.
    *
-   * Nunca lança: roda no registro, durante o boot do main, e a cada evento
-   * da pasta. Um pedido que falha não impede os outros de serem vistos.
+   * Nunca lança: roda no registro, durante o boot do main, a cada evento da
+   * pasta e no vencimento. Um pedido que falha não impede os outros de serem
+   * vistos.
    */
   function processPending() {
     try {
+      const instante = agora()
       const vistos = new Set()
-      for (const pedido of pedidos.listarPendentes({ acao: BROWSER_REQUEST_ACTION })) {
+      // Os que continuam pendentes depois desta rodada, para o próximo vencimento.
+      const esperando = []
+      for (const pedido of pedidos.listarPendentes({ acao: BROWSER_REQUEST_ACTION, incluirVencidos: true })) {
         try {
-          if (triarNaChegada(pedido)) vistos.add(pedido.id)
+          if (!triarNaChegada(pedido, instante)) continue
+          vistos.add(pedido.id)
         } catch (error) {
           avisarFalha(`o pedido ${pedido.id}`, error)
         }
+        esperando.push(pedido)
       }
       admitidos = vistos
       notifyRenderer()
+      agendarVencimento(esperando)
     } catch (error) {
       avisarFalha('a fila de pedidos', error)
     }
   }
 
   /** Recusa na hora o que não tem o que perguntar. `true` = fica para a pessoa. */
-  function triarNaChegada(pedido) {
+  function triarNaChegada(pedido, instante) {
     const leitura = lerParaOCartao(pedido)
     if (!leitura.ok) {
       recusarPeloApp(pedido, leitura.recusa)
+      return false
+    }
+
+    // Sem resposta dentro da validade: sai do cartão, e o agente lê o
+    // desfecho em vez de "pendente" para sempre.
+    if (!pedidoAindaVale(pedido, instante)) {
+      recusarPeloApp(pedido, { expirou: true, message: EXPIROU })
       return false
     }
 
@@ -120,6 +146,29 @@ function registerAgentBrowserIpcHandlers(getMainWindow, appPaths, dependencies =
       aceito: false,
       resultado: { ok: false, recusadoPor: 'app', ...resultado },
     })
+  }
+
+  /**
+   * Acorda de novo no próximo vencimento, para o pedido vencido sair do
+   * cartão na hora, sem depender de outro evento na pasta.
+   */
+  function agendarVencimento(esperando) {
+    if (vencimentoAgendado !== null) timers.clearTimeout(vencimentoAgendado)
+    vencimentoAgendado = null
+    if (parado) return
+
+    const vencimentos = esperando.map(vencimentoDe).filter(Number.isFinite)
+    if (vencimentos.length === 0) return
+    // Limitado à validade: um `pedidoEm` no futuro não vira um prazo que o
+    // setTimeout não representa (acima de ~24,8 dias ele dispara na hora, e a
+    // rodada reagendaria em laço).
+    const espera = Math.min(Math.max(Math.min(...vencimentos) - agora(), 0), VALIDADE_MS)
+    vencimentoAgendado = timers.setTimeout(() => {
+      vencimentoAgendado = null
+      processPending()
+    }, espera)
+    // Como o observador da pasta (`persistent: false`): não segura o processo.
+    vencimentoAgendado?.unref?.()
   }
 
   /**
@@ -188,6 +237,12 @@ function registerAgentBrowserIpcHandlers(getMainWindow, appPaths, dependencies =
     const leitura = lerParaOCartao(pedido)
     if (!leitura.ok || !mesmoQueOCartaoMostrou(leitura.item, params)) {
       return { resolved: null, message: MUDOU }
+    }
+
+    // O cartão ainda pode mostrar um pedido que acabou de vencer: a validade
+    // vale no clique também, e a resposta que o agente lê é a expiração.
+    if (!pedidoAindaVale(pedido, agora())) {
+      return { resolved: recusarPeloApp(pedido, { expirou: true, message: EXPIROU }), message: EXPIROU }
     }
 
     return carryOut(pedido, leitura.item, destino)
@@ -278,8 +333,18 @@ function registerAgentBrowserIpcHandlers(getMainWindow, appPaths, dependencies =
     processPending,
     listRequests,
     decide,
-    pararDeObservarPedidos: () => watcher?.close(),
+    pararDeObservarPedidos: () => {
+      parado = true
+      watcher?.close()
+      if (vencimentoAgendado !== null) timers.clearTimeout(vencimentoAgendado)
+      vencimentoAgendado = null
+    },
   }
+}
+
+/** Quando o pedido deixa de valer (ver `pedidoAindaVale`), ou NaN sem data. */
+function vencimentoDe(pedido) {
+  return typeof pedido.pedidoEm === 'string' ? Date.parse(pedido.pedidoEm) + VALIDADE_MS : Number.NaN
 }
 
 /**

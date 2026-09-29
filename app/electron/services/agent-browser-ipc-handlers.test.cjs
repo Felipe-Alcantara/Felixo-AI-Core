@@ -18,6 +18,7 @@ const {
   registerAgentBrowserIpcHandlers,
 } = require('./agent-browser-ipc-handlers.cjs')
 Module._load = originalLoad
+const { VALIDADE_MS } = require('./fetch-all/agent-requests.cjs')
 
 function appPaths() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-agent-browser-'))
@@ -59,6 +60,7 @@ async function comControlador(options, run) {
       ipcMain: { handle: (channel, handler) => handlers.set(channel, handler) },
       logger: { warn: (message) => avisos.push(message) },
       ...(options.findProfileByName ? { findProfileByName: options.findProfileByName } : {}),
+      ...(options.relogio ? { agora: options.relogio.agora, timers: options.relogio.timers } : {}),
     },
   )
   try {
@@ -66,6 +68,43 @@ async function comControlador(options, run) {
   } finally {
     controller.pararDeObservarPedidos()
     fs.rmSync(paths.root, { recursive: true, force: true })
+  }
+}
+
+/**
+ * Relógio e timers de mentira: o teste anda o tempo até um vencimento sem
+ * esperar uma hora. `andar` dispara, em ordem, o que vence no caminho;
+ * `pular` só muda a hora, como se o timer ainda não tivesse rodado.
+ */
+function relogioFalso(inicio = Date.parse('2026-09-29T12:00:00.000Z')) {
+  let agora = inicio
+  let proximoId = 1
+  const agendados = new Map()
+  const proximoVencido = (ate) =>
+    [...agendados].filter(([, timer]) => timer.quando <= ate).sort((a, b) => a[1].quando - b[1].quando)[0]
+  return {
+    agora: () => agora,
+    timers: {
+      setTimeout: (callback, ms) => {
+        agendados.set(proximoId, { callback, ms, quando: agora + ms })
+        return proximoId++
+      },
+      clearTimeout: (id) => agendados.delete(id),
+    },
+    andar(ms) {
+      const fim = agora + ms
+      for (let vencido = proximoVencido(fim); vencido; vencido = proximoVencido(fim)) {
+        agendados.delete(vencido[0])
+        agora = Math.max(agora, vencido[1].quando)
+        vencido[1].callback()
+      }
+      agora = fim
+    },
+    pular(ms) {
+      agora += ms
+    },
+    /** Os atrasos pedidos pelos timers ainda agendados. */
+    esperas: () => [...agendados.values()].map((timer) => timer.ms),
   }
 }
 
@@ -408,6 +447,8 @@ test('arquivo malformado na pasta não derruba o registro e nunca chega ao rende
     { id: 'url-numero', url: 42 },
     { id: 'modo-lista', url: 'https://example.com/b', modo: ['embutido'] },
     { id: 'modo-inventado', url: 'https://example.com/c', modo: 'janela' },
+    // Uma lista com a data dentro passaria pelo `Date.parse` como data válida.
+    { id: 'pedido-em-lista', url: 'https://example.com/d', pedidoEm: [new Date().toISOString()] },
   ]
   await comControlador(
     { preparar: (pasta) => tortos.forEach((pedido) => gravarAMao(pasta, pedido)) },
@@ -558,6 +599,77 @@ test('um pedido que falha ao processar não impede os outros, e o aviso não lev
       assert.doesNotMatch(avisos[0], /example\.com|token|segredo/)
     },
   )
+})
+
+test('pedido que vence sem resposta sai do cartão sozinho, e o agente lê que expirou', async () => {
+  const relogio = relogioFalso()
+  await comControlador({ relogio }, async ({ controller, events }) => {
+    const pedido = controller.pedidos.registrar('abrir-pagina', { url: 'https://example.com' })
+    controller.processPending()
+    // Um timer até o vencimento, e nenhum outro evento na pasta depois disso.
+    assert.deepEqual(relogio.esperas(), [VALIDADE_MS])
+
+    relogio.andar(VALIDADE_MS - 1)
+    assert.equal(controller.pedidos.ler(pedido.id).estado, 'pendente')
+    relogio.andar(1)
+
+    const resolvido = controller.pedidos.ler(pedido.id)
+    assert.equal(resolvido.estado, 'recusado')
+    assert.deepEqual(
+      { recusadoPor: resolvido.resultado.recusadoPor, expirou: resolvido.resultado.expirou, message: resolvido.resultado.message },
+      { recusadoPor: 'app', expirou: true, message: 'O pedido expirou sem resposta da pessoa.' },
+    )
+    assert.deepEqual(avisosDaFila(events).at(-1).data.requests, [])
+    assert.deepEqual(relogio.esperas(), [])
+  })
+})
+
+test('decidir um pedido que venceu antes de o timer rodar: recusado como expirado, nada abre', async () => {
+  const relogio = relogioFalso()
+  await comControlador({ relogio }, async ({ controller, handlers, opened }) => {
+    const pedido = controller.pedidos.registrar('abrir-pagina', { url: 'https://example.com' })
+    controller.processPending()
+    const params = paramsDoCartao(controller, pedido.id, 'externo')
+    relogio.pular(VALIDADE_MS)
+
+    const result = await handlers.get('agent-browser:decide')({}, params)
+
+    assert.equal(result.message, 'O pedido expirou sem resposta da pessoa.')
+    assert.equal(result.resolved.estado, 'recusado')
+    assert.equal(result.resolved.resultado.recusadoPor, 'app')
+    assert.deepEqual(opened, [])
+  })
+})
+
+test('pendente vencido que já estava na pasta quando o app abriu é resolvido como expirado', async () => {
+  const relogio = relogioFalso()
+  const antigo = new Date(relogio.agora() - 2 * VALIDADE_MS).toISOString()
+  await comControlador(
+    { relogio, preparar: (pasta) => gravarAMao(pasta, { id: 'de-ontem', url: 'https://example.com', pedidoEm: antigo }) },
+    async ({ controller }) => {
+      assert.equal(controller.pedidos.ler('de-ontem').estado, 'recusado')
+      assert.equal(controller.pedidos.ler('de-ontem').resultado.expirou, true)
+    },
+  )
+})
+
+test('o timer segue o próximo vencimento e para junto com o observador', async () => {
+  const relogio = relogioFalso()
+  await comControlador({ relogio }, async ({ controller }) => {
+    const primeiro = controller.pedidos.registrar('abrir-pagina', { url: 'https://example.com/1' })
+    relogio.pular(10 * 60 * 1000)
+    const segundo = controller.pedidos.registrar('abrir-pagina', { url: 'https://example.com/2' })
+    controller.processPending()
+    assert.deepEqual(relogio.esperas(), [VALIDADE_MS - 10 * 60 * 1000])
+
+    relogio.andar(VALIDADE_MS - 10 * 60 * 1000)
+    assert.equal(controller.pedidos.ler(primeiro.id).estado, 'recusado')
+    assert.equal(controller.pedidos.ler(segundo.id).estado, 'pendente')
+    assert.deepEqual(relogio.esperas(), [10 * 60 * 1000])
+
+    controller.pararDeObservarPedidos()
+    assert.deepEqual(relogio.esperas(), [])
+  })
 })
 
 test('contrato: o preload expõe listar, decidir e ouvir, e o vite-env.d.ts declara a ponte', () => {
