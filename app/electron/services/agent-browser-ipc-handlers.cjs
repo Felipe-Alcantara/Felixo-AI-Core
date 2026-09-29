@@ -18,6 +18,12 @@ const BROWSER_OPEN_CHANNEL = 'agent-browser:open-webpage'
 /** Avisa a interface que a fila de pedidos de abertura mudou. */
 const BROWSER_REQUESTS_CHANNEL = 'agent-browser:requests'
 const DESTINOS = ['externo', 'embutido']
+/**
+ * Uma gravação na pasta dispara vários eventos (o CLI grava, o app resolve, o
+ * editor salva de novo), e cada rodada custa uma varredura da pasta. Os
+ * eventos que chegam dentro desta janela entram na mesma rodada.
+ */
+const AGRUPAR_EVENTOS_MS = 75
 
 const URL_FORA_DA_WEB = 'A URL do pedido nao e http:// ou https://.'
 const NAO_PENDENTE = 'Esse pedido não está mais pendente.'
@@ -48,7 +54,7 @@ const EXPIROU = 'O pedido expirou sem resposta da pessoa.'
  *
  * @param {() => import('electron').BrowserWindow | undefined} getMainWindow
  * @param {{ agentRequests: string }} appPaths
- * @param {{ createRequests?: typeof criarRepositorioDePedidos, shell?: object, openExternal?: Function, findProfileByName?: Function, ipcMain?: { handle: Function }, logger?: { warn: (message: string) => void }, agora?: () => number, timers?: { setTimeout: Function, clearTimeout: Function } }} [dependencies]
+ * @param {{ createRequests?: typeof criarRepositorioDePedidos, shell?: object, openExternal?: Function, findProfileByName?: Function, ipcMain?: { handle: Function }, logger?: { warn: (message: string) => void }, agora?: () => number, timers?: { setTimeout: Function, clearTimeout: Function }, observeRequests?: typeof observeAgentRequests }} [dependencies]
  */
 function registerAgentBrowserIpcHandlers(getMainWindow, appPaths, dependencies = {}) {
   // Relógio e timers injetáveis, como o `agora` da fila: o teste anda o tempo
@@ -73,22 +79,27 @@ function registerAgentBrowserIpcHandlers(getMainWindow, appPaths, dependencies =
    * explicada, e o navegador e recusar continuam valendo.
    */
   let admitidos = new Set()
+  /** A lista que o renderer recebeu por último, para não mandar a mesma de novo. */
+  let ultimoAviso = null
+  /** A rodada que junta os eventos da pasta (ver `agendarRodada`). */
+  let rodadaAgendada = null
   /** O timer até o próximo vencimento (ver `agendarVencimento`). */
   let vencimentoAgendado = null
   let parado = false
 
   /**
-   * Recusa o que não tem o que perguntar; o resto fica para a pessoa.
+   * Uma rodada: recusa o que não tem o que perguntar e avisa o renderer do
+   * resto, que fica para a pessoa. Uma varredura só, reaproveitada no aviso.
    *
-   * Nunca lança: roda no registro, durante o boot do main, a cada evento da
-   * pasta e no vencimento. Um pedido que falha não impede os outros de serem
-   * vistos.
+   * Nunca lança: roda no registro, durante o boot do main, depois dos eventos
+   * da pasta e no vencimento. Um pedido que falha não impede os outros de
+   * serem vistos.
    */
   function processPending() {
     try {
       const instante = agora()
       const vistos = new Set()
-      // Os que continuam pendentes depois desta rodada, para o próximo vencimento.
+      // Os que continuam pendentes depois desta rodada.
       const esperando = []
       for (const pedido of pedidos.listarPendentes({ acao: BROWSER_REQUEST_ACTION, incluirVencidos: true })) {
         try {
@@ -100,11 +111,26 @@ function registerAgentBrowserIpcHandlers(getMainWindow, appPaths, dependencies =
         esperando.push(pedido)
       }
       admitidos = vistos
-      notifyRenderer()
+      avisarRenderer(paraOCartao(esperando, instante))
       agendarVencimento(esperando)
     } catch (error) {
       avisarFalha('a fila de pedidos', error)
     }
+  }
+
+  /**
+   * Um evento da pasta vira uma rodada daqui a `AGRUPAR_EVENTOS_MS`, e os que
+   * chegam nesse meio entram nela. É um prazo a partir do primeiro evento, não
+   * um adiamento a cada evento: uma pasta que não para de mudar ainda tem
+   * rodadas.
+   */
+  function agendarRodada() {
+    if (rodadaAgendada !== null || parado) return
+    rodadaAgendada = timers.setTimeout(() => {
+      rodadaAgendada = null
+      processPending()
+    }, AGRUPAR_EVENTOS_MS)
+    rodadaAgendada?.unref?.()
   }
 
   /** Recusa na hora o que não tem o que perguntar. `true` = fica para a pessoa. */
@@ -180,18 +206,22 @@ function registerAgentBrowserIpcHandlers(getMainWindow, appPaths, dependencies =
     logger.warn(`[agent-browser] Falha ao processar ${onde}: ${motivo}`)
   }
 
-  /** O que o cartão mostra: só pedidos válidos, com a URL já serializada. */
+  /**
+   * O que o cartão mostra: só pedidos válidos, com a URL já serializada. Lê a
+   * pasta na hora — o `list-requests` não espera a próxima rodada.
+   */
   function listRequests() {
-    return pedidos
-      .listarPendentes({ acao: BROWSER_REQUEST_ACTION })
-      .map(lerParaOCartao)
-      .filter((leitura) => leitura.ok)
-      .map((leitura) => leitura.item)
+    return paraOCartao(pedidos.listarPendentes({ acao: BROWSER_REQUEST_ACTION }), agora())
   }
 
-  function notifyRenderer() {
+  /** Manda a lista ao renderer só quando ela mudou desde o último aviso. */
+  function avisarRenderer(lista) {
+    const chave = JSON.stringify(lista)
+    if (chave === ultimoAviso) return
     const webContents = windowReadyContents(getMainWindow?.())
-    webContents?.send(BROWSER_REQUESTS_CHANNEL, { requests: listRequests() })
+    if (!webContents) return
+    webContents.send(BROWSER_REQUESTS_CHANNEL, { requests: lista })
+    ultimoAviso = chave
   }
 
   /**
@@ -217,7 +247,8 @@ function registerAgentBrowserIpcHandlers(getMainWindow, appPaths, dependencies =
       return await atender(id, params)
     } finally {
       emAndamento.delete(id)
-      notifyRenderer()
+      // A gravação do desfecho também dispara o observador: entram na mesma rodada.
+      agendarRodada()
     }
   }
 
@@ -236,6 +267,8 @@ function registerAgentBrowserIpcHandlers(getMainWindow, appPaths, dependencies =
     // pedido bom, e a próxima varredura recusa o que entortou.
     const leitura = lerParaOCartao(pedido)
     if (!leitura.ok || !mesmoQueOCartaoMostrou(leitura.item, params)) {
+      // Na hora, sem esperar a rodada: a pessoa precisa ver o pedido de agora.
+      avisarRenderer(listRequests())
       return { resolved: null, message: MUDOU }
     }
 
@@ -319,7 +352,7 @@ function registerAgentBrowserIpcHandlers(getMainWindow, appPaths, dependencies =
     guardAsync('Falha ao atender o pedido de abertura de página.', () => decide(params)),
   )
 
-  const watcher = observeAgentRequests(appPaths.agentRequests, processPending)
+  const watcher = (dependencies.observeRequests ?? observeAgentRequests)(appPaths.agentRequests, agendarRodada)
   // O main registra os handlers em sequência, sem try/catch em volta: o que
   // lançasse aqui levaria junto tudo o que é registrado depois no boot.
   try {
@@ -336,10 +369,26 @@ function registerAgentBrowserIpcHandlers(getMainWindow, appPaths, dependencies =
     pararDeObservarPedidos: () => {
       parado = true
       watcher?.close()
-      if (vencimentoAgendado !== null) timers.clearTimeout(vencimentoAgendado)
+      for (const timer of [rodadaAgendada, vencimentoAgendado]) {
+        if (timer !== null) timers.clearTimeout(timer)
+      }
+      rodadaAgendada = null
       vencimentoAgendado = null
     },
   }
+}
+
+/**
+ * O que o cartão mostra de uma varredura já feita: os pendentes que valem e
+ * têm formato bom. É o mesmo para `listRequests` e para o aviso de uma rodada,
+ * para o cartão nunca ver duas listas diferentes da mesma pasta.
+ */
+function paraOCartao(pendentes, instante) {
+  return pendentes
+    .filter((pedido) => pedidoAindaVale(pedido, instante))
+    .map(lerParaOCartao)
+    .filter((leitura) => leitura.ok)
+    .map((leitura) => leitura.item)
 }
 
 /** Quando o pedido deixa de valer (ver `pedidoAindaVale`), ou NaN sem data. */

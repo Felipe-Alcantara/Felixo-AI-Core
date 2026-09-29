@@ -18,7 +18,7 @@ const {
   registerAgentBrowserIpcHandlers,
 } = require('./agent-browser-ipc-handlers.cjs')
 Module._load = originalLoad
-const { VALIDADE_MS } = require('./fetch-all/agent-requests.cjs')
+const { VALIDADE_MS, criarRepositorioDePedidos } = require('./fetch-all/agent-requests.cjs')
 
 function appPaths() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-agent-browser-'))
@@ -61,6 +61,8 @@ async function comControlador(options, run) {
       logger: { warn: (message) => avisos.push(message) },
       ...(options.findProfileByName ? { findProfileByName: options.findProfileByName } : {}),
       ...(options.relogio ? { agora: options.relogio.agora, timers: options.relogio.timers } : {}),
+      ...(options.observeRequests ? { observeRequests: options.observeRequests } : {}),
+      ...(options.createRequests ? { createRequests: options.createRequests } : {}),
     },
   )
   try {
@@ -669,6 +671,101 @@ test('o timer segue o próximo vencimento e para junto com o observador', async 
 
     controller.pararDeObservarPedidos()
     assert.deepEqual(relogio.esperas(), [])
+  })
+})
+
+/**
+ * Observador da pasta que o teste dispara na mão, e uma fila que conta as
+ * varreduras: o custo de uma rodada é medido em leituras da pasta.
+ */
+function pastaContada() {
+  const observador = { disparar: () => {} }
+  const varreduras = []
+  return {
+    observador,
+    varreduras,
+    observeRequests: (_pasta, onChange) => {
+      observador.disparar = onChange
+      return { close: () => {} }
+    },
+    createRequests: (opcoes) => {
+      const fila = criarRepositorioDePedidos(opcoes)
+      return {
+        ...fila,
+        listarPendentes: (filtro) => {
+          varreduras.push(filtro)
+          return fila.listarPendentes(filtro)
+        },
+      }
+    },
+  }
+}
+
+test('uma rajada de eventos da pasta vira uma rodada: uma varredura e um aviso', async () => {
+  const relogio = relogioFalso()
+  const pasta = pastaContada()
+  await comControlador({ relogio, ...pasta }, async ({ controller, events }) => {
+    const antes = { varreduras: pasta.varreduras.length, avisos: avisosDaFila(events).length }
+    const pedido = controller.pedidos.registrar('abrir-pagina', { url: 'https://example.com' })
+
+    // O CLI grava, o app resolve, o editor salva: vários eventos seguidos.
+    for (let evento = 0; evento < 5; evento += 1) pasta.observador.disparar()
+    assert.equal(pasta.varreduras.length, antes.varreduras)
+    relogio.andar(75)
+
+    assert.equal(pasta.varreduras.length, antes.varreduras + 1)
+    const avisos = avisosDaFila(events).slice(antes.avisos)
+    assert.deepEqual(avisos.map((aviso) => aviso.data.requests.map((item) => item.id)), [[pedido.id]])
+  })
+})
+
+test('rodada que não muda a lista não manda nada ao renderer', async () => {
+  const relogio = relogioFalso()
+  const pasta = pastaContada()
+  await comControlador({ relogio, ...pasta }, async ({ controller, events }) => {
+    controller.pedidos.registrar('abrir-pagina', { url: 'https://example.com' })
+    pasta.observador.disparar()
+    relogio.andar(75)
+    const avisos = avisosDaFila(events).length
+
+    // Um evento sem mudança na fila (outro consumidor gravou, ou o próprio desfecho).
+    controller.pedidos.registrar('executar-plano')
+    pasta.observador.disparar()
+    relogio.andar(75)
+
+    assert.equal(avisosDaFila(events).length, avisos)
+  })
+})
+
+test('o list-requests responde na hora, sem esperar a rodada', async () => {
+  const relogio = relogioFalso()
+  const pasta = pastaContada()
+  await comControlador({ relogio, ...pasta }, async ({ controller, handlers }) => {
+    const pedido = controller.pedidos.registrar('abrir-pagina', { url: 'https://example.com' })
+    pasta.observador.disparar()
+
+    const lista = await handlers.get('agent-browser:list-requests')()
+
+    assert.deepEqual(lista.requests.map((item) => item.id), [pedido.id])
+  })
+})
+
+test('a decisão entra na mesma rodada que o evento do desfecho gravado', async () => {
+  const relogio = relogioFalso()
+  const pasta = pastaContada()
+  await comControlador({ relogio, ...pasta }, async ({ controller, events }) => {
+    const pedido = controller.pedidos.registrar('abrir-pagina', { url: 'https://example.com' })
+    controller.processPending()
+    const params = paramsDoCartao(controller, pedido.id, null)
+    const antes = pasta.varreduras.length
+
+    await controller.decide(params)
+    pasta.observador.disparar()
+    relogio.andar(75)
+
+    // Uma varredura para a decisão e o evento juntos, e o cartão fica sem o pedido.
+    assert.equal(pasta.varreduras.length, antes + 1)
+    assert.deepEqual(avisosDaFila(events).at(-1).data.requests, [])
   })
 })
 
