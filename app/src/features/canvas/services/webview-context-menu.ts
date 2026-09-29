@@ -2,9 +2,11 @@
  * O menu de link pedido de dentro da página de um bloco Página Web: o clique
  * direito (ou o toque longo, ou a tecla de menu) chega como o evento
  * `context-menu` do `<webview>`, e daqui sai o pedido para o menu único de
- * destino. Separado do componente para ser testado sem Electron.
+ * destino, e o perfil da Página Web que o menu abrir. Separado do componente
+ * e do canvas para ser testado sem Electron.
  */
 import type { LinkChooserAnchor } from '../../shared/links/link-chooser-store'
+import { isCustomProfileId } from './webview-profile'
 
 /** O pedaço de `params` do `context-menu` do `<webview>` que o menu usa. */
 export type WebviewContextMenuParams = { linkURL: string; x: number; y: number }
@@ -45,4 +47,22 @@ export function webviewLinkMenu(
   // Sem a ponte (ou com um valor que não é zoom), a janela está sem zoom.
   const zoom = Number.isFinite(windowZoomFactor) && windowZoomFactor > 0 ? windowZoomFactor : 1
   return { url: linkURL, anchor: { x: x / zoom, y: y / zoom } }
+}
+
+/** O mínimo de um bloco do canvas que a herança de perfil lê. */
+export type LinkSourceNode = { type?: string; data?: { profileId?: unknown } }
+
+/**
+ * O perfil da Página Web que "Abrir como Página Web" cria: o da Página Web de
+ * onde o link veio. Sem isso, um link aberto de dentro de um bloco do perfil
+ * "Trabalho" nascia no Padrão, com a sessão de outra pessoa (ou deslogado).
+ *
+ * Link de outro bloco (terminal, nota) ou de uma Página Web no Padrão fica no
+ * Padrão, como antes: `undefined` é o bloco sem `profileId`. Um id que não é
+ * de perfil não passa adiante; a partição dele já era a do Padrão.
+ */
+export function webpageProfileForLinkSource(source: LinkSourceNode | undefined): string | undefined {
+  if (source?.type !== 'webpage') return undefined
+  const profileId = source.data?.profileId
+  return isCustomProfileId(profileId) ? profileId : undefined
 }

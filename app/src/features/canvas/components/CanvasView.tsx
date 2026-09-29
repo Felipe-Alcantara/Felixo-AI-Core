@@ -120,6 +120,7 @@ import {
 } from '../services/quality-standard-prompt'
 import { subscribeSystemDesignConfig } from '../../shared/system-design/system-design-events'
 import { registerWebpageOpener } from '../../shared/links/link-chooser-store'
+import { webpageProfileForLinkSource } from '../services/webview-context-menu'
 import { stripTerminalSubmission, toSubmittedTerminalText } from '../terminal/terminal-input'
 import { buildSkillActivationPrompt } from '../services/skill-prompt'
 import {
@@ -2063,16 +2064,20 @@ function CanvasInner({
    * Bloco Página Web pedido pelo menu de link (terminal, Markdown ou outra
    * Página Web). Nasce ao lado do bloco de onde o link veio; sem bloco de
    * origem no canvas (painel do Notion, System Design), numa área livre da
-   * tela. Devolve o id para o menu levar o foco ao bloco novo.
+   * tela. Vindo de outra Página Web, nasce no perfil dela. Devolve o id para
+   * o menu levar o foco ao bloco novo.
    */
   const openWebpageFromLink = useCallback(
     (url: string, sourceId?: string) => {
       const webpageSize = getDefaultNodeSize('webpage', window.innerWidth)
-      const position =
-        sourceId && nodes.some((node) => node.id === sourceId)
-          ? findFreeNodePositionNearNode(nodes, sourceId, webpageSize)
-          : findFreeNodePosition(nodes, webpageSize, visibleCanvasBounds())
-      const id = addNode('webpage', { url }, position)
+      const source = sourceId ? nodes.find((node) => node.id === sourceId) : undefined
+      const position = source
+        ? findFreeNodePositionNearNode(nodes, source.id, webpageSize)
+        : findFreeNodePosition(nodes, webpageSize, visibleCanvasBounds())
+      // Como o pedido de agente com `--profile`: o link de uma página logada
+      // no perfil "Trabalho" continua logado nele, e não no Padrão.
+      const profileId = webpageProfileForLinkSource(source)
+      const id = addNode('webpage', { url, ...(profileId ? { profileId } : {}) }, position)
       setNodes((current) =>
         current.map((node) => ({ ...node, selected: node.id === id })),
       )

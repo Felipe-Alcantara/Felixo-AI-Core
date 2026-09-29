@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
-import { webviewLinkMenu } from './webview-context-menu'
+import { webpageProfileForLinkSource, webviewLinkMenu } from './webview-context-menu'
 
 const LINK = 'https://example.com/docs'
 
@@ -46,6 +46,33 @@ describe('webviewLinkMenu', () => {
   it('só o marcador exato: outro endereço about: segue para o menu, que explica a recusa', () => {
     for (const linkURL of ['about:blank', 'about:blank#topo']) {
       expect(webviewLinkMenu({ linkURL, x: 40, y: 30 }, 1)?.url).toBe(linkURL)
+    }
+  })
+})
+
+describe('webpageProfileForLinkSource', () => {
+  it('link de uma Página Web do perfil "Trabalho" abre no "Trabalho", não no Padrão', () => {
+    // O bloco novo herda o id, e com ele a partição: a mesma sessão logada.
+    expect(webpageProfileForLinkSource({ type: 'webpage', data: { profileId: 'trabalho-ab12' } })).toBe(
+      'trabalho-ab12',
+    )
+  })
+
+  it('Página Web no Padrão (sem perfil ou "default") abre no Padrão', () => {
+    expect(webpageProfileForLinkSource({ type: 'webpage', data: {} })).toBeUndefined()
+    expect(webpageProfileForLinkSource({ type: 'webpage', data: { profileId: 'default' } })).toBeUndefined()
+  })
+
+  it('link de outro bloco (terminal, nota) ou sem bloco de origem abre no Padrão', () => {
+    for (const type of ['terminal', 'note', 'file']) {
+      expect(webpageProfileForLinkSource({ type, data: { profileId: 'trabalho-ab12' } })).toBeUndefined()
+    }
+    expect(webpageProfileForLinkSource(undefined)).toBeUndefined()
+  })
+
+  it('id que não é de perfil não passa adiante', () => {
+    for (const profileId of ['../x', 'persist:outra', 'A B', 3, null]) {
+      expect(webpageProfileForLinkSource({ type: 'webpage', data: { profileId } })).toBeUndefined()
     }
   })
 })
