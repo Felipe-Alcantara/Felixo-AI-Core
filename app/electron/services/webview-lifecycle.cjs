@@ -1,9 +1,12 @@
 /**
  * Wires up every <webview> guest the "Página Web" canvas block attaches to
- * the main window. The element's own `webpreferences` attribute already
- * covers nodeIntegration/contextIsolation/sandbox for the guest — the one
- * thing that still needs main-process logic is deciding what "open in new
- * window" attempts should do.
+ * the main window. The element's own `webpreferences` attribute asks for
+ * nodeIntegration/contextIsolation/sandbox, but the renderer is not trusted
+ * to ask: `registerWebviewAttachGuard` (navigation-guard.cjs) forces the same
+ * isolation on every attach and points a guest that doesn't start on a web
+ * page at `about:blank` (without destroying it, so the block survives). What
+ * remains here is deciding what "open in new window" attempts should do — and
+ * only for web pages.
  *
  * Told apart by Chromium's `disposition`:
  *  - 'foreground-tab' / 'background-tab' is a plain target=_blank link — the
@@ -21,6 +24,9 @@
  *    real child window, with the same locked-down webPreferences as every
  *    other webview guest.
  */
+
+const { EXTERNAL_WEB_SCHEMES, classifyExternalUrl } = require('./external-url-policy.cjs')
+const { isWebviewDestination, registerWebviewAttachGuard } = require('./navigation-guard.cjs')
 
 /**
  * Pure decision for a webview's `setWindowOpenHandler`. Separated from the
@@ -45,6 +51,7 @@ function resolveWindowOpenAction(disposition) {
 }
 
 function registerWebviewLifecycle(mainWindow) {
+  registerWebviewAttachGuard(mainWindow)
   mainWindow.webContents.on('did-attach-webview', (_event, guestWebContents) => {
     applyWindowOpenPolicy(guestWebContents)
   })
@@ -59,9 +66,17 @@ function registerWebviewLifecycle(mainWindow) {
  */
 function applyWindowOpenPolicy(webContents) {
   webContents.setWindowOpenHandler(({ url, disposition }) => {
+    // Só página web vira aba no bloco ou popup. O `loadURL` abaixo é uma
+    // navegação iniciada pelo processo principal, que o Chromium NÃO filtra
+    // como filtra a do site: sem esta checagem, um `<a target="_blank"
+    // href="file:///...">` numa página qualquer abria arquivo local no bloco.
+    // `about:blank` passa porque é como popups de login começam.
+    if (!isWebviewDestination(url)) return { action: 'deny' }
+
     const resolved = resolveWindowOpenAction(disposition)
     if (resolved.action === 'deny') {
-      webContents.loadURL(url)
+      const decision = classifyExternalUrl(url, EXTERNAL_WEB_SCHEMES)
+      if (decision.ok) webContents.loadURL(decision.url)
     }
     return resolved
   })

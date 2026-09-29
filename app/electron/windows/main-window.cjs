@@ -1,7 +1,9 @@
+const { pathToFileURL } = require('node:url')
 const { BrowserWindow, dialog, screen } = require('electron')
 const { rendererBuildPath } = require('../core/paths.cjs')
 const { mainWindowOptions } = require('../core/window-options.cjs')
-const { denyExternalWindowOpen } = require('../services/external-links.cjs')
+const { denyExternalWindowOpen, openExternalUrl } = require('../services/external-links.cjs')
+const { registerMainWindowNavigationGuard } = require('../services/navigation-guard.cjs')
 const { registerWindowZoomShortcuts } = require('../services/window-zoom-shortcuts.cjs')
 const { registerWindowFocusBridge } = require('../services/window-focus-bridge.cjs')
 const { registerWebviewLifecycle } = require('../services/webview-lifecycle.cjs')
@@ -66,6 +68,10 @@ function createMainWindow({ contarSessoesVivas, settingsRepository, screenApi = 
   registerWindowStatePersistence(mainWindow, settingsRepository)
 
   mainWindow.webContents.setWindowOpenHandler(denyExternalWindowOpen)
+  registerMainWindowNavigationGuard(mainWindow.webContents, {
+    appUrl: process.env.VITE_DEV_SERVER_URL || pathToFileURL(rendererBuildPath).href,
+    openExternal: (url) => openExternalUrl(url),
+  })
   registerWindowZoomShortcuts(mainWindow)
   registerWebviewLifecycle(mainWindow)
 
