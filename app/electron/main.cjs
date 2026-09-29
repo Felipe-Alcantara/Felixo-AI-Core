@@ -101,6 +101,7 @@ const { registerOnboardingIpcHandlers } = require('./services/onboarding-ipc-han
 const { resolveOnboardingAutomation } = require('./core/onboarding-automation.cjs')
 const { installIpcInvokeProbe } = require('./core/ipc-invoke-probe.cjs')
 const { loadDevtoolsFakeCliPty } = require('./core/devtools-fake-cli-pty-guard.cjs')
+const { loadAutomationShellOpen } = require('./core/devtools-shell-open-guard.cjs')
 const { createAgentUsageService } = require('./services/agent-usage-service.cjs')
 const { queryClaudeUsage } = require('./services/claude-usage-query.cjs')
 const {
@@ -191,6 +192,12 @@ const ipcProbe =
 // smoke da cadeia de contas passa pelo onData real do main sem abrir CLI
 // nenhuma. O app normal recebe null aqui e nunca carrega o módulo.
 const devtoolsFakeCliPty = loadDevtoolsFakeCliPty({ env: process.env, devtoolsPort })
+
+// `shell.openExternal` que sempre falha, só na instância de automação que
+// pediu (FELIXO_DEVTOOLS_SHELL_OPEN=falha): o smoke prova o aviso de "não foi
+// possível abrir no navegador" sem abrir navegador nenhum. O app normal
+// recebe null e usa o shell do Electron.
+const automationShell = loadAutomationShellOpen({ env: process.env, devtoolsPort })
 
 // O Chromium só aceita a porta de depuração antes de ficar pronto. A flag é
 // exclusiva da instância que o `felixo devtools` criou; o app normal não abre
@@ -425,7 +432,7 @@ app.whenReady().then(async () => {
   // agora daria sempre zero, e a guarda nunca perguntaria nada.
   const contarSessoesVivas = () => ptyHandlers?.manager?.contarSessoesVivas?.() ?? 0
 
-  mainWindow = createMainWindow({ contarSessoesVivas, settingsRepository })
+  mainWindow = createMainWindow({ contarSessoesVivas, settingsRepository, electronShell: automationShell ?? undefined })
   const getMainWindow = () => mainWindow ?? BrowserWindow.getAllWindows()[0]
 
   const gpuSession = createGpuPreferenceSession({
@@ -811,7 +818,7 @@ app.whenReady().then(async () => {
       // A janela recriada precisa da MESMA guarda: no macOS este é o caminho
       // normal de voltar ao app depois de fechar, e uma janela sem guarda
       // desfaria a proteção na segunda vez.
-      mainWindow = createMainWindow({ contarSessoesVivas, settingsRepository })
+      mainWindow = createMainWindow({ contarSessoesVivas, settingsRepository, electronShell: automationShell ?? undefined })
     }
   })
 })

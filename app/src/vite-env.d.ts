@@ -43,6 +43,7 @@ import type {
   CliAccountRemoveResult,
 } from './features/shared/types/cli-accounts'
 import type { AccountChainBridge } from './features/shared/types/account-chain'
+import type { ExternalOpenFailure } from './features/shared/links/link-open-failure'
 import type { GpuPreference, GpuPreferenceStatus } from './features/shared/graphics/gpu-preference'
 import type { HardwareProfile } from './features/shared/performance/performance-suggestion'
 import type { PromptInsertionMetadata } from './features/shared/types/prompt-insertion'
@@ -371,6 +372,10 @@ declare global {
       /** Zoom da janela do app (Ctrl+=/−/0): 1 sem zoom. Converte DIP da janela em pixels CSS. */
       windowZoom?: {
         getFactor: () => number
+      }
+      /** Aviso de um link que não abriu (`external-links:open-failed`). */
+      externalLinks?: {
+        onOpenFailed: (callback: (failure: ExternalOpenFailure) => void) => () => void
       }
       getFilePath?: (file: File) => string
       /** Versão empacotada do app (a do CI, não a do package.json versionado). */

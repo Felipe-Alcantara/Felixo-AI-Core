@@ -10,7 +10,9 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
 import { createPortal } from 'react-dom'
-import { Copy, ExternalLink, Globe, Mail, ShieldAlert } from 'lucide-react'
+import { Copy, ExternalLink, Globe, Mail, ShieldAlert, X } from 'lucide-react'
+
+import { revealHiddenUrlCharacters } from '../external-url-policy'
 
 import {
   describeLinkDestination,
@@ -37,6 +39,11 @@ import {
   type LinkChooserRequest,
   type OpenedWebpage,
 } from './link-chooser-store'
+import {
+  describeLinkOpenFailure,
+  parseLinkOpenFailure,
+  type LinkOpenFailureNotice,
+} from './link-open-failure'
 
 /** O texto de um endereço gigante (até 8.192 caracteres) não precisa ir inteiro para a tela. */
 const MAX_SHOWN_CHARS = 600
@@ -49,6 +56,10 @@ type Point = { left: number; top: number }
  * bloco Página Web. Montado uma vez no `App`, desenha o pedido que estiver no
  * `link-chooser-store`. Ao lado, uma região `status` anuncia "Link copiado",
  * porque o menu fecha no mesmo clique e nada mais mostraria que deu certo.
+ *
+ * Quando o processo principal avisa que um link não abriu (o sistema não tinha
+ * navegador, ou a política recusou na hora de abrir), o host mostra o aviso
+ * com "Copiar link": o menu já fechou, e sem isso a falha era silenciosa.
  */
 export function LinkChooserHost() {
   const { request, version } = useSyncExternalStore(subscribeLinkChooser, getLinkChooserState)
@@ -68,6 +79,20 @@ export function LinkChooserHost() {
     return () => window.clearTimeout(timer)
   }, [copiedAt])
 
+  // Cada aviso novo é um nó novo (a `key`), e o leitor de tela o anuncia mesmo
+  // quando o texto é igual ao anterior.
+  const [failure, setFailure] = useState<{ notice: LinkOpenFailureNotice; key: number } | null>(null)
+  useEffect(
+    () =>
+      window.felixo?.externalLinks?.onOpenFailed?.((raw) => {
+        const parsed = parseLinkOpenFailure(raw)
+        if (!parsed) return
+        setFailure((current) => ({ notice: describeLinkOpenFailure(parsed), key: (current?.key ?? 0) + 1 }))
+      }),
+    [],
+  )
+  const closeFailure = useCallback(() => setFailure(null), [])
+
   return (
     <>
       {request &&
@@ -86,10 +111,93 @@ export function LinkChooserHost() {
           </div>,
           document.body,
         )}
+      {failure &&
+        createPortal(
+          <LinkOpenFailureAlert
+            key={failure.key}
+            notice={failure.notice}
+            onClose={closeFailure}
+            onCopied={onCopied}
+          />,
+          document.body,
+        )}
       <div role="status" aria-live="polite" className="sr-only">
         {copiedAt && <span key={copies}>Link copiado</span>}
       </div>
     </>
+  )
+}
+
+type FailureAlertProps = {
+  notice: LinkOpenFailureNotice
+  onClose: () => void
+  onCopied: (at: Point) => void
+}
+
+/**
+ * O aviso de um link que não abriu. Não rouba o foco (quem estava digitando
+ * num terminal continua nele) e se anuncia como `alert`. Fica até a pessoa
+ * copiar, fechar ou um aviso novo tomar o lugar: some sozinho seria perder o
+ * endereço que ela talvez queira colar noutro lugar.
+ */
+function LinkOpenFailureAlert({ notice, onClose, onCopied }: FailureAlertProps) {
+  const boxRef = useRef<HTMLDivElement>(null)
+  const copy = () => {
+    const rect = boxRef.current?.getBoundingClientRect()
+    void globalThis.navigator?.clipboard?.writeText(notice.copyText).then(
+      () => {
+        onCopied(rect ? { left: rect.left, top: Math.max(8, rect.top - 32) } : { left: 16, top: 16 })
+        onClose()
+      },
+      () => undefined,
+    )
+  }
+
+  return (
+    <div
+      ref={boxRef}
+      role="alert"
+      data-felixo-link-open-failure
+      // Clicar no aviso não é "clicar fora" da gaveta do terminal, e o foco
+      // nele não substitui quem tinha o foco antes (ver `floating-layer.ts`).
+      data-felixo-floating-layer
+      data-felixo-focus-transient
+      className="fixed bottom-6 left-1/2 z-70 w-[min(22rem,calc(100vw-2rem))] -translate-x-1/2 rounded-lg border border-white/10 bg-(--f-surface-panel) p-3 text-xs text-(--f-core-white-soft) shadow-2xl"
+      onKeyDown={(event) => {
+        // Nenhuma tecla daqui chega aos atalhos do canvas.
+        event.stopPropagation()
+        if (event.key === 'Escape') onClose()
+      }}
+    >
+      <div className="flex items-start gap-2">
+        <ShieldAlert size={14} className="mt-0.5 shrink-0 text-(--color-warning)" aria-hidden />
+        <div className="min-w-0 flex-1">
+          <p className="font-medium text-(--f-core-white)">{notice.title}</p>
+          <p className="mt-0.5">{notice.detail}</p>
+          <p className="mt-1 line-clamp-2 break-all font-mono text-[11px] text-(--f-core-secondary)">
+            {shorten(revealHiddenUrlCharacters(notice.copyText))}
+          </p>
+        </div>
+        <button
+          type="button"
+          aria-label="Fechar aviso"
+          title="Fechar aviso"
+          onClick={onClose}
+          className="felixo-btn-icon shrink-0 rounded-sm p-0.5 text-(--f-core-secondary) hover:bg-white/10 hover:text-(--f-core-white)"
+        >
+          <X size={12} aria-hidden />
+        </button>
+      </div>
+      <div className="mt-2 flex justify-end">
+        <button
+          type="button"
+          onClick={copy}
+          className="felixo-btn flex items-center gap-1.5 rounded-sm border border-white/15 bg-white/8 px-2.5 py-1.5 text-xs text-(--f-core-white) hover:bg-white/14"
+        >
+          <Copy size={12} aria-hidden /> Copiar link
+        </button>
+      </div>
+    </div>
   )
 }
 

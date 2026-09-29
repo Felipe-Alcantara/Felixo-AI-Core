@@ -2,7 +2,11 @@ const { pathToFileURL } = require('node:url')
 const { BrowserWindow, dialog, screen } = require('electron')
 const { rendererBuildPath } = require('../core/paths.cjs')
 const { mainWindowOptions } = require('../core/window-options.cjs')
-const { denyExternalWindowOpen, openExternalUrl } = require('../services/external-links.cjs')
+const {
+  EXTERNAL_OPEN_FAILED_CHANNEL,
+  createExternalWindowOpenHandler,
+  openExternalUrl,
+} = require('../services/external-links.cjs')
 const { registerMainWindowNavigationGuard } = require('../services/navigation-guard.cjs')
 const { registerWindowZoomShortcuts } = require('../services/window-zoom-shortcuts.cjs')
 const { registerWindowFocusBridge } = require('../services/window-focus-bridge.cjs')
@@ -46,9 +50,12 @@ function criarPerguntaNativa(browserWindow) {
  *   processo vivo. Vem como função, e não como número, porque o gerenciador de
  *   PTY é criado DEPOIS da janela em `main.cjs`: um valor lido aqui seria
  *   sempre zero, e a guarda nunca perguntaria nada.
+ * @param {{ openExternal: (url: string) => Promise<void> }} [options.electronShell] - O
+ *   `shell` que abre os links; sem ele, o do Electron. Só a automação troca
+ *   (`devtools-shell-open-guard.cjs`).
  * @returns {import('electron').BrowserWindow}
  */
-function createMainWindow({ contarSessoesVivas, settingsRepository, screenApi = screen } = {}) {
+function createMainWindow({ contarSessoesVivas, settingsRepository, screenApi = screen, electronShell } = {}) {
   let savedState = null
   try {
     savedState = settingsRepository?.get('window.main.state') ?? null
@@ -67,10 +74,19 @@ function createMainWindow({ contarSessoesVivas, settingsRepository, screenApi = 
   applyWindowState(mainWindow, state)
   registerWindowStatePersistence(mainWindow, settingsRepository)
 
-  mainWindow.webContents.setWindowOpenHandler(denyExternalWindowOpen)
+  const openExternal = (url) => openExternalUrl(url, electronShell)
+  mainWindow.webContents.setWindowOpenHandler(
+    createExternalWindowOpenHandler({
+      open: openExternal,
+      // A janela que pediu é a que avisa a pessoa (e oferece copiar o link).
+      notify: (failure) => {
+        if (!mainWindow.isDestroyed()) mainWindow.webContents.send(EXTERNAL_OPEN_FAILED_CHANNEL, failure)
+      },
+    }),
+  )
   registerMainWindowNavigationGuard(mainWindow.webContents, {
     appUrl: process.env.VITE_DEV_SERVER_URL || pathToFileURL(rendererBuildPath).href,
-    openExternal: (url) => openExternalUrl(url),
+    openExternal,
   })
   registerWindowZoomShortcuts(mainWindow)
   registerWebviewLifecycle(mainWindow)
