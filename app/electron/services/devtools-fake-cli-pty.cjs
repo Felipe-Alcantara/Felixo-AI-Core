@@ -24,6 +24,9 @@
  * - os gatilhos do smoke de links imprimem hyperlinks OSC 8 (um texto na tela,
  *   outro destino, e um `file:` que o app recusa) ou uma saída em streaming,
  *   linha a linha, para o menu de link ser testado com a tela rolando;
+ * - outros dois ligam e desligam o mouse tracking, como a Claude Code e o
+ *   Codex fazem, para o menu de link ser testado com o gesto retido pelo
+ *   renderer;
  * - toda saída é assíncrona e em ordem, como no `node-pty` (nunca dentro do
  *   `write` de quem chamou);
  * - `kill` encerra com um único `onExit`, e nada é escrito depois dele.
@@ -87,6 +90,21 @@ const SMOKE_LINK_OUTPUTS = Object.freeze({
 const SMOKE_STREAM_TRIGGER = '__felixo_smoke_stream__'
 const SMOKE_STREAM_LINES = 60
 const SMOKE_STREAM_LINE_DELAY_MS = 50
+
+/**
+ * Liga e desliga o mouse tracking, como a Claude Code e o Codex fazem ao
+ * desenhar a tela cheia: `?1000` pede o relato de cada clique ao processo e
+ * `?1006` pede as coordenadas em SGR (`CSI < … M`), que a leitura de escapes
+ * do prompt descarta em vez de ecoar como texto. Com o modo ligado, o
+ * renderer retém o `mousedown` e devolve o gesto como sintético
+ * (`terminal-mouse-selection.ts`): é o caminho em que o smoke prova, no app
+ * real, que um toque no link ainda abre o menu de destino. O `off` devolve o
+ * terminal ao estado de shell, para os passos seguintes não herdarem o modo.
+ */
+const SMOKE_MOUSE_TRACKING_OUTPUTS = Object.freeze({
+  __felixo_smoke_mouse_on__: `${CSI}?1000h${CSI}?1006h`,
+  __felixo_smoke_mouse_off__: `${CSI}?1000l${CSI}?1006l`,
+})
 
 /** Saída real de `codex login status` com login pela conta do ChatGPT. */
 const FAKE_CODEX_LOGIN_STATUS_OUTPUT = 'Logged in using ChatGPT\n'
@@ -234,6 +252,8 @@ function createFakeCliPty({ options = {}, pid, chunkDelayMs, setTimer, clearTime
       splitIntoTerminalChunks(scripted).forEach((chunk) => output.push(chunk, chunkDelayMs))
     } else if (SMOKE_LINK_OUTPUTS[trigger]) {
       output.push(SMOKE_LINK_OUTPUTS[trigger], chunkDelayMs)
+    } else if (SMOKE_MOUSE_TRACKING_OUTPUTS[trigger]) {
+      output.push(SMOKE_MOUSE_TRACKING_OUTPUTS[trigger], chunkDelayMs)
     } else if (trigger === SMOKE_STREAM_TRIGGER) {
       for (let index = 1; index <= SMOKE_STREAM_LINES; index += 1) {
         output.push(`linha ${index} de ${SMOKE_STREAM_LINES} da saída em streaming\r\n`, SMOKE_STREAM_LINE_DELAY_MS)
@@ -393,6 +413,7 @@ module.exports = {
   FAKE_CODEX_LOGIN_STATUS_OUTPUT,
   PROMPT,
   SMOKE_LINK_OUTPUTS,
+  SMOKE_MOUSE_TRACKING_OUTPUTS,
   SMOKE_STREAM_LINES,
   SMOKE_STREAM_TRIGGER,
   SMOKE_TRIGGER_OUTPUTS,
