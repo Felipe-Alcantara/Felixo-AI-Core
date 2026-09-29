@@ -781,9 +781,23 @@ function criarSessaoDeLinks(deps) {
     }, { id: WEBPAGE_ID, url: paginaUrl })
 
     const box = await blocoWeb().locator('webview').boundingBox()
-    const faixa = (fracao) => ({ x: box.x + box.width / 2, y: box.y + box.height * fracao })
+    // Cada link da página ocupa uma faixa da largura toda. O ponto é um da
+    // faixa em que o próprio webview está por cima: numa janela pequena (a do
+    // Windows na CI tem 1008×655), a lista Elementos centraliza o bloco com
+    // zoom 1,2 mesmo que ele não caiba, e o centro fica embaixo da barra lateral.
+    const faixa = async (fracao) => {
+      const ponto = await page.evaluate(({ box, fracao }) => {
+        const y = box.y + box.height * fracao
+        const x = [0.5, 0.65, 0.8, 0.35, 0.2, 0.9, 0.1]
+          .map((f) => box.x + box.width * f)
+          .find((cx) => document.elementFromPoint(cx, y)?.tagName === 'WEBVIEW')
+        return x === undefined ? null : { x, y }
+      }, { box, fracao })
+      exigir(ponto, passo, `nenhum ponto visível na faixa ${fracao} do webview`, box)
+      return ponto
+    }
 
-    const noLinkWeb = faixa(1 / 6)
+    const noLinkWeb = await faixa(1 / 6)
     await page.mouse.click(noLinkWeb.x, noLinkWeb.y, { button: 'right' })
     let menu = await esperarMenu(passo, 'clique direito num link da página')
     exigir(menu.summary.includes(INSIDE_PAGE_URL), passo, 'o menu não mostra o link da página', menu)
@@ -801,12 +815,12 @@ function criarSessaoDeLinks(deps) {
 
     // `javascript:` chega como `about:blank#blocked`: não é um link que o app
     // possa mostrar nem copiar, e o menu não abre.
-    const noScript = faixa(1 / 2)
+    const noScript = await faixa(1 / 2)
     await page.mouse.click(noScript.x, noScript.y, { button: 'right' })
     await pausa(600)
     exigir((await lerMenu()) === null, passo, 'o link javascript: abriu o menu')
 
-    const noEmail = faixa(5 / 6)
+    const noEmail = await faixa(5 / 6)
     await page.mouse.click(noEmail.x, noEmail.y, { button: 'right' })
     menu = await esperarMenu(passo, 'clique direito num e-mail da página')
     exigir(
@@ -850,7 +864,10 @@ function criarSessaoDeLinks(deps) {
     exigir(await blocoWeb().count() === 1, passo, 'o Backspace na barra apagou o bloco')
 
     // Uma navegação (Recarregar) troca o texto da barra, e o aviso sai junto.
-    await blocoWeb().getByRole('button', { name: 'Recarregar' }).click()
+    // Pelo teclado: numa janela pequena, o botão fica embaixo da barra lateral
+    // (ver `faixa`), e o foco sem `preventScroll` rolaria o canvas.
+    await blocoWeb().getByRole('button', { name: 'Recarregar' }).evaluate((button) => button.focus({ preventScroll: true }))
+    await page.keyboard.press('Enter')
     await esperar(passo, 'o aviso sumir quando a página navega', (id) =>
       document.querySelector(`.react-flow__node[data-id="${id}"] [role="alert"]`) === null, WEBPAGE_ID)
     exigir((await barra.getAttribute('aria-invalid')) === null, passo, 'a barra continuou marcada como inválida')
