@@ -40,7 +40,13 @@ async function comControlador(options, run) {
   const paths = appPaths()
   const events = []
   const opened = []
+  const avisos = []
   const handlers = new Map()
+  // Arquivos que já estão na pasta quando o app sobe (o registro os processa).
+  if (options.preparar) {
+    fs.mkdirSync(paths.agentRequests, { recursive: true })
+    options.preparar(paths.agentRequests)
+  }
   const controller = registerAgentBrowserIpcHandlers(
     options.semJanela ? () => undefined : () => janelaFalsa(events),
     paths,
@@ -50,18 +56,35 @@ async function comControlador(options, run) {
         opened.push(url)
       },
       ipcMain: { handle: (channel, handler) => handlers.set(channel, handler) },
+      logger: { warn: (message) => avisos.push(message) },
       ...(options.findProfileByName ? { findProfileByName: options.findProfileByName } : {}),
     },
   )
   try {
-    await run({ controller, events, opened, handlers, paths })
+    await run({ controller, events, opened, avisos, handlers, paths })
   } finally {
     controller.pararDeObservarPedidos()
     fs.rmSync(paths.root, { recursive: true, force: true })
   }
 }
 
+/** Um pedido gravado à mão na pasta, como um arquivo que não passou pelo CLI. */
+function gravarAMao(pasta, pedido) {
+  fs.mkdirSync(pasta, { recursive: true })
+  const completo = {
+    acao: 'abrir-pagina',
+    modo: 'externo',
+    estado: 'pendente',
+    pedidoEm: new Date().toISOString(),
+    origem: '',
+    ...pedido,
+  }
+  fs.writeFileSync(path.join(pasta, `${completo.id}.json`), JSON.stringify(completo))
+  return completo
+}
+
 const aberturas = (events) => events.filter((event) => event.channel === BROWSER_OPEN_CHANNEL)
+const avisosDaFila = (events) => events.filter((event) => event.channel === BROWSER_REQUESTS_CHANNEL)
 
 test('pedido válido NÃO abre sozinho: fica pendente e aparece para a pessoa', async () => {
   await comControlador({}, async ({ controller, events, opened }) => {
@@ -301,6 +324,84 @@ test('sem perfil no pedido o evento não traz profileId (comportamento de sempre
     await controller.decide({ id: pedido.id, destino: 'embutido' })
     assert.equal('profileId' in aberturas(events)[0].data, false)
   })
+})
+
+test('arquivo malformado na pasta não derruba o registro e nunca chega ao renderer', async () => {
+  // A sonda da revisão: `perfil: {"toString":1}` lançava no registro — que o
+  // main chama no boot sem try/catch — e no render do cartão.
+  const tortos = [
+    { id: 'perfil-objeto', modo: 'embutido', url: 'https://example.com/a', perfil: { toString: 1 } },
+    { id: 'url-numero', url: 42 },
+    { id: 'modo-lista', url: 'https://example.com/b', modo: ['embutido'] },
+    { id: 'modo-inventado', url: 'https://example.com/c', modo: 'janela' },
+  ]
+  await comControlador(
+    { preparar: (pasta) => tortos.forEach((pedido) => gravarAMao(pasta, pedido)) },
+    async ({ controller, events, handlers, avisos }) => {
+      assert.ok(handlers.has('agent-browser:list-requests'))
+      assert.ok(handlers.has('agent-browser:decide'))
+      for (const { id } of tortos) {
+        const resolvido = controller.pedidos.ler(id)
+        assert.equal(resolvido.estado, 'recusado', id)
+        assert.match(resolvido.resultado.message, /malformado/, id)
+      }
+      assert.deepEqual(controller.listRequests(), [])
+      assert.ok(avisosDaFila(events).every((event) => event.data.requests.length === 0))
+      assert.deepEqual(avisos, [])
+    },
+  )
+})
+
+test('pedido que fica torto depois de chegar é recusado ao decidir, sem lançar', async () => {
+  await comControlador({}, async ({ controller, paths, opened, events }) => {
+    gravarAMao(paths.agentRequests, { id: 'torto', modo: 'embutido', url: 'https://example.com', perfil: { toString: 1 } })
+
+    // Antes de o observador da pasta rodar: `decide` lê o arquivo direto.
+    const result = await controller.decide({ id: 'torto', destino: 'embutido' })
+
+    assert.equal(result.resolved.estado, 'recusado')
+    assert.match(result.resolved.resultado.message, /malformado/)
+    assert.deepEqual(opened, [])
+    assert.deepEqual(aberturas(events), [])
+  })
+})
+
+test('perfil só vale com o modo embutido: pedido externo com perfil é malformado', async () => {
+  await comControlador(
+    {
+      findProfileByName: () => ({ id: 'trabalho-ab12' }),
+      preparar: (pasta) => gravarAMao(pasta, { id: 'externo-com-perfil', url: 'https://example.com', perfil: 'Trabalho' }),
+    },
+    async ({ controller }) => {
+      const resolvido = controller.pedidos.ler('externo-com-perfil')
+      assert.equal(resolvido.estado, 'recusado')
+      assert.match(resolvido.resultado.message, /perfil so vale com o modo embutido/)
+      assert.deepEqual(controller.listRequests(), [])
+    },
+  )
+})
+
+test('um pedido que falha ao processar não impede os outros, e o aviso não leva a URL', async () => {
+  const segredo = 'https://example.com/convite?token=segredo'
+  await comControlador(
+    {
+      findProfileByName: () => {
+        throw new Error('banco indisponível')
+      },
+      preparar: (pasta) => {
+        gravarAMao(pasta, { id: 'quebra', modo: 'embutido', url: segredo, perfil: 'Trabalho' })
+        gravarAMao(pasta, { id: 'inteiro', url: 'https://example.com/ok' })
+      },
+    },
+    async ({ controller, avisos }) => {
+      assert.equal(controller.pedidos.ler('inteiro').estado, 'pendente')
+      assert.ok(controller.listRequests().some((item) => item.id === 'inteiro'))
+      assert.equal(avisos.length, 1)
+      assert.match(avisos[0], /quebra/)
+      assert.match(avisos[0], /banco indisponível/)
+      assert.doesNotMatch(avisos[0], /example\.com|token|segredo/)
+    },
+  )
 })
 
 test('contrato: o preload expõe listar, decidir e ouvir, e o vite-env.d.ts declara a ponte', () => {

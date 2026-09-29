@@ -101,7 +101,10 @@ export function AgentBrowserRequestCard() {
                 </span>
               )}
             </h2>
-            <p className="truncate text-[11px] text-(--f-core-secondary)" title={request.origem || undefined}>
+            <p
+              className="truncate text-[11px] text-(--f-core-secondary)"
+              title={typeof request.origem === 'string' && request.origem ? request.origem : undefined}
+            >
               {describeBrowserRequestOrigin(request)}
             </p>
           </div>

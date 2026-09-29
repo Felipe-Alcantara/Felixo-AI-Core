@@ -40,4 +40,14 @@ describe('cartão de pedido de abertura de página', () => {
       'O agente sugeriu a Página Web, no perfil Trabalho.',
     )
   })
+
+  it('campo que não é texto não derruba o cartão: vira a frase sem ele', () => {
+    // A sonda da revisão: `{"toString":1}` lança ao entrar num template, e o
+    // render do cartão levava a interface junto.
+    const torto = { toString: 1 } as unknown as string
+    expect(describeBrowserRequestSuggestion(request({ modo: 'embutido', perfil: torto }))).toBe(
+      'O agente sugeriu a Página Web.',
+    )
+    expect(describeBrowserRequestOrigin(request({ origem: torto }))).toBe('Pedido de um agente')
+  })
 })
