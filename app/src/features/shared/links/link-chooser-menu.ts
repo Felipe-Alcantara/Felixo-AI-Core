@@ -82,6 +82,27 @@ export function linkChooserKeyAction(
   return null
 }
 
+/** Como o menu fecha sem uma escolha, fora as teclas (Esc e Tab sempre devolvem o foco). */
+export type LinkChooserDismissCause = 'pointer-outside' | 'wheel' | 'resize' | 'window-blur'
+
+/**
+ * Fechar o menu sem escolha devolve o foco a quem o abriu?
+ *
+ * Só pela roda ou pelo redimensionamento, e só com o foco no menu: ele some
+ * com o foco dentro, e o foco cairia no `body` — o terminal para de receber
+ * teclas, e Backspace/Delete chegam ao canvas e apagam o bloco selecionado.
+ * Nos outros casos o foco já tem destino: o clique fora o leva aonde a pessoa
+ * clicou, e a janela que perdeu o foco o levou de propósito (um clique dentro
+ * de uma Página Web vai para a página). Quando a janela volta, é o
+ * `useFocusRestore` que devolve o foco a quem o tinha antes do menu.
+ */
+export function restoresFocusOnDismiss(
+  cause: LinkChooserDismissCause,
+  focusWasInMenu: boolean,
+): boolean {
+  return focusWasInMenu && (cause === 'wheel' || cause === 'resize')
+}
+
 /** O pedido veio do teclado? Clique direito pela tecla de menu não tem posição de ponteiro. */
 export function isKeyboardContextMenu(event: { pointerType?: string }): boolean {
   // O Chromium entrega o `contextmenu` como PointerEvent; o da tecla de menu

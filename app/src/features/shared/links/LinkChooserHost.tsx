@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useId,
   useLayoutEffect,
@@ -18,7 +19,12 @@ import {
   type LinkChoice,
   type LinkDestination,
 } from './link-destination'
-import { linkChooserKeyAction, placeLinkChooser } from './link-chooser-menu'
+import {
+  linkChooserKeyAction,
+  placeLinkChooser,
+  restoresFocusOnDismiss,
+  type LinkChooserDismissCause,
+} from './link-chooser-menu'
 import {
   closeLinkChooser,
   getLinkChooserState,
@@ -124,31 +130,43 @@ function LinkChooserMenu({ request, onCopied }: MenuProps) {
     itemRefs.current[index]?.focus()
   }
 
+  const returnFocus = request.returnFocus
+  /** Fecha sem escolha; `restoresFocusOnDismiss` diz quando o foco volta a quem abriu. */
+  const dismiss = useCallback(
+    (cause: LinkChooserDismissCause) => {
+      const focusWasInMenu = Boolean(containerRef.current?.contains(document.activeElement))
+      closeLinkChooser()
+      if (restoresFocusOnDismiss(cause, focusWasInMenu)) restoreFocus(returnFocus)
+    },
+    [returnFocus],
+  )
+
   useEffect(() => {
     const isOutside = (target: EventTarget | null) =>
       !(target instanceof Node && containerRef.current?.contains(target))
     const onPointerDown = (event: PointerEvent) => {
-      if (isOutside(event.target)) closeLinkChooser()
+      if (isOutside(event.target)) dismiss('pointer-outside')
     }
     // O canvas se move com a roda: o menu ficaria preso a um ponto que já não
     // é o link.
     const onWheel = (event: WheelEvent) => {
-      if (isOutside(event.target)) closeLinkChooser()
+      if (isOutside(event.target)) dismiss('wheel')
     }
+    const onResize = () => dismiss('resize')
     // Clicar dentro de uma Página Web não chega a este documento: o foco sai
     // da janela para a página, e é isso que fecha o menu.
-    const onBlur = () => closeLinkChooser()
+    const onBlur = () => dismiss('window-blur')
     document.addEventListener('pointerdown', onPointerDown, true)
     document.addEventListener('wheel', onWheel, { capture: true, passive: true })
-    window.addEventListener('resize', onBlur)
+    window.addEventListener('resize', onResize)
     window.addEventListener('blur', onBlur)
     return () => {
       document.removeEventListener('pointerdown', onPointerDown, true)
       document.removeEventListener('wheel', onWheel, { capture: true })
-      window.removeEventListener('resize', onBlur)
+      window.removeEventListener('resize', onResize)
       window.removeEventListener('blur', onBlur)
     }
-  }, [])
+  }, [dismiss])
 
   const choose = (choice: LinkChoice) => {
     let openedNodeId: string | undefined

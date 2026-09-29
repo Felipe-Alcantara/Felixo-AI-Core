@@ -5,6 +5,7 @@ import {
   isTouchGesture,
   linkChooserKeyAction,
   placeLinkChooser,
+  restoresFocusOnDismiss,
 } from './link-chooser-menu'
 
 const VIEWPORT = { width: 1280, height: 800 }
@@ -79,6 +80,25 @@ describe('linkChooserKeyAction', () => {
     // Segurar uma seta continua andando pelos itens, e Esc segurado fecha.
     expect(linkChooserKeyAction('ArrowDown', 0, 3, true)).toEqual({ type: 'move', index: 1 })
     expect(linkChooserKeyAction('Escape', 0, 3, true)).toEqual({ type: 'close' })
+  })
+})
+
+describe('restoresFocusOnDismiss', () => {
+  it('roda ou redimensionamento com o foco no menu: o foco volta a quem abriu', () => {
+    // Sem isto o foco caía no body: o terminal parava de receber teclas.
+    expect(restoresFocusOnDismiss('wheel', true)).toBe(true)
+    expect(restoresFocusOnDismiss('resize', true)).toBe(true)
+  })
+
+  it('sem o foco no menu, fechar não mexe no foco de ninguém', () => {
+    expect(restoresFocusOnDismiss('wheel', false)).toBe(false)
+    expect(restoresFocusOnDismiss('resize', false)).toBe(false)
+  })
+
+  it('clique fora e janela sem foco não movem o foco: ele foi para onde a pessoa quis', () => {
+    // Um clique dentro de uma Página Web tira o foco da janela de propósito.
+    expect(restoresFocusOnDismiss('pointer-outside', true)).toBe(false)
+    expect(restoresFocusOnDismiss('window-blur', true)).toBe(false)
   })
 })
 
