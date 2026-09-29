@@ -57,6 +57,13 @@ function registerAgentBrowserIpcHandlers(getMainWindow, appPaths, dependencies =
   const logger = dependencies.logger ?? console
   /** Ids com uma decisão em curso (ver `decide`). */
   const emAndamento = new Set()
+  /**
+   * Pedidos que já passaram pela chegada e estão no cartão. O perfil é
+   * conferido uma vez, quando o pedido chega: depois disso a pessoa já o viu,
+   * e um perfil apagado não o recusa pelas costas dela — a Página Web falha
+   * explicada, e o navegador e recusar continuam valendo.
+   */
+  let admitidos = new Set()
 
   /**
    * Recusa o que não tem o que perguntar; o resto fica para a pessoa.
@@ -66,41 +73,53 @@ function registerAgentBrowserIpcHandlers(getMainWindow, appPaths, dependencies =
    */
   function processPending() {
     try {
+      const vistos = new Set()
       for (const pedido of pedidos.listarPendentes({ acao: BROWSER_REQUEST_ACTION })) {
         try {
-          triarNaChegada(pedido)
+          if (triarNaChegada(pedido)) vistos.add(pedido.id)
         } catch (error) {
           avisarFalha(`o pedido ${pedido.id}`, error)
         }
       }
+      admitidos = vistos
       notifyRenderer()
     } catch (error) {
       avisarFalha('a fila de pedidos', error)
     }
   }
 
+  /** Recusa na hora o que não tem o que perguntar. `true` = fica para a pessoa. */
   function triarNaChegada(pedido) {
     const leitura = lerParaOCartao(pedido)
     if (!leitura.ok) {
-      pedidos.resolver(pedido.id, { aceito: false, resultado: { ok: false, ...leitura.recusa } })
-      return
+      recusarPeloApp(pedido, leitura.recusa)
+      return false
     }
 
     // Perfil pedido por NOME. Perfil que não existe falha explicitamente:
     // cair no Padrão abriria a página numa sessão logada que o agente não
     // escolheu — o oposto de isolar.
     const { perfil, url } = leitura.item
-    if (perfil && !resolveProfileId(perfil, dependencies.findProfileByName)) {
-      pedidos.resolver(pedido.id, {
-        aceito: false,
-        resultado: {
-          ok: false,
-          modo: 'embutido',
-          url,
-          message: `O perfil "${perfil}" nao existe no navegador interno.`,
-        },
+    if (perfil && !admitidos.has(pedido.id) && !resolveProfileId(perfil, dependencies.findProfileByName)) {
+      recusarPeloApp(pedido, {
+        modo: 'embutido',
+        url,
+        message: `O perfil "${perfil}" nao existe no navegador interno.`,
       })
+      return false
     }
+    return true
+  }
+
+  /**
+   * Recusa sem perguntar à pessoa. `recusadoPor: 'app'` diz ao agente que a
+   * pessoa não viu o pedido: o motivo é do app, não uma resposta dela.
+   */
+  function recusarPeloApp(pedido, resultado) {
+    return pedidos.resolver(pedido.id, {
+      aceito: false,
+      resultado: { ok: false, recusadoPor: 'app', ...resultado },
+    })
   }
 
   /**
@@ -171,17 +190,24 @@ function registerAgentBrowserIpcHandlers(getMainWindow, appPaths, dependencies =
       return { resolved: null, message: MUDOU }
     }
 
-    return { resolved: await carryOut(pedido, leitura.item, destino) }
+    return carryOut(pedido, leitura.item, destino)
   }
 
+  /**
+   * Executa a escolha. Só a recusa e a abertura que deu certo resolvem o
+   * pedido: o que falha ao abrir devolve `ok: false` com o motivo e deixa o
+   * pedido esperando, para a pessoa escolher outro destino ou recusar.
+   */
   async function carryOut(pedido, item, destino) {
     const { url, modo: modoPedido } = item
 
     if (destino === null) {
-      return pedidos.resolver(pedido.id, {
-        aceito: false,
-        resultado: { ok: false, modoPedido, message: 'A pessoa recusou abrir a pagina.' },
-      })
+      return {
+        resolved: pedidos.resolver(pedido.id, {
+          aceito: false,
+          resultado: { ok: false, recusadoPor: 'pessoa', modoPedido, message: 'A pessoa recusou abrir a pagina.' },
+        }),
+      }
     }
 
     if (destino === 'embutido') {
@@ -195,48 +221,39 @@ function registerAgentBrowserIpcHandlers(getMainWindow, appPaths, dependencies =
       const perfil = modoPedido === 'embutido' ? item.perfil : undefined
       const profileId = perfil ? resolveProfileId(perfil, dependencies.findProfileByName) : undefined
       if (perfil && !profileId) {
-        return pedidos.resolver(pedido.id, {
-          aceito: false,
-          resultado: {
-            ok: false,
-            modo: 'embutido',
-            url,
-            message: `O perfil "${perfil}" nao existe no navegador interno.`,
-          },
-        })
+        // Existia na chegada e sumiu antes do clique: cair no Padrão abriria
+        // outra sessão logada, e recusar tiraria a escolha da pessoa.
+        return { ok: false, message: `O perfil "${perfil}" não existe mais no navegador interno.` }
       }
 
       webContents.send(BROWSER_OPEN_CHANNEL, { requestId: pedido.id, url, ...(profileId ? { profileId } : {}) })
-      return pedidos.resolver(pedido.id, {
-        aceito: true,
-        resultado: {
-          ok: true,
-          modo: 'embutido',
-          modoPedido,
-          url,
-          ...(profileId ? { perfil, profileId } : {}),
-        },
-      })
+      return {
+        resolved: pedidos.resolver(pedido.id, {
+          aceito: true,
+          resultado: {
+            ok: true,
+            modo: 'embutido',
+            modoPedido,
+            url,
+            ...(profileId ? { perfil, profileId } : {}),
+          },
+        }),
+      }
     }
 
     try {
       await openExternal(url)
-      return pedidos.resolver(pedido.id, {
+    } catch (error) {
+      return {
+        ok: false,
+        message: error instanceof Error && error.message ? error.message : 'O navegador externo recusou a abertura.',
+      }
+    }
+    return {
+      resolved: pedidos.resolver(pedido.id, {
         aceito: true,
         resultado: { ok: true, modo: 'externo', modoPedido, url },
-      })
-    } catch (error) {
-      return pedidos.resolver(pedido.id, {
-        aceito: false,
-        resultado: {
-          ok: false,
-          modo: 'externo',
-          modoPedido,
-          url,
-          message:
-            error instanceof Error ? error.message : 'O navegador externo recusou a abertura.',
-        },
-      })
+      }),
     }
   }
 

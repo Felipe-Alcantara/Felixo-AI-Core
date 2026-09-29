@@ -52,7 +52,8 @@ async function comControlador(options, run) {
     paths,
     {
       openExternal: async (url) => {
-        if (options.falharAoAbrir) throw new Error('navegador indisponível')
+        const falhar = typeof options.falharAoAbrir === 'function' ? options.falharAoAbrir() : options.falharAoAbrir
+        if (falhar) throw new Error('navegador indisponível')
         opened.push(url)
       },
       ipcMain: { handle: (channel, handler) => handlers.set(channel, handler) },
@@ -216,17 +217,71 @@ test('pedido de outra intenção (Fetch All, pergunta) não é decidido por aqui
   })
 })
 
-test('navegador que recusa abrir: o pedido sai recusado com o motivo', async () => {
-  await comControlador({ falharAoAbrir: true }, async ({ controller }) => {
+test('navegador que não abre: o pedido continua esperando e o cartão recebe o motivo', async () => {
+  const navegador = { falhar: true }
+  await comControlador({ falharAoAbrir: () => navegador.falhar }, async ({ controller, handlers, opened }) => {
     const pedido = controller.pedidos.registrar('abrir-pagina', { url: 'https://example.com' })
     controller.processPending()
 
-    await decidirComoOCartao(controller, pedido.id, 'externo')
+    const result = await handlers.get('agent-browser:decide')({}, paramsDoCartao(controller, pedido.id, 'externo'))
 
-    const resolvido = controller.pedidos.ler(pedido.id)
-    assert.equal(resolvido.estado, 'recusado')
-    assert.match(resolvido.resultado.message, /navegador indisponível/)
+    assert.deepEqual(result, { ok: false, message: 'navegador indisponível' })
+    assert.equal(controller.pedidos.ler(pedido.id).estado, 'pendente')
+    // A pessoa pode tentar de novo (a reserva do id foi solta) ou escolher outra opção.
+    navegador.falhar = false
+    await decidirComoOCartao(controller, pedido.id, 'externo')
+    assert.deepEqual(opened, ['https://example.com/'])
+    assert.equal(controller.pedidos.ler(pedido.id).estado, 'aceito')
   })
+})
+
+test('perfil que some depois de o pedido chegar: nada é resolvido pelas costas da pessoa', async () => {
+  const perfis = new Set(['Trabalho'])
+  await comControlador(
+    { findProfileByName: (nome) => (perfis.has(nome) ? { id: `id-${nome}` } : null) },
+    async ({ controller, events, opened }) => {
+      const pedido = controller.pedidos.registrar('abrir-pagina', { url: 'https://example.com', modo: 'embutido', perfil: 'Trabalho' })
+      controller.processPending()
+      perfis.delete('Trabalho')
+
+      // Outra rodada (outro pedido chegou): o pedido já estava no cartão, fica.
+      controller.processPending()
+      assert.equal(controller.pedidos.ler(pedido.id).estado, 'pendente')
+
+      const result = await decidirComoOCartao(controller, pedido.id, 'embutido')
+      assert.equal(result.ok, false)
+      assert.match(result.message, /"Trabalho" não existe mais/)
+      assert.equal(controller.pedidos.ler(pedido.id).estado, 'pendente')
+      assert.deepEqual(aberturas(events), [])
+
+      // O navegador do sistema não usa perfil: continua valendo.
+      await decidirComoOCartao(controller, pedido.id, 'externo')
+      assert.deepEqual(opened, ['https://example.com/'])
+    },
+  )
+})
+
+test('toda recusa diz quem recusou: a pessoa, ou o app com o motivo', async () => {
+  await comControlador(
+    {
+      findProfileByName: () => null,
+      preparar: (pasta) => {
+        gravarAMao(pasta, { id: 'fora-da-web', url: 'file:///etc/passwd' })
+        gravarAMao(pasta, { id: 'malformado', url: 'https://example.com', modo: 'janela' })
+        gravarAMao(pasta, { id: 'perfil-fantasma', url: 'https://example.com', modo: 'embutido', perfil: 'Fantasma' })
+      },
+    },
+    async ({ controller }) => {
+      for (const id of ['fora-da-web', 'malformado', 'perfil-fantasma']) {
+        assert.equal(controller.pedidos.ler(id).resultado.recusadoPor, 'app', id)
+      }
+
+      const pedido = controller.pedidos.registrar('abrir-pagina', { url: 'https://example.com' })
+      controller.processPending()
+      await decidirComoOCartao(controller, pedido.id, null)
+      assert.equal(controller.pedidos.ler(pedido.id).resultado.recusadoPor, 'pessoa')
+    },
+  )
 })
 
 test('Página Web sem janela pronta: falha explicada e o pedido continua esperando', async () => {
