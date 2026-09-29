@@ -49,6 +49,19 @@ describe('describeLinkOpenFailure', () => {
     expect(notice.copyText).toBe('file:///etc/hosts')
   })
 
+  it('e-mail que não abriu: fala do app de e-mail, não do navegador', () => {
+    const notice = describeLinkOpenFailure({ url: 'mailto:time@example.com?cc=a@example.com', kind: 'falhou' })
+    expect(notice.title).toBe('Não foi possível abrir o app de e-mail')
+    expect(notice.detail).not.toMatch(/navegador/)
+    expect(notice.copyLabel).toBe('Copiar endereço')
+    expect(notice.copyText).toBe('mailto:time@example.com?cc=a@example.com')
+  })
+
+  it('link web usa o rótulo do menu, "Copiar link"', () => {
+    expect(describeLinkOpenFailure({ url: 'https://example.com/', kind: 'falhou' }).copyLabel).toBe('Copiar link')
+    expect(describeLinkOpenFailure({ url: 'file:///x', kind: 'recusado' }).copyLabel).toBe('Copiar link')
+  })
+
   it('recusa de um endereço que o renderer aprovaria: explica sem inventar motivo', () => {
     const notice = describeLinkOpenFailure({ url: 'https://example.com/', kind: 'recusado', reason: 'x' })
     expect(notice.detail).toBe('O endereço foi recusado na hora de abrir.')

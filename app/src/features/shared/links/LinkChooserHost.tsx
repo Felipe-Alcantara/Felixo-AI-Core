@@ -139,15 +139,32 @@ type FailureAlertProps = {
  * num terminal continua nele) e se anuncia como `alert`. Fica até a pessoa
  * copiar, fechar ou um aviso novo tomar o lugar: some sozinho seria perder o
  * endereço que ela talvez queira colar noutro lugar.
+ *
+ * Quem usa o aviso (clica em copiar ou no ×, aperta Esc) leva o foco para
+ * ele. Ao fechar, o foco volta a quem o tinha quando o aviso apareceu: sem
+ * isso, ele caía no `body`, o terminal parava de receber teclas e um
+ * Backspace apagava o bloco selecionado no canvas.
  */
 function LinkOpenFailureAlert({ notice, onClose, onCopied }: FailureAlertProps) {
   const boxRef = useRef<HTMLDivElement>(null)
+  const [returnFocus] = useState(() => {
+    const active = document.activeElement
+    return active instanceof HTMLElement && active !== document.body ? active : null
+  })
+
+  const close = () => {
+    const active = document.activeElement
+    const focusWasHere = active === document.body || Boolean(active && boxRef.current?.contains(active))
+    onClose()
+    if (focusWasHere) restoreFocus(returnFocus)
+  }
+
   const copy = () => {
     const rect = boxRef.current?.getBoundingClientRect()
     void globalThis.navigator?.clipboard?.writeText(notice.copyText).then(
       () => {
         onCopied(rect ? { left: rect.left, top: Math.max(8, rect.top - 32) } : { left: 16, top: 16 })
-        onClose()
+        close()
       },
       () => undefined,
     )
@@ -162,11 +179,14 @@ function LinkOpenFailureAlert({ notice, onClose, onCopied }: FailureAlertProps) 
       // nele não substitui quem tinha o foco antes (ver `floating-layer.ts`).
       data-felixo-floating-layer
       data-felixo-focus-transient
-      className="fixed bottom-6 left-1/2 z-70 w-[min(22rem,calc(100vw-2rem))] -translate-x-1/2 rounded-lg border border-white/10 bg-(--f-surface-panel) p-3 text-xs text-(--f-core-white-soft) shadow-2xl"
+      // Focável só por clique, como o menu: clicar no texto não solta o
+      // teclado para o `body` (onde o Esc não fecharia nada).
+      tabIndex={-1}
+      className="fixed bottom-6 left-1/2 z-70 w-[min(22rem,calc(100vw-2rem))] -translate-x-1/2 rounded-lg border border-white/10 bg-(--f-surface-panel) p-3 text-xs text-(--f-core-white-soft) shadow-2xl outline-hidden"
       onKeyDown={(event) => {
         // Nenhuma tecla daqui chega aos atalhos do canvas.
         event.stopPropagation()
-        if (event.key === 'Escape') onClose()
+        if (event.key === 'Escape') close()
       }}
     >
       <div className="flex items-start gap-2">
@@ -182,7 +202,7 @@ function LinkOpenFailureAlert({ notice, onClose, onCopied }: FailureAlertProps) 
           type="button"
           aria-label="Fechar aviso"
           title="Fechar aviso"
-          onClick={onClose}
+          onClick={close}
           className="felixo-btn-icon shrink-0 rounded-sm p-0.5 text-(--f-core-secondary) hover:bg-white/10 hover:text-(--f-core-white)"
         >
           <X size={12} aria-hidden />
@@ -194,7 +214,7 @@ function LinkOpenFailureAlert({ notice, onClose, onCopied }: FailureAlertProps) 
           onClick={copy}
           className="felixo-btn flex items-center gap-1.5 rounded-sm border border-white/15 bg-white/8 px-2.5 py-1.5 text-xs text-(--f-core-white) hover:bg-white/14"
         >
-          <Copy size={12} aria-hidden /> Copiar link
+          <Copy size={12} aria-hidden /> {notice.copyLabel}
         </button>
       </div>
     </div>

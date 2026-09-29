@@ -17,8 +17,10 @@ export type ExternalOpenFailure = { url: string; kind: 'recusado' | 'falhou'; re
 export type LinkOpenFailureNotice = {
   title: string
   detail: string
-  /** O que "Copiar link" escreve: o endereço como foi pedido. */
+  /** O que o botão de copiar escreve: o endereço como foi pedido. */
   copyText: string
+  /** "Copiar link", ou "Copiar endereço" num e-mail (o rótulo do menu). */
+  copyLabel: string
 }
 
 /**
@@ -47,12 +49,23 @@ export function describeLinkOpenFailure(failure: ExternalOpenFailure): LinkOpenF
         ? 'O endereço foi recusado na hora de abrir.'
         : `${capitalize(destination.reason)}.`,
       copyText: failure.url,
+      copyLabel: 'Copiar link',
+    }
+  }
+  // Um `mailto:` vai para o app de e-mail, não para o navegador.
+  if (/^\s*mailto:/i.test(failure.url)) {
+    return {
+      title: 'Não foi possível abrir o app de e-mail',
+      detail: 'O sistema não entregou o endereço a um app de e-mail. Copie o endereço e use no seu e-mail.',
+      copyText: failure.url,
+      copyLabel: 'Copiar endereço',
     }
   }
   return {
     title: 'Não foi possível abrir no navegador',
     detail: 'O sistema não entregou o endereço a um navegador. Copie o link e cole no navegador.',
     copyText: failure.url,
+    copyLabel: 'Copiar link',
   }
 }
 
