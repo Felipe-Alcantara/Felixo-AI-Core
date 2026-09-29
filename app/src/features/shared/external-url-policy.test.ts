@@ -9,6 +9,8 @@ import {
   EXTERNAL_WEB_SCHEMES,
   classifyExternalUrl,
   describeExternalUrlForLog,
+  hasHiddenUrlCharacters,
+  revealHiddenUrlCharacters,
 } from './external-url-policy'
 
 // Mesma superfície pública; o diferencial abaixo prova que o conteúdo também é.
@@ -128,6 +130,32 @@ describe('política de URL externa: propriedades', () => {
       const value = randomUrlLike(random)
       expect(() => classifyExternalUrl(value)).not.toThrow()
       expect(() => describeExternalUrlForLog(value)).not.toThrow()
+    }
+  })
+})
+
+describe('revealHiddenUrlCharacters', () => {
+  it('troca cada invisível ou controle pelo código, e deixa o resto como está', () => {
+    const zwsp = String.fromCharCode(0x200b)
+    const rlo = String.fromCharCode(0x202e)
+    const esc = String.fromCharCode(0x1b)
+    expect(revealHiddenUrlCharacters(`https://exa${zwsp}mple.com/${rlo}gpj.exe`)).toBe(
+      'https://exa⟨U+200B⟩mple.com/⟨U+202E⟩gpj.exe',
+    )
+    expect(revealHiddenUrlCharacters(`${esc}[31mx`)).toBe('⟨U+001B⟩[31mx')
+    expect(revealHiddenUrlCharacters('https://exemplo.café/ação')).toBe('https://exemplo.café/ação')
+  })
+
+  it('invisível fora do plano básico (tag Unicode) também aparece, com o código inteiro', () => {
+    const tag = String.fromCodePoint(0xe0041)
+    expect(revealHiddenUrlCharacters(`a${tag}b`)).toBe('a⟨U+E0041⟩b')
+  })
+
+  it('o resultado nunca tem mais nada escondido', () => {
+    const random = seededRandom(0x5eed_0005)
+    for (let index = 0; index < SAMPLES; index += 1) {
+      const value = randomUrlLike(random)
+      expect(hasHiddenUrlCharacters(revealHiddenUrlCharacters(value)), JSON.stringify(value)).toBe(false)
     }
   })
 })

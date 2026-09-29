@@ -1,0 +1,304 @@
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from 'react'
+import { createPortal } from 'react-dom'
+import { Copy, ExternalLink, Globe, Mail, ShieldAlert } from 'lucide-react'
+
+import {
+  describeLinkDestination,
+  linkChoiceEntries,
+  runLinkChoice,
+  type LinkChoice,
+  type LinkDestination,
+} from './link-destination'
+import { linkChooserKeyAction, placeLinkChooser } from './link-chooser-menu'
+import {
+  closeLinkChooser,
+  getLinkChooserState,
+  getWebpageOpener,
+  subscribeLinkChooser,
+  type FocusReturn,
+  type LinkChooserRequest,
+} from './link-chooser-store'
+
+/** O texto de um endereço gigante (até 8.192 caracteres) não precisa ir inteiro para a tela. */
+const MAX_SHOWN_CHARS = 600
+const COPIED_NOTICE_MS = 1400
+
+type Point = { left: number; top: number }
+
+/**
+ * O menu "para onde abrir este link", o mesmo para o terminal, o Markdown e o
+ * bloco Página Web. Montado uma vez no `App`, desenha o pedido que estiver no
+ * `link-chooser-store`. Ao lado, uma região `status` anuncia "Link copiado",
+ * porque o menu fecha no mesmo clique e nada mais mostraria que deu certo.
+ */
+export function LinkChooserHost() {
+  const { request, version } = useSyncExternalStore(subscribeLinkChooser, getLinkChooserState)
+  const [copiedAt, setCopiedAt] = useState<Point | null>(null)
+
+  useEffect(() => {
+    if (!copiedAt) return
+    const timer = window.setTimeout(() => setCopiedAt(null), COPIED_NOTICE_MS)
+    return () => window.clearTimeout(timer)
+  }, [copiedAt])
+
+  return (
+    <>
+      {request &&
+        createPortal(
+          <LinkChooserMenu key={version} request={request} onCopied={setCopiedAt} />,
+          document.body,
+        )}
+      {copiedAt &&
+        createPortal(
+          <div
+            aria-hidden
+            className="pointer-events-none fixed z-70 rounded-md border border-white/10 bg-(--f-surface-panel) px-2 py-1 text-xs text-(--f-core-white-soft) shadow-xl"
+            style={copiedAt}
+          >
+            Link copiado
+          </div>,
+          document.body,
+        )}
+      <div role="status" aria-live="polite" className="sr-only">
+        {copiedAt ? 'Link copiado' : ''}
+      </div>
+    </>
+  )
+}
+
+type MenuProps = {
+  request: LinkChooserRequest
+  onCopied: (at: Point) => void
+}
+
+function LinkChooserMenu({ request, onCopied }: MenuProps) {
+  const destination = useMemo(
+    () => describeLinkDestination(request.url, request.origin),
+    [request.url, request.origin],
+  )
+  // Lido ao abrir: sem canvas montado (tela do chat), não há onde criar o bloco.
+  const [webpageOpener] = useState(getWebpageOpener)
+  const entries = useMemo(
+    () => linkChoiceEntries(destination, { canOpenWebpage: webpageOpener !== null }),
+    [destination, webpageOpener],
+  )
+  const containerRef = useRef<HTMLDivElement>(null)
+  const itemRefs = useRef<Array<HTMLButtonElement | null>>([])
+  const [active, setActive] = useState(0)
+  const [position, setPosition] = useState<Point | null>(null)
+  const descriptionId = useId()
+
+  // Mede o menu já desenhado (fora da tela) e só então o põe no lugar: a
+  // altura depende do destino, que pode ocupar de uma a três linhas.
+  useLayoutEffect(() => {
+    const rect = containerRef.current?.getBoundingClientRect()
+    if (!rect) return
+    setPosition(
+      placeLinkChooser(
+        request.anchor,
+        { width: rect.width, height: rect.height },
+        { width: window.innerWidth, height: window.innerHeight },
+      ),
+    )
+  }, [request.anchor])
+
+  useEffect(() => {
+    // Um quadro depois: o gesto que abriu o menu (o `mouseup` do xterm, o
+    // clique no link) ainda pode devolver o foco a quem foi clicado.
+    const frame = window.requestAnimationFrame(() => itemRefs.current[active]?.focus())
+    return () => window.cancelAnimationFrame(frame)
+  }, [active])
+
+  useEffect(() => {
+    const isOutside = (target: EventTarget | null) =>
+      !(target instanceof Node && containerRef.current?.contains(target))
+    const onPointerDown = (event: PointerEvent) => {
+      if (isOutside(event.target)) closeLinkChooser()
+    }
+    // O canvas se move com a roda: o menu ficaria preso a um ponto que já não
+    // é o link.
+    const onWheel = (event: WheelEvent) => {
+      if (isOutside(event.target)) closeLinkChooser()
+    }
+    // Clicar dentro de uma Página Web não chega a este documento: o foco sai
+    // da janela para a página, e é isso que fecha o menu.
+    const onBlur = () => closeLinkChooser()
+    document.addEventListener('pointerdown', onPointerDown, true)
+    document.addEventListener('wheel', onWheel, { capture: true, passive: true })
+    window.addEventListener('resize', onBlur)
+    window.addEventListener('blur', onBlur)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true)
+      document.removeEventListener('wheel', onWheel, { capture: true })
+      window.removeEventListener('resize', onBlur)
+      window.removeEventListener('blur', onBlur)
+    }
+  }, [])
+
+  const choose = (choice: LinkChoice) => {
+    let openedNodeId: string | undefined
+    runLinkChoice(choice, request.url, request.origin, {
+      openExternal: (url) => {
+        // O processo principal recebe o pedido de janela, aplica a política de
+        // novo e entrega ao sistema; nenhuma janela nova nasce no app.
+        window.open(url, '_blank')
+      },
+      openWebpage: webpageOpener
+        ? (url) => {
+            openedNodeId = webpageOpener(url, request.sourceNodeId)
+          }
+        : undefined,
+      copy: (text) => {
+        const at = position ?? { left: request.anchor.x, top: request.anchor.y }
+        void globalThis.navigator?.clipboard?.writeText(text).then(
+          () => onCopied(at),
+          () => undefined,
+        )
+      },
+    })
+    closeLinkChooser()
+    if (openedNodeId) focusCanvasNodeSoon(openedNodeId, request.returnFocus)
+    else restoreFocus(request.returnFocus)
+  }
+
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    // Nenhuma tecla dentro do menu chega aos atalhos do canvas (Backspace
+    // apagaria o bloco selecionado atrás do menu).
+    event.stopPropagation()
+    const action = linkChooserKeyAction(event.key, active, entries.length)
+    if (!action) return
+    event.preventDefault()
+    if (action.type === 'move') {
+      setActive(action.index)
+      return
+    }
+    closeLinkChooser()
+    restoreFocus(request.returnFocus)
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      className="fixed z-70 w-72 max-w-[calc(100vw-16px)] rounded-lg border border-white/10 bg-(--f-surface-panel) p-1.5 text-xs text-(--f-core-white-soft) shadow-2xl"
+      style={
+        position
+          ? { left: position.left, top: position.top }
+          : { left: 0, top: 0, visibility: 'hidden' }
+      }
+      data-felixo-link-chooser
+      onKeyDown={onKeyDown}
+    >
+      <DestinationSummary id={descriptionId} destination={destination} />
+      <div
+        role="menu"
+        aria-label="Abrir link"
+        aria-describedby={descriptionId}
+        className="mt-1 flex flex-col border-t border-white/10 pt-1"
+      >
+        {entries.map((entry, index) => (
+          <button
+            key={entry.choice}
+            ref={(element) => {
+              itemRefs.current[index] = element
+            }}
+            type="button"
+            role="menuitem"
+            tabIndex={index === active ? 0 : -1}
+            onClick={() => choose(entry.choice)}
+            data-link-choice={entry.choice}
+            className="felixo-btn-flat flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left hover:bg-white/10 focus-visible:bg-white/10 pointer-coarse:py-2.5"
+          >
+            <ChoiceIcon choice={entry.choice} destination={destination} />
+            {entry.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function DestinationSummary({ id, destination }: { id: string; destination: LinkDestination }) {
+  if (!destination.ok) {
+    return (
+      <div id={id} className="px-2 pb-1 pt-0.5">
+        <p className="flex items-center gap-1 font-medium text-(--color-warning)">
+          <ShieldAlert size={12} aria-hidden /> Link recusado
+        </p>
+        <p className="mt-0.5">{capitalize(destination.reason)}.</p>
+        {destination.shownText && (
+          <p className="mt-1 line-clamp-3 break-all font-mono text-[11px] text-(--f-core-secondary)">
+            {shorten(destination.shownText)}
+          </p>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div id={id} className="px-2 pb-1 pt-0.5">
+      <p className="text-[10px] uppercase tracking-wide text-(--f-core-secondary)">
+        {destination.kind === 'email' ? 'E-mail para' : 'Leva a'}
+      </p>
+      <p className="break-all font-medium text-(--f-core-white)">{destination.headline}</p>
+      <p
+        className="mt-0.5 line-clamp-3 break-all font-mono text-[11px] text-(--f-core-secondary)"
+        title={destination.url.length > MAX_SHOWN_CHARS ? undefined : destination.url}
+      >
+        {shorten(destination.url)}
+      </p>
+    </div>
+  )
+}
+
+function ChoiceIcon({ choice, destination }: { choice: LinkChoice; destination: LinkDestination }) {
+  if (choice === 'copiar-link') return <Copy size={13} aria-hidden />
+  if (choice === 'abrir-como-pagina-web') return <Globe size={13} aria-hidden />
+  return destination.ok && destination.kind === 'email' ? (
+    <Mail size={13} aria-hidden />
+  ) : (
+    <ExternalLink size={13} aria-hidden />
+  )
+}
+
+function capitalize(text: string): string {
+  return text ? `${text[0].toUpperCase()}${text.slice(1)}` : text
+}
+
+function shorten(text: string): string {
+  return text.length > MAX_SHOWN_CHARS ? `${text.slice(0, MAX_SHOWN_CHARS - 1)}…` : text
+}
+
+function restoreFocus(target: FocusReturn | null | undefined): void {
+  if (target?.isConnected) target.focus()
+}
+
+/**
+ * O bloco novo recebe o foco assim que o React Flow o desenha, para quem está
+ * no teclado continuar dali. Se ele não aparecer em dois quadros, o foco volta
+ * para onde o link estava, em vez de cair no `body`.
+ */
+function focusCanvasNodeSoon(nodeId: string, fallback: FocusReturn | null | undefined): void {
+  let attempts = 0
+  const tryFocus = () => {
+    const node = document.querySelector<HTMLElement>(
+      `.react-flow__node[data-id="${CSS.escape(nodeId)}"]`,
+    )
+    if (node) {
+      node.focus()
+      return
+    }
+    attempts += 1
+    if (attempts < 2) window.requestAnimationFrame(tryFocus)
+    else restoreFocus(fallback)
+  }
+  window.requestAnimationFrame(tryFocus)
+}
