@@ -22,7 +22,11 @@
 
 const { getAppPaths } = require('../core/app-paths.cjs')
 const { createFetchAllService } = require('../services/fetch-all-service.cjs')
-const { criarRepositorioDePedidos } = require('../services/fetch-all/agent-requests.cjs')
+const {
+  VALIDADE_MS,
+  criarRepositorioDePedidos,
+  pedidoAindaVale,
+} = require('../services/fetch-all/agent-requests.cjs')
 const { loadAgentScanState, saveAgentScanState } = require('./agent-scan-state.cjs')
 const { AJUDA, formatarElementos, formatarLeitura, formatarPlano } = require('./agent-command-output.cjs')
 const { executarContexto } = require('./context-command.cjs')
@@ -153,6 +157,7 @@ async function executar(argumentos, dependencias = {}) {
     gravarRelatorio = gravarRelatorioPadrao,
     gravarEstado = gravarEstadoPadrao,
     lerEstado = lerEstadoPadrao,
+    agora = () => Date.now(),
   } = dependencias
 
   const { ferramenta, verbo, argumento, argumento2, argumento2Fornecido, restantes, opcoes } =
@@ -210,7 +215,7 @@ async function executar(argumentos, dependencias = {}) {
       }
 
       return {
-        saida: opcoes.json ? JSON.stringify(pedido, null, 2) : descreverPedido(pedido),
+        saida: opcoes.json ? JSON.stringify(pedido, null, 2) : descreverPedido(pedido, agora()),
         codigo: 0,
       }
     }
@@ -547,9 +552,10 @@ async function lerEstadoPadrao() {
  * Descreve um pedido em uma linha por fato.
  *
  * @param {object} pedido
+ * @param {number} [agora] - para dizer que um pendente de abertura já venceu.
  * @returns {string}
  */
-function descreverPedido(pedido) {
+function descreverPedido(pedido, agora = Date.now()) {
   const pagina = pedido.acao === 'abrir-pagina'
   const estados = pagina
     ? {
@@ -563,6 +569,9 @@ function descreverPedido(pedido) {
         recusado: 'recusado — nada foi escrito',
       }
   const abertoEm = pedido.resultado?.modo === 'embutido' ? 'Página Web (canvas)' : 'navegador'
+  const desfecho = (pagina && explicarDesfechoDaPagina(pedido, agora)) || estados[pedido.estado] || 'desconhecido'
+  // Recusa gravada antes de `recusadoPor` existir: o motivo em linha própria, como sempre.
+  const recusaSemAutor = pagina && pedido.estado === 'recusado' && !pedido.resultado?.recusadoPor
 
   return [
     `Pedido ${pedido.id}`,
@@ -570,16 +579,42 @@ function descreverPedido(pedido) {
     pagina ? `  url: ${pedido.url}` : null,
     pagina ? `  destino sugerido: ${pedido.modo}` : null,
     pagina && pedido.perfil ? `  perfil: ${pedido.perfil}` : null,
-    `  estado: ${pedido.estado} (${estados[pedido.estado] ?? 'desconhecido'})`,
+    `  estado: ${pedido.estado} (${desfecho})`,
     pagina && pedido.estado === 'aceito' ? `  aberto em: ${abertoEm}` : null,
-    pagina && pedido.estado === 'recusado' && pedido.resultado?.message
-      ? `  motivo: ${pedido.resultado.message}`
-      : null,
+    recusaSemAutor && pedido.resultado?.message ? `  motivo: ${pedido.resultado.message}` : null,
     `  pedido em: ${pedido.pedidoEm}`,
     pedido.resolvidoEm ? `  resolvido em: ${pedido.resolvidoEm}` : null,
   ]
     .filter(Boolean)
     .join('\n')
+}
+
+/** A validade da fila como a ajuda e a skill dizem ("1 h"). */
+const VALIDADE_TEXTO = `${VALIDADE_MS / (60 * 60 * 1000)} h`
+
+/**
+ * Quem decidiu um pedido de abertura, em uma frase — o agente age diferente
+ * em cada caso. Só a recusa da pessoa é resposta dela (não se repete o pedido
+ * sem ela pedir); a do app traz o motivo, que o agente pode corrigir; e a
+ * expiração diz que ninguém respondeu. '' = a frase de sempre do estado.
+ *
+ * @param {object} pedido
+ * @param {number} agora
+ * @returns {string}
+ */
+function explicarDesfechoDaPagina(pedido, agora) {
+  // O app resolve o vencido quando está aberto; com ele fechado, o arquivo
+  // continua "pendente", mas não vai mais aparecer para a pessoa.
+  if (pedido.estado === 'pendente' && !pedidoAindaVale(pedido, agora)) {
+    return `expirou: ninguém respondeu em ${VALIDADE_TEXTO}; o app não mostra mais esse pedido`
+  }
+  if (pedido.estado !== 'recusado') return ''
+
+  const resultado = pedido.resultado ?? {}
+  if (resultado.recusadoPor === 'pessoa') return 'recusado pela pessoa'
+  if (resultado.recusadoPor !== 'app') return ''
+  if (resultado.expirou === true) return `expirou: ninguém respondeu em ${VALIDADE_TEXTO}`
+  return `recusado pelo app: ${typeof resultado.message === 'string' ? resultado.message : 'motivo não informado'}`
 }
 
 /**

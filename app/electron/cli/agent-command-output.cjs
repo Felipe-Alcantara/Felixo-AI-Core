@@ -161,11 +161,15 @@ const AJUDA = `felixo fetch-all — varre os repositórios git da máquina e rep
       --embedded) o bloco abre nesse perfil do navegador interno — logins
       separados por perfil. "Padrão" é o perfil que já existia. Perfil
       inexistente falha na hora em vez de cair no Padrão. Devolve na hora,
-      sem esperar a escolha.
+      sem esperar a escolha. O pedido expira em 1 h sem resposta.
 
   felixo browser status <id> [--json]
       Mostra o desfecho de um pedido de abertura: esperando a pessoa, aberto
-      (no navegador ou na Página Web) ou recusado, com o motivo.
+      (no navegador ou na Página Web) ou recusado, e por quem. Só "recusado
+      pela pessoa" (recusadoPor "pessoa" no --json) é resposta dela: não
+      repita o pedido sem ela pedir. "recusado pelo app" (recusadoPor "app")
+      traz o motivo — URL, perfil, formato — e não é resposta dela. "expirou"
+      = ninguém respondeu em 1 h.
 
   felixo context read <nome-do-artefato>
       Lê um artefato temporário pelo nome portátil. Também aceito:

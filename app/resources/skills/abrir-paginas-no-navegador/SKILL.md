@@ -11,9 +11,10 @@ Fetch All já usa, e o app atende essa intenção.
 
 **Nada abre sem a pessoa.** O app mostra o pedido num cartão, com o endereço
 inteiro, e a pessoa escolhe: abrir no navegador, abrir como Página Web ou
-recusar. O comando devolve na hora, sem esperar a escolha. Os dois jeitos
-abaixo só mudam o destino **sugerido**, que vem destacado no cartão. Diga à
-pessoa que o pedido está esperando por ela no app.
+recusar. O comando devolve na hora, sem esperar a escolha, e o pedido expira
+em 1 h sem resposta. Os dois jeitos abaixo só mudam o destino **sugerido**,
+que vem destacado no cartão. Diga à pessoa que o pedido está esperando por
+ela no app.
 
 ## Sugerir o navegador externo
 
@@ -55,14 +56,22 @@ fronteira do pedido.
 
 ## Acompanhar
 
-O comando imprime um id. Consulte o resultado para saber o que a pessoa
-escolheu: ainda esperando, aberto (no navegador ou na Página Web) ou recusado.
-Uma recusa é a resposta da pessoa: não repita o pedido sem ela pedir.
+O comando imprime um id. Consulte o resultado para saber o que aconteceu:
+ainda esperando, aberto (no navegador ou na Página Web) ou recusado — e por
+quem.
 
 ```bash
 felixo browser status <id>
 felixo browser status <id> --json
 ```
+
+- **Recusado pela pessoa** (`recusadoPor: "pessoa"` no `--json`): é a
+  resposta dela. Não repita o pedido sem ela pedir.
+- **Recusado pelo app** (`recusadoPor: "app"`): a pessoa não chegou a ver o
+  pedido. O motivo vem junto (URL fora da web, perfil inexistente, pedido
+  malformado); corrija-o antes de pedir de novo.
+- **Expirou** (`recusadoPor: "app"` com `expirou: true`): ninguém respondeu
+  em 1 h e o pedido saiu do app. Pergunte à pessoa antes de pedir de novo.
 
 Não crie outro servidor, socket ou mecanismo de IPC para abrir páginas. A
 integração deve continuar usando a fila `userData/agent-requests`, compartilhada
