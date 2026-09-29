@@ -1,0 +1,38 @@
+/**
+ * O menu de link pedido de dentro da página de um bloco Página Web: o clique
+ * direito (ou o toque longo, ou a tecla de menu) chega como o evento
+ * `context-menu` do `<webview>`, e daqui sai o pedido para o menu único de
+ * destino. Separado do componente para ser testado sem Electron.
+ */
+import type { LinkChooserAnchor } from '../../shared/links/link-chooser-store'
+
+/** O pedaço de `params` do `context-menu` do `<webview>` que o menu usa. */
+export type WebviewContextMenuParams = { linkURL: string; x: number; y: number }
+
+export type WebviewLinkMenu = { url: string; anchor: LinkChooserAnchor }
+
+/**
+ * O link sob o gesto e o ponto onde o menu nasce, ou `null` quando o gesto
+ * não foi num link: aí o menu não abre, e a página segue com o dela.
+ *
+ * `x`/`y` já chegam no espaço da janela do app, em DIP: o Electron soma a
+ * posição do `<webview>`, o iframe onde o link está e a escala do canvas, e
+ * não multiplica pela escala do monitor. Somar o retângulo do webview de novo
+ * punha o menu longe do clique. Verificado num experimento isolado no
+ * Electron 41.10.7: webview em (300,200) e clique em (350,225) chegam como
+ * (350,225); link num iframe e pai com `scale(0.5)`, idem; escala de monitor
+ * 2, os mesmos números. Só o zoom da janela (Ctrl+=/−) entra: com fator 1,5,
+ * o clique no ponto CSS (325,212) chega como (488,318). O menu é
+ * `position: fixed` na página do app, que mede em pixels CSS, então o ponto
+ * é dividido pelo fator.
+ */
+export function webviewLinkMenu(
+  params: WebviewContextMenuParams,
+  windowZoomFactor: number,
+): WebviewLinkMenu | null {
+  const { linkURL, x, y } = params
+  if (!linkURL) return null
+  // Sem a ponte (ou com um valor que não é zoom), a janela está sem zoom.
+  const zoom = Number.isFinite(windowZoomFactor) && windowZoomFactor > 0 ? windowZoomFactor : 1
+  return { url: linkURL, anchor: { x: x / zoom, y: y / zoom } }
+}

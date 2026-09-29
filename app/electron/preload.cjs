@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer, webUtils } = require('electron')
+const { contextBridge, ipcRenderer, webFrame, webUtils } = require('electron')
 
 const WINDOW_FOCUS_CHANNEL = 'window:focus-state'
 const GPU_PREFERENCE_CHANGED_CHANNEL = 'graphics:gpu-preference-changed'
@@ -43,6 +43,13 @@ contextBridge.exposeInMainWorld('felixo', {
       ipcRenderer.on(WINDOW_FOCUS_CHANNEL, handler)
       return () => ipcRenderer.removeListener(WINDOW_FOCUS_CHANNEL, handler)
     },
+  },
+  // Zoom da janela (Ctrl+=/−/0, `window-zoom-shortcuts.cjs`); 1 sem zoom. O
+  // `context-menu` do <webview> entrega o ponto do clique em DIP da janela, e
+  // o menu de link é desenhado em pixels CSS da página do app: a conversão é
+  // dividir por este fator. Lido a cada gesto, porque o zoom muda sem aviso.
+  windowZoom: {
+    getFactor: () => webFrame.getZoomFactor(),
   },
   getFilePath: (file) => webUtils?.getPathForFile(file) ?? '',
   getVersion: () => ipcRenderer.invoke('app:get-version'),

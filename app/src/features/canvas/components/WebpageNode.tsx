@@ -27,6 +27,7 @@ import {
 } from '../services/webview-mount'
 import { WebviewProfileMenu } from './WebviewProfileMenu'
 import { partitionForWebviewProfile } from '../services/webview-profile'
+import { webviewLinkMenu, type WebviewContextMenuParams } from '../services/webview-context-menu'
 import type { WebpageNodeData } from '../types'
 
 /**
@@ -199,16 +200,15 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
     // Clique direito (ou toque longo, ou a tecla de menu) num link da página:
     // o mesmo menu do terminal e do Markdown. O clique simples continua sendo
     // da página, que navega dentro do bloco. Longe de um link, nada muda.
-    const onContextMenu = (event: { params: { linkURL: string; x: number; y: number } }) => {
-      const { linkURL, x, y } = event.params
-      if (!linkURL) return
-      // `x`/`y` vêm em pixels da página; o bloco pode estar com zoom do canvas.
-      const rect = webview.getBoundingClientRect()
-      const scale = webview.offsetWidth > 0 ? rect.width / webview.offsetWidth : 1
+    const onContextMenu = (event: { params: WebviewContextMenuParams }) => {
+      // O ponto já vem no espaço da janela; falta só o zoom dela (ver
+      // `webviewLinkMenu`). Lido a cada gesto: Ctrl+=/− não remonta o bloco.
+      const link = webviewLinkMenu(event.params, window.felixo?.windowZoom?.getFactor?.() ?? 1)
+      if (!link) return
       openLinkChooser({
-        url: linkURL,
+        url: link.url,
         origin: 'pagina-web',
-        anchor: { x: rect.left + x * scale, y: rect.top + y * scale },
+        anchor: link.anchor,
         sourceNodeId: id,
         returnFocus: webview,
       })

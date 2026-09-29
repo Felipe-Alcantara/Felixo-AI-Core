@@ -368,6 +368,10 @@ declare global {
       windowFocus?: {
         onChange: (callback: (focused: boolean) => void) => () => void
       }
+      /** Zoom da janela do app (Ctrl+=/−/0): 1 sem zoom. Converte DIP da janela em pixels CSS. */
+      windowZoom?: {
+        getFactor: () => number
+      }
       getFilePath?: (file: File) => string
       /** Versão empacotada do app (a do CI, não a do package.json versionado). */
       getVersion?: () => Promise<string>
