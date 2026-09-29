@@ -7003,3 +7003,14 @@ Zero violações no boot, no canvas, no terminal (mock e PTY real), em nota Mark
 - **Achado fora do diff, anterior a esta task:** no processo principal da instância do devtools, `app.constructor.constructor('return process')()` dentro do `vm` do eval devolve o `process` do main, apesar do comentário em `app/electron/main.cjs:564-568`. Tem task aberta.
 - **O `felixo.cmd` instalado no AppData aponta para uma instalação de release-smoke sem `dev-runner`.** A checagem ao vivo usou o CLI do repo.
 - Nota de ambiente: a entrada de 28/09 da cadeia de contas descreve esta máquina como "2c/4t". Medido agora, ela é um Ryzen 7 5700G com 8 núcleos e 16 threads, 13,8 GB de RAM e cerca de 2 GB livres com o app e os agentes abertos. Leituras de desempenho que usaram aquele dado devem ser relidas com isso em mente.
+
+## 2026-09-29 — Segurança de URLs: última lente da revisão (CSP, docs e testes)
+
+Registro gravado às 00:31. Completa a entrada anterior. A lente de CSP, docs e testes terminou depois do push de `cb88c79`, com 4 achados confirmados:
+
+- **`frame-src 'none'` quebrava os embeds do Excalidraw** (YouTube, Figma…), que viravam frame com erro, sem aviso. O bloco de desenho passa `validateEmbeddable={false}`, e o Excalidraw diz que o embed não é permitido. Um teste trava a CSP e o Excalidraw juntos. Religar embeds escolhendo hosts ficou como task de decisão.
+- **A ligação do plugin da CSP no `vite.config.ts` não tinha trava.** Tirar o plugin da lista deixaria o build verde e o instalador sem CSP. Agora há um teste estático, no padrão dos testes de fiação do main.
+- **A fiação dos links do terminal não tinha trava.** Duas mutações passavam com a suíte verde: o WebLinksAddon voltar ao portão antigo (sem regra de arrasto) e "Copiar link" abrir o navegador. A lista de ações do menu virou função pura (`terminalLinkMenuEntries`), com teste de que copiar nunca abre, e o store tem teste de que o WebLinksAddon usa o mesmo `linkHandler` do OSC 8.
+- **Uma asserção "copiar nunca abre" não tinha como falhar** (o mock nunca era passado). Foi substituída pelo teste acima.
+
+Essas 4 mutações agora morrem: 31 no total nesta task. O primeiro CI de `cb88c79` (run 36516349566) passou em 21 de 22 jobs. O Validate do Windows reprovou no passo SA1 do smoke de onboarding ("o app não parou de gravar sozinho antes do percurso"), a mesma intermitência do Windows já vista na task anterior; o mesmo smoke passou em ubuntu, arm e macOS. O job foi reexecutado.

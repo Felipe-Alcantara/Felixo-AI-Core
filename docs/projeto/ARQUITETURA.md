@@ -800,6 +800,11 @@ bloqueado em silêncio.
 - A única origem de rede é `https://esm.sh`, e só em `font-src`: são as fontes
   dos desenhos do Excalidraw. Fonte não executa código, e servi-las pelo build
   é uma task aberta.
+- `frame-src 'none'` também vale para os embeds do Excalidraw (YouTube,
+  Figma…). Por isso o bloco de desenho passa `validateEmbeddable={false}`: o
+  Excalidraw diz que o embed não é permitido, em vez de mostrar um frame
+  quebrado. Um teste trava as duas decisões juntas. Religar embeds exige
+  escolher os hosts no `frame-src` e no `validateEmbeddable`.
 
 O dev server fica sem CSP. Ele usa scripts inline do React Refresh e o
 WebSocket do HMR, e uma política afrouxada para caber nele não provaria nada
