@@ -26,6 +26,11 @@ export default function ExcalidrawCanvas({ initialScene, onSceneChange }: Excali
   return (
     <div className="nodrag nowheel nopan h-full w-full">
       <Excalidraw
+        // A CSP do build tem `frame-src 'none'` (scripts/renderer-csp.cjs): um
+        // embed (YouTube, Figma…) viraria um frame quebrado sem aviso. Com
+        // `false`, o Excalidraw recusa todo link de embed e diz que não é
+        // permitido. Religar embeds exige decidir os hosts nos dois lugares.
+        validateEmbeddable={false}
         initialData={{
           elements: initialScene?.elements ?? [],
           appState: {

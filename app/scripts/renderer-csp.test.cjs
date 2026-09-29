@@ -6,6 +6,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { createHash } = require('node:crypto')
 const {
+  RENDERER_CSP_DIRECTIVES,
   buildRendererCsp,
   extractInlineScripts,
   hashInlineScript,
@@ -164,4 +165,27 @@ test('a verificação acusa HTML sem meta e meta depois de um script', () => {
   )
   assert.equal(verifyRendererCsp(tarde).length, 1)
   assert.match(verifyRendererCsp(tarde)[0], /vem depois/)
+})
+
+// Estático de propósito: o plugin só roda num `vite build` inteiro. Sem esta
+// trava, tirar o plugin da lista (ou trocar o `apply`) deixaria o build verde
+// e o instalador sem CSP, e nenhum teste perceberia.
+test('o vite.config.ts liga o plugin da CSP no build', () => {
+  const config = fs.readFileSync(path.join(__dirname, '..', 'vite.config.ts'), 'utf8')
+  const plugins = /plugins:\s*\[([^\]]*)\]/.exec(config)?.[1] ?? ''
+  assert.match(plugins, /felixoRendererCspPlugin\(\)/)
+  assert.match(config, /name:\s*'felixo-renderer-csp'[\s\S]*?apply:\s*'build'/)
+  assert.match(config, /verifyRendererCsp\(/)
+})
+
+// As duas decisões andam juntas: com frame-src 'none', um embed do Excalidraw
+// viraria frame quebrado sem aviso; o Excalidraw precisa recusar o link antes.
+test("com frame-src 'none', o Excalidraw recusa embeds", () => {
+  const frameSrc = new Map(RENDERER_CSP_DIRECTIVES).get('frame-src')
+  assert.deepEqual([...frameSrc], ["'none'"])
+  const canvas = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'features', 'canvas', 'components', 'ExcalidrawCanvas.tsx'),
+    'utf8',
+  )
+  assert.match(canvas, /validateEmbeddable=\{false\}/)
 })
