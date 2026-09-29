@@ -183,12 +183,16 @@ function registerAgentBrowserIpcHandlers(getMainWindow, appPaths, dependencies =
     vencimentoAgendado = null
     if (parado) return
 
-    const vencimentos = esperando.map(vencimentoDe).filter(Number.isFinite)
+    // Só vencimentos por vir. Um pedido que já venceu e continua aqui é um que
+    // a rodada não conseguiu resolver (gravar falhou): agendar para "agora"
+    // rodaria de novo em laço, falhando a cada milissegundo.
+    const instante = agora()
+    const vencimentos = esperando.map(vencimentoDe).filter((vencimento) => vencimento > instante)
     if (vencimentos.length === 0) return
     // Limitado à validade: um `pedidoEm` no futuro não vira um prazo que o
     // setTimeout não representa (acima de ~24,8 dias ele dispara na hora, e a
     // rodada reagendaria em laço).
-    const espera = Math.min(Math.max(Math.min(...vencimentos) - agora(), 0), VALIDADE_MS)
+    const espera = Math.min(Math.min(...vencimentos) - instante, VALIDADE_MS)
     vencimentoAgendado = timers.setTimeout(() => {
       vencimentoAgendado = null
       processPending()

@@ -655,6 +655,34 @@ test('pendente vencido que já estava na pasta quando o app abriu é resolvido c
   )
 })
 
+test('pedido vencido que não dá para gravar não vira um laço de rodadas', async () => {
+  const relogio = relogioFalso()
+  const antigo = new Date(relogio.agora() - 2 * VALIDADE_MS).toISOString()
+  await comControlador(
+    {
+      relogio,
+      preparar: (pasta) => gravarAMao(pasta, { id: 'somente-leitura', url: 'https://example.com', pedidoEm: antigo }),
+      createRequests: (opcoes) => {
+        const fila = criarRepositorioDePedidos(opcoes)
+        return {
+          ...fila,
+          resolver: () => {
+            throw new Error('EACCES: permission denied')
+          },
+        }
+      },
+    },
+    async ({ controller, avisos }) => {
+      // Um aviso, e nenhum timer para "agora": a próxima tentativa vem do
+      // próximo evento na pasta, não de um laço.
+      assert.equal(avisos.length, 1)
+      assert.match(avisos[0], /somente-leitura.*EACCES/)
+      assert.deepEqual(relogio.esperas(), [])
+      assert.equal(controller.pedidos.ler('somente-leitura').estado, 'pendente')
+    },
+  )
+})
+
 test('o timer segue o próximo vencimento e para junto com o observador', async () => {
   const relogio = relogioFalso()
   await comControlador({ relogio }, async ({ controller }) => {
