@@ -278,12 +278,12 @@ test('a janela principal nega window.open e liga as guardas antes de carregar o 
   const source = readFileSync(path.join(__dirname, '..', 'windows', 'main-window.cjs'), 'utf8')
   const firstCall = (snippet) => codeIndexes(source, snippet)[0] ?? -1
 
-  const denyOpen = firstCall('mainWindow.webContents.setWindowOpenHandler(denyExternalWindowOpen)')
+  const denyOpen = firstCall('mainWindow.webContents.setWindowOpenHandler(')
   const navigationGuard = firstCall('registerMainWindowNavigationGuard(mainWindow.webContents,')
   const webviewLifecycle = firstCall('registerWebviewLifecycle(mainWindow)')
   const loads = [...codeIndexes(source, 'mainWindow.loadFile('), ...codeIndexes(source, 'mainWindow.loadURL(')]
 
-  assert.notEqual(denyOpen, -1, 'main-window.cjs deixou de chamar setWindowOpenHandler(denyExternalWindowOpen)')
+  assert.notEqual(denyOpen, -1, 'main-window.cjs deixou de chamar setWindowOpenHandler')
   assert.notEqual(navigationGuard, -1, 'main-window.cjs deixou de chamar registerMainWindowNavigationGuard')
   assert.notEqual(webviewLifecycle, -1, 'main-window.cjs deixou de chamar registerWebviewLifecycle')
   assert.ok(loads.length > 0, 'main-window.cjs não carrega mais o app do jeito esperado; revise esta trava')
@@ -295,9 +295,18 @@ test('a janela principal nega window.open e liga as guardas antes de carregar o 
     assert.ok(index < firstLoad, `${name} precisa vir antes do primeiro load`)
   }
 
-  // A saída da guarda passa pelo opener com a política de URL.
+  // O handler de `window.open` nega a janela, abre pelo opener com a política
+  // e avisa a própria janela quando o link não abre.
+  const handlerCall = source.slice(denyOpen, source.indexOf('registerMainWindowNavigationGuard(', denyOpen))
+  assert.match(handlerCall, /createExternalWindowOpenHandler\(/)
+  assert.match(handlerCall, /open: openExternal\b/)
+  assert.match(handlerCall, /notify:[\s\S]*webContents\.send\(EXTERNAL_OPEN_FAILED_CHANNEL/)
+
+  // Os dois (handler e guarda) saem pelo mesmo opener, que passa pela política
+  // de URL e pelo shell da instância (o da plataforma ou o da automação).
   const guardCall = source.slice(navigationGuard, source.indexOf('})', navigationGuard))
-  assert.match(guardCall, /openExternal:.*openExternalUrl/)
+  assert.match(guardCall, /\bopenExternal\b/)
+  assert.match(source, /const openExternal = \(url\) => openExternalUrl\(url, electronShell\)/)
 })
 
 test('o main registra a segurança de sessão antes de app.whenReady()', () => {
