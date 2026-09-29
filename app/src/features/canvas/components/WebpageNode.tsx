@@ -171,8 +171,11 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
       setLoadError(null)
       const url = webview.getURL()
       // A barra mostra onde a página está de fato, mesmo que seja um endereço
-      // que o bloco não grava.
+      // que o bloco não grava. O aviso de recusa (e o `aria-invalid`) falava
+      // do texto que a barra tinha antes: depois de Recarregar, Voltar ou um
+      // link da página, ele já não está lá.
       setAddressInput(url)
+      setAddressError(null)
       syncHistoryState()
       // Só vira `src` de remount (e dado salvo) o que o processo principal
       // aceita anexar. Um hash acima do limite, credenciais ou o about:blank
