@@ -285,7 +285,12 @@ function seededRandom(seed: number): () => number {
   }
 }
 
-describe('Markdown e a política central de URL: fuzz', () => {
+// 400 renderizações do Markdown inteiro passam de 5 s num notebook de 4
+// threads ocupado; o padrão do Vitest reprovava por tempo, não por href
+// errado (a mesma classe do prazo dos testes de 20 mil amostras da política).
+const FUZZ_TIMEOUT_MS = 60_000
+
+describe('Markdown e a política central de URL: fuzz', { timeout: FUZZ_TIMEOUT_MS }, () => {
   it('nenhuma combinação de sintaxe e destino gera href fora da política', () => {
     const random = seededRandom(0x5eed_0101)
     const pick = <T,>(items: readonly T[]) => items[Math.floor(random() * items.length)]
