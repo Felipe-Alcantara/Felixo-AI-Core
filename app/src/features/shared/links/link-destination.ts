@@ -35,7 +35,10 @@ export type LinkDestination =
       /** A serialização da política: é exatamente isto que abre ou é copiado. */
       url: string
       kind: 'web' | 'email'
-      /** O que a pessoa lê primeiro: o host da página ou o endereço de e-mail. */
+      /**
+       * O que a pessoa lê primeiro: o host da página ou o endereço de e-mail,
+       * encurtado pelo meio quando é gigante (ver `shortenAddress`).
+       */
       headline: string
     }
   | {
@@ -74,11 +77,36 @@ export function describeLinkDestination(raw: string, origin: LinkOrigin): LinkDe
     // `hostname` vem em Punycode (`xn--…`) para domínio com acento: é a forma
     // que não se confunde com outro domínio de letras parecidas. O e-mail é
     // decodificado para ser lido, e um invisível codificado nele fica à mostra.
-    headline:
+    headline: shortenAddress(
       kind === 'email'
         ? revealHiddenUrlCharacters(decodeMailtoRecipients(parsed.pathname))
         : parsed.hostname,
+    ),
   }
+}
+
+/**
+ * Quanto de um endereço (o host, ou os destinatários de um e-mail) vai para a
+ * tela. A política aprova até 8.192 caracteres: um host desse tamanho, ou um
+ * `mailto:` com 300 destinatários, virava um menu de milhares de pixels, com
+ * as opções fora da janela. Nenhum host que o DNS resolve passa de 253, e os
+ * de até 200 aparecem inteiros.
+ */
+export const MAX_SHOWN_ADDRESS_CHARS = 200
+
+/**
+ * Encurta pelo meio, guardando mais do fim. No host é o fim que diz de quem é
+ * o site (`paypal.com.<…>.exemplo.net` é de `exemplo.net`), e no e-mail é onde
+ * fica o domínio. Cortar o fim, como faria um `line-clamp`, esconderia
+ * justamente o que decide para onde o link vai. Conta caracteres, não
+ * unidades UTF-16: um emoji no destinatário não se parte ao meio.
+ */
+export function shortenAddress(text: string, max = MAX_SHOWN_ADDRESS_CHARS): string {
+  const chars = Array.from(text)
+  if (chars.length <= max) return text
+  const head = Math.floor((max - 1) / 3)
+  const tail = max - 1 - head
+  return `${chars.slice(0, head).join('')}…${chars.slice(chars.length - tail).join('')}`
 }
 
 const REFUSAL_REASONS: Record<Exclude<ExternalUrlBlockReason, 'esquema'>, string> = {

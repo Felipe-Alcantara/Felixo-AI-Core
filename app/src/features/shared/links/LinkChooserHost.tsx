@@ -105,7 +105,7 @@ function LinkChooserMenu({ request, onCopied }: MenuProps) {
   const descriptionId = useId()
 
   // Mede o menu já desenhado (fora da tela) e só então o põe no lugar: a
-  // altura depende do destino, que pode ocupar de uma a três linhas.
+  // altura depende do destino, que pode ocupar de uma a várias linhas.
   useLayoutEffect(() => {
     const rect = containerRef.current?.getBoundingClientRect()
     if (!rect) return
@@ -221,7 +221,9 @@ function LinkChooserMenu({ request, onCopied }: MenuProps) {
       // Backspace/Delete apagavam o bloco selecionado. Sem anel: quem está no
       // teclado continua nos itens.
       tabIndex={-1}
-      className="fixed z-70 w-72 max-w-[calc(100vw-16px)] rounded-lg border border-white/10 bg-(--f-surface-panel) p-1.5 text-xs text-(--f-core-white-soft) shadow-2xl outline-hidden"
+      // Nunca mais alto que a janela: com o resumo comprido (um e-mail com
+      // muitos destinatários), o menu rola, e o foco num item o traz à vista.
+      className="fixed z-70 max-h-[calc(100vh-16px)] w-72 max-w-[calc(100vw-16px)] overflow-y-auto rounded-lg border border-white/10 bg-(--f-surface-panel) p-1.5 text-xs text-(--f-core-white-soft) shadow-2xl outline-hidden"
       style={
         position
           ? { left: position.left, top: position.top }

@@ -1,11 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import {
+  MAX_SHOWN_ADDRESS_CHARS,
   allowedSchemesFor,
   describeLinkDestination,
   describeRefusal,
   linkChoiceEntries,
   runLinkChoice,
+  shortenAddress,
   type LinkChoice,
   type LinkOrigin,
 } from './link-destination'
@@ -62,12 +64,49 @@ describe('describeLinkDestination', () => {
     expect(destination.ok && destination.headline).toBe('ful⟨U+200B⟩ana@example.com')
   })
 
+  it('host gigante (a política aprova até 8.192) vira um título curto que termina no domínio', () => {
+    const destination = describeLinkDestination(`https://${'a'.repeat(8100)}.example/`, 'terminal')
+    expect(destination.ok && Array.from(destination.headline).length).toBe(MAX_SHOWN_ADDRESS_CHARS)
+    expect(destination.ok && destination.headline.endsWith('aaa.example')).toBe(true)
+  })
+
+  it('mailto com 300 destinatários também não estica o título', () => {
+    const recipients = Array.from({ length: 300 }, (_, index) => `pessoa${index}@example.com`)
+    const destination = describeLinkDestination(`mailto:${recipients.join(',')}`, 'markdown')
+    expect(destination.ok && Array.from(destination.headline).length).toBe(MAX_SHOWN_ADDRESS_CHARS)
+    // O primeiro e o último destinatário continuam à vista.
+    expect(destination.ok && destination.headline.startsWith('pessoa0@example.com,')).toBe(true)
+    expect(destination.ok && destination.headline.endsWith(',pessoa299@example.com')).toBe(true)
+  })
+
   it.each<[LinkOrigin, readonly string[]]>([
     ['terminal', ['http:', 'https:']],
     ['pagina-web', ['http:', 'https:']],
     ['markdown', ['http:', 'https:', 'mailto:']],
   ])('esquemas aceitos por origem: %s', (origin, schemes) => {
     expect(allowedSchemesFor(origin)).toEqual(schemes)
+  })
+})
+
+describe('shortenAddress', () => {
+  it('endereço até o limite aparece inteiro', () => {
+    const host = `${'a'.repeat(MAX_SHOWN_ADDRESS_CHARS - 8)}.example`
+    expect(shortenAddress(host)).toBe(host)
+  })
+
+  it('corta pelo meio e guarda o fim, que diz de quem é o site', () => {
+    // Cortar o fim deixaria à vista só o disfarce: "paypal.com.xxxx…".
+    const host = `paypal.com.${'x'.repeat(300)}.evil.example`
+    const shown = shortenAddress(host)
+    expect(Array.from(shown)).toHaveLength(MAX_SHOWN_ADDRESS_CHARS)
+    expect(shown.startsWith('paypal.com.x')).toBe(true)
+    expect(shown.endsWith('x.evil.example')).toBe(true)
+    expect(shown).toContain('…')
+  })
+
+  it('conta caracteres, não metades de um emoji', () => {
+    const shown = shortenAddress('😀'.repeat(50), 10)
+    expect(Array.from(shown)).toEqual([...'😀'.repeat(3), '…', ...'😀'.repeat(6)])
   })
 })
 
