@@ -7164,3 +7164,23 @@ Validação local depois dos consertos: a sessão D passou do L0 ao L12 nas duas
 Na mesma run, duas intermitências conhecidas, fora do código de links, ganharam task:
 - o SA1 do tutorial no Windows ("o app não parou de gravar sozinho"), pelo menos a terceira ocorrência;
 - a checagem interna de resume da bancada de scrollback no macOS, que reprovou duas vezes seguidas (count=5: 340 → 467 ms; count=1). Nos dois casos, as duas políticas usam o mesmo scrollback de 20.000, porque a adaptativa só muda a partir de 10 terminais: a checagem compara uma configuração com ela mesma.
+
+### Fechamento: CI, merge e publicação
+
+- **As duas últimas runs do PR:**
+  - **36606538229:** no Windows, o E2E de contexto (matriz de 50 rodadas com PTY real) estourou o prazo, e a bancada falhou em `native count=10: timeout`. Os dois usam ConPTY no mesmo runner; ficaram como nota na task do ConPTY. Na reexecução, o SA1 do tutorial reprovou de novo.
+  - **36608937372:** já com o diagnóstico do SA1 (`e0ba8189`), a falha veio no macOS com `{"canaisNaUltimaAmostra":{"canvas:save":2},"amostraMs":1500}`. É um laço de gravação do canvas que já existia (ocorrências no Windows antes do PR), e nada neste PR grava blocos. A task do SA1 virou "achar o laço de canvas:save", com prioridade Alta. A reexecução passou.
+- **Números da run verde:**
+  - vitest: 2.575 passaram e 1 pulado (178 arquivos);
+  - E2E de contexto: 6 de 6;
+  - suíte node: 2.328 testes e 0 falhas nos quatro sistemas;
+  - sessão D L0–L12: ubuntu 26,9 s, ARM 26,7 s, Windows 34,0 s e macOS 26,4 s.
+- **Merge:** squash às 15:21 em `d161ab5e`. O CI da main (36611428956) reaproveitou o do PR. O Release gate (36611464699) e o Release (36611482788) passaram, e a `v0.1.427` ficou como Latest às 15:28, com os instaladores dos três sistemas. Os release-smokes passaram no Linux, no macOS (com quarentena) e no Windows (instalador e cmd). O de caminho longo no Windows é exploratório, falha desde a `v0.1.426` e já tem task (suporte a path longo no node-pty).
+- **Limpeza:**
+  - ramo `feat/links-escolha-destino` apagado, local e remoto;
+  - quatro worktrees das trilhas, o snapshot da revisão e o worktree da revisão removidos;
+  - bundle e lista nome→SHA em `~/.local/state/felixo-ai-core/branches-apagadas/links-escolha-destino-2026-09-29.*`.
+- **Notion:**
+  - 13 tasks novas;
+  - notas em 5 tasks existentes: AgentQuestionDialog, gate de heap, ConPTY, links no app empacotado e links enviados por agentes;
+  - as tasks "cobrir o menu de link do terminal" e "esquema em maiúsculas no Markdown" concluídas com a evidência.
