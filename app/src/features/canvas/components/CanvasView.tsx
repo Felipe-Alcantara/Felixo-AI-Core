@@ -118,6 +118,7 @@ import {
   type QualityStandardSource,
 } from '../services/quality-standard-prompt'
 import { subscribeSystemDesignConfig } from '../../shared/system-design/system-design-events'
+import { registerWebpageOpener } from '../../shared/links/link-chooser-store'
 import { stripTerminalSubmission, toSubmittedTerminalText } from '../terminal/terminal-input'
 import { buildSkillActivationPrompt } from '../services/skill-prompt'
 import {
@@ -1623,8 +1624,6 @@ function CanvasInner({
     return () => window.removeEventListener('keydown', onKeyDown, true)
   }, [dictationShortcut, dictationToggle])
 
-  const addNodeRef = useRef<(sourceId: string, url: string) => void>(() => {})
-
   // Inject render-time concerns: the header drag handle (so only the header
   // moves the node) and, for notes/groups, the edit handler. Keeping these out
   // of stored state means persisted data stays plain JSON.
@@ -1789,8 +1788,6 @@ function CanvasInner({
                 updateNodeData(nodeId, { agentSession: undefined }),
               onDataChange: updateNodeData,
               onRenameCommit: notifyTerminalRenamed,
-              onOpenWebpage: (sourceId: string, url: string) =>
-                addNodeRef.current(sourceId, url),
             }),
           ),
         }
@@ -2061,17 +2058,27 @@ function CanvasInner({
     centerNodeInSafeArea(position, size, 0.8, 240)
   }, [addNode, centerNodeInSafeArea, focusNode, nodes, setNodes, visibleCanvasBounds])
 
-  const openWebpageFromTerminal = useCallback(
-    (sourceId: string, url: string) => {
+  /**
+   * Bloco Página Web pedido pelo menu de link (terminal, Markdown ou outra
+   * Página Web). Nasce ao lado do bloco de onde o link veio; sem bloco de
+   * origem no canvas (painel do Notion, System Design), numa área livre da
+   * tela. Devolve o id para o menu levar o foco ao bloco novo.
+   */
+  const openWebpageFromLink = useCallback(
+    (url: string, sourceId?: string) => {
       const webpageSize = getDefaultNodeSize('webpage', window.innerWidth)
-      const position = findFreeNodePositionNearNode(nodes, sourceId, webpageSize)
+      const position =
+        sourceId && nodes.some((node) => node.id === sourceId)
+          ? findFreeNodePositionNearNode(nodes, sourceId, webpageSize)
+          : findFreeNodePosition(nodes, webpageSize, visibleCanvasBounds())
       const id = addNode('webpage', { url }, position)
       setNodes((current) =>
         current.map((node) => ({ ...node, selected: node.id === id })),
       )
       centerNodeInSafeArea(position, webpageSize, 0.9, 220)
+      return id
     },
-    [addNode, centerNodeInSafeArea, nodes, setNodes],
+    [addNode, centerNodeInSafeArea, nodes, setNodes, visibleCanvasBounds],
   )
 
   const openWebpageFromAgent = useCallback(
@@ -2103,9 +2110,18 @@ function CanvasInner({
     return () => unsubscribe?.()
   }, [openWebpageFromAgent])
 
+  // O menu de link é global (montado no App) e chama sempre a versão atual,
+  // pela ref, sem re-registrar a cada mudança de `nodes`. Registrar é o que
+  // faz o menu oferecer "Abrir como Página Web": na tela do chat não há canvas.
+  const openWebpageFromLinkRef = useRef(openWebpageFromLink)
   useEffect(() => {
-    addNodeRef.current = openWebpageFromTerminal
-  }, [openWebpageFromTerminal])
+    openWebpageFromLinkRef.current = openWebpageFromLink
+  }, [openWebpageFromLink])
+  useEffect(
+    () =>
+      registerWebpageOpener((url, sourceId) => openWebpageFromLinkRef.current(url, sourceId)),
+    [],
+  )
 
   const addFileNode = useCallback(
     (name?: string) => {

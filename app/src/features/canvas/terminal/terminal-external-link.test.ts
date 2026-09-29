@@ -1,13 +1,10 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
-  activateTerminalExternalLink,
   describeTerminalLinkHover,
   hasTerminalLinkModifier,
   isAllowedTerminalExternalLink,
   isTerminalLinkDragGesture,
-  terminalLinkClipboardText,
-  terminalLinkMenuEntries,
-  terminalLinkMenuItems,
+  isTerminalLinkGesture,
 } from './terminal-external-link'
 import { DRAG_THRESHOLD_PX } from './terminal-mouse-selection'
 
@@ -16,8 +13,13 @@ const ZERO_WIDTH_SPACE = String.fromCharCode(0x200b)
 const RIGHT_TO_LEFT_OVERRIDE = String.fromCharCode(0x202e)
 const LINE_SEPARATOR = String.fromCharCode(0x2028)
 
-function mouseEvent(init: Partial<MouseEvent> = {}) {
-  return { ctrlKey: false, metaKey: false, ...init } as MouseEvent
+type GestureInit = Partial<Pick<MouseEvent, 'ctrlKey' | 'metaKey' | 'button'>> & {
+  pointerType?: string
+  sourceCapabilities?: { firesTouchEvents?: boolean } | null
+}
+
+function gesture(init: GestureInit = {}) {
+  return { ctrlKey: false, metaKey: false, button: 0, ...init }
 }
 
 describe('terminal external links', () => {
@@ -39,142 +41,59 @@ describe('terminal external links', () => {
     },
   )
 
-  it('requires exactly Ctrl or Cmd before opening', () => {
-    expect(hasTerminalLinkModifier(mouseEvent({ ctrlKey: true }))).toBe(true)
-    expect(hasTerminalLinkModifier(mouseEvent({ metaKey: true }))).toBe(true)
-    expect(hasTerminalLinkModifier(mouseEvent())).toBe(false)
-    expect(hasTerminalLinkModifier(mouseEvent({ ctrlKey: true, metaKey: true }))).toBe(false)
+  it('requires exactly Ctrl or Cmd', () => {
+    expect(hasTerminalLinkModifier(gesture({ ctrlKey: true }))).toBe(true)
+    expect(hasTerminalLinkModifier(gesture({ metaKey: true }))).toBe(true)
+    expect(hasTerminalLinkModifier(gesture())).toBe(false)
+    expect(hasTerminalLinkModifier(gesture({ ctrlKey: true, metaKey: true }))).toBe(false)
   })
 
-  it('opens only an allowed URL confirmed by the modifier', () => {
-    const openExternalLink = vi.fn()
-
-    expect(
-      activateTerminalExternalLink(mouseEvent({ ctrlKey: true }), 'https://example.com', openExternalLink),
-    ).toBe(true)
-    // A forma serializada pela política, que é a que o processo principal revalida.
-    expect(openExternalLink).toHaveBeenCalledWith('https://example.com/')
-
-    expect(
-      activateTerminalExternalLink(mouseEvent(), 'https://example.com', openExternalLink),
-    ).toBe(false)
-    expect(
-      activateTerminalExternalLink(mouseEvent({ ctrlKey: true }), 'file:///C:/secret.txt', openExternalLink),
-    ).toBe(false)
-    expect(openExternalLink).toHaveBeenCalledTimes(1)
-  })
-
-  it.each([
-    `https://exa${ZERO_WIDTH_SPACE}mple.com/`,
-    `https://example.com/${RIGHT_TO_LEFT_OVERRIDE}gpj.exe`,
-    `https://example.com/${LINE_SEPARATOR}a`,
-    'data:text/html,<script>alert(1)</script>',
-    'vscode://file/C:/x',
-  ])('rejects what the shared policy rejects: %j', (uri) => {
-    expect(isAllowedTerminalExternalLink(uri)).toBe(false)
-    expect(describeTerminalLinkHover(uri)).toBeUndefined()
-  })
-
-  it('opens only on the primary button: Ctrl+right-click shows the menu, Ctrl+middle-click does nothing', () => {
-    const openExternalLink = vi.fn()
-
-    for (const button of [1, 2]) {
-      expect(
-        activateTerminalExternalLink(mouseEvent({ ctrlKey: true, button }), 'https://example.com/', openExternalLink),
-      ).toBe(false)
-    }
-    expect(
-      activateTerminalExternalLink(mouseEvent({ ctrlKey: true, button: 0 }), 'https://example.com/', openExternalLink),
-    ).toBe(true)
-    expect(openExternalLink).toHaveBeenCalledTimes(1)
-  })
-
-  it('shows the real destination on hover, which an OSC 8 label can hide', () => {
-    // OSC 8: a tela diz uma coisa, o destino é outro. A dica mostra o destino.
-    const [destination, hint] = describeTerminalLinkHover('HTTPS://Evil.example/login')!.split(NEWLINE)
-    expect(destination).toBe('https://evil.example/login')
-    expect(hint).toBe('Ctrl/Cmd+clique: abrir no navegador · clique direito: mais opções')
-
-    const long = `https://example.com/${'a'.repeat(400)}`
-    expect(describeTerminalLinkHover(long)!.split(NEWLINE)[0]).toHaveLength(160)
-  })
-
-  it('copies the serialized URL, or the raw text when the link is refused', () => {
-    const refused = `https://exa${ZERO_WIDTH_SPACE}mple.com/`
-
-    expect(terminalLinkClipboardText(' HTTPS://Example.com/a ')).toBe('https://example.com/a')
-    expect(terminalLinkClipboardText(` ${refused} `)).toBe(refused)
-  })
-
-  describe('o que cada item do menu faz', () => {
-    function spies() {
-      return { onOpenWebpage: vi.fn(), onCopy: vi.fn(), openExternalLink: vi.fn() }
-    }
-
-    it('link aprovado: copiar só copia, abrir no navegador passa pela política, abrir no canvas usa o bloco', () => {
-      const { onOpenWebpage, onCopy, openExternalLink } = spies()
-      const entries = terminalLinkMenuEntries(' HTTPS://Example.com/a ', { onOpenWebpage, onCopy }, openExternalLink)
-
-      expect(entries.map((entry) => entry.label)).toEqual(['Abrir no canvas', 'Abrir no navegador', 'Copiar link'])
-
-      entries.find((entry) => entry.item === 'copiar-link')!.run()
-      expect(onCopy).toHaveBeenCalledWith('https://example.com/a')
-      // Copiar nunca abre: nem o navegador, nem o bloco.
-      expect(openExternalLink).not.toHaveBeenCalled()
-      expect(onOpenWebpage).not.toHaveBeenCalled()
-
-      entries.find((entry) => entry.item === 'abrir-no-navegador')!.run()
-      expect(openExternalLink).toHaveBeenCalledWith('https://example.com/a')
-
-      entries.find((entry) => entry.item === 'abrir-no-canvas')!.run()
-      expect(onOpenWebpage).toHaveBeenCalledTimes(1)
+  describe('gesto que pede o menu de destino', () => {
+    it('Ctrl/Cmd+clique com o botão principal pede o menu; clique simples de mouse é do terminal', () => {
+      expect(isTerminalLinkGesture(gesture({ ctrlKey: true }))).toBe(true)
+      expect(isTerminalLinkGesture(gesture({ metaKey: true }))).toBe(true)
+      expect(isTerminalLinkGesture(gesture())).toBe(false)
+      expect(isTerminalLinkGesture(gesture({ pointerType: 'mouse' }))).toBe(false)
     })
 
-    it('link recusado: só copiar, com o texto cru, e nada abre', () => {
-      const { onOpenWebpage, onCopy, openExternalLink } = spies()
-      const refused = 'file:///C:/Users/pessoa/notas.txt'
-      const entries = terminalLinkMenuEntries(refused, { onOpenWebpage, onCopy }, openExternalLink)
+    it('Ctrl+clique direito ou do meio não pede (o direito já abre o menu pelo contextmenu)', () => {
+      for (const button of [1, 2]) {
+        expect(isTerminalLinkGesture(gesture({ ctrlKey: true, button }))).toBe(false)
+      }
+    })
 
-      expect(entries.map((entry) => entry.item)).toEqual(['copiar-link'])
-      entries[0].run()
-      expect(onCopy).toHaveBeenCalledWith(refused)
-      expect(openExternalLink).not.toHaveBeenCalled()
-      expect(onOpenWebpage).not.toHaveBeenCalled()
+    it('um toque pede o menu sem modificador: um dedo não tem Ctrl', () => {
+      expect(isTerminalLinkGesture(gesture({ sourceCapabilities: { firesTouchEvents: true } }))).toBe(true)
+      expect(isTerminalLinkGesture(gesture({ pointerType: 'touch' }))).toBe(true)
+      expect(isTerminalLinkGesture(gesture({ sourceCapabilities: { firesTouchEvents: false } }))).toBe(false)
+      expect(isTerminalLinkGesture(gesture({ sourceCapabilities: null }))).toBe(false)
     })
   })
 
-  describe('menu do clique direito', () => {
-    it('link aprovado: abrir no canvas, abrir no navegador e copiar, nessa ordem', () => {
-      expect(terminalLinkMenuItems('https://example.com/docs')).toEqual([
-        'abrir-no-canvas',
-        'abrir-no-navegador',
-        'copiar-link',
-      ])
+  describe('dica sobre o link', () => {
+    it('mostra o destino de verdade, que o rótulo de um OSC 8 pode esconder, e como escolher', () => {
+      const [destination, hint] = describeTerminalLinkHover('HTTPS://Evil.example/login').split(NEWLINE)
+      expect(destination).toBe('https://evil.example/login')
+      expect(hint).toBe('Ctrl/Cmd+clique ou clique direito: escolher onde abrir')
+
+      const long = `https://example.com/${'a'.repeat(400)}`
+      expect(describeTerminalLinkHover(long).split(NEWLINE)[0]).toHaveLength(160)
     })
 
-    it.each(['javascript:alert(1)', 'mailto:user@example.com', 'data:text/html,<b>x</b>'])(
-      'link recusado pelo esquema (%s) fica só com copiar',
-      (uri) => {
-        expect(terminalLinkMenuItems(uri)).toEqual(['copiar-link'])
-      },
-    )
-
-    it('link recusado por caractere invisível fica só com copiar', () => {
-      expect(terminalLinkMenuItems(`https://exa${ZERO_WIDTH_SPACE}mple.com/`)).toEqual(['copiar-link'])
-      expect(terminalLinkMenuItems(`https://example.com/${RIGHT_TO_LEFT_OVERRIDE}gpj.exe`)).toEqual([
-        'copiar-link',
-      ])
+    it.each([
+      [`https://exa${ZERO_WIDTH_SPACE}mple.com/`, 'caracteres invisíveis'],
+      [`https://example.com/${RIGHT_TO_LEFT_OVERRIDE}gpj.exe`, 'caracteres invisíveis'],
+      [`https://example.com/${LINE_SEPARATOR}a`, 'caracteres de controle'],
+      ['data:text/html,<script>alert(1)</script>', 'endereços data: não abrem pelo app, só http e https'],
+      ['vscode://file/C:/x', 'endereços vscode: não abrem pelo app, só http e https'],
+      ['mailto:user@example.com', 'endereços mailto: não abrem pelo app, só http e https'],
+      ['https://usuario:senha@example.com/', 'usuário ou senha'],
+    ])('link recusado diz o motivo: %j', (uri, reason) => {
+      const [first, second] = describeTerminalLinkHover(uri).split(NEWLINE)
+      expect(first.startsWith('Link recusado: ')).toBe(true)
+      expect(first).toContain(reason)
+      expect(second).toBe('Clique direito: copiar')
     })
-
-    it.each(['file:///C:/Users/pessoa/relatorio.txt', 'vscode://file/C:/projeto/main.ts'])(
-      'destino de hyperlink OSC 8 fora da web (%s) aparece, mas só para copiar',
-      (uri) => {
-        // O xterm só entrega esse link ao app com `allowNonHttpProtocols: true`;
-        // chegando aqui, ele ganha menu, mas nenhuma ação que abra.
-        expect(terminalLinkMenuItems(uri)).toEqual(['copiar-link'])
-        expect(terminalLinkClipboardText(uri)).toBe(uri)
-      },
-    )
   })
 
   describe('arrasto x clique sobre o link', () => {

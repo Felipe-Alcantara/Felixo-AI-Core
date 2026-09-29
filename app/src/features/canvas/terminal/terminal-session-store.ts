@@ -2,12 +2,12 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import {
-  activateTerminalExternalLink,
   describeTerminalLinkHover,
   isTerminalLinkDragGesture,
-  terminalLinkMenuEntries,
-  type TerminalLinkMenuActions,
+  isTerminalLinkGesture,
 } from './terminal-external-link'
+import { openLinkChooser, type LinkChooserAnchor } from '../../shared/links/link-chooser-store'
+import { isKeyboardContextMenu } from '../../shared/links/link-chooser-menu'
 import { buildDroppedFileReference } from './terminal-dropped-files'
 import { splitTerminalSubmission, toSubmittedTerminalText } from './terminal-input'
 import { decideCopyShortcut } from './terminal-copy-shortcut'
@@ -268,8 +268,6 @@ type SessionOptions = {
   chainTicket?: string
   /** Restored timestamp; omitted on restart so a fresh clock is created. */
   startedAt?: number
-  /** Cria um bloco Página Web quando a pessoa abre um link do terminal. */
-  onOpenWebpage?: (url: string) => void
   agentSession?: AgentSessionReference
   resumeAgentSession?: boolean
   onAgentSession?: (reference: AgentSessionReference) => void
@@ -277,82 +275,6 @@ type SessionOptions = {
   terminalCount?: number
   /** Render-time Modo Performance flag; never persisted in the canvas node. */
   performanceMode?: boolean
-}
-
-function mountTerminalLinkMenu(
-  event: MouseEvent,
-  url: string,
-  actions: TerminalLinkMenuActions,
-): () => void {
-  const menu = document.createElement('div')
-  menu.setAttribute('role', 'menu')
-  menu.setAttribute('aria-label', 'Ações do link')
-  menu.style.cssText = [
-    'position:fixed',
-    `left:${Math.min(event.clientX, window.innerWidth - 220)}px`,
-    `top:${Math.min(event.clientY, window.innerHeight - 100)}px`,
-    'z-index:10000',
-    'display:flex',
-    'flex-direction:column',
-    'min-width:210px',
-    'padding:4px',
-    'border:1px solid rgba(110,231,183,.3)',
-    'border-radius:6px',
-    'background:#101a18',
-    'box-shadow:0 10px 25px rgba(0,0,0,.4)',
-  ].join(';')
-
-  const addAction = (label: string, action: () => void) => {
-    const button = document.createElement('button')
-    button.type = 'button'
-    button.textContent = label
-    button.setAttribute('role', 'menuitem')
-    button.style.cssText = [
-      'padding:7px 9px',
-      'border:0',
-      'border-radius:4px',
-      'background:transparent',
-      'color:#d1fae5',
-      'text-align:left',
-      'font:13px system-ui,sans-serif',
-      'cursor:pointer',
-    ].join(';')
-    button.addEventListener('mouseenter', () => {
-      button.style.background = 'rgba(255,255,255,.1)'
-    })
-    button.addEventListener('mouseleave', () => {
-      button.style.background = 'transparent'
-    })
-    button.addEventListener('click', () => {
-      action()
-      cleanup()
-    })
-    menu.appendChild(button)
-  }
-
-  // O que cada item faz e quais aparecem vem de `terminalLinkMenuEntries`
-  // (testada lá, inclusive "copiar nunca abre"); aqui só se desenha.
-  for (const entry of terminalLinkMenuEntries(url, actions)) {
-    addAction(entry.label, entry.run)
-  }
-  document.body.appendChild(menu)
-
-  const cleanup = () => {
-    menu.remove()
-    document.removeEventListener('mousedown', onOutside)
-    document.removeEventListener('keydown', onEscape)
-  }
-  const onOutside = (outsideEvent: MouseEvent) => {
-    if (!menu.contains(outsideEvent.target as Node)) cleanup()
-  }
-  const onEscape = (keyboardEvent: KeyboardEvent) => {
-    if (keyboardEvent.key === 'Escape') cleanup()
-  }
-  queueMicrotask(() => {
-    document.addEventListener('mousedown', onOutside)
-    document.addEventListener('keydown', onEscape)
-  })
-  return cleanup
 }
 
 type Session = {
@@ -430,7 +352,6 @@ type Session = {
   /** Avoid persisting duplicate path-typed transitions during retries. */
   contextArtifactsPathTyped: Set<string>
   sourceLabel?: string
-  optionsOnOpenWebpage?: (url: string) => void
   agentSession?: AgentSessionReference
   /** Serializes programmatic deliveries so file creation cannot reorder prompts. */
   sendChain: Promise<void>
@@ -452,6 +373,11 @@ type Session = {
   mouseSelectionBound: boolean
   hoveredLink?: string
   /**
+   * Onde o ponteiro estava sobre o link. O menu aberto pela tecla de menu (ou
+   * Shift+F10) não traz posição de ponteiro, e nasce aqui.
+   */
+  hoveredLinkPoint?: LinkChooserAnchor
+  /**
    * Onde o último `mousedown` do botão principal aconteceu no terminal.
    *
    * O xterm ativa um link no `mouseup` sempre que o botão desceu e subiu sobre
@@ -463,7 +389,6 @@ type Session = {
   offLinkContextMenu?: () => void
   /** Encerra um gesto de mouse retido e solta os listeners do documento. */
   offMouseSelection?: () => void
-  linkMenuCleanup?: () => void
   fileDropBound: boolean
   /**
    * Quando uma imagem foi colada por aqui pela última vez.
@@ -603,33 +528,34 @@ export class TerminalSessionStore {
     const pty = window.felixo?.pty
     let createdSession: Session | null = null
     // Os dois caminhos de link — texto que parece URL (WebLinksAddon) e
-    // hyperlink OSC 8 (`linkHandler`) — usam o mesmo portão e a mesma dica.
-    // Sem `linkHandler`, o xterm abriria o OSC 8 com um clique simples, um
-    // `confirm()` em inglês e um `window.open()` sem política.
+    // hyperlink OSC 8 (`linkHandler`) — usam o mesmo gesto, a mesma dica e o
+    // mesmo menu de destino. Sem `linkHandler`, o xterm abriria o OSC 8 com um
+    // clique simples, um `confirm()` em inglês e um `window.open()` sem
+    // política.
     const linkEvents = {
-      // Embrulhado: o xterm passa o `range` como terceiro argumento, que
-      // cairia no parâmetro `openExternalLink` do portão.
       activate: (event: MouseEvent, text: string) => {
         // Ctrl+arrastar dentro de uma URL é seleção, não pedido de abrir: o
         // xterm ativa o link no mouseup mesmo assim. O critério é o gesto ter
         // andado, e não existir seleção — ver `isTerminalLinkDragGesture` para
         // o Ctrl+clique legítimo que `hasSelection()` recusava.
-        if (isTerminalLinkDragGesture(createdSession?.linkGestureOrigin, event)) return
-        activateTerminalExternalLink(event, text)
+        if (!createdSession || !isTerminalLinkGesture(event)) return
+        if (isTerminalLinkDragGesture(createdSession.linkGestureOrigin, event)) return
+        // O gesto nunca abre o link: pergunta para onde, com o destino escrito.
+        this.openLinkChooserFor(createdSession, text, { x: event.clientX, y: event.clientY })
       },
-      hover: (_event: MouseEvent, text: string) => {
+      hover: (event: MouseEvent, text: string) => {
         if (!createdSession) return
         createdSession.hoveredLink = text
+        createdSession.hoveredLinkPoint = { x: event.clientX, y: event.clientY }
         if (createdSession.terminal.element) {
-          createdSession.terminal.element.title =
-            describeTerminalLinkHover(text) ??
-            'Link recusado pela política de segurança · clique direito: copiar'
+          createdSession.terminal.element.title = describeTerminalLinkHover(text)
         }
       },
       leave: () => {
         if (!createdSession) return
         // Sem limpar, um clique direito longe do link ainda abriria o menu dele.
         createdSession.hoveredLink = undefined
+        createdSession.hoveredLinkPoint = undefined
         if (createdSession.terminal.element) {
           createdSession.terminal.element.title = ''
         }
@@ -639,9 +565,9 @@ export class TerminalSessionStore {
       convertEol: false,
       // `true` não abre nada a mais: só impede o xterm de descartar em silêncio
       // o OSC 8 com `file:`/`vscode:`. Com `false`, esse link sumia sem dica,
-      // sem menu e sem "Copiar link". Assim ele aparece, a dica diz que foi
-      // recusado e o menu oferece só copiar; abrir continua passando pelo
-      // portão acima, cuja política web recusa esses esquemas.
+      // sem menu e sem "Copiar link". Assim ele aparece, a dica diz por que foi
+      // recusado e o menu oferece só copiar: a política web do menu recusa
+      // esses esquemas.
       linkHandler: { ...linkEvents, allowNonHttpProtocols: true },
       cursorBlink: true,
       // A canvas with 10+ terminals gets the compact candidate. The decision is
@@ -725,7 +651,6 @@ export class TerminalSessionStore {
       contextArtifactNames: [],
       contextArtifactsPathTyped: new Set(),
       sourceLabel: options.sourceLabel,
-      optionsOnOpenWebpage: options.onOpenWebpage,
       agentSession: isAgentSessionReference(options.agentSession)
         ? options.agentSession
         : undefined,
@@ -1011,21 +936,37 @@ export class TerminalSessionStore {
     const element = session.terminal.element
     if (!element || session.offLinkContextMenu) return
 
+    // Clique direito, toque longo ou a tecla de menu sobre um link: o mesmo
+    // menu do Ctrl/Cmd+clique. Longe de um link, o terminal segue sem menu.
     const onContextMenu = (event: MouseEvent) => {
       const url = session.hoveredLink
       if (!url) return
       event.preventDefault()
       event.stopPropagation()
-      session.linkMenuCleanup?.()
-      session.linkMenuCleanup = mountTerminalLinkMenu(event, url, {
-        onOpenWebpage: (link) => session.optionsOnOpenWebpage?.(link),
-        onCopy: (text) => {
-          void navigator.clipboard?.writeText(text).catch(() => {})
-        },
-      })
+      const anchor =
+        isKeyboardContextMenu(event as MouseEvent & { pointerType?: string }) && session.hoveredLinkPoint
+          ? session.hoveredLinkPoint
+          : { x: event.clientX, y: event.clientY }
+      this.openLinkChooserFor(session, url, anchor)
     }
     element.addEventListener('contextmenu', onContextMenu)
     session.offLinkContextMenu = () => element.removeEventListener('contextmenu', onContextMenu)
+  }
+
+  /**
+   * Pede o menu de destino para um link deste terminal. O bloco de origem é o
+   * próprio terminal (a Página Web nasce ao lado dele, mesmo com o terminal
+   * aberto na gaveta), e o foco volta para a entrada do xterm ao fechar.
+   */
+  private openLinkChooserFor(session: Session, url: string, anchor: LinkChooserAnchor): void {
+    const textarea = session.terminal.textarea
+    openLinkChooser({
+      url,
+      origin: 'terminal',
+      anchor,
+      sourceNodeId: session.id,
+      returnFocus: textarea ?? null,
+    })
   }
 
   private bindFileDrop(session: Session): void {
@@ -1730,7 +1671,6 @@ export class TerminalSessionStore {
     this.clearInitialTextTimer(session)
     this.clearSubmitRetryTimer(session)
     this.clearContextRetryTimer(session)
-    session.linkMenuCleanup?.()
     session.offLinkContextMenu?.()
     session.offMouseSelection?.()
     session.offData()
