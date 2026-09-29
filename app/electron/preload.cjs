@@ -225,6 +225,14 @@ contextBridge.exposeInMainWorld('felixo', {
       }
       return () => agentBrowserListeners.delete(callback)
     },
+    // Pedidos de agente para abrir página esperam a pessoa escolher o destino.
+    listBrowserRequests: () => ipcRenderer.invoke('agent-browser:list-requests'),
+    decideBrowserRequest: (params) => ipcRenderer.invoke('agent-browser:decide', params),
+    onBrowserRequests: (callback) => {
+      const handler = (_event, data) => callback(data)
+      ipcRenderer.on('agent-browser:requests', handler)
+      return () => ipcRenderer.removeListener('agent-browser:requests', handler)
+    },
     listWriteRequests: () => ipcRenderer.invoke('canvas:list-write-requests'),
     resolveWriteRequest: (params) => ipcRenderer.invoke('canvas:resolve-write-request', params),
     onWriteRequests: (callback) => {

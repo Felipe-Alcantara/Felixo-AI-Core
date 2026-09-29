@@ -187,7 +187,8 @@ async function executar(argumentos, dependencias = {}) {
             `Destino: ${pedido.modo}`,
             ...(pedido.perfil ? [`Perfil: ${pedido.perfil}`] : []),
             '',
-            'O app vai atender o pedido pela fila compartilhada com o Fetch All.',
+            'Nada abre sozinho: o app mostra o pedido e a pessoa escolhe entre o',
+            'navegador, a Página Web ou recusar. O destino acima é só a sugestão.',
             `Para acompanhar: felixo browser status ${pedido.id}`,
           ].join('\n'),
           codigo: 0,
@@ -549,19 +550,31 @@ async function lerEstadoPadrao() {
  * @returns {string}
  */
 function descreverPedido(pedido) {
-  const estados = {
-    pendente: 'ainda esperando a confirmação da pessoa no painel',
-    aceito: 'confirmado e executado pelo app',
-    recusado: 'recusado — nada foi escrito',
-  }
+  const pagina = pedido.acao === 'abrir-pagina'
+  const estados = pagina
+    ? {
+        pendente: 'esperando a pessoa escolher no app: navegador, Página Web ou recusar',
+        aceito: 'aberto pelo app',
+        recusado: 'não abriu',
+      }
+    : {
+        pendente: 'ainda esperando a confirmação da pessoa no painel',
+        aceito: 'confirmado e executado pelo app',
+        recusado: 'recusado — nada foi escrito',
+      }
+  const abertoEm = pedido.resultado?.modo === 'embutido' ? 'Página Web (canvas)' : 'navegador'
 
   return [
     `Pedido ${pedido.id}`,
     pedido.acao ? `  ação: ${pedido.acao}` : null,
-    pedido.acao === 'abrir-pagina' ? `  url: ${pedido.url}` : null,
-    pedido.acao === 'abrir-pagina' ? `  destino: ${pedido.modo}` : null,
-    pedido.acao === 'abrir-pagina' && pedido.perfil ? `  perfil: ${pedido.perfil}` : null,
+    pagina ? `  url: ${pedido.url}` : null,
+    pagina ? `  destino sugerido: ${pedido.modo}` : null,
+    pagina && pedido.perfil ? `  perfil: ${pedido.perfil}` : null,
     `  estado: ${pedido.estado} (${estados[pedido.estado] ?? 'desconhecido'})`,
+    pagina && pedido.estado === 'aceito' ? `  aberto em: ${abertoEm}` : null,
+    pagina && pedido.estado === 'recusado' && pedido.resultado?.message
+      ? `  motivo: ${pedido.resultado.message}`
+      : null,
     `  pedido em: ${pedido.pedidoEm}`,
     pedido.resolvidoEm ? `  resolvido em: ${pedido.resolvidoEm}` : null,
   ]

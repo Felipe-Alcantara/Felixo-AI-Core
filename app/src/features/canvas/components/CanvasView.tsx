@@ -26,6 +26,7 @@ import { Bell } from 'lucide-react'
 import { TerminalNode } from './TerminalNode'
 import { NoteNode } from './NoteNode'
 import { AgentQuestionDialog } from './AgentQuestionDialog'
+import { AgentBrowserRequestCard } from './AgentBrowserRequestCard'
 import { DictationButton } from './DictationButton'
 import { useDictation } from '../hooks/useDictation'
 import { useDictationShortcut } from '../hooks/useDictationShortcut'
@@ -2969,6 +2970,7 @@ function CanvasInner({
         </ReactFlow>
         </AccountChainActionsContext.Provider>
         <AgentQuestionDialog />
+        <AgentBrowserRequestCard />
         {colorMenu && (
           <NodeColorMenu
             x={colorMenu.x}

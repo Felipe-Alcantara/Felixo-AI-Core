@@ -25,6 +25,7 @@ import type {
   TerminalOutputEvent,
 } from './features/chat/types'
 import type {
+  CanvasAgentBrowserRequest,
   CanvasAgentQuestion,
   CanvasImageArtifact,
   CanvasNodeData,
@@ -764,6 +765,17 @@ declare global {
         }) => Promise<CliInvokeResult>
         onAgentBrowserOpen: (
           callback: (data: { requestId: string; url: string; profileId?: string }) => void,
+        ) => () => void
+        listBrowserRequests: () => Promise<
+          CliInvokeResult & { requests?: CanvasAgentBrowserRequest[] }
+        >
+        /** `destino: null` recusa. A URL aberta é a do pedido gravado, nunca uma daqui. */
+        decideBrowserRequest: (params: {
+          id: string
+          destino: 'externo' | 'embutido' | null
+        }) => Promise<CliInvokeResult & { resolved?: { estado: string } | null }>
+        onBrowserRequests: (
+          callback: (data: { requests: CanvasAgentBrowserRequest[] }) => void,
         ) => () => void
         listWriteRequests: () => Promise<
           CliInvokeResult & { requests?: CanvasWriteAgentRequest[] }

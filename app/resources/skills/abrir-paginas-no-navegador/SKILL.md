@@ -1,6 +1,6 @@
 ---
 name: abrir-paginas-no-navegador
-description: Abrir uma URL http(s) a pedido do agente usando o app Felixo AI Core. Use quando precisar mostrar uma página no navegador do sistema ou criar um bloco Webpage embutido no canvas.
+description: Pedir ao app Felixo AI Core para abrir uma URL http(s). A pessoa confirma no app e escolhe o navegador do sistema ou um bloco Página Web no canvas. Use quando precisar mostrar uma página.
 ---
 
 # Abrir páginas no navegador pelo app
@@ -9,20 +9,27 @@ O terminal do canvas não tem acesso direto ao processo principal do Electron.
 Use o comando `felixo`: ele deixa uma intenção JSON na mesma fila local que o
 Fetch All já usa, e o app atende essa intenção.
 
-## Navegador externo
+**Nada abre sem a pessoa.** O app mostra o pedido num cartão, com o endereço
+inteiro, e a pessoa escolhe: abrir no navegador, abrir como Página Web ou
+recusar. O comando devolve na hora, sem esperar a escolha. Os dois jeitos
+abaixo só mudam o destino **sugerido**, que vem destacado no cartão. Diga à
+pessoa que o pedido está esperando por ela no app.
+
+## Sugerir o navegador externo
 
 ```bash
 felixo browser open https://example.com
 ```
 
-## Página embutida no canvas
+## Sugerir a página embutida no canvas
 
 ```bash
 felixo browser open https://example.com --embedded
 ```
 
-O equivalente em português é `felixo navegador abrir ... --embutido`. O app
-cria um bloco Webpage no canvas, posiciona-o numa área livre e persiste a URL.
+O equivalente em português é `felixo navegador abrir ... --embutido`. Se a
+pessoa escolher a Página Web, o app cria o bloco no canvas, numa área livre, e
+persiste a URL.
 
 ### Perfil do navegador interno
 
@@ -48,8 +55,9 @@ fronteira do pedido.
 
 ## Acompanhar
 
-O comando imprime um id. Consulte o resultado se precisar confirmar que o app
-já consumiu a intenção:
+O comando imprime um id. Consulte o resultado para saber o que a pessoa
+escolheu: ainda esperando, aberto (no navegador ou na Página Web) ou recusado.
+Uma recusa é a resposta da pessoa: não repita o pedido sem ela pedir.
 
 ```bash
 felixo browser status <id>
