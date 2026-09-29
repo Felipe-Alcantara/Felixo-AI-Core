@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 import type { WebviewTag } from 'electron'
 import { NodeHeader } from './NodeHeader'
-import { normalizeUrlInput } from '../services/url-utils'
+import { normalizeUrlInput, persistableNavigationUrl } from '../services/url-utils'
 import {
   resolveGuestSrc,
   shouldCreateGuest,
@@ -39,6 +39,10 @@ type WebpageNodeDataWithHandler = WebpageNodeData & {
  * bar and back/forward/reload, no URL restriction. Only the current URL is
  * persisted — back/forward history lives in the webview's own session and is
  * never serialized.
+ *
+ * "Sem restrição" quer dizer sem lista de domínios, não sem política: a barra
+ * e a URL gravada seguem a política única de URL web, porque o processo
+ * principal recusa qualquer outro `src` no attach do webview.
  */
 function WebpageNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = (data ?? {}) as WebpageNodeDataWithHandler
@@ -158,10 +162,18 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
     const onNavigate = () => {
       setLoadError(null)
       const url = webview.getURL()
-      currentUrlRef.current = url
+      // A barra mostra onde a página está de fato, mesmo que seja um endereço
+      // que o bloco não grava.
       setAddressInput(url)
       syncHistoryState()
-      onDataChangeRef.current?.(id, { url })
+      // Só vira `src` de remount (e dado salvo) o que o processo principal
+      // aceita anexar. Um hash acima do limite, credenciais ou o about:blank
+      // de um popup ficam só na página aberta; o bloco guarda a última URL
+      // boa em vez de reabrir em branco depois.
+      const persistable = persistableNavigationUrl(url)
+      if (!persistable) return
+      currentUrlRef.current = persistable
+      onDataChangeRef.current?.(id, { url: persistable })
     }
 
     const onTitleUpdated = (event: { title: string }) => {
@@ -197,7 +209,20 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
     if (!normalized) return
     setAddressInput(normalized)
     currentUrlRef.current = normalized
-    webviewRef.current?.loadURL(normalized)
+    // A falha já aparece no bloco pelo `did-fail-load`. Sem o `catch`, a
+    // rejeição ("ERR_… loading 'https://…?token=…'") viraria unhandledrejection
+    // e iria inteira para o log de QA em disco, token de query incluído.
+    // O `try` cobre o outro caminho: um webview que ainda não emitiu dom-ready
+    // (a página inicial carregando, ou o guest que a troca de perfil acabou de
+    // recriar) lança síncrono em vez de rejeitar. Nenhum dos dois registra
+    // nada: a mensagem do Electron carrega a URL inteira.
+    try {
+      webviewRef.current?.loadURL(normalized).catch(() => {})
+    } catch {
+      // Sem guest pronto não há navegação a fazer agora. Um remount já nasce
+      // no endereço novo (`currentUrlRef`); senão, o `did-navigate` da página
+      // que estava carregando devolve a barra para onde ela está de fato.
+    }
   }
 
   const handleLabelChange = (label: string) => {
