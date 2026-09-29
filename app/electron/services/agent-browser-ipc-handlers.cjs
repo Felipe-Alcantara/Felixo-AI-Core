@@ -258,7 +258,9 @@ function registerAgentBrowserIpcHandlers(getMainWindow, appPaths, dependencies =
 
   async function atender(id, params) {
     const pedido = pedidos.ler(id)
-    if (!pedido || pedido.estado !== 'pendente' || pedido.acao !== BROWSER_REQUEST_ACTION) {
+    // A fila já só devolve o pedido gravado sob o próprio id; conferido de novo
+    // aqui porque é o id que a pessoa decidiu que vai para o `resolver`.
+    if (!pedido || pedido.id !== id || pedido.estado !== 'pendente' || pedido.acao !== BROWSER_REQUEST_ACTION) {
       return { resolved: null, message: NAO_PENDENTE }
     }
 

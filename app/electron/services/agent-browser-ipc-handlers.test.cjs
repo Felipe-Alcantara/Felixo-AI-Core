@@ -514,6 +514,27 @@ test('id de dentro diferente do nome do arquivo: a decisão não abre outro pedi
   )
 })
 
+test('a decisão confere o id do pedido lido, mesmo que a fila devolva outro', async () => {
+  await comControlador(
+    {
+      createRequests: (opcoes) => {
+        const fila = criarRepositorioDePedidos(opcoes)
+        // Uma fila que não guardasse o invariante id = nome do arquivo.
+        return { ...fila, ler: (id) => fila.ler(id) && { ...fila.ler(id), id: 'outro' } }
+      },
+    },
+    async ({ controller, opened }) => {
+      const pedido = controller.pedidos.registrar('abrir-pagina', { url: 'https://example.com' })
+      controller.processPending()
+
+      const result = await decidirComoOCartao(controller, pedido.id, 'externo')
+
+      assert.equal(result.resolved, null)
+      assert.deepEqual(opened, [])
+    },
+  )
+})
+
 test('arquivo reescrito entre o cartão aparecer e o clique: nada abre, e o cartão é avisado', async () => {
   await comControlador({}, async ({ controller, paths, opened, events }) => {
     const pedido = controller.pedidos.registrar('abrir-pagina', { url: 'https://docs.python.org/3/' })
@@ -805,5 +826,7 @@ test('contrato: o preload expõe listar, decidir e ouvir, e o vite-env.d.ts decl
   const types = fs.readFileSync(path.join(__dirname, '../../src/vite-env.d.ts'), 'utf8')
   assert.match(types, /listBrowserRequests: \(\) => Promise</)
   assert.match(types, /decideBrowserRequest: \(params: \{/)
+  // A decisão leva o que o cartão mostrou; o main só executa se for o pedido gravado.
+  assert.match(types, /decideBrowserRequest: \(params: \{[^}]*\burl: string[^}]*\bperfil\?: string/)
   assert.match(types, /onBrowserRequests: \(/)
 })
