@@ -127,6 +127,55 @@ export function focusLeavesLinkChooser(
   return !menu?.contains(next as Node)
 }
 
+/**
+ * Quadros de espera pelo bloco novo antes de desistir: ~400 ms a 60 Hz. A
+ * câmera leva 220 ms até o bloco, e o React Flow só põe no DOM o bloco que já
+ * entrou na tela. Num computador lento cada quadro demora mais, e a espera
+ * cresce junto.
+ */
+export const NODE_FOCUS_FRAMES = 24
+
+export type FocusWhenReadyOptions = {
+  /** O elemento, se já está no DOM. */
+  find: () => { focus: () => void } | null
+  /** Ninguém pegou o foco durante a espera (ele está no `body`)? */
+  isFocusFree: () => boolean
+  /** Os quadros acabaram sem o elemento aparecer. */
+  giveUp: () => void
+  requestFrame: (callback: () => void) => void
+  frames?: number
+}
+
+/**
+ * Dá o foco a um elemento que ainda vai aparecer, tentando uma vez por quadro.
+ *
+ * Se o foco for para outro lugar no meio da espera (a pessoa clicou em algo,
+ * apertou Tab), para sem focar nem desistir: quem chegou por último fica com
+ * o foco. Com uma espera deste tamanho, focar o bloco mesmo assim roubaria as
+ * teclas de quem já estava digitando em outro lugar.
+ */
+export function focusWhenReady({
+  find,
+  isFocusFree,
+  giveUp,
+  requestFrame,
+  frames = NODE_FOCUS_FRAMES,
+}: FocusWhenReadyOptions): void {
+  let attempts = 0
+  const attempt = () => {
+    if (!isFocusFree()) return
+    const target = find()
+    if (target) {
+      target.focus()
+      return
+    }
+    attempts += 1
+    if (attempts < frames) requestFrame(attempt)
+    else giveUp()
+  }
+  requestFrame(attempt)
+}
+
 /** O pedido veio do teclado? Clique direito pela tecla de menu não tem posição de ponteiro. */
 export function isKeyboardContextMenu(event: { pointerType?: string }): boolean {
   // O Chromium entrega o `contextmenu` como PointerEvent; o da tecla de menu

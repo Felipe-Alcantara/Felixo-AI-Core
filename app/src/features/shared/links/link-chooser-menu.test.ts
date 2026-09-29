@@ -1,7 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
+  NODE_FOCUS_FRAMES,
   focusLeavesLinkChooser,
+  focusWhenReady,
   isKeyboardContextMenu,
   isTouchGesture,
   linkChooserKeyAction,
@@ -123,6 +125,75 @@ describe('focusLeavesLinkChooser', () => {
 
   it('sem elemento novo, a janela perdeu o foco: quem fecha é o blur da janela', () => {
     expect(focusLeavesLinkChooser(menu, null)).toBe(false)
+  })
+})
+
+describe('focusWhenReady', () => {
+  /** Quadros de mentira, rodados um a um como o navegador faria. */
+  function createFrames() {
+    const pending: Array<() => void> = []
+    return {
+      requestFrame: (callback: () => void) => {
+        pending.push(callback)
+      },
+      /** Roda até não sobrar quadro pedido; devolve quantos rodaram. */
+      runAll: () => {
+        let ran = 0
+        while (pending.length > 0) {
+          pending.shift()?.()
+          ran += 1
+        }
+        return ran
+      },
+    }
+  }
+
+  it('o bloco que a câmera traz para a tela recebe o foco, mesmo vários quadros depois', () => {
+    // O bloco nasce fora da tela e só entra no DOM perto do fim da animação.
+    const frames = createFrames()
+    const node = { focus: vi.fn() }
+    const giveUp = vi.fn()
+    let attempt = 0
+    focusWhenReady({
+      find: () => (++attempt >= 14 ? node : null),
+      isFocusFree: () => true,
+      giveUp,
+      requestFrame: frames.requestFrame,
+    })
+
+    expect(frames.runAll()).toBe(14)
+    expect(node.focus).toHaveBeenCalledTimes(1)
+    expect(giveUp).not.toHaveBeenCalled()
+  })
+
+  it('desiste depois de NODE_FOCUS_FRAMES quadros, mais que os 220 ms da câmera', () => {
+    const frames = createFrames()
+    const find = vi.fn(() => null)
+    const giveUp = vi.fn()
+    focusWhenReady({ find, isFocusFree: () => true, giveUp, requestFrame: frames.requestFrame })
+
+    expect(frames.runAll()).toBe(NODE_FOCUS_FRAMES)
+    expect(NODE_FOCUS_FRAMES * (1000 / 60)).toBeGreaterThan(220)
+    expect(find).toHaveBeenCalledTimes(NODE_FOCUS_FRAMES)
+    expect(giveUp).toHaveBeenCalledTimes(1)
+  })
+
+  it('para sem focar nem desistir quando a pessoa já levou o foco para outro lugar', () => {
+    const frames = createFrames()
+    const node = { focus: vi.fn() }
+    const giveUp = vi.fn()
+    let attempt = 0
+    focusWhenReady({
+      find: () => (attempt >= 5 ? node : null),
+      // No terceiro quadro, um clique já pôs o foco num terminal.
+      isFocusFree: () => ++attempt < 3,
+      giveUp,
+      requestFrame: frames.requestFrame,
+    })
+
+    expect(frames.runAll()).toBe(3)
+    expect(node.focus).not.toHaveBeenCalled()
+    expect(giveUp).not.toHaveBeenCalled()
   })
 })
 

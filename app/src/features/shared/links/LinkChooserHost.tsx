@@ -21,6 +21,7 @@ import {
 } from './link-destination'
 import {
   focusLeavesLinkChooser,
+  focusWhenReady,
   linkChooserKeyAction,
   placeLinkChooser,
   restoresFocusOnDismiss,
@@ -334,22 +335,19 @@ function restoreFocus(target: FocusReturn | null | undefined): void {
 
 /**
  * O bloco novo recebe o foco assim que o React Flow o desenha, para quem está
- * no teclado continuar dali. Se ele não aparecer em dois quadros, o foco volta
- * para onde o link estava, em vez de cair no `body`.
+ * no teclado continuar dali. O bloco que nasce fora da tela só entra no DOM
+ * quando a câmera chega nele, então a espera cobre a animação inteira (ver
+ * `NODE_FOCUS_FRAMES`). Se ele não aparecer, o foco volta para onde o link
+ * estava, em vez de ficar no `body`.
  */
 function focusCanvasNodeSoon(nodeId: string, fallback: FocusReturn | null | undefined): void {
-  let attempts = 0
-  const tryFocus = () => {
-    const node = document.querySelector<HTMLElement>(
-      `.react-flow__node[data-id="${CSS.escape(nodeId)}"]`,
-    )
-    if (node) {
-      node.focus()
-      return
-    }
-    attempts += 1
-    if (attempts < 2) window.requestAnimationFrame(tryFocus)
-    else restoreFocus(fallback)
-  }
-  window.requestAnimationFrame(tryFocus)
+  focusWhenReady({
+    find: () =>
+      document.querySelector<HTMLElement>(`.react-flow__node[data-id="${CSS.escape(nodeId)}"]`),
+    // O menu fechou com o foco dentro, e ele caiu no `body`. Em outro lugar
+    // é porque a pessoa já seguiu durante a espera.
+    isFocusFree: () => !document.activeElement || document.activeElement === document.body,
+    giveUp: () => restoreFocus(fallback),
+    requestFrame: (callback) => window.requestAnimationFrame(callback),
+  })
 }
