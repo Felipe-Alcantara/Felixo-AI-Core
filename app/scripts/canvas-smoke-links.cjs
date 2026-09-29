@@ -275,6 +275,38 @@ function criarSessaoDeLinks(deps) {
     await pausa(450)
   }
 
+  /**
+   * Um ponto do fundo do canvas perto da nota, onde um clique não aciona nada
+   * além de fechar o menu. Conferido com `elementFromPoint`: numa janela
+   * pequena (a do Windows na CI tem 1008×655), a nota centralizada fica em
+   * parte embaixo da barra lateral, e um ponto tirado só da borda dela caía no
+   * botão "Novo bloco", que abria o popover dele.
+   */
+  async function pontoNoFundoDoCanvas(passo) {
+    const nota = await page.locator(`.react-flow__node[data-id="${NOTE_ID}"]`).boundingBox()
+    const ponto = await page.evaluate((box) => {
+      // O próprio fundo: um bloco, uma aresta, o minimapa ou a barra lateral
+      // por cima do ponto são outro alvo.
+      const livre = (x, y) => document.elementFromPoint(x, y)?.classList.contains('react-flow__pane') === true
+      // Acima da nota, do centro para as bordas; depois abaixo dela.
+      const xs = [0.5, 0.35, 0.65, 0.2, 0.8].map((fracao) => box.x + box.width * fracao)
+      const ys = [box.y - 24, box.y - 56, box.y + box.height + 24]
+      const vistos = []
+      for (const y of ys) {
+        for (const x of xs) {
+          if (y <= 0 || y >= window.innerHeight) continue
+          if (livre(x, y)) return { ponto: { x, y } }
+          const alvo = document.elementFromPoint(x, y)
+          const papel = alvo?.closest('[role]')
+          vistos.push(`${Math.round(x)},${Math.round(y)}: ${alvo?.tagName}.${String(alvo?.className?.baseVal ?? alvo?.className ?? '').slice(0, 60)}${papel ? ` [role=${papel.getAttribute('role')}]` : ''}`)
+        }
+      }
+      return { vistos }
+    }, nota)
+    exigir(ponto.ponto, passo, 'nenhum ponto livre do canvas perto da nota para o clique fora', { nota, vistos: ponto.vistos })
+    return ponto.ponto
+  }
+
   // --- passos: Markdown ----------------------------------------------------
 
   const linkDaNota = () => page.locator(`.react-flow__node[data-id="${NOTE_ID}"] a[href="${DOCS_URL}"]`)
@@ -311,9 +343,8 @@ function criarSessaoDeLinks(deps) {
     // Clique fora do menu também fecha, sem abrir nada.
     await linkDaNota().click()
     await esperarMenu(passo, 'de novo, para o clique fora')
-    // No fundo do canvas, logo acima da nota: não aciona nada além de fechar.
-    const nota = await page.locator(`.react-flow__node[data-id="${NOTE_ID}"]`).boundingBox()
-    await page.mouse.click(nota.x + 12, Math.max(70, nota.y - 24))
+    const fora = await pontoNoFundoDoCanvas(passo)
+    await page.mouse.click(fora.x, fora.y)
     await esperarMenuFechado(passo, 'clique fora')
     exigir((await gravado()).opened.length === 0, passo, 'o clique abriu uma janela sem escolha', await gravado())
   }
