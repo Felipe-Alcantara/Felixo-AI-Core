@@ -13,15 +13,11 @@
  * restaurar — moram aqui, longe do DOM, para poderem ser testadas direto.
  */
 
+import { FLOATING_LAYER_SELECTOR } from './floating-layer'
+
 /** Elemento que sabemos como focar de volta. */
 export type Focusable = Pick<HTMLElement, 'isConnected' | 'focus' | 'blur'>
 
-/**
- * Camada flutuante: o menu de destino de um link, desenhado num portal. O
- * mesmo atributo diz à gaveta do terminal que clicar nele não é clicar fora
- * (`FLOATING_LAYER_SELECTOR`, em `terminal-drawer-pin.ts`).
- */
-const CAMADA_FLUTUANTE = '[data-felixo-floating-layer]'
 
 /**
  * Se um elemento merece ser lembrado como "quem tinha o foco".
@@ -54,7 +50,7 @@ export function deveLembrarFoco(
 function estaEmCamadaFlutuante(elemento: Element): boolean {
   // A instalação é testada com um DOM de mentira (`useFocusRestore.test.ts`),
   // de objetos sem `closest`: esses contam como fora de qualquer camada.
-  return typeof elemento.closest === 'function' && elemento.closest(CAMADA_FLUTUANTE) !== null
+  return typeof elemento.closest === 'function' && elemento.closest(FLOATING_LAYER_SELECTOR) !== null
 }
 
 /**

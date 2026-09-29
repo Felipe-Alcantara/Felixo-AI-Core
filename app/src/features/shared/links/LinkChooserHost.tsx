@@ -243,8 +243,9 @@ function LinkChooserMenu({ request, onCopied }: MenuProps) {
           : { left: 0, top: 0, visibility: 'hidden' }
       }
       data-felixo-link-chooser
-      // Clicar no menu não é "clicar fora" para a gaveta do terminal de onde
-      // o link veio (ver `FLOATING_LAYER_SELECTOR`).
+      // Camada flutuante (`shared/focus/floating-layer.ts`): clicar no menu
+      // não é "clicar fora" da gaveta do terminal de onde o link veio, e o
+      // foco nele não substitui quem tinha o foco antes.
       data-felixo-floating-layer
       onKeyDown={onKeyDown}
       onBlur={(event) => {

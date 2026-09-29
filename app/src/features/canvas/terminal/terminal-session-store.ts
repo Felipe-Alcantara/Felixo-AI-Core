@@ -373,8 +373,9 @@ type Session = {
   mouseSelectionBound: boolean
   hoveredLink?: string
   /**
-   * Onde o ponteiro estava sobre o link. O menu aberto pela tecla de menu (ou
-   * Shift+F10) não traz posição de ponteiro, e nasce aqui.
+   * Onde o ponteiro estava sobre o link. O menu aberto pela tecla de menu não
+   * traz posição de ponteiro, e nasce aqui. (Shift+F10 não serve no terminal:
+   * o xterm entrega o F10 à CLI, que tem uso para ele.)
    */
   hoveredLinkPoint?: LinkChooserAnchor
   /**

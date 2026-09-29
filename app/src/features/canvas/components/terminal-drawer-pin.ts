@@ -1,3 +1,5 @@
+import { FLOATING_LAYER_SELECTOR } from '../../shared/focus/floating-layer'
+
 const PIN_STORAGE_KEY = 'felixo:terminal-drawer-pinned'
 
 export function readPinnedPreference(storage: Pick<Storage, 'getItem'>): boolean {
@@ -87,17 +89,13 @@ export function writeWidthPreference(
   storage.setItem(WIDTH_STORAGE_KEY, String(Math.round(width)))
 }
 
-/**
- * Camada flutuante que pertence a quem a abriu, desenhada num portal fora da
- * gaveta: o menu de destino de um link do terminal. Clicar nela é continuar
- * no terminal, não clicar fora — sem isto, "Copiar link" fechava a gaveta.
- */
-export const FLOATING_LAYER_SELECTOR = '[data-felixo-floating-layer]'
 
 /**
  * Decides whether a pointerdown outside the drawer should close it.
  * Pinned drawers never close from an outside click, and a click inside a
- * floating layer (see `FLOATING_LAYER_SELECTOR`) is not "outside".
+ * floating layer (the link menu, the agent request card — see
+ * `shared/focus/floating-layer.ts`) is not "outside": it is still work on
+ * the terminal.
  */
 export function shouldCloseOnOutsideClick(
   pinned: boolean,
