@@ -206,6 +206,77 @@ test('arquivo corrompido não derruba a listagem dos pedidos legítimos', () => 
   )
 })
 
+/** Grava um pedido à mão, como um arquivo que não passou por `registrar`. */
+function gravarAMao(pasta, nome, pedido) {
+  fs.writeFileSync(path.join(pasta, `${nome}.json`), JSON.stringify(pedido), 'utf8')
+}
+
+test('arquivo com outro id dentro não é lido, listado nem resolvido', () => {
+  // A sonda da revisão: `x.json` dizendo ser o pedido `y` aparecia no cartão
+  // com a URL dele, e decidir `y` abria o `y.json` — outra URL.
+  const pasta = pastaTemporaria()
+  const repositorio = criarRepositorioDePedidos({ pasta })
+  const pedidoEm = new Date().toISOString()
+  gravarAMao(pasta, 'x', { id: 'y', acao: 'abrir-pagina', url: 'https://docs.python.org/', estado: 'pendente', pedidoEm })
+  gravarAMao(pasta, 'y', { id: 'y', acao: 'abrir-pagina', url: 'https://evil.example/login', estado: 'pendente', pedidoEm })
+
+  assert.deepEqual(
+    repositorio.listarPendentes().map((item) => item.url),
+    ['https://evil.example/login'],
+  )
+  assert.equal(repositorio.ler('x'), null)
+  assert.equal(repositorio.ler('y').url, 'https://evil.example/login')
+
+  const antes = fs.readFileSync(path.join(pasta, 'x.json'), 'utf8')
+  assert.equal(repositorio.resolver('x', { aceito: true }), null)
+  assert.equal(fs.readFileSync(path.join(pasta, 'x.json'), 'utf8'), antes)
+})
+
+test('nome de arquivo que ler e resolver não alcançam fica fora da fila', () => {
+  // Listado, ele ficaria na tela sem desfecho possível: `resolver('a b')`
+  // gravaria em `ab.json`.
+  const pasta = pastaTemporaria()
+  const repositorio = criarRepositorioDePedidos({ pasta })
+  gravarAMao(pasta, 'a b', { id: 'a b', acao: 'executar-plano', estado: 'pendente', pedidoEm: new Date().toISOString() })
+
+  assert.deepEqual(repositorio.listarPendentes(), [])
+  assert.equal(repositorio.ler('a b'), null)
+})
+
+test('pedidoEm que não é texto não derruba a fila de ninguém', () => {
+  // Antes, uma lista com a data dentro passava por válida no `Date.parse` e
+  // lançava no `localeCompare` da ordenação — para todos os consumidores.
+  const pasta = pastaTemporaria()
+  const repositorio = criarRepositorioDePedidos({ pasta })
+  const legitimo = repositorio.registrar('executar-plano')
+  gravarAMao(pasta, 'zz-torto', { id: 'zz-torto', acao: 'executar-plano', estado: 'pendente', pedidoEm: [legitimo.pedidoEm] })
+
+  assert.deepEqual(repositorio.listarPendentes().map((item) => item.id), [legitimo.id])
+  assert.deepEqual(
+    repositorio.listarPendentes({ incluirVencidos: true }).map((item) => item.id),
+    ['zz-torto', legitimo.id],
+  )
+})
+
+test('incluirVencidos traz os pendentes que passaram da validade, só quando pedido', () => {
+  const pasta = pastaTemporaria()
+  let instante = Date.parse('2026-08-24T09:00:00.000Z')
+  const repositorio = criarRepositorioDePedidos({ pasta, agora: () => instante })
+  const velho = repositorio.registrar('abrir-pagina', { url: 'https://example.com/velho' })
+  const resolvido = repositorio.registrar('abrir-pagina', { url: 'https://example.com/resolvido' })
+  repositorio.resolver(resolvido.id, { aceito: false })
+  instante += VALIDADE_MS
+  const novo = repositorio.registrar('abrir-pagina', { url: 'https://example.com/novo' })
+
+  assert.deepEqual(repositorio.listarPendentes().map((item) => item.id), [novo.id])
+  assert.deepEqual(
+    repositorio.listarPendentes({ acao: 'abrir-pagina', incluirVencidos: true }).map((item) => item.id),
+    [velho.id, novo.id],
+  )
+  // Só `true` liga: um filtro vindo de fora não mostra lixo velho por descuido de tipo.
+  assert.deepEqual(repositorio.listarPendentes({ incluirVencidos: 'sim' }).map((item) => item.id), [novo.id])
+})
+
 test('pasta inexistente equivale a nenhum pedido', () => {
   const repositorio = criarRepositorioDePedidos({
     pasta: path.join(pastaTemporaria(), 'nunca-criada'),

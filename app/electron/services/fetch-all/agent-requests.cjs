@@ -58,6 +58,12 @@ const ESTADOS = {
 const VALIDADE_MS = 60 * 60 * 1000
 
 /**
+ * Nome de arquivo que não sai da pasta: o formato de todo id que `registrar`
+ * gera. É também o único id que `ler` e `resolver` alcançam.
+ */
+const ID_SEGURO = /^[\w.-]+$/
+
+/**
  * Valida e normaliza o que veio da linha de comando.
  *
  * Função pura: é a fronteira onde texto vindo de fora vira dado confiável.
@@ -198,8 +204,23 @@ function normalizarUrlWeb(valor) {
  * @returns {boolean}
  */
 function pedidoAindaVale(pedido, agora) {
-  const instante = Date.parse(pedido?.pedidoEm ?? '')
+  // Só texto: `Date.parse` converte o valor em texto antes, e uma lista com a
+  // data dentro (arquivo escrito à mão) passaria por data válida.
+  if (typeof pedido?.pedidoEm !== 'string') return false
+  const instante = Date.parse(pedido.pedidoEm)
   return Number.isFinite(instante) && agora - instante < VALIDADE_MS
+}
+
+/**
+ * Chave de ordem da fila. `pedidoEm` que não é texto vai para o começo em vez
+ * de lançar no `localeCompare` — o que derrubaria a listagem de todos os
+ * consumidores da pasta (Fetch All, perguntas, canvas, navegador).
+ *
+ * @param {{ pedidoEm?: unknown }} pedido
+ * @returns {string}
+ */
+function chaveDeOrdem(pedido) {
+  return typeof pedido.pedidoEm === 'string' ? pedido.pedidoEm : ''
 }
 
 /**
@@ -247,20 +268,26 @@ function criarRepositorioDePedidos(opcoes) {
    * Arquivo ilegível é ignorado em silêncio: um JSON corrompido não pode
    * impedir a pessoa de ver os pedidos legítimos ao lado dele.
    *
+   * `incluirVencidos: true` traz também os pendentes que passaram da
+   * validade. É para quem dá desfecho a eles — sem isso o agente leria
+   * "pendente" para sempre —, nunca para o que aparece na tela.
+   *
+   * @param {{ acao?: string, incluirVencidos?: boolean }} [filtro]
    * @returns {Array<object>}
    */
   function listarPendentes(filtro = {}) {
     const instante = agora()
     const acao = typeof filtro?.acao === 'string' ? filtro.acao : ''
+    const incluirVencidos = filtro?.incluirVencidos === true
 
     return lerTodos()
       .filter(
         (pedido) =>
           pedido.estado === ESTADOS.pendente &&
-          pedidoAindaVale(pedido, instante) &&
+          (incluirVencidos || pedidoAindaVale(pedido, instante)) &&
           (!acao || pedido.acao === acao),
       )
-      .sort((a, b) => a.pedidoEm.localeCompare(b.pedidoEm))
+      .sort((a, b) => chaveDeOrdem(a).localeCompare(chaveDeOrdem(b)))
   }
 
   /**
@@ -271,8 +298,9 @@ function criarRepositorioDePedidos(opcoes) {
    * @returns {object|null} o pedido atualizado, ou `null` se ele não existe.
    */
   function resolver(id, desfecho) {
-    const arquivo = path.join(pasta, `${String(id).replace(/[^\w.-]/g, '')}.json`)
-    const pedido = lerArquivo(arquivo)
+    // Pela mesma leitura de `ler`: um arquivo reescrito com outro id dentro
+    // não recebe o desfecho do pedido que a pessoa decidiu.
+    const pedido = ler(id)
 
     if (!pedido) {
       return null
@@ -286,7 +314,7 @@ function criarRepositorioDePedidos(opcoes) {
     }
 
     sistemaDeArquivos.writeFileSync(
-      arquivo,
+      arquivoDoPedido(pedido.id),
       `${JSON.stringify(atualizado, null, 2)}\n`,
       'utf8',
     )
@@ -297,11 +325,18 @@ function criarRepositorioDePedidos(opcoes) {
    * Lê um pedido pelo id, em qualquer estado. É como o comando descobre o
    * desfecho de um pedido que ele mesmo deixou.
    *
+   * O id é o nome do arquivo, e o conteúdo precisa dizer o mesmo id: um
+   * `a.json` com `"id": "b"` dentro apareceria na tela como o pedido b e, na
+   * hora de decidir, o app leria o `b.json` — a pessoa veria um pedido e
+   * atenderia outro. Id com caractere fora do nome de arquivo nunca foi
+   * gravado por `registrar`, e não é lido.
+   *
    * @param {string} id
    * @returns {object|null}
    */
   function ler(id) {
-    return lerArquivo(path.join(pasta, `${String(id).replace(/[^\w.-]/g, '')}.json`))
+    const nome = String(id)
+    return ID_SEGURO.test(nome) ? lerPedido(nome) : null
   }
 
   /** @returns {Array<object>} */
@@ -314,10 +349,26 @@ function criarRepositorioDePedidos(opcoes) {
       return []
     }
 
+    // Só o que `ler` também leria (ver lá): um arquivo com outro id dentro, ou
+    // com um nome que `resolver` não alcança, ficaria na tela sem desfecho
+    // possível — ou seria atendido como outro pedido.
     return nomes
       .filter((nome) => nome.endsWith('.json'))
-      .map((nome) => lerArquivo(path.join(pasta, nome)))
+      .map((nome) => nome.slice(0, -'.json'.length))
+      .filter((nome) => ID_SEGURO.test(nome))
+      .map((nome) => lerPedido(nome))
       .filter(Boolean)
+  }
+
+  /** @returns {string} */
+  function arquivoDoPedido(id) {
+    return path.join(pasta, `${id}.json`)
+  }
+
+  /** O pedido do `<id>.json`, só se o id de dentro for o próprio nome. */
+  function lerPedido(id) {
+    const pedido = lerArquivo(arquivoDoPedido(id))
+    return pedido?.id === id ? pedido : null
   }
 
   /** @returns {object|null} */
