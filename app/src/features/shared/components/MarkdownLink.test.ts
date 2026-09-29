@@ -1,5 +1,5 @@
-import type { ReactElement } from 'react'
-import { describe, expect, it, vi } from 'vitest'
+import { Fragment, type ReactElement } from 'react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { MarkdownLink } from './MarkdownLink'
 
@@ -58,6 +58,90 @@ describe('MarkdownLink', () => {
     link.props.onClick?.({ preventDefault, currentTarget: { closest: () => null } })
     link.props.onAuxClick?.({ preventDefault })
     expect(preventDefault).toHaveBeenCalledTimes(2)
+  })
+
+  describe('destino recusado', () => {
+    afterEach(() => {
+      vi.unstubAllGlobals()
+    })
+
+    it('vira o rótulo com o destino na dica e um botão que só copia', () => {
+      const writeText = vi.fn(() => Promise.resolve())
+      const open = vi.fn()
+      vi.stubGlobal('navigator', { clipboard: { writeText } })
+      vi.stubGlobal('open', open)
+
+      const rendered = MarkdownLink({
+        href: '',
+        writtenHref: ' javascript:alert(1) ',
+        children: 'x',
+      }) as ReactElement<{ children: ReactElement<RenderedLinkProps & { 'aria-label'?: string }>[] }>
+      const [label, button] = rendered.props.children
+
+      expect(rendered.type).toBe(Fragment)
+      expect(label.type).toBe('span')
+      expect(label.props.title).toBe('Link recusado por segurança: javascript:alert(1)')
+      expect(label.props.href).toBeUndefined()
+      expect(button.type).toBe('button')
+      expect(button.props.type).toBe('button')
+      expect(button.props['aria-label']).toBe('Copiar endereço recusado')
+      expect(button.props.href).toBeUndefined()
+
+      button.props.onClick?.()
+      expect(writeText).toHaveBeenCalledWith('javascript:alert(1)')
+      expect(open).not.toHaveBeenCalled()
+    })
+
+    it('sem área de transferência, copiar não quebra nem abre nada', () => {
+      const open = vi.fn()
+      vi.stubGlobal('navigator', {})
+      vi.stubGlobal('open', open)
+
+      const rendered = MarkdownLink({
+        writtenHref: 'https://usuario@git.example.com/r.git',
+        children: 'x',
+      }) as ReactElement<{ children: ReactElement<RenderedLinkProps>[] }>
+
+      expect(() => rendered.props.children[1].props.onClick?.()).not.toThrow()
+      expect(open).not.toHaveBeenCalled()
+    })
+
+    it('dica longa é cortada; a cópia leva o endereço inteiro', () => {
+      const writeText = vi.fn(() => Promise.resolve())
+      vi.stubGlobal('navigator', { clipboard: { writeText } })
+      const destination = `data:text/html,${'a'.repeat(1000)}`
+
+      const rendered = MarkdownLink({ writtenHref: destination, children: 'x' }) as ReactElement<{
+        children: ReactElement<RenderedLinkProps>[]
+      }>
+      const [label, button] = rendered.props.children
+
+      expect(label.props.title?.length).toBeLessThan(300)
+      expect(label.props.title?.endsWith('…')).toBe(true)
+      button.props.onClick?.()
+      expect(writeText).toHaveBeenCalledWith(destination)
+    })
+
+    it('âncora, relativo sem destino e endereço com invisível não ganham botão', () => {
+      const zeroWidthSpace = String.fromCharCode(0x200b)
+
+      for (const writtenHref of ['#secao', 'OUTRO.md', `https://exa${zeroWidthSpace}mple.com/`, '  ']) {
+        const link = renderLink({ href: '', writtenHref, children: 'x' })
+        expect(link.type).toBe('span')
+        expect(link.props.title).toBeUndefined()
+      }
+    })
+
+    it('com href aprovado, o destino escrito não muda nada', () => {
+      const link = renderLink({
+        href: 'https://example.com/',
+        writtenHref: 'https://Example.com',
+        children: 'x',
+      })
+
+      expect(link.type).toBe('a')
+      expect(link.props.href).toBe('https://example.com/')
+    })
   })
 
   it('só http(s) e mailto saem do app, em janela nova', () => {

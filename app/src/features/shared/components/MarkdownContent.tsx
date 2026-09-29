@@ -30,6 +30,7 @@ import {
 } from './markdown-heading-anchor'
 import {
   isRelativeMarkdownLink,
+  remarkRefuseHiddenUrlCharacters,
   resolveMarkdownImageSrc,
   sanitizeMarkdownUrl,
 } from './markdown-image-src'
@@ -158,6 +159,49 @@ const MARKDOWN_SANITIZE_SCHEMA = {
   ],
 }
 
+/** O mínimo de um nó hast que o plugin abaixo precisa ler e marcar. */
+type HastLinkNode = {
+  type: string
+  tagName?: string
+  properties?: Record<string, unknown>
+  data?: Record<string, unknown>
+  children?: HastLinkNode[]
+}
+
+const WRITTEN_HREF_DATA_KEY = 'markdownWrittenHref'
+
+/**
+ * Plugin rehype que guarda, em `node.data`, o destino escrito de cada link
+ * ANTES do `rehype-sanitize`. O sanitize apaga o `href` de esquema fora da
+ * lista (`javascript:`, `file:`, `vscode:`) e o `urlTransform` nem chega a ser
+ * chamado para ele; o que a política recusa depois chega vazio ao componente
+ * `a`. Sem uma cópia, o link recusado virava só o rótulo e o endereço sumia.
+ *
+ * `node.data` e não uma propriedade: o sanitize preserva `data` (clona) sem
+ * precisar de schema, e HTML cru não consegue escrever ali — um
+ * `data-markdown-written-href` no documento vira propriedade, não isto. A
+ * cópia nunca vira `href`: o `MarkdownLink` só a mostra na dica e a copia.
+ */
+function rehypeKeepWrittenHref() {
+  return (tree: HastLinkNode) => {
+    const visit = (node: HastLinkNode) => {
+      const href = node.properties?.href
+      if (node.type === 'element' && node.tagName === 'a' && typeof href === 'string' && href) {
+        node.data = { ...node.data, [WRITTEN_HREF_DATA_KEY]: href }
+      }
+      node.children?.forEach(visit)
+    }
+    visit(tree)
+  }
+}
+
+function writtenHrefOf(node: { data?: unknown } | undefined): string | undefined {
+  // `ElementData` do hast não declara a chave: ela é deste arquivo, gravada
+  // por `rehypeKeepWrittenHref`.
+  const value = (node?.data as Record<string, unknown> | undefined)?.[WRITTEN_HREF_DATA_KEY]
+  return typeof value === 'string' ? value : undefined
+}
+
 hljs.registerLanguage('bash', bashLanguage)
 hljs.registerLanguage('css', cssLanguage)
 hljs.registerLanguage('javascript', javascriptLanguage)
@@ -237,9 +281,13 @@ function createMarkdownComponents(
     del({ children }) {
       return <del className="text-zinc-400 line-through">{children}</del>
     },
-    a({ children, href }) {
+    a({ children, href, node }) {
       return (
-        <MarkdownLink href={href} resolveRelativeLink={resolveRelativeLink}>
+        <MarkdownLink
+          href={href}
+          resolveRelativeLink={resolveRelativeLink}
+          writtenHref={writtenHrefOf(node)}
+        >
           {children}
         </MarkdownLink>
       )
@@ -467,9 +515,12 @@ export function MarkdownContent({ content, baseDir, resolveRelativeLink }: Markd
         components={components}
         rehypePlugins={[
           rehypeRaw,
+          // Entre os dois: depois do HTML cru virar nó (o `rehype-raw` refaz a
+          // árvore) e antes do sanitize apagar o `href` recusado.
+          rehypeKeepWrittenHref,
           [rehypeSanitize, MARKDOWN_SANITIZE_SCHEMA],
         ]}
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkRefuseHiddenUrlCharacters]}
         urlTransform={
           resolveRelativeLink ? sanitizeMarkdownUrlKeepingRelativeLinks : sanitizeMarkdownUrl
         }

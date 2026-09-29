@@ -83,10 +83,15 @@ describe('MarkdownContent', () => {
     // sistema na raiz do próprio renderer.
     expect(html).not.toContain('href=""')
     expect(html).not.toContain('target="_blank"')
-    expect(html).not.toMatch(/<(?:a|button)\b/)
-    for (const text of ['outro guia', 'subindo', 'javascript', 'HTML relativo']) {
+    expect(html).not.toMatch(/<a\b/)
+    for (const text of ['outro guia', 'subindo', 'HTML relativo']) {
       expect(html).toContain(`<span>${text}</span>`)
     }
+    // O link recusado continua texto, mas o destino fica na dica e só pode ser
+    // copiado (aceite "URL bloqueada continua copiável"); os relativos sem
+    // resolvedor não são recusa e não ganham botão.
+    expect(html).toContain('<span title="Link recusado por segurança: javascript:alert(1)">javascript</span>')
+    expect(html.match(/aria-label="Copiar endereço recusado"/g)).toHaveLength(1)
   })
 
   it('âncora fica no próprio conteúdo: sem janela nova e com o título marcado como destino', () => {

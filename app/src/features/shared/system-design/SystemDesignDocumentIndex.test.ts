@@ -144,5 +144,10 @@ describe('SystemDesignDocumentContent', () => {
     )
     // Pasta fora do índice não tem destino no app: fica como texto.
     expect(html).toContain('<span>pasta de scripts</span>')
-  })
+    // Timeout explícito: o `prerender` espera o chunk `lazy()` do Markdown, e o
+    // primeiro import frio do pipeline inteiro (react-markdown, highlight.js,
+    // política de URL) passou dos 5 s padrão numa máquina carregada, enquanto a
+    // mesma renderização com o módulo já carregado leva menos de 1 s. O teste é
+    // de comportamento, não de desempenho.
+  }, 20_000)
 })

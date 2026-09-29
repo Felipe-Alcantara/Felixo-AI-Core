@@ -14,6 +14,39 @@
  * chat), caminho relativo é recusado. Isso evita que conteúdo externo ganhe
  * acesso implícito à origem local do renderer.
  */
+import {
+  EXTERNAL_WEB_SCHEMES,
+  classifyExternalUrl,
+  hasHiddenUrlCharacters,
+} from '../external-url-policy'
+
+/** O mínimo de um nó mdast que este arquivo precisa ler. */
+type MarkdownUrlNode = { type: string; url?: string; children?: MarkdownUrlNode[] }
+
+/**
+ * Plugin remark que tira o destino de link com caractere escondido ANTES de
+ * ele virar `href`. O `mdast-util-to-hast` codifica a URL (`normalizeUri`)
+ * antes do `urlTransform`: U+202E vira `%E2%80%AE` e U+200B no host some no
+ * parse, e a política recebe algo que já parece limpo. Aqui ainda se vê o texto
+ * cru. O link vira texto (o `MarkdownLink` recebe href vazio), e o endereço de
+ * um autolink continua visível e copiável, como no terminal.
+ */
+export function remarkRefuseHiddenUrlCharacters() {
+  return (tree: MarkdownUrlNode) => {
+    const visit = (node: MarkdownUrlNode) => {
+      if (
+        (node.type === 'link' || node.type === 'definition') &&
+        typeof node.url === 'string' &&
+        hasHiddenUrlCharacters(node.url)
+      ) {
+        node.url = ''
+      }
+      node.children?.forEach(visit)
+    }
+    visit(tree)
+  }
+}
+
 export const MAX_INLINE_MARKDOWN_IMAGE_BYTES = 2 * 1024 * 1024
 
 const SAFE_DATA_IMAGE =
@@ -50,14 +83,20 @@ export function sanitizeMarkdownUrl(value: string, key: string): string {
   if (!normalizedValue || hasUrlControl(normalizedValue)) return ''
 
   if (key === 'href') {
-    return isSafeMarkdownLink(normalizedValue) ? normalizedValue : ''
+    // Âncora rola o próprio documento; o resto passa pela política única de
+    // URL externa (a mesma do terminal e do processo principal) e sai na
+    // forma serializada, que é exatamente o que o opener vai receber.
+    if (normalizedValue.startsWith('#')) return normalizedValue
+    const decision = classifyExternalUrl(normalizedValue)
+    return decision.ok ? decision.url : ''
   }
 
   if (key === 'src') {
     return isSafeMarkdownImageReference(normalizedValue) ? normalizedValue : ''
   }
 
-  return isSafeRemoteUrl(normalizedValue) ? normalizedValue : ''
+  const decision = classifyExternalUrl(normalizedValue, EXTERNAL_WEB_SCHEMES)
+  return decision.ok ? decision.url : ''
 }
 
 /**
@@ -77,14 +116,6 @@ export function isRelativeMarkdownLink(value: string): boolean {
   if (isWindowsAbsolute(normalizedValue)) return false
 
   return !hasUrlScheme(normalizedValue)
-}
-
-function isSafeMarkdownLink(value: string): boolean {
-  if (value.startsWith('#')) return true
-  return (
-    isSafeRemoteUrl(value, ['http:', 'https:']) ||
-    isSafeMailto(value)
-  )
 }
 
 function isSafeMarkdownImageReference(value: string): boolean {
@@ -115,15 +146,6 @@ function isSafeRemoteUrl(value: string, protocols = ['http:', 'https:']): boolea
   try {
     const parsed = new URL(value)
     return parsed.protocol === scheme && Boolean(parsed.hostname)
-  } catch {
-    return false
-  }
-}
-
-function isSafeMailto(value: string): boolean {
-  try {
-    const parsed = new URL(value)
-    return parsed.protocol === 'mailto:' && Boolean(parsed.pathname)
   } catch {
     return false
   }
