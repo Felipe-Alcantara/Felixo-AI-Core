@@ -559,9 +559,29 @@ function criarSessaoDeLinks(deps) {
     }, { procurado: texto, ultima })
   }
 
+  /**
+   * `posicaoNoTerminal` depois que a tela parou de andar: duas leituras
+   * seguidas, com 200 ms entre elas, iguais (inclusive as duas `null`). O
+   * texto aparece no eco da digitação, antes do Enter, e o prompt seguinte
+   * ainda rola a tela uma linha quando o terminal está cheio (depois do
+   * streaming): um ponto lido cedo cai na linha de baixo, e a dica nunca
+   * aparece.
+   */
+  async function posicaoEstavel(passo, texto, opcoes) {
+    const limite = Date.now() + timeout
+    let antes = await posicaoNoTerminal(texto, opcoes)
+    while (Date.now() < limite) {
+      await pausa(200)
+      const depois = await posicaoNoTerminal(texto, opcoes)
+      if (JSON.stringify(antes) === JSON.stringify(depois)) return depois
+      antes = depois
+    }
+    falhar(passo, `a posição de "${texto}" no terminal não parou de mudar em ${timeout} ms`)
+  }
+
   async function esperarNoTerminal(passo, texto, opcoes) {
     await esperar(passo, `"${texto}" aparecer no terminal`, terminalContem, texto)
-    const ponto = await posicaoNoTerminal(texto, opcoes)
+    const ponto = await posicaoEstavel(passo, texto, opcoes)
     exigir(ponto, passo, `"${texto}" não tem posição na tela`)
     return ponto
   }
@@ -659,7 +679,7 @@ function criarSessaoDeLinks(deps) {
     const passo = 'L8 terminal: streaming com o menu aberto'
     await limparGravadores()
     // O link pode ter rolado com a saída do OSC 8: acha de novo.
-    const atual = (await posicaoNoTerminal(TERMINAL_URL)) ?? ponto
+    const atual = (await posicaoEstavel(passo, TERMINAL_URL)) ?? ponto
     await passarPorCima(passo, atual, 'escolher onde abrir')
     await modificadorClique(atual)
     await esperarMenu(passo, 'antes do streaming')
@@ -699,7 +719,6 @@ function criarSessaoDeLinks(deps) {
   async function terminalToque(xterm) {
     const passo = 'L9 terminal: toque'
     await digitar(xterm, TERMINAL_URL)
-    await pausa(200)
     let ponto = await esperarNoTerminal(passo, TERMINAL_URL, { ultima: true })
     await tocar(ponto.x, ponto.y)
     let menu = await esperarMenu(passo, 'toque no link do terminal')
@@ -714,7 +733,6 @@ function criarSessaoDeLinks(deps) {
       [...document.querySelectorAll('.xterm')].at(-1)?.classList.contains('enable-mouse-events') === true)
     // Linha nova, que nem o mouse nem o toque anterior visitaram.
     await digitar(xterm, TERMINAL_URL)
-    await pausa(200)
     ponto = await esperarNoTerminal(passo, TERMINAL_URL, { ultima: true })
     await tocar(ponto.x, ponto.y)
     menu = await esperarMenu(passo, 'toque no link com o mouse tracking ligado')
