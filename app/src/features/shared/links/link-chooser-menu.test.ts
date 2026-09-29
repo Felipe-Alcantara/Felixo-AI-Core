@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  focusLeavesLinkChooser,
   isKeyboardContextMenu,
   isTouchGesture,
   linkChooserKeyAction,
@@ -99,6 +100,29 @@ describe('restoresFocusOnDismiss', () => {
     // Um clique dentro de uma Página Web tira o foco da janela de propósito.
     expect(restoresFocusOnDismiss('pointer-outside', true)).toBe(false)
     expect(restoresFocusOnDismiss('window-blur', true)).toBe(false)
+  })
+
+  it('foco que saiu para outro elemento fica lá', () => {
+    expect(restoresFocusOnDismiss('focus-left', true)).toBe(false)
+  })
+})
+
+describe('focusLeavesLinkChooser', () => {
+  const menuElement = {} as EventTarget
+  const item = {} as EventTarget
+  const menu = { contains: (node: unknown) => node === menuElement || node === item }
+
+  it('o foco foi para outro elemento (um diálogo que abriu por cima): fecha', () => {
+    expect(focusLeavesLinkChooser(menu, {} as EventTarget)).toBe(true)
+  })
+
+  it('andar entre os itens, ou clicar no resumo (o foco vai ao próprio menu), não fecha', () => {
+    expect(focusLeavesLinkChooser(menu, item)).toBe(false)
+    expect(focusLeavesLinkChooser(menu, menuElement)).toBe(false)
+  })
+
+  it('sem elemento novo, a janela perdeu o foco: quem fecha é o blur da janela', () => {
+    expect(focusLeavesLinkChooser(menu, null)).toBe(false)
   })
 })
 

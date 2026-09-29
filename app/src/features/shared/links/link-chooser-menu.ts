@@ -83,7 +83,12 @@ export function linkChooserKeyAction(
 }
 
 /** Como o menu fecha sem uma escolha, fora as teclas (Esc e Tab sempre devolvem o foco). */
-export type LinkChooserDismissCause = 'pointer-outside' | 'wheel' | 'resize' | 'window-blur'
+export type LinkChooserDismissCause =
+  | 'pointer-outside'
+  | 'wheel'
+  | 'resize'
+  | 'window-blur'
+  | 'focus-left'
 
 /**
  * Fechar o menu sem escolha devolve o foco a quem o abriu?
@@ -92,15 +97,34 @@ export type LinkChooserDismissCause = 'pointer-outside' | 'wheel' | 'resize' | '
  * com o foco dentro, e o foco cairia no `body` — o terminal para de receber
  * teclas, e Backspace/Delete chegam ao canvas e apagam o bloco selecionado.
  * Nos outros casos o foco já tem destino: o clique fora o leva aonde a pessoa
- * clicou, e a janela que perdeu o foco o levou de propósito (um clique dentro
- * de uma Página Web vai para a página). Quando a janela volta, é o
- * `useFocusRestore` que devolve o foco a quem o tinha antes do menu.
+ * clicou, o foco que saiu do menu já está no elemento novo, e a janela que
+ * perdeu o foco o levou de propósito (um clique dentro de uma Página Web vai
+ * para a página). Quando a janela volta, é o `useFocusRestore` que devolve o
+ * foco a quem o tinha antes do menu.
  */
 export function restoresFocusOnDismiss(
   cause: LinkChooserDismissCause,
   focusWasInMenu: boolean,
 ): boolean {
   return focusWasInMenu && (cause === 'wheel' || cause === 'resize')
+}
+
+/**
+ * O foco saiu de um elemento do menu (`focusout`): o menu fecha?
+ *
+ * Fecha quando o foco foi para outro elemento, fora do menu — um diálogo que
+ * abriu depois e focou o próprio campo, por exemplo. Aberto, o menu ficaria
+ * desenhado por cima do diálogo (z-70 sobre z-60) e, ao escolher, devolveria
+ * o foco para trás do `aria-modal`. `next` nulo é a janela perdendo o foco
+ * (outro app, ou um clique dentro de uma Página Web), que o `blur` da janela
+ * já trata. Andar entre os itens ou clicar no resumo não tira o foco do menu.
+ */
+export function focusLeavesLinkChooser(
+  menu: { contains: (node: Node | null) => boolean } | null,
+  next: EventTarget | null,
+): boolean {
+  if (!next) return false
+  return !menu?.contains(next as Node)
 }
 
 /** O pedido veio do teclado? Clique direito pela tecla de menu não tem posição de ponteiro. */

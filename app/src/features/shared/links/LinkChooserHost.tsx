@@ -20,6 +20,7 @@ import {
   type LinkDestination,
 } from './link-destination'
 import {
+  focusLeavesLinkChooser,
   linkChooserKeyAction,
   placeLinkChooser,
   restoresFocusOnDismiss,
@@ -231,6 +232,9 @@ function LinkChooserMenu({ request, onCopied }: MenuProps) {
       // o link veio (ver `FLOATING_LAYER_SELECTOR`).
       data-felixo-floating-layer
       onKeyDown={onKeyDown}
+      onBlur={(event) => {
+        if (focusLeavesLinkChooser(containerRef.current, event.relatedTarget)) dismiss('focus-left')
+      }}
     >
       <DestinationSummary id={descriptionId} destination={destination} />
       <div
