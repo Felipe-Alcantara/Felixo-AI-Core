@@ -79,6 +79,49 @@ describe('describeLinkDestination', () => {
     expect(destination.ok && destination.headline.endsWith(',pessoa299@example.com')).toBe(true)
   })
 
+  it('e-mail: to, cc e bcc da query aparecem à parte, na ordem Também para, Cc, Cco', () => {
+    // Na URL cortada do menu, o bcc para um terceiro passava sem ser visto.
+    const destination = describeLinkDestination(
+      'mailto:fulana@example.com?subject=Oi&bcc=terceiro@evil.example&cc=beltrano@example.com&CC=ciclano@example.com&to=outra@example.com',
+      'markdown',
+    )
+    expect(destination).toMatchObject({
+      ok: true,
+      kind: 'email',
+      headline: 'fulana@example.com',
+      extraRecipients: [
+        { label: 'Também para', addresses: 'outra@example.com' },
+        { label: 'Cc', addresses: 'beltrano@example.com, ciclano@example.com' },
+        { label: 'Cco', addresses: 'terceiro@evil.example' },
+      ],
+    })
+  })
+
+  it('e-mail sem destinatário na query: nenhuma linha a mais', () => {
+    const destination = describeLinkDestination('mailto:fulana@example.com?subject=Oi&body=Tudo%20bem&cc=', 'markdown')
+    expect(destination.ok && destination.kind === 'email' && destination.extraRecipients).toEqual([])
+  })
+
+  it('destinatário da query: o + é do endereço, e invisível ou quebra de linha codificados ficam à mostra', () => {
+    const destination = describeLinkDestination(
+      'mailto:fulana@example.com?cc=ful+tag@example.com&bcc=ter%E2%80%8Bceiro@example.com%0Ax',
+      'markdown',
+    )
+    expect(destination.ok && destination.kind === 'email' && destination.extraRecipients).toEqual([
+      { label: 'Cc', addresses: 'ful+tag@example.com' },
+      { label: 'Cco', addresses: 'ter⟨U+200B⟩ceiro@example.com⟨U+000A⟩x' },
+    ])
+  })
+
+  it('300 destinatários em cópia oculta viram uma linha curta, com o último à vista', () => {
+    const bcc = Array.from({ length: 300 }, (_, index) => `pessoa${index}@example.com`).join(',')
+    const destination = describeLinkDestination(`mailto:fulana@example.com?bcc=${bcc}`, 'markdown')
+    const [line] = destination.ok && destination.kind === 'email' ? destination.extraRecipients : []
+    expect(line?.label).toBe('Cco')
+    expect(Array.from(line?.addresses ?? '')).toHaveLength(MAX_SHOWN_ADDRESS_CHARS)
+    expect(line?.addresses.endsWith(',pessoa299@example.com')).toBe(true)
+  })
+
   it.each<[LinkOrigin, readonly string[]]>([
     ['terminal', ['http:', 'https:']],
     ['pagina-web', ['http:', 'https:']],

@@ -29,18 +29,36 @@ export function allowedSchemesFor(origin: LinkOrigin): readonly string[] {
   return origin === 'markdown' ? EXTERNAL_OPENER_SCHEMES : EXTERNAL_WEB_SCHEMES
 }
 
+type ApprovedDestination = {
+  ok: true
+  /** A serialização da política: é exatamente isto que abre ou é copiado. */
+  url: string
+  /**
+   * O que a pessoa lê primeiro: o host da página ou o endereço de e-mail,
+   * encurtado pelo meio quando é gigante (ver `shortenAddress`).
+   */
+  headline: string
+}
+
+/** Destinatários que um campo da query de um `mailto:` acrescenta. */
+export type MailtoRecipients = {
+  /** O nome do campo como um programa de e-mail em português o mostra. */
+  label: 'Também para' | 'Cc' | 'Cco'
+  /** Os endereços, decodificados, com os invisíveis à mostra e encurtados. */
+  addresses: string
+}
+
 export type LinkDestination =
-  | {
-      ok: true
-      /** A serialização da política: é exatamente isto que abre ou é copiado. */
-      url: string
-      kind: 'web' | 'email'
+  | (ApprovedDestination & { kind: 'web' })
+  | (ApprovedDestination & {
+      kind: 'email'
       /**
-       * O que a pessoa lê primeiro: o host da página ou o endereço de e-mail,
-       * encurtado pelo meio quando é gigante (ver `shortenAddress`).
+       * O que a query acrescenta (`to`, `cc`, `bcc`), nessa ordem. A URL
+       * aparece cortada no menu, e um `bcc` para um terceiro passaria sem a
+       * pessoa ver.
        */
-      headline: string
-    }
+      extraRecipients: MailtoRecipients[]
+    })
   | {
       ok: false
       /** Frase curta, sem jargão, que completa "Link recusado: …". */
@@ -69,20 +87,59 @@ export function describeLinkDestination(raw: string, origin: LinkOrigin): LinkDe
   }
 
   const parsed = new URL(decision.url)
-  const kind = decision.scheme === 'mailto:' ? 'email' : 'web'
+  if (decision.scheme === 'mailto:') {
+    return {
+      ok: true,
+      url: decision.url,
+      kind: 'email',
+      // O e-mail é decodificado para ser lido, e um invisível codificado nele
+      // fica à mostra.
+      headline: shortenAddress(revealHiddenUrlCharacters(decodeMailtoPart(parsed.pathname))),
+      extraRecipients: describeMailtoRecipients(parsed.search),
+    }
+  }
   return {
     ok: true,
     url: decision.url,
-    kind,
+    kind: 'web',
     // `hostname` vem em Punycode (`xn--…`) para domínio com acento: é a forma
-    // que não se confunde com outro domínio de letras parecidas. O e-mail é
-    // decodificado para ser lido, e um invisível codificado nele fica à mostra.
-    headline: shortenAddress(
-      kind === 'email'
-        ? revealHiddenUrlCharacters(decodeMailtoRecipients(parsed.pathname))
-        : parsed.hostname,
-    ),
+    // que não se confunde com outro domínio de letras parecidas.
+    headline: shortenAddress(parsed.hostname),
   }
+}
+
+/** Campos da query de um `mailto:` que acrescentam destinatários, na ordem do menu. */
+const MAILTO_RECIPIENT_FIELDS: ReadonlyArray<readonly [string, MailtoRecipients['label']]> = [
+  ['to', 'Também para'],
+  ['cc', 'Cc'],
+  ['bcc', 'Cco'],
+]
+
+/**
+ * Os destinatários da query de um `mailto:`, um item por campo; o mesmo campo
+ * repetido junta os endereços.
+ *
+ * A query é lida à mão, e não por `URLSearchParams`: ele troca `+` por
+ * espaço, como num formulário, e no `mailto:` o `+` é do endereço
+ * (`fulana+tag@example.com`, RFC 6068). O nome do campo não diferencia
+ * caixa (`CC=` também é cópia), como na política.
+ */
+function describeMailtoRecipients(search: string): MailtoRecipients[] {
+  const byField = new Map<string, string[]>()
+  for (const pair of search.slice(1).split('&')) {
+    const separator = pair.indexOf('=')
+    if (separator <= 0) continue
+    const field = decodeMailtoPart(pair.slice(0, separator)).toLowerCase()
+    const value = decodeMailtoPart(pair.slice(separator + 1))
+    if (value) byField.set(field, [...(byField.get(field) ?? []), value])
+  }
+
+  return MAILTO_RECIPIENT_FIELDS.flatMap(([field, label]) => {
+    const values = byField.get(field)
+    return values
+      ? [{ label, addresses: shortenAddress(revealHiddenUrlCharacters(values.join(', '))) }]
+      : []
+  })
 }
 
 /**
@@ -142,11 +199,13 @@ function listSchemes(schemes: readonly string[]): string {
   return `${names.slice(0, -1).join(', ')} e ${names[names.length - 1]}`
 }
 
-function decodeMailtoRecipients(pathname: string): string {
+/** Um pedaço de `mailto:` (destinatários, nome ou valor de campo) como se lê. */
+function decodeMailtoPart(part: string): string {
   try {
-    return decodeURIComponent(pathname)
+    return decodeURIComponent(part)
   } catch {
-    return pathname
+    // `%` sem par válido: mostra o texto como está, em vez de nada.
+    return part
   }
 }
 

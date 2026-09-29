@@ -292,6 +292,14 @@ function DestinationSummary({ id, destination }: { id: string; destination: Link
         {destination.kind === 'email' ? 'E-mail para' : 'Leva a'}
       </p>
       <p className="break-all font-medium text-(--f-core-white)">{destination.headline}</p>
+      {/* Fora do corte da URL: um `bcc` para um terceiro não passa sem ser lido. */}
+      {destination.kind === 'email' &&
+        destination.extraRecipients.map((recipients) => (
+          <p key={recipients.label} className="break-all">
+            <span className="text-(--f-core-secondary)">{recipients.label}:</span>{' '}
+            <span className="font-medium text-(--f-core-white)">{recipients.addresses}</span>
+          </p>
+        ))}
       <p
         className="mt-0.5 line-clamp-3 break-all font-mono text-[11px] text-(--f-core-secondary)"
         title={destination.url.length > MAX_SHOWN_CHARS ? undefined : destination.url}
