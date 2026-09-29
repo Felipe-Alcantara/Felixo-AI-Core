@@ -224,7 +224,9 @@ function LinkChooserMenu({ request, onCopied }: MenuProps) {
             tabIndex={index === active ? 0 : -1}
             onClick={() => choose(entry.choice)}
             data-link-choice={entry.choice}
-            className="felixo-btn-flat flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left hover:bg-white/10 focus-visible:bg-white/10 pointer-coarse:py-2.5"
+            // `any-pointer`, não `pointer`: num notebook com tela sensível o
+            // ponteiro principal é o touchpad, e o dedo ficaria com o alvo fino.
+            className="felixo-btn-flat flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left hover:bg-white/10 focus-visible:bg-white/10 any-pointer-coarse:py-2.5"
           >
             <ChoiceIcon choice={entry.choice} destination={destination} />
             {entry.label}
