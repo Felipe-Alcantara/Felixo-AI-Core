@@ -123,6 +123,9 @@ function criarSessaoDeLinks(deps) {
   /** Troca `window.open` e a área de transferência por gravadores na página. */
   async function instalarGravadores() {
     await page.evaluate(() => {
+      // O `window.open` de verdade fica guardado para o único passo que o usa
+      // (o aviso de falha): a instância abre links por um shell que sempre falha.
+      window.__linksSmokeRealOpen = window.__linksSmokeRealOpen ?? window.open
       window.__linksSmoke = { opened: [], copied: [] }
       window.open = (url) => {
         window.__linksSmoke.opened.push(String(url))
@@ -426,6 +429,38 @@ function criarSessaoDeLinks(deps) {
     await esperarMenuFechado(passo, 'navegador')
     registro = await gravado()
     exigir(JSON.stringify(registro.opened) === JSON.stringify([DOCS_URL]), passo, 'o navegador não recebeu o destino', registro)
+
+    // O sistema não entrega o endereço a um navegador: o app avisa e oferece
+    // copiar. Aqui o pedido vai ao processo principal de verdade, cujo shell
+    // falha sempre nesta instância (FELIXO_DEVTOOLS_SHELL_OPEN=falha).
+    await limparGravadores()
+    await page.evaluate(() => {
+      window.open = window.__linksSmokeRealOpen
+    })
+    try {
+      await linkDaNota().click()
+      await esperarMenu(passo, 'navegador que falha')
+      await escolher('abrir-no-navegador')
+      await esperarMenuFechado(passo, 'navegador que falha')
+      const aviso = page.locator('[data-felixo-link-open-failure]')
+      await aviso.waitFor({ state: 'visible', timeout }).catch(() =>
+        falhar(passo, 'o aviso de que o navegador não abriu não apareceu'))
+      exigir((await aviso.getAttribute('role')) === 'alert', passo, 'o aviso não é anunciado (role=alert)')
+      const textoDoAviso = (await aviso.textContent()) ?? ''
+      exigir(textoDoAviso.includes('Não foi possível abrir no navegador') && textoDoAviso.includes(DOCS_URL), passo, 'o aviso não diz o que falhou nem mostra o endereço', textoDoAviso)
+      // Chegar ao aviso não tira o foco de quem o tinha (o link da nota).
+      exigir(
+        await page.evaluate((url) => document.activeElement?.getAttribute('href') === url, DOCS_URL),
+        passo,
+        'o aviso roubou o foco',
+      )
+      await aviso.getByRole('button', { name: 'Copiar link' }).click()
+      await aviso.waitFor({ state: 'detached', timeout }).catch(() => falhar(passo, 'copiar não fechou o aviso'))
+      registro = await gravado()
+      exigir(JSON.stringify(registro.copied) === JSON.stringify([DOCS_URL]), passo, 'o aviso não copiou o endereço', registro)
+    } finally {
+      await instalarGravadores()
+    }
 
     const antes = await contarPaginasWeb()
     await mostrarNotaRenderizadaSeFechada()
