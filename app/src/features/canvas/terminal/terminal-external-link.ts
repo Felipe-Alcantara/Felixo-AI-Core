@@ -18,7 +18,16 @@ export function isAllowedTerminalExternalLink(uri: string): boolean {
   return classifyExternalUrl(uri, EXTERNAL_WEB_SCHEMES).ok
 }
 
-export function hasTerminalLinkModifier(event: Pick<MouseEvent, 'ctrlKey' | 'metaKey'>): boolean {
+/**
+ * Ctrl ou Cmd, só um dos dois. No macOS, só Cmd: lá Ctrl+clique é o clique
+ * secundário do sistema, e o Chromium entrega esse gesto como `contextmenu`
+ * já no `mousedown` — o menu abre pelo clique direito do terminal. O
+ * `mouseup` que vem depois ainda chega ao xterm com o botão principal e Ctrl,
+ * e contar Ctrl aqui pediria o menu de novo: ele remonta e pisca, o foco cai
+ * no `body` por um quadro e o leitor de tela anuncia duas vezes.
+ */
+export function hasTerminalLinkModifier(event: Pick<MouseEvent, 'ctrlKey' | 'metaKey'>, isMac: boolean): boolean {
+  if (isMac) return event.metaKey && !event.ctrlKey
   return event.ctrlKey !== event.metaKey
 }
 
@@ -40,14 +49,14 @@ type TerminalLinkGestureEvent = Pick<MouseEvent, 'ctrlKey' | 'metaKey' | 'button
 
 /**
  * O gesto sobre o link pede o menu de destino? Ctrl/Cmd+clique com o botão
- * principal, ou um toque: um dedo não tem Ctrl, e sem isto um link do
- * terminal nunca abriria numa tela sensível ao toque. Um clique simples de
- * mouse continua sendo do terminal (foco, seleção, mouse das CLIs de tela
- * cheia).
+ * principal (no macOS, Cmd — ver `hasTerminalLinkModifier`), ou um toque: um
+ * dedo não tem Ctrl, e sem isto um link do terminal nunca abriria numa tela
+ * sensível ao toque. Um clique simples de mouse continua sendo do terminal
+ * (foco, seleção, mouse das CLIs de tela cheia).
  */
-export function isTerminalLinkGesture(event: TerminalLinkGestureEvent): boolean {
+export function isTerminalLinkGesture(event: TerminalLinkGestureEvent, isMac: boolean): boolean {
   if (!isPrimaryButton(event)) return false
-  return hasTerminalLinkModifier(event) || isTouchGesture(event)
+  return hasTerminalLinkModifier(event, isMac) || isTouchGesture(event)
 }
 
 /**

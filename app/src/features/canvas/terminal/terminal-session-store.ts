@@ -534,11 +534,14 @@ export class TerminalSessionStore {
     // política.
     const linkEvents = {
       activate: (event: MouseEvent, text: string) => {
+        // A plataforma entra no gesto porque, no macOS, Ctrl+clique é o clique
+        // secundário: o menu já foi pedido pelo `contextmenu` do mousedown, e
+        // este mouseup com Ctrl o pediria de novo (ver `hasTerminalLinkModifier`).
+        if (!createdSession || !isTerminalLinkGesture(event, isMacPlatform(window.navigator))) return
         // Ctrl+arrastar dentro de uma URL é seleção, não pedido de abrir: o
         // xterm ativa o link no mouseup mesmo assim. O critério é o gesto ter
         // andado, e não existir seleção — ver `isTerminalLinkDragGesture` para
         // o Ctrl+clique legítimo que `hasSelection()` recusava.
-        if (!createdSession || !isTerminalLinkGesture(event)) return
         if (isTerminalLinkDragGesture(createdSession.linkGestureOrigin, event)) return
         // O gesto nunca abre o link: pergunta para onde, com o destino escrito.
         this.openLinkChooserFor(createdSession, text, { x: event.clientX, y: event.clientY })

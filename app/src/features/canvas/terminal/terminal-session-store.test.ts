@@ -151,6 +151,9 @@ function createHarness(
     : Promise.resolve()
 
   ;(globalThis as { window?: unknown }).window = {
+    // O renderer sempre tem `navigator`: o gesto de link do terminal lê a
+    // plataforma (no macOS, Ctrl+clique é o clique secundário do sistema).
+    navigator: { platform: 'Linux x86_64' },
     felixo: {
       pty: {
         onData: (listener: (event: { sessionId: string; data: string }) => void) => {
@@ -1696,6 +1699,29 @@ describe('TerminalSessionStore: links do terminal', () => {
       const event = fire({ clientX: 50, clientY: 60, pointerType: 'mouse' })
       expect(event.defaultPrevented).toBe(false)
       expect(getLinkChooserState().request).toBeNull()
+    })
+
+    it('no macOS, Ctrl+clique é este clique secundário: pede o menu uma vez, não de novo no mouseup', () => {
+      harness = createHarness('', 'claude', true, false, 1)
+      ;(globalThis as { window: { navigator: unknown } }).window.navigator = { platform: 'MacIntel' }
+      const handler = linkSession(harness).terminal.options.linkHandler
+
+      // O Chromium no macOS entrega Ctrl+clique como `contextmenu` já no
+      // mousedown, e o menu abre por aqui...
+      const fire = bindContextMenu({ hoveredLink: 'https://example.com/', hoveredLinkPoint: { x: 5, y: 6 } })
+      fire({ clientX: 50, clientY: 60, pointerType: 'mouse' })
+      const pedido = getLinkChooserState()
+      expect(pedido.request?.url).toBe('https://example.com/')
+
+      // ...e o mouseup que vem depois chega ao xterm com o botão principal e
+      // Ctrl. Pedir de novo remontaria o menu (pisca, o foco cai no body por
+      // um quadro, o leitor de tela anuncia duas vezes).
+      handler?.activate(mouse({ ctrlKey: true, clientX: 50, clientY: 60 }), 'https://example.com/', RANGE)
+      expect(getLinkChooserState()).toBe(pedido)
+
+      // Cmd+clique continua sendo o gesto do link no macOS.
+      handler?.activate(mouse({ metaKey: true, clientX: 50, clientY: 60 }), 'https://example.com/', RANGE)
+      expect(getLinkChooserState().version).toBe(pedido.version + 1)
     })
   })
 })

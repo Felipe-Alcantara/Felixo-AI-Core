@@ -42,31 +42,42 @@ describe('terminal external links', () => {
   )
 
   it('requires exactly Ctrl or Cmd', () => {
-    expect(hasTerminalLinkModifier(gesture({ ctrlKey: true }))).toBe(true)
-    expect(hasTerminalLinkModifier(gesture({ metaKey: true }))).toBe(true)
-    expect(hasTerminalLinkModifier(gesture())).toBe(false)
-    expect(hasTerminalLinkModifier(gesture({ ctrlKey: true, metaKey: true }))).toBe(false)
+    expect(hasTerminalLinkModifier(gesture({ ctrlKey: true }), false)).toBe(true)
+    expect(hasTerminalLinkModifier(gesture({ metaKey: true }), false)).toBe(true)
+    expect(hasTerminalLinkModifier(gesture(), false)).toBe(false)
+    expect(hasTerminalLinkModifier(gesture({ ctrlKey: true, metaKey: true }), false)).toBe(false)
   })
 
   describe('gesto que pede o menu de destino', () => {
     it('Ctrl/Cmd+clique com o botão principal pede o menu; clique simples de mouse é do terminal', () => {
-      expect(isTerminalLinkGesture(gesture({ ctrlKey: true }))).toBe(true)
-      expect(isTerminalLinkGesture(gesture({ metaKey: true }))).toBe(true)
-      expect(isTerminalLinkGesture(gesture())).toBe(false)
-      expect(isTerminalLinkGesture(gesture({ pointerType: 'mouse' }))).toBe(false)
+      expect(isTerminalLinkGesture(gesture({ ctrlKey: true }), false)).toBe(true)
+      expect(isTerminalLinkGesture(gesture({ metaKey: true }), false)).toBe(true)
+      expect(isTerminalLinkGesture(gesture(), false)).toBe(false)
+      expect(isTerminalLinkGesture(gesture({ pointerType: 'mouse' }), false)).toBe(false)
     })
 
     it('Ctrl+clique direito ou do meio não pede (o direito já abre o menu pelo contextmenu)', () => {
       for (const button of [1, 2]) {
-        expect(isTerminalLinkGesture(gesture({ ctrlKey: true, button }))).toBe(false)
+        expect(isTerminalLinkGesture(gesture({ ctrlKey: true, button }), false)).toBe(false)
       }
     })
 
     it('um toque pede o menu sem modificador: um dedo não tem Ctrl', () => {
-      expect(isTerminalLinkGesture(gesture({ sourceCapabilities: { firesTouchEvents: true } }))).toBe(true)
-      expect(isTerminalLinkGesture(gesture({ pointerType: 'touch' }))).toBe(true)
-      expect(isTerminalLinkGesture(gesture({ sourceCapabilities: { firesTouchEvents: false } }))).toBe(false)
-      expect(isTerminalLinkGesture(gesture({ sourceCapabilities: null }))).toBe(false)
+      expect(isTerminalLinkGesture(gesture({ sourceCapabilities: { firesTouchEvents: true } }), false)).toBe(true)
+      expect(isTerminalLinkGesture(gesture({ pointerType: 'touch' }), false)).toBe(true)
+      expect(isTerminalLinkGesture(gesture({ sourceCapabilities: { firesTouchEvents: false } }), false)).toBe(false)
+      expect(isTerminalLinkGesture(gesture({ sourceCapabilities: null }), false)).toBe(false)
+    })
+
+    it('no macOS, só Cmd+clique: o Ctrl+clique já pediu o menu pelo contextmenu', () => {
+      // No macOS, Ctrl+clique é o clique secundário: o Chromium entrega o
+      // gesto como `contextmenu` já no mousedown, e o mouseup que chega depois
+      // ao xterm ainda traz o botão principal e Ctrl. Contar esse Ctrl pedia
+      // o menu duas vezes (o menu piscava e o leitor de tela anunciava de novo).
+      expect(isTerminalLinkGesture(gesture({ ctrlKey: true }), true)).toBe(false)
+      expect(isTerminalLinkGesture(gesture({ ctrlKey: true, metaKey: true }), true)).toBe(false)
+      expect(isTerminalLinkGesture(gesture({ metaKey: true }), true)).toBe(true)
+      expect(isTerminalLinkGesture(gesture({ pointerType: 'touch' }), true)).toBe(true)
     })
   })
 
