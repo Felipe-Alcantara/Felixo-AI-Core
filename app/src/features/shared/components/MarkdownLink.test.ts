@@ -1,7 +1,8 @@
-import { Fragment, type ReactElement } from 'react'
+import type { ReactElement } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { MarkdownLink } from './MarkdownLink'
+import { closeLinkChooser, getLinkChooserState } from '../links/link-chooser-store'
 
 type RenderedLinkProps = {
   href?: string
@@ -12,10 +13,15 @@ type RenderedLinkProps = {
   onAuxClick?: (event: unknown) => void
 }
 
-// Sem hooks: o componente pode ser chamado como função, e o clique é o
-// `onClick` do elemento devolvido (o ambiente de teste não tem DOM).
+// Sem hooks: o componente (e o `<a>` que ele delega) pode ser chamado como
+// função, e o clique é o `onClick` do elemento devolvido (o ambiente de teste
+// não tem DOM).
 function renderLink(props: Parameters<typeof MarkdownLink>[0]) {
-  return MarkdownLink(props) as ReactElement<RenderedLinkProps>
+  let element = MarkdownLink(props) as ReactElement<RenderedLinkProps>
+  while (typeof element.type === 'function') {
+    element = (element.type as (props: object) => ReactElement<RenderedLinkProps>)(element.props)
+  }
+  return element
 }
 
 describe('MarkdownLink', () => {
@@ -60,66 +66,133 @@ describe('MarkdownLink', () => {
     expect(preventDefault).toHaveBeenCalledTimes(2)
   })
 
-  describe('destino recusado', () => {
+  describe('link que sai do app pede o menu de destino', () => {
     afterEach(() => {
+      closeLinkChooser()
       vi.unstubAllGlobals()
     })
 
-    it('vira o rótulo com o destino na dica e um botão que só copia', () => {
-      const writeText = vi.fn(() => Promise.resolve())
+    function clickEvent(init: { detail?: number; clientX?: number; clientY?: number; type?: string } = {}) {
+      const currentTarget = {
+        closest: (selector: string) =>
+          selector === '.react-flow__node' ? { getAttribute: () => 'note-7' } : null,
+        getBoundingClientRect: () => ({ left: 40, top: 50, width: 80, height: 16 }),
+        isConnected: true,
+        focus: () => {},
+      }
+      return {
+        detail: 1,
+        clientX: 11,
+        clientY: 22,
+        type: 'click',
+        ...init,
+        currentTarget,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+      }
+    }
+
+    it.each(['https://example.com/docs', 'mailto:time@example.com'])(
+      'clique em %s não navega: pede o menu no ponto do clique, com o bloco de origem',
+      (href) => {
+        const open = vi.fn()
+        vi.stubGlobal('open', open)
+        const link = renderLink({ href, children: 'x', resolveRelativeLink: () => null })
+
+        expect(link.type).toBe('a')
+        expect(link.props.href).toBe(href)
+        // Sem janela nova: o navegador nunca segue este href sozinho.
+        expect(link.props.target).toBeUndefined()
+        expect(link.props.title).toBe(`${href}\nClique para escolher onde abrir`)
+
+        const event = clickEvent()
+        link.props.onClick?.(event)
+        expect(event.preventDefault).toHaveBeenCalled()
+        expect(getLinkChooserState().request).toMatchObject({
+          url: href,
+          origin: 'markdown',
+          anchor: { x: 11, y: 22 },
+          sourceNodeId: 'note-7',
+        })
+        expect(open).not.toHaveBeenCalled()
+      },
+    )
+
+    it('Enter no link (clique sem ponteiro) abre o menu embaixo do link', () => {
+      const link = renderLink({ href: 'https://example.com/', children: 'x' })
+      link.props.onClick?.(clickEvent({ detail: 0, clientX: 0, clientY: 0 }))
+      expect(getLinkChooserState().request?.anchor).toEqual({ x: 40, y: 50, width: 80, height: 16 })
+    })
+
+    it('clique direito pede o mesmo menu e não deixa o menu do bloco abrir junto', () => {
+      const link = renderLink({ href: 'https://example.com/', children: 'x' }) as ReactElement<
+        RenderedLinkProps & { onContextMenu?: (event: unknown) => void }
+      >
+      const event = clickEvent({ type: 'contextmenu' })
+      link.props.onContextMenu?.(event)
+      expect(event.preventDefault).toHaveBeenCalled()
+      expect(event.stopPropagation).toHaveBeenCalled()
+      expect(getLinkChooserState().request?.url).toBe('https://example.com/')
+    })
+
+    it('clique do meio não abre nada', () => {
+      const link = renderLink({ href: 'https://example.com/', children: 'x' })
+      const preventDefault = vi.fn()
+      link.props.onAuxClick?.({ preventDefault })
+      expect(preventDefault).toHaveBeenCalled()
+      expect(getLinkChooserState().request).toBeNull()
+    })
+  })
+
+  describe('destino recusado', () => {
+    afterEach(() => {
+      closeLinkChooser()
+      vi.unstubAllGlobals()
+    })
+
+    it('vira botão com o motivo e o destino na dica; o clique pede o menu, que só copia', () => {
       const open = vi.fn()
-      vi.stubGlobal('navigator', { clipboard: { writeText } })
       vi.stubGlobal('open', open)
 
-      const rendered = MarkdownLink({
-        href: '',
-        writtenHref: ' javascript:alert(1) ',
-        children: 'x',
-      }) as ReactElement<{ children: ReactElement<RenderedLinkProps & { 'aria-label'?: string }>[] }>
-      const [label, button] = rendered.props.children
+      const button = renderLink({ href: '', writtenHref: ' javascript:alert(1) ', children: 'x' }) as ReactElement<
+        RenderedLinkProps & { 'data-refused-link'?: string }
+      >
 
-      expect(rendered.type).toBe(Fragment)
-      expect(label.type).toBe('span')
-      expect(label.props.title).toBe('Link recusado por segurança: javascript:alert(1)')
-      expect(label.props.href).toBeUndefined()
       expect(button.type).toBe('button')
       expect(button.props.type).toBe('button')
-      expect(button.props['aria-label']).toBe('Copiar endereço recusado')
       expect(button.props.href).toBeUndefined()
+      expect(button.props['data-refused-link']).toBe('true')
+      expect(button.props.title).toBe(
+        'Link recusado: endereços javascript: não abrem pelo app, só http, https e mailto\njavascript:alert(1)',
+      )
 
-      button.props.onClick?.()
-      expect(writeText).toHaveBeenCalledWith('javascript:alert(1)')
+      button.props.onClick?.({
+        detail: 1,
+        clientX: 5,
+        clientY: 6,
+        currentTarget: {},
+        preventDefault: () => {},
+        stopPropagation: () => {},
+      })
+      expect(getLinkChooserState().request).toMatchObject({ url: 'javascript:alert(1)', origin: 'markdown' })
       expect(open).not.toHaveBeenCalled()
     })
 
-    it('sem área de transferência, copiar não quebra nem abre nada', () => {
-      const open = vi.fn()
-      vi.stubGlobal('navigator', {})
-      vi.stubGlobal('open', open)
-
-      const rendered = MarkdownLink({
-        writtenHref: 'https://usuario@git.example.com/r.git',
-        children: 'x',
-      }) as ReactElement<{ children: ReactElement<RenderedLinkProps>[] }>
-
-      expect(() => rendered.props.children[1].props.onClick?.()).not.toThrow()
-      expect(open).not.toHaveBeenCalled()
-    })
-
-    it('dica longa é cortada; a cópia leva o endereço inteiro', () => {
-      const writeText = vi.fn(() => Promise.resolve())
-      vi.stubGlobal('navigator', { clipboard: { writeText } })
+    it('dica longa é cortada; o menu leva o endereço inteiro', () => {
       const destination = `data:text/html,${'a'.repeat(1000)}`
+      const button = renderLink({ writtenHref: destination, children: 'x' })
 
-      const rendered = MarkdownLink({ writtenHref: destination, children: 'x' }) as ReactElement<{
-        children: ReactElement<RenderedLinkProps>[]
-      }>
-      const [label, button] = rendered.props.children
-
-      expect(label.props.title?.length).toBeLessThan(300)
-      expect(label.props.title?.endsWith('…')).toBe(true)
-      button.props.onClick?.()
-      expect(writeText).toHaveBeenCalledWith(destination)
+      expect(button.props.title?.length).toBeLessThan(400)
+      expect(button.props.title?.endsWith('…')).toBe(true)
+      button.props.onClick?.({
+        detail: 1,
+        clientX: 0,
+        clientY: 0,
+        currentTarget: {},
+        preventDefault: () => {},
+        stopPropagation: () => {},
+      })
+      expect(getLinkChooserState().request?.url).toBe(destination)
     })
 
     it('âncora, relativo sem destino e endereço com invisível não ganham botão', () => {
@@ -132,6 +205,14 @@ describe('MarkdownLink', () => {
       }
     })
 
+    it('destino que a política aprova, apagado só pelo sanitize (esquema em maiúsculas), volta a ser link', () => {
+      const link = renderLink({ href: '', writtenHref: 'HTTPS://Example.com', children: 'x' })
+
+      expect(link.type).toBe('a')
+      // A forma serializada da política, nunca o texto escrito.
+      expect(link.props.href).toBe('https://example.com/')
+    })
+
     it('com href aprovado, o destino escrito não muda nada', () => {
       const link = renderLink({
         href: 'https://example.com/',
@@ -142,14 +223,5 @@ describe('MarkdownLink', () => {
       expect(link.type).toBe('a')
       expect(link.props.href).toBe('https://example.com/')
     })
-  })
-
-  it('só http(s) e mailto saem do app, em janela nova', () => {
-    for (const href of ['https://example.com/docs', 'mailto:time@example.com']) {
-      const link = renderLink({ href, children: 'x', resolveRelativeLink: () => null })
-      expect(link.type).toBe('a')
-      expect(link.props.href).toBe(href)
-      expect(link.props.target).toBe('_blank')
-    }
   })
 })

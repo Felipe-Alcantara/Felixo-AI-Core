@@ -1,6 +1,5 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { Copy } from 'lucide-react'
 import { describe, expect, it } from 'vitest'
 import { classifyExternalUrl } from '../external-url-policy'
 import { MarkdownContent } from './MarkdownContent'
@@ -35,22 +34,16 @@ function hrefsOf(html: string): string[] {
   return [...html.matchAll(/\shref="([^"]*)"/g)].map((match) => decodeAttribute(match[1]))
 }
 
-// O ícone do botão de copiar é o único `<svg>` legítimo na saída: tira-se a
-// marcação exata dele, e qualquer outro `<svg>` ainda reprova.
-const COPY_ICON_MARKUP = renderToStaticMarkup(createElement(Copy, { size: 11 }))
-
-function withoutCopyIcons(html: string) {
-  return html.split(COPY_ICON_MARKUP).join('')
-}
-
-// A ordem dos atributos é a do JSX do `MarkdownLink`.
+// A ordem dos atributos é a do JSX do `MarkdownLink`: a dica tem o motivo na
+// primeira linha e o destino na segunda.
 const REFUSED_LINK =
-  /<span title="Link recusado por segurança: ([^"]*)">([\s\S]*?)<\/span><button type="button" aria-label="Copiar endereço recusado"/g
+  /<button type="button" class="[^"]*" title="Link recusado: ([^"\n]*)\n([^"]*)" data-refused-link="true">([\s\S]*?)<\/button>/g
 
 function refusedLinksOf(html: string) {
   return [...html.matchAll(REFUSED_LINK)].map((match) => ({
-    destination: decodeAttribute(match[1]),
-    text: match[2],
+    reason: decodeAttribute(match[1]),
+    destination: decodeAttribute(match[2]),
+    text: match[3],
   }))
 }
 
@@ -105,7 +98,7 @@ describe('Markdown e a política central de URL', () => {
 
     expectOnlyApprovedHrefs(html, source)
     expect(html).not.toMatch(/(?:action|formaction|xlink:href|http-equiv)=/i)
-    expect(withoutCopyIcons(html)).not.toMatch(/<(?:base|meta|form|area|svg)\b/i)
+    expect(html).not.toMatch(/<(?:base|meta|form|area|svg)\b/i)
   })
 
   it.each([
@@ -122,7 +115,7 @@ describe('Markdown e a política central de URL', () => {
     expect(html).toContain(visibleText)
   })
 
-  it('link recusado continua legível e copiável como texto, sem virar âncora', () => {
+  it('link recusado continua legível, com o motivo, e copiável pelo menu, sem virar âncora', () => {
     const html = renderMarkdown(
       '[abrir o arquivo](file:///C:/Users/pessoa/notas.txt) e <vscode://file/C:/x>',
     )
@@ -131,10 +124,18 @@ describe('Markdown e a política central de URL', () => {
     expect(html).toContain('abrir o arquivo')
     // O autolink recusado mantém o próprio endereço visível para quem quiser copiá-lo.
     expect(html).toContain('vscode://file/C:/x')
-    // E os dois guardam o destino escrito, na dica e no botão de copiar.
+    // E os dois guardam o destino escrito e o motivo, na dica e no menu.
     expect(refusedLinksOf(html)).toEqual([
-      { destination: 'file:///C:/Users/pessoa/notas.txt', text: 'abrir o arquivo' },
-      { destination: 'vscode://file/C:/x', text: 'vscode://file/C:/x' },
+      {
+        reason: 'endereços file: não abrem pelo app, só http, https e mailto',
+        destination: 'file:///C:/Users/pessoa/notas.txt',
+        text: 'abrir o arquivo',
+      },
+      {
+        reason: 'endereços vscode: não abrem pelo app, só http, https e mailto',
+        destination: 'vscode://file/C:/x',
+        text: 'vscode://file/C:/x',
+      },
     ])
   })
 
@@ -150,24 +151,30 @@ describe('Markdown e a política central de URL', () => {
       'https://xn--xample-2of.com/',
       'mailto:time@example.com',
     ])
-    // O Electron não tem barra de status: a dica é o único lugar onde o
-    // destino aparece antes do clique.
-    expect(html).toMatch(/<a [^>]*href="https:\/\/example\.com\/"[^>]*title="https:\/\/example\.com\/"/)
+    // O Electron não tem barra de status: a dica é o primeiro lugar onde o
+    // destino aparece antes do clique (o menu mostra de novo).
+    expect(html).toMatch(
+      /<a [^>]*href="https:\/\/example\.com\/"[^>]*title="https:\/\/example\.com\/\nClique para escolher onde abrir"/,
+    )
+    // Nenhum link abre janela nova sozinho: quem decide é o menu.
+    expect(html).not.toContain('target=')
   })
 
-  it('esquema em mai\u00fasculas vira texto no Markdown: o rehype-sanitize compara esquema com caixa', () => {
-    // Diferen\u00e7a conhecida e no sentido seguro: o terminal e o main aceitam
-    // `HTTPS://` (a pol\u00edtica normaliza), o sanitizer do Markdown recusa antes.
-    // Nenhum dos dois caminhos gera um link que a pol\u00edtica recusaria.
+  it('esquema em maiúsculas volta a ser link, pela forma que a política serializa', () => {
+    // O rehype-sanitize compara esquema com caixa e apaga `HTTPS://`, que o
+    // terminal e o main aceitam (a política normaliza). O destino escrito que
+    // a política aprova volta como link, já serializado: o mesmo texto que o
+    // processo principal revalida.
     const html = renderMarkdown('[site](HTTPS://Example.com) <a href="HTTPS://Example.com">html</a>')
 
-    expect(hrefsOf(html)).toEqual([])
+    expect(hrefsOf(html)).toEqual(['https://example.com/', 'https://example.com/'])
+    expect(refusedLinksOf(html)).toEqual([])
     expect(html).toContain('site')
     expect(html).toContain('html')
   })
 })
 
-describe('Markdown: link recusado continua visível e copiável', () => {
+describe('Markdown: link recusado continua visível, explicado e copiável', () => {
   it.each([
     ['usuário no endereço', '[repo](https://usuario@git.example.com/r.git)', 'repo', 'https://usuario@git.example.com/r.git'],
     ['espaço em href de HTML cru', '<a href="https://example.com/a b">x</a>', 'x', 'https://example.com/a b'],
@@ -175,21 +182,23 @@ describe('Markdown: link recusado continua visível e copiável', () => {
     // O sanitize apaga este `href` antes do `urlTransform`: o destino vem da
     // cópia feita antes dele.
     ['esquema que o sanitize apaga', '[x](javascript:alert(1))', 'x', 'javascript:alert(1)'],
-  ])('%s: rótulo com o destino na dica e botão de copiar, sem href', (_label, source, text, destination) => {
+  ])('%s: botão com o motivo e o destino na dica, que só pede o menu, sem href', (_label, source, text, destination) => {
     const html = renderMarkdown(source)
 
     expect(html).not.toMatch(/\shref=/i)
     expect(html).not.toMatch(/\bon[a-z]+=/i)
     expect(html).not.toMatch(/<a\b/i)
-    expect(refusedLinksOf(html)).toEqual([{ destination, text }])
+    expect(refusedLinksOf(html)).toEqual([
+      { reason: expect.any(String), destination, text },
+    ])
   })
 
-  it('link aprovado, âncora e relativo seguem como antes, sem botão de copiar', () => {
+  it('link aprovado, âncora e relativo seguem como antes, sem marca de recusado', () => {
     const html = renderMarkdown('[site](https://example.com/) [ir](#secao) [guia](OUTRO.md)')
 
     expect(hrefsOf(html)).toEqual(['https://example.com/', '#secao'])
     expect(html).toContain('<span>guia</span>')
-    expect(html).not.toContain('Copiar endereço recusado')
+    expect(html).not.toContain('data-refused-link')
     expect(html).not.toContain('Link recusado')
   })
 
@@ -198,7 +207,7 @@ describe('Markdown: link recusado continua visível e copiável', () => {
 
     expect(hrefsOf(html)).toEqual([])
     expect(html).toContain('<span>x</span>')
-    expect(html).not.toContain('Copiar endereço recusado')
+    expect(html).not.toContain('data-refused-link')
   })
 
   it('HTML cru não forja o destino recusado por atributo', () => {
@@ -208,7 +217,7 @@ describe('Markdown: link recusado continua visível e copiável', () => {
     )
 
     expect(html).not.toContain('evil.example')
-    expect(html).not.toContain('Copiar endereço recusado')
+    expect(html).not.toContain('data-refused-link')
     expect(hrefsOf(html)).toEqual(['#secao'])
   })
 })

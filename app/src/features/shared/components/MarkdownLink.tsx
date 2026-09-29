@@ -1,7 +1,9 @@
 import type { MouseEvent, ReactNode } from 'react'
-import { Copy } from 'lucide-react'
 
 import { hasHiddenUrlCharacters } from '../external-url-policy'
+import { chooserAnchorFor, canvasNodeIdOf } from '../links/link-anchor'
+import { openLinkChooser } from '../links/link-chooser-store'
+import { describeLinkDestination } from '../links/link-destination'
 import { scrollToMarkdownAnchor } from './markdown-heading-anchor'
 import { isRelativeMarkdownLink } from './markdown-image-src'
 
@@ -23,8 +25,8 @@ type MarkdownLinkProps = {
   href?: string
   /**
    * O destino como o documento o escreveu, antes do `rehype-sanitize` e da
-   * política. Só serve para mostrar e copiar um link recusado: nunca vira
-   * `href`, nem abre nada.
+   * política. Só vira link pela forma que a política serializa; recusado, só
+   * é mostrado e copiado pelo menu, nunca abre nada.
    */
   writtenHref?: string
   children?: ReactNode
@@ -34,24 +36,27 @@ type MarkdownLinkProps = {
 const LINK_CLASS_NAME =
   'font-medium text-(--f-core-white) underline decoration-white/30 underline-offset-4 hover:text-(--f-core-white)'
 
-const REFUSED_COPY_BUTTON_CLASS_NAME =
-  'felixo-btn-flat ml-0.5 inline-flex items-center rounded-xs p-0.5 align-middle text-zinc-500 hover:bg-white/6 hover:text-zinc-300'
+// Tracejado: parece link (tem para onde ir, e o menu diz para onde), mas
+// avisa que não é um link que abre.
+const REFUSED_LINK_CLASS_NAME =
+  'felixo-btn-flat inline rounded-xs text-left font-medium text-(--f-core-white-soft) underline decoration-dashed decoration-white/30 underline-offset-4 hover:text-(--f-core-white)'
+
+const LINK_HINT = 'Clique para escolher onde abrir'
 
 // A dica é para ler o destino, não para guardar um `data:` de 100 KB: o
-// endereço inteiro vai pelo botão de copiar.
+// endereço inteiro vai pelo "Copiar link" do menu.
 const REFUSED_TITLE_MAX_CHARS = 200
 
 /**
  * Link do Markdown. Só o que a política única de URL externa aprova
- * (`external-url-policy`: `http(s)` e `mailto`) sai do app, numa janela nova
- * que o processo principal revalida e manda para o navegador ou o cliente de
- * e-mail do sistema. Todo o resto fica
- * na tela: sem isto, um `<a target="_blank">` sem destino seguro abria o
- * navegador na raiz do próprio renderer.
+ * (`external-url-policy`: `http(s)` e `mailto`) pode sair do app, e nunca
+ * direto: o clique (ou Enter, ou o clique direito) abre o menu que mostra o
+ * destino e pergunta navegador, Página Web ou copiar. Quem abre é o processo
+ * principal, que revalida. Todo o resto fica na tela.
  *
  * - `#âncora` rola até o título do mesmo conteúdo;
  * - link relativo que o documento conhece vira botão que abre o destino;
- * - link recusado vira texto com o destino na dica e um botão que só copia;
+ * - link recusado vira botão que abre o mesmo menu, com o motivo e só "Copiar";
  * - link sem destino nenhum vira texto.
  */
 export function MarkdownLink({
@@ -95,42 +100,79 @@ export function MarkdownLink({
   }
 
   if (!href) {
-    const refused = refusedDestination(writtenHref)
-    if (!refused) return <span>{children}</span>
+    const written = refusedDestination(writtenHref)
+    if (!written) return <span>{children}</span>
 
-    // Recusar tira o clique, não o endereço: antes, o destino sumia junto com
-    // o link, e um `https://usuario@git.empresa.com/repo.git` que a pessoa
-    // queria de fato não dava para ver nem copiar. Copiar é inofensivo mesmo
-    // para `javascript:`; o botão não navega, e o texto não vira `<a>`.
+    const destination = describeLinkDestination(written, 'markdown')
+    // O sanitize do Markdown compara o esquema com caixa e apaga um
+    // `HTTPS://…` que a política aceita. O link volta pela forma que a
+    // política serializou — a mesma que o processo principal revalida.
+    if (destination.ok) return <ExternalMarkdownLink href={destination.url}>{children}</ExternalMarkdownLink>
+
+    // Recusar tira o abrir, não o endereço: um
+    // `https://usuario@git.empresa.com/repo.git` que a pessoa queria de fato
+    // continua visível e copiável, e o menu diz por que não abre. O botão não
+    // navega, e o texto não vira `<a>`.
     return (
-      <>
-        <span title={`Link recusado por segurança: ${shortenForTitle(refused)}`}>
-          {children}
-        </span>
-        <button
-          type="button"
-          aria-label="Copiar endereço recusado"
-          className={REFUSED_COPY_BUTTON_CLASS_NAME}
-          title="Copiar endereço recusado"
-          onClick={() => copyRefusedDestination(refused)}
-        >
-          <Copy size={11} />
-        </button>
-      </>
+      <button
+        type="button"
+        className={REFUSED_LINK_CLASS_NAME}
+        title={`Link recusado: ${destination.reason}\n${shortenForTitle(written)}`}
+        data-refused-link="true"
+        onClick={(event) => askWhereToOpen(event, written)}
+        onContextMenu={(event) => askWhereToOpen(event, written)}
+      >
+        {children}
+      </button>
     )
   }
 
-  // `title` com o destino: o Electron não tem a barra de status do navegador,
-  // e o texto do link pode dizer outra coisa (`[banco.com](https://outro)`).
+  return <ExternalMarkdownLink href={href}>{children}</ExternalMarkdownLink>
+}
+
+/**
+ * `<a>` de verdade (leitor de tela anuncia "link", Tab chega nele), mas o
+ * navegador nunca segue o `href`: clique, Enter e clique direito pedem o menu,
+ * e o clique do meio não faz nada. O `title` traz o destino porque o Electron
+ * não tem barra de status, e o texto do link pode dizer outra coisa
+ * (`[banco.com](https://outro)`).
+ */
+function ExternalMarkdownLink({ href, children }: { href: string; children?: ReactNode }) {
   return (
-    <a className={LINK_CLASS_NAME} href={href} rel="noreferrer" target="_blank" title={href}>
+    <a
+      className={LINK_CLASS_NAME}
+      href={href}
+      rel="noreferrer"
+      title={`${href}\n${LINK_HINT}`}
+      onClick={(event) => askWhereToOpen(event, href)}
+      onContextMenu={(event) => askWhereToOpen(event, href)}
+      // Clique do meio abriria o link numa janela nova, isto é, no navegador
+      // do sistema, sem perguntar.
+      onAuxClick={(event) => event.preventDefault()}
+    >
       {children}
     </a>
   )
 }
 
+function askWhereToOpen(event: MouseEvent<HTMLElement>, url: string) {
+  event.preventDefault()
+  // O clique direito num link não é o do bloco: sem isto, o menu do nó do
+  // canvas abriria junto.
+  event.stopPropagation()
+  const element = event.currentTarget
+  openLinkChooser({
+    url,
+    origin: 'markdown',
+    anchor: chooserAnchorFor(event, element),
+    sourceNodeId: canvasNodeIdOf(element),
+    returnFocus: element,
+  })
+}
+
 /**
- * O destino escrito que vale mostrar como recusado, ou `null`.
+ * O destino escrito que vale mostrar (e, se a política aprovar, abrir), ou
+ * `null`.
  *
  * Âncora e link relativo ficam de fora: não são recusa, só não têm para onde
  * ir sem um resolvedor. Destino com invisível ou controle também: a dica
@@ -152,12 +194,6 @@ function shortenForTitle(value: string): string {
   return value.length > REFUSED_TITLE_MAX_CHARS
     ? `${value.slice(0, REFUSED_TITLE_MAX_CHARS - 1)}…`
     : value
-}
-
-function copyRefusedDestination(value: string) {
-  // Só a área de transferência, nunca uma navegação. Sem permissão de
-  // clipboard (ou fora do navegador), o clique simplesmente não faz nada.
-  void globalThis.navigator?.clipboard?.writeText(value).catch(() => undefined)
 }
 
 function followAnchor(event: MouseEvent<HTMLAnchorElement>, href: string) {
