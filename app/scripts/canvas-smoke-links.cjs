@@ -42,6 +42,9 @@ const OSC8_DESTINATION = 'https://example.com/destino-real'
 const INSIDE_PAGE_URL = 'https://example.com/de-dentro'
 /** Modificador do "clique para abrir link" de cada sistema. */
 const LINK_MODIFIER = process.platform === 'darwin' ? 'Meta' : 'Control'
+// Sem emulação de viewport, ao contrário da sessão C: o `<webview>` é outro
+// processo, e com a página emulada num tamanho diferente da janela de verdade
+// o clique direito dentro dele caía no bloco (menu de cor) em vez da página.
 
 function falhar(passo, mensagem, detalhe) {
   const extra = detalhe === undefined ? '' : ` ${JSON.stringify(detalhe)}`
@@ -304,6 +307,14 @@ function criarSessaoDeLinks(deps) {
     await esperarMenuFechado(passo, 'Esc')
     const focoVoltou = await page.evaluate((url) => document.activeElement?.getAttribute('href') === url, DOCS_URL)
     exigir(focoVoltou, passo, 'Esc não devolveu o foco ao link')
+
+    // Clique fora do menu também fecha, sem abrir nada.
+    await linkDaNota().click()
+    await esperarMenu(passo, 'de novo, para o clique fora')
+    // No fundo do canvas, logo acima da nota: não aciona nada além de fechar.
+    const nota = await page.locator(`.react-flow__node[data-id="${NOTE_ID}"]`).boundingBox()
+    await page.mouse.click(nota.x + 12, Math.max(70, nota.y - 24))
+    await esperarMenuFechado(passo, 'clique fora')
     exigir((await gravado()).opened.length === 0, passo, 'o clique abriu uma janela sem escolha', await gravado())
   }
 
@@ -573,13 +584,17 @@ function criarSessaoDeLinks(deps) {
 
     // Pela tecla de menu: o link sob o ponteiro, sem clique nenhum. Shift+F10
     // não serve aqui: no terminal o F10 é da CLI, e o xterm o entrega a ela.
-    await passarPorCima(passo, ponto, 'escolher onde abrir')
-    await xterm.focus()
-    await page.keyboard.press('ContextMenu')
-    menu = await esperarMenu(passo, 'tecla de menu')
-    exigir(menu.summary.includes(TERMINAL_URL), passo, 'a tecla de menu mostrou outro destino', menu)
-    await page.keyboard.press('Escape')
-    await esperarMenuFechado(passo, 'Esc da tecla de menu')
+    // O macOS não tem tecla de menu, e o Chromium de lá não abre menu de
+    // contexto pelo teclado: o passo vale no Windows e no Linux.
+    if (process.platform !== 'darwin') {
+      await passarPorCima(passo, ponto, 'escolher onde abrir')
+      await xterm.focus()
+      await page.keyboard.press('ContextMenu')
+      menu = await esperarMenu(passo, 'tecla de menu')
+      exigir(menu.summary.includes(TERMINAL_URL), passo, 'a tecla de menu mostrou outro destino', menu)
+      await page.keyboard.press('Escape')
+      await esperarMenuFechado(passo, 'Esc da tecla de menu')
+    }
 
     exigir((await gravado()).opened.length === 0, passo, 'algum gesto abriu o navegador sem escolha', await gravado())
     return { xterm, ponto }
@@ -746,6 +761,9 @@ function criarSessaoDeLinks(deps) {
 
   async function paginaWebBarraEBotao(paginaUrl) {
     const passo = 'L11 Página Web: barra e botão do navegador'
+    // O bloco centralizado de novo: os cliques de L10 dentro da página podem ter
+    // tirado a câmera do lugar.
+    await focar(WEBPAGE_TITLE)
     const barra = blocoWeb().getByRole('textbox', { name: 'Endereço da página' })
     await barra.fill('file:///etc/passwd')
     await barra.press('Enter')

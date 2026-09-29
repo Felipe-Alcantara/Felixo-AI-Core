@@ -1771,6 +1771,33 @@ describe('TerminalSessionStore: links do terminal', () => {
       expect(getLinkChooserState().request).toBeNull()
     })
 
+    it('desligar a sessão tira o ouvinte de contextmenu do elemento, e ligar de novo não duplica', () => {
+      const added: unknown[] = []
+      const removed: unknown[] = []
+      const fakeSession: { id: string; offLinkContextMenu?: () => void; terminal: object } = {
+        id: SESSION_ID,
+        terminal: {
+          element: {
+            addEventListener: (type: string, handler: unknown) => {
+              if (type === 'contextmenu') added.push(handler)
+            },
+            removeEventListener: (type: string, handler: unknown) => {
+              if (type === 'contextmenu') removed.push(handler)
+            },
+          },
+        },
+      }
+      const store = new TerminalSessionStore()
+      const bind = (store as unknown as { bindLinkContextMenu: (session: unknown) => void }).bindLinkContextMenu.bind(store)
+
+      bind(fakeSession)
+      bind(fakeSession)
+      expect(added).toHaveLength(1)
+
+      fakeSession.offLinkContextMenu?.()
+      expect(removed).toEqual(added)
+    })
+
     it('no macOS, Ctrl+clique é este clique secundário: pede o menu uma vez, não de novo no mouseup', () => {
       harness = linkHarness()
       ;(globalThis as { window: { navigator: unknown } }).window.navigator = { platform: 'MacIntel' }

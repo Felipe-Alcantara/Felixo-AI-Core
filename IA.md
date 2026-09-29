@@ -7132,3 +7132,12 @@ Sete lentes independentes leram o diff (`fff6e998..77575049`): menu e acessibili
 - Tela sensível ao toque real e leitor de tela real não foram usados. O toque vem do CDP, e a ARIA é conferida no smoke.
 - O `AgentQuestionDialog` (anterior a esta task) também fecha uma gaveta não fixada no clique e não pega o foco. Com ele aberto, o menu de link fica por cima. Há task aberta.
 - Na Página Web, o ponto do `context-menu` foi medido com o link na página e num `<iframe>` interno. Um PDF ou um `<embed>` não foram testados.
+
+### O que o primeiro CI do PR #98 achou (run 36590390171)
+
+As sessões A, B e C passaram em Linux e macOS. A sessão D reprovou em dois pontos:
+
+- **Linux: defeito do app, não do teste.** Ao fechar o menu, o foco voltava ao `<webview>` com `focus()` sem `preventScroll`. Na janela menor do runner (1280×733), a Página Web centralizada ficava só em parte visível, o navegador rolava o container do React Flow para mostrá-la, e o canvas inteiro saía do lugar: a barra de ferramentas do bloco ficou embaixo da barra lateral. Em 1280×800 nada rolava, por isso passou aqui. `restoreFocus` usa `preventScroll: true`. A emulação de viewport (como na sessão C) foi tentada e descartada: com a página emulada num tamanho diferente da janela real, o clique direito dentro do `<webview>`, que é outro processo, caía no bloco.
+- **macOS.** Não tem tecla de menu, e o Chromium de lá não abre menu de contexto pelo teclado; o passo vale só no Windows e no Linux.
+
+O Validate do Windows reprovou na montagem da sessão A ("APP NÃO MONTOU"), a intermitência conhecida desse runner. O benchmark do Windows apontou +129% no delta de heap do streaming do xterm (14,2 MB → 32,5 MB), só nesse sistema, sem mudança no caminho do streaming (o código de link só roda em evento de mouse). A sessão D passou de novo aqui sob `xvfb-run` sem tamanho, como no CI.
