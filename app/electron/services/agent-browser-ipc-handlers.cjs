@@ -67,7 +67,8 @@ function registerAgentBrowserIpcHandlers(getMainWindow, appPaths, dependencies =
   })
   const openExternal =
     dependencies.openExternal ??
-    ((url) => openExternalUrl(url, dependencies.shell ?? electron.shell))
+    // Sem `shell` injetado, o do padrão da plataforma (`openExternalUrl`).
+    ((url) => openExternalUrl(url, dependencies.shell))
   const ipcMain = dependencies.ipcMain ?? electron.ipcMain
   const logger = dependencies.logger ?? console
   /** Ids com uma decisão em curso (ver `decide`). */

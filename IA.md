@@ -7184,3 +7184,85 @@ Na mesma run, duas intermitências conhecidas, fora do código de links, ganhara
   - 13 tasks novas;
   - notas em 5 tasks existentes: AgentQuestionDialog, gate de heap, ConPTY, links no app empacotado e links enviados por agentes;
   - as tasks "cobrir o menu de link do terminal" e "esquema em maiúsculas no Markdown" concluídas com a evidência.
+
+## 2026-09-29 — Links: aviso quando o navegador não abre e validação no app empacotado
+
+Registro de Claude - Tasks do AI Core, task "Felixo AI Core/Terminal — validar abertura de links no app empacotado nos três SOs" (Notion 3ce91f95-497e-81f3-8d3a-eb64605b36b4). Início em 29/09 às 15:55.
+
+### Contexto
+
+A escolha de destino (entrada anterior) foi provada no app de desenvolvimento, com `window.open` trocado por um gravador. Faltava o que só o app **instalado** mostra: o `shell.openExternal` de verdade e o navegador do sistema abrindo o endereço. O aceite pedia:
+
+- clique permitido abre uma vez;
+- link inválido ou perigoso não abre;
+- dev e pacote concordam;
+- falha não trava o terminal;
+- fixture sem segredo.
+
+### Decisões (Trilha B)
+
+- **16:05:**
+  1. provar o navegador real **na CI**, contra um servidor local em 127.0.0.1;
+  2. **só desta vez**: o script fica no repositório, e o `release.yml` não muda;
+  3. o teste à mão no Windows e no macOS vira uma task com roteiro para o Felipe;
+  4. quando o sistema não abre o navegador, o app **avisa e oferece copiar**. Antes era silêncio.
+- **17:10:** no Linux, o **app roda o `xdg-open`** (ver abaixo), em vez de aceitar a limitação.
+
+### O que foi feito
+
+- **Aviso de falha:**
+  - `external-links.cjs`: `createExternalWindowOpenHandler` responde `deny` na hora e, se a abertura rejeitar, a janela recebe `external-links:open-failed` com `{ url, kind, reason? }`;
+  - o preload expõe `externalLinks.onOpenFailed`;
+  - o `LinkChooserHost` mostra o aviso (`role=alert`, "Copiar link" e ×). Ele não pega o foco, devolve o foco ao fechar ou copiar e leva as marcas de camada flutuante e de foco passageiro;
+  - num `mailto:`, o aviso fala do app de e-mail;
+  - o texto sai de `link-open-failure.ts` (puro).
+- **Linux:** o `shell.openExternal` do Electron chama o `xdg-open` e resolve sem esperar (`platform_util_linux.cc`: "Don't wait for exit"). A revisão mediu no Electron 41.10.7: com o `xdg-open` saindo com 3, ou ausente, a promessa resolve em 4–18 ms. `linux-xdg-open.cjs` roda o `xdg-open` como o Electron (argumento único, sem shell, `MM_NOTTTY=1`) e espera 3 s: saída com erro ou ENOENT é falha; saída 0 ou processo vivo é sucesso. O processo nasce destacado e com `unref`. macOS e Windows continuam com o shell do Electron, que já rejeita.
+- **Costura de automação:** com `FELIXO_DEVTOOLS_SHELL_OPEN=falha` (só na instância de automação, mesma guarda da CLI roteirizada), o shell falha sempre, na janela e no cartão de pedido. A sessão D do smoke liga a costura e prova o aviso no L3:
+  - `role=alert`, com o endereço, sem roubar o foco;
+  - outra falha troca o nó;
+  - Backspace no aviso não apaga bloco;
+  - Esc, "Copiar link" e × fecham e devolvem o foco.
+- **Validação empacotada:** `scripts/packaged-links-check.cjs` instala o artefato (`prepareArtifact` do release-smoke, agora exportado), dirige o binário por `felixo devtools launch --packaged` e conta, num servidor em 127.0.0.1, os pedidos do navegador. Os pedidos do `<webview>` do app, com user-agent `Electron/`, ficam de fora. Os casos:
+  - porta e consulta, com fragmento;
+  - Unicode;
+  - pontuação em volta, no terminal;
+  - pedaços de shell (`$(…)`, `;`, `|` com `${IFS}`) que criariam marcadores;
+  - o botão da Página Web;
+  - um `file:` recusado;
+  - o terminal seguindo vivo.
+
+  No fim, o navegador tem de ter feito exatamente um pedido por caso. Os modos são `real`, `curl` e `ausente`, estes dois só no Linux, com um `xdg-open` falso.
+
+### O que a revisão adversarial achou
+
+Foram 4 lentes (processo principal e segurança, renderer e acessibilidade, script empacotado, docs e testes), com um verificador cético por achado: 17 agentes, 11 confirmados e 2 refutados.
+
+- **O aviso nunca apareceria no Linux**, porque o Electron não espera o `xdg-open`. Levou à segunda decisão.
+- **A trava estática do `navigation-guard.test.cjs` procurava a fiação antiga.** A suíte node ficou vermelha no Node 25 e no Node 22 e foi atualizada para o formato novo.
+- **A costura não cobria o cartão de pedido de agente.**
+- **Copiar ou fechar o aviso deixava o foco no `body`.** Uma sonda no Chromium real mostrou o Backspace seguinte chegando ao canvas.
+- **Num `mailto:`, o aviso mandava colar no navegador.**
+- **A contagem do script misturava os pedidos do webview do app com os do navegador.**
+- **O `rmSync` final podia transformar uma rodada aprovada em saída 1.**
+- **Esc, × e o nó novo por aviso estavam sem teste.**
+
+### Validação local
+
+- **Pacote publicado (AppImage da v0.1.427)**, rodado aqui com `--navegador curl`: os 6 casos passaram, cada um com um pedido, a 2–4 s do clique. O `file:` recusado não gerou pedido, nenhum marcador de injeção foi criado, e o terminal seguiu respondendo. O `xdg-open` recebeu cada URL como **um argumento só**, inclusive a da injeção, com `$(`, `;` e `|` literais.
+- **Pacote do ramo (`npm run pack`, `release/linux-unpacked`):**
+  - `--navegador ausente`: o aviso apareceu como `alert`, com o texto e o endereço; o foco ficou no link, e "Copiar link" fechou e devolveu o foco;
+  - `--navegador curl`: 6 de 6, com 6 pedidos do navegador para 6 casos (mais 1 do `<webview>` do app, fora da conta), 0 marcadores, terminal vivo.
+- **Suítes e smoke:**
+  - `tsc -b --force` e `npm run lint`: 0;
+  - vitest: 2.588 passaram e 1 pulado (179 arquivos);
+  - suíte node: 2.346 passaram e 1 pulado, no Node 25.9.0 e no 22.22.3;
+  - sessão D L0–L12 sob Xvfb: ok em 96 s.
+- **Ambiente:** a primeira rodada da suíte node, dentro do Felixo, reprovou num teste de outro assunto (`pty-process-manager.test.cjs`, classicScreen). A sessão herdava `CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1` do terminal do app. O teste passou a isolar a variável.
+
+### NÃO verificado / limitações
+
+- **A rodada com o navegador real nos três sistemas** ainda não tinha rodado quando esta entrada foi escrita: ela roda contra a versão publicada com este trabalho, num ramo temporário. O resultado entra numa entrada seguinte.
+- **Windows sem navegador padrão:** não testado. O `ShellExecute` pode abrir o seletor "Como você quer abrir?" em vez de falhar, e aí não há aviso, porque o sistema está pedindo a escolha.
+- **macOS:** a rejeição "No application found" foi lida no fonte do Electron (`platform_util_mac.mm`), não medida.
+- **Linux em Flatpak ou Snap:** o `xdg-open` rodado pelo app pode se comportar diferente do caminho do Electron, que numa sandbox pode usar o portal. Não testado.
+- **Navegador padrão escolhido pela pessoa** (não o de fábrica), no Windows e no macOS: fica para a task do roteiro manual.

@@ -51,6 +51,15 @@ contextBridge.exposeInMainWorld('felixo', {
   windowZoom: {
     getFactor: () => webFrame.getZoomFactor(),
   },
+  // Um link pedido pelo menu (ou pelo botão da Página Web) que não abriu: a
+  // política recusou, ou o sistema não entregou a um navegador.
+  externalLinks: {
+    onOpenFailed: (callback) => {
+      const handler = (_event, failure) => callback(failure)
+      ipcRenderer.on('external-links:open-failed', handler)
+      return () => ipcRenderer.removeListener('external-links:open-failed', handler)
+    },
+  },
   getFilePath: (file) => webUtils?.getPathForFile(file) ?? '',
   getVersion: () => ipcRenderer.invoke('app:get-version'),
   graphics: {

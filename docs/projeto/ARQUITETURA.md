@@ -756,7 +756,36 @@ Portões do processo principal:
 
 - `external-links.cjs` é o único caminho até `shell.openExternal`. A recusa
   registra só esquema e host (`describeExternalUrlForLog`), porque caminho,
-  query e userinfo podem carregar token.
+  query e userinfo podem carregar token; a falha do sistema ao entregar o
+  endereço segue a mesma regra no log. O handler de `window.open` da janela
+  (`createExternalWindowOpenHandler`) responde `deny` na hora e, se a
+  abertura rejeitar, avisa a própria janela (`external-links:open-failed`)
+  para ela mostrar o aviso com "Copiar link".
+  - No Linux, o `shell.openExternal` do Electron chama o `xdg-open` e resolve
+    sem esperar a saída dele (`platform_util_linux.cc`: "Don't wait for exit").
+    Medido no Electron 41.10.7: com o `xdg-open` saindo com 3 (sem navegador)
+    ou ausente, a promessa resolve em milissegundos. Por isso, no Linux, o app
+    roda o `xdg-open` ele mesmo (`linux-xdg-open.cjs`), como o Electron: o
+    endereço vai como argumento único, sem shell, com `MM_NOTTTY=1`. A
+    diferença é esperar 3 s: saída com erro (ou `xdg-open` inexistente) é
+    falha; saída 0 ou processo vivo (o navegador em primeiro plano, no modo
+    genérico) é sucesso. O processo nasce destacado e solto do app. No macOS
+    e no Windows, o shell do Electron já rejeita, e fica como está.
+  - Só na instância de automação que pediu (`FELIXO_DEVTOOLS_SHELL_OPEN=falha`,
+    mesma guarda da CLI roteirizada), `devtools-shell-open-guard.cjs` troca o
+    shell por um que sempre falha: o da janela (menu, botão da Página Web,
+    navegação) e o do cartão de pedido de agente. A sessão D do smoke prova o
+    aviso assim, sem abrir navegador nenhum.
+  - O caminho inteiro no **app empacotado** (gesto, menu, main, `shell`,
+    sistema e navegador) tem uma validação à parte,
+    `scripts/packaged-links-check.cjs`. Ela instala o artefato, dirige o
+    binário por `felixo devtools launch --packaged` e conta, num servidor em
+    127.0.0.1, os pedidos que o navegador faz: cada endereço tem de chegar uma
+    vez e inteiro (porta, consulta, Unicode, pontuação em volta, pedaços de
+    shell que não podem executar). O recusado não pode chegar, e o terminal
+    tem de seguir respondendo. Não roda no release: é para repetir à mão ou num
+    workflow temporário. No Linux, `--navegador curl` troca o `xdg-open` por um
+    que faz o pedido com `curl`, e `--navegador ausente` por um que falha.
 - `navigation-guard.cjs`:
   - a janela principal nega `will-navigate`/`will-redirect` para fora do
     próprio documento, porque o preload exporia a API do app a qualquer página
@@ -820,7 +849,15 @@ Peças, quase todas em `src/features/shared/links/`:
     que a câmera chega (`afterCamera`). O React Flow desenha o nó ainda sem
     medida e o desmonta quando o mede fora da tela, então focar antes jogaria
     o foco no `body`;
-  - a região `status` anuncia "Link copiado" a cada cópia.
+  - a região `status` anuncia "Link copiado" a cada cópia;
+  - o aviso de link que não abriu (`role=alert`, com "Copiar link" e fechar).
+    O processo principal manda `{ url, kind, reason? }` pelo canal
+    `external-links:open-failed` quando o `openExternalUrl` rejeita: `falhou`
+    é o sistema (sem navegador padrão, handler quebrado) e `recusado` é a
+    política do main. O texto sai de `link-open-failure.ts` (puro), e o motivo
+    da recusa vem da política do renderer. O aviso não pega o foco, leva as
+    duas marcas de `floating-layer.ts` e fica até copiar, fechar ou um aviso
+    novo tomar o lugar.
 - `shared/focus/floating-layer.ts` define duas marcas.
   - `data-felixo-floating-layer` está no menu e no cartão de pedido. Clicar
     ali não é "clicar fora" da gaveta do terminal: sem ela, "Copiar link" ou

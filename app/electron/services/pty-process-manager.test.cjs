@@ -1290,11 +1290,19 @@ test('classicScreen: só o Claude Code recebe CLAUDE_CODE_DISABLE_ALTERNATE_SCRE
     new PtyProcessManager({ spawnPty, platform: fakePosixPlatform }).spawn('t', { command, classicScreen })
     return calls[0].options.env
   }
-  assert.equal(envDe('claude', true).CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN, '1')
-  assert.equal(envDe('claude', false).CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN, undefined)
-  assert.equal(envDe('claude', 'true').CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN, undefined)
-  assert.equal(envDe('codex', true).CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN, undefined)
-  assert.equal(envDe(undefined, true).CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN, undefined)
+  // Quem roda a suíte num terminal do próprio Felixo com a rolagem clássica
+  // herda a variável no ambiente. O teste mede só o que o manager acrescenta.
+  const herdada = process.env.CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN
+  delete process.env.CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN
+  try {
+    assert.equal(envDe('claude', true).CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN, '1')
+    assert.equal(envDe('claude', false).CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN, undefined)
+    assert.equal(envDe('claude', 'true').CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN, undefined)
+    assert.equal(envDe('codex', true).CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN, undefined)
+    assert.equal(envDe(undefined, true).CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN, undefined)
+  } finally {
+    if (herdada !== undefined) process.env.CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN = herdada
+  }
 })
 
 test('isClaudeCommandName reconhece só o executável do Claude Code', () => {

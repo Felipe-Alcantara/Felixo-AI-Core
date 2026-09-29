@@ -58,8 +58,10 @@ const CONTAS_SESSION_ENV = {
   FELIXO_DEVTOOLS_FAKE_CLI_PTY: '1',
 }
 // Sessão D: o xterm de verdade (links em texto, OSC 8, streaming) sobre a
-// mesma CLI roteirizada. Nenhuma CLI real roda, e nenhum link sai da máquina.
-const LINKS_SESSION_ENV = CONTAS_SESSION_ENV
+// mesma CLI roteirizada. Nenhuma CLI real roda, e nenhum link sai da máquina:
+// o `shell.openExternal` da instância falha sempre (FELIXO_DEVTOOLS_SHELL_OPEN),
+// e é assim que o smoke prova o aviso de "não foi possível abrir no navegador".
+const LINKS_SESSION_ENV = { ...CONTAS_SESSION_ENV, FELIXO_DEVTOOLS_SHELL_OPEN: 'falha' }
 const DEVTOOLS_LAUNCH_TIMEOUT_MS = 60_000
 const THEME_STORAGE_KEY = 'felixo-ai-core.theme'
 const VISUAL_THEMES = ['dark', 'high_contrast']

@@ -1115,6 +1115,7 @@ module.exports = {
   findFilesRecursive,
   findPackagedPtyNode,
   parseArgs,
+  prepareArtifact,
   resolveReleaseArtifact,
   runBundledNpmSmoke,
   sanitizeDiagnostic,

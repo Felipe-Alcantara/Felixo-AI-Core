@@ -123,6 +123,9 @@ function criarSessaoDeLinks(deps) {
   /** Troca `window.open` e a área de transferência por gravadores na página. */
   async function instalarGravadores() {
     await page.evaluate(() => {
+      // O `window.open` de verdade fica guardado para o único passo que o usa
+      // (o aviso de falha): a instância abre links por um shell que sempre falha.
+      window.__linksSmokeRealOpen = window.__linksSmokeRealOpen ?? window.open
       window.__linksSmoke = { opened: [], copied: [] }
       window.open = (url) => {
         window.__linksSmoke.opened.push(String(url))
@@ -426,6 +429,75 @@ function criarSessaoDeLinks(deps) {
     await esperarMenuFechado(passo, 'navegador')
     registro = await gravado()
     exigir(JSON.stringify(registro.opened) === JSON.stringify([DOCS_URL]), passo, 'o navegador não recebeu o destino', registro)
+
+    // O sistema não entrega o endereço a um navegador: o app avisa e oferece
+    // copiar. Aqui o pedido vai ao processo principal de verdade, cujo shell
+    // falha sempre nesta instância (FELIXO_DEVTOOLS_SHELL_OPEN=falha).
+    await limparGravadores()
+    await page.evaluate(() => {
+      window.open = window.__linksSmokeRealOpen
+    })
+    const aviso = page.locator('[data-felixo-link-open-failure]')
+    const focoNoLink = () => page.evaluate((url) => document.activeElement?.getAttribute('href') === url, DOCS_URL)
+    const provocarFalha = async (descricao) => {
+      await mostrarNotaRenderizadaSeFechada()
+      await linkDaNota().click()
+      await esperarMenu(passo, descricao)
+      await escolher('abrir-no-navegador')
+      await esperarMenuFechado(passo, descricao)
+      await aviso.waitFor({ state: 'visible', timeout }).catch(() =>
+        falhar(passo, `${descricao}: o aviso de que o navegador não abriu não apareceu`))
+    }
+    try {
+      await provocarFalha('navegador que falha')
+      exigir((await aviso.getAttribute('role')) === 'alert', passo, 'o aviso não é anunciado (role=alert)')
+      const textoDoAviso = (await aviso.textContent()) ?? ''
+      exigir(textoDoAviso.includes('Não foi possível abrir no navegador') && textoDoAviso.includes(DOCS_URL), passo, 'o aviso não diz o que falhou nem mostra o endereço', textoDoAviso)
+      // Chegar ao aviso não tira o foco de quem o tinha (o link da nota).
+      exigir(await focoNoLink(), passo, 'o aviso roubou o foco')
+
+      // Outra falha com o aviso na tela: o nó é outro (o leitor de tela anuncia
+      // de novo, mesmo com o texto igual).
+      await aviso.evaluate((node) => {
+        node.dataset.smokeAvisoAntigo = '1'
+      })
+      await provocarFalha('segunda falha com o aviso na tela')
+      await esperar(passo, 'o aviso novo ser outro nó', () =>
+        document.querySelectorAll('[data-felixo-link-open-failure]').length === 1 &&
+        !document.querySelector('[data-felixo-link-open-failure]')?.hasAttribute('data-smoke-aviso-antigo'))
+
+      // Com o foco no aviso, as teclas não chegam ao canvas (Backspace apagaria
+      // o bloco selecionado), e o Esc fecha e devolve o foco ao link.
+      const blocosAntes = await page.locator('.react-flow__node').count()
+      await aviso.getByRole('button', { name: 'Fechar aviso' }).focus()
+      await page.keyboard.press('Backspace')
+      await pausa(300)
+      exigir(await page.locator('.react-flow__node').count() === blocosAntes, passo, 'o Backspace no aviso apagou um bloco do canvas')
+      await page.keyboard.press('Escape')
+      await aviso.waitFor({ state: 'detached', timeout }).catch(() => falhar(passo, 'o Esc não fechou o aviso'))
+      exigir(await focoNoLink(), passo, 'o Esc no aviso não devolveu o foco ao link')
+
+      // "Copiar link" copia o endereço, fecha e devolve o foco.
+      await provocarFalha('falha para copiar')
+      await aviso.getByRole('button', { name: 'Copiar link' }).click()
+      await aviso.waitFor({ state: 'detached', timeout }).catch(() => falhar(passo, 'copiar não fechou o aviso'))
+      registro = await gravado()
+      exigir(JSON.stringify(registro.copied) === JSON.stringify([DOCS_URL]), passo, 'o aviso não copiou o endereço', registro)
+      exigir(await focoNoLink(), passo, 'copiar no aviso não devolveu o foco ao link')
+
+      // O × fecha sem copiar nada, e o foco volta.
+      await limparGravadores()
+      await page.evaluate(() => {
+        window.open = window.__linksSmokeRealOpen
+      })
+      await provocarFalha('falha para fechar no x')
+      await aviso.getByRole('button', { name: 'Fechar aviso' }).click()
+      await aviso.waitFor({ state: 'detached', timeout }).catch(() => falhar(passo, 'o × não fechou o aviso'))
+      exigir((await gravado()).copied.length === 0, passo, 'fechar o aviso copiou algo', await gravado())
+      exigir(await focoNoLink(), passo, 'fechar o aviso não devolveu o foco ao link')
+    } finally {
+      await instalarGravadores()
+    }
 
     const antes = await contarPaginasWeb()
     await mostrarNotaRenderizadaSeFechada()

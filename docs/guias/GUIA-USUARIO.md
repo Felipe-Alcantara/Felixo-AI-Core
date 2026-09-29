@@ -566,6 +566,8 @@ O jeito de chamar o menu depende de onde o link está:
 
 O menu funciona pelo teclado: setas, `Home` e `End` escolhem, `Enter` confirma, e `Esc` ou `Tab` fecham e devolvem o foco para onde você estava. Segurar o `Enter` não escolhe nada: só um `Enter` novo confirma. O menu fecha sozinho se você rolar o canvas, mudar o tamanho da janela ou levar o foco para outro lugar.
 
+Se o sistema não conseguir abrir o navegador (por exemplo, sem um navegador padrão configurado), aparece um aviso embaixo, no meio da janela: **Não foi possível abrir no navegador**, com o endereço e o botão **Copiar link**, para você colar no navegador que quiser. O aviso não tira o foco de onde você estava e fica até você copiar, fechar no **×** ou apertar `Esc` com o foco nele. O botão **Abrir esta página no navegador** da Página Web usa o mesmo aviso.
+
 Se o app recusar um link, o menu diz por quê e oferece só **Copiar link**. O motivo pode ser, por exemplo:
 
 - um tipo de endereço que o app não abre (como `file:`);
