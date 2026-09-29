@@ -231,12 +231,13 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
     }
   }, [id, webview])
 
-  const navigateTo = (raw: string) => {
+  /** Leva o bloco ao endereço digitado; `false` quando a política o recusou. */
+  const navigateTo = (raw: string): boolean => {
     const result = explainUrlInput(raw)
     if (!result.ok) {
       // O texto fica na barra, para a pessoa corrigir em vez de redigitar.
       setAddressError(`Endereço não aberto: ${result.reason}.`)
-      return
+      return false
     }
     const normalized = result.url
     setAddressError(null)
@@ -256,6 +257,7 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
       // no endereço novo (`currentUrlRef`); senão, o `did-navigate` da página
       // que estava carregando devolve a barra para onde ela está de fato.
     }
+    return true
   }
 
   /**
@@ -345,8 +347,10 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
             setAddressError(null)
           }}
           onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              navigateTo(addressInput)
+            // Só o endereço aceito tira o foco da barra. Na recusa ele fica
+            // aqui, para corrigir: no body, o Backspace da correção chegaria
+            // ao React Flow (`deleteKeyCode`) e apagaria o bloco selecionado.
+            if (event.key === 'Enter' && navigateTo(addressInput)) {
               event.currentTarget.blur()
             }
           }}
