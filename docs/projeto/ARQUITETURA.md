@@ -761,10 +761,21 @@ Portões do processo principal:
   (`createExternalWindowOpenHandler`) responde `deny` na hora e, se a
   abertura rejeitar, avisa a própria janela (`external-links:open-failed`)
   para ela mostrar o aviso com "Copiar link".
+  - No Linux, o `shell.openExternal` do Electron chama o `xdg-open` e resolve
+    sem esperar a saída dele (`platform_util_linux.cc`: "Don't wait for exit").
+    Medido no Electron 41.10.7: com o `xdg-open` saindo com 3 (sem navegador)
+    ou ausente, a promessa resolve em milissegundos. Por isso, no Linux, o app
+    roda o `xdg-open` ele mesmo (`linux-xdg-open.cjs`), como o Electron: o
+    endereço vai como argumento único, sem shell, com `MM_NOTTTY=1`. A
+    diferença é esperar 3 s: saída com erro (ou `xdg-open` inexistente) é
+    falha; saída 0 ou processo vivo (o navegador em primeiro plano, no modo
+    genérico) é sucesso. O processo nasce destacado e solto do app. No macOS
+    e no Windows, o shell do Electron já rejeita, e fica como está.
   - Só na instância de automação que pediu (`FELIXO_DEVTOOLS_SHELL_OPEN=falha`,
     mesma guarda da CLI roteirizada), `devtools-shell-open-guard.cjs` troca o
-    shell por um que sempre falha. A sessão D do smoke prova o aviso assim, sem
-    abrir navegador nenhum.
+    shell por um que sempre falha: o da janela (menu, botão da Página Web,
+    navegação) e o do cartão de pedido de agente. A sessão D do smoke prova o
+    aviso assim, sem abrir navegador nenhum.
   - O caminho inteiro no **app empacotado** (gesto, menu, main, `shell`,
     sistema e navegador) tem uma validação à parte,
     `scripts/packaged-links-check.cjs`. Ela instala o artefato, dirige o
