@@ -69,11 +69,15 @@ function randomUrlLike(random: () => number): string {
 }
 
 const SAMPLES = 20_000
+// 20 mil amostras levam de 6 a 9 s num notebook de 4 threads ocupado (medido
+// em 29/09/2026, com o app e um navegador abertos). O padrão de 5 s do Vitest
+// reprovava por tempo, não por decisão errada.
+const PROPERTY_TIMEOUT_MS = 60_000
 const INVISIBLE_OR_CONTROL =
   // eslint-disable-next-line no-control-regex -- o teste procura exatamente os bytes que a política recusa.
   /[\u0000-\u001f\u007f-\u009f\u2028\u2029\p{Default_Ignorable_Code_Point}\p{Cf}\s]/u
 
-describe('política de URL externa: propriedades', () => {
+describe('política de URL externa: propriedades', { timeout: PROPERTY_TIMEOUT_MS }, () => {
   it('renderer e processo principal decidem igual para qualquer entrada', () => {
     const random = seededRandom(0x5eed_0001)
     for (let index = 0; index < SAMPLES; index += 1) {
@@ -134,7 +138,7 @@ describe('política de URL externa: propriedades', () => {
   })
 })
 
-describe('revealHiddenUrlCharacters', () => {
+describe('revealHiddenUrlCharacters', { timeout: PROPERTY_TIMEOUT_MS }, () => {
   it('troca cada invisível ou controle pelo código, e deixa o resto como está', () => {
     const zwsp = String.fromCharCode(0x200b)
     const rlo = String.fromCharCode(0x202e)
