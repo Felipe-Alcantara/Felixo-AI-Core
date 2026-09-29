@@ -52,11 +52,20 @@ function exigir(condicao, passo, mensagem, detalhe) {
   if (!condicao) falhar(passo, mensagem, detalhe)
 }
 
-/** A página que o bloco Página Web carrega: um link que cobre a tela inteira. */
+const PAGE_MAILTO = 'mailto:contato@example.com?cc=copia@example.com'
+
+/**
+ * A página que o bloco Página Web carrega: três faixas, cada uma um link que
+ * ocupa um terço da tela. Web em cima, `javascript:` no meio (o Chromium o
+ * entrega ao menu como `about:blank#blocked`) e e-mail com cópia embaixo.
+ */
 function paginaLocal() {
   return `<!doctype html><meta charset="utf-8"><title>${WEBPAGE_TITLE}</title>
-<style>html,body{margin:0;height:100%}a{position:fixed;inset:0;display:grid;place-items:center;font:20px sans-serif}</style>
-<a href="${INSIDE_PAGE_URL}">link de dentro da página</a>`
+<style>html,body{margin:0;height:100%}a{position:fixed;left:0;right:0;display:grid;place-items:center;font:20px sans-serif}
+#web{top:0;height:33%}#script{top:33%;height:34%}#email{top:67%;bottom:0}</style>
+<a id="web" href="${INSIDE_PAGE_URL}">link de dentro da página</a>
+<a id="script" href="javascript:void(0)">link de script</a>
+<a id="email" href="${PAGE_MAILTO}">e-mail com cópia</a>`
 }
 
 /** Sobe o servidor da página local numa porta livre de 127.0.0.1. */
@@ -134,8 +143,14 @@ function criarSessaoDeLinks(deps) {
       if (!menu) return null
       const items = [...menu.querySelectorAll('[data-link-choice]')]
       const rect = menu.getBoundingClientRect()
+      const list = menu.querySelector('[role="menu"]')
+      const describedBy = list?.getAttribute('aria-describedby')
       return {
         summary: menu.querySelector('[id]')?.textContent ?? '',
+        // O leitor de tela ouve o destino pelo aria-describedby da lista, e
+        // cada escolha é um menuitem.
+        described: describedBy ? document.getElementById(describedBy)?.textContent ?? '' : '',
+        allMenuItems: items.every((item) => item.getAttribute('role') === 'menuitem'),
         choices: items.map((item) => item.getAttribute('data-link-choice')),
         labels: items.map((item) => item.textContent?.trim()),
         focusedChoice: document.activeElement?.getAttribute('data-link-choice') ?? null,
@@ -202,7 +217,7 @@ function criarSessaoDeLinks(deps) {
             '',
             'Arquivo: [hosts](file:///etc/hosts)',
             '',
-            'E-mail: [time](mailto:time@example.com)',
+            'E-mail: [time](mailto:time@example.com?cc=copia@example.com)',
           ].join('\n'),
         },
       },
@@ -283,6 +298,7 @@ function criarSessaoDeLinks(deps) {
     )
     exigir(menu.focusedChoice === 'abrir-no-navegador', passo, 'o foco não foi para o primeiro item', menu)
     exigir(menu.inViewport, passo, 'o menu saiu da janela', menu.rect)
+    exigir(menu.described.includes(DOCS_URL) && menu.allMenuItems, passo, 'o menu não anuncia o destino ou as escolhas não são menuitem', menu)
 
     await page.keyboard.press('Escape')
     await esperarMenuFechado(passo, 'Esc')
@@ -316,6 +332,24 @@ function criarSessaoDeLinks(deps) {
       await page.evaluate((url) => document.activeElement?.getAttribute('href') === url, DOCS_URL),
       passo,
       'Tab não devolveu o foco ao link',
+    )
+
+    // Clicar no endereço (texto, não botão) não solta o teclado: o Esc ainda
+    // é do menu, e não vaza para o que está atrás (um modal, o React Flow).
+    await page.keyboard.press('Enter')
+    await esperarMenu(passo, 'Enter de novo')
+    await page.locator(`${MENU} [id]`).first().click()
+    exigir(
+      await page.evaluate((selector) => document.querySelector(selector)?.contains(document.activeElement) === true, MENU),
+      passo,
+      'clicar no resumo tirou o foco do menu',
+    )
+    await page.keyboard.press('Escape')
+    await esperarMenuFechado(passo, 'Esc depois de clicar no resumo')
+    exigir(
+      await page.evaluate((url) => document.activeElement?.getAttribute('href') === url, DOCS_URL),
+      passo,
+      'o Esc depois de clicar no resumo não devolveu o foco ao link',
     )
   }
 
@@ -357,7 +391,8 @@ function criarSessaoDeLinks(deps) {
     await mostrarNotaRenderizadaSeFechada()
     const recusado = page.locator(`.react-flow__node[data-id="${NOTE_ID}"] [data-refused-link]`)
     exigir((await recusado.getAttribute('title'))?.startsWith('Link recusado: endereços file:'), passo, 'a dica do link recusado não diz o motivo')
-    await recusado.click()
+    // O rótulo é texto; o botão ao lado pergunta por que não abre (e copia).
+    await page.locator(`.react-flow__node[data-id="${NOTE_ID}"] [data-refused-link] + button[aria-label="Por que este link não abre"]`).click()
     let menu = await esperarMenu(passo, 'link recusado')
     exigir(menu.summary.includes('Link recusado'), passo, 'o menu não diz que recusou', menu)
     // No menu a frase começa a linha, com maiúscula; na dica, vem depois de "Link recusado:".
@@ -369,6 +404,7 @@ function criarSessaoDeLinks(deps) {
     await page.locator(`.react-flow__node[data-id="${NOTE_ID}"] a[href^="mailto:"]`).click()
     menu = await esperarMenu(passo, 'e-mail')
     exigir(JSON.stringify(menu.labels) === JSON.stringify(['Abrir no app de e-mail', 'Copiar endereço']), passo, 'o e-mail ofereceu Página Web ou rótulo errado', menu)
+    exigir(menu.summary.includes('copia@example.com'), passo, 'o menu escondeu a cópia (cc) do e-mail', menu)
     await page.keyboard.press('Escape')
     await esperarMenuFechado(passo, 'Esc no e-mail')
   }
@@ -400,8 +436,16 @@ function criarSessaoDeLinks(deps) {
     await esperarMenuFechado(passo, 'Esc depois do toque')
   }
 
-  /** Toque de um dedo, pelo CDP: o Chromium sintetiza o clique a partir dele. */
+  /**
+   * Toque de um dedo, pelo CDP: o Chromium sintetiza o clique a partir dele.
+   * O mouse de mentira sai de cima do terminal antes, para não se misturar ao
+   * toque. No terminal, o toque vai numa linha que o mouse ainda não visitou:
+   * o Linkifier do xterm só procura link quando o ponteiro muda de célula do
+   * buffer, e o `mouseleave` não esquece a última célula — voltar a ela não
+   * conta como movimento (comportamento do xterm, não do app).
+   */
   async function tocar(x, y) {
+    await page.mouse.move(2, 2)
     const cdp = await page.context().newCDPSession(page)
     try {
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] })
@@ -439,12 +483,16 @@ function criarSessaoDeLinks(deps) {
     await page.keyboard.press('Enter')
   }
 
-  /** Centro do trecho `texto` na tela do xterm (renderizador DOM), ou `null`. */
-  function posicaoNoTerminal(texto) {
-    return page.evaluate((procurado) => {
+  /**
+   * Centro do trecho `texto` na tela do xterm (renderizador DOM), ou `null`.
+   * Com `ultima`, a ocorrência mais recente (a linha recém-impressa).
+   */
+  function posicaoNoTerminal(texto, { ultima = false } = {}) {
+    return page.evaluate(({ procurado, ultima }) => {
       const rows = [...document.querySelectorAll('.xterm-rows')].at(-1)
       if (!rows) return null
-      for (const row of rows.children) {
+      const linhas = ultima ? [...rows.children].reverse() : [...rows.children]
+      for (const row of linhas) {
         const nodes = []
         const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT)
         let full = ''
@@ -466,12 +514,12 @@ function criarSessaoDeLinks(deps) {
         return { x: rect.left + Math.min(rect.width / 2, 40), y: rect.top + rect.height / 2 }
       }
       return null
-    }, texto)
+    }, { procurado: texto, ultima })
   }
 
-  async function esperarNoTerminal(passo, texto) {
+  async function esperarNoTerminal(passo, texto, opcoes) {
     await esperar(passo, `"${texto}" aparecer no terminal`, terminalContem, texto)
-    const ponto = await posicaoNoTerminal(texto)
+    const ponto = await posicaoNoTerminal(texto, opcoes)
     exigir(ponto, passo, `"${texto}" não tem posição na tela`)
     return ponto
   }
@@ -586,6 +634,19 @@ function criarSessaoDeLinks(deps) {
     // fica aberta e o foco volta à entrada do terminal.
     await esperar(passo, 'o foco voltar à entrada do terminal, com a gaveta aberta', () =>
       document.activeElement?.classList.contains('xterm-helper-textarea') === true)
+
+    // Rolar a saída com o menu aberto fecha o menu e devolve o foco ao
+    // terminal, em vez de deixá-lo no body (onde o que se digita se perde).
+    // O streaming empurrou a URL para fora da tela: ela é impressa de novo.
+    await digitar(xterm, TERMINAL_URL)
+    const agora = await esperarNoTerminal(passo, TERMINAL_URL)
+    await passarPorCima(passo, agora, 'escolher onde abrir')
+    await modificadorClique(agora)
+    await esperarMenu(passo, 'antes da roda')
+    await page.mouse.wheel(0, -120)
+    await esperarMenuFechado(passo, 'roda')
+    await esperar(passo, 'a roda devolver o foco à entrada do terminal', () =>
+      document.activeElement?.classList.contains('xterm-helper-textarea') === true)
     await xterm.focus()
   }
 
@@ -593,12 +654,30 @@ function criarSessaoDeLinks(deps) {
     const passo = 'L9 terminal: toque'
     await digitar(xterm, TERMINAL_URL)
     await pausa(200)
-    const ponto = await esperarNoTerminal(passo, TERMINAL_URL)
+    let ponto = await esperarNoTerminal(passo, TERMINAL_URL, { ultima: true })
     await tocar(ponto.x, ponto.y)
-    const menu = await esperarMenu(passo, 'toque no link do terminal')
+    let menu = await esperarMenu(passo, 'toque no link do terminal')
     exigir(menu.summary.includes(TERMINAL_URL), passo, 'o toque abriu o menu de outro link', menu)
     await page.keyboard.press('Escape')
     await esperarMenuFechado(passo, 'Esc depois do toque')
+
+    // Com o mouse tracking ligado (Claude Code e Codex ligam), o app retém o
+    // mousedown e redispara o par: o toque precisa sobreviver a esse replay.
+    await digitar(xterm, '__felixo_smoke_mouse_on__')
+    await esperar(passo, 'a CLI ligar o mouse tracking', () =>
+      [...document.querySelectorAll('.xterm')].at(-1)?.classList.contains('enable-mouse-events') === true)
+    // Linha nova, que nem o mouse nem o toque anterior visitaram.
+    await digitar(xterm, TERMINAL_URL)
+    await pausa(200)
+    ponto = await esperarNoTerminal(passo, TERMINAL_URL, { ultima: true })
+    await tocar(ponto.x, ponto.y)
+    menu = await esperarMenu(passo, 'toque no link com o mouse tracking ligado')
+    exigir(menu.summary.includes(TERMINAL_URL), passo, 'com o mouse tracking, o toque abriu o menu de outro link', menu)
+    await page.keyboard.press('Escape')
+    await esperarMenuFechado(passo, 'Esc com o mouse tracking')
+    await digitar(xterm, '__felixo_smoke_mouse_off__')
+    await esperar(passo, 'a CLI desligar o mouse tracking', () =>
+      [...document.querySelectorAll('.xterm')].at(-1)?.classList.contains('enable-mouse-events') === false)
     await page.getByRole('button', { name: 'Fechar terminal' }).click()
   }
 
@@ -619,8 +698,11 @@ function criarSessaoDeLinks(deps) {
     }, { id: WEBPAGE_ID, url: paginaUrl })
 
     const box = await blocoWeb().locator('webview').boundingBox()
-    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2, { button: 'right' })
-    const menu = await esperarMenu(passo, 'clique direito num link da página')
+    const faixa = (fracao) => ({ x: box.x + box.width / 2, y: box.y + box.height * fracao })
+
+    const noLinkWeb = faixa(1 / 6)
+    await page.mouse.click(noLinkWeb.x, noLinkWeb.y, { button: 'right' })
+    let menu = await esperarMenu(passo, 'clique direito num link da página')
     exigir(menu.summary.includes(INSIDE_PAGE_URL), passo, 'o menu não mostra o link da página', menu)
     exigir(
       JSON.stringify(menu.choices) === JSON.stringify(['abrir-no-navegador', 'abrir-como-pagina-web', 'copiar-link']),
@@ -628,8 +710,38 @@ function criarSessaoDeLinks(deps) {
       'escolhas erradas para um link da página',
       menu,
     )
+    // O menu nasce no ponto do clique (ou virado para caber, com a borda nele):
+    // o ponto do evento já vem no espaço da janela.
+    exigir(menuNoPonto(menu.rect, noLinkWeb), passo, 'o menu nasceu longe do clique', { menu: menu.rect, clique: noLinkWeb })
     await page.keyboard.press('Escape')
     await esperarMenuFechado(passo, 'Esc')
+
+    // `javascript:` chega como `about:blank#blocked`: não é um link que o app
+    // possa mostrar nem copiar, e o menu não abre.
+    const noScript = faixa(1 / 2)
+    await page.mouse.click(noScript.x, noScript.y, { button: 'right' })
+    await pausa(600)
+    exigir((await lerMenu()) === null, passo, 'o link javascript: abriu o menu')
+
+    const noEmail = faixa(5 / 6)
+    await page.mouse.click(noEmail.x, noEmail.y, { button: 'right' })
+    menu = await esperarMenu(passo, 'clique direito num e-mail da página')
+    exigir(
+      JSON.stringify(menu.labels) === JSON.stringify(['Abrir no app de e-mail', 'Copiar endereço']),
+      passo,
+      'o e-mail da página não ofereceu o app de e-mail (o clique simples já abre)',
+      menu,
+    )
+    exigir(menu.summary.includes('copia@example.com'), passo, 'o menu escondeu a cópia (cc) do e-mail', menu)
+    await page.keyboard.press('Escape')
+    await esperarMenuFechado(passo, 'Esc do e-mail')
+  }
+
+  /** O menu está no ponto, ou virado para caber com a borda no ponto (2 px de folga). */
+  function menuNoPonto(rect, ponto) {
+    const perto = (a, b) => Math.abs(a - b) <= 2
+    return (perto(rect.left, ponto.x) || perto(rect.right, ponto.x)) &&
+      (perto(rect.top, ponto.y) || perto(rect.bottom, ponto.y))
   }
 
   async function paginaWebBarraEBotao(paginaUrl) {
@@ -641,9 +753,22 @@ function criarSessaoDeLinks(deps) {
       document.querySelector(`.react-flow__node[data-id="${id}"] [role="alert"]`)?.textContent ===
         'Endereço não aberto: endereços file: não abrem pelo app, só http e https.', WEBPAGE_ID)
     exigir((await barra.getAttribute('aria-invalid')) === 'true', passo, 'a barra não ficou marcada como inválida')
-    await barra.fill(paginaUrl)
-    await esperar(passo, 'o aviso sumir ao corrigir', (id) =>
+    // A recusa deixa o foco na barra: um Backspace para corrigir apaga texto,
+    // não o bloco selecionado.
+    exigir(
+      await barra.evaluate((input) => document.activeElement === input),
+      passo,
+      'a recusa tirou o foco da barra',
+    )
+    await barra.press('Backspace')
+    exigir(await blocoWeb().count() === 1, passo, 'o Backspace na barra apagou o bloco')
+
+    // Uma navegação (Recarregar) troca o texto da barra, e o aviso sai junto.
+    await blocoWeb().getByRole('button', { name: 'Recarregar' }).click()
+    await esperar(passo, 'o aviso sumir quando a página navega', (id) =>
       document.querySelector(`.react-flow__node[data-id="${id}"] [role="alert"]`) === null, WEBPAGE_ID)
+    exigir((await barra.getAttribute('aria-invalid')) === null, passo, 'a barra continuou marcada como inválida')
+    await barra.fill(paginaUrl)
 
     await limparGravadores()
     await blocoWeb().getByRole('button', { name: 'Abrir esta página no navegador' }).click()
@@ -710,6 +835,34 @@ function criarSessaoDeLinks(deps) {
     await cartao().getByRole('button', { name: 'Recusar', exact: true }).click()
     await esperar(passo, 'a fila esvaziar', () => document.querySelector('[data-felixo-agent-browser-request]') === null)
     exigir(pedidos.ler(terceiro.id).estado === 'recusado', passo, 'o último pedido não foi recusado', pedidos.ler(terceiro.id))
+
+    // Com a gaveta do terminal aberta: responder no cartão não a fecha, e um
+    // duplo clique decide só o pedido que a pessoa viu, não o próximo.
+    await focar(TERMINAL_TITLE)
+    await page.locator('.xterm-helper-textarea').last().waitFor({ state: 'attached', timeout })
+    const quarto = pedidos.registrar('abrir-pagina', { url: `${REQUEST_URL}-3`, origem: 'canvas-smoke' })
+    await esperar(passo, 'o quarto pedido no cartão', (id) =>
+      document.querySelector('[data-felixo-agent-browser-request]')?.getAttribute('data-felixo-agent-browser-request') === id, quarto.id)
+    await pausa(20)
+    const quinto = pedidos.registrar('abrir-pagina', { url: `${REQUEST_URL}-4`, origem: 'canvas-smoke' })
+    await esperar(passo, 'o cartão com fila (gaveta aberta)', () =>
+      document.querySelector('[data-felixo-agent-browser-request]')?.textContent?.includes('+1 na fila') === true)
+    await cartao().getByRole('button', { name: 'Recusar', exact: true }).dblclick()
+    await esperar(passo, 'o quinto pedido no cartão depois do duplo clique', (id) =>
+      document.querySelector('[data-felixo-agent-browser-request]')?.getAttribute('data-felixo-agent-browser-request') === id, quinto.id)
+    exigir(pedidos.ler(quarto.id).estado === 'recusado', passo, 'o duplo clique não recusou o pedido visto', pedidos.ler(quarto.id))
+    exigir(pedidos.ler(quinto.id).estado === 'pendente', passo, 'o duplo clique decidiu também o pedido seguinte', pedidos.ler(quinto.id))
+    exigir(
+      await page.evaluate(() => {
+        const drawer = document.querySelector('[data-canvas-terminal-drawer]')
+        return Boolean(drawer) && !drawer.classList.contains('felixo-anim-drawer-out')
+      }),
+      passo,
+      'responder no cartão fechou a gaveta do terminal',
+    )
+    await cartao().getByRole('button', { name: 'Recusar', exact: true }).click()
+    await esperar(passo, 'a fila esvaziar de novo', () => document.querySelector('[data-felixo-agent-browser-request]') === null)
+    await page.getByRole('button', { name: 'Fechar terminal' }).click()
     exigir((await gravado()).opened.length === 0, passo, 'o cartão abriu o navegador sem clique', await gravado())
   }
 
