@@ -194,7 +194,13 @@ function LinkChooserMenu({ request, onCopied }: MenuProps) {
   return (
     <div
       ref={containerRef}
-      className="fixed z-70 w-72 max-w-[calc(100vw-16px)] rounded-lg border border-white/10 bg-(--f-surface-panel) p-1.5 text-xs text-(--f-core-white-soft) shadow-2xl"
+      // Focável só por clique: clicar no resumo ou na margem levaria o foco
+      // para o `body`, e daí Esc e setas paravam de funcionar, o Esc chegava
+      // aos ouvintes do documento (um modal por trás fechava) e, no canvas,
+      // Backspace/Delete apagavam o bloco selecionado. Sem anel: quem está no
+      // teclado continua nos itens.
+      tabIndex={-1}
+      className="fixed z-70 w-72 max-w-[calc(100vw-16px)] rounded-lg border border-white/10 bg-(--f-surface-panel) p-1.5 text-xs text-(--f-core-white-soft) shadow-2xl outline-hidden"
       style={
         position
           ? { left: position.left, top: position.top }
