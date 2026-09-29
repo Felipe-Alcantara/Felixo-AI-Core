@@ -88,8 +88,16 @@ export function writeWidthPreference(
 }
 
 /**
+ * Camada flutuante que pertence a quem a abriu, desenhada num portal fora da
+ * gaveta: o menu de destino de um link do terminal. Clicar nela é continuar
+ * no terminal, não clicar fora — sem isto, "Copiar link" fechava a gaveta.
+ */
+export const FLOATING_LAYER_SELECTOR = '[data-felixo-floating-layer]'
+
+/**
  * Decides whether a pointerdown outside the drawer should close it.
- * Pinned drawers never close from an outside click.
+ * Pinned drawers never close from an outside click, and a click inside a
+ * floating layer (see `FLOATING_LAYER_SELECTOR`) is not "outside".
  */
 export function shouldCloseOnOutsideClick(
   pinned: boolean,
@@ -99,8 +107,19 @@ export function shouldCloseOnOutsideClick(
   if (pinned) {
     return false
   }
+  if (isInsideFloatingLayer(target)) {
+    return false
+  }
   if (!container) {
     return true
   }
   return !container.contains(target)
+}
+
+function isInsideFloatingLayer(target: Node | null): boolean {
+  // O alvo pode ser um nó de texto, que não tem `closest`.
+  const element = (target as Partial<Element> | null)?.closest
+    ? (target as Element)
+    : (target?.parentElement ?? null)
+  return typeof element?.closest === 'function' && element.closest(FLOATING_LAYER_SELECTOR) !== null
 }

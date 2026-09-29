@@ -112,11 +112,17 @@ function LinkChooserMenu({ request, onCopied }: MenuProps) {
   }, [request.anchor])
 
   useEffect(() => {
-    // Um quadro depois: o gesto que abriu o menu (o `mouseup` do xterm, o
-    // clique no link) ainda pode devolver o foco a quem foi clicado.
-    const frame = window.requestAnimationFrame(() => itemRefs.current[active]?.focus())
+    // Ao abrir, um quadro depois: o gesto que abriu o menu (o `mouseup` do
+    // xterm, o clique no link) ainda pode devolver o foco a quem foi clicado.
+    const frame = window.requestAnimationFrame(() => itemRefs.current[0]?.focus())
     return () => window.cancelAnimationFrame(frame)
-  }, [active])
+  }, [])
+
+  /** Setas, Home e End: o foco anda na hora da tecla, sem esperar um quadro. */
+  const moveTo = (index: number) => {
+    setActive(index)
+    itemRefs.current[index]?.focus()
+  }
 
   useEffect(() => {
     const isOutside = (target: EventTarget | null) =>
@@ -178,7 +184,7 @@ function LinkChooserMenu({ request, onCopied }: MenuProps) {
     if (!action) return
     event.preventDefault()
     if (action.type === 'move') {
-      setActive(action.index)
+      moveTo(action.index)
       return
     }
     closeLinkChooser()
@@ -195,6 +201,9 @@ function LinkChooserMenu({ request, onCopied }: MenuProps) {
           : { left: 0, top: 0, visibility: 'hidden' }
       }
       data-felixo-link-chooser
+      // Clicar no menu não é "clicar fora" para a gaveta do terminal de onde
+      // o link veio (ver `FLOATING_LAYER_SELECTOR`).
+      data-felixo-floating-layer
       onKeyDown={onKeyDown}
     >
       <DestinationSummary id={descriptionId} destination={destination} />
