@@ -24,7 +24,9 @@
  *     grava os argumentos. Para rodar numa máquina de trabalho sem abrir o
  *     navegador logado de ninguém.
  *   - `ausente` (Linux): um `xdg-open` que falha, como um sistema sem
- *     navegador padrão. Prova o aviso "Não foi possível abrir no navegador".
+ *     navegador padrão. Prova o aviso "Não foi possível abrir no navegador":
+ *     no Linux quem roda o `xdg-open` é o app (`linux-xdg-open.cjs`), porque o
+ *     do Electron não espera a saída dele e nunca vê a falha.
  *
  * Uso: node scripts/packaged-links-check.cjs --release-dir release
  *        [--artifact caminho] [--navegador real|curl|ausente]
@@ -169,6 +171,30 @@ async function subirServidor(prefixo) {
         server.closeAllConnections()
       }),
   }
+}
+
+/**
+ * O pedido veio do app, e não do navegador? O bloco Página Web do canvas
+ * carrega uma página do mesmo servidor, e o `<webview>` se identifica com
+ * `Electron/` (o app não troca o user-agent). Esses pedidos não contam como
+ * abertura.
+ */
+function pedidoDoApp(pedido) {
+  return /\bElectron\//.test(pedido.agente)
+}
+
+/**
+ * O veredito de um caso: dos pedidos que chegaram desde o clique, os do
+ * navegador (os do app ficam de fora) têm de ser exatamente um, no caminho
+ * esperado.
+ *
+ * @param {{ caminho: string, agente: string }[]} pedidos
+ * @param {string} esperado
+ */
+function julgarCaso(pedidos, esperado) {
+  const doNavegador = pedidos.filter((pedido) => !pedidoDoApp(pedido))
+  const noCaminho = doNavegador.filter((pedido) => decodificar(pedido.caminho) === decodificar(esperado))
+  return { ok: doNavegador.length === 1 && noCaminho.length === 1, doNavegador, noCaminho }
 }
 
 function decodificar(texto) {
@@ -449,13 +475,20 @@ async function main(argv = process.argv.slice(2)) {
     report.versaoDoApp = await page.evaluate(() => window.felixo?.getVersion?.() ?? null)
 
     await prepararCanvas(page, { base: servidor.base, marcador, timeoutMs: options.timeoutMs })
+    // A carga da página no bloco chega antes dos casos, para não cair dentro
+    // da janela de nenhum deles.
+    await esperarAte(
+      'o bloco Página Web carregar a página do servidor',
+      () => servidor.pedidos.some((pedido) => pedidoDoApp(pedido) && pedido.caminho === '/pagina'),
+      options.timeoutMs,
+    )
     await capturar(page, '00-canvas')
 
     const casos = casosDaRodada(marcador)
     let xterm = null
     for (const caso of options.navegador === 'ausente' ? casos.slice(0, 1) : casos) {
       const url = `${servidor.base}${caso.caminho}`
-      const antes = servidor.pedidos.length
+      let antes = servidor.pedidos.length
       let inicio = Date.now()
       if (caso.origem === 'markdown') {
         await abrirLinkDaNota(page, caso.id, options.timeoutMs)
@@ -466,6 +499,8 @@ async function main(argv = process.argv.slice(2)) {
       } else {
         await fecharGavetaDoTerminal(page)
         await focar(page, 'Página dos links')
+        // Depois do foco: remontar o bloco recarrega o `<webview>` (pedido do app).
+        antes = servidor.pedidos.length
         inicio = Date.now()
         await page.locator(`.react-flow__node[data-id="${WEBPAGE_ID}"]`).getByRole('button', { name: 'Abrir esta página no navegador' }).click()
       }
@@ -485,13 +520,13 @@ async function main(argv = process.argv.slice(2)) {
         break
       }
 
-      await esperarAte(`o navegador pedir ${caso.id}`, () => servidor.pedidos.length > antes, options.timeoutMs, 100)
+      const doNavegadorDesde = () => servidor.pedidos.slice(antes).filter((pedido) => !pedidoDoApp(pedido))
+      await esperarAte(`o navegador pedir ${caso.id}`, () => doNavegadorDesde().length > 0, options.timeoutMs, 100)
       // Do clique à chegada do pedido no servidor (o instante é o do servidor).
-      registro.latenciaMs = servidor.pedidos[antes].em - inicio
+      registro.latenciaMs = doNavegadorDesde()[0].em - inicio
       await pausa(JANELA_DE_REPETICAO_MS)
       registro.pedidos = servidor.pedidos.slice(antes).map((pedido) => ({ caminho: pedido.caminho, agente: pedido.agente }))
-      const doCaso = registro.pedidos.filter((pedido) => decodificar(pedido.caminho) === decodificar(caso.esperado))
-      registro.ok = doCaso.length === 1 && registro.pedidos.length === 1
+      registro.ok = julgarCaso(registro.pedidos, caso.esperado).ok
       report.casos.push(registro)
     }
 
@@ -513,6 +548,9 @@ async function main(argv = process.argv.slice(2)) {
 
       const marcadores = ['a', 'b', 'c'].map((letra) => `${marcador}-${letra}`)
       report.injecao = { marcadoresCriados: marcadores.filter((arquivo) => fs.existsSync(arquivo)).length }
+      // Uma duplicata atrasada do último caso só aparece aqui: no total, o
+      // navegador pediu exatamente uma vez por caso.
+      report.pedidosDoNavegador = servidor.pedidos.filter((pedido) => !pedidoDoApp(pedido)).length
 
       // Abrir links não travou o terminal: ele ainda ecoa o que se digita. A
       // gaveta fechou para os casos da nota: abre de novo.
@@ -531,6 +569,9 @@ async function main(argv = process.argv.slice(2)) {
       ...report.recusados.filter((caso) => !caso.ok).map((caso) => `recusado ${caso.id}`),
       ...(report.injecao?.marcadoresCriados ? ['injeção de shell criou marcador'] : []),
       ...(options.navegador !== 'ausente' && report.terminalRespondeDepois !== true ? ['terminal parou de responder'] : []),
+      ...(options.navegador !== 'ausente' && report.pedidosDoNavegador !== report.casos.length
+        ? [`o navegador fez ${report.pedidosDoNavegador} pedidos para ${report.casos.length} casos`]
+        : []),
       ...(options.navegador === 'ausente' && !report.avisoDeFalha?.ok ? ['aviso de falha'] : []),
     ]
     report.result = falhas.length ? 'failed' : 'passed'
@@ -555,8 +596,13 @@ async function main(argv = process.argv.slice(2)) {
     report.pedidosNoServidor = servidor.pedidos.length
     report.terminadoEm = new Date().toISOString()
     fs.mkdirSync(path.dirname(reportPath), { recursive: true })
+    try {
+      fs.rmSync(raiz, { recursive: true, force: true, maxRetries: 3 })
+    } catch (error) {
+      // Um arquivo preso (antivírus, o app ainda fechando) não muda o veredito.
+      report.erroAoLimpar = sanitizeDiagnostic(error)
+    }
     fs.writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`)
-    fs.rmSync(raiz, { recursive: true, force: true, maxRetries: 3 })
   }
 
   console.log(`[packaged-links] ${report.result}: ${reportPath}`)
@@ -567,20 +613,33 @@ async function main(argv = process.argv.slice(2)) {
   return report
 }
 
-/** Com o `xdg-open` que falha: o aviso aparece, sem roubar o foco, e copia o endereço. */
+/**
+ * Com o `xdg-open` que falha: o aviso aparece como `alert`, com o endereço,
+ * sem tirar o foco do link da nota; "Copiar link" fecha o aviso e devolve o
+ * foco ao link. (A área de transferência do sistema não é lida: o smoke da
+ * CI confere o que é copiado.)
+ */
 async function conferirAvisoDeFalha(page, url, timeoutMs) {
   const aviso = page.locator('[data-felixo-link-open-failure]')
   await aviso.waitFor({ state: 'visible', timeout: timeoutMs })
   const texto = (await aviso.textContent()) ?? ''
   const papel = await aviso.getAttribute('role')
+  const focoNoLink = () => page.evaluate((id) => Boolean(document.activeElement?.closest?.(`.react-flow__node[data-id="${id}"] a`)), NOTE_ID)
+  const focoFicou = await focoNoLink()
+  await aviso.getByRole('button', { name: 'Copiar link' }).click()
+  const fechou = await aviso.waitFor({ state: 'detached', timeout: timeoutMs }).then(() => true, () => false)
+  const focoVoltou = await focoNoLink()
   return {
-    ok: papel === 'alert' && texto.includes('Não foi possível abrir no navegador') && texto.includes(url.slice(0, 40)),
+    ok: papel === 'alert' && texto.includes('Não foi possível abrir no navegador') && texto.includes(url.slice(0, 40)) && focoFicou && fechou && focoVoltou,
     texto: texto.slice(0, 300),
     papel,
+    focoFicou,
+    fechouAoCopiar: fechou,
+    focoVoltou,
   }
 }
 
-module.exports = { casosDaRodada, decodificar, parseArgs }
+module.exports = { casosDaRodada, decodificar, julgarCaso, parseArgs, pedidoDoApp }
 
 if (require.main === module) {
   main().catch((error) => {

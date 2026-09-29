@@ -47,3 +47,27 @@ test('decodificar: compara o que cada navegador codifica de um jeito', () => {
   // Um `%` solto não derruba a comparação: volta como veio.
   assert.equal(decodificar('/x?a=%E0%A4%A'), '/x?a=%E0%A4%A')
 })
+
+test('julgarCaso: um pedido do navegador, no caminho esperado', () => {
+  const { julgarCaso } = require('./packaged-links-check.cjs')
+  const chrome = 'Mozilla/5.0 (X11; Linux x86_64) Chrome/140.0 Safari/537.36'
+  const app = 'Mozilla/5.0 (X11; Linux x86_64) Chrome/146.0 Electron/41.10.7 Safari/537.36'
+  assert.equal(julgarCaso([{ caminho: '/simples', agente: chrome }], '/simples').ok, true)
+  // O pedido do `<webview>` do app não conta, nem para o bem nem para o mal.
+  assert.equal(julgarCaso([{ caminho: '/pagina', agente: app }, { caminho: '/simples', agente: chrome }], '/simples').ok, true)
+  assert.equal(julgarCaso([{ caminho: '/pagina', agente: app }], '/pagina').ok, false)
+  // Duas aberturas, caminho errado ou nada: reprova.
+  assert.equal(julgarCaso([{ caminho: '/simples', agente: chrome }, { caminho: '/simples', agente: chrome }], '/simples').ok, false)
+  assert.equal(julgarCaso([{ caminho: '/outro', agente: chrome }], '/simples').ok, false)
+  assert.equal(julgarCaso([], '/simples').ok, false)
+  // Codificações diferentes do mesmo endereço valem igual.
+  assert.equal(julgarCaso([{ caminho: '/a%C3%A7%C3%A3o', agente: 'curl/8.5.0' }], '/ação').ok, true)
+})
+
+test('pedidoDoApp: reconhece o user-agent do Electron', () => {
+  const { pedidoDoApp } = require('./packaged-links-check.cjs')
+  assert.equal(pedidoDoApp({ agente: 'Mozilla/5.0 Chrome/146.0 Electron/41.10.7 Safari/537.36' }), true)
+  assert.equal(pedidoDoApp({ agente: 'Mozilla/5.0 (Macintosh) Version/18.0 Safari/605.1.15' }), false)
+  assert.equal(pedidoDoApp({ agente: 'curl/8.5.0' }), false)
+  assert.equal(pedidoDoApp({ agente: '' }), false)
+})
