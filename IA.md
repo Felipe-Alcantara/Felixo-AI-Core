@@ -7158,3 +7158,9 @@ Mais dois achados:
 O comportamento do popover é anterior a esta task e está em cinco popovers da barra: Organizar, Novo bloco e Grupo, Página Web, Agente e Gerar imagem. Num clique fora, eles devolvem o foco ao botão mesmo quando a pessoa clicou num controle focável, como um terminal ou o menu de link. Ficou numa task própria.
 
 Validação local depois dos consertos: a sessão D passou do L0 ao L12 nas duas janelas, 1280×738 (Xvfb sem tamanho, como no CI do Linux) em 140 s e 1023×697 em 135 s. O ESLint do script saiu com 0.
+
+**Reexecução do terceiro CI (run 36602524300), já com a sessão D rodando até o fim no Windows.** O L10 reprovou: a lista Elementos centraliza o bloco com zoom 1,2 mesmo que ele não caiba, e na janela de 1008×655 a Página Web (672×504) fica mais larga que a área livre. O centro de uma faixa da página caía embaixo da barra lateral (no CI) ou do minimapa e dos controles de zoom (aqui). O L10 agora escolhe, em cada faixa, um ponto em que `elementFromPoint` devolve o próprio `<webview>`. O "Recarregar" do L11, que fica embaixo da barra lateral, é acionado pelo teclado. Reproduzido com Xvfb em 1009×678 (janela de 1008×655): a versão anterior reprova no L10, e a nova passa do L0 ao L12 em 129 s. O zoom fixo da centralização é anterior a esta task e ficou numa task própria.
+
+Na mesma run, duas intermitências conhecidas, fora do código de links, ganharam task:
+- o SA1 do tutorial no Windows ("o app não parou de gravar sozinho"), pelo menos a terceira ocorrência;
+- a checagem interna de resume da bancada de scrollback no macOS, que reprovou duas vezes seguidas (count=5: 340 → 467 ms; count=1). Nos dois casos, as duas políticas usam o mesmo scrollback de 20.000, porque a adaptativa só muda a partir de 10 terminais: a checagem compara uma configuração com ela mesma.
