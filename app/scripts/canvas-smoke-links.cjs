@@ -450,8 +450,17 @@ function criarSessaoDeLinks(deps) {
     // No menu a frase começa a linha, com maiúscula; na dica, vem depois de "Link recusado:".
     exigir(menu.summary.includes('Endereços file: não abrem pelo app, só http, https e mailto.'), passo, 'o menu não diz o motivo', menu)
     exigir(JSON.stringify(menu.choices) === JSON.stringify(['copiar-link']), passo, 'link recusado ofereceu abrir', menu)
-    await page.keyboard.press('Escape')
-    await esperarMenuFechado(passo, 'Esc no recusado')
+    // Copiar o recusado escreve o texto cru, e nada abre: quem cola decide.
+    await limparGravadores()
+    await escolher('copiar-link')
+    await esperarMenuFechado(passo, 'copiar o recusado')
+    const registro = await gravado()
+    exigir(
+      JSON.stringify(registro.copied) === JSON.stringify(['file:///etc/hosts']) && registro.opened.length === 0,
+      passo,
+      'copiar o recusado não escreveu o texto cru, ou abriu algo',
+      registro,
+    )
 
     await page.locator(`.react-flow__node[data-id="${NOTE_ID}"] a[href^="mailto:"]`).click()
     menu = await esperarMenu(passo, 'e-mail')
