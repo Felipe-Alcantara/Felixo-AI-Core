@@ -4,7 +4,7 @@ import {
   EXTERNAL_WEB_SCHEMES,
   MAX_EXTERNAL_URL_CHARS,
 } from '../../shared/external-url-policy'
-import { normalizeUrlInput, persistableNavigationUrl } from './url-utils'
+import { explainUrlInput, normalizeUrlInput, persistableNavigationUrl } from './url-utils'
 
 // Montados por código, e não digitados no fonte, para o teste não depender de
 // um caractere invisível sobreviver a editor, diff e revisão.
@@ -133,6 +133,45 @@ describe('normalizeUrlInput', () => {
         scheme: new URL(normalized).protocol,
       })
     }
+  })
+})
+
+describe('explainUrlInput', () => {
+  it('endereço aceito: a mesma URL de normalizeUrlInput', () => {
+    for (const input of ['google.com', 'localhost:3000', 'HTTPS://Exemplo.com']) {
+      expect(explainUrlInput(input)).toEqual({ ok: true, url: normalizeUrlInput(input) })
+    }
+  })
+
+  it.each([
+    ['', 'o endereço está vazio'],
+    ['file:///etc/passwd', 'endereços file: não abrem pelo app, só http e https'],
+    ['ftp://example.com/', 'endereços ftp: não abrem pelo app, só http e https'],
+    ['usuario:senha@example.com', 'o endereço traz usuário ou senha, que podem disfarçar o destino'],
+    ['https://example.com/a b', 'o endereço tem espaço no meio'],
+    [`exa${ZERO_WIDTH_SPACE}mple.com`, 'o endereço tem caracteres invisíveis, que podem disfarçar o destino'],
+  ])('recusa com motivo legível: %j', (input, reason) => {
+    expect(explainUrlInput(input)).toEqual({ ok: false, reason })
+  })
+
+  it.each([
+    ['javascript:alert(1)', 'javascript:'],
+    ['JavaScript:alert(1)', 'javascript:'],
+    ['mailto:alguem@example.com', 'mailto:'],
+    ['about:blank', 'about:'],
+    ['data:text/html,x', 'data:'],
+  ])('esquema colado sem barras (%j) é explicado como esquema, não como "malformado"', (input, scheme) => {
+    expect(explainUrlInput(input)).toEqual({
+      ok: false,
+      reason: `endereços ${scheme} não abrem pelo app, só http e https`,
+    })
+  })
+
+  it('host:porta e usuário sem esquema não viram "esquema"', () => {
+    expect(explainUrlInput('localhost:3000')).toEqual({ ok: true, url: 'http://localhost:3000/' })
+    const credentials = explainUrlInput('usuario:senha@example.com')
+    expect(credentials.ok).toBe(false)
+    expect(!credentials.ok && credentials.reason).not.toContain('esquema')
   })
 })
 

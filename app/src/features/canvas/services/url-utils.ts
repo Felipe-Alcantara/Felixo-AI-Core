@@ -3,6 +3,20 @@
 // resultado pela política única de URL externa — a mesma que o processo
 // principal aplica ao `src` de todo webview que o renderer tenta anexar.
 import { classifyExternalUrl, EXTERNAL_WEB_SCHEMES } from '../../shared/external-url-policy'
+import { describeRefusal } from '../../shared/links/link-destination'
+
+/** O que a barra de endereço faz com o texto digitado: abre, ou diz por que não. */
+export type UrlInputResult = { ok: true; url: string } | { ok: false; reason: string }
+
+/**
+ * Esquemas sem `//` que alguém cola na barra (`javascript:`, `mailto:`,
+ * `data:`...). Com o protocolo implícito eles virariam `https://mailto:…`, e a
+ * recusa sairia como "usuário ou senha" ou "malformado" — verdade para o
+ * parser, confuso para quem digitou. Lista explícita porque `localhost:3000`
+ * e `usuario:senha@host` também têm dois-pontos e não são esquema.
+ */
+const TYPED_NON_WEB_SCHEME =
+  /^(javascript|vbscript|data|blob|about|file|mailto|tel|sms|ftp|chrome|edge|view-source|vscode):/i
 
 /**
  * Accepts URLs without a protocol (like a browser's address bar) and
@@ -18,9 +32,19 @@ import { classifyExternalUrl, EXTERNAL_WEB_SCHEMES } from '../../shared/external
  * próximo remount a página sumia. Uma regra só, dos dois lados.
  */
 export function normalizeUrlInput(raw: string): string | undefined {
+  const result = explainUrlInput(raw)
+  return result.ok ? result.url : undefined
+}
+
+/**
+ * Como `normalizeUrlInput`, mas uma recusa vem com o motivo em português
+ * comum (o mesmo texto do menu de link), para a barra dizer por que não abriu
+ * em vez de não fazer nada.
+ */
+export function explainUrlInput(raw: string): UrlInputResult {
   const trimmed = raw.trim()
   if (!trimmed) {
-    return undefined
+    return { ok: false, reason: describeRefusal('vazia', undefined, EXTERNAL_WEB_SCHEMES) }
   }
 
   // Só o texto SEM esquema ganha um protocolo implícito. Sem esta checagem,
@@ -39,7 +63,12 @@ export function normalizeUrlInput(raw: string): string | undefined {
   const candidate = hasScheme ? trimmed : `${implicitProtocol}${trimmed}`
 
   const decision = classifyExternalUrl(candidate, EXTERNAL_WEB_SCHEMES)
-  return decision.ok ? decision.url : undefined
+  if (decision.ok) return { ok: true, url: decision.url }
+
+  const typedScheme = hasScheme ? undefined : TYPED_NON_WEB_SCHEME.exec(trimmed)?.[1]
+  return typedScheme
+    ? { ok: false, reason: describeRefusal('esquema', `${typedScheme.toLowerCase()}:`, EXTERNAL_WEB_SCHEMES) }
+    : { ok: false, reason: describeRefusal(decision.reason, decision.scheme, EXTERNAL_WEB_SCHEMES) }
 }
 
 /**

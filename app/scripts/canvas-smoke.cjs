@@ -570,7 +570,12 @@ async function checarInteracoes(page) {
   const urlInput = page.locator('input[aria-label="Endereço do site"]')
   await urlInput.fill('javascript:alert(1)')
   await page.getByRole('button', { name: 'Criar' }).last().click()
-  await page.waitForFunction(() => document.body.innerText.includes('Informe um endereço de site válido'), null, { timeout: INTERACTION_TIMEOUT_MS })
+  // A recusa diz o motivo (o mesmo texto do menu de link), não só "inválido".
+  await page.waitForFunction(
+    () => document.body.innerText.includes('Endereço não aceito: endereços javascript: não abrem pelo app, só http e https.'),
+    null,
+    { timeout: INTERACTION_TIMEOUT_MS },
+  )
   await page.keyboard.press('Escape')
   await page.waitForFunction(() => !document.querySelector('input[aria-label="Endereço do site"]'), null, { timeout: INTERACTION_TIMEOUT_MS })
 }
