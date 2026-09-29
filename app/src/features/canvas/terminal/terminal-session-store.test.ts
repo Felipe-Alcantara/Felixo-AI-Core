@@ -1476,6 +1476,27 @@ describe('TerminalSessionStore: links do terminal', () => {
     }
   })
 
+  it('o WebLinksAddon usa o mesmo portão, dica e limpeza do hyperlink OSC 8', () => {
+    harness = createHarness('', 'claude', true, false, 1)
+    const terminal = linkSession(harness).terminal as unknown as {
+      options: { linkHandler?: LinkHandler | null }
+      _addonManager: { _addons: Array<{ instance: { _handler?: unknown; _options?: { hover?: unknown; leave?: unknown } } }> }
+    }
+    // Campos internos do xterm e do addon: é o único jeito de ver, sem DOM, qual
+    // função o WebLinksAddon chama. Sem esta trava, voltar a passar
+    // activateTerminalExternalLink direto tiraria a regra de arrasto da URL em
+    // texto plano sem nenhum teste falhar.
+    const webLinks = terminal._addonManager._addons
+      .map((addon) => addon.instance)
+      .find((instance) => typeof instance._handler === 'function' && instance._options)
+    const handler = terminal.options.linkHandler
+
+    expect(webLinks).toBeDefined()
+    expect(webLinks?._handler).toBe(handler?.activate)
+    expect(webLinks?._options?.hover).toBe(handler?.hover)
+    expect(webLinks?._options?.leave).toBe(handler?.leave)
+  })
+
   it('o hover guarda o link para o menu e o leave o esquece', () => {
     harness = createHarness('', 'claude', true, false, 1)
     const session = linkSession(harness)

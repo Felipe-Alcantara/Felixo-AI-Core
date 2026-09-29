@@ -130,3 +130,38 @@ export function terminalLinkMenuItems(uri: string): TerminalLinkMenuItem[] {
     ? ['abrir-no-canvas', 'abrir-no-navegador', 'copiar-link']
     : ['copiar-link']
 }
+
+export type TerminalLinkMenuActions = {
+  onOpenWebpage: (url: string) => void
+  onCopy: (text: string) => void
+}
+
+export type TerminalLinkMenuEntry = {
+  item: TerminalLinkMenuItem
+  label: string
+  run: () => void
+}
+
+/**
+ * O que cada item do menu faz, pronto para o DOM só desenhar. Fica aqui, e
+ * não no store, para "copiar nunca abre" ser uma propriedade testável: o
+ * item de copiar só conhece `onCopy`, e o de abrir no navegador passa pela
+ * política de novo antes do `window.open`.
+ */
+export function terminalLinkMenuEntries(
+  uri: string,
+  actions: TerminalLinkMenuActions,
+  openExternalLink: OpenExternalLink = (url) => window.open(url, '_blank'),
+): TerminalLinkMenuEntry[] {
+  const entries: Record<TerminalLinkMenuItem, Omit<TerminalLinkMenuEntry, 'item'>> = {
+    'abrir-no-canvas': { label: 'Abrir no canvas', run: () => actions.onOpenWebpage(uri) },
+    'abrir-no-navegador': {
+      label: 'Abrir no navegador',
+      run: () => {
+        openAllowedTerminalExternalLink(uri, openExternalLink)
+      },
+    },
+    'copiar-link': { label: 'Copiar link', run: () => actions.onCopy(terminalLinkClipboardText(uri)) },
+  }
+  return terminalLinkMenuItems(uri).map((item) => ({ item, ...entries[item] }))
+}

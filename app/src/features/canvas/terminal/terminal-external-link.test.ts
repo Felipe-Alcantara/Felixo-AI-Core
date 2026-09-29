@@ -6,6 +6,7 @@ import {
   isAllowedTerminalExternalLink,
   isTerminalLinkDragGesture,
   terminalLinkClipboardText,
+  terminalLinkMenuEntries,
   terminalLinkMenuItems,
 } from './terminal-external-link'
 import { DRAG_THRESHOLD_PX } from './terminal-mouse-selection'
@@ -98,13 +99,48 @@ describe('terminal external links', () => {
     expect(describeTerminalLinkHover(long)!.split(NEWLINE)[0]).toHaveLength(160)
   })
 
-  it('copies the serialized URL, or the raw text when the link is refused — copying never opens', () => {
-    const openExternalLink = vi.fn()
+  it('copies the serialized URL, or the raw text when the link is refused', () => {
     const refused = `https://exa${ZERO_WIDTH_SPACE}mple.com/`
 
     expect(terminalLinkClipboardText(' HTTPS://Example.com/a ')).toBe('https://example.com/a')
     expect(terminalLinkClipboardText(` ${refused} `)).toBe(refused)
-    expect(openExternalLink).not.toHaveBeenCalled()
+  })
+
+  describe('o que cada item do menu faz', () => {
+    function spies() {
+      return { onOpenWebpage: vi.fn(), onCopy: vi.fn(), openExternalLink: vi.fn() }
+    }
+
+    it('link aprovado: copiar só copia, abrir no navegador passa pela política, abrir no canvas usa o bloco', () => {
+      const { onOpenWebpage, onCopy, openExternalLink } = spies()
+      const entries = terminalLinkMenuEntries(' HTTPS://Example.com/a ', { onOpenWebpage, onCopy }, openExternalLink)
+
+      expect(entries.map((entry) => entry.label)).toEqual(['Abrir no canvas', 'Abrir no navegador', 'Copiar link'])
+
+      entries.find((entry) => entry.item === 'copiar-link')!.run()
+      expect(onCopy).toHaveBeenCalledWith('https://example.com/a')
+      // Copiar nunca abre: nem o navegador, nem o bloco.
+      expect(openExternalLink).not.toHaveBeenCalled()
+      expect(onOpenWebpage).not.toHaveBeenCalled()
+
+      entries.find((entry) => entry.item === 'abrir-no-navegador')!.run()
+      expect(openExternalLink).toHaveBeenCalledWith('https://example.com/a')
+
+      entries.find((entry) => entry.item === 'abrir-no-canvas')!.run()
+      expect(onOpenWebpage).toHaveBeenCalledTimes(1)
+    })
+
+    it('link recusado: só copiar, com o texto cru, e nada abre', () => {
+      const { onOpenWebpage, onCopy, openExternalLink } = spies()
+      const refused = 'file:///C:/Users/pessoa/notas.txt'
+      const entries = terminalLinkMenuEntries(refused, { onOpenWebpage, onCopy }, openExternalLink)
+
+      expect(entries.map((entry) => entry.item)).toEqual(['copiar-link'])
+      entries[0].run()
+      expect(onCopy).toHaveBeenCalledWith(refused)
+      expect(openExternalLink).not.toHaveBeenCalled()
+      expect(onOpenWebpage).not.toHaveBeenCalled()
+    })
   })
 
   describe('menu do clique direito', () => {

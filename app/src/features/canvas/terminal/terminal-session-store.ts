@@ -5,10 +5,8 @@ import {
   activateTerminalExternalLink,
   describeTerminalLinkHover,
   isTerminalLinkDragGesture,
-  openAllowedTerminalExternalLink,
-  terminalLinkClipboardText,
-  terminalLinkMenuItems,
-  type TerminalLinkMenuItem,
+  terminalLinkMenuEntries,
+  type TerminalLinkMenuActions,
 } from './terminal-external-link'
 import { buildDroppedFileReference } from './terminal-dropped-files'
 import { splitTerminalSubmission, toSubmittedTerminalText } from './terminal-input'
@@ -281,15 +279,10 @@ type SessionOptions = {
   performanceMode?: boolean
 }
 
-type LinkMenuActions = {
-  onOpenWebpage: (url: string) => void
-  onCopy: (text: string) => void
-}
-
 function mountTerminalLinkMenu(
   event: MouseEvent,
   url: string,
-  actions: LinkMenuActions,
+  actions: TerminalLinkMenuActions,
 ): () => void {
   const menu = document.createElement('div')
   menu.setAttribute('role', 'menu')
@@ -337,21 +330,10 @@ function mountTerminalLinkMenu(
     menu.appendChild(button)
   }
 
-  // Quais itens aparecem é decisão de `terminalLinkMenuItems` (testada lá);
-  // aqui só mora o que cada um faz. Link recusado fica só com "Copiar link".
-  const menuActions: Record<TerminalLinkMenuItem, [label: string, action: () => void]> = {
-    'abrir-no-canvas': ['Abrir no canvas', () => actions.onOpenWebpage(url)],
-    'abrir-no-navegador': [
-      'Abrir no navegador',
-      () => {
-        openAllowedTerminalExternalLink(url)
-      },
-    ],
-    'copiar-link': ['Copiar link', () => actions.onCopy(terminalLinkClipboardText(url))],
-  }
-  for (const item of terminalLinkMenuItems(url)) {
-    const [label, action] = menuActions[item]
-    addAction(label, action)
+  // O que cada item faz e quais aparecem vem de `terminalLinkMenuEntries`
+  // (testada lá, inclusive "copiar nunca abre"); aqui só se desenha.
+  for (const entry of terminalLinkMenuEntries(url, actions)) {
+    addAction(entry.label, entry.run)
   }
   document.body.appendChild(menu)
 
