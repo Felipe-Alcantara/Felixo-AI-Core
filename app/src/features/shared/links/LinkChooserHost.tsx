@@ -51,6 +51,14 @@ type Point = { left: number; top: number }
 export function LinkChooserHost() {
   const { request, version } = useSyncExternalStore(subscribeLinkChooser, getLinkChooserState)
   const [copiedAt, setCopiedAt] = useState<Point | null>(null)
+  // Uma segunda cópia dentro do aviso não muda o texto da região `status`, e
+  // o leitor de tela não anuncia de novo. A contagem troca o nó do aviso a
+  // cada cópia, e nó novo é anunciado.
+  const [copies, setCopies] = useState(0)
+  const onCopied = useCallback((at: Point) => {
+    setCopiedAt(at)
+    setCopies((count) => count + 1)
+  }, [])
 
   useEffect(() => {
     if (!copiedAt) return
@@ -62,7 +70,7 @@ export function LinkChooserHost() {
     <>
       {request &&
         createPortal(
-          <LinkChooserMenu key={version} request={request} onCopied={setCopiedAt} />,
+          <LinkChooserMenu key={version} request={request} onCopied={onCopied} />,
           document.body,
         )}
       {copiedAt &&
@@ -77,7 +85,7 @@ export function LinkChooserHost() {
           document.body,
         )}
       <div role="status" aria-live="polite" className="sr-only">
-        {copiedAt ? 'Link copiado' : ''}
+        {copiedAt && <span key={copies}>Link copiado</span>}
       </div>
     </>
   )
