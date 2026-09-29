@@ -1,0 +1,13 @@
+{
+  "comentario": "Fonte de verdade unica de quais esquemas de URL podem sair do app. Lido pelo processo principal (external-url-policy.cjs, o portao do shell.openExternal) e pelo renderer (src/features/shared/external-url-policy.ts, que decide o que vira link clicavel). As duas implementacoes rodam a mesma tabela de casos (external-url-policy.cases.json). Nao amplie uma lista sem justificativa escrita aqui e um caso novo na tabela: cada esquema a mais e um programa do sistema que conteudo externo (saida de CLI, Markdown de agente, pagina web) consegue acionar.",
+  "esquemasDoAbridor": ["http:", "https:", "mailto:"],
+  "justificativas": {
+    "http:": "pagina web no navegador padrao",
+    "https:": "pagina web no navegador padrao",
+    "mailto:": "o Markdown ja oferecia link de e-mail antes desta politica (commit 109a679); o cliente de e-mail so abre um rascunho, nada e enviado sem a pessoa"
+  },
+  "esquemasWeb": ["http:", "https:"],
+  "camposMailto": ["to", "cc", "bcc", "subject", "body"],
+  "justificativaCamposMailto": "a RFC 6068 aceita qualquer cabecalho num mailto, e clientes de e-mail ja honraram attach/attachment anexando arquivo local ao rascunho (pesquisa 'Mailto: Me Your Secrets', 2020). So os campos de um rascunho comum passam; o resto recusa o link inteiro em vez de remover o campo, para o destino nunca mudar em silencio.",
+  "maxCaracteres": 8192
+}
