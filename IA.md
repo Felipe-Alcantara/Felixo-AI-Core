@@ -7266,3 +7266,21 @@ Foram 4 lentes (processo principal e segurança, renderer e acessibilidade, scri
 - **macOS:** a rejeição "No application found" foi lida no fonte do Electron (`platform_util_mac.mm`), não medida.
 - **Linux em Flatpak ou Snap:** o `xdg-open` rodado pelo app pode se comportar diferente do caminho do Electron, que numa sandbox pode usar o portal. Não testado.
 - **Navegador padrão escolhido pela pessoa** (não o de fábrica), no Windows e no macOS: fica para a task do roteiro manual.
+
+### Rodada única com o navegador real nos três sistemas (v0.1.428)
+
+- **Publicação.** O PR #99 foi mesclado às 18:28 (`8617f802`). O CI da main (36633549761) e o Release gate (36633595275) passaram, e o Release (36633610874) publicou a **v0.1.428** como Latest às 18:37, com 28 artefatos. Os release-smokes passaram no ubuntu, no macOS (inclusive com quarentena) e no Windows (instalador NSIS e cmd). O de caminho longo no Windows é exploratório e falha desde antes (task existente).
+- **Como rodou.** Num ramo descartável, `valida/links-empacotado`, com um workflow que dispara só no push dele e sai com o ramo: `packaged-links-check.cjs` contra a v0.1.428 instalada, com o navegador padrão de cada runner (Edge no Windows, Safari no macOS, Chrome no Linux) e, no Linux, também `--navegador ausente`. Foram cinco rodadas até o verde:
+  1. **36634580297.** O `ausente` do Linux já passou: o aviso apareceu no app instalado. No Windows e no macOS, o primeiro caso abriu no Edge e no Safari, e o script falhou ao achar o texto no terminal, porque a URL quebrava de linha na gaveta estreita. No Linux, o Chrome não pediu a página.
+  2. **36635744365.** O macOS passou inteiro. No Windows, o clique caiu no link da linha anterior, porque o prefixo curto já estava na tela. No Linux, o diagnóstico rodou o `xdg-open` fora do app: o Chrome abriu e não pediu a página, preso na primeira execução.
+  3. **36636409480.** O Linux passou inteiro, com o Chrome sem primeira execução (sentinela `First Run` e política gerenciada). O macOS passou. No Windows, os 6 casos passaram, e o passo do recusado não achou o botão.
+  4. **36636996784.** O mesmo resultado. Na janela de 1008×655, a nota sai da vista, e o React Flow a remonta no modo de edição.
+  5. **36637608975: verde nos três.**
+     - Windows, macOS e Linux: os 6 casos com 1 pedido cada, a 2,0–7,5 s do clique no Windows, 0,4–6,1 s no macOS e 2,2–3,7 s no Linux. O `file:` recusado só ofereceu copiar e não gerou pedido; 0 marcadores de injeção; o terminal ficou vivo; o navegador fez 6 pedidos para 6 casos.
+     - Linux `ausente`: o aviso apareceu como `alert`, o foco ficou no link e voltou depois de copiar, e copiar fechou o aviso.
+- **O que era do ambiente, não do app:**
+  - o perfil novo do app empacotado instala as CLIs de IA e procura atualização, e o script agora desliga as duas coisas (`FELIXO_AUTO_INSTALL_CLIS=0`, `FELIXO_DISABLE_AUTO_UPDATE=1`);
+  - o Edge e o Chrome dos runners ficavam presos na primeira execução, o que o workflow resolveu com política e sentinela;
+  - a janela do Windows é de 1008×655, e o script acha o texto por um prefixo curto, espera o texto inteiro, espera a nota montar e aciona o recusado pelo teclado.
+
+  A versão final do script foi para a main em `a838bd2f`. O workflow temporário não: ele fica no ramo, apagado com bundle de backup.
