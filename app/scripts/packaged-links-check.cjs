@@ -324,15 +324,31 @@ async function escolherAbrirNoNavegador(page, timeoutMs) {
 }
 
 /**
- * Clica no link da nota pelo nome (o id do caso). O `href` renderizado é a
- * forma que a política serializa, não o texto escrito no Markdown.
+ * Centraliza a nota e a deixa no modo renderizado. Numa janela pequena, o
+ * React Flow tira da tela a nota que ficou fora da vista e, ao remontá-la,
+ * ela volta ao modo de edição, sem os links.
  */
-async function abrirLinkDaNota(page, nome, timeoutMs) {
+async function mostrarNotaRenderizada(page, timeoutMs) {
   await fecharGavetaDoTerminal(page)
   await focar(page, 'Links do app empacotado')
   const nota = page.locator(`.react-flow__node[data-id="${NOTE_ID}"]`)
   const visualizar = nota.getByRole('button', { name: 'Visualizar nota' })
-  if (await visualizar.isVisible().catch(() => false)) await visualizar.click()
+  const renderizada = nota.locator('a, [data-refused-link]').first()
+  const visivel = (locator) => locator.isVisible().catch(() => false)
+  // O nó pode estar montando: espera ou o botão de visualizar (modo de
+  // edição) ou o conteúdo já renderizado, antes de decidir.
+  await esperarAte('a nota montar', async () => (await visivel(visualizar)) || (await visivel(renderizada)), timeoutMs)
+  if (await visivel(visualizar)) await visualizar.click()
+  await renderizada.waitFor({ state: 'visible', timeout: timeoutMs })
+  return nota
+}
+
+/**
+ * Clica no link da nota pelo nome (o id do caso). O `href` renderizado é a
+ * forma que a política serializa, não o texto escrito no Markdown.
+ */
+async function abrirLinkDaNota(page, nome, timeoutMs) {
+  const nota = await mostrarNotaRenderizada(page, timeoutMs)
   const link = nota.getByRole('link', { name: nome, exact: true })
   await link.waitFor({ state: 'visible', timeout: timeoutMs })
   await link.click()
@@ -373,7 +389,7 @@ async function posicaoNoTerminal(page, texto, timeoutMs) {
       }
       const range = document.createRange()
       range.setStart(...locate(at))
-      range.setEnd(...locate(at + Math.min(procurado.length, 30) - 1))
+      range.setEnd(...locate(at + procurado.length - 1))
       const rect = range.getBoundingClientRect()
       return { x: rect.left + Math.min(rect.width / 2, 40), y: rect.top + rect.height / 2 }
     }
@@ -397,9 +413,14 @@ async function digitar(page, xterm, linha) {
   await page.keyboard.press('Enter')
 }
 
+/**
+ * Digita o texto e dá Ctrl/Cmd+clique no link dele. Espera o texto INTEIRO
+ * (único do caso) aparecer: o prefixo curto usado para achar a posição é o
+ * mesmo em todos os casos, e já estaria na tela pela linha anterior.
+ */
 async function abrirLinkDoTerminal(page, xterm, textoNaTela, inicioDoLink, timeoutMs) {
   await digitar(page, xterm, textoNaTela)
-  await esperarAte('o link aparecer no terminal', () => terminalContem(page, inicioDoLink), timeoutMs)
+  await esperarAte('o link aparecer no terminal', () => terminalContem(page, textoNaTela.split('#')[0]), timeoutMs)
   const ponto = await posicaoNoTerminal(page, inicioDoLink, timeoutMs)
   // O mouse sai de cima do terminal antes: o detector de links do xterm só
   // procura link quando o ponteiro muda de célula.
@@ -445,10 +466,15 @@ async function main(argv = process.argv.slice(2)) {
   const servidor = await subirServidor(prefixo)
   let sessaoAberta = false
   let browser = null
+  let page = null
   const env = {
     ...process.env,
     FELIXO_DEVTOOLS_MOCK_PTY: '0',
     FELIXO_DEVTOOLS_FAKE_CLI_PTY: '1',
+    // Perfil novo de app empacotado instala as CLIs de IA e procura
+    // atualização: nada disso é do teste, e rede e CPU a mais só atrapalham.
+    FELIXO_AUTO_INSTALL_CLIS: '0',
+    FELIXO_DISABLE_AUTO_UPDATE: '1',
   }
   delete env.FELIXO_DEVTOOLS_SHELL_OPEN
   let xdgFalso = null
@@ -470,7 +496,7 @@ async function main(argv = process.argv.slice(2)) {
     sessaoAberta = true
     const conexao = await connect(readState())
     browser = conexao.browser
-    const page = conexao.page
+    page = conexao.page
     await page.waitForFunction(() => document.querySelector('[data-felixo-hydrated="true"]') !== null, null, { timeout: 60_000 })
     report.versaoDoApp = await page.evaluate(() => window.felixo?.getVersion?.() ?? null)
 
@@ -495,7 +521,10 @@ async function main(argv = process.argv.slice(2)) {
       } else if (caso.origem === 'terminal') {
         xterm = xterm ?? (await abrirTerminal(page, options.timeoutMs))
         const texto = caso.texto ? caso.texto(url) : url
-        await abrirLinkDoTerminal(page, xterm, texto, url.split('#')[0].slice(0, 60), options.timeoutMs)
+        // Um prefixo curto cabe numa linha mesmo numa gaveta estreita (a URL
+        // inteira quebra, e a busca é por linha). A última ocorrência é a
+        // recém-impressa; o detector de links junta as linhas quebradas.
+        await abrirLinkDoTerminal(page, xterm, texto, url.slice(0, 24), options.timeoutMs)
       } else {
         await fecharGavetaDoTerminal(page)
         await focar(page, 'Página dos links')
@@ -523,7 +552,16 @@ async function main(argv = process.argv.slice(2)) {
       }
 
       const doNavegadorDesde = () => servidor.pedidos.slice(antes).filter((pedido) => !pedidoDoApp(pedido))
-      await esperarAte(`o navegador pedir ${caso.id}`, () => doNavegadorDesde().length > 0, options.timeoutMs, 100)
+      try {
+        await esperarAte(`o navegador pedir ${caso.id}`, () => doNavegadorDesde().length > 0, options.timeoutMs, 100)
+      } catch (error) {
+        // Sem pedido: o app avisou que não abriu, ou o sistema aceitou e o
+        // navegador não pediu nada? O relatório diz qual dos dois.
+        registro.avisoNaTela = ((await page.locator('[data-felixo-link-open-failure]').textContent().catch(() => null)) ?? '').slice(0, 300) || null
+        report.casos.push(registro)
+        await capturar(page, `sem-pedido-${caso.id}`)
+        throw error
+      }
       // Do clique à chegada do pedido no servidor (o instante é o do servidor).
       registro.latenciaMs = doNavegadorDesde()[0].em - inicio
       await pausa(JANELA_DE_REPETICAO_MS)
@@ -536,10 +574,13 @@ async function main(argv = process.argv.slice(2)) {
       // Os recusados: o menu diz o motivo e só oferece copiar; nada chega ao servidor.
       for (const caso of RECUSADOS) {
         const antes = servidor.pedidos.length
-        // O recusado não é `<a>`: o botão ao lado dele pede o menu.
-        await fecharGavetaDoTerminal(page)
-        await focar(page, 'Links do app empacotado')
-        await page.locator(`.react-flow__node[data-id="${NOTE_ID}"] [data-refused-link] + button[aria-label="Por que este link não abre"]`).first().click()
+        // O recusado não é `<a>`: o botão ao lado dele pede o menu. Pelo
+        // teclado: numa janela pequena, o botão pode ficar embaixo da barra
+        // lateral.
+        const nota = await mostrarNotaRenderizada(page, options.timeoutMs)
+        const porQue = nota.locator('[data-refused-link] + button[aria-label="Por que este link não abre"]').first()
+        await porQue.evaluate((botao) => botao.focus({ preventScroll: true }))
+        await page.keyboard.press('Enter')
         const menu = page.locator('[data-felixo-link-chooser]')
         await menu.waitFor({ state: 'visible', timeout: options.timeoutMs })
         const escolhas = await menu.locator('[data-link-choice]').evaluateAll((items) => items.map((item) => item.getAttribute('data-link-choice')))
@@ -581,6 +622,7 @@ async function main(argv = process.argv.slice(2)) {
   } catch (error) {
     report.result = 'failed'
     report.erro = sanitizeDiagnostic(error)
+    if (page) await capturar(page, 'erro')
   } finally {
     await browser?.close().catch(() => {})
     if (sessaoAberta) {
