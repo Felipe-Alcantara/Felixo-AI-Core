@@ -7141,3 +7141,20 @@ As sessões A, B e C passaram em Linux e macOS. A sessão D reprovou em dois pon
 - **macOS.** Não tem tecla de menu, e o Chromium de lá não abre menu de contexto pelo teclado; o passo vale só no Windows e no Linux.
 
 O Validate do Windows reprovou na montagem da sessão A ("APP NÃO MONTOU"), a intermitência conhecida desse runner. O benchmark do Windows apontou +129% no delta de heap do streaming do xterm (14,2 MB → 32,5 MB), só nesse sistema, sem mudança no caminho do streaming (o código de link só roda em evento de mouse). A sessão D passou de novo aqui sob `xvfb-run` sem tamanho, como no CI.
+
+### O que o segundo CI do PR #98 achou (run 36592920213)
+
+A sessão D passou no ARM e no macOS. Nos outros sistemas, os três problemas eram do teste, não do app:
+
+- **Windows, L2, a primeira vez que a sessão D rodou lá.** A janela do runner tem 1008×655. A nota, centralizada pela lista Elementos, é mais larga que a faixa livre do canvas e fica em parte embaixo da barra lateral. O "clique fora" do L1, tirado da borda esquerda da nota, caía no botão "Novo bloco" e abria o popover dele. No L2, o clique no resumo do menu de link contou como clique fora desse popover, que fecha e devolve o foco ao próprio botão no quadro seguinte: o foco saiu do menu, e o menu fechou. Reproduzido aqui com Xvfb em 1024×720 (janela 1023×697). O ponto do clique agora é conferido com `elementFromPoint`: o alvo tem de ser o próprio `.react-flow__pane`.
+- **Ubuntu, L8.** Depois do streaming, o terminal está cheio. O texto aparece no eco da digitação, antes do Enter, e o prompt seguinte rola a tela uma linha. O ponto lido cedo caía na linha do prompt, e a dica do link não vinha. `esperarNoTerminal` espera duas leituras iguais, com 200 ms entre elas, e a pausa manual do L9 saiu.
+- **Ubuntu, benchmark.** O falso positivo conhecido do cenário `renderer-xterm count=1`, desta vez no ubuntu: de 17,5 MB para 39,2 MB (+123,9%). Os outros três sistemas passaram. Já há task aberta para esse cenário, com as duas ocorrências deste PR anotadas.
+
+Mais dois achados:
+
+- **Uma rodada local travou no fim, depois do "L0–L12 ok".** O `server.close()` da página local esperava as conexões que o webview ainda segurava, e o app só fecha depois da sessão. O `close` agora vem com `closeAllConnections()`.
+- **O L4 copia o link recusado** e confere o texto cru na área de transferência (antes só fechava com Esc).
+
+O comportamento do popover é anterior a esta task e está em cinco popovers da barra: Organizar, Novo bloco e Grupo, Página Web, Agente e Gerar imagem. Num clique fora, eles devolvem o foco ao botão mesmo quando a pessoa clicou num controle focável, como um terminal ou o menu de link. Ficou numa task própria.
+
+Validação local depois dos consertos: a sessão D passou do L0 ao L12 nas duas janelas, 1280×738 (Xvfb sem tamanho, como no CI do Linux) em 140 s e 1023×697 em 135 s. O ESLint do script saiu com 0.
