@@ -79,7 +79,17 @@ async function subirPaginaLocal() {
   })
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
   const { port } = server.address()
-  return { url: `http://127.0.0.1:${port}/`, fechar: () => new Promise((resolve) => server.close(resolve)) }
+  return {
+    url: `http://127.0.0.1:${port}/`,
+    fechar: () =>
+      new Promise((resolve) => {
+        server.close(resolve)
+        // O webview do app ainda segura conexões com a página (keep-alive,
+        // pré-conexão do Chromium). Sem derrubá-las, o `close` espera o app
+        // fechar, e o app só fecha depois disto: a sessão travava no fim.
+        server.closeAllConnections()
+      }),
+  }
 }
 
 /**
