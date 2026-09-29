@@ -203,6 +203,11 @@ export function DictationSettingsSection() {
         <button
           type="button"
           onClick={() => setCapturing((value) => !value)}
+          // A gravação escuta o teclado da janela inteira, em captura: sem isto,
+          // ela continuava ligada depois de a pessoa clicar em outro lugar e
+          // engolia as teclas de quem recebeu o foco (o menu de um link do
+          // System Design, no mesmo painel, perdia setas, Enter e Esc).
+          onBlur={() => setCapturing(false)}
           className="felixo-btn felixo-secondary-action rounded-sm px-2 py-1 text-[11px]"
           aria-pressed={capturing}
         >
