@@ -44,7 +44,7 @@ import { CliSetupIndicator } from '../../setup/CliSetupNotice'
 import { useAppVersion } from '../../updates/useAppVersion'
 import type { UpdatePresentation } from '../../updates/update-presentation'
 import { deveMostrarRodapeDeStatus } from './toolbar-status'
-import { normalizeUrlInput } from '../services/url-utils'
+import { explainUrlInput } from '../services/url-utils'
 import { useWebviewProfiles } from '../hooks/useWebviewProfiles'
 import { FelixoSelect } from '../../shared/components/FelixoSelect'
 import type { ArrangeMode } from '../services/canvas-matrix-layout'
@@ -865,7 +865,7 @@ type UrlCreateButtonProps = {
 /**
  * Like NamedCreateButton, but for a block that needs a URL rather than just a
  * name — the "Página Web" mini-browser block. The URL is required (blocked
- * client-side via normalizeUrlInput); the name stays optional.
+ * client-side via explainUrlInput, which says why); the name stays optional.
  */
 function UrlCreateButton({ icon, buttonLabel, onCreate }: UrlCreateButtonProps) {
   const [open, setOpen] = useState(false)
@@ -911,13 +911,17 @@ function UrlCreateButton({ icon, buttonLabel, onCreate }: UrlCreateButtonProps) 
   }, [open])
 
   const create = () => {
-    const normalized = normalizeUrlInput(url)
-    if (!normalized) {
-      setUrlError('Informe um endereço de site válido.')
+    const result = explainUrlInput(url)
+    if (!result.ok) {
+      // O mesmo motivo que o menu de link e a barra do bloco dão, em vez de
+      // um "endereço inválido" que não diz o que corrigir.
+      setUrlError(
+        url.trim() ? `Endereço não aceito: ${result.reason}.` : 'Informe o endereço do site.',
+      )
       window.requestAnimationFrame(() => urlInputRef.current?.focus())
       return
     }
-    onCreate(normalized, name.trim() || undefined, profileId || undefined)
+    onCreate(result.url, name.trim() || undefined, profileId || undefined)
     setUrl('')
     setName('')
     setUrlError(undefined)

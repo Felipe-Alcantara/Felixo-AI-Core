@@ -6,8 +6,8 @@ const os = require('node:os')
 const path = require('node:path')
 
 const { executar, interpretarArgumentos, VERBOS } = require('./felixo.cjs')
-const { criarRepositorioDePedidos } = require('../services/fetch-all/agent-requests.cjs')
-const { AVISO_ESCRITA } = require('./agent-command-output.cjs')
+const { VALIDADE_MS, criarRepositorioDePedidos } = require('../services/fetch-all/agent-requests.cjs')
+const { AJUDA, AVISO_ESCRITA } = require('./agent-command-output.cjs')
 
 const PLANO = {
   total: 2,
@@ -585,6 +585,52 @@ test('--profile sem valor, ou perfil sem --embedded, é erro de uso e não regis
   assert.equal(externo.codigo, 2)
   assert.match(externo.erro, /--embedded/)
   assert.deepEqual(criarRepositorioDePedidos({ pasta }).listarPendentes(), [])
+})
+
+test('browser status diz quem recusou: a pessoa, ou o app com o motivo', async () => {
+  const { pasta, deps } = dependencias()
+  const repositorio = criarRepositorioDePedidos({ pasta })
+  const recusar = (resultado) => {
+    const pedido = repositorio.registrar('abrir-pagina', { url: 'https://example.com' })
+    repositorio.resolver(pedido.id, { aceito: false, resultado: { ok: false, ...resultado } })
+    return pedido.id
+  }
+  const status = async (id) => (await executar(['browser', 'status', id], deps)).saida
+
+  const pessoa = await status(recusar({ recusadoPor: 'pessoa', message: 'A pessoa recusou abrir a pagina.' }))
+  assert.match(pessoa, /estado: recusado \(recusado pela pessoa\)/)
+
+  const app = await status(recusar({ recusadoPor: 'app', message: 'A URL do pedido nao e http:// ou https://.' }))
+  assert.match(app, /estado: recusado \(recusado pelo app: A URL do pedido nao e http:\/\/ ou https:\/\/\.\)/)
+  assert.doesNotMatch(app, /pela pessoa/)
+
+  const expirou = await status(recusar({ recusadoPor: 'app', expirou: true, message: 'O pedido expirou sem resposta da pessoa.' }))
+  assert.match(expirou, /estado: recusado \(expirou: ninguém respondeu em 1 h\)/)
+
+  // Recusa gravada antes de `recusadoPor` existir: o texto de sempre, com o motivo.
+  const antiga = await status(recusar({ message: 'navegador indisponível' }))
+  assert.match(antiga, /estado: recusado \(não abriu\)/)
+  assert.match(antiga, /motivo: navegador indisponível/)
+})
+
+test('browser status de um pendente vencido diz que expirou, mesmo com o app fechado', async () => {
+  const { pasta, deps } = dependencias()
+  const agora = Date.parse('2026-09-29T12:00:00.000Z')
+  const pedido = criarRepositorioDePedidos({ pasta, agora: () => agora - VALIDADE_MS })
+    .registrar('abrir-pagina', { url: 'https://example.com' })
+
+  const vencido = await executar(['browser', 'status', pedido.id], { ...deps, agora: () => agora })
+  assert.match(vencido.saida, /estado: pendente \(expirou: ninguém respondeu em 1 h; o app não mostra mais/)
+
+  const aindaVale = await executar(['browser', 'status', pedido.id], { ...deps, agora: () => agora - 1000 })
+  assert.match(aindaVale.saida, /estado: pendente \(esperando a pessoa escolher/)
+})
+
+test('a ajuda do browser diz que só a recusa da pessoa é resposta dela e quando o pedido expira', () => {
+  assert.match(AJUDA, /Só "recusado\s+pela pessoa"/)
+  assert.match(AJUDA, /não\s+repita o pedido sem ela pedir/)
+  assert.match(AJUDA, /"recusado pelo app" \(recusadoPor "app"\)\s+traz o motivo/)
+  assert.match(AJUDA, /expira em 1 h sem resposta/)
 })
 
 test('flags booleanas de sempre continuam booleanas (--json, --cache)', () => {

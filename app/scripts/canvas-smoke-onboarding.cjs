@@ -658,15 +658,23 @@ function criarCenariosDoTutorial(deps) {
    */
   async function esperarIpcQuieto(cenario) {
     const amostraMs = 1_500
+    // O que a última amostra ainda viu, para a falha dizer quem não parou
+    // (no Windows da CI, o SA1 reprova de tempos em tempos sem isso).
+    let ultimaAmostra = {}
     const quieto = await esperarAte(
       async () => {
         const antes = await snapshotIpc()
         await page.evaluate((ms) => new Promise((resolve) => setTimeout(resolve, ms)), amostraMs)
-        return forbiddenChannels(diffChannels(antes, await snapshotIpc())).length === 0
+        const delta = diffChannels(antes, await snapshotIpc())
+        ultimaAmostra = Object.fromEntries(forbiddenChannels(delta).map((canal) => [canal, delta[canal]]))
+        return Object.keys(ultimaAmostra).length === 0
       },
       { timeoutMs: Math.max(timeout, 30_000), intervalMs: 0 },
     )
-    exigir(quieto, cenario, 'o app não parou de gravar sozinho antes do percurso')
+    exigir(quieto, cenario, 'o app não parou de gravar sozinho antes do percurso', {
+      canaisNaUltimaAmostra: ultimaAmostra,
+      amostraMs,
+    })
   }
 
   async function abrirSondas(cenario) {

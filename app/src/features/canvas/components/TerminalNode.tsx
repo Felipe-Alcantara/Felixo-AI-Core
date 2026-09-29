@@ -54,7 +54,6 @@ type TerminalNodeDataWithHandlers = TerminalNodeData & {
   onDataChange?: (nodeId: string, patch: Partial<TerminalNodeData>) => void
   /** Tells the running agent its new name once a rename is committed (blur/Enter). */
   onRenameCommit?: (nodeId: string, label: string) => void
-  onOpenWebpage?: (nodeId: string, url: string) => void
 }
 
 /**
@@ -72,7 +71,6 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
   const { deleteElements } = useReactFlow()
   const onSessionStarted = nodeData.onSessionStarted
   const onAgentSession = nodeData.onAgentSession
-  const onOpenWebpage = nodeData.onOpenWebpage
   const onDataChange = nodeData.onDataChange
   const persistedInsertion = nodeData.lastPromptInsertion
 
@@ -102,7 +100,6 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
       terminalCount: nodeData.terminalCount,
       performanceMode,
       onAgentSession: (reference) => onAgentSession?.(id, reference),
-      onOpenWebpage: (url: string) => onOpenWebpage?.(id, url),
     })
   }, [
     store,
@@ -125,7 +122,6 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
     nodeData.terminalCount,
     performanceMode,
     onAgentSession,
-    onOpenWebpage,
     nodeData.sessionStartedAt,
   ])
 
@@ -220,7 +216,6 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
       terminalCount: nodeData.terminalCount,
       performanceMode,
       onAgentSession: (reference) => nodeData.onAgentSession?.(id, reference),
-      onOpenWebpage: (url: string) => onOpenWebpage?.(id, url),
     })
     nodeData.onSessionStarted?.(id, Date.now())
   }

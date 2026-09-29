@@ -28,7 +28,7 @@ const BUILTIN_SKILLS = [
     slug: 'abrir-paginas-no-navegador',
     name: 'Abrir páginas no navegador pelo app',
     description:
-      'Pedir ao Felixo AI Core para abrir uma URL http(s) no navegador externo ou como um bloco Webpage persistido no canvas, usando `felixo browser` e a fila compartilhada com o Fetch All.',
+      'Pedir ao Felixo AI Core para abrir uma URL http(s) com `felixo browser`, pela fila compartilhada com o Fetch All. Nada abre sozinho: a pessoa confirma no app e escolhe o navegador externo ou um bloco Página Web no canvas.',
   },
   {
     slug: 'ler-elementos-do-canvas',

@@ -45,7 +45,6 @@ export type SessionOptions = {
   /** Ticket de uso único da cadeia; só no primeiro spawn do bloco. */
   chainTicket?: string
   startedAt?: number
-  onOpenWebpage?: (url: string) => void
   agentSession?: AgentSessionReference
   resumeAgentSession?: boolean
   onAgentSession?: (reference: AgentSessionReference) => void

@@ -1,3 +1,5 @@
+import { FLOATING_LAYER_SELECTOR } from '../../shared/focus/floating-layer'
+
 const PIN_STORAGE_KEY = 'felixo:terminal-drawer-pinned'
 
 export function readPinnedPreference(storage: Pick<Storage, 'getItem'>): boolean {
@@ -87,9 +89,13 @@ export function writeWidthPreference(
   storage.setItem(WIDTH_STORAGE_KEY, String(Math.round(width)))
 }
 
+
 /**
  * Decides whether a pointerdown outside the drawer should close it.
- * Pinned drawers never close from an outside click.
+ * Pinned drawers never close from an outside click, and a click inside a
+ * floating layer (the link menu, the agent request card — see
+ * `shared/focus/floating-layer.ts`) is not "outside": it is still work on
+ * the terminal.
  */
 export function shouldCloseOnOutsideClick(
   pinned: boolean,
@@ -99,8 +105,19 @@ export function shouldCloseOnOutsideClick(
   if (pinned) {
     return false
   }
+  if (isInsideFloatingLayer(target)) {
+    return false
+  }
   if (!container) {
     return true
   }
   return !container.contains(target)
+}
+
+function isInsideFloatingLayer(target: Node | null): boolean {
+  // O alvo pode ser um nó de texto, que não tem `closest`.
+  const element = (target as Partial<Element> | null)?.closest
+    ? (target as Element)
+    : (target?.parentElement ?? null)
+  return typeof element?.closest === 'function' && element.closest(FLOATING_LAYER_SELECTOR) !== null
 }

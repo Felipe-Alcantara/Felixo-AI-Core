@@ -21,6 +21,12 @@
  *   cursor no meio, como o TUI redesenha. A linha precisa ser só o gatilho:
  *   o contexto de passagem colado num bloco novo pode repetir o texto do bloco
  *   antigo, e isso não pode disparar outra falha;
+ * - os gatilhos do smoke de links imprimem hyperlinks OSC 8 (um texto na tela,
+ *   outro destino, e um `file:` que o app recusa) ou uma saída em streaming,
+ *   linha a linha, para o menu de link ser testado com a tela rolando;
+ * - outros dois ligam e desligam o mouse tracking, como a Claude Code e o
+ *   Codex fazem, para o menu de link ser testado com o gesto retido pelo
+ *   renderer;
  * - toda saída é assíncrona e em ordem, como no `node-pty` (nunca dentro do
  *   `write` de quem chamou);
  * - `kill` encerra com um único `onExit`, e nada é escrito depois dele.
@@ -60,6 +66,44 @@ const SMOKE_TRIGGER_PHRASES = Object.freeze({
   __felixo_smoke_limite__: 'codex.limit.purchase-credits',
   __felixo_smoke_rede__: 'codex.network.stream-disconnected',
   __felixo_smoke_401__: 'codex.auth.access-token-not-refreshed',
+})
+
+const OSC = '\u001b]'
+const STRING_TERMINATOR = '\u001b\\'
+
+/** Hyperlink OSC 8: `text` na tela, `url` como destino. */
+function osc8(url, text) {
+  return `${OSC}8;;${url}${STRING_TERMINATOR}${text}${OSC}8;;${STRING_TERMINATOR}`
+}
+
+/**
+ * Gatilhos do smoke de links (sessão D). O primeiro link diz um host na tela e
+ * leva a outro, o caso em que só o menu mostra o destino de verdade. O
+ * segundo é um arquivo local, que o app mostra, explica e não abre.
+ */
+const SMOKE_LINK_OUTPUTS = Object.freeze({
+  __felixo_smoke_osc8__:
+    `Destino disfarçado: ${osc8('https://example.com/destino-real', 'banco.example')}\r\n` +
+    `Arquivo local: ${osc8('file:///etc/hosts', 'hosts do sistema')}\r\n`,
+})
+/** Imprime linhas de saída por alguns segundos: a tela rola sob o menu aberto. */
+const SMOKE_STREAM_TRIGGER = '__felixo_smoke_stream__'
+const SMOKE_STREAM_LINES = 60
+const SMOKE_STREAM_LINE_DELAY_MS = 50
+
+/**
+ * Liga e desliga o mouse tracking, como a Claude Code e o Codex fazem ao
+ * desenhar a tela cheia: `?1000` pede o relato de cada clique ao processo e
+ * `?1006` pede as coordenadas em SGR (`CSI < … M`), que a leitura de escapes
+ * do prompt descarta em vez de ecoar como texto. Com o modo ligado, o
+ * renderer retém o `mousedown` e devolve o gesto como sintético
+ * (`terminal-mouse-selection.ts`): é o caminho em que o smoke prova, no app
+ * real, que um toque no link ainda abre o menu de destino. O `off` devolve o
+ * terminal ao estado de shell, para os passos seguintes não herdarem o modo.
+ */
+const SMOKE_MOUSE_TRACKING_OUTPUTS = Object.freeze({
+  __felixo_smoke_mouse_on__: `${CSI}?1000h${CSI}?1006h`,
+  __felixo_smoke_mouse_off__: `${CSI}?1000l${CSI}?1006l`,
 })
 
 /** Saída real de `codex login status` com login pela conta do ChatGPT. */
@@ -202,9 +246,18 @@ function createFakeCliPty({ options = {}, pid, chunkDelayMs, setTimer, clearTime
     const submitted = line
     line = ''
     output.push('\r\n')
-    const scripted = SMOKE_TRIGGER_OUTPUTS[submitted.trim()]
+    const trigger = submitted.trim()
+    const scripted = SMOKE_TRIGGER_OUTPUTS[trigger]
     if (scripted) {
       splitIntoTerminalChunks(scripted).forEach((chunk) => output.push(chunk, chunkDelayMs))
+    } else if (SMOKE_LINK_OUTPUTS[trigger]) {
+      output.push(SMOKE_LINK_OUTPUTS[trigger], chunkDelayMs)
+    } else if (SMOKE_MOUSE_TRACKING_OUTPUTS[trigger]) {
+      output.push(SMOKE_MOUSE_TRACKING_OUTPUTS[trigger], chunkDelayMs)
+    } else if (trigger === SMOKE_STREAM_TRIGGER) {
+      for (let index = 1; index <= SMOKE_STREAM_LINES; index += 1) {
+        output.push(`linha ${index} de ${SMOKE_STREAM_LINES} da saída em streaming\r\n`, SMOKE_STREAM_LINE_DELAY_MS)
+      }
     }
     output.push(PROMPT)
   }
@@ -359,6 +412,10 @@ module.exports = {
   DEFAULT_CHUNK_DELAY_MS,
   FAKE_CODEX_LOGIN_STATUS_OUTPUT,
   PROMPT,
+  SMOKE_LINK_OUTPUTS,
+  SMOKE_MOUSE_TRACKING_OUTPUTS,
+  SMOKE_STREAM_LINES,
+  SMOKE_STREAM_TRIGGER,
   SMOKE_TRIGGER_OUTPUTS,
   SMOKE_TRIGGER_PHRASES,
   createFakeAuthCommandRunner,

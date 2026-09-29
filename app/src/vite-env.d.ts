@@ -25,6 +25,7 @@ import type {
   TerminalOutputEvent,
 } from './features/chat/types'
 import type {
+  CanvasAgentBrowserRequest,
   CanvasAgentQuestion,
   CanvasImageArtifact,
   CanvasNodeData,
@@ -366,6 +367,10 @@ declare global {
       }
       windowFocus?: {
         onChange: (callback: (focused: boolean) => void) => () => void
+      }
+      /** Zoom da janela do app (Ctrl+=/−/0): 1 sem zoom. Converte DIP da janela em pixels CSS. */
+      windowZoom?: {
+        getFactor: () => number
       }
       getFilePath?: (file: File) => string
       /** Versão empacotada do app (a do CI, não a do package.json versionado). */
@@ -764,6 +769,23 @@ declare global {
         }) => Promise<CliInvokeResult>
         onAgentBrowserOpen: (
           callback: (data: { requestId: string; url: string; profileId?: string }) => void,
+        ) => () => void
+        listBrowserRequests: () => Promise<
+          CliInvokeResult & { requests?: CanvasAgentBrowserRequest[] }
+        >
+        /**
+         * `destino: null` recusa. `url` e `perfil` são o que o cartão mostrou:
+         * o main só executa se o pedido gravado ainda for esse. A URL aberta é
+         * a do pedido gravado, nunca uma daqui.
+         */
+        decideBrowserRequest: (params: {
+          id: string
+          destino: 'externo' | 'embutido' | null
+          url: string
+          perfil?: string
+        }) => Promise<CliInvokeResult & { resolved?: { estado: string } | null }>
+        onBrowserRequests: (
+          callback: (data: { requests: CanvasAgentBrowserRequest[] }) => void,
         ) => () => void
         listWriteRequests: () => Promise<
           CliInvokeResult & { requests?: CanvasWriteAgentRequest[] }

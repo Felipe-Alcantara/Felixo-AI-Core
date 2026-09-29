@@ -67,7 +67,8 @@ describe('MarkdownContent', () => {
     expect(html).toContain('href="https://example.com/docs"')
     expect(html).toContain('href="#secao"')
     expect(html).toContain('href="mailto:time@example.com"')
-    expect(html).toContain('target="_blank"')
+    // Nenhum link abre janela sozinho: o clique pergunta para onde (menu de link).
+    expect(html).not.toContain('target="_blank"')
     expect(html).not.toMatch(/href="(?:javascript|file|gopher|data):/i)
   })
 
@@ -87,11 +88,15 @@ describe('MarkdownContent', () => {
     for (const text of ['outro guia', 'subindo', 'HTML relativo']) {
       expect(html).toContain(`<span>${text}</span>`)
     }
-    // O link recusado continua texto, mas o destino fica na dica e só pode ser
-    // copiado (aceite "URL bloqueada continua copiável"); os relativos sem
-    // resolvedor não são recusa e não ganham botão.
-    expect(html).toContain('<span title="Link recusado por segurança: javascript:alert(1)">javascript</span>')
-    expect(html.match(/aria-label="Copiar endereço recusado"/g)).toHaveLength(1)
+    // O link recusado não vira âncora, mas o destino e o motivo ficam na dica
+    // do rótulo, e o botão ao lado pede o menu, que só oferece copiar (aceite
+    // "URL bloqueada continua copiável"); os relativos sem resolvedor não são
+    // recusa e não ganham botão.
+    expect(html).toMatch(
+      /<span [^>]*title="Link recusado: endereços javascript: não abrem pelo app, só http, https e mailto\njavascript:alert\(1\)" data-refused-link="true">javascript<\/span><button type="button" [^>]*aria-label="Por que este link não abre"[^>]*><svg\b/,
+    )
+    expect(html.match(/data-refused-link="true"/g)).toHaveLength(1)
+    expect(html.match(/aria-label="Por que este link não abre"/g)).toHaveLength(1)
   })
 
   it('âncora fica no próprio conteúdo: sem janela nova e com o título marcado como destino', () => {
@@ -122,7 +127,7 @@ describe('MarkdownContent', () => {
     expect(resolveRelativeLink).toHaveBeenCalledWith('SUMIU.md')
     expect(html).toMatch(/<button type="button"[^>]*title="Abrir OUTRO.md"[^>]*>outro<\/button>/)
     expect(html).toContain('<span>sumido</span>')
-    expect(html).toMatch(/<a [^>]*href="https:\/\/example.com\/"[^>]*target="_blank"[^>]*>site<\/a>/)
+    expect(html).toMatch(/<a [^>]*href="https:\/\/example.com\/"[^>]*>site<\/a>/)
     expect(html).not.toContain('href=""')
     expect(open).not.toHaveBeenCalled()
   })

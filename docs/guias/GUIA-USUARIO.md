@@ -550,9 +550,46 @@ Por segurança, o app só abre arquivos que estejam dentro de um projeto registr
 - O histórico visual usa 20.000 linhas quando há até 9 terminais e 5.000 linhas quando o canvas já tem 10 ou mais. O limite é escolhido ao criar a sessão; terminais que já estavam abertos não são redimensionados nem perdem linhas quando outro terminal é adicionado.
 - Se o histórico visual ultrapassar o limite, o cartão e a gaveta avisam. Fechar e reabrir o terminal reaplica o replay vivo mantido pelo processo principal, de até 200.000 caracteres; **Copiar** e **Handoff** usam o trecho que ainda está no buffer visual.
 
-### Links no terminal
+### Links: escolher onde abrir
 
-Um endereço `http://` ou `https://` na saída do terminal vira link. Ao passar o mouse, a dica mostra para onde ele leva de verdade: um link pode exibir um texto e apontar para outro endereço. Para abrir no navegador, segure `Ctrl` (ou `Cmd` no macOS) e clique. Um clique simples não abre nada. O clique direito sobre o link mostra **Abrir no canvas**, **Abrir no navegador** e **Copiar link**. Copiar nunca abre o endereço. Se o app recusar o link por segurança (por exemplo, por ter caracteres invisíveis), o menu mostra só **Copiar link**.
+Nenhum link abre direto. Ao abrir um link, aparece um menu curto com o destino escrito: primeiro o site (ou o e-mail) e, embaixo, o endereço inteiro. Um link pode exibir um texto e apontar para outro endereço, e o menu mostra para onde ele leva de verdade. Um endereço muito longo é cortado no meio, nunca no fim, porque é no fim que está o domínio de verdade. Depois, é só escolher:
+
+- **Abrir no navegador**: abre no navegador do sistema. Num link de e-mail, o botão vira **Abrir no app de e-mail**, e o menu mostra também quem vai em cópia (Cc) e em cópia oculta (Cco).
+- **Abrir como Página Web**: cria um bloco Página Web ao lado do bloco de onde o link veio e leva o foco até ele. Quando o link vem de um painel, o bloco nasce numa área livre da tela. Aberto a partir de outra Página Web, o bloco novo fica no mesmo perfil do navegador interno (com os mesmos logins). Na tela do chat não há canvas, então essa opção não aparece.
+- **Copiar link** (ou **Copiar endereço**, num e-mail): copia e não abre nada.
+
+O jeito de chamar o menu depende de onde o link está:
+
+- **Terminal**: `Ctrl`+clique (`Cmd`+clique no macOS), um toque na tela ou o clique direito sobre o link. No macOS, o `Ctrl`+clique é o clique direito do sistema e também abre o menu. Um clique simples continua sendo do terminal (foco, seleção de texto). Pelo teclado, a tecla de menu abre o menu do link sob o ponteiro. `Shift+F10` não serve no terminal, porque o `F10` é do programa que roda nele.
+- **Notas, arquivos `.md`, respostas do chat e painel do Notion**: clique no link, `Enter` com o link em foco, ou o clique direito. O clique do meio não abre nada.
+- **Dentro de uma Página Web**: clique direito sobre um link da página, inclusive de e-mail. O clique simples continua navegando dentro do bloco, e um link de script da própria página (`javascript:`) não abre o menu. Para levar a página atual ao navegador do sistema, use o botão **Abrir esta página no navegador**, ao lado da barra de endereço.
+
+O menu funciona pelo teclado: setas, `Home` e `End` escolhem, `Enter` confirma, e `Esc` ou `Tab` fecham e devolvem o foco para onde você estava. Segurar o `Enter` não escolhe nada: só um `Enter` novo confirma. O menu fecha sozinho se você rolar o canvas, mudar o tamanho da janela ou levar o foco para outro lugar.
+
+Se o app recusar um link, o menu diz por quê e oferece só **Copiar link**. O motivo pode ser, por exemplo:
+
+- um tipo de endereço que o app não abre (como `file:`);
+- caracteres invisíveis que disfarçam o destino (eles aparecem no menu com o código deles, como `⟨U+200B⟩`);
+- usuário e senha no endereço.
+
+No texto (notas, arquivos, chat), o link recusado vira texto comum, com o motivo na dica, e um botão pequeno ao lado (**Por que este link não abre**) abre o menu. Um link cujo endereço tem caracteres invisíveis vira só texto: mostrar esse endereço já seria cair no disfarce. No terminal, a dica sobre um link recusado também traz o motivo. A barra de endereço da Página Web faz o mesmo: um endereço recusado mostra o motivo em vez de simplesmente não abrir, e o texto fica na barra para você corrigir.
+
+Quando um agente pede para abrir uma página (`felixo browser open`), nada abre sozinho. Um cartão aparece no alto do canvas com três informações:
+
+- o endereço inteiro (se for longo, dá para rolar);
+- de onde veio o pedido;
+- o destino que o agente sugeriu.
+
+Você escolhe **Abrir no navegador**, **Abrir como Página Web** ou **Recusar**, e o agente consegue consultar a resposta. Alguns detalhes do cartão:
+
+- Os botões esperam meio segundo depois que um pedido novo aparece. Assim um duplo clique não decide o pedido seguinte sem você ler.
+- Com vários pedidos na fila, **Recusar todos** limpa a fila de uma vez.
+- Se o navegador não abrir, o cartão diz o motivo e o pedido continua esperando outra escolha.
+- O cartão não pega o foco nem responde a teclas, para um `Enter` digitado no terminal não confirmar nada sem querer. Responder nele também não fecha a gaveta do terminal.
+- Ele aparece no canvas. Com a tela do chat aberta, o pedido fica esperando até você voltar.
+- Um pedido sem resposta por uma hora expira e sai do cartão, e o agente vê que ele expirou.
+
+O cartão cobre o pedido feito pelo app. Um agente que roda comandos no terminal continua podendo abrir o navegador por conta própria, com os comandos do sistema, como qualquer programa que você roda.
 
 ### Colar imagens em um agente
 

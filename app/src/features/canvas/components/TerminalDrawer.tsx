@@ -483,7 +483,7 @@ export function TerminalDrawer({
           {!collapsed && (
             <span
               className="hidden text-[11px] text-zinc-600 sm:inline"
-              title="Use Ctrl+clique (Windows/Linux) ou Cmd+clique (macOS) para abrir links no navegador"
+              title="Ctrl+clique (Windows/Linux), Cmd+clique (macOS) ou clique direito sobre um link: escolher entre navegador, Página Web ou copiar"
             >
               links: Ctrl/Cmd+clique
             </span>

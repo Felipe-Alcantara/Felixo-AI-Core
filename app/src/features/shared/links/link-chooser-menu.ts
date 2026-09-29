@@ -1,0 +1,219 @@
+/**
+ * Mecânica do menu de link sem DOM: onde ele aparece e o que cada tecla faz.
+ * Separado do componente para ser testado no ambiente sem navegador da suíte.
+ */
+import type { LinkChooserAnchor } from './link-chooser-store'
+
+export type Size = { width: number; height: number }
+
+/** Folga entre o menu e a borda da janela, e entre o menu e o link. */
+const EDGE_MARGIN = 8
+const ANCHOR_GAP = 4
+
+/**
+ * Canto superior esquerdo do menu, sempre inteiro dentro da janela.
+ *
+ * Âncora de ponto (clique): o menu nasce no ponteiro e vira para a esquerda
+ * ou para cima quando não cabe. Âncora de retângulo (link escolhido pelo
+ * teclado): o menu nasce logo abaixo do link, alinhado à esquerda dele, e
+ * sobe para cima do link quando não cabe embaixo.
+ */
+export function placeLinkChooser(
+  anchor: LinkChooserAnchor,
+  menu: Size,
+  viewport: Size,
+): { left: number; top: number } {
+  const width = anchor.width ?? 0
+  const height = anchor.height ?? 0
+  const isRect = width > 0 || height > 0
+
+  let left = anchor.x
+  let top = isRect ? anchor.y + height + ANCHOR_GAP : anchor.y
+
+  if (left + menu.width > viewport.width - EDGE_MARGIN) {
+    left = isRect ? anchor.x + width - menu.width : anchor.x - menu.width
+  }
+  if (top + menu.height > viewport.height - EDGE_MARGIN) {
+    top = isRect ? anchor.y - menu.height - ANCHOR_GAP : anchor.y - menu.height
+  }
+
+  return {
+    left: clamp(left, EDGE_MARGIN, viewport.width - menu.width - EDGE_MARGIN),
+    top: clamp(top, EDGE_MARGIN, viewport.height - menu.height - EDGE_MARGIN),
+  }
+}
+
+function clamp(value: number, min: number, max: number): number {
+  // Janela menor que o menu: fica colado na margem de cima/esquerda, que é
+  // onde começa a leitura, em vez de sair pelos dois lados.
+  return Math.max(min, Math.min(value, Math.max(min, max)))
+}
+
+export type LinkChooserKeyAction =
+  | { type: 'move'; index: number }
+  | { type: 'close' }
+  /** A tecla não faz nada, nem o clique que o navegador faria no item. */
+  | { type: 'ignore' }
+
+/**
+ * O que uma tecla faz com o menu aberto. Setas circulam entre os itens, Home e
+ * End vão às pontas, Esc e Tab fecham (devolvendo o foco a quem abriu).
+ * Enter e Espaço não passam por aqui: o item é um `<button>`, e o próprio
+ * navegador transforma essas teclas em clique. A exceção é a repetição
+ * automática (`repeat`) de uma tecla segurada desde antes do menu abrir.
+ * `null` = a tecla segue o caminho normal.
+ */
+export function linkChooserKeyAction(
+  key: string,
+  activeIndex: number,
+  itemCount: number,
+  repeat = false,
+): LinkChooserKeyAction | null {
+  if (key === 'Escape' || key === 'Tab') return { type: 'close' }
+  // Enter segurado num link do Markdown: o primeiro toque abre o menu e leva o
+  // foco ao primeiro item, e a repetição da tecla o ativaria — o link abria no
+  // navegador sem ninguém escolher. Só um Enter (ou Espaço) novo confirma.
+  if (repeat && (key === 'Enter' || key === ' ')) return { type: 'ignore' }
+  if (itemCount <= 0) return null
+  if (key === 'ArrowDown') return { type: 'move', index: (activeIndex + 1) % itemCount }
+  if (key === 'ArrowUp') return { type: 'move', index: (activeIndex - 1 + itemCount) % itemCount }
+  if (key === 'Home') return { type: 'move', index: 0 }
+  if (key === 'End') return { type: 'move', index: itemCount - 1 }
+  return null
+}
+
+/** Como o menu fecha sem uma escolha, fora as teclas (Esc e Tab sempre devolvem o foco). */
+export type LinkChooserDismissCause =
+  | 'pointer-outside'
+  | 'wheel'
+  | 'resize'
+  | 'window-blur'
+  | 'focus-left'
+
+/**
+ * Fechar o menu sem escolha devolve o foco a quem o abriu?
+ *
+ * Só pela roda ou pelo redimensionamento, e só com o foco no menu: ele some
+ * com o foco dentro, e o foco cairia no `body` — o terminal para de receber
+ * teclas, e Backspace/Delete chegam ao canvas e apagam o bloco selecionado.
+ * Nos outros casos o foco já tem destino: o clique fora o leva aonde a pessoa
+ * clicou, o foco que saiu do menu já está no elemento novo, e a janela que
+ * perdeu o foco o levou de propósito (um clique dentro de uma Página Web vai
+ * para a página). Quando a janela volta, é o `useFocusRestore` que devolve o
+ * foco a quem o tinha antes do menu.
+ */
+export function restoresFocusOnDismiss(
+  cause: LinkChooserDismissCause,
+  focusWasInMenu: boolean,
+): boolean {
+  return focusWasInMenu && (cause === 'wheel' || cause === 'resize')
+}
+
+/**
+ * O foco saiu de um elemento do menu (`focusout`): o menu fecha?
+ *
+ * Fecha quando o foco foi para outro elemento, fora do menu — um diálogo que
+ * abriu depois e focou o próprio campo, por exemplo. Aberto, o menu ficaria
+ * desenhado por cima do diálogo (z-70 sobre z-60) e, ao escolher, devolveria
+ * o foco para trás do `aria-modal`. `next` nulo é a janela perdendo o foco
+ * (outro app, ou um clique dentro de uma Página Web), que o `blur` da janela
+ * já trata. Andar entre os itens ou clicar no resumo não tira o foco do menu.
+ */
+export function focusLeavesLinkChooser(
+  menu: { contains: (node: Node | null) => boolean } | null,
+  next: EventTarget | null,
+): boolean {
+  if (!next) return false
+  return !menu?.contains(next as Node)
+}
+
+/**
+ * Quadros de espera pelo bloco novo antes de desistir: ~400 ms a 60 Hz. A
+ * câmera leva 220 ms até o bloco, e o React Flow só põe no DOM o bloco que já
+ * entrou na tela. Num computador lento cada quadro demora mais, e a espera
+ * cresce junto.
+ */
+export const NODE_FOCUS_FRAMES = 24
+
+/**
+ * Tempo máximo de espera pela câmera. Ela anda 220 ms (`centerNodeInSafeArea`),
+ * mas interrompida (roda, arrasto) o d3 dispara `interrupt` e não `end`, e a
+ * promessa do `setCenter` nunca resolve: o prazo segura esse caso.
+ */
+export const CAMERA_SETTLE_TIMEOUT_MS = 450
+
+/**
+ * Resolve quando a câmera chega (a promessa do `setCenter`) ou quando o prazo
+ * acaba, o que vier primeiro. Nunca rejeita.
+ */
+export function afterCamera(
+  cameraSettled: Promise<unknown> | undefined,
+  setTimer: (callback: () => void, ms: number) => unknown = (callback, ms) => setTimeout(callback, ms),
+  timeoutMs: number = CAMERA_SETTLE_TIMEOUT_MS,
+): Promise<void> {
+  const deadline = new Promise<void>((resolve) => {
+    setTimer(resolve, timeoutMs)
+  })
+  if (!cameraSettled) return deadline
+  return Promise.race([cameraSettled.then(() => undefined, () => undefined), deadline])
+}
+
+export type FocusWhenReadyOptions = {
+  /** O elemento, se já está no DOM. */
+  find: () => { focus: () => void } | null
+  /** Ninguém pegou o foco durante a espera (ele está no `body`)? */
+  isFocusFree: () => boolean
+  /** Os quadros acabaram sem o elemento aparecer. */
+  giveUp: () => void
+  requestFrame: (callback: () => void) => void
+  frames?: number
+}
+
+/**
+ * Dá o foco a um elemento que ainda vai aparecer, tentando uma vez por quadro.
+ *
+ * Se o foco for para outro lugar no meio da espera (a pessoa clicou em algo,
+ * apertou Tab), para sem focar nem desistir: quem chegou por último fica com
+ * o foco. Com uma espera deste tamanho, focar o bloco mesmo assim roubaria as
+ * teclas de quem já estava digitando em outro lugar.
+ */
+export function focusWhenReady({
+  find,
+  isFocusFree,
+  giveUp,
+  requestFrame,
+  frames = NODE_FOCUS_FRAMES,
+}: FocusWhenReadyOptions): void {
+  let attempts = 0
+  const attempt = () => {
+    if (!isFocusFree()) return
+    const target = find()
+    if (target) {
+      target.focus()
+      return
+    }
+    attempts += 1
+    if (attempts < frames) requestFrame(attempt)
+    else giveUp()
+  }
+  requestFrame(attempt)
+}
+
+/** O pedido veio do teclado? Clique direito pela tecla de menu não tem posição de ponteiro. */
+export function isKeyboardContextMenu(event: { pointerType?: string }): boolean {
+  // O Chromium entrega o `contextmenu` como PointerEvent; o da tecla de menu
+  // (ou Shift+F10) chega sem tipo de ponteiro.
+  return event.pointerType === ''
+}
+
+/**
+ * O gesto veio de um dedo? Um toque não tem Ctrl nem Cmd, então no terminal
+ * ele vale como o gesto que pede o menu. O Chromium marca os eventos de mouse
+ * sintetizados a partir de toque em `sourceCapabilities.firesTouchEvents`.
+ */
+export function isTouchGesture(event: {
+  pointerType?: string
+  sourceCapabilities?: { firesTouchEvents?: boolean } | null
+}): boolean {
+  return event.pointerType === 'touch' || event.sourceCapabilities?.firesTouchEvents === true
+}

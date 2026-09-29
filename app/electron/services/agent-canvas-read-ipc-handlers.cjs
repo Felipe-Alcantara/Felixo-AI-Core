@@ -15,8 +15,9 @@ const LER_ACTION = 'canvas-ler'
  * Consome os pedidos de leitura do canvas pela mesma fila de intenções do
  * Fetch All/navegador (`agent-requests.cjs`) — mesmo canal, ação nova.
  *
- * Diferente de `executar-plano` (que espera um clique no painel) e igual a
- * `abrir-pagina`: leitura é resolvida sozinha, sem confirmação humana. O
+ * Diferente de `executar-plano` (que espera um clique no painel) e de
+ * `abrir-pagina` (que espera a pessoa escolher no cartão do canvas): leitura
+ * é resolvida sozinha, sem confirmação humana. O
  * ponto de atenção da task ("maior risco de segurança: prompt injection")
  * é sobre ESCREVER — uma fatia futura, ainda não implementada — não sobre
  * listar/ler, que não tem efeito nenhum no canvas ou fora dele.

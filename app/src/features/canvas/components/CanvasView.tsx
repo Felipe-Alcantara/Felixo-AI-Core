@@ -26,6 +26,7 @@ import { Bell } from 'lucide-react'
 import { TerminalNode } from './TerminalNode'
 import { NoteNode } from './NoteNode'
 import { AgentQuestionDialog } from './AgentQuestionDialog'
+import { AgentBrowserRequestCard } from './AgentBrowserRequestCard'
 import { DictationButton } from './DictationButton'
 import { useDictation } from '../hooks/useDictation'
 import { useDictationShortcut } from '../hooks/useDictationShortcut'
@@ -118,6 +119,8 @@ import {
   type QualityStandardSource,
 } from '../services/quality-standard-prompt'
 import { subscribeSystemDesignConfig } from '../../shared/system-design/system-design-events'
+import { registerWebpageOpener } from '../../shared/links/link-chooser-store'
+import { webpageProfileForLinkSource } from '../services/webview-context-menu'
 import { stripTerminalSubmission, toSubmittedTerminalText } from '../terminal/terminal-input'
 import { buildSkillActivationPrompt } from '../services/skill-prompt'
 import {
@@ -200,11 +203,12 @@ type FlowPositionMapper = {
     x: number
     y: number
   }
+  /** O React Flow devolve a promessa que resolve quando a câmera chega. */
   setCenter: (
     x: number,
     y: number,
     options?: { zoom?: number; duration?: number },
-  ) => void
+  ) => Promise<boolean> | void
   fitView: (options?: { padding?: number; duration?: number }) => void
   /** Enquadra uma área do canvas — usado para mostrar a matriz recém-organizada. */
   fitBounds: (
@@ -1038,10 +1042,12 @@ function CanvasInner({
       size: { width: number; height: number },
       zoom: number,
       duration: number,
-    ) => {
+    ): Promise<boolean> | undefined => {
+      const settledOrVoid = (value: Promise<boolean> | void) =>
+        value instanceof Promise ? value : undefined
       const flowInstance = flowInstanceRef.current
       if (!flowInstance) {
-        return
+        return undefined
       }
 
       const nodeCenter = {
@@ -1051,8 +1057,7 @@ function CanvasInner({
       const container = flowContainerRef.current
       const safeArea = getSafeCanvasScreenRect()
       if (!container || !safeArea) {
-        flowInstance.setCenter(nodeCenter.x, nodeCenter.y, { zoom, duration })
-        return
+        return settledOrVoid(flowInstance.setCenter(nodeCenter.x, nodeCenter.y, { zoom, duration }))
       }
 
       const target = flowCenterForSafeArea(
@@ -1061,7 +1066,9 @@ function CanvasInner({
         safeArea,
         zoom,
       )
-      flowInstance.setCenter(target.x, target.y, { zoom, duration })
+      // A promessa resolve quando a câmera chega (o menu de link espera por
+      // ela para focar o bloco novo; ver `OpenedWebpage`).
+      return settledOrVoid(flowInstance.setCenter(target.x, target.y, { zoom, duration }))
     },
     [getSafeCanvasScreenRect],
   )
@@ -1623,8 +1630,6 @@ function CanvasInner({
     return () => window.removeEventListener('keydown', onKeyDown, true)
   }, [dictationShortcut, dictationToggle])
 
-  const addNodeRef = useRef<(sourceId: string, url: string) => void>(() => {})
-
   // Inject render-time concerns: the header drag handle (so only the header
   // moves the node) and, for notes/groups, the edit handler. Keeping these out
   // of stored state means persisted data stays plain JSON.
@@ -1789,8 +1794,6 @@ function CanvasInner({
                 updateNodeData(nodeId, { agentSession: undefined }),
               onDataChange: updateNodeData,
               onRenameCommit: notifyTerminalRenamed,
-              onOpenWebpage: (sourceId: string, url: string) =>
-                addNodeRef.current(sourceId, url),
             }),
           ),
         }
@@ -2061,17 +2064,31 @@ function CanvasInner({
     centerNodeInSafeArea(position, size, 0.8, 240)
   }, [addNode, centerNodeInSafeArea, focusNode, nodes, setNodes, visibleCanvasBounds])
 
-  const openWebpageFromTerminal = useCallback(
-    (sourceId: string, url: string) => {
+  /**
+   * Bloco Página Web pedido pelo menu de link (terminal, Markdown ou outra
+   * Página Web). Nasce ao lado do bloco de onde o link veio; sem bloco de
+   * origem no canvas (painel do Notion, System Design), numa área livre da
+   * tela. Vindo de outra Página Web, nasce no perfil dela. Devolve o id para
+   * o menu levar o foco ao bloco novo.
+   */
+  const openWebpageFromLink = useCallback(
+    (url: string, sourceId?: string) => {
       const webpageSize = getDefaultNodeSize('webpage', window.innerWidth)
-      const position = findFreeNodePositionNearNode(nodes, sourceId, webpageSize)
-      const id = addNode('webpage', { url }, position)
+      const source = sourceId ? nodes.find((node) => node.id === sourceId) : undefined
+      const position = source
+        ? findFreeNodePositionNearNode(nodes, source.id, webpageSize)
+        : findFreeNodePosition(nodes, webpageSize, visibleCanvasBounds())
+      // Como o pedido de agente com `--profile`: o link de uma página logada
+      // no perfil "Trabalho" continua logado nele, e não no Padrão.
+      const profileId = webpageProfileForLinkSource(source)
+      const id = addNode('webpage', { url, ...(profileId ? { profileId } : {}) }, position)
       setNodes((current) =>
         current.map((node) => ({ ...node, selected: node.id === id })),
       )
-      centerNodeInSafeArea(position, webpageSize, 0.9, 220)
+      const cameraSettled = centerNodeInSafeArea(position, webpageSize, 0.9, 220)
+      return { id, cameraSettled }
     },
-    [addNode, centerNodeInSafeArea, nodes, setNodes],
+    [addNode, centerNodeInSafeArea, nodes, setNodes, visibleCanvasBounds],
   )
 
   const openWebpageFromAgent = useCallback(
@@ -2103,9 +2120,18 @@ function CanvasInner({
     return () => unsubscribe?.()
   }, [openWebpageFromAgent])
 
+  // O menu de link é global (montado no App) e chama sempre a versão atual,
+  // pela ref, sem re-registrar a cada mudança de `nodes`. Registrar é o que
+  // faz o menu oferecer "Abrir como Página Web": na tela do chat não há canvas.
+  const openWebpageFromLinkRef = useRef(openWebpageFromLink)
   useEffect(() => {
-    addNodeRef.current = openWebpageFromTerminal
-  }, [openWebpageFromTerminal])
+    openWebpageFromLinkRef.current = openWebpageFromLink
+  }, [openWebpageFromLink])
+  useEffect(
+    () =>
+      registerWebpageOpener((url, sourceId) => openWebpageFromLinkRef.current(url, sourceId)),
+    [],
+  )
 
   const addFileNode = useCallback(
     (name?: string) => {
@@ -2953,6 +2979,7 @@ function CanvasInner({
         </ReactFlow>
         </AccountChainActionsContext.Provider>
         <AgentQuestionDialog />
+        <AgentBrowserRequestCard />
         {colorMenu && (
           <NodeColorMenu
             x={colorMenu.x}

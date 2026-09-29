@@ -1,13 +1,13 @@
-import {
-  EXTERNAL_WEB_SCHEMES,
-  classifyExternalUrl,
-} from '../../shared/external-url-policy'
+import { EXTERNAL_WEB_SCHEMES, classifyExternalUrl } from '../../shared/external-url-policy'
+import { describeLinkDestination } from '../../shared/links/link-destination'
+import { isTouchGesture } from '../../shared/links/link-chooser-menu'
 import { exceedsDragThreshold, type PointerPosition } from './terminal-mouse-selection'
 
 /**
- * Links vindos da saída de uma CLI não são conteúdo confiável. O terminal só
- * pode delegar ao navegador URLs web explícitas, e apenas quando a pessoa
- * confirma a intenção com Ctrl/Cmd+clique.
+ * Links vindos da saída de uma CLI não são conteúdo confiável. O terminal
+ * nunca abre um link sozinho: o gesto (Ctrl/Cmd+clique, um toque ou o clique
+ * direito) só abre o menu que pergunta para onde ir (navegador, Página Web ou
+ * copiar), com o destino escrito.
  *
  * Vale para os dois jeitos de um link aparecer: texto que parece URL
  * (WebLinksAddon) e hyperlink OSC 8, em que o texto exibido e o destino são
@@ -18,50 +18,45 @@ export function isAllowedTerminalExternalLink(uri: string): boolean {
   return classifyExternalUrl(uri, EXTERNAL_WEB_SCHEMES).ok
 }
 
-export function hasTerminalLinkModifier(event: Pick<MouseEvent, 'ctrlKey' | 'metaKey'>): boolean {
+/**
+ * Ctrl ou Cmd, só um dos dois. No macOS, só Cmd: lá Ctrl+clique é o clique
+ * secundário do sistema, e o Chromium entrega esse gesto como `contextmenu`
+ * já no `mousedown` — o menu abre pelo clique direito do terminal. O
+ * `mouseup` que vem depois ainda chega ao xterm com o botão principal e Ctrl,
+ * e contar Ctrl aqui pediria o menu de novo: ele remonta e pisca, o foco cai
+ * no `body` por um quadro e o leitor de tela anuncia duas vezes.
+ */
+export function hasTerminalLinkModifier(event: Pick<MouseEvent, 'ctrlKey' | 'metaKey'>, isMac: boolean): boolean {
+  if (isMac) return event.metaKey && !event.ctrlKey
   return event.ctrlKey !== event.metaKey
 }
 
 /**
- * Só o botão principal abre. O xterm ativa o link no mouseup de qualquer
- * botão, então Ctrl+clique direito (que deveria só mostrar o menu) ou
- * Ctrl+clique do meio abririam o navegador. `button` ausente conta como
- * principal: é o que um evento sintético sem botão quer dizer.
+ * Só o botão principal conta. O xterm ativa o link no mouseup de qualquer
+ * botão, então Ctrl+clique direito (que já abre o menu pelo `contextmenu`) ou
+ * Ctrl+clique do meio pediriam o menu duas vezes, ou num botão que ninguém
+ * usa para isso. `button` ausente conta como principal: é o que um evento
+ * sintético sem botão quer dizer.
  */
 function isPrimaryButton(event: Pick<MouseEvent, 'button'>): boolean {
   return (event.button ?? 0) === 0
 }
 
-type OpenExternalLink = (uri: string) => void
-
-/** Abre uma URL já validada no navegador externo, na forma que a política serializou. */
-export function openAllowedTerminalExternalLink(
-  uri: string,
-  openExternalLink: OpenExternalLink = (url) => window.open(url, '_blank'),
-): boolean {
-  const decision = classifyExternalUrl(uri, EXTERNAL_WEB_SCHEMES)
-  if (!decision.ok) {
-    return false
-  }
-
-  openExternalLink(decision.url)
-  return true
+type TerminalLinkGestureEvent = Pick<MouseEvent, 'ctrlKey' | 'metaKey' | 'button'> & {
+  pointerType?: string
+  sourceCapabilities?: { firesTouchEvents?: boolean } | null
 }
 
 /**
- * Opens a terminal URL through Electron's existing window-open handler, which
- * redirects it to the system browser instead of navigating the app window.
+ * O gesto sobre o link pede o menu de destino? Ctrl/Cmd+clique com o botão
+ * principal (no macOS, Cmd — ver `hasTerminalLinkModifier`), ou um toque: um
+ * dedo não tem Ctrl, e sem isto um link do terminal nunca abriria numa tela
+ * sensível ao toque. Um clique simples de mouse continua sendo do terminal
+ * (foco, seleção, mouse das CLIs de tela cheia).
  */
-export function activateTerminalExternalLink(
-  event: MouseEvent,
-  uri: string,
-  openExternalLink: OpenExternalLink = (url) => window.open(url, '_blank'),
-): boolean {
-  if (!hasTerminalLinkModifier(event) || !isPrimaryButton(event)) {
-    return false
-  }
-
-  return openAllowedTerminalExternalLink(uri, openExternalLink)
+export function isTerminalLinkGesture(event: TerminalLinkGestureEvent, isMac: boolean): boolean {
+  if (!isPrimaryButton(event)) return false
+  return hasTerminalLinkModifier(event, isMac) || isTouchGesture(event)
 }
 
 /**
@@ -76,7 +71,7 @@ export function activateTerminalExternalLink(
  * Ctrl+clique seguinte chega com `detail=2`, o xterm seleciona a palavra (a
  * própria URL) e no `mouseup` já existe seleção — um Ctrl+clique legítimo
  * seria recusado. Sem ponto de origem conhecido, conta como clique: os outros
- * portões (modificador, botão principal, política) continuam valendo.
+ * portões (modificador, botão principal) continuam valendo.
  */
 export function isTerminalLinkDragGesture(
   origin: PointerPosition | undefined,
@@ -86,82 +81,22 @@ export function isTerminalLinkDragGesture(
 }
 
 const MAX_HOVER_URL_CHARS = 160
+const HOVER_HINT = 'Ctrl/Cmd+clique ou clique direito: escolher onde abrir'
 
 /**
  * Dica mostrada sobre um link do terminal. Traz o destino de verdade porque,
  * num hyperlink OSC 8, o texto na tela pode dizer `https://banco.com` e levar
- * a outro lugar. `undefined` quando o link não abriria.
+ * a outro lugar. Link recusado diz o motivo, em vez de só "recusado".
  */
-export function describeTerminalLinkHover(uri: string): string | undefined {
-  const decision = classifyExternalUrl(uri, EXTERNAL_WEB_SCHEMES)
-  if (!decision.ok) return undefined
-
-  const destination =
-    decision.url.length > MAX_HOVER_URL_CHARS
-      ? `${decision.url.slice(0, MAX_HOVER_URL_CHARS - 1)}…`
-      : decision.url
-  return `${destination}\nCtrl/Cmd+clique: abrir no navegador · clique direito: mais opções`
-}
-
-/**
- * Texto que "Copiar link" põe na área de transferência: o destino
- * serializado se o link é aprovado, o texto cru se não é. Copiar nunca abre
- * nada, então um link recusado continua copiável — quem cola decide.
- */
-export function terminalLinkClipboardText(uri: string): string {
-  const decision = classifyExternalUrl(uri, EXTERNAL_WEB_SCHEMES)
-  return decision.ok ? decision.url : uri.trim()
-}
-
-export type TerminalLinkMenuItem = 'abrir-no-canvas' | 'abrir-no-navegador' | 'copiar-link'
-
-/**
- * Itens do menu de clique direito sobre um link do terminal, na ordem em que
- * aparecem.
- *
- * Link recusado não some: só perde as ações que abrem. Copiar nunca abre nada,
- * então continua disponível — é o único destino de um `file:` ou `vscode:`
- * vindo de um hyperlink OSC 8, que o app não abre mas a pessoa pode levar
- * adiante. A decisão mora aqui, longe do DOM, para ser testada sem montar o
- * menu.
- */
-export function terminalLinkMenuItems(uri: string): TerminalLinkMenuItem[] {
-  return isAllowedTerminalExternalLink(uri)
-    ? ['abrir-no-canvas', 'abrir-no-navegador', 'copiar-link']
-    : ['copiar-link']
-}
-
-export type TerminalLinkMenuActions = {
-  onOpenWebpage: (url: string) => void
-  onCopy: (text: string) => void
-}
-
-export type TerminalLinkMenuEntry = {
-  item: TerminalLinkMenuItem
-  label: string
-  run: () => void
-}
-
-/**
- * O que cada item do menu faz, pronto para o DOM só desenhar. Fica aqui, e
- * não no store, para "copiar nunca abre" ser uma propriedade testável: o
- * item de copiar só conhece `onCopy`, e o de abrir no navegador passa pela
- * política de novo antes do `window.open`.
- */
-export function terminalLinkMenuEntries(
-  uri: string,
-  actions: TerminalLinkMenuActions,
-  openExternalLink: OpenExternalLink = (url) => window.open(url, '_blank'),
-): TerminalLinkMenuEntry[] {
-  const entries: Record<TerminalLinkMenuItem, Omit<TerminalLinkMenuEntry, 'item'>> = {
-    'abrir-no-canvas': { label: 'Abrir no canvas', run: () => actions.onOpenWebpage(uri) },
-    'abrir-no-navegador': {
-      label: 'Abrir no navegador',
-      run: () => {
-        openAllowedTerminalExternalLink(uri, openExternalLink)
-      },
-    },
-    'copiar-link': { label: 'Copiar link', run: () => actions.onCopy(terminalLinkClipboardText(uri)) },
+export function describeTerminalLinkHover(uri: string): string {
+  const destination = describeLinkDestination(uri, 'terminal')
+  if (!destination.ok) {
+    return `Link recusado: ${destination.reason}\nClique direito: copiar`
   }
-  return terminalLinkMenuItems(uri).map((item) => ({ item, ...entries[item] }))
+
+  const shown =
+    destination.url.length > MAX_HOVER_URL_CHARS
+      ? `${destination.url.slice(0, MAX_HOVER_URL_CHARS - 1)}…`
+      : destination.url
+  return `${shown}\n${HOVER_HINT}`
 }

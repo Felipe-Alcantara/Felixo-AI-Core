@@ -7,6 +7,10 @@ const os = require('node:os')
 const {
   FAKE_CODEX_LOGIN_STATUS_OUTPUT,
   PROMPT,
+  SMOKE_LINK_OUTPUTS,
+  SMOKE_MOUSE_TRACKING_OUTPUTS,
+  SMOKE_STREAM_LINES,
+  SMOKE_STREAM_TRIGGER,
   SMOKE_TRIGGER_OUTPUTS,
   SMOKE_TRIGGER_PHRASES,
   createFakeAuthCommandRunner,
@@ -191,6 +195,68 @@ test('só a linha que é exatamente o gatilho dispara: texto em volta, sem Enter
 
   assert.equal(classifyPty(output()).failureClass, 'unknown')
   assert.doesNotMatch(output(), /usage limit|stream disconnected/i)
+})
+
+test('gatilho de links: hyperlinks OSC 8 com destino diferente do texto e um file: para recusar', () => {
+  const { pty, timers, output, reset } = spawnScripted()
+  timers.runAll()
+  reset()
+
+  pty.write('__felixo_smoke_osc8__\r')
+  timers.runAll()
+
+  const printed = output()
+  // O eco do que foi digitado, a quebra do Enter, os links e o prompt novo.
+  assert.equal(printed, `__felixo_smoke_osc8__\r\n${SMOKE_LINK_OUTPUTS.__felixo_smoke_osc8__}${PROMPT}`)
+  assert.match(printed, /\u001b\]8;;https:\/\/example\.com\/destino-real\u001b\\banco\.example\u001b\]8;;\u001b\\/)
+  assert.match(printed, /\u001b\]8;;file:\/\/\/etc\/hosts\u001b\\hosts do sistema\u001b\]8;;\u001b\\/)
+  // Não é frase de falha: a cadeia de contas não pode ver limite nem rede aqui.
+  assert.equal(classifyPty(printed).failureClass, 'unknown')
+})
+
+test('gatilho de streaming: as linhas saem uma a uma, espaçadas, e o prompt só no fim', () => {
+  const { pty, timers, events, reset } = spawnScripted()
+  timers.runAll()
+  reset()
+
+  pty.write(`${SMOKE_STREAM_TRIGGER}\r`)
+  timers.runAll()
+
+  const lines = events.filter((event) => event.data.includes('da saída em streaming'))
+  assert.equal(lines.length, SMOKE_STREAM_LINES)
+  assert.ok(lines.at(-1).at > lines[0].at, 'a saída precisa se espalhar no tempo, não chegar de uma vez')
+  assert.equal(events.at(-1).data, PROMPT)
+})
+
+test('gatilhos de mouse tracking: ligam e desligam o relato de cliques em SGR, como as CLIs de tela cheia', () => {
+  // `?1000` pede o relato de cada clique ao processo; `?1006`, as coordenadas em SGR.
+  assert.deepEqual(SMOKE_MOUSE_TRACKING_OUTPUTS, {
+    __felixo_smoke_mouse_on__: '\u001b[?1000h\u001b[?1006h',
+    __felixo_smoke_mouse_off__: '\u001b[?1000l\u001b[?1006l',
+  })
+  const { pty, timers, output, reset } = spawnScripted()
+  timers.runAll()
+  reset()
+
+  pty.write('__felixo_smoke_mouse_on__\r')
+  timers.runAll()
+  // O eco do que foi digitado, a quebra do Enter, os modos e o prompt novo.
+  const on = SMOKE_MOUSE_TRACKING_OUTPUTS.__felixo_smoke_mouse_on__
+  assert.equal(output(), `__felixo_smoke_mouse_on__\r\n${on}${PROMPT}`)
+  assert.equal(classifyPty(output()).failureClass, 'unknown', 'não é frase de falha')
+
+  // Com o modo ligado, o xterm relata cada clique ao processo em SGR (apertar
+  // e soltar). É escape, não texto: nada é ecoado, e o gatilho seguinte ainda
+  // casa exatamente.
+  reset()
+  pty.write('\u001b[<0;12;5M\u001b[<0;12;5m')
+  timers.runAll()
+  assert.equal(output(), '')
+
+  pty.write('__felixo_smoke_mouse_off__\r')
+  timers.runAll()
+  const off = SMOKE_MOUSE_TRACKING_OUTPUTS.__felixo_smoke_mouse_off__
+  assert.equal(output(), `__felixo_smoke_mouse_off__\r\n${off}${PROMPT}`)
 })
 
 test('kill encerra com um onExit só, corta o roteiro em andamento e ignora escrita depois do fim', () => {

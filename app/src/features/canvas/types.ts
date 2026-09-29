@@ -405,6 +405,23 @@ export type CanvasAgentQuestion = {
   resolvidoEm?: string
 }
 
+/**
+ * Pedido de um agente para abrir uma página (`felixo browser open`), à
+ * espera da pessoa. `modo` é o destino que o agente sugeriu; quem decide é o
+ * cartão de confirmação.
+ */
+export type CanvasAgentBrowserRequest = {
+  id: string
+  /** Já serializada pela política de URL web. */
+  url: string
+  modo: 'externo' | 'embutido'
+  /** Perfil do navegador interno pedido por nome (só vale para a Página Web). */
+  perfil?: string
+  /** Pasta em que o agente rodou o comando. */
+  origem: string
+  pedidoEm: string
+}
+
 export type FetchAllActionResult = {
   status: FetchAllRepoStatus
   action: 'pull' | 'push' | 'commit'

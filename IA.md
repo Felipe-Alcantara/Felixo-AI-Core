@@ -7014,3 +7014,153 @@ Registro gravado às 00:31. Completa a entrada anterior. A lente de CSP, docs e 
 - **Uma asserção "copiar nunca abre" não tinha como falhar** (o mock nunca era passado). Foi substituída pelo teste acima.
 
 Essas 4 mutações agora morrem: 31 no total nesta task. O primeiro CI de `cb88c79` (run 36516349566) passou em 21 de 22 jobs. O Validate do Windows reprovou no passo SA1 do smoke de onboarding ("o app não parou de gravar sozinho antes do percurso"), a mesma intermitência do Windows já vista na task anterior; o mesmo smoke passou em ubuntu, arm e macOS. O job foi reexecutado.
+
+## 2026-09-29 — Links: escolha explícita de destino (navegador, Página Web ou copiar)
+
+Registro de Claude - Tasks do AI Core, task "Felixo AI Core/Terminal — oferecer escolha explícita entre navegador externo e Página Web" (Notion 3ce91f95-497e-8122-84ca-fd22fb536393). Início em 29/09 às 08:37.
+
+### Contexto
+
+A política única de URL (entrada anterior) decidia **se** um link podia sair do app, mas não **para onde**. No terminal, o Ctrl/Cmd+clique abria direto o navegador, e só o clique direito oferecia a Página Web. No Markdown (notas, arquivos, chat, painel do Notion), o clique abria o navegador, sem menu e sem a Página Web. A Página Web não tinha como levar a página para o navegador, e a barra de endereço não fazia nada com um endereço recusado. Um pedido de agente (`felixo browser open`) abria sozinho, no navegador logado da pessoa. A task pedia uma política uniforme de clique, modificador e menu, e o aceite dizia: "nenhuma URL abre sem gesto" e "URL não suportada explica motivo".
+
+### Decisões (Trilha B, respondidas pelo Felipe às 08:50)
+
+- **Gesto principal:** perguntar a cada clique. Nenhum link abre direto; o gesto abre o menu com o destino escrito.
+- **Preferência:** não guardar. Sem configuração nova: a escolha é feita a cada vez.
+- **Superfícies:** terminal, Markdown e Página Web, com o mesmo menu.
+- **Pedido de agente:** pedir confirmação, com navegador, Página Web ou recusar.
+
+### O que foi feito
+
+- **Núcleo em `src/features/shared/links/`:**
+  - `link-destination.ts` (puro): destino (host em punycode ou destinatário do e-mail), escolhas por origem e motivo da recusa em português comum (`describeRefusal`). `runLinkChoice` classifica de novo antes de agir, e "Copiar" só conhece a área de transferência.
+  - `link-chooser-store.ts`: o pedido fora do React (o terminal é imperativo), com cópia do link no instante do gesto. O canvas registra ali o criador de bloco Página Web (`registerWebpageOpener`); sem canvas (tela do chat), o menu não oferece a Página Web.
+  - `LinkChooserHost.tsx`, montado no `App`: `role=menu`, setas/Home/End, Enter/Espaço, Esc/Tab, foco devolvido a quem abriu (ou levado ao bloco novo), "Link copiado" na região `status`, e `data-felixo-floating-layer` para a gaveta do terminal não fechar com o clique no menu.
+  - `link-chooser-menu.ts` e `link-anchor.ts` (puros): posição dentro da janela, teclas, origem do gesto (teclado, toque) e bloco de origem.
+  - `revealHiddenUrlCharacters` na política do renderer: o texto recusado aparece com `⟨U+200B⟩` no lugar do invisível.
+- **Terminal:** Ctrl/Cmd+clique, toque (`sourceCapabilities.firesTouchEvents`), clique direito e a tecla de menu abrem o menu. A dica diz o destino real e, na recusa, o motivo. O menu DOM imperativo e a fiação `onOpenWebpage` (TerminalNode → store) saíram.
+- **Markdown:** o `<a>` continua link para leitor de tela e Tab, mas o clique, o Enter e o clique direito abrem o menu, e o clique do meio não abre nada. O recusado virou botão tracejado, com o motivo na dica e o menu só com copiar. O destino que a política aprova, mas o `rehype-sanitize` apagou (`HTTPS://`), volta como link serializado; isso resolve, por outro caminho, a diferença conhecida que a entrada anterior registrou.
+- **Página Web:** o clique direito num link da página abre o menu (evento `context-menu` do `<webview>`). Há um botão "Abrir esta página no navegador". A barra de endereço e o formulário "Criar Página Web" dizem o motivo da recusa (`explainUrlInput`); esquema colado sem barras (`javascript:`, `mailto:`) é explicado como esquema.
+- **Pedido de agente:** o pedido válido fica pendente e aparece no `AgentBrowserRequestCard` (topo do canvas). O cartão mostra origem, endereço e sugestão, com os botões navegador, Página Web e recusar, mais "Recusar todos" quando há fila. Ele não rouba o foco nem responde a teclas globais. O renderer manda só `{id, destino}` (`agent-browser:decide`); URL e perfil são relidos do pedido gravado. O resultado grava `modo` (escolhido) e `modoPedido` (sugerido); a CLI, a ajuda e a skill dizem que nada abre sem a pessoa.
+- **Smoke da CI, sessão D** (`scripts/canvas-smoke-links.cjs`, L0–L12): cobre, no app real, mouse, teclado, clique direito, toque, OSC 8, streaming com o menu aberto, a Página Web com página servida em 127.0.0.1 e o cartão de pedido. A CLI roteirizada ganhou os gatilhos `__felixo_smoke_osc8__` e `__felixo_smoke_stream__`.
+- **Docs:** ARQUITETURA ("Escolha de destino: nenhum link abre direto" e "Pedido de agente para abrir página"), GUIA-USUARIO ("Links: escolher onde abrir"), skill `abrir-paginas-no-navegador` e ajuda do `felixo browser`.
+
+### Achados no app real (sessão D), corrigidos antes do push
+
+- As setas moviam o foco só no quadro seguinte; agora movem na hora da tecla.
+- **A gaveta do terminal fechava ao escolher uma opção do menu com o mouse.** O menu mora num portal fora dela, e o `mousedown` contava como clique fora. O menu antigo do terminal tinha o mesmo defeito. Agora `shouldCloseOnOutsideClick` ignora a camada flutuante.
+- No terminal, Shift+F10 é da CLI: o xterm entrega o F10 ao programa (o htop sai com ele). A tecla de menu funciona, e o teste usa ela.
+
+### Validação local
+
+- `npx tsc -b`, `npm run lint`: saída 0.
+- `npx vitest run`: 2.501 de 2.504 na primeira rodada, com 1 pulado. As 2 falhas eram os testes de 20.000 amostras da política estourando 5 s neste notebook de 4 threads ocupado (`nproc` = 4; carga ~15 com o app e um navegador abertos). A versão da `main` reprova igual na mesma máquina. Ganharam prazo de 60 s, e o arquivo passa (87 de 87).
+- Suíte node, Node 25.9.0 e Node 22.22.3 (o da CI): 2.298 de 2.298 nas duas.
+- Smoke da sessão D sob Xvfb e `flock`, com perfil isolado: L0–L12 ok em 83 s.
+
+### NÃO verificado / limitações
+
+- **macOS e Windows** só pela CI. O modificador do smoke é Cmd no macOS. O toque real (tela sensível) não foi testado em hardware: o toque vem do CDP (`Input.dispatchTouchEvent`), que passa pelo mesmo reconhecimento de gesto do Chromium.
+- **Leitor de tela real** (Orca/NVDA/VoiceOver) não foi usado. A estrutura (`role=menu`, `menuitem`, `aria-describedby` com o destino, região `status`) está no código e no smoke.
+- **Links de conteúdo sem teclado no terminal:** o xterm não põe foco em link. Pelo teclado, só a tecla de menu com o ponteiro sobre o link.
+- **O cartão de pedido só aparece no canvas.** Na tela do chat, o pedido espera; com mais de uma hora, sai da lista.
+- **Botões do app que já dizem o destino** ("Abrir no Notion" no painel, links do painel de uso) não perguntam. A escolha já está no rótulo.
+- **Telemetria:** nenhuma foi adicionada. O único log continua o de recusa do opener, que leva só esquema e host.
+- **Nota de ambiente:** a nota da entrada anterior (Ryzen 7 5700G, 16 threads) não vale para a máquina desta sessão, que tem 4 threads (`nproc`). Provavelmente é outra máquina.
+
+## 2026-09-29 — Links: revisão adversarial da escolha de destino e consertos
+
+Completa a entrada anterior. Registrada durante a validação final (horário no fim).
+
+### Como foi revisado
+
+Sete lentes independentes leram o diff (`fff6e998..77575049`): menu e acessibilidade, convivência com painéis e diálogos, terminal, Markdown e Página Web, main e pedido de agente, docs, e mutação (18 mutantes num worktree isolado). Saíram 48 achados. Os 29 de código e comportamento, sem os duplicados, passaram por um verificador cético cada, que lia um snapshot congelado do ramo e tentava refutá-los. Vários verificadores provaram o achado rodando o código de verdade: o Electron 41.10.7 do app, o React 19 e o xyflow reais, e sondas nos módulos do main. **Todos se confirmaram; nenhum foi refutado.** Os consertos foram feitos em quatro trilhas paralelas, cada uma num worktree próprio, integradas por cherry-pick sem conflito:
+
+- A: main e cartão;
+- B: menu;
+- C: terminal;
+- D: Página Web e Markdown.
+
+### O que estava errado e foi corrigido
+
+- **Grave: um arquivo de pedido malformado derrubava o app.** Com `perfil` que não é texto, o registro do main lançava e o resto do boot não registrava mais nada. O cartão também lançava no render e levava a interface para a tela de falha, a cada abertura do app. Hoje o pedido malformado é recusado na chegada, e nada no caminho lança.
+- **TOCTOU no cartão.** A decisão executava o arquivo com o nome do id, não o pedido mostrado. Um id no conteúdo diferente do nome, ou o arquivo reescrito entre mostrar e clicar, abria outro endereço. Uma sonda mostrou `docs.python.org` no cartão e abriu `evil.example/login`. Agora o cartão manda `{id, destino, url, perfil}` do que mostrou, e o main só executa se o gravado ainda for isso. A fila inteira passou a descartar arquivo cujo id não bate com o nome.
+- **Cartão.**
+  - Duplo clique decidia o pedido seguinte, sem leitura. Os botões agora esperam 600 ms e ignoram `detail > 1`.
+  - Clicar nele fechava a gaveta do terminal.
+  - A URL ficava cortada em 3 linhas.
+  - Falha ao abrir virava "recusado" em silêncio.
+  - Um pedido vencido ficava aceitável para sempre, com `browser status` "pendente".
+  - Duas decisões concorrentes abriam duas vezes.
+  - Cada evento da pasta custava duas varreduras e um IPC.
+- **Menu.**
+  - Clicar no resumo soltava o teclado para o `body`, e o Esc fechava o modal de trás. No canvas, o Backspace apagava o bloco selecionado.
+  - Roda, redimensionamento e Alt+Tab deixavam o foco no `body`.
+  - Um diálogo que abria por cima ficava sob o menu.
+  - Enter segurado escolhia "Abrir no navegador" sem leitura.
+  - Um host gigante empurrava as opções para fora da janela. O corte agora é **no meio**: cortar no fim esconderia o domínio de um `login.banco.com.aaa….evil.example`.
+  - O e-mail escondia cc/bcc.
+  - Na Página Web, o menu dizia que mailto "não abre", mas o clique abria.
+  - "Link copiado" não se repetia.
+  - O alvo de toque não crescia em notebook com tela sensível.
+  - O foco no bloco novo se perdia (ver abaixo).
+- **Terminal.**
+  - O toque não abria o menu com o mouse tracking ligado, porque o replay do mousedown perdia `sourceCapabilities`.
+  - No macOS, o Ctrl+clique pedia o menu duas vezes.
+- **Página Web.**
+  - O menu nascia longe do clique, porque `params.x/y` já vêm no espaço da janela.
+  - Um link `javascript:` chegava como `about:blank#blocked`, com motivo errado.
+  - A recusa na barra tirava o foco, e o Backspace para corrigir apagava o bloco.
+  - O aviso sobrevivia à navegação.
+  - "Abrir como Página Web" de uma página de outro perfil abria no Padrão, logado como outra pessoa.
+- **Markdown.** O link em volta de um bloco de código punha o "copiar" dentro de outro botão.
+- **Fora da feature, mas afetando o menu.** A gravação do atalho do ditado continuava ligada depois de clicar fora e engolia as teclas do menu no mesmo painel.
+- **Testes que não pegavam.**
+  - O gravador de `window.open` nos testes do store ficava no `window` velho, porque a bancada troca o global, e toda asserção "nada abre" passava vazia. Agora pega: com um `window.open` no gesto, 5 testes falham.
+  - Três mutantes vivos ganharam teste: a marca de camada flutuante, copiar recusado que abre, e a Página Web com texto cru.
+  - O fuzz do Markdown ganhou prazo de 60 s.
+
+### Achados que mudaram a correção
+
+- **Foco no bloco novo.** A trilha tentou mais quadros (24), mas o verificador mostrou com as funções reais do xyflow que não era isso. O nó entra no DOM na hora (ainda sem medida), é focado, e sai quando o ResizeObserver o mede fora do container: o foco cai no `body`. O conserto espera a câmera (`setCenter` devolve a promessa; prazo de 450 ms para a câmera interrompida) e foca com `preventScroll`.
+- **Marca de foco.** A trilha fez o `useFocusRestore` esquecer toda camada flutuante. O verificador apontou que o cartão também é camada flutuante, mas continua na tela. A marca ficou separada: `data-felixo-focus-transient`, só no menu.
+- **Quirk do xterm no smoke.** O Linkifier só pede link quando o ponteiro muda de célula do buffer, e o `mouseleave` não esquece a última célula. Um toque na mesma célula em que o mouse esteve não conta. O smoke toca na linha recém-impressa. É comportamento do xterm, não do app.
+
+### NÃO verificado / limitações
+
+- macOS e Windows só pela CI; o Ctrl+clique do macOS foi lido do código do Chromium, sem Mac aqui.
+- Tela sensível ao toque real e leitor de tela real não foram usados. O toque vem do CDP, e a ARIA é conferida no smoke.
+- O `AgentQuestionDialog` (anterior a esta task) também fecha uma gaveta não fixada no clique e não pega o foco. Com ele aberto, o menu de link fica por cima. Há task aberta.
+- Na Página Web, o ponto do `context-menu` foi medido com o link na página e num `<iframe>` interno. Um PDF ou um `<embed>` não foram testados.
+
+### O que o primeiro CI do PR #98 achou (run 36590390171)
+
+As sessões A, B e C passaram em Linux e macOS. A sessão D reprovou em dois pontos:
+
+- **Linux: defeito do app, não do teste.** Ao fechar o menu, o foco voltava ao `<webview>` com `focus()` sem `preventScroll`. Na janela menor do runner (1280×733), a Página Web centralizada ficava só em parte visível, o navegador rolava o container do React Flow para mostrá-la, e o canvas inteiro saía do lugar: a barra de ferramentas do bloco ficou embaixo da barra lateral. Em 1280×800 nada rolava, por isso passou aqui. `restoreFocus` usa `preventScroll: true`. A emulação de viewport (como na sessão C) foi tentada e descartada: com a página emulada num tamanho diferente da janela real, o clique direito dentro do `<webview>`, que é outro processo, caía no bloco.
+- **macOS.** Não tem tecla de menu, e o Chromium de lá não abre menu de contexto pelo teclado; o passo vale só no Windows e no Linux.
+
+O Validate do Windows reprovou na montagem da sessão A ("APP NÃO MONTOU"), a intermitência conhecida desse runner. O benchmark do Windows apontou +129% no delta de heap do streaming do xterm (14,2 MB → 32,5 MB), só nesse sistema, sem mudança no caminho do streaming (o código de link só roda em evento de mouse). A sessão D passou de novo aqui sob `xvfb-run` sem tamanho, como no CI.
+
+### O que o segundo CI do PR #98 achou (run 36592920213)
+
+A sessão D passou no ARM e no macOS. Nos outros sistemas, os três problemas eram do teste, não do app:
+
+- **Windows, L2, a primeira vez que a sessão D rodou lá.** A janela do runner tem 1008×655. A nota, centralizada pela lista Elementos, é mais larga que a faixa livre do canvas e fica em parte embaixo da barra lateral. O "clique fora" do L1, tirado da borda esquerda da nota, caía no botão "Novo bloco" e abria o popover dele. No L2, o clique no resumo do menu de link contou como clique fora desse popover, que fecha e devolve o foco ao próprio botão no quadro seguinte: o foco saiu do menu, e o menu fechou. Reproduzido aqui com Xvfb em 1024×720 (janela 1023×697). O ponto do clique agora é conferido com `elementFromPoint`: o alvo tem de ser o próprio `.react-flow__pane`.
+- **Ubuntu, L8.** Depois do streaming, o terminal está cheio. O texto aparece no eco da digitação, antes do Enter, e o prompt seguinte rola a tela uma linha. O ponto lido cedo caía na linha do prompt, e a dica do link não vinha. `esperarNoTerminal` espera duas leituras iguais, com 200 ms entre elas, e a pausa manual do L9 saiu.
+- **Ubuntu, benchmark.** O falso positivo conhecido do cenário `renderer-xterm count=1`, desta vez no ubuntu: de 17,5 MB para 39,2 MB (+123,9%). Os outros três sistemas passaram. Já há task aberta para esse cenário, com as duas ocorrências deste PR anotadas.
+
+Mais dois achados:
+
+- **Uma rodada local travou no fim, depois do "L0–L12 ok".** O `server.close()` da página local esperava as conexões que o webview ainda segurava, e o app só fecha depois da sessão. O `close` agora vem com `closeAllConnections()`.
+- **O L4 copia o link recusado** e confere o texto cru na área de transferência (antes só fechava com Esc).
+
+O comportamento do popover é anterior a esta task e está em cinco popovers da barra: Organizar, Novo bloco e Grupo, Página Web, Agente e Gerar imagem. Num clique fora, eles devolvem o foco ao botão mesmo quando a pessoa clicou num controle focável, como um terminal ou o menu de link. Ficou numa task própria.
+
+Validação local depois dos consertos: a sessão D passou do L0 ao L12 nas duas janelas, 1280×738 (Xvfb sem tamanho, como no CI do Linux) em 140 s e 1023×697 em 135 s. O ESLint do script saiu com 0.
+
+**Reexecução do terceiro CI (run 36602524300), já com a sessão D rodando até o fim no Windows.** O L10 reprovou: a lista Elementos centraliza o bloco com zoom 1,2 mesmo que ele não caiba, e na janela de 1008×655 a Página Web (672×504) fica mais larga que a área livre. O centro de uma faixa da página caía embaixo da barra lateral (no CI) ou do minimapa e dos controles de zoom (aqui). O L10 agora escolhe, em cada faixa, um ponto em que `elementFromPoint` devolve o próprio `<webview>`. O "Recarregar" do L11, que fica embaixo da barra lateral, é acionado pelo teclado. Reproduzido com Xvfb em 1009×678 (janela de 1008×655): a versão anterior reprova no L10, e a nova passa do L0 ao L12 em 129 s. O zoom fixo da centralização é anterior a esta task e ficou numa task própria.
+
+Na mesma run, duas intermitências conhecidas, fora do código de links, ganharam task:
+- o SA1 do tutorial no Windows ("o app não parou de gravar sozinho"), pelo menos a terceira ocorrência;
+- a checagem interna de resume da bancada de scrollback no macOS, que reprovou duas vezes seguidas (count=5: 340 → 467 ms; count=1). Nos dois casos, as duas políticas usam o mesmo scrollback de 20.000, porque a adaptativa só muda a partir de 10 terminais: a checagem compara uma configuração com ela mesma.

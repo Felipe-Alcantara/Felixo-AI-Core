@@ -9,7 +9,9 @@
  * a sessao A (esta) com a abertura automatica suprimida, e uma sessao B com
  * perfil novo e `FELIXO_DEVTOOLS_ONBOARDING=1` para o primeiro uso de verdade.
  * A cadeia de contas fica em `canvas-smoke-contas.cjs` (sessão C, perfil novo
- * com a CLI roteirizada no processo principal).
+ * com a CLI roteirizada no processo principal). A escolha de destino dos
+ * links fica em `canvas-smoke-links.cjs` (sessão D, outro perfil novo com a
+ * mesma CLI roteirizada).
  */
 
 const path = require('node:path')
@@ -24,6 +26,7 @@ const {
 } = require('./canvas-smoke-visual.cjs')
 const { corromperEstadoNoPerfil, criarCenariosDoTutorial, registrarPerguntaNoPerfil } = require('./canvas-smoke-onboarding.cjs')
 const { criarSessaoDaCadeia } = require('./canvas-smoke-contas.cjs')
+const { criarSessaoDeLinks } = require('./canvas-smoke-links.cjs')
 
 const APP_DIR = path.resolve(__dirname, '..')
 const FELIXO_CLI = path.join(APP_DIR, 'electron', 'cli', 'felixo.cjs')
@@ -54,6 +57,9 @@ const CONTAS_SESSION_ENV = {
   FELIXO_DEVTOOLS_MOCK_PTY: '0',
   FELIXO_DEVTOOLS_FAKE_CLI_PTY: '1',
 }
+// Sessão D: o xterm de verdade (links em texto, OSC 8, streaming) sobre a
+// mesma CLI roteirizada. Nenhuma CLI real roda, e nenhum link sai da máquina.
+const LINKS_SESSION_ENV = CONTAS_SESSION_ENV
 const DEVTOOLS_LAUNCH_TIMEOUT_MS = 60_000
 const THEME_STORAGE_KEY = 'felixo-ai-core.theme'
 const VISUAL_THEMES = ['dark', 'high_contrast']
@@ -570,7 +576,12 @@ async function checarInteracoes(page) {
   const urlInput = page.locator('input[aria-label="Endereço do site"]')
   await urlInput.fill('javascript:alert(1)')
   await page.getByRole('button', { name: 'Criar' }).last().click()
-  await page.waitForFunction(() => document.body.innerText.includes('Informe um endereço de site válido'), null, { timeout: INTERACTION_TIMEOUT_MS })
+  // A recusa diz o motivo (o mesmo texto do menu de link), não só "inválido".
+  await page.waitForFunction(
+    () => document.body.innerText.includes('Endereço não aceito: endereços javascript: não abrem pelo app, só http e https.'),
+    null,
+    { timeout: INTERACTION_TIMEOUT_MS },
+  )
   await page.keyboard.press('Escape')
   await page.waitForFunction(() => !document.querySelector('input[aria-label="Endereço do site"]'), null, { timeout: INTERACTION_TIMEOUT_MS })
 }
@@ -1128,6 +1139,20 @@ async function main() {
     { env: CONTAS_SESSION_ENV },
   )
   console.log(`[canvas-smoke] cadeia de contas: sessão C (C1–C13) em ${Date.now() - inicioDaCadeia} ms`)
+  // Sessão D: perfil novo; a escolha de destino dos links em todas as
+  // superfícies, com mouse, teclado, clique direito, toque e streaming.
+  const inicioDosLinks = Date.now()
+  await withDevtoolsSession(
+    () => comPaginaDaSessao('canvas-smoke-failure-links', (page) =>
+      criarSessaoDeLinks({
+        page,
+        checarMontagem,
+        estadoDaSessao: readState,
+        timeoutMs: ONBOARDING_TIMEOUT_MS,
+      }).executar()),
+    { env: LINKS_SESSION_ENV },
+  )
+  console.log(`[canvas-smoke] links: sessão D (L0–L12) em ${Date.now() - inicioDosLinks} ms`)
   const report = writeVisualReport()
   console.log('[canvas-visual] relatório e capturas: ' + report)
   console.log('[canvas-smoke] fixture, interações, recuperação, resize, matriz visual de viewport/tema/DPR, elementos abertos (tools/menu/modal) e dimensões de acessibilidade (fonte/reduced-motion/locale): ok')

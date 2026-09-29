@@ -124,6 +124,19 @@ export function hasHiddenUrlCharacters(value: string): boolean {
   return CONTROL.test(value) || INVISIBLE.test(value)
 }
 
+/**
+ * O texto com cada controle ou invisível trocado pelo código dele
+ * (`exa⟨U+200B⟩mple.com`). Para mostrar um endereço recusado sem que o
+ * disfarce funcione na tela: a pessoa lê o que de fato está ali.
+ */
+export function revealHiddenUrlCharacters(value: string): string {
+  return Array.from(value, (char) =>
+    hasHiddenUrlCharacters(char)
+      ? `⟨U+${char.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')}⟩`
+      : char,
+  ).join('')
+}
+
 /** Atalho para quem só precisa do sim/não. */
 export function isAllowedExternalUrl(
   raw: unknown,

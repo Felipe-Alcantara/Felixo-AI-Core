@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TerminalSessionStore } from './terminal-session-store'
+import { closeLinkChooser, getLinkChooserState } from '../../shared/links/link-chooser-store'
 import { createCatalogPromptInsertion, createManualPromptInsertion } from '../../shared/types/prompt-insertion'
 
 /**
@@ -150,6 +151,9 @@ function createHarness(
     : Promise.resolve()
 
   ;(globalThis as { window?: unknown }).window = {
+    // O renderer sempre tem `navigator`: o gesto de link do terminal lê a
+    // plataforma (no macOS, Ctrl+clique é o clique secundário do sistema).
+    navigator: { platform: 'Linux x86_64' },
     felixo: {
       pty: {
         onData: (listener: (event: { sessionId: string; data: string }) => void) => {
@@ -1302,9 +1306,12 @@ describe('TerminalSessionStore: portão hasTypedInputSelection', () => {
 
 /**
  * Os dois caminhos de link do xterm — texto que parece URL (WebLinksAddon) e
- * hyperlink OSC 8 (`linkHandler`) — precisam cair no mesmo portão. Sem o
+ * hyperlink OSC 8 (`linkHandler`) — precisam cair no mesmo gesto. Sem o
  * `linkHandler`, o xterm abre OSC 8 com clique simples, `confirm()` e um
  * `window.open()` sem URL que o processo principal recebe como about:blank.
+ *
+ * O gesto nunca abre o link: pede o menu de destino (`link-chooser-store`),
+ * que mostra para onde ele vai e pergunta navegador, Página Web ou copiar.
  */
 describe('TerminalSessionStore: links do terminal', () => {
   type LinkHandler = {
@@ -1315,6 +1322,7 @@ describe('TerminalSessionStore: links do terminal', () => {
   }
   type LinkSession = {
     hoveredLink?: string
+    hoveredLinkPoint?: { x: number; y: number }
     linkGestureOrigin?: { clientX: number; clientY: number }
     terminal: { options: { linkHandler?: LinkHandler | null }; hasSelection: () => boolean }
   }
@@ -1322,9 +1330,10 @@ describe('TerminalSessionStore: links do terminal', () => {
   const RANGE = { start: { x: 1, y: 1 }, end: { x: 10, y: 1 } }
   const ZERO_WIDTH_SPACE = String.fromCharCode(0x200b)
   let harness: Harness | undefined
+  let opened: string[]
 
   function mouse(init: Partial<MouseEvent> = {}) {
-    return { ctrlKey: false, metaKey: false, ...init } as MouseEvent
+    return { ctrlKey: false, metaKey: false, button: 0, ...init } as MouseEvent
   }
 
   function linkSession(current: Harness): LinkSession {
@@ -1333,42 +1342,82 @@ describe('TerminalSessionStore: links do terminal', () => {
     return session
   }
 
+  /** O link pedido ao menu, ou `null` se nenhum gesto chegou a pedir. */
+  function chooserUrl(): string | null {
+    return getLinkChooserState().request?.url ?? null
+  }
+
   beforeEach(() => {
     harness = undefined
     vi.useFakeTimers()
+    closeLinkChooser()
+    opened = []
   })
 
-  afterEach(() => {
-    harness?.store.clear()
-    vi.useRealTimers()
-  })
-
-  it('hyperlink OSC 8 exige Ctrl/Cmd+clique e passa pela política antes do window.open', () => {
-    harness = createHarness('', 'claude', true, false, 1)
-    const opened: string[] = []
+  /**
+   * A bancada com um gravador de `window.open`. Nenhum gesto do terminal pode
+   * abrir janela: quem abre é o menu, depois da escolha. O gravador vai
+   * DEPOIS da bancada, porque ela troca o `window` global: posto antes, ele
+   * ficava no objeto velho, não gravava nada e as asserções passavam vazias.
+   */
+  function linkHarness(): Harness {
+    const created = createHarness('', 'claude', true, false, 1)
     ;(globalThis as unknown as { window: { open: (url: string) => null } }).window.open = (url) => {
       opened.push(url)
       return null
     }
+    return created
+  }
 
+  afterEach(() => {
+    harness?.store.clear()
+    closeLinkChooser()
+    vi.useRealTimers()
+  })
+
+  it('hyperlink OSC 8: Ctrl/Cmd+clique pede o menu com o destino, clique simples não pede nada', () => {
+    harness = linkHarness()
     const session = linkSession(harness)
     const handler = session.terminal.options.linkHandler
     // `true` só faz o xterm entregar ao app o OSC 8 fora da web, em vez de
-    // descartá-lo em silêncio; quem decide abrir continua sendo o portão.
+    // descartá-lo em silêncio; quem decide o que abre continua sendo a política.
     expect(handler?.allowNonHttpProtocols).toBe(true)
 
     handler?.activate(mouse(), 'https://example.com/a', RANGE)
-    handler?.activate(mouse({ ctrlKey: true }), `https://exa${ZERO_WIDTH_SPACE}mple.com/`, RANGE)
-    handler?.activate(mouse({ ctrlKey: true }), 'file:///C:/x', RANGE)
-    handler?.activate(mouse({ ctrlKey: true }), 'vscode://file/C:/x', RANGE)
-    handler?.activate(mouse({ ctrlKey: true }), 'HTTPS://Example.com/a', RANGE)
+    expect(chooserUrl()).toBeNull()
 
-    expect(opened).toEqual(['https://example.com/a'])
+    handler?.activate(mouse({ ctrlKey: true, clientX: 30, clientY: 40 }), 'HTTPS://Example.com/a', RANGE)
+    expect(getLinkChooserState().request).toEqual({
+      url: 'HTTPS://Example.com/a',
+      origin: 'terminal',
+      anchor: { x: 30, y: 40 },
+      sourceNodeId: SESSION_ID,
+      returnFocus: null,
+    })
+    expect(opened).toEqual([])
+  })
 
-    // O `file:` agora chega ao hover: fica guardado para o menu, que para ele
-    // só oferece "Copiar link" (`terminalLinkMenuItems`).
-    handler?.hover?.(mouse(), 'file:///C:/x', RANGE)
-    expect(session.hoveredLink).toBe('file:///C:/x')
+  it.each(['file:///C:/x', 'vscode://file/C:/x', `https://exa${ZERO_WIDTH_SPACE}mple.com/`])(
+    'link recusado (%j) também pede o menu, que explica o motivo e só oferece copiar',
+    (uri) => {
+      harness = linkHarness()
+      linkSession(harness).terminal.options.linkHandler?.activate(mouse({ ctrlKey: true }), uri, RANGE)
+      expect(chooserUrl()).toBe(uri)
+      expect(opened).toEqual([])
+    },
+  )
+
+  it('um toque pede o menu sem Ctrl; Ctrl+clique do meio ou direito não pede', () => {
+    harness = linkHarness()
+    const handler = linkSession(harness).terminal.options.linkHandler
+
+    handler?.activate(mouse({ ctrlKey: true, button: 1 }), 'https://example.com/', RANGE)
+    handler?.activate(mouse({ ctrlKey: true, button: 2 }), 'https://example.com/', RANGE)
+    expect(chooserUrl()).toBeNull()
+
+    const tap = { ...mouse(), sourceCapabilities: { firesTouchEvents: true } } as unknown as MouseEvent
+    handler?.activate(tap, 'https://example.com/toque', RANGE)
+    expect(chooserUrl()).toBe('https://example.com/toque')
   })
 
   /*
@@ -1378,13 +1427,8 @@ describe('TerminalSessionStore: links do terminal', () => {
    * como o listener o poria; o teste logo abaixo exercita o listener em si
    * contra um elemento falso.
    */
-  it('Ctrl+arrastar dentro de uma URL seleciona texto e não abre o link', () => {
-    harness = createHarness('', 'claude', true, false, 1)
-    const opened: string[] = []
-    ;(globalThis as unknown as { window: { open: (url: string) => null } }).window.open = (url) => {
-      opened.push(url)
-      return null
-    }
+  it('Ctrl+arrastar dentro de uma URL seleciona texto e não pede o menu', () => {
+    harness = linkHarness()
     const session = linkSession(harness)
     session.terminal.hasSelection = () => true
 
@@ -1395,29 +1439,25 @@ describe('TerminalSessionStore: links do terminal', () => {
       'https://example.com/docs',
       RANGE,
     )
-    expect(opened).toEqual([])
+    expect(chooserUrl()).toBeNull()
 
-    // O gesto seguinte desceu e subiu no mesmo lugar: clique, abre.
+    // O gesto seguinte desceu e subiu no mesmo lugar: clique, pede o menu.
     session.linkGestureOrigin = { clientX: 120, clientY: 40 }
     session.terminal.options.linkHandler?.activate(
       mouse({ ctrlKey: true, clientX: 121, clientY: 41 }),
       'https://example.com/docs',
       RANGE,
     )
-    expect(opened).toEqual(['https://example.com/docs'])
+    expect(chooserUrl()).toBe('https://example.com/docs')
+    expect(opened).toEqual([])
   })
 
-  it('Ctrl+clique sem arrasto abre mesmo com seleção existente (o 2º clique seleciona a URL)', () => {
-    harness = createHarness('', 'claude', true, false, 1)
-    const opened: string[] = []
-    ;(globalThis as unknown as { window: { open: (url: string) => null } }).window.open = (url) => {
-      opened.push(url)
-      return null
-    }
+  it('Ctrl+clique sem arrasto pede o menu mesmo com seleção existente (o 2º clique seleciona a URL)', () => {
+    harness = linkHarness()
     const session = linkSession(harness)
     // Clique simples e logo depois Ctrl+clique: o 2º `mousedown` chega com
     // `detail=2`, o xterm seleciona a palavra — a própria URL — e no `mouseup`
-    // já há seleção. O gesto não andou, então é pedido de abrir.
+    // já há seleção. O gesto não andou, então é pedido de escolher.
     session.terminal.hasSelection = () => true
     session.linkGestureOrigin = { clientX: 100, clientY: 40 }
 
@@ -1426,7 +1466,7 @@ describe('TerminalSessionStore: links do terminal', () => {
       'https://example.com/docs',
       RANGE,
     )
-    expect(opened).toEqual(['https://example.com/docs'])
+    expect(chooserUrl()).toBe('https://example.com/docs')
   })
 
   it('o mousedown do botão principal grava a origem do gesto; o de outro botão não', () => {
@@ -1476,16 +1516,174 @@ describe('TerminalSessionStore: links do terminal', () => {
     }
   })
 
-  it('o WebLinksAddon usa o mesmo portão, dica e limpeza do hyperlink OSC 8', () => {
-    harness = createHarness('', 'claude', true, false, 1)
+  /*
+   * Um toque chega ao terminal como mousedown/mouseup de verdade, marcados em
+   * `sourceCapabilities.firesTouchEvents` — um dedo não tem Ctrl. Com o mouse
+   * tracking ligado (Claude Code e Codex ligam), `bindMouseSelection` retém o
+   * par e o devolve como sintético, e o xterm ativa o link com o mouseup que
+   * recebe: o sintético. Sem DOM, o elemento, o documento e o `MouseEvent` são
+   * dublês; o do `MouseEvent` faz o que o do Chromium faz com o init (cada
+   * campo vira propriedade do evento, `sourceCapabilities` inclusive, e
+   * `isTrusted` é falso).
+   */
+  it('com o mouse tracking ligado, um toque no link ainda pede o menu', () => {
+    harness = linkHarness()
+    const handler = linkSession(harness).terminal.options.linkHandler
+    const globals = globalThis as { document?: unknown; MouseEvent?: unknown }
+    const previousDocument = globals.document
+    const previousMouseEvent = globals.MouseEvent
+    const documentListeners = new Map<string, (event: unknown) => void>()
+    const dispatched: MouseEvent[] = []
+
+    class ScreenElement extends EventTarget {
+      dispatchEvent(event: Event): boolean {
+        dispatched.push(event as MouseEvent)
+        return true
+      }
+    }
+    class ChromiumMouseEvent {
+      readonly isTrusted = false
+      readonly type: string
+      constructor(type: string, init: object) {
+        Object.assign(this, init)
+        this.type = type
+      }
+    }
+
+    Object.assign((globalThis as { window: object }).window, {
+      navigator: { platform: 'Win32' },
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    })
+    globals.document = {
+      addEventListener: (type: string, listener: (event: unknown) => void) => documentListeners.set(type, listener),
+      removeEventListener: (type: string) => documentListeners.delete(type),
+    }
+    globals.MouseEvent = ChromiumMouseEvent
+    try {
+      const elementListeners = new Map<string, (event: unknown) => void>()
+      const session = {
+        mouseSelectionBound: false,
+        terminal: {
+          element: {
+            addEventListener: (type: string, listener: (event: unknown) => void) => {
+              elementListeners.set(type, listener)
+            },
+          },
+          modes: { mouseTrackingMode: 'vt200' },
+        },
+      }
+      ;(harness.store as unknown as { bindMouseSelection: (session: unknown) => void }).bindMouseSelection(session)
+
+      const screen = new ScreenElement()
+      const touch = (type: string) => ({
+        type,
+        target: screen,
+        isTrusted: true,
+        button: 0,
+        buttons: type === 'mousedown' ? 1 : 0,
+        ctrlKey: false,
+        metaKey: false,
+        shiftKey: false,
+        altKey: false,
+        clientX: 30,
+        clientY: 40,
+        sourceCapabilities: { firesTouchEvents: true },
+        preventDefault: () => {},
+        stopImmediatePropagation: () => {},
+      })
+
+      const onMouseDown = elementListeners.get('mousedown')
+      if (!onMouseDown) throw new Error('listener de mousedown não ligado')
+      onMouseDown(touch('mousedown'))
+      // Retido: o xterm ainda não recebeu nada, e o gesto espera o mouseup.
+      expect(dispatched).toEqual([])
+      const onDocumentUp = documentListeners.get('mouseup')
+      if (!onDocumentUp) throw new Error('o mousedown do toque não foi retido')
+      onDocumentUp(touch('mouseup'))
+
+      expect(dispatched.map((event) => event.type)).toEqual(['mousedown', 'mouseup'])
+      const replayedUp = dispatched[1]
+      expect(replayedUp.isTrusted).toBe(false)
+      handler?.activate(replayedUp, 'https://example.com/toque', RANGE)
+      expect(chooserUrl()).toBe('https://example.com/toque')
+    } finally {
+      globals.document = previousDocument
+      globals.MouseEvent = previousMouseEvent
+    }
+  })
+
+  it('no macOS, com o mouse tracking ligado, Ctrl+clique segue direto para o xterm, como o clique direito', () => {
+    // O `contextmenu` do Ctrl+clique sai já no mousedown e, sobre um link,
+    // abre o menu de destino. Retido, o mousedown só chegaria ao xterm no
+    // mouseup, e o xterm, que se foca a cada mousedown, tiraria o foco do menu.
+    const globals = globalThis as { window?: unknown; document?: unknown }
+    const previousWindow = globals.window
+    const previousDocument = globals.document
+    const documentListeners: string[] = []
+    globals.window = { navigator: { platform: 'MacIntel' }, addEventListener: () => {}, removeEventListener: () => {} }
+    globals.document = {
+      addEventListener: (type: string) => documentListeners.push(type),
+      removeEventListener: () => {},
+    }
+    try {
+      const elementListeners = new Map<string, (event: unknown) => void>()
+      const session = {
+        mouseSelectionBound: false,
+        terminal: {
+          element: {
+            addEventListener: (type: string, listener: (event: unknown) => void) => {
+              elementListeners.set(type, listener)
+            },
+          },
+          modes: { mouseTrackingMode: 'vt200' },
+        },
+      }
+      const store = new TerminalSessionStore()
+      ;(store as unknown as { bindMouseSelection: (session: unknown) => void }).bindMouseSelection(session)
+      const onMouseDown = elementListeners.get('mousedown')
+      if (!onMouseDown) throw new Error('listener de mousedown não ligado')
+
+      /** Aperta o botão principal e diz se o store reteve o mousedown. */
+      const press = (modifiers: { ctrlKey?: boolean; metaKey?: boolean }) => {
+        const preventDefault = vi.fn()
+        onMouseDown({
+          type: 'mousedown',
+          isTrusted: true,
+          button: 0,
+          ctrlKey: false,
+          metaKey: false,
+          shiftKey: false,
+          altKey: false,
+          clientX: 30,
+          clientY: 40,
+          ...modifiers,
+          preventDefault,
+          stopImmediatePropagation: () => {},
+        })
+        return preventDefault.mock.calls.length > 0
+      }
+
+      expect(press({ ctrlKey: true })).toBe(false)
+      expect(documentListeners).toEqual([])
+      // Cmd+clique, o gesto do link no macOS, continua retido até o mouseup.
+      expect(press({ metaKey: true })).toBe(true)
+    } finally {
+      globals.window = previousWindow
+      globals.document = previousDocument
+    }
+  })
+
+  it('o WebLinksAddon usa o mesmo gesto, dica e limpeza do hyperlink OSC 8', () => {
+    harness = linkHarness()
     const terminal = linkSession(harness).terminal as unknown as {
       options: { linkHandler?: LinkHandler | null }
       _addonManager: { _addons: Array<{ instance: { _handler?: unknown; _options?: { hover?: unknown; leave?: unknown } } }> }
     }
     // Campos internos do xterm e do addon: é o único jeito de ver, sem DOM, qual
-    // função o WebLinksAddon chama. Sem esta trava, voltar a passar
-    // activateTerminalExternalLink direto tiraria a regra de arrasto da URL em
-    // texto plano sem nenhum teste falhar.
+    // função o WebLinksAddon chama. Sem esta trava, dar ao addon um callback
+    // próprio tiraria da URL em texto plano a regra de arrasto (ou o menu)
+    // sem nenhum teste falhar.
     const webLinks = terminal._addonManager._addons
       .map((addon) => addon.instance)
       .find((instance) => typeof instance._handler === 'function' && instance._options)
@@ -1497,16 +1695,130 @@ describe('TerminalSessionStore: links do terminal', () => {
     expect(webLinks?._options?.leave).toBe(handler?.leave)
   })
 
-  it('o hover guarda o link para o menu e o leave o esquece', () => {
-    harness = createHarness('', 'claude', true, false, 1)
+  it('o hover guarda o link (e onde o ponteiro estava) para o menu, e o leave os esquece', () => {
+    harness = linkHarness()
     const session = linkSession(harness)
     const handler = session.terminal.options.linkHandler
 
-    handler?.hover?.(mouse(), 'https://example.com/', RANGE)
+    handler?.hover?.(mouse({ clientX: 12, clientY: 34 }), 'https://example.com/', RANGE)
     expect(session.hoveredLink).toBe('https://example.com/')
+    expect(session.hoveredLinkPoint).toEqual({ x: 12, y: 34 })
 
     // Sem limpar, um clique direito longe do link ainda abriria o menu dele.
     handler?.leave?.(mouse(), 'https://example.com/', RANGE)
     expect(session.hoveredLink).toBeUndefined()
+    expect(session.hoveredLinkPoint).toBeUndefined()
+  })
+
+  describe('clique direito, toque longo e tecla de menu', () => {
+    type ContextMenuInit = { clientX?: number; clientY?: number; pointerType?: string }
+
+    /** Liga o listener de `contextmenu` a um elemento falso e devolve como dispará-lo. */
+    function bindContextMenu(session: { hoveredLink?: string; hoveredLinkPoint?: { x: number; y: number } }) {
+      let listener: ((event: unknown) => void) | undefined
+      const fakeSession = {
+        id: SESSION_ID,
+        ...session,
+        terminal: {
+          element: {
+            addEventListener: (type: string, handler: (event: unknown) => void) => {
+              if (type === 'contextmenu') listener = handler
+            },
+            removeEventListener: () => {},
+          },
+          textarea: undefined,
+        },
+      }
+      const store = new TerminalSessionStore()
+      ;(store as unknown as { bindLinkContextMenu: (session: unknown) => void }).bindLinkContextMenu(fakeSession)
+      return (init: ContextMenuInit) => {
+        const event = {
+          clientX: 0,
+          clientY: 0,
+          ...init,
+          defaultPrevented: false,
+          preventDefault() {
+            this.defaultPrevented = true
+          },
+          stopPropagation() {},
+        }
+        listener?.(event)
+        return event
+      }
+    }
+
+    it('sobre um link: pede o menu no ponto do clique e não deixa o menu do sistema abrir', () => {
+      const fire = bindContextMenu({ hoveredLink: 'https://example.com/', hoveredLinkPoint: { x: 5, y: 6 } })
+      const event = fire({ clientX: 50, clientY: 60, pointerType: 'mouse' })
+      expect(event.defaultPrevented).toBe(true)
+      expect(getLinkChooserState().request).toMatchObject({
+        url: 'https://example.com/',
+        anchor: { x: 50, y: 60 },
+        sourceNodeId: SESSION_ID,
+      })
+    })
+
+    it('pela tecla de menu (sem ponteiro): o menu nasce onde o ponteiro estava sobre o link', () => {
+      const fire = bindContextMenu({ hoveredLink: 'https://example.com/', hoveredLinkPoint: { x: 5, y: 6 } })
+      fire({ clientX: 0, clientY: 0, pointerType: '' })
+      expect(getLinkChooserState().request?.anchor).toEqual({ x: 5, y: 6 })
+    })
+
+    it('longe de um link: nada muda, o terminal segue sem menu', () => {
+      const fire = bindContextMenu({})
+      const event = fire({ clientX: 50, clientY: 60, pointerType: 'mouse' })
+      expect(event.defaultPrevented).toBe(false)
+      expect(getLinkChooserState().request).toBeNull()
+    })
+
+    it('desligar a sessão tira o ouvinte de contextmenu do elemento, e ligar de novo não duplica', () => {
+      const added: unknown[] = []
+      const removed: unknown[] = []
+      const fakeSession: { id: string; offLinkContextMenu?: () => void; terminal: object } = {
+        id: SESSION_ID,
+        terminal: {
+          element: {
+            addEventListener: (type: string, handler: unknown) => {
+              if (type === 'contextmenu') added.push(handler)
+            },
+            removeEventListener: (type: string, handler: unknown) => {
+              if (type === 'contextmenu') removed.push(handler)
+            },
+          },
+        },
+      }
+      const store = new TerminalSessionStore()
+      const bind = (store as unknown as { bindLinkContextMenu: (session: unknown) => void }).bindLinkContextMenu.bind(store)
+
+      bind(fakeSession)
+      bind(fakeSession)
+      expect(added).toHaveLength(1)
+
+      fakeSession.offLinkContextMenu?.()
+      expect(removed).toEqual(added)
+    })
+
+    it('no macOS, Ctrl+clique é este clique secundário: pede o menu uma vez, não de novo no mouseup', () => {
+      harness = linkHarness()
+      ;(globalThis as { window: { navigator: unknown } }).window.navigator = { platform: 'MacIntel' }
+      const handler = linkSession(harness).terminal.options.linkHandler
+
+      // O Chromium no macOS entrega Ctrl+clique como `contextmenu` já no
+      // mousedown, e o menu abre por aqui...
+      const fire = bindContextMenu({ hoveredLink: 'https://example.com/', hoveredLinkPoint: { x: 5, y: 6 } })
+      fire({ clientX: 50, clientY: 60, pointerType: 'mouse' })
+      const pedido = getLinkChooserState()
+      expect(pedido.request?.url).toBe('https://example.com/')
+
+      // ...e o mouseup que vem depois chega ao xterm com o botão principal e
+      // Ctrl. Pedir de novo remontaria o menu (pisca, o foco cai no body por
+      // um quadro, o leitor de tela anuncia duas vezes).
+      handler?.activate(mouse({ ctrlKey: true, clientX: 50, clientY: 60 }), 'https://example.com/', RANGE)
+      expect(getLinkChooserState()).toBe(pedido)
+
+      // Cmd+clique continua sendo o gesto do link no macOS.
+      handler?.activate(mouse({ metaKey: true, clientX: 50, clientY: 60 }), 'https://example.com/', RANGE)
+      expect(getLinkChooserState().version).toBe(pedido.version + 1)
+    })
   })
 })

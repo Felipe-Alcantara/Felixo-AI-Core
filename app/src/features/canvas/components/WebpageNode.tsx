@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useId, useRef, useState } from 'react'
 import { NODE_MIN_SIZE } from '../services/node-geometry'
 import {
   Handle,
@@ -10,12 +10,15 @@ import {
 import {
   ArrowLeft,
   ArrowRight,
+  ExternalLink,
   Globe,
   RotateCw,
 } from 'lucide-react'
 import type { WebviewTag } from 'electron'
 import { NodeHeader } from './NodeHeader'
-import { normalizeUrlInput, persistableNavigationUrl } from '../services/url-utils'
+import { explainUrlInput, persistableNavigationUrl } from '../services/url-utils'
+import { openLinkChooser } from '../../shared/links/link-chooser-store'
+import { runLinkChoice } from '../../shared/links/link-destination'
 import {
   resolveGuestSrc,
   shouldCreateGuest,
@@ -24,6 +27,7 @@ import {
 } from '../services/webview-mount'
 import { WebviewProfileMenu } from './WebviewProfileMenu'
 import { partitionForWebviewProfile } from '../services/webview-profile'
+import { webviewLinkMenu, type WebviewContextMenuParams } from '../services/webview-context-menu'
 import type { WebpageNodeData } from '../types'
 
 /**
@@ -70,6 +74,10 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
   const [canGoBack, setCanGoBack] = useState(false)
   const [canGoForward, setCanGoForward] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
+  // Endereço que a barra recusou, com o motivo. Antes, Enter num `file:///…`
+  // simplesmente não fazia nada.
+  const [addressError, setAddressError] = useState<string | null>(null)
+  const addressErrorId = useId()
   const [isResizing, setIsResizing] = useState(false)
   // The page's own title wins once, then a manual rename "locks" the label so
   // page-title-updated never overwrites a name the user chose on purpose.
@@ -163,8 +171,11 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
       setLoadError(null)
       const url = webview.getURL()
       // A barra mostra onde a página está de fato, mesmo que seja um endereço
-      // que o bloco não grava.
+      // que o bloco não grava. O aviso de recusa (e o `aria-invalid`) falava
+      // do texto que a barra tinha antes: depois de Recarregar, Voltar ou um
+      // link da página, ele já não está lá.
       setAddressInput(url)
+      setAddressError(null)
       syncHistoryState()
       // Só vira `src` de remount (e dado salvo) o que o processo principal
       // aceita anexar. Um hash acima do limite, credenciais ou o about:blank
@@ -189,11 +200,29 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
       setLoadError(event.errorDescription || 'Não foi possível carregar a página.')
     }
 
+    // Clique direito (ou toque longo, ou a tecla de menu) num link da página:
+    // o mesmo menu do terminal e do Markdown. O clique simples continua sendo
+    // da página, que navega dentro do bloco. Longe de um link, nada muda.
+    const onContextMenu = (event: { params: WebviewContextMenuParams }) => {
+      // O ponto já vem no espaço da janela; falta só o zoom dela (ver
+      // `webviewLinkMenu`). Lido a cada gesto: Ctrl+=/− não remonta o bloco.
+      const link = webviewLinkMenu(event.params, window.felixo?.windowZoom?.getFactor?.() ?? 1)
+      if (!link) return
+      openLinkChooser({
+        url: link.url,
+        origin: 'pagina-web',
+        anchor: link.anchor,
+        sourceNodeId: id,
+        returnFocus: webview,
+      })
+    }
+
     webview.addEventListener('dom-ready', onDomReady)
     webview.addEventListener('did-navigate', onNavigate)
     webview.addEventListener('did-navigate-in-page', onNavigate)
     webview.addEventListener('page-title-updated', onTitleUpdated)
     webview.addEventListener('did-fail-load', onFailLoad)
+    webview.addEventListener('context-menu', onContextMenu)
 
     return () => {
       webview.removeEventListener('dom-ready', onDomReady)
@@ -201,12 +230,20 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
       webview.removeEventListener('did-navigate-in-page', onNavigate)
       webview.removeEventListener('page-title-updated', onTitleUpdated)
       webview.removeEventListener('did-fail-load', onFailLoad)
+      webview.removeEventListener('context-menu', onContextMenu)
     }
   }, [id, webview])
 
-  const navigateTo = (raw: string) => {
-    const normalized = normalizeUrlInput(raw)
-    if (!normalized) return
+  /** Leva o bloco ao endereço digitado; `false` quando a política o recusou. */
+  const navigateTo = (raw: string): boolean => {
+    const result = explainUrlInput(raw)
+    if (!result.ok) {
+      // O texto fica na barra, para a pessoa corrigir em vez de redigitar.
+      setAddressError(`Endereço não aberto: ${result.reason}.`)
+      return false
+    }
+    const normalized = result.url
+    setAddressError(null)
     setAddressInput(normalized)
     currentUrlRef.current = normalized
     // A falha já aparece no bloco pelo `did-fail-load`. Sem o `catch`, a
@@ -223,6 +260,28 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
       // no endereço novo (`currentUrlRef`); senão, o `did-navigate` da página
       // que estava carregando devolve a barra para onde ela está de fato.
     }
+    return true
+  }
+
+  /**
+   * Leva a página em que o bloco está para o navegador do sistema. O botão diz
+   * o destino, então não pergunta; a política vale de novo aqui e no processo
+   * principal.
+   */
+  const openInExternalBrowser = () => {
+    let current = currentUrlRef.current
+    try {
+      // O guest que ainda não emitiu dom-ready lança em vez de responder.
+      current = persistableNavigationUrl(webviewRef.current?.getURL()) ?? current
+    } catch {
+      // Fica a última URL boa que o bloco conhece.
+    }
+    runLinkChoice('abrir-no-navegador', current, 'pagina-web', {
+      openExternal: (url) => {
+        window.open(url, '_blank')
+      },
+      copy: () => {},
+    })
   }
 
   const handleLabelChange = (label: string) => {
@@ -286,18 +345,44 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
         </button>
         <input
           value={addressInput}
-          onChange={(event) => setAddressInput(event.target.value)}
+          onChange={(event) => {
+            setAddressInput(event.target.value)
+            setAddressError(null)
+          }}
           onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              navigateTo(addressInput)
+            // Só o endereço aceito tira o foco da barra. Na recusa ele fica
+            // aqui, para corrigir: no body, o Backspace da correção chegaria
+            // ao React Flow (`deleteKeyCode`) e apagaria o bloco selecionado.
+            if (event.key === 'Enter' && navigateTo(addressInput)) {
               event.currentTarget.blur()
             }
           }}
           placeholder="URL (ex: google.com)"
           aria-label="Endereço da página"
+          aria-invalid={addressError ? true : undefined}
+          aria-describedby={addressError ? addressErrorId : undefined}
           className="min-w-0 flex-1 rounded-sm bg-white/4 px-2 py-1 text-xs text-(--f-core-white) outline-hidden ring-1 ring-white/10 placeholder:text-(--f-core-secondary) focus:ring-white/25"
         />
+        <button
+          type="button"
+          onClick={openInExternalBrowser}
+          className="felixo-btn-icon rounded-sm p-1 text-(--f-core-white-soft) hover:bg-white/10 hover:text-(--f-core-white)"
+          title="Abrir esta página no navegador"
+          aria-label="Abrir esta página no navegador"
+        >
+          <ExternalLink size={13} />
+        </button>
       </div>
+
+      {addressError && (
+        <div
+          id={addressErrorId}
+          role="alert"
+          className="nodrag border-b border-white/10 bg-[color-mix(in_srgb,var(--color-warning)_14%,transparent)] px-2 py-1 text-[11px] text-(--color-warning)"
+        >
+          {addressError}
+        </div>
+      )}
 
       {loadError && (
         <div className="nodrag border-b border-white/10 bg-[color-mix(in_srgb,var(--color-error)_14%,transparent)] px-2 py-1 text-[11px] text-theme-error">

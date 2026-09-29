@@ -129,4 +129,22 @@ describe('shouldCloseOnOutsideClick', () => {
   it('closes when there is no container ref yet (defensive default)', () => {
     expect(shouldCloseOnOutsideClick(false, null, outside)).toBe(true)
   })
+
+  it('um clique no menu de link (camada flutuante num portal) não fecha a gaveta', () => {
+    const containerNode = { contains: () => false } as unknown as Node
+    const layer = { closest: (selector: string) => (selector === '[data-felixo-floating-layer]' ? {} : null) }
+    const menuItem = layer as unknown as Node
+    // O alvo pode ser o texto do item, que só tem `parentElement`.
+    const itemText = { parentElement: layer } as unknown as Node
+
+    expect(shouldCloseOnOutsideClick(false, containerNode, menuItem)).toBe(false)
+    expect(shouldCloseOnOutsideClick(false, containerNode, itemText)).toBe(false)
+    expect(shouldCloseOnOutsideClick(false, null, menuItem)).toBe(false)
+  })
+
+  it('fora da gaveta e fora de camada flutuante, fecha como antes', () => {
+    const containerNode = { contains: () => false } as unknown as Node
+    const elsewhere = { closest: () => null } as unknown as Node
+    expect(shouldCloseOnOutsideClick(false, containerNode, elsewhere)).toBe(true)
+  })
 })
