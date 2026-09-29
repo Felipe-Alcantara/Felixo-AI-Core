@@ -86,6 +86,15 @@ function gravarAMao(pasta, pedido) {
 const aberturas = (events) => events.filter((event) => event.channel === BROWSER_OPEN_CHANNEL)
 const avisosDaFila = (events) => events.filter((event) => event.channel === BROWSER_REQUESTS_CHANNEL)
 
+/** O que o cartão manda ao decidir: o id, o destino e o que ele mostrou. */
+function paramsDoCartao(controller, id, destino) {
+  const item = controller.listRequests().find((request) => request.id === id)
+  assert.ok(item, `o cartão não mostra o pedido ${id}`)
+  return { id, destino, url: item.url, ...(item.perfil ? { perfil: item.perfil } : {}) }
+}
+
+const decidirComoOCartao = (controller, id, destino) => controller.decide(paramsDoCartao(controller, id, destino))
+
 test('pedido válido NÃO abre sozinho: fica pendente e aparece para a pessoa', async () => {
   await comControlador({}, async ({ controller, events, opened }) => {
     const pedido = controller.pedidos.registrar('abrir-pagina', { url: 'https://Example.com', origem: '/projeto' })
@@ -114,7 +123,7 @@ test('a pessoa escolhe o navegador: abre a URL do pedido gravado, pela política
     const pedido = controller.pedidos.registrar('abrir-pagina', { url: 'https://example.com/a', modo: 'embutido' })
     controller.processPending()
 
-    const result = await controller.decide({ id: pedido.id, destino: 'externo' })
+    const result = await decidirComoOCartao(controller, pedido.id, 'externo')
 
     assert.deepEqual(opened, ['https://example.com/a'])
     const resolvido = controller.pedidos.ler(pedido.id)
@@ -130,7 +139,7 @@ test('a pessoa escolhe a Página Web: o renderer recebe o bloco e o pedido é ac
     const pedido = controller.pedidos.registrar('abrir-pagina', { url: 'http://localhost:4173' })
     controller.processPending()
 
-    await controller.decide({ id: pedido.id, destino: 'embutido' })
+    await decidirComoOCartao(controller, pedido.id, 'embutido')
 
     assert.deepEqual(opened, [])
     assert.deepEqual(aberturas(events), [
@@ -148,7 +157,7 @@ test('recusar resolve o pedido sem abrir nada, e o agente fica sabendo', async (
     const pedido = controller.pedidos.registrar('abrir-pagina', { url: 'https://example.com' })
     controller.processPending()
 
-    await controller.decide({ id: pedido.id, destino: null })
+    await decidirComoOCartao(controller, pedido.id, null)
 
     assert.deepEqual(opened, [])
     assert.deepEqual(aberturas(events), [])
@@ -159,13 +168,21 @@ test('recusar resolve o pedido sem abrir nada, e o agente fica sabendo', async (
   })
 })
 
-test('o renderer nunca escolhe o endereço: a URL aberta é relida do pedido', async () => {
+test('o renderer só confirma o que viu: outra URL, ou nenhuma, não abre nada', async () => {
   await comControlador({}, async ({ controller, opened }) => {
     const pedido = controller.pedidos.registrar('abrir-pagina', { url: 'https://example.com' })
     controller.processPending()
 
-    await controller.decide({ id: pedido.id, destino: 'externo', url: 'https://evil.example/' })
+    for (const url of ['https://evil.example/', undefined, 'https://example.com']) {
+      const result = await controller.decide({ id: pedido.id, destino: 'externo', url })
+      assert.equal(result.resolved, null, String(url))
+      assert.match(result.message, /mudou depois de aparecer no cartão/)
+    }
+    assert.deepEqual(opened, [])
+    assert.equal(controller.pedidos.ler(pedido.id).estado, 'pendente')
 
+    // A URL aberta continua sendo a do pedido gravado, na forma serializada.
+    await controller.decide({ id: pedido.id, destino: 'externo', url: 'https://example.com/' })
     assert.deepEqual(opened, ['https://example.com/'])
   })
 })
@@ -174,13 +191,14 @@ test('decidir de novo, id desconhecido ou destino inventado não fazem nada', as
   await comControlador({}, async ({ controller, opened }) => {
     const pedido = controller.pedidos.registrar('abrir-pagina', { url: 'https://example.com' })
     controller.processPending()
-    await controller.decide({ id: pedido.id, destino: 'externo' })
+    await decidirComoOCartao(controller, pedido.id, 'externo')
 
-    assert.equal((await controller.decide({ id: pedido.id, destino: 'externo' })).resolved, null)
-    assert.equal((await controller.decide({ id: 'nao-existe', destino: 'externo' })).resolved, null)
+    const url = 'https://example.com/'
+    assert.equal((await controller.decide({ id: pedido.id, destino: 'externo', url })).resolved, null)
+    assert.equal((await controller.decide({ id: 'nao-existe', destino: 'externo', url })).resolved, null)
 
     const outro = controller.pedidos.registrar('abrir-pagina', { url: 'https://example.com/b' })
-    const invalido = await controller.decide({ id: outro.id, destino: 'shell' })
+    const invalido = await controller.decide(paramsDoCartao(controller, outro.id, 'shell'))
     assert.equal(invalido.resolved, null)
     assert.equal(controller.pedidos.ler(outro.id).estado, 'pendente')
     assert.deepEqual(opened, ['https://example.com/'])
@@ -192,7 +210,7 @@ test('pedido de outra intenção (Fetch All, pergunta) não é decidido por aqui
     const fetchAll = controller.pedidos.registrar('executar-plano')
     controller.processPending()
 
-    assert.equal((await controller.decide({ id: fetchAll.id, destino: 'externo' })).resolved, null)
+    assert.equal((await controller.decide({ id: fetchAll.id, destino: 'externo', url: 'https://example.com/' })).resolved, null)
     assert.equal(controller.pedidos.ler(fetchAll.id).estado, 'pendente')
     assert.deepEqual(controller.listRequests(), [])
   })
@@ -203,7 +221,7 @@ test('navegador que recusa abrir: o pedido sai recusado com o motivo', async () 
     const pedido = controller.pedidos.registrar('abrir-pagina', { url: 'https://example.com' })
     controller.processPending()
 
-    await controller.decide({ id: pedido.id, destino: 'externo' })
+    await decidirComoOCartao(controller, pedido.id, 'externo')
 
     const resolvido = controller.pedidos.ler(pedido.id)
     assert.equal(resolvido.estado, 'recusado')
@@ -216,7 +234,7 @@ test('Página Web sem janela pronta: falha explicada e o pedido continua esperan
     const pedido = controller.pedidos.registrar('abrir-pagina', { url: 'https://example.com' })
     controller.processPending()
 
-    const result = await handlers.get('agent-browser:decide')({}, { id: pedido.id, destino: 'embutido' })
+    const result = await handlers.get('agent-browser:decide')({}, paramsDoCartao(controller, pedido.id, 'embutido'))
 
     assert.equal(result.ok, false)
     assert.match(result.message, /janela/)
@@ -233,7 +251,8 @@ test('os canais do IPC listam e decidem pelo mesmo controlador', async () => {
     assert.equal(lista.ok, true)
     assert.deepEqual(lista.requests.map((item) => item.id), [pedido.id])
 
-    const decisao = await handlers.get('agent-browser:decide')({}, { id: pedido.id, destino: 'externo' })
+    const [mostrado] = lista.requests
+    const decisao = await handlers.get('agent-browser:decide')({}, { id: mostrado.id, destino: 'externo', url: mostrado.url })
     assert.equal(decisao.ok, true)
     assert.deepEqual(opened, ['https://example.com/'])
   })
@@ -291,7 +310,7 @@ test('perfil pedido pelo nome chega ao bloco com o id resolvido, quando a pessoa
       controller.processPending()
       assert.deepEqual(controller.listRequests().map((item) => item.perfil), ['Trabalho'])
 
-      await controller.decide({ id: pedido.id, destino: 'embutido' })
+      await decidirComoOCartao(controller, pedido.id, 'embutido')
 
       assert.deepEqual(aberturas(events)[0].data, {
         requestId: pedido.id,
@@ -311,7 +330,7 @@ test('"Padrão" pedido pelo nome vira o perfil default, sem consultar o banco', 
         url: 'https://example.com', modo: 'embutido', perfil: 'Padrão',
       })
       controller.processPending()
-      await controller.decide({ id: pedido.id, destino: 'embutido' })
+      await decidirComoOCartao(controller, pedido.id, 'embutido')
       assert.equal(aberturas(events)[0].data.profileId, 'default')
     },
   )
@@ -321,7 +340,7 @@ test('sem perfil no pedido o evento não traz profileId (comportamento de sempre
   await comControlador({}, async ({ controller, events }) => {
     const pedido = controller.pedidos.registrar('abrir-pagina', { url: 'https://example.com', modo: 'embutido' })
     controller.processPending()
-    await controller.decide({ id: pedido.id, destino: 'embutido' })
+    await decidirComoOCartao(controller, pedido.id, 'embutido')
     assert.equal('profileId' in aberturas(events)[0].data, false)
   })
 })
@@ -352,17 +371,99 @@ test('arquivo malformado na pasta não derruba o registro e nunca chega ao rende
   )
 })
 
-test('pedido que fica torto depois de chegar é recusado ao decidir, sem lançar', async () => {
+test('pedido que entorta depois de aparecer no cartão não abre nem lança, e a varredura o recusa', async () => {
   await comControlador({}, async ({ controller, paths, opened, events }) => {
+    gravarAMao(paths.agentRequests, { id: 'torto', modo: 'embutido', url: 'https://example.com' })
+    const params = paramsDoCartao(controller, 'torto', 'embutido')
     gravarAMao(paths.agentRequests, { id: 'torto', modo: 'embutido', url: 'https://example.com', perfil: { toString: 1 } })
 
-    // Antes de o observador da pasta rodar: `decide` lê o arquivo direto.
-    const result = await controller.decide({ id: 'torto', destino: 'embutido' })
+    const result = await controller.decide(params)
 
-    assert.equal(result.resolved.estado, 'recusado')
-    assert.match(result.resolved.resultado.message, /malformado/)
+    assert.equal(result.resolved, null)
+    assert.match(result.message, /mudou/)
     assert.deepEqual(opened, [])
     assert.deepEqual(aberturas(events), [])
+
+    controller.processPending()
+    assert.equal(controller.pedidos.ler('torto').estado, 'recusado')
+    assert.match(controller.pedidos.ler('torto').resultado.message, /malformado/)
+  })
+})
+
+test('id de dentro diferente do nome do arquivo: a decisão não abre outro pedido', async () => {
+  // A sonda da revisão: o cartão mostrava docs.python.org (do `x.json`, que
+  // dizia ser o pedido `y`) e a decisão de `y` abria evil.example/login.
+  const antes = new Date(Date.now() - 1000).toISOString()
+  await comControlador(
+    {
+      preparar: (pasta) => {
+        fs.writeFileSync(
+          path.join(pasta, 'x.json'),
+          JSON.stringify({ id: 'y', acao: 'abrir-pagina', url: 'https://docs.python.org/', modo: 'externo', estado: 'pendente', pedidoEm: antes, origem: '' }),
+        )
+        gravarAMao(pasta, { id: 'y', url: 'https://evil.example/login' })
+      },
+    },
+    async ({ controller, opened }) => {
+      // O cartão mostra o que a decisão abriria, não o disfarce.
+      assert.deepEqual(controller.listRequests().map((item) => item.url), ['https://evil.example/login'])
+
+      const result = await controller.decide({ id: 'y', destino: 'externo', url: 'https://docs.python.org/' })
+
+      assert.equal(result.resolved, null)
+      assert.deepEqual(opened, [])
+    },
+  )
+})
+
+test('arquivo reescrito entre o cartão aparecer e o clique: nada abre, e o cartão é avisado', async () => {
+  await comControlador({}, async ({ controller, paths, opened, events }) => {
+    const pedido = controller.pedidos.registrar('abrir-pagina', { url: 'https://docs.python.org/3/' })
+    controller.processPending()
+    const params = paramsDoCartao(controller, pedido.id, 'externo')
+    gravarAMao(paths.agentRequests, { ...pedido, url: 'https://evil.example/login' })
+
+    const result = await controller.decide(params)
+
+    assert.deepEqual(result, { resolved: null, message: 'O pedido mudou depois de aparecer no cartão. Confira de novo.' })
+    assert.deepEqual(opened, [])
+    assert.equal(controller.pedidos.ler(pedido.id).estado, 'pendente')
+    // O cartão recebe o pedido como ele está agora, para a pessoa conferir.
+    assert.deepEqual(avisosDaFila(events).at(-1).data.requests.map((item) => item.url), ['https://evil.example/login'])
+  })
+})
+
+test('perfil trocado depois de aparecer também é mudança: outro perfil é outra sessão logada', async () => {
+  await comControlador({ findProfileByName: (nome) => ({ id: `id-${nome}` }) }, async ({ controller, paths, events }) => {
+    const pedido = controller.pedidos.registrar('abrir-pagina', { url: 'https://example.com', modo: 'embutido', perfil: 'Trabalho' })
+    controller.processPending()
+    const params = paramsDoCartao(controller, pedido.id, 'embutido')
+    gravarAMao(paths.agentRequests, { ...pedido, perfil: 'Pessoal' })
+
+    assert.equal((await controller.decide(params)).resolved, null)
+    // Omitir o perfil que o cartão mostrou também não passa.
+    gravarAMao(paths.agentRequests, pedido)
+    assert.equal((await controller.decide({ ...params, perfil: undefined })).resolved, null)
+    assert.deepEqual(aberturas(events), [])
+
+    await controller.decide(params)
+    assert.equal(aberturas(events)[0].data.profileId, 'id-Trabalho')
+  })
+})
+
+test('duas decisões ao mesmo tempo abrem a página uma vez só', async () => {
+  await comControlador({}, async ({ controller, opened }) => {
+    const pedido = controller.pedidos.registrar('abrir-pagina', { url: 'https://example.com' })
+    controller.processPending()
+    const params = paramsDoCartao(controller, pedido.id, 'externo')
+
+    const [primeira, segunda] = await Promise.all([controller.decide(params), controller.decide(params)])
+
+    assert.deepEqual(opened, ['https://example.com/'])
+    assert.equal(primeira.resolved.estado, 'aceito')
+    assert.deepEqual(segunda, { resolved: null, message: 'Esse pedido já está sendo atendido.' })
+    // Terminada a primeira, o id sai da reserva: a próxima decisão lê o desfecho.
+    assert.match((await controller.decide(params)).message, /não está mais pendente/)
   })
 })
 

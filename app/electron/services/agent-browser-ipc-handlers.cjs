@@ -18,6 +18,9 @@ const BROWSER_REQUESTS_CHANNEL = 'agent-browser:requests'
 const DESTINOS = ['externo', 'embutido']
 
 const URL_FORA_DA_WEB = 'A URL do pedido nao e http:// ou https://.'
+const NAO_PENDENTE = 'Esse pedido não está mais pendente.'
+const EM_ANDAMENTO = 'Esse pedido já está sendo atendido.'
+const MUDOU = 'O pedido mudou depois de aparecer no cartão. Confira de novo.'
 
 /**
  * Pedidos de agente para abrir uma página (`felixo browser open`), pela mesma
@@ -29,9 +32,10 @@ const URL_FORA_DA_WEB = 'A URL do pedido nao e http:// ou https://.'
  * canvas: navegador, Página Web ou recusar. O destino que o agente sugeriu
  * (`--embedded`) só vem marcado; quem decide é a pessoa.
  *
- * O que chega do renderer é só o id e o destino. A URL e o perfil são relidos
- * do pedido gravado e passam de novo pela política: o renderer nunca escolhe o
- * endereço aberto.
+ * O que chega do renderer é o id, o destino e o que o cartão mostrou (URL e
+ * perfil). A URL e o perfil abertos são relidos do pedido gravado e passam de
+ * novo pela política: o renderer nunca escolhe o endereço, só confirma o que
+ * viu — se o arquivo mudou depois de aparecer no cartão, nada abre.
  *
  * Pedido que não tem o que perguntar é recusado na hora, como antes: formato
  * que o `felixo browser open` não grava, URL fora da web e perfil que não
@@ -51,6 +55,8 @@ function registerAgentBrowserIpcHandlers(getMainWindow, appPaths, dependencies =
     ((url) => openExternalUrl(url, dependencies.shell ?? electron.shell))
   const ipcMain = dependencies.ipcMain ?? electron.ipcMain
   const logger = dependencies.logger ?? console
+  /** Ids com uma decisão em curso (ver `decide`). */
+  const emAndamento = new Set()
 
   /**
    * Recusa o que não tem o que perguntar; o resto fica para a pessoa.
@@ -123,13 +129,34 @@ function registerAgentBrowserIpcHandlers(getMainWindow, appPaths, dependencies =
   /**
    * A escolha da pessoa. `destino` nulo = recusar.
    *
-   * @param {{ id?: unknown, destino?: unknown }} params
+   * `url` e `perfil` são o que o cartão mostrou. Não escolhem nada: só provam
+   * que a pessoa viu o pedido que está gravado agora. Sem isso, um arquivo
+   * reescrito entre o cartão aparecer e o clique abriria outra URL — ou outro
+   * perfil, outra sessão logada — com a confirmação dada ao primeiro.
+   *
+   * @param {{ id?: unknown, destino?: unknown, url?: unknown, perfil?: unknown }} params
    */
   async function decide(params) {
     const id = typeof params?.id === 'string' ? params.id.trim() : ''
-    const pedido = id ? pedidos.ler(id) : null
+    if (!id) return { resolved: null, message: NAO_PENDENTE }
+
+    // Reservado antes de qualquer await: o estado só é gravado depois de o
+    // navegador responder, e um segundo clique nesse meio ainda leria o pedido
+    // como pendente e abriria a página de novo.
+    if (emAndamento.has(id)) return { resolved: null, message: EM_ANDAMENTO }
+    emAndamento.add(id)
+    try {
+      return await atender(id, params)
+    } finally {
+      emAndamento.delete(id)
+      notifyRenderer()
+    }
+  }
+
+  async function atender(id, params) {
+    const pedido = pedidos.ler(id)
     if (!pedido || pedido.estado !== 'pendente' || pedido.acao !== BROWSER_REQUEST_ACTION) {
-      return { resolved: null, message: 'Esse pedido não está mais pendente.' }
+      return { resolved: null, message: NAO_PENDENTE }
     }
 
     const destino = params?.destino ?? null
@@ -137,20 +164,18 @@ function registerAgentBrowserIpcHandlers(getMainWindow, appPaths, dependencies =
       return { resolved: null, message: 'Destino inválido para esse pedido.' }
     }
 
-    try {
-      return { resolved: await carryOut(pedido, destino) }
-    } finally {
-      notifyRenderer()
+    // Relido e revalidado agora. Torto também é mudança: o cartão só mostra
+    // pedido bom, e a próxima varredura recusa o que entortou.
+    const leitura = lerParaOCartao(pedido)
+    if (!leitura.ok || !mesmoQueOCartaoMostrou(leitura.item, params)) {
+      return { resolved: null, message: MUDOU }
     }
+
+    return { resolved: await carryOut(pedido, leitura.item, destino) }
   }
 
-  async function carryOut(pedido, destino) {
-    // Relido e revalidado aqui: o arquivo pode ter mudado desde a chegada.
-    const leitura = lerParaOCartao(pedido)
-    if (!leitura.ok) {
-      return pedidos.resolver(pedido.id, { aceito: false, resultado: { ok: false, ...leitura.recusa } })
-    }
-    const { url, modo: modoPedido } = leitura.item
+  async function carryOut(pedido, item, destino) {
+    const { url, modo: modoPedido } = item
 
     if (destino === null) {
       return pedidos.resolver(pedido.id, {
@@ -167,7 +192,7 @@ function registerAgentBrowserIpcHandlers(getMainWindow, appPaths, dependencies =
       // O perfil só vale para o bloco que o agente pediu (`--embedded
       // --profile`). Pedido para o navegador que a pessoa trouxe para o
       // canvas abre no Padrão.
-      const perfil = modoPedido === 'embutido' ? leitura.item.perfil : undefined
+      const perfil = modoPedido === 'embutido' ? item.perfil : undefined
       const profileId = perfil ? resolveProfileId(perfil, dependencies.findProfileByName) : undefined
       if (perfil && !profileId) {
         return pedidos.resolver(pedido.id, {
@@ -269,6 +294,15 @@ function lerParaOCartao(pedido) {
       pedidoEm: pedido.pedidoEm,
     },
   }
+}
+
+/**
+ * A pessoa decide sobre o que viu: a URL serializada e o perfil que o cartão
+ * mostrou precisam ser os do pedido gravado agora.
+ */
+function mesmoQueOCartaoMostrou(item, params) {
+  const perfilMostrado = typeof params?.perfil === 'string' ? params.perfil : ''
+  return typeof params?.url === 'string' && params.url === item.url && perfilMostrado === (item.perfil ?? '')
 }
 
 /** O que `felixo browser open` nunca grava. '' = formato bom. */

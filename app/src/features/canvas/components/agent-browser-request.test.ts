@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  browserDecisionError,
+  browserDecisionParams,
   describeBrowserRequestOrigin,
   describeBrowserRequestSuggestion,
   pickBrowserRequest,
@@ -49,5 +51,30 @@ describe('cartão de pedido de abertura de página', () => {
       'O agente sugeriu a Página Web.',
     )
     expect(describeBrowserRequestOrigin(request({ origem: torto }))).toBe('Pedido de um agente')
+  })
+
+  it('a decisão leva o que o cartão mostrou, para o main conferir com o pedido gravado', () => {
+    expect(browserDecisionParams(request(), 'externo')).toEqual({
+      id: 'pedido-1',
+      destino: 'externo',
+      url: 'https://example.com/',
+    })
+    expect(browserDecisionParams(request({ modo: 'embutido', perfil: 'Trabalho' }), null)).toEqual({
+      id: 'pedido-1',
+      destino: null,
+      url: 'https://example.com/',
+      perfil: 'Trabalho',
+    })
+  })
+
+  it('só uma decisão atendida fica calada; o resto mostra o motivo', () => {
+    expect(browserDecisionError({ ok: true, resolved: { estado: 'aceito' } })).toBeNull()
+    // Nada feito: o pedido mudou, já está sendo atendido ou não está mais pendente.
+    const mudou = 'O pedido mudou depois de aparecer no cartão. Confira de novo.'
+    expect(browserDecisionError({ ok: true, resolved: null, message: mudou })).toBe(mudou)
+    // Tentou e não conseguiu (o navegador não abriu): a pessoa pode escolher de novo.
+    expect(browserDecisionError({ ok: false, message: 'navegador indisponível' })).toBe('navegador indisponível')
+    expect(browserDecisionError(undefined)).toBe('Não foi possível atender o pedido.')
+    expect(browserDecisionError({ ok: true, resolved: null })).toBe('Não foi possível atender o pedido.')
   })
 })

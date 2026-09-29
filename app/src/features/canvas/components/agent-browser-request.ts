@@ -27,3 +27,33 @@ export function describeBrowserRequestSuggestion(request: CanvasAgentBrowserRequ
     ? `O agente sugeriu a Página Web, no perfil ${request.perfil}.`
     : 'O agente sugeriu a Página Web.'
 }
+
+/**
+ * O que o cartão manda ao decidir. A URL e o perfil não escolhem nada: são o
+ * que a pessoa viu, e o main só executa se o pedido gravado ainda for esse
+ * (um arquivo reescrito depois de o cartão aparecer não abre).
+ */
+export function browserDecisionParams(
+  request: CanvasAgentBrowserRequest,
+  destino: 'externo' | 'embutido' | null,
+): { id: string; destino: 'externo' | 'embutido' | null; url: string; perfil?: string } {
+  return {
+    id: request.id,
+    destino,
+    url: request.url,
+    ...(typeof request.perfil === 'string' && request.perfil ? { perfil: request.perfil } : {}),
+  }
+}
+
+/**
+ * O que o cartão diz depois de uma decisão, ou `null` quando ela foi atendida.
+ * O main devolve `resolved: null` com o motivo quando não fez nada (o pedido
+ * mudou depois de aparecer, já está sendo atendido, não está mais pendente) e
+ * `ok: false` quando tentou e não conseguiu.
+ */
+export function browserDecisionError(
+  result: { ok: boolean; message?: string; resolved?: unknown } | null | undefined,
+): string | null {
+  if (result?.ok && result.resolved && !result.message) return null
+  return result?.message || 'Não foi possível atender o pedido.'
+}

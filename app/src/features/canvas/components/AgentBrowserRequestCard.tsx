@@ -3,6 +3,8 @@ import { ExternalLink, Globe, X } from 'lucide-react'
 
 import { describeLinkDestination } from '../../shared/links/link-destination'
 import {
+  browserDecisionError,
+  browserDecisionParams,
   describeBrowserRequestOrigin,
   describeBrowserRequestSuggestion,
   pickBrowserRequest,
@@ -58,15 +60,18 @@ export function AgentBrowserRequestCard() {
   )
 
   const decide = useCallback(
-    async (ids: string[], destino: Destino) => {
-      if (busy || ids.length === 0) return
+    async (targets: CanvasAgentBrowserRequest[], destino: Destino) => {
+      if (busy || targets.length === 0) return
       setBusy(true)
       setError(null)
       try {
-        for (const id of ids) {
-          const result = await window.felixo?.canvas?.decideBrowserRequest?.({ id, destino })
-          if (!result?.ok) {
-            if (mountedRef.current) setError(result?.message ?? 'Não foi possível atender o pedido.')
+        for (const target of targets) {
+          const result = await window.felixo?.canvas?.decideBrowserRequest?.(
+            browserDecisionParams(target, destino),
+          )
+          const failure = browserDecisionError(result)
+          if (failure) {
+            if (mountedRef.current) setError(failure)
             break
           }
         }
@@ -133,7 +138,7 @@ export function AgentBrowserRequestCard() {
               <button
                 type="button"
                 disabled={busy}
-                onClick={() => void decide([request.id], 'externo')}
+                onClick={() => void decide([request], 'externo')}
                 className={`${BUTTON_CLASS} ${suggested === 'externo' ? SUGGESTED_CLASS : OTHER_CLASS}`}
               >
                 <ExternalLink size={12} aria-hidden /> Abrir no navegador
@@ -141,7 +146,7 @@ export function AgentBrowserRequestCard() {
               <button
                 type="button"
                 disabled={busy}
-                onClick={() => void decide([request.id], 'embutido')}
+                onClick={() => void decide([request], 'embutido')}
                 className={`${BUTTON_CLASS} ${suggested === 'embutido' ? SUGGESTED_CLASS : OTHER_CLASS}`}
               >
                 <Globe size={12} aria-hidden /> Abrir como Página Web
@@ -151,7 +156,7 @@ export function AgentBrowserRequestCard() {
           <button
             type="button"
             disabled={busy}
-            onClick={() => void decide([request.id], null)}
+            onClick={() => void decide([request], null)}
             className={`${BUTTON_CLASS} ${OTHER_CLASS}`}
           >
             <X size={12} aria-hidden /> Recusar
@@ -160,7 +165,7 @@ export function AgentBrowserRequestCard() {
             <button
               type="button"
               disabled={busy}
-              onClick={() => void decide(requests.map((item) => item.id), null)}
+              onClick={() => void decide(requests, null)}
               className="felixo-btn-flat ml-auto rounded-xs text-[11px] text-(--f-core-secondary) underline-offset-2 hover:text-(--f-core-white-soft) hover:underline disabled:opacity-50"
             >
               Recusar todos ({requests.length})

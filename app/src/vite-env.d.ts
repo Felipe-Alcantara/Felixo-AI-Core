@@ -773,10 +773,16 @@ declare global {
         listBrowserRequests: () => Promise<
           CliInvokeResult & { requests?: CanvasAgentBrowserRequest[] }
         >
-        /** `destino: null` recusa. A URL aberta é a do pedido gravado, nunca uma daqui. */
+        /**
+         * `destino: null` recusa. `url` e `perfil` são o que o cartão mostrou:
+         * o main só executa se o pedido gravado ainda for esse. A URL aberta é
+         * a do pedido gravado, nunca uma daqui.
+         */
         decideBrowserRequest: (params: {
           id: string
           destino: 'externo' | 'embutido' | null
+          url: string
+          perfil?: string
         }) => Promise<CliInvokeResult & { resolved?: { estado: string } | null }>
         onBrowserRequests: (
           callback: (data: { requests: CanvasAgentBrowserRequest[] }) => void,
