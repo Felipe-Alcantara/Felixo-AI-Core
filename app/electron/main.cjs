@@ -742,6 +742,9 @@ app.whenReady().then(async () => {
   })
   const webviewProfiles = registerWebviewProfilesIpcHandlers({ database: storageDatabase })
   agentBrowserWatching = registerAgentBrowserIpcHandlers(getMainWindow, appPaths, {
+    // A mesma troca da janela: com FELIXO_DEVTOOLS_SHELL_OPEN=falha, o
+    // "Abrir no navegador" do cartão de pedido também não abre nada.
+    shell: automationShell ?? undefined,
     findProfileByName: (name) => webviewProfiles.repository.findByName(name),
   })
   agentCanvasReadWatching = registerAgentCanvasReadIpcHandlers({
