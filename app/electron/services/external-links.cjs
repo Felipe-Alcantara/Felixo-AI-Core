@@ -3,6 +3,7 @@ const {
   classifyExternalUrl,
   describeExternalUrlForLog,
 } = require('./external-url-policy.cjs')
+const { platformShell } = require('./linux-xdg-open.cjs')
 
 /**
  * Canal pelo qual o processo principal avisa a janela de que um link não
@@ -74,12 +75,16 @@ function describeExternalOpenFailure(url, error) {
  * URL inteira pode ter token de convite, link assinado ou senha. A falha do
  * sistema (sem navegador padrão, handler quebrado) segue a mesma regra no log.
  *
+ * Sem `electronShell`, abre pelo shell da plataforma: no Linux, o que roda o
+ * `xdg-open` e sabe quando ele falhou (`linux-xdg-open.cjs`); nos outros, o do
+ * Electron.
+ *
  * @param {unknown} url
  * @param {{ openExternal: (url: string) => Promise<void> }} [electronShell]
  * @param {{ warn: (message: string) => void }} [logger]
  * @returns {Promise<void>}
  */
-async function openExternalUrl(url, electronShell = shell, logger = console) {
+async function openExternalUrl(url, electronShell = platformShell(shell), logger = console) {
   const decision = classifyExternalUrl(url)
   if (!decision.ok) {
     const message = `Link externo recusado (${decision.reason}): ${describeExternalUrlForLog(url)}`

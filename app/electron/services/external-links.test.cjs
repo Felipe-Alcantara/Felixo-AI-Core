@@ -8,6 +8,10 @@ Module._load = function patchedLoad(request, parent, isMain) {
   if (request === 'electron') {
     return { shell: { openExternal: async (url) => defaultShellCalls.push(url) } }
   }
+  // Sem isto, no Linux o shell padrão rodaria o `xdg-open` de verdade no teste.
+  if (request === './linux-xdg-open.cjs') {
+    return { platformShell: (electronShell) => electronShell }
+  }
   return originalLoad.call(this, request, parent, isMain)
 }
 const {
