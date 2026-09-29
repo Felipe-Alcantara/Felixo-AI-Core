@@ -35,17 +35,19 @@ describe('describeLinkDestination', () => {
     expect(destination.ok && destination.headline).toBe('exemplo.xn--caf-dma')
   })
 
-  it('mailto só vale no Markdown, com o destinatário como título', () => {
-    const markdown = describeLinkDestination('mailto:fulana@example.com?subject=Oi', 'markdown')
-    expect(markdown).toMatchObject({ ok: true, kind: 'email', headline: 'fulana@example.com' })
-
-    for (const origin of ['terminal', 'pagina-web'] as const) {
-      const refused = describeLinkDestination('mailto:fulana@example.com', origin)
-      expect(refused).toMatchObject({
-        ok: false,
-        reason: 'endereços mailto: não abrem pelo app, só http e https',
-      })
+  it('mailto vale no Markdown e na Página Web, com o destinatário como título', () => {
+    for (const origin of ['markdown', 'pagina-web'] as const) {
+      const email = describeLinkDestination('mailto:fulana@example.com?subject=Oi', origin)
+      expect(email).toMatchObject({ ok: true, kind: 'email', headline: 'fulana@example.com' })
     }
+  })
+
+  it('o terminal só leva página web: mailto é recusado com o motivo', () => {
+    const refused = describeLinkDestination('mailto:fulana@example.com', 'terminal')
+    expect(refused).toMatchObject({
+      ok: false,
+      reason: 'endereços mailto: não abrem pelo app, só http e https',
+    })
   })
 
   it('recusado: motivo legível, o texto com o disfarce à mostra e o texto cru para copiar', () => {
@@ -124,7 +126,7 @@ describe('describeLinkDestination', () => {
 
   it.each<[LinkOrigin, readonly string[]]>([
     ['terminal', ['http:', 'https:']],
-    ['pagina-web', ['http:', 'https:']],
+    ['pagina-web', ['http:', 'https:', 'mailto:']],
     ['markdown', ['http:', 'https:', 'mailto:']],
   ])('esquemas aceitos por origem: %s', (origin, schemes) => {
     expect(allowedSchemesFor(origin)).toEqual(schemes)
@@ -204,13 +206,16 @@ describe('linkChoiceEntries', () => {
     ])
   })
 
-  it('e-mail abre no app de e-mail e nunca vira Página Web', () => {
-    const destination = describeLinkDestination('mailto:fulana@example.com', 'markdown')
-    expect(linkChoiceEntries(destination, { canOpenWebpage: true })).toEqual([
-      { choice: 'abrir-no-navegador', label: 'Abrir no app de e-mail' },
-      { choice: 'copiar-link', label: 'Copiar endereço' },
-    ])
-  })
+  it.each<LinkOrigin>(['markdown', 'pagina-web'])(
+    'e-mail (%s) abre no app de e-mail e nunca vira Página Web',
+    (origin) => {
+      const destination = describeLinkDestination('mailto:fulana@example.com', origin)
+      expect(linkChoiceEntries(destination, { canOpenWebpage: true })).toEqual([
+        { choice: 'abrir-no-navegador', label: 'Abrir no app de e-mail' },
+        { choice: 'copiar-link', label: 'Copiar endereço' },
+      ])
+    },
+  )
 
   it.each([
     'file:///C:/Users/pessoa/relatorio.txt',
@@ -239,6 +244,13 @@ describe('runLinkChoice', () => {
     runLinkChoice('abrir-no-navegador', 'HTTPS://Example.com/a', 'terminal', spies)
     expect(spies.openExternal).toHaveBeenCalledWith('https://example.com/a')
     expect(spies.copy).not.toHaveBeenCalled()
+  })
+
+  it('mailto de dentro de uma Página Web vai ao app de e-mail, como o clique simples na página', () => {
+    const spies = effects()
+    runLinkChoice('abrir-no-navegador', 'mailto:fulana@example.com', 'pagina-web', spies)
+    expect(spies.openExternal).toHaveBeenCalledWith('mailto:fulana@example.com')
+    expect(spies.openWebpage).not.toHaveBeenCalled()
   })
 
   it('abrir como Página Web usa o bloco, só para página web', () => {

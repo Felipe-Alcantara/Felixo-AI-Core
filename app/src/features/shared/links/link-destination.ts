@@ -21,12 +21,15 @@ import {
 export type LinkOrigin = 'terminal' | 'markdown' | 'pagina-web'
 
 /**
- * O terminal e a página aberta no bloco só levam a página web: é a política
- * que o app já aplicava a eles. O Markdown aceita também `mailto:`, que ele
- * oferecia antes da política única (ver `justificativas` no JSON dela).
+ * O terminal só leva a página web: é a política que o app já aplicava a ele.
+ * O Markdown aceita também `mailto:`, que ele oferecia antes da política única
+ * (ver `justificativas` no JSON dela). A página aberta no bloco também: o
+ * clique simples num `mailto:` dentro dela já abre o app de e-mail (o
+ * Chromium pede a permissão `openExternal`, e `session-security.cjs` a aprova
+ * com a mesma política), e o menu não pode recusar o que o clique faz.
  */
 export function allowedSchemesFor(origin: LinkOrigin): readonly string[] {
-  return origin === 'markdown' ? EXTERNAL_OPENER_SCHEMES : EXTERNAL_WEB_SCHEMES
+  return origin === 'terminal' ? EXTERNAL_WEB_SCHEMES : EXTERNAL_OPENER_SCHEMES
 }
 
 type ApprovedDestination = {
