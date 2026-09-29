@@ -1,10 +1,14 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 import {
+  BROWSER_REQUEST_ARM_MS,
   browserDecisionError,
   browserDecisionParams,
+  browserRequestArmKey,
   describeBrowserRequestOrigin,
   describeBrowserRequestSuggestion,
+  isRepeatedClick,
   pickBrowserRequest,
 } from './agent-browser-request'
 import type { CanvasAgentBrowserRequest } from '../types'
@@ -76,5 +80,57 @@ describe('cartão de pedido de abertura de página', () => {
     expect(browserDecisionError({ ok: false, message: 'navegador indisponível' })).toBe('navegador indisponível')
     expect(browserDecisionError(undefined)).toBe('Não foi possível atender o pedido.')
     expect(browserDecisionError({ ok: true, resolved: null })).toBe('Não foi possível atender o pedido.')
+  })
+
+  it('os botões esperam de novo quando o cartão mostra outra coisa', () => {
+    // Um duplo clique leva uns 300 ms; a espera cobre o segundo clique com folga.
+    expect(BROWSER_REQUEST_ARM_MS).toBeGreaterThanOrEqual(500)
+    const base = browserRequestArmKey(request())
+    expect(browserRequestArmKey(request())).toBe(base)
+    expect(browserRequestArmKey(null)).toBeNull()
+    // Outro pedido, ou o mesmo pedido reescrito: a pessoa precisa ler de novo.
+    for (const outro of [
+      request({ id: 'pedido-2' }),
+      request({ url: 'https://evil.example/' }),
+      request({ modo: 'embutido' }),
+      request({ modo: 'embutido', perfil: 'Pessoal' }),
+    ]) {
+      expect(browserRequestArmKey(outro)).not.toBe(base)
+    }
+    // A fila crescer atrás do pedido não muda o que o cartão mostra.
+    expect(browserRequestArmKey(request({ origem: '/outra/pasta' }))).toBe(base)
+  })
+
+  it('o clique repetido de um duplo clique não decide; o teclado (detail 0) decide', () => {
+    expect(isRepeatedClick(0)).toBe(false)
+    expect(isRepeatedClick(1)).toBe(false)
+    expect(isRepeatedClick(2)).toBe(true)
+    expect(isRepeatedClick(3)).toBe(true)
+  })
+})
+
+describe('AgentBrowserRequestCard (sonda do código)', () => {
+  const source = readFileSync(new URL('./AgentBrowserRequestCard.tsx', import.meta.url), 'utf8')
+
+  it('clicar no cartão não fecha a gaveta do terminal', () => {
+    // `shouldCloseOnOutsideClick` ignora o que está dentro desse marcador.
+    expect(source).toMatch(/<section[^>]*\sdata-felixo-floating-layer\s/)
+  })
+
+  it('mostra o endereço inteiro numa caixa com rolagem, sem cortar o fim', () => {
+    expect(source).not.toMatch(/line-clamp/)
+    expect(source).toMatch(/max-h-\S+ overflow-y-auto/)
+    expect(source).toMatch(/\{destination\.url\}/)
+  })
+
+  it('não rouba o foco nem ouve teclas globais', () => {
+    expect(source).not.toMatch(/autoFocus|\.focus\(|addEventListener\(|onKeyDown/)
+  })
+
+  it('todo botão de decisão espera o cartão armar e ignora o clique repetido', () => {
+    const buttons = source.match(/<button\b/g) ?? []
+    expect(buttons).toHaveLength(4)
+    expect(source.match(/disabled=\{actionsDisabled\}/g)).toHaveLength(4)
+    expect(source.match(/onClick=\{onChoose\(/g)).toHaveLength(4)
   })
 })

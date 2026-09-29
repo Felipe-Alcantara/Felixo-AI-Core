@@ -1,5 +1,27 @@
 import type { CanvasAgentBrowserRequest } from '../types'
 
+/**
+ * Quanto os botões esperam para valer depois que o cartão passa a mostrar
+ * outro pedido (ou o mesmo com outro conteúdo). O cartão troca na hora em que
+ * um pedido é atendido: sem essa espera, um clique apressado decidiria o
+ * próximo pedido sem a pessoa lê-lo.
+ */
+export const BROWSER_REQUEST_ARM_MS = 600
+
+/** O que o cartão mostra de um pedido. Mudou isto, os botões esperam de novo. */
+export function browserRequestArmKey(request: CanvasAgentBrowserRequest | null): string | null {
+  return request ? JSON.stringify([request.id, request.url, request.modo, request.perfil ?? '']) : null
+}
+
+/**
+ * Segundo (ou terceiro) clique de uma sequência rápida. Nunca é uma decisão
+ * nova: o primeiro já decidiu, e o cartão pode estar mostrando o próximo. O
+ * teclado chega com `detail` 0.
+ */
+export function isRepeatedClick(detail: number): boolean {
+  return detail > 1
+}
+
 /** O pedido mais antigo: a fila é atendida em ordem, um cartão por vez. */
 export function pickBrowserRequest(
   requests: CanvasAgentBrowserRequest[] | null | undefined,
