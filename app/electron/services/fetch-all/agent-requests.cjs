@@ -20,6 +20,8 @@
 const fs = require('node:fs')
 const path = require('node:path')
 
+const { EXTERNAL_WEB_SCHEMES, classifyExternalUrl } = require('../external-url-policy.cjs')
+
 /** Intenções aceitas. Lista fechada de propósito. */
 const ACOES_ACEITAS = [
   'executar-plano',
@@ -169,7 +171,11 @@ function normalizarPedido(acao, opcoes = {}) {
 }
 
 /**
- * URL que pode atravessar o canal de pedidos.
+ * URL que pode atravessar o canal de pedidos: exatamente o que a política
+ * única de URL externa aceita como página web (controles, invisíveis, espaço
+ * e esquema fora de http/https ficam de fora na entrada, com erro claro para
+ * o agente). Devolve o texto aparado, não a forma serializada, para o pedido
+ * gravado continuar sendo o que o agente escreveu; quem abre serializa de novo.
  *
  * @param {unknown} valor
  * @returns {string}
@@ -178,12 +184,7 @@ function normalizarUrlWeb(valor) {
   if (typeof valor !== 'string') return ''
 
   const url = valor.trim()
-  try {
-    const protocolo = new URL(url).protocol
-    return protocolo === 'http:' || protocolo === 'https:' ? url : ''
-  } catch {
-    return ''
-  }
+  return classifyExternalUrl(url, EXTERNAL_WEB_SCHEMES).ok ? url : ''
 }
 
 /**

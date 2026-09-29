@@ -59,7 +59,19 @@ test('abrir-pagina aceita apenas URL web e os dois destinos fechados', () => {
     modo: 'externo',
   })
 
-  for (const url of ['file:///tmp/a', 'javascript:alert(1)', 'data:text/html,oi', 'nao-e-url']) {
+  // Os três últimos passavam antes da política única: `new URL` aceita o
+  // invisível (e o IDNA o apaga do host), o controle no caminho e o espaço.
+  const invisivel = String.fromCharCode(0x200b)
+  const controle = String.fromCharCode(1)
+  for (const url of [
+    'file:///tmp/a',
+    'javascript:alert(1)',
+    'data:text/html,oi',
+    'nao-e-url',
+    `https://exa${invisivel}mple.com/`,
+    `https://example.com/${controle}a`,
+    'https://example.com/a b',
+  ]) {
     assert.throws(() => normalizarPedido('abrir-pagina', { url }), /URL http/)
   }
   assert.throws(
