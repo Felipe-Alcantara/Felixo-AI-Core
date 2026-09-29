@@ -34,10 +34,24 @@ function hrefsOf(html: string): string[] {
   return [...html.matchAll(/\shref="([^"]*)"/g)].map((match) => decodeAttribute(match[1]))
 }
 
-// A ordem dos atributos é a do JSX do `MarkdownLink`: a dica tem o motivo na
-// primeira linha e o destino na segunda.
-const REFUSED_LINK =
-  /<button type="button" class="[^"]*" title="Link recusado: ([^"\n]*)\n([^"]*)" data-refused-link="true">([\s\S]*?)<\/button>/g
+// O botão de ícone que pede o menu do link recusado: não embrulha nada além
+// do ícone, um `<svg>` do app. O HTML cru não gera `<button>`: o sanitize não
+// o deixa passar.
+const REFUSED_LINK_MENU_BUTTON =
+  /<button type="button" class="[^"]*" title="Por que este link não abre" aria-label="Por que este link não abre"><svg\b[^>]*>(?:(?!<\/?button\b)[\s\S])*?<\/svg><\/button>/g
+
+// A ordem dos atributos é a do JSX do `MarkdownLink`: o rótulo tem a dica, com
+// o motivo na primeira linha e o destino na segunda, e o botão vem logo depois.
+const REFUSED_LINK = new RegExp(
+  /<span class="[^"]*" title="Link recusado: ([^"\n]*)\n([^"]*)" data-refused-link="true">([\s\S]*?)<\/span>/.source +
+    REFUSED_LINK_MENU_BUTTON.source,
+  'g',
+)
+
+/** O HTML sem os botões de ícone dos links recusados, que são do app. */
+function withoutRefusedLinkButtons(html: string): string {
+  return html.replace(REFUSED_LINK_MENU_BUTTON, '')
+}
 
 function refusedLinksOf(html: string) {
   return [...html.matchAll(REFUSED_LINK)].map((match) => ({
@@ -98,7 +112,8 @@ describe('Markdown e a política central de URL', () => {
 
     expectOnlyApprovedHrefs(html, source)
     expect(html).not.toMatch(/(?:action|formaction|xlink:href|http-equiv)=/i)
-    expect(html).not.toMatch(/<(?:base|meta|form|area|svg)\b/i)
+    // O ícone do botão de um link recusado é um `<svg>` do app; o do documento some.
+    expect(withoutRefusedLinkButtons(html)).not.toMatch(/<(?:base|meta|form|area|svg)\b/i)
   })
 
   it.each([
@@ -182,7 +197,7 @@ describe('Markdown: link recusado continua visível, explicado e copiável', () 
     // O sanitize apaga este `href` antes do `urlTransform`: o destino vem da
     // cópia feita antes dele.
     ['esquema que o sanitize apaga', '[x](javascript:alert(1))', 'x', 'javascript:alert(1)'],
-  ])('%s: botão com o motivo e o destino na dica, que só pede o menu, sem href', (_label, source, text, destination) => {
+  ])('%s: rótulo com o motivo e o destino na dica, e um botão que só pede o menu, sem href', (_label, source, text, destination) => {
     const html = renderMarkdown(source)
 
     expect(html).not.toMatch(/\shref=/i)
@@ -190,6 +205,25 @@ describe('Markdown: link recusado continua visível, explicado e copiável', () 
     expect(html).not.toMatch(/<a\b/i)
     expect(refusedLinksOf(html)).toEqual([
       { reason: expect.any(String), destination, text },
+    ])
+  })
+
+  it('em volta de um bloco de código, o "copiar" do bloco não fica dentro de outro botão', () => {
+    // HTML cru: o `<a>` embrulha o bloco de código inteiro, com o botão dele.
+    const html = renderMarkdown(
+      ['<a href="file:///C:/x">', '', '```js', 'const x = 1', '```', '', '</a>'].join(NEWLINE),
+    )
+
+    expect(html).not.toMatch(/<a\b/i)
+    expect(html).not.toMatch(/\shref=/i)
+    // Nenhum botão abre antes de o anterior fechar.
+    expect(html).not.toMatch(/<button\b(?:(?!<\/button>)[\s\S])*<button\b/)
+    expect(refusedLinksOf(html)).toEqual([
+      {
+        reason: 'endereços file: não abrem pelo app, só http, https e mailto',
+        destination: 'file:///C:/x',
+        text: expect.stringContaining('title="Copiar código"'),
+      },
     ])
   })
 

@@ -1,4 +1,5 @@
 import type { MouseEvent, ReactNode } from 'react'
+import { CircleHelp } from 'lucide-react'
 
 import { hasHiddenUrlCharacters } from '../external-url-policy'
 import { chooserAnchorFor, canvasNodeIdOf } from '../links/link-anchor'
@@ -36,12 +37,24 @@ type MarkdownLinkProps = {
 const LINK_CLASS_NAME =
   'font-medium text-(--f-core-white) underline decoration-white/30 underline-offset-4 hover:text-(--f-core-white)'
 
-// Tracejado: parece link (tem para onde ir, e o menu diz para onde), mas
-// avisa que não é um link que abre.
+// Tracejado: parece link (tem para onde ir, e a dica diz para onde), mas
+// avisa que não é um link que abre. É só texto; o botão ao lado abre o menu.
 const REFUSED_LINK_CLASS_NAME =
-  'felixo-btn-flat inline rounded-xs text-left font-medium text-(--f-core-white-soft) underline decoration-dashed decoration-white/30 underline-offset-4 hover:text-(--f-core-white)'
+  'font-medium text-(--f-core-white-soft) underline decoration-dashed decoration-white/30 underline-offset-4'
+
+const REFUSED_LINK_BUTTON_CLASS_NAME =
+  'felixo-btn-icon ml-0.5 inline-flex rounded-xs p-0.5 align-middle text-(--f-core-white-soft) hover:text-(--f-core-white)'
+
+const REFUSED_LINK_BUTTON_LABEL = 'Por que este link não abre'
 
 const LINK_HINT = 'Clique para escolher onde abrir'
+
+/**
+ * Controles que podem ficar DENTRO de um link do Markdown: o "copiar" de um
+ * bloco de código que um `<a>` de HTML cru embrulha, a caixa de tarefa do
+ * GFM, o `summary` de um `details`.
+ */
+const INNER_CONTROL_SELECTOR = 'button, input, textarea, select, summary, [role="button"]'
 
 // A dica é para ler o destino, não para guardar um `data:` de 100 KB: o
 // endereço inteiro vai pelo "Copiar link" do menu.
@@ -56,7 +69,8 @@ const REFUSED_TITLE_MAX_CHARS = 200
  *
  * - `#âncora` rola até o título do mesmo conteúdo;
  * - link relativo que o documento conhece vira botão que abre o destino;
- * - link recusado vira botão que abre o mesmo menu, com o motivo e só "Copiar";
+ * - link recusado vira texto com o motivo na dica e, ao lado, um botão que
+ *   abre o mesmo menu, com o motivo e só "Copiar";
  * - link sem destino nenhum vira texto.
  */
 export function MarkdownLink({
@@ -111,19 +125,33 @@ export function MarkdownLink({
 
     // Recusar tira o abrir, não o endereço: um
     // `https://usuario@git.empresa.com/repo.git` que a pessoa queria de fato
-    // continua visível e copiável, e o menu diz por que não abre. O botão não
+    // continua visível e copiável, e o menu diz por que não abre. Nada aqui
     // navega, e o texto não vira `<a>`.
+    //
+    // O rótulo não é o botão: um `<a>` de HTML cru pode embrulhar um bloco de
+    // código, e um botão em volta dele punha o "copiar" do bloco dentro de
+    // outro botão, e o clique em "copiar" abria o menu junto. O botão de
+    // ícone ao lado não embrulha nada.
     return (
-      <button
-        type="button"
-        className={REFUSED_LINK_CLASS_NAME}
-        title={`Link recusado: ${destination.reason}\n${shortenForTitle(written)}`}
-        data-refused-link="true"
-        onClick={(event) => askWhereToOpen(event, written)}
-        onContextMenu={(event) => askWhereToOpen(event, written)}
-      >
-        {children}
-      </button>
+      <>
+        <span
+          className={REFUSED_LINK_CLASS_NAME}
+          title={`Link recusado: ${destination.reason}\n${shortenForTitle(written)}`}
+          data-refused-link="true"
+        >
+          {children}
+        </span>
+        <button
+          type="button"
+          className={REFUSED_LINK_BUTTON_CLASS_NAME}
+          title={REFUSED_LINK_BUTTON_LABEL}
+          aria-label={REFUSED_LINK_BUTTON_LABEL}
+          onClick={(event) => askWhereToOpen(event, written)}
+          onContextMenu={(event) => askWhereToOpen(event, written)}
+        >
+          <CircleHelp size={12} />
+        </button>
+      </>
     )
   }
 
@@ -156,7 +184,12 @@ function ExternalMarkdownLink({ href, children }: { href: string; children?: Rea
 }
 
 function askWhereToOpen(event: MouseEvent<HTMLElement>, url: string) {
+  // Sempre, até quando o clique é de um controle de dentro do link: o
+  // navegador nunca segue o `href`.
   event.preventDefault()
+  // O "copiar" de um bloco de código dentro do link faz a ação dele, e só
+  // ela: o clique sobe até o `<a>`, mas não é um pedido para abrir o link.
+  if (isFromInnerControl(event)) return
   // O clique direito num link não é o do bloco: sem isto, o menu do nó do
   // canvas abriria junto.
   event.stopPropagation()
@@ -168,6 +201,19 @@ function askWhereToOpen(event: MouseEvent<HTMLElement>, url: string) {
     sourceNodeId: canvasNodeIdOf(element),
     returnFocus: element,
   })
+}
+
+/**
+ * O gesto foi num controle que fica dentro do elemento que ouve o evento, e
+ * não nele mesmo? O botão de ícone do link recusado é ele mesmo um `button`:
+ * o clique no ícone dele conta como clique no botão.
+ */
+function isFromInnerControl(event: MouseEvent<HTMLElement>): boolean {
+  const link = event.currentTarget
+  // O alvo de um evento de mouse é um elemento; sem `closest`, não é controle.
+  const target = event.target as Partial<Pick<Element, 'closest'>> | null
+  const control = target?.closest?.(INNER_CONTROL_SELECTOR)
+  return control != null && control !== link && link.contains(control)
 }
 
 /**

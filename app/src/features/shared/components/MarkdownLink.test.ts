@@ -1,16 +1,21 @@
-import type { ReactElement } from 'react'
+import { Fragment, isValidElement, type ReactElement } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { MarkdownLink } from './MarkdownLink'
 import { closeLinkChooser, getLinkChooserState } from '../links/link-chooser-store'
+import { describeLinkDestination, linkChoiceEntries } from '../links/link-destination'
 
 type RenderedLinkProps = {
   href?: string
   target?: string
   title?: string
   type?: string
+  'aria-label'?: string
+  'data-refused-link'?: string
+  children?: unknown
   onClick?: (event?: unknown) => void
   onAuxClick?: (event: unknown) => void
+  onContextMenu?: (event: unknown) => void
 }
 
 // Sem hooks: o componente (e o `<a>` que ele delega) pode ser chamado como
@@ -22,6 +27,66 @@ function renderLink(props: Parameters<typeof MarkdownLink>[0]) {
     element = (element.type as (props: object) => ReactElement<RenderedLinkProps>)(element.props)
   }
   return element
+}
+
+// O link recusado é um par, lado a lado: o rótulo (com a dica) e o botão de
+// ícone que pede o menu.
+function renderRefusedLink(props: Parameters<typeof MarkdownLink>[0]) {
+  const pair = renderLink(props)
+  expect(pair.type).toBe(Fragment)
+  const [label, button] = pair.props.children as ReactElement<RenderedLinkProps>[]
+  return { label, button }
+}
+
+/**
+ * Elemento de mentira com o que o `MarkdownLink` usa do DOM: `closest` (só
+ * tag ou `[role="button"]`, os seletores da lista de controles) e `contains`.
+ */
+type FakeElement = {
+  tag: string
+  role?: string
+  parent?: FakeElement
+  closest: (selectors: string) => FakeElement | null
+  contains: (other: unknown) => boolean
+}
+
+function fakeElement(tag: string, parent?: FakeElement, role?: string): FakeElement {
+  const element: FakeElement = {
+    tag,
+    role,
+    parent,
+    closest(selectors) {
+      const matches = (node: FakeElement) =>
+        selectors.split(',').some((raw) => {
+          const selector = raw.trim()
+          return selector === node.tag || (selector === '[role="button"]' && node.role === 'button')
+        })
+      for (let node: FakeElement | undefined = element; node; node = node.parent) {
+        if (matches(node)) return node
+      }
+      return null
+    },
+    contains(other) {
+      for (let node = other as FakeElement | undefined; node; node = node.parent) {
+        if (node === element) return true
+      }
+      return false
+    },
+  }
+  return element
+}
+
+function gestureOn(target: FakeElement, currentTarget: FakeElement, type = 'click') {
+  return {
+    detail: 1,
+    clientX: 11,
+    clientY: 22,
+    type,
+    target,
+    currentTarget,
+    preventDefault: vi.fn(),
+    stopPropagation: vi.fn(),
+  }
 }
 
 describe('MarkdownLink', () => {
@@ -125,9 +190,7 @@ describe('MarkdownLink', () => {
     })
 
     it('clique direito pede o mesmo menu e não deixa o menu do bloco abrir junto', () => {
-      const link = renderLink({ href: 'https://example.com/', children: 'x' }) as ReactElement<
-        RenderedLinkProps & { onContextMenu?: (event: unknown) => void }
-      >
+      const link = renderLink({ href: 'https://example.com/', children: 'x' })
       const event = clickEvent({ type: 'contextmenu' })
       link.props.onContextMenu?.(event)
       expect(event.preventDefault).toHaveBeenCalled()
@@ -142,6 +205,43 @@ describe('MarkdownLink', () => {
       expect(preventDefault).toHaveBeenCalled()
       expect(getLinkChooserState().request).toBeNull()
     })
+
+    // Um `<a>` de HTML cru em volta de um bloco de código põe o "copiar" do
+    // bloco dentro do link: o clique nele sobe até o `<a>`.
+    it.each([
+      ['o "copiar" de um bloco de código', 'button', undefined],
+      ['a caixa de tarefa', 'input', undefined],
+      ['um campo de texto', 'textarea', undefined],
+      ['uma lista de opções', 'select', undefined],
+      ['o título de um details', 'summary', undefined],
+      ['um elemento com papel de botão', 'span', 'button'],
+    ])('%s dentro do link fica com o gesto: sem menu, e o link não navega', (_label, tag, role) => {
+      const link = renderLink({ href: 'https://example.com/', children: 'x' })
+      const anchor = fakeElement('a')
+      const control = fakeElement(tag, fakeElement('div', anchor), role)
+      // O alvo é o texto dentro do controle ("copiar"), não o controle.
+      const target = fakeElement('span', control)
+
+      for (const type of ['click', 'contextmenu']) {
+        const event = gestureOn(target, anchor, type)
+        if (type === 'click') link.props.onClick?.(event)
+        else link.props.onContextMenu?.(event)
+
+        expect(event.preventDefault).toHaveBeenCalled()
+        // O clique segue para o bloco, como um "copiar" fora de link.
+        expect(event.stopPropagation).not.toHaveBeenCalled()
+        expect(getLinkChooserState().request).toBeNull()
+      }
+    })
+
+    it('link dentro de um controle (o título de um details) ainda pede o menu', () => {
+      const link = renderLink({ href: 'https://example.com/', children: 'x' })
+      const anchor = fakeElement('a', fakeElement('summary'))
+      const event = gestureOn(fakeElement('span', anchor), anchor)
+
+      link.props.onClick?.(event)
+      expect(getLinkChooserState().request?.url).toBe('https://example.com/')
+    })
   })
 
   describe('destino recusado', () => {
@@ -150,21 +250,30 @@ describe('MarkdownLink', () => {
       vi.unstubAllGlobals()
     })
 
-    it('vira botão com o motivo e o destino na dica; o clique pede o menu, que só copia', () => {
+    it('vira rótulo com o motivo e o destino na dica, e um botão ao lado pede o menu, que só copia', () => {
       const open = vi.fn()
       vi.stubGlobal('open', open)
 
-      const button = renderLink({ href: '', writtenHref: ' javascript:alert(1) ', children: 'x' }) as ReactElement<
-        RenderedLinkProps & { 'data-refused-link'?: string }
-      >
+      const { label, button } = renderRefusedLink({ href: '', writtenHref: ' javascript:alert(1) ', children: 'x' })
 
+      // O rótulo é só texto: não navega, não pede nada, e embrulha o que o
+      // link embrulhava (até um bloco de código com o botão "copiar").
+      expect(label.type).toBe('span')
+      expect(label.props.href).toBeUndefined()
+      expect(label.props.onClick).toBeUndefined()
+      expect(label.props.children).toBe('x')
+      expect(label.props['data-refused-link']).toBe('true')
+      expect(label.props.title).toBe(
+        'Link recusado: endereços javascript: não abrem pelo app, só http, https e mailto\njavascript:alert(1)',
+      )
+
+      // O botão não embrulha o rótulo: só o ícone.
       expect(button.type).toBe('button')
       expect(button.props.type).toBe('button')
       expect(button.props.href).toBeUndefined()
-      expect(button.props['data-refused-link']).toBe('true')
-      expect(button.props.title).toBe(
-        'Link recusado: endereços javascript: não abrem pelo app, só http, https e mailto\njavascript:alert(1)',
-      )
+      expect(button.props['aria-label']).toBe('Por que este link não abre')
+      expect(button.props.title).toBe('Por que este link não abre')
+      expect(isValidElement(button.props.children)).toBe(true)
 
       button.props.onClick?.({
         detail: 1,
@@ -174,16 +283,41 @@ describe('MarkdownLink', () => {
         preventDefault: () => {},
         stopPropagation: () => {},
       })
-      expect(getLinkChooserState().request).toMatchObject({ url: 'javascript:alert(1)', origin: 'markdown' })
+      const request = getLinkChooserState().request
+      expect(request).toMatchObject({ url: 'javascript:alert(1)', origin: 'markdown' })
+      expect(
+        linkChoiceEntries(describeLinkDestination(request?.url ?? '', 'markdown'), { canOpenWebpage: true }).map(
+          (entry) => entry.choice,
+        ),
+      ).toEqual(['copiar-link'])
       expect(open).not.toHaveBeenCalled()
+    })
+
+    it('clique no ícone do botão pede o menu: o ícone é parte do botão, não um controle dentro dele', () => {
+      const { button } = renderRefusedLink({ writtenHref: 'file:///C:/x', children: 'x' })
+      const buttonElement = fakeElement('button')
+
+      button.props.onClick?.(gestureOn(fakeElement('svg', buttonElement), buttonElement))
+      expect(getLinkChooserState().request?.url).toBe('file:///C:/x')
+    })
+
+    it('clique direito no botão pede o mesmo menu, sem o menu do bloco', () => {
+      const { button } = renderRefusedLink({ writtenHref: 'file:///C:/x', children: 'x' })
+      const buttonElement = fakeElement('button')
+      const event = gestureOn(buttonElement, buttonElement, 'contextmenu')
+
+      button.props.onContextMenu?.(event)
+      expect(event.preventDefault).toHaveBeenCalled()
+      expect(event.stopPropagation).toHaveBeenCalled()
+      expect(getLinkChooserState().request?.url).toBe('file:///C:/x')
     })
 
     it('dica longa é cortada; o menu leva o endereço inteiro', () => {
       const destination = `data:text/html,${'a'.repeat(1000)}`
-      const button = renderLink({ writtenHref: destination, children: 'x' })
+      const { label, button } = renderRefusedLink({ writtenHref: destination, children: 'x' })
 
-      expect(button.props.title?.length).toBeLessThan(400)
-      expect(button.props.title?.endsWith('…')).toBe(true)
+      expect(label.props.title?.length).toBeLessThan(400)
+      expect(label.props.title?.endsWith('…')).toBe(true)
       button.props.onClick?.({
         detail: 1,
         clientX: 0,

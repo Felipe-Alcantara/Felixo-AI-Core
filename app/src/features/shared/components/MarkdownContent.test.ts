@@ -89,12 +89,14 @@ describe('MarkdownContent', () => {
       expect(html).toContain(`<span>${text}</span>`)
     }
     // O link recusado não vira âncora, mas o destino e o motivo ficam na dica
-    // e o menu só oferece copiar (aceite "URL bloqueada continua copiável");
-    // os relativos sem resolvedor não são recusa e não ganham botão.
+    // do rótulo, e o botão ao lado pede o menu, que só oferece copiar (aceite
+    // "URL bloqueada continua copiável"); os relativos sem resolvedor não são
+    // recusa e não ganham botão.
     expect(html).toMatch(
-      /<button type="button" [^>]*title="Link recusado: endereços javascript: não abrem pelo app, só http, https e mailto\njavascript:alert\(1\)" data-refused-link="true">javascript<\/button>/,
+      /<span [^>]*title="Link recusado: endereços javascript: não abrem pelo app, só http, https e mailto\njavascript:alert\(1\)" data-refused-link="true">javascript<\/span><button type="button" [^>]*aria-label="Por que este link não abre"[^>]*><svg\b/,
     )
     expect(html.match(/data-refused-link="true"/g)).toHaveLength(1)
+    expect(html.match(/aria-label="Por que este link não abre"/g)).toHaveLength(1)
   })
 
   it('âncora fica no próprio conteúdo: sem janela nova e com o título marcado como destino', () => {
