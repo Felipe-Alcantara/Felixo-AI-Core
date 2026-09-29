@@ -247,6 +247,9 @@ function LinkChooserMenu({ request, onCopied }: MenuProps) {
       // não é "clicar fora" da gaveta do terminal de onde o link veio, e o
       // foco nele não substitui quem tinha o foco antes.
       data-felixo-floating-layer
+      // Foco passageiro: o menu some no blur da janela, e quem tinha o foco
+      // antes dele é quem o recebe de volta.
+      data-felixo-focus-transient
       onKeyDown={onKeyDown}
       onBlur={(event) => {
         if (focusLeavesLinkChooser(containerRef.current, event.relatedTarget)) dismiss('focus-left')

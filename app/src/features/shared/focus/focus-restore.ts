@@ -13,7 +13,7 @@
  * restaurar — moram aqui, longe do DOM, para poderem ser testadas direto.
  */
 
-import { FLOATING_LAYER_SELECTOR } from './floating-layer'
+import { TRANSIENT_FOCUS_SELECTOR } from './floating-layer'
 
 /** Elemento que sabemos como focar de volta. */
 export type Focusable = Pick<HTMLElement, 'isConnected' | 'focus' | 'blur'>
@@ -26,7 +26,8 @@ export type Focusable = Pick<HTMLElement, 'isConnected' | 'focus' | 'blur'>
  * lembrá-lo seria lembrar justamente o estado quebrado que queremos desfazer.
  * O mesmo vale para um elemento já fora do documento.
  *
- * Nem um elemento de camada flutuante: o menu de link fecha quando a janela
+ * Nem um elemento de foco passageiro (`TRANSIENT_FOCUS_SELECTOR`, em
+ * `floating-layer.ts`): o menu de link fecha quando a janela
  * perde o foco, e quando ela volta o item lembrado já saiu do documento — o
  * foco ficaria no `<body>`, com o terminal surdo e Backspace/Delete chegando
  * ao canvas. Quem abriu o menu foi lembrado quando o foco entrou nele, e é a
@@ -50,7 +51,7 @@ export function deveLembrarFoco(
 function estaEmCamadaFlutuante(elemento: Element): boolean {
   // A instalação é testada com um DOM de mentira (`useFocusRestore.test.ts`),
   // de objetos sem `closest`: esses contam como fora de qualquer camada.
-  return typeof elemento.closest === 'function' && elemento.closest(FLOATING_LAYER_SELECTOR) !== null
+  return typeof elemento.closest === 'function' && elemento.closest(TRANSIENT_FOCUS_SELECTOR) !== null
 }
 
 /**

@@ -11,7 +11,7 @@ function elemento(isConnected = true): Focusable {
 function elementoDoDom(dentroDeCamadaFlutuante: boolean): Element {
   return {
     closest: (seletor: string) =>
-      dentroDeCamadaFlutuante && seletor === '[data-felixo-floating-layer]' ? ({} as Element) : null,
+      dentroDeCamadaFlutuante && seletor === '[data-felixo-focus-transient]' ? ({} as Element) : null,
   } as unknown as Element
 }
 
@@ -29,7 +29,7 @@ describe('deveLembrarFoco', () => {
     expect(deveLembrarFoco(null, documento)).toBe(false)
   })
 
-  it('não lembra um item de camada flutuante: o menu de link some antes de a janela voltar', () => {
+  it('não lembra um item de foco passageiro: o menu de link some antes de a janela voltar', () => {
     // O foco foi do xterm para o menu (o xterm ficou lembrado) e a janela
     // perdeu o foco com ele no menu. Lembrar o item trocaria o xterm por um
     // nó que o menu leva embora ao fechar.
