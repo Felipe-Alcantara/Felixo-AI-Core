@@ -36,8 +36,25 @@
  * molde de `terminal-copy-shortcut.ts` e `terminal-input-selection.ts`.
  */
 
+/**
+ * De onde veio o gesto: no Chromium, `firesTouchEvents` é `true` quando o
+ * evento de mouse foi sintetizado a partir de um toque. O campo é do Chromium
+ * (`InputDeviceCapabilities`) e não está no DOM que o TypeScript descreve.
+ */
+type SourceCapabilities = { readonly firesTouchEvents?: boolean } | null
+
+/** Um `MouseEvent` do Chromium, com a origem do gesto. */
+type SourcedMouseEvent = MouseEvent & { sourceCapabilities?: SourceCapabilities }
+
+/**
+ * O init de um evento sintético deste módulo. O `UIEventInit` do Chromium
+ * aceita `sourceCapabilities`, e o evento criado com ele sai com a mesma
+ * origem do original.
+ */
+type SyntheticMouseEventInit = MouseEventInit & { sourceCapabilities?: SourceCapabilities }
+
 /** Marca no MouseEventInit para o xterm.js tratar como "seleção forçada". */
-export type ForcedSelectionEventInit = MouseEventInit
+export type ForcedSelectionEventInit = SyntheticMouseEventInit
 
 /**
  * A partir de quantos pixels um gesto deixa de ser clique e vira arrasto.
@@ -120,10 +137,16 @@ export function exceedsDragThreshold(
 
 /**
  * Os campos que um evento sintético precisa copiar do original para o xterm.js
- * não notar diferença: posição, botões e os modificadores que a pessoa apertou
- * de verdade.
+ * não notar diferença: posição, botões, os modificadores que a pessoa apertou
+ * de verdade e de onde o gesto veio.
+ *
+ * `sourceCapabilities` é o que diz que o gesto foi um toque, e o menu de link
+ * do terminal depende dele (`isTerminalLinkGesture`): um dedo não tem Ctrl. O
+ * xterm ativa o link com o `mouseup` que recebe, e com o mouse tracking ligado
+ * (Claude Code, Codex) esse `mouseup` é o sintético daqui. Sem copiar o campo,
+ * o toque chegava como clique de mouse sem Ctrl e o menu nunca abria.
  */
-function baseEventInit(event: MouseEvent): MouseEventInit {
+function baseEventInit(event: SourcedMouseEvent): SyntheticMouseEventInit {
   return {
     bubbles: true,
     cancelable: true,
@@ -141,6 +164,7 @@ function baseEventInit(event: MouseEvent): MouseEventInit {
     button: event.button,
     buttons: event.buttons,
     relatedTarget: event.relatedTarget,
+    sourceCapabilities: event.sourceCapabilities,
   }
 }
 
@@ -151,7 +175,7 @@ function baseEventInit(event: MouseEvent): MouseEventInit {
  * `shouldForceSelection` é falso e manda o relatório de mouse ao processo — a
  * CLI recebe o clique exatamente como receberia se este módulo não existisse.
  */
-export function buildReplayEventInit(event: MouseEvent): MouseEventInit {
+export function buildReplayEventInit(event: SourcedMouseEvent): SyntheticMouseEventInit {
   return baseEventInit(event)
 }
 
@@ -165,7 +189,7 @@ export function buildReplayEventInit(event: MouseEvent): MouseEventInit {
  * continua chegando como Ctrl real.
  */
 export function buildForcedSelectionEventInit(
-  event: MouseEvent,
+  event: SourcedMouseEvent,
   isMac: boolean,
 ): ForcedSelectionEventInit {
   return {

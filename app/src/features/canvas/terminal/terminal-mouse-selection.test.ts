@@ -9,7 +9,12 @@ import {
   xtermAlreadyForcesSelection,
 } from './terminal-mouse-selection'
 
-function mouseEvent(init: Partial<MouseEvent> = {}) {
+/** `sourceCapabilities` é do Chromium: diz se o evento de mouse nasceu de um toque. */
+type MouseEventLike = Partial<MouseEvent> & {
+  sourceCapabilities?: { firesTouchEvents?: boolean } | null
+}
+
+function mouseEvent(init: MouseEventLike = {}) {
   return {
     type: 'mousedown',
     button: 0,
@@ -160,5 +165,18 @@ describe('buildReplayEventInit', () => {
     expect(init.clientX).toBe(77)
     expect(init.clientY).toBe(88)
     expect(init.buttons).toBe(0)
+  })
+
+  it('preserva de onde o gesto veio — é isto que faz um toque no link pedir o menu com o mouse tracking ligado', () => {
+    // Um toque chega como mousedown/mouseup de verdade, marcados em
+    // `sourceCapabilities.firesTouchEvents`. Com o mouse tracking ligado
+    // (Claude Code, Codex), o xterm ativa o link com o mouseup sintético deste
+    // módulo: sem o campo, o toque virava clique de mouse sem Ctrl e o menu de
+    // destino nunca abria.
+    const toque = { firesTouchEvents: true }
+    const init = buildReplayEventInit(mouseEvent({ type: 'mouseup', sourceCapabilities: toque }))
+
+    expect(init.sourceCapabilities).toBe(toque)
+    expect(buildReplayEventInit(mouseEvent({ sourceCapabilities: null })).sourceCapabilities).toBeNull()
   })
 })

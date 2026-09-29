@@ -1504,6 +1504,103 @@ describe('TerminalSessionStore: links do terminal', () => {
     }
   })
 
+  /*
+   * Um toque chega ao terminal como mousedown/mouseup de verdade, marcados em
+   * `sourceCapabilities.firesTouchEvents` — um dedo não tem Ctrl. Com o mouse
+   * tracking ligado (Claude Code e Codex ligam), `bindMouseSelection` retém o
+   * par e o devolve como sintético, e o xterm ativa o link com o mouseup que
+   * recebe: o sintético. Sem DOM, o elemento, o documento e o `MouseEvent` são
+   * dublês; o do `MouseEvent` faz o que o do Chromium faz com o init (cada
+   * campo vira propriedade do evento, `sourceCapabilities` inclusive, e
+   * `isTrusted` é falso).
+   */
+  it('com o mouse tracking ligado, um toque no link ainda pede o menu', () => {
+    harness = createHarness('', 'claude', true, false, 1)
+    const handler = linkSession(harness).terminal.options.linkHandler
+    const globals = globalThis as { document?: unknown; MouseEvent?: unknown }
+    const previousDocument = globals.document
+    const previousMouseEvent = globals.MouseEvent
+    const documentListeners = new Map<string, (event: unknown) => void>()
+    const dispatched: MouseEvent[] = []
+
+    class ScreenElement extends EventTarget {
+      dispatchEvent(event: Event): boolean {
+        dispatched.push(event as MouseEvent)
+        return true
+      }
+    }
+    class ChromiumMouseEvent {
+      readonly isTrusted = false
+      readonly type: string
+      constructor(type: string, init: object) {
+        Object.assign(this, init)
+        this.type = type
+      }
+    }
+
+    Object.assign((globalThis as { window: object }).window, {
+      navigator: { platform: 'Win32' },
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    })
+    globals.document = {
+      addEventListener: (type: string, listener: (event: unknown) => void) => documentListeners.set(type, listener),
+      removeEventListener: (type: string) => documentListeners.delete(type),
+    }
+    globals.MouseEvent = ChromiumMouseEvent
+    try {
+      const elementListeners = new Map<string, (event: unknown) => void>()
+      const session = {
+        mouseSelectionBound: false,
+        terminal: {
+          element: {
+            addEventListener: (type: string, listener: (event: unknown) => void) => {
+              elementListeners.set(type, listener)
+            },
+          },
+          modes: { mouseTrackingMode: 'vt200' },
+        },
+      }
+      ;(harness.store as unknown as { bindMouseSelection: (session: unknown) => void }).bindMouseSelection(session)
+
+      const screen = new ScreenElement()
+      const touch = (type: string) => ({
+        type,
+        target: screen,
+        isTrusted: true,
+        button: 0,
+        buttons: type === 'mousedown' ? 1 : 0,
+        ctrlKey: false,
+        metaKey: false,
+        shiftKey: false,
+        altKey: false,
+        clientX: 30,
+        clientY: 40,
+        sourceCapabilities: { firesTouchEvents: true },
+        preventDefault: () => {},
+        stopImmediatePropagation: () => {},
+      })
+
+      const onMouseDown = elementListeners.get('mousedown')
+      if (!onMouseDown) throw new Error('listener de mousedown não ligado')
+      onMouseDown(touch('mousedown'))
+      // Retido: o xterm ainda não recebeu nada, e o gesto espera o mouseup.
+      expect(dispatched).toEqual([])
+      const onDocumentUp = documentListeners.get('mouseup')
+      if (!onDocumentUp) throw new Error('o mousedown do toque não foi retido')
+      onDocumentUp(touch('mouseup'))
+
+      expect(dispatched.map((event) => event.type)).toEqual(['mousedown', 'mouseup'])
+      const replayedUp = dispatched[1]
+      expect(replayedUp.isTrusted).toBe(false)
+      handler?.activate(replayedUp, 'https://example.com/toque', RANGE)
+      expect(chooserUrl()).toBe('https://example.com/toque')
+    } finally {
+      globals.document = previousDocument
+      globals.MouseEvent = previousMouseEvent
+    }
+  })
+
   it('o WebLinksAddon usa o mesmo gesto, dica e limpeza do hyperlink OSC 8', () => {
     harness = createHarness('', 'claude', true, false, 1)
     const terminal = linkSession(harness).terminal as unknown as {
