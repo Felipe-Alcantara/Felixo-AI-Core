@@ -1352,13 +1352,22 @@ describe('TerminalSessionStore: links do terminal', () => {
     vi.useFakeTimers()
     closeLinkChooser()
     opened = []
-    // Nenhum gesto do terminal pode abrir janela: quem abre é o menu, depois
-    // da escolha. Se algum caminho voltar a chamar `window.open`, isto grava.
+  })
+
+  /**
+   * A bancada com um gravador de `window.open`. Nenhum gesto do terminal pode
+   * abrir janela: quem abre é o menu, depois da escolha. O gravador vai
+   * DEPOIS da bancada, porque ela troca o `window` global: posto antes, ele
+   * ficava no objeto velho, não gravava nada e as asserções passavam vazias.
+   */
+  function linkHarness(): Harness {
+    const created = createHarness('', 'claude', true, false, 1)
     ;(globalThis as unknown as { window: { open: (url: string) => null } }).window.open = (url) => {
       opened.push(url)
       return null
     }
-  })
+    return created
+  }
 
   afterEach(() => {
     harness?.store.clear()
@@ -1367,7 +1376,7 @@ describe('TerminalSessionStore: links do terminal', () => {
   })
 
   it('hyperlink OSC 8: Ctrl/Cmd+clique pede o menu com o destino, clique simples não pede nada', () => {
-    harness = createHarness('', 'claude', true, false, 1)
+    harness = linkHarness()
     const session = linkSession(harness)
     const handler = session.terminal.options.linkHandler
     // `true` só faz o xterm entregar ao app o OSC 8 fora da web, em vez de
@@ -1391,7 +1400,7 @@ describe('TerminalSessionStore: links do terminal', () => {
   it.each(['file:///C:/x', 'vscode://file/C:/x', `https://exa${ZERO_WIDTH_SPACE}mple.com/`])(
     'link recusado (%j) também pede o menu, que explica o motivo e só oferece copiar',
     (uri) => {
-      harness = createHarness('', 'claude', true, false, 1)
+      harness = linkHarness()
       linkSession(harness).terminal.options.linkHandler?.activate(mouse({ ctrlKey: true }), uri, RANGE)
       expect(chooserUrl()).toBe(uri)
       expect(opened).toEqual([])
@@ -1399,7 +1408,7 @@ describe('TerminalSessionStore: links do terminal', () => {
   )
 
   it('um toque pede o menu sem Ctrl; Ctrl+clique do meio ou direito não pede', () => {
-    harness = createHarness('', 'claude', true, false, 1)
+    harness = linkHarness()
     const handler = linkSession(harness).terminal.options.linkHandler
 
     handler?.activate(mouse({ ctrlKey: true, button: 1 }), 'https://example.com/', RANGE)
@@ -1419,7 +1428,7 @@ describe('TerminalSessionStore: links do terminal', () => {
    * contra um elemento falso.
    */
   it('Ctrl+arrastar dentro de uma URL seleciona texto e não pede o menu', () => {
-    harness = createHarness('', 'claude', true, false, 1)
+    harness = linkHarness()
     const session = linkSession(harness)
     session.terminal.hasSelection = () => true
 
@@ -1444,7 +1453,7 @@ describe('TerminalSessionStore: links do terminal', () => {
   })
 
   it('Ctrl+clique sem arrasto pede o menu mesmo com seleção existente (o 2º clique seleciona a URL)', () => {
-    harness = createHarness('', 'claude', true, false, 1)
+    harness = linkHarness()
     const session = linkSession(harness)
     // Clique simples e logo depois Ctrl+clique: o 2º `mousedown` chega com
     // `detail=2`, o xterm seleciona a palavra — a própria URL — e no `mouseup`
@@ -1518,7 +1527,7 @@ describe('TerminalSessionStore: links do terminal', () => {
    * `isTrusted` é falso).
    */
   it('com o mouse tracking ligado, um toque no link ainda pede o menu', () => {
-    harness = createHarness('', 'claude', true, false, 1)
+    harness = linkHarness()
     const handler = linkSession(harness).terminal.options.linkHandler
     const globals = globalThis as { document?: unknown; MouseEvent?: unknown }
     const previousDocument = globals.document
@@ -1666,7 +1675,7 @@ describe('TerminalSessionStore: links do terminal', () => {
   })
 
   it('o WebLinksAddon usa o mesmo gesto, dica e limpeza do hyperlink OSC 8', () => {
-    harness = createHarness('', 'claude', true, false, 1)
+    harness = linkHarness()
     const terminal = linkSession(harness).terminal as unknown as {
       options: { linkHandler?: LinkHandler | null }
       _addonManager: { _addons: Array<{ instance: { _handler?: unknown; _options?: { hover?: unknown; leave?: unknown } } }> }
@@ -1687,7 +1696,7 @@ describe('TerminalSessionStore: links do terminal', () => {
   })
 
   it('o hover guarda o link (e onde o ponteiro estava) para o menu, e o leave os esquece', () => {
-    harness = createHarness('', 'claude', true, false, 1)
+    harness = linkHarness()
     const session = linkSession(harness)
     const handler = session.terminal.options.linkHandler
 
@@ -1763,7 +1772,7 @@ describe('TerminalSessionStore: links do terminal', () => {
     })
 
     it('no macOS, Ctrl+clique é este clique secundário: pede o menu uma vez, não de novo no mouseup', () => {
-      harness = createHarness('', 'claude', true, false, 1)
+      harness = linkHarness()
       ;(globalThis as { window: { navigator: unknown } }).window.navigator = { platform: 'MacIntel' }
       const handler = linkSession(harness).terminal.options.linkHandler
 
