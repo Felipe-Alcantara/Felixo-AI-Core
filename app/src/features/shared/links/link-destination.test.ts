@@ -255,9 +255,12 @@ describe('runLinkChoice', () => {
 
   it('abrir como Página Web usa o bloco, só para página web', () => {
     const spies = effects()
-    runLinkChoice('abrir-como-pagina-web', 'https://example.com/', 'pagina-web', spies)
+    // Texto cru (maiúsculas, sem barra final): o bloco recebe a forma que a
+    // política serializou, a mesma que o processo principal aceita no attach.
+    runLinkChoice('abrir-como-pagina-web', ' HTTPS://Example.com ', 'pagina-web', spies)
     expect(spies.openWebpage).toHaveBeenCalledWith('https://example.com/')
     expect(spies.openExternal).not.toHaveBeenCalled()
+    expect(spies.copy).not.toHaveBeenCalled()
 
     const mail = effects()
     runLinkChoice('abrir-como-pagina-web', 'mailto:fulana@example.com', 'markdown', mail)
@@ -279,6 +282,9 @@ describe('runLinkChoice', () => {
     const spies = effects()
     runLinkChoice('copiar-link', ' file:///C:/Users/pessoa/notas.txt ', 'terminal', spies)
     expect(spies.copy).toHaveBeenCalledWith('file:///C:/Users/pessoa/notas.txt')
+    // Copiar um recusado continua sem abrir nada.
+    expect(spies.openExternal).not.toHaveBeenCalled()
+    expect(spies.openWebpage).not.toHaveBeenCalled()
   })
 
   it('sem canvas, "Página Web" não faz nada', () => {
