@@ -846,6 +846,10 @@ são relidos do pedido gravado e passam de novo pela política. O cartão não
 rouba o foco nem responde a teclas globais, para um Enter digitado no terminal
 não confirmar nada.
 
+O cartão é montado no `CanvasView`, porque a Página Web precisa do canvas. Com
+a tela do chat aberta, o pedido fica na fila até a pessoa voltar. Pedido com
+mais de uma hora sai da lista (`VALIDADE_MS` da fila de intenções).
+
 O que não tem o que perguntar continua recusado na hora: URL fora da web e
 perfil que não existe. O resultado gravado diz o destino sugerido
 (`modoPedido`) e o escolhido (`modo`), e `felixo browser status` mostra os dois

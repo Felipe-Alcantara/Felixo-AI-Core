@@ -7014,3 +7014,56 @@ Registro gravado às 00:31. Completa a entrada anterior. A lente de CSP, docs e 
 - **Uma asserção "copiar nunca abre" não tinha como falhar** (o mock nunca era passado). Foi substituída pelo teste acima.
 
 Essas 4 mutações agora morrem: 31 no total nesta task. O primeiro CI de `cb88c79` (run 36516349566) passou em 21 de 22 jobs. O Validate do Windows reprovou no passo SA1 do smoke de onboarding ("o app não parou de gravar sozinho antes do percurso"), a mesma intermitência do Windows já vista na task anterior; o mesmo smoke passou em ubuntu, arm e macOS. O job foi reexecutado.
+
+## 2026-09-29 — Links: escolha explícita de destino (navegador, Página Web ou copiar)
+
+Registro de Claude - Tasks do AI Core, task "Felixo AI Core/Terminal — oferecer escolha explícita entre navegador externo e Página Web" (Notion 3ce91f95-497e-8122-84ca-fd22fb536393). Início em 29/09 às 08:37.
+
+### Contexto
+
+A política única de URL (entrada anterior) decidia **se** um link podia sair do app, mas não **para onde**. No terminal, o Ctrl/Cmd+clique abria direto o navegador, e só o clique direito oferecia a Página Web. No Markdown (notas, arquivos, chat, painel do Notion), o clique abria o navegador, sem menu e sem a Página Web. A Página Web não tinha como levar a página para o navegador, e a barra de endereço não fazia nada com um endereço recusado. Um pedido de agente (`felixo browser open`) abria sozinho, no navegador logado da pessoa. A task pedia uma política uniforme de clique, modificador e menu, e o aceite dizia: "nenhuma URL abre sem gesto" e "URL não suportada explica motivo".
+
+### Decisões (Trilha B, respondidas pelo Felipe às 08:50)
+
+- **Gesto principal:** perguntar a cada clique. Nenhum link abre direto; o gesto abre o menu com o destino escrito.
+- **Preferência:** não guardar. Sem configuração nova: a escolha é feita a cada vez.
+- **Superfícies:** terminal, Markdown e Página Web, com o mesmo menu.
+- **Pedido de agente:** pedir confirmação, com navegador, Página Web ou recusar.
+
+### O que foi feito
+
+- **Núcleo em `src/features/shared/links/`:**
+  - `link-destination.ts` (puro): destino (host em punycode ou destinatário do e-mail), escolhas por origem e motivo da recusa em português comum (`describeRefusal`). `runLinkChoice` classifica de novo antes de agir, e "Copiar" só conhece a área de transferência.
+  - `link-chooser-store.ts`: o pedido fora do React (o terminal é imperativo), com cópia do link no instante do gesto. O canvas registra ali o criador de bloco Página Web (`registerWebpageOpener`); sem canvas (tela do chat), o menu não oferece a Página Web.
+  - `LinkChooserHost.tsx`, montado no `App`: `role=menu`, setas/Home/End, Enter/Espaço, Esc/Tab, foco devolvido a quem abriu (ou levado ao bloco novo), "Link copiado" na região `status`, e `data-felixo-floating-layer` para a gaveta do terminal não fechar com o clique no menu.
+  - `link-chooser-menu.ts` e `link-anchor.ts` (puros): posição dentro da janela, teclas, origem do gesto (teclado, toque) e bloco de origem.
+  - `revealHiddenUrlCharacters` na política do renderer: o texto recusado aparece com `⟨U+200B⟩` no lugar do invisível.
+- **Terminal:** Ctrl/Cmd+clique, toque (`sourceCapabilities.firesTouchEvents`), clique direito e a tecla de menu abrem o menu. A dica diz o destino real e, na recusa, o motivo. O menu DOM imperativo e a fiação `onOpenWebpage` (TerminalNode → store) saíram.
+- **Markdown:** o `<a>` continua link para leitor de tela e Tab, mas o clique, o Enter e o clique direito abrem o menu, e o clique do meio não abre nada. O recusado virou botão tracejado, com o motivo na dica e o menu só com copiar. O destino que a política aprova, mas o `rehype-sanitize` apagou (`HTTPS://`), volta como link serializado; isso resolve, por outro caminho, a diferença conhecida que a entrada anterior registrou.
+- **Página Web:** o clique direito num link da página abre o menu (evento `context-menu` do `<webview>`). Há um botão "Abrir esta página no navegador". A barra de endereço e o formulário "Criar Página Web" dizem o motivo da recusa (`explainUrlInput`); esquema colado sem barras (`javascript:`, `mailto:`) é explicado como esquema.
+- **Pedido de agente:** o pedido válido fica pendente e aparece no `AgentBrowserRequestCard` (topo do canvas). O cartão mostra origem, endereço e sugestão, com os botões navegador, Página Web e recusar, mais "Recusar todos" quando há fila. Ele não rouba o foco nem responde a teclas globais. O renderer manda só `{id, destino}` (`agent-browser:decide`); URL e perfil são relidos do pedido gravado. O resultado grava `modo` (escolhido) e `modoPedido` (sugerido); a CLI, a ajuda e a skill dizem que nada abre sem a pessoa.
+- **Smoke da CI, sessão D** (`scripts/canvas-smoke-links.cjs`, L0–L12): cobre, no app real, mouse, teclado, clique direito, toque, OSC 8, streaming com o menu aberto, a Página Web com página servida em 127.0.0.1 e o cartão de pedido. A CLI roteirizada ganhou os gatilhos `__felixo_smoke_osc8__` e `__felixo_smoke_stream__`.
+- **Docs:** ARQUITETURA ("Escolha de destino: nenhum link abre direto" e "Pedido de agente para abrir página"), GUIA-USUARIO ("Links: escolher onde abrir"), skill `abrir-paginas-no-navegador` e ajuda do `felixo browser`.
+
+### Achados no app real (sessão D), corrigidos antes do push
+
+- As setas moviam o foco só no quadro seguinte; agora movem na hora da tecla.
+- **A gaveta do terminal fechava ao escolher uma opção do menu com o mouse.** O menu mora num portal fora dela, e o `mousedown` contava como clique fora. O menu antigo do terminal tinha o mesmo defeito. Agora `shouldCloseOnOutsideClick` ignora a camada flutuante.
+- No terminal, Shift+F10 é da CLI: o xterm entrega o F10 ao programa (o htop sai com ele). A tecla de menu funciona, e o teste usa ela.
+
+### Validação local
+
+- `npx tsc -b`, `npm run lint`: saída 0.
+- `npx vitest run`: 2.501 de 2.504 na primeira rodada, com 1 pulado. As 2 falhas eram os testes de 20.000 amostras da política estourando 5 s neste notebook de 4 threads ocupado (`nproc` = 4; carga ~15 com o app e um navegador abertos). A versão da `main` reprova igual na mesma máquina. Ganharam prazo de 60 s, e o arquivo passa (87 de 87).
+- Suíte node, Node 25.9.0 e Node 22.22.3 (o da CI): 2.298 de 2.298 nas duas.
+- Smoke da sessão D sob Xvfb e `flock`, com perfil isolado: L0–L12 ok em 83 s.
+
+### NÃO verificado / limitações
+
+- **macOS e Windows** só pela CI. O modificador do smoke é Cmd no macOS. O toque real (tela sensível) não foi testado em hardware: o toque vem do CDP (`Input.dispatchTouchEvent`), que passa pelo mesmo reconhecimento de gesto do Chromium.
+- **Leitor de tela real** (Orca/NVDA/VoiceOver) não foi usado. A estrutura (`role=menu`, `menuitem`, `aria-describedby` com o destino, região `status`) está no código e no smoke.
+- **Links de conteúdo sem teclado no terminal:** o xterm não põe foco em link. Pelo teclado, só a tecla de menu com o ponteiro sobre o link.
+- **O cartão de pedido só aparece no canvas.** Na tela do chat, o pedido espera; com mais de uma hora, sai da lista.
+- **Botões do app que já dizem o destino** ("Abrir no Notion" no painel, links do painel de uso) não perguntam. A escolha já está no rótulo.
+- **Telemetria:** nenhuma foi adicionada. O único log continua o de recusa do opener, que leva só esquema e host.
+- **Nota de ambiente:** a nota da entrada anterior (Ryzen 7 5700G, 16 threads) não vale para a máquina desta sessão, que tem 4 threads (`nproc`). Provavelmente é outra máquina.
