@@ -70,6 +70,16 @@ describe('linkChooserKeyAction', () => {
     }
     expect(linkChooserKeyAction('ArrowDown', 0, 0)).toBeNull()
   })
+
+  it('Enter ou Espaço segurados não escolhem: só uma tecla nova confirma', () => {
+    // O Enter que abriu o menu, segurado, repete no primeiro item.
+    expect(linkChooserKeyAction('Enter', 0, 3, true)).toEqual({ type: 'ignore' })
+    expect(linkChooserKeyAction(' ', 0, 3, true)).toEqual({ type: 'ignore' })
+    expect(linkChooserKeyAction('Enter', 0, 3, false)).toBeNull()
+    // Segurar uma seta continua andando pelos itens, e Esc segurado fecha.
+    expect(linkChooserKeyAction('ArrowDown', 0, 3, true)).toEqual({ type: 'move', index: 1 })
+    expect(linkChooserKeyAction('Escape', 0, 3, true)).toEqual({ type: 'close' })
+  })
 })
 
 describe('origem do gesto', () => {

@@ -52,20 +52,28 @@ function clamp(value: number, min: number, max: number): number {
 export type LinkChooserKeyAction =
   | { type: 'move'; index: number }
   | { type: 'close' }
+  /** A tecla não faz nada, nem o clique que o navegador faria no item. */
+  | { type: 'ignore' }
 
 /**
  * O que uma tecla faz com o menu aberto. Setas circulam entre os itens, Home e
  * End vão às pontas, Esc e Tab fecham (devolvendo o foco a quem abriu).
  * Enter e Espaço não passam por aqui: o item é um `<button>`, e o próprio
- * navegador transforma essas teclas em clique. `null` = a tecla segue o
- * caminho normal.
+ * navegador transforma essas teclas em clique. A exceção é a repetição
+ * automática (`repeat`) de uma tecla segurada desde antes do menu abrir.
+ * `null` = a tecla segue o caminho normal.
  */
 export function linkChooserKeyAction(
   key: string,
   activeIndex: number,
   itemCount: number,
+  repeat = false,
 ): LinkChooserKeyAction | null {
   if (key === 'Escape' || key === 'Tab') return { type: 'close' }
+  // Enter segurado num link do Markdown: o primeiro toque abre o menu e leva o
+  // foco ao primeiro item, e a repetição da tecla o ativaria — o link abria no
+  // navegador sem ninguém escolher. Só um Enter (ou Espaço) novo confirma.
+  if (repeat && (key === 'Enter' || key === ' ')) return { type: 'ignore' }
   if (itemCount <= 0) return null
   if (key === 'ArrowDown') return { type: 'move', index: (activeIndex + 1) % itemCount }
   if (key === 'ArrowUp') return { type: 'move', index: (activeIndex - 1 + itemCount) % itemCount }

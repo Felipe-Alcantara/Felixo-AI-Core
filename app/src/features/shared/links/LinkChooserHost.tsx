@@ -180,9 +180,11 @@ function LinkChooserMenu({ request, onCopied }: MenuProps) {
     // Nenhuma tecla dentro do menu chega aos atalhos do canvas (Backspace
     // apagaria o bloco selecionado atrás do menu).
     event.stopPropagation()
-    const action = linkChooserKeyAction(event.key, active, entries.length)
+    const action = linkChooserKeyAction(event.key, active, entries.length, event.repeat)
     if (!action) return
+    // No `ignore`, é o `preventDefault` que segura o clique do item.
     event.preventDefault()
+    if (action.type === 'ignore') return
     if (action.type === 'move') {
       moveTo(action.index)
       return
