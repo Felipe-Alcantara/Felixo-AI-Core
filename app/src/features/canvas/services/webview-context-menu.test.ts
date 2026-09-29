@@ -36,6 +36,18 @@ describe('webviewLinkMenu', () => {
   it('longe de um link não há menu: a página segue com o dela', () => {
     expect(webviewLinkMenu({ linkURL: '', x: 40, y: 30 }, 1)).toBeNull()
   })
+
+  it('link javascript: chega como o marcador do Chromium e vale como sem link', () => {
+    // O Chromium não repassa o destino: o menu diria "endereços about: não
+    // abrem" e copiaria o marcador, que não é o que a página escreveu.
+    expect(webviewLinkMenu({ linkURL: 'about:blank#blocked', x: 40, y: 30 }, 1)).toBeNull()
+  })
+
+  it('só o marcador exato: outro endereço about: segue para o menu, que explica a recusa', () => {
+    for (const linkURL of ['about:blank', 'about:blank#topo']) {
+      expect(webviewLinkMenu({ linkURL, x: 40, y: 30 }, 1)?.url).toBe(linkURL)
+    }
+  })
 })
 
 describe('zoom da janela pela ponte do preload', () => {

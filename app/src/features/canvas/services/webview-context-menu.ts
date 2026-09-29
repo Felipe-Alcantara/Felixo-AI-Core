@@ -12,8 +12,18 @@ export type WebviewContextMenuParams = { linkURL: string; x: number; y: number }
 export type WebviewLinkMenu = { url: string; anchor: LinkChooserAnchor }
 
 /**
+ * O que o Chromium põe em `linkURL` quando não repassa o destino do link
+ * (`javascript:`, e o que mais a página não pode pedir ao navegador): um
+ * marcador dele, não o endereço que a página escreveu. Não há o que mostrar
+ * nem copiar; antes, o menu dizia "endereços about: não abrem" e "Copiar
+ * link" levava o marcador.
+ */
+const CHROMIUM_BLOCKED_LINK_URL = 'about:blank#blocked'
+
+/**
  * O link sob o gesto e o ponto onde o menu nasce, ou `null` quando o gesto
- * não foi num link: aí o menu não abre, e a página segue com o dela.
+ * não foi num link que o Chromium repassou: aí o menu não abre, e a página
+ * segue com o dela (o clique simples também continua sendo dela).
  *
  * `x`/`y` já chegam no espaço da janela do app, em DIP: o Electron soma a
  * posição do `<webview>`, o iframe onde o link está e a escala do canvas, e
@@ -31,7 +41,7 @@ export function webviewLinkMenu(
   windowZoomFactor: number,
 ): WebviewLinkMenu | null {
   const { linkURL, x, y } = params
-  if (!linkURL) return null
+  if (!linkURL || linkURL === CHROMIUM_BLOCKED_LINK_URL) return null
   // Sem a ponte (ou com um valor que não é zoom), a janela está sem zoom.
   const zoom = Number.isFinite(windowZoomFactor) && windowZoomFactor > 0 ? windowZoomFactor : 1
   return { url: linkURL, anchor: { x: x / zoom, y: y / zoom } }
