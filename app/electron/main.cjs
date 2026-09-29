@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, safeStorage } = require('electron')
+const { app, BrowserWindow, Menu, ipcMain, safeStorage, session } = require('electron')
 const path = require('node:path')
 const vm = require('node:vm')
 const { createMainWindow } = require('./windows/main-window.cjs')
@@ -137,6 +137,7 @@ const { detectAllClis, formatDetectionSummary } = require('./core/cli-detector.c
 const platform = require('./core/platform/index.cjs')
 const { runPackagedReleaseSmoke } = require('./release-smoke.cjs')
 const { registerGlobalErrorHandlers, wrapIpcHandleWithLogging } = require('./services/global-error-handlers.cjs')
+const { registerSessionSecurity } = require('./services/session-security.cjs')
 
 // O mais cedo possível — antes de qualquer `ipcMain.handle` de outro módulo
 // registrar, e antes de `app.whenReady()`. Task "Observabilidade": nenhum
@@ -146,6 +147,9 @@ const { registerGlobalErrorHandlers, wrapIpcHandleWithLogging } = require('./ser
 // `appPaths`, ligada depois dentro de `whenReady` (ver `initQaDiskStore`).
 registerGlobalErrorHandlers({ log: logQaEvent, processObj: process, electronApp: app })
 wrapIpcHandleWithLogging(ipcMain, logQaEvent)
+// Antes de qualquer sessão existir: a permissão `openExternal` de toda sessão
+// (padrão e partições do navegador interno) passa pela política de URL.
+registerSessionSecurity(app, session)
 
 let mainWindow = null
 let ptyHandlers = null
