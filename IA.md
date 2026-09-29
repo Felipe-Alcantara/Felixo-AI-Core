@@ -6864,3 +6864,142 @@ Registro gravado às 15:51.
   - **Correção:** o `--check` passou a exigir, como o gate de regressão do terminal já exige, que o custo passe do limiar percentual **e** de um piso absoluto de 0,5 µs por pedaço. Esse piso equivale a 0,1% de um núcleo com 20 sessões a 100 pedaços/s.
   - **Motivo:** abaixo de ~1 µs a VM do CI mede ruído, porque a base sem vigia oscila entre 0,35 e 0,56 µs de uma rodada para outra. O teto relativo continua o mesmo, e uma regressão real (uma regex por pedaço, por exemplo) soma vários µs e reprova.
 - O macOS reprovou de novo no `renderer-xterm count=1` (+81,4%). É o ruído conhecido, que já tem task.
+
+## 2026-09-29 — Segurança: política única de URL externa, portões no processo principal e CSP
+
+Registro de Claude - Tasks do AI Core, task "Felixo AI Core/Segurança — cobrir URLs em ANSI/Markdown e bloquear esquemas perigosos" (Notion 3ce91f95-497e-81ed-b82c-f4dc83a6f5ad). Início em 28/09 às 21:42; fim em 29/09.
+
+### Contexto
+
+Links nascem na saída de CLI (texto que parece URL e hyperlink OSC 8), no Markdown de agentes e arquivos, nos painéis, nas páginas do bloco "Página Web" e nos pedidos `abrir-pagina` de agente. Cada superfície validava do seu jeito, e o processo principal não validava nada. Uma investigação com 6 leitores, que reproduziram cada cenário no Electron 41 real, mediu cinco lacunas:
+
+- `denyExternalWindowOpen` repassava qualquer esquema ao `shell.openExternal`: `file:`, UNC, `vscode:`, `ms-settings:`, `data:`, `blob:` e esquema custom.
+- A janela principal navegava para qualquer origem, e a página nova continuava recebendo `window.felixo`, com `pty.spawn`.
+- Nenhuma sessão tinha handler de permissão. A permissão `openExternal`, que o Chromium pede quando uma página navega para um esquema externo, era concedida a qualquer site do bloco "Página Web".
+- O handler de popup do webview fazia `loadURL` de qualquer esquema, e não havia `will-attach-webview`: o renderer controlava `disablewebsecurity` e `preload`.
+- O hyperlink OSC 8 do terminal abria com clique simples, via `confirm()` em inglês e `window.open()` sem URL. O main recebia `about:blank`.
+
+### O que foi feito
+
+- **Política única.** `electron/services/external-url-policy.json` guarda a allowlist (`http:`, `https:`, `mailto:`, cada esquema com justificativa escrita), os campos aceitos em `mailto:` e o limite de 8.192 caracteres. Ela é espelhada em `external-url-policy.cjs` (main) e em `src/features/shared/external-url-policy.ts` (renderer); JSON é o formato de fronteira do repo, como `automation-scopes.json`.
+  - Recusa:
+    - controles C0/C1 e U+2028/2029;
+    - invisíveis e marcas de direção;
+    - espaço;
+    - falta de esquema ou esquema fora da lista;
+    - URL malformada;
+    - falta de destino;
+    - campo de `mailto:` fora de to/cc/bcc/subject/body, porque `attach=` já anexou arquivo local em clientes de e-mail;
+    - userinfo: `https://google.com@evil.example` diz um domínio e abre outro;
+    - tamanho acima do limite.
+  - A URL aprovada sai como `URL.href`.
+- **Opener do main** (`external-links.cjs`): é o único caminho até `shell.openExternal` e aplica a política. A recusa loga só esquema e host (`describeExternalUrlForLog`). A rejeição deixou de ficar sem dono.
+- **`navigation-guard.cjs`:**
+  - `will-navigate`/`will-redirect` na janela principal: sair do documento do app é negado; um link web sai pelo opener.
+  - `will-attach-webview`: força `webPreferences` isoladas, apaga `preload` e exige `src` web ou `about:blank`.
+- **`webview-lifecycle.cjs`:** popup e `target=_blank` só para página web; o `loadURL` usa a forma serializada.
+- **`session-security.cjs`:** registrado no `main.cjs` antes de qualquer sessão existir (`session-created` e sessão padrão no ready), passa a permissão `openExternal` de toda sessão pela política. As demais permissões mantêm o padrão do Electron.
+- **Pedidos de agente:** `normalizarUrlWeb` aceita exatamente o que a política web aceita.
+- **Terminal:**
+  - OSC 8 e WebLinksAddon passam pelo mesmo `linkHandler` (Ctrl/Cmd, botão principal, sem seleção, política web).
+  - A dica mostra o destino real.
+  - "Copiar link" nunca abre nada; link recusado perde só as ações que abrem.
+  - O `leave` limpa o link sob o mouse.
+- **Markdown:** `href` pela política, na forma serializada; `MarkdownLink` mostra o destino no `title`.
+- **WebpageNode:** a rejeição do `loadURL` não vai mais inteira, com o token da query, para o log de QA.
+- **CSP no build** (`scripts/renderer-csp.cjs` e plugin `felixo-renderer-csp` no `vite.config.ts`):
+  - meta com hash dos scripts inline;
+  - `object-src`, `base-uri`, `form-action` e `frame-src` como `'none'`;
+  - `connect-src 'self'`;
+  - `https://esm.sh` só em `font-src`, para as fontes do Excalidraw;
+  - o build falha se um script inline ficar sem hash;
+  - o dev server fica sem CSP.
+- **Docs:** `docs/projeto/ARQUITETURA.md` ganhou "Links externos: uma política e um portão" e "CSP do renderer"; `docs/guias/GUIA-USUARIO.md` ganhou "Links no terminal" e as regras de link do preview.
+
+### Decisões com motivo
+
+- **Duas implementações, uma tabela.** O main é CommonJS sem build, e o renderer importa JSON da fronteira. A consistência é provada pela tabela compartilhada (`external-url-policy.cases.json`, rodada pelos dois) e por um teste diferencial com 20.000 entradas aleatórias.
+- **Userinfo bloqueado por inteiro.** O caso legítimo (`https://usuario@git.empresa.com`) é raro e continua copiável; o disfarce e a senha no histórico não têm como passar.
+- **`mailto:` restrito a campos de rascunho.** O link inteiro é recusado, em vez de o campo ser removido, para o destino nunca mudar em silêncio.
+- **Barra de endereço do bloco "Página Web".** `url-utils.ts` continua com regra própria: é digitação da pessoa, com protocolo implícito, e não entrada externa. O attach do webview revalida.
+- **`https://esm.sh` em `font-src`.** Mantém o texto dos desenhos do Excalidraw com a fonte certa, e fonte não executa código. Servir as fontes pelo build é uma task aberta.
+- **Diferença conhecida.** O `rehype-sanitize` compara esquema com caixa, então `HTTPS://` vira texto no Markdown. É no sentido seguro, e está travado por teste.
+
+### Validação
+
+Commits `f30ba55`, `44d39df`, `3ca3f2d`, `7064c11`, `fc1393f`, `d34b5d6`, `0676e77`, `d95cce9` e `235ff82`, na ordem das dependências. Todos os comandos rodaram em `app/`.
+
+**Portões**
+- `npx tsc -b --pretty false`: saída 0.
+- `npm run lint`: saída 0.
+- `npm run build`: ok. A meta da CSP vem antes de qualquer `<script>`, `<style>` ou `<link>`, e o hash confere com o script inline normalizado.
+- Suíte node (`node scripts/run-node-unit-tests.cjs`, sem `CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN` e com stdin fechado): 2276 de 2280 passaram. As falhas são duas conhecidas, que não vêm deste diff:
+  - `app-relaunch.test.cjs`: EPERM de symlink no Windows, com task aberta.
+  - O teste de tempo do dreno do PTY, que passou na rodada anterior.
+- `npx vitest run`: 2421 de 2423 passaram.
+  - A falha foi o `SystemDesignDocumentIndex`, que estourou os 5 s com as três suítes rodando juntas, porque espera o chunk `lazy()` do Markdown frio. Ele ganhou timeout de 20 s e passa isolado.
+
+**Mutação**
+Desliguei cada portão, um por vez, em 27 mutações. Todas foram pegas por algum teste. As mutações cobriram:
+- o opener sem política;
+- `deny` trocado por `allow`;
+- `will-navigate` e `will-redirect` sem `preventDefault`;
+- `isAppDocument` aceitando qualquer `file:`;
+- o webview mantendo o `preload` ou aceitando qualquer `src`;
+- o popup sem checar o destino;
+- a permissão sempre concedida, e a partição sem proteção;
+- a política sem os invisíveis, com a lista antiga de invisíveis ou sem a checagem da autoridade codificada;
+- `attach=` e fragmento de `mailto:` aceitos;
+- o limite medido só na entrada;
+- o log vazando a URL;
+- a allowlist ganhando `file:`;
+- o renderer divergindo do main;
+- o Markdown aceitando qualquer `href`, ou sem o plugin remark;
+- o terminal sem política, a dica sem destino, sem `linkHandler`, com o `leave` sem limpar e com o critério de seleção;
+- o userinfo tratado só pela senha, ou sem regra nenhuma;
+- a regra antiga no pedido de agente;
+- `%` aceito no host.
+
+**Investigação**
+Seis leitores reproduziram as lacunas no Electron 41.10.7 real, na base `b283a66`.
+
+**Revisão adversarial**
+Cinco lentes revisaram o diff: main, renderer, política, CSP/docs/testes e checagem ao vivo. Cada achado ganhou um verificador cético: 13 foram confirmados e 2 refutados. Os confirmados foram corrigidos antes do push:
+- `attach=` pelo fragmento do `mailto:`;
+- invisível codificado pelo parser do Markdown e dentro do host;
+- a lista manual de invisíveis incompleta;
+- o `href` serializado acima do limite;
+- host que o Chromium aprova e o Node recusa;
+- `appUrl` com unidade minúscula ou nome 8.3;
+- o bloco "Página Web" morrendo ao remontar;
+- o destino do link recusado sumindo do Markdown;
+- OSC 8 `file:` invisível;
+- a trava de seleção impedindo um Ctrl+clique legítimo;
+- a falta de teste da fiação.
+
+**Checagem ao vivo**
+Feita com `node electron/cli/felixo.cjs devtools launch`, perfil isolado e PTY real:
+- `location.href='https://example.com/'` manteve a janela em `http://127.0.0.1:5173/`. O controle negativo, com o `will-navigate` removido, navegou e expôs `window.felixo`.
+- `window.open` de `file:` e `vscode:` devolveu `null`, e o log mostrou só `vscode://file`.
+- Um iframe `vscode:`, uma navegação para `vscode:` e um redirect 302 para `vscode:` no bloco "Página Web" foram recusados pela permissão. O Code.exe ficou em 0 o tempo todo.
+- OSC 8 com cliques reais pelo CDP: o clique simples não abre, o Ctrl+clique esquerdo abre, e os Ctrl+cliques direito e do meio não abrem.
+- `<webview>` injetado com `nodeIntegration=yes` foi endurecido, e `src` `file:`, `javascript:`, `data:` e com userinfo foram recusados.
+- No Markdown ao vivo, o `<img onerror>` não executou.
+- Um grep pelo segredo de teste no perfil inteiro não achou nenhum log de QA.
+
+**CSP no Electron com o `dist`**
+Zero violações no boot, no canvas, no terminal (mock e PTY real), em nota Markdown com imagem, em arquivo `.md` com imagem relativa, no chat com imagem colada, no bloco "Página Web" e no Excalidraw. Com `https://esm.sh` em `font-src`, a Excalifont carregou. Os controles negativos foram todos bloqueados: script inline, `eval`, `new Function`, `setTimeout` com string, fetch e imagem remotos, worker `data:`, WASM, iframe, `<object>`, `<base>` e submit de form.
+
+### NÃO verificado / limitações
+
+- **Validado só no working tree, com Electron em modo dev e com o `dist`.** O instalador real (asar) em Windows, macOS e Linux não foi aberto. A CSP e a guarda de `appUrl` dentro do asar ficam para a task de release-smoke.
+- **As demais permissões de site continuam liberadas para qualquer página no bloco "Página Web":** notificações, geolocalização, mídia e clipboard. Ficaram fora do escopo, com task aberta.
+- **O Blink ainda aprova alguns rótulos `xn--` inválidos que o Node recusa.** O link fica morto, sem aviso, mas falha fechado. O caso do host com `%` foi corrigido.
+- **Um Ctrl+arrastar que volta a menos de 3 px do ponto de partida conta como clique.**
+- **Depois do attach, o renderer principal ainda pode mandar o webview para `file:`.** Exige JS arbitrário no renderer, que já tem a ponte do preload.
+- **Com `connect-src` fechado, o export do Excalidraw usa o fallback de fontes dele.** O export não foi validado.
+- **Um redirecionamento aberto de terceiros** (`https://site.com/redir?u=…`) não é detectável: a política vê só a primeira URL.
+- **O menu de link do terminal e o botão de copiar do Markdown não têm teste de interface com DOM.** A decisão foi extraída para funções puras testadas.
+- **Achado fora do diff, anterior a esta task:** no processo principal da instância do devtools, `app.constructor.constructor('return process')()` dentro do `vm` do eval devolve o `process` do main, apesar do comentário em `app/electron/main.cjs:564-568`. Tem task aberta.
+- **O `felixo.cmd` instalado no AppData aponta para uma instalação de release-smoke sem `dev-runner`.** A checagem ao vivo usou o CLI do repo.
+- Nota de ambiente: a entrada de 28/09 da cadeia de contas descreve esta máquina como "2c/4t". Medido agora, ela é um Ryzen 7 5700G com 8 núcleos e 16 threads, 13,8 GB de RAM e cerca de 2 GB livres com o app e os agentes abertos. Leituras de desempenho que usaram aquele dado devem ser relidas com isso em mente.
