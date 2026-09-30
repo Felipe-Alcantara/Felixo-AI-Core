@@ -7,6 +7,7 @@ import {
   getAgent,
   getEffortLevels,
   isEffortValidForModel,
+  type AgentId,
 } from '../../canvas/services/agent-launch-options'
 import { modelSupportsFastMode, resolveFastMode } from '../services/model-fast-mode'
 import { DialogResizeHandles } from '../../shared/dialog/DialogResizeHandles'
@@ -71,16 +72,6 @@ const providerModelOptionsByCliType: Partial<Record<CliType, SelectOption[]>> = 
   ],
 }
 
-const reasoningEffortOptionsByCliType: Partial<Record<CliType, SelectOption[]>> = {
-  claude: [
-    { value: '', label: 'Padrão' },
-    { value: 'low', label: 'Low' },
-    { value: 'medium', label: 'Medium' },
-    { value: 'high', label: 'High' },
-    { value: 'max', label: 'Max' },
-  ],
-}
-
 const defaultEffortOptions: SelectOption[] = [{ value: '', label: 'Padrão' }]
 
 const EFFORT_LABELS: Record<string, string> = {
@@ -92,19 +83,27 @@ const EFFORT_LABELS: Record<string, string> = {
   ultra: 'Ultra',
 }
 
-// Codex's per-model effort set (Sol/Terra support "ultra", Luna doesn't) lives in
-// agent-launch-options.ts, the single source of truth also used by the canvas
-// terminal launcher — derive the dropdown options from it instead of duplicating the table.
+/** A CLI de agente cujos níveis de effort valem para cada tipo de modelo do chat. */
+const EFFORT_AGENT_BY_CLI_TYPE: Partial<Record<CliType, AgentId>> = {
+  claude: 'claude',
+  codex: 'codex',
+  'codex-app-server': 'codex',
+}
+
+// The effort sets (Claude's list; Codex's per-model set, where Sol/Terra support
+// "ultra" and Luna doesn't) live in agent-launch-options.ts, the single source of
+// truth also used by the canvas terminal launcher — derive the dropdown options
+// from it instead of duplicating the table. A copy here went stale: the Claude
+// list lacked the "xhigh" that `claude --help` 2.1.285 offers.
 function getReasoningEffortOptions(model: Model, providerModel: string): SelectOption[] {
-  if (model.cliType === 'codex' || model.cliType === 'codex-app-server') {
-    const agent = getAgent('codex')
-    const levels = (agent && getEffortLevels(agent, providerModel)) ?? []
-    return [
-      { value: '', label: 'Padrão' },
-      ...levels.map((level) => ({ value: level, label: EFFORT_LABELS[level] ?? level })),
-    ]
-  }
-  return reasoningEffortOptionsByCliType[model.cliType] ?? defaultEffortOptions
+  const agentId = EFFORT_AGENT_BY_CLI_TYPE[model.cliType]
+  const agent = agentId ? getAgent(agentId) : undefined
+  const levels = (agent && getEffortLevels(agent, providerModel)) ?? []
+  if (levels.length === 0) return defaultEffortOptions
+  return [
+    { value: '', label: 'Padrão' },
+    ...levels.map((level) => ({ value: level, label: EFFORT_LABELS[level] ?? level })),
+  ]
 }
 
 export function ModelConfigModal({

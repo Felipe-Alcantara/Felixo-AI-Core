@@ -4,6 +4,7 @@ import {
   buildAgentArgs,
   describeLaunch,
   getAgent,
+  getEffortLevels,
   isDirectOpeniaLaunch,
   isKnownAgentCommand,
   supportsFastMode,
@@ -87,3 +88,16 @@ describe('modo fast do Codex', () => {
     expect(describeLaunch({ agentId: 'claude', model: 'opus', fast: true })).toBe('Claude opus')
   })
 })
+
+describe('effort do Claude Code', () => {
+  it('oferece os níveis do `claude --help` 2.1.285, na mesma ordem, com xhigh', () => {
+    expect(getEffortLevels(getAgent('claude')!, 'opus')).toEqual(['low', 'medium', 'high', 'xhigh', 'max'])
+    expect(buildAgentArgs({ agentId: 'claude', model: 'opus', effort: 'xhigh' })).toEqual([
+      '--model',
+      'opus',
+      '--effort',
+      'xhigh',
+    ])
+  })
+})
+
