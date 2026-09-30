@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { TerminalSessionStore } from './terminal-session-store'
+import { CODEX_RELAUNCH_NEW_CONVERSATION_NOTICE, TerminalSessionStore } from './terminal-session-store'
 import { closeLinkChooser, getLinkChooserState } from '../../shared/links/link-chooser-store'
 import { createCatalogPromptInsertion, createManualPromptInsertion } from '../../shared/types/prompt-insertion'
+import type { AgentResumeFailure, AgentSessionReference } from '../services/agent-session'
 
 /**
  * Entrega do texto inicial, exercitada contra a saída real de uma CLI.
@@ -99,6 +100,10 @@ type Harness = {
   resolveSpawn: () => void
   /** Opções de autenticação recebidas pela ponte, na ordem dos spawns. */
   spawnRequests: SpawnRequest[]
+  /** Pasta pedida em cada spawn, na ordem (à parte de `spawnRequests`, que só fala de conta). */
+  spawnCwds: Array<string | undefined>
+  /** Troca a resposta dos próximos `pty:spawn` (ex.: um reanexo, `reused: true`). */
+  setSpawnResult: (result: { ok: boolean; reused?: boolean; message?: string }) => void
   /** Nomes dos arquivos de contexto "criados" pela ponte, na ordem de escrita. */
   contextFileNames: string[]
   /** sessionId de cada chamada a `contextFiles.release`, na ordem em que ocorreram. */
@@ -127,6 +132,11 @@ function createHarness(
     providerId?: string
     accountMode?: 'pinned' | 'chain'
     chainTicket?: string
+    cwd?: string
+    agentSession?: AgentSessionReference
+    resumeAgentSession?: boolean
+    resumeFailure?: AgentResumeFailure
+    onResumeFailure?: (reason: AgentResumeFailure['reason'], reference: AgentSessionReference) => void
   } = {},
 ): Harness {
   const writes: string[] = []
@@ -136,6 +146,7 @@ function createHarness(
   const sessionListeners = new Set<(event: object) => void>()
   const spawnArgs: string[] = []
   const spawnRequests: SpawnRequest[] = []
+  const spawnCwds: Array<string | undefined> = []
   const contextFileNames: string[] = []
   const releaseCalls: string[] = []
 
@@ -143,7 +154,7 @@ function createHarness(
   // soltá-la, reproduzindo a ordem que o ConPTY impõe no Windows: a CLI pinta
   // a primeira tela antes de a promise do IPC voltar ao renderer.
   let releaseSpawn = () => {}
-  const spawnResult = { ok: true, reused: false }
+  let spawnResult: { ok: boolean; reused?: boolean; message?: string } = { ok: true, reused: false }
   const spawnGate = deferSpawn
     ? new Promise<void>((resolve) => {
         releaseSpawn = resolve
@@ -170,13 +181,15 @@ function createHarness(
         },
         spawn: async ({
           args,
+          cwd,
           accountId,
           providerId,
           accountMode,
           chainTicket,
-        }: { args?: string[] } & SpawnRequest) => {
+        }: { args?: string[]; cwd?: string } & SpawnRequest) => {
           spawnArgs.splice(0, spawnArgs.length, ...(args ?? []))
           spawnRequests.push({ accountId, providerId, accountMode, chainTicket })
+          spawnCwds.push(cwd)
           await spawnGate
           return spawnResult
         },
@@ -224,6 +237,10 @@ function createHarness(
     contextBodies,
     spawnArgs,
     spawnRequests,
+    spawnCwds,
+    setSpawnResult: (result) => {
+      spawnResult = result
+    },
     contextFileNames,
     releaseCalls,
     feed: (data: string) => {
@@ -1032,6 +1049,368 @@ describe('TerminalSessionStore: relançamento automático do Codex depois do aut
     expect(harness.spawnRequests).toHaveLength(2)
     expect(harness.contextBodies).toEqual([DELIVERED_QUALITY_CONTEXT, DELIVERED_QUALITY_CONTEXT])
     expect(harness.store.getSnapshot(SESSION_ID)?.contextWarning).toBeUndefined()
+  })
+
+  const CODEX_REFERENCE: AgentSessionReference = {
+    version: 1,
+    provider: 'codex',
+    sessionId: 'codex-session-123',
+    cwd: '/tmp',
+    capturedAt: 123,
+  }
+  const PLAIN_CODEX_ARGS = ['--dangerously-bypass-approvals-and-sandbox']
+  const RESUME_CODEX_ARGS = ['resume', '--dangerously-bypass-approvals-and-sandbox', 'codex-session-123']
+
+  it('retoma a conversa que o processo reportou quando ela é exata', async () => {
+    harness = createHarness('', 'codex')
+    harness.feedSession({ ptySessionId: PTY_SESSION_ID, ...CODEX_REFERENCE })
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(CODEX_READY_PROMPT)
+    await vi.advanceTimersByTimeAsync(400)
+
+    await relaunchAfterUpdate(harness)
+
+    expect(harness.spawnArgs).toEqual(RESUME_CODEX_ARGS)
+    expect(harness.store.getSnapshot(SESSION_ID)?.contextWarning).toBeUndefined()
+  })
+
+  it('num bloco sem pasta, retoma na pasta real que o processo reportou', async () => {
+    // "Local (sem projeto)": o bloco não tem pasta e o PTY caiu na do usuário.
+    harness = createHarness('', 'codex', true, false, 1, { cwd: '' })
+    harness.feedSession({ ptySessionId: PTY_SESSION_ID, ...CODEX_REFERENCE, cwd: '/home/pessoa' })
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(CODEX_READY_PROMPT)
+    await vi.advanceTimersByTimeAsync(400)
+
+    await relaunchAfterUpdate(harness)
+
+    expect(harness.spawnArgs).toEqual(RESUME_CODEX_ARGS)
+    expect(harness.spawnCwds, 'o relançamento sobe na mesma pasta em que a CLI estava').toEqual(['', '/home/pessoa'])
+  })
+
+  it('não retoma uma referência só restaurada num bloco sem pasta, e diz por quê', async () => {
+    harness = createHarness('', 'codex', true, false, 1, {
+      cwd: '',
+      agentSession: { ...CODEX_REFERENCE, cwd: '/home/pessoa' },
+    })
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(CODEX_READY_PROMPT)
+    await vi.advanceTimersByTimeAsync(400)
+
+    await relaunchAfterUpdate(harness)
+
+    expect(harness.spawnArgs).toEqual(PLAIN_CODEX_ARGS)
+    const warning = harness.store.getSnapshot(SESSION_ID)?.contextWarning ?? ''
+    expect(warning).toContain(CODEX_RELAUNCH_NEW_CONVERSATION_NOTICE)
+    expect(warning).toContain('não tem pasta de trabalho')
+    expect(warning).not.toContain('codex-session-123')
+    // Conversa nova, mas nada é digitado nela: nem `/resume`, nem contexto.
+    expect(harness.writes.some((data) => data.includes('/resume'))).toBe(false)
+    expect(harness.contextBodies).toEqual([])
+  })
+
+  it('não retoma a conversa de outra conta no relançamento', async () => {
+    // O bloco foi trocado para a conta B e ainda guarda a conversa da conta A;
+    // antes, qualquer referência bastava e o Codex a retomava na conta B.
+    harness = createHarness('', 'codex', true, false, 1, {
+      accountId: 'conta-b',
+      providerId: 'codex',
+      agentSession: { ...CODEX_REFERENCE, accountId: 'conta-a' },
+    })
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(CODEX_READY_PROMPT)
+    await vi.advanceTimersByTimeAsync(400)
+
+    await relaunchAfterUpdate(harness)
+
+    expect(harness.spawnArgs).toEqual(PLAIN_CODEX_ARGS)
+    const warning = harness.store.getSnapshot(SESSION_ID)?.contextWarning ?? ''
+    expect(warning).toContain('outra conta')
+    expect(warning).not.toContain('conta-a')
+    expect(warning).not.toContain('codex-session-123')
+  })
+
+  it('não repete no relançamento a retomada que a CLI recusou neste spawn', async () => {
+    const onResumeFailure = vi.fn()
+    harness = createHarness('', 'codex', true, false, 1, {
+      agentSession: CODEX_REFERENCE,
+      resumeAgentSession: true,
+      onResumeFailure,
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(harness.spawnArgs).toEqual(RESUME_CODEX_ARGS)
+
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(`${String.fromCharCode(0x25a0)} Your access token could not be refreshed. Please log out and sign in again.\r\n`)
+    await vi.advanceTimersByTimeAsync(50)
+    expect(onResumeFailure).toHaveBeenCalledWith('auth', CODEX_REFERENCE)
+
+    await relaunchAfterUpdate(harness)
+
+    expect(harness.spawnArgs).toEqual(PLAIN_CODEX_ARGS)
+    expect(harness.store.getSnapshot(SESSION_ID)?.contextWarning).toContain('pediu login')
+  })
+
+  it('também não retoma quando o nó já registrou a falha da conversa', async () => {
+    harness = createHarness('', 'codex', true, false, 1, {
+      agentSession: CODEX_REFERENCE,
+      resumeFailure: { sessionId: 'codex-session-123', reason: 'expired', at: 1 },
+    })
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(CODEX_READY_PROMPT)
+    await vi.advanceTimersByTimeAsync(400)
+
+    await relaunchAfterUpdate(harness)
+
+    expect(harness.spawnArgs).toEqual(PLAIN_CODEX_ARGS)
+    expect(harness.store.getSnapshot(SESSION_ID)?.contextWarning).toContain('não existe mais')
+  })
+})
+
+/**
+ * A resposta da CLI a um spawn que subiu com argumentos de retomada.
+ *
+ * As frases são as das CLIs medidas (ver `resume-outcome-detector.ts`); aqui
+ * o que se prova é QUANDO o store avisa: só num spawn de retomada que subiu
+ * um processo novo, uma vez, dentro da janela do boot.
+ */
+describe('TerminalSessionStore: resposta da CLI a uma retomada', () => {
+  let harness: Harness | undefined
+  const ESC = String.fromCharCode(27)
+  const CRLF = String.fromCharCode(13, 10)
+  const CLAUDE_REFERENCE: AgentSessionReference = {
+    version: 1,
+    provider: 'claude',
+    sessionId: 'claude-session-123',
+    cwd: '/tmp',
+    capturedAt: 123,
+  }
+  /** O que o Claude 2.1.x imprime antes de sair com 1, com a cor de erro. */
+  const NOT_FOUND = `${ESC}[31mNo conversation found with session ID: claude-session-123${ESC}[39m${CRLF}`
+
+  beforeEach(() => {
+    harness = undefined
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    harness?.store.clear()
+    vi.useRealTimers()
+  })
+
+  function resumeHarness(
+    onResumeFailure: (reason: AgentResumeFailure['reason'], reference: AgentSessionReference) => void,
+    options: { deferSpawn?: boolean; cwd?: string; resumeAgentSession?: boolean } = {},
+  ): Harness {
+    return createHarness('', 'claude', true, options.deferSpawn ?? false, 1, {
+      agentSession: CLAUDE_REFERENCE,
+      resumeAgentSession: options.resumeAgentSession ?? true,
+      onResumeFailure,
+      ...(options.cwd !== undefined ? { cwd: options.cwd } : {}),
+    })
+  }
+
+  it('avisa uma vez quando a CLI responde que a conversa não existe', async () => {
+    const onResumeFailure = vi.fn()
+    harness = resumeHarness(onResumeFailure)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(harness.spawnArgs).toEqual(['--resume', 'claude-session-123', '--dangerously-skip-permissions'])
+
+    harness.feed(BOOT_ESCAPES)
+    // Partida entre dois pedaços, e depois redesenhada: um aviso só.
+    harness.feed('No conversation found with ses')
+    harness.feed(`sion ID: claude-session-123${CRLF}`)
+    harness.feed(NOT_FOUND)
+    harness.emitExit({ exitCode: 1 })
+    await vi.advanceTimersByTimeAsync(50)
+
+    expect(onResumeFailure).toHaveBeenCalledTimes(1)
+    expect(onResumeFailure).toHaveBeenCalledWith('expired', CLAUDE_REFERENCE)
+  })
+
+  it('avisa `auth` quando a CLI pede login ao retomar', async () => {
+    const onResumeFailure = vi.fn()
+    harness = resumeHarness(onResumeFailure)
+    await vi.advanceTimersByTimeAsync(0)
+
+    harness.feed(`${BOOT_ESCAPES}${READY_PROMPT}${CRLF}  Not logged in ${String.fromCharCode(0xb7)} Please run /login${CRLF}`)
+    await vi.advanceTimersByTimeAsync(50)
+
+    expect(onResumeFailure).toHaveBeenCalledTimes(1)
+    expect(onResumeFailure).toHaveBeenCalledWith('auth', CLAUDE_REFERENCE)
+  })
+
+  it('só conta `expired` com o ID da conversa que este spawn tentou retomar', async () => {
+    const onResumeFailure = vi.fn()
+    harness = resumeHarness(onResumeFailure)
+    await vi.advanceTimersByTimeAsync(0)
+
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(`No conversation found with session ID: outra-conversa-456${CRLF}`)
+    await vi.advanceTimersByTimeAsync(50)
+    expect(onResumeFailure, 'a frase fala de outra conversa').not.toHaveBeenCalled()
+
+    harness.feed(NOT_FOUND)
+    await vi.advanceTimersByTimeAsync(50)
+    expect(onResumeFailure).toHaveBeenCalledTimes(1)
+    expect(onResumeFailure).toHaveBeenCalledWith('expired', CLAUDE_REFERENCE)
+  })
+
+  it('não toma o histórico redesenhado de uma retomada que deu certo pela resposta da CLI', async () => {
+    const onResumeFailure = vi.fn()
+    harness = resumeHarness(onResumeFailure)
+    await vi.advanceTimersByTimeAsync(0)
+
+    // O boot do `claude --resume` redesenha a conversa anterior antes da
+    // entrada, com as frases de falha que ela viu: de outra conversa, num
+    // resultado de ferramenta (⎿) ou na continuação recuada dele.
+    const ASSISTANT = String.fromCharCode(0x23fa)
+    const RESULT = String.fromCharCode(0x23bf)
+    const DOT = String.fromCharCode(0xb7)
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(
+      [
+        `${ASSISTANT} Bash(claude --resume outra-conversa-456)`,
+        `  ${RESULT}  No conversation found with session ID: outra-conversa-456`,
+        `  ${RESULT}  Not logged in ${DOT} Please run /login`,
+        `${ASSISTANT} Bash(claude -p "oi")`,
+        `  ${RESULT}  Error: Exit code 1`,
+        `     Not logged in ${DOT} Please run /login`,
+        '',
+      ].join(CRLF),
+    )
+    harness.feed(READY_PROMPT)
+    await vi.advanceTimersByTimeAsync(50)
+
+    expect(onResumeFailure).not.toHaveBeenCalled()
+  })
+
+  it('nunca avisa num spawn sem retomada, mesmo com a mesma saída', async () => {
+    const onResumeFailure = vi.fn()
+    harness = resumeHarness(onResumeFailure, { resumeAgentSession: false })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(harness.spawnArgs).toEqual(['--dangerously-skip-permissions'])
+
+    harness.feed(NOT_FOUND)
+    await vi.advanceTimersByTimeAsync(50)
+
+    expect(onResumeFailure).not.toHaveBeenCalled()
+  })
+
+  it('nunca avisa quando a retomada pedida não é exata e o spawn sobe sem argumentos', async () => {
+    const onResumeFailure = vi.fn()
+    harness = resumeHarness(onResumeFailure, { cwd: '/outra-pasta' })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(harness.spawnArgs).toEqual(['--dangerously-skip-permissions'])
+
+    harness.feed(NOT_FOUND)
+    await vi.advanceTimersByTimeAsync(50)
+
+    expect(onResumeFailure).not.toHaveBeenCalled()
+  })
+
+  it('segura a falha vista antes de o spawn responder e avisa quando ele confirma', async () => {
+    const onResumeFailure = vi.fn()
+    harness = resumeHarness(onResumeFailure, { deferSpawn: true })
+
+    harness.feed(NOT_FOUND)
+    await vi.advanceTimersByTimeAsync(50)
+    expect(onResumeFailure, 'ainda pode ser o eco de um processo anterior').not.toHaveBeenCalled()
+
+    harness.resolveSpawn()
+    await vi.advanceTimersByTimeAsync(50)
+    expect(onResumeFailure).toHaveBeenCalledTimes(1)
+    expect(onResumeFailure).toHaveBeenCalledWith('expired', CLAUDE_REFERENCE)
+  })
+
+  it('nunca avisa no reanexo a um PTY vivo, nem pelo eco do buffer antigo', async () => {
+    const onResumeFailure = vi.fn()
+    harness = resumeHarness(onResumeFailure, { deferSpawn: true })
+
+    harness.feed(NOT_FOUND)
+    harness.setSpawnResult({ ok: true, reused: true })
+    harness.resolveSpawn()
+    await vi.advanceTimersByTimeAsync(50)
+    harness.feed(NOT_FOUND)
+    await vi.advanceTimersByTimeAsync(50)
+
+    expect(onResumeFailure).not.toHaveBeenCalled()
+  })
+
+  it('para de ler quando alguém escreve na entrada', async () => {
+    const onResumeFailure = vi.fn()
+    harness = resumeHarness(onResumeFailure)
+    await vi.advanceTimersByTimeAsync(0)
+
+    await harness.store.typeText(SESSION_ID, 'explique o erro No conversation found')
+    harness.feed(NOT_FOUND)
+    await vi.advanceTimersByTimeAsync(50)
+
+    expect(onResumeFailure).not.toHaveBeenCalled()
+  })
+
+  it('para de ler quando a janela do boot acaba', async () => {
+    const onResumeFailure = vi.fn()
+    harness = resumeHarness(onResumeFailure)
+    await vi.advanceTimersByTimeAsync(0)
+
+    await vi.advanceTimersByTimeAsync(31_000)
+    harness.feed(NOT_FOUND)
+    await vi.advanceTimersByTimeAsync(50)
+
+    expect(onResumeFailure).not.toHaveBeenCalled()
+  })
+
+  it('um erro de quem ouve não impede a saída de chegar ao terminal', async () => {
+    harness = resumeHarness(() => {
+      throw new Error('falha da interface')
+    })
+    await vi.advanceTimersByTimeAsync(0)
+
+    harness.feed(NOT_FOUND)
+    await vi.advanceTimersByTimeAsync(50)
+
+    expect(harness.store.getTranscript(SESSION_ID).text).toContain('No conversation found with session ID')
+  })
+})
+
+/**
+ * A gaveta monta o xterm do bloco aberto num container só, reaproveitado entre
+ * blocos. Um bloco segurado ("aguardando escolha") ainda não tem sessão.
+ */
+describe('TerminalSessionStore: gaveta aberta num bloco sem sessão', () => {
+  let harness: Harness | undefined
+
+  beforeEach(() => {
+    harness = undefined
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    harness?.store.clear()
+    vi.useRealTimers()
+  })
+
+  it('tira do container o terminal do bloco anterior, que receberia os cliques e as teclas', () => {
+    harness = createHarness('')
+    // O container ainda mostra o xterm de `terminal-1`, vivo, quando a gaveta
+    // passa para o bloco segurado. Sem o nó do DOM aqui (o teste roda sem
+    // DOM), basta um container com os dois métodos que `attach` usa.
+    const previousTerminal = { dono: SESSION_ID }
+    const children: object[] = [previousTerminal]
+    const container = {
+      children,
+      removeChild: (child: object) => {
+        children.splice(children.indexOf(child), 1)
+        return child
+      },
+    } as unknown as HTMLElement
+
+    harness.store.attach('bloco-segurado', container)
+
+    expect(children, 'o xterm do bloco anterior continuaria na gaveta do bloco segurado').toEqual([])
+    // O bloco anterior só sai da tela: a sessão dele segue viva.
+    expect(harness.store.getSnapshot(SESSION_ID)).toBeDefined()
   })
 })
 

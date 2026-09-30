@@ -56,9 +56,15 @@ import {
 import { prepareHandoffTranscript } from '../services/terminal-handoff'
 import {
   buildAgentResumeArgs,
+  canResumeAgentSession,
+  describeAgentResumeForPerson,
+  explainAgentResume,
+  isAgentResumeFailure,
   isAgentSessionReference,
+  type AgentResumeFailure,
   type AgentSessionReference,
 } from '../services/agent-session'
+import { createResumeOutcomeDetector, type ResumeOutcomeDetector } from './resume-outcome-detector'
 import type { SessionMetadata } from './session-metadata'
 import {
   computePreview,
@@ -153,6 +159,26 @@ type SessionListener = (snapshot: SessionSnapshot) => void
 /** Aviso do bloco quando o relançamento do Codex retém o texto de passagem. */
 export const CODEX_RELAUNCH_HANDOFF_NOTICE =
   'O Codex reiniciou após se atualizar. O contexto de passagem não foi reenviado; use /resume ou reenvie manualmente.'
+
+/**
+ * Começo do aviso do bloco quando o relançamento do Codex não pode retomar a
+ * conversa exata e sobe numa conversa nova. O motivo vem logo depois, no
+ * texto de `describeAgentResumeForPerson` (sem ID nenhum).
+ */
+export const CODEX_RELAUNCH_NEW_CONVERSATION_NOTICE =
+  'O Codex reiniciou após se atualizar numa conversa nova: a anterior não foi retomada.'
+
+/**
+ * Por quanto tempo depois do spawn a saída de uma retomada é lida à procura
+ * de "conversa não existe" ou "faça login" (ver `watchResumeOutcome`).
+ *
+ * As CLIs medidas respondem a uma retomada impossível no boot, em poucos
+ * segundos (o Claude e o Codex imprimem o motivo e saem). 30 s cobrem um boot
+ * lento no Windows, com servidores MCP subindo, sem transformar a vigia numa
+ * leitura permanente da conversa: depois do boot, o que aparece na tela é o
+ * trabalho do agente — que pode muito bem citar essas frases.
+ */
+const RESUME_FAILURE_WINDOW_MS = 30000
 
 /** Ms of output silence after which a running session is considered idle. */
 const IDLE_AFTER_MS = 1500
@@ -270,7 +296,22 @@ type SessionOptions = {
   startedAt?: number
   agentSession?: AgentSessionReference
   resumeAgentSession?: boolean
+  /**
+   * O que a CLI respondeu na última retomada desta conversa (persistido no
+   * nó). Com ele, o store nunca monta a mesma retomada de novo — nem no spawn
+   * pedido pela interface, nem no relançamento automático do Codex.
+   */
+  resumeFailure?: AgentResumeFailure
   onAgentSession?: (reference: AgentSessionReference) => void
+  /**
+   * A CLI respondeu, logo no boot de um spawn que subiu com argumentos de
+   * retomada, que a conversa não existe (`expired`) ou que falta login
+   * (`auth`). Chamada no máximo uma vez por spawn; nunca num spawn sem
+   * retomada nem no reanexo a um PTY vivo. `reference` é a conversa que esse
+   * spawn tentou retomar, para o registro da falha não depender do que o nó
+   * guarda no momento da chamada.
+   */
+  onResumeFailure?: (reason: AgentResumeFailure['reason'], reference: AgentSessionReference) => void
   /** Render-time total; never persisted in the canvas node. */
   terminalCount?: number
   /** Render-time Modo Performance flag; never persisted in the canvas node. */
@@ -353,6 +394,16 @@ type Session = {
   contextArtifactsPathTyped: Set<string>
   sourceLabel?: string
   agentSession?: AgentSessionReference
+  /**
+   * A conversa que o `onSession` DESTE processo reportou — ao contrário de
+   * `agentSession`, que nasce da referência restaurada. Só ela prova em que
+   * pasta a CLI rodou de fato (ver o relançamento do Codex em `finishExit`).
+   */
+  liveAgentSession?: AgentSessionReference
+  /** Vigia da saída inicial de um spawn de retomada; ver `watchResumeOutcome`. */
+  resumeWatch?: ResumeWatch
+  /** Falha de retomada reconhecida neste spawn; o relançamento não a repete. */
+  detectedResumeFailure?: AgentResumeFailure
   /** Serializes programmatic deliveries so file creation cannot reorder prompts. */
   sendChain: Promise<void>
   initialTextTimer: ReturnType<typeof setTimeout> | null
@@ -416,6 +467,24 @@ type Session = {
 }
 
 /**
+ * Estado da vigia de um spawn que subiu com argumentos de retomada.
+ *
+ * O `onData` é assinado antes do `spawn`, e o reanexo a um PTY vivo reenvia o
+ * buffer antigo por ele: uma falha que apareça antes de o spawn responder
+ * pode ser só o eco de um processo anterior. Por isso ela fica em `pending`
+ * até o spawn confirmar que subiu um processo novo (`confirmed`), e é
+ * descartada se ele for um reanexo.
+ */
+type ResumeWatch = {
+  detector: ResumeOutcomeDetector
+  /** A conversa que os argumentos deste spawn pediram. */
+  reference: AgentSessionReference
+  startedAt: number
+  confirmed: boolean
+  pending?: AgentResumeFailure['reason']
+}
+
+/**
  * Conta quebras de linha sem alocar: roda em todo pedaço de saída de todo
  * terminal, e o `match(/\n/g)` anterior criava um array por pedaço só para
  * ler o tamanho dele.
@@ -427,6 +496,19 @@ export function countLineFeeds(data: string): number {
     count += 1
   }
   return count
+}
+
+/**
+ * Tira do container de montagem tudo que não for `keep` (o xterm a mostrar).
+ * O container é só dos terminais: a gaveta o reaproveita entre blocos, e um
+ * xterm que ficasse ali continuaria recebendo cliques e teclas.
+ */
+function clearTerminalContainer(container: HTMLElement, keep?: Element | null): void {
+  for (const child of Array.from(container.children)) {
+    if (child !== keep) {
+      container.removeChild(child)
+    }
+  }
 }
 
 function readScrollbackStatus(
@@ -605,15 +687,32 @@ export class TerminalSessionStore {
     const generation = (this.generations.get(id) ?? 0) + 1
     this.generations.set(id, generation)
 
-    const launchArgs = options.resumeAgentSession
+    const resumeFailure = isAgentResumeFailure(options.resumeFailure) ? options.resumeFailure : undefined
+    const resumeArgs = options.resumeAgentSession
       ? buildAgentResumeArgs(
           options.command,
           options.args ?? [],
           options.cwd,
           options.agentSession,
           options.accountId,
-        ) ?? options.args ?? []
-      : options.args ?? []
+          resumeFailure,
+        )
+      : undefined
+    const launchArgs = resumeArgs ?? options.args ?? []
+    // Só um spawn que sobe DE FATO com argumentos de retomada tem uma
+    // resposta de retomada para vigiar; `buildAgentResumeArgs` já garantiu
+    // que a referência é válida quando devolveu argumentos. O detector recebe
+    // o ID pedido: "conversa não existe" só vale com ESTE ID na linha, e não
+    // com o de outra conversa que o histórico redesenhado mostre.
+    const resumeWatch: ResumeWatch | undefined =
+      resumeArgs && options.agentSession
+        ? {
+            detector: createResumeOutcomeDetector({ sessionId: options.agentSession.sessionId }),
+            reference: options.agentSession,
+            startedAt: Date.now(),
+            confirmed: false,
+          }
+        : undefined
 
     const session: Session = {
       id,
@@ -658,6 +757,9 @@ export class TerminalSessionStore {
       agentSession: isAgentSessionReference(options.agentSession)
         ? options.agentSession
         : undefined,
+      liveAgentSession: undefined,
+      resumeWatch,
+      detectedResumeFailure: undefined,
       sendChain: Promise.resolve(),
       initialTextTimer: null,
       submitRetryTimer: null,
@@ -699,6 +801,7 @@ export class TerminalSessionStore {
         this.handleClaudeBypassWarning(session, event.data)
         this.handleClaudeTrustPrompt(session, event.data)
         this.trackCodexUpdateBanner(session, event.data)
+        this.watchResumeOutcome(session, event.data)
         terminal.write(event.data, () => {
           session.pendingWrites -= 1
           if (session.disposed) {
@@ -735,6 +838,7 @@ export class TerminalSessionStore {
           return
         }
         session.agentSession = event
+        session.liveAgentSession = event
         options.onAgentSession?.(event)
         this.notifyAll()
       }) ?? (() => {})
@@ -880,9 +984,14 @@ export class TerminalSessionStore {
             // renderer reload, which was the development reset bug.
             session.initialTextSent = true
             this.clearInitialTextTimer(session)
+            // Reanexo não é retomada: o processo vivo já respondeu à retomada
+            // dele há muito tempo, e o que chegou até aqui foi o eco do buffer.
+            session.resumeWatch = undefined
             this.markWorking(session)
             return
           }
+
+          this.confirmResumeWatch(session)
 
           void this.prepareInitialText(session).then(() => {
             if (session.disposed) return
@@ -896,13 +1005,17 @@ export class TerminalSessionStore {
             // observadores do stream de saída mais abaixo.
             this.scheduleInitialText(session, getInitialTextDelay())
           })
-        } else if (session.snapshot.activity === 'starting') {
-          // Uma sessão que já saiu de 'starting' teve seu estado definido por
-          // algo mais recente (saída da CLI, exit, dispose); não o sobrescreve.
-          this.update(session, {
-            activity: 'error',
-            message: result?.message ?? 'Falha ao iniciar o terminal.',
-          })
+        } else {
+          // Sem processo novo, não há retomada cuja resposta vigiar.
+          session.resumeWatch = undefined
+          if (session.snapshot.activity === 'starting') {
+            // Uma sessão que já saiu de 'starting' teve seu estado definido por
+            // algo mais recente (saída da CLI, exit, dispose); não o sobrescreve.
+            this.update(session, {
+              activity: 'error',
+              message: result?.message ?? 'Falha ao iniciar o terminal.',
+            })
+          }
         }
       })
   }
@@ -911,16 +1024,17 @@ export class TerminalSessionStore {
   attach(id: string, container: HTMLElement): void {
     const session = this.sessions.get(id)
     if (!session) {
+      // Bloco sem sessão (segurado, "aguardando escolha"): a gaveta reaproveita
+      // o container, e ele ainda mostraria o xterm do bloco anterior — um
+      // clique ou uma tecla ali iria para o PTY daquele bloco. Esvazia; quando
+      // a sessão nascer, a troca de `generation` faz a gaveta anexar de novo.
+      clearTerminalContainer(container)
       return
     }
 
     // The drawer reuses one container across sessions; clear any previously
     // mounted terminal element so switching cards doesn't stack terminals.
-    for (const child of Array.from(container.children)) {
-      if (child !== session.terminal.element) {
-        container.removeChild(child)
-      }
-    }
+    clearTerminalContainer(container, session.terminal.element)
 
     if (!session.terminal.element) {
       session.terminal.open(container)
@@ -1785,16 +1899,56 @@ export class TerminalSessionStore {
       // `launchOptions` guardado no primeiro `ensure()`: se a conversa já
       // avançou (novo `onSession`) antes do auto-update chegar, retomar do
       // instantâneo antigo reabriria uma conversa mais velha do que a que
-      // estava de pé. Com uma referência de sessão, o relançamento retoma a
-      // conversa em vez de recomeçar do zero — daí também não reenviar
-      // `initialText`, que é a instrução de largada de uma sessão nova.
-      // `startedAt` fica de fora para o relógio da sessão começar do zero.
+      // estava de pé. `startedAt` fica de fora para o relógio da sessão
+      // começar do zero.
       const agentSession = session.agentSession ?? session.launchOptions.agentSession
-      const resumeAgentSession = Boolean(agentSession)
-      // Sem conversa para retomar, reenviar a instrução de largada é o certo;
-      // reenviar uma PASSAGEM não: ela é um pedido de verdade, o agente o
-      // executaria de novo do zero e o débito dobraria. Retido, o bloco diz
-      // por quê e o que fazer.
+      // A pasta efetiva é a do bloco. Num bloco "Local (sem projeto)" ela é
+      // vazia e o PTY rodou na pasta do usuário (`resolveWorkingDirectory` em
+      // pty-process-manager.cjs): a referência que ESTE processo reportou traz
+      // essa pasta real, e o relançamento sobe nela explicitamente — a mesma
+      // em que a CLI já estava. Uma referência apenas restaurada não prova
+      // pasta nenhuma; sem pasta, a retomada não é exata (`missing-cwd`).
+      const launchCwd = session.launchOptions.cwd?.trim() ? session.launchOptions.cwd : undefined
+      const cwd = launchCwd ?? session.liveAgentSession?.cwd
+      const accountId = session.launchOptions.accountId
+      // A falha vista neste spawn é mais recente que a registrada no nó.
+      const resumeFailure =
+        session.detectedResumeFailure ??
+        (isAgentResumeFailure(session.launchOptions.resumeFailure)
+          ? session.launchOptions.resumeFailure
+          : undefined)
+      // Mesma regra do spawn pedido pela interface: só retoma pelo ID no mesmo
+      // provedor, pasta e conta, sem falha registrada para a conversa. Antes,
+      // qualquer referência bastava, e o Codex podia retomar uma conversa de
+      // outra pasta ou conta (ou uma que ele já tinha dito não existir).
+      const resumeAgentSession = canResumeAgentSession(
+        session.command,
+        cwd,
+        agentSession,
+        accountId,
+        resumeFailure,
+      )
+      // Há conversa, mas não dá para retomá-la exatamente: o relançamento sobe
+      // SEM retomada — uma conversa nova, que é o que o Codex sem argumentos
+      // abre — e sem digitar nada nela (nem `/resume`, nem a instrução de
+      // largada, como já era com referência). Não em silêncio: o bloco mostra
+      // o motivo, no texto de `describeAgentResumeForPerson`, e a referência
+      // segue nas opções para o nó não perdê-la. Segurar o spawn até a pessoa
+      // escolher (o `pending` da restauração) deixaria um bloco que estava
+      // vivo parado sem ninguém ter pedido.
+      const withheldResume =
+        agentSession && !resumeAgentSession
+          ? explainAgentResume({
+              command: session.command,
+              cwd,
+              reference: agentSession,
+              accountId,
+              failure: resumeFailure,
+            })
+          : undefined
+      // Sem conversa, reenviar a instrução de largada é o certo; reenviar uma
+      // PASSAGEM não: ela é um pedido de verdade, o agente o executaria de
+      // novo do zero e o débito dobraria. Retido, o bloco diz por quê.
       const handoffWithheld =
         !resumeAgentSession &&
         session.launchOptions.initialTextIsHandoff === true &&
@@ -1802,14 +1956,28 @@ export class TerminalSessionStore {
       this.restart(session.id, {
         ...session.launchOptions,
         startedAt: undefined,
+        ...(resumeAgentSession && cwd && !launchCwd ? { cwd } : {}),
         agentSession,
         resumeAgentSession,
+        resumeFailure,
         initialText:
-          resumeAgentSession || handoffWithheld ? undefined : session.launchOptions.initialText,
+          agentSession || handoffWithheld ? undefined : session.launchOptions.initialText,
       })
-      const relaunched = handoffWithheld ? this.sessions.get(session.id) : undefined
-      if (relaunched) {
-        this.update(relaunched, { contextWarning: CODEX_RELAUNCH_HANDOFF_NOTICE })
+      const relaunched = this.sessions.get(session.id)
+      const warning = withheldResume
+        ? buildRelaunchWithoutResumeWarning(
+            describeAgentResumeForPerson(withheldResume, {
+              reference: agentSession,
+              cwd,
+              command: session.command,
+            }).detail,
+            handoffWithheld,
+          )
+        : handoffWithheld
+          ? CODEX_RELAUNCH_HANDOFF_NOTICE
+          : undefined
+      if (relaunched && warning) {
+        this.update(relaunched, { contextWarning: warning })
       }
       return
     }
@@ -2302,6 +2470,79 @@ export class TerminalSessionStore {
   }
 
   /**
+   * Lê a saída inicial de um spawn que subiu com argumentos de retomada à
+   * procura da resposta "essa conversa não existe" ou "faça login" (as frases
+   * medidas estão em `resume-outcome-detector.ts`).
+   *
+   * A janela fecha no que vier primeiro:
+   * - 30 s depois do spawn (`RESUME_FAILURE_WINDOW_MS`): a CLI responde a uma
+   *   retomada impossível no boot;
+   * - a primeira tecla ou escrita na entrada (`inputTouched`: a pessoa
+   *   digitando, um envio do canvas). Dali em diante o que aparece responde a ela, não à
+   *   retomada — um "faça login" depois da primeira mensagem é problema da
+   *   conta, que a vigia de contas já trata, e a conversa foi, sim, retomada.
+   *   O custo conhecido: num bloco fora do modo yolo, uma pasta que a CLI não
+   *   conhece pede confiança antes de retomar, e a resposta da pessoa fecha a
+   *   janela. Não acontece numa retomada exata, que exige a mesma pasta e a
+   *   mesma conta em que a conversa nasceu — ou seja, uma pasta já confiada.
+   * - o reconhecimento: avisa uma vez só.
+   */
+  private watchResumeOutcome(session: Session, data: string): void {
+    const watch = session.resumeWatch
+    if (!watch || watch.pending || !data) {
+      return
+    }
+
+    if (session.inputTouched || Date.now() - watch.startedAt > RESUME_FAILURE_WINDOW_MS) {
+      // Ainda sem resposta do spawn, a vigia fica para `confirmResumeWatch`
+      // descartá-la; confirmado, ela já pode sair.
+      if (watch.confirmed) session.resumeWatch = undefined
+      return
+    }
+
+    const reason = watch.detector.feed(data)
+    if (!reason) {
+      return
+    }
+    watch.pending = reason
+    if (watch.confirmed) {
+      this.reportResumeFailure(session)
+    }
+  }
+
+  /** O spawn subiu um processo novo: a falha vista antes da resposta já vale. */
+  private confirmResumeWatch(session: Session): void {
+    const watch = session.resumeWatch
+    if (!watch) {
+      return
+    }
+    watch.confirmed = true
+    if (watch.pending) {
+      this.reportResumeFailure(session)
+    }
+  }
+
+  private reportResumeFailure(session: Session): void {
+    const watch = session.resumeWatch
+    session.resumeWatch = undefined
+    if (!watch?.pending || session.disposed) {
+      return
+    }
+
+    session.detectedResumeFailure = {
+      sessionId: watch.reference.sessionId,
+      reason: watch.pending,
+      at: Date.now(),
+    }
+    try {
+      session.launchOptions.onResumeFailure?.(watch.pending, watch.reference)
+    } catch {
+      // Quem ouve é a interface; um erro dela não pode derrubar o caminho da
+      // saída do PTY, que ainda vai escrever este pedaço no xterm.
+    }
+  }
+
+  /**
    * O Claude em modo yolo (`--dangerously-skip-permissions`) abre todo processo
    * novo no aviso do modo, antes do REPL: um terminal yolo salvo no canvas
    * parece ter "voltado ao normal" depois de reiniciar o app. Aceita o aviso
@@ -2454,6 +2695,20 @@ export class TerminalSessionStore {
       listener()
     }
   }
+}
+
+/**
+ * Aviso do bloco relançado numa conversa nova: o que aconteceu, o motivo (já
+ * sem IDs) e, se for o caso, que a passagem também ficou de fora.
+ */
+function buildRelaunchWithoutResumeWarning(reason: string, handoffWithheld: boolean): string {
+  return [
+    CODEX_RELAUNCH_NEW_CONVERSATION_NOTICE,
+    reason,
+    handoffWithheld ? 'O contexto de passagem também não foi reenviado.' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
 }
 
 /** Intervalo curto entre o spawn e a primeira checagem de prontidão. */

@@ -1,4 +1,4 @@
-import type { AgentSessionReference } from '../services/agent-session'
+import type { AgentResumeFailure, AgentSessionReference } from '../services/agent-session'
 import type { ContextFileKind } from '../services/context-file-delivery'
 import type { TerminalScrollbackStatus } from './terminal-scrollback'
 import type { SessionMetadata } from './session-metadata'
@@ -47,7 +47,16 @@ export type SessionOptions = {
   startedAt?: number
   agentSession?: AgentSessionReference
   resumeAgentSession?: boolean
+  /** A última falha de retomada registrada no nó; o store nunca a repete. */
+  resumeFailure?: AgentResumeFailure
   onAgentSession?: (reference: AgentSessionReference) => void
+  /**
+   * A CLI respondeu, no boot de um spawn com argumentos de retomada, que a
+   * conversa não existe (`expired`) ou que falta login (`auth`). No máximo uma
+   * vez por spawn; nunca em spawn sem retomada nem em reanexo a um PTY vivo.
+   * `reference` é a conversa que esse spawn tentou retomar.
+   */
+  onResumeFailure?: (reason: AgentResumeFailure['reason'], reference: AgentSessionReference) => void
   terminalCount?: number
   /** Render-time Modo Performance flag; never persisted in the canvas node. */
   performanceMode?: boolean
