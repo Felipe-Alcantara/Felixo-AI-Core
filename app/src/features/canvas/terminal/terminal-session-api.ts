@@ -75,7 +75,12 @@ export type SessionListener = (snapshot: SessionSnapshot) => void
  * states instead of a fake success.
  */
 export type SendTextResult =
-  | { delivered: true }
+  /**
+   * `inline`: o arquivo temporário do contexto falhou e o texto foi direto
+   * no terminal (fallback), com o aviso no bloco. A interface diz isso em vez
+   * do "inserido" de sempre.
+   */
+  | { delivered: true; inline?: boolean }
   | { delivered: false; reason: 'no-session' | 'rejected' | 'error'; message?: string }
 
 /** Optional context kind plus the identity kept beside the terminal payload. */

@@ -206,6 +206,23 @@ export type PromptDisplayLabel = {
 }
 
 /**
+ * Rótulo de uma inserção sem nome, pela origem. Só o texto manual não entra:
+ * o `lastPrompt` dele é o que a pessoa digitou, e isso já é o rótulo certo.
+ * Nas outras origens, o `lastPrompt` pode ser a referência do arquivo de
+ * contexto ("CONTEXTO ENTREGUE EM ARQUIVOS…") ou o aviso do fallback inline,
+ * que não dizem o que foi enviado.
+ */
+const SOURCE_LABELS: Partial<Record<PromptInsertionSource, string>> = {
+  catalog: 'Prompt do catálogo',
+  skill: 'Skill',
+  file: 'Arquivo do canvas',
+  system: 'Contexto do app',
+  handoff: 'Passagem de responsabilidade',
+  collaboration: 'Colaboração entre agentes',
+  rename: 'Renomeação do agente',
+}
+
+/**
  * Resolves what a terminal card should show for its most recent prompt.
  *
  * `lastPrompt` is the exact text delivered to the PTY — which, when the
@@ -214,13 +231,15 @@ export type PromptDisplayLabel = {
  * that raw text left the card unable to say what was actually sent — the gap
  * behind the "Terminal — mostrar nome do prompt" task, including its
  * "caminho temporário" case. Provenance (`insertion.name`/`combinedNames`)
- * takes priority whenever it exists; a manual prompt has none by design (see
- * `createManualPromptInsertion`), so it falls back to its own content, which
- * — unlike a context-file reference — already IS the prompt.
+ * takes priority whenever it exists; sem nome, a origem vira o rótulo
+ * (`SOURCE_LABELS`) — um prompt do catálogo cujo nome foi apagado não pode
+ * aparecer como a referência do arquivo. A manual prompt has none by design
+ * (see `createManualPromptInsertion`), so it falls back to its own content,
+ * which — unlike a context-file reference — already IS the prompt.
  */
 export function resolvePromptDisplayLabel(
   lastPrompt: string | null | undefined,
-  insertion: Pick<PromptInsertionMetadata, 'name' | 'combinedNames'> | null | undefined,
+  insertion: Pick<PromptInsertionMetadata, 'name' | 'combinedNames'> & Partial<Pick<PromptInsertionMetadata, 'source'>> | null | undefined,
 ): PromptDisplayLabel | null {
   const detail = typeof lastPrompt === 'string' ? lastPrompt.trim() : ''
   if (!detail) {
@@ -234,6 +253,11 @@ export function resolvePromptDisplayLabel(
 
   if (name) {
     return { label: name, detail, named: true }
+  }
+
+  const sourceLabel = insertion?.source ? SOURCE_LABELS[insertion.source as PromptInsertionSource] : undefined
+  if (sourceLabel) {
+    return { label: sourceLabel, detail, named: false }
   }
 
   return { label: detail, detail, named: false }

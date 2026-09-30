@@ -115,6 +115,23 @@ describe('PromptInsertion', () => {
 })
 
 describe('resolvePromptDisplayLabel', () => {
+  it('sem nome, a origem vira o rótulo e a referência do arquivo fica só no detalhe', () => {
+    const reference = 'CONTEXTO ENTREGUE EM ARQUIVOS SOMENTE LEITURA\n- catalog-prompt: "felixo-context-1.txt"'
+    expect(resolvePromptDisplayLabel(reference, { combinedNames: [], source: 'catalog' })).toEqual({
+      label: 'Prompt do catálogo',
+      detail: reference,
+      named: false,
+    })
+    expect(resolvePromptDisplayLabel(reference, { name: '  ', combinedNames: ['  '], source: 'skill' })?.label).toBe('Skill')
+    expect(resolvePromptDisplayLabel(reference, { combinedNames: [], source: 'file' })?.label).toBe('Arquivo do canvas')
+  })
+
+  it('texto manual continua sendo o próprio rótulo, e origem desconhecida também', () => {
+    expect(resolvePromptDisplayLabel('corrija o teste', { combinedNames: [], source: 'manual' })?.label).toBe('corrija o teste')
+    expect(resolvePromptDisplayLabel('algo', { combinedNames: [], source: 'unknown' })?.label).toBe('algo')
+    expect(resolvePromptDisplayLabel('algo', { combinedNames: [] })?.label).toBe('algo')
+  })
+
   it('sem lastPrompt não mostra nada — não há prompt registrado', () => {
     expect(resolvePromptDisplayLabel(undefined, undefined)).toBeNull()
     expect(resolvePromptDisplayLabel(null, { name: 'Nome órfão', combinedNames: [] })).toBeNull()

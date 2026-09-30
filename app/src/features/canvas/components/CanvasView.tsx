@@ -155,6 +155,7 @@ import { createTerminalRunRegistry } from '../services/terminal-run-registry'
 import type { RunFileOptions } from '../services/run-file-command'
 import type { CanvasTool } from './tools/CanvasToolsMenu'
 import type { SkillActivationResult } from './tools/SkillsPanel'
+import { toActivationResult } from '../services/prompt-delivery-feedback'
 import { useCanvasPersistence } from '../hooks/useCanvasPersistence'
 import { useCanvasProjects } from '../hooks/useCanvasProjects'
 import { useCanvasTransfer } from '../hooks/useCanvasTransfer'
@@ -1794,7 +1795,7 @@ function CanvasInner({
           kind: 'skill-prompt',
           insertion,
         })
-        return result.delivered ? 'sent' : 'failed'
+        return toActivationResult(result)
       }
       await navigator.clipboard?.writeText(insertion.content)
       return 'copied'
@@ -1818,7 +1819,7 @@ function CanvasInner({
           kind: 'catalog-prompt',
           insertion,
         })
-        return result.delivered ? 'sent' : 'failed'
+        return toActivationResult(result)
       }
       await navigator.clipboard?.writeText(insertion.content)
       return 'copied'

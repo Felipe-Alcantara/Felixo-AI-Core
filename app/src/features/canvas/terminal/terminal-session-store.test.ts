@@ -617,7 +617,7 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
 
     const result = await harness.store.sendText(SESSION_ID, 'olá\r', { kind: 'catalog-prompt' })
 
-    expect(result).toEqual({ delivered: true })
+    expect(result).toEqual({ delivered: true, inline: true })
   })
 
   it('typeText digita o texto ditado SEM Enter e SEM arquivo de contexto', async () => {
@@ -673,7 +673,7 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
       insertion,
     })
 
-    expect(result).toEqual({ delivered: true })
+    expect(result).toEqual({ delivered: true, inline: true })
     expect(harness.store.getSnapshot(SESSION_ID)?.lastPromptInsertion).toMatchObject({
       id: 'catalog-123',
       name: 'Revisão',
@@ -734,7 +734,7 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
       }),
     })
 
-    expect(result).toEqual({ delivered: true })
+    expect(result).toEqual({ delivered: true, inline: true })
     expect(harness.store.getSnapshot(SESSION_ID)?.lastPromptInsertion).toMatchObject({
       source: 'manual',
       combinedNames: [],
@@ -800,8 +800,8 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
     const second = harness.store.sendText(SESSION_ID, 'segundo\r', { kind: 'catalog-prompt' })
     const [firstResult, secondResult] = await Promise.all([first, second])
 
-    expect(firstResult).toEqual({ delivered: true })
-    expect(secondResult).toEqual({ delivered: true })
+    expect(firstResult).toEqual({ delivered: true, inline: true })
+    expect(secondResult).toEqual({ delivered: true, inline: true })
     // A escrita do segundo texto só aparece depois da do primeiro — nunca
     // fragmentos dos dois textos intercalados no mesmo write.
     const primeiroIndex = harness.writes.findIndex((data) => data.includes('primeiro'))

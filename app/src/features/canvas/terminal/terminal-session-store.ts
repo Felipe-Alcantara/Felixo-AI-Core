@@ -151,7 +151,12 @@ export type TerminalTranscript = {
  * states instead of a fake success.
  */
 export type SendTextResult =
-  | { delivered: true }
+  /**
+   * `inline`: o arquivo temporário do contexto falhou e o texto foi direto
+   * no terminal (fallback), com o aviso no bloco. A interface diz isso em vez
+   * do "inserido" de sempre.
+   */
+  | { delivered: true; inline?: boolean }
   | { delivered: false; reason: 'no-session' | 'rejected' | 'error'; message?: string }
 
 type SessionListener = (snapshot: SessionSnapshot) => void
@@ -1453,7 +1458,7 @@ export class TerminalSessionStore {
         return
       }
 
-      const delivered = await this.deliverContextText(
+      const { data: delivered, inline } = await this.deliverContextText(
         session,
         text,
         kind,
@@ -1494,7 +1499,7 @@ export class TerminalSessionStore {
       if (prompt) this.update(session, { lastPrompt: prompt })
       this.recordPromptInsertion(session, insertion)
       session.pendingPromptInsertions = insertion.autoSubmit ? [insertion] : []
-      outcome = { delivered: true }
+      outcome = inline ? { delivered: true, inline: true } : { delivered: true }
     })
 
     // Keep the chain alive after one failed delivery. A transient IPC failure
@@ -2194,12 +2199,9 @@ export class TerminalSessionStore {
       autoSubmit: promptRequestsSubmission(text),
     })
 
-    session.initialText = await this.deliverContextText(
-      session,
-      text,
-      kind,
-      session.initialTextInsertion,
-    )
+    session.initialText = (
+      await this.deliverContextText(session, text, kind, session.initialTextInsertion)
+    ).data
   }
 
   /** Writes one generated, read-only context file or returns an explicit inline fallback. */
@@ -2208,9 +2210,10 @@ export class TerminalSessionStore {
     text: string,
     kind?: ContextFileKind,
     insertion?: PromptInsertion,
-  ): Promise<string> {
+  ): Promise<{ data: string; inline: boolean }> {
+    // Comando da CLI e texto sem tipo vão crus por desenho: não é fallback.
     if (isAgentCliCommand(text) || !kind) {
-      return text
+      return { data: text, inline: false }
     }
 
     const split = splitTerminalSubmission(text)
@@ -2247,7 +2250,7 @@ export class TerminalSessionStore {
       // the stable artifact name, which the active `felixo` shim resolves.
       if (!result?.ok || !result.name) {
         session.contextArtifactNames = []
-        return this.contextDeliveryFallback(session, text, kind, insertion)
+        return { data: this.contextDeliveryFallback(session, text, kind, insertion), inline: true }
       }
       deliveredFiles.push({ name: result.name, kind: part.kind })
       commandPath ??= result.commandPath
@@ -2255,7 +2258,10 @@ export class TerminalSessionStore {
 
     session.contextArtifactNames = deliveredFiles.map((file) => file.name)
     this.update(session, { contextWarning: undefined })
-    return buildContextFileReferences(deliveredFiles, Boolean(split.submit), commandPath)
+    return {
+      data: buildContextFileReferences(deliveredFiles, Boolean(split.submit), commandPath),
+      inline: false,
+    }
   }
 
   private contextDeliveryFallback(
