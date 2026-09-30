@@ -67,11 +67,15 @@ function normalizeCanvasBundle(value) {
       // Keeping it in an imported package would turn a crafted .fxcanvas into
       // arbitrary command/prompt execution as soon as the node is mounted.
       // Machine-specific args/cwd are also intentionally not portable.
+      // A retomada também não viaja: a conversa atual, a anterior e a falha
+      // registrada carregam ID de conversa, pasta e conta desta máquina.
       const {
         cwd: _cwd,
         args: _args,
         initialText: _initialText,
         agentSession: _agentSession,
+        previousAgentSession: _previousAgentSession,
+        resumeFailure: _resumeFailure,
         command,
         ...portableData
       } = node.data

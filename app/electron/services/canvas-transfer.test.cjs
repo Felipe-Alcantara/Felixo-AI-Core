@@ -28,6 +28,17 @@ function validSource(overrides = {}) {
             cwd: '/old/computer/repo',
             capturedAt: 1,
           },
+          previousAgentSession: {
+            reference: {
+              version: 1,
+              provider: 'codex',
+              sessionId: 'private-session-previous',
+              cwd: '/old/computer/repo',
+              capturedAt: 1,
+            },
+            replacedAt: 2,
+          },
+          resumeFailure: { sessionId: 'private-session-123', reason: 'expired', at: 3 },
         },
       },
       {
@@ -54,6 +65,9 @@ test('canvas transfer creates a portable versioned bundle', () => {
   assert.equal(bundle.nodes[0].data.command, 'codex')
   assert.equal(bundle.nodes[0].data.initialText, undefined)
   assert.equal(bundle.nodes[0].data.agentSession, undefined)
+  // A retomada carrega ID de conversa, pasta e conta: nada disso viaja no pacote.
+  assert.equal(bundle.nodes[0].data.previousAgentSession, undefined)
+  assert.equal(bundle.nodes[0].data.resumeFailure, undefined)
   assert.deepEqual(bundle.files, source.files)
   assert.deepEqual(parseCanvasBundle(JSON.stringify(bundle)), bundle)
 })
