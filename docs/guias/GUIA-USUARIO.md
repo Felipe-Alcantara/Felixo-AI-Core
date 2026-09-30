@@ -648,20 +648,27 @@ Gemini, pasta (sem pasta ou outra pasta) e, por último, conta.
   (num relato de problema, por exemplo).
 
 **Limites de cada agente.** Para quem quiser conferir no próprio terminal, estes
-são os comandos e as respostas de cada CLI, medidos em 29/09/2026:
+são os comandos e as respostas de cada CLI, medidos em 29/09/2026 e conferidos no
+app instalado (empacotado) em 30/09/2026, no Windows, sem nenhuma conta conectada:
 
 | | Claude Code 2.1.283 (npm) / 2.1.250 (gerenciada) | Codex 0.159.2 (npm) / 0.150.1 (gerenciada) | Gemini CLI 0.57.0 |
 | --- | --- | --- | --- |
 | Retomar por ID | `--resume <id>` | `codex resume <id>` (UUID ou nome) | O help só garante `latest` ou o índice da lista; o app não retoma por ID |
 | Retomar a última | `-c`/`--continue` (por pasta) | `resume --last` | `--resume latest` (sem conversa na pasta, abre uma conversa nova sem avisar) |
 | Listar | Seletor interativo (`/resume` ou `--resume` sem valor) | Seletor por pasta (`--all` mostra todas) | `--list-sessions` (exige login) |
-| Conversa inexistente | `No conversation found with session ID: …` | `No saved session found with ID …` | `Invalid session identifier` / `No previous sessions found for this project.` |
+| Conversa inexistente | `No conversation found with session ID: …`, antes de qualquer login (também na 2.1.285) | `No saved session found with ID …`, só depois do login: sem conta conectada, a tela de login vem antes | `Invalid session identifier` / `No previous sessions found for this project.` |
+| Primeira execução | Numa pasta de configuração nova, o onboarding (tema, confiança na pasta) aparece antes de a CLI olhar o `--resume` | A tela de login aparece antes de a CLI resolver o ID | O login é exigido até para listar |
 | Pasta | O seletor e o `-c` são por pasta | O seletor filtra por pasta | Conversas por projeto (pasta) |
 | Conta | Conversas por perfil (`CLAUDE_CONFIG_DIR`); outra conta dá o mesmo texto de conversa inexistente | Conversas por `CODEX_HOME` | Conversas pela HOME do perfil |
 
 A versão que roda depende do `PATH`: com duas instalações, vale a que vier
 primeiro (na máquina medida, a do npm global vinha antes da gerenciada). Confira
 com `claude --version` ou `codex --version` no terminal.
+
+No Codex 0.159, uma pasta de conta (`CODEX_HOME`) com caminho longo impede a CLI
+de abrir: ela responde `path must be shorter than SUN_LEN` antes de qualquer
+retomada. Medido no app instalado com uma pasta de 156 caracteres; com 25, a CLI
+abriu normalmente.
 
 ### Links: escolher onde abrir
 
