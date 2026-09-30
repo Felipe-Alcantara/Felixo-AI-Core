@@ -1,0 +1,53 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`origens de prompt: entrega pelo arquivo de contexto > 'arquivo do canvas': corpo intacto no arquivo, uma entrega, o Enter certo e o nome no cartão 1`] = `
+{
+  "autoSubmit": true,
+  "combinedNames": [
+    "notas do time.md",
+  ],
+  "id": "file:notas do time.md",
+  "name": "notas do time.md",
+  "source": "file",
+  "timestamp": "2026-09-30T18:00:00.000Z",
+}
+`;
+
+exports[`origens de prompt: entrega pelo arquivo de contexto > 'catálogo': corpo intacto no arquivo, uma entrega, o Enter certo e o nome no cartão 1`] = `
+{
+  "autoSubmit": false,
+  "combinedNames": [
+    "Revisão de PR",
+  ],
+  "id": "catalog-revisao",
+  "name": "Revisão de PR",
+  "source": "catalog",
+  "timestamp": "2026-09-30T18:00:00.000Z",
+}
+`;
+
+exports[`origens de prompt: entrega pelo arquivo de contexto > 'combinação': corpo intacto no arquivo, uma entrega, o Enter certo e o nome no cartão 1`] = `
+{
+  "autoSubmit": false,
+  "combinedNames": [
+    "Revisão de PR",
+    "Testes primeiro",
+  ],
+  "id": "catalog-combined:catalog-revisao+catalog-testes",
+  "source": "catalog",
+  "timestamp": "2026-09-30T18:00:00.000Z",
+}
+`;
+
+exports[`origens de prompt: entrega pelo arquivo de contexto > 'skill': corpo intacto no arquivo, uma entrega, o Enter certo e o nome no cartão 1`] = `
+{
+  "autoSubmit": false,
+  "combinedNames": [
+    "Revisor sênior",
+  ],
+  "id": "skill-revisor",
+  "name": "Revisor sênior",
+  "source": "skill",
+  "timestamp": "2026-09-30T18:00:00.000Z",
+}
+`;

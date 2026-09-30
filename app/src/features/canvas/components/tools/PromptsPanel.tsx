@@ -76,6 +76,7 @@ export function PromptsPanel({
   const [feedbackId, setFeedbackId] = useState<string | null>(null)
   const [feedbackText, setFeedbackText] = useState('')
   const [feedbackIsError, setFeedbackIsError] = useState(false)
+  const [feedbackResult, setFeedbackResult] = useState<SkillActivationResult>('sent')
   // Id ('combined' for the multi-select send) currently awaiting sendText's
   // real confirmation — never assumed "sent" before the PTY actually replied.
   const [pendingId, setPendingId] = useState<string | null>(null)
@@ -138,13 +139,15 @@ export function PromptsPanel({
     setPendingId(prompt.id)
     let result: SkillActivationResult
     try {
-      result = await onInsertPrompt(createCatalogPromptInsertion(prompt, prompt.prompt, { autoSubmit: true }))
+      // Só digita, sem Enter: a pessoa revisa e envia.
+      result = await onInsertPrompt(createCatalogPromptInsertion(prompt, prompt.prompt, { autoSubmit: false }))
     } finally {
       setPendingId((id) => (id === prompt.id ? null : id))
     }
     const feedback = describeSingleInsertFeedback(result)
     setFeedbackId(prompt.id)
     setFeedbackIsError(feedback.isError)
+    setFeedbackResult(result)
     setFeedbackText(feedback.text)
     // Um erro fica visível até a pessoa tentar de novo (ou trocar de prompt);
     // um sucesso soma-se ao "Feito" temporário, como já era.
@@ -163,7 +166,7 @@ export function PromptsPanel({
   }
 
   const insertSelected = async () => {
-    const combined = composeSelectedPromptInsertion(selectedPrompts, { autoSubmit: true })
+    const combined = composeSelectedPromptInsertion(selectedPrompts, { autoSubmit: false })
     if (!combined.content) return
     setPendingId('combined')
     let result: SkillActivationResult
@@ -172,9 +175,11 @@ export function PromptsPanel({
     } finally {
       setPendingId((id) => (id === 'combined' ? null : id))
     }
-    const feedback = describeCombinedInsertFeedback(result, selectedPrompts.length)
+    // Conta o que entrou no texto: um prompt marcado mas vazio fica de fora.
+    const feedback = describeCombinedInsertFeedback(result, combined.combinedNames.length)
     setFeedbackId('combined')
     setFeedbackIsError(feedback.isError)
+    setFeedbackResult(result)
     setFeedbackText(feedback.text)
     if (result !== 'failed') {
       window.setTimeout(() => setFeedbackId((id) => (id === 'combined' ? null : id)), 2500)
@@ -458,7 +463,11 @@ export function PromptsPanel({
           </button>
         </div>
         {feedbackId === 'combined' && (
-          <p className={`mt-1 flex items-center gap-1 text-[11px] ${feedbackIsError ? 'text-theme-error' : 'text-(--f-core-white-soft)'}`}>
+          <p
+            role="status"
+            data-felixo-delivery-feedback={feedbackResult}
+            className={`mt-1 flex items-center gap-1 text-[11px] ${feedbackIsError ? 'text-theme-error' : 'text-(--f-core-white-soft)'}`}
+          >
             {feedbackIsError ? <CircleAlert size={11} /> : <Check size={11} />}
             {feedbackText}
           </p>
@@ -482,7 +491,7 @@ export function PromptsPanel({
           const isPending = pendingId === prompt.id
 
           return (
-            <li key={prompt.id} className="rounded-sm bg-zinc-800/60 p-2">
+            <li key={prompt.id} data-felixo-prompt-id={prompt.id} className="rounded-sm bg-zinc-800/60 p-2">
               <div className="mb-1 flex items-center gap-2">
                 <input
                   type="checkbox"
@@ -523,6 +532,7 @@ export function PromptsPanel({
                 )}
                 <button
                   type="button"
+                  data-felixo-prompt-insert
                   onClick={() => void insertPrompt(prompt)}
                   disabled={isPending}
                   className="felixo-btn flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-xs text-zinc-300 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
@@ -604,7 +614,11 @@ export function PromptsPanel({
               )}
 
               {feedbackId === prompt.id && (
-                <p className={`mt-1 flex items-center gap-1 text-[11px] ${feedbackIsError ? 'text-theme-error' : 'text-(--f-core-white-soft)'}`}>
+                <p
+                  role="status"
+                  data-felixo-delivery-feedback={feedbackResult}
+                  className={`mt-1 flex items-center gap-1 text-[11px] ${feedbackIsError ? 'text-theme-error' : 'text-(--f-core-white-soft)'}`}
+                >
                   {feedbackIsError ? <CircleAlert size={11} /> : <Check size={11} />}
                   {feedbackText}
                 </p>

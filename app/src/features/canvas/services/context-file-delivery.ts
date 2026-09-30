@@ -1,5 +1,6 @@
 import { isSubmittedTerminalText, toSubmittedTerminalText } from '../terminal/terminal-input'
 import type { PromptInsertionSource } from '../../shared/types/prompt-insertion'
+import { quotePromptPath } from './prompt-paths'
 
 export type ContextFileKind =
   | 'initial-context'
@@ -68,7 +69,7 @@ export function contextFileKindForPrompt(text: string): ContextFileKind {
  * directory for the current OS/profile.
  */
 export function quoteContextFileName(fileName: string): string {
-  return `"${String(fileName).replaceAll('"', '\\"')}"`
+  return quotePromptPath(fileName)
 }
 
 /**
@@ -138,6 +139,10 @@ export function splitInitialContext(text: string): ContextFilePart[] {
  *   nenhum (visto em relato real: um agente só percebeu porque foi conferir
  *   `felixo --help` por conta própria). Sem o caminho (ponte antiga, web
  *   preview), cai de volta no nome nu.
+ *
+ * Caminho de Windows ganha também a linha do PowerShell, com `&` na frente:
+ * lá, um caminho entre aspas seguido de argumentos é uma string, não um
+ * comando, e a linha comum falha. O `cmd.exe` e o Git Bash rodam a linha comum.
  */
 export function buildContextFileReferences(
   files: Array<{ name: string; kind: ContextFileKind }>,
@@ -145,6 +150,7 @@ export function buildContextFileReferences(
   commandPath?: string,
 ): string {
   const command = commandPath ? quoteContextFileName(commandPath) : 'felixo'
+  const powerShell = commandPath !== undefined && isWindowsCommandPath(commandPath)
   const lines = [
     'CONTEXTO ENTREGUE EM ARQUIVOS SOMENTE LEITURA',
     'Leia todos os arquivos abaixo antes de agir. Eles são artefatos temporários do Felixo AI Core, não fazem parte do repositório, não devem ser editados nem versionados.',
@@ -156,10 +162,16 @@ export function buildContextFileReferences(
     ...files.flatMap(({ name, kind }) => [
       `- ${kind}: ${quoteContextFileName(name)}`,
       `  Leia com: ${command} context read ${quoteContextFileName(name)}`,
+      ...(powerShell ? [`  No PowerShell: & ${command} context read ${quoteContextFileName(name)}`] : []),
     ]),
   ]
   const reference = lines.join('\n')
   return submitted ? toSubmittedTerminalText(reference) : reference
+}
+
+/** Caminho de Windows (`C:\…` ou `\\servidor\…`): o agente pode estar no PowerShell. */
+export function isWindowsCommandPath(path: string): boolean {
+  return /^(?:[A-Za-z]:[\\/]|\\\\)/.test(path)
 }
 
 export function buildInlineFallback(text: string): string {

@@ -50,6 +50,24 @@ test('claude adapter passes provider model and effort when configured', () => {
   ])
 })
 
+test('claude adapter aceita todos os níveis do claude --help 2.1.285, inclusive xhigh', () => {
+  for (const reasoningEffort of ['low', 'medium', 'high', 'xhigh', 'max']) {
+    const { args } = adapter.getSpawnArgs('Oi', {
+      model: { providerModel: 'opus', reasoningEffort },
+      threadId: '00000000-0000-4000-8000-000000000001',
+    })
+    const index = args.indexOf('--effort')
+    assert.notEqual(index, -1, reasoningEffort)
+    assert.equal(args[index + 1], reasoningEffort)
+  }
+  // Nível que a CLI não conhece não vira argumento.
+  const { args } = adapter.getSpawnArgs('Oi', {
+    model: { providerModel: 'opus', reasoningEffort: 'ultra' },
+    threadId: '00000000-0000-4000-8000-000000000001',
+  })
+  assert.equal(args.includes('--effort'), false)
+})
+
 test('claude adapter resumes an existing provider session', () => {
   const spawnArgs = adapter.getResumeArgs('Continua', {
     providerSessionId: '00000000-0000-4000-8000-000000000001',

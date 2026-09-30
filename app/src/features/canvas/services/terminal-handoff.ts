@@ -1,4 +1,5 @@
 import type { AccountFailureClass } from '../../shared/types/account-chain'
+import { quotePromptPath } from './prompt-paths'
 
 /** Maximum size used only by the inline safety fallback. */
 export const MAX_HANDOFF_TRANSCRIPT_CHARS = 160_000
@@ -74,7 +75,7 @@ export function buildTerminalHandoffPrompt(params: {
   reason?: HandoffReason
 }): string {
   const source = params.sourceLabel?.trim() || params.sourceCommand?.trim() || 'agente anterior'
-  const cwd = params.cwd?.trim() || 'não informado'
+  const cwd = params.cwd?.trim() ? quotePromptPath(params.cwd.trim()) : 'não informado'
 
   return [
     `Você está assumindo a responsabilidade pelo trabalho do ${source}.`,

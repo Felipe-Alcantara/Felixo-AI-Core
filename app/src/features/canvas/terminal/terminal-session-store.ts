@@ -151,7 +151,12 @@ export type TerminalTranscript = {
  * states instead of a fake success.
  */
 export type SendTextResult =
-  | { delivered: true }
+  /**
+   * `inline`: o arquivo temporário do contexto falhou e o texto foi direto
+   * no terminal (fallback), com o aviso no bloco. A interface diz isso em vez
+   * do "inserido" de sempre.
+   */
+  | { delivered: true; inline?: boolean }
   | { delivered: false; reason: 'no-session' | 'rejected' | 'error'; message?: string }
 
 type SessionListener = (snapshot: SessionSnapshot) => void
@@ -360,7 +365,7 @@ type Session = {
   command?: string
   /** Printable keystrokes typed since the last submit, to capture the prompt. */
   inputBuffer: string
-  /** Programmatic submissions waiting for the echoed Enter from xterm. */
+  /** Programmatic insertions (enviadas ou só digitadas) waiting for the Enter from xterm. */
   pendingPromptInsertions: PromptInsertion[]
   /** Metadata for the startup context before it reaches the PTY. */
   initialTextInsertion?: PromptInsertion
@@ -1453,7 +1458,7 @@ export class TerminalSessionStore {
         return
       }
 
-      const delivered = await this.deliverContextText(
+      const { data: delivered, inline } = await this.deliverContextText(
         session,
         text,
         kind,
@@ -1493,8 +1498,11 @@ export class TerminalSessionStore {
       const prompt = cleanPrompt(delivered)
       if (prompt) this.update(session, { lastPrompt: prompt })
       this.recordPromptInsertion(session, insertion)
-      session.pendingPromptInsertions = insertion.autoSubmit ? [insertion] : []
-      outcome = { delivered: true }
+      // Enviada ou só digitada, a inserção espera o Enter da pessoa para ficar
+      // com o nome dela: a só digitada (catálogo, skill) vai quando a pessoa
+      // revisa e envia, às vezes completando o pedido antes.
+      session.pendingPromptInsertions = [insertion]
+      outcome = inline ? { delivered: true, inline: true } : { delivered: true }
     })
 
     // Keep the chain alive after one failed delivery. A transient IPC failure
@@ -1575,6 +1583,12 @@ export class TerminalSessionStore {
           if (pending && cleanPrompt(pending.content) === prompt) {
             session.pendingPromptInsertions.shift()
             this.update(session, { lastPrompt: prompt, lastPromptInsertion: pending })
+          } else if (pending && !pending.autoSubmit) {
+            // Prompt do catálogo (ou skill) só digitado e completado pela
+            // pessoa: a mensagem enviada é ele mais o que ela escreveu, e o
+            // nome dele continua sendo o do envio.
+            session.pendingPromptInsertions.shift()
+            this.update(session, { lastPrompt: prompt, lastPromptInsertion: pending })
           } else {
             // A keystroke-originated prompt has no catalog label. It still gets
             // an id and timestamp so the session history can distinguish it
@@ -1594,14 +1608,21 @@ export class TerminalSessionStore {
         session.pendingPromptInsertions = []
         session.inputBuffer = session.inputBuffer.slice(0, -1)
       } else if (char === '\n') {
-        // Shift+Enter newline inside the prompt — keep it as a line break.
-        session.pendingPromptInsertions = []
+        // Shift+Enter newline inside the prompt — keep it as a line break. Um
+        // prompt só digitado continua valendo: a pessoa está completando o pedido.
+        session.pendingPromptInsertions = session.pendingPromptInsertions.filter((pending) => !pending.autoSubmit)
         session.inputBuffer += '\n'
+      } else if (char === '\x03' || char === '\x15') {
+        // Ctrl+C e Ctrl+U limpam a linha de entrada nas CLIs: um prompt só
+        // digitado e abandonado não pode dar nome ao próximo pedido.
+        session.pendingPromptInsertions = []
+        session.inputBuffer = ''
       } else if (char >= ' ') {
         // Printable character (skips other control/escape bytes).
         // The person started typing before a synthetic Enter echo; the new
         // line belongs to the person and must not consume an older record.
-        session.pendingPromptInsertions = []
+        // Um prompt só digitado continua valendo: ela está completando o pedido.
+        session.pendingPromptInsertions = session.pendingPromptInsertions.filter((pending) => !pending.autoSubmit)
         session.inputBuffer += char
       }
     }
@@ -2194,12 +2215,9 @@ export class TerminalSessionStore {
       autoSubmit: promptRequestsSubmission(text),
     })
 
-    session.initialText = await this.deliverContextText(
-      session,
-      text,
-      kind,
-      session.initialTextInsertion,
-    )
+    session.initialText = (
+      await this.deliverContextText(session, text, kind, session.initialTextInsertion)
+    ).data
   }
 
   /** Writes one generated, read-only context file or returns an explicit inline fallback. */
@@ -2208,9 +2226,10 @@ export class TerminalSessionStore {
     text: string,
     kind?: ContextFileKind,
     insertion?: PromptInsertion,
-  ): Promise<string> {
+  ): Promise<{ data: string; inline: boolean }> {
+    // Comando da CLI e texto sem tipo vão crus por desenho: não é fallback.
     if (isAgentCliCommand(text) || !kind) {
-      return text
+      return { data: text, inline: false }
     }
 
     const split = splitTerminalSubmission(text)
@@ -2247,7 +2266,7 @@ export class TerminalSessionStore {
       // the stable artifact name, which the active `felixo` shim resolves.
       if (!result?.ok || !result.name) {
         session.contextArtifactNames = []
-        return this.contextDeliveryFallback(session, text, kind, insertion)
+        return { data: this.contextDeliveryFallback(session, text, kind, insertion), inline: true }
       }
       deliveredFiles.push({ name: result.name, kind: part.kind })
       commandPath ??= result.commandPath
@@ -2255,7 +2274,10 @@ export class TerminalSessionStore {
 
     session.contextArtifactNames = deliveredFiles.map((file) => file.name)
     this.update(session, { contextWarning: undefined })
-    return buildContextFileReferences(deliveredFiles, Boolean(split.submit), commandPath)
+    return {
+      data: buildContextFileReferences(deliveredFiles, Boolean(split.submit), commandPath),
+      inline: false,
+    }
   }
 
   private contextDeliveryFallback(

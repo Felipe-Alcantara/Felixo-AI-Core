@@ -20,6 +20,15 @@ export function isSubmittedTerminalText(text: string): boolean {
   return /(?:\r\n|\r|\n)$/.test(text)
 }
 
+/**
+ * O texto que vai ao PTY para uma inserção: com Enter só quando ela pede
+ * (`autoSubmit`). Os painéis de prompts e de skills só digitam — a pessoa
+ * revisa e envia —; `/resume` e a passagem de responsabilidade vão sozinhos.
+ */
+export function terminalTextForInsertion(insertion: { content: string; autoSubmit: boolean }): string {
+  return insertion.autoSubmit ? toSubmittedTerminalText(insertion.content) : insertion.content
+}
+
 /** Devolve o prompt sem o Enter final: o texto deixa de pedir execução. */
 export function stripTerminalSubmission(text?: string): string | undefined {
   return text?.replace(/(?:\r\n|\r|\n)+$/, '')

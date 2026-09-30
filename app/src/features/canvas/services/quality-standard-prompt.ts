@@ -9,6 +9,7 @@ import {
   type AgentResumeFailure,
   type AgentSessionReference,
 } from './agent-session'
+import { quotePromptPath } from './prompt-paths'
 
 /**
  * Standing instruction typed into a terminal that opens WITH an agent
@@ -205,7 +206,7 @@ export function buildAgentIdentityPrompt(identity: AgentIdentity): string {
   }
 
   if (cwd) {
-    lines.push(`- Você está trabalhando no diretório/projeto: ${cwd}`)
+    lines.push(`- Você está trabalhando no diretório/projeto: ${quotePromptPath(cwd)}`)
   }
 
   lines.push(
@@ -247,7 +248,7 @@ export function buildPlanningFileInstruction(
     'ARQUIVO DE PLANEJAMENTO OBRIGATÓRIO',
     'Leia o arquivo a seguir antes de começar e siga as funções, etapas e decisões indicadas nele.',
     'Você é responsável por executar e manter esse plano atualizado quando apropriado.',
-    `Caminho: ${path}`,
+    `Caminho: ${quotePromptPath(path)}`,
   ].join('\n')
 }
 
@@ -386,7 +387,7 @@ export function buildCanvasTerminalInitialText(
   const pathPrompt = uniquePaths.length
     ? [
         'Arquivos .md do canvas ligados a este terminal:',
-        ...uniquePaths.map((path) => `- ${path}`),
+        ...uniquePaths.map((path) => `- ${quotePromptPath(path)}`),
         'Use esses caminhos para ler e salvar o contexto que aparece nos blocos .md do canvas.',
       ].join('\n')
     : ''

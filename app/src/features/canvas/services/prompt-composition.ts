@@ -37,9 +37,9 @@ export function composeSelectedPromptInsertion(
     content,
     combinedNames: selected.map((prompt) => prompt.name),
     ...options,
-    // A selected catalog task is an action when it is inserted. Callers that
-    // only want to stage it can explicitly pass `autoSubmit: false`.
-    autoSubmit: options.autoSubmit ?? true,
+    // Inserir do catálogo só digita: o texto espera a pessoa revisar e
+    // apertar Enter (decisão de 30/09/2026; antes a combinação era enviada).
+    autoSubmit: options.autoSubmit ?? false,
   })
 }
 

@@ -1,5 +1,5 @@
 import type { CanvasSkill } from '../types'
-import { toSubmittedTerminalText } from '../terminal/terminal-input'
+import { quotePromptPath } from './prompt-paths'
 
 /**
  * A canvas skill is just a pointer to a file. Activating it doesn't paste the
@@ -9,11 +9,13 @@ import { toSubmittedTerminalText } from '../terminal/terminal-input'
  */
 export function buildSkillActivationPrompt(skill: CanvasSkill): string {
   const lines = [
-    `Use a skill "${skill.name}". O arquivo da skill está em: ${skill.path}`,
+    `Use a skill "${skill.name}". O arquivo da skill está em: ${quotePromptPath(skill.path)}`,
     'Leia esse arquivo e siga as instruções dele para esta tarefa.',
   ]
   if (skill.description.trim()) {
     lines.splice(1, 0, `Resumo: ${skill.description.trim()}`)
   }
-  return toSubmittedTerminalText(lines.join('\n'))
+  // Sem Enter: a instrução fica na linha de entrada do agente para a pessoa
+  // revisar, completar e enviar (decisão de 30/09/2026, como os prompts do catálogo).
+  return lines.join('\n')
 }

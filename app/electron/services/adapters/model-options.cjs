@@ -1,5 +1,6 @@
 const CODEX_REASONING_EFFORTS = new Set(['low', 'medium', 'high', 'xhigh'])
-const CLAUDE_REASONING_EFFORTS = new Set(['low', 'medium', 'high', 'max'])
+// Mesma lista de `agent-launch-options.ts` (conferida no `claude --help` 2.1.285).
+const CLAUDE_REASONING_EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max'])
 const CLAUDE_PERMISSION_MODES = new Set([
   'default',
   'acceptEdits',

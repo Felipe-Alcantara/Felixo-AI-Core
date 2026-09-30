@@ -3,6 +3,7 @@ import {
   BrainCircuit,
   Check,
   ChevronDown,
+  CircleAlert,
   EyeOff,
   Pencil,
   Plus,
@@ -11,6 +12,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { CanvasPanel } from './CanvasPanel'
+import { describeSkillActivationFeedback } from '../../services/prompt-delivery-feedback'
 import {
   hideSkillId,
   readSkillsCatalog,
@@ -19,8 +21,12 @@ import {
 } from './skills-panel-catalog'
 import type { CanvasSkill } from '../../types'
 
-/** Result of activating a skill, so the panel can show the right feedback. */
-export type SkillActivationResult = 'sent' | 'copied' | 'failed'
+/**
+ * Result of activating a skill (or inserting a prompt), so the panel can show
+ * the right feedback. `sent-inline`: chegou ao terminal pelo fallback, sem o
+ * arquivo temporário do contexto.
+ */
+export type SkillActivationResult = 'sent' | 'sent-inline' | 'copied' | 'failed'
 
 type SkillsPanelProps = {
   /** Sends the skill to the expanded terminal, or copies it as a fallback. */
@@ -94,6 +100,7 @@ export function SkillsPanel({
   const [draft, setDraft] = useState(emptyDraft)
   const [feedbackId, setFeedbackId] = useState<string | null>(null)
   const [feedbackText, setFeedbackText] = useState('')
+  const [feedbackResult, setFeedbackResult] = useState<SkillActivationResult>('sent')
   const botaoOcultasRef = useRef<HTMLButtonElement>(null)
   const listaOcultasId = useId()
 
@@ -202,14 +209,12 @@ export function SkillsPanel({
   const activate = async (skill: CanvasSkill) => {
     const result = await onActivateSkill(skill)
     setFeedbackId(skill.id)
-    setFeedbackText(
-      result === 'sent'
-        ? 'Enviada ao terminal aberto.'
-        : result === 'copied'
-          ? 'Sem terminal aberto — copiada para a área de transferência.'
-          : 'O terminal não confirmou o recebimento. Tente novamente.',
-    )
-    window.setTimeout(() => setFeedbackId((id) => (id === skill.id ? null : id)), 2500)
+    setFeedbackResult(result)
+    setFeedbackText(describeSkillActivationFeedback(result).text)
+    // Como no painel de prompts: o erro fica até a pessoa tentar de novo.
+    if (result !== 'failed') {
+      window.setTimeout(() => setFeedbackId((id) => (id === skill.id ? null : id)), 2500)
+    }
   }
 
   return (
@@ -300,13 +305,14 @@ export function SkillsPanel({
             botões inteiro: a rolagem da lista cortava o contorno. */}
         <ul className="-mx-1 mt-1 flex max-h-40 flex-col gap-1 overflow-y-auto p-1">
           {sistema.map((item) => (
-            <li key={item.id} className="flex items-center gap-1.5 text-[11px]">
+            <li key={item.id} data-felixo-skill-id={item.id} className="flex items-center gap-1.5 text-[11px]">
               <span className="truncate text-zinc-300" title={item.description}>
                 {item.name}
               </span>
               {item.source === 'community' && <CommunityBadge origin={item.origin} />}
               <button
                 type="button"
+                data-felixo-skill-activate
                 onClick={() => void activate(item)}
                 className="felixo-btn ml-auto shrink-0 rounded-sm px-1 text-[10px] text-(--f-core-white-soft) hover:bg-white/10"
                 title="Ativar agora no terminal aberto"
@@ -326,6 +332,18 @@ export function SkillsPanel({
             </li>
           ))}
         </ul>
+        {/* A lista da biblioteca é compacta demais para o retorno dentro da
+            linha; sem isto, ativar uma skill daqui não mostrava resultado nenhum. */}
+        {feedbackId && sistema.some((item) => item.id === feedbackId) && (
+          <p
+            role="status"
+            data-felixo-delivery-feedback={feedbackResult}
+            className={`flex items-center gap-1 text-[11px] ${feedbackResult === 'failed' ? 'text-theme-error' : 'text-(--f-core-white-soft)'}`}
+          >
+            {feedbackResult === 'failed' ? <CircleAlert size={11} /> : <Check size={11} />}
+            {sistema.find((item) => item.id === feedbackId)?.name}: {feedbackText}
+          </p>
+        )}
 
         {erroSistema && (
           <p role="alert" className="mt-1 text-[11px] text-theme-error">
@@ -401,7 +419,7 @@ export function SkillsPanel({
 
       <ul className="felixo-anim-stagger-list flex flex-col gap-2">
         {skills.map((skill) => (
-          <li key={skill.id} className="rounded-sm bg-zinc-800/60 p-2">
+          <li key={skill.id} data-felixo-skill-id={skill.id} className="rounded-sm bg-zinc-800/60 p-2">
             <div className="mb-1 flex items-center gap-1">
               <span className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-100">
                 {skill.name}
@@ -439,8 +457,12 @@ export function SkillsPanel({
               <p className="mt-0.5 text-xs text-zinc-500">{skill.description}</p>
             )}
             {feedbackId === skill.id && (
-              <p className="mt-1 flex items-center gap-1 text-[11px] text-(--f-core-white-soft)">
-                <Check size={11} />
+              <p
+                role="status"
+                data-felixo-delivery-feedback={feedbackResult}
+                className={`mt-1 flex items-center gap-1 text-[11px] ${feedbackResult === 'failed' ? 'text-theme-error' : 'text-(--f-core-white-soft)'}`}
+              >
+                {feedbackResult === 'failed' ? <CircleAlert size={11} /> : <Check size={11} />}
                 {feedbackText}
               </p>
             )}

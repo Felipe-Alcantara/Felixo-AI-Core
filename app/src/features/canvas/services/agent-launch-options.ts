@@ -3,7 +3,8 @@
  * (model / effort / yolo) into the real command-line arguments each one expects.
  *
  * Flags verified against the installed CLIs (`<cli> --help`):
- * - Claude Code: --model <m> · --effort <low|medium|high|max> · --dangerously-skip-permissions
+ * - Claude Code: --model <m> · --effort <low|medium|high|xhigh|max> · --dangerously-skip-permissions
+ *   (níveis conferidos no `claude --help` da 2.1.285)
  * - Codex:       --model <m> · -c model_reasoning_effort=<...> · -c service_tier=priority (fast) · --dangerously-bypass-approvals-and-sandbox
  * - Gemini:      --model <m> · (no effort) · --yolo
  *
@@ -46,7 +47,8 @@ export const AGENTS: AgentDefinition[] = [
     command: 'claude',
     label: 'Claude',
     models: ['opus', 'sonnet', 'haiku'],
-    effortLevels: ['low', 'medium', 'high', 'max'],
+    // Na ordem do `claude --help` (2.1.285): o xhigh fica entre high e max.
+    effortLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
   },
   {
     id: 'codex',

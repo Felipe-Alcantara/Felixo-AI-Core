@@ -1,4 +1,5 @@
 import type { CanvasSkill } from '../types'
+import { quotePromptPath } from './prompt-paths'
 
 export type PresetForPrompt = {
   name: string
@@ -39,7 +40,7 @@ export function buildPresetInstruction(
         'Skills deste agente (leia o arquivo só quando a tarefa combinar):',
         ...skills.map((skill) => {
           const description = skill.description.trim()
-          return `- ${skill.name}${description ? `: ${description}` : ''} — ${skill.path}`
+          return `- ${skill.name}${description ? `: ${description}` : ''} — ${quotePromptPath(skill.path)}`
         }),
       ].join('\n'),
     )

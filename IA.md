@@ -7509,3 +7509,95 @@ A primeira subida mostrou um problema real: com o `--version` do Gemini lento, a
 - PR #100 (`feat/retomada-capacidade-por-versao`, commits `a692d09` e `d35356a`). A CI passou em 21 dos 22 checks na primeira rodada. `Benchmarks (windows-latest)` falhou só no gate `renderer-xterm count=1` (delta de heap do stream +92,8%, limiar 60%), uma intermitência já conhecida e fora desta mudança; a reexecução do job passou.
 - Squash no `main` como `2a7aa79` às 14:52. CI do `main` verde (reaproveitada do PR), Release gate liberou, e a release **v0.1.429** foi publicada às 14:53 com os instaladores dos três sistemas. O smoke exploratório do Windows passou.
 - Branch apagada no GitHub e no local, com bundle de backup.
+
+## 2026-09-30 — Prompts: nomes, retorno e caminhos validados em todas as origens
+
+Registro de Claude - Tasks do AI Core, task "Felixo AI Core/Prompts — validar nomes em catálogo, skills, clipboard, combinação e fallback" (Notion 3ce91f95-497e-81ae-b687-e41ebf2e8ccd). Início às 15:31.
+
+### Decisões do Felipe (Trilha B)
+
+- Provar no store (PTY falso) **e** no app real, na CI dos três sistemas.
+- Corrigir aqui os caminhos absolutos sem aspas.
+- Incluir a forma do PowerShell (`&`) no texto de leitura quando o app roda no Windows.
+- Corrigir aqui as divergências pequenas entre origens; as maiores viram task.
+
+### O que a investigação achou
+
+- A task dizia que a skill não se envia sozinha, mas ela se envia: `buildSkillActivationPrompt` já usa `toSubmittedTerminalText`.
+- Caminhos absolutos sem aspas nos textos para o agente: a skill ativada, o manifesto de skills, as skills do preset, os `.md` ligados, o arquivo de planejamento, a pasta de trabalho (identidade e passagem) e os modelos de link/diagnóstico do scratchpad (`{{path}}`).
+- No Windows, o comando de leitura sai como `"C:\…\felixo.cmd" context read "x"`, e no PowerShell um caminho entre aspas seguido de argumentos precisa de `&`.
+- O fallback inline dava ao painel o mesmo "Inserido no terminal aberto" do caminho normal.
+- A contagem de "N prompts combinados" incluía os prompts vazios, que ficam fora do texto.
+- O painel de skills mostrava o ícone de sucesso também na falha e sumia com o erro em 2,5 s. Ativar uma skill da biblioteca não mostrava retorno nenhum.
+- Um prompt do catálogo sem nome mostraria no cartão a referência do arquivo ("CONTEXTO ENTREGUE EM ARQUIVOS…").
+- Nenhum smoke passava pelos painéis de prompts e de skills.
+
+### O que mudou
+
+- `prompt-paths.ts` (novo): `quotePromptPath` e `fillPathPlaceholder`, que não dobram aspas num modelo que já cercou `{{path}}`. São usados por skill, manifesto, preset, `quality-standard-prompt`, `terminal-handoff`, `file-link-prompt`, e `quoteContextFileName` delega a ele.
+- `buildContextFileReferences`: com caminho de Windows (`isWindowsCommandPath`), acrescenta `No PowerShell: & "<caminho>" context read "<nome>"` por arquivo.
+- `SendTextResult` ganha `inline: true` no fallback (`deliverContextText` devolve `{ data, inline }`). `toActivationResult` gera `sent-inline`, com texto próprio nos painéis (`describeSingleInsertFeedback`, `describeCombinedInsertFeedback`, `describeSkillActivationFeedback`). A combinação conta `combinedNames.length`.
+- `SkillsPanel`: o erro aparece como erro (ícone e cor) e fica até a nova tentativa. A lista da biblioteca passou a mostrar o retorno.
+- `resolvePromptDisplayLabel`: sem nome, usa o rótulo da origem (`Prompt do catálogo`, `Skill`, `Arquivo do canvas`…). O texto manual continua com o próprio texto.
+- Atributos estáveis para o smoke: `data-felixo-last-prompt`, `data-felixo-context-warning`, `data-felixo-delivery-feedback`, `data-felixo-prompt-id`/`-insert`, `data-felixo-skill-id`/`-activate`.
+
+### Testes novos
+
+- `prompt-origins-e2e.test.ts` (18): store com PTY falso e xterm real.
+  - Cada origem (catálogo, combinação, skill, arquivo do canvas, texto digitado): corpo byte a byte no arquivo, uma entrega e um Enter, rótulo do cartão e snapshot da metadata (`__snapshots__`).
+  - Fallback por origem, com a mesma metadata e `inline: true`.
+  - Combinação com ordem, repetição e prompt vazio.
+  - Unicode, quebras de linha e prompt de ~250 KB; nome vazio; caminhos com espaço.
+  - Duas entregas seguidas, desistência (digitado sem Enter e trocado pela pessoa), bloco removido com a entrega na fila, recusa do PTY e nova tentativa, reinício e `toPersistedNode`.
+  - Mutação conferida: sem as aspas ou sem o rótulo por origem, 5 casos falham.
+- `context-file-delivery.shell.test.ts`: a linha gerada roda no shell de verdade, numa pasta com espaço e acento. No Linux e no macOS, com `sh`; no Windows, com `cmd.exe`, PowerShell (com `&`, e a prova de que sem ele falha) e Git Bash.
+- `prompt-paths.test.ts` (16), mais casos em `context-file-delivery.test.ts`, `prompt-delivery-feedback.test.ts` e `prompt-insertion.test.ts`.
+- **Smoke, sessão E** (`scripts/canvas-smoke-prompts.cjs`, P0–P6), no app real com a CLI roteirizada:
+  - catálogo, combinação e skill da biblioteca;
+  - fallback de verdade, com a pasta `context-deliveries` trocada por um arquivo;
+  - sem terminal aberto, o prompt vai para a área de transferência;
+  - o canvas grava só a metadata.
+  - Dois achados de interface: a gaveta precisa estar **fixada** para ficar aberta enquanto se usa o painel (um clique fora a fecha), e na janela da CI do Windows a lista "Elementos" cobre parte do painel. A sessão usa o teclado, como a memória das janelas do smoke recomenda.
+  - `FELIXO_SMOKE_SESSOES=E` roda só as sessões listadas.
+
+### Validação local
+
+- `tsc -b` e `eslint .` limpos.
+- vitest: 2801 aprovados (4 pulados: os 3 de shell do Windows e 1 que já era pulado).
+- Suíte de node: 2369 aprovados no Node 25.9 e no 22.22.
+- Sessão E sozinha, em Xvfb 1009×678 (a janela do Windows da CI): P0–P6 em 80 s.
+- Smoke completo, em Xvfb 1280×800: sessões A a E aprovadas (C em 92 s, D em 47 s, E em 23 s).
+- A sessão local foi interrompida entre 16:17 e 18:37 (a máquina reiniciou e o `/tmp` foi limpo). As mudanças estavam no worktree, e a validação foi refeita às 18:37.
+
+### Relato do Felipe no meio da task: prompts enviados sozinhos
+
+Com o PR #101 aberto, o Felipe relatou que os prompts do painel **Prompts**, no Claude Code, eram enviados sozinhos em vez de só entrarem na linha de entrada. Pela resposta dele, o comportamento certo é **sempre só digitar**, em catálogo, combinação e skill. Só `/resume` e a passagem de responsabilidade continuam indo sozinhos.
+
+- **Causa:** não foi uma regressão recente. O "Inserir" do catálogo mandava `toSubmittedTerminalText` (com Enter) desde antes de 16/09, a combinação usava `autoSubmit: true` por padrão e `buildSkillActivationPrompt` terminava com Enter.
+- **Correção:**
+  - `PromptsPanel` e `activateSkill` passam `autoSubmit: false`, e `composeSelectedPromptInsertion` agora tem `false` como padrão.
+  - `buildSkillActivationPrompt` não põe mais Enter.
+  - `terminalTextForInsertion` (em `terminal-input.ts`) só acrescenta o Enter quando a inserção pede, e o `CanvasView` a usa.
+  - Os retornos dizem "Digitado no terminal aberto. Revise e aperte Enter para enviar."
+- **Nome no cartão:** a inserção só digitada fica em `pendingPromptInsertions` até o Enter da pessoa. Tecla comum e Shift+Enter a mantêm, porque a pessoa está completando o pedido, e o envio sai com o nome do prompt. Backspace, Ctrl+C e Ctrl+U a descartam.
+- **Continuam indo sozinhos, e ficam para decisão:** a instrução ao ligar um `.md` e o pedido de diagnóstico, a colaboração ao conectar agentes, o aviso de renomeação e o "Enviar" do painel Terminais, que é um envio explícito.
+- **Testes:**
+  - E2E: 22 casos.
+    - Os painéis nunca escrevem Enter.
+    - O Enter da pessoa envia com o nome do prompt.
+    - Completar com Shift+Enter mantém o nome; Ctrl+C o descarta.
+    - Os snapshots foram regravados com `autoSubmit: false` em catálogo, combinação e skill.
+  - Smoke, sessão E: passou com os textos novos, na janela do Windows da CI.
+
+### Outro pedido: effort do Claude Code desatualizado
+
+- O `claude --help` (2.1.285) lista `low, medium, high, xhigh, max`, e o app oferecia `low, medium, high, max`.
+- `agent-launch-options.ts` ganhou `xhigh`, e o adaptador do chat (`model-options.cjs`) aceita `xhigh`.
+- O modal de modelos do chat deriva a lista do Claude da mesma fonte, como já fazia com o Codex. Era a cópia duplicada que tinha ficado velha.
+- Testes novos no canvas e no adaptador; um nível desconhecido, como `ultra`, não vira argumento.
+
+### CI da primeira rodada do PR #101 (`f95bdb8`)
+
+- `Validate` passou nos três sistemas. No Windows, `context-file-delivery.shell.test.ts` rodou 3 casos e pulou 1 (o de POSIX): o `cmd.exe` roda a linha comum; o PowerShell roda a linha com `&` e recusa a linha comum; o **Git Bash roda a linha comum** com o caminho de Windows entre aspas.
+- `Dependency policy` falhou por um alerta publicado hoje, fora desta mudança: `dompurify` 3.4.13–3.4.15, GHSA-p98j-92pf-mc4p, severidade baixa, transitivo via `mermaid`.
+- `npm audit fix`, sem `--force`, só mexeu no lockfile: `dompurify` 3.4.15→3.4.16, `undici` 6.28.0→6.29.0 e 7.29.0→7.30.0, `brace-expansion` 5.0.9→5.0.12, `fast-uri` 3.1.7→3.1.8. O `npm audit` foi para 0 vulnerabilidades.

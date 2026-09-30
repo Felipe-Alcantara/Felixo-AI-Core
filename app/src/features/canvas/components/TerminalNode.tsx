@@ -426,6 +426,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
         />
         {promptDisplay && (
           <div
+            data-felixo-last-prompt={promptDisplay.named ? 'nome' : 'texto'}
             className="shrink-0 rounded-sm border border-white/10 bg-(--f-core-white)/10 px-1.5 py-1 text-[10px] leading-snug text-(--f-core-white-soft)"
             title={promptDisplay.detail}
           >
@@ -435,6 +436,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
         )}
         {snapshot?.contextWarning && (
           <div
+            data-felixo-context-warning
             className="shrink-0 rounded-sm border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-1.5 py-1 text-[10px] leading-snug text-(--color-warning)"
             title={snapshot.contextWarning}
           >

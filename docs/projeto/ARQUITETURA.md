@@ -1702,6 +1702,51 @@ temporário e o fallback inline. O cabeçalho do artefato e o QA Logger podem
 mostrar ID, nome, origem, composição, intenção de envio e timestamp, nunca o
 corpo da instrução como metadata.
 
+**O que a pessoa vê de cada origem.** O cartão do bloco mostra
+`resolvePromptDisplayLabel(lastPrompt, insertion)`: o nome (ou os nomes
+combinados, na ordem) quando existe; sem nome, a origem (`Prompt do catálogo`,
+`Skill`, `Arquivo do canvas`, `Contexto do app`…), porque o `lastPrompt` dessas
+origens é a referência do arquivo de contexto ou o aviso do fallback inline e
+não diz o que foi enviado. Só o texto `manual` usa o próprio `lastPrompt` como
+rótulo. O `sendText` devolve `{ delivered: true, inline: true }` quando o
+arquivo de contexto falhou e o texto foi direto (fallback), e
+`toActivationResult` transforma isso em `sent-inline`, que os painéis de
+prompts e de skills mostram com texto próprio, diferente do envio normal.
+
+**Os painéis só digitam.** Catálogo, combinação e skill chegam ao PTY sem
+Enter (`autoSubmit: false`, `terminalTextForInsertion`): o texto fica na linha
+de entrada, e quem envia é a pessoa (decisão de 30/09/2026, depois de um relato
+de prompts enviados sozinhos no Claude Code). A inserção fica em
+`pendingPromptInsertions` até o Enter da pessoa: tecla comum e Shift+Enter a
+mantêm (a pessoa está completando o pedido), e o envio sai com o nome dela;
+Backspace, Ctrl+C e Ctrl+U a descartam, e o pedido seguinte é `manual`. Continuam
+indo sozinhos `/resume`, a passagem de responsabilidade e as instruções que o app
+manda ao ligar um `.md`, conectar agentes ou renomear um bloco.
+
+**Caminhos entre aspas.** Todo caminho absoluto num texto para o agente passa
+por `quotePromptPath` (`prompt-paths.ts`): a skill ativada, o manifesto de
+skills, as skills do preset, os `.md` ligados, o arquivo de planejamento, a
+pasta de trabalho da identidade e da passagem, e o comando `felixo` da
+referência (`quoteContextFileName` delega a ela). Os modelos editáveis do link
+de scratchpad usam `fillPathPlaceholder`, que põe aspas em `{{path}}` e não as
+dobra quando o modelo já cercou o marcador. Com caminho de Windows
+(`isWindowsCommandPath`), a referência ganha a linha `No PowerShell: & "<caminho>"
+context read "<nome>"`: no PowerShell, um caminho entre aspas seguido de
+argumentos é uma string, e a linha comum falha.
+
+**Como isso é provado.** `prompt-origins-e2e.test.ts` passa cada origem
+(catálogo, combinação, skill, arquivo do canvas e texto digitado) pelo store,
+com PTY falso e xterm real: corpo byte a byte no arquivo, uma entrega e um
+Enter por envio, rótulo do cartão, snapshot da metadata, fallback, repetição,
+desistência, nova tentativa, reinício e o que `toPersistedNode` grava.
+`context-file-delivery.shell.test.ts` roda a linha de leitura gerada no shell
+de verdade, numa pasta com espaço e acento: `sh` no Linux e no macOS; `cmd.exe`,
+PowerShell (com `&`, e a prova de que sem ele falha) e Git Bash no Windows. A
+sessão E do smoke do canvas (`scripts/canvas-smoke-prompts.cjs`) clica nos
+painéis do app real com a CLI roteirizada: o retorno de cada envio, o nome no
+cartão, o fallback de verdade (a pasta `context-deliveries` trocada por um
+arquivo), a área de transferência e o que o canvas gravou.
+
 ### Observabilidade: erros com causa, persistidos e reportáveis
 
 O QA Logger guardava só até 400 entradas em memória — reiniciar o app (o

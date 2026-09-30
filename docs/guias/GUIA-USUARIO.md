@@ -357,7 +357,7 @@ Você pode:
 - Abrir login oficial da CLI no terminal do sistema.
 - Adicionar uma CLI pelo comando, por exemplo `codex`, `claude` ou `gemini`.
 - Remover modelos cadastrados.
-- Clicar em um modelo no painel **Modelos** para configurar o modelo do provider e o effort quando o adapter suportar.
+- Clicar em um modelo no painel **Modelos** para configurar o modelo do provider e o effort quando o adapter suportar. No Claude Code, os níveis são os do `claude --help` (2.1.285): low, medium, high, xhigh e max; no Codex, dependem do modelo.
 
 Para o Openia, a configuração do agente consulta interfaces e modelos em tempo
 real. A validação da chave acontece novamente no momento de abrir o terminal:
@@ -783,6 +783,13 @@ Escolher uma ferramenta abre o painel correspondente. **Buscar**, **Notificaçõ
 
 - **Notas** tem duas seções: **Notas no canvas** lista os blocos de nota do quadro — clicar num item centraliza e seleciona o bloco, e "Nova nota" cria um bloco direto no canvas; **Notas salvas** são as notas persistidas, editáveis ali mesmo e também legíveis pelo modo de chat legado.
 - **Source Control** mostra branch e status do projeto escolhido, com stage all e commit; erros do repositório aparecem no próprio painel, e o botão de atualizar recarrega o status.
+- **Prompts** e **Skills** **digitam** o texto no terminal aberto, **sem Enter**: ele fica na linha de entrada do agente para você revisar, completar e enviar. Só `/resume` e a passagem de responsabilidade são enviados sozinhos. O terminal aberto é o da gaveta, que precisa estar fixada (botão **Fixar terminal**, no topo da gaveta) para continuar aberta enquanto você usa o painel, porque um clique fora dela a fecha. Sem terminal aberto, o texto vai para a área de transferência. Cada uso mostra o resultado embaixo do item:
+  - **Digitado no terminal aberto. Revise e aperte Enter para enviar.**;
+  - a mesma coisa com **direto no texto**, quando o arquivo temporário do contexto falhou (o cartão do bloco mostra o aviso);
+  - **copiado para a área de transferência**;
+  - ou **O terminal não confirmou o recebimento**, que fica na tela até você tentar de novo.
+
+  Marcar vários prompts e usar **Enviar conjunto** digita os textos juntos, na ordem do catálogo; a contagem só inclui prompts com texto. O cartão do bloco mostra o nome do prompt (ou da lista combinada, da skill ou do arquivo do canvas) também quando você completa o pedido antes de apertar Enter; Ctrl+C, Ctrl+U ou apagar o texto tiram esse nome, e o que você enviar depois aparece como o próprio texto. Um prompt sem nome aparece como **Prompt do catálogo**.
 - **Skills** lista, em **Skills do sistema**, as skills que todo agente novo recebe. O ícone de olho cortado ao lado de **Ativar** ("Não enviar aos agentes") tira uma skill dessa lista. O recolhível **Ocultas (N)**, logo abaixo, mostra as que foram tiradas, e o X de cada uma a devolve. A escolha vale para os próximos agentes, sem reiniciar o app, e continua valendo nas próximas sessões. Uma skill oculta também sai dos presets que a citam.
 - **Fetch All** mostra primeiro o escopo efetivo, as raízes configuradas, o motivo da escolha e o custo esperado. As pastas-raiz se escolhem no próprio cartão **Escopo da varredura**: **Adicionar pasta** abre o seletor do sistema (dá para escolher uma ou várias pastas), e o X ao lado de cada raiz a tira da lista. Cada linha mostra o nome da pasta e o caminho completo. Não é preciso editar `fetch-all-settings.json` à mão. Prefira escolher as pastas onde ficam os seus repositórios, porque varrer os discos inteiros é bem mais caro, sobretudo numa máquina modesta. Com pelo menos uma raiz, a varredura fica só nelas e não pede confirmação. Quando nenhuma foi configurada, os discos locais aparecem apenas como alternativa ("Ou varra todos os discos locais") e a interface exige uma confirmação explícita antes de iniciar uma varredura ampla. Sem essa confirmação, nenhuma varredura recursiva começa — em particular, a configuração vazia nunca dispara `/` silenciosamente. Pull (sempre `--ff-only`), push e o commit automático dos repositórios cuja única pendência é commitar acontecem num segundo passo, depois de você revisar o plano e confirmar — e o estado de cada repositório é conferido de novo imediatamente antes de qualquer escrita. Cada passada gera um relatório em Markdown na pasta de relatórios do app. A varredura **rápida** reaproveita a lista da última varredura completa somente se raízes, exclusões, ignorados, montagens e discos detectados forem os mesmos (é mais rápida, mas não encontra repositórios novos), e o ícone ao lado de um repositório passa a **ignorar** aquela pasta nas próximas varreduras — a lista de ignoradas fica no rodapé do painel.
 - Se uma execução confirmada falhar, o painel mostra o diagnóstico, mantém o pedido pendente e preserva o plano para uma nova revisão; o pedido só sai da fila depois que `resultado.ok` confirma a execução.
@@ -952,6 +959,15 @@ outra máquina/perfil não devem ser copiados nem usados. Se a leitura falhar,
 o agente deve informar o nome e o erro exatos, sem trocar silenciosamente pelo
 artefato "equivalente" de outra sessão. Se o processo do app não conseguir
 criar o arquivo, o terminal volta ao fallback inline e mostra um aviso.
+
+Todo caminho de arquivo ou pasta que o app escreve para o agente vai entre
+aspas: o comando `felixo`, a skill ativada, a lista de skills, os arquivos
+`.md` ligados, o arquivo de planejamento e a pasta de trabalho. Assim, um
+caminho com espaço ou acento (`C:\Users\Ana Maria\…`) continua inteiro quando
+o agente o copia para um comando. No Windows, a referência traz também a linha
+do PowerShell, com `&` na frente (`& "C:\…\felixo.cmd" context read "<nome>"`):
+lá, um caminho entre aspas seguido de argumentos não roda sem o `&`. O `cmd.exe`
+e o Git Bash usam a linha comum.
 
 Arquivos e pastas úteis:
 

@@ -5,6 +5,7 @@ import {
   contextFileKindForPrompt,
   promptInsertionSourceForContextKind,
   isAgentCliCommand,
+  isWindowsCommandPath,
   quoteContextFileName,
   splitInitialContext,
 } from './context-file-delivery'
@@ -98,3 +99,36 @@ describe('context-file-delivery', () => {
     expect(buildInlineFallback('corpo\r').endsWith('\r')).toBe(true)
   })
 })
+
+describe('linha de leitura por sistema', () => {
+  const posix = '/home/ana/.config/felixo-ai-core/bin/felixo'
+  const windows = 'C:\\Users\\Ana Maria\\AppData\\Roaming\\Felixo AI Core\\bin\\felixo.cmd'
+
+  it('caminho de Windows ganha a linha do PowerShell com &, uma por arquivo', () => {
+    const text = buildContextFileReferences(
+      [
+        { name: 'felixo-context-1-a.txt', kind: 'catalog-prompt' },
+        { name: 'felixo-context-2-b.txt', kind: 'skills-manifest' },
+      ],
+      false,
+      windows,
+    )
+    expect(text).toContain(`  Leia com: "${windows}" context read "felixo-context-1-a.txt"`)
+    expect(text).toContain(`  No PowerShell: & "${windows}" context read "felixo-context-1-a.txt"`)
+    expect(text.match(/No PowerShell: &/g)).toHaveLength(2)
+  })
+
+  it('caminho POSIX e nome nu não ganham a linha do PowerShell', () => {
+    expect(buildContextFileReferences([{ name: 'x.txt', kind: 'handoff' }], false, posix)).not.toContain('PowerShell: &')
+    expect(buildContextFileReferences([{ name: 'x.txt', kind: 'handoff' }], false)).not.toContain('PowerShell: &')
+  })
+
+  it('reconhece caminho de Windows com letra, barra normal e rede', () => {
+    expect(isWindowsCommandPath(windows)).toBe(true)
+    expect(isWindowsCommandPath('c:/x/felixo.cmd')).toBe(true)
+    expect(isWindowsCommandPath('\\\\servidor\\pasta\\felixo.cmd')).toBe(true)
+    expect(isWindowsCommandPath(posix)).toBe(false)
+    expect(isWindowsCommandPath('felixo')).toBe(false)
+  })
+})
+
