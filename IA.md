@@ -7601,3 +7601,13 @@ Com o PR #101 aberto, o Felipe relatou que os prompts do painel **Prompts**, no 
 - `Validate` passou nos três sistemas. No Windows, `context-file-delivery.shell.test.ts` rodou 3 casos e pulou 1 (o de POSIX): o `cmd.exe` roda a linha comum; o PowerShell roda a linha com `&` e recusa a linha comum; o **Git Bash roda a linha comum** com o caminho de Windows entre aspas.
 - `Dependency policy` falhou por um alerta publicado hoje, fora desta mudança: `dompurify` 3.4.13–3.4.15, GHSA-p98j-92pf-mc4p, severidade baixa, transitivo via `mermaid`.
 - `npm audit fix`, sem `--force`, só mexeu no lockfile: `dompurify` 3.4.15→3.4.16, `undici` 6.28.0→6.29.0 e 7.29.0→7.30.0, `brace-expansion` 5.0.9→5.0.12, `fast-uri` 3.1.7→3.1.8. O `npm audit` foi para 0 vulnerabilidades.
+
+### Fechamento (CI, merge e release)
+
+- **PR #101, 8 commits.** Na primeira rodada (`f95bdb8`), `Validate` passou nos três sistemas, com os testes de shell do Windows, e `Dependency policy` falhou pelo alerta do `dompurify`, corrigido no PR. Na rodada de `0990acf`:
+  - o `Validate (windows-latest)` precisou de 3 tentativas: na 1ª, o smoke não montou o canvas em 45 s na primeira carga da sessão B (a sessão A tinha passado); na 2ª, `package-inventory.test.cjs` leu um `package.json` só com bytes zero de dentro do `app.asar` recém-criado, uma corrida de disco;
+  - `Benchmarks (ubuntu-24.04-arm)` reprovou no gate `renderer-xterm count=1` (heap do stream +234%) e passou na reexecução.
+
+  Nenhuma dessas falhas é desta mudança, e o mesmo conteúdo passou na 3ª tentativa.
+- **Merge e release.** Squash no `main` como `2da83fe` às 19:45; CI do `main` verde; release **v0.1.430** publicada às 19:46, com os instaladores dos três sistemas e o smoke exploratório do Windows verde.
+- **Alertas novos no `npm` embutido.** Depois do merge, o `npm audit` completo passou a apontar `ip-address@10.5.0` (moderada), `brace-expansion@5.0.9` e `undici@6.28.0` (altas), todos dentro do `npm@11.19.1` que o app carrega como runtime. A política de produção (`--omit=dev`) continua com 0 alertas. Uma execução do Dependabot para o `ip-address` falhou, porque não consegue atualizar dependência embutida no pacote `npm`. Virou task.
