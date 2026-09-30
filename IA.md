@@ -7388,3 +7388,60 @@ Feita com o store real, o PTY roteirizado do main e as pastas isoladas das CLIs,
 - **"Escolher outra conversa" é só a lista da CLI,** que filtra por pasta; no caso de pasta divergente, a conversa pode não aparecer (task aberta).
 - **O chat legado não usa este resolver** e ainda manda UUID ao Gemini (task aberta).
 - **Anterior a esta task:** a descoberta do Codex percorre as pastas em BFS com teto de 3000 arquivos, pelos rollouts mais antigos (task aberta).
+
+## 2026-09-30 — Retomada: validação E2E no app empacotado (Windows), sem credencial
+
+Registro de Claude - Tasks do AI Core, task "Felixo AI Core/Retomada — validar E2E empacotado com sessões reais não recentes nos três SOs" (Notion 3ce91f95-497e-8118-8eb2-fdb18eaff431). Início às 00:43.
+
+### Contexto e restrição
+
+A task pede sessões reais com o app empacotado nos três SOs e proíbe credencial pessoal ou prompt de login manual como E2E. Por isso tudo rodou com perfil do app isolado (`felixo devtools launch --packaged`) e pastas de conta das CLIs isoladas e vazias (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`), sem chave de API no ambiente e sem as variáveis `CLAUDE_CODE_*` da sessão que dirigiu o teste. Nenhum modelo foi chamado. O Gemini não foi aberto, porque a pasta de conta dele segue a HOME real.
+
+### Empacotamento local (Windows)
+
+- `electron-builder --dir --publish never` em `app/`, a partir de `4200757`, gerando `release/win-unpacked/Felixo AI Core.exe`, que carrega `resources/app.asar/dist`.
+- Nesta máquina, dois contornos foram necessários:
+  - sem toolchain C++, `-c.npmRebuild=false`, como o `release.yml` já faz no Windows;
+  - no Node 25.3.0, o `fs.cpSync` de `scripts/bundle-npm-runtime.cjs` quebra ("The operation completed successfully" em `…\node-gyp-bin\node-gyp`). O `electron-builder` rodou no Node 24.18 do próprio Electron (`ELECTRON_RUN_AS_NODE=1`), com um wrapper que faz `process.noAsar = true` e `process.defaultApp = true`.
+
+### Medido com as CLIs reais, sem credencial
+
+- `claude --resume <id ausente> -p x`: `No conversation found with session ID: <id>`, saída 1.
+- `claude --resume <id de um arquivo no formato do Claude Code> -p x`: `Not logged in · Please run /login`. A CLI resolve o ID **antes** do login.
+- `codex exec resume <id> x`: `Not inside a trusted directory…`. No TUI, a tela "Sign in with ChatGPT" aparece antes de resolver o ID.
+- `gemini --resume <id> -p x`: `No previous sessions found for this project.`, saída 42.
+
+### Cenários no app empacotado (Windows 11, Claude Code 2.1.283 → 2.1.285, Codex 0.159.2)
+
+| Cenário | Resultado |
+| --- | --- |
+| Claude, conversa ausente e não recente (3 dias) | A CLI respondeu `No conversation found with session ID: …a1`. O cartão mostrou a faixa "A CLI não encontrou a conversa" (Escolher na lista, Abrir conversa nova, Tentar retomar de novo), `resumeFailure = expired:a1` persistida e nenhum ID na faixa. |
+| Claude, conversa no disco (3 dias), com uma vizinha mais nova na mesma pasta | A CLI retomou a conversa exata pelo ID (redesenhou "Conversa antiga do bloco E2E", não a vizinha) e parou no login. O cartão mostrou "A CLI pediu login ao retomar" com "Dispensar aviso"; `agentSession` seguiu `…a3`, sem `previousAgentSession`. |
+| Reiniciar no bloco com conversa ausente | Nenhum processo novo (mesmos PIDs). O foco foi para "Escolher na lista (/resume)". Sem loop de `--resume`. |
+| CLI atualizada no meio (2.1.283 → 2.1.285) | "Tentar retomar de novo" rodou na 2.1.285: a mesma frase, a falha registrada de novo com carimbo novo e a faixa de volta. |
+| Projeto movido (bloco em `projeto-movido`, conversa em `projeto`) | A faixa "A conversa nasceu em outra pasta", sem spawn. "Abrir conversa nova" subiu um processo sem ID de retomada e manteve a referência antiga. |
+| Conta removida | O cartão ficou em "erro: A conta selecionada não existe mais.", sem cair no login do sistema e sem retomar. |
+| Gemini | A faixa "Retomada automática indisponível no Gemini", sem spawn. A capacidade real, medida em 29/09: a 0.57.0 aceita UUID, mas só documenta `latest` ou índice, e o app não retoma por ID. |
+| Processo ativo: reload da interface | Os mesmos PIDs antes e depois. Os blocos vivos reanexaram, sem voltar a "aguardando escolha". |
+| Processo ativo: ir ao chat e voltar | Os mesmos PIDs, e a escolha preservada. |
+| Codex, conversa ausente | Inalcançável sem credencial: o TUI pede login antes de resolver o ID. Com `CODEX_HOME` longo (156 caracteres), a CLI nem abre: `path must be shorter than SUN_LEN` (confirma ao vivo a task `3eb91f95-497e-8139-8008-ede2a7c8d531`). |
+
+Os processos foram contados pela árvore de descendentes do executável de teste (Win32_Process), fora o app do dia a dia e a sessão que dirigia o teste. O detector não conta a linha redesenhada `└ Not logged in…` do histórico (o `└` não é abertura aceita); o `auth` veio do rodapé ao vivo da CLI.
+
+### Matriz
+
+| SO | Empacotado com CLI real | Lógica (CI) |
+| --- | --- | --- |
+| Windows | Validado (acima) | Verde (Validate windows-latest) |
+| Linux | Não executado: não existe corrida empacotada sem publicar, e o `release.yml` publica | Verde (Validate ubuntu-latest e ubuntu-24.04-arm) |
+| macOS | Não executado, pelo mesmo motivo | Verde (Validate macos-latest) |
+
+Como o Claude resolve o ID antes do login, um job empacotado sem credencial pode cobrir Linux e macOS; ficou em task.
+
+### Bloqueios e o que não foi validado
+
+- **Retomada exata completa, com resposta do modelo, no Claude e no Codex:** exige uma credencial de teste que não seja pessoal. Task de decisão aberta.
+- **Codex, conversa ausente:** o login vem antes do ID.
+- **Gemini com sessão real:** a pasta de conta dele segue a HOME, e o login é exigido até para listar.
+- **Primeira execução do Claude numa pasta de configuração nova:** o onboarding vem antes do `--resume`, e a janela do detector fecha na primeira entrada. Na rodada 1 a falha não foi detectada, até o onboarding ser marcado como feito. Numa instalação configurada isso não acontece.
+- **O cartão fica em "aguardando" na tela de login do Codex**, sem faixa, porque a tela "Sign in with ChatGPT" não é uma frase de login do detector.
