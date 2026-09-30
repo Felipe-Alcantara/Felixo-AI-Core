@@ -9,6 +9,7 @@ import { useAccountChain, useCliAccountLabel } from '../hooks/useAccountChain'
 import { changeSessionAccountMode } from '../services/account-chain-client'
 import { accountChipLabel, ptySessionIdForNode } from '../services/account-chain-view'
 import {
+  describeAgentResumeCapability,
   describeAgentResumeForPerson,
   describeAgentResumeTarget,
   explainAgentResume,
@@ -29,6 +30,7 @@ function formatShortDateTime(timestamp: number): string {
 export function TerminalDetailsPanel({
   nodeId,
   data,
+  cliVersion,
   onClose,
   toolsMenuOpen,
   onClearAgentSession,
@@ -37,6 +39,8 @@ export function TerminalDetailsPanel({
 }: {
   nodeId: string
   data: TerminalNodeData
+  /** Versão instalada da CLI do bloco; ausente = não se sabe (ou ainda não chegou). */
+  cliVersion?: string | null
   onClose: () => void
   toolsMenuOpen: boolean
   onClearAgentSession: () => void
@@ -60,6 +64,7 @@ export function TerminalDetailsPanel({
         accountId: data.accountId,
         failure: data.resumeFailure,
         choice: data.resumeChoice,
+        cliVersion,
       })
     : undefined
   const resumeDescription = resumePlan
@@ -126,6 +131,7 @@ export function TerminalDetailsPanel({
         {resumeDescription && (
           <Detail label="Retomada" value={`${resumeDescription.title}. ${resumeDescription.detail}`} />
         )}
+        {resumePlan && <Detail label="Capacidade da CLI" value={describeAgentResumeCapability(resumePlan)} />}
         {previousLabel && <Detail label="Conversa anterior" value={previousLabel} />}
         {insertionLabel && <Detail label="Última inserção" value={insertionLabel} mono />}
         {agentSession && (
@@ -151,7 +157,7 @@ export function TerminalDetailsPanel({
           />
         )}
         <p className="border-t border-white/10 pt-2 text-[11px] leading-relaxed text-zinc-500">
-          “Aberto há” mede a instância atual da PTY. Ao reiniciar, o relógio recomeça; o ID do elemento continua estável. A associação da conversa só retoma quando provider, pasta e conta coincidem e não há falha registrada da CLI para ela; fora disso, o bloco espera você escolher entre a lista da CLI e uma conversa nova. O Gemini não retoma por ID (o motivo está no guia do usuário).
+          “Aberto há” mede a instância atual da PTY. Ao reiniciar, o relógio recomeça; o ID do elemento continua estável. A associação da conversa só retoma quando provider, pasta e conta coincidem e não há falha registrada da CLI para ela; fora disso, o bloco espera você escolher entre a lista da CLI e uma conversa nova. O Gemini só retoma pelo ID da versão 0.57 em diante (o motivo está no guia do usuário).
         </p>
       </div>
     </CanvasPanel>

@@ -314,6 +314,8 @@ export function resolveTerminalInitialText(params: {
   resumeFailure?: AgentResumeFailure
   /** A escolha da pessoa quando a retomada não é exata. */
   resumeChoice?: AgentResumeChoice
+  /** Versão instalada da CLI; ausente = não se sabe. */
+  cliVersion?: string | null
 }): string | undefined {
   // "/resume" is an agent CLI slash command — meaningless (and potentially
   // confusing) typed into a plain shell, so hasCommand gates it here too,
@@ -326,6 +328,7 @@ export function resolveTerminalInitialText(params: {
       accountId: params.accountId,
       failure: params.resumeFailure,
       choice: params.resumeChoice,
+      cliVersion: params.cliVersion,
     })
     switch (plan.outcome) {
       case 'exact':

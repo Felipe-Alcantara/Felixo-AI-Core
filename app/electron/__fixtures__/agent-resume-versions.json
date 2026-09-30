@@ -1,0 +1,80 @@
+{
+  "comment": "Saídas medidas das CLIs de agente, por versão, para a retomada de conversa. `versionOutput` é o que `<cli> --version` imprime; `refusals` são as respostas a uma retomada impossível no terminal interativo, com <id> no lugar do ID tentado e `exitCode` null onde o código de saída não foi medido. Medido à mão, sem credencial (HOME isolada e ambiente limpo), exceto onde `measuredIn` diz outra coisa. Ao medir uma versão nova, acrescente uma linha: os testes de agent-resume-capability e do detector percorrem todas.",
+  "versions": [
+    {
+      "provider": "claude",
+      "versionOutput": "2.1.285 (Claude Code)",
+      "version": "2.1.285",
+      "method": "exact-id",
+      "basis": "documented",
+      "measuredIn": "Linux, 30/09/2026 (`claude --version`); recusa medida em 2.1.x",
+      "refusals": [
+        { "output": "No conversation found with session ID: <id>\r\n", "exitCode": 1, "reason": "expired" }
+      ]
+    },
+    {
+      "provider": "codex",
+      "versionOutput": "codex-cli 0.156.1",
+      "version": "0.156.1",
+      "method": "exact-id",
+      "basis": "documented",
+      "measuredIn": "Linux, 30/09/2026 (`codex --version`); frase da recusa conferida no binário 0.156.1 e medida em 0.150 e 0.159",
+      "refusals": [
+        {
+          "output": "No saved session found with ID <id>. Run `codex resume` without an ID to choose from existing sessions.\r\n",
+          "exitCode": null,
+          "reason": "expired"
+        }
+      ]
+    },
+    {
+      "provider": "gemini",
+      "versionOutput": "0.57.0",
+      "version": "0.57.0",
+      "method": "exact-id",
+      "basis": "measured",
+      "measuredIn": "Linux, 30/09/2026, `script` (TTY) com HOME isolada: `--resume <uuid>` de uma conversa existente reabriu a conversa; as recusas saem antes da interface",
+      "refusals": [
+        {
+          "output": "Error resuming session: Invalid session identifier \"<id>\".\r\n  Searched for sessions in /home/pessoa/.gemini/tmp/projeto/chats.\r\n  Use --list-sessions to see available sessions, then use --resume {number}, --resume {uuid}, or --resume latest.\r\n",
+          "exitCode": 42,
+          "reason": "expired"
+        },
+        {
+          "output": "Error resuming session: No previous sessions found for this project.\r\n",
+          "exitCode": 42,
+          "reason": "expired"
+        }
+      ]
+    },
+    {
+      "provider": "gemini",
+      "versionOutput": "0.62.0",
+      "version": "0.62.0",
+      "method": "exact-id",
+      "basis": "measured",
+      "measuredIn": "Linux, 30/09/2026, `script` (TTY) com HOME isolada e auto-update desligado: `--resume <uuid>` reabriu a conversa gravada; as duas recusas iguais às da 0.57.0",
+      "refusals": [
+        {
+          "output": "Error resuming session: Invalid session identifier \"<id>\".\r\n  Searched for sessions in /home/pessoa/.gemini/tmp/projeto/chats.\r\n  Use --list-sessions to see available sessions, then use --resume {number}, --resume {uuid}, or --resume latest.\r\n",
+          "exitCode": 42,
+          "reason": "expired"
+        },
+        {
+          "output": "Error resuming session: No previous sessions found for this project.\r\n",
+          "exitCode": 42,
+          "reason": "expired"
+        }
+      ]
+    },
+    {
+      "provider": "gemini",
+      "versionOutput": "0.56.2",
+      "version": "0.56.2",
+      "method": "numeric-index",
+      "basis": "below-proven",
+      "measuredIn": "Não medido: versão anterior à primeira provada. Fica com o que o `--help` garante (`latest` e índice).",
+      "refusals": []
+    }
+  ]
+}

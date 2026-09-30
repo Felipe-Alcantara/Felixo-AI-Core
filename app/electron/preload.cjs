@@ -174,6 +174,7 @@ contextBridge.exposeInMainWorld('felixo', {
       ipcRenderer.on('pty:session', handler)
       return () => ipcRenderer.removeListener('pty:session', handler)
     },
+    cliVersions: () => ipcRenderer.invoke('pty:cli-versions'),
   },
   projects: {
     pickFolder: () => ipcRenderer.invoke('projects:pick-folder'),

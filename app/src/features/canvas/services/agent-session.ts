@@ -1,4 +1,12 @@
 import type { AgentId } from './agent-launch-options'
+import {
+  AGENT_RESUME_METHODS,
+  isCliVersion,
+  resolveAgentResumeCapability,
+  resumeProvenSince,
+  type AgentResumeCapability,
+  type AgentResumeMethod,
+} from './agent-resume-capability'
 
 export type AgentSessionReference = {
   version: 1
@@ -12,6 +20,20 @@ export type AgentSessionReference = {
    * deste campo existir).
    */
   accountId?: string
+  /**
+   * Versão da CLI no processo que gravou a conversa, carimbada pelo processo
+   * principal. Ausente = não se sabia (a versão não respondeu a tempo, a
+   * instância roteirizada, ou uma referência gravada antes deste campo).
+   */
+  cliVersion?: string
+  /**
+   * O método de retomada que valia para `cliVersion` quando a conversa foi
+   * gravada (ver `withResumeMethod`). É registro, não decisão: a retomada
+   * sempre recalcula o método pela versão instalada AGORA, então uma
+   * atualização da CLI nunca herda um método que não vale mais — e a
+   * referência continua gravada.
+   */
+  resumeMethod?: AgentResumeMethod
 }
 
 /**
@@ -26,7 +48,10 @@ export type AgentResumeReason =
   | 'exact'
   /** Nenhuma conversa associada ao bloco: a CLI mostra a lista (`/resume`). */
   | 'fallback'
-  /** O provider não garante retomar por ID na versão suportada (Gemini). */
+  /**
+   * A versão instalada da CLI não retoma pelo ID (Gemini anterior à 0.57, ou
+   * versão que o app não conseguiu ler): ver `agent-resume-capability.ts`.
+   */
   | 'unsupported'
   | 'cwd-mismatch'
   /** Bloco sem pasta de trabalho: não dá para confirmar que é a mesma conversa. */
@@ -64,6 +89,14 @@ export type AgentResumePlan = {
   reason: AgentResumeReason
   /** Todos os motivos que se aplicam, o principal primeiro (ex.: pasta E conta). */
   reasons: AgentResumeReason[]
+  /** O que a CLI do bloco sabe fazer na versão instalada agora. */
+  capability: AgentResumeCapability
+  /**
+   * A CLI mudou de versão desde que a conversa foi gravada. Não muda o
+   * desfecho: o método já foi recalculado pela versão nova (`capability`), e
+   * a interface só mostra a troca.
+   */
+  versionChange?: { from: string; to: string }
 }
 
 const SESSION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,255}$/
@@ -83,8 +116,21 @@ export function isAgentSessionReference(value: unknown): value is AgentSessionRe
     typeof reference.capturedAt === 'number' &&
     Number.isFinite(reference.capturedAt) &&
     (reference.accountId === undefined ||
-      (typeof reference.accountId === 'string' && reference.accountId.trim().length > 0))
+      (typeof reference.accountId === 'string' && reference.accountId.trim().length > 0)) &&
+    (reference.cliVersion === undefined || isCliVersion(reference.cliVersion)) &&
+    (reference.resumeMethod === undefined || AGENT_RESUME_METHODS.includes(reference.resumeMethod))
   )
+}
+
+/**
+ * Carimba na referência o método que vale para a versão com que ela foi
+ * gravada. É o que o canvas guarda quando o processo principal reporta a
+ * conversa (`agentSessionPatch`); sem versão, fica o método que a CLI
+ * garante sem ela.
+ */
+export function withResumeMethod(reference: AgentSessionReference): AgentSessionReference {
+  const { method } = resolveAgentResumeCapability({ provider: reference.provider, version: reference.cliVersion })
+  return reference.resumeMethod === method ? reference : { ...reference, resumeMethod: method }
 }
 
 export function isAgentResumeFailure(value: unknown): value is AgentResumeFailure {
@@ -109,16 +155,17 @@ function isSameAccount(reference: AgentSessionReference, accountId: string | und
  * tabela do guia do usuário derivam daqui.
  *
  * - Sem referência: `picker` com `fallback` — a lista da CLI é a escolha.
- * - Referência que não é exata (pasta, conta, provider, Gemini, ilegível, ou
- *   uma falha já registrada para ELA): `pending` até a pessoa escolher; com
- *   `choice`, vira `picker` ou `new`. O registro nunca é apagado aqui.
+ * - Referência que não é exata (pasta, conta, provider, versão da CLI que não
+ *   retoma pelo ID, ilegível, ou uma falha já registrada para ELA): `pending`
+ *   até a pessoa escolher; com `choice`, vira `picker` ou `new`. O registro
+ *   nunca é apagado aqui.
  * - Tudo coincidindo: `exact`.
  *
- * Gemini: o help público do Gemini CLI 0.57 só garante `--resume latest` ou um
- * índice da lista, e o índice muda quando surgem conversas novas. O bundle
- * dessa versão aceita UUID na prática, mas o app não se apoia em
- * comportamento não documentado — e `latest` abriria em silêncio uma
- * conversa nova quando a pasta não tem nenhuma retomável.
+ * O método sai da versão instalada AGORA (`cliVersion`, lida pelo processo
+ * principal), nunca do que foi gravado com a conversa: uma atualização da CLI
+ * recalcula a capacidade e mantém a conversa. Sem versão, Claude e Codex
+ * seguem pelo ID (o `--help` deles documenta isso) e o Gemini não (só foi
+ * provado da 0.57 em diante) — ver `agent-resume-capability.ts`.
  */
 export function explainAgentResume(input: {
   command: string | undefined
@@ -127,11 +174,15 @@ export function explainAgentResume(input: {
   accountId: string | undefined
   failure?: AgentResumeFailure
   choice?: AgentResumeChoice
+  /** Versão instalada da CLI do bloco; ausente ou `null` = não se sabe. */
+  cliVersion?: string | null
 }): AgentResumePlan {
   const { command, cwd, reference, accountId, failure, choice } = input
-  if (!reference) return { outcome: 'picker', reason: 'fallback', reasons: ['fallback'] }
+  const capability = resolveAgentResumeCapability({ provider: command, version: input.cliVersion })
+  if (!reference) return { outcome: 'picker', reason: 'fallback', reasons: ['fallback'], capability }
 
   const reasons: AgentResumeReason[] = []
+  let versionChange: AgentResumePlan['versionChange']
   if (!isAgentSessionReference(reference)) {
     reasons.push('invalid-reference')
   } else {
@@ -139,14 +190,25 @@ export function explainAgentResume(input: {
     if (isAgentResumeFailure(failure) && failure.sessionId === reference.sessionId) {
       reasons.push(failure.reason)
     }
-    if (command === 'gemini') reasons.push('unsupported')
+    // A conversa de outro provider já é o motivo; a versão da CLI do bloco
+    // não diria nada sobre ela.
+    if (command === reference.provider && capability.method !== 'exact-id') reasons.push('unsupported')
     if (!cwd?.trim()) reasons.push('missing-cwd')
     else if (cwd !== reference.cwd) reasons.push('cwd-mismatch')
     if (!isSameAccount(reference, accountId)) reasons.push('account-mismatch')
+    if (
+      command === reference.provider &&
+      reference.cliVersion &&
+      capability.version &&
+      reference.cliVersion !== capability.version
+    ) {
+      versionChange = { from: reference.cliVersion, to: capability.version }
+    }
   }
 
-  if (reasons.length === 0) return { outcome: 'exact', reason: 'exact', reasons: ['exact'] }
-  return { outcome: choice ?? 'pending', reason: reasons[0], reasons }
+  const change = versionChange ? { versionChange } : {}
+  if (reasons.length === 0) return { outcome: 'exact', reason: 'exact', reasons: ['exact'], capability, ...change }
+  return { outcome: choice ?? 'pending', reason: reasons[0], reasons, capability, ...change }
 }
 
 /**
@@ -162,16 +224,19 @@ export function canResumeAgentSession(
   reference: AgentSessionReference | undefined,
   accountId: string | undefined,
   failure?: AgentResumeFailure,
+  cliVersion?: string | null,
 ): boolean {
-  return explainAgentResume({ command, cwd, reference, accountId, failure }).outcome === 'exact'
+  return explainAgentResume({ command, cwd, reference, accountId, failure, cliVersion }).outcome === 'exact'
 }
 
 /**
- * Builds the provider's documented resume invocation, without a prompt.
+ * Builds the provider's resume-by-ID invocation, without a prompt.
  *
- * Codex and Claude accept the persisted conversation ID. Gemini is never
- * resumed by ID (see `explainAgentResume`), so the caller gets `undefined`
- * and uses the plan's `picker`/`new`/`pending` path instead.
+ * Só sai argumento quando o plano é `exact` para a versão instalada
+ * (`cliVersion`): Codex `resume …args <id>`, Claude `--resume <id> …args` e
+ * Gemini `--resume <id> …args` (da 0.57 em diante). O formato é o que
+ * `resolveResumeTarget`, no processo principal, reconhece. Fora disso o
+ * chamador recebe `undefined` e segue o `picker`/`new`/`pending` do plano.
  */
 export function buildAgentResumeArgs(
   command: string | undefined,
@@ -180,13 +245,17 @@ export function buildAgentResumeArgs(
   reference: AgentSessionReference | undefined,
   accountId: string | undefined,
   failure?: AgentResumeFailure,
+  cliVersion?: string | null,
 ): string[] | undefined {
-  if (!reference || !canResumeAgentSession(command, cwd, reference, accountId, failure)) return undefined
+  if (!reference || !canResumeAgentSession(command, cwd, reference, accountId, failure, cliVersion)) {
+    return undefined
+  }
 
   switch (command) {
     case 'codex':
       return ['resume', ...args, reference.sessionId]
     case 'claude':
+    case 'gemini':
       return ['--resume', reference.sessionId, ...args]
     default:
       return undefined
@@ -204,15 +273,37 @@ function providerLabel(provider: string | undefined): string {
   return provider && provider in PROVIDER_LABELS ? PROVIDER_LABELS[provider as AgentId] : provider || 'outro agente'
 }
 
+/** O limite de cada método que não é pelo ID, completando "O Gemini CLI 0.56.2 …". */
+const METHOD_LIMITS: Record<Exclude<AgentResumeMethod, 'exact-id'>, string> = {
+  'numeric-index':
+    'só garante retomar a conversa mais recente ou pela posição na lista, e a posição muda quando surgem conversas novas',
+  'latest-only': 'só garante retomar a conversa mais recente da pasta, que pode não ser esta',
+  'interactive-only': 'só retoma escolhendo na lista dentro da própria CLI',
+  unsupported: 'não tem um jeito conhecido de voltar a uma conversa',
+}
+
+/** Por que a versão instalada não retoma pelo ID, sem ID nenhum. */
+function unsupportedSentence(capability: AgentResumeCapability): string {
+  const label = providerLabel(capability.provider)
+  const limit = capability.method === 'exact-id' ? METHOD_LIMITS.unsupported : METHOD_LIMITS[capability.method]
+  const since = resumeProvenSince(capability.provider)
+  if (capability.basis === 'unknown-version' && since) {
+    return `O app não conseguiu ler a versão do ${label} instalado. A retomada pelo ID só foi provada a partir da ${since}, e sem a versão o ${label} ${limit}.`
+  }
+  if (capability.basis === 'below-proven' && since) {
+    return `O ${label} ${capability.version} ${limit}; a retomada pelo ID só foi provada a partir da ${since}. Atualize o ${label} para o app voltar direto à conversa.`
+  }
+  return `O ${label} ${limit}; o app não adivinha.`
+}
+
+type ResumeTextContext = { reference?: AgentSessionReference; cwd?: string; command?: string }
+
 /**
  * O que a pessoa lê sobre cada motivo. Nunca leva o ID da conversa nem o da
  * conta: para agir basta saber provider, pasta e se é a conta certa, e o ID
  * completo continua no painel de detalhes para quem precisar.
  */
-function reasonSentence(
-  reason: AgentResumeReason,
-  context: { reference?: AgentSessionReference; cwd?: string; command?: string },
-): string {
+function reasonSentence(reason: AgentResumeReason, plan: AgentResumePlan, context: ResumeTextContext): string {
   const { reference, cwd, command } = context
   switch (reason) {
     case 'exact':
@@ -220,7 +311,7 @@ function reasonSentence(
     case 'fallback':
       return 'Este bloco não guardou qual conversa estava aberta, então a CLI mostra a lista de conversas desta pasta para você escolher (/resume).'
     case 'unsupported':
-      return 'O Gemini CLI só garante retomar a conversa mais recente ou pela posição na lista, e a posição muda quando surgem conversas novas; o app não adivinha.'
+      return unsupportedSentence(plan.capability)
     case 'cwd-mismatch':
       return `A conversa foi aberta em ${reference?.cwd ?? 'outra pasta'}, e este bloco está em ${cwd ?? 'outra pasta'}. A lista da CLI filtra por pasta, então ela pode não aparecer aqui.`
     case 'missing-cwd':
@@ -243,7 +334,7 @@ function reasonSentence(
 const REASON_TITLES: Record<AgentResumeReason, string> = {
   exact: 'Retomando a conversa anterior',
   fallback: 'Sem conversa associada',
-  unsupported: 'Retomada automática indisponível no Gemini',
+  unsupported: 'Retomada pelo ID indisponível nesta versão',
   'cwd-mismatch': 'A conversa nasceu em outra pasta',
   'missing-cwd': 'Bloco sem pasta de trabalho',
   'account-mismatch': 'A conversa é de outra conta',
@@ -260,12 +351,36 @@ const REASON_TITLES: Record<AgentResumeReason, string> = {
  */
 export function describeAgentResumeForPerson(
   plan: AgentResumePlan,
-  context: { reference?: AgentSessionReference; cwd?: string; command?: string },
+  context: ResumeTextContext,
 ): { title: string; detail: string } {
+  const title =
+    plan.reason === 'unsupported'
+      ? `${REASON_TITLES.unsupported} do ${providerLabel(plan.capability.provider)}`
+      : REASON_TITLES[plan.reason]
   return {
-    title: REASON_TITLES[plan.reason],
-    detail: plan.reasons.map((reason) => reasonSentence(reason, context)).join(' '),
+    title,
+    detail: plan.reasons.map((reason) => reasonSentence(reason, plan, context)).join(' '),
   }
+}
+
+const METHOD_LABELS: Record<AgentResumeMethod, string> = {
+  'exact-id': 'pelo ID da conversa',
+  'numeric-index': 'só pela posição na lista',
+  'latest-only': 'só a mais recente',
+  'interactive-only': 'só pela lista da CLI',
+  unsupported: 'sem retomada',
+}
+
+/**
+ * Uma linha para os detalhes do bloco: como a CLI instalada retoma e, quando
+ * a versão mudou desde a gravação, de qual para qual. Ex.: "Gemini CLI 0.57.0:
+ * pelo ID da conversa (gravada na 0.56.2)".
+ */
+export function describeAgentResumeCapability(plan: AgentResumePlan): string {
+  const { capability, versionChange } = plan
+  const version = capability.version ?? 'versão desconhecida'
+  const recorded = versionChange ? ` (gravada na ${versionChange.from})` : ''
+  return `${providerLabel(capability.provider)} ${version}: ${METHOD_LABELS[capability.method]}${recorded}`
 }
 
 /**
@@ -288,13 +403,10 @@ export function describeAgentResumeTarget(reference: AgentSessionReference): str
  * Vai como contexto, não para a pessoa: ela vê o motivo na faixa do cartão.
  * Diz ao agente para não presumir o histórico, sem ID nenhum.
  */
-export function buildResumeFallbackNotice(
-  plan: AgentResumePlan,
-  context: { reference?: AgentSessionReference; cwd?: string; command?: string },
-): string {
+export function buildResumeFallbackNotice(plan: AgentResumePlan, context: ResumeTextContext): string {
   return [
     'A conversa anterior deste bloco não foi retomada; esta é uma conversa nova.',
-    `Motivo: ${plan.reasons.map((reason) => reasonSentence(reason, context)).join(' ')}`,
+    `Motivo: ${plan.reasons.map((reason) => reasonSentence(reason, plan, context)).join(' ')}`,
     'Não presuma o que foi dito na conversa anterior: peça à pessoa o contexto de que precisar.',
   ].join('\n')
 }

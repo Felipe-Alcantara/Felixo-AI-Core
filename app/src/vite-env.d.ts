@@ -586,7 +586,15 @@ declare global {
           source?: string
           /** Conta própria em que a conversa nasceu; ausente = login do sistema. */
           accountId?: string
+          /** Versão da CLI no processo que gravou a conversa; ausente = não se sabia. */
+          cliVersion?: string
         }) => void) => () => void
+        /**
+         * Versão instalada de cada CLI de agente (claude, codex, gemini), lida
+         * pelo processo principal com `<cli> --version` e tempo-limite, e
+         * guardada por alguns minutos. `null` = não respondeu ou não existe.
+         */
+        cliVersions?: () => Promise<CliInvokeResult & { versions?: Record<string, string | null> }>
       }
       projects?: {
         pickFolder: () => Promise<string | null>

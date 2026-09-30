@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import resumeFixtures from '../../../../electron/__fixtures__/agent-resume-versions.json'
 import {
   RESUME_FAILURE_PHRASES,
   RESUME_OUTCOME_BUFFER_CHARS,
@@ -35,18 +36,40 @@ function feedAll(chunks: string[], sessionId = ATTEMPTED_ID): Array<'expired' | 
   return chunks.map((chunk) => detector.feed(chunk))
 }
 
-/** A linha como a CLI a imprime: as frases `expired` vêm seguidas do ID tentado. */
+/** A linha como a CLI a imprime: as frases `expired` vêm seguidas do ID tentado (fora a que não traz ID). */
 function sampleLine(rule: ResumeFailurePhrase): string {
+  if (rule.withoutId) return `${rule.phrase}.`
   return rule.reason === 'expired' ? `${rule.phrase} ${ATTEMPTED_ID}` : rule.phrase
 }
 
+/** Alimenta a saída e, para a frase presa à saída do processo, encerra com o código medido. */
+function recognize(rule: ResumeFailurePhrase, line: string): 'expired' | 'auth' | null {
+  const detector = createResumeOutcomeDetector({ sessionId: ATTEMPTED_ID })
+  const fed = detector.feed(`${BOOT}${line}${CRLF}`)
+  if (rule.exitCode === undefined) return fed
+  expect(fed).toBeNull()
+  return detector.exit(rule.exitCode)
+}
+
 describe('createResumeOutcomeDetector', () => {
-  it.each(RESUME_FAILURE_PHRASES.map((rule) => [rule.phrase, rule.reason, sampleLine(rule)] as const))(
+  it.each(RESUME_FAILURE_PHRASES.map((rule) => [rule.phrase, rule.reason, rule] as const))(
     'reconhece "%s" como %s',
-    (_phrase, reason, line) => {
-      expect(feedAll([`${BOOT}${line}${CRLF}`])).toEqual([reason])
+    (_phrase, reason, rule) => {
+      expect(recognize(rule, sampleLine(rule))).toBe(reason)
     },
   )
+
+  it.each(
+    resumeFixtures.versions.flatMap((fixture) =>
+      fixture.refusals.map((refusal) => [fixture.provider, fixture.version, refusal] as const),
+    ),
+  )('reconhece a recusa medida do %s %s', (provider, _version, refusal) => {
+    const detector = createResumeOutcomeDetector({ sessionId: ATTEMPTED_ID, provider })
+    const fed = detector.feed(refusal.output.replaceAll('<id>', ATTEMPTED_ID))
+    // Frase com código de saída medido só vale com a saída; as outras, na hora.
+    const reason = fed ?? (refusal.exitCode === null ? null : detector.exit(refusal.exitCode))
+    expect(reason).toBe(refusal.reason)
+  })
 
   it('reconhece as mensagens inteiras como as CLIs medidas as imprimem', () => {
     expect(feedAll([`No conversation found with session ID: ${ATTEMPTED_ID}${CRLF}`])).toEqual(['expired'])
@@ -232,5 +255,55 @@ describe('createResumeOutcomeDetector', () => {
 
   it('ignora pedaço vazio e o preâmbulo do boot', () => {
     expect(feedAll(['', BOOT, `${ESC}[?25l`])).toEqual([null, null, null])
+  })
+})
+
+describe('recusas do Gemini: só com a saída 42', () => {
+  const geminiRefusals = resumeFixtures.versions.find((fixture) => fixture.provider === 'gemini' && fixture.refusals.length > 0)!
+    .refusals
+  const invalidId = geminiRefusals[0].output
+  const noSessions = geminiRefusals[1].output
+
+  it('o ID entre aspas conta, e só com a saída 42', () => {
+    const detector = createResumeOutcomeDetector({ sessionId: ATTEMPTED_ID, provider: 'gemini' })
+    expect(detector.feed(invalidId.replaceAll('<id>', ATTEMPTED_ID))).toBeNull()
+    expect(detector.exit(1)).toBeNull()
+    expect(detector.exit(42)).toBe('expired')
+    // Avisa uma vez só.
+    expect(detector.exit(42)).toBeNull()
+  })
+
+  it('o ID de outra conversa na mesma frase não conta, nem com a saída 42', () => {
+    const detector = createResumeOutcomeDetector({ sessionId: ATTEMPTED_ID, provider: 'gemini' })
+    expect(detector.feed(invalidId.replaceAll('<id>', OTHER_ID))).toBeNull()
+    expect(detector.exit(42)).toBeNull()
+  })
+
+  it('"No previous sessions…" sem ID conta com a saída 42, mesmo sem quebra no fim', () => {
+    const detector = createResumeOutcomeDetector({ sessionId: ATTEMPTED_ID, provider: 'gemini' })
+    expect(detector.feed(noSessions.trimEnd())).toBeNull()
+    expect(detector.exit(42)).toBe('expired')
+  })
+
+  it('a conversa redesenhada que cita a frase não vira recusa: o processo não sai com 42', () => {
+    const detector = createResumeOutcomeDetector({ sessionId: ATTEMPTED_ID, provider: 'gemini' })
+    const MODEL_GLYPH = String.fromCharCode(0x2726) // ✦, mensagem do modelo no Gemini
+    expect(detector.feed(` > por que deu erro?${CRLF}`)).toBeNull()
+    expect(detector.feed(`${MODEL_GLYPH} ${noSessions}`)).toBeNull()
+    // A pessoa fechou o Gemini normalmente depois da retomada.
+    expect(detector.exit(0)).toBeNull()
+  })
+
+  it('o detector de outra CLI não usa as frases do Gemini', () => {
+    for (const provider of ['claude', 'codex']) {
+      const detector = createResumeOutcomeDetector({ sessionId: ATTEMPTED_ID, provider })
+      expect(detector.feed(noSessions)).toBeNull()
+      expect(detector.exit(42)).toBeNull()
+    }
+  })
+
+  it('o detector do Gemini não usa as frases de login do Claude e do Codex', () => {
+    const detector = createResumeOutcomeDetector({ sessionId: ATTEMPTED_ID, provider: 'gemini' })
+    expect(detector.feed(`Not logged in ${MIDDLE_DOT} Please run /login${CRLF}`)).toBeNull()
   })
 })

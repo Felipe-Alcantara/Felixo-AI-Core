@@ -58,6 +58,7 @@ function refuseChainTicket(reason) {
  * @param {(accountId: string, providerId: string) => {ok: boolean, message?: string}} [dependencies.validateAccount]
  * @param {(sessionId: string) => void} [dependencies.onSessionExit] - Avisado quando o processo da sessão sai.
  * @param {{ begin: Function, finish: Function, lineage?: Function } | null} [dependencies.chainTickets] - `beginTicketSpawn`/`finishTicketSpawn`/`lineageForSession` do serviço da cadeia.
+ * @param {{ snapshot: () => Promise<Record<string, string | null>> }} [dependencies.cliVersions] - Versão de cada CLI de agente (`agent-cli-versions.cjs`).
  * @returns {{ manager: PtyProcessManager, dispose: () => void }}
  */
 function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
@@ -239,6 +240,18 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
       return { ok: true, killed }
     } catch (error) {
       return toErrorResult(error, 'Nao foi possivel encerrar o terminal.')
+    }
+  })
+
+  // Versão instalada de cada CLI de agente, para o plano de retomada do
+  // canvas (ver `agent-cli-versions.cjs`). Sem o serviço, nada se sabe: o
+  // renderer trata toda versão como desconhecida.
+  ipcMain.handle('pty:cli-versions', async () => {
+    try {
+      const versions = dependencies.cliVersions ? await dependencies.cliVersions.snapshot() : {}
+      return { ok: true, versions }
+    } catch (error) {
+      return toErrorResult(error, 'Nao foi possivel ler a versao das CLIs.')
     }
   })
 

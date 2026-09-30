@@ -163,7 +163,13 @@ describe('canvas persistence boundaries', () => {
         resumeFailure,
         previousAgentSession,
         resumeChoice: 'new',
-        resumePlan: { outcome: 'new', reason: 'expired', reasons: ['expired'] },
+        resumePlan: {
+          outcome: 'new',
+          reason: 'expired',
+          reasons: ['expired'],
+          capability: { provider: 'codex', version: '0.156.1', method: 'exact-id', basis: 'documented' },
+        },
+        resumeCliVersion: '0.156.1',
         resumeBanner: null,
       },
     })
@@ -175,6 +181,7 @@ describe('canvas persistence boundaries', () => {
     expect(persisted.data).not.toHaveProperty('resumeChoice')
     expect(persisted.data).not.toHaveProperty('resumePlan')
     expect(persisted.data).not.toHaveProperty('resumeBanner')
+    expect(persisted.data).not.toHaveProperty('resumeCliVersion')
   })
 
   it('persiste identidade da inserção sem guardar o corpo do prompt', () => {

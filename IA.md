@@ -7445,3 +7445,61 @@ Como o Claude resolve o ID antes do login, um job empacotado sem credencial pode
 - **Gemini com sessão real:** a pasta de conta dele segue a HOME, e o login é exigido até para listar.
 - **Primeira execução do Claude numa pasta de configuração nova:** o onboarding vem antes do `--resume`, e a janela do detector fecha na primeira entrada. Na rodada 1 a falha não foi detectada, até o onboarding ser marcado como feito. Numa instalação configurada isso não acontece.
 - **O cartão fica em "aguardando" na tela de login do Codex**, sem faixa, porque a tela "Sign in with ChatGPT" não é uma frase de login do detector.
+
+## 2026-09-30 — Retomada: capacidade por provedor e versão em vez de assumir UUID
+
+Registro de Claude - Tasks do AI Core, task "Felixo AI Core/Retomada — resolver capacidade por provedor e versão em vez de assumir UUID" (Notion 3ce91f95-497e-81d1-b892-c8f1bc546e36). Início às 13:34.
+
+### Decisões do Felipe (Trilha B)
+
+- Religar a retomada exata do Gemini pelo ID **da 0.57 em diante**. Versão anterior ou desconhecida fica no caminho seguro.
+- CLI que mudou de versão desde a gravação: **recalcula e segue**. O plano usa a versão nova, e os detalhes mostram a troca.
+- Versão que não respondeu: **Claude e Codex seguem** (o `--help` deles documenta o ID); o **Gemini não**.
+- Escopo: **terminais do canvas**. O chat fica com a task própria (3eb91f95-497e-8175-a8f2-c9e064b2f411).
+
+### Medido (Linux, `script` como TTY, HOME isolada, ambiente limpo, sem credencial)
+
+- **Gemini CLI 0.57.0:** `--resume <uuid>` de uma conversa existente reabriu a conversa no modo interativo ("> oi", "✦ ola"). ID inexistente numa pasta com conversas: `Error resuming session: Invalid session identifier "<id>".`, saída 42. Pasta sem conversa: `Error resuming session: No previous sessions found for this project.`, saída 42. As duas recusas saem antes da interface.
+- **Evidência no próprio Gemini:** o `--help` só cita `latest` e o índice. A mensagem de erro (`SessionError.invalidSessionIdentifier`) ensina `--resume {number}, --resume {uuid}, or --resume latest`. `findSession` procura o UUID primeiro e só depois o índice.
+- **`--session-file <arquivo>`** (documentado) não é retomada: importa as mensagens numa conversa nova, com outro ID. Ficou de fora.
+- **Auto-update do Gemini:** o Gemini instalado nesta máquina se atualizou sozinho de 0.57.0 para **0.62.0** às 13:49:37, durante a medição interativa das 13:49. Foi o auto-update do próprio Gemini (`general.enableAutoUpdate`, ligado por padrão), no npm global do nvm. As medições da 0.57.0 são de antes da troca (o banner mostrava v0.57.0). Todas as medições foram repetidas na **0.62.0**, com o auto-update desligado só na HOME isolada: iguais. Hoje a 0.62.0 é a instalada.
+- **Retenção do Gemini:** o Gemini 0.62 apaga sozinho, ao abrir, as conversas que não consegue ler e as com mais de 30 dias (`general.sessionRetention`, ligado por padrão, `maxAge: 30d`). No E2E, a conversa da fixture feita à mão sumiu assim, e o app mostrou corretamente "A CLI não encontrou a conversa".
+- **Frase do Codex:** "No saved session found with ID {}. Run \`codex {}\` without an ID to choose from existing sessions.", conferida no binário 0.156.1.
+
+### O que mudou
+
+- `src/features/canvas/services/agent-resume-capability.ts` (novo): `resolveAgentResumeCapability({ provider, version, mode, platform })` com os métodos `exact-id | numeric-index | latest-only | interactive-only | unsupported` e as bases `documented | measured | below-proven | unknown-version | unknown-provider`. A tabela `AGENT_RESUME_RULES` tem as evidências.
+- `electron/__fixtures__/agent-resume-versions.json` (novo): `--version`, recusas e código de saída por versão (Claude 2.1.285, Codex 0.156.1, Gemini 0.57.0 e 0.62.0, e a 0.56.2 como limite da regra). Os testes do renderer e do processo principal percorrem as fixtures.
+- `agent-session.ts`: `explainAgentResume` recebe `cliVersion` e devolve `capability` e `versionChange`. `unsupported` passa a valer pela capacidade (e só com o mesmo provider). `buildAgentResumeArgs` monta `--resume <id> …args` para o Gemini exato. `AgentSessionReference` ganha `cliVersion` e `resumeMethod` (validados); `withResumeMethod` grava o método; `describeAgentResumeCapability` monta a linha de Detalhes. O texto de `unsupported` diz a versão, desde qual versão a retomada foi provada e o que fazer.
+- `resume-outcome-detector.ts`: frases com `providers` (o detector de um spawn só usa as da CLI dele) e, no Gemini, `exitCode: 42` + `ResumeOutcomeDetector.exit`. O prefixo "Error resuming session:" e o ID entre aspas são aceitos. `terminal-session-store.ts` chama `exit` no começo de `finishExit`.
+- `electron/services/agent-cli-versions.cjs` (novo): versão por CLI de agente, reaproveitando a detecção da abertura. Leitura com versão vale 10 min, sem versão 1 min, e o `null` da abertura já nasce vencido. Canal `pty:cli-versions`, preload `pty.cliVersions()`. Na instância roteirizada, nada roda.
+- `pty-process-manager.cjs`: `getCliVersion` carimba `cliVersion` (só no formato aceito) na descoberta e na retomada por ID; `resolveResumeTarget` reconhece `gemini --resume <id>` (`latest` e índice seguem na descoberta).
+- Canvas: `CanvasView` carrega as versões ao montar, segura só o bloco Gemini restaurado até elas chegarem (sem faixa piscando) e passa a versão ao plano, ao relançamento e aos Detalhes ("Capacidade da CLI"). `resumeCliVersion` é dado de render e não vai para o disco.
+- Docs: GUIA-USUARIO ("A versão de cada agente", tabela dos motivos e dos limites, retenção e auto-update do Gemini) e ARQUITETURA ("Capacidade pela versão instalada", "Versão gravada e invalidação", o detector).
+
+### Testes
+
+- `tsc -b` e `eslint .` limpos.
+- vitest: 2754 aprovados.
+- Suíte de node: 2368 aprovados no Node 25.9 e no Node 22.22.
+- Novos: `agent-resume-capability.test.ts` (fixtures, formato igual ao do processo principal, modo/sistema), `agent-cli-versions.test.ts/.test.cjs`, casos do Gemini em `resume-outcome-detector.test.ts`, `terminal-session-store.test.ts` (saída 42, saída antes da resposta do spawn, sem versão), `pty-process-manager.test.cjs` (Gemini por ID, carimbo de versão) e `pty-ipc-handlers.test.cjs`.
+
+### E2E no app (fonte, Linux)
+
+Condições: `felixo devtools launch` sob `flock`, com `env -i`, sem nenhuma variável `CLAUDE_CODE_*` nem chave. A HOME era falsa, com um link `.nvm` para o nvm real (sem ele, `createCliEnv` achava o Node 18 do sistema), e o TMPDIR era próprio, para o estado do devtools não colidir com outras sessões.
+
+| Cenário | Resultado |
+| --- | --- |
+| Versões | `pty.cliVersions()` → claude 2.1.285, codex 0.156.1, gemini 0.62.0 |
+| Conversa de 3 dias gravada na 0.56.2, Gemini instalado 0.62.0 | Subiu `gemini --resume 5c6d…`; o terminal mostrou "> conversa gravada na 0.56" e "✦ resposta antiga" (depois, a tela de confiança na pasta). A referência foi regravada com `cliVersion 0.62.0`, `resumeMethod exact-id`. |
+| ID inexistente | Saída 42 → faixa "A CLI não encontrou a conversa", `resumeFailure expired` presa ao ID. Detalhes: "Capacidade da CLI: Gemini CLI 0.62.0: pelo ID da conversa". |
+| Conversa apagada pela retenção do Gemini | Mesmo desfecho do ID inexistente (`Invalid session identifier`, 42). |
+| "Abrir conversa nova" | `gemini` sem `--resume`, na mesma pasta, login do sistema, sem texto inicial. A conversa antiga foi para `previousAgentSession`, e a nova veio da descoberta com `cliVersion 0.62.0`. |
+
+A primeira subida mostrou um problema real: com o `--version` do Gemini lento, a leitura `null` da abertura ficaria guardada 10 min. Corrigido antes do commit, com o `null` da abertura vencido e 1 min para leitura sem versão.
+
+### Não verificado / limites
+
+- **Windows e macOS** não rodaram o E2E do Gemini. O código do Gemini que resolve o ID é o mesmo JS em todo sistema, mas só o Linux foi medido.
+- **Login do Gemini depois da retomada:** a tela de confiança e a de login vêm depois do ID resolvido e não viram `auth` (a vigia de contas não tem frase de login do Gemini). É o lado seguro: nada é gravado, e o terminal mostra a tela.
+- **CLI atualizada com o app aberto:** a versão nova aparece na próxima montagem do canvas depois do prazo da leitura. Até lá, o detector de recusa segura uma versão que tenha deixado de aceitar o ID.

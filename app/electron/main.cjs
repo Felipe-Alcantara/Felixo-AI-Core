@@ -135,6 +135,7 @@ const { createGpuPreferenceSession } = require('./services/gpu-preference-sessio
 const { describeHardwareProfile } = require('./core/hardware-profile.cjs')
 const { getAutoStartStatus, setAutoStartEnabled } = require('./core/autostart.cjs')
 const { detectAllClis, formatDetectionSummary } = require('./core/cli-detector.cjs')
+const { createAgentCliVersions, detectAgentCliVersion } = require('./services/agent-cli-versions.cjs')
 const platform = require('./core/platform/index.cjs')
 const { runPackagedReleaseSmoke } = require('./release-smoke.cjs')
 const { registerGlobalErrorHandlers, wrapIpcHandleWithLogging } = require('./services/global-error-handlers.cjs')
@@ -644,6 +645,15 @@ app.whenReady().then(async () => {
     })
   }
   stopAccountChainSweeper = accountChain.service.startExpirySweeper()
+  // Versão de cada CLI de agente, para a retomada de conversa: o canvas decide
+  // o método por ela e o PTY a grava junto da conversa descoberta. Reaproveita
+  // a detecção da abertura (`seed`, mais abaixo); a instância roteirizada não
+  // roda CLI nenhuma, então ali nenhuma versão é conhecida.
+  const agentCliVersions = createAgentCliVersions({
+    detect: fakeAuthCommandRunner
+      ? async () => null
+      : (provider) => detectAgentCliVersion(provider, createCliEnv()),
+  })
   ptyHandlers = registerPtyIpcHandlers(getMainWindow, {
     validateAccount: (accountId, providerId) =>
       cliAccounts.validateAccount(accountId, providerId),
@@ -655,8 +665,10 @@ app.whenReady().then(async () => {
       finish: (request) => accountChain.service.finishTicketSpawn(request),
       lineage: (request) => accountChain.service.lineageForSession(request),
     },
+    cliVersions: agentCliVersions,
     manager: new PtyProcessManager({
       spawnPty: devtoolsFakeCliPty?.createFakeCliPtyFactory(),
+      getCliVersion: (provider) => agentCliVersions.peek(provider),
       validateAccount: (accountId, providerId) =>
         cliAccounts.validateAccount(accountId, providerId),
       buildAccountEnv: (accountId, providerId) =>
@@ -798,7 +810,10 @@ app.whenReady().then(async () => {
   })
 
   // A detecção roda `--version` de cada CLI: a instância roteirizada não roda nenhuma.
-  ;(fakeAuthCommandRunner ? Promise.resolve([]) : detectAllClis(createCliEnv())).then((results) => {
+  // A versão das CLIs de agente sai daqui mesmo, sem um segundo `--version`.
+  const startupCliDetection = fakeAuthCommandRunner ? Promise.resolve([]) : detectAllClis(createCliEnv())
+  agentCliVersions.seed(startupCliDetection)
+  startupCliDetection.then((results) => {
     logQaEvent({
       level: 'info',
       scope: 'app:startup',

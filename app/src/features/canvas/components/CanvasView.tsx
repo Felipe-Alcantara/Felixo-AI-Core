@@ -139,6 +139,8 @@ import {
   type AgentResumeFailure,
   type AgentSessionReference,
 } from '../services/agent-session'
+import { resumeDependsOnVersion } from '../services/agent-resume-capability'
+import { loadAgentCliVersions, type AgentCliVersions } from '../services/agent-cli-versions'
 import {
   agentSessionPatch,
   buildTerminalResumeBanner,
@@ -1029,6 +1031,22 @@ function CanvasInner({
     () => ({ captured: false, ids: new Set(), holdable: new Set() }),
   )
   const restoredAgentTerminalIdsCapturedRef = useRef(false)
+  // Versão instalada de cada CLI de agente, para o plano de retomada decidir
+  // pelo que está instalado agora (`explainAgentResume`). `null` enquanto o
+  // processo principal responde: só o bloco restaurado cujo método depende da
+  // versão (Gemini) espera por ela; o processo principal limita a espera com
+  // o tempo-limite do `--version`. Relida a cada montagem do canvas — o
+  // processo principal guarda a leitura por alguns minutos.
+  const [agentCliVersions, setAgentCliVersions] = useState<AgentCliVersions | null>(null)
+  useEffect(() => {
+    let active = true
+    void loadAgentCliVersions().then((versions) => {
+      if (active) setAgentCliVersions(versions)
+    })
+    return () => {
+      active = false
+    }
+  }, [])
   useEffect(() => {
     if (!hydrated || restoredAgentTerminalIdsCapturedRef.current) {
       return
@@ -1497,6 +1515,7 @@ function CanvasInner({
         accountId: data.accountId,
         failure: data.resumeFailure,
         choice: data.resumeChoice,
+        cliVersion: data.resumeCliVersion,
         initialText: data.initialText,
         initialTextIsHandoff: data.initialTextIsHandoff,
       })
@@ -1517,6 +1536,7 @@ function CanvasInner({
         accountMode: data.accountMode,
         agentSession: data.agentSession,
         resumeAgentSession: launch.resumeAgentSession,
+        cliVersion: data.resumeCliVersion,
         // O store também confere a falha: nenhum relançamento automático dele
         // repete uma retomada que a CLI já recusou.
         resumeFailure: data.resumeFailure,
@@ -1927,6 +1947,7 @@ function CanvasInner({
           hasAgentCommand,
           reference: node.data.agentSession,
         })
+        const cliVersion = agentCliVersions?.[node.data.command ?? ''] ?? undefined
         const resumePlan = followsResumePlan
           ? explainAgentResume({
               command: node.data.command,
@@ -1935,10 +1956,20 @@ function CanvasInner({
               accountId: node.data.accountId,
               failure: node.data.resumeFailure,
               choice: node.data.resumeChoice,
+              cliVersion,
             })
           : undefined
         const resumeAgentSession = resumePlan?.outcome === 'exact'
         const resumePending = resumePlan?.outcome === 'pending'
+        // Bloco restaurado ainda sem processo, com conversa gravada numa CLI
+        // cujo método depende da versão: espera a versão chegar. Sem isto o
+        // Gemini decidiria como "versão desconhecida" e a faixa piscaria
+        // antes de a versão confirmar a retomada pelo ID.
+        const waitsForCliVersion =
+          agentCliVersions === null &&
+          restoredAgentTerminals.holdable.has(node.id) &&
+          node.data.agentSession !== undefined &&
+          resumeDependsOnVersion(node.data.command)
         // Só o PRIMEIRO spawn de um bloco vindo do disco é segurado. Um bloco
         // cujo processo já subiu nesta execução (mesmo antes de uma ida ao
         // chat ou de um reload da interface) não tem o que segurar: o
@@ -1970,6 +2001,7 @@ function CanvasInner({
           resumeAgentSession,
           resumeFailure: node.data.resumeFailure,
           resumeChoice: node.data.resumeChoice,
+          cliVersion,
         })
         const terminalIndex = terminalOrder.get(node.id)
 
@@ -1985,6 +2017,8 @@ function CanvasInner({
               // o objeto do plano, novo a cada render, invalidaria o cache.
               followsResumePlan,
               holdForResumeChoice,
+              cliVersion,
+              waitsForCliVersion,
               isDirectOpenia,
               terminalIndex,
               terminalCount,
@@ -2005,10 +2039,11 @@ function CanvasInner({
               // arquivos do canvas: o cartão não chama `ensure()` enquanto
               // for `false`. Nada sobe, nada é apagado, o canvas fica intacto
               // — "agora não" é simplesmente não clicar na faixa.
-              initialTextReady: initialTextReady && !holdForResumeChoice,
+              initialTextReady: initialTextReady && !holdForResumeChoice && !waitsForCliVersion,
               resumeAgentSession,
               resumePlan,
-              resumeBanner: resumePlan
+              resumeCliVersion: cliVersion,
+              resumeBanner: resumePlan && !waitsForCliVersion
                 ? buildTerminalResumeBanner({
                     plan: resumePlan,
                     reference: node.data.agentSession,
@@ -2044,6 +2079,7 @@ function CanvasInner({
     return rendered
   }, [
     nodeDataCache,
+    agentCliVersions,
     connectionIndex,
     duplicateImageNode,
     edgesHydrated,
@@ -3102,6 +3138,7 @@ function CanvasInner({
           <TerminalDetailsPanel
             nodeId={detailsNode.id}
             data={detailsNode.data}
+            cliVersion={agentCliVersions?.[detailsNode.data.command ?? ''] ?? undefined}
             onClose={() => setDetailsTerminalId(null)}
             toolsMenuOpen={sidebarCollapsed}
             onClearAgentSession={() => forgetAgentSession(detailsNode.id)}
