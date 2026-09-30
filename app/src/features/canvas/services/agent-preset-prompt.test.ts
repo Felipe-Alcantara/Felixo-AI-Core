@@ -19,9 +19,9 @@ describe('buildPresetInstruction', () => {
     )
     expect(text).toContain('Preset deste agente: Revisor')
     expect(text).toContain('Revise com rigor.')
-    expect(text).toContain('- Skill A: faz A — /skills/a/SKILL.md')
+    expect(text).toContain('- Skill A: faz A — "/skills/a/SKILL.md"')
     // Skill sem descrição não deixa um ": " solto.
-    expect(text).toContain('- Skill B — /skills/b/SKILL.md')
+    expect(text).toContain('- Skill B — "/skills/b/SKILL.md"')
   })
 
   it('só lista as skills do preset, não todas as disponíveis', () => {

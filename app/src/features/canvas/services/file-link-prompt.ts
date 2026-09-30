@@ -1,4 +1,5 @@
 import { toSubmittedTerminalText } from '../terminal/terminal-input'
+import { fillPathPlaceholder } from './prompt-paths'
 
 /**
  * The instruction injected into a terminal when a file block is linked to it.
@@ -58,9 +59,7 @@ export function buildFileLinkPrompt(
   filePath: string,
   agentName = 'este agente',
 ): string {
-  const filled = template
-    .replaceAll('{{path}}', filePath)
-    .replaceAll('{{agent}}', agentName)
+  const filled = fillPathPlaceholder(template, filePath).replaceAll('{{agent}}', agentName)
   return toSubmittedTerminalText(filled)
 }
 

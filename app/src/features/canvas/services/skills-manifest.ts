@@ -1,4 +1,5 @@
 import type { CanvasSkill } from '../types'
+import { quotePromptPath } from './prompt-paths'
 
 /**
  * O bloco de skills entregue ao agente **no nascimento do terminal**.
@@ -49,7 +50,7 @@ export function buildSkillsManifestPrompt(skills: CanvasSkill[]): string {
   const linhas = listadas.map((skill) => {
     const descricao = skill.description?.trim()
     const detalhe = descricao ? ` — ${descricao}` : ''
-    return `- ${skill.name.trim()}${descreverOrigem(skill)}${detalhe}\n  Arquivo: ${skill.path.trim()}`
+    return `- ${skill.name.trim()}${descreverOrigem(skill)}${detalhe}\n  Arquivo: ${quotePromptPath(skill.path.trim())}`
   })
 
   const excedente =
