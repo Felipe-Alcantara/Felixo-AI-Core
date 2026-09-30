@@ -184,7 +184,7 @@ caso), e o teste pode passar mesmo quebrado. Depois do diff, rode
 | `npm run release:smoke` | app/ | Valida o artefato instalado no SO atual |
 | `npm run publish:github` | app/ | Publica uma release pelo electron-builder; usar apenas no fluxo de release |
 | `npm run benchmark:terminal-output -- --check` | app/ | Compara retenção/renderização dos Logs da CLI no renderer Electron |
-| `npm run test:canvas-smoke` | app/ | Smoke real do canvas via CDP, com PTY fake, incluindo os cenários do tutorial (sessões A e B) |
+| `npm run test:canvas-smoke` | app/ | Smoke real do canvas via CDP, com PTY fake: fixture e tutorial (sessões A e B), cadeia de contas (C), links (D) e caminhos de prompt (E). `FELIXO_SMOKE_SESSOES=E` roda só as sessões listadas |
 | `npm run benchmark:ui-render -- --onboarding` | app/ | Mede FPS e custo de estilo/paint com o tutorial aberto (manual, na máquina de referência) |
 
 ---
