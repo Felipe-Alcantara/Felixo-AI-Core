@@ -6,6 +6,8 @@ const path = require('node:path')
 const win32Platform = require('../core/platform/win32.cjs')
 const {
   PtyProcessManager,
+  AGENT_SESSION_DISCOVERY_MAX_REARMS,
+  AGENT_SESSION_DISCOVERY_WINDOW_MS,
   MAX_REPLAY_BUFFER_CHARS,
   PTY_SESSION_ACCOUNT_MISMATCH,
   isClaudeCommandName,
@@ -814,6 +816,354 @@ test('a descoberta de conversa recebe as pastas do perfil da conta e a referênc
   }
 })
 
+/**
+ * Gerenciador com relógio manual e descoberta falsa que anota cada pedido. Os
+ * timers vêm do `t.mock.timers` do teste: a janela de 15 s passa sem espera.
+ */
+function criarGerenciadorDeDescoberta(responder = () => null) {
+  const relogio = { agora: 1_000_000 }
+  const pedidos = []
+  const { spawnPty } = createFakePty()
+  const manager = new PtyProcessManager({
+    spawnPty,
+    platform: fakePosixPlatform,
+    now: () => relogio.agora,
+    discoverAgentSession: (pedido) => {
+      pedidos.push(pedido)
+      return responder(pedido)
+    },
+  })
+  return { manager, pedidos, relogio }
+}
+
+test('a descoberta reabre quando a primeira mensagem chega depois da janela do spawn, ancorada nela', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const { manager, pedidos, relogio } = criarGerenciadorDeDescoberta((pedido) =>
+    pedido.createdAfter === undefined
+      ? null
+      : { version: 1, provider: 'claude', sessionId: 'claude-sessao-tardia', cwd: pedido.cwd, capturedAt: pedido.now },
+  )
+  const recebidas = []
+
+  try {
+    const spawnEm = relogio.agora
+    manager.spawn('canvas:tardio', { command: 'claude', cwd: process.cwd(), onSession: (ref) => recebidas.push(ref) })
+
+    // A pessoa não escreveu nada nos primeiros 15 s: a janela do spawn fecha.
+    relogio.agora += AGENT_SESSION_DISCOVERY_WINDOW_MS + 1_000
+    t.mock.timers.tick(250)
+    assert.equal(pedidos.length, 1)
+    assert.equal(Object.hasOwn(pedidos[0], 'createdAfter'), false, 'na janela do spawn vale a regra de sempre')
+    t.mock.timers.tick(60_000)
+    assert.equal(pedidos.length, 1, 'sem mensagem, a descoberta fica parada: nada de busca contínua')
+
+    // Digitar sem Enter não cria arquivo de conversa, então não reabre.
+    manager.write('canvas:tardio', 'o')
+    t.mock.timers.tick(1_000)
+    assert.equal(pedidos.length, 1)
+
+    relogio.agora += 5_000
+    const enviadaEm = relogio.agora
+    manager.write('canvas:tardio', 'i\r')
+    t.mock.timers.tick(250)
+    assert.equal(pedidos.length, 2)
+    assert.equal(pedidos[1].createdAfter, enviadaEm, 'só vale arquivo nascido depois da mensagem')
+    assert.equal(pedidos[1].startedAt, spawnEm)
+    assert.equal(recebidas.length, 1)
+    assert.equal(recebidas[0].sessionId, 'claude-sessao-tardia')
+
+    // Com referência, mensagens seguintes não disparam mais nada.
+    manager.write('canvas:tardio', 'mais uma\r')
+    t.mock.timers.tick(60_000)
+    assert.equal(pedidos.length, 2)
+  } finally {
+    manager.killAll({ force: true })
+  }
+})
+
+test('a reabertura pela mensagem tem teto e não empilha tentativas', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const { manager, pedidos, relogio } = criarGerenciadorDeDescoberta()
+
+  try {
+    manager.spawn('canvas:sem-historico', { command: 'codex', cwd: process.cwd() })
+
+    // Enter dentro da janela do spawn (diálogo de confiança, texto inicial)
+    // só estica o prazo e não gasta reabertura.
+    manager.write('canvas:sem-historico', '\r')
+    manager.write('canvas:sem-historico', '\r')
+    t.mock.timers.tick(250)
+    assert.equal(pedidos.length, 1, 'uma tentativa pendente por vez, mesmo com spawn e dois Enters')
+    relogio.agora += AGENT_SESSION_DISCOVERY_WINDOW_MS + 1_000
+    t.mock.timers.tick(250)
+    t.mock.timers.tick(60_000)
+    assert.equal(pedidos.length, 2, 'a janela fecha no prazo')
+
+    // Uma CLI cujo histórico nunca aparece: cada mensagem reabre uma janela
+    // (tentativas até o prazo) e, passado o teto, nenhuma reabre mais.
+    for (let rodada = 1; rodada <= AGENT_SESSION_DISCOVERY_MAX_REARMS + 2; rodada += 1) {
+      const antes = pedidos.length
+      const enviadaEm = relogio.agora
+      manager.write('canvas:sem-historico', `mensagem ${rodada}\r`)
+      t.mock.timers.tick(250)
+      relogio.agora += AGENT_SESSION_DISCOVERY_WINDOW_MS + 1_000
+      t.mock.timers.tick(250)
+      t.mock.timers.tick(60_000)
+      const novas = pedidos.length - antes
+      if (rodada <= AGENT_SESSION_DISCOVERY_MAX_REARMS) {
+        assert.equal(novas, 2, `a mensagem ${rodada} reabre uma janela, que fecha no prazo`)
+        assert.equal(pedidos.at(-1).createdAfter, enviadaEm)
+      } else {
+        assert.equal(novas, 0, `depois do teto a mensagem ${rodada} não reabre`)
+      }
+    }
+  } finally {
+    manager.killAll({ force: true })
+  }
+})
+
+test('a conversa já associada a outro terminal não concorre na descoberta deste', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const { manager, pedidos } = criarGerenciadorDeDescoberta((pedido) =>
+    pedidos.length === 1
+      ? { version: 1, provider: 'claude', sessionId: 'claude-sessao-vizinha', cwd: pedido.cwd, capturedAt: pedido.now }
+      : null,
+  )
+
+  try {
+    manager.spawn('canvas:vizinho', { command: 'claude', cwd: process.cwd() })
+    t.mock.timers.tick(250)
+    manager.spawn('canvas:novo', { command: 'claude', cwd: process.cwd() })
+    t.mock.timers.tick(250)
+
+    const pedidoDoNovo = pedidos.at(-1)
+    assert.deepEqual(pedidoDoNovo.excludeSessionIds, ['claude-sessao-vizinha'])
+    assert.deepEqual(pedidos[0].excludeSessionIds, [], 'o próprio terminal não se exclui')
+  } finally {
+    manager.killAll({ force: true })
+  }
+})
+
+const CR = String.fromCharCode(13)
+const LF = String.fromCharCode(10)
+const ESC = String.fromCharCode(27)
+const CODEX_RETOMADO = '019a1b2c-3d4e-7f00-8a9b-0c1d2e3f4a5b'
+const CLAUDE_RETOMADO = 'b7e1c2d3-4f56-4789-9abc-def012345678'
+
+test('retomada por ID já nasce com a conversa e não roda descoberta nem reabertura', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  // Qualquer busca devolveria a conversa de outro terminal da mesma pasta: a
+  // CLI grava a retomada no arquivo antigo, que nunca passa na busca ancorada.
+  const { manager, pedidos, relogio } = criarGerenciadorDeDescoberta((pedido) => ({
+    version: 1,
+    provider: pedido.command,
+    sessionId: 'conversa-de-outro-terminal',
+    cwd: pedido.cwd,
+    capturedAt: pedido.now,
+  }))
+  const recebidas = { codex: [], claude: [] }
+
+  try {
+    const nascidaEm = relogio.agora
+    manager.spawn('canvas:codex-retomado', {
+      command: 'codex',
+      args: ['resume', '--dangerously-bypass-approvals-and-sandbox', CODEX_RETOMADO],
+      cwd: process.cwd(),
+      accountId: 'conta-trabalho',
+      onSession: (ref) => recebidas.codex.push(ref),
+    })
+    manager.spawn('canvas:claude-retomado', {
+      command: 'claude',
+      args: ['--resume', CLAUDE_RETOMADO, '--dangerously-skip-permissions'],
+      cwd: process.cwd(),
+      onSession: (ref) => recebidas.claude.push(ref),
+    })
+    await Promise.resolve()
+
+    // Mesmo caminho da descoberta (onSession → pty:session), com a conta do
+    // processo carimbada do mesmo jeito.
+    assert.deepEqual(recebidas.codex, [
+      {
+        version: 1,
+        provider: 'codex',
+        sessionId: CODEX_RETOMADO,
+        cwd: process.cwd(),
+        capturedAt: nascidaEm,
+        source: 'resume-args',
+        accountId: 'conta-trabalho',
+      },
+    ])
+    assert.deepEqual(recebidas.claude, [
+      {
+        version: 1,
+        provider: 'claude',
+        sessionId: CLAUDE_RETOMADO,
+        cwd: process.cwd(),
+        capturedAt: nascidaEm,
+        source: 'resume-args',
+      },
+    ])
+
+    // Nem a janela do spawn nem a primeira mensagem disparam busca.
+    t.mock.timers.tick(250)
+    relogio.agora += AGENT_SESSION_DISCOVERY_WINDOW_MS + 1_000
+    manager.write('canvas:codex-retomado', `continua${CR}`)
+    manager.write('canvas:claude-retomado', `continua${CR}`)
+    t.mock.timers.tick(60_000)
+    assert.equal(pedidos.length, 0)
+    assert.equal(recebidas.codex.length, 1)
+    assert.equal(recebidas.claude.length, 1)
+
+    // O reanexo reemite a mesma conversa, sem buscar.
+    manager.spawn('canvas:codex-retomado', {
+      command: 'codex',
+      accountId: 'conta-trabalho',
+      reuseExisting: true,
+      onSession: (ref) => recebidas.codex.push(ref),
+    })
+    await Promise.resolve()
+    assert.equal(recebidas.codex.length, 2)
+    assert.equal(recebidas.codex[1].sessionId, CODEX_RETOMADO)
+    t.mock.timers.tick(60_000)
+    assert.equal(pedidos.length, 0)
+
+    // As conversas retomadas são destes blocos: não concorrem na descoberta
+    // de um terminal novo da mesma pasta.
+    manager.spawn('canvas:novo', { command: 'claude', cwd: process.cwd() })
+    t.mock.timers.tick(250)
+    assert.equal(pedidos.length, 1)
+    assert.deepEqual([...pedidos[0].excludeSessionIds].sort(), [CODEX_RETOMADO, CLAUDE_RETOMADO].sort())
+  } finally {
+    manager.killAll({ force: true })
+  }
+})
+
+test('retomada sem ID válido (a lista da CLI) e o Gemini seguem na descoberta', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const { manager, pedidos } = criarGerenciadorDeDescoberta()
+  const recebidas = []
+
+  try {
+    manager.spawn('canvas:lista-codex', {
+      command: 'codex',
+      args: ['resume', '--last'],
+      cwd: process.cwd(),
+      onSession: (ref) => recebidas.push(ref),
+    })
+    manager.spawn('canvas:lista-claude', {
+      command: 'claude',
+      args: ['--resume', '--dangerously-skip-permissions'],
+      cwd: process.cwd(),
+      onSession: (ref) => recebidas.push(ref),
+    })
+    // O Gemini nunca retoma por ID (agent-session.ts), mesmo que peçam.
+    manager.spawn('canvas:gemini', {
+      command: 'gemini',
+      args: ['--resume', CLAUDE_RETOMADO],
+      cwd: process.cwd(),
+      onSession: (ref) => recebidas.push(ref),
+    })
+    await Promise.resolve()
+    t.mock.timers.tick(250)
+
+    assert.deepEqual(recebidas, [])
+    assert.deepEqual(pedidos.map((pedido) => pedido.command).sort(), ['claude', 'codex', 'gemini'])
+  } finally {
+    manager.killAll({ force: true })
+  }
+})
+
+test('Shift+Enter e colagem multilinha não contam como mensagem nem gastam reabertura', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const { manager, pedidos, relogio } = criarGerenciadorDeDescoberta()
+  const colar = (texto) => `${ESC}[200~${texto}${ESC}[201~`
+  const fecharJanela = () => {
+    t.mock.timers.tick(250)
+    relogio.agora += AGENT_SESSION_DISCOVERY_WINDOW_MS + 1_000
+    t.mock.timers.tick(250)
+    t.mock.timers.tick(60_000)
+  }
+
+  try {
+    manager.spawn('canvas:colagem', { command: 'claude', cwd: process.cwd() })
+    fecharJanela()
+    assert.equal(pedidos.length, 2, 'a janela do spawn fechou')
+    const depoisDoSpawn = pedidos.length
+
+    for (const entrada of [
+      LF, // Shift+Enter: nova linha, sem enviar.
+      `linha 1${LF}`,
+      colar(`linha 1${CR}linha 2${LF}linha 3`),
+      // Colagem partida em duas escritas: o CR do meio continua colado.
+      `${ESC}[200~começo${CR}`,
+      `meio${CR}fim${ESC}[201~`,
+    ]) {
+      manager.write('canvas:colagem', entrada)
+      fecharJanela()
+    }
+    assert.equal(pedidos.length, depoisDoSpawn, 'nada disso enviou mensagem')
+
+    // O teto ficou inteiro: cada envio de verdade (CR fora da colagem,
+    // inclusive logo depois dela) reabre, até o teto.
+    const envios = [`${colar(`linha 1${CR}linha 2`)}${CR}`]
+    while (envios.length <= AGENT_SESSION_DISCOVERY_MAX_REARMS) envios.push(`mensagem ${envios.length}${CR}`)
+    envios.forEach((envio, indice) => {
+      const antes = pedidos.length
+      const enviadaEm = relogio.agora
+      manager.write('canvas:colagem', envio)
+      fecharJanela()
+      if (indice < AGENT_SESSION_DISCOVERY_MAX_REARMS) {
+        assert.ok(pedidos.length > antes, `o envio ${indice + 1} reabre`)
+        assert.equal(pedidos[antes].createdAfter, enviadaEm)
+      } else {
+        assert.equal(pedidos.length, antes, 'passado o teto, não reabre')
+      }
+    })
+  } finally {
+    manager.killAll({ force: true })
+  }
+})
+
+test('o reanexo não reabre a janela do spawn nem desliga a âncora de uma reabertura em curso', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const { manager, pedidos, relogio } = criarGerenciadorDeDescoberta()
+  const reanexar = () =>
+    manager.spawn('canvas:remonte', { command: 'claude', cwd: process.cwd(), reuseExisting: true, onSession: () => {} })
+
+  try {
+    manager.spawn('canvas:remonte', { command: 'claude', cwd: process.cwd() })
+    relogio.agora += AGENT_SESSION_DISCOVERY_WINDOW_MS + 1_000
+    t.mock.timers.tick(250)
+    t.mock.timers.tick(60_000)
+    assert.equal(pedidos.length, 1)
+
+    // Remonte do canvas depois da janela, sem conversa: nada de 15 s de busca
+    // "perto do spawn" com o spawnedAt de minutos atrás.
+    reanexar()
+    t.mock.timers.tick(250)
+    t.mock.timers.tick(60_000)
+    assert.equal(pedidos.length, 1, 'o reanexo não abre janela')
+
+    // A mensagem depois do remonte continua fora da janela do spawn, ancorada.
+    relogio.agora += 1_000
+    const enviadaEm = relogio.agora
+    manager.write('canvas:remonte', `oi${CR}`)
+    t.mock.timers.tick(250)
+    assert.equal(pedidos.length, 2)
+    assert.equal(pedidos[1].createdAfter, enviadaEm)
+
+    // Remonte no meio da reabertura: a âncora continua a da mensagem.
+    relogio.agora += 1_000
+    reanexar()
+    t.mock.timers.tick(250)
+    assert.equal(pedidos.length, 3)
+    assert.equal(pedidos[2].createdAfter, enviadaEm, 'o reanexo não desliga a âncora')
+    assert.equal(pedidos[2].startedAt, pedidos[0].startedAt)
+  } finally {
+    manager.killAll({ force: true })
+  }
+})
+
 test('sessão do login do sistema também não reanexa numa conta própria', () => {
   const { spawnPty, calls } = createFakePty()
   const manager = new PtyProcessManager({ spawnPty })
@@ -928,6 +1278,42 @@ test('Windows: command with args that exits almost immediately retries with the 
 
   second.fakePty.emitExit({ exitCode: 0 })
   assert.deepEqual(exits, [{ exitCode: 0 }])
+})
+
+test('Windows: retomada por ID recusada cedo encerra, sem virar CLI sem argumentos nem shell de emergência', () => {
+  for (const [command, args, recusa] of [
+    [
+      'codex',
+      ['resume', '--dangerously-bypass-approvals-and-sandbox', CODEX_RETOMADO],
+      `No saved session found with ID ${CODEX_RETOMADO}.`,
+    ],
+    ['claude', ['--resume', CLAUDE_RETOMADO, '--dangerously-skip-permissions'], `No conversation found with session ID: ${CLAUDE_RETOMADO}`],
+  ]) {
+    const first = createFakePty()
+    const spawnCalls = []
+    const spawnPty = (file, spawnArgs, options) => {
+      spawnCalls.push({ file, args: spawnArgs, options })
+      return (spawnCalls.length === 1 ? first : createFakePty()).spawnPty(file, spawnArgs, options)
+    }
+    const manager = new PtyProcessManager({ spawnPty, platform: fakeWin32Platform, resolveCodexPath: () => null })
+    const exits = []
+    const output = []
+
+    manager.spawn(`term-retomada-${command}`, {
+      command,
+      args,
+      onData: (data) => output.push(data),
+      onExit: (event) => exits.push(event),
+    })
+    // A CLI responde à retomada impossível e sai com erro, antes dos 800 ms.
+    first.fakePty.emitData(`${recusa}${CR}${LF}`)
+    first.fakePty.emitExit({ exitCode: 1 })
+
+    assert.equal(spawnCalls.length, 1, `${command}: a recusa não pode abrir outra coisa no lugar`)
+    assert.deepEqual(exits, [{ exitCode: 1 }], `${command}: o fim chega ao renderer, que mostra a faixa`)
+    assert.equal(manager.get(`term-retomada-${command}`), first.fakePty)
+    assert.doesNotMatch(output.join(''), /argumentos adicionais|shell de emergência/)
+  }
 })
 
 test('Windows: command with args that runs for a while does not trigger a fallback retry', () => {

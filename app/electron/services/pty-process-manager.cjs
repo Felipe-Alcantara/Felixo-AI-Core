@@ -30,7 +30,7 @@ const path = require('node:path')
 const fs = require('node:fs')
 const platform = require('../core/platform/index.cjs')
 const { createCliEnv } = require('./cli-process-manager.cjs')
-const { discoverAgentSession, selectDiscoveryContext } = require('./agent-session-discovery.cjs')
+const { discoverAgentSession, isSafeSessionId, selectDiscoveryContext } = require('./agent-session-discovery.cjs')
 const { validatePtyAccountSelection } = require('./pty-account-validation.cjs')
 const { applyProfileEnv } = require('./cli-account-profiles.cjs')
 const { ensureNodePtySpawnHelperExecutable } = require('./pty-native-assets.cjs')
@@ -54,6 +54,25 @@ const SHELL_STARTUP_RECOVERY_WINDOW_MS = 3000
 const MAX_REPLAY_BUFFER_CHARS = 200_000
 const AGENT_SESSION_DISCOVERY_WINDOW_MS = 15_000
 const AGENT_SESSION_DISCOVERY_INTERVAL_MS = 250
+/**
+ * Quantas vezes uma mensagem enviada DEPOIS da janela do spawn reabre a
+ * descoberta (cada vez, mais uma janela de 15 s). Claude e Codex só criam o
+ * arquivo da conversa na primeira mensagem; quem escreve depois de 15 s
+ * ficava sem referência, e a retomada caía no seletor sem explicação. O teto
+ * existe porque uma CLI cujo histórico nunca aparece (pasta trocada, histórico
+ * desligado) faria a busca rodar a cada mensagem para sempre. Três cobre os
+ * Enters que vêm antes da primeira mensagem de verdade (diálogo de confiança
+ * na pasta, um comando de barra).
+ */
+const AGENT_SESSION_DISCOVERY_MAX_REARMS = 3
+const AGENT_SESSION_DISCOVERY_COMMANDS = Object.freeze(['codex', 'claude', 'gemini'])
+/**
+ * Marcas do bracketed paste (DECSET 2004, que o Claude e o Codex ligam): o
+ * xterm embrulha a colagem entre elas, e um CR ali dentro é texto colado, não
+ * o Enter de quem envia.
+ */
+const BRACKETED_PASTE_START = '\u001b[200~'
+const BRACKETED_PASTE_END = '\u001b[201~'
 /**
  * Modo da conta do bloco. `pinned` (fixa) é o padrão, inclusive de bloco
  * antigo sem o campo: só vira `chain` o bloco aberto pela cadeia de contas.
@@ -214,6 +233,9 @@ class PtyProcessManager {
     const cols = normalizeDimension(options.cols, DEFAULT_COLS)
     const rows = normalizeDimension(options.rows, DEFAULT_ROWS)
     const cwd = resolveWorkingDirectory(options.cwd)
+    // Retomada por ID: a conversa é conhecida antes de o processo nascer (ver
+    // resolveResumeTarget). Muda a descoberta e o fallback de argumentos.
+    const resumeTarget = options.command ? resolveResumeTarget(requestedCommand, args) : null
 
     if (typeof options.cwd === 'string' && options.cwd.trim() && cwd !== options.cwd) {
       this.reportLayer(
@@ -233,12 +255,19 @@ class PtyProcessManager {
     // for a CLI means losing optional flags but for a file means losing the
     // file itself — `py script.py` would silently become a bare `py` REPL,
     // running something the user never asked for.
+    //
+    // Retomada por ID também fica de fora: a CLI recusa uma retomada (conversa
+    // inexistente, login) imprimindo o motivo e saindo com erro, às vezes em
+    // menos de 800 ms, e tirar os argumentos transformava a recusa num Codex
+    // sem argumentos (conversa nova, sem os flags do bloco) antes de a pessoa
+    // escolher. O processo encerra e o renderer mostra a faixa da retomada.
     const allowFallback =
       !isFallbackRetry &&
       this.platform.name === 'win32' &&
       Boolean(options.command) &&
       !keepShellOpen &&
-      args.length > 0
+      args.length > 0 &&
+      !resumeTarget
     const allowWindowsBackendFallback =
       !isFallbackRetry &&
       this.platform.name === 'win32' &&
@@ -322,7 +351,18 @@ class PtyProcessManager {
       onExit: options.onExit,
       onSession: options.onSession,
       discoveryTimer: null,
-      agentSession: null,
+      // Estado da descoberta da conversa (ver scheduleAgentSessionDiscovery):
+      // comando a procurar, fim da janela do spawn, prazo corrente, instante
+      // da última mensagem que reabriu a busca, quantas reaberturas já foram
+      // gastas e se a entrada está no meio de uma colagem (bracketed paste).
+      discoveryCommand: null,
+      discoverySpawnWindowEnd: 0,
+      discoveryDeadline: 0,
+      discoverySubmitAt: null,
+      discoveryRearms: 0,
+      discoveryInPaste: false,
+      // Retomada por ID já nasce com a conversa; o resto espera a descoberta.
+      agentSession: resumeTarget ? createResumeAgentSession(resumeTarget, cwd, accountId, this.now()) : null,
       filaDeEscrita: null,
       // Conta com que o processo nasceu. Não muda depois do spawn: é o que o
       // reattach confere e o que a cadeia de contas lê para saber de quem é
@@ -353,7 +393,15 @@ class PtyProcessManager {
     })
 
     this.sessions.set(sessionId, entry)
-    this.scheduleAgentSessionDiscovery(sessionId, options)
+    if (entry.agentSession) {
+      // Retomada por ID: nada de descoberta nem de reabertura na mensagem. A
+      // CLI grava a retomada no arquivo ANTIGO da conversa, nascido antes de
+      // qualquer mensagem deste processo, que nunca passa na busca ancorada;
+      // a busca acabava adotando a conversa de outro terminal da mesma pasta.
+      this.emitKnownAgentSession(sessionId, entry)
+    } else {
+      this.scheduleAgentSessionDiscovery(sessionId, options)
+    }
 
     ptyProcess.onData((data) => {
       entry.outputBuffer.append(String(data))
@@ -480,7 +528,11 @@ class PtyProcessManager {
           return
         }
 
-        if (allowEmergencyShellFallback) {
+        // Retomada por ID que sai cedo é a resposta da CLI (recusou a
+        // retomada), não um lançamento que falhou: trocá-la por um shell na
+        // pasta do usuário esconderia o fim do processo do renderer, que é
+        // quem mostra a faixa da retomada.
+        if (allowEmergencyShellFallback && !resumeTarget) {
           // The emergency shell throws away the command, the args and the cwd,
           // so whatever the process printed before dying is the only remaining
           // evidence of WHY it died — a Python traceback, a missing
@@ -639,10 +691,15 @@ class PtyProcessManager {
     entry.onExit = options.onExit
     entry.onSession = options.onSession
 
+    // O reanexo (todo remonte do canvas com reuseExisting) só reemite a
+    // conversa já conhecida. Sem ela, não mexe na descoberta: a janela é do
+    // spawn, e reabri-la aqui esticava o prazo com o spawnedAt antigo e
+    // desligava a âncora de uma reabertura em curso, e o bloco adotava a
+    // conversa mexida há pouco por outro terminal. A busca que estiver
+    // correndo segue no processo principal e responde pelo `onSession` novo;
+    // a próxima mensagem reabre, se ainda houver reabertura.
     if (entry.agentSession) {
-      queueMicrotask(() => entry.onSession?.(entry.agentSession))
-    } else {
-      this.scheduleAgentSessionDiscovery(sessionId, options)
+      this.emitKnownAgentSession(sessionId, entry)
     }
 
     const replay = entry.outputBuffer.toString()
@@ -677,11 +734,16 @@ class PtyProcessManager {
       return false
     }
 
+    let delivered = true
     if (entry.filaDeEscrita) {
-      return entry.filaDeEscrita.enfileirar(input)
+      delivered = entry.filaDeEscrita.enfileirar(input)
+    } else {
+      entry.ptyProcess.write(input)
     }
-    entry.ptyProcess.write(input)
-    return true
+    if (delivered) {
+      this.rearmAgentSessionDiscoveryOnSubmit(sessionId, entry, input)
+    }
+    return delivered
   }
 
   /**
@@ -857,53 +919,139 @@ class PtyProcessManager {
    * Provider history is metadata-only and best effort. A missing or ambiguous
    * candidate deliberately produces no event; the renderer then keeps its
    * honest generic /resume fallback instead of guessing another conversation.
+   *
+   * A janela de 15 s nasce só no spawn real (o reanexo não a toca, e a
+   * retomada por ID nem a abre). Como Claude e Codex só criam o arquivo na
+   * primeira mensagem, `write` a reabre quando uma mensagem é enviada sem
+   * referência ainda (ver rearmAgentSessionDiscoveryOnSubmit): custo limitado
+   * a algumas janelas por terminal, nunca uma busca contínua.
    */
   scheduleAgentSessionDiscovery(sessionId, options) {
-    if (!options.command || !['codex', 'claude', 'gemini'].includes(options.command)) {
+    if (!options.command || !AGENT_SESSION_DISCOVERY_COMMANDS.includes(options.command)) {
       return
     }
 
     const entry = this.sessions.get(sessionId)
     if (!entry || typeof this.discoverAgentSession !== 'function') return
 
-    const deadline = this.now() + AGENT_SESSION_DISCOVERY_WINDOW_MS
-    const attempt = () => {
-      const current = this.sessions.get(sessionId)
-      if (!current || current !== entry || current.agentSession) return
+    entry.discoveryCommand = options.command
+    const windowEnd = this.now() + AGENT_SESSION_DISCOVERY_WINDOW_MS
+    entry.discoverySpawnWindowEnd = Math.max(entry.discoverySpawnWindowEnd, windowEnd)
+    entry.discoveryDeadline = Math.max(entry.discoveryDeadline, windowEnd)
+    this.queueAgentSessionDiscoveryAttempt(sessionId, entry)
+  }
 
-      let reference = null
-      try {
-        reference = this.discoverAgentSession({
-          command: options.command,
-          cwd: current.cwd,
-          startedAt: current.spawnedAt,
-          now: this.now(),
-          env: current.agentSessionContext?.env,
-          homeDir: current.agentSessionContext?.homeDir,
-        })
-      } catch {
-        reference = null
-      }
+  /**
+   * Reabre a descoberta quando uma mensagem é enviada (a entrada tem Enter)
+   * e o terminal ainda não tem conversa: é nesse momento que Claude e Codex
+   * criam o arquivo da sessão. Dentro da janela do spawn só estica o prazo;
+   * depois dela, cada reabertura gasta uma das
+   * {@link AGENT_SESSION_DISCOVERY_MAX_REARMS}. Tecla sem Enter não conta:
+   * digitar não cria arquivo nenhum. Shift+Enter e colagem multilinha também
+   * não (ver scanSubmittedInput): gastavam o teto sem mensagem enviada.
+   */
+  rearmAgentSessionDiscoveryOnSubmit(sessionId, entry, input) {
+    if (entry.agentSession || !entry.discoveryCommand) return
+    if (typeof input !== 'string') return
+    const scan = scanSubmittedInput(input, entry.discoveryInPaste)
+    entry.discoveryInPaste = scan.inPaste
+    if (!scan.submitted) return
 
-      if (reference?.sessionId) {
-        // A conversa pertence à conta em que o processo nasceu: retomá-la em
-        // outra conta abriria o histórico de uma pessoa na cobrança de outra.
-        current.agentSession = current.accountId ? { ...reference, accountId: current.accountId } : reference
-        current.onSession?.(current.agentSession)
-        return
-      }
-
-      if (this.now() >= deadline) return
-      current.discoveryTimer = setTimeout(attempt, AGENT_SESSION_DISCOVERY_INTERVAL_MS)
-      if (typeof current.discoveryTimer.unref === 'function') {
-        current.discoveryTimer.unref()
-      }
+    const now = this.now()
+    if (now > entry.discoverySpawnWindowEnd) {
+      if (entry.discoveryRearms >= AGENT_SESSION_DISCOVERY_MAX_REARMS) return
+      entry.discoveryRearms += 1
     }
+    // A última mensagem é a âncora: um "/help" seguido da mensagem de verdade
+    // não pode ancorar a busca no "/help", senão a conversa que outro terminal
+    // abriu entre os dois ganharia por estar mais perto.
+    entry.discoverySubmitAt = now
+    entry.discoveryDeadline = Math.max(entry.discoveryDeadline, now + AGENT_SESSION_DISCOVERY_WINDOW_MS)
+    this.queueAgentSessionDiscoveryAttempt(sessionId, entry)
+  }
 
-    entry.discoveryTimer = setTimeout(attempt, AGENT_SESSION_DISCOVERY_INTERVAL_MS)
+  /**
+   * Entrega a conversa já conhecida (retomada por ID, reanexo) pelo mesmo
+   * caminho da descoberta (`onSession`, que vira `pty:session`), depois do
+   * spawn ou reanexo em curso, e só se a entrada ainda for a desta sessão.
+   */
+  emitKnownAgentSession(sessionId, entry) {
+    queueMicrotask(() => {
+      if (this.sessions.get(sessionId) !== entry || !entry.agentSession) return
+      try {
+        entry.onSession?.(entry.agentSession)
+      } catch {
+        // A renderer callback must not affect the PTY session.
+      }
+    })
+  }
+
+  /** Uma tentativa pendente por terminal, no máximo: spawn e Enter não empilham laços. */
+  queueAgentSessionDiscoveryAttempt(sessionId, entry) {
+    if (entry.discoveryTimer) return
+    entry.discoveryTimer = setTimeout(
+      () => this.runAgentSessionDiscoveryAttempt(sessionId, entry),
+      AGENT_SESSION_DISCOVERY_INTERVAL_MS,
+    )
     if (typeof entry.discoveryTimer.unref === 'function') {
       entry.discoveryTimer.unref()
     }
+  }
+
+  runAgentSessionDiscoveryAttempt(sessionId, entry) {
+    entry.discoveryTimer = null
+    if (this.sessions.get(sessionId) !== entry || entry.agentSession || !entry.discoveryCommand) return
+
+    const now = this.now()
+    // Dentro da janela do spawn vale a regra de sempre: arquivo mexido perto
+    // do nascimento do processo. Depois dela a âncora é a mensagem que
+    // reabriu a busca, e só conta arquivo NASCIDO depois dela; minutos após o
+    // spawn, "mexido perto do spawn" pegaria a conversa de outro terminal.
+    const createdAfter = now > entry.discoverySpawnWindowEnd && Number.isFinite(entry.discoverySubmitAt)
+      ? entry.discoverySubmitAt
+      : undefined
+
+    let reference = null
+    try {
+      reference = this.discoverAgentSession({
+        command: entry.discoveryCommand,
+        cwd: entry.cwd,
+        startedAt: entry.spawnedAt,
+        ...(createdAfter === undefined ? {} : { createdAfter }),
+        excludeSessionIds: this.collectClaimedAgentSessionIds(sessionId),
+        now,
+        env: entry.agentSessionContext?.env,
+        homeDir: entry.agentSessionContext?.homeDir,
+      })
+    } catch {
+      reference = null
+    }
+
+    if (reference?.sessionId) {
+      // A conversa pertence à conta em que o processo nasceu: retomá-la em
+      // outra conta abriria o histórico de uma pessoa na cobrança de outra.
+      entry.agentSession = entry.accountId ? { ...reference, accountId: entry.accountId } : reference
+      entry.onSession?.(entry.agentSession)
+      return
+    }
+
+    if (now >= entry.discoveryDeadline) return
+    this.queueAgentSessionDiscoveryAttempt(sessionId, entry)
+  }
+
+  /**
+   * Conversas já associadas a outros terminais deste app. Com a janela maior
+   * (reaberta na mensagem), a conversa de um terminal vizinho no mesmo
+   * diretório não pode concorrer com a deste nem transformá-lo em "ambíguo".
+   */
+  collectClaimedAgentSessionIds(ownSessionId) {
+    const claimed = []
+    for (const [sessionId, entry] of this.sessions.entries()) {
+      if (sessionId !== ownSessionId && entry.agentSession?.sessionId) {
+        claimed.push(entry.agentSession.sessionId)
+      }
+    }
+    return claimed
   }
 
   /**
@@ -1322,8 +1470,93 @@ function isClaudeCommandName(command) {
   return /^claude(\.exe|\.cmd)?$/i.test(name)
 }
 
+/**
+ * A conversa que um spawn retoma pelo ID, no formato que o renderer monta
+ * (`buildAgentResumeArgs` em agent-session.ts): Codex `resume …args <id>`,
+ * com o ID no fim, e Claude `--resume <id> …args`. O Gemini nunca retoma por
+ * ID. O ID passa pela mesma regra do renderer; fora dela (`codex resume
+ * --last`, `claude --resume` sem ID, que abrem a lista) não há conversa
+ * conhecida e a descoberta segue como num terminal novo.
+ *
+ * O comando pode vir como caminho (o Codex resolvido no Windows), por isso a
+ * comparação é pelo nome do executável.
+ *
+ * @param {string} command
+ * @param {string[]} args
+ * @returns {{ provider: 'codex' | 'claude', sessionId: string } | null}
+ */
+function resolveResumeTarget(command, args) {
+  if (!Array.isArray(args) || args.length < 2) return null
+  if (isCodexCommand(command) && args[0] === 'resume') {
+    const sessionId = args[args.length - 1]
+    return isSafeSessionId(sessionId) ? { provider: 'codex', sessionId } : null
+  }
+  if (isClaudeCommandName(command) && args[0] === '--resume') {
+    const sessionId = args[1]
+    return isSafeSessionId(sessionId) ? { provider: 'claude', sessionId } : null
+  }
+  return null
+}
+
+/**
+ * Referência de uma retomada por ID, no mesmo formato da que a descoberta
+ * entrega: a pasta é a efetiva do PTY e a conta do processo vai carimbada do
+ * mesmo jeito (retomar em outra conta abriria o histórico de uma conta na
+ * cobrança de outra). Sem conta = login do sistema, sem o campo.
+ *
+ * @param {{ provider: 'codex' | 'claude', sessionId: string }} target
+ * @param {string} cwd
+ * @param {string | null} accountId
+ * @param {number} capturedAt
+ */
+function createResumeAgentSession({ provider, sessionId }, cwd, accountId, capturedAt) {
+  return {
+    version: 1,
+    provider,
+    sessionId,
+    cwd,
+    capturedAt,
+    source: 'resume-args',
+    ...(accountId ? { accountId } : {}),
+  }
+}
+
+/**
+ * A entrada envia uma mensagem? Só o CR (o Enter do xterm) envia: o LF puro é
+ * o Shift+Enter do bloco (nova linha, sem enviar), e o que vem dentro do
+ * bracketed paste é texto colado, mesmo com CR. A colagem pode chegar partida
+ * em mais de uma escrita, então quem chama guarda se ela ficou aberta.
+ *
+ * @param {string} input
+ * @param {boolean} inPaste - Havia colagem aberta antes desta entrada.
+ * @returns {{ submitted: boolean, inPaste: boolean }}
+ */
+function scanSubmittedInput(input, inPaste) {
+  let submitted = false
+  let open = Boolean(inPaste)
+  let index = 0
+  while (index < input.length) {
+    if (open) {
+      const end = input.indexOf(BRACKETED_PASTE_END, index)
+      if (end === -1) break
+      open = false
+      index = end + BRACKETED_PASTE_END.length
+      continue
+    }
+    const start = input.indexOf(BRACKETED_PASTE_START, index)
+    const typed = start === -1 ? input.slice(index) : input.slice(index, start)
+    if (typed.includes('\r')) submitted = true
+    if (start === -1) break
+    open = true
+    index = start + BRACKETED_PASTE_START.length
+  }
+  return { submitted, inPaste: open }
+}
+
 module.exports = {
   PtyProcessManager,
+  AGENT_SESSION_DISCOVERY_MAX_REARMS,
+  AGENT_SESSION_DISCOVERY_WINDOW_MS,
   MAX_REPLAY_BUFFER_CHARS,
   PTY_ACCOUNT_MODES,
   PTY_SESSION_ACCOUNT_MISMATCH,
