@@ -133,8 +133,23 @@ import {
   isDirectOpeniaLaunch,
   isKnownAgentCommand,
 } from '../services/agent-launch-options'
-import { canResumeAgentSession } from '../services/agent-session'
-import type { AgentSessionReference } from '../services/agent-session'
+import {
+  explainAgentResume,
+  isAgentSessionReference,
+  type AgentResumeFailure,
+  type AgentSessionReference,
+} from '../services/agent-session'
+import {
+  agentSessionPatch,
+  buildTerminalResumeBanner,
+  followsTerminalResumePlan,
+  resolveTerminalRelaunch,
+  resumeFailurePatch,
+  terminalResumeActionPatch,
+  terminalResumeActionRelaunches,
+  type TerminalResumeActionId,
+} from '../services/terminal-resume-banner'
+import { createTerminalRunRegistry } from '../services/terminal-run-registry'
 import type { RunFileOptions } from '../services/run-file-command'
 import type { CanvasTool } from './tools/CanvasToolsMenu'
 import type { SkillActivationResult } from './tools/SkillsPanel'
@@ -193,9 +208,11 @@ import {
 } from '../services/canvas-interaction-geometry'
 import type {
   CanvasImageArtifact,
+  CanvasNodeData,
   CanvasNodeType,
   CanvasSkill,
   DiagnosisRequestStatus,
+  TerminalNodeData,
 } from '../types'
 
 type FlowPositionMapper = {
@@ -239,7 +256,28 @@ type FlowPositionMapper = {
 
 type RestoredAgentTerminals = {
   captured: boolean
+  /** Agentes vindos do disco nesta execução do app: seguem o plano de retomada. */
   ids: ReadonlySet<string>
+  /** Os restaurados ainda sem processo nesta execução: só esses são segurados. */
+  holdable: ReadonlySet<string>
+}
+
+/**
+ * O que precisa durar a execução do app, não a montagem do canvas: blocos cujo
+ * processo já subiu, agentes restaurados do disco, a escolha da faixa de
+ * retomada e as conversas esquecidas (ver `terminal-run-registry.ts`). O PTY
+ * continua vivo no processo principal quando o canvas desmonta (ida ao chat e
+ * volta) E quando só a interface recarrega (Ctrl+R, "Recarregar interface",
+ * "Recarregar app"): o `ensure()` da volta só reanexa (`reuseExisting`). Um
+ * `Set` de módulo zerava no `location.reload` com o agente de pé, e o bloco
+ * voltava a "aguardando escolha / Nada foi iniciado" — daí o `sessionStorage`
+ * da janela, que sobrevive ao reload e zera quando a janela fecha, como os
+ * PTYs. Se ele falhar, o registro segue em memória.
+ */
+const terminalRunRegistry = createTerminalRunRegistry(() => window.sessionStorage)
+
+function markTerminalStarted(nodeId: string): void {
+  terminalRunRegistry.markStarted(nodeId)
 }
 
 const AGENT_MATRIX_MOVING_CLASS = 'felixo-agent-matrix-moving'
@@ -978,8 +1016,17 @@ function CanvasInner({
   // capture and its readiness live in one state update: TerminalNode must not
   // call ensure() before this snapshot is available, otherwise its idempotent
   // first spawn would receive the normal prompt and could never be replaced.
+  //
+  // A captura passa pelo registro da execução (`terminalRunRegistry`), porque
+  // o canvas remonta na volta do chat e a interface pode recarregar sozinha,
+  // com os PTYs de pé no processo principal. Quem já era restaurado continua
+  // sendo — o Reiniciar segue o mesmo plano de antes da ida ao chat —, mas só
+  // os restaurados ainda sem processo (`holdable`) podem ser segurados por uma
+  // retomada pendente. Na mesma atualização volta a escolha feita na faixa
+  // nesta execução: a reidratação do disco a perde (é transitória), e sem ela
+  // a faixa de falha reapareceria sobre a conversa já escolhida.
   const [restoredAgentTerminals, setRestoredAgentTerminals] = useState<RestoredAgentTerminals>(
-    () => ({ captured: false, ids: new Set() }),
+    () => ({ captured: false, ids: new Set(), holdable: new Set() }),
   )
   const restoredAgentTerminalIdsCapturedRef = useRef(false)
   useEffect(() => {
@@ -987,15 +1034,15 @@ function CanvasInner({
       return
     }
     restoredAgentTerminalIdsCapturedRef.current = true
-    setRestoredAgentTerminals({
-      captured: true,
-      ids: new Set(
-        nodes
-          .filter((node) => node.type === 'terminal' && isKnownAgentCommand(node.data.command))
-          .map((node) => node.id),
-      ),
-    })
-  }, [hydrated, nodes])
+    const capture = terminalRunRegistry.captureRestored(
+      nodes
+        .filter((node) => node.type === 'terminal' && isKnownAgentCommand(node.data.command))
+        .map((node) => node.id),
+    )
+    setRestoredAgentTerminals({ captured: true, ids: capture.restored, holdable: capture.holdable })
+    // Sem `persistNode`: `resumeChoice` é transitória e nunca vai para o disco.
+    setNodes((current) => terminalRunRegistry.applyChoices(current))
+  }, [hydrated, nodes, setNodes])
   const flowContainerRef = useRef<HTMLDivElement>(null)
   const flowInstanceRef = useRef<FlowPositionMapper | null>(null)
   const [flowReady, setFlowReady] = useState(false)
@@ -1329,6 +1376,10 @@ function CanvasInner({
 
   const updateNodeData = useCallback(
     (nodeId: string, patch: Record<string, unknown>) => {
+      // A escolha da faixa de retomada não vai para o disco, mas precisa
+      // sobreviver à ida ao chat: todo patch que mexe nela passa pelo registro
+      // da execução (ver a captura dos restaurados).
+      terminalRunRegistry.recordNodePatch(nodeId, patch)
       setNodes((current) => {
         const next = current.map((item) =>
           item.id === nodeId ? { ...item, data: { ...item.data, ...patch } } : item,
@@ -1341,6 +1392,159 @@ function CanvasInner({
       })
     },
     [setNodes, persistNode],
+  )
+
+  // Como `updateNodeData`, mas o patch sai do `data` ATUAL do bloco (dentro do
+  // `setNodes`), não de uma leitura que pode estar um render atrás. As regras
+  // de retomada comparam com o que está gravado (a conversa anterior, por
+  // exemplo); ler de `nodesRef` aqui arriscaria comparar com a versão velha.
+  // `null` = nada a gravar.
+  const updateNodeDataFrom = useCallback(
+    (nodeId: string, derive: (data: CanvasNodeData) => Partial<CanvasNodeData> | null) => {
+      setNodes((current) => {
+        let changed: (typeof current)[number] | undefined
+        const next = current.map((item) => {
+          if (item.id !== nodeId) return item
+          const patch = derive(item.data)
+          if (!patch) return item
+          // Mesmo espelho de `updateNodeData` (a escolha da faixa). Dentro do
+          // atualizador porque o patch só existe aqui; gravar o mesmo valor
+          // de novo, se o React repetir o atualizador, não muda nada.
+          terminalRunRegistry.recordNodePatch(nodeId, patch)
+          changed = { ...item, data: { ...item.data, ...patch } }
+          return changed
+        })
+        if (!changed) return current
+        persistNode(changed)
+        return next
+      })
+    },
+    [setNodes, persistNode],
+  )
+
+  // Conversa descoberta pelo processo principal: grava a referência (e a
+  // pasta real do PTY) e, se o ID mudou, guarda a anterior em vez de
+  // descartá-la — ver `agentSessionPatch`. A conversa que a pessoa mandou
+  // esquecer não volta: o processo principal reemite a do PTY vivo a cada
+  // reanexo (volta do chat, reload da interface), e regravá-la desfaria o
+  // "Esquecer associação". Outra conversa (processo novo) volta a valer.
+  const handleAgentSession = useCallback(
+    (nodeId: string, reference: AgentSessionReference) => {
+      if (!terminalRunRegistry.acceptAgentSession(nodeId, reference.sessionId)) return
+      updateNodeDataFrom(nodeId, (data) => agentSessionPatch(data, reference, Date.now()))
+    },
+    [updateNodeDataFrom],
+  )
+
+  // "Esquecer associação" (cartão e painel de detalhes) é o único apagamento
+  // explícito: leva a conversa atual e a falha registrada para ela; a anterior
+  // (`previousAgentSession`) fica como histórico. O registro da execução
+  // guarda o ID esquecido — o do bloco e o que o store ainda tem ao vivo —
+  // para o reanexo não o regravar (ver `handleAgentSession`). O do bloco sai
+  // do `data` atual, dentro do atualizador; registrar o mesmo ID duas vezes,
+  // se o React repetir o atualizador, não muda nada.
+  const forgetAgentSession = useCallback(
+    (nodeId: string) => {
+      terminalRunRegistry.forgetAgentSessions(nodeId, [
+        store.getSessionMetadata(nodeId)?.agentSession?.sessionId,
+      ])
+      updateNodeDataFrom(nodeId, (data) => {
+        const saved = (data as { agentSession?: unknown }).agentSession
+        if (isAgentSessionReference(saved)) {
+          terminalRunRegistry.forgetAgentSessions(nodeId, [saved.sessionId])
+        }
+        return { agentSession: undefined, resumeFailure: undefined }
+      })
+    },
+    [store, updateNodeDataFrom],
+  )
+
+  // A CLI recusou a retomada (conversa inexistente, login). Registrar em vez
+  // de repetir: o próximo spawn deste bloco espera a escolha da pessoa, e a
+  // faixa diz por quê. A conversa associada continua gravada.
+  const handleResumeFailure = useCallback(
+    (nodeId: string, reason: AgentResumeFailure['reason'], attempted?: AgentSessionReference) =>
+      updateNodeDataFrom(nodeId, (data) => resumeFailurePatch(data, reason, Date.now(), attempted)),
+    [updateNodeDataFrom],
+  )
+
+  // Os relançamentos disparados de dentro dos blocos (Reiniciar do cartão e da
+  // gaveta, botões da faixa de retomada) leem o `data` já renderizado — é nele
+  // que está o texto de largada resolvido (padrão de qualidade, passagem) e o
+  // plano de retomada. Refs, sincronizados depois do render, mantêm esses
+  // callbacks estáveis: recriá-los invalidaria o cache de `data` de todos os
+  // blocos a cada render.
+  const renderedNodesRef = useRef<ReadonlyArray<{ id: string; type?: string; data: object }>>([])
+  const performanceModeRef = useRef(performanceMode)
+  useEffect(() => {
+    performanceModeRef.current = performanceMode
+  }, [performanceMode])
+
+  // O ÚNICO caminho de relançamento de um bloco de terminal: o Reiniciar do
+  // cartão, o da gaveta e os botões da faixa passam por aqui e pelo mesmo
+  // plano (`resolveTerminalRelaunch`). Retomada pendente não sobe nada — nem
+  // derruba o processo atual —, e a função diz isso a quem chamou.
+  const relaunchTerminal = useCallback(
+    (nodeId: string, patch: Partial<TerminalNodeData> = {}): 'restarted' | 'held' | 'missing' => {
+      const rendered = renderedNodesRef.current.find((node) => node.id === nodeId)
+      if (!rendered || rendered.type !== 'terminal') return 'missing'
+      const data = { ...(rendered.data as TerminalNodeData), ...patch }
+      const launch = resolveTerminalRelaunch({
+        followsResumePlan: data.resumePlan !== undefined,
+        command: data.command,
+        cwd: data.cwd,
+        reference: data.agentSession,
+        accountId: data.accountId,
+        failure: data.resumeFailure,
+        choice: data.resumeChoice,
+        initialText: data.initialText,
+        initialTextIsHandoff: data.initialTextIsHandoff,
+      })
+      if (launch.kind === 'hold') return 'held'
+
+      store.restart(nodeId, {
+        command: data.command,
+        args: data.args,
+        cwd: data.cwd,
+        initialText: launch.initialText,
+        initialTextIsHandoff: launch.initialTextIsHandoff,
+        sourceLabel: data.label,
+        fallbackCommand: data.fallbackCommand,
+        keepShellOpen: data.keepShellOpen,
+        accountId: data.accountId,
+        providerId: data.providerId,
+        // Reiniciar é spawn comum na mesma conta: nunca leva ticket da cadeia.
+        accountMode: data.accountMode,
+        agentSession: data.agentSession,
+        resumeAgentSession: launch.resumeAgentSession,
+        // O store também confere a falha: nenhum relançamento automático dele
+        // repete uma retomada que a CLI já recusou.
+        resumeFailure: data.resumeFailure,
+        terminalCount: data.terminalCount,
+        performanceMode: performanceModeRef.current,
+        onAgentSession: (reference) => handleAgentSession(nodeId, reference),
+        onResumeFailure: (reason, attempted) => handleResumeFailure(nodeId, reason, attempted),
+      })
+      markTerminalStarted(nodeId)
+      updateNodeData(nodeId, { sessionStartedAt: Date.now() })
+      return 'restarted'
+    },
+    [store, updateNodeData, handleAgentSession, handleResumeFailure],
+  )
+
+  // Botão da faixa de retomada. Grava a escolha (ou limpa a falha, no "tentar
+  // de novo") e relança na hora com o mesmo `patch`: o `data` renderizado
+  // ainda não o tem, e um bloco que já tem processo (a CLI pedindo login, por
+  // exemplo) não subiria de novo só pelo `ensure()` do cartão, que é
+  // idempotente. "Dispensar aviso" só limpa a falha: o agente de pé continua.
+  // Nenhuma ação apaga a conversa associada.
+  const handleResumeAction = useCallback(
+    (nodeId: string, action: TerminalResumeActionId) => {
+      const patch = terminalResumeActionPatch(action)
+      updateNodeData(nodeId, patch)
+      if (terminalResumeActionRelaunches(action)) relaunchTerminal(nodeId, patch)
+    },
+    [updateNodeData, relaunchTerminal],
   )
 
   // Renaming a terminal in the canvas only relabels the block on our side —
@@ -1709,27 +1913,48 @@ function CanvasInner({
           connectedCanvasFileCount: connectedFileNames.length,
           resolvedCanvasFileCount: canvasFilePaths.length,
         })
-        const resumeAgentSession =
-          restoredAgentTerminals.ids.has(node.id) &&
-          canResumeAgentSession(
-            node.data.command,
-            node.data.cwd,
-            node.data.agentSession,
-            node.data.accountId,
-          )
         const isDirectOpenia = isDirectOpeniaLaunch(node.data.command, node.data.args)
+        const hasAgentCommand =
+          isDirectOpenia ||
+          (node.data.launchMode !== 'launcher' && isKnownAgentCommand(node.data.command))
+        // Agente restaurado (ou com conversa associada, para o Reiniciar):
+        // `explainAgentResume` decide se retoma pelo ID, digita `/resume`,
+        // abre conversa nova ou — quando a conversa gravada não é exata —
+        // segura o spawn até a pessoa escolher na faixa do cartão.
+        const isRestoredAgent = restoredAgentTerminals.ids.has(node.id)
+        const followsResumePlan = followsTerminalResumePlan({
+          isRestoredAgent,
+          hasAgentCommand,
+          reference: node.data.agentSession,
+        })
+        const resumePlan = followsResumePlan
+          ? explainAgentResume({
+              command: node.data.command,
+              cwd: node.data.cwd,
+              reference: node.data.agentSession,
+              accountId: node.data.accountId,
+              failure: node.data.resumeFailure,
+              choice: node.data.resumeChoice,
+            })
+          : undefined
+        const resumeAgentSession = resumePlan?.outcome === 'exact'
+        const resumePending = resumePlan?.outcome === 'pending'
+        // Só o PRIMEIRO spawn de um bloco vindo do disco é segurado. Um bloco
+        // cujo processo já subiu nesta execução (mesmo antes de uma ida ao
+        // chat ou de um reload da interface) não tem o que segurar: o
+        // `ensure()` dele é no-op ou só reanexa ao PTY vivo; a pendência vale
+        // para o próximo Reiniciar, que mostra a faixa em vez de subir.
+        const holdForResumeChoice = resumePending && restoredAgentTerminals.holdable.has(node.id)
         // Left open from a previous run: whatever it was doing may not have
         // finished, so type "/resume" on this (re)spawn instead of the usual
-        // standing instruction — see restoredAgentTerminalIds above.
+        // standing instruction — see restoredAgentTerminalIds above. With a
+        // pending plan nothing is typed: the block waits for the person.
         const fallbackInitialText = resolveTerminalInitialText({
-          isRestoredAgent: restoredAgentTerminals.ids.has(node.id),
+          isRestoredAgent: followsResumePlan,
           command: node.data.command,
           qualityStandardEnabled: quality.enabled,
           qualityStandardPrompt: quality.prompt,
-          hasCommand:
-            isDirectOpenia ||
-            (node.data.launchMode !== 'launcher' &&
-              isKnownAgentCommand(node.data.command)),
+          hasCommand: hasAgentCommand,
           // `handoffText` é transitório e carrega um pedido de verdade, então
           // pode sair submetido; `initialText` é persistido e é sempre
           // contexto. O recorte cobre os blocos salvos antes desta mudança,
@@ -1743,6 +1968,8 @@ function CanvasInner({
           agentSession: node.data.agentSession,
           accountId: node.data.accountId,
           resumeAgentSession,
+          resumeFailure: node.data.resumeFailure,
+          resumeChoice: node.data.resumeChoice,
         })
         const terminalIndex = terminalOrder.get(node.id)
 
@@ -1754,14 +1981,19 @@ function CanvasInner({
               node.data,
               fallbackInitialText,
               initialTextReady,
-              resumeAgentSession,
+              // O plano e a faixa são funções de `node.data` e destes flags;
+              // o objeto do plano, novo a cada render, invalidaria o cache.
+              followsResumePlan,
+              holdForResumeChoice,
               isDirectOpenia,
               terminalIndex,
               terminalCount,
             ],
             () => ({
               ...node.data,
-              ...(resumeAgentSession
+              // Retomada exata não digita nada; pendente não sobe — e nenhum
+              // dos dois pode carregar a instrução de largada gravada.
+              ...(resumeAgentSession || resumePending
                 ? { initialText: undefined }
                 : fallbackInitialText
                   ? { initialText: fallbackInitialText }
@@ -1769,29 +2001,33 @@ function CanvasInner({
               // A passagem vira o texto inicial deste bloco; a sessão precisa
               // saber disso para nunca reenviá-la num relançamento automático.
               initialTextIsHandoff: !resumeAgentSession && Boolean(node.data.handoffText),
-              initialTextReady,
+              // Retomada pendente usa a mesma barreira da espera pelos
+              // arquivos do canvas: o cartão não chama `ensure()` enquanto
+              // for `false`. Nada sobe, nada é apagado, o canvas fica intacto
+              // — "agora não" é simplesmente não clicar na faixa.
+              initialTextReady: initialTextReady && !holdForResumeChoice,
               resumeAgentSession,
+              resumePlan,
+              resumeBanner: resumePlan
+                ? buildTerminalResumeBanner({
+                    plan: resumePlan,
+                    reference: node.data.agentSession,
+                    cwd: node.data.cwd,
+                    command: node.data.command,
+                  })
+                : null,
               terminalIndex,
               terminalCount,
               onExpand: openTerminal,
               onDetails: setDetailsTerminalId,
               onSessionStarted: (nodeId: string, startedAt: number) =>
                 updateNodeData(nodeId, { sessionStartedAt: startedAt }),
-              onAgentSession: (nodeId: string, reference: AgentSessionReference) =>
-                // `reference.cwd` é o diretório real em que o PTY rodou — não
-                // necessariamente `node.data.cwd`, que fica vazio para
-                // qualquer terminal aberto sem projeto explícito ("Local (sem
-                // projeto)"): o processo cai no diretório do usuário
-                // (`resolveWorkingDirectory` em pty-process-manager.cjs), mas
-                // isso nunca era escrito de volta no node. Na retomada,
-                // `canResumeAgentSession` compara `node.data.cwd` (vazio) com
-                // `agentSession.cwd` (preenchido) e falha sempre — mesmo com
-                // uma sessão descoberta e válida. Gravar os dois aqui fecha
-                // essa divergência: é a mesma pasta onde o terminal já está,
-                // nunca uma pasta nova (achado de 28/08/2026).
-                updateNodeData(nodeId, { agentSession: reference, cwd: reference.cwd }),
-              onClearAgentSession: (nodeId: string) =>
-                updateNodeData(nodeId, { agentSession: undefined }),
+              onAgentSession: handleAgentSession,
+              onResumeFailure: handleResumeFailure,
+              onResumeAction: handleResumeAction,
+              onRestart: relaunchTerminal,
+              onSessionEnsured: markTerminalStarted,
+              onClearAgentSession: forgetAgentSession,
               onDataChange: updateNodeData,
               onRenameCommit: notifyTerminalRenamed,
             }),
@@ -1811,12 +2047,17 @@ function CanvasInner({
     connectionIndex,
     duplicateImageNode,
     edgesHydrated,
+    forgetAgentSession,
     generateDiagnosis,
+    handleAgentSession,
+    handleResumeAction,
+    handleResumeFailure,
     linkAgentToFile,
     notifyTerminalRenamed,
     nodes,
     openTerminal,
     qualityStandard,
+    relaunchTerminal,
     removeTemporaryImageNode,
     repairImageNode,
     restoredAgentTerminals,
@@ -1824,6 +2065,9 @@ function CanvasInner({
     unlinkAgentFromFile,
     updateNodeData,
   ])
+  useEffect(() => {
+    renderedNodesRef.current = renderedNodes
+  }, [renderedNodes])
 
   // Groups must render before their children so they sit behind them.
   const orderedNodes = useMemo(() => {
@@ -2643,31 +2887,15 @@ function CanvasInner({
     [],
   )
 
+  // A gaveta lê o `data` já renderizado, o mesmo do cartão: é nele que estão
+  // a faixa de retomada e o texto de largada resolvido. Antes ela relançava
+  // com o `initialText` cru do bloco, e o cartão não — os dois Reiniciar
+  // agora passam por `relaunchTerminal`.
   const expandedNode = expandedTerminalId
-    ? nodes.find((node) => node.id === expandedTerminalId)
+    ? renderedNodes.find((node) => node.id === expandedTerminalId)
     : undefined
-  const expandedNodeData = expandedNode?.data as
-    | {
-        label?: string
-        command?: string
-        args?: string[]
-        cwd?: string
-        initialText?: string
-        handoffText?: string
-        accountId?: string
-        providerId?: string
-        accountMode?: 'pinned' | 'chain'
-        agentSession?: AgentSessionReference
-        terminalCount?: number
-      }
-    | undefined
+  const expandedNodeData = expandedNode?.data as TerminalNodeData | undefined
   const expandedTitle = expandedNodeData?.label ?? 'Terminal'
-  const expandedCanResumeAgentSession = canResumeAgentSession(
-    expandedNodeData?.command,
-    expandedNodeData?.cwd,
-    expandedNodeData?.agentSession,
-    expandedNodeData?.accountId,
-  )
   const arrangeableCount = countArrangeableNodes(nodes)
   // Tipos de bloco presentes, só quando o catálogo do tutorial tem gatilho de
   // canvas (o v1 não tem): sem isso, arrastar um bloco nem monta a chave.
@@ -2876,7 +3104,7 @@ function CanvasInner({
             data={detailsNode.data}
             onClose={() => setDetailsTerminalId(null)}
             toolsMenuOpen={sidebarCollapsed}
-            onClearAgentSession={() => updateNodeData(detailsNode.id, { agentSession: undefined })}
+            onClearAgentSession={() => forgetAgentSession(detailsNode.id)}
             onAccountModeChange={(accountMode) => updateNodeData(detailsNode.id, { accountMode })}
             onFocusNode={focusNode}
           />
@@ -3006,24 +3234,16 @@ function CanvasInner({
         <TerminalDrawer
           sessionId={expandedTerminalId}
           title={expandedTitle}
+          // Só o que a prévia do arquivo aberto (nano/vim) precisa: o
+          // relançamento sai de `onRestart`, pelo mesmo plano do cartão.
           restartOptions={{
             command: expandedNodeData?.command,
             args: expandedNodeData?.args,
             cwd: expandedNodeData?.cwd,
-            initialText: expandedCanResumeAgentSession
-              ? undefined
-              : expandedNodeData?.handoffText ?? expandedNodeData?.initialText,
-            initialTextIsHandoff:
-              !expandedCanResumeAgentSession && Boolean(expandedNodeData?.handoffText),
-            sourceLabel: expandedTitle,
-            accountId: expandedNodeData?.accountId,
-            providerId: expandedNodeData?.providerId,
-            accountMode: expandedNodeData?.accountMode,
-            agentSession: expandedNodeData?.agentSession,
-            resumeAgentSession: expandedCanResumeAgentSession,
-            terminalCount: expandedNodeData?.terminalCount,
-            performanceMode,
           }}
+          onRestart={() => relaunchTerminal(expandedTerminalId)}
+          resumeBanner={expandedNodeData?.resumeBanner ?? null}
+          onResumeAction={(action) => handleResumeAction(expandedTerminalId, action)}
           onPassResponsibility={(transcript) =>
             setHandoff({ sourceId: expandedTerminalId, transcript })
           }

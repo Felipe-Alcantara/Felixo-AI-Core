@@ -199,6 +199,14 @@ const TRANSIENT_DATA_KEYS = new Set<string>([
   // Ticket da cadeia: vale uma vez, no primeiro spawn. Persistido, um reload
   // tentaria reusá-lo; sem ele, o bloco reabre como spawn comum na mesma conta.
   'chainTicket',
+  // Escolha da faixa de retomada (lista ou conversa nova): vale para esta
+  // execução. Gravada, o próximo reload decidiria sozinho com a escolha de
+  // ontem em vez de mostrar à pessoa por que a retomada não é exata.
+  'resumeChoice',
+  // Plano e faixa são derivados a cada render do próprio `data`; gravados,
+  // ficariam velhos assim que conta, pasta ou conversa mudassem.
+  'resumePlan',
+  'resumeBanner',
 ])
 
 function stripFunctions(data: Record<string, unknown>): CanvasNodeData {

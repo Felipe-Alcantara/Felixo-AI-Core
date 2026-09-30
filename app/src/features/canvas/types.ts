@@ -1,5 +1,11 @@
 import type { AccountFailureClass } from '../shared/types/account-chain'
-import type { AgentSessionReference } from './services/agent-session'
+import type {
+  AgentResumeChoice,
+  AgentResumeFailure,
+  AgentResumePlan,
+  AgentSessionReference,
+} from './services/agent-session'
+import type { TerminalResumeBanner } from './services/terminal-resume-banner'
 import type { PromptInsertionMetadata } from '../shared/types/prompt-insertion'
 
 export type CanvasNodeType =
@@ -106,6 +112,17 @@ export type TerminalChainOrigin = {
   decidedAt: string
 }
 
+/**
+ * A conversa que o bloco tinha antes de a atual tomar o lugar dela (a pessoa
+ * escolheu outra na lista, ou abriu uma nova). Guardada em vez de descartada:
+ * o registro explica de onde o bloco veio, e nada some para esconder que a
+ * retomada não foi exata.
+ */
+export type PreviousAgentSession = {
+  reference: AgentSessionReference
+  replacedAt: number
+}
+
 export type TerminalNodeData = {
   /** Optional binary to launch; defaults to the shell on the backend. */
   command?: string
@@ -171,6 +188,25 @@ export type TerminalNodeData = {
   lastPromptInsertion?: PromptInsertionMetadata
   /** Render-time flag: launch the persisted provider session instead of generic /resume. */
   resumeAgentSession?: boolean
+  /**
+   * O que a CLI respondeu na última tentativa de retomar a conversa associada
+   * (inexistente, ou pediu login). Persistido: sem ele, reabrir o app tentaria
+   * a mesma retomada de novo e cairia no mesmo erro. Vale só para o ID que
+   * carrega — trocar de conversa o torna inerte, sem apagá-lo.
+   */
+  resumeFailure?: AgentResumeFailure
+  /**
+   * A escolha da pessoa na faixa de retomada (lista da CLI ou conversa nova).
+   * Transitória, nunca persistida: reabrir o app pergunta de novo em vez de
+   * decidir em silêncio com a escolha de ontem.
+   */
+  resumeChoice?: AgentResumeChoice
+  /** Conversa anterior à atual, quando o ID mudou; persistida (ver o tipo). */
+  previousAgentSession?: PreviousAgentSession
+  /** Render-time (nunca persistido): o plano de retomada do bloco, quando ele segue um. */
+  resumePlan?: AgentResumePlan
+  /** Render-time (nunca persistido): a faixa da retomada pendente; `null` sem pendência. */
+  resumeBanner?: TerminalResumeBanner | null
   /**
    * Render-time only (never persisted): this terminal's position among the
    * currently open terminal blocks, 1-based in creation order. Recomputed on

@@ -8,6 +8,23 @@ import type { TerminalNodeData } from '../types'
 import { useAccountChain, useCliAccountLabel } from '../hooks/useAccountChain'
 import { changeSessionAccountMode } from '../services/account-chain-client'
 import { accountChipLabel, ptySessionIdForNode } from '../services/account-chain-view'
+import {
+  describeAgentResumeForPerson,
+  describeAgentResumeTarget,
+  explainAgentResume,
+  isAgentSessionReference,
+} from '../services/agent-session'
+import { isKnownAgentCommand } from '../services/agent-launch-options'
+
+/** Dia/mês e hora, sem ano: o bastante para situar a troca de conversa. */
+function formatShortDateTime(timestamp: number): string {
+  return new Date(timestamp).toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
 
 export function TerminalDetailsPanel({
   nodeId,
@@ -31,6 +48,36 @@ export function TerminalDetailsPanel({
   const value = (text: string | undefined, fallback = 'não informado') => text?.trim() || fallback
   const hasPersistedAssociation = Object.prototype.hasOwnProperty.call(data, 'agentSession')
   const agentSession = hasPersistedAssociation ? data.agentSession : metadata?.agentSession
+  // O que acontece ao reabrir este bloco, pelo mesmo plano que decide o spawn
+  // (`explainAgentResume`): a linha nunca promete uma retomada exata que o
+  // resolver não faria, e usa os mesmos títulos da tabela do guia. Só para
+  // agentes — um shell não tem conversa.
+  const resumePlan = isKnownAgentCommand(data.command)
+    ? explainAgentResume({
+        command: data.command,
+        cwd: data.cwd,
+        reference: agentSession,
+        accountId: data.accountId,
+        failure: data.resumeFailure,
+        choice: data.resumeChoice,
+      })
+    : undefined
+  const resumeDescription = resumePlan
+    ? describeAgentResumeForPerson(resumePlan, {
+        reference: agentSession,
+        cwd: data.cwd,
+        command: data.command,
+      })
+    : undefined
+  const previous = data.previousAgentSession
+  const previousLabel = previous
+    ? [
+        isAgentSessionReference(previous.reference)
+          ? describeAgentResumeTarget(previous.reference)
+          : 'registro ilegível',
+        `substituída em ${formatShortDateTime(previous.replacedAt)}`,
+      ].join(' · ')
+    : undefined
   const insertion = metadata?.lastPromptInsertion ?? data.lastPromptInsertion
   const insertionLabel = insertion
     ? [
@@ -68,10 +115,18 @@ export function TerminalDetailsPanel({
         <Detail label="Agente" value={value(data.command, 'Shell padrão')} />
         <Detail
           label="Sessão do agente"
-          value={agentSession ? `${agentSession.provider}: ${agentSession.sessionId}` : 'não associada; retomada genérica'}
+          value={
+            agentSession
+              ? `${agentSession.provider}: ${agentSession.sessionId}`
+              : 'sem conversa associada: ao reabrir, a CLI mostra a lista (/resume)'
+          }
           copy={agentSession?.sessionId}
           mono
         />
+        {resumeDescription && (
+          <Detail label="Retomada" value={`${resumeDescription.title}. ${resumeDescription.detail}`} />
+        )}
+        {previousLabel && <Detail label="Conversa anterior" value={previousLabel} />}
         {insertionLabel && <Detail label="Última inserção" value={insertionLabel} mono />}
         {agentSession && (
           <button
@@ -96,7 +151,7 @@ export function TerminalDetailsPanel({
           />
         )}
         <p className="border-t border-white/10 pt-2 text-[11px] leading-relaxed text-zinc-500">
-          “Aberto há” mede a instância atual da PTY. Ao reiniciar, o relógio recomeça; o ID do elemento continua estável. A associação da conversa só é usada quando provider e diretório coincidem.
+          “Aberto há” mede a instância atual da PTY. Ao reiniciar, o relógio recomeça; o ID do elemento continua estável. A associação da conversa só retoma quando provider, pasta e conta coincidem e não há falha registrada da CLI para ela; fora disso, o bloco espera você escolher entre a lista da CLI e uma conversa nova. O Gemini não retoma por ID (o motivo está no guia do usuário).
         </p>
       </div>
     </CanvasPanel>

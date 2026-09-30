@@ -1,4 +1,4 @@
-import { memo, useEffect } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import { NODE_MIN_SIZE } from '../services/node-geometry'
 import {
   Handle,
@@ -28,10 +28,14 @@ import type { SessionActivity } from '../terminal/terminal-session-store'
 import { terminalScrollbackNotice } from '../terminal/terminal-scrollback'
 import { repositoryLabel } from '../services/repository-grouping'
 import type { TerminalNodeData } from '../types'
+import type { AgentResumeFailure, AgentSessionReference } from '../services/agent-session'
 import {
-  canResumeAgentSession,
-  type AgentSessionReference,
-} from '../services/agent-session'
+  TERMINAL_RESUME_PENDING_LABEL,
+  describeTerminalResumeStart,
+  terminalResumeActionRelaunches,
+  visibleTerminalResumeBanner,
+  type TerminalResumeActionId,
+} from '../services/terminal-resume-banner'
 import {
   resolvePromptDisplayLabel,
   toPromptInsertionMetadata,
@@ -50,6 +54,22 @@ type TerminalNodeDataWithHandlers = TerminalNodeData & {
   onDetails?: (nodeId: string) => void
   onSessionStarted?: (nodeId: string, startedAt: number) => void
   onAgentSession?: (nodeId: string, reference: AgentSessionReference) => void
+  /** A CLI recusou a retomada deste spawn (conversa inexistente ou login). */
+  onResumeFailure?: (
+    nodeId: string,
+    reason: AgentResumeFailure['reason'],
+    attempted: AgentSessionReference,
+  ) => void
+  /** Botão da faixa de retomada: o canvas grava a escolha e (re)sobe o bloco. */
+  onResumeAction?: (nodeId: string, action: TerminalResumeActionId) => void
+  /** Reinicia pelo plano de retomada do canvas (o mesmo da gaveta). */
+  onRestart?: (nodeId: string) => void
+  /**
+   * O cartão pediu o processo ao store. O canvas anota no registro da
+   * execução: na volta do chat ou depois de recarregar só a interface, o PTY
+   * segue vivo e o bloco não é segurado por uma retomada pendente.
+   */
+  onSessionEnsured?: (nodeId: string) => void
   onClearAgentSession?: (nodeId: string) => void
   onDataChange?: (nodeId: string, patch: Partial<TerminalNodeData>) => void
   /** Tells the running agent its new name once a rename is committed (blur/Enter). */
@@ -71,11 +91,19 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
   const { deleteElements } = useReactFlow()
   const onSessionStarted = nodeData.onSessionStarted
   const onAgentSession = nodeData.onAgentSession
+  const onResumeFailure = nodeData.onResumeFailure
+  const onSessionEnsured = nodeData.onSessionEnsured
   const onDataChange = nodeData.onDataChange
   const persistedInsertion = nodeData.lastPromptInsertion
+  const resumeBannerRef = useRef<HTMLDivElement>(null)
+  // Geração do processo em que a pessoa pediu Reiniciar com a retomada
+  // pendente (ver `shouldShowTerminalResumeBanner`).
+  const [resumeRevealedGeneration, setResumeRevealedGeneration] = useState<number | null>(null)
 
   // Start (or adopt) the background session as soon as the card mounts.
   // ensure() is idempotent, so initialText only fires on the first creation.
+  // `initialTextReady === false` also holds a pending resume: the block stays
+  // without a PTY until the person picks an option in the resume banner.
   useEffect(() => {
     if (nodeData.initialTextReady === false) {
       return
@@ -97,10 +125,16 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
       chainTicket: nodeData.chainTicket,
       agentSession: nodeData.agentSession,
       resumeAgentSession: nodeData.resumeAgentSession,
+      resumeFailure: nodeData.resumeFailure,
       terminalCount: nodeData.terminalCount,
       performanceMode,
       onAgentSession: (reference) => onAgentSession?.(id, reference),
+      // Só dispara num spawn com argumentos de retomada: o canvas registra a
+      // falha (presa à conversa tentada) e o próximo spawn espera a escolha
+      // na faixa, sem repetir o erro.
+      onResumeFailure: (reason, attempted) => onResumeFailure?.(id, reason, attempted),
     })
+    onSessionEnsured?.(id)
   }, [
     store,
     id,
@@ -119,9 +153,12 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
     nodeData.chainTicket,
     nodeData.agentSession,
     nodeData.resumeAgentSession,
+    nodeData.resumeFailure,
     nodeData.terminalCount,
     performanceMode,
     onAgentSession,
+    onResumeFailure,
+    onSessionEnsured,
     nodeData.sessionStartedAt,
   ])
 
@@ -187,41 +224,55 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
   const preview = snapshot?.previewLines ?? []
   const scrollbackNotice = terminalScrollbackNotice(snapshot?.scrollback)
   const isLive = activity !== 'exited' && activity !== 'error'
-  const canResume = canResumeAgentSession(
-    nodeData.command,
-    nodeData.cwd,
-    nodeData.agentSession,
-    nodeData.accountId,
-  )
+  // Sem snapshot não há processo: nada a confirmar antes de (re)subir.
+  const hasLiveProcess = snapshot !== undefined && isLive
+  // A faixa visível agora, com as ações do estado do processo: falha com o
+  // agente de pé ganha "Dispensar aviso" (ver `visibleTerminalResumeBanner`).
+  const resumeBanner = visibleTerminalResumeBanner({
+    banner: nodeData.resumeBanner ?? null,
+    hasProcess: snapshot !== undefined,
+    processLive: isLive,
+    // Revelada pelo Reiniciar só para ESTE processo: a geração muda a cada
+    // (re)spawn, e a faixa volta a ficar guardada com o agente novo de pé.
+    revealed: snapshot !== undefined && resumeRevealedGeneration === (snapshot.generation ?? 0),
+  })
+  // Retomada pendente e nenhum processo: o bloco espera a pessoa, e diz isso
+  // em vez de um "iniciando…" que nunca termina.
+  const awaitingResumeChoice = resumeBanner !== null && snapshot === undefined
+  // Antes da primeira linha da CLI: o que este spawn faz com a conversa
+  // (retomando, lista, conversa nova), em vez do "Sem saída ainda…" genérico.
+  const resumeStartText = describeTerminalResumeStart(nodeData.resumePlan)
+
+  const confirmRestartOfLiveProcess = () =>
+    !hasLiveProcess ||
+    window.confirm('O processo deste terminal ainda está rodando. Reiniciar mesmo assim?')
 
   const restart = () => {
-    if (isLive && !window.confirm('O processo deste terminal ainda está rodando. Reiniciar mesmo assim?')) {
+    if (nodeData.resumeBanner) {
+      // Retomada pendente: reiniciar sem a escolha repetiria o que a faixa
+      // explica que não vai dar certo. A faixa aparece (se estava guardada
+      // com o agente de pé) e recebe o foco: ela diz por quê e oferece as
+      // saídas. O processo atual não é derrubado.
+      if (snapshot) setResumeRevealedGeneration(snapshot.generation ?? 0)
+      requestAnimationFrame(() => resumeBannerRef.current?.querySelector('button')?.focus())
       return
     }
-    store.restart(id, {
-      command: nodeData.command,
-      args: nodeData.args,
-      cwd: nodeData.cwd,
-      initialText: canResume ? undefined : nodeData.initialText,
-      initialTextIsHandoff: !canResume && nodeData.initialTextIsHandoff,
-      sourceLabel: nodeData.label,
-      fallbackCommand: nodeData.fallbackCommand,
-      keepShellOpen: nodeData.keepShellOpen,
-      accountId: nodeData.accountId,
-      providerId: nodeData.providerId,
-      // Reiniciar é spawn comum na mesma conta: nunca leva ticket da cadeia.
-      accountMode: nodeData.accountMode,
-      agentSession: nodeData.agentSession,
-      resumeAgentSession: canResume,
-      terminalCount: nodeData.terminalCount,
-      performanceMode,
-      onAgentSession: (reference) => nodeData.onAgentSession?.(id, reference),
-    })
-    nodeData.onSessionStarted?.(id, Date.now())
+    if (!confirmRestartOfLiveProcess()) return
+    // O plano de retomada (exata, lista, conversa nova) é decidido no canvas,
+    // pelo mesmo caminho do Reiniciar da gaveta.
+    nodeData.onRestart?.(id)
+  }
+
+  const runResumeAction = (action: TerminalResumeActionId) => {
+    // Com processo de pé (a CLI esperando login, por exemplo), a escolha
+    // reinicia o terminal: pede a mesma confirmação do Reiniciar. Dispensar
+    // o aviso não reinicia nada, então não pergunta.
+    if (terminalResumeActionRelaunches(action) && !confirmRestartOfLiveProcess()) return
+    nodeData.onResumeAction?.(id, action)
   }
 
   return (
-    <div data-activity={activity} className="felixo-canvas-card felixo-canvas-card-terminal flex h-full w-full flex-col overflow-hidden rounded-lg border border-white/10 bg-(--f-core-black-surface) text-zinc-200 shadow-xl">
+    <div data-activity={activity} data-resume-pending={resumeBanner ? 'true' : undefined} className="felixo-canvas-card felixo-canvas-card-terminal flex h-full w-full flex-col overflow-hidden rounded-lg border border-white/10 bg-(--f-core-black-surface) text-zinc-200 shadow-xl">
       <NodeResizer
         isVisible={selected}
         minWidth={NODE_MIN_SIZE.terminal.width}
@@ -282,8 +333,41 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
         )}
       </div>
 
-      {(chainBanners.length > 0 || chainError) && (
+      {(resumeBanner || chainBanners.length > 0 || chainError) && (
         <div className="nodrag nowheel nopan flex shrink-0 flex-col gap-1 px-2 pt-2">
+          {/* Retomada pendente: o alvo e o motivo ANTES do spawn. Nenhum
+              botão apaga a conversa gravada; não clicar em nada ("agora não")
+              deixa o bloco parado, sem processo, e o canvas intacto. */}
+          {resumeBanner && (
+            <div
+              ref={resumeBannerRef}
+              role="status"
+              data-terminal-resume-banner
+              className="rounded-sm border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-1.5 py-1 text-[10px] leading-snug text-(--color-warning)"
+            >
+              <p className="font-semibold">{resumeBanner.title}</p>
+              <p className="mt-0.5 line-clamp-4 text-(--f-core-white-soft)" title={resumeBanner.detail}>
+                {resumeBanner.detail}
+              </p>
+              {resumeBanner.target && (
+                <p className="mt-0.5 truncate text-zinc-400" title={resumeBanner.target}>
+                  {resumeBanner.target}
+                </p>
+              )}
+              <div className="mt-1 flex flex-wrap gap-1">
+                {resumeBanner.actions.map((action) => (
+                  <button
+                    key={action.id}
+                    type="button"
+                    onClick={() => runResumeAction(action.id)}
+                    className="felixo-btn rounded-sm bg-black/25 px-1.5 py-0.5 text-[10px] text-zinc-100 hover:bg-black/40"
+                  >
+                    {action.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {chainBanners.map((banner) => (
             <div
               key={banner.key}
@@ -333,7 +417,11 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
         className="felixo-node-preview nodrag nowheel nopan flex min-h-0 flex-1 flex-col gap-1 p-2 text-left"
         aria-label={`Abrir ${nodeData.label || provider.label}`}
       >
-        <ActivityBadge activity={activity} exitCode={snapshot?.exitCode} />
+        <ActivityBadge
+          activity={activity}
+          exitCode={snapshot?.exitCode}
+          awaitingResumeChoice={awaitingResumeChoice}
+        />
         {promptDisplay && (
           <div
             className="shrink-0 rounded-sm border border-white/10 bg-(--f-core-white)/10 px-1.5 py-1 text-[10px] leading-snug text-(--f-core-white-soft)"
@@ -369,8 +457,10 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
                 {line}
               </div>
             ))
+          ) : awaitingResumeChoice ? (
+            <span className="text-zinc-500">Nada foi iniciado: escolha acima como abrir a conversa.</span>
           ) : (
-            <span className="text-zinc-600">Sem saída ainda…</span>
+            <span className="text-zinc-600">{resumeStartText ?? 'Sem saída ainda…'}</span>
           )}
         </div>
       </button>
@@ -414,10 +504,22 @@ function TerminalSideHandles() {
 function ActivityBadge({
   activity,
   exitCode,
+  awaitingResumeChoice = false,
 }: {
   activity: SessionActivity
   exitCode?: number
+  /** Retomada pendente e nenhum processo: o bloco espera a escolha da pessoa. */
+  awaitingResumeChoice?: boolean
 }) {
+  if (awaitingResumeChoice) {
+    return (
+      <span className="felixo-node-activity flex items-center gap-1 text-[11px] font-medium text-(--color-warning)">
+        <AlertCircle size={11} />
+        {TERMINAL_RESUME_PENDING_LABEL}
+      </span>
+    )
+  }
+
   const config: Record<SessionActivity, { label: string; className: string }> = {
     starting: { label: 'iniciando…', className: 'text-(--color-warning)' },
     working: { label: 'trabalhando', className: 'text-(--f-core-white-soft)' },

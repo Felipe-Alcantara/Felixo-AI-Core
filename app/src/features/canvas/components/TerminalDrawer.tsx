@@ -20,6 +20,13 @@ import { resolveOpenEditorFile } from './terminal-open-file'
 import { useExitAnimation } from '../hooks/useExitAnimation'
 import { DRAWER_EXIT_MS } from '../services/animation-timing'
 import type { AgentSessionReference } from '../services/agent-session'
+import {
+  TERMINAL_RESUME_PENDING_LABEL,
+  terminalResumeActionRelaunches,
+  visibleTerminalResumeBanner,
+  type TerminalResumeActionId,
+  type TerminalResumeBanner,
+} from '../services/terminal-resume-banner'
 import { terminalScrollbackNotice } from '../terminal/terminal-scrollback'
 import { useCanvasSurfaces } from '../hooks/canvas-surfaces-context'
 import { DRAWER_MIN_WIDTH } from '../services/canvas-surfaces'
@@ -41,7 +48,11 @@ import {
 type TerminalDrawerProps = {
   sessionId: string
   title: string
-  /** Launch options to relaunch with when the session has exited (see restart button). */
+  /**
+   * Launch options to relaunch with when the session has exited (see restart
+   * button). With `onRestart` the canvas decides the relaunch and these only
+   * feed the rendered-file preview (command/args/cwd).
+   */
   restartOptions?: {
     command?: string
     args?: string[]
@@ -63,6 +74,18 @@ type TerminalDrawerProps = {
     /** Render-time Modo Performance flag used only when this drawer creates a fresh xterm. */
     performanceMode?: boolean
   }
+  /**
+   * Reinicia pelo plano de retomada do canvas — o mesmo caminho do Reiniciar
+   * do cartão. Sem ele, a gaveta relança com `restartOptions`.
+   */
+  onRestart?: () => void
+  /**
+   * Faixa da retomada pendente do bloco, espelho da do cartão: quem abre a
+   * gaveta de um bloco segurado vê o alvo, o motivo e as saídas aqui também.
+   */
+  resumeBanner?: TerminalResumeBanner | null
+  /** Botão da faixa: o canvas grava a escolha e (re)sobe o bloco. */
+  onResumeAction?: (action: TerminalResumeActionId) => void
   /**
    * Abre a escolha do agente que vai assumir o trabalho, levando o histórico
    * completo da sessão. Sempre disponível: passar responsabilidade é uma
@@ -90,6 +113,9 @@ export function TerminalDrawer({
   sessionId,
   title,
   restartOptions,
+  onRestart,
+  resumeBanner: pendingResumeBanner = null,
+  onResumeAction,
   onPassResponsibility,
   onOpenFilePreview,
   onClose,
@@ -98,11 +124,44 @@ export function TerminalDrawer({
   const snapshot = useSessionSnapshot(sessionId)
   const scrollbackNotice = terminalScrollbackNotice(snapshot?.scrollback)
   const isLive = snapshot?.activity !== 'exited' && snapshot?.activity !== 'error'
+  // Sem snapshot não há processo: nada a confirmar antes de (re)subir.
+  const hasLiveProcess = snapshot !== undefined && isLive
+  const resumeBannerRef = useRef<HTMLDivElement>(null)
+  // Geração do processo em que a pessoa pediu Reiniciar com a retomada
+  // pendente: a faixa guardada aparece para ESTE processo (como no cartão).
+  const [resumeRevealedGeneration, setResumeRevealedGeneration] = useState<number | null>(null)
+  // Mesma faixa do cartão, com as mesmas ações ("Dispensar aviso" na falha
+  // com o agente de pé).
+  const resumeBanner = visibleTerminalResumeBanner({
+    banner: pendingResumeBanner,
+    hasProcess: snapshot !== undefined,
+    processLive: isLive,
+    revealed: snapshot !== undefined && resumeRevealedGeneration === (snapshot.generation ?? 0),
+  })
+  const awaitingResumeChoice = resumeBanner !== null && snapshot === undefined
+  const confirmRestartOfLiveProcess = () =>
+    !hasLiveProcess ||
+    window.confirm('O processo deste terminal ainda está rodando. Reiniciar mesmo assim?')
   const restart = () => {
-    if (isLive && !window.confirm('O processo deste terminal ainda está rodando. Reiniciar mesmo assim?')) {
+    if (pendingResumeBanner) {
+      // Retomada pendente: nada sobe sem a escolha, e o processo atual não é
+      // derrubado. A faixa aparece e recebe o foco, como no cartão.
+      if (snapshot) setResumeRevealedGeneration(snapshot.generation ?? 0)
+      requestAnimationFrame(() => resumeBannerRef.current?.querySelector('button')?.focus())
+      return
+    }
+    if (!confirmRestartOfLiveProcess()) return
+    if (onRestart) {
+      onRestart()
       return
     }
     store.restart(sessionId, restartOptions ?? {})
+  }
+  const runResumeAction = (action: TerminalResumeActionId) => {
+    // Com processo de pé, a escolha reinicia o terminal: mesma confirmação.
+    // Dispensar o aviso não reinicia nada, então não pergunta.
+    if (terminalResumeActionRelaunches(action) && !confirmRestartOfLiveProcess()) return
+    onResumeAction?.(action)
   }
   const mountRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -471,13 +530,15 @@ export function TerminalDrawer({
         <div className={`flex items-center gap-2 ${collapsed ? 'flex-col' : ''}`}>
           {!collapsed && (
             <span className="text-xs text-zinc-500" aria-live="polite">
-              {snapshot?.activity === 'working'
-                ? 'trabalhando'
-                : snapshot?.activity === 'idle'
-                  ? 'aguardando'
-                  : snapshot?.activity === 'exited'
-                    ? 'encerrado'
-                    : ''}
+              {awaitingResumeChoice
+                ? TERMINAL_RESUME_PENDING_LABEL
+                : snapshot?.activity === 'working'
+                  ? 'trabalhando'
+                  : snapshot?.activity === 'idle'
+                    ? 'aguardando'
+                    : snapshot?.activity === 'exited'
+                      ? 'encerrado'
+                      : ''}
             </span>
           )}
           {!collapsed && (
@@ -582,6 +643,35 @@ export function TerminalDrawer({
       {!collapsed && snapshot?.message && (
         <div className="border-b border-[color-mix(in_srgb,var(--color-error)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-error)_14%,transparent)] px-3 py-2 text-xs text-theme-error">
           {snapshot.message}
+        </div>
+      )}
+      {/* Espelho da faixa do cartão: alvo e motivo antes do spawn. Nenhum
+          botão apaga a conversa gravada; fechar a gaveta sem escolher deixa o
+          bloco parado, sem processo. */}
+      {!collapsed && resumeBanner && (
+        <div
+          ref={resumeBannerRef}
+          role="status"
+          data-terminal-resume-banner
+          className="border-b border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-3 py-2 text-xs text-(--color-warning)"
+        >
+          <p className="font-medium">{resumeBanner.title}</p>
+          <p className="mt-1 leading-relaxed text-zinc-300">{resumeBanner.detail}</p>
+          {resumeBanner.target && (
+            <p className="mt-1 wrap-break-word text-zinc-400">{resumeBanner.target}</p>
+          )}
+          <div className="mt-2 flex flex-wrap gap-2">
+            {resumeBanner.actions.map((action) => (
+              <button
+                key={action.id}
+                type="button"
+                onClick={() => runResumeAction(action.id)}
+                className="felixo-btn rounded-sm bg-black/25 px-2 py-1 text-[11px] text-zinc-100 hover:bg-black/40"
+              >
+                {action.label}
+              </button>
+            ))}
+          </div>
         </div>
       )}
       {!collapsed && snapshot?.contextWarning && (

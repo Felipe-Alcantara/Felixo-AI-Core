@@ -140,6 +140,43 @@ describe('canvas persistence boundaries', () => {
     })
   })
 
+  it('retomada: falha e conversa anterior ficam; escolha, plano e faixa não', () => {
+    const agentSession = {
+      version: 1 as const,
+      provider: 'codex' as const,
+      sessionId: 'conversa-atual-123',
+      cwd: '/repo',
+      capturedAt: 2,
+    }
+    const resumeFailure = { sessionId: 'conversa-atual-123', reason: 'expired' as const, at: 3 }
+    const previousAgentSession = {
+      reference: { ...agentSession, sessionId: 'conversa-velha-456', capturedAt: 1 },
+      replacedAt: 2,
+    }
+    const persisted = toPersistedNode({
+      id: 'retomada',
+      type: 'terminal',
+      position: { x: 0, y: 0 },
+      data: {
+        command: 'codex',
+        agentSession,
+        resumeFailure,
+        previousAgentSession,
+        resumeChoice: 'new',
+        resumePlan: { outcome: 'new', reason: 'expired', reasons: ['expired'] },
+        resumeBanner: null,
+      },
+    })
+
+    // A falha evita repetir a mesma retomada no próximo reload; a conversa
+    // anterior é o registro de onde o bloco veio. Nenhum dos dois é apagado.
+    expect(persisted.data).toMatchObject({ agentSession, resumeFailure, previousAgentSession })
+    // A escolha vale para esta execução: reabrir pergunta de novo.
+    expect(persisted.data).not.toHaveProperty('resumeChoice')
+    expect(persisted.data).not.toHaveProperty('resumePlan')
+    expect(persisted.data).not.toHaveProperty('resumeBanner')
+  })
+
   it('persiste identidade da inserção sem guardar o corpo do prompt', () => {
     const persisted = toPersistedNode({
       id: 'prompt-safe',
