@@ -297,6 +297,13 @@ type SessionOptions = {
   agentSession?: AgentSessionReference
   resumeAgentSession?: boolean
   /**
+   * Versão instalada da CLI, lida pelo processo principal quando o canvas
+   * montou o plano. Entra em `buildAgentResumeArgs` para o store confirmar a
+   * retomada com a mesma versão com que o plano foi decidido; ausente = não
+   * se sabe (o Gemini não retoma pelo ID sem ela).
+   */
+  cliVersion?: string | null
+  /**
    * O que a CLI respondeu na última retomada desta conversa (persistido no
    * nó). Com ele, o store nunca monta a mesma retomada de novo — nem no spawn
    * pedido pela interface, nem no relançamento automático do Codex.
@@ -696,6 +703,7 @@ export class TerminalSessionStore {
           options.agentSession,
           options.accountId,
           resumeFailure,
+          options.cliVersion,
         )
       : undefined
     const launchArgs = resumeArgs ?? options.args ?? []
@@ -707,7 +715,10 @@ export class TerminalSessionStore {
     const resumeWatch: ResumeWatch | undefined =
       resumeArgs && options.agentSession
         ? {
-            detector: createResumeOutcomeDetector({ sessionId: options.agentSession.sessionId }),
+            detector: createResumeOutcomeDetector({
+              sessionId: options.agentSession.sessionId,
+              provider: options.agentSession.provider,
+            }),
             reference: options.agentSession,
             startedAt: Date.now(),
             confirmed: false,
@@ -1877,6 +1888,9 @@ export class TerminalSessionStore {
     session: Session,
     event: { exitCode: number; signal?: number },
   ): void {
+    // Antes de tudo: o relançamento do Codex logo abaixo precisa saber se a
+    // retomada deste spawn foi recusada.
+    this.watchResumeExit(session, event.exitCode)
     session.outputFlushGeneration += 1
     this.clearInitialTextTimer(session)
     this.clearContextRetryTimer(session)
@@ -1927,6 +1941,7 @@ export class TerminalSessionStore {
         agentSession,
         accountId,
         resumeFailure,
+        session.launchOptions.cliVersion,
       )
       // Há conversa, mas não dá para retomá-la exatamente: o relançamento sobe
       // SEM retomada — uma conversa nova, que é o que o Codex sem argumentos
@@ -1944,6 +1959,7 @@ export class TerminalSessionStore {
               reference: agentSession,
               accountId,
               failure: resumeFailure,
+              cliVersion: session.launchOptions.cliVersion,
             })
           : undefined
       // Sem conversa, reenviar a instrução de largada é o certo; reenviar uma
@@ -2501,6 +2517,30 @@ export class TerminalSessionStore {
     }
 
     const reason = watch.detector.feed(data)
+    if (!reason) {
+      return
+    }
+    watch.pending = reason
+    if (watch.confirmed) {
+      this.reportResumeFailure(session)
+    }
+  }
+
+  /**
+   * O processo saiu. Algumas recusas só valem com o código de saída (o Gemini
+   * imprime "No previous sessions found for this project." sem o ID e sai com
+   * 42; ver `ResumeOutcomeDetector.exit`). Mesma janela de `watchResumeOutcome`:
+   * depois dela, ou da primeira tecla, a saída não responde mais à retomada.
+   */
+  private watchResumeExit(session: Session, exitCode: number): void {
+    const watch = session.resumeWatch
+    if (!watch || watch.pending) {
+      return
+    }
+    if (session.inputTouched || Date.now() - watch.startedAt > RESUME_FAILURE_WINDOW_MS) {
+      return
+    }
+    const reason = watch.detector.exit(exitCode)
     if (!reason) {
       return
     }

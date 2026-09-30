@@ -56,7 +56,7 @@ function createFakeManager() {
   }
 }
 
-function setup({ validateAccount } = {}) {
+function setup({ validateAccount, cliVersions } = {}) {
   handlers.clear()
   const sent = []
   const window = {
@@ -66,7 +66,7 @@ function setup({ validateAccount } = {}) {
     },
   }
   const manager = createFakeManager()
-  const api = registerPtyIpcHandlers(() => window, { manager, validateAccount })
+  const api = registerPtyIpcHandlers(() => window, { manager, validateAccount, cliVersions })
   const invoke = (channel, params) => handlers.get(channel)(null, params)
 
   return { manager, sent, api, invoke }
@@ -241,6 +241,26 @@ test('pty:kill forwards the force flag to the manager', () => {
     manager.calls.find((call) => call.method === 'kill'),
     { method: 'kill', sessionId: 'term-1', options: { force: true } },
   )
+})
+
+test('pty:cli-versions devolve a versão de cada CLI de agente', async () => {
+  const versions = { claude: '2.1.285', codex: '0.156.1', gemini: null }
+  const { invoke } = setup({ cliVersions: { snapshot: async () => versions } })
+
+  assert.deepEqual(await invoke('pty:cli-versions'), { ok: true, versions })
+})
+
+test('pty:cli-versions sem o serviço, ou com ele falhando, não quebra o renderer', async () => {
+  assert.deepEqual(await setup().invoke('pty:cli-versions'), { ok: true, versions: {} })
+
+  const failing = setup({
+    cliVersions: {
+      snapshot: async () => {
+        throw new Error('detector caiu')
+      },
+    },
+  })
+  assert.deepEqual(await failing.invoke('pty:cli-versions'), { ok: false, message: 'detector caiu' })
 })
 
 test('dispose force-kills every session', () => {

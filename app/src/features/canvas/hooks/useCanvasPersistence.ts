@@ -207,6 +207,7 @@ const TRANSIENT_DATA_KEYS = new Set<string>([
   // ficariam velhos assim que conta, pasta ou conversa mudassem.
   'resumePlan',
   'resumeBanner',
+  'resumeCliVersion',
 ])
 
 function stripFunctions(data: Record<string, unknown>): CanvasNodeData {

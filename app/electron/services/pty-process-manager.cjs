@@ -31,6 +31,7 @@ const fs = require('node:fs')
 const platform = require('../core/platform/index.cjs')
 const { createCliEnv } = require('./cli-process-manager.cjs')
 const { discoverAgentSession, isSafeSessionId, selectDiscoveryContext } = require('./agent-session-discovery.cjs')
+const { normalizeCliVersion } = require('./agent-cli-versions.cjs')
 const { validatePtyAccountSelection } = require('./pty-account-validation.cjs')
 const { applyProfileEnv } = require('./cli-account-profiles.cjs')
 const { ensureNodePtySpawnHelperExecutable } = require('./pty-native-assets.cjs')
@@ -109,8 +110,9 @@ class PtyProcessManager {
    * @param {(accountId: string, providerId: string) => {ok: boolean, message?: string}} [dependencies.validateAccount] - Confere a conta antes de montar o ambiente.
    * @param {((options: object) => import('./accounts/account-output-watcher.cjs').AccountOutputWatcher | null) | null} [dependencies.createOutputWatcher] - Fábrica da vigia de falha por conta; sem ela nenhum terminal é vigiado.
    * @param {((detection: object) => void) | null} [dependencies.onOutputFailure] - Recebe cada detecção da vigia, com a sessão, a conta e o modo.
+   * @param {(provider: string) => string | null} [dependencies.getCliVersion] - Última versão lida da CLI (`agent-cli-versions.cjs`), gravada junto de cada conversa.
    */
-  constructor({ spawnPty, now, platform: platformAdapter, logger, resolveCodexPath, isDebugSession, discoverAgentSession: discover = discoverAgentSession, buildAccountEnv, validateAccount, createOutputWatcher = null, onOutputFailure = null } = {}) {
+  constructor({ spawnPty, now, platform: platformAdapter, logger, resolveCodexPath, isDebugSession, discoverAgentSession: discover = discoverAgentSession, buildAccountEnv, validateAccount, createOutputWatcher = null, onOutputFailure = null, getCliVersion = null } = {}) {
     this.sessions = new Map()
     this.injectedSpawnPty = spawnPty ?? null
     this.now = now ?? (() => Date.now())
@@ -126,6 +128,24 @@ class PtyProcessManager {
     // eles (testes antigos, bancada `atual`) o onData fica como era.
     this.createOutputWatcher = typeof createOutputWatcher === 'function' ? createOutputWatcher : null
     this.onOutputFailure = typeof onOutputFailure === 'function' ? onOutputFailure : null
+    // Sem leitor de versão (testes antigos), as conversas saem sem versão, como antes.
+    this.getCliVersion = typeof getCliVersion === 'function' ? getCliVersion : () => null
+  }
+
+  /**
+   * A conversa com a versão da CLI deste processo carimbada, quando se sabe.
+   * O renderer compara essa versão com a instalada na hora de retomar.
+   *
+   * @param {object} reference
+   */
+  withCliVersion(reference) {
+    let version = null
+    try {
+      version = normalizeCliVersion(this.getCliVersion(reference.provider))
+    } catch {
+      version = null
+    }
+    return version ? { ...reference, cliVersion: version } : reference
   }
 
   /**
@@ -362,7 +382,9 @@ class PtyProcessManager {
       discoveryRearms: 0,
       discoveryInPaste: false,
       // Retomada por ID já nasce com a conversa; o resto espera a descoberta.
-      agentSession: resumeTarget ? createResumeAgentSession(resumeTarget, cwd, accountId, this.now()) : null,
+      agentSession: resumeTarget
+        ? this.withCliVersion(createResumeAgentSession(resumeTarget, cwd, accountId, this.now()))
+        : null,
       filaDeEscrita: null,
       // Conta com que o processo nasceu. Não muda depois do spawn: é o que o
       // reattach confere e o que a cadeia de contas lê para saber de quem é
@@ -1030,7 +1052,8 @@ class PtyProcessManager {
     if (reference?.sessionId) {
       // A conversa pertence à conta em que o processo nasceu: retomá-la em
       // outra conta abriria o histórico de uma pessoa na cobrança de outra.
-      entry.agentSession = entry.accountId ? { ...reference, accountId: entry.accountId } : reference
+      const stamped = this.withCliVersion(reference)
+      entry.agentSession = entry.accountId ? { ...stamped, accountId: entry.accountId } : stamped
       entry.onSession?.(entry.agentSession)
       return
     }
@@ -1463,6 +1486,14 @@ function isCodexCommand(command) {
     .toLowerCase() === 'codex'
 }
 
+/** O comando é o Gemini CLI (o `gemini.cmd` do npm no Windows incluído)? */
+function isGeminiCommand(command) {
+  return path.win32
+    .basename(String(command ?? ''))
+    .replace(/\.(?:cmd|exe|bat|ps1)$/i, '')
+    .toLowerCase() === 'gemini'
+}
+
 /** O comando é o Claude Code? A variável de tela clássica só existe nele. */
 function isClaudeCommandName(command) {
   if (typeof command !== 'string') return false
@@ -1473,17 +1504,18 @@ function isClaudeCommandName(command) {
 /**
  * A conversa que um spawn retoma pelo ID, no formato que o renderer monta
  * (`buildAgentResumeArgs` em agent-session.ts): Codex `resume …args <id>`,
- * com o ID no fim, e Claude `--resume <id> …args`. O Gemini nunca retoma por
- * ID. O ID passa pela mesma regra do renderer; fora dela (`codex resume
- * --last`, `claude --resume` sem ID, que abrem a lista) não há conversa
- * conhecida e a descoberta segue como num terminal novo.
+ * com o ID no fim, e Claude e Gemini `--resume <id> …args`. O ID passa pela
+ * mesma regra do renderer; fora dela (`codex resume --last`, `claude
+ * --resume` sem ID, `gemini --resume latest` ou um índice, que não apontam
+ * uma conversa fixa) não há conversa conhecida e a descoberta segue como num
+ * terminal novo.
  *
  * O comando pode vir como caminho (o Codex resolvido no Windows), por isso a
  * comparação é pelo nome do executável.
  *
  * @param {string} command
  * @param {string[]} args
- * @returns {{ provider: 'codex' | 'claude', sessionId: string } | null}
+ * @returns {{ provider: 'codex' | 'claude' | 'gemini', sessionId: string } | null}
  */
 function resolveResumeTarget(command, args) {
   if (!Array.isArray(args) || args.length < 2) return null
@@ -1491,9 +1523,10 @@ function resolveResumeTarget(command, args) {
     const sessionId = args[args.length - 1]
     return isSafeSessionId(sessionId) ? { provider: 'codex', sessionId } : null
   }
-  if (isClaudeCommandName(command) && args[0] === '--resume') {
+  const provider = isClaudeCommandName(command) ? 'claude' : isGeminiCommand(command) ? 'gemini' : null
+  if (provider && args[0] === '--resume') {
     const sessionId = args[1]
-    return isSafeSessionId(sessionId) ? { provider: 'claude', sessionId } : null
+    return isSafeSessionId(sessionId) ? { provider, sessionId } : null
   }
   return null
 }
@@ -1504,7 +1537,7 @@ function resolveResumeTarget(command, args) {
  * mesmo jeito (retomar em outra conta abriria o histórico de uma conta na
  * cobrança de outra). Sem conta = login do sistema, sem o campo.
  *
- * @param {{ provider: 'codex' | 'claude', sessionId: string }} target
+ * @param {{ provider: 'codex' | 'claude' | 'gemini', sessionId: string }} target
  * @param {string} cwd
  * @param {string | null} accountId
  * @param {number} capturedAt

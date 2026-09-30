@@ -820,7 +820,7 @@ test('a descoberta de conversa recebe as pastas do perfil da conta e a referênc
  * Gerenciador com relógio manual e descoberta falsa que anota cada pedido. Os
  * timers vêm do `t.mock.timers` do teste: a janela de 15 s passa sem espera.
  */
-function criarGerenciadorDeDescoberta(responder = () => null) {
+function criarGerenciadorDeDescoberta(responder = () => null, extras = {}) {
   const relogio = { agora: 1_000_000 }
   const pedidos = []
   const { spawnPty } = createFakePty()
@@ -832,6 +832,7 @@ function criarGerenciadorDeDescoberta(responder = () => null) {
       pedidos.push(pedido)
       return responder(pedido)
     },
+    ...extras,
   })
   return { manager, pedidos, relogio }
 }
@@ -949,6 +950,7 @@ const LF = String.fromCharCode(10)
 const ESC = String.fromCharCode(27)
 const CODEX_RETOMADO = '019a1b2c-3d4e-7f00-8a9b-0c1d2e3f4a5b'
 const CLAUDE_RETOMADO = 'b7e1c2d3-4f56-4789-9abc-def012345678'
+const GEMINI_RETOMADO = '3f0c2a1e-8b7d-4c3e-9a1f-2b3c4d5e6f70'
 
 test('retomada por ID já nasce com a conversa e não roda descoberta nem reabertura', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] })
@@ -961,7 +963,7 @@ test('retomada por ID já nasce com a conversa e não roda descoberta nem reaber
     cwd: pedido.cwd,
     capturedAt: pedido.now,
   }))
-  const recebidas = { codex: [], claude: [] }
+  const recebidas = { codex: [], claude: [], gemini: [] }
 
   try {
     const nascidaEm = relogio.agora
@@ -977,6 +979,13 @@ test('retomada por ID já nasce com a conversa e não roda descoberta nem reaber
       args: ['--resume', CLAUDE_RETOMADO, '--dangerously-skip-permissions'],
       cwd: process.cwd(),
       onSession: (ref) => recebidas.claude.push(ref),
+    })
+    // Gemini 0.57 em diante, no formato de `buildAgentResumeArgs`.
+    manager.spawn('canvas:gemini-retomado', {
+      command: 'gemini',
+      args: ['--resume', GEMINI_RETOMADO, '--yolo'],
+      cwd: process.cwd(),
+      onSession: (ref) => recebidas.gemini.push(ref),
     })
     await Promise.resolve()
 
@@ -998,6 +1007,16 @@ test('retomada por ID já nasce com a conversa e não roda descoberta nem reaber
         version: 1,
         provider: 'claude',
         sessionId: CLAUDE_RETOMADO,
+        cwd: process.cwd(),
+        capturedAt: nascidaEm,
+        source: 'resume-args',
+      },
+    ])
+    assert.deepEqual(recebidas.gemini, [
+      {
+        version: 1,
+        provider: 'gemini',
+        sessionId: GEMINI_RETOMADO,
         cwd: process.cwd(),
         capturedAt: nascidaEm,
         source: 'resume-args',
@@ -1032,13 +1051,16 @@ test('retomada por ID já nasce com a conversa e não roda descoberta nem reaber
     manager.spawn('canvas:novo', { command: 'claude', cwd: process.cwd() })
     t.mock.timers.tick(250)
     assert.equal(pedidos.length, 1)
-    assert.deepEqual([...pedidos[0].excludeSessionIds].sort(), [CODEX_RETOMADO, CLAUDE_RETOMADO].sort())
+    assert.deepEqual(
+      [...pedidos[0].excludeSessionIds].sort(),
+      [CODEX_RETOMADO, CLAUDE_RETOMADO, GEMINI_RETOMADO].sort(),
+    )
   } finally {
     manager.killAll({ force: true })
   }
 })
 
-test('retomada sem ID válido (a lista da CLI) e o Gemini seguem na descoberta', async (t) => {
+test('retomada sem ID válido (a lista da CLI, o latest e o índice do Gemini) segue na descoberta', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] })
   const { manager, pedidos } = criarGerenciadorDeDescoberta()
   const recebidas = []
@@ -1056,18 +1078,20 @@ test('retomada sem ID válido (a lista da CLI) e o Gemini seguem na descoberta',
       cwd: process.cwd(),
       onSession: (ref) => recebidas.push(ref),
     })
-    // O Gemini nunca retoma por ID (agent-session.ts), mesmo que peçam.
-    manager.spawn('canvas:gemini', {
-      command: 'gemini',
-      args: ['--resume', CLAUDE_RETOMADO],
-      cwd: process.cwd(),
-      onSession: (ref) => recebidas.push(ref),
-    })
+    // `latest` e a posição na lista não apontam uma conversa fixa.
+    for (const [sessionId, alvo] of [['canvas:gemini-latest', 'latest'], ['canvas:gemini-indice', '3']]) {
+      manager.spawn(sessionId, {
+        command: 'gemini',
+        args: ['--resume', alvo],
+        cwd: process.cwd(),
+        onSession: (ref) => recebidas.push(ref),
+      })
+    }
     await Promise.resolve()
     t.mock.timers.tick(250)
 
     assert.deepEqual(recebidas, [])
-    assert.deepEqual(pedidos.map((pedido) => pedido.command).sort(), ['claude', 'codex', 'gemini'])
+    assert.deepEqual(pedidos.map((pedido) => pedido.command).sort(), ['claude', 'codex', 'gemini', 'gemini'])
   } finally {
     manager.killAll({ force: true })
   }
@@ -1939,6 +1963,63 @@ test('a linhagem da cadeia fica na sessão só com conta própria e sai na lista
     const porId = new Map(manager.listarSessoesVivas().map((sessao) => [sessao.sessionId, sessao]))
     assert.equal(porId.get('canvas:continuacao').lineageId, 'linhagem-1')
     assert.equal(porId.get('canvas:sistema').lineageId, null)
+  } finally {
+    manager.killAll({ force: true })
+  }
+})
+
+test('a conversa sai com a versão da CLI deste processo, quando ela está no formato', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const versoes = { claude: '2.1.285', codex: 'codex-cli 0.156.1', gemini: '0.57.0' }
+  const { manager } = criarGerenciadorDeDescoberta(
+    (pedido) => ({ version: 1, provider: pedido.command, sessionId: `${pedido.command}-descoberta-1`, cwd: pedido.cwd, capturedAt: pedido.now }),
+    { getCliVersion: (provider) => versoes[provider] ?? null },
+  )
+  const recebidas = []
+
+  try {
+    // Retomada pelo ID: a versão vai junto da referência que nasce com o spawn.
+    manager.spawn('canvas:gemini-retomado', {
+      command: 'gemini',
+      args: ['--resume', GEMINI_RETOMADO],
+      cwd: process.cwd(),
+      onSession: (ref) => recebidas.push(ref),
+    })
+    // Descoberta: a versão vai junto da conversa achada no histórico.
+    manager.spawn('canvas:claude-novo', { command: 'claude', cwd: process.cwd(), onSession: (ref) => recebidas.push(ref) })
+    // Versão fora do formato (a linha crua do `--version`) não vai: o renderer
+    // recusaria a referência inteira.
+    manager.spawn('canvas:codex-novo', { command: 'codex', cwd: process.cwd(), onSession: (ref) => recebidas.push(ref) })
+    await Promise.resolve()
+    t.mock.timers.tick(250)
+
+    const porProvider = Object.fromEntries(recebidas.map((ref) => [ref.provider, ref]))
+    assert.equal(porProvider.gemini.cliVersion, '0.57.0')
+    assert.equal(porProvider.gemini.source, 'resume-args')
+    assert.equal(porProvider.claude.cliVersion, '2.1.285')
+    assert.equal(Object.hasOwn(porProvider.codex, 'cliVersion'), false)
+  } finally {
+    manager.killAll({ force: true })
+  }
+})
+
+test('leitor de versão que falha não derruba o spawn nem a conversa', async () => {
+  const { manager } = criarGerenciadorDeDescoberta(() => null, {
+    getCliVersion: () => {
+      throw new Error('falhou')
+    },
+  })
+  const recebidas = []
+  try {
+    manager.spawn('canvas:gemini-retomado', {
+      command: 'gemini',
+      args: ['--resume', GEMINI_RETOMADO],
+      cwd: process.cwd(),
+      onSession: (ref) => recebidas.push(ref),
+    })
+    await Promise.resolve()
+    assert.equal(recebidas.length, 1)
+    assert.equal(Object.hasOwn(recebidas[0], 'cliVersion'), false)
   } finally {
     manager.killAll({ force: true })
   }

@@ -17,7 +17,10 @@ import type { AgentResumeFailure } from '../services/agent-session'
  * conversa anterior, e ela pode conter as mesmas frases (um "No conversation
  * found…" de outra conversa, um "Not logged in" dentro do resultado de uma
  * ferramenta). Por isso `expired` só conta com o ID tentado na linha, e linha
- * de conversa redesenhada nunca conta (ver `conversationRole`).
+ * de conversa redesenhada nunca conta (ver `conversationRole`). As frases do
+ * Gemini ainda exigem a saída do processo com o código medido (`exitCode`):
+ * a recusa dele sai antes da interface, e uma conversa redesenhada nunca
+ * termina assim.
  */
 
 export type ResumeFailureReason = AgentResumeFailure['reason']
@@ -35,6 +38,16 @@ export type ResumeFailurePhrase = {
    * `electron/services/accounts/cli-failure-patterns.cjs`.
    */
   wholeLine?: boolean
+  /** CLIs que imprimem a frase; o detector de um spawn só usa as da CLI dele. */
+  providers: readonly string[]
+  /**
+   * A frase só vale se o processo sair com este código dentro da janela da
+   * vigia (ver `ResumeOutcomeDetector.exit`). É o que prova que a linha é a
+   * resposta deste spawn quando a CLI não imprime o ID nela.
+   */
+  exitCode?: number
+  /** `expired` sem ID na linha: só com `exitCode`, que faz o papel do ID. */
+  withoutId?: boolean
 }
 
 /**
@@ -47,16 +60,18 @@ export type ResumeFailurePhrase = {
  * recebe esse ID): uma linha antiga do histórico redesenhado, com a frase e o
  * ID de OUTRA conversa, não é a resposta a este spawn.
  *
- * Ficaram de fora, de propósito, frases medidas que nenhum spawn vigiado
- * imprime: "No conversation found to continue" (Claude Code 2.1.x, `-c`) e
- * "Invalid session identifier" / "No previous sessions found for this
- * project" (Gemini CLI 0.57, `--resume`). A vigia só existe num spawn montado
- * por `buildAgentResumeArgs`, que é sempre `--resume <id>` no Claude e
- * `resume <id>` no Codex e nunca retoma o Gemini; nesse spawn, essas frases só
- * podem vir do histórico redesenhado ou de uma citação, ou seja, só dariam
- * alarme falso. Se o Gemini passar a ser retomado por ID, "Invalid session
- * identifier" volta, exigindo o ID como as outras ("No previous sessions…" não
- * traz ID nenhum e não serve).
+ * Ficou de fora, de propósito, "No conversation found to continue" (Claude
+ * Code 2.1.x, `-c`): a vigia só existe num spawn montado por
+ * `buildAgentResumeArgs`, que nunca usa `-c`; nesse spawn a frase só viria do
+ * histórico redesenhado ou de uma citação, ou seja, só daria alarme falso.
+ *
+ * O Gemini (0.57 em diante, `--resume <id>`) recusa antes de abrir a
+ * interface e sai com 42 (`FATAL_INPUT_ERROR`), com uma de duas frases,
+ * sempre depois de "Error resuming session:": "Invalid session identifier
+ * "<id>"." quando a pasta tem conversas mas não essa, e "No previous
+ * sessions found for this project." quando não tem nenhuma. A segunda não traz
+ * ID; a saída com 42 dentro da janela é que prova que ela responde a este
+ * spawn, e as duas só contam com ela.
  *
  * O ID precisa caber na mesma linha que a frase. Se o terminal quebrar a
  * linha antes do ID, nada é reconhecido — o lado seguro: nada é gravado, e o
@@ -80,19 +95,43 @@ export const RESUME_FAILURE_PHRASES: readonly ResumeFailurePhrase[] = Object.fre
   {
     phrase: 'No conversation found with session ID',
     reason: 'expired',
+    providers: ['claude'],
     measuredIn: 'Claude Code 2.1.x, `--resume <id>` ("No conversation found with session ID: <id>", sai com 1)',
   },
   {
     phrase: 'No saved session found with ID',
     reason: 'expired',
+    providers: ['codex'],
     measuredIn: 'Codex 0.150 e 0.159, `resume <id>` ("No saved session found with ID <id>. Run `codex resume` without an ID…")',
   },
-  { phrase: 'Not logged in', reason: 'auth', measuredIn: 'Claude Code e Codex', wholeLine: true },
-  { phrase: 'Please run /login', reason: 'auth', measuredIn: 'Claude Code' },
-  { phrase: 'Invalid API key', reason: 'auth', measuredIn: 'Claude Code' },
-  { phrase: 'Authentication required', reason: 'auth', measuredIn: 'Claude Code' },
-  { phrase: 'Your access token could not be refreshed', reason: 'auth', measuredIn: 'Codex' },
-  { phrase: 'Your authentication session could not be refreshed', reason: 'auth', measuredIn: 'Codex' },
+  {
+    phrase: 'Invalid session identifier',
+    reason: 'expired',
+    providers: ['gemini'],
+    exitCode: 42,
+    measuredIn:
+      'Gemini CLI 0.57.0, `--resume <id>` numa pasta com outras conversas ("Error resuming session: Invalid session identifier "<id>".", sai com 42)',
+  },
+  {
+    phrase: 'No previous sessions found for this project',
+    reason: 'expired',
+    providers: ['gemini'],
+    exitCode: 42,
+    withoutId: true,
+    measuredIn:
+      'Gemini CLI 0.57.0, `--resume <id>` numa pasta sem conversa ("Error resuming session: No previous sessions found for this project.", sai com 42)',
+  },
+  { phrase: 'Not logged in', reason: 'auth', providers: ['claude', 'codex'], measuredIn: 'Claude Code e Codex', wholeLine: true },
+  { phrase: 'Please run /login', reason: 'auth', providers: ['claude'], measuredIn: 'Claude Code' },
+  { phrase: 'Invalid API key', reason: 'auth', providers: ['claude'], measuredIn: 'Claude Code' },
+  { phrase: 'Authentication required', reason: 'auth', providers: ['claude'], measuredIn: 'Claude Code' },
+  { phrase: 'Your access token could not be refreshed', reason: 'auth', providers: ['codex'], measuredIn: 'Codex' },
+  {
+    phrase: 'Your authentication session could not be refreshed',
+    reason: 'auth',
+    providers: ['codex'],
+    measuredIn: 'Codex',
+  },
 ])
 
 /**
@@ -129,9 +168,10 @@ const CONVERSATION_GLYPH = new RegExp('[\\u23bf\\u23fa]')
 
 /**
  * Abertura de linha da própria CLI antes da frase: o "Error:" com que o Codex
- * e o Claude podem prefixar um erro fatal.
+ * e o Claude podem prefixar um erro fatal, e o "Error resuming session:" com
+ * que o Gemini abre a recusa.
  */
-const CLI_LINE_PREFIX = '(?:error\\s*:\\s*)?'
+const CLI_LINE_PREFIX = '(?:error(?:\\s+resuming\\s+session)?\\s*:\\s*)?'
 
 /**
  * Fim do ID na linha: nenhum caractere que ainda poderia ser do ID (os de
@@ -173,37 +213,45 @@ function phraseBody(phrase: string): string {
 
 /**
  * O que vem depois da frase: em `expired`, o ID tentado (depois de ":" ou de
- * espaço, como as duas CLIs imprimem); nas outras, fronteira de palavra —
- * "Not logged in" nunca casa com "Not logged into".
+ * espaço, como as CLIs imprimem, e entre aspas no Gemini); nas outras,
+ * fronteira de palavra — "Not logged in" nunca casa com "Not logged into".
  */
 function phraseTail(rule: ResumeFailurePhrase, sessionId: string): string {
-  if (rule.reason === 'expired') return `(?::\\s*|\\s+)${escapeRegExp(sessionId)}${SESSION_ID_END}`
+  if (rule.reason === 'expired' && !rule.withoutId) {
+    return `(?::\\s*|\\s+)["\\u201c]?${escapeRegExp(sessionId)}${SESSION_ID_END}`
+  }
   return rule.wholeLine ? '(?:\\s*[.!]?\\s*$|\\s*\\u00b7)' : '(?![a-z0-9])'
 }
 
-type LineRule = { reason: ResumeFailureReason; regex: RegExp }
+type LineRule = { reason: ResumeFailureReason; regex: RegExp; exitCode?: number }
 
 /**
- * Uma expressão por desfecho: a frase no começo da linha (depois só de
- * glifos da TUI e, no máximo, de um "Error:") — "Logged in as" nem começa
- * com a frase. Sem ID tentado, `expired` fica sem regra: sem o ID na linha,
- * nenhuma frase de conversa inexistente prova que a resposta é deste spawn.
+ * Uma expressão por desfecho e código de saída: a frase no começo da linha
+ * (depois só de glifos da TUI e, no máximo, do "Error…:" da CLI) — "Logged
+ * in as" nem começa com a frase. Sem ID tentado, `expired` fica sem regra:
+ * sem o ID, nenhuma frase de conversa inexistente prova que a resposta é
+ * deste spawn. Sem `provider`, valem as frases de todas as CLIs.
  */
-function compileLineRules(sessionId: string): LineRule[] {
-  const rules: LineRule[] = []
-  for (const reason of ['expired', 'auth'] as const) {
-    if (reason === 'expired' && !sessionId) continue
-    const alternatives = RESUME_FAILURE_PHRASES.filter((rule) => rule.reason === reason).map(
-      (rule) => `${phraseBody(rule.phrase)}${phraseTail(rule, sessionId)}`,
-    )
-    rules.push({ reason, regex: new RegExp(`^${LINE_LEAD}${CLI_LINE_PREFIX}(?:${alternatives.join('|')})`, 'i') })
+function compileLineRules(sessionId: string, provider: string | undefined): LineRule[] {
+  const groups = new Map<string, { reason: ResumeFailureReason; exitCode?: number; alternatives: string[] }>()
+  for (const rule of RESUME_FAILURE_PHRASES) {
+    if (provider && !rule.providers.includes(provider)) continue
+    if (rule.reason === 'expired' && !sessionId) continue
+    const key = `${rule.reason}:${rule.exitCode ?? ''}`
+    const group = groups.get(key) ?? { reason: rule.reason, exitCode: rule.exitCode, alternatives: [] }
+    group.alternatives.push(`${phraseBody(rule.phrase)}${phraseTail(rule, sessionId)}`)
+    groups.set(key, group)
   }
-  return rules
+  return [...groups.values()].map(({ reason, exitCode, alternatives }) => ({
+    reason,
+    exitCode,
+    regex: new RegExp(`^${LINE_LEAD}${CLI_LINE_PREFIX}(?:${alternatives.join('|')})`, 'i'),
+  }))
 }
 
-function classifyLine(rules: readonly LineRule[], line: string): ResumeFailureReason | null {
+function classifyLine(rules: readonly LineRule[], line: string): LineRule | null {
   for (const rule of rules) {
-    if (rule.regex.test(line)) return rule.reason
+    if (rule.regex.test(line)) return rule
   }
   return null
 }
@@ -267,21 +315,31 @@ export type ResumeOutcomeDetector = {
   /**
    * Alimenta um pedaço cru de saída do PTY. Devolve o desfecho na primeira
    * vez que uma frase de falha aparece e `null` em todas as outras chamadas —
-   * inclusive nas seguintes, se a mesma frase for redesenhada.
+   * inclusive nas seguintes, se a mesma frase for redesenhada. Uma frase com
+   * `exitCode` nunca sai daqui: ela fica guardada para `exit`.
    */
   feed: (chunk: string) => ResumeFailureReason | null
+  /**
+   * O processo saiu com `exitCode`. Devolve o desfecho de uma frase já vista
+   * que exige esse código, e `null` sem ela, com outro código ou se um
+   * desfecho já foi devolvido.
+   */
+  exit: (exitCode: number) => ResumeFailureReason | null
 }
 
 export type ResumeOutcomeDetectorOptions = {
   /**
    * A conversa que os argumentos do spawn pediram. `expired` só é reconhecido
-   * com este ID na mesma linha da frase; vazio, nunca.
+   * com este ID na mesma linha da frase (ou, no Gemini, com a saída medida);
+   * vazio, nunca.
    */
   sessionId: string
+  /** A CLI do spawn; ausente = frases de todas as CLIs. */
+  provider?: string
 }
 
-export function createResumeOutcomeDetector({ sessionId }: ResumeOutcomeDetectorOptions): ResumeOutcomeDetector {
-  const rules = compileLineRules(typeof sessionId === 'string' ? sessionId.trim() : '')
+export function createResumeOutcomeDetector({ sessionId, provider }: ResumeOutcomeDetectorOptions): ResumeOutcomeDetector {
+  const rules = compileLineRules(typeof sessionId === 'string' ? sessionId.trim() : '', provider)
   /** Escape incompleto do fim do pedaço anterior. */
   let carry = ''
   /** A última linha, ainda sem quebra: a frase pode estar pela metade nela. */
@@ -291,8 +349,25 @@ export function createResumeOutcomeDetector({ sessionId }: ResumeOutcomeDetector
   /** A última linha fechada pertence a um bloco da conversa redesenhada. */
   let insideConversation = false
   let recognized = false
+  /** Frase vista que ainda depende do código de saída do processo. */
+  let awaitingExit: { reason: ResumeFailureReason; exitCode: number } | null = null
+
+  /** Guarda a primeira frase de linha inteira que depende da saída do processo. */
+  const rememberExitBound = (rule: LineRule | null) => {
+    if (rule?.exitCode !== undefined) awaitingExit ??= { reason: rule.reason, exitCode: rule.exitCode }
+  }
 
   return {
+    exit(exitCode) {
+      if (recognized) return null
+      // A última linha pode ter chegado sem quebra antes da saída.
+      if (!openLineLostStart && conversationRole(openLine, insideConversation) === 'top') {
+        rememberExitBound(classifyLine(rules, openLine))
+      }
+      if (!awaitingExit || awaitingExit.exitCode !== exitCode) return null
+      recognized = true
+      return awaitingExit.reason
+    },
     feed(chunk) {
       if (recognized || typeof chunk !== 'string' || chunk.length === 0) return null
 
@@ -306,15 +381,17 @@ export function createResumeOutcomeDetector({ sessionId }: ResumeOutcomeDetector
         if (index === 0 && openLineLostStart) continue
         const line = lines[index]
         const role = conversationRole(line, insideConversation)
-        const reason = role === 'top' ? classifyLine(rules, line) : null
-        if (reason) {
+        const rule = role === 'top' ? classifyLine(rules, line) : null
+        if (rule && rule.exitCode === undefined) {
           recognized = true
           carry = ''
           openLine = ''
-          return reason
+          return rule.reason
         }
-        // Só a linha fechada decide o bloco: a aberta ainda pode crescer.
+        // Só a linha fechada decide o bloco e guarda frase para a saída: a
+        // aberta ainda pode crescer (e `exit` a confere no fim).
         if (index < lines.length - 1) {
+          rememberExitBound(rule)
           if (role === 'opens') insideConversation = true
           else if (role === 'top') insideConversation = false
         }

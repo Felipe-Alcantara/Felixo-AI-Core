@@ -205,6 +205,11 @@ export type TerminalNodeData = {
   previousAgentSession?: PreviousAgentSession
   /** Render-time (nunca persistido): o plano de retomada do bloco, quando ele segue um. */
   resumePlan?: AgentResumePlan
+  /**
+   * Render-time (nunca persistido): a versão instalada da CLI com que o plano
+   * foi decidido, para o store confirmar a retomada com a mesma versão.
+   */
+  resumeCliVersion?: string | null
   /** Render-time (nunca persistido): a faixa da retomada pendente; `null` sem pendência. */
   resumeBanner?: TerminalResumeBanner | null
   /**

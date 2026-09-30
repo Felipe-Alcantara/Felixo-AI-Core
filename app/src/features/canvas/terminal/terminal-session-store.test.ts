@@ -136,6 +136,7 @@ function createHarness(
     agentSession?: AgentSessionReference
     resumeAgentSession?: boolean
     resumeFailure?: AgentResumeFailure
+    cliVersion?: string | null
     onResumeFailure?: (reason: AgentResumeFailure['reason'], reference: AgentSessionReference) => void
   } = {},
 ): Harness {
@@ -1226,6 +1227,99 @@ describe('TerminalSessionStore: resposta da CLI a uma retomada', () => {
 
     expect(onResumeFailure).toHaveBeenCalledTimes(1)
     expect(onResumeFailure).toHaveBeenCalledWith('expired', CLAUDE_REFERENCE)
+  })
+
+  describe('Gemini: retomada pelo ID conforme a versão, recusa só com a saída 42', () => {
+    const GEMINI_REFERENCE: AgentSessionReference = {
+      version: 1,
+      provider: 'gemini',
+      sessionId: '3f0c2a1e-8b7d-4c3e-9a1f-2b3c4d5e6f70',
+      cwd: '/tmp',
+      capturedAt: 123,
+    }
+    const INVALID_ID = `Error resuming session: Invalid session identifier "${GEMINI_REFERENCE.sessionId}".${CRLF}  Searched for sessions in /home/pessoa/.gemini/tmp/tmp/chats.${CRLF}`
+    const NO_SESSIONS = `Error resuming session: No previous sessions found for this project.${CRLF}`
+
+    function geminiHarness(
+      onResumeFailure: (reason: AgentResumeFailure['reason'], reference: AgentSessionReference) => void,
+      options: { cliVersion?: string | null; deferSpawn?: boolean } = {},
+    ): Harness {
+      return createHarness('', 'gemini', true, options.deferSpawn ?? false, 1, {
+        agentSession: GEMINI_REFERENCE,
+        resumeAgentSession: true,
+        cliVersion: 'cliVersion' in options ? options.cliVersion : '0.57.0',
+        onResumeFailure,
+      })
+    }
+
+    it('na 0.57 sobe com --resume <id>; o ID de outra conversa não conta', async () => {
+      const onResumeFailure = vi.fn()
+      harness = geminiHarness(onResumeFailure)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(harness.spawnArgs).toEqual(['--resume', GEMINI_REFERENCE.sessionId, '--dangerously-skip-permissions'])
+
+      harness.feed(INVALID_ID.replaceAll(GEMINI_REFERENCE.sessionId, '7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d'))
+      harness.emitExit({ exitCode: 42 })
+      await vi.advanceTimersByTimeAsync(50)
+      expect(onResumeFailure).not.toHaveBeenCalled()
+    })
+
+    it.each([
+      ['ID inexistente', INVALID_ID],
+      ['pasta sem conversa', NO_SESSIONS],
+    ])('%s: avisa `expired` quando o Gemini sai com 42', async (_label, output) => {
+      const onResumeFailure = vi.fn()
+      harness = geminiHarness(onResumeFailure)
+      await vi.advanceTimersByTimeAsync(0)
+
+      harness.feed(output)
+      await vi.advanceTimersByTimeAsync(50)
+      expect(onResumeFailure, 'a frase sozinha não basta').not.toHaveBeenCalled()
+
+      harness.emitExit({ exitCode: 42 })
+      await vi.advanceTimersByTimeAsync(50)
+      expect(onResumeFailure).toHaveBeenCalledTimes(1)
+      expect(onResumeFailure).toHaveBeenCalledWith('expired', GEMINI_REFERENCE)
+    })
+
+    it('a frase seguida de uma saída comum não é recusa', async () => {
+      const onResumeFailure = vi.fn()
+      harness = geminiHarness(onResumeFailure)
+      await vi.advanceTimersByTimeAsync(0)
+
+      harness.feed(NO_SESSIONS)
+      harness.emitExit({ exitCode: 0 })
+      await vi.advanceTimersByTimeAsync(50)
+      expect(onResumeFailure).not.toHaveBeenCalled()
+    })
+
+    it('a saída antes da resposta do spawn só avisa quando o spawn confirma o processo novo', async () => {
+      const onResumeFailure = vi.fn()
+      harness = geminiHarness(onResumeFailure, { deferSpawn: true })
+      await vi.advanceTimersByTimeAsync(0)
+
+      harness.feed(NO_SESSIONS)
+      harness.emitExit({ exitCode: 42 })
+      await vi.advanceTimersByTimeAsync(50)
+      expect(onResumeFailure).not.toHaveBeenCalled()
+
+      harness.resolveSpawn()
+      await vi.advanceTimersByTimeAsync(50)
+      expect(onResumeFailure).toHaveBeenCalledTimes(1)
+      expect(onResumeFailure).toHaveBeenCalledWith('expired', GEMINI_REFERENCE)
+    })
+
+    it('sem versão o store não monta a retomada, mesmo com o pedido do canvas', async () => {
+      const onResumeFailure = vi.fn()
+      harness = geminiHarness(onResumeFailure, { cliVersion: null })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(harness.spawnArgs).toEqual(['--dangerously-skip-permissions'])
+
+      harness.feed(NO_SESSIONS)
+      harness.emitExit({ exitCode: 42 })
+      await vi.advanceTimersByTimeAsync(50)
+      expect(onResumeFailure).not.toHaveBeenCalled()
+    })
   })
 
   it('avisa `auth` quando a CLI pede login ao retomar', async () => {

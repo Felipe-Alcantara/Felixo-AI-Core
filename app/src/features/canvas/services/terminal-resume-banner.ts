@@ -9,6 +9,7 @@ import {
   describeAgentResumeTarget,
   explainAgentResume,
   isAgentSessionReference,
+  withResumeMethod,
   type AgentResumeChoice,
   type AgentResumeFailure,
   type AgentResumePlan,
@@ -109,10 +110,11 @@ export function buildTerminalResumeBanner(input: {
  * - a CLI acabou de recusar a conversa com o processo de pé (esperando login);
  * - a pessoa pediu Reiniciar deste processo (`revealed`).
  *
- * Com o agente de pé por outro motivo, ela fica guardada: um Gemini aberto
- * agora, cuja conversa acabou de ser registrada, é "pendente" para a próxima
- * abertura (o Gemini não retoma por ID) — mas uma faixa sobre um agente que
- * está funcionando pareceria um erro, e escolher nela reiniciaria o trabalho.
+ * Com o agente de pé por outro motivo, ela fica guardada: um Gemini anterior
+ * à 0.57 aberto agora, cuja conversa acabou de ser registrada, é "pendente"
+ * para a próxima abertura (essa versão não retoma pelo ID) — mas uma faixa
+ * sobre um agente que está funcionando pareceria um erro, e escolher nela
+ * reiniciaria o trabalho.
  */
 export function shouldShowTerminalResumeBanner(input: {
   banner: TerminalResumeBanner | null
@@ -244,6 +246,8 @@ export function resolveTerminalRelaunch(input: {
   accountId?: string
   failure?: AgentResumeFailure
   choice?: AgentResumeChoice
+  /** Versão instalada da CLI; ausente = não se sabe. */
+  cliVersion?: string | null
   /** Texto de largada de um bloco fora do plano. */
   initialText?: string
   initialTextIsHandoff?: boolean
@@ -264,6 +268,7 @@ export function resolveTerminalRelaunch(input: {
     accountId: input.accountId,
     failure: input.failure,
     choice: input.choice,
+    cliVersion: input.cliVersion,
   })
   if (plan.outcome === 'pending') return { kind: 'hold', plan }
 
@@ -286,6 +291,7 @@ export function resolveTerminalRelaunch(input: {
       resumeAgentSession,
       resumeFailure: input.failure,
       resumeChoice: input.choice,
+      cliVersion: input.cliVersion,
     }),
     // `/resume` e o aviso ao agente nunca são uma passagem de responsabilidade.
     initialTextIsHandoff: false,
@@ -330,7 +336,7 @@ export function agentSessionPatch(
   const previous = isAgentSessionReference(current.agentSession) ? current.agentSession : undefined
   const replaced = previous !== undefined && previous.sessionId !== reference.sessionId
   return {
-    agentSession: reference,
+    agentSession: withResumeMethod(reference),
     cwd: reference.cwd,
     ...(replaced
       ? { previousAgentSession: { reference: previous, replacedAt: now }, resumeChoice: undefined }

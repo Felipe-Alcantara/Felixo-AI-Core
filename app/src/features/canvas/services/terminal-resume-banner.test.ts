@@ -329,8 +329,15 @@ describe('relançamento: cartão, gaveta e faixa decidem igual', () => {
 })
 
 describe('registro da conversa do bloco', () => {
-  it('primeira conversa descoberta: grava a referência e a pasta real do PTY', () => {
-    expect(agentSessionPatch({}, reference, 10)).toEqual({ agentSession: reference, cwd: '/repo' })
+  it('primeira conversa descoberta: grava a referência, o método da versão dela e a pasta real do PTY', () => {
+    expect(agentSessionPatch({}, reference, 10)).toEqual({
+      agentSession: { ...reference, resumeMethod: 'exact-id' },
+      cwd: '/repo',
+    })
+    // O Gemini gravado na 0.57 retoma pelo ID; sem versão, fica o que o `--help` garante.
+    const gemini = { ...reference, provider: 'gemini' as const }
+    expect(agentSessionPatch({}, { ...gemini, cliVersion: '0.57.0' }, 10).agentSession.resumeMethod).toBe('exact-id')
+    expect(agentSessionPatch({}, gemini, 10).agentSession.resumeMethod).toBe('numeric-index')
   })
 
   it('mesma conversa redescoberta: não mexe na escolha nem cria conversa anterior', () => {
@@ -343,7 +350,7 @@ describe('registro da conversa do bloco', () => {
     const next = { ...reference, sessionId: 'conversa-nova-9876543210', capturedAt: 50 }
     const patch = agentSessionPatch({ agentSession: reference }, next, 60)
     expect(patch).toMatchObject({
-      agentSession: next,
+      agentSession: { ...next, resumeMethod: 'exact-id' },
       cwd: '/repo',
       previousAgentSession: { reference, replacedAt: 60 },
     })
@@ -352,10 +359,11 @@ describe('registro da conversa do bloco', () => {
 
   it('agentSession null ou lixo no canvas salvo: grava a descoberta sem virar conversa anterior', () => {
     // Antes: `previous.sessionId` com `previous === null` lançava dentro do setNodes.
-    expect(agentSessionPatch({ agentSession: null }, reference, 10)).toEqual({ agentSession: reference, cwd: '/repo' })
+    const recorded = { agentSession: { ...reference, resumeMethod: 'exact-id' }, cwd: '/repo' }
+    expect(agentSessionPatch({ agentSession: null }, reference, 10)).toEqual(recorded)
     for (const garbage of ['texto', 42, {}, { sessionId: 'curto' }, { ...reference, version: 2 }]) {
       const patch = agentSessionPatch({ agentSession: garbage }, reference, 10)
-      expect(patch).toEqual({ agentSession: reference, cwd: '/repo' })
+      expect(patch).toEqual(recorded)
       expect(patch).not.toHaveProperty('previousAgentSession')
     }
   })

@@ -47,6 +47,8 @@ export type SessionOptions = {
   startedAt?: number
   agentSession?: AgentSessionReference
   resumeAgentSession?: boolean
+  /** Versão instalada da CLI com que o plano de retomada foi decidido. */
+  cliVersion?: string | null
   /** A última falha de retomada registrada no nó; o store nunca a repete. */
   resumeFailure?: AgentResumeFailure
   onAgentSession?: (reference: AgentSessionReference) => void
