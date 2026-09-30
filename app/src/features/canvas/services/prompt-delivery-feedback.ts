@@ -21,14 +21,20 @@ export type PromptDeliveryFeedback = {
  * igual ao caminho normal.
  */
 const INLINE_SUFFIX = 'direto no texto, porque o arquivo temporário do contexto falhou (veja o aviso no bloco).'
+/**
+ * O painel só digita (decisão de 30/09/2026): o texto fica na linha de
+ * entrada, e quem envia é a pessoa. O retorno diz isso, para ninguém esperar
+ * o agente responder sozinho.
+ */
+const REVIEW_HINT = 'Revise e aperte Enter para enviar.'
 const FAILED_TEXT = 'O terminal não confirmou o recebimento. Tente novamente.'
 
 export function describeSingleInsertFeedback(result: SkillActivationResult): PromptDeliveryFeedback {
   if (result === 'sent') {
-    return { text: 'Inserido no terminal aberto.', isError: false }
+    return { text: `Digitado no terminal aberto. ${REVIEW_HINT}`, isError: false }
   }
   if (result === 'sent-inline') {
-    return { text: `Inserido no terminal aberto, ${INLINE_SUFFIX}`, isError: false }
+    return { text: `Digitado no terminal aberto, ${INLINE_SUFFIX} ${REVIEW_HINT}`, isError: false }
   }
   if (result === 'copied') {
     return { text: 'Sem terminal aberto — copiado para a área de transferência.', isError: false }
@@ -46,10 +52,10 @@ export function describeCombinedInsertFeedback(
   count: number,
 ): PromptDeliveryFeedback {
   if (result === 'sent') {
-    return { text: `${count} prompts combinados e enviados.`, isError: false }
+    return { text: `${count} prompts combinados e digitados no terminal. ${REVIEW_HINT}`, isError: false }
   }
   if (result === 'sent-inline') {
-    return { text: `${count} prompts combinados e enviados ${INLINE_SUFFIX}`, isError: false }
+    return { text: `${count} prompts combinados e digitados ${INLINE_SUFFIX} ${REVIEW_HINT}`, isError: false }
   }
   if (result === 'copied') {
     return { text: `${count} prompts combinados e copiados.`, isError: false }
@@ -60,10 +66,10 @@ export function describeCombinedInsertFeedback(
 /** O mesmo para a ativação de uma skill no painel de skills. */
 export function describeSkillActivationFeedback(result: SkillActivationResult): PromptDeliveryFeedback {
   if (result === 'sent') {
-    return { text: 'Enviada ao terminal aberto.', isError: false }
+    return { text: `Digitada no terminal aberto. ${REVIEW_HINT}`, isError: false }
   }
   if (result === 'sent-inline') {
-    return { text: `Enviada ao terminal aberto, ${INLINE_SUFFIX}`, isError: false }
+    return { text: `Digitada no terminal aberto, ${INLINE_SUFFIX} ${REVIEW_HINT}`, isError: false }
   }
   if (result === 'copied') {
     return { text: 'Sem terminal aberto — copiada para a área de transferência.', isError: false }

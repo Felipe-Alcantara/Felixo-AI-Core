@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { TerminalSessionStore } from './terminal-session-store'
-import { toSubmittedTerminalText } from './terminal-input'
+import { terminalTextForInsertion } from './terminal-input'
 import {
   createCatalogPromptInsertion,
   createFilePromptInsertion,
@@ -153,6 +153,8 @@ const SKILL = {
 type Origin = {
   label: string
   kind: ContextFileKind
+  /** Enters que o app escreve: os painéis só digitam; o link de arquivo ainda envia. */
+  submissions: 0 | 1
   /** O que o cartão deve mostrar. */
   expectedLabel: string
   build: () => { text: string; insertion: PromptInsertion }
@@ -162,33 +164,38 @@ const ORIGINS: Origin[] = [
   {
     label: 'catálogo',
     kind: 'catalog-prompt',
+    submissions: 0,
     expectedLabel: 'Revisão de PR',
     build: () => {
-      const insertion = createCatalogPromptInsertion(REVIEW, REVIEW.prompt, { autoSubmit: true, timestamp: TIMESTAMP })
-      return { text: toSubmittedTerminalText(insertion.content), insertion }
+      // Como o painel monta: só digitar (`PromptsPanel.insertPrompt`).
+      const insertion = createCatalogPromptInsertion(REVIEW, REVIEW.prompt, { autoSubmit: false, timestamp: TIMESTAMP })
+      return { text: terminalTextForInsertion(insertion), insertion }
     },
   },
   {
     label: 'combinação',
     kind: 'catalog-prompt',
+    submissions: 0,
     expectedLabel: 'Revisão de PR, Testes primeiro',
     build: () => {
       const insertion = composeSelectedPromptInsertion([REVIEW, TESTS], { timestamp: TIMESTAMP })
-      return { text: toSubmittedTerminalText(insertion.content), insertion }
+      return { text: terminalTextForInsertion(insertion), insertion }
     },
   },
   {
     label: 'skill',
     kind: 'skill-prompt',
+    submissions: 0,
     expectedLabel: 'Revisor sênior',
     build: () => {
       const text = buildSkillActivationPrompt(SKILL)
-      return { text, insertion: createSkillPromptInsertion(SKILL, text, { autoSubmit: true, timestamp: TIMESTAMP }) }
+      return { text, insertion: createSkillPromptInsertion(SKILL, text, { autoSubmit: false, timestamp: TIMESTAMP }) }
     },
   },
   {
     label: 'arquivo do canvas',
     kind: 'scratchpad-link',
+    submissions: 1,
     expectedLabel: 'notas do time.md',
     build: () => {
       const text = buildFileLinkPrompt(DEFAULT_FILE_LINK_PROMPT, SCRATCHPAD_PATH, 'Agente 1')
@@ -198,7 +205,7 @@ const ORIGINS: Origin[] = [
 ]
 
 describe('origens de prompt: entrega pelo arquivo de contexto', () => {
-  it.each(ORIGINS)('$label: corpo intacto no arquivo, uma entrega, um Enter e o nome certo no cartão', async (origin) => {
+  it.each(ORIGINS)('$label: corpo intacto no arquivo, uma entrega, o Enter certo e o nome no cartão', async (origin) => {
     harness = await createHarness()
     const { text, insertion } = origin.build()
 
@@ -211,12 +218,12 @@ describe('origens de prompt: entrega pelo arquivo de contexto', () => {
     expect(harness.contextWrites[0].kind).toBe(origin.kind)
     expect(harness.contextWrites[0].content).toBe(stripPromptSubmission(text))
     expect(harness.contextWrites[0].insertion).not.toHaveProperty('content')
-    // O PTY recebe só a referência, com o caminho do `felixo` entre aspas e um Enter só.
+    // O PTY recebe só a referência, com o caminho do `felixo` entre aspas; Enter só no link de arquivo.
     expect(harness.ptyWrites).toHaveLength(1)
     const written = harness.ptyWrites[0]
     expect(written).toContain(`Leia com: "${COMMAND_PATH}" context read "felixo-context-1-${origin.kind}.txt"`)
-    expect(countSubmissions(written)).toBe(1)
-    expect(written.endsWith('\r')).toBe(true)
+    expect(countSubmissions(written)).toBe(origin.submissions)
+    expect(written.endsWith('\r')).toBe(origin.submissions === 1)
     // O cartão mostra o nome, não a referência do arquivo.
     expect(cardLabel(harness)).toBe(origin.expectedLabel)
     expect(stableMetadata(harness.store.getSnapshot(ID)?.lastPromptInsertion)).toMatchSnapshot()
@@ -252,7 +259,7 @@ describe('fallback inline', () => {
     const written = harness.ptyWrites[0]
     expect(written.startsWith('AVISO DO FELIXO AI CORE')).toBe(true)
     expect(written).toContain(stripPromptSubmission(text))
-    expect(countSubmissions(written)).toBe(1)
+    expect(countSubmissions(written)).toBe(origin.submissions)
     expect(harness.store.getSnapshot(ID)?.contextWarning).toContain('fallback inline')
     expect(stableMetadata(harness.store.getSnapshot(ID)?.lastPromptInsertion)).toEqual(normal)
     expect(cardLabel(harness)).toBe(origin.expectedLabel)
@@ -263,7 +270,7 @@ describe('combinação', () => {
   it('preserva a ordem, repete nomes repetidos e não conta prompt vazio', async () => {
     harness = await createHarness()
     const insertion = composeSelectedPromptInsertion([TESTS, EMPTY, REVIEW, TESTS], { timestamp: TIMESTAMP })
-    await harness.store.sendText(ID, toSubmittedTerminalText(insertion.content), { kind: 'catalog-prompt', insertion })
+    await harness.store.sendText(ID, terminalTextForInsertion(insertion), { kind: 'catalog-prompt', insertion })
 
     const body = harness.contextWrites[0].content
     const headings = [...body.matchAll(/^## (.+)$/gm)].map((match) => match[1])
@@ -276,8 +283,8 @@ describe('combinação', () => {
     ])
     expect(cardLabel(harness)).toBe('Testes primeiro, Revisão de PR, Testes primeiro')
     // O painel conta o que entrou no texto (3), não o que estava marcado (4).
-    expect(describeCombinedInsertFeedback('sent', insertion.combinedNames.length).text).toBe(
-      '3 prompts combinados e enviados.',
+    expect(describeCombinedInsertFeedback('sent', insertion.combinedNames.length).text).toMatch(
+      /^3 prompts combinados e digitados/,
     )
   })
 })
@@ -287,22 +294,23 @@ describe('conteúdo difícil', () => {
     harness = await createHarness()
     const huge = `# Revisão 日本語 🚀\n\n${'linha com acentuação é ç ã õ\r\n'.repeat(8000)}fim\n`
     const prompt = { ...REVIEW, name: 'Revisão ✓ 日本語 🚀', prompt: huge }
-    const insertion = createCatalogPromptInsertion(prompt, prompt.prompt, { autoSubmit: true, timestamp: TIMESTAMP })
+    const insertion = createCatalogPromptInsertion(prompt, prompt.prompt, { autoSubmit: false, timestamp: TIMESTAMP })
 
-    await harness.store.sendText(ID, toSubmittedTerminalText(insertion.content), { kind: 'catalog-prompt', insertion })
+    await harness.store.sendText(ID, terminalTextForInsertion(insertion), { kind: 'catalog-prompt', insertion })
 
     expect(harness.contextWrites[0].content).toBe(stripPromptSubmission(huge))
     expect(harness.ptyWrites[0].length).toBeLessThan(2000)
-    expect(countSubmissions(harness.ptyWrites[0])).toBe(1)
+    // Os \r\n do corpo ficam no arquivo: nenhum chega ao PTY como Enter.
+    expect(countSubmissions(harness.ptyWrites[0])).toBe(0)
     expect(cardLabel(harness)).toBe('Revisão ✓ 日本語 🚀')
   })
 
   it('prompt do catálogo sem nome: o cartão diz a origem, nunca a referência do arquivo', async () => {
     harness = await createHarness()
     const nameless = { ...REVIEW, name: '   ' }
-    const insertion = createCatalogPromptInsertion(nameless, nameless.prompt, { autoSubmit: true, timestamp: TIMESTAMP })
+    const insertion = createCatalogPromptInsertion(nameless, nameless.prompt, { autoSubmit: false, timestamp: TIMESTAMP })
 
-    await harness.store.sendText(ID, toSubmittedTerminalText(insertion.content), { kind: 'catalog-prompt', insertion })
+    await harness.store.sendText(ID, terminalTextForInsertion(insertion), { kind: 'catalog-prompt', insertion })
 
     expect(harness.store.getSnapshot(ID)?.lastPromptInsertion).not.toHaveProperty('name')
     expect(cardLabel(harness)).toBe('Prompt do catálogo')
@@ -315,7 +323,7 @@ describe('conteúdo difícil', () => {
     const text = buildSkillActivationPrompt(skill)
     await harness.store.sendText(ID, text, {
       kind: 'skill-prompt',
-      insertion: createSkillPromptInsertion(skill, text, { autoSubmit: true, timestamp: TIMESTAMP }),
+      insertion: createSkillPromptInsertion(skill, text, { autoSubmit: false, timestamp: TIMESTAMP }),
     })
     const link = buildFileLinkPrompt(DEFAULT_FILE_LINK_PROMPT, SCRATCHPAD_PATH, 'Agente 1')
     await harness.store.sendText(ID, link, {
@@ -331,7 +339,7 @@ describe('conteúdo difícil', () => {
 })
 
 describe('repetição, cancelamento, nova tentativa e reinício', () => {
-  it('o mesmo prompt duas vezes seguidas: duas entregas em ordem, um Enter cada, nunca intercaladas', async () => {
+  it('o mesmo prompt duas vezes seguidas: duas entregas em ordem, nenhuma com Enter, nunca intercaladas', async () => {
     harness = await createHarness()
     const { text, insertion } = ORIGINS[0].build()
 
@@ -344,7 +352,7 @@ describe('repetição, cancelamento, nova tentativa e reinício', () => {
     expect(harness.ptyWrites).toHaveLength(2)
     expect(harness.ptyWrites[0]).toContain('felixo-context-1-catalog-prompt.txt')
     expect(harness.ptyWrites[1]).toContain('felixo-context-2-catalog-prompt.txt')
-    expect(harness.ptyWrites.map(countSubmissions)).toEqual([1, 1])
+    expect(harness.ptyWrites.map(countSubmissions)).toEqual([0, 0])
   })
 
   it('prompt só digitado (sem Enter) e depois trocado pela pessoa: o cartão mostra o que ela enviou', async () => {
@@ -385,7 +393,7 @@ describe('repetição, cancelamento, nova tentativa e reinício', () => {
 
     const retried = await harness.store.sendText(ID, text, { kind: 'catalog-prompt', insertion })
     expect(retried).toEqual({ delivered: true })
-    expect(harness.ptyWrites.map(countSubmissions)).toEqual([1, 1])
+    expect(harness.ptyWrites.map(countSubmissions)).toEqual([0, 0])
     expect(cardLabel(harness)).toBe('Revisão de PR')
   })
 
@@ -418,3 +426,57 @@ describe('repetição, cancelamento, nova tentativa e reinício', () => {
     )
   })
 })
+
+describe('painéis só digitam: quem envia é a pessoa', () => {
+  it('catálogo: o app não manda Enter, e o Enter da pessoa envia com o nome do prompt', async () => {
+    harness = await createHarness()
+    const { text, insertion } = ORIGINS[0].build()
+    await harness.store.sendText(ID, text, { kind: 'catalog-prompt', insertion })
+    expect(harness.ptyWrites.map(countSubmissions)).toEqual([0])
+
+    harness.type('\r')
+
+    // O único Enter é o da pessoa, escrito pelo teclado.
+    expect(harness.ptyWrites.map(countSubmissions)).toEqual([0, 1])
+    expect(harness.ptyWrites[1]).toBe('\r')
+    expect(cardLabel(harness)).toBe('Revisão de PR')
+  })
+
+  it('completado pela pessoa, com Shift+Enter no meio: o nome do prompt continua sendo o do envio', async () => {
+    harness = await createHarness()
+    const { text, insertion } = ORIGINS[2].build()
+    await harness.store.sendText(ID, text, { kind: 'skill-prompt', insertion })
+
+    harness.type(' no módulo de pagamentos')
+    harness.type('\n')
+    harness.type('e rode os testes\r')
+
+    const snapshot = harness.store.getSnapshot(ID)
+    expect(snapshot?.lastPromptInsertion).toMatchObject({ source: 'skill', name: 'Revisor sênior', autoSubmit: false })
+    expect(cardLabel(harness)).toBe('Revisor sênior')
+  })
+
+  it('nenhum dos painéis escreve Enter: catálogo, combinação e skill', async () => {
+    harness = await createHarness()
+    for (const origin of ORIGINS.filter((candidate) => candidate.submissions === 0)) {
+      const { text, insertion } = origin.build()
+      expect(insertion.autoSubmit, origin.label).toBe(false)
+      expect(text.endsWith('\r') || text.endsWith('\n'), origin.label).toBe(false)
+      await harness.store.sendText(ID, text, { kind: origin.kind, insertion })
+    }
+    expect(harness.ptyWrites.map(countSubmissions)).toEqual([0, 0, 0])
+  })
+
+  it('prompt só digitado e abandonado com Ctrl+C: o próximo pedido é da pessoa, sem o nome dele', async () => {
+    harness = await createHarness()
+    const { text, insertion } = ORIGINS[0].build()
+    await harness.store.sendText(ID, text, { kind: 'catalog-prompt', insertion })
+
+    harness.type('\x03')
+    harness.type('outra coisa\r')
+
+    expect(harness.store.getSnapshot(ID)?.lastPromptInsertion).toMatchObject({ source: 'manual' })
+    expect(cardLabel(harness)).toBe('outra coisa')
+  })
+})
+

@@ -121,7 +121,7 @@ import {
 import { subscribeSystemDesignConfig } from '../../shared/system-design/system-design-events'
 import { registerWebpageOpener } from '../../shared/links/link-chooser-store'
 import { webpageProfileForLinkSource } from '../services/webview-context-menu'
-import { stripTerminalSubmission, toSubmittedTerminalText } from '../terminal/terminal-input'
+import { stripTerminalSubmission, terminalTextForInsertion, toSubmittedTerminalText } from '../terminal/terminal-input'
 import { buildSkillActivationPrompt } from '../services/skill-prompt'
 import {
   createManualPromptInsertion,
@@ -1785,11 +1785,12 @@ function CanvasInner({
   )
 
   // Activate a skill: type its "use the file at <path>" instruction into the
-  // expanded terminal if one is open; otherwise copy it for manual pasting.
+  // expanded terminal if one is open (sem Enter: a pessoa revisa e envia);
+  // otherwise copy it for manual pasting.
   const activateSkill = useCallback(
     async (skill: CanvasSkill): Promise<SkillActivationResult> => {
       const prompt = buildSkillActivationPrompt(skill)
-      const insertion = createSkillPromptInsertion(skill, prompt, { autoSubmit: true })
+      const insertion = createSkillPromptInsertion(skill, prompt, { autoSubmit: false })
       if (expandedTerminalId) {
         const result = await store.sendText(expandedTerminalId, prompt, {
           kind: 'skill-prompt',
@@ -1804,18 +1805,19 @@ function CanvasInner({
   )
 
   // Insert a pre-built automation prompt into the expanded terminal if one is
-  // open; otherwise copy it for manual pasting, same fallback as skills.
+  // open; otherwise copy it for manual pasting, same fallback as skills. O Enter
+  // só vai quando a inserção pede (`autoSubmit`); o catálogo só digita.
   const insertPrompt = useCallback(
     async (promptInput: PromptInsertion | string): Promise<SkillActivationResult> => {
       const insertion = typeof promptInput === 'string'
-        ? createManualPromptInsertion(promptInput, { autoSubmit: true })
+        ? createManualPromptInsertion(promptInput, { autoSubmit: false })
         : createPromptInsertion({
             ...promptInput,
             content: promptInput.content,
             autoSubmit: promptInput.autoSubmit,
           })
       if (expandedTerminalId) {
-        const result = await store.sendText(expandedTerminalId, toSubmittedTerminalText(insertion.content), {
+        const result = await store.sendText(expandedTerminalId, terminalTextForInsertion(insertion), {
           kind: 'catalog-prompt',
           insertion,
         })

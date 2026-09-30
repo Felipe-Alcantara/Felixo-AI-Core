@@ -139,7 +139,8 @@ export function PromptsPanel({
     setPendingId(prompt.id)
     let result: SkillActivationResult
     try {
-      result = await onInsertPrompt(createCatalogPromptInsertion(prompt, prompt.prompt, { autoSubmit: true }))
+      // Só digita, sem Enter: a pessoa revisa e envia.
+      result = await onInsertPrompt(createCatalogPromptInsertion(prompt, prompt.prompt, { autoSubmit: false }))
     } finally {
       setPendingId((id) => (id === prompt.id ? null : id))
     }
@@ -165,7 +166,7 @@ export function PromptsPanel({
   }
 
   const insertSelected = async () => {
-    const combined = composeSelectedPromptInsertion(selectedPrompts, { autoSubmit: true })
+    const combined = composeSelectedPromptInsertion(selectedPrompts, { autoSubmit: false })
     if (!combined.content) return
     setPendingId('combined')
     let result: SkillActivationResult

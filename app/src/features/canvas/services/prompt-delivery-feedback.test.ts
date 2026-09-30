@@ -7,9 +7,9 @@ import {
 } from './prompt-delivery-feedback'
 
 describe('describeSingleInsertFeedback', () => {
-  it('sent: mensagem de sucesso, sem erro', () => {
+  it('sent: diz que o texto foi só digitado e espera o Enter da pessoa', () => {
     expect(describeSingleInsertFeedback('sent')).toEqual({
-      text: 'Inserido no terminal aberto.',
+      text: 'Digitado no terminal aberto. Revise e aperte Enter para enviar.',
       isError: false,
     })
   })
@@ -32,7 +32,7 @@ describe('describeSingleInsertFeedback', () => {
 describe('describeCombinedInsertFeedback', () => {
   it('sent: soma a contagem de prompts na mensagem', () => {
     expect(describeCombinedInsertFeedback('sent', 3)).toEqual({
-      text: '3 prompts combinados e enviados.',
+      text: '3 prompts combinados e digitados no terminal. Revise e aperte Enter para enviar.',
       isError: false,
     })
   })

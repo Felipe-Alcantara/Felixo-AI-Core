@@ -65,7 +65,8 @@ describe('PromptInsertion', () => {
     expect(insertion.content).toBe(
       '## Primeiro prompt\n\ninstrução um\n\n---\n\n## Segundo prompt\n\ninstrução dois\n\n---\n\n## Primeiro prompt\n\ninstrução um',
     )
-    expect(insertion.autoSubmit).toBe(true)
+    // A combinação só é digitada: quem envia é a pessoa (30/09/2026).
+    expect(insertion.autoSubmit).toBe(false)
   })
 
   it('mantém o ID de um preset editado e atualiza o nome/texto', () => {

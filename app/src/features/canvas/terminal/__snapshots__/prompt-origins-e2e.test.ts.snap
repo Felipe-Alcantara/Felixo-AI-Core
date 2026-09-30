@@ -1,6 +1,6 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`origens de prompt: entrega pelo arquivo de contexto > 'arquivo do canvas': corpo intacto no arquivo, uma entrega, um Enter e o nome certo no cartão 1`] = `
+exports[`origens de prompt: entrega pelo arquivo de contexto > 'arquivo do canvas': corpo intacto no arquivo, uma entrega, o Enter certo e o nome no cartão 1`] = `
 {
   "autoSubmit": true,
   "combinedNames": [
@@ -13,9 +13,9 @@ exports[`origens de prompt: entrega pelo arquivo de contexto > 'arquivo do canva
 }
 `;
 
-exports[`origens de prompt: entrega pelo arquivo de contexto > 'catálogo': corpo intacto no arquivo, uma entrega, um Enter e o nome certo no cartão 1`] = `
+exports[`origens de prompt: entrega pelo arquivo de contexto > 'catálogo': corpo intacto no arquivo, uma entrega, o Enter certo e o nome no cartão 1`] = `
 {
-  "autoSubmit": true,
+  "autoSubmit": false,
   "combinedNames": [
     "Revisão de PR",
   ],
@@ -26,9 +26,9 @@ exports[`origens de prompt: entrega pelo arquivo de contexto > 'catálogo': corp
 }
 `;
 
-exports[`origens de prompt: entrega pelo arquivo de contexto > 'combinação': corpo intacto no arquivo, uma entrega, um Enter e o nome certo no cartão 1`] = `
+exports[`origens de prompt: entrega pelo arquivo de contexto > 'combinação': corpo intacto no arquivo, uma entrega, o Enter certo e o nome no cartão 1`] = `
 {
-  "autoSubmit": true,
+  "autoSubmit": false,
   "combinedNames": [
     "Revisão de PR",
     "Testes primeiro",
@@ -39,9 +39,9 @@ exports[`origens de prompt: entrega pelo arquivo de contexto > 'combinação': c
 }
 `;
 
-exports[`origens de prompt: entrega pelo arquivo de contexto > 'skill': corpo intacto no arquivo, uma entrega, um Enter e o nome certo no cartão 1`] = `
+exports[`origens de prompt: entrega pelo arquivo de contexto > 'skill': corpo intacto no arquivo, uma entrega, o Enter certo e o nome no cartão 1`] = `
 {
-  "autoSubmit": true,
+  "autoSubmit": false,
   "combinedNames": [
     "Revisor sênior",
   ],

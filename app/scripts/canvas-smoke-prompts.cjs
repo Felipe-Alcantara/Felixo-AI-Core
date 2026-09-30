@@ -9,8 +9,9 @@
  * pessoa vê: o retorno de cada painel, o nome no cartão do bloco, o aviso do
  * fallback e o que o canvas grava. Passos:
  *
- * - P1 catálogo: um prompt inserido no terminal aberto;
- * - P2 combinação: dois prompts marcados e enviados juntos, na ordem;
+ * - P1 catálogo: um prompt digitado no terminal aberto, sem Enter (quem
+ *   envia é a pessoa);
+ * - P2 combinação: dois prompts marcados e digitados juntos, na ordem;
  * - P3 fallback: a pasta dos arquivos de contexto some e o texto vai direto,
  *   com retorno próprio no painel e o aviso no cartão;
  * - P4 skill da biblioteca, ativada pelo painel de skills;
@@ -186,7 +187,7 @@ function criarSessaoDePrompts(deps) {
     const [primeiro] = prompts ?? (await doisPrompts(passo, panel))
     const item = `[data-felixo-prompt-id="${primeiro.id}"]`
     await acionar(page.locator(`${item} [data-felixo-prompt-insert]`))
-    await esperarRetorno(passo, item, 'sent', 'Inserido no terminal aberto.')
+    await esperarRetorno(passo, item, 'sent', 'Digitado no terminal aberto.')
     await esperarCartao(passo, primeiro.nome)
     // A CLI roteirizada ecoa o que recebe: a referência do arquivo, com o comando entre aspas.
     await esperar(passo, 'o terminal receber a referência do arquivo de contexto', terminalContem, 'context read "felixo-context-')
@@ -199,7 +200,7 @@ function criarSessaoDePrompts(deps) {
       await acionar(panel.getByRole('checkbox', { name: `Selecionar ${prompt.nome}` }), 'Space')
     }
     await acionar(panel.getByRole('button', { name: /Enviar conjunto/ }))
-    await esperarRetorno(passo, '[data-felixo-canvas-panel="prompts"]', 'sent', '2 prompts combinados e enviados.')
+    await esperarRetorno(passo, '[data-felixo-canvas-panel="prompts"]', 'sent', '2 prompts combinados e digitados')
     await esperarCartao(passo, `${prompts[0].nome}, ${prompts[1].nome}`)
     for (const prompt of prompts) {
       await acionar(panel.getByRole('checkbox', { name: `Selecionar ${prompt.nome}` }), 'Space')
@@ -241,7 +242,7 @@ function criarSessaoDePrompts(deps) {
     const nome = ((await item.locator('span').first().textContent()) ?? '').trim()
     exigir(Boolean(nome), passo, 'a skill não tem nome visível')
     await acionar(item.locator('[data-felixo-skill-activate]'))
-    await esperarRetorno(passo, '[data-felixo-canvas-panel="skills"]', 'sent', 'Enviada ao terminal aberto.')
+    await esperarRetorno(passo, '[data-felixo-canvas-panel="skills"]', 'sent', 'Digitada no terminal aberto.')
     await esperarCartao(passo, nome)
     return nome
   }
