@@ -813,6 +813,8 @@ Mapa declarativo `CREDENCIAIS_HERDADAS` em `cli-account-profiles.cjs`. Os nomes 
 - `AgentSessionReference.accountId` passa a ser gravado. `canResumeAgentSession` (`agent-session.ts:30`) exige a mesma conta. Uma referência antiga sem conta só vale em bloco sem conta. Se conta ou cwd não baterem, nenhum id é usado, e vale o aviso de `/resume` manual que já existe (`agent-session.ts:80`).
 - `listOfficialCliAccountSessions` (`official-cli-service.cjs:234-263`) exclui as sessões com `accountId`, porque o logout do sistema não as afeta.
 
+> Atualização de 29/09/2026: o "aviso de `/resume` manual" citado acima foi substituído pelo plano com motivo de `explainAgentResume`. Conta ou pasta divergentes agora seguram o spawn e pedem uma escolha (lista da CLI ou conversa nova), sem apagar o registro. Ver [Retomada de conversa: plano com motivo](ARQUITETURA.md#retomada-de-conversa-plano-com-motivo). As linhas citadas nesta seção continuam sendo as do commit-base do plano.
+
 ---
 
 ## 10. Orquestrador do chat pedindo confirmação (decisão 7)

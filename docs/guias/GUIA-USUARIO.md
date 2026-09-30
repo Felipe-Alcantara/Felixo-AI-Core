@@ -1,7 +1,7 @@
 # Guia do Usuário Final - Felixo AI Core
 
 Status: concluido.
-Última revisão: 2026-09-28.
+Última revisão: 2026-09-29.
 
 Este guia é para quem quer instalar e usar o Felixo AI Core como aplicativo
 desktop. O Felixo centraliza CLIs de IA instaladas no seu computador, como
@@ -315,7 +315,9 @@ terminal, chaves ou caminhos de perfil.
   salva "‹nome›" não existe mais. Escolha outra conta ou o login do sistema.", e
   a abertura fica bloqueada até você escolher.
 - **Retomada na mesma conta.** Uma conversa só é retomada na conta em que foi
-  aberta. Se o bloco estiver em outra conta, vale o aviso de `/resume` manual.
+  aberta. Se o bloco estiver em outra conta, o cartão mostra **A conversa é de
+  outra conta** e você escolhe entre a lista da CLI e uma conversa nova (ver
+  [Retomar conversas de agentes](#retomar-conversas-de-agentes)).
 - **Codex reiniciado após se atualizar.** O texto de uma passagem de
   responsabilidade não é reenviado, para o agente não recomeçar a tarefa nem
   cobrar de novo. O bloco avisa e sugere `/resume` ou reenviar à mão.
@@ -542,13 +544,124 @@ Por segurança, o app só abre arquivos que estejam dentro de um projeto registr
 - Quando houver um arquivo de planejamento, o agente recebe no primeiro prompt a instrução para lê-lo antes de começar e seguir suas funções, etapas e decisões. O conteúdo do arquivo não é copiado para o app; o agente recebe apenas o caminho e decide como lê-lo.
 - Ao montar uma **Fila** e iniciar vários agentes de uma vez, os blocos entram em uma grade próxima de quadrada, crescendo por linhas e colunas e evitando os blocos já existentes no canvas.
 - O botão **Organizar**, ao lado de **Agente**, também monta essa matriz para agentes já abertos em momentos diferentes. Ele move apenas agentes no nível principal do canvas; shells, arquivos, notas, grupos e agentes dentro de grupos permanecem onde estão.
-- Ao reiniciar o aplicativo, um terminal de agente que já existia recebe `/resume` seguido de Enter como primeira instrução, em vez do prompt inicial, para retomar a conversa anterior.
+- Ao reabrir o aplicativo, um terminal de agente que já existia tenta voltar para a conversa anterior em vez de receber o prompt inicial. Ele só volta sozinho quando é, com certeza, a mesma conversa; nos outros casos o cartão explica o motivo e você escolhe. Veja [Retomar conversas de agentes](#retomar-conversas-de-agentes).
 - O prompt inicial de contexto (padrão de qualidade, identidade no canvas, arquivos ligados) é **digitado sem Enter**: ele fica na linha de entrada do agente esperando que você escreva o pedido depois dele, e vai junto quando você enviar. Só `/resume` e a passagem de responsabilidade são enviados sozinhos, porque carregam uma instrução de verdade.
 - Esse contexto é digitado quando a CLI mostra que a entrada dela está pronta, e não num tempo fixo depois da abertura — em agentes que abrem uma tela de aviso ou de confiança antes do prompt, ele espera essa tela ser respondida. Em modo yolo, o app responde sozinho o aviso do Claude Code, que aparece uma vez por máquina.
 - Ao trocar de agente no configurador, a conta e a lista do agente anterior são limpas imediatamente. Consultas antigas que terminarem depois são descartadas, e o processo principal ainda confere conta, provedor e comando antes de criar o PTY; uma combinação incompatível não inicia o terminal.
 - Ao reiniciar um terminal pelo drawer lateral, o app reaproveita o `accountId` e o provedor persistidos no bloco. O restart continua no perfil selecionado; sem `accountId`, o terminal usa o login do sistema.
 - O histórico visual usa 20.000 linhas quando há até 9 terminais e 5.000 linhas quando o canvas já tem 10 ou mais. O limite é escolhido ao criar a sessão; terminais que já estavam abertos não são redimensionados nem perdem linhas quando outro terminal é adicionado.
 - Se o histórico visual ultrapassar o limite, o cartão e a gaveta avisam. Fechar e reabrir o terminal reaplica o replay vivo mantido pelo processo principal, de até 200.000 caracteres; **Copiar** e **Handoff** usam o trecho que ainda está no buffer visual.
+
+### Retomar conversas de agentes
+
+Enquanto um agente trabalha, o bloco anota qual conversa está aberta nele: o
+agente, a pasta, a conta e quando a conversa foi vista. Quando o app reabre com
+esse bloco, ou quando você usa **Reiniciar terminal** (no cartão ou na gaveta),
+o Felixo usa essa anotação
+para tentar voltar à mesma conversa. Ele só volta sozinho quando tem certeza de
+que é a mesma. Quando não tem, ele não adivinha e não abre outra conversa no
+lugar: o cartão do bloco mostra o motivo e você escolhe.
+
+**Os quatro desfechos.**
+
+1. **Retomada exata.** O agente volta para a mesma conversa, com o histórico
+   dela. Só acontece no Claude Code e no Codex, e só quando o bloco está no mesmo
+   agente, na mesma pasta e na mesma conta em que a conversa nasceu. Enquanto o
+   agente sobe, o cartão mostra *Retomando a conversa anterior…*; o motivo
+   fica registrado em **Detalhes do terminal → Retomada**.
+2. **Lista da CLI.** Quando o bloco não guardou qual conversa estava aberta, o
+   app digita `/resume` e a própria CLI mostra a lista de conversas daquela pasta
+   para você escolher. Isso é automático, como antes, e acontece também depois de
+   **Esquecer associação da conversa**. O título é **Sem conversa associada**.
+3. **Escolha antes de abrir.** Quando o bloco guardou uma conversa, mas ela não
+   pode ser retomada com certeza (outra pasta, outra conta, outro agente, Gemini,
+   ou a CLI já respondeu que ela não existe), o agente **não é aberto**. O
+   cartão mostra a conversa (o agente, a pasta, o dia e a hora da conversa, e se
+   ela é de uma conta própria ou do login do sistema) e o motivo, com os botões:
+   - **Escolher na lista (/resume)**: abre o agente e digita `/resume`, para você
+     escolher a conversa na lista da CLI;
+   - **Abrir conversa nova**: abre o agente numa conversa nova. O agente recebe,
+     como contexto e sem Enter, um aviso de que esta não é a conversa anterior e
+     o motivo, para não presumir o que foi dito antes;
+   - **Tentar retomar de novo**: aparece só quando a falha da última tentativa
+     (a CLI não encontrou a conversa ou pediu login) é o único obstáculo. Tenta
+     a mesma conversa outra vez, por exemplo depois de você fazer login. Se além
+     da falha a pasta ou a conta também não batem, o botão não aparece, porque
+     tentar de novo cairia no mesmo impedimento.
+   - **Dispensar aviso**: aparece quando o aviso de falha está sobre um agente
+     que continua aberto (por exemplo, você fez login no próprio terminal e a
+     conversa seguiu). Tira o aviso sem reiniciar nada.
+4. **Deixar para depois.** Não clicar em nada também vale: o bloco fica parado,
+   sem abrir o agente, e o canvas continua como estava. Nada é apagado e os
+   outros blocos seguem funcionando. Você escolhe quando quiser.
+
+Se uma retomada exata falhar (a CLI responde que a conversa não existe ou pede
+login), o app anota a falha para aquela conversa e o cartão passa a mostrar o
+motivo e os botões. A partir daí, **Reiniciar terminal** e a próxima abertura do app não
+repetem a mesma tentativa: o bloco espera a sua escolha.
+
+O app confere a pasta e a conta **antes** de abrir o agente, pela anotação do
+bloco, porque o Claude Code e o Codex respondem com o mesmo texto para uma
+conversa de outra conta e para uma conversa que não existe. Pela resposta da CLI
+não daria para saber qual dos dois aconteceu.
+
+**Os motivos.** Quando é preciso escolher, o título aparece na faixa do
+cartão e na gaveta, com o texto que explica o caso embaixo dele. Nos outros
+casos, o título fica em **Detalhes do terminal → Retomada**.
+
+| Título (faixa do cartão ou Detalhes → Retomada) | Quando aparece | O que acontece |
+| --- | --- | --- |
+| **Retomando a conversa anterior** | É a mesma conversa, na mesma pasta e na mesma conta (Claude Code ou Codex) | Retomada exata |
+| **Sem conversa associada** | O bloco não guardou qual conversa estava aberta | A CLI mostra a lista (`/resume`) |
+| **Retomada automática indisponível no Gemini** | O Gemini CLI só garante retomar a conversa mais recente ou pela posição na lista, e a posição muda quando surgem conversas novas; o app não adivinha | Escolha antes de abrir |
+| **A conversa nasceu em outra pasta** | A conversa foi aberta numa pasta e o bloco está em outra. A lista da CLI filtra por pasta, então ela pode não aparecer ali | Escolha antes de abrir |
+| **Bloco sem pasta de trabalho** | O bloco não tem pasta de trabalho definida, então não dá para confirmar que é a mesma conversa | Escolha antes de abrir |
+| **A conversa é de outra conta** | Retomar ali abriria o histórico de uma conta na cobrança de outra. Volte o bloco para a conta original para retomá-la | Escolha antes de abrir |
+| **A conversa é de outro agente** | A conversa foi aberta num agente (no Codex, por exemplo) e o bloco agora usa outro | Escolha antes de abrir |
+| **Registro da conversa ilegível** | O registro salvo da conversa não está num formato que o app reconheça. Nada foi apagado | Escolha antes de abrir |
+| **A CLI não encontrou a conversa** | Na última tentativa, a CLI respondeu que essa conversa não existe mais (apagada, arquivada, ou de outra pasta ou conta). O app não repete a mesma retomada | Escolha antes de abrir, com **Tentar retomar de novo** |
+| **A CLI pediu login ao retomar** | Na última tentativa, a CLI pediu login antes de retomar. Faça login na CLI desta conta e tente retomar de novo; o registro da conversa continua salvo. Trocar a conta do bloco não ajuda: a conversa só retoma na conta em que nasceu | Escolha antes de abrir, com **Tentar retomar de novo** |
+
+Quando vale mais de um motivo (outra pasta **e** outra conta, por exemplo), o
+título mostra o primeiro e o texto explica todos. A ordem é: registro ilegível,
+outro agente, falha na última tentativa (conversa não encontrada ou login),
+Gemini, pasta (sem pasta ou outra pasta) e, por último, conta.
+
+**Nada é apagado.**
+
+- O registro da conversa nunca é apagado para esconder um erro: nem uma falha,
+  nem a sua escolha o removem.
+- Quando o bloco passa a outra conversa (depois de **Abrir conversa nova**, por
+  exemplo), a anterior continua registrada em **Detalhes do terminal**, com a data
+  em que foi substituída.
+- Só o botão **Esquecer associação da conversa**, em **Detalhes do terminal**,
+  apaga a associação, e ele pede confirmação antes. Ele leva a conversa atual e
+  a falha registrada para ela; a conversa anterior, se houver, continua em
+  **Detalhes do terminal**.
+- Se o bloco ainda não tinha anotado a conversa quando você mandou a primeira
+  mensagem (o Claude Code e o Codex só criam a conversa nessa hora), o app volta
+  a procurá-la quando você envia a mensagem, até três vezes, para ela não ficar
+  sem registro.
+- O cartão e o aviso que o agente recebe não mostram o ID da conversa nem o da
+  conta: para decidir, bastam o agente, a pasta, a data e a conta. O ID completo
+  fica em **Detalhes do terminal**, com o botão de copiar, para quem precisar dele
+  (num relato de problema, por exemplo).
+
+**Limites de cada agente.** Para quem quiser conferir no próprio terminal, estes
+são os comandos e as respostas de cada CLI, medidos em 29/09/2026:
+
+| | Claude Code 2.1.283 (npm) / 2.1.250 (gerenciada) | Codex 0.159.2 (npm) / 0.150.1 (gerenciada) | Gemini CLI 0.57.0 |
+| --- | --- | --- | --- |
+| Retomar por ID | `--resume <id>` | `codex resume <id>` (UUID ou nome) | O help só garante `latest` ou o índice da lista; o app não retoma por ID |
+| Retomar a última | `-c`/`--continue` (por pasta) | `resume --last` | `--resume latest` (sem conversa na pasta, abre uma conversa nova sem avisar) |
+| Listar | Seletor interativo (`/resume` ou `--resume` sem valor) | Seletor por pasta (`--all` mostra todas) | `--list-sessions` (exige login) |
+| Conversa inexistente | `No conversation found with session ID: …` | `No saved session found with ID …` | `Invalid session identifier` / `No previous sessions found for this project.` |
+| Pasta | O seletor e o `-c` são por pasta | O seletor filtra por pasta | Conversas por projeto (pasta) |
+| Conta | Conversas por perfil (`CLAUDE_CONFIG_DIR`); outra conta dá o mesmo texto de conversa inexistente | Conversas por `CODEX_HOME` | Conversas pela HOME do perfil |
+
+A versão que roda depende do `PATH`: com duas instalações, vale a que vier
+primeiro (na máquina medida, a do npm global vinha antes da gerenciada). Confira
+com `claude --version` ou `codex --version` no terminal.
 
 ### Links: escolher onde abrir
 
@@ -839,6 +952,21 @@ Se estiver reportando um problema, inclua a versão do app, sistema operacional,
     mas não cancela essa continuação por você;
   - a **Passar responsabilidade** feita à mão ainda não mascara segredos no
     histórico enviado; só a continuação confirmada pela cadeia mascara.
+- **Retomada de conversas:**
+  - a falha de uma retomada (conversa não encontrada ou pedido de login) é
+    reconhecida pelas frases que as versões medidas das CLIs imprimem. Uma versão
+    nova pode mudar o texto; nesse caso o app não anota a falha, a mensagem da
+    CLI continua visível no terminal, e o próximo **Reiniciar terminal** tenta a mesma
+    conversa de novo;
+  - o Gemini não é retomado pelo ID: um bloco do Gemini com conversa registrada
+    sempre pede a escolha (ver a tabela de limites em
+    [Retomar conversas de agentes](#retomar-conversas-de-agentes));
+  - o app só registra uma conversa quando consegue identificá-la sem dúvida. Duas
+    conversas abertas ao mesmo tempo na mesma pasta ficam sem registro, e o bloco
+    cai na lista da CLI;
+  - a lista da CLI (`/resume`) filtra pela pasta, e cada conta tem as suas
+    conversas: uma conversa de outra pasta ou de outra conta pode não aparecer
+    nela.
 
 ## 7. Solução de problemas
 
@@ -891,6 +1019,16 @@ Depois, rode `claude --version`, `codex --version`, `gemini --version` ou `git -
 O Felixo executa arquivos Python com `python3`, inclusive quando a extensão
 está em maiúsculas. Confirme `python3 --version` no Terminal, instale o Python
 3 se necessário e reinicie o app para que o shell de login carregue o PATH.
+
+**O agente não voltou para a conversa anterior.**
+
+Leia o título e o texto no cartão do bloco: eles dizem o motivo (a tabela está em
+[Retomar conversas de agentes](#retomar-conversas-de-agentes)). Se o bloco mudou
+de pasta ou de conta, volte para a pasta ou a conta em que a conversa nasceu. Se
+a CLI pediu login, faça o login na CLI daquela conta e use **Tentar retomar de
+novo**. Se preferir seguir sem a conversa antiga, **Abrir conversa nova** não
+apaga o registro dela. Para relatar um problema, copie o ID da conversa em
+**Detalhes do terminal**; ele não aparece nas mensagens do cartão.
 
 **A IA retorna erro de login/autenticação.**
 

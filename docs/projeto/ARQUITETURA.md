@@ -1,7 +1,7 @@
 # Arquitetura vigente — Felixo AI Core
 
 Status: concluido.
-Última revisão: 2026-09-02.
+Última revisão: 2026-09-29.
 
 ## Princípio do produto
 
@@ -553,6 +553,164 @@ manual de links, labels, prompts, retomada e remoção no Canvas real.
   ligados a vários agentes. Eles são a memória compartilhada recomendada.
 - O manifesto `.fxcanvas` transporta layout, conexões e conteúdo dos arquivos
   referenciados, mas não leva comandos ou caminhos dependentes da máquina.
+
+### Retomada de conversa: plano com motivo
+
+Um bloco de agente restaurado (o app reabriu com ele) ou reiniciado com uma
+conversa associada passa por `explainAgentResume`
+(`features/canvas/services/agent-session.ts`). A função é a fonte única da
+retomada: recebe o comando, a pasta e a conta do bloco, a referência gravada
+(`agentSession`), a falha registrada (`resumeFailure`) e a escolha da pessoa
+(`resumeChoice`), e devolve `{ outcome, reason, reasons }`.
+`canResumeAgentSession` e `buildAgentResumeArgs` (mesmo arquivo),
+`resolveTerminalInitialText` (`quality-standard-prompt.ts`), a faixa do cartão
+(`terminal-resume-banner.ts`) e a tabela do
+[Guia do Usuário](../guias/GUIA-USUARIO.md#retomar-conversas-de-agentes)
+derivam desse plano. Nenhum deles decide de novo, para o que a pessoa lê e o que
+o spawn faz não divergirem.
+
+| `outcome` | Quando | O que o spawn faz |
+| --- | --- | --- |
+| `exact` | Referência válida, mesmo provider, pasta e conta, e nenhuma falha registrada para aquela `sessionId` | Sobe com `--resume <id>` (Claude) ou `resume … <id>` (Codex), sem texto inicial |
+| `picker` | Sem referência (motivo `fallback`), ou escolha `picker` | Digita `/resume` com Enter (`RESUME_INITIAL_TEXT`), e a CLI mostra a lista |
+| `new` | Escolha `new` | Conversa nova; `buildResumeFallbackNotice` entra como contexto, sem Enter |
+| `pending` | Referência presente, mas não exata, e sem escolha | Não sobe: `resolveTerminalInitialText` devolve `undefined` e a faixa pede a escolha |
+
+Sem referência, a lista da CLI continua automática: não há conversa a
+confirmar. Antes, uma referência não exata virava em silêncio o aviso de
+conversa nova; agora o spawn espera a escolha, e a pessoa sabe se está voltando
+à conversa ou começando outra.
+
+| `reason` | Título (`REASON_TITLES`) | Quando |
+| --- | --- | --- |
+| `exact` | Retomando a conversa anterior | Tudo coincide |
+| `fallback` | Sem conversa associada | Bloco sem referência |
+| `invalid-reference` | Registro da conversa ilegível | `isAgentSessionReference` recusa a referência; nada mais é comparado |
+| `provider-mismatch` | A conversa é de outro agente | O comando do bloco não é o provider da referência |
+| `expired` | A CLI não encontrou a conversa | `resumeFailure` com a mesma `sessionId` da referência |
+| `auth` | A CLI pediu login ao retomar | Idem |
+| `unsupported` | Retomada automática indisponível no Gemini | O comando é `gemini` |
+| `missing-cwd` | Bloco sem pasta de trabalho | A pasta do bloco está vazia |
+| `cwd-mismatch` | A conversa nasceu em outra pasta | A pasta do bloco difere de `reference.cwd` |
+| `account-mismatch` | A conversa é de outra conta | A conta difere; vazia e ausente valem como login do sistema |
+
+A ordem da segunda tabela, a partir de `invalid-reference`, é a de prioridade.
+`reasons` acumula todos os motivos que se aplicam nessa ordem, `reason` é o
+primeiro (vira o título), e o detalhe de `describeAgentResumeForPerson` explica
+todos, para pasta e conta divergentes aparecerem juntas. `missing-cwd` e
+`cwd-mismatch` se excluem.
+
+**Pasta e conta antes do spawn.** O Claude e o Codex imprimem o mesmo texto para
+uma conversa de outra conta e para uma que não existe (as conversas ficam por
+`CLAUDE_CONFIG_DIR` e por `CODEX_HOME`), então a saída não separa os dois casos.
+Quem separa é a referência: `agent-session-discovery.cjs` a grava com o `cwd`
+real do PTY e procura só nas pastas de histórico do ambiente da conta
+(`selectDiscoveryContext`), e o processo principal carimba o `accountId`. Assim,
+`cwd-mismatch`, `missing-cwd` e `account-mismatch` são decididos sem gastar um
+spawn.
+
+**O Gemini nunca é `exact`.** O help do Gemini CLI 0.57 só garante
+`--resume latest` ou o índice da lista. O índice muda quando surgem conversas
+novas, e `latest` numa pasta sem conversa abre outra em silêncio. O bundle dessa
+versão aceita UUID, mas o app não se apoia em comportamento não documentado:
+`buildAgentResumeArgs` devolve `undefined` para o Gemini. A descoberta continua
+gravando a referência dele, então um bloco Gemini com referência cai em
+`pending` com `unsupported`, e sem referência vai para a lista.
+
+**`expired` e `auth` vêm de depois do spawn.** São os únicos motivos que
+dependem do que a CLI respondeu. `resume-outcome-detector.ts` lê a saída inicial
+de um spawn que subiu com argumentos de retomada e a compara com as frases de
+falha medidas. Para `expired` vale só a frase do Claude ("No conversation found
+with session ID: <id>") ou do Codex ("No saved session found with ID <id>") com
+o ID TENTADO na mesma linha: numa retomada que dá certo, a CLI redesenha a
+conversa anterior, e uma linha antiga citando outra conversa não pode virar
+falha. `auth` usa as frases de login da vigia de contas. Nos dois casos, linhas
+da conversa redesenhada (com ⎿ ou ⏺, ou a continuação recuada delas) não contam
+— uma falha de login desenhada como saída de ferramenta não é detectada, o lado
+seguro. O `TerminalSessionStore` chama `onResumeFailure(reason)`, opção de
+`SessionOptions`, no máximo uma vez por spawn desses, e o bloco grava
+`resumeFailure = { sessionId, reason, at }`, persistido. `explainAgentResume` só
+a considera se `isAgentResumeFailure` a aceitar e se a `sessionId` for a da
+referência atual: uma conversa nova não herda a falha da anterior. Com a falha
+gravada, `canResumeAgentSession` é `false`, e nem o **Reiniciar terminal** nem a
+reabertura do app repetem o mesmo `--resume`. O plano vira `pending`, e a faixa
+oferece "Tentar retomar de novo". Se uma versão nova da CLI mudar o texto, nada
+é detectado e vale o comportamento anterior: a mensagem fica no terminal e o
+próximo spawn tenta a mesma conversa.
+
+**Spawn segurado.** Em `pending`, o bloco não abre PTY. A faixa mostra o alvo
+(`describeAgentResumeTarget`) e o motivo (`describeAgentResumeForPerson`), com
+"Escolher na lista (/resume)" e "Abrir conversa nova" e, com falha registrada,
+"Tentar retomar de novo". A escolha vira `resumeChoice`, que nunca vai para o
+disco, e só então o spawn acontece. Sem escolha, o bloco fica parado e o resto
+do canvas não muda. Com a faixa de falha sobre um agente de pé (login feito no
+próprio terminal, por exemplo), "Dispensar aviso" limpa a `resumeFailure` sem
+reiniciar.
+
+Só o primeiro spawn de um bloco que veio do disco é segurado. O registro da
+execução (`terminal-run-registry.ts`, na chave `felixo:canvas-terminal-run` do
+`sessionStorage`, com cópia em memória se o storage falhar) guarda os blocos que
+já subiram, os restaurados, a escolha da faixa e as conversas esquecidas. Ele
+sobrevive a ir ao chat e voltar e a recarregar só a interface (os PTYs continuam
+vivos no processo principal), e zera quando a janela fecha, como os PTYs. Um bloco
+com processo vivo reanexa em vez de voltar para "aguardando escolha". O Reiniciar
+do cartão, o da gaveta e os botões da faixa passam pelo mesmo caminho
+(`relaunchTerminal`) e pelo mesmo plano.
+
+**Relançamento automático do Codex.** Depois de o Codex se atualizar, o store
+relança o processo. Ele usa `canResumeAgentSession` com a falha vista neste
+spawn (ou a gravada). A pasta de um bloco "Local (sem projeto)" vem da referência
+que o próprio processo reportou (`liveAgentSession`). Se não puder retomar
+exato, relança numa conversa nova sem digitar nada e mostra o motivo no cartão
+(`contextWarning`, com o texto de `describeAgentResumeForPerson`). Não segura
+o bloco: ele estava rodando um instante antes, e ninguém pediu para pará-lo.
+
+**Retomada por ID já nasce com a referência.** Um PTY que sobe com
+`resume … <id>` (Codex) ou `--resume <id>` (Claude) recebe a referência no
+spawn (`resolveResumeTarget` em `pty-process-manager.cjs`, `source:
+'resume-args'`) e não passa pela descoberta: a CLI grava a retomada no arquivo
+antigo da conversa, que a busca por "arquivo mais novo" nunca acharia, e a
+descoberta acabaria adotando a conversa de outro terminal da mesma pasta. No
+Windows, uma retomada recusada que sai cedo não cai no reenvio sem argumentos
+nem no shell de emergência: o processo encerra e a faixa espera a escolha.
+
+**Captura tardia.** O Claude e o Codex só criam o arquivo da conversa na
+primeira mensagem. Por isso a descoberta (`agent-session-discovery.cjs`) é
+reaberta quando um Enter (`\r`) chega a um PTY ainda sem referência, até três
+vezes (`AGENT_SESSION_DISCOVERY_MAX_REARMS` em `pty-process-manager.cjs`).
+Shift+Enter e colagem (bracketed paste) não contam. O reanexo só reemite a
+referência que já existe; não reabre a janela do spawn. Depois da janela do
+spawn, a busca prefere o arquivo nascido depois dessa mensagem (a folga de 1 s
+para trás só vale quando nenhum nasceu depois), e as conversas já associadas a
+outro terminal do app ficam fora da disputa. Os arquivos de subagente do Claude (`isSidechain`) são ignorados, e a
+mesma `sessionId` em dois arquivos conta uma vez. No Gemini, o
+`.project_root` é comparado como o próprio Gemini normaliza (`path.resolve`, e
+minúsculas no win32); antes, a descoberta do Gemini nunca casava no Windows.
+
+**Nada é apagado.** Nem a falha nem a escolha apagam `agentSession`. Quando o
+bloco passa a outra conversa, a referência anterior vai para
+`previousAgentSession = { reference, replacedAt }`, persistido, e aparece em
+Detalhes do terminal. Só "Esquecer associação da conversa" (em Detalhes, com
+confirmação) remove a associação: leva `agentSession` e a `resumeFailure` dela, e
+mantém `previousAgentSession` como histórico. O export `.fxcanvas`
+(`canvas-transfer.cjs`) não leva `agentSession`, `previousAgentSession` nem
+`resumeFailure`, que carregam ID de conversa, pasta e conta.
+
+**Textos sem ID.** `describeAgentResumeForPerson` (título e detalhe da faixa),
+`describeAgentResumeTarget` (`Codex · /repo · conversa de 28/09 21:40 · conta
+própria`) e `buildResumeFallbackNotice` (texto para o agente no desfecho `new`)
+não levam o ID da conversa nem o da conta. Para decidir, bastam provider, pasta,
+data e se é a conta certa. O ID completo fica em Detalhes do terminal, com o
+botão de copiar.
+
+Os limites medidos de cada CLI (retomar por ID, retomar a última, listar,
+resposta para conversa inexistente, pasta e conta), com as versões, estão em
+[Retomar conversas de agentes](../guias/GUIA-USUARIO.md#retomar-conversas-de-agentes).
+A cobertura fica em `agent-session.test.ts`, `quality-standard-prompt.test.ts`,
+`terminal-resume-banner.test.ts`, `terminal-run-registry.test.ts`, `resume-outcome-detector.test.ts`,
+`terminal-session-store.test.ts`, `canvas-context-e2e.test.ts`,
+`agent-session-discovery.test.cjs`, `pty-process-manager.test.cjs` e
+`canvas-transfer.test.cjs`.
 
 ### Geometria segura e acessibilidade das superfícies
 
@@ -1353,7 +1511,9 @@ vale `pinned`), `chainOrigin` e `chainSuccessorNodeId`, persistidos. O
   (`selectDiscoveryContext`: `CODEX_HOME`, `CLAUDE_CONFIG_DIR`, `GEMINI_HOME` e a
   HOME do perfil). O Claude procura em `${CLAUDE_CONFIG_DIR || ~/.claude}/projects`.
   A referência achada sai com o `accountId` do processo, e `canResumeAgentSession`
-  só retoma na mesma conta.
+  só retoma na mesma conta. Em outra conta, o motivo é `account-mismatch` e o
+  bloco pede uma escolha (ver
+  [Retomada de conversa: plano com motivo](#retomada-de-conversa-plano-com-motivo)).
 - O `cli-accounts.json` é gravado num temporário e entra com `rename`. Arquivo
   ausente é lista vazia. Arquivo ilegível lança `CLI_ACCOUNTS_STORE_UNREADABLE`
   e nunca é sobrescrito.

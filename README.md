@@ -54,6 +54,7 @@ Base funcional entregue:
 - Launcher **Agente** com reutilização das últimas configurações e arquivo de planejamento opcional
 - **Conta por terminal**: cada conta tem login próprio, então duas contas da mesma CLI convivem sem logout e o terminal escolhe em qual nasce
 - **Cadeia de contas**, desligada por padrão: quando uma conta bate o limite, propõe continuar em outra, sempre com a sua confirmação, num bloco novo com o contexto e sem tocar no terminal antigo
+- **Retomada de conversas com motivo**: ao reabrir o app ou reiniciar um bloco, o agente só volta sozinho à mesma conversa quando agente (Claude Code ou Codex), pasta e conta coincidem; nos outros casos o cartão explica o motivo, sem mostrar IDs, e você escolhe entre a lista da CLI e uma conversa nova, sem apagar o registro (ver o [Guia do Usuário](docs/guias/GUIA-USUARIO.md#retomar-conversas-de-agentes))
 - Entrega de contexto inicial por artefatos somente leitura, com trilha persistida `written → path-typed → read` em `logs/qa` para diagnosticar reinícios e trocas de terminal/agente
 - Painel **Limites e uso** no canvas, com consumo por janela, conta, plano e horário de reset de cada CLI; no Codex, também mostra a quantidade, validade e detalhes dos resets bancados por conta, com uso protegido por confirmação
 - Bloco **Tarefas Notion** no canvas (**Ferramentas → Tarefas Notion** cria o bloco ou foca o que já existe), com conexão própria cifrada, seleção de database compartilhada, cache offline e CRUD de tarefas
