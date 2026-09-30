@@ -7284,3 +7284,107 @@ Foram 4 lentes (processo principal e segurança, renderer e acessibilidade, scri
   - a janela do Windows é de 1008×655, e o script acha o texto por um prefixo curto, espera o texto inteiro, espera a nota montar e aciona o recusado pelo teclado.
 
   A versão final do script foi para a main em `a838bd2f`. O workflow temporário não: ele fica no ramo, apagado com bundle de backup.
+
+## 2026-09-30 — Retomada: plano com motivo, escolha antes do spawn e falha registrada
+
+Registro de Claude - Tasks do AI Core, task "Felixo AI Core/Retomada — documentar diagnóstico quando a sessão exata não existe" (Notion 3ce91f95-497e-8124-bde2-eea1d848ddf5). Início em 29/09 às 22:29.
+
+### Contexto
+
+A retomada de conversa decidia por um booleano (`canResumeAgentSession`) e explicava o fallback com um texto de quatro ramos. Quatro leitores mediram, na base `f2e9496`:
+
+- O aviso de fallback não chegava à pessoa. Como não é slash command, virava artefato `initial-context`, e na tela aparecia só "CONTEXTO ENTREGUE EM ARQUIVOS…".
+- O ramo genérico ("A CLI não confirmou…") cobria provider trocado, cwd vazio e referência inválida sem que nenhuma CLI tivesse sido consultada.
+- A falha real de retomada não era detectada: o Claude responde "No conversation found with session ID", o Codex responde "No saved session found with ID", e o bloco ficava só "encerrado". Reiniciar repetia o mesmo `--resume`, e a única saída era "Esquecer associação", que apaga o registro.
+- Os dois Reiniciar decidiam diferente, e o relançamento do Codex forçava a retomada sem checar.
+- A descoberta do Gemini nunca casava no Windows (`.project_root` em minúsculas).
+- Uma conversa cuja primeira mensagem vinha depois de 15 s nunca era capturada.
+
+### O que foi feito
+
+- **Plano com motivo** (`agent-session.ts`). `explainAgentResume` devolve `{ outcome, reason, reasons }`, e é a fonte única de decisão e de texto.
+  - Desfechos: `exact`, `picker` (`/resume`), `new` e `pending`, este último segurando o spawn.
+  - Motivos: `exact`, `fallback`, `unsupported`, `cwd-mismatch`, `missing-cwd`, `account-mismatch`, `provider-mismatch`, `invalid-reference`, `expired` e `auth`.
+  - `canResumeAgentSession` e `buildAgentResumeArgs` viraram cascas do plano e aceitam a falha registrada.
+  - Os textos para a pessoa (`describeAgentResumeForPerson`, `describeAgentResumeTarget`) e para o agente (`buildResumeFallbackNotice`) não levam ID de conversa nem de conta.
+- **Escolha antes do spawn** (`terminal-resume-banner.ts`, `CanvasView.tsx`, `TerminalNode.tsx`, `TerminalDrawer.tsx`, `TerminalDetailsPanel.tsx`).
+  - Em `pending`, o cartão mostra o alvo e o motivo, com as ações "Escolher na lista (/resume)" e "Abrir conversa nova".
+  - Quando a falha é o único obstáculo, aparece "Tentar retomar de novo"; com o agente de pé, "Dispensar aviso".
+  - O estado mostrado é "aguardando escolha". Não clicar deixa o bloco parado e o canvas intacto.
+  - Os dois Reiniciar e as ações passam por `relaunchTerminal`.
+  - `terminal-run-registry.ts` guarda no `sessionStorage` os blocos iniciados, os restaurados, a escolha e as conversas esquecidas. Esse registro sobrevive a ir ao chat e a recarregar só a interface, com os PTYs vivos.
+- **Falha registrada** (`resume-outcome-detector.ts`, `terminal-session-store.ts`).
+  - A saída inicial de um spawn de retomada é lida até 30 s ou até a primeira entrada da pessoa.
+  - `expired` exige a frase do Claude ou do Codex **com o ID tentado**. `auth` usa as frases de login da vigia de contas. As linhas da conversa redesenhada (⎿/⏺) não contam.
+  - A falha vira `resumeFailure = { sessionId, reason, at }`, persistida e presa à conversa tentada.
+  - O relançamento do Codex passa a usar `canResumeAgentSession`.
+  - A gaveta limpa o xterm do bloco anterior quando abre um bloco sem sessão.
+- **Registro preservado.** A conversa substituída vai para `previousAgentSession`. "Esquecer associação" leva só a atual e a falha dela, e o reanexo não a traz de volta. O export `.fxcanvas` não leva `agentSession`, `previousAgentSession` nem `resumeFailure`.
+- **Processo principal** (`pty-process-manager.cjs`, `agent-session-discovery.cjs`).
+  - A retomada por ID já nasce com a referência (`resolveResumeTarget`, `source: 'resume-args'`) e não roda a descoberta.
+  - A descoberta reabre no Enter (`\r`) de um PTY sem referência, até 3 vezes; Shift+Enter e colagem não contam. O reanexo não reabre a janela.
+  - A busca ancorada prefere o arquivo nascido depois da mensagem. Os subagentes do Claude (`isSidechain`) são ignorados, e as referências são deduplicadas por `sessionId`.
+  - O Gemini é normalizado como o próprio Gemini faz (minúsculas no win32).
+  - No Windows, uma retomada recusada que sai cedo não vira CLI sem argumentos nem shell de emergência.
+- **Docs.**
+  - `GUIA-USUARIO.md`, seção "Retomar conversas de agentes": os desfechos, a tabela dos 10 motivos com os títulos exatos, "nada é apagado" e os limites medidos por CLI e versão.
+  - `ARQUITETURA.md`, seção "Retomada de conversa: plano com motivo".
+  - README e PLANO-CADEIA-CONTAS.
+
+### Decisões com motivo
+
+- **Pasta e conta são decididas antes do spawn, pela referência.** Medido: o Claude e o Codex respondem com o mesmo texto para conversa de outra conta e conversa inexistente.
+- **O Gemini segue sem retomada por ID.** Medido: o bundle 0.57.0 aceita UUID (UUID inexistente dá "Invalid session identifier", saída 42), mas o help público só garante `latest` ou índice, e `latest` abre conversa nova em silêncio quando a pasta não tem nenhuma. A mensagem "No previous sessions found for this project" indica projeto ou HOME sem sessão retomável, não UUID recusado. Isso corrige a leitura da entrada de 28/08. Religar o Gemini ficou como task de decisão.
+- **A escolha do spawn fica com a pessoa só na ambiguidade.** Sem conversa associada, a lista da CLI continua automática. Com o agente de pé, a faixa só aparece para falha, para não parecer erro sobre um agente funcionando.
+- **O relançamento do Codex não segura o bloco.** Ele estava rodando um instante antes; relança sem retomada e mostra o motivo no cartão.
+
+### Validação
+
+Todos os comandos rodaram em `app/`, no conjunto final.
+
+**Portões**
+- `npx tsc -b --pretty false`, `npm run lint` e `npm run build`: saída 0.
+- Suíte node: 2349 de 2353. As falhas são duas conhecidas: `app-relaunch.test.cjs` (EPERM de symlink no Windows) e o teste de tempo do dreno do PTY, que passa isolado.
+- `npx vitest run`: 2712 testes, com 1 pulado.
+
+**Mutação**
+- Núcleo (`agent-session.ts` e `quality-standard-prompt.ts`): 10 mutações, todas mortas. Foram elas:
+  - falha ignorada, e falha de outra conversa bloqueando;
+  - pasta, conta e provider ignorados;
+  - Gemini retomado por ID;
+  - só um motivo no texto;
+  - alvo vazando o ID;
+  - `pending` subindo direto;
+  - escolha ignorada.
+- Export `.fxcanvas`: `resumeFailure` exportado é pego pelo teste.
+- Correções dos agentes, cada uma revertida com o próprio teste falhando:
+  - terminal: 7 falhas com a regra antiga do relançamento e a vigia desligada;
+  - main: 5 correções, cada uma só com o próprio teste falhando;
+  - UI: 6 reversões, cada uma pega por algum teste.
+
+**Revisão**
+Três agentes revisaram, reproduzindo cada achado: um ao vivo, um no fluxo do renderer e um na descoberta. Foram 18 achados, 15 corrigidos antes do commit e 3 que viraram tasks.
+
+**Checagem ao vivo**
+Feita com o store real, o PTY roteirizado do main e as pastas isoladas das CLIs, antes das correções da revisão:
+- a faixa "A conversa nasceu em outra pasta" com alvo e botões, e nenhum PTY para o bloco segurado;
+- a faixa sem o ID;
+- "Abrir conversa nova" sobe o bloco com o aviso ao agente, e a conversa antiga vai para `previousAgentSession` na captura da primeira mensagem;
+- "Escolher na lista" digita `/resume`;
+- deixar sem escolher sobrevive ao reload;
+- Detalhes mostra "Retomada" sem ID;
+- o Gemini mostra "Retomada automática indisponível";
+- a retomada exata sobe com `resume <id>` sem faixa;
+- o export não leva ID;
+- "Esquecer" mantém `previousAgentSession`.
+
+### NÃO verificado / limitações
+
+- **Checagem ao vivo feita antes das correções da revisão.** O conjunto final (registro no `sessionStorage`, "Dispensar aviso", detector com ID, referência no spawn de retomada) foi validado por testes, não reaberto no app.
+- **O detector não foi exercitado ao vivo:** o PTY roteirizado só imprime depois de uma entrada, e a entrada fecha a janela.
+- **Frases de falha dependem da versão da CLI.** Uma CLI nova com outro texto não é detectada e vale o comportamento anterior. Falha de login desenhada como saída de ferramenta, ou ID quebrado de linha, também não é detectada.
+- **O relançamento automático do Codex ignora a escolha da faixa:** não redigita `/resume` nem o aviso de conversa nova (task aberta).
+- **O store falso do renderer (`FELIXO_DEVTOOLS_MOCK_PTY=1`) diverge do real** e esconde a faixa. Os smokes do CI não cobrem esta funcionalidade (task aberta).
+- **"Escolher outra conversa" é só a lista da CLI,** que filtra por pasta; no caso de pasta divergente, a conversa pode não aparecer (task aberta).
+- **O chat legado não usa este resolver** e ainda manda UUID ao Gemini (task aberta).
+- **Anterior a esta task:** a descoberta do Codex percorre as pastas em BFS com teto de 3000 arquivos, pelos rollouts mais antigos (task aberta).
