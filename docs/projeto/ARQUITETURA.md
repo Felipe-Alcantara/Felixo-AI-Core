@@ -1713,6 +1713,16 @@ arquivo de contexto falhou e o texto foi direto (fallback), e
 `toActivationResult` transforma isso em `sent-inline`, que os painéis de
 prompts e de skills mostram com texto próprio, diferente do envio normal.
 
+**Os painéis só digitam.** Catálogo, combinação e skill chegam ao PTY sem
+Enter (`autoSubmit: false`, `terminalTextForInsertion`): o texto fica na linha
+de entrada, e quem envia é a pessoa (decisão de 30/09/2026, depois de um relato
+de prompts enviados sozinhos no Claude Code). A inserção fica em
+`pendingPromptInsertions` até o Enter da pessoa: tecla comum e Shift+Enter a
+mantêm (a pessoa está completando o pedido), e o envio sai com o nome dela;
+Backspace, Ctrl+C e Ctrl+U a descartam, e o pedido seguinte é `manual`. Continuam
+indo sozinhos `/resume`, a passagem de responsabilidade e as instruções que o app
+manda ao ligar um `.md`, conectar agentes ou renomear um bloco.
+
 **Caminhos entre aspas.** Todo caminho absoluto num texto para o agente passa
 por `quotePromptPath` (`prompt-paths.ts`): a skill ativada, o manifesto de
 skills, as skills do preset, os `.md` ligados, o arquivo de planejamento, a

@@ -7568,3 +7568,36 @@ Registro de Claude - Tasks do AI Core, task "Felixo AI Core/Prompts — validar 
 - Sessão E sozinha, em Xvfb 1009×678 (a janela do Windows da CI): P0–P6 em 80 s.
 - Smoke completo, em Xvfb 1280×800: sessões A a E aprovadas (C em 92 s, D em 47 s, E em 23 s).
 - A sessão local foi interrompida entre 16:17 e 18:37 (a máquina reiniciou e o `/tmp` foi limpo). As mudanças estavam no worktree, e a validação foi refeita às 18:37.
+
+### Relato do Felipe no meio da task: prompts enviados sozinhos
+
+Com o PR #101 aberto, o Felipe relatou que os prompts do painel **Prompts**, no Claude Code, eram enviados sozinhos em vez de só entrarem na linha de entrada. Pela resposta dele, o comportamento certo é **sempre só digitar**, em catálogo, combinação e skill. Só `/resume` e a passagem de responsabilidade continuam indo sozinhos.
+
+- **Causa:** não foi uma regressão recente. O "Inserir" do catálogo mandava `toSubmittedTerminalText` (com Enter) desde antes de 16/09, a combinação usava `autoSubmit: true` por padrão e `buildSkillActivationPrompt` terminava com Enter.
+- **Correção:**
+  - `PromptsPanel` e `activateSkill` passam `autoSubmit: false`, e `composeSelectedPromptInsertion` agora tem `false` como padrão.
+  - `buildSkillActivationPrompt` não põe mais Enter.
+  - `terminalTextForInsertion` (em `terminal-input.ts`) só acrescenta o Enter quando a inserção pede, e o `CanvasView` a usa.
+  - Os retornos dizem "Digitado no terminal aberto. Revise e aperte Enter para enviar."
+- **Nome no cartão:** a inserção só digitada fica em `pendingPromptInsertions` até o Enter da pessoa. Tecla comum e Shift+Enter a mantêm, porque a pessoa está completando o pedido, e o envio sai com o nome do prompt. Backspace, Ctrl+C e Ctrl+U a descartam.
+- **Continuam indo sozinhos, e ficam para decisão:** a instrução ao ligar um `.md` e o pedido de diagnóstico, a colaboração ao conectar agentes, o aviso de renomeação e o "Enviar" do painel Terminais, que é um envio explícito.
+- **Testes:**
+  - E2E: 22 casos.
+    - Os painéis nunca escrevem Enter.
+    - O Enter da pessoa envia com o nome do prompt.
+    - Completar com Shift+Enter mantém o nome; Ctrl+C o descarta.
+    - Os snapshots foram regravados com `autoSubmit: false` em catálogo, combinação e skill.
+  - Smoke, sessão E: passou com os textos novos, na janela do Windows da CI.
+
+### Outro pedido: effort do Claude Code desatualizado
+
+- O `claude --help` (2.1.285) lista `low, medium, high, xhigh, max`, e o app oferecia `low, medium, high, max`.
+- `agent-launch-options.ts` ganhou `xhigh`, e o adaptador do chat (`model-options.cjs`) aceita `xhigh`.
+- O modal de modelos do chat deriva a lista do Claude da mesma fonte, como já fazia com o Codex. Era a cópia duplicada que tinha ficado velha.
+- Testes novos no canvas e no adaptador; um nível desconhecido, como `ultra`, não vira argumento.
+
+### CI da primeira rodada do PR #101 (`f95bdb8`)
+
+- `Validate` passou nos três sistemas. No Windows, `context-file-delivery.shell.test.ts` rodou 3 casos e pulou 1 (o de POSIX): o `cmd.exe` roda a linha comum; o PowerShell roda a linha com `&` e recusa a linha comum; o **Git Bash roda a linha comum** com o caminho de Windows entre aspas.
+- `Dependency policy` falhou por um alerta publicado hoje, fora desta mudança: `dompurify` 3.4.13–3.4.15, GHSA-p98j-92pf-mc4p, severidade baixa, transitivo via `mermaid`.
+- `npm audit fix`, sem `--force`, só mexeu no lockfile: `dompurify` 3.4.15→3.4.16, `undici` 6.28.0→6.29.0 e 7.29.0→7.30.0, `brace-expansion` 5.0.9→5.0.12, `fast-uri` 3.1.7→3.1.8. O `npm audit` foi para 0 vulnerabilidades.
