@@ -11,7 +11,12 @@
  * A cadeia de contas fica em `canvas-smoke-contas.cjs` (sessão C, perfil novo
  * com a CLI roteirizada no processo principal). A escolha de destino dos
  * links fica em `canvas-smoke-links.cjs` (sessão D, outro perfil novo com a
- * mesma CLI roteirizada).
+ * mesma CLI roteirizada), e os caminhos de prompt (catálogo, combinação,
+ * fallback, skill e área de transferência) em `canvas-smoke-prompts.cjs`
+ * (sessão E, idem).
+ *
+ * `FELIXO_SMOKE_SESSOES=D,E` roda só as sessões listadas, para quem estiver
+ * mexendo numa delas; sem a variável, rodam todas (é o que a CI faz).
  */
 
 const path = require('node:path')
@@ -27,6 +32,7 @@ const {
 const { corromperEstadoNoPerfil, criarCenariosDoTutorial, registrarPerguntaNoPerfil } = require('./canvas-smoke-onboarding.cjs')
 const { criarSessaoDaCadeia } = require('./canvas-smoke-contas.cjs')
 const { criarSessaoDeLinks } = require('./canvas-smoke-links.cjs')
+const { criarSessaoDePrompts } = require('./canvas-smoke-prompts.cjs')
 
 const APP_DIR = path.resolve(__dirname, '..')
 const FELIXO_CLI = path.join(APP_DIR, 'electron', 'cli', 'felixo.cjs')
@@ -62,6 +68,12 @@ const CONTAS_SESSION_ENV = {
 // o `shell.openExternal` da instância falha sempre (FELIXO_DEVTOOLS_SHELL_OPEN),
 // e é assim que o smoke prova o aviso de "não foi possível abrir no navegador".
 const LINKS_SESSION_ENV = { ...CONTAS_SESSION_ENV, FELIXO_DEVTOOLS_SHELL_OPEN: 'falha' }
+// Sessão E: a mesma CLI roteirizada, que ecoa o que o terminal recebe.
+const PROMPTS_SESSION_ENV = CONTAS_SESSION_ENV
+const SESSOES = new Set(
+  (process.env.FELIXO_SMOKE_SESSOES || 'A,B,C,D,E').split(',').map((sessao) => sessao.trim().toUpperCase()),
+)
+const rodar = (sessao) => SESSOES.has(sessao)
 const DEVTOOLS_LAUNCH_TIMEOUT_MS = 60_000
 const THEME_STORAGE_KEY = 'felixo-ai-core.theme'
 const VISUAL_THEMES = ['dark', 'high_contrast']
@@ -1105,7 +1117,7 @@ async function main() {
   fs.rmSync(visualOutputPath(''), { recursive: true, force: true })
   // Sessão A: o smoke de sempre, com o tutorial suprimido na automação (SA0
   // logo depois da montagem, SA1–SA10 no fim, sobre a fixture).
-  await withDevtoolsSession(() => comPaginaDaSessao('canvas-smoke-failure', async (page) => {
+  if (rodar('A')) await withDevtoolsSession(() => comPaginaDaSessao('canvas-smoke-failure', async (page) => {
     const tutorial = cenariosDoTutorial(page)
     await checarMontagem(page)
     await tutorial.sa0()
@@ -1128,23 +1140,23 @@ async function main() {
   }))
   // Sessão B: perfil novo e canvas vazio, com o tutorial abrindo e gravando
   // sozinho (o primeiro uso de verdade) e os avisos de hardware ligados.
-  await withDevtoolsSession(
+  if (rodar('B')) await withDevtoolsSession(
     () => comPaginaDaSessao('canvas-smoke-failure-onboarding', (page) => cenariosDoTutorial(page).sessaoB()),
     { env: ONBOARDING_SESSION_ENV },
   )
   // Sessão C: perfil novo com a CLI roteirizada no main; a cadeia de contas de
   // ponta a ponta (§13.6 do plano da cadeia).
   const inicioDaCadeia = Date.now()
-  await withDevtoolsSession(
+  if (rodar('C')) await withDevtoolsSession(
     () => comPaginaDaSessao('canvas-smoke-failure-contas', (page) =>
       criarSessaoDaCadeia({ page, checarMontagem, timeoutMs: ONBOARDING_TIMEOUT_MS }).executar()),
     { env: CONTAS_SESSION_ENV },
   )
-  console.log(`[canvas-smoke] cadeia de contas: sessão C (C1–C13) em ${Date.now() - inicioDaCadeia} ms`)
+  if (rodar('C')) console.log(`[canvas-smoke] cadeia de contas: sessão C (C1–C13) em ${Date.now() - inicioDaCadeia} ms`)
   // Sessão D: perfil novo; a escolha de destino dos links em todas as
   // superfícies, com mouse, teclado, clique direito, toque e streaming.
   const inicioDosLinks = Date.now()
-  await withDevtoolsSession(
+  if (rodar('D')) await withDevtoolsSession(
     () => comPaginaDaSessao('canvas-smoke-failure-links', (page) =>
       criarSessaoDeLinks({
         page,
@@ -1154,11 +1166,26 @@ async function main() {
       }).executar()),
     { env: LINKS_SESSION_ENV },
   )
-  console.log(`[canvas-smoke] links: sessão D (L0–L12) em ${Date.now() - inicioDosLinks} ms`)
+  if (rodar('D')) console.log(`[canvas-smoke] links: sessão D (L0–L12) em ${Date.now() - inicioDosLinks} ms`)
+  // Sessão E: perfil novo; os caminhos de prompt clicados nos painéis, com o
+  // retorno de cada um, o nome no cartão e o fallback de verdade.
+  const inicioDosPrompts = Date.now()
+  if (rodar('E')) await withDevtoolsSession(
+    () => comPaginaDaSessao('canvas-smoke-failure-prompts', (page) =>
+      criarSessaoDePrompts({
+        page,
+        checarMontagem,
+        estadoDaSessao: readState,
+        timeoutMs: ONBOARDING_TIMEOUT_MS,
+      }).executar()),
+    { env: PROMPTS_SESSION_ENV },
+  )
+  if (rodar('E')) console.log(`[canvas-smoke] prompts: sessão E (P0–P6) em ${Date.now() - inicioDosPrompts} ms`)
   const report = writeVisualReport()
   console.log('[canvas-visual] relatório e capturas: ' + report)
-  console.log('[canvas-smoke] fixture, interações, recuperação, resize, matriz visual de viewport/tema/DPR, elementos abertos (tools/menu/modal) e dimensões de acessibilidade (fonte/reduced-motion/locale): ok')
-  console.log('[canvas-smoke] tutorial do canvas: sessão A (SA0–SA10, abertura suprimida) e sessão B (SB1–SB8, primeiro uso real): ok')
+  if (rodar('A')) console.log('[canvas-smoke] fixture, interações, recuperação, resize, matriz visual de viewport/tema/DPR, elementos abertos (tools/menu/modal) e dimensões de acessibilidade (fonte/reduced-motion/locale): ok')
+  if (rodar('A') && rodar('B')) console.log('[canvas-smoke] tutorial do canvas: sessão A (SA0–SA10, abertura suprimida) e sessão B (SB1–SB8, primeiro uso real): ok')
+  console.log(`[canvas-smoke] sessões rodadas: ${[...SESSOES].join(', ')}`)
 }
 
 main().catch((error) => {
