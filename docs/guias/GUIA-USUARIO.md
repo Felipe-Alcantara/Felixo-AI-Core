@@ -565,17 +565,19 @@ lugar: o cartão do bloco mostra o motivo e você escolhe.
 **Os quatro desfechos.**
 
 1. **Retomada exata.** O agente volta para a mesma conversa, com o histórico
-   dela. Só acontece no Claude Code e no Codex, e só quando o bloco está no mesmo
-   agente, na mesma pasta e na mesma conta em que a conversa nasceu. Enquanto o
-   agente sobe, o cartão mostra *Retomando a conversa anterior…*; o motivo
-   fica registrado em **Detalhes do terminal → Retomada**.
+   dela. Acontece no Claude Code, no Codex e no Gemini CLI a partir da versão
+   0.57, e só quando o bloco está no mesmo agente, na mesma pasta e na mesma
+   conta em que a conversa nasceu. Enquanto o agente sobe, o cartão mostra
+   *Retomando a conversa anterior…*; o motivo fica registrado em **Detalhes do
+   terminal → Retomada**.
 2. **Lista da CLI.** Quando o bloco não guardou qual conversa estava aberta, o
    app digita `/resume` e a própria CLI mostra a lista de conversas daquela pasta
    para você escolher. Isso é automático, como antes, e acontece também depois de
    **Esquecer associação da conversa**. O título é **Sem conversa associada**.
 3. **Escolha antes de abrir.** Quando o bloco guardou uma conversa, mas ela não
-   pode ser retomada com certeza (outra pasta, outra conta, outro agente, Gemini,
-   ou a CLI já respondeu que ela não existe), o agente **não é aberto**. O
+   pode ser retomada com certeza (outra pasta, outra conta, outro agente, uma
+   versão do Gemini que não retoma pelo ID, ou a CLI já respondeu que ela não
+   existe), o agente **não é aberto**. O
    cartão mostra a conversa (o agente, a pasta, o dia e a hora da conversa, e se
    ela é de uma conta própria ou do login do sistema) e o motivo, com os botões:
    - **Escolher na lista (/resume)**: abre o agente e digita `/resume`, para você
@@ -605,15 +607,36 @@ bloco, porque o Claude Code e o Codex respondem com o mesmo texto para uma
 conversa de outra conta e para uma conversa que não existe. Pela resposta da CLI
 não daria para saber qual dos dois aconteceu.
 
+**A versão de cada agente.** O jeito de voltar a uma conversa muda de uma versão
+para outra da CLI. Por isso o app lê a versão instalada de cada agente (com
+`--version`, com tempo-limite, nunca abrindo a CLI de verdade) e decide por ela:
+
+- **Claude Code e Codex** voltam pelo ID da conversa em qualquer versão, porque
+  o `--help` dos dois documenta isso. Se a versão não responder a tempo, eles
+  seguem do mesmo jeito.
+- **Gemini CLI** volta pelo ID da conversa a partir da 0.57, onde isso foi
+  provado (medido na 0.57.0 e na 0.62.0). Numa versão anterior, ou quando o app
+  não consegue ler a versão, o bloco espera você escolher, e o texto diz qual é
+  a versão e o que fazer (atualizar o Gemini CLI).
+- A conversa fica anotada com a versão em que foi vista. Se você atualizar o
+  agente depois, o app recalcula o jeito de voltar pela versão nova e **não
+  apaga a conversa**. **Detalhes do terminal → Capacidade da CLI** mostra a
+  versão instalada, o jeito de voltar e, quando a versão mudou, em qual versão
+  a conversa foi gravada (por exemplo, *Gemini CLI 0.62.0: pelo ID da conversa
+  (gravada na 0.56.2)*).
+- Ao abrir o app, um bloco do Gemini com conversa anotada espera alguns
+  segundos pela versão antes de subir; os do Claude Code e do Codex sobem na
+  hora.
+
 **Os motivos.** Quando é preciso escolher, o título aparece na faixa do
 cartão e na gaveta, com o texto que explica o caso embaixo dele. Nos outros
 casos, o título fica em **Detalhes do terminal → Retomada**.
 
 | Título (faixa do cartão ou Detalhes → Retomada) | Quando aparece | O que acontece |
 | --- | --- | --- |
-| **Retomando a conversa anterior** | É a mesma conversa, na mesma pasta e na mesma conta (Claude Code ou Codex) | Retomada exata |
+| **Retomando a conversa anterior** | É a mesma conversa, na mesma pasta e na mesma conta (Claude Code, Codex, ou Gemini CLI a partir da 0.57) | Retomada exata |
 | **Sem conversa associada** | O bloco não guardou qual conversa estava aberta | A CLI mostra a lista (`/resume`) |
-| **Retomada automática indisponível no Gemini** | O Gemini CLI só garante retomar a conversa mais recente ou pela posição na lista, e a posição muda quando surgem conversas novas; o app não adivinha | Escolha antes de abrir |
+| **Retomada pelo ID indisponível nesta versão do Gemini CLI** | O Gemini CLI instalado é anterior à 0.57, ou o app não conseguiu ler a versão. Sem a 0.57, o Gemini CLI só garante retomar a conversa mais recente ou pela posição na lista, e a posição muda quando surgem conversas novas; o app não adivinha. Atualize o Gemini CLI para voltar direto à conversa | Escolha antes de abrir |
 | **A conversa nasceu em outra pasta** | A conversa foi aberta numa pasta e o bloco está em outra. A lista da CLI filtra por pasta, então ela pode não aparecer ali | Escolha antes de abrir |
 | **Bloco sem pasta de trabalho** | O bloco não tem pasta de trabalho definida, então não dá para confirmar que é a mesma conversa | Escolha antes de abrir |
 | **A conversa é de outra conta** | Retomar ali abriria o histórico de uma conta na cobrança de outra. Volte o bloco para a conta original para retomá-la | Escolha antes de abrir |
@@ -625,7 +648,7 @@ casos, o título fica em **Detalhes do terminal → Retomada**.
 Quando vale mais de um motivo (outra pasta **e** outra conta, por exemplo), o
 título mostra o primeiro e o texto explica todos. A ordem é: registro ilegível,
 outro agente, falha na última tentativa (conversa não encontrada ou login),
-Gemini, pasta (sem pasta ou outra pasta) e, por último, conta.
+versão do Gemini, pasta (sem pasta ou outra pasta) e, por último, conta.
 
 **Nada é apagado.**
 
@@ -649,15 +672,17 @@ Gemini, pasta (sem pasta ou outra pasta) e, por último, conta.
 
 **Limites de cada agente.** Para quem quiser conferir no próprio terminal, estes
 são os comandos e as respostas de cada CLI, medidos em 29/09/2026 e conferidos no
-app instalado (empacotado) em 30/09/2026, no Windows, sem nenhuma conta conectada:
+app instalado (empacotado) em 30/09/2026, no Windows, sem nenhuma conta conectada.
+O Gemini CLI foi medido de novo em 30/09/2026, no Linux, na 0.57.0 e na 0.62.0,
+e a retomada dele pelo ID foi conferida no app com uma pasta de usuário isolada:
 
-| | Claude Code 2.1.283 (npm) / 2.1.250 (gerenciada) | Codex 0.159.2 (npm) / 0.150.1 (gerenciada) | Gemini CLI 0.57.0 |
+| | Claude Code 2.1.283 (npm) / 2.1.250 (gerenciada) | Codex 0.159.2 (npm) / 0.150.1 (gerenciada) | Gemini CLI 0.57.0 e 0.62.0 |
 | --- | --- | --- | --- |
-| Retomar por ID | `--resume <id>` | `codex resume <id>` (UUID ou nome) | O help só garante `latest` ou o índice da lista; o app não retoma por ID |
+| Retomar por ID | `--resume <id>` | `codex resume <id>` (UUID ou nome) | `--resume <id>`: o `--help` só cita `latest` e o índice, mas a própria mensagem de erro da CLI ensina `--resume {uuid}`, e a retomada pelo ID foi medida. O app usa da 0.57 em diante |
 | Retomar a última | `-c`/`--continue` (por pasta) | `resume --last` | `--resume latest` (sem conversa na pasta, abre uma conversa nova sem avisar) |
 | Listar | Seletor interativo (`/resume` ou `--resume` sem valor) | Seletor por pasta (`--all` mostra todas) | `--list-sessions` (exige login) |
-| Conversa inexistente | `No conversation found with session ID: …`, antes de qualquer login (também na 2.1.285) | `No saved session found with ID …`, só depois do login: sem conta conectada, a tela de login vem antes | `Invalid session identifier` / `No previous sessions found for this project.` |
-| Primeira execução | Numa pasta de configuração nova, o onboarding (tema, confiança na pasta) aparece antes de a CLI olhar o `--resume` | A tela de login aparece antes de a CLI resolver o ID | O login é exigido até para listar |
+| Conversa inexistente | `No conversation found with session ID: …`, antes de qualquer login (também na 2.1.285) | `No saved session found with ID …`, só depois do login: sem conta conectada, a tela de login vem antes | `Error resuming session: Invalid session identifier "…"` (a pasta tem outras conversas) ou `Error resuming session: No previous sessions found for this project.` (não tem nenhuma), antes do login e saindo com o código 42 |
+| Primeira execução | Numa pasta de configuração nova, o onboarding (tema, confiança na pasta) aparece antes de a CLI olhar o `--resume` | A tela de login aparece antes de a CLI resolver o ID | O ID é resolvido antes de tudo; depois vêm a confiança na pasta e o login. O login é exigido para listar |
 | Pasta | O seletor e o `-c` são por pasta | O seletor filtra por pasta | Conversas por projeto (pasta) |
 | Conta | Conversas por perfil (`CLAUDE_CONFIG_DIR`); outra conta dá o mesmo texto de conversa inexistente | Conversas por `CODEX_HOME` | Conversas pela HOME do perfil |
 
@@ -669,6 +694,13 @@ No Codex 0.159, uma pasta de conta (`CODEX_HOME`) com caminho longo impede a CLI
 de abrir: ela responde `path must be shorter than SUN_LEN` antes de qualquer
 retomada. Medido no app instalado com uma pasta de 156 caracteres; com 25, a CLI
 abriu normalmente.
+
+O Gemini CLI apaga sozinho, ao abrir, as conversas com mais de 30 dias e as que
+ele não consegue ler (a opção `general.sessionRetention` das configurações dele,
+ligada por padrão). Uma conversa apagada assim aparece no cartão como **A CLI não
+encontrou a conversa**. O Gemini CLI também se atualiza sozinho ao abrir
+(`general.enableAutoUpdate`, ligada por padrão): a versão pode mudar de um dia
+para o outro, e o app acompanha pela leitura da versão.
 
 ### Links: escolher onde abrir
 

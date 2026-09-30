@@ -571,7 +571,7 @@ o spawn faz não divergirem.
 
 | `outcome` | Quando | O que o spawn faz |
 | --- | --- | --- |
-| `exact` | Referência válida, mesmo provider, pasta e conta, e nenhuma falha registrada para aquela `sessionId` | Sobe com `--resume <id>` (Claude) ou `resume … <id>` (Codex), sem texto inicial |
+| `exact` | Referência válida, mesmo provider, pasta e conta, nenhuma falha registrada para aquela `sessionId`, e a versão instalada da CLI retoma pelo ID (`capability.method === 'exact-id'`) | Sobe com `--resume <id>` (Claude e Gemini) ou `resume … <id>` (Codex), sem texto inicial |
 | `picker` | Sem referência (motivo `fallback`), ou escolha `picker` | Digita `/resume` com Enter (`RESUME_INITIAL_TEXT`), e a CLI mostra a lista |
 | `new` | Escolha `new` | Conversa nova; `buildResumeFallbackNotice` entra como contexto, sem Enter |
 | `pending` | Referência presente, mas não exata, e sem escolha | Não sobe: `resolveTerminalInitialText` devolve `undefined` e a faixa pede a escolha |
@@ -589,7 +589,7 @@ conversa nova; agora o spawn espera a escolha, e a pessoa sabe se está voltando
 | `provider-mismatch` | A conversa é de outro agente | O comando do bloco não é o provider da referência |
 | `expired` | A CLI não encontrou a conversa | `resumeFailure` com a mesma `sessionId` da referência |
 | `auth` | A CLI pediu login ao retomar | Idem |
-| `unsupported` | Retomada automática indisponível no Gemini | O comando é `gemini` |
+| `unsupported` | Retomada pelo ID indisponível nesta versão do <agente> | A versão instalada da CLI do bloco não retoma pelo ID (Gemini anterior à 0.57, ou versão que não respondeu). Só com o mesmo provider: a conversa de outro agente já tem `provider-mismatch` |
 | `missing-cwd` | Bloco sem pasta de trabalho | A pasta do bloco está vazia |
 | `cwd-mismatch` | A conversa nasceu em outra pasta | A pasta do bloco difere de `reference.cwd` |
 | `account-mismatch` | A conversa é de outra conta | A conta difere; vazia e ausente valem como login do sistema |
@@ -609,22 +609,64 @@ real do PTY e procura só nas pastas de histórico do ambiente da conta
 `cwd-mismatch`, `missing-cwd` e `account-mismatch` são decididos sem gastar um
 spawn.
 
-**O Gemini nunca é `exact`.** O help do Gemini CLI 0.57 só garante
-`--resume latest` ou o índice da lista. O índice muda quando surgem conversas
-novas, e `latest` numa pasta sem conversa abre outra em silêncio. O bundle dessa
-versão aceita UUID, mas o app não se apoia em comportamento não documentado:
-`buildAgentResumeArgs` devolve `undefined` para o Gemini. A descoberta continua
-gravando a referência dele, então um bloco Gemini com referência cai em
-`pending` com `unsupported`, e sem referência vai para a lista.
+**Capacidade pela versão instalada.** O método de retomada sai de
+`resolveAgentResumeCapability` (`agent-resume-capability.ts`), por provider,
+versão, modo (hoje só o terminal interativo do canvas) e sistema (nenhuma regra
+difere por sistema hoje). Os métodos são `exact-id`, `numeric-index`,
+`latest-only`, `interactive-only` e `unsupported`, e o app só retoma sozinho
+pelo `exact-id`:
+
+| Provider | Regra | Base | Sem versão |
+| --- | --- | --- | --- |
+| Claude Code | `exact-id` em qualquer versão | `documented`: `--help` da 2.1.285 | `exact-id` |
+| Codex | `exact-id` em qualquer versão | `documented`: `codex resume --help` da 0.156.1 | `exact-id` |
+| Gemini CLI | `exact-id` da 0.57.0 em diante; antes, `numeric-index` (`below-proven`) | `measured`: 0.57.0 e 0.62.0, no TTY com HOME isolada | `numeric-index` (`unknown-version`) |
+
+O `--help` do Gemini só cita `latest` e o índice, mas a própria mensagem de erro
+dele ensina `--resume {uuid}`, e a retomada pelo ID foi medida. Cada regra tem
+as saídas medidas em `electron/__fixtures__/agent-resume-versions.json`
+(`--version`, recusas e código de saída), que os testes dos dois processos
+percorrem. Ao medir uma versão nova, acrescenta-se uma linha ali.
+
+A versão vem do processo principal: `agent-cli-versions.cjs` reaproveita a
+detecção da abertura (`detectAllClis`, que já roda `<cli> --version` com
+tempo-limite) e responde ao canal `pty:cli-versions`. Uma leitura com versão
+vale 10 min; sem versão, 1 min, e a da abertura nem isso, porque o `--version`
+do Gemini (uns 7 s ocioso na 0.62) pode estourar o prazo disputando a CPU com
+o boot do app. O canvas pede as versões ao montar (`loadAgentCliVersions`). Só
+um bloco restaurado cuja regra depende de versão (o Gemini,
+`resumeDependsOnVersion`) espera por elas antes de subir; Claude e Codex sobem na
+hora. A versão usada no plano segue para o store (`resumeCliVersion` no dado de
+render, `cliVersion` nas `SessionOptions`), que confere de novo em
+`buildAgentResumeArgs`. Na instância roteirizada (`FELIXO_DEVTOOLS_FAKE_CLI_PTY`),
+nenhuma versão é lida.
+
+**Versão gravada e invalidação.** O processo principal carimba `cliVersion` na
+referência, tanto na descoberta quanto na retomada por ID
+(`PtyProcessManager.withCliVersion`, com a mesma regra de formato do renderer),
+e o canvas acrescenta `resumeMethod` ao gravá-la (`withResumeMethod`, em
+`agentSessionPatch`). O método gravado é registro, não decisão:
+`explainAgentResume` sempre recalcula pela versão instalada agora e, quando ela
+difere da gravada, devolve `versionChange = { from, to }`, que Detalhes do
+terminal mostra ("Gemini CLI 0.62.0: pelo ID da conversa (gravada na 0.56.2)").
+A referência nunca é apagada por mudança de versão, e a próxima retomada regrava
+`cliVersion` com a versão nova.
 
 **`expired` e `auth` vêm de depois do spawn.** São os únicos motivos que
 dependem do que a CLI respondeu. `resume-outcome-detector.ts` lê a saída inicial
 de um spawn que subiu com argumentos de retomada e a compara com as frases de
-falha medidas. Para `expired` vale só a frase do Claude ("No conversation found
-with session ID: <id>") ou do Codex ("No saved session found with ID <id>") com
-o ID TENTADO na mesma linha: numa retomada que dá certo, a CLI redesenha a
-conversa anterior, e uma linha antiga citando outra conversa não pode virar
-falha. `auth` usa as frases de login da vigia de contas. Nos dois casos, linhas
+falha medidas, só as da CLI do spawn (`providers` de cada frase). Para
+`expired` vale só a frase do Claude ("No conversation found with session ID:
+<id>") ou do Codex ("No saved session found with ID <id>") com o ID TENTADO na
+mesma linha: numa retomada que dá certo, a CLI redesenha a conversa anterior, e
+uma linha antiga citando outra conversa não pode virar falha. O Gemini recusa
+antes de abrir a interface, depois de "Error resuming session:", e sai com 42:
+`Invalid session identifier "<id>".` (com o ID entre aspas) ou "No previous
+sessions found for this project." (sem ID). As duas frases têm `exitCode: 42` e
+só contam quando o processo sai com esse código dentro da janela
+(`ResumeOutcomeDetector.exit`, chamado no começo de `finishExit`); a saída faz o
+papel do ID que a segunda frase não traz, e uma conversa redesenhada que cite a
+frase não termina assim. `auth` usa as frases de login da vigia de contas. Nos dois casos, linhas
 da conversa redesenhada (com ⎿ ou ⏺, ou a continuação recuada delas) não contam
 — uma falha de login desenhada como saída de ferramenta não é detectada, o lado
 seguro. O `TerminalSessionStore` chama `onResumeFailure(reason)`, opção de
@@ -666,7 +708,7 @@ exato, relança numa conversa nova sem digitar nada e mostra o motivo no cartão
 o bloco: ele estava rodando um instante antes, e ninguém pediu para pará-lo.
 
 **Retomada por ID já nasce com a referência.** Um PTY que sobe com
-`resume … <id>` (Codex) ou `--resume <id>` (Claude) recebe a referência no
+`resume … <id>` (Codex) ou `--resume <id>` (Claude e Gemini) recebe a referência no
 spawn (`resolveResumeTarget` em `pty-process-manager.cjs`, `source:
 'resume-args'`) e não passa pela descoberta: a CLI grava a retomada no arquivo
 antigo da conversa, que a busca por "arquivo mais novo" nunca acharia, e a
