@@ -7503,3 +7503,9 @@ A primeira subida mostrou um problema real: com o `--version` do Gemini lento, a
 - **Windows e macOS** não rodaram o E2E do Gemini. O código do Gemini que resolve o ID é o mesmo JS em todo sistema, mas só o Linux foi medido.
 - **Login do Gemini depois da retomada:** a tela de confiança e a de login vêm depois do ID resolvido e não viram `auth` (a vigia de contas não tem frase de login do Gemini). É o lado seguro: nada é gravado, e o terminal mostra a tela.
 - **CLI atualizada com o app aberto:** a versão nova aparece na próxima montagem do canvas depois do prazo da leitura. Até lá, o detector de recusa segura uma versão que tenha deixado de aceitar o ID.
+
+### Fechamento (CI, merge e release)
+
+- PR #100 (`feat/retomada-capacidade-por-versao`, commits `a692d09` e `d35356a`). A CI passou em 21 dos 22 checks na primeira rodada. `Benchmarks (windows-latest)` falhou só no gate `renderer-xterm count=1` (delta de heap do stream +92,8%, limiar 60%), uma intermitência já conhecida e fora desta mudança; a reexecução do job passou.
+- Squash no `main` como `2a7aa79` às 14:52. CI do `main` verde (reaproveitada do PR), Release gate liberou, e a release **v0.1.429** foi publicada às 14:53 com os instaladores dos três sistemas. O smoke exploratório do Windows passou.
+- Branch apagada no GitHub e no local, com bundle de backup.
