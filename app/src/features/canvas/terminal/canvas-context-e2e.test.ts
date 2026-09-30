@@ -952,7 +952,7 @@ describe('E2E do contexto inicial do Canvas', () => {
       accountId: codexProfile.accountId,
     }, codexProfile.accountId)).toBe(true)
 
-    const fallback = resolveTerminalInitialText({
+    const geminiRestore = {
       isRestoredAgent: true,
       qualityStandardEnabled: true,
       qualityStandardPrompt: 'Siga o padrão.',
@@ -961,15 +961,21 @@ describe('E2E do contexto inicial do Canvas', () => {
       cwd,
       resumeAgentSession: true,
       agentSession: {
-        version: 1,
-        provider: 'gemini',
+        version: 1 as const,
+        provider: 'gemini' as const,
         sessionId: 'gemini-session-fake-456',
         cwd,
         capturedAt: 1,
       },
-    })
+    }
+    // Sem escolha, o bloco espera a pessoa decidir (lista da CLI ou conversa
+    // nova): não há texto porque o spawn nem acontece.
+    expect(resolveTerminalInitialText(geminiRestore)).toBeUndefined()
+    // "Abrir conversa nova": o motivo vai ao agente como contexto, sem Enter.
+    const fallback = resolveTerminalInitialText({ ...geminiRestore, resumeChoice: 'new' })
     expect(fallback).toBeDefined()
-    expect(fallback).toMatch(/retom|session|ID/i)
+    expect(fallback).toMatch(/retom|conversa nova/i)
+    expect(fallback).not.toContain('gemini-session-fake-456')
     expect(fallback).not.toMatch(/\r$|\n$/)
 
     const geminiProfile = createAgentProfile(
@@ -990,7 +996,7 @@ describe('E2E do contexto inicial do Canvas', () => {
       providerId: geminiProfile.providerId,
     })
     await waitFor(() => harness?.fakes.get(geminiProfile.sessionId)?.written.some((data) => data.includes(CONTEXT_HEADER)) ?? false)
-    expect(harness.contextBodies.some((body) => /retom|session|ID/i.test(body))).toBe(true)
+    expect(harness.contextBodies.some((body) => /conversa nova/i.test(body))).toBe(true)
     expect(harness.fakes.get(geminiProfile.sessionId)?.events.filter((event) => event.kind === 'context-submitted')).toEqual([])
     expect(harness.fakes.get(geminiProfile.sessionId)?.executions).toEqual([])
   }, 10_000)

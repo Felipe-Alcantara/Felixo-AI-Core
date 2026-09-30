@@ -4,7 +4,9 @@ import { buildSkillsManifestPrompt } from './skills-manifest'
 import type { CanvasSkill } from '../types'
 import {
   buildResumeFallbackNotice,
-  canResumeAgentSession,
+  explainAgentResume,
+  type AgentResumeChoice,
+  type AgentResumeFailure,
   type AgentSessionReference,
 } from './agent-session'
 
@@ -308,21 +310,44 @@ export function resolveTerminalInitialText(params: {
   /** Conta do bloco; a retomada só vale na conta em que a conversa nasceu. */
   accountId?: string
   resumeAgentSession?: boolean
+  /** O que a CLI respondeu na última retomada desta conversa (expirada, login). */
+  resumeFailure?: AgentResumeFailure
+  /** A escolha da pessoa quando a retomada não é exata. */
+  resumeChoice?: AgentResumeChoice
 }): string | undefined {
   // "/resume" is an agent CLI slash command — meaningless (and potentially
   // confusing) typed into a plain shell, so hasCommand gates it here too,
   // not just in how the caller builds the restored-terminal set.
   if (params.isRestoredAgent && params.hasCommand) {
-    if (
-      params.resumeAgentSession &&
-      canResumeAgentSession(params.command, params.cwd, params.agentSession, params.accountId)
-    ) {
-      return undefined
+    const plan = explainAgentResume({
+      command: params.command,
+      cwd: params.cwd,
+      reference: params.agentSession,
+      accountId: params.accountId,
+      failure: params.resumeFailure,
+      choice: params.resumeChoice,
+    })
+    switch (plan.outcome) {
+      case 'exact':
+        // Os argumentos de retomada já levam à conversa; nada a digitar. Sem
+        // `resumeAgentSession` o chamador não montou esses argumentos, e a
+        // lista da CLI é o caminho honesto.
+        return params.resumeAgentSession ? undefined : RESUME_INITIAL_TEXT
+      case 'picker':
+        return RESUME_INITIAL_TEXT
+      case 'new':
+        // Conversa nova: o agente recebe o motivo como contexto (não é
+        // submetido), para não presumir o histórico da anterior. A pessoa vê o
+        // motivo na faixa do cartão, não aqui.
+        return buildResumeFallbackNotice(plan, {
+          reference: params.agentSession,
+          cwd: params.cwd,
+          command: params.command,
+        })
+      case 'pending':
+        // O spawn fica segurado até a escolha; não há o que digitar.
+        return undefined
     }
-    if (params.agentSession) {
-      return buildResumeFallbackNotice(params.agentSession, params.cwd, params.accountId)
-    }
-    return RESUME_INITIAL_TEXT
   }
   if (params.qualityStandardEnabled && params.hasCommand) {
     return buildCanvasTerminalInitialText(

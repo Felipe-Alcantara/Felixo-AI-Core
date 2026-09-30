@@ -3,7 +3,11 @@ import {
   buildAgentResumeArgs,
   buildResumeFallbackNotice,
   canResumeAgentSession,
+  describeAgentResumeForPerson,
+  describeAgentResumeTarget,
+  explainAgentResume,
   isAgentSessionReference,
+  type AgentResumeReason,
   type AgentSessionReference,
 } from './agent-session'
 
@@ -69,19 +73,8 @@ describe('sessão do agente do canvas', () => {
     ).toBeUndefined()
   })
 
-  it('explica o fallback quando a associação não é segura', () => {
-    expect(buildResumeFallbackNotice(reference, '/outro', undefined)).toContain('nenhum ID foi usado')
+  it('referência que não é exata não monta argumentos de retomada', () => {
     expect(buildAgentResumeArgs('codex', [], '/outro', reference, undefined)).toBeUndefined()
-  })
-
-  it('explica o fallback específico da sintaxe atual do Gemini', () => {
-    expect(
-      buildResumeFallbackNotice(
-        { ...reference, provider: 'gemini' },
-        '/repo',
-        undefined,
-      ),
-    ).toContain('índice muda')
   })
 
   it('retoma só na mesma conta: a conversa de uma conta nunca abre na cobrança de outra', () => {
@@ -98,10 +91,6 @@ describe('sessão do agente do canvas', () => {
       'resume',
       'codex-session-123',
     ])
-
-    const aviso = buildResumeFallbackNotice(daConta, '/repo', 'conta-pessoal')
-    expect(aviso).toContain('outra conta')
-    expect(aviso).toContain('/resume')
   })
 
   it('referência antiga, sem conta, só vale em bloco sem conta', () => {
@@ -112,5 +101,138 @@ describe('sessão do agente do canvas', () => {
   it('conta vazia na referência é inválida', () => {
     expect(isAgentSessionReference({ ...reference, accountId: '  ' })).toBe(false)
     expect(isAgentSessionReference({ ...reference, accountId: 42 })).toBe(false)
+  })
+})
+
+describe('plano de retomada: desfecho e motivo', () => {
+  const plan = (overrides: Partial<Parameters<typeof explainAgentResume>[0]> = {}) =>
+    explainAgentResume({ command: 'codex', cwd: '/repo', reference, accountId: undefined, ...overrides })
+
+  it('mesma conversa, pasta e conta: retomada exata', () => {
+    expect(plan()).toEqual({ outcome: 'exact', reason: 'exact', reasons: ['exact'] })
+  })
+
+  it('sem conversa associada: a lista da CLI é a escolha, sem segurar o spawn', () => {
+    expect(plan({ reference: undefined })).toEqual({ outcome: 'picker', reason: 'fallback', reasons: ['fallback'] })
+  })
+
+  it('cada divergência tem o próprio motivo, e o spawn espera a escolha da pessoa', () => {
+    const casos: Array<[Partial<Parameters<typeof explainAgentResume>[0]>, AgentResumeReason]> = [
+      [{ cwd: '/outro' }, 'cwd-mismatch'],
+      [{ cwd: '' }, 'missing-cwd'],
+      [{ cwd: undefined }, 'missing-cwd'],
+      [{ accountId: 'conta-pessoal' }, 'account-mismatch'],
+      [{ command: 'claude' }, 'provider-mismatch'],
+      [{ reference: { ...reference, sessionId: 'curto' } }, 'invalid-reference'],
+      [{ command: 'gemini', reference: { ...reference, provider: 'gemini' } }, 'unsupported'],
+      [{ failure: { sessionId: reference.sessionId, reason: 'expired', at: 2 } }, 'expired'],
+      [{ failure: { sessionId: reference.sessionId, reason: 'auth', at: 2 } }, 'auth'],
+    ]
+    for (const [overrides, reason] of casos) {
+      expect(plan(overrides), reason).toMatchObject({ outcome: 'pending', reason })
+    }
+  })
+
+  it('pasta E conta divergentes aparecem juntas, a pasta primeiro', () => {
+    expect(plan({ cwd: '/outro', accountId: 'conta-pessoal' })).toEqual({
+      outcome: 'pending',
+      reason: 'cwd-mismatch',
+      reasons: ['cwd-mismatch', 'account-mismatch'],
+    })
+  })
+
+  it('falha registrada para OUTRA conversa não conta: a referência nova retoma normalmente', () => {
+    expect(plan({ failure: { sessionId: 'outra-conversa-99', reason: 'expired', at: 2 } }).outcome).toBe('exact')
+    expect(canResumeAgentSession('codex', '/repo', reference, undefined, {
+      sessionId: 'outra-conversa-99',
+      reason: 'expired',
+      at: 2,
+    })).toBe(true)
+  })
+
+  it('conversa que a CLI já recusou não é retomada de novo pelo mesmo ID', () => {
+    const failure = { sessionId: reference.sessionId, reason: 'expired' as const, at: 2 }
+    expect(canResumeAgentSession('codex', '/repo', reference, undefined, failure)).toBe(false)
+    expect(buildAgentResumeArgs('codex', [], '/repo', reference, undefined, failure)).toBeUndefined()
+  })
+
+  it('a escolha da pessoa resolve a pendência em lista da CLI ou conversa nova', () => {
+    expect(plan({ cwd: '/outro', choice: 'picker' })).toMatchObject({ outcome: 'picker', reason: 'cwd-mismatch' })
+    expect(plan({ cwd: '/outro', choice: 'new' })).toMatchObject({ outcome: 'new', reason: 'cwd-mismatch' })
+    // Retomada exata não pergunta nada, mesmo com escolha guardada.
+    expect(plan({ choice: 'new' }).outcome).toBe('exact')
+  })
+})
+
+describe('textos da retomada: explicam sem expor ID', () => {
+  const daConta: AgentSessionReference = { ...reference, accountId: 'conta-trabalho-secreta' }
+  const todos: Array<[string, ReturnType<typeof explainAgentResume>, { cwd?: string; command?: string; reference?: AgentSessionReference }]> = [
+    ['cwd', explainAgentResume({ command: 'codex', cwd: '/outro', reference: daConta, accountId: 'conta-trabalho-secreta' }), { cwd: '/outro', command: 'codex', reference: daConta }],
+    ['conta', explainAgentResume({ command: 'codex', cwd: '/repo', reference: daConta, accountId: 'outra-conta-secreta' }), { cwd: '/repo', command: 'codex', reference: daConta }],
+    ['provider', explainAgentResume({ command: 'claude', cwd: '/repo', reference: daConta, accountId: 'conta-trabalho-secreta' }), { cwd: '/repo', command: 'claude', reference: daConta }],
+    ['sem pasta', explainAgentResume({ command: 'codex', cwd: '', reference: daConta, accountId: 'conta-trabalho-secreta' }), { cwd: '', command: 'codex', reference: daConta }],
+    ['gemini', explainAgentResume({ command: 'gemini', cwd: '/repo', reference: { ...daConta, provider: 'gemini' }, accountId: 'conta-trabalho-secreta' }), { cwd: '/repo', command: 'gemini', reference: { ...daConta, provider: 'gemini' } }],
+    ['expirada', explainAgentResume({ command: 'codex', cwd: '/repo', reference: daConta, accountId: 'conta-trabalho-secreta', failure: { sessionId: daConta.sessionId, reason: 'expired', at: 3 } }), { cwd: '/repo', command: 'codex', reference: daConta }],
+    ['login', explainAgentResume({ command: 'codex', cwd: '/repo', reference: daConta, accountId: 'conta-trabalho-secreta', failure: { sessionId: daConta.sessionId, reason: 'auth', at: 3 } }), { cwd: '/repo', command: 'codex', reference: daConta }],
+    ['sem associação', explainAgentResume({ command: 'codex', cwd: '/repo', reference: undefined, accountId: undefined }), { cwd: '/repo', command: 'codex' }],
+  ]
+
+  it.each(todos)('%s: título, explicação e aviso ao agente sem o ID da conversa nem o da conta', (_label, planned, context) => {
+    const person = describeAgentResumeForPerson(planned, context)
+    const notice = buildResumeFallbackNotice(planned, context)
+    for (const text of [person.title, person.detail, notice]) {
+      expect(text).not.toContain(daConta.sessionId)
+      expect(text).not.toContain('conta-trabalho-secreta')
+      expect(text).not.toContain('outra-conta-secreta')
+    }
+    expect(person.title.length).toBeGreaterThan(0)
+  })
+
+  it('nenhum motivo culpa a CLI por algo que ela não disse', () => {
+    for (const [, planned, context] of todos) {
+      if (planned.reasons.includes('expired') || planned.reasons.includes('auth')) continue
+      expect(describeAgentResumeForPerson(planned, context).detail).not.toMatch(/CLI (não confirmou|respondeu)/)
+    }
+  })
+
+  it('login pedido: manda fazer login nesta conta, nunca trocar a conta do bloco', () => {
+    // Trocar a conta levaria a outra faixa (conta divergente) e a retomada
+    // exata ficaria proibida: o conselho seria um beco sem saída.
+    const [, planned, context] = todos.find(([label]) => label === 'login')!
+    const { detail } = describeAgentResumeForPerson(planned, context)
+    expect(detail).toContain('Faça login na CLI desta conta')
+    expect(detail).not.toMatch(/troque a conta|trocar a conta/i)
+  })
+
+  it('pasta divergente diz onde a conversa nasceu e onde o bloco está', () => {
+    const [, planned, context] = todos[0]
+    const { title, detail } = describeAgentResumeForPerson(planned, context)
+    expect(title).toBe('A conversa nasceu em outra pasta')
+    expect(detail).toContain('/repo')
+    expect(detail).toContain('/outro')
+  })
+
+  it('pasta e conta divergentes: as duas explicações no mesmo texto', () => {
+    const planned = explainAgentResume({ command: 'codex', cwd: '/outro', reference: daConta, accountId: 'outra-conta-secreta' })
+    const { detail } = describeAgentResumeForPerson(planned, { cwd: '/outro', command: 'codex', reference: daConta })
+    expect(detail).toContain('/outro')
+    expect(detail).toContain('outra conta')
+  })
+
+  it('o aviso ao agente diz que a conversa é nova e pede para não presumir o histórico', () => {
+    const [, planned, context] = todos[0]
+    const notice = buildResumeFallbackNotice(planned, context)
+    expect(notice).toContain('conversa nova')
+    expect(notice).toContain('Não presuma')
+  })
+
+  it('o alvo mostra provider, pasta, data e tipo de conta, sem ID', () => {
+    const target = describeAgentResumeTarget(daConta)
+    expect(target).toContain('Codex')
+    expect(target).toContain('/repo')
+    expect(target).toContain('conta própria')
+    expect(target).not.toContain(daConta.sessionId)
+    expect(target).not.toContain('conta-trabalho-secreta')
+    expect(describeAgentResumeTarget(reference)).toContain('login do sistema')
   })
 })

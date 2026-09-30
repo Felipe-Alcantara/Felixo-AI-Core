@@ -61,8 +61,8 @@ describe('resolveTerminalInitialText', () => {
     expect(result).toBeUndefined()
   })
 
-  it('exibe fallback honesto quando o diretório salvo mudou', () => {
-    const result = resolveTerminalInitialText({
+  it('pasta salva diferente: segura o spawn até a escolha, e cada escolha tem seu texto', () => {
+    const base = {
       isRestoredAgent: true,
       qualityStandardEnabled: true,
       qualityStandardPrompt: 'Follow the standard.',
@@ -70,18 +70,24 @@ describe('resolveTerminalInitialText', () => {
       command: 'codex',
       cwd: '/other-repo',
       agentSession: {
-        version: 1,
-        provider: 'codex',
+        version: 1 as const,
+        provider: 'codex' as const,
         sessionId: 'codex-session-123',
         cwd: '/repo',
         capturedAt: 1,
       },
-    })
-    expect(result).toContain('nenhum ID foi usado')
+    }
+    // Sem escolha não há texto: o cartão pergunta antes de subir.
+    expect(resolveTerminalInitialText(base)).toBeUndefined()
+    expect(resolveTerminalInitialText({ ...base, resumeChoice: 'picker' })).toBe(RESUME_INITIAL_TEXT)
+    const nova = resolveTerminalInitialText({ ...base, resumeChoice: 'new' })
+    expect(nova).toContain('conversa nova')
+    expect(nova).toContain('/repo')
+    expect(nova).not.toContain('codex-session-123')
   })
 
-  it('não retoma conversa de outra conta: fallback honesto em vez do ID', () => {
-    const result = resolveTerminalInitialText({
+  it('não retoma conversa de outra conta: espera a escolha e nunca expõe a conta', () => {
+    const base = {
       isRestoredAgent: true,
       qualityStandardEnabled: true,
       qualityStandardPrompt: 'Follow the standard.',
@@ -91,20 +97,45 @@ describe('resolveTerminalInitialText', () => {
       accountId: 'conta-pessoal',
       resumeAgentSession: true,
       agentSession: {
-        version: 1,
-        provider: 'codex',
+        version: 1 as const,
+        provider: 'codex' as const,
         sessionId: 'codex-session-123',
         cwd: '/repo',
         capturedAt: 1,
         accountId: 'conta-trabalho',
       },
-    })
-    expect(result).toContain('outra conta')
-    expect(result).toContain('Use /resume')
+    }
+    expect(resolveTerminalInitialText(base)).toBeUndefined()
+    const nova = resolveTerminalInitialText({ ...base, resumeChoice: 'new' })
+    expect(nova).toContain('outra conta')
+    expect(nova).not.toContain('conta-trabalho')
+    expect(nova).not.toContain('codex-session-123')
   })
 
-  it('exibe fallback honesto para Gemini sem enviar UUID à CLI', () => {
+  it('conversa que a CLI já disse não existir não é retomada de novo', () => {
     const result = resolveTerminalInitialText({
+      isRestoredAgent: true,
+      qualityStandardEnabled: true,
+      qualityStandardPrompt: 'Follow the standard.',
+      hasCommand: true,
+      command: 'codex',
+      cwd: '/repo',
+      resumeAgentSession: true,
+      resumeFailure: { sessionId: 'codex-session-123', reason: 'expired', at: 2 },
+      resumeChoice: 'picker',
+      agentSession: {
+        version: 1,
+        provider: 'codex',
+        sessionId: 'codex-session-123',
+        cwd: '/repo',
+        capturedAt: 1,
+      },
+    })
+    expect(result).toBe(RESUME_INITIAL_TEXT)
+  })
+
+  it('Gemini: nunca manda o UUID; espera a escolha entre a lista e uma conversa nova', () => {
+    const base = {
       isRestoredAgent: true,
       qualityStandardEnabled: true,
       qualityStandardPrompt: 'Follow the standard.',
@@ -112,17 +143,18 @@ describe('resolveTerminalInitialText', () => {
       command: 'gemini',
       cwd: '/repo',
       agentSession: {
-        version: 1,
-        provider: 'gemini',
+        version: 1 as const,
+        provider: 'gemini' as const,
         sessionId: 'gemini-session-123',
         cwd: '/repo',
         capturedAt: 1,
       },
-    })
-
-    expect(result).toContain('índice muda')
-    expect(result).toContain('Use /resume')
-    expect(result).not.toBe(RESUME_INITIAL_TEXT)
+    }
+    expect(resolveTerminalInitialText(base)).toBeUndefined()
+    expect(resolveTerminalInitialText({ ...base, resumeChoice: 'picker' })).toBe(RESUME_INITIAL_TEXT)
+    const nova = resolveTerminalInitialText({ ...base, resumeChoice: 'new' })
+    expect(nova).toContain('Gemini')
+    expect(nova).not.toContain('gemini-session-123')
   })
 
   it('does not resume a restored PLAIN SHELL (no command) — "/resume" is an agent CLI slash command, and this function enforces that even if a caller mismarks isRestoredAgent', () => {
