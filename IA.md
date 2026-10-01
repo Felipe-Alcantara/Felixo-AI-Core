@@ -7611,3 +7611,75 @@ Com o PR #101 aberto, o Felipe relatou que os prompts do painel **Prompts**, no 
   Nenhuma dessas falhas é desta mudança, e o mesmo conteúdo passou na 3ª tentativa.
 - **Merge e release.** Squash no `main` como `2da83fe` às 19:45; CI do `main` verde; release **v0.1.430** publicada às 19:46, com os instaladores dos três sistemas e o smoke exploratório do Windows verde.
 - **Alertas novos no `npm` embutido.** Depois do merge, o `npm audit` completo passou a apontar `ip-address@10.5.0` (moderada), `brace-expansion@5.0.9` e `undici@6.28.0` (altas), todos dentro do `npm@11.19.1` que o app carrega como runtime. A política de produção (`--omit=dev`) continua com 0 alertas. Uma execução do Dependabot para o `ip-address` falhou, porque não consegue atualizar dependência embutida no pacote `npm`. Virou task.
+
+## 2026-10-01 — Canvas: inventário operacional da superfície, gerado de dados e travado por teste
+
+Registro de Claude - Tasks do AI Core, task "Felixo AI Core/Canvas — inventariar todos os elementos, estados e ações da superfície principal" (Notion 3ce91f95-497e-81fc-9c15-fff0cd5d931c). Início às 02:32.
+
+### Contexto
+
+O canvas reúne blocos, arestas, grupos, Mini Map, barra lateral, ferramentas, notificações, gaveta do terminal, diálogos de agente e overlays de outras features. A cobertura estava espalhada em testes isolados e no smoke. O `LAYOUT-SUPERFICIES.md` já inventariava tamanho e eixo, mas não estado, efeito, persistência nem lacuna. A task pede um inventário que sirva de contrato visual/E2E e que seja atualizado sempre que entrar uma tool nova.
+
+### Decisão: dados tipados e três travas, em vez de um documento à mão
+
+- **`app/src/features/canvas/inventory/`.**
+  - `canvas-inventory-types.ts` define elemento, estado (os 8 da task), controle, teste e lacuna.
+  - `canvas-inventory.ts` agrega os dados e gera o Markdown.
+  - `data/` tem um arquivo por frente: `nodes`, `chrome`, `terminal`, `tools-workspace`, `tools-agents` e `overlays`.
+- **Trava 1, `tsc`.** `NODE_INVENTORY: Record<CanvasNodeType, …>` e `TOOL_INVENTORY: Record<CanvasTool, …>`. Um tipo de bloco ou uma ferramenta nova sem entrada não compila. É o mesmo truque de `TOOL_LABELS` e `CANVAS_TOOL_FEATURES`.
+- **Trava 2, `canvas-inventory.test.ts`.** O teste reprova quando:
+  - o número de controles declarados de um arquivo difere do que o código tem (conta `<button`, `role="button"`/`"menuitem"`, `<FelixoSelect`, `<FelixoToggle` e `<ActivityRailButton`);
+  - um componente de `src/features/canvas/components/` com controle não é dono de nenhum elemento;
+  - o localizador de um controle não aparece no arquivo dono;
+  - falta efeito ou falha conhecida;
+  - um canal IPC citado não está no `preload.cjs`;
+  - um teste citado não existe, ou a função de smoke citada não está no script;
+  - uma lacuna não aponta um UUID de task.
+- **Trava 3, `toMatchFileSnapshot`.** O `docs/projeto/INVENTARIO-CANVAS.md` é gerado e comparado com os dados. No CI (`CI=true`) o vitest não regrava, então editar um sem o outro reprova. Para regenerar: `npm run docs:inventario-canvas` (`vitest … -u`).
+- **Escopo.** Os modais de `features/chat` ficam fora: o canvas não os importa, e o chat é legado. Entram os diálogos do canvas e os overlays de outras features renderizados sobre ele (onboarding, aviso das CLIs, atualização, escolha de link, avisos de hardware, alças de modal, tela de recuperação).
+
+### Como foi levantado
+
+- Seis agentes, um por arquivo de dados, leram o código seguindo cada handler até o efeito (estado, canal IPC, persistência) e a falha (aviso, estado de erro, `catch`). Cada um validou o próprio arquivo com `tsc`, `eslint` e o teste de contrato.
+- Lacuna sem task existente ganhou um marcador temporário. Os marcadores foram agrupados por tema num script (`tasks-inventario.cjs`, fora do repositório), que abriu as tasks e trocou os marcadores pelos IDs.
+- Os 63 IDs de tasks existentes citados foram conferidos contra a database: todos existem e estão abertos.
+- Os quatro bugs de risco alto foram conferidos no código pelo coordenador:
+  - `GroupNode.tsx` remove o grupo com `deleteElements`, e os filhos vão em cascata, sem confirmação;
+  - `useFileNodeDocument.ts` grava com `void …write()`, sem olhar o resultado;
+  - `canvas-storage.ts` devolve `[]` quando `canvas:list` falha;
+  - o balão de erro do `DictationButton` é `absolute top-full` dentro da topbar, que tem `overflow: hidden` (`index.css`, `.felixo-canvas-topbar`).
+
+### Números
+
+- 93 elementos: 8 blocos, 16 ferramentas e 69 outras superfícies.
+- 349 controles; só 53 (15%) têm um teste que os exercita especificamente.
+- 4 elementos sem teste nenhum.
+- 271 lacunas (10 de risco alto, 145 médio e 116 baixo):
+  - 98 ligadas a 63 tasks existentes;
+  - 173 em 12 tasks novas: 6 de bugs (perda de dados, remoções destrutivas, falha mostrada como sucesso, carregamento, foco/acessibilidade e layout), 5 de cobertura de smoke (blocos, moldura, terminal, ferramentas e overlays) e 1 de sobreposição.
+
+### Validação
+
+- `npx tsc -b`, `npx eslint .` e `npx vitest run src/features/canvas/inventory` com `CI=true`: 9/9.
+- **Mutação: 10 de 10 mortas, cada uma pelo portão e pela mensagem esperados.**
+  - botão novo sem entrada;
+  - componente novo sem dono;
+  - ferramenta sem entrada (`tsc`);
+  - localizador inexistente;
+  - canal IPC inexistente;
+  - teste inexistente;
+  - função de smoke inexistente;
+  - lacuna sem UUID;
+  - efeito vazio;
+  - documento editado à mão.
+- **Suíte inteira do renderer (`CI=true npx vitest run`): 2816 passaram, 2 pulados e 1 falha.** A falha é `context-file-delivery.shell.test.ts`, de outra mudança (`2da83fe`), que abre o PowerShell. Isolada, passa duas vezes seguidas: é instabilidade de tempo com a suíte em paralelo.
+
+### Achado de ferramenta
+
+No Node 25.3.0 (Windows), `fs.rmSync(arquivo, { force: true })` **não apaga e não lança erro** num caminho com acento (`F:\Programação\…`); `fs.unlinkSync` apaga. Com `F:\sl`, sem acento, o `rmSync` funcionou em 30/09. É provável que seja a mesma família do `fs.cpSync` que quebra o `bundle-npm-runtime.cjs` no Node 25. A evidência foi anexada à task `3eb91f95-497e-8197-89ea-e8a7a876a357`.
+
+### Limitações
+
+- Os efeitos e os bugs vêm da leitura do código. Ninguém clicou nos 349 controles numa janela, e só os 53 com teste específico têm efeito visto por teste.
+- O documento gerado tem cerca de 350 KB: é o contrato inteiro, não um resumo.
+- A contagem de controles é por padrão literal. Um botão renderizado por um componente de outra pasta, ou montado sem nenhum desses padrões, não é contado.
