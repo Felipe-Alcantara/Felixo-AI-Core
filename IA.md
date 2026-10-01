@@ -7733,3 +7733,10 @@ Registro de Claude - Tasks do AI Core, task "Felixo AI Core/Terminal — validar
 - Leitura: palavra partida pela largura da CLI, código sem cor e regravação a cada versão nova das CLIs (3ec91f95-497e-8122-a08b).
 - Topo do app: na captura com viewport emulado de 1600 px, a busca cobre o nome do app; conferir numa janela real (3ec91f95-497e-8122-b2ca).
 - Efeito colateral da gravação: o Codex guardou no `config.toml` a confiança na pasta `~/.cache/felixo-ai-core/fixture-recordings/codex`.
+
+### Fechamento (CI, merge e release)
+
+- **PR #102, 3 commits** (a branch foi reescrita num commit só antes do primeiro push, para as gravações antigas do Claude com a regra de permissão nunca saírem da máquina).
+- CI: `Validate` passou nos quatro runners, com o smoke rodando as sessões A–F; a sessão F levou 66 s (macOS), 69 s (Ubuntu), 74 s (ARM) e 85 s (Windows). `Benchmarks (macos-latest)` reprovou no gate já conhecido `renderer-xterm count=1` (delta de heap do stream +131 %) e passou na reexecução.
+- **Merge e release.** Squash no `main` como `99bd562` às 12:27; CI do `main` verde; release **v0.1.431** publicada às 12:28, com os instaladores dos três sistemas e os smokes de release (incluindo o exploratório do Windows) verdes.
+
