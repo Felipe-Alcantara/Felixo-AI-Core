@@ -7767,3 +7767,16 @@ Registro de Claude - Tasks do AI Core, task "Felixo AI Core/Canvas — criar gat
 - `release.yml`: passo "Smoke do canvas no app empacotado" no `Publish <os>`, antes de enviar os instaladores, e artefato `canvas-smoke-pacote-<os>`.
 - `ci.yml`: o artefato `canvas-smoke-evidencia-<os>` sobe sempre (não só na falha).
 - `GUIA-DESENVOLVEDOR.md`: seção "Gate visual do canvas (smoke)" — sessões, o que reprova, o que uma ferramenta nova precisa, repetição, tabela de instabilidades conhecidas, evidência e reprodução local (fonte e pacote).
+
+### Validação local
+
+- `eslint .` limpo; vitest 2919 aprovados; suíte de node 2386 (Node 25) e 2388 (Node 22) aprovados, 0 falhas; testes novos: 8 (`canvas-smoke-evidencia.test.cjs`) e 3 (`packaged-canvas-smoke.test.cjs`).
+- Sessão A (fonte): uma rodada com falha provocada (o nome do agente fica num campo editável e o caso lia o texto do cartão) mostrou as 3 tentativas, cada uma do zero e com a própria captura, e o relatório `falhou` com o comando de reprodução. Corrigida a leitura (`aria-label` do corpo do cartão), a sessão A passou com os 4 casos de vários agentes. Outra rodada mostrou que a captura era tirada depois da limpeza do caso; a limpeza passou a rodar só no sucesso.
+- AppImage montado localmente e smoke A–F nele pelo `packaged-canvas-smoke.cjs`: aprovado, com a sessão D instável (L10 falhou uma vez) — relatório `passou-com-instabilidade`. Task 3ec91f95-497e-81e7.
+
+### Fechamento (CI, merge e release)
+
+- **PR #103, 3 commits.** O `Release scripts` reprovou na primeira rodada: o `release-relevant.test.sh` deriva do `release.yml` os scripts que a release roda, e o `packaged-canvas-smoke.cjs` precisava entrar na lista de inclusão (o `canvas-smoke*.cjs` segue fora: mudar o smoke não publica). O relatório passou a citar o commit da branch no PR (o `GITHUB_SHA` de PR é o merge sintético).
+- Instabilidades vistas e reexecutadas: `openia-image-service.test.cjs` no Windows (o teste de cancelamento ficou 240 s esperando o filho; passou depois) e o gate `renderer-xterm count=1` no Ubuntu (+177 %) e no macOS (+157 %), anotados na task 3e891f95-497e-81a6.
+- **Merge** `1633b9f` às 16:11. A release **v0.1.432** (run 36912514190) **não foi publicada**: o smoke do canvas no pacote passou no Linux e reprovou no Windows e no macOS nas 3 tentativas. A evidência mostrou o app empacotado instalando as CLIs que faltam no runner ao abrir ("Preparando as CLIs de IA" cobrindo a barra de atividades em 320 px), o que o app de desenvolvimento não faz. A v0.1.432 ficou como pré-release, só com os instaladores do Linux.
+- **Correção** `4870600` no `main`: o `packaged-canvas-smoke.cjs` roda com `FELIXO_AUTO_INSTALL_CLIS=0` e `FELIXO_DISABLE_AUTO_UPDATE=1`. CI do `main` verde de primeira; release **v0.1.433** publicada às 16:42 (run 36916252510) com o smoke do canvas no pacote aprovado nos três sistemas: Windows e macOS com todas as sessões de primeira; Ubuntu com a sessão A instável (SA1, `canvas:save` ainda gravando na amostra; task 3ec91f95-497e-811a).
