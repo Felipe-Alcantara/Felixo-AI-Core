@@ -7717,3 +7717,19 @@ Registro de Claude - Tasks do AI Core, task "Felixo AI Core/Terminal — validar
 - `stripTerminalAnsi`: ESC de um caractere com intermediários, OSC/DCS/APC sem atravessar `ESC`; sai o `RESIDUAL_ESCAPE` do detector de retomada.
 - Link com invisível: o destino cru segue numa propriedade só aceita com invisível de fato, e a dica e o menu mostram `⟨U+200B⟩`. Vale para link, referência e autolink.
 - `parseAdapterLine` devolve `{ cliEvent, parseError }`; a linha aparece como **Linha não reconhecida** nos Logs da CLI e a resposta segue.
+
+### Validação local
+
+- `tsc -b` (no `npm run pack`) e `eslint .` limpos.
+- Vitest: 2919 aprovados, 5 pulados (inclui a medição opcional da Leitura).
+- Suíte de node: 2378 aprovados no Node 25.9 e no 22.22 (1 pulado nos dois).
+- Smoke completo em Xvfb 1280×800 (fonte): sessões A–F aprovadas; F em 281 s (C 187 s, D 128 s, E 65 s).
+- **Pacote do Linux** (`npm run pack`, `release/linux-unpacked`): sessão F aprovada no binário empacotado, com o log `Origem: empacotado (…/felixo-ai-core)`, em 181 s.
+- Medição (`FELIXO_READING_PERF=1`), i5-6200U com carga ~14: 2.161 linhas no buffer, 2.000 lidas; mediana de 14 ms por redesenho (p95 45 ms), eram 52 ms antes do cache das falas.
+
+### O que ficou de fora (tasks abertas)
+
+- Gemini: conta pessoal recusada no Gemini CLI 0.62; sem perfil de Leitura (3ec91f95-497e-8113).
+- Leitura: palavra partida pela largura da CLI, código sem cor e regravação a cada versão nova das CLIs (3ec91f95-497e-8122-a08b).
+- Topo do app: na captura com viewport emulado de 1600 px, a busca cobre o nome do app; conferir numa janela real (3ec91f95-497e-8122-b2ca).
+- Efeito colateral da gravação: o Codex guardou no `config.toml` a confiança na pasta `~/.cache/felixo-ai-core/fixture-recordings/codex`.

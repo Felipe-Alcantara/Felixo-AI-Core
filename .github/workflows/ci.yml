@@ -499,8 +499,10 @@ jobs:
       # sobe como artefato se o passo falhar. Execuções verdes no Linux antes de
       # virar gate: PR #70 (push da correção), main do #70 e o CI do PR que o
       # reativou (que só entrou na main por ter passado).
+      # 15 min: a sessão F (Leitura do terminal, 01/10/2026) soma 2,5–5 min aos
+      # 200–283 s que as sessões A–E levavam nos runners.
       - name: Test Canvas PR smoke (interações + oclusão + acessibilidade)
-        timeout-minutes: 10
+        timeout-minutes: 15
         shell: bash
         run: |
           if [ "$RUNNER_OS" = "Linux" ]; then
