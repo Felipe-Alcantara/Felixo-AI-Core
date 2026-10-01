@@ -184,7 +184,7 @@ caso), e o teste pode passar mesmo quebrado. Depois do diff, rode
 | `npm run release:smoke` | app/ | Valida o artefato instalado no SO atual |
 | `npm run publish:github` | app/ | Publica uma release pelo electron-builder; usar apenas no fluxo de release |
 | `npm run benchmark:terminal-output -- --check` | app/ | Compara retenção/renderização dos Logs da CLI no renderer Electron |
-| `npm run test:canvas-smoke` | app/ | Smoke real do canvas via CDP, com PTY fake: fixture e tutorial (sessões A e B), cadeia de contas (C), links (D) e caminhos de prompt (E). `FELIXO_SMOKE_SESSOES=E` roda só as sessões listadas |
+| `npm run test:canvas-smoke` | app/ | Gate visual do canvas via CDP, com PTY fake: fixture, matriz visual e tutorial (sessões A e B), cadeia de contas (C), links (D), caminhos de prompt (E) e Leitura do terminal (F). `FELIXO_SMOKE_SESSOES=E` roda só as sessões listadas; ver [Gate visual do canvas](#gate-visual-do-canvas-smoke) |
 | `npm run benchmark:ui-render -- --onboarding` | app/ | Mede FPS e custo de estilo/paint com o tutorial aberto (manual, na máquina de referência) |
 
 ---
@@ -542,6 +542,110 @@ Dicas que valem para qualquer verificação com `felixo devtools`:
 - **Sonda IPC.** `felixo devtools main "ipcProbe.snapshot()"` devolve quantas vezes
   cada canal IPC foi invocado desde o boot. Duas fotos antes e depois de uma ação
   mostram se ela chamou PTY, CLI ou rede.
+
+### Gate visual do canvas (smoke)
+
+`npm run test:canvas-smoke` (`app/scripts/canvas-smoke.cjs`) abre o app de
+verdade numa sessão `felixo devtools` isolada e confere a tela por CDP. Ele é
+um check obrigatório de PR: roda no job `Validate` dos quatro runners (Linux
+x64 e ARM, Windows e macOS). Nenhuma CLI real nem credencial entra: o renderer
+usa o PTY falso (`FELIXO_DEVTOOLS_MOCK_PTY=1`) ou o processo principal usa a
+CLI roteirizada (`FELIXO_DEVTOOLS_FAKE_CLI_PTY=1`, que também toca as gravações
+reais de CLI com `__felixo_smoke_gravacao_<nome>__`).
+
+| Sessão | Arquivo | O que prova |
+| --- | --- | --- |
+| A | `canvas-smoke.cjs` | montagem; topbar, sidebar e canvas visíveis; Tab; foco ao abrir ferramenta; fixture com todos os tipos de bloco; oclusão; auditoria de acessibilidade; interações (arrasto, conexão, gaveta, notificações, URL inválida); reload sem duplicar (reidratação); painel nos dois eixos; viewport mínimo 375×667; zoom; matriz tema × viewport × DPR; vários agentes (4 terminais, 2 temas × 2 tamanhos, movimento reduzido); painéis, menu e diálogo abertos em 320 e 1280 px; fonte 137,5 %, movimento reduzido e locale; tutorial SA0–SA10 |
+| B | `canvas-smoke-onboarding.cjs` | tutorial no primeiro uso real |
+| C | `canvas-smoke-contas.cjs` | cadeia de contas |
+| D | `canvas-smoke-links.cjs` | escolha de destino dos links |
+| E | `canvas-smoke-prompts.cjs` | caminhos de prompt |
+| F | `canvas-smoke-leitura.cjs` | Leitura do terminal |
+
+**O que reprova (regressão objetiva).** A comparação é estrutural, não pixel
+a pixel (decisão de 01/10/2026): fontes e renderização mudam de um sistema
+para outro, e as capturas ficam como evidência, não como referência.
+
+- Elemento obrigatório ausente ou com tamanho zero.
+- Sobreposição proibida: bloco do fixture coberto pela interface, agentes um
+  sobre o outro, menu ou diálogo fora da janela.
+- Rolagem horizontal da página em qualquer tamanho da matriz.
+- Geometria instável: depois de assentar, um elemento que anda mais de
+  0,5 px CSS entre quadros (`DEFAULT_JITTER_THRESHOLD`, `canvas-smoke-visual.cjs`).
+- Foco no lugar errado ao abrir ou fechar (Tab, Esc devolvendo o foco).
+- Prazo: o canvas monta em até 45 s (Linux e Windows) ou 20 s (macOS); uma
+  reação da interface em até 5 s (20 s no Windows).
+
+**Ferramenta, bloco ou botão novo.** Além do inventário do canvas (abaixo),
+o gate espera:
+
+1. Painel, menu ou diálogo novo entra em `checarElementosAbertosEmViewportsCriticos`
+   (320 e 1280 px): abrir, ficar dentro da janela, foco dentro, Esc devolvendo
+   o foco.
+2. Fluxo com estado próprio (terminal, conta, link) ganha uma sessão no padrão
+   `canvas-smoke-<tema>.cjs` (`criarSessaoDe…({ page, checarMontagem, timeoutMs }).executar()`)
+   e uma entrada em `SESSIONS`, com a letra, o nome da captura de falha
+   (`canvas-smoke-failure-<tema>`) e as variáveis da instância.
+3. Espere uma condição (`esperarAte`, `page.waitForFunction`), nunca um tempo
+   fixo: os runners têm velocidades muito diferentes.
+4. Nada de CLI real nem conta: PTY falso, CLI roteirizada ou gravação.
+
+**Repetição e instabilidade.** Cada sessão tem até 3 tentativas (a primeira e
+mais 2 repetições), qualquer que seja a falha (decisão de 01/10/2026). Cada
+tentativa começa do zero, num perfil novo. Uma sessão que só passa na
+repetição sai como **instável**: ⚠️ no resumo da run e `instavel: true` no
+relatório. Se a mesma sessão aparecer instável de novo, abra uma task com o
+relatório das runs. `FELIXO_SMOKE_TENTATIVAS=1` desliga a repetição, para
+quem está depurando.
+
+Instabilidades conhecidas da CI, para a triagem:
+
+| Sintoma | Onde | Causa conhecida | O que fazer |
+| --- | --- | --- | --- |
+| "APP NÃO MONTOU" na primeira carga | smoke, sessões A/B, Windows | runner lento; o Vite compila sob demanda na primeira carga | a repetição cobre; nas 3 tentativas, é real |
+| `package.json` com bytes zero dentro do `app.asar` | `package-inventory.test.cjs`, Windows | corrida de disco logo depois do empacotamento | reexecutar o job |
+| gate `renderer-xterm count=1` (heap do stream) ou `adaptive count=1: resume` | job `Benchmarks` | o menor cenário oscila, até em commit só de docs | reexecutar o job; reprovar 3 runs seguidos é regressão |
+
+**Evidência.** Toda execução grava `app/build/canvas-smoke-evidencia/`
+(`canvas-smoke-evidencia.cjs`), enviada como artefato `canvas-smoke-evidencia-<os>`:
+
+- `relatorio-<os>.json`: versão do app, commit, sistema, Node, Electron,
+  origem (fonte ou empacotado), cada sessão com as tentativas, a duração, o
+  erro e o comando que reproduz;
+- `canvas-smoke-failure-<sessão>-<os>-tentativa-<n>.png`: a tela de cada
+  tentativa que falhou;
+- `electron-devtools-<os>.log`: stdout e stderr do Electron, sem segredo e sem
+  pasta pessoal.
+
+O artefato `canvas-visual-regression-<os>` traz o relatório geométrico e as
+capturas da matriz. A página da run mostra a tabela das sessões, com as
+falhas e o comando de reprodução.
+
+**Reproduzir localmente.** O mesmo comando da CI, só com a sessão que falhou:
+
+```bash
+cd app
+FELIXO_SMOKE_SESSOES=A FELIXO_SMOKE_TENTATIVAS=1 npm run test:canvas-smoke
+# Linux sem tela (como a CI):
+xvfb-run -a --server-args="-screen 0 1280x800x24" env FELIXO_SMOKE_SESSOES=A FELIXO_SMOKE_TENTATIVAS=1 npm run test:canvas-smoke
+```
+
+Um `TMPDIR` próprio isola a sessão `felixo devtools` de outra que esteja rodando
+na mesma máquina.
+
+**No app empacotado.** A release roda o mesmo smoke no instalador daquele
+sistema antes de enviar os instaladores (passo "Smoke do canvas no app
+empacotado" do job `Publish <os>`, artefato `canvas-smoke-pacote-<os>`).
+Falhou, o instalador não sobe e a release não sai de pré-release. Para
+reproduzir:
+
+```bash
+cd app
+npm run pack
+FELIXO_SMOKE_PACKAGED=release/linux-unpacked/felixo-ai-core npm run test:canvas-smoke
+# ou, preparando o instalador como a release faz (AppImage, DMG ou NSIS):
+node scripts/packaged-canvas-smoke.cjs --release-dir release
+```
 
 ### Tutorial do canvas: anunciar uma função nova
 

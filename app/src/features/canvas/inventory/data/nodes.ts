@@ -119,6 +119,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
       unit('src/features/canvas/terminal/prompt-origins-e2e.test.ts'),
       ...FIXTURE_TESTS,
       smoke('checarInteracoes'),
+      smoke('checarVariosAgentes'),
       { file: SMOKE_CONTAS, check: 'abrirBlocoDaCadeia' },
       { file: SMOKE_PROMPTS, check: 'esperarCartao' },
     ],

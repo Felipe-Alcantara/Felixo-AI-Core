@@ -246,6 +246,33 @@ jobs:
           path: app/release/release-smoke-${{ matrix.os }}.json
           if-no-files-found: ignore
 
+      # O mesmo smoke do canvas do CI (sessões A–F), agora no app empacotado
+      # desta release — o instalador preparado como no passo de cima. É o gate
+      # "dev e pacote têm smoke equivalente": decisão de 01/10/2026, roda só
+      # aqui, antes de enviar os instaladores. Falhou (depois das 2 repetições
+      # por sessão do próprio smoke), o instalador deste SO não sobe e o
+      # `finalize` não tira a release de pré-release.
+      - name: Smoke do canvas no app empacotado
+        timeout-minutes: 25
+        shell: bash
+        run: |
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            xvfb-run -a --server-args="-screen 0 1280x800x24" node scripts/packaged-canvas-smoke.cjs --release-dir release
+          else
+            node scripts/packaged-canvas-smoke.cjs --release-dir release
+          fi
+
+      - name: Upload evidência do smoke do canvas no pacote
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: canvas-smoke-pacote-${{ matrix.os }}
+          path: |
+            app/build/canvas-smoke-evidencia/**
+            app/build/canvas-visual-regression/**
+            app/build/canvas-reading-smoke/**
+          if-no-files-found: ignore
+
       # Um build do CI nunca ganha o atributo estendido de quarentena do
       # macOS sozinho — só chega nele quem baixou o artefato de verdade
       # (Safari, curl com --xattr, Finder AirDrop). Sem simular isso, o
