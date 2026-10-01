@@ -1,0 +1,738 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Leitura das gravações reais > claude-cancelamento: snapshot do Markdown e do HTML > html 1`] = `
+[
+  "<div class="markdown-content space-y-2 overflow-hidden text-[13px] leading-relaxed text-zinc-100"><p class="whitespace-pre-wrap text-zinc-100">Responda só com texto, sem ferramentas: escreva uma lista numerada com 40 curiosidades curtas sobre terminais de computador, uma por linha.</p></div>",
+  "<div class="markdown-content space-y-2 overflow-hidden text-[13px] leading-relaxed text-zinc-100"><ol class="list-decimal space-y-1 pl-4 text-zinc-100 marker:text-zinc-500">
+<li class="pl-1">A palavra &quot;terminal&quot; vem dos teletipos, que ficavam na &quot;ponta&quot; (terminal) de uma linha de comunicação.</li>
+<li class="pl-1">O teletipo Teletype Model 33 (ASR-33) foi um dos primeiros terminais populares em minicomputadores.</li>
+<li class="pl-1">É por causa dos teletipos que até hoje os dispositivos de terminal no Unix se chamam &quot;tty&quot;.</li>
+<li class="pl-1">Antes das telas, a saída dos teletipos era impressa em papel contínuo.</li>
+<li class="pl-1">O VT100, lançado pela DEC em 1978, virou o padrão de</li>
+</ol>
+<p class="whitespace-pre-wrap text-zinc-100"><em class="italic text-zinc-100">Interrupted · What should Claude do instead?</em></p></div>",
+]
+`;
+
+exports[`Leitura das gravações reais > claude-cancelamento: snapshot do Markdown e do HTML > markdown 1`] = `
+[
+  {
+    "markdown": "Responda só com texto\\, sem ferramentas\\: escreva uma lista numerada com 40 curiosidades curtas sobre terminais de computador\\, uma por linha\\.",
+    "raw": false,
+    "role": "pessoa",
+  },
+  {
+    "markdown": "1. A palavra \\"terminal\\" vem dos teletipos\\, que ficavam na \\"ponta\\" \\(terminal\\) de uma linha de comunicação\\.
+2. O teletipo Teletype Model 33 \\(ASR\\-33\\) foi um dos primeiros terminais populares em minicomputadores\\.
+3. É por causa dos teletipos que até hoje os dispositivos de terminal no Unix se chamam \\"tty\\"\\.
+4. Antes das telas\\, a saída dos teletipos era impressa em papel contínuo\\.
+5. O VT100\\, lançado pela DEC em 1978\\, virou o padrão de
+
+*Interrupted · What should Claude do instead\\?*",
+    "raw": false,
+    "role": "agente",
+  },
+]
+`;
+
+exports[`Leitura das gravações reais > claude-erro: snapshot do Markdown e do HTML > html 1`] = `
+[
+  "<div class="markdown-content space-y-2 overflow-hidden text-[13px] leading-relaxed text-zinc-100"><p class="whitespace-pre-wrap text-zinc-100">Diga oi.</p></div>",
+  "<div class="markdown-content space-y-2 overflow-hidden text-[13px] leading-relaxed text-zinc-100"><p class="whitespace-pre-wrap text-zinc-100">There&#x27;s an issue with the selected model (modelo-que-nao-existe). It may not exist or you may not have access to it. Run /model to pick a different model.</p></div>",
+]
+`;
+
+exports[`Leitura das gravações reais > claude-erro: snapshot do Markdown e do HTML > markdown 1`] = `
+[
+  {
+    "markdown": "Diga oi\\.",
+    "raw": false,
+    "role": "pessoa",
+  },
+  {
+    "markdown": "There\\'s an issue with the selected model \\(modelo\\-que\\-nao\\-existe\\)\\. It may not exist or you may not have access to it\\. Run \\/model to pick a different model\\.",
+    "raw": false,
+    "role": "agente",
+  },
+]
+`;
+
+exports[`Leitura das gravações reais > claude-resposta: snapshot do Markdown e do HTML > html 1`] = `
+[
+  "<div class="markdown-content space-y-2 overflow-hidden text-[13px] leading-relaxed text-zinc-100"><p class="whitespace-pre-wrap text-zinc-100">Responda só com texto, sem usar ferramentas e sem ler nem criar arquivos. Use exatamente estes blocos em Markdown, nesta ordem: um título de nível 2 &quot;Resumo&quot;; um parágrafo curto com uma palavra em negrito e outra em itálico; uma lista com três itens; uma lista numerada com dois itens; um bloco de código python com uma função soma; uma tabela com as colunas Nome e Valor e duas linhas; uma citação curta; e um link para <a class="font-medium text-(--f-core-white) underline decoration-white/30 underline-offset-4 hover:text-(--f-core-white)" href="https://example.com/docs" rel="noreferrer" title="https://example.com/docs
+Clique para escolher onde abrir">https://example.com/docs</a>.</p></div>",
+  "<div class="markdown-content space-y-2 overflow-hidden text-[13px] leading-relaxed text-zinc-100"><h3 class="text-[13px] font-semibold text-zinc-100" data-markdown-anchor="resumo">Resumo</h3>
+<p class="whitespace-pre-wrap text-zinc-100">Este é um exemplo de texto em Markdown com uma palavra <strong class="font-semibold text-zinc-50">importante</strong> e outra <em class="italic text-zinc-100">destacada</em>, criado para testar a renderização dos blocos.</p>
+<ul class="list-disc space-y-1 pl-4 text-zinc-100 marker:text-zinc-500">
+<li class="pl-1">Primeiro item da lista</li>
+<li class="pl-1">Segundo item da lista</li>
+<li class="pl-1">Terceiro item da lista</li>
+</ul>
+<ol class="list-decimal space-y-1 pl-4 text-zinc-100 marker:text-zinc-500">
+<li class="pl-1">Primeiro passo</li>
+<li class="pl-1">Segundo passo</li>
+</ol>
+<div class="max-w-full overflow-hidden rounded-xl border border-white/8 bg-black/25"><div class="flex h-7 items-center justify-between border-b border-white/6 px-3 font-mono text-[10px] uppercase text-zinc-500"><span>código</span><button type="button" title="Copiar código" class="felixo-btn flex items-center gap-1 hover:text-zinc-300"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-copy" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg><span class="normal-case">copiar</span></button></div><pre class="max-h-80 overflow-auto p-3 font-mono text-[12px] leading-relaxed text-zinc-200"><code>def soma(a, b):
+    return a + b
+</code></pre></div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="max-w-full overflow-x-auto rounded-lg border border-white/8"><table class="w-full min-w-max border-collapse text-left text-[12px]"><thead class="bg-white/5 text-zinc-200"><tr><th class="border-r border-white/6 px-3 py-2 font-semibold last:border-r-0">Nome</th><th class="border-r border-white/6 px-3 py-2 font-semibold last:border-r-0">Valor</th></tr></thead><tbody class="divide-y divide-white/6"><tr><td class="border-r border-white/6 px-3 py-2 text-zinc-300 last:border-r-0">Alfa</td><td class="border-r border-white/6 px-3 py-2 text-zinc-300 last:border-r-0">10</td></tr><tr><td class="border-r border-white/6 px-3 py-2 text-zinc-300 last:border-r-0">Beta</td><td class="border-r border-white/6 px-3 py-2 text-zinc-300 last:border-r-0">20</td></tr></tbody></table></div>
+<blockquote class="border-l-2 border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] pl-3 text-zinc-300">
+<p class="whitespace-pre-wrap text-zinc-100"><em class="italic text-zinc-100">A simplicidade é o último grau de sofisticação.</em></p>
+</blockquote>
+<p class="whitespace-pre-wrap text-zinc-100">Documentação (<a class="font-medium text-(--f-core-white) underline decoration-white/30 underline-offset-4 hover:text-(--f-core-white)" href="https://example.com/docs" rel="noreferrer" title="https://example.com/docs
+Clique para escolher onde abrir">https://example.com/docs</a>)</p></div>",
+]
+`;
+
+exports[`Leitura das gravações reais > claude-resposta: snapshot do Markdown e do HTML > markdown 1`] = `
+[
+  {
+    "markdown": "Responda só com texto\\, sem usar ferramentas e sem ler nem criar arquivos\\. Use exatamente estes blocos em Markdown\\, nesta ordem\\: um título de nível 2 \\"Resumo\\"\\; um parágrafo curto com uma palavra em negrito e outra em itálico\\; uma lista com três itens\\; uma lista numerada com dois itens\\; um bloco de código python com uma função soma\\; uma tabela com as colunas Nome e Valor e duas linhas\\; uma citação curta\\; e um link para <https://example.com/docs>\\.",
+    "raw": false,
+    "role": "pessoa",
+  },
+  {
+    "markdown": "### Resumo
+
+Este é um exemplo de texto em Markdown com uma palavra **importante** e outra *destacada*\\, criado para testar a renderização dos blocos\\.
+
+- Primeiro item da lista
+- Segundo item da lista
+- Terceiro item da lista
+
+1. Primeiro passo
+2. Segundo passo
+
+\`\`\`
+def soma(a, b):
+    return a + b
+\`\`\`
+
+| Nome | Valor |
+| --- | --- |
+| Alfa | 10 |
+| Beta | 20 |
+
+> *A simplicidade é o último grau de sofisticação\\.*
+
+Documentação \\(<https://example.com/docs>\\)",
+    "raw": false,
+    "role": "agente",
+  },
+]
+`;
+
+exports[`Leitura das gravações reais > claude-retomada: snapshot do Markdown e do HTML > html 1`] = `
+[
+  "<div class="markdown-content space-y-2 overflow-hidden text-[13px] leading-relaxed text-zinc-100"><p class="whitespace-pre-wrap text-zinc-100">Responda só com texto, sem usar ferramentas e sem ler nem criar arquivos. Use exatamente estes blocos em Markdown, nesta ordem: um título de nível 2 &quot;Resumo&quot;; um parágrafo curto com uma palavra em negrito e outra em itálico; uma lista com três itens; uma lista numerada com dois itens; um bloco de código python com uma função soma; uma tabela com as colunas Nome e Valor e duas linhas; uma citação curta; e um link para <a class="font-medium text-(--f-core-white) underline decoration-white/30 underline-offset-4 hover:text-(--f-core-white)" href="https://example.com/docs" rel="noreferrer" title="https://example.com/docs
+Clique para escolher onde abrir">https://example.com/docs</a>.</p></div>",
+  "<div class="markdown-content space-y-2 overflow-hidden text-[13px] leading-relaxed text-zinc-100"><h3 class="text-[13px] font-semibold text-zinc-100" data-markdown-anchor="resumo">Resumo</h3>
+<p class="whitespace-pre-wrap text-zinc-100">Este é um exemplo de texto em Markdown com uma palavra <strong class="font-semibold text-zinc-50">importante</strong> e outra <em class="italic text-zinc-100">destacada</em>, criado para testar a renderização dos blocos.</p>
+<ul class="list-disc space-y-1 pl-4 text-zinc-100 marker:text-zinc-500">
+<li class="pl-1">Primeiro item da lista</li>
+<li class="pl-1">Segundo item da lista</li>
+<li class="pl-1">Terceiro item da lista</li>
+</ul>
+<ol class="list-decimal space-y-1 pl-4 text-zinc-100 marker:text-zinc-500">
+<li class="pl-1">Primeiro passo</li>
+<li class="pl-1">Segundo passo</li>
+</ol>
+<div class="max-w-full overflow-hidden rounded-xl border border-white/8 bg-black/25"><div class="flex h-7 items-center justify-between border-b border-white/6 px-3 font-mono text-[10px] uppercase text-zinc-500"><span>código</span><button type="button" title="Copiar código" class="felixo-btn flex items-center gap-1 hover:text-zinc-300"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-copy" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg><span class="normal-case">copiar</span></button></div><pre class="max-h-80 overflow-auto p-3 font-mono text-[12px] leading-relaxed text-zinc-200"><code>def soma(a, b):
+    return a + b
+</code></pre></div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="max-w-full overflow-x-auto rounded-lg border border-white/8"><table class="w-full min-w-max border-collapse text-left text-[12px]"><thead class="bg-white/5 text-zinc-200"><tr><th class="border-r border-white/6 px-3 py-2 font-semibold last:border-r-0">Nome</th><th class="border-r border-white/6 px-3 py-2 font-semibold last:border-r-0">Valor</th></tr></thead><tbody class="divide-y divide-white/6"><tr><td class="border-r border-white/6 px-3 py-2 text-zinc-300 last:border-r-0">Alfa</td><td class="border-r border-white/6 px-3 py-2 text-zinc-300 last:border-r-0">10</td></tr><tr><td class="border-r border-white/6 px-3 py-2 text-zinc-300 last:border-r-0">Beta</td><td class="border-r border-white/6 px-3 py-2 text-zinc-300 last:border-r-0">20</td></tr></tbody></table></div>
+<blockquote class="border-l-2 border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] pl-3 text-zinc-300">
+<p class="whitespace-pre-wrap text-zinc-100"><em class="italic text-zinc-100">A simplicidade é o último grau de sofisticação.</em></p>
+</blockquote>
+<p class="whitespace-pre-wrap text-zinc-100">Documentação (<a class="font-medium text-(--f-core-white) underline decoration-white/30 underline-offset-4 hover:text-(--f-core-white)" href="https://example.com/docs" rel="noreferrer" title="https://example.com/docs
+Clique para escolher onde abrir">https://example.com/docs</a>)</p></div>",
+  "<div class="markdown-content space-y-2 overflow-hidden text-[13px] leading-relaxed text-zinc-100"><p class="whitespace-pre-wrap text-zinc-100">/exit ⎿  Bye!</p></div>",
+]
+`;
+
+exports[`Leitura das gravações reais > claude-retomada: snapshot do Markdown e do HTML > markdown 1`] = `
+[
+  {
+    "markdown": "Responda só com texto\\, sem usar ferramentas e sem ler nem criar arquivos\\. Use exatamente estes blocos em Markdown\\, nesta ordem\\: um título de nível 2 \\"Resumo\\"\\; um parágrafo curto com uma palavra em negrito e outra em itálico\\; uma lista com três itens\\; uma lista numerada com dois itens\\; um bloco de código python com uma função soma\\; uma tabela com as colunas Nome e Valor e duas linhas\\; uma citação curta\\; e um link para <https://example.com/docs>\\.",
+    "raw": false,
+    "role": "pessoa",
+  },
+  {
+    "markdown": "### Resumo
+
+Este é um exemplo de texto em Markdown com uma palavra **importante** e outra *destacada*\\, criado para testar a renderização dos blocos\\.
+
+- Primeiro item da lista
+- Segundo item da lista
+- Terceiro item da lista
+
+1. Primeiro passo
+2. Segundo passo
+
+\`\`\`
+def soma(a, b):
+    return a + b
+\`\`\`
+
+| Nome | Valor |
+| --- | --- |
+| Alfa | 10 |
+| Beta | 20 |
+
+> *A simplicidade é o último grau de sofisticação\\.*
+
+Documentação \\(<https://example.com/docs>\\)",
+    "raw": false,
+    "role": "agente",
+  },
+  {
+    "markdown": "\\/exit ⎿  Bye\\!",
+    "raw": false,
+    "role": "pessoa",
+  },
+]
+`;
+
+exports[`Leitura das gravações reais > claude-telacheia: snapshot do Markdown e do HTML > html 1`] = `
+[
+  "<div class="markdown-content space-y-2 overflow-hidden text-[13px] leading-relaxed text-zinc-100"><p class="whitespace-pre-wrap text-zinc-100">Responda só com texto, sem usar ferramentas e sem ler nem criar arquivos. Use exatamente estes blocos em Markdown, nesta ordem: um título de nível 2 &quot;Resumo&quot;; um parágrafo curto com uma palavra em negrito e outra em itálico; uma lista com três itens; uma lista numerada com dois itens; um bloco de código python com uma função soma; uma tabela com as colunas Nome e Valor e duas linhas; uma citação curta; e um link para <a class="font-medium text-(--f-core-white) underline decoration-white/30 underline-offset-4 hover:text-(--f-core-white)" href="https://example.com/docs" rel="noreferrer" title="https://example.com/docs
+Clique para escolher onde abrir">https://example.com/docs</a>.</p></div>",
+  "<div class="markdown-content space-y-2 overflow-hidden text-[13px] leading-relaxed text-zinc-100"><h3 class="text-[13px] font-semibold text-zinc-100" data-markdown-anchor="resumo">Resumo</h3>
+<p class="whitespace-pre-wrap text-zinc-100">Este é um parágrafo de exemplo com uma palavra <strong class="font-semibold text-zinc-50">importante</strong> e outra <em class="italic text-zinc-100">destacada</em>, só para mostrar a formatação básica.</p>
+<ul class="list-disc space-y-1 pl-4 text-zinc-100 marker:text-zinc-500">
+<li class="pl-1">Primeiro item</li>
+<li class="pl-1">Segundo item</li>
+<li class="pl-1">Terceiro item</li>
+</ul>
+<ol class="list-decimal space-y-1 pl-4 text-zinc-100 marker:text-zinc-500">
+<li class="pl-1">Passo inicial</li>
+<li class="pl-1">Passo final</li>
+</ol>
+<div class="max-w-full overflow-hidden rounded-xl border border-white/8 bg-black/25"><div class="flex h-7 items-center justify-between border-b border-white/6 px-3 font-mono text-[10px] uppercase text-zinc-500"><span>código</span><button type="button" title="Copiar código" class="felixo-btn flex items-center gap-1 hover:text-zinc-300"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-copy" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg><span class="normal-case">copiar</span></button></div><pre class="max-h-80 overflow-auto p-3 font-mono text-[12px] leading-relaxed text-zinc-200"><code>def soma(a, b):
+    return a + b
+</code></pre></div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="max-w-full overflow-x-auto rounded-lg border border-white/8"><table class="w-full min-w-max border-collapse text-left text-[12px]"><thead class="bg-white/5 text-zinc-200"><tr><th class="border-r border-white/6 px-3 py-2 font-semibold last:border-r-0">Nome</th><th class="border-r border-white/6 px-3 py-2 font-semibold last:border-r-0">Valor</th></tr></thead><tbody class="divide-y divide-white/6"><tr><td class="border-r border-white/6 px-3 py-2 text-zinc-300 last:border-r-0">Alfa</td><td class="border-r border-white/6 px-3 py-2 text-zinc-300 last:border-r-0">10</td></tr><tr><td class="border-r border-white/6 px-3 py-2 text-zinc-300 last:border-r-0">Beta</td><td class="border-r border-white/6 px-3 py-2 text-zinc-300 last:border-r-0">20</td></tr></tbody></table></div>
+<blockquote class="border-l-2 border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] pl-3 text-zinc-300">
+<p class="whitespace-pre-wrap text-zinc-100"><em class="italic text-zinc-100">Simplicidade é a sofisticação máxima.</em></p>
+</blockquote>
+<p class="whitespace-pre-wrap text-zinc-100">Documentação (<a class="font-medium text-(--f-core-white) underline decoration-white/30 underline-offset-4 hover:text-(--f-core-white)" href="https://example.com/docs" rel="noreferrer" title="https://example.com/docs
+Clique para escolher onde abrir">https://example.com/docs</a>)</p></div>",
+]
+`;
+
+exports[`Leitura das gravações reais > claude-telacheia: snapshot do Markdown e do HTML > markdown 1`] = `
+[
+  {
+    "markdown": "Responda só com texto\\, sem usar ferramentas e sem ler nem criar arquivos\\. Use exatamente estes blocos em Markdown\\, nesta ordem\\: um título de nível 2 \\"Resumo\\"\\; um parágrafo curto com uma palavra em negrito e outra em itálico\\; uma lista com três itens\\; uma lista numerada com dois itens\\; um bloco de código python com uma função soma\\; uma tabela com as colunas Nome e Valor e duas linhas\\; uma citação curta\\; e um link para <https://example.com/docs>\\.",
+    "raw": false,
+    "role": "pessoa",
+  },
+  {
+    "markdown": "### Resumo
+
+Este é um parágrafo de exemplo com uma palavra **importante** e outra *destacada*\\, só para mostrar a formatação básica\\.
+
+- Primeiro item
+- Segundo item
+- Terceiro item
+
+1. Passo inicial
+2. Passo final
+
+\`\`\`
+def soma(a, b):
+    return a + b
+\`\`\`
+
+| Nome | Valor |
+| --- | --- |
+| Alfa | 10 |
+| Beta | 20 |
+
+> *Simplicidade é a sofisticação máxima\\.*
+
+Documentação \\(<https://example.com/docs>\\)",
+    "raw": false,
+    "role": "agente",
+  },
+]
+`;
+
+exports[`Leitura das gravações reais > codex-cancelamento: snapshot do Markdown e do HTML > html 1`] = `
+[
+  "<div class="markdown-content space-y-2 overflow-hidden text-[13px] leading-relaxed text-zinc-100"><p class="whitespace-pre-wrap text-zinc-100">Responda só com texto, sem ferramentas: escreva uma lista numerada com 40 curiosidades curtas sobre terminais de computador, uma por linha.</p></div>",
+  "<div class="markdown-content space-y-2 overflow-hidden text-[13px] leading-relaxed text-zinc-100"><ol class="list-decimal space-y-1 pl-4 text-zinc-100 marker:text-zinc-500">
+<li class="pl-1">TTY é a sigla histórica de <em class="italic text-zinc-100">teletypewriter</em>, uma máquina que imprimia mensagens e recebia comandos.</li>
+<li class="pl-1">Muitos terminais antigos usavam papel em vez de uma tela.</li>
+<li class="pl-1">Terminais de mainframe costumavam depender do computador central para processar comandos.</li>
+<li class="pl-1">O DEC VT100, lançado em 1978, virou um modelo influente de terminal.</li>
+<li class="pl-1">O VT100 exibia</li>
+</ol></div>",
+  "<div class="markdown-content space-y-2 overflow-hidden text-[13px] leading-relaxed text-zinc-100"><p class="whitespace-pre-wrap text-zinc-100">Conversation interrupted - tell the model what to do differently. Something went wrong? Hit \`/ feedback\` to report the issue.</p></div>",
+]
+`;
+
+exports[`Leitura das gravações reais > codex-cancelamento: snapshot do Markdown e do HTML > markdown 1`] = `
+[
+  {
+    "markdown": "Responda só com texto\\, sem ferramentas\\: escreva uma lista numerada com 40 curiosidades curtas sobre terminais de computador\\, uma por linha\\.",
+    "raw": false,
+    "role": "pessoa",
+  },
+  {
+    "markdown": "1. TTY é a sigla histórica de *teletypewriter*\\, uma máquina que imprimia mensagens e recebia comandos\\.
+2. Muitos terminais antigos usavam papel em vez de uma tela\\.
+3. Terminais de mainframe costumavam depender do computador central para processar comandos\\.
+4. O DEC VT100\\, lançado em 1978\\, virou um modelo influente de terminal\\.
+5. O VT100 exibia",
+    "raw": false,
+    "role": "agente",
+  },
+  {
+    "markdown": "Conversation interrupted \\- tell the model what to do differently\\. Something went wrong\\? Hit \\\`\\/ feedback\\\` to report the issue\\.",
+    "raw": false,
+    "role": "aviso",
+  },
+]
+`;
+
+exports[`Leitura das gravações reais > codex-erro: snapshot do Markdown e do HTML > html 1`] = `
+[
+  "<div class="markdown-content space-y-2 overflow-hidden text-[13px] leading-relaxed text-zinc-100"><p class="whitespace-pre-wrap text-zinc-100">Diga oi.</p></div>",
+  "<div class="markdown-content space-y-2 overflow-hidden text-[13px] leading-relaxed text-zinc-100"><p class="whitespace-pre-wrap text-zinc-100">{&quot;type&quot;:&quot;error&quot;,&quot;status&quot;:400,&quot;error&quot;:{&quot;type&quot;:&quot;invalid_request_error&quot;,&quot;message&quot;:&quot;The &#x27;modelo-que- nao-existe&#x27; model is not supported when using Codex with a ChatGPT account.&quot;}}</p></div>",
+]
+`;
+
+exports[`Leitura das gravações reais > codex-erro: snapshot do Markdown e do HTML > markdown 1`] = `
+[
+  {
+    "markdown": "Diga oi\\.",
+    "raw": false,
+    "role": "pessoa",
+  },
+  {
+    "markdown": "\\{\\"type\\"\\:\\"error\\"\\,\\"status\\"\\:400\\,\\"error\\"\\:\\{\\"type\\"\\:\\"invalid\\_request\\_error\\"\\,\\"message\\"\\:\\"The \\'modelo\\-que\\- nao\\-existe\\' model is not supported when using Codex with a ChatGPT account\\.\\"\\}\\}",
+    "raw": false,
+    "role": "aviso",
+  },
+]
+`;
+
+exports[`Leitura das gravações reais > codex-resposta: snapshot do Markdown e do HTML > html 1`] = `
+[
+  "<div class="markdown-content space-y-2 overflow-hidden text-[13px] leading-relaxed text-zinc-100"><p class="whitespace-pre-wrap text-zinc-100">Responda só com texto, sem usar ferramentas e sem ler nem criar arquivos. Use exatamente estes blocos em Markdown, nesta ordem: um título de nível 2 &quot;Resumo&quot;; um parágrafo curto com uma palavra em negrito e outra em itálico; uma lista com três itens; uma lista numerada com dois itens; um bloco de código python com uma função soma; uma tabela com as colunas Nome e Valor e duas linhas; uma citação curta; e um link para <a class="font-medium text-(--f-core-white) underline decoration-white/30 underline-offset-4 hover:text-(--f-core-white)" href="https://example.com/docs" rel="noreferrer" title="https://example.com/docs
+Clique para escolher onde abrir">https://example.com/docs</a>.</p></div>",
+  "<div class="markdown-content space-y-2 overflow-hidden text-[13px] leading-relaxed text-zinc-100"><h2 class="text-sm font-semibold text-zinc-100" data-markdown-anchor="resumo">Resumo</h2>
+<p class="whitespace-pre-wrap text-zinc-100">Este é um <strong class="font-semibold text-zinc-50">resumo</strong> breve e <em class="italic text-zinc-100">claro</em>.</p>
+<ul class="list-disc space-y-1 pl-4 text-zinc-100 marker:text-zinc-500">
+<li class="pl-1">Primeiro item</li>
+<li class="pl-1">Segundo item</li>
+<li class="pl-1">Terceiro item</li>
+</ul>
+<ol class="list-decimal space-y-1 pl-4 text-zinc-100 marker:text-zinc-500">
+<li class="pl-1">Primeiro passo</li>
+<li class="pl-1">Segundo passo</li>
+</ol>
+<div class="max-w-full overflow-hidden rounded-xl border border-white/8 bg-black/25"><div class="flex h-7 items-center justify-between border-b border-white/6 px-3 font-mono text-[10px] uppercase text-zinc-500"><span>código</span><button type="button" title="Copiar código" class="felixo-btn flex items-center gap-1 hover:text-zinc-300"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-copy" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg><span class="normal-case">copiar</span></button></div><pre class="max-h-80 overflow-auto p-3 font-mono text-[12px] leading-relaxed text-zinc-200"><code>def soma(a, b):
+    return a + b
+</code></pre></div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="max-w-full overflow-x-auto rounded-lg border border-white/8"><table class="w-full min-w-max border-collapse text-left text-[12px]"><thead class="bg-white/5 text-zinc-200"><tr><th class="border-r border-white/6 px-3 py-2 font-semibold last:border-r-0">Nome</th><th class="border-r border-white/6 px-3 py-2 font-semibold last:border-r-0">Valor</th></tr></thead><tbody class="divide-y divide-white/6"><tr><td class="border-r border-white/6 px-3 py-2 text-zinc-300 last:border-r-0">A</td><td class="border-r border-white/6 px-3 py-2 text-zinc-300 last:border-r-0">1</td></tr><tr><td class="border-r border-white/6 px-3 py-2 text-zinc-300 last:border-r-0">B</td><td class="border-r border-white/6 px-3 py-2 text-zinc-300 last:border-r-0">2</td></tr></tbody></table></div>
+<blockquote class="border-l-2 border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] pl-3 text-zinc-300">
+<p class="whitespace-pre-wrap text-zinc-100">Uma citação curta.</p>
+</blockquote>
+<p class="whitespace-pre-wrap text-zinc-100">Documentação (<a class="font-medium text-(--f-core-white) underline decoration-white/30 underline-offset-4 hover:text-(--f-core-white)" href="https://example.com/docs" rel="noreferrer" title="https://example.com/docs
+Clique para escolher onde abrir">https://example.com/docs</a>)</p></div>",
+]
+`;
+
+exports[`Leitura das gravações reais > codex-resposta: snapshot do Markdown e do HTML > markdown 1`] = `
+[
+  {
+    "markdown": "Responda só com texto\\, sem usar ferramentas e sem ler nem criar arquivos\\. Use exatamente estes blocos em Markdown\\, nesta ordem\\: um título de nível 2 \\"Resumo\\"\\; um parágrafo curto com uma palavra em negrito e outra em itálico\\; uma lista com três itens\\; uma lista numerada com dois itens\\; um bloco de código python com uma função soma\\; uma tabela com as colunas Nome e Valor e duas linhas\\; uma citação curta\\; e um link para <https://example.com/docs>\\.",
+    "raw": false,
+    "role": "pessoa",
+  },
+  {
+    "markdown": "## Resumo
+
+Este é um **resumo** breve e *claro*\\.
+
+- Primeiro item
+- Segundo item
+- Terceiro item
+
+1. Primeiro passo
+2. Segundo passo
+
+\`\`\`
+def soma(a, b):
+    return a + b
+\`\`\`
+
+| Nome | Valor |
+| --- | --- |
+| A | 1 |
+| B | 2 |
+
+> Uma citação curta\\.
+
+Documentação \\(<https://example.com/docs>\\)",
+    "raw": false,
+    "role": "agente",
+  },
+]
+`;
+
+exports[`Leitura das gravações reais > codex-retomada: snapshot do Markdown e do HTML > html 1`] = `
+[
+  "<div class="markdown-content space-y-2 overflow-hidden text-[13px] leading-relaxed text-zinc-100"><p class="whitespace-pre-wrap text-zinc-100">Responda só com texto, sem usar ferramentas e sem ler nem criar arquivos. Use exatamente estes blocos em Markdown, nesta ordem: um título de nível 2 &quot;Resumo&quot;; um parágrafo curto com uma palavra em negrito e outra em itálico; uma lista com três itens; uma lista numerada com dois itens; um bloco de código python com uma função soma; uma tabela com as colunas Nome e Valor e duas linhas; uma citação curta; e um link para <a class="font-medium text-(--f-core-white) underline decoration-white/30 underline-offset-4 hover:text-(--f-core-white)" href="https://example.com/docs" rel="noreferrer" title="https://example.com/docs
+Clique para escolher onde abrir">https://example.com/docs</a>.</p></div>",
+  "<div class="markdown-content space-y-2 overflow-hidden text-[13px] leading-relaxed text-zinc-100"><h2 class="text-sm font-semibold text-zinc-100" data-markdown-anchor="resumo">Resumo</h2>
+<p class="whitespace-pre-wrap text-zinc-100">Este é um <strong class="font-semibold text-zinc-50">resumo</strong> breve e <em class="italic text-zinc-100">claro</em>.</p>
+<ul class="list-disc space-y-1 pl-4 text-zinc-100 marker:text-zinc-500">
+<li class="pl-1">Primeiro item</li>
+<li class="pl-1">Segundo item</li>
+<li class="pl-1">Terceiro item</li>
+</ul>
+<ol class="list-decimal space-y-1 pl-4 text-zinc-100 marker:text-zinc-500">
+<li class="pl-1">Primeiro passo</li>
+<li class="pl-1">Segundo passo</li>
+</ol>
+<div class="max-w-full overflow-hidden rounded-xl border border-white/8 bg-black/25"><div class="flex h-7 items-center justify-between border-b border-white/6 px-3 font-mono text-[10px] uppercase text-zinc-500"><span>código</span><button type="button" title="Copiar código" class="felixo-btn flex items-center gap-1 hover:text-zinc-300"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-copy" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg><span class="normal-case">copiar</span></button></div><pre class="max-h-80 overflow-auto p-3 font-mono text-[12px] leading-relaxed text-zinc-200"><code>def soma(a, b):
+    return a + b
+</code></pre></div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="max-w-full overflow-x-auto rounded-lg border border-white/8"><table class="w-full min-w-max border-collapse text-left text-[12px]"><thead class="bg-white/5 text-zinc-200"><tr><th class="border-r border-white/6 px-3 py-2 font-semibold last:border-r-0">Nome</th><th class="border-r border-white/6 px-3 py-2 font-semibold last:border-r-0">Valor</th></tr></thead><tbody class="divide-y divide-white/6"><tr><td class="border-r border-white/6 px-3 py-2 text-zinc-300 last:border-r-0">A</td><td class="border-r border-white/6 px-3 py-2 text-zinc-300 last:border-r-0">1</td></tr><tr><td class="border-r border-white/6 px-3 py-2 text-zinc-300 last:border-r-0">B</td><td class="border-r border-white/6 px-3 py-2 text-zinc-300 last:border-r-0">2</td></tr></tbody></table></div>
+<blockquote class="border-l-2 border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] pl-3 text-zinc-300">
+<p class="whitespace-pre-wrap text-zinc-100">Uma citação curta.</p>
+</blockquote>
+<p class="whitespace-pre-wrap text-zinc-100">Documentação (<a class="font-medium text-(--f-core-white) underline decoration-white/30 underline-offset-4 hover:text-(--f-core-white)" href="https://example.com/docs" rel="noreferrer" title="https://example.com/docs
+Clique para escolher onde abrir">https://example.com/docs</a>)</p></div>",
+]
+`;
+
+exports[`Leitura das gravações reais > codex-retomada: snapshot do Markdown e do HTML > markdown 1`] = `
+[
+  {
+    "markdown": "Responda só com texto\\, sem usar ferramentas e sem ler nem criar arquivos\\. Use exatamente estes blocos em Markdown\\, nesta ordem\\: um título de nível 2 \\"Resumo\\"\\; um parágrafo curto com uma palavra em negrito e outra em itálico\\; uma lista com três itens\\; uma lista numerada com dois itens\\; um bloco de código python com uma função soma\\; uma tabela com as colunas Nome e Valor e duas linhas\\; uma citação curta\\; e um link para <https://example.com/docs>\\.",
+    "raw": false,
+    "role": "pessoa",
+  },
+  {
+    "markdown": "## Resumo
+
+Este é um **resumo** breve e *claro*\\.
+
+- Primeiro item
+- Segundo item
+- Terceiro item
+
+1. Primeiro passo
+2. Segundo passo
+
+\`\`\`
+def soma(a, b):
+    return a + b
+\`\`\`
+
+| Nome | Valor |
+| --- | --- |
+| A | 1 |
+| B | 2 |
+
+> Uma citação curta\\.
+
+Documentação \\(<https://example.com/docs>\\)",
+    "raw": false,
+    "role": "agente",
+  },
+]
+`;
+
+exports[`Leitura das gravações reais > gemini-erro: snapshot do Markdown e do HTML > html 1`] = `
+[
+  "<div class="markdown-content space-y-2 overflow-hidden text-[13px] leading-relaxed text-zinc-100"><div class="max-w-full overflow-hidden rounded-xl border border-white/8 bg-black/25"><div class="flex h-7 items-center justify-between border-b border-white/6 px-3 font-mono text-[10px] uppercase text-zinc-500"><span>text</span><button type="button" title="Copiar código" class="felixo-btn flex items-center gap-1 hover:text-zinc-300"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-copy" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg><span class="normal-case">copiar</span></button></div><pre class="max-h-80 overflow-auto p-3 font-mono text-[12px] leading-relaxed text-zinc-200"><code> ▝▜▄      ▗█▀▀▜▙▝█▛▀▀▌▜██▖▟██▘▜█▘▜██▖▝█▛▝█▛
+   ▝▜▄    █▌     █▙▟  ▐█▝█▛▐█ ▐█ ▐█▝█▖█▌ █▌
+  ▗▟▀     ▜▙ ▝█▛ █▌▝ ▖▐█   ▐█ ▐█ ▐█ ▝██▌ █▌
+ ▝▀        ▀▀▀▀▘▝▀▀▀▀▘▀▀▘  ▀▀▘▀▀▘▀▀▘ ▝▀▀▝▀▀
+
+ Gemini CLI v0.62.0
+
+
+
+╭──────────────────────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                                  │
+│ ? Get started                                                                                    │
+│                                                                                                  │
+│   How would you like to authenticate for this project?                                           │
+│                                                                                                  │
+│   ● 1. Sign in with Google                                                                       │
+│     2. Use Gemini API Key                                                                        │
+│     3. Vertex AI                                                                                 │
+│                                                                                                  │
+│   Failed to sign in. Message: This client is no longer supported for Gemini Code Assist for      │
+│   individuals. To continue using Gemini, please migrate to the Antigravity suite of products:    │
+│   https://antigravity.google                                                                     │
+│                                                                                                  │
+│   (Use Enter to select)                                                                          │
+│                                                                                                  │
+│   Terms of Services and Privacy Notice for Gemini CLI                                            │
+│                                                                                                  │
+│   https://geminicli.com/docs/resources/tos-privacy/                                              │
+</code></pre></div></div>",
+]
+`;
+
+exports[`Leitura das gravações reais > gemini-erro: snapshot do Markdown e do HTML > markdown 1`] = `
+[
+  {
+    "markdown": "\`\`\`text
+ ▝▜▄      ▗█▀▀▜▙▝█▛▀▀▌▜██▖▟██▘▜█▘▜██▖▝█▛▝█▛
+   ▝▜▄    █▌     █▙▟  ▐█▝█▛▐█ ▐█ ▐█▝█▖█▌ █▌
+  ▗▟▀     ▜▙ ▝█▛ █▌▝ ▖▐█   ▐█ ▐█ ▐█ ▝██▌ █▌
+ ▝▀        ▀▀▀▀▘▝▀▀▀▀▘▀▀▘  ▀▀▘▀▀▘▀▀▘ ▝▀▀▝▀▀
+
+ Gemini CLI v0.62.0
+
+
+
+╭──────────────────────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                                  │
+│ ? Get started                                                                                    │
+│                                                                                                  │
+│   How would you like to authenticate for this project?                                           │
+│                                                                                                  │
+│   ● 1. Sign in with Google                                                                       │
+│     2. Use Gemini API Key                                                                        │
+│     3. Vertex AI                                                                                 │
+│                                                                                                  │
+│   Failed to sign in. Message: This client is no longer supported for Gemini Code Assist for      │
+│   individuals. To continue using Gemini, please migrate to the Antigravity suite of products:    │
+│   https://antigravity.google                                                                     │
+│                                                                                                  │
+│   (Use Enter to select)                                                                          │
+│                                                                                                  │
+│   Terms of Services and Privacy Notice for Gemini CLI                                            │
+│                                                                                                  │
+│   https://geminicli.com/docs/resources/tos-privacy/                                              │
+\`\`\`",
+    "raw": true,
+    "role": "saida",
+  },
+]
+`;
+
+exports[`Leitura das gravações reais > openia-ajuda: snapshot do Markdown e do HTML > html 1`] = `
+[
+  "<div class="markdown-content space-y-2 overflow-hidden text-[13px] leading-relaxed text-zinc-100"><div class="max-w-full overflow-hidden rounded-xl border border-white/8 bg-black/25"><div class="flex h-7 items-center justify-between border-b border-white/6 px-3 font-mono text-[10px] uppercase text-zinc-500"><span>text</span><button type="button" title="Copiar código" class="felixo-btn flex items-center gap-1 hover:text-zinc-300"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-copy" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg><span class="normal-case">copiar</span></button></div><pre class="max-h-80 overflow-auto p-3 font-mono text-[12px] leading-relaxed text-zinc-200"><code> Usage: openia [OPTIONS] COMMAND [ARGS]...
+
+ Launcher de CLIs de IA com OpenRouter. Rode sem argumentos para o menu.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --version          Mostra a versão do launcher e sai.                                            │
+│ --help             Show this message and exit.                                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────╮
+│ list     Lista todas as interfaces de IA suportadas.                                             │
+│ models   Lista o catálogo público de modelos do OpenRouter.                                      │
+│ install  Instala a interface escolhida direto no sistema.                                        │
+│ run      Roda a interface (instala antes, se necessário). Args extras vão para a CLI.            │
+│ key      Gerencia a chave do OpenRouter.                                                         │
+</code></pre></div></div>",
+]
+`;
+
+exports[`Leitura das gravações reais > openia-ajuda: snapshot do Markdown e do HTML > markdown 1`] = `
+[
+  {
+    "markdown": "\`\`\`text
+ Usage: openia [OPTIONS] COMMAND [ARGS]...
+
+ Launcher de CLIs de IA com OpenRouter. Rode sem argumentos para o menu.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --version          Mostra a versão do launcher e sai.                                            │
+│ --help             Show this message and exit.                                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────╮
+│ list     Lista todas as interfaces de IA suportadas.                                             │
+│ models   Lista o catálogo público de modelos do OpenRouter.                                      │
+│ install  Instala a interface escolhida direto no sistema.                                        │
+│ run      Roda a interface (instala antes, se necessário). Args extras vão para a CLI.            │
+│ key      Gerencia a chave do OpenRouter.                                                         │
+\`\`\`",
+    "raw": true,
+    "role": "saida",
+  },
+]
+`;
+
+exports[`Leitura das gravações reais > openia-erro: snapshot do Markdown e do HTML > html 1`] = `
+[
+  "<div class="markdown-content space-y-2 overflow-hidden text-[13px] leading-relaxed text-zinc-100"><div class="max-w-full overflow-hidden rounded-xl border border-white/8 bg-black/25"><div class="flex h-7 items-center justify-between border-b border-white/6 px-3 font-mono text-[10px] uppercase text-zinc-500"><span>text</span><button type="button" title="Copiar código" class="felixo-btn flex items-center gap-1 hover:text-zinc-300"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-copy" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg><span class="normal-case">copiar</span></button></div><pre class="max-h-80 overflow-auto p-3 font-mono text-[12px] leading-relaxed text-zinc-200"><code>erro: &quot;interface desconhecida: &#x27;interface-que-nao-existe&#x27;. Disponíveis: aichat, claudecode, cline, llm, openclaw, opencode, orchat&quot;
+</code></pre></div></div>",
+]
+`;
+
+exports[`Leitura das gravações reais > openia-erro: snapshot do Markdown e do HTML > markdown 1`] = `
+[
+  {
+    "markdown": "\`\`\`text
+erro: "interface desconhecida: 'interface-que-nao-existe'. Disponíveis: aichat, claudecode, cline, llm, openclaw, opencode, orchat"
+\`\`\`",
+    "raw": true,
+    "role": "saida",
+  },
+]
+`;
+
+exports[`Leitura das gravações reais > openia-lista: snapshot do Markdown e do HTML > html 1`] = `
+[
+  "<div class="markdown-content space-y-2 overflow-hidden text-[13px] leading-relaxed text-zinc-100"><div class="max-w-full overflow-hidden rounded-xl border border-white/8 bg-black/25"><div class="flex h-7 items-center justify-between border-b border-white/6 px-3 font-mono text-[10px] uppercase text-zinc-500"><span>text</span><button type="button" title="Copiar código" class="felixo-btn flex items-center gap-1 hover:text-zinc-300"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-copy" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg><span class="normal-case">copiar</span></button></div><pre class="max-h-80 overflow-auto p-3 font-mono text-[12px] leading-relaxed text-zinc-200"><code>Interfaces de IA suportadas:
+
+  orchat  (OrChat) — ✓ instalada
+      Chat rico no terminal: streaming, contagem de tokens e resumo de conversa.
+      https://github.com/oop7/OrChat
+  aichat  (aichat) — · não instalada
+      CLI/REPL de chat genérica e leve; aceita qualquer provedor OpenAI-compatível.
+      https://github.com/sigoden/aichat
+  llm  (llm (Simon Willison)) — · não instalada
+      CLI de LLM extensível, com plugins, logs em SQLite e modo conversa.
+      https://github.com/simonw/llm
+  cline  (Cline) — · não instalada
+      Agente de código autônomo no terminal; provider OpenRouter nativo.
+      https://github.com/cline/cline
+  opencode  (opencode) — ✓ instalada
+      Agente de código no terminal; OpenRouter via base_url OpenAI-compatível.
+      https://opencode.ai
+  openclaw  (OpenClaw) — · não instalada
+      Assistente/agente autônomo com suporte nativo a OpenRouter.
+      https://github.com/openclaw/openclaw
+  claudecode  (Claude Code) — ✓ instalada
+      Agente de código da Anthropic; fala o protocolo Anthropic com o OpenRouter.
+      https://docs.claude.com/claude-code
+
+Use &#x27;openia run &lt;chave&gt;&#x27; para iniciar uma delas.
+</code></pre></div></div>",
+]
+`;
+
+exports[`Leitura das gravações reais > openia-lista: snapshot do Markdown e do HTML > markdown 1`] = `
+[
+  {
+    "markdown": "\`\`\`text
+Interfaces de IA suportadas:
+
+  orchat  (OrChat) — ✓ instalada
+      Chat rico no terminal: streaming, contagem de tokens e resumo de conversa.
+      https://github.com/oop7/OrChat
+  aichat  (aichat) — · não instalada
+      CLI/REPL de chat genérica e leve; aceita qualquer provedor OpenAI-compatível.
+      https://github.com/sigoden/aichat
+  llm  (llm (Simon Willison)) — · não instalada
+      CLI de LLM extensível, com plugins, logs em SQLite e modo conversa.
+      https://github.com/simonw/llm
+  cline  (Cline) — · não instalada
+      Agente de código autônomo no terminal; provider OpenRouter nativo.
+      https://github.com/cline/cline
+  opencode  (opencode) — ✓ instalada
+      Agente de código no terminal; OpenRouter via base_url OpenAI-compatível.
+      https://opencode.ai
+  openclaw  (OpenClaw) — · não instalada
+      Assistente/agente autônomo com suporte nativo a OpenRouter.
+      https://github.com/openclaw/openclaw
+  claudecode  (Claude Code) — ✓ instalada
+      Agente de código da Anthropic; fala o protocolo Anthropic com o OpenRouter.
+      https://docs.claude.com/claude-code
+
+Use 'openia run <chave>' para iniciar uma delas.
+\`\`\`",
+    "raw": true,
+    "role": "saida",
+  },
+]
+`;

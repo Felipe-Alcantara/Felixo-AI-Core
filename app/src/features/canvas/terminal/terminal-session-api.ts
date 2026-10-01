@@ -3,6 +3,7 @@ import type { ContextFileKind } from '../services/context-file-delivery'
 import type { TerminalScrollbackStatus } from './terminal-scrollback'
 import type { SessionMetadata } from './session-metadata'
 import type { PromptInsertion } from '../../shared/types/prompt-insertion'
+import type { ReadingBuffer } from './reading/reading-lines'
 
 /** The small lifecycle vocabulary needed by cards, the dock, and notices. */
 export type SessionActivity =
@@ -27,6 +28,17 @@ export type SessionSnapshot = {
 }
 
 export type TerminalTranscript = { text: string }
+
+/**
+ * A tela do terminal para a Leitura: o buffer ativo do xterm e a largura.
+ * Quem lê não guarda o buffer — ele muda a cada escrita e é outro depois de
+ * um Reiniciar (`generation`).
+ */
+export type TerminalReadingSource = {
+  buffer: ReadingBuffer
+  cols: number
+  generation: number
+}
 
 export type SessionOptions = {
   command?: string
@@ -118,6 +130,14 @@ export type TerminalSessionStoreApi = {
   copy: (id: string) => Promise<string>
   getTranscript: (id: string) => TerminalTranscript
   getShellHistory: (id: string) => TerminalTranscript
+  /** A tela para a Leitura; `undefined` sem sessão (ou antes de o runtime carregar). */
+  getReadingSource: (id: string) => TerminalReadingSource | undefined
+  /**
+   * Avisa quando a tela do terminal muda, no máximo uma vez por quadro. O
+   * snapshot só muda na troca de atividade, de propósito; a Leitura precisa
+   * de cada redesenho. Sobrevive ao Reiniciar, como `subscribe`.
+   */
+  subscribeOutput: (id: string, listener: () => void) => () => void
   getSnapshot: (id: string) => SessionSnapshot | undefined
   getSessionMetadata: (id: string) => SessionMetadata | undefined
   getSnapshots: () => Record<string, SessionSnapshot>

@@ -756,6 +756,61 @@ A cobertura fica em `agent-session.test.ts`, `quality-standard-prompt.test.ts`,
 `agent-session-discovery.test.cjs`, `pty-process-manager.test.cjs` e
 `canvas-transfer.test.cjs`.
 
+### Leitura do terminal: o Markdown da tela
+
+A aba **Leitura** da gaveta mostra a conversa de um terminal de agente como
+Markdown renderizado. A fonte é só a tela do xterm — o buffer que o terminal
+já interpretou (cursor, cor, tela alternativa, redesenho) —, não o arquivo de
+conversa do agente nem o fluxo de bytes. As CLIs desenham o Markdown com estilo
+de célula (título em negrito, código com cor de sintaxe, tabela com traços), e
+é desse estilo que a estrutura é reconstruída.
+
+Módulos, em `src/features/canvas/terminal/reading/`:
+
+- `reading-lines.ts`: lê o buffer (`IBuffer`) em linhas lógicas com segmentos
+  de estilo; junta as linhas que o xterm quebrou por largura. O leitor é
+  incremental (o histórico acima de `baseY` não muda; o cache cai quando o
+  buffer troca, encolhe, muda de largura ou desloca) e guarda no máximo 2.000
+  linhas (`droppedLines` diz quantas ficaram só no terminal).
+- `reading-profiles.ts`: como cada CLI marca as falas e o status. Só ganha
+  perfil a CLI gravada em `__fixtures__/terminal-output` (Claude Code 2.1.286,
+  nas telas clássica e cheia, e Codex 0.156.1); o resto usa o perfil `texto`.
+- `reading-blocks.ts`: divide a tela em falas (pessoa, agente, aviso; o que vem
+  antes da primeira marca e a caixa de digitação ficam de fora) e a fala do
+  agente em blocos. `sameReadingContent` confere se os blocos têm o mesmo texto
+  das linhas; se não, a fala sai como texto puro.
+- `reading-markdown.ts`: blocos → Markdown. Todo texto do terminal é escapado
+  (cada pontuação ASCII ganha `\`); só URL `http(s)` vira autolink, que passa
+  pela política central de links. Ênfase só quando os delimitadores fecham
+  pelas regras de flanco do CommonMark.
+- `terminal-reading.ts`: monta a Leitura e guarda as falas por chave de texto e
+  estilo (no stream, só a fala que mudou é remontada).
+
+O store expõe `getReadingSource` (buffer e largura) e `subscribeOutput` (no
+máximo uma vez por quadro, via `onWriteParsed`; o snapshot continua mudando só
+na troca de atividade). `useTerminalReading` relê com intervalo mínimo (250 ms
+na gaveta, 1 s no cartão) e só enquanto a Leitura aparece. O painel
+(`TerminalReadingPanel`) fica por cima do xterm, do mesmo tamanho: o PTY não é
+redimensionado; o xterm fica `inert` e `aria-hidden` enquanto a Leitura
+aparece. A prévia do cartão (`TerminalReadingPreview`) desenha os blocos como
+texto com estilo, sem `MarkdownContent`, porque fica dentro do botão do cartão.
+A escolha é do bloco (`readingMode`, persistido; ausente é o Terminal).
+
+Testes: snapshot do Markdown e do HTML de cada gravação; o texto renderizado
+igual ao da tela em todo ponto do stream; leitor incremental igual ao novo;
+fuzz de bytes quaisquer; propriedades do escape; sessão F do smoke, com o PTY
+roteirizado tocando as gravações (`__felixo_smoke_gravacao_<nome>__`). As
+gravações saem de `scripts/record-terminal-fixture.cjs`, que roda a CLI real
+num PTY com a conta de quem grava, anonimiza e se recusa a salvar segredo,
+plano da conta ou regra de configuração. O Claude é gravado sem as
+configurações do usuário (`--setting-sources project,local`): ao abrir, ele
+imprime avisos sobre as regras de permissão delas.
+
+Medido num i5-6200U (2 núcleos), com a máquina em carga alta: num histórico de
+2.000 linhas, a releitura incremental e a montagem custam ~14 ms por redesenho
+(eram ~52 ms antes do cache das falas). `FELIXO_READING_PERF=1` roda a medição
+(`terminal-reading.perf.test.ts`); ela não é portão de CI.
+
 ### Geometria segura e acessibilidade das superfícies
 
 `CanvasView` mantém o React Flow em uma área full-bleed para preservar pan e

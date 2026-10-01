@@ -78,6 +78,15 @@ export const terminalSurfaces: InventoryElement[] = [
         test: { file: SMOKE, check: 'checarInteracoes' },
       },
       {
+        locator: 'data-felixo-terminal-tab',
+        kind: 'button',
+        trigger: 'clique, ou seta esquerda/direita na lista de abas',
+        effect: 'Abas Terminal | Leitura (WAI-ARIA tabs): grava readingMode no nó (updateNodeData, persistido no canvas) e leva o foco junto — ao xterm no Terminal, ao painel na Leitura. Na Leitura o xterm fica por baixo, do mesmo tamanho, inert e aria-hidden; o PTY não é redimensionado.',
+        failure: 'Sem falha própria: trocar de aba não toca o processo. Só aparece com onReadingModeChange e um perfil de leitura.',
+        disabledWhen: 'some recolhida',
+        test: { file: 'scripts/canvas-smoke-leitura.cjs', check: 'copiarEAbas' },
+      },
+      {
         locator: 'runResumeAction(action.id)',
         kind: 'button',
         effect: 'Botão repetido da faixa (Escolher na lista (/resume), Abrir conversa nova, Tentar retomar de novo, Dispensar aviso): handleResumeAction grava terminalResumeActionPatch no nó (resumeChoice ou limpa resumeFailure), espelha a escolha no sessionStorage felixo:canvas-terminal-run e relança por relaunchTerminal; "Dispensar aviso" só limpa a falha.',
@@ -91,6 +100,7 @@ export const terminalSurfaces: InventoryElement[] = [
       'localStorage felixo:terminal-drawer-width (gravado ao soltar o arrasto, setas ou Home)',
       'processo principal: PTY vivo (fechar ou recolher não encerra)',
       'canvas salvo (dados do nó): resumeChoice, resumeFailure e sessionStartedAt gravados pelas ações',
+      'canvas salvo (dados do nó): readingMode, gravado pelas abas Terminal | Leitura',
     ],
     ipc: ['pty:spawn', 'pty:kill', 'pty:resize'],
     dependsOn: [
@@ -153,6 +163,51 @@ export const terminalSurfaces: InventoryElement[] = [
     overlap: 'Coluna encostada à direita, relative z-20 (focus-within z-30), altura total; a largura (mínimo 440, recolhida 44) é negociada com o painel e o inspector por splitHorizontalSpace, então empurra o canvas em vez de cobri-lo. Fica abaixo do cartão de pedido de página e dos toasts (z 50) e dos modais (z 60); clicar numa camada flutuante (data-felixo-floating-layer) não conta como clique fora.',
   },
   {
+    id: 'terminal-reading',
+    name: 'Leitura do terminal',
+    layer: 'terminal',
+    owner: 'src/features/canvas/components/TerminalReadingPanel.tsx',
+    states: {
+      normal: 'Aba Leitura da gaveta: a conversa da tela em falas (Você, Agente, Aviso da CLI, Saída), cada uma com o Markdown reconstruído da tela do xterm (título, listas, código, tabela, citação, link). Relida no máximo a cada 250 ms durante o stream; acompanha o fim só se a pessoa já estava no fim.',
+      empty: 'Sem fala reconhecida (CLI abrindo, só logotipo): "Nada para ler ainda."',
+      error: 'Fala cuja estrutura não confere com a tela (ou que lança erro): sai como texto puro, com "mostrado como texto: a formatação não conferiu".',
+      disabled: 'CLI sem perfil gravado (Gemini, Openia, shell): a saída aparece como veio, num bloco de texto, com o aviso de que não há leitura formatada.',
+      loading: 'Runtime do terminal ainda carregando: getReadingSource devolve undefined e o painel fica vazio até o primeiro aviso de saída.',
+    },
+    controls: [],
+    persistence: ['canvas salvo (dados do nó): readingMode', 'nenhuma para o conteúdo: relido da tela a cada abertura'],
+    ipc: [],
+    dependsOn: [
+      'useTerminalReading',
+      'terminal-session-store.getReadingSource',
+      'terminal-session-store.subscribeOutput',
+      'terminal/reading (reading-lines, reading-blocks, reading-markdown, reading-profiles)',
+      'DeferredMarkdownContent',
+      'TerminalCopyButton',
+    ],
+    tests: [
+      { file: 'src/features/canvas/terminal/reading/terminal-reading.fixtures.test.ts' },
+      { file: 'src/features/canvas/terminal/reading/terminal-reading.stream.test.ts' },
+      { file: 'src/features/canvas/terminal/reading/reading-markdown.test.ts' },
+      { file: 'scripts/canvas-smoke-leitura.cjs', check: 'claudeNaLeitura' },
+      { file: 'scripts/canvas-smoke-leitura.cjs', check: 'codexERolagem' },
+      { file: 'scripts/canvas-smoke-leitura.cjs', check: 'temaTamanhoEMovimento' },
+    ],
+    gaps: [
+      {
+        what: 'O Gemini não tem perfil: a conta pessoal foi recusada pelo Gemini CLI 0.62 e não houve resposta para gravar; ele aparece como texto puro.',
+        risk: 'médio',
+        task: '3ec91f95-497e-8113-afb0-eecb92e4eb23',
+      },
+      {
+        what: 'Palavra partida pela largura da CLI vira espaço; código sem cor sai como parágrafo; versão nova das CLIs pode desenhar diferente sem teste que avise.',
+        risk: 'baixo',
+        task: '3ec91f95-497e-8122-a08b-d26d4991acca',
+      },
+    ],
+    overlap: 'Absoluta por cima do xterm, dentro da gaveta (inset-0, fundo opaco): não muda o tamanho do terminal nem cria camada própria acima da gaveta.',
+  },
+  {
     id: 'terminal-copy-button',
     name: 'Botão Copiar do terminal',
     layer: 'terminal',
@@ -164,7 +219,7 @@ export const terminalSurfaces: InventoryElement[] = [
     },
     controls: [
       {
-        locator: 'aria-label="Copiar do terminal"',
+        locator: "label = 'Copiar do terminal'",
         kind: 'button',
         effect: 'store.copy(sessionId): copia a seleção do xterm ou, sem seleção, a tela visível (readViewport) com navigator.clipboard.writeText e mostra ✓.',
         failure: 'erro engolido: a rejeição do clipboard vira promessa sem tratamento, sem aviso; sem navigator.clipboard o ✓ aparece sem ter copiado nada.',

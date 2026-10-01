@@ -425,7 +425,7 @@ function registerCliIpcHandlers(getMainWindow, dependencies = {}) {
             preview: createTextPreview(line, 500),
           },
         })
-        const cliEvent = parseAdapterLine(adapter, line)
+        const { cliEvent, parseError } = parseAdapterLine(adapter, line)
         sendTerminalEvents(
           targetWebContents,
           threadId,
@@ -433,6 +433,7 @@ function registerCliIpcHandlers(getMainWindow, dependencies = {}) {
             command,
             line,
             cliEvent,
+            parseError,
             durationMs: Date.now() - processStartedAt,
           }),
         )

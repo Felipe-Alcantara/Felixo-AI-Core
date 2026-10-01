@@ -2,7 +2,9 @@
 
 const test = require('node:test')
 const assert = require('node:assert/strict')
+const fs = require('node:fs')
 const os = require('node:os')
+const path = require('node:path')
 
 const {
   FAKE_CODEX_LOGIN_STATUS_OUTPUT,
@@ -55,12 +57,15 @@ function createManualTimers() {
   }
 }
 
-function spawnScripted() {
+const RECORDINGS_DIR = path.join(__dirname, '..', '..', 'src', 'features', 'canvas', 'terminal', '__fixtures__', 'terminal-output')
+
+function spawnScripted({ recordingsDir = RECORDINGS_DIR } = {}) {
   const timers = createManualTimers()
   const spawnPty = createFakeCliPtyFactory({
     chunkDelayMs: CHUNK_DELAY_MS,
     setTimer: timers.setTimer,
     clearTimer: timers.clearTimer,
+    recordingsDir,
   })
   const pty = spawnPty('codex', ['--model', 'gpt-5.5-codex'], {
     name: 'xterm-256color',
@@ -212,6 +217,54 @@ test('gatilho de links: hyperlinks OSC 8 com destino diferente do texto e um fil
   assert.match(printed, /\u001b\]8;;file:\/\/\/etc\/hosts\u001b\\hosts do sistema\u001b\]8;;\u001b\\/)
   // Não é frase de falha: a cadeia de contas não pode ver limite nem rede aqui.
   assert.equal(classifyPty(printed).failureClass, 'unknown')
+})
+
+test('respostas do terminal às perguntas da CLI (OSC 10/11, DCS) não viram texto nem sujam o gatilho', () => {
+  const { pty, timers, output, reset } = spawnScripted()
+  timers.runAll()
+  reset()
+
+  pty.write('\u001b]10;rgb:ffff/ffff/ffff\u001b\\\u001b]11;rgb:0b0b/0f0f/1414\u0007\u001bP1$r0m\u001b\\')
+  pty.write('__felixo_smoke_osc8__\r')
+  timers.runAll()
+
+  assert.equal(output(), `__felixo_smoke_osc8__\r\n${SMOKE_LINK_OUTPUTS.__felixo_smoke_osc8__}${PROMPT}`)
+})
+
+test('gatilho de gravação: limpa a tela e toca a gravação inteira, em ordem, sem prompt no fim', () => {
+  const { pty, timers, events, output, reset } = spawnScripted()
+  timers.runAll()
+  reset()
+
+  pty.write('__felixo_smoke_gravacao_claude-resposta__\r')
+  timers.runAll()
+
+  const recording = JSON.parse(fs.readFileSync(path.join(RECORDINGS_DIR, 'claude-resposta.json'), 'utf8'))
+  const printed = output()
+  assert.ok(printed.startsWith('__felixo_smoke_gravacao_claude-resposta__\r\n\u001b[3J\u001b[2J\u001b[H'))
+  assert.ok(printed.endsWith(recording.chunks.map((chunk) => chunk.data).join('')))
+  assert.notEqual(events.at(-1).data, PROMPT)
+  // Os intervalos da gravação ficam curtos: o smoke não espera 30 s.
+  assert.ok(events.at(-1).at <= recording.chunks.length * 40 + CHUNK_DELAY_MS)
+})
+
+test('gatilho de gravação: nome com caminho não é gatilho; gravação ausente ou pasta faltando viram aviso', () => {
+  const { pty, timers, output, reset } = spawnScripted()
+  timers.runAll()
+  reset()
+  pty.write('__felixo_smoke_gravacao_../../etc-passwd__\r')
+  pty.write('__felixo_smoke_gravacao_nao-existe__\r')
+  timers.runAll()
+  const printed = output()
+  assert.doesNotMatch(printed, /root:/)
+  assert.match(printed, /\[Felixo\] gravação nao-existe não foi lida \(ENOENT\)\./)
+
+  const semPasta = spawnScripted({ recordingsDir: '' })
+  semPasta.timers.runAll()
+  semPasta.reset()
+  semPasta.pty.write('__felixo_smoke_gravacao_claude-resposta__\r')
+  semPasta.timers.runAll()
+  assert.match(semPasta.output(), /gravações do terminal não configuradas/)
 })
 
 test('gatilho de streaming: as linhas saem uma a uma, espaçadas, e o prompt só no fim', () => {

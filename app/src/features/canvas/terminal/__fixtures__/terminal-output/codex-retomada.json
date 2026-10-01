@@ -1,0 +1,162 @@
+{
+ "provider": "codex",
+ "version": "0.156.1",
+ "scenario": "retomada",
+ "cols": 100,
+ "rows": 50,
+ "platform": "linux",
+ "recordedAt": "2026-10-01",
+ "anonymized": true,
+ "marks": [
+  {
+   "t": 12,
+   "label": "espera a conversa ser redesenhada"
+  }
+ ],
+ "chunks": [
+  {
+   "t": 184,
+   "data": "\u001b[?2004h\u001b[>4;0m\u001b[>7u\u001b[?1004h\u001b[6n\u001b]10;?\u001b\\\u001b]11;?\u001b\\\u001b[?u\u001b[c"
+  },
+  {
+   "t": 436,
+   "data": "\u001b[?2026h\u001b[?2026h\u001b[1;1H\u001b[J\u001b[?25l\u001b[1;42H\u001b[0m\u001b[49m\u001b[K\u001b[2;42H\u001b[0m\u001b[49m\u001b[K\u001b[3;42H\u001b[0m\u001b[49m\u001b[K\u001b[4;42H\u001b[0m\u001b[49m\u001b[K\u001b[5;42H\u001b[0m\u001b[49m\u001b[K\u001b[6;42H\u001b[0m\u001b[49m\u001b[K\u001b[7;20H\u001b[0m\u001b[49m\u001b[K\u001b[8;2H\u001b[0m\u001b[49m\u001b[K\u001b[9;27H\u001b[0m\u001b[49m\u001b[K\u001b[10;2H\u001b[0m\u001b[49m\u001b[K\u001b[11;2H\u001b[0m\u001b[49m\u001b[K\u001b[1;1H\u001b[2m╭───────────────────────────────────────╮\u001b[2;1H│ >_ \u001b[22m\u001b[1mOpenAI Codex\u001b[22m\u001b[2m\u001b[2m (v0.156.1)            │\u001b[3;1H│                                       │\u001b[4;1H│ model:     \u001b[3mloading\u001b[23m   \u001b[22m\u001b[38;2;99;168;248;49m/model\u001b[2m\u001b[39;49m to change │\u001b[5;1H│ directory: \u001b[22mloading\u001b[2m                    │\u001b[6;1H╰───────────────────────────────────────╯\u001b[7;1H  Resuming session…\u001b[8;1H\u001b[22m \u001b[9;1H\u001b[1m›\u001b[22m \u001b[2mAsk Codex to do anything\u001b[10;1H\u001b[22m \u001b[11;1H \u001b[39m\u001b[49m\u001b[0m\u001b[1;1H\u001b[0 q\u001b[1;1H\u001b[2m╭\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 523,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[?25l\u001b[1;41H\u001b[2m─────────╮\u001b[2;41H         │\u001b[3;41H         │\u001b[4;41H         │\u001b[5;14H\u001b[22m~/.cache/…/fixture-recordings/codex\u001b[2m │\u001b[6;41H─────────╯\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 634,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 781,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 977,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 6807,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 6852,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 7039,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 7601,
+   "data": "\u001b]0;codex\u0007\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l\u001b]0;Formatar resposta em Markdown | codex\u0007\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[1;1H\u001b[J\u001b[?25l\u001b[1;2H\u001b[0m\u001b[49m\u001b[K\u001b[2;2H\u001b[0m\u001b[49m\u001b[K\u001b[3;27H\u001b[0m\u001b[49m\u001b[K\u001b[4;2H\u001b[0m\u001b[49m\u001b[K\u001b[5;100H\u001b[0m\u001b[49m\u001b[K\u001b[1;1H \u001b[2;1H \u001b[3;1H\u001b[1m\u001b[38;2;255;178;66;49m›\u001b[22m\u001b[39;49m \u001b[2mAsk Codex to do anything\u001b[4;1H\u001b[22m \u001b[5;1H  \u001b[38;2;246;226;183;49mGPT-6-Luna max\u001b[39;49m · \u001b[38;2;171;223;167;49m/tmp/felixo-fixture\u001b[39;49m · \u001b[38;2;245;194;231;49mFormatar resposta em Markdown\u001b[39m\u001b[49m\u001b[0m\u001b[1;1H\u001b[0 q\u001b[1;1H \u001b[39m\u001b[49m\u001b[0m\u001b[3;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 7913,
+   "data": "\u001b]0;⠸ Formatar resposta em Markdown | codex\u0007\u001b[?2026h\u001b[1;50r\u001b[1;1H\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001b[r\u001b[1;43r\u001b[1;1H\r\n\u001b[39;49m\u001b[K\u001b[2m╭────────────────────────────────────────────────╮\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│ >_ \u001b[22m\u001b[1mOpenAI Codex\u001b[22m\u001b[2m\u001b[2m (v0.156.1)                     │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│                                                │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│ model:     \u001b[22mGPT-6-Luna max\u001b[2m   \u001b[22m\u001b[38;2;99;168;248;49m/model\u001b[2m\u001b[39;49m to change   │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│ directory: \u001b[22m~/.cache/…/fixture-recordings/codex\u001b[2m │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m╰────────────────────────────────────────────────╯\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K  \u001b[1mTip:\u001b[22m Try the \u001b[1mDesktop app\u001b[22m on Linux: install it from \u001b[4m\u001b[38;2;99;168;248;49m\u001b]8;;https://learn.chatgpt.com/docs/linux/linux-app\u0007https://learn.chatgpt.com/docs/linux/linux-app\u001b]8;;\u0007\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K  and run 'chatgpt'.\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[1m\u001b[2m› \u001b[22m\u001b[22mResponda só com texto, sem usar ferramentas e sem ler nem criar arquivos. Use exatamente estes\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K  blocos em Markdown, nesta ordem: um título de nível 2 \"Resumo\"; um parágrafo curto com uma\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K  palavra em negrito e outra em itálico; uma lista com três itens; uma lista numerada com dois\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K  itens; um bloco de código python com uma função soma; uma tabela com as colunas Nome e Valor e\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K  duas linhas; uma citação curta; e um link para https://example.com/docs.\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m• \u001b[22m\u001b[1m## Resumo\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K  Este é um \u001b[1mresumo\u001b[22m breve e \u001b[3mclaro\u001b[23m.\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K  - Primeiro item\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K  - Segundo item\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K  - Terceiro item\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K  \u001b[38;2;99;168;248;49m1. \u001b[39;49mPrimeiro passo\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K  \u001b[38;2;99;168;248;49m2. \u001b[39;49mSegundo passo\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K  \u001b[38;2;203;166;247;49mdef\u001b[38;2;205;214;244;49m \u001b[38;2;137;180;250;49msoma\u001b[38;2;147;153;178;49m(\u001b[38;2;235;160;172;49ma\u001b[38;2;147;153;178;49m,\u001b[38;2;235;160;172;49m b\u001b[38;2;147;153;178;49m):\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K  \u001b[38;2;205;214;244;49m    \u001b[38;2;203;166;247;49mreturn\u001b[38;2;205;214;244;49m a \u001b[38;2;148;226;213;49m+\u001b[38;2;205;214;244;49m b\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[38;2;249;226;175;49m\u001b[K\u001b[1m\u001b[38;2;249;226;175;49m   Nome    Valor\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K  \u001b[2m━━━━━━  ━━━━━━━\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K   A           1\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K  \u001b[2m──────  ───────\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K   B           2\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[38;5;2;49m\u001b[K\u001b[38;5;2;49m  > Uma citação curta.\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K  \u001b[4m\u001b[38;2;99;168;248;49m\u001b]8;;https://example.com/docs\u0007Documentação\u001b]8;;\u0007\u001b[24m\u001b[39;49m (\u001b[4m\u001b[38;2;99;168;248;49m\u001b]8;;https://example.com/docs\u0007https://example.com/docs\u001b]8;;\u0007\u001b[24m\u001b[39;49m)\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m  9:35 AM\u001b[39m\u001b[49m\u001b[0m\u001b[r\u001b[3;3H\u001b[?25l\u001b[44;2H\u001b[0m\u001b[49m\u001b[K\u001b[45;2H\u001b[0m\u001b[49m\u001b[K\u001b[46;27H\u001b[0m\u001b[49m\u001b[K\u001b[47;2H\u001b[0m\u001b[49m\u001b[K\u001b[48;100H\u001b[0m\u001b[49m\u001b[K\u001b[44;1H \u001b[45;1H \u001b[46;1H\u001b[1m\u001b[38;2;255;178;66;49m›\u001b[22m\u001b[39;49m \u001b[2mAsk Codex to do anything\u001b[47;1H\u001b[22m \u001b[48;1H  \u001b[38;2;246;226;183;49mGPT-6-Luna max\u001b[39;49m · \u001b[38;2;171;223;167;49m/tmp/felixo-fixture\u001b[39;49m · \u001b[38;2;245;194;231;49mFormatar resposta em Markdown\u001b[39m\u001b[49m\u001b[0m\u001b[44;1H\u001b[0 q\u001b[44;1H \u001b[39m\u001b[49m\u001b[0m\u001b[46;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[46;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 7975,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[46;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[46;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 8065,
+   "data": "\u001b]0;⠼ Formatar resposta em Markdown | codex\u0007"
+  },
+  {
+   "t": 8165,
+   "data": "\u001b]0;⠴ Formatar resposta em Markdown | codex\u0007"
+  },
+  {
+   "t": 8285,
+   "data": "\u001b]0;⠦ Formatar resposta em Markdown | codex\u0007"
+  },
+  {
+   "t": 8385,
+   "data": "\u001b]0;⠧ Formatar resposta em Markdown | codex\u0007"
+  },
+  {
+   "t": 8574,
+   "data": "\u001b]0;⠏ Formatar resposta em Markdown | codex\u0007\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[46;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 8629,
+   "data": "\u001b]0;⠋ Formatar resposta em Markdown | codex\u0007\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[46;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 8734,
+   "data": "\u001b]0;⠙ Formatar resposta em Markdown | codex\u0007"
+  },
+  {
+   "t": 8809,
+   "data": "\u001b]0;⠹ Formatar resposta em Markdown | codex\u0007"
+  },
+  {
+   "t": 8914,
+   "data": "\u001b]0;⠸ Formatar resposta em Markdown | codex\u0007"
+  },
+  {
+   "t": 9015,
+   "data": "\u001b]0;⠼ Formatar resposta em Markdown | codex\u0007"
+  },
+  {
+   "t": 9117,
+   "data": "\u001b]0;⠴ Formatar resposta em Markdown | codex\u0007"
+  },
+  {
+   "t": 9218,
+   "data": "\u001b]0;⠦ Formatar resposta em Markdown | codex\u0007"
+  },
+  {
+   "t": 9319,
+   "data": "\u001b]0;⠧ Formatar resposta em Markdown | codex\u0007"
+  },
+  {
+   "t": 9421,
+   "data": "\u001b]0;⠇ Formatar resposta em Markdown | codex\u0007"
+  },
+  {
+   "t": 9523,
+   "data": "\u001b]0;⠏ Formatar resposta em Markdown | codex\u0007"
+  },
+  {
+   "t": 9623,
+   "data": "\u001b]0;⠋ Formatar resposta em Markdown | codex\u0007"
+  },
+  {
+   "t": 9727,
+   "data": "\u001b]0;⠙ Formatar resposta em Markdown | codex\u0007"
+  },
+  {
+   "t": 9825,
+   "data": "\u001b]0;⠹ Formatar resposta em Markdown | codex\u0007"
+  },
+  {
+   "t": 9896,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[46;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 9997,
+   "data": "\u001b]0;⠸ Formatar resposta em Markdown | codex\u0007"
+  },
+  {
+   "t": 10098,
+   "data": "\u001b]0;⠼ Formatar resposta em Markdown | codex\u0007"
+  },
+  {
+   "t": 10199,
+   "data": "\u001b]0;⠴ Formatar resposta em Markdown | codex\u0007"
+  },
+  {
+   "t": 10302,
+   "data": "\u001b]0;⠦ Formatar resposta em Markdown | codex\u0007\u001b]0;⠧ Formatar resposta em Markdown | codex\u0007\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[46;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[46;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 10369,
+   "data": "\u001b]0;Formatar resposta em Markdown | codex\u0007\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[46;3H\u001b[?25h\u001b[?2026l"
+  }
+ ]
+}

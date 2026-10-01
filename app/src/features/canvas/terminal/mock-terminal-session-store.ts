@@ -17,6 +17,7 @@ import type {
   SessionOptions,
   SessionSnapshot,
   SendTextInput,
+  TerminalReadingSource,
   TerminalSessionStoreApi,
   TerminalTranscript,
 } from './terminal-session-api'
@@ -180,6 +181,18 @@ export class MockTerminalSessionStore implements TerminalSessionStoreApi {
 
   getShellHistory(id: string): TerminalTranscript {
     return { text: this.sessions.get(id)?.shellHistory ?? '' }
+  }
+
+  getReadingSource(id: string): TerminalReadingSource | undefined {
+    // O PTY falso escreve num textarea, sem xterm: não há tela para ler.
+    void id
+    return undefined
+  }
+
+  subscribeOutput(id: string, listener: () => void): () => void {
+    void id
+    void listener
+    return () => {}
   }
 
   getSnapshot(id: string): SessionSnapshot | undefined {

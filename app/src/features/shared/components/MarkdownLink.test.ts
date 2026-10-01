@@ -329,14 +329,31 @@ describe('MarkdownLink', () => {
       expect(getLinkChooserState().request?.url).toBe(destination)
     })
 
-    it('âncora, relativo sem destino e endereço com invisível não ganham botão', () => {
-      const zeroWidthSpace = String.fromCharCode(0x200b)
-
-      for (const writtenHref of ['#secao', 'OUTRO.md', `https://exa${zeroWidthSpace}mple.com/`, '  ']) {
+    it('âncora, relativo sem destino e destino em branco não ganham botão', () => {
+      for (const writtenHref of ['#secao', 'OUTRO.md', '  ']) {
         const link = renderLink({ href: '', writtenHref, children: 'x' })
         expect(link.type).toBe('span')
         expect(link.props.title).toBeUndefined()
       }
+    })
+
+    it('endereço com invisível explica a recusa com os invisíveis à mostra', () => {
+      const zeroWidthSpace = String.fromCharCode(0x200b)
+      const written = `https://exa${zeroWidthSpace}mple.com/`
+      const { label, button } = renderRefusedLink({ href: '', writtenHref: written, children: 'x' })
+
+      expect(label.props.title).toBe(
+        'Link recusado: o endereço tem caracteres invisíveis, que podem disfarçar o destino\nhttps://exa⟨U+200B⟩mple.com/',
+      )
+      button.props.onClick?.(gestureOn(fakeElement('button'), fakeElement('button')))
+      const request = getLinkChooserState().request
+      // O menu recebe o texto cru: ele mesmo mostra os invisíveis e só oferece copiar.
+      expect(request?.url).toBe(written)
+      expect(
+        linkChoiceEntries(describeLinkDestination(request?.url ?? '', 'markdown'), { canOpenWebpage: true }).map(
+          (entry) => entry.choice,
+        ),
+      ).toEqual(['copiar-link'])
     })
 
     it('destino que a política aprova, apagado só pelo sanitize (esquema em maiúsculas), volta a ser link', () => {

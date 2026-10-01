@@ -4,6 +4,7 @@ import type {
   SessionListener,
   SessionOptions,
   SessionSnapshot,
+  TerminalReadingSource,
   TerminalSessionStoreApi,
   TerminalTranscript,
 } from './terminal-session-api'
@@ -44,6 +45,7 @@ export class DeferredTerminalSessionStore implements TerminalSessionStoreApi {
   private clearGeneration = 0
   private pendingAllListeners = new Set<PendingListener>()
   private pendingSessionListeners = new Map<string, Set<PendingSessionListener>>()
+  private pendingOutputListeners = new Map<string, Set<PendingListener>>()
 
   private load(): Promise<TerminalSessionStoreApi> {
     if (this.realStore) return Promise.resolve(this.realStore)
@@ -64,6 +66,14 @@ export class DeferredTerminalSessionStore implements TerminalSessionStoreApi {
           for (const pending of listeners) {
             if (!pending.active) continue
             pending.unsubscribe = store.subscribe(sessionId, pending.listener)
+          }
+        }
+
+        for (const [sessionId, listeners] of this.pendingOutputListeners) {
+          for (const pending of listeners) {
+            if (!pending.active) continue
+            pending.unsubscribe = store.subscribeOutput(sessionId, pending.listener)
+            pending.listener()
           }
         }
 
@@ -135,6 +145,25 @@ export class DeferredTerminalSessionStore implements TerminalSessionStoreApi {
 
   getShellHistory(id: string): TerminalTranscript {
     return this.realStore?.getShellHistory(id) ?? EMPTY_TRANSCRIPT
+  }
+
+  getReadingSource(id: string): TerminalReadingSource | undefined {
+    return this.realStore?.getReadingSource(id)
+  }
+
+  subscribeOutput(id: string, listener: () => void): () => void {
+    if (this.realStore) return this.realStore.subscribeOutput(id, listener)
+
+    const pending: PendingListener = { active: true, listener }
+    const listeners = this.pendingOutputListeners.get(id) ?? new Set()
+    listeners.add(pending)
+    this.pendingOutputListeners.set(id, listeners)
+    return () => {
+      pending.active = false
+      pending.unsubscribe?.()
+      listeners.delete(pending)
+      if (listeners.size === 0) this.pendingOutputListeners.delete(id)
+    }
   }
 
   getSnapshot(id: string): SessionSnapshot | undefined {

@@ -1,7 +1,6 @@
 import type { MouseEvent, ReactNode } from 'react'
 import { CircleHelp } from 'lucide-react'
 
-import { hasHiddenUrlCharacters } from '../external-url-policy'
 import { chooserAnchorFor, canvasNodeIdOf } from '../links/link-anchor'
 import { openLinkChooser } from '../links/link-chooser-store'
 import { describeLinkDestination } from '../links/link-destination'
@@ -136,7 +135,7 @@ export function MarkdownLink({
       <>
         <span
           className={REFUSED_LINK_CLASS_NAME}
-          title={`Link recusado: ${destination.reason}\n${shortenForTitle(written)}`}
+          title={`Link recusado: ${destination.reason}\n${shortenForTitle(destination.shownText)}`}
           data-refused-link="true"
         >
           {children}
@@ -221,17 +220,16 @@ function isFromInnerControl(event: MouseEvent<HTMLElement>): boolean {
  * `null`.
  *
  * Âncora e link relativo ficam de fora: não são recusa, só não têm para onde
- * ir sem um resolvedor. Destino com invisível ou controle também: a dica
- * mostraria um texto e a cópia levaria outro (U+202E inverte o que se lê), e
- * é a mesma escolha que `remarkRefuseHiddenUrlCharacters` já faz para a
- * sintaxe de link do Markdown.
+ * ir sem um resolvedor. Destino com invisível ou controle entra, como recusa:
+ * a política nunca o aprova, e a dica e o menu mostram o texto com cada
+ * invisível à mostra (`exa⟨U+200B⟩mple.com`) — o disfarce não funciona na
+ * tela, e a pessoa vê por que o link não abre.
  */
 function refusedDestination(writtenHref: string | undefined): string | null {
   const value = writtenHref?.trim()
 
   if (!value) return null
   if (value.startsWith('#') || isRelativeMarkdownLink(value)) return null
-  if (hasHiddenUrlCharacters(value)) return null
 
   return value
 }

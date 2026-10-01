@@ -1,0 +1,130 @@
+{
+ "provider": "claude",
+ "version": "2.1.286",
+ "scenario": "erro",
+ "cols": 100,
+ "rows": 50,
+ "platform": "linux",
+ "recordedAt": "2026-10-01",
+ "anonymized": true,
+ "marks": [
+  {
+   "t": 21,
+   "label": "espera a CLI abrir"
+  },
+  {
+   "t": 9601,
+   "label": "confia na pasta de gravação, se perguntar"
+  },
+  {
+   "t": 10102,
+   "label": "espera a CLI ficar pronta"
+  },
+  {
+   "t": 10103,
+   "label": "digita o pedido"
+  },
+  {
+   "t": 10103,
+   "label": "pausa antes do Enter"
+  },
+  {
+   "t": 10906,
+   "label": "envia"
+  },
+  {
+   "t": 10910,
+   "label": "espera a resposta terminar"
+  }
+ ],
+ "chunks": [
+  {
+   "t": 1382,
+   "data": "\u001b[33m\"modelo-que-nao-existe\" isn't described by this version's model catalog; update Claude Code, or map it with behavesAs on a modelPicker row (or modelOverrides, if it is a provider id of a model this version knows). Until then auto-compact keeps this session within 200k tokens (the context window it assumes); if the model accepts more, append [1m] to the model name for 1M, or set CLAUDE_CODE_MAX_CONTEXT_TOKENS to its real window; CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT=1 restores the previous wait-for-the-API behavior.\u001b[39m\r\n\u001b7\u001b[r\u001b8\u001b[?25h"
+  },
+  {
+   "t": 1515,
+   "data": "\u001b[?25l\u001b[?2004h\u001b[?2031h\u001b[?1004h"
+  },
+  {
+   "t": 1648,
+   "data": "\u001b[>0q\u001b[?u\u001b[c"
+  },
+  {
+   "t": 2049,
+   "data": "\u001b[>4m\u001b[?1004l\u001b[?2031l\u001b[?2004l"
+  },
+  {
+   "t": 2589,
+   "data": "\u001b[?2004h\u001b[?2031h\u001b[?1004h"
+  },
+  {
+   "t": 2665,
+   "data": "\u001b]0;✳ Claude Code\u0007"
+  },
+  {
+   "t": 2941,
+   "data": "\u001b[38;2;215;119;87m ▐\u001b[48;2;0;0;0m▛███▛█\u001b[12G\u001b[39m\u001b[49m\u001b[1mClaude\u001b[19GCode\u001b[24G\u001b[22m\u001b[38;2;153;153;153mv2.1.286\u001b[39m\r\r\n\u001b[38;2;215;119;87m▝▜\u001b[48;2;0;0;0m█████\u001b[49m█▀\u001b[12G\u001b[38;2;153;153;153mmodelo-que-nao-existe\u001b[34G·\u001b[36GClaude\u001b[43GPlano\u001b[39m\r\r\n\u001b[38;2;215;119;87m ▝▝\u001b[7G▝▝\u001b[12G\u001b[38;2;153;153;153m/tmp/felixo-fixture\u001b[39m\r\r\n\r\r\n\r\r\n\u001b[38;2;136;136;136m────────────────────────────────────────────────────────────────────────────────────────────────────\u001b[39m\r\r\n❯ \u001b[2mTry\u001b[7G\"refactor\u001b[17G<filepath>\"\u001b[22m\r\r\n\u001b[38;2;136;136;136m────────────────────────────────────────────────────────────────────────────────────────────────────\u001b[39m\r\r\n\u001b[3G\u001b[38;2;255;193;7m⏵⏵\u001b[6Gauto\u001b[11Gmode\u001b[16Gon\u001b[38;2;153;153;153m (shift+tab\u001b[30Gto\u001b[33Gcycle)\u001b[40G·\u001b[42G←\u001b[44Gfor\u001b[48Gagents\u001b[83G●\u001b[85Ghigh\u001b[90G·\u001b[92G/effort\u001b[39m\r\r\n\u001b[84G\u001b[38;2;255;193;7m/rc\u001b[88Gconnecting…\u001b[39m\r\r\n\u001b[2C\u001b[4A\u001b[?25h"
+  },
+  {
+   "t": 4371,
+   "data": "\u001b[>0q\u001b[c"
+  },
+  {
+   "t": 5522,
+   "data": "\u001b[?25l\u001b[2D\u001b[4B\r\u001b[83C\u001b[1A            \u001b[38;2;78;186;101m/rc\u001b[39m\r\r\n\u001b[2C\u001b[4A\u001b[?25h"
+  },
+  {
+   "t": 10105,
+   "data": "\u001b(B\u000f\u001b[?2004h"
+  },
+  {
+   "t": 10213,
+   "data": "\u001b[?25l\u001b[2D\u001b[4B\r\u001b[2C\u001b[4ADiga oi.\u001b[K\r\u001b[38C\u001b[2B               \r\r\n\r\n\u001b[10C\u001b[4A\u001b[?25h"
+  },
+  {
+   "t": 11897,
+   "data": "\u001b]0;◐ Claude Code\u0007"
+  },
+  {
+   "t": 11996,
+   "data": "\u001b[?25l\u001b[10D\u001b[4B\r\u001b[5A\u001b[48;2;55;55;55m\u001b[38;2;80;80;80m❯ \u001b[38;2;255;255;255mDiga oi.\u001b[39m                                                                                          \r\u001b[1B\u001b[49m\u001b[K\r\u001b[1B\u001b[38;2;215;119;87m✢\u001b[39m \u001b[38;2;215;119;87mGrooving… \u001b[39m\u001b[K\r\u001b[2C\u001b[1B\u001b[K\r\u001b[1B\u001b[38;2;136;136;136m────────────────────────────────────────────────────────────────────────────────────────────────────\u001b[39m\r\r\n\u001b[38;2;153;153;153m❯ \u001b[39m\r\r\n\u001b[38;2;136;136;136m────────────────────────────────────────────────────────────────────────────────────────────────────\u001b[39m\r\r\n\u001b[3G\u001b[38;2;255;193;7m⏵⏵\u001b[6Gauto\u001b[11Gmode\u001b[16Gon\u001b[38;2;153;153;153m (shift+tab\u001b[30Gto\u001b[33Gcycle)\u001b[40G·\u001b[42Gesc\u001b[46Gto\u001b[49Ginterrupt\u001b[59G·\u001b[61G←\u001b[63Gfor\u001b[67Gagents\u001b[83G●\u001b[85Ghigh\u001b[90G·\u001b[92G/effort\u001b[39m\r\r\n\u001b[96G\u001b[38;2;78;186;101m/rc\u001b[39m\r\r\n\u001b[2C\u001b[4A\u001b[?25h"
+  },
+  {
+   "t": 12209,
+   "data": "\u001b[?25l\u001b[2D\u001b[4B\r\u001b[7A\u001b[38;2;215;119;87m✶\u001b[39m\r\r\n\r\n\r\n\r\n\r\n\r\n\r\n\u001b[2C\u001b[4A\u001b[?25h"
+  },
+  {
+   "t": 12405,
+   "data": "\u001b[?25l\u001b[2D\u001b[4B\r\u001b[7A\u001b[38;2;215;119;87m✻\u001b[39m\r\r\n\r\n\r\n\r\n\r\n\r\n\r\n\u001b[2C\u001b[4A\u001b[?25h\u001b[?25l\u001b[2D\u001b[4B\r\u001b[7A\u001b[38;2;215;119;87m✽\u001b[39m\r\r\n\r\n\r\n\r\n\r\n\r\n\r\n\u001b[2C\u001b[4A\u001b[?25h"
+  },
+  {
+   "t": 12738,
+   "data": "\u001b[?25l\u001b[2D\u001b[4B\u001b[2K\u001b[G\u001b[1A\r\u001b[82C\u001b[1A             \u001b[38;2;78;186;101m/rc\r\u001b[1B\u001b[39m\u001b[K\u001b[2C\u001b[3A\u001b[?25h"
+  },
+  {
+   "t": 12852,
+   "data": "\u001b[?25l\u001b[2D\u001b[3B\r\u001b[6A\u001b[38;2;215;119;87m✻\u001b[39m\r\r\n\r\n\r\n\r\n\r\n\r\n\u001b[2C\u001b[3A\u001b[?25h\u001b]0;◑ Claude Code\u0007"
+  },
+  {
+   "t": 12939,
+   "data": "\u001b[?25l\u001b[2D\u001b[3B\r\u001b[6A\u001b[38;2;215;119;87m✶\u001b[39m\r\r\n\r\n\r\n\r\n\r\n\r\n\u001b[2C\u001b[3A\u001b[?25h"
+  },
+  {
+   "t": 13080,
+   "data": "\u001b[?25l\u001b[2D\u001b[3B\r\u001b[6A\u001b[38;2;215;119;87m*\u001b[39m\r\r\n\r\n\r\n\r\n\r\n\r\n\u001b[2C\u001b[3A\u001b[?25h"
+  },
+  {
+   "t": 13165,
+   "data": "\u001b[?25l\u001b[2D\u001b[3B\r\u001b[6A\u001b[38;2;215;119;87m✢\u001b[39m\r\r\n\r\n\r\n\r\n\r\n\r\n\u001b[2C\u001b[3A\u001b[?25h"
+  },
+  {
+   "t": 13395,
+   "data": "\u001b[?25l\u001b[2D\u001b[3B\r\u001b[6A\u001b[38;2;215;119;87m·\u001b[39m\r\r\n\r\n\r\n\r\n\r\n\r\n\u001b[2C\u001b[3A\u001b[?25h"
+  },
+  {
+   "t": 14844,
+   "data": "\u001b]0;✳ Claude Code\u0007\u001b[?25l\u001b[2D\u001b[3B\r\u001b[6A\u001b[38;2;255;193;7m●\u001b[3GThere's an issue with the selected model (modelo-que-nao-existe). It may not exist or you \r\u001b[2C\u001b[1Bmay not have access to it. Run /model to pick a different model.\r\u001b[1B\u001b[39m\u001b[K\r\u001b[1B\u001b[38;2;153;153;153m✻\u001b[39m \u001b[38;2;153;153;153mChurned for 3s · done 10:50\r\u001b[1B\u001b[39m\u001b[K\r\u001b[1B\u001b[38;2;136;136;136m────────────────────────────────────────────────────────────────────────────────────────────────────\u001b[39m\r\r\n❯ \r\r\n\u001b[38;2;136;136;136m────────────────────────────────────────────────────────────────────────────────────────────────────\u001b[39m\r\r\n\u001b[3G\u001b[38;2;255;193;7m⏵⏵\u001b[6Gauto\u001b[11Gmode\u001b[16Gon\u001b[38;2;153;153;153m (shift+tab\u001b[30Gto\u001b[33Gcycle)\u001b[40G·\u001b[42G←\u001b[44Gfor\u001b[48Gagents\u001b[96G\u001b[38;2;78;186;101m/rc\u001b[39m\r\r\n\u001b[2C\u001b[3A\u001b[?25h"
+  }
+ ]
+}

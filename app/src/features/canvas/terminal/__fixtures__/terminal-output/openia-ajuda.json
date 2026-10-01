@@ -1,0 +1,26 @@
+{
+ "provider": "openia",
+ "version": "0.1.0",
+ "scenario": "ajuda",
+ "cols": 100,
+ "rows": 50,
+ "platform": "linux",
+ "recordedAt": "2026-10-01",
+ "anonymized": true,
+ "marks": [
+  {
+   "t": 15,
+   "label": "espera sair"
+  }
+ ],
+ "chunks": [
+  {
+   "t": 1012,
+   "data": "\u001b[1m                                                                                                    \u001b[0m\r\n\u001b[1m \u001b[0m\u001b[1;33mUsage: \u001b[0m\u001b[1mopenia [OPTIONS] COMMAND [ARGS]...\u001b[0m\u001b[1m                                                         \u001b[0m\u001b[1m \u001b[0m\r\n\u001b[1m                                                                                                    \u001b[0m\r\n Launcher de CLIs de IA com OpenRouter. Rode sem argumentos para o menu.                            \r\n                                                                                                    \r\n"
+  },
+  {
+   "t": 1063,
+   "data": "\u001b[2m╭─\u001b[0m\u001b[2m Options \u001b[0m\u001b[2m───────────────────────────────────────────────────────────────────────────────────────\u001b[0m\u001b[2m─╮\u001b[0m\r\n\u001b[2m│\u001b[0m \u001b[1;36m-\u001b[0m\u001b[1;36m-version\u001b[0m          Mostra a versão do launcher e sai.                                            \u001b[2m│\u001b[0m\r\n\u001b[2m│\u001b[0m \u001b[1;36m-\u001b[0m\u001b[1;36m-help\u001b[0m             Show this message and exit.                                                   \u001b[2m│\u001b[0m\r\n\u001b[2m╰──────────────────────────────────────────────────────────────────────────────────────────────────╯\u001b[0m\r\n\u001b[2m╭─\u001b[0m\u001b[2m Commands \u001b[0m\u001b[2m──────────────────────────────────────────────────────────────────────────────────────\u001b[0m\u001b[2m─╮\u001b[0m\r\n\u001b[2m│\u001b[0m \u001b[1;36mlist   \u001b[0m\u001b[1;36m \u001b[0m Lista todas as interfaces de IA suportadas.                                             \u001b[2m│\u001b[0m\r\n\u001b[2m│\u001b[0m \u001b[1;36mmodels \u001b[0m\u001b[1;36m \u001b[0m Lista o catálogo público de modelos do OpenRouter.                                      \u001b[2m│\u001b[0m\r\n\u001b[2m│\u001b[0m \u001b[1;36minstall\u001b[0m\u001b[1;36m \u001b[0m Instala a interface escolhida direto no sistema.                                        \u001b[2m│\u001b[0m\r\n\u001b[2m│\u001b[0m \u001b[1;36mrun    \u001b[0m\u001b[1;36m \u001b[0m Roda a interface (instala antes, se necessário). Args extras vão para a CLI.            \u001b[2m│\u001b[0m\r\n\u001b[2m│\u001b[0m \u001b[1;36mkey    \u001b[0m\u001b[1;36m \u001b[0m Gerencia a chave do OpenRouter.                                                         \u001b[2m│\u001b[0m\r\n\u001b[2m╰──────────────────────────────────────────────────────────────────────────────────────────────────╯\u001b[0m\r\n\r\n"
+  }
+ ]
+}

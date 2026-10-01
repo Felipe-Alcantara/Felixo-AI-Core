@@ -83,7 +83,7 @@ import {
   looksLikeApprovalPrompt,
   readInputLineState,
 } from './terminal-screen-state'
-import type { SendTextInput } from './terminal-session-api'
+import type { SendTextInput, TerminalReadingSource } from './terminal-session-api'
 import { createPtyEventRouter, type PtyEventRouter } from './pty-event-router'
 import { loadClaudeTerminalScroll, shouldUseClassicScreen } from '../services/terminal-scroll-preference'
 import {
@@ -588,6 +588,8 @@ function normalizeInsertionForDelivery(
 export class TerminalSessionStore {
   private sessions = new Map<string, Session>()
   private listeners = new Map<string, Set<SessionListener>>()
+  /** Quem relê a tela a cada redesenho (a Leitura); sobrevive ao Reiniciar. */
+  private outputListeners = new Map<string, Set<() => void>>()
   private allListeners = new Set<() => void>()
   /** Immutable cache used by React's external-store subscription. */
   private snapshots: Record<string, SessionSnapshot> = {}
@@ -692,6 +694,9 @@ export class TerminalSessionStore {
     })
     const fitAddon = new FitAddon()
     terminal.loadAddon(fitAddon)
+    // No máximo uma vez por quadro, depois do parse: a Leitura relê a tela.
+    // O `dispose` do terminal solta este ouvinte junto.
+    terminal.onWriteParsed(() => this.notifyOutput(id))
     terminal.loadAddon(
       new WebLinksAddon(linkEvents.activate, { hover: linkEvents.hover, leave: linkEvents.leave }),
     )
@@ -802,6 +807,8 @@ export class TerminalSessionStore {
     this.sessions.set(id, session)
     this.snapshots = { ...this.snapshots, [id]: session.snapshot }
     this.notifyAll()
+    // Terminal novo (primeiro spawn ou Reiniciar): quem lia o antigo relê.
+    this.notifyOutput(id)
 
     if (!pty) {
       this.update(session, { activity: 'error', message: 'Bridge PTY indisponível.' })
@@ -1740,6 +1747,32 @@ export class TerminalSessionStore {
   getShellHistory(id: string): TerminalTranscript {
     const session = this.sessions.get(id)
     return { text: session ? readShellHistory(session.terminal) : '' }
+  }
+
+  getReadingSource(id: string): TerminalReadingSource | undefined {
+    const session = this.sessions.get(id)
+    if (!session || session.disposed) return undefined
+    return {
+      buffer: session.terminal.buffer.active,
+      cols: session.terminal.cols,
+      generation: session.snapshot.generation ?? 0,
+    }
+  }
+
+  subscribeOutput(id: string, listener: () => void): () => void {
+    const listeners = this.outputListeners.get(id) ?? new Set()
+    listeners.add(listener)
+    this.outputListeners.set(id, listeners)
+    return () => {
+      listeners.delete(listener)
+      if (listeners.size === 0) this.outputListeners.delete(id)
+    }
+  }
+
+  private notifyOutput(id: string): void {
+    for (const listener of this.outputListeners.get(id) ?? []) {
+      listener()
+    }
   }
 
   getSnapshot(id: string): SessionSnapshot | undefined {

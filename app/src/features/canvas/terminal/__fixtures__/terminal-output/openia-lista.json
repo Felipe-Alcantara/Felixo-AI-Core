@@ -1,0 +1,22 @@
+{
+ "provider": "openia",
+ "version": "0.1.0",
+ "scenario": "lista",
+ "cols": 100,
+ "rows": 50,
+ "platform": "linux",
+ "recordedAt": "2026-10-01",
+ "anonymized": true,
+ "marks": [
+  {
+   "t": 21,
+   "label": "espera sair"
+  }
+ ],
+ "chunks": [
+  {
+   "t": 482,
+   "data": "\u001b[1mInterfaces de IA suportadas:\r\n\u001b[0m\r\n\u001b[36m\u001b[1m  orchat\u001b[0m  (OrChat) — ✓ instalada\r\n      Chat rico no terminal: streaming, contagem de tokens e resumo de conversa.\r\n      https://github.com/oop7/OrChat\r\n\u001b[36m\u001b[1m  aichat\u001b[0m  (aichat) — · não instalada\r\n      CLI/REPL de chat genérica e leve; aceita qualquer provedor OpenAI-compatível.\r\n      https://github.com/sigoden/aichat\r\n\u001b[36m\u001b[1m  llm\u001b[0m  (llm (Simon Willison)) — · não instalada\r\n      CLI de LLM extensível, com plugins, logs em SQLite e modo conversa.\r\n      https://github.com/simonw/llm\r\n\u001b[36m\u001b[1m  cline\u001b[0m  (Cline) — · não instalada\r\n      Agente de código autônomo no terminal; provider OpenRouter nativo.\r\n      https://github.com/cline/cline\r\n\u001b[36m\u001b[1m  opencode\u001b[0m  (opencode) — ✓ instalada\r\n      Agente de código no terminal; OpenRouter via base_url OpenAI-compatível.\r\n      https://opencode.ai\r\n\u001b[36m\u001b[1m  openclaw\u001b[0m  (OpenClaw) — · não instalada\r\n      Assistente/agente autônomo com suporte nativo a OpenRouter.\r\n      https://github.com/openclaw/openclaw\r\n\u001b[36m\u001b[1m  claudecode\u001b[0m  (Claude Code) — ✓ instalada\r\n      Agente de código da Anthropic; fala o protocolo Anthropic com o OpenRouter.\r\n      https://docs.claude.com/claude-code\r\n\r\nUse 'openia run <chave>' para iniciar uma delas.\r\n"
+  }
+ ]
+}

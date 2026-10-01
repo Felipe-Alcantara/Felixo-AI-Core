@@ -16,6 +16,8 @@ import {
   useTerminalSessions,
 } from '../terminal/terminal-session-context'
 import { CopyButton } from './TerminalCopyButton'
+import { TerminalReadingPanel } from './TerminalReadingPanel'
+import type { ReadingProfile } from '../terminal/reading/reading-profiles'
 import { resolveOpenEditorFile } from './terminal-open-file'
 import { useExitAnimation } from '../hooks/useExitAnimation'
 import { DRAWER_EXIT_MS } from '../services/animation-timing'
@@ -99,6 +101,15 @@ type TerminalDrawerProps = {
    * markdown/código/imagem é sempre o bloco arquivo.
    */
   onOpenFilePreview?: (filePath: string, fileName: string) => void
+  /**
+   * A aba Leitura está ligada neste bloco. A escolha fica no bloco
+   * (persistida); o padrão é o Terminal. Sem `onReadingModeChange`, a gaveta
+   * não mostra as abas.
+   */
+  readingMode?: boolean
+  onReadingModeChange?: (on: boolean) => void
+  /** Como ler a tela deste bloco: o perfil da CLI que roda nele. */
+  readingProfile?: ReadingProfile
   onClose: () => void
 }
 
@@ -118,6 +129,9 @@ export function TerminalDrawer({
   onResumeAction,
   onPassResponsibility,
   onOpenFilePreview,
+  readingMode = false,
+  onReadingModeChange,
+  readingProfile,
   onClose,
 }: TerminalDrawerProps) {
   const store = useTerminalSessions()
@@ -167,6 +181,12 @@ export function TerminalDrawer({
   const containerRef = useRef<HTMLDivElement>(null)
   const collapsedTriggerRef = useRef<HTMLButtonElement>(null)
   const titleId = useId()
+  const terminalTabId = useId()
+  const readingTabId = useId()
+  const readingPanelId = useId()
+  const readingPanelRef = useRef<HTMLDivElement | null>(null)
+  const hasReading = Boolean(onReadingModeChange && readingProfile)
+  const readingActive = hasReading && readingMode
   const [width, setWidth] = useState(() => {
     const maxWidth = getDrawerMaxWidth(window.innerWidth)
     return readWidthPreference(
@@ -312,7 +332,8 @@ export function TerminalDrawer({
   }, [store, sessionId, snapshot?.generation])
 
   // Keep the terminal fitted as the drawer width changes. Expanding also
-  // returns focus to the terminal so the user can type right away.
+  // returns focus to the terminal so the user can type right away — or to the
+  // Leitura, when it is the tab showing (the terminal is inert behind it).
   useEffect(() => {
     if (collapsed) {
       focusTerminalOnExpandRef.current = true
@@ -325,10 +346,24 @@ export function TerminalDrawer({
       !containerRef.current?.contains(activeElement) ||
       mountRef.current?.contains(activeElement)
     ) {
-      store.focus(sessionId)
+      if (readingActive) readingPanelRef.current?.focus()
+      else store.focus(sessionId)
       focusTerminalOnExpandRef.current = false
     }
-  }, [store, sessionId, effectiveWidth, collapsed])
+  }, [store, sessionId, effectiveWidth, collapsed, readingActive])
+
+  // Trocar de aba leva o foco junto: no Terminal, para digitar; na Leitura,
+  // para rolar com o teclado.
+  const selectReadingTab = useCallback(
+    (on: boolean) => {
+      onReadingModeChange?.(on)
+      requestAnimationFrame(() => {
+        if (on) readingPanelRef.current?.focus()
+        else store.focus(sessionId)
+      })
+    },
+    [onReadingModeChange, sessionId, store],
+  )
 
   useEffect(() => {
     if (collapsed && mountRef.current?.contains(document.activeElement)) {
@@ -694,14 +729,74 @@ export function TerminalDrawer({
           {previewError}
         </div>
       )}
+      {!collapsed && hasReading && (
+        <div
+          role="tablist"
+          aria-label="Como mostrar este terminal"
+          className="flex gap-1 border-b border-white/10 px-2 py-1"
+          onKeyDown={(event) => {
+            if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+            event.preventDefault()
+            selectReadingTab(!readingActive)
+          }}
+        >
+          {[
+            { id: terminalTabId, on: false, label: 'Terminal', controls: 'canvas-terminal-output' },
+            { id: readingTabId, on: true, label: 'Leitura', controls: readingPanelId },
+          ].map((tab) => {
+            const selected = readingActive === tab.on
+            return (
+              <button
+                key={tab.label}
+                id={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                aria-controls={tab.controls}
+                tabIndex={selected ? 0 : -1}
+                onClick={() => selectReadingTab(tab.on)}
+                data-felixo-terminal-tab={tab.on ? 'leitura' : 'terminal'}
+                title={
+                  tab.on
+                    ? 'A conversa da tela como texto formatado (só leitura; o terminal segue rodando)'
+                    : 'O terminal interativo'
+                }
+                className={`felixo-btn rounded-sm px-2 py-0.5 text-xs ${
+                  selected ? 'bg-white/10 text-zinc-100' : 'text-zinc-400 hover:bg-white/6 hover:text-zinc-200'
+                }`}
+              >
+                {tab.label}
+              </button>
+            )
+          })}
+        </div>
+      )}
       {/* The terminal element stays mounted while collapsed (the PTY and its
-          scrollback must survive); only its box is hidden. */}
-      <div
-        ref={mountRef}
-        id="canvas-terminal-output"
-        aria-hidden={collapsed}
-        className={`min-h-0 flex-1 overflow-hidden px-1 pb-2 pt-1 ${collapsed ? 'invisible w-0' : ''}`}
-      />
+          scrollback must survive); only its box is hidden. A Leitura fica por
+          cima dele, do mesmo tamanho: o xterm não muda de largura (o que faria
+          a CLI redesenhar) e segue recebendo tudo; só sai do foco e do leitor
+          de tela, para o conteúdo não ser lido duas vezes. */}
+      <div className={`relative min-h-0 flex-1 ${collapsed ? 'invisible w-0' : ''}`}>
+        <div
+          ref={mountRef}
+          id="canvas-terminal-output"
+          role={hasReading ? 'tabpanel' : undefined}
+          aria-labelledby={hasReading ? terminalTabId : undefined}
+          aria-hidden={collapsed || readingActive}
+          inert={readingActive}
+          className="h-full overflow-hidden px-1 pb-2 pt-1"
+        />
+        {hasReading && readingProfile && (
+          <TerminalReadingPanel
+            sessionId={sessionId}
+            profile={readingProfile}
+            visible={readingActive && !collapsed}
+            panelId={readingPanelId}
+            labelledBy={readingTabId}
+            panelRef={readingPanelRef}
+          />
+        )}
+      </div>
     </div>
   )
 }

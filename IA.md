@@ -7683,3 +7683,53 @@ No Node 25.3.0 (Windows), `fs.rmSync(arquivo, { force: true })` **não apaga e n
 - Os efeitos e os bugs vêm da leitura do código. Ninguém clicou nos 349 controles numa janela, e só os 53 com teste específico têm efeito visto por teste.
 - O documento gerado tem cerca de 350 KB: é o contrato inteiro, não um resumo.
 - A contagem de controles é por padrão literal. Um botão renderizado por um componente de outra pasta, ou montado sem nenhum desses padrões, não é contado.
+
+## 2026-10-01 — Terminal: Leitura, o Markdown da tela, por bloco
+
+Registro de Claude - Tasks do AI Core, task "Felixo AI Core/Terminal — validar snapshots e E2E Markdown em todos os providers" (Notion 3ce91f95-497e-819b-888d-e4712f09af04), com as tasks irmãs do mesmo tema: modo texto/Markdown por sessão (3ce91f95-497e-818a), parser incremental (3ce91f95-497e-8176), seleção/cópia/acessibilidade/desempenho (3ce91f95-497e-81cf), o `stripTerminalAnsi` com ESC 7/8 (3eb91f95-497e-8163) e o link com caractere invisível (3ea91f95-497e-8183). Início às 08:44.
+
+### Decisões do Felipe (Trilha B)
+
+- Fazer todas as tasks do tema, não só a de testes.
+- Gravar as saídas reais com as contas dele; os testes usam só as gravações.
+- Corrigir aqui a linha que o adaptador do chat não entende.
+- Montar o pacote do Linux aqui e rodar o teste de tela nele.
+- A Leitura aparece nos dois lugares (aba da gaveta e prévia do cartão), lê **só a tela do terminal**, vem desligada e liga por bloco.
+
+### O que a investigação achou
+
+- As CLIs já desenham o Markdown no terminal: título em negrito (o Codex mantém o `##`), código com cor de sintaxe, tabela com traços de caixa (Claude) ou em colunas (Codex), citação com `▎` ou `>`. A Leitura reconstrói a estrutura desse estilo de célula.
+- **Gemini:** o Google recusou a conta pessoal do Felipe no Gemini CLI 0.62.0 ("This client is no longer supported for Gemini Code Assist for individuals… migrate to the Antigravity suite"). Só a tela de login foi gravada; o Gemini fica sem perfil de leitura.
+- O arquivo de configuração do sistema do Gemini (`GEMINI_CLI_SYSTEM_SETTINGS_PATH`) só vale numa pasta do root. Para não atualizar o Gemini durante a gravação, o gravador usa uma pasta pessoal própria (`GEMINI_CLI_HOME`) que aponta para o `~/.gemini` real, menos o `settings.json`.
+- O Codex aceita `-c check_for_update_on_startup=false`, mas a confiança na pasta por `-c projects."…".trust_level` não evita o diálogo. A pasta de gravação foi confiada uma vez (fica no `config.toml` do Codex).
+- **Privacidade:** o Claude escreve na tela normal, ao abrir, um aviso com as regras de permissão do `settings.json` do usuário; na tela cheia esse texto fica escondido atrás. O plano da conta vem separado por um salto de cursor (`Claude` `CSI 48 G` `Pro`). As primeiras gravações tinham os dois; foram refeitas antes de qualquer push, e a branch foi reescrita num commit só.
+- Sem as configurações do usuário, o Claude usa a tela clássica; a tela cheia vem de `tui: fullscreen`. Há gravação dos dois modos.
+- `stripTerminalAnsi` deixava o "7" do `ESC 7`, apagava o texto de um hyperlink OSC 8 fechado com `ESC \` (o OSC guloso ia até o último fechamento) e soltava o conteúdo de DCS/APC.
+- `parseAdapterLine` transformava uma linha não-JSON no meio do stream em `type: 'error'`: o chat encerrava a resposta como falha e a linha sumia dos Logs da CLI.
+
+### O que mudou
+
+- `terminal/reading/` (novo): `reading-lines` (buffer → linhas com estilo, incremental, limite de 2.000 linhas), `reading-profiles` (Claude, Codex e `texto`), `reading-blocks` (falas e blocos, com `sameReadingContent`), `reading-markdown` (escape de toda pontuação ASCII, autolink só para `http(s)`, ênfase pelas regras de flanco), `terminal-reading` (montagem com cache das falas).
+- Store: `getReadingSource` e `subscribeOutput` (via `onWriteParsed`), também no store adiado e no falso.
+- `TerminalDrawer`: abas Terminal | Leitura; a Leitura por cima do xterm, que fica `inert`/`aria-hidden` e não muda de tamanho. `readingMode` no `TerminalNodeData`, persistido. `TerminalReadingPreview` no cartão, sem controle dentro do botão.
+- `scripts/record-terminal-fixture.cjs` (novo): grava a CLI real num PTY com tela virtual, responde à confiança na pasta, para antes de sair, anonimiza pedaço a pedaço e recusa salvar segredo, plano, regra de permissão ou `settings.json` na tela (as duas telas).
+- PTY roteirizado: `__felixo_smoke_gravacao_<nome>__` toca uma gravação; as respostas do terminal (OSC 10/11, DCS) deixaram de ser ecoadas como texto.
+- `stripTerminalAnsi`: ESC de um caractere com intermediários, OSC/DCS/APC sem atravessar `ESC`; sai o `RESIDUAL_ESCAPE` do detector de retomada.
+- Link com invisível: o destino cru segue numa propriedade só aceita com invisível de fato, e a dica e o menu mostram `⟨U+200B⟩`. Vale para link, referência e autolink.
+- `parseAdapterLine` devolve `{ cliEvent, parseError }`; a linha aparece como **Linha não reconhecida** nos Logs da CLI e a resposta segue.
+
+### Validação local
+
+- `tsc -b` (no `npm run pack`) e `eslint .` limpos.
+- Vitest: 2919 aprovados, 5 pulados (inclui a medição opcional da Leitura).
+- Suíte de node: 2378 aprovados no Node 25.9 e no 22.22 (1 pulado nos dois).
+- Smoke completo em Xvfb 1280×800 (fonte): sessões A–F aprovadas; F em 281 s (C 187 s, D 128 s, E 65 s).
+- **Pacote do Linux** (`npm run pack`, `release/linux-unpacked`): sessão F aprovada no binário empacotado, com o log `Origem: empacotado (…/felixo-ai-core)`, em 181 s.
+- Medição (`FELIXO_READING_PERF=1`), i5-6200U com carga ~14: 2.161 linhas no buffer, 2.000 lidas; mediana de 14 ms por redesenho (p95 45 ms), eram 52 ms antes do cache das falas.
+
+### O que ficou de fora (tasks abertas)
+
+- Gemini: conta pessoal recusada no Gemini CLI 0.62; sem perfil de Leitura (3ec91f95-497e-8113).
+- Leitura: palavra partida pela largura da CLI, código sem cor e regravação a cada versão nova das CLIs (3ec91f95-497e-8122-a08b).
+- Topo do app: na captura com viewport emulado de 1600 px, a busca cobre o nome do app; conferir numa janela real (3ec91f95-497e-8122-b2ca).
+- Efeito colateral da gravação: o Codex guardou no `config.toml` a confiança na pasta `~/.cache/felixo-ai-core/fixture-recordings/codex`.
