@@ -61,6 +61,7 @@
     "test:frontend": "vitest run",
     "test:canvas-context": "vitest run src/features/canvas/terminal/canvas-context-e2e.test.ts --reporter=verbose",
     "test:canvas-smoke": "node scripts/canvas-smoke.cjs",
+    "docs:inventario-canvas": "vitest run src/features/canvas/inventory -u",
     "preview": "vite preview --host 127.0.0.1",
     "start": "node scripts/start-electron.cjs"
   },
