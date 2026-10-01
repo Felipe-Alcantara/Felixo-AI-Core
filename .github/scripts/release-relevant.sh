@@ -45,6 +45,10 @@ is_release_input() {
     app/scripts/package-manager-operational-performance.cjs) return 0 ;;
     app/scripts/package-manager-selection.cjs) return 0 ;;
     app/scripts/npm-runtime-performance.cjs) return 0 ;;
+    # Prepara o instalador e chama o smoke do canvas no pacote. O smoke em si
+    # (`canvas-smoke*.cjs`) roda como processo e é validado em todo PR: mudar
+    # só ele não publica instalador.
+    app/scripts/packaged-canvas-smoke.cjs) return 0 ;;
     # Normalização de fim de linha: muda os bytes que o checkout do runner
     # Windows entrega ao empacotamento (ex.: SKILL.md em app/resources).
     .gitattributes) return 0 ;;
