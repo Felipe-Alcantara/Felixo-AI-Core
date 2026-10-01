@@ -30,9 +30,9 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 ## Números
 
 - **Elementos:** 94 (8 blocos, 16 ferramentas, 70 outras superfícies)
-- **Controles:** 350, dos quais 53 com teste específico
+- **Controles:** 350, dos quais 54 com teste específico
 - **Elementos sem nenhum teste:** 4
-- **Lacunas:** 271 (alto 10, médio 145, baixo 116), em 75 tasks
+- **Lacunas:** 273 (alto 10, médio 146, baixo 117), em 77 tasks
 
 ## Moldura do canvas
 
@@ -934,7 +934,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `data-canvas-handoff-trigger` (button) | clique | Lê o histórico inteiro do xterm (getTranscript) e abre o HandoffDialog com ele (setHandoff no CanvasView). (desabilitado: some recolhida ou sem onPassResponsibility) | Histórico vazio: faixa vermelha "Este terminal ainda não tem histórico para transferir." e nenhum diálogo. Com o Claude na tela alternativa o histórico pode sair incompleto. | `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos` |
 | `Fixar terminal` (button) | clique | Alterna fixada e grava localStorage felixo:terminal-drawer-pinned; fixada, o mousedown fora não fecha a gaveta (shouldCloseOnOutsideClick). (desabilitado: some com a gaveta recolhida) | Sem falha própria; desafixada, clicar na sidebar ou num painel fecha a gaveta. | `scripts/canvas-smoke-prompts.cjs` → `criarSessaoDePrompts` |
 | `aria-label="Fechar terminal"` (button) | clique, Esc fora do xterm ou mousedown fora da gaveta não fixada (exceto camada flutuante) | Animação de saída (DRAWER_EXIT_MS) e closeExpandedTerminal: a gaveta desmonta, reporta largura 0 e o foco volta ao gatilho do bloco; o PTY segue vivo. | Sem falha própria: fechar nunca encerra o processo. | `scripts/canvas-smoke.cjs` → `checarInteracoes` |
-| `data-felixo-terminal-tab` (button) | clique, ou seta esquerda/direita na lista de abas | Abas Terminal \| Leitura (WAI-ARIA tabs): grava readingMode no nó (updateNodeData, persistido no canvas) e leva o foco junto — ao xterm no Terminal, ao painel na Leitura. Na Leitura o xterm fica por baixo, do mesmo tamanho, inert e aria-hidden; o PTY não é redimensionado. (desabilitado: some recolhida) | Sem falha própria: trocar de aba não toca o processo. Só aparece com onReadingModeChange e um perfil de leitura. | — |
+| `data-felixo-terminal-tab` (button) | clique, ou seta esquerda/direita na lista de abas | Abas Terminal \| Leitura (WAI-ARIA tabs): grava readingMode no nó (updateNodeData, persistido no canvas) e leva o foco junto — ao xterm no Terminal, ao painel na Leitura. Na Leitura o xterm fica por baixo, do mesmo tamanho, inert e aria-hidden; o PTY não é redimensionado. (desabilitado: some recolhida) | Sem falha própria: trocar de aba não toca o processo. Só aparece com onReadingModeChange e um perfil de leitura. | `scripts/canvas-smoke-leitura.cjs` → `copiarEAbas` |
 | `runResumeAction(action.id)` (button) | clique | Botão repetido da faixa (Escolher na lista (/resume), Abrir conversa nova, Tentar retomar de novo, Dispensar aviso): handleResumeAction grava terminalResumeActionPatch no nó (resumeChoice ou limpa resumeFailure), espelha a escolha no sessionStorage felixo:canvas-terminal-run e relança por relaunchTerminal; "Dispensar aviso" só limpa a falha. (desabilitado: some recolhida ou sem faixa visível) | As ações que relançam pedem o mesmo confirm do Reiniciar com processo vivo; cancelar não grava nada. | — |
 
 | Lacuna | Risco | Task |
@@ -953,7 +953,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** nenhum
 - **Depende de:** `useTerminalReading`, `terminal-session-store.getReadingSource`, `terminal-session-store.subscribeOutput`, `terminal/reading (reading-lines, reading-blocks, reading-markdown, reading-profiles)`, `DeferredMarkdownContent`, `TerminalCopyButton`
 - **Sobreposição:** Absoluta por cima do xterm, dentro da gaveta (inset-0, fundo opaco): não muda o tamanho do terminal nem cria camada própria acima da gaveta.
-- **Testes:** `src/features/canvas/terminal/reading/terminal-reading.fixtures.test.ts`, `src/features/canvas/terminal/reading/terminal-reading.stream.test.ts`, `src/features/canvas/terminal/reading/reading-markdown.test.ts`
+- **Testes:** `src/features/canvas/terminal/reading/terminal-reading.fixtures.test.ts`, `src/features/canvas/terminal/reading/terminal-reading.stream.test.ts`, `src/features/canvas/terminal/reading/reading-markdown.test.ts`, `scripts/canvas-smoke-leitura.cjs` → `claudeNaLeitura`, `scripts/canvas-smoke-leitura.cjs` → `codexERolagem`, `scripts/canvas-smoke-leitura.cjs` → `temaTamanhoEMovimento`
 
 | Estado | Quando |
 | --- | --- |
@@ -964,6 +964,11 @@ Sem controle próprio: as ações vêm de outros elementos.
 | disabled | CLI sem perfil gravado (Gemini, Openia, shell): a saída aparece como veio, num bloco de texto, com o aviso de que não há leitura formatada. |
 
 Sem controle próprio: as ações vêm de outros elementos.
+
+| Lacuna | Risco | Task |
+| --- | --- | --- |
+| O Gemini não tem perfil: a conta pessoal foi recusada pelo Gemini CLI 0.62 e não houve resposta para gravar; ele aparece como texto puro. | médio | `3ec91f95-497e-8113-afb0-eecb92e4eb23` |
+| Palavra partida pela largura da CLI vira espaço; código sem cor sai como parágrafo; versão nova das CLIs pode desenhar diferente sem teste que avise. | baixo | `3ec91f95-497e-8122-a08b-d26d4991acca` |
 
 ### Botão Copiar do terminal
 
@@ -2801,6 +2806,8 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3ec91f95-497e-8103-b360-c1979d6992f4` — 9 lacunas
 - `3ec91f95-497e-8110-b363-cfade2b68b7a` — 43 lacunas
 - `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` — 19 lacunas
+- `3ec91f95-497e-8113-afb0-eecb92e4eb23` — 1 lacuna
+- `3ec91f95-497e-8122-a08b-d26d4991acca` — 1 lacuna
 - `3ec91f95-497e-8141-b6c1-d1833aac5664` — 12 lacunas
 - `3ec91f95-497e-8143-a0b4-cceb0ace7599` — 6 lacunas
 - `3ec91f95-497e-8176-bef0-dfde828936dc` — 6 lacunas

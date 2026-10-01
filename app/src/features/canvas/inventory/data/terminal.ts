@@ -84,6 +84,7 @@ export const terminalSurfaces: InventoryElement[] = [
         effect: 'Abas Terminal | Leitura (WAI-ARIA tabs): grava readingMode no nó (updateNodeData, persistido no canvas) e leva o foco junto — ao xterm no Terminal, ao painel na Leitura. Na Leitura o xterm fica por baixo, do mesmo tamanho, inert e aria-hidden; o PTY não é redimensionado.',
         failure: 'Sem falha própria: trocar de aba não toca o processo. Só aparece com onReadingModeChange e um perfil de leitura.',
         disabledWhen: 'some recolhida',
+        test: { file: 'scripts/canvas-smoke-leitura.cjs', check: 'copiarEAbas' },
       },
       {
         locator: 'runResumeAction(action.id)',
@@ -188,8 +189,22 @@ export const terminalSurfaces: InventoryElement[] = [
       { file: 'src/features/canvas/terminal/reading/terminal-reading.fixtures.test.ts' },
       { file: 'src/features/canvas/terminal/reading/terminal-reading.stream.test.ts' },
       { file: 'src/features/canvas/terminal/reading/reading-markdown.test.ts' },
+      { file: 'scripts/canvas-smoke-leitura.cjs', check: 'claudeNaLeitura' },
+      { file: 'scripts/canvas-smoke-leitura.cjs', check: 'codexERolagem' },
+      { file: 'scripts/canvas-smoke-leitura.cjs', check: 'temaTamanhoEMovimento' },
     ],
-    gaps: [],
+    gaps: [
+      {
+        what: 'O Gemini não tem perfil: a conta pessoal foi recusada pelo Gemini CLI 0.62 e não houve resposta para gravar; ele aparece como texto puro.',
+        risk: 'médio',
+        task: '3ec91f95-497e-8113-afb0-eecb92e4eb23',
+      },
+      {
+        what: 'Palavra partida pela largura da CLI vira espaço; código sem cor sai como parágrafo; versão nova das CLIs pode desenhar diferente sem teste que avise.',
+        risk: 'baixo',
+        task: '3ec91f95-497e-8122-a08b-d26d4991acca',
+      },
+    ],
     overlap: 'Absoluta por cima do xterm, dentro da gaveta (inset-0, fundo opaco): não muda o tamanho do terminal nem cria camada própria acima da gaveta.',
   },
   {

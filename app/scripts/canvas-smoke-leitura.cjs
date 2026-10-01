@@ -127,8 +127,13 @@ function criarSessaoDaLeitura(deps) {
   async function maximizar(passo) {
     const botao = page.getByRole('button', { name: 'Maximizar terminal' })
     if (await botao.isVisible()) await botao.click()
-    await pausa(400)
-    const tamanho = await tamanhoDoXterm()
+    // A largura anima (180 ms) e o fit vem depois: espera o tamanho, não um tempo fixo.
+    const limite = Date.now() + timeout
+    let tamanho = await tamanhoDoXterm()
+    while (!(tamanho.cols >= 100 && tamanho.rows >= 50) && Date.now() < limite) {
+      await pausa(200)
+      tamanho = await tamanhoDoXterm()
+    }
     exigir(tamanho.cols >= 100 && tamanho.rows >= 50, passo, 'o xterm ficou menor que a gravação (100×50)', tamanho)
   }
 
@@ -228,7 +233,7 @@ function criarSessaoDaLeitura(deps) {
       passo,
       'o padrão do bloco não é o Terminal',
     )
-    await tocarGravacao(passo, terminal, 'Documentação de exemplo')
+    await tocarGravacao(passo, terminal, '(https://example.com/docs)')
     const antes = await tamanhoDoXterm()
 
     await selecionarAba(passo, 'leitura')
@@ -281,7 +286,7 @@ function criarSessaoDaLeitura(deps) {
     // Depois do reload o xterm é outro: toca a gravação de novo pelo Terminal.
     await selecionarAba(passo, 'terminal')
     await maximizar(passo)
-    await tocarGravacao(passo, TERMINALS[0], 'Documentação de exemplo')
+    await tocarGravacao(passo, TERMINALS[0], '(https://example.com/docs)')
     await selecionarAba(passo, 'leitura')
     await esperarLeitura(passo, 'a Leitura não voltou', (estado) => estado.visible && estado.headings.includes('Resumo'))
 
@@ -314,7 +319,7 @@ function criarSessaoDaLeitura(deps) {
       text: element.textContent ?? '',
       interactive: element.querySelectorAll('a, button, input, [role="button"]').length,
     }))
-    exigir(/Documentação de exemplo|Nome · Valor/.test(estado.text), passo, 'a prévia não mostra o fim da resposta', estado)
+    exigir(/example\.com\/docs|Nome · Valor/.test(estado.text), passo, 'a prévia não mostra o fim da resposta', estado)
     exigir(estado.interactive === 0, passo, 'a prévia tem controle dentro do botão do cartão', estado)
     log(`${passo}: ok`)
   }
@@ -371,25 +376,37 @@ function criarSessaoDaLeitura(deps) {
     log(`${passo}: ok`)
   }
 
+  /**
+   * Cada tema nas duas larguras, com movimento reduzido. Na larga, o Claude em
+   * tela cheia (a gravação precisa de 100 colunas). Na estreita, a gaveta
+   * divide o espaço com os painéis e não chega a 100 colunas: usa o Openia,
+   * texto simples que se reacomoda em qualquer largura — o que se confere ali é
+   * a Leitura não vazar para os lados num painel estreito.
+   */
   async function temaTamanhoEMovimento() {
     const passo = 'F7 tema, tamanho e movimento reduzido'
     await fecharGaveta()
+    const casos = [
+      { viewport: VIEWPORT, terminal: TERMINALS[0], marca: '(https://example.com/docs)', titulo: 'Resumo', cheio: true },
+      { viewport: NARROW_VIEWPORT, terminal: TERMINALS[2], marca: "Use 'openia run <chave>'", titulo: null, cheio: false },
+    ]
     for (const theme of ['dark', 'high_contrast']) {
-      for (const viewport of [VIEWPORT, NARROW_VIEWPORT]) {
+      for (const caso of casos) {
+        const { viewport, terminal } = caso
         await page.evaluate((value) => window.localStorage.setItem('felixo-ai-core.theme', value), theme)
         await page.setViewportSize(viewport)
         await page.emulateMedia({ reducedMotion: 'reduce' })
         await page.reload()
         await checarMontagem(page)
         await esperar(passo, `o tema ${theme}`, (expected) => document.documentElement.dataset.theme === expected, theme)
-        await abrirGaveta(passo, TERMINALS[0])
-        // Reaberto na Leitura (a escolha do bloco); o xterm novo recebe a gravação pelo Terminal.
+        await abrirGaveta(passo, terminal)
+        // O xterm é novo depois do reload: a gravação entra pelo Terminal.
         await selecionarAba(passo, 'terminal')
-        await maximizar(passo)
-        await tocarGravacao(passo, TERMINALS[0], 'Documentação de exemplo')
+        if (caso.cheio) await maximizar(passo)
+        await tocarGravacao(passo, terminal, caso.marca)
         await selecionarAba(passo, 'leitura')
         const leitura = await esperarLeitura(passo, `a Leitura em ${theme} ${viewport.width}px`, (estado) =>
-          estado.visible && estado.headings.includes('Resumo'))
+          estado.visible && (caso.titulo ? estado.headings.includes(caso.titulo) : estado.code.length > 0))
         exigir(leitura.overflowX <= 1, passo, `a Leitura vaza para os lados em ${theme} ${viewport.width}px`, leitura.overflowX)
         const animando = await page.locator(READING).evaluate((element) =>
           [element, ...element.querySelectorAll('*')].filter((node) => {
@@ -397,7 +414,7 @@ function criarSessaoDaLeitura(deps) {
             return style.animationName !== 'none' && Number.parseFloat(style.animationDuration) > 0.01
           }).length)
         exigir(animando === 0, passo, `há animação na Leitura com movimento reduzido (${theme})`, animando)
-        await capturar(`f7-${theme}-${viewport.width}x${viewport.height}-reduced-motion`)
+        await capturar(`f7-${theme}-${viewport.width}x${viewport.height}-${terminal.command}-reduced-motion`)
         await fecharGaveta()
       }
     }

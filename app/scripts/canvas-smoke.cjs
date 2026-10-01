@@ -19,6 +19,9 @@
  *
  * `FELIXO_SMOKE_SESSOES=D,E` roda só as sessões listadas, para quem estiver
  * mexendo numa delas; sem a variável, rodam todas (é o que a CI faz).
+ * `FELIXO_SMOKE_PACKAGED=<executável>` dirige o binário empacotado (por
+ * exemplo `release/linux-unpacked/felixo-ai-core`) no lugar da fonte, pelo
+ * `felixo devtools launch --packaged`.
  */
 
 const path = require('node:path')
@@ -262,7 +265,17 @@ async function withDevtoolsSession(action, { env = {} } = {}) {
   // The geometry sampler needs real animation frames. A hidden Electron window
   // throttles requestAnimationFrame to background cadence and makes the visual
   // test wait on frames that are no longer being produced at display rate.
-  runCli(['launch', '--visible', '--timeout', String(DEVTOOLS_LAUNCH_TIMEOUT_MS)])
+  const packaged = process.env.FELIXO_SMOKE_PACKAGED
+  const launched = runCli([
+    'launch',
+    '--visible',
+    '--timeout',
+    String(DEVTOOLS_LAUNCH_TIMEOUT_MS),
+    ...(packaged ? ['--packaged', path.resolve(packaged)] : []),
+  ])
+  // "Origem: fonte (dev)" ou "Origem: empacotado (<executável>)": a prova de qual app rodou.
+  const origem = /Origem: .*/.exec(launched)?.[0]
+  if (origem) console.log(`[canvas-smoke] ${origem}`)
   const launchedState = readState()
   try {
     return await action()
