@@ -501,26 +501,31 @@ jobs:
       # reativou (que só entrou na main por ter passado).
       # 15 min: a sessão F (Leitura do terminal, 01/10/2026) soma 2,5–5 min aos
       # 200–283 s que as sessões A–E levavam nos runners.
+      # Cada sessão pode repetir até 2 vezes (qualquer falha, decisão de
+      # 01/10/2026); a que só passa na repetição sai como "instável" no resumo
+      # da run e no relatório. O log do Electron vai para o artefato já limpo
+      # de segredo e de pasta pessoal (`canvas-smoke-evidencia.cjs`).
       - name: Test Canvas PR smoke (interações + oclusão + acessibilidade)
         timeout-minutes: 15
         shell: bash
         run: |
           if [ "$RUNNER_OS" = "Linux" ]; then
-            mkdir -p build
-            export FELIXO_DEVTOOLS_DEBUG_LOG="$GITHUB_WORKSPACE/app/build/electron-devtools-${{ matrix.os }}.log"
             xvfb-run -a npm run test:canvas-smoke
           else
             npm run test:canvas-smoke
           fi
 
-      - name: Upload Canvas PR smoke failure screenshot
-        if: failure()
+      # Sempre: relatório (versão, commit, sistema, tentativas por sessão e o
+      # comando que reproduz), capturas de cada tentativa que falhou e o log
+      # limpo. Num verde com sessão instável, é a evidência do flake.
+      - name: Upload Canvas PR smoke evidence
+        if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: canvas-smoke-failure-${{ matrix.os }}
+          name: canvas-smoke-evidencia-${{ matrix.os }}
           path: |
-            app/build/canvas-smoke-failure-*.png
-            app/build/electron-devtools-*.log
+            app/build/canvas-smoke-evidencia/**
+            app/build/canvas-reading-smoke/**
           if-no-files-found: ignore
 
       - name: Upload Canvas visual regression evidence

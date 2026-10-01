@@ -7740,3 +7740,30 @@ Registro de Claude - Tasks do AI Core, task "Felixo AI Core/Terminal — validar
 - CI: `Validate` passou nos quatro runners, com o smoke rodando as sessões A–F; a sessão F levou 66 s (macOS), 69 s (Ubuntu), 74 s (ARM) e 85 s (Windows). `Benchmarks (macos-latest)` reprovou no gate já conhecido `renderer-xterm count=1` (delta de heap do stream +131 %) e passou na reexecução.
 - **Merge e release.** Squash no `main` como `99bd562` às 12:27; CI do `main` verde; release **v0.1.431** publicada às 12:28, com os instaladores dos três sistemas e os smokes de release (incluindo o exploratório do Windows) verdes.
 
+
+## 2026-10-01 — Canvas: gate visual com evidência, repetição registrada e smoke no app empacotado
+
+Registro de Claude - Tasks do AI Core, task "Felixo AI Core/Canvas — criar gate CI de evidência visual, estabilidade e regressão" (Notion 3ce91f95-497e-8148-92da-ff24b14b270c). Início às 14:38. Retoma as fatias 3–5 que tinham ficado paradas por decisão em 14/09.
+
+### O que já existia (medido antes de mudar)
+
+- O smoke do canvas já era check obrigatório no `Validate` dos quatro runners, com as sessões A–F: montagem, topbar/sidebar/canvas visíveis, Tab, foco ao abrir ferramenta, fixture com todos os blocos, oclusão, auditoria de acessibilidade, interações (com notificações), reload sem duplicar, viewport mínimo, zoom, matriz tema × viewport × DPR, elementos abertos em 320/1280 px, fonte maior, movimento reduzido e locale.
+- O Linux, que em 14/09 pulava o smoke, roda desde a correção do `--no-sandbox` (subtask 3db91f95-497e-814d, Concluída).
+- Faltava: smoke no app empacotado na CI; artefato de falha com versão, commit e log nos três sistemas (o log só subia no Linux e só na falha); política de repetição e triagem de flake; vários agentes na matriz; e o guia do que o gate exige de uma ferramenta nova.
+
+### Decisões do Felipe (Trilha B)
+
+- O smoke no app empacotado roda **só antes da release** (nem em todo PR, nem toda noite).
+- Cada sessão pode **repetir até 2 vezes, qualquer que seja a falha**. Para a repetição não esconder flake, cada tentativa fica registrada e a sessão que só passa na repetição sai como "instável".
+- A comparação visual continua **só estrutural** (sem referência pixel a pixel).
+- Fechar a task inteira.
+
+### O que mudou
+
+- `scripts/canvas-smoke-evidencia.cjs` (novo, com teste): tentativas por sessão (`FELIXO_SMOKE_TENTATIVAS`, 1 a 3), relatório `build/canvas-smoke-evidencia/relatorio-<os>.json` (versão, commit, sistema, Node, Electron, origem do app, tentativas com duração, erro e captura, comando de reprodução), limpeza de segredo/pasta pessoal/usuário nos erros e no log, e o resumo da run (`GITHUB_STEP_SUMMARY`).
+- `canvas-smoke.cjs`: as sessões viraram uma tabela (`SESSIONS`) rodada pelas tentativas; cada tentativa sobe uma instância nova e tem a própria captura (`canvas-smoke-failure-<sessão>-<os>-tentativa-<n>.png`); a repetição da sessão A descarta os cenários visuais da tentativa que falhou; o log do Electron é ligado em todos os sistemas e entra limpo no artefato.
+- Sessão A: `checarVariosAgentes` — quatro cartões de agente (PTY falso) em cada tema, em 1280×800 e 375×667, com movimento reduzido: depois de "Enquadrar todos os blocos", todos dentro da janela, com nome e prévia, sem se sobrepor, sem rolagem horizontal e com geometria estável.
+- `scripts/packaged-canvas-smoke.cjs` (novo, com teste): prepara o instalador da release como o `release-smoke.cjs` (AppImage extraído, DMG copiado, NSIS instalado) e roda o smoke nele.
+- `release.yml`: passo "Smoke do canvas no app empacotado" no `Publish <os>`, antes de enviar os instaladores, e artefato `canvas-smoke-pacote-<os>`.
+- `ci.yml`: o artefato `canvas-smoke-evidencia-<os>` sobe sempre (não só na falha).
+- `GUIA-DESENVOLVEDOR.md`: seção "Gate visual do canvas (smoke)" — sessões, o que reprova, o que uma ferramenta nova precisa, repetição, tabela de instabilidades conhecidas, evidência e reprodução local (fonte e pacote).

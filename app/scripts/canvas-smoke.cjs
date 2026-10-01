@@ -39,6 +39,13 @@ const { criarSessaoDaCadeia } = require('./canvas-smoke-contas.cjs')
 const { criarSessaoDeLinks } = require('./canvas-smoke-links.cjs')
 const { criarSessaoDePrompts } = require('./canvas-smoke-prompts.cjs')
 const { RECORDINGS_DIR, criarSessaoDaLeitura } = require('./canvas-smoke-leitura.cjs')
+const {
+  criarRelatorio,
+  fecharRelatorio,
+  gravarEvidencia,
+  rodarSessaoComTentativas,
+  tentativasDaExecucao,
+} = require('./canvas-smoke-evidencia.cjs')
 
 const APP_DIR = path.resolve(__dirname, '..')
 const FELIXO_CLI = path.join(APP_DIR, 'electron', 'cli', 'felixo.cjs')
@@ -857,6 +864,123 @@ async function checarMatrizVisual(page) {
 }
 
 /**
+ * Agentes extras da matriz de vários agentes: com o terminal do fixture, são
+ * quatro cartões de agente vivos (PTY falso do renderer) ao mesmo tempo,
+ * abaixo do resto do fixture, sem encostar em nada.
+ */
+const MULTI_AGENT_NODES = ['Claude', 'Codex', 'Gemini'].map((name, index) => ({
+  id: `fixture-agente-${name.toLowerCase()}`,
+  type: 'terminal',
+  position: { x: index * 600, y: 1800 },
+  width: 520,
+  height: 360,
+  data: { label: `Agente ${name}`, command: 'mock', args: [], cwd: '', launchMode: 'agent' },
+}))
+const MULTI_AGENT_IDS = ['fixture-terminal', ...MULTI_AGENT_NODES.map((node) => node.id)]
+const MULTI_AGENT_VIEWPORTS = [
+  { width: 1280, height: 800 },
+  MIN_VIEWPORT,
+]
+
+/** Os cartões de agente na tela: retângulo, rótulo e selo de atividade. */
+function readAgentCards(page) {
+  return page.evaluate((ids) => ids.map((id) => {
+    const node = document.querySelector(`.react-flow__node[data-id="${id}"]`)
+    if (!node) return { id, present: false }
+    const rect = node.getBoundingClientRect()
+    return {
+      id,
+      present: true,
+      rect: { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height },
+      // O nome fica num campo editável no cabeçalho; o corpo do cartão, que
+      // abre a gaveta, o anuncia ("Abrir <nome>") e mostra a atividade e a prévia.
+      name: node.querySelector('.felixo-node-preview')?.getAttribute('aria-label') ?? '',
+      activity: Boolean(node.querySelector('.felixo-node-preview')?.textContent?.trim()),
+      insideViewport: rect.left >= -1 && rect.top >= -1 && rect.right <= window.innerWidth + 1 && rect.bottom <= window.innerHeight + 1,
+    }
+  }), MULTI_AGENT_IDS)
+}
+
+/**
+ * Vários agentes ao mesmo tempo, em cada tema, na tela grande e na mínima, com
+ * movimento reduzido: depois de "Enquadrar todos os blocos", os quatro cartões
+ * aparecem inteiros dentro da janela, com o nome e a prévia, sem se sobrepor, sem
+ * overflow horizontal e com a geometria estável (quatro terminais vivos não
+ * podem fazer o layout tremer). Os agentes extras saem do canvas no fim, para
+ * os cenários seguintes verem o fixture de sempre.
+ *
+ * Não confere a cobertura pela pílula do zoom e pelo minimapa: o Enquadrar da
+ * pílula não desconta a área útil e, abaixo de 768 px, o dock de terminais
+ * intercepta o clique nela — lacunas já registradas no inventário (tasks
+ * 3ec91f95-497e-8103 e 3e691f95-497e-810e).
+ */
+async function checarVariosAgentes(page) {
+  await page.evaluate(async (nodes) => {
+    for (const node of nodes) {
+      const saved = await window.felixo.canvas.save(node)
+      if (!saved?.ok) throw new Error(saved?.message || `persistencia falhou: ${node.id}`)
+    }
+  }, MULTI_AGENT_NODES)
+  await page.reload()
+  await checarMontagem(page)
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  for (const theme of VISUAL_THEMES) {
+    await selectVisualTheme(page, theme)
+    for (const viewport of MULTI_AGENT_VIEWPORTS) {
+      const label = `varios-agentes-${theme}-${viewport.width}x${viewport.height}`
+      await page.setViewportSize(viewport)
+      await waitForViewport(page, viewport)
+      // Por evento, não pelo clique do mouse: na janela mínima a pílula do
+      // zoom fica sob a barra lateral, e o que se confere aqui são os
+      // cartões, não o alcance do botão.
+      await page.getByRole('button', { name: 'Enquadrar todos os blocos' }).dispatchEvent('click')
+      // O enquadramento anima em 240 ms: espera os quatro cartões assentarem dentro da janela.
+      const inside = await esperarAte(
+        async () => (await readAgentCards(page)).every((card) => card.present && card.insideViewport),
+        { timeoutMs: INTERACTION_TIMEOUT_MS },
+      )
+      if (!inside) {
+        throw new Error(`[canvas-smoke] ${label}: agentes fora da janela depois de enquadrar: ${JSON.stringify(await readAgentCards(page))}`)
+      }
+
+      const cards = await readAgentCards(page)
+      const expectedNames = ['Agente fixture', ...MULTI_AGENT_NODES.map((node) => node.data.label)]
+      const unnamed = cards.filter((card, index) => card.name !== `Abrir ${expectedNames[index]}` || !card.activity)
+      if (unnamed.length > 0) throw new Error(`[canvas-smoke] ${label}: cartão de agente sem o nome ou sem a prévia: ${JSON.stringify(unnamed)}`)
+      for (const [index, first] of cards.entries()) {
+        for (const second of cards.slice(index + 1)) {
+          if (rectangleOverlaps(first.rect, second.rect)) {
+            throw new Error(`[canvas-smoke] ${label}: ${first.id} sobrepõe ${second.id}: ${JSON.stringify([first.rect, second.rect])}`)
+          }
+        }
+      }
+      const overflow = await page.evaluate(() => ({
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+      }))
+      if (overflow.scrollWidth > overflow.clientWidth) {
+        throw new Error(`[canvas-smoke] ${label}: overflow horizontal com vários agentes: ${JSON.stringify(overflow)}`)
+      }
+      await recordVisualEvidence(
+        page,
+        label,
+        [...CORE_LAYOUT_SELECTORS, ...MULTI_AGENT_IDS.map((id) => `.react-flow__node[data-id="${id}"]`)],
+        { event: 'multi-agent', theme, requestedViewport: viewport, agents: MULTI_AGENT_IDS.length, reducedMotion: true },
+      )
+    }
+  }
+  // Só no sucesso: numa falha, a captura precisa mostrar a tela como ficou (a
+  // repetição já começa de um perfil novo).
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+  await page.evaluate(async (ids) => {
+    for (const id of ids) await window.felixo.canvas.delete(id)
+  }, MULTI_AGENT_NODES.map((node) => node.id))
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await page.reload()
+  await checarMontagem(page)
+}
+
+/**
  * A matriz de tema×viewport×DPR (checarMatrizVisual) só fotografa o layout
  * base — nenhum painel, menu ou dialog aberto. Isso deixava sem evidência
  * justamente os elementos que mais mudam de forma com o espaço disponível:
@@ -1107,17 +1231,25 @@ function cenariosDoTutorial(page) {
   })
 }
 
+/** Pasta do artefato de evidência: relatório, logs limpos e capturas das falhas. */
+const EVIDENCE_DIR = path.join(APP_DIR, 'build', 'canvas-smoke-evidencia')
+
+/** Captura da falha de uma tentativa: uma por tentativa, para nenhuma apagar a outra. */
+function failureScreenshotPath(failureName, attempt) {
+  return path.join(EVIDENCE_DIR, `${failureName}-${process.platform}-tentativa-${attempt}.png`)
+}
+
 /**
  * Conecta na sessão aberta, roda os cenários e guarda uma captura se algo
- * falhar. O nome começa com `canvas-smoke-failure` para o CI anexar a captura
- * das duas sessões com o mesmo glob.
+ * falhar. O nome começa com `canvas-smoke-failure` e leva a tentativa, para o
+ * CI anexar as capturas de todas as sessões e repetições com o mesmo glob.
  */
-async function comPaginaDaSessao(failureName, action) {
+async function comPaginaDaSessao(failureName, action, attempt = 1) {
   const { browser, page } = await connect(readState())
   try {
     await action(page)
   } catch (error) {
-    const output = path.join(APP_DIR, 'build', `${failureName}-${process.platform}.png`)
+    const output = failureScreenshotPath(failureName, attempt)
     try {
       fs.mkdirSync(path.dirname(output), { recursive: true })
       await page.screenshot({ path: output })
@@ -1131,96 +1263,173 @@ async function comPaginaDaSessao(failureName, action) {
   }
 }
 
-async function main() {
+/**
+ * As sessões do smoke, na ordem. Cada uma sobe uma instância DevTools nova
+ * (perfil isolado), então repetir uma sessão começa do zero.
+ */
+const SESSIONS = [
+  {
+    letter: 'A',
+    failureName: 'canvas-smoke-failure',
+    summary: 'fixture, interações, recuperação, resize, matriz visual de viewport/tema/DPR, vários agentes, elementos abertos (tools/menu/modal) e dimensões de acessibilidade (fonte/reduced-motion/locale); tutorial SA0–SA10',
+    env: {},
+    run: async (page) => {
+      const tutorial = cenariosDoTutorial(page)
+      await checarMontagem(page)
+      await tutorial.sa0()
+      await checarLandmarksVisiveis(page)
+      await checarNavegacaoPorTab(page)
+      await checarFocoAoAbrirFerramenta(page)
+      await prepararFixture(page)
+      await checarOclusaoDoFixture(page)
+      await checarAuditoriaDeAcessibilidade(page)
+      await checarInteracoes(page)
+      await checarReloadSemDuplicacao(page)
+      await checarPainelNosDoisEixos(page)
+      await checarViewportMinimo(page)
+      await checarZoomVisual(page)
+      await checarMatrizVisual(page)
+      await checarVariosAgentes(page)
+      await checarElementosAbertosEmViewportsCriticos(page)
+      await checarDimensoesDeAcessibilidadeAdicionais(page)
+      await selectVisualTheme(page, 'dark')
+      await tutorial.sessaoA()
+    },
+  },
+  {
+    // Perfil novo e canvas vazio, com o tutorial abrindo e gravando sozinho
+    // (o primeiro uso de verdade) e os avisos de hardware ligados.
+    letter: 'B',
+    failureName: 'canvas-smoke-failure-onboarding',
+    summary: 'tutorial no primeiro uso real (SB1–SB8)',
+    env: ONBOARDING_SESSION_ENV,
+    run: (page) => cenariosDoTutorial(page).sessaoB(),
+  },
+  {
+    // A cadeia de contas de ponta a ponta (§13.6 do plano da cadeia).
+    letter: 'C',
+    failureName: 'canvas-smoke-failure-contas',
+    summary: 'cadeia de contas (C1–C13)',
+    env: CONTAS_SESSION_ENV,
+    run: (page) => criarSessaoDaCadeia({ page, checarMontagem, timeoutMs: ONBOARDING_TIMEOUT_MS }).executar(),
+  },
+  {
+    // A escolha de destino dos links em todas as superfícies, com mouse,
+    // teclado, clique direito, toque e streaming.
+    letter: 'D',
+    failureName: 'canvas-smoke-failure-links',
+    summary: 'links (L0–L12)',
+    env: LINKS_SESSION_ENV,
+    run: (page) => criarSessaoDeLinks({ page, checarMontagem, estadoDaSessao: readState, timeoutMs: ONBOARDING_TIMEOUT_MS }).executar(),
+  },
+  {
+    // Os caminhos de prompt clicados nos painéis, com o retorno de cada um, o
+    // nome no cartão e o fallback de verdade.
+    letter: 'E',
+    failureName: 'canvas-smoke-failure-prompts',
+    summary: 'prompts (P0–P6)',
+    env: PROMPTS_SESSION_ENV,
+    run: (page) => criarSessaoDePrompts({ page, checarMontagem, estadoDaSessao: readState, timeoutMs: ONBOARDING_TIMEOUT_MS }).executar(),
+  },
+  {
+    // A Leitura do terminal sobre gravações reais de CLI.
+    letter: 'F',
+    failureName: 'canvas-smoke-failure-leitura',
+    summary: 'Leitura do terminal (F0–F7)',
+    env: LEITURA_SESSION_ENV,
+    run: (page) => criarSessaoDaLeitura({ page, checarMontagem, timeoutMs: ONBOARDING_TIMEOUT_MS }).executar(),
+  },
+]
+
+/** Versão do Electron instalada, para o relatório (a do app empacotado é a mesma do lock). */
+function installedElectronVersion() {
+  try {
+    return require('electron/package.json').version
+  } catch {
+    return null
+  }
+}
+
+/** O commit do app: o do CI, ou o do checkout local. */
+function currentCommit() {
+  if (process.env.GITHUB_SHA) return process.env.GITHUB_SHA
+  try {
+    return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: APP_DIR, encoding: 'utf8' }).trim()
+  } catch {
+    return null
+  }
+}
+
+async function main(evidence) {
   fs.rmSync(visualOutputPath(''), { recursive: true, force: true })
-  // Sessão A: o smoke de sempre, com o tutorial suprimido na automação (SA0
-  // logo depois da montagem, SA1–SA10 no fim, sobre a fixture).
-  if (rodar('A')) await withDevtoolsSession(() => comPaginaDaSessao('canvas-smoke-failure', async (page) => {
-    const tutorial = cenariosDoTutorial(page)
-    await checarMontagem(page)
-    await tutorial.sa0()
-    await checarLandmarksVisiveis(page)
-    await checarNavegacaoPorTab(page)
-    await checarFocoAoAbrirFerramenta(page)
-    await prepararFixture(page)
-    await checarOclusaoDoFixture(page)
-    await checarAuditoriaDeAcessibilidade(page)
-    await checarInteracoes(page)
-    await checarReloadSemDuplicacao(page)
-    await checarPainelNosDoisEixos(page)
-    await checarViewportMinimo(page)
-    await checarZoomVisual(page)
-    await checarMatrizVisual(page)
-    await checarElementosAbertosEmViewportsCriticos(page)
-    await checarDimensoesDeAcessibilidadeAdicionais(page)
-    await selectVisualTheme(page, 'dark')
-    await tutorial.sessaoA()
-  }))
-  // Sessão B: perfil novo e canvas vazio, com o tutorial abrindo e gravando
-  // sozinho (o primeiro uso de verdade) e os avisos de hardware ligados.
-  if (rodar('B')) await withDevtoolsSession(
-    () => comPaginaDaSessao('canvas-smoke-failure-onboarding', (page) => cenariosDoTutorial(page).sessaoB()),
-    { env: ONBOARDING_SESSION_ENV },
-  )
-  // Sessão C: perfil novo com a CLI roteirizada no main; a cadeia de contas de
-  // ponta a ponta (§13.6 do plano da cadeia).
-  const inicioDaCadeia = Date.now()
-  if (rodar('C')) await withDevtoolsSession(
-    () => comPaginaDaSessao('canvas-smoke-failure-contas', (page) =>
-      criarSessaoDaCadeia({ page, checarMontagem, timeoutMs: ONBOARDING_TIMEOUT_MS }).executar()),
-    { env: CONTAS_SESSION_ENV },
-  )
-  if (rodar('C')) console.log(`[canvas-smoke] cadeia de contas: sessão C (C1–C13) em ${Date.now() - inicioDaCadeia} ms`)
-  // Sessão D: perfil novo; a escolha de destino dos links em todas as
-  // superfícies, com mouse, teclado, clique direito, toque e streaming.
-  const inicioDosLinks = Date.now()
-  if (rodar('D')) await withDevtoolsSession(
-    () => comPaginaDaSessao('canvas-smoke-failure-links', (page) =>
-      criarSessaoDeLinks({
-        page,
-        checarMontagem,
-        estadoDaSessao: readState,
-        timeoutMs: ONBOARDING_TIMEOUT_MS,
-      }).executar()),
-    { env: LINKS_SESSION_ENV },
-  )
-  if (rodar('D')) console.log(`[canvas-smoke] links: sessão D (L0–L12) em ${Date.now() - inicioDosLinks} ms`)
-  // Sessão E: perfil novo; os caminhos de prompt clicados nos painéis, com o
-  // retorno de cada um, o nome no cartão e o fallback de verdade.
-  const inicioDosPrompts = Date.now()
-  if (rodar('E')) await withDevtoolsSession(
-    () => comPaginaDaSessao('canvas-smoke-failure-prompts', (page) =>
-      criarSessaoDePrompts({
-        page,
-        checarMontagem,
-        estadoDaSessao: readState,
-        timeoutMs: ONBOARDING_TIMEOUT_MS,
-      }).executar()),
-    { env: PROMPTS_SESSION_ENV },
-  )
-  if (rodar('E')) console.log(`[canvas-smoke] prompts: sessão E (P0–P6) em ${Date.now() - inicioDosPrompts} ms`)
-  // Sessão F: perfil novo; a Leitura do terminal sobre gravações reais de CLI.
-  const inicioDaLeitura = Date.now()
-  if (rodar('F')) await withDevtoolsSession(
-    () => comPaginaDaSessao('canvas-smoke-failure-leitura', (page) =>
-      criarSessaoDaLeitura({
-        page,
-        checarMontagem,
-        timeoutMs: ONBOARDING_TIMEOUT_MS,
-      }).executar()),
-    { env: LEITURA_SESSION_ENV },
-  )
-  if (rodar('F')) console.log(`[canvas-smoke] leitura: sessão F (F0–F7) em ${Date.now() - inicioDaLeitura} ms`)
+  const attempts = evidence.tentativasPorSessao
+  for (const session of SESSIONS) {
+    if (!rodar(session.letter)) continue
+    // Uma repetição da sessão A não pode somar os cenários visuais da tentativa que falhou.
+    const visualScenariosBefore = visualReport.scenarios.length
+    const started = Date.now()
+    await rodarSessaoComTentativas(evidence, {
+      sessao: session.letter,
+      tentativas: attempts,
+      empacotado: Boolean(process.env.FELIXO_SMOKE_PACKAGED),
+      capturaDaTentativa: (attempt) => path.relative(APP_DIR, failureScreenshotPath(session.failureName, attempt)),
+      aoRepetir: (attempt, error) => {
+        visualReport.scenarios.length = visualScenariosBefore
+        delete visualReport.failure
+        console.warn(`[canvas-smoke] sessão ${session.letter} falhou na tentativa ${attempt}/${attempts}; repetindo do zero: ${(error?.message || String(error)).split('\n')[0]}`)
+      },
+      executar: (attempt) => withDevtoolsSession(
+        () => comPaginaDaSessao(session.failureName, session.run, attempt),
+        { env: session.env },
+      ),
+    })
+    console.log(`[canvas-smoke] sessão ${session.letter} — ${session.summary}: ok em ${Date.now() - started} ms`)
+  }
   const report = writeVisualReport()
   console.log('[canvas-visual] relatório e capturas: ' + report)
-  if (rodar('A')) console.log('[canvas-smoke] fixture, interações, recuperação, resize, matriz visual de viewport/tema/DPR, elementos abertos (tools/menu/modal) e dimensões de acessibilidade (fonte/reduced-motion/locale): ok')
-  if (rodar('A') && rodar('B')) console.log('[canvas-smoke] tutorial do canvas: sessão A (SA0–SA10, abertura suprimida) e sessão B (SB1–SB8, primeiro uso real): ok')
   console.log(`[canvas-smoke] sessões rodadas: ${[...SESSOES].join(', ')}`)
 }
 
-main().catch((error) => {
-  const report = writeVisualReport(error)
-  console.error('[canvas-visual] relatório: ' + report)
-  console.error(error.stack || error.message || String(error))
-  process.exitCode = 1
+// O log do Electron (stdout+stderr de cada lançamento) vai para o artefato,
+// limpo de segredo e de pasta pessoal; quem roda à mão pode apontar outro.
+process.env.FELIXO_DEVTOOLS_DEBUG_LOG ||= path.join(APP_DIR, 'build', `electron-devtools-${process.platform}.log`)
+fs.mkdirSync(path.dirname(process.env.FELIXO_DEVTOOLS_DEBUG_LOG), { recursive: true })
+fs.rmSync(EVIDENCE_DIR, { recursive: true, force: true })
+
+const evidence = criarRelatorio({
+  versao: require('../package.json').version,
+  commit: currentCommit(),
+  origem: process.env.FELIXO_SMOKE_PACKAGED ? `empacotado (${path.basename(process.env.FELIXO_SMOKE_PACKAGED)})` : 'fonte (dev)',
+  electron: installedElectronVersion(),
+  sessoes: SESSIONS.map((session) => session.letter).filter(rodar),
+  tentativas: tentativasDaExecucao(),
 })
+
+/** Grava o relatório, o resumo da run e a cópia limpa do log, passe ou falhe. */
+function writeEvidence(error = null) {
+  fecharRelatorio(evidence, error)
+  const file = gravarEvidencia(evidence, {
+    pasta: EVIDENCE_DIR,
+    logs: [process.env.FELIXO_DEVTOOLS_DEBUG_LOG],
+    titulo: `Smoke do canvas (${evidence.app.origem})`,
+    limpeza: { trocas: [[APP_DIR, '<app>']] },
+  })
+  console.log(`[canvas-smoke] evidência: ${path.relative(APP_DIR, file)} (${evidence.resultado})`)
+  if (evidence.sessoesInstaveis.length > 0) {
+    console.warn(`[canvas-smoke] sessões que só passaram na repetição (instáveis): ${evidence.sessoesInstaveis.join(', ')}`)
+  }
+}
+
+main(evidence)
+  .then(() => writeEvidence())
+  .catch((error) => {
+    const report = writeVisualReport(error)
+    console.error('[canvas-visual] relatório: ' + report)
+    console.error(error.stack || error.message || String(error))
+    try {
+      writeEvidence(error)
+    } catch (evidenceError) {
+      console.error(`[canvas-smoke] não foi possível gravar a evidência: ${evidenceError.message}`)
+    }
+    process.exitCode = 1
+  })
