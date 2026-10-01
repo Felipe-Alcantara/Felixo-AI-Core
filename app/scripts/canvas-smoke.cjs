@@ -1350,8 +1350,18 @@ function installedElectronVersion() {
   }
 }
 
-/** O commit do app: o do CI, ou o do checkout local. */
+/**
+ * O commit do app: num PR, o da branch (o `GITHUB_SHA` de um PR é o commit
+ * sintético de merge, que ninguém consegue fazer checkout depois); no push, o
+ * do CI; fora dele, o do checkout local.
+ */
 function currentCommit() {
+  try {
+    const event = JSON.parse(fs.readFileSync(process.env.GITHUB_EVENT_PATH ?? '', 'utf8'))
+    if (event?.pull_request?.head?.sha) return event.pull_request.head.sha
+  } catch {
+    // Fora do GitHub Actions não há evento.
+  }
   if (process.env.GITHUB_SHA) return process.env.GITHUB_SHA
   try {
     return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: APP_DIR, encoding: 'utf8' }).trim()
