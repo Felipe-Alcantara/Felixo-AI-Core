@@ -636,8 +636,11 @@ na mesma máquina.
 **No app empacotado.** A release roda o mesmo smoke no instalador daquele
 sistema antes de enviar os instaladores (passo "Smoke do canvas no app
 empacotado" do job `Publish <os>`, artefato `canvas-smoke-pacote-<os>`).
-Falhou, o instalador não sobe e a release não sai de pré-release. Para
-reproduzir:
+Falhou, o instalador não sobe e a release não sai de pré-release. O
+`packaged-canvas-smoke.cjs` desliga o que só o app empacotado faz ao abrir —
+instalar as CLIs que faltam (`FELIXO_AUTO_INSTALL_CLIS=0`) e procurar
+atualização (`FELIXO_DISABLE_AUTO_UPDATE=1`) —, para o pacote rodar nas mesmas
+condições da fonte. Para reproduzir:
 
 ```bash
 cd app

@@ -25,6 +25,18 @@ const { prepareArtifact, resolveReleaseArtifact, sanitizeDiagnostic } = require(
 
 const APP_DIR = path.resolve(__dirname, '..')
 
+/**
+ * O que só o app empacotado faz sozinho ao abrir e o de desenvolvimento não:
+ * instalar as CLIs que faltam (no runner sem CLI, isso baixa pacotes pela rede
+ * e abre o aviso "Preparando as CLIs de IA", que na tela de 320 px cobria a
+ * barra de atividades — release 36912514190, 01/10/2026) e procurar
+ * atualização. Desligados, o pacote roda o smoke nas mesmas condições da fonte.
+ */
+const PACKAGED_SMOKE_ENV = Object.freeze({
+  FELIXO_AUTO_INSTALL_CLIS: '0',
+  FELIXO_DISABLE_AUTO_UPDATE: '1',
+})
+
 function parseArgs(argv) {
   const options = { releaseDir: 'release', artifact: '' }
   for (let index = 0; index < argv.length; index += 1) {
@@ -48,7 +60,7 @@ function main(argv = process.argv.slice(2)) {
     const result = spawnSync(process.execPath, [path.join(__dirname, 'canvas-smoke.cjs')], {
       cwd: APP_DIR,
       stdio: 'inherit',
-      env: { ...process.env, FELIXO_SMOKE_PACKAGED: prepared.executable },
+      env: { ...process.env, ...PACKAGED_SMOKE_ENV, FELIXO_SMOKE_PACKAGED: prepared.executable },
     })
     if (result.error) throw result.error
     return result.status ?? 1
@@ -70,4 +82,4 @@ if (require.main === module) {
   process.exitCode = main()
 }
 
-module.exports = { main, parseArgs }
+module.exports = { PACKAGED_SMOKE_ENV, main, parseArgs }

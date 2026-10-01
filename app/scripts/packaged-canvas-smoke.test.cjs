@@ -6,7 +6,7 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 
-const { main, parseArgs } = require('./packaged-canvas-smoke.cjs')
+const { PACKAGED_SMOKE_ENV, main, parseArgs } = require('./packaged-canvas-smoke.cjs')
 
 test('lê a pasta da release e o artefato explícito; argumento desconhecido falha dizendo o uso', () => {
   assert.deepEqual(parseArgs([]), { releaseDir: 'release', artifact: '' })
@@ -26,4 +26,8 @@ test('sem artefato empacotado, falha antes de abrir o app (código 1)', () => {
     fs.rmSync(vazia, { recursive: true, force: true })
   }
   assert.match(erros.join('\n'), /Nenhum artefato empacotado encontrado/)
+})
+
+test('o pacote roda sem instalar CLI nem procurar atualização, como o app de desenvolvimento', () => {
+  assert.deepEqual(PACKAGED_SMOKE_ENV, { FELIXO_AUTO_INSTALL_CLIS: '0', FELIXO_DISABLE_AUTO_UPDATE: '1' })
 })
