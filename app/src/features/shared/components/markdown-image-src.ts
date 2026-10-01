@@ -21,7 +21,21 @@ import {
 } from '../external-url-policy'
 
 /** O mínimo de um nó mdast que este arquivo precisa ler. */
-type MarkdownUrlNode = { type: string; url?: string; children?: MarkdownUrlNode[] }
+type MarkdownUrlNode = {
+  type: string
+  url?: string
+  identifier?: string
+  data?: { hProperties?: Record<string, unknown> }
+  children?: MarkdownUrlNode[]
+}
+
+/**
+ * Propriedade hast em que o destino recusado por invisível segue até o
+ * `rehypeKeepWrittenHref` do `MarkdownContent`, que a tira antes do sanitize.
+ * Só vale com invisível de fato: HTML cru que escreva o atributo não ganha um
+ * destino que abre, porque o que tem invisível nunca abre.
+ */
+export const HIDDEN_HREF_PROPERTY = 'dataMarkdownHiddenHref'
 
 /**
  * Plugin remark que tira o destino de link com caractere escondido ANTES de
@@ -30,20 +44,36 @@ type MarkdownUrlNode = { type: string; url?: string; children?: MarkdownUrlNode[
  * parse, e a política recebe algo que já parece limpo. Aqui ainda se vê o texto
  * cru. O link vira texto (o `MarkdownLink` recebe href vazio), e o endereço de
  * um autolink continua visível e copiável, como no terminal.
+ *
+ * O destino cru vai junto, à parte (`HIDDEN_HREF_PROPERTY`), para o
+ * `MarkdownLink` explicar a recusa com os invisíveis à mostra. Num link por
+ * referência (`[texto][ref]`), o destino é o da definição.
  */
 export function remarkRefuseHiddenUrlCharacters() {
   return (tree: MarkdownUrlNode) => {
-    const visit = (node: MarkdownUrlNode) => {
+    const hiddenDefinitions = new Map<string, string>()
+    const keepHidden = (node: MarkdownUrlNode, url: string) => {
+      node.data = { ...node.data, hProperties: { ...node.data?.hProperties, [HIDDEN_HREF_PROPERTY]: url } }
+    }
+    const refuse = (node: MarkdownUrlNode) => {
       if (
         (node.type === 'link' || node.type === 'definition') &&
         typeof node.url === 'string' &&
         hasHiddenUrlCharacters(node.url)
       ) {
+        if (node.type === 'link') keepHidden(node, node.url)
+        else if (node.identifier) hiddenDefinitions.set(node.identifier, node.url)
         node.url = ''
       }
-      node.children?.forEach(visit)
+      node.children?.forEach(refuse)
     }
-    visit(tree)
+    const explainReferences = (node: MarkdownUrlNode) => {
+      const hidden = node.type === 'linkReference' && node.identifier ? hiddenDefinitions.get(node.identifier) : undefined
+      if (hidden) keepHidden(node, hidden)
+      node.children?.forEach(explainReferences)
+    }
+    refuse(tree)
+    if (hiddenDefinitions.size > 0) explainReferences(tree)
   }
 }
 

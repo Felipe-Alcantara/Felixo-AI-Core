@@ -16,6 +16,23 @@ describe('preparação segura de Markdown', () => {
     expect(stripTerminalAnsi(value)).toBe('**falha**\n[link]\nlinha')
   })
 
+  it('tira o ESC de um caractere inteiro, sem sobrar o 7 ou o 8', () => {
+    expect(stripTerminalAnsi('\u001b7x\u001b8')).toBe('x')
+    expect(stripTerminalAnsi('\u001b=\u001b>ok\u001bc\u001b#8\u001b%G\u001b(Bfim')).toBe('okfim')
+  })
+
+  it('mantém o texto de um hyperlink OSC 8 fechado com ESC \\', () => {
+    const value = 'a \u001b]8;;https://example.com\u001b\\texto\u001b]8;;\u001b\\ b'
+
+    expect(stripTerminalAnsi(value)).toBe('a texto b')
+  })
+
+  it('tira o conteúdo de DCS e APC (imagens do terminal, passagem do tmux)', () => {
+    const value = '\u001bP1;2|carga\u001b\\fim \u001b_Gf=100;AAAA\u001b\\z'
+
+    expect(stripTerminalAnsi(value)).toBe('fim z')
+  })
+
   it('normaliza quebras e limita o tamanho antes do parser', () => {
     const result = prepareMarkdownContent('a\r\nb\r\n' + 'x'.repeat(8), 4)
 

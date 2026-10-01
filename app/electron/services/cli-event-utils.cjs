@@ -9,16 +9,20 @@ const PERSISTENT_SESSION_IDLE_TIMEOUT_MS = 30 * 60 * 1000
 const DEFERRED_PROMPT_FALLBACK_MS = 5000
 const PERSISTENT_TRAILING_OUTPUT_GRACE_MS = 5000
 
+/**
+ * Interpreta uma linha da CLI pelo adaptador. A linha que ele não entende
+ * (texto solto no meio do JSONL, JSON cortado) não vira erro do chat: antes,
+ * ela encerrava a resposta como falha e sumia dos Logs da CLI. Agora a
+ * resposta segue e o motivo volta em `parseError`, para os logs mostrarem a
+ * linha como veio.
+ */
 function parseAdapterLine(adapter, line) {
   try {
-    return adapter.parseLine(line)
+    return { cliEvent: adapter.parseLine(line), parseError: null }
   } catch (error) {
     return {
-      type: 'error',
-      message:
-        error instanceof Error
-          ? `Falha ao interpretar saída da CLI: ${error.message}`
-          : 'Falha ao interpretar saída da CLI.',
+      cliEvent: null,
+      parseError: error instanceof Error ? error.message : String(error),
     }
   }
 }

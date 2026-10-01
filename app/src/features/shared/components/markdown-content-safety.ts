@@ -8,10 +8,16 @@ export const MAX_MARKDOWN_CONTENT_CHARS = 200_000
  * mensagem ou prévia Markdown. Remover CSI/OSC antes do parser evita que
  * estados visuais, hyperlinks OSC 8 e controles de cursor contaminem o texto
  * que o renderer interpreta.
+ *
+ * Em ordem: as strings OSC e DCS/SOS/PM/APC (o conteúdo vai junto, e para no
+ * primeiro BEL ou ESC — senão o texto de um hyperlink OSC 8 fechado com
+ * `ESC \` sumiria entre a abertura e o fechamento); o CSI; e o ESC de um
+ * caractere só, com os intermediários (`ESC 7`, `ESC =`, `ESC ( B`, `ESC # 8`,
+ * `ESC c`), que antes deixava o "7" como texto.
  */
 const ANSI_ESCAPE_PATTERN =
   // eslint-disable-next-line no-control-regex -- a barreira precisa reconhecer bytes ANSI.
-  /(?:\u001B\][^\u0007]*(?:\u0007|\u001B\\)|\u001B\[[0-?]*[ -/]*[@-~]|\u001B[()][0-2A-Z]|\u001B[@-_]|\u009B[0-?]*[ -/]*[@-~])/g
+  /(?:\u001B[\]PX^_][^\u0007\u001B]*(?:\u0007|\u001B\\)|\u001B\[[0-?]*[ -/]*[@-~]|\u001B[ -/]*[0-~]|\u009B[0-?]*[ -/]*[@-~])/g
 
 /** C0/C1 restantes não têm lugar no Markdown exibido. Quebras são preservadas. */
 const TERMINAL_CONTROL_PATTERN =

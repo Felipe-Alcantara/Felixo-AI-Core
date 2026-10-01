@@ -236,12 +236,47 @@ describe('Markdown: link recusado continua visível, explicado e copiável', () 
     expect(html).not.toContain('Link recusado')
   })
 
-  it('destino com invisível não vai para a dica: ela mostraria um texto e copiaria outro', () => {
-    const html = renderMarkdown(`<a href="https://exa${ZERO_WIDTH_SPACE}mple.com/">x</a>`)
+  it.each([
+    ['HTML cru', `<a href="https://exa${ZERO_WIDTH_SPACE}mple.com/">x</a>`, 'x'],
+    ['link do Markdown', `[x](https://exa${ZERO_WIDTH_SPACE}mple.com/)`, 'x'],
+    ['referência', `[ref]: https://exa${ZERO_WIDTH_SPACE}mple.com/${NEWLINE}${NEWLINE}[x][ref]`, 'x'],
+    ['autolink', `<https://exa${ZERO_WIDTH_SPACE}mple.com/>`, `https://exa${ZERO_WIDTH_SPACE}mple.com/`],
+  ])('destino com invisível (%s) explica a recusa, com o invisível à mostra na dica', (_label, source, text) => {
+    const html = renderMarkdown(source)
 
     expect(hrefsOf(html)).toEqual([])
+    expect(refusedLinksOf(html)).toEqual([
+      {
+        reason: 'o endereço tem caracteres invisíveis, que podem disfarçar o destino',
+        destination: 'https://exa⟨U+200B⟩mple.com/',
+        text,
+      },
+    ])
+  })
+
+  it('U+202E, que inverte o que se lê, aparece pelo código na dica', () => {
+    const html = renderMarkdown(`[foto](https://example.com/${RIGHT_TO_LEFT_OVERRIDE}gpj.exe)`)
+
+    expect(refusedLinksOf(html)).toEqual([
+      expect.objectContaining({ destination: 'https://example.com/⟨U+202E⟩gpj.exe', text: 'foto' }),
+    ])
+    expect(html).not.toContain(RIGHT_TO_LEFT_OVERRIDE)
+  })
+
+  it('HTML cru não forja o destino com invisível por atributo', () => {
+    const html = renderMarkdown(
+      '<a data-markdown-hidden-href="https://evil.example/">x</a> ' +
+        `<a data-markdown-hidden-href="https://e${ZERO_WIDTH_SPACE}vil.example/">y</a>`,
+    )
+
+    // Sem invisível, o atributo é ignorado; com ele, vira só a explicação de
+    // um link que nunca abre.
+    expect(hrefsOf(html)).toEqual([])
+    expect(html).not.toContain('data-markdown-hidden-href')
+    expect(refusedLinksOf(html)).toEqual([
+      expect.objectContaining({ destination: 'https://e⟨U+200B⟩vil.example/', text: 'y' }),
+    ])
     expect(html).toContain('<span>x</span>')
-    expect(html).not.toContain('data-refused-link')
   })
 
   it('HTML cru não forja o destino recusado por atributo', () => {

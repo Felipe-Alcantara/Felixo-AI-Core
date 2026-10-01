@@ -43,6 +43,7 @@ import { FileNode } from './FileNode'
 import { WebpageNode } from './WebpageNode'
 import { NotionTasksNode } from './NotionTasksNode'
 import { TerminalDrawer } from './TerminalDrawer'
+import { readingProfileFor } from '../terminal/reading/reading-profiles'
 import { TerminalDetailsPanel } from './TerminalDetailsPanel'
 import { NODE_DRAG_HANDLE_CLASS } from './NodeHeader'
 import {
@@ -3288,6 +3289,9 @@ function CanvasInner({
             setHandoff({ sourceId: expandedTerminalId, transcript })
           }
           onOpenFilePreview={openTextFileNode}
+          readingMode={expandedNodeData?.readingMode === true}
+          onReadingModeChange={(on) => updateNodeData(expandedTerminalId, { readingMode: on })}
+          readingProfile={readingProfileFor(expandedNodeData?.providerId, expandedNodeData?.command)}
           onClose={closeExpandedTerminal}
         />
       )}

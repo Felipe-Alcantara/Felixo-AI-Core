@@ -702,6 +702,20 @@ encontrou a conversa**. O Gemini CLI também se atualiza sozinho ao abrir
 (`general.enableAutoUpdate`, ligada por padrão): a versão pode mudar de um dia
 para o outro, e o app acompanha pela leitura da versão.
 
+### Leitura: a resposta do agente como texto formatado
+
+As CLIs de agente desenham a resposta no terminal: título em negrito, código colorido, tabela com traços. A aba **Leitura** da gaveta do terminal mostra essa mesma resposta como texto formatado, com títulos, listas, blocos de código, tabelas, citações e links de verdade.
+
+- Na gaveta, troque entre **Terminal** e **Leitura** pelas abas (ou pelas setas, com o foco nelas). Cada bloco guarda a escolha; o padrão é o Terminal.
+- A Leitura só mostra. Para digitar, volte ao **Terminal**. O agente continua rodando por baixo, no mesmo tamanho, e nada se perde ao trocar de aba.
+- Cada fala aparece separada: **Você** (o seu pedido), **Agente** e **Aviso da CLI** (um erro ou uma interrupção). O logotipo, as dicas, o status ("Working…", contagem de tokens) e a caixa de digitação ficam de fora.
+- O botão de copiar da Leitura leva o texto selecionado ou, sem seleção, o texto de todas as falas como o terminal mostra.
+- Se você rolar para cima para ler, a Leitura não pula para o fim quando chega texto novo. Parada no fim, ela acompanha a resposta.
+- Com a Leitura ligada, o cartão do bloco no canvas também mostra o fim da última resposta já formatado.
+- Os links da Leitura seguem a mesma regra de todo o app (ver [Links: escolher onde abrir](#links-escolher-onde-abrir)).
+
+A Leitura reconhece o Claude Code e o Codex. Para outros programas (Gemini, Openia, o terminal comum), ela mostra o texto como veio, sem formatação nova, e avisa isso no topo. Os limites estão em [Limitações conhecidas](#6-limitações-conhecidas).
+
 ### Links: escolher onde abrir
 
 Nenhum link abre direto. Ao abrir um link, aparece um menu curto com o destino escrito: primeiro o site (ou o e-mail) e, embaixo, o endereço inteiro. Um link pode exibir um texto e apontar para outro endereço, e o menu mostra para onde ele leva de verdade. Um endereço muito longo é cortado no meio, nunca no fim, porque é no fim que está o domínio de verdade. Depois, é só escolher:
@@ -726,7 +740,7 @@ Se o app recusar um link, o menu diz por quê e oferece só **Copiar link**. O m
 - caracteres invisíveis que disfarçam o destino (eles aparecem no menu com o código deles, como `⟨U+200B⟩`);
 - usuário e senha no endereço.
 
-No texto (notas, arquivos, chat), o link recusado vira texto comum, com o motivo na dica, e um botão pequeno ao lado (**Por que este link não abre**) abre o menu. Um link cujo endereço tem caracteres invisíveis vira só texto: mostrar esse endereço já seria cair no disfarce. No terminal, a dica sobre um link recusado também traz o motivo. A barra de endereço da Página Web faz o mesmo: um endereço recusado mostra o motivo em vez de simplesmente não abrir, e o texto fica na barra para você corrigir.
+No texto (notas, arquivos, chat), o link recusado vira texto comum, com o motivo na dica, e um botão pequeno ao lado (**Por que este link não abre**) abre o menu. Isso vale também para o link cujo endereço tem caracteres invisíveis: a dica e o menu mostram o endereço com cada invisível pelo código (`exa⟨U+200B⟩mple.com`), e nunca o endereço disfarçado. No terminal, a dica sobre um link recusado também traz o motivo. A barra de endereço da Página Web faz o mesmo: um endereço recusado mostra o motivo em vez de simplesmente não abrir, e o texto fica na barra para você corrigir.
 
 Quando um agente pede para abrir uma página (`felixo browser open`), nada abre sozinho. Um cartão aparece no alto do canvas com três informações:
 
@@ -982,7 +996,25 @@ Se estiver reportando um problema, inclua a versão do app, sistema operacional,
 
 - O app depende das CLIs externas estarem instaladas, autenticadas e acessíveis no `PATH`.
 - O modo de chat está depreciado: pode ser usado para compatibilidade, exportação de histórico e exclusão de conversas antigas, mas não recebe novos fluxos de produto; use o canvas para trabalho novo.
-- No painel **Logs da CLI** do chat, a tela mostra uma janela limitada para permanecer navegável. A exportação **Markdown para análise** conserva o histórico completo da execução enquanto o app estiver aberto; limpar os logs ou encerrar o app remove esse arquivo temporário.
+- No painel **Logs da CLI** do chat, a tela mostra uma janela limitada para permanecer navegável. A exportação **Markdown para análise** conserva o histórico completo da execução enquanto o app estiver aberto; limpar os logs ou encerrar o app remove esse arquivo temporário. Uma linha que a CLI imprime fora do formato esperado aparece ali como **Linha não reconhecida**, do jeito que veio, e a resposta continua.
+- **Leitura do terminal:**
+  - só o Claude Code e o Codex têm leitura formatada. As regras vêm de gravações
+    das versões 2.1.286 e 0.156.1; uma versão nova pode desenhar diferente. O
+    Gemini não pôde ser gravado (a conta pessoal do Google não entra mais no
+    Gemini CLI 0.62) e, como os outros programas, aparece como texto puro;
+  - a Leitura vê o que o terminal tem na tela e no histórico, até 2000 linhas.
+    Por padrão, o Claude desenha a conversa numa tela sem histórico: o que já
+    rolou para fora da tela do Claude não aparece na Leitura. Com a opção
+    **Rolagem no terminal do Claude Code** ligada, os terminais novos do Claude
+    guardam a conversa no histórico, e a Leitura alcança o começo dela;
+  - o reconhecimento olha o estilo das letras. Um título sem negrito ou um
+    código sem cor pode sair como parágrafo, e um parágrafo que começa com
+    código pode sair como bloco de código. O texto nunca some: quando a
+    estrutura não confere com a tela, a fala aparece como texto puro;
+  - quando a CLI quebra uma palavra no meio por falta de largura, a Leitura junta
+    as duas partes com um espaço;
+  - o app não tem busca dentro do terminal; na Leitura, o texto pode ser
+    selecionado e copiado como qualquer texto.
 - O auto-update silencioso também existe no launcher do código-fonte; no macOS, o prompt de atualização forçada vem confirmado por padrão. `npm run dev` direto não executa atualização Git.
 - No Linux, prefira AppImage para o fluxo de auto-update. `.deb` exige reinstalação/atualização tradicional.
 - **macOS bloqueia a primeira execução.** Os artefatos não são assinados nem notarizados, então o Gatekeeper barra o app até que ele seja liberado manualmente (ver a [seção de instalação para macOS](#macos)). Não há como evitar isso sem uma conta paga do Apple Developer Program.

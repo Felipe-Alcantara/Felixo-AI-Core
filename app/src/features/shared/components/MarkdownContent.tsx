@@ -24,11 +24,13 @@ import {
   MAX_MARKDOWN_CONTENT_CHARS,
   prepareMarkdownContent,
 } from './markdown-content-safety'
+import { hasHiddenUrlCharacters } from '../external-url-policy'
 import {
   MARKDOWN_ANCHOR_ATTRIBUTE,
   markdownHeadingSlug,
 } from './markdown-heading-anchor'
 import {
+  HIDDEN_HREF_PROPERTY,
   isRelativeMarkdownLink,
   remarkRefuseHiddenUrlCharacters,
   resolveMarkdownImageSrc,
@@ -185,14 +187,28 @@ const WRITTEN_HREF_DATA_KEY = 'markdownWrittenHref'
 function rehypeKeepWrittenHref() {
   return (tree: HastLinkNode) => {
     const visit = (node: HastLinkNode) => {
-      const href = node.properties?.href
-      if (node.type === 'element' && node.tagName === 'a' && typeof href === 'string' && href) {
-        node.data = { ...node.data, [WRITTEN_HREF_DATA_KEY]: href }
+      if (node.type === 'element' && node.tagName === 'a') {
+        const written = writtenHrefFromProperties(node.properties)
+        if (written) node.data = { ...node.data, [WRITTEN_HREF_DATA_KEY]: written }
       }
       node.children?.forEach(visit)
     }
     visit(tree)
   }
+}
+
+/**
+ * O `href`, ou — sem ele — o destino que `remarkRefuseHiddenUrlCharacters`
+ * tirou por ter invisível. A propriedade some aqui, e só vale com invisível:
+ * um `data-markdown-hidden-href` limpo escrito em HTML cru é ignorado.
+ */
+function writtenHrefFromProperties(properties: Record<string, unknown> | undefined): string | undefined {
+  if (!properties) return undefined
+  const { href } = properties
+  const hidden = properties[HIDDEN_HREF_PROPERTY]
+  delete properties[HIDDEN_HREF_PROPERTY]
+  if (typeof href === 'string' && href) return href
+  return typeof hidden === 'string' && hasHiddenUrlCharacters(hidden) ? hidden : undefined
 }
 
 function writtenHrefOf(node: { data?: unknown } | undefined): string | undefined {

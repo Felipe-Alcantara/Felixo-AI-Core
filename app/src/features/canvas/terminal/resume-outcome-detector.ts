@@ -193,13 +193,6 @@ const LINE_MOVING_ESCAPE = /\u001b\[[0-?]*[ -/]*[ABEFHfd]|\u001b[DEM8]/g
 /** Escapes que só andam na mesma linha (CSI C/G/I/`) viram espaço, como o espaço que pulam. */
 // eslint-disable-next-line no-control-regex -- reconhece bytes ANSI de propósito.
 const COLUMN_MOVING_ESCAPE = /\u001b\[[0-?]*[ -/]*[CGI`]/g
-/**
- * ESC seguido de dígito ou `=`/`>` (salvar cursor, modos do teclado): o
- * `stripTerminalAnsi` tira só o ESC e deixaria o "7" como texto no começo da
- * linha — e o boot do Claude começa exatamente com `ESC 7`.
- */
-// eslint-disable-next-line no-control-regex -- reconhece bytes ANSI de propósito.
-const RESIDUAL_ESCAPE = /\u001b[0-9=>]/g
 // eslint-disable-next-line no-control-regex -- reconhece bytes ANSI de propósito.
 const INCOMPLETE_CSI = /^\u001b\[[0-?]*[ -/]*$/
 
@@ -282,8 +275,7 @@ function normalizeTerminalChunk(chunk: string): string {
   return stripTerminalAnsi(
     chunk
       .replace(LINE_MOVING_ESCAPE, '\n')
-      .replace(COLUMN_MOVING_ESCAPE, ' ')
-      .replace(RESIDUAL_ESCAPE, ''),
+      .replace(COLUMN_MOVING_ESCAPE, ' '),
   ).replace(/\r\n?/g, '\n')
 }
 

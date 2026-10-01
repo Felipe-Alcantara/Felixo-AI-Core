@@ -27,6 +27,11 @@
  * - outros dois ligam e desligam o mouse tracking, como a Claude Code e o
  *   Codex fazem, para o menu de link ser testado com o gesto retido pelo
  *   renderer;
+ * - `__felixo_smoke_gravacao_<nome>__` limpa a tela e toca uma gravação real
+ *   de CLI (`scripts/record-terminal-fixture.cjs`), com os intervalos
+ *   encurtados, para o smoke da Leitura ler a tela que a CLI desenharia. A
+ *   pasta vem de `FELIXO_DEVTOOLS_TERMINAL_RECORDINGS`; o nome só aceita
+ *   `letras-letras`, nunca um caminho;
  * - toda saída é assíncrona e em ordem, como no `node-pty` (nunca dentro do
  *   `write` de quem chamou);
  * - `kill` encerra com um único `onExit`, e nada é escrito depois dele.
@@ -40,6 +45,7 @@
  * este arquivo.
  */
 
+const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 const vocabulary = require('../__fixtures__/cli-failure-vocabulary.json')
@@ -55,7 +61,13 @@ const DEFAULT_CHUNK_DELAY_MS = 20
 const FAKE_PID_BASE = 4_000_000
 /** `signal` do `onExit` quando `kill()` vem sem sinal (padrão do node-pty). */
 const DEFAULT_KILL_SIGNAL = 'SIGHUP'
-const INPUT_ESCAPE_PATTERN = /^\u001b(?:\[[0-?]*[ -/]*[@-~]|O.|.)?/
+/**
+ * O que chega do teclado e não é texto: setas, colagem entre colchetes e as
+ * respostas do próprio terminal às perguntas da CLI — a cor de fundo (OSC
+ * 10/11, que o Codex pergunta ao abrir), DCS. Uma CLI de verdade as consome;
+ * ecoadas, sujariam a linha e o próximo gatilho não dispararia.
+ */
+const INPUT_ESCAPE_PATTERN = /^\u001b(?:\][^\u0007\u001b]*(?:\u0007|\u001b\\)?|P[^\u001b]*(?:\u001b\\)?|\[[0-?]*[ -/]*[@-~]|O.|.)?/
 const WINDOWS_EXECUTABLE_SUFFIX = /\.(?:exe|cmd|bat|ps1)$/i
 
 /**
@@ -105,6 +117,35 @@ const SMOKE_MOUSE_TRACKING_OUTPUTS = Object.freeze({
   __felixo_smoke_mouse_on__: `${CSI}?1000h${CSI}?1006h`,
   __felixo_smoke_mouse_off__: `${CSI}?1000l${CSI}?1006l`,
 })
+
+/** Gatilho da gravação: o nome é o do arquivo, sem caminho nem extensão. */
+const SMOKE_RECORDING_TRIGGER = /^__felixo_smoke_gravacao_([a-z]+-[a-z]+)__$/
+/** Limpa histórico e tela e volta o cursor ao topo, antes da gravação. */
+const CLEAR_FOR_RECORDING = `${CSI}3J${CSI}2J${CSI}H`
+/** Teto do intervalo entre dois pedaços da gravação: a do Claude levaria 30 s. */
+const RECORDING_MAX_DELAY_MS = 40
+
+/**
+ * Lê uma gravação da pasta das gravações. Só arquivos `<nome>.json` dessa
+ * pasta, com `chunks` de `{ t, data }`.
+ *
+ * @param {string} name - Já validado por `SMOKE_RECORDING_TRIGGER`.
+ * @param {string | undefined} dir
+ * @returns {{ ok: true, chunks: { t: number, data: string }[] } | { ok: false, message: string }}
+ */
+function readTerminalRecording(name, dir) {
+  if (!dir) return { ok: false, message: 'gravações do terminal não configuradas (FELIXO_DEVTOOLS_TERMINAL_RECORDINGS).' }
+  try {
+    const parsed = JSON.parse(fs.readFileSync(path.join(dir, `${name}.json`), 'utf8'))
+    const chunks = Array.isArray(parsed?.chunks) ? parsed.chunks : []
+    if (chunks.length === 0 || !chunks.every((chunk) => typeof chunk?.data === 'string' && Number.isFinite(chunk?.t))) {
+      return { ok: false, message: `gravação ${name} sem pedaços válidos.` }
+    }
+    return { ok: true, chunks }
+  } catch (error) {
+    return { ok: false, message: `gravação ${name} não foi lida (${error.code ?? error.message}).` }
+  }
+}
 
 /** Saída real de `codex login status` com login pela conta do ChatGPT. */
 const FAKE_CODEX_LOGIN_STATUS_OUTPUT = 'Logged in using ChatGPT\n'
@@ -225,7 +266,7 @@ function positiveDimension(value, fallback) {
  * @param {Function} params.clearTimer
  * @returns {import('./pty-process-manager.cjs').PtyHandle & { readonly cols: number, readonly rows: number }}
  */
-function createFakeCliPty({ options = {}, pid, chunkDelayMs, setTimer, clearTimer }) {
+function createFakeCliPty({ options = {}, pid, chunkDelayMs, setTimer, clearTimer, recordingsDir }) {
   const dataListeners = new Set()
   const exitListeners = new Set()
   let cols = positiveDimension(options.cols, 80)
@@ -258,6 +299,19 @@ function createFakeCliPty({ options = {}, pid, chunkDelayMs, setTimer, clearTime
       for (let index = 1; index <= SMOKE_STREAM_LINES; index += 1) {
         output.push(`linha ${index} de ${SMOKE_STREAM_LINES} da saída em streaming\r\n`, SMOKE_STREAM_LINE_DELAY_MS)
       }
+    } else if (SMOKE_RECORDING_TRIGGER.test(trigger)) {
+      const recording = readTerminalRecording(SMOKE_RECORDING_TRIGGER.exec(trigger)[1], recordingsDir)
+      if (recording.ok) {
+        output.push(CLEAR_FOR_RECORDING, chunkDelayMs)
+        let previous = 0
+        for (const chunk of recording.chunks) {
+          output.push(chunk.data, Math.min(RECORDING_MAX_DELAY_MS, Math.max(0, chunk.t - previous)))
+          previous = chunk.t
+        }
+        // Sem prompt: a tela fica como a CLI gravada a deixou.
+        return
+      }
+      output.push(`[Felixo] ${recording.message}\r\n`, chunkDelayMs)
     }
     output.push(PROMPT)
   }
@@ -355,17 +409,20 @@ function createFakeCliPty({ options = {}, pid, chunkDelayMs, setTimer, clearTime
  * @param {number} [deps.chunkDelayMs] - Intervalo entre pedaços do roteiro.
  * @param {Function} [deps.setTimer] - `setTimeout` injetável (testes).
  * @param {Function} [deps.clearTimer] - `clearTimeout` injetável (testes).
+ * @param {string} [deps.recordingsDir] - Pasta das gravações de CLI (padrão:
+ *   `FELIXO_DEVTOOLS_TERMINAL_RECORDINGS`, que o smoke define).
  * @returns {import('./pty-process-manager.cjs').PtyFactory}
  */
 function createFakeCliPtyFactory({
   chunkDelayMs = DEFAULT_CHUNK_DELAY_MS,
   setTimer = setTimeout,
   clearTimer = clearTimeout,
+  recordingsDir = process.env.FELIXO_DEVTOOLS_TERMINAL_RECORDINGS,
 } = {}) {
   let nextPid = FAKE_PID_BASE
   return (_file, _args, options) => {
     nextPid += 1
-    return createFakeCliPty({ options, pid: nextPid, chunkDelayMs, setTimer, clearTimer })
+    return createFakeCliPty({ options, pid: nextPid, chunkDelayMs, setTimer, clearTimer, recordingsDir })
   }
 }
 
@@ -414,6 +471,7 @@ module.exports = {
   PROMPT,
   SMOKE_LINK_OUTPUTS,
   SMOKE_MOUSE_TRACKING_OUTPUTS,
+  SMOKE_RECORDING_TRIGGER,
   SMOKE_STREAM_LINES,
   SMOKE_STREAM_TRIGGER,
   SMOKE_TRIGGER_OUTPUTS,

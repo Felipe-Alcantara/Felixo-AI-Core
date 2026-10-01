@@ -13,7 +13,9 @@
  * links fica em `canvas-smoke-links.cjs` (sessão D, outro perfil novo com a
  * mesma CLI roteirizada), e os caminhos de prompt (catálogo, combinação,
  * fallback, skill e área de transferência) em `canvas-smoke-prompts.cjs`
- * (sessão E, idem).
+ * (sessão E, idem). A Leitura do terminal (Markdown da tela) fica em
+ * `canvas-smoke-leitura.cjs` (sessão F, idem, com a CLI roteirizada tocando
+ * as gravações reais de CLI).
  *
  * `FELIXO_SMOKE_SESSOES=D,E` roda só as sessões listadas, para quem estiver
  * mexendo numa delas; sem a variável, rodam todas (é o que a CI faz).
@@ -33,6 +35,7 @@ const { corromperEstadoNoPerfil, criarCenariosDoTutorial, registrarPerguntaNoPer
 const { criarSessaoDaCadeia } = require('./canvas-smoke-contas.cjs')
 const { criarSessaoDeLinks } = require('./canvas-smoke-links.cjs')
 const { criarSessaoDePrompts } = require('./canvas-smoke-prompts.cjs')
+const { RECORDINGS_DIR, criarSessaoDaLeitura } = require('./canvas-smoke-leitura.cjs')
 
 const APP_DIR = path.resolve(__dirname, '..')
 const FELIXO_CLI = path.join(APP_DIR, 'electron', 'cli', 'felixo.cjs')
@@ -70,8 +73,10 @@ const CONTAS_SESSION_ENV = {
 const LINKS_SESSION_ENV = { ...CONTAS_SESSION_ENV, FELIXO_DEVTOOLS_SHELL_OPEN: 'falha' }
 // Sessão E: a mesma CLI roteirizada, que ecoa o que o terminal recebe.
 const PROMPTS_SESSION_ENV = CONTAS_SESSION_ENV
+// Sessão F: a mesma CLI roteirizada, tocando as gravações reais de CLI.
+const LEITURA_SESSION_ENV = { ...CONTAS_SESSION_ENV, FELIXO_DEVTOOLS_TERMINAL_RECORDINGS: RECORDINGS_DIR }
 const SESSOES = new Set(
-  (process.env.FELIXO_SMOKE_SESSOES || 'A,B,C,D,E').split(',').map((sessao) => sessao.trim().toUpperCase()),
+  (process.env.FELIXO_SMOKE_SESSOES || 'A,B,C,D,E,F').split(',').map((sessao) => sessao.trim().toUpperCase()),
 )
 const rodar = (sessao) => SESSOES.has(sessao)
 const DEVTOOLS_LAUNCH_TIMEOUT_MS = 60_000
@@ -1181,6 +1186,18 @@ async function main() {
     { env: PROMPTS_SESSION_ENV },
   )
   if (rodar('E')) console.log(`[canvas-smoke] prompts: sessão E (P0–P6) em ${Date.now() - inicioDosPrompts} ms`)
+  // Sessão F: perfil novo; a Leitura do terminal sobre gravações reais de CLI.
+  const inicioDaLeitura = Date.now()
+  if (rodar('F')) await withDevtoolsSession(
+    () => comPaginaDaSessao('canvas-smoke-failure-leitura', (page) =>
+      criarSessaoDaLeitura({
+        page,
+        checarMontagem,
+        timeoutMs: ONBOARDING_TIMEOUT_MS,
+      }).executar()),
+    { env: LEITURA_SESSION_ENV },
+  )
+  if (rodar('F')) console.log(`[canvas-smoke] leitura: sessão F (F0–F7) em ${Date.now() - inicioDaLeitura} ms`)
   const report = writeVisualReport()
   console.log('[canvas-visual] relatório e capturas: ' + report)
   if (rodar('A')) console.log('[canvas-smoke] fixture, interações, recuperação, resize, matriz visual de viewport/tema/DPR, elementos abertos (tools/menu/modal) e dimensões de acessibilidade (fonte/reduced-motion/locale): ok')

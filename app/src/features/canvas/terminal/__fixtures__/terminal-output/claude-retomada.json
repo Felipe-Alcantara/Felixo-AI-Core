@@ -1,0 +1,58 @@
+{
+ "provider": "claude",
+ "version": "2.1.286",
+ "scenario": "retomada",
+ "cols": 100,
+ "rows": 50,
+ "platform": "linux",
+ "recordedAt": "2026-10-01",
+ "anonymized": true,
+ "marks": [
+  {
+   "t": 25,
+   "label": "espera a conversa ser redesenhada"
+  }
+ ],
+ "chunks": [
+  {
+   "t": 2047,
+   "data": "\u001b7\u001b[r\u001b8\u001b[?25h"
+  },
+  {
+   "t": 2130,
+   "data": "\u001b[?25l\u001b[?2004h\u001b[?2031h\u001b[?1004h"
+  },
+  {
+   "t": 2394,
+   "data": "\u001b[>0q\u001b[?u\u001b[c"
+  },
+  {
+   "t": 3107,
+   "data": "\u001b[>4m\u001b[?1004l\u001b[?2031l\u001b[?2004l"
+  },
+  {
+   "t": 4912,
+   "data": "\u001b[?2004h\u001b[?2031h\u001b[?1004h"
+  },
+  {
+   "t": 5028,
+   "data": "\u001b]0;✳ Resumo com blocos Markdown\u0007"
+  },
+  {
+   "t": 5651,
+   "data": "\u001b[38;2;215;119;87m ▐\u001b[48;2;0;0;0m▛███▛█\u001b[12G\u001b[39m\u001b[49m\u001b[1mClaude\u001b[19GCode\u001b[24G\u001b[22m\u001b[38;2;153;153;153mv2.1.286\u001b[39m\r\r\n\u001b[38;2;215;119;87m▝▜\u001b[48;2;0;0;0m█████\u001b[49m█▀\u001b[12G\u001b[38;2;153;153;153mOpus\u001b[17G5.5\u001b[21G·\u001b[23GClaude\u001b[30GPlano\u001b[39m\r\r\n\u001b[38;2;215;119;87m ▝▝\u001b[7G▝▝\u001b[12G\u001b[38;2;153;153;153m/tmp/felixo-fixture\u001b[39m\r\r\n\r\r\n\r\r\n\u001b[48;2;55;55;55m\u001b[38;2;80;80;80m❯ \u001b[38;2;255;255;255mResponda só com texto, sem usar ferramentas e sem ler nem criar arquivos. Use exatamente estes \u001b[39m   \u001b[49m\r\r\n\u001b[48;2;55;55;55m  \u001b[38;2;255;255;255mblocos em Markdown, nesta ordem: um título de nível 2 \"Resumo\"; um parágrafo curto com uma \u001b[39m       \u001b[49m\r\r\n\u001b[48;2;55;55;55m  \u001b[38;2;255;255;255mpalavra em negrito e outra em itálico; uma lista com três itens; uma lista numerada com dois \u001b[39m     \u001b[49m\r\r\n\u001b[48;2;55;55;55m  \u001b[38;2;255;255;255mitens; um bloco de código python com uma função soma; uma tabela com as colunas Nome e Valor e \u001b[39m   \u001b[49m\r\r\n\u001b[48;2;55;55;55m  \u001b[38;2;255;255;255mduas linhas; uma citação curta; e um link para https://example.com/docs.\u001b[39m                          \u001b[49m\r\r\n\r\r\n\u001b[38;2;255;255;255m●\u001b[3G\u001b[39m\u001b[1mResumo\u001b[22m\r\r\n\r\r\n\u001b[3GEste\u001b[8Gé\u001b[10Gum\u001b[13Gexemplo\u001b[21Gde\u001b[24Gtexto\u001b[30Gem\u001b[33GMarkdown\u001b[42Gcom\u001b[46Guma\u001b[50Gpalavra\u001b[58G\u001b[1mimportante\u001b[69G\u001b[22me\u001b[71Goutra\u001b[77G\u001b[3mdestacada\u001b[23m,\u001b[88Gcriado\u001b[95Gpara\r\r\n\u001b[3Gtestar\u001b[10Ga\u001b[12Grenderização\u001b[25Gdos\u001b[29Gblocos.\r\r\n\r\r\n\u001b[3G-\u001b[5GPrimeiro\u001b[14Gitem\u001b[19Gda\u001b[22Glista\r\r\n\u001b[3G-\u001b[5GSegundo\u001b[13Gitem\u001b[18Gda\u001b[21Glista\r\r\n\u001b[3G-\u001b[5GTerceiro\u001b[14Gitem\u001b[19Gda\u001b[22Glista\r\r\n\r\r\n\u001b[3G1.\u001b[6GPrimeiro\u001b[15Gpasso\r\r\n\u001b[3G2.\u001b[6GSegundo\u001b[14Gpasso\r\r\n\r\r\n\u001b[3G\u001b[34mdef\u001b[7G\u001b[33msoma\u001b[39m(a,\u001b[15Gb):\r\r\n\u001b[7G\u001b[34mreturn\u001b[14G\u001b[39ma\u001b[16G+\u001b[18Gb\r\r\n\r\r\n\u001b[3G┌──────┬───────┐\r\r\n\u001b[3G│\u001b[5GNome\u001b[10G│\u001b[12GValor\u001b[18G│\r\r\n\u001b[3G├──────┼───────┤\r\r\n\u001b[3G│\u001b[5GAlfa\u001b[10G│\u001b[12G10\u001b[18G│\r\r\n\u001b[3G├──────┼───────┤\r\r\n\u001b[3G│\u001b[5GBeta\u001b[10G│\u001b[12G20\u001b[18G│\r\r\n\u001b[3G└──────┴───────┘\r\r\n\r\r\n\u001b[3G\u001b[2m▎\u001b[5G\u001b[22m\u001b[3mA\u001b[7Gsimplicidade\u001b[20Gé\u001b[22Go\u001b[24Gúltimo\u001b[31Ggrau\u001b[36Gde\u001b[39Gsofisticação.\u001b[23m\r\r\n\r\r\n\u001b[3GDocumentação\u001b[16G(https://example.com/docs)\r\r\n\r\r\n\u001b[38;2;153;153;153m✻\u001b[3GCrunched\u001b[12Gfor\u001b[16G5s\u001b[19G·\u001b[21Gdone\u001b[26G10:49\u001b[39m\r\r\n\r\r\n\u001b[48;2;55;55;55m\u001b[38;2;80;80;80m❯\u001b[39m \u001b[38;2;255;255;255m/exit\u001b[39m                                                                                             \u001b[49m\r\r\n\u001b[38;2;153;153;153m \u001b[3G⎿\u001b[6G\u001b[39mBye!\r\r\n\r\r\n\u001b[38;2;136;136;136m────────────────────────────────────────────────────────────────────────────────────────────────────\u001b[39m\r\r\n❯ \r\r\n\u001b[38;2;136;136;136m────────────────────────────────────────────────────────────────────────────────────────────────────\u001b[39m\r\r\n\u001b[3G\u001b[38;2;255;193;7m⏵⏵\u001b[6Gauto\u001b[11Gmode\u001b[16Gon\u001b[38;2;153;153;153m (shift+tab\u001b[30Gto\u001b[33Gcycle)\u001b[40G·\u001b[42G←\u001b[44Gfor\u001b[48Gagents\u001b[81G◐\u001b[83Gmedium\u001b[90G·\u001b[92G/effort\u001b[39m\r\r\n\u001b[84G\u001b[38;2;255;193;7m/rc\u001b[88Gconnecting…\u001b[39m\r\r\n\u001b[2C\u001b[4A\u001b[?25h"
+  },
+  {
+   "t": 7580,
+   "data": "\u001b[>0q\u001b[c\u001b(B\u000f\u001b[?2004h"
+  },
+  {
+   "t": 9462,
+   "data": "\u001b[?25l\u001b[2D\u001b[4B\r\u001b[83C\u001b[1A            \u001b[38;2;78;186;101m/rc\u001b[39m\r\r\n\u001b[2C\u001b[4A\u001b[?25h"
+  },
+  {
+   "t": 15077,
+   "data": "\u001b[?25l\u001b[2D\u001b[4B\u001b[2K\u001b[G\u001b[1A\r\u001b[80C\u001b[1A               \u001b[38;2;78;186;101m/rc\r\u001b[1B\u001b[39m\u001b[K\u001b[2C\u001b[3A\u001b[?25h"
+  }
+ ]
+}

@@ -52,8 +52,13 @@ function createTerminalEvents({
   command,
   line,
   cliEvent,
+  parseError = null,
   durationMs,
 }) {
+  if (parseError) {
+    return [createUnparsedLineTerminalEvent(line, parseError)]
+  }
+
   const payload = parseJson(line)
   const cliEvents = createEventsFromCliEvent(cliEvent, payload, durationMs)
 
@@ -66,6 +71,21 @@ function createTerminalEvents({
   }
 
   return createEventsFromPayload(command, payload, durationMs)
+}
+
+/**
+ * Linha que o adaptador não entendeu: aparece nos Logs da CLI como veio, em
+ * vez de sumir atrás de um "Falha ao interpretar". O texto é só texto — o
+ * painel não interpreta HTML nem códigos de terminal.
+ */
+function createUnparsedLineTerminalEvent(line, reason) {
+  return {
+    source: 'stdout',
+    severity: 'warn',
+    title: 'Linha não reconhecida',
+    chunk: String(line),
+    metadata: { reason: String(reason) },
+  }
 }
 
 function createErrorTerminalEvent(message) {

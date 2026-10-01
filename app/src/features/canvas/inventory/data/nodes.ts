@@ -26,7 +26,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
     layer: 'node',
     owner: `${COMPONENTS}/TerminalNode.tsx`,
     states: {
-      normal: 'Processo de pé: selo "trabalhando" (spinner) ou "aguardando" (ponto), contexto (#índice, repositório, modelo, selo da conta), último prompt (data-felixo-last-prompt) e as últimas linhas da saída na prévia.',
+      normal: 'Processo de pé: selo "trabalhando" (spinner) ou "aguardando" (ponto), contexto (#índice, repositório, modelo, selo da conta), último prompt (data-felixo-last-prompt) e as últimas linhas da saída na prévia — com a Leitura ligada no bloco (readingMode), a prévia é o fim da última fala desenhado como texto com estilo (TerminalReadingPreview, data-felixo-reading-preview), sem link nem botão dentro do botão do cartão.',
       loading: 'activity "starting" (selo "iniciando…") enquanto o PTY sobe ou enquanto initialTextReady é falso (arestas e arquivos do canvas ainda resolvendo, versão da CLI chegando); antes da primeira linha a prévia diz o que o spawn faz (describeTerminalResumeStart).',
       empty: 'Sem nenhuma linha de saída: "Sem saída ainda…".',
       pending: 'activity "waiting_approval" (selo "aguardando aprovação"), ou retomada pendente sem processo: selo "aguardando escolha" + faixa de retomada (data-terminal-resume-banner) e a prévia "Nada foi iniciado: escolha acima como abrir a conversa.".',

@@ -133,6 +133,12 @@ export type TerminalNodeData = {
   /** Human label shown on the node header. */
   label?: string
   /**
+   * Leitura ligada: a gaveta abre na aba Leitura e o cartão mostra a prévia
+   * formatada. Persistido no bloco; ausente (o padrão) é o terminal como
+   * sempre. Ver `terminal/reading/`.
+   */
+  readingMode?: boolean
+  /**
    * Launcher configurado pela interface. O spawn direto do Openia recebe o
    * contexto do canvas; nodes antigos sem `run` preservam o menu opaco.
    */

@@ -1,0 +1,198 @@
+{
+ "provider": "claude",
+ "version": "2.1.286",
+ "scenario": "cancelamento",
+ "cols": 100,
+ "rows": 50,
+ "platform": "linux",
+ "recordedAt": "2026-10-01",
+ "anonymized": true,
+ "marks": [
+  {
+   "t": 36,
+   "label": "espera a CLI abrir"
+  },
+  {
+   "t": 11921,
+   "label": "confia na pasta de gravação, se perguntar"
+  },
+  {
+   "t": 12425,
+   "label": "espera a CLI ficar pronta"
+  },
+  {
+   "t": 12425,
+   "label": "digita o pedido"
+  },
+  {
+   "t": 12425,
+   "label": "pausa antes do Enter"
+  },
+  {
+   "t": 13227,
+   "label": "envia"
+  },
+  {
+   "t": 13227,
+   "label": "deixa a resposta começar"
+  },
+  {
+   "t": 18452,
+   "label": "cancela (Esc)"
+  },
+  {
+   "t": 18453,
+   "label": "espera a resposta terminar"
+  }
+ ],
+ "chunks": [
+  {
+   "t": 1756,
+   "data": "\u001b7\u001b[r\u001b8\u001b[?25h"
+  },
+  {
+   "t": 1834,
+   "data": "\u001b[?25l\u001b[?2004h\u001b[?2031h\u001b[?1004h"
+  },
+  {
+   "t": 1963,
+   "data": "\u001b[>0q\u001b[?u\u001b[c"
+  },
+  {
+   "t": 3084,
+   "data": "\u001b[>4m\u001b[?1004l\u001b[?2031l\u001b[?2004l"
+  },
+  {
+   "t": 3635,
+   "data": "\u001b[?2004h\u001b[?2031h\u001b[?1004h"
+  },
+  {
+   "t": 3726,
+   "data": "\u001b]0;✳ Claude Code\u0007"
+  },
+  {
+   "t": 4015,
+   "data": "\u001b[38;2;215;119;87m ▐\u001b[48;2;0;0;0m▛███▛█\u001b[12G\u001b[39m\u001b[49m\u001b[1mClaude\u001b[19GCode\u001b[24G\u001b[22m\u001b[38;2;153;153;153mv2.1.286\u001b[39m\r\r\n\u001b[38;2;215;119;87m▝▜\u001b[48;2;0;0;0m█████\u001b[49m█▀\u001b[12G\u001b[38;2;153;153;153mOpus\u001b[17G5.5\u001b[21G·\u001b[23GClaude\u001b[30GPlano\u001b[39m\r\r\n\u001b[38;2;215;119;87m ▝▝\u001b[7G▝▝\u001b[12G\u001b[38;2;153;153;153m/tmp/felixo-fixture\u001b[39m\r\r\n\r\r\n\r\r\n\u001b[38;2;136;136;136m────────────────────────────────────────────────────────────────────────────────────────────────────\u001b[39m\r\r\n❯ \u001b[2mTry\u001b[7G\"how\u001b[12Gdoes\u001b[17G<filepath>\u001b[28Gwork?\"\u001b[22m\r\r\n\u001b[38;2;136;136;136m────────────────────────────────────────────────────────────────────────────────────────────────────\u001b[39m\r\r\n\u001b[3G\u001b[38;2;255;193;7m⏵⏵\u001b[6Gauto\u001b[11Gmode\u001b[16Gon\u001b[38;2;153;153;153m (shift+tab\u001b[30Gto\u001b[33Gcycle)\u001b[40G·\u001b[42G←\u001b[44Gfor\u001b[48Gagents\u001b[81G◐\u001b[83Gmedium\u001b[90G·\u001b[92G/effort\u001b[39m\r\r\n\u001b[84G\u001b[38;2;255;193;7m/rc\u001b[88Gconnecting…\u001b[39m\r\r\n\u001b[2C\u001b[4A\u001b[?25h"
+  },
+  {
+   "t": 5770,
+   "data": "\u001b[>0q\u001b[c"
+  },
+  {
+   "t": 7664,
+   "data": "\u001b[?25l\u001b[2D\u001b[4B\r\u001b[83C\u001b[1A            \u001b[38;2;78;186;101m/rc\u001b[39m\r\r\n\u001b[2C\u001b[4A\u001b[?25h"
+  },
+  {
+   "t": 12570,
+   "data": "\u001b(B\u000f\u001b[?2004h"
+  },
+  {
+   "t": 12706,
+   "data": "\u001b[?25l\u001b[2D\u001b[4B\r\u001b[2C\u001b[4AResponda só com texto, sem ferramentas:\u001b[43Gescreva\u001b[51Guma\u001b[55Glista\u001b[61Gnumerada\u001b[70Gcom\u001b[74G40\u001b[77Gcuriosidades\u001b[90Gcurtas\r\u001b[1B  sobre terminais de computador, uma por linha.\u001b[K\r\u001b[1B\u001b[38;2;136;136;136m────────────────────────────────────────────────────────────────────────────────────────────────────\r\u001b[2C\u001b[1B\u001b[38;2;255;193;7m⏵⏵ auto mode on\u001b[38;2;153;153;153m (shift+tab to cycle)\u001b[81G◐ medium · /effort\u001b[39m\r\r\n\u001b[96G\u001b[38;2;78;186;101m/rc\u001b[39m\r\r\n\u001b[47C\u001b[4A\u001b[?25h"
+  },
+  {
+   "t": 14774,
+   "data": "\u001b]0;◐ Claude Code\u0007\u001b[?25l\u001b[47D\u001b[4B\r\u001b[6A\u001b[48;2;55;55;55m\u001b[38;2;80;80;80m❯ \u001b[38;2;255;255;255mResponda só com texto, sem ferramentas: escreva uma lista numerada com 40 curiosidades curtas \u001b[39m    \r\u001b[1B  \u001b[38;2;255;255;255msobre terminais de computador, uma por linha.\u001b[39m                                                     \r\u001b[2C\u001b[1B\u001b[49m\u001b[K\r\u001b[1B\u001b[38;2;215;119;87m✽\u001b[39m \u001b[38;2;215;119;87mHullaballooing… \u001b[39m\u001b[K\r\u001b[2C\u001b[1B\u001b[K\r\u001b[1B\u001b[38;2;136;136;136m────────────────────────────────────────────────────────────────────────────────────────────────────\u001b[39m\r\r\n\u001b[38;2;153;153;153m❯ \u001b[39m\r\r\n\u001b[38;2;136;136;136m────────────────────────────────────────────────────────────────────────────────────────────────────\u001b[39m\r\r\n\u001b[3G\u001b[38;2;255;193;7m⏵⏵\u001b[6Gauto\u001b[11Gmode\u001b[16Gon\u001b[38;2;153;153;153m (shift+tab\u001b[30Gto\u001b[33Gcycle)\u001b[40G·\u001b[42Gesc\u001b[46Gto\u001b[49Ginterrupt\u001b[59G·\u001b[61G←\u001b[63Gfor\u001b[67Gagents\u001b[96G\u001b[38;2;78;186;101m/rc\u001b[39m\r\r\n\u001b[2C\u001b[3A\u001b[?25h"
+  },
+  {
+   "t": 15225,
+   "data": "\u001b[?25l\u001b[2D\u001b[3B\r\u001b[6A\u001b[38;2;215;119;87m✻\u001b[39m\r\r\n\r\n\r\n\r\n\r\n\r\n\u001b[2C\u001b[3A\u001b[?25h"
+  },
+  {
+   "t": 15293,
+   "data": "\u001b[?25l\u001b[2D\u001b[3B\r\u001b[6A\u001b[38;2;215;119;87m✶\u001b[39m\r\r\n\r\n\r\n\r\n\r\n\r\n\u001b[2C\u001b[3A\u001b[?25h"
+  },
+  {
+   "t": 15395,
+   "data": "\u001b]0;◐ Curiosidades sobre terminais de computador\u0007\u001b[?25l\u001b[2D\u001b[3B\r\u001b[6A\u001b[38;2;215;119;87m*\u001b[39m\r\r\n\r\n\r\n\r\n\r\n\r\n\u001b[2C\u001b[3A\u001b[?25h"
+  },
+  {
+   "t": 15507,
+   "data": "\u001b[?25l\u001b[2D\u001b[3B\r\u001b[6A\u001b[38;2;215;119;87m✢\u001b[39m\r\r\n\r\n\r\n\r\n\r\n\r\n\u001b[2C\u001b[3A\u001b[?25h"
+  },
+  {
+   "t": 15664,
+   "data": "\u001b]0;◑ Curiosidades sobre terminais de computador\u0007"
+  },
+  {
+   "t": 15727,
+   "data": "\u001b[?25l\u001b[2D\u001b[3B\r\u001b[6A\u001b[38;2;215;119;87m·\u001b[39m\r\r\n\r\n\r\n\r\n\r\n\r\n\u001b[2C\u001b[3A\u001b[?25h"
+  },
+  {
+   "t": 16120,
+   "data": "\u001b[?25l\u001b[2D\u001b[3B\r\u001b[6A\u001b[38;2;215;119;87m✢\u001b[39m\r\r\n\r\n\r\n\r\n\r\n\r\n\u001b[2C\u001b[3A\u001b[?25h"
+  },
+  {
+   "t": 16293,
+   "data": "\u001b[?25l\u001b[2D\u001b[3B\r\u001b[6A\u001b[38;2;215;119;87m*\u001b[39m\r\r\n\r\n\r\n\r\n\r\n\r\n\u001b[2C\u001b[3A\u001b[?25h"
+  },
+  {
+   "t": 16382,
+   "data": "\u001b[?25l\u001b[2D\u001b[3B\r\u001b[6A\u001b[38;2;215;119;87m✶\u001b[39m\r\r\n\r\n\r\n\r\n\r\n\r\n\u001b[2C\u001b[3A\u001b[?25h"
+  },
+  {
+   "t": 16438,
+   "data": "\u001b[?25l\u001b[2D\u001b[3B\r\u001b[2C\u001b[6A\u001b[38;2;215;119;87mSymbioting\u001b[38;2;235;159;127m…\u001b[38;2;215;119;87m \u001b[39m\u001b[K\r\r\n\r\n\r\n\r\n\r\n\r\n\u001b[2C\u001b[3A\u001b[?25h\u001b[?25l\u001b[2D\u001b[3B\r\u001b[14C\u001b[6A\u001b[38;2;153;153;153m(3s · thinking)\u001b[39m\r\r\n\r\n\r\n\r\n\r\n\r\n\u001b[2C\u001b[3A\u001b[?25h"
+  },
+  {
+   "t": 16507,
+   "data": "\u001b[?25l\u001b[2D\u001b[3B\r\u001b[6A\u001b[38;2;215;119;87m✻\u001b[12G\u001b[38;2;235;159;127mg\u001b[21G\u001b[38;2;157;157;157mthinking\u001b[39m\r\r\n\r\n\r\n\r\n\r\n\r\n\u001b[2C\u001b[3A\u001b[?25h"
+  },
+  {
+   "t": 16626,
+   "data": "\u001b]0;◐ Curiosidades sobre terminais de computador\u0007"
+  },
+  {
+   "t": 16828,
+   "data": "\u001b[?25l\u001b[2D\u001b[3B\r\u001b[6A\u001b[38;2;215;119;87m✽\u001b[11G\u001b[38;2;235;159;127mn\u001b[21G\u001b[38;2;153;153;153m↓\u001b[39m \u001b[38;2;153;153;153m25 tokens · \u001b[38;2;165;165;165mthinking\u001b[38;2;153;153;153m)\u001b[39m\r\r\n\r\n\r\n\r\n\r\n\r\n\u001b[2C\u001b[3A\u001b[?25h"
+  },
+  {
+   "t": 16882,
+   "data": "\u001b[?25l\u001b[2D\u001b[3B\r\u001b[6A\u001b[38;2;255;255;255m●\u001b[3G\u001b[39m1.\u001b[K\r\u001b[2B\u001b[38;2;215;119;87m✽\u001b[39m \u001b[38;2;215;119;87mSymbioti\u001b[38;2;235;159;127mng…\u001b[38;2;215;119;87m \u001b[38;2;153;153;153m(3s · ↓\u001b[39m \u001b[38;2;153;153;153m25 tokens · \u001b[38;2;165;165;165mthinking\u001b[38;2;153;153;153m)\u001b[39m\u001b[K\r\u001b[1B\u001b[K\r\u001b[2B\u001b[38;2;153;153;153m❯ \u001b[39m\u001b[K\r\r\n\u001b[38;2;136;136;136m────────────────────────────────────────────────────────────────────────────────────────────────────\u001b[39m\r\r\n\u001b[3G\u001b[38;2;255;193;7m⏵⏵\u001b[6Gauto\u001b[11Gmode\u001b[16Gon\u001b[38;2;153;153;153m (shift+tab\u001b[30Gto\u001b[33Gcycle)\u001b[40G·\u001b[42Gesc\u001b[46Gto\u001b[49Ginterrupt\u001b[59G·\u001b[61G←\u001b[63Gfor\u001b[67Gagents\u001b[96G\u001b[38;2;78;186;101m/rc\u001b[39m\r\r\n\u001b[2C\u001b[3A\u001b[?25h\u001b[?25l\u001b[2D\u001b[3B\r\u001b[9C\u001b[6A\u001b[38;2;235;159;127mi\u001b[13G\u001b[38;2;215;119;87m…\u001b[23G\u001b[38;2;153;153;153m50\u001b[35G\u001b[38;2;169;169;169mthinking\u001b[39m\r\r\n\r\n\r\n\r\n\r\n\r\n\u001b[2C\u001b[3A\u001b[?25h"
+  },
+  {
+   "t": 16970,
+   "data": "\u001b[?25l\u001b[2D\u001b[3B\r\u001b[22C\u001b[6A\u001b[38;2;153;153;153m88\u001b[35G\u001b[38;2;173;173;173mthinking\u001b[39m\r\r\n\r\n\r\n\r\n\r\n\r\n\u001b[2C\u001b[3A\u001b[?25h"
+  },
+  {
+   "t": 17064,
+   "data": "\u001b[?25l\u001b[2D\u001b[3B\r\u001b[6A\u001b[38;2;215;119;87m✻\u001b[9G\u001b[38;2;235;159;127mt\u001b[12G\u001b[38;2;215;119;87mg\u001b[23G\u001b[38;2;153;153;153m113 tokens · \u001b[38;2;181;181;181mthinking\u001b[38;2;153;153;153m)\u001b[39m\r\r\n\r\n\r\n\r\n\r\n\r\n\u001b[2C\u001b[3A\u001b[?25h"
+  },
+  {
+   "t": 17173,
+   "data": "\u001b[?25l\u001b[2D\u001b[3B\r\u001b[23C\u001b[6A\u001b[38;2;153;153;153m32\u001b[36G\u001b[38;2;185;185;185mthinking\u001b[39m\r\r\n\r\n\r\n\r\n\r\n\r\n\u001b[2C\u001b[3A\u001b[?25h"
+  },
+  {
+   "t": 17301,
+   "data": "\u001b[?25l\u001b[2D\u001b[3B\r\u001b[6A\u001b[38;2;215;119;87m✶\u001b[8G\u001b[38;2;235;159;127mo\u001b[11G\u001b[38;2;215;119;87mn\u001b[16G\u001b[38;2;153;153;153m4\u001b[24G57\u001b[39m\r\r\n\r\n\r\n\r\n\r\n\r\n\u001b[2C\u001b[3A\u001b[?25h"
+  },
+  {
+   "t": 17349,
+   "data": "\u001b[?25l\u001b[2D\u001b[3B\r\u001b[5C\u001b[8AA\u001b[8Gpalavra\u001b[16G\"terminal\"\u001b[27Gvem\u001b[31Gdos\u001b[35Gteletipos,\u001b[46Gque\u001b[50Gficavam\u001b[58Gna\u001b[61G\"ponta\"\u001b[69G(terminal)\u001b[80Gde\u001b[83Guma\u001b[87Glinha\u001b[93Gde\r\u001b[5C\u001b[1Bcomunicação.\r\u001b[1B \u001b[3G2.\u001b[K\r\r\n\r\n\r\n\r\n\r\n\r\n\u001b[2C\u001b[3A\u001b[?25h"
+  },
+  {
+   "t": 17585,
+   "data": "\u001b]0;◑ Curiosidades sobre terminais de computador\u0007"
+  },
+  {
+   "t": 17876,
+   "data": "\u001b[?25l\u001b[2D\u001b[3B\r\u001b[5C\u001b[6AO\u001b[8Gteletipo\u001b[17GTeletype\u001b[26GModel\u001b[32G33\u001b[35G(ASR-33)\u001b[44Gfoi\u001b[48Gum\u001b[51Gdos\u001b[55Gprimeiros\u001b[65Gterminais\u001b[75Gpopulares\u001b[85Gem\r\u001b[5C\u001b[1Bminicomputadores.\r\u001b[1B  3.\u001b[K\r\u001b[1B\u001b[K\r\u001b[2B\u001b[38;2;153;153;153m❯ \u001b[39m\u001b[K\r\r\n\u001b[38;2;136;136;136m────────────────────────────────────────────────────────────────────────────────────────────────────\u001b[39m\r\r\n\u001b[3G\u001b[38;2;255;193;7m⏵⏵\u001b[6Gauto\u001b[11Gmode\u001b[16Gon\u001b[38;2;153;153;153m (shift+tab\u001b[30Gto\u001b[33Gcycle)\u001b[40G·\u001b[42Gesc\u001b[46Gto\u001b[49Ginterrupt\u001b[59G·\u001b[61G←\u001b[63Gfor\u001b[67Gagents\u001b[96G\u001b[38;2;78;186;101m/rc\u001b[39m\r\r\n\u001b[2C\u001b[3A\u001b[?25h"
+  },
+  {
+   "t": 18006,
+   "data": "\u001b[?25l\u001b[2D\u001b[3B\r\u001b[5C\u001b[6AÉ\u001b[8Gpor\u001b[12Gcausa\u001b[18Gdos\u001b[22Gteletipos\u001b[32Gque\u001b[36Gaté\u001b[40Ghoje\u001b[45Gos\u001b[48Gdispositivos\u001b[61Gde\u001b[64Gterminal\u001b[73Gno\u001b[76GUnix\u001b[81Gse\u001b[84Gchamam\u001b[91G\"tty\".\r\u001b[2C\u001b[1B4.\r\u001b[1B\u001b[K\r\u001b[1B\u001b[38;2;136;136;136m────────────────────────────────────────────────────────────────────────────────────────────────────\r\u001b[1B\u001b[38;2;153;153;153m❯ \u001b[39m\u001b[K\r\u001b[1B\u001b[38;2;136;136;136m────────────────────────────────────────────────────────────────────────────────────────────────────\u001b[39m\r\r\n\u001b[3G\u001b[38;2;255;193;7m⏵⏵\u001b[6Gauto\u001b[11Gmode\u001b[16Gon\u001b[38;2;153;153;153m (shift+tab\u001b[30Gto\u001b[33Gcycle)\u001b[40G·\u001b[42Gesc\u001b[46Gto\u001b[49Ginterrupt\u001b[59G·\u001b[61G←\u001b[63Gfor\u001b[67Gagents\u001b[96G\u001b[38;2;78;186;101m/rc\u001b[39m\r\r\n\u001b[2C\u001b[3A\u001b[?25h"
+  },
+  {
+   "t": 18376,
+   "data": "\u001b[?25l\u001b[2D\u001b[3B\r\u001b[5C\u001b[6AAntes\u001b[12Gdas\u001b[16Gtelas,\u001b[23Ga\u001b[25Gsaída\u001b[31Gdos\u001b[35Gteletipos\u001b[45Gera\u001b[49Gimpressa\u001b[58Gem\u001b[61Gpapel\u001b[67Gcontínuo.\r\u001b[2C\u001b[1B5.\r\u001b[1B\u001b[K\r\u001b[1B\u001b[38;2;136;136;136m────────────────────────────────────────────────────────────────────────────────────────────────────\r\u001b[1B\u001b[38;2;153;153;153m❯ \u001b[39m\u001b[K\r\u001b[1B\u001b[38;2;136;136;136m────────────────────────────────────────────────────────────────────────────────────────────────────\u001b[39m\r\r\n\u001b[3G\u001b[38;2;255;193;7m⏵⏵\u001b[6Gauto\u001b[11Gmode\u001b[16Gon\u001b[38;2;153;153;153m (shift+tab\u001b[30Gto\u001b[33Gcycle)\u001b[40G·\u001b[42Gesc\u001b[46Gto\u001b[49Ginterrupt\u001b[59G·\u001b[61G←\u001b[63Gfor\u001b[67Gagents\u001b[96G\u001b[38;2;78;186;101m/rc\u001b[39m\r\r\n\u001b[2C\u001b[3A\u001b[?25h"
+  },
+  {
+   "t": 18458,
+   "data": "\u001b(B\u000f\u001b[?2004h"
+  },
+  {
+   "t": 18652,
+   "data": "\u001b]0;✳ Curiosidades sobre terminais de computador\u0007\u001b[?25l\u001b[2D\u001b[3B\r\u001b[5C\u001b[6AO\u001b[8GVT100,\u001b[15Glançado\u001b[23Gpela\u001b[28GDEC\u001b[32Gem\u001b[35G1978,\u001b[41Gvirou\u001b[47Go\u001b[49Gpadrão\u001b[56Gde\r\u001b[1B\u001b[38;2;153;153;153m  ⎿  Interrupted · What should Claude do instead?\r\u001b[1B\u001b[39m\u001b[K\r\u001b[1B\u001b[38;2;136;136;136m────────────────────────────────────────────────────────────────────────────────────────────────────\r\u001b[1B\u001b[39m❯ \u001b[K\r\u001b[1B\u001b[38;2;136;136;136m────────────────────────────────────────────────────────────────────────────────────────────────────\u001b[39m\r\r\n\u001b[3G\u001b[38;2;255;193;7m⏵⏵\u001b[6Gauto\u001b[11Gmode\u001b[16Gon\u001b[38;2;153;153;153m (shift+tab\u001b[30Gto\u001b[33Gcycle)\u001b[40G·\u001b[42G←\u001b[44Gfor\u001b[48Gagents\u001b[96G\u001b[38;2;78;186;101m/rc\u001b[39m\r\r\n\u001b[2C\u001b[3A\u001b[?25h"
+  }
+ ]
+}

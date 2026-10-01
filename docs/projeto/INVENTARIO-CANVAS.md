@@ -29,8 +29,8 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 
 ## Números
 
-- **Elementos:** 93 (8 blocos, 16 ferramentas, 69 outras superfícies)
-- **Controles:** 349, dos quais 53 com teste específico
+- **Elementos:** 94 (8 blocos, 16 ferramentas, 70 outras superfícies)
+- **Controles:** 350, dos quais 53 com teste específico
 - **Elementos sem nenhum teste:** 4
 - **Lacunas:** 271 (alto 10, médio 145, baixo 116), em 75 tasks
 
@@ -554,7 +554,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Estado | Quando |
 | --- | --- |
-| normal | Processo de pé: selo "trabalhando" (spinner) ou "aguardando" (ponto), contexto (#índice, repositório, modelo, selo da conta), último prompt (data-felixo-last-prompt) e as últimas linhas da saída na prévia. |
+| normal | Processo de pé: selo "trabalhando" (spinner) ou "aguardando" (ponto), contexto (#índice, repositório, modelo, selo da conta), último prompt (data-felixo-last-prompt) e as últimas linhas da saída na prévia — com a Leitura ligada no bloco (readingMode), a prévia é o fim da última fala desenhado como texto com estilo (TerminalReadingPreview, data-felixo-reading-preview), sem link nem botão dentro do botão do cartão. |
 | loading | activity "starting" (selo "iniciando…") enquanto o PTY sobe ou enquanto initialTextReady é falso (arestas e arquivos do canvas ainda resolvendo, versão da CLI chegando); antes da primeira linha a prévia diz o que o spawn faz (describeTerminalResumeStart). |
 | empty | Sem nenhuma linha de saída: "Sem saída ainda…". |
 | error | activity "error" (selo "erro"), activity "exited" com código ≠ 0, ou snapshot.message em vermelho na prévia; erro de uma ação da cadeia em role="alert". |
@@ -910,7 +910,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 ### Gaveta do terminal
 
 - **ID:** `terminal-drawer` · **Dono:** `src/features/canvas/components/TerminalDrawer.tsx`
-- **Persistência:** localStorage felixo:terminal-drawer-pinned; localStorage felixo:terminal-drawer-collapsed; localStorage felixo:terminal-drawer-width (gravado ao soltar o arrasto, setas ou Home); processo principal: PTY vivo (fechar ou recolher não encerra); canvas salvo (dados do nó): resumeChoice, resumeFailure e sessionStartedAt gravados pelas ações
+- **Persistência:** localStorage felixo:terminal-drawer-pinned; localStorage felixo:terminal-drawer-collapsed; localStorage felixo:terminal-drawer-width (gravado ao soltar o arrasto, setas ou Home); processo principal: PTY vivo (fechar ou recolher não encerra); canvas salvo (dados do nó): resumeChoice, resumeFailure e sessionStartedAt gravados pelas ações; canvas salvo (dados do nó): readingMode, gravado pelas abas Terminal \| Leitura
 - **IPC:** `pty:spawn`, `pty:kill`, `pty:resize`
 - **Depende de:** `TerminalSessionProvider`, `useTerminalSessions`, `useSessionSnapshot`, `useCanvasSurfaces`, `useExitAnimation`, `terminal-drawer-pin`, `attachTerminalFitLifecycle`, `visibleTerminalResumeBanner`, `resolveOpenEditorFile`, `CanvasView.relaunchTerminal`, `CanvasView.handleResumeAction`
 - **Sobreposição:** Coluna encostada à direita, relative z-20 (focus-within z-30), altura total; a largura (mínimo 440, recolhida 44) é negociada com o painel e o inspector por splitHorizontalSpace, então empurra o canvas em vez de cobri-lo. Fica abaixo do cartão de pedido de página e dos toasts (z 50) e dos modais (z 60); clicar numa camada flutuante (data-felixo-floating-layer) não conta como clique fora.
@@ -934,6 +934,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `data-canvas-handoff-trigger` (button) | clique | Lê o histórico inteiro do xterm (getTranscript) e abre o HandoffDialog com ele (setHandoff no CanvasView). (desabilitado: some recolhida ou sem onPassResponsibility) | Histórico vazio: faixa vermelha "Este terminal ainda não tem histórico para transferir." e nenhum diálogo. Com o Claude na tela alternativa o histórico pode sair incompleto. | `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos` |
 | `Fixar terminal` (button) | clique | Alterna fixada e grava localStorage felixo:terminal-drawer-pinned; fixada, o mousedown fora não fecha a gaveta (shouldCloseOnOutsideClick). (desabilitado: some com a gaveta recolhida) | Sem falha própria; desafixada, clicar na sidebar ou num painel fecha a gaveta. | `scripts/canvas-smoke-prompts.cjs` → `criarSessaoDePrompts` |
 | `aria-label="Fechar terminal"` (button) | clique, Esc fora do xterm ou mousedown fora da gaveta não fixada (exceto camada flutuante) | Animação de saída (DRAWER_EXIT_MS) e closeExpandedTerminal: a gaveta desmonta, reporta largura 0 e o foco volta ao gatilho do bloco; o PTY segue vivo. | Sem falha própria: fechar nunca encerra o processo. | `scripts/canvas-smoke.cjs` → `checarInteracoes` |
+| `data-felixo-terminal-tab` (button) | clique, ou seta esquerda/direita na lista de abas | Abas Terminal \| Leitura (WAI-ARIA tabs): grava readingMode no nó (updateNodeData, persistido no canvas) e leva o foco junto — ao xterm no Terminal, ao painel na Leitura. Na Leitura o xterm fica por baixo, do mesmo tamanho, inert e aria-hidden; o PTY não é redimensionado. (desabilitado: some recolhida) | Sem falha própria: trocar de aba não toca o processo. Só aparece com onReadingModeChange e um perfil de leitura. | — |
 | `runResumeAction(action.id)` (button) | clique | Botão repetido da faixa (Escolher na lista (/resume), Abrir conversa nova, Tentar retomar de novo, Dispensar aviso): handleResumeAction grava terminalResumeActionPatch no nó (resumeChoice ou limpa resumeFailure), espelha a escolha no sessionStorage felixo:canvas-terminal-run e relança por relaunchTerminal; "Dispensar aviso" só limpa a falha. (desabilitado: some recolhida ou sem faixa visível) | As ações que relançam pedem o mesmo confirm do Reiniciar com processo vivo; cancelar não grava nada. | — |
 
 | Lacuna | Risco | Task |
@@ -944,6 +945,25 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Abrir a gaveta rola o shell para o lado por um instante. | baixo | `3e891f95-497e-819b-a75f-e5cec04e3173` |
 | Desafixada, clicar num painel da sidebar (Prompts, Skills) fecha a gaveta antes de o texto chegar ao terminal. | médio | `3eb91f95-497e-814a-8b2c-e471e09f6ff3` |
 | Com a gaveta aberta, a barra de status encolhe até 160 px e quebra. | médio | `3e791f95-497e-81bd-8e8c-de6f9e16cec5` |
+
+### Leitura do terminal
+
+- **ID:** `terminal-reading` · **Dono:** `src/features/canvas/components/TerminalReadingPanel.tsx`
+- **Persistência:** canvas salvo (dados do nó): readingMode; nenhuma para o conteúdo: relido da tela a cada abertura
+- **IPC:** nenhum
+- **Depende de:** `useTerminalReading`, `terminal-session-store.getReadingSource`, `terminal-session-store.subscribeOutput`, `terminal/reading (reading-lines, reading-blocks, reading-markdown, reading-profiles)`, `DeferredMarkdownContent`, `TerminalCopyButton`
+- **Sobreposição:** Absoluta por cima do xterm, dentro da gaveta (inset-0, fundo opaco): não muda o tamanho do terminal nem cria camada própria acima da gaveta.
+- **Testes:** `src/features/canvas/terminal/reading/terminal-reading.fixtures.test.ts`, `src/features/canvas/terminal/reading/terminal-reading.stream.test.ts`, `src/features/canvas/terminal/reading/reading-markdown.test.ts`
+
+| Estado | Quando |
+| --- | --- |
+| normal | Aba Leitura da gaveta: a conversa da tela em falas (Você, Agente, Aviso da CLI, Saída), cada uma com o Markdown reconstruído da tela do xterm (título, listas, código, tabela, citação, link). Relida no máximo a cada 250 ms durante o stream; acompanha o fim só se a pessoa já estava no fim. |
+| loading | Runtime do terminal ainda carregando: getReadingSource devolve undefined e o painel fica vazio até o primeiro aviso de saída. |
+| empty | Sem fala reconhecida (CLI abrindo, só logotipo): "Nada para ler ainda." |
+| error | Fala cuja estrutura não confere com a tela (ou que lança erro): sai como texto puro, com "mostrado como texto: a formatação não conferiu". |
+| disabled | CLI sem perfil gravado (Gemini, Openia, shell): a saída aparece como veio, num bloco de texto, com o aviso de que não há leitura formatada. |
+
+Sem controle próprio: as ações vêm de outros elementos.
 
 ### Botão Copiar do terminal
 
@@ -962,7 +982,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Controle | Gatilho | Efeito | Falha conhecida | Teste |
 | --- | --- | --- | --- | --- |
-| `aria-label="Copiar do terminal"` (button) | clique | store.copy(sessionId): copia a seleção do xterm ou, sem seleção, a tela visível (readViewport) com navigator.clipboard.writeText e mostra ✓. | erro engolido: a rejeição do clipboard vira promessa sem tratamento, sem aviso; sem navigator.clipboard o ✓ aparece sem ter copiado nada. | — |
+| `label = 'Copiar do terminal'` (button) | clique | store.copy(sessionId): copia a seleção do xterm ou, sem seleção, a tela visível (readViewport) com navigator.clipboard.writeText e mostra ✓. | erro engolido: a rejeição do clipboard vira promessa sem tratamento, sem aviso; sem navigator.clipboard o ✓ aparece sem ter copiado nada. | — |
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |

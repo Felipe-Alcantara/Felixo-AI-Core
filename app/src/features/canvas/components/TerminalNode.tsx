@@ -40,6 +40,8 @@ import {
   resolvePromptDisplayLabel,
   toPromptInsertionMetadata,
 } from '../../shared/types/prompt-insertion'
+import { TerminalReadingPreview } from './TerminalReadingPreview'
+import { readingProfileFor } from '../terminal/reading/reading-profiles'
 import { useAccountChain, useCliAccountLabel } from '../hooks/useAccountChain'
 import { useAccountChainActions } from '../hooks/account-chain-actions-context'
 import {
@@ -455,6 +457,11 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
         <div className="min-h-0 flex-1 overflow-hidden font-mono text-[10px] leading-snug text-zinc-400">
           {snapshot?.message ? (
             <span className="text-theme-error">{snapshot.message}</span>
+          ) : nodeData.readingMode && snapshot ? (
+            <TerminalReadingPreview
+              sessionId={id}
+              profile={readingProfileFor(nodeData.providerId, nodeData.command)}
+            />
           ) : preview.length > 0 ? (
             preview.map((line, index) => (
               <div key={index} className="overflow-hidden text-ellipsis whitespace-nowrap">

@@ -1,0 +1,22 @@
+{
+ "provider": "openia",
+ "version": "0.1.0",
+ "scenario": "erro",
+ "cols": 100,
+ "rows": 50,
+ "platform": "linux",
+ "recordedAt": "2026-10-01",
+ "anonymized": true,
+ "marks": [
+  {
+   "t": 12,
+   "label": "espera sair"
+  }
+ ],
+ "chunks": [
+  {
+   "t": 294,
+   "data": "\u001b[31merro: \"interface desconhecida: 'interface-que-nao-existe'. Disponíveis: aichat, claudecode, cline, llm, openclaw, opencode, orchat\"\u001b[0m\r\n"
+  }
+ ]
+}

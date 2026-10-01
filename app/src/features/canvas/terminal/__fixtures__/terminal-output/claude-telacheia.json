@@ -1,0 +1,150 @@
+{
+ "provider": "claude",
+ "version": "2.1.286",
+ "scenario": "telacheia",
+ "cols": 100,
+ "rows": 50,
+ "platform": "linux",
+ "recordedAt": "2026-10-01",
+ "anonymized": true,
+ "marks": [
+  {
+   "t": 16,
+   "label": "espera a CLI abrir"
+  },
+  {
+   "t": 13729,
+   "label": "confia na pasta de gravação, se perguntar"
+  },
+  {
+   "t": 14230,
+   "label": "espera a CLI ficar pronta"
+  },
+  {
+   "t": 14232,
+   "label": "digita o pedido"
+  },
+  {
+   "t": 14232,
+   "label": "pausa antes do Enter"
+  },
+  {
+   "t": 15043,
+   "label": "envia"
+  },
+  {
+   "t": 15043,
+   "label": "espera a resposta terminar"
+  }
+ ],
+ "chunks": [
+  {
+   "t": 2146,
+   "data": "\u001b7\u001b[r\u001b8\u001b[?25h"
+  },
+  {
+   "t": 2378,
+   "data": "\u001b[?25l\u001b[?2004h\u001b[?2031h\u001b[?1004h"
+  },
+  {
+   "t": 2838,
+   "data": "\u001b[>0q\u001b[?u\u001b[c"
+  },
+  {
+   "t": 3318,
+   "data": "\u001b[>4m\u001b[?1004l\u001b[?2031l\u001b[?2004l"
+  },
+  {
+   "t": 4842,
+   "data": "\u001b[?2004h\u001b[?2031h\u001b[?1004h"
+  },
+  {
+   "t": 4951,
+   "data": "\u001b]0;✳ Claude Code\u0007"
+  },
+  {
+   "t": 5300,
+   "data": "\u001b[?1049h\u001b[2J\u001b[H\u001b[?1000h\u001b[?1002h\u001b[?1003h\u001b[?1006h\u001b[?25l\u001b[H\r\u001b[1B\u001b[38;2;215;119;87m ▐\u001b[48;2;0;0;0m▛███▛█\u001b[12G\u001b[39m\u001b[49m\u001b[1mClaude Code\u001b[24G\u001b[22m\u001b[38;2;153;153;153mv2.1.286\r\u001b[1B\u001b[38;2;215;119;87m▝▜\u001b[48;2;0;0;0m█████\u001b[49m█▀\u001b[12G\u001b[38;2;153;153;153mOpus 5.5 · Claude Plano\r\u001b[1B\u001b[38;2;215;119;87m ▝▝   ▝▝ \u001b[12G\u001b[38;2;153;153;153m/tmp/felixo-fixture · \u001b[38;2;255;193;7m/rc connecting…\r\u001b[80C\u001b[42B\u001b[38;2;153;153;153m◐ medium · /effort\r\u001b[1B\u001b[38;2;136;136;136m────────────────────────────────────────────────────────────────────────────────────────────────────\r\u001b[1B\u001b[39m❯ \u001b[2mTry \"fix typecheck errors\"\r\u001b[1B\u001b[22m\u001b[38;2;136;136;136m────────────────────────────────────────────────────────────────────────────────────────────────────\r\u001b[2C\u001b[1B\u001b[38;2;255;193;7m⏵⏵ auto mode on\u001b[38;2;153;153;153m (shift+tab to cycle) · ← for agents\u001b[39m\u001b[50;1H\u001b[48;3H\u001b[?25h"
+  },
+  {
+   "t": 7372,
+   "data": "\u001b[>0q\u001b[c"
+  },
+  {
+   "t": 9604,
+   "data": "\u001b[?25l\u001b[H\r\u001b[63C\u001b[3B\u001b[38;2;78;186;101m/rc\u001b[39m\u001b[K\u001b[50;1H\u001b[48;3H\u001b[?25h"
+  },
+  {
+   "t": 14419,
+   "data": "\u001b(B\u000f\u001b[?2004h\u001b[?1000h\u001b[?1002h\u001b[?1003h\u001b[?1006h"
+  },
+  {
+   "t": 14544,
+   "data": "\u001b[?25l\u001b[H\r\u001b[80C\u001b[41B\u001b[38;2;153;153;153m◐ medium · /effort\r\u001b[1B\u001b[38;2;136;136;136m────────────────────────────────────────────────────────────────────────────────────────────────────\r\u001b[1B\u001b[39m❯ Responda\u001b[12Gsó\u001b[15Gcom\u001b[19Gtexto,\u001b[26Gsem\u001b[30Gusar\u001b[35Gferramentas\u001b[47Ge\u001b[49Gsem\u001b[53Gler\u001b[57Gnem\u001b[61Gcriar\u001b[67Garquivos.\u001b[77GUse\u001b[81Gexatamente\u001b[92Gestes\r\u001b[2C\u001b[1Bblocos\u001b[10Gem\u001b[13GMarkdown,\u001b[23Gnesta\u001b[29Gordem:\u001b[36Gum\u001b[39Gtítulo\u001b[46Gde\u001b[49Gnível\u001b[55G2\u001b[57G\"Resumo\";\u001b[67Gum\u001b[70Gparágrafo\u001b[80Gcurto\u001b[86Gcom\u001b[90Guma\r\u001b[2C\u001b[1Bpalavra\u001b[11Gem\u001b[14Gnegrito\u001b[22Ge\u001b[24Goutra\u001b[30Gem\u001b[33Gitálico;\u001b[42Guma\u001b[46Glista\u001b[52Gcom\u001b[56Gtrês\u001b[61Gitens;\u001b[68Guma\u001b[72Glista\u001b[78Gnumerada com dois\u001b[K\r\u001b[1B  itens; um bloco de código python com uma função soma; uma tabela com as colunas Nome e Valor e\u001b[K\r\u001b[1B  duas linhas; uma citação curta;\u001b[35Ge\u001b[37Gum\u001b[40Glink\u001b[45Gpara\u001b[50Ghttps://example.com/docs.\r\u001b[38C\u001b[2B\u001b[K\u001b[50;1H\u001b[48;75H\u001b[?25h"
+  },
+  {
+   "t": 16669,
+   "data": "\u001b]0;◐ Claude Code\u0007"
+  },
+  {
+   "t": 16712,
+   "data": "\u001b[?25l\u001b[H\r\u001b[6B\u001b[48;2;55;55;55m\u001b[38;2;80;80;80m❯ \u001b[38;2;255;255;255mResponda só com texto, sem usar ferramentas e sem ler nem criar arquivos. Use exatamente estes \u001b[39m   \r\u001b[1B  \u001b[38;2;255;255;255mblocos em Markdown, nesta ordem: um título de nível 2 \"Resumo\"; um parágrafo curto com uma \u001b[39m       \r\u001b[1B  \u001b[38;2;255;255;255mpalavra em negrito e outra em itálico; uma lista com três itens; uma lista numerada com dois \u001b[39m     \r\u001b[1B  \u001b[38;2;255;255;255mitens; um bloco de código python com uma função soma; uma tabela com as colunas Nome e Valor e \u001b[39m   \r\u001b[1B  \u001b[38;2;255;255;255mduas linhas; uma citação curta; e um link para https://example.com/docs.\u001b[39m                          \r\u001b[80C\u001b[31B\u001b[49m\u001b[K\r\u001b[1B\u001b[K\r\u001b[1B\u001b[K\r\u001b[1B\u001b[38;2;215;119;87m✢\u001b[3GScurryin\u001b[38;2;235;159;127mg…\u001b[38;2;215;119;87m \u001b[39m\u001b[K\r\u001b[2C\u001b[1B\u001b[K\r\u001b[1B\u001b[38;2;136;136;136m────────────────────────────────────────────────────────────────────────────────────────────────────\r\u001b[1B\u001b[38;2;153;153;153m❯ \u001b[39m\u001b[K\r\u001b[38C\u001b[2B\u001b[38;2;153;153;153m · esc to interrupt · ← for agents\u001b[39m\u001b[50;1H\u001b[48;3H\u001b[?25h"
+  },
+  {
+   "t": 17868,
+   "data": "\u001b]0;◐ Markdown text structure exercise\u0007\u001b[?25l\u001b[H\r\u001b[44B\u001b[38;2;215;119;87m✽\u001b[7G\u001b[38;2;235;159;127mryi\u001b[11G\u001b[38;2;215;119;87mg…\u001b[39m\u001b[50;1H\u001b[48;3H\u001b[?25h\u001b]0;◑ Markdown text structure exercise\u0007"
+  },
+  {
+   "t": 17908,
+   "data": "\u001b[?25l\u001b[H\r\u001b[44B\u001b[38;2;215;119;87m*\u001b[5G\u001b[38;2;235;159;127mur\u001b[8G\u001b[38;2;215;119;87myi\u001b[39m\u001b[50;1H\u001b[48;3H\u001b[?25h"
+  },
+  {
+   "t": 17978,
+   "data": "\u001b[?25l\u001b[H\r\u001b[44B\u001b[38;2;215;119;87m✢\u001b[4G\u001b[38;2;235;159;127mc\u001b[7G\u001b[38;2;215;119;87mr\u001b[39m\u001b[50;1H\u001b[48;3H\u001b[?25h"
+  },
+  {
+   "t": 18195,
+   "data": "\u001b[?25l\u001b[H\r\u001b[44B\u001b[38;2;215;119;87m·\u001b[3G\u001b[38;2;235;159;127mS\u001b[6G\u001b[38;2;215;119;87mr\u001b[39m\u001b[50;1H\u001b[48;3H\u001b[?25h"
+  },
+  {
+   "t": 18321,
+   "data": "\u001b[?25l\u001b[H\r\u001b[4C\u001b[44B\u001b[38;2;215;119;87mu\u001b[39m\u001b[50;1H\u001b[48;3H\u001b[?25h"
+  },
+  {
+   "t": 18476,
+   "data": "\u001b[?25l\u001b[H\r\u001b[2C\u001b[44B\u001b[38;2;215;119;87mFr\u001b[38;2;235;159;127moli\u001b[38;2;215;119;87mcking… \u001b[39m\u001b[50;1H\u001b[48;3H\u001b[?25h"
+  },
+  {
+   "t": 18542,
+   "data": "\u001b[?25l\u001b[H\r\u001b[44B\u001b[38;2;215;119;87m✢\u001b[4G\u001b[38;2;235;159;127mr\u001b[7G\u001b[38;2;215;119;87mi\u001b[15G\u001b[38;2;153;153;153m(3s · ↓\u001b[23G2 tokens)\u001b[39m\u001b[50;1H\u001b[48;3H\u001b[?25h"
+  },
+  {
+   "t": 18648,
+   "data": "\u001b[?25l\u001b[H\r\u001b[12B\u001b[38;2;255;255;255m●\u001b[3G\u001b[39m\u001b[1mResumo\r\u001b[32B\u001b[22m\u001b[K\u001b[50;1H\u001b[48;3H\u001b[?25h"
+  },
+  {
+   "t": 18848,
+   "data": "\u001b]0;◐ Markdown text structure exercise\u0007"
+  },
+  {
+   "t": 19130,
+   "data": "\u001b[?25l\u001b[H\r\u001b[2C\u001b[14BEste\u001b[8Gé\u001b[10Gum\u001b[13Gparágrafo\u001b[23Gde\u001b[26Gexemplo\u001b[34Gcom\u001b[38Guma\u001b[42Gpalavra\u001b[50G\u001b[1mimportante\u001b[61G\u001b[22me\u001b[63Goutra\u001b[69G\u001b[3mdestacada\u001b[23m,\u001b[80Gsó\u001b[83Gpara\u001b[88Gmostrar\u001b[96Ga\r\u001b[2C\u001b[1Bformatação\u001b[14Gbásica.\r\u001b[2C\u001b[2B-\u001b[5GPrimeiro\u001b[14Gitem\r\u001b[2C\u001b[1B-\u001b[5GSegundo\u001b[13Gitem\r\u001b[2C\u001b[1B-\u001b[50;1H\u001b[48;3H\u001b[?25h"
+  },
+  {
+   "t": 19722,
+   "data": "\u001b[?25l\u001b[H\r\u001b[4C\u001b[19BTerceiro\u001b[14Gitem\r\u001b[2C\u001b[2B1.\u001b[6GPasso\u001b[12Ginicial\r\u001b[2C\u001b[1B2.\u001b[6GPasso\u001b[12Gfinal\r\u001b[2C\u001b[2B\u001b[34mdef\u001b[7G\u001b[33msoma\u001b[39m(a,\u001b[15Gb):\r\u001b[6C\u001b[1B\u001b[34mreturn\u001b[14G\u001b[39ma\u001b[16G+\u001b[18Gb\r\u001b[2C\u001b[2B┌──────┬───────┐\r\u001b[2C\u001b[1B│\u001b[5GNome\u001b[10G│\u001b[12GValor\u001b[18G│\r\u001b[2C\u001b[1B├──────┼───────┤\r\u001b[2C\u001b[1B│\u001b[5GAlfa\u001b[10G│\u001b[12G10\u001b[18G│\r\u001b[2C\u001b[1B├──────┼───────┤\r\u001b[2C\u001b[1B│\u001b[5GBeta\u001b[10G│\u001b[12G20\u001b[18G│\r\u001b[2C\u001b[1B└──────┴───────┘\r\u001b[2C\u001b[2B\u001b[2m▎\u001b[5G\u001b[22m\u001b[3mSim\u001b[23m\u001b[50;1H\u001b[48;3H\u001b[?25h"
+  },
+  {
+   "t": 19808,
+   "data": "\u001b]0;◑ Markdown text structure exercise\u0007"
+  },
+  {
+   "t": 19852,
+   "data": "\u001b[?25l\u001b[H\r\u001b[7C\u001b[35B\u001b[3mplicidade é a\u001b[23m\u001b[50;1H\u001b[48;3H\u001b[?25h"
+  },
+  {
+   "t": 20762,
+   "data": "\u001b]0;✳ Markdown text structure exercise\u0007\u001b[?25l\u001b[H\r\u001b[20C\u001b[35B\u001b[3m sofisticação máxima.\r\u001b[2C\u001b[2B\u001b[23mDocumentação\u001b[16G(https://example.com/docs)\r\u001b[2B\u001b[38;2;153;153;153m✻\u001b[3GWorked for 5s · done 10:52\r\u001b[8B\u001b[39m❯ \r\u001b[41C\u001b[2B\u001b[38;2;153;153;153m← for agents\u001b[39m\u001b[K\u001b[50;1H\u001b[48;3H\u001b[?25h"
+  }
+ ]
+}

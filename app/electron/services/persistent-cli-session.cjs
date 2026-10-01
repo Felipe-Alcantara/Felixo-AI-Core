@@ -346,7 +346,7 @@ function createPersistentCliSessionManager({
       },
     })
 
-    const cliEvent = parseAdapterLine(adapter, line)
+    const { cliEvent, parseError } = parseAdapterLine(adapter, line)
 
     if (!cliEvent) {
       sendTerminalEvents(
@@ -356,6 +356,7 @@ function createPersistentCliSessionManager({
           command,
           line,
           cliEvent,
+          parseError,
           durationMs,
         }),
       )
