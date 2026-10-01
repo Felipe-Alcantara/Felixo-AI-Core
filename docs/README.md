@@ -14,6 +14,8 @@ compatibilidade com histórico legado.
 |-----------|---------|
 | [projeto/IA.md](projeto/IA.md) | **Contexto operacional versionado** — objetivo, stack, decisões, testes e histórico de evolução para retomada por IA (segue o template de contexto do padrão de qualidade). |
 | [projeto/ARQUITETURA.md](projeto/ARQUITETURA.md) | Arquitetura vigente do canvas, terminais, providers, persistência e fronteiras do modo legado. |
+| [projeto/INVENTARIO-CANVAS.md](projeto/INVENTARIO-CANVAS.md) | **Inventário operacional do canvas** (gerado e travado por teste): cada elemento com dono, estados, controles com efeito e falha conhecida, persistência, IPC, testes e lacunas com task. Contrato visual/E2E da superfície principal. |
+| [projeto/LAYOUT-SUPERFICIES.md](projeto/LAYOUT-SUPERFICIES.md) | Inventário de layout: quais superfícies redimensionam, em que eixo, mínimos e escala de z. |
 | [projeto/ROADMAP.md](projeto/ROADMAP.md) | Direção e próximos passos. |
 | [projeto/PLANO-TUTORIAL-CANVAS.md](projeto/PLANO-TUTORIAL-CANVAS.md) | Plano do tutorial do canvas, da Ajuda e das novidades: estado versionado no SQLite, gatilhos, UX acessível, automação e mapa de testes por aceite. |
 | [projeto/POLITICA-CONTAS.md](projeto/POLITICA-CONTAS.md) | Política da cadeia de contas: decisões do dono, classes de falha, elegibilidade, estratégias, espera, confirmação, isolamento de credenciais e privacidade. |

@@ -473,7 +473,9 @@ mesmo teto que ele ja respeitava (`getPanelMaxHeight`, topo 64 + rodape 48) —
 esticar na vertical nao cria uma posicao nova e, por isso, nao reabre o loop de
 painel x gaveta de 12/09 (leitura circular entre superficies, ver
 `splitHorizontalSpace`). Inventario completo, com o que ainda nao redimensiona:
-`docs/projeto/LAYOUT-SUPERFICIES.md`.
+`docs/projeto/LAYOUT-SUPERFICIES.md`. Estados, botões, persistência, IPC, testes e
+lacunas de cada elemento: `docs/projeto/INVENTARIO-CANVAS.md`, gerado de
+`app/src/features/canvas/inventory/` e conferido por `canvas-inventory.test.ts`.
 
 ## Cor de moldura dos blocos do canvas
 

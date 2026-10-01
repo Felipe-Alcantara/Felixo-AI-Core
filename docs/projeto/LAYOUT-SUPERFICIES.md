@@ -1,5 +1,9 @@
 # Inventário de superfícies do layout
 
+> Este documento trata de **tamanho e eixo**. O inventário operacional (estados, botões
+> com efeito e falha, persistência, IPC, testes e lacunas de cada elemento) está em
+> [INVENTARIO-CANVAS.md](INVENTARIO-CANVAS.md), gerado do código e conferido por teste.
+
 Levantado lendo o código (não medido numa janela real) em 19/09/2026, para a task
 "redimensionar painéis e janelas nos dois eixos sem quebrar em telas pequenas".
 Cada linha diz se a superfície redimensiona, em qual eixo e o tamanho mínimo útil.

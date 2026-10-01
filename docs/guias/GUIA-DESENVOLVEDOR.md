@@ -587,6 +587,28 @@ alvos invisíveis, retomada, chat e falha isolada) e a sessão B com
 sem novidade, downgrade, estado corrompido e redefinição). Os asserts são
 relacionais (`canvas-smoke-onboarding-geometry.cjs`), sem coordenada fixa.
 
+### Inventário do canvas: bloco, ferramenta ou botão novo
+
+O inventário operacional do canvas
+([`INVENTARIO-CANVAS.md`](../projeto/INVENTARIO-CANVAS.md)) é gerado de dados
+tipados em `app/src/features/canvas/inventory/data/`, um arquivo por frente (blocos,
+moldura, terminal, ferramentas de workspace, ferramentas de agente, overlays). Cada
+elemento declara dono, estados, controles (efeito e falha conhecida), persistência,
+canais IPC, testes e lacunas com task.
+
+- Um tipo novo em `CanvasNodeType` ou uma ferramenta nova em `CanvasTool` reprova o
+  `tsc` até ganhar entrada (`NODE_INVENTORY` e `TOOL_INVENTORY` são `Record`).
+- Um botão novo num componente de `src/features/canvas/components/` reprova o
+  `canvas-inventory.test.ts`: o teste conta `<button`, `role="button"`/`"menuitem"`,
+  `<FelixoSelect`, `<FelixoToggle` e `<ActivityRailButton` por arquivo e exige o mesmo
+  número de controles declarados, com um localizador que exista no arquivo.
+- Canal IPC citado tem de existir no `preload.cjs`; teste citado tem de existir; lacuna
+  tem de apontar uma task do Notion.
+
+Depois de mexer nos dados, regenere o documento em `app/` com
+`npm run docs:inventario-canvas`. O mesmo teste compara o `.md` com os dados e
+reprova no CI se alguém editar um sem o outro.
+
 ### Função que só tinha atalho de teclado
 
 Quando uma função só existe como atalho, ela ganha um item no menu da janela
