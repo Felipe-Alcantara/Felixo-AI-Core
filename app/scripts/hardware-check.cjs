@@ -45,6 +45,15 @@
  * - `sugestao-cpu`: numa máquina com até 4 CPUs lógicas, a sugestão aparece
  *   sem ligar o modo; "Agora não" some e continua dispensada depois de
  *   recarregar; num perfil novo, "Ligar Modo Performance" liga o modo.
+ * - `pc-fraco`: PC fraco reproduzível. Com `--disable-gpu-compositing` (o
+ *   Chromium recusa a composição por GPU, como faz com driver bloqueado) e o
+ *   modo Automático, a 1ª abertura grava a recomendação, a 2ª mostra e aceita
+ *   "Usar modo compatível", a 3ª abre em software pelo modo salvo no perfil e
+ *   "GPU normal" volta ao caminho acelerado; cada abertura mede os pixels da
+ *   janela (`screenStats`/`looksBlack`) para provar que não ficou preta.
+ * - `gpu-caiu`: derruba o processo de GPU 3 vezes no meio da sessão e mede a
+ *   janela depois de cada queda; registra o que o Chromium passou a usar e se
+ *   o app gravou recomendação.
  *
  * Uso (a automação só usa a GPU com FELIXO_GRAPHICS_MODE=hardware, que este
  * script define):
@@ -65,7 +74,7 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 const net = require('node:net')
-const { spawn } = require('node:child_process')
+const { execFileSync, spawn } = require('node:child_process')
 
 const ALL_SCENARIOS = [
   'auto',
@@ -78,6 +87,8 @@ const ALL_SCENARIOS = [
   'relancamento-em-andamento',
   'escolha-salva-compativel',
   'sugestao-cpu',
+  'pc-fraco',
+  'gpu-caiu',
 ]
 const OPTION_LABEL = { auto: 'Automático', integrada: 'Integrada', dedicada: 'Dedicada (experimental)' }
 const PRIME_RUN_ENV = { __NV_PRIME_RENDER_OFFLOAD: '1', __GLX_VENDOR_LIBRARY_NAME: 'nvidia', __VK_LAYER_NV_optimus: 'NVIDIA_only' }
@@ -238,7 +249,9 @@ async function stopApp(app, browser) {
   const pids = new Set([app?.child?.pid, ...processesUsingProfile(app.profile)].filter(Boolean))
   for (const pid of pids) {
     try {
-      if (process.platform === 'win32') process.kill(pid)
+      // No Windows não há /proc para achar os filhos (GPU, renderer); a árvore
+      // inteira sai pelo taskkill, senão eles seguram a pasta do perfil.
+      if (process.platform === 'win32') execFileSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' })
       else process.kill(pid, 'SIGTERM')
     } catch {
       // Já saiu.
@@ -781,6 +794,235 @@ async function cpuSuggestionScenario(options) {
   }
 }
 
+/** Apaga o perfil temporário; uma pasta ainda presa só avisa, para não esconder o erro do cenário. */
+function removeProfile(profile) {
+  try {
+    fs.rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 })
+  } catch (error) {
+    console.warn(`[hardware-check] não deu para apagar ${profile}: ${error.message}`)
+  }
+}
+
+/**
+ * Pixels da janela como o compositor entregou (`devtools:capture-page`),
+ * contados na própria página: a fração quase preta e a fração clara (texto,
+ * ícones, bordas). O tema é escuro, então "tela preta" não é "muito pixel
+ * escuro", e sim nenhum pixel claro — o que a tela preta de driver produz.
+ */
+async function screenStats(page) {
+  // A primeira captura de uma janela recém-pintada sai vazia (medido: 0,04 %
+  // de pixels claros contra 0,7 % na seguinte); como em `capture`, descarta.
+  await page.evaluate(() => window.felixo.devtools.capturePage())
+  await page.waitForTimeout(500)
+  return page.evaluate(async () => {
+    const dataUrl = await window.felixo.devtools.capturePage()
+    const image = new Image()
+    await new Promise((resolve, reject) => {
+      image.onload = resolve
+      image.onerror = () => reject(new Error('captura ilegível'))
+      image.src = dataUrl
+    })
+    const canvas = document.createElement('canvas')
+    canvas.width = image.naturalWidth
+    canvas.height = image.naturalHeight
+    const context = canvas.getContext('2d')
+    context.drawImage(image, 0, 0)
+    const { data } = context.getImageData(0, 0, canvas.width, canvas.height)
+    let black = 0
+    let bright = 0
+    const total = data.length / 4
+    for (let index = 0; index < data.length; index += 4) {
+      const luminance = 0.2126 * data[index] + 0.7152 * data[index + 1] + 0.0722 * data[index + 2]
+      if (luminance <= 3) black += 1
+      if (luminance >= 96) bright += 1
+    }
+    return {
+      largura: canvas.width,
+      altura: canvas.height,
+      fracaoPreta: Number((black / total).toFixed(4)),
+      fracaoClara: Number((bright / total).toFixed(4)),
+    }
+  })
+}
+
+/** Tela preta: nenhum pixel claro (menos de 0,2 %) numa captura de tamanho válido. */
+function looksBlack(stats) {
+  return !stats || stats.largura === 0 || stats.fracaoClara < 0.002
+}
+
+async function readGraphicsConfig(page) {
+  return page.evaluate(async () => (await window.felixo.graphics.getConfig()).config)
+}
+
+function readJson(profile, name) {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(profile, name), 'utf8'))
+  } catch {
+    return null
+  }
+}
+
+async function openRenderingSection(page) {
+  await page.evaluate(() => {
+    const button = document.querySelector('button[aria-label="Configurações"]')
+    if (!button) throw new Error('Botão Configurações não encontrado.')
+    button.click()
+  })
+  await page.waitForFunction(() => document.body.innerText.includes('Renderização e recuperação'))
+  await page.evaluate(() => {
+    const title = [...document.querySelectorAll('div')].find((node) => node.textContent.trim() === 'Renderização e recuperação')
+    title?.scrollIntoView({ block: 'start' })
+  })
+}
+
+async function chooseGraphicsMode(page, label) {
+  await page.evaluate(() => document.querySelector('[role="combobox"][aria-label="Modo gráfico"]').click())
+  await page.waitForSelector('[role="option"]')
+  await page.evaluate((wanted) => {
+    const option = [...document.querySelectorAll('[role="option"]')].find(
+      (node) => node.querySelector('.felixo-select-option-label')?.textContent === wanted,
+    )
+    if (!option) throw new Error(`Opção ${wanted} não encontrada.`)
+    option.click()
+  }, label)
+  await clickButtonByText(page, 'Salvar modo gráfico')
+}
+
+/**
+ * PC fraco reproduzível: o Chromium recusa a composição por GPU
+ * (`--disable-gpu-compositing`, o mesmo efeito de um driver na lista de
+ * bloqueio) com o modo Automático. Percorre o caminho inteiro da pessoa:
+ * a 1ª abertura detecta e grava a recomendação; a 2ª mostra a recomendação
+ * em Configurações e aceita "Usar modo compatível"; a 3ª abre em software
+ * (conferido pelo app e pela captura); por fim "GPU normal" volta ao caminho
+ * acelerado, provando que o seletor alterna os dois. Cada abertura mede os
+ * pixels da janela.
+ */
+async function weakPcScenario(options) {
+  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-hardware-check-pc-fraco-'))
+  // Na automação (porta CDP), o Automático é software salvo pedido explícito de
+  // hardware, e esse pedido vence o modo salvo (`shouldUseSoftwareRendering`).
+  // Detecção e aceite pedem hardware para a GPU estar ligada e ser recusada; a
+  // 3ª abertura vai sem a variável, para valer o modo salvo no perfil.
+  const weak = { env: { FELIXO_GRAPHICS_MODE: 'hardware' }, args: ['--disable-gpu-compositing'] }
+  const savedMode = { env: { FELIXO_GRAPHICS_MODE: '' }, args: ['--disable-gpu-compositing'] }
+  try {
+    const deteccao = await withApp(options, profile, weak, async ({ browser, page }) => {
+      const recomendacao = await waitFor(() => readJson(profile, 'graphics-recommendation.json'), options.timeoutMs, 'a recomendação gravada')
+      const tela = await screenStats(page)
+      // A captura logo depois da recomendação pode pegar a primeira pintura;
+      // a segunda, 5 s depois, diz se a janela ficou assim (o sintoma) ou não.
+      await page.waitForTimeout(5_000)
+      await capture(options, page, 'pc-fraco-deteccao')
+      return { recomendacao, config: await readGraphicsConfig(page), cdp: await readCdpGpu(browser), tela, telaDepois: await screenStats(page) }
+    })
+    const aceite = await withApp(options, profile, weak, async ({ page }) => {
+      await openRenderingSection(page)
+      const recomendacaoVisivel = await page.evaluate(() => document.body.innerText.includes('Modo compatível recomendado'))
+      await capture(options, page, 'pc-fraco-recomendacao')
+      if (recomendacaoVisivel) await clickButtonByText(page, 'Usar modo compatível')
+      const modoSalvo = await waitFor(() => readJson(profile, 'graphics-mode.json')?.mode === 'software' && 'software', 15_000, 'o modo compatível salvo').catch(() => null)
+      return { recomendacaoVisivel, modoSalvo }
+    })
+    const compativel = await withApp(options, profile, savedMode, async ({ browser, page }) => {
+      await openRenderingSection(page)
+      const texto = await page.evaluate(() => document.body.innerText.includes('Esta abertura está usando rasterização por software.'))
+      await capture(options, page, 'pc-fraco-modo-compativel')
+      const result = { config: await readGraphicsConfig(page), cdp: await readCdpGpu(browser), tela: await screenStats(page), texto }
+      await chooseGraphicsMode(page, 'GPU normal')
+      result.modoDepoisDeVoltar = await waitFor(() => readJson(profile, 'graphics-mode.json')?.mode === 'hardware' && 'hardware', 15_000, 'GPU normal salva').catch(() => null)
+      return result
+    })
+    // Sem o switch: a máquina "boa". Na automação a GPU só liga com pedido
+    // explícito; que "GPU normal" foi salvo é conferido no arquivo, acima.
+    const normal = await withApp(options, profile, {}, async ({ browser, page }) => ({
+      config: await readGraphicsConfig(page),
+      cdp: await readCdpGpu(browser),
+      tela: await screenStats(page),
+    }))
+    const result = { cenario: 'pc-fraco', deteccao, aceite, compativel, normal, falhas: [] }
+    result.cdp = compativel.cdp
+    if (!deteccao.recomendacao?.disabledFeatures?.length) result.falhas.push('a 1ª abertura não gravou a recomendação')
+    if (deteccao.config.softwareRenderingActive) result.falhas.push('a 1ª abertura já estava em software (a simulação não exercitou o Automático)')
+    if (!aceite.recomendacaoVisivel) result.falhas.push('a recomendação não apareceu em Configurações na 2ª abertura')
+    if (aceite.modoSalvo !== 'software') result.falhas.push('"Usar modo compatível" não salvou o modo software')
+    if (!compativel.config.softwareRenderingActive || !compativel.texto) result.falhas.push('a 3ª abertura não ficou em rasterização por software')
+    if (looksBlack(compativel.tela)) result.falhas.push(`a janela ficou preta no modo compatível: ${JSON.stringify(compativel.tela)}`)
+    if (compativel.modoDepoisDeVoltar !== 'hardware') result.falhas.push('"GPU normal" não foi salvo')
+    if (normal.config.softwareRenderingActive) result.falhas.push('com GPU normal salva, a abertura seguiu em software')
+    if (looksBlack(normal.tela)) result.falhas.push(`a janela ficou preta com GPU normal: ${JSON.stringify(normal.tela)}`)
+    return result
+  } finally {
+    removeProfile(profile)
+  }
+}
+
+/** PIDs do processo de GPU vistos pelo navegador (`SystemInfo.getProcessInfo`, que o chama de "GPU"). */
+async function gpuProcessIds(browser) {
+  const session = await browser.newBrowserCDPSession()
+  try {
+    const { processInfo } = await session.send('SystemInfo.getProcessInfo')
+    return processInfo.filter((item) => String(item.type).toLowerCase() === 'gpu').map((item) => item.id)
+  } finally {
+    await session.detach().catch(() => {})
+  }
+}
+
+/**
+ * A GPU cai no meio da sessão (o que um driver instável faz): mata o processo
+ * de GPU até 3 vezes e, depois de cada queda, mede se a janela continua
+ * desenhando, o que o Chromium passou a usar e se o app gravou recomendação.
+ * Registra o comportamento real; só reprova se a janela ficar preta.
+ */
+async function gpuCrashScenario(options) {
+  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-hardware-check-gpu-caiu-'))
+  try {
+    const result = await withApp(options, profile, {}, async ({ browser, page }) => {
+      const antes = { cdp: await readCdpGpu(browser), tela: await screenStats(page), gpu: await gpuProcessIds(browser) }
+      const quedas = []
+      for (let queda = 1; queda <= 3; queda += 1) {
+        const pids = await gpuProcessIds(browser)
+        if (pids.length === 0) {
+          quedas.push({ queda, semProcessoDeGpu: true })
+          break
+        }
+        for (const pid of pids) {
+          try {
+            process.kill(pid)
+          } catch {
+            // Já saiu.
+          }
+        }
+        await page.waitForTimeout(4_000)
+        quedas.push({
+          queda,
+          mortos: pids,
+          novos: await gpuProcessIds(browser),
+          cdp: await readCdpGpu(browser),
+          tela: await screenStats(page).catch((error) => ({ erro: error.message })),
+          vivo: await page.evaluate(() => document.querySelector('[data-felixo-hydrated="true"]') !== null).catch(() => false),
+        })
+      }
+      await capture(options, page, 'gpu-caiu-depois')
+      return { antes, quedas, recomendacao: readJson(profile, 'graphics-recommendation.json') }
+    })
+    result.cenario = 'gpu-caiu'
+    result.cdp = result.quedas.at(-1)?.cdp ?? result.antes.cdp
+    result.falhas = []
+    if (!result.quedas.some((queda) => queda.mortos?.length)) {
+      result.falhas.push('a simulação não achou o processo de GPU para derrubar (cenário sem efeito)')
+    }
+    for (const queda of result.quedas) {
+      if (queda.mortos && (!queda.vivo || looksBlack(queda.tela))) {
+        result.falhas.push(`depois da queda ${queda.queda} a janela ficou preta ou parou: ${JSON.stringify(queda.tela)}`)
+      }
+    }
+    return result
+  } finally {
+    removeProfile(profile)
+  }
+}
+
 async function run(options) {
   const results = []
   for (const scenario of options.scenarios) {
@@ -793,6 +1035,8 @@ async function run(options) {
     else if (scenario === 'relancamento-em-andamento') result = await relaunchInProgressScenario(options)
     else if (scenario === 'escolha-salva-compativel') result = await savedChoiceCompatibleScenario(options)
     else if (scenario === 'sugestao-cpu') result = await cpuSuggestionScenario(options)
+    else if (scenario === 'pc-fraco') result = await weakPcScenario(options)
+    else if (scenario === 'gpu-caiu') result = await gpuCrashScenario(options)
     else result = await preferenceScenario(options, scenario)
     results.push(result)
     console.log(
@@ -822,4 +1066,4 @@ if (require.main === module) {
   })
 }
 
-module.exports = { ALL_SCENARIOS, appImageRootOf, parseArgs, processesUsingProfile, resolveLaunchCommand, sameGpu }
+module.exports = { ALL_SCENARIOS, appImageRootOf, looksBlack, parseArgs, processesUsingProfile, resolveLaunchCommand, sameGpu }
