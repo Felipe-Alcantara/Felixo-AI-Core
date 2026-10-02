@@ -7780,3 +7780,56 @@ Registro de Claude - Tasks do AI Core, task "Felixo AI Core/Canvas — criar gat
 - Instabilidades vistas e reexecutadas: `openia-image-service.test.cjs` no Windows (o teste de cancelamento ficou 240 s esperando o filho; passou depois) e o gate `renderer-xterm count=1` no Ubuntu (+177 %) e no macOS (+157 %), anotados na task 3e891f95-497e-81a6.
 - **Merge** `1633b9f` às 16:11. A release **v0.1.432** (run 36912514190) **não foi publicada**: o smoke do canvas no pacote passou no Linux e reprovou no Windows e no macOS nas 3 tentativas. A evidência mostrou o app empacotado instalando as CLIs que faltam no runner ao abrir ("Preparando as CLIs de IA" cobrindo a barra de atividades em 320 px), o que o app de desenvolvimento não faz. A v0.1.432 ficou como pré-release, só com os instaladores do Linux.
 - **Correção** `4870600` no `main`: o `packaged-canvas-smoke.cjs` roda com `FELIXO_AUTO_INSTALL_CLIS=0` e `FELIXO_DISABLE_AUTO_UPDATE=1`. CI do `main` verde de primeira; release **v0.1.433** publicada às 16:42 (run 36916252510) com o smoke do canvas no pacote aprovado nos três sistemas: Windows e macOS com todas as sessões de primeira; Ubuntu com a sessão A instável (SA1, `canvas:save` ainda gravando na amostra; task 3ec91f95-497e-811a).
+
+## 2026-10-02 — Canvas: matriz visual com sobreposição da moldura, Modo Performance e execução noturna
+
+Registro de Claude - Tasks do AI Core, task "Felixo AI Core/Canvas — automatizar matriz visual de viewport, tema, zoom e quantidade de agentes" (Notion 3ce91f95-497e-81c9-8c3b-def9ed09d58c). Início às 01:48.
+
+### O que já existia
+
+O smoke do canvas (sessão A) já rodava:
+
+- tema × viewport × DPR, só com o layout base: overflow horizontal, estabilidade e elemento dentro da janela;
+- zoom (`checarZoomVisual`);
+- quatro agentes, sem um sobre o outro (`checarVariosAgentes`, do #103);
+- elementos abertos em 320 e 1280 px;
+- fonte maior, movimento reduzido e locale.
+
+Faltava o que o aceite pede: limite de sobreposição entre as superfícies da moldura, prova de que o Modo Performance não perde elemento, e uma matriz noturna.
+
+### O que mudou
+
+- **`app/scripts/canvas-smoke-matriz.cjs`, puro, com `canvas-smoke-matriz.test.cjs`.**
+  - `MATRIX_SURFACES`: topbar, sidebar, statusbar, pílula de zoom, Mini Map, e a lista Elementos ou o puck.
+  - `findSurfaceOverlaps`: limite `OVERLAP_THRESHOLD_CSS_PX` = 1 px nos dois eixos.
+  - `findMissingSurfaces`: só o Mini Map pode faltar, e basta a lista Elementos ou o puck.
+  - `ALLOWED_OVERLAPS`/`ALLOWED_OUTSIDE`: cada entrada tem motivo, condição `when` e task.
+  - `buildMatrixCases('pr' | 'completa')`, em ordem fixa.
+- **`checarMatrizVisual`** (`canvas-smoke.cjs`), em cada caso:
+  - enquadra (o mesmo enquadramento nos dois modos);
+  - grava a evidência geométrica que já existia;
+  - mede as superfícies e os blocos do fixture.
+
+  No fim, compara cada caso com o Modo Performance (`felixo-ai-core.performance-mode`) com o mesmo caso sem ele. Os problemas se acumulam e saem juntos, cada um com o rótulo do caso (`dark-320x720-dpr2-performance`), o par e os retângulos.
+- **Casos.** PR: 16 (2 temas × 7 viewports, mais o Modo Performance em 320 e 1280). Noturna (`nightly.yml`, job `canvas-visual-matrix`, `FELIXO_SMOKE_MATRIZ=completa`, só a sessão A, nos três SOs): 44 (2 temas × 11 viewports × Modo Performance ligado e desligado). As constantes de tema e viewport do smoke passaram a vir do módulo.
+
+### Medido (smoke local no Windows, sessão A)
+
+- 1280×800 e 3840×2160, nos dois temas e DPR: nenhuma sobreposição e nada fora da janela.
+- **Defeitos reais, repetidos nas 3 tentativas:**
+  - **320×720:** a lista Elementos cobre a sidebar expandida (187 × 54 px), e a pílula de zoom passa 147 px da borda direita (`right` 466,9 numa janela de 320);
+  - **768×900:** o Mini Map cobre a pílula de zoom (200 × 40 px).
+
+  Os três entram como permitidos só no caso em que ocorrem, apontando a task `3ed91f95-497e-8114-a246-f72c73ae50c4`. Assim o gate não esconde regressões novas atrás deles.
+- **Modo Performance:** 9/9 blocos do fixture e as mesmas superfícies; só o Mini Map some, como manda o desenho.
+
+### Determinismo
+
+- A medida é de retângulos, não de pixels, e a ordem dos casos é fixa.
+- Os IDs do fixture são fixos.
+- O fundo estrelado (aleatório) fica fora das superfícies medidas.
+- A tolerância de DPR e de fonte vem do limite de 1 px, e só no par que se cruza.
+
+### Tropeço
+
+Na primeira versão, a substituição da `checarMatrizVisual` apagou `MULTI_AGENT_NODES`/`readAgentCards`, que ficavam entre ela e `checarVariosAgentes`. O `eslint` não acusa referência indefinida nos `.cjs`; foi o smoke local que pegou, e o trecho foi restaurado do `HEAD`.
