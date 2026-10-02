@@ -555,7 +555,7 @@ reais de CLI com `__felixo_smoke_gravacao_<nome>__`).
 
 | Sessão | Arquivo | O que prova |
 | --- | --- | --- |
-| A | `canvas-smoke.cjs` | montagem; topbar, sidebar e canvas visíveis; Tab; foco ao abrir ferramenta; fixture com todos os tipos de bloco; oclusão; auditoria de acessibilidade; interações (arrasto, conexão, gaveta, notificações, URL inválida); reload sem duplicar (reidratação); painel nos dois eixos; viewport mínimo 375×667; zoom; matriz tema × viewport × DPR; vários agentes (4 terminais, 2 temas × 2 tamanhos, movimento reduzido); painéis, menu e diálogo abertos em 320 e 1280 px; fonte 137,5 %, movimento reduzido e locale; tutorial SA0–SA10 |
+| A | `canvas-smoke.cjs` | montagem; topbar, sidebar e canvas visíveis; Tab; foco ao abrir ferramenta; fixture com todos os tipos de bloco; oclusão; auditoria de acessibilidade; interações (arrasto, conexão, gaveta, notificações, URL inválida); reload sem duplicar (reidratação); painel nos dois eixos; viewport mínimo 375×667; zoom; matriz tema × viewport × DPR × Modo Performance, com sobreposição e saída da janela da moldura; vários agentes (4 terminais, 2 temas × 2 tamanhos, movimento reduzido); painéis, menu e diálogo abertos em 320 e 1280 px; fonte 137,5 %, movimento reduzido e locale; tutorial SA0–SA10 |
 | B | `canvas-smoke-onboarding.cjs` | tutorial no primeiro uso real |
 | C | `canvas-smoke-contas.cjs` | cadeia de contas |
 | D | `canvas-smoke-links.cjs` | escolha de destino dos links |
@@ -575,6 +575,23 @@ para outro, e as capturas ficam como evidência, não como referência.
 - Foco no lugar errado ao abrir ou fechar (Tab, Esc devolvendo o foco).
 - Prazo: o canvas monta em até 45 s (Linux e Windows) ou 20 s (macOS); uma
   reação da interface em até 5 s (20 s no Windows).
+
+**Matriz visual (`canvas-smoke-matriz.cjs`).** A `checarMatrizVisual` roda os
+casos de `buildMatrixCases`. No PR (`pr`) são 16: os 2 temas × 7 viewports
+(320 a 3840 px, DPR 1 e 2), mais o Modo Performance ligado em 320 e 1280 px.
+A noturna (`nightly.yml`, `FELIXO_SMOKE_MATRIZ=completa`) roda 44: os 2 temas ×
+11 viewports (inclui DPR 1,25 e 1,5) × Modo Performance ligado e desligado. Em
+cada caso, as superfícies da moldura (`MATRIX_SURFACES`: topbar, sidebar,
+statusbar, pílula de zoom, Mini Map, lista Elementos ou puck) precisam estar na
+janela e não se cobrir mais que `OVERLAP_THRESHOLD_CSS_PX` (1 px) nos dois
+eixos. Depois, cada caso com o Modo Performance é comparado ao mesmo caso sem
+ele: só o Mini Map pode sumir, nenhum bloco do fixture e nenhuma outra superfície.
+Uma sobreposição intencional, ou um defeito conhecido, entra em
+`ALLOWED_OVERLAPS`/`ALLOWED_OUTSIDE` com o motivo, a condição (`when`) e a task
+(o `canvas-smoke-matriz.test.cjs` exige o motivo e o UUID da task). A falha lista
+todos os problemas, cada um com o caso (`dark-320x720-dpr2-performance`), o par e
+os retângulos. A ordem dos casos é fixa e a medida é geométrica, então duas
+execuções do mesmo commit comparam a mesma coisa.
 
 **Ferramenta, bloco ou botão novo.** Além do inventário do canvas (abaixo),
 o gate espera:
