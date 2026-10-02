@@ -7873,3 +7873,48 @@ Três tentativas anteriores (08/09, 11/09 e 14/09) não tinham hardware fraco, e
 ### Limitação
 
 Nenhuma simulação deixou a janela preta: o Chromium cai para software sozinho. A tela preta original nunca foi reproduzida. Ver se ela some numa máquina com o driver ruim continua sendo processo manual (task `3ed91f95-497e-8137-a5e8-f6ca84bb1804`, com o roteiro de 11/09). "Recarregar interface" com PTY vivo foi validado em 14/09 e não foi refeito.
+
+## 2026-10-02 — Notion: validação real no app empacotado (Windows, release v0.1.433)
+
+Registro de Claude - Tasks do AI Core, task "Felixo AI Core/Notion — validar conexão real, sincronização e matriz multi-SO no Canvas" (Notion 3d591f95-497e-810c-9f26-ff8a3e6e53ce). Início às 07:29.
+
+### Como
+
+A pessoa autorizou o token do perfil `felipe` da CLI (conexão A) e o do perfil `flavia`, só para leitura (conexão B), além de mutações numa tarefa `[TESTE]` na To Do da HOME. Os tokens foram lidos do store da CLI por um processo Python, só em memória, e toda saída passou por um redator.
+
+O alvo foi o binário da **release v0.1.433 instalada**, numa segunda instância com perfil temporário. O empacotamento local deste dia saía com código 1 sem saída nenhuma; está registrado na task `3eb91f95-497e-8197-89ea-e8a7a876a357`.
+
+Os scripts ficaram fora do repositório e dirigem o app por CDP: a ponte `window.felixo.notion.*` e o bloco Tarefas Notion. Para cortar a rede só do app, o processo principal subiu com `NODE_USE_ENV_PROXY=1` e `HTTPS_PROXY` numa porta morta, o que alcança o `fetch` do Node e não a máquina.
+
+### Medido
+
+- **Conexões.** A pelo formulário real ("Guardar conexão" responde "O token permanece cifrado no processo principal"), e B pela ponte. As duas passaram no teste. A lista expõe `id`, `label`, `profileId`, datas e `hasToken`, nunca o token.
+- **Isolamento.**
+  - A vê 117 databases e B vê 79, nenhuma em comum, e a To Do não aparece em B.
+  - O cache de A lido com a conexão B volta vazio (`syncStatus: "empty"`).
+- **Schema.** A To Do tem 23 propriedades. O título é `Tarefa` (`title`), o status é `Etapa`, e há o checkbox `Em andamento`. A lista trouxe 842 abertas.
+- **Operações, cada uma conferida no Notion pela CLI.**
+  - Criar: Etapa "Entrada".
+  - Filtrar por `[TESTE] Felixo`: 1 tarefa.
+  - Editar o título.
+  - Concluir: Etapa "Concluída".
+  - Reabrir: Etapa "Entrada".
+  - Arquivar: a página passa a dar 404.
+
+  O "concluir" usa a `Etapa` e nunca marcou `Em andamento`.
+- **Offline.**
+  - Na mesma sessão, `listTasks` responde `stale: true` com o snapshot. Com a rede de volta, `stale: false` e `fetchedAt` novo.
+  - **Depois de reabrir o app sem rede, a interface não chega ao snapshot.** A conexão volta e o aviso é legível, mas a database não volta selecionada e a lista de databases vem só da rede. Virou a task `3ed91f95-497e-814c-b35c-d0e346233d3f`.
+- **Vazamento:** nenhum dos dois tokens apareceu em nenhum destes lugares:
+  - DOM, localStorage e sessionStorage;
+  - respostas de IPC;
+  - console;
+  - os 95 arquivos do perfil (logs e cache SQLite incluídos);
+  - as entradas novas do `%TEMP%`.
+
+  O relatório salvo tem zero ocorrências de `ntn_`.
+- **Limpeza.** As duas tarefas `[TESTE]` foram arquivadas, e os perfis temporários, que guardavam a credencial cifrada e o cache, foram apagados.
+
+### Não validado
+
+Linux e macOS: não há máquina. Seguem nas subtarefas `3d791f95-497e-818f-bf69-d1346e2caabb` e `3d791f95-497e-8106-be65-ed2014762ee8`.
