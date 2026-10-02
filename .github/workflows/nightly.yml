@@ -14,6 +14,10 @@ name: Nightly
 #    advisory novo é publicado sem nenhum commit nosso; sem uma execução
 #    agendada, ele só apareceria no próximo PR. Os passos são cópias dos jobs
 #    `Dependency policy` e `Python dependency audit` do ci.yml.
+# 3. Matriz visual completa do canvas. O CI de cada PR roda a matriz enxuta
+#    (16 casos: tema × 7 viewports, mais o Modo Performance nas duas pontas);
+#    aqui roda a completa (44 casos: tema × 11 viewports × Modo Performance
+#    ligado e desligado), só a sessão A do smoke, nos três SOs.
 #
 # Nada aqui é check obrigatório de PR nem dispara Release.
 on:
@@ -248,3 +252,58 @@ jobs:
           name: dependency-policy-python
           path: app/build/dependency-policy/pip-*
           if-no-files-found: error
+
+  canvas-visual-matrix:
+    name: Matriz visual completa do canvas (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+          - macos-latest
+    defaults:
+      run:
+        working-directory: app
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Mesma sessão A do gate do PR (fixture, interações, matriz, vários
+      # agentes), com FELIXO_SMOKE_MATRIZ=completa. Uma falha lista cada caso
+      # (tema, viewport, DPR, Modo Performance) e os elementos envolvidos.
+      - name: Canvas smoke com a matriz completa
+        timeout-minutes: 25
+        shell: bash
+        env:
+          FELIXO_SMOKE_SESSOES: A
+          FELIXO_SMOKE_MATRIZ: completa
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            xvfb-run -a npm run test:canvas-smoke
+          else
+            npm run test:canvas-smoke
+          fi
+
+      - name: Upload canvas visual matrix evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: canvas-visual-matrix-${{ matrix.os }}
+          path: |
+            app/build/canvas-smoke-evidencia/**
+            app/build/canvas-visual-regression/**
+          if-no-files-found: ignore
