@@ -7833,3 +7833,43 @@ Faltava o que o aceite pede: limite de sobreposição entre as superfícies da m
 ### Tropeço
 
 Na primeira versão, a substituição da `checarMatrizVisual` apagou `MULTI_AGENT_NODES`/`readAgentCards`, que ficavam entre ela e `checarVariosAgentes`. O `eslint` não acusa referência indefinida nos `.cjs`; foi o smoke local que pegou, e o trecho foi restaurado do `HEAD`.
+
+## 2026-10-02 — Performance: fallback gráfico com PC fraco reproduzível (`hardware-check`)
+
+Registro de Claude - Tasks do AI Core, task "Felixo AI Core/Performance — validar fallback gráfico em PC fraco reproduzível" (Notion 3d591f95-497e-8192-b911-cdb759933401). Início às 06:51.
+
+### Contexto
+
+Três tentativas anteriores (08/09, 11/09 e 14/09) não tinham hardware fraco, e a pessoa já respondeu que não tem a máquina. O título pede um PC fraco **reproduzível**: em vez de esperar o hardware, a falha que um driver ruim provoca passou a ser provocada no próprio Chromium, dentro do bench que já abria o app real com perfil persistente (`app/scripts/hardware-check.cjs`).
+
+### O que mudou (`app/scripts/hardware-check.cjs`)
+
+- **Cenário `pc-fraco`:** modo Automático com `--disable-gpu-compositing`, que faz o Chromium recusar a composição por GPU, como faz com um driver bloqueado. Quatro aberturas, cada uma com os pixels medidos:
+  1. a 1ª grava a recomendação;
+  2. a 2ª mostra a recomendação em Configurações e aceita "Usar modo compatível";
+  3. a 3ª abre em software pelo modo salvo no perfil;
+  4. "GPU normal" volta ao caminho acelerado.
+- **Cenário `gpu-caiu`:** derruba o processo de GPU 3 vezes no meio da sessão. Um cenário sem nenhuma queda passou a ser falha: o primeiro rodou verde sem testar nada, porque o CDP chama o processo de `"GPU"`, em maiúsculas.
+- **`screenStats`/`looksBlack`:** decodificam a captura do compositor (`devtools:capture-page`) na própria página. "Tela preta" é menos de 0,2% de pixels claros, porque o tema é escuro. A primeira captura de uma janela recém-pintada sai vazia (0,04%) e é descartada.
+- **No Windows,** o `stopApp` encerra a árvore com `taskkill /T /F`; antes só o processo principal saía, e os filhos prendiam a pasta. A limpeza do perfil só avisa, para não esconder o erro do cenário.
+- **Na automação,** o Automático é software salvo pedido explícito de hardware, e esse pedido vence o modo salvo. Por isso detecção e aceite pedem `hardware`, e a 3ª abertura vai sem a variável, para valer o perfil.
+
+### Medido (Windows 11, AMD Radeon integrada, driver 31.0.21923.1000)
+
+| Abertura | GPU (CDP) | `gpu_compositing` | Pixels claros |
+| --- | --- | --- | --- |
+| 1, detecção (Automático + GPU recusada) | AMD | `disabled_software` | 0,71 % |
+| 3, modo compatível (perfil) | Microsoft Basic Render Driver | — | 1,76 % |
+| GPU normal | AMD | `enabled` | 0,71 % |
+
+- A recomendação gravada foi `gpu-feature-disabled` / `gpu_compositing`.
+- Na 2ª abertura, a recomendação apareceu, e "Usar modo compatível" gravou `software`.
+- **Quedas da GPU:**
+  - nas quedas 1 e 2, o Chromium relança o processo e segue na AMD;
+  - na queda 3, ele desiste da GPU sozinho (`disabled_software`, renderer "Disabled");
+  - a janela desenhou depois de todas;
+  - **o app não gravou recomendação nenhuma**, o que virou a task `3ed91f95-497e-8114-ba5c-dd4e2f116800`.
+
+### Limitação
+
+Nenhuma simulação deixou a janela preta: o Chromium cai para software sozinho. A tela preta original nunca foi reproduzida. Ver se ela some numa máquina com o driver ruim continua sendo processo manual (task `3ed91f95-497e-8137-a5e8-f6ca84bb1804`, com o roteiro de 11/09). "Recarregar interface" com PTY vivo foi validado em 14/09 e não foi refeito.
