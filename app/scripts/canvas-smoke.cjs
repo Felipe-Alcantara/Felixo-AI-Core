@@ -34,6 +34,16 @@ const {
   DEFAULT_JITTER_THRESHOLD,
   measureStableGeometry,
 } = require('./canvas-smoke-visual.cjs')
+const {
+  MATRIX_SURFACES,
+  OVERLAP_THRESHOLD_CSS_PX,
+  THEMES: MATRIX_THEMES,
+  VIEWPORTS: MATRIX_VIEWPORTS,
+  buildMatrixCases,
+  describeCase,
+  findMissingSurfaces,
+  findSurfaceOverlaps,
+} = require('./canvas-smoke-matriz.cjs')
 const { corromperEstadoNoPerfil, criarCenariosDoTutorial, registrarPerguntaNoPerfil } = require('./canvas-smoke-onboarding.cjs')
 const { criarSessaoDaCadeia } = require('./canvas-smoke-contas.cjs')
 const { criarSessaoDeLinks } = require('./canvas-smoke-links.cjs')
@@ -91,16 +101,11 @@ const SESSOES = new Set(
 const rodar = (sessao) => SESSOES.has(sessao)
 const DEVTOOLS_LAUNCH_TIMEOUT_MS = 60_000
 const THEME_STORAGE_KEY = 'felixo-ai-core.theme'
-const VISUAL_THEMES = ['dark', 'high_contrast']
-const VISUAL_VIEWPORT_CASES = [
-  { width: 320, height: 720, deviceScaleFactor: 1 },
-  { width: 320, height: 720, deviceScaleFactor: 2 },
-  { width: 768, height: 900, deviceScaleFactor: 1 },
-  { width: 1280, height: 800, deviceScaleFactor: 1 },
-  { width: 1280, height: 800, deviceScaleFactor: 2 },
-  { width: 3840, height: 2160, deviceScaleFactor: 1 },
-  { width: 3840, height: 2160, deviceScaleFactor: 2 },
-]
+const VISUAL_THEMES = MATRIX_THEMES
+const VISUAL_VIEWPORT_CASES = MATRIX_VIEWPORTS
+// `pr` no CI de cada PR; `completa` na noturna (nightly.yml).
+const MATRIX_MODE = process.env.FELIXO_SMOKE_MATRIZ || 'pr'
+const PERFORMANCE_STORAGE_KEY = 'felixo-ai-core.performance-mode'
 const CORE_LAYOUT_SELECTORS = [
   '[data-felixo-region="topbar"]',
   '[data-felixo-region="sidebar"]',
@@ -118,6 +123,7 @@ const visualReport = {
   },
   themes: VISUAL_THEMES,
   viewportCases: VISUAL_VIEWPORT_CASES,
+  matrix: { mode: MATRIX_MODE, overlapThresholdCssPx: OVERLAP_THRESHOLD_CSS_PX, problems: [] },
   scenarios: [],
 }
 
@@ -804,62 +810,135 @@ async function checarZoomVisual(page) {
   }
 }
 
+async function lerSuperficies(page) {
+  return page.evaluate((specs) => specs.map(({ name, selector }) => {
+    const element = document.querySelector(selector)
+    if (!element) return { name, visible: false, rect: null }
+    const style = window.getComputedStyle(element)
+    const box = element.getBoundingClientRect()
+    const visible = style.display !== 'none' && style.visibility !== 'hidden' &&
+      Number(style.opacity) > 0.01 && box.width > 0 && box.height > 0
+    const rect = { left: box.left, top: box.top, right: box.right, bottom: box.bottom }
+    return { name, visible, rect: visible ? rect : null }
+  }), MATRIX_SURFACES)
+}
+
+/** Blocos do fixture presentes no DOM e com área (o Modo Performance não pode tirar nenhum). */
+async function lerBlocosDoFixture(page) {
+  return page.evaluate((ids) => ids.filter((id) => {
+    const node = document.querySelector('.react-flow__node[data-id="' + id + '"]')
+    if (!node) return false
+    const box = node.getBoundingClientRect()
+    return box.width > 0 && box.height > 0
+  }), FIXTURE_NODES.map((node) => node.id))
+}
+
+async function definirModoPerformance(page, ligado) {
+  const esperado = ligado ? 'on' : 'off'
+  const atual = await page.evaluate(() => document.documentElement.dataset.performanceMode)
+  if (atual === esperado) return
+  await page.evaluate(({ key, value }) => window.localStorage.setItem(key, value), { key: PERFORMANCE_STORAGE_KEY, value: esperado })
+  await page.reload()
+  await checarMontagem(page)
+  await page.waitForFunction(
+    (value) => document.documentElement.dataset.performanceMode === value,
+    esperado,
+    { timeout: HYDRATION_TIMEOUT_MS },
+  )
+}
+
+/**
+ * Matriz tema × viewport × DPR × Modo Performance (casos em
+ * canvas-smoke-matriz.cjs). Em cada caso: sem overflow horizontal, layout
+ * estável (recordVisualEvidence), superfícies da moldura na janela e sem
+ * sobreposição além de OVERLAP_THRESHOLD_CSS_PX fora de ALLOWED_OVERLAPS.
+ * Depois compara cada caso com o Modo Performance ligado ao mesmo caso
+ * desligado: ele só pode esconder o Mini Map, nunca bloco nem superfície.
+ * Os problemas se acumulam e saem todos juntos, cada um com o caso e os
+ * elementos, para a falha dizer o que quebrou sem reexecutar.
+ */
 async function checarMatrizVisual(page) {
-  for (const theme of VISUAL_THEMES) {
-    await selectVisualTheme(page, theme)
-    const cdp = await page.context().newCDPSession(page)
-    try {
-      for (const viewport of VISUAL_VIEWPORT_CASES) {
-        const label = theme + '-' + viewport.width + 'x' + viewport.height +
-          '-dpr' + viewport.deviceScaleFactor
-        await page.setViewportSize({ width: viewport.width, height: viewport.height })
-        await cdp.send('Emulation.setDeviceMetricsOverride', {
-          width: viewport.width,
-          height: viewport.height,
-          deviceScaleFactor: viewport.deviceScaleFactor,
-          mobile: false,
-        })
-        await waitForViewport(page, viewport)
-        await page.waitForFunction(
-          (expected) => Math.abs(window.devicePixelRatio - expected) < 0.01,
-          viewport.deviceScaleFactor,
-          { timeout: INTERACTION_TIMEOUT_MS },
-        )
+  const casos = buildMatrixCases(MATRIX_MODE)
+    .slice()
+    .sort((a, b) => Number(a.performance) - Number(b.performance))
+  const problemas = visualReport.matrix.problems
+  const medidos = new Map()
+  const cdp = await page.context().newCDPSession(page)
+  try {
+    for (const caso of casos) {
+      const label = describeCase(caso)
+      const { viewport } = caso
+      await definirModoPerformance(page, caso.performance)
+      await selectVisualTheme(page, caso.theme)
+      await page.setViewportSize({ width: viewport.width, height: viewport.height })
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: viewport.width,
+        height: viewport.height,
+        deviceScaleFactor: viewport.deviceScaleFactor,
+        mobile: false,
+      })
+      await waitForViewport(page, viewport)
+      await page.waitForFunction(
+        (expected) => Math.abs(window.devicePixelRatio - expected) < 0.01,
+        viewport.deviceScaleFactor,
+        { timeout: INTERACTION_TIMEOUT_MS },
+      )
+      // Mesmo enquadramento nos dois modos, para comparar os blocos na tela.
+      await page.getByRole('button', { name: 'Enquadrar todos os blocos' }).dispatchEvent('click')
 
-        const overflow = await page.evaluate(() => ({
-          scrollWidth: document.documentElement.scrollWidth,
-          clientWidth: document.documentElement.clientWidth,
-        }))
-        if (overflow.scrollWidth > overflow.clientWidth) {
-          throw new Error(
-            '[canvas-visual] ' + label + ' tem overflow horizontal: ' +
-            JSON.stringify(overflow),
-          )
-        }
-
-        const selectors = viewport.width >= 1280
-          ? [...CORE_LAYOUT_SELECTORS, '.felixo-canvas-minimap']
-          : CORE_LAYOUT_SELECTORS
-        await recordVisualEvidence(
-          page,
-          label,
-          selectors,
-          {
-            event: 'viewport-theme-dpr',
-            theme,
-            requestedViewport: viewport,
-            horizontalOverflow: overflow,
-          },
-          { sampleFrames: 16 },
-        )
+      const overflow = await page.evaluate(() => ({
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+      }))
+      if (overflow.scrollWidth > overflow.clientWidth) {
+        problemas.push({ caso: label, tipo: 'overflow-horizontal', detalhe: overflow })
       }
-    } catch (error) {
-      visualReport.failure = { scenario: theme, message: error.message || String(error) }
-      throw error
-    } finally {
-      await cdp.send('Emulation.clearDeviceMetricsOverride').catch(() => {})
-      await cdp.detach().catch(() => {})
+
+      const selectors = viewport.width >= 1280 && !caso.performance
+        ? [...CORE_LAYOUT_SELECTORS, '.felixo-canvas-minimap']
+        : CORE_LAYOUT_SELECTORS
+      await recordVisualEvidence(page, label, selectors, {
+        event: 'viewport-theme-dpr',
+        theme: caso.theme,
+        performance: caso.performance,
+        requestedViewport: viewport,
+        horizontalOverflow: overflow,
+      }, { sampleFrames: 16 })
+
+      const superficies = await lerSuperficies(page)
+      const blocos = await lerBlocosDoFixture(page)
+      const sobreposicoes = findSurfaceOverlaps(superficies, caso)
+      const ausentes = findMissingSurfaces(superficies, caso)
+      for (const item of sobreposicoes) problemas.push({ caso: label, tipo: 'sobreposicao', detalhe: item })
+      for (const item of ausentes) problemas.push({ caso: label, tipo: 'superficie', detalhe: item })
+      medidos.set(label, { caso, superficies, blocos })
+      console.log('[canvas-matriz] ' + label + ': ' + superficies.filter((item) => item.visible).length +
+        ' superfícies, ' + blocos.length + '/' + FIXTURE_NODES.length + ' blocos, ' +
+        sobreposicoes.length + ' sobreposições, ' + ausentes.length + ' ausências')
     }
+  } finally {
+    await cdp.send('Emulation.clearDeviceMetricsOverride').catch(() => {})
+    await cdp.detach().catch(() => {})
+  }
+
+  for (const [label, medido] of medidos) {
+    if (!medido.caso.performance) continue
+    const base = medidos.get(describeCase({ ...medido.caso, performance: false }))
+    if (!base) continue
+    const perdidos = base.blocos.filter((id) => !medido.blocos.includes(id))
+    const visiveis = (lista) => lista.filter((item) => item.visible).map((item) => item.name)
+    const superficiesPerdidas = visiveis(base.superficies)
+      .filter((name) => name !== 'minimap' && !visiveis(medido.superficies).includes(name))
+    if (perdidos.length || superficiesPerdidas.length) {
+      problemas.push({ caso: label, tipo: 'performance-perdeu', detalhe: { blocos: perdidos, superficies: superficiesPerdidas } })
+    }
+  }
+
+  await definirModoPerformance(page, false)
+  if (problemas.length) {
+    visualReport.failure = { scenario: 'matriz', message: problemas.length + ' problemas' }
+    throw new Error('[canvas-matriz] ' + problemas.length + ' problemas na matriz ' + MATRIX_MODE + ': ' +
+      JSON.stringify(problemas.slice(0, 12)))
   }
 }
 
