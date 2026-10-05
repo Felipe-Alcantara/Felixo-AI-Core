@@ -5819,3 +5819,62 @@ O código ficou pronto em 02/10, mas não subiu. Em 05/10, às 02:35, outra sess
 
 - **Windows e macOS.** Não houve leitura real do PTY nesses sistemas. As aspas do `-c projects` no `cmd.exe`, com pasta temporária contendo espaço, estão cobertas só por teste de unidade.
 - **Duas contas Codex reais no mesmo cartão.** Não foram vistas no app isolado: usar o perfil real é vetado. O agrupamento com duas linhas está coberto pelos testes de renderização.
+## 2026-10-05 — Ditado por voz: validação de ponta a ponta no Linux (microfone virtual + whisper local)
+
+Registro de Claude - Tasks do AI Core, task "Entrada de voz — validar o ditado com microfone real nos três sistemas" (Notion 3e091f95-497e-81e2-9cd8-d7f19085de39). Início às 09:31.
+
+### Decisões da pessoa
+
+- **Microfone.** Esta máquina só tem o microfone embutido, que está quebrado, então a validação usa só um microfone virtual.
+- **Transcrição.** Só servidor local, sem chave de nuvem.
+- **Windows e macOS.** Uma task por sistema, com o roteiro pronto.
+
+### Como
+
+- **Instância isolada.** `felixo devtools launch --visible`, sob Xvfb e `flock`, com TMPDIR próprio.
+- **Microfone virtual.** O PipeWire faz uma saída nula e uma `module-remap-source` com o nome `felixo_vmic`. `PULSE_SOURCE` aponta o app para essa fonte, sem trocar a fonte padrão do sistema.
+- **Fala.** Cinco frases em pt-BR, geradas com o piper (`pt_BR-faber-medium`).
+- **Transcrição.** `app/scripts/servidor-transcricao-local.py`, com faster-whisper 1.2.1 e PyAV 15.1. O PyAV 16+ quebra: `TypeError: open() got an unexpected keyword argument 'metadata_errors'`.
+- **Roteiro.** `app/scripts/validar-ditado-linux.cjs`.
+
+### Medido no Linux
+
+| # | Item | Resultado |
+| --- | --- | --- |
+| 1 | Fluxo | `Ctrl+Shift+M`, fala, `Ctrl+Shift+M`: o texto ficou na linha do bash real (`bash-5.2$ e um teste para função que calcula o fete.`) e não foi executado. |
+| 2 | Indicadores | Ponto vermelho com cronômetro (`0:04`) na barra de cima, `data-dictation-state` passando por `recording`, `transcribing` e `idle`, e o spinner. |
+| 3 | Permissão negada | Com a sessão recusando `media`: "O acesso ao microfone foi negado. Confira a permissão de microfone do seu sistema (portal/PipeWire/PulseAudio) para o Felixo AI Core." Nenhum stream de captura aberto. |
+| 4 | Sem terminal aberto | O aviso "Nenhum terminal aberto: copiei o texto ditado." aparece e o texto vai para a área de transferência. |
+| 5 | Erros | Servidor local desligado, DNS inexistente, rota 404 (mensagem "modelo ou endereço não encontrado") e chave falsa na API real da OpenAI (401, "A chave … foi recusada"). Nenhuma mensagem trouxe a chave. |
+| 6 | Tipo de áudio | `MediaRecorder.isTypeSupported`: `audio/webm;codecs=opus` e `audio/mp4` sim, `audio/ogg;codecs=opus` não. O servidor recebeu `ditado.webm` (`audio/webm`) e transcreveu. |
+| 7 | Linux sem keyring | Com o D-Bus apontando para lugar nenhum, o Chromium não alcança o KWallet. O `speech:set-key` devolve "Este sistema não oferece armazenamento cifrado …" e não grava o `speech-key.bin`. |
+| 8 | Microfone liberado | Um stream "Chromium input" (`electron`) no `pactl list source-outputs` durante a gravação, e zero depois de parar, cancelar ou fechar o app gravando. |
+
+**Latência e qualidade.** As frases têm de 2,6 a 3,3 s, com voz sintética, num notebook de 2 núcleos e 4 threads, com o app principal e o navegador abertos (load average por volta de 9 a 14). A WER compara com o texto de referência.
+
+| Modelo | Mediana | Média de WER |
+| --- | --- | --- |
+| tiny | 1,6 s | 30,6% |
+| base | 3,0 s | 30,2% |
+| small | 8,8 s | 13,5% |
+
+Na prova pelo app, do segundo atalho ao texto no terminal, o `base` levou 9,7 s, e 19,9 s numa rodada com a máquina mais carregada.
+
+**macOS (estático).** O `NSMicrophoneUsageDescription` está no `build.mac.extendInfo`. A build não é assinada (`identity: null`), então o entitlement `com.apple.security.device.audio-input` segue desnecessário.
+
+### Mudou
+
+- A tela de configurações deixou de dizer que o servidor local "ainda não foi testado com um servidor real" e passou a citar o exemplo.
+- O guia do usuário ganhou a seção "Ditado por voz".
+- A lacuna do inventário foi atualizada.
+
+### Achado fora do escopo
+
+`session-security.cjs` concede toda permissão que não seja `openExternal`, inclusive `media`, a qualquer sessão. Isso vale também para as partições dos blocos "Página Web". Um site aberto no navegador interno abre microfone e câmera sem perguntar. Virou task própria.
+
+### Não validado
+
+- **Microfone físico.** O desta máquina está quebrado.
+- **API na nuvem com chave real**, por decisão da pessoa.
+- **Windows e macOS.** Ficaram em tasks próprias.
+- **Diálogo de permissão do macOS empacotado.**

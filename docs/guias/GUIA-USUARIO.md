@@ -765,6 +765,19 @@ Cole com o atalho normal do sistema (`Ctrl+V`, ou `Cmd+V` no macOS) dentro do te
 
 Vale tanto para uma imagem copiada (captura de tela, "copiar imagem" no navegador) quanto para um arquivo de imagem copiado no gerenciador de arquivos. O app lê a área de transferência pelo próprio sistema operacional, então não é preciso instalar `xclip` ou `wl-paste` no Linux, e o atalho é o mesmo em todos os sistemas e para qualquer CLI de agente — que passa a receber sempre um caminho de arquivo, a única forma de imagem que um terminal consegue transportar.
 
+### Ditado por voz
+
+Aperte `Ctrl+Shift+M` (`Cmd+Shift+M` no macOS), fale e aperte de novo. O texto entra na linha de entrada do terminal aberto e **não é enviado sozinho**: você revisa e aperta Enter. Sem terminal aberto, o texto vai para a área de transferência e um aviso diz isso. Enquanto grava, o botão do microfone na barra de cima mostra um ponto vermelho e o tempo. O **X** ao lado descarta a gravação. Se algo falhar, a mensagem aparece logo abaixo do botão.
+
+Em **Configurações → Ditado por voz** você escolhe o motor:
+
+- **Nuvem:** qualquer API compatível com a da OpenAI, com a sua chave. A chave fica cifrada pelo sistema. No Linux, isso exige um keyring, como o GNOME Keyring ou o KWallet. Sem keyring, o app recusa guardar a chave em vez de gravá-la em texto puro.
+- **Servidor local:** o áudio não sai do computador e não há chave. O endereço é `http://127.0.0.1:8765/v1` com o servidor de exemplo `app/scripts/servidor-transcricao-local.py`, que usa o faster-whisper. Instale numa venv com `pip install faster-whisper "av<16"` e rode `python servidor-transcricao-local.py --registro transcricoes.jsonl`. No campo **Modelo**, `tiny`, `base` ou `small` trocam velocidade por precisão.
+
+Num notebook de 2 núcleos e 4 threads, com o app e o navegador abertos, frases de 3 s levaram por volta de 1,6 s no `tiny`, 3 s no `base` e 9 s no `small`. O `small` errou bem menos palavras (13% contra 30%). As medições foram feitas em 05/10/2026, com voz sintética em português.
+
+No Linux, o caminho inteiro foi conferido com um microfone virtual: gravação, texto no terminal, avisos, permissão negada, erros de endereço e de chave, e o microfone liberado ao parar, cancelar ou fechar o app. Microfone físico, Windows e macOS ainda não foram conferidos.
+
 ### Gerar uma imagem no canvas
 
 Na seção **Criar** da barra lateral, **Gerar imagem** (logo abaixo de **Abrir imagem**) abre um painel com dois campos:
