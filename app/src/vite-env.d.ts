@@ -438,7 +438,8 @@ declare global {
         getConfig: () => Promise<{
           ok: boolean
           /** `supported: false` no Linux — o Electron não tem API nativa lá. */
-          config?: { supported: boolean; enabled: boolean }
+          /** `warning`: o app atual roda de uma pasta temporária do sistema. */
+          config?: { supported: boolean; enabled: boolean; warning?: string }
         }>
         setEnabled: (enabled: boolean) => Promise<{
           ok: boolean

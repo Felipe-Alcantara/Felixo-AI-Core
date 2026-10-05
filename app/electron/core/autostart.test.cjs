@@ -172,3 +172,58 @@ test('Linux: erro de I/O (ex.: permissão) não derruba o app, devolve mensagem'
   assert.equal(resultado.ok, false)
   assert.match(resultado.message, /EACCES/)
 })
+
+const { isInsideTemporaryDirectory } = require('./autostart.cjs')
+// Caso real do Windows: os.tmpdir() vem com nome curto 8.3 e o exe com o
+// nome longo. O realpath falso faz o papel do realpathSync.native.
+const realpath = (value) => value.replace('FELIPE~1', 'Felipe Martins')
+const temporaryDirs = [String.raw`C:\Users\FELIPE~1\AppData\Local\Temp`]
+const smokeExe = String.raw`C:\Users\Felipe Martins\AppData\Local\Temp\felixo-release-smoke-4pap4S\installed\Felixo AI Core\Felixo AI Core.exe`
+const installedExe = String.raw`C:\Users\Felipe Martins\AppData\Local\Programs\Felixo AI Core\Felixo AI Core.exe`
+const win = { platformName: 'win32', temporaryDirs, realpath }
+
+test('pasta temporária: reconhece a cópia de smoke em %TEMP% mesmo com nome curto 8.3 e caixa diferente', () => {
+  assert.equal(isInsideTemporaryDirectory(smokeExe, win), true)
+  assert.equal(isInsideTemporaryDirectory(smokeExe.toUpperCase(), win), true)
+  assert.equal(isInsideTemporaryDirectory(installedExe, win), false)
+})
+
+test('pasta temporária: não confunde uma pasta irmã que só começa com o mesmo nome', () => {
+  assert.equal(
+    isInsideTemporaryDirectory(String.raw`C:\Users\Felipe Martins\AppData\Local\TempoReal\app.exe`, win),
+    false,
+  )
+})
+
+test('pasta temporária: recusa ligar o autostart a partir da pasta temporária, sem chamar a API do sistema', () => {
+  let called = false
+  const result = setAutoStartEnabled({
+    enabled: true,
+    execPath: smokeExe,
+    setLoginItemSettings: () => { called = true },
+    ...win,
+  })
+  assert.equal(result.ok, false)
+  assert.equal(called, false)
+  assert.match(result.message, /pasta temporária/)
+})
+
+test('pasta temporária: desligar continua permitido, para limpar um item de login antigo', () => {
+  let received = null
+  const result = setAutoStartEnabled({
+    enabled: false,
+    execPath: smokeExe,
+    setLoginItemSettings: (settings) => { received = settings },
+    ...win,
+  })
+  assert.equal(result.ok, true)
+  assert.deepEqual(received, { openAtLogin: false })
+})
+
+test('pasta temporária: o status avisa quando o app atual roda de pasta temporária', () => {
+  const status = getAutoStartStatus({ ...win, execPath: smokeExe, getLoginItemSettings: () => ({ openAtLogin: true }) })
+  assert.equal(status.enabled, true)
+  assert.match(status.warning, /pasta temporária/)
+  const installed = getAutoStartStatus({ ...win, execPath: installedExe, getLoginItemSettings: () => ({ openAtLogin: true }) })
+  assert.equal(installed.warning, undefined)
+})

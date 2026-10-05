@@ -5,6 +5,8 @@ import { FelixoToggle } from '../components/FelixoToggle'
 type AutoStartConfig = {
   supported: boolean
   enabled: boolean
+  /** O app atual roda de pasta temporária: o item de login sumiria com ela. */
+  warning?: string
 }
 
 export function AutoStartSection() {
@@ -40,7 +42,7 @@ export function AutoStartSection() {
     try {
       const result = await bridge.setEnabled(!config.enabled)
       if (result.ok) {
-        setConfig({ supported: result.supported, enabled: result.enabled })
+        setConfig({ supported: result.supported, enabled: result.enabled, warning: config.warning })
       } else {
         setMessage(result.message ?? 'Não foi possível salvar a preferência de autostart.')
       }
@@ -77,6 +79,9 @@ export function AutoStartSection() {
         <p className="text-xs leading-relaxed text-zinc-500">
           Esta opção não está disponível nesta plataforma.
         </p>
+      )}
+      {config.warning && (
+        <p className="mt-2 text-[11px] leading-relaxed text-(--color-warning)">{config.warning}</p>
       )}
       {message && (
         <p className="mt-2 text-[11px] leading-relaxed text-(--color-warning)">{message}</p>

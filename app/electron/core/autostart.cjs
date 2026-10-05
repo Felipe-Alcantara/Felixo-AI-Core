@@ -22,6 +22,57 @@ const path = require('node:path')
 
 const LINUX_DESKTOP_FILE_APP_ID = 'felixo-ai-core'
 
+/**
+ * Verdadeiro quando o executável mora dentro da pasta temporária do sistema.
+ *
+ * Existe por um caso real (Windows, 02/09/2026): um release smoke local
+ * instalou o app em `%TEMP%\felixo-release-smoke-*`, a pessoa passou a abrir
+ * essa cópia e o "iniciar com o sistema" gravou o caminho dela. `%TEMP%` é
+ * esvaziado pelo Sensor de Armazenamento sem aviso — app e item de login
+ * sumiriam juntos. Os dois lados passam por `realpathSync.native` porque o
+ * Windows devolve `os.tmpdir()` com nome curto 8.3 (`FELIPE~1`) e o exe com
+ * o nome longo: comparar texto cru nunca casaria.
+ *
+ * @param {string} execPath
+ * @param {object} [options]
+ * @param {string[]} [options.temporaryDirs]
+ * @param {(target: string) => string} [options.realpath]
+ * @param {string} [options.platformName]
+ * @returns {boolean}
+ */
+function isInsideTemporaryDirectory(execPath, {
+  temporaryDirs = defaultTemporaryDirs(),
+  realpath = safeRealpath,
+  platformName = process.platform,
+} = {}) {
+  if (typeof execPath !== 'string' || !execPath.trim()) return false
+  const pathApi = platformName === 'win32' ? path.win32 : path.posix
+  const normalize = (value) => {
+    const resolved = pathApi.resolve(realpath(value))
+    return platformName === 'win32' ? resolved.toLowerCase() : resolved
+  }
+  const exe = normalize(execPath)
+  return temporaryDirs
+    .filter((dir) => typeof dir === 'string' && dir.trim())
+    .map(normalize)
+    .some((dir) => exe === dir || exe.startsWith(dir.endsWith(pathApi.sep) ? dir : dir + pathApi.sep))
+}
+
+function defaultTemporaryDirs() {
+  return [os.tmpdir(), process.env.TEMP, process.env.TMP, process.env.TMPDIR]
+}
+
+function safeRealpath(target) {
+  try {
+    return fs.realpathSync.native(target)
+  } catch {
+    return target
+  }
+}
+
+const TEMPORARY_LOCATION_MESSAGE =
+  'Este Felixo está rodando de uma pasta temporária do sistema, que pode ser apagada sem aviso. Instale pelo instalador oficial antes de ligar "iniciar com o sistema".'
+
 // O destino é sempre Linux, não importa em qual SO o processo Node/Electron
 // que está CHAMANDO esta função roda (ex.: o CI roda a suíte inteira de
 // testes também no runner windows-latest) — path.join() usaria `\` lá e
@@ -109,7 +160,17 @@ function getAutoStartStatus({
   homeDir,
   environment,
   fileSystem,
+  execPath,
+  temporaryDirs,
+  realpath,
 } = {}) {
+  const status = readAutoStartStatus({ platformName, getLoginItemSettings, homeDir, environment, fileSystem })
+  return execPath && isInsideTemporaryDirectory(execPath, { temporaryDirs, realpath, platformName })
+    ? { ...status, warning: TEMPORARY_LOCATION_MESSAGE }
+    : status
+}
+
+function readAutoStartStatus({ platformName, getLoginItemSettings, homeDir, environment, fileSystem }) {
   if (platformName === 'linux') {
     return getLinuxAutostartStatus({ homeDir, environment, fileSystem })
   }
@@ -144,7 +205,14 @@ function setAutoStartEnabled({
   homeDir,
   environment,
   fileSystem,
+  temporaryDirs,
+  realpath,
 }) {
+  // Desligar sempre pode: é o jeito de limpar um item de login que já aponta
+  // para uma cópia temporária.
+  if (enabled && isInsideTemporaryDirectory(execPath, { temporaryDirs, realpath, platformName })) {
+    return { ok: false, supported: true, enabled: false, message: TEMPORARY_LOCATION_MESSAGE }
+  }
   if (platformName === 'linux') {
     return setLinuxAutostartEnabled({ enabled, execPath, homeDir, environment, fileSystem })
   }
@@ -178,5 +246,6 @@ module.exports = {
   buildDesktopFileContent,
   getAutoStartStatus,
   getLinuxAutostartDesktopPath,
+  isInsideTemporaryDirectory,
   setAutoStartEnabled,
 }

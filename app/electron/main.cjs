@@ -551,14 +551,18 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('autostart:get-config', () => ({
     ok: true,
-    config: getAutoStartStatus({ getLoginItemSettings: () => app.getLoginItemSettings() }),
+    config: getAutoStartStatus({
+      getLoginItemSettings: () => app.getLoginItemSettings(),
+      // Avisa quando este exe mora em %TEMP% (ver isInsideTemporaryDirectory).
+      execPath: app.isPackaged ? app.getPath('exe') : undefined,
+    }),
   }))
   ipcMain.handle('autostart:set-enabled', (_event, enabled) => {
     const result = setAutoStartEnabled({
       enabled: Boolean(enabled),
       setLoginItemSettings: (settings) => app.setLoginItemSettings(settings),
-      // Só usado no Linux (escreve o .desktop com o caminho real do
-      // executável instalado, não o binário genérico do Electron em dev).
+      // No Linux vira o Exec= do .desktop; nos três SOs é o que permite
+      // recusar ligar o autostart a partir de uma cópia em pasta temporária.
       execPath: app.getPath('exe'),
     })
     logQaEvent({
