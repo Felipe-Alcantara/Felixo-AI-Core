@@ -5646,3 +5646,44 @@ Também em 05/10: apagadas, com autorização, 198 pastas de teste
 (`felixo-release-smoke-test-*`, `-app-test-*`) e a `felixo-release-smoke-EanLXu`
 (smoke de 14/09) em `%TEMP%`, depois de conferir que nenhum processo rodava
 delas. A `felixo-release-smoke-4pap4S`, de onde o app roda, ficou intacta.
+
+## [2026-10-05] Terminal: links longos dos agentes abriam cortados (H2 confirmada)
+
+Task: [Felixo AI Core/Terminal — links enviados pelos agentes ainda não abrem](https://app.notion.com/p/Felixo-AI-Core-Terminal-links-enviados-pelos-agentes-ainda-n-o-abrem-reproduzir-no-app-real-e-ach-3db91f95497e81a79554c9cffa821c63).
+O PR #98 já tinha tratado OSC 8 (H3) e o mouse tracking (H1); faltava a H2
+e um clique em saída de agente real.
+
+Medição com os agentes reais: Claude Code 2.1.285 e Codex 0.150.1 num PTY
+de 100 colunas (Windows/ConPTY), renderizados num `@xterm/headless`, cada um
+respondendo com uma URL de 322 caracteres. O Codex quebra a resposta com
+quebra mole (`isWrapped`, sem recuo), que o `WebLinksAddon` já resolvia. A
+Claude Code reposiciona o cursor na coluna 3 a cada linha (`ESC[n;3H`): a
+primeira quebra chega sem `isWrapped` e o recuo de dois espaços vira
+caractere real no buffer, inclusive nas linhas seguintes marcadas como
+continuação. Os dois ecoam o prompt com quebra dura e o mesmo recuo. Com isso
+o addon via só a primeira linha da URL.
+
+Correção: `terminal-spanning-url-links.ts`, registrado com
+`registerLinkProvider` antes do `WebLinksAddon` (no xterm, o primeiro
+provedor com link na posição vence). Critério geométrico, não `isWrapped`:
+a linha encosta na margem direita (com uma coluna de folga, que o Codex
+deixa) e a seguinte começa com recuo curto e caractere de URL; o recuo sai
+do texto juntado. Só links que atravessam linhas; o resto segue com o addon.
+Mesmo gesto, dica e menu de destino; só http/https.
+
+Prova no app real (fonte, Windows): passo L13 do smoke de links (sessão D),
+com a CLI roteirizada desenhando a URL como a Claude Code real. Ctrl+clique
+na primeira linha, na de baixo e na última: com o provedor, o menu mostra a
+URL inteira; sem ele (desligado de propósito), o menu mostrou
+`https://example.com/felixo/url-quebrada/segmento01/segmento02/segmento03/se`.
+9 testes de unidade com as linhas reais do buffer (fixture JSON).
+
+Limites: não houve clique numa sessão viva da Claude Code dentro do app — o
+bloco "Agente" abriu a Claude real pedindo confiança na pasta pessoal
+inteira, e essa confiança não foi concedida para um teste; a prova usa os
+mesmos bytes reproduzidos pela CLI roteirizada no terminal real do app. Não
+rodei no app empacotado (o empacotamento local segue bloqueado; o código é o
+mesmo bundle do renderer). A suíte completa do backend foi interrompida pelo
+Claude Code por falta de memória na máquina; os testes do backend alterado
+(CLI roteirizada) passaram 18/18 e a CI roda a suíte inteira. Frontend
+2925/2933, com as 5 falhas pré-existentes de `terminal-reading`.
