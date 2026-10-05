@@ -108,6 +108,7 @@ const {
   consumeCodexRateLimitReset,
   queryCodexRateLimits,
 } = require('./services/codex-account-rate-limits.cjs')
+const { queryCodexStatus } = require('./services/codex-status-query.cjs')
 const {
   registerAgentUsageIpcHandlers,
 } = require('./services/agent-usage-ipc-handlers.cjs')
@@ -395,7 +396,9 @@ app.whenReady().then(async () => {
     : {
         queryLiveUsage: {
           'claude-status': queryClaudeUsage,
-          'codex-rate-limits': queryCodexRateLimits,
+          // O `/status` inteiro: limites, conta, configuração e histórico pelo
+          // app-server, mais o texto da tela (codex-status-query.cjs).
+          'codex-rate-limits': queryCodexStatus,
         },
         queryResetCredits: queryCodexRateLimits,
         consumeResetCreditQuery: consumeCodexRateLimitReset,

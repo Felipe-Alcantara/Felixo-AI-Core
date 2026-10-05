@@ -5757,3 +5757,65 @@ f01f69f), instaladores dos três SOs, "Smoke do canvas no app empacotado"
 verde em Linux, Windows e macOS — o que inclui o passo L13 dos links
 quebrados e fecha a validação empacotada das tasks de links e de Limites de
 hoje.
+
+## 2026-10-05 — Limites: o /status inteiro do Codex no painel, e o resumo por provedor
+
+Registro de Claude - Tasks do AI Core, task "Felixo AI Core/Limites — mostrar no painel todas as informações do /status do Codex" (Notion 3db91f95-497e-8186-bb2e-f5d707a05d2b). Feito em 02/10 (14:24 em diante) e portado em 05/10.
+
+### Porte sobre o `19d9dae4` (05/10)
+
+O código ficou pronto em 02/10, mas não subiu. Em 05/10, às 02:35, outra sessão entregou uma versão menor da mesma task (`19d9dae4`): só app-server, com `extraRequests` dentro de `codex-account-rate-limits.cjs`. A pessoa escolheu **portar tudo**, então esta versão substitui aquela parte.
+
+- **Mantido do `main`:**
+  - o cancelamento por `signal` (teto da rodada e "Reconectar", `058750ae`), que agora vale para o app-server (`runCodexAppServerSession`, motivo `cancelled`), para a tela do `/status` (fecha o PTY) e para a consulta combinada;
+  - o campo `profile` da configuração;
+  - o teste de cancelamento.
+- **Coberto pelos testes daqui:** isolamento por perfil e CLI sem os métodos novos (opcional recusado ou `timeout`).
+- **Saiu:**
+  - o rótulo "Permissões" derivado de aprovação e sandbox: o `/status` real mostra permissões da pasta, que são da sessão;
+  - o e-mail nos detalhes: a identidade já aparece no cabeçalho da conta.
+
+### Decisões da pessoa
+
+- **Campos da conversa ficam fora, com aviso.** Pasta, permissões da pasta, Agents.md, nome e modo da conversa, ID da sessão e janela de contexto descrevem um terminal, não a conta.
+- **Duas fontes.** O app-server estruturado e também a tela do `/status`, para o texto exato da CLI.
+- **Tudo o que o app-server dá.** Inclui o histórico de tokens e os avisos de bloqueio.
+- **Pedido no meio da task.** Agrupar as contas do mesmo provedor: cada cartão abre com uma tabela de resumo, e o /status completo de cada conta fica recolhido.
+
+### Como ficou
+
+- **Processo principal.**
+  - `codex-app-server-client.cjs`: uma sessão JSON-RPC manda vários pedidos de uma vez; só o limite é obrigatório, e os opcionais têm uma folga de 8 s.
+  - `codex-status-details.cjs`: monta os detalhes, com texto em português e uma allowlist em `agent-usage-model.cjs`.
+  - `codex-status-screen.cjs`: lê a tela num PTY, usando `@xterm/headless` para saber o que está visível.
+  - `codex-status-query.cjs`: junta as duas fontes em paralelo.
+- **Métricas.** Os outros baldes de `rateLimitsByLimitId` (a reserva semanal de um modelo) saem com `scope: 'model'`, e `account-chain-policy.cjs` ignora esse escopo: a cadeia não declara a conta esgotada por causa de um modelo. O limite de gasto individual de workspace vira métrica da conta.
+- **Painel.** `summarizeProviderAccounts` (puro, em `agent-usage.ts`) alimenta `AgentUsageProviderSummary.tsx`, e cada conta fica num `<details>` sem `open` controlado, que guarda o estado entre coletas.
+- **Fixtures reais anonimizadas.**
+  - `electron/__fixtures__/codex-app-server-status.json`, gravada por `scripts/record-codex-app-server-fixture.cjs`.
+  - `codex-status-conta*.json`, gravadas pelo cenário `status-conta` de `record-terminal-fixture.cjs`, que ganhou `--reanonymize` e a troca do plano da linha "Account:".
+
+### Cuidados medidos no Codex 0.156.1
+
+- **Confiança na pasta.** Em pasta nova, o Codex pergunta "Trust this folder?", e Enter grava no `config.toml`. Um teste de sonda gravou, e a linha foi removida com backup. A leitura usa `-c projects={'<pasta>'={trust_level='trusted'}}`, que vale só para a execução, e sai com Esc se algum diálogo aparecer.
+- **Enter durante a subida do MCP.** Enquanto os servidores MCP sobem, o Enter de um comando é ignorado. Uma gravação digitou `/status` de novo, mandou "/status/status" como mensagem e criou uma conversa real (sessão `01a0fe3e…` e uma linha no `history.jsonl`, deixadas para a pessoa decidir). Desde então:
+  - a leitura e o gravador só digitam com o campo vazio e sem "Starting MCP servers" na tela;
+  - o Enter só é repetido com o `/status` ainda no campo.
+- **Primeiro `/status` sem limites.** O primeiro `/status` de uma sessão nova pode responder "refresh requested". A leitura repete até 4 vezes.
+- **Isolamento.** `--no-daemon` evita um servidor compartilhado de outra conta, e `--no-alt-screen` mantém o quadro em linhas.
+- **Conferido por hash depois de cada rodada real.** `config.toml`, `history.jsonl` e `auth.json` ficaram iguais, sem sessão nova. A exceção é a gravação acima.
+
+### Medido
+
+- **Consulta completa.** 6,6 a 11 s. A da medição de CPU levou 7,6 s, com 3,4 s de CPU de usuário e 1,5 s de sistema somando node, app-server e TUI.
+- **App isolado.** Rodou da fonte sob Xvfb, com userData temporário e `flock`. O resumo mostrou as janelas do Codex e do Claude, a etiqueta "só este modelo", os detalhes e o aviso do Codex. A coluna Conta, estreita na primeira captura, foi alargada.
+- **Testes.** 53 testes novos. Lint e typecheck limpos, Vitest com 2.928 testes, e a suíte node com 2.442 no Node 25 e no Node 22. Os testes novos com timer passaram 6 rodadas paralelas sob carga, depois de corrigidas duas corridas de timer nos próprios testes.
+
+### Observado e não resolvido aqui
+
+- **Créditos de reset.** O backend às vezes devolve `availableCount: 4` com a lista de créditos vazia (gravado na fixture). Sem a lista, o botão "Usar reset" não tem o ID do crédito.
+
+### Não validado
+
+- **Windows e macOS.** Não houve leitura real do PTY nesses sistemas. As aspas do `-c projects` no `cmd.exe`, com pasta temporária contendo espaço, estão cobertas só por teste de unidade.
+- **Duas contas Codex reais no mesmo cartão.** Não foram vistas no app isolado: usar o perfil real é vetado. O agrupamento com duas linhas está coberto pelos testes de renderização.

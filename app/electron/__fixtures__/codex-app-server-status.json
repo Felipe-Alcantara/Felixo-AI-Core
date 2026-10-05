@@ -1,0 +1,650 @@
+{
+ "recordedAt": "2026-10-02",
+ "version": "0.156.1",
+ "anonymized": true,
+ "initialize": {
+  "userAgent": "felixo-ai-core/0.156.1 (Linux; x86_64) xterm-256color (felixo-ai-core; 0.0.0)",
+  "codexHome": "/home/pessoa/.codex",
+  "platformFamily": "unix",
+  "platformOs": "linux"
+ },
+ "responses": {
+  "model/list": {
+   "status": "ok",
+   "result": {
+    "data": [
+     {
+      "id": "gpt-6-astra",
+      "model": "gpt-6-astra",
+      "upgrade": null,
+      "upgradeInfo": null,
+      "availabilityNux": null,
+      "displayName": "GPT-6-Astra",
+      "description": "Frontier intelligence for the most demanding work.",
+      "modelSpecialty": null,
+      "hidden": false,
+      "supportedReasoningEfforts": [
+       {
+        "reasoningEffort": "low",
+        "description": "Fast responses with lighter reasoning"
+       },
+       {
+        "reasoningEffort": "medium",
+        "description": "Balances speed and reasoning depth for everyday tasks"
+       },
+       {
+        "reasoningEffort": "high",
+        "description": "Greater reasoning depth for complex problems"
+       },
+       {
+        "reasoningEffort": "xhigh",
+        "description": "Extra high reasoning depth for complex problems"
+       },
+       {
+        "reasoningEffort": "max",
+        "description": "Maximum reasoning depth for the hardest problems"
+       },
+       {
+        "reasoningEffort": "ultra",
+        "description": "Maximum reasoning with automatic task delegation"
+       }
+      ],
+      "defaultReasoningEffort": "low",
+      "inputModalities": [
+       "text",
+       "image"
+      ],
+      "supportsPersonality": false,
+      "multiAgentVersion": "v2",
+      "additionalSpeedTiers": [
+       "fast"
+      ],
+      "serviceTiers": [
+       {
+        "id": "priority",
+        "name": "Fast",
+        "description": "2x speed, increased usage"
+       }
+      ],
+      "defaultServiceTier": null,
+      "availableAccessPrograms": {
+       "cyber": [
+        "standard"
+       ]
+      },
+      "isDefault": true
+     },
+     {
+      "id": "gpt-6-sol",
+      "model": "gpt-6-sol",
+      "upgrade": null,
+      "upgradeInfo": null,
+      "availabilityNux": null,
+      "displayName": "GPT-6-Sol",
+      "description": "Previous generation workhorse model.",
+      "modelSpecialty": null,
+      "hidden": false,
+      "supportedReasoningEfforts": [
+       {
+        "reasoningEffort": "low",
+        "description": "Fast responses with lighter reasoning"
+       },
+       {
+        "reasoningEffort": "medium",
+        "description": "Balances speed and reasoning depth for everyday tasks"
+       },
+       {
+        "reasoningEffort": "high",
+        "description": "Greater reasoning depth for complex problems"
+       },
+       {
+        "reasoningEffort": "xhigh",
+        "description": "Extra high reasoning depth for complex problems"
+       },
+       {
+        "reasoningEffort": "max",
+        "description": "Maximum reasoning depth for the hardest problems"
+       },
+       {
+        "reasoningEffort": "ultra",
+        "description": "Maximum reasoning with automatic task delegation"
+       }
+      ],
+      "defaultReasoningEffort": "medium",
+      "inputModalities": [
+       "text",
+       "image"
+      ],
+      "supportsPersonality": false,
+      "multiAgentVersion": "v2",
+      "additionalSpeedTiers": [
+       "fast"
+      ],
+      "serviceTiers": [
+       {
+        "id": "priority",
+        "name": "Fast",
+        "description": "1.5x speed"
+       }
+      ],
+      "defaultServiceTier": null,
+      "availableAccessPrograms": {
+       "cyber": [
+        "standard"
+       ]
+      },
+      "isDefault": false
+     },
+     {
+      "id": "gpt-6-luna",
+      "model": "gpt-6-luna",
+      "upgrade": null,
+      "upgradeInfo": null,
+      "availabilityNux": null,
+      "displayName": "GPT-6-Luna",
+      "description": "Fast and affordable model for easier tasks.",
+      "modelSpecialty": null,
+      "hidden": false,
+      "supportedReasoningEfforts": [
+       {
+        "reasoningEffort": "low",
+        "description": "Fast responses with lighter reasoning"
+       },
+       {
+        "reasoningEffort": "medium",
+        "description": "Balances speed and reasoning depth for everyday tasks"
+       },
+       {
+        "reasoningEffort": "high",
+        "description": "Greater reasoning depth for complex problems"
+       },
+       {
+        "reasoningEffort": "xhigh",
+        "description": "Extra high reasoning depth for complex problems"
+       },
+       {
+        "reasoningEffort": "max",
+        "description": "Maximum reasoning depth for the hardest problems"
+       }
+      ],
+      "defaultReasoningEffort": "medium",
+      "inputModalities": [
+       "text",
+       "image"
+      ],
+      "supportsPersonality": false,
+      "multiAgentVersion": "v2",
+      "additionalSpeedTiers": [
+       "fast"
+      ],
+      "serviceTiers": [
+       {
+        "id": "priority",
+        "name": "Fast",
+        "description": "1.5x speed"
+       }
+      ],
+      "defaultServiceTier": null,
+      "availableAccessPrograms": {
+       "cyber": [
+        "standard"
+       ]
+      },
+      "isDefault": false
+     },
+     {
+      "id": "gpt-5.6-sol",
+      "model": "gpt-5.6-sol",
+      "upgrade": null,
+      "upgradeInfo": null,
+      "availabilityNux": null,
+      "displayName": "GPT-5.6-Sol",
+      "description": "Older generation workhorse model.",
+      "modelSpecialty": null,
+      "hidden": false,
+      "supportedReasoningEfforts": [
+       {
+        "reasoningEffort": "low",
+        "description": "Fast responses with lighter reasoning"
+       },
+       {
+        "reasoningEffort": "medium",
+        "description": "Balances speed and reasoning depth for everyday tasks"
+       },
+       {
+        "reasoningEffort": "high",
+        "description": "Greater reasoning depth for complex problems"
+       },
+       {
+        "reasoningEffort": "xhigh",
+        "description": "Extra high reasoning depth for complex problems"
+       },
+       {
+        "reasoningEffort": "max",
+        "description": "Maximum reasoning depth for the hardest problems"
+       },
+       {
+        "reasoningEffort": "ultra",
+        "description": "Maximum reasoning with automatic task delegation"
+       }
+      ],
+      "defaultReasoningEffort": "low",
+      "inputModalities": [
+       "text",
+       "image"
+      ],
+      "supportsPersonality": false,
+      "multiAgentVersion": "v2",
+      "additionalSpeedTiers": [
+       "fast"
+      ],
+      "serviceTiers": [
+       {
+        "id": "priority",
+        "name": "Fast",
+        "description": "1.5x speed, increased usage"
+       }
+      ],
+      "defaultServiceTier": null,
+      "availableAccessPrograms": {
+       "cyber": [
+        "standard"
+       ]
+      },
+      "isDefault": false
+     },
+     {
+      "id": "gpt-5.6-terra",
+      "model": "gpt-5.6-terra",
+      "upgrade": null,
+      "upgradeInfo": null,
+      "availabilityNux": null,
+      "displayName": "GPT-5.6-Terra",
+      "description": "Older balanced model for straightforward work.",
+      "modelSpecialty": null,
+      "hidden": false,
+      "supportedReasoningEfforts": [
+       {
+        "reasoningEffort": "low",
+        "description": "Fast responses with lighter reasoning"
+       },
+       {
+        "reasoningEffort": "medium",
+        "description": "Balances speed and reasoning depth for everyday tasks"
+       },
+       {
+        "reasoningEffort": "high",
+        "description": "Greater reasoning depth for complex problems"
+       },
+       {
+        "reasoningEffort": "xhigh",
+        "description": "Extra high reasoning depth for complex problems"
+       },
+       {
+        "reasoningEffort": "max",
+        "description": "Maximum reasoning depth for the hardest problems"
+       },
+       {
+        "reasoningEffort": "ultra",
+        "description": "Maximum reasoning with automatic task delegation"
+       }
+      ],
+      "defaultReasoningEffort": "medium",
+      "inputModalities": [
+       "text",
+       "image"
+      ],
+      "supportsPersonality": false,
+      "multiAgentVersion": "v2",
+      "additionalSpeedTiers": [
+       "fast"
+      ],
+      "serviceTiers": [
+       {
+        "id": "priority",
+        "name": "Fast",
+        "description": "1.5x speed, increased usage"
+       }
+      ],
+      "defaultServiceTier": null,
+      "availableAccessPrograms": {
+       "cyber": [
+        "standard"
+       ]
+      },
+      "isDefault": false
+     },
+     {
+      "id": "gpt-5.6-luna",
+      "model": "gpt-5.6-luna",
+      "upgrade": null,
+      "upgradeInfo": null,
+      "availabilityNux": null,
+      "displayName": "GPT-5.6-Luna",
+      "description": "Older fast and efficient model.",
+      "modelSpecialty": null,
+      "hidden": false,
+      "supportedReasoningEfforts": [
+       {
+        "reasoningEffort": "low",
+        "description": "Fast responses with lighter reasoning"
+       },
+       {
+        "reasoningEffort": "medium",
+        "description": "Balances speed and reasoning depth for everyday tasks"
+       },
+       {
+        "reasoningEffort": "high",
+        "description": "Greater reasoning depth for complex problems"
+       },
+       {
+        "reasoningEffort": "xhigh",
+        "description": "Extra high reasoning depth for complex problems"
+       },
+       {
+        "reasoningEffort": "max",
+        "description": "Maximum reasoning depth for the hardest problems"
+       }
+      ],
+      "defaultReasoningEffort": "medium",
+      "inputModalities": [
+       "text",
+       "image"
+      ],
+      "supportsPersonality": false,
+      "multiAgentVersion": "v1",
+      "additionalSpeedTiers": [
+       "fast"
+      ],
+      "serviceTiers": [
+       {
+        "id": "priority",
+        "name": "Fast",
+        "description": "1.5x speed, increased usage"
+       }
+      ],
+      "defaultServiceTier": null,
+      "availableAccessPrograms": {
+       "cyber": [
+        "standard"
+       ]
+      },
+      "isDefault": false
+     },
+     {
+      "id": "gpt-5.5",
+      "model": "gpt-5.5",
+      "upgrade": null,
+      "upgradeInfo": null,
+      "availabilityNux": null,
+      "displayName": "GPT-5.5",
+      "description": "Legacy coding model.",
+      "modelSpecialty": null,
+      "hidden": false,
+      "supportedReasoningEfforts": [
+       {
+        "reasoningEffort": "low",
+        "description": "Fast responses with lighter reasoning"
+       },
+       {
+        "reasoningEffort": "medium",
+        "description": "Balances speed and reasoning depth for everyday tasks"
+       },
+       {
+        "reasoningEffort": "high",
+        "description": "Greater reasoning depth for complex problems"
+       },
+       {
+        "reasoningEffort": "xhigh",
+        "description": "Extra high reasoning depth for complex problems"
+       }
+      ],
+      "defaultReasoningEffort": "medium",
+      "inputModalities": [
+       "text",
+       "image"
+      ],
+      "supportsPersonality": false,
+      "multiAgentVersion": null,
+      "additionalSpeedTiers": [
+       "fast"
+      ],
+      "serviceTiers": [
+       {
+        "id": "priority",
+        "name": "Fast",
+        "description": "1.5x speed, increased usage"
+       }
+      ],
+      "defaultServiceTier": null,
+      "availableAccessPrograms": {
+       "cyber": [
+        "standard"
+       ]
+      },
+      "isDefault": false
+     }
+    ],
+    "nextCursor": null
+   }
+  },
+  "config/read": {
+   "status": "ok",
+   "result": {
+    "config": {
+     "model": "gpt-6-luna",
+     "model_reasoning_effort": "max",
+     "model_reasoning_summary": null,
+     "model_verbosity": null,
+     "model_provider": null,
+     "service_tier": "default",
+     "approval_policy": null,
+     "sandbox_mode": null,
+     "model_context_window": null,
+     "model_auto_compact_token_limit": null,
+     "web_search": null,
+     "developer_instructions": "instrução privada da pessoa",
+     "projects": {
+      "/home/pessoa/projeto-secreto": {
+       "trust_level": "trusted"
+      }
+     },
+     "mcp_servers": {
+      "exemplo": {
+       "command": "/home/pessoa/bin/servidor-mcp"
+      }
+     }
+    }
+   }
+  },
+  "account/read": {
+   "status": "ok",
+   "result": {
+    "account": {
+     "type": "chatgpt",
+     "email": "pessoa@example.com",
+     "planType": "pro"
+    },
+    "requiresOpenaiAuth": true,
+    "workspaceRouting": {
+     "chatgptAccountId": "00000000-0000-4000-8000-000000000000",
+     "backendOrigin": "https://chatgpt.com",
+     "accountRoutingOverride": "NO_CONSTRAINT"
+    }
+   }
+  },
+  "account/usage/read": {
+   "status": "ok",
+   "result": {
+    "summary": {
+     "lifetimeTokens": 123456789,
+     "peakDailyTokens": 9876543,
+     "longestRunningTurnSec": 4567,
+     "currentStreakDays": 3,
+     "longestStreakDays": 9
+    },
+    "dailyUsageBuckets": [
+     {
+      "startDate": "2026-09-13",
+      "tokens": 1000
+     },
+     {
+      "startDate": "2026-09-14",
+      "tokens": 2000
+     },
+     {
+      "startDate": "2026-09-15",
+      "tokens": 3000
+     },
+     {
+      "startDate": "2026-09-16",
+      "tokens": 4000
+     },
+     {
+      "startDate": "2026-09-17",
+      "tokens": 5000
+     },
+     {
+      "startDate": "2026-09-18",
+      "tokens": 6000
+     },
+     {
+      "startDate": "2026-09-19",
+      "tokens": 7000
+     },
+     {
+      "startDate": "2026-09-20",
+      "tokens": 8000
+     },
+     {
+      "startDate": "2026-09-21",
+      "tokens": 9000
+     },
+     {
+      "startDate": "2026-09-22",
+      "tokens": 10000
+     },
+     {
+      "startDate": "2026-09-23",
+      "tokens": 11000
+     },
+     {
+      "startDate": "2026-09-24",
+      "tokens": 12000
+     },
+     {
+      "startDate": "2026-09-25",
+      "tokens": 13000
+     },
+     {
+      "startDate": "2026-09-26",
+      "tokens": 14000
+     },
+     {
+      "startDate": "2026-09-27",
+      "tokens": 15000
+     },
+     {
+      "startDate": "2026-09-28",
+      "tokens": 16000
+     },
+     {
+      "startDate": "2026-09-29",
+      "tokens": 17000
+     },
+     {
+      "startDate": "2026-09-30",
+      "tokens": 18000
+     },
+     {
+      "startDate": "2026-10-01",
+      "tokens": 19000
+     },
+     {
+      "startDate": "2026-10-02",
+      "tokens": 20000
+     }
+    ],
+    "threadUsage": null
+   }
+  },
+  "account/rateLimits/read": {
+   "status": "ok",
+   "result": {
+    "ordinaryUsageAllowed": true,
+    "rateLimits": {
+     "limitId": "codex",
+     "limitName": null,
+     "normalModelSlug": null,
+     "primary": {
+      "usedPercent": 0,
+      "windowDurationMins": 300,
+      "resetsAt": 1790980387
+     },
+     "secondary": {
+      "usedPercent": 0,
+      "windowDurationMins": 10080,
+      "resetsAt": 1791106188
+     },
+     "credits": {
+      "hasCredits": false,
+      "unlimited": false,
+      "balance": "0"
+     },
+     "individualLimit": null,
+     "spendControlReached": false,
+     "planType": "pro",
+     "rateLimitReachedType": null
+    },
+    "rateLimitsByLimitId": {
+     "codex": {
+      "limitId": "codex",
+      "limitName": null,
+      "normalModelSlug": null,
+      "primary": {
+       "usedPercent": 0,
+       "windowDurationMins": 300,
+       "resetsAt": 1790980387
+      },
+      "secondary": {
+       "usedPercent": 0,
+       "windowDurationMins": 10080,
+       "resetsAt": 1791106188
+      },
+      "credits": {
+       "hasCredits": false,
+       "unlimited": false,
+       "balance": "0"
+      },
+      "individualLimit": null,
+      "spendControlReached": false,
+      "planType": "pro",
+      "rateLimitReachedType": null
+     },
+     "base_model_inference": {
+      "limitId": "base_model_inference",
+      "limitName": "gpt-reserve",
+      "normalModelSlug": "gpt-5.6-luna",
+      "primary": {
+       "usedPercent": 0,
+       "windowDurationMins": 10080,
+       "resetsAt": 1791576555
+      },
+      "secondary": null,
+      "credits": null,
+      "individualLimit": null,
+      "spendControlReached": null,
+      "planType": "pro",
+      "rateLimitReachedType": null
+     }
+    },
+    "rateLimitResetCredits": {
+     "availableCount": 4,
+     "credits": []
+    },
+    "accountId": "00000000-0000-4000-8000-000000000000",
+    "rateLimitUpsell": null
+   }
+  }
+ }
+}

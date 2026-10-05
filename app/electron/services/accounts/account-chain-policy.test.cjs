@@ -268,6 +268,31 @@ test('a janela mais apertada manda na capacidade', () => {
   assert.equal(capacity.value, 5)
 })
 
+test('janela de um modelo só (scope "model") não esgota a conta nem puxa a capacidade', () => {
+  // A reserva semanal de um modelo do Codex: zerada, só aquele modelo para.
+  const reserveReset = iso(NOW + HOUR)
+  const sample = currentSample([
+    percent(80),
+    percent(0, { key: 'rate_limits.base_model_inference.primary', scope: 'model', resetAt: reserveReset }),
+  ])
+
+  assert.equal(findExhaustedWindow(sample, NOW), null)
+  assert.equal(computeCapacity({ sample, multiplier: 1, nowMs: NOW }).remainingPercent, 80)
+  const cooldown = resolveCooldownEnd({
+    providerId: 'codex',
+    failureClass: 'limit',
+    detectedAtMs: NOW,
+    nowMs: NOW,
+    sample,
+    localTimeZone: 'UTC',
+  })
+  assert.notEqual(cooldown.measuredUntilAt, reserveReset)
+
+  // A mesma janela sem o escopo (a conta inteira) continua esgotando.
+  const accountWide = currentSample([percent(80), percent(0, { resetAt: reserveReset })])
+  assert.ok(findExhaustedWindow(accountWide, NOW))
+})
+
 test('Openia mede créditos em US$: capacidade não comparável', () => {
   const sample = currentSample([{ key: 'credits', unit: 'US$', used: 0.42, limit: 5, remaining: 4.58 }])
 

@@ -44,28 +44,51 @@ const DETAIL_LABELS: Record<string, string> = {
   grantedAt: 'Concedido em',
   expiresAt: 'Expira em',
   id: 'Identificador',
-  // Codex: campos por conta do `/status`, lidos do app-server
-  // (`account/read`, `config/read`, `account/rateLimits/read`).
+  // Codex (codex-status-details.cjs no processo principal).
+  usagePage: 'Página de uso',
+  account: 'Conta',
+  authMode: 'Login',
   plan: 'Plano',
-  authMode: 'Tipo de login',
+  configuration: 'Configuração',
   reasoningEffort: 'Esforço de raciocínio',
   reasoningSummary: 'Resumo do raciocínio',
+  verbosity: 'Verbosidade',
+  modelProvider: 'Provedor do modelo',
   serviceTier: 'Nível de serviço',
-  profile: 'Perfil de configuração',
-  permissions: 'Permissões',
   approvalPolicy: 'Política de aprovação',
   sandboxMode: 'Sandbox',
-  rateLimitReachedType: 'Limite atingido',
-  spendControlReached: 'Controle de gastos',
-  accountUnavailable: 'Conta/plano',
-  configUnavailable: 'Configuração',
-  sessionOnlyFields: 'Fora do painel (só existem numa sessão aberta)',
+  contextWindow: 'Janela de contexto (config)',
+  autoCompactLimit: 'Limite da compactação automática',
+  webSearch: 'Busca na web',
+  profile: 'Perfil de configuração',
+  accountState: 'Estado da conta',
+  ordinaryUsage: 'Uso comum',
+  limitReached: 'Limite atingido',
+  spendControl: 'Controle de gasto',
+  individualLimit: 'Limite individual',
+  extraCredits: 'Créditos avulsos',
+  blockingWarning: 'Aviso de bloqueio',
+  models: 'Modelos disponíveis',
+  tokenUsage: 'Histórico de tokens',
+  lifetimeTokens: 'Total desde o início',
+  peakDailyTokens: 'Pico em um dia',
+  longestTurn: 'Turno mais longo',
+  currentStreak: 'Sequência atual',
+  longestStreak: 'Maior sequência',
+  recentDays: 'Últimos dias',
+  screen: 'Tela do /status',
+  unavailable: 'Não lido nesta rodada',
+}
+
+/** Só endereço https vira link; qualquer outra coisa continua texto. */
+function isSafeExternalUrl(value: AgentUsageStatusDetailValue): value is string {
+  return typeof value === 'string' && /^https:\/\/[^\s]+$/.test(value)
 }
 
 /**
  * Exibe o retorno seguro do `/status` sem despejar a saída bruta do PTY.
- * `open` é intencional: a informação pedida pelo painel fica visível em cada
- * conta/perfil, enquanto o resumo continua no topo do cartão.
+ * `open` é intencional: quem abriu o /status completo de uma conta no painel
+ * (ou o modal de limites do chat) quer ver os dados, não mais um clique.
  */
 export function AgentUsageStatusDetailsView({
   sample,
@@ -130,6 +153,18 @@ function DetailValue({
                 <DetailValue value={item} depth={depth + 1} />
               </div>
             </details>
+          ) : key === 'usagePage' && isSafeExternalUrl(item) ? (
+            <div key={key} className="min-w-0">
+              <span className="text-[10px] text-zinc-600">{DETAIL_LABELS[key]}: </span>
+              <a
+                href={item}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="wrap-break-word text-[10px] text-zinc-400 underline decoration-white/20 hover:text-zinc-200"
+              >
+                {item}
+              </a>
+            </div>
           ) : (
             <div key={key} className="min-w-0">
               <span className="text-[10px] text-zinc-600">{DETAIL_LABELS[key] ?? key}: </span>

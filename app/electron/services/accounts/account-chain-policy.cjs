@@ -97,11 +97,22 @@ function isMeasurementCurrent(sample, nowMs, ttlMs = ELIGIBILITY_TTL_MS) {
   return isWithinTtl(sample.metadata?.measuredAt ?? sample.collectedAt, nowMs, ttlMs)
 }
 
-/** Janelas em % com restante finito (as únicas comparáveis entre contas). */
+/**
+ * Janelas em % com restante finito (as únicas comparáveis entre contas).
+ *
+ * Fica de fora a janela com `scope: 'model'` — a reserva semanal de um modelo
+ * do Codex, por exemplo. Ela zerada só tira aquele modelo; a conta continua
+ * rodando os outros, então não pode virar "conta esgotada" nem puxar a
+ * capacidade da conta para baixo.
+ */
 function readPercentWindows(sample) {
   const metrics = Array.isArray(sample?.metrics) ? sample.metrics : []
   return metrics.filter(
-    (metric) => metric?.unit === '%' && typeof metric.remaining === 'number' && Number.isFinite(metric.remaining),
+    (metric) =>
+      metric?.unit === '%' &&
+      metric.scope !== 'model' &&
+      typeof metric.remaining === 'number' &&
+      Number.isFinite(metric.remaining),
   )
 }
 

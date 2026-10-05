@@ -1,0 +1,121 @@
+{
+ "provider": "codex",
+ "version": "0.156.1",
+ "scenario": "status-conta-pendente",
+ "cols": 160,
+ "rows": 60,
+ "platform": "linux",
+ "recordedAt": "2026-10-02",
+ "anonymized": true,
+ "marks": [],
+ "chunks": [
+  {
+   "t": 400,
+   "data": "\u001b[?2004h\u001b[>4;0m\u001b[>7u\u001b[?1004h\u001b[6n\u001b]10;?\u001b\\\u001b]11;?\u001b\\\u001b[?u\u001b[c"
+  },
+  {
+   "t": 680,
+   "data": "\u001b[?2026h\u001b[?2026h\u001b[1;1H\u001b[J\u001b[?25l\u001b[1;42H\u001b[0m\u001b[49m\u001b[K\u001b[2;42H\u001b[0m\u001b[49m\u001b[K\u001b[3;42H\u001b[0m\u001b[49m\u001b[K\u001b[4;42H\u001b[0m\u001b[49m\u001b[K\u001b[5;42H\u001b[0m\u001b[49m\u001b[K\u001b[6;42H\u001b[0m\u001b[49m\u001b[K\u001b[7;2H\u001b[0m\u001b[49m\u001b[K\u001b[8;2H\u001b[0m\u001b[49m\u001b[K\u001b[9;27H\u001b[0m\u001b[49m\u001b[K\u001b[10;2H\u001b[0m\u001b[49m\u001b[K\u001b[11;2H\u001b[0m\u001b[49m\u001b[K\u001b[1;1H\u001b[2m╭───────────────────────────────────────╮\u001b[2;1H│ >_ \u001b[22m\u001b[1mOpenAI Codex\u001b[22m\u001b[2m\u001b[2m (v0.156.1)            │\u001b[3;1H│                                       │\u001b[4;1H│ model:     \u001b[3mloading\u001b[23m   \u001b[22m\u001b[38;5;75;49m/model\u001b[2m\u001b[39;49m to change │\u001b[5;1H│ directory: \u001b[22mloading\u001b[2m                    │\u001b[6;1H╰───────────────────────────────────────╯\u001b[7;1H\u001b[22m \u001b[8;1H \u001b[9;1H\u001b[1m›\u001b[22m \u001b[2mAsk Codex to do anything\u001b[10;1H\u001b[22m \u001b[11;1H \u001b[39m\u001b[49m\u001b[0m\u001b[1;1H\u001b[0 q\u001b[1;1H\u001b[2m╭\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H"
+  },
+  {
+   "t": 720,
+   "data": "\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 1321,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 2112,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[?25l\u001b[9;5H\u001b[0m\u001b[49m\u001b[K\u001b[9;3H/s\u001b[39m\u001b[49m\u001b[0m\u001b[9;5H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;5H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 2163,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;5H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[?25l\u001b[9;5Ht\u001b[39m\u001b[49m\u001b[0m\u001b[9;6H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 2233,
+   "data": "\u001b[?2026h\u001b[?25l\u001b[1;41H\u001b[2m─────╮\u001b[2;41H     │\u001b[3;41H     │\u001b[4;41H     │\u001b[5;14H\u001b[22m/tmp/felixo-codex-status-9fdkpk\u001b[2m │\u001b[6;41H─────╯\u001b[9;6H\u001b[22ma\u001b[39m\u001b[49m\u001b[0m\u001b[9;7H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 2326,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;7H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 2917,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;7H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;7H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;7H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[?25l\u001b[9;7Ht\u001b[39m\u001b[49m\u001b[0m\u001b[9;8H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;8H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;8H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[?25l\u001b[9;8Hu\u001b[39m\u001b[49m\u001b[0m\u001b[9;9H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 2960,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;9H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[?25l\u001b[9;9Hs\u001b[39m\u001b[49m\u001b[0m\u001b[9;10H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;10H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 5793,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;10H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 5904,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;10H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 6909,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;10H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 12721,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;10H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;10H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;10H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;10H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;10H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;10H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 12767,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;10H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 14121,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;10H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 14275,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;10H\u001b[?25h\u001b[?2026l\u001b]0;felixo-codex-status-9...\u0007\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;10H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;10H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 14320,
+   "data": "\u001b[?2026h\u001b[1;1H\u001b[J\u001b[?25l\u001b[1;47H\u001b[0m\u001b[49m\u001b[K\u001b[2;47H\u001b[0m\u001b[49m\u001b[K\u001b[3;47H\u001b[0m\u001b[49m\u001b[K\u001b[4;47H\u001b[0m\u001b[49m\u001b[K\u001b[5;47H\u001b[0m\u001b[49m\u001b[K\u001b[6;47H\u001b[0m\u001b[49m\u001b[K\u001b[7;2H\u001b[0m\u001b[49m\u001b[K\u001b[9;63H\u001b[0m\u001b[49m\u001b[K\u001b[10;2H\u001b[0m\u001b[49m\u001b[K\u001b[11;10H\u001b[0m\u001b[49m\u001b[K\u001b[12;2H\u001b[0m\u001b[49m\u001b[K\u001b[13;55H\u001b[0m\u001b[49m\u001b[K\u001b[1;1H\u001b[2m╭────────────────────────────────────────────╮\u001b[2;1H│ >_ \u001b[22m\u001b[1mOpenAI Codex\u001b[22m\u001b[2m\u001b[2m (v0.156.1)                 │\u001b[3;1H│                                            │\u001b[4;1H│ model:     \u001b[3mloading\u001b[23m   \u001b[22m\u001b[38;5;75;49m/model\u001b[2m\u001b[39;49m to change      │\u001b[5;1H│ directory: \u001b[22m/tmp/felixo-codex-status-9fdkpk\u001b[2m │\u001b[6;1H╰────────────────────────────────────────────╯\u001b[7;1H\u001b[22m \u001b[8;1H\u001b[7m\u001b[1m› /status      \u001b[22mshow current session configuration and token usage\u001b[1m                                                                                               \u001b[9;1H\u001b[27m\u001b[22m  /\u001b[1mstatus\u001b[22mline  \u001b[2mconfigure which items appear in the status line\u001b[10;1H\u001b[22m \u001b[11;1H\u001b[1m›\u001b[22m /status\u001b[12;1H \u001b[13;1H  \u001b[38;5;223;49mGPT-6-Luna default\u001b[39;49m · \u001b[38;5;151;49m/tmp/felixo-codex-status-9fdkpk\u001b[39m\u001b[49m\u001b[0m\u001b[1;1H\u001b[0 q\u001b[1;1H\u001b[2m╭\u001b[39m\u001b[49m\u001b[0m\u001b[11;10H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[11;10H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[11;10H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 14493,
+   "data": "\u001b[?2026h\u001b[1;1H\u001b[J\u001b[1;60r\u001b[1;1H\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001b[r\u001b[1;17r\u001b[1;1H\r\n\u001b[39;49m\u001b[K\u001b[38;5;5;49m/status\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m╭──────────────────────────────────────────────────────────────────────╮\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│  >_ \u001b[22m\u001b[1mOpenAI Codex\u001b[22m\u001b[2m\u001b[2m (v0.156.1)                                          │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│                                                                      │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│ \u001b[22m\u001b[38;5;75;49mVisit \u001b[4m\u001b]8;;https://chatgpt.com/codex/settings/usage\u0007https://chatgpt.com/codex/settings/usage\u001b]8;;\u0007\u001b[24m for up-to-date\u001b[2m\u001b[39;49m        │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│ \u001b[22m\u001b[38;5;75;49minformation on rate limits and credits\u001b[2m\u001b[39;49m                               │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│                                                                      │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│  Model:                \u001b[22mGPT-6-Luna\u001b[2m (reasoning max, summaries auto)    │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│  Directory:            \u001b[22m/tmp/felixo-codex-status-9fdkpk\u001b[2m               │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│  Permissions:          \u001b[22mWorkspace (Ask for approval)\u001b[2m                  │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│  Agents.md:            \u001b[22m<none>\u001b[2m                                        │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│  Account:              \u001b[22mPlano\u001b[2m                                          │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│  Collaboration mode:   \u001b[22mDefault\u001b[2m                                       │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│                                                                      │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│  Limits:               refresh requested; run /status again shortly. │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m╰──────────────────────────────────────────────────────────────────────╯\u001b[39m\u001b[49m\u001b[0m\u001b[r\u001b[11;10H\u001b[?25l\u001b[18;47H\u001b[0m\u001b[49m\u001b[K\u001b[19;47H\u001b[0m\u001b[49m\u001b[K\u001b[20;47H\u001b[0m\u001b[49m\u001b[K\u001b[21;47H\u001b[0m\u001b[49m\u001b[K\u001b[22;47H\u001b[0m\u001b[49m\u001b[K\u001b[23;47H\u001b[0m\u001b[49m\u001b[K\u001b[24;2H\u001b[0m\u001b[49m\u001b[K\u001b[25;2H\u001b[0m\u001b[49m\u001b[K\u001b[26;27H\u001b[0m\u001b[49m\u001b[K\u001b[27;2H\u001b[0m\u001b[49m\u001b[K\u001b[28;55H\u001b[0m\u001b[49m\u001b[K\u001b[18;1H\u001b[2m╭────────────────────────────────────────────╮\u001b[19;1H│ >_ \u001b[22m\u001b[1mOpenAI Codex\u001b[22m\u001b[2m\u001b[2m (v0.156.1)                 │\u001b[20;1H│                                            │\u001b[21;1H│ model:     \u001b[3mloading\u001b[23m   \u001b[22m\u001b[38;5;75;49m/model\u001b[2m\u001b[39;49m to change      │\u001b[22;1H│ directory: \u001b[22m/tmp/felixo-codex-status-9fdkpk\u001b[2m │\u001b[23;1H╰────────────────────────────────────────────╯\u001b[24;1H\u001b[22m \u001b[25;1H \u001b[26;1H\u001b[1m›\u001b[22m \u001b[2mAsk Codex to do anything\u001b[27;1H\u001b[22m \u001b[28;1H  \u001b[38;5;223;49mGPT-6-Luna default\u001b[39;49m · \u001b[38;5;151;49m/tmp/felixo-codex-status-9fdkpk\u001b[39m\u001b[49m\u001b[0m\u001b[18;1H\u001b[0 q\u001b[18;1H\u001b[2m╭\u001b[39m\u001b[49m\u001b[0m\u001b[26;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 15522,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[26;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 15758,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[26;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 15959,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[26;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 16613,
+   "data": "\u001b]0;⠸ felixo-codex-status-9...\u0007"
+  },
+  {
+   "t": 18168,
+   "data": "\u001b]0;⠇ felixo-codex-status-9...\u0007\u001b[?2026h\u001b[18;1H\u001b[J\u001b[18;60r\u001b[18;1H\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001b[r\u001b[1;26r\u001b[17;1H\r\n\u001b[39;49m\u001b[K\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m╭──────────────────────────────────────────────╮\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│ >_ \u001b[22m\u001b[1mOpenAI Codex\u001b[22m\u001b[2m\u001b[2m (v0.156.1)                   │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│                                              │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│ model:     \u001b[22mGPT-6-Luna max\u001b[2m   \u001b[22m\u001b[38;5;75;49m/model\u001b[2m\u001b[39;49m to change │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│ directory: \u001b[22m/tmp/felixo-codex-status-9fdkpk\u001b[2m   │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m╰──────────────────────────────────────────────╯\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K  \u001b[1mTip:\u001b[22m \u001b[3mNew\u001b[23m Use \u001b[1m/fast\u001b[22m to enable our fastest inference with increased plan usage.\u001b[39m\u001b[49m\u001b[0m\u001b[r\u001b[26;3H\u001b[?25l\u001b[27;2H\u001b[0m\u001b[49m\u001b[K\u001b[28;2H\u001b[0m\u001b[49m\u001b[K\u001b[29;27H\u001b[0m\u001b[49m\u001b[K\u001b[30;2H\u001b[0m\u001b[49m\u001b[K\u001b[31;51H\u001b[0m\u001b[49m\u001b[K\u001b[27;1H \u001b[28;1H \u001b[29;1H\u001b[1m\u001b[38;5;215;49m›\u001b[22m\u001b[39;49m \u001b[2mAsk Codex to do anything\u001b[30;1H\u001b[22m \u001b[31;1H  \u001b[38;5;223;49mGPT-6-Luna max\u001b[39;49m · \u001b[38;5;151;49m/tmp/felixo-codex-status-9fdkpk\u001b[39m\u001b[49m\u001b[0m\u001b[27;1H\u001b[0 q\u001b[27;1H \u001b[39m\u001b[49m\u001b[0m\u001b[29;3H\u001b[?25h\u001b[?2026l\u001b]0;⠏ felixo-codex-status-9...\u0007\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[29;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 18292,
+   "data": "\u001b]0;⠋ felixo-codex-status-9...\u0007\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[29;3H\u001b[?25h\u001b[?2026l\u001b]0;felixo-codex-status-9...\u0007\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[29;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[29;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 18646,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[29;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[29;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 19563,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[29;3H\u001b[?25h\u001b[?2026l"
+  }
+ ]
+}

@@ -7,6 +7,11 @@ export type AgentUsageMetric = {
   unit: string | null
   precision: string
   resetAt: string | null
+  /**
+   * `model`: a janela vale só para um modelo (a reserva semanal do Codex, por
+   * exemplo) e não diz se a conta inteira acabou. Ausente = conta inteira.
+   */
+  scope?: 'account' | 'model'
 }
 
 export type AgentUsageStatusDetailValue =
@@ -287,6 +292,109 @@ export function getLastKnownAgentUsage(
   account: AgentUsageAccount,
 ): AgentUsageSample | null {
   return account.lastKnownSample ?? null
+}
+
+/**
+ * Amostra que o painel mostra para a conta. Com a fonte fora do ar, o painel
+ * não apaga o que já sabia: mostra o último valor conhecido, marcado como
+ * antigo pelo próprio selo de status.
+ */
+export function getDisplayedAgentUsageSample(
+  account: AgentUsageAccount,
+): AgentUsageSample | null {
+  return account.latestSample?.metrics.length
+    ? account.latestSample
+    : getLastKnownAgentUsage(account) ?? account.latestSample
+}
+
+export type AgentUsageSummaryColumn = { key: string; label: string }
+
+export type AgentUsageSummaryCell = {
+  remaining: number
+  usedPercent: number
+  resetAt: string | null
+}
+
+export type AgentUsageSummaryRow = {
+  account: AgentUsageAccount
+  plan: string | null
+  status: AgentUsageStatus
+  /** Aviso de bloqueio publicado pela CLI (uso bloqueado, limite atingido). */
+  warning: string | null
+  cells: Record<string, AgentUsageSummaryCell | null>
+}
+
+export type AgentUsageProviderSummary = {
+  columns: AgentUsageSummaryColumn[]
+  rows: AgentUsageSummaryRow[]
+}
+
+/**
+ * Resumo de um provedor: uma linha por conta e uma coluna por janela de uso
+ * da conta, na ordem em que a CLI publica. Só entram janelas em % da conta
+ * inteira — a de um modelo só (`scope: 'model'`) e os saldos sem escala
+ * fechada ficam no /status completo de cada conta. Conta sem a janela fica
+ * com a célula vazia, nunca com zero.
+ */
+export function summarizeProviderAccounts(
+  group: AgentUsageProviderGroup,
+  now: () => number = Date.now,
+): AgentUsageProviderSummary {
+  const columns: AgentUsageSummaryColumn[] = []
+  const seen = new Set<string>()
+  const displayed = group.accounts.map((account) => ({
+    account,
+    sample: getDisplayedAgentUsageSample(account),
+  }))
+
+  for (const { sample } of displayed) {
+    for (const metric of sample?.metrics ?? []) {
+      if (isAccountPercentWindow(metric) && !seen.has(metric.key)) {
+        seen.add(metric.key)
+        columns.push({ key: metric.key, label: metric.label })
+      }
+    }
+  }
+
+  const rows = displayed.map(({ account, sample }) => {
+    const cells: Record<string, AgentUsageSummaryCell | null> = {}
+    for (const column of columns) {
+      const metric = sample?.metrics.find((item) => item.key === column.key)
+      cells[column.key] =
+        metric && isAccountPercentWindow(metric)
+          ? {
+              remaining: metric.remaining as number,
+              usedPercent: agentUsagePercent(metric) ?? 100 - (metric.remaining as number),
+              resetAt: metric.resetAt,
+            }
+          : null
+    }
+
+    return {
+      account,
+      plan: getAgentUsagePlan(sample),
+      status: getAccountStatus(account, now),
+      warning: getAgentUsageBlockingWarning(account.latestSample ?? sample),
+      cells,
+    }
+  })
+
+  return { columns, rows }
+}
+
+function isAccountPercentWindow(metric: AgentUsageMetric): boolean {
+  return (
+    metric.unit === '%' &&
+    metric.scope !== 'model' &&
+    typeof metric.remaining === 'number' &&
+    Number.isFinite(metric.remaining)
+  )
+}
+
+/** Aviso de bloqueio que a consulta publicou nos detalhes do /status. */
+export function getAgentUsageBlockingWarning(sample: AgentUsageSample | null): string | null {
+  const warning = getAgentUsageStatusDetails(sample)?.blockingWarning
+  return typeof warning === 'string' && warning.trim() ? warning.trim() : null
 }
 
 /**
