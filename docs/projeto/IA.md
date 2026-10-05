@@ -5728,3 +5728,32 @@ provocar sob demanda) e o app empacotado.
 Achado à parte (task própria): o selo de plano do Codex mostra FREE numa conta
 Plus, porque `agent-usage-local-probes.cjs:46` prefere o `plan_type` dos
 limites (`free`) ao plano da conta (`chatgpt_plan_type` = `plus`).
+
+## [2026-10-05] Dependências: Release destravado (braces via Excalidraw) e v0.1.434 publicada
+
+Task: [Felixo AI Core/Dependências — tirar o braces vulnerável (GHSA-vfj7-8cjw-p6xm) que entra pelo Excalidraw e reprova o Dependency policy](https://app.notion.com/p/Felixo-AI-Core-Depend-ncias-tirar-o-braces-vulner-vel-GHSA-vfj7-8cjw-p6xm-que-entra-pelo-Excalid-3f091f95497e8109bcdac1df0785f87e).
+
+Desde o alerta GHSA-vfj7-8cjw-p6xm, o job Dependency policy reprovava em main
+(`npm audit --omit=dev` com high=4) e o Release não publicava: o último
+publicado era a v0.1.433, de 01/10. Cadeia: `@excalidraw/excalidraw@0.18.1 →
+sass@1.51.0 → chokidar@3.6.0 → braces@3.0.3`. Não existe braces corrigido (o
+alerta cobre `<=3.0.3`, a versão mais nova publicada). O chokidar 4 não
+depende de braces; o Excalidraw declara o sass como dependência, mas o dist
+não o importa e o app não usa sass. Correção: override
+`@excalidraw/excalidraw > sass > chokidar: ^4.0.3`. Descartado o override do
+sass para 1.105, que traria o `@parcel/watcher` (módulo nativo) ao app
+empacotado sem necessidade.
+
+O lock foi montado a partir do original aplicando só as diferenças reais de
+pacote: o `npm install` desta máquina (Windows) também apagava os campos
+`libc` (glibc/musl) dos pacotes nativos por plataforma — que o npm no Linux
+usa para escolher o binário — e entradas `inBundle` do oxide-wasm32. Prova:
+`npm ci` do zero com o lock montado (exit 0), audit de produção 0, build ok.
+
+Deploy (Etapa 9 cumprida até o fim, a pedido do Felipe): CI 37291727326 verde
+(o benchmark de scrollback do macOS oscilou e passou na reexecução); Release
+37293541428 verde às 07:12; **v0.1.434 publicada como Latest** (alvo
+f01f69f), instaladores dos três SOs, "Smoke do canvas no app empacotado"
+verde em Linux, Windows e macOS — o que inclui o passo L13 dos links
+quebrados e fecha a validação empacotada das tasks de links e de Limites de
+hoje.
