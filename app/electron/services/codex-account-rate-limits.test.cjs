@@ -399,3 +399,21 @@ test('Permissions do /status: rótulo só quando a CLI publicou aprovação e sa
   assert.equal(describeCodexPermissions(null, 'read-only'), null)
   assert.equal(describeCodexPermissions('never', null), null)
 })
+
+test('cancelar a leitura encerra o app-server do Codex na hora e resolve com falha', async () => {
+  let killed = 0
+  const child = new EventEmitter()
+  // Um app-server que nunca responde ao initialize.
+  child.stdin = { write: () => {} }
+  child.stdout = new EventEmitter()
+  child.stdout.setEncoding = () => {}
+  child.kill = () => { killed += 1 }
+  const queryCodexRateLimits = createCodexRateLimitsQuery({ spawnProcess: () => child })
+  const controller = new AbortController()
+  const pending = queryCodexRateLimits({ timeoutMs: 60_000, signal: controller.signal })
+  controller.abort()
+  const result = await pending
+  assert.equal(result.ok, false)
+  assert.match(result.message, /cancelada/)
+  assert.equal(killed, 1)
+})

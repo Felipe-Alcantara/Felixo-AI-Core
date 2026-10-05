@@ -185,3 +185,22 @@ test('consulta Claude em PTY envia somente /status e devolve o perfil isolado', 
   assert.ok(writes.filter((value) => value === '\u001b[C').length >= 2)
   assert.equal(exitListeners.length, 1)
 })
+
+test('cancelar a consulta (teto da rodada ou Reconectar) encerra o PTY na hora e resolve com falha', async () => {
+  let killed = 0
+  const pty = {
+    write() {},
+    kill() { killed += 1 },
+    onData() {},
+    onExit() {},
+  }
+  // Um Claude que abriu e nunca mostra o prompt: o caso do monitor travado.
+  const query = createClaudeUsageQuery({ now: () => NOW, platform, spawnPty: () => pty })
+  const controller = new AbortController()
+  const pending = query({ cwd: '/tmp', timeoutMs: 60_000, startupFallbackMs: 60_000, signal: controller.signal })
+  controller.abort()
+  const result = await pending
+  assert.equal(result.ok, false)
+  assert.match(result.message, /cancelada/)
+  assert.equal(killed, 1)
+})

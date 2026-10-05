@@ -1270,3 +1270,110 @@ test('checagem de uma conta com perfil não herda as credenciais do app; a do lo
     }
   }
 })
+
+/**
+ * Serviço com uma conta do Claude cuja consulta ao vivo é controlada pelo
+ * teste. Reproduz a task "reconectar o monitor quando o Claude dessincroniza":
+ * uma consulta que nunca resolve prendia `refreshPromise` até o app morrer.
+ */
+function criarServicoComConsultaControlada({ queryLiveUsage, refreshDeadlineMs, onLiveQueryFailure = null }) {
+  const databaseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-agent-usage-reconectar-'))
+  const database = createStorageDatabase({ databaseDir })
+  const repository = createAgentUsageRepository(database)
+  repository.createAccount({ id: 'claude-sistema', providerId: 'claude', label: 'Claude' })
+  const service = createAgentUsageService({
+    repository,
+    probe: () => null,
+    listCatalog: async () => [
+      { id: 'claude', name: 'Claude Code CLI', provider: 'Anthropic', command: 'claude', detected: true, version: '2.1.285' },
+    ],
+    runCommand: async () => ({
+      ok: true,
+      stdout: JSON.stringify({ loggedIn: true, email: 'pessoa@example.com', subscriptionType: 'max' }),
+      stderr: '',
+    }),
+    queryLiveUsage,
+    refreshDeadlineMs,
+    onLiveQueryFailure,
+  })
+  return {
+    service,
+    repository,
+    limpar: () => {
+      database.close()
+      fs.rmSync(databaseDir, { recursive: true, force: true })
+    },
+  }
+}
+
+const consultaOk = () => ({
+  ok: true,
+  collectedAt: new Date().toISOString(),
+  measuredAt: new Date().toISOString(),
+  metrics: [{ key: 'rate_limits.seven_day', label: 'Janela de 7 dias', used: 40, limit: 100, remaining: 60, unit: '%', precision: 'percentage', resetAt: null }],
+  details: null,
+})
+
+test(
+  'consulta ao vivo que nunca responde não prende o Atualizar: a rodada estoura o teto e cancela a consulta',
+  { skip: hasNodeSqlite() ? false : 'node:sqlite indisponível neste runtime' },
+  async () => {
+    let sinalRecebido = null
+    const falhasObservadas = []
+    const { service, repository, limpar } = criarServicoComConsultaControlada({
+      refreshDeadlineMs: 200,
+      // O observador é o que grava no QA Logger persistido em disco: a falha
+      // precisa sobreviver ao restart que antes era a única saída.
+      onLiveQueryFailure: (falha) => falhasObservadas.push(falha),
+      queryLiveUsage: ({ signal }) => {
+        sinalRecebido = signal
+        return new Promise(() => {})
+      },
+    })
+    try {
+      const inicio = Date.now()
+      const dashboard = await service.refresh()
+      assert.ok(Date.now() - inicio < 2_000, 'a rodada travada deveria sair pelo teto')
+      assert.equal(dashboard.ok, true)
+      assert.equal(sinalRecebido?.aborted, true, 'a consulta travada deveria receber o cancelamento')
+      const amostra = repository.getLatestSample('claude-sistema')
+      assert.equal(amostra.status, 'error')
+      assert.match(amostra.errorMessage, /não respondeu/)
+      assert.equal(falhasObservadas.length, 1)
+      assert.match(falhasObservadas[0].message, /não respondeu em 0 s|não respondeu/)
+    } finally {
+      limpar()
+    }
+  },
+)
+
+test(
+  'Reconectar abandona a rodada travada e refaz do zero, sem reiniciar o app',
+  { skip: hasNodeSqlite() ? false : 'node:sqlite indisponível neste runtime' },
+  async () => {
+    let chamadas = 0
+    const { service, repository, limpar } = criarServicoComConsultaControlada({
+      // Teto alto: quem destrava aqui é o Reconectar, não o tempo.
+      refreshDeadlineMs: 60_000,
+      queryLiveUsage: () => {
+        chamadas += 1
+        return chamadas === 1 ? new Promise(() => {}) : Promise.resolve(consultaOk())
+      },
+    })
+    try {
+      const travada = service.refresh()
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      const dashboard = await service.reconnect()
+      assert.equal(dashboard.ok, true)
+      assert.equal(chamadas, 2)
+      const amostra = repository.getLatestSample('claude-sistema')
+      assert.equal(amostra.status === 'error', false)
+      assert.equal(amostra.metrics[0].remaining, 60)
+      // A rodada abandonada também termina, e não sobrescreve a nova.
+      await travada
+      assert.equal(repository.getLatestSample('claude-sistema').metrics[0].remaining, 60)
+    } finally {
+      limpar()
+    }
+  },
+)

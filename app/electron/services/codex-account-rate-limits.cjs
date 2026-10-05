@@ -64,6 +64,7 @@ function createCodexRateLimitsQuery({ spawnProcess = spawnChildProcess, now = ()
     env: accountEnv = {},
     timeoutMs = DEFAULT_TIMEOUT_MS,
     clientVersion = '0.0.0',
+    signal = null,
   } = {}) {
     return requestCodexAppServer({
       spawnProcess,
@@ -71,6 +72,7 @@ function createCodexRateLimitsQuery({ spawnProcess = spawnChildProcess, now = ()
       accountEnv,
       timeoutMs,
       clientVersion,
+      signal,
       method: 'account/rateLimits/read',
       params: null,
       // Conta/plano e configuração efetiva entram na mesma sessão: são as
@@ -195,6 +197,10 @@ function requestCodexAppServer({
   method,
   params,
   extraRequests = [],
+  // Cancelamento de fora (teto da rodada ou "Reconectar"): encerra o
+  // app-server na hora. Só a leitura aceita; o consumo de reset nunca é
+  // abortado no meio.
+  signal = null,
   timeoutMessage,
   failureResult,
   serverErrorMessage,
@@ -354,6 +360,15 @@ function requestCodexAppServer({
     // No tempo limite, um pedido obrigatório já respondido vale: só os
     // opcionais que faltaram ficam de fora (o painel registra a ausência).
     timeoutTimer = setTimeout(() => (mainAnswered ? complete() : fail(timeoutMessage)), timeoutMs)
+
+    if (signal) {
+      const cancel = () => fail('A consulta ao app-server do Codex foi cancelada.')
+      if (signal.aborted) {
+        cancel()
+        return
+      }
+      signal.addEventListener('abort', cancel, { once: true })
+    }
 
     send({
       jsonrpc: '2.0',

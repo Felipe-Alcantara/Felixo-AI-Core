@@ -59,6 +59,9 @@ function createClaudeUsageQuery({
     startupFallbackMs = DEFAULT_STARTUP_FALLBACK_MS,
     navigationDelayMs = DEFAULT_NAVIGATION_DELAY_MS,
     resultSettleMs = DEFAULT_RESULT_SETTLE_MS,
+    // Cancelamento de fora (teto da rodada ou "Reconectar" no painel): encerra
+    // o PTY descartável na hora, sem esperar o próprio timeout desta consulta.
+    signal = null,
   } = {}) {
     return new Promise((resolve) => {
       const queryEnv = createCliEnv(buildAccountProcessEnv(process.env, { providerId: 'claude', profileEnv: accountEnv }))
@@ -269,6 +272,15 @@ function createClaudeUsageQuery({
 
         fail('O /status do Claude não retornou os limites de uso.')
       })
+
+      if (signal) {
+        const cancel = () => fail('A consulta ao /status do Claude foi cancelada.')
+        if (signal.aborted) {
+          cancel()
+          return
+        }
+        signal.addEventListener('abort', cancel, { once: true })
+      }
 
       startupTimer = setTimeout(sendStatus, startupFallbackMs)
       const timeoutTimer = setTimeout(() => {

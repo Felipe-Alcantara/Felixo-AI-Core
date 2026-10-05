@@ -30,6 +30,17 @@ const {
 } = require('./storage/agent-usage-repository.cjs')
 
 const COMMAND_TIMEOUT_MS = 30_000
+/**
+ * Teto da rodada inteira de atualização. Cada comando já tinha o seu limite,
+ * mas a consulta ao vivo é uma função injetada que só RECEBE `timeoutMs` —
+ * se ela nunca resolver, nada a encerrava, e o `refreshPromise` compartilhado
+ * prendia o botão Atualizar até o app ser reiniciado (task "reconectar o
+ * monitor quando o Claude dessincroniza", 05/10/2026). Folga sobre o
+ * COMMAND_TIMEOUT_MS: as contas rodam em paralelo, e a do Claude abre um PTY.
+ */
+const REFRESH_DEADLINE_MS = 90_000
+/** Depois do teto, quanto esperar a rodada assentar antes de soltar o botão. */
+const REFRESH_SETTLE_GRACE_MS = 5_000
 const STALE_AFTER_MS = 15 * 60 * 1000
 const SECRET_LIKE_INPUT_PATTERN =
   /(api[_ -]?key|access[_ -]?token|auth[_ -]?token|bearer|cookie|password|secret|sk-|eyJ[A-Za-z0-9_-]{8,})/i
@@ -80,9 +91,15 @@ function createAgentUsageService({
   // Contas com login próprio. Cada uma tem pasta de credencial separada, então
   // a quota delas é lida da pasta delas — não do login do sistema.
   listProfiles = () => [],
+  refreshDeadlineMs = REFRESH_DEADLINE_MS,
 } = {}) {
   let refreshPromise = null
   let lastRefreshAt = null
+  // Cada rodada ganha um número. Só a rodada corrente grava amostras: uma
+  // rodada abandonada (teto ou Reconectar) que termine depois nunca
+  // sobrescreve o resultado de uma mais nova.
+  let generation = 0
+  let currentRound = null
 
   async function list() {
     const catalog = await readCatalog(listCatalog)
@@ -109,14 +126,58 @@ function createAgentUsageService({
       return refreshPromise
     }
 
-    refreshPromise = refreshInternal().finally(() => {
-      refreshPromise = null
+    const round = { id: ++generation, controller: new AbortController(), reason: null }
+    currentRound = round
+    const deadlineTimer = setTimeout(() => abortRound(round, 'deadline'), refreshDeadlineMs)
+    deadlineTimer.unref?.()
+
+    const work = refreshInternal(round)
+    // Rede de segurança para um passo que ignore o cancelamento (o catálogo,
+    // um runCommand injetado): passado o teto e a folga, o botão é solto com
+    // o painel atual em vez de ficar preso na promessa.
+    const safety = new Promise((resolve) => {
+      const timer = setTimeout(async () => {
+        abortRound(round, 'deadline')
+        resolve({ ...(await list()), refreshError: deadlineMessage() })
+      }, refreshDeadlineMs + REFRESH_SETTLE_GRACE_MS)
+      timer.unref?.()
+      work.finally(() => clearTimeout(timer)).catch(() => {})
     })
 
-    return refreshPromise
+    const promise = Promise.race([work, safety]).finally(() => {
+      clearTimeout(deadlineTimer)
+      if (refreshPromise === promise) {
+        refreshPromise = null
+      }
+    })
+    refreshPromise = promise
+    return promise
   }
 
-  async function refreshInternal() {
+  /**
+   * "Reconectar": abandona a rodada em andamento (cancelando as consultas
+   * dela, que encerram o processo descartável) e começa outra do zero. É a
+   * saída que antes exigia reiniciar o app.
+   */
+  async function reconnect() {
+    if (currentRound) {
+      abortRound(currentRound, 'reconnect')
+    }
+    refreshPromise = null
+    return refresh()
+  }
+
+  function abortRound(round, reason) {
+    if (round.controller.signal.aborted) return
+    round.reason = reason
+    round.controller.abort()
+  }
+
+  function deadlineMessage() {
+    return `A consulta não respondeu em ${Math.round(refreshDeadlineMs / 1000)} s; a rodada foi encerrada e o processo da consulta, cancelado. Use Reconectar para tentar de novo.`
+  }
+
+  async function refreshInternal(round = { id: ++generation, controller: new AbortController(), reason: null }) {
     const catalog = await readCatalog(listCatalog)
     const accounts = ensureDiscoveredAccounts({
       catalog,
@@ -140,6 +201,8 @@ function createAgentUsageService({
           queryLiveUsage,
           onLiveQueryFailure,
           queryResetCredits,
+          signal: round.controller.signal,
+          abortMessage: () => (round.reason === 'reconnect' ? 'A consulta foi cancelada pelo Reconectar.' : deadlineMessage()),
         }),
       ),
       // A conta com login próprio não precisa de adivinhação de identidade: a
@@ -156,11 +219,18 @@ function createAgentUsageService({
           queryLiveUsage,
           onLiveQueryFailure,
           queryResetCredits,
+          signal: round.controller.signal,
+          abortMessage: () => (round.reason === 'reconnect' ? 'A consulta foi cancelada pelo Reconectar.' : deadlineMessage()),
         }),
       ),
     ])
 
     const idsDePerfil = new Set(perfis.map((perfil) => perfil.id))
+
+    // Rodada abandonada pelo Reconectar: uma mais nova já está valendo.
+    if (round.id !== generation) {
+      return list()
+    }
 
     for (const snapshot of snapshots) {
       // A amostra do login do sistema não disputa as contas com login próprio:
@@ -409,6 +479,7 @@ function createAgentUsageService({
     addAccount,
     getDashboard: list,
     list,
+    reconnect,
     refresh,
     refreshLocal,
     removeAccount,
@@ -493,6 +564,8 @@ async function collectProviderSnapshot({
   queryLiveUsage,
   onLiveQueryFailure,
   queryResetCredits,
+  signal = new AbortController().signal,
+  abortMessage = () => 'A consulta foi cancelada.',
 }) {
   const source = getAgentUsageSource(providerId)
   const collectedAt = nowIso(now)
@@ -561,11 +634,16 @@ async function collectProviderSnapshot({
       })
     } else if (liveQueryFunction) {
       try {
-        liveResult = await liveQueryFunction({
-          env: profileEnv,
-          cwd: os.tmpdir(),
-          timeoutMs: COMMAND_TIMEOUT_MS,
-        })
+        liveResult = await untilAborted(
+          liveQueryFunction({
+            env: profileEnv,
+            cwd: os.tmpdir(),
+            timeoutMs: COMMAND_TIMEOUT_MS,
+            signal,
+          }),
+          signal,
+          () => ({ ok: false, message: `${source.name}: ${abortMessage()}` }),
+        )
       } catch {
         liveResult = {
           ok: false,
@@ -590,10 +668,15 @@ async function collectProviderSnapshot({
     auth.authStatus !== 'logged_out'
   ) {
     try {
-      resetCreditsResult = await queryResetCredits({
-        env: profileEnv,
-        timeoutMs: COMMAND_TIMEOUT_MS,
-      })
+      resetCreditsResult = await untilAborted(
+        queryResetCredits({
+          env: profileEnv,
+          timeoutMs: COMMAND_TIMEOUT_MS,
+          signal,
+        }),
+        signal,
+        () => ({ ok: false }),
+      )
     } catch {
       resetCreditsResult = { ok: false }
     }
@@ -765,6 +848,29 @@ async function checkAccountAuth({
     auth,
     durationMs: Math.max(0, clock() - startedAt),
   }
+}
+
+/**
+ * Espera `promise`, mas resolve com `onAbort()` assim que `signal` for
+ * abortado — a consulta pode ignorar o cancelamento, a rodada não espera por
+ * ela. Rejeição continua rejeição (os `try/catch` de quem chama tratam).
+ */
+function untilAborted(promise, signal, onAbort) {
+  if (signal.aborted) return Promise.resolve(onAbort())
+  return new Promise((resolve, reject) => {
+    const abort = () => resolve(onAbort())
+    signal.addEventListener('abort', abort, { once: true })
+    Promise.resolve(promise).then(
+      (value) => {
+        signal.removeEventListener('abort', abort)
+        resolve(value)
+      },
+      (error) => {
+        signal.removeEventListener('abort', abort)
+        reject(error)
+      },
+    )
+  })
 }
 
 function mergeStatusDetails({ liveDetails, resetCreditsResult }) {
@@ -1422,6 +1528,7 @@ function nowIso(now) {
 }
 
 module.exports = {
+  REFRESH_DEADLINE_MS,
   COMMAND_TIMEOUT_MS,
   STALE_AFTER_MS,
   createAgentUsageService,
