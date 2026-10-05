@@ -1052,7 +1052,7 @@ export const agentToolSurfaces: InventoryElement[] = [
     ],
     gaps: [
       {
-        what: 'Sem teste de interface da seção (motor, chave, endereço, atalho, microfone); a própria tela avisa que o servidor local nunca foi testado com um servidor real',
+        what: 'Sem teste de interface da seção (motor, chave, endereço, atalho, microfone). O caminho com servidor local foi conferido de ponta a ponta no Linux em 05/10/2026 (faster-whisper e microfone virtual, scripts/validar-ditado-linux.cjs), mas só por roteiro manual',
         risk: 'baixo',
         task: '3ec91f95-497e-81ca-8319-ee657b0b6492',
       },

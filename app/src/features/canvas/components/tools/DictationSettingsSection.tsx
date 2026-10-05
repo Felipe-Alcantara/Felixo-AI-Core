@@ -134,8 +134,8 @@ export function DictationSettingsSection() {
           <span>
             Servidor local (sem chave) — o áudio não sai desta máquina
             <span className="block text-[11px] text-zinc-500">
-              Você precisa rodar um servidor de transcrição compatível neste computador. Este recurso ainda não foi
-              testado com um servidor real.
+              Você precisa rodar neste computador um servidor de transcrição compatível com a rota
+              /v1/audio/transcriptions (por exemplo, o faster-whisper). Veja o guia do usuário, seção Ditado por voz.
             </span>
           </span>
         </label>

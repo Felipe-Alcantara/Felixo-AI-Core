@@ -2238,7 +2238,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Sem teste de interface da seção (motor, chave, endereço, atalho, microfone); a própria tela avisa que o servidor local nunca foi testado com um servidor real | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
+| Sem teste de interface da seção (motor, chave, endereço, atalho, microfone). O caminho com servidor local foi conferido de ponta a ponta no Linux em 05/10/2026 (faster-whisper e microfone virtual, scripts/validar-ditado-linux.cjs), mas só por roteiro manual | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
 | Falhas engolidas: DictationSettingsSection.tsx:87-91 mostra "Chave removida." sem ler o retorno e speech:clear-key não tem try no main (speech-ipc-handlers.cjs:63-66); se speech:get-config falhar (DictationSettingsSection.tsx:35-38), config fica nula, os campos de endereço/modelo/idioma não aceitam digitação e "Salvar endereço, modelo e idioma" não faz nada, sem aviso | médio | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 
 ### Rolagem no terminal do Claude Code (Configurações)
