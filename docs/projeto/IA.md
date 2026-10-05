@@ -5588,3 +5588,40 @@ real anonimizada). Backend 2395/2398 e frontend 2916/2924; as falhas
 Lint e typecheck limpos. O `node_modules` local precisou ser reinstalado do
 zero (estava desatualizado depois do pull, sem TypeScript 7 nem
 `@tailwindcss/vite`).
+
+## [2026-10-05] Instalação: o app do dia a dia rodava da cópia de smoke em %TEMP%
+
+Task: [Felixo AI Core/Instalação — app do dia a dia roda da cópia de smoke em %TEMP% e o autostart aponta para ela](https://app.notion.com/p/Felixo-AI-Core-Instala-o-app-do-dia-a-dia-roda-da-c-pia-de-smoke-em-TEMP-e-o-autostart-aponta-p-3db91f95497e81699310d1f0e05ec51d).
+
+Causa raiz medida no registro do Windows do Felipe (05/10/2026): em 02/09 um
+release smoke rodou localmente num shell elevado. `scripts/release-smoke.cjs`
+instalava o NSIS com `/S /D=%TEMP%\felixo-release-smoke-*` e o mesmo appId do
+app real; elevado, o NSIS fez instalação "para todos os usuários": gravou a
+desinstalação e o `InstallLocation` em HKLM
+(`38f15219-ae73-5ead-9234-72a65f4ddfd3`), criou atalhos no Menu Iniciar
+(ProgramData) e na Área de Trabalho pública, todos apontando para `%TEMP%`. O
+Felipe abriu o app por esses atalhos; o auto-update lê o `InstallLocation` e
+atualiza no lugar (a cópia estava na 0.1.433); o "iniciar com o sistema"
+gravou esse exe em `HKCU\...\Run`, habilitado em `StartupApproved`.
+
+Correções:
+- `release-smoke.cjs`: fora de um runner descartável (`GITHUB_ACTIONS`/`CI`),
+  o instalador NSIS é recusado com mensagem explicando o risco; a escolha
+  automática passa a usar `win-unpacked`. `--allow-system-install` libera
+  numa máquina descartável. O CI segue instalando como antes.
+- `autostart.cjs`: `isInsideTemporaryDirectory()` compara o exe com as
+  pastas temporárias depois de `realpathSync.native` — no Windows
+  `os.tmpdir()` vem em nome curto 8.3 (`FELIPE~1`) e o exe em nome longo, e
+  texto cru nunca casaria. Ligar o autostart a partir de %TEMP% é recusado;
+  desligar continua permitido; o status traz `warning`, mostrado em
+  Configurações.
+- `electron/release-smoke.test.cjs` apaga as pastas que cria (`after`).
+  Medido: 200 pastas `felixo-release-*` antes e 200 depois de rodar os dois
+  arquivos de teste.
+
+Pendente, manual: migrar esta máquina para uma instalação normal (precisa
+fechar o app, que hospeda as sessões do canvas). Testes: autostart 17/17,
+smoke 17/17 + 7/7 (`electron/release-smoke.test.cjs`); backend 2402/2405 e
+frontend 2916/2924, com as mesmas falhas pré-existentes de antes
+(`app-relaunch`, EPERM de symlink; 5 timeouts em `terminal-reading`). Lint e
+typecheck limpos.
