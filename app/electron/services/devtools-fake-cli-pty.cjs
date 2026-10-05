@@ -98,6 +98,34 @@ const SMOKE_LINK_OUTPUTS = Object.freeze({
     `Destino disfarçado: ${osc8('https://example.com/destino-real', 'banco.example')}\r\n` +
     `Arquivo local: ${osc8('file:///etc/hosts', 'hosts do sistema')}\r\n`,
 })
+/**
+ * URL longa desenhada como a Claude Code real desenha uma resposta (captura
+ * de 05/10/2026, Claude Code 2.1.285, Windows/ConPTY): `● ` e a URL até a
+ * margem; a primeira quebra é dura (a CLI reposiciona o cursor na coluna 3,
+ * aqui `\r\n` + recuo) e, daí em diante, o recuo de dois espaços entra no
+ * fluxo e quebra junto — linhas marcadas `isWrapped` com o recuo dentro do
+ * texto. É o caso em que o `WebLinksAddon` sozinho só via a primeira linha.
+ * O desenho acompanha a largura atual do terminal.
+ */
+const SMOKE_WRAPPED_URL_TRIGGER = '__felixo_smoke_url_quebrada__'
+const SMOKE_WRAPPED_URL_INDENT = '  '
+
+function smokeWrappedUrl(cols) {
+  const width = Math.max(20, cols - SMOKE_WRAPPED_URL_INDENT.length)
+  const segments = []
+  while (segments.join('/').length < width * 3 + 10) segments.push(`segmento${String(segments.length + 1).padStart(2, '0')}`)
+  return `https://example.com/felixo/url-quebrada/${segments.join('/')}?origem=agente#fim`
+}
+
+/** Bytes que desenham `smokeWrappedUrl(cols)` como a Claude Code real. */
+function renderWrappedUrlLikeClaude(cols) {
+  const url = smokeWrappedUrl(cols)
+  const width = Math.max(20, cols - SMOKE_WRAPPED_URL_INDENT.length)
+  const pieces = []
+  for (let index = 0; index < url.length; index += width) pieces.push(url.slice(index, index + width))
+  return `● ${pieces[0]}\r\n${pieces.slice(1).map((piece) => SMOKE_WRAPPED_URL_INDENT + piece).join('')}\r\n`
+}
+
 /** Imprime linhas de saída por alguns segundos: a tela rola sob o menu aberto. */
 const SMOKE_STREAM_TRIGGER = '__felixo_smoke_stream__'
 const SMOKE_STREAM_LINES = 60
@@ -295,6 +323,8 @@ function createFakeCliPty({ options = {}, pid, chunkDelayMs, setTimer, clearTime
       output.push(SMOKE_LINK_OUTPUTS[trigger], chunkDelayMs)
     } else if (SMOKE_MOUSE_TRACKING_OUTPUTS[trigger]) {
       output.push(SMOKE_MOUSE_TRACKING_OUTPUTS[trigger], chunkDelayMs)
+    } else if (trigger === SMOKE_WRAPPED_URL_TRIGGER) {
+      output.push(renderWrappedUrlLikeClaude(cols), chunkDelayMs)
     } else if (trigger === SMOKE_STREAM_TRIGGER) {
       for (let index = 1; index <= SMOKE_STREAM_LINES; index += 1) {
         output.push(`linha ${index} de ${SMOKE_STREAM_LINES} da saída em streaming\r\n`, SMOKE_STREAM_LINE_DELAY_MS)
@@ -475,6 +505,9 @@ module.exports = {
   SMOKE_STREAM_LINES,
   SMOKE_STREAM_TRIGGER,
   SMOKE_TRIGGER_OUTPUTS,
+  SMOKE_WRAPPED_URL_TRIGGER,
+  renderWrappedUrlLikeClaude,
+  smokeWrappedUrl,
   SMOKE_TRIGGER_PHRASES,
   createFakeAuthCommandRunner,
   createFakeCliPtyFactory,

@@ -807,6 +807,50 @@ function criarSessaoDeLinks(deps) {
     await xterm.focus()
   }
 
+  /**
+   * URL longa quebrada como a Claude Code real quebra (captura de 05/10/2026):
+   * a primeira quebra é dura e as linhas seguintes começam com dois espaços de
+   * recuo, inclusive as que o xterm marca como continuação. Sem o provedor de
+   * `terminal-spanning-url-links.ts`, o clique na primeira linha mostrava só o
+   * pedaço dela e o clique nas outras não achava link nenhum.
+   */
+  async function terminalUrlQuebrada(xterm) {
+    const passo = 'L13 terminal: URL quebrada pela TUI'
+    await limparGravadores()
+    await digitar(xterm, '__felixo_smoke_url_quebrada__')
+    const inicio = 'https://example.com/felixo/url-quebrada/segmento01'
+    const fim = '?origem=agente#fim'
+    // Um ponto em cada tipo de linha: a primeira (com https), a da quebra dura
+    // com recuo e a última (continuação marcada, com o recuo dentro do texto).
+    const primeira = await esperarNoTerminal(passo, 'url-quebrada', { ultima: true })
+    await esperarNoTerminal(passo, 'fim', { ultima: true })
+    // A linha logo abaixo da primeira, pelo DOM do xterm: um trecho fixo como
+    // "segmento10" pode cair partido entre duas linhas conforme a largura do
+    // bloco, e aí a busca por texto falharia sem o link estar errado.
+    const abaixo = await page.evaluate(() => {
+      const rows = [...[...document.querySelectorAll('.xterm-rows')].at(-1).children]
+      const index = rows.findLastIndex((row) => row.textContent.includes('url-quebrada'))
+      const rect = rows[index + 1]?.getBoundingClientRect()
+      return rect ? { x: rect.left + Math.min(rect.width / 2, 200), y: rect.top + rect.height / 2 } : null
+    })
+    exigir(abaixo, passo, 'a linha com recuo abaixo da URL não tem posição na tela')
+    const pontos = [
+      ['primeira linha', primeira],
+      ['linha com recuo', abaixo],
+      ['última linha', await posicaoEstavel(passo, 'fim', { ultima: true })],
+    ]
+    for (const [onde, ponto] of pontos) {
+      await passarPorCima(passo, ponto, 'escolher onde abrir')
+      await modificadorClique(ponto)
+      const menu = await esperarMenu(passo, `${LINK_MODIFIER}+clique na ${onde}`)
+      exigir(menu.summary.includes(inicio) && menu.summary.includes(fim), passo, `o menu da ${onde} não mostra a URL inteira`, menu)
+      exigir(!/\s/.test(menu.summary.slice(menu.summary.indexOf(inicio), menu.summary.indexOf(fim))), passo, `a URL da ${onde} veio com o recuo da TUI no meio`, menu)
+      await page.keyboard.press('Escape')
+      await esperarMenuFechado(passo, `Esc na ${onde}`)
+    }
+    exigir((await gravado()).opened.length === 0, passo, 'algum gesto abriu o navegador sem escolha', await gravado())
+  }
+
   async function terminalToque(xterm) {
     const passo = 'L9 terminal: toque'
     await digitar(xterm, TERMINAL_URL)
@@ -1055,11 +1099,12 @@ function criarSessaoDeLinks(deps) {
       const { xterm, ponto } = await terminalTexto()
       await terminalOsc8(xterm)
       await terminalStreaming(xterm, ponto)
+      await terminalUrlQuebrada(xterm)
       await terminalToque(xterm)
       await paginaWebMenuDeLink(pagina.url)
       await paginaWebBarraEBotao(pagina.url)
       await pedidoDeAgente()
-      log('L0–L12 ok: Markdown, terminal (texto, OSC 8, streaming, toque), Página Web e pedido de agente')
+      log('L0–L13 ok: Markdown, terminal (texto, OSC 8, streaming, URL quebrada, toque), Página Web e pedido de agente')
     } finally {
       await pagina.fechar()
     }

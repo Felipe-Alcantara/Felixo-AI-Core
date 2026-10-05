@@ -1397,7 +1397,7 @@ const SESSIONS = [
     // teclado, clique direito, toque e streaming.
     letter: 'D',
     failureName: 'canvas-smoke-failure-links',
-    summary: 'links (L0–L12)',
+    summary: 'links (L0–L13)',
     env: LINKS_SESSION_ENV,
     run: (page) => criarSessaoDeLinks({ page, checarMontagem, estadoDaSessao: readState, timeoutMs: ONBOARDING_TIMEOUT_MS }).executar(),
   },
