@@ -457,10 +457,26 @@ transcriptions`, corpo `multipart/form-data` com `file` (audio; nome
 endereco, 413 tamanho, 429 limite, demais com a mensagem da API redigida).
 Servidor desligado diz para conferir se ele esta rodando.
 
-NAO verificado: nenhum servidor real foi rodado (nada instalado aqui e sem
-microfone). O contrato acima e o do CLIENTE; que um servidor especifico o aceite
-— inclusive o formato webm/opus, que alguns exigem converter — e justamente o
-experimento pendente. Nenhum servidor e recomendado antes de medido.
+Verificado em 05/10/2026 (Linux): o servidor de exemplo
+`app/scripts/servidor-transcricao-local.py` (faster-whisper, so 127.0.0.1)
+aceita o webm/opus do Chromium sem conversao. O app instalado ditou sem
+internet (rede isolada com `bwrap --unshare-net`, so loopback), e o texto
+caiu na linha do terminal sem Enter.
+
+Decisao (Felipe, 05/10/2026, com medicao): NAO embutir motor no app. O
+caminho local continua sendo o servidor a parte, documentado no guia do
+usuario, com o modelo `small` como padrao. Motivo medido: o unico motor
+embutivel sem Python, o whisper.cpp, tem a mesma qualidade do faster-whisper
+(mesmos pesos), mas e de 2,3 a 2,8x mais lento nesta CPU (i5-6200U, 4
+threads, decodificacao gulosa nos dois). No `small`, levou 18 s contra 7,3 s
+por frase de voz humana. O que pesou para a pessoa foi nao pagar API, e isso
+o servidor local ja resolve. O instalador fica do mesmo tamanho.
+
+Numeros e roteiro no IA.md (entrada de 05/10/2026, "Motor local").
+
+Se a decisao for revista: o whisper.cpp seria baixado sob demanda (a pessoa
+nao aceita crescer o instalador). Antes disso, vale medir o backend Vulkan
+na GPU integrada; so a CPU foi medida.
 
 ## Layout: altura dos paineis
 

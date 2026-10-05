@@ -5926,3 +5926,70 @@ Nenhuma das três mostrou botão "Instalar". O "Copiar texto para o suporte" cop
 - O texto de suporte esconde o usuário só em `/home/<u>/`, `/Users/<u>/`, `C:\Users\<u>\` e no HOME real. Um caminho fora desses padrões que tenha o nome dentro de outro diretório mantém o nome. Isso só apareceu porque o teste usou um HOME falso.
 - O Windows real (shim `.cmd` quebrado e CLI gerenciada fora do PATH) não foi rodado: não há máquina Windows nesta sessão.
 - O caso "instalação gerenciada fora do PATH" não foi montado aqui.
+
+## 2026-10-05 — Motor local do ditado: medido com voz humana, decidido não embutir
+
+Registro de Claude - Tasks do AI Core, task "Entrada de voz — medir e decidir o motor local com microfone real" (Notion 3e091f95-497e-818d-bac4-c8fb971cdb4c). Início às 12:47.
+
+### Decisões da pessoa
+
+- **Voz humana.** Sem microfone que funcione nesta máquina, a voz humana veio de gravações públicas.
+- **Motivo de um motor local.** O que pesa é não pagar API.
+- **Instalador.** Nada a mais; um motor local, se viesse, seria baixado sob demanda.
+- **Com os números na mesa:** documentar o servidor local (não embutir), com `small` como modelo padrão.
+
+### Como foi medido
+
+- **Máquina.** i5-6200U (2 núcleos e 4 threads, AVX2/FMA/F16C), com o uso normal da pessoa ao mesmo tempo: app Felixo, Firefox tocando mídia e outras sessões. O load average ficou entre 5 e 13.
+- **Voz humana.**
+  - 6 frases do **FLEURS** pt_br (`google/fleurs`, CC-BY 4.0), de 6,7 a 9,5 s. As duas partes do pt_br só têm vozes masculinas. O `dev.tar.gz` foi lido em fluxo, sem baixar o pacote inteiro.
+  - 6 frases do **VoxForge** pt (GPL), de 3,3 a 5,8 s, de 3 locutoras com microfones caseiros, achadas lendo o README de cada pacote ("Gênero: Feminino").
+- **Comparação.** O **faster-whisper** 1.2.1 (CTranslate2 int8, pelo `servidor-transcricao-local.py`) contra o **whisper.cpp** `60c0be6` (compilado aqui, `-t 4`). Nos dois, decodificação **gulosa** (beam 1). O `whisper-cli` usa beam 5 por padrão, e a primeira rodada, injusta por isso, deu de 35 a 39 s no `small`. A ordem dos motores alterna a cada frase, para os dois dividirem a mesma carga.
+- **WER.** Contra a transcrição oficial, depois de normalizar maiúsculas e pontuação.
+
+### Medido: os dois motores (voz humana, 12 frases por modelo)
+
+| Modelo | Motor | Mediana | WER | Masculinas | Femininas |
+| --- | --- | --- | --- | --- | --- |
+| tiny | faster-whisper | 1,39 s | 31,2% | 21,6% | 40,8% |
+| tiny | whisper.cpp | 3,89 s | 30,8% | 22,4% | 39,3% |
+| base | faster-whisper | 2,51 s | 21,8% | 12,6% | 31,1% |
+| base | whisper.cpp | 5,85 s | 19,5% | 9,5% | 29,5% |
+| small | faster-whisper | 7,31 s | 13,2% | 7,7% | 18,7% |
+| small | whisper.cpp | 18,21 s | 13,7% | 8,8% | 18,7% |
+
+- **Qualidade igual**, porque são os mesmos pesos. O whisper.cpp é de 2,3 a 2,8x mais lento nesta CPU.
+- **Parte do WER é formatação:** "10 km" e "10 quilômetros", "nove e vinte e cinco" e "9h25", "21 a 20" e "21-20". Os erros reais ficam em nomes próprios ("Lakkha Singh" virou "Lacasingue") e em palavras como "móveis", que virou "Moved".
+- **Voz sintética** (piper, 5 frases de 5,2 a 5,9 s): o faster-whisper levou 1,5 s no `tiny`, 2,1 a 4,6 s no `base` e 6,2 a 6,6 s no `small`. A voz sintética tropeça em termos em inglês ("TypeScript" virou "tipisquite"), então só a voz humana entrou na decisão.
+
+### Medido: critério de aceite (ditar sem internet, no app)
+
+- **Isolamento.** `bwrap --dev-bind / / --unshare-net --die-with-parent`: só loopback (`curl` para fora dá "sem rota"), com o servidor local dentro (`HF_HUB_OFFLINE=1`).
+- **Microfone e app.** O microfone virtual do PipeWire tocou as frases humanas. O app foi dirigido por `felixo devtools`, com perfil temporário.
+- **Resultado.** O texto ficou na linha do bash real, sem Enter, nas 5 frases (3 masculinas e 2 femininas). Da segunda tecla do atalho até o texto:
+
+| App | Modelo | Tempo | WER |
+| --- | --- | --- | --- |
+| Instalado (v0.1.437), com Modo Performance | `small` | 13,4 a 16,8 s | 0% a 7,7% |
+| Instalado | `base` | 4,5 a 9 s | 0% a 8,7%, com uma frase feminina toda errada |
+| Modo dev (Vite), sob Xvfb | `small` | 14 a 25 s | 0% a 5,6% |
+
+- **De onde vem a demora.** O próprio app acrescenta só de 0,4 a 0,9 s. O resto é a transcrição, sensível à carga da máquina:
+  - a mesma frase de 7,4 s levou 7,9 s com a máquina livre (medição A/B);
+  - levou 12,6 a 13,7 s com outra sessão e o navegador ocupando a CPU;
+  - levou 23,6 a 25,3 s com o app em modo dev aberto ao lado, porque o Vite e o Electron sem GPU somavam cerca de 1,7 núcleo.
+
+### Decisão e consequência
+
+Não embutir motor no app.
+
+- **Por quê.** O faster-whisper, que é o mais rápido aqui, depende de Python e não é embutível. O whisper.cpp, embutível, não ganha em qualidade e é mais de 2x mais lento no modelo que dá para usar (`small`, 18 s por frase).
+- **O que mudou.** O guia do usuário passa a indicar `small` como padrão, com a tabela de custo. A seção do `ARQUITETURA.md` deixou de dizer "nenhum servidor real foi rodado".
+
+### Não medido
+
+- Microfone físico (o desta máquina está quebrado).
+- O backend Vulkan do whisper.cpp na GPU integrada.
+- Modelos maiores (`medium`, `large-v3-turbo`).
+- Windows e macOS.
+- A API na nuvem (task própria).

@@ -772,11 +772,19 @@ Aperte `Ctrl+Shift+M` (`Cmd+Shift+M` no macOS), fale e aperte de novo. O texto e
 Em **Configurações → Ditado por voz** você escolhe o motor:
 
 - **Nuvem:** qualquer API compatível com a da OpenAI, com a sua chave. A chave fica cifrada pelo sistema. No Linux, isso exige um keyring, como o GNOME Keyring ou o KWallet. Sem keyring, o app recusa guardar a chave em vez de gravá-la em texto puro.
-- **Servidor local:** o áudio não sai do computador e não há chave. O endereço é `http://127.0.0.1:8765/v1` com o servidor de exemplo `app/scripts/servidor-transcricao-local.py`, que usa o faster-whisper. Instale numa venv com `pip install faster-whisper "av<16"` e rode `python servidor-transcricao-local.py --registro transcricoes.jsonl`. No campo **Modelo**, `tiny`, `base` ou `small` trocam velocidade por precisão.
+- **Servidor local:** o áudio não sai do computador, não há chave e não há custo por minuto. O app não traz um motor embutido. Você roda o servidor de exemplo `app/scripts/servidor-transcricao-local.py`, que usa o faster-whisper, e aponta o endereço `http://127.0.0.1:8765/v1`. Instale numa venv com `pip install faster-whisper "av<16"` e rode `python servidor-transcricao-local.py --registro transcricoes.jsonl`. O modelo padrão é o **`small`**. No campo **Modelo**, `base` ou `tiny` trocam precisão por velocidade. Na primeira vez, o modelo é baixado (o `small` tem cerca de 480 MB); depois, tudo funciona sem internet.
 
-Num notebook de 2 núcleos e 4 threads, com o app e o navegador abertos, frases de 3 s levaram por volta de 1,6 s no `tiny`, 3 s no `base` e 9 s no `small`. O `small` errou bem menos palavras (13% contra 30%). As medições foram feitas em 05/10/2026, com voz sintética em português.
+Quanto custa esperar, num notebook de 2 núcleos e 4 threads (i5-6200U), com voz humana em português em frases de 3 a 10 s:
 
-No Linux, o caminho inteiro foi conferido com um microfone virtual: gravação, texto no terminal, avisos, permissão negada, erros de endereço e de chave, e o microfone liberado ao parar, cancelar ou fechar o app. Microfone físico, Windows e macOS ainda não foram conferidos.
+| Modelo | Tempo por frase, máquina livre | Tempo por frase, no app, com o navegador e outros programas abertos | Palavras erradas |
+| --- | --- | --- | --- |
+| `small` | cerca de 7 s | 13 a 17 s | 13% |
+| `base` | cerca de 2,5 s | 4,5 a 9 s | 22% (31% em vozes femininas) |
+| `tiny` | cerca de 1,4 s | — | 31% |
+
+Boa parte dos "erros" contados é só formatação, como "10 km" escrito "10 quilômetros" ou "nove e vinte e cinco" escrito "9h25". Os erros de verdade aparecem em nomes próprios e palavras raras. O tempo cresce bastante quando o computador está ocupado. Medido em 05/10/2026: com o `small`, a mesma frase de 7 s levou 8 s com a máquina livre e 15 s com o navegador tocando vídeo e outros programas abertos.
+
+No Linux, o caminho inteiro foi conferido com um microfone virtual: gravação, texto no terminal, avisos, permissão negada, erros de endereço e de chave, e o microfone liberado ao parar, cancelar ou fechar o app. O ditado também foi conferido **sem internet**, no app instalado, com o servidor local. Microfone físico, Windows e macOS ainda não foram conferidos.
 
 ### Gerar uma imagem no canvas
 
