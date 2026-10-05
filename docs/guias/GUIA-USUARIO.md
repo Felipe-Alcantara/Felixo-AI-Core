@@ -157,7 +157,7 @@ gemini --version
 git --version
 ```
 
-Se o comando funcionar no terminal, mas não no app, reinicie o Felixo. Em instalações fora do `PATH` padrão, defina `FELIXO_CLI_PATHS` com uma ou mais pastas extras onde os executáveis ficam instalados.
+Se o comando funcionar no terminal, mas não no app, reinicie o Felixo. Em instalações fora do `PATH` padrão, defina `FELIXO_CLI_PATHS` com uma ou mais pastas extras onde os executáveis ficam instalados. Para ver em quais pastas o app procura, use o diagnóstico de CLIs: a lista **PATH que o app enxerga** fica no fim dele (veja "Uma CLI não foi detectada" em [Solução de problemas](#7-solução-de-problemas)).
 
 ### Cadeia de contas: seguir em outra conta com a sua confirmação
 
@@ -352,7 +352,7 @@ Você pode:
 
 - Ver os modelos/CLIs importados.
 - Detectar CLIs oficiais instaladas.
-- Diagnosticar por que uma CLI não aparece, sem instalar nada: em **CLIs oficiais**, o ícone **Diagnosticar CLIs** (ao lado de **Atualizar detecção**) mostra, em cada cartão de Codex, Claude Code e Gemini, a causa ("Não instalada", "Instalada, mas invisível ao app", "Bloqueada por permissão"…) e a próxima ação. Com o diagnóstico na tela, **Instalar** só aparece onde reinstalar resolve. **Copiar texto para o suporte** copia um resumo sem nome de usuário, URL nem segredo. Fechar o gerenciador descarta o diagnóstico.
+- Diagnosticar por que uma CLI não aparece, sem instalar nada: em **CLIs oficiais**, o ícone **Diagnosticar CLIs** (ao lado de **Atualizar detecção**) mostra, em cada cartão de Codex, Claude Code e Gemini, a causa ("Não instalada", "Instalada, mas invisível ao app", "Bloqueada por permissão"…) e a próxima ação. Com o diagnóstico na tela, **Instalar** só aparece onde reinstalar resolve. Abaixo dos cartões, **PATH que o app enxerga** (recolhido) lista as pastas em que o app procurou as CLIs, na ordem em que são consultadas — a primeira que tem o comando vence — e de onde cada uma veio: `FELIXO_CLI_PATHS`, pasta pessoal, sistema, PATH herdado, ferramentas do app ou CLIs instaladas pelo app. **Copiar texto para o suporte** copia um resumo com essa lista e a posição da pasta de cada CLI, sem nome de usuário (a pasta pessoal vira `~` e o nome vira `<usuario>`, também fora dela), URL nem segredo. Fechar o gerenciador descarta o diagnóstico.
 - Instalar CLIs oficiais usando o instalador configurado para cada provider.
 - Abrir login oficial da CLI no terminal do sistema.
 - Adicionar uma CLI pelo comando, por exemplo `codex`, `claude` ou `gemini`.
@@ -1120,7 +1120,7 @@ Também é o mesmo bloqueio, e o download não está corrompido. Neste caso o bo
 
 Primeiro, peça o diagnóstico ao próprio app. Ele fica no ícone **Diagnosticar CLIs** do **Gerenciar modelos** (tela Chat → **Configurar modelos** → **CLIs oficiais**) ou no botão **Ver diagnóstico** do aviso de falha da instalação. Ele diz se a CLI não está instalada, está fora do `PATH` que o app enxerga, está sem permissão de execução, tem um atalho quebrado ou não respondeu, e indica o que fazer. Nada é instalado nesse passo.
 
-Depois, rode `claude --version`, `codex --version`, `gemini --version` ou `git --version` no terminal. Se funcionar fora do app, reinicie o Felixo ou configure `FELIXO_CLI_PATHS`.
+Depois, rode `claude --version`, `codex --version`, `gemini --version` ou `git --version` no terminal. Se funcionar fora do app, veja em que pasta a CLI está (`command -v codex` no Linux e no macOS, `where codex` no Windows) e procure essa pasta em **PATH que o app enxerga**, no fim do diagnóstico. Se ela não estiver na lista, reinicie o Felixo ou configure `FELIXO_CLI_PATHS` com ela.
 
 **Um arquivo `.PY` não inicia no macOS.**
 

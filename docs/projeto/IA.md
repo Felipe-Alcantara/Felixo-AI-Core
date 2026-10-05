@@ -5993,3 +5993,36 @@ Não embutir motor no app.
 - Modelos maiores (`medium`, `large-v3-turbo`).
 - Windows e macOS.
 - A API na nuvem (task própria).
+
+## 2026-10-05 — CLI: o diagnóstico mostra o PATH efetivo (origem e ordem) e diz se a pasta da CLI está nele
+
+Registro de Claude - Tasks do AI Core, task "Felixo AI Core/CLI — incluir o PATH efetivo (origem e ordem) no diagnóstico de CLI" (Notion 3e291f95-497e-8184-8b28-ce3a7a52f3e2). Início às 15:15.
+
+### Decisão
+
+Segui a recomendação da própria task: origem, posição e caminho minimizado, sem ler variável de ambiente além das que já montam o PATH.
+
+### O que mudou
+
+- **Fonte única.** `describeCliPath(env)` (`cli-process-manager.cjs`) devolve `{ position, origin, path }`, com origem em `CLI_PATH_ORIGINS` (`configurada`, `usuario`, `sistema`, `processo`, `app`, `gerenciada`). `createCliEnv` só junta essa lista. Antes da troca, comparei com a implementação anterior: string de PATH idêntica em três ambientes (18, 11 e 19 pastas).
+- **Diagnóstico.** `binaryDir`/`managedDir` trazem a pasta minimizada e a posição (`null` = fora). A causa `path` cita a pasta exata, dentro ou fora da lista; "não instalada" diz em quantas pastas o app procurou; o texto de suporte termina com a lista `N. [origem] pasta`.
+- **Privacidade.** `minimizePaths` aceita `userName` (de `os.userInfo()`, não de variável de ambiente): o nome some também fora da pasta pessoal, só como pedaço inteiro e sem diferenciar maiúsculas. Nomes genéricos que são pastas comuns (`node`, `bin`…) ficam de fora. Fecha a limitação "nome de usuário em outros caminhos" da entrada anterior.
+- **Tela.** `<details>` "PATH que o app enxerga (N pastas)" no rodapé do diagnóstico, fechado por padrão, com a origem no fluxo do texto (o aviso das CLIs tem 320 px).
+
+### Achado
+
+`createCliEnv` sempre acrescenta `layout.packagesBin` quando a pasta existe. Então, se há binário gerenciado no disco, a pasta dele **está** no PATH, e o texto antigo da causa `path` ("a pasta dela não está no PATH") estava errado no caso comum. O que acontece de fato é o arquivo não ser reconhecido como executável (sem bit `x`, ou só `.cmd` fora do Windows). O texto novo diz isso.
+
+### Medido (Linux, app real isolado)
+
+`felixo devtools`, Xvfb, `flock`, `env -i` com HOME falsa e CLIs falsas: `codex` em `FELIXO_CLI_PATHS`, nenhum `claude`, e `gemini.cmd` na pasta gerenciada.
+
+- Codex "Pronta", pasta na posição 1; Claude "Não instalada… procurou em 8 pastas"; Gemini causa `path`, "a pasta 8 de 8".
+- Lista com as 6 origens na ordem; `<details>` fechado no início, abre no clique e é focável pelo teclado.
+- Texto copiado (2.681 caracteres) e tela sem o nome da conta nem `/home/<conta>`. O nome sumiu também dentro de `/tmp/claude-1000/-home-<usuario>-…`.
+- Lint, typecheck, Vitest (2.947) e suíte Node (2.478 no Node 25; Node 22 verde).
+
+### Limitações
+
+- Windows real não rodado (sem máquina Windows nesta sessão); a task já aberta de validação no Windows ganhou este item.
+- A deduplicação continua exata por texto, como antes: no Windows, a mesma pasta com maiúsculas diferentes aparece duas vezes na lista (é o que a CLI recebe).

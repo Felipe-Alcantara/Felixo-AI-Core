@@ -426,7 +426,7 @@ A CLI não está instalada ou não está no PATH.
 **Solução:**
 1. Instale a CLI conforme instruções acima.
 2. Verifique com `which claude` (Linux/macOS) ou `where claude` (Windows).
-3. Se instalada fora do PATH, use `FELIXO_CLI_PATHS`.
+3. Se instalada fora do PATH, use `FELIXO_CLI_PATHS`. O **Diagnosticar CLIs** do gerenciador de modelos lista, em **PATH que o app enxerga**, as pastas em que o app procura, na ordem e com a origem de cada uma (`describeCliPath`, a mesma lista que `createCliEnv` entrega às CLIs).
 
 ### "Modelo sem CLI compatível configurada"
 
