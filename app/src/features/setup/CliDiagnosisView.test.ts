@@ -1,8 +1,19 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { CliDiagnosisFooter, CliDiagnosisLine, CliDiagnosisList } from './CliDiagnosisView'
-import type { CliDiagnosis } from './cli-diagnosis'
+import {
+  CliDiagnosisFooter,
+  CliDiagnosisLine,
+  CliDiagnosisList,
+  CliEffectivePathDetails,
+} from './CliDiagnosisView'
+import type { CliDiagnosis, CliEffectivePathEntry } from './cli-diagnosis'
+
+const EFFECTIVE_PATH: CliEffectivePathEntry[] = [
+  { position: 1, origin: 'usuario', path: '~/.local/bin' },
+  { position: 2, origin: 'sistema', path: '/usr/bin' },
+  { position: 3, origin: 'gerenciada', path: '~/.config/felixo-ai-core/clis/bin' },
+]
 
 const INVISIBLE: CliDiagnosis = {
   id: 'codex',
@@ -40,6 +51,28 @@ describe('CliDiagnosisList', () => {
   })
 })
 
+describe('CliEffectivePathDetails', () => {
+  it('lists every folder in order with where it came from, collapsed and keyboard-reachable', () => {
+    const html = renderToStaticMarkup(createElement(CliEffectivePathDetails, { entries: EFFECTIVE_PATH }))
+
+    expect(html).toContain('<details')
+    expect(html).not.toContain('open=""')
+    expect(html).toContain('PATH que o app enxerga (3 pastas)')
+    expect(html).toContain('a primeira pasta que tem o comando vence')
+    expect(html).toContain('tabindex="0"')
+    expect(html.indexOf('~/.local/bin')).toBeLessThan(html.indexOf('/usr/bin'))
+    expect(html).toContain('CLIs instaladas pelo app')
+    expect(html).toContain('pasta pessoal')
+  })
+
+  it('shows nothing without a list and says "pasta" for a single folder', () => {
+    expect(renderToStaticMarkup(createElement(CliEffectivePathDetails, { entries: [] }))).toBe('')
+    expect(
+      renderToStaticMarkup(createElement(CliEffectivePathDetails, { entries: EFFECTIVE_PATH.slice(0, 1) })),
+    ).toContain('(1 pasta)')
+  })
+})
+
 describe('CliDiagnosisFooter', () => {
   it('offers the support text only once there is one to copy', () => {
     const running = renderToStaticMarkup(
@@ -49,7 +82,11 @@ describe('CliDiagnosisFooter', () => {
       createElement(CliDiagnosisFooter, {
         state: {
           running: false,
-          report: { diagnoses: [INVISIBLE], supportText: 'Felixo AI Core 0.1.0 — linux/x64' },
+          report: {
+            diagnoses: [INVISIBLE],
+            effectivePath: EFFECTIVE_PATH,
+            supportText: 'Felixo AI Core 0.1.0 — linux/x64',
+          },
           error: null,
         },
       }),
@@ -57,7 +94,9 @@ describe('CliDiagnosisFooter', () => {
 
     expect(running).toContain('Diagnosticando as CLIs…')
     expect(running).not.toContain('Copiar texto para o suporte')
+    expect(running).not.toContain('data-cli-effective-path')
     expect(ready).toContain('Copiar texto para o suporte')
+    expect(ready).toContain('PATH que o app enxerga (3 pastas)')
   })
 
   it('announces a failed diagnosis as an alert', () => {

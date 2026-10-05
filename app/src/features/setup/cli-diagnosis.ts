@@ -31,8 +31,20 @@ export type CliDiagnosis = {
   nextAction: { kind: string; text: string }
 }
 
+/** Uma pasta do PATH com que o app procurou as CLIs. */
+export type CliEffectivePathEntry = {
+  /** 1 = consultada primeiro: a primeira pasta que tem o comando vence. */
+  position: number
+  /** De onde a pasta veio (`CLI_PATH_ORIGINS` em `cli-process-manager.cjs`). */
+  origin: string
+  /** Já minimizado: `~` no lugar da pasta pessoal, sem nome de usuário. */
+  path: string
+}
+
 export type CliDiagnosisReport = {
   diagnoses: CliDiagnosis[]
+  /** Vazio quando o processo principal não manda a lista (versão anterior). */
+  effectivePath: CliEffectivePathEntry[]
   /** Já sai minimizado do processo principal: sem usuário, URL nem segredo. */
   supportText: string
 }
@@ -70,6 +82,16 @@ const CAUSE_LABELS: Record<CliDiagnosisCause, string> = {
   network: 'Instalação falhou por rede',
 }
 
+/** A origem de cada pasta do PATH em palavras da tela. */
+const PATH_ORIGIN_LABELS: Record<string, string> = {
+  configurada: 'configurada em FELIXO_CLI_PATHS',
+  usuario: 'pasta pessoal',
+  sistema: 'pasta do sistema',
+  processo: 'herdada do PATH',
+  app: 'ferramentas do app',
+  gerenciada: 'CLIs instaladas pelo app',
+}
+
 /**
  * Valida a resposta do IPC antes de ela chegar à tela.
  *
@@ -103,6 +125,7 @@ export function parseCliDiagnoseResult(raw: unknown): CliDiagnoseOutcome {
     ok: true,
     report: {
       diagnoses,
+      effectivePath: parseEffectivePath(raw.effectivePath),
       supportText: typeof raw.supportText === 'string' ? raw.supportText : '',
     },
   }
@@ -162,6 +185,11 @@ export function shouldOfferCliInstall({
   return diagnosis ? diagnosis.recommendInstall : true
 }
 
+/** Origem desconhecida (processo principal mais novo) aparece como veio. */
+export function describeCliPathOrigin(origin: string): string {
+  return Object.hasOwn(PATH_ORIGIN_LABELS, origin) ? PATH_ORIGIN_LABELS[origin] : origin
+}
+
 export function indexCliDiagnoses(
   report: CliDiagnosisReport | null,
 ): Record<string, CliDiagnosis> {
@@ -187,6 +215,19 @@ function parseDiagnosis(item: unknown): CliDiagnosis | null {
       text: nextAction.text,
     },
   }
+}
+
+/** Item malformado sai da lista; a ordem é a que o processo principal mandou. */
+function parseEffectivePath(raw: unknown): CliEffectivePathEntry[] {
+  if (!Array.isArray(raw)) return []
+
+  return raw.flatMap((item) => {
+    if (!isRecord(item)) return []
+    const { position, origin, path } = item
+    if (typeof position !== 'number' || !Number.isInteger(position) || position < 1) return []
+    if (typeof origin !== 'string' || typeof path !== 'string' || !path) return []
+    return [{ position, origin, path }]
+  })
 }
 
 function isKnownCause(cause: string | null): cause is CliDiagnosisCause {

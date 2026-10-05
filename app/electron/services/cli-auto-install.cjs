@@ -22,7 +22,7 @@ const { listOfficialAiClis } = require('../core/official-cli-catalog.cjs')
 const { getManagedCliLayout, getNpmRegistryCacheDir } = require('../core/managed-cli-paths.cjs')
 const { getManagedCliManifestEntry } = require('../core/managed-cli-manifest.cjs')
 const { getNodeExecutable, resolveNpmCliPath } = require('../core/node-runtime.cjs')
-const { createCliEnv } = require('./cli-process-manager.cjs')
+const { createCliEnv, describeCliPath } = require('./cli-process-manager.cjs')
 const { ensureManagedCliRuntime } = require('./managed-cli-runtime.cjs')
 const { installManagedPackage } = require('./managed-cli-installer.cjs')
 const { pruneNpmCacheIfOverBudget } = require('./managed-cli-cache-maintenance.cjs')
@@ -38,6 +38,7 @@ const { logQaEvent } = require('./qa-logger.cjs')
 const {
   diagnoseClis,
   formatDiagnosisForSupport,
+  minimizeEffectivePath,
   redactDiagnosticText,
 } = require('./cli-diagnostics.cjs')
 
@@ -56,6 +57,9 @@ const STARTUP_DELAY_MS = 4000
  * @param {string} [options.platformName]
  * @param {string} [options.arch]
  * @param {typeof fs} [options.fileSystem]
+ * @param {(env: Record<string, string>) => Array<{ position: number, origin: string, path: string }>} [options.describePath]
+ *   O PATH efetivo das CLIs (`describeCliPath`); injetável nos testes.
+ * @param {string} [options.userName] - Conta atual, que some do texto de suporte.
  * @returns {{ getStatus: () => object, run: (reason?: string) => Promise<object>, stop: () => void }}
  */
 function registerCliAutoInstallHandlers(getMainWindow, options) {
@@ -69,6 +73,8 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
     platformName = process.platform,
     arch = process.arch,
     fileSystem = fs,
+    describePath = describeCliPath,
+    userName = readUserName(),
   } = options
 
   const layout = getManagedCliLayout({ userData: appPaths.userData })
@@ -266,6 +272,10 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
   // configuração. Existe para a interface separar "não instalada" de
   // "instalada mas invisível" antes de sugerir reinstalar.
   ipcMain.handle('clis:diagnose', async () => {
+    const homeDir = os.homedir()
+    // A lista crua só serve para localizar a pasta de cada CLI aqui dentro;
+    // para a tela e o suporte vai a minimizada.
+    const effectivePath = describePath(process.env)
     const diagnoses = await diagnoseClis({
       catalog: getAutoInstallableClis(listOfficialAiClis()),
       detect,
@@ -274,10 +284,16 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
       verifyInstallation,
       attempts: readState(stateFilePath),
       fileSystem,
-      context: { platformName, arch, appVersion, homeDir: os.homedir() },
+      context: { platformName, arch, appVersion, homeDir, userName, effectivePath },
     })
+    const visiblePath = minimizeEffectivePath(effectivePath, { homeDir, userName })
 
-    return { ok: true, diagnoses, supportText: formatDiagnosisForSupport(diagnoses) }
+    return {
+      ok: true,
+      diagnoses,
+      effectivePath: visiblePath,
+      supportText: formatDiagnosisForSupport(diagnoses, { effectivePath: visiblePath }),
+    }
   })
   ipcMain.handle('clis:retry-setup', async () => {
     if (!enabled) {
@@ -473,6 +489,19 @@ function combineInstallOutput(...parts) {
     .filter((part) => String(part ?? '').trim())
     .join('\n')
     .slice(-12000)
+}
+
+/**
+ * Nome da conta atual, lido do sistema (nunca de variável de ambiente).
+ * `os.userInfo` lança quando o uid não tem entrada no passwd (container); sem
+ * o nome, o diagnóstico ainda tira `/home/<usuario>` e `C:\Users\<usuario>`.
+ */
+function readUserName() {
+  try {
+    return os.userInfo().username
+  } catch {
+    return undefined
+  }
 }
 
 function readState(stateFilePath) {

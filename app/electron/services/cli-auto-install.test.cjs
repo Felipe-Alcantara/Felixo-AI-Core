@@ -70,6 +70,8 @@ function createRunner(
     verifyInstallation,
     platformName = process.platform,
     arch = process.arch,
+    describePath,
+    userName,
   },
 ) {
   const installed = []
@@ -82,6 +84,8 @@ function createRunner(
     platformName,
     arch,
     ...(verifyInstallation ? { verifyInstallation } : {}),
+    ...(describePath ? { describePath } : {}),
+    ...(userName !== undefined ? { userName } : {}),
     installPackage:
       installPackage ??
       (async ({ npmPackage }) => {
@@ -402,6 +406,55 @@ test(
       assert.equal(byId.claude.recommendInstall, true)
       assert.match(supportText, /próxima ação:/)
       assert.deepEqual(installed, [], 'diagnosticar não pode instalar')
+    } finally {
+      profile.cleanup()
+    }
+  },
+)
+
+test(
+  'clis:diagnose devolve o PATH efetivo minimizado e acha nele a pasta gerenciada',
+  async () => {
+    const profile = createProfile({ managedClis: ['gemini'] })
+    const { packagesBin } = getManagedCliLayout({ userData: profile.userData })
+
+    try {
+      const { service } = createRunner(profile, {
+        detect: async () => ({
+          detected: false,
+          version: null,
+          path: null,
+          reason: 'not-found',
+          attempts: [],
+        }),
+        platformName: process.platform,
+        verifyInstallation: () => ({ ok: true }),
+        userName: 'conta-teste',
+        describePath: () => [
+          { position: 1, origin: 'usuario', path: path.join(os.homedir(), '.local', 'bin') },
+          { position: 2, origin: 'processo', path: path.join(path.sep, 'opt', 'conta-teste', 'bin') },
+          { position: 3, origin: 'gerenciada', path: packagesBin },
+        ],
+      })
+
+      const { effectivePath, diagnoses, supportText } = await handlers.get('clis:diagnose')()
+      service.stop()
+
+      assert.deepEqual(
+        effectivePath.slice(0, 2),
+        [
+          { position: 1, origin: 'usuario', path: path.join('~', '.local', 'bin') },
+          { position: 2, origin: 'processo', path: path.join(path.sep, 'opt', '<usuario>', 'bin') },
+        ],
+      )
+      const gemini = diagnoses.find((item) => item.id === 'gemini')
+      assert.equal(gemini.cause, 'path')
+      assert.equal(gemini.managedDir.position, 3)
+      assert.match(supportText, /PATH que o app enxerga \(3 pastas/)
+      for (const surface of [supportText, JSON.stringify(effectivePath)]) {
+        assert.equal(surface.includes('conta-teste'), false, 'o nome da conta vazou')
+        assert.equal(surface.includes(os.homedir()), false, 'o home vazou')
+      }
     } finally {
       profile.cleanup()
     }

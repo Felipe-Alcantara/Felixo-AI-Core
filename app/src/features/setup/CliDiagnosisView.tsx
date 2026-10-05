@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, Check, CheckCircle2, CircleDashed, Copy } from 'lucide-react'
 import {
   describeCliDiagnosis,
+  describeCliPathOrigin,
   type CliDiagnosis,
   type CliDiagnosisTone,
+  type CliEffectivePathEntry,
 } from './cli-diagnosis'
 import type { CliDiagnosisState } from './useCliDiagnosis'
 
@@ -67,8 +69,44 @@ export function CliDiagnosisList({ diagnoses }: { diagnoses: CliDiagnosis[] }) {
 }
 
 /**
- * Fecho do diagnóstico: andamento, erro e o texto pronto para o suporte.
- * Não mostra nada enquanto o diagnóstico não foi pedido.
+ * O PATH com que o app procurou as CLIs, na ordem de consulta. Recolhido: é
+ * para quem investiga por que o terminal acha a CLI e o app não.
+ */
+export function CliEffectivePathDetails({ entries }: { entries: CliEffectivePathEntry[] }) {
+  if (entries.length === 0) return null
+
+  return (
+    <details className="rounded-lg border border-white/8 bg-black/15 px-2 py-1.5" data-cli-effective-path="">
+      <summary className="cursor-pointer text-[11px] font-medium text-zinc-400 hover:text-zinc-200">
+        PATH que o app enxerga ({entries.length} {entries.length === 1 ? 'pasta' : 'pastas'})
+      </summary>
+      <p className="mt-1.5 text-[11px] leading-relaxed text-zinc-500">
+        Nesta ordem: a primeira pasta que tem o comando vence.
+      </p>
+      <ol
+        // Região rolável precisa ser alcançável pelo teclado.
+        tabIndex={0}
+        aria-label="Pastas do PATH que o app enxerga, na ordem de consulta"
+        className="mt-1.5 max-h-48 space-y-0.5 overflow-y-auto rounded-md outline-hidden focus-visible:ring-2 focus-visible:ring-white/25"
+      >
+        {entries.map((entry) => (
+          <li key={entry.position} className="flex min-w-0 gap-2 text-[11px] leading-relaxed">
+            <span className="w-5 shrink-0 text-right text-zinc-500 tabular-nums">{entry.position}.</span>
+            {/* Origem no fluxo do texto: o aviso das CLIs tem 320 px, e uma coluna fixa espremeria o caminho. */}
+            <span className="min-w-0 flex-1">
+              <span className="font-mono break-all text-zinc-300">{entry.path}</span>
+              <span className="text-zinc-500"> · {describeCliPathOrigin(entry.origin)}</span>
+            </span>
+          </li>
+        ))}
+      </ol>
+    </details>
+  )
+}
+
+/**
+ * Fecho do diagnóstico: andamento, erro, o PATH consultado e o texto pronto
+ * para o suporte. Não mostra nada enquanto o diagnóstico não foi pedido.
  */
 export function CliDiagnosisFooter({ state }: { state: CliDiagnosisState }) {
   const supportText = state.report?.supportText ?? ''
@@ -85,6 +123,7 @@ export function CliDiagnosisFooter({ state }: { state: CliDiagnosisState }) {
           {state.error}
         </p>
       )}
+      <CliEffectivePathDetails entries={state.report?.effectivePath ?? []} />
       {supportText && <CopySupportTextButton text={supportText} />}
     </>
   )

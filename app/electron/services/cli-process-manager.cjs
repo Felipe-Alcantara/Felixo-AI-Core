@@ -125,24 +125,56 @@ class CliProcessManager {
   }
 }
 
+/**
+ * De onde veio cada pasta do PATH que as CLIs enxergam. A ordem do objeto é a
+ * ordem em que as pastas entram — e a primeira que tem o comando vence.
+ */
+const CLI_PATH_ORIGINS = Object.freeze({
+  CONFIGURED: 'configurada',
+  USER: 'usuario',
+  SYSTEM: 'sistema',
+  PROCESS: 'processo',
+  APP: 'app',
+  MANAGED: 'gerenciada',
+})
+
+/**
+ * PATH que as CLIs enxergam, pasta por pasta, com a origem de cada uma.
+ *
+ * É a lista que `createCliEnv` junta, na mesma ordem e com o mesmo corte:
+ * pasta repetida fica só na primeira posição e pasta que não existe sai. O
+ * diagnóstico de CLI mostra esta lista para explicar "funciona no meu
+ * terminal, mas o app não vê" — por isso ela é a fonte única, e não uma cópia
+ * da regra. Só lê: nada aqui altera o PATH real.
+ *
+ * @param {Record<string, string | undefined>} [baseEnv]
+ * @returns {Array<{ position: number, origin: string, path: string }>}
+ */
+function describeCliPath(baseEnv = process.env) {
+  const seen = new Set()
+  const entries = []
+
+  for (const part of collectCliPathParts(baseEnv)) {
+    if (!part.path || seen.has(part.path)) {
+      continue
+    }
+
+    seen.add(part.path)
+
+    if (directoryExists(part.path)) {
+      entries.push({ position: entries.length + 1, origin: part.origin, path: part.path })
+    }
+  }
+
+  return entries
+}
+
 function createCliEnv(baseEnv = process.env) {
   const pathKey = platform.getPathEnvKey(baseEnv)
-  const configuredPaths = getConfiguredCliPaths(baseEnv)
-  const userPaths = getUserCliPathCandidates(baseEnv)
-  const pathParts = [
-    ...configuredPaths,
-    ...userPaths,
-    ...(baseEnv[pathKey] ?? '').split(path.delimiter).filter(Boolean),
-    // As ferramentas do próprio app (`felixo`) vêm depois do PATH da pessoa:
-    // se ela já tem um comando com esse nome, é o dela que roda.
-    ...getAgentCommandPaths(baseEnv),
-    // Por último de propósito: as CLIs instaladas pelo próprio app são rede
-    // de segurança para quem não tem nada instalado. Se a pessoa já tem a
-    // sua, é a dela que deve rodar.
-    ...getManagedCliPaths(baseEnv),
-  ]
   const nextEnv = { ...baseEnv }
-  const nextPath = uniqueExistingPathParts(pathParts).join(path.delimiter)
+  const nextPath = describeCliPath(baseEnv)
+    .map((entry) => entry.path)
+    .join(path.delimiter)
 
   nextEnv[pathKey] = nextPath
 
@@ -151,6 +183,29 @@ function createCliEnv(baseEnv = process.env) {
   }
 
   return nextEnv
+}
+
+function collectCliPathParts(baseEnv) {
+  const pathKey = platform.getPathEnvKey(baseEnv)
+  const tag = (origin) => (candidate) => ({ origin, path: candidate })
+  const home = baseEnv.HOME || baseEnv.USERPROFILE || os.homedir()
+
+  return [
+    ...getConfiguredCliPaths(baseEnv).map(tag(CLI_PATH_ORIGINS.CONFIGURED)),
+    ...(home ? getHomeCliPathCandidates(baseEnv, home) : []).map(tag(CLI_PATH_ORIGINS.USER)),
+    ...platform.getSystemCliPaths().map(tag(CLI_PATH_ORIGINS.SYSTEM)),
+    ...(baseEnv[pathKey] ?? '')
+      .split(path.delimiter)
+      .filter(Boolean)
+      .map(tag(CLI_PATH_ORIGINS.PROCESS)),
+    // As ferramentas do próprio app (`felixo`) vêm depois do PATH da pessoa:
+    // se ela já tem um comando com esse nome, é o dela que roda.
+    ...getAgentCommandPaths(baseEnv).map(tag(CLI_PATH_ORIGINS.APP)),
+    // Por último de propósito: as CLIs instaladas pelo próprio app são rede
+    // de segurança para quem não tem nada instalado. Se a pessoa já tem a
+    // sua, é a dela que deve rodar.
+    ...getManagedCliPaths(baseEnv).map(tag(CLI_PATH_ORIGINS.MANAGED)),
+  ]
 }
 
 /**
@@ -189,18 +244,12 @@ function getConfiguredCliPaths(env) {
   return splitPathList(env[CLI_PATHS_ENV_KEY])
 }
 
-function getUserCliPathCandidates(env) {
-  const home = env.HOME || env.USERPROFILE || os.homedir()
-
-  if (!home) {
-    return platform.getSystemCliPaths()
-  }
-
+/** Pastas de CLI dentro da pasta pessoal: instalação do usuário, pip --user e gerenciadores de versão do Node. */
+function getHomeCliPathCandidates(env, home) {
   return [
     ...platform.getUserCliPaths(home),
     ...getPythonUserScriptPaths(env, home),
     ...getVersionManagerCliPaths(env, home),
-    ...platform.getSystemCliPaths(),
   ]
 }
 
@@ -297,25 +346,6 @@ function splitPathList(value) {
     .filter(Boolean)
 }
 
-function uniqueExistingPathParts(pathParts) {
-  const seen = new Set()
-  const uniqueParts = []
-
-  for (const pathPart of pathParts) {
-    if (!pathPart || seen.has(pathPart)) {
-      continue
-    }
-
-    seen.add(pathPart)
-
-    if (directoryExists(pathPart)) {
-      uniqueParts.push(pathPart)
-    }
-  }
-
-  return uniqueParts
-}
-
 function directoryExists(candidate) {
   try {
     return fs.statSync(candidate).isDirectory()
@@ -325,6 +355,8 @@ function directoryExists(candidate) {
 }
 
 module.exports = {
+  CLI_PATH_ORIGINS,
   CliProcessManager,
   createCliEnv,
+  describeCliPath,
 }

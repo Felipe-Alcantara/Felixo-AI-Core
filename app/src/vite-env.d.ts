@@ -1141,7 +1141,8 @@ declare global {
         retry: () => Promise<CliInvokeResult & { status?: CliSetupStatus }>
         /**
          * Só lê: explica por que cada CLI não é vista, sem instalar nada.
-         * `supportText` já sai minimizado (sem usuário, URL ou segredo).
+         * `supportText` e `effectivePath` já saem minimizados (sem usuário,
+         * URL ou segredo).
          */
         diagnose: () => Promise<
           CliInvokeResult & {
@@ -1153,6 +1154,8 @@ declare global {
               recommendInstall: boolean
               nextAction: { kind: string; text: string }
             }>
+            /** PATH com que as CLIs foram procuradas, em ordem e já minimizado. */
+            effectivePath?: Array<{ position: number; origin: string; path: string }>
             supportText?: string
           }
         >

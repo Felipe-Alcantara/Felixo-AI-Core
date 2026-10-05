@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   describeCliDiagnosis,
+  describeCliPathOrigin,
   indexCliDiagnoses,
   parseCliDiagnoseResult,
   requestCliDiagnosis,
@@ -20,15 +21,25 @@ function createDiagnosis(overrides: Partial<CliDiagnosis> = {}): CliDiagnosis {
   }
 }
 
+type EffectivePathEntry = { position: number; origin: string; path: string }
+
 type BackendDiagnostics = {
   DIAGNOSIS_CAUSES: Record<string, string>
   buildCliDiagnosis: (input: object) => unknown
-  formatDiagnosisForSupport: (diagnoses: unknown[]) => string
+  formatDiagnosisForSupport: (
+    diagnoses: unknown[],
+    options?: { effectivePath?: EffectivePathEntry[] },
+  ) => string
+  minimizeEffectivePath: (
+    entries: EffectivePathEntry[],
+    options: { homeDir?: string; userName?: string },
+  ) => EffectivePathEntry[]
 }
 
 async function loadBackend(): Promise<{
   diagnostics: BackendDiagnostics
   reasons: Record<string, string>
+  pathOrigins: Record<string, string>
 }> {
   const { createRequire } = await import('node:module')
   const require = createRequire(import.meta.url)
@@ -38,6 +49,9 @@ async function loadBackend(): Promise<{
     reasons: (require('../../../electron/core/cli-detector.cjs') as {
       FAILURE_REASONS: Record<string, string>
     }).FAILURE_REASONS,
+    pathOrigins: (require('../../../electron/services/cli-process-manager.cjs') as {
+      CLI_PATH_ORIGINS: Record<string, string>
+    }).CLI_PATH_ORIGINS,
   }
 }
 
@@ -53,9 +67,37 @@ describe('parseCliDiagnoseResult', () => {
       ok: true,
       report: {
         diagnoses: [createDiagnosis(), createDiagnosis({ id: 'codex', name: 'Codex CLI' })],
+        effectivePath: [],
         supportText: 'Felixo AI Core 0.1.0 — linux/x64',
       },
     })
+  })
+
+  it('keeps the effective PATH in order and drops entries it cannot show', () => {
+    const outcome = parseCliDiagnoseResult({
+      ok: true,
+      diagnoses: [],
+      effectivePath: [
+        { position: 1, origin: 'usuario', path: '~/.local/bin' },
+        null,
+        { position: 0, origin: 'sistema', path: '/usr/bin' },
+        { position: 2.5, origin: 'sistema', path: '/bin' },
+        { position: 3, origin: 'processo', path: '' },
+        { position: 4, origin: 7, path: '/opt/bin' },
+        { position: 5, origin: 'gerenciada', path: '~/.config/felixo-ai-core/clis/bin' },
+      ],
+    })
+
+    expect(outcome.ok && outcome.report.effectivePath).toEqual([
+      { position: 1, origin: 'usuario', path: '~/.local/bin' },
+      { position: 5, origin: 'gerenciada', path: '~/.config/felixo-ai-core/clis/bin' },
+    ])
+  })
+
+  it('treats a missing effective PATH (older main process) as an empty list', () => {
+    const outcome = parseCliDiagnoseResult({ ok: true, diagnoses: [], effectivePath: 'PATH=/usr/bin' })
+
+    expect(outcome.ok && outcome.report.effectivePath).toEqual([])
   })
 
   it('drops malformed items instead of failing the whole report', () => {
@@ -168,9 +210,16 @@ describe('shouldOfferCliInstall', () => {
   })
 })
 
+describe('describeCliPathOrigin', () => {
+  it('names where each folder came from and shows an unknown origin as it came', () => {
+    expect(describeCliPathOrigin('gerenciada')).toBe('CLIs instaladas pelo app')
+    expect(describeCliPathOrigin('origem-nova')).toBe('origem-nova')
+  })
+})
+
 describe('indexCliDiagnoses', () => {
   it('finds each diagnosis by CLI id and tolerates no report', () => {
-    const index = indexCliDiagnoses({ diagnoses: [createDiagnosis()], supportText: '' })
+    const index = indexCliDiagnoses({ diagnoses: [createDiagnosis()], effectivePath: [], supportText: '' })
 
     expect(index.claude?.name).toBe('Claude Code CLI')
     expect(indexCliDiagnoses(null)).toEqual({})
@@ -217,5 +266,36 @@ describe('paridade com o processo principal', () => {
     expect(describeCliDiagnosis(diagnosis).label).toBe('Instalada, mas invisível ao app')
     expect(shouldOfferCliInstall({ detected: false, diagnosis })).toBe(false)
     expect(outcome.report.supportText).toContain('Claude Code CLI: indisponível')
+  })
+
+  it('has a label for every origin the PATH can come from', async () => {
+    const { pathOrigins } = await loadBackend()
+
+    for (const origin of Object.values(pathOrigins)) {
+      expect(describeCliPathOrigin(origin), `origem sem rótulo: ${origin}`).not.toBe(origin)
+    }
+  })
+
+  it('reads the effective PATH the main process sends, already minimized', async () => {
+    const { diagnostics } = await loadBackend()
+    const effectivePath = diagnostics.minimizeEffectivePath(
+      [
+        { position: 1, origin: 'usuario', path: '/home/bia/.local/bin' },
+        { position: 2, origin: 'processo', path: '/opt/bia/bin' },
+      ],
+      { homeDir: '/home/bia', userName: 'bia' },
+    )
+
+    const outcome = parseCliDiagnoseResult({
+      ok: true,
+      diagnoses: [],
+      effectivePath,
+      supportText: diagnostics.formatDiagnosisForSupport([], { effectivePath }),
+    })
+
+    expect(outcome.ok && outcome.report.effectivePath).toEqual([
+      { position: 1, origin: 'usuario', path: '~/.local/bin' },
+      { position: 2, origin: 'processo', path: '/opt/<usuario>/bin' },
+    ])
   })
 })

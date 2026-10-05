@@ -23,6 +23,10 @@ const { redactSecrets } = require('./official-cli-account-status.cjs')
 
 const REDACTED = '[oculto]'
 const MAX_DIAGNOSTIC_TEXT = 2000
+// Nomes de conta que também são pastas comuns do PATH (a imagem Docker do Node
+// roda como `node`): trocá-los em qualquer posição esconderia `~/.nvm/versions/node`
+// sem proteger ninguém, porque um nome genérico não identifica a pessoa.
+const GENERIC_ACCOUNT_NAMES = new Set(['bin', 'sbin', 'usr', 'local', 'lib', 'opt', 'share', 'node', 'nodejs', 'npm', 'python', 'scripts', 'tools', 'apps', 'windows', 'system32'])
 
 /** Causas que a interface explica. Fechado: quem consome faz `switch`. */
 const DIAGNOSIS_CAUSES = Object.freeze({
@@ -68,13 +72,15 @@ function redactDiagnosticText(text, { homeDir } = {}) {
  *
  * Cobre o caso de vários usuários na mesma máquina: um caminho de OUTRA conta
  * (`C:\Users\Ana\…` quando o app roda como `Bia`) também perde o nome, sem
- * depender de saber quem está logado.
+ * depender de saber quem está logado. Com `userName`, o nome da conta atual
+ * some também FORA da pasta pessoal (`/opt/ana/bin`, `D:\Ana\ferramentas`),
+ * onde o padrão de `/home` e `Users` não alcança.
  *
  * @param {unknown} text
- * @param {{ homeDir?: string }} [options]
+ * @param {{ homeDir?: string, userName?: string }} [options]
  * @returns {string}
  */
-function minimizePaths(text, { homeDir } = {}) {
+function minimizePaths(text, { homeDir, userName } = {}) {
   let output = String(text ?? '')
 
   if (homeDir) {
@@ -94,7 +100,46 @@ function minimizePaths(text, { homeDir } = {}) {
   output = output.replace(/([A-Za-z]:[\\/]+Users[\\/]+)[^\\/\r\n"']+/gi, '$1<usuario>')
   output = output.replace(/(\/(?:home|Users)\/)[^/\r\n"']+/g, '$1<usuario>')
 
+  const name = typeof userName === 'string' ? userName.trim() : ''
+  if (name.length >= 2 && !GENERIC_ACCOUNT_NAMES.has(name.toLowerCase())) {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    // Só como pedaço inteiro: "ana" some de `/opt/ana/bin` e de `-ana-`, não de "banana".
+    output = output.replace(new RegExp(`(^|[^\\p{L}\\p{N}])${escaped}(?=$|[^\\p{L}\\p{N}])`, 'giu'), '$1<usuario>')
+  }
+
   return output
+}
+
+/**
+ * PATH que o app enxerga, pronto para a tela e para o suporte: origem,
+ * posição e caminho minimizado de cada pasta (nunca outra variável de
+ * ambiente).
+ *
+ * @param {Array<{ position: number, origin: string, path: string }> | null | undefined} entries - `describeCliPath`.
+ * @param {{ homeDir?: string, userName?: string }} [options]
+ * @returns {Array<{ position: number, origin: string, path: string }>}
+ */
+function minimizeEffectivePath(entries, { homeDir, userName } = {}) {
+  return (Array.isArray(entries) ? entries : []).map((entry) => ({
+    position: entry.position,
+    origin: entry.origin,
+    path: minimizePaths(entry.path, { homeDir, userName }),
+  }))
+}
+
+/**
+ * Em que posição do PATH do app está a pasta `dir` (1, 2, …), ou `null` se ela
+ * não está lá. No Windows a comparação ignora maiúsculas e a barra do fim.
+ */
+function findPathPosition(dir, entries, platformName) {
+  if (!dir || !Array.isArray(entries)) return null
+  const windows = platformName === 'win32'
+  const normalize = (value) => {
+    const trimmed = String(value).replace(/[\\/]+$/, '')
+    return windows ? trimmed.replace(/\//g, '\\').toLowerCase() : trimmed
+  }
+  const target = normalize(dir)
+  return entries.find((entry) => normalize(entry.path) === target)?.position ?? null
 }
 
 /**
@@ -142,20 +187,41 @@ function hasManagedBinary({ layout, cli, fileSystem }) {
  * @param {{ id: string, name: string, command: string, install?: { label?: string } }} input.cli
  * @param {object} input.detection - Resultado de `detectCli` (com `attempts` e `reason`).
  * @param {boolean} [input.managedPresent] - Há binário instalado pelo app no disco.
+ * @param {string | null} [input.managedDir] - Pasta desse binário (`layout.packagesBin`).
  * @param {{ ok: boolean, message?: string } | null} [input.managedHealth]
  * @param {{ ok?: boolean, message?: string } | null} [input.lastInstall]
- * @param {{ platformName?: string, arch?: string, appVersion?: string, homeDir?: string }} [input.context]
+ * @param {{ platformName?: string, arch?: string, appVersion?: string, homeDir?: string, userName?: string, effectivePath?: Array<{ position: number, origin: string, path: string }> | null }} [input.context]
  */
 function buildCliDiagnosis({
   cli,
   detection,
   managedPresent = false,
+  managedDir = null,
   managedHealth = null,
   lastInstall = null,
   context = {},
 }) {
-  const { platformName = process.platform, arch = process.arch, appVersion = null, homeDir } = context
-  const minimize = (value) => (value ? minimizePaths(value, { homeDir }) : null)
+  const {
+    platformName = process.platform,
+    arch = process.arch,
+    appVersion = null,
+    homeDir,
+    userName,
+    effectivePath = null,
+  } = context
+  const minimize = (value) => (value ? minimizePaths(value, { homeDir, userName }) : null)
+  const dirname = platformName === 'win32' ? path.win32.dirname : path.posix.dirname
+  // Onde está a pasta no PATH do app: `position` nula = fora dele. Só existe
+  // quando quem chama informou o PATH efetivo (`describeCliPath`).
+  const placeIn = (dir) =>
+    dir && Array.isArray(effectivePath)
+      ? { path: minimize(dir), position: findPathPosition(dir, effectivePath, platformName) }
+      : null
+  // A pasta que importa: a do executável escolhido ou, na falha, a do primeiro
+  // arquivo achado no disco (o mesmo que os textos abaixo citam).
+  const binaryPath = detection.detected
+    ? detection.path
+    : (detection.attempts ?? []).find((attempt) => attempt.resolvedPath)?.resolvedPath ?? null
 
   const candidates = (detection.attempts ?? []).map((attempt) => ({
     command: attempt.command,
@@ -175,6 +241,8 @@ function buildCliDiagnosis({
     chosen,
     version: detection.version ?? null,
     reason: detection.reason ?? null,
+    binaryDir: placeIn(binaryPath ? dirname(binaryPath) : null),
+    managedDir: managedPresent ? placeIn(managedDir) : null,
   }
 
   if (detection.detected) {
@@ -266,7 +334,7 @@ function buildCliDiagnosis({
       recommendInstall: false,
       nextAction: {
         kind: 'fix-path',
-        text: 'Existe uma instalação gerenciada pelo app no disco, mas a pasta dela não está no PATH que o app enxerga. Reiniciar o Felixo costuma refazer o PATH; reinstalar não resolve.',
+        text: describeManagedPathAction(failed.managedDir, effectivePath),
       },
     }
   }
@@ -301,9 +369,35 @@ function buildCliDiagnosis({
     recommendInstall: true,
     nextAction: {
       kind: 'install',
-      text: `Não encontrei ${cli.name} no PATH que o app enxerga${installLabel}. Se o comando funciona no seu terminal, ele pode ser um alias ou estar num PATH que só o terminal carrega — nesse caso o app não o vê, e instalar duplicaria a CLI.`,
+      text: `Não encontrei ${cli.name} no PATH que o app enxerga${installLabel}.${searchedFolders(effectivePath)} Se o comando funciona no seu terminal, ele pode ser um alias ou estar num PATH que só o terminal carrega — nesse caso o app não o vê, e instalar duplicaria a CLI.`,
     },
   }
+}
+
+/**
+ * Próxima ação da causa `path`: aponta a pasta exata da instalação gerenciada
+ * e se ela está ou não no PATH do app. Sem o PATH efetivo, o texto de antes.
+ */
+function describeManagedPathAction(managedDir, effectivePath) {
+  if (!managedDir || !Array.isArray(effectivePath)) {
+    return 'Existe uma instalação gerenciada pelo app no disco, mas a pasta dela não está no PATH que o app enxerga. Reiniciar o Felixo costuma refazer o PATH; reinstalar não resolve.'
+  }
+
+  const total = effectivePath.length
+  if (managedDir.position === null) {
+    return `Existe uma instalação gerenciada pelo app em ${managedDir.path}, mas essa pasta não está entre as ${total} pastas do PATH que o app enxerga. Reiniciar o Felixo costuma refazer o PATH; reinstalar não resolve.`
+  }
+
+  // Na lista e mesmo assim "não achei": o sistema não reconhece o arquivo como
+  // executável — sem permissão de execução no POSIX, sem `.cmd`/`.exe` no Windows.
+  return `Existe uma instalação gerenciada pelo app em ${managedDir.path} — a pasta ${managedDir.position} de ${total} do PATH que o app enxerga —, mas o sistema não reconheceu o arquivo dali como executável (sem permissão de execução ou, no Windows, sem a versão .cmd/.exe). Rode a CLI num terminal para ver a mensagem do sistema; reiniciar o Felixo não muda isso.`
+}
+
+/** " O app procurou em N pastas…" — só quando o PATH efetivo foi informado. */
+function searchedFolders(effectivePath) {
+  return Array.isArray(effectivePath)
+    ? ` O app procurou em ${effectivePath.length} pastas, listadas em "PATH que o app enxerga" no fim do diagnóstico.`
+    : ''
 }
 
 /**
@@ -316,7 +410,9 @@ function buildCliDiagnosis({
  * @param {import('../core/managed-cli-paths.cjs').ManagedCliLayout} [options.layout]
  * @param {Function} [options.verifyInstallation]
  * @param {Record<string, { ok?: boolean, message?: string }>} [options.attempts] - Estado persistido do instalador.
- * @param {{ platformName?: string, arch?: string, appVersion?: string, homeDir?: string }} [options.context]
+ * @param {{ platformName?: string, arch?: string, appVersion?: string, homeDir?: string, userName?: string, effectivePath?: Array<{ position: number, origin: string, path: string }> | null }} [options.context]
+ *   `effectivePath` é o `describeCliPath` do mesmo ambiente: com ele, cada
+ *   diagnóstico diz em que posição do PATH está a pasta da CLI.
  * @param {{ existsSync: (candidate: string) => boolean }} [options.fileSystem]
  */
 async function diagnoseClis({
@@ -348,6 +444,7 @@ async function diagnoseClis({
         cli,
         detection,
         managedPresent,
+        managedDir: layout?.packagesBin ?? null,
         managedHealth,
         lastInstall: attempts[cli.id] ?? null,
         context,
@@ -360,9 +457,11 @@ async function diagnoseClis({
  * Texto para colar num pedido de suporte. Só usa campos já minimizados.
  *
  * @param {Array<ReturnType<typeof buildCliDiagnosis>>} diagnoses
+ * @param {{ effectivePath?: Array<{ position: number, origin: string, path: string }> | null }} [options]
+ *   O PATH já minimizado (`minimizeEffectivePath`), listado no fim.
  * @returns {string}
  */
-function formatDiagnosisForSupport(diagnoses) {
+function formatDiagnosisForSupport(diagnoses, { effectivePath = null } = {}) {
   if (diagnoses.length === 0) return 'Nenhuma CLI diagnosticada.'
 
   const first = diagnoses[0]
@@ -383,8 +482,22 @@ function formatDiagnosisForSupport(diagnoses) {
       const reason = candidate.reason ? ` (${candidate.reason})` : ''
       lines.push(`  tentativa: ${candidate.command}${resolved}${shell} = ${candidate.outcome}${reason}`)
     }
+    const placement = (label, dir) => {
+      if (!dir) return
+      const where = dir.position === null ? 'fora do PATH do app' : `posição ${dir.position} do PATH do app`
+      lines.push(`  ${label}: ${dir.path} (${where})`)
+    }
+    placement('pasta do executável', diagnosis.binaryDir)
+    placement('pasta da instalação gerenciada', diagnosis.managedDir)
     lines.push(`  próxima ação: ${diagnosis.nextAction.text}`)
     lines.push('')
+  }
+
+  if (Array.isArray(effectivePath)) {
+    lines.push(`PATH que o app enxerga (${effectivePath.length} pastas, nesta ordem; a primeira com o comando vence):`)
+    for (const entry of effectivePath) {
+      lines.push(`  ${entry.position}. [${entry.origin}] ${entry.path}`)
+    }
   }
 
   return lines.join('\n').trimEnd()
@@ -397,6 +510,7 @@ module.exports = {
   diagnoseClis,
   formatDiagnosisForSupport,
   hasManagedBinary,
+  minimizeEffectivePath,
   minimizePaths,
   redactDiagnosticText,
 }

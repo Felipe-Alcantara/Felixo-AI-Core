@@ -476,7 +476,8 @@ export const overlaySurfaces: InventoryElement[] = [
     states: {
       normal: 'Não aparece enquanto o diagnóstico não foi pedido no aviso de falha das CLIs.',
       loading: '"Diagnosticando as CLIs…" (role="status") até o primeiro relatório.',
-      success: 'Lista por CLI com a causa e a próxima ação, e o botão de copiar o texto de suporte.',
+      success:
+        'Lista por CLI com a causa e a próxima ação (na causa path, a pasta exata e se ela está no PATH do app); "PATH que o app enxerga (N pastas)" num <details> nativo que começa fechado, com posição, pasta já minimizada (~ e <usuario>) e origem de cada pasta (describeCliPath, o mesmo PATH que createCliEnv entrega), rolável e alcançável pelo teclado; e o botão de copiar o texto de suporte. Main sem effectivePath (versão anterior) não mostra a lista.',
       error: 'Mensagem do erro em role="alert".',
     },
     controls: [

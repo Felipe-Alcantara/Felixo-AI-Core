@@ -7,6 +7,7 @@ const {
   buildCliDiagnosis,
   diagnoseClis,
   formatDiagnosisForSupport,
+  minimizeEffectivePath,
   minimizePaths,
   redactDiagnosticText,
 } = require('./cli-diagnostics.cjs')
@@ -336,6 +337,236 @@ describe('redactDiagnosticText / minimizePaths', () => {
 
   it('limita o tamanho do que é persistido', () => {
     assert.ok(redactDiagnosticText('x '.repeat(5000)).length <= 2000)
+  })
+})
+
+describe('minimizePaths com o nome da conta', () => {
+  it('POSIX: o nome some fora de /home, só como pedaço inteiro', () => {
+    const text = minimizePaths('/opt/ana/bin:/srv/ana-tools/bin:/opt/banana/bin:/home/ana/.local/bin', {
+      homeDir: '/home/ana',
+      userName: 'ana',
+    })
+
+    assert.equal(text, '/opt/<usuario>/bin:/srv/<usuario>-tools/bin:/opt/banana/bin:~/.local/bin')
+  })
+
+  it('Windows: nome com espaço some em outro disco, sem diferenciar maiúsculas', () => {
+    const text = minimizePaths(
+      'D:\\Ana Maria\\ferramentas;C:\\Users\\Ana Maria\\AppData\\Roaming\\npm;E:\\copia\\ANA MARIA\\bin',
+      { homeDir: 'C:\\Users\\Ana Maria', userName: 'Ana Maria' },
+    )
+
+    assert.equal(text, 'D:\\<usuario>\\ferramentas;~\\AppData\\Roaming\\npm;E:\\copia\\<usuario>\\bin')
+  })
+
+  it('pasta de OUTRA conta perde o nome dela; o nome da conta atual não atrapalha', () => {
+    const text = minimizePaths('C:\\Users\\Carla\\AppData\\Roaming\\npm', {
+      homeDir: 'C:\\Users\\Bia',
+      userName: 'Bia',
+    })
+
+    assert.equal(text, 'C:\\Users\\<usuario>\\AppData\\Roaming\\npm')
+  })
+
+  it('conta com nome genérico (node) não apaga a pasta do nvm', () => {
+    assert.equal(
+      minimizePaths('~/.nvm/versions/node/v22.22.3/bin', { userName: 'node' }),
+      '~/.nvm/versions/node/v22.22.3/bin',
+    )
+  })
+
+  it('caractere especial no nome vale literalmente', () => {
+    assert.equal(
+      minimizePaths('/opt/a.b/bin:/opt/axb/bin', { userName: 'a.b' }),
+      '/opt/<usuario>/bin:/opt/axb/bin',
+    )
+  })
+})
+
+describe('PATH efetivo no diagnóstico', () => {
+  const linux = {
+    platformName: 'linux',
+    arch: 'x64',
+    appVersion: '0.1.437',
+    homeDir: '/home/ana',
+    userName: 'ana',
+  }
+  const effectivePath = [
+    { position: 1, origin: 'usuario', path: '/home/ana/.local/bin' },
+    { position: 2, origin: 'sistema', path: '/usr/bin' },
+    { position: 3, origin: 'processo', path: '/opt/ana/bin' },
+    { position: 4, origin: 'gerenciada', path: '/home/ana/.config/felixo/clis/bin' },
+  ]
+  const notFound = {
+    detected: false,
+    version: null,
+    path: null,
+    reason: FAILURE_REASONS.NOT_FOUND,
+    attempts: [{ command: 'claude', resolvedPath: null, viaShell: false, outcome: 'failed', reason: FAILURE_REASONS.NOT_FOUND }],
+  }
+  const readyAt = (binary) => ({
+    detected: true,
+    version: '2.0.0',
+    path: binary,
+    reason: null,
+    attempts: [{ command: 'claude', resolvedPath: null, viaShell: false, outcome: 'ok', reason: null }],
+  })
+  const managedAt = (managedDir) =>
+    buildCliDiagnosis({
+      cli: CATALOG_CLAUDE,
+      detection: notFound,
+      managedPresent: true,
+      managedDir,
+      managedHealth: { ok: true },
+      context: { ...linux, effectivePath },
+    })
+
+  it('minimizeEffectivePath mantém ordem e origem, tira o usuário e não copia outro campo', () => {
+    const visible = minimizeEffectivePath(
+      [...effectivePath, { position: 5, origin: 'processo', path: '/srv/bin', env: 'HOME=/home/ana' }],
+      { homeDir: '/home/ana', userName: 'ana' },
+    )
+
+    assert.deepEqual(visible, [
+      { position: 1, origin: 'usuario', path: '~/.local/bin' },
+      { position: 2, origin: 'sistema', path: '/usr/bin' },
+      { position: 3, origin: 'processo', path: '/opt/<usuario>/bin' },
+      { position: 4, origin: 'gerenciada', path: '~/.config/felixo/clis/bin' },
+      { position: 5, origin: 'processo', path: '/srv/bin' },
+    ])
+  })
+
+  it('causa path com a pasta gerenciada FORA da lista diz isso e aponta a pasta', () => {
+    const diagnosis = managedAt('/home/ana/.local/share/felixo/clis/bin')
+
+    assert.equal(diagnosis.cause, DIAGNOSIS_CAUSES.PATH)
+    assert.deepEqual(diagnosis.managedDir, { path: '~/.local/share/felixo/clis/bin', position: null })
+    assert.match(
+      diagnosis.nextAction.text,
+      /em ~\/\.local\/share\/felixo\/clis\/bin, mas essa pasta não está entre as 4 pastas do PATH/,
+    )
+  })
+
+  it('causa path com a pasta gerenciada NA lista diz a posição e não manda reiniciar', () => {
+    const diagnosis = managedAt('/home/ana/.config/felixo/clis/bin/')
+
+    assert.equal(diagnosis.cause, DIAGNOSIS_CAUSES.PATH)
+    assert.equal(diagnosis.recommendInstall, false)
+    assert.equal(diagnosis.managedDir.position, 4)
+    assert.match(diagnosis.nextAction.text, /a pasta 4 de 4 do PATH que o app enxerga/)
+    assert.match(diagnosis.nextAction.text, /reiniciar o Felixo não muda isso/)
+  })
+
+  it('CLI pronta diz em que posição está a pasta do executável escolhido', () => {
+    const diagnosis = buildCliDiagnosis({
+      cli: CATALOG_CLAUDE,
+      detection: readyAt('/opt/ana/bin/claude'),
+      context: { ...linux, effectivePath },
+    })
+
+    assert.deepEqual(diagnosis.binaryDir, { path: '/opt/<usuario>/bin', position: 3 })
+  })
+
+  it('no Windows a pasta é achada sem diferenciar maiúsculas, barras nem a barra do fim', () => {
+    const diagnosis = buildCliDiagnosis({
+      cli: CATALOG_CLAUDE,
+      detection: {
+        detected: false,
+        version: null,
+        path: null,
+        reason: FAILURE_REASONS.SHIM_BROKEN,
+        attempts: [
+          {
+            command: 'claude.cmd',
+            resolvedPath: 'C:\\Users\\Ana Maria\\AppData\\Roaming\\npm\\claude.cmd',
+            viaShell: true,
+            outcome: 'failed',
+            reason: FAILURE_REASONS.SHIM_BROKEN,
+          },
+        ],
+      },
+      context: {
+        platformName: 'win32',
+        arch: 'x64',
+        appVersion: '0.1.437',
+        homeDir: 'C:\\Users\\Ana Maria',
+        userName: 'Ana Maria',
+        effectivePath: [{ position: 1, origin: 'usuario', path: 'c:/users/ana maria/appdata/roaming/npm/' }],
+      },
+    })
+
+    assert.deepEqual(diagnosis.binaryDir, { path: '~\\AppData\\Roaming\\npm', position: 1 })
+  })
+
+  it('não instalada conta em quantas pastas o app procurou', () => {
+    const diagnosis = buildCliDiagnosis({
+      cli: CATALOG_CLAUDE,
+      detection: notFound,
+      context: { ...linux, effectivePath },
+    })
+
+    assert.equal(diagnosis.cause, DIAGNOSIS_CAUSES.NOT_INSTALLED)
+    assert.match(diagnosis.nextAction.text, /procurou em 4 pastas/)
+  })
+
+  it('sem o PATH efetivo não há posição e o texto continua o de antes', () => {
+    const diagnosis = buildCliDiagnosis({
+      cli: CATALOG_CLAUDE,
+      detection: notFound,
+      managedPresent: true,
+      managedDir: '/home/ana/.config/felixo/clis/bin',
+      managedHealth: { ok: true },
+      context: linux,
+    })
+
+    assert.equal(diagnosis.binaryDir, null)
+    assert.equal(diagnosis.managedDir, null)
+    assert.match(diagnosis.nextAction.text, /a pasta dela não está no PATH que o app enxerga/)
+  })
+
+  it('texto de suporte: PATH com origem e ordem, pastas da CLI marcadas, sem dado pessoal', () => {
+    const ready = buildCliDiagnosis({
+      cli: CATALOG_CLAUDE,
+      detection: readyAt('/opt/ana/bin/claude'),
+      context: { ...linux, effectivePath },
+    })
+    const outside = managedAt('/home/ana/.local/share/felixo/clis/bin')
+    const text = formatDiagnosisForSupport([ready, outside], {
+      effectivePath: minimizeEffectivePath(effectivePath, { homeDir: '/home/ana', userName: 'ana' }),
+    })
+
+    assert.match(text, /PATH que o app enxerga \(4 pastas, nesta ordem; a primeira com o comando vence\):/)
+    assert.match(text, /^  1\. \[usuario\] ~\/\.local\/bin$/m)
+    assert.match(text, /^  3\. \[processo\] \/opt\/<usuario>\/bin$/m)
+    assert.match(text, /pasta do executável: \/opt\/<usuario>\/bin \(posição 3 do PATH do app\)/)
+    assert.match(text, /pasta da instalação gerenciada: ~\/\.local\/share\/felixo\/clis\/bin \(fora do PATH do app\)/)
+    assert.equal(/[\\/]ana(?:[\\/]|$)/im.test(text), false, 'o nome da conta vazou')
+  })
+
+  it('diagnoseClis localiza a pasta gerenciada (layout.packagesBin) no PATH efetivo', async () => {
+    const packagesBin = 'C:\\Users\\Bia\\AppData\\Roaming\\Felixo\\clis'
+    const [diagnosis] = await diagnoseClis({
+      catalog: [CATALOG_CLAUDE],
+      detect: async () => ({ detected: false, version: null, path: null, reason: FAILURE_REASONS.NOT_FOUND, attempts: [] }),
+      env: {},
+      layout: { packagesBin },
+      verifyInstallation: () => ({ ok: true }),
+      fileSystem: { existsSync: (candidate) => candidate.endsWith('claude.cmd') },
+      context: {
+        platformName: 'win32',
+        arch: 'x64',
+        appVersion: '0.1.437',
+        homeDir: 'C:\\Users\\Bia',
+        userName: 'Bia',
+        effectivePath: [
+          { position: 1, origin: 'sistema', path: 'C:\\Windows\\System32' },
+          { position: 2, origin: 'gerenciada', path: packagesBin },
+        ],
+      },
+    })
+
+    assert.deepEqual(diagnosis.managedDir, { path: '~\\AppData\\Roaming\\Felixo\\clis', position: 2 })
+    assert.match(diagnosis.nextAction.text, /a pasta 2 de 2/)
   })
 })
 

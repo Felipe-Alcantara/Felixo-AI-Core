@@ -3,7 +3,14 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
-const { CliProcessManager, createCliEnv } = require('./cli-process-manager.cjs')
+const platform = require('../core/platform/index.cjs')
+const { getManagedCliLayout } = require('../core/managed-cli-paths.cjs')
+const {
+  CLI_PATH_ORIGINS,
+  CliProcessManager,
+  createCliEnv,
+  describeCliPath,
+} = require('./cli-process-manager.cjs')
 
 test('cli env uses configured portable cli paths', (t) => {
   const cliDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-cli-path-'))
@@ -76,6 +83,75 @@ test('cli env exposes the agent command directory from the app profile', (t) => 
   })
 
   assert.equal(env.PATH.split(path.delimiter).includes(binDir), true)
+})
+
+test('describeCliPath lista cada pasta uma vez, na ordem do createCliEnv e com a origem', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-effective-path-'))
+  t.after(() => {
+    fs.rmSync(root, { recursive: true, force: true })
+  })
+
+  const home = path.join(root, 'home')
+  // No Windows a lista começa por %APPDATA%\npm, do ambiente real: só a pasta
+  // dentro da HOME falsa pode ser criada pelo teste.
+  const userBin = platform.getUserCliPaths(home).find((candidate) => candidate.startsWith(home))
+  const configured = path.join(root, 'configurada')
+  const inherited = path.join(root, 'herdada')
+  const agentBin = path.join(root, 'perfil', 'bin')
+  const managedRoot = path.join(root, 'gerenciadas')
+  const { packagesBin } = getManagedCliLayout({
+    userData: root,
+    env: { FELIXO_MANAGED_CLI_ROOT: managedRoot },
+  })
+  for (const dir of [userBin, configured, inherited, agentBin, packagesBin]) {
+    fs.mkdirSync(dir, { recursive: true })
+  }
+  const env = {
+    FELIXO_CLI_PATHS: configured,
+    FELIXO_USER_DATA_DIR: path.join(root, 'perfil'),
+    FELIXO_MANAGED_CLI_ROOT: managedRoot,
+    HOME: home,
+    // A configurada repetida e uma pasta que não existe: nenhuma entra de novo.
+    PATH: [inherited, configured, path.join(root, 'nao-existe')].join(path.delimiter),
+  }
+
+  const entries = describeCliPath(env)
+  const originsOf = (dir) =>
+    entries.filter((entry) => entry.path === dir).map((entry) => entry.origin)
+
+  assert.deepEqual(
+    entries.map((entry) => entry.position),
+    entries.map((_, index) => index + 1),
+  )
+  assert.equal(entries[0].path, configured)
+  assert.deepEqual(originsOf(configured), [CLI_PATH_ORIGINS.CONFIGURED])
+  assert.deepEqual(originsOf(userBin), [CLI_PATH_ORIGINS.USER])
+  assert.deepEqual(originsOf(inherited), [CLI_PATH_ORIGINS.PROCESS])
+  assert.deepEqual(originsOf(agentBin), [CLI_PATH_ORIGINS.APP])
+  assert.deepEqual(originsOf(packagesBin), [CLI_PATH_ORIGINS.MANAGED])
+  assert.equal(entries.some((entry) => entry.path.endsWith('nao-existe')), false)
+
+  // As origens aparecem na ordem do CLI_PATH_ORIGINS, que é a ordem da junção.
+  const ranks = entries.map((entry) => Object.values(CLI_PATH_ORIGINS).indexOf(entry.origin))
+  assert.deepEqual(ranks, [...ranks].sort((a, b) => a - b))
+
+  // Uma fonte só: o PATH entregue às CLIs é exatamente esta lista.
+  assert.equal(
+    createCliEnv(env).PATH,
+    entries.map((entry) => entry.path).join(path.delimiter),
+  )
+})
+
+test('describeCliPath só lê: o env recebido e o PATH do processo ficam iguais', () => {
+  const env = { HOME: os.tmpdir(), PATH: ['/usr/bin', '/bin'].join(path.delimiter) }
+  const before = { ...env }
+  const processPath = process.env.PATH
+
+  describeCliPath(env)
+  createCliEnv(env)
+
+  assert.deepEqual(env, before)
+  assert.equal(process.env.PATH, processPath)
 })
 
 test('cli process manager keeps stdin closed by default', async () => {
