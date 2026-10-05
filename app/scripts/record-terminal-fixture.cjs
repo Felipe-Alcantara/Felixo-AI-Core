@@ -12,6 +12,9 @@
  *   node scripts/record-terminal-fixture.cjs --provider claude --scenario resposta
  *   node scripts/record-terminal-fixture.cjs --provider codex --explore
  *   node scripts/record-terminal-fixture.cjs --provider claude --scenario telacheia
+ *   node scripts/record-terminal-fixture.cjs --provider codex --scenario status
+ *   node scripts/record-terminal-fixture.cjs --provider codex --scenario status-conta --cols 160 --rows 60
+ *   node scripts/record-terminal-fixture.cjs --reanonymize src/.../codex-status.json
  *
  * - `--explore` só abre a CLI, espera a tela parar e imprime o que ela mostra.
  *   Serve para ver diálogos novos (confiança na pasta, login) antes de
@@ -23,15 +26,19 @@
  * - O Gemini roda com uma pasta pessoal própria (`GEMINI_CLI_HOME`) cujo
  *   `settings.json` desliga a atualização automática, sem tocar no
  *   `~/.gemini/settings.json` da pessoa.
- * - A fixture sai anonimizada (pasta pessoal, usuário, máquina, e-mails e
- *   IDs trocados por marcadores) e o script se recusa a gravar se ainda achar
- *   algo com cara de chave ou token.
+ * - A fixture sai anonimizada (pasta pessoal, usuário, máquina, e-mails,
+ *   IDs e o plano da conta trocados por marcadores) e o script se recusa a
+ *   gravar se ainda achar algo com cara de chave ou token.
+ * - `--reanonymize <fixture>` reaplica as regras atuais a uma fixture já
+ *   gravada, sem abrir a CLI — para quando uma regra nova de anonimização
+ *   chega depois da gravação.
  */
 
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 const { execFileSync } = require('node:child_process')
+const { buildCodexStatusArgs } = require('../electron/services/codex-status-screen.cjs')
 
 const APP_DIR = path.resolve(__dirname, '..')
 const FIXTURES_DIR = path.join(APP_DIR, 'src', 'features', 'canvas', 'terminal', '__fixtures__', 'terminal-output')
@@ -63,13 +70,14 @@ function parseArgs(argv) {
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index]
     if (arg === '--explore') args.explore = true
+    else if (arg === '--reanonymize') args.reanonymize = argv[++index]
     else if (arg === '--provider') args.provider = argv[++index]
     else if (arg === '--scenario') args.scenario = argv[++index]
     else if (arg === '--cols') args.cols = Number(argv[++index])
     else if (arg === '--rows') args.rows = Number(argv[++index])
     else throw new Error(`Argumento desconhecido: ${arg}`)
   }
-  if (!args.provider) throw new Error('Informe --provider (claude, codex, gemini ou openia).')
+  if (!args.provider && !args.reanonymize) throw new Error('Informe --provider (claude, codex, gemini ou openia).')
   return args
 }
 
@@ -169,6 +177,15 @@ const BASE_ARGS = {
  */
 const TRUST_DIALOG = /Trust this folder\?|Do you trust the files in this folder\?/
 
+/** Campo de mensagem do Codex vazio, e com o `/status` digitado. */
+const CODEX_EMPTY_COMPOSER = /^\s*›\s*(?:Ask Codex to do anything\s*)?$/m
+const CODEX_TYPED_STATUS = /^\s*›\s*\/status\s*$/m
+
+/** O Codex aceita um comando: campo vazio na tela e nenhum servidor MCP subindo. */
+function codexReadyForCommand(viewport) {
+  return CODEX_EMPTY_COMPOSER.test(viewport) && !/Starting MCP servers|Booting MCP/i.test(viewport)
+}
+
 /**
  * Roteiro por provedor e cenário: comando, argumentos e os passos. Cada passo
  * espera algo aparecer na tela (`untilScreen`), a tela parar (`idleMs`) ou um
@@ -216,6 +233,57 @@ function scenarioFor(provider, scenario) {
       // histórico), o modo que muita gente liga nas configurações.
       if (provider !== 'claude') throw new Error('O cenário "telacheia" é só do Claude.')
       return { command, args: [...base, '--settings', '{"tui":"fullscreen"}'], steps: [...ask(MARKDOWN_PROMPT), ...finish] }
+    case 'status':
+      // O `/status` da própria CLI depois de uma resposta curta: tokens e janela
+      // de contexto só aparecem quando a sessão já teve uso. É a referência do
+      // que a CLI mostra ali.
+      return {
+        command,
+        args: base,
+        steps: [
+          ...ask('Diga oi.'),
+          { label: 'espera a resposta terminar', idleMs: 9000, maxMs: 300_000 },
+          { label: 'digita /status', send: '/status' },
+          { label: 'pausa antes do Enter', waitMs: 800 },
+          { label: 'envia', send: '\r' },
+          { label: 'espera o /status ser desenhado', idleMs: 5000, maxMs: 60_000 },
+          ...exit,
+        ],
+      }
+    case 'status-conta': {
+      // O caminho do painel "Limites e uso" (codex-status-screen.cjs): sessão
+      // nova, sem conversa, com os mesmos argumentos da leitura do app. O
+      // /status roda duas vezes porque o primeiro só pede os limites ao
+      // servidor ("refresh requested").
+      if (provider !== 'codex') throw new Error('O cenário "status-conta" é só do Codex.')
+      // Só digita com o campo vazio e só dá Enter com o `/status` no campo:
+      // com os servidores MCP ainda subindo, a CLI ignora o Enter, e digitar
+      // de novo mandaria "/status/status" como mensagem (aconteceu numa
+      // gravação de 02/10/2026 e virou uma conversa de verdade).
+      const sendStatus = (label) => [
+        { label: `digita /status (${label}), se o campo estiver vazio`, ifScreen: CODEX_EMPTY_COMPOSER, send: '/status' },
+        { label: 'pausa antes do Enter', waitMs: 800 },
+        { label: 'envia, se o /status estiver no campo', ifScreen: CODEX_TYPED_STATUS, send: '\r' },
+      ]
+      return {
+        command,
+        args: buildCodexStatusArgs([path.join(RECORDINGS_ROOT, provider)]),
+        steps: [
+          // O mesmo tempo da leitura do app: digita assim que o campo de
+          // mensagem aparece, sem servidor MCP subindo, e a tela sossega.
+          // Esperar mais deixa a CLI buscar os limites sozinha, e o primeiro
+          // quadro já viria completo.
+          { label: 'espera o campo de mensagem e os servidores MCP', untilScreen: codexReadyForCommand, maxMs: 90_000 },
+          { label: 'espera a tela sossegar', idleMs: 700, maxMs: 30_000 },
+          ...sendStatus('primeiro'),
+          { label: 'espera o primeiro quadro', untilScreen: /refresh requested|\blimit:/, maxMs: 30_000 },
+          { label: 'espera a tela sossegar', idleMs: 1500, maxMs: 30_000 },
+          ...sendStatus('de novo'),
+          { label: 'espera o quadro com os limites', idleMs: 4000, maxMs: 60_000 },
+          ...exit,
+        ],
+      }
+    }
     case 'cancelamento':
       return {
         command,
@@ -242,7 +310,7 @@ function scenarioFor(provider, scenario) {
       }
     }
     default:
-      throw new Error('Cenários: resposta, telacheia (só Claude), cancelamento, erro, retomada.')
+      throw new Error('Cenários: resposta, telacheia (só Claude), status, status-conta (só Codex), cancelamento, erro, retomada.')
   }
 }
 
@@ -262,6 +330,8 @@ function anonymize(text, workdir) {
   result = result
     // O Claude separa as palavras com espaço ou com um salto de cursor (`CSI 48 G`).
     .replace(/(Claude(?:\s|\u001b\[[0-9;?]*[A-Za-z])+)(Pro|Max|Team|Enterprise)\b/g, '$1Plano')
+    // O `/status` do Codex mostra o plano na linha "Account:".
+    .replace(/(Account:(?:\s|\u001b\[[0-9;?]*[A-Za-z])+)(Free|Go|Plus|Pro(?: Lite)?|Team|Business|Enterprise|Edu(?: Plus| Pro)?)\b/g, '$1Plano')
     .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '00000000-0000-4000-8000-000000000000')
     .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, 'pessoa@example.com')
   if (user && user.length > 2) result = result.replace(new RegExp(`\\b${escapeRegExp(user)}\\b`, 'gi'), 'pessoa')
@@ -292,6 +362,7 @@ function assertNoSecrets(text) {
 /** Dados da conta e das configurações da pessoa que uma CLI pode mostrar na tela. */
 const ACCOUNT_DATA_PATTERNS = [
   /Claude (?:Pro|Max|Team|Enterprise)\b/,
+  /Account:\s+(?:Free|Go|Plus|Pro|Team|Business|Enterprise|Edu)\b/,
   /Permission (?:allow|deny|ask) rule/i,
   /settings\.json/,
 ]
@@ -310,6 +381,11 @@ function assertAnonymous(renderedText) {
   assertNoSecrets(renderedText)
 }
 
+/** Condição de tela de um passo: expressão regular ou função do texto visível. */
+function matchesScreen(matcher, viewport) {
+  return typeof matcher === 'function' ? matcher(viewport) : matcher.test(viewport)
+}
+
 function mergeChunks(chunks) {
   const merged = []
   for (const chunk of chunks) {
@@ -320,8 +396,29 @@ function mergeChunks(chunks) {
   return merged
 }
 
+/**
+ * Reaplica a anonimização atual a uma fixture já gravada. A pasta de gravação
+ * entra como `workdir` porque é o caminho que a gravação original trocou.
+ */
+async function reanonymizeFixture(file) {
+  const fixturePath = path.resolve(file)
+  const fixture = JSON.parse(fs.readFileSync(fixturePath, 'utf8'))
+  const workdir = path.join(RECORDINGS_ROOT, fixture.provider)
+  fixture.chunks = fixture.chunks.map((chunk) => ({ ...chunk, data: anonymize(chunk.data, workdir) }))
+  assertNoSecrets(JSON.stringify(fixture.chunks))
+  const replay = createScreen(fixture.cols, fixture.rows)
+  for (const chunk of fixture.chunks) await replay.write(chunk.data)
+  assertAnonymous(replay.text())
+  fs.writeFileSync(fixturePath, `${JSON.stringify(fixture, null, 1)}\n`)
+  process.stderr.write(`[gravar] ${path.relative(APP_DIR, fixturePath)} anonimizada de novo\n`)
+}
+
 async function run() {
   const args = parseArgs(process.argv.slice(2))
+  if (args.reanonymize) {
+    await reanonymizeFixture(args.reanonymize)
+    return
+  }
   const pty = require('node-pty')
   const workdir = path.join(RECORDINGS_ROOT, args.provider)
   fs.mkdirSync(workdir, { recursive: true })
@@ -376,7 +473,7 @@ async function run() {
     if (recording) marks.push({ t: Date.now() - started, label: step.label })
     if (step.untilScreen) {
       const deadline = Date.now() + (step.maxMs ?? 60_000)
-      while (!step.untilScreen.test(screen.viewport()) && Date.now() < deadline && !exited) await sleep(100)
+      while (!matchesScreen(step.untilScreen, screen.viewport()) && Date.now() < deadline && !exited) await sleep(100)
       if (Date.now() >= deadline) process.stderr.write('[gravar] prazo do passo esgotado; seguindo\n')
     }
     if (step.idleMs) {
@@ -384,7 +481,8 @@ async function run() {
       while (!settledFor(step.idleMs) && Date.now() < deadline && !exited) await sleep(250)
       if (Date.now() >= deadline) process.stderr.write('[gravar] prazo do passo esgotado; seguindo\n')
     }
-    const wanted = step.ifScreen ? step.ifScreen.test(screen.viewport()) : true
+    const wanted = step.ifScreen ? matchesScreen(step.ifScreen, screen.viewport()) : true
+    if (step.ifScreen && !wanted) process.stderr.write('[gravar] condição do passo não vista na tela; nada enviado\n')
     if (step.send !== undefined && wanted && !exited) child.write(step.send)
     if (step.waitMs) await sleep(step.waitMs)
   }

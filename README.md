@@ -489,21 +489,24 @@ chave configurada, e rede para o catálogo. O contrato com o Openia está em
 ### Limites e uso por conta
 
 O painel **Limites e uso** (menu **Ferramentas** do canvas) reúne as contas
-detectadas de cada CLI instalada, com o consumo de cada janela, o horário do
-reset, a conta e o plano informados pela própria ferramenta. O identificador da
-conta aparece inteiro, para dar para dizer qual linha é qual quando há mais de
-uma conta no mesmo provedor; quem separa as contas por dentro é um fingerprint
-SHA-256, não esse texto. Nenhum token, cookie, chave ou senha é lido para o
-painel ou gravado por ele.
+detectadas de cada CLI instalada, agrupadas por provedor. Cada provedor abre com
+um **resumo**: uma linha por conta, com o plano, quanto sobra em cada janela de
+uso da conta e o status da leitura — dá para comparar as contas do mesmo
+provedor de uma vez. Logo abaixo, o **/status completo** de cada conta fica
+recolhido e abre com um clique: as barras com o horário do reset, a fonte, os
+resets bancados e todos os dados que a CLI publica. O identificador da conta
+aparece inteiro, para dar para dizer qual linha é qual; quem separa as contas
+por dentro é um fingerprint SHA-256, não esse texto. Nenhum token, cookie,
+chave ou senha é lido para o painel ou gravado por ele.
 
 Cada número mostra de onde veio e **quando foi medido**, que nem sempre é quando
 o app leu — uma fonte que só é atualizada durante a sessão continua exibindo o
 último valor conhecido, marcado como antigo em vez de apresentado como atual.
 Onde a CLI não oferece cota consultável sem interação, o painel diz isso por
 extenso, em vez de mostrar zero. As fontes declaradas com consulta ao vivo são
-executadas em cada atualização e por conta/perfil: o Codex usa o
-`account/rateLimits/read` do app-server autenticado, o Claude abre uma sessão
-PTY descartável e executa o `/status`, e o Openia chama seu `statusline`. Por
+executadas em cada atualização e por conta/perfil: o Codex lê o app-server
+autenticado e a tela do `/status` (ver abaixo), o Claude abre uma sessão PTY
+descartável e executa o `/status`, e o Openia chama seu `statusline`. Por
 isso o painel não copia o limite do login do sistema para outra linha. O botão
 **Atualizar** repete a consulta, e a atualização automática pode ser
 configurada em intervalos de 5, 15 ou 30 minutos.
@@ -515,11 +518,38 @@ promoção, explicação/atribuição das últimas 24 horas e créditos de uso. 
 campos são extraídos e redigidos antes de serem armazenados; a saída bruta do
 terminal nunca vai para o renderer.
 
+No Codex, o `/status` completo de cada conta vem de duas leituras feitas ao
+mesmo tempo, com o login daquela conta:
+
+- **app-server** (`codex app-server --stdio`, só leituras): as janelas de 5 h e
+  semanal, a reserva semanal de um modelo (marcada **só este modelo** — zerada,
+  ela para aquele modelo, não a conta, e a cadeia de contas não a usa), o
+  limite de gasto individual de workspace quando existe, créditos avulsos,
+  resets bancados, tipo de login e plano, a configuração de modelos (modelo,
+  esforço, resumo, verbosidade, provedor, nível de serviço, aprovação,
+  sandbox, janela de contexto, compactação e busca na web — "padrão da CLI"
+  quando não definida), os modelos disponíveis, o histórico de tokens da conta
+  e os avisos de bloqueio de uso (que também aparecem no resumo);
+- **tela do `/status`**: o texto exato que a CLI imprime — a linha do modelo
+  com esforço e resumos, o provedor, a conta e o rótulo de cada limite — e o
+  link da página de uso. A leitura abre o Codex escondido numa pasta temporária
+  marcada como confiável só naquela execução (`-c projects=...`), espera os
+  servidores MCP subirem e só digita com o campo de mensagem vazio, nunca
+  responde a um diálogo com Enter e não envia mensagem nenhuma: o `config.toml`,
+  o histórico e as sessões do Codex ficam como estavam. Se a tela não for lida,
+  os números continuam valendo e os detalhes dizem por quê.
+
+Ficam de fora **de propósito** os campos do `/status` que descrevem a conversa
+aberta em um terminal, não a conta: pasta, permissões da pasta, Agents.md,
+nome e modo da conversa, ID da sessão e janela de contexto usada. O cartão do
+Codex avisa isso. E-mail, IDs de conta/workspace, caminhos e instruções do
+`config.toml` também nunca chegam ao painel.
+
 O que cada CLI publica hoje:
 
 | CLI | Fonte | O que aparece |
 |-----|-------|---------------|
-| Codex | `account/rateLimits/read` ao vivo no app-server por conta/perfil; rollout local só como fallback | janela de 5 h, janela semanal, reset, créditos e plano |
+| Codex | app-server ao vivo (limites, conta, configuração, modelos e histórico de tokens) e a tela do `/status`, por conta/perfil; rollout local só como fallback | janelas de 5 h e semanal, reserva semanal por modelo, resets, créditos, plano, configuração, modelos, histórico de tokens, avisos de bloqueio e o texto do `/status` |
 | Claude Code | `/status` interativo ao vivo por conta/perfil | Status + Usage completos, janelas de 5 h e semanal, resets, estatísticas e atribuição |
 | Openia | `openia statusline` ao vivo (créditos da conta no OpenRouter) | usado, restante e total em US$ |
 | Gemini | — | sem endpoint não interativo seguro: a quota só existe no `/stats model` interativo e fica explicitamente indisponível |

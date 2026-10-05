@@ -33,10 +33,10 @@ const AGENT_USAGE_SOURCES = Object.freeze([
     resetCreditsQuery: 'codex-app-server',
     usage: {
       kind: 'live-query',
-      label: 'Codex limites ao vivo (app-server)',
+      label: 'Codex /status ao vivo (app-server + tela do /status)',
       docsUrl: 'https://developers.openai.com/codex/cli',
       limitation:
-        'A quota vem do app-server autenticado; se ele não responder, a rodada fica explicitamente indisponível e o último valor conhecido permanece separado.',
+        'A quota vem do app-server autenticado; se ele não responder, a rodada fica explicitamente indisponível e o último valor conhecido permanece separado. A tela do /status é complemento: sem ela, os números continuam valendo.',
     },
   },
   {

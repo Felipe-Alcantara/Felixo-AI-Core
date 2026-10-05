@@ -119,6 +119,8 @@ function normalizeUsageSample(sample) {
   }
 }
 
+const METRIC_SCOPES = new Set(['account', 'model'])
+
 function normalizeMetrics(metrics) {
   if (!Array.isArray(metrics)) {
     return []
@@ -148,6 +150,9 @@ function normalizeMetrics(metrics) {
       unit: cleanString(metric.unit, 30) || null,
       precision: cleanString(metric.precision, 30) || 'unknown',
       resetAt: normalizeTimestamp(metric.resetAt),
+      // `model`: a janela vale só para um modelo (ex.: a reserva semanal do
+      // Codex). Sem o campo, a métrica é da conta inteira.
+      ...(METRIC_SCOPES.has(metric.scope) ? { scope: metric.scope } : {}),
     }
 
     if (
@@ -246,6 +251,41 @@ const STATUS_DETAIL_KEYS = new Set([
   'description',
   'grantedAt',
   'expiresAt',
+  // Detalhes do `/status` do Codex (codex-status-details.cjs): o que o
+  // app-server publica sobre a conta e o texto exato da tela do `/status`.
+  'usagePage',
+  'account',
+  'authMode',
+  'plan',
+  'configuration',
+  'reasoningEffort',
+  'reasoningSummary',
+  'verbosity',
+  'modelProvider',
+  'serviceTier',
+  'approvalPolicy',
+  'sandboxMode',
+  'contextWindow',
+  'autoCompactLimit',
+  'webSearch',
+  'profile',
+  'accountState',
+  'ordinaryUsage',
+  'limitReached',
+  'spendControl',
+  'individualLimit',
+  'extraCredits',
+  'models',
+  'tokenUsage',
+  'lifetimeTokens',
+  'peakDailyTokens',
+  'longestTurn',
+  'currentStreak',
+  'longestStreak',
+  'recentDays',
+  'screen',
+  'unavailable',
+  'blockingWarning',
 ])
 
 /**

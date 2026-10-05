@@ -1,0 +1,366 @@
+{
+ "provider": "codex",
+ "version": "0.156.1",
+ "scenario": "status",
+ "cols": 100,
+ "rows": 50,
+ "platform": "linux",
+ "recordedAt": "2026-10-02",
+ "anonymized": true,
+ "marks": [
+  {
+   "t": 19,
+   "label": "espera a CLI abrir"
+  },
+  {
+   "t": 18022,
+   "label": "confia na pasta de gravação, se perguntar"
+  },
+  {
+   "t": 18523,
+   "label": "espera a CLI ficar pronta"
+  },
+  {
+   "t": 18523,
+   "label": "digita o pedido"
+  },
+  {
+   "t": 18523,
+   "label": "pausa antes do Enter"
+  },
+  {
+   "t": 19326,
+   "label": "envia"
+  },
+  {
+   "t": 19329,
+   "label": "espera a resposta terminar"
+  },
+  {
+   "t": 32377,
+   "label": "digita /status"
+  },
+  {
+   "t": 32378,
+   "label": "pausa antes do Enter"
+  },
+  {
+   "t": 33178,
+   "label": "envia"
+  },
+  {
+   "t": 33178,
+   "label": "espera o /status ser desenhado"
+  }
+ ],
+ "chunks": [
+  {
+   "t": 314,
+   "data": "\u001b[?2004h\u001b[>4;0m\u001b[>7u\u001b[?1004h\u001b[6n\u001b]10;?\u001b\\\u001b]11;?\u001b\\\u001b[?u\u001b[c"
+  },
+  {
+   "t": 584,
+   "data": "\u001b[?2026h\u001b[?2026h\u001b[1;1H\u001b[J\u001b[?25l\u001b[1;42H\u001b[0m\u001b[49m\u001b[K\u001b[2;42H\u001b[0m\u001b[49m\u001b[K\u001b[3;42H\u001b[0m\u001b[49m\u001b[K\u001b[4;42H\u001b[0m\u001b[49m\u001b[K\u001b[5;42H\u001b[0m\u001b[49m\u001b[K\u001b[6;42H\u001b[0m\u001b[49m\u001b[K\u001b[7;2H\u001b[0m\u001b[49m\u001b[K\u001b[8;2H\u001b[0m\u001b[49m\u001b[K\u001b[9;27H\u001b[0m\u001b[49m\u001b[K\u001b[10;2H\u001b[0m\u001b[49m\u001b[K\u001b[11;2H\u001b[0m\u001b[49m\u001b[K\u001b[1;1H\u001b[2m╭───────────────────────────────────────╮\u001b[2;1H│ >_ \u001b[22m\u001b[1mOpenAI Codex\u001b[22m\u001b[2m\u001b[2m (v0.156.1)            │\u001b[3;1H│                                       │\u001b[4;1H│ model:     \u001b[3mloading\u001b[23m   \u001b[22m\u001b[38;2;99;168;248;49m/model\u001b[2m\u001b[39;49m to change │\u001b[5;1H│ directory: \u001b[22mloading\u001b[2m                    │\u001b[6;1H╰───────────────────────────────────────╯\u001b[7;1H\u001b[22m \u001b[8;1H \u001b[9;1H\u001b[1m›\u001b[22m \u001b[2mAsk Codex to do anything\u001b[10;1H\u001b[22m \u001b[11;1H \u001b[39m\u001b[49m\u001b[0m\u001b[1;1H\u001b[0 q\u001b[1;1H\u001b[2m╭\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 1200,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 1246,
+   "data": "\u001b[?2026h\u001b[?25l\u001b[1;41H\u001b[2m─────────╮\u001b[2;41H         │\u001b[3;41H         │\u001b[4;41H         │\u001b[5;14H\u001b[22m~/.cache/…/fixture-recordings/codex\u001b[2m │\u001b[6;41H─────────╯\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 1437,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 1590,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 2354,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 2431,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 3090,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 7003,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 7058,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 8278,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 8562,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l\u001b]0;codex\u0007\u001b[?2026h\u001b[?25l\u001b[11;3H\u001b[38;2;246;226;183;49mGPT-6-Luna default\u001b[11;22H\u001b[39;49m·\u001b[11;24H\u001b[38;2;171;223;167;49m/tmp/felixo-fixture\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 8629,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 9251,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 10053,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[9;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 10782,
+   "data": "\u001b]0;⠹ codex\u0007"
+  },
+  {
+   "t": 12871,
+   "data": "\u001b[?2026h\u001b[1;1H\u001b[J\u001b[1;50r\u001b[1;1H\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001b[r\u001b[1;9r\u001b[1;1H\r\n\u001b[39;49m\u001b[K\u001b[2m╭────────────────────────────────────────────────╮\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│ >_ \u001b[22m\u001b[1mOpenAI Codex\u001b[22m\u001b[2m\u001b[2m (v0.156.1)                     │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│                                                │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│ model:     \u001b[22mGPT-6-Luna max\u001b[2m   \u001b[22m\u001b[38;2;99;168;248;49m/model\u001b[2m\u001b[39;49m to change   │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│ directory: \u001b[22m~/.cache/…/fixture-recordings/codex\u001b[2m │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m╰────────────────────────────────────────────────╯\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K  \u001b[1mTip:\u001b[22m Try the \u001b[1mDesktop app\u001b[22m on Linux: install it from \u001b[4m\u001b[38;2;99;168;248;49m\u001b]8;;https://learn.chatgpt.com/docs/linux/linux-app\u0007https://learn.chatgpt.com/docs/linux/linux-app\u001b]8;;\u0007\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K  and run 'chatgpt'.\u001b[39m\u001b[49m\u001b[0m\u001b[r\u001b[9;3H\u001b[?25l\u001b[10;2H\u001b[0m\u001b[49m\u001b[K\u001b[11;2H\u001b[0m\u001b[49m\u001b[K\u001b[12;27H\u001b[0m\u001b[49m\u001b[K\u001b[13;2H\u001b[0m\u001b[49m\u001b[K\u001b[14;68H\u001b[0m\u001b[49m\u001b[K\u001b[10;1H \u001b[11;1H \u001b[12;1H\u001b[1m\u001b[38;2;255;178;66;49m›\u001b[22m\u001b[39;49m \u001b[2mAsk Codex to do anything\u001b[13;1H\u001b[22m \u001b[14;1H  \u001b[38;2;246;226;183;49mGPT-6-Luna max\u001b[39;49m · \u001b[38;2;171;223;167;49m/tmp/felixo-fixture\u001b[39m\u001b[49m\u001b[0m\u001b[10;1H\u001b[0 q\u001b[10;1H \u001b[39m\u001b[49m\u001b[0m\u001b[12;3H\u001b[?25h\u001b[?2026l\u001b]0;⠸ codex\u0007"
+  },
+  {
+   "t": 12962,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[12;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[12;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[12;3H\u001b[?25h\u001b[?2026l\u001b]0;codex\u0007\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[12;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 13709,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[12;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 13835,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[12;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[12;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 18550,
+   "data": "\u001b[?2026h\u001b[?25l\u001b[12;11H\u001b[0m\u001b[49m\u001b[K\u001b[12;3HDiga oi.\u001b[39m\u001b[49m\u001b[0m\u001b[12;11H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 19331,
+   "data": "\u001b[?2026h\u001b[10;50r\u001b[10;1H\u001bM\u001bM\u001bM\u001bM\u001b[r\u001b[1;13r\u001b[9;1H\r\n\u001b[39;49m\u001b[K\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[1m\u001b[2m› \u001b[22m\u001b[22mDiga oi.\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[39m\u001b[49m\u001b[0m\u001b[r\u001b[12;11H\u001b[?25l\u001b[16;3H\u001b[2mAsk Codex to do anything\u001b[39m\u001b[49m\u001b[0m\u001b[14;1H\u001b[0 q\u001b[14;1H \u001b[39m\u001b[49m\u001b[0m\u001b[16;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 19460,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[16;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[16;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[16;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 19611,
+   "data": "\u001b]0;⠋ codex\u0007\u001b[?2026h\u001b[14;1H\u001b[J\u001b[?25l\u001b[14;2H\u001b[0m\u001b[49m\u001b[K\u001b[15;34H\u001b[0m\u001b[49m\u001b[K\u001b[16;2H\u001b[0m\u001b[49m\u001b[K\u001b[17;2H\u001b[0m\u001b[49m\u001b[K\u001b[18;27H\u001b[0m\u001b[49m\u001b[K\u001b[19;2H\u001b[0m\u001b[49m\u001b[K\u001b[20;68H\u001b[0m\u001b[49m\u001b[K\u001b[14;1H \u001b[15;1H\u001b[1m\u001b[38;2;128;128;128;49m•\u001b[22m\u001b[39;49m \u001b[2mWorking\u001b[22m \u001b[2m(0s • \u001b[22m\u001b[1mesc\u001b[22m\u001b[2m\u001b[2m to interrupt)\u001b[16;1H\u001b[22m \u001b[17;1H \u001b[18;1H\u001b[1m\u001b[38;2;255;178;66;49m›\u001b[22m\u001b[39;49m \u001b[2mAsk Codex to do anything\u001b[19;1H\u001b[22m \u001b[20;1H  \u001b[38;2;246;226;183;49mGPT-6-Luna max\u001b[39;49m · \u001b[38;2;171;223;167;49m/tmp/felixo-fixture\u001b[39m\u001b[49m\u001b[0m\u001b[14;1H\u001b[0 q\u001b[14;1H \u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 19695,
+   "data": "\u001b]0;⠙ codex\u0007\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 19774,
+   "data": "\u001b]0;⠹ codex\u0007\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 19826,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 19915,
+   "data": "\u001b]0;⠸ codex\u0007\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 19972,
+   "data": "\u001b]0;⠼ codex\u0007\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 20022,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 20070,
+   "data": "\u001b]0;⠴ codex\u0007\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 20137,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l\u001b]0;⠦ codex\u0007\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 20204,
+   "data": "\u001b[?2026h\u001b[?25l\u001b[15;1H\u001b[1m\u001b[38;2;138;138;138;49m•\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 20304,
+   "data": "\u001b]0;⠧ codex\u0007\u001b[?2026h\u001b[?25l\u001b[15;1H\u001b[1m\u001b[38;2;167;167;167;49m•\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 20375,
+   "data": "\u001b]0;⠇ codex\u0007\u001b[?2026h\u001b[?25l\u001b[15;1H\u001b[1m\u001b[38;2;202;202;202;49m•\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 20416,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 20468,
+   "data": "\u001b]0;⠏ codex\u0007\u001b[?2026h\u001b[?25l\u001b[15;1H\u001b[1m\u001b[38;2;231;231;231;49m•\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 20540,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l\u001b]0;⠋ codex\u0007\u001b[?2026h\u001b[?25l\u001b[15;1H\u001b[1m\u001b[38;2;242;242;242;49m•\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 20609,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l\u001b]0;⠋ ⠋ | codex\u0007\u001b[?2026h\u001b[?25l\u001b[15;12H\u001b[2m1\u001b[20;69H\u001b[22m·\u001b[20;71H\u001b[38;2;245;224;220;49m⠋\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 20666,
+   "data": "\u001b[?2026h\u001b[?25l\u001b[15;1H\u001b[1m\u001b[38;2;231;231;231;49m•\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l\u001b]0;⠙ ⠙ | codex\u0007\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 20735,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[?25l\u001b[15;1H\u001b[1m\u001b[38;2;202;202;202;49m•\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 20801,
+   "data": "\u001b]0;⠹ ⠹ | codex\u0007\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 20867,
+   "data": "\u001b[?2026h\u001b[?25l\u001b[15;1H\u001b[1m\u001b[38;2;167;167;167;49m•\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l\u001b]0;⠸ ⠸ | codex\u0007\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 20935,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[?25l\u001b[15;1H\u001b[1m\u001b[38;2;138;138;138;49m•\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 21000,
+   "data": "\u001b]0;⠼ ⠼ | codex\u0007\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 21068,
+   "data": "\u001b]0;⠴ ⠴ | codex\u0007\u001b[?2026h\u001b[?25l\u001b[15;1H\u001b[1m\u001b[38;2;128;128;128;49m•\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 21136,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l\u001b]0;⠦ ⠦ | codex\u0007\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 21207,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 21254,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l\u001b]0;⠧ ⠧ | codex\u0007\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 21309,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 21376,
+   "data": "\u001b]0;⠇ ⠇ | codex\u0007\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 21443,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l\u001b]0;⠏ ⠏ | codex\u0007\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 21510,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 21575,
+   "data": "\u001b]0;⠋ ⠋ | codex\u0007\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 21641,
+   "data": "\u001b[?2026h\u001b[?25l\u001b[15;12H\u001b[2m2\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l\u001b]0;⠙ ⠙ | codex\u0007\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 21708,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 21777,
+   "data": "\u001b]0;⠹ ⠹ | codex\u0007\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 21843,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l\u001b]0;⠸ ⠸ | codex\u0007\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 21912,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[?25l\u001b[15;5H\u001b[0m\u001b[49m\u001b[K\u001b[15;1H\u001b[2m• \u001b[22mOi\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 21957,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[?25l\u001b[15;5H!\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 22048,
+   "data": "\u001b]0;⠼ ⠼ | codex\u0007\u001b[?2026h\u001b[14;1H\u001b[J\u001b[14;50r\u001b[14;1H\u001bM\u001bM\u001b[r\u001b[1;15r\u001b[13;1H\r\n\u001b[39;49m\u001b[K\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m• \u001b[22mOi!\u001b[39m\u001b[49m\u001b[0m\u001b[r\u001b[18;3H\u001b[?25l\u001b[16;2H\u001b[0m\u001b[49m\u001b[K\u001b[17;2H\u001b[0m\u001b[49m\u001b[K\u001b[18;27H\u001b[0m\u001b[49m\u001b[K\u001b[19;2H\u001b[0m\u001b[49m\u001b[K\u001b[20;72H\u001b[0m\u001b[49m\u001b[K\u001b[16;1H \u001b[17;1H \u001b[18;1H\u001b[1m\u001b[38;2;255;178;66;49m›\u001b[22m\u001b[39;49m \u001b[2mAsk Codex to do anything\u001b[19;1H\u001b[22m \u001b[20;1H  \u001b[38;2;246;226;183;49mGPT-6-Luna max\u001b[39;49m · \u001b[38;2;171;223;167;49m/tmp/felixo-fixture\u001b[39;49m · \u001b[38;2;245;224;220;49m⠋\u001b[39m\u001b[49m\u001b[0m\u001b[16;1H\u001b[0 q\u001b[16;1H \u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l\u001b]0;⠴ ⠴ | codex\u0007\u001b[?2026h\u001b[?25l\u001b[20;71H\u001b[38;2;245;224;220;49m⠴\u001b[39m\u001b[49m\u001b[0m\u001b[18;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 22116,
+   "data": "\u001b]0;⠴ | codex\u0007\u0007\u001b[?2026h\u001b[16;50r\u001b[16;1H\u001bM\u001bM\u001b[r\u001b[1;17r\u001b[15;1H\r\n\u001b[39;49m\u001b[K\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m  2:33 PM\u001b[39m\u001b[49m\u001b[0m\u001b[r\u001b[18;3H\u001b[39m\u001b[49m\u001b[0m\u001b[?25l\u001b[18;1H\u001b[0 q\u001b[18;1H \u001b[39m\u001b[49m\u001b[0m\u001b[20;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 22230,
+   "data": "\u001b]0;⠦ | codex\u0007\u001b[?2026h\u001b[?25l\u001b[22;71H\u001b[38;2;245;224;220;49m⠦\u001b[39m\u001b[49m\u001b[0m\u001b[20;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 22332,
+   "data": "\u001b]0;⠧ | codex\u0007\u001b[?2026h\u001b[?25l\u001b[22;71H\u001b[38;2;245;224;220;49m⠧\u001b[39m\u001b[49m\u001b[0m\u001b[20;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 22464,
+   "data": "\u001b]0;⠇ | codex\u0007\u001b[?2026h\u001b[?25l\u001b[22;71H\u001b[38;2;245;224;220;49m⠇\u001b[39m\u001b[49m\u001b[0m\u001b[20;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 22569,
+   "data": "\u001b]0;⠋ | codex\u0007\u001b[?2026h\u001b[?25l\u001b[22;71H\u001b[38;2;245;224;220;49m⠏\u001b[39m\u001b[49m\u001b[0m\u001b[20;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[20;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 22670,
+   "data": "\u001b]0;⠙ | codex\u0007\u001b[?2026h\u001b[?25l\u001b[22;71H\u001b[38;2;245;224;220;49m⠙\u001b[39m\u001b[49m\u001b[0m\u001b[20;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[20;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 22772,
+   "data": "\u001b]0;⠹ | codex\u0007\u001b[?2026h\u001b[?25l\u001b[22;71H\u001b[38;2;245;224;220;49m⠹\u001b[39m\u001b[49m\u001b[0m\u001b[20;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 22874,
+   "data": "\u001b]0;⠸ | codex\u0007\u001b[?2026h\u001b[?25l\u001b[22;71H\u001b[38;2;245;224;220;49m⠸\u001b[39m\u001b[49m\u001b[0m\u001b[20;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 22979,
+   "data": "\u001b]0;⠼ | codex\u0007\u001b[?2026h\u001b[?25l\u001b[22;71H\u001b[38;2;245;224;220;49m⠼\u001b[39m\u001b[49m\u001b[0m\u001b[20;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 23082,
+   "data": "\u001b]0;⠴ | codex\u0007\u001b[?2026h\u001b[?25l\u001b[22;71H\u001b[38;2;245;224;220;49m⠴\u001b[39m\u001b[49m\u001b[0m\u001b[20;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 23168,
+   "data": "\u001b]0;⠦ | codex\u0007\u001b[?2026h\u001b[?25l\u001b[22;71H\u001b[38;2;245;224;220;49m⠦\u001b[39m\u001b[49m\u001b[0m\u001b[20;3H\u001b[?25h\u001b[?2026l\u001b]0;codex\u0007"
+  },
+  {
+   "t": 23222,
+   "data": "\u001b]0;Diga oi | codex\u0007\u001b[?2026h\u001b[?25l\u001b[22;71H\u001b[38;2;245;224;220;49mDiga oi\u001b[39m\u001b[49m\u001b[0m\u001b[20;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[20;3H\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[20;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 32399,
+   "data": "\u001b[?2026h\u001b[18;1H\u001b[J\u001b[?25l\u001b[18;2H\u001b[0m\u001b[49m\u001b[K\u001b[20;63H\u001b[0m\u001b[49m\u001b[K\u001b[21;2H\u001b[0m\u001b[49m\u001b[K\u001b[22;10H\u001b[0m\u001b[49m\u001b[K\u001b[23;2H\u001b[0m\u001b[49m\u001b[K\u001b[24;78H\u001b[0m\u001b[49m\u001b[K\u001b[18;1H \u001b[19;1H\u001b[7m\u001b[1m› /status      \u001b[22mshow current session configuration and token usage\u001b[1m                                   \u001b[20;1H\u001b[27m\u001b[22m  /\u001b[1mstatus\u001b[22mline  \u001b[2mconfigure which items appear in the status line\u001b[21;1H\u001b[22m \u001b[22;1H\u001b[1m\u001b[38;2;255;178;66;49m›\u001b[22m\u001b[39;49m /status\u001b[23;1H \u001b[24;1H  \u001b[38;2;246;226;183;49mGPT-6-Luna max\u001b[39;49m · \u001b[38;2;171;223;167;49m/tmp/felixo-fixture\u001b[39;49m · \u001b[38;2;245;224;220;49mDiga oi\u001b[39m\u001b[49m\u001b[0m\u001b[18;1H\u001b[0 q\u001b[18;1H \u001b[39m\u001b[49m\u001b[0m\u001b[22;10H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 33180,
+   "data": "\u001b[?2026h\u001b[18;1H\u001b[J\u001b[18;50r\u001b[18;1H\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001bM\u001b[r\u001b[1;41r\u001b[17;1H\r\n\u001b[39;49m\u001b[K\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[38;5;5;49m/status\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m╭────────────────────────────────────────────────────────────────────────────────────────╮\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│  >_ \u001b[22m\u001b[1mOpenAI Codex\u001b[22m\u001b[2m\u001b[2m (v0.156.1)                                                            │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│                                                                                        │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│ \u001b[22m\u001b[38;2;99;168;248;49mVisit \u001b[4m\u001b]8;;https://chatgpt.com/codex/settings/usage\u0007https://chatgpt.com/codex/settings/usage\u001b]8;;\u0007\u001b[24m for up-to-date\u001b[2m\u001b[39;49m                          │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│ \u001b[22m\u001b[38;2;99;168;248;49minformation on rate limits and credits\u001b[2m\u001b[39;49m                                                 │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│                                                                                        │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│  Model:                       \u001b[22mGPT-6-Luna\u001b[2m (reasoning max, summaries auto)               │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│  Model provider:              \u001b[22mopenai\u001b[2m                                                   │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│  Directory:                   \u001b[22m/tmp/felixo-fixture\u001b[2m         │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│  Permissions:                 \u001b[22mWorkspace (Ask for approval)\u001b[2m                             │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│  Agents.md:                   \u001b[22m<none>\u001b[2m                                                   │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│  Account:                     \u001b[22mPlano\u001b[2m                                                     │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│  Thread name:                 \u001b[22mDiga oi\u001b[2m                                                  │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│  Collaboration mode:          \u001b[22mDefault\u001b[2m                                                  │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│  Session:                     \u001b[22m00000000-0000-4000-8000-000000000000\u001b[2m                     │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│                                                                                        │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│  Context window:              \u001b[22m98% left\u001b[2m (18K used / 258K)                               │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│  5h limit:                    \u001b[22m[████████████████████] 100% left\u001b[2m (resets 19:32)          │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│  Weekly limit:                \u001b[22m[████████████████████] 100% left\u001b[2m (resets 06:29 on 4 Oct) │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m│  Luna Reserve Weekly limit:   \u001b[22m[████████████████████] 100% left\u001b[2m (resets 14:32 on 9 Oct) │\u001b[39m\u001b[49m\u001b[0m\r\n\u001b[39;49m\u001b[K\u001b[2m╰────────────────────────────────────────────────────────────────────────────────────────╯\u001b[39m\u001b[49m\u001b[0m\u001b[r\u001b[22;10H\u001b[?25l\u001b[42;2H\u001b[0m\u001b[49m\u001b[K\u001b[43;2H\u001b[0m\u001b[49m\u001b[K\u001b[44;27H\u001b[0m\u001b[49m\u001b[K\u001b[45;2H\u001b[0m\u001b[49m\u001b[K\u001b[46;78H\u001b[0m\u001b[49m\u001b[K\u001b[42;1H \u001b[43;1H \u001b[44;1H\u001b[1m\u001b[38;2;255;178;66;49m›\u001b[22m\u001b[39;49m \u001b[2mAsk Codex to do anything\u001b[45;1H\u001b[22m \u001b[46;1H  \u001b[38;2;246;226;183;49mGPT-6-Luna max\u001b[39;49m · \u001b[38;2;171;223;167;49m/tmp/felixo-fixture\u001b[39;49m · \u001b[38;2;245;224;220;49mDiga oi\u001b[39m\u001b[49m\u001b[0m\u001b[42;1H\u001b[0 q\u001b[42;1H \u001b[39m\u001b[49m\u001b[0m\u001b[44;3H\u001b[?25h\u001b[?2026l"
+  },
+  {
+   "t": 34058,
+   "data": "\u001b[?2026h\u001b[39m\u001b[49m\u001b[0m\u001b[44;3H\u001b[?25h\u001b[?2026l"
+  }
+ ]
+}

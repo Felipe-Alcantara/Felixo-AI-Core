@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import { ExternalLink, Gauge, PlugZap, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { ChevronRight, ExternalLink, Gauge, PlugZap, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { CanvasPanel } from './CanvasPanel'
 import { AccountChainSection } from './AccountChainSection'
 import { AccountSwitchHistory } from './AccountSwitchHistory'
+import { CodexSessionFieldsNotice, ProviderSummaryTable } from './AgentUsageProviderSummary'
 import { rovingIndex } from '../../services/keyboard-focus'
 import {
   consumeRequestedAgentUsageTab,
@@ -22,9 +23,10 @@ import {
   getAgentUsageLastFailureNotice,
   getAgentUsageMeasuredAt,
   getAgentUsagePlan,
-  getLastKnownAgentUsage,
+  getDisplayedAgentUsageSample,
   groupAgentUsageAccounts,
   shouldRunScheduledAgentUsageRefresh,
+  summarizeProviderAccounts,
 } from '../../../shared/agent-usage/agent-usage'
 import type {
   AgentUsageAccount,
@@ -75,15 +77,18 @@ const AUTO_REFRESH_SELECT_OPTIONS: FelixoSelectOption[] = AUTO_REFRESH_OPTIONS.m
 /**
  * Limites e uso das CLIs, no canvas.
  *
- * Cada provider aparece com a conta logada, o quanto já foi gasto em cada
- * janela e quando ela zera. O painel abre com o que está salvo e dispara uma
- * coleta em seguida, porque consultar as CLIs leva segundos e uma tela vazia
- * nesse intervalo passa a impressão de que a função não existe.
+ * Cada provider abre com um resumo das contas dele (plano, quanto sobra em
+ * cada janela e o status), para comparar contas do mesmo provedor de uma vez.
+ * O /status completo de cada conta — barras com reset, fonte, resets bancados
+ * e os dados seguros que a CLI publica — fica recolhido logo abaixo, e abre
+ * com um clique. O painel abre com o que está salvo e dispara uma coleta em
+ * seguida, porque consultar as CLIs leva segundos e uma tela vazia nesse
+ * intervalo passa a impressão de que a função não existe.
  *
- * O Claude também expõe os dados completos e seguros do Status + Usage do
- * `/status` dentro de cada linha, sem reaproveitar a sessão de outro perfil.
- * A regra da fonte continua valendo: número só aparece quando a CLI publicou —
- * ausência vira a limitação escrita por extenso, nunca zero.
+ * Claude e Codex expõem o `/status` inteiro de cada conta, sem reaproveitar a
+ * sessão de outro perfil. A regra da fonte continua valendo: número só
+ * aparece quando a CLI publicou — ausência vira a limitação escrita por
+ * extenso, nunca zero.
  */
 export function AgentUsagePanel({
   onClose,
@@ -487,6 +492,10 @@ function ProviderCard({
   statusline: ClaudeStatuslineState | null
   onToggleStatusline: (enable: boolean) => Promise<void>
 }) {
+  // Sem memo: o status de cada conta envelhece pelo relógio (o tick de 30 s
+  // do painel), não só quando o dashboard muda.
+  const summary = summarizeProviderAccounts(group)
+
   return (
     <section className="rounded-lg border border-white/10 bg-white/2 p-2.5">
       <header className="flex items-center gap-2">
@@ -520,18 +529,36 @@ function ProviderCard({
           Nenhuma conta vinculada a este provider.
         </p>
       ) : (
-        <div className="mt-2 space-y-2">
-          {group.accounts.map((account) => (
-            <AccountRow
-              key={account.id}
-              account={account}
-              limitation={group.usageSource.limitation}
-              sourceLabel={group.usageSource.label}
-              onRemove={() => void onRemoveAccount(account)}
-              onUseResetCredit={(creditId) => onUseResetCredit(account, creditId)}
-            />
-          ))}
-        </div>
+        <>
+          <ProviderSummaryTable providerName={group.name} summary={summary} />
+          <div className="mt-2 space-y-1.5">
+            {group.accounts.map((account) => (
+              // Sem `open` controlado: aberto ou fechado, o estado fica no
+              // próprio elemento e sobrevive a cada nova coleta.
+              <details key={account.id} className="group rounded-md border border-white/6 bg-black/20">
+                <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] text-zinc-400 hover:text-zinc-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/30 [&::-webkit-details-marker]:hidden">
+                  <ChevronRight
+                    size={12}
+                    aria-hidden="true"
+                    className="shrink-0 transition-transform group-open:rotate-90"
+                  />
+                  <span className="truncate text-zinc-200" title={account.label}>
+                    {account.identityDisplay ?? account.label}
+                  </span>
+                  <span className="shrink-0 text-zinc-500">— /status completo</span>
+                </summary>
+                <AccountRow
+                  account={account}
+                  limitation={group.usageSource.limitation}
+                  sourceLabel={group.usageSource.label}
+                  onRemove={() => void onRemoveAccount(account)}
+                  onUseResetCredit={(creditId) => onUseResetCredit(account, creditId)}
+                />
+              </details>
+            ))}
+          </div>
+          {group.id === 'codex' && <CodexSessionFieldsNotice />}
+        </>
       )}
 
       {statusline && (
@@ -619,12 +646,7 @@ function AccountRow({
   onUseResetCredit: (creditId: string) => Promise<AgentUsageMutationResult>
 }) {
   const status = getAccountStatus(account)
-  // Com a fonte fora do ar o painel não apaga o que já sabia: mostra o último
-  // valor conhecido, marcado como antigo pelo próprio selo de status.
-  const sample: AgentUsageSample | null =
-    account.latestSample?.metrics.length
-      ? account.latestSample
-      : getLastKnownAgentUsage(account) ?? account.latestSample
+  const sample: AgentUsageSample | null = getDisplayedAgentUsageSample(account)
   const detailsSample = account.latestSample?.metadata.statusDetails
     ? account.latestSample
     : sample?.metadata.statusDetails
@@ -635,7 +657,7 @@ function AccountRow({
   const lastFailure = getAgentUsageLastFailureNotice(account, sample)
 
   return (
-    <div className="rounded-md border border-white/6 bg-black/20 p-2">
+    <div className="border-t border-white/6 p-2">
       <div className="flex items-center gap-1.5">
         <span className="truncate text-[12px] text-zinc-200" title={account.label}>
           {account.identityDisplay ?? account.label}
@@ -720,6 +742,14 @@ function MetricBar({ metric }: { metric: AgentUsageMetric }) {
     <div>
       <div className="flex items-baseline gap-2 text-[11px]">
         <span className="text-zinc-400">{metric.label}</span>
+        {metric.scope === 'model' && (
+          <span
+            className="rounded-sm bg-white/6 px-1 py-px text-[9px] text-zinc-400"
+            title="Limite de um modelo só: zerado, ele para aquele modelo, não a conta. A cadeia de contas não o usa."
+          >
+            só este modelo
+          </span>
+        )}
         <span className="ml-auto font-medium text-zinc-100">
           {formatMetricValue(metric)}
         </span>

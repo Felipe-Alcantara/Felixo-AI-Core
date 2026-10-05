@@ -17,6 +17,7 @@ import {
   groupAgentUsageAccounts,
   shouldRunScheduledAgentUsageRefresh,
   summarizeAgentUsage,
+  summarizeProviderAccounts,
 } from './agent-usage'
 import type {
   AgentUsageAccount,
@@ -393,5 +394,94 @@ describe('aviso da última falha no card da conta', () => {
   it('rodada atual sem erro não gera aviso', () => {
     const atual = amostra('current', null, true)
     expect(getAgentUsageLastFailureNotice({ latestSample: atual }, atual)).toBeNull()
+  })
+})
+
+describe('summarizeProviderAccounts', () => {
+  const NOW = () => Date.parse('2026-08-28T12:05:00.000Z')
+  const window5h = (remaining: number) =>
+    metric({ key: 'rate_limits.primary', label: 'Últimas 5 h', used: 100 - remaining, limit: 100, remaining, resetAt: '2026-08-28T15:00:00.000Z' })
+  const weekly = (remaining: number) =>
+    metric({ key: 'rate_limits.secondary', label: 'Últimos 7 dias', used: 100 - remaining, limit: 100, remaining })
+  const reserve = metric({
+    key: 'rate_limits.base_model_inference.primary',
+    label: 'Últimos 7 dias · gpt-reserve (gpt-5.6-luna)',
+    used: 100,
+    limit: 100,
+    remaining: 0,
+    scope: 'model',
+  })
+  const credits = metric({ key: 'credits', label: 'Créditos avulsos', unit: null, remaining: 4.5 })
+
+  function codexAccount(id: string, metrics: AgentUsageMetric[], metadata: AgentUsageSample['metadata'] = {}) {
+    const base = account(id, 'current')
+    const latest = { ...sample('current', metrics), accountId: id, metadata }
+    return { ...base, latestSample: latest, lastKnownSample: latest }
+  }
+
+  function group(accounts: AgentUsageAccount[]) {
+    const provider: AgentUsageProvider = {
+      id: 'codex',
+      name: 'Codex CLI',
+      provider: 'OpenAI',
+      command: 'codex',
+      detected: true,
+      version: '0.156.1',
+      usageSource: { kind: 'live-query', label: 'Codex', docsUrl: null, limitation: '', capability: 'available' },
+    }
+    return groupAgentUsageAccounts([provider], accounts)[0]
+  }
+
+  it('uma linha por conta e uma coluna por janela da conta, sem a reserva de um modelo nem saldos', () => {
+    const summary = summarizeProviderAccounts(
+      group([
+        codexAccount('conta-a', [window5h(80), weekly(40), reserve, credits], { plan: 'plus' }),
+        codexAccount('conta-b', [window5h(10)]),
+      ]),
+      NOW,
+    )
+
+    expect(summary.columns).toEqual([
+      { key: 'rate_limits.primary', label: 'Últimas 5 h' },
+      { key: 'rate_limits.secondary', label: 'Últimos 7 dias' },
+    ])
+    expect(summary.rows.map((row) => row.account.id)).toEqual(['conta-a', 'conta-b'])
+    expect(summary.rows[0].plan).toBe('plus')
+    expect(summary.rows[0].cells['rate_limits.primary']).toEqual({
+      remaining: 80,
+      usedPercent: 20,
+      resetAt: '2026-08-28T15:00:00.000Z',
+    })
+    // A conta B não publicou a janela semanal: célula vazia, nunca zero.
+    expect(summary.rows[1].cells['rate_limits.secondary']).toBeNull()
+    expect(summary.rows[1].status).toBe('current')
+  })
+
+  it('traz o aviso de bloqueio publicado nos detalhes do /status', () => {
+    const summary = summarizeProviderAccounts(
+      group([
+        codexAccount('conta-a', [window5h(0)], {
+          statusDetails: { blockingWarning: 'O serviço bloqueou o uso comum desta conta.' },
+        }),
+      ]),
+      NOW,
+    )
+
+    expect(summary.rows[0].warning).toBe('O serviço bloqueou o uso comum desta conta.')
+  })
+
+  it('provedor sem conta não tem colunas nem linhas', () => {
+    expect(summarizeProviderAccounts(group([]), NOW)).toEqual({ columns: [], rows: [] })
+  })
+
+  it('conta com a rodada atual sem número usa o último valor conhecido, com o status da rodada atual', () => {
+    const known = { ...sample('current', [window5h(55)]), accountId: 'conta-a' }
+    const failed = { ...sample('error'), accountId: 'conta-a' }
+    const conta = { ...account('conta-a', null), latestSample: failed, lastKnownSample: known }
+
+    const summary = summarizeProviderAccounts(group([conta]), NOW)
+
+    expect(summary.rows[0].cells['rate_limits.primary']?.remaining).toBe(55)
+    expect(summary.rows[0].status).toBe('error')
   })
 })

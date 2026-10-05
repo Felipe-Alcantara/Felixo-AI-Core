@@ -185,7 +185,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
     layer: 'panel',
     owner: `${TOOLS}/AgentUsagePanel.tsx`,
     states: {
-      normal: 'Aba "Uso agora": um cartão por provider com versão, contas (identidade, plano, selo de status), barras por janela com reset, fonte e horário da medição; as abas Cadeia e Trocas montam AccountChainSection e AccountSwitchHistory',
+      normal: 'Aba "Uso agora": um cartão por provider com versão, a tabela de resumo das contas (AgentUsageProviderSummary.tsx: uma linha por conta com identidade, plano, quanto sobra em cada janela da conta, selo de status e aviso de bloqueio) e, por conta, "— /status completo" recolhido num <details> que guarda o próprio estado entre coletas: barras por janela com reset (a de um modelo só leva a etiqueta "só este modelo"), fonte, horário da medição, resets bancados e os dados completos do /status; o cartão do Codex avisa que os campos da conversa aberta ficam fora de propósito; as abas Cadeia e Trocas montam AccountChainSection e AccountSwitchHistory',
       loading: 'loading=true na abertura (lista o salvo e em seguida agent-usage:refresh) e no Atualizar; sem conteúdo mostra "Consultando as CLIs instaladas…" e o ícone gira',
       empty: '!hasContent e !loading: "Nenhuma CLI foi detectada nesta máquina."; provider sem conta: "Nenhuma conta vinculada a este provider."; conta sem amostra mostra a limitação da fonte por extenso, nunca zero',
       error: 'statusMessage em faixa âmbar (falha de list/refresh/remover/reset ou "Não foi possível falar com o processo principal."); sem ponte: "Este painel só funciona no app desktop."; amostra com errorMessage aparece na linha da conta',
@@ -204,8 +204,8 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
       {
         locator: 'Atualizar',
         kind: 'button',
-        effect: 'agent-usage:refresh: abre uma sessão PTY descartável de /status por conta e perfil, regrava as amostras e acende "ao vivo"',
-        failure: 'ok: false ou exceção viram statusMessage âmbar; o painel continua com o último valor conhecido, marcado como antigo pelo selo; a rodada tem teto (REFRESH_DEADLINE_MS, 90 s): estourar cancela a consulta e volta com refreshError em vez de girar para sempre',
+        effect: 'agent-usage:refresh: por conta e perfil, abre uma sessão PTY descartável de /status (Claude e Codex; no Codex junto com o app-server, que traz os números), regrava as amostras e acende "ao vivo"',
+        failure: 'ok: false ou exceção viram statusMessage âmbar; o painel continua com o último valor conhecido, marcado como antigo pelo selo; a rodada tem teto (REFRESH_DEADLINE_MS, 90 s): estourar cancela a consulta (app-server e PTY do Codex inclusive) e volta com refreshError em vez de girar para sempre',
         disabledWhen: 'loading',
       },
       {
@@ -225,7 +225,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
         locator: 'Ligar coleta do rate limit',
         kind: 'button',
         effect: 'agent-usage:enable-claude-statusline (ou disable, quando já instalada): grava ou remove a statusLine do app em ~/.claude/settings.json, com backup da anterior, e recarrega o painel',
-        failure: 'erro engolido: a mensagem de falha do main nunca aparece; se o handler lançar, o resultado de erro vira o estado e o botão some atrás de "Não foi possível ler ~/.claude/settings.json" (AgentUsagePanel.tsx:174-188)',
+        failure: 'erro engolido: a mensagem de falha do main nunca aparece; se o handler lançar, o resultado de erro vira o estado e o botão some atrás de "Não foi possível ler ~/.claude/settings.json" (AgentUsagePanel.tsx:190-204)',
         disabledWhen: 'busy; só existe no cartão do Claude, com settings legível e sem statusLine alheia',
       },
       {
@@ -282,14 +282,19 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
       'getAccountStatus',
       'AgentUsageResetCreditsView',
       'AgentUsageStatusDetailsView',
+      'ProviderSummaryTable',
+      'summarizeProviderAccounts',
       'AccountChainSection',
       'AccountSwitchHistory',
     ],
     tests: [
       { file: 'src/features/shared/agent-usage/agent-usage.test.ts' },
+      { file: 'src/features/canvas/components/tools/AgentUsageProviderSummary.test.ts' },
       { file: 'electron/services/agent-usage-ipc-handlers.test.cjs' },
       { file: 'electron/services/agent-usage-service.test.cjs' },
       { file: 'electron/services/claude-statusline-service.test.cjs' },
+      { file: 'electron/services/codex-status-query.test.cjs' },
+      { file: 'electron/services/codex-status-screen.test.cjs' },
       { file: SMOKE_CONTAS, check: 'abrirLimitesEUso' },
     ],
     gaps: [
@@ -299,7 +304,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
         task: '3ec91f95-497e-81ca-8319-ee657b0b6492',
       },
       {
-        what: 'AgentUsagePanel.tsx:174-188 e 530-583: a resposta de agent-usage:enable/disable-claude-statusline substitui o estado sem olhar ok; a mensagem de falha (ex.: "Não foi possível gravar o script da status line.") nunca é exibida, e um erro lançado no handler vira estado sem settingsReadable, escondendo o botão atrás de "Não foi possível ler ~/.claude/settings.json"',
+        what: 'AgentUsagePanel.tsx:190-204 e 580-633: a resposta de agent-usage:enable/disable-claude-statusline substitui o estado sem olhar ok; a mensagem de falha (ex.: "Não foi possível gravar o script da status line.") nunca é exibida, e um erro lançado no handler vira estado sem settingsReadable, escondendo o botão atrás de "Não foi possível ler ~/.claude/settings.json"',
         risk: 'médio',
         task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
       },

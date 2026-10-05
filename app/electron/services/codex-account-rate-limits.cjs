@@ -2,8 +2,7 @@
 
 const { randomUUID } = require('node:crypto')
 const spawnChildProcess = require('cross-spawn')
-const { createCliEnv } = require('./cli-process-manager.cjs')
-const { buildAccountProcessEnv } = require('./cli-account-profiles.cjs')
+const { requestCodexAppServer } = require('./codex-app-server-client.cjs')
 
 /**
  * Resets bancados ("banked resets") do Codex: um crédito único, concedido
@@ -27,31 +26,9 @@ const { buildAccountProcessEnv } = require('./cli-account-profiles.cjs')
  */
 
 const DEFAULT_TIMEOUT_MS = 15_000
-const DEFAULT_CLIENT_NAME = 'felixo-ai-core'
-
-/**
- * Pedidos opcionais que acompanham `account/rateLimits/read` na mesma sessão.
- * `refreshToken: false` deixa `account/read` só ler o login já gravado — o
- * painel nunca deve renovar credencial como efeito colateral de abrir.
- */
-const STATUS_EXTRA_REQUESTS = Object.freeze([
-  Object.freeze({ method: 'account/read', params: { refreshToken: false } }),
-  Object.freeze({ method: 'config/read', params: { includeLayers: false } }),
-])
-
-/**
- * Linhas do `/status` do Codex que dependem de uma sessão de chat aberta, não
- * da conta. O painel é por conta/perfil, então elas ficam de fora de propósito
- * — e a ausência é escrita no próprio painel, não escondida. Conferido contra
- * o `/status` real do Codex CLI 0.150.1 em 05/10/2026.
- */
-const SESSION_ONLY_STATUS_FIELDS = Object.freeze([
-  'Directory (pasta do terminal, não da conta)',
-  'Agents.md (depende da pasta do terminal)',
-  'Collaboration mode (escolhido dentro da sessão)',
-  'Session (id de uma sessão de chat aberta)',
-  'Tokens usados e janela de contexto (existem só numa sessão em andamento)',
-])
+// Balde principal quando a resposta não diz qual é (payload antigo).
+const DEFAULT_LIMIT_ID = 'codex'
+const SAFE_LIMIT_ID_PATTERN = /^[A-Za-z0-9_.-]{1,40}$/
 
 /**
  * @param {object} [dependencies]
@@ -68,16 +45,14 @@ function createCodexRateLimitsQuery({ spawnProcess = spawnChildProcess, now = ()
   } = {}) {
     return requestCodexAppServer({
       spawnProcess,
-      now,
       accountEnv,
       timeoutMs,
       clientVersion,
+      // Só a leitura aceita cancelamento; o consumo de reset nunca é
+      // abortado no meio.
       signal,
       method: 'account/rateLimits/read',
       params: null,
-      // Conta/plano e configuração efetiva entram na mesma sessão: são as
-      // linhas do `/status` do Codex que não dependem de uma sessão de chat.
-      extraRequests: STATUS_EXTRA_REQUESTS,
       timeoutMessage: 'A consulta de resets do Codex excedeu o tempo limite.',
       failureResult: () => ({
         collectedAt: null,
@@ -85,31 +60,7 @@ function createCodexRateLimitsQuery({ spawnProcess = spawnChildProcess, now = ()
         credits: [],
       }),
       serverErrorMessage: 'O app-server do Codex recusou a consulta de limites.',
-      normalizeResult: (result, extras = {}) => {
-        const summary = result?.rateLimitResetCredits ?? null
-        const collectedAt = new Date(now()).toISOString()
-        const credits = Array.isArray(summary?.credits)
-          ? summary.credits.map(toResetCredit)
-          : []
-        const availableCount =
-          typeof summary?.availableCount === 'number' ? summary.availableCount : 0
-        return {
-          collectedAt,
-          measuredAt: collectedAt,
-          metrics: toRateLimitMetrics(result?.rateLimits),
-          availableCount,
-          credits,
-          details: {
-            ...buildCodexStatusDetails({
-              account: extras['account/read'],
-              config: extras['config/read'],
-              rateLimits: result?.rateLimits,
-            }),
-            usageCredits: { availableCount, credits },
-          },
-          message: null,
-        }
-      },
+      normalizeResult: (result) => normalizeCodexRateLimitsResult(result, { now }),
     })
   }
 }
@@ -123,7 +74,6 @@ function createCodexRateLimitsQuery({ spawnProcess = spawnChildProcess, now = ()
  */
 function createCodexRateLimitResetConsumer({
   spawnProcess = spawnChildProcess,
-  now = () => Date.now(),
   createIdempotencyKey = randomUUID,
 } = {}) {
   return function consumeCodexRateLimitReset({
@@ -147,7 +97,6 @@ function createCodexRateLimitResetConsumer({
 
     return requestCodexAppServer({
       spawnProcess,
-      now,
       accountEnv,
       timeoutMs,
       clientVersion,
@@ -178,293 +127,6 @@ function createCodexRateLimitResetConsumer({
   }
 }
 
-/**
- * Fala com `codex app-server --stdio` (JSON-RPC por linha) numa sessão só.
- *
- * `method`/`params` é o pedido obrigatório: sem a resposta dele a leitura
- * falha. `extraRequests` são pedidos opcionais que viajam no MESMO processo —
- * abrir um app-server por pergunta custaria um processo (e um handshake) a
- * mais por conta a cada atualização do painel. Um opcional que responda com
- * erro, ou que não responda até o tempo limite, só deixa o seu campo de fora:
- * `normalizeResult` recebe `(resultadoObrigatório, { [método]: resultado | null })`.
- */
-function requestCodexAppServer({
-  spawnProcess,
-  now,
-  accountEnv,
-  timeoutMs,
-  clientVersion,
-  method,
-  params,
-  extraRequests = [],
-  // Cancelamento de fora (teto da rodada ou "Reconectar"): encerra o
-  // app-server na hora. Só a leitura aceita; o consumo de reset nunca é
-  // abortado no meio.
-  signal = null,
-  timeoutMessage,
-  failureResult,
-  serverErrorMessage,
-  normalizeResult,
-}) {
-  return new Promise((resolve) => {
-    let child
-    let settled = false
-    let timeoutTimer
-    let buffer = ''
-    const MAIN_REQUEST_ID = 2
-    // id do JSON-RPC → método opcional. Os ids começam depois do obrigatório.
-    const extraById = new Map(extraRequests.map((request, index) => [MAIN_REQUEST_ID + 1 + index, request.method]))
-    const extraResults = Object.fromEntries(extraRequests.map((request) => [request.method, null]))
-    let pendingExtras = extraById.size
-    let mainAnswered = false
-    let mainResult
-
-    const finish = (result) => {
-      if (settled) {
-        return
-      }
-      settled = true
-      clearTimeout(timeoutTimer)
-      try {
-        child?.kill?.()
-      } catch {
-        // Não afeta o resultado; o timeout de fora também cobre órfãos.
-      }
-      resolve(result)
-    }
-
-    const fail = (message) =>
-      finish({
-        ok: false,
-        ...(typeof failureResult === 'function' ? failureResult() : {}),
-        message,
-      })
-
-    const complete = () => {
-      try {
-        finish({ ok: true, ...normalizeResult(mainResult, { ...extraResults }) })
-      } catch {
-        fail('A resposta do app-server do Codex veio em formato inválido.')
-      }
-    }
-
-    const send = (payload) => {
-      if (settled) {
-        return
-      }
-      try {
-        child.stdin.write(`${JSON.stringify(payload)}\n`)
-      } catch {
-        fail('Não foi possível falar com o app-server do Codex.')
-      }
-    }
-
-    try {
-      child = spawnProcess('codex', ['app-server', '--stdio'], {
-        env: createCliEnv(buildAccountProcessEnv(process.env, { providerId: 'codex', profileEnv: accountEnv })),
-        stdio: ['pipe', 'pipe', 'pipe'],
-        windowsHide: true,
-      })
-    } catch {
-      fail('Não foi possível iniciar o app-server do Codex.')
-      return
-    }
-
-    child.on('error', () => fail('O app-server do Codex não pôde ser iniciado.'))
-    child.on('exit', () => {
-      if (!settled) {
-        fail('O app-server do Codex encerrou antes de responder.')
-      }
-    })
-
-    child.stdout.setEncoding('utf8')
-    child.stdout.on('data', (chunk) => {
-      if (settled) {
-        return
-      }
-
-      buffer += chunk
-      let newlineIndex = buffer.indexOf('\n')
-      while (newlineIndex >= 0) {
-        const line = buffer.slice(0, newlineIndex).trim()
-        buffer = buffer.slice(newlineIndex + 1)
-        newlineIndex = buffer.indexOf('\n')
-
-        if (line) {
-          handleLine(line)
-        }
-      }
-    })
-
-    function handleLine(line) {
-      let message
-      try {
-        message = JSON.parse(line)
-      } catch {
-        return
-      }
-
-      if (message.id === 1) {
-        if (message.error) {
-          fail(
-            typeof message.error?.message === 'string'
-              ? message.error.message
-              : 'O app-server do Codex recusou a inicialização.',
-          )
-          return
-        }
-
-        if (message.result) {
-          // `initialize` respondeu: só agora o app-server aceita os pedidos.
-          // Não existe uma notificação `initialized` obrigatória neste
-          // protocolo — os pedidos seguintes já podem sair.
-          send({ jsonrpc: '2.0', id: MAIN_REQUEST_ID, method, params })
-          for (const [id, request] of extraRequests.map((item, index) => [MAIN_REQUEST_ID + 1 + index, item])) {
-            send({ jsonrpc: '2.0', id, method: request.method, params: request.params ?? null })
-          }
-        }
-        return
-      }
-
-      if (extraById.has(message.id)) {
-        const extraMethod = extraById.get(message.id)
-        extraById.delete(message.id)
-        pendingExtras -= 1
-        extraResults[extraMethod] = message.error ? null : message.result ?? null
-        if (mainAnswered && pendingExtras === 0) {
-          complete()
-        }
-        return
-      }
-
-      if (message.id !== MAIN_REQUEST_ID) {
-        return
-      }
-
-      if (message.error) {
-        fail(
-          typeof message.error?.message === 'string'
-            ? message.error.message
-            : serverErrorMessage,
-        )
-        return
-      }
-
-      mainAnswered = true
-      mainResult = message.result
-      if (pendingExtras === 0) {
-        complete()
-      }
-    }
-
-    // No tempo limite, um pedido obrigatório já respondido vale: só os
-    // opcionais que faltaram ficam de fora (o painel registra a ausência).
-    timeoutTimer = setTimeout(() => (mainAnswered ? complete() : fail(timeoutMessage)), timeoutMs)
-
-    if (signal) {
-      const cancel = () => fail('A consulta ao app-server do Codex foi cancelada.')
-      if (signal.aborted) {
-        cancel()
-        return
-      }
-      signal.addEventListener('abort', cancel, { once: true })
-    }
-
-    send({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'initialize',
-      params: { clientInfo: { name: DEFAULT_CLIENT_NAME, version: clientVersion } },
-    })
-  })
-}
-
-/**
- * Monta os campos por conta do `/status` a partir das fontes estruturadas do
- * app-server. Regra do painel: só entra o que a CLI publicou — um campo nulo
- * na resposta fica fora, nunca vira um valor presumido.
- *
- * @param {{ account?: object | null, config?: object | null, rateLimits?: object | null }} sources
- * @returns {Record<string, unknown>}
- */
-function buildCodexStatusDetails({ account, config, rateLimits }) {
-  const details = {}
-  const login = account?.account ?? null
-  const effectiveConfig = config?.config ?? null
-
-  if (login && typeof login === 'object') {
-    putString(details, 'email', login.email)
-    putString(details, 'plan', login.planType)
-    putString(details, 'authMode', login.type)
-  }
-
-  if (effectiveConfig && typeof effectiveConfig === 'object') {
-    putString(details, 'model', effectiveConfig.model)
-    putString(details, 'reasoningEffort', effectiveConfig.model_reasoning_effort)
-    putString(details, 'reasoningSummary', effectiveConfig.model_reasoning_summary)
-    putString(details, 'serviceTier', effectiveConfig.service_tier)
-    putString(details, 'profile', effectiveConfig.profile)
-
-    const approvalPolicy = typeof effectiveConfig.approval_policy === 'string'
-      ? effectiveConfig.approval_policy
-      : null
-    const sandboxMode = typeof effectiveConfig.sandbox_mode === 'string'
-      ? effectiveConfig.sandbox_mode
-      : null
-    const permissions = describeCodexPermissions(approvalPolicy, sandboxMode)
-    putString(details, 'permissions', permissions)
-    putString(details, 'approvalPolicy', approvalPolicy)
-    putString(details, 'sandboxMode', sandboxMode)
-  }
-
-  putString(details, 'rateLimitReachedType', rateLimits?.rateLimitReachedType)
-  if (rateLimits?.spendControlReached === true) {
-    details.spendControlReached = 'Sim — o controle de gastos da conta foi atingido'
-  }
-
-  if (!login) {
-    details.accountUnavailable = 'A CLI não respondeu conta/plano nesta leitura.'
-  }
-  if (!effectiveConfig) {
-    details.configUnavailable = 'A CLI não respondeu a configuração efetiva nesta leitura.'
-  }
-
-  details.sessionOnlyFields = [...SESSION_ONLY_STATUS_FIELDS]
-  return details
-}
-
-/**
- * Traduz aprovação + sandbox no rótulo "Permissions" que o `/status` mostra
- * (no Codex 0.150.1 real: `never` + `danger-full-access` → "Full Access").
- *
- * @param {string | null} approvalPolicy - `untrusted` | `on-failure` | `on-request` | `never` | null
- * @param {string | null} sandboxMode - `read-only` | `workspace-write` | `danger-full-access` | null
- * @returns {string | null}
- */
-function describeCodexPermissions(approvalPolicy, sandboxMode) {
-  // Sem um dos dois o rótulo seria presumido; os valores crus continuam no
-  // painel, então a linha simplesmente não aparece.
-  if (!approvalPolicy || !sandboxMode) {
-    return null
-  }
-
-  const known = {
-    'never|danger-full-access': 'Acesso total (Full Access)',
-    'on-request|workspace-write': 'Padrão: edita a pasta, pede aprovação fora dela',
-    'untrusted|read-only': 'Somente leitura',
-    'on-request|read-only': 'Somente leitura, pede aprovação para agir',
-  }
-
-  return known[`${approvalPolicy}|${sandboxMode}`]
-    ?? `Aprovação "${approvalPolicy}", sandbox "${sandboxMode}"`
-}
-
-function putString(target, key, value) {
-  if (typeof value === 'string' && value.trim()) {
-    target[key] = value.trim()
-  }
-}
-
 function toResetCredit(credit) {
   return {
     id: typeof credit?.id === 'string' ? credit.id : null,
@@ -477,31 +139,72 @@ function toResetCredit(credit) {
   }
 }
 
-function toRateLimitMetrics(rateLimits) {
-  const metrics = []
+/**
+ * Resposta de `account/rateLimits/read` no formato do painel: janelas como
+ * métricas, resets bancados em `details.usageCredits`.
+ *
+ * @param {object} result
+ * @param {{ now?: () => number }} [options]
+ */
+function normalizeCodexRateLimitsResult(result, { now = () => Date.now() } = {}) {
+  const summary = result?.rateLimitResetCredits ?? null
+  const collectedAt = new Date(now()).toISOString()
+  const credits = Array.isArray(summary?.credits)
+    ? summary.credits.map(toResetCredit)
+    : []
+  const availableCount =
+    typeof summary?.availableCount === 'number' ? summary.availableCount : 0
+  return {
+    collectedAt,
+    measuredAt: collectedAt,
+    metrics: toRateLimitMetrics(result),
+    availableCount,
+    credits,
+    details: {
+      usageCredits: { availableCount, credits },
+    },
+    message: null,
+  }
+}
 
-  for (const [key, window] of [
-    ['primary', rateLimits?.primary],
-    ['secondary', rateLimits?.secondary],
-  ]) {
-    const used = toFiniteNumber(window?.usedPercent)
-    if (used === null) {
+/**
+ * Janelas de uso publicadas pelo app-server.
+ *
+ * `rateLimits` é o balde principal da conta, com as chaves de sempre
+ * (`rate_limits.primary/secondary`). `rateLimitsByLimitId` traz também os
+ * outros baldes — em 02/10/2026 (Codex 0.156.1), a reserva semanal de um
+ * modelo, que o /status chama de "Luna Reserve Weekly limit". Esses saem com
+ * `scope: 'model'`: valem só para aquele modelo, e a cadeia de contas não pode
+ * concluir que a conta inteira acabou porque um deles zerou.
+ */
+function toRateLimitMetrics(result) {
+  const main = result?.rateLimits ?? null
+  const metrics = toWindowMetrics(main, { keyPrefix: 'rate_limits' })
+
+  const mainLimitId = typeof main?.limitId === 'string' ? main.limitId : DEFAULT_LIMIT_ID
+  const buckets =
+    result?.rateLimitsByLimitId && typeof result.rateLimitsByLimitId === 'object'
+      ? result.rateLimitsByLimitId
+      : {}
+  for (const [limitId, bucket] of Object.entries(buckets)) {
+    if (limitId === mainLimitId || !SAFE_LIMIT_ID_PATTERN.test(limitId)) {
       continue
     }
-
-    metrics.push({
-      key: `rate_limits.${key}`,
-      label: describeRateLimitWindow(window?.windowDurationMins, key),
-      used,
-      limit: 100,
-      remaining: Math.max(0, Math.round((100 - used) * 100) / 100),
-      unit: '%',
-      precision: 'reported',
-      resetAt: toIsoFromEpochSeconds(window?.resetsAt),
-    })
+    metrics.push(
+      ...toWindowMetrics(bucket, {
+        keyPrefix: `rate_limits.${limitId}`,
+        scope: 'model',
+        title: describeLimitBucket(bucket, limitId),
+      }),
+    )
   }
 
-  const credits = rateLimits?.credits
+  const individualLimit = toIndividualLimitMetric(main?.individualLimit)
+  if (individualLimit) {
+    metrics.push(individualLimit)
+  }
+
+  const credits = main?.credits
   if (credits?.unlimited !== true) {
     const balance = toFiniteNumber(credits?.balance)
     if (balance !== null) {
@@ -519,6 +222,73 @@ function toRateLimitMetrics(rateLimits) {
   }
 
   return metrics
+}
+
+function toWindowMetrics(snapshot, { keyPrefix, scope = null, title = null }) {
+  const metrics = []
+
+  for (const [key, window] of [
+    ['primary', snapshot?.primary],
+    ['secondary', snapshot?.secondary],
+  ]) {
+    const used = toFiniteNumber(window?.usedPercent)
+    if (used === null) {
+      continue
+    }
+
+    const windowLabel = describeRateLimitWindow(window?.windowDurationMins, key)
+    metrics.push({
+      key: `${keyPrefix}.${key}`,
+      label: title ? `${windowLabel} · ${title}` : windowLabel,
+      used,
+      limit: 100,
+      remaining: Math.max(0, Math.round((100 - used) * 100) / 100),
+      unit: '%',
+      precision: 'reported',
+      resetAt: toIsoFromEpochSeconds(window?.resetsAt),
+      ...(scope ? { scope } : {}),
+    })
+  }
+
+  return metrics
+}
+
+/** "gpt-reserve (gpt-5.6-luna)": o nome do limite e o modelo que ele cobre. */
+function describeLimitBucket(bucket, limitId) {
+  const name = cleanLabelPart(bucket?.limitName) ?? cleanLabelPart(limitId)
+  const model = cleanLabelPart(bucket?.normalModelSlug)
+  return model && model !== name ? `${name} (${model})` : name
+}
+
+/**
+ * Limite de gasto individual de um membro de workspace. A CLI publica o
+ * percentual restante e o reset; os valores em dinheiro ficam nos detalhes.
+ */
+function toIndividualLimitMetric(individualLimit) {
+  const remaining = toFiniteNumber(individualLimit?.remainingPercent)
+  if (remaining === null) {
+    return null
+  }
+
+  const clamped = Math.min(100, Math.max(0, remaining))
+  return {
+    key: 'spend_control.individual',
+    label: 'Limite de gasto individual',
+    used: Math.round((100 - clamped) * 100) / 100,
+    limit: 100,
+    remaining: clamped,
+    unit: '%',
+    precision: 'reported',
+    resetAt: toIsoFromEpochSeconds(individualLimit?.resetsAt),
+  }
+}
+
+function cleanLabelPart(value) {
+  if (typeof value !== 'string') {
+    return null
+  }
+  const cleaned = value.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 40)
+  return cleaned || null
 }
 
 function describeRateLimitWindow(minutes, fallbackKey) {
@@ -591,11 +361,9 @@ const queryCodexRateLimits = createCodexRateLimitsQuery()
 const consumeCodexRateLimitReset = createCodexRateLimitResetConsumer()
 
 module.exports = {
-  SESSION_ONLY_STATUS_FIELDS,
-  buildCodexStatusDetails,
   consumeCodexRateLimitReset,
   createCodexRateLimitResetConsumer,
   createCodexRateLimitsQuery,
-  describeCodexPermissions,
+  normalizeCodexRateLimitsResult,
   queryCodexRateLimits,
 }

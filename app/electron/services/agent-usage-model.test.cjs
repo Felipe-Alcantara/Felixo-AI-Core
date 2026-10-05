@@ -237,6 +237,27 @@ test('normalizeMetrics descarta itens malformados e mantém só as métricas vá
   )
 })
 
+test('normalizeMetrics guarda o escopo "model" ou "account" e descarta qualquer outro', () => {
+  const base = { label: 'Janela', used: 10, limit: 100, remaining: 90, unit: '%' }
+  const metrics = normalizeMetrics([
+    { ...base, key: 'modelo', scope: 'model' },
+    { ...base, key: 'conta', scope: 'account' },
+    { ...base, key: 'sem-escopo' },
+    { ...base, key: 'escopo-estranho', scope: 'workspace' },
+  ])
+
+  assert.deepEqual(
+    metrics.map((metric) => [metric.key, metric.scope]),
+    [
+      ['modelo', 'model'],
+      ['conta', 'account'],
+      ['sem-escopo', undefined],
+      ['escopo-estranho', undefined],
+    ],
+  )
+  assert.ok(!('scope' in metrics[2]), 'sem escopo, a métrica continua igual à de antes')
+})
+
 test('normalizeMetrics limita a 24 métricas mesmo recebendo uma fonte hostil com centenas', () => {
   const muitasMetricas = Array.from({ length: 200 }, (_, i) => ({
     key: `metrica-${i}`,
