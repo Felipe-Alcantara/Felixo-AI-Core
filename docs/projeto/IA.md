@@ -5625,3 +5625,24 @@ smoke 17/17 + 7/7 (`electron/release-smoke.test.cjs`); backend 2402/2405 e
 frontend 2916/2924, com as mesmas falhas pré-existentes de antes
 (`app-relaunch`, EPERM de symlink; 5 timeouts em `terminal-reading`). Lint e
 typecheck limpos.
+
+## [2026-10-05] Script para tirar uma instalação do Felixo de %TEMP%
+
+`app/scripts/windows/migrar-instalacao-de-temp.ps1` corrige uma máquina que
+ficou com o estado da entrada anterior (app do dia a dia rodando de
+`%TEMP%\felixo-release-smoke-*`). Por padrão só simula; com `-Executar`:
+recusa continuar com o app aberto (nunca o encerra), roda o desinstalador da
+cópia (`/allusers` quando ela está em HKLM, exigindo administrador), remove
+item de login e atalhos que apontem para `%TEMP%`, instala o instalador
+oficial com `/S /currentuser` — sem esse argumento, rodando elevado, o NSIS
+repetiria a instalação para todos os usuários — e confere que o exe novo mora
+fora de `%TEMP%`. Gravado em UTF-8 **com BOM**: o Windows PowerShell 5.1 lê
+UTF-8 sem BOM como ANSI e o parser quebra nos acentos. Simulado nesta máquina
+em 05/10/2026: encontrou a cópia 0.1.433 em HKLM, o item de login e os dois
+atalhos; nada foi alterado. A execução de verdade fica com o Felipe, porque
+fechar o app encerra as sessões do canvas.
+
+Também em 05/10: apagadas, com autorização, 198 pastas de teste
+(`felixo-release-smoke-test-*`, `-app-test-*`) e a `felixo-release-smoke-EanLXu`
+(smoke de 14/09) em `%TEMP%`, depois de conferir que nenhum processo rodava
+delas. A `felixo-release-smoke-4pap4S`, de onde o app roda, ficou intacta.
