@@ -44,6 +44,22 @@ const DETAIL_LABELS: Record<string, string> = {
   grantedAt: 'Concedido em',
   expiresAt: 'Expira em',
   id: 'Identificador',
+  // Codex: campos por conta do `/status`, lidos do app-server
+  // (`account/read`, `config/read`, `account/rateLimits/read`).
+  plan: 'Plano',
+  authMode: 'Tipo de login',
+  reasoningEffort: 'Esforço de raciocínio',
+  reasoningSummary: 'Resumo do raciocínio',
+  serviceTier: 'Nível de serviço',
+  profile: 'Perfil de configuração',
+  permissions: 'Permissões',
+  approvalPolicy: 'Política de aprovação',
+  sandboxMode: 'Sandbox',
+  rateLimitReachedType: 'Limite atingido',
+  spendControlReached: 'Controle de gastos',
+  accountUnavailable: 'Conta/plano',
+  configUnavailable: 'Configuração',
+  sessionOnlyFields: 'Fora do painel (só existem numa sessão aberta)',
 }
 
 /**

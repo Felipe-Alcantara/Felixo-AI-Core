@@ -5548,3 +5548,43 @@ relançamento do Codex e queda silenciosa) estão na branch; os SHAs estão na e
 Validação final: registrada ao fim da branch (suíte completa, vitest, lint, build, bancada do caminho de saída com
 Modo Performance ligado e desligado, smoke de ponta a ponta nos 4 sistemas e verificação manual no Linux com duas
 contas Codex reais).
+
+## [2026-10-05] Limites e uso: campos do `/status` do Codex no painel
+
+Task: [Felixo AI Core/Limites — mostrar no painel todas as informações do /status do Codex](https://app.notion.com/p/Felixo-AI-Core-Limites-mostrar-no-painel-todas-as-informa-es-do-status-do-Codex-3db91f95497e8186bb2ef5d707a05d2b).
+
+O `/status` real do Codex CLI 0.150.1 foi capturado por PTY e renderizado num
+`@xterm/headless` (a TUI redesenha com movimento de cursor; tirar só os
+escapes funde textos sobrepostos). Campos medidos: Model (modelo, esforço,
+resumos), Directory, Permissions, Agents.md, Account (e-mail e plano),
+Collaboration mode, Session e o limite (Monthly limit, % restante e reset).
+
+Fonte escolhida: o `codex app-server`, não a TUI. A mesma sessão que já lia
+`account/rateLimits/read` agora também pede `account/read`
+(`refreshToken: false`, para nunca renovar credencial ao abrir o painel) e
+`config/read`. `requestCodexAppServer()` passou a aceitar pedidos opcionais
+no mesmo processo: um opcional que responde erro ou não responde até o tempo
+limite só deixa o próprio campo de fora, e a leitura dos limites continua.
+
+O que entra no painel, só quando a CLI publicou (campo nulo não vira valor
+presumido): e-mail, plano, tipo de login, modelo, esforço e resumo do
+raciocínio, nível de serviço, perfil, política de aprovação, sandbox, o rótulo
+"Permissões" derivado das duas (ex.: `never` + `danger-full-access` → "Acesso
+total (Full Access)", conferido contra o `/status` real), limite atingido e
+controle de gastos. O limite em si continua como métrica ("Últimos 30 dias").
+Omitidos de propósito, com o motivo escrito no próprio painel: Directory,
+Agents.md, Collaboration mode, Session, tokens e janela de contexto — eles
+dependem de uma sessão de chat aberta, e o painel é por conta/perfil.
+
+Cada conta continua lendo o próprio app-server com o ambiente do seu perfil;
+um teste prova que dois perfis não trocam e-mail nem plano. Consulta ao vivo
+nesta máquina bateu com o `/status`: `gpt-5.6-terra`, esforço `low`, Plus,
+100% do limite mensal, 2 resets disponíveis, "Acesso total (Full Access)".
+
+Testes: 12/12 em `codex-account-rate-limits.test.cjs` (4 novos, com fixture
+real anonimizada). Backend 2395/2398 e frontend 2916/2924; as falhas
+(`app-relaunch.test.cjs`, EPERM de symlink, e 5 timeouts em
+`terminal-reading.fixtures.test.ts`) se repetem idênticas sem esta mudança.
+Lint e typecheck limpos. O `node_modules` local precisou ser reinstalado do
+zero (estava desatualizado depois do pull, sem TypeScript 7 nem
+`@tailwindcss/vite`).

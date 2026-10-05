@@ -5,9 +5,42 @@ const test = require('node:test')
 const { EventEmitter } = require('node:events')
 
 const {
+  SESSION_ONLY_STATUS_FIELDS,
   createCodexRateLimitResetConsumer,
   createCodexRateLimitsQuery,
 } = require('./codex-account-rate-limits.cjs')
+
+/**
+ * Respostas reais do `codex app-server` (Codex CLI 0.150.1, 05/10/2026),
+ * anonimizadas: e-mail trocado e a configuração reduzida aos campos que o
+ * `/status` mostra. O `/status` da mesma conta, na mesma hora, exibia:
+ * "Model: gpt-5.6-terra (reasoning low, summaries auto)", "Permissions: Full
+ * Access", "Account: <email> (Plus)" e "Monthly limit: 100% left".
+ */
+const REAL_ACCOUNT_READ = {
+  account: { type: 'chatgpt', email: 'pessoa@example.com', planType: 'plus' },
+  requiresOpenaiAuth: true,
+}
+const REAL_CONFIG_READ = {
+  config: {
+    model: 'gpt-5.6-terra',
+    model_reasoning_effort: 'low',
+    model_reasoning_summary: null,
+    service_tier: 'default',
+    profile: null,
+    approval_policy: 'never',
+    sandbox_mode: 'danger-full-access',
+  },
+}
+const REAL_RATE_LIMITS = {
+  limitId: 'codex',
+  primary: { usedPercent: 0, windowDurationMins: 43200, resetsAt: 1793767721 },
+  secondary: null,
+  credits: { hasCredits: false, unlimited: false, balance: null },
+  spendControlReached: false,
+  planType: 'free',
+  rateLimitReachedType: null,
+}
 
 /**
  * Processo falso que fala o mesmo protocolo do `codex app-server --stdio`
@@ -20,6 +53,8 @@ function fakeCodexAppServer({
   consumeOutcome = 'reset',
   errorOnRead = null,
   errorOnConsume = null,
+  account = null,
+  config = null,
 } = {}) {
   const child = new EventEmitter()
   const written = []
@@ -50,6 +85,24 @@ function fakeCodexAppServer({
             `${JSON.stringify({ id: message.id, result: { rateLimits, rateLimitResetCredits } })}\n`,
           )
         })
+      }
+
+      // Como um servidor JSON-RPC real: todo pedido recebe resposta. Sem
+      // payload configurado, `account/read`/`config/read` respondem erro
+      // "method not found", que é o que uma CLI mais antiga devolveria.
+      if (message.method === 'account/read' || message.method === 'config/read') {
+        const payload = message.method === 'account/read' ? account : config
+        queueMicrotask(() =>
+          child.stdout.emit(
+            'data',
+            `${JSON.stringify(
+              payload
+                ? { id: message.id, result: payload }
+                : { id: message.id, error: { code: -32601, message: 'method not found' } },
+            )}\n`,
+          ),
+        )
+        return
       }
 
       if (message.method === 'account/rateLimitResetCredit/consume') {
@@ -257,4 +310,92 @@ test('resultado sem crédito não é tratado como sucesso', async () => {
   assert.equal(result.consumed, false)
   assert.equal(result.outcome, 'noCredit')
   assert.match(result.message, /não está mais disponível/)
+})
+
+test('leva para o painel os campos por conta do /status real do Codex', async () => {
+  const child = fakeCodexAppServer({
+    rateLimits: REAL_RATE_LIMITS,
+    rateLimitResetCredits: { availableCount: 0, credits: [] },
+    account: REAL_ACCOUNT_READ,
+    config: REAL_CONFIG_READ,
+  })
+  const queryCodexRateLimits = createCodexRateLimitsQuery({ spawnProcess: () => child })
+
+  const result = await queryCodexRateLimits({ timeoutMs: 2_000 })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.details.email, 'pessoa@example.com')
+  assert.equal(result.details.plan, 'plus')
+  assert.equal(result.details.model, 'gpt-5.6-terra')
+  assert.equal(result.details.reasoningEffort, 'low')
+  assert.equal(result.details.approvalPolicy, 'never')
+  assert.equal(result.details.sandboxMode, 'danger-full-access')
+  // Campo que a CLI publicou como nulo não vira valor presumido.
+  assert.equal('reasoningSummary' in result.details, false)
+  assert.equal('rateLimitReachedType' in result.details, false)
+  assert.deepEqual(result.details.sessionOnlyFields, [...SESSION_ONLY_STATUS_FIELDS])
+  // O "Monthly limit" do /status chega como métrica, não como detalhe solto.
+  assert.equal(result.metrics[0].label, 'Últimos 30 dias')
+  assert.equal(result.metrics[0].remaining, 100)
+  // Os três pedidos viajaram no mesmo processo.
+  const methods = child.written.map((raw) => JSON.parse(raw).method)
+  assert.deepEqual(methods, ['initialize', 'account/rateLimits/read', 'account/read', 'config/read'])
+})
+
+test('CLI que não conhece account/read nem config/read mantém os limites e escreve a ausência', async () => {
+  const child = fakeCodexAppServer({
+    rateLimits: REAL_RATE_LIMITS,
+    rateLimitResetCredits: { availableCount: 0, credits: [] },
+  })
+  const queryCodexRateLimits = createCodexRateLimitsQuery({ spawnProcess: () => child })
+
+  const result = await queryCodexRateLimits({ timeoutMs: 2_000 })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.metrics.length, 1)
+  assert.equal('email' in result.details, false)
+  assert.equal('model' in result.details, false)
+  assert.match(result.details.accountUnavailable, /conta\/plano/)
+  assert.match(result.details.configUnavailable, /configuração efetiva/)
+})
+
+test('cada perfil lê o próprio app-server: os dados de uma conta não vazam para a outra', async () => {
+  // Cada conta tem a sua pasta de login (`CODEX_HOME`); o processo é aberto
+  // com o ambiente do perfil, e é por ele que o fake decide quem responde.
+  const spawnProcess = (_command, _args, options) =>
+    fakeCodexAppServer({
+      rateLimits: REAL_RATE_LIMITS,
+      rateLimitResetCredits: { availableCount: 0, credits: [] },
+      account: {
+        account: {
+          type: 'chatgpt',
+          email: options.env.CODEX_HOME?.includes('trabalho') ? 'trabalho@example.com' : 'pessoal@example.com',
+          planType: options.env.CODEX_HOME?.includes('trabalho') ? 'pro' : 'plus',
+        },
+      },
+      config: REAL_CONFIG_READ,
+    })
+  const queryCodexRateLimits = createCodexRateLimitsQuery({ spawnProcess })
+
+  const pessoal = await queryCodexRateLimits({ env: { CODEX_HOME: '/perfis/pessoal' }, timeoutMs: 2_000 })
+  const trabalho = await queryCodexRateLimits({ env: { CODEX_HOME: '/perfis/trabalho' }, timeoutMs: 2_000 })
+
+  assert.equal(pessoal.details.email, 'pessoal@example.com')
+  assert.equal(pessoal.details.plan, 'plus')
+  assert.equal(trabalho.details.email, 'trabalho@example.com')
+  assert.equal(trabalho.details.plan, 'pro')
+})
+
+test('Permissions do /status: rótulo só quando a CLI publicou aprovação e sandbox', () => {
+  const { describeCodexPermissions } = require('./codex-account-rate-limits.cjs')
+
+  // Par medido ao vivo: o /status real mostrava "Permissions: Full Access".
+  assert.equal(describeCodexPermissions('never', 'danger-full-access'), 'Acesso total (Full Access)')
+  assert.equal(describeCodexPermissions('untrusted', 'read-only'), 'Somente leitura')
+  assert.equal(
+    describeCodexPermissions('on-failure', 'workspace-write'),
+    'Aprovação "on-failure", sandbox "workspace-write"',
+  )
+  assert.equal(describeCodexPermissions(null, 'read-only'), null)
+  assert.equal(describeCodexPermissions('never', null), null)
 })

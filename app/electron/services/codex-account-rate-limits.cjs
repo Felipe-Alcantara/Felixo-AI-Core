@@ -30,6 +30,30 @@ const DEFAULT_TIMEOUT_MS = 15_000
 const DEFAULT_CLIENT_NAME = 'felixo-ai-core'
 
 /**
+ * Pedidos opcionais que acompanham `account/rateLimits/read` na mesma sessão.
+ * `refreshToken: false` deixa `account/read` só ler o login já gravado — o
+ * painel nunca deve renovar credencial como efeito colateral de abrir.
+ */
+const STATUS_EXTRA_REQUESTS = Object.freeze([
+  Object.freeze({ method: 'account/read', params: { refreshToken: false } }),
+  Object.freeze({ method: 'config/read', params: { includeLayers: false } }),
+])
+
+/**
+ * Linhas do `/status` do Codex que dependem de uma sessão de chat aberta, não
+ * da conta. O painel é por conta/perfil, então elas ficam de fora de propósito
+ * — e a ausência é escrita no próprio painel, não escondida. Conferido contra
+ * o `/status` real do Codex CLI 0.150.1 em 05/10/2026.
+ */
+const SESSION_ONLY_STATUS_FIELDS = Object.freeze([
+  'Directory (pasta do terminal, não da conta)',
+  'Agents.md (depende da pasta do terminal)',
+  'Collaboration mode (escolhido dentro da sessão)',
+  'Session (id de uma sessão de chat aberta)',
+  'Tokens usados e janela de contexto (existem só numa sessão em andamento)',
+])
+
+/**
  * @param {object} [dependencies]
  * @param {(command: string, args: string[], options: object) => object} [dependencies.spawnProcess]
  * @param {() => number} [dependencies.now]
@@ -49,6 +73,9 @@ function createCodexRateLimitsQuery({ spawnProcess = spawnChildProcess, now = ()
       clientVersion,
       method: 'account/rateLimits/read',
       params: null,
+      // Conta/plano e configuração efetiva entram na mesma sessão: são as
+      // linhas do `/status` do Codex que não dependem de uma sessão de chat.
+      extraRequests: STATUS_EXTRA_REQUESTS,
       timeoutMessage: 'A consulta de resets do Codex excedeu o tempo limite.',
       failureResult: () => ({
         collectedAt: null,
@@ -56,7 +83,7 @@ function createCodexRateLimitsQuery({ spawnProcess = spawnChildProcess, now = ()
         credits: [],
       }),
       serverErrorMessage: 'O app-server do Codex recusou a consulta de limites.',
-      normalizeResult: (result) => {
+      normalizeResult: (result, extras = {}) => {
         const summary = result?.rateLimitResetCredits ?? null
         const collectedAt = new Date(now()).toISOString()
         const credits = Array.isArray(summary?.credits)
@@ -71,6 +98,11 @@ function createCodexRateLimitsQuery({ spawnProcess = spawnChildProcess, now = ()
           availableCount,
           credits,
           details: {
+            ...buildCodexStatusDetails({
+              account: extras['account/read'],
+              config: extras['config/read'],
+              rateLimits: result?.rateLimits,
+            }),
             usageCredits: { availableCount, credits },
           },
           message: null,
@@ -144,6 +176,16 @@ function createCodexRateLimitResetConsumer({
   }
 }
 
+/**
+ * Fala com `codex app-server --stdio` (JSON-RPC por linha) numa sessão só.
+ *
+ * `method`/`params` é o pedido obrigatório: sem a resposta dele a leitura
+ * falha. `extraRequests` são pedidos opcionais que viajam no MESMO processo —
+ * abrir um app-server por pergunta custaria um processo (e um handshake) a
+ * mais por conta a cada atualização do painel. Um opcional que responda com
+ * erro, ou que não responda até o tempo limite, só deixa o seu campo de fora:
+ * `normalizeResult` recebe `(resultadoObrigatório, { [método]: resultado | null })`.
+ */
 function requestCodexAppServer({
   spawnProcess,
   now,
@@ -152,6 +194,7 @@ function requestCodexAppServer({
   clientVersion,
   method,
   params,
+  extraRequests = [],
   timeoutMessage,
   failureResult,
   serverErrorMessage,
@@ -162,7 +205,13 @@ function requestCodexAppServer({
     let settled = false
     let timeoutTimer
     let buffer = ''
-    let requestId = null
+    const MAIN_REQUEST_ID = 2
+    // id do JSON-RPC → método opcional. Os ids começam depois do obrigatório.
+    const extraById = new Map(extraRequests.map((request, index) => [MAIN_REQUEST_ID + 1 + index, request.method]))
+    const extraResults = Object.fromEntries(extraRequests.map((request) => [request.method, null]))
+    let pendingExtras = extraById.size
+    let mainAnswered = false
+    let mainResult
 
     const finish = (result) => {
       if (settled) {
@@ -184,6 +233,14 @@ function requestCodexAppServer({
         ...(typeof failureResult === 'function' ? failureResult() : {}),
         message,
       })
+
+    const complete = () => {
+      try {
+        finish({ ok: true, ...normalizeResult(mainResult, { ...extraResults }) })
+      } catch {
+        fail('A resposta do app-server do Codex veio em formato inválido.')
+      }
+    }
 
     const send = (payload) => {
       if (settled) {
@@ -252,16 +309,29 @@ function requestCodexAppServer({
         }
 
         if (message.result) {
-          // `initialize` respondeu: só agora o app-server aceita o pedido
-          // específico. Não existe uma notificação `initialized` obrigatória
-          // neste protocolo — o pedido seguinte já pode sair.
-          requestId = 2
-          send({ jsonrpc: '2.0', id: requestId, method, params })
+          // `initialize` respondeu: só agora o app-server aceita os pedidos.
+          // Não existe uma notificação `initialized` obrigatória neste
+          // protocolo — os pedidos seguintes já podem sair.
+          send({ jsonrpc: '2.0', id: MAIN_REQUEST_ID, method, params })
+          for (const [id, request] of extraRequests.map((item, index) => [MAIN_REQUEST_ID + 1 + index, item])) {
+            send({ jsonrpc: '2.0', id, method: request.method, params: request.params ?? null })
+          }
         }
         return
       }
 
-      if (message.id !== requestId) {
+      if (extraById.has(message.id)) {
+        const extraMethod = extraById.get(message.id)
+        extraById.delete(message.id)
+        pendingExtras -= 1
+        extraResults[extraMethod] = message.error ? null : message.result ?? null
+        if (mainAnswered && pendingExtras === 0) {
+          complete()
+        }
+        return
+      }
+
+      if (message.id !== MAIN_REQUEST_ID) {
         return
       }
 
@@ -274,14 +344,16 @@ function requestCodexAppServer({
         return
       }
 
-      try {
-        finish({ ok: true, ...normalizeResult(message.result) })
-      } catch {
-        fail('A resposta do app-server do Codex veio em formato inválido.')
+      mainAnswered = true
+      mainResult = message.result
+      if (pendingExtras === 0) {
+        complete()
       }
     }
 
-    timeoutTimer = setTimeout(() => fail(timeoutMessage), timeoutMs)
+    // No tempo limite, um pedido obrigatório já respondido vale: só os
+    // opcionais que faltaram ficam de fora (o painel registra a ausência).
+    timeoutTimer = setTimeout(() => (mainAnswered ? complete() : fail(timeoutMessage)), timeoutMs)
 
     send({
       jsonrpc: '2.0',
@@ -290,6 +362,92 @@ function requestCodexAppServer({
       params: { clientInfo: { name: DEFAULT_CLIENT_NAME, version: clientVersion } },
     })
   })
+}
+
+/**
+ * Monta os campos por conta do `/status` a partir das fontes estruturadas do
+ * app-server. Regra do painel: só entra o que a CLI publicou — um campo nulo
+ * na resposta fica fora, nunca vira um valor presumido.
+ *
+ * @param {{ account?: object | null, config?: object | null, rateLimits?: object | null }} sources
+ * @returns {Record<string, unknown>}
+ */
+function buildCodexStatusDetails({ account, config, rateLimits }) {
+  const details = {}
+  const login = account?.account ?? null
+  const effectiveConfig = config?.config ?? null
+
+  if (login && typeof login === 'object') {
+    putString(details, 'email', login.email)
+    putString(details, 'plan', login.planType)
+    putString(details, 'authMode', login.type)
+  }
+
+  if (effectiveConfig && typeof effectiveConfig === 'object') {
+    putString(details, 'model', effectiveConfig.model)
+    putString(details, 'reasoningEffort', effectiveConfig.model_reasoning_effort)
+    putString(details, 'reasoningSummary', effectiveConfig.model_reasoning_summary)
+    putString(details, 'serviceTier', effectiveConfig.service_tier)
+    putString(details, 'profile', effectiveConfig.profile)
+
+    const approvalPolicy = typeof effectiveConfig.approval_policy === 'string'
+      ? effectiveConfig.approval_policy
+      : null
+    const sandboxMode = typeof effectiveConfig.sandbox_mode === 'string'
+      ? effectiveConfig.sandbox_mode
+      : null
+    const permissions = describeCodexPermissions(approvalPolicy, sandboxMode)
+    putString(details, 'permissions', permissions)
+    putString(details, 'approvalPolicy', approvalPolicy)
+    putString(details, 'sandboxMode', sandboxMode)
+  }
+
+  putString(details, 'rateLimitReachedType', rateLimits?.rateLimitReachedType)
+  if (rateLimits?.spendControlReached === true) {
+    details.spendControlReached = 'Sim — o controle de gastos da conta foi atingido'
+  }
+
+  if (!login) {
+    details.accountUnavailable = 'A CLI não respondeu conta/plano nesta leitura.'
+  }
+  if (!effectiveConfig) {
+    details.configUnavailable = 'A CLI não respondeu a configuração efetiva nesta leitura.'
+  }
+
+  details.sessionOnlyFields = [...SESSION_ONLY_STATUS_FIELDS]
+  return details
+}
+
+/**
+ * Traduz aprovação + sandbox no rótulo "Permissions" que o `/status` mostra
+ * (no Codex 0.150.1 real: `never` + `danger-full-access` → "Full Access").
+ *
+ * @param {string | null} approvalPolicy - `untrusted` | `on-failure` | `on-request` | `never` | null
+ * @param {string | null} sandboxMode - `read-only` | `workspace-write` | `danger-full-access` | null
+ * @returns {string | null}
+ */
+function describeCodexPermissions(approvalPolicy, sandboxMode) {
+  // Sem um dos dois o rótulo seria presumido; os valores crus continuam no
+  // painel, então a linha simplesmente não aparece.
+  if (!approvalPolicy || !sandboxMode) {
+    return null
+  }
+
+  const known = {
+    'never|danger-full-access': 'Acesso total (Full Access)',
+    'on-request|workspace-write': 'Padrão: edita a pasta, pede aprovação fora dela',
+    'untrusted|read-only': 'Somente leitura',
+    'on-request|read-only': 'Somente leitura, pede aprovação para agir',
+  }
+
+  return known[`${approvalPolicy}|${sandboxMode}`]
+    ?? `Aprovação "${approvalPolicy}", sandbox "${sandboxMode}"`
+}
+
+function putString(target, key, value) {
+  if (typeof value === 'string' && value.trim()) {
+    target[key] = value.trim()
+  }
 }
 
 function toResetCredit(credit) {
@@ -418,8 +576,11 @@ const queryCodexRateLimits = createCodexRateLimitsQuery()
 const consumeCodexRateLimitReset = createCodexRateLimitResetConsumer()
 
 module.exports = {
+  SESSION_ONLY_STATUS_FIELDS,
+  buildCodexStatusDetails,
   consumeCodexRateLimitReset,
   createCodexRateLimitResetConsumer,
   createCodexRateLimitsQuery,
+  describeCodexPermissions,
   queryCodexRateLimits,
 }
