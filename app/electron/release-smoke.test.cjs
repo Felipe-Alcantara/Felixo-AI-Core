@@ -1,6 +1,6 @@
 'use strict'
 
-const { test } = require('node:test')
+const { test, after } = require('node:test')
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const os = require('node:os')
@@ -13,8 +13,20 @@ const {
   normalizePtyTextOutput,
 } = require('./release-smoke.cjs')
 
+// Cada pasta criada aqui é apagada no fim do arquivo. Sem isso a suíte deixava
+// uma `felixo-release-smoke-test-*` por teste em %TEMP% a cada `npm test`
+// (62 delas contadas em 14/09/2026).
+const pastasCriadas = []
+after(() => {
+  for (const pasta of pastasCriadas) {
+    fs.rmSync(pasta, { recursive: true, force: true, maxRetries: 3 })
+  }
+})
+
 function pastaTemporaria() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-release-smoke-test-'))
+  const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-release-smoke-test-'))
+  pastasCriadas.push(pasta)
+  return pasta
 }
 
 test('createPtyWorkingDirectory devolve um cwd curto por padrão', () => {

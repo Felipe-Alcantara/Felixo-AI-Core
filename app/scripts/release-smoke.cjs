@@ -30,9 +30,11 @@ async function main(argv = process.argv.slice(2)) {
   let temporaryRoot = null
 
   try {
+    const allowSystemInstall = options.allowSystemInstall || isDisposableRunner()
     const artifactPath = resolveReleaseArtifact({
       releaseDir,
       explicitArtifact: options.artifact,
+      allowSystemInstall,
     })
     report.artifact = {
       name: path.basename(artifactPath),
@@ -41,7 +43,7 @@ async function main(argv = process.argv.slice(2)) {
     }
 
     temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-release-smoke-'))
-    const prepared = prepareArtifact({ artifactPath, temporaryRoot })
+    const prepared = prepareArtifact({ artifactPath, temporaryRoot, allowSystemInstall })
     report.installMode = prepared.installMode
     report.installed = {
       name: path.basename(prepared.appRoot),
@@ -114,6 +116,7 @@ function parseArgs(argv) {
     keepTemp: false,
     timeoutMs: SMOKE_TIMEOUT_MS,
     simulateQuarantine: false,
+    allowSystemInstall: false,
   }
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -121,6 +124,11 @@ function parseArgs(argv) {
 
     if (argument === '--keep-temp') {
       options.keepTemp = true
+      continue
+    }
+
+    if (argument === '--allow-system-install') {
+      options.allowSystemInstall = true
       continue
     }
 
@@ -176,7 +184,32 @@ function createEmptyReport() {
   }
 }
 
-function resolveReleaseArtifact({ releaseDir, explicitArtifact }) {
+/**
+ * Runner descartável de CI: instalar de verdade (registro do sistema,
+ * atalhos) não tem custo, porque a máquina é jogada fora depois.
+ */
+function isDisposableRunner(environment = process.env) {
+  return environment.GITHUB_ACTIONS === 'true' || environment.CI === 'true'
+}
+
+/**
+ * No Windows o instalador NSIS não é "só extrair": com o mesmo appId do app
+ * real ele grava a desinstalação e o InstallLocation no registro (em HKLM se o
+ * shell estiver elevado), cria atalhos no Menu Iniciar e na Área de Trabalho e
+ * passa a ser A instalação que o auto-update atualiza. Foi assim que um smoke
+ * local de 02/09/2026 virou o app de uso diário rodando de %TEMP%, com o
+ * "iniciar com o sistema" apontando para lá. Fora do CI, só com pedido
+ * explícito; o caminho local é a pasta `win-unpacked`.
+ */
+function assertSystemInstallAllowed(kind, allowSystemInstall) {
+  if (kind === 'nsis' && !allowSystemInstall) {
+    throw new Error(
+      'O instalador NSIS registraria esta cópia de teste como a instalação do Felixo nesta máquina (registro, atalhos e auto-update). Fora do CI, rode o smoke contra a pasta win-unpacked (--artifact release/win-unpacked) ou passe --allow-system-install numa máquina descartável.',
+    )
+  }
+}
+
+function resolveReleaseArtifact({ releaseDir, explicitArtifact, allowSystemInstall = isDisposableRunner() }) {
   if (explicitArtifact) {
     const candidate = path.resolve(explicitArtifact)
     if (!pathExists(candidate)) {
@@ -194,6 +227,9 @@ function resolveReleaseArtifact({ releaseDir, explicitArtifact }) {
     .filter((entry) => entry.isFile())
     .map((entry) => path.join(releaseDir, entry.name))
     .filter(isPlatformInstaller)
+    // Sem permissão para instalar no sistema, o NSIS nem entra na escolha
+    // automática: a pasta desempacotada vence.
+    .filter((candidate) => allowSystemInstall || getArtifactKind(candidate) !== 'nsis')
     .sort(compareArtifacts)[0]
 
   if (installer) return installer
@@ -245,7 +281,7 @@ function getArtifactKind(candidate) {
           : extension.slice(1) || 'file'
 }
 
-function prepareArtifact({ artifactPath, temporaryRoot }) {
+function prepareArtifact({ artifactPath, temporaryRoot, allowSystemInstall = isDisposableRunner() }) {
   if (fs.statSync(artifactPath).isDirectory()) {
     return createPreparedArtifact(findPackagedAppRoot(artifactPath) || artifactPath, 'unpacked')
   }
@@ -274,6 +310,7 @@ function prepareArtifact({ artifactPath, temporaryRoot }) {
   }
 
   if (kind === 'nsis') {
+    assertSystemInstallAllowed(kind, allowSystemInstall)
     const installRoot = path.join(temporaryRoot, 'installed')
     fs.mkdirSync(installRoot, { recursive: true })
     runChecked(artifactPath, ['/S', `/D=${installRoot}`], {
@@ -1102,6 +1139,8 @@ function removeTemporaryDirectory(directory) {
 }
 
 module.exports = {
+  assertSystemInstallAllowed,
+  isDisposableRunner,
   CLI_COMMAND_NAME,
   CLI_PACKAGE_NAME,
   PTY_MARKER,

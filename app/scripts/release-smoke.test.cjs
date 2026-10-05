@@ -8,7 +8,9 @@ const { test } = require('node:test')
 
 const {
   captureWindowsAcl,
+  assertSystemInstallAllowed,
   createCliLayout,
+  isDisposableRunner,
   extractNativeErrors,
   findFilesRecursive,
   findPackagedAppRoot,
@@ -37,6 +39,7 @@ test('parseArgs accepts an explicit release artifact and report', () => {
       keepTemp: true,
       timeoutMs: 5000,
       simulateQuarantine: false,
+      allowSystemInstall: false,
     },
   )
 })
@@ -236,7 +239,7 @@ test('prefers the host-compatible Linux x86_64 alias over arm64', () => {
     fs.writeFileSync(foreignArtifact, '')
 
     assert.equal(
-      path.basename(resolveReleaseArtifact({ releaseDir: temporaryRoot })),
+      path.basename(resolveReleaseArtifact({ releaseDir: temporaryRoot, allowSystemInstall: true })),
       path.basename(hostArtifact),
     )
   } finally {
@@ -332,6 +335,39 @@ test('packaged app smoke uses the real-process status contract', async () => {
     assert.ok(status.contextDelivery.files.every((file) => file.readExactly === true))
     assert.equal(status.contextDelivery.missingArtifactReported, true)
     assert.equal(JSON.parse(fs.readFileSync(statusFile, 'utf8')).pty.marker, 'FELIXO_RELEASE_PTY_OK')
+  } finally {
+    fs.rmSync(temporaryRoot, { recursive: true, force: true })
+  }
+})
+
+test('fora do CI o instalador NSIS é recusado: ele registraria a cópia de teste como a instalação real', () => {
+  assert.throws(() => assertSystemInstallAllowed('nsis', false), /win-unpacked/)
+  assert.doesNotThrow(() => assertSystemInstallAllowed('nsis', true))
+  assert.doesNotThrow(() => assertSystemInstallAllowed('appimage', false))
+  assert.equal(isDisposableRunner({ GITHUB_ACTIONS: 'true' }), true)
+  assert.equal(isDisposableRunner({ CI: 'true' }), true)
+  assert.equal(isDisposableRunner({}), false)
+})
+
+test('sem permissão de instalar, a escolha automática pula o .exe NSIS e usa a pasta desempacotada', () => {
+  const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-release-smoke-test-'))
+  try {
+    fs.writeFileSync(path.join(temporaryRoot, 'Felixo-AI-Core-0.1.1-win-x64.exe'), '')
+    const appRoot = path.join(temporaryRoot, 'win-unpacked')
+    const npmCli = path.join(appRoot, 'resources', 'npm-runtime', 'npm', 'bin', 'npm-cli.js')
+    fs.mkdirSync(path.dirname(npmCli), { recursive: true })
+    fs.writeFileSync(npmCli, '', 'utf8')
+
+    if (process.platform === 'win32') {
+      assert.equal(resolveReleaseArtifact({ releaseDir: temporaryRoot, allowSystemInstall: false }), appRoot)
+      assert.equal(
+        path.basename(resolveReleaseArtifact({ releaseDir: temporaryRoot, allowSystemInstall: true })),
+        'Felixo-AI-Core-0.1.1-win-x64.exe',
+      )
+    } else {
+      // Em Linux/macOS o .exe nem é instalador da plataforma: sempre a pasta.
+      assert.equal(resolveReleaseArtifact({ releaseDir: temporaryRoot, allowSystemInstall: false }), appRoot)
+    }
   } finally {
     fs.rmSync(temporaryRoot, { recursive: true, force: true })
   }
