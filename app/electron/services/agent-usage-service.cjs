@@ -129,7 +129,9 @@ function createAgentUsageService({
     const round = { id: ++generation, controller: new AbortController(), reason: null }
     currentRound = round
     const deadlineTimer = setTimeout(() => abortRound(round, 'deadline'), refreshDeadlineMs)
-    deadlineTimer.unref?.()
+    // Sem unref de propósito: o teto PRECISA disparar mesmo que nada mais mantenha
+    // o loop vivo (foi o que reprovou o CI). O timer é limpo quando a rodada
+    // termina, então não vaza.
 
     const work = refreshInternal(round)
     // Rede de segurança para um passo que ignore o cancelamento (o catálogo,
@@ -140,7 +142,6 @@ function createAgentUsageService({
         abortRound(round, 'deadline')
         resolve({ ...(await list()), refreshError: deadlineMessage() })
       }, refreshDeadlineMs + REFRESH_SETTLE_GRACE_MS)
-      timer.unref?.()
       work.finally(() => clearTimeout(timer)).catch(() => {})
     })
 
