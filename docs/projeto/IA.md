@@ -5687,3 +5687,44 @@ mesmo bundle do renderer). A suíte completa do backend foi interrompida pelo
 Claude Code por falta de memória na máquina; os testes do backend alterado
 (CLI roteirizada) passaram 18/18 e a CI roda a suíte inteira. Frontend
 2925/2933, com as 5 falhas pré-existentes de `terminal-reading`.
+
+## [2026-10-05] Limites: o monitor do Claude travava e só reiniciar o app destravava
+
+Task: [Felixo AI Core/Limites — reconectar o monitor quando o Claude dessincroniza, sem reiniciar o app](https://app.notion.com/p/Felixo-AI-Core-Limites-reconectar-o-monitor-quando-o-Claude-dessincroniza-sem-reiniciar-o-app-3db91f95497e8195a468fc5cd74cd6cc).
+
+Causa reproduzida com teste: `refresh()` deduplicava as rodadas num
+`refreshPromise` compartilhado e só o liberava no `finally`. A consulta ao
+vivo é uma função injetada que RECEBE `timeoutMs`, mas nada garantia que ela
+cumprisse; uma promessa que nunca resolve prendia todo clique em Atualizar
+(que, além disso, fica desabilitado enquanto carrega) até o processo morrer.
+O teste com `queryLiveUsage: () => new Promise(() => {})` travou até o
+`timeout 60` do shell antes da correção.
+
+Correção:
+- Teto da rodada (`REFRESH_DEADLINE_MS`, 90 s) com um `AbortController` por
+  rodada; `untilAborted()` faz a rodada não depender de a consulta honrar o
+  cancelamento. Estourar grava amostra de erro com motivo e passa pelo
+  `onLiveQueryFailure`, que alimenta o QA Logger já persistido em disco
+  (`qa-log-disk-store.cjs`, da task de observabilidade, concluída) — a
+  evidência sobrevive ao restart.
+- Rede de segurança: teto + 5 s devolve o painel atual com `refreshError`.
+- `reconnect()` (IPC `agent-usage:reconnect`): abandona a rodada, cancela as
+  consultas dela e refaz; uma geração por rodada impede que a abandonada
+  grave por cima da nova. A mensagem distingue teto de Reconectar.
+- Consultas do Claude (PTY) e do Codex (app-server) aceitam `signal`:
+  abortar encerra o processo descartável na hora.
+- Painel: botão Reconectar habilitado mesmo durante a coleta; só a resposta
+  do pedido mais recente vale; card mostra "Última consulta falhou (hora):
+  motivo" quando exibe o último valor conhecido.
+
+Validação: teste de reprodução sai em ~0,3 s; Reconectar com a consulta presa
+refaz sem ser sobrescrito; cancelamento mata o PTY e o app-server; 40/40 nos
+testes de serviço, IPC, consulta do Claude e do Codex; 3 testes do aviso de
+falha. Typecheck e lint limpos. No app real (fonte, perfil isolado),
+Reconectar clicado no meio da coleta concluiu uma rodada nova em ~30 s.
+Não validado: a consulta real do Claude travando de verdade (não há como
+provocar sob demanda) e o app empacotado.
+
+Achado à parte (task própria): o selo de plano do Codex mostra FREE numa conta
+Plus, porque `agent-usage-local-probes.cjs:46` prefere o `plan_type` dos
+limites (`free`) ao plano da conta (`chatgpt_plan_type` = `plus`).
