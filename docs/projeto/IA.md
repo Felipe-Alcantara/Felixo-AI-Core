@@ -5878,3 +5878,51 @@ Na prova pelo app, do segundo atalho ao texto no terminal, o `base` levou 9,7 s,
 - **API na nuvem com chave real**, por decisão da pessoa.
 - **Windows e macOS.** Ficaram em tasks próprias.
 - **Diálogo de permissão do macOS empacotado.**
+
+## 2026-10-05 — CLI: diagnóstico na interface conferido com CLIs quebradas de verdade, e dois erros de causa no Linux/macOS
+
+Registro de Claude - Tasks do AI Core, task "Felixo AI Core/CLI — mostrar o diagnóstico de CLI na UI (causa, próxima ação e copiar para suporte)" (Notion 3e291f95-497e-8109-8851-e4ff2193c4db). Início às 10:52.
+
+### Estado encontrado
+
+Os passos 1 a 4 da task já estavam no main desde o PR #94 (`d0496cd6`, 26/09):
+
+- `cli-diagnosis.ts`, com rótulo por causa e `shouldOfferCliInstall`;
+- `CliDiagnosisView.tsx`, com a linha por CLI e o "Copiar texto para o suporte";
+- o botão "Diagnosticar CLIs" no gerenciador de modelos, e os testes.
+
+Faltava a conferência com CLIs quebradas de verdade.
+
+### Medido (Linux, execução real)
+
+Uma pasta em `FELIXO_CLI_PATHS` com CLIs falsas, PATH sem o nvm e HOME falso. Cada CLI falsa reproduz uma causa:
+
+- `claude` sem bit de execução;
+- `codex` que sai com código 3;
+- `gemini` com `#!` para um Node que não existe.
+
+| CLI falsa | Antes | Depois da correção |
+| --- | --- | --- |
+| `claude` (sem bit de execução) | `permission`, sem instalar (certo) | igual |
+| `codex` (sai com código 3) | `not-installed` e `recommendInstall: true` ("Não encontrei Codex CLI no PATH") | `exec-error`, sem instalar |
+| `gemini` (Node do `#!` não existe) | `not-installed`, oferecendo instalar | `shim`, sem instalar |
+
+**Causa.** No POSIX, `detectCli` roda o comando pelo nome e só resolve o caminho no Windows. Por isso `attempts[].resolvedPath` saía `null`: o `exec-error` não achava `found` e caía em "não instalada". O ENOENT de um interpretador ausente era lido como "arquivo não existe".
+
+**Correção** (`cli-detector.cjs`). Na falha, o caminho é resolvido no PATH só para o registro. ENOENT com o arquivo presente vira `shim-broken`. O Windows não muda, porque lá o caminho já era resolvido antes.
+
+**Testes.** Três testes com execução real em `cli-diagnostics.test.cjs`: falharam antes da correção e passaram depois.
+
+**Na tela** (instância isolada, `felixo devtools`, Xvfb e `flock`). Pelo "Configurar modelos" e pelo "Diagnosticar CLIs" do gerenciador:
+
+- "Instalada, mas falhou ao responder";
+- "Bloqueada por permissão";
+- "Instalada, mas o atalho não executa".
+
+Nenhuma das três mostrou botão "Instalar". O "Copiar texto para o suporte" copiou 1.699 caracteres, com causa, motivo técnico e próxima ação de cada CLI.
+
+### Limitações
+
+- O texto de suporte esconde o usuário só em `/home/<u>/`, `/Users/<u>/`, `C:\Users\<u>\` e no HOME real. Um caminho fora desses padrões que tenha o nome dentro de outro diretório mantém o nome. Isso só apareceu porque o teste usou um HOME falso.
+- O Windows real (shim `.cmd` quebrado e CLI gerenciada fora do PATH) não foi rodado: não há máquina Windows nesta sessão.
+- O caso "instalação gerenciada fora do PATH" não foi montado aqui.
