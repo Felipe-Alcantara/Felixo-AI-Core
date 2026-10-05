@@ -201,14 +201,25 @@ async function detectCli(cliInfo, env, options = {}) {
       result.attempts = attempts
       return result
     } catch (error) {
+      // Fora do Windows o comando roda pelo nome, sem resolver o caminho
+      // antes. Na falha, o caminho é procurado só para o registro: sem ele o
+      // diagnóstico não sabe que a CLI existe no disco e oferece instalar
+      // outra cópia.
+      const located = commandPath || resolveLocatedPath(resolvePath, command, env, adapter.name)
+      let reason = classifyExecutionFailure(error)
+      // ENOENT com o arquivo lá: quem não existe é o interpretador da linha
+      // `#!` (o Node de um nvm removido, por exemplo) — atalho quebrado.
+      if (reason === FAILURE_REASONS.NOT_FOUND && located) {
+        reason = FAILURE_REASONS.SHIM_BROKEN
+      }
       // Só o código de motivo é guardado: a mensagem crua do erro pode trazer
       // saída da CLI, e este registro é copiado para suporte.
       attempts.push({
         command,
-        resolvedPath: commandPath,
+        resolvedPath: located,
         viaShell: useShell,
         outcome: 'failed',
-        reason: classifyExecutionFailure(error),
+        reason,
       })
       continue
     }
@@ -374,6 +385,15 @@ function parseVersionFromOutput(output) {
  * @param {(candidate: string) => boolean} [options.exists]
  * @returns {string | null}
  */
+/** Caminho do comando no PATH, sem lançar: o registro de falha não pode falhar. */
+function resolveLocatedPath(resolvePath, command, env, platformName) {
+  try {
+    return resolvePath(command, env, { platform: platformName }) || null
+  } catch {
+    return null
+  }
+}
+
 function resolveCommandPath(command, env, options = {}) {
   const adapter = options.platform
     ? platform.getAdapter(options.platform)

@@ -382,3 +382,63 @@ describe('diagnoseClis / formatDiagnosisForSupport', () => {
     assert.equal(text.includes('Ana Silva'), false)
   })
 })
+
+// Execução real (sem dublê de execFile): no Linux/macOS o detector não
+// resolvia o caminho antes de executar, e o diagnóstico tratava uma CLI que
+// existe no disco como "não instalada" — oferecendo instalar outra cópia.
+describe('diagnóstico com CLIs quebradas de verdade (POSIX)', { skip: process.platform === 'win32' }, () => {
+  const fs = require('node:fs')
+  const os = require('node:os')
+  const path = require('node:path')
+
+  function pastaComCli(nome, conteudo, modo = 0o755) {
+    const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-cli-diag-'))
+    fs.writeFileSync(path.join(pasta, nome), conteudo, { mode: modo })
+    return pasta
+  }
+
+  async function diagnosticar(pasta) {
+    const env = { PATH: pasta, HOME: pasta }
+    const detection = await detectCli(CLAUDE, env)
+    return { detection, diagnosis: buildCliDiagnosis({ cli: CATALOG_CLAUDE, detection, context: { homeDir: pasta } }) }
+  }
+
+  it('atalho cujo interpretador sumiu (Node do nvm removido) é atalho quebrado, não "instalar"', async () => {
+    const pasta = pastaComCli('claude', '#!/opt/node-que-nao-existe/bin/node\nconsole.log(1)\n')
+    try {
+      const { detection, diagnosis } = await diagnosticar(pasta)
+
+      assert.equal(detection.reason, FAILURE_REASONS.SHIM_BROKEN)
+      assert.equal(diagnosis.cause, DIAGNOSIS_CAUSES.SHIM)
+      assert.equal(diagnosis.recommendInstall, false)
+    } finally {
+      fs.rmSync(pasta, { recursive: true, force: true })
+    }
+  })
+
+  it('CLI que existe e sai com erro mostra o erro, não "não encontrei no PATH"', async () => {
+    const pasta = pastaComCli('claude', '#!/bin/sh\necho "falhou ao iniciar" >&2\nexit 3\n')
+    try {
+      const { detection, diagnosis } = await diagnosticar(pasta)
+
+      assert.equal(detection.reason, FAILURE_REASONS.EXIT_ERROR)
+      assert.equal(diagnosis.cause, DIAGNOSIS_CAUSES.EXEC_ERROR)
+      assert.equal(diagnosis.recommendInstall, false)
+      assert.match(diagnosis.nextAction.text, /foi encontrada/)
+    } finally {
+      fs.rmSync(pasta, { recursive: true, force: true })
+    }
+  })
+
+  it('sem arquivo nenhum continua "não instalada", oferecendo instalar', async () => {
+    const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-cli-diag-'))
+    try {
+      const { diagnosis } = await diagnosticar(pasta)
+
+      assert.equal(diagnosis.cause, DIAGNOSIS_CAUSES.NOT_INSTALLED)
+      assert.equal(diagnosis.recommendInstall, true)
+    } finally {
+      fs.rmSync(pasta, { recursive: true, force: true })
+    }
+  })
+})
