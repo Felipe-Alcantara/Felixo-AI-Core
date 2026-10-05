@@ -1018,6 +1018,8 @@ declare global {
       agentUsage?: {
         list: () => Promise<AgentUsageDashboard>
         refresh: () => Promise<AgentUsageDashboard>
+        /** Abandona a rodada travada (encerra a consulta) e refaz do zero. */
+        reconnect: () => Promise<AgentUsageDashboard>
         addAccount: (params: {
           providerId: string
           label: string

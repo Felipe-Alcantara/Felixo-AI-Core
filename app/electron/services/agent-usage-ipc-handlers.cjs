@@ -37,6 +37,16 @@ function registerAgentUsageIpcHandlers({
     }
   })
 
+  // Abandona a rodada em andamento (encerra a consulta travada) e refaz do
+  // zero: a saída que antes exigia reiniciar o app.
+  ipcMain.handle('agent-usage:reconnect', async () => {
+    try {
+      return await service.reconnect()
+    } catch (error) {
+      return toErrorResult(error, 'Não foi possível reconectar o monitor de uso.')
+    }
+  })
+
   ipcMain.handle('agent-usage:add-account', async (_event, params = {}) => {
     try {
       return await service.addAccount({

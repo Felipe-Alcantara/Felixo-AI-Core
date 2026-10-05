@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import { ExternalLink, Gauge, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { ExternalLink, Gauge, PlugZap, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { CanvasPanel } from './CanvasPanel'
 import { AccountChainSection } from './AccountChainSection'
 import { AccountSwitchHistory } from './AccountSwitchHistory'
@@ -19,6 +19,7 @@ import {
   formatAgentUsageReset,
   formatAgentUsageStatus,
   getAccountStatus,
+  getAgentUsageLastFailureNotice,
   getAgentUsageMeasuredAt,
   getAgentUsagePlan,
   getLastKnownAgentUsage,
@@ -101,6 +102,9 @@ export function AgentUsagePanel({
   const [statusline, setStatusline] = useState<ClaudeStatuslineState | null>(null)
   const [liveAt, setLiveAt] = useState<Date | null>(null)
   const mounted = useRef(true)
+  // Só a resposta do pedido mais recente vale: a rodada abandonada pelo
+  // Reconectar ainda responde depois, e não pode sobrescrever a nova.
+  const latestRequest = useRef(0)
 
   useEffect(() => {
     mounted.current = true
@@ -109,7 +113,9 @@ export function AgentUsagePanel({
     }
   }, [])
 
-  const load = useCallback(async (refreshNow: boolean) => {
+  const load = useCallback(async (mode: boolean | 'reconnect') => {
+    const refreshNow = mode !== false
+    const request = ++latestRequest.current
     const api = window.felixo?.agentUsage
     if (!api) {
       setLoading(false)
@@ -121,8 +127,9 @@ export function AgentUsagePanel({
     setStatusMessage(null)
 
     try {
-      const result = refreshNow ? await api.refresh() : await api.list()
-      if (!mounted.current) {
+      const result =
+        mode === 'reconnect' ? await api.reconnect() : refreshNow ? await api.refresh() : await api.list()
+      if (!mounted.current || request !== latestRequest.current) {
         return
       }
 
@@ -132,15 +139,19 @@ export function AgentUsagePanel({
       }
 
       setDashboard(result)
-      if (refreshNow) {
+      // Rodada que estourou o teto: o painel volta com o que já sabia, e o
+      // motivo fica escrito em vez de o botão girar para sempre.
+      if (result.refreshError) {
+        setStatusMessage(result.refreshError)
+      } else if (refreshNow) {
         setLiveAt(new Date())
       }
     } catch {
-      if (mounted.current) {
+      if (mounted.current && request === latestRequest.current) {
         setStatusMessage('Não foi possível falar com o processo principal.')
       }
     } finally {
-      if (mounted.current) {
+      if (mounted.current && request === latestRequest.current) {
         setLoading(false)
       }
     }
@@ -383,6 +394,18 @@ export function AgentUsagePanel({
             Atualizar
           </button>
 
+          {/* Habilitado mesmo carregando: é exatamente quando a rodada trava
+              que ele serve. Encerra a consulta em andamento e refaz do zero. */}
+          <button
+            type="button"
+            onClick={() => void load('reconnect')}
+            title="Encerra a consulta em andamento e consulta de novo, sem reiniciar o app"
+            className="felixo-btn flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-zinc-400 ring-1 ring-white/10 hover:bg-zinc-800 hover:text-zinc-200"
+          >
+            <PlugZap size={12} aria-hidden="true" />
+            Reconectar
+          </button>
+
           {liveAt && (
             <span
               title={`Última atualização ao vivo às ${liveAt.toLocaleTimeString('pt-BR')}`}
@@ -609,6 +632,7 @@ function AccountRow({
       : null
   const plan = getAgentUsagePlan(sample)
   const measuredAt = getAgentUsageMeasuredAt(sample)
+  const lastFailure = getAgentUsageLastFailureNotice(account, sample)
 
   return (
     <div className="rounded-md border border-white/6 bg-black/20 p-2">
@@ -647,6 +671,18 @@ function AccountRow({
       ) : (
         <p className="mt-1.5 text-[11px] leading-snug text-zinc-500">
           {account.latestSample?.errorMessage ?? limitation}
+        </p>
+      )}
+
+      {/* Com o último valor conhecido na tela, a falha da rodada atual sumiria
+          atrás dele: o motivo fica escrito no card, com o horário. */}
+      {lastFailure && (
+        <p
+          role="status"
+          data-felixo-agent-usage-last-failure
+          className="mt-2 text-[10px] leading-snug text-(--color-warning)"
+        >
+          Última consulta falhou ({formatAgentUsageDate(lastFailure.at)}): {lastFailure.message}
         </p>
       )}
 

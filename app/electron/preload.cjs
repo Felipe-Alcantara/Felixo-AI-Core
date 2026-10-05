@@ -396,6 +396,7 @@ contextBridge.exposeInMainWorld('felixo', {
   agentUsage: {
     list: () => ipcRenderer.invoke('agent-usage:list'),
     refresh: () => ipcRenderer.invoke('agent-usage:refresh'),
+    reconnect: () => ipcRenderer.invoke('agent-usage:reconnect'),
     addAccount: (params) => ipcRenderer.invoke('agent-usage:add-account', params),
     removeAccount: (accountId) =>
       ipcRenderer.invoke('agent-usage:remove-account', accountId),

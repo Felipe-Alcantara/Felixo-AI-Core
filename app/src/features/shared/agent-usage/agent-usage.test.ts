@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  getAgentUsageLastFailureNotice,
   AGENT_USAGE_STALE_AFTER_MS,
   agentUsagePercent,
   deriveDisplayStatus,
@@ -362,3 +363,35 @@ function metric(
     ...values,
   }
 }
+
+describe('aviso da última falha no card da conta', () => {
+  const amostra = (status: AgentUsageSample['status'], errorMessage: string | null, comNumero: boolean) =>
+    ({
+      id: `${status}-${String(comNumero)}`,
+      status,
+      errorMessage,
+      collectedAt: '2026-10-05T08:00:00.000Z',
+      metrics: comNumero
+        ? [{ key: 'rate_limits.seven_day', label: 'Janela de 7 dias', used: 40, limit: 100, remaining: 60, unit: '%', precision: 'percentage', resetAt: null }]
+        : [],
+    }) as unknown as AgentUsageSample
+
+  it('mostra o motivo quando a rodada falhou e o card exibe o último valor conhecido', () => {
+    const falha = amostra('error', 'Claude Code CLI: A consulta não respondeu em 90 s.', false)
+    const antigo = amostra('current', null, true)
+    expect(getAgentUsageLastFailureNotice({ latestSample: falha }, antigo)).toEqual({
+      message: 'Claude Code CLI: A consulta não respondeu em 90 s.',
+      at: '2026-10-05T08:00:00.000Z',
+    })
+  })
+
+  it('sem número na tela não há aviso a mais: o próprio card já mostra o erro', () => {
+    const falha = amostra('error', 'falhou', false)
+    expect(getAgentUsageLastFailureNotice({ latestSample: falha }, falha)).toBeNull()
+  })
+
+  it('rodada atual sem erro não gera aviso', () => {
+    const atual = amostra('current', null, true)
+    expect(getAgentUsageLastFailureNotice({ latestSample: atual }, atual)).toBeNull()
+  })
+})

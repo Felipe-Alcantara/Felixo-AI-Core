@@ -100,6 +100,8 @@ export type AgentUsageDashboard = {
   accounts?: AgentUsageAccount[]
   refreshedAt?: string | null
   message?: string
+  /** A rodada estourou o teto: o painel volta com o que já sabia e o motivo. */
+  refreshError?: string
 }
 
 export type AgentUsageMutationResult = AgentUsageDashboard & {
@@ -467,4 +469,23 @@ export type ClaudeStatuslineState = {
   settingsReadable: boolean
   conflictingStatusLine: boolean
   message?: string
+}
+
+/**
+ * Aviso da última falha de uma conta quando o card mostra um valor antigo.
+ *
+ * Com a consulta atual em erro, o card cai para o último valor conhecido — e
+ * a falha sumia atrás dele: quem olhava não sabia que o número era velho nem
+ * por quê (task "reconectar o monitor quando o Claude dessincroniza"). Sem
+ * valor na tela, o próprio card já mostra a mensagem de erro; aí não há aviso
+ * a mais.
+ */
+export function getAgentUsageLastFailureNotice(
+  account: Pick<AgentUsageAccount, 'latestSample'>,
+  shownSample: AgentUsageSample | null,
+): { message: string; at: string } | null {
+  const latest = account.latestSample
+  if (!shownSample?.metrics.length) return null
+  if (!latest || latest.status !== 'error' || !latest.errorMessage) return null
+  return { message: latest.errorMessage, at: latest.collectedAt }
 }
