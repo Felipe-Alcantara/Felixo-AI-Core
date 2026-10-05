@@ -1,0 +1,34 @@
+{
+  "capturedAt": "2026-10-05",
+  "cols": 100,
+  "url": "https://example.com/felixo/teste-de-link-longo/segmento01/segmento02/segmento03/segmento04/segmento05/segmento06/segmento07/segmento08/segmento09/segmento10/segmento11/segmento12/segmento13/segmento14/segmento15/segmento16/segmento17/segmento18/segmento19/segmento20/segmento21/segmento22/fim?origem=agente&id=12345#ancora",
+  "note": "Linhas reais do buffer do xterm (headless), Windows/ConPTY, 100 colunas: Claude Code 2.1.285 e Codex 0.150.1 respondendo com a URL. Espaços à direita removidos, como translateToString(true).",
+  "rows": {
+    "claudeAnswer": [
+      "● https://example.com/felixo/teste-de-link-longo/segmento01/segmento02/segmento03/segmento04/segment",
+      "  o05/segmento06/segmento07/segmento08/segmento09/segmento10/segmento11/segmento12/segmento13/segmen",
+      "  to14/segmento15/segmento16/segmento17/segmento18/segmento19/segmento20/segmento21/segmento22/fim?o",
+      "  rigem=agente&id=12345#ancora"
+    ],
+    "claudePromptEcho": [
+      "❯ Responda apenas com esta URL, exatamente, sem formatação e sem mais nada:",
+      "  https://example.com/felixo/teste-de-link-longo/segmento01/segmento02/segmento03/segmento04/segmen",
+      "  to05/segmento06/segmento07/segmento08/segmento09/segmento10/segmento11/segmento12/segmento13/segm",
+      "  ento14/segmento15/segmento16/segmento17/segmento18/segmento19/segmento20/segmento21/segmento22/fi",
+      "  m?origem=agente&id=12345#ancora"
+    ],
+    "codexAnswer": [
+      "• https://example.com/felixo/teste-de-link-longo/segmento01/segmento02/segmento03/segmento04/segment",
+      "o05/segmento06/segmento07/segmento08/segmento09/segmento10/segmento11/segmento12/segmento13/segmento",
+      "14/segmento15/segmento16/segmento17/segmento18/segmento19/segmento20/segmento21/segmento22/fim?orige",
+      "m=agente&id=12345#ancora"
+    ],
+    "codexPromptEcho": [
+      "› Responda apenas com esta URL, exatamente, sem formatação e sem mais nada:",
+      "  https://example.com/felixo/teste-de-link-longo/segmento01/segmento02/segmento03/segmento04/segmen",
+      "  to05/segmento06/segmento07/segmento08/segmento09/segmento10/segmento11/segmento12/segmento13/segm",
+      "  ento14/segmento15/segmento16/segmento17/segmento18/segmento19/segmento20/segmento21/segmento22/fi",
+      "  m?origem=agente&id=12345#ancora"
+    ]
+  }
+}

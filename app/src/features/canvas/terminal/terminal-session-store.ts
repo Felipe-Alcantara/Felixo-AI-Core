@@ -1,6 +1,7 @@
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
+import { findSpanningUrlLinks } from './terminal-spanning-url-links'
 import {
   describeTerminalLinkHover,
   isTerminalLinkDragGesture,
@@ -697,6 +698,38 @@ export class TerminalSessionStore {
     // No máximo uma vez por quadro, depois do parse: a Leitura relê a tela.
     // O `dispose` do terminal solta este ouvinte junto.
     terminal.onWriteParsed(() => this.notifyOutput(id))
+    // Antes do WebLinksAddon de propósito: no xterm, o primeiro provedor que
+    // acha link na posição vence. Este só responde por URL que a TUI de um
+    // agente quebrou em várias linhas com recuo (ver
+    // `terminal-spanning-url-links.ts`); onde ele não acha nada, o addon segue
+    // valendo. Mesmo gesto, mesma dica e mesmo menu de destino.
+    terminal.registerLinkProvider({
+      provideLinks: (bufferLineNumber, callback) => {
+        const buffer = terminal.buffer.active
+        const links = findSpanningUrlLinks(
+          {
+            cols: terminal.cols,
+            length: buffer.length,
+            row: (index) => {
+              const line = buffer.getLine(index)
+              return line ? { text: line.translateToString(true) } : null
+            },
+          },
+          bufferLineNumber - 1,
+        )
+        callback(
+          links.length === 0
+            ? undefined
+            : links.map((link) => ({
+                range: link.range,
+                text: link.url,
+                activate: (event: MouseEvent, text: string) => linkEvents.activate(event, text),
+                hover: (event: MouseEvent, text: string) => linkEvents.hover(event, text),
+                leave: () => linkEvents.leave(),
+              })),
+        )
+      },
+    })
     terminal.loadAddon(
       new WebLinksAddon(linkEvents.activate, { hover: linkEvents.hover, leave: linkEvents.leave }),
     )
