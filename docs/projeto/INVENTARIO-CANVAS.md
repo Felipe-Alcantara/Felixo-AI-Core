@@ -30,7 +30,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 ## Números
 
 - **Elementos:** 94 (8 blocos, 16 ferramentas, 70 outras superfícies)
-- **Controles:** 350, dos quais 54 com teste específico
+- **Controles:** 351, dos quais 55 com teste específico
 - **Elementos sem nenhum teste:** 4
 - **Lacunas:** 273 (alto 10, médio 146, baixo 117), em 77 tasks
 
@@ -1619,7 +1619,8 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Controle | Gatilho | Efeito | Falha conhecida | Teste |
 | --- | --- | --- | --- | --- |
 | `role="tab"` (button) | clique ou setas/Home/End no tablist (rovingIndex) | Troca a aba entre Uso agora, Cadeia e Trocas (só o tabpanel ativo monta); a aba inicial pode vir pedida por consumeRequestedAgentUsageTab | sem falha própria | `scripts/canvas-smoke-contas.cjs` → `irParaAba` |
-| `Atualizar` (button) | clique | agent-usage:refresh: abre uma sessão PTY descartável de /status por conta e perfil, regrava as amostras e acende "ao vivo" (desabilitado: loading) | ok: false ou exceção viram statusMessage âmbar; o painel continua com o último valor conhecido, marcado como antigo pelo selo | — |
+| `Atualizar` (button) | clique | agent-usage:refresh: abre uma sessão PTY descartável de /status por conta e perfil, regrava as amostras e acende "ao vivo" (desabilitado: loading) | ok: false ou exceção viram statusMessage âmbar; o painel continua com o último valor conhecido, marcado como antigo pelo selo; a rodada tem teto (REFRESH_DEADLINE_MS, 90 s): estourar cancela a consulta e volta com refreshError em vez de girar para sempre | — |
+| `Reconectar` (button) | clique | agent-usage:reconnect: abandona a rodada em andamento (aborta as consultas dela, que encerram o PTY do Claude e o app-server do Codex) e refaz do zero; só a resposta do pedido mais recente é aplicada no painel | ok: false ou exceção viram statusMessage âmbar, como no Atualizar; nunca desabilitado — é durante uma coleta presa que ele serve | `electron/services/agent-usage-service.test.cjs` |
 | `Intervalo de reconsulta` (select) | clique | Liga um setInterval de 5/15/30 min que chama agent-usage:refresh só quando shouldRunScheduledAgentUsageRefresh deixa (janela visível e Modo Performance desligado); 0 = só ao abrir/atualizar | sem falha própria; a escolha não persiste e volta a 0 ao reabrir o painel | — |
 | `Ligar coleta do rate limit` (button) | clique | agent-usage:enable-claude-statusline (ou disable, quando já instalada): grava ou remove a statusLine do app em ~/.claude/settings.json, com backup da anterior, e recarrega o painel (desabilitado: busy; só existe no cartão do Claude, com settings legível e sem statusLine alheia) | erro engolido: a mensagem de falha do main nunca aparece; se o handler lançar, o resultado de erro vira o estado e o botão some atrás de "Não foi possível ler ~/.claude/settings.json" (AgentUsagePanel.tsx:174-188) | — |
 | `Remover a conta` (button) | clique e confirmação em window.confirm | agent-usage:remove-account apaga a conta e o histórico local de uso do painel (o perfil de login dos terminais não muda) e redesenha com o dashboard devolvido | "Não foi possível remover a conta do painel." em faixa âmbar; cancelar o confirm não chama nada | — |

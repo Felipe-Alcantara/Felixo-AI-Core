@@ -205,8 +205,15 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
         locator: 'Atualizar',
         kind: 'button',
         effect: 'agent-usage:refresh: abre uma sessão PTY descartável de /status por conta e perfil, regrava as amostras e acende "ao vivo"',
-        failure: 'ok: false ou exceção viram statusMessage âmbar; o painel continua com o último valor conhecido, marcado como antigo pelo selo',
+        failure: 'ok: false ou exceção viram statusMessage âmbar; o painel continua com o último valor conhecido, marcado como antigo pelo selo; a rodada tem teto (REFRESH_DEADLINE_MS, 90 s): estourar cancela a consulta e volta com refreshError em vez de girar para sempre',
         disabledWhen: 'loading',
+      },
+      {
+        locator: 'Reconectar',
+        kind: 'button',
+        effect: 'agent-usage:reconnect: abandona a rodada em andamento (aborta as consultas dela, que encerram o PTY do Claude e o app-server do Codex) e refaz do zero; só a resposta do pedido mais recente é aplicada no painel',
+        failure: 'ok: false ou exceção viram statusMessage âmbar, como no Atualizar; nunca desabilitado — é durante uma coleta presa que ele serve',
+        test: { file: 'electron/services/agent-usage-service.test.cjs' },
       },
       {
         locator: 'Intervalo de reconsulta',
