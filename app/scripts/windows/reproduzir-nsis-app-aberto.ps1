@@ -1,0 +1,386 @@
+<#
+.SYNOPSIS
+  Reproduz o instalador NSIS silencioso que não avança com o Felixo aberto e
+  deixa processo elevado (task 3e291f95497e81058292f38d63a3034c).
+
+.DESCRIPTION
+  Só roda em runner descartável (GITHUB_ACTIONS/CI): cada cenário instala o
+  Felixo AI Core, abre o app, roda um segundo instalador e depois mata e
+  desinstala tudo. Numa máquina com trabalho aberto isso fecharia o app — é
+  exatamente a hipótese investigada.
+
+  Para cada cenário mede: se o instalador terminou dentro do limite, código de
+  saída, tempo, CPU dos processos presos nos últimos 20 s, texto das janelas
+  que eles mostram (MessageBox), arquivos no destino, registro e se o app
+  continuou aberto. Grava relatorio.json e uma captura de tela por cenário
+  preso em -Saida.
+#>
+[CmdletBinding()]
+param(
+  [Parameter(Mandatory)] [string]$Base,
+  [Parameter(Mandatory)] [string]$Novo,
+  [Parameter(Mandatory)] [string]$Saida,
+  [int]$LimiteSegundos = 180,
+  [string[]]$Cenarios = @()
+)
+
+$ErrorActionPreference = 'Stop'
+if ($env:GITHUB_ACTIONS -ne 'true' -and $env:CI -ne 'true') {
+  throw 'Recusado: este roteiro instala, abre, mata e desinstala o Felixo. Só roda em runner descartável (GITHUB_ACTIONS/CI).'
+}
+
+$Nome = 'Felixo AI Core'
+$Guid = '38f15219-ae73-5ead-9234-72a65f4ddfd3'
+$Raiz = 'C:\fx'
+New-Item -ItemType Directory -Force -Path $Saida, $Raiz | Out-Null
+# Usuário padrão do cenário G precisa ler os instaladores e escrever no destino.
+& icacls $Raiz /grant '*S-1-5-32-545:(OI)(CI)M' | Out-Null
+
+Add-Type -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using System.Text;
+
+public static class JanelasFelixo {
+  public delegate bool EnumProc(IntPtr h, IntPtr l);
+  [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc f, IntPtr l);
+  [DllImport("user32.dll")] public static extern bool EnumChildWindows(IntPtr p, EnumProc f, IntPtr l);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClassName(IntPtr h, StringBuilder s, int n);
+  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+  public static extern IntPtr SendMessageTimeout(IntPtr h, uint msg, IntPtr w, StringBuilder l, uint flags, uint timeout, out IntPtr result);
+  [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] public static extern uint GetLongPathName(string s, StringBuilder l, uint n);
+  [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] public static extern uint GetShortPathName(string s, StringBuilder l, uint n);
+
+  // WM_GETTEXT direto: GetWindowText não lê controles de outro processo.
+  static string Texto(IntPtr h) {
+    var sb = new StringBuilder(2048);
+    IntPtr r;
+    SendMessageTimeout(h, 0x000D, (IntPtr)sb.Capacity, sb, 0x0002, 1000, out r);
+    return sb.ToString();
+  }
+
+  public static string[] Listar(int[] pids) {
+    var alvo = new HashSet<uint>();
+    foreach (var p in pids) alvo.Add((uint)p);
+    var saida = new List<string>();
+    EnumWindows(delegate (IntPtr h, IntPtr l) {
+      uint pid;
+      GetWindowThreadProcessId(h, out pid);
+      if (!alvo.Contains(pid)) return true;
+      var classe = new StringBuilder(256);
+      GetClassName(h, classe, 256);
+      var filhos = new List<string>();
+      EnumChildWindows(h, delegate (IntPtr hc, IntPtr lc) {
+        var t = Texto(hc);
+        if (t.Length > 0) filhos.Add(t.Replace("\r", " ").Replace("\n", " "));
+        return true;
+      }, IntPtr.Zero);
+      saida.Add(String.Format("pid={0} classe={1} visivel={2} titulo=\"{3}\" textos=\"{4}\"",
+        pid, classe, IsWindowVisible(h), Texto(h), String.Join(" | ", filhos)));
+      return true;
+    }, IntPtr.Zero);
+    return saida.ToArray();
+  }
+
+  public static string Longo(string p) {
+    var sb = new StringBuilder(1024);
+    return GetLongPathName(p, sb, 1024) > 0 ? sb.ToString() : p;
+  }
+
+  public static string Curto(string p) {
+    var sb = new StringBuilder(1024);
+    return GetShortPathName(p, sb, 1024) > 0 ? sb.ToString() : p;
+  }
+}
+'@
+
+$NomesDeInstalador = @((Split-Path $Base -Leaf), (Split-Path $Novo -Leaf), 'old-uninstaller.exe', "Uninstall $Nome.exe") |
+  Select-Object -Unique
+
+function Processos-Do-App { @(Get-CimInstance Win32_Process -Filter "Name='$Nome.exe'") }
+
+function Pids-Do-Instalador([int]$raiz) {
+  $todos = @(Get-CimInstance Win32_Process)
+  $pids = [System.Collections.Generic.HashSet[int]]::new()
+  $fila = [System.Collections.Generic.Queue[int]]::new()
+  $fila.Enqueue($raiz)
+  while ($fila.Count -gt 0) {
+    $atual = $fila.Dequeue()
+    if (-not $pids.Add($atual)) { continue }
+    foreach ($filho in $todos | Where-Object { $_.ParentProcessId -eq $atual }) { $fila.Enqueue([int]$filho.ProcessId) }
+  }
+  # Instância elevada do UAC ou desinstalador antigo que sobreviveu ao pai.
+  foreach ($p in $todos | Where-Object { $NomesDeInstalador -contains $_.Name }) { [void]$pids.Add([int]$p.ProcessId) }
+  @($todos | Where-Object { $pids.Contains([int]$_.ProcessId) } | ForEach-Object { [int]$_.ProcessId })
+}
+
+function Cpu-De([int[]]$pids) {
+  $total = 0.0
+  foreach ($p in Get-CimInstance Win32_Process | Where-Object { $pids -contains [int]$_.ProcessId }) {
+    $total += ([double]$p.KernelModeTime + [double]$p.UserModeTime) / 1e7
+  }
+  [math]::Round($total, 2)
+}
+
+function Parar-Pids([int[]]$pids) {
+  $falhas = @()
+  foreach ($id in $pids) {
+    try { Stop-Process -Id $id -Force -ErrorAction Stop } catch { $falhas += "pid $id`: $($_.Exception.Message)" }
+  }
+  $falhas
+}
+
+function Contar-Arquivos([string]$pasta) {
+  if (-not (Test-Path -LiteralPath $pasta)) { return 0 }
+  @(Get-ChildItem -LiteralPath $pasta -Recurse -File -Force -ErrorAction SilentlyContinue).Count
+}
+
+function Capturar-Tela([string]$arquivo) {
+  try {
+    Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+    $b = [System.Windows.Forms.SystemInformation]::VirtualScreen
+    $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+    $g = [System.Drawing.Graphics]::FromImage($bmp)
+    $g.CopyFromScreen($b.Left, $b.Top, 0, 0, $bmp.Size)
+    $bmp.Save($arquivo, [System.Drawing.Imaging.ImageFormat]::Png)
+    $g.Dispose(); $bmp.Dispose()
+    Split-Path $arquivo -Leaf
+  } catch { "sem captura: $($_.Exception.Message)" }
+}
+
+function Estado-Do-Registro {
+  $estado = [ordered]@{}
+  foreach ($raiz in 'HKLM:', 'HKCU:') {
+    $local = (Get-ItemProperty "$raiz\Software\$Guid" -ErrorAction SilentlyContinue).InstallLocation
+    $des = Get-ItemProperty "$raiz\Software\Microsoft\Windows\CurrentVersion\Uninstall\$Guid" -ErrorAction SilentlyContinue
+    $estado[$raiz.TrimEnd(':')] = if ($local -or $des) { [ordered]@{ installLocation = $local; versao = $des.DisplayVersion } } else { $null }
+  }
+  $estado
+}
+
+function Instalar-Base([string]$modo, [string]$pastaD) {
+  $p = Start-Process -FilePath $Base -ArgumentList "/S /$modo /D=$pastaD" -PassThru
+  $null = $p.Handle
+  if (-not $p.WaitForExit(300000)) { Parar-Pids (Pids-Do-Instalador $p.Id) | Out-Null; throw 'a instalação base passou de 300 s' }
+  if ($p.ExitCode -ne 0) { throw "a instalação base saiu com $($p.ExitCode)" }
+  $raiz = if ($modo -eq 'allusers') { 'HKLM:' } else { 'HKCU:' }
+  $local = (Get-ItemProperty "$raiz\Software\$Guid" -ErrorAction SilentlyContinue).InstallLocation
+  if (-not $local) { throw "a instalação base não gravou InstallLocation em $raiz" }
+  $exe = Join-Path ([JanelasFelixo]::Longo($local)) "$Nome.exe"
+  if (-not (Test-Path -LiteralPath $exe)) { throw "exe da instalação base não encontrado: $exe" }
+  Write-Host "   base: /$modo em '$local' (exe por caminho longo: $exe)"
+  [ordered]@{ modo = $modo; installLocation = $local; exe = $exe }
+}
+
+function Abrir-App([string]$exe) {
+  $perfil = Join-Path $env:RUNNER_TEMP ('perfil-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
+  New-Item -ItemType Directory -Force -Path $perfil | Out-Null
+  $env:FELIXO_USER_DATA_DIR = $perfil
+  $null = Start-Process -FilePath $exe -PassThru
+  Start-Sleep -Seconds 20
+  $vivos = Processos-Do-App
+  if ($vivos.Count -eq 0) { throw 'o app não ficou aberto' }
+  Write-Host "   app aberto: $($vivos.Count) processo(s) em $($vivos[0].ExecutablePath)"
+  [ordered]@{ processos = $vivos.Count; caminho = $vivos[0].ExecutablePath }
+}
+
+function Medir([string]$instalador, [string]$argumentos, [string]$destino, [int]$limite = $LimiteSegundos, [pscredential]$credencial = $null) {
+  $sp = @{ FilePath = $instalador; PassThru = $true }
+  if ($argumentos) { $sp.ArgumentList = $argumentos }
+  $temp = $env:TEMP
+  if ($credencial) {
+    # O processo de outro usuário herda este ambiente; o %TEMP% do runner não é dele.
+    $tempPadrao = Join-Path $Raiz 'temp-padrao'
+    New-Item -ItemType Directory -Force -Path $tempPadrao | Out-Null
+    $env:TEMP = $tempPadrao; $env:TMP = $tempPadrao
+    $sp.Credential = $credencial
+    $sp.WorkingDirectory = $Raiz
+  }
+  $inicio = Get-Date
+  try { $p = Start-Process @sp } finally { $env:TEMP = $temp; $env:TMP = $temp }
+  $null = $p.Handle
+  $terminou = $p.WaitForExit($limite * 1000)
+  $m = [ordered]@{
+    argumentos = $argumentos
+    comoUsuarioPadrao = [bool]$credencial
+    terminou = $terminou
+    segundos = [math]::Round(((Get-Date) - $inicio).TotalSeconds, 1)
+  }
+  if ($terminou) {
+    $m.codigoDeSaida = $p.ExitCode
+    Start-Sleep -Seconds 3
+    $sobras = @(Get-CimInstance Win32_Process | Where-Object { $NomesDeInstalador -contains $_.Name })
+    $m.processosQueSobraram = @($sobras | ForEach-Object { "$($_.ProcessId) $($_.Name)" })
+    if ($sobras.Count -gt 0) {
+      $m.janelas = @([JanelasFelixo]::Listar([int[]]@($sobras | ForEach-Object { [int]$_.ProcessId })))
+      $m.falhasAoEncerrar = @(Parar-Pids @($sobras | ForEach-Object { [int]$_.ProcessId }))
+    }
+  } else {
+    $pids = Pids-Do-Instalador $p.Id
+    $cpu = Cpu-De $pids
+    Start-Sleep -Seconds 20
+    $pids = Pids-Do-Instalador $p.Id
+    $m.cpuNosUltimos20s = [math]::Round((Cpu-De $pids) - $cpu, 2)
+    $m.processosPresos = @(Get-CimInstance Win32_Process | Where-Object { $pids -contains [int]$_.ProcessId } |
+      ForEach-Object { "$($_.ProcessId) (pai $($_.ParentProcessId)) $($_.Name): $($_.CommandLine)" })
+    $m.janelas = @([JanelasFelixo]::Listar([int[]]$pids))
+    $m.captura = Capturar-Tela (Join-Path $Saida "$($script:CenarioAtual).png")
+    $m.falhasAoEncerrar = @(Parar-Pids $pids)
+  }
+  if ($destino) { $m.arquivosNoDestino = Contar-Arquivos $destino }
+  $m.appAindaAberto = (Processos-Do-App).Count
+  $m.registroDepois = Estado-Do-Registro
+  Write-Host ("   instalador: terminou={0} código={1} {2}s app-aberto={3} arquivos={4}" -f $m.terminou, $m.codigoDeSaida, $m.segundos, $m.appAindaAberto, $m.arquivosNoDestino)
+  foreach ($j in @($m.janelas)) { if ($j) { Write-Host "   janela: $j" } }
+  $m
+}
+
+function Limpar {
+  Processos-Do-App | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+  Get-CimInstance Win32_Process | Where-Object { $NomesDeInstalador -contains $_.Name } |
+    ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+  Start-Sleep -Seconds 2
+  foreach ($raiz in 'HKLM:', 'HKCU:') {
+    $des = Get-ItemProperty "$raiz\Software\Microsoft\Windows\CurrentVersion\Uninstall\$Guid" -ErrorAction SilentlyContinue
+    if ($des -and $des.UninstallString -match '^"([^"]+)"') {
+      $desinstalador = $Matches[1]
+      if (Test-Path -LiteralPath $desinstalador) {
+        $modo = if ($raiz -eq 'HKLM:') { '/allusers' } else { '/currentuser' }
+        $p = Start-Process -FilePath $desinstalador -ArgumentList "/S $modo" -PassThru
+        if (-not $p.WaitForExit(120000)) { Parar-Pids (Pids-Do-Instalador $p.Id) | Out-Null }
+      }
+    }
+    Remove-Item "$raiz\Software\$Guid", "$raiz\Software\Microsoft\Windows\CurrentVersion\Uninstall\$Guid" -Recurse -Force -ErrorAction SilentlyContinue
+  }
+  foreach ($pasta in @([Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('CommonDesktopDirectory'),
+      [Environment]::GetFolderPath('Programs'), [Environment]::GetFolderPath('CommonPrograms'))) {
+    if ($pasta) { Get-ChildItem -LiteralPath $pasta -Filter "$Nome*.lnk" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue }
+  }
+  Get-ChildItem -LiteralPath $Raiz -Directory -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -notin 'instaladores', 'temp-padrao' } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+  Get-ChildItem -LiteralPath $env:TEMP -Directory -Filter 'fx-*' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+$resultados = [System.Collections.Generic.List[object]]::new()
+function Cenario([string]$id, [string]$descricao, [scriptblock]$corpo) {
+  if ($Cenarios.Count -gt 0 -and $Cenarios -notcontains $id.Substring(0, 1)) { return }
+  $script:CenarioAtual = $id
+  Write-Host ''
+  Write-Host "=== $id — $descricao"
+  $r = [ordered]@{ id = $id; descricao = $descricao }
+  try { Limpar; & $corpo $r } catch { $r.erro = $_.Exception.Message; Write-Host "   ERRO: $($r.erro)" }
+  finally { try { Limpar } catch { $r.erroNaLimpeza = $_.Exception.Message } }
+  $resultados.Add($r)
+}
+
+# --- Ambiente -------------------------------------------------------------
+$politica = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
+$ambiente = [ordered]@{
+  usuario = [Environment]::UserName
+  elevado = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+  enableLUA = $politica.EnableLUA
+  consentPromptBehaviorAdmin = $politica.ConsentPromptBehaviorAdmin
+  consentPromptBehaviorUser = $politica.ConsentPromptBehaviorUser
+  temp = $env:TEMP
+  tempLongo = [JanelasFelixo]::Longo($env:TEMP)
+  base = [ordered]@{ arquivo = (Split-Path $Base -Leaf); versao = (Get-Item $Base).VersionInfo.ProductVersion }
+  novo = [ordered]@{ arquivo = (Split-Path $Novo -Leaf); versao = (Get-Item $Novo).VersionInfo.ProductVersion }
+  oitoPontoTres = ((& fsutil 8dot3name query C: 2>&1) -join ' ')
+}
+$env:FELIXO_DISABLE_AUTO_UPDATE = '1'
+$env:FELIXO_AUTO_INSTALL_CLIS = '0'
+Write-Host ($ambiente | ConvertTo-Json -Depth 4)
+
+# Pasta curta como a do release smoke de 02/09: %TEMP% vem em 8.3 (RUNNER~1),
+# e o exe aberto pelo atalho vem pelo caminho longo.
+$baseCurta = Join-Path ([JanelasFelixo]::Curto($env:TEMP)) 'fx-base'
+$ambiente.baseCurta = $baseCurta
+$baseLonga = Join-Path $Raiz 'base'
+$destinoNovo = Join-Path $Raiz 'novo'
+
+Cenario 'A-allusers-curto-app-aberto-com-D' 'como em 21/09: instalação para todos em pasta 8.3, app aberto, /S /D= para outra pasta' {
+  param($r)
+  $r.base = Instalar-Base 'allusers' $baseCurta
+  $r.app = Abrir-App $r.base.exe
+  $r.medicao = Medir $Novo "/S /D=$destinoNovo" $destinoNovo
+}
+
+Cenario 'B-allusers-curto-app-fechado-com-D' 'mesma base de A, app fechado' {
+  param($r)
+  $r.base = Instalar-Base 'allusers' $baseCurta
+  $r.medicao = Medir $Novo "/S /D=$destinoNovo" $destinoNovo
+}
+
+Cenario 'C-allusers-curto-app-aberto-sem-D' 'base de A, app aberto, /S por cima da mesma pasta' {
+  param($r)
+  $r.base = Instalar-Base 'allusers' $baseCurta
+  $r.app = Abrir-App $r.base.exe
+  $r.medicao = Medir $Novo '/S' ([JanelasFelixo]::Longo($r.base.installLocation))
+}
+
+Cenario 'D-allusers-longo-app-aberto-sem-D' 'instalação para todos em caminho longo, app aberto, /S' {
+  param($r)
+  $r.base = Instalar-Base 'allusers' $baseLonga
+  $r.app = Abrir-App $r.base.exe
+  $r.medicao = Medir $Novo '/S' $r.base.installLocation
+}
+
+Cenario 'E-usuario-longo-app-aberto-sem-D' 'instalação por usuário (perMachine:false), app aberto, /S' {
+  param($r)
+  $r.base = Instalar-Base 'currentuser' $baseLonga
+  $r.app = Abrir-App $r.base.exe
+  $r.medicao = Medir $Novo '/S' $r.base.installLocation
+}
+
+Cenario 'F-usuario-longo-app-aberto-com-D' 'instalação por usuário, app aberto, /S /D= para outra pasta' {
+  param($r)
+  $r.base = Instalar-Base 'currentuser' $baseLonga
+  $r.app = Abrir-App $r.base.exe
+  $r.medicao = Medir $Novo "/S /D=$destinoNovo" $destinoNovo
+}
+
+Cenario 'G-usuario-padrao-sobre-allusers' 'usuário sem admin roda /S /D= numa máquina com instalação para todos (pede elevação)' {
+  param($r)
+  $r.base = Instalar-Base 'allusers' $baseLonga
+  $nomeUsuario = 'felixo-padrao'
+  $bytes = [byte[]]::new(18)
+  [Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+  $senha = 'Fx!' + [Convert]::ToBase64String($bytes) + 'a1'
+  $computador = [ADSI]"WinNT://$env:COMPUTERNAME,computer"
+  try { [void]$computador.psbase.Invoke('Delete', 'User', $nomeUsuario) } catch { }
+  # ADSI em vez de `net user`: a senha não aparece em linha de comando.
+  $u = $computador.psbase.Children.Add($nomeUsuario, 'User')
+  [void]$u.psbase.Invoke('SetPassword', $senha)
+  $u.psbase.CommitChanges()
+  try {
+    $grupo = (New-Object Security.Principal.SecurityIdentifier 'S-1-5-32-545').Translate([Security.Principal.NTAccount]).Value.Split('\')[-1]
+    try { [void]([ADSI]"WinNT://$env:COMPUTERNAME/$grupo,group").psbase.Invoke('Add', "WinNT://$env:COMPUTERNAME/$nomeUsuario,user") } catch { }
+    $credencial = New-Object pscredential $nomeUsuario, (ConvertTo-SecureString $senha -AsPlainText -Force)
+    $destinoG = Join-Path $Raiz 'g'
+    New-Item -ItemType Directory -Force -Path $destinoG | Out-Null
+    $r.medicao = Medir $Novo "/S /D=$destinoG" $destinoG 120 $credencial
+  } finally {
+    $senha = $null
+    try { [void]$computador.psbase.Invoke('Delete', 'User', $nomeUsuario) } catch { }
+  }
+}
+
+Cenario 'H-usuario-longo-app-aberto-interativo' 'instalação por usuário, app aberto, sem /S (assistente)' {
+  param($r)
+  $r.base = Instalar-Base 'currentuser' $baseLonga
+  $r.app = Abrir-App $r.base.exe
+  $r.medicao = Medir $Novo '' $null 30
+}
+
+$relatorio = [ordered]@{ ambiente = $ambiente; cenarios = $resultados }
+$relatorio | ConvertTo-Json -Depth 8 | Out-File -Encoding utf8 (Join-Path $Saida 'relatorio.json')
+Write-Host ''
+Write-Host '=== Resumo'
+foreach ($c in $resultados) {
+  $m = $c.medicao
+  if (-not $m) { Write-Host ("{0}: erro — {1}" -f $c.id, $c.erro); continue }
+  Write-Host ("{0}: terminou={1} código={2} {3}s cpu20s={4} app-aberto={5} arquivos={6}" -f $c.id, $m.terminou, $m.codigoDeSaida, $m.segundos, $m.cpuNosUltimos20s, $m.appAindaAberto, $m.arquivosNoDestino)
+}

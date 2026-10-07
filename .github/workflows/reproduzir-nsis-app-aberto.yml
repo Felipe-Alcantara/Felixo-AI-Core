@@ -1,0 +1,50 @@
+name: Reproduzir NSIS silencioso com o app aberto
+
+# Investigação da task "Felixo AI Core/Instalador — investigar instalador NSIS
+# silencioso que não avança com o app aberto e deixa processo elevado". Roda só
+# na branch de investigação: os cenários instalam, abrem, matam e desinstalam o
+# Felixo — o runner windows-latest é a máquina descartável.
+on:
+  push:
+    branches:
+      - investigacao/nsis-app-aberto
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reproduzir:
+    name: Cenários NSIS (windows-latest)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Baixar os instaladores das duas últimas releases
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tags = @(gh release list --repo $env:GITHUB_REPOSITORY --limit 2 --exclude-drafts --exclude-pre-releases --json tagName --jq '.[].tagName')
+          if ($tags.Count -lt 2) { throw "Esperava duas releases, achei: $($tags -join ', ')" }
+          foreach ($tag in $tags) {
+            gh release download $tag --repo $env:GITHUB_REPOSITORY --pattern '*-win-x64.exe' --dir "C:\fx\instaladores\$tag"
+          }
+          "NOVO=$((Get-ChildItem "C:\fx\instaladores\$($tags[0])" -Filter *.exe | Select-Object -First 1).FullName)" >> $env:GITHUB_ENV
+          "BASE=$((Get-ChildItem "C:\fx\instaladores\$($tags[1])" -Filter *.exe | Select-Object -First 1).FullName)" >> $env:GITHUB_ENV
+          Get-ChildItem C:\fx\instaladores -Recurse -File | Select-Object FullName, Length
+
+      - name: Rodar os cenários
+        shell: pwsh
+        run: |
+          pwsh -NoLogo -NoProfile -File app/scripts/windows/reproduzir-nsis-app-aberto.ps1 -Base $env:BASE -Novo $env:NOVO -Saida "$env:RUNNER_TEMP\repro"
+
+      - name: Publicar o relatório
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reproduzir-nsis-app-aberto
+          path: ${{ runner.temp }}/repro/
+          if-no-files-found: warn
