@@ -188,6 +188,9 @@ function comoLista(valor) {
 
 const esperar = (ms) => new Promise((resolver) => setTimeout(resolver, ms))
 
+/** Pasta de saída da rodada, onde as capturas de falha são gravadas. */
+let pastaDeEvidencias = null
+
 function runCli(args, env = process.env) {
   return execFileSync(process.execPath, [FELIXO_CLI, 'devtools', ...args], {
     cwd: APP_DIR,
@@ -210,6 +213,12 @@ async function comApp(executavel, { path: pathDoApp } = {}, acao) {
   try {
     await page.waitForFunction(() => Boolean(window.felixo?.cli?.listOfficial), null, { timeout: TEMPO_APP_MS })
     return await acao(page, estado)
+  } catch (error) {
+    // A tela no momento da falha vira evidência (o campo da chave é de senha).
+    if (pastaDeEvidencias) {
+      await page.screenshot({ path: path.join(pastaDeEvidencias, `falha-${Date.now()}.png`) }).catch(() => {})
+    }
+    throw error
   } finally {
     try {
       await browser.close()
@@ -242,6 +251,23 @@ function resumoDaDeteccao(item) {
   }
 }
 
+/** Pacotes do Python que o `py` escolhe, incluindo o site do usuário. */
+function pipFreeze() {
+  const r = rodar('py', ['-m', 'pip', 'freeze', '--all'])
+  return new Set(r.saida.split(/\r?\n/).map((linha) => linha.trim()).filter(Boolean))
+}
+
+function diferencaDePacotes(antes, depois) {
+  return [...depois].filter((pacote) => !antes.has(pacote)).sort()
+}
+
+/** Saída de comando para o relatório: sem escapes ANSI e sem o caminho do perfil. */
+function higienizarSaida(texto, home = os.homedir()) {
+  let resultado = String(texto ?? '').replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, '')
+  if (home) resultado = resultado.split(home).join('~')
+  return resultado.trim()
+}
+
 function pipMostra(pacote) {
   const r = rodar('py', ['-m', 'pip', 'show', pacote])
   return { instalado: r.codigo === 0, versao: /^Version:\s*(.+)$/m.exec(r.saida)?.[1]?.trim() ?? null }
@@ -262,6 +288,7 @@ async function custoDaChave(chave) {
 async function main(argv = process.argv.slice(2)) {
   const opcoes = parseArgs(argv)
   fs.mkdirSync(opcoes.out, { recursive: true })
+  pastaDeEvidencias = opcoes.out
   const chave = process.env.OPENIA_TEST_KEY?.trim() || `sk-or-v1-sentinela${crypto.randomBytes(24).toString('hex')}`
   const chaveReal = Boolean(process.env.OPENIA_TEST_KEY?.trim())
   const pathOriginal = process.env.PATH
@@ -361,6 +388,30 @@ async function main(argv = process.argv.slice(2)) {
     const instalador = rodar('cmd.exe', ['/d', '/c', path.join(clone, 'scripts', 'cmd', 'install-openia-cmd.cmd')], { timeout: 120_000 })
     const pastaLegado = path.join(process.env.LOCALAPPDATA, 'openia')
     const typerAntes = pipMostra('typer')
+
+    // Primeiro, o launcher legado sozinho, fora do app: o que a detecção do
+    // Felixo vai receber de `openia --version` num clone recém-baixado. Na
+    // rodada 37580071358 o app leu a versão "0.27.3-py3" — que não é do
+    // Openia e parece nome de wheel do pip —, então a saída e os pacotes
+    // instalados antes e depois entram no relatório (higienizados).
+    const pacotesAntesDireto = pipFreeze()
+    const inicioDireto = Date.now()
+    const direto = rodar('cmd.exe', ['/d', '/c', path.join(pastaLegado, 'openia.cmd'), '--version'], { timeout: 300_000 })
+    const msDireto = Date.now() - inicioDireto
+    const pacotesDepoisDireto = pipFreeze()
+    const execucaoDireta = {
+      codigo: direto.codigo,
+      ms: msDireto,
+      versaoLida: extrairVersao(`${direto.saida}${direto.erro}`),
+      saida: higienizarSaida(`${direto.saida}\n${direto.erro}`).slice(0, 1_200),
+      pacotesInstaladosPeloVersion: diferencaDePacotes(pacotesAntesDireto, pacotesDepoisDireto),
+    }
+    // Volta ao estado de clone recém-baixado, para a detecção do app também
+    // começar do zero.
+    const instaladosPeloDireto = execucaoDireta.pacotesInstaladosPeloVersion.map((pacote) => pacote.split('==')[0])
+    if (instaladosPeloDireto.length > 0) rodar('py', ['-m', 'pip', 'uninstall', '-y', ...instaladosPeloDireto], { timeout: 180_000 })
+
+    const pacotesAntesApp = pipFreeze()
     const comClone = await comApp(exe, { path: `${pastaLegado};${pathOriginal}` }, async (page) => {
       const inicio = Date.now()
       const item = await catalogoOpenia(page)
@@ -378,15 +429,21 @@ async function main(argv = process.argv.slice(2)) {
       }
     })
     const typerDepois = pipMostra('typer')
+    const pacotesDepoisApp = pipFreeze()
+    // Com as dependências já presentes, o que sobra é o custo do próprio launcher.
+    const inicioSegunda = Date.now()
+    const segunda = rodar('cmd.exe', ['/d', '/c', path.join(pastaLegado, 'openia.cmd'), '--version'], { timeout: 120_000 })
+    execucaoDireta.segundaChamada = { codigo: segunda.codigo, ms: Date.now() - inicioSegunda, versaoLida: extrairVersao(`${segunda.saida}${segunda.erro}`) }
     // Desfaz: o launcher legado não pode contaminar as etapas seguintes.
     fs.rmSync(pastaLegado, { recursive: true, force: true })
     return {
       instaladorLegado: { codigo: instalador.codigo },
+      execucaoDireta,
       ...comClone,
       efeitoColateral: {
         typerAntes: typerAntes.instalado,
         typerDepois: typerDepois.instalado,
-        detecaoInstalouDependencia: !typerAntes.instalado && typerDepois.instalado,
+        pacotesInstaladosPelaDeteccaoDoApp: diferencaDePacotes(pacotesAntesApp, pacotesDepoisApp),
       },
       ok: instalador.codigo === 0 && comClone.semClone.detectado === false,
     }
@@ -411,7 +468,9 @@ async function main(argv = process.argv.slice(2)) {
       let interrompidos = []
       const limite = Date.now() + 120_000
       while (Date.now() < limite && interrompidos.length === 0) {
-        const pips = comoLista(powershellJson("Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match 'pip' -and $_.CommandLine -match 'Openia' } | Select-Object ProcessId, Name | ConvertTo-Json"))
+        // Só o py/python do pip: na primeira rodada o filtro por linha de
+        // comando casou também o powershell.exe desta própria consulta.
+        const pips = comoLista(powershellJson("Get-CimInstance Win32_Process | Where-Object { @('py.exe','python.exe') -contains $_.Name -and $_.CommandLine -match 'pip' -and $_.CommandLine -match 'Openia' } | Select-Object ProcessId, Name | ConvertTo-Json"))
         if (pips.length > 0) {
           await esperar(1_500)
           for (const pip of pips) rodar('taskkill', ['/T', '/F', '/PID', String(pip.ProcessId)])
@@ -476,28 +535,35 @@ async function main(argv = process.argv.slice(2)) {
       const statusDaChave = await page.evaluate(() => window.felixo.openia.keyStatus())
 
       await escolher('Interface Openia', /\bllm\b/i)
-      let modeloEscolhido = false
+      let modeloEscolhido = null
       try {
         await grupo.getByRole('combobox', { name: 'Modelo Openia', exact: true }).click()
-        const busca = page.getByPlaceholder('Buscar modelo…')
+        const busca = page.getByPlaceholder(/Buscar modelo/)
         if (await busca.count()) await busca.fill('gpt-4o-mini')
-        await page.getByRole('option').filter({ hasText: /gpt-4o-mini/i }).first().click({ timeout: 15_000 })
-        modeloEscolhido = true
+        const opcao = page.getByRole('option').filter({ hasText: /gpt-4o-mini/i }).first()
+        modeloEscolhido = (await opcao.textContent({ timeout: 15_000 }))?.trim().slice(0, 80) ?? null
+        await opcao.click({ timeout: 15_000 })
       } catch {
+        modeloEscolhido = null
+        // Fecha só a lista de modelos; se o Esc fechar o painel inteiro, ele é reaberto abaixo.
         await page.keyboard.press('Escape')
       }
+      // Na primeira rodada (run 37580071358) o Esc acima fechou o painel e o
+      // "Abrir agente" sumiu junto: reabre sem perder a configuração escolhida.
+      if ((await gatilho.getAttribute('aria-expanded')) !== 'true') await gatilho.click()
+      await grupo.waitFor({ state: 'visible', timeout: TEMPO_APP_MS })
 
       await page.evaluate(() => {
         window.__felixoSaida = ''
         window.felixo.pty.onData((evento) => { window.__felixoSaida += String(evento?.data ?? '') })
       })
-      await page.getByRole('button', { name: 'Abrir agente' }).click()
+      await grupo.getByRole('button', { name: 'Abrir agente' }).click()
       await page.waitForFunction(() => document.querySelectorAll('.react-flow__node').length > 0, null, { timeout: TEMPO_APP_MS })
       await page.waitForFunction(() => window.__felixoSaida.length > 0, null, { timeout: TEMPO_APP_MS })
 
       // Chat real, de melhor esforço: o critério da task é o não-vazamento.
       let chat = { tentado: false }
-      if (chaveReal && modeloEscolhido) {
+      if (chaveReal && modeloEscolhido !== null) {
         chat = { tentado: true, respondeuPong: false }
         try {
           await esperar(8_000)
@@ -591,22 +657,37 @@ async function main(argv = process.argv.slice(2)) {
           const deteccao = resumoDaDeteccao(await catalogoOpenia(page))
           const interfaces = await page.evaluate(() => window.felixo.openia.listInterfaces())
           const sessao = `alias-${Date.now()}`
-          const saida = await page.evaluate(async (sessionId) => {
+          const terminal = await page.evaluate(async (sessionId) => {
             let texto = ''
-            const parar = window.felixo.pty.onData((evento) => {
+            let saiu = null
+            const pararDados = window.felixo.pty.onData((evento) => {
               if (evento?.sessionId === sessionId) texto += String(evento.data ?? '')
             })
-            await window.felixo.pty.spawn({ sessionId, command: 'openia', args: ['--version'], cols: 120, rows: 30 })
+            const pararSaida = window.felixo.pty.onExit?.((evento) => {
+              if (evento?.sessionId === sessionId) saiu = evento.exitCode ?? evento.code ?? null
+            })
+            const spawn = await window.felixo.pty.spawn({ sessionId, command: 'openia', args: ['--version'], cols: 120, rows: 30 })
             const limite = Date.now() + 30_000
-            while (Date.now() < limite && !/\d+\.\d+\.\d+/.test(texto)) await new Promise((r) => setTimeout(r, 250))
-            parar?.()
+            while (Date.now() < limite && !/\d+\.\d+\.\d+/.test(texto.replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, ''))) {
+              await new Promise((r) => setTimeout(r, 250))
+            }
+            pararDados?.()
+            pararSaida?.()
             await window.felixo.pty.kill({ sessionId })
-            return texto
+            return { spawnOk: Boolean(spawn?.ok), spawnMensagem: spawn?.message ?? null, saiu, texto }
           }, sessao)
+          const textoLimpo = higienizarSaida(terminal.texto)
           return {
             deteccao,
-            contratoListJson: { ok: Boolean(interfaces?.ok), interfaces: interfaces?.interfaces?.length ?? 0 },
-            terminalVersao: extrairVersao(saida),
+            contratoListJson: { ok: Boolean(interfaces?.ok), interfaces: interfaces?.interfaces?.length ?? 0, mensagem: interfaces?.message ?? null },
+            terminal: {
+              spawnOk: terminal.spawnOk,
+              spawnMensagem: terminal.spawnMensagem,
+              codigoSaida: terminal.saiu,
+              bytes: terminal.texto.length,
+              finalDaSaida: textoLimpo.slice(-400),
+            },
+            terminalVersao: extrairVersao(textoLimpo),
           }
         })
         fs.rmSync(variante.pasta, { recursive: true, force: true })
@@ -738,7 +819,12 @@ function validarUsuarioComEspaco(opcoes) {
     usuario,
     codigoSaida: r.codigo,
     resultado,
-    ...(resultado ? {} : { log: log.replace(/[A-Za-z]:\\Users\\[^\\\s]+/g, 'C:\\Users\\<usuario>') }),
+    // Na rodada 37580071358 o PowerShell saiu em 1 s sem log: sem o stderr
+    // dele não dava para saber se falhou ao criar o usuário ou ao abrir o processo.
+    ...(resultado ? {} : {
+      log: higienizarSaida(log).replace(/[A-Za-z]:\\Users\\[^\\\s]+/g, 'C:\\Users\\<usuario>'),
+      powershell: higienizarSaida(`${r.saida}\n${r.erro}`).replace(/[A-Za-z]:\\Users\\[^\\\s]+/g, 'C:\\Users\\<usuario>').slice(-1_200),
+    }),
     ok: Boolean(resultado?.homeTemEspaco && resultado.detectado && resultado.caminhoDentroDoPerfil && resultado.contratoOk),
   }
 }
