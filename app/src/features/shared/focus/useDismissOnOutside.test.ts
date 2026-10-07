@@ -92,6 +92,26 @@ describe('instalarFechamentoAoClicarFora', () => {
     expect(fechamentos()).toBe(1)
   })
 
+  it('painel com formulário pode ignorar a troca de janela e continua fechando com clique fora', () => {
+    const bancada = criarBancada()
+    let fechamentos = 0
+    const limpar = instalarFechamentoAoClicarFora(bancada.ambiente, {
+      estaDentro: (alvo) => alvo === DENTRO,
+      fechar: () => {
+        fechamentos += 1
+      },
+      fecharAoSairDaJanela: false,
+    })
+
+    bancada.disparar('win:blur', {})
+    expect(fechamentos).toBe(0)
+    bancada.disparar('doc:pointerdown', { target: FORA })
+    expect(fechamentos).toBe(1)
+
+    limpar()
+    expect(bancada.total()).toBe(0)
+  })
+
   it('a limpeza solta todos os ouvintes', () => {
     const bancada = criarBancada()
     const { limpar, fechamentos } = instalar(bancada)

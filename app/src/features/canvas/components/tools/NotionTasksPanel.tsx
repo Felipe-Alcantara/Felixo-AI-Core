@@ -160,6 +160,8 @@ export function NotionTasksPanel({
   const [token, setToken] = useState('')
   const [showConnectionForm, setShowConnectionForm] = useState(false)
   const [showWorkspaceSettings, setShowWorkspaceSettings] = useState(false)
+  const settingsToggleRef = useRef<HTMLButtonElement>(null)
+  const settingsSectionRef = useRef<HTMLElement>(null)
   const [databaseQuery, setDatabaseQuery] = useState('')
   const [databases, setDatabases] = useState<NotionDatabase[]>([])
   const [dataSourceId, setDataSourceId] = useState(savedSelection?.dataSourceId ?? '')
@@ -176,6 +178,15 @@ export function NotionTasksPanel({
   const [showColumnPicker, setShowColumnPicker] = useState(false)
   const columnPickerRef = useRef<HTMLDivElement>(null)
   useDismissOnOutside(showColumnPicker, columnPickerRef, () => setShowColumnPicker(false))
+  // A configuração recolhe ao clicar fora ou com Esc — mas não com o formulário
+  // de conexão aberto nem ao trocar de janela, para não perder o token que a
+  // pessoa foi copiar.
+  useDismissOnOutside(
+    showWorkspaceSettings && !showConnectionForm,
+    [settingsToggleRef, settingsSectionRef],
+    () => setShowWorkspaceSettings(false),
+    { fecharAoSairDaJanela: false },
+  )
   // O bloco já nasce com a conexão e a database gravadas: a aba inicial segue a
   // mesma regra da troca de database (Painel, se era a aba aberta).
   const [activeViewId, setActiveViewId] = useState<string>(() => openingViewId(connectionId, dataSourceId, BUILT_IN_VIEWS[0].id))
@@ -887,6 +898,7 @@ export function NotionTasksPanel({
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             <button
+              ref={settingsToggleRef}
               type="button"
               className="felixo-btn flex items-center gap-1.5 rounded-md border border-white/10 px-2.5 py-1.5 text-xs text-zinc-300 hover:bg-white/5 hover:text-zinc-100"
               onClick={() => setShowWorkspaceSettings((value) => !value)}
@@ -909,7 +921,7 @@ export function NotionTasksPanel({
         </header>
 
         {showWorkspaceSettings && (
-          <section className="mt-3 grid gap-3 rounded-lg border border-white/10 bg-zinc-950/45 p-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)]" aria-label="Configuração do Notion">
+          <section ref={settingsSectionRef} className="mt-3 grid gap-3 rounded-lg border border-white/10 bg-zinc-950/45 p-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)]" aria-label="Configuração do Notion">
             <div className="min-w-0 space-y-2">
               <div className="flex items-center gap-2">
                 <KeyRound size={14} className="text-(--f-core-white-soft)" />

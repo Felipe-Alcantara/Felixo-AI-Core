@@ -1,6 +1,11 @@
+import { useLayoutEffect, useRef, type PropsWithChildren, type RefObject } from 'react'
 import { Loader2, Mic, MicOff, X } from 'lucide-react'
 import type { Dictation } from '../hooks/useDictation'
 import { formatElapsed } from '../services/dictation'
+import { useDismissOnOutside } from '../../shared/focus/useDismissOnOutside'
+import { FelixoPopoverSurface } from '../../shared/components/FelixoPopoverSurface'
+
+const VIEWPORT_GAP = 8
 
 type Props = { dictation: Dictation; shortcutLabel: string }
 
@@ -15,6 +20,11 @@ export function DictationButton({ dictation, shortcutLabel }: Props) {
   const transcribing = state.phase === 'transcribing'
   const failed = state.phase === 'error'
 
+  const containerRef = useRef<HTMLDivElement>(null)
+  // O aviso flutuante some ao clicar fora, com Esc ou ao sair da janela, como
+  // os outros menus — antes só o "Fechar" o tirava da frente.
+  useDismissOnOutside(failed || Boolean(notice), containerRef, dismiss)
+
   const title = recording
     ? `Parar e transcrever (${shortcutLabel})`
     : transcribing
@@ -22,7 +32,7 @@ export function DictationButton({ dictation, shortcutLabel }: Props) {
       : `Ditar por voz (${shortcutLabel})`
 
   return (
-    <div className="relative flex items-center gap-1">
+    <div ref={containerRef} className="relative flex items-center gap-1">
       <button
         type="button"
         onClick={toggle}
@@ -61,16 +71,59 @@ export function DictationButton({ dictation, shortcutLabel }: Props) {
         </button>
       )}
       {(failed || notice) && (
-        <div
-          role={failed ? 'alert' : 'status'}
-          className="absolute right-0 top-full z-50 mt-1 w-72 rounded-md border border-white/10 bg-(--f-surface-panel) p-2 text-[11px] leading-relaxed text-(--f-core-white-soft) shadow-xl"
-        >
+        <DictationNotice anchorRef={containerRef} role={failed ? 'alert' : 'status'}>
           <p className={failed ? 'text-red-300' : undefined}>{failed ? state.message : notice}</p>
           <button type="button" onClick={dismiss} className="mt-1 text-[10px] opacity-70 hover:opacity-100">
             Fechar
           </button>
-        </div>
+        </DictationNotice>
       )}
     </div>
+  )
+}
+
+/**
+ * O aviso sai por portal: a barra do topo corta o que passa da altura dela
+ * (`overflow: hidden`), e o aviso absoluto ficava invisível — a pessoa via só
+ * o microfone riscado, sem saber por quê. Fica logo abaixo do botão, alinhado
+ * à direita dele e contido na janela.
+ */
+function DictationNotice({
+  anchorRef,
+  role,
+  children,
+}: PropsWithChildren<{ anchorRef: RefObject<HTMLElement | null>; role: 'alert' | 'status' }>) {
+  const surfaceRef = useRef<HTMLDivElement>(null)
+
+  // Posição escrita pela ref, sem re-render.
+  useLayoutEffect(() => {
+    const surface = surfaceRef.current
+    if (!surface) return undefined
+    const place = () => {
+      const anchor = anchorRef.current?.getBoundingClientRect()
+      if (!anchor) return
+      const box = surface.getBoundingClientRect()
+      const left = Math.max(VIEWPORT_GAP, Math.min(anchor.right - box.width, window.innerWidth - box.width - VIEWPORT_GAP))
+      surface.style.left = `${left}px`
+      surface.style.top = `${anchor.bottom + 4}px`
+    }
+    place()
+    const resize = new ResizeObserver(place)
+    resize.observe(surface)
+    window.addEventListener('resize', place)
+    return () => {
+      resize.disconnect()
+      window.removeEventListener('resize', place)
+    }
+  }, [anchorRef])
+
+  return (
+    <FelixoPopoverSurface
+      surfaceRef={surfaceRef}
+      role={role}
+      className="w-72 p-2 text-[11px] leading-relaxed text-(--f-core-white-soft)"
+    >
+      {children}
+    </FelixoPopoverSurface>
   )
 }
