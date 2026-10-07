@@ -13,6 +13,7 @@ const { ipcMain } = require('electron')
 const spawnChildProcess = require('cross-spawn')
 const { createCliEnv } = require('./cli-process-manager.cjs')
 const { resolveCommandPath } = require('../core/cli-detector.cjs')
+const platform = require('../core/platform/index.cjs')
 
 const COMMAND_TIMEOUT_MS = 30_000
 const OUTPUT_LIMIT = 12000
@@ -188,27 +189,53 @@ function sanitizeString(value, maxLength) {
   return value.trim().slice(0, maxLength)
 }
 
-/** Executável, ambiente e necessidade de shell (só `.cmd`/`.bat` no Windows) para chamar o Openia. */
-function resolveOpeniaSpawn() {
-  const env = createCliEnv()
-  const executable = resolveCommandPath('openia', env, { platform: process.platform }) || 'openia'
-  const needsShell = process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(executable)
-  return { executable, env, needsShell }
+/**
+ * Executável, argumentos de prefixo e ambiente para chamar o Openia.
+ *
+ * - `.exe`: direto.
+ * - `.cmd`/`.bat`: também direto, SEM `shell: true`. O `cross-spawn` já embrulha
+ *   o shim no `cmd.exe` citando o caminho; com `shell: true` ele repassava a
+ *   linha crua e um caminho com espaço ("C:\Users\Felipe Martins\…\openia.cmd",
+ *   o launcher legado) quebrava ao meio — medido em 07/10/2026: `list --json`
+ *   falhava só na pasta com espaço.
+ * - `.ps1`: pelo PowerShell (`-File`), que é quem executa script no Windows.
+ *   `prefixArgs` carrega as flags e o caminho; o serviço de imagens já os
+ *   acrescenta antes dos argumentos dele.
+ *
+ * `needsShell` fica sempre `false` e continua no retorno só pelo contrato com
+ * `openia-image-service`.
+ *
+ * @param {{ platformName?: string, env?: Record<string, string>, resolvePath?: Function, exists?: Function }} [options]
+ */
+function resolveOpeniaSpawn(options = {}) {
+  const platformName = options.platformName ?? process.platform
+  const env = options.env ?? createCliEnv()
+  const resolvePath = options.resolvePath ?? resolveCommandPath
+  const resolved = resolvePath('openia', env, { platform: platformName })
+  const adapter = platform.getAdapter(platformName)
+
+  if (resolved && adapter.isPowerShellScript?.(resolved)) {
+    const launch = adapter.createPowerShellScriptLaunch(resolved, [], env, { exists: options.exists })
+    if (launch) {
+      return { executable: launch.command, env, needsShell: false, prefixArgs: launch.args }
+    }
+  }
+
+  return { executable: resolved || 'openia', env, needsShell: false, prefixArgs: [] }
 }
 
-function runOpeniaCommand(args, { input, timeoutMs = COMMAND_TIMEOUT_MS } = {}) {
-  const { executable, env, needsShell } = resolveOpeniaSpawn()
+function runOpeniaCommand(args, { input, timeoutMs = COMMAND_TIMEOUT_MS, resolveSpawn = resolveOpeniaSpawn } = {}) {
+  const { executable, env, prefixArgs = [] } = resolveSpawn()
   const stdio = input === undefined ? ['ignore', 'pipe', 'pipe'] : ['pipe', 'pipe', 'pipe']
 
   return new Promise((resolve) => {
     let childProcess
     try {
-      childProcess = spawnChildProcess(executable, args, {
+      childProcess = spawnChildProcess(executable, [...prefixArgs, ...args], {
         cwd: os.homedir(),
         env,
         stdio,
         windowsHide: true,
-        ...(needsShell ? { shell: true } : {}),
       })
     } catch {
       resolve({ ok: false })

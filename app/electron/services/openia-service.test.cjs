@@ -15,6 +15,8 @@ Module._load = function patchedLoad(request, parent, isMain) {
 const {
   createOpeniaService,
   registerOpeniaIpcHandlers,
+  resolveOpeniaSpawn,
+  runOpeniaCommand,
 } = require('./openia-service.cjs')
 Module._load = originalLoad
 
@@ -146,4 +148,79 @@ test('registra somente os quatro canais da ponte Openia', async () => {
     ['models', { refresh: true }],
     ['key', { name: 'felixo', key: 'segredo' }],
   ])
+})
+
+// Aliases do Openia no Windows, medidos em 07/10/2026 com `list --json`:
+// `openia.cmd` numa pasta com espaço falhava (o `shell: true` repassava o
+// caminho sem aspas ao `cmd.exe`) e `openia.ps1` nunca rodava. Agora o `.cmd`
+// vai direto pelo `cross-spawn`, que cita o caminho, e o `.ps1` pelo PowerShell.
+test('resolveOpeniaSpawn roda o alias .ps1 pelo PowerShell e o .cmd sem shell', () => {
+  const powerShell = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+  const env = { PATH: 'C:\\x', SystemRoot: 'C:\\Windows' }
+
+  const ps1 = resolveOpeniaSpawn({
+    platformName: 'win32',
+    env,
+    resolvePath: () => 'C:\\Users\\Pessoa Teste\\openia.ps1',
+    exists: (candidate) => candidate === powerShell,
+  })
+  assert.equal(ps1.executable, powerShell)
+  assert.equal(ps1.needsShell, false)
+  assert.deepEqual(ps1.prefixArgs, [
+    '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-NonInteractive',
+    '-File', 'C:\\Users\\Pessoa Teste\\openia.ps1',
+  ])
+
+  const cmd = resolveOpeniaSpawn({
+    platformName: 'win32',
+    env,
+    resolvePath: () => 'C:\\Users\\Pessoa Teste\\openia.cmd',
+  })
+  assert.equal(cmd.executable, 'C:\\Users\\Pessoa Teste\\openia.cmd')
+  assert.equal(cmd.needsShell, false)
+  assert.deepEqual(cmd.prefixArgs, [])
+})
+
+test('list --json roda de verdade pelos aliases .cmd (pasta com espaço) e .ps1', { skip: process.platform !== 'win32' }, async () => {
+  const fs = require('node:fs')
+  const os = require('node:os')
+  const path = require('node:path')
+  const raiz = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo openia '))
+  try {
+    // O falso repassa argv a um script Node, como o launcher real repassa ao
+    // Python: assim o teste mede o caminho do spawn, não a leitura de `%1`.
+    const falso = path.join(raiz, 'falso-openia.js')
+    fs.writeFileSync(
+      falso,
+      "const a = process.argv.slice(2)\n" +
+        "if (a[0] === 'list' && a.includes('--json')) console.log(JSON.stringify({ interfaces: [{ key: 'llm', name: 'LLM' }] }))\n" +
+        "else { console.error(JSON.stringify(a)); process.exit(2) }\n",
+      'utf8',
+    )
+    const pastaCmd = path.join(raiz, 'com espaço cmd')
+    const pastaPs1 = path.join(raiz, 'com espaço ps1')
+    fs.mkdirSync(pastaCmd)
+    fs.mkdirSync(pastaPs1)
+    fs.writeFileSync(path.join(pastaCmd, 'openia.cmd'), `@echo off\r\n"${process.execPath}" "${falso}" %*\r\n`, 'utf8')
+    fs.writeFileSync(
+      path.join(pastaPs1, 'openia.ps1'),
+      `& "${process.execPath}" "${falso}" @args\r\nexit $LASTEXITCODE\r\n`,
+      'utf8',
+    )
+
+    for (const pasta of [pastaCmd, pastaPs1]) {
+      const env = { ...process.env, PATH: [pasta, path.join(process.env.SystemRoot || 'C:\\Windows', 'System32')].join(';') }
+      const service = createOpeniaService({
+        runCommand: (args, options) =>
+          runOpeniaCommand(args, { ...options, resolveSpawn: () => resolveOpeniaSpawn({ platformName: 'win32', env }) }),
+      })
+
+      const result = await service.listInterfaces()
+
+      assert.equal(result.ok, true, `list --json falhou pelo alias de ${path.basename(pasta)}`)
+      assert.deepEqual(result.interfaces.map((item) => item.key), ['llm'])
+    }
+  } finally {
+    fs.rmSync(raiz, { recursive: true, force: true })
+  }
 })

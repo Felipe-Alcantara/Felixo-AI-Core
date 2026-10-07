@@ -121,6 +121,7 @@ const SUPPORTED_CLIS = [
  * @param {string} [options.platformName]
  * @param {(command: string, env?: Record<string, string>, options?: object) => string | null} [options.resolvePath]
  * @param {(command: string, args: string[], options: object) => Promise<{ stdout?: string, stderr?: string }>} [options.execute]
+ * @param {(candidate: string) => boolean} [options.exists] - Onde procurar o PowerShell que roda um `.ps1` (injetável nos testes).
  * @returns {Promise<{
  *   name: string,
  *   command: string,
@@ -161,11 +162,37 @@ async function detectCli(cliInfo, env, options = {}) {
     // foi resolvido mesmo quando o exec falha logo depois.
     let commandPath = null
     let useShell = false
+    let viaPowerShell = false
     try {
       commandPath = adapter.name === 'win32'
         ? resolvePath(command, env, { platform: adapter.name })
         : null
       const executable = commandPath || command
+
+      // `.ps1` não é executável pelo `child_process` nem pelo `cmd.exe`: roda
+      // pelo PowerShell, com os mesmos argumentos (alias `.ps1` do Openia).
+      if (adapter.name === 'win32' && adapter.isPowerShellScript?.(executable)) {
+        const launch = adapter.createPowerShellScriptLaunch(executable, [cliInfo.versionFlag], env || process.env, {
+          exists: options.exists,
+        })
+        if (!launch) {
+          throw Object.assign(new Error('PowerShell não encontrado para rodar o .ps1.'), { code: 'ENOENT' })
+        }
+        viaPowerShell = true
+        const { stdout, stderr } = await execute(launch.command, launch.args, {
+          timeout: DETECTION_TIMEOUT_MS,
+          env: env || process.env,
+          windowsHide: true,
+        })
+        const output = (stdout || stderr || '').trim()
+        result.detected = true
+        result.version = parseVersionFromOutput(output)
+        result.path = commandPath
+        attempts.push({ command, resolvedPath: commandPath, viaShell: false, viaPowerShell, outcome: 'ok', reason: null })
+        result.attempts = attempts
+        return result
+      }
+
       useShell = adapter.name === 'win32' && /\.(?:cmd|bat)$/i.test(executable)
       // `execFile` com `shell: true` no Windows concatena o comando cru para o
       // `cmd.exe /c` em vez de citá-lo — sem aspas, um caminho com espaço (ex.:
@@ -218,6 +245,7 @@ async function detectCli(cliInfo, env, options = {}) {
         command,
         resolvedPath: located,
         viaShell: useShell,
+        ...(viaPowerShell ? { viaPowerShell } : {}),
         outcome: 'failed',
         reason,
       })
@@ -406,15 +434,32 @@ function resolveCommandPath(command, env, options = {}) {
   const dirs = pathEnv.split(platformPath.delimiter)
   const extensions = adapter.getExecutableExtensions()
 
-  for (const dir of dirs) {
-    for (const ext of extensions) {
-      const fullPath = platformPath.join(dir, command + ext)
-      try {
-        if (exists(fullPath)) {
-          return fullPath
+  // No Windows, as extensões que o próprio `cmd.exe` executa (PATHEXT) valem
+  // em TODO o PATH antes de qualquer `.ps1`, e o arquivo sem extensão (shim
+  // POSIX do npm, que o Windows não executa) fica por último. Sem essa ordem,
+  // um `openia.ps1` numa pasta anterior venceria um `openia.exe` numa pasta
+  // posterior — e o terminal, que lança pelo `cmd.exe`, usaria o `.exe`:
+  // detecção e execução discordariam. Assim o `.ps1` só é escolhido quando
+  // nada que o `cmd.exe` rode existe no PATH (alias `.ps1` do Openia).
+  const passes = adapter.name === 'win32'
+    ? [
+      extensions.filter((ext) => ext !== '.ps1' && ext !== ''),
+      extensions.filter((ext) => ext === '.ps1'),
+      extensions.filter((ext) => ext === ''),
+    ]
+    : [extensions]
+
+  for (const passExtensions of passes) {
+    for (const dir of dirs) {
+      for (const ext of passExtensions) {
+        const fullPath = platformPath.join(dir, command + ext)
+        try {
+          if (exists(fullPath)) {
+            return fullPath
+          }
+        } catch {
+          continue
         }
-      } catch {
-        continue
       }
     }
   }

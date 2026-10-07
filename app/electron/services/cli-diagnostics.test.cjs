@@ -673,3 +673,24 @@ describe('diagnóstico com CLIs quebradas de verdade (POSIX)', { skip: process.p
     }
   })
 })
+
+describe('alias .ps1 no texto de suporte', () => {
+  it('marca a tentativa que rodou pelo PowerShell como [powershell]', () => {
+    const diagnosis = buildCliDiagnosis({
+      cli: CATALOG_CLAUDE,
+      detection: {
+        detected: true,
+        version: '0.1.0',
+        path: 'C:\\Users\\Bia\\bin\\openia.ps1',
+        reason: null,
+        attempts: [
+          { command: 'openia', resolvedPath: 'C:\\Users\\Bia\\bin\\openia.ps1', viaShell: false, viaPowerShell: true, outcome: 'ok', reason: null },
+        ],
+      },
+      context: { platformName: 'win32', arch: 'x64', appVersion: '0.1.400', homeDir: 'C:\\Users\\Bia' },
+    })
+
+    assert.equal(diagnosis.candidates[0].viaPowerShell, true)
+    assert.match(formatDiagnosisForSupport([diagnosis]), /tentativa: openia -> .*openia\.ps1 \[powershell\] = ok/)
+  })
+})

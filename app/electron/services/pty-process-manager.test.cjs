@@ -2024,3 +2024,66 @@ test('leitor de versão que falha não derruba o spawn nem a conversa', async ()
     manager.killAll({ force: true })
   }
 })
+
+// Alias `.ps1` (Openia, 07/10/2026): o `cmd.exe` não executa `.ps1`, então
+// um comando que só existe como script abre pelo PowerShell com `-File`. A
+// prova na ConPTY real fica em `pty-ps1-launch.integration.test.cjs`; aqui a
+// forma do lançamento, em qualquer SO, com o adaptador win32 de verdade.
+const win32Adapter = require('../core/platform/win32.cjs')
+const POWERSHELL_DO_SISTEMA = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+
+test('Windows: comando que só existe como .ps1 abre pelo PowerShell com -File, interativo', () => {
+  const launch = createPtyLaunchSpec(
+    'openia',
+    ['run', 'llm'],
+    { PATH: 'C:\\Users\\Pessoa Teste\\bin', SystemRoot: 'C:\\Windows' },
+    win32Adapter,
+    false,
+    {
+      resolvePath: () => 'C:\\Users\\Pessoa Teste\\bin\\openia.ps1',
+      exists: (candidate) => candidate === POWERSHELL_DO_SISTEMA,
+    },
+  )
+
+  // Sem `-NonInteractive`: no terminal o script conversa com a pessoa.
+  assert.deepEqual(launch, {
+    command: POWERSHELL_DO_SISTEMA,
+    args: [
+      '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass',
+      '-File', 'C:\\Users\\Pessoa Teste\\bin\\openia.ps1', 'run', 'llm',
+    ],
+  })
+})
+
+test('Windows: sessão de rodar arquivo mantém o PowerShell aberto depois do .ps1', () => {
+  const launch = createPtyLaunchSpec(
+    'openia',
+    [],
+    { PATH: 'C:\\bin', SystemRoot: 'C:\\Windows' },
+    win32Adapter,
+    true,
+    {
+      resolvePath: () => 'C:\\bin\\openia.ps1',
+      exists: (candidate) => candidate === POWERSHELL_DO_SISTEMA,
+    },
+  )
+
+  assert.ok(launch.args.includes('-NoExit'), JSON.stringify(launch.args))
+  assert.ok(launch.args.indexOf('-NoExit') < launch.args.indexOf('-File'))
+})
+
+test('Windows: comando que resolve para .cmd/.exe continua pelo cmd.exe como antes', () => {
+  const launch = createPtyLaunchSpec(
+    'claude',
+    ['--print'],
+    { PATH: 'C:\\npm', SystemRoot: 'C:\\Windows' },
+    win32Adapter,
+    false,
+    {
+      resolvePath: () => 'C:\\npm\\claude.cmd',
+      exists: () => true,
+    },
+  )
+
+  assert.deepEqual(launch, { command: 'cmd.exe', args: ['/d', '/s', '/c', 'claude', '--print'] })
+})

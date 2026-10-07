@@ -217,3 +217,91 @@ describe('cli-detector', () => {
     assert.equal(result.version, '2.1.258')
   })
 })
+
+
+// Alias `.ps1` (Openia), decidido em 07/10/2026: medido nesta data, um Openia
+// que só existe como `openia.ps1` nunca era detectado — o `execFile` não roda
+// `.ps1` e o detector não chamava o PowerShell. O catálogo já declarava o
+// alias; agora ele é executado pelo PowerShell com `-File`.
+describe('alias .ps1 no Windows', () => {
+  const POWERSHELL = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+  const openia = SUPPORTED_CLIS.find((cli) => cli.command === 'openia')
+
+  it('um .exe em pasta posterior do PATH vence um .ps1 em pasta anterior, como no cmd.exe', () => {
+    const existentes = new Set(['C:\\scripts\\openia.ps1', 'C:\\py\\Scripts\\openia.exe'])
+    const result = resolveCommandPath('openia', { PATH: 'C:\\scripts;C:\\py\\Scripts' }, {
+      platform: 'win32',
+      exists: (candidate) => existentes.has(candidate),
+    })
+
+    assert.equal(result, 'C:\\py\\Scripts\\openia.exe')
+  })
+
+  it('o .ps1 só é escolhido quando nada que o cmd.exe execute existe, e antes do shim sem extensão', () => {
+    const existentes = new Set(['C:\\a\\openia', 'C:\\b\\openia.ps1'])
+    const result = resolveCommandPath('openia', { PATH: 'C:\\a;C:\\b' }, {
+      platform: 'win32',
+      exists: (candidate) => existentes.has(candidate),
+    })
+
+    assert.equal(result, 'C:\\b\\openia.ps1')
+  })
+
+  it('roda o .ps1 pelo PowerShell com -File, sem shell e sem perfil', async () => {
+    const calls = []
+    const result = await detectCli(openia, { PATH: 'C:\\Users\\Pessoa Teste\\bin', SystemRoot: 'C:\\Windows' }, {
+      platformName: 'win32',
+      resolvePath: () => 'C:\\Users\\Pessoa Teste\\bin\\openia.ps1',
+      exists: (candidate) => candidate === POWERSHELL,
+      execute: async (command, args, options) => {
+        calls.push({ command, args, options })
+        return { stdout: 'openia 0.1.0' }
+      },
+    })
+
+    assert.equal(result.detected, true)
+    assert.equal(result.version, '0.1.0')
+    assert.equal(result.path, 'C:\\Users\\Pessoa Teste\\bin\\openia.ps1')
+    assert.equal(calls[0].command, POWERSHELL)
+    assert.deepEqual(calls[0].args, [
+      '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-NonInteractive',
+      '-File', 'C:\\Users\\Pessoa Teste\\bin\\openia.ps1', '--version',
+    ])
+    assert.equal(calls[0].options.shell, undefined)
+    assert.equal(result.attempts[0].viaPowerShell, true)
+  })
+
+  it('sem PowerShell na máquina, registra a falha em vez de lançar', async () => {
+    const result = await detectCli(openia, { PATH: 'C:\\bin', SystemRoot: 'C:\\Windows' }, {
+      platformName: 'win32',
+      resolvePath: (command) => (command === 'openia' ? 'C:\\bin\\openia.ps1' : null),
+      exists: () => false,
+      execute: async () => {
+        throw new Error('não deveria executar nada')
+      },
+    })
+
+    assert.equal(result.detected, false)
+    assert.equal(result.attempts[0].viaPowerShell, undefined)
+    assert.equal(result.attempts[0].outcome, 'failed')
+  })
+
+  it('detecta de verdade um openia.ps1 numa pasta com espaço no nome', { skip: process.platform !== 'win32' }, async () => {
+    const fs = require('node:fs')
+    const os = require('node:os')
+    const path = require('node:path')
+    const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo ps1 '))
+    try {
+      fs.writeFileSync(path.join(pasta, 'openia.ps1'), 'Write-Output "openia 0.1.0"\r\n', 'utf8')
+      const env = { ...process.env, PATH: [pasta, path.join(process.env.SystemRoot || 'C:\\Windows', 'System32')].join(';') }
+
+      const result = await detectCli(openia, env)
+
+      assert.equal(result.detected, true)
+      assert.equal(result.version, '0.1.0')
+      assert.equal(result.path, path.join(pasta, 'openia.ps1'))
+    } finally {
+      fs.rmSync(pasta, { recursive: true, force: true })
+    }
+  })
+})

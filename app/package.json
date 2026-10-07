@@ -57,7 +57,7 @@
     "lint": "eslint .",
     "pretest": "npm run rebuild:node",
     "test": "node scripts/run-node-unit-tests.cjs",
-    "test:native": "node --test --test-concurrency=1 electron/services/pty-write-queue.integration.test.cjs electron/services/claude-usage-query.integration.test.cjs",
+    "test:native": "node --test --test-concurrency=1 electron/services/pty-write-queue.integration.test.cjs electron/services/claude-usage-query.integration.test.cjs electron/services/pty-ps1-launch.integration.test.cjs",
     "test:frontend": "vitest run",
     "test:canvas-context": "vitest run src/features/canvas/terminal/canvas-context-e2e.test.ts --reporter=verbose",
     "test:canvas-smoke": "node scripts/canvas-smoke.cjs",

@@ -29,6 +29,7 @@ const { createReplayBuffer } = require('./pty-replay-buffer.cjs')
 const path = require('node:path')
 const fs = require('node:fs')
 const platform = require('../core/platform/index.cjs')
+const { resolveCommandPath } = require('../core/cli-detector.cjs')
 const { createCliEnv } = require('./cli-process-manager.cjs')
 const { discoverAgentSession, isSafeSessionId, selectDiscoveryContext } = require('./agent-session-discovery.cjs')
 const { normalizeCliVersion } = require('./agent-cli-versions.cjs')
@@ -1258,7 +1259,7 @@ function resolvePtyCommand(command, isExplicitCommand, env, adapter, resolveCode
  *   command exits, instead of letting the PTY close with it.
  * @returns {{ command: string, args: string[] }}
  */
-function createPtyLaunchSpec(command, args, env, adapter = platform, keepShellOpen = false) {
+function createPtyLaunchSpec(command, args, env, adapter = platform, keepShellOpen = false, launchOptions = {}) {
   if (adapter.name === 'darwin') {
     const shell = adapter.getDefaultShell(env)
     const commandLine = [command, ...args]
@@ -1278,7 +1279,13 @@ function createPtyLaunchSpec(command, args, env, adapter = platform, keepShellOp
   }
 
   if (adapter.name === 'win32') {
-    // cmd.exe resolves PATHEXT (.cmd/.exe/.ps1) and searches PATH; `/d /s /c`
+    const powerShellLaunch = createWindowsPowerShellScriptLaunch(command, args, env, adapter, keepShellOpen, launchOptions)
+    if (powerShellLaunch) {
+      return powerShellLaunch
+    }
+
+    // cmd.exe resolves PATHEXT (.com/.exe/.bat/.cmd — not .ps1, which is
+    // handled above) and searches PATH; `/d /s /c`
     // skips AutoRun and runs the command that follows. Passed as separate argv
     // entries (not pre-joined into one string) so node-pty's own Windows
     // command-line builder — which already quotes each argument correctly for
@@ -1327,6 +1334,38 @@ function createPtyLaunchSpec(command, args, env, adapter = platform, keepShellOp
   }
 
   return { command, args }
+}
+
+/**
+ * Lançamento de um comando que, no Windows, só existe como `.ps1`.
+ *
+ * O `cmd.exe` não roda `.ps1` (o PATHEXT padrão não inclui `.PS1`), então um
+ * Openia instalado só como `openia.ps1` abria o terminal com "não é
+ * reconhecido". O PowerShell roda o script com `-File`. Só entra quando o nome
+ * resolve para um `.ps1` — e `resolveCommandPath` só escolhe `.ps1` quando
+ * nada que o `cmd.exe` execute existe no PATH —, então todo comando que já
+ * funcionava continua indo pelo `cmd.exe` como antes.
+ *
+ * @returns {{ command: string, args: string[] } | null}
+ */
+function createWindowsPowerShellScriptLaunch(command, args, env, adapter, keepShellOpen, { resolvePath = resolveCommandPath, exists } = {}) {
+  if (typeof adapter.isPowerShellScript !== 'function' || typeof adapter.createPowerShellScriptLaunch !== 'function') {
+    return null
+  }
+
+  const raw = String(command)
+  // Nome solto ("openia" ou "openia.ps1") é procurado no PATH do terminal;
+  // caminho explícito é usado como veio.
+  const candidate = /[\\/]/.test(raw) ? raw : resolvePath(raw, env, { platform: 'win32', exists })
+  if (!candidate || !adapter.isPowerShellScript(candidate)) {
+    return null
+  }
+
+  return adapter.createPowerShellScriptLaunch(candidate, args.map(String), env, {
+    interactive: true,
+    keepOpen: keepShellOpen,
+    exists,
+  })
 }
 
 /** Mesma regra de "tem conta" da validação: string não vazia. */

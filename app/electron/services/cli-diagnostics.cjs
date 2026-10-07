@@ -227,6 +227,9 @@ function buildCliDiagnosis({
     command: attempt.command,
     resolvedPath: minimize(attempt.resolvedPath),
     viaShell: Boolean(attempt.viaShell),
+    // `.ps1` roda pelo PowerShell (alias do Openia): o suporte precisa saber
+    // que aquela tentativa não foi o executável direto nem o `cmd.exe`.
+    viaPowerShell: Boolean(attempt.viaPowerShell),
     outcome: attempt.outcome,
     reason: attempt.reason,
   }))
@@ -478,7 +481,7 @@ function formatDiagnosisForSupport(diagnoses, { effectivePath = null } = {}) {
     if (diagnosis.reason) lines.push(`  motivo técnico: ${diagnosis.reason}`)
     for (const candidate of diagnosis.candidates) {
       const resolved = candidate.resolvedPath ? ` -> ${candidate.resolvedPath}` : ''
-      const shell = candidate.viaShell ? ' [shell]' : ''
+      const shell = candidate.viaShell ? ' [shell]' : candidate.viaPowerShell ? ' [powershell]' : ''
       const reason = candidate.reason ? ` (${candidate.reason})` : ''
       lines.push(`  tentativa: ${candidate.command}${resolved}${shell} = ${candidate.outcome}${reason}`)
     }

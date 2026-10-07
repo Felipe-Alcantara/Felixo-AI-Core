@@ -172,9 +172,62 @@ function findPowerShell(env, exists = fs.existsSync) {
   return null
 }
 
+/**
+ * Flags para rodar um `.ps1` resolvido no PATH.
+ *
+ * O `cmd.exe` não executa `.ps1` (`.PS1` não está no PATHEXT padrão) e o
+ * `child_process` também não; quem roda é o PowerShell, com `-File`.
+ * `-ExecutionPolicy Bypass` vale só para este processo: a política padrão de
+ * uma máquina cliente recusa script local não assinado, e o script já foi
+ * escolhido pela pessoa ao colocá-lo no PATH. `-NoProfile`, como nos
+ * terminais do canvas: um `$PROFILE` com `cd`/erro não pode decidir se a CLI
+ * existe. Decisão do Felipe (07/10/2026): suportar o alias `.ps1` do Openia.
+ */
+const POWERSHELL_SCRIPT_FLAGS = Object.freeze(['-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass'])
+
+/** @returns {boolean} */
+function isPowerShellScript(executable) {
+  return typeof executable === 'string' && /\.ps1$/i.test(executable)
+}
+
+/**
+ * Comando e argumentos para rodar um `.ps1` pelo PowerShell.
+ *
+ * `interactive: false` (detecção, contratos `--json`) acrescenta
+ * `-NonInteractive`, para um script que pergunte algo falhar em vez de ficar
+ * esperando até o tempo limite. No terminal do canvas o script conversa com a
+ * pessoa, então a flag fica de fora; `keepOpen` mantém o PowerShell vivo
+ * depois do script, como o `/k` do `cmd.exe` numa sessão de "rodar arquivo".
+ *
+ * @param {string} scriptPath - Caminho absoluto do `.ps1`.
+ * @param {string[]} args - Argumentos repassados ao script.
+ * @param {Record<string, string>} [env]
+ * @param {{ interactive?: boolean, keepOpen?: boolean, exists?: (candidate: string) => boolean }} [options]
+ * @returns {{ command: string, args: string[] } | null} `null` sem PowerShell na máquina.
+ */
+function createPowerShellScriptLaunch(scriptPath, args = [], env = process.env, options = {}) {
+  const powerShell = findPowerShell(env || {}, options.exists ?? fs.existsSync)
+  if (!powerShell) return null
+
+  return {
+    command: powerShell,
+    args: [
+      ...POWERSHELL_SCRIPT_FLAGS,
+      ...(options.interactive ? [] : ['-NonInteractive']),
+      ...(options.keepOpen ? ['-NoExit'] : []),
+      '-File',
+      scriptPath,
+      ...args,
+    ],
+  }
+}
+
 module.exports = {
   name: 'win32',
+  POWERSHELL_SCRIPT_FLAGS,
+  createPowerShellScriptLaunch,
   createTerminalLaunchPlan,
+  isPowerShellScript,
   escapeArg,
   getCacheBase,
   getDefaultShell,
