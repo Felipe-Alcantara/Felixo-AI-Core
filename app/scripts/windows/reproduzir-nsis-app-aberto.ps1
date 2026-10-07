@@ -175,42 +175,127 @@ function Instalar-Base([string]$modo, [string]$pastaD) {
   [ordered]@{ modo = $modo; installLocation = $local; exe = $exe }
 }
 
-function Abrir-App([string]$exe) {
-  $perfil = Join-Path $env:RUNNER_TEMP ('perfil-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
-  New-Item -ItemType Directory -Force -Path $perfil | Out-Null
-  $env:FELIXO_USER_DATA_DIR = $perfil
-  $null = Start-Process -FilePath $exe -PassThru
-  Start-Sleep -Seconds 20
-  $vivos = Processos-Do-App
-  if ($vivos.Count -eq 0) { throw 'o app não ficou aberto' }
-  Write-Host "   app aberto: $($vivos.Count) processo(s) em $($vivos[0].ExecutablePath)"
-  [ordered]@{ processos = $vivos.Count; caminho = $vivos[0].ExecutablePath }
+function Rodar-Limitado([string]$exe, [string]$argumentos) {
+  # Tarefa agendada com RunLevel Limited: o processo nasce com o token filtrado
+  # do runneradmin (integridade média), como o agente dentro do Felixo em 21/09.
+  # O runner tem ConsentPromptBehaviorAdmin=0: o UAC eleva sem caixa — no PC do
+  # Felipe (=5) é o mesmo caminho, com a caixa de consentimento no meio.
+  $nomeTarefa = 'felixo-limitado-' + [guid]::NewGuid().ToString('N').Substring(0, 6)
+  $acao = if ($argumentos) { New-ScheduledTaskAction -Execute $exe -Argument $argumentos } else { New-ScheduledTaskAction -Execute $exe }
+  $principal = New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited
+  $config = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 15)
+  Register-ScheduledTask -TaskName $nomeTarefa -Action $acao -Principal $principal -Settings $config -Force | Out-Null
+  Start-ScheduledTask -TaskName $nomeTarefa
+  $nomeTarefa
 }
 
-function Medir([string]$instalador, [string]$argumentos, [string]$destino, [int]$limite = $LimiteSegundos, [pscredential]$credencial = $null) {
-  $sp = @{ FilePath = $instalador; PassThru = $true }
-  if ($argumentos) { $sp.ArgumentList = $argumentos }
-  $temp = $env:TEMP
-  if ($credencial) {
-    # O processo de outro usuário herda este ambiente; o %TEMP% do runner não é dele.
-    $tempPadrao = Join-Path $Trabalho 'temp-padrao'
-    New-Item -ItemType Directory -Force -Path $tempPadrao | Out-Null
-    $env:TEMP = $tempPadrao; $env:TMP = $tempPadrao
-    $sp.Credential = $credencial
-    $sp.WorkingDirectory = $Trabalho
+function Abrir-App([string]$exe, [switch]$Limitado) {
+  $perfil = Join-Path $Trabalho ('perfil-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
+  New-Item -ItemType Directory -Force -Path $perfil | Out-Null
+  $tarefa = $null
+  if ($Limitado) {
+    # A tarefa não herda este ambiente: um abridor define as variáveis do app.
+    $abridor = Join-Path $Trabalho 'abrir-app.ps1'
+    Set-Content -LiteralPath $abridor -Encoding utf8 -Value @(
+      'param([string]$Exe, [string]$Perfil)',
+      '$env:FELIXO_DISABLE_AUTO_UPDATE = "1"; $env:FELIXO_AUTO_INSTALL_CLIS = "0"; $env:FELIXO_USER_DATA_DIR = $Perfil',
+      'Start-Process -FilePath $Exe'
+    )
+    $tarefa = Rodar-Limitado "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$abridor`" -Exe `"$exe`" -Perfil `"$perfil`""
+  } else {
+    $env:FELIXO_USER_DATA_DIR = $perfil
+    $null = Start-Process -FilePath $exe -PassThru
   }
+  Start-Sleep -Seconds 20
+  if ($tarefa) { Unregister-ScheduledTask -TaskName $tarefa -Confirm:$false -ErrorAction SilentlyContinue }
+  $vivos = Processos-Do-App
+  if ($vivos.Count -eq 0) { throw "o app não ficou aberto (limitado=$([bool]$Limitado))" }
+  Write-Host "   app aberto (limitado=$([bool]$Limitado)): $($vivos.Count) processo(s) em $($vivos[0].ExecutablePath)"
+  [ordered]@{ limitado = [bool]$Limitado; processos = $vivos.Count; caminho = $vivos[0].ExecutablePath }
+}
+
+# Instaladores, desinstaladores antigos e tudo o que eles abriram (PowerShell
+# da checagem de app, taskkill...). Devolve o HashSet inteiro (vírgula).
+function Arvore-De($todos) {
+  $conjunto = [System.Collections.Generic.HashSet[int]]::new()
+  $fila = [System.Collections.Generic.Queue[int]]::new()
+  foreach ($proc in $todos) { if ($NomesDeInstalador -contains $proc.Name) { $fila.Enqueue([int]$proc.ProcessId) } }
+  if ($script:RaizAtual) { $fila.Enqueue([int]$script:RaizAtual) }
+  while ($fila.Count -gt 0) {
+    $atual = $fila.Dequeue()
+    if (-not $conjunto.Add($atual)) { continue }
+    foreach ($filho in $todos) { if ([int]$filho.ParentProcessId -eq $atual -and [int]$filho.ProcessId -ne $atual) { $fila.Enqueue([int]$filho.ProcessId) } }
+  }
+  , $conjunto
+}
+
+function Medir([string]$instalador, [string]$argumentos, [string]$destino, [int]$limite = $LimiteSegundos, [string]$modo = 'direto', [pscredential]$credencial = $null) {
   $inicio = Get-Date
-  try { $p = Start-Process @sp } finally { $env:TEMP = $temp; $env:TMP = $temp }
-  $null = $p.Handle
-  $terminou = $p.WaitForExit($limite * 1000)
+  $p = $null
+  $tarefa = $null
+  $script:RaizAtual = $null
+  if ($modo -eq 'limitado') {
+    $tarefa = Rodar-Limitado $instalador $argumentos
+  } else {
+    $sp = @{ FilePath = $instalador; PassThru = $true }
+    if ($argumentos) { $sp.ArgumentList = $argumentos }
+    $temp = $env:TEMP
+    if ($modo -eq 'padrao') {
+      # O processo de outro usuário herda este ambiente; o %TEMP% do runner não é dele.
+      $tempPadrao = Join-Path $Trabalho 'temp-padrao'
+      New-Item -ItemType Directory -Force -Path $tempPadrao | Out-Null
+      $env:TEMP = $tempPadrao; $env:TMP = $tempPadrao
+      $sp.Credential = $credencial
+      $sp.WorkingDirectory = $Trabalho
+    }
+    try { $p = Start-Process @sp } finally { $env:TEMP = $temp; $env:TMP = $temp }
+    $null = $p.Handle
+    $script:RaizAtual = $p.Id
+  }
+
+  # Linha do tempo: cada processo novo da árvore do instalador (com a linha de
+  # comando, que mostra o $INSTDIR usado na checagem de app) e cada mudança no
+  # número de processos do app.
+  $linha = [System.Collections.Generic.List[string]]::new()
+  $vistos = [System.Collections.Generic.HashSet[int]]::new()
+  $appUltimo = -1
+  $viuInstalador = $false
+  $terminou = $false
+  while ($true) {
+    $t = [math]::Round(((Get-Date) - $inicio).TotalSeconds, 1)
+    $todos = @(Get-CimInstance Win32_Process)
+    $arvore = Arvore-De $todos
+    foreach ($proc in $todos) {
+      $id = [int]$proc.ProcessId
+      if (($arvore.Contains($id) -or $proc.Name -eq 'consent.exe') -and $vistos.Add($id)) {
+        $cmd = "$($proc.CommandLine)"
+        if ($cmd.Length -gt 400) { $cmd = $cmd.Substring(0, 400) + '...' }
+        $linha.Add(("{0,6}s +{1} (pai {2}) {3}: {4}" -f $t, $id, $proc.ParentProcessId, $proc.Name, $cmd))
+      }
+    }
+    $app = @($todos | Where-Object { $_.Name -eq "$Nome.exe" }).Count
+    if ($app -ne $appUltimo) { $linha.Add(("{0,6}s app: {1} processo(s)" -f $t, $app)); $appUltimo = $app }
+    $instaladoresVivos = @($todos | Where-Object { $NomesDeInstalador -contains $_.Name }).Count
+    if ($instaladoresVivos -gt 0) { $viuInstalador = $true }
+    if ($p) { $terminou = $p.HasExited }
+    elseif ($viuInstalador) { $terminou = $instaladoresVivos -eq 0 }
+    elseif ($t -gt 30) { $terminou = $true; $linha.Add("${t}s o instalador não apareceu em 30 s") }
+    if ($terminou -or $t -ge $limite) { break }
+    Start-Sleep -Milliseconds 400
+  }
+
   $m = [ordered]@{
+    modo = $modo
     argumentos = $argumentos
-    comoUsuarioPadrao = [bool]$credencial
     terminou = $terminou
     segundos = [math]::Round(((Get-Date) - $inicio).TotalSeconds, 1)
   }
+  if ($p -and $p.HasExited) { $m.codigoDeSaida = $p.ExitCode }
+  if ($tarefa) {
+    $info = Get-ScheduledTaskInfo -TaskName $tarefa -ErrorAction SilentlyContinue
+    if ($info) { $m.codigoDeSaida = $info.LastTaskResult }
+  }
   if ($terminou) {
-    $m.codigoDeSaida = $p.ExitCode
     Start-Sleep -Seconds 3
     $sobras = @(Get-CimInstance Win32_Process | Where-Object { $NomesDeInstalador -contains $_.Name })
     $m.processosQueSobraram = @($sobras | ForEach-Object { "$($_.ProcessId) $($_.Name)" })
@@ -219,26 +304,34 @@ function Medir([string]$instalador, [string]$argumentos, [string]$destino, [int]
       $m.falhasAoEncerrar = @(Parar-Pids @($sobras | ForEach-Object { [int]$_.ProcessId }))
     }
   } else {
-    $pids = Pids-Do-Instalador $p.Id
+    $pids = @((Arvore-De @(Get-CimInstance Win32_Process)) | ForEach-Object { $_ })
     $cpu = Cpu-De $pids
     Start-Sleep -Seconds 20
-    $pids = Pids-Do-Instalador $p.Id
+    $pids = @((Arvore-De @(Get-CimInstance Win32_Process)) | ForEach-Object { $_ })
     $m.cpuNosUltimos20s = [math]::Round((Cpu-De $pids) - $cpu, 2)
     $m.processosPresos = @(Get-CimInstance Win32_Process | Where-Object { $pids -contains [int]$_.ProcessId } |
       ForEach-Object { "$($_.ProcessId) (pai $($_.ParentProcessId)) $($_.Name): $($_.CommandLine)" })
-    $m.janelas = @([JanelasFelixo]::Listar([int[]]$pids))
+    $consent = @(Get-CimInstance Win32_Process -Filter "Name='consent.exe'")
+    $m.consentAberto = $consent.Count
+    $alvosDeJanela = @($pids) + @($consent | ForEach-Object { [int]$_.ProcessId })
+    $m.janelas = if ($alvosDeJanela.Count -gt 0) { @([JanelasFelixo]::Listar([int[]]$alvosDeJanela)) } else { @() }
     $m.captura = Capturar-Tela (Join-Path $Saida "$($script:CenarioAtual).png")
-    $m.falhasAoEncerrar = @(Parar-Pids $pids)
+    $m.falhasAoEncerrar = if ($pids.Count -gt 0) { @(Parar-Pids $pids) } else { @() }
   }
+  if ($tarefa) { Unregister-ScheduledTask -TaskName $tarefa -Confirm:$false -ErrorAction SilentlyContinue }
+  $m.linhaDoTempo = $linha
   if ($destino) { $m.arquivosNoDestino = Contar-Arquivos $destino }
   $m.appAindaAberto = (Processos-Do-App).Count
   $m.registroDepois = Estado-Do-Registro
-  Write-Host ("   instalador: terminou={0} código={1} {2}s app-aberto={3} arquivos={4}" -f $m.terminou, $m.codigoDeSaida, $m.segundos, $m.appAindaAberto, $m.arquivosNoDestino)
+  Write-Host ("   instalador ({0}): terminou={1} código={2} {3}s cpu20s={4} app-aberto={5} arquivos={6}" -f $modo, $m.terminou, $m.codigoDeSaida, $m.segundos, $m.cpuNosUltimos20s, $m.appAindaAberto, $m.arquivosNoDestino)
+  foreach ($l in $linha) { Write-Host "   | $l" }
   foreach ($j in @($m.janelas)) { if ($j) { Write-Host "   janela: $j" } }
+  foreach ($pp in @($m.processosPresos)) { if ($pp) { Write-Host "   preso: $pp" } }
   $m
 }
 
 function Limpar {
+  Get-ScheduledTask -TaskName 'felixo-limitado-*' -ErrorAction SilentlyContinue | Unregister-ScheduledTask -Confirm:$false -ErrorAction SilentlyContinue
   Processos-Do-App | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
   Get-CimInstance Win32_Process | Where-Object { $NomesDeInstalador -contains $_.Name } |
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
@@ -265,6 +358,8 @@ function Limpar {
 }
 
 $resultados = [System.Collections.Generic.List[object]]::new()
+# `pwsh -File` entrega "A,G,I" como um texto só.
+$Cenarios = @($Cenarios | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 function Cenario([string]$id, [string]$descricao, [scriptblock]$corpo) {
   if ($Cenarios.Count -gt 0 -and $Cenarios -notcontains $id.Substring(0, 1)) { return }
   $script:CenarioAtual = $id
@@ -364,7 +459,7 @@ Cenario 'G-usuario-padrao-sobre-allusers' 'usuário sem admin roda /S /D= numa m
     $credencial = New-Object pscredential $nomeUsuario, (ConvertTo-SecureString $senha -AsPlainText -Force)
     $destinoG = Join-Path $Trabalho 'g'
     New-Item -ItemType Directory -Force -Path $destinoG | Out-Null
-    $r.medicao = Medir $Novo "/S /D=$destinoG" $destinoG 120 $credencial
+    $r.medicao = Medir $Novo "/S /D=$destinoG" $destinoG 120 'padrao' $credencial
   } finally {
     $senha = $null
     try { [void]$computador.psbase.Invoke('Delete', 'User', $nomeUsuario) } catch { }
@@ -376,6 +471,26 @@ Cenario 'H-usuario-longo-app-aberto-interativo' 'instalação por usuário, app 
   $r.base = Instalar-Base 'currentuser' $baseLonga
   $r.app = Abrir-App $r.base.exe
   $r.medicao = Medir $Novo '' $null 30
+}
+
+Cenario 'I-limitado-allusers-curto-app-aberto-com-D' 'réplica de 21/09: chamador SEM elevação (token limitado), instalação para todos em pasta 8.3, app aberto sem elevação, /S /D=' {
+  param($r)
+  $r.base = Instalar-Base 'allusers' $baseCurta
+  $r.app = Abrir-App $r.base.exe -Limitado
+  $r.medicao = Medir $Novo "/S /D=$destinoNovo" $destinoNovo $LimiteSegundos 'limitado'
+}
+
+Cenario 'J-limitado-allusers-curto-app-fechado-com-D' 'base de I, app fechado, chamador sem elevação' {
+  param($r)
+  $r.base = Instalar-Base 'allusers' $baseCurta
+  $r.medicao = Medir $Novo "/S /D=$destinoNovo" $destinoNovo $LimiteSegundos 'limitado'
+}
+
+Cenario 'K-limitado-usuario-longo-app-aberto-sem-D' 'instalação por usuário (o caso comum), app aberto, chamador sem elevação, /S' {
+  param($r)
+  $r.base = Instalar-Base 'currentuser' $baseLonga
+  $r.app = Abrir-App $r.base.exe -Limitado
+  $r.medicao = Medir $Novo '/S' $r.base.installLocation $LimiteSegundos 'limitado'
 }
 
 $relatorio = [ordered]@{ ambiente = $ambiente; cenarios = $resultados }

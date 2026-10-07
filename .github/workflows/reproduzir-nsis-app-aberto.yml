@@ -39,7 +39,9 @@ jobs:
       - name: Rodar os cenários
         shell: pwsh
         run: |
-          pwsh -NoLogo -NoProfile -File app/scripts/windows/reproduzir-nsis-app-aberto.ps1 -Base $env:BASE -Novo $env:NOVO -Saida "$env:RUNNER_TEMP\repro"
+          # Run 37589421692 já mediu B–F e H com o runner elevado; esta rodada
+          # refaz A com a linha do tempo e mede o chamador sem elevação (G, I–K).
+          pwsh -NoLogo -NoProfile -File app/scripts/windows/reproduzir-nsis-app-aberto.ps1 -Base $env:BASE -Novo $env:NOVO -Saida "$env:RUNNER_TEMP\repro" -Cenarios 'A,G,I,J,K'
 
       - name: Publicar o relatório
         if: always()
