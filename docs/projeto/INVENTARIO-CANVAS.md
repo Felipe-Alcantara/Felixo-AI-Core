@@ -32,7 +32,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **Elementos:** 95 (8 blocos, 16 ferramentas, 71 outras superfícies)
 - **Controles:** 358, dos quais 55 com teste específico
 - **Elementos sem nenhum teste:** 4
-- **Lacunas:** 274 (alto 10, médio 147, baixo 117), em 77 tasks
+- **Lacunas:** 274 (alto 10, médio 147, baixo 117), em 78 tasks
 
 ## Moldura do canvas
 
@@ -1929,7 +1929,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Os 4 controles do Painel não são clicados por teste automático (o smoke só vê o bloco sem conexão); a tela foi conferida com dados de fixture fora do app. | médio | `3d591f95-497e-810c-9f26-ff8a3e6e53ce` |
+| Os 4 controles do Painel não são clicados por teste automático (o smoke só vê o bloco sem conexão); a tela foi conferida com dados de fixture fora do app, não no app real com conexão Notion. | médio | `3f291f95-497e-81fe-8670-fe2fc871318d` |
 
 ### Hospedeiro dos painéis de ferramenta
 
@@ -2773,7 +2773,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 ## Tasks das lacunas
 
 - `3ce91f95-497e-81c9-8c3b-def9ed09d58c` — 1 lacuna
-- `3d591f95-497e-810c-9f26-ff8a3e6e53ce` — 2 lacunas
+- `3d591f95-497e-810c-9f26-ff8a3e6e53ce` — 1 lacuna
 - `3d591f95-497e-8192-b911-cdb759933401` — 1 lacuna
 - `3d691f95-497e-8105-b007-f7767fe10405` — 1 lacuna
 - `3d791f95-497e-8139-8417-f90dd73f2777` — 1 lacuna
@@ -2849,3 +2849,4 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3ec91f95-497e-81ca-8319-ee657b0b6492` — 28 lacunas
 - `3ec91f95-497e-81e8-8f18-e2a529b0568e` — 10 lacunas
 - `3ec91f95-497e-81f7-8b12-c5c252d020c7` — 5 lacunas
+- `3f291f95-497e-81fe-8670-fe2fc871318d` — 1 lacuna

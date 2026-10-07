@@ -1110,9 +1110,9 @@ const notionRepoBoard: InventoryElement = {
   tests: [unit(`${SERVICES}/notion-repo-board.test.ts`)],
   gaps: [
     {
-      what: 'Os 4 controles do Painel não são clicados por teste automático (o smoke só vê o bloco sem conexão); a tela foi conferida com dados de fixture fora do app.',
+      what: 'Os 4 controles do Painel não são clicados por teste automático (o smoke só vê o bloco sem conexão); a tela foi conferida com dados de fixture fora do app, não no app real com conexão Notion.',
       risk: 'médio',
-      task: '3d591f95-497e-810c-9f26-ff8a3e6e53ce',
+      task: '3f291f95-497e-81fe-8670-fe2fc871318d',
     },
   ],
   overlap: 'Mora dentro do bloco Tarefas Notion (overflow-auto), no lugar da tabela. Os FelixoSelect da configuração abrem em portal z 1000; a grade quebra em colunas de no mínimo 13rem.',
