@@ -46,12 +46,8 @@ jobs:
           "ANTERIOR=$((Get-ChildItem "C:\fx\instaladores\$($tags[1])" -Filter *.exe | Select-Object -First 1).FullName)" >> $env:GITHUB_ENV
           Get-ChildItem C:\fx\instaladores -Recurse -File | Select-Object FullName, Length
 
-      # Antes: o instalador publicado por cima da release anterior, com o app
-      # aberto e o $INSTDIR curto (L). O I já foi medido preso na run 37591182111.
-      - name: Antes da correção (instalador publicado)
-        shell: pwsh
-        run: |
-          pwsh -NoLogo -NoProfile -File scripts/windows/reproduzir-nsis-app-aberto.ps1 -Base $env:ANTERIOR -Novo $env:ULTIMA -Saida "$env:RUNNER_TEMP\antes" -Cenarios 'L'
+      # O "antes" já está medido com o instalador publicado: I preso na run
+      # 37591182111 e L preso na run 37624204763 (180 s, app aberto, MessageBox).
 
       - name: Construir o instalador deste commit
         shell: pwsh
@@ -63,7 +59,8 @@ jobs:
           npm version --no-git-tag-version 0.1.9999
           npx vite build
           # Mesma linha do passo "Build installers" do release.yml no Windows.
-          npx electron-builder --win nsis --x64 --publish never -c.npmRebuild=false
+          # Citado: sem aspas o pwsh parte '-c.npmRebuild=false' em dois argumentos.
+          npx electron-builder --win nsis --x64 --publish never '-c.npmRebuild=false'
           "CONSTRUIDO=$((Get-ChildItem release -Filter '*-win-x64.exe' | Select-Object -First 1).FullName)" >> $env:GITHUB_ENV
 
       # Depois: o instalador deste commit por cima da última release (cujo
@@ -78,7 +75,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: reproduzir-nsis-app-aberto
-          path: |
-            ${{ runner.temp }}/antes/
-            ${{ runner.temp }}/depois/
+          path: ${{ runner.temp }}/depois/
           if-no-files-found: warn
