@@ -26,6 +26,7 @@ import {
 } from 'lucide-react'
 import { DeferredMarkdownContent } from '../../../shared/components/DeferredMarkdownContent'
 import { FelixoSelect, type FelixoSelectOption } from '../../../shared/components/FelixoSelect'
+import { useDismissOnOutside } from '../../../shared/focus/useDismissOnOutside'
 import type {
   NotionConnection,
   NotionDatabase,
@@ -133,6 +134,8 @@ export function NotionTasksPanel() {
   const [columnsVersion, setColumnsVersion] = useState(0)
   const [sortVersion, setSortVersion] = useState(0)
   const [showColumnPicker, setShowColumnPicker] = useState(false)
+  const columnPickerRef = useRef<HTMLDivElement>(null)
+  useDismissOnOutside(showColumnPicker, columnPickerRef, () => setShowColumnPicker(false))
   const [activeViewId, setActiveViewId] = useState<string>(BUILT_IN_VIEWS[0].id)
   const [showViewBuilder, setShowViewBuilder] = useState(false)
   const [editingViewId, setEditingViewId] = useState<string | null>(null)
@@ -872,7 +875,7 @@ export function NotionTasksPanel() {
                 >
                   <Clock size={14} />
                 </button>
-                <div className="relative">
+                <div ref={columnPickerRef} className="relative">
                   <button
                     type="button"
                     className={`felixo-btn-icon rounded-md border p-1.5 ${visibleColumns.length > 0 ? 'border-white/10 text-(--f-core-white-soft) hover:bg-(--f-core-white)/10' : 'border-white/10 text-zinc-400 hover:bg-white/5 hover:text-zinc-100'}`}
