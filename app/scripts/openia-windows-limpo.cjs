@@ -203,6 +203,25 @@ function comoLista(valor) {
 
 const esperar = (ms) => new Promise((resolver) => setTimeout(resolver, ms))
 
+/**
+ * Renomeia esperando o Windows liberar a pasta. Com o clone recém-baixado, a
+ * detecção do app roda o launcher legado, que faz `pushd` no clone e instala
+ * dependências; até esse processo terminar, a pasta fica presa (EBUSY no run
+ * 37581612847). Devolve quantas tentativas foram precisas.
+ */
+async function renomearComEspera(origem, destino, { limiteMs = 60_000 } = {}) {
+  const limite = Date.now() + limiteMs
+  for (let tentativa = 1; ; tentativa += 1) {
+    try {
+      fs.renameSync(origem, destino)
+      return tentativa
+    } catch (error) {
+      if (!['EBUSY', 'EPERM', 'EACCES'].includes(error?.code) || Date.now() > limite) throw error
+      await esperar(1_000)
+    }
+  }
+}
+
 /** Pasta de saída da rodada, onde as capturas de falha são gravadas. */
 let pastaDeEvidencias = null
 
@@ -455,14 +474,14 @@ async function main(argv = process.argv.slice(2)) {
       const msDeteccao = Date.now() - inicio
       const interfaces = await page.evaluate(() => window.felixo.openia.listInterfaces())
       // Sem o clone: o launcher continua no PATH, mas aponta para uma pasta que não existe mais.
-      fs.renameSync(clone, `${clone}-movido`)
+      const tentativasParaMover = await renomearComEspera(clone, `${clone}-movido`)
       const inicioSem = Date.now()
       const semClone = await catalogoOpenia(page)
       const msSem = Date.now() - inicioSem
-      fs.renameSync(`${clone}-movido`, clone)
+      await renomearComEspera(`${clone}-movido`, clone)
       return {
         comClone: { ...resumoDaDeteccao(item), msDeteccao, contratoListJson: { ok: Boolean(interfaces?.ok), interfaces: interfaces?.interfaces?.length ?? 0 } },
-        semClone: { ...resumoDaDeteccao(semClone), msDeteccao: msSem },
+        semClone: { ...resumoDaDeteccao(semClone), msDeteccao: msSem, tentativasParaMoverOClone: tentativasParaMover },
       }
     })
     const typerDepois = pipMostra('typer')
@@ -840,15 +859,22 @@ function validarUsuarioComEspaco(opcoes) {
     `  Start-Process -FilePath "${instalador}" -ArgumentList '/S' -Wait`,
     "  $reg = Get-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*' | Where-Object { $_.DisplayName -like 'Felixo AI Core*' } | Select-Object -First 1",
     "  if (-not $reg) { throw 'instalador nao registrou o app para este usuario' }",
-    "  & py -m pip install --user --upgrade 'https://github.com/Felipe-Alcantara/Openia/archive/d248538.zip' *>> $log",
+    // Comando nativo com 'Continue': no 5.1, com 'Stop', o aviso do pip no
+    // stderr ("script ... not on PATH") virava erro fatal e parava aqui
+    // (run 37581612847). O resultado vale pelo código de saída, conferido à mão.
+    "  $ErrorActionPreference = 'Continue'",
+    "  & py -m pip install --user --upgrade 'https://github.com/Felipe-Alcantara/Openia/archive/d248538.zip' 2>&1 | Out-File -Append -Encoding utf8 $log",
+    "  if ($LASTEXITCODE -ne 0) { throw \"pip install saiu com $LASTEXITCODE\" }",
     // Sem InstallLocation no registro (NSIS do electron-builder): a pasta é a do desinstalador.
     "  $pasta = $reg.InstallLocation; if (-not $pasta) { $pasta = Split-Path -Parent ($reg.UninstallString -replace '^\"([^\"]+)\".*$', '$1') }",
     "  $exe = Join-Path $pasta 'Felixo AI Core.exe'",
     "  $asar = Join-Path $pasta 'resources\\app.asar'",
     "  $env:ELECTRON_RUN_AS_NODE = '1'",
-    `  & $exe (Join-Path $PSScriptRoot 'detectar.cjs') $asar "${saidaJson}" *>> $log`,
+    `  & $exe (Join-Path $PSScriptRoot 'detectar.cjs') $asar "${saidaJson}" 2>&1 | Out-File -Append -Encoding utf8 $log`,
+    "  if ($LASTEXITCODE -ne 0) { throw \"deteccao saiu com $LASTEXITCODE\" }",
+    "  $ErrorActionPreference = 'Stop'",
     `  Start-Process -FilePath (Join-Path $pasta 'Uninstall Felixo AI Core.exe') -ArgumentList '/S' -Wait`,
-    '} catch { $_ | Out-String | Add-Content $log; exit 1 }',
+    '} catch { $_ | Out-String | Out-File -Append -Encoding utf8 $log; exit 1 }',
     '',
   ].join('\r\n'))
 
