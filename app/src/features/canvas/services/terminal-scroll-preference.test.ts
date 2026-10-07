@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isClaudeCommand, shouldUseClassicScreen } from './terminal-scroll-preference'
+import { isClaudeCommand, parseClaudeTerminalScroll, shouldUseClassicScreen } from './terminal-scroll-preference'
 
 describe('rolagem do terminal no Claude Code', () => {
   it('só o Claude Code recebe o interruptor', () => {
@@ -10,7 +10,12 @@ describe('rolagem do terminal no Claude Code', () => {
       expect(isClaudeCommand(c), String(c)).toBe(false)
     }
   })
-  it('desligado (padrão) nunca pede a tela clássica', () => {
+  it('vem ligado por padrão e só um "off" salvo desliga', () => {
+    expect(parseClaudeTerminalScroll(null)).toBe(true)
+    expect(parseClaudeTerminalScroll('on')).toBe(true)
+    expect(parseClaudeTerminalScroll('off')).toBe(false)
+  })
+  it('desligado nunca pede a tela clássica', () => {
     expect(shouldUseClassicScreen('claude', false)).toBe(false)
     expect(shouldUseClassicScreen('claude', true)).toBe(true)
     expect(shouldUseClassicScreen('codex', true)).toBe(false)

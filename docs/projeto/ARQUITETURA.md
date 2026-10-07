@@ -1957,7 +1957,7 @@ para espalhar na moldura; um objeto com `ref` nomeado disparava `react-hooks/ref
 
 ## Terminal: rolagem do Claude Code
 
-`terminal-scroll-preference.ts` guarda a opção (padrão desligada). No spawn, o store envia
+`terminal-scroll-preference.ts` guarda a opção (padrão ligada; só um `off` salvo desliga). No spawn, o store envia
 `classicScreen` (booleano) e `PtyProcessManager` o traduz em
 `CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1` só para o executável `claude` (`isClaudeCommandName`).
 O renderer não escolhe nome nem valor de variável de ambiente.

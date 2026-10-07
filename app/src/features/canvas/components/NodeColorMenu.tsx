@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useRef } from 'react'
 import { Check, Palette } from 'lucide-react'
 import {
   FRAME_COLORS,
@@ -7,6 +7,7 @@ import {
   readFrameColor,
 } from './frame-colors'
 import type { FrameColor } from '../types'
+import { useDismissOnOutside } from '../../shared/focus/useDismissOnOutside'
 
 type NodeColorMenuProps = {
   x: number
@@ -24,16 +25,14 @@ type NodeColorMenuProps = {
 export function NodeColorMenu({ x, y, current, onSelect, onClose }: NodeColorMenuProps) {
   const active = readFrameColor(current)
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [onClose])
+  const menuRef = useRef<HTMLDivElement>(null)
+  // Fecha ao clicar em qualquer lugar fora — inclusive dentro de outro bloco,
+  // que antes não contava porque só o fundo vazio do canvas fechava o menu.
+  useDismissOnOutside(true, menuRef, onClose)
 
   return (
     <div
+      ref={menuRef}
       role="menu"
       aria-label="Cor da moldura"
       className="fixed z-50 w-44 rounded-lg border border-white/10 bg-(--f-surface-panel) p-2 text-xs text-(--f-core-white-soft) shadow-2xl"

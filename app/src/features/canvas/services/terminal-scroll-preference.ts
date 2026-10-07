@@ -8,11 +8,19 @@
 
 const STORAGE_KEY = 'felixo-ai-core.claude-terminal-scroll'
 
+/**
+ * Ligado por padrão: sem escolha salva, os terminais do Claude abrem com
+ * rolagem. Só um `off` gravado pela pessoa desliga.
+ */
+export function parseClaudeTerminalScroll(stored: string | null): boolean {
+  return stored !== 'off'
+}
+
 export function loadClaudeTerminalScroll(): boolean {
   try {
-    return window.localStorage.getItem(STORAGE_KEY) === 'on'
+    return parseClaudeTerminalScroll(window.localStorage.getItem(STORAGE_KEY))
   } catch {
-    return false
+    return parseClaudeTerminalScroll(null)
   }
 }
 
