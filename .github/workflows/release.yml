@@ -273,6 +273,32 @@ jobs:
             app/build/canvas-reading-smoke/**
           if-no-files-found: ignore
 
+      # Atualização silenciosa com o app aberto (task "Instalador — investigar
+      # instalador NSIS silencioso que não avança com o app aberto"): o
+      # instalador desta release por cima da última promovida, instalada para
+      # todos numa pasta 8.3, com o app e o instalador sem elevação. Até a
+      # 0.1.438 os dois cenários travavam para sempre num MessageBox invisível.
+      # Fica depois do smoke do canvas, porque desinstala o Felixo preparado
+      # acima; o relatório vai para o RUNNER_TEMP, fora do upload da release.
+      - name: Atualização silenciosa com o app aberto (Windows)
+        if: runner.os == 'Windows'
+        timeout-minutes: 15
+        shell: pwsh
+        run: |
+          $tag = gh release list --repo $env:GITHUB_REPOSITORY --limit 1 --exclude-drafts --exclude-pre-releases --json tagName --jq '.[0].tagName'
+          gh release download $tag --repo $env:GITHUB_REPOSITORY --pattern '*-win-x64.exe' --dir "C:\fx\instaladores\$tag"
+          $base = (Get-ChildItem "C:\fx\instaladores\$tag" -Filter *.exe | Select-Object -First 1).FullName
+          $novo = (Get-ChildItem release -Filter '*-win-x64.exe' | Select-Object -First 1).FullName
+          pwsh -NoLogo -NoProfile -File scripts/windows/reproduzir-nsis-app-aberto.ps1 -Base $base -Novo $novo -Saida "$env:RUNNER_TEMP\nsis-app-aberto" -Cenarios 'I,L' -Verificar
+
+      - name: Upload relatório da atualização com o app aberto
+        if: always() && runner.os == 'Windows'
+        uses: actions/upload-artifact@v6
+        with:
+          name: nsis-app-aberto-${{ matrix.os }}
+          path: ${{ runner.temp }}/nsis-app-aberto/
+          if-no-files-found: ignore
+
       # Um build do CI nunca ganha o atributo estendido de quarentena do
       # macOS sozinho — só chega nele quem baixou o artefato de verdade
       # (Safari, curl com --xattr, Finder AirDrop). Sem simular isso, o

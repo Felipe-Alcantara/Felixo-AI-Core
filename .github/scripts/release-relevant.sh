@@ -36,8 +36,10 @@ is_release_input() {
     app/index.html|app/vite.config.ts|app/tsconfig*.json) return 0 ;;
     app/postcss.config.js|app/tailwind.config.js) return 0 ;;
     app/package.json|app/package-lock.json) return 0 ;;
-    # Hooks do electron-builder (`beforePack`/`afterPack`).
+    # Hooks do electron-builder (`beforePack`/`afterPack`) e o script NSIS
+    # próprio (`nsis.include`), compilado dentro do instalador do Windows.
     app/scripts/bundle-npm-runtime.cjs|app/scripts/fix-native-pty-permissions.cjs) return 0 ;;
+    app/installer/*) return 0 ;;
     # Gates que o release.yml executa sobre o artefato (e o require local de
     # package-manager-alternatives-performance.cjs).
     app/scripts/release-smoke.cjs|app/scripts/package-inventory.cjs) return 0 ;;
@@ -49,6 +51,8 @@ is_release_input() {
     # (`canvas-smoke*.cjs`) roda como processo e é validado em todo PR: mudar
     # só ele não publica instalador.
     app/scripts/packaged-canvas-smoke.cjs) return 0 ;;
+    # Gate do Windows: atualização silenciosa com o app aberto.
+    app/scripts/windows/reproduzir-nsis-app-aberto.ps1) return 0 ;;
     # Normalização de fim de linha: muda os bytes que o checkout do runner
     # Windows entrega ao empacotamento (ex.: SKILL.md em app/resources).
     .gitattributes) return 0 ;;

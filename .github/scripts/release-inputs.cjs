@@ -33,13 +33,18 @@ function workflowScripts(workflowText) {
   for (const match of workflowText.matchAll(/\.github\/scripts\/[\w.-]+\.(?:sh|cjs)/g)) {
     scripts.add(path.join(ROOT, match[0]))
   }
+  // Roteiros PowerShell (`pwsh -File scripts/windows/...ps1`), também em `app/`.
+  for (const match of workflowText.matchAll(/(?<![\w./-])scripts\/(?:[\w.-]+\/)+[\w.-]+\.ps1/g)) {
+    scripts.add(path.join(APP, match[0]))
+  }
   return scripts
 }
 
 /** Hooks do electron-builder e conteúdo versionado que entra no instalador. */
 function packagedInputs(buildConfig) {
   const inputs = new Set()
-  for (const hook of [buildConfig.beforePack, buildConfig.afterPack]) {
+  // Script NSIS próprio (`nsis.include`): vai para dentro do instalador do Windows.
+  for (const hook of [buildConfig.beforePack, buildConfig.afterPack, buildConfig.nsis?.include]) {
     if (typeof hook === 'string') inputs.add(path.join(APP, hook))
   }
   for (const pattern of buildConfig.files ?? []) {

@@ -54,6 +54,8 @@ esperar true "skill empacotada via extraResources (era tratada como .md irreleva
 esperar true "markdown dentro de app/public" $'app/public/docs/x.md\n'
 esperar true "hook beforePack do electron-builder" $'app/scripts/bundle-npm-runtime.cjs\n'
 esperar true "hook afterPack do electron-builder" $'app/scripts/fix-native-pty-permissions.cjs\n'
+esperar true "script NSIS próprio (nsis.include)" $'app/installer/instalador.nsh\n'
+esperar true "gate do Windows: atualização silenciosa com o app aberto" $'app/scripts/windows/reproduzir-nsis-app-aberto.ps1\n'
 esperar true "smoke do artefato (gate do release)" $'app/scripts/release-smoke.cjs\n'
 esperar true "require local da bancada de gerenciadores" $'app/scripts/npm-runtime-performance.cjs\n'
 esperar true "script de versão usado no finalize" $'.github/scripts/release-version.sh\n'

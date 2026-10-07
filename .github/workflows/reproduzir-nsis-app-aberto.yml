@@ -1,13 +1,12 @@
 name: Reproduzir NSIS silencioso com o app aberto
 
-# Investigação da task "Felixo AI Core/Instalador — investigar instalador NSIS
-# silencioso que não avança com o app aberto e deixa processo elevado". Roda só
-# na branch de investigação: os cenários instalam, abrem, matam e desinstalam o
-# Felixo — o runner windows-latest é a máquina descartável.
+# Ferramenta manual da task "Felixo AI Core/Instalador — investigar instalador
+# NSIS silencioso que não avança com o app aberto e deixa processo elevado":
+# constrói o instalador do commit e roda os cenários I e L por cima da última
+# release. Rode ao mexer em `app/installer/` ou no NSIS do electron-builder. O
+# Release roda os mesmos cenários como gate. Os cenários instalam, abrem, matam
+# e desinstalam o Felixo — o runner windows-latest é a máquina descartável.
 on:
-  push:
-    branches:
-      - investigacao/nsis-app-aberto
   workflow_dispatch:
 
 permissions:
