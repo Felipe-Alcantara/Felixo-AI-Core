@@ -6117,3 +6117,53 @@ A compilação local no Linux (`-c.win.signAndEditExecutable=false`) validou a p
 
 - O gate novo do Release ainda não rodou num Release de verdade, porque a main está vermelha no Dependency policy (`npm audit`), e o Release gate não publica. Há task própria para isso.
 - O Windows real do Felipe não foi usado. A prova é em runner descartável, com `ConsentPromptBehaviorAdmin=0` (UAC sem caixa). No PC dele, com UAC padrão, o mesmo caminho passa pela caixa de consentimento.
+
+## 2026-10-07 — Notion: aba Painel com um cartão por repositório no bloco Tarefas Notion
+
+### Ponto de partida
+
+Uma forma comum de ler as tarefas no Notion é uma página "Repositórios" em galeria. Nela há um cartão por repositório, com barra de progresso, tarefas abertas, stack e link do GitHub, ligada à database de tarefas por uma relação. O bloco Tarefas Notion só tinha a tabela, com visualizações que filtram estado e propriedade.
+
+### Decisões do Felipe
+
+- O placar sai da coluna de agrupamento das tarefas (`Repositório`). Os detalhes (link, linguagem, arquivado) vêm da database ligada (`Projeto` → `GITHUB`), quando o nome bate.
+- O lugar é a aba **Painel** no próprio bloco, como primeira aba. O clique abre a tabela filtrada.
+- Os cartões são montados no renderer; a segunda database é lida pelo IPC que já existia.
+
+### O que mudou
+
+- `services/notion-repo-board.ts` concentra as funções puras: preferências, colunas elegíveis, automático, cartões e filtro por grupo. `hooks/useNotionDetailsSource.ts` lê a database de detalhes, e `components/tools/NotionRepoBoard.tsx` desenha a grade e a configuração.
+- No `NotionTasksPanel.tsx` entraram:
+  - a aba Painel;
+  - o chip do filtro temporário e "Voltar ao painel";
+  - a busca, que no Painel filtra só na tela;
+  - `tasksQuery`, que impede o placar de usar a lista filtrada de outra aba.
+- Duas descobertas na database real mudaram o casamento de nomes:
+  - Os títulos da database de repositórios vêm como `dono/repositório`, por isso nenhum nome batia direto.
+  - Dois repositórios aparecem nas duas contas, um deles como fork.
+
+  Por isso o casamento usa o trecho depois da barra ou o fim do link. No empate, vence a linha mais ligada pelas tarefas e depois a que não é fork.
+- A database medida tinha 77 de 91 repositórios sem nenhuma tarefa. Mostrar todos encheria o painel, então eles ficam escondidos por padrão e aparecem por "Mostrar repositórios sem tarefas".
+
+### Medido
+
+- `notion-repo-board.test.ts`: 24 testes.
+- Com os dados reais (1.756 tarefas, 91 repositórios), fora do app, saíram:
+  - 34 cartões, 12 deles com link;
+  - "Sem Repositório" com 284 tarefas;
+  - Felixo-AI-Core com 57%, 183 abertas de 428.
+- A primeira versão levava cerca de 130 ms por cálculo. Depois de indexar os nomes e usar um `Intl.Collator` só, a mediana caiu para cerca de 7 ms, com a máquina em load 18. A busca passou a filtrar fora do memo do placar.
+- Tela renderizada com a ponte do Notion simulada (Electron em xvfb, fixture local, sem token):
+  - Painel com 34 cartões, configuração aberta;
+  - clique em Felixo-AI-Core → aba "Todas" com o chip "Repositório: Felixo-AI-Core" e 428 tarefas;
+  - busca "estudo" → 5 cartões, sem nova chamada às tarefas;
+  - agrupar por `Projeto` → 13 cartões com o título da página ligada e o seletor de detalhes travado;
+  - ligação sem acesso → aviso "detalhes indisponíveis" com o placar mantido.
+- Gates: lint, `npm run build`, vitest 2.977 testes passando (5 ignorados), suíte node 2.494 testes no Node 25 e no Node 22 sem falhas.
+
+### Limitações
+
+- A tela não foi aberta no app real com uma conexão Notion de verdade. A validação foi com a ponte simulada e dados reais exportados.
+- A database de detalhes não entra na sincronização automática. Ela recarrega ao abrir o Painel e no botão Sincronizar.
+- A pasta local do repositório ("Sem repositório local" na galeria de origem) ficou fora do escopo.
+

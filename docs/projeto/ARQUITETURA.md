@@ -59,6 +59,21 @@ demanda, junto com as outras ferramentas do canvas. O painel mostra a origem
 da sincronização, filtros por texto/estado, seleção de tabelas compartilhadas,
 formulário guiado pelo schema reconhecido e confirmação antes de arquivar.
 
+A aba **Painel** do mesmo bloco não tem IPC próprio. As funções puras de
+`services/notion-repo-board.ts` montam os cartões no renderer a partir das
+tarefas já carregadas. Elas agrupam por uma coluna `select`, `multi_select`,
+`status` ou `relation`, contam abertas e concluídas pelo `completed`
+normalizado e, quando o agrupamento não é uma ligação, casam cada grupo com a
+database de detalhes. O casamento é pelo nome depois de `dono/` no título ou
+pelo fim do link. No empate, vence a linha mais ligada pelas tarefas do grupo
+e depois a que não é fork. A database de detalhes é o alvo da coluna de
+ligação no schema (`relation.data_source_id`) e é lida por
+`hooks/useNotionDetailsSource.ts` pelo mesmo `notion:tasks:list`, com o
+snapshot local antes. O Painel só desenha quando a lista na tela é a database
+inteira (estado `all`, sem busca enviada ao Notion), para que a lista filtrada
+de outra aba nunca vire placar. Preferências ficam em
+`felixo:notion-repo-board:<conexão>:<database>`.
+
 **Ordenação e filtros seguem a ordem visual do schema, não a alfabética.**
 `notion-task-sort.ts` usa `schemaOptionOrder` pra ler a ordem real de
 `select`/`status`: `select` é a ordem do array `options`; `status` tem grupo

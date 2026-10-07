@@ -80,34 +80,34 @@ com o mesmo cache local. Nada muda no processo principal.
 - `buildRepoCards({ tasks, schema, groupBy, detailsVia, details, tagProperties, showEmpty, search }): RepoCard[]`
 - `type RepoGroupFilter = { property: string; key: string; label: string }`, `filterTasksByGroup(tasks, schema, filter)`
 
-- [ ] Testes que falham primeiro: agrupamento por select (placar e %), multi_select (conta em cada
+- [x] Testes que falham primeiro: agrupamento por select (placar e %), multi_select (conta em cada
   valor), relation (nome vindo dos detalhes), cartão "Sem Repositório" no fim, ordem, casamento
   `dono/nome` e pelo link, desempate por ligação e por fork, arquivado, "mostrar sem tarefas", busca,
   automático das colunas, preferências com JSON inválido, `filterTasksByGroup` (inclui o grupo vazio).
-- [ ] Implementar até passar (`npx vitest run src/features/canvas/services/notion-repo-board.test.ts`).
-- [ ] Commit `feat(notion): montar o placar de repositórios a partir das tarefas`.
+- [x] Implementar até passar (`npx vitest run src/features/canvas/services/notion-repo-board.test.ts`).
+- [x] Commit `feat(notion): montar o placar de repositórios a partir das tarefas`.
 
 ### Tarefa 2 — Aba Painel no bloco
 
 **Consome:** a Tarefa 1.
 
-- [ ] `useNotionDetailsSource({ api, connectionId, target, enabled, refreshKey })` →
+- [x] `useNotionDetailsSource({ api, connectionId, target, enabled, refreshKey })` →
   `{ details: { rows, schema } | null, status: 'idle' | 'loading' | 'ready' | 'error', message }`.
-- [ ] `NotionRepoBoard` com a grade e a configuração (Agrupar por, Detalhes pela ligação,
+- [x] `NotionRepoBoard` com a grade e a configuração (Agrupar por, Detalhes pela ligação,
   Etiquetas, Mostrar sem tarefas).
-- [ ] No painel: aba Painel antes das visualizações; no Painel a carga usa `status: 'all'` e busca
+- [x] No painel: aba Painel antes das visualizações; no Painel a carga usa `status: 'all'` e busca
   vazia; clique → visualização "Todas" + chip; troca de conexão/database limpa o chip e reabre a aba
   guardada.
-- [ ] Inventário do canvas atualizado e regenerado (`npm run docs:inventario-canvas`).
-- [ ] `npm run lint`, `npm run build`, vitest e a suíte node.
-- [ ] Commit `feat(canvas): aba Painel com cartões de repositório no bloco Tarefas Notion`.
+- [x] Inventário do canvas atualizado e regenerado (`npm run docs:inventario-canvas`).
+- [x] `npm run lint`, `npm run build`, vitest e a suíte node.
+- [x] Commit `feat(canvas): aba Painel com cartões de repositório no bloco Tarefas Notion`.
 
 ### Tarefa 3 — Ver rodando e documentar
 
-- [ ] Renderizar o painel com dados de fixture fora do app e capturar a tela (Painel, configuração,
+- [x] Renderizar o painel com dados de fixture fora do app e capturar a tela (Painel, configuração,
   clique → tabela filtrada).
-- [ ] README, guia do usuário, arquitetura e `IA.md` no mesmo passo.
-- [ ] Commit `docs(notion): painel de repositórios`.
+- [x] README, guia do usuário, arquitetura e `IA.md` no mesmo passo.
+- [x] Commit `docs(notion): painel de repositórios`.
 
 ## Pontos de atenção (sem teste automático de componente)
 
