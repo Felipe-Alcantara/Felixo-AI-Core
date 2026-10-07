@@ -899,6 +899,45 @@ três sistemas. A compilação de 01/09/2026 gerou entry de 191,73 KiB cru
 500 kB; os chunks grandes de PTY e Markdown permanecem isolados até serem
 necessários.
 
+### Instalador NSIS do Windows: ganchos próprios
+
+`build.nsis.include` aponta para `app/installer/instalador.nsh`. O arquivo entra
+no cabeçalho do instalador e do desinstalador, antes dos templates do
+electron-builder. Existe por um defeito medido em 07/10/2026: a instalação
+silenciosa (`/S`) por cima de uma instalação registrada em pasta 8.3
+(`C:\Users\RUNNER~1\...`), com o app aberto e o chamador sem elevação, travava
+para sempre.
+
+- **Causa.** A checagem padrão de app aberto compara `Win32_Process.Path`, que
+  vem com caminho longo, com `$INSTDIR`, que é curto, e não vê o app. O
+  desinstalador antigo falha com os arquivos em uso. O `handleUninstallResult`
+  padrão então mostra um `MessageBox` sem `/SD`, invisível em `/S`, num processo
+  elevado que o chamador não consegue matar.
+- **`customCheckAppRunning`.** Roda a MESMA `_CHECK_APP_RUNNING` do
+  electron-builder, uma vez só, num laço por três pastas: o destino e o
+  `InstallLocation` de HKCU e de HKLM. Cada uma é convertida para o caminho longo
+  (`GetLongPathNameW`). Com `/D=` para outra pasta, só assim o app que roda da
+  pasta antiga é fechado antes do desinstalador antigo, que já foi distribuído e
+  não muda. O desinstalador novo só olha a própria pasta.
+- **`customUnInstallCheck`/`customUnInstallCheckCurrentUser`.** São iguais ao
+  padrão, com `/SD IDOK` no `MessageBox`: em `/S`, a falha vira código de saída 2.
+- **Armadilhas do build.** O electron-builder compila com `-WX`. Definir
+  `customCheckAppRunning` desliga o `!include "getProcessInfo.nsh"` e o `Var pid`
+  dos templates (o arquivo os repõe). Inserir a checagem padrão duas vezes na
+  mesma seção duplica os rótulos dela, daí o laço.
+- **Prova e gate.** `app/scripts/windows/reproduzir-nsis-app-aberto.ps1`
+  reproduz os cenários num runner descartável. O I usa `/D=` e o L não; nos dois,
+  a instalação é para todos, em 8.3, com o app aberto e o chamador limitado por
+  uma tarefa agendada `RunLevel Limited`. Antes da correção os dois ficavam
+  presos 180 s (runs 37591182111 e 37624204763). Depois, terminaram com exit 0
+  em 38 s e 43 s (run 37625032022). O `release.yml` roda I e L com `-Verificar`
+  no Windows, depois do smoke do canvas no pacote. O workflow manual
+  `reproduzir-nsis-app-aberto.yml` constrói o instalador de um commit e roda os
+  mesmos cenários.
+- **Fora do escopo, documentado.** Um usuário sem admin rodando `/S` sobre uma
+  instalação para todos para no pedido de elevação do Windows (UAC). Isso é do
+  sistema; o guia do usuário orienta a rodar elevado ou instalar por usuário.
+
 ### npm-runtime do instalador
 
 Como o app instalado precisa instalar CLIs sem depender de Node/npm do usuário,

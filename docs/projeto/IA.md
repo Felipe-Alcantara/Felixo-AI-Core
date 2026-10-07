@@ -6067,3 +6067,53 @@ Workflow manual `openia-windows-limpo.yml` + roteiro reutilizável `app/scripts/
 - O chat real não rodou no runner: o seletor "Modelo Openia" não abriu (lista de modelos vazia ao carregar). Chat e agente reais já tinham sido validados em 21/09 nesta máquina; não é critério desta task.
 - Validação de UI do Windows só no runner (Windows Server 2025); macOS segue na task própria.
 - Gates locais: suíte Node 2481/2484 (a falha é EPERM de symlink em `app-relaunch.test.cjs`, igual sem esta mudança), `test:native` 6/6, lint e typecheck limpos. CI: todos os `Validate` (Linux x64/arm64, macOS, Windows) verdes; só o "Dependency policy" vermelho.
+
+## 2026-10-07 — Instalador: a instalação silenciosa com o app aberto não trava mais em pasta 8.3
+
+Registro de Claude - Tasks do AI Core, task "Felixo AI Core/Instalador — investigar instalador NSIS silencioso que não avança com o app aberto e deixa processo elevado" (Notion 3e291f95-497e-8105-8292-f38d63a3034c). Início às 09:30.
+
+### Ponto de partida
+
+Outra sessão, entre 04:28 e 05:03, deixou a branch `investigacao/nsis-app-aberto` com o roteiro de reprodução e três runs: A–F com runner elevado terminam; G (usuário sem admin) para no UAC; I (réplica de 21/09) fica preso. Continuei dali.
+
+### Causa (linha do tempo do cenário I, run 37591182111)
+
+- A instalação anterior é para todos, numa pasta 8.3. O desinstalador antigo procura o app com `Win32_Process.Path.StartsWith('C:\Users\RUNNER~1\...')`. O Windows devolve o caminho longo do processo, então o app não é visto e não é fechado.
+- Com os arquivos em uso, o desinstalador sai com 2 cinco vezes. O instalador mostra "Failed to uninstall old application files. Please try running the installer again.: 2" num `MessageBox` sem `/SD` (`installUtil.nsh:129` do electron-builder 26.15.3). Em `/S` ninguém clica, e o processo elevado não pode ser morto pelo chamador sem elevação.
+
+### Decisões do Felipe
+
+- Com o app aberto, o `/S` fecha o app e instala.
+- Cobertura por cenário no Release.
+- O caso do usuário sem admin com instalação para todos (UAC) só é documentado.
+
+### Correção
+
+`app/installer/instalador.nsh` (`build.nsis.include`):
+
+- `customCheckAppRunning` faz a checagem padrão com caminho longo, também nas pastas da instalação anterior (HKCU/HKLM).
+- `customUnInstallCheck*` põe `/SD IDOK` no `MessageBox`; a falha vira exit 2.
+
+Detalhes e armadilhas (`-WX`, `Var pid`, rótulos) estão em ARQUITETURA.md, seção "Instalador NSIS do Windows: ganchos próprios".
+
+### Medido (windows-latest, chamador com token limitado)
+
+| Cenário | Instalador v0.1.438 | Instalador corrigido |
+| --- | --- | --- |
+| I: para todos em 8.3, app aberto, `/S /D=` | preso 180 s, app aberto (run 37591182111) | exit 0 em 38 s, app fechado, 1.826 arquivos (run 37625032022) |
+| L: para todos em 8.3, app aberto, `/S` | preso 180 s, app aberto (run 37624204763) | exit 0 em 43 s, app fechado, 1.826 arquivos (run 37625032022) |
+
+Na linha do tempo do I corrigido, o instalador novo fecha os 5 processos pelo caminho longo do `InstallLocation` de HKLM (7,4 s) antes de chamar o desinstalador antigo.
+
+A compilação local no Linux (`-c.win.signAndEditExecutable=false`) validou a passada do desinstalador com `-WX`. A do instalador só compila no Windows (precisa de wine aqui).
+
+### Cobertura
+
+- O `release.yml` (Windows) roda I e L com `-Verificar` depois do smoke do canvas no pacote.
+- `release-relevant.sh` e `release-inputs.cjs` passam a contar `app/installer/*` e o `.ps1`.
+- O workflow `reproduzir-nsis-app-aberto.yml` virou manual.
+
+### Limitações
+
+- O gate novo do Release ainda não rodou num Release de verdade, porque a main está vermelha no Dependency policy (`npm audit`), e o Release gate não publica. Há task própria para isso.
+- O Windows real do Felipe não foi usado. A prova é em runner descartável, com `ConsentPromptBehaviorAdmin=0` (UAC sem caixa). No PC dele, com UAC padrão, o mesmo caminho passa pela caixa de consentimento.

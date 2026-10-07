@@ -63,6 +63,12 @@ Baixe o arquivo `Felixo-AI-Core-*-win-x64.exe`, execute o instalador e siga as e
 
 Ainda não há versão portátil oficial em `.zip` para Windows.
 
+#### Instalação silenciosa (script)
+
+Para instalar ou atualizar sem janelas, rode o instalador com `/S` (e, se quiser outra pasta, `/D=C:\caminho`, sempre por último). Se o Felixo estiver aberto, o instalador **fecha o app** e segue. Isso vale também quando a instalação anterior está numa pasta registrada com nome curto do Windows (`C:\Users\FULANO~1\...`). Se mesmo assim a versão anterior não puder ser removida, o instalador termina com **código de saída 2** em vez de esperar indefinidamente.
+
+Instalação "para todos os usuários" pede administrador. Um usuário sem admin rodando `/S` numa máquina com instalação para todos fica parado no pedido de elevação do Windows (UAC). Em script, rode o instalador elevado ou use a instalação por usuário, que é o padrão do Felixo.
+
 ### macOS
 
 Artefatos configurados:
