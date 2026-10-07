@@ -169,9 +169,24 @@ function rodar(comando, args, opcoes = {}) {
   }
 }
 
+/**
+ * Ambiente para o Windows PowerShell 5.1. O passo do workflow roda em pwsh 7,
+ * e o `PSModulePath` herdado aponta para os módulos do 7: o 5.1 não carregava
+ * `Microsoft.PowerShell.Security` (`ConvertTo-SecureString`, run 37580814167).
+ * Sem a variável, o 5.1 monta a dele.
+ */
+function ambienteDoPowerShell(extra = {}) {
+  const env = { ...process.env, ...extra }
+  for (const nome of Object.keys(env)) if (nome.toLowerCase() === 'psmodulepath') delete env[nome]
+  return env
+}
+
 /** PowerShell com saída JSON: o jeito estável de ler registro, atalhos e processos. */
 function powershellJson(script, opcoes = {}) {
-  const r = rodar('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script], opcoes)
+  const r = rodar('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script], {
+    ...opcoes,
+    env: ambienteDoPowerShell(opcoes.env),
+  })
   const texto = r.saida.trim()
   if (!texto) return null
   try {
@@ -257,10 +272,22 @@ function resumoDaDeteccao(item) {
   }
 }
 
-/** Pacotes do Python que o `py` escolhe, incluindo o site do usuário. */
+/**
+ * Pacotes de cada Python que pode estar em jogo, rotulados pelo comando.
+ * Não basta o `py`: o launcher legado roda `py start_app.py`, e o `py` segue o
+ * shebang `#!/usr/bin/env python3` do script — no runner isso escolheu o
+ * Python do PATH (3.12), não o padrão do `py` (3.14). Medido no run
+ * 37580814167: o diff só do `py` saiu vazio enquanto o pip instalava o typer.
+ */
 function pipFreeze() {
-  const r = rodar('py', ['-m', 'pip', 'freeze', '--all'])
-  return new Set(r.saida.split(/\r?\n/).map((linha) => linha.trim()).filter(Boolean))
+  const pacotes = new Set()
+  for (const interpretador of ['py', 'python']) {
+    const r = rodar(interpretador, ['-m', 'pip', 'freeze', '--all'])
+    for (const linha of r.saida.split(/\r?\n/)) {
+      if (linha.trim()) pacotes.add(`${interpretador}:${linha.trim()}`)
+    }
+  }
+  return pacotes
 }
 
 function diferencaDePacotes(antes, depois) {
@@ -414,8 +441,12 @@ async function main(argv = process.argv.slice(2)) {
     }
     // Volta ao estado de clone recém-baixado, para a detecção do app também
     // começar do zero.
-    const instaladosPeloDireto = execucaoDireta.pacotesInstaladosPeloVersion.map((pacote) => pacote.split('==')[0])
-    if (instaladosPeloDireto.length > 0) rodar('py', ['-m', 'pip', 'uninstall', '-y', ...instaladosPeloDireto], { timeout: 180_000 })
+    for (const interpretador of ['py', 'python']) {
+      const nomes = execucaoDireta.pacotesInstaladosPeloVersion
+        .filter((pacote) => pacote.startsWith(`${interpretador}:`))
+        .map((pacote) => pacote.slice(interpretador.length + 1).split('==')[0])
+      if (nomes.length > 0) rodar(interpretador, ['-m', 'pip', 'uninstall', '-y', ...nomes], { timeout: 180_000 })
+    }
 
     const pacotesAntesApp = pipFreeze()
     const comClone = await comApp(exe, { path: `${pastaLegado};${pathOriginal}` }, async (page) => {
@@ -542,8 +573,13 @@ async function main(argv = process.argv.slice(2)) {
 
       await escolher('Interface Openia', /\bllm\b/i)
       let modeloEscolhido = null
+      let opcoesDeModelo = null
       try {
         await grupo.getByRole('combobox', { name: 'Modelo Openia', exact: true }).click()
+        // Quantos modelos o seletor ofereceu (só a contagem): na rodada
+        // 37580814167 o gpt-4o-mini não apareceu e não se sabia se a lista
+        // estava vazia ou se o nome era outro.
+        opcoesDeModelo = await page.getByRole('option').count()
         const busca = page.getByPlaceholder(/Buscar modelo/)
         if (await busca.count()) await busca.fill('gpt-4o-mini')
         const opcao = page.getByRole('option').filter({ hasText: /gpt-4o-mini/i }).first()
@@ -589,6 +625,16 @@ async function main(argv = process.argv.slice(2)) {
 
       const textoDaTela = await page.evaluate(() => document.body.innerText)
       const saidaDoTerminal = await page.evaluate(() => window.__felixoSaida)
+      // O bloco nasce no estado da tela e só depois o autosave o grava no
+      // banco; exportar antes disso saiu com 0 blocos (run 37580814167).
+      const limiteDoAutosave = Date.now() + 60_000
+      let blocosSalvos = 0
+      while (Date.now() < limiteDoAutosave) {
+        blocosSalvos = await page.evaluate(async () => (await window.felixo.canvas.list())?.nodes?.length ?? 0)
+        if (blocosSalvos > 0) break
+        await esperar(500)
+      }
+      if (blocosSalvos === 0) throw new Error('o bloco do terminal Openia não foi gravado no canvas em 60 s')
       const exportacao = await page.evaluate(async () => {
         const nodes = await window.felixo.canvas.list()
         const edges = await window.felixo.canvas.listEdges()
@@ -626,6 +672,7 @@ async function main(argv = process.argv.slice(2)) {
       return {
         chaveConfigurada: Boolean(statusDaChave?.configured ?? statusDaChave?.ok),
         modeloEscolhido,
+        opcoesDeModelo,
         chat,
         nodesExportados: exportacao.bundle.nodes.length,
         nodesOpenia: nodesOpenia.length,
@@ -814,13 +861,13 @@ function validarUsuarioComEspaco(opcoes) {
     `$c = New-Object System.Management.Automation.PSCredential('${usuario}', $s)`,
     `$p = Start-Process -FilePath powershell.exe -Credential $c -LoadUserProfile -WorkingDirectory '${compartilhada}' -ArgumentList '-NoLogo','-NoProfile','-ExecutionPolicy','Bypass','-File','${path.join(compartilhada, 'como-usuario.ps1')}' -Wait -PassThru`,
     'exit $p.ExitCode',
-  ].join('; ')], { timeout: 20 * 60_000, env: { ...process.env, FELIXO_SENHA_TESTE: senha } })
+  ].join('; ')], { timeout: 20 * 60_000, env: ambienteDoPowerShell({ FELIXO_SENHA_TESTE: senha }) })
 
   const resultado = fs.existsSync(saidaJson) ? JSON.parse(fs.readFileSync(saidaJson, 'utf8')) : null
   const log = fs.existsSync(path.join(compartilhada, 'usuario-com-espaco.log'))
     ? fs.readFileSync(path.join(compartilhada, 'usuario-com-espaco.log'), 'utf8').slice(-1_500)
     : ''
-  rodar('powershell.exe', ['-NoLogo', '-NoProfile', '-Command', `Remove-LocalUser -Name '${usuario}' -ErrorAction SilentlyContinue`])
+  rodar('powershell.exe', ['-NoLogo', '-NoProfile', '-Command', `Remove-LocalUser -Name '${usuario}' -ErrorAction SilentlyContinue`], { env: ambienteDoPowerShell() })
   return {
     usuario,
     codigoSaida: r.codigo,
