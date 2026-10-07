@@ -209,7 +209,11 @@ test('list --json roda de verdade pelos aliases .cmd (pasta com espaço) e .ps1'
     )
 
     for (const pasta of [pastaCmd, pastaPs1]) {
-      const env = { ...process.env, PATH: [pasta, path.join(process.env.SystemRoot || 'C:\\Windows', 'System32')].join(';') }
+      // Sem as outras grafias de PATH: no runner a variável herdada se chama
+      // "Path", e `{ ...process.env, PATH }` ficaria com as duas — o
+      // resolvedor prefere "Path" e não veria a pasta do teste (run 37579797141).
+      const env = Object.fromEntries(Object.entries(process.env).filter(([nome]) => nome.toLowerCase() !== 'path'))
+      env.PATH = [pasta, path.join(process.env.SystemRoot || 'C:\\Windows', 'System32')].join(';')
       const service = createOpeniaService({
         runCommand: (args, options) =>
           runOpeniaCommand(args, { ...options, resolveSpawn: () => resolveOpeniaSpawn({ platformName: 'win32', env }) }),

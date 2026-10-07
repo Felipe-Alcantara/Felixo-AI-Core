@@ -293,7 +293,11 @@ describe('alias .ps1 no Windows', () => {
     const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo ps1 '))
     try {
       fs.writeFileSync(path.join(pasta, 'openia.ps1'), 'Write-Output "openia 0.1.0"\r\n', 'utf8')
-      const env = { ...process.env, PATH: [pasta, path.join(process.env.SystemRoot || 'C:\\Windows', 'System32')].join(';') }
+      // Sem as outras grafias de PATH: no runner a variável herdada se chama
+      // "Path", e `{ ...process.env, PATH }` ficaria com as duas — o
+      // resolvedor prefere "Path" e não veria a pasta do teste (run 37579797141).
+      const env = Object.fromEntries(Object.entries(process.env).filter(([nome]) => nome.toLowerCase() !== 'path'))
+      env.PATH = [pasta, path.join(process.env.SystemRoot || 'C:\\Windows', 'System32')].join(';')
 
       const result = await detectCli(openia, env)
 
