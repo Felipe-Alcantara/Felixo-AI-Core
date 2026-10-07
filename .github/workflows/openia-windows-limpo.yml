@@ -1,0 +1,89 @@
+name: Openia em Windows limpo
+
+# Cobre a task "Felixo AI Core/Agentes — validar Openia empacotado em Windows
+# limpo (NSIS real, aliases .cmd/.ps1, cancelamento, exportação de canvas)".
+# A validação de 21/09/2026 rodou numa máquina não limpa (launcher legado do
+# Openia no PATH, Python e Felixo já instalados); o runner `windows-latest` é o
+# Windows limpo e descartável — com Python, sem Felixo e sem Openia. Decisão do
+# Felipe em 07/10/2026.
+#
+# Só manual (workflow_dispatch): o roteiro instala o pacote publicado, mexe no
+# perfil do runner, cria um usuário local e pode usar uma chave real de teste
+# (secret OPENIA_TEST_KEY). Sem o secret, roda com uma chave-sentinela fictícia
+# — a varredura de vazamento continua valendo e só o chat real fica de fora.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag da release a validar (vazio = a mais recente)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  validar:
+    name: Validar Openia empacotado (windows-latest)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # O Felixo instala o Openia com `py -m pip install --user` no Windows.
+      # Se o runner não trouxer o lançador `py`, instala o Python oficial (que o
+      # inclui) — e o log diz qual dos dois aconteceu.
+      - name: Python com o lançador py
+        shell: pwsh
+        run: |
+          if (Get-Command py -ErrorAction SilentlyContinue) {
+            Write-Host "Lançador py já presente no runner: $(py --version)"
+          } else {
+            $instalador = Join-Path $env:RUNNER_TEMP 'python-3.13.7-amd64.exe'
+            Invoke-WebRequest 'https://www.python.org/ftp/python/3.13.7/python-3.13.7-amd64.exe' -OutFile $instalador
+            Start-Process $instalador -ArgumentList '/quiet','InstallAllUsers=1','Include_launcher=1','InstallLauncherAllUsers=1','PrependPath=1' -Wait
+            # O lançador vai para C:\Windows\py.exe, que já está no PATH.
+            Write-Host "Lançador py instalado pelo workflow: $(py --version)"
+          }
+
+      - name: Baixar o instalador da release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_PEDIDA: ${{ inputs.tag }}
+        run: |
+          $tag = $env:TAG_PEDIDA
+          if (-not $tag) { $tag = gh release view --repo $env:GITHUB_REPOSITORY --json tagName --jq .tagName }
+          Write-Host "Release validada: $tag"
+          gh release download $tag --repo $env:GITHUB_REPOSITORY --pattern '*-win-x64.exe' --dir instalador
+          Get-ChildItem instalador
+
+      - name: Validar o Openia no pacote instalado
+        shell: pwsh
+        env:
+          OPENIA_TEST_KEY: ${{ secrets.OPENIA_TEST_KEY }}
+        run: |
+          $instalador = (Get-ChildItem instalador -Filter '*-win-x64.exe' | Select-Object -First 1).FullName
+          node scripts/openia-windows-limpo.cjs --installer $instalador --out relatorio
+
+      - name: Publicar o relatório
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openia-windows-limpo
+          path: app/relatorio/
+          if-no-files-found: warn
