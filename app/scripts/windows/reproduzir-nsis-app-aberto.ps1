@@ -14,6 +14,11 @@
   que eles mostram (MessageBox), arquivos no destino, registro e se o app
   continuou aberto. Grava relatorio.json e uma captura de tela por cenário
   preso em -Saida.
+
+  Com -Verificar vira gate (smoke do Release): sai com 1 se algum cenário
+  escolhido não terminou, saiu com código diferente de 0, deixou o app aberto,
+  deixou processo de instalador vivo ou deu erro. Use com cenários que DEVEM
+  passar com o instalador novo (I e L, que travavam antes da correção).
 #>
 [CmdletBinding()]
 param(
@@ -21,7 +26,8 @@ param(
   [Parameter(Mandatory)] [string]$Novo,
   [Parameter(Mandatory)] [string]$Saida,
   [int]$LimiteSegundos = 180,
-  [string[]]$Cenarios = @()
+  [string[]]$Cenarios = @(),
+  [switch]$Verificar
 )
 
 $ErrorActionPreference = 'Stop'
@@ -493,6 +499,13 @@ Cenario 'K-limitado-usuario-longo-app-aberto-sem-D' 'instalação por usuário (
   $r.medicao = Medir $Novo '/S' $r.base.installLocation $LimiteSegundos 'limitado'
 }
 
+Cenario 'L-limitado-allusers-curto-app-aberto-sem-D' 'chamador sem elevação, instalação para todos em pasta 8.3, app aberto, /S por cima da mesma pasta ($INSTDIR curto)' {
+  param($r)
+  $r.base = Instalar-Base 'allusers' $baseCurta
+  $r.app = Abrir-App $r.base.exe -Limitado
+  $r.medicao = Medir $Novo '/S' ([JanelasFelixo]::Longo($r.base.installLocation)) $LimiteSegundos 'limitado'
+}
+
 $relatorio = [ordered]@{ ambiente = $ambiente; cenarios = $resultados }
 $relatorio | ConvertTo-Json -Depth 8 | Out-File -Encoding utf8 (Join-Path $Saida 'relatorio.json')
 Write-Host ''
@@ -501,4 +514,22 @@ foreach ($c in $resultados) {
   $m = $c.medicao
   if (-not $m) { Write-Host ("{0}: erro — {1}" -f $c.id, $c.erro); continue }
   Write-Host ("{0}: terminou={1} código={2} {3}s cpu20s={4} app-aberto={5} arquivos={6}" -f $c.id, $m.terminou, $m.codigoDeSaida, $m.segundos, $m.cpuNosUltimos20s, $m.appAindaAberto, $m.arquivosNoDestino)
+}
+
+if ($Verificar) {
+  $falhas = @(foreach ($c in $resultados) {
+    $m = $c.medicao
+    if (-not $m) { "$($c.id): erro — $($c.erro)"; continue }
+    if (-not $m.terminou) { "$($c.id): o instalador não terminou em $($m.segundos) s" }
+    elseif ($m.codigoDeSaida -ne 0) { "$($c.id): o instalador saiu com $($m.codigoDeSaida)" }
+    if ($m.appAindaAberto -gt 0) { "$($c.id): o app continuou aberto ($($m.appAindaAberto) processo(s))" }
+    if (@($m.processosQueSobraram).Count -gt 0) { "$($c.id): sobraram processos do instalador: $(@($m.processosQueSobraram) -join ', ')" }
+    if ($m.arquivosNoDestino -le 0) { "$($c.id): nenhum arquivo no destino" }
+  })
+  if ($resultados.Count -eq 0) { $falhas += 'nenhum cenário rodou' }
+  if ($falhas.Count -gt 0) {
+    foreach ($f in $falhas) { Write-Host "::error::$f" }
+    exit 1
+  }
+  Write-Host "Verificação: $($resultados.Count) cenário(s) terminaram com código 0, app fechado e sem processo preso."
 }

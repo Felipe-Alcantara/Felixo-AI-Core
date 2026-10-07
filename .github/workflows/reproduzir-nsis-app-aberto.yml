@@ -17,10 +17,20 @@ jobs:
   reproduzir:
     name: Cenários NSIS (windows-latest)
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 75
+    defaults:
+      run:
+        working-directory: app
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: app/package-lock.json
 
       - name: Baixar os instaladores das duas últimas releases
         shell: pwsh
@@ -32,21 +42,43 @@ jobs:
           foreach ($tag in $tags) {
             gh release download $tag --repo $env:GITHUB_REPOSITORY --pattern '*-win-x64.exe' --dir "C:\fx\instaladores\$tag"
           }
-          "NOVO=$((Get-ChildItem "C:\fx\instaladores\$($tags[0])" -Filter *.exe | Select-Object -First 1).FullName)" >> $env:GITHUB_ENV
-          "BASE=$((Get-ChildItem "C:\fx\instaladores\$($tags[1])" -Filter *.exe | Select-Object -First 1).FullName)" >> $env:GITHUB_ENV
+          "ULTIMA=$((Get-ChildItem "C:\fx\instaladores\$($tags[0])" -Filter *.exe | Select-Object -First 1).FullName)" >> $env:GITHUB_ENV
+          "ANTERIOR=$((Get-ChildItem "C:\fx\instaladores\$($tags[1])" -Filter *.exe | Select-Object -First 1).FullName)" >> $env:GITHUB_ENV
           Get-ChildItem C:\fx\instaladores -Recurse -File | Select-Object FullName, Length
 
-      - name: Rodar os cenários
+      # Antes: o instalador publicado por cima da release anterior, com o app
+      # aberto e o $INSTDIR curto (L). O I já foi medido preso na run 37591182111.
+      - name: Antes da correção (instalador publicado)
         shell: pwsh
         run: |
-          # Run 37589421692 já mediu B–F e H com o runner elevado; esta rodada
-          # refaz A com a linha do tempo e mede o chamador sem elevação (G, I–K).
-          pwsh -NoLogo -NoProfile -File app/scripts/windows/reproduzir-nsis-app-aberto.ps1 -Base $env:BASE -Novo $env:NOVO -Saida "$env:RUNNER_TEMP\repro" -Cenarios 'A,G,I,J,K'
+          pwsh -NoLogo -NoProfile -File scripts/windows/reproduzir-nsis-app-aberto.ps1 -Base $env:ANTERIOR -Novo $env:ULTIMA -Saida "$env:RUNNER_TEMP\antes" -Cenarios 'L'
+
+      - name: Construir o instalador deste commit
+        shell: pwsh
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: |
+          npm ci --no-audit --no-fund
+          # Versão acima das publicadas: o instalador novo é uma atualização.
+          npm version --no-git-tag-version 0.1.9999
+          npx vite build
+          # Mesma linha do passo "Build installers" do release.yml no Windows.
+          npx electron-builder --win nsis --x64 --publish never -c.npmRebuild=false
+          "CONSTRUIDO=$((Get-ChildItem release -Filter '*-win-x64.exe' | Select-Object -First 1).FullName)" >> $env:GITHUB_ENV
+
+      # Depois: o instalador deste commit por cima da última release (cujo
+      # desinstalador ainda tem a checagem por caminho curto), I e L como gate.
+      - name: Depois da correção (instalador deste commit)
+        shell: pwsh
+        run: |
+          pwsh -NoLogo -NoProfile -File scripts/windows/reproduzir-nsis-app-aberto.ps1 -Base $env:ULTIMA -Novo $env:CONSTRUIDO -Saida "$env:RUNNER_TEMP\depois" -Cenarios 'I,L' -Verificar
 
       - name: Publicar o relatório
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: reproduzir-nsis-app-aberto
-          path: ${{ runner.temp }}/repro/
+          path: |
+            ${{ runner.temp }}/antes/
+            ${{ runner.temp }}/depois/
           if-no-files-found: warn
