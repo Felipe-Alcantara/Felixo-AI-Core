@@ -7918,3 +7918,41 @@ Os scripts ficaram fora do repositório e dirigem o app por CDP: a ponte `window
 ### Não validado
 
 Linux e macOS: não há máquina. Seguem nas subtarefas `3d791f95-497e-818f-bf69-d1346e2caabb` e `3d791f95-497e-8106-be65-ed2014762ee8`.
+
+## 2026-10-07 — Menus que não fechavam ao clicar fora; rolagem do Claude ligada por padrão
+
+Registro de Claude opus yolo · Felixo-AI-Core.
+
+### Menus flutuantes que ficavam abertos
+
+Sintoma relatado: o menu de cor (clique direito num bloco) e o seletor "Colunas da tabela" do bloco Tarefas Notion
+ficavam abertos depois de usar ou clicar fora, poluindo a tela.
+
+Causa: o menu de cor só fechava com Esc, ao escolher uma cor ou pelo `onPaneClick` do React Flow, que só dispara no
+fundo vazio do canvas; clique dentro de outro bloco, na sidebar ou num painel não contava. O seletor de colunas só
+fechava clicando de novo no próprio botão. Um ouvinte comum de `mousedown` no documento também não resolveria: o
+d3-drag dos blocos chama `stopImmediatePropagation` no `mousedown`, e outros menus param a propagação do Esc.
+
+Correção: `useDismissOnOutside` (`app/src/features/shared/focus/useDismissOnOutside.ts`) fecha com `pointerdown` fora
+e com Esc, os dois ouvidos na **fase de captura**, e com o `blur` da janela (clique numa página web ou iframe, ou
+troca de app). A superfície portaled (`data-felixo-popover-surface`) conta como dentro. O hook foi aplicado ao
+`NodeColorMenu` e ao seletor de colunas do `NotionTasksPanel`.
+
+Validação: `useDismissOnOutside.test.ts` (5 testes, inclusive a exigência de captura). No app isolado
+(`felixo devtools`, da fonte), o menu de cor fechou ao clicar dentro de outro bloco, ao clicar na sidebar, com Esc
+(inclusive com outro menu aberto, caso que falhou com o Esc em bolha), com o `blur` da janela e ao escolher uma cor
+(a moldura aplicou). O seletor de colunas do Notion **não foi clicado no app**: aparece só com uma database Notion
+configurada, e o perfil isolado não tem conexão. Ele usa o mesmo hook já validado.
+
+### Rolagem no terminal do Claude Code: ligada por padrão
+
+Decisão da pessoa: deixar a opção ligada por padrão. Sem escolha salva, `loadClaudeTerminalScroll` agora devolve
+ligado (`parseClaudeTerminalScroll`); só um `off` gravado desliga, então quem já tinha desligado continua desligado.
+Os riscos listados na entrada de 2026-09-19 (menus, seleção com o mouse, redesenho) continuam não verificados numa
+janela real com o Claude rodando; a decisão de ligar por padrão foi tomada sabendo disso.
+
+Validação: teste novo em `terminal-scroll-preference.test.ts`. No perfil isolado, sem nada salvo, o interruptor em
+Configurações aparece ligado, com o aviso "Ativado", e com `off` salvo o carregamento devolve desligado.
+`tsc -b`, `eslint` dos arquivos alterados e `vitest` dos módulos tocados limpos.
+
+Estado: concluído.
