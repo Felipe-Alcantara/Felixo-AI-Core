@@ -76,7 +76,10 @@ jobs:
         run: |
           npm run build
           # Mesma linha do passo "Build installers" do release.yml no Windows.
-          npx electron-builder --win nsis --x64 --publish never -c.npmRebuild=false
+          # Entre aspas: o pwsh partia `-c.npmRebuild=false` em `-c` e
+          # `.npmRebuild=false`, e o electron-builder procurava um arquivo de
+          # configuração com esse nome (run 37581351940).
+          npx electron-builder --win nsis --x64 --publish never '-c.npmRebuild=false'
           New-Item -ItemType Directory -Force instalador | Out-Null
           Copy-Item (Get-ChildItem release -Filter '*-win-x64.exe' | Select-Object -First 1).FullName instalador
           Write-Host "Instalador construído a partir de $env:GITHUB_SHA"
