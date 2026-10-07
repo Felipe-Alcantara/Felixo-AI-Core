@@ -29,10 +29,10 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 
 ## Números
 
-- **Elementos:** 94 (8 blocos, 16 ferramentas, 70 outras superfícies)
-- **Controles:** 351, dos quais 55 com teste específico
+- **Elementos:** 95 (8 blocos, 16 ferramentas, 71 outras superfícies)
+- **Controles:** 358, dos quais 55 com teste específico
 - **Elementos sem nenhum teste:** 4
-- **Lacunas:** 273 (alto 10, médio 146, baixo 117), em 77 tasks
+- **Lacunas:** 274 (alto 10, médio 147, baixo 117), em 77 tasks
 
 ## Moldura do canvas
 
@@ -1834,15 +1834,15 @@ Sem controle próprio: as ações vêm de outros elementos.
 ### Tarefas Notion (ferramenta e conteúdo do bloco)
 
 - **ID:** `ferramenta-tarefas-notion` · **Dono:** `src/features/canvas/components/tools/NotionTasksPanel.tsx`
-- **Persistência:** processo principal: notion-connections.json (rótulo e perfil; token cifrado com safeStorage); processo principal: SQLite notion_task_cache (snapshot por conexão e database); localStorage felixo:notion-task-views:<conexão>:<database>; localStorage felixo:notion-task-sort:<conexão>:<database>; localStorage felixo:notion-table-columns:<conexão>:<database>; nenhuma para conexão e database selecionadas, visualização ativa e sincronização automática
+- **Persistência:** processo principal: notion-connections.json (rótulo e perfil; token cifrado com safeStorage); processo principal: SQLite notion_task_cache (snapshot por conexão e database); localStorage felixo:notion-task-views:<conexão>:<database>; localStorage felixo:notion-task-sort:<conexão>:<database>; localStorage felixo:notion-table-columns:<conexão>:<database>; localStorage felixo:notion-repo-board:<conexão>:<database> (coluna de agrupamento, ligação de detalhes, etiquetas, "mostrar sem tarefas" e se o Painel era a aba aberta); nenhuma para conexão e database selecionadas, visualização ativa (fora o Painel), filtro do cartão e sincronização automática
 - **IPC:** `notion:connections:list`, `notion:connections:save`, `notion:connections:remove`, `notion:connections:test`, `notion:databases:list`, `notion:tasks:list`, `notion:tasks:cached`, `notion:tasks:content`, `notion:tasks:create`, `notion:tasks:update`, `notion:tasks:archive`
-- **Depende de:** `window.felixo.notion`, `FelixoSelect`, `createRefreshCoordinator / targetChanged (notion-refresh-coordinator)`, `nextAutoSyncDelayMs (notion-sync-backoff)`, `decideSyncStatusAfterNetwork (notion-sync-status)`, `notion-task-views / notion-task-sort / notion-table-columns / notion-table-view`, `DeferredMarkdownContent`
+- **Depende de:** `window.felixo.notion`, `FelixoSelect`, `createRefreshCoordinator / targetChanged (notion-refresh-coordinator)`, `nextAutoSyncDelayMs (notion-sync-backoff)`, `decideSyncStatusAfterNetwork (notion-sync-status)`, `notion-task-views / notion-task-sort / notion-table-columns / notion-table-view`, `notion-repo-board / useNotionDetailsSource / NotionRepoBoard`, `DeferredMarkdownContent`
 - **Sobreposição:** Mora dentro do bloco Tarefas Notion (overflow-auto). FelixoSelect em portal z 1000 fica acima de tudo, inclusive de diálogos; o seletor de colunas (absolute z-10) é cortado pela rolagem do bloco e só aparece rolando. Colunas sticky (z-10) ficam sob o seletor.
-- **Testes:** `src/features/canvas/services/notion-refresh-coordinator.test.ts`, `src/features/canvas/services/notion-sync-backoff.test.ts`, `src/features/canvas/services/notion-sync-status.test.ts`, `src/features/canvas/services/notion-table-columns.test.ts`, `src/features/canvas/services/notion-table-view.test.ts`, `src/features/canvas/services/notion-task-sort.test.ts`, `src/features/canvas/services/notion-task-views.test.ts`, `electron/services/notion-ipc-handlers.test.cjs`, `electron/services/notion-service.test.cjs`, `electron/services/notion-connection-store.test.cjs`, `electron/services/notion-client.test.cjs`, `electron/services/storage/notion-cache-repository.test.cjs`, `scripts/canvas-smoke.cjs` → `checarAuditoriaDeAcessibilidade`
+- **Testes:** `src/features/canvas/services/notion-refresh-coordinator.test.ts`, `src/features/canvas/services/notion-sync-backoff.test.ts`, `src/features/canvas/services/notion-sync-status.test.ts`, `src/features/canvas/services/notion-table-columns.test.ts`, `src/features/canvas/services/notion-table-view.test.ts`, `src/features/canvas/services/notion-task-sort.test.ts`, `src/features/canvas/services/notion-task-views.test.ts`, `src/features/canvas/services/notion-repo-board.test.ts`, `electron/services/notion-ipc-handlers.test.cjs`, `electron/services/notion-service.test.cjs`, `electron/services/notion-connection-store.test.cjs`, `electron/services/notion-client.test.cjs`, `electron/services/storage/notion-cache-repository.test.cjs`, `scripts/canvas-smoke.cjs` → `checarAuditoriaDeAcessibilidade`
 
 | Estado | Quando |
 | --- | --- |
-| normal | Tabela da database com a visualização ativa, contagem, ordenação por coluna, colunas extras escolhidas e "Sincronizado <data>"; sincronização automática a cada 1 min (backoff dobrando até 15 min a cada falha). |
+| normal | Tabela da database com a visualização ativa, contagem, ordenação por coluna, colunas extras escolhidas e "Sincronizado <data>"; sincronização automática a cada 1 min (backoff dobrando até 15 min a cada falha). A aba Painel troca a tabela pela grade de cartões (NotionRepoBoard); clicar num cartão volta à tabela com o chip "<coluna>: <valor>". |
 | loading | Primeira visita a uma database sem snapshot local: busy (spinners) até notion:tasks:list; "Revalidando com o Notion…" durante a sincronização; "Carregando conteúdo da página…" no detalhe. |
 | empty | Sem conexão ou database: "Sua lista do Notion aparece aqui" + "Configurar agora"; "Nenhuma tarefa encontrada."; "Adicione uma conexão para começar…"; "Esta database não tem outras propriedades.". |
 | error | role="alert" com a mensagem do processo principal (guard devolve ok:false), "A ponte do Notion não está disponível nesta versão do app."; rede fora: "Snapshot local desatualizado" / "Dados locais"; erro do conteúdo da página com "Tentar novamente". |
@@ -1869,7 +1869,8 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `aria-pressed={autoSyncEnabled}` (button) | clique | Liga/desliga a sincronização automática silenciosa (1 min, backoff até 15 min). | Sem falha própria; não persiste (volta ligada ao remontar). | — |
 | `aria-label="Escolher colunas da tabela"` (button) | clique | Abre/fecha o seletor de colunas; cada caixa grava em localStorage felixo:notion-table-columns:<conexão>:<database>. | Sem falha própria; localStorage indisponível só deixa de lembrar. | — |
 | `aria-label="Mostrar filtros e configuração"` (button) | clique | Abre a seção de configuração (não alterna). | Sem falha própria. | — |
-| `onClick={() => setActiveViewId(view.id)}` (button) | clique | Aba de visualização (role="tab"): filtra a tabela por estado e propriedade; só estado local. | Sem falha própria; a visualização ativa não persiste. | — |
+| `title="Um cartão por repositório (ou por valor de uma coluna), com o placar das tarefas"` (button) | clique | Aba Painel (role="tab"): troca a tabela pelos cartões, carrega a database inteira (estado "all", busca só na tela), lê a database de detalhes e grava open=true em felixo:notion-repo-board:<conexão>:<database>; tira o chip de filtro. | Sem falha própria; localStorage indisponível só deixa de reabrir no Painel. | — |
+| `onClick={() => selectView(view.id)}` (button) | clique | Aba de visualização (role="tab"): filtra a tabela por estado e propriedade; sair do Painel grava open=false em felixo:notion-repo-board:<conexão>:<database>. | Sem falha própria; a visualização ativa que não é o Painel não persiste. | — |
 | `aria-label={`Editar visualização ${view.name}`}` (button) | clique | Abre o editor preenchido com a visualização própria. (desabilitado: Só nas visualizações próprias e só no hover (hidden group-hover:flex): fora do alcance do teclado.) | Sem falha própria. | — |
 | `aria-label={`Excluir visualização ${view.name}`}` (button) | clique | Pede confirm e tira a visualização de felixo:notion-task-views:<conexão>:<database>; se era a ativa, volta à primeira. (desabilitado: Só nas visualizações próprias e só no hover.) | Cancelar o confirm não faz nada. | — |
 | `aria-label="Criar nova visualização"` (button) | clique | "Nova visualização": abre o editor vazio. | Sem falha própria. | — |
@@ -1889,16 +1890,46 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `aria-label={`Excluir ${task.title}`}` (button) | clique | Um por linha: pede confirm e manda a tarefa para a lixeira do Notion (notion:tasks:archive); recarrega. (desabilitado: Enquanto a linha está ocupada.) | role="alert" "Não foi possível arquivar a tarefa."; cancelar o confirm não faz nada. | — |
 | `onClick={() => void loadTaskContent(task)}>Tentar novamente` (button) | clique | No detalhe com erro: refaz notion:tasks:content. (desabilitado: Só aparece com erro no conteúdo.) | Mantém o erro com a nova mensagem. | — |
 | `onClick={() => void copyTaskLink(task)}` (button) | clique | "Copiar link": copia a URL da página com navigator.clipboard e mostra "Link copiado" por 1,5 s. (desabilitado: Só aparece em tarefa com URL.) | role="alert" "Não foi possível copiar o link automaticamente. Copie manualmente: <url>". | — |
+| `aria-label={`Tirar o filtro ${groupFilter.label}`}` (button) | clique | Tira o filtro temporário do cartão clicado; a tabela volta a mostrar a visualização inteira. (desabilitado: Só aparece depois de clicar num cartão do Painel.) | Sem falha própria. | — |
+| `Voltar ao painel` (button) | clique | Volta à aba Painel e tira o filtro do cartão. (desabilitado: Só aparece junto do chip do filtro.) | Sem falha própria. | — |
 | `Mostrar mais {ROW_PAGE_SIZE}` (button) | clique | Monta mais 200 linhas no DOM (nextRowLimit); reinicia ao trocar de database. (desabilitado: Só aparece com mais linhas que o limite montado.) | Sem falha própria. | — |
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Nenhum dos 37 controles é clicado por teste (o smoke só vê o estado vazio, sem conexão); conexão real, sincronização e a matriz multi-SO não foram validadas no canvas. | médio | `3d591f95-497e-810c-9f26-ff8a3e6e53ce` |
+| Nenhum dos 40 controles é clicado por teste (o smoke só vê o estado vazio, sem conexão); conexão real, sincronização e a matriz multi-SO não foram validadas no canvas. | médio | `3d591f95-497e-810c-9f26-ff8a3e6e53ce` |
 | Copiar link nunca foi validado no app real. | baixo | `3d691f95-497e-8105-b007-f7767fe10405` |
 | Isolamento entre conexões e DevTools do app empacotado só por checklist manual. | baixo | `3d791f95-497e-8139-8417-f90dd73f2777` |
-| Seleção que não persiste (NotionTasksPanel.tsx:120, 128, 136 e 148): conexão, database, visualização ativa e sincronização automática vivem só em useState; ao reabrir o app (ou remontar o bloco) a lista volta à primeira conexão e à primeira database, embora o bloco seja "persistente". | médio | `3ec91f95-497e-81a3-9be3-c0d354bf7621` |
-| O aviso role="status" nunca é limpo (NotionTasksPanel.tsx:161; não há setMessage(null)): "Exibindo o último snapshot salvo; a rede está indisponível." continua na tela depois que a rede volta e sincroniza, e "Tarefa criada…" fica até o próximo aviso. | baixo | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
-| Editar e Excluir visualização (NotionTasksPanel.tsx:925) ficam em "hidden group-hover:flex": display none fora do hover, então o teclado nunca chega neles. | baixo | `3ec91f95-497e-8197-a218-ef49c302013d` |
+| Seleção que não persiste (NotionTasksPanel.tsx:142, 150, 164 e 176): conexão, database, visualização ativa (fora o Painel) e sincronização automática vivem só em useState; ao reabrir o app (ou remontar o bloco) a lista volta à primeira conexão e à primeira database, embora o bloco seja "persistente". | médio | `3ec91f95-497e-81a3-9be3-c0d354bf7621` |
+| O aviso role="status" nunca é limpo (NotionTasksPanel.tsx:189; não há setMessage(null)): "Exibindo o último snapshot salvo; a rede está indisponível." continua na tela depois que a rede volta e sincroniza, e "Tarefa criada…" fica até o próximo aviso. | baixo | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
+| Editar e Excluir visualização (NotionTasksPanel.tsx:1050) ficam em "hidden group-hover:flex": display none fora do hover, então o teclado nunca chega neles. | baixo | `3ec91f95-497e-8197-a218-ef49c302013d` |
+
+### Painel de repositórios (aba Painel do bloco Tarefas Notion)
+
+- **ID:** `painel-repositorios-notion` · **Dono:** `src/features/canvas/components/tools/NotionRepoBoard.tsx`
+- **Persistência:** localStorage felixo:notion-repo-board:<conexão>:<database>; processo principal: SQLite notion_task_cache (snapshot da database de detalhes)
+- **IPC:** `notion:tasks:list`, `notion:tasks:cached`
+- **Depende de:** `NotionTasksPanel (tarefas, schema e preferências)`, `useNotionDetailsSource`, `buildRepoCards / filterRepoCards (notion-repo-board)`, `FelixoSelect`
+- **Sobreposição:** Mora dentro do bloco Tarefas Notion (overflow-auto), no lugar da tabela. Os FelixoSelect da configuração abrem em portal z 1000; a grade quebra em colunas de no mínimo 13rem.
+- **Testes:** `src/features/canvas/services/notion-repo-board.test.ts`
+
+| Estado | Quando |
+| --- | --- |
+| normal | Grade de cartões, um por valor da coluna de agrupamento: nome, barra e "<n>% · <abertas> aberta(s) · <total> no total", etiquetas e link da database de detalhes; "Sem <coluna>" no fim. |
+| loading | "Carregando o placar…" enquanto a lista na tela não é a database inteira (estado "all", sem busca no Notion); "· lendo os detalhes…" até a database de detalhes chegar. |
+| empty | "Esta database não tem coluna de escolha, status ou ligação para virar cartão."; "Nenhuma tarefa nesta database."; "Nenhum cartão com esse nome." (busca). |
+| error | "· detalhes indisponíveis: <mensagem>" (database de detalhes sem acesso ou rede fora); com snapshot local, "(usando o snapshot local)". O placar continua. |
+| disabled | "Ligação com a database de detalhes" travada quando o agrupamento já é uma ligação; "Mostrar repositórios sem tarefas" sem database de detalhes. |
+
+| Controle | Gatilho | Efeito | Falha conhecida | Teste |
+| --- | --- | --- | --- | --- |
+| `aria-label="Configurar painel"` (button) | clique | Abre/fecha a configuração do Painel (aria-expanded). | Sem falha própria. | — |
+| `aria-label="Agrupar cartões por"` (select) | clique | Escolhe a coluna (escolha, múltipla escolha, status ou ligação) que vira cartão e grava em felixo:notion-repo-board:<conexão>:<database>. (desabilitado: Database sem coluna agrupável.) | localStorage indisponível: volta ao automático ao remontar. | — |
+| `aria-label="Ligação com a database de detalhes"` (select) | clique | Escolhe a ligação cuja database dá link, etiquetas e arquivado ("Nenhuma" desliga); a database é lida por notion:tasks:cached + notion:tasks:list. (desabilitado: Agrupando por ligação (os detalhes vêm da própria ligação).) | Database sem acesso pela integração: aviso "detalhes indisponíveis" e cartões só com o placar. | — |
+| `aria-label={`Abrir as tarefas de ${card.label}`}` (button) | clique | Um por cartão com tarefas: volta à visualização "Todas" com o filtro temporário "<coluna>: <valor>" (o cartão "Sem <coluna>" traz as tarefas sem valor). (desabilitado: Cartão sem tarefas (repositório só da database de detalhes) não é botão.) | Sem falha própria. | — |
+
+| Lacuna | Risco | Task |
+| --- | --- | --- |
+| Os 4 controles do Painel não são clicados por teste automático (o smoke só vê o bloco sem conexão); a tela foi conferida com dados de fixture fora do app. | médio | `3d591f95-497e-810c-9f26-ff8a3e6e53ce` |
 
 ### Hospedeiro dos painéis de ferramenta
 
@@ -2742,7 +2773,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 ## Tasks das lacunas
 
 - `3ce91f95-497e-81c9-8c3b-def9ed09d58c` — 1 lacuna
-- `3d591f95-497e-810c-9f26-ff8a3e6e53ce` — 1 lacuna
+- `3d591f95-497e-810c-9f26-ff8a3e6e53ce` — 2 lacunas
 - `3d591f95-497e-8192-b911-cdb759933401` — 1 lacuna
 - `3d691f95-497e-8105-b007-f7767fe10405` — 1 lacuna
 - `3d791f95-497e-8139-8417-f90dd73f2777` — 1 lacuna

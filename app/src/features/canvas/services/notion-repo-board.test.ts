@@ -135,7 +135,7 @@ describe('buildRepoCards', () => {
     const cards = buildRepoCards({ ...baseInput, groupBy: 'Projeto', tasks })
     expect(cards[0]).toMatchObject({ key: 'gh-core', label: 'Felipe-Alcantara/Felixo-AI-Core', total: 2, percent: 50, tags: ['TypeScript'] })
     expect(cards[0].link).toBe('https://github.com/Felipe-Alcantara/Felixo-AI-Core')
-    expect(cards[1]).toMatchObject({ key: 'pagina-fora-dos-detalhes', label: 'Página ligada sem nome', link: null })
+    expect(cards[1]).toMatchObject({ key: 'pagina-fora-dos-detalhes', label: 'Página ligada paginafo', link: null })
   })
 
   it('casa o valor com o nome depois de "dono/" e com o fim do link', () => {

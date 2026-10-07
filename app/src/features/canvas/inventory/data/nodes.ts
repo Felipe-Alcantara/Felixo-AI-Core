@@ -708,7 +708,7 @@ export const notionTasksTool: InventoryElement = {
   layer: 'panel',
   owner: `${COMPONENTS}/tools/NotionTasksPanel.tsx`,
   states: {
-    normal: 'Tabela da database com a visualização ativa, contagem, ordenação por coluna, colunas extras escolhidas e "Sincronizado <data>"; sincronização automática a cada 1 min (backoff dobrando até 15 min a cada falha).',
+    normal: 'Tabela da database com a visualização ativa, contagem, ordenação por coluna, colunas extras escolhidas e "Sincronizado <data>"; sincronização automática a cada 1 min (backoff dobrando até 15 min a cada falha). A aba Painel troca a tabela pela grade de cartões (NotionRepoBoard); clicar num cartão volta à tabela com o chip "<coluna>: <valor>".',
     loading: 'Primeira visita a uma database sem snapshot local: busy (spinners) até notion:tasks:list; "Revalidando com o Notion…" durante a sincronização; "Carregando conteúdo da página…" no detalhe.',
     empty: 'Sem conexão ou database: "Sua lista do Notion aparece aqui" + "Configurar agora"; "Nenhuma tarefa encontrada."; "Adicione uma conexão para começar…"; "Esta database não tem outras propriedades.".',
     error: 'role="alert" com a mensagem do processo principal (guard devolve ok:false), "A ponte do Notion não está disponível nesta versão do app."; rede fora: "Snapshot local desatualizado" / "Dados locais"; erro do conteúdo da página com "Tentar novamente".',
@@ -824,10 +824,16 @@ export const notionTasksTool: InventoryElement = {
       failure: 'Sem falha própria.',
     },
     {
-      locator: 'onClick={() => setActiveViewId(view.id)}',
+      locator: 'title="Um cartão por repositório (ou por valor de uma coluna), com o placar das tarefas"',
       kind: 'button',
-      effect: 'Aba de visualização (role="tab"): filtra a tabela por estado e propriedade; só estado local.',
-      failure: 'Sem falha própria; a visualização ativa não persiste.',
+      effect: 'Aba Painel (role="tab"): troca a tabela pelos cartões, carrega a database inteira (estado "all", busca só na tela), lê a database de detalhes e grava open=true em felixo:notion-repo-board:<conexão>:<database>; tira o chip de filtro.',
+      failure: 'Sem falha própria; localStorage indisponível só deixa de reabrir no Painel.',
+    },
+    {
+      locator: 'onClick={() => selectView(view.id)}',
+      kind: 'button',
+      effect: 'Aba de visualização (role="tab"): filtra a tabela por estado e propriedade; sair do Painel grava open=false em felixo:notion-repo-board:<conexão>:<database>.',
+      failure: 'Sem falha própria; a visualização ativa que não é o Painel não persiste.',
     },
     {
       locator: 'aria-label={`Editar visualização ${view.name}`}',
@@ -953,6 +959,20 @@ export const notionTasksTool: InventoryElement = {
       disabledWhen: 'Só aparece em tarefa com URL.',
     },
     {
+      locator: 'aria-label={`Tirar o filtro ${groupFilter.label}`}',
+      kind: 'button',
+      effect: 'Tira o filtro temporário do cartão clicado; a tabela volta a mostrar a visualização inteira.',
+      failure: 'Sem falha própria.',
+      disabledWhen: 'Só aparece depois de clicar num cartão do Painel.',
+    },
+    {
+      locator: 'Voltar ao painel',
+      kind: 'button',
+      effect: 'Volta à aba Painel e tira o filtro do cartão.',
+      failure: 'Sem falha própria.',
+      disabledWhen: 'Só aparece junto do chip do filtro.',
+    },
+    {
       locator: 'Mostrar mais {ROW_PAGE_SIZE}',
       kind: 'button',
       effect: 'Monta mais 200 linhas no DOM (nextRowLimit); reinicia ao trocar de database.',
@@ -966,7 +986,8 @@ export const notionTasksTool: InventoryElement = {
     'localStorage felixo:notion-task-views:<conexão>:<database>',
     'localStorage felixo:notion-task-sort:<conexão>:<database>',
     'localStorage felixo:notion-table-columns:<conexão>:<database>',
-    'nenhuma para conexão e database selecionadas, visualização ativa e sincronização automática',
+    'localStorage felixo:notion-repo-board:<conexão>:<database> (coluna de agrupamento, ligação de detalhes, etiquetas, "mostrar sem tarefas" e se o Painel era a aba aberta)',
+    'nenhuma para conexão e database selecionadas, visualização ativa (fora o Painel), filtro do cartão e sincronização automática',
   ],
   ipc: [
     'notion:connections:list',
@@ -988,6 +1009,7 @@ export const notionTasksTool: InventoryElement = {
     'nextAutoSyncDelayMs (notion-sync-backoff)',
     'decideSyncStatusAfterNetwork (notion-sync-status)',
     'notion-task-views / notion-task-sort / notion-table-columns / notion-table-view',
+    'notion-repo-board / useNotionDetailsSource / NotionRepoBoard',
     'DeferredMarkdownContent',
   ],
   tests: [
@@ -998,6 +1020,7 @@ export const notionTasksTool: InventoryElement = {
     unit(`${SERVICES}/notion-table-view.test.ts`),
     unit(`${SERVICES}/notion-task-sort.test.ts`),
     unit(`${SERVICES}/notion-task-views.test.ts`),
+    unit(`${SERVICES}/notion-repo-board.test.ts`),
     unit('electron/services/notion-ipc-handlers.test.cjs'),
     unit('electron/services/notion-service.test.cjs'),
     unit('electron/services/notion-connection-store.test.cjs'),
@@ -1007,7 +1030,7 @@ export const notionTasksTool: InventoryElement = {
   ],
   gaps: [
     {
-      what: 'Nenhum dos 37 controles é clicado por teste (o smoke só vê o estado vazio, sem conexão); conexão real, sincronização e a matriz multi-SO não foram validadas no canvas.',
+      what: 'Nenhum dos 40 controles é clicado por teste (o smoke só vê o estado vazio, sem conexão); conexão real, sincronização e a matriz multi-SO não foram validadas no canvas.',
       risk: 'médio',
       task: '3d591f95-497e-810c-9f26-ff8a3e6e53ce',
     },
@@ -1022,17 +1045,17 @@ export const notionTasksTool: InventoryElement = {
       task: '3d791f95-497e-8139-8417-f90dd73f2777',
     },
     {
-      what: 'Seleção que não persiste (NotionTasksPanel.tsx:120, 128, 136 e 148): conexão, database, visualização ativa e sincronização automática vivem só em useState; ao reabrir o app (ou remontar o bloco) a lista volta à primeira conexão e à primeira database, embora o bloco seja "persistente".',
+      what: 'Seleção que não persiste (NotionTasksPanel.tsx:142, 150, 164 e 176): conexão, database, visualização ativa (fora o Painel) e sincronização automática vivem só em useState; ao reabrir o app (ou remontar o bloco) a lista volta à primeira conexão e à primeira database, embora o bloco seja "persistente".',
       risk: 'médio',
       task: '3ec91f95-497e-81a3-9be3-c0d354bf7621',
     },
     {
-      what: 'O aviso role="status" nunca é limpo (NotionTasksPanel.tsx:161; não há setMessage(null)): "Exibindo o último snapshot salvo; a rede está indisponível." continua na tela depois que a rede volta e sincroniza, e "Tarefa criada…" fica até o próximo aviso.',
+      what: 'O aviso role="status" nunca é limpo (NotionTasksPanel.tsx:189; não há setMessage(null)): "Exibindo o último snapshot salvo; a rede está indisponível." continua na tela depois que a rede volta e sincroniza, e "Tarefa criada…" fica até o próximo aviso.',
       risk: 'baixo',
       task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
     },
     {
-      what: 'Editar e Excluir visualização (NotionTasksPanel.tsx:925) ficam em "hidden group-hover:flex": display none fora do hover, então o teclado nunca chega neles.',
+      what: 'Editar e Excluir visualização (NotionTasksPanel.tsx:1050) ficam em "hidden group-hover:flex": display none fora do hover, então o teclado nunca chega neles.',
       risk: 'baixo',
       task: '3ec91f95-497e-8197-a218-ef49c302013d',
     },
@@ -1040,7 +1063,63 @@ export const notionTasksTool: InventoryElement = {
   overlap: 'Mora dentro do bloco Tarefas Notion (overflow-auto). FelixoSelect em portal z 1000 fica acima de tudo, inclusive de diálogos; o seletor de colunas (absolute z-10) é cortado pela rolagem do bloco e só aparece rolando. Colunas sticky (z-10) ficam sob o seletor.',
 }
 
+const notionRepoBoard: InventoryElement = {
+  id: 'painel-repositorios-notion',
+  name: 'Painel de repositórios (aba Painel do bloco Tarefas Notion)',
+  layer: 'panel',
+  owner: `${COMPONENTS}/tools/NotionRepoBoard.tsx`,
+  states: {
+    normal: 'Grade de cartões, um por valor da coluna de agrupamento: nome, barra e "<n>% · <abertas> aberta(s) · <total> no total", etiquetas e link da database de detalhes; "Sem <coluna>" no fim.',
+    loading: '"Carregando o placar…" enquanto a lista na tela não é a database inteira (estado "all", sem busca no Notion); "· lendo os detalhes…" até a database de detalhes chegar.',
+    empty: '"Esta database não tem coluna de escolha, status ou ligação para virar cartão."; "Nenhuma tarefa nesta database."; "Nenhum cartão com esse nome." (busca).',
+    error: '"· detalhes indisponíveis: <mensagem>" (database de detalhes sem acesso ou rede fora); com snapshot local, "(usando o snapshot local)". O placar continua.',
+    disabled: '"Ligação com a database de detalhes" travada quando o agrupamento já é uma ligação; "Mostrar repositórios sem tarefas" sem database de detalhes.',
+  },
+  controls: [
+    {
+      locator: 'aria-label="Configurar painel"',
+      kind: 'button',
+      effect: 'Abre/fecha a configuração do Painel (aria-expanded).',
+      failure: 'Sem falha própria.',
+    },
+    {
+      locator: 'aria-label="Agrupar cartões por"',
+      kind: 'select',
+      effect: 'Escolhe a coluna (escolha, múltipla escolha, status ou ligação) que vira cartão e grava em felixo:notion-repo-board:<conexão>:<database>.',
+      failure: 'localStorage indisponível: volta ao automático ao remontar.',
+      disabledWhen: 'Database sem coluna agrupável.',
+    },
+    {
+      locator: 'aria-label="Ligação com a database de detalhes"',
+      kind: 'select',
+      effect: 'Escolhe a ligação cuja database dá link, etiquetas e arquivado ("Nenhuma" desliga); a database é lida por notion:tasks:cached + notion:tasks:list.',
+      failure: 'Database sem acesso pela integração: aviso "detalhes indisponíveis" e cartões só com o placar.',
+      disabledWhen: 'Agrupando por ligação (os detalhes vêm da própria ligação).',
+    },
+    {
+      locator: 'aria-label={`Abrir as tarefas de ${card.label}`}',
+      kind: 'button',
+      effect: 'Um por cartão com tarefas: volta à visualização "Todas" com o filtro temporário "<coluna>: <valor>" (o cartão "Sem <coluna>" traz as tarefas sem valor).',
+      failure: 'Sem falha própria.',
+      disabledWhen: 'Cartão sem tarefas (repositório só da database de detalhes) não é botão.',
+    },
+  ],
+  persistence: ['localStorage felixo:notion-repo-board:<conexão>:<database>', 'processo principal: SQLite notion_task_cache (snapshot da database de detalhes)'],
+  ipc: ['notion:tasks:list', 'notion:tasks:cached'],
+  dependsOn: ['NotionTasksPanel (tarefas, schema e preferências)', 'useNotionDetailsSource', 'buildRepoCards / filterRepoCards (notion-repo-board)', 'FelixoSelect'],
+  tests: [unit(`${SERVICES}/notion-repo-board.test.ts`)],
+  gaps: [
+    {
+      what: 'Os 4 controles do Painel não são clicados por teste automático (o smoke só vê o bloco sem conexão); a tela foi conferida com dados de fixture fora do app.',
+      risk: 'médio',
+      task: '3d591f95-497e-810c-9f26-ff8a3e6e53ce',
+    },
+  ],
+  overlap: 'Mora dentro do bloco Tarefas Notion (overflow-auto), no lugar da tabela. Os FelixoSelect da configuração abrem em portal z 1000; a grade quebra em colunas de no mínimo 13rem.',
+}
+
 export const nodeSurfaces: InventoryElement[] = [
+  notionRepoBoard,
   {
     id: 'cabecalho-do-bloco',
     name: 'Cabeçalho do bloco (arrasto, nome e remover)',

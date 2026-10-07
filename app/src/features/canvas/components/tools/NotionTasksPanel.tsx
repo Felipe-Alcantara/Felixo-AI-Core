@@ -13,6 +13,7 @@ import {
   Database,
   ExternalLink,
   KeyRound,
+  LayoutGrid,
   ListTodo,
   Pencil,
   Plus,
@@ -54,6 +55,26 @@ import {
 } from '../../services/notion-sync-status'
 import { createRefreshCoordinator, targetChanged } from '../../services/notion-refresh-coordinator'
 import { nextAutoSyncDelayMs } from '../../services/notion-sync-backoff'
+import {
+  REPO_BOARD_VIEW,
+  buildRepoCards,
+  filterRepoCards,
+  filterTasksByGroup,
+  listGroupableProperties,
+  listRelationProperties,
+  listTagCandidates,
+  readRepoBoardSettings,
+  relationTarget,
+  resolveDetailsVia,
+  resolveGroupBy,
+  resolveTagProperties,
+  saveRepoBoardSettings,
+  type RepoBoardSettings,
+  type RepoCard,
+  type RepoGroupFilter,
+} from '../../services/notion-repo-board'
+import { useNotionDetailsSource } from '../../hooks/useNotionDetailsSource'
+import { NotionRepoBoard } from './NotionRepoBoard'
 
 type TaskDraft = {
   title: string
@@ -129,6 +150,10 @@ export function NotionTasksPanel() {
   const [dataSourceId, setDataSourceId] = useState('')
   const [schema, setSchema] = useState<Record<string, NotionSchemaProperty>>({})
   const [tasks, setTasks] = useState<NotionTask[]>([])
+  // Filtro (estado|busca) com que `tasks` foi carregada: o placar do Painel só
+  // vale para a database inteira, nunca para a lista filtrada de outra aba que
+  // ainda está na tela enquanto a recarga chega.
+  const [tasksQuery, setTasksQuery] = useState('')
   const [search, setSearch] = useState('')
   const [viewsVersion, setViewsVersion] = useState(0)
   const [columnsVersion, setColumnsVersion] = useState(0)
@@ -226,20 +251,40 @@ export function NotionTasksPanel() {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- viewsVersion força reler o localStorage após persistCustomViews
   const customViews = useMemo(() => readCustomViews(connectionId, dataSourceId), [connectionId, dataSourceId, viewsVersion])
   const views = useMemo<NotionTaskView[]>(() => [...BUILT_IN_VIEWS, ...customViews], [customViews])
-  const activeView = views.find((view) => view.id === activeViewId) || BUILT_IN_VIEWS[0]
+  const isBoard = activeViewId === REPO_BOARD_VIEW.id
+  const activeView = isBoard ? REPO_BOARD_VIEW : views.find((view) => view.id === activeViewId) || BUILT_IN_VIEWS[0]
+  // Cartão clicado no Painel: filtro temporário da tabela, que não vira visualização salva.
+  const [groupFilter, setGroupFilter] = useState<RepoGroupFilter | null>(null)
+  const [boardSettingsVersion, setBoardSettingsVersion] = useState(0)
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- boardSettingsVersion força reler o localStorage após persistBoardSettings
+  const boardSettings = useMemo(() => readRepoBoardSettings(connectionId, dataSourceId), [connectionId, dataSourceId, boardSettingsVersion])
 
   // Reseta a visualização ativa ao trocar de conexão/database, sem depender de um efeito (ver
   // https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes).
+  // O Painel reabre se era a aba aberta da última vez nesta database.
   const dataScopeKey = `${connectionId}::${dataSourceId}`
   const [lastDataScopeKey, setLastDataScopeKey] = useState(dataScopeKey)
   if (dataScopeKey !== lastDataScopeKey) {
     setLastDataScopeKey(dataScopeKey)
-    setActiveViewId(BUILT_IN_VIEWS[0].id)
+    setActiveViewId(readRepoBoardSettings(connectionId, dataSourceId).open ? REPO_BOARD_VIEW.id : BUILT_IN_VIEWS[0].id)
+    setGroupFilter(null)
   }
 
   function persistCustomViews(next: NotionTaskView[]) {
     saveCustomViews(connectionId, dataSourceId, next)
     setViewsVersion((value) => value + 1)
+  }
+
+  function persistBoardSettings(patch: Partial<RepoBoardSettings>) {
+    saveRepoBoardSettings(connectionId, dataSourceId, { ...readRepoBoardSettings(connectionId, dataSourceId), ...patch })
+    setBoardSettingsVersion((value) => value + 1)
+  }
+
+  function selectView(viewId: string) {
+    const openBoard = viewId === REPO_BOARD_VIEW.id
+    setActiveViewId(viewId)
+    if (openBoard) setGroupFilter(null)
+    if (openBoard !== boardSettings.open) persistBoardSettings({ open: openBoard })
   }
 
   const loadConnections = useCallback(async () => {
@@ -308,14 +353,19 @@ export function NotionTasksPanel() {
    * a lista por baixo. Uma sincronização manual (botão, busca, troca de
    * database) continua limpando os dois, como sempre.
    */
+  // No Painel a busca filtra os cartões na tela; a carga é sempre da database inteira.
+  const querySearch = isBoard ? '' : search
+
   const loadTasks = useCallback((options: { silent?: boolean } = {}) => {
     const { silent = false } = options
     const targetConnectionId = connectionId
     const targetDataSourceId = dataSourceId
+    const query = `${activeView.statusFilter}|${querySearch}`
 
     return refreshCoordinatorRef.current.trigger(async (): Promise<PanelSyncStatus | undefined> => {
       if (!api || !targetConnectionId || !targetDataSourceId) {
         setTasks([])
+        setTasksQuery('')
         setSyncStatus('idle')
         return 'idle'
       }
@@ -341,13 +391,14 @@ export function NotionTasksPanel() {
         const cachedResult = await api.getCachedTasks({
           connectionId: targetConnectionId,
           dataSourceId: targetDataSourceId,
-          search,
+          search: querySearch,
           status: activeView.statusFilter,
         })
         if (isStale()) return undefined
         hasLocalSnapshot = hasUsableCachedSnapshot(cachedResult)
         if (hasLocalSnapshot) {
           setTasks(cachedResult.tasks || [])
+          setTasksQuery(query)
           setSchema(cachedResult.schema || {})
           setFetchedAt(cachedResult.fetchedAt || null)
         }
@@ -363,7 +414,7 @@ export function NotionTasksPanel() {
       const result = await api.listTasks({
         connectionId: targetConnectionId,
         dataSourceId: targetDataSourceId,
-        search,
+        search: querySearch,
         status: activeView.statusFilter,
       })
       if (isStale()) return undefined
@@ -377,6 +428,7 @@ export function NotionTasksPanel() {
         return finalStatus
       }
       setTasks(result.tasks || [])
+      setTasksQuery(query)
       setSchema(result.schema || {})
       setFetchedAt(result.fetchedAt || null)
       setHasMoreTasks(Boolean(result.hasMore))
@@ -385,10 +437,68 @@ export function NotionTasksPanel() {
       }
       return finalStatus
     })
-  }, [api, connectionId, dataSourceId, search, activeView.statusFilter])
+  }, [api, connectionId, dataSourceId, querySearch, activeView.statusFilter])
 
-  const filteredTasks = useMemo(() => filterTasksByView(tasks, activeView), [tasks, activeView])
+  const filteredTasks = useMemo(
+    () => filterTasksByGroup(filterTasksByView(tasks, activeView), schema, groupFilter),
+    [tasks, activeView, schema, groupFilter],
+  )
   const visibleTasks = useMemo(() => sortTasks(filteredTasks, sortState, formatPropertyValue, schema), [filteredTasks, sortState, schema])
+
+  // Painel: coluna de agrupamento, ligação de detalhes e etiquetas resolvidas
+  // contra o schema atual (preferência que aponta coluna sumida volta ao automático).
+  const boardGroupBy = useMemo(() => resolveGroupBy(schema, boardSettings), [schema, boardSettings])
+  const boardDetailsVia = useMemo(() => resolveDetailsVia(schema, boardSettings, boardGroupBy), [schema, boardSettings, boardGroupBy])
+  const boardGroupIsRelation = schema[boardGroupBy]?.type === 'relation'
+  const detailsTarget = useMemo(() => (boardDetailsVia ? relationTarget(schema, boardDetailsVia) : null), [schema, boardDetailsVia])
+  const [detailsRefreshKey, setDetailsRefreshKey] = useState(0)
+  const detailsSource = useNotionDetailsSource({ api, connectionId, target: detailsTarget, enabled: isBoard, refreshKey: detailsRefreshKey })
+  const detailsSchema = detailsSource.details?.schema
+  const tagCandidates = useMemo(() => (detailsSchema ? listTagCandidates(detailsSchema) : []), [detailsSchema])
+  const tagProperties = useMemo(() => (detailsSchema ? resolveTagProperties(detailsSchema, boardSettings) : []), [detailsSchema, boardSettings])
+  const boardReady = tasksQuery === `${REPO_BOARD_VIEW.statusFilter}|`
+  const allBoardCards = useMemo(
+    () =>
+      isBoard && boardReady
+        ? buildRepoCards({
+            tasks,
+            schema,
+            groupBy: boardGroupBy,
+            detailsVia: boardDetailsVia,
+            details: detailsSource.details,
+            tagProperties,
+            showEmpty: boardSettings.showEmpty,
+            search: '',
+          })
+        : [],
+    [isBoard, boardReady, tasks, schema, boardGroupBy, boardDetailsVia, detailsSource.details, tagProperties, boardSettings.showEmpty],
+  )
+  const boardCards = useMemo(() => filterRepoCards(allBoardCards, search), [allBoardCards, search])
+  const boardGroupOptions = useMemo(
+    () => listGroupableProperties(schema).map((name) => ({ value: name, label: name, meta: schema[name]?.type === 'relation' ? 'ligação' : undefined })),
+    [schema],
+  )
+  const boardDetailsOptions = useMemo(
+    () => [
+      { value: '', label: 'Nenhuma' },
+      ...listRelationProperties(schema).map((name) => {
+        const target = relationTarget(schema, name)
+        const targetName = databases.find((database) => database.id === target?.dataSourceId || (target?.databaseId && database.databaseId === target.databaseId))?.name
+        return { value: name, label: name, meta: targetName ? `→ ${targetName}` : undefined }
+      }),
+    ],
+    [schema, databases],
+  )
+
+  function openRepoCard(card: RepoCard) {
+    setGroupFilter({ property: boardGroupBy, key: card.key, label: card.label })
+    selectView(BUILT_IN_VIEWS[0].id)
+  }
+
+  function syncNow() {
+    void loadTasks()
+    setDetailsRefreshKey((value) => value + 1)
+  }
 
   useEffect(() => {
     if (!connectionId || !dataSourceId) return undefined
@@ -853,7 +963,7 @@ export function NotionTasksPanel() {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <h2 className="text-sm font-medium text-zinc-100">{activeView.name}</h2>
-                  <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] text-zinc-400">{visibleTasks.length}</span>
+                  <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] text-zinc-400">{isBoard ? boardCards.length : visibleTasks.length}</span>
                 </div>
                 <p className="mt-1 text-[11px] text-zinc-500">
                   {syncing ? 'Revalidando com o Notion…' : stale ? 'Snapshot local desatualizado' : fetchedAt ? `Sincronizado ${formatDate(fetchedAt)}` : 'Ainda não sincronizado'}
@@ -862,9 +972,9 @@ export function NotionTasksPanel() {
               <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-1.5 sm:flex-none">
                 <label className="relative min-w-52 flex-1 sm:w-56 sm:flex-none">
                   <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
-                  <input className={`${inputClass} h-8 pl-8`} value={search} onChange={(event) => setSearch(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void loadTasks() }} placeholder="Buscar tarefas" aria-label="Buscar tarefas Notion" />
+                  <input className={`${inputClass} h-8 pl-8`} value={search} onChange={(event) => setSearch(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !isBoard) void loadTasks() }} placeholder={isBoard ? 'Buscar cartões' : 'Buscar tarefas'} aria-label="Buscar tarefas Notion" />
                 </label>
-                <button type="button" className="felixo-btn-icon rounded-md border border-white/10 p-1.5 text-zinc-400 hover:bg-white/5 hover:text-zinc-100 disabled:opacity-50" onClick={() => void loadTasks()} disabled={busy || syncing} aria-label="Sincronizar tarefas" title="Sincronizar tarefas"><RefreshCw size={14} className={busy || syncing ? 'animate-spin' : ''} /></button>
+                <button type="button" className="felixo-btn-icon rounded-md border border-white/10 p-1.5 text-zinc-400 hover:bg-white/5 hover:text-zinc-100 disabled:opacity-50" onClick={syncNow} disabled={busy || syncing} aria-label="Sincronizar tarefas" title="Sincronizar tarefas"><RefreshCw size={14} className={busy || syncing ? 'animate-spin' : ''} /></button>
                 <button
                   type="button"
                   className={`felixo-btn-icon rounded-md border p-1.5 ${autoSyncEnabled ? 'border-white/10 text-(--f-core-white-soft) hover:bg-(--f-core-white)/10' : 'border-white/10 text-zinc-500 hover:bg-white/5 hover:text-zinc-100'}`}
@@ -875,7 +985,7 @@ export function NotionTasksPanel() {
                 >
                   <Clock size={14} />
                 </button>
-                <div ref={columnPickerRef} className="relative">
+                <div ref={columnPickerRef} className={isBoard ? 'hidden' : 'relative'}>
                   <button
                     type="button"
                     className={`felixo-btn-icon rounded-md border p-1.5 ${visibleColumns.length > 0 ? 'border-white/10 text-(--f-core-white-soft) hover:bg-(--f-core-white)/10' : 'border-white/10 text-zinc-400 hover:bg-white/5 hover:text-zinc-100'}`}
@@ -909,6 +1019,18 @@ export function NotionTasksPanel() {
             </div>
 
             <div className="mt-3 flex flex-wrap items-center gap-1.5 border-b border-white/10 pb-2" role="tablist" aria-label="Visualizações de tarefas">
+              <div className={`flex items-center gap-1 rounded-md px-1 ${isBoard ? 'bg-zinc-700' : 'hover:bg-white/5'}`}>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={isBoard}
+                  className={`flex items-center gap-1 rounded-sm px-1.5 py-1 text-[11px] ${isBoard ? 'text-zinc-100' : 'text-zinc-500 hover:text-zinc-200'}`}
+                  onClick={() => selectView(REPO_BOARD_VIEW.id)}
+                  title="Um cartão por repositório (ou por valor de uma coluna), com o placar das tarefas"
+                >
+                  <LayoutGrid size={11} aria-hidden="true" /> {REPO_BOARD_VIEW.name}
+                </button>
+              </div>
               {views.map((view) => {
                 const isActive = view.id === activeViewId
                 const editable = !isBuiltInView(view.id)
@@ -919,7 +1041,7 @@ export function NotionTasksPanel() {
                       role="tab"
                       aria-selected={isActive}
                       className={`rounded-sm px-1.5 py-1 text-[11px] ${isActive ? 'text-zinc-100' : 'text-zinc-500 hover:text-zinc-200'}`}
-                      onClick={() => setActiveViewId(view.id)}
+                      onClick={() => selectView(view.id)}
                       title={editable && view.propertyFilters[0] ? `${view.propertyFilters[0].property}: ${view.propertyFilters[0].values.join(', ')}` : undefined}
                     >
                       {view.name}
@@ -1008,6 +1130,35 @@ export function NotionTasksPanel() {
               </form>
             )}
 
+            {isBoard ? (
+              <NotionRepoBoard
+                cards={boardCards}
+                totalCards={allBoardCards.length}
+                ready={boardReady}
+                taskCount={tasks.length}
+                groupBy={boardGroupBy}
+                groupOptions={boardGroupOptions}
+                detailsVia={boardDetailsVia}
+                detailsOptions={boardDetailsOptions}
+                detailsLocked={boardGroupIsRelation}
+                details={detailsSource}
+                tagCandidates={tagCandidates}
+                tagProperties={tagProperties}
+                showEmpty={boardSettings.showEmpty}
+                onOpenCard={openRepoCard}
+                onChangeSettings={persistBoardSettings}
+              />
+            ) : (
+            <>
+            {groupFilter && (
+              <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[11px]">
+                <span className="inline-flex max-w-full items-center gap-1 rounded-full border border-white/10 bg-(--f-core-white)/10 py-0.5 pl-2 pr-0.5 text-(--f-core-white)">
+                  <span className="truncate">{groupFilter.property}: {groupFilter.label}</span>
+                  <button type="button" className="felixo-btn-icon rounded-full p-0.5 hover:bg-white/10" onClick={() => setGroupFilter(null)} aria-label={`Tirar o filtro ${groupFilter.label}`} title="Tirar o filtro"><X size={11} /></button>
+                </span>
+                <button type="button" className="felixo-btn flex items-center gap-1 rounded-md px-1.5 py-0.5 text-zinc-400 hover:bg-white/5 hover:text-zinc-100" onClick={() => selectView(REPO_BOARD_VIEW.id)}><LayoutGrid size={11} aria-hidden="true" /> Voltar ao painel</button>
+              </div>
+            )}
             <div className="mt-3 overflow-hidden rounded-lg border border-white/10 bg-zinc-950/35">
               <div className="overflow-x-auto">
                 <table className="min-w-[760px] w-full table-fixed border-collapse text-xs" aria-label="Tarefas do Notion">
@@ -1079,6 +1230,8 @@ export function NotionTasksPanel() {
               </div>
               <div className="flex items-center justify-between border-t border-white/[0.07] px-3 py-2 text-[10px] text-zinc-500"><span>{visibleTasks.length} tarefa(s) exibida(s)</span><span>{syncing ? 'Sincronizando…' : stale ? 'Dados locais' : 'Notion conectado'}</span></div>
             </div>
+            </>
+            )}
           </>
         )}
       </div>

@@ -363,7 +363,8 @@ export function buildRepoCards(input: BuildRepoCardsInput): RepoCard[] {
       ? reader?.byId.get(key) || null
       : reader ? matchDetailsRow(key, groupTasks, detailsVia, reader) : null
     if (row) matchedRowIds.add(row.id)
-    const label = groupIsRelation ? row?.title || 'Página ligada sem nome' : key
+    // Sem a linha (detalhes fora do ar ou página fora da database), um trecho do ID distingue um cartão do outro.
+    const label = groupIsRelation ? row?.title || `Página ligada ${key.replace(/-/g, '').slice(0, 8)}` : key
     taskCards.push(card(key, label, groupTasks, row, reader))
   }
 
