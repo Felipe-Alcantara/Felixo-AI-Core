@@ -6026,3 +6026,44 @@ Segui a recomendação da própria task: origem, posição e caminho minimizado,
 
 - Windows real não rodado (sem máquina Windows nesta sessão); a task já aberta de validação no Windows ganhou este item.
 - A deduplicação continua exata por texto, como antes: no Windows, a mesma pasta com maiúsculas diferentes aparece duas vezes na lista (é o que a CLI recebe).
+
+## 2026-10-07 — Openia no pacote instalado num Windows limpo, e o alias .ps1 passa a funcionar
+
+Task: [Felixo AI Core/Agentes — validar Openia empacotado em Windows limpo (NSIS real, aliases .cmd/.ps1, cancelamento, exportação de canvas)](https://app.notion.com/p/Felixo-AI-Core-Agentes-validar-Openia-empacotado-em-Windows-limpo-NSIS-real-aliases-cmd-ps1-c-3e291f95497e81e19363e1888d82cbaf). A validação de 21/09 rodou numa máquina não limpa e deixou cinco itens sem prova.
+
+### Decisões do Felipe (07/10)
+
+- **Ambiente limpo = runner `windows-latest`** (com Python, sem Felixo e sem Openia). Esta máquina não serve: Felixo, Python e o launcher legado instalados; Windows Sandbox desativado; 0,5 GB de RAM livre.
+- **Chave real**, a "Teste Felipe Home" do Audiofy (`.audiofy/keys.json`, fora do git), como secret temporário `OPENIA_TEST_KEY` — criado para a validação e apagado no fim. A chave não tem limite de gasto no OpenRouter; o roteiro se impôs teto de US$ 0,05 e gastou US$ 0.
+- **Suportar o alias `.ps1`** do Openia (alternativas: remover do catálogo ou só abrir task).
+
+### Achado e correção: aliases `.cmd`/`.ps1`
+
+Medido nesta máquina com pastas temporárias, e depois no app instalado da v0.1.438 no runner limpo:
+
+- `.ps1`: nunca detectado (o `execFile` não roda script); o serviço do Openia não chamava `list`/`models`/`key`; o terminal abria com "não é reconhecido" — o `cmd.exe` não executa `.ps1` (o PATHEXT padrão não tem `.PS1`, ao contrário do que dizia o comentário em `createPtyLaunchSpec`). Nenhum instalador do Openia cria `openia.ps1`: o instalador PowerShell grava uma *função* no `$PROFILE`, que os terminais (`-NoProfile`) nem carregam.
+- `.cmd` numa pasta com espaço: detectado, mas `list --json` falhava — `resolveOpeniaSpawn` passava `shell: true` ao `cross-spawn`, que então repassa o caminho sem aspas. É o caso do launcher legado desta máquina (`C:\Users\Felipe Martins\AppData\Local\openia\openia.cmd`).
+
+Uma regra para as três camadas (commit `44fde46`): `resolveCommandPath` no Windows procura primeiro o que o `cmd.exe` executa (`.exe`/`.cmd`/`.bat`) em todo o PATH, depois `.ps1` e por último o arquivo sem extensão — o `.ps1` só entra quando nada mais existe, então nada que já funcionava muda. O adaptador win32 ganhou `createPowerShellScriptLaunch` (`-NoLogo -NoProfile -ExecutionPolicy Bypass [-NonInteractive] -File`), usado pelo detector, pelo serviço do Openia (via o `prefixArgs` que o serviço de imagens já aceitava) e pelo terminal (interativo, `-NoExit` na sessão de rodar arquivo). O serviço deixou de usar `shell: true`. O diagnóstico marca `[powershell]`.
+
+Testes que falham antes e passam depois (conferido com `git stash`): detector (precedência, `-File`, `.ps1` real em pasta com espaço), serviço (`list --json` real por `.cmd` com espaço e por `.ps1`) e um teste novo de PTY nativa (`pty-ps1-launch.integration.test.cjs`, no `test:native`). A guarda do `AttachConsole` virou fixture compartilhada (`electron/__fixtures__/conpty-console-list-agent-guard.cjs`).
+
+### Validação no Windows limpo
+
+Workflow manual `openia-windows-limpo.yml` + roteiro reutilizável `app/scripts/openia-windows-limpo.cjs`, que dirige o app INSTALADO por `felixo devtools launch --packaged`. Rodada final 37582901029 (instalador construído do commit `6cd0736`, opção `construir`): **8/8 etapas**. A "antes" é a rodada 37580814167 (v0.1.438).
+
+- **NSIS real:** instala por usuário em `~\AppData\Local\Programs\Felixo AI Core` com o app fechado; atalhos na área de trabalho e no menu Iniciar apontam para o exe; a desinstalação silenciosa remove registro, atalhos e exe (0 arquivos sobram). O NSIS do electron-builder **não grava `InstallLocation`** — a pasta é a do desinstalador.
+- **Aliases:** `openia.exe` do pip embrulhado por `openia.cmd` e por `openia.ps1` em `C:\Felixo Aliases\so cmd|so ps1`. Antes: `.cmd` detectado e `list --json` falhando; `.ps1` não detectado e "not recognized" no terminal. Depois: os dois detectados (`0.1.0`), `list --json` com 7 interfaces e `openia --version` no PTY do app (o `.ps1` pelo PowerShell 7).
+- **Usuário real com espaço** ("Felixo Teste", criado no runner): instala o pacote e o Openia; a detecção do app (modo Node do próprio Electron) acha `~\AppData\Roaming\Python\Python314\Scripts\openia.exe` dentro do perfil com espaço; contrato com 7 interfaces.
+- **Exportação do canvas:** chave salva pelo campo de senha da UI; 1 bloco de terminal Openia exportado pelo mesmo `canvas:export` do botão. Chave ausente da exportação, da tela, da saída do terminal e de 115 arquivos (perfil, logs, `llm`); o único lugar é o `keys.json` do próprio Openia, apagado no fim.
+- **Cancelamento:** recusar o consentimento não instala nada; pip encerrado no meio → "py encerrou com codigo 1." e nada instalado; a repetição instala e detecta `0.1.0`.
+- **Launcher legado (dependente de clone, instalado pelo `install-openia-cmd.cmd` do próprio Openia):** sem o clone, não é detectado (correto). **Com um clone recém-baixado, a detecção do app instala 7 pacotes** (typer, rich, pygments…) no Python do PATH — o `start_app.py` faz `pip install` antes de responder, e o `py` segue o shebang `#!/usr/bin/env python3` — e **mostra a versão "0.27.3-py3"**, que é a do typer, não a do Openia (6 s). A segunda chamada responde `0.1.0` em 350 ms. Task aberta.
+
+### Outros achados e limitações
+
+- O roteiro precisou de seis ajustes nas rodadas intermediárias (registro sem `InstallLocation`, painel fechado pelo Esc, pip errado no diff, `PSModulePath` do pwsh 7 quebrando o PowerShell 5.1, aviso do pip virando erro fatal no 5.1, `EBUSY` no clone); cada um está no commit correspondente.
+- Os testes reais do `.ps1` falharam uma vez no CI: no runner a variável herdada chama-se `Path`, e `{ ...process.env, PATH }` ficava com duas grafias. Defeito do teste, não do produto (`createCliEnv` grava as duas com o mesmo valor).
+- **Release bloqueada por fator externo:** o job "Dependency policy" passou a falhar com `npm audit --omit=dev` acusando 1 vulnerabilidade *high* numa dependência de produção (aviso publicado depois do CI verde de 05/10; o PR do Dependabot também falha). Sem CI verde o Release gate não publica, então a correção do alias ainda não está numa release — por isso a validação "depois" usou o instalador construído do commit. Task aberta.
+- O chat real não rodou no runner: o seletor "Modelo Openia" não abriu (lista de modelos vazia ao carregar). Chat e agente reais já tinham sido validados em 21/09 nesta máquina; não é critério desta task.
+- Validação de UI do Windows só no runner (Windows Server 2025); macOS segue na task própria.
+- Gates locais: suíte Node 2481/2484 (a falha é EPERM de symlink em `app-relaunch.test.cjs`, igual sem esta mudança), `test:native` 6/6, lint e typecheck limpos. CI: todos os `Validate` (Linux x64/arm64, macOS, Windows) verdes; só o "Dependency policy" vermelho.
