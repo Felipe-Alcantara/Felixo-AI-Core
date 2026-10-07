@@ -206,7 +206,13 @@ function runCli(args, env = process.env) {
  */
 async function comApp(executavel, { path: pathDoApp } = {}, acao) {
   const { connect, readState } = require('../electron/cli/felixo-devtools.cjs')
-  const env = { ...process.env, ...AMBIENTE_DO_APP, ...(pathDoApp ? { PATH: pathDoApp } : {}) }
+  // Uma grafia só de PATH: com "Path" herdado e "PATH" do cenário juntos, quem
+  // vence depende da ordenação do Node — melhor não deixar a escolha implícita.
+  const env = { ...process.env, ...AMBIENTE_DO_APP }
+  if (pathDoApp) {
+    for (const nome of Object.keys(env)) if (nome.toLowerCase() === 'path') delete env[nome]
+    env.PATH = pathDoApp
+  }
   runCli(['launch', '--visible', '--timeout', String(TEMPO_APP_MS), '--packaged', executavel], env)
   const estado = readState()
   const { browser, page } = await connect(estado)

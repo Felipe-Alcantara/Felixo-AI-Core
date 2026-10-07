@@ -18,6 +18,14 @@ on:
         description: 'Tag da release a validar (vazio = a mais recente)'
         required: false
         default: ''
+      construir:
+        # Quando a correção ainda não virou release (o Release gate só
+        # publica depois de um CI verde), o instalador NSIS sai deste commit,
+        # construído no próprio runner — o mesmo electron-builder do Release.
+        description: 'Construir o instalador NSIS a partir deste commit em vez de baixar a release'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -60,7 +68,22 @@ jobs:
             Write-Host "Lançador py instalado pelo workflow: $(py --version)"
           }
 
+      - name: Construir o instalador deste commit
+        if: ${{ inputs.construir }}
+        shell: pwsh
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: |
+          npm run build
+          # Mesma linha do passo "Build installers" do release.yml no Windows.
+          npx electron-builder --win nsis --x64 --publish never -c.npmRebuild=false
+          New-Item -ItemType Directory -Force instalador | Out-Null
+          Copy-Item (Get-ChildItem release -Filter '*-win-x64.exe' | Select-Object -First 1).FullName instalador
+          Write-Host "Instalador construído a partir de $env:GITHUB_SHA"
+          Get-ChildItem instalador
+
       - name: Baixar o instalador da release
+        if: ${{ !inputs.construir }}
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
