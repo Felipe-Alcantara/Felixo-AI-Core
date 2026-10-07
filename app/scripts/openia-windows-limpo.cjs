@@ -314,7 +314,10 @@ async function main(argv = process.argv.slice(2)) {
     const abertos = comoLista(powershellJson(`Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -like '${PRODUTO}*' } | Select-Object Id | ConvertTo-Json`))
     const r = rodar(opcoes.installer, ['/S'], { timeout: TEMPO_INSTALACAO_MS })
     const registro = comoLista(powershellJson("Get-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*' | Where-Object { $_.DisplayName -like 'Felixo AI Core*' } | Select-Object DisplayName, DisplayVersion, Publisher, InstallLocation, UninstallString | ConvertTo-Json"))[0] ?? null
-    const pasta = registro?.InstallLocation || null
+    const desinstalador = registro?.UninstallString ? /"([^"]+)"/.exec(registro.UninstallString)?.[1] ?? registro.UninstallString.split(' /')[0] : null
+    // O NSIS do electron-builder não grava InstallLocation (medido no run
+    // 37579811264): a pasta do app é a do desinstalador, que mora nela.
+    const pasta = registro?.InstallLocation || (desinstalador ? path.dirname(desinstalador) : null)
     const executavel = pasta ? path.join(pasta, `${PRODUTO}.exe`) : null
     const atalhos = comoLista(powershellJson(
       "$sh = New-Object -ComObject WScript.Shell; " +
@@ -322,14 +325,19 @@ async function main(argv = process.argv.slice(2)) {
       "ForEach-Object { Get-ChildItem -Path $_ -Filter 'Felixo AI Core*.lnk' -Recurse -ErrorAction SilentlyContinue } | " +
       "ForEach-Object { [pscustomobject]@{ arquivo = $_.FullName; alvo = $sh.CreateShortcut($_.FullName).TargetPath } } | ConvertTo-Json",
     ))
-    const desinstalador = registro?.UninstallString ? /"([^"]+)"/.exec(registro.UninstallString)?.[1] ?? registro.UninstallString.split(' /')[0] : null
     instalacao = { pasta, executavel, desinstalador, versao: registro?.DisplayVersion ?? null }
     relatorio.versaoApp = registro?.DisplayVersion ?? null
     const atalhosValidos = atalhos.filter((a) => executavel && path.resolve(a.alvo).toLowerCase() === path.resolve(executavel).toLowerCase())
     return {
       appAbertoAntes: abertos.length > 0,
       codigoSaida: r.codigo,
-      registro: registro ? { nome: registro.DisplayName, versao: registro.DisplayVersion, editor: registro.Publisher, pasta: caminhoParaRelatorio(pasta) } : null,
+      registro: registro ? {
+        nome: registro.DisplayName,
+        versao: registro.DisplayVersion,
+        editor: registro.Publisher,
+        gravaInstallLocation: Boolean(registro.InstallLocation),
+        pasta: caminhoParaRelatorio(pasta),
+      } : null,
       executavelExiste: Boolean(executavel && fs.existsSync(executavel)),
       desinstaladorExiste: Boolean(desinstalador && fs.existsSync(desinstalador)),
       atalhos: atalhos.map((a) => ({ arquivo: caminhoParaRelatorio(a.arquivo), apontaParaOApp: atalhosValidos.includes(a) })),
@@ -699,11 +707,13 @@ function validarUsuarioComEspaco(opcoes) {
     "  $reg = Get-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*' | Where-Object { $_.DisplayName -like 'Felixo AI Core*' } | Select-Object -First 1",
     "  if (-not $reg) { throw 'instalador nao registrou o app para este usuario' }",
     "  & py -m pip install --user --upgrade 'https://github.com/Felipe-Alcantara/Openia/archive/d248538.zip' *>> $log",
-    "  $exe = Join-Path $reg.InstallLocation 'Felixo AI Core.exe'",
-    "  $asar = Join-Path $reg.InstallLocation 'resources\\app.asar'",
+    // Sem InstallLocation no registro (NSIS do electron-builder): a pasta é a do desinstalador.
+    "  $pasta = $reg.InstallLocation; if (-not $pasta) { $pasta = Split-Path -Parent ($reg.UninstallString -replace '^\"([^\"]+)\".*$', '$1') }",
+    "  $exe = Join-Path $pasta 'Felixo AI Core.exe'",
+    "  $asar = Join-Path $pasta 'resources\\app.asar'",
     "  $env:ELECTRON_RUN_AS_NODE = '1'",
     `  & $exe (Join-Path $PSScriptRoot 'detectar.cjs') $asar "${saidaJson}" *>> $log`,
-    `  Start-Process -FilePath (Join-Path $reg.InstallLocation 'Uninstall Felixo AI Core.exe') -ArgumentList '/S' -Wait`,
+    `  Start-Process -FilePath (Join-Path $pasta 'Uninstall Felixo AI Core.exe') -ArgumentList '/S' -Wait`,
     '} catch { $_ | Out-String | Add-Content $log; exit 1 }',
     '',
   ].join('\r\n'))
