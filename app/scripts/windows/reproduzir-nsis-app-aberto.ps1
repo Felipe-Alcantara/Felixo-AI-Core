@@ -31,10 +31,10 @@ if ($env:GITHUB_ACTIONS -ne 'true' -and $env:CI -ne 'true') {
 
 $Nome = 'Felixo AI Core'
 $Guid = '38f15219-ae73-5ead-9234-72a65f4ddfd3'
-$Raiz = 'C:\fx'
-New-Item -ItemType Directory -Force -Path $Saida, $Raiz | Out-Null
+$Trabalho = 'C:\fx'
+New-Item -ItemType Directory -Force -Path $Saida, $Trabalho | Out-Null
 # Usuário padrão do cenário G precisa ler os instaladores e escrever no destino.
-& icacls $Raiz /grant '*S-1-5-32-545:(OI)(CI)M' | Out-Null
+& icacls $Trabalho /grant '*S-1-5-32-545:(OI)(CI)M' | Out-Null
 
 Add-Type -TypeDefinition @'
 using System;
@@ -193,11 +193,11 @@ function Medir([string]$instalador, [string]$argumentos, [string]$destino, [int]
   $temp = $env:TEMP
   if ($credencial) {
     # O processo de outro usuário herda este ambiente; o %TEMP% do runner não é dele.
-    $tempPadrao = Join-Path $Raiz 'temp-padrao'
+    $tempPadrao = Join-Path $Trabalho 'temp-padrao'
     New-Item -ItemType Directory -Force -Path $tempPadrao | Out-Null
     $env:TEMP = $tempPadrao; $env:TMP = $tempPadrao
     $sp.Credential = $credencial
-    $sp.WorkingDirectory = $Raiz
+    $sp.WorkingDirectory = $Trabalho
   }
   $inicio = Get-Date
   try { $p = Start-Process @sp } finally { $env:TEMP = $temp; $env:TMP = $temp }
@@ -259,7 +259,7 @@ function Limpar {
       [Environment]::GetFolderPath('Programs'), [Environment]::GetFolderPath('CommonPrograms'))) {
     if ($pasta) { Get-ChildItem -LiteralPath $pasta -Filter "$Nome*.lnk" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue }
   }
-  Get-ChildItem -LiteralPath $Raiz -Directory -ErrorAction SilentlyContinue |
+  Get-ChildItem -LiteralPath $Trabalho -Directory -ErrorAction SilentlyContinue |
     Where-Object { $_.Name -notin 'instaladores', 'temp-padrao' } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
   Get-ChildItem -LiteralPath $env:TEMP -Directory -Filter 'fx-*' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 }
@@ -271,7 +271,10 @@ function Cenario([string]$id, [string]$descricao, [scriptblock]$corpo) {
   Write-Host ''
   Write-Host "=== $id — $descricao"
   $r = [ordered]@{ id = $id; descricao = $descricao }
-  try { Limpar; & $corpo $r } catch { $r.erro = $_.Exception.Message; Write-Host "   ERRO: $($r.erro)" }
+  try { Limpar; & $corpo $r } catch {
+    $r.erro = "$($_.Exception.Message) (linha $($_.InvocationInfo.ScriptLineNumber))"
+    Write-Host "   ERRO: $($r.erro)"
+  }
   finally { try { Limpar } catch { $r.erroNaLimpeza = $_.Exception.Message } }
   $resultados.Add($r)
 }
@@ -298,8 +301,8 @@ Write-Host ($ambiente | ConvertTo-Json -Depth 4)
 # e o exe aberto pelo atalho vem pelo caminho longo.
 $baseCurta = Join-Path ([JanelasFelixo]::Curto($env:TEMP)) 'fx-base'
 $ambiente.baseCurta = $baseCurta
-$baseLonga = Join-Path $Raiz 'base'
-$destinoNovo = Join-Path $Raiz 'novo'
+$baseLonga = Join-Path $Trabalho 'base'
+$destinoNovo = Join-Path $Trabalho 'novo'
 
 Cenario 'A-allusers-curto-app-aberto-com-D' 'como em 21/09: instalação para todos em pasta 8.3, app aberto, /S /D= para outra pasta' {
   param($r)
@@ -359,7 +362,7 @@ Cenario 'G-usuario-padrao-sobre-allusers' 'usuário sem admin roda /S /D= numa m
     $grupo = (New-Object Security.Principal.SecurityIdentifier 'S-1-5-32-545').Translate([Security.Principal.NTAccount]).Value.Split('\')[-1]
     try { [void]([ADSI]"WinNT://$env:COMPUTERNAME/$grupo,group").psbase.Invoke('Add', "WinNT://$env:COMPUTERNAME/$nomeUsuario,user") } catch { }
     $credencial = New-Object pscredential $nomeUsuario, (ConvertTo-SecureString $senha -AsPlainText -Force)
-    $destinoG = Join-Path $Raiz 'g'
+    $destinoG = Join-Path $Trabalho 'g'
     New-Item -ItemType Directory -Force -Path $destinoG | Out-Null
     $r.medicao = Medir $Novo "/S /D=$destinoG" $destinoG 120 $credencial
   } finally {
