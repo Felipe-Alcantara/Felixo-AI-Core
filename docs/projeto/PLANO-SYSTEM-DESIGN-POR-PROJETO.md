@@ -68,22 +68,22 @@ Task: Felixo AI Core/System Design — camada por projeto na precedência da fon
 
 ## Fases (commits na branch `feat/system-design-por-projeto`)
 
-- [ ] **1. Contrato:** lista de guias do usuário, v3 com migração, camada de projeto (arquivo,
+- [x] **1. Contrato:** lista de guias do usuário, v3 com migração, camada de projeto (arquivo,
   pasta, escolha no app), precedência e efetivo. Só funções puras, com testes.
-- [ ] **2. Processo principal:**
+- [x] **2. Processo principal:**
   - migração 018 e documentos por fonte;
   - sincronização por fonte;
   - `system-design:resolve-project` e `system-design:save-project`;
   - leitura autorizada da raiz;
   - testes de integração com SQLite real.
-- [ ] **3. Renderer:**
+- [x] **3. Renderer:**
   - tipos, hook, seção "Seus guias" (adicionar URL e branch, remover, voltar ao padrão) e "Por
     projeto" (confirmar o arquivo, ligar a pasta, escolher guias);
   - lembrete por `cwd` no canvas;
   - bloco do orquestrador por projeto ativo;
   - índice do painel por guia;
   - testes de apresentação e de texto.
-- [ ] **4. Docs, inventário e validação no app:**
+- [x] **4. Docs e validação no app:**
   - README, GUIA-USUARIO, ARQUITETURA, IA.md e inventário do canvas;
   - app isolado com um projeto que traz o arquivo (Doktor), outro com pasta de guias e um com
     escolha no app.
@@ -104,3 +104,14 @@ Task: Felixo AI Core/System Design — camada por projeto na precedência da fon
 - O app não escreve o arquivo `.felixo/system-design.json` no repositório; quem versiona é a
   pessoa.
 - Validar a migração numa instalação real anterior (task já aberta).
+
+## Resultado (08/10/2026)
+
+- Fases 1 e 2: `61afa5ed`. Fase 3: `b6c800b7`. Correções achadas na validação no app: `14081afc`
+  (sync da mesma fonte duplicado, rótulo do Felixo como item da lista, textos da tela).
+- Validação no app (código do worktree, perfil isolado, três projetos registrados, CLI falsa): arquivo
+  pendente não vale e não é clonado; confirmado, clona o Doktor (75 documentos) e os agentes novos do
+  projeto o citam com o aviso de substituição; pasta de guias vale e desliga pela chave; escolha no app
+  vale só naquele projeto; dois guias na sua lista aparecem juntos no lembrete; tudo sobrevive ao
+  reinício; console do renderer sem erros.
+- O inventário do canvas não mudou: a seção mora em `shared/` e não é dona de controles do canvas.

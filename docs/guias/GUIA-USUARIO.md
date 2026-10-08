@@ -451,30 +451,49 @@ Como cada sistema escolhe a placa:
   efeito. Automático e Integrada continuam disponíveis.
 - Em outros sistemas a opção aparece desligada, com o motivo.
 
-### Felixo System Design
+### System Design (guias dos agentes)
 
-Em **Configurações** (a engrenagem no pé da faixa de ícones do canvas), o bloco **Felixo System Design** sincroniza
-o repositório de padrões e mostra o índice usado pelos agentes. A sincronização
+Em **Configurações** (a engrenagem no pé da faixa de ícones do canvas), o bloco **System Design** sincroniza
+os repositórios de padrões que os agentes seguem e mostra o índice de cada um. A sincronização
 de repositórios privados usa a autenticação segura já configurada no Git
 (credential helper, Keychain do macOS, Credential Manager do Windows ou
 equivalente). Não coloque usuário, senha, token ou parâmetro secreto na URL do
 repositório; quando uma configuração legada contém esse formato, o app remove
 essas partes antes de salvar e de chamar o Git.
 
-O bloco mostra três coisas que costumam ser confundidas: a **fonte** (repositório e
-branch), o **estado da sincronização** e **de onde vem o conteúdo que os agentes
-estão recebendo agora**. Depois de trocar a fonte, ou quando a sincronização falha,
-o conteúdo em cache ainda é o da fonte anterior — e a tela diz isso, em vez de
-afirmar que a nova já vale. O texto do lembrete de padrão de qualidade e o bloco
-enviado ao orquestrador citam a mesma fonte, com o mesmo estado.
+**Seus guias.** É uma lista, então dá para seguir dois padrões ao mesmo tempo (por
+exemplo, o Felixo e o Doktor). Em **Adicionar guia**, cole a URL do repositório e a
+branch; o guia é sincronizado em seguida. Cada guia mostra o próprio estado
+(sincronizado, ainda não sincronizado ou sem acesso à fonte — usando o último
+conteúdo), a contagem de documentos e o índice. A lixeira tira um guia da lista.
 
-- **Padrão do app:** sem escolha sua, o Felixo segue o padrão dele. Se o padrão do
-  app mudar numa atualização, você passa a recebê-lo.
-- **Fonte escolhida por você:** nunca é trocada por um novo padrão do app. O botão
-  **Voltar ao padrão do app** descarta a escolha e sincroniza de novo.
+- **Padrão do app:** sem escolha sua, vale o Felixo System Design. Se o padrão do app
+  mudar numa atualização, você passa a recebê-lo.
+- **Lista escolhida por você:** nunca é trocada por um novo padrão do app. O botão
+  **Voltar ao padrão do app** descarta a lista e sincroniza de novo.
 - **Instalação anterior a esta versão:** configuração igual ao padrão vira "segue o
-  padrão"; qualquer outra vira "escolhida por você" e é preservada como estava.
+  padrão"; qualquer outra vira uma lista com aquela fonte, preservada como estava.
 - Uma URL inválida é recusada com o motivo, sem alterar nada.
+
+**Guias por projeto.** Um projeto pode trazer os próprios guias, e aí eles valem nos
+terminais daquele projeto **no lugar dos seus** — o lembrete do agente avisa isso. São
+três caminhos, que somam:
+
+- **Arquivo no repositório** `.felixo/system-design.json`, versionado junto com o
+  projeto (quem clona recebe). Formato: `{ "guias": [ { "url": "https://github.com/conta/guia", "branch": "main" } ] }`.
+  Como ele vem de fora, **nunca vale sozinho**: em **Por projeto**, o cartão do projeto
+  mostra as URLs que o arquivo pede, e só depois de **Usar estes guias** elas são
+  buscadas e passam a valer. **Ignorar arquivo** para de perguntar. Se o arquivo mudar
+  depois, a confirmação cai e ele volta a pedir conferência.
+- **Pasta de guias** na raiz do repositório, chamada `Padrão de qualidade - <nome>/`.
+  Vale por padrão, sem rede (o agente lê os arquivos dali); a chave no cartão desliga.
+- **Escolha no app:** em **Por projeto**, adicione guias só para aquele projeto.
+
+A seção **Por projeto** lista os projetos em uso: no canvas, as pastas dos terminais;
+no chat, os projetos ativos. O app só lê projetos registrados em **Projetos** (ou uma
+pasta escolhida no seletor). Terminais já abertos não mudam de texto; os próximos já
+nascem com os guias certos. O bloco enviado ao orquestrador do chat também diz quais
+guias valem em cada projeto ativo.
 
 Se o clone, fetch ou reset falhar, a mensagem preserva a etapa, o código, o
 branch e o repositório sem a credencial. O stderr, cabeçalhos de autorização e

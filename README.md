@@ -59,7 +59,7 @@ Base funcional entregue:
 - Painel **Limites e uso** no canvas, com consumo por janela, conta, plano e horário de reset de cada CLI; no Codex, também mostra a quantidade, validade e detalhes dos resets bancados por conta, com uso protegido por confirmação
 - Bloco **Tarefas Notion** no canvas (**Ferramentas → Tarefas Notion** cria o bloco ou foca o que já existe), com conexão própria cifrada, seleção de database compartilhada, cache offline, CRUD de tarefas e a aba **Painel**: um cartão por repositório (ou por valor de qualquer coluna de escolha/ligação) com o placar de abertas e concluídas
 - Preview de Markdown com sanitização de HTML/URLs externos, remoção de ANSI, limite de 200.000 caracteres e imagens remotas bloqueadas por padrão; GFM e imagens locais seguem a autorização do arquivo
-- Sincronização do Felixo System Design com diagnóstico Git redigido antes de chegar ao SQLite, QA Logger ou renderer
+- Sincronização do Felixo System Design com diagnóstico Git redigido antes de chegar ao SQLite, QA Logger ou renderer; lista de guias (dá para seguir dois padrões juntos) e guias por projeto — arquivo `.felixo/system-design.json` no repositório (só vale depois de confirmado), pasta de guias ou escolha no app
 - Superfícies do canvas que dividem o espaço entre si: painel, gaveta do terminal, Mini Map e dock encolhem uns pelos outros em vez de se cobrirem
 - Escolha da **placa de vídeo** (Automático, Integrada ou Dedicada experimental) como opção avançada, com volta automática para Automático se a GPU falhar, e sugestão do **Modo Performance** em máquina com até 4 CPUs lógicas
 - **Tutorial do canvas** no primeiro uso (projeto, agente, contexto, terminais, ferramentas e onde rever), não bloqueante e sem criar nada, e **Ajuda** na barra de ícones para reabrir o tutorial, ver novidades e redefinir. Quem já usava o app recebe só um aviso discreto da Ajuda, uma vez; o progresso fica versionado no SQLite local, sem reabrir a cada atualização (ver o [Guia do Usuário](docs/guias/GUIA-USUARIO.md#tutorial-e-ajuda))
@@ -81,16 +81,28 @@ destino sem userinfo. Tokens, parâmetros sensíveis, cabeçalhos de autorizaç�
 stderr cru e a linha de comando completa são redigidos antes de `lastError`, do
 QA Logger e da resposta ao renderer.
 
-A fonte (URL e branch) tem um contrato único em `electron/core/system-design-source.cjs`:
-só a escolha explícita é gravada, o padrão do app é resolvido na leitura, e a UI e os
-prompts dizem a fonte **entregue** (a do conteúdo em cache), que pode diferir da
-configurada até a próxima sincronização. Uma fonte escolhida nunca é trocada por um
-novo padrão do app; configurações antigas são migradas sem reset.
+Os guias têm um contrato único em `electron/core/system-design-source.cjs` (camada
+do usuário) e `electron/core/system-design-project.cjs` (camada de projeto):
 
-Os agentes procuram uma cópia local dos guias em
-`Padrão de qualidade - Felixo System Design/`. Essa pasta é opcional e fica fora do
-versionamento; quando não existe, o prompt aponta para a URL e a branch da fonte
-configurada.
+- **Seus guias:** uma lista; dá para seguir dois padrões ao mesmo tempo (ex.: Felixo +
+  Doktor). Só a escolha explícita é gravada, e uma lista escolhida nunca é trocada por
+  um novo padrão do app. Cada guia tem cache, índice e estado próprios.
+- **Guias do projeto:** um projeto pode trazer os seus por três caminhos que somam: um
+  arquivo versionado, uma pasta `Padrão de qualidade - <nome>/` na raiz do repositório
+  ou uma escolha feita no app. Quando o projeto traz guias, eles valem nos terminais
+  daquele projeto **no lugar** dos seus, e o lembrete e a tela avisam isso.
+
+O arquivo do repositório é lido do disco, mas vem de fora: ele aparece em
+**Configurações → System Design → Por projeto** com as URLs que pede e só passa a
+valer (e a ser buscado) depois de **Usar estes guias**. Se o arquivo mudar, a
+confirmação cai. Formato:
+
+```json
+{ "guias": [ { "url": "https://github.com/conta/guia", "branch": "main" } ] }
+```
+
+O app só lê projetos registrados em **Projetos** (ou pastas escolhidas no seletor) e
+não segue link simbólico. Configurações antigas são migradas sem reset.
 
 Para voltar de uma fonte escolhida à fonte padrão do app, abra **Configurações →
 System Design** e use **Voltar ao padrão do app**; a tela troca a configuração e

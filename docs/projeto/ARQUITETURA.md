@@ -1370,29 +1370,59 @@ branch e destino seguro, usa stderr apenas depois da redação e elimina a linha
 de comando completa. A migração de configuração também regrava URLs e erros
 legados já sanitizados no SQLite.
 
-### Fonte do System Design: contrato e precedência
+### Guias do System Design: camadas, contrato e precedência
 
-`electron/core/system-design-source.cjs` é a única definição do padrão da fonte e
-da migração da configuração (`schemaVersion` 2). Só a escolha explícita é gravada
-(`sourceMode: custom` + `customSource`); no modo `default` a fonte é resolvida na
-leitura, então um novo padrão do app alcança quem o segue e nunca uma fonte
-escolhida. A precedência é **escolha do usuário > padrão do app**; o fallback
-offline não é uma terceira fonte, é o último conteúdo entregue (`delivered`), que
-segue valendo enquanto a sincronização falha.
+**Camada do usuário — `electron/core/system-design-source.cjs` (`schemaVersion` 3).**
+A configuração (`system-design.config`) só guarda escolhas: `enabled`, `sourceMode`
+e `customSources` (lista de até 5 guias, sem repetir a mesma fonte canônica). No modo
+`default` a lista é resolvida na leitura a partir do padrão do app, então um novo
+padrão alcança quem o segue e nunca uma lista escolhida. O estado de sincronização
+saiu da configuração para um store por fonte (`system-design.sync`: sha, data e
+último erro de cada `sourceKey`, a forma canônica `url#branch`) — cada guia tem cache
+(`config/system-design/sources/<hash>/repo`) e índice próprios, e o fallback offline
+é o último conteúdo daquela fonte. A migração v1/v2 → v3 é idempotente: a escolha
+vira lista, o entregue e o erro vão para a chave da fonte certa, e os documentos da
+tabela antiga migram para a fonte que os entregou (migração SQL `018` cria
+`system_design_source_documents`, chave `(source_key, path)`). `LEGACY_DEFAULT_SOURCES`
+continua protegendo quem pula de uma versão v1 direto para uma com novo padrão.
 
-A migração do v1 (que gravava `repoUrl`/`branch` sempre) trata como "segue o
-padrão" o que for igual ao padrão atual ou a um padrão histórico
-(`LEGACY_DEFAULT_SOURCES` — ao trocar o padrão do app, acrescente o que está
-saindo), e como escolha explícita o restante, preservando `enabled`, sha, data e
-erro.
+**Camada de projeto — `electron/core/system-design-project.cjs`.** Três mecanismos que
+somam, à escolha de quem usa: o arquivo `.felixo/system-design.json` (até 5 guias, 16
+KB, cada URL pelo mesmo `validateSourceUrl`), as pastas `Padrão de qualidade - <nome>/`
+na raiz (guias locais, sem rede, ligadas por padrão) e a escolha no app
+(`system-design.projects`, por raiz). O arquivo **nunca vale sem confirmação**: a
+confirmação guarda o hash da lista normalizada e só é aceita para o conteúdo atual;
+mudou URL ou branch, o estado volta a `alterado`. Lista do projeto não vazia
+**substitui** a do usuário naquele projeto (`resolveEffectiveGuides` devolve
+`replaced`, que a UI e o lembrete citam).
 
-`system-design:save-config` aceita só `enabled`, `sourceMode: 'default'`, `repoUrl`
-e `branch` (lista branca); sha, data, erro e fonte entregue só o processo principal
-escreve, e URL inválida é recusada sem gravar. O serviço descarta um clone em cache
-cujo `origin` não é a fonte pedida (antes o `fetch` rodava no `origin` antigo e o
-conteúdo da fonte anterior era gravado como da nova). O renderer não tem cópia do
-padrão; recebe a configuração já resolvida com `syncState` (`disabled`,
-`never-synced`, `synced`, `offline-fallback`, `pending-source-change`) e `delivered`.
+**Leitura em disco — `services/system-design-project-service.cjs`.** A raiz de um
+terminal é a primeira pasta com `.git` subindo do `cwd`, sem passar do que
+`authorizeProjectDirectory` aceita — a mesma régua dos IPCs de projetos (pasta do
+seletor ou projeto registrado), repassada por `registerProjectsIpcHandlers`. Nada
+segue link simbólico (`.felixo` ou o arquivo como link não são lidos), e o documento
+de uma pasta local não sai dela (comparação por caminho real).
+
+**IPC.** `system-design:save-config` aceita `enabled`, `sourceMode: 'default'`,
+`guides` (lista inteira) ou o par `repoUrl`/`branch` da v2 (lista branca).
+`system-design:sync` sem argumento sincroniza os guias do usuário; com
+`{ projectRoot }`, só os guias git que **já valem** no projeto (escolha no app e
+arquivo confirmado) — um arquivo pendente nunca chega ao `git clone`. Sincronizações
+da mesma fonte ao mesmo tempo compartilham a mesma execução (a tela e o canvas
+chegavam juntos e o segundo clone falhava na mesma pasta).
+`system-design:resolve-project` e `system-design:save-project` expõem e gravam a
+camada de projeto; `list-documents`/`get-document` aceitam a chave do guia (git pelo
+índice, `local:` pelo disco, reautorizado).
+
+**Renderer.** `useProjectGuides` resolve a camada das pastas em uso (cwds dos
+terminais, projetos ativos do chat) e sincroniza os guias de projeto uma vez por
+sessão. No canvas, criar um terminal espera a resolução da pasta (com prazo) para o
+lembrete nascer gravado com os guias certos; o render monta o lembrete só a partir de
+estado. Com só o padrão do app, o lembrete é idêntico byte a byte ao texto histórico;
+com lista ou projeto, `buildDefaultQualityStandardPrompt` usa o modelo de lista, e
+`isCustomizedQualityStandardPrompt` reconhece os dois modelos como gerados. O bloco do
+orquestrador (`createSystemDesignGuidesPromptBlock`) traz uma seção por guia e uma
+para os projetos ativos com guias próprios.
 
 ## Tutorial do canvas, Ajuda e novidades
 
