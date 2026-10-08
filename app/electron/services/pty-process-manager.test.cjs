@@ -1340,6 +1340,57 @@ test('Windows: retomada por ID recusada cedo encerra, sem virar CLI sem argument
   }
 })
 
+// O Openia 0.2.0 testa a chave antes de lançar e, com a chave recusada pelo
+// OpenRouter, sai com código 3 em ~0,5 s (medido em 08/10/2026: 536, 558, 569
+// ms) — abaixo dos 800 ms da saída precoce. Tirar os argumentos abriria o menu
+// interativo do Openia no lugar da recusa.
+test('Windows: openia run com a chave recusada (código 3) encerra cedo sem retry nem shell de emergência', () => {
+  for (const command of ['openia', 'C:\\Users\\Pessoa\\AppData\\Roaming\\Python\\Scripts\\openia.exe']) {
+    const first = createFakePty()
+    const spawnCalls = []
+    const spawnPty = (file, spawnArgs, options) => {
+      spawnCalls.push({ file, args: spawnArgs, options })
+      return (spawnCalls.length === 1 ? first : createFakePty()).spawnPty(file, spawnArgs, options)
+    }
+    const manager = new PtyProcessManager({ spawnPty, platform: fakeWin32Platform, resolveCodexPath: () => null })
+    const exits = []
+    const output = []
+
+    manager.spawn('term-openia-chave', {
+      command,
+      args: ['run', 'claudecode', '--provider', '--no-model', '--dir', 'C:\\projeto'],
+      onData: (data) => output.push(data),
+      onExit: (event) => exits.push(event),
+    })
+    first.fakePty.emitData(`erro: a chave foi rejeitada pelo OpenRouter (inválida, revogada ou sem permissão).${CR}${LF}`)
+    first.fakePty.emitExit({ exitCode: 3 })
+
+    assert.equal(spawnCalls.length, 1, `${command}: a recusa não pode abrir outra coisa no lugar`)
+    assert.deepEqual(exits, [{ exitCode: 3 }], `${command}: o código 3 chega ao renderer, que mostra a faixa`)
+    assert.doesNotMatch(output.join(''), /argumentos adicionais|shell de emergência/)
+  }
+})
+
+test('Windows: openia run que sai cedo com outro código continua com a recuperação de sempre', () => {
+  const first = createFakePty()
+  const spawnCalls = []
+  const spawnPty = (file, spawnArgs, options) => {
+    spawnCalls.push({ file, args: spawnArgs, options })
+    return (spawnCalls.length === 1 ? first : createFakePty()).spawnPty(file, spawnArgs, options)
+  }
+  const manager = new PtyProcessManager({ spawnPty, platform: fakeWin32Platform, resolveCodexPath: () => null })
+
+  manager.spawn('term-openia-outro', {
+    command: 'openia',
+    args: ['run', 'claudecode', '--provider', '--no-model'],
+    onExit: () => {},
+  })
+  first.fakePty.emitExit({ exitCode: 1 })
+
+  assert.equal(spawnCalls.length, 2)
+  assert.deepEqual(spawnCalls[1].args, ['/d', '/s', '/c', 'openia'])
+})
+
 test('Windows: command with args that runs for a while does not trigger a fallback retry', () => {
   const { fakePty, spawnPty } = createFakePty()
   let now = 0

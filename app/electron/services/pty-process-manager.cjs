@@ -488,11 +488,14 @@ class PtyProcessManager {
       // in", o aviso de limite): varre já, sem esperar o debounce, e desliga.
       this.finishSessionOutputWatcher(entry, { flush: true })
 
+      // A recusa da chave pelo `openia run` também é resposta, não lançamento
+      // quebrado (ver isOpeniaKeyRefusal): o fim chega ao renderer como veio.
       const exitedEarly =
         isCurrentAttempt &&
         this.platform.name === 'win32' &&
         event.exitCode !== 0 &&
-        this.now() - entry.spawnedAt < EARLY_EXIT_THRESHOLD_MS
+        this.now() - entry.spawnedAt < EARLY_EXIT_THRESHOLD_MS &&
+        !isOpeniaKeyRefusal(requestedCommand, args, event.exitCode)
 
       if (exitedEarly) {
         // Tried before every other recovery: a missing interpreter is the
@@ -1523,6 +1526,31 @@ function isCodexCommand(command) {
     .basename(String(command ?? ''))
     .replace(/\.(?:cmd|exe|bat|ps1)$/i, '')
     .toLowerCase() === 'codex'
+}
+
+/**
+ * Código de saída do `openia run` quando o OpenRouter recusa a chave (Openia
+ * 0.2.0, o mesmo da autenticação do `openia image`). O renderer usa o mesmo
+ * número para a faixa do bloco (`openia-key-refused-banner.ts`).
+ */
+const OPENIA_CHAVE_RECUSADA = 3
+
+/**
+ * O `openia run` recusou a chave antes de lançar a ferramenta? É a resposta do
+ * Openia, como a recusa de uma retomada: sai em ~0,5 s, abaixo da saída
+ * precoce, e o retry sem argumentos abriria o menu interativo do Openia no
+ * lugar da mensagem — e o shell de emergência esconderia o código 3.
+ */
+function isOpeniaKeyRefusal(command, args, exitCode) {
+  return (
+    exitCode === OPENIA_CHAVE_RECUSADA &&
+    Array.isArray(args) &&
+    args[0] === 'run' &&
+    path.win32
+      .basename(String(command ?? ''))
+      .replace(/\.(?:cmd|exe|bat|ps1)$/i, '')
+      .toLowerCase() === 'openia'
+  )
 }
 
 /** O comando é o Gemini CLI (o `gemini.cmd` do npm no Windows incluído)? */
