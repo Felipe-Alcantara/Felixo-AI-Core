@@ -708,7 +708,7 @@ export const notionTasksTool: InventoryElement = {
   layer: 'panel',
   owner: `${COMPONENTS}/tools/NotionTasksPanel.tsx`,
   states: {
-    normal: 'Tabela da database com a visualização ativa, contagem, ordenação por coluna, colunas extras escolhidas e "Sincronizado <data>"; sincronização automática a cada 1 min (backoff dobrando até 15 min a cada falha). A aba Painel troca a tabela pela grade de cartões (NotionRepoBoard); clicar num cartão volta à tabela com o chip "<coluna>: <valor>".',
+    normal: 'Tabela da database com a visualização ativa, contagem, ordenação por coluna, colunas extras escolhidas e "Sincronizado <data>"; sincronização automática a cada 1 min (backoff dobrando até 15 min a cada falha). Concluídas escondidas por padrão (a barra fica só com "Abertas" e as visualizações próprias) e seletor "Todos os repositórios" na barra, que vale para todas as abas. A aba Painel troca a tabela pela grade de cartões (NotionRepoBoard); clicar num cartão volta à tabela com aquele repositório escolhido no seletor.',
     loading: 'Primeira visita a uma database sem snapshot local: busy (spinners) até notion:tasks:list; "Revalidando com o Notion…" durante a sincronização; "Carregando conteúdo da página…" no detalhe.',
     empty: 'Sem conexão ou database: "Sua lista do Notion aparece aqui" + "Configurar agora"; "Nenhuma tarefa encontrada."; "Adicione uma conexão para começar…"; "Esta database não tem outras propriedades.".',
     error: 'role="alert" com a mensagem do processo principal (guard devolve ok:false), "A ponte do Notion não está disponível nesta versão do app."; rede fora: "Snapshot local desatualizado" / "Dados locais"; erro do conteúdo da página com "Tentar novamente".',
@@ -812,6 +812,20 @@ export const notionTasksTool: InventoryElement = {
       failure: 'Sem falha própria; não persiste (volta ligada ao remontar).',
     },
     {
+      locator: 'aria-label="Repositório das tarefas"',
+      kind: 'select',
+      effect: 'Escolhe de qual repositório (valor da coluna de agrupamento do Painel) vêm as tarefas em todas as abas, com a contagem de abertas; "Todos os repositórios" tira o filtro. Grava em felixo:notion-task-scope:<conexão>:<database>.',
+      failure: 'localStorage indisponível: filtra na sessão e não lembra. Repositório gravado de outra coluna de agrupamento é ignorado (effectiveRepoFilter).',
+      disabledWhen: 'Só na tabela (some no Painel) e só com uma coluna agrupável na database.',
+    },
+    {
+      locator: 'aria-pressed={taskScope.showCompleted}',
+      kind: 'button',
+      effect: 'Mostra/esconde as concluídas em todas as abas; escondidas (padrão), "Todas" e "Concluídas" saem da barra e a tabela cai em "Abertas"; mostrar a partir de "Abertas" vai para "Todas". Grava em felixo:notion-task-scope:<conexão>:<database>.',
+      failure: 'Sem falha própria; localStorage indisponível volta a esconder ao remontar.',
+      disabledWhen: 'Só na tabela (some no Painel).',
+    },
+    {
       locator: 'aria-label="Escolher colunas da tabela"',
       kind: 'button',
       effect: 'Abre/fecha o seletor de colunas; cada caixa grava em localStorage felixo:notion-table-columns:<conexão>:<database>.',
@@ -826,7 +840,7 @@ export const notionTasksTool: InventoryElement = {
     {
       locator: 'title="Um cartão por repositório (ou por valor de uma coluna), com o placar das tarefas"',
       kind: 'button',
-      effect: 'Aba Painel (role="tab"): troca a tabela pelos cartões, carrega a database inteira (estado "all", busca só na tela), lê a database de detalhes e grava open=true em felixo:notion-repo-board:<conexão>:<database>; tira o chip de filtro.',
+      effect: 'Aba Painel (role="tab"): troca a tabela pelos cartões, carrega a database inteira (estado "all", busca só na tela), lê a database de detalhes e grava open=true em felixo:notion-repo-board:<conexão>:<database>.',
       failure: 'Sem falha própria; localStorage indisponível só deixa de reabrir no Painel.',
     },
     {
@@ -959,20 +973,6 @@ export const notionTasksTool: InventoryElement = {
       disabledWhen: 'Só aparece em tarefa com URL.',
     },
     {
-      locator: 'aria-label={`Tirar o filtro ${groupFilter.label}`}',
-      kind: 'button',
-      effect: 'Tira o filtro temporário do cartão clicado; a tabela volta a mostrar a visualização inteira.',
-      failure: 'Sem falha própria.',
-      disabledWhen: 'Só aparece depois de clicar num cartão do Painel.',
-    },
-    {
-      locator: 'Voltar ao painel',
-      kind: 'button',
-      effect: 'Volta à aba Painel e tira o filtro do cartão.',
-      failure: 'Sem falha própria.',
-      disabledWhen: 'Só aparece junto do chip do filtro.',
-    },
-    {
       locator: 'Mostrar mais {ROW_PAGE_SIZE}',
       kind: 'button',
       effect: 'Monta mais 200 linhas no DOM (nextRowLimit); reinicia ao trocar de database.',
@@ -987,8 +987,9 @@ export const notionTasksTool: InventoryElement = {
     'localStorage felixo:notion-task-sort:<conexão>:<database>',
     'localStorage felixo:notion-table-columns:<conexão>:<database>',
     'localStorage felixo:notion-repo-board:<conexão>:<database> (coluna de agrupamento, ligação de detalhes, etiquetas, "mostrar sem tarefas" e se o Painel era a aba aberta)',
+    'localStorage felixo:notion-task-scope:<conexão>:<database> (repositório escolhido e se as concluídas aparecem)',
     'canvas salvo: data.notionConnectionId e data.notionDataSourceId (cada bloco reabre na sua conexão e database)',
-    'nenhuma para visualização ativa (fora o Painel), filtro do cartão e sincronização automática',
+    'nenhuma para visualização ativa (fora o Painel) e sincronização automática',
   ],
   ipc: [
     'notion:connections:list',
@@ -1009,7 +1010,7 @@ export const notionTasksTool: InventoryElement = {
     'createRefreshCoordinator / targetChanged (notion-refresh-coordinator)',
     'nextAutoSyncDelayMs (notion-sync-backoff)',
     'decideSyncStatusAfterNetwork (notion-sync-status)',
-    'notion-task-views / notion-task-sort / notion-table-columns / notion-table-view',
+    'notion-task-views / notion-task-scope / notion-task-sort / notion-table-columns / notion-table-view',
     'notion-repo-board / useNotionDetailsSource / NotionRepoBoard',
     'DeferredMarkdownContent',
   ],
@@ -1019,6 +1020,7 @@ export const notionTasksTool: InventoryElement = {
     unit(`${SERVICES}/notion-sync-status.test.ts`),
     unit(`${SERVICES}/notion-table-columns.test.ts`),
     unit(`${SERVICES}/notion-table-view.test.ts`),
+    unit(`${SERVICES}/notion-task-scope.test.ts`),
     unit(`${SERVICES}/notion-task-sort.test.ts`),
     unit(`${SERVICES}/notion-task-views.test.ts`),
     unit(`${SERVICES}/notion-repo-board.test.ts`),

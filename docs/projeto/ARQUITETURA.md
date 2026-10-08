@@ -74,6 +74,17 @@ inteira (estado `all`, sem busca enviada ao Notion), para que a lista filtrada
 de outra aba nunca vire placar. Preferências ficam em
 `felixo:notion-repo-board:<conexão>:<database>`.
 
+O recorte da tabela que vale para todas as abas fica em
+`services/notion-task-scope.ts`, gravado em
+`felixo:notion-task-scope:<conexão>:<database>`. Ele guarda o repositório
+escolhido (um valor da coluna de agrupamento do Painel, que só vale enquanto o
+Painel agrupa pela mesma coluna) e se as concluídas aparecem. Por padrão as
+concluídas ficam escondidas no renderer, e as abas fixas **Todas** e
+**Concluídas** saem da barra. O seletor lista os cartões das tarefas já
+carregadas, montados por `buildRepoCards`, e o clique num cartão do Painel
+grava o mesmo recorte. O placar do Painel continua contando abertas e
+concluídas.
+
 A conexão e a database que cada bloco mostra ficam no `data` do próprio nó
 (`notionConnectionId` e `notionDataSourceId`), gravado no canvas pelo
 `onDataChange` que o `CanvasView` injeta; dois blocos podem apontar para

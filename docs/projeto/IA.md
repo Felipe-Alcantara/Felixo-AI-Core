@@ -6277,3 +6277,31 @@ Os cofres do token (`notion-connection-store.cjs` e `cli-account-store.cjs`) com
 - O app de uso diário do Felipe (v0.1.440, com a 0.1.441 pronta para instalar) não tem bloco Tarefas Notion no canvas; não foi criado um ali para não mexer no canvas durante o trabalho dele. A conexão real dele pode ser outra integração, com outro acesso à GITHUB.
 - A database "Repositórios" do André não aparece para nenhuma das integrações daqui (`home-pessoal` e `vitis`); task aberta para ele conferir.
 - A correção rodou do código-fonte com o Electron do projeto, não de um pacote gerado pelo electron-builder; o pacote só sai no Release.
+
+## 2026-10-08 — Notion: seletor de repositório na tabela e concluídas escondidas por padrão
+
+### Pedido
+
+Pedido no canvas: no bloco Tarefas Notion, uma opção para escolher de qual repositório aparecem as tarefas e não ver as concluídas. Até aqui o recorte por repositório só existia como chip temporário depois de clicar num cartão do Painel, e as abas fixas eram Todas/Abertas/Concluídas.
+
+### O que mudou
+
+- `services/notion-task-scope.ts` (novo, puro): `readTaskScope`/`saveTaskScope` em `felixo:notion-task-scope:<conexão>:<database>` com `{ repo, showCompleted }`; `visibleBuiltInViews` (com as concluídas escondidas sobra só **Abertas**), `defaultTableView`, `effectiveRepoFilter` (o repositório gravado só vale com o Painel agrupando pela mesma coluna), `hideCompletedTasks` e `repoChoices` (opções do seletor a partir de `buildRepoCards`, com a contagem que a tabela vai mostrar).
+- `NotionTasksPanel.tsx`: seletor **Todos os repositórios** à direita das abas (some no Painel), botão com o olho ao lado da sincronização, aba ativa destacada pela visualização efetiva e clique no cartão do Painel gravando o mesmo recorte. O chip "<coluna>: <valor>" e o **Voltar ao painel** saíram: o seletor mostra e desfaz o recorte. Mostrar as concluídas a partir de **Abertas** vai para **Todas**, senão o clique não mudaria nada na tela.
+- O Painel continua contando abertas e concluídas: o filtro das concluídas vale só para a tabela.
+- O `FelixoSelect` fixa `width: 100%` fora das camadas do Tailwind, então a largura do seletor vem de um contêiner (`w-52`), não do `className`.
+
+### Como foi validado
+
+- Bancada temporária (apagada antes do commit): o `NotionTasksPanel` real numa página do Vite, com a ponte do Notion simulada e as 164 linhas reais do "To do list!" exportadas pela API e normalizadas pelo `normalizePage` do próprio `notion-client.cjs`.
+- No bloco de 680 px: o seletor listou social-api-manager 48, Contas.exe 9, vip-fit 7… (iguais às abertas no Notion); escolher Contas.exe deixou 9 linhas; a escolha voltou depois de recarregar; o olho mostrou as 22 do Contas.exe (9 + 13 concluídas) e as abas Todas/Concluídas; o cartão vip-fit abriu a tabela com 7 e o seletor em vip-fit; concluir uma tarefa a tirou da lista (6). Em 420 px o seletor desce para a linha de baixo, alinhado à direita. Console sem erro.
+
+### Testes
+
+- `notion-task-scope.test.ts`: 12 casos (padrão, gravação por conexão + database, campo inválido, barra com as concluídas escondidas, contagem do seletor, repositório gravado sem tarefas, coluna sem "reposit", filtro aplicado).
+- Bateria no worktree, no Windows 11 com Node 24.15.0: lint limpo; build (`tsc -b` + Vite) ok; vitest **3.011 passaram, 3 pulados** e 1 falha intermitente em `context-file-delivery.shell.test.ts` (o PowerShell estourou o tempo com a máquina carregada; o arquivo sozinho passa no commit base e nesta branch); suíte Node **2.493 testes, 2.483 passaram, 6 pulados, 4 falhas**, todas em `agent-session-discovery.test.cjs` e iguais no commit base `f329c33`: a sessão roda com `CLAUDE_CONFIG_DIR` apontando para outro perfil, e o teste procura as sessões do Claude no lugar padrão.
+
+### Limitações
+
+- Não rodou no Electron nem com a conexão real: a bancada simula a ponte. A lógica nova é toda no renderer, sobre as tarefas que a ponte já entrega.
+- Windows apenas (a máquina da sessão).
