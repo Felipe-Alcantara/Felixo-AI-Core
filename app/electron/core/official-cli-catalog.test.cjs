@@ -41,8 +41,11 @@ describe('official-cli-catalog', () => {
       'install',
       '--user',
       '--upgrade',
-      'https://github.com/Felipe-Alcantara/Openia/archive/d248538.zip',
+      'https://github.com/Felipe-Alcantara/Openia/archive/024167e.zip',
     ])
+    // Atualizar instala o mesmo pino: um pino só no install deixaria o botão
+    // de atualizar entregando a revisão antiga.
+    assert.deepEqual(getOfficialAiCli('openia').update.args, getOfficialAiCli('openia').install.args)
     assert.equal(getOfficialAiCli('openia').isLauncher, true)
     assert.equal(getOfficialAiCli('openia').autoInstall, false)
     assert.equal(getOfficialAiCli('openia').modelSelection, 'felixo-spawn-interface')

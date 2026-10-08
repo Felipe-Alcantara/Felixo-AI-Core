@@ -161,6 +161,11 @@ const OFFICIAL_AI_CLIS = Object.freeze([
     modelSelection: 'felixo-spawn-interface',
     installUrl: 'https://github.com/Felipe-Alcantara/Openia',
     authUrl: 'https://openrouter.ai/keys',
+    // Pino num commit do Openia. O `--upgrade` do pip só reinstala quando a
+    // versão do pacote sobe: com a mesma versão ele mantém o código antigo sem
+    // avisar (medido em 08/10/2026, 0.1.0 → 0.1.0). Trocar o pino exige um
+    // commit do Openia com versão nova — o 024167e é a 0.2.0, que testa a chave
+    // antes do `run` e sai com código 3 quando o OpenRouter a recusa.
     install: {
       label: 'python3 -m pip install --user --upgrade Openia (GitHub)',
       command: 'python3',
@@ -171,7 +176,7 @@ const OFFICIAL_AI_CLIS = Object.freeze([
         'install',
         '--user',
         '--upgrade',
-        'https://github.com/Felipe-Alcantara/Openia/archive/d248538.zip',
+        'https://github.com/Felipe-Alcantara/Openia/archive/024167e.zip',
       ],
       requiresConfirmation: true,
     },
@@ -185,7 +190,7 @@ const OFFICIAL_AI_CLIS = Object.freeze([
         'install',
         '--user',
         '--upgrade',
-        'https://github.com/Felipe-Alcantara/Openia/archive/d248538.zip',
+        'https://github.com/Felipe-Alcantara/Openia/archive/024167e.zip',
       ],
     },
     login: {

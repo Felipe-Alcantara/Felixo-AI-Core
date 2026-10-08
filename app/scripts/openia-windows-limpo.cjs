@@ -33,6 +33,9 @@ const { spawnSync, execFileSync } = require('node:child_process')
 const APP_DIR = path.resolve(__dirname, '..')
 const FELIXO_CLI = path.join(APP_DIR, 'electron', 'cli', 'felixo.cjs')
 const OPENIA_REPO = 'https://github.com/Felipe-Alcantara/Openia'
+// O mesmo pino do botão "Instalar" do app, lido do catálogo: uma cópia aqui
+// ficou para trás quando o pino subiu.
+const OPENIA_PACOTE = require('../electron/core/official-cli-catalog.cjs').getOfficialAiCli('openia').install.args.at(-1)
 const PRODUTO = 'Felixo AI Core'
 const TEMPO_APP_MS = 120_000
 const TEMPO_INSTALACAO_MS = 10 * 60_000
@@ -863,7 +866,7 @@ function validarUsuarioComEspaco(opcoes) {
     // stderr ("script ... not on PATH") virava erro fatal e parava aqui
     // (run 37581612847). O resultado vale pelo código de saída, conferido à mão.
     "  $ErrorActionPreference = 'Continue'",
-    "  & py -m pip install --user --upgrade 'https://github.com/Felipe-Alcantara/Openia/archive/d248538.zip' 2>&1 | Out-File -Append -Encoding utf8 $log",
+    `  & py -m pip install --user --upgrade '${OPENIA_PACOTE}' 2>&1 | Out-File -Append -Encoding utf8 $log`,
     "  if ($LASTEXITCODE -ne 0) { throw \"pip install saiu com $LASTEXITCODE\" }",
     // Sem InstallLocation no registro (NSIS do electron-builder): a pasta é a do desinstalador.
     "  $pasta = $reg.InstallLocation; if (-not $pasta) { $pasta = Split-Path -Parent ($reg.UninstallString -replace '^\"([^\"]+)\".*$', '$1') }",
