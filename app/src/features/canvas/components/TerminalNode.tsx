@@ -44,6 +44,7 @@ import { TerminalReadingPreview } from './TerminalReadingPreview'
 import { readingProfileFor } from '../terminal/reading/reading-profiles'
 import { useAccountChain, useCliAccountLabel } from '../hooks/useAccountChain'
 import { useAccountChainActions } from '../hooks/account-chain-actions-context'
+import { openiaKeyRefusedBanner } from '../services/openia-key-refused-banner'
 import {
   BANNER_ACTION_LABELS,
   accountChipLabel,
@@ -225,6 +226,15 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
         })
   const configuredModel = configuredAgentModel(nodeData.command, nodeData.args)
   const activity = snapshot?.activity ?? 'starting'
+  // O `openia run` saiu porque o OpenRouter recusou a chave: a resposta está
+  // no terminal; a faixa diz onde trocar a chave no Felixo.
+  const keyRefusedBanner = openiaKeyRefusedBanner({
+    providerId: provider.id,
+    args: nodeData.args,
+    activity: snapshot?.activity,
+    exitCode: snapshot?.exitCode,
+    accountLabel,
+  })
   const preview = snapshot?.previewLines ?? []
   const scrollbackNotice = terminalScrollbackNotice(snapshot?.scrollback)
   const isLive = activity !== 'exited' && activity !== 'error'
@@ -337,8 +347,20 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
         )}
       </div>
 
-      {(resumeBanner || chainBanners.length > 0 || chainError) && (
+      {(resumeBanner || keyRefusedBanner || chainBanners.length > 0 || chainError) && (
         <div className="nodrag nowheel nopan flex shrink-0 flex-col gap-1 px-2 pt-2">
+          {keyRefusedBanner && (
+            <div
+              role="status"
+              data-terminal-key-refused-banner
+              className="rounded-sm border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-1.5 py-1 text-[10px] leading-snug text-(--color-warning)"
+            >
+              <p className="font-semibold">{keyRefusedBanner.title}</p>
+              <p className="mt-0.5 line-clamp-4 text-(--f-core-white-soft)" title={keyRefusedBanner.detail}>
+                {keyRefusedBanner.detail}
+              </p>
+            </div>
+          )}
           {/* Retomada pendente: o alvo e o motivo ANTES do spawn. Nenhum
               botão apaga a conversa gravada; não clicar em nada ("agora não")
               deixa o bloco parado, sem processo, e o canvas intacto. */}
