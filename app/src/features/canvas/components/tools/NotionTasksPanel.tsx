@@ -12,6 +12,8 @@ import {
   Copy,
   Database,
   ExternalLink,
+  Eye,
+  EyeOff,
   KeyRound,
   LayoutGrid,
   ListTodo,
@@ -37,6 +39,16 @@ import type {
 import { hasVisibleColumnsPreference, readVisibleColumns, saveVisibleColumns } from '../../services/notion-table-columns'
 import { nextSortState, readSortState, saveSortState, sortTasks, type SortState } from '../../services/notion-task-sort'
 import { ROW_PAGE_SIZE, defaultVisibleColumns, formatPropertyValue, hasTaskRoles, nextRowLimit } from '../../services/notion-table-view'
+import {
+  defaultTableView,
+  effectiveRepoFilter,
+  hideCompletedTasks,
+  readTaskScope,
+  repoChoices,
+  saveTaskScope,
+  visibleBuiltInViews,
+  type NotionTaskScope,
+} from '../../services/notion-task-scope'
 import {
   BUILT_IN_VIEWS,
   createViewId,
@@ -72,7 +84,6 @@ import {
   saveRepoBoardSettings,
   type RepoBoardSettings,
   type RepoCard,
-  type RepoGroupFilter,
 } from '../../services/notion-repo-board'
 import {
   keepIfListed,
@@ -278,14 +289,20 @@ export function NotionTasksPanel({
 
   // eslint-disable-next-line react-hooks/exhaustive-deps -- viewsVersion força reler o localStorage após persistCustomViews
   const customViews = useMemo(() => readCustomViews(connectionId, dataSourceId), [connectionId, dataSourceId, viewsVersion])
-  const views = useMemo<NotionTaskView[]>(() => [...BUILT_IN_VIEWS, ...customViews], [customViews])
+  // Repositório escolhido e concluídas à mostra: valem para todas as abas da tabela.
+  const [taskScopeVersion, setTaskScopeVersion] = useState(0)
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- taskScopeVersion força reler o localStorage após persistTaskScope
+  const taskScope = useMemo(() => readTaskScope(connectionId, dataSourceId), [connectionId, dataSourceId, taskScopeVersion])
+  const views = useMemo<NotionTaskView[]>(() => [...visibleBuiltInViews(taskScope.showCompleted), ...customViews], [customViews, taskScope.showCompleted])
   const isBoard = activeViewId === REPO_BOARD_VIEW.id
-  const activeView = isBoard ? REPO_BOARD_VIEW : views.find((view) => view.id === activeViewId) || BUILT_IN_VIEWS[0]
-  // Cartão clicado no Painel: filtro temporário da tabela, que não vira visualização salva.
-  const [groupFilter, setGroupFilter] = useState<RepoGroupFilter | null>(null)
+  // A aba gravada pode ter saído da barra (Todas/Concluídas com as concluídas escondidas): cai na fixa visível.
+  const activeView = isBoard ? REPO_BOARD_VIEW : views.find((view) => view.id === activeViewId) || defaultTableView(taskScope.showCompleted)
   const [boardSettingsVersion, setBoardSettingsVersion] = useState(0)
   // eslint-disable-next-line react-hooks/exhaustive-deps -- boardSettingsVersion força reler o localStorage após persistBoardSettings
   const boardSettings = useMemo(() => readRepoBoardSettings(connectionId, dataSourceId), [connectionId, dataSourceId, boardSettingsVersion])
+  // Coluna que vira cartão no Painel e opção do seletor de repositório da tabela.
+  const boardGroupBy = useMemo(() => resolveGroupBy(schema, boardSettings), [schema, boardSettings])
+  const groupFilter = effectiveRepoFilter(taskScope, boardGroupBy)
 
   // Reseta a visualização ativa ao trocar de conexão/database, sem depender de um efeito (ver
   // https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes).
@@ -295,7 +312,6 @@ export function NotionTasksPanel({
   if (dataScopeKey !== lastDataScopeKey) {
     setLastDataScopeKey(dataScopeKey)
     setActiveViewId(openingViewId(connectionId, dataSourceId, BUILT_IN_VIEWS[0].id))
-    setGroupFilter(null)
   }
 
   function persistCustomViews(next: NotionTaskView[]) {
@@ -308,10 +324,21 @@ export function NotionTasksPanel({
     setBoardSettingsVersion((value) => value + 1)
   }
 
+  function persistTaskScope(patch: Partial<NotionTaskScope>) {
+    saveTaskScope(connectionId, dataSourceId, { ...readTaskScope(connectionId, dataSourceId), ...patch })
+    setTaskScopeVersion((value) => value + 1)
+  }
+
+  // Mostrar as concluídas a partir de "Abertas" não mudaria nada na tela: vai para a aba que as inclui.
+  function toggleShowCompleted() {
+    const showCompleted = !taskScope.showCompleted
+    persistTaskScope({ showCompleted })
+    if (showCompleted && activeView.id === defaultTableView(false).id) setActiveViewId(defaultTableView(true).id)
+  }
+
   function selectView(viewId: string) {
     const openBoard = viewId === REPO_BOARD_VIEW.id
     setActiveViewId(viewId)
-    if (openBoard) setGroupFilter(null)
     if (openBoard !== boardSettings.open) persistBoardSettings({ open: openBoard })
   }
 
@@ -486,14 +513,13 @@ export function NotionTasksPanel({
   }, [api, connectionId, dataSourceId, querySearch, activeView.statusFilter])
 
   const filteredTasks = useMemo(
-    () => filterTasksByGroup(filterTasksByView(tasks, activeView), schema, groupFilter),
-    [tasks, activeView, schema, groupFilter],
+    () => filterTasksByGroup(hideCompletedTasks(filterTasksByView(tasks, activeView), taskScope.showCompleted), schema, groupFilter),
+    [tasks, activeView, taskScope.showCompleted, schema, groupFilter],
   )
   const visibleTasks = useMemo(() => sortTasks(filteredTasks, sortState, formatPropertyValue, schema), [filteredTasks, sortState, schema])
 
   // Painel: coluna de agrupamento, ligação de detalhes e etiquetas resolvidas
   // contra o schema atual (preferência que aponta coluna sumida volta ao automático).
-  const boardGroupBy = useMemo(() => resolveGroupBy(schema, boardSettings), [schema, boardSettings])
   const boardDetailsVia = useMemo(() => resolveDetailsVia(schema, boardSettings, boardGroupBy), [schema, boardSettings, boardGroupBy])
   const boardGroupIsRelation = schema[boardGroupBy]?.type === 'relation'
   const detailsTarget = useMemo(() => (boardDetailsVia ? relationTarget(schema, boardDetailsVia) : null), [schema, boardDetailsVia])
@@ -536,9 +562,32 @@ export function NotionTasksPanel({
     [schema, databases],
   )
 
+  // Seletor de repositório da tabela: um item por cartão das tarefas já carregadas
+  // (sem as concluídas, se escondidas), na ordem do Painel.
+  const repoOptions = useMemo(() => {
+    if (!boardGroupBy) return []
+    const cards = buildRepoCards({
+      tasks: hideCompletedTasks(tasks, taskScope.showCompleted),
+      schema,
+      groupBy: boardGroupBy,
+      detailsVia: '',
+      details: detailsSource.details,
+      tagProperties: [],
+      showEmpty: false,
+      search: '',
+    })
+    return repoChoices(cards, boardGroupBy, groupFilter, taskScope.showCompleted)
+  }, [boardGroupBy, tasks, taskScope.showCompleted, schema, detailsSource.details, groupFilter])
+
+  function selectRepo(key: string) {
+    const label = repoOptions.find((option) => option.value === key)?.label || key
+    persistTaskScope({ repo: key ? { property: boardGroupBy, key, label } : null })
+  }
+
+  // Cartão do Painel: abre a tabela já com o repositório escolhido no seletor.
   function openRepoCard(card: RepoCard) {
-    setGroupFilter({ property: boardGroupBy, key: card.key, label: card.label })
-    selectView(BUILT_IN_VIEWS[0].id)
+    persistTaskScope({ repo: { property: boardGroupBy, key: card.key, label: card.label } })
+    selectView(defaultTableView(taskScope.showCompleted).id)
   }
 
   function syncNow() {
@@ -806,7 +855,7 @@ export function NotionTasksPanel({
   function deleteView(view: NotionTaskView) {
     if (!window.confirm(`Excluir a visualização “${view.name}”? Isso não afeta as tarefas no Notion.`)) return
     persistCustomViews(customViews.filter((current) => current.id !== view.id))
-    if (activeViewId === view.id) setActiveViewId(BUILT_IN_VIEWS[0].id)
+    if (activeViewId === view.id) setActiveViewId(defaultTableView(taskScope.showCompleted).id)
   }
 
   const loadTaskContent = useCallback(async (task: NotionTask) => {
@@ -1032,6 +1081,18 @@ export function NotionTasksPanel({
                 >
                   <Clock size={14} />
                 </button>
+                {!isBoard && (
+                  <button
+                    type="button"
+                    className={`felixo-btn-icon rounded-md border p-1.5 ${taskScope.showCompleted ? 'border-white/10 text-(--f-core-white-soft) hover:bg-(--f-core-white)/10' : 'border-white/10 text-zinc-400 hover:bg-white/5 hover:text-zinc-100'}`}
+                    onClick={toggleShowCompleted}
+                    aria-pressed={taskScope.showCompleted}
+                    aria-label={taskScope.showCompleted ? 'Esconder tarefas concluídas' : 'Mostrar tarefas concluídas'}
+                    title={taskScope.showCompleted ? 'Concluídas à mostra — clique para esconder' : 'Concluídas escondidas — clique para mostrar'}
+                  >
+                    {taskScope.showCompleted ? <Eye size={14} /> : <EyeOff size={14} />}
+                  </button>
+                )}
                 <div ref={columnPickerRef} className={isBoard ? 'hidden' : 'relative'}>
                   <button
                     type="button"
@@ -1079,7 +1140,7 @@ export function NotionTasksPanel({
                 </button>
               </div>
               {views.map((view) => {
-                const isActive = view.id === activeViewId
+                const isActive = !isBoard && view.id === activeView.id
                 const editable = !isBuiltInView(view.id)
                 return (
                   <div key={view.id} className={`group flex items-center gap-1 rounded-md px-1 ${isActive ? 'bg-zinc-700' : 'hover:bg-white/5'}`}>
@@ -1103,6 +1164,18 @@ export function NotionTasksPanel({
                 )
               })}
               <button type="button" className="felixo-btn flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-zinc-400 hover:bg-white/5 hover:text-zinc-100" onClick={startCreatingView} aria-label="Criar nova visualização" title="Criar visualização com filtro avançado"><Plus size={12} /> Nova visualização</button>
+              {/* Vale para todas as abas da tabela; o Painel já mostra um cartão por repositório. */}
+              {!isBoard && repoOptions.length > 0 && (
+                <div className="ml-auto w-52 max-w-full">
+                  <FelixoSelect
+                    value={groupFilter?.key ?? ''}
+                    options={repoOptions}
+                    onChange={selectRepo}
+                    searchable={repoOptions.length > 8}
+                    aria-label="Repositório das tarefas"
+                  />
+                </div>
+              )}
             </div>
 
             {showViewBuilder && (
@@ -1197,15 +1270,6 @@ export function NotionTasksPanel({
               />
             ) : (
             <>
-            {groupFilter && (
-              <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[11px]">
-                <span className="inline-flex max-w-full items-center gap-1 rounded-full border border-white/10 bg-(--f-core-white)/10 py-0.5 pl-2 pr-0.5 text-(--f-core-white)">
-                  <span className="truncate">{groupFilter.property}: {groupFilter.label}</span>
-                  <button type="button" className="felixo-btn-icon rounded-full p-0.5 hover:bg-white/10" onClick={() => setGroupFilter(null)} aria-label={`Tirar o filtro ${groupFilter.label}`} title="Tirar o filtro"><X size={11} /></button>
-                </span>
-                <button type="button" className="felixo-btn flex items-center gap-1 rounded-md px-1.5 py-0.5 text-zinc-400 hover:bg-white/5 hover:text-zinc-100" onClick={() => selectView(REPO_BOARD_VIEW.id)}><LayoutGrid size={11} aria-hidden="true" /> Voltar ao painel</button>
-              </div>
-            )}
             <div className="mt-3 overflow-hidden rounded-lg border border-white/10 bg-zinc-950/35">
               <div className="overflow-x-auto">
                 <table className="min-w-[760px] w-full table-fixed border-collapse text-xs" aria-label="Tarefas do Notion">
