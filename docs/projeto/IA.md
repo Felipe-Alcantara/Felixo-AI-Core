@@ -6305,3 +6305,39 @@ Pedido no canvas: no bloco Tarefas Notion, uma opção para escolher de qual rep
 
 - Não rodou no Electron nem com a conexão real: a bancada simula a ponte. A lógica nova é toda no renderer, sobre as tarefas que a ponte já entrega.
 - Windows apenas (a máquina da sessão).
+
+## 2026-10-08 — System Design: lista de guias por camada e guias por projeto
+
+### Ponto de partida
+
+A fonte do System Design era uma só por instalação (commit `f3fcfc3`, 21/09): a precedência entregue foi "escolha do usuário > padrão do app", e a camada por projeto ficou de fora porque não existia configuração por projeto. Times que padronizam o guia por repositório (um guia por cliente, o Doktor do André) não tinham como.
+
+### Decisões do Felipe
+
+- Os três mecanismos de projeto, à escolha de quem usa: arquivo versionado no repositório, escolha no app e pasta de guias. Dá para usar dois padrões ao mesmo tempo.
+- Cada camada é uma **lista de guias**; a lista do projeto **substitui** a do usuário naquele projeto, com aviso.
+- Alcance completo: agentes, orquestrador e painel (um cache e um índice por fonte).
+
+### O que mudou
+
+- `core/system-design-source.cjs` (v3): a configuração só guarda escolhas (`customSources`, até 5); o estado de sincronização vai para um store por fonte (`system-design.sync`). Migração v1/v2 → v3 idempotente, sem reset.
+- `core/system-design-project.cjs`: arquivo `.felixo/system-design.json` (até 5 guias, 16 KB, URL validada como a do usuário), confirmação pelo hash da lista normalizada, pastas `Padrão de qualidade - <nome>/` e escolha no app; `resolveEffectiveGuides` aplica a precedência e diz o que foi substituído.
+- `services/system-design-project-service.cjs`: raiz do projeto subindo até o `.git` dentro do autorizado (mesma régua dos IPCs de projetos), sem seguir link simbólico; documento de pasta local não sai dela (caminho real).
+- Migração SQL `018`: índice por fonte; os documentos da tabela antiga migram para a fonte que os entregou. Cache por fonte em `config/system-design/sources/<hash>/repo`.
+- IPC novos `system-design:resolve-project` e `system-design:save-project`; `sync` com `{ projectRoot }` só clona guias que já valem — arquivo pendente nunca chega ao `git clone`.
+- Renderer: `useProjectGuides`; lembrete por `cwd` no canvas (criar terminal espera a camada do projeto; o render monta o texto só de estado); modelo de lista no lembrete, com o texto histórico idêntico byte a byte quando só vale o padrão do app; bloco do orquestrador por guia e por projeto ativo; seção "Seus guias" + "Por projeto" nas Configurações (canvas e chat).
+
+### Medido
+
+- Testes novos: contrato v3 (39), camada de projeto (21), handlers com SQLite real (22, incluindo "nenhum clone antes da confirmação", link simbólico, `../`, pasta fora dos projetos), lembrete de lista (7), apresentação (6), bloco do orquestrador (4). Mutação: incluir arquivo pendente na camada, tirar a contenção do documento local e autorizar qualquer pasta derrubam testes (2, 1 e 2 falhas).
+- App (código do worktree, Electron 41.10.7, perfil isolado, três projetos registrados, CLI falsa que só faz `cat`): `cliente-a` com o arquivo pendente → lembrete original do Felixo e nada clonado; depois de **Usar estes guias** → Doktor clonado (75 documentos, `7fc7f5e`) e o agente novo cita "System Design (Doktor-SystemDesign): https://github.com/AndreGustavoms/Doktor-SystemDesign (branch: main)" com "Estes guias são do projeto e valem aqui no lugar dos guias gerais do app (Felixo System Design)". `cliente-b` (pasta) → cita a pasta; a chave desliga e volta à lista do usuário. `cliente-c` → guia escolhido no app vale só ali. Dois guias na lista do usuário → os dois no lembrete. Escolhas sobrevivem a três reinícios. Console do renderer: 0 erros e 0 avisos (com sonda provando o método).
+- Achados no app e corrigidos (`fix(system-design)`): dois syncs da mesma fonte ao mesmo tempo (o da tela e o do canvas) clonavam na mesma pasta e o segundo falhava com código 128 — agora compartilham a execução (teste vermelho antes); o Felixo virava "System Design (Felixo-System-Design)" ao entrar numa lista; textos e espaços da seção.
+- Bateria sobre a branch rebaseada em `0e16817a`: lint limpo; build (`tsc -b` + Vite) ok; vitest **3028 passaram, 5 pulados**; suíte Node **2532 testes, 2529 passaram, 3 pulados, 0 falhas** no Node 25.9.0 e no 22.22.3.
+
+### Limitações
+
+- O pacote gerado pelo electron-builder não foi aberto; a validação rodou do código-fonte com o Electron do projeto.
+- Windows e macOS não foram abertos (o caminho do repositório e o link simbólico têm testes; o chaveiro não entra nesta feature).
+- O orquestrador do chat foi validado pelo teste do bloco, não com uma conversa real.
+- Ao trocar o padrão do app, o conteúdo do padrão antigo segue no cache dele, e o novo aparece como ainda não sincronizado até a próxima sincronização (antes, a fonte única mostrava o conteúdo antigo como entregue).
+- Guia privado no Windows pode abrir o Git Credential Manager (task irmã já aberta).
