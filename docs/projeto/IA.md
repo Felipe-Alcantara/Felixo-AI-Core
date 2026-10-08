@@ -6209,3 +6209,14 @@ Com uma chave do OpenRouter inválida, `openia run claudecode --provider` ficava
 - O pino novo só chega a quem instala ou atualiza o Openia pelo Felixo depois do próximo Release. Instalações antigas continuam na 0.1.0 até alguém clicar em atualizar.
 - O disco E: deste PC está cheio (0 GB livres; o pytest nem gravava o cache). O trabalho foi feito num clone temporário. O clone local em `E:\Programação\Github\Openia`, que o launcher legado do PATH usa, ficou em `ed1e85c`, sem os commits novos.
 
+### Validação no app, depois do push (08/10/2026, 05:45–05:55)
+
+Um roteiro de uso único abriu o app pela fonte, com `felixo devtools launch`, perfil isolado e Openia 0.2.0 de um venv descartável na frente do PATH. Pela interface, ele salvou uma chave **falsa** no Login do sistema e clicou em "Abrir agente" com a interface `llm`. O Openia detectado foi o `0.2.0` do venv.
+
+| Rodada | Fim do bloco | Retry ou shell de emergência | Faixa | Chave na tela/terminal |
+| --- | --- | --- | --- | --- |
+| 1 | código 3 em 9,0 s do clique | não | apareceu, mas dizia "a conta" num bloco sem conta | nenhum trecho |
+| 2 (texto corrigido) | código 3 em 5,0 s do clique | não | "Agente → Openia → Login do sistema → Chave do OpenRouter" | nenhum trecho |
+
+A primeira rodada mostrou o defeito de texto: sem conta, o bloco roda no **Login do sistema**, e a faixa mandava ir em "a conta". A correção veio com teste (vermelho antes). Com isso, a limitação "faixa não aberta no app real" acima fica coberta para o app da fonte; o pacote instalado só recebe a faixa no próximo Release.
+
