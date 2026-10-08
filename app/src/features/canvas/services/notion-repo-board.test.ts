@@ -8,6 +8,7 @@ import {
   listGroupableProperties,
   listRelationProperties,
   listTagCandidates,
+  progressPercent,
   readRepoBoardSettings,
   relationTarget,
   resolveDetailsVia,
@@ -177,6 +178,31 @@ describe('buildRepoCards', () => {
 
   it('sem coluna de agrupamento devolve lista vazia', () => {
     expect(buildRepoCards({ ...baseInput, groupBy: '', tasks: [task('1', { Repositório: 'X' })] })).toEqual([])
+  })
+})
+
+describe('progressPercent', () => {
+  it('arredonda meio para cima nos dois casos medidos no app real', () => {
+    // 253/440 é 57,5% exato, mas (253 / 440) * 100 dá 57,4999… em ponto
+    // flutuante e caía para 57; 1/8 é 12,5% e já subia para 13.
+    expect(progressPercent(253, 440)).toBe(58)
+    expect(progressPercent(1, 8)).toBe(13)
+  })
+
+  it('só mostra 100% com tudo feito e só 0% com nada feito', () => {
+    expect(progressPercent(439, 440)).toBe(99)
+    expect(progressPercent(1, 300)).toBe(1)
+    expect(progressPercent(5, 5)).toBe(100)
+    expect(progressPercent(0, 5)).toBe(0)
+  })
+
+  it('sem tarefas é 0%', () => {
+    expect(progressPercent(0, 0)).toBe(0)
+  })
+
+  it('o cartão usa a mesma conta', () => {
+    const tasks = Array.from({ length: 440 }, (_, index) => task(`t${index}`, { Repositório: 'Felixo-AI-Core' }, index < 253))
+    expect(buildRepoCards({ ...baseInput, tasks })[0]).toMatchObject({ key: 'Felixo-AI-Core', total: 440, open: 187, percent: 58 })
   })
 })
 

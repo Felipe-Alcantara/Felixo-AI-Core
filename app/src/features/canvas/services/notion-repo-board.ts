@@ -318,6 +318,20 @@ function matchDetailsRow(
   )[0]
 }
 
+/**
+ * Percentual feito do cartão. Multiplica antes de dividir: `(done / total) * 100`
+ * dá 57,4999… para 253/440 e o meio arredondava para baixo, enquanto 1/8 subia.
+ * 100% fica só para "tudo feito" e 0% só para "nada feito" — "100% · 1 aberta"
+ * se desmentiria na mesma linha.
+ */
+export function progressPercent(done: number, total: number): number {
+  if (total <= 0) return 0
+  const percent = Math.round((done * 100) / total)
+  if (done >= total) return 100
+  if (done <= 0) return 0
+  return Math.min(99, Math.max(1, percent))
+}
+
 function card(key: string, label: string, groupTasks: NotionTask[], row: NotionTask | null, reader: DetailsReader | null): RepoCard {
   const done = groupTasks.filter((task) => task.completed).length
   const total = groupTasks.length
@@ -327,7 +341,7 @@ function card(key: string, label: string, groupTasks: NotionTask[], row: NotionT
     total,
     open: total - done,
     done,
-    percent: total === 0 ? 0 : Math.round((done / total) * 100),
+    percent: progressPercent(done, total),
     tags: row && reader ? reader.tagsOf(row) : [],
     link: row && reader ? reader.linkOf(row) : null,
     archived: Boolean(row && reader?.isArchived(row)),
