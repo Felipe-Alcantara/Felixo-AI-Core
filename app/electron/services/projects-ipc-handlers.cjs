@@ -302,6 +302,14 @@ function registerProjectsIpcHandlers(getMainWindow, options = {}) {
      * que ninguem passe a gravar projetos por fora daqui.
      */
     listProjectRoots: () => projectPathAccess.listProjectRoots(),
+    /**
+     * Confere (sem conceder nada) se um caminho está numa pasta escolhida no
+     * seletor ou num projeto registrado; devolve o caminho resolvido ou lança.
+     * A camada de projeto do System Design lê arquivos do repositório com esta
+     * mesma régua.
+     */
+    authorizeProjectDirectory: (directoryPath) =>
+      projectPathAccess.authorizeProjectDirectory(directoryPath),
   }
 }
 

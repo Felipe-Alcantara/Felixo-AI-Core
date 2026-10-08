@@ -751,7 +751,10 @@ app.whenReady().then(async () => {
   registerAgentPresetsIpcHandlers({ database: storageDatabase })
   registerSpeechIpcHandlers({ userData: appPaths.userData })
   registerAgentModelsIpcHandlers(appPaths)
-  registerSystemDesignIpcHandlers(appPaths, { database: storageDatabase })
+  registerSystemDesignIpcHandlers(appPaths, {
+    database: storageDatabase,
+    authorizeProjectDirectory: projectsHandlers.authorizeProjectDirectory,
+  })
   registerChatHistoryIpcHandlers({ database: storageDatabase })
   registerGitIpcHandlers()
   registerFetchAllIpcHandlers(getMainWindow, appPaths)

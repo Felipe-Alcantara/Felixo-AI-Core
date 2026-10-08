@@ -63,6 +63,7 @@ const ADDITIONAL_TABLES_BY_MIGRATION = {
   3: ['models'],
   4: ['system_design_documents'],
   10: ['agent_usage_accounts', 'agent_usage_samples'],
+  18: ['system_design_source_documents'],
 }
 
 test('storage migrations are versioned and include initial schema', () => {

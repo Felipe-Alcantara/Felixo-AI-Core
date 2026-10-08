@@ -419,11 +419,16 @@ contextBridge.exposeInMainWorld('felixo', {
     getConfig: () => ipcRenderer.invoke('system-design:get-config'),
     saveConfig: (partial) =>
       ipcRenderer.invoke('system-design:save-config', partial),
-    listDocuments: () => ipcRenderer.invoke('system-design:list-documents'),
-    getDocument: (documentPath) =>
-      ipcRenderer.invoke('system-design:get-document', documentPath),
-    sync: () => ipcRenderer.invoke('system-design:sync'),
+    // Sem argumento: o primeiro guia do usuário (forma de antes); `{ guideKey }`
+    // escolhe o guia (git ou pasta local de um projeto).
+    listDocuments: (request) => ipcRenderer.invoke('system-design:list-documents', request),
+    getDocument: (documentPath, guideKey) =>
+      ipcRenderer.invoke('system-design:get-document', documentPath, guideKey),
+    // Sem argumento: os guias do usuário; `{ projectRoot }`: os que já valem no projeto.
+    sync: (request) => ipcRenderer.invoke('system-design:sync', request),
     resetCache: () => ipcRenderer.invoke('system-design:reset-cache'),
+    resolveProject: (directory) => ipcRenderer.invoke('system-design:resolve-project', directory),
+    saveProject: (root, change) => ipcRenderer.invoke('system-design:save-project', root, change),
   },
   chats: {
     list: (params) => ipcRenderer.invoke('chats:list', params),
