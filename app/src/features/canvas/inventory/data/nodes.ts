@@ -728,7 +728,7 @@ export const notionTasksTool: InventoryElement = {
       locator: 'aria-label="Database Notion"',
       kind: 'select',
       effect: 'Troca a database: volta à primeira visualização, mostra o snapshot local (notion:tasks:cached) e revalida com notion:tasks:list; respostas da database anterior são descartadas (notion-refresh-coordinator).',
-      failure: 'Erro da rede em role="alert"; a escolha não persiste e volta à primeira database ao remontar.',
+      failure: 'Erro da rede em role="alert". A escolha fica no data do bloco (notionDataSourceId); database que sumiu da lista volta para a primeira (notion-tasks-selection).',
       disabledWhen: 'Só aparece com databases listadas.',
     },
     {
@@ -754,7 +754,7 @@ export const notionTasksTool: InventoryElement = {
       locator: 'aria-label="Conexão Notion"',
       kind: 'select',
       effect: 'Troca a conexão: recarrega as databases (notion:databases:list) e as tarefas.',
-      failure: 'Erro em role="alert"; a escolha não persiste (volta à primeira conexão ao remontar).',
+      failure: 'Erro em role="alert". A escolha fica no data do bloco (notionConnectionId); conexão removida volta para a primeira (notion-tasks-selection).',
       disabledWhen: 'Só aparece com conexões cadastradas.',
     },
     {
@@ -987,7 +987,8 @@ export const notionTasksTool: InventoryElement = {
     'localStorage felixo:notion-task-sort:<conexão>:<database>',
     'localStorage felixo:notion-table-columns:<conexão>:<database>',
     'localStorage felixo:notion-repo-board:<conexão>:<database> (coluna de agrupamento, ligação de detalhes, etiquetas, "mostrar sem tarefas" e se o Painel era a aba aberta)',
-    'nenhuma para conexão e database selecionadas, visualização ativa (fora o Painel), filtro do cartão e sincronização automática',
+    'canvas salvo: data.notionConnectionId e data.notionDataSourceId (cada bloco reabre na sua conexão e database)',
+    'nenhuma para visualização ativa (fora o Painel), filtro do cartão e sincronização automática',
   ],
   ipc: [
     'notion:connections:list',

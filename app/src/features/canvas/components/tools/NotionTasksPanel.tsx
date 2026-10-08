@@ -63,6 +63,7 @@ import {
   listGroupableProperties,
   listRelationProperties,
   listTagCandidates,
+  openingViewId,
   readRepoBoardSettings,
   relationTarget,
   resolveDetailsVia,
@@ -73,6 +74,12 @@ import {
   type RepoCard,
   type RepoGroupFilter,
 } from '../../services/notion-repo-board'
+import {
+  keepIfListed,
+  selectionPatch,
+  type NotionTasksSelection,
+  type NotionTasksSelectionPatch,
+} from '../../services/notion-tasks-selection'
 import { useNotionDetailsSource } from '../../hooks/useNotionDetailsSource'
 import { NotionRepoBoard } from './NotionRepoBoard'
 
@@ -134,12 +141,20 @@ function SortableHeader({ column, label, sort, onSort }: SortableHeaderProps) {
 /**
  * Conteúdo do bloco "Tarefas Notion" do canvas (`NotionTasksNode`). Cabeçalho,
  * mover, redimensionar e fechar pertencem ao bloco — aqui fica só a lista.
+ * A conexão e a database escolhidas voltam do `data` do bloco (`savedSelection`)
+ * e cada troca sobe por `onSelectionChange`, para o bloco reabrir onde estava.
  */
-export function NotionTasksPanel() {
+export function NotionTasksPanel({
+  savedSelection,
+  onSelectionChange,
+}: {
+  savedSelection?: NotionTasksSelection
+  onSelectionChange?: (patch: NotionTasksSelectionPatch) => void
+} = {}) {
   const api = window.felixo?.notion
   const [connections, setConnections] = useState<NotionConnection[]>([])
   const [secureStorage, setSecureStorage] = useState<{ ok: boolean; reason: string | null } | null>(null)
-  const [connectionId, setConnectionId] = useState('')
+  const [connectionId, setConnectionId] = useState(savedSelection?.connectionId ?? '')
   const [connectionLabel, setConnectionLabel] = useState('Minha conexão Notion')
   const [profileId, setProfileId] = useState('default')
   const [token, setToken] = useState('')
@@ -147,7 +162,7 @@ export function NotionTasksPanel() {
   const [showWorkspaceSettings, setShowWorkspaceSettings] = useState(false)
   const [databaseQuery, setDatabaseQuery] = useState('')
   const [databases, setDatabases] = useState<NotionDatabase[]>([])
-  const [dataSourceId, setDataSourceId] = useState('')
+  const [dataSourceId, setDataSourceId] = useState(savedSelection?.dataSourceId ?? '')
   const [schema, setSchema] = useState<Record<string, NotionSchemaProperty>>({})
   const [tasks, setTasks] = useState<NotionTask[]>([])
   // Filtro (estado|busca) com que `tasks` foi carregada: o placar do Painel só
@@ -161,7 +176,9 @@ export function NotionTasksPanel() {
   const [showColumnPicker, setShowColumnPicker] = useState(false)
   const columnPickerRef = useRef<HTMLDivElement>(null)
   useDismissOnOutside(showColumnPicker, columnPickerRef, () => setShowColumnPicker(false))
-  const [activeViewId, setActiveViewId] = useState<string>(BUILT_IN_VIEWS[0].id)
+  // O bloco já nasce com a conexão e a database gravadas: a aba inicial segue a
+  // mesma regra da troca de database (Painel, se era a aba aberta).
+  const [activeViewId, setActiveViewId] = useState<string>(() => openingViewId(connectionId, dataSourceId, BUILT_IN_VIEWS[0].id))
   const [showViewBuilder, setShowViewBuilder] = useState(false)
   const [editingViewId, setEditingViewId] = useState<string | null>(null)
   const [viewDraft, setViewDraft] = useState(() => emptyViewDraft())
@@ -266,7 +283,7 @@ export function NotionTasksPanel() {
   const [lastDataScopeKey, setLastDataScopeKey] = useState(dataScopeKey)
   if (dataScopeKey !== lastDataScopeKey) {
     setLastDataScopeKey(dataScopeKey)
-    setActiveViewId(readRepoBoardSettings(connectionId, dataSourceId).open ? REPO_BOARD_VIEW.id : BUILT_IN_VIEWS[0].id)
+    setActiveViewId(openingViewId(connectionId, dataSourceId, BUILT_IN_VIEWS[0].id))
     setGroupFilter(null)
   }
 
@@ -299,7 +316,9 @@ export function NotionTasksPanel() {
     }
     setConnections(result.connections || [])
     setSecureStorage(result.secureStorage || null)
-    setConnectionId((current) => current || result.connections?.[0]?.id || '')
+    // A gravada no bloco pode ter sido removida em outra sessão: só vale se
+    // ainda estiver na lista.
+    setConnectionId((current) => keepIfListed(current, result.connections || []))
   }, [api])
 
   useEffect(() => {
@@ -323,9 +342,7 @@ export function NotionTasksPanel() {
     }
     const nextDatabases = result.databases || []
     setDatabases(nextDatabases)
-    setDataSourceId((current) =>
-      nextDatabases.some((database) => database.id === current) ? current : nextDatabases[0]?.id || '',
-    )
+    setDataSourceId((current) => keepIfListed(current, nextDatabases))
   }, [api, connectionId, databaseQuery])
 
   useEffect(() => {
@@ -333,6 +350,24 @@ export function NotionTasksPanel() {
     const timer = window.setTimeout(() => void loadDatabases(), 0)
     return () => window.clearTimeout(timer)
   }, [connectionId, loadDatabases])
+
+  // Sobe a escolha para o `data` do bloco. A ref guarda o último par gravado
+  // (não regrava o mesmo) e o callback, que muda a cada gravação do bloco.
+  const savedSelectionRef = useRef<NotionTasksSelection>({
+    connectionId: savedSelection?.connectionId ?? '',
+    dataSourceId: savedSelection?.dataSourceId ?? '',
+  })
+  const onSelectionChangeRef = useRef(onSelectionChange)
+  useEffect(() => {
+    onSelectionChangeRef.current = onSelectionChange
+  }, [onSelectionChange])
+  useEffect(() => {
+    const current = { connectionId, dataSourceId }
+    const patch = selectionPatch(savedSelectionRef.current, current)
+    if (!patch) return
+    savedSelectionRef.current = current
+    onSelectionChangeRef.current?.(patch)
+  }, [connectionId, dataSourceId])
 
   // Nunca deixa dois loadTasks() rodarem em paralelo (manual, timer, busca,
   // troca de filtro disputando ao mesmo tempo) — ver notion-refresh-coordinator.ts.

@@ -9,6 +9,13 @@ import {
 } from '@xyflow/react'
 import { ListTodo } from 'lucide-react'
 import { NodeHeader } from './NodeHeader'
+import { readNotionTasksSelection, type NotionTasksSelectionPatch } from '../services/notion-tasks-selection'
+import type { NotionTasksNodeData } from '../types'
+
+/** `onDataChange` vem do CanvasView, como no bloco de página web. */
+type NotionTasksNodeDataWithHandler = NotionTasksNodeData & {
+  onDataChange?: (nodeId: string, patch: Partial<NotionTasksNodeData>) => void
+}
 
 const LazyNotionTasksPanel = lazy(() =>
   import('./tools/NotionTasksPanel').then(({ NotionTasksPanel }) => ({
@@ -22,10 +29,14 @@ const LazyNotionTasksPanel = lazy(() =>
  * A lista não é uma janela flutuante: ela vive no grafo, pode ser arrastada,
  * redimensionada e reencontrada depois de reabrir o app. A configuração e as
  * ações continuam no mesmo conteúdo, mas o cabeçalho do bloco é o único
- * elemento responsável por movê-lo.
+ * elemento responsável por movê-lo. A conexão e a database escolhidas ficam no
+ * `data` do bloco, para cada bloco reabrir na sua.
  */
-export function NotionTasksNode({ id, selected }: NodeProps) {
+export function NotionTasksNode({ id, data, selected }: NodeProps) {
   const { deleteElements } = useReactFlow()
+  const nodeData = data as NotionTasksNodeDataWithHandler
+  const savedSelection = readNotionTasksSelection(nodeData)
+  const saveSelection = (patch: NotionTasksSelectionPatch) => nodeData.onDataChange?.(id, patch)
 
   return (
     <div className="felixo-canvas-card felixo-canvas-card-notion flex h-full w-full min-h-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-zinc-900 text-zinc-200 shadow-2xl">
@@ -49,7 +60,7 @@ export function NotionTasksNode({ id, selected }: NodeProps) {
             </div>
           }
         >
-          <LazyNotionTasksPanel />
+          <LazyNotionTasksPanel savedSelection={savedSelection} onSelectionChange={saveSelection} />
         </Suspense>
       </div>
       <Handle type="source" position={Position.Right} />

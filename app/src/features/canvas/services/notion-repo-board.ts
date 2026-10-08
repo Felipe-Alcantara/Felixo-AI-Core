@@ -143,6 +143,20 @@ export function saveRepoBoardSettings(
   }
 }
 
+/**
+ * Aba com que a database abre: o Painel, se era a aba aberta da última vez
+ * nesta conexão + database. Vale ao montar o bloco (que já nasce com a escolha
+ * gravada) e ao trocar de database.
+ */
+export function openingViewId(
+  connectionId: string,
+  dataSourceId: string,
+  fallbackViewId: string,
+  storage: StorageLike | undefined = getStorage(),
+): string {
+  return readRepoBoardSettings(connectionId, dataSourceId, storage).open ? REPO_BOARD_VIEW.id : fallbackViewId
+}
+
 function propertiesOfType(schema: Record<string, NotionSchemaProperty>, types: readonly string[]): string[] {
   return Object.values(schema)
     .filter((property) => types.includes(property.type))

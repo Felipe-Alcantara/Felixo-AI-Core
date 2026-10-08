@@ -3,11 +3,13 @@ import type { NotionSchemaProperty, NotionTask } from '../../shared/types/notion
 import {
   DEFAULT_REPO_BOARD_SETTINGS,
   NO_GROUP_KEY,
+  REPO_BOARD_VIEW,
   buildRepoCards,
   filterTasksByGroup,
   listGroupableProperties,
   listRelationProperties,
   listTagCandidates,
+  openingViewId,
   progressPercent,
   readRepoBoardSettings,
   relationTarget,
@@ -270,6 +272,22 @@ describe('filterTasksByGroup', () => {
 
   it('sem filtro devolve a lista inteira', () => {
     expect(filterTasksByGroup(tasks, TASK_SCHEMA, null)).toBe(tasks)
+  })
+})
+
+describe('openingViewId', () => {
+  it('abre no Painel quando ele era a aba aberta nesta conexão e database', () => {
+    const storage = memoryStorage()
+    saveRepoBoardSettings('conexao', 'database', { ...DEFAULT_REPO_BOARD_SETTINGS, open: true }, storage)
+    expect(openingViewId('conexao', 'database', 'all', storage)).toBe(REPO_BOARD_VIEW.id)
+    expect(openingViewId('conexao', 'outra-database', 'all', storage)).toBe('all')
+  })
+
+  it('sem preferência ou com o Painel fechado abre na aba padrão', () => {
+    const storage = memoryStorage()
+    expect(openingViewId('conexao', 'database', 'all', storage)).toBe('all')
+    saveRepoBoardSettings('conexao', 'database', { ...DEFAULT_REPO_BOARD_SETTINGS, open: false }, storage)
+    expect(openingViewId('conexao', 'database', 'all', storage)).toBe('all')
   })
 })
 

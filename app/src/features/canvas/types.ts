@@ -249,6 +249,16 @@ export type WebpageNodeData = {
   profileId?: string
 }
 
+/**
+ * Bloco "Tarefas Notion": a conexão e a database que ele mostra, para reabrir
+ * no mesmo lugar. Ausentes (bloco antigo) = a primeira conexão e database.
+ */
+export type NotionTasksNodeData = {
+  label?: string
+  notionConnectionId?: string
+  notionDataSourceId?: string
+}
+
 export type NoteColor = 'amber' | 'emerald' | 'sky' | 'rose' | 'zinc'
 
 export type NoteNodeData = {
@@ -328,6 +338,7 @@ export type CanvasNodeData = TerminalNodeData &
   GroupNodeData &
   FileNodeData &
   WebpageNodeData &
+  NotionTasksNodeData &
   DrawingNodeData &
   ExcalidrawDrawingNodeData &
   OrderedNodeData &
