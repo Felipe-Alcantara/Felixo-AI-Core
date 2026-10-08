@@ -6167,3 +6167,45 @@ Uma forma comum de ler as tarefas no Notion é uma página "Repositórios" em ga
 - A database de detalhes não entra na sincronização automática. Ela recarrega ao abrir o Painel e no botão Sincronizar.
 - A pasta local do repositório ("Sem repositório local" na galeria de origem) ficou fora do escopo.
 
+## 2026-10-08 — Openia: chave recusada pelo OpenRouter falha em segundos, com faixa no bloco
+
+Registro de Claude - Tasks do AI Core, task "Openia/Felixo — falhar rápido com chave OpenRouter inválida em vez de ficar sem mensagem" (Notion 3e291f95-497e-8110-b07b-f7f7ccb41a46). Início às 05:10.
+
+### Problema
+
+Com uma chave do OpenRouter inválida, `openia run claudecode --provider` ficava 170 s sem mensagem nenhuma. O OpenRouter responde 401 em décimos de segundo, mas o Claude Code em `-p` silencia o 401. A barreira do Felixo só confere se a chave existe (`secretConfigured`), não se ela vale.
+
+### Decisões do Felipe
+
+- Validar no Openia, que vale também fora do Felixo, e o Felixo mostrar um aviso próprio quando o `run` sair com o código da recusa.
+- Rede fora, timeout ou 5xx: avisar e lançar mesmo assim. Nunca virar "chave inválida".
+- Saldo zerado: só avisar, porque os modelos `:free` funcionam sem saldo.
+
+### Openia (Felipe-Alcantara/Openia)
+
+- `60705d6`: o `run --provider` testa a chave em `/api/v1/credits` antes de instalar e lançar. O 401/403 sai com **código 3**, o mesmo do `openia image`, junto com a resposta curta do OpenRouter. O 403 também cobre "Key limit exceeded"; padrões `sk-or-…` são omitidos. Rede fora ou saldo zerado só avisam. A conexão derrubada no meio (`RemoteDisconnected`) deixou de escapar como exceção.
+- `024167e`: versão **0.2.0**. Medido num venv limpo: com `d248538` instalado, `pip install --upgrade` do zip novo montava `openia==0.1.0`, achava a mesma versão e não reinstalava. O botão de atualizar do Felixo entregaria o código antigo sem avisar. Com 0.2.0: `Successfully installed openia-0.2.0`.
+
+### Felixo
+
+- `official-cli-catalog.cjs`: o pino do Openia (instalar e atualizar) sobe de `d248538` para `024167e`. O teste do catálogo exige que os dois sejam iguais. O roteiro `openia-windows-limpo.cjs` passa a ler o pino do catálogo, em vez de manter uma cópia própria.
+- `pty-process-manager.cjs` (`isOpeniaKeyRefusal`): no Windows, o `openia run` que sai com código 3 não cai mais na recuperação de saída precoce (< 800 ms). Essa recuperação abriria o menu interativo do Openia, sem os argumentos, ou o shell de emergência, no lugar da recusa. É o mesmo tratamento da retomada recusada.
+- `openia-key-refused-banner.ts` + `TerminalNode.tsx`: com o bloco do Openia encerrado em código 3, aparece a faixa **O OpenRouter recusou a chave**, apontando Agente → Openia → conta → Chave do OpenRouter. O guia do usuário explica a recusa, a rede fora e o saldo zerado.
+
+### Medido
+
+- OpenRouter com chave falsa: `/api/v1/credits` → 401 "User not found." em 0,36 s. Com a chave real deste PC (só em memória, nada impresso) → 200.
+- Openia do commit novo, `OPENROUTER_API_KEY=<falsa> py -m openia run claudecode --provider --no-model --dir <pasta>`:
+  - exit 3 em 536, 1387, 558 e 569 ms;
+  - mensagem com "Resposta do OpenRouter: User not found.";
+  - nenhum trecho da chave na saída (inteira e trechos de 8, 12 e 16 caracteres).
+  - Três das quatro saídas ficaram abaixo dos 800 ms da saída precoce do Windows. Daí a mudança no PTY.
+- Rede fora (`HTTPS_PROXY` numa porta fechada): aviso e segue em 2,08 s.
+- Testes: Openia **121** (21 novos, todos vermelhos antes); Felixo PTY + catálogo **81/81**, faixa **6/6**; os testes novos do PTY e da faixa falharam antes da mudança. Suíte Node **2483/2486**: a única falha é o EPERM de symlink em `app-relaunch.test.cjs`, preexistente nesta máquina. Vitest **2980/2988**: as 5 falhas são os timeouts de 5 s em `terminal-reading.fixtures.test.ts` (codex-cancelamento), também preexistentes aqui. Typecheck e eslint limpos.
+
+### Limitações
+
+- O bloco com a faixa não foi aberto no app real com uma chave recusada. A faixa foi provada pela função pura, e a passagem do código 3 pelo PTY pelos testes do gerenciador.
+- O pino novo só chega a quem instala ou atualiza o Openia pelo Felixo depois do próximo Release. Instalações antigas continuam na 0.1.0 até alguém clicar em atualizar.
+- O disco E: deste PC está cheio (0 GB livres; o pytest nem gravava o cache). O trabalho foi feito num clone temporário. O clone local em `E:\Programação\Github\Openia`, que o launcher legado do PATH usa, ficou em `ed1e85c`, sem os commits novos.
+
