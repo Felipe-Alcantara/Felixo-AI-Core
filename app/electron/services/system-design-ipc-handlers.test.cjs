@@ -91,8 +91,11 @@ test('normalizeConfig nunca preserva credencial de URL nem de erro', () => {
 function setupHandlers(t, { rawConfig, syncSystemDesignRepository, legacyDocuments = [] } = {}) {
   handlers.clear()
   const paths = appPaths()
-  const projectsRoot = path.join(paths.root, 'projetos')
-  fs.mkdirSync(projectsRoot, { recursive: true })
+  // A raiz registrada não pode ter link simbólico em nenhum trecho, e no macOS o
+  // tmpdir fica em /var -> /private/var: registra o caminho já resolvido.
+  const projectsDir = path.join(paths.root, 'projetos')
+  fs.mkdirSync(projectsDir, { recursive: true })
+  const projectsRoot = fs.realpathSync(projectsDir)
   const database = createStorageDatabase({ databaseDir: path.join(paths.root, 'database') })
 
   if (rawConfig) {
@@ -549,9 +552,15 @@ test('duas sincronizações da mesma fonte ao mesmo tempo compartilham um único
   const second = handlers.get('system-design:sync')(null, { projectRoot: root })
   // Segura o "clone" até a primeira chamada estar nele e a segunda ter tido
   // tempo de resolver o projeto e chegar ao sync (no app, o clone leva segundos).
-  while (syncCalls.length === 0) await new Promise((resolve) => setTimeout(resolve, 5))
+  // Com prazo: se o projeto não resolver, nenhum sync acontece e a espera sem
+  // limite travaria a suíte inteira em vez de falhar este teste.
+  const deadline = Date.now() + 5000
+  while (syncCalls.length === 0 && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 5))
+  }
   await new Promise((resolve) => setTimeout(resolve, 150))
   release()
+  assert.ok(syncCalls.length > 0, 'o sync do projeto chegou a começar')
   const [a, b] = await Promise.all([first, second])
 
   assert.equal(a.ok, true)
