@@ -28,3 +28,25 @@ export function subscribeSystemDesignConfig(
   window.addEventListener(SYSTEM_DESIGN_CONFIG_EVENT, handler)
   return () => window.removeEventListener(SYSTEM_DESIGN_CONFIG_EVENT, handler)
 }
+
+/**
+ * Aviso de que a camada de PROJETO mudou (arquivo confirmado ou ignorado,
+ * guias escolhidos para um projeto, pasta ligada/desligada, projeto
+ * sincronizado). `root` é a raiz que mudou, ou ausente para "releia tudo".
+ */
+export const SYSTEM_DESIGN_PROJECTS_EVENT = 'felixo:system-design-projects'
+
+export function announceSystemDesignProjects(root?: string): void {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent<{ root?: string }>(SYSTEM_DESIGN_PROJECTS_EVENT, { detail: { root } }))
+}
+
+export function subscribeSystemDesignProjects(listener: (root: string | undefined) => void): () => void {
+  if (typeof window === 'undefined') return () => {}
+
+  const handler = (event: Event) => {
+    listener((event as CustomEvent<{ root?: string }>).detail?.root)
+  }
+  window.addEventListener(SYSTEM_DESIGN_PROJECTS_EVENT, handler)
+  return () => window.removeEventListener(SYSTEM_DESIGN_PROJECTS_EVENT, handler)
+}

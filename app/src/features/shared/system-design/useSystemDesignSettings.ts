@@ -6,6 +6,8 @@ import type {
   SystemDesignConfig,
   SystemDesignConfigChange,
   SystemDesignDocumentSummary,
+  SystemDesignGuide,
+  SystemDesignGuideInput,
 } from './types'
 
 /**
@@ -20,6 +22,7 @@ import type {
 export const UNLOADED_CONFIG: SystemDesignConfig = {
   schemaVersion: 0,
   enabled: true,
+  guides: [],
   repoUrl: '',
   branch: '',
   sourceMode: 'default',
@@ -37,7 +40,10 @@ let autoSyncTriggered = false
 
 export type SystemDesignSettingsState = {
   config: SystemDesignConfig
+  /** Índice do primeiro guia (forma de antes; o chat e telas antigas leem este). */
   documents: SystemDesignDocumentSummary[]
+  /** Índice de cada guia da camada do usuário, pela chave do guia. */
+  documentsByGuide: Record<string, SystemDesignDocumentSummary[]>
   loaded: boolean
   syncing: boolean
   error: string | null
@@ -47,6 +53,7 @@ export function useSystemDesignSettings() {
   const [state, setState] = useState<SystemDesignSettingsState>({
     config: UNLOADED_CONFIG,
     documents: [],
+    documentsByGuide: {},
     loaded: false,
     syncing: false,
     error: null,
@@ -54,17 +61,32 @@ export function useSystemDesignSettings() {
   const previousEnabledRef = useRef(false)
   const syncRef = useRef<() => Promise<void>>(async () => {})
 
-  const refreshDocuments = useCallback(async () => {
-    if (!window.felixo?.systemDesign?.listDocuments) {
+  // Um índice por guia: com a lista de guias, cada fonte tem o seu.
+  const refreshDocuments = useCallback(async (guides?: SystemDesignGuide[]) => {
+    const bridge = window.felixo?.systemDesign
+    if (!bridge?.listDocuments) {
       return
     }
-    const result = await window.felixo.systemDesign.listDocuments()
-    if (result.ok) {
-      setState((current) => ({
-        ...current,
-        documents: result.documents ?? [],
-      }))
+    const keys = (guides ?? []).map((guide) => guide.key)
+    if (!keys.length) {
+      const result = await bridge.listDocuments()
+      if (result.ok) {
+        setState((current) => ({ ...current, documents: result.documents ?? [] }))
+      }
+      return
     }
+    const entries = await Promise.all(
+      keys.map(async (key) => {
+        const result = await bridge.listDocuments({ guideKey: key })
+        return [key, result.ok ? result.documents ?? [] : []] as const
+      }),
+    )
+    const documentsByGuide = Object.fromEntries(entries)
+    setState((current) => ({
+      ...current,
+      documents: documentsByGuide[keys[0]] ?? [],
+      documentsByGuide,
+    }))
   }, [])
 
   const loadConfig = useCallback(async () => {
@@ -83,7 +105,7 @@ export function useSystemDesignSettings() {
         error: result.ok ? null : result.message ?? 'Falha ao carregar config.',
       }))
       if (result.ok && result.config) announceSystemDesignConfig(result.config)
-      await refreshDocuments()
+      await refreshDocuments(config.guides)
 
       // Once-per-session auto-sync when the toggle is enabled. Picks up new
       // commits without the user having to click "Sincronizar agora".
@@ -116,7 +138,7 @@ export function useSystemDesignSettings() {
           error: null,
         }))
         announceSystemDesignConfig(result.config)
-        await refreshDocuments()
+        await refreshDocuments(result.config.guides)
       } else {
         // A falha já foi gravada no processo principal (estado "usando o último
         // conteúdo"). Sem reler, esta tela continuaria dizendo "sincronizado".
@@ -173,6 +195,27 @@ export function useSystemDesignSettings() {
     [sync],
   )
 
+  /**
+   * Troca a lista de guias da pessoa (vazia = padrão do app) e sincroniza: um
+   * guia novo só tem índice depois da primeira sincronização.
+   */
+  const replaceGuides = useCallback(
+    async (guides: SystemDesignGuideInput[]) => {
+      const result = await window.felixo?.systemDesign?.saveConfig?.({ guides })
+      if (!result) return { ok: false, message: 'Indisponível fora do app desktop.' }
+      if (!result.ok || !result.config) {
+        setState((current) => ({ ...current, error: result.message ?? 'Não foi possível salvar os guias.' }))
+        return { ok: false, message: result.message }
+      }
+      previousEnabledRef.current = result.config.enabled
+      setState((current) => ({ ...current, config: result.config!, error: null }))
+      announceSystemDesignConfig(result.config)
+      await sync()
+      return { ok: true }
+    },
+    [sync],
+  )
+
   const resetCache = useCallback(async () => {
     if (!window.felixo?.systemDesign?.resetCache) {
       return
@@ -184,6 +227,7 @@ export function useSystemDesignSettings() {
         ...current,
         config: result.config!,
         documents: [],
+        documentsByGuide: {},
       }))
       announceSystemDesignConfig(result.config)
     }
@@ -192,8 +236,8 @@ export function useSystemDesignSettings() {
   // O índice só traz o resumo de cada guia; o conteúdo é lido do cache local
   // quando a pessoa abre um item. Identidade estável: a prévia relê quando ela muda.
   const readDocument = useCallback(
-    (documentPath: string) =>
-      readSystemDesignDocument(window.felixo?.systemDesign, documentPath),
+    (documentPath: string, guideKey?: string) =>
+      readSystemDesignDocument(window.felixo?.systemDesign, documentPath, guideKey),
     [],
   )
 
@@ -225,6 +269,7 @@ export function useSystemDesignSettings() {
     state,
     sync,
     updateConfig,
+    replaceGuides,
     resetCache,
     refreshDocuments,
     readDocument,

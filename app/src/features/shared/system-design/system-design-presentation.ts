@@ -1,4 +1,9 @@
-import type { SystemDesignConfig } from './types'
+import type {
+  SystemDesignConfig,
+  SystemDesignGuide,
+  SystemDesignGuideOrigin,
+  SystemDesignProject,
+} from './types'
 
 export type SystemDesignStatusTone = 'ok' | 'warn' | 'muted'
 
@@ -78,6 +83,116 @@ export function describeSystemDesignStatus(
         detail: deliveredLabel
           ? `Até a próxima sincronização, os agentes seguem recebendo ${deliveredLabel}${deliveredWhen}, não ${describeConfiguredSource(config)}.`
           : null,
+        tone: 'warn',
+      }
+  }
+}
+
+/** De onde veio um guia, em palavras. */
+export function describeGuideOrigin(origin: SystemDesignGuideOrigin): string {
+  switch (origin) {
+    case 'default':
+      return 'padrão do app'
+    case 'custom':
+      return 'escolhido por você'
+    case 'projeto-arquivo':
+      return 'arquivo do projeto'
+    case 'projeto-app':
+      return 'escolhido para este projeto'
+    case 'projeto-pasta':
+      return 'pasta do projeto'
+  }
+}
+
+/** "Doktor · main" ou "Cliente X · pasta do projeto". */
+export function describeGuideSource(guide: SystemDesignGuide): string {
+  if (guide.kind === 'local') return `${guide.label} · pasta do projeto`
+  return guide.branch ? `${guide.label} · ${guide.branch}` : guide.label
+}
+
+/** Estado de UM guia: cada fonte tem cache e índice próprios. */
+export function describeGuideStatus(
+  guide: SystemDesignGuide,
+  { formatDate = defaultFormatDate }: PresentationOptions = {},
+): SystemDesignStatusView {
+  if (guide.kind === 'local') {
+    return { headline: 'Lido do repositório', detail: null, tone: 'ok' }
+  }
+  const when = guide.syncedAt ? ` em ${formatDate(guide.syncedAt)}` : ''
+  const sha = guide.sha ? ` @ ${shortSha(guide.sha)}` : ''
+  switch (guide.syncState) {
+    case 'disabled':
+      return { headline: 'Desligado', detail: null, tone: 'muted' }
+    case 'never-synced':
+    case 'pending-source-change':
+      return {
+        headline: 'Ainda não sincronizado',
+        detail: 'Os agentes recebem a URL; o índice local chega na próxima sincronização.',
+        tone: 'muted',
+      }
+    case 'synced':
+      return { headline: `Sincronizado${sha}`, detail: when ? `Última sincronização${when}.` : null, tone: 'ok' }
+    case 'offline-fallback':
+      return {
+        headline: 'Sem acesso à fonte — usando o último conteúdo',
+        detail: guide.sha ? `O índice é o de ${shortSha(guide.sha)}${when}.` : null,
+        tone: 'warn',
+      }
+  }
+}
+
+/** Qual camada vale num projeto, e o aviso quando ela substitui a sua. */
+export function describeProjectLayer(project: SystemDesignProject): SystemDesignStatusView {
+  if (!project.authorized) {
+    return {
+      headline: 'Fora dos projetos registrados',
+      detail: 'Nada desta pasta é lido. Registre o projeto em Projetos para usar guias próprios; até lá valem os seus.',
+      tone: 'muted',
+    }
+  }
+  if (project.layer === 'projeto') {
+    const replaced = project.replaced.map((guide) => guide.label).join(', ')
+    return {
+      headline: 'Guias do projeto',
+      detail: replaced ? `Valem aqui no lugar dos seus (${replaced}).` : null,
+      tone: 'warn',
+    }
+  }
+  return {
+    headline: project.layer === 'usuario' ? 'Seus guias' : 'Padrão do app',
+    detail: 'O projeto não traz guias próprios.',
+    tone: 'muted',
+  }
+}
+
+/** Situação do `.felixo/system-design.json`, ou null quando não há arquivo. */
+export function describeProjectFile(file: SystemDesignProject['file']): SystemDesignStatusView | null {
+  if (!file) return null
+  const count = file.guides.length
+  const guides = `${count} guia${count === 1 ? '' : 's'}`
+  switch (file.status) {
+    case 'ausente':
+      return null
+    case 'pendente':
+      return {
+        headline: `O arquivo do projeto pede ${guides}`,
+        detail: 'Ele vem do repositório: confira as URLs antes de usar. Até confirmar, nada é buscado.',
+        tone: 'warn',
+      }
+    case 'alterado':
+      return {
+        headline: 'O arquivo do projeto mudou desde a sua confirmação',
+        detail: `Agora ele pede ${guides}. Confira de novo; até lá ele não vale.`,
+        tone: 'warn',
+      }
+    case 'confirmado':
+      return { headline: `Arquivo do projeto confirmado (${guides})`, detail: null, tone: 'ok' }
+    case 'ignorado':
+      return { headline: 'Arquivo do projeto ignorado', detail: null, tone: 'muted' }
+    case 'invalido':
+      return {
+        headline: 'O arquivo do projeto não tem guia válido',
+        detail: file.problems.join(' '),
         tone: 'warn',
       }
   }

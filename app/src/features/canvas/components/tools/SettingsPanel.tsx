@@ -31,6 +31,8 @@ const THEME_OPTIONS: FelixoSelectOption[] = [
 
 type SettingsPanelProps = {
   onClose: () => void
+  /** Pastas dos terminais do canvas: a seção do System Design mostra os guias de cada projeto. */
+  projectDirectories?: readonly string[]
   /** Lets the canvas pick up the new shared-scratchpad prompt without a reload. */
   onPromptSaved?: (prompt: string) => void
   /** Lets the canvas pick up the new bootstrap prompt without a reload. */
@@ -49,6 +51,7 @@ type SettingsPanelProps = {
  */
 export function SettingsPanel({
   onClose,
+  projectDirectories,
   onPromptSaved,
   onBootstrapSaved,
   onQualityStandardSaved,
@@ -92,7 +95,7 @@ export function SettingsPanel({
 
       {/* Sincroniza os guias do Felixo System Design — antes só existia dentro
           das configurações do chat. */}
-      <SystemDesignSettingsSection />
+      <SystemDesignSettingsSection projectDirectories={projectDirectories} />
 
       <div className="my-3 border-t border-white/10" />
 

@@ -4,7 +4,7 @@
 // Mantém o CanvasView focado na orquestração do fluxo, não no switch de painéis.
 // Os módulos das ferramentas ficam fora do chunk do canvas: abrir uma
 // ferramenta é a única ação que justifica baixar e executar seu código.
-import { Component, Suspense, type ReactNode } from 'react'
+import { Component, Suspense, useMemo, type ReactNode } from 'react'
 import type { Node } from '@xyflow/react'
 import type { CanvasTool } from './tools/CanvasToolsMenu'
 import { CanvasPanel } from './tools/CanvasPanel'
@@ -175,6 +175,19 @@ export function CanvasToolPanels({
   onBootstrapSaved,
   onQualityStandardSaved,
 }: CanvasToolPanelsProps) {
+  // Pastas dos terminais: a seção do System Design mostra os guias de cada projeto.
+  const terminalDirectories = useMemo(
+    () =>
+      [
+        ...new Set(
+          nodes
+            .filter((node) => node.type === 'terminal' && typeof node.data?.cwd === 'string' && node.data.cwd)
+            .map((node) => node.data.cwd as string),
+        ),
+      ],
+    [nodes],
+  )
+
   if (!activeTool) return null
 
   const closeActiveTool = () => {
@@ -284,6 +297,7 @@ export function CanvasToolPanels({
         return (
           <LazySettingsPanel
             onClose={closeActiveTool}
+            projectDirectories={terminalDirectories}
             onPromptSaved={onPromptSaved}
             onBootstrapSaved={onBootstrapSaved}
             onQualityStandardSaved={onQualityStandardSaved}

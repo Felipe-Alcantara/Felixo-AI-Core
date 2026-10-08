@@ -47,13 +47,17 @@ export function systemDesignDocumentRevision(
 export async function readSystemDesignDocument(
   reader: SystemDesignDocumentReader | undefined,
   documentPath: string,
+  /** Guia dono do documento; ausente = o primeiro guia do usuário (forma de antes). */
+  guideKey?: string,
 ): Promise<SystemDesignDocumentReadState> {
   if (!reader?.getDocument) {
     return { status: 'error', message: DOCUMENT_READER_UNAVAILABLE_MESSAGE }
   }
 
   try {
-    const result = await reader.getDocument(documentPath)
+    const result = guideKey
+      ? await reader.getDocument(documentPath, guideKey)
+      : await reader.getDocument(documentPath)
     if (!result.ok || !result.document) {
       return { status: 'error', message: result.message ?? DOCUMENT_NOT_FOUND_MESSAGE }
     }

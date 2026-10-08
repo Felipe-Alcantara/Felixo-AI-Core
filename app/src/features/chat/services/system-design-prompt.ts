@@ -1,4 +1,9 @@
-import type { SystemDesignConfig, SystemDesignDocumentSummary } from '../types'
+import type {
+  SystemDesignConfig,
+  SystemDesignDocumentSummary,
+  SystemDesignGuide,
+  SystemDesignProject,
+} from '../types'
 
 /**
  * Remove credencial embutida em URL (`https://usuario:senha@host/...`).
@@ -83,4 +88,83 @@ export function createSystemDesignPromptBlock(
     'Índice de documentos disponíveis:',
     ...docLines,
   ].join('\n')
+}
+
+function describeGuidePointer(guide: SystemDesignGuide): string {
+  if (guide.kind === 'local') return `pasta ${guide.path ?? guide.label}`
+  return `${withoutCredentials(guide.repoUrl)} (branch: ${guide.branch})`
+}
+
+function guideSection(guide: SystemDesignGuide, documents: SystemDesignDocumentSummary[]): string {
+  const lines = [
+    `Guia: ${guide.label}`,
+    `- Repositório: ${describeGuidePointer(guide)}. SHA atual: ${guide.sha ? guide.sha.slice(0, 12) : 'desconhecido'}.`,
+  ]
+  if (guide.syncState === 'offline-fallback') {
+    lines.push('- Estado: a última sincronização falhou; estes documentos são os da sincronização anterior e podem estar desatualizados.')
+  } else if (guide.syncState === 'never-synced') {
+    lines.push('- Estado: ainda não sincronizado; consulte o repositório diretamente.')
+  }
+  if (documents.length) {
+    lines.push('Índice de documentos disponíveis:')
+    for (const doc of documents) {
+      const summary = doc.summary?.trim() ? ` — ${doc.summary.trim()}` : ''
+      lines.push(`- \`${doc.path}\` (${doc.title})${summary}`)
+    }
+  }
+  return lines.join('\n')
+}
+
+function baseName(value: string): string {
+  return value.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || value
+}
+
+/**
+ * Bloco do orquestrador para a LISTA de guias da pessoa e para os projetos
+ * ativos que trazem os próprios guias (eles valem dentro do projeto no lugar
+ * dos gerais). Com um guia só e nenhum projeto com guias próprios, é o bloco
+ * de sempre (`createSystemDesignPromptBlock`), byte a byte.
+ */
+export function createSystemDesignGuidesPromptBlock(params: {
+  config: SystemDesignConfig
+  documentsByGuide: Record<string, SystemDesignDocumentSummary[]>
+  projects?: SystemDesignProject[]
+}): string | null {
+  const { config, documentsByGuide } = params
+  if (!config.enabled) return null
+  const guides = config.guides ?? []
+  const projectOverrides = (params.projects ?? []).filter(
+    (project) => project.authorized && project.layer === 'projeto' && project.guides.length > 0,
+  )
+
+  if (guides.length <= 1 && projectOverrides.length === 0) {
+    const key = guides[0]?.key
+    return createSystemDesignPromptBlock(config, key ? documentsByGuide[key] ?? [] : [])
+  }
+
+  const names = guides.map((guide) => guide.label).join(' + ')
+  const sections = [
+    [
+      `Guias obrigatórios — ${names}:`,
+      '- O usuário ativou estes guias. Você e seus sub-agentes DEVEM seguir os padrões deles.',
+      '- Antes de gerar código, decidir arquitetura, escrever testes, organizar pastas ou tomar qualquer decisão técnica, consulte o(s) documento(s) relevantes de cada guia.',
+      '- Em sub-agentes que tem acesso a Read/Glob/Grep, instrua-os a ler o(s) arquivo(s) relevante(s) do índice antes de produzir o resultado.',
+    ].join('\n'),
+    ...guides.map((guide) => guideSection(guide, documentsByGuide[guide.key] ?? [])),
+  ]
+
+  if (projectOverrides.length) {
+    sections.push(
+      [
+        'Projetos com guias próprios (dentro deles, valem estes no lugar dos guias acima):',
+        ...projectOverrides.map((project) => {
+          const root = project.root ?? project.directory ?? ''
+          const list = project.guides.map((guide) => `${guide.label} — ${describeGuidePointer(guide)}`).join('; ')
+          return `- ${baseName(root)} (${root}): ${list}.`
+        }),
+      ].join('\n'),
+    )
+  }
+
+  return sections.join('\n\n')
 }

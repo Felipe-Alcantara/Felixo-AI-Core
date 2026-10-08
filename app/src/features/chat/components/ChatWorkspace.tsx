@@ -25,8 +25,9 @@ import {
   inferAvailabilityCliType,
   resolveErrorAvailabilityStatus,
 } from '../services/stream-status'
-import { createSystemDesignPromptBlock } from '../services/system-design-prompt'
+import { createSystemDesignGuidesPromptBlock } from '../services/system-design-prompt'
 import { useSystemDesignSettings } from '../../shared/system-design/useSystemDesignSettings'
+import { useProjectGuides } from '../../shared/system-design/useProjectGuides'
 import {
   createSuggestedExportFileName,
   exportChat,
@@ -197,6 +198,10 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
   } = useTerminalOutput()
 
   const { state: systemDesignState } = useSystemDesignSettings()
+  // Guias por projeto: os projetos ativos que trazem os próprios guias valem,
+  // dentro deles, no lugar dos guias gerais.
+  const activeProjectPaths = useMemo(() => activeProjects.map((project) => project.path), [activeProjects])
+  const { projects: activeProjectGuides } = useProjectGuides(activeProjectPaths)
 
   const selectedModel = useMemo(
     () =>
@@ -484,10 +489,13 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
       modelCapabilities,
       orchestratorSettings,
     )
-    const systemDesignBlock = createSystemDesignPromptBlock(
-      systemDesignState.config,
-      systemDesignState.documents,
-    )
+    const systemDesignBlock = createSystemDesignGuidesPromptBlock({
+      config: systemDesignState.config,
+      documentsByGuide: systemDesignState.documentsByGuide,
+      projects: activeProjectPaths
+        .map((directory) => activeProjectGuides[directory])
+        .filter((project): project is NonNullable<typeof project> => Boolean(project)),
+    })
     const orchestrationContextBlock = systemDesignBlock
       ? `${baseContextBlock}\n\n${systemDesignBlock}`
       : baseContextBlock
@@ -1489,6 +1497,7 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
         orchestratorSettings={orchestratorSettings}
         projectsCount={projects.length}
         activeProjectsCount={activeProjectIds.size}
+        activeProjectPaths={activeProjectPaths}
         automationsCount={automations.length}
         onClose={() => setIsFelixoSettingsOpen(false)}
         onThemeChange={updateTheme}

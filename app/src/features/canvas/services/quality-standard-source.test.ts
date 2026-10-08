@@ -5,6 +5,8 @@ import {
   buildDefaultQualityStandardPrompt,
   isCustomizedQualityStandardPrompt,
   resolveQualityStandardPrompt,
+  type QualityStandardGuide,
+  type QualityStandardGuides,
   type QualityStandardSource,
 } from './quality-standard-prompt'
 
@@ -131,5 +133,97 @@ describe('resolveQualityStandardPrompt', () => {
     const input = { stored: null, source: CUSTOM_SOURCE }
 
     expect(resolveQualityStandardPrompt(input)).toBe(resolveQualityStandardPrompt(input))
+  })
+})
+
+const FELIXO_GUIDE: QualityStandardGuide = {
+  label: 'Felixo System Design',
+  repoUrl: 'https://github.com/Felipe-Alcantara/Felixo-System-Design.git',
+  branch: 'main',
+  kind: 'git',
+  origin: 'default',
+  syncState: 'synced',
+}
+const DOKTOR_GUIDE: QualityStandardGuide = {
+  label: 'System Design (Doktor-SystemDesign)',
+  repoUrl: 'https://github.com/acme/Doktor-SystemDesign.git',
+  branch: 'main',
+  kind: 'git',
+  origin: 'custom',
+  syncState: 'synced',
+}
+const FOLDER_GUIDE: QualityStandardGuide = {
+  label: 'Cliente X',
+  repoUrl: '',
+  branch: '',
+  kind: 'local',
+  path: '/repos/cliente/Padrão de qualidade - Cliente X',
+  origin: 'projeto-pasta',
+  syncState: 'synced',
+}
+const list = (layer: QualityStandardGuides['layer'], guides: QualityStandardGuide[], replaced: QualityStandardGuide[] = []): QualityStandardGuides =>
+  ({ layer, guides, replaced })
+
+describe('lista de guias por camada', () => {
+  it('um guia só, fora do projeto, continua no texto de antes (padrão byte a byte)', () => {
+    expect(buildDefaultQualityStandardPrompt(list('padrao', [FELIXO_GUIDE]))).toBe(ORIGINAL_DEFAULT_PROMPT)
+    expect(buildDefaultQualityStandardPrompt(list('usuario', [{ ...CUSTOM_SOURCE, kind: 'git', origin: 'custom' }]))).toBe(
+      buildDefaultQualityStandardPrompt(CUSTOM_SOURCE),
+    )
+  })
+
+  it('dois guias da pessoa: o texto cita os dois, com URL e branch, sem aviso de projeto', () => {
+    const prompt = buildDefaultQualityStandardPrompt(list('usuario', [FELIXO_GUIDE, DOKTOR_GUIDE]))
+
+    expect(prompt).toContain('siga o PADRÃO DE QUALIDADE destes guias')
+    expect(prompt).toContain('\n- Felixo System Design: https://github.com/Felipe-Alcantara/Felixo-System-Design (branch: main).')
+    expect(prompt).toContain('\n- System Design (Doktor-SystemDesign): https://github.com/acme/Doktor-SystemDesign (branch: main).')
+    expect(prompt).toContain('\nLeia o que for relevante')
+    expect(prompt).not.toContain('Estes guias são do projeto')
+    expect(prompt).toContain('AskUserQuestion')
+  })
+
+  it('guias do projeto: cita a pasta do repositório e avisa quais guias gerais substituiu', () => {
+    const prompt = buildDefaultQualityStandardPrompt(list('projeto', [FOLDER_GUIDE, DOKTOR_GUIDE], [FELIXO_GUIDE]))
+
+    expect(prompt).toContain('\n- Cliente X: pasta "Padrão de qualidade - Cliente X/" dentro deste repositório.')
+    expect(prompt).toContain(
+      'Estes guias são do projeto e valem aqui no lugar dos guias gerais do app (Felixo System Design). Leia o que for relevante',
+    )
+  })
+
+  it('um guia de projeto sozinho já usa o texto de lista, para dizer de qual camada veio', () => {
+    const prompt = buildDefaultQualityStandardPrompt(list('projeto', [DOKTOR_GUIDE], [FELIXO_GUIDE]))
+
+    expect(prompt).toContain('Estes guias são do projeto')
+    expect(prompt).not.toBe(buildDefaultQualityStandardPrompt({ ...DOKTOR_GUIDE, sourceMode: 'custom' }))
+  })
+
+  it('cada guia avisa a própria falha e nenhuma credencial chega ao texto', () => {
+    const prompt = buildDefaultQualityStandardPrompt(
+      list('usuario', [
+        { ...FELIXO_GUIDE, syncState: 'offline-fallback' },
+        { ...DOKTOR_GUIDE, repoUrl: 'https://usuario:SEGREDO123@github.com/acme/Doktor-SystemDesign.git' },
+      ]),
+    )
+
+    expect(prompt).toContain('a última sincronização desse guia falhou')
+    expect(prompt).not.toContain('SEGREDO123')
+  })
+
+  it('lista vazia cai no texto original', () => {
+    expect(buildDefaultQualityStandardPrompt(list('padrao', []))).toBe(ORIGINAL_DEFAULT_PROMPT)
+  })
+
+  it('o texto gerado para outra lista não é personalização e acompanha a lista atual', () => {
+    const generatedForProject = buildDefaultQualityStandardPrompt(list('projeto', [FOLDER_GUIDE], [FELIXO_GUIDE]))
+    const generatedForUser = buildDefaultQualityStandardPrompt(list('usuario', [FELIXO_GUIDE, DOKTOR_GUIDE]))
+
+    expect(isCustomizedQualityStandardPrompt(generatedForProject, DEFAULT_SOURCE)).toBe(false)
+    expect(isCustomizedQualityStandardPrompt(generatedForUser, DEFAULT_SOURCE)).toBe(false)
+    expect(resolveQualityStandardPrompt({ stored: generatedForProject, source: list('padrao', [FELIXO_GUIDE]) })).toBe(
+      ORIGINAL_DEFAULT_PROMPT,
+    )
+    expect(isCustomizedQualityStandardPrompt(`${generatedForUser}\nExtra.`, DEFAULT_SOURCE)).toBe(true)
   })
 })

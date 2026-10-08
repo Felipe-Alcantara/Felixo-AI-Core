@@ -22,6 +22,8 @@ type FelixoSettingsModalProps = {
   orchestratorSettings: OrchestratorSettings
   projectsCount: number
   activeProjectsCount: number
+  /** Projetos ativos: a seção do System Design mostra os guias de cada um. */
+  activeProjectPaths?: readonly string[]
   automationsCount: number
   onClose: () => void
   onThemeChange: (theme: AppTheme) => void
@@ -53,6 +55,7 @@ function FelixoSettingsDialog({
   orchestratorSettings,
   projectsCount,
   activeProjectsCount,
+  activeProjectPaths,
   automationsCount,
   onClose,
   onThemeChange,
@@ -288,7 +291,7 @@ function FelixoSettingsDialog({
 
           <GraphicsRecoverySection />
 
-          <SystemDesignSettingsSection />
+          <SystemDesignSettingsSection projectDirectories={activeProjectPaths} />
 
           <section className="rounded-2xl border border-white/8 bg-black/10 p-3">
             <div className="mb-3 flex items-center gap-2 text-xs font-medium text-zinc-300">

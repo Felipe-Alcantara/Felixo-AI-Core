@@ -114,12 +114,15 @@ import {
   buildQualityStandardMessage,
   composeTerminalInitialText,
   isTerminalInitialTextReady,
+  qualityStandardGuidesFrom,
   qualityStandardSourceFrom,
   resolveQualityStandardPrompt,
   resolveTerminalInitialText,
+  type QualityStandardGuides,
   type QualityStandardSource,
 } from '../services/quality-standard-prompt'
 import { subscribeSystemDesignConfig } from '../../shared/system-design/system-design-events'
+import { useProjectGuides } from '../../shared/system-design/useProjectGuides'
 import { registerWebpageOpener } from '../../shared/links/link-chooser-store'
 import { webpageProfileForLinkSource } from '../services/webview-context-menu'
 import { stripTerminalSubmission, terminalTextForInsertion, toSubmittedTerminalText } from '../terminal/terminal-input'
@@ -992,7 +995,14 @@ function CanvasInner({
   // `qualityStandard` acima), então a fonte citada não pode divergir entre elas.
   const qualityStoredPromptRef = useRef<string | null>(null)
   const qualityEnabledRef = useRef(true)
-  const qualitySourceRef = useRef<QualityStandardSource | null>(null)
+  // Camada do usuário (lista de guias); a do projeto entra por `qualityPromptFor`.
+  const qualitySourceRef = useRef<QualityStandardSource | QualityStandardGuides | null>(null)
+  // As mesmas entradas, como ESTADO, para o render montar o lembrete de cada
+  // projeto (o render não pode ler ref: não re-renderizaria quando mudasse).
+  const [qualityInputs, setQualityInputs] = useState<{
+    stored: string | null
+    source: QualityStandardSource | QualityStandardGuides | null
+  }>({ stored: null, source: null })
   const refreshQualityStandard = useCallback(() => {
     applyQualityStandard({
       prompt: resolveQualityStandardPrompt({
@@ -1001,6 +1011,7 @@ function CanvasInner({
       }),
       enabled: qualityEnabledRef.current,
     })
+    setQualityInputs({ stored: qualityStoredPromptRef.current, source: qualitySourceRef.current })
   }, [applyQualityStandard])
   const applySavedQualityStandard = useCallback(
     (value: { prompt: string; enabled: boolean }) => {
@@ -1009,6 +1020,28 @@ function CanvasInner({
       refreshQualityStandard()
     },
     [refreshQualityStandard],
+  )
+  // Guias por PROJETO: cada terminal cita os guias da pasta em que trabalha
+  // (arquivo confirmado, escolha no app ou pasta de guias), e os da pessoa
+  // quando o projeto não traz nenhum.
+  const terminalCwds = useMemo(
+    () =>
+      nodes
+        .filter((node) => node.type === 'terminal' && typeof node.data.cwd === 'string' && node.data.cwd)
+        .map((node) => node.data.cwd as string),
+    [nodes],
+  )
+  const projectGuides = useProjectGuides(terminalCwds)
+  const getProjectGuides = projectGuides.getProject
+  const qualityPromptFor = useCallback(
+    (cwd: string | undefined) => {
+      const project = getProjectGuides(cwd)
+      return resolveQualityStandardPrompt({
+        stored: qualityStoredPromptRef.current,
+        source: (project ? qualityStandardGuidesFrom(project) : null) ?? qualitySourceRef.current,
+      })
+    },
+    [getProjectGuides],
   )
   // Agent terminals that already existed on disk the moment the app booted —
   // i.e. left open from a previous run, so whatever they were doing may not
@@ -1292,7 +1325,8 @@ function CanvasInner({
       window.felixo?.systemDesign?.getConfig?.(),
     ]).then(([quality, systemDesign]) => {
       if (systemDesign?.ok) {
-        qualitySourceRef.current = qualityStandardSourceFrom(systemDesign.config)
+        qualitySourceRef.current =
+          qualityStandardGuidesFrom(systemDesign.config) ?? qualityStandardSourceFrom(systemDesign.config)
       }
       if (quality?.ok) {
         qualityStoredPromptRef.current = typeof quality.prompt === 'string' ? quality.prompt : null
@@ -1308,7 +1342,7 @@ function CanvasInner({
   useEffect(
     () =>
       subscribeSystemDesignConfig((config) => {
-        qualitySourceRef.current = qualityStandardSourceFrom(config)
+        qualitySourceRef.current = qualityStandardGuidesFrom(config) ?? qualityStandardSourceFrom(config)
         refreshQualityStandard()
       }),
     [refreshQualityStandard],
@@ -1929,6 +1963,15 @@ function CanvasInner({
 
       if (node.type === 'terminal') {
         const quality = qualityStandard
+        // O lembrete cita os guias do projeto deste terminal (ou os da pessoa).
+        const terminalProject =
+          typeof node.data.cwd === 'string' ? projectGuides.projects[node.data.cwd] : undefined
+        const qualityPrompt = terminalProject
+          ? resolveQualityStandardPrompt({
+              stored: qualityInputs.stored,
+              source: qualityStandardGuidesFrom(terminalProject) ?? qualityInputs.source,
+            })
+          : quality.prompt
         const connectedFileNames = connectionIndex.getConnectedCanvasFileNames(node.id)
         const canvasFilePaths = terminalCanvasFilePaths[node.id] ?? []
         const initialTextReady = isTerminalInitialTextReady({
@@ -1988,7 +2031,7 @@ function CanvasInner({
           isRestoredAgent: followsResumePlan,
           command: node.data.command,
           qualityStandardEnabled: quality.enabled,
-          qualityStandardPrompt: quality.prompt,
+          qualityStandardPrompt: qualityPrompt,
           hasCommand: hasAgentCommand,
           // `handoffText` é transitório e carrega um pedido de verdade, então
           // pode sair submetido; `initialText` é persistido e é sempre
@@ -2008,6 +2051,18 @@ function CanvasInner({
           cliVersion,
         })
         const terminalIndex = terminalOrder.get(node.id)
+        // Só quando o lembrete vai ser MONTADO aqui (agente sem texto gravado):
+        // espera a camada do projeto assentar, para não subir citando os guias
+        // errados. Bloco novo já nasce com o texto, montado na criação.
+        const waitsForProjectGuides =
+          quality.enabled &&
+          hasAgentCommand &&
+          !followsResumePlan &&
+          typeof node.data.cwd === 'string' &&
+          Boolean(node.data.cwd) &&
+          !node.data.handoffText &&
+          !stripTerminalSubmission(node.data.initialText) &&
+          !projectGuides.settled[node.data.cwd]
 
         return {
           ...withHandle,
@@ -2017,6 +2072,7 @@ function CanvasInner({
               node.data,
               fallbackInitialText,
               initialTextReady,
+              waitsForProjectGuides,
               // O plano e a faixa são funções de `node.data` e destes flags;
               // o objeto do plano, novo a cada render, invalidaria o cache.
               followsResumePlan,
@@ -2043,7 +2099,8 @@ function CanvasInner({
               // arquivos do canvas: o cartão não chama `ensure()` enquanto
               // for `false`. Nada sobe, nada é apagado, o canvas fica intacto
               // — "agora não" é simplesmente não clicar na faixa.
-              initialTextReady: initialTextReady && !holdForResumeChoice && !waitsForCliVersion,
+              initialTextReady:
+                initialTextReady && !holdForResumeChoice && !waitsForCliVersion && !waitsForProjectGuides,
               resumeAgentSession,
               resumePlan,
               resumeCliVersion: cliVersion,
@@ -2097,6 +2154,9 @@ function CanvasInner({
     nodes,
     openTerminal,
     qualityStandard,
+    qualityInputs,
+    projectGuides.settled,
+    projectGuides.projects,
     relaunchTerminal,
     removeTemporaryImageNode,
     repairImageNode,
@@ -2528,6 +2588,8 @@ function CanvasInner({
       // permanente sozinha é contexto — fica digitada na entrada esperando o
       // usuário escrever a tarefa, em vez de o agente subir executando.
       const quality = qualityStandardRef.current
+      // Os guias que valem na pasta do terminal (projeto) ou os da pessoa.
+      const qualityPrompt = qualityPromptFor(options.cwd)
       const isDirectOpenia = isDirectOpeniaLaunch(options.command, options.args)
       const isOpaqueLauncher = options.launchMode === 'launcher' && !isDirectOpenia
       const isContextAwareCommand = Boolean(options.command && !isOpaqueLauncher)
@@ -2542,7 +2604,7 @@ function CanvasInner({
         : undefined
       const handoffSections = isContextAwareCommand && options.handoffText
         ? composeTerminalInitialText(
-            quality.enabled ? buildQualityStandardMessage(quality.prompt) : undefined,
+            quality.enabled ? buildQualityStandardMessage(qualityPrompt) : undefined,
             options.handoffText,
             planningInstruction,
           )
@@ -2558,7 +2620,7 @@ function CanvasInner({
         ? handoffInstruction ?? composeTerminalInitialText(
             quality.enabled
               ? buildCanvasTerminalInitialText(
-                  quality.prompt,
+                  qualityPrompt,
                   undefined,
                   [],
                   { agentName: options.label, cwd: options.cwd },
@@ -2587,14 +2649,19 @@ function CanvasInner({
         ...(options.handoffText ? { handoffText: initialText } : {}),
       }
     },
-    [],
+    [qualityPromptFor],
   )
 
+  // Criar espera a camada do projeto da pasta (com prazo curto): o lembrete
+  // nasce gravado no bloco, então precisa já citar os guias certos.
+  const ensureProjectGuides = projectGuides.ensure
   const addTerminalNode = useCallback(
     (options: NewTerminalOptions) => {
-      addNode('terminal', buildTerminalNodeData(options))
+      void ensureProjectGuides([options.cwd]).then(() => {
+        addNode('terminal', buildTerminalNodeData(options))
+      })
     },
-    [addNode, buildTerminalNodeData],
+    [addNode, buildTerminalNodeData, ensureProjectGuides],
   )
 
   /**
@@ -2725,11 +2792,14 @@ function CanvasInner({
   // near-square matrix before everything lands in one `setNodes` + one
   // `persistNode` per node.
   const addTerminalNodes = useCallback(
-    (optionsList: NewTerminalOptions[]) => {
+    async (optionsList: NewTerminalOptions[]) => {
       if (optionsList.length === 0) {
         return
       }
 
+      await ensureProjectGuides(optionsList.map((options) => options.cwd))
+      // Depois da espera: outro bloco pode ter entrado nesse meio-tempo.
+      const nodes = nodesRef.current
       const size = getDefaultNodeSize('terminal', window.innerWidth)
       const positions = findFreeNodePositions(
         nodes,
@@ -2751,7 +2821,7 @@ function CanvasInner({
       setNodes((current) => [...current, ...newNodes])
       newNodes.forEach((node) => persistNode(node))
     },
-    [nodes, setNodes, persistNode, buildTerminalNodeData, visibleCanvasBounds],
+    [setNodes, persistNode, buildTerminalNodeData, visibleCanvasBounds, ensureProjectGuides],
   )
 
   // Explicit, opt-in layout for agents that were added at different times.

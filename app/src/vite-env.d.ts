@@ -22,6 +22,8 @@ import type {
   SystemDesignConfigChange,
   SystemDesignDocument,
   SystemDesignDocumentSummary,
+  SystemDesignProject,
+  SystemDesignProjectChange,
   TerminalOutputEvent,
 } from './features/chat/types'
 import type {
@@ -1044,24 +1046,33 @@ declare global {
         saveConfig: (
           change: SystemDesignConfigChange,
         ) => Promise<CliInvokeResult & { config?: SystemDesignConfig }>
-        listDocuments: () => Promise<
+        listDocuments: (request?: { guideKey?: string }) => Promise<
           CliInvokeResult & { documents?: SystemDesignDocumentSummary[] }
         >
         getDocument: (
           path: string,
+          guideKey?: string,
         ) => Promise<
           CliInvokeResult & { document?: SystemDesignDocument }
         >
-        sync: () => Promise<
+        sync: (request?: { projectRoot?: string }) => Promise<
           CliInvokeResult & {
             config?: SystemDesignConfig
             indexedCount?: number
             removedCount?: number
+            results?: { key: string; ok: boolean; message?: string }[]
           }
         >
         resetCache: () => Promise<
           CliInvokeResult & { cleared?: number; config?: SystemDesignConfig }
         >
+        resolveProject?: (
+          directory: string,
+        ) => Promise<CliInvokeResult & { project?: SystemDesignProject }>
+        saveProject?: (
+          root: string,
+          change: SystemDesignProjectChange,
+        ) => Promise<CliInvokeResult & { project?: SystemDesignProject }>
       }
       chats?: {
         list: (params?: {

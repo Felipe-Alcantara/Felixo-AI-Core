@@ -1006,6 +1006,7 @@ describe('E2E do contexto inicial do Canvas', () => {
     const configuracao: SystemDesignConfig = {
       schemaVersion: 2,
       enabled: true,
+      guides: [],
       repoUrl: 'https://github.com/acme/padroes.git',
       branch: 'release/qa',
       sourceMode: 'custom',

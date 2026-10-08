@@ -1,4 +1,9 @@
-import type { SystemDesignSyncState } from '../../shared/system-design/types'
+import type {
+  SystemDesignGuide,
+  SystemDesignGuideOrigin,
+  SystemDesignLayer,
+  SystemDesignSyncState,
+} from '../../shared/system-design/types'
 import { isSubmittedTerminalText, toSubmittedTerminalText } from '../terminal/terminal-input'
 import { buildSkillsManifestPrompt } from './skills-manifest'
 import type { CanvasSkill } from '../types'
@@ -30,6 +35,33 @@ export type QualityStandardSource = {
   syncState: SystemDesignSyncState
 }
 
+/** Um guia no lembrete: git (URL + branch) ou pasta de guias dentro do projeto. */
+export type QualityStandardGuide = {
+  label: string
+  repoUrl: string
+  branch: string
+  kind?: 'git' | 'local'
+  /** `kind: 'local'`: caminho da pasta de guias. */
+  path?: string
+  origin?: SystemDesignGuideOrigin
+  syncState: SystemDesignSyncState
+}
+
+/**
+ * Os guias que valem para UM terminal, já resolvidos pela precedência
+ * (projeto > usuário > padrão do app). `replaced` são os guias gerais que a
+ * lista do projeto substituiu ali — o lembrete avisa.
+ */
+export type QualityStandardGuides = {
+  layer: SystemDesignLayer
+  guides: QualityStandardGuide[]
+  replaced: QualityStandardGuide[]
+}
+
+function isGuideList(value: QualityStandardSource | QualityStandardGuides): value is QualityStandardGuides {
+  return Array.isArray((value as QualityStandardGuides).guides)
+}
+
 /** Nome e URL que o texto padrão sempre usou; ainda é o resultado para o default do app. */
 const FELIXO_LABEL = 'Felixo System Design'
 const FELIXO_URL = 'https://github.com/Felipe-Alcantara/Felixo-System-Design'
@@ -53,6 +85,66 @@ function buildQualityStandardTemplate(params: {
 Quando precisar perguntar algo ao usuário (escolher entre opções, confirmar uma decisão que só ele pode tomar), use a ferramenta interativa de pergunta da sua própria CLI (ex.: AskUserQuestion), se ela existir — não escreva a pergunta como texto corrido no chat. Pergunta em texto vira só um parágrafo na conversa, sem botão nem campo pra responder; a ferramenta interativa é o que dá ao usuário uma UI de verdade para escolher.`
 }
 
+const MULTI_HEADER =
+  'Antes de qualquer tarefa: siga o PADRÃO DE QUALIDADE destes guias (padrões de design, backend/frontend, política de git e o template de contexto IA.md):'
+const MULTI_TAIL = `Leia o que for relevante para a tarefa e mantenha esses padrões em tudo que produzir (código, commits e documentação). Se estiver atualizando um arquivo de contexto ou plano, nunca encerre a resposta com o trabalho ainda marcado como "em andamento": faça a última edição do arquivo e deixe o estado final claro (concluído, bloqueado, aguardando decisão ou interrompido com motivo).
+
+Quando precisar perguntar algo ao usuário (escolher entre opções, confirmar uma decisão que só ele pode tomar), use a ferramenta interativa de pergunta da sua própria CLI (ex.: AskUserQuestion), se ela existir — não escreva a pergunta como texto corrido no chat. Pergunta em texto vira só um parágrafo na conversa, sem botão nem campo pra responder; a ferramenta interativa é o que dá ao usuário uma UI de verdade para escolher.`
+
+function buildMultiGuideTemplate(params: { lines: string; layerNote: string }): string {
+  return `${MULTI_HEADER}${params.lines}\n${params.layerNote ? `${params.layerNote} ` : ''}${MULTI_TAIL}`
+}
+
+function folderName(folderPath: string): string {
+  return folderPath.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? folderPath
+}
+
+function describeGuideLine(guide: QualityStandardGuide): string {
+  if (guide.kind === 'local' && guide.path) {
+    return `\n- ${guide.label}: pasta "${folderName(guide.path)}/" dentro deste repositório.`
+  }
+  const branchNote = guide.branch ? ` (branch: ${guide.branch})` : ''
+  const stateNote =
+    guide.syncState === 'offline-fallback'
+      ? ' Atenção: a última sincronização desse guia falhou; o índice local pode estar desatualizado.'
+      : ''
+  return `\n- ${guide.label}: ${toReadableRepoUrl(guide.repoUrl)}${branchNote}.${stateNote}`
+}
+
+function describeLayerNote(value: QualityStandardGuides): string {
+  if (value.layer !== 'projeto') return ''
+  const replaced = value.replaced.map((guide) => guide.label).filter(Boolean)
+  return replaced.length
+    ? `Estes guias são do projeto e valem aqui no lugar dos guias gerais do app (${replaced.join(', ')}).`
+    : 'Estes guias são do projeto.'
+}
+
+/**
+ * Texto para uma LISTA de guias, ou para guias do projeto. Um guia git só,
+ * fora da camada de projeto, continua no texto de fonte única (inclusive o
+ * literal histórico do default do app).
+ */
+function buildGuideListPrompt(value: QualityStandardGuides): string {
+  const usable = value.guides.filter((guide) => guide.kind === 'local' ? Boolean(guide.path) : Boolean(guide.repoUrl))
+  if (!usable.length) return DEFAULT_QUALITY_STANDARD_PROMPT
+
+  const [only] = usable
+  if (value.layer !== 'projeto' && usable.length === 1 && only.kind !== 'local') {
+    return buildDefaultQualityStandardPrompt({
+      label: only.label,
+      repoUrl: only.repoUrl,
+      branch: only.branch,
+      sourceMode: only.origin === 'default' ? 'default' : 'custom',
+      syncState: only.syncState,
+    })
+  }
+
+  return buildMultiGuideTemplate({
+    lines: usable.map(describeGuideLine).join(''),
+    layerNote: describeLayerNote(value),
+  })
+}
+
 /**
  * Texto padrão para o padrão de qualidade do Felixo. Para o default do app é
  * idêntico, byte a byte, ao texto fixo que existia antes de a fonte ser
@@ -74,7 +166,10 @@ export const DEFAULT_QUALITY_STANDARD_PROMPT = buildQualityStandardTemplate({
  * - Sincronização que falhou ou fonte trocada e ainda não sincronizada: uma
  *   frase avisando que o índice local pode não ser o da fonte citada.
  */
-export function buildDefaultQualityStandardPrompt(source: QualityStandardSource | null): string {
+export function buildDefaultQualityStandardPrompt(
+  source: QualityStandardSource | QualityStandardGuides | null,
+): string {
+  if (source && isGuideList(source)) return buildGuideListPrompt(source)
   if (!source || !source.repoUrl) return DEFAULT_QUALITY_STANDARD_PROMPT
 
   const isCustom = source.sourceMode === 'custom'
@@ -104,15 +199,30 @@ export function buildDefaultQualityStandardPrompt(source: QualityStandardSource 
  */
 export function isCustomizedQualityStandardPrompt(
   stored: string | null | undefined,
-  source: QualityStandardSource | null,
+  source: QualityStandardSource | QualityStandardGuides | null,
 ): boolean {
   if (typeof stored !== 'string' || !stored.trim()) return false
   const text = stored.trim()
   if (text === DEFAULT_QUALITY_STANDARD_PROMPT.trim()) return false
   if (text === buildDefaultQualityStandardPrompt(source).trim()) return false
-  // Padrão gerado para OUTRA fonte (ou em outro estado): também não é
-  // personalização — reconhecido pela estrutura do modelo, não pelo texto exato.
-  return !getGeneratedDefaultPattern().test(text)
+  // Padrão gerado para OUTRA fonte (ou em outro estado, ou outra lista): também
+  // não é personalização — reconhecido pela estrutura do modelo.
+  return !getGeneratedDefaultPattern().test(text) && !getGeneratedListPattern().test(text)
+}
+
+let generatedListPattern: RegExp | null = null
+
+/** Casa qualquer texto que o modelo de LISTA poderia ter gerado. */
+function getGeneratedListPattern(): RegExp {
+  if (generatedListPattern) return generatedListPattern
+  // O aviso de projeto entra com um espaço depois; o marcador o leva junto.
+  const skeleton = buildMultiGuideTemplate({ lines: '\u0001', layerNote: '\u0002' }).replace('\u0002 ', '\u0002')
+  const escaped = skeleton.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const source = escaped
+    .replace('\u0001', '(?:\\n- [^\\n]+)+')
+    .replace('\u0002', '(?:Estes guias são do projeto[^\\n]*?\\. )?')
+  generatedListPattern = new RegExp(`^${source}$`)
+  return generatedListPattern
 }
 
 let generatedDefaultPattern: RegExp | null = null
@@ -169,10 +279,50 @@ export function qualityStandardSourceFrom(config: {
   }
 }
 
+function toQualityGuide(guide: SystemDesignGuide): QualityStandardGuide {
+  return {
+    label: guide.label,
+    repoUrl: guide.repoUrl,
+    branch: guide.branch,
+    kind: guide.kind,
+    ...(guide.path ? { path: guide.path } : {}),
+    origin: guide.origin,
+    syncState: guide.syncState,
+  }
+}
+
+/**
+ * Os guias do lembrete a partir do que o processo principal resolveu: a camada
+ * de um projeto (`resolve-project`) ou só a do usuário (`get-config`). `null`
+ * enquanto nada foi lido — melhor o texto histórico do que citar uma lista que
+ * ninguém confirmou.
+ */
+export function qualityStandardGuidesFrom(
+  input:
+    | { layer: SystemDesignLayer; guides: SystemDesignGuide[]; replaced: SystemDesignGuide[] }
+    | { sourceMode: 'default' | 'custom'; guides: SystemDesignGuide[] }
+    | null
+    | undefined,
+): QualityStandardGuides | null {
+  if (!input || !Array.isArray(input.guides) || input.guides.length === 0) return null
+  if ('layer' in input) {
+    return {
+      layer: input.layer,
+      guides: input.guides.map(toQualityGuide),
+      replaced: input.replaced.map(toQualityGuide),
+    }
+  }
+  return {
+    layer: input.sourceMode === 'custom' ? 'usuario' : 'padrao',
+    guides: input.guides.map(toQualityGuide),
+    replaced: [],
+  }
+}
+
 /** O texto que de fato vai para o agente: a personalização, ou o padrão da fonte atual. */
 export function resolveQualityStandardPrompt(params: {
   stored: string | null | undefined
-  source: QualityStandardSource | null
+  source: QualityStandardSource | QualityStandardGuides | null
 }): string {
   return isCustomizedQualityStandardPrompt(params.stored, params.source)
     ? (params.stored as string)
