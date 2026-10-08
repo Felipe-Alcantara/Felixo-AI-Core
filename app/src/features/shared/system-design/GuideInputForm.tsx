@@ -46,7 +46,7 @@ export function GuideInputForm({
         placeholder="https://github.com/conta/repositorio-do-guia"
         aria-label="URL do repositório do guia"
         disabled={disabled || busy}
-        className="min-w-0 flex-1 rounded-md border border-white/10 bg-black/20 px-2 py-1 text-[11px] text-zinc-100 placeholder:text-zinc-500"
+        className="min-w-0 basis-full rounded-md border border-white/10 bg-black/20 px-2 py-1 text-[11px] text-zinc-100 placeholder:text-zinc-500"
       />
       <input
         type="text"

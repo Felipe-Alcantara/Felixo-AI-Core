@@ -106,7 +106,8 @@ export function describeGuideOrigin(origin: SystemDesignGuideOrigin): string {
 
 /** "Doktor · main" ou "Cliente X · pasta do projeto". */
 export function describeGuideSource(guide: SystemDesignGuide): string {
-  if (guide.kind === 'local') return `${guide.label} · pasta do projeto`
+  // Guia de pasta: a origem ("pasta do projeto") já vai no selo ao lado.
+  if (guide.kind === 'local') return guide.label
   return guide.branch ? `${guide.label} · ${guide.branch}` : guide.label
 }
 
@@ -158,9 +159,12 @@ export function describeProjectLayer(project: SystemDesignProject): SystemDesign
       tone: 'warn',
     }
   }
+  const fileWaiting = project.file?.status === 'pendente' || project.file?.status === 'alterado'
   return {
     headline: project.layer === 'usuario' ? 'Seus guias' : 'Padrão do app',
-    detail: 'O projeto não traz guias próprios.',
+    detail: fileWaiting
+      ? 'O arquivo do projeto ainda não foi confirmado; até lá valem os seus guias.'
+      : 'O projeto não traz guias próprios.',
     tone: 'muted',
   }
 }

@@ -205,6 +205,11 @@ describe('lista de guias da camada do usuário', () => {
     assert.equal(publicConfig.sourceMode, SOURCE_MODES.CUSTOM)
     assert.deepEqual(publicConfig.guides.map((guide) => guide.syncState), [SYNC_STATES.SYNCED, SYNC_STATES.NEVER_SYNCED])
     assert.equal(publicConfig.guides[1].label, 'System Design (Doktor-SystemDesign)')
+    // O padrão do app escolhido como item da lista continua com o nome dele;
+    // outra branch do mesmo repositório já é outra fonte.
+    assert.equal(publicConfig.guides[0].label, 'Felixo System Design')
+    const otherBranch = applyConfigChange(base(), { guides: [{ repoUrl: DEFAULT_REPO_URL, branch: 'develop' }] })
+    assert.equal(toPublicConfig(otherBranch.stored).guides[0].label, 'System Design (Felixo-System-Design)')
   })
 
   it('a mesma fonte escrita de outro jeito conta uma vez', () => {

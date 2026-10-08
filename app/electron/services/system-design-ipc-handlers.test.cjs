@@ -528,3 +528,33 @@ test('escolha no app por projeto: vale só naquele projeto e sincroniza ao pedir
   const invalid = await handlers.get('system-design:save-project')(null, a, { guides: [{ repoUrl: 'file:///x', branch: 'main' }] })
   assert.equal(invalid.ok, false)
 })
+
+test('duas sincronizações da mesma fonte ao mesmo tempo compartilham um único clone', async (t) => {
+  let release
+  const gate = new Promise((resolve) => {
+    release = resolve
+  })
+  const { projectsRoot, syncCalls } = setupHandlers(t, {
+    syncSystemDesignRepository: async () => {
+      await gate
+      return { headSha: 'f'.repeat(40), indexedCount: 1, removedCount: 0 }
+    },
+  })
+  const root = makeProject(projectsRoot, 'concorrente')
+  await handlers.get('system-design:save-project')(null, root, { guides: [{ repoUrl: DOKTOR_URL, branch: 'main' }] })
+
+  // A tela confirma e sincroniza; o hook vê o projeto passar a valer e
+  // sincroniza também — as duas chamadas chegam juntas.
+  const first = handlers.get('system-design:sync')(null, { projectRoot: root })
+  const second = handlers.get('system-design:sync')(null, { projectRoot: root })
+  // Segura o "clone" até a primeira chamada estar nele e a segunda ter tido
+  // tempo de resolver o projeto e chegar ao sync (no app, o clone leva segundos).
+  while (syncCalls.length === 0) await new Promise((resolve) => setTimeout(resolve, 5))
+  await new Promise((resolve) => setTimeout(resolve, 150))
+  release()
+  const [a, b] = await Promise.all([first, second])
+
+  assert.equal(a.ok, true)
+  assert.equal(b.ok, true)
+  assert.equal(syncCalls.length, 1, 'a mesma fonte não é clonada duas vezes ao mesmo tempo')
+})

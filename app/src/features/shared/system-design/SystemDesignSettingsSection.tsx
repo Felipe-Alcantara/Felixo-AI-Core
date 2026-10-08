@@ -91,9 +91,9 @@ export function SystemDesignSettingsSection({ projectDirectories = [] }: { proje
           return (
             <li key={guide.key} className="rounded-md bg-white/5 px-2 py-1.5 text-[11px]">
               <div className="flex items-center justify-between gap-2 text-zinc-300">
-                <span className="truncate">
-                  {describeGuideSource(guide)}
-                  <span className="ml-1.5 rounded-full border border-white/10 px-1.5 text-[10px] uppercase tracking-wide text-zinc-400">
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span className="min-w-0 truncate">{describeGuideSource(guide)}</span>
+                  <span className="shrink-0 whitespace-nowrap rounded-full border border-white/10 px-1.5 text-[10px] uppercase tracking-wide text-zinc-400">
                     {describeGuideOrigin(guide.origin)}
                   </span>
                 </span>

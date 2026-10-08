@@ -349,7 +349,9 @@ function resolveConfiguredSource(stored, defaultSource = getDefaultSource()) {
 }
 
 function labelFor(source, origin) {
-  if (origin === SOURCE_MODES.DEFAULT) return DEFAULT_LABEL
+  // A fonte do app escolhida explicitamente (ex.: ao somar um segundo guia, o
+  // padrão vira item da lista) continua sendo o Felixo System Design.
+  if (origin === SOURCE_MODES.DEFAULT || sourcesEqual(source, getDefaultSource())) return DEFAULT_LABEL
   const segment = String(source.repoUrl ?? '')
     .replace(/[/:]+$/, '')
     .replace(/\.git$/i, '')

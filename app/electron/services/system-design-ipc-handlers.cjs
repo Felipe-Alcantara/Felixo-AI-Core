@@ -225,8 +225,24 @@ function registerSystemDesignIpcHandlers(appPaths, options = {}) {
     }
   }
 
+  // Sincronização em andamento por fonte. Duas chamadas para a mesma fonte ao
+  // mesmo tempo (a tela confirma o arquivo e sincroniza; o canvas vê o projeto
+  // passar a valer e sincroniza também) clonariam na mesma pasta de cache, e a
+  // segunda falhava com o diretório já existente (medido no app em 08/10/2026).
+  const inFlightSyncs = new Map()
+
+  /** Sincroniza UMA fonte git; chamada repetida enquanto ela roda devolve a mesma. */
+  function syncOne(guide) {
+    const key = sourceKey(guide)
+    const running = inFlightSyncs.get(key)
+    if (running) return running
+    const task = syncOneNow(guide).finally(() => inFlightSyncs.delete(key))
+    inFlightSyncs.set(key, task)
+    return task
+  }
+
   /** Sincroniza UMA fonte git e registra o resultado no store dela. */
-  async function syncOne(guide) {
+  async function syncOneNow(guide) {
     const key = sourceKey(guide)
     try {
       const result = await syncRepository({

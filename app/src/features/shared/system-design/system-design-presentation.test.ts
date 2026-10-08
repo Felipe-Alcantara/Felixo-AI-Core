@@ -178,6 +178,13 @@ describe('camada de um projeto', () => {
     expect(view.detail).toBe('Valem aqui no lugar dos seus (Felixo System Design).')
   })
 
+  it('com o arquivo esperando confirmação, a camada diz isso em vez de "não traz guias"', () => {
+    const pending = { present: true, path: '.felixo/system-design.json', status: 'pendente' as const, guides: [guide()], problems: [], hash: 'h' }
+
+    expect(describeProjectLayer(project({ file: pending })).detail).toContain('ainda não foi confirmado')
+    expect(describeProjectLayer(project()).detail).toBe('O projeto não traz guias próprios.')
+  })
+
   it('fora dos projetos registrados diz que nada foi lido', () => {
     expect(describeProjectLayer(project({ authorized: false, root: null })).headline).toBe('Fora dos projetos registrados')
   })
