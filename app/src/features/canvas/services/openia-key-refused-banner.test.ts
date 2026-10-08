@@ -18,7 +18,7 @@ describe('openiaKeyRefusedBanner', () => {
     expect(banner?.detail).toContain('Chave do OpenRouter')
   })
 
-  it('sem conta escolhida fala da chave do Openia, sem inventar nome', () => {
+  it('sem conta escolhida aponta o Login do sistema, sem inventar nome', () => {
     const banner = openiaKeyRefusedBanner({
       providerId: 'openia',
       args: RUN,
@@ -27,7 +27,8 @@ describe('openiaKeyRefusedBanner', () => {
       accountLabel: null,
     })
 
-    expect(banner?.detail).toContain('A chave do Openia')
+    expect(banner?.detail).toContain('A chave do Login do sistema')
+    expect(banner?.detail).toContain('Agente → Openia → Login do sistema → Chave do OpenRouter')
     expect(banner?.detail).not.toContain('conta null')
   })
 

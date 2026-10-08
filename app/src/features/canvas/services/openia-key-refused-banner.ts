@@ -25,12 +25,14 @@ export function openiaKeyRefusedBanner(params: {
   if (params.activity !== 'exited' && params.activity !== 'error') return null
   if (params.exitCode !== OPENIA_CHAVE_RECUSADA) return null
 
+  // Sem conta, o bloco roda no "Login do sistema" (a chave global do Openia),
+  // que é como o seletor de conta do configurador chama essa opção.
   const conta = params.accountLabel?.trim()
+  const onde = conta ? `conta ${conta}` : 'Login do sistema'
   return {
     title: 'O OpenRouter recusou a chave',
     detail:
-      `${conta ? `A chave da conta ${conta}` : 'A chave do Openia'} é inválida, foi revogada, ` +
-      'não tem permissão ou esgotou o limite. Troque em Agente → Openia → ' +
-      `${conta ? `conta ${conta}` : 'a conta'} → Chave do OpenRouter e abra o agente de novo.`,
+      `A chave do ${onde} é inválida, foi revogada, não tem permissão ou esgotou o limite. ` +
+      `Troque em Agente → Openia → ${onde} → Chave do OpenRouter e abra o agente de novo.`,
   }
 }
