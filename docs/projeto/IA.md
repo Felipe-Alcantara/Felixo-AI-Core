@@ -6220,3 +6220,60 @@ Um roteiro de uso único abriu o app pela fonte, com `felixo devtools launch`, p
 
 A primeira rodada mostrou o defeito de texto: sem conta, o bloco roda no **Login do sistema**, e a faixa mandava ir em "a conta". A correção veio com teste (vermelho antes). Com isso, a limitação "faixa não aberta no app real" acima fica coberta para o app da fonte; o pacote instalado só recebe a faixa no próximo Release.
 
+
+## 2026-10-08 — Notion: Painel validado no app instalado com a conexão real; o % e a memória da database corrigidos
+
+### Ponto de partida
+
+A aba **Painel** (entrada de 2026-10-07) tinha sido vista só numa bancada com a ponte do Notion simulada. A task de validação pedia o app instalado com uma conexão de verdade, números conferidos contra o Notion, clique, configuração e "fechar e reabrir volta no Painel".
+
+### Como foi validado
+
+- **Binário instalado da v0.1.440** (`felixo devtools launch --packaged "/opt/Felixo AI Core/felixo-ai-core"`), perfil isolado, `env -i` com HOME e TMPDIR próprios, Xvfb `:87`, `flock`. Nenhuma CLI de IA no PATH.
+- **Conexão real**: o token da integração "Automações do notion" (a mesma da CLI `notion-tasks`) entrou só por variável de ambiente, num script que chama `window.felixo.notion.saveConnection` pelo CDP. A saída do script é conferida contra o token, e o perfil (com o `notion-connection-secrets.bin`) foi apagado no fim.
+- **Gabarito independente**: as linhas da database exportadas pela API (`notion-tasks linhas --completo`), contadas em Python por `Repositório` e `Etapa`.
+- **Console**: `Runtime.enable` numa sessão CDP nova devolve as mensagens guardadas desde o carregamento; um `console.error` de sonda provou que o método enxerga mensagens antigas.
+
+### Medido na v0.1.440
+
+- 1.774 tarefas → **34 cartões, 34/34 iguais à API** no mesmo instante (total, abertas e %). Uma diferença intermediária no SpicyGame era uma task concluída às 05:49 por outra sessão, entre a leitura do app e a exportação; o botão de sincronizar trouxe o cartão para 55% · 10 abertas.
+- Felixo-AI-Core com link do GitHub e etiqueta JavaScript (database GITHUB pela ligação `Projeto`).
+- Clique no cartão → aba Todas, filtro "Repositório: Felixo-AI-Core", 433 tarefas (= total do cartão); **Voltar ao painel** → 34 cartões; **×** → 1.774.
+- Agrupar por Projeto → 13 cartões, seletor de detalhes travado; "Mostrar repositórios sem tarefas" → 107 cartões = 34 + **73 vazios**, igual à conta pela API (91 linhas da GITHUB, 12 casadas, sem arquivados e forks).
+- Console do renderer: **0 erros e 0 avisos** do boot até o fim (fora as 2 sondas).
+
+### Os dois defeitos encontrados
+
+1. **Percentual no meio.** Agrupando por Projeto, Felixo-AI-Core mostrava 57% com 253 feitas de 440 (57,5% exato), enquanto 1/8 (12,5%) virava 13%. `Math.round((253 / 440) * 100)` é 57 porque a divisão primeiro dá 57,4999…; `253 * 100 / 440` dá 57,5 exato. Defeito do commit `95870840`.
+2. **O bloco esquecia a database.** Fechando o app na "Tarefas — HOME (pessoal)" com o Painel aberto, ele reabriu em "Ideias criativas" (a primeira da lista) na aba Todas. A conexão e a database viviam só em `useState('')` desde o commit `58be0fc7` (08/09); o Painel, que lembra a aba por conexão + database, nunca tinha onde reabrir. O Felipe decidiu corrigir nesta task.
+
+### O que mudou
+
+- `progressPercent` (`services/notion-repo-board.ts`): multiplica antes de dividir; 100% só com tudo feito e 0% só com nada feito, para o cartão não dizer "100% · 1 aberta".
+- `services/notion-tasks-selection.ts`: `keepIfListed`, `readNotionTasksSelection`, `selectionPatch`. A escolha vai para o `data` do bloco (`notionConnectionId`, `notionDataSourceId`) pelo `onDataChange` que o `CanvasView` já injetava; conexão removida ou database que sumiu volta para a primeira.
+- `openingViewId`: a aba inicial do bloco segue a mesma regra da troca de database. Sem isso, a escolha já gravada na montagem nunca disparava a troca, e o Painel continuava sem reabrir — achado na primeira rodada de "fechar e reabrir" depois da correção.
+- Inventário do canvas: a persistência do bloco e os dois seletores descrevem a escolha gravada no bloco.
+
+### Medido depois da correção
+
+O código do worktree rodou num Electron 41.10.7 com o nome de app "Felixo AI Core" (pasta de preparo com o `package.json` do worktree mais `productName`), para usar a mesma chave do chaveiro do app instalado sem pedir permissão na tela. Perfil isolado, mesma conexão real.
+
+- Escolhida a "Tarefas — HOME (pessoal)" e aberto o Painel, o `data` do bloco no canvas ficou com `notionConnectionId` e `notionDataSourceId: f65396de…`.
+- `app.quit()` e reabertura com o mesmo perfil: o bloco voltou na HOME **direto no Painel** (32 cartões, 1.789 tarefas, do cache e revalidando).
+- **32/32 cartões iguais à API** com a regra nova; console sem erro nem aviso.
+
+### Testes
+
+- Unitários: `notion-repo-board.test.ts` foi de 24 para 30 (`progressPercent` e `openingViewId`; o do cartão com 253/440 e os de `openingViewId` falharam antes da mudança) e `notion-tasks-selection.test.ts` tem 8.
+- Bateria no worktree em `cc0b7939`: lint limpo; build (`tsc -b` + Vite) ok; vitest **2997 passaram, 5 pulados**; suíte Node **2496 testes, 2493 passaram, 3 pulados, 0 falhas** no Node 25.9.0 e no 22.22.3.
+
+### Achado paralelo
+
+Os cofres do token (`notion-connection-store.cjs` e `cli-account-store.cjs`) comparam `getSelectedStorageBackend()` com `'basic'`, mas o Electron 41 devolve `basic_text`. Medido com um app mínimo sem D-Bus: `{"backend":"basic_text","available":false}`. O token continua protegido, porque `isEncryptionAvailable()` já recusa; só a mensagem específica ("chaveiro indisponível, desbloqueie") nunca aparece. Task aberta.
+
+### Limitações
+
+- Windows e macOS não foram abertos (decisão do Felipe: task para depois).
+- O app de uso diário do Felipe (v0.1.440, com a 0.1.441 pronta para instalar) não tem bloco Tarefas Notion no canvas; não foi criado um ali para não mexer no canvas durante o trabalho dele. A conexão real dele pode ser outra integração, com outro acesso à GITHUB.
+- A database "Repositórios" do André não aparece para nenhuma das integrações daqui (`home-pessoal` e `vitis`); task aberta para ele conferir.
+- A correção rodou do código-fonte com o Electron do projeto, não de um pacote gerado pelo electron-builder; o pacote só sai no Release.

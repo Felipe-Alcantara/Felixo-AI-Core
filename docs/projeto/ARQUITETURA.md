@@ -74,6 +74,16 @@ inteira (estado `all`, sem busca enviada ao Notion), para que a lista filtrada
 de outra aba nunca vire placar. Preferências ficam em
 `felixo:notion-repo-board:<conexão>:<database>`.
 
+A conexão e a database que cada bloco mostra ficam no `data` do próprio nó
+(`notionConnectionId` e `notionDataSourceId`), gravado no canvas pelo
+`onDataChange` que o `CanvasView` injeta; dois blocos podem apontar para
+databases diferentes. Ao reabrir, a escolha só vale se ainda estiver na lista
+(`services/notion-tasks-selection.ts`): conexão removida ou database que sumiu
+volta para a primeira. A aba inicial segue `openingViewId`, a mesma regra da
+troca de database. O percentual do cartão é `progressPercent`: multiplica antes
+de dividir (sem o 57,4999… de `253 / 440 * 100`), e 100% só aparece com tudo
+feito, 0% só com nada feito.
+
 **Ordenação e filtros seguem a ordem visual do schema, não a alfabética.**
 `notion-task-sort.ts` usa `schemaOptionOrder` pra ler a ordem real de
 `select`/`status`: `select` é a ordem do array `options`; `status` tem grupo
