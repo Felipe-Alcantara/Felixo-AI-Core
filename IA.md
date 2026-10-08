@@ -7956,3 +7956,24 @@ Configurações aparece ligado, com o aviso "Ativado", e com `off` salvo o carre
 `tsc -b`, `eslint` dos arquivos alterados e `vitest` dos módulos tocados limpos.
 
 Estado: concluído.
+
+## 2026-10-07 — Configuração do Notion e aviso do ditado também fecham ao clicar fora
+
+Continuação da entrada anterior: as duas superfícies que ainda só saíam da tela pelo próprio botão.
+
+- **Seção "Configurar" do bloco Tarefas Notion**: recolhe com clique fora ou Esc. Não recolhe com o formulário de
+  conexão aberto nem ao trocar de janela (a pessoa sai para copiar o token e volta), para não perder o que foi
+  digitado. Para isso o `useDismissOnOutside` ganhou uma lista de refs (o botão fica no cabeçalho e a seção abaixo,
+  sem ancestral comum só deles) e a opção `fecharAoSairDaJanela: false`.
+- **Aviso do ditado por voz** (`DictationButton`): fecha com clique fora ou Esc. Achado de passagem: o aviso era
+  `absolute` dentro da barra do topo, que tem `overflow: hidden`, e **ficava invisível**; a pessoa via só o microfone
+  riscado. Agora sai por `FelixoPopoverSurface` (portal), abaixo do botão e contido na janela.
+
+Validação: teste novo em `useDismissOnOutside.test.ts` (painel que ignora o `blur`). No app isolado: a seção
+"Configurar" ficou aberta com clique dentro, com `blur` da janela e com o formulário de token aberto, e recolheu com
+clique no vazio do bloco, com Esc e pelo próprio botão. O aviso do ditado (erro "Cadastre a chave…") apareceu
+visível sob o microfone (captura) e fechou com clique fora, Esc e "Fechar"; clique no próprio aviso não fecha.
+`npm run typecheck`, `npm run lint` e `vitest` completo (2980) limpos. `npm test` (testes node) tem 4 falhas de
+descoberta de sessão do Claude que **já falham no `main` limpo** neste Windows; não são desta mudança.
+
+Estado: concluído.
