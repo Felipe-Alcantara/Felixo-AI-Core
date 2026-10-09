@@ -833,7 +833,7 @@ Na seção **Criar** da barra lateral, **Gerar imagem** (logo abaixo de **Abrir 
 
 Depois, clique em **Gerar** ou use Ctrl/Cmd+Enter. Quem gera é o Openia, com a chave do OpenRouter configurada nele. O Felixo não lê essa chave, e cada geração pode consumir créditos da sua conta. Por isso, na primeira vez nenhum modelo vem escolhido; depois, o último escolhido é lembrado.
 
-Enquanto gera, o painel mostra o tempo decorrido, e **Cancelar** interrompe o pedido. Esc ou um clique fora fecham o painel sem interromper a geração. A imagem pronta entra no canvas como um bloco de imagem temporário; **Remover temporário** apaga o bloco e o arquivo. Se faltar a chave, o crédito acabar, o modelo sair do catálogo ou a rede cair, o painel diz qual foi o problema. É preciso ter o Openia instalado e configurado.
+Enquanto gera, o painel mostra o tempo decorrido, e **Cancelar** interrompe o pedido. Esc ou um clique fora fecham o painel sem interromper a geração. A imagem pronta entra no canvas como um bloco de imagem temporário; **Remover temporário** apaga o bloco e o arquivo. Se faltar a chave, o crédito acabar, o modelo sair do catálogo ou a rede cair, o painel diz qual foi o problema. Para imagem, o OpenRouter exige um saldo mínimo na conta (US$ 1,00 em 09/10/2026): abaixo disso, o painel pede para adicionar créditos. É preciso ter o Openia 0.2.0 ou mais novo, com a chave configurada. Se o Openia for antigo, o painel avisa e mostra **Atualizar o Openia**; a atualização instala a versão nova a partir do GitHub do Openia, só para o seu usuário, depois de você confirmar.
 
 ### Notificações dos agentes
 

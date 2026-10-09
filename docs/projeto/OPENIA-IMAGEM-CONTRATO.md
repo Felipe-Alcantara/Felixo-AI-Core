@@ -54,11 +54,22 @@ openia image --json --model <empresa/modelo> --prompt=<texto> --output-dir <past
 | 2 | invalid_request | `invalid_request` |
 | 3 | authentication_error (`missing_key`, `invalid_key`) | `authentication_error` |
 | 4 | model_error (`model_not_found`, `model_unsupported`…) | `model_unavailable` |
-| 5 | limit_error (`rate_limit`, `account_limit`…) | `limit_error` |
+| 5 | limit_error (`rate_limit`, `request_too_large`…) | `limit_error` |
+| 5 | limit_error com `account_limit` ou `minimum_balance` (falta de créditos) | `insufficient_credits` |
 | 6 | network_error | `network_error` |
 | 124 | timeout | `timeout` |
 | 130 | cancelled | `cancelled` |
 | 1, 7, 8, outros | provider/output/genérico | `generation_failed` (ou `invalid_output` para `output_too_large`, `unsafe_output`, `mime_mismatch`, `format_mismatch`, `unsupported_mime`) |
+
+O `error.code` só vence o código de saída quando DETALHA a mesma classe: falta de créditos (`account_limit`,
+`minimum_balance`) é um limite de saída 5, mas pede outra ação (adicionar saldo). Medido em 09/10/2026 com uma
+conta de US$ 0,77: o endpoint de imagens responde HTTP 402 "Insufficient credits" (vira `account_limit`); o
+texto do saldo mínimo ("requires at least $1.00 in balance for image or video output") só veio pela API de chat.
+
+**Openia antigo.** Um Openia anterior à 0.2.0 não tem `openia image`: o Typer sai com código 2 e nada em stdout.
+Nesse caso, e só nele, o Felixo consulta `openia --version`; abaixo de 0.2.0 o código público é
+`openia_outdated`, e o painel oferece atualizar pelo `cli:install-official` (o mesmo pino do catálogo de CLIs,
+hoje o commit `6f75f8f`, versão 0.2.1).
 
 Cancelamento pelo Felixo: cria o `--cancel-file`; se o Openia não sair em 2,5 s, `SIGTERM` ao grupo de
 processos (Windows: `taskkill /T /F`) e, depois de 2 s, `SIGKILL`.
