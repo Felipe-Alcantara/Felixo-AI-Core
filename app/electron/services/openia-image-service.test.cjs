@@ -53,7 +53,7 @@ function catalog(extra = []) {
 }
 
 /** Serviço com gravação REAL no disco (mesma função usada em produção) e filho simulado. */
-function harness({ runImage, fetchCatalog = catalog(), timeoutMs, saveImage } = {}) {
+function harness({ runImage, fetchCatalog = catalog(), timeoutMs, saveImage, readVersion = async () => null } = {}) {
   const userData = tmp()
   const generatedDir = path.join(userData, 'generated-images')
   const notified = []
@@ -64,6 +64,7 @@ function harness({ runImage, fetchCatalog = catalog(), timeoutMs, saveImage } = 
     notify: (artifact) => notified.push({ artifact, existsAtNotify: fs.existsSync(artifact.path) }),
     runImage,
     timeoutMs,
+    readVersion,
   })
   return { userData, generatedDir, notified, service, runsDir: path.join(userData, 'openia-image-runs') }
 }
@@ -284,7 +285,8 @@ test('erros do filho viram códigos e mensagens FIXAS: nunca stderr, chave, mens
   const casos = [
     [{ started: true, ok: false, exitCode: 3, stdout: failureEnvelope('missing_key') }, 'authentication_error'],
     [{ started: true, ok: false, exitCode: 3, stdout: failureEnvelope('invalid_key') }, 'authentication_error'],
-    [{ started: true, ok: false, exitCode: 5, stdout: failureEnvelope('account_limit') }, 'limit_error'],
+    [{ started: true, ok: false, exitCode: 5, stdout: failureEnvelope('account_limit') }, 'insufficient_credits'],
+    [{ started: true, ok: false, exitCode: 5, stdout: failureEnvelope('rate_limit') }, 'limit_error'],
     [{ started: true, ok: false, exitCode: 4, stdout: failureEnvelope('model_unsupported') }, 'model_unavailable'],
     [{ started: true, ok: false, exitCode: 6, stdout: failureEnvelope('network_error') }, 'network_error'],
     [{ started: true, ok: false, exitCode: 7, stdout: failureEnvelope('provider_error') }, 'generation_failed'],
@@ -697,4 +699,60 @@ test('contrato real: um Openia que IGNORA o cancelamento é morto, com o neto, e
   assert.equal(fs.existsSync(path.join(h.runsDir, 'req-real-05')), false)
   assert.equal(h.notified.length, 0)
   assert.equal(fs.existsSync(h.generatedDir) ? fs.readdirSync(h.generatedDir).length : 0, 0)
+})
+
+// ---------------------------------------------------------------------------
+// 09/10/2026: o que a primeira geração real mostrou.
+// ---------------------------------------------------------------------------
+
+test('mapFailure: falta de créditos (account_limit ou minimum_balance) vence o código de saída genérico de limite', () => {
+  assert.equal(mapFailure(5, 'account_limit'), 'insufficient_credits')
+  assert.equal(mapFailure(5, 'minimum_balance'), 'insufficient_credits')
+  assert.equal(mapFailure(undefined, 'account_limit'), 'insufficient_credits')
+  assert.equal(mapFailure(5, 'rate_limit'), 'limit_error', 'limite de requisições continua genérico')
+  assert.equal(mapFailure(5, 'request_too_large'), 'limit_error')
+})
+
+test('falta de créditos tem mensagem própria, que diz do saldo mínimo para imagem e para adicionar créditos', async () => {
+  for (const codigo of ['account_limit', 'minimum_balance']) {
+    const h = harness({ runImage: async () => ({ started: true, ok: false, exitCode: 5, stdout: failureEnvelope(codigo) }) })
+    const result = await h.service.generate({ prompt: 'x', model: MODEL })
+    assert.equal(result.code, 'insufficient_credits', codigo)
+    assert.equal(result.message, MESSAGES.insufficient_credits)
+    assert.equal(JSON.stringify(result).includes(SECRET), false)
+  }
+  assert.match(MESSAGES.insufficient_credits, /mínimo/)
+  assert.match(MESSAGES.insufficient_credits, /créditos/)
+})
+
+test('Openia antigo (sem o comando image): código 2 sem envelope + versão abaixo de 0.2.0 vira openia_outdated', async () => {
+  const semComando = { started: true, ok: false, exitCode: 2, stdout: '' }
+  const versoes = []
+  const antigo = harness({ runImage: async () => semComando, readVersion: async () => { versoes.push('consultou'); return '0.1.0' } })
+  const result = await antigo.service.generate({ prompt: 'x', model: MODEL })
+  assert.equal(result.code, 'openia_outdated')
+  assert.equal(result.message, MESSAGES.openia_outdated)
+  assert.match(MESSAGES.openia_outdated, /0\.2\.0/)
+  assert.equal(versoes.length, 1)
+
+  for (const versao of ['0.2.0', '0.2.1', '1.0.0', null, 'lixo']) {
+    const h = harness({ runImage: async () => semComando, readVersion: async () => versao })
+    assert.equal((await h.service.generate({ prompt: 'x', model: MODEL })).code, 'generation_failed', String(versao))
+  }
+})
+
+test('a versão do Openia só é consultada no caso suspeito (código 2 sem envelope)', async () => {
+  let consultas = 0
+  const readVersion = async () => { consultas += 1; return '0.1.0' }
+  const casos = [
+    { started: true, ok: false, exitCode: 2, stdout: failureEnvelope('invalid_request') },
+    { started: true, ok: false, exitCode: 1, stdout: '' },
+    { started: true, ok: false, exitCode: 5, stdout: failureEnvelope('account_limit') },
+    { started: false },
+  ]
+  for (const resposta of casos) {
+    await harness({ runImage: async () => resposta, readVersion }).service.generate({ prompt: 'x', model: MODEL })
+  }
+  await harness({ runImage: child(), readVersion }).service.generate({ prompt: 'x', model: MODEL })
+  assert.equal(consultas, 0)
 })

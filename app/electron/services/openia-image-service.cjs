@@ -32,7 +32,7 @@ const path = require('node:path')
 const { randomUUID } = require('node:crypto')
 const spawnChildProcess = require('cross-spawn')
 const { ipcMain } = require('electron')
-const { resolveOpeniaSpawn } = require('./openia-service.cjs')
+const { resolveOpeniaSpawn, runOpeniaCommand } = require('./openia-service.cjs')
 const { killProcessTree } = require('../core/process-tree.cjs')
 const { MAX_ATTACHMENT_BYTES, isPathInside } = require('./file-attachments-ipc-handlers.cjs')
 
@@ -42,6 +42,8 @@ const CATALOG_MAX_BYTES = 2 * 1024 * 1024
 const CATALOG_CACHE_MS = 10 * 60_000
 // Openia: 100 s por tentativa e 1 tentativa extra (`--timeout`/`--retries`); o teto do Felixo dá folga.
 const IMAGE_TIMEOUT_MS = 240_000
+// `openia --version` é instantâneo; o prazo só cobre um Python lento para abrir.
+const VERSION_TIMEOUT_MS = 8_000
 const OPENIA_CALL_TIMEOUT_S = 100
 const OPENIA_RETRIES = 1
 const MAX_PROMPT_CHARS = 4_000
@@ -71,6 +73,9 @@ const MESSAGES = Object.freeze({
   openia_unavailable: 'Não foi possível executar o Openia.',
   authentication_error: 'A chave do OpenRouter não está configurada ou foi recusada. Configure no Openia.',
   limit_error: 'O OpenRouter recusou por limite ou falta de créditos.',
+  insufficient_credits:
+    'O OpenRouter recusou por falta de créditos: gerar imagem exige saldo mínimo na conta (US$ 1,00 em 09/10/2026). Adicione créditos e tente de novo.',
+  openia_outdated: 'O Openia instalado não gera imagem: é preciso a versão 0.2.0 ou mais nova. Atualize o Openia e tente de novo.',
   model_unavailable: 'O modelo escolhido não está disponível para gerar imagem agora.',
   network_error: 'Falha de rede ao falar com o OpenRouter.',
   generation_failed: 'O Openia não conseguiu gerar a imagem.',
@@ -112,6 +117,41 @@ const ERROR_CODE_TO_FAILURE = new Map([
   ['unsupported_mime', 'invalid_output'],
 ])
 
+/**
+ * Códigos do envelope mais específicos que o código de saída (ver `mapFailure`).
+ * O 402 do endpoint de imagens chega como `account_limit` ("Insufficient
+ * credits", mesmo com saldo abaixo do mínimo para imagem — medido em
+ * 09/10/2026 com US$ 0,77); o `minimum_balance` (Openia 0.2.1) é o texto
+ * explícito do mínimo, se o OpenRouter o mandar. Os dois pedem a mesma ação.
+ */
+const REFINED_ERROR_CODES = new Map([
+  ['account_limit', 'insufficient_credits'],
+  ['minimum_balance', 'insufficient_credits'],
+])
+
+/** Primeira versão do Openia com `openia image`. */
+const MIN_IMAGE_VERSION = [0, 2, 0]
+
+/**
+ * `openia --version` antes da 0.2.0? Só para o caso suspeito (saída 2 sem
+ * envelope: o Typer recusando um comando que não existe). Versão ilegível ou
+ * sem resposta não conta como antiga — o erro continua genérico.
+ */
+function isOutdatedOpeniaVersion(version) {
+  const match = /^(\d+)\.(\d+)\.(\d+)/.exec(String(version ?? '').trim())
+  if (!match) return false
+  const parts = match.slice(1).map(Number)
+  for (let index = 0; index < MIN_IMAGE_VERSION.length; index += 1) {
+    if (parts[index] !== MIN_IMAGE_VERSION[index]) return parts[index] < MIN_IMAGE_VERSION[index]
+  }
+  return false
+}
+
+async function readInstalledOpeniaVersion() {
+  const result = await runOpeniaCommand(['--version'], { timeoutMs: VERSION_TIMEOUT_MS })
+  return result.ok ? result.stdout.trim() : null
+}
+
 function fail(code, requestId) {
   return { ok: false, code, message: MESSAGES[code] ?? MESSAGES.generation_failed, ...(requestId ? { requestId } : {}) }
 }
@@ -123,6 +163,7 @@ function fail(code, requestId) {
  * @param {(artifact: object) => void} [deps.notify] Avisa o canvas (`canvas:image-generated`).
  * @param {() => Promise<object[]>} [deps.fetchCatalog] Catálogo público de modelos de imagem.
  * @param {(request: object) => object} [deps.runImage] Inicia o filho; padrão spawn real do Openia.
+ * @param {() => Promise<string | null>} [deps.readVersion] `openia --version`; só no caso suspeito de Openia antigo.
  */
 function createOpeniaImageService({
   userData,
@@ -130,6 +171,7 @@ function createOpeniaImageService({
   notify = () => {},
   fetchCatalog = fetchImageCatalog,
   runImage = runOpeniaImageProcess,
+  readVersion = readInstalledOpeniaVersion,
   now = () => Date.now(),
   timeoutMs = IMAGE_TIMEOUT_MS,
   fileSystem = fs,
@@ -256,7 +298,14 @@ function createOpeniaImageService({
     if (!result?.started) return { error: 'openia_unavailable' }
 
     const envelope = parseEnvelope(result.stdout)
-    if (!envelope) return { error: result.ok ? 'invalid_output' : 'generation_failed' }
+    if (!envelope) {
+      // Saída 2 sem envelope é o Typer recusando o comando: um Openia anterior
+      // à 0.2.0 não tem `image` (medido em 09/10/2026 com a 0.1.0).
+      if (!result.ok && result.exitCode === 2 && isOutdatedOpeniaVersion(await readVersion().catch(() => null))) {
+        return { error: 'openia_outdated' }
+      }
+      return { error: result.ok ? 'invalid_output' : 'generation_failed' }
+    }
     if (envelope.ok === false) return { error: mapFailure(result.exitCode, envelope.error?.code) }
     if (!result.ok) return { error: mapFailure(result.exitCode) }
     if (!Array.isArray(envelope.outputs) || envelope.outputs.length === 0) return { error: 'invalid_output' }
@@ -381,6 +430,10 @@ function parseEnvelope(stdout) {
 
 /** Falha do filho → código público. O código de saída é a parte estável do contrato; o `error.code` é reserva. */
 function mapFailure(exitCode, errorCode) {
+  // Um código do envelope que DETALHA a saída genérica vence: o 5 do Openia é
+  // qualquer limite (de requisições, de tamanho…), mas falta de créditos pede
+  // outra ação — adicionar saldo.
+  if (typeof errorCode === 'string' && REFINED_ERROR_CODES.has(errorCode)) return REFINED_ERROR_CODES.get(errorCode)
   if (EXIT_CODE_TO_FAILURE.has(exitCode)) return EXIT_CODE_TO_FAILURE.get(exitCode)
   if (typeof errorCode === 'string' && ERROR_CODE_TO_FAILURE.has(errorCode)) return ERROR_CODE_TO_FAILURE.get(errorCode)
   return 'generation_failed'
