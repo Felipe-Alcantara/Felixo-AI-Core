@@ -441,9 +441,14 @@ export function TerminalsPanel({
   return (
     // The wrapper is only an anchor: it never eats canvas clicks, and each of
     // the two states re-enables pointer events for itself while visible.
+    // It reaches the window's bottom edge: the status bar stops at the
+    // inspector's left edge (`right: 18rem`), so stopping above it left an
+    // empty strip of canvas under the panel. The puck keeps its old spot
+    // (bottom-10 = the former bottom-7 + bottom-3), clear of the status bar,
+    // which spans under it once the dock is collapsed.
     <div
       data-terminals-dock
-      className="pointer-events-none absolute bottom-7 right-0 top-12 z-20"
+      className="pointer-events-none absolute bottom-0 right-0 top-12 z-20"
     >
       {/* Collapsed, the dock shrinks away into this puck in the corner. Both
           states share the same bottom-right anchor, so the scale animation
@@ -457,7 +462,7 @@ export function TerminalsPanel({
         aria-hidden={!collapsed}
         tabIndex={collapsed ? 0 : -1}
         data-felixo-tour-anchor="inspector-puck"
-        className={`felixo-btn felixo-anim-corner-puck absolute bottom-3 right-3 flex items-center gap-2 rounded-full border border-white/10 bg-zinc-900 px-3 py-2 text-sm font-medium text-zinc-100 shadow-2xl hover:bg-zinc-800 ${
+        className={`felixo-btn felixo-anim-corner-puck absolute bottom-10 right-3 flex items-center gap-2 rounded-full border border-white/10 bg-zinc-900 px-3 py-2 text-sm font-medium text-zinc-100 shadow-2xl hover:bg-zinc-800 ${
           collapsed ? 'felixo-anim-corner-puck-shown' : 'felixo-anim-corner-puck-hidden'
         }`}
       >

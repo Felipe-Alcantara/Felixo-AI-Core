@@ -1023,7 +1023,7 @@ export const chromeSurfaces: InventoryElement[] = [
         task: '3ec91f95-497e-818f-b9f2-f9710605c303',
       },
     ],
-    overlap: 'Wrapper data-terminals-dock absolute (top-12, bottom-7, right-0) z-20, pointer-events-none; o inspector (w-72) e o puck (bottom-3 right-3) religam os cliques. Abaixo da topbar (começa em 48 px) e acima da statusbar; topbar, statusbar e Mini Map reservam 18rem (1rem com o puck) via :has(). Publica a largura em reportInspectorWidth, que encolhe painel e gaveta.',
+    overlap: 'Wrapper data-terminals-dock absolute (top-12, bottom-0, right-0) z-20, pointer-events-none; o inspector (w-72) e o puck (bottom-10 right-3) religam os cliques. Abaixo da topbar (começa em 48 px) e até a borda de baixo da janela, ao lado da statusbar (que para em right: 18rem); o puck fica acima da statusbar; topbar, statusbar e Mini Map reservam 18rem (1rem com o puck) via :has(). Publica a largura em reportInspectorWidth, que encolhe painel e gaveta.',
   },
   {
     id: 'chrome-ambient-layer',
