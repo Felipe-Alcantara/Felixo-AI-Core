@@ -469,10 +469,12 @@ conteúdo), a contagem de documentos e o índice. A lixeira tira um guia da list
 
 **Guia privado.** Quando você clica (Sincronizar, Adicionar guia, a lixeira, Voltar ao
 padrão ou "Usar estes guias"), o Git pode abrir a janela de login do sistema — no
-Windows, a do Git Credential Manager. A sincronização que o app faz sozinho nunca abre
-essa janela: se um guia pede login, aparece no canto de baixo o aviso **Um guia do
-System Design pede login**, e **Fazer login e sincronizar** tenta de novo podendo
-pedir. O GitHub também pede login para um endereço que não existe, então confira o
+Windows, a do Git Credential Manager. No macOS e no Linux essa janela só existe com o
+Git Credential Manager instalado; sem ele, salve a credencial do Git pelo terminal (por
+exemplo, com `gh auth login`) e sincronize de novo. A sincronização que o app faz
+sozinho nunca abre essa janela: se um guia pede login, aparece no canto de baixo o
+aviso **Um guia do System Design pede login**, e **Fazer login e sincronizar** tenta
+de novo podendo pedir. O GitHub também pede login para um endereço que não existe, então confira o
 endereço antes de entrar. Enquanto isso, os agentes seguem com o último conteúdo
 baixado.
 

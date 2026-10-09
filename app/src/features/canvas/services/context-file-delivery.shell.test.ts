@@ -81,7 +81,9 @@ describe.runIf(process.platform === 'win32')('linha de leitura no Windows', () =
     expect(run(lineAfter(text, 'No PowerShell'))).toMatch(ARGS_PRINTED)
     // Sem o &, o caminho entre aspas é uma string e "context" um token inesperado.
     expect(() => run(lineAfter(text, 'Leia com'))).toThrow()
-  })
+    // Dois PowerShell de verdade: cada um leva segundos para abrir numa máquina
+    // ocupada, e o prazo padrão de 5 s reprovava sem nada de errado na linha.
+  }, 30_000)
 
   const gitBash = path.join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Git', 'bin', 'bash.exe')
   it.runIf(fs.existsSync(gitBash))('o Git Bash roda a linha comum', () => {

@@ -13,11 +13,11 @@ function createSystemDesignRepository(database) {
   const connection = database?.connection ?? database
 
   if (!connection?.prepare) {
-    throw new Error('Conexao SQLite invalida para system-design repository.')
+    throw new Error('Conexão SQLite inválida para o repositório do System Design.')
   }
 
   function forSource(sourceKey) {
-    const key = requireString(sourceKey, 'Fonte do System Design invalida.')
+    const key = requireString(sourceKey, 'Fonte do System Design inválida.')
 
     return {
       list() {
@@ -34,7 +34,7 @@ function createSystemDesignRepository(database) {
       get(documentPath) {
         const row = connection
           .prepare('SELECT * FROM system_design_source_documents WHERE source_key = ? AND path = ?')
-          .get(key, requireString(documentPath, 'Path do documento invalido.'))
+          .get(key, requireString(documentPath, 'Caminho do documento inválido.'))
 
         return row ? mapDocumentRow(row) : null
       },
@@ -129,7 +129,7 @@ function createSystemDesignRepository(database) {
      * @returns {number} documentos movidos
      */
     migrateLegacyDocuments(sourceKey) {
-      const key = requireString(sourceKey, 'Fonte do System Design invalida.')
+      const key = requireString(sourceKey, 'Fonte do System Design inválida.')
       connection.exec('BEGIN IMMEDIATE')
       try {
         const moved =
@@ -159,11 +159,11 @@ function createSystemDesignRepository(database) {
 
 function normalizeDocument(document) {
   if (!document || typeof document !== 'object') {
-    throw new Error('Documento invalido.')
+    throw new Error('Documento inválido.')
   }
 
-  const path = requireString(document.path, 'Path do documento invalido.')
-  const title = requireString(document.title, 'Titulo do documento invalido.')
+  const path = requireString(document.path, 'Caminho do documento inválido.')
+  const title = requireString(document.title, 'Título do documento inválido.')
   const content = typeof document.content === 'string' ? document.content : ''
   const summary = typeof document.summary === 'string' ? document.summary : ''
   const sourceSha = getOptionalTrimmed(document.sourceSha)

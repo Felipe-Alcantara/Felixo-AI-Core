@@ -114,6 +114,16 @@ describe('describeGitFailure', () => {
     assert.match(describeGitFailure(GIT_FAILURE.LOGIN, { interactive: true }), /login não foi concluído/)
   })
 
+  it('com clique fora do Windows, não fala em cancelar e diz como salvar a credencial', () => {
+    for (const platform of ['darwin', 'linux']) {
+      const text = describeGitFailure(GIT_FAILURE.LOGIN, { interactive: true, platform })
+      assert.doesNotMatch(text, /cancelado/, platform)
+      assert.match(text, /Git Credential Manager/, platform)
+      assert.match(text, /gh auth login/, platform)
+    }
+    assert.match(describeGitFailure(GIT_FAILURE.LOGIN, { interactive: true, platform: 'win32' }), /cancelado/)
+  })
+
   it('timeout diz o prazo de cada caso', () => {
     assert.match(describeGitFailure(GIT_FAILURE.TIMEOUT, { interactive: false }), /60 s/)
     assert.match(describeGitFailure(GIT_FAILURE.TIMEOUT, { interactive: true }), /180 s/)
