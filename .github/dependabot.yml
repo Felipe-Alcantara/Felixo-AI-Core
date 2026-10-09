@@ -18,7 +18,7 @@ updates:
       - dependencies
       - javascript
     commit-message:
-      prefix: deps
+      prefix: chore
       include: scope
     groups:
       npm-security:
@@ -39,7 +39,7 @@ updates:
       - dependencies
       - python
     commit-message:
-      prefix: deps
+      prefix: chore
       include: scope
     groups:
       pip-security:
