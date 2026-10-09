@@ -467,6 +467,15 @@ branch; o guia é sincronizado em seguida. Cada guia mostra o próprio estado
 (sincronizado, ainda não sincronizado ou sem acesso à fonte — usando o último
 conteúdo), a contagem de documentos e o índice. A lixeira tira um guia da lista.
 
+**Guia privado.** Quando você clica (Sincronizar, Adicionar guia, a lixeira, Voltar ao
+padrão ou "Usar estes guias"), o Git pode abrir a janela de login do sistema — no
+Windows, a do Git Credential Manager. A sincronização que o app faz sozinho nunca abre
+essa janela: se um guia pede login, aparece no canto de baixo o aviso **Um guia do
+System Design pede login**, e **Fazer login e sincronizar** tenta de novo podendo
+pedir. O GitHub também pede login para um endereço que não existe, então confira o
+endereço antes de entrar. Enquanto isso, os agentes seguem com o último conteúdo
+baixado.
+
 - **Padrão do app:** sem escolha sua, vale o Felixo System Design. Se o padrão do app
   mudar numa atualização, você passa a recebê-lo.
 - **Lista escolhida por você:** nunca é trocada por um novo padrão do app. O botão

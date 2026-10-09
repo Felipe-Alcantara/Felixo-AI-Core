@@ -76,6 +76,12 @@ outro mecanismo seguro configurado no sistema; não coloque usuário, senha ou
 token na URL do repositório. Se uma URL antiga contiver credenciais, o app as
 remove antes de persistir a configuração ou iniciar o Git.
 
+O Git só pode **pedir login** quando você clica (Sincronizar, adicionar ou tirar um
+guia, voltar ao padrão, "Usar estes guias"): aí a janela de login do sistema pode
+abrir. A sincronização automática nunca pede: se um guia precisar de login (é
+privado, ou o endereço está errado), ela falha na hora, o app mostra um aviso com o
+botão **Fazer login e sincronizar** e os agentes seguem com o último conteúdo.
+
 Falhas de clone/fetch/reset mostram somente a etapa, o código, o branch e o
 destino sem userinfo. Tokens, parâmetros sensíveis, cabeçalhos de autorização,
 stderr cru e a linha de comando completa são redigidos antes de `lastError`, do

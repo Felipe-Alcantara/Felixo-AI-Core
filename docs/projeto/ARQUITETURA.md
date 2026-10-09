@@ -1364,6 +1364,19 @@ repositório. A autenticação de repositórios privados fica a cargo do
 credential helper do Git ou do gerenciador de credenciais do sistema; segredo
 embutido na URL não é um mecanismo suportado.
 
+**Quando o Git pode pedir login** (`core/git-failure.cjs`, 09/10/2026). Todo `git`
+roda com `GIT_TERMINAL_PROMPT=0` (o app não tem terminal; num `npm run dev` a
+pergunta iria para um terminal que ninguém vê). Sem clique da pessoa
+(`interactive: false`, o padrão), também `GCM_INTERACTIVE=never` (o Git Credential
+Manager falha em vez de abrir janela) e `SSH_ASKPASS_REQUIRE=never`, com prazo de
+60 s; com clique, a janela de login do sistema pode abrir e o prazo é de 180 s.
+Credencial já salva vale nos dois casos. `classifyGitFailure` lê o motivo do erro
+cru, antes da redação (`login`, `not-found`, `branch`, `network`, `timeout`,
+`other`); só esse nome acompanha o erro redigido, e `describeGitFailure` põe a frase
+para a pessoa antes do diagnóstico. Um `fetch` que falha por login, repositório
+sumido, rede ou prazo não apaga o clone em cache para tentar de novo (o re-clone
+falharia igual).
+
 Erros do Git passam por `git-secret-redaction.cjs` antes de qualquer `lastError`,
 evento do QA Logger ou resposta IPC. O diagnóstico mantém etapa, código,
 branch e destino seguro, usa stderr apenas depois da redação e elimina a linha
@@ -1407,16 +1420,23 @@ de uma pasta local não sai dela (comparação por caminho real).
 `guides` (lista inteira) ou o par `repoUrl`/`branch` da v2 (lista branca).
 `system-design:sync` sem argumento sincroniza os guias do usuário; com
 `{ projectRoot }`, só os guias git que **já valem** no projeto (escolha no app e
-arquivo confirmado) — um arquivo pendente nunca chega ao `git clone`. Sincronizações
+arquivo confirmado) — um arquivo pendente nunca chega ao `git clone`. `{ interactive:
+true }` marca o clique da pessoa; sem ele o Git não pede login. Sincronizações
 da mesma fonte ao mesmo tempo compartilham a mesma execução (a tela e o canvas
-chegavam juntos e o segundo clone falhava na mesma pasta).
+chegavam juntos e o segundo clone falhava na mesma pasta); um clique que chega com
+uma automática em andamento espera por ela e, se ela falhou por login, roda de novo
+podendo pedir. Cada guia que falha volta com `reason` e `label`.
 `system-design:resolve-project` e `system-design:save-project` expõem e gravam a
 camada de projeto; `list-documents`/`get-document` aceitam a chave do guia (git pelo
 índice, `local:` pelo disco, reautorizado).
 
 **Renderer.** `useProjectGuides` resolve a camada das pastas em uso (cwds dos
 terminais, projetos ativos do chat) e sincroniza os guias de projeto uma vez por
-sessão. No canvas, criar um terminal espera a resolução da pasta (com prazo) para o
+sessão. As duas sincronizações automáticas (a da sessão e a de projeto) passam por
+`runAutomaticSync` (`system-design-sync.ts`), que nunca deixa o Git pedir login e
+anuncia o guia que falhou por login; `SystemDesignLoginNotice` (montado no `App`,
+no canto esquerdo) mostra o aviso uma vez por guia e sessão, e o botão dele
+sincroniza com `interactive: true`. Os cliques da tela passam `interactive: true`. No canvas, criar um terminal espera a resolução da pasta (com prazo) para o
 lembrete nascer gravado com os guias certos; o render monta o lembrete só a partir de
 estado. Com só o padrão do app, o lembrete é idêntico byte a byte ao texto histórico;
 com lista ou projeto, `buildDefaultQualityStandardPrompt` usa o modelo de lista, e
