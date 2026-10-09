@@ -6376,3 +6376,26 @@ Pedido do Felipe: colocar o repositório no padrão de git e versionamento do Fe
 - O histórico antigo continua com os commits "Merge …" e "deps(deps)": não se reescreve a `main`.
 - A cópia de `http-cache-semantics` embutida no pacote `npm` 11.19.1 continua na 4.2.0 até sair um npm novo com a correção.
 - Existem duas releases com a mesma tag `v0.1.8` (de 09/08/2026); ficou para uma task.
+
+## 2026-10-09 — System Design: migração v2 → v3 conferida numa instalação real
+
+### Contexto
+
+A migração da configuração do System Design (v1/v2 → v3, com documentos por fonte na migração SQL `018`) só tinha sido provada com configurações sintéticas. A instalação de uso diário do Felipe (pacote `.deb`, aberta pelo autostart) foi de 0.1.443 para 0.1.445 em 09/10/2026 às 12:03:35 (`dpkg.log`), e a 0.1.445 é a primeira com a v3 — a migração rodou sozinha na primeira abertura.
+
+### Como foi conferido
+
+Sem abrir, fechar ou escrever no app: cópia dos bancos com a API de backup do SQLite a partir de conexões `mode=ro`, lidas fora do perfil. O "antes" é o retrato `felixo.antes-monolito-20261008-093432.sqlite` (08/10, 09:34, ainda na 0.1.440, migração SQL 17); o "depois" é o banco vivo às 13:35.
+
+### Medido
+
+- Antes: `system-design.config` = `schemaVersion 2`, `enabled: true`, `sourceMode: default`, entregue `Felixo-System-Design.git#main` no `cc4aae7`, sincronizado em 2026-09-27T05:05:36Z; 32 documentos em `system_design_documents`.
+- Depois: migração SQL 18; `system-design.config` = `{"schemaVersion":3,"enabled":true,"sourceMode":"default","customSources":[]}` gravada uma única vez, em 2026-10-09T15:04:14Z (primeira abertura da 0.1.445); `system-design.sync` com a fonte `…/Felixo-System-Design#main` no mesmo `cc4aae7`; `system_design_documents` vazia e 32 documentos em `system_design_source_documents` na chave da fonte; o clone antigo `config/system-design/repo` removido e o novo em `sources/4b15ed3220559c4b/repo` (= `sha256("…/Felixo-System-Design#main")[:16]`) no `cc4aae7`.
+- A sincronização da sessão (13:31:17, log de QA) releu a configuração sem regravá-la (`updated_at` continuou 15:04:14Z) e registrou "Sincronizado 32 doc(s) (sha=cc4aae7, removidos=0)".
+- Resultado: sem reset silencioso — mesma fonte, ligada, no modo padrão, com o mesmo commit e os mesmos 32 documentos.
+
+### Limitações
+
+- O retrato "antes" é de 08/10 09:34; entre ele e a atualização a 0.1.443 rodou e pode ter sincronizado de novo (o commit de origem era o mesmo).
+- O app não foi reaberto depois da migração (é onde esta sessão roda); a idempotência ficou provada entre leituras da mesma sessão, não entre aberturas.
+- Uma instalação com fonte escolhida à mão (`sourceMode: custom`, como a do André se apontar para o Doktor) não foi conferida.
