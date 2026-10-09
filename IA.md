@@ -7977,3 +7977,39 @@ visível sob o microfone (captura) e fechou com clique fora, Esc e "Fechar"; cli
 descoberta de sessão do Claude que **já falham no `main` limpo** neste Windows; não são desta mudança.
 
 Estado: concluído.
+
+## 2026-10-09 — Revisão de coerência dos commits de 08–09/10 e ajustes
+
+Revisão dos 18 commits entre `e370a88` e `e567563` (System Design por projeto e login só no clique, launcher na
+`main`, política de git, #108 do Notion). As camadas IPC estão consistentes (handlers, preload, `vite-env.d.ts`), a
+migração 018 bate com o repositório e é idempotente, todo `git` do System Design passa por `runGit` com ambiente e
+prazo, e o launcher não usa mais `production` no código. O #108 manteve o fechamento ao clicar fora do #107.
+
+Corrigido nesta passada:
+
+- **Login de guia privado fora do Windows.** Com `GIT_TERMINAL_PROMPT=0` sempre, no macOS e no Linux sem o Git
+  Credential Manager o clique não abre janela nenhuma, e a frase dizia que o login "foi cancelado".
+  `describeGitFailure` agora recebe a plataforma: fora do Windows diz que a janela depende do GCM e manda salvar a
+  credencial pelo terminal (`gh auth login`). Teste novo em `git-failure.test.cjs`; o GUIA-USUARIO diz o mesmo.
+- **Acentos** nas mensagens de erro do `system-design-repository.cjs`, que podem chegar à tela.
+- **`.env.example`** ainda sugeria `FELIXO_PRODUCTION_BRANCH=production`; agora `main`.
+- **Teste do PowerShell** (`context-file-delivery.shell.test.ts`): abre dois PowerShell reais; com a máquina ocupada
+  cada um levou ~3,8 s e o prazo padrão de 5 s reprovava. Prazo de 30 s só nesse teste.
+
+Ficou registrado, sem mudança:
+
+- **Dois `IA.md`.** `docs/README.md` define a raiz como registro das sessões recentes e `docs/projeto/IA.md` como
+  contexto versionado, mas as sessões de 08–09/10 registraram no segundo. Escolher um só é decisão do Felipe.
+- A entrada de 08/10 em `docs/projeto/IA.md` ainda cita o GCM no Windows como pendente; a de 09/10 resolveu.
+- Instalação antiga sem `system-design.config` gravado não migra documentos da tabela antiga (`loadState`). É só
+  cache: a próxima sincronização repõe.
+- Corrida rara: sincronização automática que falha por login logo após um clique ainda mostra o aviso de login.
+- A política de git manda commitar direto na `main`, mas a proteção do `main` recusa push direto de quem não é
+  admin (15 checks obrigatórios); para quem não é admin, o caminho continua sendo PR.
+
+Validação: `git-failure`, handlers do System Design, armazenamento e origem do System Design (97 testes) e o teste do
+PowerShell passam; `eslint` dos arquivos tocados limpo; `typecheck` e `lint` completos limpos antes das mudanças.
+A suíte completa de testes node e o vitest inteiro **não** rodaram até o fim: a máquina ficou sem memória e a
+sessão interrompeu a suíte. O CI do PR roda tudo.
+
+Estado: concluído.

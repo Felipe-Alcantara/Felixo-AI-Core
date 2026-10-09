@@ -92,16 +92,24 @@ function classifyGitFailure(error) {
  * A frase para a pessoa, antes do diagnóstico técnico. `null` quando o motivo
  * não diz nada além do que o diagnóstico já diz.
  *
+ * Fora do Windows, a janela de login só existe com o Git Credential Manager
+ * instalado: o terminal fica fechado (`GIT_TERMINAL_PROMPT=0`) e o keychain do
+ * macOS só lê credencial já salva. Sem o GCM, o clique falha sem abrir nada —
+ * então a frase não fala em "cancelado" e diz como salvar a credencial.
+ *
  * @param {string} reason
- * @param {{ interactive?: boolean }} options
+ * @param {{ interactive?: boolean, platform?: NodeJS.Platform }} options
  * @returns {string | null}
  */
-function describeGitFailure(reason, { interactive = false } = {}) {
+function describeGitFailure(reason, { interactive = false, platform = process.platform } = {}) {
   switch (reason) {
     case GIT_FAILURE.LOGIN:
-      return interactive
+      if (!interactive) {
+        return 'O repositório pede login: ele é privado ou o endereço está errado. Confira o endereço; se ele for privado, clique em Sincronizar para entrar com a sua conta do Git.'
+      }
+      return platform === 'win32'
         ? 'O login não foi concluído: ele foi cancelado, ou a conta não tem acesso a esse repositório. Confira o endereço e tente de novo.'
-        : 'O repositório pede login: ele é privado ou o endereço está errado. Confira o endereço; se ele for privado, clique em Sincronizar para entrar com a sua conta do Git.'
+        : 'O login não foi concluído. Neste sistema o Git só abre uma janela de login com o Git Credential Manager instalado; sem ele, salve a credencial do Git pelo terminal (por exemplo, com `gh auth login`) e sincronize de novo. Se a credencial já está salva, confira o endereço e se a conta tem acesso a esse repositório.'
     case GIT_FAILURE.NOT_FOUND:
       return 'O repositório não foi encontrado: confira o endereço, ou se a sua conta do Git tem acesso a ele.'
     case GIT_FAILURE.BRANCH:
