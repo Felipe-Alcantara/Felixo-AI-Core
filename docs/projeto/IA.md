@@ -6399,3 +6399,34 @@ Sem abrir, fechar ou escrever no app: cópia dos bancos com a API de backup do S
 - O retrato "antes" é de 08/10 09:34; entre ele e a atualização a 0.1.443 rodou e pode ter sincronizado de novo (o commit de origem era o mesmo).
 - O app não foi reaberto depois da migração (é onde esta sessão roda); a idempotência ficou provada entre leituras da mesma sessão, não entre aberturas.
 - Uma instalação com fonte escolhida à mão (`sourceMode: custom`, como a do André se apontar para o Doktor) não foi conferida.
+
+## 2026-10-09 — System Design: guia privado só pede login no clique
+
+### Contexto
+
+Task "permitir escolher a fonte (URL e branch) pela interface": o formulário já tinha saído em 08/10; faltava tratar o guia privado. O `git` rodava sem nenhum controle de interação: no Windows, a janela do Git Credential Manager podia abrir numa sincronização automática (ao abrir o app), inclusive por um endereço digitado errado (o GitHub pede login para repositório que não existe); num `npm run dev`, o Git perguntava "Username for …" no terminal de quem rodou.
+
+### Decisões do Felipe
+
+- A janela de login só abre quando a pessoa clica (Sincronizar, adicionar/tirar guia, voltar ao padrão, ligar, "Usar estes guias"); a sincronização automática nunca pede e falha na hora.
+- Falha da automática por login: aviso na tela.
+- Validação do Windows só pela CI (teste automático nos três sistemas).
+
+### O que mudou
+
+- `electron/core/git-failure.cjs` (novo): `gitEnvironment` (sempre `GIT_TERMINAL_PROMPT=0`; sem clique, `GCM_INTERACTIVE=never` e `SSH_ASKPASS_REQUIRE=never`), prazos 60 s / 180 s, `classifyGitFailure` (lê o erro cru antes da redação) e `describeGitFailure`.
+- `system-design-service.cjs`: `interactive`, ambiente e prazo em todo `git`; o erro redigido leva `reason`; `fetch` que falha por login, repositório sumido, rede ou prazo mantém o clone em cache.
+- `system-design-ipc-handlers.cjs`: `system-design:sync` aceita `{ interactive }`; a mensagem de falha começa pela frase para a pessoa; cada guia volta com `reason` e `label`; a deduplicação por fonte "sobe de nível" quando um clique chega durante uma automática que falhou por login.
+- Renderer: `system-design-sync.ts` (`runAutomaticSync`) para as duas automáticas; `SystemDesignLoginNotice` no `App` (NoticeToast com a opção nova `placement="left"`, para não cobrir os avisos do centro e da direita); os cliques passam `interactive: true`; inventário do canvas com o aviso.
+
+### Medido
+
+- Testes que reprovaram antes da mudança: 5 do serviço (ambiente, prazo, motivo, cache mantido, git real) e 3 dos handlers; 2 mutações no `runAutomaticSync` (pedir com login, esquecer o "uma vez por sessão") derrubam 1 teste cada.
+- Git real num terminal falso (`script`) contra um servidor local que responde 401: sem `GIT_TERMINAL_PROMPT=0` o Git pergunta "Username for 'http://127.0.0.1:…'"; com ela, "terminal prompts disabled". O teste de integração faz o mesmo sem terminal e roda na CI dos três sistemas (no Windows, com o Git Credential Manager do runner).
+- App isolado (código do worktree, `dist`, Xvfb, servidor local que exige senha): clicar em Adicionar guia → 1 pedido e "O login não foi concluído…" na seção, sem aviso flutuante; sessão nova → 1 pedido, aviso "Um guia do System Design pede login" no canto esquerdo, ao lado do aviso do Modo Performance sem cobri-lo; "Fazer login e sincronizar" → 1 pedido, aviso some; console sem erros.
+- Bateria: lint e build ok; vitest 3035 passaram (5 pulados); suíte Node 2557 testes (2554 passaram, 3 pulados) no Node 25 e no 22 — no 22, `process-tree.test.cjs:198` falhou uma vez sob carga e passou em 3 de 3 rodadas isoladas (task aberta).
+
+### Limitações
+
+- A janela real de login do Windows com um guia privado de verdade não foi vista (decisão: só a CI).
+- Achado do teste no app: sem locale UTF-8 (`env -i` sem `LANG`), o Electron não carrega o preload de um caminho com acentos e a interface mostra "Indisponível fora do app desktop" sem nenhum erro no console; com `LANG=C.UTF-8` funciona.
