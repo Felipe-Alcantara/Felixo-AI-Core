@@ -29,10 +29,10 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 
 ## Números
 
-- **Elementos:** 95 (8 blocos, 16 ferramentas, 71 outras superfícies)
+- **Elementos:** 96 (8 blocos, 16 ferramentas, 72 outras superfícies)
 - **Controles:** 358, dos quais 55 com teste específico
 - **Elementos sem nenhum teste:** 4
-- **Lacunas:** 274 (alto 10, médio 147, baixo 117), em 78 tasks
+- **Lacunas:** 275 (alto 10, médio 147, baixo 118), em 78 tasks
 
 ## Moldura do canvas
 
@@ -2748,6 +2748,28 @@ Sem controle próprio: as ações vêm de outros elementos.
 | HardwareNotices.tsx:124 chama void acknowledgeGpuFallback(), que rejeita quando a IPC falha (o teste do gpu-status-store confirma): unhandledrejection no QA Logger e o aviso volta na próxima abertura sem a pessoa saber por quê. | baixo | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 | A caixa (22rem, embaixo no centro, z 50) cobre a barra de status (18) e a dock (20) no centro de baixo; só a convivência com o card do tour é medida (SB1). | baixo | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
 
+### Aviso de guia do System Design que pede login
+
+- **ID:** `system-design-aviso-login` · **Dono:** `src/features/shared/system-design/SystemDesignLoginNotice.tsx`
+- **Persistência:** nenhuma (fila do aviso só no estado do componente; guias já avisados num Set do módulo system-design-sync, por sessão)
+- **IPC:** `system-design:sync`
+- **Depende de:** `subscribeSystemDesignLoginNeeded (system-design-events)`, `runAutomaticSync (system-design-sync)`, `describeLoginNotice (system-design-presentation)`, `NoticeToast (placement left)`
+- **Sobreposição:** NoticeToast com placement left: wrapper fixed inset-x-0 bottom-4 z 50 (pointer-events none) e a caixa de 22rem no canto ESQUERDO, para não cobrir os avisos de hardware (centro) nem o de instalação das CLIs (direita), que podem aparecer junto. Cobre o rodapé da barra lateral (Limpar, versão) enquanto está aberto. Montado no App: vale no canvas e no chat.
+- **Testes:** `src/features/shared/system-design/system-design-sync.test.ts`, `electron/services/system-design-ipc-handlers.test.cjs`, `electron/core/git-failure.test.cjs`
+
+| Estado | Quando |
+| --- | --- |
+| normal | Nenhuma sincronização automática falhou por login nesta sessão: nada aparece. |
+| error | A sincronização automática (a da sessão, ao montar a seção System Design, ou a de um projeto, pelo useProjectGuides) voltou com reason "login" num guia: "Um guia do System Design pede login" com o nome do guia (e o projeto, se for de projeto), "Fazer login e sincronizar", "Agora não" e ×. Um aviso por vez; o mesmo guia avisa uma vez por sessão (runAutomaticSync). |
+| success | "Fazer login e sincronizar" some com o aviso e sincroniza com interactive: true; o resultado (ou o motivo, se o login não foi concluído) aparece no estado do guia em Configurações. |
+| disabled | Sem ponte (fora do app desktop): runAutomaticSync não roda e nada aparece. |
+
+Sem controle próprio: as ações vêm de outros elementos.
+
+| Lacuna | Risco | Task |
+| --- | --- | --- |
+| Nenhum smoke abre o aviso nem clica "Fazer login e sincronizar": a única passada pela tela foi a validação manual de 09/10/2026 (app isolado, servidor local que exige senha). | baixo | `3ec91f95-497e-8141-b6c1-d1833aac5664` |
+
 ### Tela "A interface não conseguiu carregar"
 
 - **ID:** `tela-recuperacao-renderer` · **Dono:** `src/RendererRecoveryBoundary.tsx`
@@ -2840,7 +2862,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` — 19 lacunas
 - `3ec91f95-497e-8113-afb0-eecb92e4eb23` — 1 lacuna
 - `3ec91f95-497e-8122-a08b-d26d4991acca` — 1 lacuna
-- `3ec91f95-497e-8141-b6c1-d1833aac5664` — 12 lacunas
+- `3ec91f95-497e-8141-b6c1-d1833aac5664` — 13 lacunas
 - `3ec91f95-497e-8143-a0b4-cceb0ace7599` — 6 lacunas
 - `3ec91f95-497e-8176-bef0-dfde828936dc` — 6 lacunas
 - `3ec91f95-497e-818f-b9f2-f9710605c303` — 14 lacunas

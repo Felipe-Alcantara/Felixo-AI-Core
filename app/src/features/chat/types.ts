@@ -293,6 +293,8 @@ export type {
   SystemDesignGuideInput,
   SystemDesignProject,
   SystemDesignProjectChange,
+  SystemDesignSyncRequest,
+  SystemDesignSyncResult,
   SystemDesignSyncState,
   SystemDesignDocument,
   SystemDesignDocumentSummary,

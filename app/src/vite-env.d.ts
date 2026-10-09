@@ -24,6 +24,8 @@ import type {
   SystemDesignDocumentSummary,
   SystemDesignProject,
   SystemDesignProjectChange,
+  SystemDesignSyncRequest,
+  SystemDesignSyncResult,
   TerminalOutputEvent,
 } from './features/chat/types'
 import type {
@@ -1055,14 +1057,7 @@ declare global {
         ) => Promise<
           CliInvokeResult & { document?: SystemDesignDocument }
         >
-        sync: (request?: { projectRoot?: string }) => Promise<
-          CliInvokeResult & {
-            config?: SystemDesignConfig
-            indexedCount?: number
-            removedCount?: number
-            results?: { key: string; ok: boolean; message?: string }[]
-          }
-        >
+        sync: (request?: SystemDesignSyncRequest) => Promise<CliInvokeResult & SystemDesignSyncResult>
         resetCache: () => Promise<
           CliInvokeResult & { cleared?: number; config?: SystemDesignConfig }
         >

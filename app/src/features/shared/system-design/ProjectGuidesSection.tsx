@@ -37,7 +37,8 @@ async function saveProject(
   announceSystemDesignProjects(root)
   if (sync) {
     // Só guias que já valem (escolha no app, arquivo confirmado) são buscados.
-    await bridge.sync?.({ projectRoot: root })
+    // É clique da pessoa: o Git pode abrir a janela de login.
+    await bridge.sync?.({ projectRoot: root, interactive: true })
     announceSystemDesignProjects(root)
   }
   return { ok: true }

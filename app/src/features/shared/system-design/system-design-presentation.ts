@@ -2,6 +2,7 @@ import type {
   SystemDesignConfig,
   SystemDesignGuide,
   SystemDesignGuideOrigin,
+  SystemDesignLoginNeeded,
   SystemDesignProject,
 } from './types'
 
@@ -200,4 +201,35 @@ export function describeProjectFile(file: SystemDesignProject['file']): SystemDe
         tone: 'warn',
       }
   }
+}
+
+export type SystemDesignLoginNoticeView = {
+  title: string
+  description: string
+  primaryLabel: string
+  secondaryLabel: string
+  dismissLabel: string
+}
+
+/**
+ * Texto do aviso de quando a sincronização automática não atualizou um guia
+ * porque ele pede login. Diz qual guia, por quê, que os agentes continuam com
+ * o que já tinham e o que o botão faz (o clique é o que pode abrir o login).
+ */
+export function describeLoginNotice(notice: SystemDesignLoginNeeded): SystemDesignLoginNoticeView {
+  const project = notice.projectRoot ? ` do projeto ${lastPathSegment(notice.projectRoot)}` : ''
+  return {
+    title: 'Um guia do System Design pede login',
+    description:
+      `O guia "${notice.label}"${project} não foi atualizado: o repositório pede login ` +
+      '(é privado, ou o endereço está errado). Os agentes seguem com o último conteúdo baixado.',
+    primaryLabel: 'Fazer login e sincronizar',
+    secondaryLabel: 'Agora não',
+    dismissLabel: 'Dispensar aviso de login do System Design',
+  }
+}
+
+function lastPathSegment(value: string): string {
+  const parts = value.split(/[\\/]+/).filter(Boolean)
+  return parts[parts.length - 1] ?? value
 }

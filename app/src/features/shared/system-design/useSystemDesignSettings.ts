@@ -2,12 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { readSystemDesignDocument } from './system-design-document'
 import { announceSystemDesignConfig, subscribeSystemDesignConfig } from './system-design-events'
+import { runAutomaticSync } from './system-design-sync'
 import type {
   SystemDesignConfig,
   SystemDesignConfigChange,
   SystemDesignDocumentSummary,
   SystemDesignGuide,
   SystemDesignGuideInput,
+  SystemDesignSyncResult,
 } from './types'
 
 /**
@@ -59,7 +61,7 @@ export function useSystemDesignSettings() {
     error: null,
   })
   const previousEnabledRef = useRef(false)
-  const syncRef = useRef<() => Promise<void>>(async () => {})
+  const syncRef = useRef<(options?: { interactive?: boolean }) => Promise<void>>(async () => {})
 
   // Um índice por guia: com a lista de guias, cada fonte tem o seu.
   const refreshDocuments = useCallback(async (guides?: SystemDesignGuide[]) => {
@@ -112,7 +114,9 @@ export function useSystemDesignSettings() {
       // Module-level flag prevents duplicate syncs from multiple mount points.
       if (config.enabled && !autoSyncTriggered) {
         autoSyncTriggered = true
-        void syncRef.current()
+        // A da sessão é automática: o Git não pode pedir login (ver
+        // system-design-sync.ts); um guia que pede vira aviso na tela.
+        void syncRef.current({ interactive: false })
       }
     } catch (error) {
       setState((current) => ({
@@ -123,13 +127,25 @@ export function useSystemDesignSettings() {
     }
   }, [refreshDocuments])
 
-  const sync = useCallback(async () => {
-    if (!window.felixo?.systemDesign?.sync) {
+  /**
+   * Por padrão é um clique da pessoa (Sincronizar, trocar a lista, voltar ao
+   * padrão, ligar): o Git pode abrir a janela de login. `interactive: false` é
+   * a sincronização automática da sessão.
+   */
+  const sync = useCallback(async ({ interactive = true }: { interactive?: boolean } = {}) => {
+    const bridge = window.felixo?.systemDesign
+    if (!bridge?.sync) {
       return
     }
     setState((current) => ({ ...current, syncing: true, error: null }))
     try {
-      const result = await window.felixo.systemDesign.sync()
+      const result: SystemDesignSyncResult | null = interactive
+        ? await bridge.sync({ interactive: true })
+        : await runAutomaticSync()
+      if (!result) {
+        setState((current) => ({ ...current, syncing: false }))
+        return
+      }
       if (result.ok && result.config) {
         setState((current) => ({
           ...current,
@@ -142,7 +158,7 @@ export function useSystemDesignSettings() {
       } else {
         // A falha já foi gravada no processo principal (estado "usando o último
         // conteúdo"). Sem reler, esta tela continuaria dizendo "sincronizado".
-        const fresh = await window.felixo.systemDesign.getConfig?.()
+        const fresh = await bridge.getConfig?.()
         setState((current) => ({
           ...current,
           config: fresh?.ok && fresh.config ? fresh.config : current.config,

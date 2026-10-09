@@ -5,7 +5,8 @@ import {
   subscribeSystemDesignConfig,
   subscribeSystemDesignProjects,
 } from './system-design-events'
-import type { SystemDesignProject } from './types'
+import { runAutomaticSync } from './system-design-sync'
+import type { SystemDesignProject, SystemDesignSyncRequest, SystemDesignSyncResult } from './types'
 
 /**
  * Raízes cujos guias git já foram sincronizados nesta execução do app — como o
@@ -19,7 +20,7 @@ const ENSURE_TIMEOUT_MS = 1500
 
 type ResolveBridge = {
   resolveProject?: (directory: string) => Promise<{ ok: boolean; project?: SystemDesignProject; message?: string }>
-  sync?: (request?: { projectRoot?: string }) => Promise<{ ok: boolean }>
+  sync?: (request?: SystemDesignSyncRequest) => Promise<SystemDesignSyncResult>
 }
 
 function bridge(): ResolveBridge | undefined {
@@ -36,7 +37,7 @@ function syncProjectOnce(project: SystemDesignProject): void {
   if (!root || project.layer !== 'projeto' || syncedProjectRoots.has(root)) return
   if (!project.guides.some((guide) => guide.kind === 'git')) return
   syncedProjectRoots.add(root)
-  void bridge()?.sync?.({ projectRoot: root }).then(() => announceSystemDesignProjects(root))
+  void runAutomaticSync({ projectRoot: root }, { bridge: bridge() }).then(() => announceSystemDesignProjects(root))
 }
 
 /**

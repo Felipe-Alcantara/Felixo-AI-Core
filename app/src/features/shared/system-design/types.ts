@@ -149,3 +149,35 @@ export type SystemDesignDocumentSummary = {
 export type SystemDesignDocument = SystemDesignDocumentSummary & {
   content: string
 }
+
+/** Por que uma sincronização falhou (espelho de `GIT_FAILURE` em `electron/core/git-failure.cjs`). */
+export type SystemDesignSyncFailureReason = 'login' | 'not-found' | 'branch' | 'network' | 'timeout' | 'other'
+
+/**
+ * `interactive`: a pessoa clicou, então o Git pode abrir a janela de login.
+ * Sem ele (sincronização automática), o Git nunca pede e falha na hora.
+ */
+export type SystemDesignSyncRequest = { projectRoot?: string; interactive?: boolean }
+
+export type SystemDesignSyncGuideResult = {
+  key: string
+  ok: boolean
+  message?: string
+  reason?: SystemDesignSyncFailureReason
+  label?: string
+  indexedCount?: number
+  removedCount?: number
+}
+
+export type SystemDesignSyncResult = {
+  ok: boolean
+  message?: string
+  reason?: SystemDesignSyncFailureReason
+  config?: SystemDesignConfig
+  indexedCount?: number
+  removedCount?: number
+  results?: SystemDesignSyncGuideResult[]
+}
+
+/** Um guia que a sincronização automática não atualizou porque pede login. */
+export type SystemDesignLoginNeeded = { key: string; label: string; projectRoot?: string }

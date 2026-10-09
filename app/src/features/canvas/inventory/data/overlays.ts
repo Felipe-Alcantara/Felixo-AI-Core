@@ -779,6 +779,42 @@ export const overlaySurfaces: InventoryElement[] = [
       'Wrapper fixed inset-x-0 bottom-4 z 50 com pointer-events none; a caixa (w-[22rem], pointer-events auto) é [data-felixo-tour-avoid] e o card desvia dela (SB1 confere que os botões continuam clicáveis). Montado no App: vale no canvas e no chat.',
   },
   {
+    id: 'system-design-aviso-login',
+    name: 'Aviso de guia do System Design que pede login',
+    layer: 'overlay',
+    owner: 'src/features/shared/system-design/SystemDesignLoginNotice.tsx',
+    states: {
+      normal: 'Nenhuma sincronização automática falhou por login nesta sessão: nada aparece.',
+      error:
+        'A sincronização automática (a da sessão, ao montar a seção System Design, ou a de um projeto, pelo useProjectGuides) voltou com reason "login" num guia: "Um guia do System Design pede login" com o nome do guia (e o projeto, se for de projeto), "Fazer login e sincronizar", "Agora não" e ×. Um aviso por vez; o mesmo guia avisa uma vez por sessão (runAutomaticSync).',
+      disabled: 'Sem ponte (fora do app desktop): runAutomaticSync não roda e nada aparece.',
+      success: '"Fazer login e sincronizar" some com o aviso e sincroniza com interactive: true; o resultado (ou o motivo, se o login não foi concluído) aparece no estado do guia em Configurações.',
+    },
+    controls: [],
+    persistence: ['nenhuma (fila do aviso só no estado do componente; guias já avisados num Set do módulo system-design-sync, por sessão)'],
+    ipc: ['system-design:sync'],
+    dependsOn: [
+      'subscribeSystemDesignLoginNeeded (system-design-events)',
+      'runAutomaticSync (system-design-sync)',
+      'describeLoginNotice (system-design-presentation)',
+      'NoticeToast (placement left)',
+    ],
+    tests: [
+      { file: 'src/features/shared/system-design/system-design-sync.test.ts' },
+      { file: 'electron/services/system-design-ipc-handlers.test.cjs' },
+      { file: 'electron/core/git-failure.test.cjs' },
+    ],
+    gaps: [
+      {
+        what: 'Nenhum smoke abre o aviso nem clica "Fazer login e sincronizar": a única passada pela tela foi a validação manual de 09/10/2026 (app isolado, servidor local que exige senha).',
+        risk: 'baixo',
+        task: '3ec91f95-497e-8141-b6c1-d1833aac5664',
+      },
+    ],
+    overlap:
+      'NoticeToast com placement left: wrapper fixed inset-x-0 bottom-4 z 50 (pointer-events none) e a caixa de 22rem no canto ESQUERDO, para não cobrir os avisos de hardware (centro) nem o de instalação das CLIs (direita), que podem aparecer junto. Cobre o rodapé da barra lateral (Limpar, versão) enquanto está aberto. Montado no App: vale no canvas e no chat.',
+  },
+  {
     id: 'modal-alcas-redimensionar',
     name: 'Alças de redimensionar dos modais',
     layer: 'modal',

@@ -21,12 +21,17 @@ type NoticeToastProps = {
   secondaryLabel: string
   onSecondary: () => void
   dismissLabel: string
+  /**
+   * Centro (padrão) ou canto esquerdo. O canto direito é do aviso de instalação
+   * das CLIs e o centro dos avisos de hardware; um aviso de outra origem, que
+   * pode aparecer junto com eles, vai à esquerda para não cobrir nenhum.
+   */
+  placement?: 'center' | 'left'
 }
 
 /**
- * Aviso flutuante do app, centralizado embaixo: o canto direito já é do aviso
- * de instalação das CLIs, e os dois podem aparecer juntos na primeira
- * abertura.
+ * Aviso flutuante do app, embaixo: o canto direito já é do aviso de instalação
+ * das CLIs, e os dois podem aparecer juntos na primeira abertura.
  */
 export function NoticeToast({
   icon,
@@ -37,9 +42,14 @@ export function NoticeToast({
   secondaryLabel,
   onSecondary,
   dismissLabel,
+  placement = 'center',
 }: NoticeToastProps) {
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex justify-center px-4">
+    <div
+      className={`pointer-events-none fixed inset-x-0 bottom-4 z-50 flex px-4 ${
+        placement === 'left' ? 'justify-start' : 'justify-center'
+      }`}
+    >
       {/* O obstáculo do tutorial é a caixa, não o wrapper de largura total:
           o card do tour desvia só do que a pessoa vê e clica. */}
       <div

@@ -3,6 +3,7 @@ import { useFocusRestore } from './features/shared/focus/useFocusRestore'
 import { ThemeProvider } from './features/shared/theme/ThemeProvider'
 import { PerformanceModeProvider } from './features/shared/performance/PerformanceModeProvider'
 import { HardwareNotices } from './features/shared/hardware/HardwareNotices'
+import { SystemDesignLoginNotice } from './features/shared/system-design/SystemDesignLoginNotice'
 import { LinkChooserHost } from './features/shared/links/LinkChooserHost'
 
 type Screen = 'canvas' | 'chat'
@@ -63,6 +64,10 @@ function App() {
           {/* Volta automática da placa de vídeo e sugestão do Modo Performance:
               valem nas duas telas. */}
           <HardwareNotices />
+          {/* Guia do System Design que a sincronização automática não
+              atualizou por pedir login: o aviso oferece o clique que pode
+              abrir a janela de login. */}
+          <SystemDesignLoginNotice />
           {/* O menu "para onde abrir este link" também: terminal e Markdown
               existem no canvas e no chat. */}
           <LinkChooserHost />
