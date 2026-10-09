@@ -6341,3 +6341,38 @@ A fonte do System Design era uma só por instalação (commit `f3fcfc3`, 21/09):
 - O orquestrador do chat foi validado pelo teste do bloco, não com uma conversa real.
 - Ao trocar o padrão do app, o conteúdo do padrão antigo segue no cache dele, e o novo aparece como ainda não sincronizado até a próxima sincronização (antes, a fonte única mostrava o conteúdo antigo como entregue).
 - Guia privado no Windows pode abrir o Git Credential Manager (task irmã já aberta).
+
+## 2026-10-09 — Git: repositório alinhado à política de versionamento do Felixo System Design
+
+### Contexto
+
+Pedido do Felipe: colocar o repositório no padrão de git e versionamento do Felixo System Design (`docs/GIT-POLITICA-DE-VERSIONAMENTO.md`, `cc4aae7`) e alinhar o GitHub. O lado local já estava em ordem desde a limpeza de 26/09 (só a `main`, em dia com o remoto, sem worktree sobrando).
+
+### Decisões do Felipe
+
+- Apagar as branches remotas já mescladas (`feat/notion-tarefas-escolher-repositorio`, PR #108, e `fix/menus-fecham-ao-clicar-fora`, PR #106).
+- Aplicar a correção de segurança do PR #104 direto na `main` e fechar o PR.
+- Apagar as 43 pré-releases que nunca foram promovidas, com a tag.
+- Ligar no GitHub: apagar a branch ao mesclar o PR, tirar o merge commit dos PRs e usar `chore(deps)` no Dependabot.
+
+### O que mudou
+
+- `GUIA-DESENVOLVEDOR.md`: commit direto na `main` por padrão; branch (`feat/`, `fix/`, `refactor/`, `docs/`) só para feature grande, refatoração significativa ou alto risco, apagada ao mesclar; PR mesclado só por squash ou rebase; `git pull --rebase`; tipos `perf`, `ci` e `build` na tabela. Antes ele mandava abrir branch e PR para toda mudança.
+- `POLITICA-VERSIONAMENTO.md`: o mesmo fluxo; pré-release esquecida é publicação que falhou e se apaga com a tag; o `Release gate` olha só o último commit do push.
+- Launcher: o padrão do "Atualizar" e do `--update` passa de `production` (que não existe mais no remoto e fazia a atualização falhar) para `main`, num lugar só (`DEFAULT_UPDATE_BRANCH`); `FELIXO_PRODUCTION_BRANCH` vazia não vira branch vazia. Valor salvo no Configurar continua valendo.
+- `.github/dependabot.yml`: prefixo `chore` (npm e pip), para os commits do bot saírem como `chore(deps): …` em vez de `deps(deps): …`.
+- `app/package-lock.json`: `http-cache-semantics` 4.3.0 (GHSA-ch52-4w7c-c8xp), diff idêntico ao do PR #104.
+- GitHub: `delete_branch_on_merge` ligado e `allow_merge_commit` desligado (squash e rebase continuam). As branches remotas mescladas e a do Dependabot saíram, com bundle de backup; as 43 pré-releases saíram, com nome, commit, notas e lista de arquivos guardados fora do repositório.
+
+### Medido
+
+- Antes: 3 branches remotas além da `main` (2 já mescladas por squash — o diff de cada uma é idêntico ao commit de merge na `main` — e 1 do Dependabot), 1 PR aberto, 43 pré-releases (16 sem nenhum arquivo), 24 de 400 commits recentes da `main` fora de `tipo(escopo): descrição` (quase todos "Merge …" de merge commit ou de pull sem rebase).
+- Depois: só `main` no remoto, 0 PR aberto, 0 pré-release, 295 releases normais; a `Latest` continua `v0.1.445`.
+- Launcher: teste novo (`tests/test_update_branch.py`, 6 casos) reprovou antes da correção (`'production' != 'main'` e `'' != 'main'`) e passa depois; suíte do launcher (104) verde no Python 3.9, 3.12 e 3.13; `ruff` limpo.
+- App com o lockfile novo: lint limpo, build ok, vitest 3028 passaram e 5 pulados, suíte Node 2532 testes (2529 passaram, 3 pulados, 0 falhas) no Node 25 e no 22.
+
+### Limitações
+
+- O histórico antigo continua com os commits "Merge …" e "deps(deps)": não se reescreve a `main`.
+- A cópia de `http-cache-semantics` embutida no pacote `npm` 11.19.1 continua na 4.2.0 até sair um npm novo com a correção.
+- Existem duas releases com a mesma tag `v0.1.8` (de 09/08/2026); ficou para uma task.
