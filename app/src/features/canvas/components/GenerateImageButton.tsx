@@ -7,6 +7,12 @@ import { ChevronDown, CircleAlert, LoaderCircle, RotateCw, WandSparkles } from '
 import { FelixoSelect, type FelixoSelectOption } from '../../shared/components/FelixoSelect'
 import { useOpeniaImageGeneration } from '../hooks/useOpeniaImageGeneration'
 import { IMAGE_PROMPT_MAX_CHARS, type ImageGenerationState } from '../services/openia-image-store'
+import {
+  OPENIA_UPDATE_MESSAGES,
+  needsOpeniaUpdate,
+  updateOpenia,
+  type OpeniaUpdateState,
+} from '../services/openia-update'
 
 type Props = {
   /** Mesma forma dos outros botões da sidebar (vem do CanvasToolbar). */
@@ -28,6 +34,7 @@ export function GenerateImageButton({ triggerClassName }: Props) {
   const { acknowledge, loadModels } = image
   const [open, setOpen] = useState(false)
   const [fieldError, setFieldError] = useState<FieldError | null>(null)
+  const [openiaUpdate, setOpeniaUpdate] = useState<OpeniaUpdateState>({ status: 'idle' })
   const popoverId = useId()
   const promptId = `${popoverId}-prompt`
   const modelId = `${popoverId}-model`
@@ -88,6 +95,7 @@ export function GenerateImageButton({ triggerClassName }: Props) {
     const outcome = image.generate()
     if (outcome.ok) {
       setFieldError(null)
+      setOpeniaUpdate({ status: 'idle' })
       return
     }
     setFieldError(outcome)
@@ -245,6 +253,14 @@ export function GenerateImageButton({ triggerClassName }: Props) {
           </p>
 
           <GenerationStatus generation={generation} extraError={generationError?.message} />
+          {(needsOpeniaUpdate(generation) || openiaUpdate.status !== 'idle') && (
+            <OpeniaUpdateAction
+              state={openiaUpdate}
+              onChange={setOpeniaUpdate}
+              // Atualizado, o erro de "Openia antigo" já não vale: fica só o aviso de pronto.
+              onUpdated={acknowledge}
+            />
+          )}
 
           {/*
             Dois botões fixos, e não um que troca de papel: com um só, o segundo
@@ -277,6 +293,80 @@ export function GenerateImageButton({ triggerClassName }: Props) {
       )}
     </div>
   )
+}
+
+/**
+ * Oferta de atualizar o Openia quando a geração falhou por ele ser antigo: dois
+ * cliques (o segundo confirma, porque a instalação executa código vindo do
+ * GitHub do Openia), sem diálogo do sistema, que travaria a janela.
+ */
+function OpeniaUpdateAction({
+  state,
+  onChange,
+  onUpdated,
+}: {
+  state: OpeniaUpdateState
+  onChange: (next: OpeniaUpdateState) => void
+  onUpdated: () => void
+}) {
+  const run = async () => {
+    onChange({ status: 'running' })
+    const next = await updateOpenia()
+    if (next.status === 'done') onUpdated()
+    onChange(next)
+  }
+  switch (state.status) {
+    case 'running':
+      return (
+        <p role="status" className="mb-2 flex items-center gap-1.5 text-xs text-zinc-300">
+          <LoaderCircle size={12} className="shrink-0 motion-safe:animate-spin" aria-hidden="true" />
+          {OPENIA_UPDATE_MESSAGES.running}
+        </p>
+      )
+    case 'done':
+      return (
+        <p role="status" className="mb-2 text-xs text-zinc-300">
+          {state.message}
+        </p>
+      )
+    case 'confirming':
+      return (
+        <div className="mb-2">
+          <p className="mb-1.5 text-[11px] leading-relaxed text-zinc-400">{OPENIA_UPDATE_MESSAGES.confirm}</p>
+          <div className="flex gap-1.5">
+            <button
+              type="button"
+              onClick={() => void run()}
+              className="felixo-btn rounded-sm px-2 py-1 text-xs text-zinc-100 ring-1 ring-white/15 hover:bg-white/6"
+            >
+              Confirmar atualização
+            </button>
+            <button
+              type="button"
+              onClick={() => onChange({ status: 'idle' })}
+              className="felixo-btn rounded-sm px-2 py-1 text-xs text-zinc-400 hover:bg-white/6"
+            >
+              Agora não
+            </button>
+          </div>
+        </div>
+      )
+    default:
+      return (
+        <div className="mb-2 flex items-start gap-2">
+          <p className={`min-w-0 flex-1 text-[11px] leading-relaxed ${state.status === 'failed' ? 'text-theme-error' : 'text-zinc-400'}`} role={state.status === 'failed' ? 'alert' : undefined}>
+            {state.status === 'failed' ? state.message : OPENIA_UPDATE_MESSAGES.offer}
+          </p>
+          <button
+            type="button"
+            onClick={() => onChange({ status: 'confirming' })}
+            className="felixo-btn shrink-0 rounded-sm px-2 py-1 text-xs text-zinc-100 ring-1 ring-white/15 hover:bg-white/6"
+          >
+            Atualizar o Openia
+          </button>
+        </div>
+      )
+  }
 }
 
 /** Linha de estado do pedido: anunciada ao leitor de tela sem repetir o cronômetro a cada segundo. */

@@ -30,7 +30,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 ## Números
 
 - **Elementos:** 96 (8 blocos, 16 ferramentas, 72 outras superfícies)
-- **Controles:** 358, dos quais 55 com teste específico
+- **Controles:** 361, dos quais 55 com teste específico
 - **Elementos sem nenhum teste:** 4
 - **Lacunas:** 275 (alto 10, médio 147, baixo 118), em 78 tasks
 
@@ -161,17 +161,17 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 
 - **ID:** `chrome-generate-image` · **Dono:** `src/features/canvas/components/GenerateImageButton.tsx`
 - **Persistência:** localStorage felixo:openia-image-model (último modelo); sessionStorage felixo:openia-image-pending (pedido em andamento, reconsultado por openia:image-status ao recarregar); processo principal: arquivo da imagem gerada (openia-image-service) e o bloco salvo pelo canvas
-- **IPC:** `openia:image-models`, `openia:generate-image`, `openia:cancel-image`, `openia:image-status`, `canvas:image-generated`
-- **Depende de:** `useOpeniaImageGeneration`, `openiaImageStore`, `FelixoSelect`, `addImageNodeFromArtifact (CanvasView)`
+- **IPC:** `openia:image-models`, `openia:generate-image`, `openia:cancel-image`, `openia:image-status`, `canvas:image-generated`, `cli:install-official`
+- **Depende de:** `useOpeniaImageGeneration`, `openiaImageStore`, `FelixoSelect`, `addImageNodeFromArtifact (CanvasView)`, `updateOpenia (openia-update)`
 - **Sobreposição:** Popover inline dentro da sidebar (z-26), não flutua sobre o canvas; o menu de modelos (FelixoSelect) abre em portal (z 1000). O Esc que fecha o menu de modelos não fecha o popover junto (defaultPrevented).
-- **Testes:** `src/features/canvas/services/openia-image-store.test.ts`, `electron/services/openia-image-service.test.cjs`
+- **Testes:** `src/features/canvas/services/openia-image-store.test.ts`, `src/features/canvas/services/openia-update.test.ts`, `electron/services/openia-image-service.test.cjs`
 
 | Estado | Quando |
 | --- | --- |
 | normal | Botão "Gerar imagem" na seção Criar; aberto, popover com descrição (até 4.000 caracteres), modelo, aviso de custo e Gerar/Cancelar. |
 | loading | Catálogo carregando (models.status === "loading", seletor com loading). |
 | empty | Catálogo sem modelo de imagem: "Nenhum modelo de imagem no catálogo" e seletor desabilitado. |
-| error | Catálogo indisponível (mensagem + "Tentar de novo"), descrição vazia/longa ou sem modelo (role="alert" no campo), falha da geração (mensagem do serviço) e, com o popover fechado, ícone de alerta no gatilho. |
+| error | Catálogo indisponível (mensagem + "Tentar de novo"), descrição vazia/longa ou sem modelo (role="alert" no campo), falha da geração (mensagem do serviço; falta de créditos tem mensagem própria, insufficient_credits, que fala do saldo mínimo para imagem) e, com o popover fechado, ícone de alerta no gatilho. Openia antigo (openia_outdated): a mensagem vem com "Atualizar o Openia". |
 | pending | generation.status === "pending": gatilho com "Gerando imagem…" e spinner, linha de estado com segundos; "Cancelando…" depois de cancelar. Sobrevive a fechar o popover e a recarregar (sessionStorage). |
 | success | "Imagem adicionada ao canvas." (ou "N imagens…"); a imagem chega pelo evento canvas:image-generated e o CanvasView cria o bloco. |
 | disabled | Seletor de modelo sem opções; Gerar com aria-disabled durante a geração; Cancelar com aria-disabled sem geração ou já cancelando. |
@@ -183,10 +183,13 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 | `Consultar o catálogo de modelos de imagem de novo` (button) | clique | "Tentar de novo": loadModels({ force: true }) consulta openia:image-models de novo. (desabilitado: só aparece com o catálogo em erro) | Nova falha mantém o estado de erro com a mensagem do serviço. | — |
 | `onClick={pending ? undefined : submit}` (button) | clique | Gerar (ou Ctrl/Cmd+Enter): valida descrição e modelo, grava o pedido em sessionStorage felixo:openia-image-pending e chama openia:generate-image; o processo principal grava a imagem e emite canvas:image-generated, que vira bloco de imagem selecionado e centralizado. (desabilitado: aria-disabled durante a geração) | Descrição vazia ou longa e modelo ausente viram role="alert" com foco no campo; pedido já em andamento: "Já há uma imagem sendo gerada. Aguarde ou cancele."; falha do serviço vira o estado de erro com a mensagem. | — |
 | `Interromper a geração em andamento` (button) | clique | Cancelar: marca cancelling e chama openia:cancel-image; o desfecho "A geração de imagem foi cancelada." chega pela resposta do pedido. (desabilitado: aria-disabled sem geração em andamento ou já cancelando) | erro engolido: falha de openia:cancel-image cai num catch vazio (openia-image-store.ts:241); o botão fica em "Cancelando…" até o pedido terminar, e a geração pode concluir (e cobrar). | — |
+| `Atualizar o Openia` (button) | clique | Só com a geração em erro openia_outdated (ou depois de uma atualização que falhou): mostra o aviso de que a instalação executa código do GitHub do Openia e os botões de confirmação. (desabilitado: só aparece com a geração em openia_outdated ou com a atualização em "failed") | Nenhuma: só troca o estado local do popover. | — |
+| `Confirmar atualização` (button) | clique | updateOpenia → cli:install-official { id: "openia", confirmed: true } (pip --user no commit fixado no catálogo, com a repetição do PEP 668); "Atualizando o Openia…" e depois "Openia atualizado. Clique em Gerar de novo." (desabilitado: só aparece depois de "Atualizar o Openia") | Falha volta como alerta com a mensagem do processo principal (ou "Não foi possível atualizar o Openia.") e "Atualizar o Openia" de novo; fora do app desktop: "A atualização automática só existe no app desktop." | — |
+| `Agora não` (button) | clique | Desiste da atualização: volta ao estado inicial e some (a oferta reaparece enquanto a geração estiver em openia_outdated). (desabilitado: só aparece depois de "Atualizar o Openia") | Nenhuma. | — |
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| O popover não tem teste de interface (abrir, escolher modelo, Gerar, Cancelar, Tentar de novo, alerta no gatilho); só a store e o serviço do processo principal são testados. | médio | `3e391f95-497e-8144-be4c-cd800cf6fd52` |
+| O popover não tem teste de interface na CI (abrir, escolher modelo, Gerar, Cancelar, Tentar de novo, alerta no gatilho, Atualizar o Openia); só a store, o serviço do processo principal e a lógica de atualização são testados. A geração real pela tela foi vista em 09/10/2026, num roteiro fora do repositório. | médio | `3f491f95-497e-8126-b0ec-fab2a600214a` |
 | Gerar cobra créditos do OpenRouter sem confirmação; só há o aviso de texto no popover. | médio | `3e991f95-497e-8172-b092-f3aa9f111ccc` |
 | erro engolido: falha de openia:cancel-image não aparece (catch vazio em openia-image-store.ts:241); a pessoa vê "Cancelando…" e a imagem pode sair mesmo assim. | baixo | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 | Fechar o popover por clique fora devolve o foco ao gatilho mesmo quando a pessoa clicou em outro controle. | baixo | `3ea91f95-497e-81d9-a3d8-ed3971b18a24` |
@@ -2806,7 +2809,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3e191f95-497e-81fd-b657-d7a63b5d17f0` — 3 lacunas
 - `3e291f95-497e-8109-8851-e4ff2193c4db` — 2 lacunas
 - `3e291f95-497e-815a-9863-d4b9f8f15e8f` — 1 lacuna
-- `3e391f95-497e-8144-be4c-cd800cf6fd52` — 1 lacuna
 - `3e691f95-497e-810e-a39b-f26d90a38c8e` — 3 lacunas
 - `3e691f95-497e-8116-8cbd-fad2823ce1da` — 1 lacuna
 - `3e691f95-497e-815c-a129-f4d2d6405cbc` — 2 lacunas
@@ -2872,3 +2874,4 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3ec91f95-497e-81e8-8f18-e2a529b0568e` — 10 lacunas
 - `3ec91f95-497e-81f7-8b12-c5c252d020c7` — 5 lacunas
 - `3f291f95-497e-81fe-8670-fe2fc871318d` — 1 lacuna
+- `3f491f95-497e-8126-b0ec-fab2a600214a` — 1 lacuna

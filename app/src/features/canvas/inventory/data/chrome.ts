@@ -499,7 +499,7 @@ export const chromeSurfaces: InventoryElement[] = [
       empty: 'Catálogo sem modelo de imagem: "Nenhum modelo de imagem no catálogo" e seletor desabilitado.',
       pending: 'generation.status === "pending": gatilho com "Gerando imagem…" e spinner, linha de estado com segundos; "Cancelando…" depois de cancelar. Sobrevive a fechar o popover e a recarregar (sessionStorage).',
       success: '"Imagem adicionada ao canvas." (ou "N imagens…"); a imagem chega pelo evento canvas:image-generated e o CanvasView cria o bloco.',
-      error: 'Catálogo indisponível (mensagem + "Tentar de novo"), descrição vazia/longa ou sem modelo (role="alert" no campo), falha da geração (mensagem do serviço) e, com o popover fechado, ícone de alerta no gatilho.',
+      error: 'Catálogo indisponível (mensagem + "Tentar de novo"), descrição vazia/longa ou sem modelo (role="alert" no campo), falha da geração (mensagem do serviço; falta de créditos tem mensagem própria, insufficient_credits, que fala do saldo mínimo para imagem) e, com o popover fechado, ícone de alerta no gatilho. Openia antigo (openia_outdated): a mensagem vem com "Atualizar o Openia".',
       disabled: 'Seletor de modelo sem opções; Gerar com aria-disabled durante a geração; Cancelar com aria-disabled sem geração ou já cancelando.',
     },
     controls: [
@@ -537,23 +537,45 @@ export const chromeSurfaces: InventoryElement[] = [
         failure: 'erro engolido: falha de openia:cancel-image cai num catch vazio (openia-image-store.ts:241); o botão fica em "Cancelando…" até o pedido terminar, e a geração pode concluir (e cobrar).',
         disabledWhen: 'aria-disabled sem geração em andamento ou já cancelando',
       },
+      {
+        locator: 'Atualizar o Openia',
+        kind: 'button',
+        effect: 'Só com a geração em erro openia_outdated (ou depois de uma atualização que falhou): mostra o aviso de que a instalação executa código do GitHub do Openia e os botões de confirmação.',
+        failure: 'Nenhuma: só troca o estado local do popover.',
+        disabledWhen: 'só aparece com a geração em openia_outdated ou com a atualização em "failed"',
+      },
+      {
+        locator: 'Confirmar atualização',
+        kind: 'button',
+        effect: 'updateOpenia → cli:install-official { id: "openia", confirmed: true } (pip --user no commit fixado no catálogo, com a repetição do PEP 668); "Atualizando o Openia…" e depois "Openia atualizado. Clique em Gerar de novo."',
+        failure: 'Falha volta como alerta com a mensagem do processo principal (ou "Não foi possível atualizar o Openia.") e "Atualizar o Openia" de novo; fora do app desktop: "A atualização automática só existe no app desktop."',
+        disabledWhen: 'só aparece depois de "Atualizar o Openia"',
+      },
+      {
+        locator: 'Agora não',
+        kind: 'button',
+        effect: 'Desiste da atualização: volta ao estado inicial e some (a oferta reaparece enquanto a geração estiver em openia_outdated).',
+        failure: 'Nenhuma.',
+        disabledWhen: 'só aparece depois de "Atualizar o Openia"',
+      },
     ],
     persistence: [
       'localStorage felixo:openia-image-model (último modelo)',
       'sessionStorage felixo:openia-image-pending (pedido em andamento, reconsultado por openia:image-status ao recarregar)',
       'processo principal: arquivo da imagem gerada (openia-image-service) e o bloco salvo pelo canvas',
     ],
-    ipc: ['openia:image-models', 'openia:generate-image', 'openia:cancel-image', 'openia:image-status', 'canvas:image-generated'],
-    dependsOn: ['useOpeniaImageGeneration', 'openiaImageStore', 'FelixoSelect', 'addImageNodeFromArtifact (CanvasView)'],
+    ipc: ['openia:image-models', 'openia:generate-image', 'openia:cancel-image', 'openia:image-status', 'canvas:image-generated', 'cli:install-official'],
+    dependsOn: ['useOpeniaImageGeneration', 'openiaImageStore', 'FelixoSelect', 'addImageNodeFromArtifact (CanvasView)', 'updateOpenia (openia-update)'],
     tests: [
       { file: 'src/features/canvas/services/openia-image-store.test.ts' },
+      { file: 'src/features/canvas/services/openia-update.test.ts' },
       { file: 'electron/services/openia-image-service.test.cjs' },
     ],
     gaps: [
       {
-        what: 'O popover não tem teste de interface (abrir, escolher modelo, Gerar, Cancelar, Tentar de novo, alerta no gatilho); só a store e o serviço do processo principal são testados.',
+        what: 'O popover não tem teste de interface na CI (abrir, escolher modelo, Gerar, Cancelar, Tentar de novo, alerta no gatilho, Atualizar o Openia); só a store, o serviço do processo principal e a lógica de atualização são testados. A geração real pela tela foi vista em 09/10/2026, num roteiro fora do repositório.',
         risk: 'médio',
-        task: '3e391f95-497e-8144-be4c-cd800cf6fd52',
+        task: '3f491f95-497e-8126-b0ec-fab2a600214a',
       },
       {
         what: 'Gerar cobra créditos do OpenRouter sem confirmação; só há o aviso de texto no popover.',
