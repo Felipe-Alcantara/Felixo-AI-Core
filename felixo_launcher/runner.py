@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 from .commands import run_command
-from .config import apply_config_to_env, load_config
+from .config import DEFAULT_UPDATE_BRANCH, apply_config_to_env, load_config
 from .node import build_env, find_node_bin, read_minimum_node_version, read_node_version
 from .node_deps import ensure_dependencies
 from .paths import APP_DIR, DEFAULT_URL
@@ -48,8 +48,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--branch",
-        default=os.environ.get("FELIXO_PRODUCTION_BRANCH", "production"),
-        help="Branch used with --update. Defaults to production.",
+        default=os.environ.get("FELIXO_PRODUCTION_BRANCH") or DEFAULT_UPDATE_BRANCH,
+        help=f"Branch used with --update. Defaults to {DEFAULT_UPDATE_BRANCH}.",
     )
     parser.add_argument(
         "--no-auto-update",

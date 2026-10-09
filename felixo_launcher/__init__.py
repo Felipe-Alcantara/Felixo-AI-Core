@@ -12,7 +12,7 @@ be read and tested on its own:
 | `process`      | Stopping the launcher child process tree               |
 | `node_deps`    | Keeping `app/node_modules` in sync with `package.json`  |
 | `python_deps`  | Installing the launcher's own Python dependencies       |
-| `git`          | Fast-forwarding the checkout from the production branch |
+| `git`          | Fast-forwarding the checkout from the update branch     |
 | `runner`       | Environment setup and the flag-driven, menu-less path   |
 | `menu`         | The interactive menu — the launcher's main interface    |
 

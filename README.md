@@ -222,7 +222,7 @@ A atualização automática silenciosa só atualiza quando é seguro e **nunca i
 - o histórico divergiu, quando um fast-forward reescreveria commits locais;
 - o checkout está em *detached HEAD*, sem branch para atualizar.
 
-Atualiza a branch em que você **já está** — não troca de branch nem puxa de `production` quando você está em `main`.
+Atualiza a branch em que você **já está** — não troca de branch.
 
 Para desligar (necessário em CI, que deve compilar exatamente o commit que baixou):
 

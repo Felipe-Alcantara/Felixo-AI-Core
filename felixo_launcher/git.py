@@ -1,4 +1,4 @@
-"""Fast-forwards the checkout from the production branch.
+"""Fast-forwards the checkout from the update branch (`main` by default).
 
 Refuses to touch a dirty tree: the launcher updates code people are about to
 run, so silently discarding local work would be the worst possible outcome.

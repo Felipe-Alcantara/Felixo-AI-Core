@@ -104,7 +104,7 @@ npm run dev:web
 |---------|-----------|-----------|
 | `python3 start_app.py` | raiz | Abre o menu interativo (Iniciar/Instalar/Configurar/Status) |
 | `python3 start_app.py --web` | raiz | **Atalho sem menu**, para scripts/CI: inicia apenas preview web |
-| `python3 start_app.py --update` | raiz | **Atalho sem menu**: faz `fetch` + `pull --ff-only` da branch definida para a atualização explícita (por padrão, `production`) |
+| `python3 start_app.py --update` | raiz | **Atalho sem menu**: faz `fetch` + `pull --ff-only` da branch definida para a atualização explícita (por padrão, `main`) |
 | `python3 start_app.py --skip-install` | raiz | **Atalho sem menu**: pula instalação de deps |
 | `npm run dev` | app/ | Inicia Vite + Electron |
 | `npm run dev:web` | app/ | Inicia apenas o Vite dev server com limpeza coordenada |
@@ -321,7 +321,7 @@ python3 start_app.py
 | `FELIXO_GEMINI_FULL_ACCESS` | Ativa/desativa `--yolo` no Gemini (`off` para desativar) | ligado |
 | `FELIXO_NODE_BIN` | Diretório do Node.js override | auto-detectado |
 | `FELIXO_NODE_SEARCH_PATHS` | Diretórios extras para buscar Node/npm | vazio |
-| `FELIXO_PRODUCTION_BRANCH` | Branch usada pelo `--update` explícito | `production` |
+| `FELIXO_PRODUCTION_BRANCH` | Branch usada pelo `--update` explícito e pelo **Atualizar** do menu (o nome da variável é histórico) | `main` |
 | `FELIXO_AUTO_UPDATE` | Controla o update silencioso da branch atual (`off`, `0`, `false` ou `no` desabilita) | ligado |
 | `FELIXO_UPDATE_PRERELEASE` | Aceita pre-releases | `0` |
 | `FELIXO_UPDATE_CHANNEL` | Canal de update | vazio |
@@ -477,7 +477,7 @@ checkout já está**; se houver alterações locais, divergência, falta de rede
 outro impedimento, o app abre sem interromper o trabalho.
 
 Para pedir explicitamente a branch configurada para esse atalho (por padrão,
-`production`), use:
+`main`, a única branch de longa duração do projeto), use:
 
 ```bash
 python3 start_app.py --update
@@ -492,8 +492,13 @@ Isso executa:
 Também é possível selecionar outra branch sem alterar a configuração salva:
 
 ```bash
-python3 start_app.py --update --branch main
+python3 start_app.py --update --branch minha-branch
 ```
+
+Até 09/10/2026 o padrão era `production`, uma branch que não existe mais no
+remoto. Quem salvou esse valor em **Configurar → Branch usada em Atualizar**
+continua com ele (valor salvo é escolha explícita e o launcher não o troca):
+apague o campo para voltar ao padrão `main`.
 
 **Nota:** Se houver alterações locais não commitadas, a atualização explícita é
 bloqueada para proteger o trabalho do usuário. `--no-auto-update` e

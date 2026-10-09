@@ -13,6 +13,12 @@ import json
 from .paths import CONFIG_FILE
 
 
+# Branch do "Atualizar" e do `--update` quando ninguém escolheu outra. A `main`
+# é a única branch de longa duração do projeto; a antiga `production` foi
+# aposentada e não existe mais no remoto.
+DEFAULT_UPDATE_BRANCH = "main"
+
+
 CONFIG_FIELDS: tuple[dict[str, object], ...] = (
     {
         "key": "FELIXO_NODE_BIN",
@@ -44,9 +50,9 @@ CONFIG_FIELDS: tuple[dict[str, object], ...] = (
     },
     {
         "key": "FELIXO_PRODUCTION_BRANCH",
-        "label": "Branch de produção (usada em Atualizar)",
+        "label": "Branch usada em Atualizar",
         "kind": "text",
-        "default": "production",
+        "default": DEFAULT_UPDATE_BRANCH,
     },
 )
 

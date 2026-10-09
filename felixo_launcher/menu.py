@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 from .commands import run_command
-from .config import CONFIG_FIELDS, load_config, save_config
+from .config import CONFIG_FIELDS, DEFAULT_UPDATE_BRANCH, load_config, save_config
 from .git import (
     auto_update,
     auto_update_is_enabled,
@@ -281,8 +281,10 @@ def _menu_configure(console: object) -> None:
 
 def _menu_update(console: object) -> None:
     config = load_config()
-    branch = config.get("FELIXO_PRODUCTION_BRANCH") or os.environ.get(
-        "FELIXO_PRODUCTION_BRANCH", "production"
+    branch = (
+        config.get("FELIXO_PRODUCTION_BRANCH")
+        or os.environ.get("FELIXO_PRODUCTION_BRANCH")
+        or DEFAULT_UPDATE_BRANCH
     )
 
     prepared = prepare_node_env()
