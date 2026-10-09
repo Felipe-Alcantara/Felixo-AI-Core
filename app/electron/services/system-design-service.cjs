@@ -9,6 +9,12 @@ const {
   createRedactedGitError,
   sanitizeGitRemoteUrl,
 } = require('./git-secret-redaction.cjs')
+const {
+  GIT_FAILURE,
+  classifyGitFailure,
+  gitEnvironment,
+  gitTimeoutMs,
+} = require('../core/git-failure.cjs')
 
 const execFileAsync = promisify(execFile)
 
@@ -20,10 +26,16 @@ const {
   sourcesEqual,
 } = require('../core/system-design-source.cjs')
 
-const GIT_TIMEOUT_MS = 60000
 const MAX_BUFFER = 32 * 1024 * 1024
 
 // Indexa apenas arquivos .md/.MD do repo, ignorando arquivos enormes ou não-texto.
+const FETCH_FAILURES_THAT_KEEP_CACHE = new Set([
+  GIT_FAILURE.LOGIN,
+  GIT_FAILURE.NOT_FOUND,
+  GIT_FAILURE.NETWORK,
+  GIT_FAILURE.TIMEOUT,
+])
+
 const INCLUDE_PATTERN = /\.md$/i
 const MAX_DOCUMENT_BYTES = 256 * 1024
 
@@ -34,6 +46,8 @@ async function syncSystemDesignRepository({
   repository,
   logger,
   executeGit = execFileAsync,
+  // Só um clique da pessoa deixa o Git pedir login (ver core/git-failure.cjs).
+  interactive = false,
 }) {
   if (!cacheDir || typeof cacheDir !== 'string') {
     throw new Error('cacheDir e obrigatorio para sync do System Design.')
@@ -46,7 +60,7 @@ async function syncSystemDesignRepository({
   // privados usam o credential helper/keychain do sistema, não userinfo na URL.
   repoUrl = sanitizeGitRemoteUrl(repoUrl)
   const run = (cwd, args, context) =>
-    runGit(cwd, args, context, executeGit)
+    runGit(cwd, args, context, executeGit, { interactive })
 
   await fsp.mkdir(cacheDir, { recursive: true })
   const repoPath = path.join(cacheDir, 'repo')
@@ -82,6 +96,9 @@ async function syncSystemDesignRepository({
         { stage: 'reset', repoUrl, branch },
       )
     } catch (error) {
+      // Login, repositório sumido, rede ou prazo: o re-clone falharia igual e só apagaria o cache
+      // que ainda serve. A falha sobe e o conteúdo anterior fica.
+      if (FETCH_FAILURES_THAT_KEEP_CACHE.has(error?.reason)) throw error
       logger?.warn?.(
         `fetch falhou, tentando re-clone: ${describeError(error, {
           stage: 'fetch',
@@ -92,7 +109,7 @@ async function syncSystemDesignRepository({
       await fsp.rm(repoPath, { recursive: true, force: true })
       await run(
         cacheDir,
-        ['clone', '--depth', '1', '--branch', branch, '--', repoUrl, 'repo'],
+        createCloneArgs({ repoUrl, branch }),
         { stage: 're-clone', repoUrl, branch },
       )
     }
@@ -229,16 +246,21 @@ function createCloneArgs({ repoUrl, branch }) {
   return ['clone', '--depth', '1', '--branch', branch, '--', repoUrl, 'repo']
 }
 
-async function runGit(cwd, args, context = {}, executeGit = execFileAsync) {
+async function runGit(cwd, args, context = {}, executeGit = execFileAsync, { interactive = false } = {}) {
   try {
     const { stdout } = await executeGit('git', args, {
       cwd,
-      timeout: GIT_TIMEOUT_MS,
+      timeout: gitTimeoutMs(interactive),
       maxBuffer: MAX_BUFFER,
+      env: gitEnvironment({ interactive }),
     })
     return stdout
   } catch (error) {
-    throw createRedactedGitError(error, context)
+    // O motivo é lido do erro cru, antes da redação apagar o texto do Git; só
+    // o nome do motivo (sem nada do stderr) vai junto do erro redigido.
+    const redacted = createRedactedGitError(error, context)
+    redacted.reason = classifyGitFailure(error)
+    throw redacted
   }
 }
 

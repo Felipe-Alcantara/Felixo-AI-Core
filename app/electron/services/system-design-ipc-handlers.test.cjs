@@ -567,3 +567,105 @@ test('duas sincronizações da mesma fonte ao mesmo tempo compartilham um único
   assert.equal(b.ok, true)
   assert.equal(syncCalls.length, 1, 'a mesma fonte não é clonada duas vezes ao mesmo tempo')
 })
+
+// ---------------------------------------------------------------------------
+// Guia privado (09/10/2026): só o clique pode pedir login.
+// ---------------------------------------------------------------------------
+
+function loginRequiredError() {
+  const error = new Error("Falha no Git durante clone. Repositório: https://github.com/acme/privado.git. Código: 128. Detalhe: fatal: could not read Username for 'https://github.com': terminal prompts disabled")
+  error.isRedactedGitError = true
+  error.reason = 'login'
+  return error
+}
+
+async function waitFor(predicate, label) {
+  const deadline = Date.now() + 5000
+  while (!predicate() && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 5))
+  }
+  assert.ok(predicate(), label)
+}
+
+test('sync sem pedido de clique roda sem login; com clique, deixa pedir', async (t) => {
+  const { syncCalls } = setupHandlers(t)
+
+  await handlers.get('system-design:sync')(null)
+  await handlers.get('system-design:sync')(null, { interactive: true })
+
+  assert.equal(syncCalls.length, 2)
+  assert.equal(syncCalls[0].interactive, false)
+  assert.equal(syncCalls[1].interactive, true)
+})
+
+test('falha por login volta com o motivo, o nome do guia e a frase do que fazer', async (t) => {
+  const { readSetting } = setupHandlers(t, {
+    syncSystemDesignRepository: async () => {
+      throw loginRequiredError()
+    },
+  })
+
+  const result = await handlers.get('system-design:sync')(null)
+
+  assert.equal(result.ok, false)
+  assert.equal(result.reason, 'login')
+  assert.equal(result.results[0].reason, 'login')
+  assert.ok(result.results[0].label, 'o aviso precisa dizer qual guia')
+  assert.match(result.message, /^O repositório pede login/)
+  assert.match(result.message, /Código: 128/, 'o diagnóstico técnico continua depois da frase')
+  const store = readSetting('system-design.sync')
+  const entry = Object.values(store.sources)[0]
+  assert.match(entry.lastError, /^O repositório pede login/)
+})
+
+test('clique durante uma sincronização automática que falhou por login roda de novo, agora com login', async (t) => {
+  let release
+  const gate = new Promise((resolve) => {
+    release = resolve
+  })
+  const { syncCalls } = setupHandlers(t, {
+    syncSystemDesignRepository: async (options) => {
+      if (!options.interactive) {
+        await gate
+        throw loginRequiredError()
+      }
+      return { headSha: 'c'.repeat(40), indexedCount: 3, removedCount: 0 }
+    },
+  })
+
+  const automatic = handlers.get('system-design:sync')(null)
+  await waitFor(() => syncCalls.length === 1, 'a automática começou')
+  const click = handlers.get('system-design:sync')(null, { interactive: true })
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  assert.equal(syncCalls.length, 1, 'o clique não clona em paralelo com a automática')
+  release()
+  const [automaticResult, clickResult] = await Promise.all([automatic, click])
+
+  assert.equal(automaticResult.ok, false)
+  assert.equal(automaticResult.reason, 'login')
+  assert.equal(clickResult.ok, true, 'o clique não herda a falha de quem não podia pedir login')
+  assert.deepEqual(syncCalls.map((call) => call.interactive), [false, true])
+})
+
+test('automática durante um clique pega carona nele (um clone só)', async (t) => {
+  let release
+  const gate = new Promise((resolve) => {
+    release = resolve
+  })
+  const { syncCalls } = setupHandlers(t, {
+    syncSystemDesignRepository: async () => {
+      await gate
+      return { headSha: 'd'.repeat(40), indexedCount: 2, removedCount: 0 }
+    },
+  })
+
+  const click = handlers.get('system-design:sync')(null, { interactive: true })
+  await waitFor(() => syncCalls.length === 1, 'o clique começou')
+  const automatic = handlers.get('system-design:sync')(null)
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  release()
+  const results = await Promise.all([click, automatic])
+
+  assert.ok(results.every((result) => result.ok))
+  assert.equal(syncCalls.length, 1)
+})

@@ -39,6 +39,7 @@ const {
   resolveProjectLayer,
   settingsForRoot,
 } = require('../core/system-design-project.cjs')
+const { GIT_FAILURE, describeGitFailure } = require('../core/git-failure.cjs')
 const { logQaEvent } = require('./qa-logger.cjs')
 const { toErrorResult } = require('./ipc-result.cjs')
 const {
@@ -231,18 +232,33 @@ function registerSystemDesignIpcHandlers(appPaths, options = {}) {
   // segunda falhava com o diretório já existente (medido no app em 08/10/2026).
   const inFlightSyncs = new Map()
 
-  /** Sincroniza UMA fonte git; chamada repetida enquanto ela roda devolve a mesma. */
-  function syncOne(guide) {
+  /**
+   * Sincroniza UMA fonte git; chamada repetida enquanto ela roda devolve a mesma.
+   *
+   * `interactive` diz se a pessoa clicou — só então o Git pode pedir login
+   * (core/git-failure.cjs). Um clique que chega com uma sincronização
+   * automática em andamento espera por ela (dois clones na mesma pasta é o bug
+   * de 08/10) e, se ela falhou por login, roda de novo podendo pedir. Uma
+   * automática que chega durante um clique pega carona nele.
+   */
+  function syncOne(guide, { interactive = false } = {}) {
     const key = sourceKey(guide)
     const running = inFlightSyncs.get(key)
-    if (running) return running
-    const task = syncOneNow(guide).finally(() => inFlightSyncs.delete(key))
-    inFlightSyncs.set(key, task)
+    if (running && (running.interactive || !interactive)) return running.task
+    const task = (running
+      ? running.task.then((result) =>
+          result.ok || result.reason !== GIT_FAILURE.LOGIN ? result : syncOneNow(guide, { interactive }),
+        )
+      : syncOneNow(guide, { interactive })
+    ).finally(() => {
+      if (inFlightSyncs.get(key)?.task === task) inFlightSyncs.delete(key)
+    })
+    inFlightSyncs.set(key, { task, interactive })
     return task
   }
 
   /** Sincroniza UMA fonte git e registra o resultado no store dela. */
-  async function syncOneNow(guide) {
+  async function syncOneNow(guide, { interactive = false } = {}) {
     const key = sourceKey(guide)
     try {
       const result = await syncRepository({
@@ -250,6 +266,7 @@ function registerSystemDesignIpcHandlers(appPaths, options = {}) {
         branch: guide.branch,
         cacheDir: path.join(cacheBaseDir, 'sources', sourceDirName(key)),
         repository: documents.forSource(key),
+        interactive,
         logger: {
           warn: (message) => logQaEvent({ level: 'warn', scope: 'system-design:sync', message }),
         },
@@ -269,20 +286,24 @@ function registerSystemDesignIpcHandlers(appPaths, options = {}) {
       })
       return { key, ok: true, indexedCount: result.indexedCount, removedCount: result.removedCount }
     } catch (error) {
-      const message = error?.isRedactedGitError
+      const reason = error?.reason ?? GIT_FAILURE.OTHER
+      const diagnostic = error?.isRedactedGitError
         ? sanitizeGitErrorText(error.message)
         : createRedactedGitError(error, {
             stage: error?.stage ?? 'sincronização',
             repoUrl: guide.repoUrl,
             branch: guide.branch,
           }).message
+      // A frase de quem lê vem antes do diagnóstico técnico, que continua inteiro.
+      const lead = describeGitFailure(reason, { interactive })
+      const message = lead ? `${lead} ${diagnostic}` : diagnostic
       try {
         saveStore(recordFailedSync(loadState().store, guide, message))
       } catch {
         // ignore
       }
       logQaEvent({ level: 'error', scope: 'system-design:sync', message: `Sync falhou: ${message}` })
-      return { key, ok: false, message }
+      return { key, ok: false, message, reason, label: guide.label ?? guide.repoUrl }
     }
   }
 
@@ -371,14 +392,15 @@ function registerSystemDesignIpcHandlers(appPaths, options = {}) {
         guides = toPublicConfig(config).guides
       }
 
+      const interactive = request?.interactive === true
       const results = []
       for (const guide of guides) {
-        results.push(await syncOne(guide))
+        results.push(await syncOne(guide, { interactive }))
       }
       const failure = results.find((result) => !result.ok)
       return {
         ok: !failure,
-        ...(failure ? { message: failure.message } : {}),
+        ...(failure ? { message: failure.message, reason: failure.reason } : {}),
         config: loadConfig(),
         results,
         indexedCount: results.reduce((total, result) => total + (result.indexedCount ?? 0), 0),

@@ -234,3 +234,184 @@ test('a credencial do origin gravado não vaza para o resultado da comparação'
 
   assert.ok(calls.some((call) => call.args[0] === 'fetch'), 'mesma fonte apesar da credencial')
 })
+
+// ---------------------------------------------------------------------------
+// Guia privado (09/10/2026): o Git só pode PEDIR login quando a pessoa clicou.
+// Sem clique, nem terminal, nem janela do Git Credential Manager: a falha volta
+// na hora, com o motivo, e o cache que já existia fica.
+// ---------------------------------------------------------------------------
+
+function captureGitCalls({ failWith } = {}) {
+  const calls = []
+  const executeGit = async (command, args, options) => {
+    calls.push({ args, options })
+    if (failWith && failWith(args)) {
+      const error = new Error('Command failed')
+      error.code = 128
+      error.stderr = failWith(args)
+      throw error
+    }
+    if (args[0] === 'clone') {
+      const target = path.join(options.cwd, args[args.length - 1])
+      fs.mkdirSync(path.join(target, '.git'), { recursive: true })
+    }
+    if (args[0] === 'remote') return { stdout: 'https://github.com/acme/privado.git\n' }
+    if (args[0] === 'rev-parse') return { stdout: `${'a'.repeat(40)}\n` }
+    return { stdout: '' }
+  }
+  return { executeGit, calls }
+}
+
+test('sem clique, o Git roda sem poder pedir login e com o prazo curto', async (t) => {
+  const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-system-design-env-'))
+  t.after(() => fs.rmSync(cacheDir, { recursive: true, force: true }))
+  const { executeGit, calls } = captureGitCalls()
+
+  await syncSystemDesignRepository({
+    repoUrl: 'https://github.com/acme/privado.git',
+    branch: 'main',
+    cacheDir,
+    repository: noopRepository,
+    executeGit,
+  })
+
+  assert.ok(calls.length > 0)
+  for (const call of calls) {
+    assert.equal(call.options.env.GIT_TERMINAL_PROMPT, '0')
+    assert.equal(call.options.env.GCM_INTERACTIVE, 'never')
+    assert.equal(call.options.env.SSH_ASKPASS_REQUIRE, 'never')
+    assert.equal(call.options.timeout, 60_000)
+  }
+})
+
+test('com clique, a janela de login pode abrir e o prazo é maior', async (t) => {
+  const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-system-design-env-'))
+  t.after(() => fs.rmSync(cacheDir, { recursive: true, force: true }))
+  const { executeGit, calls } = captureGitCalls()
+
+  await syncSystemDesignRepository({
+    repoUrl: 'https://github.com/acme/privado.git',
+    branch: 'main',
+    cacheDir,
+    repository: noopRepository,
+    executeGit,
+    interactive: true,
+  })
+
+  for (const call of calls) {
+    assert.equal(call.options.env.GIT_TERMINAL_PROMPT, '0')
+    assert.equal(call.options.env.GCM_INTERACTIVE, process.env.GCM_INTERACTIVE)
+    assert.equal(call.options.timeout, 180_000)
+  }
+})
+
+test('o erro redigido leva o motivo da falha, e nada do stderr além do diagnóstico', async (t) => {
+  const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-system-design-reason-'))
+  t.after(() => fs.rmSync(cacheDir, { recursive: true, force: true }))
+  const { executeGit } = captureGitCalls({
+    failWith: (args) => args[0] === 'clone' && "fatal: could not read Username for 'https://github.com': terminal prompts disabled",
+  })
+
+  await assert.rejects(
+    syncSystemDesignRepository({
+      repoUrl: 'https://github.com/acme/privado.git',
+      branch: 'main',
+      cacheDir,
+      repository: noopRepository,
+      executeGit,
+    }),
+    (error) => {
+      assert.equal(error.isRedactedGitError, true)
+      assert.equal(error.reason, 'login')
+      return true
+    },
+  )
+})
+
+test('fetch que falha por login mantém o clone em cache e não tenta clonar de novo', async (t) => {
+  const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-system-design-keep-'))
+  t.after(() => fs.rmSync(cacheDir, { recursive: true, force: true }))
+  const repoPath = seedExistingClone(cacheDir)
+  const { executeGit, calls } = captureGitCalls({
+    failWith: (args) => args[0] === 'fetch' && 'fatal: Cannot prompt because user interactivity has been disabled.',
+  })
+
+  await assert.rejects(
+    syncSystemDesignRepository({
+      repoUrl: 'https://github.com/acme/privado.git',
+      branch: 'main',
+      cacheDir,
+      repository: noopRepository,
+      executeGit,
+    }),
+    (error) => error.reason === 'login',
+  )
+
+  assert.ok(fs.existsSync(path.join(repoPath, 'antigo.md')), 'o conteúdo anterior continua no cache')
+  assert.ok(!calls.some((call) => call.args[0] === 'clone'), 'sem re-clone que falharia igual')
+})
+
+test('fetch que falha por outro motivo ainda tenta o re-clone (comportamento de antes)', async (t) => {
+  const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-system-design-reclone-'))
+  t.after(() => fs.rmSync(cacheDir, { recursive: true, force: true }))
+  seedExistingClone(cacheDir)
+  const { executeGit, calls } = captureGitCalls({
+    failWith: (args) => args[0] === 'fetch' && 'fatal: shallow file has changed since we read it',
+  })
+
+  await syncSystemDesignRepository({
+    repoUrl: 'https://github.com/acme/privado.git',
+    branch: 'main',
+    cacheDir,
+    repository: noopRepository,
+    executeGit,
+  })
+
+  assert.ok(calls.some((call) => call.args[0] === 'clone'))
+})
+
+function gitIsInstalled() {
+  try {
+    require('node:child_process').execFileSync('git', ['--version'], { stdio: 'ignore' })
+    return true
+  } catch {
+    return false
+  }
+}
+
+// Git de verdade contra um servidor local que exige senha: é o que um guia
+// privado faz. Roda na CI de Linux, macOS e Windows — e no Windows da CI o Git
+// vem com o Git Credential Manager, a janela que não pode abrir sem clique.
+test('git real: repositório que pede senha falha em segundos sem clique, com motivo login', { skip: !gitIsInstalled() && 'git não instalado', timeout: 45_000 }, async (t) => {
+  const http = require('node:http')
+  let requests = 0
+  const server = http.createServer((_request, response) => {
+    requests += 1
+    response.writeHead(401, { 'WWW-Authenticate': 'Basic realm="guia privado"', 'Content-Type': 'text/plain' })
+    response.end('login necessário')
+  })
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-system-design-401-'))
+  t.after(() => {
+    server.close()
+    fs.rmSync(cacheDir, { recursive: true, force: true })
+  })
+
+  const startedAt = Date.now()
+  await assert.rejects(
+    syncSystemDesignRepository({
+      repoUrl: `http://127.0.0.1:${server.address().port}/acme/privado.git`,
+      branch: 'main',
+      cacheDir,
+      repository: noopRepository,
+    }),
+    (error) => {
+      assert.equal(error.reason, 'login', error.message)
+      return true
+    },
+  )
+  const elapsed = Date.now() - startedAt
+
+  assert.ok(requests > 0, 'o Git chegou a pedir o repositório')
+  assert.ok(elapsed < 30_000, `falhou em ${elapsed} ms, sem esperar login`)
+})
