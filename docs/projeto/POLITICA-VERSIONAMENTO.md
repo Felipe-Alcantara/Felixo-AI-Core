@@ -1,11 +1,14 @@
 # Política de Versionamento
 
 Status: concluido.
-Última revisão: 2026-08-31.
+Última revisão: 2026-10-09.
 
 ## Objetivo
 
-Definir como as versões do Felixo AI Core são numeradas e publicadas.
+Definir como as versões do Felixo AI Core são numeradas e publicadas. Como se
+usam branches e commits está em
+[`GUIA-DESENVOLVEDOR.md`](../guias/GUIA-DESENVOLVEDOR.md#política-de-branch),
+que segue a política de git do Felixo System Design.
 
 ---
 
@@ -75,6 +78,13 @@ Enquanto o projeto estiver em `0.x.x`:
   normal e atualiza o marcador `Latest` somente se ela for a mais recente.
 - Pre-releases podem ser habilitadas no auto-updater via `FELIXO_UPDATE_PRERELEASE=1`.
 
+**Pré-release que fica para trás é publicação que falhou.** Se algum sistema ou
+o smoke do instalador reprova, a release não é promovida e continua como
+pré-release, às vezes sem nenhum arquivo. Ela não é uma versão do produto:
+depois de registrar o motivo (run, commit e erro), apague a release e a tag
+(`gh release delete vX.Y.Z --cleanup-tag`). O número dela não é reaproveitado,
+porque a sequência vem do `run_number`; buraco na numeração é esperado.
+
 ---
 
 ## Changelog
@@ -93,14 +103,18 @@ sendo uma possível melhoria, não uma etapa obrigatória do fluxo atual.
 
 ## Fluxo de publicação de versão
 
-1. O desenvolvedor abre uma branch de trabalho e envia um PR para `main`.
+1. O desenvolvedor commita direto na `main`, ou mescla um PR quando a mudança
+   justifica branch (feature grande, refatoração significativa ou alto risco).
 2. O CI valida a política de dependências (audit npm completo e de produção,
    SBOM e inventário do pacote), o launcher, os scripts de release e o app nos
    três sistemas.
-3. Depois de um CI verde para um commit em `main`, `release.yml` cria a
-   pré-release, publica os artefatos de Linux, Windows e macOS e a promove.
-4. Um `workflow_dispatch` pode repetir a publicação, mas exige o SHA exato de
-   um commit que já passou no CI.
+3. Depois de um CI verde para um commit em `main`, o `Release gate` dispara o
+   `release.yml` quando esse commit muda algo do instalador; o `release.yml`
+   cria a pré-release, publica os artefatos de Linux, Windows e macOS e a
+   promove. O gate olha só o último commit do push: se ele for só de teste ou
+   de documentação, a publicação não sai sozinha.
+4. Um `workflow_dispatch` pode repetir a publicação (ou fazê-la no caso acima),
+   mas exige o SHA exato de um commit que já passou no CI.
 5. O `electron-updater` detecta a nova versão em apps instalados.
 
 ---

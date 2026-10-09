@@ -191,7 +191,10 @@ caso), e o teste pode passar mesmo quebrado. Depois do diff, rode
 
 ## Padrão de commits
 
-O projeto segue Conventional Commits:
+O projeto segue a política de git do Felixo System Design
+([`GIT-POLITICA-DE-VERSIONAMENTO.md`](https://github.com/Felipe-Alcantara/Felixo-System-Design/blob/main/docs/GIT-POLITICA-DE-VERSIONAMENTO.md)):
+commits pequenos e frequentes, um tema por commit, em Conventional Commits, com
+a documentação afetada atualizada no mesmo passo.
 
 ```
 tipo(escopo): descrição curta
@@ -208,8 +211,16 @@ Corpo detalhado opcional.
 | `docs` | Documentação |
 | `refactor` | Refatoração sem mudança funcional |
 | `test` | Adição ou correção de testes |
+| `perf` | Melhoria de desempenho medida |
+| `ci` | Workflows e scripts do GitHub Actions |
+| `build` | Empacotamento e configuração de build |
 | `chore` | Manutenção, dependências |
 | `style` | Formatação, sem mudança funcional |
+
+A descrição diz **o que** mudou e **por quê**. Se ela precisa de vários "e"
+para juntar assuntos diferentes, são vários commits. `wip`, `update` e mensagem
+sem tipo não entram na `main`. As atualizações do Dependabot saem como
+`chore(deps): …` (npm e pip) e `ci(deps): …` (GitHub Actions).
 
 ### Escopos comuns
 
@@ -235,21 +246,50 @@ test(cli-detector): add version parsing edge cases
 
 ## Política de branch
 
+**O padrão é commitar direto na `main`.** Correção, documentação, ajuste
+localizado e refatoração que não muda comportamento entram sem branch.
+
 | Branch | Propósito |
 |--------|----------|
-| `main` | Desenvolvimento ativo |
-| `production` | Branch legada/configurável usada apenas pelo atalho explícito `--update` |
-| `feature/*` | Features em desenvolvimento |
-| `fix/*` | Correções de bugs |
-| `docs/*` | Atualizações de documentação |
+| `main` | Única branch de longa duração: desenvolvimento e release |
+| `feat/*`, `fix/*`, `refactor/*`, `docs/*` | Vida curta, só nas exceções abaixo; apagada assim que mesclada |
 
-### Fluxo
+A antiga `production` foi aposentada e não existe mais no remoto; o atalho
+`--update` do launcher usa a `main` por padrão.
 
-1. Criar branch a partir de `main`: `git checkout -b feature/nome-da-feature`
-2. Desenvolver, testar, commitar.
+### Quando abrir uma branch (exceção)
+
+Só quando a mudança for uma destas três:
+
+1. **Feature grande:** funcionalidade nova e substancial, com vários commits até
+   ficar utilizável.
+2. **Refatoração significativa:** mexe em vários módulos ou na estrutura do
+   projeto, e vale revisar ou reverter como um bloco.
+3. **Alto risco:** altera comportamento e precisa ser testada antes de entrar na
+   `main` (o CI do PR roda os mesmos gates, nos três sistemas).
+
+Se não dá para dizer qual das três justifica a branch, commite na `main`.
+
+### Fluxo com branch
+
+1. Criar a branch a partir da `main` atualizada: `git switch -c feat/descricao-curta`.
+2. Desenvolver, testar e commitar no padrão acima.
 3. Abrir PR para `main`.
-4. Após aprovação, fazer merge em `main`.
-5. O CI de `main` valida o commit; a conclusão verde aciona o workflow de release.
+4. Mesclar com **squash** (PR de um tema só) ou **rebase** (vários commits
+   coesos, cada um com um tema). O repositório não aceita merge commit, para a
+   `main` não receber commits "Merge branch …" fora do padrão.
+5. O GitHub apaga a branch remota ao mesclar. Apague a local e o worktree, se
+   houver: `git branch -d <branch>` e `git fetch --prune`.
+6. O CI de `main` valida o commit; a conclusão verde aciona o `Release gate`.
+
+Uma branch viva é trabalho em andamento: branch já mesclada não fica para trás.
+
+### Atualizar a `main` local
+
+Use `git pull --rebase` (ou `git config pull.rebase true` uma vez): o pull com
+merge cria commits "Merge branch 'main' of …" que entram no histórico fora do
+padrão. Quem contribui de fora (fork) segue o mesmo padrão de commits e abre o
+PR a partir do fork.
 
 ---
 
