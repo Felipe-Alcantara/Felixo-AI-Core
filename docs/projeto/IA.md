@@ -6430,3 +6430,37 @@ Task "permitir escolher a fonte (URL e branch) pela interface": o formulário j�
 
 - A janela real de login do Windows com um guia privado de verdade não foi vista (decisão: só a CI).
 - Achado do teste no app: sem locale UTF-8 (`env -i` sem `LANG`), o Electron não carrega o preload de um caminho com acentos e a interface mostra "Indisponível fora do app desktop" sem nenhum erro no console; com `LANG=C.UTF-8` funciona.
+
+## 2026-10-09 — Openia: geração de imagem de verdade pela tela, falta de créditos e Openia antigo
+
+### Contexto
+
+Task "Openia — tela no canvas para pedir e acompanhar geração de imagem". O popover "Gerar imagem" já existia (PR #94), mas nenhuma imagem tinha sido gerada de verdade. Ao tentar: o Openia instalado era a 0.1.0, sem `openia image` (o app mostrava "O Openia não conseguiu gerar a imagem."); o `.env` do Audiofy tinha `OPENROUTER_API_KEY` vazia; e a conta da chave do shell tinha US$ 0,77, abaixo do mínimo de US$ 1,00 que o OpenRouter exige para imagem.
+
+### Decisões do Felipe
+
+- Usar a chave à vontade nos testes; a chave usada foi a ativa do keystore do Audiofy ("Validacao voz estavel", conta com US$ 3,49), só no ambiente, nunca impressa.
+- Um Openia só: atualizar o instalado (não uma segunda instalação) e, se faltar algo, mudar o repositório do Openia e usar no AI Core.
+- O app avisar quando o Openia é antigo; cadastrar a chave no Openia para a produção funcionar.
+
+### O que mudou
+
+- Openia `6f75f8f` (0.2.1): 402 com o texto do saldo mínimo para imagem vira `minimum_balance`. `a832a14` corrige o registro: pelo endpoint de imagens, o mesmo saldo baixo chega como "Insufficient credits" (`account_limit`).
+- `official-cli-catalog.cjs`: pino do Openia (instalar e atualizar) de `024167e` para `6f75f8f`.
+- `openia-image-service.cjs`: `account_limit` e `minimum_balance` viram `insufficient_credits` (mensagem com o saldo mínimo para imagem), vencendo o código de saída 5 genérico; código 2 sem envelope + `openia --version` abaixo de 0.2.0 vira `openia_outdated` (a versão só é consultada nesse caso).
+- `GenerateImageButton.tsx` + `openia-update.ts`: com `openia_outdated`, o popover oferece "Atualizar o Openia" → aviso de que executa código do GitHub do Openia → "Confirmar atualização" (`cli:install-official`, o mesmo caminho do catálogo, com a repetição do PEP 668) → "Openia atualizado. Clique em Gerar de novo." (o erro antigo é esquecido).
+- Inventário do canvas: 3 controles novos; a lacuna do teste de interface aponta para a task nova do smoke.
+
+### Medido
+
+- Openia do Felipe atualizado pela função do app (`installOfficialCli('openia', { confirmed: true })`): 0.1.0 → 0.2.0 em 30 s e 0.2.0 → 0.2.1 em 25 s, as duas com `retriedWithBreakSystemPackages: true`.
+- CLI com chave só no ambiente: `google/gemini-3.1-flash-lite-image` gerou JPEG 1408×768 (42 KB) em 6 s; com só a chave cadastrada no Openia, JPEG de 95 KB em 6 s.
+- Janela real (código do worktree sobre o `dist`, perfil isolado, Openia real): Gerar → "Imagem adicionada ao canvas." em 11,6 s, blocos 0 → 1; Cancelar no meio → "A geração de imagem foi cancelada.", blocos 1 → 1 oito segundos depois; conta de US$ 0,77 → a mensagem de falta de créditos; `openia` falso igual à 0.1.0 no PATH → mensagem de Openia antigo → Atualizar → Confirmar → "Openia atualizado"; console sem erros nos quatro.
+- Testes: serviço 33/33 (os de créditos e de Openia antigo reprovaram antes), catálogo, `openia-update.test.ts` 5/5, inventário 9/9; lint e build ok; vitest 3040 passaram (5 pulados); suíte Node 2561 testes (2558 passaram, 3 pulados) no Node 25 e no 22.
+
+### Limitações
+
+- Só Linux foi visto rodando; macOS e Windows não.
+- O popover não tem teste de interface na CI (task aberta para a sessão de smoke).
+- A geração de imagem não usa a chave por conta do Felixo, só a do Openia (nota na task de unificar a chave).
+- O Openia guarda a chave dentro da pasta do pacote; sobreviver a uma troca de versão de verdade não foi medido (task aberta no Openia).
