@@ -41,7 +41,7 @@ describe('official-cli-catalog', () => {
       'install',
       '--user',
       '--upgrade',
-      'https://github.com/Felipe-Alcantara/Openia/archive/024167e.zip',
+      'https://github.com/Felipe-Alcantara/Openia/archive/6f75f8f.zip',
     ])
     // Atualizar instala o mesmo pino: um pino só no install deixaria o botão
     // de atualizar entregando a revisão antiga.
