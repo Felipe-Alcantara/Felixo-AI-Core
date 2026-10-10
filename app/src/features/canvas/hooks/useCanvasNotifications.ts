@@ -7,6 +7,10 @@ import {
 } from '../terminal/session-notifications'
 import {
   appendCanvasNotifications,
+  clearReadCanvasNotifications,
+  markAllCanvasNotificationsRead,
+  markCanvasNotificationRead,
+  removeCanvasNotification,
   type CanvasNotification,
 } from '../terminal/canvas-notifications'
 import {
@@ -177,8 +181,57 @@ export function useCanvasNotifications({ hydrated, nodes, store }: CanvasNotific
     [store],
   )
 
+  // Ações do painel. Marcar como lida ou remover uma notificação não lida
+  // também consome o pedido do agente, para ele não voltar a notificar.
+  const markNotificationRead = useCallback(
+    (notificationId: string) => {
+      const target = notificationHistory.find(
+        (notification) => notification.id === notificationId,
+      )
+      if (target) {
+        acknowledgeNodeNotifications(target.nodeId)
+      }
+      setNotificationHistory((current) =>
+        markCanvasNotificationRead(current, notificationId),
+      )
+    },
+    [acknowledgeNodeNotifications, notificationHistory],
+  )
+
+  const markAllNotificationsRead = useCallback(() => {
+    notificationHistory.forEach((notification) => {
+      if (notification.readAt !== null) return
+      acknowledgeNodeNotifications(notification.nodeId)
+    })
+    setNotificationHistory((current) => markAllCanvasNotificationsRead(current))
+  }, [acknowledgeNodeNotifications, notificationHistory])
+
+  const removeNotification = useCallback(
+    (notificationId: string) => {
+      const target = notificationHistory.find(
+        (notification) => notification.id === notificationId,
+      )
+      if (target?.readAt === null) {
+        acknowledgeNodeNotifications(target.nodeId)
+      }
+      setNotificationHistory((current) =>
+        removeCanvasNotification(current, notificationId),
+      )
+    },
+    [acknowledgeNodeNotifications, notificationHistory],
+  )
+
+  const clearReadNotifications = useCallback(
+    () => setNotificationHistory((current) => clearReadCanvasNotifications(current)),
+    [],
+  )
+
   return {
     acknowledgeNodeNotifications,
+    clearReadNotifications,
+    markAllNotificationsRead,
+    markNotificationRead,
+    removeNotification,
     notificationHistory,
     notificationSoundEnabled,
     notificationVolume,
