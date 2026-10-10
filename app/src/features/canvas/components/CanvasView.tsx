@@ -99,8 +99,6 @@ import {
   resolveQualityStandardPrompt,
   resolveTerminalInitialText,
 } from '../services/quality-standard-prompt'
-import { registerWebpageOpener } from '../../shared/links/link-chooser-store'
-import { webpageProfileForLinkSource } from '../services/webview-context-menu'
 import { stripTerminalSubmission, terminalTextForInsertion, toSubmittedTerminalText } from '../terminal/terminal-input'
 import { buildSkillActivationPrompt } from '../services/skill-prompt'
 import {
@@ -147,7 +145,6 @@ import {
 import {
   getDefaultNodeSize,
   findFreeNodePosition,
-  findFreeNodePositionNearNode,
   findFreeNodePositions,
   getNodeSize,
   isInside,
@@ -184,6 +181,7 @@ import { useCanvasPrompts } from '../hooks/useCanvasPrompts'
 import { useImageNodeActions } from '../hooks/useImageNodeActions'
 import { useMatrixArrange } from '../hooks/useMatrixArrange'
 import { useSafeViewport, type FlowPositionMapper } from '../hooks/useSafeViewport'
+import { useWebpageOpeners } from '../hooks/useWebpageOpeners'
 import type {
   CanvasImageArtifact,
   CanvasNodeData,
@@ -1831,74 +1829,7 @@ function CanvasInner({
     centerNodeInSafeArea(position, size, 0.8, 240)
   }, [addNode, centerNodeInSafeArea, focusNode, nodes, setNodes, visibleCanvasBounds])
 
-  /**
-   * Bloco Página Web pedido pelo menu de link (terminal, Markdown ou outra
-   * Página Web). Nasce ao lado do bloco de onde o link veio; sem bloco de
-   * origem no canvas (painel do Notion, System Design), numa área livre da
-   * tela. Vindo de outra Página Web, nasce no perfil dela. Devolve o id para
-   * o menu levar o foco ao bloco novo.
-   */
-  const openWebpageFromLink = useCallback(
-    (url: string, sourceId?: string) => {
-      const webpageSize = getDefaultNodeSize('webpage', window.innerWidth)
-      const source = sourceId ? nodes.find((node) => node.id === sourceId) : undefined
-      const position = source
-        ? findFreeNodePositionNearNode(nodes, source.id, webpageSize)
-        : findFreeNodePosition(nodes, webpageSize, visibleCanvasBounds())
-      // Como o pedido de agente com `--profile`: o link de uma página logada
-      // no perfil "Trabalho" continua logado nele, e não no Padrão.
-      const profileId = webpageProfileForLinkSource(source)
-      const id = addNode('webpage', { url, ...(profileId ? { profileId } : {}) }, position)
-      setNodes((current) =>
-        current.map((node) => ({ ...node, selected: node.id === id })),
-      )
-      const cameraSettled = centerNodeInSafeArea(position, webpageSize, 0.9, 220)
-      return { id, cameraSettled }
-    },
-    [addNode, centerNodeInSafeArea, nodes, setNodes, visibleCanvasBounds],
-  )
-
-  const openWebpageFromAgent = useCallback(
-    (url: string, profileId?: string) => {
-      const webpageSize = getDefaultNodeSize('webpage', window.innerWidth)
-      const position = findFreeNodePosition(nodes, webpageSize, visibleCanvasBounds())
-      // `felixo browser open --embedded --profile=Nome`: o processo principal
-      // já resolveu o nome; o Padrão é o bloco sem `profileId`.
-      const id = addNode(
-        'webpage',
-        { url, ...(profileId && profileId !== 'default' ? { profileId } : {}) },
-        position,
-      )
-      setNodes((current) =>
-        current.map((node) => ({ ...node, selected: node.id === id })),
-      )
-      centerNodeInSafeArea(position, webpageSize, 0.9, 220)
-    },
-    [addNode, centerNodeInSafeArea, nodes, setNodes, visibleCanvasBounds],
-  )
-
-  useEffect(() => {
-    const unsubscribe = window.felixo?.canvas?.onAgentBrowserOpen?.(({ url, profileId }) => {
-      if (typeof url === 'string' && url.trim()) {
-        openWebpageFromAgent(url, typeof profileId === 'string' ? profileId : undefined)
-      }
-    })
-
-    return () => unsubscribe?.()
-  }, [openWebpageFromAgent])
-
-  // O menu de link é global (montado no App) e chama sempre a versão atual,
-  // pela ref, sem re-registrar a cada mudança de `nodes`. Registrar é o que
-  // faz o menu oferecer "Abrir como Página Web": na tela do chat não há canvas.
-  const openWebpageFromLinkRef = useRef(openWebpageFromLink)
-  useEffect(() => {
-    openWebpageFromLinkRef.current = openWebpageFromLink
-  }, [openWebpageFromLink])
-  useEffect(
-    () =>
-      registerWebpageOpener((url, sourceId) => openWebpageFromLinkRef.current(url, sourceId)),
-    [],
-  )
+  useWebpageOpeners({ addNode, centerNodeInSafeArea, nodes, setNodes, visibleCanvasBounds })
 
   const addFileNode = useCallback(
     (name?: string) => {
