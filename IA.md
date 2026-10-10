@@ -8119,3 +8119,42 @@ antes de ser movido.
 Validação: `tsc -b`, `eslint` e os testes novos verdes; suíte completa e smoke do canvas pelo CI do PR.
 
 Estado: concluído.
+
+## 2026-10-09 — Decisão de subida do terminal: função pura, tabela de casos e achados
+
+O maior bloco que restava no `CanvasView.tsx`, o `useMemo` de `renderedNodes`, decide o que cada terminal faz ao
+subir. As funções que ele chama já tinham teste; a combinação delas (segurar o spawn, esperar a versão da CLI,
+esperar os guias do projeto, montar o texto inicial e a faixa) não tinha, e só existia dentro do componente.
+
+**Extração (commit 1).** O cálculo foi para `services/terminal-spawn-plan.ts`: `resolveTerminalSpawnPlan` (a
+decisão), `terminalSpawnData` (os campos que ela acrescenta ao bloco) e `terminalSpawnCacheDeps` (a parte dela na
+chave do cache). Expressões copiadas como estavam: conferido por script que, das linhas que saíram do componente,
+só diferem os imports e as duas leituras que agora chegam por parâmetro. O cache por bloco continua no componente,
+com a chave na mesma ordem, e a lista de dependências do `useMemo` não mudou. `CanvasView.tsx`: 2.520 → 2.375.
+
+**Tabela de casos (commit 2).** `terminal-spawn-plan.test.ts`, 49 testes, três tabelas no cabeçalho do arquivo: o
+que cada bloco recebe ao subir; as três esperas e suas combinações (das 8, só 5 acontecem: a espera pelos guias
+exige agente sem conversa, as outras duas exigem conversa gravada); e o cache (o que reconstrói e o que
+reaproveita). Dois invariantes sobre uma grade de 396 cenários: guias nunca coincidem com as outras esperas, e
+chave de cache igual implica dados iguais.
+
+**Achados (fixados nos testes, NÃO corrigidos):**
+
+1. *Gemini com o processo de pé e versões ainda carregando.* A espera pela versão vale só para o bloco sem
+   processo; com o processo de pé o plano é calculado sem versão e a faixa já sai montada com o texto de versão
+   desconhecida. Se ela chega a aparecer na tela depende de `visibleTerminalResumeBanner`, que não foi avaliado.
+2. *Lançador opaco com conversa do Gemini.* `waitsForCliVersion` não confere se o bloco segue o plano de retomada:
+   um lançador (que não recebe contexto nem retomada) com `agentSession` e comando `gemini` fica segurado até as
+   versões chegarem, sem faixa. Só acontece se um bloco assim tiver `agentSession` gravado.
+3. *`holdable` fora de `ids`.* A decisão não confere que os "sem processo" são um subconjunto dos restaurados. Hoje
+   quem monta os dois (`terminalRunRegistry`) garante isso; é uma dependência implícita.
+
+**Limite da validação.** O smoke do canvas no CI (`scripts/canvas-smoke.cjs`, Electron real) cria terminais novos e
+confere o que recebem, mas **não reabre o app com conversas gravadas**: ele não exercita retomada. O verde do CI
+prova que o app sobe e que o caminho do agente novo funciona; para a retomada, a garantia é a cópia literal
+conferida por script, o `tsc` e os 49 testes. Falta uma conferência manual da retomada no app (reabrir com um
+agente que tinha conversa), que não foi feita por falta de memória na máquina.
+
+Validação local: `tsc -b` e `eslint` limpos; os 49 testes passam.
+
+Estado: concluído (com a conferência manual da retomada pendente).
