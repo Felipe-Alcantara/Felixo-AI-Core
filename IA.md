@@ -8039,4 +8039,26 @@ por causa da memória da máquina).
 **Sem conferência visual local**: a máquina estava com menos de 1 GB livre e a sessão interrompeu a abertura
 do app. A conferência fica pelo smoke do canvas no CI (Electron real nos três sistemas, com capturas).
 
+## 2026-10-09 — Benchmark de terminal: dois critérios que reprovavam por ruído
+
+O job "Benchmarks" reprovou os PRs #107, #110 e #111 (macOS e Windows) sem relação com o código deles: a bancada
+carrega só uma página com o xterm (`benchmarks/terminal-scrollback-harness.html`).
+
+Medido em 8 runs verdes seguidos da `main` (07–09/10), mesmo código:
+
+- **Heap do `adaptive count=1`**: de 12,0 a 35,8 MiB (até 23,8 MiB de salto), enquanto o `current count=1` — a
+  mesma configuração, rodada antes no renderer compartilhado — fica em 13,5–16,8 MiB. O piso absoluto do gate
+  (`benchmark-regression-gate.cjs`) era 15 MiB, dentro dessa faixa. Passou a 32 MiB.
+- **Resume com `count=5`**: abaixo do limite adaptativo (10) as duas políticas usam o mesmo scrollback; a diferença
+  de resume entre elas (246–408 ms no macOS) é variação do runner. O `--check` da bancada
+  (`terminal-scrollback-benchmark.cjs`) agora só compara o resume a partir do limite adaptativo, como a comparação
+  de memória já fazia.
+
+Nos cenários em que a política muda algo (10 e 20 sessões) nada afrouxou: o ganho medido continua exigido
+(~95 contra ~150 MiB e ~400 contra ~570 ms com 10 sessões), e 60% de 85–290 MiB passa do piso com folga.
+
+Validação: testes novos com os valores reais que reprovaram (`benchmark-regression-gate.test.cjs`,
+`terminal-scrollback-benchmark.test.cjs`, 38 passando). Reexecutando o gate sobre os 8 relatórios reais, par a
+par no mesmo sistema (168 pares, mesmo código): o gate antigo reprova 10, o novo nenhum.
+
 Estado: concluído.

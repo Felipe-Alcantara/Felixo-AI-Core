@@ -98,6 +98,34 @@ test('o modo check detecta perda de identidade e regressão da política adaptat
   )
 })
 
+test('abaixo do limite adaptativo as duas políticas são a mesma configuração: resume diferente é ruído', () => {
+  // count=5 com limite 10: `adaptive` e `current` usam o mesmo scrollback, então
+  // a diferença entre as duas medidas só mostra a variação do runner (na main,
+  // 246–408 ms no macOS com o mesmo código). Reprovou o PR #107 duas vezes.
+  const base = {
+    phase: 'renderer-xterm',
+    policy: 'current',
+    count: 5,
+    scrollback: 20_000,
+    linesPerTerminal: 8_000,
+    linesWritten: [8_000],
+    resumedRows: [32],
+    lineIntegrity: [{ outputComplete: true, unexpectedGap: false }],
+    detachAttachPreserved: true,
+    resumeIntegrity: [{ outputComplete: true, unexpectedGap: false }],
+    resumeMs: 136,
+  }
+  const adaptive = { ...base, policy: 'adaptive', resumeMs: 288 }
+
+  assert.deepEqual(
+    benchmark.validateReport({
+      scenario: { adaptiveScrollback: 5_000, adaptiveThreshold: 10 },
+      results: [base, adaptive],
+    }),
+    [],
+  )
+})
+
 test('percentis são estáveis para amostras vazias, pares e ímpares', () => {
   assert.equal(benchmark.percentile([], 0.5), null)
   assert.equal(benchmark.percentile([1, 3, 2], 0.5), 2)

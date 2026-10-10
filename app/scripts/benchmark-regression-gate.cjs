@@ -45,6 +45,14 @@ function heapStreamDeltaBytes(result) {
 // diferença real, ~14 MiB, é ruído de runner, não regressão. Uma métrica só
 // vira regressão quando os DOIS critérios batem: variou mais que o limiar
 // percentual E a diferença absoluta é grande o bastante pra importar.
+//
+// O piso do heap é 32 MiB porque o salto do count=1 é maior do que o PR #89
+// mostrou: em 8 runs verdes seguidos da main (07–09/10/2026), o cenário
+// `adaptive count=1` foi de 12,0 a 35,8 MiB com o mesmo código — até 23,8 MiB
+// de diferença, por rodar depois do `current` no renderer compartilhado. Com
+// o piso em 15 MiB isso reprovou os PRs #107 e #110, que nem carregam o
+// xterm. Nos cenários que importam (10 e 20 sessões, 85–290 MiB) o limiar
+// percentual continua mandando: 60% deles passa de 32 MiB com folga.
 const METRICS = [
   { key: 'resumeMs', label: 'resume (ms)', read: (result) => result.resumeMs, minAbsoluteDelta: 300 },
   {
@@ -57,7 +65,7 @@ const METRICS = [
     key: 'heapStreamDeltaBytes',
     label: 'delta de heap do stream (bytes)',
     read: heapStreamDeltaBytes,
-    minAbsoluteDelta: 15 * 1024 * 1024,
+    minAbsoluteDelta: 32 * 1024 * 1024,
   },
 ]
 
