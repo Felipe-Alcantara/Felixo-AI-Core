@@ -11,10 +11,11 @@ import {
 } from './terminal-spawn-plan'
 
 /**
- * Estes testes fixam o comportamento ATUAL da decisão de subida de um bloco de
- * terminal, como ela era dentro do `useMemo` de `renderedNodes` do CanvasView.
- * Os casos marcados como "achado" parecem estranhos, mas é assim que o app
- * funciona hoje; estão registrados no IA.md e não foram corrigidos aqui.
+ * Estes testes fixam o comportamento da decisão de subida de um bloco de
+ * terminal, como ela era dentro do `useMemo` de `renderedNodes` do CanvasView,
+ * com as duas correções dos achados do #117 (a faixa não é montada sem a
+ * versão da CLI; lançador opaco não espera a versão). O achado 3 continua
+ * fixado como está: a garantia dele fica no registro de execução.
  *
  * ── Tabela 1: o que cada bloco recebe ao subir ─────────────────────────────
  * | Bloco                                           | Texto inicial          | Retoma pelo ID | Faixa |
@@ -33,8 +34,9 @@ import {
  * ── Tabela 2: as três esperas (o cartão só sobe com `initialTextReady`) ────
  * | Espera                  | Quando                                                            |
  * | escolha na faixa (hold) | retomada pendente E o bloco ainda não tem processo nesta execução |
- * | versão da CLI           | versões ainda não chegaram, bloco sem processo, conversa gravada, |
- * |                         | e a CLI retoma de um jeito que depende da versão (Gemini)         |
+ * | versão da CLI           | versões ainda não chegaram, bloco sem processo que segue o plano  |
+ * |                         | de retomada, conversa gravada, e a CLI retoma de um jeito que     |
+ * |                         | depende da versão (Gemini)                                        |
  * | guias do projeto        | agente novo com pasta, lembrete ligado, sem texto gravado nem     |
  * |                         | passagem, e os guias da pasta ainda não assentaram                |
  *
@@ -49,6 +51,8 @@ import {
  * restaurados, arestas hidratadas, lembrete que muda. Não invalida: o que não
  * muda nenhum desses valores (guias de outra pasta, versão de outra CLI). O
  * objeto `resumePlan` é novo a cada cálculo e por isso fica fora da chave.
+ * A faixa de um bloco COM processo também espera a versão (sem segurar o
+ * bloco); por isso `cliVersionPending` entra na chave.
  */
 
 const LEMBRETE = 'LEMBRETE-DE-QUALIDADE'
@@ -389,7 +393,7 @@ describe('Tabela 3: cache de dados do bloco', () => {
     return construcoes === 2
   }
 
-  it('a parte do plano na chave são oito valores primitivos, nesta ordem', () => {
+  it('a parte do plano na chave são nove valores primitivos, nesta ordem', () => {
     const { plano } = chave(bloco({ command: 'gemini', cwd: '/repo', agentSession: conversa('gemini') }), {
       restoredAgentTerminals: restauradoSemProcesso,
       agentCliVersions: { gemini: '0.9.0' },
@@ -404,6 +408,7 @@ describe('Tabela 3: cache de dados do bloco', () => {
       plano.cliVersion,
       plano.waitsForCliVersion,
       plano.isDirectOpenia,
+      plano.cliVersionPending,
     ])
     for (const valor of terminalSpawnCacheDeps(plano)) {
       expect(['string', 'boolean', 'undefined']).toContain(typeof valor)
@@ -427,6 +432,12 @@ describe('Tabela 3: cache de dados do bloco', () => {
       { command: 'gemini', cwd: '/repo', agentSession: conversa('gemini') },
       { restoredAgentTerminals: restauradoSemProcesso, agentCliVersions: null },
       { restoredAgentTerminals: restauradoSemProcesso, agentCliVersions: { gemini: '0.9.0' } },
+    ],
+    [
+      'as versões chegam sem a do Gemini, com o processo dele de pé (a faixa deixa de esperar)',
+      { command: 'gemini', cwd: '/repo', agentSession: conversa('gemini') },
+      { restoredAgentTerminals: restauradoComProcesso, agentCliVersions: null },
+      { restoredAgentTerminals: restauradoComProcesso, agentCliVersions: {} },
     ],
     ['os guias da pasta assentam', { command: 'claude', cwd: '/repo' }, { projectGuides: semGuias }, {}],
     [
@@ -511,34 +522,35 @@ describe('Tabela 3: cache de dados do bloco', () => {
   })
 })
 
-describe('Achados: casos estranhos fixados como estão', () => {
-  it('achado 1: Gemini com o processo de pé já sai com a faixa montada antes de a versão chegar', () => {
-    // A espera pela versão vale só para o bloco ainda sem processo. Com o
-    // processo de pé e as versões ainda carregando, o plano é calculado sem
-    // versão e a faixa já sai montada.
-    const { plano, campos } = decidir(
-      { command: 'gemini', cwd: '/repo', agentSession: conversa('gemini') },
-      { restoredAgentTerminals: restauradoComProcesso, agentCliVersions: null },
-    )
+describe('Achados do #117', () => {
+  it('Gemini com o processo de pé não monta a faixa enquanto a versão não chega, e não é segurado', () => {
+    // Era o achado 1: sem versão, a faixa saía montada como "versão
+    // desconhecida" e trocava quando a versão chegava. O bloco com processo
+    // continua não sendo segurado; só a faixa espera.
+    const dados: Dados = { command: 'gemini', cwd: '/repo', agentSession: conversa('gemini') }
+    const carregando = decidir(dados, { restoredAgentTerminals: restauradoComProcesso, agentCliVersions: null })
+    const chegou = decidir(dados, { restoredAgentTerminals: restauradoComProcesso, agentCliVersions: {} })
 
-    expect(plano.waitsForCliVersion).toBe(false)
-    expect(plano.cliVersion).toBeUndefined()
-    expect(campos.resumeBanner).not.toBeNull()
-    expect(campos.initialTextReady).toBe(true)
+    expect(carregando.plano.cliVersionPending).toBe(true)
+    expect(carregando.plano.waitsForCliVersion).toBe(false)
+    expect(carregando.campos.resumeBanner).toBeNull()
+    expect(carregando.campos.initialTextReady).toBe(true)
+    expect(chegou.plano.cliVersionPending).toBe(false)
+    expect(chegou.campos.resumeBanner).not.toBeNull()
   })
 
-  it('achado 2: lançador opaco com conversa do Gemini espera a versão sem seguir o plano de retomada', () => {
-    // `waitsForCliVersion` não olha se o bloco segue o plano: um lançador (que
-    // não recebe contexto nem retomada) com conversa gravada e comando gemini
-    // fica segurado até as versões chegarem, sem faixa para explicar.
+  it('lançador opaco com conversa do Gemini não espera a versão: ele não segue o plano de retomada', () => {
+    // Era o achado 2: o lançador ficava segurado até as versões chegarem, sem
+    // faixa para explicar, por uma retomada que ele nunca faz.
     const { plano, campos } = decidir(
       { command: 'gemini', launchMode: 'launcher', cwd: '/repo', agentSession: conversa('gemini') },
       { restoredAgentTerminals: restauradoSemProcesso, agentCliVersions: null },
     )
 
     expect(plano.followsResumePlan).toBe(false)
-    expect(plano.waitsForCliVersion).toBe(true)
-    expect(campos.initialTextReady).toBe(false)
+    expect(plano.cliVersionPending).toBe(false)
+    expect(plano.waitsForCliVersion).toBe(false)
+    expect(campos.initialTextReady).toBe(true)
     expect(campos.resumeBanner).toBeNull()
   })
 
