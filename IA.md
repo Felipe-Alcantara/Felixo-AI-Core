@@ -8082,3 +8082,22 @@ Validação: `tsc -b` e `eslint` limpos. O vitest local **não rodou**: a fila d
 ocupada (posição 6); a suíte roda no CI do PR, junto com o smoke do canvas no Electron real.
 
 Estado: concluído.
+
+## 2026-10-09 — Divisão do CanvasView, parte 3: Página Web por link/agente e dados do terminal novo
+
+- `hooks/useWebpageOpeners.ts`: os dois caminhos que criam um bloco Página Web sem a sidebar (menu de link global
+  e `felixo browser open --embedded`) com os efeitos que os registram. Só mudança de lugar.
+- `services/terminal-node-data.ts`: a regra que monta os dados de um bloco de terminal novo (comando, pasta, conta e
+  o texto que o agente recebe ao subir) virou **função pura**. Antes era um `useCallback` lendo refs; agora o
+  lembrete de qualidade e as skills chegam por parâmetro e o `CanvasView` só repassa. Com isso a regra ganhou
+  testes (`terminal-node-data.test.ts`, 7): shell simples sem texto, agente com o lembrete digitado e não
+  submetido, passagem de responsabilidade submetida (e não submetida na continuação desmarcada), lançador opaco sem
+  contexto, `accountMode` só na cadeia e a cor do preset como moldura.
+
+`CanvasView.tsx`: 2.728 → 2.594 linhas (3.392 no começo do dia). O que resta de grande: o `useMemo` de
+`renderedNodes` (~265 linhas), a continuação/passagem de responsabilidade e o JSX do `return` (~390 linhas).
+
+Validação: `tsc -b` e `eslint` limpos; os 7 testes novos passam. A suíte completa roda no CI do PR (a fila de
+trabalho pesado da máquina seguia ocupada).
+
+Estado: concluído.
