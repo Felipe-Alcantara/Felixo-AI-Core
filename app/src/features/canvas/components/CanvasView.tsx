@@ -84,13 +84,7 @@ import {
   markCanvasNotificationsReadForNode,
   pruneCanvasNotifications,
 } from '../terminal/canvas-notifications'
-import {
-  isTerminalInitialTextReady,
-  qualityStandardGuidesFrom,
-  resolveQualityStandardPrompt,
-  resolveTerminalInitialText,
-} from '../services/quality-standard-prompt'
-import { stripTerminalSubmission, terminalTextForInsertion, toSubmittedTerminalText } from '../terminal/terminal-input'
+import { terminalTextForInsertion, toSubmittedTerminalText } from '../terminal/terminal-input'
 import { buildSkillActivationPrompt } from '../services/skill-prompt'
 import {
   createManualPromptInsertion,
@@ -98,22 +92,15 @@ import {
   createPromptInsertion,
   type PromptInsertion,
 } from '../../shared/types/prompt-insertion'
+import { isKnownAgentCommand } from '../services/agent-launch-options'
 import {
-  isDirectOpeniaLaunch,
-  isKnownAgentCommand,
-} from '../services/agent-launch-options'
-import {
-  explainAgentResume,
   isAgentSessionReference,
   type AgentResumeFailure,
   type AgentSessionReference,
 } from '../services/agent-session'
-import { resumeDependsOnVersion } from '../services/agent-resume-capability'
 import { loadAgentCliVersions, type AgentCliVersions } from '../services/agent-cli-versions'
 import {
   agentSessionPatch,
-  buildTerminalResumeBanner,
-  followsTerminalResumePlan,
   resolveTerminalRelaunch,
   resumeFailurePatch,
   terminalResumeActionPatch,
@@ -159,6 +146,12 @@ import {
 } from '../services/terminal-handoff'
 import type { NewTerminalOptions } from '../services/new-terminal-options'
 import {
+  resolveTerminalSpawnPlan,
+  terminalSpawnCacheDeps,
+  terminalSpawnData,
+  type RestoredAgentTerminals,
+} from '../services/terminal-spawn-plan'
+import {
   buildTerminalNodeData as buildTerminalNodeDataFrom,
   type TerminalNodeDataOptions,
 } from '../services/terminal-node-data'
@@ -187,14 +180,6 @@ import type {
   DiagnosisRequestStatus,
   TerminalNodeData,
 } from '../types'
-
-type RestoredAgentTerminals = {
-  captured: boolean
-  /** Agentes vindos do disco nesta execução do app: seguem o plano de retomada. */
-  ids: ReadonlySet<string>
-  /** Os restaurados ainda sem processo nesta execução: só esses são segurados. */
-  holdable: ReadonlySet<string>
-}
 
 /**
  * O que precisa durar a execução do app, não a montagem do canvas: blocos cujo
@@ -1343,156 +1328,26 @@ function CanvasInner({
       }
 
       if (node.type === 'terminal') {
-        const quality = qualityStandard
-        // O lembrete cita os guias do projeto deste terminal (ou os da pessoa).
-        const terminalProject =
-          typeof node.data.cwd === 'string' ? projectGuides.projects[node.data.cwd] : undefined
-        const qualityPrompt = terminalProject
-          ? resolveQualityStandardPrompt({
-              stored: qualityInputs.stored,
-              source: qualityStandardGuidesFrom(terminalProject) ?? qualityInputs.source,
-            })
-          : quality.prompt
-        const connectedFileNames = connectionIndex.getConnectedCanvasFileNames(node.id)
-        const canvasFilePaths = terminalCanvasFilePaths[node.id] ?? []
-        const initialTextReady = isTerminalInitialTextReady({
-          restoredAgentsCaptured: restoredAgentTerminals.captured,
+        const spawn = resolveTerminalSpawnPlan(node.data, {
+          nodeId: node.id,
+          qualityStandard,
+          qualityInputs,
+          projectGuides: { projects: projectGuides.projects, settled: projectGuides.settled },
+          connectedFileNames: connectionIndex.getConnectedCanvasFileNames(node.id),
+          canvasFilePaths: terminalCanvasFilePaths[node.id] ?? [],
+          restoredAgentTerminals,
           edgesHydrated,
-          connectedCanvasFileCount: connectedFileNames.length,
-          resolvedCanvasFileCount: canvasFilePaths.length,
-        })
-        const isDirectOpenia = isDirectOpeniaLaunch(node.data.command, node.data.args)
-        const hasAgentCommand =
-          isDirectOpenia ||
-          (node.data.launchMode !== 'launcher' && isKnownAgentCommand(node.data.command))
-        // Agente restaurado (ou com conversa associada, para o Reiniciar):
-        // `explainAgentResume` decide se retoma pelo ID, digita `/resume`,
-        // abre conversa nova ou — quando a conversa gravada não é exata —
-        // segura o spawn até a pessoa escolher na faixa do cartão.
-        const isRestoredAgent = restoredAgentTerminals.ids.has(node.id)
-        const followsResumePlan = followsTerminalResumePlan({
-          isRestoredAgent,
-          hasAgentCommand,
-          reference: node.data.agentSession,
-        })
-        const cliVersion = agentCliVersions?.[node.data.command ?? ''] ?? undefined
-        const resumePlan = followsResumePlan
-          ? explainAgentResume({
-              command: node.data.command,
-              cwd: node.data.cwd,
-              reference: node.data.agentSession,
-              accountId: node.data.accountId,
-              failure: node.data.resumeFailure,
-              choice: node.data.resumeChoice,
-              cliVersion,
-            })
-          : undefined
-        const resumeAgentSession = resumePlan?.outcome === 'exact'
-        const resumePending = resumePlan?.outcome === 'pending'
-        // Bloco restaurado ainda sem processo, com conversa gravada numa CLI
-        // cujo método depende da versão: espera a versão chegar. Sem isto o
-        // Gemini decidiria como "versão desconhecida" e a faixa piscaria
-        // antes de a versão confirmar a retomada pelo ID.
-        const waitsForCliVersion =
-          agentCliVersions === null &&
-          restoredAgentTerminals.holdable.has(node.id) &&
-          node.data.agentSession !== undefined &&
-          resumeDependsOnVersion(node.data.command)
-        // Só o PRIMEIRO spawn de um bloco vindo do disco é segurado. Um bloco
-        // cujo processo já subiu nesta execução (mesmo antes de uma ida ao
-        // chat ou de um reload da interface) não tem o que segurar: o
-        // `ensure()` dele é no-op ou só reanexa ao PTY vivo; a pendência vale
-        // para o próximo Reiniciar, que mostra a faixa em vez de subir.
-        const holdForResumeChoice = resumePending && restoredAgentTerminals.holdable.has(node.id)
-        // Left open from a previous run: whatever it was doing may not have
-        // finished, so type "/resume" on this (re)spawn instead of the usual
-        // standing instruction — see restoredAgentTerminalIds above. With a
-        // pending plan nothing is typed: the block waits for the person.
-        const fallbackInitialText = resolveTerminalInitialText({
-          isRestoredAgent: followsResumePlan,
-          command: node.data.command,
-          qualityStandardEnabled: quality.enabled,
-          qualityStandardPrompt: qualityPrompt,
-          hasCommand: hasAgentCommand,
-          // `handoffText` é transitório e carrega um pedido de verdade, então
-          // pode sair submetido; `initialText` é persistido e é sempre
-          // contexto. O recorte cobre os blocos salvos antes desta mudança,
-          // gravados com o Enter no fim — sem ele, um canvas antigo voltaria a
-          // executar sozinho ao reabrir.
-          existingInitialText:
-            node.data.handoffText ?? stripTerminalSubmission(node.data.initialText),
-          canvasFilePaths,
-          identity: { agentName: node.data.label, cwd: node.data.cwd },
-          cwd: node.data.cwd,
-          agentSession: node.data.agentSession,
-          accountId: node.data.accountId,
-          resumeAgentSession,
-          resumeFailure: node.data.resumeFailure,
-          resumeChoice: node.data.resumeChoice,
-          cliVersion,
+          agentCliVersions,
         })
         const terminalIndex = terminalOrder.get(node.id)
-        // Só quando o lembrete vai ser MONTADO aqui (agente sem texto gravado):
-        // espera a camada do projeto assentar, para não subir citando os guias
-        // errados. Bloco novo já nasce com o texto, montado na criação.
-        const waitsForProjectGuides =
-          quality.enabled &&
-          hasAgentCommand &&
-          !followsResumePlan &&
-          typeof node.data.cwd === 'string' &&
-          Boolean(node.data.cwd) &&
-          !node.data.handoffText &&
-          !stripTerminalSubmission(node.data.initialText) &&
-          !projectGuides.settled[node.data.cwd]
-
         return {
           ...withHandle,
           data: reuseData(
             node.id,
-            [
-              node.data,
-              fallbackInitialText,
-              initialTextReady,
-              waitsForProjectGuides,
-              // O plano e a faixa são funções de `node.data` e destes flags;
-              // o objeto do plano, novo a cada render, invalidaria o cache.
-              followsResumePlan,
-              holdForResumeChoice,
-              cliVersion,
-              waitsForCliVersion,
-              isDirectOpenia,
-              terminalIndex,
-              terminalCount,
-            ],
+            [node.data, ...terminalSpawnCacheDeps(spawn), terminalIndex, terminalCount],
             () => ({
               ...node.data,
-              // Retomada exata não digita nada; pendente não sobe — e nenhum
-              // dos dois pode carregar a instrução de largada gravada.
-              ...(resumeAgentSession || resumePending
-                ? { initialText: undefined }
-                : fallbackInitialText
-                  ? { initialText: fallbackInitialText }
-                  : {}),
-              // A passagem vira o texto inicial deste bloco; a sessão precisa
-              // saber disso para nunca reenviá-la num relançamento automático.
-              initialTextIsHandoff: !resumeAgentSession && Boolean(node.data.handoffText),
-              // Retomada pendente usa a mesma barreira da espera pelos
-              // arquivos do canvas: o cartão não chama `ensure()` enquanto
-              // for `false`. Nada sobe, nada é apagado, o canvas fica intacto
-              // — "agora não" é simplesmente não clicar na faixa.
-              initialTextReady:
-                initialTextReady && !holdForResumeChoice && !waitsForCliVersion && !waitsForProjectGuides,
-              resumeAgentSession,
-              resumePlan,
-              resumeCliVersion: cliVersion,
-              resumeBanner: resumePlan && !waitsForCliVersion
-                ? buildTerminalResumeBanner({
-                    plan: resumePlan,
-                    reference: node.data.agentSession,
-                    cwd: node.data.cwd,
-                    command: node.data.command,
-                  })
-                : null,
+              ...terminalSpawnData(node.data, spawn),
               terminalIndex,
               terminalCount,
               onExpand: openTerminal,
