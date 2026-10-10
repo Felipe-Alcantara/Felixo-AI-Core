@@ -91,11 +91,12 @@ test('baseline zero ou negativo não gera regressão de "infinitos %"', () => {
 })
 
 test('compara pelo delta de heap do stream quando os dois relatórios têm heap', () => {
+  // Ordem de grandeza de 10 sessões: ~95 MiB na main, +57 MiB no PR.
   const baseline = {
-    results: [scenario({ heapBefore: { usedJsHeapBytes: 0 }, heapAfterStream: { usedJsHeapBytes: 20_000_000 } })],
+    results: [scenario({ heapBefore: { usedJsHeapBytes: 0 }, heapAfterStream: { usedJsHeapBytes: 100_000_000 } })],
   }
   const current = {
-    results: [scenario({ heapBefore: { usedJsHeapBytes: 0 }, heapAfterStream: { usedJsHeapBytes: 40_000_000 } })],
+    results: [scenario({ heapBefore: { usedJsHeapBytes: 0 }, heapAfterStream: { usedJsHeapBytes: 160_000_000 } })],
   }
 
   const result = compareReports({ baseline, current, thresholdPercent: 20 })
@@ -119,13 +120,35 @@ test('% grande sobre base pequena não é regressão quando a diferença absolut
   assert.equal(result.ok, true)
 })
 
+test('o salto de heap do count=1 entre runners não é regressão — casos reais dos PRs #107, #110 e #111', () => {
+  // Mesmo código, runs diferentes: 14,2 → 34,7 MiB (+143%) no Windows e
+  // 15,3 → 33,4 MiB (+118%) no macOS reprovaram PRs que nem carregam o xterm.
+  // Em 8 runs verdes seguidos da main, esse cenário foi de 12,0 a 35,8 MiB.
+  const casos = [
+    [14_240_574, 34_651_836],
+    [15_333_060, 33_375_892],
+    [14_039_568, 33_437_292],
+    [18_603_139, 35_409_407],
+  ]
+  for (const [before, after] of casos) {
+    const baseline = {
+      results: [scenario({ heapBefore: { usedJsHeapBytes: 0 }, heapAfterStream: { usedJsHeapBytes: before } })],
+    }
+    const current = {
+      results: [scenario({ heapBefore: { usedJsHeapBytes: 0 }, heapAfterStream: { usedJsHeapBytes: after } })],
+    }
+
+    assert.equal(compareReports({ baseline, current, thresholdPercent: 60 }).ok, true, `${before} → ${after}`)
+  }
+})
+
 test('% grande sobre base pequena AINDA é regressão quando a diferença absoluta também é grande', () => {
   const baseline = {
     results: [scenario({ heapBefore: { usedJsHeapBytes: 0 }, heapAfterStream: { usedJsHeapBytes: 20_000_000 } })],
   }
   const current = {
-    // +100%, e 20 MiB reais de diferença — acima do piso de 15 MiB.
-    results: [scenario({ heapBefore: { usedJsHeapBytes: 0 }, heapAfterStream: { usedJsHeapBytes: 40_000_000 } })],
+    // +200%, e ~38 MiB reais de diferença — acima do piso de 32 MiB.
+    results: [scenario({ heapBefore: { usedJsHeapBytes: 0 }, heapAfterStream: { usedJsHeapBytes: 60_000_000 } })],
   }
 
   const result = compareReports({ baseline, current, thresholdPercent: 60 })

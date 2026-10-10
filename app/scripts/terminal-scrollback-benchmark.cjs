@@ -196,8 +196,12 @@ function validateReport(report, { platform = process.platform } = {}) {
       )
     }
 
+    // Abaixo do limite adaptativo as duas políticas rodam com o mesmo
+    // scrollback: a diferença de resume entre elas é só a variação do runner
+    // (246–408 ms no macOS com o mesmo código), não efeito da política.
     if (
       baseline &&
+      result.count >= adaptiveThreshold &&
       Number.isFinite(baseline.resumeMs) &&
       baseline.resumeMs > 0 &&
       Number.isFinite(result.resumeMs) &&
