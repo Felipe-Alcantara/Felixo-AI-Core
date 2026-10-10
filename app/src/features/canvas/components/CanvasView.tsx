@@ -31,7 +31,6 @@ import { DictationButton } from './DictationButton'
 import { useDictation } from '../hooks/useDictation'
 import { useDictationShortcut } from '../hooks/useDictationShortcut'
 import { formatShortcut, matchesShortcut } from '../services/dictation'
-import { buildPresetInstruction } from '../services/agent-preset-prompt'
 import { NodeColorMenu } from './NodeColorMenu'
 import { frameClassName } from './frame-colors'
 import { notificationClassName, unreadCategoryByNode } from '../terminal/notification-category'
@@ -90,10 +89,6 @@ import {
   removeCanvasNotification,
 } from '../terminal/canvas-notifications'
 import {
-  buildPlanningFileInstruction,
-  buildCanvasTerminalInitialText,
-  buildQualityStandardMessage,
-  composeTerminalInitialText,
   isTerminalInitialTextReady,
   qualityStandardGuidesFrom,
   resolveQualityStandardPrompt,
@@ -166,6 +161,10 @@ import {
   buildTerminalHandoffPrompt,
 } from '../services/terminal-handoff'
 import type { NewTerminalOptions } from '../services/new-terminal-options'
+import {
+  buildTerminalNodeData as buildTerminalNodeDataFrom,
+  type TerminalNodeDataOptions,
+} from '../services/terminal-node-data'
 import { HandoffDialog } from './HandoffDialog'
 import { AccountSwitchDialog } from './AccountSwitchDialog'
 import { AccountChainActionsContext } from '../hooks/account-chain-actions-context'
@@ -1932,77 +1931,13 @@ function CanvasInner({
   }, [openTextFileNode])
 
   const buildTerminalNodeData = useCallback(
-    (options: NewTerminalOptions & { handoffText?: string; handoffAutoSubmit?: boolean }) => {
-      // Agent terminals get the standing quality-standard instruction (if on)
-      // plus their canvas identity (name, cwd, multi-agent setting); a plain
-      // shell does not (there's no agent to read it).
-      //
-      // Só a passagem de responsabilidade sai submetida: ela carrega um pedido
-      // que alguém despachou de propósito para este terminal. A instrução
-      // permanente sozinha é contexto — fica digitada na entrada esperando o
-      // usuário escrever a tarefa, em vez de o agente subir executando.
-      const quality = qualityStandardRef.current
-      // Os guias que valem na pasta do terminal (projeto) ou os da pessoa.
-      const qualityPrompt = qualityPromptFor(options.cwd)
-      const isDirectOpenia = isDirectOpeniaLaunch(options.command, options.args)
-      const isOpaqueLauncher = options.launchMode === 'launcher' && !isDirectOpenia
-      const isContextAwareCommand = Boolean(options.command && !isOpaqueLauncher)
-      const planningInstruction = isContextAwareCommand
-        ? buildPlanningFileInstruction(options.planningFile)
-        : undefined
-      // Preset de agente: contexto e skills dele entram no mesmo initialText,
-      // que o session-store entrega por arquivo. Passagem de responsabilidade
-      // (handoff) carrega o próprio pedido e não recebe preset.
-      const presetInstruction = isContextAwareCommand && !options.handoffText
-        ? buildPresetInstruction(options.preset, availableSkillsRef.current)
-        : undefined
-      const handoffSections = isContextAwareCommand && options.handoffText
-        ? composeTerminalInitialText(
-            quality.enabled ? buildQualityStandardMessage(qualityPrompt) : undefined,
-            options.handoffText,
-            planningInstruction,
-          )
-        : undefined
-      // Na continuação da cadeia a pessoa pode desmarcar "pedir para o agente
-      // continuar": aí o contexto vai sem submissão, esperando por ela.
-      const handoffInstruction = handoffSections
-        ? options.handoffAutoSubmit === false
-          ? handoffSections
-          : toSubmittedTerminalText(handoffSections)
-        : undefined
-      const initialText = isContextAwareCommand
-        ? handoffInstruction ?? composeTerminalInitialText(
-            quality.enabled
-              ? buildCanvasTerminalInitialText(
-                  qualityPrompt,
-                  undefined,
-                  [],
-                  { agentName: options.label, cwd: options.cwd },
-                  availableSkillsRef.current,
-                )
-              : undefined,
-            presetInstruction,
-            planningInstruction,
-          )
-        : undefined
-
-      return {
-        label: options.label,
-        ...(options.command ? { command: options.command } : {}),
-        ...(options.args && options.args.length ? { args: options.args } : {}),
-        ...(options.cwd ? { cwd: options.cwd } : {}),
-        ...(options.accountId ? { accountId: options.accountId } : {}),
-        ...(options.providerId ? { providerId: options.providerId } : {}),
-        // Só a cadeia marca `chain`; ausente o bloco é fixo (decisão 5).
-        ...(options.accountMode === 'chain' ? { accountMode: 'chain' as const } : {}),
-        ...(options.chainTicket ? { chainTicket: options.chainTicket } : {}),
-        ...(options.chainOrigin ? { chainOrigin: options.chainOrigin } : {}),
-        ...(options.launchMode ? { launchMode: options.launchMode } : {}),
-        ...(options.preset?.color ? { frameColor: options.preset.color } : {}),
-        ...(initialText && !options.handoffText ? { initialText } : {}),
-        ...(options.handoffText ? { handoffText: initialText } : {}),
-      }
-    },
+    (options: TerminalNodeDataOptions) =>
+      buildTerminalNodeDataFrom(options, {
+        quality: qualityStandardRef.current,
+        // Os guias que valem na pasta do terminal (projeto) ou os da pessoa.
+        qualityPrompt: qualityPromptFor(options.cwd),
+        availableSkills: availableSkillsRef.current,
+      }),
     [availableSkillsRef, qualityPromptFor, qualityStandardRef],
   )
 
