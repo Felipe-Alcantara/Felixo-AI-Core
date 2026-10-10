@@ -8062,3 +8062,23 @@ Validação: testes novos com os valores reais que reprovaram (`benchmark-regres
 par no mesmo sistema (168 pares, mesmo código): o gate antigo reprova 10, o novo nenhum.
 
 Estado: concluído.
+
+## 2026-10-09 — Divisão do CanvasView, parte 2: Organizar em matriz e ações de imagem
+
+Mais dois blocos saíram do `CanvasView.tsx` para hooks, um commit por extração, sem mudar comportamento:
+
+- `hooks/useMatrixArrange.ts`: o "Organizar" (posições da matriz, animação de deslocamento com cancelamento ao
+  desmontar, enquadramento do resultado) e as duas funções de classe CSS que só ele usava.
+- `hooks/useImageNodeActions.ts`: duplicar a imagem num bloco ao lado, apontar para outro arquivo quando o
+  original sumiu e apagar uma imagem gerada temporária.
+
+Como na parte 1, as refs recebidas por parâmetro entraram nas listas de dependências (identidade estável).
+
+`CanvasView.tsx`: 2.924 → 2.728 linhas (3.392 no começo do dia). Restam como maiores blocos o `useMemo` de
+`renderedNodes` (~265 linhas), a criação de terminais (`buildTerminalNodeData`, continuação e passagem de
+responsabilidade) e o JSX do `return` (~390 linhas).
+
+Validação: `tsc -b` e `eslint` limpos. O vitest local **não rodou**: a fila de trabalho pesado da máquina estava
+ocupada (posição 6); a suíte roda no CI do PR, junto com o smoke do canvas no Electron real.
+
+Estado: concluído.
