@@ -8101,3 +8101,21 @@ Validação: `tsc -b` e `eslint` limpos; os 7 testes novos passam. A suíte comp
 trabalho pesado da máquina seguia ocupada).
 
 Estado: concluído.
+
+## 2026-10-09 — Divisão do CanvasView, parte 4: painel de notificações, rota acesa e arquivos herdados
+
+- As quatro ações do painel de notificações (marcar como lida, marcar todas, remover, limpar as lidas) estavam
+  escritas dentro do JSX; foram para o `useCanvasNotifications`, junto do estado que alteram.
+- `hooks/useRouteHighlight.ts`: o estado das rotas acesas quando uma entrega chega ao terminal, com os
+  temporizadores e a limpeza ao desmontar.
+- `getLinkedFileNodeIds` (`services/file-terminal-links.ts`): a regra de quais arquivos um terminal de continuação
+  herda virou função pura; o serviço ganhou o primeiro arquivo de teste (3 casos: duas direções da linha, só
+  arquivos, sem repetir).
+
+`CanvasView.tsx`: 2.594 → 2.520 linhas (3.392 no começo do dia). O `useMemo` de `renderedNodes` (~265 linhas) ficou
+de fora de propósito: ele decide a retomada de cada agente e tem cache por bloco, e precisa de testes dedicados
+antes de ser movido.
+
+Validação: `tsc -b`, `eslint` e os testes novos verdes; suíte completa e smoke do canvas pelo CI do PR.
+
+Estado: concluído.
