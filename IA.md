@@ -8013,3 +8013,30 @@ A suíte completa de testes node e o vitest inteiro **não** rodaram até o fim:
 sessão interrompeu a suíte. O CI do PR roda tudo.
 
 Estado: concluído.
+
+## 2026-10-09 — Divisão do CanvasView: câmera, textos dos agentes e notificações
+
+O `CanvasView.tsx` tinha 3.392 linhas. Três blocos coesos saíram para hooks, um commit por extração, sem mudar
+comportamento (mesmo código, mudando só de lugar):
+
+- `hooks/useSafeViewport.ts`: as seis funções que centralizam um bloco ou enquadram o canvas na área útil
+  (descontando topbar, sidebar, painéis e inspector) e o tipo `FlowPositionMapper`.
+- `hooks/useCanvasPrompts.ts`: instruções de arquivo ligado a terminal, catálogo de skills e o lembrete do padrão
+  de qualidade (fonte do System Design e guias por projeto), com os efeitos que carregam e acompanham esses textos.
+- `hooks/useCanvasNotifications.ts`: histórico persistido, som e a regra de quando um agente aguardando vira
+  notificação nova.
+
+Detalhes que não são "só mover": as refs e os setters que agora chegam por parâmetro ou retorno de hook entraram nas
+listas de dependências dos `useCallback`/`useEffect` (o lint exige; a identidade deles não muda, então nada
+re-executa a mais). Os dois efeitos que carregam os textos do backend rodam agora junto do resto do
+`useCanvasPrompts`, um pouco antes na ordem de montagem; eles só disparam leituras assíncronas e uma inscrição.
+
+`CanvasView.tsx`: 3.392 → 2.924 linhas. Próximas extrações candidatas: o `useMemo` de `renderedNodes` (~265
+linhas), `organizeCanvasBlocks` e as operações de bloco de imagem.
+
+Validação: `tsc -b` e `eslint` limpos; `vitest` de `src/features/canvas` com 1.676 testes passando (2 workers,
+por causa da memória da máquina).
+**Sem conferência visual local**: a máquina estava com menos de 1 GB livre e a sessão interrompeu a abertura
+do app. A conferência fica pelo smoke do canvas no CI (Electron real nos três sistemas, com capturas).
+
+Estado: concluído.
