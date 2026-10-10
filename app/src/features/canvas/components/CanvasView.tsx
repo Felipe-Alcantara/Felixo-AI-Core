@@ -178,13 +178,10 @@ import { formatClockTime, ptySessionIdForNode } from '../services/account-chain-
 import { requestAgentUsageTab } from '../services/agent-usage-panel-tab'
 import { OnboardingMount } from '../../onboarding/OnboardingMount'
 import { WATCHES_CANVAS_NODE_TYPES, nodeTypesKeyOf } from '../../onboarding/onboarding-canvas-triggers'
-import {
-  arrangeNodesAsMatrix,
-  countArrangeableNodes,
-  type ArrangeMode,
-} from '../services/canvas-matrix-layout'
+import { countArrangeableNodes } from '../services/canvas-matrix-layout'
 import { useCanvasNotifications } from '../hooks/useCanvasNotifications'
 import { useCanvasPrompts } from '../hooks/useCanvasPrompts'
+import { useMatrixArrange } from '../hooks/useMatrixArrange'
 import { useSafeViewport, type FlowPositionMapper } from '../hooks/useSafeViewport'
 import type {
   CanvasImageArtifact,
@@ -221,20 +218,6 @@ function markTerminalStarted(nodeId: string): void {
   terminalRunRegistry.markStarted(nodeId)
 }
 
-const AGENT_MATRIX_MOVING_CLASS = 'felixo-agent-matrix-moving'
-/** Must match `.felixo-agent-matrix-moving` in index.css. */
-const AGENT_MATRIX_ANIMATION_MS = 320
-
-function addCssClass(current: string | undefined, added: string): string {
-  return [...new Set([...(current?.split(/\s+/) ?? []), added].filter(Boolean))].join(' ')
-}
-
-function removeCssClass(current: string | undefined, removed: string): string | undefined {
-  const next = (current?.split(/\s+/) ?? []).filter(
-    (className) => className && className !== removed,
-  )
-  return next.length > 0 ? next.join(' ') : undefined
-}
 
 /** True only when the keyboard event originates from the bare canvas (not a
  *  field, terminal or panel) — so 'Q' toggles the mode only there. */
@@ -819,9 +802,6 @@ function CanvasInner({
   const flowContainerRef = useRef<HTMLDivElement>(null)
   const flowInstanceRef = useRef<FlowPositionMapper | null>(null)
   const [flowReady, setFlowReady] = useState(false)
-  const agentMatrixAnimationFrameRef = useRef<number | undefined>(undefined)
-  const agentMatrixAnimationCleanupRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  const agentMatrixAnimationRunRef = useRef(0)
   // Espelho de edges para os callbacks injetados nos dados dos nodes (o de
   // nodes fica lá em cima, junto da origem). Ler por ref mantém esses
   // callbacks referencialmente estáveis, então arrastar um bloco não invalida
@@ -867,18 +847,6 @@ function CanvasInner({
   useEffect(() => {
     edgesRef.current = edges
   }, [edges])
-
-  useEffect(
-    () => () => {
-      if (agentMatrixAnimationFrameRef.current !== undefined) {
-        window.cancelAnimationFrame(agentMatrixAnimationFrameRef.current)
-      }
-      if (agentMatrixAnimationCleanupRef.current !== undefined) {
-        clearTimeout(agentMatrixAnimationCleanupRef.current)
-      }
-    },
-    [],
-  )
 
   // 'Q' toggles select/pan, but only when the canvas itself is focused — never
   // while typing in a field, terminal or tool panel.
@@ -2356,101 +2324,14 @@ function CanvasInner({
     [setNodes, persistNode, buildTerminalNodeData, visibleCanvasBounds, ensureProjectGuides],
   )
 
-  // Explicit, opt-in layout for agents that were added at different times.
-  // Shells and group children stay exactly where the user put them.
-  const organizeCanvasBlocks = useCallback((mode: ArrangeMode = 'single') => {
-    // Sem viewport: a matriz é ancorada no bloco mais ao topo-esquerda, então o
-    // resultado não muda com pan, zoom ou tamanho de janela. A ordem das
-    // células vem da ordem deste array — a mesma do dock e do "#N" do bloco.
-    const { nodes: organized, bounds } = arrangeNodesAsMatrix(nodes, edges, mode)
-    const targetPositions = new Map(
-      organized.flatMap((node, index) => {
-        const current = nodes[index]
-        return node.position.x !== current.position.x || node.position.y !== current.position.y
-          ? [[node.id, node.position] as const]
-          : []
-      }),
-    )
-    if (targetPositions.size === 0) {
-      return
-    }
-
-    // A matriz pode ser maior que a área visível (telas menores, zoom alto).
-    // Enquadrar depois de posicionar garante que o usuário veja o resultado
-    // inteiro, em vez de achar que "não organizou" porque os blocos saíram
-    // do campo de visão.
-    const frameMatrix = () => {
-      if (!bounds) return
-      fitBoundsSafely(bounds, AGENT_MATRIX_ANIMATION_MS)
-    }
-
-    const applyTargetPositions = () => {
-      setNodes((current) => {
-        const next = current.map((node) => {
-          const position = targetPositions.get(node.id)
-          return position ? { ...node, position } : node
-        })
-        next.forEach((node, index) => {
-          if (targetPositions.has(node.id) && node !== current[index]) {
-            persistNode(node)
-          }
-        })
-        return next
-      })
-    }
-
-    if (performanceMode || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
-      applyTargetPositions()
-      frameMatrix()
-      return
-    }
-
-    if (agentMatrixAnimationFrameRef.current !== undefined) {
-      window.cancelAnimationFrame(agentMatrixAnimationFrameRef.current)
-    }
-    if (agentMatrixAnimationCleanupRef.current !== undefined) {
-      clearTimeout(agentMatrixAnimationCleanupRef.current)
-    }
-
-    const run = agentMatrixAnimationRunRef.current + 1
-    agentMatrixAnimationRunRef.current = run
-    setNodes((current) =>
-      current.map((node) =>
-        targetPositions.has(node.id)
-          ? { ...node, className: addCssClass(node.className, AGENT_MATRIX_MOVING_CLASS) }
-          : node,
-      ),
-    )
-    // Two frames ensure the transition class is painted before React Flow gets
-    // the new coordinates; otherwise the browser can coalesce both updates and
-    // make the nodes teleport.
-    agentMatrixAnimationFrameRef.current = window.requestAnimationFrame(() => {
-      agentMatrixAnimationFrameRef.current = window.requestAnimationFrame(() => {
-        agentMatrixAnimationFrameRef.current = undefined
-        if (agentMatrixAnimationRunRef.current !== run) {
-          return
-        }
-        applyTargetPositions()
-        frameMatrix()
-        agentMatrixAnimationCleanupRef.current = setTimeout(() => {
-          if (agentMatrixAnimationRunRef.current !== run) {
-            return
-          }
-          agentMatrixAnimationCleanupRef.current = undefined
-          setNodes((current) =>
-            current.map((node) =>
-              targetPositions.has(node.id)
-                ? {
-                    ...node,
-                    className: removeCssClass(node.className, AGENT_MATRIX_MOVING_CLASS),
-                  }
-                : node,
-            ),
-          )
-        }, AGENT_MATRIX_ANIMATION_MS)
-      })
-    })
-  }, [nodes, edges, setNodes, persistNode, performanceMode, fitBoundsSafely])
+  const organizeCanvasBlocks = useMatrixArrange({
+    edges,
+    fitBoundsSafely,
+    nodes,
+    performanceMode,
+    persistNode,
+    setNodes,
+  })
 
   // "Run this file" from the Projects panel: the terminal's process IS the
   // file running (command = interpreter, args = [file]) — unlike agent
