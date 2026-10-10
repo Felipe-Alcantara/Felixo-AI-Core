@@ -181,6 +181,7 @@ import { WATCHES_CANVAS_NODE_TYPES, nodeTypesKeyOf } from '../../onboarding/onbo
 import { countArrangeableNodes } from '../services/canvas-matrix-layout'
 import { useCanvasNotifications } from '../hooks/useCanvasNotifications'
 import { useCanvasPrompts } from '../hooks/useCanvasPrompts'
+import { useImageNodeActions } from '../hooks/useImageNodeActions'
 import { useMatrixArrange } from '../hooks/useMatrixArrange'
 import { useSafeViewport, type FlowPositionMapper } from '../hooks/useSafeViewport'
 import type {
@@ -1137,93 +1138,15 @@ function CanvasInner({
     [bootstrapPromptRef, store],
   )
 
-  const duplicateImageNode = useCallback(
-    async (nodeId: string): Promise<boolean> => {
-      const node = nodesRef.current.find((item) => item.id === nodeId)
-      const data = node?.data as {
-        filePath?: string
-        fileLabel?: string
-        image?: CanvasImageArtifact
-      } | undefined
-      const duplicate = window.felixo?.files?.duplicateImage
-      if (!node || node.type !== 'file' || !data?.filePath || !duplicate) {
-        return false
-      }
-
-      const result = await duplicate({
-        path: data.filePath,
-        name: data.fileLabel,
-        prompt: data.image?.prompt,
-        model: data.image?.model,
-        createdAt: data.image?.createdAt,
-        cost: data.image?.cost,
-        requestId: data.image?.requestId,
-        temporary: data.image?.temporary,
-      }).catch(() => null)
-      const artifact = result?.artifact ?? result
-      if (!result?.ok || !artifact?.path || !artifact?.name || !artifact?.mimeType) {
-        return false
-      }
-
-      addImageNodeRef.current(artifact as CanvasImageArtifact, {
-        x: node.position.x + (node.width ?? 320) + 32,
-        y: node.position.y,
-      })
-      return true
-    },
-    [],
-  )
-
-  const repairImageNode = useCallback(
-    async (nodeId: string): Promise<boolean> => {
-      const pickImage = window.felixo?.files?.pickImage
-      if (!pickImage) return false
-      const result = await pickImage().catch(() => null)
-      const mimeType = result?.type ?? result?.mimeType
-      if (!result?.ok || result.canceled || !result.path || !result.name || !mimeType) {
-        return false
-      }
-
-      updateNodeData(nodeId, {
-        filePath: result.path,
-        fileLabel: result.name,
-        fileKind: 'image',
-        image: {
-          kind: 'local-image',
-          mimeType,
-          temporary: false,
-        },
-      })
-      return true
-    },
-    [updateNodeData],
-  )
-
-  const removeTemporaryImageNode = useCallback(
-    async (nodeId: string): Promise<boolean> => {
-      const node = nodesRef.current.find((item) => item.id === nodeId)
-      const data = node?.data as { filePath?: string; image?: { temporary?: boolean } } | undefined
-      const removeImage = window.felixo?.files?.removeGeneratedImage
-      if (!node || node.type !== 'file' || !data?.filePath || data.image?.temporary !== true || !removeImage) {
-        return false
-      }
-
-      const result = await removeImage({ path: data.filePath }).catch(() => null)
-      if (!result?.ok) return false
-
-      setNodes((current) => current.filter((item) => item.id !== nodeId))
-      const relatedEdges = edgesRef.current.filter(
-        (edge) => edge.source === nodeId || edge.target === nodeId,
-      )
-      if (relatedEdges.length > 0) {
-        relatedEdges.forEach((edge) => void deleteCanvasEdge(edge.id))
-        setEdges((current) => current.filter((edge) => !relatedEdges.some((item) => item.id === edge.id)))
-      }
-      removeNode(nodeId)
-      return true
-    },
-    [removeNode, setEdges, setNodes],
-  )
+  const { duplicateImageNode, removeTemporaryImageNode, repairImageNode } = useImageNodeActions({
+    addImageNodeRef,
+    edgesRef,
+    nodesRef,
+    removeNode,
+    setEdges,
+    setNodes,
+    updateNodeData,
+  })
 
   // "+ Ligar agente" on a file block: create the edge (if missing) and tell the
   // agent about the file — the same outcome as dragging a wire between them.
