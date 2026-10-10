@@ -114,15 +114,19 @@ export function resolveTerminalSpawnPlan(data: CanvasNodeData, context: Terminal
     : undefined
   const resumeAgentSession = resumePlan?.outcome === 'exact'
   const resumePending = resumePlan?.outcome === 'pending'
-  // Bloco restaurado ainda sem processo, com conversa gravada numa CLI
-  // cujo método depende da versão: espera a versão chegar. Sem isto o
-  // Gemini decidiria como "versão desconhecida" e a faixa piscaria
-  // antes de a versão confirmar a retomada pelo ID.
-  const waitsForCliVersion =
+  // Conversa gravada numa CLI cujo método depende da versão, e a versão
+  // ainda não chegou do processo principal: o plano calculado agora é o de
+  // "versão desconhecida". Só vale para quem segue o plano de retomada — um
+  // lançador opaco nunca retoma, então não tem o que esperar.
+  const cliVersionPending =
+    followsResumePlan &&
     agentCliVersions === null &&
-    restoredAgentTerminals.holdable.has(node.id) &&
     node.data.agentSession !== undefined &&
     resumeDependsOnVersion(node.data.command)
+  // Bloco restaurado ainda sem processo: espera a versão chegar antes de
+  // subir. Sem isto o Gemini decidiria como "versão desconhecida" e a faixa
+  // piscaria antes de a versão confirmar a retomada pelo ID.
+  const waitsForCliVersion = cliVersionPending && restoredAgentTerminals.holdable.has(node.id)
   // Só o PRIMEIRO spawn de um bloco vindo do disco é segurado. Um bloco
   // cujo processo já subiu nesta execução (mesmo antes de uma ida ao
   // chat ou de um reload da interface) não tem o que segurar: o
@@ -171,6 +175,7 @@ export function resolveTerminalSpawnPlan(data: CanvasNodeData, context: Terminal
 
   return {
     cliVersion,
+    cliVersionPending,
     fallbackInitialText,
     followsResumePlan,
     holdForResumeChoice,
@@ -193,6 +198,7 @@ export type TerminalSpawnPlan = ReturnType<typeof resolveTerminalSpawnPlan>
 export function terminalSpawnCacheDeps(plan: TerminalSpawnPlan): unknown[] {
   const {
     cliVersion,
+    cliVersionPending,
     fallbackInitialText,
     followsResumePlan,
     holdForResumeChoice,
@@ -213,6 +219,10 @@ export function terminalSpawnCacheDeps(plan: TerminalSpawnPlan): unknown[] {
     cliVersion,
     waitsForCliVersion,
     isDirectOpenia,
+    // A faixa espera a versão mesmo no bloco com processo (que não é
+    // segurado): sem isto, versões que chegam sem a desta CLI não mudariam
+    // nenhum outro valor e a faixa ficaria escondida para sempre.
+    cliVersionPending,
   ]
 }
 
@@ -220,6 +230,7 @@ export function terminalSpawnCacheDeps(plan: TerminalSpawnPlan): unknown[] {
 export function terminalSpawnData(data: CanvasNodeData, plan: TerminalSpawnPlan) {
   const {
     cliVersion,
+    cliVersionPending,
     fallbackInitialText,
     holdForResumeChoice,
     initialTextReady,
@@ -251,7 +262,9 @@ export function terminalSpawnData(data: CanvasNodeData, plan: TerminalSpawnPlan)
     resumeAgentSession,
     resumePlan,
     resumeCliVersion: cliVersion,
-    resumeBanner: resumePlan && !waitsForCliVersion
+    // Enquanto a versão não chega, o plano é o de "versão desconhecida": a
+    // faixa montada com ele trocaria de texto um instante depois.
+    resumeBanner: resumePlan && !cliVersionPending
       ? buildTerminalResumeBanner({
           plan: resumePlan,
           reference: node.data.agentSession,

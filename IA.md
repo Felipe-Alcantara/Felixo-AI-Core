@@ -8158,3 +8158,32 @@ agente que tinha conversa), que não foi feita por falta de memória na máquina
 Validação local: `tsc -b` e `eslint` limpos; os 49 testes passam.
 
 Estado: concluído (com a conferência manual da retomada pendente).
+
+## 2026-10-10 — Achados do #117: avaliação e correções propostas (PRs abertos, sem merge)
+
+Decisão da coordenação da noite: nenhum merge a mais na `main` até o André conferir a retomada de agente no app
+instalado. Os três achados do #117 ficaram assim:
+
+- **Achado 1 (faixa montada sem a versão da CLI): defeito pequeno, de tempo.** Com o processo de pé e sem falha a
+  faixa fica guardada (`shouldShowTerminalResumeBanner`), então na maior parte do tempo ninguém vê. Ela aparecia
+  montada como "versão desconhecida" quando, nos primeiros segundos depois de abrir o canvas (versões ainda
+  carregando), o processo do Gemini já tinha saído ou a pessoa pedia Reiniciar; e trocava de texto quando a versão
+  chegava. Correção proposta: a faixa espera a versão em qualquer bloco que siga o plano (`cliVersionPending`); o
+  bloco com processo continua sem ser segurado. O valor novo entra na chave do cache do bloco.
+- **Achado 2 (lançador opaco esperando a versão): defeito pequeno.** O lançador com conversa do Gemini gravada
+  ficava segurado até as versões chegarem, sem faixa, por uma retomada que ele nunca faz. Correção proposta: a
+  espera pela versão só vale para quem segue o plano de retomada.
+- **Achado 3 (`holdable` fora de `ids`): não é defeito.** A captura do registro de execução já monta os "sem
+  processo" como subconjunto dos restaurados. Um teste novo prende essa garantia na origem (720 ordens de eventos,
+  com reload no meio).
+
+PRs: correções dos achados 1 e 2 (este registro); teste do achado 3 (#118). Nenhum foi mesclado.
+
+Sobre publicação: o Release gate olha só o último commit do push. O #117 e as partes anteriores da divisão do
+CanvasView estão na `main` mas não foram publicados (o último commit de cada merge era de documentação ou teste);
+o último Release é o v0.1.450. O próximo push cujo último commit mexa no app publica tudo acumulado.
+
+Validação: `terminal-spawn-plan.test.ts` com 50 testes (os dois achados invertidos para o comportamento novo, um
+caso de cache novo, e os invariantes da grade de 396 cenários); `tsc -b` e `eslint` limpos. Sem conferência no app.
+
+Estado: aguardando decisão do André (PRs abertos).
