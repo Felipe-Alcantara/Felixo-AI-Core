@@ -145,6 +145,25 @@ export function getLinkedAgentIds(fileNodeId: string, edges: Edge[]): Set<string
   return ids
 }
 
+/**
+ * Ids dos blocos de arquivo ligados a um terminal, em qualquer direção da
+ * linha, na ordem dos blocos do canvas. É o que um terminal de continuação
+ * herda do anterior.
+ */
+export function getLinkedFileNodeIds(terminalId: string, nodes: Node[], edges: Edge[]): string[] {
+  return nodes
+    .filter(
+      (node) =>
+        node.type === 'file' &&
+        edges.some(
+          (edge) =>
+            (edge.source === terminalId && edge.target === node.id) ||
+            (edge.target === terminalId && edge.source === node.id),
+        ),
+    )
+    .map((node) => node.id)
+}
+
 export function getConnectedCanvasFileNames(
   terminalId: string,
   nodes: Node[],

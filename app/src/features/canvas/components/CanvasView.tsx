@@ -147,6 +147,7 @@ import {
   agentLabelOf,
   announceFileNodeToTerminalNode,
   announceFileToTerminal,
+  getLinkedFileNodeIds,
   requestRepoDiagnosis,
 } from '../services/file-terminal-links'
 import { createCanvasConnectionIndex } from '../services/canvas-connection-index'
@@ -1944,20 +1945,13 @@ function CanvasInner({
 
       // Carry file links to the continuation node so it inherits the same
       // shared scratchpads and receives their absolute paths in its bootstrap.
-      const linkedFileNodes = nodesRef.current.filter(
-        (node) =>
-          node.type === 'file' &&
-          edgesRef.current.some(
-            (edge) =>
-              (edge.source === sourceId && edge.target === node.id) ||
-              (edge.target === sourceId && edge.source === node.id),
-          ),
+      const newEdges = getLinkedFileNodeIds(sourceId, nodesRef.current, edgesRef.current).map(
+        (fileNodeId) => ({
+          id: `edge-${crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`}`,
+          source: fileNodeId,
+          target: newId,
+        }),
       )
-      const newEdges = linkedFileNodes.map((fileNode) => ({
-        id: `edge-${crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`}`,
-        source: fileNode.id,
-        target: newId,
-      }))
       if (newEdges.length > 0) {
         setEdges((current) => [...current, ...newEdges])
         newEdges.forEach((edge) => void saveCanvasEdge(edge))
