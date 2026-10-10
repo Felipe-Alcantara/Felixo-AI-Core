@@ -41,6 +41,12 @@ function references(commandPath: string): string {
   return buildContextFileReferences([{ name: NAME, kind: 'catalog-prompt' }], false, commandPath)
 }
 
+// Cada teste abre um shell de verdade. Num runner ocupado só abrir o processo
+// leva segundos (3,8 s por PowerShell medido numa máquina sem memória livre; o
+// Git Bash estourou 5 s no CI do Windows), e o prazo padrão de 5 s reprovava
+// sem nada de errado na linha.
+const REAL_SHELL_TIMEOUT_MS = 30_000
+
 describe.runIf(process.platform !== 'win32')('linha de leitura no POSIX', () => {
   it('o sh roda o caminho entre aspas numa pasta com espaço e acento', () => {
     const felixo = path.join(fakeBinDir(), 'felixo')
@@ -50,7 +56,7 @@ describe.runIf(process.platform !== 'win32')('linha de leitura no POSIX', () => 
     expect(text).not.toContain('No PowerShell')
     const output = execFileSync('sh', ['-c', lineAfter(text, 'Leia com')], { encoding: 'utf8' })
     expect(output).toMatch(ARGS_PRINTED)
-  })
+  }, REAL_SHELL_TIMEOUT_MS)
 })
 
 describe.runIf(process.platform === 'win32')('linha de leitura no Windows', () => {
@@ -70,7 +76,7 @@ describe.runIf(process.platform === 'win32')('linha de leitura no Windows', () =
     })
     expect(result.status, result.stderr).toBe(0)
     expect(result.stdout).toMatch(ARGS_PRINTED)
-  })
+  }, REAL_SHELL_TIMEOUT_MS)
 
   it('o PowerShell roda a linha com & e recusa a linha comum', () => {
     const run = (line: string) =>
@@ -81,13 +87,11 @@ describe.runIf(process.platform === 'win32')('linha de leitura no Windows', () =
     expect(run(lineAfter(text, 'No PowerShell'))).toMatch(ARGS_PRINTED)
     // Sem o &, o caminho entre aspas é uma string e "context" um token inesperado.
     expect(() => run(lineAfter(text, 'Leia com'))).toThrow()
-    // Dois PowerShell de verdade: cada um leva segundos para abrir numa máquina
-    // ocupada, e o prazo padrão de 5 s reprovava sem nada de errado na linha.
-  }, 30_000)
+  }, REAL_SHELL_TIMEOUT_MS)
 
   const gitBash = path.join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Git', 'bin', 'bash.exe')
   it.runIf(fs.existsSync(gitBash))('o Git Bash roda a linha comum', () => {
     const output = execFileSync(gitBash, ['-c', lineAfter(text, 'Leia com')], { encoding: 'utf8' })
     expect(output).toMatch(ARGS_PRINTED)
-  })
+  }, REAL_SHELL_TIMEOUT_MS)
 })
