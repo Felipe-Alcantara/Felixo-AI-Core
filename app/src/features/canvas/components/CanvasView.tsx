@@ -80,13 +80,9 @@ import { NotificationsPanel } from './NotificationsPanel'
 import { TerminalSessionProvider } from '../terminal/TerminalSessionProvider'
 import { useTerminalSessions } from '../terminal/terminal-session-context'
 import {
-  clearReadCanvasNotifications,
   countUnreadCanvasNotifications,
-  markAllCanvasNotificationsRead,
-  markCanvasNotificationRead,
   markCanvasNotificationsReadForNode,
   pruneCanvasNotifications,
-  removeCanvasNotification,
 } from '../terminal/canvas-notifications'
 import {
   isTerminalInitialTextReady,
@@ -478,9 +474,13 @@ function CanvasInner({
   }, [])
   const {
     acknowledgeNodeNotifications,
+    clearReadNotifications,
+    markAllNotificationsRead,
+    markNotificationRead,
     notificationHistory,
     notificationSoundEnabled,
     notificationVolume,
+    removeNotification,
     setNotificationHistory,
     setNotificationSoundEnabled,
     setNotificationVolume,
@@ -2342,38 +2342,10 @@ function CanvasInner({
             onClose={() => setActiveTool(null)}
             onFocusNode={focusNode}
             onExpandNode={openTerminal}
-            onMarkRead={(notificationId) => {
-              const target = notificationHistory.find(
-                (notification) => notification.id === notificationId,
-              )
-              if (target) {
-                acknowledgeNodeNotifications(target.nodeId)
-              }
-              setNotificationHistory((current) =>
-                markCanvasNotificationRead(current, notificationId),
-              )
-            }}
-            onMarkAllRead={() => {
-              notificationHistory.forEach((notification) => {
-                if (notification.readAt !== null) return
-                acknowledgeNodeNotifications(notification.nodeId)
-              })
-              setNotificationHistory((current) => markAllCanvasNotificationsRead(current))
-            }}
-            onRemove={(notificationId) => {
-              const target = notificationHistory.find(
-                (notification) => notification.id === notificationId,
-              )
-              if (target?.readAt === null) {
-                acknowledgeNodeNotifications(target.nodeId)
-              }
-              setNotificationHistory((current) =>
-                removeCanvasNotification(current, notificationId),
-              )
-            }}
-            onClearRead={() =>
-              setNotificationHistory((current) => clearReadCanvasNotifications(current))
-            }
+            onMarkRead={markNotificationRead}
+            onMarkAllRead={markAllNotificationsRead}
+            onRemove={removeNotification}
+            onClearRead={clearReadNotifications}
           />
         </CanvasPanel>
       )}
