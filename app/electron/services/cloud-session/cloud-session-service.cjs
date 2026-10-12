@@ -235,7 +235,20 @@ function createCloudSessionService({
         }
       }
       const handle = {
-        abort: () => finish(fail('interrupted')),
+        abort: () => {
+          if (!settled) {
+            finish(fail('interrupted'))
+            return
+          }
+          // Já resolvido, mas o CLI ainda pode estar saindo (tolerância depois da
+          // criação): ao fechar o app não se espera o relógio para encerrá-lo.
+          if (graceId !== null) {
+            clearTimeoutFn(graceId)
+            graceId = null
+          }
+          kill()
+          active.delete(handle)
+        },
       }
       const finish = (result, { graceMs = 0 } = {}) => {
         if (settled) return

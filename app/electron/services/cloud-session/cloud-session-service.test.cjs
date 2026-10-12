@@ -548,3 +548,35 @@ test('no macOS o follow-up usa o shell de login sem modo interativo (não há TT
     ['-p', TAREFA_PERIGOSA, '--cloud', ID],
   )
 })
+
+// --- Robustez do ciclo de vida (achados da revisão) --------------------------
+
+test('dispose durante a tolerância depois da criação encerra o PTY na hora, sem esperar o relógio', async () => {
+  const { service, ptys, timers } = setup()
+
+  const pending = service.launch(input())
+  ptys[0].emit(SUCCESS)
+  await pending
+  assert.equal(ptys[0].pty.killed, 0)
+  service.dispose()
+
+  assert.equal(ptys[0].pty.killed, 1)
+  assert.equal(timers.pendingCount, 0)
+})
+
+test('nenhum relógio fica pendente depois do fim de um disparo, com sucesso, falha ou timeout', async () => {
+  const { service, ptys, timers } = setup()
+
+  const ok = service.launch(input({ nodeId: 'a' }))
+  ptys[0].emit(SUCCESS)
+  await ok
+  timers.advance(CREATED_GRACE_MS)
+  const trust = service.launch(input({ nodeId: 'b' }))
+  ptys[1].emit(TRUST_SCREEN)
+  await trust
+  const lento = service.launch(input({ nodeId: 'c' }))
+  timers.advance(LAUNCH_TIMEOUT_MS)
+  await lento
+
+  assert.equal(timers.pendingCount, 0)
+})
