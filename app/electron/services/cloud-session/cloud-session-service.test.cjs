@@ -7,6 +7,7 @@ const {
   FOLLOW_UP_TIMEOUT_MS,
   LAUNCH_TIMEOUT_MS,
   createCloudSessionService,
+  describeCloudSessionEvent,
 } = require('./cloud-session-service.cjs')
 
 // Um disparo que nunca recebe saída ficaria esperando para sempre; com o
@@ -148,8 +149,13 @@ test('dois launch do mesmo nó executam uma vez e o segundo devolve busy', async
   const primeiro = service.launch(input())
   const segundo = service.launch(input())
   // Sem a trava o segundo disparo ficaria pendente esperando um PTY; a corrida
-  // faz o teste falhar na hora em vez de travar.
-  const resposta = await Promise.race([segundo, Promise.resolve({ code: 'pendente: criou outro PTY' })])
+  // faz o teste falhar na hora em vez de travar. O `setImmediate` só vence
+  // depois de todas as microtarefas, então não depende de quantas camadas
+  // `async` existem entre a chamada e o resultado.
+  const resposta = await Promise.race([
+    segundo,
+    new Promise((resolve) => setImmediate(() => resolve({ code: 'pendente: criou outro PTY' }))),
+  ])
   ptys[0].emit(SUCCESS)
 
   assert.equal(resposta.code, 'busy')
@@ -361,4 +367,92 @@ test('dispose encerra os PTY que ainda estão vivos', async () => {
 
   assert.equal(ptys[0].pty.killed, 1)
   assert.equal(result.ok, false)
+})
+
+// --- Observabilidade (DESIGN_SYSTEM_BACKEND §9.2) ---------------------------
+
+/** Relógio que avança 250 ms a cada leitura: a duração de uma operação é sempre 250. */
+function steppingClock() {
+  let t = 1000
+  return () => (t += 250)
+}
+
+test('onEvent recebe o disparo bem-sucedido com a duração, sem a tarefa nem a pasta', async () => {
+  const events = []
+  const { service, ptys } = setup({ onEvent: (event) => events.push(event), now: steppingClock() })
+
+  const pending = service.launch(input({ task: 'Tarefa privada do cliente' }))
+  ptys[0].emit(SUCCESS)
+  await pending
+
+  assert.deepEqual(events, [{ operation: 'launch', ok: true, durationMs: 250 }])
+  const serialized = JSON.stringify(events)
+  assert.doesNotMatch(serialized, /Tarefa privada|Programação|session_01EXEMPLO/)
+})
+
+test('onEvent recebe a falha do disparo com o código classificado', async () => {
+  const events = []
+  const { service, ptys } = setup({ onEvent: (event) => events.push(event), now: steppingClock() })
+
+  const pending = service.launch(input())
+  ptys[0].emit(TRUST_SCREEN)
+  await pending
+
+  assert.deepEqual(events, [{ operation: 'launch', ok: false, code: 'trust-required', durationMs: 250 }])
+})
+
+test('onEvent recebe o follow-up com a operação follow-up', async () => {
+  const events = []
+  const { service, execs } = setup({ onEvent: (event) => events.push(event), now: steppingClock() })
+
+  const pending = service.followUp({ nodeId: 'no-1', sessionId: ID, text: 'segredo do cliente', cwd: CWD })
+  execs[0].callback(null, 'Sent to cloud session.', '')
+  await pending
+
+  assert.deepEqual(events, [{ operation: 'follow-up', ok: true, durationMs: 250 }])
+  assert.doesNotMatch(JSON.stringify(events), /segredo do cliente|session_01EXEMPLO/)
+})
+
+test('onEvent não registra busy nem entrada inválida: são ruído de uso, não falha de integração', async () => {
+  const events = []
+  const { service, ptys } = setup({ onEvent: (event) => events.push(event), now: steppingClock() })
+
+  const primeiro = service.launch(input())
+  await service.launch(input()) // busy
+  await service.launch(input({ nodeId: 'outro', task: '   ' })) // entrada inválida
+  ptys[0].emit(SUCCESS)
+  await primeiro
+
+  assert.deepEqual(events.map((event) => event.ok), [true])
+})
+
+test('um onEvent que lança nunca muda o resultado do disparo', async () => {
+  const { service, ptys } = setup({
+    onEvent: () => {
+      throw new Error('log quebrado')
+    },
+  })
+
+  const pending = service.launch(input())
+  ptys[0].emit(SUCCESS)
+  const result = await pending
+
+  assert.equal(result.ok, true)
+})
+
+test('describeCloudSessionEvent traduz o evento em nível, mensagem neutra e detalhes sem conteúdo privado', () => {
+  assert.deepEqual(describeCloudSessionEvent({ operation: 'launch', ok: true, durationMs: 250 }), {
+    level: 'info',
+    message: 'Sessão na nuvem criada em 250 ms.',
+    details: { operation: 'launch', durationMs: 250 },
+  })
+  assert.deepEqual(describeCloudSessionEvent({ operation: 'launch', ok: false, code: 'trust-required', durationMs: 90 }), {
+    level: 'warn',
+    message: 'Falha ao criar a sessão na nuvem (trust-required) após 90 ms.',
+    details: { operation: 'launch', code: 'trust-required', durationMs: 90 },
+  })
+  assert.equal(describeCloudSessionEvent({ operation: 'follow-up', ok: false, code: 'timeout', durationMs: 1 }).level, 'error')
+  assert.equal(describeCloudSessionEvent({ operation: 'follow-up', ok: false, code: 'unknown', durationMs: 1 }).level, 'error')
+  assert.equal(describeCloudSessionEvent({ operation: 'follow-up', ok: false, code: 'login-required', durationMs: 1 }).level, 'warn')
+  assert.match(describeCloudSessionEvent({ operation: 'follow-up', ok: true, durationMs: 5 }).message, /Mensagem enviada/)
 })

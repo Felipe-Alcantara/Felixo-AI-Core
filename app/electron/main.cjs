@@ -112,7 +112,10 @@ const { queryCodexStatus } = require('./services/codex-status-query.cjs')
 const {
   registerAgentUsageIpcHandlers,
 } = require('./services/agent-usage-ipc-handlers.cjs')
-const { createCloudSessionService } = require('./services/cloud-session/cloud-session-service.cjs')
+const {
+  createCloudSessionService,
+  describeCloudSessionEvent,
+} = require('./services/cloud-session/cloud-session-service.cjs')
 const { registerCloudSessionIpcHandlers } = require('./services/cloud-session-ipc-handlers.cjs')
 const { createCliEnv } = require('./services/cli-process-manager.cjs')
 const { createStorageDatabase } = require('./services/storage/sqlite-database.cjs')
@@ -807,6 +810,9 @@ app.whenReady().then(async () => {
   // pelo mesmo cadastro que os terminais usam; sem conta vale o Login do sistema.
   cloudSessionService = createCloudSessionService({
     resolveProfileEnv: (accountId) => cliAccounts.buildEnv(accountId, 'claude'),
+    // Falha de integração com o Claude fica rastreável no QA Logger, sem a
+    // tarefa, a mensagem, a pasta nem o ID da sessão.
+    onEvent: (event) => logQaEvent({ scope: 'cloud-session', ...describeCloudSessionEvent(event) }),
   })
   registerCloudSessionIpcHandlers({
     ipcMain,

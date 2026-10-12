@@ -57,6 +57,32 @@ function unknownWithTail(output, exitCode) {
   return fail('unknown', `${CLOUD_SESSION_ERROR_MESSAGES.unknown}${suffix}${tail ? `\n${tail}` : ''}`)
 }
 
+/** Falhas que a pessoa não causou nem corrige sozinha: nível `error` no log. */
+const ERROR_LEVEL_CODES = new Set(['timeout', 'unknown', 'interrupted'])
+
+/**
+ * Traduz o evento de uma operação em entrada de log: nível, mensagem neutra e
+ * detalhes. Nada que a pessoa digitou (tarefa, mensagem), nenhuma pasta e
+ * nenhum ID de sessão entram aqui — o log ajuda a rastrear a falha sem expor
+ * conteúdo privado (DESIGN_SYSTEM_BACKEND §9.2 e README §3.5).
+ *
+ * @param {{ operation: 'launch' | 'follow-up', ok: boolean, code?: string, durationMs: number }} event
+ * @returns {{ level: 'info' | 'warn' | 'error', message: string, details: Record<string, unknown> }}
+ */
+function describeCloudSessionEvent(event) {
+  const { operation, ok, code, durationMs } = event
+  if (ok) {
+    const done = operation === 'launch' ? 'Sessão na nuvem criada' : 'Mensagem enviada à sessão na nuvem'
+    return { level: 'info', message: `${done} em ${durationMs} ms.`, details: { operation, durationMs } }
+  }
+  const attempted = operation === 'launch' ? 'criar a sessão na nuvem' : 'enviar a mensagem à sessão na nuvem'
+  return {
+    level: ERROR_LEVEL_CODES.has(code) ? 'error' : 'warn',
+    message: `Falha ao ${attempted} (${code}) após ${durationMs} ms.`,
+    details: { operation, code, durationMs },
+  }
+}
+
 function loadNodePtySpawn(platformName) {
   // Mesmo preparo que o terminal do canvas faz: no macOS o spawn-helper do
   // node-pty pode vir sem o bit de execução.
@@ -79,6 +105,10 @@ function loadNodePtySpawn(platformName) {
  * @param {typeof resolveNativeClaude} [dependencies.resolveClaude]
  * @param {{ name: string }} [dependencies.platform]
  * @param {{ statSync: (target: string) => { isDirectory(): boolean } }} [dependencies.fsApi]
+ * @param {(event: { operation: 'launch' | 'follow-up', ok: boolean, code?: string, durationMs: number }) => void} [dependencies.onEvent]
+ *   Recebe o resultado de cada operação (sem tarefa, mensagem, pasta nem ID);
+ *   o main o liga ao QA Logger com `describeCloudSessionEvent`.
+ * @param {() => number} [dependencies.now]
  */
 function createCloudSessionService({
   spawnPty,
@@ -90,11 +120,37 @@ function createCloudSessionService({
   fsApi = fs,
   setTimeoutFn = setTimeout,
   clearTimeoutFn = clearTimeout,
+  onEvent = () => {},
+  now = () => Date.now(),
 } = {}) {
   /** Nós com uma operação em andamento. */
   const busyNodes = new Set()
   /** Operações com PTY vivo, para `dispose`. */
   const active = new Set()
+
+  /**
+   * Registra o fim de uma operação. `busy` e entrada inválida ficam de fora:
+   * são ruído de uso do cartão, não falha de integração. Um log com defeito
+   * nunca pode mudar o resultado de quem criou a sessão.
+   */
+  async function reported(operation, run) {
+    const startedAt = now()
+    const result = await run()
+    if (result.ok === false && (result.code === 'busy' || result.code === 'invalid-input')) {
+      return result
+    }
+    try {
+      onEvent({
+        operation,
+        ok: result.ok,
+        ...(result.ok ? {} : { code: result.code }),
+        durationMs: Math.max(0, now() - startedAt),
+      })
+    } catch {
+      // Observabilidade é melhor esforço.
+    }
+    return result
+  }
 
   function readNodeId(value) {
     return typeof value === 'string' && value.trim() ? value : null
@@ -257,13 +313,7 @@ function createCloudSessionService({
     })
   }
 
-  /**
-   * Cria uma sessão na nuvem. Só é chamada por um clique confirmado no cartão.
-   *
-   * @param {{ nodeId: string, task: string, cwd: string, accountId?: string }} input
-   * @returns {Promise<{ ok: true, session: { id: string, url: string, title: string } } | { ok: false, code: string, message: string }>}
-   */
-  async function launch(input) {
+  async function runLaunch(input) {
     const nodeId = readNodeId(input?.nodeId)
     if (!nodeId) return fail('invalid-input')
     const valid = validateLaunchInput({ task: input?.task, cwd: input?.cwd }, fsApi)
@@ -280,13 +330,7 @@ function createCloudSessionService({
     }
   }
 
-  /**
-   * Envia uma mensagem a uma sessão existente.
-   *
-   * @param {{ nodeId: string, sessionId: string, text: string, cwd: string, accountId?: string }} input
-   * @returns {Promise<{ ok: true } | { ok: false, code: string, message: string }>}
-   */
-  async function followUp(input) {
+  async function runFollowUp(input) {
     const nodeId = readNodeId(input?.nodeId)
     if (!nodeId) return fail('invalid-input')
     const valid = validateFollowUpInput(
@@ -306,6 +350,26 @@ function createCloudSessionService({
     }
   }
 
+  /**
+   * Cria uma sessão na nuvem. Só é chamada por um clique confirmado no cartão.
+   *
+   * @param {{ nodeId: string, task: string, cwd: string, accountId?: string }} input
+   * @returns {Promise<{ ok: true, session: { id: string, url: string, title: string } } | { ok: false, code: string, message: string }>}
+   */
+  function launch(input) {
+    return reported('launch', () => runLaunch(input))
+  }
+
+  /**
+   * Envia uma mensagem a uma sessão existente.
+   *
+   * @param {{ nodeId: string, sessionId: string, text: string, cwd: string, accountId?: string }} input
+   * @returns {Promise<{ ok: true } | { ok: false, code: string, message: string }>}
+   */
+  function followUp(input) {
+    return reported('follow-up', () => runFollowUp(input))
+  }
+
   /** Encerra os PTY vivos (fechamento do app). */
   function dispose() {
     for (const handle of [...active]) handle.abort()
@@ -319,4 +383,5 @@ module.exports = {
   FOLLOW_UP_TIMEOUT_MS,
   LAUNCH_TIMEOUT_MS,
   createCloudSessionService,
+  describeCloudSessionEvent,
 }
