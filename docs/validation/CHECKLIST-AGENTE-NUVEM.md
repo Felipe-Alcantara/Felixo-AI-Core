@@ -53,6 +53,30 @@ mostra a tela. A primeira carga compila o Vite e leva cerca de um minuto.
 12. **Crédito.** Em *Configurações > Uso*, o "Crédito incluído" cai (o painel mostra
     dólares inteiros; tarefas triviais custam centavos). Se só a barra semanal subir, a
     sessão está sendo cobrada do plano, e não do crédito de nuvem.
+13. **Texto difícil.** Dispare uma tarefa com aspas, acento, emoji, `%PATH%` e uma quebra de
+    linha (por exemplo, `Responda "ok" ✅ %PATH%` e, na linha de baixo, `fim`). Esperado: a
+    sessão em claude.ai/code mostra o texto **exatamente** como foi escrito, sem variável
+    expandida nem aspas comidas. Repita no follow-up.
+14. **Hífen no início.** Escreva `--teste` na tarefa. Esperado: aviso "não pode começar com
+    “-”" no campo (com `aria-invalid`), **Disparar na nuvem** desabilitado e nenhuma sessão
+    criada. O mesmo vale para o campo de mensagem.
+15. **Teclado.** Só com o teclado: abra a confirmação (o foco entra nela), pressione **Esc**
+    (volta ao botão **Disparar na nuvem**) e confirme com **Enter**. Esperado: nenhum passo
+    exige o mouse e, se a criação falhar, o foco vai para o aviso de erro.
+16. **Log.** Abra o QA Logger depois de um disparo. Esperado: um evento do escopo
+    `cloud-session` com operação, resultado e duração, **sem** tarefa, pasta nem ID.
+17. **Banco existente.** Antes de abrir uma versão nova com um banco real, rode
+    `node scripts/ensaiar-migracoes-em-copia.cjs` (em `app/`). Esperado: "Resultado: OK", a
+    versão das migrações subindo e nenhuma tabela com menos linhas. O banco original não é
+    alterado e a cópia temporária é apagada.
+
+## Convite: Linux e macOS
+
+Os testes automáticos rodam nos dois sistemas no CI, mas a criação real de sessão foi
+conferida só no Windows. Se você usa Linux ou macOS, rode este roteiro e abra um PR
+acrescentando uma linha em **Última execução** (sistema, versão do Claude Code e o que foi
+observado). Em macOS, vale conferir sobretudo as etapas 3, 6 e 13, que passam pelo shell de
+login; em Linux, a 2 e a 8.
 
 ## Encerrar
 
@@ -81,5 +105,7 @@ com o Login do sistema. O que foi **observado** no app:
 claude.ai/code (só comparei o ID do cartão); na etapa 6, que a mensagem chegou à sessão
 vista no claude.ai/code; as etapas 4 (duplo clique real), 7 (clique em **Abrir**, que
 abriria o navegador), 10 (fechar o app no meio do disparo) e 11 (importar em outro
-perfil); e a etapa 12 com precisão (o painel mostra dólares inteiros). Linux e macOS não
-foram executados.
+perfil); e a etapa 12 com precisão (o painel mostra dólares inteiros). As etapas 13 a 16
+foram acrescentadas depois desta execução e ainda não foram feitas na nuvem real; a 17 foi
+rodada contra o banco do perfil local (versão 18 → 19, nenhuma tabela com menos linhas).
+Linux e macOS não foram executados.
