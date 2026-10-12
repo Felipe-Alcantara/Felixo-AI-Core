@@ -143,7 +143,7 @@ ganho é real mas moderado e custa bateria, então a escolha é uma **opção
 avançada** nas Configurações (Automático, Integrada ou Dedicada experimental),
 nunca um padrão: Automático continua sendo o comportamento de antes. Todo início
 que troca a GPU é conferido, e uma falha volta sozinha para Automático (ver
-`README.md`, "Placa de vídeo e máquinas com poucas CPUs").
+[Guia do canvas](../guias/GUIA-CANVAS.md), "Placa de vídeo e máquinas com poucas CPUs").
 
 #### Sugestão em máquina com poucas CPUs (26/09/2026)
 
