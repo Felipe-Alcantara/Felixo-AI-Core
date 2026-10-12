@@ -57,7 +57,7 @@ caminhos relançaria `--cloud` e gastaria crédito de novo. Evitar isso exigiria
 blindar cerca de oito pontos do ciclo de vida do terminal (restauração,
 Reiniciar do cartão e da gaveta, texto inicial e skills, descoberta de sessão
 local, fallback do Windows, vigia de contas, exportação `.fxcanvas`). Os dois
-custos principais da escolha: migração 018 e componente novo.
+custos principais da escolha: migração 019 e componente novo.
 
 ## 5. Modelo de dados
 
@@ -65,7 +65,7 @@ custos principais da escolha: migração 018 e componente novo.
 
 - `CanvasNodeType` ganha `'cloud-session'` (`app/src/features/canvas/types.ts`).
 - `NODE_TYPES` ganha `'cloud-session'` (`services/storage/canvas-repository.cjs`).
-- Migração `018_canvas_cloud_session_nodes.sql` recria `canvas_nodes` com o
+- Migração `019_canvas_cloud_session_nodes.sql` recria `canvas_nodes` com o
   `CHECK` ampliado, no padrão das migrações 006, 007, 012 e 013. Sem ela o
   salvamento falha em silêncio.
 - Os dados ficam em `data_json`, sem coluna nova.
@@ -216,7 +216,7 @@ formato de cada payload (tipos, tamanhos, `nodeId`); `open` aceita somente
   macOS; recusa de caracteres perigosos quando só há shim.
 - **Serviço** com PTY falso: I2, I4, I5, timeout, encerramento do processo, falha
   parcial.
-- **Migração 018** e `canvas-repository`: ida e volta do tipo novo; dados antigos
+- **Migração 019** e `canvas-repository`: ida e volta do tipo novo; dados antigos
   preservados.
 - **Estado do cartão** (`vitest`, `.ts` puro): transições da seção 5.3 e I3, I9.
 - **IPC**: validação de payload e I6, com `electron` stub (`pty-ipc-handlers.test.cjs`
@@ -244,3 +244,25 @@ formato de cada payload (tipos, tamanhos, `nodeId`); `open` aceita somente
 5. **Sessões duplicadas por timeout**: o timeout de 60 s pode estourar depois de a
    sessão ser criada; por isso `timeout` não oferece "Tentar de novo" direto.
 6. **Efeito de modelo e esforço na nuvem**: fora da v1 por falta de prova.
+
+## 12. Ajustes feitos durante a implementação
+
+Registrados aqui em vez de reescrever as seções acima, que descrevem o desenho aprovado.
+
+1. **Migração `019`, não `018`.** A `018_system_design_sources.sql` já existia em
+   `origin/main` (e já estava aplicada no banco local). A branch saiu de um `main`
+   local desatualizado; foi rebaseada sobre `origin/main` e a migração renumerada. A
+   `019` foi ensaiada numa cópia do banco real (versão 18 para 19, mesmas contagens
+   de blocos, `integrity_check` ok).
+2. **Campos do nó com prefixo `cloud`** (`cloudTask`, `cloudCwd`, `cloudAccountId`,
+   `cloudStatus`, `cloudSession`, `cloudFollowUps`, `cloudError`). `CanvasNodeData` é
+   uma intersecção plana de todos os tipos de bloco, e `cwd` e `accountId` já existem
+   no terminal: reaproveitá-los faria o código que varre "blocos com conta" tratar o
+   cartão como um terminal vivo daquela conta.
+3. **Criação pelo menu de ferramentas**, como o bloco Tarefas Notion, e não pelo menu
+   Agente (§7).
+4. **`createdAt` é carimbado pelo renderer**; o serviço devolve só `id`, `url` e
+   `title`.
+5. **Saída parcial.** O parser só aceita a última linha sem quebra depois que o
+   processo sai (`final`), porque antes disso o ID pode estar cortado no meio do
+   pedaço recebido do PTY.

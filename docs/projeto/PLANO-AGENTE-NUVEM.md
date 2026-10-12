@@ -52,7 +52,7 @@ Main (`app/electron/services/`):
 - `cloud-session/cloud-session-executable.cjs` — resolve o `claude` nativo.
 - `cloud-session/cloud-session-service.cjs` — `launch`, `followUp`, trava por nó.
 - `cloud-session-ipc-handlers.cjs` — `registerCloudSessionIpcHandlers`.
-- `storage/migrations/018_canvas_cloud_session_nodes.sql`, `storage/canvas-repository.cjs`.
+- `storage/migrations/019_canvas_cloud_session_nodes.sql`, `storage/canvas-repository.cjs`.
 - `canvas-transfer.cjs` (exportação), `preload.cjs`, `main.cjs`.
 
 Renderer (`app/src/`):
@@ -169,9 +169,9 @@ o `notionTasks`, que é o padrão de bloco novo), não no menu Agente.
 - [ ] **Passo 4:** PASSA; `npm run typecheck` (dentro de `app/`) sem erros.
 - [ ] **Passo 5: commit** `feat(nuvem): canais IPC do agente na nuvem`.
 
-### Tarefa 5: Tipo de nó, migração 018 e repositório
+### Tarefa 5: Tipo de nó, migração 019 e repositório
 
-**Arquivos:** criar `storage/migrations/018_canvas_cloud_session_nodes.sql`; modificar
+**Arquivos:** criar `storage/migrations/019_canvas_cloud_session_nodes.sql`; modificar
 `storage/canvas-repository.cjs:11`, `storage/canvas-repository.test.cjs`,
 `src/features/canvas/types.ts` (`CanvasNodeType` + `CloudSessionNodeData`).
 
@@ -185,7 +185,7 @@ o `notionTasks`, que é o padrão de bloco novo), não no menu Agente.
 - [ ] **Passo 3: implementar** a migração recriando `canvas_nodes` com o `CHECK`
   ampliado (copiar a estrutura da `013`), mais `NODE_TYPES` e os tipos.
 - [ ] **Passo 4:** PASSA, junto com `backward-compatibility.test.cjs` e a suíte de storage.
-- [ ] **Passo 5: commit** `feat(nuvem): tipo de nó cloud-session e migração 018`.
+- [ ] **Passo 5: commit** `feat(nuvem): tipo de nó cloud-session e migração 019`.
 
 ### Tarefa 6: Estado puro do cartão
 
