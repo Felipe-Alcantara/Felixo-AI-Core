@@ -35,6 +35,9 @@
   (2) Um comentário em `app/electron/services/codex-status-screen.cjs` ainda cita a seção
   "Limites e uso por conta" do README, que agora está em `docs/guias/GUIA-CONTAS-E-LIMITES.md`; não
   foi editado porque qualquer mudança em `app/electron/` publica uma release.
+  (3) Os artefatos de contexto morrem com o terminal, mas a conversa retomada do agente ainda os cita;
+  a entrada de 2026-10-12 "artefato expirado deixava o agente parado" só impede que isso trave o
+  agente (texto do erro de `felixo context read`) e não mudou a retenção.
 - **Como compactar de novo:** este arquivo e `docs/projeto/IA.md` crescem com cada sessão. Quando
   passarem de uns 1000 linhas, rode `node app/scripts/archive-ia-md.cjs` (dry-run por padrão); o
   passo a passo está no Guia para Desenvolvedores.
@@ -1019,3 +1022,39 @@ Estado: concluído e validado localmente no Windows. Commitado na `main` local, 
 **Correção (mesma data).** Acima escrevi que enviar à `main` publica uma release. Não é bem assim: o `Release gate` (`.github/workflows/release-gate.yml`) compara só o último commit da execução do CI (`git diff --name-only HEAD^ HEAD`). Rodei `release-relevant.sh` em cada commit desta mudança: só o de código (`feat(nuvem)`) dá `true`; os três de documentação dão `false`. Logo, um push direto destes commits termina em `docs(ia)` e **não publica nada agora**; a mudança de `app/src` entra no próximo release que um commit de app disparar. Já um PR mesclado por squash vira um commit só, com `app/src`, e publica. Verificado no workflow e no script; o CI em si não foi rodado.
 
 **Envio e CI (mesma data).** Os commits desta mudança foram enviados por push direto à `main` (`e7b7efe..d952f5b`), por decisão da pessoa; a regra de proteção foi contornada pela permissão de admin da conta. O CI de `d952f5b` terminou em `success` nos 22 jobs: `Validate` em Windows, Ubuntu, Ubuntu ARM e macOS, `Launcher` (Python 3.9 e 3.13) nos três sistemas, `Benchmarks` e `Benchmarks exploratórios` nos quatro, `Dependency policy`, `Python dependency audit` e `Release scripts`. O Release gate listou só `IA.md` como arquivo do commit, deu "Release relevante: false" e pulou a publicação, como previsto na correção acima. Não foi rodada nenhuma conferência na tela em Linux ou macOS.
+
+## 2026-10-12 — Contexto: artefato expirado deixava o agente parado numa conversa retomada
+
+Relato de uma pessoa usando o Codex no AI Core, no Windows (captura de tela): o agente tentou duas vezes ler `felixo context read` de três artefatos (`initial-context`, `agent-identity`, `skills-manifest`), recebeu "Artefato de contexto não encontrado" nos três, **não executou o pedido da pessoa** (subir o localhost) e pediu que ela "disponibilizasse novamente" os arquivos.
+
+### Causa
+
+Não é perfil trocado nem falha do shim: o `felixo.cmd` da captura é o de `%APPDATA%\felixo-ai-core\bin`, a mesma pasta de `userData` que grava `context-deliveries/` (a instância de desenvolvimento usa `-dev`), e o smoke de release lê esses arquivos no Windows. O que ocorre é uma diferença de tempo de vida:
+
+- **Os arquivos** morrem com o processo do terminal: `finishExit` e `remove` chamam `context-file:release`; `dispose` no `before-quit` apaga todos os da sessão; e `cleanupStaleContextFiles` apaga, ao abrir o app, os de mais de 24 h (`context-files-ipc-handlers.cjs`).
+- **A referência a eles** mora na conversa do agente, que o app retoma de propósito (`resumeAgentSession`: fechar e reabrir, o Codex se atualizando e saindo com código 0, reiniciar o bloco) **sem reenviar o contexto inicial**, para não repetir a instrução (`terminal-session-store.ts`, `finishExit`). A instrução original ("Leia todos os arquivos abaixo antes de agir… não substitua por outro artefato") continua no histórico.
+- O leitor respondia ao arquivo ausente só com "informe este nome e o erro exato". O agente obedeceu ao pé da letra e parou. A regra de não trocar por outro artefato é legítima (um agente já leu um arquivo "equivalente" de outra sessão, ver 2026-09-08); o defeito era tratar a **expiração esperada** como uma falha a reportar, sem saída.
+
+Os nomes da captura têm carimbo `1791213063512/17/21`, que é 2026-10-05 15:11:03 UTC, três escritas em 9 ms (o contexto inicial dividido em três por `splitInitialContext`). A captura marca 10:17. Em UTC−3 (Brasil) o artefato foi criado às 12:11, então a captura é de outro dia, o que condiz com conversa retomada; num fuso a UTC−5 ou mais a oeste caberia no mesmo dia, e o fuso da pessoa não é conhecido. **Não confirmei qual dos gatilhos aconteceu naquela máquina** (fechar o app, auto-atualização ou a limpeza de 24 h): isso exigiria o `logs\qa` dela.
+
+### Correção
+
+- `app/electron/cli/context-command.cjs`: `mensagemDeArtefatoAusente(name)` mantém a primeira frase de antes (nome e "não substitua") e acrescenta: os arquivos são temporários e quando o app os apaga; numa conversa retomada o conteúdo deve estar no histórico, então o agente **continua o pedido atual a partir dele**, sem esperar o arquivo reaparecer nem pedir que a pessoa o disponibilize; se o histórico não tiver o conteúdo, **não inventa** e avisa que o contexto expirou (nova conversa no bloco gera contexto novo). Código de saída continua 1.
+- O texto vive no leitor, não no prompt: como o `felixo` roda o código do app instalado, uma conversa que já está travada passa a receber a orientação nova assim que o app for atualizado, sem precisar de um prompt novo. Sem o número de horas de propósito: o módulo não carrega o Electron e uma cópia de `STALE_CONTEXT_MAX_AGE_MS` divergiria em silêncio.
+- Guia do Usuário (seção 5) descreve o comportamento.
+
+### Evidência
+
+- Teste novo `artefato expirado explica o ciclo de vida e não trava a conversa retomada` (`context-command.test.cjs`), escrito antes da correção: falhou por faltar a explicação (a mensagem recebida era exatamente a da captura) e passa depois.
+- `node --test` de `context-command`, `felixo`, `context-files-ipc-handlers`, `context-delivery-log`: 61 passam. `eslint` dos dois arquivos: limpo.
+- `release-smoke.test.cjs` (shim real, PTY real, nome ausente reportado): 7 passam, depois de baixar o binário do Electron nesta máquina.
+- Comando real com perfil vazio (`FELIXO_USER_DATA_DIR`, `ELECTRON_RUN_AS_NODE=1`, `node electron/cli/felixo.cjs context read <nome>`): saída com as quatro frases novas e `exit=1`.
+
+### Não validado e em aberto
+
+- **Não rodei um Codex de verdade lendo a mensagem nova.** Que o agente siga a orientação (continuar a partir do histórico) é o efeito esperado de um texto de erro, não algo provado aqui. Também não vi o `felixo.cmd` no Windows; o que foi exercitado é o mesmo `.cjs` no Linux.
+- Que o histórico retomado traga o conteúdo lido no início depende de a CLI do agente guardar as saídas das ferramentas. Se não guardar, cai no segundo caminho da mensagem (avisar e pedir nova conversa).
+- **A diferença de tempo de vida continua.** Esta mudança só impede que a expiração trave o agente. Opções que não fiz, por mexerem em retenção de dados que contêm prompts e handoffs: manter os artefatos de blocos com conversa retomável até o bloco ser removido, ou o app avisar a pessoa ao retomar que o contexto antigo expirou.
+- Mudar `app/electron/` publica uma release ao mesclar (regra do `Release gate`); a decisão de mesclar é de quem mantém.
+
+Estado: concluído e validado localmente no Linux (Node 22.22). Em branch própria (`claude/keen-darwin-b2lrbc`) com PR em rascunho; sem push direto à `main`.
