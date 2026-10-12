@@ -230,3 +230,26 @@ describe('isCloudSessionUrl', () => {
     expect(isCloudSessionUrl(undefined)).toBe(false)
   })
 })
+
+describe('normalizeLoaded: o ID da sessão tem que ser o do link', () => {
+  it('descarta a sessão quando o ID é só um prefixo do ID do link', () => {
+    const data = normalizeLoaded({
+      cloudStatus: 'created',
+      cloudSession: {
+        id: 'session_AB',
+        url: 'https://claude.ai/code/session_ABC?from=cli',
+        title: 'x',
+        createdAt: NOW,
+      },
+    })
+
+    expect(data.cloudStatus).toBe('draft')
+    expect(data.cloudSession).toBeUndefined()
+  })
+
+  it('aceita quando o ID é exatamente o do link', () => {
+    const data = normalizeLoaded({ cloudStatus: 'created', cloudSession: { ...SESSION, createdAt: NOW } })
+
+    expect(data.cloudStatus).toBe('created')
+  })
+})

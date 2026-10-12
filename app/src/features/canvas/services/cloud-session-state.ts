@@ -41,6 +41,12 @@ const SAFE_TO_RETRY: ReadonlySet<CloudSessionErrorCode> = new Set([
 
 const STATUSES: readonly CloudSessionStatus[] = ['draft', 'launching', 'created', 'failed']
 
+/** O ID da sessão que está no link (`null` se o link não é de uma sessão do claude.ai/code). */
+function sessionIdFromUrl(url: unknown): string | null {
+  if (typeof url !== 'string' || url.length > 300) return null
+  return SESSION_URL_PATTERN.exec(url)?.[1] ?? null
+}
+
 /** Só o link de sessão do claude.ai/code; o main confere de novo antes de abrir. */
 export function isCloudSessionUrl(url: unknown): url is string {
   return typeof url === 'string' && url.length <= 300 && SESSION_URL_PATTERN.test(url)
@@ -151,7 +157,9 @@ function readSession(value: unknown): CloudSessionNodeData['cloudSession'] {
   if (!isRecord(value)) return undefined
   const { id, url, title, createdAt } = value
   if (typeof id !== 'string' || !SESSION_ID_PATTERN.test(id)) return undefined
-  if (!isCloudSessionUrl(url) || !url.includes(id)) return undefined
+  // O ID guardado tem que ser exatamente o do link: com `includes`, `session_AB`
+  // passaria por `.../session_ABC` e o follow-up iria para outra sessão que o "Abrir".
+  if (typeof url !== 'string' || sessionIdFromUrl(url) !== id) return undefined
   if (typeof createdAt !== 'string' || createdAt.length === 0 || createdAt.length > 64) return undefined
   return {
     id,
