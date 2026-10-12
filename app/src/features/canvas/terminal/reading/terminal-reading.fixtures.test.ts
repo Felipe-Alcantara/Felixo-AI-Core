@@ -3,13 +3,18 @@ import { describe, expect, it } from 'vitest'
 import { FIXTURE_NAMES, loadFixture, replayFixture } from '../__fixtures__/terminal-output/replay-fixture'
 import { comparableText, expectInertHtml, readFixture, renderMarkdown, renderedText } from './reading-test-helpers'
 
+// Cada teste reproduz a gravação inteira no xterm. A maior (`codex-cancelamento`,
+// 130 KB) leva cerca de 6 s numa máquina comum do Windows, e o prazo padrão de
+// 5 s reprovava os cinco testes que a usam sem nada de errado na Leitura.
+const REPLAY_TIMEOUT_MS = 30_000
+
 /**
  * A Leitura de cada gravação real (`scripts/record-terminal-fixture.cjs`):
  * Claude Code e Codex em resposta, cancelamento, erro e retomada; o Gemini só
  * no erro de login (a conta pessoal foi recusada na gravação); o Openia em
  * lista, ajuda e erro. Os snapshots guardam o Markdown e o HTML de cada fala.
  */
-describe('Leitura das gravações reais', () => {
+describe('Leitura das gravações reais', { timeout: REPLAY_TIMEOUT_MS }, () => {
   it.each(FIXTURE_NAMES)('%s: snapshot do Markdown e do HTML', async (name) => {
     const reading = await readFixture(name)
 
