@@ -38,7 +38,8 @@ const UNAVAILABLE = 'O agente na nuvem não está disponível nesta versão do a
 const FIELD = 'felixo-control w-full text-xs'
 const LABEL = 'felixo-field-label'
 const PRIMARY = 'felixo-btn felixo-primary-action rounded-sm px-3 py-1.5 text-xs disabled:opacity-50'
-const SECONDARY = 'felixo-btn felixo-secondary-action rounded-sm px-2 py-1 text-[11px] disabled:opacity-50'
+const SECONDARY =
+  'felixo-btn felixo-secondary-action inline-flex items-center gap-1 rounded-sm px-2 py-1 text-[11px] disabled:opacity-50'
 
 function formatLocal(iso: string): string {
   const date = new Date(iso)
@@ -220,7 +221,9 @@ function CloudSessionNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         )}
 
-        {editable && (
+        {/* Com a confirmação aberta o resumo dela já mostra conta, pasta e tarefa:
+            esconder os campos mantém os botões de confirmar à vista. */}
+        {editable && !confirming && (
           <>
             {status === 'draft' && (
               <p className="text-[11px] text-(--f-core-secondary)">

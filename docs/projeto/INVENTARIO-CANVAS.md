@@ -741,7 +741,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **Persistência:** canvas salvo (canvas_nodes tipo cloud-session: campos cloudTask, cloudCwd, cloudAccountId, cloudStatus, cloudSession, cloudFollowUps, cloudError e label); cloudProjects é injetado a cada render e nunca é gravado; um nó salvo como "launching" reabre como "failed (interrupted)"
 - **IPC:** `cloud-session:launch`, `cloud-session:follow-up`, `cloud-session:open`, `cli-accounts:list`, `canvas:save`, `canvas:delete`
 - **Depende de:** `useReactFlow`, `cloud-session-state.ts`, `window.felixo.cloudSession`, `addCloudSessionNode e openCloudTerminal (CanvasView)`
-- **Sobreposição:** Bloco do React Flow, sem z próprio: fica abaixo de toda superfície fixa (topbar e statusbar 18, dock e painéis 20/30, sidebar 26, menus 50+). O cartão é overflow-hidden, então nada que nasce dentro dele passa das bordas. Bloco médio (padrão 460×460, mínimo 340×320). A confirmação é inline dentro do próprio cartão (sem modal e sem window.confirm), então nada cobre o canvas.
+- **Sobreposição:** Bloco do React Flow, sem z próprio: fica abaixo de toda superfície fixa (topbar e statusbar 18, dock e painéis 20/30, sidebar 26, menus 50+). O cartão é overflow-hidden, então nada que nasce dentro dele passa das bordas. Bloco médio (padrão 460×560, mínimo 340×320). A confirmação é inline dentro do próprio cartão (sem modal e sem window.confirm), então nada cobre o canvas.
 - **Testes:** `src/features/canvas/services/cloud-session-state.test.ts`, `src/features/canvas/hooks/useCanvasPersistence.test.ts`, `electron/services/cloud-session/cloud-session-service.test.cjs`, `electron/services/cloud-session-ipc-handlers.test.cjs`
 
 | Estado | Quando |

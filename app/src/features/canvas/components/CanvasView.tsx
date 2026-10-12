@@ -1677,7 +1677,12 @@ function CanvasInner({
   const addCloudSessionNode = useCallback(() => {
     const size = getDefaultNodeSize('cloud-session', window.innerWidth)
     const position = findFreeNodePosition(nodes, size, visibleCanvasBounds())
-    const id = addNode('cloud-session', createCloudSessionDraft({ cwd: projects[0]?.path ?? '' }), position)
+    // O nome também alimenta o dock de elementos, que sem `label` mostra o tipo cru.
+    const id = addNode(
+      'cloud-session',
+      { ...createCloudSessionDraft({ cwd: projects[0]?.path ?? '' }), label: 'Agente na nuvem' },
+      position,
+    )
     setNodes((current) => current.map((node) => ({ ...node, selected: node.id === id })))
     centerNodeInSafeArea(position, size, 0.8, 240)
   }, [addNode, centerNodeInSafeArea, nodes, projects, setNodes, visibleCanvasBounds])

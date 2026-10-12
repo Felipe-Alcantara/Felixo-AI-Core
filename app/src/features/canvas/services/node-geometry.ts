@@ -16,7 +16,7 @@ export const DEFAULT_SIZE: Record<
   notionTasks: { width: 1040, height: 680 },
   drawing: { width: 360, height: 280 },
   excalidrawDrawing: { width: 760, height: 560 },
-  'cloud-session': { width: 460, height: 460 },
+  'cloud-session': { width: 460, height: 560 },
 }
 
 /**

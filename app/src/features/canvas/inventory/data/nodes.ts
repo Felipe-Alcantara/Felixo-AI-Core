@@ -700,7 +700,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
       { file: 'electron/services/cloud-session-ipc-handlers.test.cjs' },
     ],
     gaps: [],
-    overlap: `${NODE_OVERLAP_BASE} Bloco médio (padrão 460×460, mínimo 340×320). A confirmação é inline dentro do próprio cartão (sem modal e sem window.confirm), então nada cobre o canvas.`,
+    overlap: `${NODE_OVERLAP_BASE} Bloco médio (padrão 460×560, mínimo 340×320). A confirmação é inline dentro do próprio cartão (sem modal e sem window.confirm), então nada cobre o canvas.`,
   },
 
   drawing: {
