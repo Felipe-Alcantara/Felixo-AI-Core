@@ -10,6 +10,7 @@ import {
   canRetryWithoutConfirmation,
   isCloudSessionUrl,
   startNewSession,
+  taskProblem,
 } from '../services/cloud-session-state'
 import type { NewTerminalOptions } from '../services/new-terminal-options'
 import type { CliAccount } from '../../shared/types/cli-accounts'
@@ -215,6 +216,7 @@ function CloudSessionNodeComponent({ id, data, selected }: NodeProps) {
   const selectedProject = projects.find((project) => project.path === nodeData.cloudCwd)
   const error = nodeData.cloudError
   const retryNeedsConfirmation = error ? !canRetryWithoutConfirmation(error.code) : false
+  const taskIssue = taskProblem(nodeData.cloudTask ?? '')
   const editable = status === 'draft' || status === 'failed'
 
   return (
@@ -263,8 +265,15 @@ function CloudSessionNodeComponent({ id, data, selected }: NodeProps) {
                 rows={4}
                 onChange={(event) => change({ cloudTask: event.target.value })}
                 placeholder="O que a sessão na nuvem deve fazer?"
+                aria-invalid={taskIssue ? true : undefined}
+                aria-describedby={taskIssue ? `${id}-task-problem` : undefined}
                 className={`${FIELD} resize-none`}
               />
+              {taskIssue && (
+                <p id={`${id}-task-problem`} role="alert" className="mt-1 text-[11px] text-theme-error">
+                  {taskIssue}
+                </p>
+              )}
             </div>
 
             <div>
