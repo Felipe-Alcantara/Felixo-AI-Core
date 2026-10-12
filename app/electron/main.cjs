@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, safeStorage, session } = require('electron')
+const { app, BrowserWindow, Menu, ipcMain, safeStorage, session, shell } = require('electron')
 const path = require('node:path')
 const vm = require('node:vm')
 const { createMainWindow } = require('./windows/main-window.cjs')
@@ -112,6 +112,8 @@ const { queryCodexStatus } = require('./services/codex-status-query.cjs')
 const {
   registerAgentUsageIpcHandlers,
 } = require('./services/agent-usage-ipc-handlers.cjs')
+const { createCloudSessionService } = require('./services/cloud-session/cloud-session-service.cjs')
+const { registerCloudSessionIpcHandlers } = require('./services/cloud-session-ipc-handlers.cjs')
 const { createCliEnv } = require('./services/cli-process-manager.cjs')
 const { createStorageDatabase } = require('./services/storage/sqlite-database.cjs')
 const { createSettingsRepository } = require('./services/storage/settings-repository.cjs')
@@ -165,6 +167,7 @@ let settingsRepository = null
 let terminalLogStore = null
 let cliAutoInstall = null
 let agentUsageWatching = null
+let cloudSessionService = null
 let notionHandlers = null
 let agentBrowserWatching = null
 let agentCanvasReadWatching = null
@@ -800,6 +803,18 @@ app.whenReady().then(async () => {
     service: agentUsageService,
     getMainWindow,
   })
+  // Agente na nuvem: a conta escolhida vira o ambiente do `claude --cloud`
+  // pelo mesmo cadastro que os terminais usam; sem conta vale o Login do sistema.
+  cloudSessionService = createCloudSessionService({
+    resolveProfileEnv: (accountId) => cliAccounts.buildEnv(accountId, 'claude'),
+  })
+  registerCloudSessionIpcHandlers({
+    ipcMain,
+    service: cloudSessionService,
+    // Mesma troca do "Abrir no navegador" do cartão de pedido: na instância de
+    // automação que pediu falha de navegador, nada abre.
+    shell: automationShell ?? shell,
+  })
 
   // Expõe a versão empacotada (definida pelo CI no release, não no
   // package.json versionado) para a interface conseguir mostrá-la.
@@ -854,6 +869,8 @@ app.whenReady().then(async () => {
 app.on('before-quit', () => {
   // Interrompe gerações de imagem em andamento (mata o filho do Openia e a pasta temporária).
   openiaImageService?.shutdown()
+  // Encerra os PTY descartáveis de um disparo em andamento.
+  cloudSessionService?.dispose()
   if (agentBrowserWatching) {
     try {
       agentBrowserWatching.pararDeObservarPedidos()
