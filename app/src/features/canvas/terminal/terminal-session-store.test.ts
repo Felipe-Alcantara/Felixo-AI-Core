@@ -108,6 +108,8 @@ type Harness = {
   contextFileNames: string[]
   /** sessionId de cada chamada a `contextFiles.release`, na ordem em que ocorreram. */
   releaseCalls: string[]
+  /** Eventos gravados no log de QA pelo store, na ordem. */
+  qaLogs: Array<{ level: string; scope: string; message: string; details: Record<string, unknown> }>
 }
 
 type SpawnRequest = {
@@ -127,6 +129,7 @@ function createHarness(
   deferSpawn = false,
   terminalCount = 1,
   extraOptions: {
+    args?: string[]
     initialTextIsHandoff?: boolean
     accountId?: string
     providerId?: string
@@ -150,6 +153,7 @@ function createHarness(
   const spawnCwds: Array<string | undefined> = []
   const contextFileNames: string[] = []
   const releaseCalls: string[] = []
+  const qaLogs: Harness['qaLogs'] = []
 
   // Com `deferSpawn`, a resposta do `pty:spawn` fica pendurada até o teste
   // soltá-la, reproduzindo a ordem que o ConPTY impõe no Windows: a CLI pinta
@@ -216,6 +220,12 @@ function createHarness(
           return { ok: true }
         },
       },
+      qaLogger: {
+        log: async (entry: Harness['qaLogs'][number]) => {
+          qaLogs.push(entry)
+          return { ok: true }
+        },
+      },
     },
   }
 
@@ -244,6 +254,7 @@ function createHarness(
     },
     contextFileNames,
     releaseCalls,
+    qaLogs,
     feed: (data: string) => {
       for (const listener of dataListeners) {
         listener({ sessionId: PTY_SESSION_ID, data })
@@ -2293,5 +2304,231 @@ describe('TerminalSessionStore: links do terminal', () => {
       handler?.activate(mouse({ metaKey: true, clientX: 50, clientY: 60 }), 'https://example.com/', RANGE)
       expect(getLinkChooserState().version).toBe(pedido.version + 1)
     })
+  })
+})
+
+
+describe('TerminalSessionStore: lançamento do Codex', () => {
+  const YOLO = '--dangerously-bypass-approvals-and-sandbox'
+  let harness: Harness | undefined
+
+  beforeEach(() => {
+    harness = undefined
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    harness?.store.clear()
+    vi.useRealTimers()
+  })
+
+  const launchLogs = (h: Harness) => h.qaLogs.filter((entry) => entry.scope === 'terminal-launch')
+
+  // Relato real (Windows, conta free, yolo): o bloco nasceu "encerrado" com
+  // "the argument '--dangerously-bypass-approvals-and-sandbox' cannot be used
+  // multiple times". O Codex recusa duas flags de yolo antes de olhar conta ou
+  // modelo, então o app descarta a repetição e registra o que fez.
+  it('descarta a flag de yolo repetida antes do spawn e registra o que mudou', async () => {
+    harness = createHarness('', 'codex', true, false, 1, {
+      args: [YOLO, '--model', 'gpt-5', YOLO],
+    })
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(harness.spawnArgs).toEqual([YOLO, '--model', 'gpt-5'])
+    expect(launchLogs(harness)).toEqual([
+      expect.objectContaining({
+        level: 'warn',
+        message: 'terminal-launch:args-normalized',
+        details: expect.objectContaining({
+          command: 'codex',
+          requestedArgs: [YOLO, '--model', 'gpt-5', YOLO],
+          launchArgs: [YOLO, '--model', 'gpt-5'],
+          removed: [YOLO],
+        }),
+      }),
+    ])
+  })
+
+  it('sem repetição, sobe com os argumentos de sempre e não registra nada', async () => {
+    harness = createHarness('', 'codex', true)
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(harness.spawnArgs).toEqual([YOLO])
+    expect(launchLogs(harness)).toEqual([])
+  })
+
+  it('saída logo ao abrir: mostra os argumentos enviados e grava o diagnóstico completo', async () => {
+    // Falha de outra natureza (a repetição de yolo tem fallback próprio, abaixo):
+    // sem os argumentos de fato enviados não dá para separar "o bloco guarda algo
+    // errado" de "algo de fora mexe no comando".
+    harness = createHarness('', 'codex', true)
+    await vi.advanceTimersByTimeAsync(0)
+
+    harness.feed("error: unexpected argument '--opcao-que-nao-existe' found\r\n")
+    harness.emitExit({ exitCode: 2 })
+    await vi.advanceTimersByTimeAsync(50)
+
+    const message = harness.store.getSnapshot(SESSION_ID)?.message ?? ''
+    expect(message).toContain('encerrou logo ao abrir')
+    expect(message).toContain('código 2')
+    expect(message).toContain(`Argumentos enviados: ${YOLO}`)
+
+    expect(launchLogs(harness)).toEqual([
+      expect.objectContaining({
+        level: 'error',
+        message: 'terminal-launch:early-exit',
+        details: expect.objectContaining({
+          command: 'codex',
+          args: [YOLO],
+          exitCode: 2,
+          // O xterm quebra a linha nas colunas do terminal: tolera a quebra no meio da frase.
+          outputTail: expect.stringMatching(/unexpected argument\s+'--opcao-que-nao-existe'/),
+        }),
+      }),
+    ])
+  })
+
+  it('quando o app descartou uma repetição e mesmo assim falhou, a mensagem diz isso', async () => {
+    harness = createHarness('', 'codex', true, false, 1, { args: [YOLO, YOLO] })
+    await vi.advanceTimersByTimeAsync(0)
+
+    harness.feed('error: qualquer coisa\r\n')
+    harness.emitExit({ exitCode: 2 })
+    await vi.advanceTimersByTimeAsync(50)
+
+    const message = harness.store.getSnapshot(SESSION_ID)?.message ?? ''
+    expect(message).toContain(`Argumentos enviados: ${YOLO}`)
+    expect(message).toContain(`O Felixo descartou flag repetida: ${YOLO}`)
+    const early = launchLogs(harness).find((entry) => entry.message === 'terminal-launch:early-exit')
+    expect(early?.details).toMatchObject({ removed: [YOLO], requestedArgs: [YOLO, YOLO] })
+  })
+
+  it('saída normal (código 0) ou muito depois de abrir não vira diagnóstico', async () => {
+    harness = createHarness('', 'codex', true)
+    await vi.advanceTimersByTimeAsync(0)
+    harness.feed('tchau\r\n')
+    harness.emitExit({ exitCode: 0 })
+    await vi.advanceTimersByTimeAsync(50)
+    expect(harness.store.getSnapshot(SESSION_ID)?.message).toBeUndefined()
+    expect(launchLogs(harness)).toEqual([])
+    harness.store.clear()
+
+    harness = createHarness('', 'codex', true)
+    await vi.advanceTimersByTimeAsync(60_000)
+    harness.feed('erro tardio\r\n')
+    harness.emitExit({ exitCode: 2 })
+    await vi.advanceTimersByTimeAsync(50)
+    expect(harness.store.getSnapshot(SESSION_ID)?.message).toBeUndefined()
+    expect(launchLogs(harness)).toEqual([])
+  })
+
+  describe('fallback: o Codex recusa a flag de yolo que outra fonte já deu', () => {
+    // Reproduzido no app real com um `codex` na frente do PATH que sempre soma a
+    // flag: com o checkbox, o app manda UMA e o Codex recusa ("cannot be used
+    // multiple times"); sem o checkbox, abre em YOLO mode só pela flag de fora.
+    // A recusa prova que a outra existe, então reabrir sem a do app mantém o yolo.
+    const DUPLICADA = `error: the argument '${YOLO}' cannot be used multiple times\r\n\r\nUsage: codex [OPTIONS] [PROMPT]\r\n`
+    const REFERENCIA: AgentSessionReference = {
+      version: 1,
+      provider: 'codex',
+      sessionId: 'codex-session-123',
+      cwd: '/tmp',
+      capturedAt: 123,
+    }
+
+    it('reabre uma vez sem a flag do app e avisa por que', async () => {
+      harness = createHarness('', 'codex', true)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(harness.spawnRequests).toHaveLength(1)
+      expect(harness.spawnArgs).toEqual([YOLO])
+
+      harness.feed(DUPLICADA)
+      harness.emitExit({ exitCode: 2 })
+      await vi.advanceTimersByTimeAsync(50)
+
+      expect(harness.spawnRequests).toHaveLength(2)
+      expect(harness.spawnArgs).toEqual([])
+      const snapshot = harness.store.getSnapshot(SESSION_ID)
+      expect(snapshot?.contextWarning).toContain('já existe outra')
+      expect(snapshot?.contextWarning).toContain('reabriu sem a dele')
+      expect(snapshot?.message, 'o bloco novo não nasce com a mensagem de falha').toBeUndefined()
+      expect(launchLogs(harness)).toContainEqual(
+        expect.objectContaining({
+          level: 'warn',
+          message: 'terminal-launch:yolo-duplicate-retry',
+          details: expect.objectContaining({ args: [YOLO], retryArgs: [], exitCode: 2 }),
+        }),
+      )
+    })
+
+    it('reabre uma vez só: se a segunda tentativa também falhar, mostra o diagnóstico e para', async () => {
+      harness = createHarness('', 'codex', true)
+      await vi.advanceTimersByTimeAsync(0)
+      harness.feed(DUPLICADA)
+      harness.emitExit({ exitCode: 2 })
+      await vi.advanceTimersByTimeAsync(50)
+      expect(harness.spawnRequests).toHaveLength(2)
+
+      harness.feed(DUPLICADA)
+      harness.emitExit({ exitCode: 2 })
+      await vi.advanceTimersByTimeAsync(50)
+
+      expect(harness.spawnRequests, 'sem a flag do app não há o que tirar de novo').toHaveLength(2)
+      expect(harness.store.getSnapshot(SESSION_ID)?.message).toContain('encerrou logo ao abrir')
+    })
+
+    it('mantém a retomada: reabre com `resume <id>` sem a flag do app', async () => {
+      harness = createHarness('', 'codex', true, false, 1, {
+        agentSession: REFERENCIA,
+        resumeAgentSession: true,
+      })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(harness.spawnArgs).toEqual(['resume', YOLO, 'codex-session-123'])
+
+      harness.feed(DUPLICADA)
+      harness.emitExit({ exitCode: 2 })
+      await vi.advanceTimersByTimeAsync(50)
+
+      expect(harness.spawnRequests).toHaveLength(2)
+      expect(harness.spawnArgs).toEqual(['resume', 'codex-session-123'])
+    })
+
+    it('não reabre por erro de outra natureza, nem quando o app não mandou a flag', async () => {
+      harness = createHarness('', 'codex', true)
+      await vi.advanceTimersByTimeAsync(0)
+      harness.feed('Not logged in\r\n')
+      harness.emitExit({ exitCode: 1 })
+      await vi.advanceTimersByTimeAsync(50)
+      expect(harness.spawnRequests).toHaveLength(1)
+      expect(harness.store.getSnapshot(SESSION_ID)?.message).toContain('encerrou logo ao abrir')
+      harness.store.clear()
+
+      harness = createHarness('', 'codex', true, false, 1, { args: [] })
+      await vi.advanceTimersByTimeAsync(0)
+      harness.feed(DUPLICADA)
+      harness.emitExit({ exitCode: 2 })
+      await vi.advanceTimersByTimeAsync(50)
+      expect(harness.spawnRequests, 'o app não mandou yolo: a repetição não é dele').toHaveLength(1)
+    })
+
+    it('não reabre uma saída que veio muito depois de abrir', async () => {
+      harness = createHarness('', 'codex', true)
+      await vi.advanceTimersByTimeAsync(60_000)
+      harness.feed(DUPLICADA)
+      harness.emitExit({ exitCode: 2 })
+      await vi.advanceTimersByTimeAsync(50)
+
+      expect(harness.spawnRequests).toHaveLength(1)
+    })
+  })
+
+  it('só o Codex ganha o diagnóstico: o Claude sai cedo com erro como sempre', async () => {
+    harness = createHarness('', 'claude', true)
+    await vi.advanceTimersByTimeAsync(0)
+    harness.feed('erro\r\n')
+    harness.emitExit({ exitCode: 1 })
+    await vi.advanceTimersByTimeAsync(50)
+
+    expect(launchLogs(harness)).toEqual([])
   })
 })

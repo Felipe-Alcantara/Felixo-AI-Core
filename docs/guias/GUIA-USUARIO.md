@@ -1193,6 +1193,23 @@ na mesma seção), feche e abra o app de novo: um início que não termina (ou q
 fecha sem mostrar a janela, ao tentar reabrir na Integrada) faz a escolha voltar
 sozinha para **Automático** na abertura seguinte.
 
+**O bloco do Codex fecha logo ao abrir, com "the argument '--dangerously-bypass-approvals-and-sandbox' cannot be used multiple times".**
+
+O Codex recusa duas flags de yolo ao mesmo tempo. Quando o app manda uma só (o
+checkbox **Yolo**) e o Codex ainda assim recusa, a outra vem de fora do app: um
+`codex` embrulhado ou um alias no seu sistema que já soma a flag. Sinal disso: o
+mesmo bloco, com o Yolo **desmarcado**, abre mostrando `permissions: YOLO mode`.
+
+O app trata isso sozinho: reabre o Codex **uma vez**, sem a flag dele (o yolo
+continua valendo pela flag de fora), e avisa no bloco. Uma flag repetida dentro
+dos próprios argumentos do bloco é descartada antes de abrir. Se o Codex ainda
+cair logo ao abrir, o bloco mostra o código de saída e os **argumentos enviados**,
+e o diagnóstico completo (comando, argumentos, versão da CLI, plataforma e o fim
+da tela) fica no QA Logger, no escopo `terminal-launch`, e no arquivo
+`logs/qa/qa-AAAA-MM-DD.jsonl` do diretório de dados do app. Mande esse trecho ao
+reportar o problema. Para tirar a causa, procure o `codex` que soma a flag
+(`Get-Command codex -All` no PowerShell, `where codex` no cmd).
+
 **O app não abre no Linux.**
 
 Se estiver usando AppImage, confirme a permissão de execução com `chmod +x Felixo-AI-Core-*.AppImage`.
