@@ -103,6 +103,41 @@ test('artefato ausente falha sem sugerir um caminho de outro perfil', async () =
   }
 })
 
+test('artefato expirado explica o ciclo de vida e não trava a conversa retomada', async () => {
+  // O Felixo apaga estes arquivos quando o terminal do agente termina (fechar o
+  // app, auto-atualização do Codex, reiniciar o bloco) e os de mais de 24 h na
+  // abertura. A conversa do agente, porém, é retomada com a instrução original
+  // ("leia antes de agir") ainda no histórico. Relato real, Windows + Codex:
+  // o agente tentou ler três artefatos de uma execução anterior, recebeu só
+  // "não encontrado... informe o erro" e parou, sem fazer o pedido da pessoa,
+  // pedindo que ela "disponibilizasse novamente" arquivos que ela não controla.
+  const contextDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'felixo-context-cli-'))
+  const name = 'felixo-context-1791213063512-93a7b9e2-05b2-4f4e-bdd4-c52f2752d8d1-initial-context.txt'
+
+  try {
+    const result = await executarContexto(['read', name], {
+      getContextDir: () => contextDir,
+    })
+
+    assert.equal(result.codigo, 1)
+    // Continua identificando o artefato e proibindo troca silenciosa (a razão
+    // original desta mensagem: um agente já leu o arquivo errado "equivalente").
+    assert.ok(result.erro.includes(`Artefato de contexto não encontrado: ${name}`))
+    assert.match(result.erro, /Não substitua por outro artefato/)
+    // Diz que a ausência é esperada, em vez de parecer uma falha a reportar.
+    assert.match(result.erro, /temporári/i)
+    assert.match(result.erro, /encerrad|reiniciad/i)
+    // Dá o caminho de saída: o conteúdo já está no histórico da conversa
+    // retomada, então o pedido atual segue sem esperar o arquivo reaparecer.
+    assert.match(result.erro, /histórico/i)
+    assert.match(result.erro, /continue/i)
+    // E não abre brecha para inventar o conteúdo que o histórico não tiver.
+    assert.match(result.erro, /não invente/i)
+  } finally {
+    await fsp.rm(contextDir, { recursive: true, force: true })
+  }
+})
+
 test('persiste um diagnóstico quando a leitura do agente falha', async () => {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'felixo-context-cli-failure-'))
   const contextDir = path.join(root, 'context-deliveries')
