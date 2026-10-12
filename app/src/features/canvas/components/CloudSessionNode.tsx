@@ -2,16 +2,13 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { NodeResizer, useReactFlow, type NodeProps } from '@xyflow/react'
 import { Cloud, Copy, ExternalLink, FolderOpen, Loader2, Send, TerminalSquare } from 'lucide-react'
 import { NODE_MIN_SIZE } from '../services/node-geometry'
+import { runFollowUp, runLaunch } from '../services/cloud-session-actions'
 import {
   CLOUD_FOLLOW_UP_MAX,
   CLOUD_TASK_MAX,
-  appendFollowUp,
-  applyLaunchResult,
-  canFollowUp,
   canLaunch,
   canRetryWithoutConfirmation,
   isCloudSessionUrl,
-  markLaunching,
   startNewSession,
 } from '../services/cloud-session-state'
 import type { NewTerminalOptions } from '../services/new-terminal-options'
@@ -34,7 +31,6 @@ type CloudSessionNodeDataWithHandlers = CloudSessionNodeData & {
 
 type Confirming = 'launch' | 'retry' | 'new-session' | null
 
-const UNAVAILABLE = 'O agente na nuvem não está disponível nesta versão do app.'
 const FIELD = 'felixo-control w-full text-xs'
 const LABEL = 'felixo-field-label'
 const PRIMARY = 'felixo-btn felixo-primary-action rounded-sm px-3 py-1.5 text-xs disabled:opacity-50'
@@ -91,72 +87,45 @@ function CloudSessionNodeComponent({ id, data, selected }: NodeProps) {
     }
   }, [])
 
+  // A regra de disparar e de enviar mensagem mora em `cloud-session-actions.ts`
+  // (testada sem DOM); aqui só se liga o botão a ela e se guarda o que é da tela.
+  const actionParams = useCallback(
+    () => ({
+      nodeId: id,
+      current: dataRef.current,
+      latest: () => dataRef.current,
+      bridge,
+      now: () => new Date().toISOString(),
+      change,
+    }),
+    [bridge, change, id],
+  )
+
   const launch = useCallback(async () => {
-    const current = dataRef.current
-    if (inFlightRef.current || !canLaunch(current)) return
-    if (!bridge) {
-      setActionError(UNAVAILABLE)
-      return
-    }
+    if (inFlightRef.current) return
     inFlightRef.current = true
     setConfirming(null)
     setActionError(null)
-    change(markLaunching(current))
     try {
-      const result = await bridge.launch({
-        nodeId: id,
-        task: current.cloudTask ?? '',
-        cwd: current.cloudCwd ?? '',
-        accountId: current.cloudAccountId,
-      })
-      change(applyLaunchResult(dataRef.current, result, new Date().toISOString()))
-    } catch {
-      change(
-        applyLaunchResult(
-          dataRef.current,
-          { ok: false, code: 'unknown', message: 'Não foi possível falar com o processo principal do app.' },
-          new Date().toISOString(),
-        ),
-      )
+      const outcome = await runLaunch(actionParams())
+      if (outcome.message) setActionError(outcome.message)
     } finally {
       inFlightRef.current = false
     }
-  }, [bridge, change, id])
+  }, [actionParams])
 
   const sendFollowUp = useCallback(async () => {
-    const current = dataRef.current
-    const text = followUpText.trim()
-    if (!text || followUpBusy || !canFollowUp(current) || !current.cloudSession) return
-    if (!bridge) {
-      setActionError(UNAVAILABLE)
-      return
-    }
+    if (followUpBusy) return
     setFollowUpBusy(true)
     setActionError(null)
     try {
-      const result = await bridge.followUp({
-        nodeId: id,
-        sessionId: current.cloudSession.id,
-        text,
-        cwd: current.cloudCwd ?? '',
-        accountId: current.cloudAccountId,
-      })
-      change(
-        appendFollowUp(dataRef.current, {
-          at: new Date().toISOString(),
-          text,
-          ok: result.ok,
-          ...(result.ok ? {} : { error: result.code }),
-        }),
-      )
-      if (result.ok) setFollowUpText('')
-      else setActionError(result.message)
-    } catch {
-      setActionError('Não foi possível falar com o processo principal do app.')
+      const outcome = await runFollowUp({ ...actionParams(), text: followUpText })
+      if (outcome.sent) setFollowUpText('')
+      else if (outcome.message) setActionError(outcome.message)
     } finally {
       setFollowUpBusy(false)
     }
-  }, [bridge, change, followUpBusy, followUpText, id])
+  }, [actionParams, followUpBusy, followUpText])
 
   const openSession = useCallback(async () => {
     if (!session || !isCloudSessionUrl(session.url)) return
