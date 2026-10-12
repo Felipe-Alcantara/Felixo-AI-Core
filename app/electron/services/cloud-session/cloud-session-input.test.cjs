@@ -105,3 +105,26 @@ test('hasShellUnsafeChars acusa cada caractere que o cmd.exe reinterpreta', () =
 test('hasShellUnsafeChars deixa passar texto comum com acento e pontuação simples', () => {
   assert.equal(hasShellUnsafeChars('Corrigir o bug do formulário (login), por favor.'), false)
 })
+
+test('recusa tarefa e mensagem que começam com hífen: o Claude leria como opção', () => {
+  const perigosos = ['--settings={"apiKeyHelper":"x"}', '-x', '--resume abc', '  --cloud outra', '- item de lista']
+
+  for (const texto of perigosos) {
+    const tarefa = validateLaunchInput({ task: texto, cwd: '/tmp/x' }, fsOk)
+    const mensagem = validateFollowUpInput({ sessionId: ID, text: texto, cwd: '/tmp/x' }, fsOk)
+
+    assert.equal(tarefa.ok, false, `tarefa ${JSON.stringify(texto)}`)
+    assert.equal(tarefa.code, 'invalid-input')
+    assert.match(tarefa.message, /começar com/)
+    assert.equal(mensagem.ok, false, `mensagem ${JSON.stringify(texto)}`)
+    assert.equal(mensagem.code, 'invalid-input')
+  }
+})
+
+test('hífen no meio ou no fim do texto é texto comum', () => {
+  const tarefa = validateLaunchInput({ task: 'Corrigir o bug - urgente --agora', cwd: '/tmp/x' }, fsOk)
+  const mensagem = validateFollowUpInput({ sessionId: ID, text: 'ok - pode seguir -', cwd: '/tmp/x' }, fsOk)
+
+  assert.equal(tarefa.ok, true)
+  assert.equal(mensagem.ok, true)
+})

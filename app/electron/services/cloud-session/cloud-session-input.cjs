@@ -29,6 +29,15 @@ function readText(value, max) {
   return text.length > 0 && text.length <= max ? text : null
 }
 
+/**
+ * O texto vira argumento do `claude`; um que comece com `-` seria lido como
+ * opção (`--settings=...` roda comando). Vale em qualquer plataforma, porque o
+ * CLI decide isso e não o sistema operacional.
+ */
+function startsLikeAnOption(text) {
+  return text.startsWith('-')
+}
+
 function isExistingDirectory(cwd, fsApi) {
   if (typeof cwd !== 'string' || cwd.length === 0) return false
   if (!path.win32.isAbsolute(cwd) && !path.posix.isAbsolute(cwd)) return false
@@ -49,6 +58,9 @@ function validateLaunchInput(input, fsApi = fs) {
   if (task === null) {
     return invalid(`Escreva a tarefa (até ${TASK_MAX} caracteres).`)
   }
+  if (startsLikeAnOption(task)) {
+    return invalid('A tarefa não pode começar com “-”: o Claude leria como uma opção. Comece com uma letra ou número.')
+  }
   if (!isExistingDirectory(input?.cwd, fsApi)) {
     return invalid('A pasta do projeto não existe ou não é uma pasta.')
   }
@@ -67,6 +79,9 @@ function validateFollowUpInput(input, fsApi = fs) {
   const text = readText(input?.text, FOLLOW_UP_MAX)
   if (text === null) {
     return invalid(`Escreva a mensagem (até ${FOLLOW_UP_MAX} caracteres).`)
+  }
+  if (startsLikeAnOption(text)) {
+    return invalid('A mensagem não pode começar com “-”: o Claude leria como uma opção. Comece com uma letra ou número.')
   }
   if (!isExistingDirectory(input?.cwd, fsApi)) {
     return invalid('A pasta do projeto não existe ou não é uma pasta.')
