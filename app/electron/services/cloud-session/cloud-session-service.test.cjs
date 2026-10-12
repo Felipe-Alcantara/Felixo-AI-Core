@@ -9,6 +9,7 @@ const {
   createCloudSessionService,
   describeCloudSessionEvent,
 } = require('./cloud-session-service.cjs')
+const { parseWindowsCommandLine } = require('./test-support/parse-windows-command-line.cjs')
 
 // Um disparo que nunca recebe saída ficaria esperando para sempre; com o
 // teto curto, uma regressão (ex.: sem a trava do nó) falha em segundos.
@@ -113,7 +114,12 @@ test('launch cria o PTY com --cloud e a tarefa como argv, na pasta certa e sem c
   ptys[0].emitInChunks(SUCCESS)
   const result = await pending
 
-  assert.deepEqual(spawns[0].args, ['--cloud', 'Linha 1\nLinha "2" com %PATH% & emoji'])
+  // No Windows o PTY recebe a linha de comando já montada; o parser do sistema
+  // a separa de volta em exatamente --cloud e a tarefa.
+  assert.deepEqual(parseWindowsCommandLine(spawns[0].args), [
+    '--cloud',
+    'Linha 1\nLinha "2" com %PATH% & emoji',
+  ])
   assert.equal(spawns[0].file, 'C:\\npm\\claude.exe')
   assert.equal(spawns[0].options.cwd, CWD)
   assert.equal(spawns[0].options.cols, 120)
@@ -455,4 +461,45 @@ test('describeCloudSessionEvent traduz o evento em nível, mensagem neutra e det
   assert.equal(describeCloudSessionEvent({ operation: 'follow-up', ok: false, code: 'unknown', durationMs: 1 }).level, 'error')
   assert.equal(describeCloudSessionEvent({ operation: 'follow-up', ok: false, code: 'login-required', durationMs: 1 }).level, 'warn')
   assert.match(describeCloudSessionEvent({ operation: 'follow-up', ok: true, durationMs: 5 }).message, /Mensagem enviada/)
+})
+
+// --- Argumentos chegam como argv, em cada plataforma (achado da revisão #1) --
+
+
+test('no Windows o PTY recebe uma linha de comando que o parser do sistema separa em exatamente --cloud e a tarefa', async () => {
+  // O node-pty não cita um argumento que começa e termina com aspas; sem a nossa
+  // montagem, o --settings abaixo viraria uma opção do claude.
+  const tarefa = '"Corrija o bug" --settings={"apiKeyHelper":"x"} "e pronto"'
+  const { service, spawns, ptys } = setup()
+
+  const pending = service.launch(input({ task: tarefa }))
+  ptys[0].emit(SUCCESS)
+  await pending
+
+  assert.equal(typeof spawns[0].args, 'string')
+  assert.deepEqual(parseWindowsCommandLine(spawns[0].args), ['--cloud', tarefa])
+})
+
+test('fora do Windows o PTY recebe o argv como lista, sem montar linha de comando', async () => {
+  const { service, spawns, ptys } = setup({
+    platform: { name: 'linux' },
+    resolveClaude: () => ({ command: 'claude', viaShell: false }),
+  })
+
+  const pending = service.launch(input({ task: 'Linha 1\nLinha "2" com %PATH% & emoji' }))
+  ptys[0].emit(SUCCESS)
+  await pending
+
+  assert.equal(spawns[0].file, 'claude')
+  assert.deepEqual(spawns[0].args, ['--cloud', 'Linha 1\nLinha "2" com %PATH% & emoji'])
+})
+
+test('o follow-up no Windows continua como lista para o execFile, que cita corretamente', async () => {
+  const { service, execs } = setup()
+
+  const pending = service.followUp({ nodeId: 'no-1', sessionId: ID, text: '"entre aspas" e mais', cwd: CWD })
+  execs[0].callback(null, 'Sent to cloud session.', '')
+  await pending
+
+  assert.deepEqual(execs[0].args, ['-p', '"entre aspas" e mais', '--cloud', ID])
 })

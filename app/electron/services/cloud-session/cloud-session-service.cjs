@@ -24,6 +24,7 @@ const { createCliEnv } = require('../cli-process-manager.cjs')
 const { applyProfileEnv } = require('../cli-account-profiles.cjs')
 const { createPtyLaunchSpec } = require('../pty-process-manager.cjs')
 const { ensureNodePtySpawnHelperExecutable } = require('../pty-native-assets.cjs')
+const { buildWindowsCommandLine } = require('./cloud-session-command-line.cjs')
 const { resolveNativeClaude } = require('./cloud-session-executable.cjs')
 const {
   hasShellUnsafeChars,
@@ -163,16 +164,27 @@ function createCloudSessionService({
     return applyProfileEnv(createBaseEnv(), { providerId: 'claude', profileEnv }, platform.name)
   }
 
-  /** O que executar: o binário nativo direto, ou o launch spec do app. */
-  function buildSpec(claude, args, env) {
-    const direct = !claude.viaShell && platform.name !== 'darwin'
-    return direct
-      ? { command: claude.command, args }
-      : createPtyLaunchSpec(claude.command, args, env, platform)
+  /**
+   * O que executar: o binário nativo direto, ou o launch spec do app.
+   *
+   * No Windows, para o PTY, a linha de comando é montada aqui, porque o node-pty
+   * não cita um argumento que começa e termina com aspas (ver
+   * cloud-session-command-line.cjs). O `execFile` (follow-up) cita certo e
+   * recebe a lista; nas outras plataformas o node-pty também entrega a lista
+   * como argv ao processo.
+   */
+  function buildSpec(claude, args, env, { pty }) {
+    if (claude.viaShell || platform.name === 'darwin') {
+      return createPtyLaunchSpec(claude.command, args, env, platform)
+    }
+    return {
+      command: claude.command,
+      args: pty && platform.name === 'win32' ? buildWindowsCommandLine(args) : args,
+    }
   }
 
   /** Env + executável + recusa de texto que um shell reinterpretaria. */
-  function prepare(accountId, args, freeText) {
+  function prepare(accountId, args, freeText, { pty }) {
     let env
     try {
       env = buildEnv(accountId)
@@ -188,7 +200,7 @@ function createCloudSessionService({
         ),
       }
     }
-    return { env, spec: buildSpec(claude, args, env) }
+    return { env, spec: buildSpec(claude, args, env, { pty }) }
   }
 
   function runPty(spec, cwd, env) {
@@ -322,7 +334,7 @@ function createCloudSessionService({
 
     busyNodes.add(nodeId)
     try {
-      const prepared = prepare(input?.accountId, ['--cloud', valid.task], valid.task)
+      const prepared = prepare(input?.accountId, ['--cloud', valid.task], valid.task, { pty: true })
       if (prepared.error) return prepared.error
       return await runPty(prepared.spec, valid.cwd, prepared.env)
     } finally {
@@ -342,7 +354,7 @@ function createCloudSessionService({
 
     busyNodes.add(nodeId)
     try {
-      const prepared = prepare(input?.accountId, ['-p', valid.text, '--cloud', valid.sessionId], valid.text)
+      const prepared = prepare(input?.accountId, ['-p', valid.text, '--cloud', valid.sessionId], valid.text, { pty: false })
       if (prepared.error) return prepared.error
       return await runExec(prepared.spec, valid.cwd, prepared.env)
     } finally {
