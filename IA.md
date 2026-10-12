@@ -8348,3 +8348,104 @@ barras invertidas em heredocs, o que corrompe fixtures com caminhos do Windows.
   mantém os commits acessíveis por SHA. Fica registrado para decidir.
 
 Estado: implementado e validado localmente no Windows; push, CI e merge pendentes.
+
+## 2026-10-12 — Alinhamento ao padrão de qualidade: gate verde, portabilidade e lacunas declaradas
+
+**Contexto.** Pedido: colocar o repositório no padrão de qualidade do Felixo System Design.
+A pasta `Padrão de qualidade - Felixo System Design/` não existia na cópia de trabalho, então a
+fonte foi o repositório público (clone raso, commit `cc4aae7`). A auditoria seguiu o Guia Mínimo de
+Qualidade (13 itens e checklist), a política de git, o template de `IA.md`, o guia do `start_app.py`
+e o guia de README.
+
+**Já conforme, não refazer.** `start_app.py` na raiz com menu `questionary`/`rich` e as quatro ações
+mínimas; `requirements.txt` com hashes e `package-lock.json` versionado; auditoria de dependências
+no CI (`dependency-policy`, `python-dependency-audit`); CI em matriz de três sistemas; política de
+branch e commits já alinhada (`docs/guias/GUIA-DESENVOLVEDOR.md`); nenhum segredo versionado (só
+sentinelas de teste); 102 links relativos válidos antes das mudanças.
+
+**Gate medido antes de mexer** (árvore limpa, Windows 11): `tsc -b` e `eslint` limpos; vitest com 5
+falhas (um arquivo); Python com 4 falhas; testes Node com 3 arquivos falhando. Nenhuma era defeito
+de produto; cada uma tinha causa própria, achada por reprodução e não por suposição:
+
+- **Python, 4 falhas em `tests/test_node.py`.** O `.cmd` falso imprimia a versão certa mas saía com
+  código 1. Causa: `HKCU\Software\Microsoft\Command Processor\AutoRun` desta máquina chama `doskey`,
+  que não existe no PATH sintético dos testes. Correção em `tests/support.py`: o PATH de teste inclui
+  o `System32` no fim no Windows (`bf44a17`).
+- **vitest, 5 timeouts em `terminal-reading.fixtures`.** Reproduziu isolado. `codex-cancelamento`
+  (130 KB) leva cerca de 6 s para reproduzir no xterm, acima do limite padrão de 5 s. Correção:
+  `describe(..., { timeout: 30_000 })`, o mesmo idioma do arquivo vizinho e do #114 (`1c02fd7`).
+- **Node, `app-relaunch.test.cjs` inteiro falhando (`EPERM: symlink`).** A fixture criava o link
+  simbólico ao carregar o módulo, mesmo no Windows, onde os testes que o usam já são pulados. O
+  `EPERM` passa a ser tolerado só nesse caso (`85c1cdf`). Antes, 0 testes do arquivo rodavam; agora
+  4 passam e 4 são pulados por SO.
+- **Node, `codex-status-*` falhando (`Cannot find module '@xterm/headless'`).** Dependência declarada
+  e travada no lockfile, mas ausente no `node_modules` desta cópia. Ambiente, não repositório;
+  instalada com `npm install --no-save --ignore-scripts @xterm/headless@6.0.0`. O npm reconciliou
+  outros pacotes (removeu 12, alterou 10); depois disso `require('node-pty')` carregou, o binário
+  do `electron` continuou resolvendo e o teste de integração `pty-write-queue` passou (os outros
+  dois de `test:native` não foram rodados).
+
+**Organização e portabilidade.**
+
+- `ai-clis/*.sh` fixavam `/home/felipe/...` e a versão do Node de quem os escreveu. Agora resolvem a
+  CLI pelo PATH, com `FELIXO_CLI_PATHS` (o mesmo ajuste do app) e `$HOME/.npm-global/bin` na frente
+  (`ed29ea6`). A linha 2 de cada arquivo ficou igual: o chat legado a usa para inferir o nome do
+  modelo. Continuam exclusivos de Linux/KDE por usarem o Konsole, e isso agora está dito no arquivo.
+- O arquivo `plan`, sem extensão na raiz, passou para
+  `docs/_legado/projeto/PLANO-INTEGRACAO-CLIS-BACKEND.md` com `git mv`, histórico preservado
+  (`c2c0213`). Nada o referenciava.
+- A branch local `test/canvas-visual-regression-20260924` foi apagada. O remoto já tinha sido
+  removido e o diff dela é idêntico ao squash `34a422c` (#85) na `main`. Recuperável por
+  `git branch test/canvas-visual-regression-20260924 52008b7`.
+- README: índice no topo e seção Licença e contribuições no rodapé, no estilo do projeto, sem emojis
+  (`37d6083`).
+
+**Evidência e validação (final).**
+
+- `tsc -b`: exit 0. `eslint .`: exit 0.
+- Python: `python -m unittest discover -s tests -t .`, 104 testes OK (2 pulados por SO).
+- Node: `node scripts/run-node-unit-tests.cjs`, 2662 testes, 2654 passam, 0 falham, 8 pulados.
+- vitest: `CI=true npx vitest run --maxWorkers=4`, 205 arquivos passam (2 ignorados), 3145 testes
+  passam, 3 ignorados, 0 falhas, 90 s.
+- Links: verificador próprio (fora do repo) com controle negativo; 105 links relativos e 22
+  âncoras do README, 0 quebrados.
+
+**O que foi investigado e deliberadamente NÃO alterado.**
+
+- **Suíte vitest inteira com os 16 workers padrão não é confiável nesta máquina.** Havia só 2 GB de
+  14 GB de RAM livres. Uma rodada perdeu um worker (`Worker exited unexpectedly`, 1 arquivo e 9
+  testes a menos) e outra reprovou `canvas-context-e2e` num `waitFor` de 8 s. Esse arquivo passou
+  3 de 3 vezes isolado (cerca de 86 s) e o CI já o roda em passo próprio; a suíte inteira com 4
+  workers passou. Hipótese de causa: pressão de memória. Não foi medida a taxa de falha, então o
+  teste não foi alterado.
+- O `.gitignore` tem uma linha com o nome da pasta do padrão em mojibake (`Padr├úo ...`). Parece
+  proposital (um sincronizador pode criar a pasta com esse nome no Windows); mantida.
+- `.codex` vazio na raiz foi versionado de propósito (`2b9b9e1`); mantido.
+- O menu e `runner.py` ainda falam em "branch de produção" e `FELIXO_PRODUCTION_BRANCH`. É o nome
+  histórico da chave, o padrão já é a `main`; renomear mexeria em configuração salva de quem usa.
+
+**Lacunas que ficam abertas (decisão de quem mantém).**
+
+1. `IA.md` da raiz (8350 linhas, 556 KB) e `docs/projeto/IA.md` (6466 linhas, 660 KB) passaram do
+   ponto em que a compactação sem perda do template se aplica: não têm a seção **Estado atual
+   (resumo vivo)** e não existe `docs/ia-archive/`. Não foi feito porque vários agentes acrescentam
+   entradas a esses arquivos em paralelo e mover centenas de milhares de bytes colidiria com eles.
+   Se for feito, mover registros antigos na íntegra, sem editar, com ponteiro datado.
+2. O README continua com 865 linhas. Blocos longos (limites e uso por conta, cadeia de contas,
+   validação) poderiam migrar para `docs/` e deixar um resumo com link.
+
+**Não validado.** Só rodei no Windows; Linux e macOS dependem do CI.
+
+**Envio ao remoto.** Eu não executei `git push`, mas seis dos sete commits já estão na `origin/main`:
+o reflog registra `update by push` às 03:34, 03:37 e 03:46, logo depois de cada commit, o clone não
+tem hooks, e o app Felixo e o GitHub Desktop estavam abertos. A origem exata do envio não foi
+verificada. Quando escrevi isto, o CI do remoto estava assim: `ed29ea6` em andamento, `c2c0213`
+cancelado, `37d6083` pendente, e o Release gate de `37d6083` `skipped`. Cada um dos seis commits de
+código e documentação passou por `.github/scripts/release-relevant.sh` e deu `false`: nenhum publica
+instalador. O commit deste registro foi o único que ficou só local.
+
+Aprendizado de método: `grep -c $'\r'` no Git Bash deu falso positivo (disse 6 CRs num arquivo LF);
+a fonte confiável foi `git ls-files --eol` e `od -c`.
+
+Estado: concluído e validado localmente no Windows; seis commits já no remoto, com o CI dele sem
+resultado final; lacunas 1 e 2 aguardam decisão.
