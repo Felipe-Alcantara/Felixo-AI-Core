@@ -125,13 +125,25 @@ export function startNewSession(data: CloudSessionNodeData): CloudSessionNodeDat
   }
 }
 
+/**
+ * Texto que o Claude leria como opção em vez de tarefa (`--settings=...` roda
+ * comando). O main recusa o mesmo caso; aqui a tela avisa antes de o clique custar
+ * um disparo. `null` quando está tudo certo (inclusive vazio, que é outro problema).
+ */
+export function taskProblem(task: string): string | null {
+  return /^\s*-/.test(task)
+    ? 'A tarefa não pode começar com “-”: o Claude leria como uma opção. Comece com uma letra ou número.'
+    : null
+}
+
 /** Disparar vale em rascunho ou depois de uma falha; nunca depois de criada (I3). */
 export function canLaunch(data: CloudSessionNodeData): boolean {
   const status = data.cloudStatus ?? 'draft'
   return (
     (status === 'draft' || status === 'failed') &&
     (data.cloudTask ?? '').trim().length > 0 &&
-    (data.cloudCwd ?? '').trim().length > 0
+    (data.cloudCwd ?? '').trim().length > 0 &&
+    taskProblem(data.cloudTask ?? '') === null
   )
 }
 

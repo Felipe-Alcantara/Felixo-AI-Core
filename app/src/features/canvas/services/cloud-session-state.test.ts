@@ -12,6 +12,7 @@ import {
   markLaunching,
   normalizeLoaded,
   startNewSession,
+  taskProblem,
 } from './cloud-session-state'
 
 const ID = 'session_01EXEMPLO0000000000000000'
@@ -228,6 +229,26 @@ describe('isCloudSessionUrl', () => {
     expect(isCloudSessionUrl(`https://evil.example/?u=https://claude.ai/code/${ID}`)).toBe(false)
     expect(isCloudSessionUrl('https://claude.ai/code/')).toBe(false)
     expect(isCloudSessionUrl(undefined)).toBe(false)
+  })
+})
+
+describe('texto que o Claude leria como opção (achado da revisão)', () => {
+  it('taskProblem acusa tarefa que começa com hífen, mesmo depois de espaços', () => {
+    expect(taskProblem('--settings={"k":1}')).toMatch(/começar com/)
+    expect(taskProblem('  -x')).toMatch(/começar com/)
+    expect(taskProblem('- item de lista')).toMatch(/começar com/)
+  })
+
+  it('taskProblem aceita hífen no meio e tarefa vazia (vazia é outro problema)', () => {
+    expect(taskProblem('Corrigir o bug - urgente')).toBeNull()
+    expect(taskProblem('')).toBeNull()
+  })
+
+  it('canLaunch fica desabilitado enquanto a tarefa começa com hífen', () => {
+    const base = { ...createDraft({ cwd: '/p' }), cloudTask: 'Tarefa válida' }
+
+    expect(canLaunch(base)).toBe(true)
+    expect(canLaunch({ ...base, cloudTask: '--resume abc' })).toBe(false)
   })
 })
 
