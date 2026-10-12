@@ -614,8 +614,15 @@ O que vale saber:
 
 - Na **primeira vez numa pasta** o Claude pede para você confiar nela. O cartão avisa
   e oferece **Abrir Claude nesta pasta**; confie uma vez e use **Tentar de novo**.
-- Sem *remote* no GitHub, o repositório inteiro é **enviado como pacote** (limite de
-  100 MB). Na nuvem não há MCPs, skills nem arquivos fora do repositório.
+- A tarefa e as mensagens **não podem começar com “-”**: o Claude leria o texto como uma
+  opção da linha de comando. Escreva “Corrigir o bug - urgente”, e não “- Corrigir o bug”.
+  Aspas, acentos, emoji e quebras de linha no meio do texto chegam como foram escritos.
+- Sem *remote* no GitHub, o repositório inteiro é **enviado como pacote** (a documentação
+  do Claude fala em até 100 MB). Na nuvem não há MCPs, skills nem arquivos fora do
+  repositório.
+- Pelo teclado: ao abrir a confirmação, o foco vai para ela; **Esc** cancela e devolve o
+  foco ao botão **Disparar na nuvem**. Se a criação falhar, o foco vai para o aviso de
+  erro. Quem reduz as animações no sistema não vê o ícone girar.
 - O app **não consegue ler o saldo** do crédito; confira em *Configurações > Uso*.
 - Se o app fechar enquanto a sessão estava sendo criada, o cartão reabre como
   **interrompido**: a sessão pode ter sido criada, então confira em claude.ai/code
