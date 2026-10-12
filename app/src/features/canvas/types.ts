@@ -7,6 +7,7 @@ import type {
 } from './services/agent-session'
 import type { TerminalResumeBanner } from './services/terminal-resume-banner'
 import type { PromptInsertionMetadata } from '../shared/types/prompt-insertion'
+import type { CloudSessionErrorCode, CloudSessionInfo } from '../shared/types/cloud-session'
 
 export type CanvasNodeType =
   | 'terminal'
@@ -259,6 +260,43 @@ export type NotionTasksNodeData = {
   notionDataSourceId?: string
 }
 
+/**
+ * Bloco "Agente na nuvem": uma sessão do Claude Code na nuvem (`claude --cloud`)
+ * criada por um clique confirmado e acompanhada pelo cartão. Não é um
+ * terminal: nada aqui é processo vivo, então abrir, restaurar ou importar o
+ * canvas nunca cria sessão.
+ *
+ * Os campos levam o prefixo `cloud` porque `CanvasNodeData` é uma intersecção
+ * plana de todos os tipos de bloco. `cwd` e `accountId` já existem no
+ * terminal, e reaproveitá-los faria o código que varre "blocos com conta"
+ * tratar este cartão como um terminal vivo daquela conta.
+ */
+export type CloudSessionStatus = 'draft' | 'launching' | 'created' | 'failed'
+
+export type CloudSessionFollowUp = {
+  /** ISO 8601 em UTC. */
+  at: string
+  text: string
+  ok: boolean
+  error?: CloudSessionErrorCode
+}
+
+export type CloudSessionNodeData = {
+  /** O que a sessão deve fazer, 1 a 4000 caracteres. */
+  cloudTask?: string
+  /** Pasta do projeto; é o diretório de trabalho do `claude --cloud`. */
+  cloudCwd?: string
+  /** Vazio = Login do sistema. */
+  cloudAccountId?: string
+  /** Ausente (bloco antigo ou recém-criado sem dados) vale `draft`. */
+  cloudStatus?: CloudSessionStatus
+  /** A sessão criada; `createdAt` é carimbado pelo renderer. */
+  cloudSession?: CloudSessionInfo & { createdAt: string }
+  /** No máximo os 20 mais recentes. */
+  cloudFollowUps?: CloudSessionFollowUp[]
+  cloudError?: { code: CloudSessionErrorCode; message: string }
+}
+
 export type NoteColor = 'amber' | 'emerald' | 'sky' | 'rose' | 'zinc'
 
 export type NoteNodeData = {
@@ -341,6 +379,7 @@ export type CanvasNodeData = TerminalNodeData &
   NotionTasksNodeData &
   DrawingNodeData &
   ExcalidrawDrawingNodeData &
+  CloudSessionNodeData &
   OrderedNodeData &
   FramedNodeData
 

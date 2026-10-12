@@ -5,6 +5,7 @@ const path = require('node:path')
 const os = require('node:os')
 
 const { createStorageDatabase } = require('./sqlite-database.cjs')
+const { listStorageMigrations } = require('./migration-loader.cjs')
 const {
   createCanvasRepository,
   normalizeNode,
@@ -281,6 +282,83 @@ test('normalizeEdge requires id, source and target', () => {
   const edge = normalizeEdge({ id: 'e', source: 's', target: 't' })
   assert.equal(edge.source, 's')
   assert.ok(!Number.isNaN(Date.parse(edge.createdAt)))
+})
+
+test('canvas repository persists cloud-session nodes across a restart', () => {
+  // O tipo novo precisa estar no CHECK da coluna `type` (migração 019); sem ela
+  // o salvamento falha em silêncio e o cartão some ao reabrir o app.
+  const databaseDir = createTempDir('felixo-canvas-cloud-session-')
+
+  try {
+    const database = createStorageDatabase({ databaseDir })
+    const repository = createCanvasRepository(database)
+
+    repository.save({
+      id: 'cloud-1',
+      type: 'cloud-session',
+      position: { x: 30, y: 60 },
+      data: {
+        task: 'Corrigir o bug',
+        status: 'created',
+        session: { id: 'session_01EXEMPLO', url: 'https://claude.ai/code/session_01EXEMPLO', title: 'Corrigir' },
+      },
+    })
+    repository.save({ id: 'note-1', type: 'note', position: { x: 0, y: 0 }, data: { text: 'oi' } })
+    database.close()
+
+    const reopened = createStorageDatabase({ databaseDir })
+    const nodes = createCanvasRepository(reopened).list()
+    const cloud = nodes.find((node) => node.id === 'cloud-1')
+
+    assert.deepEqual(nodes.map((node) => node.type).sort(), ['cloud-session', 'note'])
+    assert.equal(cloud?.data.task, 'Corrigir o bug')
+    assert.equal(cloud?.data.session.id, 'session_01EXEMPLO')
+
+    reopened.close()
+  } finally {
+    removeTempDir(databaseDir)
+  }
+})
+
+test('migração 019 preserva os blocos e as ligações de um banco que estava na 018', () => {
+  // O dado do usuário não volta: o banco nasce só até a 018, recebe blocos de
+  // vários tipos e uma ligação, e a 019 (que recria a tabela) não pode perder nada.
+  const databaseDir = createTempDir('felixo-canvas-migracao-019-')
+
+  try {
+    const ateA018 = listStorageMigrations().filter((migration) => migration.version <= 18)
+    const antigo = createStorageDatabase({ databaseDir, migrations: ateA018 })
+    const repositorioAntigo = createCanvasRepository(antigo)
+    repositorioAntigo.save({ id: 'g1', type: 'group', position: { x: 0, y: 0 }, width: 600, height: 400, data: { label: 'Grupo' } })
+    repositorioAntigo.save({
+      id: 't1',
+      type: 'terminal',
+      parentId: 'g1',
+      position: { x: 10, y: 20 },
+      width: 480,
+      height: 320,
+      data: { command: 'claude', label: 'Claude' },
+    })
+    repositorioAntigo.save({ id: 'n1', type: 'notionTasks', position: { x: 700, y: 0 }, data: { label: 'Tarefas' } })
+    repositorioAntigo.saveEdge({ id: 'e1', source: 't1', target: 'n1', data: { kind: 'flow' } })
+    antigo.close()
+
+    const novo = createStorageDatabase({ databaseDir })
+    const repositorio = createCanvasRepository(novo)
+    const nos = repositorio.list()
+    const terminal = nos.find((node) => node.id === 't1')
+
+    assert.deepEqual(nos.map((node) => node.id).sort(), ['g1', 'n1', 't1'])
+    assert.equal(terminal?.parentId, 'g1')
+    assert.equal(terminal?.width, 480)
+    assert.deepEqual(terminal?.data, { command: 'claude', label: 'Claude' })
+    assert.deepEqual(repositorio.listEdges().map((edge) => edge.id), ['e1'])
+    assert.equal(novo.latestMigrationVersion >= 19, true)
+
+    novo.close()
+  } finally {
+    removeTempDir(databaseDir)
+  }
 })
 
 test('normalizeNode rejects invalid type and id', () => {

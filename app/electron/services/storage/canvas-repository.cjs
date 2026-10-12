@@ -17,6 +17,7 @@ const NODE_TYPES = new Set([
   'notionTasks',
   'drawing',
   'excalidrawDrawing',
+  'cloud-session',
 ])
 
 function createCanvasRepository(database) {
