@@ -1,4 +1,6 @@
 #!/bin/bash
 # Gemini CLI (Google - oficial)
-export PATH="/home/felipe/.nvm/versions/node/v25.9.0/bin:/home/felipe/.npm-global/bin:$PATH"
-exec konsole --hold --workdir "$HOME" -e /home/felipe/.nvm/versions/node/v25.9.0/bin/gemini
+# Exige o Konsole (Linux/KDE). A CLI é resolvida pelo PATH; se ele vier reduzido
+# (lançador gráfico), defina FELIXO_CLI_PATHS com a pasta onde ela está instalada.
+export PATH="${FELIXO_CLI_PATHS:+$FELIXO_CLI_PATHS:}$HOME/.npm-global/bin:$PATH"
+exec konsole --hold --workdir "$HOME" -e gemini
