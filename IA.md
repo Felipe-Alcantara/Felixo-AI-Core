@@ -885,3 +885,25 @@ Release (instala e roda) mais a execução do `npm` empacotado descrita acima. L
 de 23/10 é a primeira que vê o `Dependency policy` sem crítico na `main`.
 
 Estado: concluído e publicado (v0.1.479); decisões de quem mantém ficam em tasks no Notion.
+
+## 2026-10-12 — Clicar num agente da lista "Elementos" fechava o terminal
+
+**Sintoma (relato do André).** Com a gaveta do terminal aberta e desafixada, clicar em outro agente
+na lista fechava a gaveta; era preciso clicar de novo para abrir.
+
+**Causa.** O clique na lista é também um `mousedown` fora da gaveta, que inicia a animação de saída
+(`DRAWER_EXIT_MS`). O `click` logo depois chama `openTerminal` e troca o terminal mostrado, mas o
+timer do fechamento continuava pendente e, ao vencer, chamava `closeExpandedTerminal`. Só escapava
+quem segurava o botão por mais tempo que a animação.
+
+**Correção.** `exit-animation-controller.ts` ganhou `cancel()` (cancela o timer e volta `closing`
+para falso). `CanvasView` conta os pedidos de abertura (`terminalOpenRequest`, em `openTerminal` e
+na criação de continuação) e a `TerminalDrawer` cancela o fechamento pendente a cada pedido.
+
+**Validação.** Três testes novos do controlador; `tsc` e `eslint` sem erro. No app de fonte com
+perfil isolado e PTY falso, dois agentes: abrir A e clicar em B deixava a gaveta fechada sem a
+correção e mostra B com ela; clicar fora continua fechando. Suíte completa não rodada localmente.
+
+Estado: em branch `fix/abrir-terminal-cancela-fechamento`, rebaseada sobre o `main` em 21/10 (só o `IA.md` conflitou; as duas entradas foram mantidas) e enviada como PR; aguardando CI e revisão.
+
+> Integrado à `main` em 2026-10-23 (o commit do PR #128, de André, foi trazido para a `main` com `git cherry-pick`, com a autoria dele preservada; o PR ficou superado e a branch `fix/abrir-terminal-cancela-fechamento` foi apagada).

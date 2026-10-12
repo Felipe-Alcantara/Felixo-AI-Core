@@ -110,6 +110,12 @@ type TerminalDrawerProps = {
   onReadingModeChange?: (on: boolean) => void
   /** Como ler a tela deste bloco: o perfil da CLI que roda nele. */
   readingProfile?: ReadingProfile
+  /**
+   * Muda a cada pedido de abrir um terminal, inclusive o que já está aberto.
+   * O clique que pede a abertura costuma ser também um mousedown fora da
+   * gaveta, que já começou a fechá-la: o pedido cancela esse fechamento.
+   */
+  openRequest?: number
   onClose: () => void
 }
 
@@ -132,6 +138,7 @@ export function TerminalDrawer({
   readingMode = false,
   onReadingModeChange,
   readingProfile,
+  openRequest = 0,
   onClose,
 }: TerminalDrawerProps) {
   const store = useTerminalSessions()
@@ -200,7 +207,10 @@ export function TerminalDrawer({
   const latestResizeClientXRef = useRef<number | null>(null)
   const resizeFrameRef = useRef<number | null>(null)
   const [resizing, setResizing] = useState(false)
-  const { closing, close } = useExitAnimation(DRAWER_EXIT_MS, onClose)
+  const { closing, close, cancelClose } = useExitAnimation(DRAWER_EXIT_MS, onClose)
+  useEffect(() => {
+    cancelClose()
+  }, [openRequest, cancelClose])
   const [pinned, setPinned] = useState(() => readPinnedPreference(localStorage))
   // Collapsed keeps the session running and the terminal mounted — the drawer
   // just shrinks to a rail, so reopening is instant and nothing is lost.
