@@ -8161,9 +8161,9 @@ Estado: concluído (com a conferência manual da retomada pendente).
 
 ## 2026-10-12 — Agente na nuvem: sessões do Claude Code na nuvem por um cartão do canvas
 
-**Contexto.** Contas Max recebem um crédito de sessão na nuvem (US$ 250 no caso medido, com
-prazo em 4 e 5 de novembro) que só vale para sessões na nuvem e não cobre o CLI local. O pedido
-foi poder criar, pelo AI Core, um agente que use esse crédito e poupe o limite semanal.
+**Contexto.** Algumas contas de assinatura recebem um crédito de sessão na nuvem (valor e validade
+variam por conta) que só vale para sessões na nuvem e não cobre o CLI local. O pedido foi poder
+criar, pelo AI Core, um agente que use esse crédito e poupe o limite semanal do plano.
 
 **O que foi medido antes de desenhar** (Windows 11, Claude Code 2.1.287, PTY real):
 
@@ -8177,9 +8177,9 @@ foi poder criar, pelo AI Core, um agente que use esse crédito e poupe o limite 
 - `claude -p "<texto>" --cloud <id>` funciona **sem TTY** e imprime `Sent to cloud session.`.
 - `--model` e `--effort` são aceitos junto com `--cloud` sem erro; o efeito na sessão **não** foi
   verificado, por isso ficaram fora do cartão.
-- O "Crédito incluído" do painel Uso caiu de US$ 159 para US$ 158 depois das sessões de teste
-  (consistente com o CLI gastar esse crédito; o painel mostra dólares inteiros e o uso local da
-  própria sessão de trabalho impede atribuir a barra semanal à nuvem).
+- O "Crédito incluído" do painel Uso diminuiu depois das sessões de teste, o que é consistente com
+  o CLI gastar esse crédito. A medição é grossa: o painel mostra dólares inteiros, e o uso local
+  da própria sessão de trabalho impede atribuir a barra semanal à nuvem.
 
 **O que foi feito.** Nó novo `cloud-session` (cartão de dados, sem terminal) mais um serviço no
 processo principal (`electron/services/cloud-session/`) que roda o `claude` nativo num PTY
@@ -8198,8 +8198,8 @@ dispara por clique confirmado (invariantes I1 a I9 do spec, cada uma com teste).
 
 - `origin/main` já tinha a migração `018_system_design_sources.sql` (a branch saiu de um `main`
   local desatualizado). Renumerada para `019` e rebaseada. Ensaio da `019` numa **cópia do banco
-  real**: versão 18 para 19, os mesmos 51 blocos (49 terminais, 1 Tarefas Notion, 1 página web),
-  mesmos bytes de `data_json`, `integrity_check` ok e `foreign_key_check` sem linhas.
+  real**: versão 18 para 19, a mesma contagem de blocos por tipo (terminais, Tarefas Notion e
+  página web), os mesmos bytes de `data_json`, `integrity_check` ok e `foreign_key_check` sem linhas.
 - `tsc -p .` não verifica nada neste projeto (usa referências de projeto): o gate é
   `npm run typecheck` (`tsc -b`).
 - Com Login do sistema o app mantém o ambiente da pessoa; um `ANTHROPIC_API_KEY` ali faria o CLI
@@ -8239,6 +8239,6 @@ dispara por clique confirmado (invariantes I1 a I9 do spec, cada uma com teste).
 - O crédito com precisão (o painel mostra dólares inteiros) e se `--teleport` consome o plano ou
   o crédito.
 - O CI e o merge: o trabalho está na branch `feat/agente-nuvem`. **Mesclar em `main` publica uma
-  release** (`release.yml`), então a decisão de mesclar fica com o dono.
+  release** (`release.yml`), então a decisão de mesclar fica com quem mantém o repositório.
 
 Estado: implementado e validado localmente no Windows; CI e merge pendentes.
