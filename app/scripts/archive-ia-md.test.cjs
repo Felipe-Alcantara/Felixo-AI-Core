@@ -165,6 +165,21 @@ test('entrada com CRLF é lida e o resultado sai com LF, sem perder linha', (t) 
   assert.match(origem, /## 2026-10-02 — Entrada nova\nCorpo C\n/)
 })
 
+test('as saídas terminam com quebra de linha mesmo quando a seção movida não tinha linha em branco depois', (t) => {
+  // O 2026-08 é a última do arquivo de agosto e termina colado no próximo cabeçalho; o
+  // `fica` perde a seção que o separava do fim do arquivo e passa a ser a última do IA.md.
+  const texto = '## [2026-08-01] sem linha em branco depois\núltima linha\n## 2026-10-05 — fica\ncorpo\n## [2026-08-02] velha, sem fim de linha\nfim'
+  const { cwd, arquivo, arquivo_morto } = criarRepositorio(t, texto)
+
+  run(opcoes(cwd, { apply: true }))
+
+  const origem = fs.readFileSync(arquivo, 'utf8')
+  const agosto = fs.readFileSync(path.join(arquivo_morto, 'IA-ARCHIVE-2026-08.md'), 'utf8')
+  assert.ok(origem.endsWith('corpo\n'), 'o IA.md termina com quebra de linha')
+  assert.ok(agosto.endsWith('fim\n'), 'o arquivo termina com quebra de linha')
+  assert.match(agosto, /última linha\n## \[2026-08-02\] velha/)
+})
+
 test('assertLossless reprova quando uma seção movida some do plano', () => {
   const plan = planArchive(DOCUMENTO, { keepFrom: '2026-10-01' })
   assert.doesNotThrow(() => assertLossless(DOCUMENTO, plan))

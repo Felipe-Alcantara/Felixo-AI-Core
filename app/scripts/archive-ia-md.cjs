@@ -140,8 +140,16 @@ function withPointer(kept, items) {
   return [pointer, ...kept]
 }
 
+/**
+ * Uma seção do meio do arquivo pode não ter linha em branco depois da última
+ * linha. Quando ela vira a última do arquivo, falta a quebra de linha final.
+ */
+function ensureFinalNewline(text) {
+  return text.endsWith('\n') ? text : `${text}\n`
+}
+
 function renderSource({ preamble, kept }) {
-  return [...preamble, ...kept.flatMap((section) => section.lines)].join('\n')
+  return ensureFinalNewline([...preamble, ...kept.flatMap((section) => section.lines)].join('\n'))
 }
 
 function archiveHeader({ month, sourceName, sourceLink, today }) {
@@ -158,7 +166,9 @@ function archiveHeader({ month, sourceName, sourceLink, today }) {
 /** Texto do arquivo do mês: o que já existia (ou o cabeçalho) mais as seções novas. */
 function renderArchive(existingText, header, sections) {
   const base = existingText === null ? splitSections(header.join('\n')) : splitSections(existingText)
-  return [...base.preamble, ...base.sections.flatMap((s) => s.lines), ...sections.flatMap((s) => s.lines)].join('\n')
+  return ensureFinalNewline(
+    [...base.preamble, ...base.sections.flatMap((s) => s.lines), ...sections.flatMap((s) => s.lines)].join('\n'),
+  )
 }
 
 function countLines(lines) {
@@ -201,23 +211,37 @@ function sameLines(a, b) {
   return a.length === b.length && a.every((line, index) => line === b[index])
 }
 
+function withoutTrailingBlanks(lines) {
+  let end = lines.length
+  while (end > 0 && lines[end - 1] === '') end -= 1
+  return lines.slice(0, end)
+}
+
+/** As seções são iguais linha a linha; só a última do texto pode diferir nas linhas em branco finais. */
+function sameSections(actual, expected) {
+  const lastIndex = expected.length - 1
+  return (
+    actual.length === expected.length &&
+    actual.every((section, index) =>
+      index === lastIndex
+        ? sameLines(withoutTrailingBlanks(section.lines), withoutTrailingBlanks(expected[index].lines))
+        : sameLines(section.lines, expected[index].lines),
+    )
+  )
+}
+
 /** Relê o que foi renderizado e confere que cada seção está inteira e na ordem. */
 function assertRendered({ sourceText, archiveTexts, plan }) {
   const source = splitSections(sourceText)
   const keptNow = source.sections.filter((section) => !isPointer(section))
   const keptPlanned = plan.kept.filter((section) => !isPointer(section))
-  if (
-    !sameLines(source.preamble, plan.preamble) ||
-    keptNow.length !== keptPlanned.length ||
-    !keptNow.every((section, index) => sameLines(section.lines, keptPlanned[index].lines))
-  ) {
+  if (!sameLines(source.preamble, plan.preamble) || !sameSections(keptNow, keptPlanned)) {
     throw new Error('o IA.md renderizado não bate com o plano')
   }
 
   for (const [month, sections] of plan.moved) {
     const archived = splitSections(archiveTexts.get(month)).sections
-    const tail = archived.slice(archived.length - sections.length)
-    if (tail.length !== sections.length || !tail.every((section, index) => sameLines(section.lines, sections[index].lines))) {
+    if (!sameSections(archived.slice(archived.length - sections.length), sections)) {
       throw new Error(`o arquivo de ${month} não contém as seções movidas, inteiras e na ordem`)
     }
   }
