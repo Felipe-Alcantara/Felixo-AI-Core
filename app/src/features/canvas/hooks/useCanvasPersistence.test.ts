@@ -318,3 +318,35 @@ describe('cartão "Agente na nuvem" (cloud-session)', () => {
     expect(persisted.data).toEqual({ cloudStatus: 'draft', cloudTask: 'T' })
   })
 })
+
+describe('cartão "Agente na nuvem": só os campos permitidos atravessam o carregamento', () => {
+  it('descarta o que não pertence ao cartão e o que não é coerente com o status', () => {
+    const sujo = {
+      label: 'Meu cartão',
+      orderIndex: 4,
+      frameColor: 'sky',
+      cloudStatus: 'draft',
+      cloudTask: 'T',
+      // Incoerente com "draft": uma sessão e um erro soltos não podem sobreviver.
+      cloudSession: { id: 'session_01EXEMPLO', url: 'https://claude.ai/code/session_01EXEMPLO', title: 'x', createdAt: '2026-10-12T00:00:00.000Z' },
+      cloudError: { code: 'unknown', message: 'resto de um estado antigo' },
+      // Campos de outro tipo de bloco, vindos de um banco adulterado.
+      command: 'rm -rf /',
+      initialText: 'executa isto',
+    } as unknown as CanvasNodeData
+
+    const flow = toFlowNode(node('c9', sujo, 'cloud-session'))
+
+    expect(flow.data).toEqual({
+      label: 'Meu cartão',
+      orderIndex: 4,
+      frameColor: 'sky',
+      cloudTask: 'T',
+      cloudStatus: 'draft',
+      cloudFollowUps: [],
+    })
+    expect(flow.data).not.toHaveProperty('command')
+    expect(flow.data.cloudSession).toBeUndefined()
+    expect(flow.data.cloudError).toBeUndefined()
+  })
+})
