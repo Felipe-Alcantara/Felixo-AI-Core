@@ -1,8 +1,10 @@
 # Especificação — Agente na nuvem (crédito de sessão na nuvem)
 
-Estado: **rascunho para revisão** (2026-10-11). Nada abaixo está implementado.
-Origem: pedido do dono para "spawnar um agente configurado para usar os créditos
-especiais" e design aprovado em conversa na mesma data (abordagem B).
+Estado: **implementado** na branch `feat/agente-nuvem` (PR #120, 2026-10-12). Este
+documento descreve o desenho; a seção 12 registra o que mudou na execução e na
+revisão independente.
+Origem: o pedido de poder criar um agente configurado para usar o crédito de sessão
+na nuvem, e o desenho aprovado em conversa (abordagem B).
 
 ## 1. Objetivo
 
@@ -10,10 +12,10 @@ Permitir, a partir do canvas, criar uma **sessão de nuvem do Claude Code**
 (`claude --cloud`) na conta escolhida e acompanhá-la por um cartão: título,
 link, follow-up e retorno ao terminal local.
 
-Motivação: contas Max recebem um **crédito de sessão na nuvem** (exemplo medido:
-US$ 250, com prazo de 4 a 5 de novembro de 2026) que só vale para sessões na
-nuvem. Esse crédito não cobre o CLI rodando local. Gastá-lo em tarefas de
-programação também poupa o limite semanal do plano.
+Motivação: algumas contas de assinatura recebem um **crédito de sessão na nuvem**
+(valor e validade variam por conta) que só vale para sessões na nuvem. Esse crédito
+não cobre o CLI rodando local. Gastá-lo em tarefas de programação também poupa o
+limite semanal do plano.
 
 Critério de sucesso: um clique confirmado cria **exatamente uma** sessão na
 conta certa, o cartão guarda o ID e o link, e nenhuma abertura, restauração ou
@@ -29,7 +31,7 @@ reinício do app cria sessão (e gasta crédito) sem uma ação explícita.
 | Na primeira vez numa pasta aparece a tela "Quick safety check: Is this a project you created or one you trust?" antes de criar a sessão. Depois de confiada, não volta. | Captura real. |
 | `claude -p "<texto>" --cloud <id>` funciona **sem TTY**: imprime `Sent to cloud session.`, `Session ID: …`, `View: …` e sai com 0. | Execução real. |
 | `--model sonnet --effort low` e `--effort medium` são aceitos junto com `--cloud` sem erro. | Execução real. O efeito na sessão **não** foi verificado. |
-| O crédito de nuvem caiu de US$ 159 para US$ 158 depois das sessões de teste, o que é consistente com `claude --cloud` do CLI gastar esse crédito na conta logada na máquina. A barra semanal também subiu 1 ponto, mas o uso local da própria sessão de trabalho impede atribuir isso à nuvem. | Leitura manual do painel Uso (valores inteiros, sem prova isolada). |
+| O saldo do crédito de nuvem diminuiu depois das sessões de teste, o que é consistente com `claude --cloud` do CLI gastar esse crédito na conta logada na máquina. A barra semanal também subiu um ponto, mas o uso local da própria sessão de trabalho impede atribuir isso à nuvem. | Leitura manual do painel Uso (valores inteiros, sem prova isolada). |
 | Cloud sessions exigem login claude.ai (não API key). Sem remote no GitHub, o CLI envia um bundle do repositório local (até 100 MB). Na nuvem não há MCPs nem skills locais; permissões são só Auto, Accept edits e Plan. | Documentação oficial (code.claude.com/docs/en/claude-code-on-the-web). Não testado. |
 
 **Não verificado:** efeito de `--model` e `--effort` na nuvem; saídas de erro de
@@ -42,9 +44,10 @@ crédito.
 **Dentro (v1):** nó "Agente na nuvem", serviço de disparo, follow-up, abrir link,
 trazer para o terminal (teleport), erros classificados, testes, documentação.
 
-**Fora (v1):** escolher modelo e esforço; ler o saldo do crédito (não há API);
-acompanhar andamento ou resultado em tempo real; listar ou reconciliar sessões
-do claude.ai; presets `.fxpreset`; Codex e Gemini.
+**Fora da v1 (melhorias que o projeto poderia expandir, com ajuda bem-vinda):**
+escolher modelo e esforço (a CLI aceita as flags, mas falta provar o efeito na nuvem);
+ler o saldo do crédito (hoje não há API); acompanhar andamento ou resultado em tempo
+real; listar ou reconciliar sessões do claude.ai; presets `.fxpreset`; Codex e Gemini.
 
 ## 4. Decisão de arquitetura
 
@@ -75,14 +78,16 @@ custos principais da escolha: migração 019 e componente novo.
 ```ts
 type CloudSessionStatus = 'draft' | 'launching' | 'created' | 'failed'
 
+// Os campos levam o prefixo `cloud` (ver o ajuste 2 da seção 12).
 type CloudSessionNodeData = {
-  task: string                // 1 a 4000 caracteres
-  cwd: string                 // pasta do projeto; existente e diretório
-  accountId?: string          // vazio = Login do sistema
-  status: CloudSessionStatus
-  session?: { id: string; url: string; title: string; createdAt: string }
-  followUps: Array<{ at: string; text: string; ok: boolean; error?: CloudSessionErrorCode }>
-  error?: { code: CloudSessionErrorCode; message: string }
+  label?: string
+  cloudTask: string           // 1 a 4000 caracteres; não começa com "-"
+  cloudCwd: string            // pasta do projeto; existente e diretório
+  cloudAccountId?: string     // vazio = Login do sistema
+  cloudStatus: CloudSessionStatus
+  cloudSession?: { id: string; url: string; title: string; createdAt: string }
+  cloudFollowUps: Array<{ at: string; text: string; ok: boolean; error?: CloudSessionErrorCode }>
+  cloudError?: { code: CloudSessionErrorCode; message: string }
 }
 ```
 
@@ -108,9 +113,12 @@ tentar de novo.
 
 ## 6. Serviço (processo principal)
 
-Arquivo: `app/electron/services/cloud-session-service.cjs`, com injeção de
-dependências no estilo de `claude-usage-query.cjs` (PTY, relógio e resolvedores
-injetáveis para teste).
+Pasta: `app/electron/services/cloud-session/`, com injeção de dependências no estilo
+de `claude-usage-query.cjs` (PTY, `execFile`, relógio, plataforma e resolvedores
+injetáveis para teste). Um arquivo por responsabilidade: `cloud-session-output.cjs`
+(parser), `cloud-session-input.cjs` (validação), `cloud-session-executable.cjs`
+(resolução do `claude`), `cloud-session-command-line.cjs` (linha de comando por
+plataforma) e `cloud-session-service.cjs` (orquestração).
 
 ### 6.1 API
 
@@ -122,12 +130,24 @@ injetáveis para teste).
 
 - **Executável.** Resolver o `claude` **nativo** (no Windows, o `claude.exe` para
   o qual o shim `.cmd` aponta: `…\node_modules\@anthropic-ai\claude-code\bin\claude.exe`)
-  e executá-lo com `argv`, **sem shell e sem `cmd.exe`**. O caminho padrão do app
+  e executá-lo com `argv`, **sem `cmd.exe`**. O caminho padrão do app
   (`createPtyLaunchSpec`) passa por `cmd.exe /d /s /c`, onde `%VAR%`, `"`, `&`,
   `^`, `|`, `<`, `>` e quebras de linha do texto da tarefa podem ser reinterpretados.
   Se só houver o shim, o serviço **recusa** tarefas com esses caracteres
-  (`invalid-input`) em vez de arriscar. Linux e macOS executam o binário direto.
-  A resolução é uma função pura e testada.
+  (`invalid-input`) em vez de arriscar. A busca continua pelo `PATH` quando um shim
+  antigo não tem o exe por trás. A resolução é uma função pura e testada.
+- **Como o texto chega ao processo, por plataforma** (cada uma com teste):
+  - *Windows, PTY:* uma linha de comando montada pela regra do `CommandLineToArgvW`
+    (`quoteWindowsArg`), porque o `argsToCommandLine` do node-pty não cita um argumento
+    que começa e termina com aspas. Conferida contra o parser real do sistema.
+  - *Windows, follow-up:* lista para o `execFile`, que cita corretamente.
+  - *macOS:* o `claude` roda pelo shell de login (um app com janela herda um `PATH`
+    reduzido) e **cada argumento viaja numa variável de ambiente** (`FELIXO_ARG_n`),
+    expandida só entre aspas duplas (`buildPosixExecLine`); o escape de shell do app
+    não cobre quebra de linha. O follow-up usa o shell de login sem `-i`, pois não há TTY.
+  - *Linux:* o node-pty entrega a lista como `argv`.
+  - *Todas:* tarefa e mensagem que começam com `-` são recusadas, porque o próprio
+    `claude` as leria como opção (`--settings=…` roda comando).
 - **Ambiente.** `buildAccountProcessEnv` + `createCliEnv` (já usados por
   `claude-usage-query.cjs`), que removem credenciais herdadas como
   `ANTHROPIC_API_KEY`. `accountMode: 'chain'` **nunca** é usado.
@@ -137,9 +157,15 @@ injetáveis para teste).
   sem ANSI.
 - **`followUp`.** `execFile` sem TTY: `claude -p <texto> --cloud <id>`, timeout de
   90 s, sucesso quando a saída contém `Sent to cloud session.`.
-- **Trava por nó.** Um `Map` em memória por `nodeId`: um segundo `launch` ou
+- **Trava por nó.** Um `Set` em memória por `nodeId`: um segundo `launch` ou
   `followUp` do mesmo nó enquanto outro está em andamento devolve `busy` sem
   executar nada.
+- **Observabilidade.** Cada operação termina com um evento (`operation`, `ok`, `code`,
+  `durationMs`) que o main grava no QA Logger com `describeCloudSessionEvent`. O evento
+  nunca leva a tarefa, a mensagem, a pasta nem o ID da sessão, e um log com defeito não
+  muda o resultado. `busy` e entrada inválida não são registrados.
+- **Encerramento.** `dispose` encerra os PTY vivos, inclusive durante a tolerância de
+  3 s depois da criação, sem esperar o relógio.
 
 ### 6.3 Parser e classificação (funções puras)
 
@@ -147,16 +173,18 @@ injetáveis para teste).
 
 - Sucesso: três linhas reconhecidas; `id` casa `session_[A-Za-z0-9]+`; `url` deve
   ser `https://claude.ai/code/session_<mesmo id>` com query opcional; `title` é o
-  texto depois de `Created cloud session:` (até 200 caracteres).
+  texto depois de `Created cloud session:` (até 200 caracteres). Os rótulos `View:` e
+  `Resume with:` só valem no começo da linha: um título como "Create View: component"
+  não pode transformar uma sessão criada (e cobrada) em erro.
 - `trust-required`: a saída contém "Is this a project you created or one you
   trust" e nenhuma linha `Created cloud session`.
-- Demais códigos: login e limite reaproveitam `accounts/cli-failure-patterns.cjs`;
-  `repo-too-large` e `network` ganham padrões novos **confirmados contra saída
-  real durante a implementação**; sem correspondência, `unknown` com as últimas 20
-  linhas redigidas.
+- Demais códigos: login, limite e rede reaproveitam `accounts/cli-failure-patterns.cjs`;
+  sem correspondência, `unknown` com as últimas 20 linhas redigidas.
 
-Códigos: `trust-required`, `login-required`, `limit-reached`, `repo-too-large`,
-`network`, `timeout`, `interrupted`, `invalid-input`, `busy`, `unknown`.
+Códigos: `trust-required`, `login-required`, `limit-reached`, `network`, `timeout`,
+`interrupted`, `invalid-input`, `busy`, `unknown`. (Um código para "repositório grande
+demais" foi removido: nenhum caminho o produzia, porque a saída real desse erro nunca
+foi capturada. Quem capturá-la pode propor o padrão e o código.)
 
 ### 6.4 IPC e preload
 
@@ -168,15 +196,17 @@ formato de cada payload (tipos, tamanhos, `nodeId`); `open` aceita somente
 
 ## 7. Interface
 
-- **Criação.** Item "Agente na nuvem (créditos)" no menu **Agente** (`TerminalMenu.tsx`)
-  cria o cartão em `draft` na pasta do projeto atual.
-- **Rascunho.** Campos: tarefa (textarea), pasta (projeto), conta (seletor
+- **Criação.** Botão **Agente na nuvem** na seção *Criar* da barra lateral (como
+  Grupo e Página Web) cria um cartão em `draft`, com o nome "Agente na nuvem", na
+  pasta do primeiro projeto. Cada clique cria um cartão novo.
+- **Rascunho.** Campos: tarefa (textarea), pasta (projeto) e conta (seletor
   existente). Aviso fixo: "Gasta o crédito de sessão na nuvem da conta escolhida
-  (se houver) ou o plano. O saldo só aparece em Configurações > Uso." Botão
-  **Disparar na nuvem**.
-- **Confirmação.** Diálogo com conta, pasta e tarefa. Se `git remote get-url origin`
-  falha na pasta, acrescenta: "Esta pasta não tem remote no GitHub: o repositório
-  será enviado como pacote (limite de 100 MB)."
+  (se houver) ou o limite do plano. O saldo só aparece em Configurações > Uso." Botão
+  **Disparar na nuvem**. Uma tarefa que começa com `-` mostra o motivo no campo
+  (`aria-invalid`) e mantém o botão desabilitado.
+- **Confirmação inline** (sem modal e sem `window.confirm`), que esconde o formulário
+  e mostra conta, pasta e a **tarefa inteira** (o que se confirma é o que roda). O
+  aviso do pacote de 100 MB aparece sempre, sem consultar o git no renderer.
 - **Criada.** Título, ID copiável e botões **Abrir**, **Enviar follow-up** (campo +
   envio), **Trazer para cá** e **Nova sessão**. Lista os últimos follow-ups com
   resultado.
@@ -186,8 +216,14 @@ formato de cada payload (tipos, tamanhos, `nodeId`); `open` aceita somente
   retomada. Dica no botão: "continua localmente e pode usar o limite do plano".
 - **Falha.** Mensagem em português do código; para `trust-required`, botão
   **Abrir Claude nesta pasta** (terminal comum, uma vez) e depois **Tentar de novo**.
-- **Acessibilidade.** Rótulos, foco no primeiro campo, estados anunciados
-  (`aria-live`), mesmo padrão dos nós existentes (`docs/design/NODES.md`).
+- **Acessibilidade** (baseline obrigatório do padrão de qualidade, frontend §9): todo
+  campo tem rótulo e todo botão de ícone tem nome; estados anunciados com
+  `aria-live`/`role="alert"`. **Foco:** entra na tarefa de um cartão novo e vazio; na
+  confirmação ao abri-la (no contêiner, e não no botão que gasta crédito, para um
+  Enter mantido não confirmar sem querer); volta ao botão de origem ao cancelar ou
+  com **Esc**; vai para o resultado quando o disparo termina; e para a tarefa depois
+  de **Nova sessão**. Os spinners usam `motion-safe:animate-spin`
+  (`prefers-reduced-motion`).
 - **Inventário.** Cada botão novo entra em `inventory/data/nodes.ts` e o
   inventário é regenerado (`npm run docs:inventario-canvas`), porque um teste
   conta `<button` por arquivo dono.
@@ -201,7 +237,8 @@ formato de cada payload (tipos, tamanhos, `nodeId`); `open` aceita somente
 | I1 | Só um clique confirmado em **Disparar** ou **Nova sessão + Disparar** cria sessão. Restaurar, abrir o app, reconectar o IPC ou recarregar o renderer nunca chamam `launch`. |
 | I2 | Dois disparos simultâneos do mesmo nó resultam em uma execução (`busy` no outro). |
 | I3 | Depois de `created`, o botão Disparar não existe; só **Nova sessão**, confirmada. |
-| I4 | A tarefa e o follow-up chegam ao processo apenas como `argv`; nenhum shell interpreta o texto. |
+| I4 | A tarefa e o follow-up chegam ao processo como um único argumento, nunca reinterpretados por um shell: linha de comando exata no Windows, variável de ambiente no macOS, `argv` no Linux (§6.2). |
+| I10 | Tarefa e mensagem não começam com `-`: o `claude` as leria como opção. |
 | I5 | `ANTHROPIC_API_KEY` e credenciais herdadas não entram no ambiente; a conta vem só do perfil escolhido. |
 | I6 | `open` só abre `https://claude.ai/code/session_…`. |
 | I7 | Saída exibida em erro passa por redação antes de sair do main. |
@@ -231,19 +268,22 @@ formato de cada payload (tipos, tamanhos, `nodeId`); `open` aceita somente
 `GUIA-USUARIO.md`, `README.md`, `INVENTARIO-CANVAS.md` (regenerado),
 `docs/README.md` (índice) e o checklist de release, se aplicável.
 
-## 11. Riscos e pontos a confirmar antes de codar
+## 11. Pontos em aberto e convites à contribuição
 
-1. **Linux e macOS** não foram testados: confirmar `--cloud` em PTY e a resolução
-   do binário.
-2. **Saídas de erro** (login, limite, bundle grande, rede) ainda não foram
-   capturadas; os padrões novos dependem de captura real.
-3. **Resolver `accountId` em ambiente**: localizar a função que o
-   `pty-ipc-handlers.cjs` usa e reutilizá-la, sem `chain`.
-4. **Continuar localmente com `--teleport`**: confirmar se consome o plano; a dica
-   do botão deve refletir o resultado.
-5. **Sessões duplicadas por timeout**: o timeout de 60 s pode estourar depois de a
-   sessão ser criada; por isso `timeout` não oferece "Tentar de novo" direto.
-6. **Efeito de modelo e esforço na nuvem**: fora da v1 por falta de prova.
+O que segue ainda não foi provado e é um bom lugar para quem quiser ajudar. O roteiro
+`docs/validation/CHECKLIST-AGENTE-NUVEM.md` diz como conferir cada ponto.
+
+1. **Linux e macOS na tela.** O CI roda os testes automáticos nos dois (inclusive a prova
+   do shell POSIX), mas a criação real de sessão foi conferida só no Windows. Quem tiver
+   um deles pode rodar o checklist e registrar o resultado.
+2. **Saídas de erro reais** de login, limite, rede e pacote grande: os padrões vêm do
+   classificador de falhas das contas, e só a tela de confiança foi capturada de verdade.
+3. **Continuar localmente com `--teleport`**: confirmar se consome o plano ou o crédito
+   de nuvem; a dica do botão deve refletir o resultado.
+4. **Efeito de modelo e esforço na nuvem**: a CLI aceita as flags junto com `--cloud`,
+   mas falta provar que a sessão as usa para oferecê-las no cartão.
+5. **Sessões duplicadas por timeout**: o timeout de 60 s pode estourar depois de a sessão
+   ser criada; por isso `timeout` não oferece "Tentar de novo" direto.
 
 ## 12. Ajustes feitos durante a implementação
 
@@ -277,3 +317,24 @@ Registrados aqui em vez de reescrever as seções acima, que descrevem o desenho
    *Criar* da barra lateral (como Grupo e Página Web), e cada clique cria um cartão novo.
    O cartão nasce com o nome "Agente na nuvem" (o dock de elementos usa o `label`) e
    altura padrão de 560 px.
+
+## 13. Revisão independente e ajustes de padrão de qualidade (2026-10-12)
+
+Depois de o cartão estar funcionando, uma revisão independente da branch inteira, com os
+guias do padrão de qualidade como régua (guia mínimo, backend, frontend §9 e §10 e a
+política de git), achou os pontos abaixo. Todos têm teste automatizado ou verificação
+registrada; os de interface foram conferidos no app real.
+
+| # | Achado | O que mudou |
+|---|---|---|
+| 1 | No Windows o node-pty não cita um argumento que começa e termina com aspas: uma tarefa como `"abc" --settings=x "def"` virava vários argumentos e o `--settings` chegava ao `claude` como opção. Em qualquer plataforma, texto começando com `-` também vira opção. | Linha de comando montada pela regra do `CommandLineToArgvW` (conferida contra o parser real do Windows); recusa de texto que começa com `-` no main e na tela (I4 e I10). |
+| 2 | Um título como "Create View: component" fazia uma sessão já criada e cobrada virar erro, e o cartão perdia o ID. | Os rótulos `View:` e `Resume with:` só valem no começo da linha. |
+| 3 | Sem gestão de foco, sem Esc na confirmação e com spinner sem `prefers-reduced-motion` (frontend §9, obrigatório); o foco inicial caía no botão que gasta crédito. | Foco, Esc e `motion-safe` (seção 7), conferidos no app real; o foco entra no contêiner da confirmação. |
+| 4 | O ID da sessão era comparado ao link com `includes`; o carregamento do cartão deixava passar campos soltos de outro tipo de bloco. | Igualdade exata do ID e lista fechada de campos ao reabrir. |
+| 5 | No macOS o escape de shell do app não cobre quebra de linha nem tabulação. | Cada argumento viaja numa variável de ambiente (verificado com um `sh` de verdade, e o CI de Linux e macOS roda o mesmo teste). |
+| 6 | Sem log das falhas (backend §9.2); `dispose` não encerrava o PTY durante a tolerância; a busca do `claude.exe` parava no primeiro shim; um código de erro que nenhum caminho produzia. | Eventos no QA Logger sem conteúdo privado; `dispose` imediato; busca segue pelo `PATH`; código removido. |
+| 7 | Valores privados da conta e do banco de quem testou nos documentos, spec com "nada está implementado", plano sem as caixas marcadas, trabalho futuro escrito como pendência interna, e um commit de documentação misturando `IA.md` com README e guias. | Valores generalizados, documentos atualizados, trabalho futuro como convite (seções 3 e 11), commits separados por tema nas correções. |
+
+Dois aprendizados que valem para quem mexer aqui: o `tsc -p .` não verifica nada neste
+projeto (o gate é `npm run typecheck`), e o shell das ferramentas de edição reduz pela
+metade as barras invertidas em heredocs, o que corrompe fixtures com caminhos do Windows.

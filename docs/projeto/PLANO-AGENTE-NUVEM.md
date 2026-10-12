@@ -1,6 +1,6 @@
 # Agente na nuvem — Plano de implementação
 
-> **Para quem executa:** siga as tarefas na ordem; cada passo usa a caixa `- [ ]`.
+> **Para quem executa:** siga as tarefas na ordem; cada passo usa a caixa `- [x]`.
 > Execução nativa (uma pessoa ou agente faz tudo e a branch inteira é revisada ao final).
 
 **Objetivo:** criar o bloco "Agente na nuvem": dispara `claude --cloud` na conta
@@ -19,7 +19,7 @@ SQLite, `node --test` (main) e `vitest` (renderer, só `.ts`).
 ## Restrições globais
 
 - Branch `feat/agente-nuvem` (feature grande + migração de banco). **Nada é
-  mesclado em `main` sem confirmação do dono**: `main` publica release sozinha.
+  mesclado em `main` sem confirmação de quem mantém o repositório**: `main` publica release sozinha.
 - Commits `tipo: descrição` em português, pequenos e coesos, sem caminhos locais,
   e-mail ou IDs de sessão reais. Documentação viva no mesmo passo.
 - Comentários e textos de UI em pt-BR acentuado; identificadores em inglês.
@@ -32,8 +32,8 @@ SQLite, `node --test` (main) e `vitest` (renderer, só `.ts`).
 
 1. Saída do PTY quebrada em pedaços ou com quebra de linha em 120 colunas (título
    longo, URL partida entre dois `data`) → o parser ainda acha ID e link.
-2. Pasta com acento e espaço (`Programação`, `Meus repositórios`) → executa e
-   valida normalmente.
+2. Pasta com acento e espaço no caminho (por exemplo `Programação com espaço`) →
+   executa e valida normalmente.
 3. Tarefa com quebra de linha, aspas, `%PATH%`, `&`, emoji ou 4001 caracteres →
    chega intacta como `argv` ou é recusada com `invalid-input`, nunca executada
    por um shell.
@@ -83,21 +83,21 @@ o `notionTasks`, que é o padrão de bloco novo), não no menu Agente.
 - `isCloudSessionUrl(url: string): boolean` (só `https://claude.ai/code/session_<alnum>` + query opcional).
 - `CLOUD_SESSION_ERROR_CODES` (lista congelada dos códigos do spec §6.3).
 
-- [ ] **Passo 1: testes que falham** — `parseCloudSessionOutput` devolve `created` para
+- [x] **Passo 1: testes que falham** — `parseCloudSessionOutput` devolve `created` para
   as 3 linhas do spike; reconhece `trust-required` pela frase "Is this a project you
   created or one you trust" sem linha `Created cloud session`; devolve `incomplete`
   para saída vazia ou só com o início; aceita título com acento; **junta URL partida
   por quebra `\r\n` inserida pelo PTY** (Foco 1); rejeita `url` cujo ID difere do
   da linha `Resume with`; `isCloudSessionUrl('https://claude.ai.evil.com/code/session_x')` é `false`;
   `CLOUD_SESSION_ERROR_CODES` está congelada.
-- [ ] **Passo 2:** `node --test electron/services/cloud-session/cloud-session-output.test.cjs` → FALHA (módulo ausente).
-- [ ] **Passo 3: implementar** as funções acima. Login e limite reaproveitam
+- [x] **Passo 2:** `node --test electron/services/cloud-session/cloud-session-output.test.cjs` → FALHA (módulo ausente).
+- [x] **Passo 3: implementar** as funções acima. Login e limite reaproveitam
   `accounts/cli-failure-patterns.cjs` (ler a API real do arquivo antes de importar).
   Sem correspondência: `unknown` com as últimas 20 linhas passando pela redação
   existente do projeto (localizar o redator usado pelo `qa-logger`).
-- [ ] **Passo 4:** mesmo comando → PASSA. Quebre uma regra de propósito (ex.: aceite
+- [x] **Passo 4:** mesmo comando → PASSA. Quebre uma regra de propósito (ex.: aceite
   qualquer host) e confirme que o teste correspondente falha.
-- [ ] **Passo 5: commit** `feat(nuvem): parser da saída do claude --cloud` .
+- [x] **Passo 5: commit** `feat(nuvem): parser da saída do claude --cloud` .
 
 ### Tarefa 2: Validação de entrada e resolução do executável
 
@@ -110,20 +110,20 @@ o `notionTasks`, que é o padrão de bloco novo), não no menu Agente.
 - `resolveNativeClaude(opts: { platformName: string; env: Record<string,string>; fsApi?: { existsSync, readFileSync }; whichApi?: (name: string, env) => string | null }): { command: string; viaShell: false } | { command: string; viaShell: true }`.
 - `hasShellUnsafeChars(text: string): boolean` — `%`, `"`, `^`, `&`, `|`, `<`, `>` e quebras de linha.
 
-- [ ] **Passo 1: testes que falham** — tarefa vazia, só espaços, 4001 caracteres e com NUL
+- [x] **Passo 1: testes que falham** — tarefa vazia, só espaços, 4001 caracteres e com NUL
   são recusadas; 4000 passam; pasta inexistente e arquivo no lugar de pasta são
-  recusados; **pasta `P:\Programação\Meus repositórios\x` com acento e espaço passa**
+  recusados; **pasta com acento e espaço no caminho passa**
   (Foco 2); `sessionId` com `;` ou `..` é recusado; no Windows, shim `claude.cmd`
   resolve para `…\node_modules\@anthropic-ai\claude-code\bin\claude.exe` quando
   o exe existe (`viaShell: false`); sem o exe, `viaShell: true`; Linux e macOS
   devolvem o comando `claude` direto; `hasShellUnsafeChars` verdadeiro para cada
   caractere da lista (Foco 3).
-- [ ] **Passo 2:** `node --test` nos dois arquivos → FALHAM.
-- [ ] **Passo 3: implementar.** `resolveNativeClaude` lê o shim `.cmd` com
+- [x] **Passo 2:** `node --test` nos dois arquivos → FALHAM.
+- [x] **Passo 3: implementar.** `resolveNativeClaude` lê o shim `.cmd` com
   `readFileSync` e extrai o caminho do `.exe` da linha que o chama; sem isso,
   devolve o shim com `viaShell: true`.
-- [ ] **Passo 4:** PASSAM.
-- [ ] **Passo 5: commit** `feat(nuvem): validação de entrada e resolução do claude nativo`.
+- [x] **Passo 4:** PASSAM.
+- [x] **Passo 5: commit** `feat(nuvem): validação de entrada e resolução do claude nativo`.
 
 ### Tarefa 3: Serviço de disparo e follow-up
 
@@ -135,7 +135,7 @@ o `notionTasks`, que é o padrão de bloco novo), não no menu Agente.
 `pty-ipc-handlers.cjs` (localizar e injetar, nunca `accountMode: 'chain'`).
 **Produz:** `createCloudSessionService(deps: { spawnPty; execFile; resolveAccountEnv(accountId): Record<string,string>; resolveClaude; now; setTimeoutFn; clearTimeoutFn }): { launch(input: { nodeId: string; task: string; cwd: string; accountId?: string }): Promise<LaunchResult>; followUp(input: { nodeId: string; sessionId: string; text: string; cwd: string; accountId?: string }): Promise<{ ok: true } | { ok: false; code: CloudSessionErrorCode; message: string }> }`, com `LaunchResult = { ok: true; session: { id: string; url: string; title: string } } | { ok: false; code: CloudSessionErrorCode; message: string }` (o `createdAt` é carimbado pelo renderer, em `applyLaunchResult`).
 
-- [ ] **Passo 1: testes que falham** — `launch` chama o PTY com `['--cloud', task]` como
+- [x] **Passo 1: testes que falham** — `launch` chama o PTY com `['--cloud', task]` como
   `argv` e `cwd` correto; **dois `launch` simultâneos do mesmo nó executam uma vez e o
   outro devolve `busy`** (I2, Foco 4); sucesso quando a saída fragmentada em vários
   `data` fecha as 3 linhas; `trust-required` quando aparece a tela de confiança e
@@ -145,11 +145,11 @@ o `notionTasks`, que é o padrão de bloco novo), não no menu Agente.
   Foco 5); com `viaShell: true` e `hasShellUnsafeChars(task)` devolve
   `invalid-input` sem criar PTY; `followUp` usa `execFile` com `['-p', text, '--cloud', id]`
   e só dá `ok` com `Sent to cloud session.`; a trava também vale para `followUp`.
-- [ ] **Passo 2:** `node --test electron/services/cloud-session/cloud-session-service.test.cjs` → FALHA.
-- [ ] **Passo 3: implementar** o serviço; a trava é um `Set` de `nodeId` liberado em
+- [x] **Passo 2:** `node --test electron/services/cloud-session/cloud-session-service.test.cjs` → FALHA.
+- [x] **Passo 3: implementar** o serviço; a trava é um `Set` de `nodeId` liberado em
   `finally`. O PTY de `launch` sempre é encerrado ao concluir.
-- [ ] **Passo 4:** PASSA. Remova a trava de propósito e confirme que o teste I2 falha.
-- [ ] **Passo 5: commit** `feat(nuvem): serviço que cria e acompanha sessões na nuvem`.
+- [x] **Passo 4:** PASSA. Remova a trava de propósito e confirme que o teste I2 falha.
+- [x] **Passo 5: commit** `feat(nuvem): serviço que cria e acompanha sessões na nuvem`.
 
 ### Tarefa 4: IPC, preload e tipos do renderer
 
@@ -159,15 +159,15 @@ o `notionTasks`, que é o padrão de bloco novo), não no menu Agente.
 
 **Interfaces — produz:** `registerCloudSessionIpcHandlers(deps: { ipcMain; service; shell; resolveAccountEnv }): void` com os canais `cloud-session:launch`, `cloud-session:follow-up`, `cloud-session:open`; `window.felixo.cloudSession.{ launch, followUp, open }` com os mesmos tipos do serviço.
 
-- [ ] **Passo 1: testes que falham** — payload com tipos errados, `nodeId` vazio e
+- [x] **Passo 1: testes que falham** — payload com tipos errados, `nodeId` vazio e
   `url` fora do padrão (`isCloudSessionUrl`) são recusados sem chamar o serviço
   (I6); `open` chama `shell.openExternal` só com URL válida; payload válido
   chega ao serviço; erros viram `{ ok: false, code, message }` sem stack.
-- [ ] **Passo 2:** `node --test` no arquivo → FALHA.
-- [ ] **Passo 3: implementar** e registrar em `main.cjs` e `preload.cjs`; declarar os
+- [x] **Passo 2:** `node --test` no arquivo → FALHA.
+- [x] **Passo 3: implementar** e registrar em `main.cjs` e `preload.cjs`; declarar os
   tipos em `vite-env.d.ts`.
-- [ ] **Passo 4:** PASSA; `npm run typecheck` (dentro de `app/`) sem erros.
-- [ ] **Passo 5: commit** `feat(nuvem): canais IPC do agente na nuvem`.
+- [x] **Passo 4:** PASSA; `npm run typecheck` (dentro de `app/`) sem erros.
+- [x] **Passo 5: commit** `feat(nuvem): canais IPC do agente na nuvem`.
 
 ### Tarefa 5: Tipo de nó, migração 019 e repositório
 
@@ -178,14 +178,14 @@ o `notionTasks`, que é o padrão de bloco novo), não no menu Agente.
 **Interfaces — produz:** `CanvasNodeType` ganha `'cloud-session'`;
 `CloudSessionNodeData` e `CloudSessionErrorCode` exatamente como spec §5.2.
 
-- [ ] **Passo 1: teste que falha** — espelho do teste de `notionTasks` em
+- [x] **Passo 1: teste que falha** — espelho do teste de `notionTasks` em
   `canvas-repository.test.cjs:120`: salvar um nó `cloud-session` com `data_json`,
   reabrir o banco e listar devolve o nó; os tipos antigos continuam sendo salvos.
-- [ ] **Passo 2:** `node --test electron/services/storage/canvas-repository.test.cjs` → FALHA (CHECK rejeita).
-- [ ] **Passo 3: implementar** a migração recriando `canvas_nodes` com o `CHECK`
+- [x] **Passo 2:** `node --test electron/services/storage/canvas-repository.test.cjs` → FALHA (CHECK rejeita).
+- [x] **Passo 3: implementar** a migração recriando `canvas_nodes` com o `CHECK`
   ampliado (copiar a estrutura da `013`), mais `NODE_TYPES` e os tipos.
-- [ ] **Passo 4:** PASSA, junto com `backward-compatibility.test.cjs` e a suíte de storage.
-- [ ] **Passo 5: commit** `feat(nuvem): tipo de nó cloud-session e migração 019`.
+- [x] **Passo 4:** PASSA, junto com `backward-compatibility.test.cjs` e a suíte de storage.
+- [x] **Passo 5: commit** `feat(nuvem): tipo de nó cloud-session e migração 019`.
 
 ### Tarefa 6: Estado puro do cartão
 
@@ -200,14 +200,14 @@ o `notionTasks`, que é o padrão de bloco novo), não no menu Agente.
 - `normalizeLoaded(raw: unknown): CloudSessionNodeData` (`launching` → `failed(interrupted)`, tipos inválidos viram rascunho, campos cortados nos limites)
 - `canRetryWithoutConfirmation(code: CloudSessionErrorCode): boolean` (só os 4 códigos que provam "nenhuma sessão criada").
 
-- [ ] **Passo 1: testes que falham** — cada transição do spec §5.3; `normalizeLoaded` de
+- [x] **Passo 1: testes que falham** — cada transição do spec §5.3; `normalizeLoaded` de
   um nó `launching` nunca devolve `launching` (I9); `appendFollowUp` descarta o 21º
   mais antigo; `startNewSession` limpa `session` e `followUps`; `applyLaunchResult` com
   `created` marca `created` e guarda `createdAt`; `canRetryWithoutConfirmation('timeout')` é `false`.
-- [ ] **Passo 2:** `npx vitest run src/features/canvas/services/cloud-session-state.test.ts` → FALHA.
-- [ ] **Passo 3: implementar** (funções puras, sem I/O).
-- [ ] **Passo 4:** PASSA. Troque `launching` por `draft` em `normalizeLoaded` e veja o teste I9 falhar.
-- [ ] **Passo 5: commit** `feat(nuvem): estado do cartão do agente na nuvem`.
+- [x] **Passo 2:** `npx vitest run src/features/canvas/services/cloud-session-state.test.ts` → FALHA.
+- [x] **Passo 3: implementar** (funções puras, sem I/O).
+- [x] **Passo 4:** PASSA. Troque `launching` por `draft` em `normalizeLoaded` e veja o teste I9 falhar.
+- [x] **Passo 5: commit** `feat(nuvem): estado do cartão do agente na nuvem`.
 
 ### Tarefa 7: Cartão no canvas
 
@@ -219,17 +219,17 @@ registro do mapa (padrão do `notionTasks`); `useCanvasPersistence.ts` (aplicar
 **Interfaces — consome:** Tarefas 4 e 6. **Produz:** nó React `CloudSessionNode`
 registrado como `'cloud-session'`; entrada "Agente na nuvem" no menu de ferramentas.
 
-- [ ] **Passo 1:** teste de geometria (`node-geometry.test.ts`) com tamanho padrão e
+- [x] **Passo 1:** teste de geometria (`node-geometry.test.ts`) com tamanho padrão e
   mínimo do `cloud-session`; teste em `useCanvasPersistence.test.ts` de que um nó
   salvo como `launching` reabre como `failed`/`interrupted`.
-- [ ] **Passo 2:** `npx vitest run` nesses dois arquivos → FALHAM.
-- [ ] **Passo 3: implementar** o cartão com os estados do spec §7 (rascunho,
+- [x] **Passo 2:** `npx vitest run` nesses dois arquivos → FALHAM.
+- [x] **Passo 3: implementar** o cartão com os estados do spec §7 (rascunho,
   confirmação, criada, falha), `aria-live`, foco inicial e **diálogo de confirmação
   antes de Disparar e de Nova sessão**. "Trazer para cá" cria um terminal com
   `command: 'claude'`, `args: ['--teleport', id]`, mesma pasta e conta, `launchMode: 'launcher'`
   (sem texto inicial). Aviso fixo sobre o crédito e dica do teleport.
-- [ ] **Passo 4:** os testes passam; `npm run typecheck` e `npm run lint` limpos.
-- [ ] **Passo 5: commit** `feat(nuvem): cartão do agente na nuvem no canvas`.
+- [x] **Passo 4:** os testes passam; `npm run typecheck` e `npm run lint` limpos.
+- [x] **Passo 5: commit** `feat(nuvem): cartão do agente na nuvem no canvas`.
 
 ### Tarefa 8: Inventário e exportação
 
@@ -237,14 +237,14 @@ registrado como `'cloud-session'`; entrada "Agente na nuvem" no menu de ferramen
 regenerar `docs/projeto/INVENTARIO-CANVAS.md` (`npm run docs:inventario-canvas`);
 `canvas-transfer.cjs` e seu teste.
 
-- [ ] **Passo 1: teste que falha** — `canvas-transfer`: exportar um `cloud-session` em
+- [x] **Passo 1: teste que falha** — `canvas-transfer`: exportar um `cloud-session` em
   `created` devolve `draft` sem `session`, `followUps`, `cwd` nem `accountId`;
   importar nunca devolve `created` (I8).
-- [ ] **Passo 2:** `node --test electron/services/canvas-transfer.test.cjs` (ou o nome real do teste) → FALHA.
-- [ ] **Passo 3: implementar**; descrever cada botão do cartão no inventário.
-- [ ] **Passo 4:** PASSA, e `npx vitest run src/features/canvas/inventory` passa
+- [x] **Passo 2:** `node --test electron/services/canvas-transfer.test.cjs` (ou o nome real do teste) → FALHA.
+- [x] **Passo 3: implementar**; descrever cada botão do cartão no inventário.
+- [x] **Passo 4:** PASSA, e `npx vitest run src/features/canvas/inventory` passa
   com o documento regenerado.
-- [ ] **Passo 5: commit** `feat(nuvem): inventário do canvas e exportação do cartão`.
+- [x] **Passo 5: commit** `feat(nuvem): inventário do canvas e exportação do cartão`.
 
 ### Tarefa 9: Documentação e validação final
 
@@ -252,16 +252,16 @@ regenerar `docs/projeto/INVENTARIO-CANVAS.md` (`npm run docs:inventario-canvas`)
 `GUIA-USUARIO.md`, `README.md`, `docs/README.md` (índice), spec (ajuste do menu) e
 roteiro manual em `docs/validation/CHECKLIST-AGENTE-NUVEM.md`.
 
-- [ ] **Passo 1:** escrever as entradas e seções (o que mudou, motivo, alternativa
+- [x] **Passo 1:** escrever as entradas e seções (o que mudou, motivo, alternativa
   descartada, evidência do spike, o que não foi validado).
-- [ ] **Passo 2:** rodar `npm test`, `npm run test:native`, `npm run test:frontend`,
+- [x] **Passo 2:** rodar `npm test`, `npm run test:native`, `npm run test:frontend`,
   `npm run lint`, `npm run build` e registrar a saída real.
-- [ ] **Passo 3: validação real** com `felixo devtools` (perfil isolado) ou o app em
+- [x] **Passo 3: validação real** com `felixo devtools` (perfil isolado) ou o app em
   desenvolvimento: criar o cartão, disparar uma sessão real numa pasta descartável,
   conferir ID e link, enviar follow-up, abrir o link e testar "Trazer para cá".
   Registrar o que não foi possível validar.
-- [ ] **Passo 4: commit** `docs(nuvem): documentação e checklist do agente na nuvem`.
-- [ ] **Passo 5:** push da branch, acompanhar o CI até estado final e **parar antes
+- [x] **Passo 4: commit** `docs(nuvem): documentação e checklist do agente na nuvem`.
+- [x] **Passo 5:** push da branch, acompanhar o CI até estado final e **parar antes
   de mesclar em `main`**.
 
 ---
@@ -288,3 +288,15 @@ Registrados depois de executar o plano; o que está acima descreve o que foi dec
 7. **Validação no app real** (`felixo devtools`, perfil isolado) achou três ajustes que os testes
    não pegariam: botões de confirmar fora da área visível, cartão sem nome no dock e altura
    padrão curta. Ver o commit `fix(nuvem): ajustes do cartão achados ao rodá-lo no app real`.
+8. **Revisão independente da branch** (depois de o plano estar executado) achou defeitos que
+   os testes não pegavam, todos corrigidos em commits por tema: o texto da tarefa no Windows
+   (linha de comando própria, `cloud-session-command-line.cjs`) e no macOS (variável de
+   ambiente), a recusa de texto que começa com `-`, o título com `View:`, foco e Esc na
+   confirmação, o ID da sessão comparado por igualdade, o log no QA Logger, o `dispose` na
+   tolerância, a busca do `claude.exe` no `PATH` e a remoção do código `repo-too-large`.
+   Detalhes na seção 13 do spec.
+9. **A orquestração de disparo e follow-up saiu do componente** para
+   `cloud-session-actions.ts` (sem React, com testes), porque a regra de chamar o processo
+   principal estava misturada com a tela e sem teste.
+10. **Ensaio de migração em cópia do banco** virou um script reutilizável
+    (`app/scripts/ensaiar-migracoes-em-copia.cjs`), em vez de um script descartável.
