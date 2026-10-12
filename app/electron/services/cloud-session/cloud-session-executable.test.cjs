@@ -77,3 +77,24 @@ test('no Linux e no macOS devolve o comando claude, sem shell próprio', () => {
     assert.deepEqual(result, { command: 'claude', viaShell: false })
   }
 })
+
+test('no Windows, um shim sem o exe por trás não impede de achar o claude.exe mais adiante no PATH', () => {
+  const quebrado = 'C:\\Velho\\npm'
+  const bom = 'C:\\Novo\\bin'
+  const exe = `${bom}\\claude.exe`
+  const fsApi = fakeFs({ [`${quebrado}\\claude.cmd`]: SHIM, [exe]: '' })
+
+  const result = resolveNativeClaude({ platformName: 'win32', env: { Path: `${quebrado};${bom}` }, fsApi })
+
+  assert.deepEqual(result, { command: exe, viaShell: false })
+})
+
+test('no Windows, só shims sem exe por trás caem no shell depois de olhar o PATH inteiro', () => {
+  const a = 'C:\\A\\npm'
+  const b = 'C:\\B\\npm'
+  const fsApi = fakeFs({ [`${a}\\claude.cmd`]: SHIM, [`${b}\\claude.cmd`]: SHIM })
+
+  const result = resolveNativeClaude({ platformName: 'win32', env: { Path: `${a};${b}` }, fsApi })
+
+  assert.deepEqual(result, { command: 'claude', viaShell: true })
+})

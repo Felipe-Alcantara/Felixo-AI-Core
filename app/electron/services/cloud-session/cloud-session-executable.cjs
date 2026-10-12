@@ -55,11 +55,13 @@ function resolveNativeClaude({ platformName = process.platform, env = process.en
     try {
       target = findShimTarget(fsApi.readFileSync(shim, 'utf8'), dir)
     } catch {
-      // Shim ilegível: cai no caminho com shell, que é o conservador.
+      // Shim ilegível: segue procurando; só cai no shell se nada melhor existir.
     }
-    return target && fsApi.existsSync(target)
-      ? { command: target, viaShell: false }
-      : { command: 'claude', viaShell: true }
+    if (target && fsApi.existsSync(target)) {
+      return { command: target, viaShell: false }
+    }
+    // Um shim velho, sem o exe por trás, não esconde um claude.exe mais adiante
+    // no PATH: segue procurando antes de aceitar o caminho com shell.
   }
 
   return { command: 'claude', viaShell: true }
