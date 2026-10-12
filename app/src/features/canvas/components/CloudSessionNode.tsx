@@ -364,8 +364,16 @@ function CloudSessionNodeComponent({ id, data, selected }: NodeProps) {
                 <ul className="mt-1 list-disc pl-4 text-[11px] text-(--f-core-secondary)">
                   <li>Conta: {accountLabel}</li>
                   <li>Pasta: {nodeData.cloudCwd}</li>
-                  <li>Tarefa: {(nodeData.cloudTask ?? '').slice(0, 200)}</li>
                 </ul>
+                {/* A tarefa inteira, não um trecho: o que se confirma é o que roda. */}
+                <p className="mt-1 text-[11px] text-(--f-core-secondary)">Tarefa:</p>
+                <div
+                  tabIndex={0}
+                  aria-label="Texto completo da tarefa"
+                  className="mt-0.5 max-h-24 overflow-auto whitespace-pre-wrap break-words rounded-sm bg-black/20 p-1.5 text-[11px]"
+                >
+                  {nodeData.cloudTask}
+                </div>
                 <p className="mt-1 text-[11px] text-(--f-core-secondary)">
                   Sem remote no GitHub, o repositório inteiro é enviado como pacote (limite de 100 MB).
                 </p>
