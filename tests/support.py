@@ -82,6 +82,24 @@ def windows_base_env() -> dict[str, str]:
     }
 
 
+def windows_system_path() -> str:
+    """A pasta System32, que o `.cmd` de teste precisa achar no PATH.
+
+    O `cmd.exe` roda o `AutoRun` do usuário (`HKCU\\Software\\Microsoft\\Command
+    Processor`) antes de qualquer `.cmd`. Quem usa Clink, Anaconda ou um
+    arquivo de macros do `doskey` tem ali um comando de System32; sem essa
+    pasta no PATH sintético ele falha e o `.cmd` falso sai com código 1, mesmo
+    imprimindo a versão certa. Acrescentá-la ao fim não muda qual Node a
+    descoberta escolhe: o System32 não tem `node` nem `npm`.
+
+    Vazio fora do Windows, onde não existe AutoRun."""
+    system_root = os.environ.get("SystemRoot")
+    if os.name != "nt" or not system_root:
+        return ""
+
+    return str(Path(system_root) / "System32")
+
+
 def make_node_bin(bin_dir: Path, node_version: str = "v25.9.0") -> Path:
     write_executable(bin_dir / "node", f"echo {node_version}")
     write_executable(bin_dir / "npm", "echo 10.9.0")
@@ -102,6 +120,10 @@ def clean_node_env(home: Path, **overrides: str) -> dict[str, str]:
         env["USERPROFILE"] = str(home)
     env.update({key: "" for key in NODE_ENV_KEYS})
     env.update(overrides)
+    if os.name == "nt":
+        env["PATH"] = os.pathsep.join(
+            entry for entry in (env["PATH"], windows_system_path()) if entry
+        )
     return env
 
 
