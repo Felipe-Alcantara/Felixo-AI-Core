@@ -22,14 +22,13 @@
   (`e7b7efe..d952f5b`) e o CI de `d952f5b` passou nos 22 jobs, inclusive esse exploratório do Windows.
 - **Em andamento:** nada aberto no código. O Agente na nuvem foi movido do botão em *Criar* para uma
   opção do menu Agente (entrada de 2026-10-12 "movido para dentro do menu Agente"): validado no Windows,
-  enviado e com o CI verde. O Release gate pulou a publicação (o último commit do push só mexe em
-  `IA.md`), então a mudança de `app/src` sai no próximo release que um commit de app disparar.
+  enviado, com o CI verde e publicado na `v0.1.452`. O Release gate não publicou sozinho (o último
+  commit do push só mexia em `IA.md`); a release foi disparada à mão para `d952f5b`.
 - **Pendente de conferência manual:** o roteiro do Agente na nuvem em
   `docs/validation/CHECKLIST-AGENTE-NUVEM.md` (cria sessão real e gasta crédito, por isso não roda
   no CI) e a retomada do terminal (entrada de 2026-10-09).
-- **Próximo passo sugerido:** rodar a etapa 18 do checklist do Agente na nuvem em Linux ou macOS (o
-  CI passou, mas a interface só foi conferida no Windows) e, quando um commit de app for publicar um
-  release, incluir nas notas que a opção do menu Agente vai junto.
+- **Próximo passo sugerido:** rodar a etapa 18 do checklist do Agente na nuvem em Linux ou macOS com a
+  `v0.1.452` (o CI passou, mas a interface só foi conferida no Windows).
 - **Riscos abertos:** (1) a suíte vitest completa com os 16 workers padrão ficou instável numa
   máquina com 2 GB de RAM livres; use `npx vitest run --maxWorkers=4` (3151 testes passando, 90 s).
   (2) Um comentário em `app/electron/services/codex-status-screen.cjs` ainda cita a seção
@@ -1097,3 +1096,8 @@ Um bloco criado por **Criar > Agente** (Codex, conta free, `gpt-6-luna`, esforç
 - Mudar `app/src` publica uma release ao mesclar.
 
 Estado: em branch própria (`claude/keen-darwin-b2lrbc`), PR em rascunho, aguardando revisão; sem merge.
+**Release e medições (mesma data).** A pessoa pediu a release: o `release.yml` foi disparado à mão para `d952f5b`, que é o caminho previsto para publicar um commit já validado, e terminou em `success` nos seis jobs (`Prepare release`, `Publish` de Ubuntu, macOS e Windows, `Publish release` e `Smoke exploratório (Windows)`). A `v0.1.452` está publicada, não é pré-release, aponta para `d952f5b` e tem 28 artefatos. Com isso deixou de valer a frase acima de que a mudança só sairia no próximo commit de app. O `Release gate` não publicou sozinho porque o último commit do push era só `IA.md`; quem quiser contribuir pode fazê-lo comparar tudo o que chegou desde a última decisão, e não só o último commit.
+
+Dois pontos que estavam como estimativa foram medidos no app isolado. Contraste (cores convertidas para sRGB e razão do WCAG): o texto de ajuda do campo Tarefa dá 6,95:1 sobre o fundo do painel, contra os 4,5:1 do AA; o rótulo dá 7,06:1, o placeholder 5,63:1 e o texto digitado 16,56:1. Trocando a classe do mesmo elemento para `text-zinc-500`, que é a dos outros textos de ajuda do formulário, a razão cai para 3,78:1: fica como convite rever esses textos. Teclado: o foco segue Agente, Conta, Tarefa e Projeto, com anel de foco visível em todos; o botão desabilitado é pulado; Esc com o foco no campo fecha o painel e devolve o foco ao botão Agente.
+
+O que o processo não seguiu, para quem retomar: os guias do padrão de qualidade e as skills foram lidos depois do código, e a skill de projeto `rodar-app` e a de entrada em repositório só na auditoria final, então o gate não foi rodado antes da primeira alteração; a primeira versão desta entrada foi reescrita antes do primeiro commit, em vez de receber uma nota datada; os commits saíram em bloco no fim, e não a cada unidade concluída; e o roteiro ponta a ponta ficou fora do repositório por depender do Windows.
