@@ -100,7 +100,10 @@ function planArchive(text, { keepFrom }) {
     }
   }
 
-  return { preamble, kept, moved }
+  // Meses em ordem cronológica, mesmo que o arquivo de origem não esteja (os
+  // IA.md reais têm entradas fora de ordem): os ponteiros saem na ordem do tempo.
+  const chronological = new Map([...moved].sort(([a], [b]) => (a < b ? -1 : 1)))
+  return { preamble, kept, moved: chronological }
 }
 
 function toPosix(value) {

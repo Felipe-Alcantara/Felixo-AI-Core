@@ -83,6 +83,14 @@ test('planArchive move só o datado antes do corte, por mês, e mantém o resto'
   assert.equal(planArchive(DOCUMENTO, { keepFrom: '2026-10-02' }).kept.length, 2, 'a data do corte fica no arquivo')
 })
 
+test('planArchive ordena os meses no tempo mesmo com o arquivo de origem fora de ordem', () => {
+  const fora_de_ordem = '## [2026-09-05] depois\n\n## [2026-07-01] antes\n\n## [2026-08-15] meio\n'
+
+  const plan = planArchive(fora_de_ordem, { keepFrom: '2026-10-01' })
+
+  assert.deepEqual([...plan.moved.keys()], ['2026-07', '2026-08', '2026-09'])
+})
+
 test('sem --apply nada é escrito', (t) => {
   const { cwd, arquivo, arquivo_morto } = criarRepositorio(t)
 
