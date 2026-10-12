@@ -1,6 +1,6 @@
 # Documentação — Felixo AI Core
 
-Última revisão: 2026-09-01.
+Última revisão: 2026-10-12.
 
 Esta pasta reúne a documentação vigente do produto baseado no **canvas estilo
 n8n** (blocos visuais — terminais reais, notas, arquivos `.md` compartilhados,
@@ -32,6 +32,11 @@ compatibilidade com histórico legado.
 | [performance/PERFORMANCE.md](performance/PERFORMANCE.md) | Auditoria, medições e guardrails de performance do Canvas, terminal e bundle. |
 | [guias/GUIA-DESENVOLVEDOR.md](guias/GUIA-DESENVOLVEDOR.md) | Guia para desenvolvedores. |
 | [guias/GUIA-USUARIO.md](guias/GUIA-USUARIO.md) | Guia de instalação e uso para o usuário final. |
+| [guias/GUIA-CANVAS.md](guias/GUIA-CANVAS.md) | Organizar os blocos, área útil e foco, remover a seleção, identidade das inserções de prompt e máquinas com poucas CPUs ou mais de uma placa de vídeo. |
+| [guias/GUIA-CONTAS-E-LIMITES.md](guias/GUIA-CONTAS-E-LIMITES.md) | Conta da CLI oficial, diagnóstico das CLIs, limites e uso por conta, conta por terminal e cadeia de contas. |
+| [guias/GUIA-SYSTEM-DESIGN.md](guias/GUIA-SYSTEM-DESIGN.md) | Sincronização segura do Felixo System Design e quando o Git pode pedir login. |
+| [guias/GUIA-DEPENDENCIAS-E-SBOM.md](guias/GUIA-DEPENDENCIAS-E-SBOM.md) | Auditoria de dependências, SBOM e como repetir o que o CI faz. |
+| [ia-archive/](ia-archive/) | Arquivo dos registros antigos dos `IA.md`, movidos sem edição (ver `app/scripts/archive-ia-md.cjs`). |
 | [AUDITORIA-2026-08-08.md](AUDITORIA-2026-08-08.md) | Auditoria histórica de código e segurança; os achados refletem a fotografia daquela data. |
 
 ## Qual arquivo consultar
@@ -42,6 +47,9 @@ compatibilidade com histórico legado.
   seu histórico; acrescente entradas datadas, sem reescrever o passado.
 - [`../IA.md`](../IA.md) é o ledger operacional mais recente da raiz, usado para
   registrar sessões e correções recentes.
+- Os registros de julho a setembro de 2026 dos dois `IA.md` foram movidos, sem
+  edição, para [`ia-archive/`](ia-archive/); cada `IA.md` tem uma seção
+  **Registros arquivados** com o ponteiro para o arquivo de cada mês.
 - Os guias explicam procedimentos observáveis; o roadmap descreve direção e
   ideias de contribuição, não funcionalidades prometidas.
 
