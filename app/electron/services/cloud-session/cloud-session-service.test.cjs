@@ -580,3 +580,18 @@ test('nenhum relógio fica pendente depois do fim de um disparo, com sucesso, fa
 
   assert.equal(timers.pendingCount, 0)
 })
+
+test('no Linux só o nome exato da credencial é removido, porque lá o ambiente diferencia maiúsculas', async () => {
+  const { service, spawns, ptys } = setup({
+    platform: { name: 'linux' },
+    resolveClaude: () => ({ command: 'claude', viaShell: false }),
+    createBaseEnv: () => ({ PATH: '/usr/bin', ANTHROPIC_API_KEY: 'sk-ant-api03-segredo', anthropic_api_key: 'outra-variavel' }),
+  })
+
+  const pending = service.launch(input())
+  ptys[0].emit(SUCCESS)
+  await pending
+
+  assert.equal('ANTHROPIC_API_KEY' in spawns[0].options.env, false)
+  assert.equal(spawns[0].options.env.anthropic_api_key, 'outra-variavel')
+})
