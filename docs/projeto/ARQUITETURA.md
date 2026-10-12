@@ -1526,6 +1526,47 @@ aparece). Sem essa regra, cada rolagem da pessoa disparava um recálculo que
 devolvia a sidebar para o alvo, e o `Tab` focava controles que o tour tirava de
 vista.
 
+## Agente na nuvem (`claude --cloud`)
+
+O bloco **Agente na nuvem** cria uma sessão do Claude Code na nuvem e a acompanha por
+um cartão. Desenho completo em [`ESPEC-AGENTE-NUVEM.md`](ESPEC-AGENTE-NUVEM.md); o que
+mora aqui é o que quem mexe no canvas precisa saber.
+
+**Por que não é um bloco de terminal.** `claude --cloud` exige TTY mas **não abre TUI**:
+cria a sessão em poucos segundos e sai com código 0 (medido no Claude Code 2.1.287).
+O terminal do canvas é restaurado, reiniciado e redescoberto pelo app, e cada um desses
+caminhos relançaria o comando e gastaria crédito de novo. O cartão é um nó `cloud-session`
+só de dados; o único caminho que cria sessão é um clique confirmado.
+
+**Camadas.**
+
+| Camada | Arquivos | Responsabilidade |
+|---|---|---|
+| Parser (puro) | `electron/services/cloud-session/cloud-session-output.cjs` | Lê as 3 linhas da saída (`Created cloud session`, `View`, `Resume with`), a tela de confiança e falhas classificadas. |
+| Entrada e executável | `cloud-session-input.cjs`, `cloud-session-executable.cjs` | Valida tarefa, follow-up e pasta; resolve o `claude.exe` nativo por trás do shim do npm. |
+| Serviço | `cloud-session-service.cjs` | `launch` (PTY descartável) e `followUp` (`claude -p ... --cloud`), com trava por nó. |
+| Borda IPC | `cloud-session-ipc-handlers.cjs`, `window.felixo.cloudSession` | Valida o payload; `open` só abre `https://claude.ai/code/session_*`. |
+| Persistência | migração `019_canvas_cloud_session_nodes.sql` | Amplia o `CHECK` de `canvas_nodes.type`. |
+| Renderer | `CloudSessionNode.tsx`, `services/cloud-session-state.ts` | Cartão e máquina de estados pura (`draft`, `launching`, `created`, `failed`). |
+
+**Invariantes (cada uma com teste).** A tarefa e o follow-up chegam ao processo só como
+`argv`, sem `cmd.exe`: no Windows o serviço executa o `claude.exe` por trás do shim, e só
+sem ele recusa texto com `% " ^ & | < > ` e quebras de linha. As credenciais herdadas do
+Claude (`ANTHROPIC_API_KEY` etc.) nunca entram no ambiente, nem no Login do sistema, porque
+a nuvem exige login de assinatura. Um nó só tem uma operação por vez (`busy`). Um cartão
+salvo em `launching` reabre como `failed (interrupted)`. O `.fxcanvas` leva o cartão só
+como rascunho (nome e tarefa).
+
+**Campos do nó com prefixo `cloud`** (`cloudTask`, `cloudCwd`, `cloudAccountId`,
+`cloudStatus`, `cloudSession`, `cloudFollowUps`, `cloudError`): `CanvasNodeData` é uma
+intersecção plana de todos os tipos de bloco, e `cwd` e `accountId` já existem no terminal;
+reaproveitá-los faria o código que varre "blocos com conta" tratar o cartão como um
+terminal vivo daquela conta.
+
+**Limites conhecidos.** O saldo do crédito não tem API: só aparece em *Configurações > Uso*.
+`--model` e `--effort` são aceitos junto com `--cloud`, mas o efeito na sessão não foi
+verificado, por isso ficam fora do cartão. Validado em Windows; Linux e macOS pendentes.
+
 ## Providers e contas
 
 Os providers entram por adapters e pelo registry de Terminal Adapters. A

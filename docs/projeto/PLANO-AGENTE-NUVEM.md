@@ -263,3 +263,28 @@ roteiro manual em `docs/validation/CHECKLIST-AGENTE-NUVEM.md`.
 - [ ] **Passo 4: commit** `docs(nuvem): documentação e checklist do agente na nuvem`.
 - [ ] **Passo 5:** push da branch, acompanhar o CI até estado final e **parar antes
   de mesclar em `main`**.
+
+---
+
+## Desvios na execução
+
+Registrados depois de executar o plano; o que está acima descreve o que foi decidido antes.
+
+1. **Migração `019`**, não `018`: `origin/main` já tinha a `018_system_design_sources.sql`. A
+   branch foi rebaseada e a migração renumerada.
+2. **O ponto de entrada é um botão na seção *Criar*** (`CanvasToolbar.tsx`), e não o menu de
+   ferramentas. `CanvasToolsMenu.tsx`, `canvas-tool-labels.ts`, `canvas-tool-imports.ts` e
+   `canvas-tool-preloaders.ts` não foram tocados: esse menu é acoplado a painéis.
+3. **A união `CanvasNodeType` só ganhou `'cloud-session'` na Tarefa 7**, junto com tudo que a
+   consome (geometria, ícone do dock, ponte do canvas, inventário), para cada commit passar
+   no `typecheck`. A Tarefa 5 ficou com o banco e os tipos de dados.
+4. **Tipos compartilhados** em `src/features/shared/types/cloud-session.ts` (códigos de erro e
+   a ponte `CloudSessionBridge`), no padrão da cadeia de contas.
+5. **Campos do nó com prefixo `cloud`**, para não colidir com o terminal na intersecção plana
+   `CanvasNodeData`.
+6. **O parser ganhou** `summarizeTail`, `CLOUD_SESSION_ERROR_MESSAGES` e a opção `final`; a
+   tarefa de inventário e a de exportação (`canvas-transfer.cjs`) foram separadas em commits
+   próprios.
+7. **Validação no app real** (`felixo devtools`, perfil isolado) achou três ajustes que os testes
+   não pegariam: botões de confirmar fora da área visível, cartão sem nome no dock e altura
+   padrão curta. Ver o commit `fix(nuvem): ajustes do cartão achados ao rodá-lo no app real`.

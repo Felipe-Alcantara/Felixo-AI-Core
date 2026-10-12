@@ -590,6 +590,39 @@ Por segurança, o app só abre arquivos que estejam dentro de um projeto registr
 - O histórico visual usa 20.000 linhas quando há até 9 terminais e 5.000 linhas quando o canvas já tem 10 ou mais. O limite é escolhido ao criar a sessão; terminais que já estavam abertos não são redimensionados nem perdem linhas quando outro terminal é adicionado.
 - Se o histórico visual ultrapassar o limite, o cartão e a gaveta avisam. Fechar e reabrir o terminal reaplica o replay vivo mantido pelo processo principal, de até 200.000 caracteres; **Copiar** e **Handoff** usam o trecho que ainda está no buffer visual.
 
+### Agente na nuvem
+
+O bloco **Agente na nuvem** (botão na seção **Criar** da barra lateral) cria uma
+sessão do Claude Code que roda **na nuvem da Anthropic**, e não no seu computador.
+Serve, por exemplo, para gastar o **crédito de sessão na nuvem** que algumas contas
+recebem (ele aparece em *Configurações > Uso* do Claude) e poupar o limite semanal do
+plano. Esse crédito só vale para sessões na nuvem: não cobre um agente rodando no
+terminal local.
+
+1. Clique em **Agente na nuvem**: um cartão em rascunho aparece no canvas.
+2. Escreva a **tarefa**, escolha o **projeto** (ou a pasta) e a **conta**. Sem escolher
+   uma conta, vale o *Login do sistema*. A nuvem exige login de assinatura do Claude;
+   uma chave de API não funciona.
+3. Clique em **Disparar na nuvem** e confirme. **Só esse clique cria a sessão**: abrir o
+   app, restaurar o canvas ou importar um canvas nunca criam (nem gastam crédito).
+4. O cartão mostra o título, o ID e a data da sessão, com as ações **Abrir** (no
+   navegador), **Trazer para cá** (abre um terminal com `claude --teleport` e continua
+   a conversa localmente; isso pode usar o limite do plano, não o crédito de nuvem) e
+   **Nova sessão**. Há também um campo para **enviar mensagens à sessão**.
+
+O que vale saber:
+
+- Na **primeira vez numa pasta** o Claude pede para você confiar nela. O cartão avisa
+  e oferece **Abrir Claude nesta pasta**; confie uma vez e use **Tentar de novo**.
+- Sem *remote* no GitHub, o repositório inteiro é **enviado como pacote** (limite de
+  100 MB). Na nuvem não há MCPs, skills nem arquivos fora do repositório.
+- O app **não consegue ler o saldo** do crédito; confira em *Configurações > Uso*.
+- Se o app fechar enquanto a sessão estava sendo criada, o cartão reabre como
+  **interrompido**: a sessão pode ter sido criada, então confira em claude.ai/code
+  antes de tentar de novo.
+- Ao exportar um canvas (`.fxcanvas`), o cartão leva só o nome e a tarefa, como
+  rascunho: sessão, pasta, conta e mensagens ficam de fora.
+
 ### Retomar conversas de agentes
 
 Enquanto um agente trabalha, o bloco anota qual conversa está aberta nele: o

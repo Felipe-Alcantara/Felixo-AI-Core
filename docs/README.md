@@ -20,6 +20,9 @@ compatibilidade com histórico legado.
 | [projeto/PLANO-TUTORIAL-CANVAS.md](projeto/PLANO-TUTORIAL-CANVAS.md) | Plano do tutorial do canvas, da Ajuda e das novidades: estado versionado no SQLite, gatilhos, UX acessível, automação e mapa de testes por aceite. |
 | [projeto/POLITICA-CONTAS.md](projeto/POLITICA-CONTAS.md) | Política da cadeia de contas: decisões do dono, classes de falha, elegibilidade, estratégias, espera, confirmação, isolamento de credenciais e privacidade. |
 | [projeto/PLANO-CADEIA-CONTAS.md](projeto/PLANO-CADEIA-CONTAS.md) | Plano de implementação da cadeia de contas: arquitetura em camadas, dados, máquina de estados, sequência de commits e mapa de testes. |
+| [projeto/ESPEC-AGENTE-NUVEM.md](projeto/ESPEC-AGENTE-NUVEM.md) | Especificação do bloco Agente na nuvem (`claude --cloud`): fatos medidos, decisão de arquitetura (nó próprio, não terminal), dados, serviço, invariantes de segurança e ajustes da implementação. |
+| [projeto/PLANO-AGENTE-NUVEM.md](projeto/PLANO-AGENTE-NUVEM.md) | Plano de implementação do Agente na nuvem em tarefas: arquivos, interfaces, testes e ordem. |
+| [validation/CHECKLIST-AGENTE-NUVEM.md](validation/CHECKLIST-AGENTE-NUVEM.md) | Roteiro manual do Agente na nuvem. Não roda no CI porque cria sessão real e gasta crédito. |
 | [projeto/POLITICA-VERSIONAMENTO.md](projeto/POLITICA-VERSIONAMENTO.md) | Política de branches e commits do projeto. |
 | [projeto/RODAR-VIA-CODIGO-FONTE.md](projeto/RODAR-VIA-CODIGO-FONTE.md) | Como rodar o app a partir do código-fonte. |
 | [design/BRAND-SYSTEM.md](design/BRAND-SYSTEM.md) | Tokens e princípios visuais do Felixo AI Core. |

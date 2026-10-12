@@ -259,10 +259,21 @@ Registrados aqui em vez de reescrever as seções acima, que descrevem o desenho
    uma intersecção plana de todos os tipos de bloco, e `cwd` e `accountId` já existem
    no terminal: reaproveitá-los faria o código que varre "blocos com conta" tratar o
    cartão como um terminal vivo daquela conta.
-3. **Criação pelo menu de ferramentas**, como o bloco Tarefas Notion, e não pelo menu
-   Agente (§7).
+3. **Criação fora do menu Agente (§7).** A primeira ideia foi o menu de ferramentas,
+   como o bloco Tarefas Notion, mas ele é acoplado a painéis; o item 8 registra o que
+   ficou.
 4. **`createdAt` é carimbado pelo renderer**; o serviço devolve só `id`, `url` e
    `title`.
 5. **Saída parcial.** O parser só aceita a última linha sem quebra depois que o
    processo sai (`final`), porque antes disso o ID pode estar cortado no meio do
    pedaço recebido do PTY.
+6. **Confirmação inline esconde o formulário.** Medido ao rodar o cartão no app real: com
+   o resumo aberto abaixo dos campos, os botões de confirmar ficavam fora da área
+   visível. Com a confirmação aberta, só o resumo (conta, pasta e tarefa) aparece.
+7. **Sem detecção de remote.** O aviso do pacote de 100 MB aparece sempre na confirmação
+   ("Sem remote no GitHub, o repositório inteiro é enviado como pacote"), em vez de
+   consultar `git remote get-url origin` (§7), para o renderer não executar git.
+8. **Botão na seção Criar.** O ponto de entrada é um botão **Agente na nuvem** na seção
+   *Criar* da barra lateral (como Grupo e Página Web), e cada clique cria um cartão novo.
+   O cartão nasce com o nome "Agente na nuvem" (o dock de elementos usa o `label`) e
+   altura padrão de 560 px.

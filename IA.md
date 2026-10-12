@@ -8158,3 +8158,87 @@ agente que tinha conversa), que não foi feita por falta de memória na máquina
 Validação local: `tsc -b` e `eslint` limpos; os 49 testes passam.
 
 Estado: concluído (com a conferência manual da retomada pendente).
+
+## 2026-10-12 — Agente na nuvem: sessões do Claude Code na nuvem por um cartão do canvas
+
+**Contexto.** Contas Max recebem um crédito de sessão na nuvem (US$ 250 no caso medido, com
+prazo em 4 e 5 de novembro) que só vale para sessões na nuvem e não cobre o CLI local. O pedido
+foi poder criar, pelo AI Core, um agente que use esse crédito e poupe o limite semanal.
+
+**O que foi medido antes de desenhar** (Windows 11, Claude Code 2.1.287, PTY real):
+
+- `claude --cloud "<tarefa>"` **exige TTY**: com a saída redirecionada recusa com
+  `--cloud requires an interactive terminal` e código 1.
+- Num PTY ele **não abre TUI**: cria a sessão em 5 a 7 s e sai com código 0, imprimindo
+  `Created cloud session: <título>`, `View: https://claude.ai/code/session_<ID>?from=cli&m=0` e
+  `Resume with: claude --teleport session_<ID>`.
+- Na primeira vez numa pasta aparece a tela "Is this a project you created or one you trust?"
+  antes de a sessão ser criada.
+- `claude -p "<texto>" --cloud <id>` funciona **sem TTY** e imprime `Sent to cloud session.`.
+- `--model` e `--effort` são aceitos junto com `--cloud` sem erro; o efeito na sessão **não** foi
+  verificado, por isso ficaram fora do cartão.
+- O "Crédito incluído" do painel Uso caiu de US$ 159 para US$ 158 depois das sessões de teste
+  (consistente com o CLI gastar esse crédito; o painel mostra dólares inteiros e o uso local da
+  própria sessão de trabalho impede atribuir a barra semanal à nuvem).
+
+**O que foi feito.** Nó novo `cloud-session` (cartão de dados, sem terminal) mais um serviço no
+processo principal (`electron/services/cloud-session/`) que roda o `claude` nativo num PTY
+descartável e lê a saída com um parser puro. Botão **Agente na nuvem** na seção *Criar*;
+confirmação inline antes de disparar; depois de criado: Abrir, Trazer para cá (`--teleport`),
+Nova sessão e follow-up. Migração `019_canvas_cloud_session_nodes.sql`. Desenho em
+`docs/projeto/ESPEC-AGENTE-NUVEM.md`, plano e desvios em `PLANO-AGENTE-NUVEM.md`, roteiro manual
+em `docs/validation/CHECKLIST-AGENTE-NUVEM.md`.
+
+**Por que um nó e não um bloco de terminal.** O terminal é restaurado, reiniciado e
+redescoberto pelo app, e cada um desses caminhos relançaria `--cloud` e gastaria crédito de
+novo; blindar isso exigia tratar uns oito pontos do ciclo de vida do terminal. O cartão só
+dispara por clique confirmado (invariantes I1 a I9 do spec, cada uma com teste).
+
+**Achados no caminho** (registrados porque custariam caro de novo):
+
+- `origin/main` já tinha a migração `018_system_design_sources.sql` (a branch saiu de um `main`
+  local desatualizado). Renumerada para `019` e rebaseada. Ensaio da `019` numa **cópia do banco
+  real**: versão 18 para 19, os mesmos 51 blocos (49 terminais, 1 Tarefas Notion, 1 página web),
+  mesmos bytes de `data_json`, `integrity_check` ok e `foreign_key_check` sem linhas.
+- `tsc -p .` não verifica nada neste projeto (usa referências de projeto): o gate é
+  `npm run typecheck` (`tsc -b`).
+- Com Login do sistema o app mantém o ambiente da pessoa; um `ANTHROPIC_API_KEY` ali faria o CLI
+  cobrar pela chave e recusar a nuvem. O serviço passa sempre por `applyProfileEnv`.
+- `CanvasNodeData` é uma intersecção plana: os campos do cartão levam o prefixo `cloud` para não
+  colidir com `cwd` e `accountId` do terminal.
+- Ao rodar o cartão no app real apareceram três defeitos que os testes não pegam: botões de
+  confirmar fora da área visível, cartão sem nome no dock e altura padrão curta (corrigidos).
+
+**Validação.**
+
+- `node --test` do processo principal: 2.619 testes passando. 1 arquivo falha
+  (`electron/core/app-relaunch.test.cjs`) com `EPERM: symlink`: o Windows desta máquina não
+  deixa o teste criar link simbólico; ambiental e anterior a esta mudança.
+- `vitest`: 204 arquivos e 3.126 testes passando, 3 ignorados, **com `--testTimeout=120000`**.
+  Com o timeout padrão de 5 s, 6 testes (as gravações `terminal-reading.fixtures` e um do guia do
+  System Design) estouram nesta máquina: o arquivo das gravações leva cerca de 72 s e passa 63 de
+  63 com o prazo maior. Não tem relação com esta mudança.
+- `npm run lint` sem avisos e `npm run typecheck` sem erros.
+- Mutações feitas de propósito, e os testes falharam como devia: host do link, trava por nó,
+  remoção das credenciais herdadas, migração que perdia linhas e `launching` que não virava
+  `interrupted`.
+- **No app real** (`felixo devtools launch`, perfil isolado, a partir do código-fonte, Login do
+  sistema): criar o cartão; erro de pasta não confiada (sem sessão criada); disparo real com
+  "Criando a sessão na nuvem…" e depois o cartão criado; follow-up real; recarregar o app (o
+  cartão volta com o mesmo ID); Trazer para cá (terminal na pasta do cartão); Nova sessão.
+
+**O que NÃO foi validado.**
+
+- **Linux e macOS**: o spike e a validação rodaram só no Windows.
+- Duplo clique real, fechar o app no meio do disparo e importar um `.fxcanvas` em outro perfil
+  só têm teste automatizado, não foram feitos na tela.
+- Que a mensagem do follow-up apareceu **dentro** da sessão no claude.ai/code, e que o recarregar
+  não criou sessão nova na lista de lá (só comparei o ID do cartão).
+- Saídas de erro de login, limite, rede e pacote grande: os padrões vêm do classificador de
+  falhas das contas, mas só a tela de confiança foi capturada de verdade.
+- O crédito com precisão (o painel mostra dólares inteiros) e se `--teleport` consome o plano ou
+  o crédito.
+- O CI e o merge: o trabalho está na branch `feat/agente-nuvem`. **Mesclar em `main` publica uma
+  release** (`release.yml`), então a decisão de mesclar fica com o dono.
+
+Estado: implementado e validado localmente no Windows; CI e merge pendentes.
