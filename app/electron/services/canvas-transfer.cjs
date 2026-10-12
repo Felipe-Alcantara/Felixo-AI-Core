@@ -12,6 +12,8 @@ const MAX_FILES = 5_000
 const MAX_FILE_BYTES = 10 * 1024 * 1024
 const MAX_TOTAL_FILE_BYTES = 50 * 1024 * 1024
 const PORTABLE_AGENT_COMMANDS = new Set(['claude', 'codex', 'gemini'])
+// Mesmo teto do cartão "Agente na nuvem" (cloud-session-state.ts e cloud-session-input.cjs).
+const CLOUD_TASK_MAX = 4000
 
 function createCanvasBundle({ nodes, edges, files }) {
   return normalizeCanvasBundle({
@@ -84,6 +86,26 @@ function normalizeCanvasBundle(value) {
         data: {
           ...portableData,
           ...(PORTABLE_AGENT_COMMANDS.has(command) ? { command } : {}),
+        },
+      }
+    }
+    if (node.type === 'cloud-session') {
+      // O cartão da nuvem viaja só como rascunho: a sessão, o ID, a pasta, a
+      // conta e os follow-ups são desta pessoa e desta máquina, e um cartão
+      // importado como "criada" ou "disparando" mostraria uma sessão que não
+      // existe. Importar nunca dispara nada (I8 do spec). Lista fechada de
+      // campos: o que não está aqui não atravessa.
+      const data = node.data && typeof node.data === 'object' ? node.data : {}
+      const { label, orderIndex, frameColor, cloudTask } = data
+      return {
+        ...node,
+        data: {
+          ...(typeof label === 'string' ? { label } : {}),
+          ...(Number.isInteger(orderIndex) ? { orderIndex } : {}),
+          ...(typeof frameColor === 'string' ? { frameColor } : {}),
+          cloudTask: typeof cloudTask === 'string' ? cloudTask.slice(0, CLOUD_TASK_MAX) : '',
+          cloudStatus: 'draft',
+          cloudFollowUps: [],
         },
       }
     }
