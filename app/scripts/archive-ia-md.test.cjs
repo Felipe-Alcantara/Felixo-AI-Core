@@ -13,6 +13,7 @@ const {
   headingDate,
   parseArgs,
   planArchive,
+  relinkLines,
   run,
   splitSections,
 } = require('./archive-ia-md.cjs')
@@ -178,6 +179,38 @@ test('as saídas terminam com quebra de linha mesmo quando a seção movida não
   assert.ok(origem.endsWith('corpo\n'), 'o IA.md termina com quebra de linha')
   assert.ok(agosto.endsWith('fim\n'), 'o arquivo termina com quebra de linha')
   assert.match(agosto, /última linha\n## \[2026-08-02\] velha/)
+})
+
+test('relinkLines reaponta só links relativos de arquivo e deixa o resto como está', () => {
+  const entrada = [
+    'veja [a política](docs/projeto/POLITICA.md#isolamento) e [o guia](GUIA.md)',
+    'externo [site](https://exemplo.org/x), âncora [aqui](#local), absoluto [raiz](/docs/x.md)',
+    '```',
+    'exemplo em código [x](docs/projeto/NAO-MEXE.md)',
+    '```',
+    'depois da cerca [y](docs/projeto/Y.md)',
+  ]
+
+  const saida = relinkLines(entrada, path.resolve('repo'), path.resolve('repo', 'docs', 'ia-archive'))
+
+  assert.equal(saida[0], 'veja [a política](../projeto/POLITICA.md#isolamento) e [o guia](../../GUIA.md)')
+  assert.equal(saida[1], entrada[1])
+  assert.equal(saida[3], entrada[3], 'o que está em bloco de código não muda')
+  assert.equal(saida[5], 'depois da cerca [y](../projeto/Y.md)')
+})
+
+test('seções movidas de docs/projeto mantêm os links apontando para o mesmo arquivo', (t) => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-arquivo-ia-'))
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }))
+  fs.mkdirSync(path.join(cwd, 'docs', 'projeto'), { recursive: true })
+  fs.writeFileSync(path.join(cwd, 'docs', 'projeto', 'POLITICA.md'), '# Política\n')
+  fs.writeFileSync(path.join(cwd, 'docs', 'projeto', 'IA.md'), '## [2026-08-01] antiga\nver [a política](POLITICA.md) e [a raiz](../../README.md)\n\n## 2026-10-05 — nova\ncorpo\n')
+
+  run(opcoes(cwd, { file: 'docs/projeto/IA.md', prefix: 'IA-PROJETO-ARCHIVE', apply: true }))
+
+  const agosto = fs.readFileSync(path.join(cwd, 'docs', 'ia-archive', 'IA-PROJETO-ARCHIVE-2026-08.md'), 'utf8')
+  assert.match(agosto, /\[a política\]\(\.\.\/projeto\/POLITICA\.md\) e \[a raiz\]\(\.\.\/\.\.\/README\.md\)/)
+  assert.match(agosto, /\]\(\.\.\/projeto\/IA\.md\)/, 'o cabeçalho aponta para o arquivo de origem')
 })
 
 test('assertLossless reprova quando uma seção movida some do plano', () => {

@@ -110,6 +110,36 @@ function toPosix(value) {
   return value.split(path.sep).join('/')
 }
 
+/**
+ * Um link relativo escrito para o arquivo de origem tem de continuar apontando
+ * para o mesmo destino quando a seção passa a viver na pasta do arquivo morto.
+ * Links absolutos (`https:`, `/`), âncoras locais e o que está em bloco de
+ * código ficam como estão.
+ */
+function relinkLines(lines, fromDir, toDir) {
+  let inFence = false
+  return lines.map((line) => {
+    if (FENCE.test(line)) inFence = !inFence
+    if (inFence) return line
+
+    return line.replace(/\]\(([^)\s]+)\)/g, (all, url) => {
+      if (/^([a-z][a-z0-9+.-]*:|#|\/)/i.test(url)) return all
+      const [target, ...fragment] = url.split('#')
+      const relative = toPosix(path.relative(toDir, path.resolve(fromDir, target)))
+      return `](${relative}${fragment.length > 0 ? `#${fragment.join('#')}` : ''})`
+    })
+  })
+}
+
+const withoutLinkTargets = (line) => line.replace(/\]\([^)\s]+\)/g, '](_)')
+
+/** A reescrita de links só pode ter mudado o destino dos links, nada mais na linha. */
+function assertOnlyLinksChanged(before, after) {
+  if (before.length !== after.length || !before.every((line, index) => withoutLinkTargets(line) === withoutLinkTargets(after[index]))) {
+    throw new Error('a reescrita dos links mudou mais do que o destino dos links')
+  }
+}
+
 function pointerLine({ today, month, count, link }) {
   const noun = count === 1 ? 'seção' : 'seções'
   return `- [${today}] Registros de ${month} (${count} ${noun}) movidos para [${link}](${link})`
@@ -265,20 +295,27 @@ function buildOutputs({ text, file, keepFrom, archiveDir, prefix, today, cwd }) 
   const sourceName = toPosix(path.relative(cwd, file))
   const archives = new Map()
   const archiveTexts = new Map()
+  const relinkedMoved = new Map()
   const items = []
 
   for (const [month, sections] of plan.moved) {
     const archiveFile = path.join(archiveDir, `${prefix}-${month}.md`)
     const sourceLink = toPosix(path.relative(path.dirname(archiveFile), file))
     const header = archiveHeader({ month, sourceName, sourceLink, today })
-    const archiveText = renderArchive(readIfExists(archiveFile), header, sections)
+    const relinked = sections.map((section) => {
+      const lines = relinkLines(section.lines, path.dirname(file), path.dirname(archiveFile))
+      assertOnlyLinksChanged(section.lines, lines)
+      return { ...section, lines }
+    })
+    const archiveText = renderArchive(readIfExists(archiveFile), header, relinked)
 
+    relinkedMoved.set(month, relinked)
     archives.set(month, archiveFile)
     archiveTexts.set(month, archiveText)
     items.push(pointerLine({ today, month, count: sections.length, link: toPosix(path.relative(path.dirname(file), archiveFile)) }))
   }
 
-  const withPointers = { ...plan, kept: items.length > 0 ? withPointer(plan.kept, items) : plan.kept }
+  const withPointers = { ...plan, moved: relinkedMoved, kept: items.length > 0 ? withPointer(plan.kept, items) : plan.kept }
   const sourceText = renderSource(withPointers)
   assertRendered({ sourceText, archiveTexts, plan: withPointers })
 
@@ -359,6 +396,7 @@ module.exports = {
   headingDate,
   parseArgs,
   planArchive,
+  relinkLines,
   run,
   splitSections,
 }
