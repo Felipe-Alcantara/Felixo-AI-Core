@@ -345,6 +345,7 @@ function CanvasInner({
   const { projects, reloadProjects, addProjectFolder, removeProjectFolder } = useCanvasProjects()
   const [expandedTerminalId, setExpandedTerminalId] = useState<string | null>(null)
   const expandedTerminalIdRef = useRef<string | null>(null)
+  const [terminalOpenRequest, setTerminalOpenRequest] = useState(0)
   const terminalFocusReturnRef = useRef<HTMLElement | null>(null)
   // While a drawer is open — and until focus has returned to the card's trigger
   // and left it again — keep node triggers mounted so closing the drawer can
@@ -466,6 +467,7 @@ function CanvasInner({
       expandedTerminalIdRef.current = nodeId
       dispatchNodeMountLatch({ type: 'drawer-opened' })
       setExpandedTerminalId(nodeId)
+      setTerminalOpenRequest((current) => current + 1)
       acknowledgeNodeNotifications(nodeId)
       setNotificationHistory((current) =>
         markCanvasNotificationsReadForNode(current, nodeId),
@@ -1926,6 +1928,7 @@ function CanvasInner({
       expandedTerminalIdRef.current = newId
       dispatchNodeMountLatch({ type: 'drawer-opened' })
       setExpandedTerminalId(newId)
+      setTerminalOpenRequest((current) => current + 1)
       return newId
     },
     [addNode, buildTerminalNodeData, setEdges],
@@ -2460,6 +2463,7 @@ function CanvasInner({
           readingMode={expandedNodeData?.readingMode === true}
           onReadingModeChange={(on) => updateNodeData(expandedTerminalId, { readingMode: on })}
           readingProfile={readingProfileFor(expandedNodeData?.providerId, expandedNodeData?.command)}
+          openRequest={terminalOpenRequest}
           onClose={closeExpandedTerminal}
         />
       )}

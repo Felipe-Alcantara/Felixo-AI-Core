@@ -59,8 +59,9 @@ export function useExitAnimation(
   controller.update({ onClosed, shouldSkipAnimation })
 
   const close = useCallback(() => controller.close(durationMs), [controller, durationMs])
+  const cancelClose = useCallback(() => controller.cancel(), [controller])
 
   useEffect(() => () => controller.dispose(), [controller])
 
-  return { closing, close }
+  return { closing, close, cancelClose }
 }

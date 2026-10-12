@@ -22,6 +22,13 @@ export type ExitAnimationController = {
    *   da prop sem precisar recriar o controlador a cada render.
    */
   close: (durationMs: number) => void
+  /**
+   * Desiste de um fechamento em curso: cancela o timer, não chama `onClosed`
+   * e volta `closing` para falso. Sem fechamento pendente não faz nada. É o
+   * que impede um pedido de abrir feito durante a animação de saída de ser
+   * desfeito quando ela termina.
+   */
+  cancel: () => void
   /** Cancela o timer pendente, se houver, sem chamar `onClosed`. Chamar no cleanup do `useEffect`. */
   dispose: () => void
   /** Há um timer de fechamento pendente agora. */
@@ -66,6 +73,12 @@ export function createExitAnimationController({
         timer = null
         callbacks.onClosed()
       }, delay)
+    },
+    cancel() {
+      if (timer === null) return
+      clearTimeoutFn(timer)
+      timer = null
+      onClosingChange(false)
     },
     dispose() {
       if (timer === null) return

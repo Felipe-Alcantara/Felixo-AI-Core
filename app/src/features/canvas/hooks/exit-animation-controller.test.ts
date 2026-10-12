@@ -126,6 +126,40 @@ describe('createExitAnimationController', () => {
     expect(controller.isClosing()).toBe(false)
   })
 
+  it('cancel() desiste do fechamento: onClosed não roda e closing volta a falso', () => {
+    const { clock, onClosed, closingStates, controller } = setup()
+
+    controller.close(160)
+    clock.advance(40)
+    controller.cancel()
+
+    expect(closingStates).toEqual([true, false])
+    expect(controller.isClosing()).toBe(false)
+    expect(clock.pendingCount()).toBe(0)
+    clock.advance(500)
+    expect(onClosed).not.toHaveBeenCalled()
+  })
+
+  it('depois de cancel() um novo close() fecha normalmente', () => {
+    const { clock, onClosed, closingStates, controller } = setup()
+
+    controller.close(160)
+    controller.cancel()
+    controller.close(160)
+    clock.advance(160)
+
+    expect(closingStates).toEqual([true, false, true])
+    expect(onClosed).toHaveBeenCalledTimes(1)
+  })
+
+  it('cancel() sem fechamento pendente não muda nada', () => {
+    const { closingStates, controller } = setup()
+
+    controller.cancel()
+
+    expect(closingStates).toEqual([])
+  })
+
   it('dispose() sem nenhum close() pendente não quebra nem chama onClosed', () => {
     const { onClosed, controller } = setup()
 
