@@ -1079,6 +1079,15 @@ o agente deve informar o nome e o erro exatos, sem trocar silenciosamente pelo
 artefato "equivalente" de outra sessão. Se o processo do app não conseguir
 criar o arquivo, o terminal volta ao fallback inline e mostra um aviso.
 
+Como os arquivos somem quando o terminal do agente termina (fechar o app,
+reiniciar o bloco, o agente se atualizar e reabrir), uma conversa retomada
+depois ainda carrega no histórico a instrução de lê-los. Nesse caso o erro
+"Artefato de contexto não encontrado" explica ao agente que o arquivo é
+temporário e que o conteúdo já está no histórico da conversa, e manda seguir o
+pedido atual a partir dele. Se o histórico não tiver o conteúdo, o agente avisa
+que o contexto expirou, sem inventá-lo; iniciar uma nova conversa no bloco gera
+um contexto novo.
+
 Todo caminho de arquivo ou pasta que o app escreve para o agente vai entre
 aspas: o comando `felixo`, a skill ativada, a lista de skills, os arquivos
 `.md` ligados, o arquivo de planejamento e a pasta de trabalho. Assim, um
