@@ -21,7 +21,8 @@
   `IA.md`, divisão do README) estavam só locais ao escrever isto.
 - **Em andamento:** nada aberto no código. O Agente na nuvem foi movido do botão em *Criar* para uma
   opção do menu Agente (entrada de 2026-10-12 "movido para dentro do menu Agente"): validado no Windows
-  e commitado só na `main` local; enviar publica release, então o push aguarda a decisão de quem mantém.
+  e commitado só na `main` local, sem push. Um push direto não publica release (o último commit é de
+  documentação); um PR com squash publica. O envio aguarda a decisão de quem mantém.
   Resta acompanhar o CI dos commits ainda não enviados.
 - **Pendente de conferência manual:** o roteiro do Agente na nuvem em
   `docs/validation/CHECKLIST-AGENTE-NUVEM.md` (cria sessão real e gasta crédito, por isso não roda
@@ -1013,3 +1014,5 @@ Registro de Claude — Tasks do AI Core. O trabalho começou numa sessão com Ha
 - A pasta de projeto só é autorizada pelo seletor nativo (concessão em memória do processo principal). Para exercitar o fluxo real no teste, o diálogo do Windows foi preenchido por mensagens ao próprio diálogo do app de teste (UI Automation para achar, `WM_SETTEXT` e `BM_CLICK` para agir), sem tocar em foco nem em outras janelas.
 
 Estado: concluído e validado localmente no Windows. Commitado na `main` local, em três commits (código e testes; documentação pública; documentação interna), **sem push**. Mudar `app/src` conta como mudança do instalador (`release-relevant.sh`), então enviar para o remoto publica uma release: a decisão é de quem mantém o repositório. O `app/package-lock.json` que estava modificado na cópia de trabalho não é desta mudança: o npm 11 podou 13 pacotes de empacotamento do Windows (`electron-winstaller`, `electron-builder-squirrel-windows`, `@electron/windows-sign`, `rimraf`, `postject` e outros) depois de um `npm install --no-save`, e commitá-lo quebraria o instalador. Ficou guardado no `git stash` (mensagem "package-lock.json podado pelo npm 11…") e, como patch, fora do repositório; use `git stash pop` só se alguém precisar dele, e nunca o commite.
+
+**Correção (mesma data).** Acima escrevi que enviar à `main` publica uma release. Não é bem assim: o `Release gate` (`.github/workflows/release-gate.yml`) compara só o último commit da execução do CI (`git diff --name-only HEAD^ HEAD`). Rodei `release-relevant.sh` em cada commit desta mudança: só o de código (`feat(nuvem)`) dá `true`; os três de documentação dão `false`. Logo, um push direto destes commits termina em `docs(ia)` e **não publica nada agora**; a mudança de `app/src` entra no próximo release que um commit de app disparar. Já um PR mesclado por squash vira um commit só, com `app/src`, e publica. Verificado no workflow e no script; o CI em si não foi rodado.
