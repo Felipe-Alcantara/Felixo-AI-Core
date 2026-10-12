@@ -842,6 +842,34 @@ Toda feature deve ser documentada em `/docs/`:
 5. **Produto atual:** novas telas, fluxos e exemplos devem tratar o canvas como
    caminho principal; o chat só deve aparecer em documentação de compatibilidade.
 
+### Compactar o IA.md sem perder histórico
+
+O `IA.md` da raiz e o `docs/projeto/IA.md` crescem a cada sessão. Quando a
+leitura de um deles ficar lenta (como regra prática, acima de umas 1000 linhas),
+os registros antigos são **movidos**, nunca apagados, para `docs/ia-archive/`,
+por um arquivo por mês, e o `IA.md` guarda um ponteiro datado na seção
+**Registros arquivados**. Quem faz o movimento é
+`app/scripts/archive-ia-md.cjs`; não recorte à mão.
+
+```bash
+# Da raiz do repositório. Sem --apply só mostra o plano (dry-run).
+node app/scripts/archive-ia-md.cjs --file IA.md --keep-from AAAA-MM-DD \
+  --prefix IA-ARCHIVE
+node app/scripts/archive-ia-md.cjs --file docs/projeto/IA.md --keep-from AAAA-MM-DD \
+  --prefix IA-PROJETO-ARCHIVE
+
+# Confirmado o plano, repita os comandos acima com --apply.
+```
+
+O que o script garante: só move seção **datada** anterior a `--keep-from`
+(Objetivo, Stack e o ponteiro nunca saem); prova, antes e depois de escrever, que
+nenhuma linha se perdeu; reaponta os links relativos das seções movidas; grava o
+arquivo de origem por último; e recusa escrever se o `IA.md` mudou durante a
+execução. Antes de aplicar, confira que nenhum outro agente está anexando ao
+arquivo, e depois acrescente ao `IA.md` uma entrada datada contando o que foi
+movido. O comando `node --test scripts/archive-ia-md.test.cjs`, dentro de `app/`,
+roda os testes da ferramenta.
+
 ---
 
 ## Como adicionar uma nova CLI/Provider
