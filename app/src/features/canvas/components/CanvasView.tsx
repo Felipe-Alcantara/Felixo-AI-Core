@@ -146,7 +146,7 @@ import { announceAgentCollaboration } from '../services/agent-collaboration-link
 import {
   buildTerminalHandoffPrompt,
 } from '../services/terminal-handoff'
-import type { NewTerminalOptions } from '../services/new-terminal-options'
+import type { NewTerminalOptions, NewCloudSessionOptions } from '../services/new-terminal-options'
 import {
   resolveTerminalSpawnPlan,
   terminalSpawnCacheDeps,
@@ -1672,20 +1672,31 @@ function CanvasInner({
   /**
    * Cria um cartão "Agente na nuvem" em rascunho. Cada clique cria um cartão
    * novo (podem existir vários); nada é disparado: a sessão só nasce de um
-   * clique confirmado dentro do cartão.
+   * clique confirmado dentro do cartão. Vem do menu Agente, que já entrega
+   * tarefa, pasta e conta preenchidas.
    */
-  const addCloudSessionNode = useCallback(() => {
-    const size = getDefaultNodeSize('cloud-session', window.innerWidth)
-    const position = findFreeNodePosition(nodes, size, visibleCanvasBounds())
-    // O nome também alimenta o dock de elementos, que sem `label` mostra o tipo cru.
-    const id = addNode(
-      'cloud-session',
-      { ...createCloudSessionDraft({ cwd: projects[0]?.path ?? '' }), label: 'Agente na nuvem' },
-      position,
-    )
-    setNodes((current) => current.map((node) => ({ ...node, selected: node.id === id })))
-    centerNodeInSafeArea(position, size, 0.8, 240)
-  }, [addNode, centerNodeInSafeArea, nodes, projects, setNodes, visibleCanvasBounds])
+  const addCloudSessionNode = useCallback(
+    (options: NewCloudSessionOptions) => {
+      const size = getDefaultNodeSize('cloud-session', window.innerWidth)
+      const position = findFreeNodePosition(nodes, size, visibleCanvasBounds())
+      // O nome também alimenta o dock de elementos, que sem `label` mostra o tipo cru.
+      const id = addNode(
+        'cloud-session',
+        {
+          ...createCloudSessionDraft({
+            cwd: options.cwd,
+            accountId: options.accountId,
+            task: options.task,
+          }),
+          label: options.label,
+        },
+        position,
+      )
+      setNodes((current) => current.map((node) => ({ ...node, selected: node.id === id })))
+      centerNodeInSafeArea(position, size, 0.8, 240)
+    },
+    [addNode, centerNodeInSafeArea, nodes, setNodes, visibleCanvasBounds],
+  )
 
   useWebpageOpeners({ addNode, centerNodeInSafeArea, nodes, setNodes, visibleCanvasBounds })
 
@@ -2138,6 +2149,7 @@ function CanvasInner({
         projects={projects}
         onAddTerminal={addTerminalNode}
         onAddTerminals={addTerminalNodes}
+        onAddCloudSession={addCloudSessionNode}
         onOrganizeBlocks={organizeCanvasBlocks}
         arrangeableCount={arrangeableCount}
         onAddFolder={addProjectFolder}
@@ -2145,7 +2157,6 @@ function CanvasInner({
         onOpenFile={() => void pickAndOpenTextFile()}
         onOpenImage={() => void pickAndOpenImageFile()}
         onAddGroup={(name) => addNode('group', { label: name || 'Grupo' })}
-        onAddCloudSession={addCloudSessionNode}
         onAddWebpage={(url, name, profileId) =>
           addNode('webpage', {
             url,

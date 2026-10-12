@@ -65,10 +65,14 @@ function cloudFields(data: CloudSessionNodeData): CloudSessionNodeData {
   }
 }
 
-export function createDraft(input: { cwd: string; accountId?: string }): CloudSessionNodeData {
+export function createDraft(input: {
+  cwd: string
+  accountId?: string
+  task?: string
+}): CloudSessionNodeData {
   return {
     cloudStatus: 'draft',
-    cloudTask: '',
+    cloudTask: input.task ?? '',
     cloudCwd: input.cwd,
     cloudAccountId: input.accountId || undefined,
     cloudFollowUps: [],

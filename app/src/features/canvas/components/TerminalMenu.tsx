@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
-import { ChevronDown, Plus, TerminalSquare, Trash2, X } from 'lucide-react'
+import { Cloud, ChevronDown, Plus, TerminalSquare, Trash2, X } from 'lucide-react'
+import { CLOUD_AGENT_VALUE } from '../services/agent-launch-preferences'
 import { useAgentConfig, type AgentConfigProject } from '../hooks/useAgentConfig'
-import type { NewTerminalOptions } from '../services/new-terminal-options'
+import type { NewCloudSessionOptions, NewTerminalOptions } from '../services/new-terminal-options'
 import { AgentConfigFields } from './AgentConfigFields'
 import { isFelixoPopoverTarget } from '../../shared/components/felixo-popover-target'
 
@@ -14,6 +15,8 @@ type TerminalMenuProps = {
   onAdd: (options: NewTerminalOptions) => void
   /** Starts every queued config at once — see the "Fila" section below. */
   onAddMany: (optionsList: NewTerminalOptions[]) => void
+  /** Cria o cartão "Agente na nuvem" já configurado; nada é disparado aqui. */
+  onAddCloud: (options: NewCloudSessionOptions) => void
   /** Adds a folder as a project (picker + detect repos), returns the new ids. */
   onAddFolder: () => Promise<string[]>
 }
@@ -32,11 +35,13 @@ export function TerminalMenu({
   openRequest = 0,
   onAdd,
   onAddMany,
+  onAddCloud,
   onAddFolder,
 }: TerminalMenuProps) {
   const fieldIdPrefix = useId()
   const [open, setOpen] = useState(false)
   const config = useAgentConfig(projects)
+  const isCloud = config.agentValue === CLOUD_AGENT_VALUE
   // Configs queued up to start together — lets one click launch a whole
   // agent setup instead of repeating "configure, open" once per terminal.
   const [queue, setQueue] = useState<NewTerminalOptions[]>([])
@@ -108,9 +113,22 @@ export function TerminalMenu({
         }
         return
       }
-      const options = config.buildOptions()
-      config.savePreferences()
-      onAdd(options)
+      if (isCloud) {
+        // Nuvem sem tarefa ou sem pasta não tem o que criar: o clique no botão
+        // compacto reabre o painel, como acontece com qualquer erro de configuração.
+        if (!config.cloudReady) {
+          if (!open) {
+            setOpen(true)
+          }
+          return
+        }
+        onAddCloud(config.buildCloudOptions())
+        config.setCloudTask('')
+      } else {
+        const options = config.buildOptions()
+        config.savePreferences()
+        onAdd(options)
+      }
       config.setName('')
       closeSettings()
       window.requestAnimationFrame(() => triggerRef.current?.focus())
@@ -211,28 +229,40 @@ export function TerminalMenu({
             projects={projects}
             onAddFolder={onAddFolder}
             autoFocus
+            allowCloud
           />
 
           <div className="flex gap-1.5">
             <button
               type="button"
               onClick={() => void openTerminal()}
-              disabled={launching || Boolean(config.accountSelectionIssue)}
+              disabled={
+                launching ||
+                Boolean(config.accountSelectionIssue) ||
+                (isCloud && !config.cloudReady)
+              }
               title={config.accountSelectionIssue?.message}
-              className="felixo-btn flex-1 rounded-sm felixo-primary-action px-3 py-1.5 text-sm disabled:opacity-50"
+              className={`felixo-btn flex-1 rounded-sm felixo-primary-action px-3 py-1.5 text-sm disabled:opacity-50${
+                isCloud ? ' flex items-center justify-center gap-2' : ''
+              }`}
             >
-              Abrir agente
+              {isCloud && <Cloud size={14} aria-hidden="true" />}
+              {isCloud ? 'Abrir agente na nuvem' : 'Abrir agente'}
             </button>
-            <button
-              type="button"
-              onClick={() => void queueCurrent()}
-              disabled={launching || Boolean(config.accountSelectionIssue)}
-              title="Adicionar esta configuração à fila, para iniciar vários terminais de uma vez"
-              aria-label="Adicionar à fila de terminais"
-              className="felixo-btn-icon flex items-center justify-center rounded-sm bg-zinc-700 px-2 text-zinc-100 hover:bg-zinc-600"
-            >
-              <Plus size={14} />
-            </button>
+            {/* A fila inicia vários terminais de uma vez; a nuvem sempre passa
+                pela confirmação do próprio cartão, então não entra nela. */}
+            {!isCloud && (
+              <button
+                type="button"
+                onClick={() => void queueCurrent()}
+                disabled={launching || Boolean(config.accountSelectionIssue)}
+                title="Adicionar esta configuração à fila, para iniciar vários terminais de uma vez"
+                aria-label="Adicionar à fila de terminais"
+                className="felixo-btn-icon flex items-center justify-center rounded-sm bg-zinc-700 px-2 text-zinc-100 hover:bg-zinc-600"
+              >
+                <Plus size={14} />
+              </button>
+            )}
           </div>
 
           {queue.length > 0 && (

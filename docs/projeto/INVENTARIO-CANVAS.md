@@ -30,7 +30,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 ## Números
 
 - **Elementos:** 97 (9 blocos, 16 ferramentas, 72 outras superfícies)
-- **Controles:** 372, dos quais 55 com teste específico
+- **Controles:** 371, dos quais 55 com teste específico
 - **Elementos sem nenhum teste:** 4
 - **Lacunas:** 275 (alto 10, médio 147, baixo 118), em 78 tasks
 
@@ -106,7 +106,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 
 | Estado | Quando |
 | --- | --- |
-| normal | Seção "Criar" aberta: Agente (TerminalMenu), Novo bloco, Abrir imagem, Gerar imagem, Grupo, Página Web e Agente na nuvem; cada botão com nome abre um popover inline (o da nuvem cria o cartão direto). |
+| normal | Seção "Criar" aberta: Agente (TerminalMenu, que também cria o Agente na nuvem), Novo bloco, Abrir imagem, Gerar imagem, Grupo e Página Web; cada botão com nome abre um popover inline. |
 | error | Página Web com endereço recusado: "Endereço não aceito: <motivo>." ou "Informe o endereço do site." (role="alert", campo com aria-invalid). |
 | disabled | Sidebar recolhida: a seção fica inert. |
 
@@ -117,7 +117,6 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 | `onCreate(name.trim() \|\| undefined)` (button) | clique | Criar (ou Enter no campo): "Novo bloco" chama addFileNode (cria nome-<timestamp>.md por canvas-file:write e um bloco de arquivo); "Grupo" chama addNode("group") com o nome ou "Grupo". O bloco nasce numa posição livre da área visível, entra no fim do dock (orderIndex) e é salvo por canvas:save. | erro engolido: a criação do .md (canvas-file:write) é void e não é conferida (CanvasView.tsx:2426); o bloco nasce mesmo se o arquivo falhar. Falha do canvas:save só vai para o console. | — |
 | `{secondaryLabel}` (button) | clique | "Abrir arquivo existente…" (só em Novo bloco): fecha o popover e chama pickAndOpenTextFile (text-file:pick); o arquivo escolhido vira um bloco de arquivo apontando para ele. (desabilitado: só existe no popover de "Novo bloco") | erro engolido: falha do seletor volta ok:false com mensagem e o renderer ignora (CanvasView.tsx:2512). | — |
 | `buttonLabel="Página Web"` (button) | clique | Gatilho de UrlCreateButton: abre ou fecha o popover com endereço, nome e perfil; Esc ou clique fora fecha e devolve o foco. | Sem falha própria. | `scripts/canvas-smoke.cjs` → `checarInteracoes` |
-| `onClick={onAddCloudSession}` (button) | clique | "Agente na nuvem": cria um cartão em rascunho na pasta do primeiro projeto (addCloudSessionNode); nada é disparado, a sessão só nasce de um clique confirmado dentro do cartão. | Sem falha própria; cada clique cria um cartão novo. | — |
 | `menuLabel="Perfil do navegador"` (select) | clique | Escolhe o perfil do navegador interno do bloco novo ("Perfil: Padrão" = sem perfil); vai como profileId no data do bloco. (desabilitado: some quando useWebviewProfiles não devolve perfis) | Sem falha própria; sem perfis cadastrados o seletor nem aparece. | — |
 | `onCreate(result.url, name.trim() \|\| undefined, profileId \|\| undefined)` (button) | clique | Criar (ou Enter) da Página Web: explainUrlInput valida; aceito, addNode("webpage", { url, label?, profileId? }) cria e salva o bloco, limpa os campos e fecha. | Endereço recusado mostra o motivo (role="alert") e devolve o foco ao campo; o popover continua aberto. | `scripts/canvas-smoke.cjs` → `checarInteracoes` |
 
@@ -1079,7 +1078,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | --- | --- | --- | --- | --- |
 | `ref={triggerRef}` (button) | clique | Metade "Agente": prepareForLaunch → buildOptions → savePreferences (localStorage felixo:last-agent-launch-preferences) → onAdd cria o bloco terminal, que sobe o PTY; limpa o nome, fecha o flyout e devolve o foco. (desabilitado: launching) | Configuração inválida reabre o flyout com o erro. Exceção do prepareForLaunch (IPC rejeitado) não é capturada: try/finally sem catch. | `scripts/canvas-smoke-onboarding.cjs` → `criarCenariosDoTutorial` |
 | `onClick={toggleSettings}` (button) | clique | Abre ou fecha o flyout inline (role="group" "Configurar novo agente") com os campos do agente; Esc dentro dele e clique fora (exceto popover do FelixoSelect) fecham e devolvem o foco à pílula. | Sem falha própria. | `scripts/canvas-smoke-contas.cjs` → `criarSessaoDaCadeia` |
-| `Abrir agente` (button) | clique | Mesmo caminho da metade "Agente" (openTerminal) com o flyout aberto: cria o bloco e sobe o PTY com a conta, o modelo e o projeto escolhidos. (desabilitado: launching ou accountSelectionIssue) | Configuração inválida mantém o flyout com o erro; exceção do preparo sem catch. | `scripts/canvas-smoke-contas.cjs` → `criarSessaoDaCadeia` |
+| `Abrir agente` (button) | clique | Mesmo caminho da metade "Agente" (openTerminal) com o flyout aberto: cria o bloco e sobe o PTY com a conta, o modelo e o projeto escolhidos. Com "Agente na nuvem" no seletor o botão vira "Abrir agente na nuvem" e cria o cartão em rascunho (onAddCloud → addCloudSessionNode) com a tarefa, a pasta e a conta escolhidas, sem gravar a nuvem como último agente; nada é disparado, a sessão só nasce da confirmação do cartão. (desabilitado: launching ou accountSelectionIssue) | Configuração inválida mantém o flyout com o erro; exceção do preparo sem catch. | `scripts/canvas-smoke-contas.cjs` → `criarSessaoDaCadeia` |
 | `aria-label="Adicionar à fila de terminais"` (button) | clique | queueCurrent: prepareForLaunch e savePreferences, depois empilha buildOptions na fila local do menu e limpa o nome. (desabilitado: launching ou accountSelectionIssue) | Configuração inválida não enfileira (erro nos campos). Com "Automática (cadeia)" o ticket é pedido na hora de enfileirar. | — |
 | `aria-label="Esvaziar fila de terminais"` (button) | clique | Esvazia a fila de uma vez, sem confirmação. (desabilitado: some com a fila vazia) | Sem falha própria. | — |
 | `Remover "${item.label}" da fila` (button) | clique | Botão repetido em cada item: tira aquele item da fila. | Sem falha própria. | — |

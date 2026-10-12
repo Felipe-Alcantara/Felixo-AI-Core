@@ -39,6 +39,18 @@ describe('createDraft', () => {
   it('sem conta usa o Login do sistema (campo ausente)', () => {
     expect(createDraft({ cwd: '/projeto' }).cloudAccountId).toBeUndefined()
   })
+
+  it('já nasce com a tarefa quando o menu Agente a entrega, e continua em rascunho', () => {
+    const draft = createDraft({ cwd: '/projeto', accountId: 'conta-a', task: 'Corrigir o bug' })
+
+    expect(draft.cloudTask).toBe('Corrigir o bug')
+    expect(draft.cloudStatus).toBe('draft')
+    expect(canLaunch(draft)).toBe(true)
+  })
+
+  it('sem pasta o cartão não dispara, mesmo com tarefa', () => {
+    expect(canLaunch(createDraft({ cwd: '', task: 'Corrigir o bug' }))).toBe(false)
+  })
 })
 
 describe('transições', () => {

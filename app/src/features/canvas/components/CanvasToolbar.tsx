@@ -18,7 +18,6 @@ import {
   Bell,
   ChevronDown,
   CircleHelp,
-  Cloud,
   FileText,
   FolderOpen,
   Globe,
@@ -50,7 +49,7 @@ import { useWebviewProfiles } from '../hooks/useWebviewProfiles'
 import { FelixoSelect } from '../../shared/components/FelixoSelect'
 import type { ArrangeMode } from '../services/canvas-matrix-layout'
 import type { CanvasProject } from '../hooks/useCanvasProjects'
-import type { NewTerminalOptions } from '../services/new-terminal-options'
+import type { NewCloudSessionOptions, NewTerminalOptions } from '../services/new-terminal-options'
 import type { AnchorId } from '../../onboarding/onboarding-catalog'
 import { helpButtonLabel } from '../../onboarding/onboarding-help-label'
 import { OnboardingErrorBoundary } from '../../onboarding/OnboardingErrorBoundary'
@@ -104,6 +103,8 @@ type CanvasToolbarProps = {
   agentMenuRequest?: number
   /** Starts several terminal configs at once — a whole agent setup in one click. */
   onAddTerminals: (optionsList: NewTerminalOptions[]) => void
+  /** Cria o cartão "Agente na nuvem" já configurado no menu Agente; nada é disparado. */
+  onAddCloudSession: (options: NewCloudSessionOptions) => void
   onOrganizeBlocks: (mode: ArrangeMode) => void
   arrangeableCount: number
   onAddFolder: () => Promise<string[]>
@@ -113,8 +114,6 @@ type CanvasToolbarProps = {
   /** Abre o seletor nativo e cria um FileNode de imagem autorizado. */
   onOpenImage: () => void
   onAddGroup: (name?: string) => void
-  /** Cria um cartão "Agente na nuvem" em rascunho; nada é disparado. */
-  onAddCloudSession: () => void
   onAddWebpage: (url: string, name?: string, profileId?: string) => void
   canvasMode: 'select' | 'pan'
   onToggleMode: () => void
@@ -151,6 +150,7 @@ export function CanvasToolbar({
   onAddTerminal,
   agentMenuRequest = 0,
   onAddTerminals,
+  onAddCloudSession,
   onOrganizeBlocks,
   arrangeableCount,
   onAddFolder,
@@ -158,7 +158,6 @@ export function CanvasToolbar({
   onOpenFile,
   onOpenImage,
   onAddGroup,
-  onAddCloudSession,
   onAddWebpage,
   canvasMode,
   onToggleMode,
@@ -330,6 +329,7 @@ export function CanvasToolbar({
               openRequest={agentMenuRequest}
               onAdd={onAddTerminal}
               onAddMany={onAddTerminals}
+              onAddCloud={onAddCloudSession}
               onAddFolder={onAddFolder}
             />
             <NamedCreateButton
@@ -366,15 +366,6 @@ export function CanvasToolbar({
               buttonLabel="Página Web"
               onCreate={onAddWebpage}
             />
-            <button
-              type="button"
-              onClick={onAddCloudSession}
-              className={TOOLBAR_BUTTON_CLASS}
-              title="Criar uma sessão do Claude Code na nuvem (usa o crédito de sessão na nuvem da conta)"
-            >
-              <Cloud size={16} />
-              Agente na nuvem
-            </button>
           </SidebarSection>
 
           <SidebarSection title="Organizar">

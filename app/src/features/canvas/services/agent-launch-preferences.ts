@@ -9,6 +9,13 @@ import {
 export const SHELL_AGENT_VALUE = '__shell__'
 
 /**
+ * Opção "Agente na nuvem" do seletor. Fica fora de `AgentLaunchPreferences` de
+ * propósito: o botão "Agente" abre a última configuração com um clique, e uma
+ * nuvem sem tarefa não tem o que abrir. Por isso ela nunca é gravada.
+ */
+export const CLOUD_AGENT_VALUE = '__cloud__'
+
+/**
  * Valor especial do campo Conta: "Automática (cadeia)". Só vale com a cadeia
  * ligada e um provedor com checagem de login; o main escolhe a conta e a
  * abertura confirma. Nunca cai no Login do sistema.
@@ -44,6 +51,18 @@ export type AgentLaunchPreferences = {
    * sumir, o aviso "a conta salva X não existe mais" ainda sabe dizer qual.
    */
   accountLabel?: string
+}
+
+/** O que o seletor de agente pode ter marcado: o que se grava, mais a nuvem. */
+export type AgentConfigValue = AgentLaunchPreferences['agentValue'] | typeof CLOUD_AGENT_VALUE
+
+/**
+ * Provedor cujas contas valem para o que está marcado no seletor (vazio = nenhum,
+ * como no shell). A nuvem roda o Claude Code, então usa as contas dele.
+ */
+export function providerIdOf(agentValue: AgentConfigValue): string {
+  if (agentValue === SHELL_AGENT_VALUE) return ''
+  return agentValue === CLOUD_AGENT_VALUE ? 'claude' : agentValue
 }
 
 type StorageReader = Pick<Storage, 'getItem'>

@@ -1,15 +1,17 @@
 import { useId, useRef, useState } from 'react'
-import { FilePlus2, FolderOpen, FolderPlus, Link2, RotateCw, TerminalSquare, Trash2, UserRound } from 'lucide-react'
+import { Cloud, FilePlus2, FolderOpen, FolderPlus, Link2, RotateCw, TerminalSquare, Trash2, UserRound } from 'lucide-react'
 import {
   CHAIN_ACCOUNT_VALUE,
+  CLOUD_AGENT_VALUE,
   SHELL_AGENT_VALUE,
-  type AgentLaunchPreferences,
+  type AgentConfigValue,
 } from '../services/agent-launch-preferences'
 import { ADD_FOLDER_VALUE, type AgentConfig, type AgentConfigProject } from '../hooks/useAgentConfig'
 import { ProviderMark } from '../../shared/brand/ProviderMark'
 import { providerIdentity } from '../../shared/brand/provider-identity'
 import { FelixoSelect, type FelixoSelectOption } from '../../shared/components/FelixoSelect'
 import { AgentPresetFields } from './AgentPresetFields'
+import { CloudSessionConfigFields } from './CloudSessionConfigFields'
 
 type Props = {
   config: AgentConfig
@@ -19,6 +21,11 @@ type Props = {
   /** `false` no diálogo de passagem: lá o nome vem da continuação. */
   showName?: boolean
   autoFocus?: boolean
+  /**
+   * Oferece "Agente na nuvem" entre os agentes. Só o menu Agente da toolbar liga:
+   * a passagem de responsabilidade continua o trabalho num terminal.
+   */
+  allowCloud?: boolean
 }
 
 const CAMPO = 'felixo-control w-full'
@@ -54,8 +61,10 @@ export function AgentConfigFields({
   onAddFolder,
   showName = true,
   autoFocus = false,
+  allowCloud = false,
 }: Props) {
   const prefixo = useId()
+  const isCloud = config.agentValue === CLOUD_AGENT_VALUE
   const planningFileInputRef = useRef<HTMLInputElement>(null)
   const openiaModelGroups = config.openiaModels.reduce<Record<string, typeof config.openiaModels>>(
     (groups, model) => {
@@ -84,15 +93,31 @@ export function AgentConfigFields({
       icon: <ProviderMark command={item.command} size={17} />,
       searchText: `${item.label} ${PROVIDER_VENDOR[item.id] ?? ''}`,
     })),
+    ...(allowCloud
+      ? [
+          {
+            value: CLOUD_AGENT_VALUE,
+            label: 'Agente na nuvem',
+            description: 'Claude Code na nuvem, com o crédito da conta',
+            icon: <Cloud size={16} strokeWidth={1.5} />,
+            searchText: 'agente na nuvem cloud claude anthropic',
+          },
+        ]
+      : []),
   ]
 
+  // A nuvem roda numa pasta de projeto: não existe "sem projeto" para ela.
   const projectOptions: FelixoSelectOption[] = [
-    {
-      value: '',
-      label: 'Local (sem projeto)',
-      description: 'Executar no ambiente local',
-      icon: <FolderOpen size={15} strokeWidth={1.5} />,
-    },
+    ...(isCloud
+      ? []
+      : [
+          {
+            value: '',
+            label: 'Local (sem projeto)',
+            description: 'Executar no ambiente local',
+            icon: <FolderOpen size={15} strokeWidth={1.5} />,
+          },
+        ]),
     ...projects.map((project) => ({
       value: project.id,
       label: project.name,
@@ -135,7 +160,7 @@ export function AgentConfigFields({
         </>
       )}
 
-      <AgentPresetFields config={config} />
+      {!isCloud && <AgentPresetFields config={config} />}
 
       <label htmlFor={`${prefixo}-agent`} className={ROTULO}>
         Agente
@@ -144,9 +169,7 @@ export function AgentConfigFields({
         id={`${prefixo}-agent`}
         value={config.agentValue}
         autoFocus={autoFocus && !showName}
-        onChange={(value) =>
-          config.changeAgent(value as AgentLaunchPreferences['agentValue'])
-        }
+        onChange={(value) => config.changeAgent(value as AgentConfigValue)}
         options={agentOptions}
         menuLabel="Agentes disponíveis"
         aria-label="Agente"
@@ -154,8 +177,10 @@ export function AgentConfigFields({
       />
 
       {config.agentValue !== SHELL_AGENT_VALUE && (
-        <CampoConta prefixo={prefixo} config={config} />
+        <CampoConta prefixo={prefixo} config={config} permitirCadeia={!isCloud} />
       )}
+
+      {isCloud && <CloudSessionConfigFields config={config} />}
 
       {config.agent && (
         <>
@@ -402,7 +427,7 @@ export function AgentConfigFields({
       </label>
       <FelixoSelect
         id={`${prefixo}-project`}
-        value={config.projectId}
+        value={isCloud ? config.cloudProjectId : config.projectId}
         onChange={(value) => void handleProjectChange(value)}
         options={projectOptions}
         searchable={projects.length > 8}
@@ -425,7 +450,16 @@ const NOVA_CONTA = '__nova__'
  * que a conta que ela quer ainda não existe — mandá-la para outra tela ali
  * seria perder o passo.
  */
-function CampoConta({ prefixo, config }: { prefixo: string; config: AgentConfig }) {
+function CampoConta({
+  prefixo,
+  config,
+  permitirCadeia = true,
+}: {
+  prefixo: string
+  config: AgentConfig
+  /** A nuvem usa uma conta fixa: a cadeia escolheria a conta por conta própria. */
+  permitirCadeia?: boolean
+}) {
   const [criando, setCriando] = useState(false)
   const [nome, setNome] = useState('')
   const [chave, setChave] = useState('')
@@ -443,7 +477,7 @@ function CampoConta({ prefixo, config }: { prefixo: string; config: AgentConfig 
   // A opção só aparece com a cadeia ligada e um provedor que ela confere; se
   // já estava escolhida (preferência salva), continua visível para o aviso
   // explicar por que não abre.
-  const mostraCadeia = config.chainLaunchAvailable || viaCadeia
+  const mostraCadeia = permitirCadeia && (config.chainLaunchAvailable || viaCadeia)
 
   async function criar() {
     setSalvando(true)

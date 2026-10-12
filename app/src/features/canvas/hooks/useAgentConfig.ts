@@ -12,10 +12,12 @@ import {
 } from '../services/agent-launch-options'
 import {
   CHAIN_ACCOUNT_VALUE,
+  CLOUD_AGENT_VALUE,
+  providerIdOf,
   readAgentLaunchPreferences,
   saveAgentLaunchPreferences,
   SHELL_AGENT_VALUE,
-  type AgentLaunchPreferences,
+  type AgentConfigValue,
 } from '../services/agent-launch-preferences'
 import { useAccountChain } from './useAccountChain'
 import {
@@ -29,7 +31,8 @@ import type { AccountChainProviderId } from '../../shared/types/account-chain'
 import { useAgentModelCatalog } from './useAgentModelCatalog'
 import { useAgentPresets } from './useAgentPresets'
 import type { AgentPreset, AgentPresetAgentId } from '../services/agent-preset'
-import type { NewTerminalOptions } from '../services/new-terminal-options'
+import { canLaunch, createDraft } from '../services/cloud-session-state'
+import type { NewCloudSessionOptions, NewTerminalOptions } from '../services/new-terminal-options'
 import {
   removeAccountWithConfirmation,
   type AccountRemovalOutcome,
@@ -81,9 +84,7 @@ export function useAgentConfig(
   { persistPreferences = true }: UseAgentConfigOptions = {},
 ) {
   const [inicial] = useState(readAgentLaunchPreferences)
-  const [agentValue, setAgentValue] = useState<AgentLaunchPreferences['agentValue']>(
-    inicial.agentValue,
-  )
+  const [agentValue, setAgentValue] = useState<AgentConfigValue>(inicial.agentValue)
   // Contas com login próprio do provedor escolhido. Vazio = só o login do
   // sistema, que continua sendo o padrão.
   const accountIdRef = useRef(inicial.accountId)
@@ -132,11 +133,19 @@ export function useAgentConfig(
   const accountListRequestRef = useRef(0)
   const openiaKeyStatusRequestRef = useRef(0)
 
+  // Tarefa do agente na nuvem. Não é gravada: é texto de um uso só.
+  const [cloudTask, setCloudTask] = useState('')
+  // A nuvem exige uma pasta: sem projeto escolhido vale o primeiro da lista.
+  const cloudProjectId = projectId || projects[0]?.id || ''
+  const cloudProject = projects.find((item) => item.id === cloudProjectId)
+  // O botão do menu só habilita quando o cartão aceitaria disparar: a regra é a do cartão.
+  const cloudReady = canLaunch(createDraft({ cwd: cloudProject?.path ?? '', task: cloudTask }))
+
   // Modelos que as CLIs oferecem agora; cai na lista fixa se a descoberta não
   // trouxer nada, para o formulário nunca aparecer sem opções.
   const { agents, refreshing, refresh } = useAgentModelCatalog()
   const agent: AgentDefinition | undefined =
-    agentValue === SHELL_AGENT_VALUE
+    agentValue === SHELL_AGENT_VALUE || agentValue === CLOUD_AGENT_VALUE
       ? undefined
       : (agents.find((item) => item.id === agentValue) ?? getAgent(agentValue))
   const effortLevels = agent ? getEffortLevels(agent, model) : null
@@ -228,7 +237,7 @@ export function useAgentConfig(
     return () => window.clearTimeout(timer)
   }, [agentValue, loadOpenia])
 
-  const providerId = agentValue === SHELL_AGENT_VALUE ? '' : agentValue
+  const providerId = providerIdOf(agentValue)
   const providerIdRef = useRef(providerId)
 
   useEffect(() => {
@@ -601,12 +610,12 @@ export function useAgentConfig(
     }
   }, [listarContasDoProvedor, providerId, setAccountId])
 
-  const changeAgent = useCallback((valor: AgentLaunchPreferences['agentValue']) => {
+  const changeAgent = useCallback((valor: AgentConfigValue) => {
     // Limpa antes de a nova lista chegar. Assim nenhum clique no mesmo ciclo
     // consegue carregar a conta do agente anterior para o novo processo.
     accountListRequestRef.current += 1
     openiaKeyStatusRequestRef.current += 1
-    providerIdRef.current = valor === SHELL_AGENT_VALUE ? '' : valor
+    providerIdRef.current = providerIdOf(valor)
     accountIdRef.current = ''
     setAccounts([])
     setAccountIdState('')
@@ -837,6 +846,9 @@ export function useAgentConfig(
   )
 
   const savePreferences = useCallback(() => {
+    // O botão "Agente" reabre a última configuração com um clique; uma nuvem
+    // sem tarefa não teria o que abrir, então a nuvem fica de fora.
+    if (agentValue === CLOUD_AGENT_VALUE) return
     const conta = accountIdRef.current
     // O nome acompanha o id para o aviso de conta ausente. Se a conta já não
     // está na lista, fica o nome guardado antes (nunca some junto com ela).
@@ -888,6 +900,17 @@ export function useAgentConfig(
     savePreferences,
     yolo,
   ])
+
+  /** Traduz a configuração atual nas opções do cartão "Agente na nuvem". */
+  const buildCloudOptions = useCallback((): NewCloudSessionOptions => {
+    const customName = name.trim()
+    return {
+      label: customName || `Agente na nuvem · ${cloudProject ? cloudProject.name : 'sem pasta'}`,
+      task: cloudTask.trim(),
+      cwd: cloudProject?.path ?? '',
+      accountId: accountIdRef.current || undefined,
+    }
+  }, [cloudProject, cloudTask, name])
 
   /** Traduz a configuração atual nas opções de abertura de um terminal. */
   const buildOptions = useCallback((): NewTerminalOptions => {
@@ -1046,6 +1069,11 @@ export function useAgentConfig(
     prepareForLaunch,
     savePreferences,
     buildOptions,
+    buildCloudOptions,
+    cloudTask,
+    setCloudTask,
+    cloudProjectId,
+    cloudReady,
   }
 }
 

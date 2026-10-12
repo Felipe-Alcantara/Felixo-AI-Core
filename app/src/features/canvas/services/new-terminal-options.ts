@@ -47,3 +47,15 @@ export type NewTerminalOptions = {
   /** Preset de agente de onde o terminal nasce (contexto, skills e cor). */
   preset?: NewTerminalPreset
 }
+
+/**
+ * Como abrir um cartão "Agente na nuvem". Nasce em rascunho: nada é disparado
+ * até a confirmação dentro do cartão, que é o que protege o crédito da conta.
+ */
+export type NewCloudSessionOptions = {
+  label: string
+  task: string
+  /** Pasta do projeto: o `claude --cloud` precisa de uma. */
+  cwd: string
+  accountId?: string
+}

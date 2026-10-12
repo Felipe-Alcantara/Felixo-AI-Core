@@ -324,7 +324,7 @@ export const chromeSurfaces: InventoryElement[] = [
     layer: 'chrome',
     owner: TOOLBAR,
     states: {
-      normal: 'Seção "Criar" aberta: Agente (TerminalMenu), Novo bloco, Abrir imagem, Gerar imagem, Grupo, Página Web e Agente na nuvem; cada botão com nome abre um popover inline (o da nuvem cria o cartão direto).',
+      normal: 'Seção "Criar" aberta: Agente (TerminalMenu, que também cria o Agente na nuvem), Novo bloco, Abrir imagem, Gerar imagem, Grupo e Página Web; cada botão com nome abre um popover inline.',
       error: 'Página Web com endereço recusado: "Endereço não aceito: <motivo>." ou "Informe o endereço do site." (role="alert", campo com aria-invalid).',
       disabled: 'Sidebar recolhida: a seção fica inert.',
     },
@@ -360,12 +360,6 @@ export const chromeSurfaces: InventoryElement[] = [
         effect: 'Gatilho de UrlCreateButton: abre ou fecha o popover com endereço, nome e perfil; Esc ou clique fora fecha e devolve o foco.',
         failure: 'Sem falha própria.',
         test: { file: 'scripts/canvas-smoke.cjs', check: 'checarInteracoes' },
-      },
-      {
-        locator: 'onClick={onAddCloudSession}',
-        kind: 'button',
-        effect: '"Agente na nuvem": cria um cartão em rascunho na pasta do primeiro projeto (addCloudSessionNode); nada é disparado, a sessão só nasce de um clique confirmado dentro do cartão.',
-        failure: 'Sem falha própria; cada clique cria um cartão novo.',
       },
       {
         locator: 'menuLabel="Perfil do navegador"',

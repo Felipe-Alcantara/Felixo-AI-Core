@@ -358,7 +358,7 @@ export const terminalSurfaces: InventoryElement[] = [
       {
         locator: 'Abrir agente',
         kind: 'button',
-        effect: 'Mesmo caminho da metade "Agente" (openTerminal) com o flyout aberto: cria o bloco e sobe o PTY com a conta, o modelo e o projeto escolhidos.',
+        effect: 'Mesmo caminho da metade "Agente" (openTerminal) com o flyout aberto: cria o bloco e sobe o PTY com a conta, o modelo e o projeto escolhidos. Com "Agente na nuvem" no seletor o botão vira "Abrir agente na nuvem" e cria o cartão em rascunho (onAddCloud → addCloudSessionNode) com a tarefa, a pasta e a conta escolhidas, sem gravar a nuvem como último agente; nada é disparado, a sessão só nasce da confirmação do cartão.',
         failure: 'Configuração inválida mantém o flyout com o erro; exceção do preparo sem catch.',
         disabledWhen: 'launching ou accountSelectionIssue',
         test: { file: SMOKE_CONTAS, check: 'criarSessaoDaCadeia' },

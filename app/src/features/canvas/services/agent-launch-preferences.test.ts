@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   CHAIN_ACCOUNT_VALUE,
+  CLOUD_AGENT_VALUE,
+  providerIdOf,
   readAgentLaunchPreferences,
   saveAgentLaunchPreferences,
+  SHELL_AGENT_VALUE,
 } from './agent-launch-preferences'
 
 function createStorage(initial: Record<string, string> = {}) {
@@ -14,6 +17,20 @@ function createStorage(initial: Record<string, string> = {}) {
 }
 
 describe('agent launch preferences', () => {
+  it('nunca restaura "Agente na nuvem": o botão Agente abriria um cartão sem tarefa', () => {
+    const preferences = readAgentLaunchPreferences(
+      createStorage({
+        'felixo:last-agent-launch-preferences': JSON.stringify({
+          agentValue: CLOUD_AGENT_VALUE,
+          model: 'opus',
+        }),
+        'felixo:last-agent': CLOUD_AGENT_VALUE,
+      }),
+    )
+
+    expect(preferences.agentValue).toBe('claude')
+  })
+
   it('migrates the previous agent-only preference without losing a usable default', () => {
     const preferences = readAgentLaunchPreferences(
       createStorage({ 'felixo:last-agent': 'codex' }),
@@ -172,5 +189,20 @@ describe('agent launch preferences', () => {
     expect(salvar({ agentValue: 'gemini' }).fast).toBe(false)
     // Valor de tipo errado é descartado.
     expect(salvar({ agentValue: 'codex', fast: 'yes' }).fast).toBe(false)
+  })
+})
+
+describe('providerIdOf', () => {
+  it('a nuvem usa as contas do Claude, que é quem roda a sessão', () => {
+    expect(providerIdOf(CLOUD_AGENT_VALUE)).toBe('claude')
+  })
+
+  it('o shell não tem provedor, então não lista conta de ninguém', () => {
+    expect(providerIdOf(SHELL_AGENT_VALUE)).toBe('')
+  })
+
+  it('um agente comum usa o próprio provedor', () => {
+    expect(providerIdOf('codex')).toBe('codex')
+    expect(providerIdOf('claude')).toBe('claude')
   })
 })
