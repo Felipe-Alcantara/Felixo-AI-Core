@@ -25,7 +25,6 @@ const CLOUD_SESSION_ERROR_CODES = Object.freeze([
   'trust-required',
   'login-required',
   'limit-reached',
-  'repo-too-large',
   'network',
   'timeout',
   'interrupted',
@@ -41,7 +40,6 @@ const CLOUD_SESSION_ERROR_MESSAGES = Object.freeze({
   'login-required':
     'A conta escolhida não está logada com assinatura. Entre pelo login do Claude e tente de novo.',
   'limit-reached': 'A conta atingiu um limite de uso. Veja Configurações > Uso no Claude.',
-  'repo-too-large': 'O repositório é grande demais para enviar à nuvem (limite de 100 MB).',
   network: 'Falha de rede ao falar com o Claude. Confira a conexão.',
   timeout:
     'O Claude demorou demais para responder. A sessão pode ter sido criada: confira em claude.ai/code.',
@@ -128,7 +126,7 @@ function classifyWithoutSession(text) {
 }
 
 /**
- * @typedef {'trust-required' | 'login-required' | 'limit-reached' | 'repo-too-large' |
+ * @typedef {'trust-required' | 'login-required' | 'limit-reached' |
  *   'network' | 'timeout' | 'interrupted' | 'invalid-input' | 'busy' | 'unknown'} CloudSessionErrorCode
  *
  * @typedef {{ kind: 'created', session: { id: string, url: string, title: string } }

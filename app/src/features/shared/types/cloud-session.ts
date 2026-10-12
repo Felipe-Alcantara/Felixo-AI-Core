@@ -14,7 +14,6 @@ export const CLOUD_SESSION_ERROR_CODES = [
   'trust-required',
   'login-required',
   'limit-reached',
-  'repo-too-large',
   'network',
   'timeout',
   'interrupted',

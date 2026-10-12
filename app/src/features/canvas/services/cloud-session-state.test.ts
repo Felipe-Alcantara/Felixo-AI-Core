@@ -118,7 +118,7 @@ describe('regras de uso do cartão', () => {
     for (const code of ['trust-required', 'login-required', 'limit-reached', 'invalid-input'] as const) {
       expect(canRetryWithoutConfirmation(code)).toBe(true)
     }
-    for (const code of ['timeout', 'network', 'interrupted', 'unknown', 'busy', 'repo-too-large'] as const) {
+    for (const code of ['timeout', 'network', 'interrupted', 'unknown', 'busy'] as const) {
       expect(canRetryWithoutConfirmation(code)).toBe(false)
     }
   })
