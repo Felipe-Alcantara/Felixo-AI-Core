@@ -4,6 +4,8 @@ Status: em evolução ativa — canvas estilo n8n como produto principal; chat l
 
 > Este arquivo segue o template de contexto do padrão de qualidade (`TEMPLATE-CONTEXTO-IA`). O "Histórico de Evolução" mantém a trilha cronológica densa das fases; as seções fixas acima consolidam o estado atual.
 
+Estado atual (resumo vivo): ver a seção [Estado atual](../../IA.md#estado-atual-resumo-vivo) do `IA.md` da raiz.
+
 ## Registros arquivados
 
 Registros antigos movidos, na íntegra e sem edição, para o arquivo. A linha do tempo completa

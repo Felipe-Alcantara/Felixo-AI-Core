@@ -1,6 +1,39 @@
 
 ---
 
+## Estado atual (resumo vivo)
+
+<!--
+  EXCEÇÃO à regra append-only: esta seção é um resumo reescrevível de "onde o projeto está
+  AGORA". Reescreva-a a cada mudança de estado; o histórico fica nas entradas datadas abaixo e
+  nos arquivos de docs/ia-archive/.
+-->
+
+Última atualização: [2026-10-12]
+
+- **Fase:** o canvas é o produto principal (o chat está depreciado). A divisão do `CanvasView`
+  (partes 1 a 4) e o bloco Agente na nuvem estão na `main`: PRs #113 a #120 mesclados.
+- **Padrão de qualidade:** auditado e alinhado em 2026-10-12 (ver a entrada daquele dia). Gate
+  verde no Windows: `tsc`, `eslint`, Python 104, Node 2677, vitest 3145. No CI de `37d6083`,
+  `Validate` (4 sistemas) e `Launcher` (3 sistemas, Python 3.9 e 3.13) passaram; só o job
+  exploratório `Benchmarks exploratórios (windows-latest)`, que é `continue-on-error`, falhou no
+  passo de responsividade do terminal e não foi investigado. Os commits seguintes (compactação dos
+  `IA.md`, divisão do README) estavam só locais ao escrever isto.
+- **Em andamento:** nada aberto no código. Resta acompanhar o CI dos commits ainda não enviados.
+- **Pendente de conferência manual:** o roteiro do Agente na nuvem em
+  `docs/validation/CHECKLIST-AGENTE-NUVEM.md` (cria sessão real e gasta crédito, por isso não roda
+  no CI) e a retomada do terminal (entrada de 2026-10-09).
+- **Próximo passo sugerido:** enviar os commits locais e conferir o CI deles, que roda pela primeira
+  vez em Linux e macOS os testes novos de `app/scripts/archive-ia-md.test.cjs`.
+- **Riscos abertos:** (1) a suíte vitest completa com os 16 workers padrão ficou instável numa
+  máquina com 2 GB de RAM livres; use `npx vitest run --maxWorkers=4` (3145 testes passando, 90 s).
+  (2) Um comentário em `app/electron/services/codex-status-screen.cjs` ainda cita a seção
+  "Limites e uso por conta" do README, que agora está em `docs/guias/GUIA-CONTAS-E-LIMITES.md`; não
+  foi editado porque qualquer mudança em `app/electron/` publica uma release.
+- **Como compactar de novo:** este arquivo e `docs/projeto/IA.md` crescem com cada sessão. Quando
+  passarem de uns 1000 linhas, rode `node app/scripts/archive-ia-md.cjs` (dry-run por padrão); o
+  passo a passo está no Guia para Desenvolvedores.
+
 ## Registros arquivados
 
 Registros antigos movidos, na íntegra e sem edição, para o arquivo. A linha do tempo completa
@@ -846,3 +879,81 @@ a fonte confiável foi `git ls-files --eol` e `od -c`.
 
 Estado: concluído e validado localmente no Windows; seis commits já no remoto, com o CI dele sem
 resultado final; lacunas 1 e 2 aguardam decisão.
+
+## 2026-10-12 — IA.md compactados sem perda e README dividido em guias
+
+**Contexto.** A entrada anterior deixou duas lacunas à espera de decisão: os dois `IA.md` gigantes
+e o README de 890 linhas. A pessoa decidiu, por pergunta interativa, fazer as duas: compactar tudo
+e dividir o README. As duas mexem em muito texto versionado e outros agentes anexam ao `IA.md` em
+paralelo; por isso o movimento foi feito por ferramenta que prova a conservação, e não à mão.
+
+**O que foi feito.**
+
+- **Ferramenta:** `app/scripts/archive-ia-md.cjs` com 15 testes em `archive-ia-md.test.cjs` (roda no
+  CI com os demais testes Node). Separa as seções (`## ` fora de bloco de código), lê a data do
+  cabeçalho em três formatos (`[AAAA-MM-DD]`, `AAAA-MM-DD —`, `DD/MM/AAAA —`), move as anteriores ao
+  corte para um arquivo por mês, deixa um ponteiro datado, prova a conservação antes e depois de
+  escrever, é dry-run por padrão e recusa escrever se o arquivo mudou durante a execução.
+- **`IA.md` da raiz:** 8452 → 879 linhas (555 KB → 69 KB). 161 seções (66 de agosto, 95 de setembro)
+  foram para `docs/ia-archive/IA-ARCHIVE-2026-08.md` e `-09.md`. Ganhou a seção **Estado atual
+  (resumo vivo)** que o template exige.
+- **`docs/projeto/IA.md`:** 6467 → 1307 linhas (654 KB → 127 KB). 149 seções (6 de julho, 69 de
+  agosto, 74 de setembro) foram para `docs/ia-archive/IA-PROJETO-ARCHIVE-<mês>.md`. O prefixo
+  próprio evita colidir com os arquivos da raiz. As seções fixas (Objetivo, Stack, Testes,
+  Histórico de Evolução) e outubro ficaram.
+- **Corte:** 2026-10-01, o primeiro dia do mês corrente; arquivo por mês.
+- **README:** 890 → 487 linhas. Doze blocos passaram, na íntegra, para quatro guias novos em
+  `docs/guias/` (`GUIA-CANVAS`, `GUIA-CONTAS-E-LIMITES`, `GUIA-SYSTEM-DESIGN`,
+  `GUIA-DEPENDENCIAS-E-SBOM`). Sob "Rodar em outro PC" havia ~135 linhas de recursos do canvas e das
+  CLIs e sob "Openia" ~190 de contas e limites que nada tinham a ver com esses títulos (a mensagem do
+  commit `de8ce7d` diz "cerca de 400"; o certo é ~325). Os dois blocos que
+  mantêm o título (sincronização e auditoria) viraram resumos curtos, preservando as âncoras.
+  `docs/README.md`, a política de performance e o Guia para Desenvolvedores (como compactar de
+  novo) foram atualizados.
+
+**Por que assim / alternativas.** Mover à mão centenas de milhares de bytes é onde se perde linha sem
+perceber. Para o README usei um script **descartável** (fora do repositório), porque a divisão é
+única e não se repete; o padrão aceita a exceção quando o custo da ferramenta supera o ganho, e a
+conservação foi provada do mesmo jeito. O `IA.md` pede uma ferramenta de verdade: vai precisar ser
+repetido, então foi versionada e testada.
+
+**Evidência: dois defeitos que a prova interna da ferramenta NÃO viu.** A prova do script compara
+linhas; só uma conferência externa, com `diff` das linhas ordenadas do blob anterior contra o
+resultado, e o verificador de links, pegaram:
+
+- **Arquivo sem quebra de linha final.** Uma seção do meio sem linha em branco depois, ao virar a
+  última do arquivo de um mês, deixava o arquivo sem LF e colava uma linha na seguinte ao
+  concatenar. O conteúdo estava inteiro. Corrigido com teste que reprova sem a correção
+  (vermelho-verde) e a saída agora sempre termina em LF.
+- **6 links relativos quebrados.** Links escritos para a raiz ou `docs/projeto/` deixaram de
+  funcionar em `docs/ia-archive/`. A ferramenta passou a reapontar os links de arquivo (links
+  absolutos, âncoras locais e blocos de código ficam como estão) e a provar que só o destino mudou;
+  os 6 já arquivados foram corrigidos com a mesma função.
+- Lição: "nenhuma linha se perdeu" não é "nada quebrou". Mover texto pede também verificar EOL e
+  links, e o verificador deve ser independente de quem moveu.
+
+**Validação.** Mutações deliberadas na ferramenta (corte inclusivo, ponteiro perdido, última linha
+descartada, sem EOL final, reaponte desligado) reprovaram 1, 2, 5, 1 e 1 testes. Diff independente
+da raiz: 0 linhas removidas, 18 adicionadas (cabeçalhos e ponteiros); de `docs/projeto`: 0
+removidas, 25 adicionadas. README: 15 linhas "removidas", exatamente os 10 títulos H3 promovidos a
+H2 e as 5 linhas de link reescrito. Depois de tudo: `tsc` e `eslint` exit 0; Python 104 OK; Node
+2677 testes, 0 falhas, 8 pulados; 133 links relativos e 43 âncoras, 0 quebrados. O vitest não foi
+rerodado nesta etapa porque nenhum arquivo de `app/src` mudou desde a rodada verde (3145 testes).
+No remoto, o CI de `37d6083` (primeiro lote: correções de teste, `ai-clis`, `plan`, README) terminou
+`success`: `Validate` em windows, ubuntu, ubuntu-arm e macos, `Launcher` em três sistemas com Python
+3.9 e 3.13, `Dependency policy` e `Python dependency audit`. Uma falha: `Benchmarks exploratórios
+(windows-latest)`, passo "Benchmark terminal responsiveness during install". O job é
+`continue-on-error` por desenho e nada deste lote toca o código desse benchmark; não foi investigado.
+
+**Não alterado de propósito.** O comentário em `app/electron/services/codex-status-screen.cjs`
+que cita a seção "Limites e uso por conta" do README continua apontando para um lugar que mudou;
+qualquer mudança em `app/electron/` conta como mudança do instalador e publicaria uma release por
+causa de um comentário. Fica registrado em **Estado atual**; corrigir na próxima vez que esse arquivo
+mudar. A citação em `docs/projeto/PLANO-CADEIA-CONTAS.md` ("docs(readme): cadeia de contas no
+README") é registro histórico de um commit e não foi tocada.
+
+**Não validado.** Os commits desta etapa (e o `ac3107b`, da entrada anterior) estavam só locais ao
+escrever isto; o CI deles (incluindo o teste novo em Linux e macOS) ainda não rodou. Os guias novos foram conferidos por links, âncoras e
+diff, mas ninguém os leu inteiros na tela renderizada.
+
+Estado: concluído e validado localmente no Windows; commits desta etapa aguardam envio e CI.
