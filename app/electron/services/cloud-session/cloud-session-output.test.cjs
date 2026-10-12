@@ -217,3 +217,26 @@ test('summarizeTail devolve só as últimas linhas, sem ANSI e sem segredo', () 
   assert.doesNotMatch(tail, /sk-ant-api03/)
   assert.doesNotMatch(tail, /\x1b/)
 })
+
+test('título que contém "View:" ou "Resume with:" não confunde a leitura de uma sessão já criada', () => {
+  // Uma sessão criada e cobrada não pode virar erro porque o título menciona as
+  // mesmas palavras que o CLI usa como rótulo: os rótulos valem no início da linha.
+  for (const titulo of ['Create View: component', 'Fix Resume with: the parser', 'View: View: Resume with: x']) {
+    const raw = out(`Created cloud session: ${titulo}`, `View: ${URL_OK}`, `Resume with: claude --teleport ${ID}`)
+
+    const result = parseCloudSessionOutput(raw)
+
+    assert.equal(result.kind, 'created', titulo)
+    assert.equal(result.session.title, titulo)
+    assert.equal(result.session.url, URL_OK)
+  }
+})
+
+test('título longo quebrado pelo PTY com "View:" no começo de uma linha de continuação ainda não vira o link', () => {
+  const raw = out('Created cloud session: Revisar o componente', 'seguido de mais texto', `View: ${URL_OK}`, `Resume with: claude --teleport ${ID}`)
+
+  const result = parseCloudSessionOutput(raw)
+
+  assert.equal(result.kind, 'created')
+  assert.equal(result.session.title, 'Revisar o componente seguido de mais texto')
+})

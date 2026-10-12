@@ -53,8 +53,11 @@ const CLOUD_SESSION_ERROR_MESSAGES = Object.freeze({
 })
 
 const CREATED_MARKER = 'Created cloud session:'
-const VIEW_MARKER = 'View:'
-const RESUME_MARKER = 'Resume with:'
+// Os rótulos valem só no começo da linha: o título que a pessoa escreveu pode
+// conter "View:" ou "Resume with:", e uma sessão já criada (e cobrada) não pode
+// virar erro por causa disso.
+const VIEW_LABEL = /\n[ \t]*View:/
+const RESUME_LABEL = /\n[ \t]*Resume with:/
 const TITLE_MAX = 200
 const TITLE_FALLBACK = 'Sessão na nuvem'
 const URL_MAX = 300
@@ -151,18 +154,18 @@ function parseCloudSessionOutput(raw, { final = false } = {}) {
   }
 
   const afterCreated = text.slice(createdAt + CREATED_MARKER.length)
-  const viewAt = afterCreated.indexOf(VIEW_MARKER)
-  if (viewAt === -1) {
+  const view = VIEW_LABEL.exec(afterCreated)
+  if (!view) {
     return { kind: 'incomplete' }
   }
 
-  const afterView = afterCreated.slice(viewAt + VIEW_MARKER.length)
-  const resumeAt = afterView.indexOf(RESUME_MARKER)
-  if (resumeAt === -1) {
+  const afterView = afterCreated.slice(view.index + view[0].length)
+  const resume = RESUME_LABEL.exec(afterView)
+  if (!resume) {
     return { kind: 'incomplete' }
   }
 
-  const resumeText = afterView.slice(resumeAt + RESUME_MARKER.length)
+  const resumeText = afterView.slice(resume.index + resume[0].length)
   const lineEnd = resumeText.indexOf('\n')
   if (lineEnd === -1 && !final) {
     return { kind: 'incomplete' }
@@ -174,7 +177,7 @@ function parseCloudSessionOutput(raw, { final = false } = {}) {
   }
 
   // A URL pode vir quebrada em duas linhas pelo PTY: sem espaço nenhum nela.
-  const url = afterView.slice(0, resumeAt).replace(/\s+/g, '')
+  const url = afterView.slice(0, resume.index).replace(/\s+/g, '')
   const match = SESSION_URL_PATTERN.exec(url)
   if (!match || url.length > URL_MAX) {
     return errorResult('unknown')
@@ -185,7 +188,7 @@ function parseCloudSessionOutput(raw, { final = false } = {}) {
 
   return {
     kind: 'created',
-    session: { id: match[1], url, title: normalizeTitle(afterCreated.slice(0, viewAt)) },
+    session: { id: match[1], url, title: normalizeTitle(afterCreated.slice(0, view.index)) },
   }
 }
 
