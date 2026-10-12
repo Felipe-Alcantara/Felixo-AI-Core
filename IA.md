@@ -19,7 +19,10 @@
   exploratório `Benchmarks exploratórios (windows-latest)`, que é `continue-on-error`, falhou no
   passo de responsividade do terminal e não foi investigado. Os commits seguintes (compactação dos
   `IA.md`, divisão do README) estavam só locais ao escrever isto.
-- **Em andamento:** nada aberto no código. Resta acompanhar o CI dos commits ainda não enviados.
+- **Em andamento:** nada aberto no código. O Agente na nuvem foi movido do botão em *Criar* para uma
+  opção do menu Agente (entrada de 2026-10-12 "movido para dentro do menu Agente"): validado no Windows
+  e commitado só na `main` local; enviar publica release, então o push aguarda a decisão de quem mantém.
+  Resta acompanhar o CI dos commits ainda não enviados.
 - **Pendente de conferência manual:** o roteiro do Agente na nuvem em
   `docs/validation/CHECKLIST-AGENTE-NUVEM.md` (cria sessão real e gasta crédito, por isso não roda
   no CI) e a retomada do terminal (entrada de 2026-10-09).
@@ -957,3 +960,56 @@ escrever isto; o CI deles (incluindo o teste novo em Linux e macOS) ainda não r
 diff, mas ninguém os leu inteiros na tela renderizada.
 
 Estado: concluído e validado localmente no Windows; commits desta etapa aguardam envio e CI.
+
+## 2026-10-12 — Agente na nuvem: movido para dentro do menu Agente
+
+Registro de Claude — Tasks do AI Core. O trabalho começou numa sessão com Haiku 4.5 e terminou com Sonnet 5.5; o primeiro passe tinha defeitos (abaixo) e foi refeito.
+
+**Contexto.** O #120 (`d84e579`) criou o Agente na nuvem como um botão avulso na seção *Criar*. A pessoa queria a função como mais uma opção do menu **Agente** (a configuração da setinha), configurada ali mesmo, ao lado de Claude, Codex e os outros. A spec do #120 tinha decidido o contrário (itens 3 e 8 do §12 de `ESPEC-AGENTE-NUVEM.md`); o item 9 novo registra a decisão da pessoa. Os guias do padrão de qualidade (a pasta não existe nesta cópia; lidos do repositório público, commit `cc4aae7`) e as skills de `IA.md` e de testes só foram lidos depois do primeiro passe, por cobrança da pessoa; a auditoria contra eles gerou os ajustes da segunda metade abaixo.
+
+**Defeitos do primeiro passe (nunca commitado), achados ao revisar antes do teste.**
+
+- Ao marcar a nuvem, o `TerminalMenu` trocava o formulário inteiro por outro sem o seletor de agente: não havia como voltar ao Claude.
+- O valor `__cloud__` virava `providerId`, e o app chamava `cliAccounts.list('__cloud__')`: as contas da nuvem nunca seriam as do Claude.
+- Perdeu o posicionamento do #120 (posição livre, seleção e centralização do cartão) e duplicou o `taskProblem` do cartão.
+- Oferecia "Local (sem projeto)", que gera um cartão que `canLaunch` recusa (o `claude --cloud` precisa de pasta).
+- O diálogo de passar responsabilidade, que reaproveita `AgentConfigFields`, ganhava a opção, e a união `NewAgentOptions` vazava por `CanvasView` e `HandoffDialog` (`'type' in options`).
+- Eu tinha relatado "typecheck com 0 erros"; eram 3. O gate só ficou verde depois do refeito.
+
+**O que foi feito (só `app/src`, nada em `app/electron`).**
+
+- `AgentConfigFields` ganhou `allowCloud` (só o `TerminalMenu` liga). Com a nuvem marcada, a **Tarefa** (`CloudSessionConfigFields`, que agora é só esse campo) ocupa o lugar de modelo e esforço; conta e projeto são os campos de sempre.
+- `providerIdOf` (puro, em `agent-launch-preferences.ts`) mapeia a nuvem para `claude`. `useAgentConfig`: `cloudTask`, `cloudProjectId` (o projeto escolhido ou o primeiro), `cloudReady` (é o `canLaunch` do cartão: o botão do menu só habilita quando o cartão aceitaria disparar) e `buildCloudOptions`. `buildOptions` voltou a devolver só `NewTerminalOptions`.
+- `TerminalMenu` ganhou `onAddCloud`; `CanvasToolbar` repassa `onAddCloudSession` (o botão de *Criar* saiu); `CanvasView.addCloudSessionNode` voltou, agora com as opções do menu, e `createDraft` aceita a tarefa.
+- Decisões e motivo:
+  - **Cartão em rascunho, confirmação no cartão.** Disparar direto do menu pularia a confirmação que protege o crédito (invariantes I1 a I9).
+  - **A nuvem nunca é gravada como último agente.** O botão compacto "Agente" abre a última configuração com um clique, e uma nuvem sem tarefa não teria o que abrir. Efeito colateral aceito: depois de usar a nuvem, o botão compacto só reabre o painel até a pessoa escolher outro agente.
+  - **Sem fila (+), sem "Local (sem projeto)", sem "Automática (cadeia)"**: a fila inicia vários terminais, a nuvem exige pasta e a cadeia escolheria a conta por conta própria.
+  - **Dois callbacks (`onAdd`, `onAddCloud`) em vez de união discriminada**: nenhum tipo novo vaza para quem só abre terminais.
+- Inventário do canvas, `ESPEC-AGENTE-NUVEM.md` (§7 e item 9), checklist (etapas 1, 14 e 18), Guia do Usuário e README atualizados; `INVENTARIO-CANVAS.md` regenerado por `npm run docs:inventario-canvas`.
+
+**Evidência (Windows 11).**
+
+- `npm run typecheck` e `npm run lint`: saída 0.
+- `vitest` completo (`CI=true npx vitest run --maxWorkers=4 --testTimeout=120000`): 205 arquivos, 3151 testes passando, 3 ignorados (eram 3145; 6 novos: `createDraft` com tarefa, cartão sem pasta que não dispara, preferência que ignora a nuvem e três do `providerIdOf`). O contrato do inventário reprovou ao remover o botão e passou depois de atualizar os dados.
+- Mutação, uma por regra nova, todas mortas pelo teste esperado: `isAgentValue` aceitando a nuvem; `providerIdOf` sem mapear a nuvem para `claude`; `createDraft` ignorando a tarefa; `canLaunch` sem exigir a pasta (este também reprovou o teste antigo do cartão).
+- **No app real isolado** (`felixo devtools launch`, da fonte, pasta registrada pelo seletor nativo de verdade): a seção *Criar* não tem mais o botão; o seletor lista a nuvem junto dos agentes; com ela marcada o seletor de agente continua visível e os campos mudam como descrito; `--settings=...` mostra o aviso e mantém o botão desabilitado; sem pasta o botão fica desabilitado; com pasta e tarefa o cartão nasce `cloud-session`, selecionado, com tarefa e pasta, e o painel fecha; o botão compacto com a nuvem sem tarefa só reabre o painel; voltar ao Claude traz o formulário completo e a fila; um shell comum ainda abre; recarregar mantém o cartão e a nuvem não fica gravada. O roteiro foi repetido do início ao fim depois da refatoração final, por um script fora do repositório (usa UI Automation do Windows para o diálogo nativo, então não serve de teste de CI).
+
+**Não validado.**
+
+- **Nenhuma sessão real foi disparada** (gasta crédito); o clique "Disparar na nuvem" do cartão não foi feito, só a criação do cartão.
+- Que o diálogo de **Passar responsabilidade** não mostra a nuvem: garantido por código (só o `TerminalMenu` passa `allowCloud`) e pelo tipo, **não visto na tela**.
+- Que `config.accounts` traz as contas do Claude com a nuvem marcada: garantido por `providerOf`; o perfil isolado não tem contas, e a ponte do app não deixa instrumentar a chamada.
+- Linux e macOS. Não há teste de componente automatizado (o projeto não tem `jsdom` nem testing-library): a interface foi conferida só no app isolado, e a etapa 18 do checklist é a verificação manual objetiva (regra única de testes do guia mínimo).
+- O smoke de CI não cobre a opção: a pasta só é autorizada pelo seletor nativo e o `mainEval` do smoke não tem `require` para trocá-lo. Ficou como convite no §11 da spec (item 6).
+- O texto de ajuda do campo usa `text-zinc-400` pelo contraste AA do guia de frontend (§9.2); a razão foi estimada, não medida por ferramenta.
+- Achado de passagem, anterior a esta mudança: `useCanvasProjects` divide o caminho por `/`, então no Windows uma pasta que não é repositório git vira projeto com o **caminho inteiro como nome**.
+
+**Armadilhas de ambiente (valem para quem repetir).**
+
+- `felixo devtools screenshot` atrasa um passo (janela invisível): tire duas capturas e use a segunda; o DOM (`devtools eval`) é a prova confiável. A lista do `FelixoSelect` (portal) não aparece na captura, mas está no DOM.
+- O `felixo.cmd` do PATH apontava para uma instalação temporária sem `dev-runner.cjs`: rode `node electron/cli/felixo.cjs devtools …` dentro de `app/`.
+- `devtools main` não tem `require` (sandbox proposital), e `devtools type` lê texto que começa com `--` como opção do CLI; para esse caso, o setter nativo do campo mais um evento `input` passa pelo mesmo `onChange`.
+- A pasta de projeto só é autorizada pelo seletor nativo (concessão em memória do processo principal). Para exercitar o fluxo real no teste, o diálogo do Windows foi preenchido por mensagens ao próprio diálogo do app de teste (UI Automation para achar, `WM_SETTEXT` e `BM_CLICK` para agir), sem tocar em foco nem em outras janelas.
+
+Estado: concluído e validado localmente no Windows. Commitado na `main` local, em três commits (código e testes; documentação pública; documentação interna), **sem push**. Mudar `app/src` conta como mudança do instalador (`release-relevant.sh`), então enviar para o remoto publica uma release: a decisão é de quem mantém o repositório. O `app/package-lock.json` modificado na cópia de trabalho não é desta mudança e ficou fora dos commits.

@@ -196,9 +196,11 @@ formato de cada payload (tipos, tamanhos, `nodeId`); `open` aceita somente
 
 ## 7. Interface
 
-- **Criação.** Botão **Agente na nuvem** na seção *Criar* da barra lateral (como
-  Grupo e Página Web) cria um cartão em `draft`, com o nome "Agente na nuvem", na
-  pasta do primeiro projeto. Cada clique cria um cartão novo.
+- **Criação.** Opção **Agente na nuvem** no seletor de agentes do menu **Agente** da
+  seção *Criar* (decisão de 2026-10-12, ver o item 9 do §12). Com ela marcada, o painel
+  troca modelo e esforço pela **tarefa**, mantém conta e projeto e o botão vira **Abrir
+  agente na nuvem**, que cria um cartão em `draft` já preenchido (tarefa, pasta e conta),
+  selecionado e centralizado. Cada clique cria um cartão novo; nada é disparado.
 - **Rascunho.** Campos: tarefa (textarea), pasta (projeto) e conta (seletor
   existente). Aviso fixo: "Gasta o crédito de sessão na nuvem da conta escolhida
   (se houver) ou o limite do plano. O saldo só aparece em Configurações > Uso." Botão
@@ -284,6 +286,11 @@ O que segue ainda não foi provado e é um bom lugar para quem quiser ajudar. O 
    mas falta provar que a sessão as usa para oferecê-las no cartão.
 5. **Sessões duplicadas por timeout**: o timeout de 60 s pode estourar depois de a sessão
    ser criada; por isso `timeout` não oferece "Tentar de novo" direto.
+6. **Cobertura da opção no smoke do canvas.** A opção **Agente na nuvem** do menu Agente
+   (campos, validação da tarefa e criação do cartão) foi conferida no app isolado e está
+   na etapa 18 do checklist, mas não no smoke de CI. O obstáculo é a pasta: ela só é
+   autorizada pelo seletor nativo, e o `mainEval` do smoke não tem `require` para trocá-lo.
+   Quem quiser estender o smoke precisa de um jeito de autorizar uma pasta de teste.
 
 ## 12. Ajustes feitos durante a implementação
 
@@ -299,9 +306,9 @@ Registrados aqui em vez de reescrever as seções acima, que descrevem o desenho
    uma intersecção plana de todos os tipos de bloco, e `cwd` e `accountId` já existem
    no terminal: reaproveitá-los faria o código que varre "blocos com conta" tratar o
    cartão como um terminal vivo daquela conta.
-3. **Criação fora do menu Agente (§7).** A primeira ideia foi o menu de ferramentas,
-   como o bloco Tarefas Notion, mas ele é acoplado a painéis; o item 8 registra o que
-   ficou.
+3. **Criação fora do menu Agente (§7).** *(Revertida pelo item 9.)* A primeira ideia foi
+   o menu de ferramentas, como o bloco Tarefas Notion, mas ele é acoplado a painéis; o
+   item 8 registrava o que ficou.
 4. **`createdAt` é carimbado pelo renderer**; o serviço devolve só `id`, `url` e
    `title`.
 5. **Saída parcial.** O parser só aceita a última linha sem quebra depois que o
@@ -313,10 +320,25 @@ Registrados aqui em vez de reescrever as seções acima, que descrevem o desenho
 7. **Sem detecção de remote.** O aviso do pacote de 100 MB aparece sempre na confirmação
    ("Sem remote no GitHub, o repositório inteiro é enviado como pacote"), em vez de
    consultar `git remote get-url origin` (§7), para o renderer não executar git.
-8. **Botão na seção Criar.** O ponto de entrada é um botão **Agente na nuvem** na seção
-   *Criar* da barra lateral (como Grupo e Página Web), e cada clique cria um cartão novo.
-   O cartão nasce com o nome "Agente na nuvem" (o dock de elementos usa o `label`) e
-   altura padrão de 560 px.
+8. **Botão na seção Criar.** *(Substituído pelo item 9.)* O ponto de entrada era um
+   botão **Agente na nuvem** na seção *Criar* da barra lateral (como Grupo e Página Web),
+   e cada clique criava um cartão novo. O cartão nasce com um nome (o dock de elementos
+   usa o `label`) e altura padrão de 560 px.
+9. **Criação dentro do menu Agente (2026-10-12).** A pessoa pediu a função como mais uma
+   opção do menu **Agente**, configurada ali mesmo, e não como botão avulso em *Criar*.
+   Pontos do desenho:
+   - O seletor ganha a opção **Agente na nuvem**; conta e projeto são os campos de
+     sempre (a nuvem usa as contas do Claude e exige pasta, então não há "sem projeto"
+     nem "Automática (cadeia)"), e a **tarefa** ocupa o lugar de modelo e esforço.
+   - O botão cria o cartão em `draft` já preenchido; a **confirmação inline continua no
+     cartão** (I1 a I9 intactas). Disparar direto do menu pularia a confirmação que
+     protege o crédito.
+   - A nuvem **nunca é gravada** como último agente (o botão compacto "Agente" abre a
+     última configuração com um clique, e uma nuvem sem tarefa não teria o que abrir) e
+     **não entra na fila** de terminais.
+   - O diálogo de passar responsabilidade não oferece a nuvem: ele continua o trabalho
+     num terminal.
+   - A tarefa é validada no menu pela mesma regra do cartão (`taskProblem`).
 
 ## 13. Revisão independente e ajustes de padrão de qualidade (2026-10-12)
 

@@ -23,9 +23,12 @@ mostra a tela. A primeira carga compila o Vite e leva cerca de um minuto.
 
 ## Roteiro
 
-1. **Criar o cartão.** Seção *Criar* → **Agente na nuvem**. Esperado: cartão em rascunho
-   com o nome "Agente na nuvem" (também no dock de elementos), aviso do crédito e
-   **Disparar na nuvem** desabilitado até haver tarefa e pasta.
+1. **Criar o cartão.** Seção *Criar* → setinha do **Agente** → agente **Agente na nuvem** →
+   tarefa e projeto → **Abrir agente na nuvem** (desabilitado até haver tarefa válida e
+   pasta). Esperado: cartão em rascunho já com a tarefa, a pasta e a conta escolhidas,
+   selecionado e centralizado, com o nome "Agente na nuvem · <projeto>" (também no dock
+   de elementos), aviso do crédito e **Disparar na nuvem** do próprio cartão. Nenhuma
+   sessão é criada nesta etapa.
 2. **Pasta não confiada.** Aponte para uma pasta git nova e dispare. Esperado: nenhuma
    sessão criada; erro "O Claude ainda não confia nesta pasta", com **Abrir Claude nesta
    pasta** e **Tentar de novo** (sem confirmação extra).
@@ -57,9 +60,10 @@ mostra a tela. A primeira carga compila o Vite e leva cerca de um minuto.
     linha (por exemplo, `Responda "ok" ✅ %PATH%` e, na linha de baixo, `fim`). Esperado: a
     sessão em claude.ai/code mostra o texto **exatamente** como foi escrito, sem variável
     expandida nem aspas comidas. Repita no follow-up.
-14. **Hífen no início.** Escreva `--teste` na tarefa. Esperado: aviso "não pode começar com
-    “-”" no campo (com `aria-invalid`), **Disparar na nuvem** desabilitado e nenhuma sessão
-    criada. O mesmo vale para o campo de mensagem.
+14. **Hífen no início.** Escreva `--teste` na tarefa, no menu Agente e no cartão. Esperado:
+    aviso "não pode começar com “-”" no campo (com `aria-invalid`), **Abrir agente na
+    nuvem** (menu) e **Disparar na nuvem** (cartão) desabilitados e nenhuma sessão criada.
+    O mesmo vale para o campo de mensagem.
 15. **Teclado.** Só com o teclado: abra a confirmação (o foco entra nela), pressione **Esc**
     (volta ao botão **Disparar na nuvem**) e confirme com **Enter**. Esperado: nenhum passo
     exige o mouse e, se a criação falhar, o foco vai para o aviso de erro.
@@ -69,6 +73,17 @@ mostra a tela. A primeira carga compila o Vite e leva cerca de um minuto.
     `node scripts/ensaiar-migracoes-em-copia.cjs` (em `app/`). Esperado: "Resultado: OK", a
     versão das migrações subindo e nenhuma tabela com menos linhas. O banco original não é
     alterado e a cópia temporária é apagada.
+18. **Menu Agente.** Esta etapa não gasta crédito. Esperado:
+    - **Agente na nuvem** aparece no seletor, junto de Claude, Codex e os outros; ao marcá-lo,
+      o seletor de agente continua visível, modelo e esforço dão lugar à **Tarefa**, o
+      projeto não oferece "Local (sem projeto)", a conta não oferece "Automática (cadeia)" e
+      a fila (+) some;
+    - com a nuvem marcada e sem tarefa, o botão compacto **Agente** só reabre o painel e não
+      cria cartão;
+    - voltar para Claude traz o formulário completo de volta;
+    - depois de recarregar o app, o seletor volta ao último agente comum: a nuvem nunca é
+      gravada como último agente;
+    - no diálogo **Passar responsabilidade** a nuvem não aparece entre os agentes.
 
 ## Convite: Linux e macOS
 
