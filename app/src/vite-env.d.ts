@@ -90,6 +90,7 @@ type PersistedCanvasNode = {
     | 'notionTasks'
     | 'drawing'
     | 'excalidrawDrawing'
+    | 'cloud-session'
   parentId?: string | null
   position: { x: number; y: number }
   width?: number | null

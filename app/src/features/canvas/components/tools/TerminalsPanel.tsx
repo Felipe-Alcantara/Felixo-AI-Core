@@ -10,6 +10,7 @@ import type { Node } from '@xyflow/react'
 import {
   ChevronDown,
   ChevronUp,
+  Cloud,
   FileText,
   Globe,
   GripVertical,
@@ -87,6 +88,7 @@ const TYPE_ICON: Record<CanvasNodeType, typeof TerminalIcon> = {
   group: Group,
   webpage: Globe,
   notionTasks: ListTodo,
+  'cloud-session': Cloud,
 }
 
 function elementTitle(node: Node<CanvasNodeData>) {

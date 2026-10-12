@@ -18,6 +18,7 @@ import {
   Bell,
   ChevronDown,
   CircleHelp,
+  Cloud,
   FileText,
   FolderOpen,
   Globe,
@@ -112,6 +113,8 @@ type CanvasToolbarProps = {
   /** Abre o seletor nativo e cria um FileNode de imagem autorizado. */
   onOpenImage: () => void
   onAddGroup: (name?: string) => void
+  /** Cria um cartão "Agente na nuvem" em rascunho; nada é disparado. */
+  onAddCloudSession: () => void
   onAddWebpage: (url: string, name?: string, profileId?: string) => void
   canvasMode: 'select' | 'pan'
   onToggleMode: () => void
@@ -155,6 +158,7 @@ export function CanvasToolbar({
   onOpenFile,
   onOpenImage,
   onAddGroup,
+  onAddCloudSession,
   onAddWebpage,
   canvasMode,
   onToggleMode,
@@ -362,6 +366,15 @@ export function CanvasToolbar({
               buttonLabel="Página Web"
               onCreate={onAddWebpage}
             />
+            <button
+              type="button"
+              onClick={onAddCloudSession}
+              className={TOOLBAR_BUTTON_CLASS}
+              title="Criar uma sessão do Claude Code na nuvem (usa o crédito de sessão na nuvem da conta)"
+            >
+              <Cloud size={16} />
+              Agente na nuvem
+            </button>
           </SidebarSection>
 
           <SidebarSection title="Organizar">

@@ -29,8 +29,8 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 
 ## Números
 
-- **Elementos:** 96 (8 blocos, 16 ferramentas, 72 outras superfícies)
-- **Controles:** 361, dos quais 55 com teste específico
+- **Elementos:** 97 (9 blocos, 16 ferramentas, 72 outras superfícies)
+- **Controles:** 372, dos quais 55 com teste específico
 - **Elementos sem nenhum teste:** 4
 - **Lacunas:** 275 (alto 10, médio 147, baixo 118), em 78 tasks
 
@@ -106,7 +106,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 
 | Estado | Quando |
 | --- | --- |
-| normal | Seção "Criar" aberta: Agente (TerminalMenu), Novo bloco, Abrir imagem, Gerar imagem, Grupo e Página Web; cada botão com nome abre um popover inline. |
+| normal | Seção "Criar" aberta: Agente (TerminalMenu), Novo bloco, Abrir imagem, Gerar imagem, Grupo, Página Web e Agente na nuvem; cada botão com nome abre um popover inline (o da nuvem cria o cartão direto). |
 | error | Página Web com endereço recusado: "Endereço não aceito: <motivo>." ou "Informe o endereço do site." (role="alert", campo com aria-invalid). |
 | disabled | Sidebar recolhida: a seção fica inert. |
 
@@ -117,6 +117,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 | `onCreate(name.trim() \|\| undefined)` (button) | clique | Criar (ou Enter no campo): "Novo bloco" chama addFileNode (cria nome-<timestamp>.md por canvas-file:write e um bloco de arquivo); "Grupo" chama addNode("group") com o nome ou "Grupo". O bloco nasce numa posição livre da área visível, entra no fim do dock (orderIndex) e é salvo por canvas:save. | erro engolido: a criação do .md (canvas-file:write) é void e não é conferida (CanvasView.tsx:2426); o bloco nasce mesmo se o arquivo falhar. Falha do canvas:save só vai para o console. | — |
 | `{secondaryLabel}` (button) | clique | "Abrir arquivo existente…" (só em Novo bloco): fecha o popover e chama pickAndOpenTextFile (text-file:pick); o arquivo escolhido vira um bloco de arquivo apontando para ele. (desabilitado: só existe no popover de "Novo bloco") | erro engolido: falha do seletor volta ok:false com mensagem e o renderer ignora (CanvasView.tsx:2512). | — |
 | `buttonLabel="Página Web"` (button) | clique | Gatilho de UrlCreateButton: abre ou fecha o popover com endereço, nome e perfil; Esc ou clique fora fecha e devolve o foco. | Sem falha própria. | `scripts/canvas-smoke.cjs` → `checarInteracoes` |
+| `onClick={onAddCloudSession}` (button) | clique | "Agente na nuvem": cria um cartão em rascunho na pasta do primeiro projeto (addCloudSessionNode); nada é disparado, a sessão só nasce de um clique confirmado dentro do cartão. | Sem falha própria; cada clique cria um cartão novo. | — |
 | `menuLabel="Perfil do navegador"` (select) | clique | Escolhe o perfil do navegador interno do bloco novo ("Perfil: Padrão" = sem perfil); vai como profileId no data do bloco. (desabilitado: some quando useWebviewProfiles não devolve perfis) | Sem falha própria; sem perfis cadastrados o seletor nem aparece. | — |
 | `onCreate(result.url, name.trim() \|\| undefined, profileId \|\| undefined)` (button) | clique | Criar (ou Enter) da Página Web: explainUrlInput valida; aceito, addNode("webpage", { url, label?, profileId? }) cria e salva o bloco, limpa os campos e fecha. | Endereço recusado mostra o motivo (role="alert") e devolve o foco ao campo; o popover continua aberto. | `scripts/canvas-smoke.cjs` → `checarInteracoes` |
 
@@ -733,6 +734,37 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | Blocos lazy sem error boundary (NotionTasksNode.tsx:45-53, ExcalidrawDrawingNode.tsx:82-91): falha ao baixar o chunk ou erro de render do painel sobe até a raiz e derruba o canvas inteiro; os painéis de ferramenta têm ToolPanelErrorBoundary, os blocos não. | médio | `3ec91f95-497e-8176-bef0-dfde828936dc` |
+
+### Bloco Agente na nuvem (cartão de sessão)
+
+- **ID:** `bloco-agente-nuvem` · **Dono:** `src/features/canvas/components/CloudSessionNode.tsx`
+- **Persistência:** canvas salvo (canvas_nodes tipo cloud-session: campos cloudTask, cloudCwd, cloudAccountId, cloudStatus, cloudSession, cloudFollowUps, cloudError e label); cloudProjects é injetado a cada render e nunca é gravado; um nó salvo como "launching" reabre como "failed (interrupted)"
+- **IPC:** `cloud-session:launch`, `cloud-session:follow-up`, `cloud-session:open`, `cli-accounts:list`, `canvas:save`, `canvas:delete`
+- **Depende de:** `useReactFlow`, `cloud-session-state.ts`, `window.felixo.cloudSession`, `addCloudSessionNode e openCloudTerminal (CanvasView)`
+- **Sobreposição:** Bloco do React Flow, sem z próprio: fica abaixo de toda superfície fixa (topbar e statusbar 18, dock e painéis 20/30, sidebar 26, menus 50+). O cartão é overflow-hidden, então nada que nasce dentro dele passa das bordas. Bloco médio (padrão 460×460, mínimo 340×320). A confirmação é inline dentro do próprio cartão (sem modal e sem window.confirm), então nada cobre o canvas.
+- **Testes:** `src/features/canvas/services/cloud-session-state.test.ts`, `src/features/canvas/hooks/useCanvasPersistence.test.ts`, `electron/services/cloud-session/cloud-session-service.test.cjs`, `electron/services/cloud-session-ipc-handlers.test.cjs`
+
+| Estado | Quando |
+| --- | --- |
+| normal | Rascunho: tarefa, projeto, conta e o botão "Disparar na nuvem". Criada: título, ID, ações e follow-up. |
+| loading | status "launching": "Criando a sessão na nuvem…" (até 60 s); o formulário some e nada é clicável até o fim. |
+| empty | Rascunho sem tarefa ou sem pasta: "Disparar na nuvem" desabilitado. |
+| error | status "failed": faixa role="alert" com a mensagem em português do código de erro; erros de follow-up e de abrir o link aparecem numa linha abaixo. |
+| pending | Confirmação inline antes de disparar, de tentar de novo depois de erro incerto e de criar nova sessão. |
+| success | status "created": título, ID copiável, data de criação e a conta usada. |
+
+| Controle | Gatilho | Efeito | Falha conhecida | Teste |
+| --- | --- | --- | --- | --- |
+| `title="Escolher pasta"` (button) | clique | Abre o seletor nativo de pasta (files.pickContext) e grava a escolhida em cloudCwd. (desabilitado: Some depois que a sessão é criada.) | Cancelar o seletor não muda nada; sem a ponte files o botão não faz nada. | — |
+| `Abrir Claude nesta pasta` (button) | clique | Só no erro "trust-required": abre um terminal comum do Claude na pasta, para a pessoa confiar nela uma vez. (desabilitado: Só aparece no erro trust-required.) | Sem falha própria; o terminal nasce pelo mesmo caminho dos demais. | — |
+| `'Criar novo rascunho' : 'Confirmar e disparar'` (button) | clique | Confirmar e disparar chama cloudSession.launch (cria a sessão paga); Criar novo rascunho limpa sessão e follow-ups e volta ao rascunho. (desabilitado: Só existe com a confirmação aberta.) | Falha do launch vira status "failed" com o código do erro; nada é reenviado sozinho. | — |
+| `onClick={() => setConfirming(null)}` (button) | clique | Cancelar: fecha a confirmação sem chamar o processo principal. (desabilitado: Só existe com a confirmação aberta.) | Sem falha própria. | — |
+| `'Tentar de novo' : 'Disparar na nuvem'` (button) | clique | Rascunho: abre a confirmação. Depois de erro que prova que nada foi criado (trust, login, limite, entrada inválida): dispara de novo direto; nos demais abre a confirmação com aviso de sessão possivelmente criada. (desabilitado: Sem tarefa ou sem pasta; some enquanto dispara e depois de criada.) | Um disparo duplicado do mesmo cartão devolve "busy" (trava por nó no processo principal). | — |
+| `title="Copiar ID"` (button) | clique | Copia o ID da sessão para a área de transferência. (desabilitado: Só existe depois de criada.) | Sem permissão de área de transferência: mostra "Não foi possível copiar o ID". | — |
+| `onClick={() => void openSession()}` (button) | clique | Abre o link da sessão no navegador padrão (cloudSession.open; o main só aceita claude.ai/code/session_*). (desabilitado: Só existe depois de criada.) | Link fora do padrão ou navegador indisponível: mostra a mensagem do processo principal. | — |
+| `Trazer para cá` (button) | clique | Cria um terminal do Claude com --teleport <id> na mesma pasta e conta, sem texto inicial. Continua a conversa localmente. (desabilitado: Só existe depois de criada.) | Sem sessão local equivalente o CLI mostra o próprio erro no terminal; o cartão não é alterado. | — |
+| `onClick={() => setConfirming('new-session')}` (button) | clique | Abre a confirmação para voltar ao rascunho; a sessão atual continua existindo em claude.ai/code. (desabilitado: Só existe depois de criada.) | Sem falha própria. | — |
+| `onClick={() => void sendFollowUp()}` (button) | clique | Envia a mensagem à sessão (claude -p … --cloud <id>, sem TTY) e registra o resultado na lista de mensagens enviadas. (desabilitado: Texto vazio ou envio em andamento.) | Falha mostra a mensagem e mantém o texto digitado; a trava por nó impede dois envios ao mesmo tempo. | — |
 
 ### Bloco Desenho leve (SVG)
 

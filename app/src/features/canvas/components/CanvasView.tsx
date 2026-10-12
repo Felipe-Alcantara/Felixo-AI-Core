@@ -41,6 +41,8 @@ import { GroupNode } from './GroupNode'
 import { FileNode } from './FileNode'
 import { WebpageNode } from './WebpageNode'
 import { NotionTasksNode } from './NotionTasksNode'
+import { CloudSessionNode } from './CloudSessionNode'
+import { createDraft as createCloudSessionDraft } from '../services/cloud-session-state'
 import { TerminalDrawer } from './TerminalDrawer'
 import { readingProfileFor } from '../terminal/reading/reading-profiles'
 import { TerminalDetailsPanel } from './TerminalDetailsPanel'
@@ -973,6 +975,13 @@ function CanvasInner({
   // callbacks estáveis: recriá-los invalidaria o cache de `data` de todos os
   // blocos a cada render.
   const renderedNodesRef = useRef<ReadonlyArray<{ id: string; type?: string; data: object }>>([])
+  // O cartão "Agente na nuvem" abre terminais (teleport, confiar na pasta), mas
+  // `addTerminalNode` só existe depois deste ponto: a ponte estável é um ref.
+  const openCloudTerminalRef = useRef<(options: NewTerminalOptions) => void>(() => {})
+  const openCloudTerminal = useCallback(
+    (options: NewTerminalOptions) => openCloudTerminalRef.current(options),
+    [],
+  )
   const performanceModeRef = useRef(performanceMode)
   useEffect(() => {
     performanceModeRef.current = performanceMode
@@ -1310,6 +1319,20 @@ function CanvasInner({
         }
       }
 
+      // `cloudProjects` é dado transitório (ver TRANSIENT_DATA_KEYS); as funções
+      // são descartadas ao salvar.
+      if (node.type === 'cloud-session') {
+        return {
+          ...withHandle,
+          data: reuseData(node.id, [node.data, projects], () => ({
+            ...node.data,
+            cloudProjects: projects,
+            onDataChange: updateNodeData,
+            onOpenTerminal: openCloudTerminal,
+          })),
+        }
+      }
+
       if (
         node.type === 'note' ||
         node.type === 'group' ||
@@ -1388,7 +1411,9 @@ function CanvasInner({
     linkAgentToFile,
     notifyTerminalRenamed,
     nodes,
+    openCloudTerminal,
     openTerminal,
+    projects,
     qualityStandard,
     qualityInputs,
     projectGuides.settled,
@@ -1644,6 +1669,19 @@ function CanvasInner({
     centerNodeInSafeArea(position, size, 0.8, 240)
   }, [addNode, centerNodeInSafeArea, focusNode, nodes, setNodes, visibleCanvasBounds])
 
+  /**
+   * Cria um cartão "Agente na nuvem" em rascunho. Cada clique cria um cartão
+   * novo (podem existir vários); nada é disparado: a sessão só nasce de um
+   * clique confirmado dentro do cartão.
+   */
+  const addCloudSessionNode = useCallback(() => {
+    const size = getDefaultNodeSize('cloud-session', window.innerWidth)
+    const position = findFreeNodePosition(nodes, size, visibleCanvasBounds())
+    const id = addNode('cloud-session', createCloudSessionDraft({ cwd: projects[0]?.path ?? '' }), position)
+    setNodes((current) => current.map((node) => ({ ...node, selected: node.id === id })))
+    centerNodeInSafeArea(position, size, 0.8, 240)
+  }, [addNode, centerNodeInSafeArea, nodes, projects, setNodes, visibleCanvasBounds])
+
   useWebpageOpeners({ addNode, centerNodeInSafeArea, nodes, setNodes, visibleCanvasBounds })
 
   const addFileNode = useCallback(
@@ -1768,6 +1806,9 @@ function CanvasInner({
     },
     [addNode, buildTerminalNodeData, ensureProjectGuides],
   )
+  useEffect(() => {
+    openCloudTerminalRef.current = addTerminalNode
+  }, [addTerminalNode])
 
   /**
    * Cria o agente escolhido no diálogo já sabendo o que o anterior estava
@@ -2004,6 +2045,7 @@ function CanvasInner({
       file: FileNode,
       webpage: WebpageNode,
       notionTasks: NotionTasksNode,
+      'cloud-session': CloudSessionNode,
     }),
     [],
   )
@@ -2098,6 +2140,7 @@ function CanvasInner({
         onOpenFile={() => void pickAndOpenTextFile()}
         onOpenImage={() => void pickAndOpenImageFile()}
         onAddGroup={(name) => addNode('group', { label: name || 'Grupo' })}
+        onAddCloudSession={addCloudSessionNode}
         onAddWebpage={(url, name, profileId) =>
           addNode('webpage', {
             url,

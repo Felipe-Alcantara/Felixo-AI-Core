@@ -18,6 +18,7 @@ export type CanvasNodeType =
   | 'notionTasks'
   | 'drawing'
   | 'excalidrawDrawing'
+  | 'cloud-session'
 
 export type GroupNodeData = {
   label?: string
@@ -282,6 +283,8 @@ export type CloudSessionFollowUp = {
 }
 
 export type CloudSessionNodeData = {
+  /** Nome do cartão no cabeçalho e no dock de elementos. */
+  label?: string
   /** O que a sessão deve fazer, 1 a 4000 caracteres. */
   cloudTask?: string
   /** Pasta do projeto; é o diretório de trabalho do `claude --cloud`. */

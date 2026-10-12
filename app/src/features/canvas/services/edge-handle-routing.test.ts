@@ -52,6 +52,7 @@ describe('SIDE_HANDLE_NODE_TYPES', () => {
     notionTasks: 'NotionTasksNode.tsx',
     drawing: 'DrawingNode.tsx',
     excalidrawDrawing: 'ExcalidrawDrawingNode.tsx',
+    'cloud-session': 'CloudSessionNode.tsx',
   }
 
   // A lista e os componentes andam juntos: um tipo na lista sem os handles
