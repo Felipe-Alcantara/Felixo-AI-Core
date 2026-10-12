@@ -23,7 +23,8 @@ function fakeFs({ dirs = [], files = [] } = {}) {
   }
 }
 
-const PASTA = 'P:\\Programação\\Github\\Repositórios\\Meus repositórios\\Projeto'
+// Acento e espaço no caminho de propósito: a validação não pode depender de um caminho "limpo".
+const PASTA = 'C:\\Projetos\\Programação com espaço\\Meu projeto'
 const fsOk = fakeFs({ dirs: [PASTA, '/tmp/x'], files: ['/tmp/arquivo.txt'] })
 
 test('aceita tarefa e pasta válidas e devolve a tarefa sem espaços nas pontas', () => {

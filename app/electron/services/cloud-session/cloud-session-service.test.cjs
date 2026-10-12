@@ -24,7 +24,8 @@ const SUCCESS = [
   '',
 ].join('\r\n')
 const TRUST_SCREEN = `Quick safety check: Is this a project you created or one you trust?\r\nYes, I trust this folder`
-const CWD = 'P:\\Programação\\Github\\Repositórios\\Meus repositórios\\Projeto'
+// Acento e espaço no caminho de propósito: o serviço não pode depender de um caminho "limpo".
+const CWD = 'C:\\Projetos\\Programação com espaço\\Meu projeto'
 
 /** PTY falso: o teste dispara `data` e `exit` à mão. */
 function createFakePty() {
