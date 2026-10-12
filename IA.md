@@ -18,19 +18,20 @@
   `Validate` (4 sistemas) e `Launcher` (3 sistemas, Python 3.9 e 3.13) passaram; só o job
   exploratório `Benchmarks exploratórios (windows-latest)`, que é `continue-on-error`, falhou no
   passo de responsividade do terminal e não foi investigado. Os commits seguintes (compactação dos
-  `IA.md`, divisão do README) estavam só locais ao escrever isto.
+  `IA.md`, divisão do README e o Agente na nuvem no menu Agente) foram enviados à `main`
+  (`e7b7efe..d952f5b`) e o CI de `d952f5b` passou nos 22 jobs, inclusive esse exploratório do Windows.
 - **Em andamento:** nada aberto no código. O Agente na nuvem foi movido do botão em *Criar* para uma
-  opção do menu Agente (entrada de 2026-10-12 "movido para dentro do menu Agente"): validado no Windows
-  e commitado só na `main` local, sem push. Um push direto não publica release (o último commit é de
-  documentação); um PR com squash publica. O envio aguarda a decisão de quem mantém.
-  Resta acompanhar o CI dos commits ainda não enviados.
+  opção do menu Agente (entrada de 2026-10-12 "movido para dentro do menu Agente"): validado no Windows,
+  enviado e com o CI verde. O Release gate pulou a publicação (o último commit do push só mexe em
+  `IA.md`), então a mudança de `app/src` sai no próximo release que um commit de app disparar.
 - **Pendente de conferência manual:** o roteiro do Agente na nuvem em
   `docs/validation/CHECKLIST-AGENTE-NUVEM.md` (cria sessão real e gasta crédito, por isso não roda
   no CI) e a retomada do terminal (entrada de 2026-10-09).
-- **Próximo passo sugerido:** enviar os commits locais e conferir o CI deles, que roda pela primeira
-  vez em Linux e macOS os testes novos de `app/scripts/archive-ia-md.test.cjs`.
+- **Próximo passo sugerido:** rodar a etapa 18 do checklist do Agente na nuvem em Linux ou macOS (o
+  CI passou, mas a interface só foi conferida no Windows) e, quando um commit de app for publicar um
+  release, incluir nas notas que a opção do menu Agente vai junto.
 - **Riscos abertos:** (1) a suíte vitest completa com os 16 workers padrão ficou instável numa
-  máquina com 2 GB de RAM livres; use `npx vitest run --maxWorkers=4` (3145 testes passando, 90 s).
+  máquina com 2 GB de RAM livres; use `npx vitest run --maxWorkers=4` (3151 testes passando, 90 s).
   (2) Um comentário em `app/electron/services/codex-status-screen.cjs` ainda cita a seção
   "Limites e uso por conta" do README, que agora está em `docs/guias/GUIA-CONTAS-E-LIMITES.md`; não
   foi editado porque qualquer mudança em `app/electron/` publica uma release.
@@ -1016,3 +1017,5 @@ Registro de Claude — Tasks do AI Core. O trabalho começou numa sessão com Ha
 Estado: concluído e validado localmente no Windows. Commitado na `main` local, em três commits (código e testes; documentação pública; documentação interna), **sem push**. Mudar `app/src` conta como mudança do instalador (`release-relevant.sh`), então enviar para o remoto publica uma release: a decisão é de quem mantém o repositório. O `app/package-lock.json` que estava modificado na cópia de trabalho não é desta mudança: o npm 11 podou 13 pacotes de empacotamento do Windows (`electron-winstaller`, `electron-builder-squirrel-windows`, `@electron/windows-sign`, `rimraf`, `postject` e outros) depois de um `npm install --no-save`, e commitá-lo quebraria o instalador. Ficou guardado no `git stash` (mensagem "package-lock.json podado pelo npm 11…") e, como patch, fora do repositório; use `git stash pop` só se alguém precisar dele, e nunca o commite.
 
 **Correção (mesma data).** Acima escrevi que enviar à `main` publica uma release. Não é bem assim: o `Release gate` (`.github/workflows/release-gate.yml`) compara só o último commit da execução do CI (`git diff --name-only HEAD^ HEAD`). Rodei `release-relevant.sh` em cada commit desta mudança: só o de código (`feat(nuvem)`) dá `true`; os três de documentação dão `false`. Logo, um push direto destes commits termina em `docs(ia)` e **não publica nada agora**; a mudança de `app/src` entra no próximo release que um commit de app disparar. Já um PR mesclado por squash vira um commit só, com `app/src`, e publica. Verificado no workflow e no script; o CI em si não foi rodado.
+
+**Envio e CI (mesma data).** Os commits desta mudança foram enviados por push direto à `main` (`e7b7efe..d952f5b`), por decisão da pessoa; a regra de proteção foi contornada pela permissão de admin da conta. O CI de `d952f5b` terminou em `success` nos 22 jobs: `Validate` em Windows, Ubuntu, Ubuntu ARM e macOS, `Launcher` (Python 3.9 e 3.13) nos três sistemas, `Benchmarks` e `Benchmarks exploratórios` nos quatro, `Dependency policy`, `Python dependency audit` e `Release scripts`. O Release gate listou só `IA.md` como arquivo do commit, deu "Release relevante: false" e pulou a publicação, como previsto na correção acima. Não foi rodada nenhuma conferência na tela em Linux ou macOS.
