@@ -211,6 +211,111 @@ export function buildAgentArgs(choices: AgentLaunchChoices): string[] | null {
   return args
 }
 
+/**
+ * As duas grafias da mesma opção do Codex. Para o `clap` (o parser da CLI) são
+ * um argumento só: a flag longa mais o apelido `--yolo` também é "usada várias
+ * vezes". Medido com o `codex` 0.162.1.
+ */
+const CODEX_YOLO_FLAGS: ReadonlySet<string> = new Set([
+  '--dangerously-bypass-approvals-and-sandbox',
+  '--yolo',
+])
+
+/**
+ * Rede de segurança do lançamento: o Codex recusa subir com duas flags de yolo
+ * antes do subcomando ("the argument '…' cannot be used multiple times"), antes
+ * mesmo de olhar conta ou modelo — e o bloco nasce "encerrado". Mantém a
+ * PRIMEIRA ocorrência e devolve o que descartou, para o chamador registrar.
+ *
+ * Só o Codex: o Claude e o Gemini aceitam a repetição. Só descarta opção
+ * repetida de yolo (nunca `-c` ou `--model`, que podem repetir de propósito), e
+ * deixa em paz tudo depois de `--`, que já é texto e não opção.
+ */
+export function dropRepeatedYoloFlags(
+  command: string | undefined,
+  args: readonly string[],
+): { args: string[]; removed: string[] } {
+  if (command !== 'codex') {
+    return { args: [...args], removed: [] }
+  }
+
+  const kept: string[] = []
+  const removed: string[] = []
+  let sawYolo = false
+  let afterDoubleDash = false
+
+  for (const arg of args) {
+    if (afterDoubleDash) {
+      kept.push(arg)
+      continue
+    }
+    if (arg === '--') {
+      afterDoubleDash = true
+      kept.push(arg)
+      continue
+    }
+    if (CODEX_YOLO_FLAGS.has(arg)) {
+      if (sawYolo) {
+        removed.push(arg)
+        continue
+      }
+      sawYolo = true
+    }
+    kept.push(arg)
+  }
+
+  return { args: kept, removed }
+}
+
+/**
+ * Tira todas as grafias de yolo do Codex, preservando o resto (e o que vem
+ * depois de `--`). É o que o fallback de "o Codex recusou a repetição" manda
+ * de volta: a flag que a CLI já recebeu de fora fica valendo, a do app sai.
+ */
+export function withoutCodexYoloFlags(command: string | undefined, args: readonly string[]): string[] {
+  if (command !== 'codex') {
+    return [...args]
+  }
+
+  const kept: string[] = []
+  let afterDoubleDash = false
+  for (const arg of args) {
+    if (afterDoubleDash) {
+      kept.push(arg)
+      continue
+    }
+    if (arg === '--') {
+      afterDoubleDash = true
+      kept.push(arg)
+      continue
+    }
+    if (!CODEX_YOLO_FLAGS.has(arg)) {
+      kept.push(arg)
+    }
+  }
+  return kept
+}
+
+/** Quantas flags de yolo do Codex há na lista (as duas grafias contam como uma opção). */
+export function countCodexYoloFlags(args: readonly string[]): number {
+  return args.filter((arg) => CODEX_YOLO_FLAGS.has(arg)).length
+}
+
+const CODEX_REPEATED_YOLO_ERROR = new RegExp(
+  `theargument'(?:${[...CODEX_YOLO_FLAGS].join('|')})'cannotbeusedmultipletimes`,
+  'i',
+)
+
+/**
+ * A saída do Codex quando ele recusa a flag de yolo repetida:
+ * "error: the argument '--dangerously-bypass-approvals-and-sandbox' cannot be
+ * used multiple times". O terminal quebra a linha nas colunas (no meio da frase
+ * ou até da flag), então a comparação ignora todo espaço em branco.
+ */
+export function codexRejectedRepeatedYolo(output: string): boolean {
+  return CODEX_REPEATED_YOLO_ERROR.test(output.replace(/\s+/g, ''))
+}
+
 /** Short human label for the block, e.g. "Claude opus" or "Codex sol ⚡". */
 export function describeLaunch(choices: AgentLaunchChoices): string {
   const agent = getAgent(choices.agentId)

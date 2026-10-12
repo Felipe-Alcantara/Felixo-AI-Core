@@ -65,6 +65,12 @@ import {
   type AgentResumeFailure,
   type AgentSessionReference,
 } from '../services/agent-session'
+import {
+  codexRejectedRepeatedYolo,
+  countCodexYoloFlags,
+  dropRepeatedYoloFlags,
+  withoutCodexYoloFlags,
+} from '../services/agent-launch-options'
 import { createResumeOutcomeDetector, type ResumeOutcomeDetector } from './resume-outcome-detector'
 import type { SessionMetadata } from './session-metadata'
 import {
@@ -190,6 +196,17 @@ const RESUME_FAILURE_WINDOW_MS = 30000
 const IDLE_AFTER_MS = 1500
 /** A configured agent should not terminate silently immediately after launch. */
 const SILENT_EARLY_EXIT_MS = 5000
+/**
+ * Janela em que uma saída do Codex com código diferente de zero, sem a pessoa
+ * ter digitado nada, conta como falha de lançamento (recusa de argumentos,
+ * login, instalação quebrada). A recusa do `clap` sai em menos de um segundo.
+ */
+const CODEX_BOOT_FAILURE_MS = 10_000
+/** Aviso do bloco reaberto sem a flag de yolo do app (ver `relaunchWithoutDuplicateYolo`). */
+const CODEX_DUPLICATE_YOLO_NOTICE =
+  'O Codex recusou a flag de yolo repetida: já existe outra no comando `codex` do seu sistema (um wrapper ou alias). O Felixo reabriu sem a dele; o modo yolo continua valendo.'
+/** Quanto da tela entra no registro de diagnóstico: o fim, onde a CLI diz o erro. */
+const BOOT_FAILURE_OUTPUT_CHARS = 2_000
 /** A tela reconhecida, e não um atraso fixo, decide quando o texto pode entrar. */
 const DEFAULT_INITIAL_TEXT_DELAY_MS = 0
 /** Fallback de silêncio para CLIs cuja linha de entrada não conhecemos. */
@@ -399,6 +416,12 @@ type Session = {
   /** When output last changed the buffer in a meaningful way. */
   lastMeaningfulAt: number
   args: string[]
+  /** Argumentos pedidos ao store, antes de `dropRepeatedYoloFlags` mexer neles. */
+  requestedArgs: string[]
+  /** Flags de yolo repetidas que o store descartou neste spawn (para o diagnóstico). */
+  droppedYoloFlags: string[]
+  /** Relógio deste processo: `startedAt` vem do bloco e pode ser de uma execução antiga. */
+  spawnedAt: number
   initialText?: string
   rawInitialText?: string
   /** Artifact names belonging to the most recent generated context reference. */
@@ -749,7 +772,14 @@ export class TerminalSessionStore {
           options.cliVersion,
         )
       : undefined
-    const launchArgs = resumeArgs ?? options.args ?? []
+    // Rede de segurança: o Codex recusa subir com duas flags de yolo antes do
+    // subcomando, e o bloco nasceria "encerrado". Vale para o lançamento comum e
+    // para a retomada (`resume <flags> <id>`), que passam por aqui.
+    const requestedArgs = resumeArgs ?? options.args ?? []
+    const { args: launchArgs, removed: droppedYoloFlags } = dropRepeatedYoloFlags(
+      options.command,
+      requestedArgs,
+    )
     // Só um spawn que sobe DE FATO com argumentos de retomada tem uma
     // resposta de retomada para vigiar; `buildAgentResumeArgs` já garantiu
     // que a referência é válida quando devolveu argumentos. O detector recebe
@@ -803,6 +833,9 @@ export class TerminalSessionStore {
       lastSignature: '',
       lastMeaningfulAt: Date.now(),
       args: [...launchArgs],
+      requestedArgs: [...requestedArgs],
+      droppedYoloFlags,
+      spawnedAt: Date.now(),
       initialText: undefined,
       rawInitialText: options.initialText,
       contextArtifactNames: [],
@@ -1001,6 +1034,14 @@ export class TerminalSessionStore {
       session.inputTouched = true
       this.trackTypedInput(session, data)
     })
+
+    if (droppedYoloFlags.length > 0) {
+      this.logLaunch(session, 'warn', 'terminal-launch:args-normalized', {
+        requestedArgs: session.requestedArgs,
+        launchArgs: session.args,
+        removed: droppedYoloFlags,
+      })
+    }
 
     void pty
       .spawn({
@@ -2085,13 +2126,20 @@ export class TerminalSessionStore {
       return
     }
 
+    if (this.relaunchWithoutDuplicateYolo(session, event)) {
+      return
+    }
+
     const silentEarlyExit =
       Boolean(session.command) &&
       !session.receivedOutput &&
       Date.now() - session.startedAt < SILENT_EARLY_EXIT_MS
+    // Registra sempre que for falha de lançamento; a mensagem na tela só entra se a
+    // da saída silenciosa (mais específica) não estiver lá.
+    const bootFailureMessage = this.reportCodexBootFailure(session, event)
     const message = silentEarlyExit
       ? `O comando "${session.command}" encerrou sem produzir saída. Verifique a instalação e a autenticação da CLI.`
-      : undefined
+      : bootFailureMessage
 
     this.update(session, {
       activity: silentEarlyExit ? 'error' : 'exited',
@@ -2099,6 +2147,125 @@ export class TerminalSessionStore {
       message,
       scrollback: readScrollbackStatus(session.terminal, session.outputLineCount, session.snapshot.scrollback),
     })
+  }
+
+  /**
+   * O Codex recusou a flag de yolo repetida logo ao abrir e o app mandou
+   * exatamente uma: então a outra vem de fora (um `codex` embrulhado, um alias
+   * no sistema). Reproduzido no app real com um `codex` na frente do PATH que
+   * sempre soma a flag — sem o checkbox o bloco abre em YOLO mode só por ela;
+   * com o checkbox, dava este erro e o bloco nascia "encerrado".
+   *
+   * A recusa prova que o yolo vale pela flag de fora, então reabrir sem a do app
+   * não tira permissão nenhuma. Uma vez só: sem a flag do app não há o que tirar
+   * de novo, então não há laço. Só reabre um processo que morreu sem receber
+   * nada (nenhuma tecla da pessoa, nenhum texto do app), por isso é seguro
+   * reenviar o contexto inicial.
+   */
+  private relaunchWithoutDuplicateYolo(
+    session: Session,
+    event: { exitCode: number; signal?: number },
+  ): boolean {
+    if (
+      session.command !== 'codex' ||
+      event.exitCode === 0 ||
+      session.inputTouched ||
+      session.initialTextSent ||
+      Date.now() - session.spawnedAt >= CODEX_BOOT_FAILURE_MS ||
+      countCodexYoloFlags(session.args) !== 1 ||
+      !codexRejectedRepeatedYolo(readBuffer(session.terminal))
+    ) {
+      return false
+    }
+
+    const retryArgs = withoutCodexYoloFlags(session.command, session.launchOptions.args ?? [])
+    this.logLaunch(session, 'warn', 'terminal-launch:yolo-duplicate-retry', {
+      args: session.args,
+      retryArgs,
+      exitCode: event.exitCode,
+      elapsedMs: Date.now() - session.spawnedAt,
+    })
+
+    this.restart(session.id, { ...session.launchOptions, args: retryArgs })
+    const relaunched = this.sessions.get(session.id)
+    if (relaunched) {
+      this.update(relaunched, { contextWarning: CODEX_DUPLICATE_YOLO_NOTICE })
+    }
+    return true
+  }
+
+  /**
+   * Grava no log de QA (escopo `terminal-launch`) o que o app mandou e o que a
+   * CLI respondeu quando um Codex cai logo ao abrir, e devolve o texto que o
+   * bloco mostra. Existe porque um bloco Codex nasceu "encerrado" com "the
+   * argument '--dangerously-bypass-approvals-and-sandbox' cannot be used
+   * multiple times" e, sem os argumentos de fato enviados, não dava para
+   * separar "o bloco guarda a flag duas vezes" de "um `codex` embrulhado
+   * soma a sua". Só o Codex: Claude e Gemini têm os próprios avisos de
+   * retomada e login, que esta mensagem repetiria.
+   */
+  private reportCodexBootFailure(
+    session: Session,
+    event: { exitCode: number; signal?: number },
+  ): string | undefined {
+    if (
+      session.command !== 'codex' ||
+      event.exitCode === 0 ||
+      session.inputTouched ||
+      Date.now() - session.spawnedAt >= CODEX_BOOT_FAILURE_MS
+    ) {
+      return undefined
+    }
+
+    this.logLaunch(session, 'error', 'terminal-launch:early-exit', {
+      args: session.args,
+      requestedArgs: session.requestedArgs,
+      removed: session.droppedYoloFlags,
+      exitCode: event.exitCode,
+      signal: event.signal ?? null,
+      elapsedMs: Date.now() - session.spawnedAt,
+      outputTail: readBuffer(session.terminal).trimEnd().slice(-BOOT_FAILURE_OUTPUT_CHARS),
+    })
+
+    const sent = session.args.length > 0 ? session.args.join(' ') : '(nenhum)'
+    const dropped =
+      session.droppedYoloFlags.length > 0
+        ? ` O Felixo descartou flag repetida: ${session.droppedYoloFlags.join(', ')}.`
+        : ''
+    return (
+      `O Codex encerrou logo ao abrir (código ${event.exitCode}). Argumentos enviados: ${sent}.` +
+      `${dropped} O diagnóstico completo está no log de QA (escopo terminal-launch).`
+    )
+  }
+
+  /** Evento de diagnóstico do lançamento. Nunca atrapalha o terminal: melhor esforço. */
+  private logLaunch(
+    session: Session,
+    level: 'warn' | 'error',
+    message: string,
+    details: Record<string, unknown>,
+  ): void {
+    try {
+      void Promise.resolve(
+        window.felixo?.qaLogger?.log({
+          level,
+          scope: 'terminal-launch',
+          sessionId: session.ptySessionId,
+          message,
+          details: {
+            terminal: session.id,
+            command: session.command,
+            accountId: session.launchOptions.accountId ?? null,
+            providerId: session.launchOptions.providerId ?? null,
+            cliVersion: session.launchOptions.cliVersion ?? null,
+            platform: window.navigator?.platform ?? null,
+            ...details,
+          },
+        }),
+      ).catch(() => {})
+    } catch {
+      // O registro de QA é melhor esforço: uma ponte antiga não pode quebrar o spawn.
+    }
   }
 
   private markWorking(session: Session): void {
