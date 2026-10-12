@@ -8242,3 +8242,80 @@ dispara por clique confirmado (invariantes I1 a I9 do spec, cada uma com teste).
   release** (`release.yml`), então a decisão de mesclar fica com quem mantém o repositório.
 
 Estado: implementado e validado localmente no Windows; CI e merge pendentes.
+
+## 2026-10-12 — Agente na nuvem: revisão independente e ajustes de padrão de qualidade
+
+**Contexto.** Com o cartão funcionando e o PR em rascunho, foi pedido seguir sempre o padrão de
+qualidade do projeto. A branch inteira foi revisada com os guias como régua (guia mínimo, backend,
+frontend §9 e §10, política de git, template do `IA.md`). A tabela completa dos achados está na
+seção 13 de `docs/projeto/ESPEC-AGENTE-NUVEM.md`; aqui ficam os que custariam caro de novo.
+
+**Achados que mudaram o desenho.**
+
+- **Windows.** O node-pty não cita um argumento que começa e termina com aspas. Uma tarefa como
+  `"abc" --settings=x "def"` virava vários argumentos e o `--settings` chegava ao `claude` como
+  opção. A linha de comando agora é montada pela regra do `CommandLineToArgvW` e o teste a confere
+  contra o parser real do sistema. Em **todas** as plataformas, tarefa e mensagem que começam com
+  `-` são recusadas, porque o próprio `claude` as leria como opção.
+- **macOS.** O escape de shell do app não cobre quebra de linha nem tabulação. Cada argumento
+  viaja numa variável de ambiente (`FELIXO_ARG_n`) expandida só entre aspas duplas. A prova usa um
+  `sh` de verdade e roda no CI de Linux e macOS; no Windows o teste é pulado.
+- **Parser.** Um título como "Create View: component" fazia uma sessão já criada (e cobrada) virar
+  erro e o cartão perdia o ID. Os rótulos `View:` e `Resume with:` só valem no começo da linha.
+- **Interface.** Faltavam foco, Esc na confirmação e `prefers-reduced-motion`. O foco inicial caía
+  no botão que gasta crédito; agora entra no contêiner da confirmação.
+- **Backend.** Faltava log das falhas: cada operação grava um evento no QA Logger (escopo
+  `cloud-session`) sem tarefa, pasta nem ID. `dispose` agora encerra o PTY também durante a
+  tolerância de 3 s, e a busca do `claude.exe` continua pelo `PATH` quando um shim não tem o exe.
+- **Migração.** Novo `app/scripts/ensaiar-migracoes-em-copia.cjs`: copia o banco real, aplica as
+  migrações pendentes só na cópia e reprova se alguma tabela perder linhas, se o `integrity_check`
+  não vier "ok" ou se houver violação de chave estrangeira. O relatório só traz nomes de tabela e
+  contagens. Rodado no banco do perfil local: versão 18 para 19 e nenhuma tabela com menos linhas.
+- **Repositório público.** Valores privados da conta e do banco de quem testou tinham ido para
+  documentos e fixtures; foram generalizados na árvore. As versões antigas dos commits já
+  publicados no PR ainda os contêm (ver o fim desta entrada).
+
+**Armadilha de ambiente (vale para quem roda os testes nesta máquina).** O `pretest` do
+`npm test` roda `npm rebuild node-pty`. Com o TypeScript 6.0.2 do `node_modules` compartilhado ele
+falha (`TS5108: Option 'target=ES5' has been removed`) **depois de recompilar o `lib/` do node-pty**
+por cima do que veio no pacote. O `lib/` foi restaurado a partir do tarball oficial da mesma
+versão e o node-pty voltou a abrir um PTY. Para rodar os testes aqui, use
+`node scripts/run-node-unit-tests.cjs` direto. Dois outros tropeços: o `tsc -p .` não verifica
+nada neste projeto (o gate é `npm run typecheck`), e o shell das ferramentas de edição reduz as
+barras invertidas em heredocs, o que corrompe fixtures com caminhos do Windows.
+
+**Validação desta fase** (Windows 11, Claude Code 2.1.287):
+
+- `node scripts/run-node-unit-tests.cjs`: 2.655 testes, 2.648 passam, 6 pulados (POSIX e link
+  simbólico, que não se aplicam ao Windows) e **1 falha**: `electron/core/app-relaunch.test.cjs`
+  com `EPERM: symlink`, porque o Windows desta máquina não deixa o teste criar link simbólico.
+  Ambiental, anterior a esta mudança, e a branch não toca nesse arquivo.
+- `vitest` com `--testTimeout=120000`: 205 arquivos passam (2 ignorados), 3.143 testes passando
+  e 3 ignorados. Com o prazo padrão de 5 s, as gravações `terminal-reading.fixtures` estouram
+  nesta máquina; não tem relação com esta mudança.
+- `npm run typecheck`, `npm run lint` e `vite build` sem erros.
+- Mutações feitas de propósito, e os testes falharam como devia: host do link, trava por nó,
+  remoção das credenciais herdadas, migração que perdia linhas, `launching` que não virava
+  `interrupted` e a linha de comando do Windows.
+- Foco, Esc e `motion-safe` conferidos num DOM real (cartão novo foca a tarefa; a confirmação
+  foca o contêiner e devolve o foco ao botão de origem ao cancelar ou com Esc; a falha leva o foco
+  ao aviso).
+
+**O que NÃO foi validado.**
+
+- **Linux e macOS**: só os testes automáticos rodam no CI; a criação real de sessão foi vista só
+  no Windows. O convite está no checklist manual.
+- Na tela real, depois desta fase: o foco após o cartão ficar **criado** e após **Nova sessão**, a
+  recusa do hífen no início, o evento no QA Logger e a pasta não confiada pelo caminho "Abrir
+  Claude nesta pasta". Estão como etapas 13 a 16 do checklist.
+- Texto difícil (aspas, `%PATH%`, quebra de linha) chegando intacto **na nuvem real**: provado
+  contra o parser do Windows e com um `sh` de verdade, não numa sessão cobrada.
+- O resto da lista da entrada anterior continua valendo (duplo clique real, fechar o app no meio
+  do disparo, importar em outro perfil, a mensagem do follow-up dentro do claude.ai/code, saídas
+  de erro de login, limite, rede e pacote grande, e se `--teleport` consome o plano ou o crédito).
+- O CI e o merge. **Mesclar em `main` publica uma release** (`release.yml`): a decisão é de quem
+  mantém o repositório. Os commits antigos já enviados ao PR ainda contêm os valores privados;
+  reescrever a história exigiria force-push e só esconderia isso da branch, porque o GitHub
+  mantém os commits acessíveis por SHA. Fica registrado para decidir.
+
+Estado: implementado e validado localmente no Windows; push, CI e merge pendentes.
