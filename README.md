@@ -82,7 +82,7 @@ Base funcional entregue:
 - **Tutorial do canvas** no primeiro uso (projeto, agente, contexto, terminais, ferramentas e onde rever), não bloqueante e sem criar nada, e **Ajuda** na barra de ícones para reabrir o tutorial, ver novidades e redefinir. Quem já usava o app recebe só um aviso discreto da Ajuda, uma vez; o progresso fica versionado no SQLite local, sem reabrir a cada atualização (ver o [Guia do Usuário](docs/guias/GUIA-USUARIO.md#tutorial-e-ajuda))
 - Frontend organizado por feature em `app/src/features/`, com o que é comum às telas em `features/shared/`
 - Processo Electron modularizado em `core/`, `services/` e `windows/`
-- Bloco **Agente na nuvem** (**Criar → Agente na nuvem**): cria uma sessão do Claude Code na nuvem (`claude --cloud`) por um cartão no canvas, com confirmação antes de gastar crédito, follow-up e **Trazer para cá** (`--teleport`). A sessão só nasce de um clique confirmado: abrir, restaurar ou importar o canvas nunca criam (ver o [Guia do Usuário](docs/guias/GUIA-USUARIO.md#agente-na-nuvem))
+- Bloco **Agente na nuvem** (opção do menu **Agente**, em **Criar**): cria uma sessão do Claude Code na nuvem (`claude --cloud`) por um cartão no canvas, com confirmação antes de gastar crédito, follow-up e **Trazer para cá** (`--teleport`). A sessão só nasce de um clique confirmado: abrir, restaurar ou importar o canvas nunca criam (ver o [Guia do Usuário](docs/guias/GUIA-USUARIO.md#agente-na-nuvem))
 - Testes unitários para adapters, orquestrador, catálogo MCP e leitura JSONL
 
 ### Sincronização segura do Felixo System Design

@@ -592,19 +592,24 @@ Por segurança, o app só abre arquivos que estejam dentro de um projeto registr
 
 ### Agente na nuvem
 
-O bloco **Agente na nuvem** (botão na seção **Criar** da barra lateral) cria uma
-sessão do Claude Code que roda **na nuvem da Anthropic**, e não no seu computador.
+O bloco **Agente na nuvem** (uma das opções do menu **Agente**, na seção **Criar** da
+barra lateral) cria uma sessão do Claude Code que roda **na nuvem da Anthropic**, e
+não no seu computador.
 Serve, por exemplo, para gastar o **crédito de sessão na nuvem** que algumas contas
 recebem (ele aparece em *Configurações > Uso* do Claude) e poupar o limite semanal do
 plano. Esse crédito só vale para sessões na nuvem: não cobre um agente rodando no
 terminal local.
 
-1. Clique em **Agente na nuvem**: um cartão em rascunho aparece no canvas.
-2. Escreva a **tarefa**, escolha o **projeto** (ou a pasta) e a **conta**. Sem escolher
-   uma conta, vale o *Login do sistema*. A nuvem exige login de assinatura do Claude;
-   uma chave de API não funciona.
-3. Clique em **Disparar na nuvem** e confirme. **Só esse clique cria a sessão**: abrir o
-   app, restaurar o canvas ou importar um canvas nunca criam (nem gastam crédito).
+1. Em **Criar**, abra a configuração do **Agente** (a setinha ao lado dele) e escolha
+   **Agente na nuvem** na lista de agentes, junto de Claude, Codex e os outros.
+2. Escreva a **tarefa**, escolha a **conta** e o **projeto** (a nuvem precisa de uma
+   pasta; não existe "sem projeto"). Sem escolher uma conta, vale o *Login do sistema*.
+   A nuvem exige login de assinatura do Claude; uma chave de API não funciona. Clique em
+   **Abrir agente na nuvem**: um cartão em rascunho, já preenchido, aparece no canvas.
+   Isso ainda **não** cria sessão nem gasta crédito.
+3. No cartão, clique em **Disparar na nuvem** e confirme. **Só esse clique cria a
+   sessão**: abrir o app, restaurar o canvas ou importar um canvas nunca criam (nem
+   gastam crédito).
 4. O cartão mostra o título, o ID e a data da sessão, com as ações **Abrir** (no
    navegador), **Trazer para cá** (abre um terminal com `claude --teleport` e continua
    a conversa localmente; isso pode usar o limite do plano, não o crédito de nuvem) e
