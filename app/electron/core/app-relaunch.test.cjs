@@ -30,7 +30,14 @@ function appImageFixture() {
   fs.writeFileSync(path.join(mount, 'felixo-ai-core'), '')
   fs.writeFileSync(path.join(extracted, 'felixo-ai-core'), '')
   fs.writeFileSync(appImage, '')
-  fs.symlinkSync(realTmp, linkTmp)
+  try {
+    fs.symlinkSync(realTmp, linkTmp)
+  } catch (error) {
+    // No Windows o link simbólico exige privilégio (modo desenvolvedor) e só os
+    // testes pulados por SO_EM_POSIX o usam; sem ele o arquivo inteiro morria
+    // antes de rodar os testes que valem lá. Fora do Windows a falha continua alta.
+    if (!SO_EM_POSIX || error.code !== 'EPERM') throw error
+  }
   return { root, realTmp, linkTmp, mount, extracted, appImage, execPath: path.join(mount, 'felixo-ai-core') }
 }
 
