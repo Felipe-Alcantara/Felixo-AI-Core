@@ -61,6 +61,20 @@ function CloudSessionNodeComponent({ id, data, selected }: NodeProps) {
   })
   const inFlightRef = useRef(false)
 
+  // Foco (DESIGN_SYSTEM_FRONTEND §9.1): a confirmação, o resultado e o rascunho
+  // aparecem e somem trocando o conteúdo do cartão, e o botão que tinha o foco
+  // some junto. Cada refs abaixo aponta o lugar para onde o foco precisa ir.
+  const taskRef = useRef<HTMLTextAreaElement>(null)
+  // O foco entra no contêiner da confirmação, e não no botão que gasta crédito:
+  // um Enter mantido pressionado ao abrir não pode confirmar sem querer.
+  const confirmationRef = useRef<HTMLDivElement>(null)
+  const launchTriggerRef = useRef<HTMLButtonElement>(null)
+  const newSessionTriggerRef = useRef<HTMLButtonElement>(null)
+  const resultRef = useRef<HTMLDivElement>(null)
+  const restoreFocusRef = useRef<'launch' | 'new-session' | null>(null)
+  const previousStatusRef = useRef(status)
+  const autoFocusedRef = useRef(false)
+
   const [confirming, setConfirming] = useState<Confirming>(null)
   const [followUpText, setFollowUpText] = useState('')
   const [followUpBusy, setFollowUpBusy] = useState(false)
@@ -86,6 +100,42 @@ function CloudSessionNodeComponent({ id, data, selected }: NodeProps) {
       cancelled = true
     }
   }, [])
+
+  /** Fecha a confirmação sem fazer nada e devolve o foco ao botão que a abriu. */
+  const closeConfirmation = useCallback(() => {
+    restoreFocusRef.current = confirming === 'new-session' ? 'new-session' : 'launch'
+    setConfirming(null)
+  }, [confirming])
+
+  useEffect(() => {
+    if (confirming) {
+      confirmationRef.current?.focus()
+      return
+    }
+    const target = restoreFocusRef.current
+    restoreFocusRef.current = null
+    if (target === 'launch') launchTriggerRef.current?.focus()
+    else if (target === 'new-session') newSessionTriggerRef.current?.focus()
+  }, [confirming])
+
+  useEffect(() => {
+    const previous = previousStatusRef.current
+    previousStatusRef.current = status
+    // Terminou o disparo: o botão que tinha o foco sumiu, então o foco vai para o resultado.
+    if (previous === 'launching' && (status === 'created' || status === 'failed')) {
+      resultRef.current?.focus()
+    }
+    // Nova sessão: volta ao rascunho, pronto para escrever a próxima tarefa.
+    if (previous === 'created' && status === 'draft') taskRef.current?.focus()
+  }, [status])
+
+  // Cartão novo e vazio, recém-selecionado: o foco vai para a tarefa. Um cartão
+  // restaurado ao abrir o app não está selecionado e não rouba o foco.
+  useEffect(() => {
+    if (autoFocusedRef.current || !selected || status !== 'draft' || nodeData.cloudTask) return
+    autoFocusedRef.current = true
+    taskRef.current?.focus()
+  }, [selected, status, nodeData.cloudTask])
 
   // A regra de disparar e de enviar mensagem mora em `cloud-session-actions.ts`
   // (testada sem DOM); aqui só se liga o botão a ela e se guarda o que é da tela.
@@ -185,7 +235,7 @@ function CloudSessionNodeComponent({ id, data, selected }: NodeProps) {
       <div className="nodrag nowheel nopan flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-3 text-xs">
         {status === 'launching' && (
           <div role="status" aria-live="polite" className="flex items-center gap-2 py-6">
-            <Loader2 size={16} className="animate-spin" aria-hidden />
+            <Loader2 size={16} className="motion-safe:animate-spin" aria-hidden />
             <span>Criando a sessão na nuvem… pode levar até 1 minuto.</span>
           </div>
         )}
@@ -207,6 +257,7 @@ function CloudSessionNodeComponent({ id, data, selected }: NodeProps) {
               </label>
               <textarea
                 id={`${id}-task`}
+                ref={taskRef}
                 value={nodeData.cloudTask ?? ''}
                 maxLength={CLOUD_TASK_MAX}
                 rows={4}
@@ -270,7 +321,12 @@ function CloudSessionNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         {status === 'failed' && error && (
-          <div role="alert" className="rounded-sm bg-theme-error/10 p-2 text-theme-error">
+          <div
+            role="alert"
+            ref={resultRef}
+            tabIndex={-1}
+            className="rounded-sm bg-theme-error/10 p-2 text-theme-error outline-none"
+          >
             <p className="whitespace-pre-wrap break-words">{error.message}</p>
             {error.code === 'trust-required' && (
               <button
@@ -285,7 +341,19 @@ function CloudSessionNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         {confirming && (
-          <div role="group" aria-label="Confirmação" className="rounded-sm border border-(--color-border) p-2">
+          <div
+            role="group"
+            aria-label="Confirmação"
+            ref={confirmationRef}
+            tabIndex={-1}
+            className="rounded-sm border border-(--color-border) p-2 outline-none"
+            onKeyDown={(event) => {
+              // Esc cancela, como em qualquer diálogo; o React Flow não deve ver a tecla.
+              if (event.key !== 'Escape') return
+              event.stopPropagation()
+              closeConfirmation()
+            }}
+          >
             {confirming === 'new-session' ? (
               <p>
                 A sessão atual continua em claude.ai/code. Este cartão volta ao rascunho para criar outra.
@@ -323,7 +391,7 @@ function CloudSessionNodeComponent({ id, data, selected }: NodeProps) {
               >
                 {confirming === 'new-session' ? 'Criar novo rascunho' : 'Confirmar e disparar'}
               </button>
-              <button type="button" className={SECONDARY} onClick={() => setConfirming(null)}>
+              <button type="button" className={SECONDARY} onClick={closeConfirmation}>
                 Cancelar
               </button>
             </div>
@@ -333,6 +401,7 @@ function CloudSessionNodeComponent({ id, data, selected }: NodeProps) {
         {editable && !confirming && (
           <button
             type="button"
+            ref={launchTriggerRef}
             className={`${PRIMARY} self-start`}
             disabled={!canLaunch(nodeData)}
             onClick={() => {
@@ -346,7 +415,7 @@ function CloudSessionNodeComponent({ id, data, selected }: NodeProps) {
 
         {status === 'created' && session && (
           <>
-            <div role="status" aria-live="polite">
+            <div role="status" aria-live="polite" ref={resultRef} tabIndex={-1} className="outline-none">
               <p className="text-sm font-medium">{session.title}</p>
               <p className="mt-1 flex items-center gap-1 text-[11px] text-(--f-core-secondary)">
                 <span className="truncate" title={session.id}>
@@ -381,7 +450,12 @@ function CloudSessionNodeComponent({ id, data, selected }: NodeProps) {
               >
                 <TerminalSquare size={12} aria-hidden /> Trazer para cá
               </button>
-              <button type="button" className={SECONDARY} onClick={() => setConfirming('new-session')}>
+              <button
+                type="button"
+                ref={newSessionTriggerRef}
+                className={SECONDARY}
+                onClick={() => setConfirming('new-session')}
+              >
                 Nova sessão
               </button>
             </div>
@@ -405,7 +479,11 @@ function CloudSessionNodeComponent({ id, data, selected }: NodeProps) {
                   disabled={followUpBusy || !followUpText.trim()}
                   onClick={() => void sendFollowUp()}
                 >
-                  {followUpBusy ? <Loader2 size={12} className="animate-spin" aria-hidden /> : <Send size={12} aria-hidden />}
+                  {followUpBusy ? (
+                    <Loader2 size={12} className="motion-safe:animate-spin" aria-hidden />
+                  ) : (
+                    <Send size={12} aria-hidden />
+                  )}
                   <span className="sr-only">Enviar</span>
                 </button>
               </div>

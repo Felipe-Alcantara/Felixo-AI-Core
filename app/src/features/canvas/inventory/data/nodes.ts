@@ -608,7 +608,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
     layer: 'node',
     owner: `${COMPONENTS}/CloudSessionNode.tsx`,
     states: {
-      normal: 'Rascunho: tarefa, projeto, conta e o botão "Disparar na nuvem". Criada: título, ID, ações e follow-up.',
+      normal: 'Rascunho: tarefa, projeto, conta e o botão "Disparar na nuvem". Criada: título, ID, ações e follow-up. O foco entra na tarefa de um cartão novo, na confirmação ao abri-la e no resultado ao terminar o disparo.',
       loading: 'status "launching": "Criando a sessão na nuvem…" (até 60 s); o formulário some e nada é clicável até o fim.',
       empty: 'Rascunho sem tarefa ou sem pasta: "Disparar na nuvem" desabilitado.',
       pending: 'Confirmação inline antes de disparar, de tentar de novo depois de erro incerto e de criar nova sessão.',
@@ -638,9 +638,9 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
         disabledWhen: 'Só existe com a confirmação aberta.',
       },
       {
-        locator: 'onClick={() => setConfirming(null)}',
+        locator: 'onClick={closeConfirmation}',
         kind: 'button',
-        effect: 'Cancelar: fecha a confirmação sem chamar o processo principal.',
+        effect: 'Cancelar (ou Esc): fecha a confirmação sem chamar o processo principal e devolve o foco ao botão que a abriu.',
         failure: 'Sem falha própria.',
         disabledWhen: 'Só existe com a confirmação aberta.',
       },

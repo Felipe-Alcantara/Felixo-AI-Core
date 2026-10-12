@@ -746,7 +746,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Estado | Quando |
 | --- | --- |
-| normal | Rascunho: tarefa, projeto, conta e o botão "Disparar na nuvem". Criada: título, ID, ações e follow-up. |
+| normal | Rascunho: tarefa, projeto, conta e o botão "Disparar na nuvem". Criada: título, ID, ações e follow-up. O foco entra na tarefa de um cartão novo, na confirmação ao abri-la e no resultado ao terminar o disparo. |
 | loading | status "launching": "Criando a sessão na nuvem…" (até 60 s); o formulário some e nada é clicável até o fim. |
 | empty | Rascunho sem tarefa ou sem pasta: "Disparar na nuvem" desabilitado. |
 | error | status "failed": faixa role="alert" com a mensagem em português do código de erro; erros de follow-up e de abrir o link aparecem numa linha abaixo. |
@@ -758,7 +758,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `title="Escolher pasta"` (button) | clique | Abre o seletor nativo de pasta (files.pickContext) e grava a escolhida em cloudCwd. (desabilitado: Some depois que a sessão é criada.) | Cancelar o seletor não muda nada; sem a ponte files o botão não faz nada. | — |
 | `Abrir Claude nesta pasta` (button) | clique | Só no erro "trust-required": abre um terminal comum do Claude na pasta, para a pessoa confiar nela uma vez. (desabilitado: Só aparece no erro trust-required.) | Sem falha própria; o terminal nasce pelo mesmo caminho dos demais. | — |
 | `'Criar novo rascunho' : 'Confirmar e disparar'` (button) | clique | Confirmar e disparar chama cloudSession.launch (cria a sessão paga); Criar novo rascunho limpa sessão e follow-ups e volta ao rascunho. (desabilitado: Só existe com a confirmação aberta.) | Falha do launch vira status "failed" com o código do erro; nada é reenviado sozinho. | — |
-| `onClick={() => setConfirming(null)}` (button) | clique | Cancelar: fecha a confirmação sem chamar o processo principal. (desabilitado: Só existe com a confirmação aberta.) | Sem falha própria. | — |
+| `onClick={closeConfirmation}` (button) | clique | Cancelar (ou Esc): fecha a confirmação sem chamar o processo principal e devolve o foco ao botão que a abriu. (desabilitado: Só existe com a confirmação aberta.) | Sem falha própria. | — |
 | `'Tentar de novo' : 'Disparar na nuvem'` (button) | clique | Rascunho: abre a confirmação. Depois de erro que prova que nada foi criado (trust, login, limite, entrada inválida): dispara de novo direto; nos demais abre a confirmação com aviso de sessão possivelmente criada. (desabilitado: Sem tarefa ou sem pasta; some enquanto dispara e depois de criada.) | Um disparo duplicado do mesmo cartão devolve "busy" (trava por nó no processo principal). | — |
 | `title="Copiar ID"` (button) | clique | Copia o ID da sessão para a área de transferência. (desabilitado: Só existe depois de criada.) | Sem permissão de área de transferência: mostra "Não foi possível copiar o ID". | — |
 | `onClick={() => void openSession()}` (button) | clique | Abre o link da sessão no navegador padrão (cloudSession.open; o main só aceita claude.ai/code/session_*). (desabilitado: Só existe depois de criada.) | Link fora do padrão ou navegador indisponível: mostra a mensagem do processo principal. | — |
