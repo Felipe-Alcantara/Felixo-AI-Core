@@ -6,6 +6,22 @@ Felixo AI Core é o núcleo inteligente do ecossistema FelixoVerse: uma aplicaç
 
 ---
 
+## Índice
+
+- [O que é](#o-que-é)
+- [Arquitetura atual](#arquitetura-atual)
+- [Status atual](#status-atual)
+- [Stack](#stack)
+- [Como rodar](#como-rodar)
+- [Rodar em outro PC](#rodar-em-outro-pc)
+- [Openia como launcher de OpenRouter](#openia-como-launcher-de-openrouter)
+- [Como distribuir](#como-distribuir)
+- [Validação](#validação)
+- [Roadmap](#roadmap)
+- [Licença e contribuições](#licença-e-contribuições)
+
+---
+
 ## O que é
 
 Uma aplicação desktop que transforma as CLIs de IA que você já usa no terminal — Claude, Codex, Gemini e outros — em blocos de trabalho conectados num canvas visual.
@@ -863,3 +879,11 @@ Cada módulo tem seu arquivo de teste correspondente em `tests/`.
 ## Roadmap
 
 Ver [ROADMAP.md](./docs/projeto/ROADMAP.md) para fases, checklists, metas e backlog completo.
+
+---
+
+## Licença e contribuições
+
+Distribuído sob a licença MIT; o texto completo está em [LICENSE](./LICENSE).
+
+Contribuições são bem-vindas. O fluxo de branches e commits (direto na `main` por padrão, branch só nas exceções) está na [política de branch do Guia para Desenvolvedores](./docs/guias/GUIA-DESENVOLVEDOR.md#política-de-branch), e o [Roadmap](./docs/projeto/ROADMAP.md) lista a direção do projeto e as ideias abertas para quem quiser ajudar.
