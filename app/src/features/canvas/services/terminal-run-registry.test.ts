@@ -209,3 +209,45 @@ describe('registro de execução: conversa esquecida', () => {
     expect(registry.acceptAgentSession('bloco', reference.sessionId)).toBe(true)
   })
 })
+
+describe('registro de execução: o que a decisão de subida pressupõe', () => {
+  // `resolveTerminalSpawnPlan` segura um bloco pela versão da CLI olhando só
+  // os "sem processo" (`holdable`), sem conferir que ele está entre os
+  // restaurados. Quem garante isso é a captura: este teste prende a garantia
+  // aqui, na origem, para ela não depender de ninguém lembrar.
+  it('os "sem processo" são sempre um subconjunto dos restaurados, em qualquer ordem de eventos', () => {
+    const ids = ['a', 'b', 'c', 'd']
+    const passos: Array<(registry: ReturnType<typeof reload>) => void> = [
+      (registry) => registry.markStarted('a'),
+      (registry) => registry.markStarted('c'),
+      (registry) => void registry.captureRestored(['a', 'b']),
+      (registry) => void registry.captureRestored(ids),
+      (registry) => registry.markStarted('b'),
+      (registry) => registry.markStarted('d'),
+    ]
+
+    // Todas as ordens dos seis passos, com um reload da interface no meio.
+    const ordens = permutacoes(passos.map((_, index) => index))
+    expect(ordens).toHaveLength(720)
+    for (const ordem of ordens) {
+      const storage = memoryStorage()
+      let registry = reload(storage)
+      ordem.forEach((indice, posicao) => {
+        if (posicao === 3) registry = reload(storage)
+        passos[indice](registry)
+        const captura = registry.captureRestored(ids)
+        for (const id of captura.holdable) {
+          expect(captura.restored.has(id), `${id} em ${ordem.join(',')}`).toBe(true)
+          expect(registry.hasStarted(id), `${id} em ${ordem.join(',')}`).toBe(false)
+        }
+      })
+    }
+  })
+})
+
+function permutacoes<T>(itens: T[]): T[][] {
+  if (itens.length <= 1) return [itens]
+  return itens.flatMap((item, index) =>
+    permutacoes([...itens.slice(0, index), ...itens.slice(index + 1)]).map((resto) => [item, ...resto]),
+  )
+}
