@@ -3743,9 +3743,9 @@ failover no PTY, isolamento por conta, falhas injetadas e retomada. Branch `feat
 `origin/main` `116f0569`. O app guardava várias contas por CLI, cada uma na própria pasta de login, mas quando uma
 conta batia o limite nada ajudava a seguir em outra, e trocar de conta pode mudar quem paga. As 8 decisões do dono
 (tomadas em 28/09 pelo AskUserQuestion) e as alternativas estão no Resumo de Decisão de 28/09 em
-[`docs/projeto/IA.md`](docs/projeto/IA.md). A regra está em
-[`docs/projeto/POLITICA-CONTAS.md`](docs/projeto/POLITICA-CONTAS.md) e o plano de 30 commits em
-[`docs/projeto/PLANO-CADEIA-CONTAS.md`](docs/projeto/PLANO-CADEIA-CONTAS.md).
+[`docs/projeto/IA.md`](../projeto/IA.md). A regra está em
+[`docs/projeto/POLITICA-CONTAS.md`](../projeto/POLITICA-CONTAS.md) e o plano de 30 commits em
+[`docs/projeto/PLANO-CADEIA-CONTAS.md`](../projeto/PLANO-CADEIA-CONTAS.md).
 
 ### O que já está na branch (commits 1–14 do plano)
 

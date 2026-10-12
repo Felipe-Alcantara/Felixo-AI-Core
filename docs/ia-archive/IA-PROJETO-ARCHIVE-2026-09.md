@@ -2772,7 +2772,7 @@ número de CPUs" e "Placa de vídeo: correções da revisão" e não as reescrev
 
 **Task.** Tutorial inicial não bloqueante no canvas, um lugar para reabri-lo (Ajuda) e um aviso discreto de
 capability nova, tudo com estado versionado. O plano completo, com decisões, alternativas descartadas, riscos
-e o mapa aceite → teste (T1.a–T3.d), está em [`PLANO-TUTORIAL-CANVAS.md`](PLANO-TUTORIAL-CANVAS.md). Branch
+e o mapa aceite → teste (T1.a–T3.d), está em [`PLANO-TUTORIAL-CANVAS.md`](../projeto/PLANO-TUTORIAL-CANVAS.md). Branch
 `feat/tutorial-canvas`, a partir de `f42eb661` (#95). Registro gravado às 14:50.
 
 **Decisões centrais (detalhe e motivo no plano).**
@@ -3454,8 +3454,8 @@ posição.
 
 Registro gravado às 13:47. Task "Contas — definir política de cadeia, elegibilidade e ordem de fallback", na
 branch `feat/cadeia-contas`, a partir de `origin/main` `116f0569`. A regra está em
-[`POLITICA-CONTAS.md`](POLITICA-CONTAS.md) e o plano (camadas, dados, máquina de estados, commits e testes) em
-[`PLANO-CADEIA-CONTAS.md`](PLANO-CADEIA-CONTAS.md).
+[`POLITICA-CONTAS.md`](../projeto/POLITICA-CONTAS.md) e o plano (camadas, dados, máquina de estados, commits e testes) em
+[`PLANO-CADEIA-CONTAS.md`](../projeto/PLANO-CADEIA-CONTAS.md).
 
 CONTEXTO: o app já guardava várias contas por CLI, cada uma com a própria pasta de login, mas quando uma conta
 batia o limite de uso nada ajudava a seguir em outra. Trocar de conta pode mudar quem paga, então a cadeia é uma
