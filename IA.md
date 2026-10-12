@@ -38,6 +38,9 @@
   (3) Os artefatos de contexto morrem com o terminal, mas a conversa retomada do agente ainda os cita;
   a entrada de 2026-10-12 "artefato expirado deixava o agente parado" só impede que isso trave o
   agente (texto do erro de `felixo context read`) e não mudou a retenção.
+  (4) Um bloco Codex com yolo marcado nasce "encerrado" por flag repetida quando algo fora do app já
+  soma a flag. Há fallback e diagnóstico (entrada de 2026-10-12 "Codex: flag de yolo repetida"), mas a
+  causa na máquina de quem relatou não foi confirmada; o evento `terminal-launch:early-exit` no QA Logger diz.
 - **Como compactar de novo:** este arquivo e `docs/projeto/IA.md` crescem com cada sessão. Quando
   passarem de uns 1000 linhas, rode `node app/scripts/archive-ia-md.cjs` (dry-run por padrão); o
   passo a passo está no Guia para Desenvolvedores.
@@ -1058,3 +1061,39 @@ Os nomes da captura têm carimbo `1791213063512/17/21`, que é 2026-10-05 15:11:
 - Mudar `app/electron/` publica uma release ao mesclar (regra do `Release gate`); a decisão de mesclar é de quem mantém.
 
 Estado: concluído e validado localmente no Linux (Node 22.22). Em branch própria (`claude/keen-darwin-b2lrbc`) com PR em rascunho; sem push direto à `main`.
+
+## 2026-10-12 — Codex: flag de yolo repetida derruba o bloco ao abrir (fallback e diagnóstico)
+
+Fecha uma pendência do registro de "artefato expirado deixava o agente parado": o PR #121 foi mesclado (squash `de58bba`) e a release `v0.1.453` saiu; a linha "PR em rascunho" daquela entrada ficou desatualizada.
+
+### Relato
+
+Um bloco criado por **Criar > Agente** (Codex, conta free, `gpt-6-luna`, esforço `max`, **Yolo ligado**) nasce "encerrado" com `error: the argument '--dangerously-bypass-approvals-and-sandbox' cannot be used multiple times` e o bloco `Usage: codex [OPTIONS] [PROMPT]`. Relatado como recorrente, e "sem o yolo vai normal". Numa captura, o bloco criado com o Yolo **desmarcado** mostrava `permissions: YOLO mode` no banner do Codex (v0.149.0-alpha.4.1).
+
+### Investigação
+
+- **O app não duplica a flag.** Li tudo que monta argumentos de Codex (menu, presets, continuação em outra conta, reinício, retomada, spawn do PTY no cmd e no PowerShell) e rodei as combinações num teste descartável: sempre uma ocorrência, mesmo empilhando a retomada duas vezes.
+- **O erro não depende de conta nem de modelo.** Com o `codex` 0.162.1 instalado numa pasta temporária, sem login: duas flags de yolo antes do subcomando dão exatamente o erro e o `Usage` das capturas; o `--yolo` é apelido da mesma opção; com `resume` o `Usage` seria o do subcomando. Modelo que a conta não aceita falha **depois**, como erro de API 400 dentro do terminal (fixture do próprio app). As hipóteses "conta free" e "modelo não permitido" não produzem este erro; o plano da conta não entra nos argumentos.
+- **No app real** (Electron da fonte, Xvfb, perfil isolado): com o Yolo desmarcado, o `ps` mostra o `codex` aberto **sem argumento nenhum**. Com um `codex` na frente do PATH que sempre soma a flag e o Yolo marcado, o app manda **uma** flag (conferido no log) e o Codex responde com o mesmo erro das capturas. O mecanismo está reproduzido e explica as duas observações: desmarcado, a flag de fora dá o YOLO mode; marcado, são duas.
+
+### Mudanças (`app/src`)
+
+- **`dropRepeatedYoloFlags`** (`agent-launch-options.ts`): descarta flag de yolo repetida (as duas grafias contam como uma) nos argumentos do Codex antes do spawn, inclusive na retomada. Não toca em `-c`/`--model` repetidos nem no que vem depois de `--`.
+- **Fallback `relaunchWithoutDuplicateYolo`** (`terminal-session-store.ts`): se o Codex recusa a repetição logo ao abrir (10 s, sem tecla da pessoa, sem texto enviado) e o app mandou exatamente uma flag, a outra vem de fora; reabre **uma vez** sem a do app (o yolo vale pela de fora) e avisa no bloco. Sem a flag do app não há o que tirar de novo, então não há laço. Mantém a retomada (`resume <id>`).
+- **Diagnóstico `terminal-launch`**: quando um Codex cai logo ao abrir, o bloco mostra o código de saída e os **argumentos enviados**, e o QA Logger (`logs/qa/qa-AAAA-MM-DD.jsonl`) guarda comando, argumentos pedidos e enviados, flags descartadas, código, tempo, conta, provedor, versão da CLI, plataforma e o fim da tela. Eventos: `args-normalized`, `yolo-duplicate-retry` e `early-exit`. Só o Codex: Claude e Gemini têm avisos próprios de retomada e login.
+- Guia do Usuário, em Solução de problemas, descreve o caso e onde achar o diagnóstico.
+
+### Evidência
+
+- `agent-launch-options.test.ts`: 21 passam; `terminal-session-store.test.ts`: 107 passam (escritos antes do código; o descarte e o fallback falharam primeiro). Área do canvas inteira: 140 arquivos, 1805 testes. `tsc -b` e `eslint` dos arquivos alterados limpos.
+- **App real, com o `codex` embrulhado e o Yolo marcado:** o log mostra `yolo-duplicate-retry` com `retryArgs: []` e o segundo spawn **passou do parser de argumentos** (o erro de flag sumiu).
+
+### Não validado e em aberto
+
+- **Não vi a máquina de quem relatou.** O mecanismo foi reproduzido, não a causa lá: que exista um wrapper ou alias é a hipótese que melhor explica as duas observações, mas pode ser outra fonte de flag. `Get-Command codex -All` no PowerShell e o evento `terminal-launch:early-exit` confirmam. A versão do Codex dele (0.149.0-alpha) é uma alfa.
+- **Não vi o Codex abrir em YOLO mode depois do fallback:** o terminal virtual daqui derruba o TUI do Codex 0.162.1 (`timed out discarding buffered terminal input`), sem relação com isto. Windows e macOS não foram testados.
+- O fallback roda a cada lançamento com Yolo marcado enquanto a flag de fora existir (cerca de 1 s e o aviso). Não guardei "já sei que há yolo externo": se o wrapper sumisse, o bloco abriria sem yolo em silêncio.
+- Anotado, fora do escopo: o app não tem fonte do que cada **plano** pode usar (modelos por plano nas configurações do agente); pela leitura do código, o `codex exec` sem terminal liga o acesso total por padrão (`FELIXO_CODEX_FULL_ACCESS`), sem teste.
+- Mudar `app/src` publica uma release ao mesclar.
+
+Estado: em branch própria (`claude/keen-darwin-b2lrbc`), PR em rascunho, aguardando revisão; sem merge.
