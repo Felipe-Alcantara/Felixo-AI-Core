@@ -1546,16 +1546,35 @@ só de dados; o único caminho que cria sessão é um clique confirmado.
 | Entrada e executável | `cloud-session-input.cjs`, `cloud-session-executable.cjs` | Valida tarefa, follow-up e pasta; resolve o `claude.exe` nativo por trás do shim do npm. |
 | Serviço | `cloud-session-service.cjs` | `launch` (PTY descartável) e `followUp` (`claude -p ... --cloud`), com trava por nó. |
 | Borda IPC | `cloud-session-ipc-handlers.cjs`, `window.felixo.cloudSession` | Valida o payload; `open` só abre `https://claude.ai/code/session_*`. |
-| Persistência | migração `019_canvas_cloud_session_nodes.sql` | Amplia o `CHECK` de `canvas_nodes.type`. |
+| Persistência | migração `019_canvas_cloud_session_nodes.sql` | Amplia o `CHECK` de `canvas_nodes.type`. Antes de publicar uma migração assim, `node scripts/ensaiar-migracoes-em-copia.cjs` a aplica numa **cópia** do banco real e reprova se alguma tabela perder linhas. |
 | Renderer | `CloudSessionNode.tsx`, `services/cloud-session-state.ts` | Cartão e máquina de estados pura (`draft`, `launching`, `created`, `failed`). |
 
-**Invariantes (cada uma com teste).** A tarefa e o follow-up chegam ao processo só como
-`argv`, sem `cmd.exe`: no Windows o serviço executa o `claude.exe` por trás do shim, e só
-sem ele recusa texto com `% " ^ & | < > ` e quebras de linha. As credenciais herdadas do
-Claude (`ANTHROPIC_API_KEY` etc.) nunca entram no ambiente, nem no Login do sistema, porque
-a nuvem exige login de assinatura. Um nó só tem uma operação por vez (`busy`). Um cartão
-salvo em `launching` reabre como `failed (interrupted)`. O `.fxcanvas` leva o cartão só
-como rascunho (nome e tarefa).
+**Invariantes (cada uma com teste).** A tarefa e o follow-up chegam ao processo como **um
+único argumento**, nunca interpretados por um shell, e o caminho muda por plataforma:
+
+| Plataforma | Como o texto viaja |
+|---|---|
+| Windows (criação, PTY) | Linha de comando montada pela regra do `CommandLineToArgvW` (`quoteWindowsArg`): o `argsToCommandLine` do node-pty não cita um argumento que começa e termina com aspas. O teste confere contra o parser real do sistema. |
+| Windows (follow-up) | Lista para o `execFile`, com o `claude.exe` resolvido por trás do shim do npm (sem ele, vale a recusa descrita abaixo). |
+| macOS | Shell de login (um app com janela herda um `PATH` reduzido) e uma variável `FELIXO_ARG_n` por argumento, expandida só entre aspas duplas (`buildPosixExecLine`). |
+| Linux | O node-pty entrega a lista como `argv`. |
+
+Em todas, texto que começa com `-` é recusado: o `claude` o leria como opção (`--settings=…`
+roda comando). No Windows, se só existir o shim `.cmd` (sem o `claude.exe` por trás), o
+serviço recusa também texto com `%`, `"`, `^`, `&`, `|`, `<`, `>` ou quebra de linha, que o
+`cmd.exe` reinterpretaria, em vez de arriscar. As credenciais herdadas do Claude (`ANTHROPIC_API_KEY` etc.) nunca entram no
+ambiente, nem no Login do sistema, porque a nuvem exige login de assinatura. Um nó só tem uma
+operação por vez (`busy`). Um cartão salvo em `launching` reabre como `failed (interrupted)`.
+O `.fxcanvas` leva o cartão só como rascunho (nome e tarefa).
+
+**Observabilidade.** Cada operação termina com um evento (`operation`, `ok`, `code`,
+`durationMs`) que o `main.cjs` grava no QA Logger sob o escopo `cloud-session`
+(`describeCloudSessionEvent`). O evento nunca leva a tarefa, a mensagem, a pasta nem o ID da
+sessão, e um log com defeito não muda o resultado.
+
+**Acessibilidade.** A confirmação é um contêiner focável: abrir leva o foco para ela, **Esc**
+cancela e devolve o foco ao botão de origem, e a falha leva o foco ao aviso (`role="alert"`).
+Os ícones que giram usam `motion-safe:animate-spin`.
 
 **Campos do nó com prefixo `cloud`** (`cloudTask`, `cloudCwd`, `cloudAccountId`,
 `cloudStatus`, `cloudSession`, `cloudFollowUps`, `cloudError`): `CanvasNodeData` é uma
@@ -1565,7 +1584,9 @@ terminal vivo daquela conta.
 
 **Limites conhecidos.** O saldo do crédito não tem API: só aparece em *Configurações > Uso*.
 `--model` e `--effort` são aceitos junto com `--cloud`, mas o efeito na sessão não foi
-verificado, por isso ficam fora do cartão. Validado em Windows; Linux e macOS pendentes.
+verificado, por isso ficam fora do cartão. A criação real de sessão foi conferida só no
+Windows: no Linux e no macOS os testes automáticos rodam no CI (inclusive a prova do shell
+POSIX), mas o roteiro manual ainda não foi executado.
 
 ## Providers e contas
 
