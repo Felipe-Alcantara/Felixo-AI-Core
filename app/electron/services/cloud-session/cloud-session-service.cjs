@@ -24,7 +24,7 @@ const { createCliEnv } = require('../cli-process-manager.cjs')
 const { applyProfileEnv } = require('../cli-account-profiles.cjs')
 const { createPtyLaunchSpec } = require('../pty-process-manager.cjs')
 const { ensureNodePtySpawnHelperExecutable } = require('../pty-native-assets.cjs')
-const { buildWindowsCommandLine } = require('./cloud-session-command-line.cjs')
+const { buildPosixExecLine, buildWindowsCommandLine } = require('./cloud-session-command-line.cjs')
 const { resolveNativeClaude } = require('./cloud-session-executable.cjs')
 const {
   hasShellUnsafeChars,
@@ -167,15 +167,28 @@ function createCloudSessionService({
   /**
    * O que executar: o binário nativo direto, ou o launch spec do app.
    *
-   * No Windows, para o PTY, a linha de comando é montada aqui, porque o node-pty
-   * não cita um argumento que começa e termina com aspas (ver
-   * cloud-session-command-line.cjs). O `execFile` (follow-up) cita certo e
-   * recebe a lista; nas outras plataformas o node-pty também entrega a lista
-   * como argv ao processo.
+   * - Windows, PTY: a linha de comando é montada aqui, porque o node-pty não cita
+   *   um argumento que começa e termina com aspas (cloud-session-command-line.cjs).
+   *   O `execFile` (follow-up) cita certo e recebe a lista.
+   * - macOS: um app com janela herda um PATH reduzido, então o `claude` roda pelo
+   *   shell de login. O texto NÃO passa pelo escape de shell: cada argumento viaja
+   *   numa variável de ambiente e o shell só a expande entre aspas duplas. O
+   *   follow-up não tem TTY, então usa o shell de login sem `-i`.
+   * - Linux e o resto: o node-pty entrega a lista como argv ao processo.
+   * - Só o shim `.cmd` do Windows (`viaShell`) usa o launch spec do app.
    */
   function buildSpec(claude, args, env, { pty }) {
-    if (claude.viaShell || platform.name === 'darwin') {
+    if (claude.viaShell) {
       return createPtyLaunchSpec(claude.command, args, env, platform)
+    }
+    if (platform.name === 'darwin') {
+      const variables = Object.fromEntries(args.map((value, index) => [`FELIXO_ARG_${index}`, String(value)]))
+      const line = buildPosixExecLine(platform.escapeArg(claude.command), args.length)
+      return {
+        command: platform.getDefaultShell(env),
+        args: pty ? ['-l', '-i', '-c', line] : ['-l', '-c', line],
+        env: { ...env, ...variables },
+      }
     }
     return {
       command: claude.command,
@@ -200,7 +213,8 @@ function createCloudSessionService({
         ),
       }
     }
-    return { env, spec: buildSpec(claude, args, env, { pty }) }
+    const spec = buildSpec(claude, args, env, { pty })
+    return { env: spec.env ?? env, spec }
   }
 
   function runPty(spec, cwd, env) {

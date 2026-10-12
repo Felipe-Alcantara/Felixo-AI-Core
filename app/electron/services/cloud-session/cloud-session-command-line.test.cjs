@@ -68,3 +68,54 @@ test(
     }
   },
 )
+
+// --- Shell POSIX (macOS): o texto viaja por variável de ambiente -------------
+
+const { buildPosixExecLine } = require('./cloud-session-command-line.cjs')
+
+const POSIX_TRICKY = [
+  'simples',
+  'com espaço',
+  '',
+  "aspas ' simples",
+  'aspas " duplas',
+  '$(echo pwned)',
+  '`echo pwned`',
+  '${HOME}',
+  '$HOME e $((1+1))',
+  'a;b&c|d>e<f',
+  'linha 1\nlinha 2\n',
+  'tab\tcom\\barra\\',
+  '*?[x] ~/y',
+  '  pontas  ',
+  'acentuação e emoji 🚀',
+  '-- não é opção --',
+]
+
+const aspasSimples = (text) => `'${text.replace(/'/g, "'\\''")}'`
+
+test('buildPosixExecLine referencia cada argumento por variável entre aspas duplas', () => {
+  assert.equal(
+    buildPosixExecLine("'claude'", 3),
+    'exec \'claude\' "${FELIXO_ARG_0}" "${FELIXO_ARG_1}" "${FELIXO_ARG_2}"',
+  )
+  assert.equal(buildPosixExecLine('claude', 0), 'exec claude')
+})
+
+test(
+  'num shell POSIX de verdade, cada argumento chega intacto, sem reinterpretar $, crase, aspas nem quebra de linha',
+  { skip: process.platform === 'win32' },
+  () => {
+    const script = 'process.stdout.write(JSON.stringify(process.argv.slice(1)))'
+    for (const texto of POSIX_TRICKY) {
+      const comando = `${aspasSimples(process.execPath)} -e ${aspasSimples(script)} --`
+      const result = spawnSync('sh', ['-c', buildPosixExecLine(comando, 2)], {
+        env: { ...process.env, FELIXO_ARG_0: '--cloud', FELIXO_ARG_1: texto },
+        encoding: 'utf8',
+      })
+
+      assert.equal(result.status, 0, result.stderr)
+      assert.deepEqual(JSON.parse(result.stdout), ['--cloud', texto], JSON.stringify(texto))
+    }
+  },
+)

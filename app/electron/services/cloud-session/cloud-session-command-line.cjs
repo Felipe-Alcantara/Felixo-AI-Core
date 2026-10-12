@@ -48,4 +48,23 @@ function buildWindowsCommandLine(args) {
   return args.map(quoteWindowsArg).join(' ')
 }
 
-module.exports = { buildWindowsCommandLine, quoteWindowsArg }
+/**
+ * Linha de `sh -c` (macOS) em que cada argumento é lido de uma variável de
+ * ambiente entre aspas duplas: `exec <comando> "${FELIXO_ARG_0}" "${FELIXO_ARG_1}"`.
+ *
+ * Por que variável e não escape: o `escapeArg` do app não cobre `\n`, `\t` nem
+ * `\r`, e escapar para um shell é sempre uma lista de casos. O valor de uma
+ * variável entre aspas duplas não é reinterpretado pelo shell (nada de `$()`,
+ * crase, aspas ou quebra de linha), seja qual for o texto. Quem chama coloca os
+ * valores no ambiente do processo como `FELIXO_ARG_0`, `FELIXO_ARG_1`, ...
+ *
+ * @param {string} escapedCommand Comando já escapado para o shell (ex.: `'claude'`).
+ * @param {number} argCount
+ * @returns {string}
+ */
+function buildPosixExecLine(escapedCommand, argCount) {
+  const refs = Array.from({ length: argCount }, (_, index) => `"\${FELIXO_ARG_${index}}"`)
+  return ['exec', escapedCommand, ...refs].join(' ')
+}
+
+module.exports = { buildPosixExecLine, buildWindowsCommandLine, quoteWindowsArg }

@@ -503,3 +503,48 @@ test('o follow-up no Windows continua como lista para o execFile, que cita corre
 
   assert.deepEqual(execs[0].args, ['-p', '"entre aspas" e mais', '--cloud', ID])
 })
+
+// --- macOS: o texto viaja por variável de ambiente, nunca pelo escape do shell -
+
+const MAC = { name: 'darwin', getDefaultShell: () => '/bin/zsh', escapeArg: (value) => `'${value}'` }
+const TAREFA_PERIGOSA = 'Linha 1\nLinha "2" $(rm -rf ~) `x`'
+
+test('no macOS o PTY roda o shell de login e o texto da tarefa só aparece nas variáveis', async () => {
+  const { service, spawns, ptys } = setup({
+    platform: MAC,
+    resolveClaude: () => ({ command: 'claude', viaShell: false }),
+  })
+
+  const pending = service.launch(input({ task: TAREFA_PERIGOSA }))
+  ptys[0].emit(SUCCESS)
+  await pending
+
+  assert.equal(spawns[0].file, '/bin/zsh')
+  assert.deepEqual(spawns[0].args, ['-l', '-i', '-c', 'exec \'claude\' "${FELIXO_ARG_0}" "${FELIXO_ARG_1}"'])
+  assert.doesNotMatch(spawns[0].args.join(' '), /Linha 1|rm -rf/)
+  assert.equal(spawns[0].options.env.FELIXO_ARG_0, '--cloud')
+  assert.equal(spawns[0].options.env.FELIXO_ARG_1, TAREFA_PERIGOSA)
+  assert.equal('ANTHROPIC_API_KEY' in spawns[0].options.env, false)
+})
+
+test('no macOS o follow-up usa o shell de login sem modo interativo (não há TTY) e as variáveis', async () => {
+  const { service, execs } = setup({
+    platform: MAC,
+    resolveClaude: () => ({ command: 'claude', viaShell: false }),
+  })
+
+  const pending = service.followUp({ nodeId: 'no-1', sessionId: ID, text: TAREFA_PERIGOSA, cwd: CWD })
+  execs[0].callback(null, 'Sent to cloud session.', '')
+  await pending
+
+  assert.equal(execs[0].file, '/bin/zsh')
+  assert.deepEqual(execs[0].args, [
+    '-l',
+    '-c',
+    'exec \'claude\' "${FELIXO_ARG_0}" "${FELIXO_ARG_1}" "${FELIXO_ARG_2}" "${FELIXO_ARG_3}"',
+  ])
+  assert.deepEqual(
+    [0, 1, 2, 3].map((index) => execs[0].options.env[`FELIXO_ARG_${index}`]),
+    ['-p', TAREFA_PERIGOSA, '--cloud', ID],
+  )
+})
