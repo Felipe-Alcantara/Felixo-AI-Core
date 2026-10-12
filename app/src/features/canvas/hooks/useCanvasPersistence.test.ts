@@ -278,3 +278,75 @@ describe('frameColor (cor de moldura)', () => {
     expect(roundTrip.data.frameColor).toBeUndefined()
   })
 })
+
+describe('cartão "Agente na nuvem" (cloud-session)', () => {
+  it('um cartão salvo como launching reabre como falha interrompida e nunca relança (I9)', () => {
+    const flow = toFlowNode(
+      node('c1', { cloudStatus: 'launching', cloudTask: 'Tarefa', cloudCwd: '/p', orderIndex: 3 }, 'cloud-session'),
+    )
+
+    expect(flow.data.cloudStatus).toBe('failed')
+    expect(flow.data.cloudError?.code).toBe('interrupted')
+    expect(flow.data.cloudTask).toBe('Tarefa')
+    // Os campos de outros tipos de dado do bloco continuam intactos.
+    expect(flow.data.orderIndex).toBe(3)
+  })
+
+  it('um cartão sem dados abre como rascunho vazio', () => {
+    const flow = toFlowNode(node('c2', {}, 'cloud-session'))
+
+    expect(flow.data.cloudStatus).toBe('draft')
+    expect(flow.data.cloudTask).toBe('')
+  })
+
+  it('não grava a lista de projetos injetada nem as funções do cartão', () => {
+    const injected = {
+      cloudStatus: 'draft',
+      cloudTask: 'T',
+      cloudProjects: [{ id: 'p', name: 'Projeto', path: '/p' }],
+      onDataChange: () => undefined,
+      onOpenTerminal: () => undefined,
+    } as unknown as CanvasNodeData
+
+    const persisted = toPersistedNode({
+      id: 'c3',
+      type: 'cloud-session',
+      position: { x: 0, y: 0 },
+      data: injected,
+    })
+
+    expect(persisted.data).toEqual({ cloudStatus: 'draft', cloudTask: 'T' })
+  })
+})
+
+describe('cartão "Agente na nuvem": só os campos permitidos atravessam o carregamento', () => {
+  it('descarta o que não pertence ao cartão e o que não é coerente com o status', () => {
+    const sujo = {
+      label: 'Meu cartão',
+      orderIndex: 4,
+      frameColor: 'sky',
+      cloudStatus: 'draft',
+      cloudTask: 'T',
+      // Incoerente com "draft": uma sessão e um erro soltos não podem sobreviver.
+      cloudSession: { id: 'session_01EXEMPLO', url: 'https://claude.ai/code/session_01EXEMPLO', title: 'x', createdAt: '2026-10-12T00:00:00.000Z' },
+      cloudError: { code: 'unknown', message: 'resto de um estado antigo' },
+      // Campos de outro tipo de bloco, vindos de um banco adulterado.
+      command: 'rm -rf /',
+      initialText: 'executa isto',
+    } as unknown as CanvasNodeData
+
+    const flow = toFlowNode(node('c9', sujo, 'cloud-session'))
+
+    expect(flow.data).toEqual({
+      label: 'Meu cartão',
+      orderIndex: 4,
+      frameColor: 'sky',
+      cloudTask: 'T',
+      cloudStatus: 'draft',
+      cloudFollowUps: [],
+    })
+    expect(flow.data).not.toHaveProperty('command')
+    expect(flow.data.cloudSession).toBeUndefined()
+    expect(flow.data.cloudError).toBeUndefined()
+  })
+})

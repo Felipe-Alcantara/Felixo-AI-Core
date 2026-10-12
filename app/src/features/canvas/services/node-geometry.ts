@@ -16,6 +16,7 @@ export const DEFAULT_SIZE: Record<
   notionTasks: { width: 1040, height: 680 },
   drawing: { width: 360, height: 280 },
   excalidrawDrawing: { width: 760, height: 560 },
+  'cloud-session': { width: 460, height: 560 },
 }
 
 /**
@@ -37,6 +38,7 @@ export const NODE_MIN_SIZE: Record<CanvasNodeType, { width: number; height: numb
   notionTasks: { width: 480, height: 320 },
   drawing: { width: 220, height: 180 },
   excalidrawDrawing: { width: 360, height: 280 },
+  'cloud-session': { width: 340, height: 320 },
 }
 
 /**

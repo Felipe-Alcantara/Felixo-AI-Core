@@ -47,6 +47,7 @@ import type {
   CliAccountRemoveResult,
 } from './features/shared/types/cli-accounts'
 import type { AccountChainBridge } from './features/shared/types/account-chain'
+import type { CloudSessionBridge } from './features/shared/types/cloud-session'
 import type { ExternalOpenFailure } from './features/shared/links/link-open-failure'
 import type { GpuPreference, GpuPreferenceStatus } from './features/shared/graphics/gpu-preference'
 import type { HardwareProfile } from './features/shared/performance/performance-suggestion'
@@ -89,6 +90,7 @@ type PersistedCanvasNode = {
     | 'notionTasks'
     | 'drawing'
     | 'excalidrawDrawing'
+    | 'cloud-session'
   parentId?: string | null
   position: { x: number; y: number }
   width?: number | null
@@ -1019,6 +1021,11 @@ declare global {
        * a UI mostra a cadeia como indisponível e nada troca de conta.
        */
       accountChain?: AccountChainBridge
+      /**
+       * Agente na nuvem (`claude --cloud`). Opcional: numa versão sem o
+       * serviço, o cartão mostra o recurso como indisponível.
+       */
+      cloudSession?: CloudSessionBridge
       agentUsage?: {
         list: () => Promise<AgentUsageDashboard>
         refresh: () => Promise<AgentUsageDashboard>

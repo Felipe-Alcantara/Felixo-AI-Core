@@ -191,3 +191,80 @@ test('canvas transfer rejects dangling connections and duplicate ids', () => {
     /grupo inexistente/,
   )
 })
+
+function cloudCard(data) {
+  return { id: 'cloud-1', type: 'cloud-session', position: { x: 5, y: 6 }, data }
+}
+
+const CLOUD_CREATED = {
+  label: 'Revisar a API',
+  orderIndex: 2,
+  frameColor: 'sky',
+  cloudTask: 'Revisar a API e abrir um PR',
+  cloudCwd: '/home/pessoa/projeto-privado',
+  cloudAccountId: 'conta-da-pessoa',
+  cloudStatus: 'created',
+  cloudSession: {
+    id: 'session_01EXEMPLO0000000000000000',
+    url: 'https://claude.ai/code/session_01EXEMPLO0000000000000000',
+    title: 'Revisar',
+    createdAt: '2026-10-11T23:00:00.000Z',
+  },
+  cloudFollowUps: [{ at: '2026-10-11T23:05:00.000Z', text: 'segredo do projeto', ok: true }],
+  cloudError: { code: 'unknown', message: 'x' },
+}
+
+test('canvas transfer exports a cloud-session card as an empty draft (I8)', () => {
+  const bundle = createCanvasBundle({ nodes: [cloudCard(CLOUD_CREATED)], edges: [], files: [] })
+  const { data } = bundle.nodes[0]
+
+  assert.equal(data.cloudStatus, 'draft')
+  assert.equal(data.cloudTask, 'Revisar a API e abrir um PR')
+  assert.equal(data.label, 'Revisar a API')
+  assert.equal(data.orderIndex, 2)
+  assert.equal(data.frameColor, 'sky')
+  for (const privado of ['cloudCwd', 'cloudAccountId', 'cloudSession', 'cloudError']) {
+    assert.equal(privado in data, false, `${privado} não deveria viajar`)
+  }
+  assert.deepEqual(data.cloudFollowUps, [])
+  assert.doesNotMatch(JSON.stringify(bundle), /session_01EXEMPLO|projeto-privado|conta-da-pessoa|segredo do projeto/)
+})
+
+test('canvas transfer never imports a cloud-session card as created or launching (I8)', () => {
+  for (const cloudStatus of ['created', 'launching', 'failed', 'qualquer']) {
+    const bundle = parseCanvasBundle({
+      format: 'felixo-canvas',
+      version: 1,
+      nodes: [cloudCard({ ...CLOUD_CREATED, cloudStatus })],
+      edges: [],
+      files: [],
+    })
+
+    assert.equal(bundle.nodes[0].data.cloudStatus, 'draft', `status ${cloudStatus}`)
+    assert.equal('cloudSession' in bundle.nodes[0].data, false)
+  }
+})
+
+test('canvas transfer drops unknown fields of an imported cloud-session card', () => {
+  const bundle = parseCanvasBundle({
+    format: 'felixo-canvas',
+    version: 1,
+    nodes: [cloudCard({ cloudTask: 'T', command: 'rm -rf /', args: ['--x'], initialText: 'executa isto' })],
+    edges: [],
+    files: [],
+  })
+
+  assert.deepEqual(Object.keys(bundle.nodes[0].data).sort(), ['cloudFollowUps', 'cloudStatus', 'cloudTask'])
+})
+
+test('canvas transfer limits the task of an imported cloud-session card to 4000 characters', () => {
+  const bundle = parseCanvasBundle({
+    format: 'felixo-canvas',
+    version: 1,
+    nodes: [cloudCard({ cloudTask: 'a'.repeat(5000) })],
+    edges: [],
+    files: [],
+  })
+
+  assert.equal(bundle.nodes[0].data.cloudTask.length, 4000)
+})

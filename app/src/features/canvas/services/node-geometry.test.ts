@@ -145,3 +145,18 @@ describe('tamanho padrão × mínimo de cada bloco', () => {
     expect(getDefaultNodeSize('notionTasks', 1920)).toEqual(DEFAULT_SIZE.notionTasks)
   })
 })
+
+describe('cloud-session (cartão Agente na nuvem)', () => {
+  it('nasce em tamanho utilizável e nunca menor que o próprio mínimo', () => {
+    const padrao = DEFAULT_SIZE['cloud-session']
+    const minimo = NODE_MIN_SIZE['cloud-session']
+
+    expect(minimo.width).toBeLessThanOrEqual(padrao.width)
+    expect(minimo.height).toBeLessThanOrEqual(padrao.height)
+    for (const largura of [800, 1280, 1920]) {
+      const size = getDefaultNodeSize('cloud-session', largura)
+      expect(size.width).toBeGreaterThanOrEqual(minimo.width)
+      expect(size.height).toBeGreaterThanOrEqual(minimo.height)
+    }
+  })
+})

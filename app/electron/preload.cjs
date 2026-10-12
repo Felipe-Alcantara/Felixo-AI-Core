@@ -415,6 +415,13 @@ contextBridge.exposeInMainWorld('felixo', {
       return () => ipcRenderer.removeListener('agent-usage:changed', handler)
     },
   },
+  // Agente na nuvem: o main cria a sessão e valida cada pedido; o renderer só
+  // entrega o que a pessoa confirmou no cartão.
+  cloudSession: {
+    launch: (params) => ipcRenderer.invoke('cloud-session:launch', params),
+    followUp: (params) => ipcRenderer.invoke('cloud-session:follow-up', params),
+    open: (params) => ipcRenderer.invoke('cloud-session:open', params),
+  },
   systemDesign: {
     getConfig: () => ipcRenderer.invoke('system-design:get-config'),
     saveConfig: (partial) =>

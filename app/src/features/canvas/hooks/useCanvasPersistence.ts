@@ -5,6 +5,7 @@ import {
   loadCanvasNodes,
   saveCanvasNode,
 } from '../services/canvas-storage'
+import { normalizeLoaded } from '../services/cloud-session-state'
 import type { CanvasNodeData, CanvasNodeType, PersistedCanvasNode } from '../types'
 
 /** A React Flow node whose `data` is typed as the canvas' own node data. */
@@ -161,12 +162,29 @@ export function withOrderIndex(
   )
 }
 
+/**
+ * Dados de um cartão "Agente na nuvem" ao reabrir: só os campos genéricos de
+ * bloco (nome, ordem, moldura) e os `cloud*` já normalizados. O cartão nunca
+ * reabre "disparando" (o processo morreu com o app e a sessão pode ou não ter
+ * sido criada; I9 do spec), e nada de outro tipo de bloco, nem campo solto
+ * incoerente com o status, atravessa.
+ */
+function loadCloudSessionData(raw: CanvasNodeData): CanvasNodeData {
+  const { label, orderIndex, frameColor } = raw ?? {}
+  return {
+    ...(label === undefined ? {} : { label }),
+    ...(orderIndex === undefined ? {} : { orderIndex }),
+    ...(frameColor === undefined ? {} : { frameColor }),
+    ...normalizeLoaded(raw),
+  }
+}
+
 export function toFlowNode(node: PersistedCanvasNode): CanvasFlowNode {
   return {
     id: node.id,
     type: node.type,
     position: node.position,
-    data: node.data,
+    data: node.type === 'cloud-session' ? loadCloudSessionData(node.data) : node.data,
     // Restore group membership; children are clamped to the group bounds.
     ...(node.parentId
       ? { parentId: node.parentId, extent: 'parent' as const }
@@ -208,6 +226,9 @@ const TRANSIENT_DATA_KEYS = new Set<string>([
   'resumePlan',
   'resumeBanner',
   'resumeCliVersion',
+  // Lista de projetos do canvas injetada no cartão "Agente na nuvem": mudaria
+  // com os projetos, então nunca é gravada junto do bloco.
+  'cloudProjects',
 ])
 
 function stripFunctions(data: Record<string, unknown>): CanvasNodeData {
