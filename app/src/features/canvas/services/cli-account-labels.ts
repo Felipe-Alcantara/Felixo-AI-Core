@@ -25,7 +25,12 @@ export function createCliAccountLabelStore(listAccounts: ListAccounts | null) {
     inFlight = listAccounts()
       .then((result) => {
         if (!result?.ok) return
-        labels = new Map((result.accounts ?? []).map((account) => [account.id, account.label]))
+        labels = new Map(
+          (result.accounts ?? []).flatMap((account) => [
+            [account.id, account.label] as const,
+            ...(account.legacyAccountIds ?? []).map((id) => [id, account.label] as const),
+          ]),
+        )
         listeners.forEach((listener) => listener())
       })
       .catch(() => {

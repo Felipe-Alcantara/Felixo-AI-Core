@@ -114,6 +114,68 @@ test(
   },
 )
 
+test(
+  'mesclar ids de contas move amostras e arquiva a linha duplicada',
+  { skip: hasNodeSqlite() ? false : 'node:sqlite indisponível neste runtime' },
+  () => {
+    const databaseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-agent-usage-merge-'))
+    const database = createStorageDatabase({ databaseDir })
+
+    try {
+      const repository = createAgentUsageRepository(database)
+      repository.createAccount({
+        id: 'conta-canonica',
+        providerId: 'codex',
+        label: 'Pessoal',
+        createdAt: '2026-08-28T12:00:00.000Z',
+        updatedAt: '2026-08-28T12:00:00.000Z',
+      })
+      const duplicate = repository.createAccount({
+        id: 'conta-duplicada',
+        providerId: 'codex',
+        label: 'Pessoal',
+        createdAt: '2026-08-28T12:01:00.000Z',
+        updatedAt: '2026-08-28T12:01:00.000Z',
+      })
+      repository.saveSample({
+        id: 'amostra-duplicada',
+        accountId: duplicate.id,
+        status: 'current',
+        sourceKind: 'cli-command',
+        sourceLabel: 'codex login status',
+        sourceCommand: 'codex login status',
+        sourceUrl: null,
+        collectedAt: '2026-08-28T12:02:00.000Z',
+        metrics: [],
+        observedIdentityKey: null,
+        observedIdentityDisplay: null,
+        errorMessage: null,
+        metadata: {},
+      })
+
+      assert.deepEqual(
+        repository.mergeAccountIds({
+          canonicalId: 'conta-canonica',
+          duplicateIds: ['conta-duplicada'],
+          nowIso: '2026-08-28T12:03:00.000Z',
+        }),
+        { accounts: 1, samples: 1 },
+      )
+      assert.deepEqual(repository.listAccounts().map((account) => account.id), ['conta-canonica'])
+      assert.equal(repository.getLatestSample('conta-canonica').accountId, 'conta-canonica')
+      assert.equal(
+        database.connection
+          .prepare('SELECT archived_at FROM agent_usage_accounts WHERE id = ?')
+          .get('conta-duplicada').archived_at,
+        '2026-08-28T12:03:00.000Z',
+      )
+    } finally {
+      database.close()
+      fs.rmSync(databaseDir, { recursive: true, force: true })
+    }
+  },
+)
+
 function hasNodeSqlite() {
   try {
     require('node:sqlite')

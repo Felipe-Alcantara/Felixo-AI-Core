@@ -11,6 +11,7 @@ const { registerPtyIpcHandlers } = require('./services/pty-ipc-handlers.cjs')
 const { PtyProcessManager } = require('./services/pty-process-manager.cjs')
 const { createCliAccountStore } = require('./services/cli-account-store.cjs')
 const { createAccountChainRepository } = require('./services/storage/account-chain-repository.cjs')
+const { createAgentUsageRepository } = require('./services/storage/agent-usage-repository.cjs')
 const { listPresentInheritedCredentialNames } = require('./services/cli-account-profiles.cjs')
 const { createAccountChainRuntime } = require('./services/accounts/account-chain-runtime.cjs')
 const { createAccountOutputWatcher } = require('./services/accounts/account-output-watcher.cjs')
@@ -377,6 +378,33 @@ app.whenReady().then(async () => {
   })
   // Remover uma conta também a tira da cadeia (membro, espera e checagem).
   const accountChainRepository = createAccountChainRepository(storageDatabase)
+  const agentUsageRepository = createAgentUsageRepository(storageDatabase)
+  const mergeAccountReferences = ({ canonicalId, duplicateIds }) => {
+    let firstFailure = null
+    try {
+      accountChainRepository.mergeAccountIds({
+        canonicalId,
+        duplicateIds,
+        nowIso: new Date().toISOString(),
+      })
+    } catch (error) {
+      firstFailure = error
+    }
+
+    try {
+      agentUsageRepository.mergeAccountIds({
+        canonicalId,
+        duplicateIds,
+        nowIso: new Date().toISOString(),
+      })
+    } catch (error) {
+      firstFailure ??= error
+    }
+
+    if (firstFailure) {
+      throw firstFailure
+    }
+  }
   // A loja vem antes do serviço de uso: é ela que diz quais contas têm login
   // próprio, e é da pasta de cada uma que a quota é lida. Os terminais vivos
   // entram por getter porque o gerenciador de PTY nasce depois.
@@ -386,6 +414,7 @@ app.whenReady().then(async () => {
     listLiveSessions: () => ptyHandlers?.manager?.listarSessoesVivas?.() ?? [],
     forgetChainAccount: (accountId) =>
       accountChainRepository.forgetAccount(accountId, new Date().toISOString()),
+    mergeAccountReferences,
   })
   // Na instância de automação com a CLI roteirizada nenhuma CLI real roda:
   // nem a detecção do catálogo, nem as consultas de uso, nem a checagem de
@@ -411,6 +440,7 @@ app.whenReady().then(async () => {
       }
   const agentUsageService = createAgentUsageService({
     database: storageDatabase,
+    repository: agentUsageRepository,
     ...usageCliOptions,
     // Task Limites (mais reportado no Mac): "às vezes falha, sem motivo
     // aparente" não tinha nenhum log — sem isso, a próxima falha real

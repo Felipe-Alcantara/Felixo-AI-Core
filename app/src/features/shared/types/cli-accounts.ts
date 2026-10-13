@@ -11,6 +11,7 @@ export type CliAccount = {
   providerId: string
   label: string
   createdAt: string
+  legacyAccountIds?: readonly string[]
   /** Nunca contém a chave; só existe para o provedor que usa segredo por conta. */
   secretConfigured?: boolean
 }

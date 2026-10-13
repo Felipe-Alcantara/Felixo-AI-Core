@@ -356,6 +356,125 @@ test('CLI sem suporte a perfil recusa criar conta', () => {
   }
 })
 
+test('não permite duas contas do mesmo provedor com rótulos equivalentes', () => {
+  const env = createEnvironment()
+
+  try {
+    const primeira = env.store.create({
+      providerId: 'codex',
+      label: '  FelixoBackup@gmail.com  ',
+    })
+    const profileRoot = path.join(env.userData, 'cli-profiles', 'codex')
+
+    assert.throws(
+      () => env.store.create({ providerId: 'codex', label: 'felixobackup@gmail.com' }),
+      (error) => {
+        assert.equal(error.code, 'CLI_ACCOUNT_DUPLICATE')
+        assert.match(error.message, /Já existe uma conta/)
+        return true
+      },
+    )
+
+    assert.deepEqual(env.store.list('codex'), [primeira])
+    assert.deepEqual(fs.readdirSync(profileRoot), [primeira.id])
+
+    assert.doesNotThrow(() =>
+      env.store.create({ providerId: 'claude', label: 'felixobackup@gmail.com' }),
+    )
+  } finally {
+    env.cleanup()
+  }
+})
+
+test('na atualização, deduplica contas legadas, preserva o perfil e mantém ids antigos funcionando', () => {
+  const env = createEnvironment()
+
+  try {
+    const canonical = env.store.create({
+      providerId: 'codex',
+      label: 'FelixoBackup@gmail.com',
+    })
+    const duplicate = env.store.create({ providerId: 'codex', label: 'outra conta' })
+    const duplicateDir = path.join(env.userData, 'cli-profiles', 'codex', duplicate.id)
+    fs.writeFileSync(path.join(duplicateDir, 'auth.json'), '{"token":"preservar"}', 'utf8')
+
+    const stored = JSON.parse(fs.readFileSync(env.store.storePath, 'utf8'))
+    stored.accounts.find((account) => account.id === duplicate.id).label = ' felixobackup@gmail.com '
+    fs.writeFileSync(env.store.storePath, `${JSON.stringify(stored)}\n`, 'utf8')
+
+    const migrated = createCliAccountStore({
+      userData: env.userData,
+      homeDir: env.homeDir,
+      safeStorage: fakeSafeStorage(),
+    })
+
+    assert.deepEqual(migrated.list('codex'), [
+      { ...canonical, legacyAccountIds: [duplicate.id] },
+    ])
+    assert.equal(migrated.resolveAccountId(duplicate.id), canonical.id)
+    assert.match(migrated.buildEnv(duplicate.id).CODEX_HOME, new RegExp(canonical.id))
+    assert.equal(
+      fs.readFileSync(
+        path.join(env.userData, 'cli-profiles', 'codex', canonical.id, 'auth.json'),
+        'utf8',
+      ),
+      '{"token":"preservar"}',
+    )
+
+    const migratedStore = JSON.parse(fs.readFileSync(migrated.storePath, 'utf8'))
+    assert.deepEqual(migratedStore.accounts.map((account) => account.id), [canonical.id])
+    assert.deepEqual(migratedStore.accountAliases, { [duplicate.id]: canonical.id })
+    assert.equal(fs.existsSync(duplicateDir), false)
+    assert.equal(
+      fs.existsSync(path.join(env.userData, 'cli-account-duplicates', 'codex', duplicate.id)),
+      true,
+    )
+
+    const reopened = createCliAccountStore({
+      userData: env.userData,
+      homeDir: env.homeDir,
+      safeStorage: fakeSafeStorage(),
+    })
+    assert.deepEqual(reopened.list('codex'), migrated.list('codex'))
+  } finally {
+    env.cleanup()
+  }
+})
+
+test('a migração de duplicata Openia transfere a chave e aceita o id antigo', () => {
+  const env = createEnvironment()
+
+  try {
+    const canonical = env.store.create({ providerId: 'openia', label: 'Router' })
+    const duplicate = env.store.create({ providerId: 'openia', label: 'Outra conta' })
+    env.store.setSecret(duplicate.id, 'sk-chave-preservada')
+
+    const stored = JSON.parse(fs.readFileSync(env.store.storePath, 'utf8'))
+    stored.accounts.find((account) => account.id === duplicate.id).label = ' router '
+    fs.writeFileSync(env.store.storePath, `${JSON.stringify(stored)}\n`, 'utf8')
+
+    const migrated = createCliAccountStore({
+      userData: env.userData,
+      homeDir: env.homeDir,
+      safeStorage: fakeSafeStorage(),
+    })
+
+    assert.deepEqual(migrated.list('openia'), [
+      { ...canonical, legacyAccountIds: [duplicate.id], secretConfigured: true },
+    ])
+    assert.equal(migrated.buildEnv(duplicate.id).OPENROUTER_API_KEY, 'sk-chave-preservada')
+
+    const secrets = JSON.parse(
+      fakeSafeStorage().decryptString(
+        fs.readFileSync(path.join(env.userData, 'config', 'cli-account-secrets.bin')),
+      ),
+    )
+    assert.deepEqual(secrets, { [canonical.id]: 'sk-chave-preservada' })
+  } finally {
+    env.cleanup()
+  }
+})
+
 test('criar a conta que falha ao gravar o registro não deixa pasta de perfil órfã (nem o ssh espelhado)', () => {
   let falhar = true
   const fileSystem = {

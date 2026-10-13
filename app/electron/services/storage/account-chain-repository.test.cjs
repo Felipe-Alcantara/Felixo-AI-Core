@@ -498,6 +498,38 @@ test('esquecer uma conta tira membro, espera e checagem e sobe a revisão; o reg
   })
 })
 
+test('mesclar ids de contas reaponta membro, espera e checagem para a conta sobrevivente', () => {
+  withRepository((repo) => {
+    repo.replaceMembers({
+      members: [member('conta-antiga', { enabled: true }), member('outra')],
+      expectedRevision: 0,
+      nowIso: NOW,
+    })
+    repo.upsertCooldown(limitCooldown({ accountId: 'conta-antiga' }))
+    repo.recordLoginCheck({
+      accountId: 'conta-antiga',
+      providerId: 'codex',
+      status: 'logged_in',
+      checkedAt: NOW,
+      source: 'checagem',
+    })
+
+    assert.deepEqual(
+      repo.mergeAccountIds({
+        canonicalId: 'conta-nova',
+        duplicateIds: ['conta-antiga'],
+        nowIso: LATER,
+      }),
+      { members: 1, cooldowns: 1, loginChecks: 1 },
+    )
+    assert.deepEqual(repo.listMembers().map((item) => item.accountId), ['conta-nova', 'outra'])
+    assert.equal(repo.getCooldown('conta-nova').accountId, 'conta-nova')
+    assert.equal(repo.getCooldown('conta-antiga'), null)
+    assert.equal(repo.getLoginCheck('conta-nova').accountId, 'conta-nova')
+    assert.equal(repo.readSettings().revision, 2)
+  })
+})
+
 test('sobrevive a reabrir o banco (depois de reiniciar o app)', () => {
   const databaseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-account-chain-restart-'))
   try {

@@ -67,8 +67,11 @@ export function selectAccountFromList(
     return { status: 'ok', accountId: wanted }
   }
 
-  return listing.accounts.some((account) => account.id === wanted)
-    ? { status: 'ok', accountId: wanted }
+  const account = listing.accounts.find(
+    (item) => item.id === wanted || item.legacyAccountIds?.includes(wanted),
+  )
+  return account
+    ? { status: 'ok', accountId: account.id }
     : { status: 'saved-missing', accountId: wanted }
 }
 

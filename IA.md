@@ -1101,3 +1101,17 @@ Estado: em branch própria (`claude/keen-darwin-b2lrbc`), PR em rascunho, aguard
 Dois pontos que estavam como estimativa foram medidos no app isolado. Contraste (cores convertidas para sRGB e razão do WCAG): o texto de ajuda do campo Tarefa dá 6,95:1 sobre o fundo do painel, contra os 4,5:1 do AA; o rótulo dá 7,06:1, o placeholder 5,63:1 e o texto digitado 16,56:1. Trocando a classe do mesmo elemento para `text-zinc-500`, que é a dos outros textos de ajuda do formulário, a razão cai para 3,78:1: fica como convite rever esses textos. Teclado: o foco segue Agente, Conta, Tarefa e Projeto, com anel de foco visível em todos; o botão desabilitado é pulado; Esc com o foco no campo fecha o painel e devolve o foco ao botão Agente.
 
 O que o processo não seguiu, para quem retomar: os guias do padrão de qualidade e as skills foram lidos depois do código, e a skill de projeto `rodar-app` e a de entrada em repositório só na auditoria final, então o gate não foi rodado antes da primeira alteração; a primeira versão desta entrada foi reescrita antes do primeiro commit, em vez de receber uma nota datada; os commits saíram em bloco no fim, e não a cada unidade concluída; e o roteiro ponta a ponta ficou fora do repositório por depender do Windows.
+
+## 2026-10-13 — Nomes de contas locais não podem duplicar no mesmo provedor
+
+**Causa.** O cadastro de perfis em `cli-account-store.cjs` aceitava qualquer nome não vazio e gerava um UUID novo a cada clique. Assim, repetir o mesmo e-mail ou rótulo criava pastas de login diferentes que apareciam como contas repetidas no configurador.
+
+**Correção.** O processo principal agora compara o nome normalizado dentro do provedor antes de criar a pasta: espaços repetidos, espaços nas extremidades, caixa e compatibilidade Unicode não geram outro perfil. A criação é recusada com erro explícito e código `CLI_ACCOUNT_DUPLICATE`; nomes iguais em provedores diferentes continuam independentes. O teste também verifica que a rejeição não deixa uma pasta extra.
+
+**Validação.** O teste de regressão falhou antes da correção por aceitar a segunda criação e passou depois; `node --test electron/services/cli-account-store.test.cjs` terminou com 26 testes passando no Windows. Duplicatas já existentes não são apagadas automaticamente para preservar credenciais: devem ser removidas individualmente pela interface.
+
+## 2026-10-13 — Migração automática das contas duplicadas legadas
+
+**Correção da anotação anterior.** A exigência mudou: a próxima atualização precisa corrigir também quem já tinha duplicatas. Na inicialização, o registro agora conserva a primeira conta de cada provedor e nome normalizado, cria aliases para os IDs antigos, reaponta preferências, cadeia e histórico de uso, transfere a chave do Openia e preserva o perfil duplicado em `cli-account-duplicates` antes de tirá-lo da lista ativa.
+
+**Validação.** A migração foi coberta com casos de perfil Codex, chave Openia, reabertura idempotente e IDs antigos; os testes focados de Node passaram, assim como os testes de seleção/rótulo do frontend, typecheck e lint. A suíte Node completa ainda deve ser registrada após a rodada final.

@@ -109,6 +109,16 @@ sistema**, oferece **+ Nova conta…** e mostra o botão **Remover** depois que 
 perfil é selecionado. O padrão continua sendo o login que você já tem no
 sistema.
 
+O nome do perfil é único dentro de cada provedor: espaços repetidos, espaços nas
+extremidades e diferenças de maiúsculas e minúsculas não criam uma segunda conta.
+Para cadastrar outro login, use um nome diferente.
+
+Na atualização do app, registros antigos que já tenham o mesmo nome são
+corrigidos automaticamente: a primeira conta mantém seu identificador, os
+perfis e as referências antigas são reapontados para ela e a lista deixa de
+mostrar a duplicata. O perfil duplicado é preservado em uma cópia de segurança
+local durante a migração; nenhuma credencial é descartada.
+
 O login em si é feito pela própria CLI, dentro do terminal, na primeira vez que
 você abre um perfil novo — o app não intermedeia credencial. A exceção é o
 Openia: a chave digitada no configurador é guardada cifrada pelo chaveiro do

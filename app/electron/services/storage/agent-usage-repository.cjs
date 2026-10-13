@@ -218,6 +218,122 @@ function createAgentUsageRepository(database) {
       return row ? mapSampleRow(row) : null
     },
 
+    mergeAccountIds({ canonicalId, duplicateIds, nowIso = new Date().toISOString() }) {
+      const targetId = requireString(canonicalId, 'ID canônico da conta inválido.')
+      const mergedIds = [
+        ...new Set(
+          (Array.isArray(duplicateIds) ? duplicateIds : [])
+            .filter((accountId) => typeof accountId === 'string' && accountId.trim())
+            .map((accountId) => accountId.trim())
+            .filter((accountId) => accountId !== targetId),
+        ),
+      ]
+
+      if (mergedIds.length === 0) {
+        return { accounts: 0, samples: 0 }
+      }
+
+      connection.exec('BEGIN IMMEDIATE')
+      try {
+        let accounts = 0
+        let samples = 0
+
+        for (const duplicateId of mergedIds) {
+          const duplicate = connection
+            .prepare(
+              `SELECT * FROM agent_usage_accounts
+               WHERE id = ? AND archived_at IS NULL`,
+            )
+            .get(duplicateId)
+          if (!duplicate) continue
+
+          let canonical = connection
+            .prepare(
+              `SELECT * FROM agent_usage_accounts
+               WHERE id = ? AND archived_at IS NULL`,
+            )
+            .get(targetId)
+
+          if (!canonical) {
+            try {
+              connection
+                .prepare(
+                  `INSERT INTO agent_usage_accounts
+                     (id, provider_id, label, identity_key, identity_display, identity_source, created_at, updated_at, archived_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+                )
+                .run(
+                  targetId,
+                  duplicate.provider_id,
+                  duplicate.label,
+                  duplicate.identity_key,
+                  duplicate.identity_display,
+                  duplicate.identity_source,
+                  duplicate.created_at,
+                  nowIso,
+                )
+            } catch {
+              connection
+                .prepare(
+                  `INSERT INTO agent_usage_accounts
+                     (id, provider_id, label, identity_key, identity_display, identity_source, created_at, updated_at, archived_at)
+                   VALUES (?, ?, ?, ?, NULL, NULL, ?, ?, NULL)`,
+                )
+                .run(targetId, duplicate.provider_id, duplicate.label, null, duplicate.created_at, nowIso)
+            }
+            canonical = connection
+              .prepare('SELECT * FROM agent_usage_accounts WHERE id = ? AND archived_at IS NULL')
+              .get(targetId)
+          } else if (!canonical.identity_key && duplicate.identity_key) {
+            const conflict = connection
+              .prepare(
+                `SELECT id FROM agent_usage_accounts
+                 WHERE provider_id = ? AND identity_key = ? AND archived_at IS NULL AND id != ?`,
+              )
+              .get(canonical.provider_id, duplicate.identity_key, targetId)
+            if (!conflict) {
+              connection
+                .prepare(
+                  `UPDATE agent_usage_accounts
+                   SET identity_key = ?, identity_display = ?, identity_source = ?, updated_at = ?
+                   WHERE id = ?`,
+                )
+                .run(
+                  duplicate.identity_key,
+                  duplicate.identity_display,
+                  duplicate.identity_source,
+                  nowIso,
+                  targetId,
+                )
+            }
+          }
+
+          samples += Number(
+            connection
+              .prepare('UPDATE agent_usage_samples SET account_id = ? WHERE account_id = ?')
+              .run(targetId, duplicateId).changes,
+          )
+          accounts += Number(
+            connection
+              .prepare(
+                `UPDATE agent_usage_accounts
+                 SET archived_at = ?, updated_at = ?
+                 WHERE id = ? AND archived_at IS NULL`,
+              )
+              .run(nowIso, nowIso, duplicateId).changes,
+          )
+        }
+
+        connection.exec('COMMIT')
+        return { accounts, samples }
+      } catch (error) {
+        try {
+          connection.exec('ROLLBACK')
+        } catch {}
+        throw error
+      }
+    },
+
     archiveAccount(accountId) {
       const normalizedAccountId = requireString(
         accountId,

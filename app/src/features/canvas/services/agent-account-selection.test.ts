@@ -124,6 +124,19 @@ describe('seleção de conta por agente', () => {
     expect(selectAccountFromList(codex, '', '')).toEqual({ status: 'ok', accountId: '' })
   })
 
+  it('troca automaticamente um id legado pelo id da conta deduplicada', () => {
+    expect(
+      selectAccountFromList(
+        {
+          ok: true,
+          accounts: [{ ...codexAccount, legacyAccountIds: ['codex-conta-antiga'] }],
+        },
+        '',
+        'codex-conta-antiga',
+      ),
+    ).toEqual({ status: 'ok', accountId: 'codex-conta' })
+  })
+
   it('lista que falha mantém a seleção e bloqueia a abertura, sem cair no login do sistema', () => {
     const selection = selectAccountFromList(
       { ok: false, message: 'O registro de contas (cli-accounts.json) está ilegível.' },

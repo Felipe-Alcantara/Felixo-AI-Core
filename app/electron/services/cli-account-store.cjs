@@ -41,6 +41,79 @@ const STORE_FILE = 'cli-accounts.json'
 const SECRETS_FILE = 'cli-account-secrets.bin'
 const STORE_UNREADABLE_CODE = 'CLI_ACCOUNTS_STORE_UNREADABLE'
 const SECRETS_UNREADABLE_CODE = 'CLI_ACCOUNT_SECRETS_UNREADABLE'
+const DUPLICATE_ACCOUNT_CODE = 'CLI_ACCOUNT_DUPLICATE'
+const DUPLICATE_PROFILE_BACKUP_DIRNAME = 'cli-account-duplicates'
+
+function createDuplicateAccountError(label) {
+  const error = new Error(`Já existe uma conta com o nome "${label}" para este agente.`)
+  error.code = DUPLICATE_ACCOUNT_CODE
+  return error
+}
+
+function normalizeAccountLabel(label) {
+  return label.normalize('NFKC').replace(/\s+/gu, ' ').trim().toLowerCase()
+}
+
+function isNonEmptyText(value) {
+  return typeof value === 'string' && value.trim() !== ''
+}
+
+function normalizeAliasMap(value) {
+  const aliases = Object.create(null)
+
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return aliases
+  }
+
+  for (const [alias, target] of Object.entries(value)) {
+    if (isNonEmptyText(alias) && isNonEmptyText(target) && alias !== target) {
+      aliases[alias] = target
+    }
+  }
+
+  return aliases
+}
+
+function resolveAccountIdAlias(accountId, aliases) {
+  if (!isNonEmptyText(accountId)) {
+    return accountId
+  }
+
+  let resolved = accountId
+  const visited = new Set()
+
+  while (isNonEmptyText(aliases?.[resolved]) && !visited.has(resolved)) {
+    visited.add(resolved)
+    resolved = aliases[resolved]
+  }
+
+  return resolved
+}
+
+function canonicalizeAliases(value, accountIds) {
+  const storedAliases = normalizeAliasMap(value)
+  const aliases = Object.create(null)
+
+  for (const alias of Object.keys(storedAliases)) {
+    const target = resolveAccountIdAlias(alias, storedAliases)
+    if (accountIds.has(target) && !accountIds.has(alias) && alias !== target) {
+      aliases[alias] = target
+    }
+  }
+
+  return aliases
+}
+
+function aliasMapsEqual(left, right) {
+  const leftKeys = Object.keys(left ?? {}).sort()
+  const rightKeys = Object.keys(right ?? {}).sort()
+
+  if (leftKeys.length !== rightKeys.length) {
+    return false
+  }
+
+  return leftKeys.every((key) => left[key] === right[key])
+}
 
 function createStoreUnreadableError() {
   const error = new Error(
@@ -103,6 +176,8 @@ function toAffectedSession(session) {
  * @param {(accountId: string) => unknown} [options.forgetChainAccount]
  *   Tira a conta removida da cadeia (membro, espera e checagem de login). O
  *   registro de trocas fica, com o rótulo guardado.
+ * @param {(input: { canonicalId: string, duplicateIds: string[], providerId: string }) => unknown} [options.mergeAccountReferences]
+ *   Reaponta referências persistidas de contas deduplicadas.
  */
 function createCliAccountStore({
   userData,
@@ -111,6 +186,7 @@ function createCliAccountStore({
   safeStorage = null,
   listLiveSessions = () => [],
   forgetChainAccount = null,
+  mergeAccountReferences = null,
 } = {}) {
   if (!userData) {
     throw new Error('createCliAccountStore requer userData.')
@@ -118,19 +194,20 @@ function createCliAccountStore({
 
   const storePath = path.join(userData, 'config', STORE_FILE)
   const secretsPath = path.join(userData, 'config', SECRETS_FILE)
+  let accountAliases = Object.create(null)
 
   /**
    * Lê o registro. Arquivo ausente é a lista vazia de quem nunca criou conta;
    * qualquer outra falha (JSON quebrado, formato inesperado, sem permissão)
    * lança `CLI_ACCOUNTS_STORE_UNREADABLE`, para ninguém gravar por cima.
    */
-  function readStore() {
+  function readStoreDocument() {
     let raw
     try {
       raw = fileSystem.readFileSync(storePath, 'utf8')
     } catch (error) {
       if (error?.code === 'ENOENT') {
-        return []
+        return { accounts: [], accountAliases: Object.create(null) }
       }
       throw createStoreUnreadableError()
     }
@@ -146,15 +223,313 @@ function createCliAccountStore({
       throw createStoreUnreadableError()
     }
 
-    return parsed.accounts
+    return {
+      accounts: parsed.accounts,
+      accountAliases: normalizeAliasMap(parsed.accountAliases),
+    }
   }
 
-  function writeStore(accounts) {
+  function readStore() {
+    const document = readStoreDocument()
+    accountAliases = canonicalizeAliases(
+      document.accountAliases,
+      new Set(document.accounts.map((account) => account?.id).filter(isNonEmptyText)),
+    )
+    return document.accounts
+  }
+
+  function writeStore(accounts, aliases = accountAliases) {
+    const normalizedAliases = canonicalizeAliases(
+      aliases,
+      new Set(accounts.map((account) => account?.id).filter(isNonEmptyText)),
+    )
+    const document = { accounts }
+
+    if (Object.keys(normalizedAliases).length > 0) {
+      document.accountAliases = normalizedAliases
+    }
+
+    accountAliases = normalizedAliases
     writeFileAtomically(
       fileSystem,
       storePath,
-      `${JSON.stringify({ accounts }, null, 2)}\n`,
+      `${JSON.stringify(document, null, 2)}\n`,
       'utf8',
+    )
+  }
+
+  function buildDuplicateGroups(accounts, storedAliases) {
+    const canonicalByLabel = new Map()
+    const accountsById = new Map(
+      accounts.filter((account) => isNonEmptyText(account?.id)).map((account) => [account.id, account]),
+    )
+    const migratedAccounts = []
+    const groupsByCanonicalId = new Map()
+
+    for (const account of accounts) {
+      const canGroup =
+        isNonEmptyText(account?.id) &&
+        isNonEmptyText(account?.providerId) &&
+        typeof account?.label === 'string' &&
+        normalizeAccountLabel(account.label) !== ''
+
+      if (!canGroup) {
+        migratedAccounts.push(account)
+        continue
+      }
+
+      const key = `${account.providerId}\u0000${normalizeAccountLabel(account.label)}`
+      const canonical = canonicalByLabel.get(key)
+
+      if (!canonical) {
+        canonicalByLabel.set(key, account)
+        migratedAccounts.push(account)
+        continue
+      }
+
+      if (canonical.id === account.id) {
+        continue
+      }
+
+      let group = groupsByCanonicalId.get(canonical.id)
+      if (!group) {
+        group = {
+          canonical,
+          duplicateIds: [],
+          providerId: canonical.providerId,
+        }
+        groupsByCanonicalId.set(canonical.id, group)
+      }
+
+      if (!group.duplicateIds.includes(account.id)) {
+        group.duplicateIds.push(account.id)
+      }
+    }
+
+    const canonicalIds = new Set(
+      migratedAccounts.map((account) => account?.id).filter(isNonEmptyText),
+    )
+    const aliases = canonicalizeAliases(storedAliases, canonicalIds)
+
+    for (const [alias, target] of Object.entries(aliases)) {
+      const canonical = accountsById.get(target) ?? migratedAccounts.find((account) => account.id === target)
+      if (!canonical) {
+        continue
+      }
+
+      let group = groupsByCanonicalId.get(canonical.id)
+      if (!group) {
+        group = {
+          canonical,
+          duplicateIds: [],
+          providerId: canonical.providerId,
+        }
+        groupsByCanonicalId.set(canonical.id, group)
+      }
+
+      if (!group.duplicateIds.includes(alias)) {
+        group.duplicateIds.push(alias)
+      }
+    }
+
+    for (const group of groupsByCanonicalId.values()) {
+      for (const duplicateId of group.duplicateIds) {
+        aliases[duplicateId] = group.canonical.id
+      }
+    }
+
+    return {
+      accounts: migratedAccounts,
+      aliases: canonicalizeAliases(aliases, canonicalIds),
+      groups: [...groupsByCanonicalId.values()].filter((group) => group.duplicateIds.length > 0),
+    }
+  }
+
+  function copyMissingProfileEntries(providerId, canonicalId, duplicateId) {
+    let sourceDir
+    let targetDir
+
+    try {
+      sourceDir = getProfileDir(userData, providerId, duplicateId)
+      targetDir = getProfileDir(userData, providerId, canonicalId)
+      if (!fileSystem.existsSync(sourceDir)) {
+        return
+      }
+
+      fileSystem.mkdirSync(targetDir, { recursive: true })
+      for (const entry of fileSystem.readdirSync(sourceDir)) {
+        const sourcePath = path.join(sourceDir, entry)
+        const targetPath = path.join(targetDir, entry)
+        if (fileSystem.existsSync(targetPath)) {
+          continue
+        }
+        try {
+          fileSystem.cpSync(sourcePath, targetPath, { recursive: true })
+        } catch {}
+      }
+    } catch {}
+  }
+
+  function quarantineDuplicateProfile(providerId, duplicateId) {
+    try {
+      const sourceDir = getProfileDir(userData, providerId, duplicateId)
+      if (!fileSystem.existsSync(sourceDir)) {
+        return
+      }
+
+      const backupDir = path.join(
+        userData,
+        DUPLICATE_PROFILE_BACKUP_DIRNAME,
+        providerId,
+        duplicateId,
+      )
+      if (fileSystem.existsSync(backupDir)) {
+        return
+      }
+
+      fileSystem.mkdirSync(path.dirname(backupDir), { recursive: true })
+      fileSystem.renameSync(sourceDir, backupDir)
+    } catch {}
+  }
+
+  function getAccountSecret(accountId, secrets) {
+    const canonicalId = resolveAccountIdAlias(accountId, accountAliases)
+    if (hasSecretValue(secrets?.[canonicalId])) {
+      return secrets[canonicalId]
+    }
+
+    for (const alias of legacyAccountIdsFor(canonicalId)) {
+      if (hasSecretValue(secrets?.[alias])) {
+        return secrets[alias]
+      }
+    }
+
+    return undefined
+  }
+
+  function prepareDuplicateSecretMigration(groups) {
+    const openiaGroups = groups.filter((group) => group.providerId === 'openia')
+    if (!safeStorage || openiaGroups.length === 0) {
+      return { cleanup: [] }
+    }
+
+    let secrets
+    try {
+      secrets = loadSecretsForWrite()
+    } catch {
+      return { cleanup: [] }
+    }
+
+    const cleanup = []
+    let changed = false
+
+    for (const group of openiaGroups) {
+      let canonicalReady = hasSecretValue(secrets[group.canonical.id])
+      for (const duplicateId of group.duplicateIds) {
+        if (!canonicalReady && hasSecretValue(secrets[duplicateId])) {
+          secrets[group.canonical.id] = secrets[duplicateId]
+          canonicalReady = true
+          changed = true
+        }
+      }
+
+      if (canonicalReady) {
+        cleanup.push({ canonicalId: group.canonical.id, duplicateIds: group.duplicateIds })
+      }
+    }
+
+    if (changed) {
+      try {
+        writeSecrets(secrets)
+      } catch {
+        return { cleanup: [] }
+      }
+    }
+
+    return { cleanup }
+  }
+
+  function cleanupDuplicateSecrets(cleanup) {
+    if (!safeStorage || cleanup.length === 0) {
+      return
+    }
+
+    try {
+      const secrets = loadSecretsForWrite()
+      let changed = false
+
+      for (const group of cleanup) {
+        if (!hasSecretValue(secrets[group.canonicalId])) {
+          continue
+        }
+        for (const duplicateId of group.duplicateIds) {
+          if (duplicateId in secrets) {
+            delete secrets[duplicateId]
+            changed = true
+          }
+        }
+      }
+
+      if (changed) {
+        writeSecrets(secrets)
+      }
+    } catch {}
+  }
+
+  function migrateStoredDuplicates() {
+    let document
+    try {
+      document = readStoreDocument()
+    } catch (error) {
+      if (error?.code === STORE_UNREADABLE_CODE) {
+        return
+      }
+      throw error
+    }
+
+    const migration = buildDuplicateGroups(document.accounts, document.accountAliases)
+    const accountsChanged = migration.accounts.length !== document.accounts.length
+    const aliasesChanged = !aliasMapsEqual(migration.aliases, document.accountAliases)
+
+    if (!accountsChanged && !aliasesChanged && migration.groups.length === 0) {
+      accountAliases = migration.aliases
+      return
+    }
+
+    for (const group of migration.groups) {
+      for (const duplicateId of group.duplicateIds) {
+        copyMissingProfileEntries(group.providerId, group.canonical.id, duplicateId)
+      }
+    }
+
+    const secretMigration = prepareDuplicateSecretMigration(migration.groups)
+
+    try {
+      writeStore(migration.accounts, migration.aliases)
+    } catch {
+      return
+    }
+
+    for (const group of migration.groups) {
+      try {
+        mergeAccountReferences?.({
+          canonicalId: group.canonical.id,
+          duplicateIds: group.duplicateIds,
+          providerId: group.providerId,
+        })
+      } catch {}
+
+      for (const duplicateId of group.duplicateIds) {
+        quarantineDuplicateProfile(group.providerId, duplicateId)
+      }
+    }
+
+    cleanupDuplicateSecrets(secretMigration.cleanup)
+  }
+
+  function legacyAccountIdsFor(accountId) {
+    return Object.keys(accountAliases).filter(
+      (alias) => resolveAccountIdAlias(alias, accountAliases) === accountId,
     )
   }
 
@@ -166,11 +541,15 @@ function createCliAccountStore({
     const filtered = providerId
       ? accounts.filter((account) => account.providerId === providerId)
       : accounts
-    return filtered.map((account) => toPublicAccount(account, secrets))
+    return filtered.map((account) =>
+      toPublicAccount(account, secrets, legacyAccountIdsFor(account.id)),
+    )
   }
 
   function findAccount(accountId) {
-    return readStore().find((account) => account.id === accountId) ?? null
+    const accounts = readStore()
+    const resolvedId = resolveAccountIdAlias(accountId, accountAliases)
+    return accounts.find((account) => account.id === resolvedId) ?? null
   }
 
   /**
@@ -237,6 +616,18 @@ function createCliAccountStore({
 
     // Lido antes de criar a pasta: com o registro ilegível, nada é criado.
     const accounts = readStore()
+    const normalizedName = normalizeAccountLabel(name)
+    const alreadyExists = accounts.some(
+      (existing) =>
+        existing?.providerId === providerId &&
+        typeof existing.label === 'string' &&
+        normalizeAccountLabel(existing.label) === normalizedName,
+    )
+
+    if (alreadyExists) {
+      throw createDuplicateAccountError(name)
+    }
+
     const account = {
       id: randomUUID(),
       providerId,
@@ -268,7 +659,10 @@ function createCliAccountStore({
   /** Terminais vivos que nasceram nesta conta. */
   function listAccountSessions(accountId) {
     return listLiveSessions()
-      .filter((session) => session?.accountId === accountId)
+      .filter(
+        (session) =>
+          resolveAccountIdAlias(session?.accountId, accountAliases) === accountId,
+      )
       .map(toAffectedSession)
   }
 
@@ -296,7 +690,8 @@ function createCliAccountStore({
    */
   function remove(accountId, { confirmed = false, acknowledgedSessionIds = [] } = {}) {
     const accounts = readStore()
-    const account = accounts.find((item) => item.id === accountId)
+    const resolvedId = resolveAccountIdAlias(accountId, accountAliases)
+    const account = accounts.find((item) => item.id === resolvedId)
 
     if (!account) {
       return { removed: false, sessions: [] }
@@ -335,7 +730,10 @@ function createCliAccountStore({
     if (hasSecret) {
       forgetSecret(account.id)
     }
-    writeStore(accounts.filter((item) => item.id !== accountId))
+    const aliases = Object.fromEntries(
+      Object.entries(accountAliases).filter(([, target]) => target !== account.id),
+    )
+    writeStore(accounts.filter((item) => item.id !== account.id), aliases)
 
     return { removed: true, sessions, chainCleaned: forgetInChain(account.id) }
   }
@@ -435,18 +833,21 @@ function createCliAccountStore({
   }
 
   function hasConfiguredSecret(accountId) {
-    return hasSecretValue(readSecrets()[accountId])
+    return hasSecretValue(getAccountSecret(accountId, readSecrets()))
   }
 
-  function toPublicAccount(account, secrets) {
+  function toPublicAccount(account, secrets, legacyAccountIds = []) {
+    const publicAccount =
+      legacyAccountIds.length > 0 ? { ...account, legacyAccountIds } : account
+
     if (account.providerId !== 'openia') {
-      return account
+      return publicAccount
     }
 
     return {
-      ...account,
+      ...publicAccount,
       // Nunca devolve a chave: o renderer só precisa saber se existe uma.
-      secretConfigured: hasSecretValue(secrets[account.id]),
+      secretConfigured: hasSecretValue(getAccountSecret(account.id, secrets)),
     }
   }
 
@@ -512,12 +913,17 @@ function createCliAccountStore({
     }
 
     const secrets = loadSecretsForWrite()
+    const canonicalId = resolveAccountIdAlias(accountId, accountAliases)
+    const ids = [canonicalId, ...legacyAccountIdsFor(canonicalId)]
+    const found = ids.some((id) => id in secrets)
 
-    if (!(accountId in secrets)) {
+    if (!found) {
       return
     }
 
-    delete secrets[accountId]
+    for (const id of ids) {
+      delete secrets[id]
+    }
     writeSecrets(secrets)
   }
 
@@ -555,7 +961,7 @@ function createCliAccountStore({
     return buildProfileEnv({
       providerId: account.providerId,
       profileDir: getProfileDir(userData, account.providerId, account.id),
-      secret: readSecrets()[account.id],
+      secret: getAccountSecret(account.id, readSecrets()),
       homeDir,
     })
   }
@@ -568,7 +974,9 @@ function createCliAccountStore({
    * o que responder aqui.
    */
   function buildProbeOptions(accountId) {
-    const account = readStore().find((item) => item.id === accountId)
+    const accounts = readStore()
+    const resolvedId = resolveAccountIdAlias(accountId, accountAliases)
+    const account = accounts.find((item) => item.id === resolvedId)
 
     if (!account) {
       return {}
@@ -587,6 +995,8 @@ function createCliAccountStore({
     return {}
   }
 
+  migrateStoredDuplicates()
+
   return {
     buildEnv,
     buildProbeOptions,
@@ -595,6 +1005,11 @@ function createCliAccountStore({
     forgetSecret,
     list,
     remove,
+    resolveAccountId: (accountId) => {
+      const accounts = readStore()
+      const resolvedId = resolveAccountIdAlias(accountId, accountAliases)
+      return accounts.some((account) => account.id === resolvedId) ? resolvedId : null
+    },
     setSecret,
     storePath,
     validateAccount,
@@ -602,6 +1017,7 @@ function createCliAccountStore({
 }
 
 module.exports = {
+  DUPLICATE_ACCOUNT_CODE,
   STORE_UNREADABLE_CODE,
   createCliAccountStore,
 }

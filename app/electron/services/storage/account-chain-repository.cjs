@@ -906,6 +906,185 @@ function createAccountChainRepository(database) {
     }
   }
 
+  function mergeAccountIds({ canonicalId, duplicateIds, nowIso }) {
+    const canonical = requireText(canonicalId, 'canonicalId')
+    const now = requireIso(nowIso, 'nowIso')
+    const duplicates = [
+      ...new Set(
+        (Array.isArray(duplicateIds) ? duplicateIds : [])
+          .filter((accountId) => typeof accountId === 'string' && accountId.trim())
+          .map((accountId) => accountId.trim())
+          .filter((accountId) => accountId !== canonical),
+      ),
+    ]
+
+    if (duplicates.length === 0) {
+      return { members: 0, cooldowns: 0, loginChecks: 0 }
+    }
+
+    return inImmediateTransaction(connection, () => {
+      let members = 0
+      let cooldowns = 0
+      let loginChecks = 0
+
+      for (const duplicate of duplicates) {
+        const duplicateMember = connection
+          .prepare('SELECT * FROM account_chain_members WHERE account_id = ?')
+          .get(duplicate)
+        const canonicalMember = connection
+          .prepare('SELECT * FROM account_chain_members WHERE account_id = ?')
+          .get(canonical)
+
+        if (duplicateMember && !canonicalMember) {
+          members += Number(
+            connection
+              .prepare(
+                'UPDATE account_chain_members SET account_id = ?, updated_at = ? WHERE account_id = ?',
+              )
+              .run(canonical, now, duplicate).changes,
+          )
+        } else if (duplicateMember && canonicalMember) {
+          connection
+            .prepare(
+              `UPDATE account_chain_members
+               SET enabled = CASE WHEN enabled = 1 OR ? = 1 THEN 1 ELSE 0 END,
+                   billing_declared = COALESCE(billing_declared, ?),
+                   multiplier_declared = COALESCE(multiplier_declared, ?),
+                   position = MIN(position, ?),
+                   updated_at = ?
+               WHERE account_id = ?`,
+            )
+            .run(
+              duplicateMember.enabled,
+              duplicateMember.billing_declared,
+              duplicateMember.multiplier_declared,
+              duplicateMember.position,
+              now,
+              canonical,
+            )
+          members += Number(
+            connection
+              .prepare('DELETE FROM account_chain_members WHERE account_id = ?')
+              .run(duplicate).changes,
+          )
+        }
+
+        const duplicateCooldown = connection
+          .prepare('SELECT * FROM account_cooldowns WHERE account_id = ?')
+          .get(duplicate)
+        const canonicalCooldown = connection
+          .prepare('SELECT * FROM account_cooldowns WHERE account_id = ?')
+          .get(canonical)
+
+        if (duplicateCooldown && !canonicalCooldown) {
+          cooldowns += Number(
+            connection
+              .prepare('UPDATE account_cooldowns SET account_id = ? WHERE account_id = ?')
+              .run(canonical, duplicate).changes,
+          )
+        } else if (duplicateCooldown && canonicalCooldown) {
+          const duplicateIsActive = duplicateCooldown.released_at === null
+          const canonicalIsActive = canonicalCooldown.released_at === null
+          const duplicateIsPreferred =
+            duplicateIsActive !== canonicalIsActive
+              ? duplicateIsActive
+              : duplicateCooldown.detected_at > canonicalCooldown.detected_at
+
+          if (duplicateIsPreferred) {
+            connection
+              .prepare(
+                `UPDATE account_cooldowns
+                 SET provider_id = ?, failure_class = ?, detected_at = ?, until_at = ?,
+                     until_source = ?, evidence = ?, evidence_hash = ?, session_id = ?,
+                     released_at = ?, released_by = ?, revision = ?
+                 WHERE account_id = ?`,
+              )
+              .run(
+                duplicateCooldown.provider_id,
+                duplicateCooldown.failure_class,
+                duplicateCooldown.detected_at,
+                duplicateCooldown.until_at,
+                duplicateCooldown.until_source,
+                duplicateCooldown.evidence,
+                duplicateCooldown.evidence_hash,
+                duplicateCooldown.session_id,
+                duplicateCooldown.released_at,
+                duplicateCooldown.released_by,
+                Math.max(canonicalCooldown.revision, duplicateCooldown.revision) + 1,
+                canonical,
+              )
+          }
+
+          cooldowns += Number(
+            connection
+              .prepare('DELETE FROM account_cooldowns WHERE account_id = ?')
+              .run(duplicate).changes,
+          )
+        }
+
+        const duplicateLoginCheck = connection
+          .prepare('SELECT * FROM account_login_checks WHERE account_id = ?')
+          .get(duplicate)
+        const canonicalLoginCheck = connection
+          .prepare('SELECT * FROM account_login_checks WHERE account_id = ?')
+          .get(canonical)
+
+        if (duplicateLoginCheck && !canonicalLoginCheck) {
+          loginChecks += Number(
+            connection
+              .prepare('UPDATE account_login_checks SET account_id = ? WHERE account_id = ?')
+              .run(canonical, duplicate).changes,
+          )
+        } else if (duplicateLoginCheck && canonicalLoginCheck) {
+          if (duplicateLoginCheck.checked_at > canonicalLoginCheck.checked_at) {
+            connection
+              .prepare(
+                `UPDATE account_login_checks
+                 SET provider_id = ?, status = ?, checked_at = ?, source = ?, duration_ms = ?,
+                     method = ?, plan = ?, billing_detected = ?, api_key_source_present = ?,
+                     multiplier_detected = ?, identity_key = ?, identity_status = ?
+                 WHERE account_id = ?`,
+              )
+              .run(
+                duplicateLoginCheck.provider_id,
+                duplicateLoginCheck.status,
+                duplicateLoginCheck.checked_at,
+                duplicateLoginCheck.source,
+                duplicateLoginCheck.duration_ms,
+                duplicateLoginCheck.method,
+                duplicateLoginCheck.plan,
+                duplicateLoginCheck.billing_detected,
+                duplicateLoginCheck.api_key_source_present,
+                duplicateLoginCheck.multiplier_detected,
+                duplicateLoginCheck.identity_key,
+                duplicateLoginCheck.identity_status,
+                canonical,
+              )
+          }
+
+          loginChecks += Number(
+            connection
+              .prepare('DELETE FROM account_login_checks WHERE account_id = ?')
+              .run(duplicate).changes,
+          )
+        }
+      }
+
+      if (members > 0) {
+        const orderedMembers = connection
+          .prepare('SELECT account_id FROM account_chain_members ORDER BY position ASC, account_id ASC')
+          .all()
+        const updatePosition = connection.prepare(
+          'UPDATE account_chain_members SET position = ?, updated_at = ? WHERE account_id = ?',
+        )
+        orderedMembers.forEach((member, position) => updatePosition.run(position, now, member.account_id))
+        bumpSettingsRevision(now)
+      }
+
+      return { members, cooldowns, loginChecks }
+    })
+  }
+
   /**
    * Tira a conta removida da lista, da espera e das checagens. O registro de
    * trocas fica, com o rótulo guardado como fotografia.
@@ -991,6 +1170,7 @@ function createAccountChainRepository(database) {
     findOpenSwitchEventForSession,
     findSpawnedSwitchEventForTarget,
     forgetAccount,
+    mergeAccountIds,
     getCooldown,
     getLoginCheck,
     getSwitchEvent,

@@ -37,6 +37,25 @@ describe('createCliAccountLabelStore', () => {
     expect(store.getLabels().get('sumida')).toBeUndefined()
   })
 
+  it('mantém o rótulo disponível para ids legados deduplicados', async () => {
+    const store = createCliAccountLabelStore(async () => ({
+      ok: true,
+      accounts: [
+        {
+          id: 'nova',
+          providerId: 'codex',
+          label: 'Pessoal',
+          createdAt: '',
+          legacyAccountIds: ['antiga'],
+        },
+      ],
+    }))
+
+    store.request('antiga')
+    await flush()
+    expect(store.getLabels().get('antiga')).toBe('Pessoal')
+  })
+
   it('sem a ponte ou com falha, fica sem rótulo e não lança', async () => {
     const semPonte = createCliAccountLabelStore(null)
     semPonte.request('a')
