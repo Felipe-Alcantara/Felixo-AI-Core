@@ -1115,3 +1115,17 @@ O que o processo não seguiu, para quem retomar: os guias do padrão de qualidad
 **Correção da anotação anterior.** A exigência mudou: a próxima atualização precisa corrigir também quem já tinha duplicatas. Na inicialização, o registro agora conserva a primeira conta de cada provedor e nome normalizado, cria aliases para os IDs antigos, reaponta preferências, cadeia e histórico de uso, transfere a chave do Openia e preserva o perfil duplicado em `cli-account-duplicates` antes de tirá-lo da lista ativa.
 
 **Validação.** A migração foi coberta com casos de perfil Codex, chave Openia, reabertura idempotente e IDs antigos; os testes focados de Node passaram, assim como os testes de seleção/rótulo do frontend, typecheck e lint. A suíte Node completa ainda deve ser registrada após a rodada final.
+
+## 2026-10-13 — Nomes das contas visíveis no resumo de Limites e uso
+
+**Relato.** A tabela de resumo do painel **Limites e uso** mostrava apenas o começo dos nomes das contas em uma janela estreita, embora a identidade completa já chegasse ao renderer.
+
+**Causa.** `AgentUsageProviderSummary.tsx` usava `table-fixed` e aplicava `truncate` à célula da conta. A coluna era a única sem largura definida e podia ser comprimida pelos indicadores de plano, janelas e status. Além disso, o `title` apontava para `account.label`, que pode ser diferente da identidade exibida.
+
+**Correção.** A célula agora usa o identificador que realmente aparece (`identityDisplay` com fallback para `label`), permite quebra de palavras longas e usa esse mesmo valor no `title`. O backend e o contrato de contas não foram alterados.
+
+**Evidência.** O teste de regressão foi escrito antes da correção e falhou porque não encontrava o título com o identificador completo nem a regra de quebra; depois passou. `npx vitest run --maxWorkers=4 src/features/canvas/components/tools/AgentUsageProviderSummary.test.ts`: 6 testes; suíte frontend completa: 205 arquivos, 3.176 testes aprovados e 3 ignorados; `npm run typecheck`, `npm run lint` e `npm run build`: exit 0.
+
+**Não validado.** Não abri o Electron com contas reais nesta rodada; portanto, a conferência visual manual não foi feita. O teste de renderização estática confirma o identificador e as classes responsivas esperadas. O aviso de chunks grandes do Vite permaneceu igual ao baseline.
+
+Estado: concluído e validado localmente no Windows; publicação externa não foi feita nesta sessão.

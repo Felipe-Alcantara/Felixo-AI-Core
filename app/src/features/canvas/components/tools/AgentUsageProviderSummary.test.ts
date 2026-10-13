@@ -67,6 +67,24 @@ describe('ProviderSummaryTable', () => {
     expect(html).toContain('O serviço bloqueou o uso comum desta conta.')
   })
 
+  it('mantém o identificador da conta legível quando a tabela fica estreita', () => {
+    const narrowSummary: AgentUsageProviderSummary = {
+      ...SUMMARY,
+      rows: [
+        {
+          ...SUMMARY.rows[0],
+          account: account('conta-a', 'felipemartins072004@gmail.com'),
+        },
+      ],
+    }
+    const html = renderToStaticMarkup(
+      createElement(ProviderSummaryTable, { providerName: 'Codex CLI', summary: narrowSummary }),
+    )
+
+    expect(html).toContain('title="felipemartins072004@gmail.com"')
+    expect(html).toContain('whitespace-normal wrap-break-word')
+  })
+
   it('janela que a conta não publicou aparece como traço, nunca como zero', () => {
     const html = renderToStaticMarkup(createElement(ProviderSummaryTable, { providerName: 'Codex CLI', summary: SUMMARY }))
 

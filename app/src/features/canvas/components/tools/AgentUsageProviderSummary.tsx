@@ -46,7 +46,10 @@ export function ProviderSummaryTable({
         {summary.rows.map((row) => (
           <tr key={row.account.id} className="border-t border-white/6 align-top">
             <th scope="row" className="py-1.5 pr-2 text-left font-normal">
-              <span className="block truncate text-zinc-200" title={row.account.label}>
+              <span
+                className="block whitespace-normal wrap-break-word text-zinc-200"
+                title={accountName(row.account)}
+              >
                 {accountName(row.account)}
               </span>
               {row.warning && (
