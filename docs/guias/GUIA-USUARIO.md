@@ -1067,26 +1067,31 @@ Locais comuns de dados do app:
 
 Os arquivos em `context-deliveries/` são artefatos temporários somente leitura:
 o app os cria fora do repositório para entregar prompts longos sem digitá-los
-inteiros na PTY, remove-os quando a sessão termina e limpa sobras com mais de
-24 horas na inicialização. Eles não são os scratchpads editáveis de
-`canvas-files/` e não devem ser versionados.
+inteiros na PTY, tira-os da pasta ativa quando a sessão termina e guarda uma
+cópia por até 30 dias. Na inicialização, sobras ativas com mais de 24 horas
+também vão para essa cópia; depois do prazo, ela é apagada. Eles não são os
+scratchpads editáveis de `canvas-files/` e não devem ser versionados.
 Para funcionar quando o contexto atravessa Linux, macOS ou Windows, a
 referência enviada ao terminal contém somente o nome do artefato e o comando
 `felixo context read "<nome>"` (também `felixo contexto ler "<nome>"`). O
 comando resolve a pasta nativa do perfil Felixo ativo; caminhos absolutos de
-outra máquina/perfil não devem ser copiados nem usados. Se a leitura falhar,
-o agente deve informar o nome e o erro exatos, sem trocar silenciosamente pelo
-artefato "equivalente" de outra sessão. Se o processo do app não conseguir
-criar o arquivo, o terminal volta ao fallback inline e mostra um aviso.
+outra máquina/perfil não devem ser copiados nem usados. Se o arquivo ativo não
+existir, o comando tenta a cópia guardada e avisa que o conteúdo veio de uma
+execução anterior. Se não houver cópia, o agente deve informar o nome e o erro
+exatos, sem trocar silenciosamente pelo artefato "equivalente" de outra sessão.
+Se o processo do app não conseguir criar o arquivo, o terminal volta ao
+fallback inline e mostra um aviso.
 
-Como os arquivos somem quando o terminal do agente termina (fechar o app,
-reiniciar o bloco, o agente se atualizar e reabrir), uma conversa retomada
-depois ainda carrega no histórico a instrução de lê-los. Nesse caso o erro
-"Artefato de contexto não encontrado" explica ao agente que o arquivo é
-temporário e que o conteúdo já está no histórico da conversa, e manda seguir o
-pedido atual a partir dele. Se o histórico não tiver o conteúdo, o agente avisa
-que o contexto expirou, sem inventá-lo; iniciar uma nova conversa no bloco gera
-um contexto novo.
+Como os arquivos podem sair da pasta ativa quando o terminal do agente termina
+(fechar o app, reiniciar o bloco, o agente se atualizar e reabrir), uma conversa
+retomada depois ainda carrega no histórico a instrução de lê-los. Se a cópia
+guardada existir, o comando recupera o conteúdo e avisa que ele veio de uma
+execução anterior. Depois dos 30 dias de retenção, o erro "Artefato de contexto
+não encontrado" explica ao agente que o arquivo é temporário e que o conteúdo
+deve estar no histórico da conversa, mandando seguir o pedido atual a partir
+dele. Se o histórico não tiver o conteúdo, o agente avisa que o contexto
+expirou, sem inventá-lo; iniciar uma nova conversa no bloco gera um contexto
+novo.
 
 Todo caminho de arquivo ou pasta que o app escreve para o agente vai entre
 aspas: o comando `felixo`, a skill ativada, a lista de skills, os arquivos

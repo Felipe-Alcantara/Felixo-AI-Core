@@ -13,11 +13,17 @@ const fsp = require('node:fs/promises')
 const path = require('node:path')
 const crypto = require('node:crypto')
 const { toErrorResult } = require('./ipc-result.cjs')
-const { CONTEXT_FILE_PREFIX } = require('../core/context-file-contract.cjs')
+const { CONTEXT_EXPIRED_DIRNAME, CONTEXT_FILE_PREFIX } = require('../core/context-file-contract.cjs')
 const { caminhoDoComando } = require('./agent-command-install.cjs')
 const { buildContextDeliveryEntry } = require('./context-delivery-log.cjs')
 
 const STALE_CONTEXT_MAX_AGE_MS = 24 * 60 * 60 * 1000
+// How long an artifact of an ended session stays readable. The agent CLIs resume
+// a conversation by id days later, and that conversation still tells the agent
+// to read these names; destroying the file on exit made that read fail forever.
+// Thirty days bounds how long a handoff (which may carry sensitive history)
+// stays on disk, the same order of magnitude as the terminal logs the app keeps.
+const EXPIRED_CONTEXT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
 const MAX_CONTEXT_BYTES = 32 * 1024 * 1024
 function requireText(value, fieldName) {
   if (typeof value !== 'string' || value.trim() === '') {
@@ -104,14 +110,36 @@ function isOwnedContextFile(filePath, baseDir) {
   return resolved.startsWith(`${base}${path.sep}`) && path.basename(resolved).startsWith(CONTEXT_FILE_PREFIX)
 }
 
-async function removeFileIfOwned(filePath, baseDir) {
+/**
+ * Takes one owned artifact out of the live folder without destroying it: the
+ * file moves to the expired subfolder, where `felixo context read` falls back.
+ *
+ * The move stamps the file with the expiry time, so retention counts from when
+ * the session ended and not from when a long-lived terminal was opened. Any
+ * failure leaves the file where it is; losing the content is the one outcome
+ * this function must not produce.
+ *
+ * @returns {Promise<boolean>} whether a file left the live folder.
+ */
+async function expireFileIfOwned(filePath, baseDir, now = Date.now()) {
   if (!isOwnedContextFile(filePath, baseDir)) {
     return false
   }
-  await fsp.rm(filePath, { force: true })
+  const expiredDir = path.join(baseDir, CONTEXT_EXPIRED_DIRNAME)
+  const expiredPath = path.join(expiredDir, path.basename(filePath))
+  try {
+    await fsp.mkdir(expiredDir, { recursive: true })
+    await fsp.rename(filePath, expiredPath)
+  } catch {
+    // Already expired (ENOENT) or locked by a reader: nothing left the folder.
+    return false
+  }
+  const expiredAt = new Date(now)
+  await fsp.utimes(expiredPath, expiredAt, expiredAt).catch(() => {})
   return true
 }
 
+/** Expires the live leftovers of a previous run that are older than a day. */
 async function cleanupStaleContextFiles(baseDir, now = Date.now()) {
   let entries
   try {
@@ -121,17 +149,40 @@ async function cleanupStaleContextFiles(baseDir, now = Date.now()) {
     throw error
   }
 
-  let removed = 0
+  let expired = 0
   for (const entry of entries) {
     if (!entry.isFile() || !entry.name.startsWith(CONTEXT_FILE_PREFIX)) continue
     const filePath = path.join(baseDir, entry.name)
     const stat = await fsp.stat(filePath)
-    if (now - stat.mtimeMs >= STALE_CONTEXT_MAX_AGE_MS) {
-      await fsp.rm(filePath, { force: true })
-      removed += 1
+    if (now - stat.mtimeMs >= STALE_CONTEXT_MAX_AGE_MS && (await expireFileIfOwned(filePath, baseDir, now))) {
+      expired += 1
     }
   }
-  return removed
+  return expired
+}
+
+/** Destroys the expired copies whose retention ended. This is the only delete. */
+async function purgeExpiredContextFiles(baseDir, now = Date.now()) {
+  const expiredDir = path.join(baseDir, CONTEXT_EXPIRED_DIRNAME)
+  let entries
+  try {
+    entries = await fsp.readdir(expiredDir, { withFileTypes: true })
+  } catch (error) {
+    if (error?.code === 'ENOENT') return 0
+    throw error
+  }
+
+  let purged = 0
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.startsWith(CONTEXT_FILE_PREFIX)) continue
+    const filePath = path.join(expiredDir, entry.name)
+    const stat = await fsp.stat(filePath)
+    if (now - stat.mtimeMs >= EXPIRED_CONTEXT_MAX_AGE_MS) {
+      await fsp.rm(filePath, { force: true })
+      purged += 1
+    }
+  }
+  return purged
 }
 
 async function writeContextFile(baseDir, params = {}, now = new Date()) {
@@ -201,7 +252,9 @@ function registerContextFilesIpcHandlers(appPaths, dependencies = {}) {
   const commandPath =
     typeof appPaths.bin === 'string' && appPaths.bin ? caminhoDoComando(appPaths.bin) : undefined
 
-  void cleanupStaleContextFiles(baseDir).catch(() => {})
+  void cleanupStaleContextFiles(baseDir)
+    .then(() => purgeExpiredContextFiles(baseDir))
+    .catch(() => {})
 
   ipcMain.handle('context-file:write', async (_event, params = {}) => {
     try {
@@ -276,9 +329,11 @@ function registerContextFilesIpcHandlers(appPaths, dependencies = {}) {
     try {
       const sessionId = requireText(params.sessionId, 'sessionId')
       const files = filesBySession.get(sessionId) ?? new Set()
+      // `removed` keeps its name for the callers: it counts the files that left
+      // the live folder. They are kept in the expired subfolder, not destroyed.
       let removed = 0
       for (const filePath of files) {
-        if (await removeFileIfOwned(filePath, baseDir)) removed += 1
+        if (await expireFileIfOwned(filePath, baseDir)) removed += 1
         metadataByArtifact.delete(path.basename(filePath))
       }
       filesBySession.delete(sessionId)
@@ -293,7 +348,7 @@ function registerContextFilesIpcHandlers(appPaths, dependencies = {}) {
     releaseSession: async (sessionId) => {
       const files = filesBySession.get(sessionId) ?? new Set()
       for (const filePath of files) {
-        await removeFileIfOwned(filePath, baseDir)
+        await expireFileIfOwned(filePath, baseDir)
         metadataByArtifact.delete(path.basename(filePath))
       }
       filesBySession.delete(sessionId)
@@ -302,7 +357,7 @@ function registerContextFilesIpcHandlers(appPaths, dependencies = {}) {
       for (const sessionId of filesBySession.keys()) {
         const files = filesBySession.get(sessionId) ?? new Set()
         for (const filePath of files) {
-          await removeFileIfOwned(filePath, baseDir)
+          await expireFileIfOwned(filePath, baseDir)
           metadataByArtifact.delete(path.basename(filePath))
         }
       }
@@ -314,11 +369,13 @@ function registerContextFilesIpcHandlers(appPaths, dependencies = {}) {
 
 module.exports = {
   CONTEXT_FILE_PREFIX,
+  EXPIRED_CONTEXT_MAX_AGE_MS,
   MAX_CONTEXT_BYTES,
   STALE_CONTEXT_MAX_AGE_MS,
   buildContextFileContent,
   cleanupStaleContextFiles,
   normalizeKind,
+  purgeExpiredContextFiles,
   registerContextFilesIpcHandlers,
   writeContextFile,
 }

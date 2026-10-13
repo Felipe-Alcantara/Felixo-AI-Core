@@ -12,11 +12,70 @@
 const fsp = require('node:fs/promises')
 const path = require('node:path')
 const { getAppPaths } = require('../core/app-paths.cjs')
-const { CONTEXT_FILE_PREFIX, CONTEXT_FILE_SUFFIX } = require('../core/context-file-contract.cjs')
+const {
+  CONTEXT_EXPIRED_DIRNAME,
+  CONTEXT_FILE_PREFIX,
+  CONTEXT_FILE_SUFFIX,
+} = require('../core/context-file-contract.cjs')
 const { appendContextDeliveryEvent, recordContextDeliveryRead } = require('../services/context-delivery-log.cjs')
 const { AJUDA_CONTEXT } = require('./agent-command-output.cjs')
 
 const CONTEXT_READ_VERBS = new Set(['read', 'ler'])
+
+/**
+ * Quantas vezes a leitura percorre "artefato vivo, depois cópia guardada" antes
+ * de desistir. O app move o arquivo de uma pasta para a outra quando a sessão
+ * termina; uma leitura que cai nesse instante não acha o arquivo em nenhuma das
+ * duas e acha na rodada seguinte.
+ */
+const TENTATIVAS_DE_LEITURA = 3
+const ESPERA_ENTRE_TENTATIVAS_MS = 150
+/** Ausente ou em uso por outro processo: vale tentar a outra origem e repetir. */
+const ERROS_QUE_VALEM_NOVA_TENTATIVA = new Set(['ENOENT', 'EBUSY'])
+
+const AVISO_DE_RECUPERACAO =
+  'AVISO DO FELIXO AI CORE: este artefato é de uma execução anterior deste terminal e foi ' +
+  'recuperado automaticamente da cópia guardada pelo app. O conteúdo abaixo é o que foi ' +
+  'entregue na época; valide-o contra o estado atual do projeto. Nenhuma ação é necessária: ' +
+  'não peça reenvio e siga com a tarefa.'
+
+function esperarPadrao(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/**
+ * A data em que o app gerou o artefato, tirada do próprio nome
+ * (`felixo-context-<ms desde 1970>-<uuid>-<tipo>.txt`). Serve só para a
+ * mensagem de erro dizer de quando é o artefato que sumiu.
+ *
+ * @param {string} name
+ * @returns {string | null} `AAAA-MM-DD`, ou `null` se o nome não traz uma data plausível.
+ */
+function dataDeCriacaoDoArtefato(name) {
+  const match = new RegExp(`^${CONTEXT_FILE_PREFIX}(\\d{13})-`).exec(String(name))
+  if (!match) return null
+  const date = new Date(Number(match[1]))
+  return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10)
+}
+
+/**
+ * O que o agente lê quando o conteúdo não existe mais em lugar nenhum. É uma
+ * instrução, não só um diagnóstico: o texto de entrega manda ler antes de agir,
+ * e sem esta liberação explícita o agente fica parado esperando um arquivo que
+ * não volta.
+ *
+ * @param {string} name
+ * @returns {string}
+ */
+function mensagemDeArtefatoPerdido(name) {
+  const data = dataDeCriacaoDoArtefato(name)
+  return [
+    `Artefato de contexto não encontrado: ${name}.`,
+    `${data ? `Ele foi gerado em ${data} e não` : 'Ele não'} existe mais neste perfil: os artefatos são temporários e a cópia guardada pelo app também já expirou.`,
+    'Isso não impede o trabalho: se você já leu este contexto nesta conversa, continue com o que tem; se não leu, siga as regras do repositório e a tarefa pedida, e avise a pessoa, com este nome, de que o contexto não pôde ser lido.',
+    'Não substitua por outro artefato e não repita esta leitura.',
+  ].join(' ')
+}
 
 /**
  * Validate the opaque filename before joining it to the context directory.
@@ -93,17 +152,54 @@ function mensagemDeArtefatoAusente(name) {
 }
 
 /**
+ * Lê um artefato e se recupera sozinho quando ele saiu da pasta viva.
+ *
+ * A conversa do agente é retomada pelo ID depois que o processo dele terminou e
+ * continua mandando ler os mesmos nomes. Por isso a leitura não para no
+ * primeiro "não existe": tenta o artefato vivo, depois a cópia que o app guarda
+ * das sessões encerradas, e repete as duas algumas vezes.
+ *
+ * @param {string} contextDir
+ * @param {string} name
+ * @param {{ readFile?: Function, esperar?: (ms: number) => Promise<unknown> }} [dependencies]
+ * @returns {Promise<{ conteudo: string, origem: 'vivo' | 'guardado' }>}
+ */
+async function lerComRecuperacao(contextDir, name, dependencies = {}) {
+  const readFile = dependencies.readFile || fsp.readFile
+  const esperar = dependencies.esperar || esperarPadrao
+  const origens = [
+    ['vivo', resolverCaminhoDoArtefato(contextDir, name)],
+    ['guardado', resolverCaminhoDoArtefato(path.join(contextDir, CONTEXT_EXPIRED_DIRNAME), name)],
+  ]
+
+  let erroDoArtefatoVivo
+  for (let tentativa = 1; tentativa <= TENTATIVAS_DE_LEITURA; tentativa += 1) {
+    for (const [origem, filePath] of origens) {
+      try {
+        return { conteudo: await readFile(filePath, 'utf8'), origem }
+      } catch (error) {
+        if (!ERROS_QUE_VALEM_NOVA_TENTATIVA.has(error?.code)) throw error
+        // O erro que conta no fim é o do artefato pedido, não o da cópia.
+        if (origem === 'vivo') erroDoArtefatoVivo = error
+      }
+    }
+    if (tentativa < TENTATIVAS_DE_LEITURA) {
+      await esperar(ESPERA_ENTRE_TENTATIVAS_MS)
+    }
+  }
+  throw erroDoArtefatoVivo
+}
+
+/**
  * Read one artifact from the active Felixo profile.
  *
  * @param {string} name
- * @param {{ getContextDir?: () => string, readFile?: Function }} [dependencies]
+ * @param {{ getContextDir?: () => string, readFile?: Function, esperar?: Function }} [dependencies]
  * @returns {Promise<string>}
  */
 async function lerArtefatoDeContexto(name, dependencies = {}) {
   const contextDir = dependencies.getContextDir?.() || getAppPaths().contextFiles
-  const filePath = resolverCaminhoDoArtefato(contextDir, name)
-  const readFile = dependencies.readFile || fsp.readFile
-  return readFile(filePath, 'utf8')
+  return (await lerComRecuperacao(contextDir, name, dependencies)).conteudo
 }
 
 /**
@@ -129,18 +225,22 @@ async function executarContexto(argumentos, dependencies = {}) {
     dependencies.deliveryLogDirectory || path.join(path.dirname(contextDir), 'logs', 'qa')
 
   try {
-    const saida = await lerArtefatoDeContexto(name, { ...dependencies, getContextDir: () => contextDir })
+    const { conteudo, origem } = await lerComRecuperacao(contextDir, name, dependencies)
+    const recuperado = origem === 'guardado'
     try {
       if (typeof dependencies.recordDeliveryRead === 'function') {
-        await dependencies.recordDeliveryRead(name, { contextDir, deliveryLogDirectory })
+        await dependencies.recordDeliveryRead(name, { contextDir, deliveryLogDirectory, origem })
       } else {
-        await recordContextDeliveryRead(deliveryLogDirectory, name)
+        await recordContextDeliveryRead(deliveryLogDirectory, name, recuperado ? 'recovered' : 'read')
       }
     } catch {
       // Reading context must remain reliable when a disk diagnostic cannot be
       // appended. The successful stdout is still the source of truth.
     }
-    return { saida, codigo: 0 }
+    return {
+      saida: recuperado ? `${AVISO_DE_RECUPERACAO}\n\n${conteudo}` : conteudo,
+      codigo: 0,
+    }
   } catch (error) {
     try {
       const metadata = typeof dependencies.deliveryMetadata === 'object'
@@ -164,7 +264,7 @@ async function executarContexto(argumentos, dependencies = {}) {
     if (error?.code === 'ENOENT') {
       return {
         saida: '',
-        erro: mensagemDeArtefatoAusente(name),
+        erro: `${mensagemDeArtefatoAusente(name)}\n${mensagemDeArtefatoPerdido(name)}`,
         codigo: 1,
       }
     }
@@ -180,6 +280,7 @@ async function executarContexto(argumentos, dependencies = {}) {
 module.exports = {
   CONTEXT_FILE_SUFFIX,
   CONTEXT_READ_VERBS,
+  dataDeCriacaoDoArtefato,
   executarContexto,
   lerArtefatoDeContexto,
   resolverCaminhoDoArtefato,

@@ -11,6 +11,7 @@ const {
   resolverCaminhoDoArtefato,
   validarNomeDoArtefato,
 } = require('./context-command.cjs')
+const { CONTEXT_EXPIRED_DIRNAME } = require('../core/context-file-contract.cjs')
 
 test('lê um artefato pelo nome no diretório do perfil ativo', async () => {
   const contextDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'felixo-context-cli-'))
@@ -159,6 +160,165 @@ test('persiste um diagnóstico quando a leitura do agente falha', async () => {
     assert.equal(entries.at(-1).scope, 'context-delivery')
     assert.equal(entries.at(-1).details.artifactId, name)
     assert.equal(entries.at(-1).details.state, 'failed')
+  } finally {
+    await fsp.rm(root, { recursive: true, force: true })
+  }
+})
+
+/** Erro de arquivo ausente, como o `fs` devolve. */
+function ausente() {
+  return Object.assign(new Error('ENOENT: no such file or directory'), { code: 'ENOENT' })
+}
+
+test('recupera sozinho o artefato de uma sessão encerrada e avisa que é de uma execução anterior', async () => {
+  // Regressão: a conversa do agente é retomada dias depois e ainda manda ler
+  // estes nomes. Com o arquivo apagado na saída do processo, o agente travava.
+  const contextDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'felixo-context-cli-'))
+  const name = 'felixo-context-1791213063512-93a7b9e2-05b2-4f4e-bdd4-c52f2752d8d1-initial-context.txt'
+  const body = '# CONTEXTO ENTREGUE PELO FELIXO AI CORE\npadrão de qualidade'
+
+  try {
+    await fsp.mkdir(path.join(contextDir, CONTEXT_EXPIRED_DIRNAME))
+    await fsp.writeFile(path.join(contextDir, CONTEXT_EXPIRED_DIRNAME, name), body, 'utf8')
+
+    const result = await executarContexto(['read', name], { getContextDir: () => contextDir })
+
+    assert.equal(result.codigo, 0)
+    assert.equal(result.erro, undefined)
+    assert.match(result.saida, /^AVISO DO FELIXO AI CORE: este artefato é de uma execução anterior/)
+    assert.ok(result.saida.endsWith(body), 'o conteúdo entregue na época vem inteiro depois do aviso')
+  } finally {
+    await fsp.rm(contextDir, { recursive: true, force: true })
+  }
+})
+
+test('a leitura normal não ganha aviso nem espera', async () => {
+  const contextDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'felixo-context-cli-'))
+  const name = 'felixo-context-123-abc-agent-identity.txt'
+  const esperas = []
+
+  try {
+    await fsp.writeFile(path.join(contextDir, name), 'identidade', 'utf8')
+
+    const result = await executarContexto(['read', name], {
+      getContextDir: () => contextDir,
+      esperar: async (ms) => esperas.push(ms),
+    })
+
+    assert.equal(result.saida, 'identidade')
+    assert.deepEqual(esperas, [])
+  } finally {
+    await fsp.rm(contextDir, { recursive: true, force: true })
+  }
+})
+
+test('tenta de novo antes de desistir: o artefato que aparece na segunda tentativa é lido', async () => {
+  const name = 'felixo-context-123-abc-skills-manifest.txt'
+  const esperas = []
+  let leituras = 0
+  // Primeira rodada: nem o vivo nem a cópia guardada. Segunda rodada: o vivo aparece.
+  const readFile = async () => {
+    leituras += 1
+    if (leituras <= 2) throw ausente()
+    return 'skills'
+  }
+
+  const result = await executarContexto(['read', name], {
+    getContextDir: () => path.join(os.tmpdir(), 'felixo-context-cli-inexistente'),
+    readFile,
+    esperar: async (ms) => esperas.push(ms),
+    recordDeliveryRead: async () => {},
+  })
+
+  assert.equal(result.codigo, 0)
+  assert.equal(result.saida, 'skills')
+  assert.equal(esperas.length, 1)
+})
+
+test('sem artefato vivo nem cópia guardada, desiste depois de três tentativas e libera o agente a seguir', async () => {
+  const contextDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'felixo-context-cli-'))
+  const name = 'felixo-context-1791213063512-93a7b9e2-05b2-4f4e-bdd4-c52f2752d8d1-initial-context.txt'
+  const esperas = []
+
+  try {
+    const result = await executarContexto(['read', name], {
+      getContextDir: () => contextDir,
+      esperar: async (ms) => esperas.push(ms),
+    })
+
+    assert.equal(result.codigo, 1)
+    assert.equal(result.saida, '')
+    assert.ok(result.erro.startsWith(`Artefato de contexto não encontrado: ${name}.`))
+    assert.match(result.erro, /gerado em 2026-10-05/)
+    assert.match(result.erro, /Isso não impede o trabalho/)
+    assert.match(result.erro, /continue com o que tem/)
+    assert.match(result.erro, /Não substitua por outro artefato e não repita esta leitura/)
+    assert.equal(esperas.length, 2)
+  } finally {
+    await fsp.rm(contextDir, { recursive: true, force: true })
+  }
+})
+
+test('nome sem data reconhecível não ganha uma data inventada', async () => {
+  const contextDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'felixo-context-cli-'))
+
+  try {
+    const result = await executarContexto(['read', 'felixo-context-0-abc-catalog-prompt.txt'], {
+      getContextDir: () => contextDir,
+      esperar: async () => {},
+    })
+
+    assert.equal(result.codigo, 1)
+    assert.doesNotMatch(result.erro, /gerado em/)
+  } finally {
+    await fsp.rm(contextDir, { recursive: true, force: true })
+  }
+})
+
+test('erro que não é de arquivo ausente não vira nova tentativa nem leitura da cópia guardada', async () => {
+  const esperas = []
+  let leituras = 0
+  const readFile = async () => {
+    leituras += 1
+    throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' })
+  }
+
+  const result = await executarContexto(['read', 'felixo-context-123-abc-handoff.txt'], {
+    getContextDir: () => path.join(os.tmpdir(), 'felixo-context-cli-negado'),
+    readFile,
+    esperar: async (ms) => esperas.push(ms),
+  })
+
+  assert.equal(result.codigo, 2)
+  assert.match(result.erro, /EACCES/)
+  assert.equal(leituras, 1)
+  assert.deepEqual(esperas, [])
+})
+
+test('a recuperação fica registrada no QA como leitura da cópia guardada', async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'felixo-context-cli-recovered-'))
+  const contextDir = path.join(root, 'context-deliveries')
+  const deliveryLogDirectory = path.join(root, 'logs', 'qa')
+  const name = 'felixo-context-123-recuperado.txt'
+
+  try {
+    await fsp.mkdir(path.join(contextDir, CONTEXT_EXPIRED_DIRNAME), { recursive: true })
+    await fsp.writeFile(path.join(contextDir, CONTEXT_EXPIRED_DIRNAME, name), 'corpo guardado', 'utf8')
+
+    const result = await executarContexto(['read', name], {
+      getContextDir: () => contextDir,
+      deliveryLogDirectory,
+    })
+
+    assert.equal(result.codigo, 0)
+    const logFile = path.join(deliveryLogDirectory, `qa-${new Date().toISOString().slice(0, 10)}.jsonl`)
+    const entries = (await fsp.readFile(logFile, 'utf8'))
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line))
+    assert.equal(entries.at(-1).details.artifactId, name)
+    assert.equal(entries.at(-1).details.state, 'recovered')
+    assert.equal(entries.at(-1).level, 'info')
   } finally {
     await fsp.rm(root, { recursive: true, force: true })
   }

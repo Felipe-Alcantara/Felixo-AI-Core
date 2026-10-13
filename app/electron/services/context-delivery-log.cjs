@@ -15,7 +15,9 @@ const { CONTEXT_FILE_PREFIX, CONTEXT_FILE_SUFFIX } = require('../core/context-fi
 const { createQaLogDiskStore } = require('./qa-log-disk-store.cjs')
 
 const CONTEXT_DELIVERY_SCOPE = 'context-delivery'
-const CONTEXT_DELIVERY_STATES = new Set(['written', 'path-typed', 'read', 'failed'])
+// `recovered` is a read served from the copy kept for ended sessions: the agent
+// got the content, but the live artifact was already gone.
+const CONTEXT_DELIVERY_STATES = new Set(['written', 'path-typed', 'read', 'recovered', 'failed'])
 const CONTEXT_DELIVERY_LOG_LIMIT = 2_000
 
 // A renderer can create several files at once and a terminal can read them in
@@ -151,13 +153,19 @@ async function findContextDeliveryMetadata(directory, artifactId) {
   return {}
 }
 
-/** Record a successful read while retaining the writer's terminal/agent data. */
-async function recordContextDeliveryRead(directory, artifactId) {
+/**
+ * Record a successful read while retaining the writer's terminal/agent data.
+ *
+ * @param {string} directory
+ * @param {string} artifactId
+ * @param {'read' | 'recovered'} [state] - `recovered` when the content came from the kept copy.
+ */
+async function recordContextDeliveryRead(directory, artifactId, state = 'read') {
   const metadata = await findContextDeliveryMetadata(directory, artifactId)
   await appendContextDeliveryEvent(directory, {
     ...metadata,
     artifactId,
-    state: 'read',
+    state: state === 'recovered' ? 'recovered' : 'read',
   })
 }
 

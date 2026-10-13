@@ -388,6 +388,9 @@ jobs:
       - name: Test release-relevant.sh
         run: bash .github/scripts/release-relevant.test.sh
 
+      - name: Test release-base.sh
+        run: bash .github/scripts/release-base.test.sh
+
       - name: Test ci-reuse.sh
         run: bash .github/scripts/ci-reuse.test.sh
 

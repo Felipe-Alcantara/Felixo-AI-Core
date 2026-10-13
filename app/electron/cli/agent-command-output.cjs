@@ -211,6 +211,8 @@ const AJUDA_CONTEXT = `felixo context read <nome-do-artefato>
     Lê um artefato temporário somente leitura criado pelo Felixo no perfil
     ativo. O nome é portátil entre Linux, macOS e Windows; não use nem peça
     um caminho absoluto de outra máquina ou perfil.
+    Se o terminal que recebeu o artefato já foi encerrado, o comando recupera
+    sozinho a cópia que o app guarda por 30 dias e avisa disso no topo da saída.
 
 Também aceito em português: felixo contexto ler <nome-do-artefato>.`
 

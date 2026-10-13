@@ -16,14 +16,22 @@ Module._load = function patchedLoad(request, parent, isMain) {
 }
 const {
   CONTEXT_FILE_PREFIX,
+  EXPIRED_CONTEXT_MAX_AGE_MS,
   MAX_CONTEXT_BYTES,
   STALE_CONTEXT_MAX_AGE_MS,
   buildContextFileContent,
   cleanupStaleContextFiles,
+  purgeExpiredContextFiles,
   registerContextFilesIpcHandlers,
   writeContextFile,
 } = require('./context-files-ipc-handlers.cjs')
 Module._load = originalLoad
+const { CONTEXT_EXPIRED_DIRNAME } = require('../core/context-file-contract.cjs')
+
+/** Onde fica a cópia guardada de um artefato que saiu da pasta viva. */
+function expiredPathOf(livePath) {
+  return path.join(path.dirname(livePath), CONTEXT_EXPIRED_DIRNAME, path.basename(livePath))
+}
 
 test('writes an immutable, identifiable context artifact with the body intact', async () => {
   const baseDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'felixo-context-files-'))
@@ -104,6 +112,9 @@ test('cleans only owned stale files and leaves current/unrelated files alone', a
     assert.equal(fs.existsSync(oldPath), false)
     assert.equal(fs.existsSync(currentPath), true)
     assert.equal(fs.existsSync(unrelatedPath), true)
+    // O arquivo velho sai da pasta viva, mas não é destruído: a conversa do
+    // agente pode ser retomada e pedir a leitura de novo.
+    assert.equal(await fsp.readFile(expiredPathOf(oldPath), 'utf8'), 'old')
   } finally {
     await fsp.rm(baseDir, { recursive: true, force: true })
   }
@@ -127,6 +138,103 @@ test('IPC release removes all files registered for one session only', async () =
     assert.equal(fs.existsSync(other.path), true)
   } finally {
     await controller.dispose()
+    await fsp.rm(baseDir, { recursive: true, force: true })
+  }
+})
+
+test('o processo do agente sair guarda os artefatos da sessão em vez de destruí-los', async () => {
+  // Regressão: a conversa do agente sobrevive ao processo (retomada pelo ID) e
+  // continua mandando ler estes nomes. Apagados, a leitura falhava para sempre.
+  handlers.clear()
+  const baseDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'felixo-context-expire-'))
+  const controller = registerContextFilesIpcHandlers({ contextFiles: baseDir })
+
+  try {
+    const write = handlers.get('context-file:write')
+    const release = handlers.get('context-file:release')
+    const delivered = await write(null, {
+      sessionId: 'canvas:codex',
+      kind: 'initial-context',
+      content: 'padrão de qualidade',
+    })
+
+    await release(null, { sessionId: 'canvas:codex' })
+
+    assert.equal(fs.existsSync(delivered.path), false)
+    assert.match(await fsp.readFile(expiredPathOf(delivered.path), 'utf8'), /padrão de qualidade/)
+  } finally {
+    await controller.dispose()
+    await fsp.rm(baseDir, { recursive: true, force: true })
+  }
+})
+
+test('fechar o app guarda os artefatos de todas as sessões em vez de destruí-los', async () => {
+  handlers.clear()
+  const baseDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'felixo-context-dispose-'))
+  const controller = registerContextFilesIpcHandlers({ contextFiles: baseDir })
+
+  try {
+    const write = handlers.get('context-file:write')
+    const first = await write(null, { sessionId: 'canvas:a', kind: 'agent-identity', content: 'agente A' })
+    const second = await write(null, { sessionId: 'canvas:b', kind: 'skills-manifest', content: 'skills' })
+
+    await controller.dispose()
+
+    assert.equal(fs.existsSync(first.path), false)
+    assert.equal(fs.existsSync(second.path), false)
+    assert.match(await fsp.readFile(expiredPathOf(first.path), 'utf8'), /agente A/)
+    assert.match(await fsp.readFile(expiredPathOf(second.path), 'utf8'), /skills/)
+  } finally {
+    await fsp.rm(baseDir, { recursive: true, force: true })
+  }
+})
+
+test('a cópia guardada só sai depois do prazo, contado a partir de quando expirou', async () => {
+  handlers.clear()
+  const baseDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'felixo-context-purge-'))
+  const controller = registerContextFilesIpcHandlers({ contextFiles: baseDir })
+
+  try {
+    const write = handlers.get('context-file:write')
+    const delivered = await write(null, { sessionId: 'canvas:longo', content: 'sessão de 40 dias' })
+    // Um terminal que ficou aberto por muito tempo: o arquivo é antigo quando expira.
+    const criadoHa40Dias = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000)
+    await fsp.utimes(delivered.path, criadoHa40Dias, criadoHa40Dias)
+    const estranho = path.join(baseDir, CONTEXT_EXPIRED_DIRNAME, 'nao-e-do-felixo.txt')
+
+    await controller.releaseSession('canvas:longo')
+    await fsp.writeFile(estranho, 'keep')
+    const expirado = expiredPathOf(delivered.path)
+
+    assert.equal(await purgeExpiredContextFiles(baseDir), 0)
+    assert.equal(fs.existsSync(expirado), true)
+
+    const depoisDoPrazo = Date.now() + EXPIRED_CONTEXT_MAX_AGE_MS + 1000
+    assert.equal(await purgeExpiredContextFiles(baseDir, depoisDoPrazo), 1)
+    assert.equal(fs.existsSync(expirado), false)
+    assert.equal(fs.existsSync(estranho), true)
+  } finally {
+    await controller.dispose()
+    await fsp.rm(baseDir, { recursive: true, force: true })
+  }
+})
+
+test('expirar de novo o que já saiu da pasta viva não quebra', async () => {
+  handlers.clear()
+  const baseDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'felixo-context-twice-'))
+  const controller = registerContextFilesIpcHandlers({ contextFiles: baseDir })
+
+  try {
+    const write = handlers.get('context-file:write')
+    const release = handlers.get('context-file:release')
+    const delivered = await write(null, { sessionId: 'canvas:duas', content: 'uma vez' })
+
+    assert.equal((await release(null, { sessionId: 'canvas:duas' })).removed, 1)
+    assert.equal((await release(null, { sessionId: 'canvas:duas' })).ok, true)
+    await controller.dispose()
+
+    assert.match(await fsp.readFile(expiredPathOf(delivered.path), 'utf8'), /uma vez/)
+  } finally {
     await fsp.rm(baseDir, { recursive: true, force: true })
   }
 })

@@ -38,17 +38,26 @@ jobs:
         uses: actions/checkout@v5
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
-          fetch-depth: 2
+          fetch-depth: 0
 
       - name: Decide whether the app changed
         id: decide
         shell: bash
         run: |
           source .github/scripts/release-relevant.sh
+          source .github/scripts/release-base.sh
           # Qualquer falha ao ler o diff cai em `true`: na dúvida, publica.
           # Preserve UTF-8 path names: core.quotePath's default C escapes stop
           # the selector from recognizing ignored non-ASCII local-copy paths.
-          FILES="$(git -c core.quotePath=false diff --name-only HEAD^ HEAD 2>/dev/null || true)"
+          AVALIADOS="$(gh run list --workflow release-gate.yml --branch main --status completed --limit 1000 --json headSha,conclusion --jq '.[] | select(.conclusion == "success") | .headSha' 2>/dev/null || true)"
+          BASE="$(printf '%s\n' "$AVALIADOS" | release_base "$TARGET_SHA")"
+          if [[ -n "$BASE" ]]; then
+            FILES="$(git -c core.quotePath=false diff --name-only "$BASE" "$TARGET_SHA" 2>/dev/null || true)"
+            echo "Commit de base avaliado: $BASE"
+          else
+            FILES=""
+            echo "Nenhum commit de base confiável; decisão conservadora: publicar."
+          fi
           RELEVANT="$(printf '%s\n' "$FILES" | release_relevant)"
           echo "Arquivos alterados neste commit:"
           printf '%s\n' "$FILES"
