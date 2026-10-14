@@ -28,20 +28,28 @@ const OUTPUT_LIMIT = 12000
  * `--no-audit`/`--no-fund` só cortam ruído de saída. `--loglevel=error`
  * mantém o log legível para quem eventualmente for ler o relatório de falha.
  *
- * `--cache`/`--prefer-offline` (quando `cacheDir` é passado) apontam o npm
- * para uma pasta persistente dentro do `userData` do app, em vez do cache
- * global padrão do sistema (`~/.npm`). O alvo já foi resolvido como uma
- * versão exata de `latest` e teve o hash conferido; por isso o tarball exato
- * pode ser reutilizado com segurança quando já está no cache.
+ * `--cache` (quando `cacheDir` é passado) aponta o npm para uma pasta
+ * persistente dentro do `userData` do app, em vez do cache global padrão do
+ * sistema (`~/.npm`). O tarball é endereçado pelo hash, então é reaproveitado
+ * do cache nos dois modos abaixo; o que muda é a lista de versões do pacote:
+ *
+ * - `--prefer-offline` usa a lista guardada sem perguntar ao registry. Serve
+ *   para o alvo do manifesto de fallback, que só existe quando o registry não
+ *   respondeu.
+ * - `--prefer-online` (`preferOnline`) revalida a lista. É obrigatório quando o
+ *   alvo acabou de vir do registry: uma lista guardada de antes da publicação
+ *   não tem a versão, e o npm responde ETARGET (caso real em 14/10/2026, com o
+ *   Claude Code 2.1.300).
  *
  * @param {object} options
  * @param {string} options.npmCliPath
  * @param {string} options.npmPackage
  * @param {string} options.prefix
  * @param {string} [options.cacheDir]
+ * @param {boolean} [options.preferOnline] - O alvo foi confirmado no registry agora.
  * @returns {string[]}
  */
-function createNpmInstallArgs({ npmCliPath, npmPackage, prefix, cacheDir }) {
+function createNpmInstallArgs({ npmCliPath, npmPackage, prefix, cacheDir, preferOnline = false }) {
   return [
     npmCliPath,
     'install',
@@ -51,7 +59,7 @@ function createNpmInstallArgs({ npmCliPath, npmPackage, prefix, cacheDir }) {
     '--no-audit',
     '--no-fund',
     '--loglevel=error',
-    ...(cacheDir ? ['--cache', cacheDir, '--prefer-offline'] : []),
+    ...(cacheDir ? ['--cache', cacheDir, preferOnline ? '--prefer-online' : '--prefer-offline'] : []),
     npmPackage,
   ]
 }
@@ -411,6 +419,7 @@ async function verifyManagedPackageIntegrity({
  * @param {import('../core/managed-cli-paths.cjs').ManagedCliLayout} options.layout
  * @param {string} [options.expectedIntegrity] - Hash esperado, do metadata resolvido.
  * @param {string} [options.cacheDir] - Cache offline do npm (`getNpmRegistryCacheDir`).
+ * @param {boolean} [options.preferOnline] - Revalida a lista de versões (ver `createNpmInstallArgs`).
  * @param {(line: string) => void} [options.onLog]
  * @param {AbortSignal} [options.signal] - Cancelamento externo (ex.: a pessoa fechou o diálogo de instalação).
  * @param {Function} [options.spawn] - Injetável nos testes.
@@ -425,6 +434,7 @@ async function installManagedPackage({
   layout,
   expectedIntegrity,
   cacheDir,
+  preferOnline = false,
   onLog,
   signal,
   spawn = spawnChildProcess,
@@ -460,6 +470,7 @@ async function installManagedPackage({
     npmPackage,
     prefix: layout.root,
     cacheDir,
+    preferOnline,
   })
 
   return runCommand({

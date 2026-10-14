@@ -156,6 +156,9 @@ function isInstallInUse(packageDir, executables, platformName = process.platform
 /**
  * Instala uma versão exata no npm global do sistema.
  *
+ * `--prefer-online`: a versão acabou de vir do registry, e a lista de versões
+ * guardada no cache do npm pode ser de antes da publicação dela (ETARGET).
+ *
  * @param {object} options
  * @param {string} options.npmPackage - Com versão, ex.: `@anthropic-ai/claude-code@2.1.300`.
  * @param {string} options.cwd
@@ -173,7 +176,7 @@ async function installSystemNpmPackage({
 }) {
   const result = await runCommand({
     command: 'npm',
-    args: ['install', '--global', '--no-audit', '--no-fund', '--loglevel=error', npmPackage],
+    args: ['install', '--global', '--prefer-online', '--no-audit', '--no-fund', '--loglevel=error', npmPackage],
     env,
     cwd,
     spawn,

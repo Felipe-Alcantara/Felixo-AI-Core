@@ -152,7 +152,11 @@ test('instala a versão exata no npm global e marca como passageira a falha de a
     spawn: () => fakeChild({ code: 1, stdout: 'npm error code EACCES' }),
   })
 
-  assert.deepEqual(calls, [['npm', 'install', '--global', '--no-audit', '--no-fund', '--loglevel=error', '@anthropic-ai/claude-code@2.1.300']])
+  // `--prefer-online`: a versão acabou de vir do registry; o cache do npm não pode
+  // responder com uma lista de versões de antes dela (ETARGET).
+  assert.deepEqual(calls, [
+    ['npm', 'install', '--global', '--prefer-online', '--no-audit', '--no-fund', '--loglevel=error', '@anthropic-ai/claude-code@2.1.300'],
+  ])
   assert.equal(ok.ok, true)
   assert.deepEqual({ ok: busy.ok, busy: busy.busy }, { ok: false, busy: true })
   assert.deepEqual({ ok: denied.ok, busy: denied.busy }, { ok: false, busy: false })

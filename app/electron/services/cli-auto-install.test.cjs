@@ -681,3 +681,35 @@ test('adia a atualização da cópia do app aberta por um agente, sem instalar p
     profile.cleanup()
   }
 })
+
+test('instala o alvo confirmado no registry com a lista de versões revalidada, e o do manifesto pelo cache', async () => {
+  const rodar = async (resolveLatestPackage) => {
+    const profile = createProfile()
+    const opcoes = []
+    try {
+      const { service } = createRunner(profile, {
+        detect: detectedOnly(['claude', 'gemini']),
+        verifyInstallation: () => ({ ok: true }),
+        ...(resolveLatestPackage ? { resolveLatestPackage } : {}),
+        installPackage: async (options) => {
+          opcoes.push(options)
+          return { ok: true, message: `${options.npmPackage} instalado.`, output: '' }
+        },
+      })
+      assertPlanned(await service.run('startup'))
+      service.stop()
+      return opcoes
+    } finally {
+      profile.cleanup()
+    }
+  }
+
+  const doRegistry = await rodar()
+  const doManifesto = await rodar(async () => ({ ok: false, message: 'registry fora do ar', output: '' }))
+
+  assert.deepEqual(doRegistry.map((options) => options.preferOnline), [true])
+  assert.deepEqual(doManifesto.map((options) => options.preferOnline), [false])
+  // O cache continua sendo usado nos dois casos: só a lista de versões é revalidada.
+  assert.ok(doRegistry[0].cacheDir)
+  assert.ok(doManifesto[0].cacheDir)
+})

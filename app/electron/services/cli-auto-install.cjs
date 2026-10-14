@@ -251,6 +251,10 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
           nodeExecutable: getNodeExecutable(),
           layout,
           cacheDir,
+          // Alvo que acabou de vir do registry: a lista de versões do cache pode
+          // ser de antes da publicação dele (ETARGET). O do manifesto só existe
+          // quando o registry não respondeu, e aí o cache é o que vale.
+          preferOnline: latestPackage?.source === 'registry',
         },
       })
 

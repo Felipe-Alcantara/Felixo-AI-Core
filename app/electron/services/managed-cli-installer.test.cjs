@@ -77,6 +77,24 @@ describe('managed-cli-installer', () => {
     assert.ok(args.indexOf('--prefer-offline') < args.indexOf('@anthropic-ai/claude-code'))
   })
 
+  // Caso real de 14/10/2026: o cache tinha a lista de versões de antes da 2.1.300 e
+  // o `--prefer-offline` a usou sem perguntar ao registry ("cache stale"), então o
+  // npm respondeu ETARGET para a versão que o próprio registry tinha acabado de dar.
+  it('com alvo confirmado no registry, revalida a lista de versões em vez de confiar no cache', () => {
+    const args = createNpmInstallArgs({
+      npmCliPath: '/opt/app/resources/npm/bin/npm-cli.js',
+      npmPackage: '@anthropic-ai/claude-code@2.1.300',
+      prefix: LAYOUT.root,
+      cacheDir: '/data/cli-cache/npm-registry-cache',
+      preferOnline: true,
+    })
+
+    assert.equal(args[args.indexOf('--cache') + 1], '/data/cli-cache/npm-registry-cache')
+    assert.ok(args.includes('--prefer-online'))
+    assert.ok(!args.includes('--prefer-offline'))
+    assert.ok(args.indexOf('--prefer-online') < args.indexOf('@anthropic-ai/claude-code@2.1.300'))
+  })
+
   // Fatia 3/5 de "cache offline por perfil": auditoria com teste, não
   // afirmação — confirma que o ambiente da instalação gerenciada (a mesma
   // que escreve no cache offline) nunca carrega nenhuma das variáveis de
@@ -189,6 +207,26 @@ describe('managed-cli-installer', () => {
     assert.equal(result.ok, true)
     assert.match(result.message, /@google\/gemini-cli/)
     assert.equal(result.output, 'added 1 package')
+  })
+
+  it('leva o pedido de revalidar a lista de versões até o comando do npm', async () => {
+    const calls = []
+    await installManagedPackage({
+      npmPackage: '@anthropic-ai/claude-code@2.1.300',
+      npmCliPath: '/npm/bin/npm-cli.js',
+      nodeExecutable: '/opt/app/felixo',
+      layout: LAYOUT,
+      cacheDir: '/data/cli-cache/npm-registry-cache',
+      preferOnline: true,
+      spawn: (command, args) => {
+        calls.push(args)
+        return createFakeChild({ stdout: 'changed 2 packages' })
+      },
+    })
+
+    assert.equal(calls.length, 1)
+    assert.ok(calls[0].includes('--prefer-online'))
+    assert.ok(!calls[0].includes('--prefer-offline'))
   })
 
   it('turns a non-zero exit into a readable failure', async () => {
