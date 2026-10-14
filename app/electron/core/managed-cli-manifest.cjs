@@ -1,27 +1,24 @@
 /**
  * @module managed-cli-manifest
- * Versão e hash exatos que a instalação automática das CLIs aceita.
+ * Fallback versionado para a instalação automática das CLIs.
  *
  * A instalação manual documentada (`official-cli-catalog.cjs`) continua livre
  * para instalar `latest` — é o comando que a pessoa copia do próprio
  * terminal, e travar isso destoaria da documentação oficial de cada CLI.
- * Este manifesto vale só para a instalação automática e gerenciada pelo app
- * (`cli-auto-install.cjs` → `managed-cli-installer.cjs`), onde ninguém está
- * olhando o que foi baixado: sem um pin explícito, o app instalaria uma
- * versão nova e não revisada a cada execução, e sem hash não há como saber
- * se o registry entregou o pacote esperado.
+ * A rotina consulta `latest` no registry em cada abertura e confere o hash da
+ * versão exata retornada antes de instalar. Este manifesto continua sendo o
+ * alvo seguro quando o registry está indisponível, para que uma instalação
+ * limpa ainda use a versão mais recente conhecida pelo release.
  *
- * Atualizar uma entrada aqui é decisão deliberada: subir a versão, conferir
- * o hash publicado pelo próprio registry (`npm view <pacote>@<versao>
- * dist.integrity`) e commitar os dois juntos. `managed-cli-manifest.test.cjs`
- * falha se o hash não tiver o formato esperado — não se ele estiver
- * desatualizado, isso o teste não sabe medir.
+ * Atualizar uma entrada aqui mantém o fallback fresco: subir a versão,
+ * conferir o hash publicado pelo próprio registry (`npm view
+ * <pacote>@<versão> dist.integrity`) e commitar os dois juntos.
  */
 
 const MANAGED_CLI_MANIFEST = Object.freeze({
   codex: Object.freeze({
     npmPackage: '@openai/codex',
-    version: '0.153.4',
+    version: '0.162.1',
     // O pacote principal delega o executável nativo a uma dependência
     // opcional diferente por plataforma/arquitetura. No Windows, npm pode
     // terminar com código 0 sem materializar essa dependência.
@@ -31,23 +28,23 @@ const MANAGED_CLI_MANIFEST = Object.freeze({
         arm64: '@openai/codex-win32-arm64',
       }),
     }),
-    // Capturado em 06/09/2026 via `npm view @openai/codex@0.153.4 dist.integrity`.
+    // Capturado em 13/10/2026 via `npm view @openai/codex@0.162.1 dist.integrity`.
     integrity:
-      'sha512-wbHDmit7S/YvBGVX1DQmk13xtWblZ2cApeJ/pB7xDZ10Cna+DZc5ij7f0F4OxdsXN4FW1oLT48OpogUI1+8Y2w==',
+      'sha512-NWZdi/kxyjv/8EUGFupziGU38YyleugZRM4JXgY5XFH7FUmaFA33NZS2Bmq0HPazf7S3jJQQWsZ/jAK9jsrV3Q==',
   }),
   claude: Object.freeze({
     npmPackage: '@anthropic-ai/claude-code',
-    version: '2.1.263',
-    // Capturado em 06/09/2026 via `npm view @anthropic-ai/claude-code@2.1.263 dist.integrity`.
+    version: '2.1.296',
+    // Capturado em 13/10/2026 via `npm view @anthropic-ai/claude-code@2.1.296 dist.integrity`.
     integrity:
-      'sha512-kvvBK6/69iTRYnq0TKVyxVZs1CxYCJGojshQSP+2qaDb66A2xtI4zbCuqkZUWLkFGmHSRqhFf/ATpzH2UNKcwg==',
+      'sha512-OX/k/rpcthMqnFKOWcpNcbiLsMKtAjLOpQNJHlYiDCFUznWCIwdRTyl/p9SdHVrsrzZuPMCNqZjnpakIni6upw==',
   }),
   gemini: Object.freeze({
     npmPackage: '@google/gemini-cli',
-    version: '0.58.0',
-    // Capturado em 06/09/2026 via `npm view @google/gemini-cli@0.58.0 dist.integrity`.
+    version: '0.64.0',
+    // Capturado em 13/10/2026 via `npm view @google/gemini-cli@0.64.0 dist.integrity`.
     integrity:
-      'sha512-++LtUYMcLE8dVxMcuwv6kIp8+h6z+std/7iVE+vSunkrwNDaWMFkWw/psv2RSySWjr2A1SsEEIGCK0xULWY2sA==',
+      'sha512-FHrZ1NPf9QszyVMaa/BP3SsPy40ogBLnbZNWkv/PMi1Uz2zoDNMLGiBzBGmx4Bl7iLRq01K9PY/5kmloXFTpsA==',
   }),
 })
 

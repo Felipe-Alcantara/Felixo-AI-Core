@@ -2,8 +2,10 @@ const { describe, it } = require('node:test')
 const assert = require('node:assert/strict')
 
 const {
+  compareCliVersions,
   getAutoInstallableClis,
   isAutoInstallEnabled,
+  isManagedCliOutdated,
   planAutoInstall,
   summarizeAutoInstall,
 } = require('./cli-auto-install-plan.cjs')
@@ -24,6 +26,32 @@ function managed(...present) {
 }
 
 describe('cli-auto-install-plan', () => {
+  it('compara semver das CLIs sem confundir patch, prerelease e versao desconhecida', () => {
+    assert.equal(compareCliVersions('0.58.0', '0.64.0'), -1)
+    assert.equal(compareCliVersions('2.1.296', '2.1.296'), 0)
+    assert.equal(compareCliVersions('1.0.0', '1.0.0-beta.1'), 1)
+    assert.equal(compareCliVersions('nao-sei', '1.0.0'), null)
+  })
+
+  it('considera desatualizada a copia gerenciada sem versao verificavel', () => {
+    assert.equal(
+      isManagedCliOutdated({
+        managedPresent: true,
+        managedVersion: null,
+        latestVersion: '0.64.0',
+      }),
+      true,
+    )
+    assert.equal(
+      isManagedCliOutdated({
+        managedPresent: true,
+        managedVersion: '0.64.0',
+        latestVersion: '0.64.0',
+      }),
+      false,
+    )
+  })
+
   it('does not put another ecosystem launcher in the npm auto-install queue', () => {
     const catalog = [
       ...CATALOG,
@@ -98,6 +126,61 @@ describe('cli-auto-install-plan', () => {
 
     assert.deepEqual(pending, [])
     assert.equal(progress[0].state, 'skipped')
+  })
+
+  it('queues an old managed CLI for update even when its binary is detected', () => {
+    const { pending, progress } = planAutoInstall({
+      catalog: CATALOG,
+      detections: detections(true, true, true),
+      managedPresent: managed(true, true, true),
+      managedVersions: ['0.153.4', '2.1.263', '0.58.0'],
+      latestVersions: ['0.162.1', '2.1.296', '0.64.0'],
+      previousState: {
+        codex: { version: '0.1.0', ok: true },
+        claude: { version: '0.1.0', ok: true },
+        gemini: { version: '0.1.0', ok: true },
+      },
+      appVersion: '0.1.0',
+    })
+
+    assert.deepEqual(
+      pending.map((cli) => cli.id),
+      ['codex', 'claude', 'gemini'],
+    )
+    assert.match(progress[0].message, /0\.153\.4 -> 0\.162\.1/)
+  })
+
+  it('nao reinstala a copia gerenciada quando ela ja e igual ao latest', () => {
+    const { pending, progress } = planAutoInstall({
+      catalog: CATALOG,
+      detections: detections(false, false, false),
+      managedPresent: managed(true, true, true),
+      managedVersions: ['0.162.1', '2.1.296', '0.64.0'],
+      latestVersions: ['0.162.1', '2.1.296', '0.64.0'],
+      previousState: {
+        codex: { version: '0.1.0', ok: true },
+        claude: { version: '0.1.0', ok: true },
+        gemini: { version: '0.1.0', ok: true },
+      },
+      appVersion: '0.1.0',
+    })
+
+    assert.deepEqual(pending, [])
+    assert.deepEqual(progress.map((item) => item.state), ['skipped', 'skipped', 'skipped'])
+  })
+
+  it('tenta novamente uma falha quando o registry publica um latest novo', () => {
+    const { pending } = planAutoInstall({
+      catalog: CATALOG,
+      detections: detections(false, true, true),
+      previousState: {
+        codex: { version: '0.1.0', targetVersion: '0.153.4', ok: false },
+      },
+      latestVersions: ['0.162.1', null, null],
+      appVersion: '0.1.0',
+    })
+
+    assert.deepEqual(pending.map((cli) => cli.id), ['codex'])
   })
 
   it('reinstalls when the binary we installed is no longer on disk', () => {

@@ -8,6 +8,7 @@ const path = require('node:path')
 
 const {
   CODEX_REINSTALL_COMMAND,
+  getManagedCliPackageVersion,
   verifyManagedCliInstallation,
 } = require('./managed-cli-health.cjs')
 
@@ -25,6 +26,61 @@ function writePackage(layout, packageName) {
   fs.mkdirSync(packageDir, { recursive: true })
   fs.writeFileSync(path.join(packageDir, 'package.json'), '{}', 'utf8')
 }
+
+function writeManagedCliPackage(layout, packageName, version) {
+  const packageDir = path.join(layout.root, 'node_modules', ...packageName.split('/'))
+  fs.mkdirSync(packageDir, { recursive: true })
+  fs.writeFileSync(path.join(packageDir, 'package.json'), JSON.stringify({ version }), 'utf8')
+}
+
+test('le a versao da CLI principal materializada pelo npm', () => {
+  const layout = createLayout()
+
+  try {
+    writeManagedCliPackage(layout, '@google/gemini-cli', '0.64.0')
+
+    assert.equal(
+      getManagedCliPackageVersion({
+        providerId: 'gemini',
+        layout,
+      }),
+      '0.64.0',
+    )
+  } finally {
+    fs.rmSync(layout.root, { recursive: true, force: true })
+  }
+})
+
+test('trata manifesto ausente ou ilegivel como versao desconhecida', () => {
+  const layout = createLayout()
+
+  try {
+    assert.equal(
+      getManagedCliPackageVersion({
+        providerId: 'gemini',
+        layout,
+      }),
+      null,
+    )
+
+    writeManagedCliPackage(layout, '@google/gemini-cli', 'nao-e-json')
+    fs.writeFileSync(
+      path.join(layout.root, 'node_modules', '@google', 'gemini-cli', 'package.json'),
+      '{ quebrado',
+      'utf8',
+    )
+
+    assert.equal(
+      getManagedCliPackageVersion({
+        providerId: 'gemini',
+        layout,
+      }),
+      null,
+    )
+  } finally {
+    fs.rmSync(layout.root, { recursive: true, force: true })
+  }
+})
 
 test('detecta o pacote nativo do Codex ausente no Windows', () => {
   const layout = createLayout()

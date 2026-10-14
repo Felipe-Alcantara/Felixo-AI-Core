@@ -23,7 +23,10 @@ const {
 } = require('./cli-auto-install.cjs')
 Module._load = originalLoad
 const { getManagedCliLayout } = require('../core/managed-cli-paths.cjs')
-const { getPinnedInstallTarget } = require('../core/managed-cli-manifest.cjs')
+const {
+  getManagedCliManifestEntry,
+  getPinnedInstallTarget,
+} = require('../core/managed-cli-manifest.cjs')
 
 const GEMINI_PINNED = getPinnedInstallTarget('gemini')
 
@@ -38,7 +41,7 @@ const GEMINI_PINNED = getPinnedInstallTarget('gemini')
  * `managedClis` são as CLIs cujo executável já está lá — a prova de que a
  * instalação anterior continua valendo.
  */
-function createProfile({ managedClis = [], state = {} } = {}) {
+function createProfile({ managedClis = [], managedVersions = {}, state = {} } = {}) {
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-auto-install-'))
   const layout = getManagedCliLayout({ userData })
   fs.mkdirSync(layout.packagesBin, { recursive: true })
@@ -46,6 +49,12 @@ function createProfile({ managedClis = [], state = {} } = {}) {
 
   for (const cli of managedClis) {
     fs.writeFileSync(path.join(layout.packagesBin, cli), '#!/bin/sh\n', 'utf8')
+  }
+
+  for (const [providerId, version] of Object.entries(managedVersions)) {
+    const entry = getManagedCliManifestEntry(providerId)
+    if (!entry) continue
+    writePackage(layout, entry.npmPackage, version)
   }
 
   fs.writeFileSync(
@@ -67,6 +76,7 @@ function createRunner(
     detect,
     appVersion = '0.1.103',
     installPackage,
+    resolveLatestPackage,
     verifyInstallation,
     platformName = process.platform,
     arch = process.arch,
@@ -86,6 +96,23 @@ function createRunner(
     ...(verifyInstallation ? { verifyInstallation } : {}),
     ...(describePath ? { describePath } : {}),
     ...(userName !== undefined ? { userName } : {}),
+    resolveLatestPackage:
+      resolveLatestPackage ??
+      (async ({ npmPackage }) => {
+        const entry = ['codex', 'claude', 'gemini']
+          .map((id) => getManagedCliManifestEntry(id))
+          .find((candidate) => candidate?.npmPackage === npmPackage)
+        return entry
+          ? {
+              ok: true,
+              npmPackage,
+              version: entry.version,
+              integrity: entry.integrity,
+              message: 'fixture latest',
+              output: '',
+            }
+          : { ok: false, message: 'fixture sem latest', output: '' }
+      }),
     installPackage:
       installPackage ??
       (async ({ npmPackage }) => {
@@ -117,10 +144,14 @@ function detectedOnly(ids) {
   return async (cli) => ({ detected: ids.includes(cli.id), version: '1.0.0' })
 }
 
-function writePackage(layout, packageName) {
+function writePackage(layout, packageName, version) {
   const packageDir = path.join(layout.root, 'node_modules', ...packageName.split('/'))
   fs.mkdirSync(packageDir, { recursive: true })
-  fs.writeFileSync(path.join(packageDir, 'package.json'), '{}', 'utf8')
+  fs.writeFileSync(
+    path.join(packageDir, 'package.json'),
+    JSON.stringify(version ? { version } : {}),
+    'utf8',
+  )
 }
 
 test(
@@ -130,6 +161,10 @@ test(
     // sucesso amarrado à versão nunca valia na abertura seguinte.
     const profile = createProfile({
       managedClis: ['claude', 'gemini'],
+      managedVersions: {
+        claude: getManagedCliManifestEntry('claude').version,
+        gemini: getManagedCliManifestEntry('gemini').version,
+      },
       state: {
         claude: { version: '0.1.55', ok: true, message: 'instalado' },
         gemini: { version: '0.1.86', ok: true, message: 'instalado' },
@@ -146,6 +181,64 @@ test(
       service.stop()
 
       assert.deepEqual(installed, [])
+    } finally {
+      profile.cleanup()
+    }
+  },
+)
+
+test(
+  'abrir o app atualiza uma CLI gerenciada antiga mesmo quando ela e detectada',
+  async () => {
+    const profile = createProfile({
+      managedClis: ['gemini'],
+      managedVersions: { gemini: '0.58.0' },
+      state: {
+        gemini: { version: '0.1.86', ok: true, message: 'instalado' },
+      },
+    })
+
+    try {
+      const { service, installed } = createRunner(profile, {
+        detect: detectedOnly(['codex', 'claude', 'gemini']),
+      })
+
+      const status = await service.run('startup')
+      service.stop()
+
+      assertPlanned(status)
+      assert.deepEqual(installed, [getPinnedInstallTarget('gemini')])
+    } finally {
+      profile.cleanup()
+    }
+  },
+)
+
+test(
+  'usa o fallback versionado quando o registry nao responde',
+  async () => {
+    const profile = createProfile()
+
+    try {
+      const { service, installed } = createRunner(profile, {
+        detect: detectedOnly([]),
+        platformName: 'linux',
+        resolveLatestPackage: async () => ({
+          ok: false,
+          message: 'registry indisponivel',
+          output: '',
+        }),
+      })
+
+      const status = await service.run('startup')
+      service.stop()
+
+      assert.equal(status.state, 'done')
+      assert.deepEqual(installed, [
+        getPinnedInstallTarget('codex'),
+        getPinnedInstallTarget('claude'),
+        getPinnedInstallTarget('gemini'),
+      ])
     } finally {
       profile.cleanup()
     }

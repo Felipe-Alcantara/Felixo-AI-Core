@@ -4,9 +4,53 @@ const fs = require('node:fs')
 const path = require('node:path')
 const {
   getManagedCliPlatformPackage,
+  getManagedCliManifestEntry,
 } = require('../core/managed-cli-manifest.cjs')
 
 const CODEX_REINSTALL_COMMAND = 'npm install -g @openai/codex@latest'
+
+/**
+ * Caminho do manifesto do pacote principal instalado pelo app.
+ *
+ * O binario sozinho nao informa se a copia gerenciada ficou antiga. A versao
+ * confiavel para a rotina de atualizacao e a que o proprio npm gravou no
+ * `package.json` do pacote dentro do prefixo gerenciado.
+ *
+ * @param {string} providerId
+ * @param {import('../core/managed-cli-paths.cjs').ManagedCliLayout} layout
+ * @returns {string | null}
+ */
+function getManagedCliPackageManifestPath(providerId, layout) {
+  const entry = getManagedCliManifestEntry(providerId)
+  if (!entry || !layout?.root) {
+    return null
+  }
+
+  return path.join(layout.root, 'node_modules', ...entry.npmPackage.split('/'), 'package.json')
+}
+
+/**
+ * Le a versao da CLI instalada pelo app, sem executar o binario.
+ *
+ * @param {object} options
+ * @param {string} options.providerId
+ * @param {import('../core/managed-cli-paths.cjs').ManagedCliLayout} options.layout
+ * @param {typeof fs} [options.fileSystem]
+ * @returns {string | null}
+ */
+function getManagedCliPackageVersion({ providerId, layout, fileSystem = fs }) {
+  const packageManifestPath = getManagedCliPackageManifestPath(providerId, layout)
+  if (!packageManifestPath) {
+    return null
+  }
+
+  try {
+    const manifest = JSON.parse(fileSystem.readFileSync(packageManifestPath, 'utf8'))
+    return typeof manifest.version === 'string' ? manifest.version : null
+  } catch {
+    return null
+  }
+}
 
 /**
  * Confere se o pacote nativo que o manifesto exige foi materializado dentro
@@ -72,5 +116,7 @@ function safeExists(fileSystem, candidate) {
 
 module.exports = {
   CODEX_REINSTALL_COMMAND,
+  getManagedCliPackageManifestPath,
+  getManagedCliPackageVersion,
   verifyManagedCliInstallation,
 }

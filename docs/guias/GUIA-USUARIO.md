@@ -130,6 +130,14 @@ Perfis padrão atuais:
 - `Gemini ACP` com comando `gemini --experimental-acp`.
 - `Openia` como launcher das interfaces compatíveis com OpenRouter.
 
+No app instalado, cerca de quatro segundos depois de abrir, o Felixo confere as
+CLIs oficiais que ele mantém em sua pasta gerenciada. A consulta pede a versão
+`latest` ao registry em cada abertura: se a cópia gerenciada estiver antiga, ela
+é atualizada mesmo que o executável também seja detectado no `PATH`. Uma CLI
+instalada diretamente no sistema não é alterada. Sem acesso ao registry, o app
+usa a última versão/hash conhecida pelo release e tenta novamente quando um
+`latest` novo for publicado.
+
 CLIs e ferramentas detectadas pelo app:
 
 - `claude`, `codex`, `gemini` e `ollama`, como providers de IA.

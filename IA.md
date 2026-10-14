@@ -9,7 +9,7 @@
   nos arquivos de docs/ia-archive/.
 -->
 
-Última atualização: [2026-10-12]
+Última atualização: [2026-10-13]
 
 - **Fase:** o canvas é o produto principal (o chat está depreciado). A divisão do `CanvasView`
   (partes 1 a 4) e o bloco Agente na nuvem estão na `main`: PRs #113 a #120 mesclados.
@@ -20,7 +20,8 @@
   passo de responsividade do terminal e não foi investigado. Os commits seguintes (compactação dos
   `IA.md`, divisão do README e o Agente na nuvem no menu Agente) foram enviados à `main`
   (`e7b7efe..d952f5b`) e o CI de `d952f5b` passou nos 22 jobs, inclusive esse exploratório do Windows.
-- **Em andamento:** nada aberto no código. O Agente na nuvem foi movido do botão em *Criar* para uma
+- **Em andamento:** nada aberto no código nesta entrega. A atualização automática das CLIs gerenciadas
+  foi implementada no checkout e está pronta para revisão/publicação. O Agente na nuvem foi movido do botão em *Criar* para uma
   opção do menu Agente (entrada de 2026-10-12 "movido para dentro do menu Agente"): validado no Windows,
   enviado, com o CI verde e publicado na `v0.1.452`. O Release gate não publicou sozinho (o último
   commit do push só mexia em `IA.md`); a release foi disparada à mão para `d952f5b`.
@@ -40,6 +41,8 @@
   (4) Um bloco Codex com yolo marcado nasce "encerrado" por flag repetida quando algo fora do app já
   soma a flag. Há fallback e diagnóstico (entrada de 2026-10-12 "Codex: flag de yolo repetida"), mas a
   causa na máquina de quem relatou não foi confirmada; o evento `terminal-launch:early-exit` no QA Logger diz.
+   (5) A suíte Node completa ainda tem três falhas preexistentes/de ambiente, nas descobertas de sessão e no
+   terminal por conta; os testes direcionados da mudança passam.
 - **Como compactar de novo:** este arquivo e `docs/projeto/IA.md` crescem com cada sessão. Quando
   passarem de uns 1000 linhas, rode `node app/scripts/archive-ia-md.cjs` (dry-run por padrão); o
   passo a passo está no Guia para Desenvolvedores.
@@ -51,6 +54,38 @@ Registros antigos movidos, na íntegra e sem edição, para o arquivo. A linha d
 
 - [2026-10-12] Registros de 2026-08 (66 seções) movidos para [docs/ia-archive/IA-ARCHIVE-2026-08.md](docs/ia-archive/IA-ARCHIVE-2026-08.md)
 - [2026-10-12] Registros de 2026-09 (95 seções) movidos para [docs/ia-archive/IA-ARCHIVE-2026-09.md](docs/ia-archive/IA-ARCHIVE-2026-09.md)
+
+## 2026-10-13 — CLIs gerenciadas acompanham o `latest` do registry
+
+### Contexto
+
+As CLIs instaladas pelo aplicativo continuavam dependentes de versões fixadas no manifesto local. A inicialização precisava consultar o pacote `latest` no registry para manter a cópia gerenciada atualizada, sem substituir uma CLI externa já disponível no `PATH`.
+
+### Decisão
+
+- Consultar `npm view --prefer-online <pacote>@latest version dist.integrity --json` durante a preparação automática da aplicação.
+- Comparar a versão detectada dentro do prefixo gerenciado com a versão retornada pelo registry; versões ausentes, inválidas ou antigas entram no plano de atualização.
+- Usar a versão e o `dist.integrity` do manifesto como fallback quando a rede, o `npm` ou a resposta do registry falhar.
+- Revalidar o hash SHA-512 exato antes de instalar e registrar a versão-alvo que falhou para evitar tentativas repetidas no mesmo startup.
+
+### O que mudou
+
+- `app/electron/services/cli-auto-install.cjs`, `app/electron/services/cli-auto-install-plan.cjs` e `app/electron/services/managed-cli-installer.cjs` agora resolvem o `latest`, planejam atualizações por versão e preservam CLIs externas.
+- `app/electron/services/managed-cli-health.cjs` lê a versão real do pacote instalado; o manifesto mantém versões conhecidas para fallback.
+- Testes cobrem comparação semver, atualização de cópia antiga, retry quando chega uma versão nova, fallback offline, integridade e leitura do pacote.
+- `README.md`, `docs/guias/GUIA-USUARIO.md` e `docs/guias/GUIA-DESENVOLVEDOR.md` documentam o comportamento.
+
+### Validação
+
+- Testes direcionados: 62/62 passaram; `npm run lint` e `npm run build` passaram.
+- Consulta real ao registry confirmou os metadados atuais de Codex, Claude Code e Gemini CLI.
+- DevTools confirmou a interface na origem de desenvolvimento e no executável empacotado; o artefato `app/release/win-unpacked` foi gerado.
+- A suíte `npm test` terminou com 2.693 sucessos, 8 skips e 3 falhas não relacionadas, nos testes de descoberta de sessão e terminal por conta.
+
+### Limitações
+
+- O fallback versionado é deliberadamente usado quando o registry não está acessível; a próxima abertura tenta novamente consultar o `latest`.
+- As CLIs externas encontradas no `PATH` continuam fora do ciclo de instalação/atualização automática.
 
 ## 2026-10-01 — Canvas: inventário operacional da superfície, gerado de dados e travado por teste
 

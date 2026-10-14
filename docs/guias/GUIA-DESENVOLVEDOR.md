@@ -187,6 +187,31 @@ caso), e o teste pode passar mesmo quebrado. Depois do diff, rode
 | `npm run test:canvas-smoke` | app/ | Gate visual do canvas via CDP, com PTY fake: fixture, matriz visual e tutorial (sessões A e B), cadeia de contas (C), links (D), caminhos de prompt (E) e Leitura do terminal (F). `FELIXO_SMOKE_SESSOES=E` roda só as sessões listadas; ver [Gate visual do canvas](#gate-visual-do-canvas-smoke) |
 | `npm run benchmark:ui-render -- --onboarding` | app/ | Mede FPS e custo de estilo/paint com o tutorial aberto (manual, na máquina de referência) |
 
+### Atualização automática das CLIs gerenciadas
+
+No app empacotado, `cli-auto-install.cjs` faz uma rodada de verificação alguns
+segundos depois da abertura. O `npm-runtime` consulta cada pacote conhecido com
+`npm view --prefer-online <pacote>@latest version dist.integrity --json`, valida
+o semver retornado e compara essa versão com o `package.json` da cópia no
+prefixo gerenciado. Uma CLI instalada fora do app continua intocada.
+
+Se o registry falhar, a rodada usa a versão/hash do
+`managed-cli-manifest.cjs` como fallback. Antes de qualquer download, o
+instalador consulta novamente o `dist.integrity` da versão exata e recusa uma
+divergência; a tentativa registrada também guarda o alvo para não repetir o
+mesmo erro em toda abertura. Um `latest` novo libera uma nova tentativa.
+
+Os contratos principais ficam cobertos por `node:test`:
+
+```bash
+cd app
+node --test electron/core/managed-cli-manifest.test.cjs \
+  electron/services/managed-cli-health.test.cjs \
+  electron/services/managed-cli-installer.test.cjs \
+  electron/services/cli-auto-install-plan.test.cjs \
+  electron/services/cli-auto-install.test.cjs
+```
+
 ---
 
 ## Padrão de commits

@@ -6,8 +6,10 @@ const { EventEmitter } = require('node:events')
 const {
   createManagedInstallEnv,
   createNpmInstallArgs,
+  createNpmViewLatestArgs,
   createNpmViewIntegrityArgs,
   installManagedPackage,
+  resolveLatestManagedPackage,
   verifyManagedPackageIntegrity,
 } = require('./managed-cli-installer.cjs')
 
@@ -211,9 +213,50 @@ describe('managed-cli-installer', () => {
     assert.deepEqual(args, [
       '/opt/app/resources/npm/bin/npm-cli.js',
       'view',
+      '--prefer-online',
       '@anthropic-ai/claude-code@2.1.263',
       'dist.integrity',
     ])
+  })
+
+  it('consulta o latest online com versao e hash no mesmo metadata', async () => {
+    const integrity = 'sha512-NWZdi/kxyjv/8EUGFupziGU38YyleugZRM4JXgY5XFH7FUmaFA33NZS2Bmq0HPazf7S3jJQQWsZ/jAK9jsrV3Q=='
+    let latestArgs
+
+    const result = await resolveLatestManagedPackage({
+      npmPackage: '@openai/codex',
+      npmCliPath: '/npm/bin/npm-cli.js',
+      nodeExecutable: '/opt/app/felixo',
+      layout: LAYOUT,
+      spawn: (command, args) => {
+        latestArgs = args
+        return createFakeChild({
+          stdout: JSON.stringify({ version: '0.162.1', 'dist.integrity': integrity }),
+        })
+      },
+    })
+
+    assert.deepEqual(
+      latestArgs,
+      createNpmViewLatestArgs({
+        npmCliPath: '/npm/bin/npm-cli.js',
+        npmPackage: '@openai/codex',
+      }),
+    )
+    assert.deepEqual(
+      {
+        ok: result.ok,
+        npmPackage: result.npmPackage,
+        version: result.version,
+        integrity: result.integrity,
+      },
+      {
+        ok: true,
+        npmPackage: '@openai/codex',
+        version: '0.162.1',
+        integrity,
+      },
+    )
   })
 
   it('confirms integrity when the registry hash matches the manifest', async () => {

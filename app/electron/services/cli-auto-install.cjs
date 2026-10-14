@@ -8,9 +8,10 @@
  * plano, na pasta gerenciada do app (ver `managed-cli-paths`), com o Node e o
  * npm que o app carrega consigo (ver `node-runtime`).
  *
- * O que já estiver instalado na máquina é preservado: essas CLIs nem entram
- * na fila. A decisão de o que instalar vive em `cli-auto-install-plan`; aqui
- * ficam o efeito colateral (processo, disco, IPC) e o status para a interface.
+ * Uma CLI instalada fora do app é preservada. A cópia gerenciada pelo app é
+ * comparada ao `latest` e entra na fila quando ficou antiga. A decisão de o
+ * que instalar vive em `cli-auto-install-plan`; aqui ficam o efeito colateral
+ * (processo, disco, IPC) e o status para a interface.
  */
 
 const fs = require('node:fs')
@@ -24,9 +25,15 @@ const { getManagedCliManifestEntry } = require('../core/managed-cli-manifest.cjs
 const { getNodeExecutable, resolveNpmCliPath } = require('../core/node-runtime.cjs')
 const { createCliEnv, describeCliPath } = require('./cli-process-manager.cjs')
 const { ensureManagedCliRuntime } = require('./managed-cli-runtime.cjs')
-const { installManagedPackage } = require('./managed-cli-installer.cjs')
+const {
+  installManagedPackage,
+  resolveLatestManagedPackage,
+} = require('./managed-cli-installer.cjs')
 const { pruneNpmCacheIfOverBudget } = require('./managed-cli-cache-maintenance.cjs')
-const { verifyManagedCliInstallation } = require('./managed-cli-health.cjs')
+const {
+  getManagedCliPackageVersion,
+  verifyManagedCliInstallation,
+} = require('./managed-cli-health.cjs')
 const {
   allDetected,
   getAutoInstallableClis,
@@ -53,6 +60,7 @@ const STARTUP_DELAY_MS = 4000
  * @param {boolean} options.isPackaged
  * @param {Function} [options.installPackage] - Injetável nos testes.
  * @param {Function} [options.detect] - Injetável nos testes.
+ * @param {Function} [options.resolveLatestPackage] - Injetável nos testes.
  * @param {Function} [options.verifyInstallation] - Injetável nos testes.
  * @param {string} [options.platformName]
  * @param {string} [options.arch]
@@ -69,6 +77,7 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
     isPackaged,
     installPackage = installManagedPackage,
     detect = detectCli,
+    resolveLatestPackage = resolveLatestManagedPackage,
     verifyInstallation = verifyManagedCliInstallation,
     platformName = process.platform,
     arch = process.arch,
@@ -143,6 +152,22 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
 
     const catalog = getAutoInstallableClis(listOfficialAiClis())
     const detections = await detectWithSecondChance(catalog, detect)
+    ensureManagedCliRuntime({
+      layout,
+      nodeExecutable: getNodeExecutable(),
+      npmCliPath,
+      platformName,
+      fileSystem,
+    })
+
+    const latestPackages = await resolveLatestPackages({
+      catalog,
+      resolveLatestPackage,
+      npmCliPath,
+      nodeExecutable: getNodeExecutable(),
+      layout,
+      platformName,
+    })
     const { pending, progress } = planAutoInstall({
       catalog,
       detections,
@@ -153,6 +178,16 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
           arch,
           fileSystem,
         }),
+      ),
+      managedVersions: catalog.map((cli) =>
+        getManagedCliPackageVersion({
+          providerId: cli.id,
+          layout,
+          fileSystem,
+        }),
+      ),
+      latestVersions: catalog.map(
+        (cli) => latestPackages.find((item) => item.id === cli.id)?.version ?? null,
       ),
       previousState: readState(stateFilePath),
       appVersion,
@@ -169,14 +204,6 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
       })
     }
 
-    // Os atalhos `node`/`npm` precisam existir antes do primeiro pacote: é o
-    // npm que vai usá-los para rodar os scripts de instalação.
-    ensureManagedCliRuntime({
-      layout,
-      nodeExecutable: getNodeExecutable(),
-      npmCliPath,
-    })
-
     const attempts = readState(stateFilePath)
 
     for (const [index, cli] of pending.entries()) {
@@ -187,15 +214,12 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
         clis: progress,
       })
 
-      // A instalação automática pina versão e hash pelo manifesto — ao
-      // contrário do comando manual do catálogo, que segue `latest` porque é
-      // o que a documentação oficial de cada CLI instrui a pessoa a rodar.
-      // CLI fora do manifesto (ainda não revisada) cai para o pacote solto:
-      // perde o pin, não trava a instalação.
-      const manifestEntry = getManagedCliManifestEntry(cli.id)
-      const npmPackage = manifestEntry
-        ? `${manifestEntry.npmPackage}@${manifestEntry.version}`
-        : cli.install.npmPackage
+      // O alvo vem do latest resolvido no registry. Se a consulta falhar, ele
+      // vem do manifesto de fallback e ainda passa pela conferência de hash.
+      const latestPackage = latestPackages.find((item) => item.id === cli.id)
+      const npmPackage = latestPackage?.version
+        ? `${latestPackage.npmPackage}@${latestPackage.version}`
+        : latestPackage?.npmPackage ?? cli.install.npmPackage
       const result = await installAndVerifyManagedCli({
         cli,
         installPackage,
@@ -204,7 +228,7 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
         arch,
         fileSystem,
         installOptions: {
-          expectedIntegrity: manifestEntry?.integrity,
+          expectedIntegrity: latestPackage?.integrity,
           npmPackage,
           npmCliPath,
           nodeExecutable: getNodeExecutable(),
@@ -227,6 +251,7 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
       })
       attempts[cli.id] = {
         version: appVersion,
+        ...(latestPackage?.version ? { targetVersion: latestPackage.version } : {}),
         ok: result.ok,
         message: safeMessage,
         at: new Date().toISOString(),
@@ -323,6 +348,75 @@ function updateCliProgress(progress, id, patch) {
 
 function createStatus({ state, message }) {
   return { state, message, clis: [], updatedAt: new Date().toISOString() }
+}
+
+async function resolveLatestPackages({
+  catalog,
+  resolveLatestPackage,
+  npmCliPath,
+  nodeExecutable,
+  layout,
+  platformName,
+}) {
+  return Promise.all(
+    catalog.map(async (cli) => {
+      const fallback = getManagedCliManifestEntry(cli.id)
+
+      if (!fallback) {
+        return {
+          id: cli.id,
+          npmPackage: cli.install.npmPackage,
+          version: null,
+          integrity: null,
+          source: 'catalog',
+        }
+      }
+
+      try {
+        const latest = await resolveLatestPackage({
+          npmPackage: fallback.npmPackage,
+          npmCliPath,
+          nodeExecutable,
+          layout,
+          platformName,
+        })
+
+        if (latest?.ok && latest.version && latest.integrity) {
+          return {
+            id: cli.id,
+            npmPackage: latest.npmPackage ?? fallback.npmPackage,
+            version: latest.version,
+            integrity: latest.integrity,
+            source: 'registry',
+          }
+        }
+
+        logLatestFallback(cli.id, latest?.message)
+      } catch (error) {
+        logLatestFallback(cli.id, getErrorMessage(error, 'erro desconhecido'))
+      }
+
+      return {
+        id: cli.id,
+        npmPackage: fallback.npmPackage,
+        version: fallback.version,
+        integrity: fallback.integrity,
+        source: 'manifest-fallback',
+      }
+    }),
+  )
+}
+
+function logLatestFallback(id, reason) {
+  logQaEvent({
+    level: 'warn',
+    scope: 'cli:auto-install',
+    message: 'Registry indisponivel; usando o manifesto de fallback da CLI.',
+    details: {
+      id,
+      reason: redactDiagnosticText(reason ?? 'motivo desconhecido', { homeDir: os.homedir() }),
+    },
+  })
 }
 
 /**

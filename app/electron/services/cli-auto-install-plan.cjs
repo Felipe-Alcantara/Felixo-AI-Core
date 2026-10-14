@@ -40,27 +40,18 @@ function getAutoInstallableClis(catalog) {
 /**
  * Monta a fila de instalação e o estado inicial de cada CLI.
  *
- * Três situações não entram na fila:
- * - `present`: já existe na máquina (instalada pela pessoa ou por nós antes);
- * - `skipped`: ou já foi instalada por nós e os arquivos continuam lá, ou
- *   falhou nesta mesma versão do app — repetir a cada abertura só gastaria
- *   rede e tempo de quem já viu o erro;
- * - tudo, quando `reason` é `manual`: aí a pessoa pediu explicitamente, e o
- *   registro anterior deixa de valer.
- *
- * A instalação bem-sucedida **não** expira quando o app é atualizado: o app
- * publica uma versão por push, então amarrar o sucesso à versão fazia a
- * verificação valer por poucas horas e a CLI ser reinstalada na abertura
- * seguinte. Só a falha continua amarrada à versão, porque aí uma versão nova
- * do app pode ser justamente o que corrige.
- *
- * O que substitui a versão como prova é `managedPresent`: se o executável que
- * instalamos sumiu do disco, o registro de sucesso não vale mais.
+ * Uma CLI detectada fora do app não entra na fila. A cópia gerenciada entra
+ * quando não existe, está incompleta ou tem versão anterior ao `latest` que o
+ * registry acabou de devolver. Falhas continuam limitadas ao mesmo alvo e à
+ * mesma versão do app para não repetir uma instalação quebrada a cada abertura;
+ * um novo `latest` libera uma nova tentativa.
  *
  * @param {object} options
  * @param {Array<{ id: string, name: string }>} options.catalog
  * @param {Array<{ detected: boolean }>} options.detections - Na ordem do catálogo.
  * @param {Array<boolean>} [options.managedPresent] - Na ordem do catálogo.
+ * @param {Array<string | null>} [options.managedVersions] - Versões dos pacotes gerenciados.
+ * @param {Array<string | null>} [options.latestVersions] - Versões latest resolvidas no registry.
  * @param {Record<string, { version?: string, ok?: boolean }>} [options.previousState]
  * @param {string} options.appVersion
  * @param {'startup' | 'manual'} [options.reason]
@@ -70,6 +61,8 @@ function planAutoInstall({
   catalog,
   detections,
   managedPresent = [],
+  managedVersions = [],
+  latestVersions = [],
   previousState = {},
   appVersion,
   reason = 'startup',
@@ -77,6 +70,27 @@ function planAutoInstall({
   const forced = reason === 'manual'
   const pending = []
   const progress = catalog.map((cli, index) => {
+    const latestVersion = latestVersions[index]
+    const managedVersion = managedVersions[index]
+
+    if (
+      isManagedCliOutdated({
+        managedPresent: managedPresent[index],
+        managedVersion,
+        latestVersion,
+      }) &&
+      (forced || !hasFailedForVersion(previousState, cli.id, appVersion, latestVersion))
+    ) {
+      pending.push(cli)
+      return createCliProgress(
+        cli,
+        'pending',
+        latestVersion
+          ? `Atualizacao disponivel (${managedVersion ?? 'versao desconhecida'} -> ${latestVersion}).`
+          : 'A versao gerenciada da CLI nao pode ser confirmada.',
+      )
+    }
+
     if (detections[index]?.detected) {
       return createCliProgress(cli, 'present')
     }
@@ -89,7 +103,7 @@ function planAutoInstall({
       )
     }
 
-    if (!forced && hasFailedForVersion(previousState, cli.id, appVersion)) {
+    if (!forced && hasFailedForVersion(previousState, cli.id, appVersion, latestVersion)) {
       return createCliProgress(
         cli,
         'skipped',
@@ -112,9 +126,91 @@ function allDetected(detections) {
   return detections.every((detection) => detection.detected)
 }
 
-function hasFailedForVersion(state, id, appVersion) {
+function hasFailedForVersion(state, id, appVersion, latestVersion) {
   const attempt = state?.[id]
-  return Boolean(attempt && attempt.version === appVersion && attempt.ok === false)
+  if (!attempt || attempt.version !== appVersion || attempt.ok !== false) {
+    return false
+  }
+
+  // Um novo latest publicado merece uma nova tentativa mesmo dentro da mesma
+  // versao do app. Estados antigos, sem targetVersion, continuam bloqueando a
+  // repeticao como antes.
+  return !attempt.targetVersion || !latestVersion || attempt.targetVersion === latestVersion
+}
+
+/**
+ * @param {object} options
+ * @param {boolean} [options.managedPresent]
+ * @param {string | null} [options.managedVersion]
+ * @param {string | null} [options.latestVersion]
+ * @returns {boolean}
+ */
+function isManagedCliOutdated({ managedPresent, managedVersion, latestVersion }) {
+  if (!managedPresent || !latestVersion) {
+    return false
+  }
+
+  const comparison = compareCliVersions(managedVersion, latestVersion)
+  return comparison === null || comparison < 0
+}
+
+/**
+ * Compara versoes sem depender de outra arvore npm no app empacotado.
+ * Retorna null quando algum valor nao e semver basico.
+ *
+ * @param {string | null | undefined} left
+ * @param {string | null | undefined} right
+ * @returns {-1 | 0 | 1 | null}
+ */
+function compareCliVersions(left, right) {
+  const leftParts = parseCliVersion(left)
+  const rightParts = parseCliVersion(right)
+  if (!leftParts || !rightParts) {
+    return null
+  }
+
+  for (const key of ['major', 'minor', 'patch']) {
+    if (leftParts[key] !== rightParts[key]) {
+      return leftParts[key] < rightParts[key] ? -1 : 1
+    }
+  }
+
+  if (!leftParts.prerelease && !rightParts.prerelease) return 0
+  if (!leftParts.prerelease) return 1
+  if (!rightParts.prerelease) return -1
+
+  const size = Math.max(leftParts.prerelease.length, rightParts.prerelease.length)
+  for (let index = 0; index < size; index += 1) {
+    const leftIdentifier = leftParts.prerelease[index]
+    const rightIdentifier = rightParts.prerelease[index]
+    if (leftIdentifier === undefined) return -1
+    if (rightIdentifier === undefined) return 1
+    if (leftIdentifier === rightIdentifier) continue
+
+    const leftNumber = /^\d+$/.test(leftIdentifier) ? Number(leftIdentifier) : null
+    const rightNumber = /^\d+$/.test(rightIdentifier) ? Number(rightIdentifier) : null
+    if (leftNumber !== null && rightNumber !== null) {
+      return leftNumber < rightNumber ? -1 : 1
+    }
+    if (leftNumber !== null) return -1
+    if (rightNumber !== null) return 1
+    return leftIdentifier < rightIdentifier ? -1 : 1
+  }
+
+  return 0
+}
+
+function parseCliVersion(value) {
+  if (typeof value !== 'string') return null
+  const match = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/.exec(value)
+  if (!match) return null
+
+  return {
+    major: Number(match[1]),
+    minor: Number(match[2]),
+    patch: Number(match[3]),
+    prerelease: match[4]?.split('.') ?? null,
+  }
 }
 
 function hasInstalled(state, id) {
@@ -162,9 +258,11 @@ function summarizeAutoInstall(progress) {
 
 module.exports = {
   allDetected,
+  compareCliVersions,
   createCliProgress,
   getAutoInstallableClis,
   isAutoInstallEnabled,
+  isManagedCliOutdated,
   planAutoInstall,
   summarizeAutoInstall,
 }

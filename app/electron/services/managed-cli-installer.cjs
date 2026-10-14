@@ -18,6 +18,7 @@ const { createCliEnv } = require('./cli-process-manager.cjs')
 const { killProcessTree } = require('../core/process-tree.cjs')
 
 const INSTALL_TIMEOUT_MS = 10 * 60 * 1000
+const LATEST_LOOKUP_TIMEOUT_MS = 30 * 1000
 const OUTPUT_LIMIT = 12000
 
 /**
@@ -28,14 +29,9 @@ const OUTPUT_LIMIT = 12000
  *
  * `--cache`/`--prefer-offline` (quando `cacheDir` é passado) apontam o npm
  * para uma pasta persistente dentro do `userData` do app, em vez do cache
- * global padrão do sistema (`~/.npm`) — decisão da fatia "cache offline por
- * perfil": o cache do npm já é endereçado por conteúdo e verificado por SRI
- * internamente, então reusar o mecanismo do próprio npm (em vez de
- * reimplementar leitura/escrita/verificação do zero) cobre "primeira
- * instalação sem rede com cache válido" e "reinstalação/atualização" sem
- * exigir bater na rede de novo pra um tarball já baixado antes. `
- * --prefer-offline` usa o cache sem checar frescor no registry quando o
- * tarball exato já está lá — só volta pra rede quando falta.
+ * global padrão do sistema (`~/.npm`). O alvo já foi resolvido como uma
+ * versão exata de `latest` e teve o hash conferido; por isso o tarball exato
+ * pode ser reutilizado com segurança quando já está no cache.
  *
  * @param {object} options
  * @param {string} options.npmCliPath
@@ -56,6 +52,27 @@ function createNpmInstallArgs({ npmCliPath, npmPackage, prefix, cacheDir }) {
     '--loglevel=error',
     ...(cacheDir ? ['--cache', cacheDir, '--prefer-offline'] : []),
     npmPackage,
+  ]
+}
+
+/**
+ * Consulta a versao e o hash do rotulo `latest` diretamente no registry.
+ * `--prefer-online` evita que o metadata antigo do rotulo seja reutilizado.
+ *
+ * @param {object} options
+ * @param {string} options.npmCliPath
+ * @param {string} options.npmPackage
+ * @returns {string[]}
+ */
+function createNpmViewLatestArgs({ npmCliPath, npmPackage }) {
+  return [
+    npmCliPath,
+    'view',
+    '--prefer-online',
+    `${npmPackage}@latest`,
+    'version',
+    'dist.integrity',
+    '--json',
   ]
 }
 
@@ -137,23 +154,116 @@ function createManagedInstallEnv({
  * @returns {string[]}
  */
 function createNpmViewIntegrityArgs({ npmCliPath, npmPackage }) {
-  return [npmCliPath, 'view', npmPackage, 'dist.integrity']
+  return [npmCliPath, 'view', '--prefer-online', npmPackage, 'dist.integrity']
 }
 
 /**
- * Confere, contra o registry, se o hash do pacote pinado no manifesto ainda
- * é o mesmo antes de deixar o npm baixar e extrair qualquer coisa.
+ * Resolve o alvo mais novo e o hash que sera conferido imediatamente antes
+ * da instalacao. O manifesto versionado continua sendo o fallback do
+ * chamador quando o registry estiver indisponivel.
+ *
+ * @param {object} options
+ * @param {string} options.npmPackage - Nome sem versao, ex.: `@openai/codex`.
+ * @param {string} options.npmCliPath
+ * @param {string} options.nodeExecutable
+ * @param {import('../core/managed-cli-paths.cjs').ManagedCliLayout} options.layout
+ * @param {AbortSignal} [options.signal]
+ * @param {Function} [options.spawn]
+ * @param {number} [options.timeoutMs]
+ * @param {string} [options.platformName]
+ * @param {Function} [options.killTree]
+ * @returns {Promise<{ ok: boolean, npmPackage?: string, version?: string, integrity?: string, message: string, output: string }>}
+ */
+async function resolveLatestManagedPackage({
+  npmPackage,
+  npmCliPath,
+  nodeExecutable,
+  layout,
+  signal,
+  spawn = spawnChildProcess,
+  timeoutMs = LATEST_LOOKUP_TIMEOUT_MS,
+  platformName = platformAdapter.name,
+  killTree = killProcessTree,
+}) {
+  const env = createManagedInstallEnv({ layout, platformName })
+  const result = await runCommand({
+    command: nodeExecutable,
+    args: createNpmViewLatestArgs({ npmCliPath, npmPackage }),
+    env,
+    cwd: layout.root,
+    signal,
+    spawn,
+    timeoutMs,
+    platformName,
+    killTree,
+    successMessage: `Latest de ${npmPackage} consultado.`,
+    failureMessage: `Nao foi possivel consultar o latest de ${npmPackage}.`,
+  })
+
+  if (!result.ok) {
+    return result
+  }
+
+  const metadata = parseLatestPackageMetadata(result.output)
+  if (!metadata) {
+    return {
+      ok: false,
+      message: `O registry devolveu metadata invalido para ${npmPackage}.`,
+      output: result.output,
+    }
+  }
+
+  return {
+    ok: true,
+    npmPackage,
+    version: metadata.version,
+    integrity: metadata.integrity,
+    message: `${npmPackage}@${metadata.version} e o latest publicado.`,
+    output: result.output,
+  }
+}
+
+function parseLatestPackageMetadata(output) {
+  let metadata
+
+  try {
+    metadata = JSON.parse(String(output ?? '').trim())
+  } catch {
+    return null
+  }
+
+  const version = metadata?.version
+  const integrity = metadata?.['dist.integrity'] ?? metadata?.dist?.integrity
+
+  if (!isValidPackageVersion(version) || !isValidIntegrity(integrity)) {
+    return null
+  }
+
+  return { version, integrity }
+}
+
+function isValidPackageVersion(version) {
+  return typeof version === 'string' && /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(version)
+}
+
+function isValidIntegrity(integrity) {
+  return typeof integrity === 'string' && /^sha512-[A-Za-z0-9+/]{86}==$/.test(integrity)
+}
+
+/**
+ * Confere, contra o registry, se o hash do pacote exato escolhido ainda é o
+ * mesmo antes de deixar o npm baixar e extrair qualquer coisa.
  *
  * Isso é defesa em profundidade, não substituição da verificação que o
  * próprio npm já faz ao instalar (ele recusa um tarball cujo hash não bate
  * com o que o registry anunciou). O que este passo cobre é o cenário em que
- * o registry passa a anunciar, para a mesma versão pinada, um hash diferente
- * do que foi revisado e commitado no manifesto — sinal de pacote alterado ou
- * de registry comprometido, que o npm sozinho aceitaria como válido.
+ * o registry passa a anunciar, para a mesma versão escolhida, um hash
+ * diferente do metadata consultado antes — sinal de pacote alterado ou de
+ * registry comprometido, que o npm sozinho aceitaria como válido.
  *
  * @param {object} options
- * @param {string} options.npmPackage - Já com a versão pinada, ex.: `pkg@1.2.3`.
- * @param {string} options.expectedIntegrity - Hash esperado, do manifesto.
+ * @param {string} options.npmPackage - Já com a versão exata, ex.: `pkg@1.2.3`.
+ * @param {string} options.expectedIntegrity - Hash esperado, do metadata resolvido.
  * @param {string} options.npmCliPath
  * @param {string} options.nodeExecutable
  * @param {Record<string, string>} options.env
@@ -224,7 +334,7 @@ async function verifyManagedPackageIntegrity({
  * @param {string} options.npmCliPath - `npm-cli.js` empacotado.
  * @param {string} options.nodeExecutable - Binário que roda como Node.
  * @param {import('../core/managed-cli-paths.cjs').ManagedCliLayout} options.layout
- * @param {string} [options.expectedIntegrity] - Hash esperado, do manifesto.
+ * @param {string} [options.expectedIntegrity] - Hash esperado, do metadata resolvido.
  * @param {string} [options.cacheDir] - Cache offline do npm (`getNpmRegistryCacheDir`).
  * @param {(line: string) => void} [options.onLog]
  * @param {AbortSignal} [options.signal] - Cancelamento externo (ex.: a pessoa fechou o diálogo de instalação).
@@ -247,7 +357,7 @@ async function installManagedPackage({
   platformName = platformAdapter.name,
   killTree = killProcessTree,
 }) {
-  const env = createManagedInstallEnv({ layout })
+  const env = createManagedInstallEnv({ layout, platformName })
 
   if (expectedIntegrity) {
     const integrityCheck = await verifyManagedPackageIntegrity({
@@ -406,9 +516,12 @@ function runCommand({
 
 module.exports = {
   INSTALL_TIMEOUT_MS,
+  LATEST_LOOKUP_TIMEOUT_MS,
   createManagedInstallEnv,
   createNpmInstallArgs,
+  createNpmViewLatestArgs,
   createNpmViewIntegrityArgs,
   installManagedPackage,
+  resolveLatestManagedPackage,
   verifyManagedPackageIntegrity,
 }
