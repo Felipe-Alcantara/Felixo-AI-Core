@@ -22,17 +22,17 @@
   (`e7b7efe..d952f5b`) e o CI de `d952f5b` passou nos 22 jobs, inclusive esse exploratório do Windows.
 - **Em andamento:** nada aberto no código nesta entrega. Em toda abertura (também na execução da
   fonte), a rodada das CLIs busca a versão mais nova publicada de Claude, Codex e Gemini, inclusive
-  pré-lançamento, e atualiza a cópia do app e a do npm global; a CLI em uso fica adiada, com nova
-  tentativa a cada 5 minutos, e o rodapé avisa "CLIs atualizadas" (entrada de 2026-10-14 "CLIs: a
-  versão mais nova publicada"). `FELIXO_AUTO_INSTALL_CLIS=0` é o opt-out para automações isoladas. O Agente na nuvem foi movido do botão em *Criar* para uma
+  pré-lançamento, e atualiza a cópia do app e a do npm global, mesmo com a CLI aberta (o npm troca
+  o pacote com o executável antigo rodando). O rodapé avisa "CLIs atualizadas" (entradas de
+  2026-10-14 "CLIs: a versão mais nova publicada" e "o Claude não atualizava"). `FELIXO_AUTO_INSTALL_CLIS=0` é o opt-out para automações isoladas. O Agente na nuvem foi movido do botão em *Criar* para uma
   opção do menu Agente (entrada de 2026-10-12 "movido para dentro do menu Agente"): validado no Windows,
   enviado, com o CI verde e publicado na `v0.1.452`. O Release gate não publicou sozinho (o último
   commit do push só mexia em `IA.md`); a release foi disparada à mão para `d952f5b`.
 - **Pendente de conferência manual:** o roteiro do Agente na nuvem em
   `docs/validation/CHECKLIST-AGENTE-NUVEM.md` (cria sessão real e gasta crédito, por isso não roda
-  no CI) e a retomada do terminal (entrada de 2026-10-09). A atualização das CLIs e o aviso no app
-  instalado (a validação de 2026-10-14 foi numa instância isolada da fonte; o app do dia a dia deste
-  PC ainda roda a v0.1.458 de dentro de `%TEMP%`).
+  no CI) e a retomada do terminal (entrada de 2026-10-09). A atualização do Claude no app instalado
+  com a `v0.1.461` (a correção foi validada numa instância isolada da fonte; o app do dia a dia
+  deste PC roda de dentro de `%TEMP%`).
 - **Próximo passo sugerido:** rodar a etapa 18 do checklist do Agente na nuvem em Linux ou macOS com a
   `v0.1.452` (o CI passou, mas a interface só foi conferida no Windows).
 - **Riscos abertos:** (1) a suíte vitest completa com os 16 workers padrão ficou instável numa
@@ -48,8 +48,8 @@
   causa na máquina de quem relatou não foi confirmada; o evento `terminal-launch:early-exit` no QA Logger diz.
    (5) A suíte Node completa tinha três falhas preexistentes/de ambiente, nas descobertas de sessão e no
    terminal por conta; em 2026-10-14 ela passou sem falhas no Windows (2738 testes, 8 ignorados).
-  (6) Com agentes Claude abertos, o Claude do npm global não atualiza: os agentes restaurados sobem
-  antes da rodada das CLIs e o Windows não troca um executável em uso. Só atualiza quando todos fecham.
+  (6) Cada atualização de uma CLI aberta deixa a pasta antiga do pacote (`.claude-code-XXXX`, do
+  tamanho do pacote) no npm global até uma instalação seguinte com o processo fechado.
 - **Como compactar de novo:** este arquivo e `docs/projeto/IA.md` crescem com cada sessão. Quando
   passarem de uns 1000 linhas, rode `node app/scripts/archive-ia-md.cjs` (dry-run por padrão); o
   passo a passo está no Guia para Desenvolvedores.
@@ -1276,3 +1276,61 @@ Registro de Claude — Tasks AI Core (Opus 5.5). Pedido da pessoa: "Toda vez que
 - **Release** [38601843878](https://github.com/Felipe-Alcantara/Felixo-AI-Core/actions/runs/38601843878): `v0.1.460` publicada às 14:13 como versão principal ("Latest"), com os instaladores de Windows, macOS e Ubuntu. O "Smoke exploratório (Windows)", que é `continue-on-error`, também passou às 14:15; a tag aponta para `6bfb911`.
 
 Estado: concluído, publicado na `v0.1.460` e validado no Windows numa instância isolada da fonte. A conferência no app instalado ficou como task no Notion.
+
+## 2026-10-14 — CLIs: o Claude não atualizava (ETARGET na cópia do app e adiamento eterno no sistema)
+
+Registro de Claude — Tasks AI Core (Opus 5.5), continuação da entrada anterior. Depois de atualizar o app real para a `v0.1.460` (aberto às 14:32), a pessoa relatou: "o do Codex funcionou, já no claude, não conseguiu atualizar". Depois acrescentou: "mesmo sem nenhuma CLI aberta no AI Core, ele estava avisando que não conseguia atualizar pois tinha algum terminal aberto".
+
+**Correção da entrada anterior.** Lá eu registrei que, no Windows, uma CLI aberta não pode ser trocada e por isso fica adiada. Era uma suposição que eu não tinha medido, e está errada (ver Experimentos). O adiamento criado em `e78a2b8` era a própria causa do problema relatado.
+
+**Medição no app real** (`v0.1.460`, rodando de `%TEMP%\felixo-release-smoke-…\installed`).
+
+- `cli-auto-install.json`: Codex `ok` (0.163.0-alpha.11) e Gemini `ok` (0.65.0-nightly.20261014.g42c518220). O Claude ficou `ok: false`, "Nao foi possivel instalar @anthropic-ai/claude-code@2.1.300. (codigo 1)", às 14:30 e às 14:31. Nenhuma chave `sistema:*`, porque o adiamento não gravava estado.
+- Log de QA: `npm error code ETARGET`, "No matching version found for @anthropic-ai/claude-code@2.1.300".
+- Log de depuração do npm: o `argv` tinha `--cache …\cli-cache\npm-registry-cache --prefer-offline`, e a linha `GET 200 …/@anthropic-ai%2fclaude-code 29ms (cache stale)` mostra que ele usou o cache sem revalidar.
+- `npm view --offline --cache <cache do app>`: canal `next` em 2.1.299, sem a 2.1.300 entre as 539 versões. No registry, `next` estava em 2.1.300, publicada em 2026-10-14T14:27:26Z.
+- Processos: `claude.exe --chrome-native-host` (PID 27540, aberto desde as 11:54). O pai é um `cmd.exe` aberto pelo `brave.exe` com `%USERPROFILE%\.claude\chrome\chrome-native-host.bat`, e o executável fica dentro do pacote do npm global. É o host nativo da extensão Claude in Chrome. Por causa dele, a rodada adiava o Claude do sistema em toda abertura, e o aviso dizia "Em uso por um agente aberto".
+
+**Causas.**
+
+1. **ETARGET na cópia do app.** A escolha do alvo usa `npm view --prefer-online` e enxerga a versão nova. A instalação usava o cache do app com `--prefer-offline`, que aceita a lista de versões guardada sem perguntar ao registry.
+2. **Adiamento eterno no sistema.** A rodada adiava qualquer CLI com o executável aberto, e o host nativo do navegador fica aberto o dia todo.
+
+**Experimentos** (scratchpad e prefixos temporários, sem tocar no npm global).
+
+- `PING.EXE` copiado como `pkg\bin\claude.exe` e rodando: apagar a pasta falha; renomear a pasta funciona; mover o `.exe` funciona. O processo continua vivo, e o Windows segue informando o caminho antigo dele.
+- npm do sistema (11.6.2) e npm embutido (11.19.1), atualizando um pacote local de 1.0.0 para 1.0.1 com o `.exe` dele rodando: saída 0, a 1.0.1 fica no disco e a pasta antiga sobra ao lado (`.felixo-exp-lock-XXXX`). Numa instalação seguinte, depois que o processo fecha, essa pasta some.
+- Claude Code real: 2.1.299 instalado num prefixo temporário, com `claude.exe mcp serve` aberto. `npm install …@2.1.300` saiu com 0 em 14 s, `--version` passou a dar 2.1.300, o processo antigo continuou vivo e sobrou `.claude-code-Ec3GtIoV` ao lado. Uma tentativa anterior com `--chrome-native-host` não chegou a subir: o pipe já era do host real (`EADDRINUSE`), e o processo de teste saiu sem afetar o real.
+- ETARGET com os dados reais: cópia do cache do app (348 MB) e o npm embutido. Com `--prefer-offline` deu `ETARGET`; com `--prefer-online`, instalou a 2.1.300.
+
+**Correção.**
+
+- `eb52933` — `createNpmInstallArgs` e `installManagedPackage` ganham `preferOnline`, e a rodada passa `preferOnline: latestPackage?.source === 'registry'`. O tarball continua saindo do cache pelo hash; só o alvo do manifesto de fallback segue com `--prefer-offline`. O npm do sistema também instala com `--prefer-online`.
+- `9b0a5e9` — saem `listRunningExecutables`, `isInstallInUse`, `managedInUse`/`inUse` e a leitura de processos da rodada. `EBUSY`/`EPERM` na saída do npm continuam como rede de segurança (nova tentativa em 5 minutos), com um texto ("arquivos travados") que não culpa agentes. Um teste com npm de verdade, só no Windows, guarda a premissa: "no Windows, o npm do sistema atualiza o pacote com o executável dele rodando".
+- `5767e8b` — README, Guia do Usuário e Guia do Desenvolvedor. O Guia do Desenvolvedor também passa a descrever a escolha do alvo como está desde `6bfb911`.
+
+**Validação.**
+
+- TDD: na fase vermelha, 6 falhas pelos motivos esperados; depois, verde. As mutações M1 a M5 morreram: rodada nunca ou sempre com `preferOnline`, argumentos que ignoram `preferOnline`, instalador que não repassa a opção e npm do sistema sem `--prefer-online`.
+- O estado do primeiro commit (`eb52933`) foi testado sozinho, numa exportação do índice: 87 de 87.
+- Suíte Node completa: 2735 testes, 2726 passaram, 8 ignorados e 1 falha de ambiente. A falha foi em "analyzeRepo detecta commits remotos pendentes de pull": `git clone` sob carga deu "fatal: unknown error occurred while reading the configuration files"; isolado, o teste passa 3 de 3. `npm run lint` com saída 0. Não houve mudança em TypeScript.
+- **Teste real no PC.** Instância isolada da fonte aberta às 14:58:47, com o host nativo do Brave (PID 27540) e esta sessão (PID 12356) abertos.
+  - Às 14:59:30 a rodada atualizou o Claude do npm global de 2.1.287 para 2.1.300.
+  - No disco, `package.json` em 2.1.300 e `claude --version` respondendo "2.1.300 (Claude Code)"; os dois processos antigos continuaram vivos, e o npm deixou `.claude-code-tAuxFcZW`.
+  - O aviso da interface dizia "Gemini CLI instalada (0.65.0-nightly.20261014.g42c518220) · Claude Code CLI do sistema 2.1.287 → 2.1.300".
+
+**Não validado e limitações.**
+
+- A cópia gerenciada do app real (`%APPDATA%\felixo-ai-core\clis`) segue em 2.1.299 até o app abrir numa versão com esta correção. A falha da 2.1.300 ficou registrada para a 0.1.460, e como o registro vale por versão do app, a release nova libera outra tentativa.
+- A pasta antiga `.claude-code-XXXX` fica no npm global enquanto o processo antigo estiver aberto. Que o npm a remove numa instalação seguinte foi medido com o pacote de teste, não com o Claude.
+- Agentes abertos continuam na versão antiga até serem reiniciados; os novos abrem na nova.
+- Linux e macOS não têm a trava de executável aberto. Lá rodam só os testes de unidade; o teste com npm real é só do Windows.
+
+**Envio, CI e release.**
+
+- **Envio:** push direto à `main` às 15:07 (`27dc229..5767e8b`). O CI do commit de docs anterior (`27dc229`, [38605272027](https://github.com/Felipe-Alcantara/Felixo-AI-Core/actions/runs/38605272027)) tinha passado às 14:32, e o gate dele não publicou ("Release relevante: false").
+- **CI** [38612371019](https://github.com/Felipe-Alcantara/Felixo-AI-Core/actions/runs/38612371019): os 22 jobs passaram às 15:21, inclusive `Validate (windows-latest)`, que roda o teste novo com npm real.
+- **Release gate** [38614435215](https://github.com/Felipe-Alcantara/Felixo-AI-Core/actions/runs/38614435215): "Commit de base avaliado: 27dc229…" e "Release relevante: true".
+- **Release** [38614478105](https://github.com/Felipe-Alcantara/Felixo-AI-Core/actions/runs/38614478105): `v0.1.461` publicada às 15:37 como versão principal ("Latest"), com a tag em `5767e8b` e os instaladores de Windows, macOS e Ubuntu. O "Smoke exploratório (Windows)" também passou, às 15:39.
+
+Estado: concluído e publicado na `v0.1.461`. A conferência no app instalado ficou como task no Notion.
