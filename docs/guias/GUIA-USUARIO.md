@@ -130,13 +130,20 @@ Perfis padrão atuais:
 - `Gemini ACP` com comando `gemini --experimental-acp`.
 - `Openia` como launcher das interfaces compatíveis com OpenRouter.
 
-No app instalado, cerca de quatro segundos depois de abrir, o Felixo confere as
-CLIs oficiais que ele mantém em sua pasta gerenciada. A consulta pede a versão
-`latest` ao registry em cada abertura: se a cópia gerenciada estiver antiga, ela
-é atualizada mesmo que o executável também seja detectado no `PATH`. Uma CLI
-instalada diretamente no sistema não é alterada. Sem acesso ao registry, o app
-usa a última versão/hash conhecida pelo release e tenta novamente quando um
-`latest` novo for publicado.
+Cerca de quatro segundos depois de abrir, o Felixo confere as CLIs oficiais em
+cada abertura e as leva para a versão mais nova publicada, **inclusive
+pré-lançamento** (canais como `next`, `preview` e `alpha`):
+
+- a cópia que o app mantém na pasta gerenciada dele;
+- a instalação feita pelo **npm global** do sistema (`npm install -g`), quando houver.
+  Instalação nativa, Homebrew, pnpm ou Volta continuam como estão.
+
+Quando algo muda de versão, aparece um aviso curto, por exemplo "Codex CLI 0.150.1 →
+0.163.0-alpha.11" ou "Claude Code CLI do sistema 2.1.287 → 2.1.300". No Windows, uma
+CLI aberta por um agente não pode ser trocada; a atualização dela fica adiada e o app
+tenta de novo sozinho a cada 5 minutos, até os agentes que a usam serem fechados. Sem
+acesso ao registry, a cópia do app usa a última versão/hash conhecida pelo release e a
+instalação do sistema não é tocada.
 
 CLIs e ferramentas detectadas pelo app:
 

@@ -190,16 +190,30 @@ caso), e o teste pode passar mesmo quebrado. Depois do diff, rode
 ### Atualização automática das CLIs gerenciadas
 
 Ao abrir o app, `cli-auto-install.cjs` faz uma rodada de verificação alguns
-segundos depois. O `npm-runtime` consulta cada pacote conhecido com
-`npm view --prefer-online <pacote>@latest version dist.integrity --json`, valida
-o semver retornado e compara essa versão com o `package.json` da cópia no
-prefixo gerenciado. Uma CLI instalada fora do app continua intocada.
+segundos depois. O `npm-runtime` consulta os canais de cada pacote conhecido com
+`npm view --prefer-online <pacote> dist-tags --json` e o alvo é a maior versão
+entre eles (`chooseNewestPublishedVersion`), inclusive pré-lançamento. Versões que
+são o binário de uma plataforma (o Codex publica `0.162.1-win32-x64` como versão do
+próprio pacote) ficam de fora. O hash vem de `npm view <pacote>@<versão>
+dist.integrity`. O alvo é comparado com o `package.json` da cópia no prefixo
+gerenciado (`planAutoInstall`) e com a instalação do npm global do sistema, achada
+por `npm root --global` do npm do PATH (`system-cli-update.cjs` e
+`planSystemUpdates`). A do sistema só é atualizada com alvo confirmado no registry,
+nunca é rebaixada e conta como sucesso só com a versão nova no disco.
+
+No Windows o executável aberto não pode ser trocado: a rodada lista os processos
+(`Get-CimInstance Win32_Process`) e adia a CLI em uso, na cópia do app e no
+sistema; `EBUSY`/`EPERM` na saída do npm também viram adiamento, e não falha
+registrada. Com algo adiado, a rodada se repete a cada 5 minutos. O status
+emitido em `clis:setup-status` traz `updates` (o que mudou de versão), que a
+interface mostra no aviso de CLIs atualizadas.
 
 Se o registry falhar, a rodada usa a versão/hash do
 `managed-cli-manifest.cjs` como fallback. Antes de qualquer download, o
 instalador consulta novamente o `dist.integrity` da versão exata e recusa uma
 divergência; a tentativa registrada também guarda o alvo para não repetir o
-mesmo erro em toda abertura. Um `latest` novo libera uma nova tentativa.
+mesmo erro em toda abertura (a do sistema usa a chave `sistema:<id>`). Um alvo
+novo libera uma nova tentativa.
 Defina `FELIXO_AUTO_INSTALL_CLIS=0` somente para desativar a rodada em uma
 automação isolada.
 
@@ -211,7 +225,8 @@ node --test electron/core/managed-cli-manifest.test.cjs \
   electron/services/managed-cli-health.test.cjs \
   electron/services/managed-cli-installer.test.cjs \
   electron/services/cli-auto-install-plan.test.cjs \
-  electron/services/cli-auto-install.test.cjs
+  electron/services/cli-auto-install.test.cjs \
+  electron/services/system-cli-update.test.cjs
 ```
 
 ---

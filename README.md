@@ -437,13 +437,17 @@ e valide instalação/atualização offline nos três SOs com
 também registra o tamanho do runtime e os tempos do npm no artefato real.
 
 Ao abrir o app, a preparação automática das CLIs começa alguns segundos depois.
-A cada rodada o npm-runtime consulta o `latest` do registry e
-atualiza somente as cópias que o próprio app mantém no prefixo gerenciado;
-CLIs encontradas no `PATH` da pessoa não são alteradas. Se o registry estiver
-indisponível, o app usa a última versão/hash revisados no manifesto do release,
-e a instalação ainda confere o `dist.integrity` da versão exata antes de extrair
-o pacote. Em automações isoladas, use `FELIXO_AUTO_INSTALL_CLIS=0` para
-desativar essa rodada.
+A cada rodada o npm-runtime consulta os canais publicados de cada CLI no registry
+(`latest` e os de pré-lançamento, como `next`, `preview` e `alpha`) e leva para a
+versão mais nova entre eles a cópia que o app mantém no prefixo gerenciado e, quando
+existir, a instalação feita pelo npm global do sistema. Instalação nativa, Homebrew,
+pnpm ou Volta não são alteradas. No Windows, uma CLI aberta por um agente não pode
+ser trocada: a atualização dela fica adiada e a rodada tenta de novo a cada 5
+minutos. O que mudou de versão aparece num aviso curto. Se o registry estiver
+indisponível, a cópia do app usa a última versão/hash revisados no manifesto do
+release (a do sistema não é tocada), e a instalação ainda confere o
+`dist.integrity` da versão exata antes de extrair o pacote. Em automações isoladas,
+use `FELIXO_AUTO_INSTALL_CLIS=0` para desativar essa rodada.
 
 Para avaliar uma substituição sem mudar o produto, use
 `npm run benchmark:package-managers -- --check` em `app/`. A bancada mede o
