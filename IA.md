@@ -1199,3 +1199,15 @@ Estado: concluído e validado localmente no Windows; publicação externa não f
 **Não validado.** Não abri o Electron com as contas reais; a prévia usou o CSS do build fora do app. Fica registrado, sem mudança nesta rodada, que o Codex publica duas janelas com o mesmo rótulo ("Últimas 5 h" e "Últimos 7 dias" aparecem duas vezes e cada conta preenche só um dos pares, deixando o outro com traços), o que confunde a leitura das colunas.
 
 Estado: concluído e validado localmente no Windows.
+
+## 2026-10-14 — CI vermelho desde 5c273d8: smoke L13 com a instalação automática ligada na fonte
+
+**Relato.** Ao publicar a correção do resumo de Limites e uso, o CI da `main` já estava vermelho desde `5c273d8` (run 38506544412, e o Nightly 38556790578): `Validate` falhava nos quatro sistemas, sempre na sessão D do `canvas-smoke`, passo **L13 terminal: URL quebrada pela TUI** ("a dica do link (escolher onde abrir) não aconteceu em 15000 ms"), nas três tentativas. Com o CI vermelho, o Release gate fica `skipped` e nenhuma correção chega ao app.
+
+**Causa provável.** Entre o último verde (`81e19ac`, run 38500389625) e o primeiro vermelho, a única mudança de comportamento foi `isAutoInstallEnabled` passar a ligar a instalação automática das CLIs também na fonte. O `canvas-smoke.cjs` roda a fonte (`Origem: fonte (dev)`) e, ao contrário do `packaged-canvas-smoke.cjs`, não tinha o opt-out `FELIXO_AUTO_INSTALL_CLIS=0`, que o próprio `5c273d8` documenta para automações isoladas. A captura da falha mostra "CLIs prontas" no rodapé, ou seja, a rodada rodou durante o smoke, e nenhum aviso cobrindo o link; o mecanismo exato (rede/CPU no meio da sessão ou o fim da instalação mexendo no terminal aberto) não foi isolado.
+
+**Correção.** `withDevtoolsSession` passa a definir `FELIXO_AUTO_INSTALL_CLIS: '0'` em toda sessão do smoke da fonte, como o smoke empacotado já fazia; o comentário do `packaged-canvas-smoke.cjs`, que dizia que a fonte não instalava CLIs, foi atualizado. O comportamento do app não muda.
+
+**Validação.** `eslint` e `node --check` nos dois scripts. Não rodei o smoke localmente (abriria uma janela do Electron na sessão remota do Felipe); a confirmação fica para o CI deste envio.
+
+**Pendente.** Se o fim da instalação automática com um terminal aberto quebra a dica de link no app real, isso continua sem teste: os dois smokes agora desligam a instalação.
