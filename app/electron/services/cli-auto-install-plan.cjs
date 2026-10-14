@@ -155,12 +155,38 @@ function hasFailedForVersion(state, id, appVersion, latestVersion) {
  * @returns {boolean}
  */
 function isManagedCliOutdated({ managedPresent, managedVersion, latestVersion }) {
-  if (!managedPresent || !latestVersion) {
+  if (!managedPresent) {
     return false
   }
 
-  const comparison = compareCliVersions(managedVersion, latestVersion)
-  return comparison === null || comparison < 0
+  return isTargetNewer(managedVersion, latestVersion)
+}
+
+/**
+ * Vale trocar a versão instalada pelo alvo?
+ *
+ * O alvo já é a versão mais nova publicada: a maior versão principal entre os
+ * canais e, dentro dela, a publicada por último. Por isso a troca acontece sempre
+ * que a instalada é outra, menos quando a versão principal dela é maior que a do
+ * alvo, o que seria rebaixar. Dentro da mesma versão principal vale a ordem de
+ * publicação, não a do semver: a nightly de hoje vem depois da preview de ontem,
+ * embora "preview" ordene acima de "nightly".
+ *
+ * @param {string | null | undefined} installedVersion
+ * @param {string | null | undefined} targetVersion
+ * @returns {boolean}
+ */
+function isTargetNewer(installedVersion, targetVersion) {
+  if (!targetVersion) return false
+  if (!installedVersion) return true
+  if (installedVersion === targetVersion) return false
+  const core = compareCliVersions(coreVersion(installedVersion), coreVersion(targetVersion))
+  return core === null || core <= 0
+}
+
+/** `0.65.0-nightly.20261014` -> `0.65.0`. */
+function coreVersion(version) {
+  return String(version).replace(/[-+].*$/, '')
 }
 
 /**
@@ -300,8 +326,7 @@ function planSystemUpdates({
     if (!install || !to) return
 
     const from = install.version ?? null
-    const comparison = compareCliVersions(from, to)
-    if (comparison !== null && comparison >= 0) {
+    if (!isTargetNewer(from, to)) {
       plan.push({ cli, action: 'current', from, to })
       return
     }
@@ -329,6 +354,8 @@ module.exports = {
   getAutoInstallableClis,
   isAutoInstallEnabled,
   isManagedCliOutdated,
+  isTargetNewer,
+  coreVersion,
   planAutoInstall,
   planSystemUpdates,
   systemStateKey,

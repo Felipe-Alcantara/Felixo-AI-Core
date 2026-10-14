@@ -7,7 +7,7 @@ const {
   chooseNewestPublishedVersion,
   createManagedInstallEnv,
   createNpmInstallArgs,
-  createNpmViewDistTagsArgs,
+  createNpmViewChannelsArgs,
   createNpmViewIntegrityArgs,
   installManagedPackage,
   resolveLatestManagedPackage,
@@ -240,7 +240,7 @@ describe('managed-cli-installer', () => {
     })
 
     assert.deepEqual(calls, [
-      createNpmViewDistTagsArgs({ npmCliPath: '/npm/bin/npm-cli.js', npmPackage: '@anthropic-ai/claude-code' }),
+      createNpmViewChannelsArgs({ npmCliPath: '/npm/bin/npm-cli.js', npmPackage: '@anthropic-ai/claude-code' }),
       createNpmViewIntegrityArgs({ npmCliPath: '/npm/bin/npm-cli.js', npmPackage: '@anthropic-ai/claude-code@2.1.300' }),
     ])
     assert.deepEqual(
@@ -288,6 +288,13 @@ const CANAIS_GEMINI = {
   latest: '0.64.0',
   'staging-tmp': '0.65.0-nightly.20261014.g42c518220',
 }
+// Datas reais de publicação (registry, 14/10/2026). A 0.64.0 saiu depois da preview.
+const DATAS_GEMINI = {
+  '0.42.0-nightly.20260512.g11a9edc80': '2026-05-12T18:26:43.837Z',
+  '0.64.0': '2026-10-13T20:48:24.183Z',
+  '0.65.0-preview.0': '2026-10-13T20:31:28.212Z',
+  '0.65.0-nightly.20261014.g42c518220': '2026-10-14T01:33:01.285Z',
+}
 const CANAIS_CODEX = {
   beta: '0.1.2505172116',
   native: '0.1.2505291658',
@@ -304,7 +311,29 @@ describe('chooseNewestPublishedVersion', () => {
     assert.deepEqual(chooseNewestPublishedVersion(CANAIS_CLAUDE), { version: '2.1.300', tag: 'next' })
   })
 
-  it('pega o preview do Gemini, que é mais novo que o nightly da mesma versão', () => {
+  it('pega a nightly do Gemini: dentro da maior versão principal vale a publicada por último', () => {
+    assert.deepEqual(chooseNewestPublishedVersion(CANAIS_GEMINI, DATAS_GEMINI), {
+      version: '0.65.0-nightly.20261014.g42c518220',
+      tag: 'nightly',
+    })
+  })
+
+  it('a escolha não depende da ordem em que o registry lista os canais', () => {
+    const entradas = Object.entries(CANAIS_GEMINI)
+    for (const ordem of [entradas, [...entradas].reverse(), [entradas[2], entradas[1], entradas[3], entradas[0], entradas[4]]]) {
+      assert.deepEqual(chooseNewestPublishedVersion(Object.fromEntries(ordem), DATAS_GEMINI)?.version, '0.65.0-nightly.20261014.g42c518220')
+    }
+  })
+
+  it('a estável publicada depois da preview não vence: a versão principal dela é menor', () => {
+    const semNightly = { latest: '0.64.0', preview: '0.65.0-preview.0' }
+    assert.deepEqual(chooseNewestPublishedVersion(semNightly, DATAS_GEMINI), {
+      version: '0.65.0-preview.0',
+      tag: 'preview',
+    })
+  })
+
+  it('sem as datas vale o semver dentro da mesma versão principal', () => {
     assert.deepEqual(chooseNewestPublishedVersion(CANAIS_GEMINI), { version: '0.65.0-preview.0', tag: 'preview' })
   })
 

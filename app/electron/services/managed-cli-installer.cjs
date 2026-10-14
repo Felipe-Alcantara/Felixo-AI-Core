@@ -16,7 +16,7 @@ const platformAdapter = require('../core/platform/index.cjs')
 const { createNodeEnv } = require('../core/node-runtime.cjs')
 const { createCliEnv } = require('./cli-process-manager.cjs')
 const { killProcessTree } = require('../core/process-tree.cjs')
-const { compareCliVersions } = require('./cli-auto-install-plan.cjs')
+const { compareCliVersions, coreVersion } = require('./cli-auto-install-plan.cjs')
 
 const INSTALL_TIMEOUT_MS = 10 * 60 * 1000
 const LATEST_LOOKUP_TIMEOUT_MS = 30 * 1000
@@ -57,17 +57,25 @@ function createNpmInstallArgs({ npmCliPath, npmPackage, prefix, cacheDir }) {
 }
 
 /**
- * Consulta todos os canais publicados (`dist-tags`) de um pacote, com
- * `--prefer-online` para nunca reaproveitar um canal antigo do cache.
+ * Consulta os canais publicados (`dist-tags`) e a data de publicação de cada
+ * versão (`time`) de um pacote, com `--prefer-online` para nunca reaproveitar
+ * um canal antigo do cache.
  *
  * @param {object} options
  * @param {string} options.npmCliPath
  * @param {string} options.npmPackage
  * @returns {string[]}
  */
-function createNpmViewDistTagsArgs({ npmCliPath, npmPackage }) {
-  return [npmCliPath, 'view', '--prefer-online', npmPackage, 'dist-tags', '--json']
+function createNpmViewChannelsArgs({ npmCliPath, npmPackage }) {
+  return [npmCliPath, 'view', '--prefer-online', npmPackage, 'dist-tags', 'time', '--json']
 }
+
+/**
+ * O mapa de datas lista todas as versões já publicadas (o do Codex passa de
+ * 300 KB, por causa dos binários de plataforma), muito acima do que a saída
+ * guardada de um comando comum precisa.
+ */
+const CHANNELS_OUTPUT_LIMIT = 4 * 1024 * 1024
 
 /**
  * Versão que é o binário de UMA plataforma, publicada como versão do próprio
@@ -79,26 +87,50 @@ const PLATFORM_PAYLOAD_VERSION = /-(?:linux|darwin|win32)-(?:x64|arm64)(?:-musl)
 /**
  * Escolhe a versão mais nova entre os canais publicados, inclusive os de
  * pré-lançamento (`next`, `preview`, `alpha`, `nightly`), que é a política
- * de atualização das CLIs. Canais que apontam para um binário de plataforma ou
- * para algo que não é semver são ignorados. Não é "a maior versão já
- * publicada": essa lista inclui os binários de plataforma e versões que o
- * próprio fornecedor já tirou de todos os canais.
+ * de atualização das CLIs.
+ *
+ * "Mais nova" é a maior versão principal (`0.65.0` acima de `0.64.0`) e, dentro
+ * dela, a publicada por último: a nightly de 14/10 do Gemini vem depois da
+ * preview de 13/10, embora "preview" ordene acima de "nightly" no semver. Sem as
+ * datas, vale o semver. Canais que apontam para um binário de plataforma ou para
+ * algo que não é semver são ignorados.
  *
  * @param {Record<string, unknown> | null | undefined} distTags
+ * @param {Record<string, unknown> | null | undefined} [publishTimes] - Versão -> data ISO.
  * @returns {{ version: string, tag: string } | null}
  */
-function chooseNewestPublishedVersion(distTags) {
+function chooseNewestPublishedVersion(distTags, publishTimes = null) {
   if (!distTags || typeof distTags !== 'object') return null
-  let newest = null
-  for (const [tag, version] of Object.entries(distTags)) {
-    if (!isValidPackageVersion(version) || PLATFORM_PAYLOAD_VERSION.test(version)) continue
-    const comparison = newest ? compareCliVersions(version, newest.version) : 1
-    // Em empate, `latest` dá o nome ao canal: é o mais fácil de reconhecer no aviso.
-    if (comparison === 1 || (comparison === 0 && tag === 'latest')) {
-      newest = { version, tag }
+  const candidates = Object.entries(distTags)
+    .filter(([, version]) => isValidPackageVersion(version) && !PLATFORM_PAYLOAD_VERSION.test(version))
+    .map(([tag, version]) => ({ tag, version, publishedAt: publishedAtOf(publishTimes, version) }))
+  if (candidates.length === 0) return null
+
+  let newest = candidates[0]
+  for (const candidate of candidates.slice(1)) {
+    const core = compareCliVersions(coreVersion(candidate.version), coreVersion(newest.version))
+    if (core === 1) {
+      newest = candidate
+      continue
+    }
+    if (core !== 0) continue
+    const byTime = candidate.publishedAt - newest.publishedAt
+    const bySemver = compareCliVersions(candidate.version, newest.version)
+    // Em empate total, `latest` dá o nome ao canal: é o mais fácil de reconhecer no aviso.
+    if (
+      byTime > 0 ||
+      (byTime === 0 && bySemver === 1) ||
+      (byTime === 0 && bySemver === 0 && candidate.tag === 'latest')
+    ) {
+      newest = candidate
     }
   }
-  return newest
+  return { version: newest.version, tag: newest.tag }
+}
+
+function publishedAtOf(publishTimes, version) {
+  const value = publishTimes && typeof publishTimes === 'object' ? Date.parse(publishTimes[version]) : NaN
+  return Number.isNaN(value) ? 0 : value
 }
 
 /**
@@ -211,8 +243,9 @@ async function resolveLatestManagedPackage({
   killTree = killProcessTree,
 }) {
   const env = createManagedInstallEnv({ layout, platformName })
-  const query = (args, successMessage, failureMessage) =>
+  const query = (args, successMessage, failureMessage, outputLimit) =>
     runCommand({
+      outputLimit,
       command: nodeExecutable,
       args,
       env,
@@ -227,15 +260,20 @@ async function resolveLatestManagedPackage({
     })
 
   const tagsResult = await query(
-    createNpmViewDistTagsArgs({ npmCliPath, npmPackage }),
+    createNpmViewChannelsArgs({ npmCliPath, npmPackage }),
     `Canais de ${npmPackage} consultados.`,
     `Nao foi possivel consultar os canais de ${npmPackage}.`,
+    CHANNELS_OUTPUT_LIMIT,
   )
   if (!tagsResult.ok) {
     return tagsResult
   }
 
-  const newest = chooseNewestPublishedVersion(parseJsonObject(tagsResult.output))
+  const channels = parseJsonObject(tagsResult.output)
+  const newest = chooseNewestPublishedVersion(
+    channels?.['dist-tags'] ?? channels,
+    channels?.time,
+  )
   if (!newest) {
     return {
       ok: false,
@@ -265,7 +303,8 @@ async function resolveLatestManagedPackage({
     integrity,
     tag: newest.tag,
     message: `${npmPackage}@${newest.version} é a versão mais nova publicada (canal ${newest.tag}).`,
-    output: tagsResult.output,
+    // O mapa de datas é enorme e não serve para diagnóstico.
+    output: '',
   }
 }
 
@@ -467,6 +506,7 @@ function runCommand({
   killTree = killProcessTree,
   successMessage,
   failureMessage,
+  outputLimit = OUTPUT_LIMIT,
 }) {
   if (signal?.aborted) {
     return Promise.resolve({ ok: false, cancelled: true, message: `${failureMessage} A instalacao foi cancelada.`, output: '' })
@@ -488,7 +528,7 @@ function runCommand({
 
     const collect = (chunk) => {
       const text = String(chunk)
-      output = `${output}${text}`.slice(-OUTPUT_LIMIT)
+      output = `${output}${text}`.slice(-(outputLimit ?? OUTPUT_LIMIT))
       onLog?.(text)
     }
 
@@ -556,7 +596,7 @@ module.exports = {
   createManagedInstallEnv,
   createNpmInstallArgs,
   chooseNewestPublishedVersion,
-  createNpmViewDistTagsArgs,
+  createNpmViewChannelsArgs,
   createNpmViewIntegrityArgs,
   installManagedPackage,
   resolveLatestManagedPackage,

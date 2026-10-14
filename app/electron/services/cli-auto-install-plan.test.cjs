@@ -6,6 +6,7 @@ const {
   getAutoInstallableClis,
   isAutoInstallEnabled,
   isManagedCliOutdated,
+  isTargetNewer,
   planAutoInstall,
   planSystemUpdates,
   summarizeAutoInstall,
@@ -379,5 +380,23 @@ describe('planSystemUpdates', () => {
       'update',
     )
     assert.equal(planSystemUpdates({ ...base, targetVersions: alvo, reason: 'manual' })[0].action, 'update')
+  })
+})
+
+describe('isTargetNewer', () => {
+  it('segue a publicação mais recente dentro da mesma versão principal (preview para nightly)', () => {
+    assert.equal(isTargetNewer('0.65.0-preview.0', '0.65.0-nightly.20261014.g42c518220'), true)
+  })
+
+  it('nunca rebaixa a versão principal, nem para o canal estável', () => {
+    assert.equal(isTargetNewer('0.66.0', '0.65.0-nightly.20261014.g42c518220'), false)
+    assert.equal(isTargetNewer('0.65.0-preview.0', '0.64.0'), false)
+  })
+
+  it('a mesma versão não troca, e versão desconhecida sempre troca', () => {
+    assert.equal(isTargetNewer('2.1.300', '2.1.300'), false)
+    assert.equal(isTargetNewer(null, '2.1.300'), true)
+    assert.equal(isTargetNewer('nao-sei', '2.1.300'), true)
+    assert.equal(isTargetNewer('2.1.300', null), false)
   })
 })
