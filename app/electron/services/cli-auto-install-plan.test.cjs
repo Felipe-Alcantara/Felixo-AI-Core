@@ -7,6 +7,7 @@ const {
   isAutoInstallEnabled,
   isManagedCliOutdated,
   planAutoInstall,
+  planSystemUpdates,
   summarizeAutoInstall,
 } = require('./cli-auto-install-plan.cjs')
 
@@ -272,5 +273,111 @@ describe('cli-auto-install-plan', () => {
     ])
 
     assert.equal(summary.state, 'idle')
+  })
+})
+
+describe('cópia do app em uso', () => {
+  it('adia a atualização da cópia do app que um agente está usando, em vez de quebrá-la', () => {
+    const plan = planAutoInstall({
+      catalog: CATALOG,
+      detections: detections(true, true, true),
+      managedPresent: managed(true, true, true),
+      managedVersions: ['0.150.1', '2.1.300', '0.65.0-preview.0'],
+      latestVersions: ['0.163.0-alpha.11', '2.1.300', '0.65.0-preview.0'],
+      managedInUse: [true, false, false],
+      appVersion: '0.1.460',
+    })
+
+    assert.deepEqual(plan.pending, [])
+    assert.equal(plan.progress[0].state, 'deferred')
+    assert.match(plan.progress[0].message, /em uso/)
+  })
+
+  it('cópia ausente instala mesmo que algo com o mesmo nome esteja rodando', () => {
+    const plan = planAutoInstall({
+      catalog: CATALOG,
+      detections: detections(false, true, true),
+      managedPresent: managed(false, true, true),
+      managedVersions: [null, '2.1.300', '0.65.0-preview.0'],
+      latestVersions: ['0.163.0-alpha.11', '2.1.300', '0.65.0-preview.0'],
+      managedInUse: [true, false, false],
+      appVersion: '0.1.460',
+    })
+
+    assert.deepEqual(plan.pending.map((cli) => cli.id), ['codex'])
+  })
+})
+
+describe('planSystemUpdates', () => {
+  const alvo = ['0.163.0-alpha.11', '2.1.300', '0.65.0-preview.0']
+
+  it('atualiza a instalação do npm global que ficou para trás e deixa a que está em dia', () => {
+    const plan = planSystemUpdates({
+      catalog: CATALOG,
+      systemInstalls: [null, { version: '2.1.287' }, { version: '0.65.0-preview.0' }],
+      targetVersions: alvo,
+      appVersion: '0.1.460',
+    })
+
+    assert.deepEqual(
+      plan.map(({ cli, action, from, to }) => ({ id: cli.id, action, from, to })),
+      [
+        { id: 'claude', action: 'update', from: '2.1.287', to: '2.1.300' },
+        { id: 'gemini', action: 'current', from: '0.65.0-preview.0', to: '0.65.0-preview.0' },
+      ],
+    )
+  })
+
+  it('sem alvo confirmado no registry não mexe no sistema (nunca rebaixa para o manifesto)', () => {
+    const plan = planSystemUpdates({
+      catalog: CATALOG,
+      systemInstalls: [null, { version: '2.1.287' }, null],
+      targetVersions: [null, null, null],
+      appVersion: '0.1.460',
+    })
+
+    assert.deepEqual(plan, [])
+  })
+
+  it('nunca rebaixa uma instalação do sistema mais nova que o alvo', () => {
+    const plan = planSystemUpdates({
+      catalog: CATALOG,
+      systemInstalls: [null, { version: '2.1.301' }, null],
+      targetVersions: alvo,
+      appVersion: '0.1.460',
+    })
+
+    assert.equal(plan[0].action, 'current')
+  })
+
+  it('adia a instalação do sistema que um agente está usando', () => {
+    const plan = planSystemUpdates({
+      catalog: CATALOG,
+      systemInstalls: [null, { version: '2.1.287' }, null],
+      targetVersions: alvo,
+      inUse: [false, true, false],
+      appVersion: '0.1.460',
+    })
+
+    assert.equal(plan[0].action, 'deferred')
+  })
+
+  it('não repete na abertura seguinte a mesma atualização que já falhou, mas repete com alvo novo ou a pedido', () => {
+    const previousState = {
+      'sistema:claude': { version: '0.1.460', targetVersion: '2.1.300', ok: false, message: 'sem permissão' },
+    }
+    const base = {
+      catalog: CATALOG,
+      systemInstalls: [null, { version: '2.1.287' }, null],
+      appVersion: '0.1.460',
+      previousState,
+    }
+
+    assert.equal(planSystemUpdates({ ...base, targetVersions: alvo })[0].action, 'skipped')
+    assert.equal(
+      planSystemUpdates({ ...base, targetVersions: [null, '2.1.301', null] })[0].action,
+      'update',
+    )
+    assert.equal(planSystemUpdates({ ...base, targetVersions: alvo, reason: 'manual' })[0].action, 'update')
   })
 })

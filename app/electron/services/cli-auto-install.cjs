@@ -39,8 +39,17 @@ const {
   getAutoInstallableClis,
   isAutoInstallEnabled,
   planAutoInstall,
+  planSystemUpdates,
   summarizeAutoInstall,
+  systemStateKey,
 } = require('./cli-auto-install-plan.cjs')
+const {
+  installSystemNpmPackage,
+  isInstallInUse,
+  listRunningExecutables,
+  readSystemNpmInstall,
+  resolveSystemNpmGlobalRoot,
+} = require('./system-cli-update.cjs')
 const { logQaEvent } = require('./qa-logger.cjs')
 const {
   diagnoseClis,
@@ -51,6 +60,10 @@ const {
 
 const STATE_FILE_NAME = 'cli-auto-install.json'
 const STARTUP_DELAY_MS = 4000
+/** Intervalo da nova tentativa enquanto alguma CLI estiver em uso por um agente. */
+const DEFERRED_RETRY_MINUTES = 5
+/** Saída do npm quando um arquivo da CLI está aberto (no Windows, o executável em uso). */
+const BUSY_OUTPUT = /\b(?:EBUSY|EPERM)\b/
 
 /**
  * @param {() => import('electron').BrowserWindow | null} getMainWindow
@@ -82,6 +95,12 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
     fileSystem = fs,
     describePath = describeCliPath,
     userName = readUserName(),
+    listExecutables = listRunningExecutables,
+    systemCli = {
+      resolveGlobalRoot: resolveSystemNpmGlobalRoot,
+      readInstall: readSystemNpmInstall,
+      install: installSystemNpmPackage,
+    },
   } = options
 
   const layout = getManagedCliLayout({ userData: appPaths.userData })
@@ -97,6 +116,7 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
   })
   let running = null
   let startupTimer = null
+  let retryTimer = null
 
   function setStatus(next) {
     status = { ...status, ...next, updatedAt: new Date().toISOString() }
@@ -166,6 +186,16 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
       layout,
       platformName,
     })
+    // No Windows o executável aberto por um agente não pode ser trocado. A lista
+    // é lida uma vez por rodada; fora do Windows ela vem vazia.
+    const executables = await listExecutables({ platformName })
+    const managedVersions = catalog.map((cli) =>
+      getManagedCliPackageVersion({
+        providerId: cli.id,
+        layout,
+        fileSystem,
+      }),
+    )
     const { pending, progress } = planAutoInstall({
       catalog,
       detections,
@@ -177,32 +207,21 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
           fileSystem,
         }),
       ),
-      managedVersions: catalog.map((cli) =>
-        getManagedCliPackageVersion({
-          providerId: cli.id,
-          layout,
-          fileSystem,
-        }),
-      ),
+      managedVersions,
       latestVersions: catalog.map(
         (cli) => latestPackages.find((item) => item.id === cli.id)?.version ?? null,
+      ),
+      managedInUse: catalog.map((cli) =>
+        isInstallInUse(getManagedPackageDir(layout, cli), executables, platformName),
       ),
       previousState: readState(stateFilePath),
       appVersion,
       reason,
     })
 
-    if (pending.length === 0) {
-      return setStatus({
-        state: 'idle',
-        message: allDetected(detections)
-          ? 'Todas as CLIs de IA estao prontas.'
-          : 'Faltam CLIs de IA, e a instalacao automatica ja tentou nesta versao.',
-        clis: progress,
-      })
-    }
-
     const attempts = readState(stateFilePath)
+    // O que mudou de versão nesta rodada, para o aviso discreto da interface.
+    const updates = []
 
     for (const [index, cli] of pending.entries()) {
       updateCliProgress(progress, cli.id, { state: 'installing' })
@@ -243,6 +262,16 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
       const redactOptions = { homeDir: os.homedir() }
       const safeMessage = redactDiagnosticText(result.message, redactOptions)
 
+      // Um agente abriu a CLI entre a lista de processos e a instalação: é
+      // passageiro, não uma falha desta versão; a nova tentativa resolve.
+      if (!result.ok && BUSY_OUTPUT.test(String(result.output ?? ''))) {
+        updateCliProgress(progress, cli.id, {
+          state: 'deferred',
+          message: `Atualizacao adiada: a ${cli.name} esta em uso por um agente aberto.`,
+        })
+        continue
+      }
+
       updateCliProgress(progress, cli.id, {
         state: result.ok ? 'installed' : 'failed',
         message: safeMessage,
@@ -254,6 +283,15 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
         message: safeMessage,
         at: new Date().toISOString(),
       }
+      if (result.ok && latestPackage?.version) {
+        updates.push({
+          id: cli.id,
+          name: cli.name,
+          scope: 'app',
+          from: managedVersions[catalog.indexOf(cli)] ?? null,
+          to: latestPackage.version,
+        })
+      }
 
       logQaEvent({
         level: result.ok ? 'info' : 'warn',
@@ -261,6 +299,19 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
         message: safeMessage,
         details: { id: cli.id, reason, output: redactDiagnosticText(result.output, redactOptions) },
       })
+    }
+
+    const systemResults = await updateSystemInstalls({
+      catalog,
+      latestPackages,
+      executables,
+      attempts,
+      reason,
+    })
+    for (const item of systemResults) {
+      if (item.action === 'updated') {
+        updates.push({ id: item.id, name: item.name, scope: 'sistema', from: item.from, to: item.to })
+      }
     }
 
     writeState(stateFilePath, attempts)
@@ -287,7 +338,134 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
       }
     }
 
-    return setStatus({ ...summarizeAutoInstall(progress), clis: progress })
+    const deferred = [
+      ...progress.filter((item) => item.state === 'deferred').map((item) => item.name),
+      ...systemResults
+        .filter((item) => item.action === 'deferred')
+        .map((item) => `${item.name} (sistema)`),
+    ]
+    scheduleDeferredRetry(deferred.length > 0)
+
+    const summary =
+      pending.length === 0
+        ? {
+            state: 'idle',
+            message: allDetected(detections)
+              ? 'Todas as CLIs de IA estao prontas.'
+              : 'Faltam CLIs de IA, e a instalacao automatica ja tentou nesta versao.',
+          }
+        : summarizeAutoInstall(progress)
+
+    return setStatus({
+      ...summary,
+      ...(summary.state === 'idle' && updates.length > 0 ? { state: 'done' } : {}),
+      message:
+        deferred.length > 0
+          ? `${summary.message} Em uso por um agente aberto: ${deferred.join(', ')}; nova tentativa em ${DEFERRED_RETRY_MINUTES} min.`
+          : summary.message,
+      clis: progress,
+      updates,
+      systemUpdates: systemResults,
+    })
+  }
+
+  /**
+   * Leva a instalação da CLI no npm global do sistema para o mesmo alvo da cópia
+   * do app. Só com alvo confirmado no registry; a decisão fica em
+   * `planSystemUpdates` e o que pode dar errado vira resultado, nunca exceção.
+   */
+  async function updateSystemInstalls({ catalog, latestPackages, executables, attempts, reason }) {
+    let globalRoot = null
+    try {
+      globalRoot = await systemCli.resolveGlobalRoot({ managedRoot: layout.root, platformName, fileSystem })
+    } catch {
+      globalRoot = null
+    }
+    if (!globalRoot) return []
+
+    const installs = catalog.map((cli) => {
+      const entry = getManagedCliManifestEntry(cli.id)
+      return entry ? systemCli.readInstall({ globalRoot, npmPackage: entry.npmPackage, fileSystem }) : null
+    })
+    const plan = planSystemUpdates({
+      catalog,
+      systemInstalls: installs,
+      targetVersions: catalog.map((cli) => {
+        const latestPackage = latestPackages.find((item) => item.id === cli.id)
+        return latestPackage?.source === 'registry' ? latestPackage.version : null
+      }),
+      inUse: installs.map((install) => isInstallInUse(install?.packageDir, executables, platformName)),
+      previousState: attempts,
+      appVersion,
+      reason,
+    })
+
+    const results = []
+    for (const item of plan) {
+      const base = { id: item.cli.id, name: item.cli.name, from: item.from, to: item.to }
+      if (item.action !== 'update') {
+        results.push({ ...base, action: item.action, message: item.message ?? '' })
+        continue
+      }
+
+      const entry = getManagedCliManifestEntry(item.cli.id)
+      let result
+      try {
+        result = await systemCli.install({
+          npmPackage: `${entry.npmPackage}@${item.to}`,
+          cwd: os.homedir(),
+          platformName,
+        })
+      } catch (error) {
+        result = { ok: false, busy: false, message: getErrorMessage(error, 'Falha ao chamar o npm do sistema.'), output: '' }
+      }
+      if (!result.ok && result.busy) {
+        results.push({ ...base, action: 'deferred', message: 'Em uso por um agente aberto.' })
+        continue
+      }
+
+      // Sucesso é a versão nova no disco, não só o código de saída do npm.
+      const after = systemCli.readInstall({ globalRoot, npmPackage: entry.npmPackage, fileSystem })
+      const ok = result.ok && after?.version === item.to
+      const redactOptions = { homeDir: os.homedir() }
+      const message = redactDiagnosticText(
+        ok
+          ? `${item.cli.name} do sistema atualizada de ${item.from ?? 'versao desconhecida'} para ${item.to}.`
+          : result.ok
+            ? `O npm terminou, mas a ${item.cli.name} do sistema continua em ${after?.version ?? 'versao desconhecida'}.`
+            : result.message,
+        redactOptions,
+      )
+      attempts[systemStateKey(item.cli.id)] = {
+        version: appVersion,
+        targetVersion: item.to,
+        ok,
+        message,
+        at: new Date().toISOString(),
+      }
+      logQaEvent({
+        level: ok ? 'info' : 'warn',
+        scope: 'cli:auto-install',
+        message,
+        details: {
+          id: item.cli.id,
+          scope: 'sistema',
+          reason,
+          output: redactDiagnosticText(result.output, redactOptions),
+        },
+      })
+      results.push({ ...base, action: ok ? 'updated' : 'failed', message })
+    }
+    return results
+  }
+
+  function scheduleDeferredRetry(needed) {
+    clearTimeout(retryTimer)
+    retryTimer = null
+    if (!needed) return
+    retryTimer = setTimeout(() => run('retry'), DEFERRED_RETRY_MINUTES * 60 * 1000)
+    // A nova tentativa nunca segura o processo aberto sozinha.
+    retryTimer.unref?.()
   }
 
   ipcMain.handle('clis:get-setup-status', () => ({ ok: true, status }))
@@ -335,8 +513,17 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
   return {
     getStatus: () => status,
     run,
-    stop: () => clearTimeout(startupTimer),
+    stop: () => {
+      clearTimeout(startupTimer)
+      clearTimeout(retryTimer)
+    },
   }
+}
+
+/** Pasta do pacote principal da cópia do app (onde o executável aberto mora). */
+function getManagedPackageDir(layout, cli) {
+  const entry = getManagedCliManifestEntry(cli.id)
+  return entry ? path.join(layout.root, 'node_modules', ...entry.npmPackage.split('/')) : null
 }
 
 function updateCliProgress(progress, id, patch) {

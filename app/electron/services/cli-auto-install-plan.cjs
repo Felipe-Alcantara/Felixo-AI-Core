@@ -49,6 +49,7 @@ function getAutoInstallableClis(catalog) {
  * @param {Array<boolean>} [options.managedPresent] - Na ordem do catálogo.
  * @param {Array<string | null>} [options.managedVersions] - Versões dos pacotes gerenciados.
  * @param {Array<string | null>} [options.latestVersions] - Versões latest resolvidas no registry.
+ * @param {Array<boolean>} [options.managedInUse] - Cópia em uso por um processo aberto (Windows trava o executável).
  * @param {Record<string, { version?: string, ok?: boolean }>} [options.previousState]
  * @param {string} options.appVersion
  * @param {'startup' | 'manual'} [options.reason]
@@ -60,6 +61,7 @@ function planAutoInstall({
   managedPresent = [],
   managedVersions = [],
   latestVersions = [],
+  managedInUse = [],
   previousState = {},
   appVersion,
   reason = 'startup',
@@ -78,6 +80,16 @@ function planAutoInstall({
       }) &&
       (forced || !hasFailedForVersion(previousState, cli.id, appVersion, latestVersion))
     ) {
+      // No Windows o executável aberto por um agente não pode ser substituído:
+      // instalar agora falharia ou deixaria a cópia pela metade. A rodada tenta
+      // de novo sozinha depois (ver `cli-auto-install`).
+      if (managedInUse[index] === true) {
+        return createCliProgress(
+          cli,
+          'deferred',
+          `Atualizacao adiada: a ${cli.name} esta em uso por um agente aberto (${managedVersion ?? 'versao desconhecida'} -> ${latestVersion}).`,
+        )
+      }
       pending.push(cli)
       return createCliProgress(
         cli,
@@ -253,6 +265,63 @@ function summarizeAutoInstall(progress) {
   }
 }
 
+/**
+ * Decide o que fazer com cada CLI que também está instalada pelo npm global do
+ * sistema, fora do app. Por decisão da pessoa, essa instalação acompanha a
+ * mesma versão-alvo da cópia do app.
+ *
+ * Só entra quem tem alvo confirmado no registry: o manifesto de fallback pode
+ * ser mais velho que o que a pessoa instalou, e atualizar o sistema com ele
+ * seria rebaixar. Uma instalação mais nova que o alvo também fica como está.
+ *
+ * @param {object} options
+ * @param {Array<{ id: string, name: string }>} options.catalog
+ * @param {Array<{ version: string | null } | null>} options.systemInstalls - Na ordem do catálogo; `null` quando não há instalação pelo npm global.
+ * @param {Array<string | null>} options.targetVersions - Alvo confirmado no registry, na ordem do catálogo.
+ * @param {Array<boolean>} [options.inUse]
+ * @param {Record<string, object>} [options.previousState]
+ * @param {string} options.appVersion
+ * @param {'startup' | 'manual' | 'retry'} [options.reason]
+ * @returns {Array<{ cli: object, action: 'update' | 'deferred' | 'current' | 'skipped', from: string | null, to: string, message?: string }>}
+ */
+function planSystemUpdates({
+  catalog,
+  systemInstalls,
+  targetVersions,
+  inUse = [],
+  previousState = {},
+  appVersion,
+  reason = 'startup',
+}) {
+  const plan = []
+  catalog.forEach((cli, index) => {
+    const install = systemInstalls[index]
+    const to = targetVersions[index]
+    if (!install || !to) return
+
+    const from = install.version ?? null
+    const comparison = compareCliVersions(from, to)
+    if (comparison !== null && comparison >= 0) {
+      plan.push({ cli, action: 'current', from, to })
+      return
+    }
+
+    const stateKey = systemStateKey(cli.id)
+    if (reason !== 'manual' && hasFailedForVersion(previousState, stateKey, appVersion, to)) {
+      plan.push({ cli, action: 'skipped', from, to, message: previousState[stateKey]?.message ?? '' })
+      return
+    }
+
+    plan.push({ cli, action: inUse[index] === true ? 'deferred' : 'update', from, to })
+  })
+  return plan
+}
+
+/** Chave do registro de tentativas da instalação do sistema, separada da cópia do app. */
+function systemStateKey(id) {
+  return `sistema:${id}`
+}
+
 module.exports = {
   allDetected,
   compareCliVersions,
@@ -261,5 +330,7 @@ module.exports = {
   isAutoInstallEnabled,
   isManagedCliOutdated,
   planAutoInstall,
+  planSystemUpdates,
+  systemStateKey,
   summarizeAutoInstall,
 }

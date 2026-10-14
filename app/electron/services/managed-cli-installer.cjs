@@ -560,5 +560,6 @@ module.exports = {
   createNpmViewIntegrityArgs,
   installManagedPackage,
   resolveLatestManagedPackage,
+  runCommand,
   verifyManagedPackageIntegrity,
 }

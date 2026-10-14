@@ -30,6 +30,15 @@ const {
 
 const GEMINI_PINNED = getPinnedInstallTarget('gemini')
 
+/** Máquina sem npm global: a fase do sistema não encontra nada para atualizar. */
+const SEM_INSTALACAO_DO_SISTEMA = {
+  resolveGlobalRoot: async () => null,
+  readInstall: () => null,
+  install: async () => {
+    throw new Error('a fase do sistema não deveria instalar nada neste teste')
+  },
+}
+
 /**
  * Monta um perfil isolado com o layout que o app usa em disco.
  *
@@ -82,6 +91,10 @@ function createRunner(
     arch = process.arch,
     describePath,
     userName,
+    // Por padrão nenhum teste toca no npm global nem lista processos da máquina
+    // que roda a suíte: sem isto, a fase do sistema atualizaria CLIs de verdade.
+    listExecutables = async () => [],
+    systemCli = SEM_INSTALACAO_DO_SISTEMA,
   },
 ) {
   const installed = []
@@ -93,6 +106,8 @@ function createRunner(
     detect,
     platformName,
     arch,
+    listExecutables,
+    systemCli,
     ...(verifyInstallation ? { verifyInstallation } : {}),
     ...(describePath ? { describePath } : {}),
     ...(userName !== undefined ? { userName } : {}),
@@ -553,3 +568,116 @@ test(
     }
   },
 )
+
+/** npm global falso, com estado: a versão no disco muda depois de instalar. */
+function sistemaFalso({ versoes, instalar = 'ok' }) {
+  const atuais = { ...versoes }
+  const instalados = []
+  return {
+    instalados,
+    systemCli: {
+      resolveGlobalRoot: async () => path.join(os.tmpdir(), 'npm-global-falso'),
+      readInstall: ({ npmPackage }) =>
+        npmPackage in atuais
+          ? { version: atuais[npmPackage], packageDir: path.join(os.tmpdir(), 'npm-global-falso', npmPackage) }
+          : null,
+      install: async ({ npmPackage }) => {
+        instalados.push(npmPackage)
+        const at = npmPackage.lastIndexOf('@')
+        if (instalar === 'ok') atuais[npmPackage.slice(0, at)] = npmPackage.slice(at + 1)
+        if (instalar === 'em-uso') return { ok: false, busy: true, message: 'EBUSY', output: 'npm error code EBUSY' }
+        return { ok: true, busy: false, message: 'instalado', output: '' }
+      },
+    },
+  }
+}
+
+test('atualiza a CLI do npm global do sistema para o mesmo alvo e avisa no status', async () => {
+  const claude = getManagedCliManifestEntry('claude')
+  const profile = createProfile({ managedClis: ['claude'], managedVersions: { claude: claude.version } })
+  const sistema = sistemaFalso({ versoes: { [claude.npmPackage]: '2.1.200' } })
+
+  try {
+    const { service, installed } = createRunner(profile, {
+      detect: detectedOnly(['codex', 'claude', 'gemini']),
+      systemCli: sistema.systemCli,
+    })
+    const status = await service.run('startup')
+    service.stop()
+
+    assertPlanned(status)
+    assert.deepEqual(installed, [])
+    assert.deepEqual(sistema.instalados, [`${claude.npmPackage}@${claude.version}`])
+    assert.deepEqual(status.updates, [
+      { id: 'claude', name: status.updates[0].name, scope: 'sistema', from: '2.1.200', to: claude.version },
+    ])
+    assert.equal(status.state, 'done')
+  } finally {
+    profile.cleanup()
+  }
+})
+
+test('o npm global que terminou sem trocar a versão no disco conta como falha', async () => {
+  const claude = getManagedCliManifestEntry('claude')
+  const profile = createProfile({ managedClis: ['claude'], managedVersions: { claude: claude.version } })
+  const sistema = sistemaFalso({ versoes: { [claude.npmPackage]: '2.1.200' }, instalar: 'sem-efeito' })
+
+  try {
+    const { service } = createRunner(profile, {
+      detect: detectedOnly(['codex', 'claude', 'gemini']),
+      systemCli: sistema.systemCli,
+    })
+    const status = await service.run('startup')
+    service.stop()
+
+    assert.equal(status.systemUpdates[0].action, 'failed')
+    assert.deepEqual(status.updates, [])
+  } finally {
+    profile.cleanup()
+  }
+})
+
+test('arquivo em uso no npm global vira adiamento com nova tentativa, sem registrar falha', async () => {
+  const claude = getManagedCliManifestEntry('claude')
+  const profile = createProfile({ managedClis: ['claude'], managedVersions: { claude: claude.version } })
+  const sistema = sistemaFalso({ versoes: { [claude.npmPackage]: '2.1.200' }, instalar: 'em-uso' })
+
+  try {
+    const { service } = createRunner(profile, {
+      detect: detectedOnly(['codex', 'claude', 'gemini']),
+      systemCli: sistema.systemCli,
+    })
+    const status = await service.run('startup')
+    service.stop()
+
+    assert.equal(status.systemUpdates[0].action, 'deferred')
+    assert.match(status.message, /nova tentativa em 5 min/)
+    const state = JSON.parse(fs.readFileSync(path.join(profile.userData, 'config', 'cli-auto-install.json'), 'utf8'))
+    assert.equal(state['sistema:claude'], undefined)
+  } finally {
+    profile.cleanup()
+  }
+})
+
+test('adia a atualização da cópia do app aberta por um agente, sem instalar por cima', async () => {
+  const codex = getManagedCliManifestEntry('codex')
+  const profile = createProfile({ managedClis: ['codex'], managedVersions: { codex: '0.1.0' } })
+  const layout = getManagedCliLayout({ userData: profile.userData })
+  const executavelAberto = path.join(layout.root, 'node_modules', ...codex.npmPackage.split('/'), 'bin', 'codex.exe')
+
+  try {
+    const { service, installed } = createRunner(profile, {
+      detect: detectedOnly(['codex', 'claude', 'gemini']),
+      verifyInstallation: () => ({ ok: true }),
+      listExecutables: async () => [executavelAberto],
+    })
+    const status = await service.run('startup')
+    service.stop()
+
+    assert.deepEqual(installed, [])
+    assert.equal(status.clis.find((cli) => cli.id === 'codex').state, 'deferred')
+    assert.match(status.message, /nova tentativa em 5 min/)
+  } finally {
+    profile.cleanup()
+  }
+})
