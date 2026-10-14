@@ -51,11 +51,12 @@ const SUMMARY: AgentUsageProviderSummary = {
 }
 
 describe('ProviderSummaryTable', () => {
-  it('uma linha por conta com plano, cada janela e o status, em tabela acessível', () => {
+  it('um grupo por conta com plano, cada janela e o status, em tabela acessível', () => {
     const html = renderToStaticMarkup(createElement(ProviderSummaryTable, { providerName: 'Codex CLI', summary: SUMMARY }))
 
     expect(html).toContain('<caption class="sr-only">Resumo das contas do Codex CLI</caption>')
-    expect(html).toContain('<th scope="col" class="w-[4.5rem] py-1 pr-2 font-normal">Últimas 5 h</th>')
+    expect(html).toContain('<th scope="col" class="py-1 pr-2 font-normal">Últimas 5 h</th>')
+    expect(html.match(/<tbody/g)).toHaveLength(2)
     expect(html).toContain('p***a@example.com')
     expect(html).toContain('Felixo principal')
     expect(html).toContain('>plus<')
@@ -67,13 +68,15 @@ describe('ProviderSummaryTable', () => {
     expect(html).toContain('O serviço bloqueou o uso comum desta conta.')
   })
 
-  it('mantém o identificador da conta legível quando a tabela fica estreita', () => {
+  it('o identificador da conta ocupa a largura inteira da tabela, acima dos números', () => {
+    // Numa linha só, plano + quatro janelas + status deixavam poucos pixels
+    // para a conta e o e-mail quebrava letra por letra no painel estreito.
     const narrowSummary: AgentUsageProviderSummary = {
       ...SUMMARY,
       rows: [
         {
           ...SUMMARY.rows[0],
-          account: account('conta-a', 'felipemartins072004@gmail.com'),
+          account: account('conta-a', 'nome.sobrenome.backup2026@example.com'),
         },
       ],
     }
@@ -81,8 +84,13 @@ describe('ProviderSummaryTable', () => {
       createElement(ProviderSummaryTable, { providerName: 'Codex CLI', summary: narrowSummary }),
     )
 
-    expect(html).toContain('title="felipemartins072004@gmail.com"')
-    expect(html).toContain('whitespace-normal wrap-break-word')
+    // Plano + 2 janelas + status = 4 colunas, todas cobertas pelo nome.
+    expect(html).toContain('<th scope="rowgroup" colSpan="4"')
+    expect(html).toContain('title="nome.sobrenome.backup2026@example.com"')
+    // Sem coluna "Conta" disputando largura com os números.
+    expect(html).not.toContain('>Conta</th>')
+    // Uma conta por grupo de linhas: o nome é o cabeçalho dos números dela.
+    expect(html.match(/<tbody/g)).toHaveLength(1)
   })
 
   it('janela que a conta não publicou aparece como traço, nunca como zero', () => {

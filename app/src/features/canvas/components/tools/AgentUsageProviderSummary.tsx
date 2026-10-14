@@ -9,10 +9,15 @@ import {
 } from '../../../shared/agent-usage/agent-usage'
 
 /**
- * Resumo de um provedor no painel "Limites e uso": uma linha por conta, com
- * plano, quanto sobra em cada janela da conta e o selo de status. É a leitura
- * rápida para comparar contas do mesmo provedor; o /status completo de cada
- * uma fica recolhido logo abaixo.
+ * Resumo de um provedor no painel "Limites e uso": um grupo de linhas por
+ * conta — o identificador na largura inteira e, logo abaixo, plano, quanto
+ * sobra em cada janela da conta e o selo de status. É a leitura rápida para
+ * comparar contas do mesmo provedor; o /status completo de cada uma fica
+ * recolhido logo abaixo.
+ *
+ * O nome não divide a linha com os números: com plano, quatro janelas e
+ * status lado a lado, sobravam poucos pixels para ele no painel estreito e o
+ * e-mail quebrava letra por letra.
  */
 export function ProviderSummaryTable({
   providerName,
@@ -25,27 +30,30 @@ export function ProviderSummaryTable({
     return null
   }
 
+  // Plano + uma coluna por janela + status.
+  const columnCount = summary.columns.length + 2
+
   return (
     <table className="mt-2 w-full table-fixed border-collapse text-[11px]">
       <caption className="sr-only">Resumo das contas do {providerName}</caption>
       <thead>
         <tr className="text-left text-[10px] text-zinc-500">
-          {/* Larguras fixas nas colunas curtas: o resto fica para o nome da
-              conta, que é o que diferencia uma linha da outra. */}
-          <th scope="col" className="py-1 pr-2 font-normal">Conta</th>
+          {/* Plano e status com largura fixa; as janelas dividem o resto. */}
           <th scope="col" className="w-12 py-1 pr-2 font-normal">Plano</th>
           {summary.columns.map((column) => (
-            <th key={column.key} scope="col" className="w-[4.5rem] py-1 pr-2 font-normal">
+            <th key={column.key} scope="col" className="py-1 pr-2 font-normal">
               {column.label}
             </th>
           ))}
           <th scope="col" className="w-[5.25rem] py-1 text-right font-normal">Status</th>
         </tr>
       </thead>
-      <tbody>
-        {summary.rows.map((row) => (
-          <tr key={row.account.id} className="border-t border-white/6 align-top">
-            <th scope="row" className="py-1.5 pr-2 text-left font-normal">
+      {summary.rows.map((row) => (
+        // Um <tbody> por conta: o nome é o cabeçalho (rowgroup) dos números
+        // dela, e o leitor de tela continua lendo "conta → janela → valor".
+        <tbody key={row.account.id}>
+          <tr className="border-t border-white/6">
+            <th scope="rowgroup" colSpan={columnCount} className="pt-1.5 text-left font-normal">
               <span
                 className="block whitespace-normal wrap-break-word text-zinc-200"
                 title={accountName(row.account)}
@@ -58,6 +66,8 @@ export function ProviderSummaryTable({
                 </span>
               )}
             </th>
+          </tr>
+          <tr className="align-top">
             <td className="py-1.5 pr-2">
               {row.plan ? (
                 <span className="rounded-sm bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-1.5 py-0.5 text-[10px] uppercase text-(--color-warning)">
@@ -80,8 +90,8 @@ export function ProviderSummaryTable({
               </span>
             </td>
           </tr>
-        ))}
-      </tbody>
+        </tbody>
+      ))}
     </table>
   )
 }
