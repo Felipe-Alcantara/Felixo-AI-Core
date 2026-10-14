@@ -436,13 +436,14 @@ e valide instalação/atualização offline nos três SOs com
 `npm run benchmark:npm-runtime:check` dentro de `app/`. O smoke do release
 também registra o tamanho do runtime e os tempos do npm no artefato real.
 
-No app instalado, a preparação automática das CLIs começa alguns segundos após
-a abertura. A cada rodada o npm-runtime consulta o `latest` do registry e
+Ao abrir o app, a preparação automática das CLIs começa alguns segundos depois.
+A cada rodada o npm-runtime consulta o `latest` do registry e
 atualiza somente as cópias que o próprio app mantém no prefixo gerenciado;
 CLIs encontradas no `PATH` da pessoa não são alteradas. Se o registry estiver
 indisponível, o app usa a última versão/hash revisados no manifesto do release,
 e a instalação ainda confere o `dist.integrity` da versão exata antes de extrair
-o pacote.
+o pacote. Em automações isoladas, use `FELIXO_AUTO_INSTALL_CLIS=0` para
+desativar essa rodada.
 
 Para avaliar uma substituição sem mudar o produto, use
 `npm run benchmark:package-managers -- --check` em `app/`. A bancada mede o

@@ -9,20 +9,17 @@
  */
 
 /**
- * A instalação automática vale para o app instalado.
+ * A instalação automática roda sempre que o aplicativo abre.
  *
- * Rodando do código-fonte quem desenvolve já tem o próprio ambiente e não
- * quer o app mexendo nele. A variável de ambiente existe para conseguir
- * exercitar o fluxo completo fora do empacotado.
+ * A variável de ambiente permite desativá-la em automações que precisam
+ * manter o ambiente isolado.
  *
- * @param {boolean} isPackaged
  * @param {Record<string, string>} [env]
  * @returns {boolean}
  */
-function isAutoInstallEnabled(isPackaged, env = process.env) {
+function isAutoInstallEnabled(env = process.env) {
   if (env.FELIXO_AUTO_INSTALL_CLIS === '0') return false
-  if (env.FELIXO_AUTO_INSTALL_CLIS === '1') return true
-  return Boolean(isPackaged)
+  return true
 }
 
 /**

@@ -189,8 +189,8 @@ caso), e o teste pode passar mesmo quebrado. Depois do diff, rode
 
 ### Atualização automática das CLIs gerenciadas
 
-No app empacotado, `cli-auto-install.cjs` faz uma rodada de verificação alguns
-segundos depois da abertura. O `npm-runtime` consulta cada pacote conhecido com
+Ao abrir o app, `cli-auto-install.cjs` faz uma rodada de verificação alguns
+segundos depois. O `npm-runtime` consulta cada pacote conhecido com
 `npm view --prefer-online <pacote>@latest version dist.integrity --json`, valida
 o semver retornado e compara essa versão com o `package.json` da cópia no
 prefixo gerenciado. Uma CLI instalada fora do app continua intocada.
@@ -200,6 +200,8 @@ Se o registry falhar, a rodada usa a versão/hash do
 instalador consulta novamente o `dist.integrity` da versão exata e recusa uma
 divergência; a tentativa registrada também guarda o alvo para não repetir o
 mesmo erro em toda abertura. Um `latest` novo libera uma nova tentativa.
+Defina `FELIXO_AUTO_INSTALL_CLIS=0` somente para desativar a rodada em uma
+automação isolada.
 
 Os contratos principais ficam cobertos por `node:test`:
 

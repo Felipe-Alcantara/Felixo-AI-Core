@@ -57,7 +57,6 @@ const STARTUP_DELAY_MS = 4000
  * @param {object} options
  * @param {ReturnType<typeof import('../core/app-paths.cjs').getAppPaths>} options.appPaths
  * @param {string} options.appVersion
- * @param {boolean} options.isPackaged
  * @param {Function} [options.installPackage] - Injetável nos testes.
  * @param {Function} [options.detect] - Injetável nos testes.
  * @param {Function} [options.resolveLatestPackage] - Injetável nos testes.
@@ -74,7 +73,6 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
   const {
     appPaths,
     appVersion,
-    isPackaged,
     installPackage = installManagedPackage,
     detect = detectCli,
     resolveLatestPackage = resolveLatestManagedPackage,
@@ -89,13 +87,13 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
   const layout = getManagedCliLayout({ userData: appPaths.userData })
   const cacheDir = getNpmRegistryCacheDir(appPaths.userData)
   const stateFilePath = path.join(appPaths.config, STATE_FILE_NAME)
-  const enabled = isAutoInstallEnabled(isPackaged)
+  const enabled = isAutoInstallEnabled()
 
   let status = createStatus({
     state: enabled ? 'idle' : 'disabled',
     message: enabled
       ? 'Verificando as CLIs de IA.'
-      : 'A instalacao automatica das CLIs roda apenas no app instalado.',
+      : 'A instalacao automatica das CLIs foi desativada neste ambiente.',
   })
   let running = null
   let startupTimer = null

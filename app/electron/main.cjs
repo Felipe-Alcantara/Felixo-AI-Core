@@ -820,7 +820,6 @@ app.whenReady().then(async () => {
   cliAutoInstall = registerCliAutoInstallHandlers(getMainWindow, {
     appPaths,
     appVersion: resolveRuntimeAppVersion(),
-    isPackaged: app.isPackaged,
   })
   registerOrchestratorSettingsIpcHandlers(appPaths, { database: storageDatabase })
   // Tutorial do canvas: estado no SQLite com compare-and-set. A instância de

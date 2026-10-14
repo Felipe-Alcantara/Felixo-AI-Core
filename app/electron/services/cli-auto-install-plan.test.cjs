@@ -243,11 +243,10 @@ describe('cli-auto-install-plan', () => {
     )
   })
 
-  it('runs only in the installed app, unless explicitly forced', () => {
-    assert.equal(isAutoInstallEnabled(true, {}), true)
-    assert.equal(isAutoInstallEnabled(false, {}), false)
-    assert.equal(isAutoInstallEnabled(false, { FELIXO_AUTO_INSTALL_CLIS: '1' }), true)
-    assert.equal(isAutoInstallEnabled(true, { FELIXO_AUTO_INSTALL_CLIS: '0' }), false)
+  it('runs whenever the app opens, unless explicitly disabled', () => {
+    assert.equal(isAutoInstallEnabled({}), true)
+    assert.equal(isAutoInstallEnabled({ FELIXO_AUTO_INSTALL_CLIS: '1' }), true)
+    assert.equal(isAutoInstallEnabled({ FELIXO_AUTO_INSTALL_CLIS: '0' }), false)
   })
 
   it('reports the failures by name, so the message says what to do about', () => {

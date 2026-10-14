@@ -9,7 +9,7 @@
   nos arquivos de docs/ia-archive/.
 -->
 
-Última atualização: [2026-10-13]
+Última atualização: [2026-10-14]
 
 - **Fase:** o canvas é o produto principal (o chat está depreciado). A divisão do `CanvasView`
   (partes 1 a 4) e o bloco Agente na nuvem estão na `main`: PRs #113 a #120 mesclados.
@@ -21,7 +21,7 @@
   `IA.md`, divisão do README e o Agente na nuvem no menu Agente) foram enviados à `main`
   (`e7b7efe..d952f5b`) e o CI de `d952f5b` passou nos 22 jobs, inclusive esse exploratório do Windows.
 - **Em andamento:** nada aberto no código nesta entrega. A atualização automática das CLIs gerenciadas
-  foi implementada no checkout e está pronta para revisão/publicação. O Agente na nuvem foi movido do botão em *Criar* para uma
+  consulta o `latest` em toda abertura, também na execução da fonte; `FELIXO_AUTO_INSTALL_CLIS=0` é o opt-out para automações isoladas. O Agente na nuvem foi movido do botão em *Criar* para uma
   opção do menu Agente (entrada de 2026-10-12 "movido para dentro do menu Agente"): validado no Windows,
   enviado, com o CI verde e publicado na `v0.1.452`. O Release gate não publicou sozinho (o último
   commit do push só mexia em `IA.md`); a release foi disparada à mão para `d952f5b`.
@@ -86,6 +86,27 @@ As CLIs instaladas pelo aplicativo continuavam dependentes de versões fixadas n
 
 - O fallback versionado é deliberadamente usado quando o registry não está acessível; a próxima abertura tenta novamente consultar o `latest`.
 - As CLIs externas encontradas no `PATH` continuam fora do ciclo de instalação/atualização automática.
+
+## 2026-10-14 — Atualização das CLIs em toda abertura do app
+
+### Causa
+
+A rotina que consulta o `latest` só era agendada quando `app.isPackaged` era verdadeiro. A execução a partir da fonte deixava de verificar e atualizar as cópias gerenciadas, contrariando o requisito de checar as CLIs em cada abertura.
+
+### Correção
+
+- `isAutoInstallEnabled` passa a habilitar a rodada por padrão, independente de empacotamento; `FELIXO_AUTO_INSTALL_CLIS=0` permanece como opt-out explícito para automações isoladas.
+- O bootstrap deixa de transportar `app.isPackaged` para esse serviço. A atualização continua limitada ao prefixo privado do app, sem alterar CLIs encontradas no `PATH`.
+- `README.md` e o Guia para Desenvolvedores passaram a documentar o comportamento uniforme e o opt-out.
+
+### Validação
+
+- `node --test electron/services/cli-auto-install-plan.test.cjs electron/services/cli-auto-install.test.cjs electron/services/managed-cli-installer.test.cjs electron/services/managed-cli-health.test.cjs`: 57 testes passaram.
+- `npx eslint electron/main.cjs electron/services/cli-auto-install.cjs electron/services/cli-auto-install-plan.cjs electron/services/cli-auto-install-plan.test.cjs`: saída 0.
+
+### Limitação
+
+- A validação foi unitária e não abriu uma janela Electron nem instalou uma CLI real; os testes injetam o instalador e a consulta ao registry.
 
 ## 2026-10-01 — Canvas: inventário operacional da superfície, gerado de dados e travado por teste
 
