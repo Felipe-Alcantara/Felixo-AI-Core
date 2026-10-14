@@ -20,14 +20,19 @@
   passo de responsividade do terminal e não foi investigado. Os commits seguintes (compactação dos
   `IA.md`, divisão do README e o Agente na nuvem no menu Agente) foram enviados à `main`
   (`e7b7efe..d952f5b`) e o CI de `d952f5b` passou nos 22 jobs, inclusive esse exploratório do Windows.
-- **Em andamento:** nada aberto no código nesta entrega. A atualização automática das CLIs gerenciadas
-  consulta o `latest` em toda abertura, também na execução da fonte; `FELIXO_AUTO_INSTALL_CLIS=0` é o opt-out para automações isoladas. O Agente na nuvem foi movido do botão em *Criar* para uma
+- **Em andamento:** nada aberto no código nesta entrega. Em toda abertura (também na execução da
+  fonte), a rodada das CLIs busca a versão mais nova publicada de Claude, Codex e Gemini, inclusive
+  pré-lançamento, e atualiza a cópia do app e a do npm global; a CLI em uso fica adiada, com nova
+  tentativa a cada 5 minutos, e o rodapé avisa "CLIs atualizadas" (entrada de 2026-10-14 "CLIs: a
+  versão mais nova publicada"). `FELIXO_AUTO_INSTALL_CLIS=0` é o opt-out para automações isoladas. O Agente na nuvem foi movido do botão em *Criar* para uma
   opção do menu Agente (entrada de 2026-10-12 "movido para dentro do menu Agente"): validado no Windows,
   enviado, com o CI verde e publicado na `v0.1.452`. O Release gate não publicou sozinho (o último
   commit do push só mexia em `IA.md`); a release foi disparada à mão para `d952f5b`.
 - **Pendente de conferência manual:** o roteiro do Agente na nuvem em
   `docs/validation/CHECKLIST-AGENTE-NUVEM.md` (cria sessão real e gasta crédito, por isso não roda
-  no CI) e a retomada do terminal (entrada de 2026-10-09).
+  no CI) e a retomada do terminal (entrada de 2026-10-09). A atualização das CLIs e o aviso no app
+  instalado (a validação de 2026-10-14 foi numa instância isolada da fonte; o app do dia a dia deste
+  PC ainda roda a v0.1.458 de dentro de `%TEMP%`).
 - **Próximo passo sugerido:** rodar a etapa 18 do checklist do Agente na nuvem em Linux ou macOS com a
   `v0.1.452` (o CI passou, mas a interface só foi conferida no Windows).
 - **Riscos abertos:** (1) a suíte vitest completa com os 16 workers padrão ficou instável numa
@@ -41,8 +46,10 @@
   (4) Um bloco Codex com yolo marcado nasce "encerrado" por flag repetida quando algo fora do app já
   soma a flag. Há fallback e diagnóstico (entrada de 2026-10-12 "Codex: flag de yolo repetida"), mas a
   causa na máquina de quem relatou não foi confirmada; o evento `terminal-launch:early-exit` no QA Logger diz.
-   (5) A suíte Node completa ainda tem três falhas preexistentes/de ambiente, nas descobertas de sessão e no
-   terminal por conta; os testes direcionados da mudança passam.
+   (5) A suíte Node completa tinha três falhas preexistentes/de ambiente, nas descobertas de sessão e no
+   terminal por conta; em 2026-10-14 ela passou sem falhas no Windows (2738 testes, 8 ignorados).
+  (6) Com agentes Claude abertos, o Claude do npm global não atualiza: os agentes restaurados sobem
+  antes da rodada das CLIs e o Windows não troca um executável em uso. Só atualiza quando todos fecham.
 - **Como compactar de novo:** este arquivo e `docs/projeto/IA.md` crescem com cada sessão. Quando
   passarem de uns 1000 linhas, rode `node app/scripts/archive-ia-md.cjs` (dry-run por padrão); o
   passo a passo está no Guia para Desenvolvedores.
@@ -1211,3 +1218,61 @@ Estado: concluído e validado localmente no Windows.
 **Validação.** `eslint` e `node --check` nos dois scripts. Não rodei o smoke localmente (abriria uma janela do Electron na sessão remota do Felipe); a confirmação fica para o CI deste envio.
 
 **Pendente.** Se o fim da instalação automática com um terminal aberto quebra a dica de link no app real, isso continua sem teste: os dois smokes agora desligam a instalação.
+
+## 2026-10-14 — CLIs: a versão mais nova publicada (inclusive pré-lançamento), também a do sistema, em toda abertura
+
+Registro de Claude — Tasks AI Core (Opus 5.5). Pedido da pessoa: "Toda vez que abre o AI Core ele tem que buscar as versões mais recentes possíveis da CLI e instalar automaticamente". Início às 12:55.
+
+**Contexto e medição.** As duas entradas de CLIs no topo deste arquivo (13/10 e 14/10) já consultavam o `latest` em toda abertura. Um diagnóstico só de leitura no PC mostrou por que, mesmo assim, os agentes não abriam na versão mais nova:
+
+- **Codex nunca atualizava.** A cópia gerenciada guarda o pacote da plataforma (`@openai/codex-win32-x64`) aninhado em `node_modules/@openai/codex/node_modules/`, mas `verifyManagedCliInstallation` só procurava no caminho achatado. A verificação dizia "ausente", a rodada tratava a CLI como externa e não a tocava.
+- **Claude rodava a cópia do sistema.** No terminal do agente, o npm global vem antes da cópia gerenciada no `PATH`; a cópia do sistema nunca era atualizada pelo app.
+- **Só o canal `latest` contava.** Em 14/10 havia versões mais novas fora dele: Claude `next` 2.1.300 (o `latest` era 2.1.299), Codex `alpha` 0.163.0-alpha.11 (o `latest` era 0.162.1) e Gemini `nightly`/`preview` 0.65.0 (o `latest` era 0.64.0).
+
+**Decisões da pessoa (Trilha B, pela pergunta interativa).** (1) Atualizar também a instalação do sistema (npm global), não só a cópia do app. (2) Aviso discreto com o que foi atualizado. (3) Incluir pré-lançamento: a versão mais nova de todas, inclusive alpha, beta, next e nightly.
+
+**O que mudou (seis commits, enviados juntos).**
+
+- `71125a3` — `managed-cli-health.cjs`: o pacote nativo é procurado primeiro dentro do pacote principal da CLI e depois no caminho achatado. Aninhado dentro de outro pacote não conta.
+- `d576282` e `6bfb911` — `managed-cli-installer.cjs`: a consulta passou a ser `npm view --prefer-online <pacote> dist-tags time --json`, com limite de saída de 4 MB (o mapa de datas do Codex passa de 300 KB). `chooseNewestPublishedVersion` pega a maior versão principal (`major.minor.patch`) entre os canais e, dentro dela, a publicada por último; sem datas, decide o semver. Versões de binário de plataforma (`-win32-x64` e afins) ficam de fora. Uma segunda consulta traz o `dist.integrity` exato da versão escolhida, e o fallback versionado do manifesto continua valendo quando o registry falha.
+- `6bfb911` — `cli-auto-install-plan.cjs`: `isTargetNewer` troca a instalada sempre que ela é diferente do alvo, menos quando a versão principal dela é maior (não rebaixa). Dentro da mesma versão principal vale a ordem de publicação: a nightly de 14/10 do Gemini vem depois da preview de 13/10, embora "preview" ordene acima de "nightly" no semver.
+- `e78a2b8` — `system-cli-update.cjs` (novo) e a rodada em `cli-auto-install.cjs`:
+  - Acha o `npm root --global` do sistema, com `npm_config_prefix` e afins removidos do ambiente para não cair no prefixo do app, e lê a versão instalada.
+  - Roda `npm install --global <pacote>@<versão>` só com alvo confirmado pelo registry e confere a versão nova no disco.
+  - Uma CLI em uso fica adiada, seja a do sistema ou a cópia do app: o executável dela está na lista de processos (`Get-CimInstance Win32_Process`, só no Windows). `EBUSY`/`EPERM` na saída do npm também viram adiamento, não falha.
+  - Quando algo fica adiado, a rodada tenta de novo a cada 5 minutos (`DEFERRED_RETRY_MINUTES`).
+  - O estado guarda as tentativas do sistema em `sistema:<id>`, separadas das da cópia do app.
+- `dd5d5d5` — `cli-setup-presentation.ts` e `vite-env.d.ts`: o rodapé mostra "CLIs atualizadas" e a descrição lista o que mudou, por exemplo "Codex CLI 0.150.1 → 0.163.0-alpha.11 · Claude Code CLI do sistema 2.1.287 → 2.1.300".
+- `8f18131` — README, Guia do Usuário e Guia do Desenvolvedor.
+
+**Evidência (Windows 11).**
+
+- TDD: o teste de cada regra nova foi escrito antes e falhou; os dados de canal nos testes têm a forma real do registry (`CANAIS_CLAUDE`, `CANAIS_GEMINI` com as datas reais, `CANAIS_CODEX`).
+- Mutações: quatro na rodada (M1 a M4), todas mortas. A da regra de data só morreu depois do teste de independência de ordem (antes, o resultado dependia da ordem dos canais na entrada).
+- Os testes da rodada usam um sistema falso (`SEM_INSTALACAO_DO_SISTEMA`) que lança erro se alguém tentar instalar: nenhum teste toca no npm global real.
+- Gates: `node --test` completo com 2738 testes (2730 passaram, 0 falhas, 8 ignorados) e `npm run lint` com saída 0, depois do último commit. `npm run typecheck` com saída 0 e `vitest` com 3179 testes passando foram rodados antes de `6bfb911`, que só mexeu em `app/electron`.
+- **Teste real no PC (pedido da pessoa).** Instância isolada da fonte (`felixo devtools launch`), com as pastas dos perfis reais fora do `PATH`. A rodada:
+  - instalou a Gemini na cópia do app, em 0.65.0-nightly.20261014;
+  - atualizou o Codex do npm global de 0.160.0 para 0.163.0-alpha.11 (mudança real no PC);
+  - adiou o Claude do npm global, em uso por esta sessão do Claude Code.
+
+  No terminal do AI Core: `claude --version` 2.1.287 (npm global), `codex --version` codex-cli 0.163.0-alpha.11 (npm global) e `gemini --version` 0.65.0-nightly.20261014 (cópia do perfil isolado). O aviso "CLIs atualizadas" apareceu no rodapé.
+- **Comparação com a internet** (registry do npm e releases do GitHub, 14/10). Codex: a mais nova é 0.163.0-alpha.11 (a estável é 0.162.1). Gemini: v0.65.0-nightly.20261014 (preview 0.65.0-preview.0, estável 0.64.0). Claude: `next` 2.1.300 (`latest` 2.1.299, `stable` 2.1.287). Codex e Gemini batem com a mais nova. O Claude não bate porque estava em uso.
+- O teste real achou um defeito da primeira versão: ela escolhia a preview do Gemini (pelo semver) em vez da nightly, publicada depois. A regra da data de `6bfb911` corrigiu.
+
+**Não validado e limitações.**
+
+- **Claude com agentes abertos.** Os agentes restaurados sobem antes da rodada (que começa 4 s depois da abertura), então o Claude do sistema quase sempre está em uso e só atualiza quando todos os agentes Claude fecham; a nova tentativa a cada 5 minutos pega esse momento. Caminhos possíveis: atualizar antes de restaurar os terminais, ou instalar lado a lado.
+- Instalações fora do npm global não são atualizadas: o instalador nativo do Claude, Homebrew, pnpm e Volta.
+- Linux e macOS só foram cobertos pelos testes e pelo CI. Fora do Windows a lista de processos fica vazia e o adiamento depende do `EBUSY`/`EPERM` do npm.
+- O app real deste PC roda de uma pasta `release-smoke` dentro da pasta temporária do sistema (v0.1.458); a cópia gerenciada da Gemini dele (0.64.0) só atualiza quando o app real abrir numa versão com esta mudança.
+- Achado de passagem, fora do escopo: `felixo context read` com artefato ausente junta duas mensagens (`app/electron/cli/context-command.cjs:267`), que repetem "Artefato de contexto não encontrado" com instruções sobrepostas.
+
+**Envio, CI e release.**
+
+- **Envio:** os seis commits foram para a `main` por push direto às 13:36 (`676abb8..6bfb911`). A regra de proteção foi contornada pela permissão de admin, como nos envios anteriores.
+- **CI** [38599315363](https://github.com/Felipe-Alcantara/Felixo-AI-Core/actions/runs/38599315363): os 22 jobs passaram, inclusive `Validate` nos quatro sistemas, às 13:53.
+- **Release gate** [38601808702](https://github.com/Felipe-Alcantara/Felixo-AI-Core/actions/runs/38601808702): "Commit de base avaliado: 676abb8…" e "Release relevante: true". O `release-base.sh` comparou o intervalo inteiro do envio, não só o último commit.
+- **Release** [38601843878](https://github.com/Felipe-Alcantara/Felixo-AI-Core/actions/runs/38601843878): `v0.1.460` publicada às 14:13 como versão principal ("Latest"), com os instaladores de Windows, macOS e Ubuntu. O "Smoke exploratório (Windows)", que é `continue-on-error`, também passou às 14:15; a tag aponta para `6bfb911`.
+
+Estado: concluído, publicado na `v0.1.460` e validado no Windows numa instância isolada da fonte. A conferência no app instalado ficou como task no Notion.
