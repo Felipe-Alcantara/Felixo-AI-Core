@@ -229,8 +229,16 @@ type CliSetupStatus = {
   clis?: Array<{
     id: string
     name: string
-    state: 'present' | 'pending' | 'installing' | 'installed' | 'failed' | 'skipped'
+    state: 'present' | 'pending' | 'installing' | 'installed' | 'failed' | 'skipped' | 'deferred'
     message?: string
+  }>
+  /** O que mudou de versão na rodada, na cópia do app ou no npm global do sistema. */
+  updates?: Array<{
+    id: string
+    name: string
+    scope: 'app' | 'sistema'
+    from: string | null
+    to: string
   }>
 }
 

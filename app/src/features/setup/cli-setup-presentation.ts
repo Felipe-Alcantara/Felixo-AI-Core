@@ -23,6 +23,7 @@ export type CliSetupItemState =
   | 'installed'
   | 'failed'
   | 'skipped'
+  | 'deferred'
 
 export type CliSetupItem = {
   id: string
@@ -31,11 +32,22 @@ export type CliSetupItem = {
   message?: string
 }
 
+/** Uma CLI que mudou de versão na rodada: na cópia do app ou na instalação do sistema. */
+export type CliSetupUpdate = {
+  id: string
+  name: string
+  scope: 'app' | 'sistema'
+  /** `null` quando a CLI não existia antes. */
+  from: string | null
+  to: string
+}
+
 export type CliSetupStatus = {
   state: CliSetupState
   message: string
   updatedAt: string
   clis?: CliSetupItem[]
+  updates?: CliSetupUpdate[]
 }
 
 export type CliSetupPresentation = {
@@ -106,17 +118,30 @@ export function presentCliSetupStatus(
       }
     }
 
+    // Atualização é notícia boa e curta: o aviso diz o que mudou de versão e
+    // some sozinho, como qualquer resultado positivo.
     case 'done':
-      return {
-        showIndicator: true,
-        showToast: true,
-        indicatorLabel: 'CLIs prontas',
-        toastTitle: 'CLIs de IA prontas',
-        toastDescription: status.message,
-        canRetry: false,
-        progress: 100,
-        tone: 'success',
-      }
+      return status.updates?.length
+        ? {
+            showIndicator: true,
+            showToast: true,
+            indicatorLabel: 'CLIs atualizadas',
+            toastTitle: 'CLIs de IA atualizadas',
+            toastDescription: describeCliUpdates(status.updates),
+            canRetry: false,
+            progress: 100,
+            tone: 'success',
+          }
+        : {
+            showIndicator: true,
+            showToast: true,
+            indicatorLabel: 'CLIs prontas',
+            toastTitle: 'CLIs de IA prontas',
+            toastDescription: status.message,
+            canRetry: false,
+            progress: 100,
+            tone: 'success',
+          }
 
     // Sem CLI o app não tem o que orquestrar: aqui o aviso flutuante se
     // justifica, e com ele a nova tentativa — a automática não volta sozinha
@@ -136,6 +161,20 @@ export function presentCliSetupStatus(
     default:
       return HIDDEN
   }
+}
+
+/**
+ * Uma linha por CLI, na ordem da rodada: `Codex CLI 0.150.1 → 0.163.0-alpha.11`.
+ * A instalação do sistema leva "do sistema", para a pessoa saber qual das duas
+ * cópias mudou.
+ */
+export function describeCliUpdates(updates: CliSetupUpdate[]): string {
+  return updates
+    .map((update) => {
+      const name = update.scope === 'sistema' ? `${update.name} do sistema` : update.name
+      return update.from ? `${name} ${update.from} → ${update.to}` : `${name} instalada (${update.to})`
+    })
+    .join(' · ')
 }
 
 /**

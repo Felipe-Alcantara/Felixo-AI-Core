@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   cliSetupNoticeKey,
+  describeCliUpdates,
   presentCliSetupStatus,
   type CliSetupStatus,
 } from './cli-setup-presentation'
@@ -79,5 +80,42 @@ describe('cli-setup-presentation', () => {
 
     expect(cliSetupNoticeKey(running)).toBe('em-andamento')
     expect(cliSetupNoticeKey(failed)).not.toBe(cliSetupNoticeKey(running))
+  })
+})
+
+describe('aviso discreto de atualização das CLIs', () => {
+  it('lista o que mudou de versão, separando a cópia do app da instalação do sistema', () => {
+    const presentation = presentCliSetupStatus(
+      createStatus({
+        state: 'done',
+        message: 'Codex CLI foi instalada e ja esta disponivel.',
+        updates: [
+          { id: 'codex', name: 'Codex CLI', scope: 'app', from: '0.150.1', to: '0.163.0-alpha.11' },
+          { id: 'claude', name: 'Claude Code CLI', scope: 'sistema', from: '2.1.287', to: '2.1.300' },
+        ],
+      }),
+    )
+
+    expect(presentation.showToast).toBe(true)
+    expect(presentation.tone).toBe('success')
+    expect(presentation.toastTitle).toBe('CLIs de IA atualizadas')
+    expect(presentation.indicatorLabel).toBe('CLIs atualizadas')
+    expect(presentation.toastDescription).toBe(
+      'Codex CLI 0.150.1 → 0.163.0-alpha.11 · Claude Code CLI do sistema 2.1.287 → 2.1.300',
+    )
+    expect(presentation.canRetry).toBe(false)
+  })
+
+  it('uma CLI que não existia aparece como instalada, sem seta', () => {
+    expect(
+      describeCliUpdates([{ id: 'gemini', name: 'Gemini CLI', scope: 'app', from: null, to: '0.65.0-preview.0' }]),
+    ).toBe('Gemini CLI instalada (0.65.0-preview.0)')
+  })
+
+  it('sem atualização o fim continua sendo o aviso de CLIs prontas', () => {
+    const presentation = presentCliSetupStatus(createStatus({ state: 'done', message: 'pronto', updates: [] }))
+
+    expect(presentation.toastTitle).toBe('CLIs de IA prontas')
+    expect(presentation.toastDescription).toBe('pronto')
   })
 })
