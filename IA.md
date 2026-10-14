@@ -1185,3 +1185,17 @@ O que o processo não seguiu, para quem retomar: os guias do padrão de qualidad
 **Não validado.** Não abri o Electron com contas reais nesta rodada; portanto, a conferência visual manual não foi feita. O teste de renderização estática confirma o identificador e as classes responsivas esperadas. O aviso de chunks grandes do Vite permaneceu igual ao baseline.
 
 Estado: concluído e validado localmente no Windows; publicação externa não foi feita nesta sessão.
+
+## 2026-10-14 — Nome da conta ganha linha própria no resumo de Limites e uso
+
+**Relato.** Depois da correção anterior (`cc078e9`), o Felipe mandou o print do painel **Limites e uso** com o Codex: os e-mails das contas continuavam ilegíveis, agora quebrados letra por letra em pedaços de seis ou sete caracteres, e cada conta ocupava cinco ou seis linhas.
+
+**Causa.** A correção anterior trocou `truncate` por quebra de palavra, mas não mexeu na largura da coluna. Com `table-fixed`, plano (`w-12`), uma coluna `w-[4.5rem]` por janela e status (`w-[5.25rem]`) ficavam com largura fixa; o Codex publica quatro janelas de conta, então sobravam poucos pixels para a coluna **Conta** no painel estreito. A anotação daquela rodada já registrava que a conferência visual não tinha sido feita.
+
+**Correção.** Em `AgentUsageProviderSummary.tsx`, cada conta virou um `<tbody>`: a primeira linha é o identificador (e o aviso de bloqueio) em `th scope="rowgroup"` com `colSpan` cobrindo todas as colunas; a segunda traz plano, janelas e status. A coluna **Conta** saiu do cabeçalho e as janelas deixaram de ter largura fixa, dividindo o que sobra entre plano e status. O leitor de tela continua associando cada número à conta pelo cabeçalho do grupo. Dados, backend e contrato não mudaram.
+
+**Evidência.** O teste de regressão foi reescrito antes da correção e falhou (sem `rowgroup`/`colSpan`, coluna **Conta** presente, um único `<tbody>`); depois passou. Gates: `npm run typecheck`, `npm run lint` e `npx vite build` com exit 0; `npx vitest run --testTimeout=120000 --maxWorkers=4`: 205 arquivos, 3.176 testes aprovados e 3 ignorados. Conferência visual: renderizei a tabela antiga e a nova com as sete contas do print e o CSS do build, num screenshot do Edge headless a 400 px e 330 px. A antiga reproduziu o print; na nova todos os e-mails cabem numa linha nas duas larguras; a 330 px os percentuais quebram em "77 % / livre", sem sobrepor colunas.
+
+**Não validado.** Não abri o Electron com as contas reais; a prévia usou o CSS do build fora do app. Fica registrado, sem mudança nesta rodada, que o Codex publica duas janelas com o mesmo rótulo ("Últimas 5 h" e "Últimos 7 dias" aparecem duas vezes e cada conta preenche só um dos pares, deixando o outro com traços), o que confunde a leitura das colunas.
+
+Estado: concluído e validado localmente no Windows.
