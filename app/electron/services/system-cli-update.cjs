@@ -24,8 +24,11 @@ const { INSTALL_TIMEOUT_MS, LATEST_LOOKUP_TIMEOUT_MS, runCommand } = require('./
 const MANAGED_NPM_KEYS = ['npm_config_prefix', 'npm_config_global', 'NPM_CONFIG_PREFIX', 'ELECTRON_RUN_AS_NODE']
 
 /**
- * No Windows um executável aberto não pode ser substituído. Falhas assim são
- * passageiras: a CLI está em uso por um agente, e a próxima tentativa resolve.
+ * Rede de segurança para arquivo travado. Uma CLI aberta não impede a troca: o
+ * npm renomeia a pasta antiga e instala a nova ao lado, com o executável antigo
+ * ainda rodando (medido no Windows em 14/10/2026 com o Claude Code real). Se
+ * mesmo assim algum arquivo estiver preso, a falha é passageira e a próxima
+ * tentativa resolve.
  */
 const BUSY_OUTPUT = /\b(?:EBUSY|EPERM)\b/
 
@@ -103,57 +106,6 @@ function readSystemNpmInstall({ globalRoot, npmPackage, fileSystem = fs }) {
 }
 
 /**
- * Os executáveis em execução, para saber se uma CLI está aberta por um agente.
- *
- * Só o Windows trava o executável em uso; no Linux e no macOS o arquivo pode ser
- * trocado com o processo rodando, então a lista vazia basta. `null` quando a
- * lista não pôde ser lida: quem chama segue e trata a falha de arquivo em uso
- * se ela acontecer.
- *
- * @param {object} [options]
- * @param {Function} [options.spawn]
- * @param {string} [options.platformName]
- * @returns {Promise<string[] | null>}
- */
-async function listRunningExecutables({ spawn = crossSpawn, platformName = process.platform } = {}) {
-  if (platformName !== 'win32') return []
-  const result = await runCommand({
-    command: 'powershell.exe',
-    args: [
-      '-NoProfile',
-      '-NonInteractive',
-      '-Command',
-      'Get-CimInstance Win32_Process | ForEach-Object { $_.ExecutablePath }',
-    ],
-    env: process.env,
-    cwd: process.cwd(),
-    spawn,
-    timeoutMs: LATEST_LOOKUP_TIMEOUT_MS,
-    platformName,
-    successMessage: 'Processos listados.',
-    failureMessage: 'Nao foi possivel listar os processos.',
-  })
-  if (!result.ok) return null
-  return String(result.output ?? '')
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-}
-
-/**
- * Algum processo em execução roda um executável de dentro desta instalação?
- *
- * @param {string | null | undefined} packageDir
- * @param {string[] | null} executables
- * @param {string} [platformName]
- * @returns {boolean}
- */
-function isInstallInUse(packageDir, executables, platformName = process.platform) {
-  if (!packageDir || !Array.isArray(executables)) return false
-  return executables.some((executable) => isInside(executable, packageDir, platformName))
-}
-
-/**
  * Instala uma versão exata no npm global do sistema.
  *
  * `--prefer-online`: a versão acabou de vir do registry, e a lista de versões
@@ -211,8 +163,6 @@ function safeExists(fileSystem, candidate) {
 module.exports = {
   createSystemNpmEnv,
   installSystemNpmPackage,
-  isInstallInUse,
-  listRunningExecutables,
   readSystemNpmInstall,
   resolveSystemNpmGlobalRoot,
 }

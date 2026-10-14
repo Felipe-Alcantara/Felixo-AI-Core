@@ -5,13 +5,13 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
-const { EventEmitter } = require('node:events')
+const { EventEmitter, once } = require('node:events')
+const { spawn: spawnProcess } = require('node:child_process')
+const crossSpawn = require('cross-spawn')
 
 const {
   createSystemNpmEnv,
   installSystemNpmPackage,
-  isInstallInUse,
-  listRunningExecutables,
   readSystemNpmInstall,
   resolveSystemNpmGlobalRoot,
 } = require('./system-cli-update.cjs')
@@ -104,32 +104,61 @@ test('lê a versão instalada no npm global, e só quando o pacote está lá', (
   }
 })
 
-test('reconhece a instalação em uso pelo executável aberto, sem diferenciar maiúsculas no Windows', () => {
-  const packageDir = 'C:\\Users\\Pessoa\\AppData\\Roaming\\npm\\node_modules\\@anthropic-ai\\claude-code'
-  const executables = [
-    'C:\\Windows\\explorer.exe',
-    'c:\\users\\pessoa\\appdata\\roaming\\npm\\node_modules\\@anthropic-ai\\claude-code\\bin\\claude.exe',
-  ]
+// Medido em 14/10/2026 com o Claude Code real: o `claude.exe --chrome-native-host`
+// que o navegador mantém aberto não impede a troca. O npm renomeia a pasta antiga
+// e instala a nova ao lado, com o executável antigo rodando. Por isso a rodada não
+// espera a CLI fechar; este teste guarda essa premissa com um npm de verdade.
+test(
+  'no Windows, o npm do sistema atualiza o pacote com o executável dele rodando',
+  { skip: process.platform !== 'win32' && 'só o Windows trava executável aberto', timeout: 120000 },
+  async () => {
+    const base = tempDir('felixo-npm-trava-')
+    const prefix = path.join(base, 'prefixo')
+    // Prefixo e cache do teste: o npm global de quem roda a suíte não é tocado.
+    const env = { ...createSystemNpmEnv(), npm_config_prefix: prefix, npm_config_cache: path.join(base, 'cache') }
+    const tarballs = ['1.0.0', '1.0.1'].map((version) => {
+      const dir = path.join(base, `pacote-${version}`)
+      fs.mkdirSync(path.join(dir, 'bin'), { recursive: true })
+      fs.copyFileSync(path.join(process.env.SystemRoot, 'System32', 'PING.EXE'), path.join(dir, 'bin', 'ferramenta.exe'))
+      fs.writeFileSync(
+        path.join(dir, 'package.json'),
+        JSON.stringify({ name: 'felixo-teste-trava', version, bin: { ferramenta: 'bin/ferramenta.exe' } }),
+      )
+      const packed = crossSpawn.sync('npm', ['pack', dir, '--pack-destination', base, '--loglevel=error'], {
+        cwd: base,
+        env,
+        encoding: 'utf8',
+      })
+      assert.equal(packed.status, 0, packed.stderr)
+      return path.join(base, `felixo-teste-trava-${version}.tgz`)
+    })
+    const globalRoot = path.join(prefix, 'node_modules')
+    let aberto = null
 
-  assert.equal(isInstallInUse(packageDir, executables, 'win32'), true)
-  assert.equal(isInstallInUse(`${packageDir}-outro`, executables, 'win32'), false)
-  assert.equal(isInstallInUse(packageDir, null, 'win32'), false)
-})
+    try {
+      const primeira = await installSystemNpmPackage({ npmPackage: tarballs[0], cwd: base, env })
+      assert.equal(primeira.ok, true, primeira.output)
 
-test('fora do Windows não lista processos: trocar o arquivo com a CLI aberta é seguro', async () => {
-  let spawned = false
-  const result = await listRunningExecutables({ platformName: 'linux', spawn: () => { spawned = true } })
-  assert.deepEqual(result, [])
-  assert.equal(spawned, false)
-})
+      aberto = spawnProcess(path.join(globalRoot, 'felixo-teste-trava', 'bin', 'ferramenta.exe'), ['-n', '60', '127.0.0.1'], {
+        stdio: 'ignore',
+        windowsHide: true,
+      })
+      await once(aberto, 'spawn')
 
-test('no Windows lê os executáveis em execução', async () => {
-  const result = await listRunningExecutables({
-    platformName: 'win32',
-    spawn: () => fakeChild({ stdout: 'C:\\a.exe\r\n\r\nC:\\b\\c.exe\r\n' }),
-  })
-  assert.deepEqual(result, ['C:\\a.exe', 'C:\\b\\c.exe'])
-})
+      const segunda = await installSystemNpmPackage({ npmPackage: tarballs[1], cwd: base, env })
+
+      assert.deepEqual({ ok: segunda.ok, busy: segunda.busy }, { ok: true, busy: false }, segunda.output)
+      assert.equal(readSystemNpmInstall({ globalRoot, npmPackage: 'felixo-teste-trava' }).version, '1.0.1')
+      assert.equal(aberto.exitCode, null, 'o executável antigo deveria continuar rodando')
+    } finally {
+      if (aberto && aberto.exitCode === null) {
+        aberto.kill()
+        await once(aberto, 'exit')
+      }
+      fs.rmSync(base, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
+    }
+  },
+)
 
 test('instala a versão exata no npm global e marca como passageira a falha de arquivo em uso', async () => {
   const calls = []

@@ -45,8 +45,6 @@ const {
 } = require('./cli-auto-install-plan.cjs')
 const {
   installSystemNpmPackage,
-  isInstallInUse,
-  listRunningExecutables,
   readSystemNpmInstall,
   resolveSystemNpmGlobalRoot,
 } = require('./system-cli-update.cjs')
@@ -60,9 +58,13 @@ const {
 
 const STATE_FILE_NAME = 'cli-auto-install.json'
 const STARTUP_DELAY_MS = 4000
-/** Intervalo da nova tentativa enquanto alguma CLI estiver em uso por um agente. */
+/** Intervalo da nova tentativa quando o npm encontrou algum arquivo da CLI travado. */
 const DEFERRED_RETRY_MINUTES = 5
-/** Saída do npm quando um arquivo da CLI está aberto (no Windows, o executável em uso). */
+/**
+ * Saída do npm quando um arquivo da CLI ficou travado. Uma CLI aberta não causa
+ * isso: o npm renomeia a pasta antiga e instala a nova com o executável antigo
+ * ainda rodando (medido no Windows em 14/10/2026). Fica como rede de segurança.
+ */
 const BUSY_OUTPUT = /\b(?:EBUSY|EPERM)\b/
 
 /**
@@ -95,7 +97,6 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
     fileSystem = fs,
     describePath = describeCliPath,
     userName = readUserName(),
-    listExecutables = listRunningExecutables,
     systemCli = {
       resolveGlobalRoot: resolveSystemNpmGlobalRoot,
       readInstall: readSystemNpmInstall,
@@ -186,9 +187,6 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
       layout,
       platformName,
     })
-    // No Windows o executável aberto por um agente não pode ser trocado. A lista
-    // é lida uma vez por rodada; fora do Windows ela vem vazia.
-    const executables = await listExecutables({ platformName })
     const managedVersions = catalog.map((cli) =>
       getManagedCliPackageVersion({
         providerId: cli.id,
@@ -210,9 +208,6 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
       managedVersions,
       latestVersions: catalog.map(
         (cli) => latestPackages.find((item) => item.id === cli.id)?.version ?? null,
-      ),
-      managedInUse: catalog.map((cli) =>
-        isInstallInUse(getManagedPackageDir(layout, cli), executables, platformName),
       ),
       previousState: readState(stateFilePath),
       appVersion,
@@ -271,7 +266,7 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
       if (!result.ok && BUSY_OUTPUT.test(String(result.output ?? ''))) {
         updateCliProgress(progress, cli.id, {
           state: 'deferred',
-          message: `Atualizacao adiada: a ${cli.name} esta em uso por um agente aberto.`,
+          message: `Atualizacao adiada: o npm encontrou arquivos da ${cli.name} travados.`,
         })
         continue
       }
@@ -308,7 +303,6 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
     const systemResults = await updateSystemInstalls({
       catalog,
       latestPackages,
-      executables,
       attempts,
       reason,
     })
@@ -365,7 +359,7 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
       ...(summary.state === 'idle' && updates.length > 0 ? { state: 'done' } : {}),
       message:
         deferred.length > 0
-          ? `${summary.message} Em uso por um agente aberto: ${deferred.join(', ')}; nova tentativa em ${DEFERRED_RETRY_MINUTES} min.`
+          ? `${summary.message} Arquivos travados: ${deferred.join(', ')}; nova tentativa em ${DEFERRED_RETRY_MINUTES} min.`
           : summary.message,
       clis: progress,
       updates,
@@ -378,7 +372,7 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
    * do app. Só com alvo confirmado no registry; a decisão fica em
    * `planSystemUpdates` e o que pode dar errado vira resultado, nunca exceção.
    */
-  async function updateSystemInstalls({ catalog, latestPackages, executables, attempts, reason }) {
+  async function updateSystemInstalls({ catalog, latestPackages, attempts, reason }) {
     let globalRoot = null
     try {
       globalRoot = await systemCli.resolveGlobalRoot({ managedRoot: layout.root, platformName, fileSystem })
@@ -398,7 +392,6 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
         const latestPackage = latestPackages.find((item) => item.id === cli.id)
         return latestPackage?.source === 'registry' ? latestPackage.version : null
       }),
-      inUse: installs.map((install) => isInstallInUse(install?.packageDir, executables, platformName)),
       previousState: attempts,
       appVersion,
       reason,
@@ -424,7 +417,7 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
         result = { ok: false, busy: false, message: getErrorMessage(error, 'Falha ao chamar o npm do sistema.'), output: '' }
       }
       if (!result.ok && result.busy) {
-        results.push({ ...base, action: 'deferred', message: 'Em uso por um agente aberto.' })
+        results.push({ ...base, action: 'deferred', message: 'O npm encontrou arquivos travados.' })
         continue
       }
 
@@ -522,12 +515,6 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
       clearTimeout(retryTimer)
     },
   }
-}
-
-/** Pasta do pacote principal da cópia do app (onde o executável aberto mora). */
-function getManagedPackageDir(layout, cli) {
-  const entry = getManagedCliManifestEntry(cli.id)
-  return entry ? path.join(layout.root, 'node_modules', ...entry.npmPackage.split('/')) : null
 }
 
 function updateCliProgress(progress, id, patch) {

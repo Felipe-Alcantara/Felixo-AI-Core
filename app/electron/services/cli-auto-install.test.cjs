@@ -91,9 +91,8 @@ function createRunner(
     arch = process.arch,
     describePath,
     userName,
-    // Por padrão nenhum teste toca no npm global nem lista processos da máquina
-    // que roda a suíte: sem isto, a fase do sistema atualizaria CLIs de verdade.
-    listExecutables = async () => [],
+    // Por padrão nenhum teste toca no npm global da máquina que roda a suíte:
+    // sem isto, a fase do sistema atualizaria CLIs de verdade.
     systemCli = SEM_INSTALACAO_DO_SISTEMA,
   },
 ) {
@@ -106,7 +105,6 @@ function createRunner(
     detect,
     platformName,
     arch,
-    listExecutables,
     systemCli,
     ...(verifyInstallation ? { verifyInstallation } : {}),
     ...(describePath ? { describePath } : {}),
@@ -654,29 +652,6 @@ test('arquivo em uso no npm global vira adiamento com nova tentativa, sem regist
     assert.match(status.message, /nova tentativa em 5 min/)
     const state = JSON.parse(fs.readFileSync(path.join(profile.userData, 'config', 'cli-auto-install.json'), 'utf8'))
     assert.equal(state['sistema:claude'], undefined)
-  } finally {
-    profile.cleanup()
-  }
-})
-
-test('adia a atualização da cópia do app aberta por um agente, sem instalar por cima', async () => {
-  const codex = getManagedCliManifestEntry('codex')
-  const profile = createProfile({ managedClis: ['codex'], managedVersions: { codex: '0.1.0' } })
-  const layout = getManagedCliLayout({ userData: profile.userData })
-  const executavelAberto = path.join(layout.root, 'node_modules', ...codex.npmPackage.split('/'), 'bin', 'codex.exe')
-
-  try {
-    const { service, installed } = createRunner(profile, {
-      detect: detectedOnly(['codex', 'claude', 'gemini']),
-      verifyInstallation: () => ({ ok: true }),
-      listExecutables: async () => [executavelAberto],
-    })
-    const status = await service.run('startup')
-    service.stop()
-
-    assert.deepEqual(installed, [])
-    assert.equal(status.clis.find((cli) => cli.id === 'codex').state, 'deferred')
-    assert.match(status.message, /nova tentativa em 5 min/)
   } finally {
     profile.cleanup()
   }

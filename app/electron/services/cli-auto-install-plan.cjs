@@ -49,7 +49,6 @@ function getAutoInstallableClis(catalog) {
  * @param {Array<boolean>} [options.managedPresent] - Na ordem do catálogo.
  * @param {Array<string | null>} [options.managedVersions] - Versões dos pacotes gerenciados.
  * @param {Array<string | null>} [options.latestVersions] - Versões latest resolvidas no registry.
- * @param {Array<boolean>} [options.managedInUse] - Cópia em uso por um processo aberto (Windows trava o executável).
  * @param {Record<string, { version?: string, ok?: boolean }>} [options.previousState]
  * @param {string} options.appVersion
  * @param {'startup' | 'manual'} [options.reason]
@@ -61,7 +60,6 @@ function planAutoInstall({
   managedPresent = [],
   managedVersions = [],
   latestVersions = [],
-  managedInUse = [],
   previousState = {},
   appVersion,
   reason = 'startup',
@@ -80,16 +78,6 @@ function planAutoInstall({
       }) &&
       (forced || !hasFailedForVersion(previousState, cli.id, appVersion, latestVersion))
     ) {
-      // No Windows o executável aberto por um agente não pode ser substituído:
-      // instalar agora falharia ou deixaria a cópia pela metade. A rodada tenta
-      // de novo sozinha depois (ver `cli-auto-install`).
-      if (managedInUse[index] === true) {
-        return createCliProgress(
-          cli,
-          'deferred',
-          `Atualizacao adiada: a ${cli.name} esta em uso por um agente aberto (${managedVersion ?? 'versao desconhecida'} -> ${latestVersion}).`,
-        )
-      }
       pending.push(cli)
       return createCliProgress(
         cli,
@@ -304,17 +292,15 @@ function summarizeAutoInstall(progress) {
  * @param {Array<{ id: string, name: string }>} options.catalog
  * @param {Array<{ version: string | null } | null>} options.systemInstalls - Na ordem do catálogo; `null` quando não há instalação pelo npm global.
  * @param {Array<string | null>} options.targetVersions - Alvo confirmado no registry, na ordem do catálogo.
- * @param {Array<boolean>} [options.inUse]
  * @param {Record<string, object>} [options.previousState]
  * @param {string} options.appVersion
  * @param {'startup' | 'manual' | 'retry'} [options.reason]
- * @returns {Array<{ cli: object, action: 'update' | 'deferred' | 'current' | 'skipped', from: string | null, to: string, message?: string }>}
+ * @returns {Array<{ cli: object, action: 'update' | 'current' | 'skipped', from: string | null, to: string, message?: string }>}
  */
 function planSystemUpdates({
   catalog,
   systemInstalls,
   targetVersions,
-  inUse = [],
   previousState = {},
   appVersion,
   reason = 'startup',
@@ -337,7 +323,9 @@ function planSystemUpdates({
       return
     }
 
-    plan.push({ cli, action: inUse[index] === true ? 'deferred' : 'update', from, to })
+    // Uma CLI aberta não é motivo para esperar: o npm troca o pacote com o
+    // executável antigo rodando (ver `system-cli-update`).
+    plan.push({ cli, action: 'update', from, to })
   })
   return plan
 }

@@ -277,38 +277,6 @@ describe('cli-auto-install-plan', () => {
   })
 })
 
-describe('cópia do app em uso', () => {
-  it('adia a atualização da cópia do app que um agente está usando, em vez de quebrá-la', () => {
-    const plan = planAutoInstall({
-      catalog: CATALOG,
-      detections: detections(true, true, true),
-      managedPresent: managed(true, true, true),
-      managedVersions: ['0.150.1', '2.1.300', '0.65.0-preview.0'],
-      latestVersions: ['0.163.0-alpha.11', '2.1.300', '0.65.0-preview.0'],
-      managedInUse: [true, false, false],
-      appVersion: '0.1.460',
-    })
-
-    assert.deepEqual(plan.pending, [])
-    assert.equal(plan.progress[0].state, 'deferred')
-    assert.match(plan.progress[0].message, /em uso/)
-  })
-
-  it('cópia ausente instala mesmo que algo com o mesmo nome esteja rodando', () => {
-    const plan = planAutoInstall({
-      catalog: CATALOG,
-      detections: detections(false, true, true),
-      managedPresent: managed(false, true, true),
-      managedVersions: [null, '2.1.300', '0.65.0-preview.0'],
-      latestVersions: ['0.163.0-alpha.11', '2.1.300', '0.65.0-preview.0'],
-      managedInUse: [true, false, false],
-      appVersion: '0.1.460',
-    })
-
-    assert.deepEqual(plan.pending.map((cli) => cli.id), ['codex'])
-  })
-})
-
 describe('planSystemUpdates', () => {
   const alvo = ['0.163.0-alpha.11', '2.1.300', '0.65.0-preview.0']
 
@@ -349,18 +317,6 @@ describe('planSystemUpdates', () => {
     })
 
     assert.equal(plan[0].action, 'current')
-  })
-
-  it('adia a instalação do sistema que um agente está usando', () => {
-    const plan = planSystemUpdates({
-      catalog: CATALOG,
-      systemInstalls: [null, { version: '2.1.287' }, null],
-      targetVersions: alvo,
-      inUse: [false, true, false],
-      appVersion: '0.1.460',
-    })
-
-    assert.equal(plan[0].action, 'deferred')
   })
 
   it('não repete na abertura seguinte a mesma atualização que já falhou, mas repete com alvo novo ou a pedido', () => {
