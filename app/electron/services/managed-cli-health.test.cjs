@@ -104,6 +104,51 @@ test('detecta o pacote nativo do Codex ausente no Windows', () => {
   }
 })
 
+test('aceita o pacote nativo do Codex aninhado dentro do pacote principal', () => {
+  // Regressão medida numa instalação real (Codex 0.150.1, Windows): o npm pôs o
+  // pacote da plataforma em node_modules/@openai/codex/node_modules/, onde o Node
+  // o encontra e o Codex roda. Reprovada aqui, a cópia passava por CLI externa e
+  // nunca era atualizada.
+  const layout = createLayout()
+
+  try {
+    writePackage(layout, '@openai/codex')
+    writePackage(layout, '@openai/codex/node_modules/@openai/codex-win32-x64')
+
+    const result = verifyManagedCliInstallation({
+      providerId: 'codex',
+      layout,
+      platformName: 'win32',
+      arch: 'x64',
+    })
+
+    assert.equal(result.ok, true)
+    assert.equal(result.requiredPackage, '@openai/codex-win32-x64')
+  } finally {
+    fs.rmSync(layout.root, { recursive: true, force: true })
+  }
+})
+
+test('o pacote nativo aninhado em outro pacote não conta para o Codex', () => {
+  const layout = createLayout()
+
+  try {
+    writePackage(layout, '@openai/codex')
+    writePackage(layout, '@google/gemini-cli/node_modules/@openai/codex-win32-x64')
+
+    const result = verifyManagedCliInstallation({
+      providerId: 'codex',
+      layout,
+      platformName: 'win32',
+      arch: 'x64',
+    })
+
+    assert.equal(result.ok, false)
+  } finally {
+    fs.rmSync(layout.root, { recursive: true, force: true })
+  }
+})
+
 test('aceita o pacote nativo do Codex quando ele foi materializado', () => {
   const layout = createLayout()
 

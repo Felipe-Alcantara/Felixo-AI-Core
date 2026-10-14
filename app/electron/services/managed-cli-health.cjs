@@ -85,21 +85,30 @@ function verifyManagedCliInstallation({
     return { ok: true, requiredPackage: null, packagePath: null }
   }
 
-  const packagePath = path.join(
-    layout.root,
-    'node_modules',
-    ...requiredPackage.split('/'),
+  // Mesma ordem em que o Node resolve o `require` feito pelo pacote principal:
+  // primeiro dentro dele, depois no nível de cima do prefixo. O npm instala o
+  // pacote da plataforma aninhado em algumas versões (visto no Codex 0.150.1
+  // no Windows); procurar só em cima reprovava uma instalação que funciona.
+  const mainPackage = getManagedCliManifestEntry(providerId)?.npmPackage
+  const hoistedPath = path.join(layout.root, 'node_modules', ...requiredPackage.split('/'))
+  const candidates = [
+    ...(mainPackage
+      ? [path.join(layout.root, 'node_modules', ...mainPackage.split('/'), 'node_modules', ...requiredPackage.split('/'))]
+      : []),
+    hoistedPath,
+  ]
+  const packagePath = candidates.find((candidate) =>
+    safeExists(fileSystem, path.join(candidate, 'package.json')),
   )
-  const packageManifestPath = path.join(packagePath, 'package.json')
 
-  if (safeExists(fileSystem, packageManifestPath)) {
+  if (packagePath) {
     return { ok: true, requiredPackage, packagePath }
   }
 
   return {
     ok: false,
     requiredPackage,
-    packagePath,
+    packagePath: hoistedPath,
     // Preserve the wording emitted by @openai/codex so the person can search
     // for the same failure outside the app and see the actionable reinstall.
     message: `Missing optional dependency ${requiredPackage}. Reinstall Codex: ${CODEX_REINSTALL_COMMAND}`,
