@@ -28,12 +28,13 @@ O diagnóstico é uma fotografia. Fechar o gerenciador o descarta, e **Atualizar
 
 O painel **Limites e uso** (menu **Ferramentas** do canvas) reúne as contas
 detectadas de cada CLI instalada, agrupadas por provedor. Cada provedor abre com
-um **resumo**: uma linha por conta, com o plano, quanto sobra em cada janela de
-uso da conta e o status da leitura — dá para comparar as contas do mesmo
-provedor de uma vez. Logo abaixo, o **/status completo** de cada conta fica
-recolhido e abre com um clique: as barras com o horário do reset, a fonte, os
-resets bancados e todos os dados que a CLI publica. O identificador da conta
-aparece inteiro, para dar para dizer qual linha é qual; quem separa as contas
+um **resumo**: para cada conta, o identificador numa linha própria e, logo
+abaixo dele, o plano, quanto sobra em cada janela de uso da conta e o status da
+leitura — dá para comparar as contas do mesmo provedor de uma vez. Logo abaixo,
+o **/status completo** de cada conta fica recolhido e abre com um clique: as
+barras com o horário do reset, a fonte, os resets bancados e todos os dados que
+a CLI publica. O identificador da conta aparece inteiro, mesmo com o painel
+estreito, para dar para dizer qual linha é qual; quem separa as contas
 por dentro é um fingerprint SHA-256, não esse texto. Nenhum token, cookie,
 chave ou senha é lido para o painel ou gravado por ele.
 
