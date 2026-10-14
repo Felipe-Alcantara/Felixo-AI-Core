@@ -272,7 +272,11 @@ function runCli(args) {
  * o ambiente do processo como estava ao terminar.
  */
 async function withDevtoolsSession(action, { env = {} } = {}) {
-  const sessionEnv = { FELIXO_DEVTOOLS_MOCK_PTY: '1', ...env }
+  // Desde 5c273d8 a fonte também instala e atualiza as CLIs ao abrir; no
+  // runner isso baixa pacotes no meio da sessão e o L13 (dica do link na URL
+  // quebrada pela TUI) parou de passar nos quatro sistemas. Desligada, a
+  // sessão volta a rodar nas mesmas condições do smoke empacotado.
+  const sessionEnv = { FELIXO_DEVTOOLS_MOCK_PTY: '1', FELIXO_AUTO_INSTALL_CLIS: '0', ...env }
   const previousEnv = Object.fromEntries(Object.keys(sessionEnv).map((key) => [key, process.env[key]]))
   Object.assign(process.env, sessionEnv)
   // The geometry sampler needs real animation frames. A hidden Electron window

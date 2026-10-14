@@ -26,11 +26,12 @@ const { prepareArtifact, resolveReleaseArtifact, sanitizeDiagnostic } = require(
 const APP_DIR = path.resolve(__dirname, '..')
 
 /**
- * O que só o app empacotado faz sozinho ao abrir e o de desenvolvimento não:
- * instalar as CLIs que faltam (no runner sem CLI, isso baixa pacotes pela rede
- * e abre o aviso "Preparando as CLIs de IA", que na tela de 320 px cobria a
- * barra de atividades — release 36912514190, 01/10/2026) e procurar
- * atualização. Desligados, o pacote roda o smoke nas mesmas condições da fonte.
+ * O que o app faz sozinho ao abrir e o smoke não quer: instalar as CLIs que
+ * faltam (no runner sem CLI, isso baixa pacotes pela rede e abre o aviso
+ * "Preparando as CLIs de IA", que na tela de 320 px cobria a barra de
+ * atividades — release 36912514190, 01/10/2026) e procurar atualização.
+ * Desligados, o pacote roda o smoke nas mesmas condições da fonte, cujo smoke
+ * também desliga a instalação desde que ela passou a rodar na fonte (5c273d8).
  */
 const PACKAGED_SMOKE_ENV = Object.freeze({
   FELIXO_AUTO_INSTALL_CLIS: '0',
