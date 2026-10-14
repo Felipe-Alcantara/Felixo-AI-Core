@@ -191,8 +191,9 @@ caso), e o teste pode passar mesmo quebrado. Depois do diff, rode
 
 Ao abrir o app, `cli-auto-install.cjs` faz uma rodada de verificação alguns
 segundos depois. O `npm-runtime` consulta os canais de cada pacote conhecido com
-`npm view --prefer-online <pacote> dist-tags --json` e o alvo é a maior versão
-entre eles (`chooseNewestPublishedVersion`), inclusive pré-lançamento. Versões que
+`npm view --prefer-online <pacote> dist-tags time --json`, e o alvo é a maior versão
+principal (`major.minor.patch`) entre eles e, dentro dela, a publicada por último
+(`chooseNewestPublishedVersion`), inclusive pré-lançamento. Versões que
 são o binário de uma plataforma (o Codex publica `0.162.1-win32-x64` como versão do
 próprio pacote) ficam de fora. O hash vem de `npm view <pacote>@<versão>
 dist.integrity`. O alvo é comparado com o `package.json` da cópia no prefixo
@@ -201,10 +202,20 @@ por `npm root --global` do npm do PATH (`system-cli-update.cjs` e
 `planSystemUpdates`). A do sistema só é atualizada com alvo confirmado no registry,
 nunca é rebaixada e conta como sucesso só com a versão nova no disco.
 
-No Windows o executável aberto não pode ser trocado: a rodada lista os processos
-(`Get-CimInstance Win32_Process`) e adia a CLI em uso, na cópia do app e no
-sistema; `EBUSY`/`EPERM` na saída do npm também viram adiamento, e não falha
-registrada. Com algo adiado, a rodada se repete a cada 5 minutos. O status
+A instalação usa `--prefer-online` sempre que o alvo veio do registry: na cópia do
+app, o `--cache` dela guarda a lista de versões, e com `--prefer-offline` uma lista
+de antes da publicação dava `ETARGET` para a versão que o registry acabara de
+devolver. O tarball continua saindo do cache pelo hash. Só o alvo do manifesto de
+fallback (registry fora do ar) instala com `--prefer-offline`.
+
+Uma CLI aberta não segura a atualização, nem no Windows: o npm renomeia a pasta
+antiga do pacote (`.claude-code-XXXX`) e instala a nova ao lado, com o executável
+antigo rodando; a pasta antiga some numa instalação seguinte, depois que o processo
+fecha. O teste "no Windows, o npm do sistema
+atualiza o pacote com o executável dele rodando" (`system-cli-update.test.cjs`)
+guarda essa premissa com um npm de verdade. `EBUSY`/`EPERM` na saída do npm ainda
+viram adiamento, e não falha registrada; com algo adiado, a rodada se repete a cada
+5 minutos. O status
 emitido em `clis:setup-status` traz `updates` (o que mudou de versão), que a
 interface mostra no aviso de CLIs atualizadas.
 

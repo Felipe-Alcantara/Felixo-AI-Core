@@ -139,9 +139,11 @@ pré-lançamento** (canais como `next`, `preview` e `alpha`):
   Instalação nativa, Homebrew, pnpm ou Volta continuam como estão.
 
 Quando algo muda de versão, aparece um aviso curto, por exemplo "Codex CLI 0.150.1 →
-0.163.0-alpha.11" ou "Claude Code CLI do sistema 2.1.287 → 2.1.300". No Windows, uma
-CLI aberta por um agente não pode ser trocada; a atualização dela fica adiada e o app
-tenta de novo sozinho a cada 5 minutos, até os agentes que a usam serem fechados. Sem
+0.163.0-alpha.11" ou "Claude Code CLI do sistema 2.1.287 → 2.1.300". Uma CLI aberta,
+por um agente ou por outro programa (a extensão do Claude no navegador mantém o
+`claude` aberto o tempo todo), é atualizada assim mesmo: os agentes que já estavam
+abertos seguem na versão antiga até serem reiniciados, e os novos já abrem na nova. Se o
+npm encontrar algum arquivo travado, o app tenta de novo sozinho 5 minutos depois. Sem
 acesso ao registry, a cópia do app usa a última versão/hash conhecida pelo release e a
 instalação do sistema não é tocada.
 

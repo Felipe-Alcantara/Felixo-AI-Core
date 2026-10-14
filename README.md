@@ -441,9 +441,11 @@ A cada rodada o npm-runtime consulta os canais publicados de cada CLI no registr
 (`latest` e os de pré-lançamento, como `next`, `preview` e `alpha`) e leva para a
 versão mais nova entre eles a cópia que o app mantém no prefixo gerenciado e, quando
 existir, a instalação feita pelo npm global do sistema. Instalação nativa, Homebrew,
-pnpm ou Volta não são alteradas. No Windows, uma CLI aberta por um agente não pode
-ser trocada: a atualização dela fica adiada e a rodada tenta de novo a cada 5
-minutos. O que mudou de versão aparece num aviso curto. Se o registry estiver
+pnpm ou Volta não são alteradas. Uma CLI aberta (por um agente ou por outro programa,
+como a extensão do Claude no navegador) é atualizada assim mesmo: o npm troca o
+pacote e o processo aberto segue na versão antiga até ser reiniciado. Só se o npm
+encontrar arquivos travados a atualização fica para uma nova tentativa, 5 minutos
+depois. O que mudou de versão aparece num aviso curto. Se o registry estiver
 indisponível, a cópia do app usa a última versão/hash revisados no manifesto do
 release (a do sistema não é tocada), e a instalação ainda confere o
 `dist.integrity` da versão exata antes de extrair o pacote. Em automações isoladas,
