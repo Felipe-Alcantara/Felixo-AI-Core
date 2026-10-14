@@ -16,6 +16,7 @@ const platformAdapter = require('../core/platform/index.cjs')
 const { createNodeEnv } = require('../core/node-runtime.cjs')
 const { createCliEnv } = require('./cli-process-manager.cjs')
 const { killProcessTree } = require('../core/process-tree.cjs')
+const { compareCliVersions } = require('./cli-auto-install-plan.cjs')
 
 const INSTALL_TIMEOUT_MS = 10 * 60 * 1000
 const LATEST_LOOKUP_TIMEOUT_MS = 30 * 1000
@@ -56,24 +57,48 @@ function createNpmInstallArgs({ npmCliPath, npmPackage, prefix, cacheDir }) {
 }
 
 /**
- * Consulta a versao e o hash do rotulo `latest` diretamente no registry.
- * `--prefer-online` evita que o metadata antigo do rotulo seja reutilizado.
+ * Consulta todos os canais publicados (`dist-tags`) de um pacote, com
+ * `--prefer-online` para nunca reaproveitar um canal antigo do cache.
  *
  * @param {object} options
  * @param {string} options.npmCliPath
  * @param {string} options.npmPackage
  * @returns {string[]}
  */
-function createNpmViewLatestArgs({ npmCliPath, npmPackage }) {
-  return [
-    npmCliPath,
-    'view',
-    '--prefer-online',
-    `${npmPackage}@latest`,
-    'version',
-    'dist.integrity',
-    '--json',
-  ]
+function createNpmViewDistTagsArgs({ npmCliPath, npmPackage }) {
+  return [npmCliPath, 'view', '--prefer-online', npmPackage, 'dist-tags', '--json']
+}
+
+/**
+ * Versão que é o binário de UMA plataforma, publicada como versão do próprio
+ * pacote (o Codex faz isso: `0.162.1-win32-x64`). Ela ordena acima da versão
+ * principal e não é instalável sozinha, então nunca pode virar o alvo.
+ */
+const PLATFORM_PAYLOAD_VERSION = /-(?:linux|darwin|win32)-(?:x64|arm64)(?:-musl)?$/
+
+/**
+ * Escolhe a versão mais nova entre os canais publicados, inclusive os de
+ * pré-lançamento (`next`, `preview`, `alpha`, `nightly`), que é a política
+ * de atualização das CLIs. Canais que apontam para um binário de plataforma ou
+ * para algo que não é semver são ignorados. Não é "a maior versão já
+ * publicada": essa lista inclui os binários de plataforma e versões que o
+ * próprio fornecedor já tirou de todos os canais.
+ *
+ * @param {Record<string, unknown> | null | undefined} distTags
+ * @returns {{ version: string, tag: string } | null}
+ */
+function chooseNewestPublishedVersion(distTags) {
+  if (!distTags || typeof distTags !== 'object') return null
+  let newest = null
+  for (const [tag, version] of Object.entries(distTags)) {
+    if (!isValidPackageVersion(version) || PLATFORM_PAYLOAD_VERSION.test(version)) continue
+    const comparison = newest ? compareCliVersions(version, newest.version) : 1
+    // Em empate, `latest` dá o nome ao canal: é o mais fácil de reconhecer no aviso.
+    if (comparison === 1 || (comparison === 0 && tag === 'latest')) {
+      newest = { version, tag }
+    }
+  }
+  return newest
 }
 
 /**
@@ -186,60 +211,71 @@ async function resolveLatestManagedPackage({
   killTree = killProcessTree,
 }) {
   const env = createManagedInstallEnv({ layout, platformName })
-  const result = await runCommand({
-    command: nodeExecutable,
-    args: createNpmViewLatestArgs({ npmCliPath, npmPackage }),
-    env,
-    cwd: layout.root,
-    signal,
-    spawn,
-    timeoutMs,
-    platformName,
-    killTree,
-    successMessage: `Latest de ${npmPackage} consultado.`,
-    failureMessage: `Nao foi possivel consultar o latest de ${npmPackage}.`,
-  })
+  const query = (args, successMessage, failureMessage) =>
+    runCommand({
+      command: nodeExecutable,
+      args,
+      env,
+      cwd: layout.root,
+      signal,
+      spawn,
+      timeoutMs,
+      platformName,
+      killTree,
+      successMessage,
+      failureMessage,
+    })
 
-  if (!result.ok) {
-    return result
+  const tagsResult = await query(
+    createNpmViewDistTagsArgs({ npmCliPath, npmPackage }),
+    `Canais de ${npmPackage} consultados.`,
+    `Nao foi possivel consultar os canais de ${npmPackage}.`,
+  )
+  if (!tagsResult.ok) {
+    return tagsResult
   }
 
-  const metadata = parseLatestPackageMetadata(result.output)
-  if (!metadata) {
+  const newest = chooseNewestPublishedVersion(parseJsonObject(tagsResult.output))
+  if (!newest) {
     return {
       ok: false,
-      message: `O registry devolveu metadata invalido para ${npmPackage}.`,
-      output: result.output,
+      message: `O registry devolveu canais inválidos para ${npmPackage}.`,
+      output: tagsResult.output,
+    }
+  }
+
+  const integrityResult = await query(
+    createNpmViewIntegrityArgs({ npmCliPath, npmPackage: `${npmPackage}@${newest.version}` }),
+    `Hash de ${npmPackage}@${newest.version} consultado.`,
+    `Nao foi possivel consultar o hash de ${npmPackage}@${newest.version}.`,
+  )
+  const integrity = String(integrityResult.output ?? '').trim()
+  if (!integrityResult.ok || !isValidIntegrity(integrity)) {
+    return {
+      ok: false,
+      message: `O registry não devolveu o hash de ${npmPackage}@${newest.version}.`,
+      output: integrityResult.output,
     }
   }
 
   return {
     ok: true,
     npmPackage,
-    version: metadata.version,
-    integrity: metadata.integrity,
-    message: `${npmPackage}@${metadata.version} e o latest publicado.`,
-    output: result.output,
+    version: newest.version,
+    integrity,
+    tag: newest.tag,
+    message: `${npmPackage}@${newest.version} é a versão mais nova publicada (canal ${newest.tag}).`,
+    output: tagsResult.output,
   }
 }
 
-function parseLatestPackageMetadata(output) {
-  let metadata
-
+function parseJsonObject(output) {
   try {
-    metadata = JSON.parse(String(output ?? '').trim())
+    const value = JSON.parse(String(output ?? '').trim())
+    return value && typeof value === 'object' && !Array.isArray(value) ? value : null
   } catch {
     return null
   }
-
-  const version = metadata?.version
-  const integrity = metadata?.['dist.integrity'] ?? metadata?.dist?.integrity
-
-  if (!isValidPackageVersion(version) || !isValidIntegrity(integrity)) {
-    return null
-  }
-
-  return { version, integrity }
 }
 
 function isValidPackageVersion(version) {
@@ -519,7 +555,8 @@ module.exports = {
   LATEST_LOOKUP_TIMEOUT_MS,
   createManagedInstallEnv,
   createNpmInstallArgs,
-  createNpmViewLatestArgs,
+  chooseNewestPublishedVersion,
+  createNpmViewDistTagsArgs,
   createNpmViewIntegrityArgs,
   installManagedPackage,
   resolveLatestManagedPackage,

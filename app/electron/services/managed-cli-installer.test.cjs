@@ -4,9 +4,10 @@ const path = require('node:path')
 const { EventEmitter } = require('node:events')
 
 const {
+  chooseNewestPublishedVersion,
   createManagedInstallEnv,
   createNpmInstallArgs,
-  createNpmViewLatestArgs,
+  createNpmViewDistTagsArgs,
   createNpmViewIntegrityArgs,
   installManagedPackage,
   resolveLatestManagedPackage,
@@ -219,44 +220,102 @@ describe('managed-cli-installer', () => {
     ])
   })
 
-  it('consulta o latest online com versao e hash no mesmo metadata', async () => {
+  it('consulta os canais online e o hash da versão mais nova entre eles', async () => {
     const integrity = 'sha512-NWZdi/kxyjv/8EUGFupziGU38YyleugZRM4JXgY5XFH7FUmaFA33NZS2Bmq0HPazf7S3jJQQWsZ/jAK9jsrV3Q=='
-    let latestArgs
+    const calls = []
 
+    const result = await resolveLatestManagedPackage({
+      npmPackage: '@anthropic-ai/claude-code',
+      npmCliPath: '/npm/bin/npm-cli.js',
+      nodeExecutable: '/opt/app/felixo',
+      layout: LAYOUT,
+      spawn: (command, args) => {
+        calls.push(args)
+        return createFakeChild({
+          stdout: args.includes('dist-tags')
+            ? JSON.stringify(CANAIS_CLAUDE)
+            : `${integrity}\n`,
+        })
+      },
+    })
+
+    assert.deepEqual(calls, [
+      createNpmViewDistTagsArgs({ npmCliPath: '/npm/bin/npm-cli.js', npmPackage: '@anthropic-ai/claude-code' }),
+      createNpmViewIntegrityArgs({ npmCliPath: '/npm/bin/npm-cli.js', npmPackage: '@anthropic-ai/claude-code@2.1.300' }),
+    ])
+    assert.deepEqual(
+      { ok: result.ok, npmPackage: result.npmPackage, version: result.version, integrity: result.integrity },
+      { ok: true, npmPackage: '@anthropic-ai/claude-code', version: '2.1.300', integrity },
+    )
+    assert.match(result.message, /canal next/)
+  })
+
+  it('falha legível quando o registry não devolve canal válido', async () => {
     const result = await resolveLatestManagedPackage({
       npmPackage: '@openai/codex',
       npmCliPath: '/npm/bin/npm-cli.js',
       nodeExecutable: '/opt/app/felixo',
       layout: LAYOUT,
-      spawn: (command, args) => {
-        latestArgs = args
-        return createFakeChild({
-          stdout: JSON.stringify({ version: '0.162.1', 'dist.integrity': integrity }),
-        })
-      },
+      spawn: () => createFakeChild({ stdout: '{"latest":"não é versão"}' }),
     })
 
-    assert.deepEqual(
-      latestArgs,
-      createNpmViewLatestArgs({
-        npmCliPath: '/npm/bin/npm-cli.js',
-        npmPackage: '@openai/codex',
-      }),
-    )
-    assert.deepEqual(
-      {
-        ok: result.ok,
-        npmPackage: result.npmPackage,
-        version: result.version,
-        integrity: result.integrity,
-      },
-      {
-        ok: true,
-        npmPackage: '@openai/codex',
-        version: '0.162.1',
-        integrity,
-      },
-    )
+    assert.equal(result.ok, false)
+    assert.match(result.message, /canais inválidos/)
+  })
+
+  it('falha legível quando o hash da versão escolhida não vem', async () => {
+    const result = await resolveLatestManagedPackage({
+      npmPackage: '@google/gemini-cli',
+      npmCliPath: '/npm/bin/npm-cli.js',
+      nodeExecutable: '/opt/app/felixo',
+      layout: LAYOUT,
+      spawn: (command, args) =>
+        createFakeChild({ stdout: args.includes('dist-tags') ? JSON.stringify(CANAIS_GEMINI) : 'sem hash' }),
+    })
+
+    assert.equal(result.ok, false)
+    assert.match(result.message, /hash/)
+  })
+})
+
+// Canais reais medidos no registry em 14/10/2026 (o Codex resumido: ele publica
+// também um canal por plataforma para cada versão).
+const CANAIS_CLAUDE = { stable: '2.1.287', latest: '2.1.299', next: '2.1.300' }
+const CANAIS_GEMINI = {
+  false: '0.42.0-nightly.20260512.g11a9edc80',
+  nightly: '0.65.0-nightly.20261014.g42c518220',
+  preview: '0.65.0-preview.0',
+  latest: '0.64.0',
+  'staging-tmp': '0.65.0-nightly.20261014.g42c518220',
+}
+const CANAIS_CODEX = {
+  beta: '0.1.2505172116',
+  native: '0.1.2505291658',
+  latest: '0.162.1',
+  'win32-x64': '0.162.1-win32-x64',
+  alpha: '0.163.0-alpha.11',
+  'alpha-win32-x64': '0.163.0-alpha.11-win32-x64',
+  'alpha-linux-arm64': '0.163.0-alpha.11-linux-arm64',
+  'release-0.162.0-alpha.17.2-alpha-darwin-arm64': '0.162.0-alpha.17.2-darwin-arm64',
+}
+
+describe('chooseNewestPublishedVersion', () => {
+  it('pega o pré-lançamento mais novo do Claude (next)', () => {
+    assert.deepEqual(chooseNewestPublishedVersion(CANAIS_CLAUDE), { version: '2.1.300', tag: 'next' })
+  })
+
+  it('pega o preview do Gemini, que é mais novo que o nightly da mesma versão', () => {
+    assert.deepEqual(chooseNewestPublishedVersion(CANAIS_GEMINI), { version: '0.65.0-preview.0', tag: 'preview' })
+  })
+
+  it('pega o alpha do Codex e nunca um pacote de plataforma, mesmo que ele ordene acima', () => {
+    assert.deepEqual(chooseNewestPublishedVersion(CANAIS_CODEX), { version: '0.163.0-alpha.11', tag: 'alpha' })
+  })
+
+  it('sem canal válido não inventa versão', () => {
+    assert.equal(chooseNewestPublishedVersion({}), null)
+    assert.equal(chooseNewestPublishedVersion({ latest: 'x' }), null)
+    assert.equal(chooseNewestPublishedVersion(null), null)
   })
 
   it('confirms integrity when the registry hash matches the manifest', async () => {
