@@ -9,7 +9,7 @@
   nos arquivos de docs/ia-archive/.
 -->
 
-Última atualização: [2026-10-14]
+Última atualização: [2026-10-15]
 
 - **Fase:** o canvas é o produto principal (o chat está depreciado). A divisão do `CanvasView`
   (partes 1 a 4) e o bloco Agente na nuvem estão na `main`: PRs #113 a #120 mesclados.
@@ -32,7 +32,9 @@
   `docs/validation/CHECKLIST-AGENTE-NUVEM.md` (cria sessão real e gasta crédito, por isso não roda
   no CI) e a retomada do terminal (entrada de 2026-10-09). A atualização do Claude no app instalado
   com a `v0.1.461` (a correção foi validada numa instância isolada da fonte; o app do dia a dia
-  deste PC roda de dentro de `%TEMP%`).
+  deste PC roda de dentro de `%TEMP%`). O "File not found: " vazio ao abrir agentes (entrada de
+  2026-10-15) na máquina de quem relatou, depois que o app dela atualizar para a release com
+  `41e72a7`.
 - **Próximo passo sugerido:** rodar a etapa 18 do checklist do Agente na nuvem em Linux ou macOS com a
   `v0.1.452` (o CI passou, mas a interface só foi conferida no Windows).
 - **Riscos abertos:** (1) a suíte vitest completa com os 16 workers padrão ficou instável numa
@@ -50,6 +52,9 @@
    terminal por conta; em 2026-10-14 ela passou sem falhas no Windows (2738 testes, 8 ignorados).
   (6) Cada atualização de uma CLI aberta deixa a pasta antiga do pacote (`.claude-code-XXXX`, do
   tamanho do pacote) no npm global até uma instalação seguinte com o processo fechado.
+  (7) No Windows, `npm run test:native` completo falha de forma intermitente em "payload grande chega
+  inteiro" ou "emoji não é partido" (`pty-write-queue`); isolado, passa. Derrubou o CI de `e7615c3`
+  em 2026-10-14 e tem task própria no Notion.
 - **Como compactar de novo:** este arquivo e `docs/projeto/IA.md` crescem com cada sessão. Quando
   passarem de uns 1000 linhas, rode `node app/scripts/archive-ia-md.cjs` (dry-run por padrão); o
   passo a passo está no Guia para Desenvolvedores.
@@ -1334,3 +1339,72 @@ Registro de Claude — Tasks AI Core (Opus 5.5), continuação da entrada anteri
 - **Release** [38614478105](https://github.com/Felipe-Alcantara/Felixo-AI-Core/actions/runs/38614478105): `v0.1.461` publicada às 15:37 como versão principal ("Latest"), com a tag em `5767e8b` e os instaladores de Windows, macOS e Ubuntu. O "Smoke exploratório (Windows)" também passou, às 15:39.
 
 Estado: concluído e publicado na `v0.1.461`. A conferência no app instalado ficou como task no Notion.
+
+## 2026-10-15 — PTY: "File not found: " vazio ao abrir agentes (node-pty e a pasta atual em System32)
+
+Registro de Claude — Tasks do AI Core (Opus 5.5). Um usuário da `v0.1.461` (Windows) mandou um
+print pelo WhatsApp às 08:50, reclamando que o problema era recorrente. O bloco "Claude haiku yolo" não
+abria e mostrava "Camada de inicialização do PTY: não foi possível criar a sessão: File not found:",
+com o caminho **vazio** depois dos dois-pontos.
+
+**Origem da mensagem.** O texto é montado no `catch` do `spawnPty` em
+`app/electron/services/pty-process-manager.cjs` (`PtyProcessManager.spawn`), com a mensagem do
+próprio node-pty. O "File not found: " sai de `node_modules/node-pty/src/win/conpty.cc`
+(`PtyStartProcess`, também em `winpty.cc`), que recusa um `shellpath` vazio ou inexistente.
+
+**Causa** (node-pty 1.1.0, `src/win/path_util.cc`, `get_shell_path`). Para um nome relativo
+(`cmd.exe`), a função começa com `if (file_exists(filename)) return shellpath;`, e nesse ponto
+`shellpath` ainda é a string vazia. Quando o nome existe **na pasta atual do processo**, ela devolve
+vazio em vez do caminho. No Windows, todo lançamento de CLI passava `'cmd.exe'` solto
+(`createPtyLaunchSpec`). Com a pasta atual do processo Electron em `C:\Windows\System32`, que é onde o
+`cmd.exe` mora, todo agente falhava. O shell padrão escapava porque já saía com caminho absoluto
+(`findPowerShell`).
+
+**Medido** (scratchpad e teste novo, ConPTY real, node-pty 1.1.0 do `app/node_modules`):
+
+- `nodePty.spawn('cmd.exe', …)` com a pasta atual em home: abre. Com a pasta atual em System32:
+  lança `"File not found: "`. O resto do spawn é o mesmo nos dois casos.
+- Antes da correção, o teste novo `pty-pasta-atual-system32.integration.test.cjs` falhava com
+  "Camada de inicialização do PTY: não foi possível criar a sessão: File not found: ", igual ao print
+  do usuário. Depois da correção, passa.
+
+**Inferido, não medido.** Que o app do usuário estava com a pasta atual em System32. Um app aberto
+pelo Windows no login (o "iniciar com o sistema" do app grava em `HKCU\…\Run` via
+`app.setLoginItemSettings`) costuma nascer com essa pasta atual. Isso combina com o "recorrente" (falha
+ao ligar o PC, some ao reabrir pelo atalho) e com o horário do relato, mas não foi conferido na
+máquina dele.
+
+**Correção** (`41e72a7`).
+
+- `getCmdPath(env, exists)` no adaptador `core/platform/win32.cjs` devolve
+  `%SystemRoot%\System32\cmd.exe`. O `ComSpec` vem em segundo e só vale quando o arquivo se chama
+  `cmd.exe`: trocado por outro shell (TCC, Clink), ele receberia `/d /s /c call …` sem entender as
+  flags. Sem nenhum dos dois no disco, fica o nome solto de antes. A escolha da ordem foi do agente.
+- `createPtyLaunchSpec` e o `getDefaultShell` (o fallback sem PowerShell) usam essa função. A mesma
+  função monta o lançamento do terminal dos agentes, do `/status` do Claude em Limites
+  (`claude-usage-query.cjs`), da tela de status do Codex (`codex-status-screen.cjs`) e da sessão na
+  nuvem (`cloud-session-service.cjs`), então os quatro ficam cobertos.
+- Testes: o nativo novo entra no `test:native`. Há 4 unitários novos (adaptador e lançamento) e 2
+  expectativas antigas passaram a exigir o caminho absoluto: o `.cmd/.exe` em
+  `pty-process-manager.test.cjs` e o lançamento do `/status` em
+  `claude-usage-query.integration.test.cjs`.
+
+**Validação local** (Windows 11, 15/10).
+
+- TDD: com o `getCmdPath` ainda vazio, 7 testes unitários vermelhos; depois, 92/92 nos dois
+  arquivos.
+- `npm test`: 2739 testes, 2731 passaram, 8 pulados, 0 falhas. `npm run lint` e `npm run build`
+  com saída 0.
+- `npm run test:native`: os dois testes tocados (System32 e `/status`) passam. Na rodada completa,
+  falhou primeiro "emoji não é partido" (timeout de 15 s, com a suíte Node rodando em paralelo) e
+  depois "payload grande chega inteiro". Para separar a causa, o `pty-write-queue` rodou isolado 3
+  vezes com a correção e 3 sem ela (`git stash` dos dois arquivos de produção): 4/4 nas seis
+  rodadas. É a intermitência que já tinha derrubado o CI de `e7615c3` em 14/10, antes desta mudança.
+
+**Não validado.**
+
+- O app empacotado aberto pelo login do Windows não foi reiniciado de verdade. A prova cobre o
+  mecanismo, chamando `process.chdir` para System32 no processo de teste.
+- A máquina do usuário que relatou não foi inspecionada.
+- O defeito do `get_shell_path` continua no node-pty: qualquer outro nome relativo entregue a ele
+  ainda cai na mesma armadilha. Hoje o app só entregava `cmd.exe` solto.
