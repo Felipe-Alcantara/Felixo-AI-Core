@@ -25,6 +25,7 @@ import {
   getAgentUsagePlan,
   getDisplayedAgentUsageSample,
   groupAgentUsageAccounts,
+  shouldRefreshAgentUsageOnOpen,
   shouldRunScheduledAgentUsageRefresh,
   summarizeProviderAccounts,
 } from '../../../shared/agent-usage/agent-usage'
@@ -118,14 +119,14 @@ export function AgentUsagePanel({
     }
   }, [])
 
-  const load = useCallback(async (mode: boolean | 'reconnect') => {
+  const load = useCallback(async (mode: boolean | 'reconnect'): Promise<AgentUsageDashboard | null> => {
     const refreshNow = mode !== false
     const request = ++latestRequest.current
     const api = window.felixo?.agentUsage
     if (!api) {
       setLoading(false)
       setStatusMessage('Este painel só funciona no app desktop.')
-      return
+      return null
     }
 
     setLoading(true)
@@ -135,12 +136,12 @@ export function AgentUsagePanel({
       const result =
         mode === 'reconnect' ? await api.reconnect() : refreshNow ? await api.refresh() : await api.list()
       if (!mounted.current || request !== latestRequest.current) {
-        return
+        return null
       }
 
       if (!result.ok) {
         setStatusMessage(result.message ?? 'Não foi possível carregar o painel.')
-        return
+        return null
       }
 
       setDashboard(result)
@@ -151,10 +152,12 @@ export function AgentUsagePanel({
       } else if (refreshNow) {
         setLiveAt(new Date())
       }
+      return result
     } catch {
       if (mounted.current && request === latestRequest.current) {
         setStatusMessage('Não foi possível falar com o processo principal.')
       }
+      return null
     } finally {
       if (mounted.current && request === latestRequest.current) {
         setLoading(false)
@@ -162,12 +165,21 @@ export function AgentUsagePanel({
     }
   }, [])
 
-  // Primeiro o que já está salvo (instantâneo), depois a coleta real. Sem os
-  // dois passos o painel fica vários segundos sem nada na tela. O timeout tira
-  // o primeiro setState de dentro do corpo do efeito.
+  // Primeiro o que já está salvo (instantâneo), depois a coleta real, só se a
+  // última coleta completa tiver 5 min ou mais (shouldRefreshAgentUsageOnOpen).
+  // Recente, ela vale como a coleta desta abertura, com a hora dela no selo
+  // "ao vivo". O timeout tira o primeiro setState de dentro do corpo do efeito.
   useEffect(() => {
     const timerId = window.setTimeout(() => {
-      void load(false).then(() => load(true))
+      void load(false).then((saved) => {
+        if (saved?.refreshedAt && !shouldRefreshAgentUsageOnOpen(saved.refreshedAt, Date.now())) {
+          if (mounted.current) {
+            setLiveAt(new Date(saved.refreshedAt))
+          }
+          return null
+        }
+        return load(true)
+      })
     }, 0)
 
     return () => window.clearTimeout(timerId)

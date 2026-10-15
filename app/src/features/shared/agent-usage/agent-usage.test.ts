@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   getAgentUsageLastFailureNotice,
+  AGENT_USAGE_OPEN_REUSE_MS,
   AGENT_USAGE_STALE_AFTER_MS,
   agentUsagePercent,
   deriveDisplayStatus,
@@ -15,6 +16,7 @@ import {
   getAgentUsagePlan,
   getAgentUsageResetCredits,
   groupAgentUsageAccounts,
+  shouldRefreshAgentUsageOnOpen,
   shouldRunScheduledAgentUsageRefresh,
   summarizeAgentUsage,
   summarizeProviderAccounts,
@@ -345,6 +347,31 @@ describe('metadados da amostra', () => {
           performanceMode: false,
         }),
       ).toBe(true)
+    })
+  })
+
+  describe('shouldRefreshAgentUsageOnOpen', () => {
+    const now = Date.parse('2026-10-15T14:00:00.000Z')
+
+    it('reaproveita uma coleta completa de menos de 5 min: o painel abre sem reconsultar', () => {
+      expect(AGENT_USAGE_OPEN_REUSE_MS).toBe(5 * 60_000)
+      expect(shouldRefreshAgentUsageOnOpen('2026-10-15T13:59:00.000Z', now)).toBe(false)
+      expect(shouldRefreshAgentUsageOnOpen('2026-10-15T13:55:00.001Z', now)).toBe(false)
+    })
+
+    it('reconsulta a partir de 5 min', () => {
+      expect(shouldRefreshAgentUsageOnOpen('2026-10-15T13:55:00.000Z', now)).toBe(true)
+      expect(shouldRefreshAgentUsageOnOpen('2026-10-15T12:00:00.000Z', now)).toBe(true)
+    })
+
+    it('reconsulta sem coleta nesta execução do app ou com data ilegível', () => {
+      expect(shouldRefreshAgentUsageOnOpen(null, now)).toBe(true)
+      expect(shouldRefreshAgentUsageOnOpen(undefined, now)).toBe(true)
+      expect(shouldRefreshAgentUsageOnOpen('ontem', now)).toBe(true)
+    })
+
+    it('reconsulta quando a coleta parece vir do futuro (relógio do sistema voltou)', () => {
+      expect(shouldRefreshAgentUsageOnOpen('2026-10-15T14:01:00.000Z', now)).toBe(true)
     })
   })
 })

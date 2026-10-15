@@ -10,6 +10,7 @@ import {
   getAccountStatus,
   getLastKnownAgentUsage,
   groupAgentUsageAccounts,
+  shouldRefreshAgentUsageOnOpen,
   shouldRunScheduledAgentUsageRefresh,
   summarizeAgentUsage,
 } from '../../shared/agent-usage/agent-usage'
@@ -59,11 +60,11 @@ export function AgentUsageLimitsModal({
   // aplicar seu resultado.
   const requestSeqRef = useRef(0)
 
-  const loadDashboard = useCallback(async (refreshNow: boolean) => {
+  const loadDashboard = useCallback(async (refreshNow: boolean): Promise<AgentUsageDashboard | null> => {
     const api = window.felixo?.agentUsage
     if (!api) {
       setStatusMessage('Este painel só está disponível no app desktop.')
-      return
+      return null
     }
 
     const requestId = (requestSeqRef.current += 1)
@@ -72,29 +73,37 @@ export function AgentUsageLimitsModal({
 
     try {
       const result = refreshNow ? await api.refresh() : await api.list()
-      if (requestId !== requestSeqRef.current) return
+      if (requestId !== requestSeqRef.current) return null
 
       if (!result.ok) {
         setStatusMessage(result.message ?? 'Não foi possível carregar o painel.')
-        return
+        return null
       }
 
       setDashboard(result)
+      return result
     } catch {
-      if (requestId !== requestSeqRef.current) return
+      if (requestId !== requestSeqRef.current) return null
       setStatusMessage('Não foi possível comunicar com o processo principal.')
+      return null
     } finally {
       if (requestId === requestSeqRef.current) setLoading(false)
     }
   }, [])
 
+  // Mesma regra do painel do canvas: coleta completa de menos de 5 min vale
+  // como a desta abertura (shouldRefreshAgentUsageOnOpen).
   useEffect(() => {
     if (!isOpen) {
       return
     }
 
     const timerId = window.setTimeout(() => {
-      void loadDashboard(false).then(() => loadDashboard(true))
+      void loadDashboard(false).then((saved) =>
+        saved?.refreshedAt && !shouldRefreshAgentUsageOnOpen(saved.refreshedAt, Date.now())
+          ? null
+          : loadDashboard(true),
+      )
     }, 0)
 
     return () => window.clearTimeout(timerId)

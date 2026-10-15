@@ -230,6 +230,33 @@ export function shouldRunScheduledAgentUsageRefresh(
   return true
 }
 
+/**
+ * Idade máxima da última coleta completa para o painel abrir com ela, sem
+ * reconsultar. Decisão do Felipe (15/10/2026): abrir e fechar os Limites
+ * várias vezes não pode custar uma coleta de ~15 s a cada vez; o botão
+ * Atualizar continua forçando uma coleta nova.
+ */
+export const AGENT_USAGE_OPEN_REUSE_MS = 5 * 60_000
+
+/**
+ * Decide se abrir o painel dispara a coleta ao vivo (`refresh()`). Sem coleta
+ * nesta execução do app, com data ilegível ou "do futuro" (relógio do sistema
+ * voltou), reconsulta: na dúvida, o número fresco vale mais que a pressa.
+ */
+export function shouldRefreshAgentUsageOnOpen(
+  refreshedAt: string | null | undefined,
+  now: number,
+  reuseMs: number = AGENT_USAGE_OPEN_REUSE_MS,
+): boolean {
+  const collectedAt = refreshedAt ? Date.parse(refreshedAt) : Number.NaN
+  if (!Number.isFinite(collectedAt)) {
+    return true
+  }
+
+  const age = now - collectedAt
+  return age < 0 || age >= reuseMs
+}
+
 export function formatAgentUsageStatus(status: AgentUsageStatus): string {
   return AGENT_USAGE_STATUS_LABELS[status]
 }
