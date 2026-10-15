@@ -105,6 +105,19 @@ function child({ files = [['img-1.png', PNG]], listed, stdout, exitCode = 0 } = 
   return run
 }
 
+/**
+ * Espera a condição em vez de um tempo fixo: o `generate` só chama o filho depois do catálogo e
+ * de um `mkdir` real, que sob carga passam de 30 ms. No prazo, falha em vez de deixar uma
+ * promessa sem dono (no Node 25 o runner espera ela para sempre).
+ */
+async function esperarAte(condicao, descricao, ms = 5000) {
+  const limite = Date.now() + ms
+  while (!condicao()) {
+    if (Date.now() > limite) assert.fail(`não aconteceu em ${ms} ms: ${descricao}`)
+    await new Promise((resolve) => setTimeout(resolve, 5))
+  }
+}
+
 test('gera, grava pelo caminho seguro e só DEPOIS de gravar avisa o canvas', async () => {
   const runImage = child()
   const h = harness({ runImage })
@@ -396,7 +409,7 @@ test('limite de execuções simultâneas e identificador repetido', async () => 
   const h = harness({ runImage })
   const ids = Array.from({ length: MAX_CONCURRENT }, (_, i) => `req-conc-0${i}`)
   const emAndamento = ids.map((requestId) => h.service.generate({ prompt: 'x', model: MODEL, requestId }))
-  await new Promise((resolve) => setTimeout(resolve, 30))
+  await esperarAte(() => liberar.length === MAX_CONCURRENT, 'todas as gerações chegarem ao filho')
 
   assert.equal((await h.service.generate({ prompt: 'x', model: MODEL, requestId: 'req-conc-99' })).code, 'busy')
   assert.equal((await h.service.generate({ prompt: 'x', model: MODEL, requestId: ids[0] })).code, 'duplicate_request')
@@ -409,8 +422,10 @@ test('limite de execuções simultâneas e identificador repetido', async () => 
 
 test('cancelar: avisa o filho, devolve "cancelled", não grava, não anuncia e limpa pasta e arquivo de cancelamento', async () => {
   let recebeuSinal = false
+  let filhoRodando = false
   const runImage = ({ args, signal }) =>
     new Promise((resolve) => {
+      filhoRodando = true
       fs.writeFileSync(path.join(args[args.indexOf('--output-dir') + 1], 'parcial.png'), PNG)
       signal.addEventListener('abort', () => {
         recebeuSinal = true
@@ -419,7 +434,7 @@ test('cancelar: avisa o filho, devolve "cancelled", não grava, não anuncia e l
     })
   const h = harness({ runImage })
   const pendente = h.service.generate({ prompt: 'x', model: MODEL, requestId: 'req-cancel1' })
-  await new Promise((resolve) => setTimeout(resolve, 30))
+  await esperarAte(() => filhoRodando, 'o filho começar, para o cancelamento chegar a ele')
   assert.deepEqual(h.service.cancel({ requestId: 'req-cancel1' }), { ok: true, cancelled: true })
 
   const result = await pendente
