@@ -1307,9 +1307,15 @@ function createPtyLaunchSpec(command, args, env, adapter = platform, keepShellOp
     // extra-outer-quotes form here: under ConPTY it becomes part of the command
     // name and produces "O caminho da rede nÃ£o foi encontrado".
     const usesCallDispatcher = /\s/.test(String(command))
+    // Caminho absoluto, não `cmd.exe` solto: o node-pty devolve "File not
+    // found: " vazio quando o nome existe na pasta atual do processo (app
+    // aberto no login costuma nascer no System32). Ver `getCmdPath`.
+    const cmdPath = typeof adapter.getCmdPath === 'function'
+      ? adapter.getCmdPath(env, launchOptions.exists)
+      : 'cmd.exe'
 
     return {
-      command: 'cmd.exe',
+      command: cmdPath,
       args: [
         '/d',
         '/s',

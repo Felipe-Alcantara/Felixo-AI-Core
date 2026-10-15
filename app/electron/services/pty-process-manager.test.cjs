@@ -2136,5 +2136,26 @@ test('Windows: comando que resolve para .cmd/.exe continua pelo cmd.exe como ant
     },
   )
 
-  assert.deepEqual(launch, { command: 'cmd.exe', args: ['/d', '/s', '/c', 'claude', '--print'] })
+  assert.deepEqual(launch, { command: 'C:\\Windows\\System32\\cmd.exe', args: ['/d', '/s', '/c', 'claude', '--print'] })
+})
+
+// 15/10/2026: "File not found: " vazio ao abrir agente. O node-pty devolve
+// caminho vazio para um nome relativo que existe na pasta atual do processo, e
+// app aberto no login costuma nascer no System32. A prova na ConPTY real fica em
+// `pty-pasta-atual-system32.integration.test.cjs`.
+test('Windows: o agente vai pelo cmd.exe com caminho absoluto, nunca pelo nome solto', () => {
+  const cmdDoSistema = 'D:\\Win\\System32\\cmd.exe'
+  const launch = createPtyLaunchSpec(
+    'claude',
+    ['--print'],
+    { PATH: 'C:\\npm', SystemRoot: 'D:\\Win' },
+    win32Adapter,
+    false,
+    {
+      resolvePath: () => 'C:\\npm\\claude.cmd',
+      exists: (candidate) => candidate === cmdDoSistema,
+    },
+  )
+
+  assert.equal(launch.command, cmdDoSistema)
 })

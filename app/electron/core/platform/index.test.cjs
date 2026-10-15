@@ -24,10 +24,31 @@ describe('adaptadores de plataforma: shell do PTY', () => {
       assert.equal(getAdapter('win32').getDefaultShell({}, () => false), 'cmd.exe')
     })
 
+    it('no Windows sem PowerShell o cmd.exe sai com caminho absoluto quando existe', () => {
+      const cmd = 'D:\\Win\\System32\\cmd.exe'
+      assert.equal(
+        getAdapter('win32').getDefaultShell({ SystemRoot: 'D:\\Win' }, (candidate) => candidate === cmd),
+        cmd,
+      )
+    })
+
     it('SO desconhecido usa as regras POSIX do adaptador base', () => {
       const fallback = getAdapter('freebsd')
       assert.equal(fallback.name, 'linux')
       assert.equal(fallback.getDefaultShell({}), '/bin/bash')
+    })
+  })
+
+  describe('getCmdPath()', () => {
+    // O node-pty devolve "File not found: " vazio para nome relativo que existe
+    // na pasta atual do processo (app aberto no login costuma nascer no System32).
+    it('no Windows devolve o cmd.exe do SystemRoot com caminho absoluto', () => {
+      const cmd = 'D:\\Win\\System32\\cmd.exe'
+      assert.equal(getAdapter('win32').getCmdPath({ SystemRoot: 'D:\\Win' }, (candidate) => candidate === cmd), cmd)
+    })
+
+    it('no Windows sem nenhum cmd.exe no disco devolve o nome solto, como antes', () => {
+      assert.equal(getAdapter('win32').getCmdPath({}, () => false), 'cmd.exe')
     })
   })
 

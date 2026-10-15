@@ -13,7 +13,44 @@ const fs = require('node:fs')
 
 /** @returns {string} */
 function getDefaultShell(env, exists = fs.existsSync) {
-  return findPowerShell(env, exists) || 'cmd.exe'
+  return findPowerShell(env, exists) || getCmdPath(env, exists)
+}
+
+/**
+ * Caminho absoluto do `cmd.exe` para entregar ao node-pty.
+ *
+ * Nunca o nome solto: o node-pty 1.1.0 (`src/win/path_util.cc`,
+ * `get_shell_path`) procura um nome relativo e, quando ele existe na pasta
+ * atual do processo, devolve o caminho VAZIO em vez do achado; o spawn falha
+ * com "File not found: " sem caminho nenhum. App aberto pelo Windows no
+ * login costuma nascer com a pasta atual no System32, onde o `cmd.exe` mora:
+ * é o erro recorrente relatado em 15/10/2026 ao abrir agentes. Caminho
+ * absoluto pula essa busca inteira.
+ *
+ * @param {Record<string, string>} env
+ * @param {(candidate: string) => boolean} [exists]
+ * @returns {string}
+ */
+function getCmdPath(env, exists = fs.existsSync) {
+  const systemRoot = env.SystemRoot || env.WINDIR || 'C:\\Windows'
+  // O ComSpec só vale quando é mesmo um cmd.exe: trocado por outro shell
+  // (TCC, Clink), ele receberia `/d /s /c call ...` sem entender as flags.
+  const comSpec = env.ComSpec || env.COMSPEC
+  const candidates = [
+    path.join(systemRoot, 'System32', 'cmd.exe'),
+    comSpec && path.basename(comSpec).toLowerCase() === 'cmd.exe' ? comSpec : null,
+  ].filter(Boolean)
+
+  for (const candidate of candidates) {
+    try {
+      if (exists(candidate)) return candidate
+    } catch {
+      continue
+    }
+  }
+
+  // Sem nenhum no disco, o nome solto de antes: melhor que recusar o spawn.
+  return 'cmd.exe'
 }
 
 /** @returns {string[]} */
@@ -230,6 +267,7 @@ module.exports = {
   isPowerShellScript,
   escapeArg,
   getCacheBase,
+  getCmdPath,
   getDefaultShell,
   getExecutableExtensions,
   getPathEnvKey,

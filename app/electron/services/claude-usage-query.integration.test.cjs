@@ -304,7 +304,10 @@ test('consulta o /status do Claude por PTY nativa e navega até Usage', async ()
     assert.equal(launch.options.cwd, diretorio)
     assert.equal(launch.options.env.CLAUDE_CONFIG_DIR, configDir)
     if (process.platform === 'win32') {
-      assert.equal(launch.file.toLowerCase(), 'cmd.exe')
+      // Absoluto: com o nome solto, o node-pty devolve "File not found: "
+      // vazio quando a pasta atual do processo é o System32.
+      assert.ok(path.win32.isAbsolute(launch.file), `cmd.exe sem caminho absoluto: ${launch.file}`)
+      assert.equal(path.win32.basename(launch.file).toLowerCase(), 'cmd.exe')
       assert.ok(launch.args.includes('/c'))
       assert.ok(launch.args.includes('claude'))
     } else if (process.platform === 'darwin') {
