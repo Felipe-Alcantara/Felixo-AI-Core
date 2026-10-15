@@ -82,6 +82,8 @@ const MCP_STARTING_PATTERN = /Starting MCP servers|Booting MCP/i
 const STATUS_POPUP_PATTERN = /\/status\s+show current session/
 const TRUST_DIALOG_PATTERN = /trust (?:this|the files in this) folder/i
 const LIMITS_PENDING_PATTERN = /refresh requested|run \/status again/i
+// Cabeçalho do quadro sem moldura (Codex 0.159+), que abre o `/status` e a sessão.
+const BORDERLESS_HEADER_PATTERN = /^\s*>_\s+OpenAI Codex\b/
 
 /**
  * Rótulos do `/status` que descrevem a conversa aberta, não a conta. Saem da
@@ -519,34 +521,66 @@ function stripCodexTerminalOutput(value) {
 }
 
 /**
- * Quadros do `/status` no texto, na ordem em que saíram. Um quadro vai de
- * `╭` a `╰`; o da abertura (com "model:" e "directory:" em minúsculas) não
- * conta, porque não tem nenhum dos rótulos do `/status`.
+ * Quadros do `/status` no texto, na ordem em que saíram. O da abertura (com
+ * "model:" e "directory:" em minúsculas) não conta, porque não tem nenhum dos
+ * rótulos do `/status`.
+ *
+ * Duas formas, conforme a versão da CLI:
+ * - Até o Codex 0.158, com moldura: o quadro vai de `╭` a `╰`.
+ * - Do 0.159 em diante (openai/codex 819cdb726), sem moldura: o quadro vai do
+ *   cabeçalho ">_ OpenAI Codex" até o campo de mensagem (`›`) voltar ou o
+ *   próximo cabeçalho começar. Sob carga a CLI reimprime o cabeçalho da sessão
+ *   entre os limites e o campo (gravado em 15/10/2026). Sem nenhum dos dois
+ *   depois, o quadro ainda está sendo desenhado e não conta, para a leitura
+ *   não sair antes da linha dos limites. Só a forma com moldura era
+ *   reconhecida: medido em 15/10/2026, toda leitura no 0.163 esperava os 25 s
+ *   do tempo limite, e o painel Limites junto com ela.
  */
 function findStatusBoxes(text) {
   const lines = String(text ?? '').split('\n')
   const boxes = []
   let current = null
+  let bordered = false
+
+  const close = () => {
+    if (current?.some((inner) => parseFieldLine(inner) && isStatusField(parseFieldLine(inner).label))) {
+      boxes.push(current)
+    }
+    current = null
+  }
 
   for (const line of lines) {
     if (/^\s*╭/.test(line)) {
       current = []
+      bordered = true
+      continue
+    }
+    if (!bordered && BORDERLESS_HEADER_PATTERN.test(line)) {
+      // Um cabeçalho novo fecha o quadro anterior: a CLI já passou dele.
+      close()
+      current = [line]
       continue
     }
     if (!current) {
       continue
     }
-    if (/^\s*╰/.test(line)) {
-      if (current.some((inner) => parseFieldLine(inner) && isStatusField(parseFieldLine(inner).label))) {
-        boxes.push(current)
+    if (bordered) {
+      if (/^\s*╰/.test(line)) {
+        close()
+        bordered = false
+        continue
       }
-      current = null
+      const inner = extractBoxInner(line)
+      if (inner !== null) {
+        current.push(inner)
+      }
       continue
     }
-    const inner = extractBoxInner(line)
-    if (inner !== null) {
-      current.push(inner)
+    if (/^\s*›/.test(line)) {
+      close()
+      continue
     }
+    current.push(line.replace(/\s+$/, ''))
   }
 
   return boxes

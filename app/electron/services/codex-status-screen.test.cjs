@@ -285,6 +285,120 @@ test('fluxo completo: espera o campo, digita, repete enquanto os limites não ch
   assert.equal(fs.existsSync(pty.spawn.options.cwd), false, 'a pasta temporária é apagada quando o PTY sai')
 })
 
+/**
+ * O `/status` do Codex 0.159+ não tem moldura (openai/codex 819cdb726, "Render
+ * `/status` without borders"). Forma gravada ao vivo no 0.163.0-alpha.10.1 em
+ * 15/10/2026, anonimizada: cabeçalho, aviso da página de uso e os campos em
+ * duas colunas, com o esmaecido (`ESC[2m`) e o apagar-linha (`ESC[K`) da CLI.
+ * O bloco termina quando o campo de mensagem volta.
+ */
+const PLAIN_FIELD = (label, value) => `  \u001b[2m${`${label}:`.padEnd(21)}\u001b[22m${value}\u001b[K`
+const STATUS_PLAIN = (fields, { version = '0.163.0-alpha.10.1', composerAfter = true } = {}) =>
+  [
+    '',
+    '/status',
+    '',
+    `  >_ OpenAI Codex (v${version})\u001b[K`,
+    '\u001b[K',
+    '  Visit \u001b]8;;https://chatgpt.com/settings/usage\u001b\\https://chatgpt.com/settings/usage\u001b]8;;\u001b\\ for up-to-date\u001b[K',
+    '  information on rate limits and credits\u001b[K',
+    '\u001b[K',
+    ...fields.map(([label, value]) => PLAIN_FIELD(label, value)),
+    '',
+    ...(composerAfter ? ['› Ask Codex to do anything', ''] : []),
+  ].join('\r\n')
+/** Cabeçalho da sessão, também sem moldura desde o 0.159 (rótulo em minúsculas). */
+const SESSION_HEADER_PLAIN = [
+  '',
+  '  >_ OpenAI Codex (v0.163.0-alpha.10.1)',
+  '     /tmp/felixo-codex-status-x',
+  '  permissions: YOLO mode',
+  '',
+  '  Tip: Use /vim to toggle Vim editing in the composer.',
+  '',
+].join('\r\n')
+const PLAIN_PENDING_FIELDS = [
+  ['Model', 'GPT-6.1-Sol (reasoning high, summaries auto)'],
+  ['Model provider', 'openai'],
+  ['Directory', '/tmp/felixo-codex-status-x'],
+  ['Permissions', 'Full Access'],
+  ['Agents.md', '~/.codex/AGENTS.md'],
+  ['Account', 'pessoa@example.com (Plus)'],
+  ['Collaboration mode', 'Default'],
+  ['Session', '00000000-0000-0000-0000-000000000000'],
+  ['Limits', 'refresh requested; run /status again shortly.'],
+]
+
+test('Codex 0.159+: lê o /status sem moldura, do cabeçalho até o campo de mensagem voltar', () => {
+  const parsed = parseCodexStatusScreen(`${SESSION_HEADER_PLAIN}${STATUS_PLAIN(PLAIN_PENDING_FIELDS)}`)
+
+  assert.equal(parsed.version, '0.163.0-alpha.10.1')
+  assert.equal(parsed.usagePage, 'https://chatgpt.com/settings/usage')
+  assert.deepEqual(parsed.fields.map((field) => field.label), PLAIN_PENDING_FIELDS.map(([label]) => label))
+  assert.equal(parsed.fields[0].value, 'GPT-6.1-Sol (reasoning high, summaries auto)')
+  assert.equal(parsed.limitsPending, true)
+})
+
+test('Codex 0.159+: o cabeçalho da sessão sem moldura não conta como /status', () => {
+  assert.equal(parseCodexStatusScreen(`${SESSION_HEADER_PLAIN}› Ask Codex to do anything\r\n`), null)
+})
+
+test('Codex 0.159+: o cabeçalho da sessão redesenhado logo depois do /status também fecha o quadro', () => {
+  // Gravado em 15/10/2026 com dez leituras ao mesmo tempo: a CLI reimprimiu o
+  // cabeçalho da sessão entre a linha dos limites e o campo de mensagem. O
+  // quadro já estava completo e era descartado, e a leitura esperava os 25 s.
+  const output = `${STATUS_PLAIN(PLAIN_PENDING_FIELDS, { composerAfter: false })}${SESSION_HEADER_PLAIN}› Ask Codex to do anything\r\n`
+  const parsed = parseCodexStatusScreen(output)
+
+  assert.ok(parsed, 'o quadro do /status precisa ser lido')
+  assert.equal(parsed.version, '0.163.0-alpha.10.1')
+  assert.equal(parsed.limitsPending, true)
+  assert.equal(parsed.fields.at(-1).label, 'Limits')
+})
+
+test('Codex 0.159+: bloco sem o campo de mensagem depois ainda está sendo desenhado e não conta', () => {
+  // Sem esta espera a leitura podia sair com o quadro pela metade, antes da
+  // linha dos limites, e o painel mostraria a conta sem eles.
+  const partial = STATUS_PLAIN(PLAIN_PENDING_FIELDS.slice(0, 3), { composerAfter: false })
+
+  assert.equal(parseCodexStatusScreen(partial), null)
+})
+
+test('Codex 0.159+: fluxo completo sem moldura, repete o /status até os limites chegarem', async () => {
+  let statusCount = 0
+  const pty = fakePty({
+    onSpawn: (fake) => fake.emit(`\u001b[6n${composer(fake)}${SESSION_HEADER_PLAIN}`),
+    onWrite: (data, fake) => {
+      if (data === '/status') {
+        fake.emit('\r\n› /status      show current session configuration and token usage\r\n')
+      }
+      if (data === '\r') {
+        statusCount += 1
+        fake.emit(STATUS_PLAIN(
+          statusCount === 1
+            ? [['Model', 'GPT-6.1-Sol (reasoning high)'], ['Limits', 'refresh requested; run /status again shortly.']]
+            : [['Model', 'GPT-6.1-Sol (reasoning high)'], ['Directory', '/tmp/x'], ['5h limit', '[████] 80% left (resets 19:33)']],
+        ))
+      }
+    },
+  })
+  const read = createCodexStatusScreenQuery({ spawnPty: pty.factory, platform: LINUX })
+
+  const result = await read({ ...FAST, env: { CODEX_HOME: '/perfis/conta-b' } })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.limitsPending, false)
+  assert.equal(result.version, '0.163.0-alpha.10.1')
+  assert.deepEqual(result.lines, [
+    'OpenAI Codex (v0.163.0-alpha.10.1)',
+    'Visit https://chatgpt.com/settings/usage for up-to-date information on rate limits and credits',
+    'Model: GPT-6.1-Sol (reasoning high)',
+    '5h limit: [████] 80% left (resets 19:33)',
+  ])
+  assert.deepEqual(result.omittedLabels, ['Directory'])
+  assert.deepEqual(pty.writes, ['\u001b[1;1R', '/status', '\r', '/status', '\r'])
+})
+
 test('pergunta de confiança na pasta: sai com Esc e nunca envia Enter', async () => {
   const pty = fakePty({
     onSpawn: (fake) => fake.emit('> You are in /tmp/x\r\n\r\n  Do you trust the files in this folder?\r\n\r\n› 1. Yes, continue\r\n  2. No, quit\r\n'),
