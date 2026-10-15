@@ -1463,3 +1463,105 @@ problema.
 
 Estado: investigação concluída, sem mudança de código. A conferência do Codex no PC do print ficou
 como task no Notion.
+
+## 2026-10-15 — Limites e uso: ~31 s a cada abertura (leitor do /status do Codex e coleta refeita)
+
+Registro de Claude — Tasks do AI Core (Opus 5.5). Relato: "Toda vez que abre os limites de uso ele
+demora muito pra recarregar".
+
+**Medido antes de mexer.** O script do scratchpad montou o serviço com as dependências reais do
+`main.cjs`, cada uma cronometrada: as 9 contas Codex com login próprio deste PC (perfis lidos do
+`cli-accounts.json`, sem abrir segredo), o login do sistema e um banco temporário.
+
+- `list()`, o passo "instantâneo" da abertura: 3,1 a 3,5 s, quase tudo no catálogo (`--version` de
+  cada CLI).
+- `refresh()`, disparado em toda abertura: 31,4, 31,0 e 31,0 s. Cada uma das 10 consultas do Codex
+  levou de 25,1 a 25,6 s; o Claude levou 9,9 s; os logins, de 0,4 a 2,8 s.
+- Uma consulta do Codex sozinha: o app-server respondeu em 5,5 a 8,7 s com os números, e a tela do
+  `/status` falhou em 25,2 s ("O /status do Codex não apareceu a tempo"). A consulta espera as duas
+  (`Promise.all` em `codex-status-query.cjs`).
+
+**Causa 1 — leitor da tela do `/status` do Codex.** Desde a 0.159.0 (openai/codex `819cdb726`,
+"Render `/status` without borders", 27/09/2026; o `latest` hoje é 0.162.1) o `/status` não tem
+moldura. `findStatusBoxes` só reconhecia `╭ │ ╰`. A gravação da saída real (0.163.0-alpha.10.1) tinha
+zero caracteres de moldura e os campos `Model:`, `Account:` e `Limits:` soltos, com recuo. Toda
+leitura esperava o teto de 25 s, e como desde 14/10 o app atualiza o Codex sozinho, todo mundo
+passou a pagar isso. Correção (`4199363`): o quadro sem moldura vai do cabeçalho `>_ OpenAI Codex`
+até o campo `›` voltar ou o próximo cabeçalho começar. O segundo fim veio de uma falha gravada com
+10 leituras ao mesmo tempo: a CLI reimprime o cabeçalho da sessão entre os limites e o campo. Sem
+nenhum dos dois, o quadro ainda está sendo desenhado e não conta. A forma com moldura continua lida.
+
+**Causa 2 — a coleta inteira refeita a cada abertura.** Decisão do Felipe (pergunta interativa,
+15/10): reaproveitar a coleta recente. Implementação:
+
+- `shouldRefreshAgentUsageOnOpen` em `features/shared/agent-usage/agent-usage.ts`: com coleta
+  completa de menos de 5 min (`refreshedAt`), o painel do canvas e o modal antigo do chat abrem com
+  ela e não reconsultam. Sem coleta, com data ilegível ou "do futuro", reconsultam. O Atualizar sempre
+  força.
+- O catálogo de CLIs ganhou a mesma janela no serviço (`CATALOG_REUSE_MS`): `list()` e a releitura do
+  watcher (que roda a cada gravação da statusline) reaproveitam o catálogo lido há menos de 5 min, e
+  `refresh()` sempre lê de novo.
+
+**Causa 1, segunda parte: duas formas que ainda esperavam 25 s.** Com `4199363`, rodadas de 5
+coletas ainda tinham 1 em 50 e 4 em 50 telas presas nos 25 s. A medição passou a gravar a saída do
+PTY de cada tela que falhava, e apareceram duas formas. Na primeira, o campo `›` já estava na tela e a
+CLI, que redesenha por diferença, não o reimprimiu: depois dos limites só vieram `ESC[27;3H` e quadros
+sincronizados vazios (`ESC[?2026h`/`l`), e o bloco sem moldura nunca fechava. Na segunda, a CLI
+desenhou o cabeçalho, redesenhou o campo e o rodapé embaixo e só então voltou o cursor (`ESC[13;1H`)
+para os campos; no texto corrido o `›` fecha o bloco antes deles. Passadas pelo xterm headless que o
+leitor já mantém, as duas gravações mostram o quadro inteiro. Correção (`6732edd`): com a tela parada
+(`readyQuietMs`), a leitura ao vivo conta o bloco aberto que já tem a linha dos limites e, se o texto
+corrido não trouxer quadro novo, o quadro da tela renderizada. Sem a linha dos limites, o bloco
+aberto continua sem encerrar a leitura. `parseCodexStatusScreen` (texto gravado) não mudou.
+
+**Depois.** Medição final das 13:54 às 13:59, máquina ociosa: 5 coletas com o código de antes
+(`1f0c1ae`) e, em seguida, 5 com o de agora, 9 contas Codex e o login do sistema. p50 / p95 pelo
+posto mais próximo.
+
+| Medida | Antes | Depois |
+| --- | --- | --- |
+| Tela do `/status` do Codex lida | 0 de 50 | 50 de 50 |
+| Consulta do Codex por conta | 25,2 s / 25,5 s | 11,3 s / 15,2 s |
+| `list()` logo depois de uma coleta (reabrir o painel) | 3,0 s | 0,0 s |
+| Coleta inteira (Atualizar, ou abrir depois de 5 min) | 31,4 s / 35,5 s | 36,1 s / 36,5 s |
+
+- A coleta inteira não melhorou nessa rodada porque quem a segura agora é o `/status` do Claude: em
+  3 das 5 coletas ele estourou os 30 s, e a coleta espera a fonte mais lenta. Nas 2 em que ele falhou
+  rápido, a coleta levou 17,8 e 18,6 s.
+- Com o mesmo código, o Codex por conta variou de ~6 s (13:24 a 13:29) a ~12 s (13:32 em diante),
+  conforme a carga da máquina: o app instalado, que roda os agentes do canvas, é o maior consumidor
+  de CPU dela. O gravador de telas da medição não pesa: com e sem ele, ~11 s no mesmo horário.
+- Depois da segunda correção: 80 de 80, 59 de 60 e 50 de 50 telas lidas. A que faltou foi o Codex
+  fechando sozinho em 1,5 s na partida ("O Codex fechou antes de mostrar o /status"), que o código
+  antigo também teve 2 vezes; ela não espera os 25 s, e os números do app-server chegam mesmo assim.
+- App real pela fonte (`felixo devtools`, perfil isolado, `ipcProbe`): a reabertura ficou pronta em
+  290, 227 e 246 ms, medidos no relógio do renderer, sem nenhum `agent-usage:refresh` novo (o `list`
+  subiu de 2 para 5 e o `refresh` ficou em 1). O Atualizar levou o `refresh` a 2, e o selo "ao vivo"
+  passou para a hora nova.
+- O texto do `/status` do Codex volta a aparecer no painel, sumido desde o 0.159.
+
+**Achado fora do escopo: o `/status` do Claude virou o gargalo da coleta (task aberta).** Em Node,
+com o login do sistema e o Claude Code 2.1.300, nenhuma das 47 consultas das rodadas de hoje devolveu
+os limites: 32 falharam em 4 a 8 s com "O /status do Claude não retornou os limites de uso" e 15
+estouraram os 30 s ("A consulta ao /status do Claude excedeu o tempo limite"). No app real, os 35
+registros `agent-usage:live-query` em `userData/logs/qa` são todos "não retornou", o último de 14/10.
+O painel fica sem os números do Claude, e cada estouro segura a coleta inteira em ~36 s. Task no
+Notion: `3fa91f95-497e-81fc-b87c-e65a5bdce2a5`.
+
+**Achado no gate: o `npm test` travava em silêncio.** Duas rodadas seguidas da suíte Node pararam
+por mais de meia hora em `openia-image-service.test.cjs`, sem processo filho vivo. Com o inspetor
+ligado no processo preso (`process._debugProcess`), o único recurso vivo era o `setInterval(() => {},
+TIMEOUT_MAX)` do harness do `node:test`: no Node 25, quando um teste espera uma promessa que nunca
+resolve e nada mais segura o processo, o runner espera para sempre (antes falhava com "Promise
+resolution is still pending"). Pelo escopo desse timer, a raiz dos testes mostrou o pendente: "limite
+de execuções simultâneas e identificador repetido". O `generate` reserva a vaga na hora, mas só chama
+o filho depois do catálogo e de um `mkdir` real; o teste esperava 30 ms fixos e liberava só quem já
+tinha chegado. Sob carga, a segunda geração chegava depois e ficava sem dono. O teste "cancelar" tem a
+mesma corrida: cancelado durante o `mkdir`, o falso recebe o sinal já abortado e nunca ouve o
+`abort` (o `runOpeniaImageProcess` de produção trata esse caso). Reprodução: 12 cópias paralelas do
+arquivo, 2 travadas. Correção: `esperarAte` espera a condição real (o filho chamado), com prazo de
+5 s que falha em vez de travar. Depois: 24 de 24 cópias passaram, a mais lenta em 0,44 s. O runner
+continua sem prazo por arquivo; ficou a task `3fa91f95-497e-812c-8171-ca83c4ab7c84`.
+
+**Não validado.** O app instalado com a release nova. A janela de 5 min não foi esperada de verdade
+no app; ela é coberta pelos testes, com relógio injetado.

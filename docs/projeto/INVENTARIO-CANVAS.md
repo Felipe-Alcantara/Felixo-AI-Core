@@ -1637,17 +1637,17 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **ID:** `tool-agent-usage` · **Dono:** `src/features/canvas/components/tools/AgentUsagePanel.tsx`
 - **Persistência:** processo principal: SQLite agent_usage_accounts e agent_usage_samples (contas extras e amostras de uso); ~/.claude/settings.json: statusLine do app ao ligar a coleta, com backup da anterior; script e captura em userData/claude-statusline; nenhuma: aba e intervalo de reconsulta são estado do componente
 - **IPC:** `agent-usage:list`, `agent-usage:refresh`, `agent-usage:add-account`, `agent-usage:remove-account`, `agent-usage:consume-reset-credit`, `agent-usage:claude-statusline-status`, `agent-usage:enable-claude-statusline`, `agent-usage:disable-claude-statusline`, `agent-usage:changed`
-- **Depende de:** `window.felixo.agentUsage`, `CanvasPanel`, `consumeRequestedAgentUsageTab`, `rovingIndex`, `FelixoSelect`, `shouldRunScheduledAgentUsageRefresh`, `getAccountStatus`, `AgentUsageResetCreditsView`, `AgentUsageStatusDetailsView`, `ProviderSummaryTable`, `summarizeProviderAccounts`, `AccountChainSection`, `AccountSwitchHistory`
+- **Depende de:** `window.felixo.agentUsage`, `CanvasPanel`, `consumeRequestedAgentUsageTab`, `rovingIndex`, `FelixoSelect`, `shouldRefreshAgentUsageOnOpen`, `shouldRunScheduledAgentUsageRefresh`, `getAccountStatus`, `AgentUsageResetCreditsView`, `AgentUsageStatusDetailsView`, `ProviderSummaryTable`, `summarizeProviderAccounts`, `AccountChainSection`, `AccountSwitchHistory`
 - **Sobreposição:** CanvasPanel: absolute z-20 (z-30 com foco dentro), top-16, à direita da barra lateral e deslocado quando o menu de ferramentas abre (toolsMenuOpen); largura limitada a viewport − barra − inspector Elementos (288 px) e altura a viewport − 112. Os menus do FelixoSelect abrem em portal z-1000 por cima; toasts (z 50) e AgentQuestionDialog/HandoffDialog (z 60) cobrem o painel. Em janela <768 px o painel passa da viewport (PANEL_MIN_WIDTH 260, task 3e691f95-497e-815c-a129-f4d2d6405cbc). Tamanho lg (o mais largo desta parte); o window.confirm do Remover é diálogo nativo, fora da escala de z
 - **Testes:** `src/features/shared/agent-usage/agent-usage.test.ts`, `src/features/canvas/components/tools/AgentUsageProviderSummary.test.ts`, `electron/services/agent-usage-ipc-handlers.test.cjs`, `electron/services/agent-usage-service.test.cjs`, `electron/services/claude-statusline-service.test.cjs`, `electron/services/codex-status-query.test.cjs`, `electron/services/codex-status-screen.test.cjs`, `scripts/canvas-smoke-contas.cjs` → `abrirLimitesEUso`
 
 | Estado | Quando |
 | --- | --- |
 | normal | Aba "Uso agora": um cartão por provider com versão, a tabela de resumo das contas (AgentUsageProviderSummary.tsx: um `<tbody>` por conta, com a identidade e o aviso de bloqueio numa linha de largura inteira — `th scope="rowgroup"` — e, abaixo, plano, quanto sobra em cada janela da conta e selo de status) e, por conta, "— /status completo" recolhido num <details> que guarda o próprio estado entre coletas: barras por janela com reset (a de um modelo só leva a etiqueta "só este modelo"), fonte, horário da medição, resets bancados e os dados completos do /status; o cartão do Codex avisa que os campos da conversa aberta ficam fora de propósito; as abas Cadeia e Trocas montam AccountChainSection e AccountSwitchHistory |
-| loading | loading=true na abertura (lista o salvo e em seguida agent-usage:refresh) e no Atualizar; sem conteúdo mostra "Consultando as CLIs instaladas…" e o ícone gira |
+| loading | loading=true na abertura (lista o salvo e, só se a última coleta completa tiver 5 min ou mais — shouldRefreshAgentUsageOnOpen —, chama agent-usage:refresh) e no Atualizar; sem conteúdo mostra "Consultando as CLIs instaladas…" e o ícone gira |
 | empty | !hasContent e !loading: "Nenhuma CLI foi detectada nesta máquina."; provider sem conta: "Nenhuma conta vinculada a este provider."; conta sem amostra mostra a limitação da fonte por extenso, nunca zero |
 | error | statusMessage em faixa âmbar (falha de list/refresh/remover/reset ou "Não foi possível falar com o processo principal."); sem ponte: "Este painel só funciona no app desktop."; amostra com errorMessage aparece na linha da conta |
-| success | Selo "ao vivo" depois de um refresh ou de agent-usage:changed; "Reset aplicado com sucesso." depois de usar um reset |
+| success | Selo "ao vivo" depois de um refresh, de agent-usage:changed ou de uma abertura que reaproveitou a coleta recente (com a hora dela no title); "Reset aplicado com sucesso." depois de usar um reset |
 | disabled | Atualizar desabilitado durante loading; "Adicionar ao painel" sem nome; botão da coleta durante busy, e ausente quando ~/.claude/settings.json não é legível ou já tem outra statusLine |
 
 | Controle | Gatilho | Efeito | Falha conhecida | Teste |
@@ -1655,7 +1655,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `role="tab"` (button) | clique ou setas/Home/End no tablist (rovingIndex) | Troca a aba entre Uso agora, Cadeia e Trocas (só o tabpanel ativo monta); a aba inicial pode vir pedida por consumeRequestedAgentUsageTab | sem falha própria | `scripts/canvas-smoke-contas.cjs` → `irParaAba` |
 | `Atualizar` (button) | clique | agent-usage:refresh: por conta e perfil, abre uma sessão PTY descartável de /status (Claude e Codex; no Codex junto com o app-server, que traz os números), regrava as amostras e acende "ao vivo" (desabilitado: loading) | ok: false ou exceção viram statusMessage âmbar; o painel continua com o último valor conhecido, marcado como antigo pelo selo; a rodada tem teto (REFRESH_DEADLINE_MS, 90 s): estourar cancela a consulta (app-server e PTY do Codex inclusive) e volta com refreshError em vez de girar para sempre | — |
 | `Reconectar` (button) | clique | agent-usage:reconnect: abandona a rodada em andamento (aborta as consultas dela, que encerram o PTY do Claude e o app-server do Codex) e refaz do zero; só a resposta do pedido mais recente é aplicada no painel | ok: false ou exceção viram statusMessage âmbar, como no Atualizar; nunca desabilitado — é durante uma coleta presa que ele serve | `electron/services/agent-usage-service.test.cjs` |
-| `Intervalo de reconsulta` (select) | clique | Liga um setInterval de 5/15/30 min que chama agent-usage:refresh só quando shouldRunScheduledAgentUsageRefresh deixa (janela visível e Modo Performance desligado); 0 = só ao abrir/atualizar | sem falha própria; a escolha não persiste e volta a 0 ao reabrir o painel | — |
+| `Intervalo de reconsulta` (select) | clique | Liga um setInterval de 5/15/30 min que chama agent-usage:refresh só quando shouldRunScheduledAgentUsageRefresh deixa (janela visível e Modo Performance desligado); 0 = só ao abrir (se a coleta tiver 5 min ou mais) e no Atualizar | sem falha própria; a escolha não persiste e volta a 0 ao reabrir o painel | — |
 | `Ligar coleta do rate limit` (button) | clique | agent-usage:enable-claude-statusline (ou disable, quando já instalada): grava ou remove a statusLine do app em ~/.claude/settings.json, com backup da anterior, e recarrega o painel (desabilitado: busy; só existe no cartão do Claude, com settings legível e sem statusLine alheia) | erro engolido: a mensagem de falha do main nunca aparece; se o handler lançar, o resultado de erro vira o estado e o botão some atrás de "Não foi possível ler ~/.claude/settings.json" (AgentUsagePanel.tsx:190-204) | — |
 | `Remover a conta` (button) | clique e confirmação em window.confirm | agent-usage:remove-account apaga a conta e o histórico local de uso do painel (o perfil de login dos terminais não muda) e redesenha com o dashboard devolvido | "Não foi possível remover a conta do painel." em faixa âmbar; cancelar o confirm não chama nada | — |
 | `Adicionar outra conta` (button) | clique | Abre e fecha o formulário de conta extra (desabilitado: só aparece quando há algum provider (hasContent)) | sem falha própria | — |
@@ -1665,8 +1665,8 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | Atualizar, Reconsultar, Remover, Adicionar conta e Ligar coleta não têm teste de interface (o smoke de contas só abre o painel e troca de aba); enable/disable da statusLine também não aparece em agent-usage-ipc-handlers.test.cjs | médio | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
-| AgentUsagePanel.tsx:190-204 e 580-633: a resposta de agent-usage:enable/disable-claude-statusline substitui o estado sem olhar ok; a mensagem de falha (ex.: "Não foi possível gravar o script da status line.") nunca é exibida, e um erro lançado no handler vira estado sem settingsReadable, escondendo o botão atrás de "Não foi possível ler ~/.claude/settings.json" | médio | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
-| O refresh abre um PTY de /status por conta: erros e lentidão no uso real ainda não foram medidos | médio | `3eb91f95-497e-81fb-9909-fcd86abe2e3f` |
+| AgentUsagePanel.tsx:202-216 e 592-645: a resposta de agent-usage:enable/disable-claude-statusline substitui o estado sem olhar ok; a mensagem de falha (ex.: "Não foi possível gravar o script da status line.") nunca é exibida, e um erro lançado no handler vira estado sem settingsReadable, escondendo o botão atrás de "Não foi possível ler ~/.claude/settings.json" | médio | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
+| O refresh abre um PTY de /status por conta. Medido em 15/10/2026 com 9 contas Codex e o Claude: a consulta do Codex por conta caiu de 25,2 s para ~11 s (p50) com a leitura do /status sem moldura (Codex 0.159+), mas a coleta inteira segue em ~31 a 36 s porque o /status do Claude 2.1.300 nunca devolve os limites (0 de 47): falha em 4 a 8 s ou estoura os 30 s (15 de 47), e a coleta espera a fonte mais lenta | médio | `3fa91f95-497e-81fc-b87c-e65a5bdce2a5` |
 
 ### Orquestrador
 
@@ -2889,7 +2889,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3eb91f95-497e-817d-baf1-fbf8f400f399` — 1 lacuna
 - `3eb91f95-497e-81b8-a70f-dfce2a446a3e` — 2 lacunas
 - `3eb91f95-497e-81bb-a374-eb2e336c73c6` — 1 lacuna
-- `3eb91f95-497e-81fb-9909-fcd86abe2e3f` — 1 lacuna
 - `3ec91f95-497e-8103-b360-c1979d6992f4` — 9 lacunas
 - `3ec91f95-497e-8110-b363-cfade2b68b7a` — 43 lacunas
 - `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` — 19 lacunas
@@ -2906,3 +2905,4 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3ec91f95-497e-81f7-8b12-c5c252d020c7` — 5 lacunas
 - `3f291f95-497e-81fe-8670-fe2fc871318d` — 1 lacuna
 - `3f491f95-497e-8126-b0ec-fab2a600214a` — 1 lacuna
+- `3fa91f95-497e-81fc-b87c-e65a5bdce2a5` — 1 lacuna

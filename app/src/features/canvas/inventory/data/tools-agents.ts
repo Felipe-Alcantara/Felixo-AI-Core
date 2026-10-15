@@ -186,10 +186,10 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
     owner: `${TOOLS}/AgentUsagePanel.tsx`,
     states: {
       normal: 'Aba "Uso agora": um cartão por provider com versão, a tabela de resumo das contas (AgentUsageProviderSummary.tsx: um `<tbody>` por conta, com a identidade e o aviso de bloqueio numa linha de largura inteira — `th scope="rowgroup"` — e, abaixo, plano, quanto sobra em cada janela da conta e selo de status) e, por conta, "— /status completo" recolhido num <details> que guarda o próprio estado entre coletas: barras por janela com reset (a de um modelo só leva a etiqueta "só este modelo"), fonte, horário da medição, resets bancados e os dados completos do /status; o cartão do Codex avisa que os campos da conversa aberta ficam fora de propósito; as abas Cadeia e Trocas montam AccountChainSection e AccountSwitchHistory',
-      loading: 'loading=true na abertura (lista o salvo e em seguida agent-usage:refresh) e no Atualizar; sem conteúdo mostra "Consultando as CLIs instaladas…" e o ícone gira',
+      loading: 'loading=true na abertura (lista o salvo e, só se a última coleta completa tiver 5 min ou mais — shouldRefreshAgentUsageOnOpen —, chama agent-usage:refresh) e no Atualizar; sem conteúdo mostra "Consultando as CLIs instaladas…" e o ícone gira',
       empty: '!hasContent e !loading: "Nenhuma CLI foi detectada nesta máquina."; provider sem conta: "Nenhuma conta vinculada a este provider."; conta sem amostra mostra a limitação da fonte por extenso, nunca zero',
       error: 'statusMessage em faixa âmbar (falha de list/refresh/remover/reset ou "Não foi possível falar com o processo principal."); sem ponte: "Este painel só funciona no app desktop."; amostra com errorMessage aparece na linha da conta',
-      success: 'Selo "ao vivo" depois de um refresh ou de agent-usage:changed; "Reset aplicado com sucesso." depois de usar um reset',
+      success: 'Selo "ao vivo" depois de um refresh, de agent-usage:changed ou de uma abertura que reaproveitou a coleta recente (com a hora dela no title); "Reset aplicado com sucesso." depois de usar um reset',
       disabled: 'Atualizar desabilitado durante loading; "Adicionar ao painel" sem nome; botão da coleta durante busy, e ausente quando ~/.claude/settings.json não é legível ou já tem outra statusLine',
     },
     controls: [
@@ -218,7 +218,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
       {
         locator: 'Intervalo de reconsulta',
         kind: 'select',
-        effect: 'Liga um setInterval de 5/15/30 min que chama agent-usage:refresh só quando shouldRunScheduledAgentUsageRefresh deixa (janela visível e Modo Performance desligado); 0 = só ao abrir/atualizar',
+        effect: 'Liga um setInterval de 5/15/30 min que chama agent-usage:refresh só quando shouldRunScheduledAgentUsageRefresh deixa (janela visível e Modo Performance desligado); 0 = só ao abrir (se a coleta tiver 5 min ou mais) e no Atualizar',
         failure: 'sem falha própria; a escolha não persiste e volta a 0 ao reabrir o painel',
       },
       {
@@ -278,6 +278,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
       'consumeRequestedAgentUsageTab',
       'rovingIndex',
       'FelixoSelect',
+      'shouldRefreshAgentUsageOnOpen',
       'shouldRunScheduledAgentUsageRefresh',
       'getAccountStatus',
       'AgentUsageResetCreditsView',
@@ -304,14 +305,14 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
         task: '3ec91f95-497e-81ca-8319-ee657b0b6492',
       },
       {
-        what: 'AgentUsagePanel.tsx:190-204 e 580-633: a resposta de agent-usage:enable/disable-claude-statusline substitui o estado sem olhar ok; a mensagem de falha (ex.: "Não foi possível gravar o script da status line.") nunca é exibida, e um erro lançado no handler vira estado sem settingsReadable, escondendo o botão atrás de "Não foi possível ler ~/.claude/settings.json"',
+        what: 'AgentUsagePanel.tsx:202-216 e 592-645: a resposta de agent-usage:enable/disable-claude-statusline substitui o estado sem olhar ok; a mensagem de falha (ex.: "Não foi possível gravar o script da status line.") nunca é exibida, e um erro lançado no handler vira estado sem settingsReadable, escondendo o botão atrás de "Não foi possível ler ~/.claude/settings.json"',
         risk: 'médio',
         task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
       },
       {
-        what: 'O refresh abre um PTY de /status por conta: erros e lentidão no uso real ainda não foram medidos',
+        what: 'O refresh abre um PTY de /status por conta. Medido em 15/10/2026 com 9 contas Codex e o Claude: a consulta do Codex por conta caiu de 25,2 s para ~11 s (p50) com a leitura do /status sem moldura (Codex 0.159+), mas a coleta inteira segue em ~31 a 36 s porque o /status do Claude 2.1.300 nunca devolve os limites (0 de 47): falha em 4 a 8 s ou estoura os 30 s (15 de 47), e a coleta espera a fonte mais lenta',
         risk: 'médio',
-        task: '3eb91f95-497e-81fb-9909-fcd86abe2e3f',
+        task: '3fa91f95-497e-81fc-b87c-e65a5bdce2a5',
       },
     ],
     overlap: `${PAINEL}. Tamanho lg (o mais largo desta parte); o window.confirm do Remover é diálogo nativo, fora da escala de z`,

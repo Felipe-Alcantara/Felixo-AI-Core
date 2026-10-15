@@ -46,9 +46,14 @@ extenso, em vez de mostrar zero. As fontes declaradas com consulta ao vivo são
 executadas em cada atualização e por conta/perfil: o Codex lê o app-server
 autenticado e a tela do `/status` (ver abaixo), o Claude abre uma sessão PTY
 descartável e executa o `/status`, e o Openia chama seu `statusline`. Por
-isso o painel não copia o limite do login do sistema para outra linha. O botão
-**Atualizar** repete a consulta, e a atualização automática pode ser
-configurada em intervalos de 5, 15 ou 30 minutos.
+isso o painel não copia o limite do login do sistema para outra linha. Ao
+abrir, o painel mostra o que já tem e só consulta de novo se a última coleta
+completa tiver 5 minutos ou mais (ou se ainda não houve coleta desde que o app
+abriu). Abaixo disso, a coleta recente vale para aquela abertura, e o selo
+**ao vivo** mostra a hora dela: abrir e fechar o painel várias vezes não refaz
+a consulta de todas as contas. O botão **Atualizar** sempre repete a consulta,
+e a atualização automática pode ser configurada em intervalos de 5, 15 ou 30
+minutos.
 
 No Claude Code, cada linha também traz **Dados completos do /status**: versão,
 sessão, peer, pasta, método de login, organização, e-mail, modelo, fontes de
@@ -75,8 +80,9 @@ mesmo tempo, com o login daquela conta:
   marcada como confiável só naquela execução (`-c projects=...`), espera os
   servidores MCP subirem e só digita com o campo de mensagem vazio, nunca
   responde a um diálogo com Enter e não envia mensagem nenhuma: o `config.toml`,
-  o histórico e as sessões do Codex ficam como estavam. Se a tela não for lida,
-  os números continuam valendo e os detalhes dizem por quê.
+  o histórico e as sessões do Codex ficam como estavam. A leitura reconhece o
+  `/status` com moldura (até o Codex 0.158) e sem moldura (0.159 em diante). Se
+  a tela não for lida, os números continuam valendo e os detalhes dizem por quê.
 
 Ficam de fora **de propósito** os campos do `/status` que descrevem a conversa
 aberta em um terminal, não a conta: pasta, permissões da pasta, Agents.md,
