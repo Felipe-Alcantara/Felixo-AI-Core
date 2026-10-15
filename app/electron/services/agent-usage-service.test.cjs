@@ -1377,3 +1377,60 @@ test(
     }
   },
 )
+
+test(
+  'catálogo de CLIs lido há menos de 5 min vale para o list(); a coleta (refresh) sempre lê de novo',
+  { skip: hasNodeSqlite() ? false : 'node:sqlite indisponível neste runtime' },
+  async () => {
+    // O catálogo roda o `--version` de cada CLI: ~3 s medidos em 15/10/2026,
+    // pagos a cada abertura do painel mesmo quando a coleta recente é
+    // reaproveitada (decisão do Felipe: reaproveitar por 5 min).
+    const databaseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-agent-usage-catalogo-'))
+    const database = createStorageDatabase({ databaseDir })
+    const repository = createAgentUsageRepository(database)
+    const nowValue = { value: Date.parse('2026-10-15T14:00:00.000Z') }
+    const catalog = listAgentUsageSources().map((source) => ({
+      id: source.id,
+      name: source.name,
+      provider: source.provider,
+      command: source.command,
+      detected: true,
+      version: 'test',
+    }))
+    let leituras = 0
+    const service = createAgentUsageService({
+      repository,
+      probe: () => null,
+      now: () => nowValue.value,
+      listCatalog: async () => {
+        leituras += 1
+        return catalog
+      },
+      runCommand: async () => ({ ok: false, stdout: '', stderr: '' }),
+      queryLiveUsage: {},
+    })
+
+    try {
+      await service.list()
+      assert.equal(leituras, 1)
+      await service.list()
+      assert.equal(leituras, 1, 'a segunda abertura reaproveita o catálogo')
+
+      nowValue.value += 5 * 60_000 - 1
+      await service.list()
+      assert.equal(leituras, 1, 'ainda dentro dos 5 min')
+
+      nowValue.value += 1
+      await service.list()
+      assert.equal(leituras, 2, 'com 5 min o catálogo é lido de novo')
+
+      await service.refresh()
+      assert.equal(leituras, 3, 'o Atualizar sempre lê o catálogo de novo')
+      await service.list()
+      assert.equal(leituras, 3, 'e o list() seguinte usa o catálogo da coleta')
+    } finally {
+      database.close()
+      fs.rmSync(databaseDir, { recursive: true, force: true })
+    }
+  },
+)

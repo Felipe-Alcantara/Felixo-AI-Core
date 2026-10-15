@@ -42,6 +42,14 @@ const REFRESH_DEADLINE_MS = 90_000
 /** Depois do teto, quanto esperar a rodada assentar antes de soltar o botão. */
 const REFRESH_SETTLE_GRACE_MS = 5_000
 const STALE_AFTER_MS = 15 * 60 * 1000
+/**
+ * Por quanto tempo o catálogo de CLIs (um `--version` por CLI, ~3 s medidos em
+ * 15/10/2026) vale para o `list()` e para a releitura do watcher. É a mesma
+ * janela em que o painel reaproveita a última coleta ao abrir (decisão do
+ * Felipe, 15/10/2026): sem ela, a abertura "direta" ainda esperava o catálogo.
+ * A coleta (`refresh()`, o Atualizar) sempre lê o catálogo de novo.
+ */
+const CATALOG_REUSE_MS = 5 * 60 * 1000
 const SECRET_LIKE_INPUT_PATTERN =
   /(api[_ -]?key|access[_ -]?token|auth[_ -]?token|bearer|cookie|password|secret|sk-|eyJ[A-Za-z0-9_-]{8,})/i
 
@@ -100,9 +108,26 @@ function createAgentUsageService({
   // sobrescreve o resultado de uma mais nova.
   let generation = 0
   let currentRound = null
+  // Último catálogo lido e quando; ver CATALOG_REUSE_MS.
+  let lastCatalog = null
+
+  function rememberCatalog(catalog) {
+    lastCatalog = { catalog, readAt: now() }
+    return catalog
+  }
+
+  async function readRecentCatalog() {
+    if (lastCatalog) {
+      const age = now() - lastCatalog.readAt
+      if (age >= 0 && age < CATALOG_REUSE_MS) {
+        return lastCatalog.catalog
+      }
+    }
+    return rememberCatalog(await readCatalog(listCatalog))
+  }
 
   async function list() {
-    const catalog = await readCatalog(listCatalog)
+    const catalog = await readRecentCatalog()
     const accounts = ensureDiscoveredAccounts({
       catalog,
       repository,
@@ -179,7 +204,7 @@ function createAgentUsageService({
   }
 
   async function refreshInternal(round = { id: ++generation, controller: new AbortController(), reason: null }) {
-    const catalog = await readCatalog(listCatalog)
+    const catalog = rememberCatalog(await readCatalog(listCatalog))
     const accounts = ensureDiscoveredAccounts({
       catalog,
       repository,
@@ -468,7 +493,9 @@ function createAgentUsageService({
       ok: true,
       ...buildDashboard({
         accounts: repository.listAccounts(),
-        catalog: await readCatalog(listCatalog),
+        // A releitura roda a cada gravação da statusline: um `--version` por
+        // CLI aqui era o custo mais repetido do painel.
+        catalog: await readRecentCatalog(),
         repository,
         now,
         lastRefreshAt,
