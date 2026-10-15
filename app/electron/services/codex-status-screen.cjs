@@ -174,6 +174,7 @@ function createCodexStatusScreenQuery({
       let entersThisAttempt = 0
       let attempts = 0
       let boxesAtSend = 0
+      let renderedAtSend = 0
       let boxesSeen = 0
       let lastBoxAt = 0
       let retryAt = 0
@@ -245,9 +246,32 @@ function createCodexStatusScreenQuery({
         return text
       }
 
-      const latestBox = () => {
-        const boxes = findStatusBoxes(currentText())
+      // `includeOpen` conta o quadro sem moldura ainda aberto que já tem os
+      // limites (veja scanStatusBoxes): com a tela parada ele está completo.
+      const latestBox = ({ includeOpen = false } = {}) => {
+        const { boxes, open } = scanStatusBoxes(currentText())
+        const all = includeOpen && open ? [...boxes, open] : boxes
+        return { count: all.length, latest: all.length ? parseStatusBox(all[all.length - 1]) : null }
+      }
+
+      // A tela como o terminal a desenhou (rolagem + área visível). Gravado em
+      // 15/10/2026: a CLI pode redesenhar o campo de mensagem e o rodapé no
+      // meio do /status e voltar o cursor para escrever os campos; no texto
+      // corrido o `›` fecha o quadro antes deles, na tela ele está inteiro.
+      const renderedBox = () => {
+        const boxes = findStatusBoxes(screen.lines().join('\n'))
         return { count: boxes.length, latest: boxes.length ? parseStatusBox(boxes[boxes.length - 1]) : null }
+      }
+
+      const conclude = (parsed) => {
+        if (!parsed.limitsPending || attempts >= maxStatusAttempts) {
+          finishWithScreen(parsed)
+          return
+        }
+        // Os limites ainda não tinham chegado: repetir o /status depois de
+        // uma pausa, como a própria CLI pede.
+        stage = 'waiting-retry'
+        retryAt = now() + refreshRetryMs
       }
 
       const finishWithScreen = (parsed) => {
@@ -306,20 +330,31 @@ function createCodexStatusScreenQuery({
           const popupVisible = visible.some((line) => STATUS_POPUP_PATTERN.test(line))
           if (elapsed >= minEnterDelayMs && (popupVisible || elapsed >= popupFallbackMs)) {
             entersThisAttempt = 0
-            boxesAtSend = latestBox().count
+            // Conta o quadro aberto da tentativa anterior: o cabeçalho do
+            // próximo o fecha, e ele não pode passar por resposta nova.
+            boxesAtSend = latestBox({ includeOpen: true }).count
+            renderedAtSend = renderedBox().count
             pressEnter()
           }
           return
         }
 
         // stage === 'sent'
-        const { count, latest } = latestBox()
+        const { count, latest } = latestBox({ includeOpen: quiet })
         if (count > boxesSeen) {
           boxesSeen = count
           lastBoxAt = now()
         }
 
         if (count <= boxesAtSend) {
+          // Nada novo no texto corrido: com a tela parada, vale um quadro novo
+          // na tela renderizada.
+          const rendered = quiet ? renderedBox() : null
+          if (rendered && rendered.count > renderedAtSend) {
+            conclude(rendered.latest)
+            return
+          }
+
           // O Enter caiu antes de a CLI aceitar comandos: o `/status` continua
           // no campo e um novo Enter o executa. Com qualquer outra coisa no
           // campo, nada é enviado — um Enter ali poderia virar mensagem.
@@ -339,15 +374,7 @@ function createCodexStatusScreenQuery({
           return
         }
 
-        if (!latest.limitsPending || attempts >= maxStatusAttempts) {
-          finishWithScreen(latest)
-          return
-        }
-
-        // Os limites ainda não tinham chegado: repetir o /status depois de
-        // uma pausa, como a própria CLI pede.
-        stage = 'waiting-retry'
-        retryAt = now() + refreshRetryMs
+        conclude(latest)
       }
 
       try {
@@ -387,7 +414,7 @@ function createCodexStatusScreenQuery({
           removeWorkDir()
           return
         }
-        const { latest } = latestBox()
+        const latest = latestBox({ includeOpen: true }).latest ?? renderedBox().latest
         if (latest) {
           finishWithScreen(latest)
           return
@@ -402,7 +429,7 @@ function createCodexStatusScreenQuery({
       timeoutTimer = setTimeout(() => {
         // Sem tempo para mais uma tentativa: vale o último quadro, mesmo que
         // a CLI ainda não tivesse os limites (os números vêm do app-server).
-        const { latest } = latestBox()
+        const latest = latestBox({ includeOpen: true }).latest ?? renderedBox().latest
         if (latest) {
           finishWithScreen(latest)
           return
@@ -437,6 +464,18 @@ function createScreenModel(cols, rows) {
       const buffer = terminal.buffer.active
       const lines = []
       for (let row = buffer.viewportY; row < buffer.viewportY + rows; row += 1) {
+        lines.push(buffer.getLine(row)?.translateToString(true) ?? '')
+      }
+      return lines
+    },
+    /** Rolagem e área visível, de cima para baixo. */
+    lines() {
+      if (disposed) {
+        return []
+      }
+      const buffer = terminal.buffer.active
+      const lines = []
+      for (let row = 0; row < buffer.length; row += 1) {
         lines.push(buffer.getLine(row)?.translateToString(true) ?? '')
       }
       return lines
@@ -532,18 +571,33 @@ function stripCodexTerminalOutput(value) {
  *   próximo cabeçalho começar. Sob carga a CLI reimprime o cabeçalho da sessão
  *   entre os limites e o campo (gravado em 15/10/2026). Sem nenhum dos dois
  *   depois, o quadro ainda está sendo desenhado e não conta, para a leitura
- *   não sair antes da linha dos limites. Só a forma com moldura era
+ *   não sair antes da linha dos limites (a exceção da leitura ao vivo, com a
+ *   tela parada, está em scanStatusBoxes). Só a forma com moldura era
  *   reconhecida: medido em 15/10/2026, toda leitura no 0.163 esperava os 25 s
  *   do tempo limite, e o painel Limites junto com ela.
  */
 function findStatusBoxes(text) {
+  return scanStatusBoxes(text).boxes
+}
+
+/**
+ * Além dos quadros fechados, devolve em `open` o quadro sem moldura que ficou
+ * aberto no fim do texto, se ele já tiver a linha dos limites. Gravado em
+ * 15/10/2026 (1 leitura em ~20): com o campo de mensagem já na tela, a CLI
+ * redesenha por diferença e não o reimprime; depois dos limites só vêm o
+ * cursor e quadros sincronizados vazios. A leitura ao vivo só conta esse
+ * quadro com a tela parada (`readyQuietMs`), no tempo esgotado ou na saída da
+ * CLI; a leitura de um texto já gravado (`parseCodexStatusScreen`) não conta.
+ */
+function scanStatusBoxes(text) {
   const lines = String(text ?? '').split('\n')
   const boxes = []
   let current = null
   let bordered = false
 
+  const hasStatusField = (inner) => isStatusField(parseFieldLine(inner)?.label ?? '')
   const close = () => {
-    if (current?.some((inner) => parseFieldLine(inner) && isStatusField(parseFieldLine(inner).label))) {
+    if (current?.some(hasStatusField)) {
       boxes.push(current)
     }
     current = null
@@ -583,7 +637,8 @@ function findStatusBoxes(text) {
     current.push(line.replace(/\s+$/, ''))
   }
 
-  return boxes
+  const open = !bordered && current?.some((inner) => isLimitsField(parseFieldLine(inner)?.label)) ? current : null
+  return { boxes, open }
 }
 
 function extractBoxInner(line) {
@@ -602,6 +657,11 @@ function extractBoxInner(line) {
  */
 function isStatusField(label) {
   return /^(Model|Model provider|Account|Limits)$/.test(label) || /\blimit$/.test(label)
+}
+
+/** "Limits" (ainda sem os números) ou uma janela, como "5h limit" e "Weekly limit". */
+function isLimitsField(label) {
+  return typeof label === 'string' && (label === 'Limits' || /\blimit$/.test(label))
 }
 
 function parseFieldLine(inner) {

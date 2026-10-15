@@ -399,6 +399,121 @@ test('Codex 0.159+: fluxo completo sem moldura, repete o /status até os limites
   assert.deepEqual(pty.writes, ['\u001b[1;1R', '/status', '\r', '/status', '\r'])
 })
 
+/**
+ * Gravado em 15/10/2026 numa coleta do painel (1 leitura em ~20): o campo de
+ * mensagem já estava na tela e a CLI, que redesenha por diferença, não o
+ * reimprimiu. Depois da última linha dos limites só vieram o cursor de volta
+ * ao campo e quadros sincronizados vazios; a leitura esperava os 25 s.
+ */
+const CURSOR_BACK_TO_COMPOSER = '\r\n \u001b[27;3H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?2026h\u001b[?2026l'
+const PLAIN_FULL_FIELDS = [
+  ['Model', 'GPT-6.1-Sol (reasoning low, summaries auto)'],
+  ['Directory', '/tmp/felixo-codex-status-x'],
+  ['Account', 'pessoa@example.com (Plus)'],
+  ['5h limit', '[████████████████████] 100% left (resets 18:33)'],
+  ['Weekly limit', '[████████████████████] 100% left (resets 13:33 on 22 Oct)'],
+]
+
+function statusFlow(responses) {
+  let statusCount = 0
+  return fakePty({
+    onSpawn: (fake) => fake.emit(`\u001b[6n${composer(fake)}${SESSION_HEADER_PLAIN}`),
+    onWrite: (data, fake) => {
+      if (data === '/status') {
+        fake.emit('\r\n› /status      show current session configuration and token usage\r\n')
+      }
+      if (data === '\r') {
+        fake.emit(responses[Math.min(statusCount, responses.length - 1)])
+        statusCount += 1
+      }
+    },
+  })
+}
+
+test('Codex 0.159+: quadro completo sem o campo de mensagem depois vale quando a CLI para de escrever', async () => {
+  const pty = statusFlow([`${STATUS_PLAIN(PLAIN_FULL_FIELDS, { composerAfter: false })}${CURSOR_BACK_TO_COMPOSER}`])
+  const read = createCodexStatusScreenQuery({ spawnPty: pty.factory, platform: LINUX })
+
+  const inicio = Date.now()
+  const result = await read({ ...FAST, env: {} })
+
+  assert.equal(result.ok, true, result.message)
+  assert.equal(result.limitsPending, false)
+  assert.ok(result.lines.includes('Weekly limit: [████████████████████] 100% left (resets 13:33 on 22 Oct)'))
+  assert.ok(Date.now() - inicio < FAST.timeoutMs / 2, 'sai pela tela parada, não pelo tempo limite')
+  // Nenhum Enter a mais: o quadro já tinha chegado.
+  assert.deepEqual(pty.writes, ['\u001b[1;1R', '/status', '\r'])
+})
+
+test('Codex 0.159+: bloco aberto sem a linha dos limites não encerra a leitura, mesmo com a tela parada', async () => {
+  // Parado sem os limites, o quadro pode ainda estar chegando; sair aqui
+  // mostraria a conta sem eles. Continua valendo a espera de antes.
+  const parcial = STATUS_PLAIN(PLAIN_FULL_FIELDS.slice(0, 3), { composerAfter: false })
+  const pty = statusFlow([`${parcial}${CURSOR_BACK_TO_COMPOSER}`])
+  const read = createCodexStatusScreenQuery({ spawnPty: pty.factory, platform: LINUX })
+
+  const result = await read({ ...FAST, timeoutMs: 1_000, env: {} })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.message, 'O /status do Codex não apareceu a tempo.')
+})
+
+test('Codex 0.159+: bloco aberto com os limites pendentes repete o /status, como o fechado', async () => {
+  const pendente = [['Model', 'GPT-6.1-Sol (reasoning high)'], ['Limits', 'refresh requested; run /status again shortly.']]
+  const pty = statusFlow([
+    `${STATUS_PLAIN(pendente, { composerAfter: false })}${CURSOR_BACK_TO_COMPOSER}`,
+    `${STATUS_PLAIN(PLAIN_FULL_FIELDS, { composerAfter: false })}${CURSOR_BACK_TO_COMPOSER}`,
+  ])
+  const read = createCodexStatusScreenQuery({ spawnPty: pty.factory, platform: LINUX })
+
+  const result = await read({ ...FAST, env: {} })
+
+  assert.equal(result.ok, true, result.message)
+  assert.equal(result.limitsPending, false)
+  assert.ok(result.lines.includes('5h limit: [████████████████████] 100% left (resets 18:33)'))
+  assert.deepEqual(pty.writes, ['\u001b[1;1R', '/status', '\r', '/status', '\r'])
+})
+
+test('Codex 0.159+: campo de mensagem redesenhado no meio do /status: vale a tela renderizada', async () => {
+  // Gravado em 15/10/2026 numa coleta do painel: a CLI desenhou o cabeçalho,
+  // redesenhou o campo e o rodapé embaixo e só então voltou o cursor para
+  // escrever os campos. No texto corrido o `›` fecha o quadro antes dos
+  // campos e eles ficam sem cabeçalho; na tela, o quadro está inteiro.
+  // Forma dos bytes gravados: cabeçalho, linhas apagadas até o fim da tela, o
+  // campo depois de 160 espaços (quebra para a linha de baixo), o rodapé e só
+  // então o cursor volta à linha 13 para os campos.
+  const cabecalho = ['  >_ OpenAI Codex (v0.163.0-alpha.10.1)\u001b[K', '\u001b[K', '  Visit https://chatgpt.com/settings/usage for up-to-date\u001b[K', '  information on rate limits and credits\u001b[K']
+  const intercalado = (fake) => [
+    `\u001b[9;1H${cabecalho.join('\r\n')}\r\n`,
+    '\u001b[K\r\n'.repeat(12),
+    `${' '.repeat(160)}› Ask Codex to do anything\u001b[K\r\n\u001b[K\r\n  GPT-5.6-Luna max · ${fake.spawn.options.cwd}\u001b[K\r\n`,
+    '\u001b[K\r\n'.repeat(5),
+    `\u001b[13;1H${PLAIN_FULL_FIELDS.map(([label, value]) => `\r\n${PLAIN_FIELD(label, value)}`).join('')}`,
+    '\u001b[26;3H\u001b[?2026h\u001b[?2026l',
+  ].join('')
+  const pty = fakePty({
+    onSpawn: (fake) => fake.emit(`\u001b[6n${composer(fake)}`),
+    onWrite: (data, fake) => {
+      if (data === '/status') {
+        fake.emit('\r\n› /status      show current session configuration and token usage\r\n')
+      }
+      if (data === '\r') {
+        fake.emit(intercalado(fake))
+      }
+    },
+  })
+  assert.equal(parseCodexStatusScreen(`${composer({ spawn: { options: { cwd: '/tmp/x' } } })}${intercalado({ spawn: { options: { cwd: '/tmp/x' } } })}`), null, 'no texto corrido o quadro não aparece')
+  const read = createCodexStatusScreenQuery({ spawnPty: pty.factory, platform: LINUX })
+
+  const result = await read({ ...FAST, env: {} })
+
+  assert.equal(result.ok, true, result.message)
+  assert.equal(result.limitsPending, false)
+  assert.ok(result.lines.includes('5h limit: [████████████████████] 100% left (resets 18:33)'))
+  assert.ok(!result.lines.some((line) => line.includes('GPT-5.6-Luna max')), 'o rodapé redesenhado não vira aviso')
+  assert.deepEqual(pty.writes, ['\u001b[1;1R', '/status', '\r'])
+})
+
 test('pergunta de confiança na pasta: sai com Esc e nunca envia Enter', async () => {
   const pty = fakePty({
     onSpawn: (fake) => fake.emit('> You are in /tmp/x\r\n\r\n  Do you trust the files in this folder?\r\n\r\n› 1. Yes, continue\r\n  2. No, quit\r\n'),
