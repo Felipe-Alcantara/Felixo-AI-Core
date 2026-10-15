@@ -33,8 +33,7 @@
   no CI) e a retomada do terminal (entrada de 2026-10-09). A atualização do Claude no app instalado
   com a `v0.1.461` (a correção foi validada numa instância isolada da fonte; o app do dia a dia
   deste PC roda de dentro de `%TEMP%`). O "File not found: " vazio ao abrir agentes (entrada de
-  2026-10-15) na máquina de quem relatou, depois que o app dela atualizar para a release com
-  `41e72a7`.
+  2026-10-15) na máquina de quem relatou, depois que o app dela atualizar para a `v0.1.462`.
 - **Próximo passo sugerido:** rodar a etapa 18 do checklist do Agente na nuvem em Linux ou macOS com a
   `v0.1.452` (o CI passou, mas a interface só foi conferida no Windows).
 - **Riscos abertos:** (1) a suíte vitest completa com os 16 workers padrão ficou instável numa
@@ -1408,3 +1407,59 @@ máquina dele.
 - A máquina do usuário que relatou não foi inspecionada.
 - O defeito do `get_shell_path` continua no node-pty: qualquer outro nome relativo entregue a ele
   ainda cai na mesma armadilha. Hoje o app só entregava `cmd.exe` solto.
+
+**Envio, CI e release.**
+
+- **Envio:** push direto à `main` às 10:16 (`e7615c3..3e2e095`).
+- **CI** [38741170213](https://github.com/Felipe-Alcantara/Felixo-AI-Core/actions/runs/38741170213):
+  os 22 jobs passaram às 10:31, inclusive `Validate (windows-latest)`, que roda o teste nativo novo
+  com a pasta atual em System32.
+- **Release gate** [38743454800](https://github.com/Felipe-Alcantara/Felixo-AI-Core/actions/runs/38743454800):
+  "Commit de base avaliado: 5767e8b…" e "Release relevante: true".
+- **Release** [38743497883](https://github.com/Felipe-Alcantara/Felixo-AI-Core/actions/runs/38743497883):
+  [`v0.1.462`](https://github.com/Felipe-Alcantara/Felixo-AI-Core/releases/tag/v0.1.462) publicada
+  às 10:50 como Latest, com a tag em `3e2e095` e os instaladores de Windows, macOS e Linux, mais o
+  `latest.yml` da atualização automática. O "Smoke exploratório (Windows)" também passou.
+
+Estado: concluído e publicado na `v0.1.462`. A conferência na máquina de quem relatou e o relato ao
+node-pty ficaram como tasks no Notion.
+
+## 2026-10-15 — Codex: o "Worked for" não aparecia no fim da rodada (Codex antigo, não o app)
+
+Registro de Claude — Tasks do AI Core (Opus 5.5). Relato com print: "Tempo de working não aparece no
+codex depois que o agente termina". No print (outro PC, 13/10/2026), um bloco Codex separa as
+mensagens com linhas `────` cheias, e não há "Worked for …" no fim da rodada.
+
+**Conclusão: não é defeito do AI Core.** É o comportamento de um Codex antigo. O texto vem do próprio
+Codex (`codex-rs/tui/src/history_cell/separators.rs`), e o app não escreve nem filtra esse texto. Na
+aba Terminal o app também não desenha `─`, e os argumentos que ele passa ao Codex (`--model`,
+`-c model_reasoning_effort`, `-c service_tier`, yolo) não mexem na tela.
+
+**Medido no código do Codex** (cada commit conferido com `gh api …/compare/<commit>...<tag>`):
+
+| Codex | Fim da rodada |
+|---|---|
+| ≤ 0.154.x | linha `────` cheia; "Worked for" só com `seconds > 60` |
+| 0.155.0 a 0.158.x | rótulo só com a hora (`333c41eef`, #43558); "Worked for" ainda só acima de 60 s |
+| ≥ 0.159.0 | sempre `Worked for Xs • HH:MM` (`99f7758a5`, #48807) |
+
+O print, com traço e sem tempo, só acontece com Codex ≤ 0.154.x numa rodada de até 60 s. A
+gravação `codex-resposta.json` (Codex 0.156.1) termina com `9:35 AM`, só a hora, o que confirma a
+faixa do meio.
+
+**Medido no app.** O Codex `0.163.0-alpha.10.1` rodou pelo `PtyProcessManager` real com um pedido
+trivial (uma requisição mínima da conta deste PC). Nos bytes crus apareceu
+`ESC[2m ESC[14;1H  Worked for 3s • 10:33 … ESC[22m`: o rótulo chega ao terminal do bloco.
+
+**Por que aquele PC tinha um Codex antigo** (inferência, versão não medida lá). Até a `v0.1.460`
+(14/10), o app tomava o Codex dele por instalação de fora e nunca o atualizava (`71125a3`), e também
+não atualizava a CLI do npm global. O print é de 13/10. Com a `v0.1.461` ou mais nova, a rodada de
+CLIs leva o Codex à versão mais nova publicada.
+
+**Fora do escopo.** A aba Leitura esconde de propósito a linha de status do Codex que é só a hora
+(`CODEX_TIMESTAMP` em `app/src/features/canvas/terminal/reading/reading-profiles.ts`). O rótulo novo,
+`Worked for … • HH:MM`, não casa com o padrão e aparece como texto comum. Não foi relatado como
+problema.
+
+Estado: investigação concluída, sem mudança de código. A conferência do Codex no PC do print ficou
+como task no Notion.
