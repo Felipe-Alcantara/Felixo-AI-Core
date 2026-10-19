@@ -1,5 +1,6 @@
 const { app, BrowserWindow, Menu, ipcMain, safeStorage, session, shell } = require('electron')
 const path = require('node:path')
+const fs = require('node:fs')
 const vm = require('node:vm')
 const { createMainWindow } = require('./windows/main-window.cjs')
 const { instalarMenuDoApp } = require('./windows/app-menu.cjs')
@@ -906,6 +907,13 @@ app.whenReady().then(async () => {
       }
     },
     log: (entry) => logQaEvent({ scope: 'claude-api', ...entry }),
+    writeContextFile: (sessionId, text) => {
+      const dir = path.join(appPaths.userData, 'claude-api-context')
+      fs.mkdirSync(dir, { recursive: true })
+      const file = path.join(dir, `${sessionId}.md`)
+      fs.writeFileSync(file, text, { encoding: 'utf8', mode: 0o600 })
+      return file
+    },
   })
   // Pasta de conversas da conta: só conta por chave, nunca a de outra conta.
   const claudeApiConfigDir = (accountId) =>

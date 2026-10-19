@@ -23,6 +23,10 @@ const {
  * Com o Yolo, o processo nasce em `bypassPermissions` e não pede nada.
  */
 
+function hashText(text) {
+  return require('node:crypto').createHash('sha256').update(text).digest('hex').slice(0, 16)
+}
+
 const MODELOS_PERMITIDOS = /^[a-z0-9][a-z0-9.\-[\]]{0,79}$/i
 const ESFORCOS = new Set(['low', 'medium', 'high', 'xhigh', 'max'])
 const ID_SEGURO = /^[A-Za-z0-9_-]{1,128}$/
@@ -51,7 +55,7 @@ function sanitizeClaudeApiEnv(env, platformName = process.platform) {
   return clean
 }
 
-function buildClaudeApiArgs({ model, effort, yolo, resumeSessionId } = {}) {
+function buildClaudeApiArgs({ model, effort, yolo, resumeSessionId, systemPromptFile } = {}) {
   const args = [
     '-p',
     '--input-format',
@@ -71,6 +75,9 @@ function buildClaudeApiArgs({ model, effort, yolo, resumeSessionId } = {}) {
   }
   if (typeof effort === 'string' && ESFORCOS.has(effort)) {
     args.push('--effort', effort)
+  }
+  if (typeof systemPromptFile === 'string' && systemPromptFile) {
+    args.push('--append-system-prompt-file', systemPromptFile)
   }
   if (typeof resumeSessionId === 'string' && ID_SESSAO_CLAUDE.test(resumeSessionId)) {
     args.push('--resume', resumeSessionId)
@@ -93,6 +100,14 @@ function createClaudeApiSessionManager({
   buildAccountEnv,
   emit,
   log = () => {},
+  // Contexto do canvas vai como instrução de sistema, num arquivo por bloco:
+  // como primeira mensagem ele gastava um turno inteiro antes de a pessoa
+  // conseguir conversar.
+  writeContextFile = null,
+  // Processo parado há tanto tempo é encerrado; o próximo envio reabre com --resume.
+  idleTimeoutMs = 15 * 60 * 1000,
+  setTimer = setTimeout,
+  clearTimer = clearTimeout,
   newRequestId = () => `felixo-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
 }) {
   /** @type {Map<string, object>} */
@@ -118,6 +133,7 @@ function createClaudeApiSessionManager({
     const args = buildClaudeApiArgs({
       ...session.config,
       resumeSessionId: session.claudeSessionId ?? session.config.resumeSessionId,
+      systemPromptFile: session.contextFile,
     })
     const child = spawnProcess('claude', args, {
       cwd: session.config.cwd,
@@ -149,6 +165,7 @@ function createClaudeApiSessionManager({
         }
         if (event.kind === 'turn-end') {
           session.busy = false
+          armIdle(sessionId, session)
           const total = typeof event.costUsd === 'number' ? event.costUsd : 0
           const delta = Math.max(0, total - (session.processCostUsd ?? 0))
           session.processCostUsd = Math.max(session.processCostUsd ?? 0, total)
@@ -216,6 +233,10 @@ function createClaudeApiSessionManager({
       model: typeof params.model === 'string' ? params.model : '',
       effort: typeof params.effort === 'string' ? params.effort : '',
       yolo: params.yolo === true,
+      // Só a impressão digital: o texto pode ter centenas de KB.
+      contextKey: typeof params.systemContext === 'string' && params.systemContext.trim()
+        ? `${params.systemContext.length}:${hashText(params.systemContext)}`
+        : '',
       resumeSessionId:
         typeof params.resumeSessionId === 'string' && ID_SESSAO_CLAUDE.test(params.resumeSessionId)
           ? params.resumeSessionId
@@ -229,20 +250,68 @@ function createClaudeApiSessionManager({
         if (!previous.claudeSessionId && config.resumeSessionId) {
           previous.claudeSessionId = config.resumeSessionId
         }
+        if (params.warm === true) warm(sessionId, previous)
         return { ok: true, alreadyRunning: true }
       }
       stop(sessionId)
     }
-    sessions.set(sessionId, {
+    let contextFile = null
+    if (config.contextKey && writeContextFile) {
+      try {
+        contextFile = writeContextFile(sessionId, params.systemContext)
+      } catch (error) {
+        log({ level: 'warn', message: 'Não foi possível gravar o contexto do bloco.', details: { error: error?.message } })
+      }
+    }
+    const session = {
       config,
+      contextFile,
       child: null,
       claudeSessionId: config.resumeSessionId,
       busy: false,
       stopping: false,
       stderrTail: '',
       pendingPermissions: new Set(),
-    })
+      idleTimer: null,
+    }
+    sessions.set(sessionId, session)
+    if (params.warm === true) warm(sessionId, session)
     return { ok: true }
+  }
+
+  /**
+   * Abre o processo antes da primeira mensagem. Abrir o Claude Code leva ~3 s
+   * (medido); sem isso a primeira resposta do bloco saía em ~5,3 s contra
+   * ~2,2 s do Claude Code direto. Abrir não chama a API: nada é cobrado.
+   */
+  function warm(sessionId, session) {
+    if (session.child) return
+    try {
+      spawnFor(sessionId, session)
+      armIdle(sessionId, session)
+    } catch (error) {
+      log({ level: 'warn', message: 'Não foi possível abrir o Claude Code antes da mensagem.', details: { error: error?.message } })
+    }
+  }
+
+  function armIdle(sessionId, session) {
+    if (session.idleTimer) clearTimer(session.idleTimer)
+    session.idleTimer = null
+    if (!idleTimeoutMs) return
+    session.idleTimer = setTimer(() => {
+      session.idleTimer = null
+      if (sessions.get(sessionId) !== session || session.busy || !session.child) return
+      if (session.pendingPermissions?.size) return
+      const child = session.child
+      session.child = null
+      try {
+        child.stdin?.end()
+      } catch {}
+      try {
+        child.kill()
+      } catch {}
+    }, idleTimeoutMs)
+    session.idleTimer?.unref?.()
   }
 
   function send(sessionId, text) {
@@ -258,6 +327,10 @@ function createClaudeApiSessionManager({
       }
     }
     session.busy = true
+    if (session.idleTimer) {
+      clearTimer(session.idleTimer)
+      session.idleTimer = null
+    }
     const ok = writeLine(session, {
       type: 'user',
       message: { role: 'user', content: text },
@@ -304,6 +377,7 @@ function createClaudeApiSessionManager({
     if (!session) return { ok: true }
     sessions.delete(sessionId)
     session.stopping = true
+    if (session.idleTimer) clearTimer(session.idleTimer)
     const child = session.child
     session.child = null
     if (child && child.exitCode === null) {

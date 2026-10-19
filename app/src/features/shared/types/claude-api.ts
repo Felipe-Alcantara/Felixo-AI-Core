@@ -44,6 +44,10 @@ export type ClaudeApiStartParams = {
   effort?: string
   yolo?: boolean
   resumeSessionId?: string
+  /** Contexto do canvas, entregue como instrução de sistema. */
+  systemContext?: string
+  /** Abre o processo já, sem esperar a primeira mensagem. */
+  warm?: boolean
 }
 
 export type ClaudeApiSessionSummary = {

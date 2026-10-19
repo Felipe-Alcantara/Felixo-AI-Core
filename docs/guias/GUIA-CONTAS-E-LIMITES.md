@@ -210,7 +210,11 @@ promocional disponível:
   aparece no bloco com **Permitir** e **Negar**.
 - **Com Yolo**, roda em `bypassPermissions`.
 - O contexto do canvas (padrão de qualidade, identidade, preset, arquivo de
-  planejamento) vai como primeira mensagem, uma vez.
+  planejamento) vai como instrução de sistema (`--append-system-prompt-file`),
+  sem gastar um turno; ele aparece recolhido no topo do bloco.
+- O Claude Code abre assim que o bloco aparece, sem esperar a primeira
+  mensagem (abrir não chama a API, então não gasta). Depois de 15 minutos sem
+  uso o processo fecha sozinho; a próxima mensagem reabre na mesma conversa.
 - **Parar** interrompe o turno sem fechar a conversa.
 - A conversa fica gravada no bloco. Reabrir o app continua a mesma sessão do
   Claude (`--resume`).
