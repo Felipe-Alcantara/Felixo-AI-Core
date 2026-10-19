@@ -20,6 +20,7 @@
   passo de responsividade do terminal e não foi investigado. Os commits seguintes (compactação dos
   `IA.md`, divisão do README e o Agente na nuvem no menu Agente) foram enviados à `main`
   (`e7b7efe..d952f5b`) e o CI de `d952f5b` passou nos 22 jobs, inclusive esse exploratório do Windows.
+- **Claude por chave de API:** conta do Claude por chave abre um bloco de conversa (Claude Code sem tela, que usa o crédito promocional do Agent SDK); ver a entrada de 2026-10-19.
 - **Em andamento:** nada aberto no código nesta entrega. Em toda abertura (também na execução da
   fonte), a rodada das CLIs busca a versão mais nova publicada de Claude, Codex e Gemini, inclusive
   pré-lançamento, e atualiza a cópia do app e a do npm global, mesmo com a CLI aberta (o npm troca
@@ -1830,3 +1831,83 @@ job: 5,1 min (antes 15 a 18). `Validate (windows-latest)`: 4,0 min (antes 14,7 a
 `npm test` em 61 s (antes 248 a 298 s), o node-pty em 34 s e o Vitest em 66 s. `Canvas smoke
 (ubuntu-latest)`: 5,0 min, em paralelo. macOS: 1,4 min; arm64: 24 s. O passo do Defender passou
 (6 s). Como o `ci.yml` mudou, o escopo ligou tudo nessa run.
+
+## 2026-10-19 — Claude por chave de API: bloco de conversa que usa o crédito do Agent SDK
+
+**Pedido.** Abrir o Claude Code por uma conexão via API, sem conta logada, a partir das
+configurações de agente.
+
+**Contexto.** O Claude Code nativo, logado pelo Console (`/login`, "API Usage Billing"), devolvia
+"Credit balance too low" mesmo com US$ 199,99 de crédito promocional. Esse crédito vale para
+"Agent SDK, API, Batch API, Playground e Agentes gerenciados".
+
+**Medido com a chave da pessoa (Claude Code 2.1.303):**
+
+| Teste | Resultado |
+|---|---|
+| API direta (`/v1/messages`) | responde |
+| `claude -p` com `ANTHROPIC_API_KEY` | responde |
+| `stream-json` de vários turnos | responde e lembra do turno anterior |
+| Claude Code interativo (num PTY) com a mesma chave | "Credit balance too low" |
+
+Conclusão: o que decide é o modo de rodar, não o tipo de credencial. Não foi tentado mudar a forma
+como o Claude Code se identifica.
+
+**Feito.**
+- **Conta do Claude `authKind: 'api-key'`** (`cli-account-profiles.cjs`, `cli-account-store.cjs`).
+  - A chave fica cifrada no mesmo `cli-account-secrets.bin` do Openia.
+  - `buildEnv` devolve `CLAUDE_CONFIG_DIR` + `ANTHROPIC_API_KEY`.
+  - `applyProfileEnv` tira as credenciais herdadas antes e espalha o perfil por cima, então a
+    chave sobrevive só nessa conta.
+- **A conta fica fora de:**
+  - terminal (`validatePtyAccount` em `main.cjs` recusa);
+  - Agente na nuvem;
+  - painel **Limites e uso** (`listProfiles` filtra);
+  - cadeia de contas (`account-chain-runtime.cjs` filtra).
+- **`electron/services/claude-api/`.**
+  - `claude-stream-events.cjs` traduz as linhas do `stream-json`.
+  - `claude-api-session-manager.cjs` mantém um `claude -p` por bloco, vivo entre turnos:
+    - abre no primeiro envio;
+    - `--resume` depois de cair;
+    - `--permission-prompt-tool stdio` sem Yolo, `bypassPermissions` com Yolo;
+    - repetir `start` com o id da sessão não reabre o processo.
+  - Canais `claude-api:*` (IPC e preload).
+  - Formato medido: pedido de permissão chega como `control_request` `can_use_tool` e é respondido
+    com `control_response`; interrupção é `control_request` `interrupt`; chave inválida vem como
+    `result.is_error` com `api_error_status: 401`.
+- **Bloco `claude-api` no canvas.**
+  - Arquivos: `ClaudeApiNode.tsx`, `claude-api-conversation.ts` (puro) e
+    `claude-api-conversation-store.ts`.
+  - A conversa fica fora do React, porque o canvas desmonta blocos fora da tela. O CanvasView grava
+    a conversa no node.
+  - Registro: migração 020, `NODE_TYPES`, tamanhos, ícone, inventário. A exportação leva só nome e
+    modelo.
+- **Menu Agente.**
+  - Novas opções: "Nova conta por chave de API…" e "Abrir conversa". Esta exige projeto, porque o
+    bloco precisa de pasta.
+  - A conta por chave não entra na fila.
+  - O contexto do canvas é o `initialText` do terminal equivalente e vai como primeira mensagem.
+
+**Verificado.**
+- Testes:
+  - Node: `npm test` 2763/2763.
+  - Vitest: 3215.
+  - Testes novos: 12 do gerenciador e da borda IPC, 10 da conversa e do store, 4 da loja de contas,
+    transferência e repositório.
+- `tsc -b`, `eslint` e `vite build` limpos.
+- App real no Linux, instância isolada com `gnome-keyring` para o `safeStorage`:
+  1. a conta foi criada e a chave cifrada;
+  2. um bloco com Haiku pediu permissão para `Write`;
+  3. "Permitir" criou o arquivo, e a resposta e o gasto (US$ 0,0095) apareceram;
+  4. depois de recarregar o renderer, a conversa voltou e o Claude lembrou do arquivo;
+  5. o menu mostra a conta com ícone de chave e "Abrir conversa" desabilitado sem projeto.
+
+**Não verificado.**
+- Criar o bloco pelo botão do menu com um projeto (o projeto exige o seletor nativo de pasta; o
+  bloco foi criado pelo `canvas.save`).
+- Windows e macOS.
+- Fechar e reabrir o app inteiro (só o renderer foi recarregado).
+- Negar uma permissão e Parar no app real (cobertos só por teste).
+
+A chave foi colada no chat de uma conta compartilhada: recomendado revogá-la no Console depois dos
+testes.

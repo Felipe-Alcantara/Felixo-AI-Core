@@ -5,9 +5,11 @@ const os = require('node:os')
 const path = require('node:path')
 const { randomUUID } = require('node:crypto')
 const {
+  CLAUDE_API_KEY_AUTH_KIND,
   buildProfileEnv,
   getMirrorEntries,
   getProfileDir,
+  isClaudeApiKeyAccount,
   supportsProfiles,
 } = require('./cli-account-profiles.cjs')
 
@@ -408,7 +410,7 @@ function createCliAccountStore({
   }
 
   function prepareDuplicateSecretMigration(groups) {
-    const openiaGroups = groups.filter((group) => group.providerId === 'openia')
+    const openiaGroups = groups.filter((group) => usesSecret(group.canonical))
     if (!safeStorage || openiaGroups.length === 0) {
       return { cleanup: [] }
     }
@@ -535,7 +537,7 @@ function createCliAccountStore({
 
   function list(providerId) {
     const accounts = readStore()
-    const secrets = accounts.some((account) => account.providerId === 'openia')
+    const secrets = accounts.some(usesSecret)
       ? readSecrets()
       : {}
     const filtered = providerId
@@ -595,6 +597,13 @@ function createCliAccountStore({
       }
     }
 
+    if (isClaudeApiKeyAccount(account) && !hasConfiguredSecret(account.id)) {
+      return {
+        ok: false,
+        message: 'A conta do Claude por chave de API não tem uma chave configurada.',
+      }
+    }
+
     return { ok: true, account }
   }
 
@@ -603,7 +612,7 @@ function createCliAccountStore({
    * primeira vez que um terminal nasce nesse perfil: a CLI percebe que não há
    * credencial e conduz o próprio fluxo, dentro do terminal.
    */
-  function create({ providerId, label }) {
+  function create({ providerId, label, authKind }) {
     if (!supportsProfiles(providerId)) {
       throw new Error('Esta CLI não aceita mais de uma conta no app.')
     }
@@ -628,11 +637,18 @@ function createCliAccountStore({
       throw createDuplicateAccountError(name)
     }
 
+    if (authKind !== undefined && authKind !== null && authKind !== 'login') {
+      if (providerId !== 'claude' || authKind !== CLAUDE_API_KEY_AUTH_KIND) {
+        throw new Error('Este tipo de conta não existe para esta CLI.')
+      }
+    }
+
     const account = {
       id: randomUUID(),
       providerId,
       label: name,
       createdAt: new Date().toISOString(),
+      ...(authKind === CLAUDE_API_KEY_AUTH_KIND ? { authKind } : {}),
     }
 
     const profileDir = getProfileDir(userData, providerId, account.id)
@@ -704,10 +720,10 @@ function createCliAccountStore({
       return { removed: false, requiresConfirmation: true, sessions }
     }
 
-    // Só conta do Openia tem chave. Com o arquivo de chaves ilegível, recusa
-    // antes de mexer em qualquer coisa: esquecer a chave regravaria o arquivo
-    // sem as das outras contas.
-    const hasSecret = account.providerId === 'openia' && Boolean(safeStorage)
+    // Só o Openia e o Claude por chave de API têm chave. Com o arquivo de
+    // chaves ilegível, recusa antes de mexer em qualquer coisa: esquecer a
+    // chave regravaria o arquivo sem as das outras contas.
+    const hasSecret = usesSecret(account) && Boolean(safeStorage)
     if (hasSecret) {
       loadSecretsForWrite()
     }
@@ -840,7 +856,7 @@ function createCliAccountStore({
     const publicAccount =
       legacyAccountIds.length > 0 ? { ...account, legacyAccountIds } : account
 
-    if (account.providerId !== 'openia') {
+    if (!usesSecret(account)) {
       return publicAccount
     }
 
@@ -853,6 +869,14 @@ function createCliAccountStore({
 
   function hasSecretValue(secret) {
     return typeof secret === 'string' && secret.trim() !== ''
+  }
+
+  /**
+   * Contas que guardam chave: o Openia e a conta do Claude por chave de API.
+   * As outras só têm a pasta de login, escrita pela própria CLI.
+   */
+  function usesSecret(account) {
+    return account?.providerId === 'openia' || isClaudeApiKeyAccount(account)
   }
 
   function writeSecrets(secrets) {
@@ -878,7 +902,7 @@ function createCliAccountStore({
         return {
           ok: false,
           reason:
-            'O sistema está sem chaveiro (backend "basic"): a chave ficaria praticamente em texto. Instale/desbloqueie o chaveiro para usar a conta do Openia por terminal.',
+            'O sistema está sem chaveiro (backend "basic"): a chave ficaria praticamente em texto. Instale/desbloqueie o chaveiro para usar uma conta por chave (Openia ou Claude por chave de API).',
         }
       }
     } catch {
@@ -890,8 +914,8 @@ function createCliAccountStore({
 
   function setSecret(accountId, secret) {
     const account = findAccount(typeof accountId === 'string' ? accountId.trim() : '')
-    if (!account || account.providerId !== 'openia') {
-      throw new Error('A conta do Openia não existe.')
+    if (!account || !usesSecret(account)) {
+      throw new Error('A conta não existe ou não guarda chave.')
     }
 
     const permitido = canStoreSecret()
@@ -961,8 +985,9 @@ function createCliAccountStore({
     return buildProfileEnv({
       providerId: account.providerId,
       profileDir: getProfileDir(userData, account.providerId, account.id),
-      secret: getAccountSecret(account.id, readSecrets()),
+      secret: usesSecret(account) ? getAccountSecret(account.id, readSecrets()) : undefined,
       homeDir,
+      authKind: account.authKind,
     })
   }
 
@@ -1003,6 +1028,14 @@ function createCliAccountStore({
     canStoreSecret,
     create,
     forgetSecret,
+    /** `true` quando a conta é do Claude por chave de API (abre o bloco de conversa). */
+    isApiKeyAccount: (accountId) => {
+      try {
+        return isClaudeApiKeyAccount(findAccount(accountId))
+      } catch {
+        return false
+      }
+    },
     list,
     remove,
     resolveAccountId: (accountId) => {

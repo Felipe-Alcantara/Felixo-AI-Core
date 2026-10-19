@@ -14,6 +14,17 @@ export type CliAccount = {
   legacyAccountIds?: readonly string[]
   /** Nunca contém a chave; só existe para o provedor que usa segredo por conta. */
   secretConfigured?: boolean
+  /**
+   * `api-key`: conta do Claude que entra por chave de API em vez de login.
+   * Ela abre o bloco de conversa (Claude sem tela), não um terminal.
+   */
+  authKind?: CliAccountAuthKind
+}
+
+export type CliAccountAuthKind = 'api-key'
+
+export function isClaudeApiKeyAccount(account: Pick<CliAccount, 'providerId' | 'authKind'> | null | undefined): boolean {
+  return account?.providerId === 'claude' && account?.authKind === 'api-key'
 }
 
 /**

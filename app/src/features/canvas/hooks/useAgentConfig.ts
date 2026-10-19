@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type SetStateAction } from 'react'
-import type { CliAccount } from '../../shared/types/cli-accounts'
+import {
+  isClaudeApiKeyAccount,
+  type CliAccount,
+  type CliAccountAuthKind,
+} from '../../shared/types/cli-accounts'
 import {
   buildAgentArgs,
   describeLaunch,
@@ -32,7 +36,11 @@ import { useAgentModelCatalog } from './useAgentModelCatalog'
 import { useAgentPresets } from './useAgentPresets'
 import type { AgentPreset, AgentPresetAgentId } from '../services/agent-preset'
 import { canLaunch, createDraft } from '../services/cloud-session-state'
-import type { NewCloudSessionOptions, NewTerminalOptions } from '../services/new-terminal-options'
+import type {
+  NewClaudeApiOptions,
+  NewCloudSessionOptions,
+  NewTerminalOptions,
+} from '../services/new-terminal-options'
 import {
   removeAccountWithConfirmation,
   type AccountRemovalOutcome,
@@ -504,12 +512,19 @@ export function useAgentConfig(
    * o terminal nela, não escolher de novo numa lista.
    */
   const createAccount = useCallback(
-    async (label: string, secret?: string) => {
+    async (label: string, secret?: string, authKind?: CliAccountAuthKind) => {
       if (!providerId) {
         return { ok: false, message: 'Escolha um agente antes de criar a conta.' }
       }
+      if (authKind === 'api-key' && !secret?.trim()) {
+        return { ok: false, message: 'Cole a chave de API da conta.' }
+      }
 
-      const criada = await window.felixo?.cliAccounts?.create({ providerId, label })
+      const criada = await window.felixo?.cliAccounts?.create({
+        providerId,
+        label,
+        ...(authKind ? { authKind } : {}),
+      })
 
       if (!criada?.ok || !criada.account) {
         return { ok: false, message: criada?.message ?? 'Não foi possível criar a conta.' }
@@ -1010,7 +1025,36 @@ export function useAgentConfig(
     yolo,
   ])
 
+  // Conta do Claude por chave de API: abre o bloco de conversa, não o terminal.
+  const selectedAccount = accounts.find((account) => account.id === accountId)
+  const isClaudeApi = agent?.id === 'claude' && isClaudeApiKeyAccount(selectedAccount)
+  const claudeApiProject = projects.find((item) => item.id === projectId)
+  const claudeApiIssue =
+    isClaudeApi && !claudeApiProject?.path
+      ? 'Escolha um projeto: o Claude por chave de API trabalha dentro de uma pasta.'
+      : isClaudeApi && selectedAccount?.secretConfigured === false
+        ? 'Esta conta está sem chave. Remova e crie de novo com a chave.'
+        : null
+
+  const buildClaudeApiOptions = useCallback((): NewClaudeApiOptions => {
+    const terminalOptions = buildOptions()
+    const account = accounts.find((item) => item.id === accountIdRef.current)
+    return {
+      label: name.trim() || `Claude (chave de API) · ${claudeApiProject?.name ?? 'sem pasta'}`,
+      accountId: accountIdRef.current,
+      accountLabel: account?.label,
+      cwd: claudeApiProject?.path ?? '',
+      model: model || undefined,
+      effort: effort || undefined,
+      yolo,
+      terminalOptions,
+    }
+  }, [accounts, buildOptions, claudeApiProject, effort, model, name, yolo])
+
   return {
+    isClaudeApi,
+    claudeApiIssue,
+    buildClaudeApiOptions,
     agents,
     agent,
     agentValue,

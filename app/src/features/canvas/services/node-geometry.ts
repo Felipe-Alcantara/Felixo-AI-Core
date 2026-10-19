@@ -17,6 +17,7 @@ export const DEFAULT_SIZE: Record<
   drawing: { width: 360, height: 280 },
   excalidrawDrawing: { width: 760, height: 560 },
   'cloud-session': { width: 460, height: 560 },
+  'claude-api': { width: 560, height: 640 },
 }
 
 /**
@@ -39,6 +40,7 @@ export const NODE_MIN_SIZE: Record<CanvasNodeType, { width: number; height: numb
   drawing: { width: 220, height: 180 },
   excalidrawDrawing: { width: 360, height: 280 },
   'cloud-session': { width: 340, height: 320 },
+  'claude-api': { width: 360, height: 340 },
 }
 
 /**

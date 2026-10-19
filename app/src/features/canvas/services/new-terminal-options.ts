@@ -59,3 +59,19 @@ export type NewCloudSessionOptions = {
   cwd: string
   accountId?: string
 }
+
+/**
+ * Bloco de conversa do Claude por chave de API (`ClaudeApiNode`). Nasce pelo
+ * mesmo menu de agentes; `terminalOptions` é o que viraria um terminal, usado
+ * só para montar o mesmo contexto do canvas que o terminal receberia.
+ */
+export type NewClaudeApiOptions = {
+  label: string
+  accountId: string
+  accountLabel?: string
+  cwd: string
+  model?: string
+  effort?: string
+  yolo: boolean
+  terminalOptions: NewTerminalOptions
+}

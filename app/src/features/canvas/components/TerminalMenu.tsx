@@ -2,7 +2,11 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { Cloud, ChevronDown, Plus, TerminalSquare, Trash2, X } from 'lucide-react'
 import { CLOUD_AGENT_VALUE } from '../services/agent-launch-preferences'
 import { useAgentConfig, type AgentConfigProject } from '../hooks/useAgentConfig'
-import type { NewCloudSessionOptions, NewTerminalOptions } from '../services/new-terminal-options'
+import type {
+  NewClaudeApiOptions,
+  NewCloudSessionOptions,
+  NewTerminalOptions,
+} from '../services/new-terminal-options'
 import { AgentConfigFields } from './AgentConfigFields'
 import { isFelixoPopoverTarget } from '../../shared/components/felixo-popover-target'
 
@@ -17,6 +21,8 @@ type TerminalMenuProps = {
   onAddMany: (optionsList: NewTerminalOptions[]) => void
   /** Cria o cartão "Agente na nuvem" já configurado; nada é disparado aqui. */
   onAddCloud: (options: NewCloudSessionOptions) => void
+  /** Conta do Claude por chave de API: cria o bloco de conversa. */
+  onAddClaudeApi: (options: NewClaudeApiOptions) => void
   /** Adds a folder as a project (picker + detect repos), returns the new ids. */
   onAddFolder: () => Promise<string[]>
 }
@@ -36,6 +42,7 @@ export function TerminalMenu({
   onAdd,
   onAddMany,
   onAddCloud,
+  onAddClaudeApi,
   onAddFolder,
 }: TerminalMenuProps) {
   const fieldIdPrefix = useId()
@@ -124,6 +131,15 @@ export function TerminalMenu({
         }
         onAddCloud(config.buildCloudOptions())
         config.setCloudTask('')
+      } else if (config.isClaudeApi) {
+        if (config.claudeApiIssue) {
+          if (!open) {
+            setOpen(true)
+          }
+          return
+        }
+        config.savePreferences()
+        onAddClaudeApi(config.buildClaudeApiOptions())
       } else {
         const options = config.buildOptions()
         config.savePreferences()
@@ -239,19 +255,20 @@ export function TerminalMenu({
               disabled={
                 launching ||
                 Boolean(config.accountSelectionIssue) ||
-                (isCloud && !config.cloudReady)
+                (isCloud && !config.cloudReady) ||
+                Boolean(config.claudeApiIssue)
               }
-              title={config.accountSelectionIssue?.message}
+              title={config.accountSelectionIssue?.message ?? config.claudeApiIssue ?? undefined}
               className={`felixo-btn flex-1 rounded-sm felixo-primary-action px-3 py-1.5 text-sm disabled:opacity-50${
                 isCloud ? ' flex items-center justify-center gap-2' : ''
               }`}
             >
               {isCloud && <Cloud size={14} aria-hidden="true" />}
-              {isCloud ? 'Abrir agente na nuvem' : 'Abrir agente'}
+              {isCloud ? 'Abrir agente na nuvem' : config.isClaudeApi ? 'Abrir conversa' : 'Abrir agente'}
             </button>
             {/* A fila inicia vários terminais de uma vez; a nuvem sempre passa
                 pela confirmação do próprio cartão, então não entra nela. */}
-            {!isCloud && (
+            {!isCloud && !config.isClaudeApi && (
               <button
                 type="button"
                 onClick={() => void queueCurrent()}

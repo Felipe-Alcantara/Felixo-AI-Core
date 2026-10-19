@@ -422,6 +422,20 @@ contextBridge.exposeInMainWorld('felixo', {
     followUp: (params) => ipcRenderer.invoke('cloud-session:follow-up', params),
     open: (params) => ipcRenderer.invoke('cloud-session:open', params),
   },
+  // Bloco de conversa do Claude por chave de API. A chave nunca passa por
+  // aqui: o renderer manda só o id da conta.
+  claudeApi: {
+    start: (params) => ipcRenderer.invoke('claude-api:start', params),
+    send: (params) => ipcRenderer.invoke('claude-api:send', params),
+    respondPermission: (params) => ipcRenderer.invoke('claude-api:respond-permission', params),
+    interrupt: (sessionId) => ipcRenderer.invoke('claude-api:interrupt', sessionId),
+    stop: (sessionId) => ipcRenderer.invoke('claude-api:stop', sessionId),
+    onEvent: (callback) => {
+      const handler = (_event, payload) => callback(payload)
+      ipcRenderer.on('claude-api:event', handler)
+      return () => ipcRenderer.removeListener('claude-api:event', handler)
+    },
+  },
   systemDesign: {
     getConfig: () => ipcRenderer.invoke('system-design:get-config'),
     saveConfig: (partial) =>

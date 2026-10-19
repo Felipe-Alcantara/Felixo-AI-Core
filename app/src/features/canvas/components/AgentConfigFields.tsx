@@ -1,5 +1,17 @@
 import { useId, useRef, useState } from 'react'
-import { Cloud, FilePlus2, FolderOpen, FolderPlus, Link2, RotateCw, TerminalSquare, Trash2, UserRound } from 'lucide-react'
+import {
+  Cloud,
+  FilePlus2,
+  FolderOpen,
+  FolderPlus,
+  KeyRound,
+  Link2,
+  RotateCw,
+  TerminalSquare,
+  Trash2,
+  UserRound,
+} from 'lucide-react'
+import { isClaudeApiKeyAccount } from '../../shared/types/cli-accounts'
 import {
   CHAIN_ACCOUNT_VALUE,
   CLOUD_AGENT_VALUE,
@@ -442,6 +454,8 @@ export function AgentConfigFields({
 
 /** Valor da opção que abre o cadastro de uma conta nova. */
 const NOVA_CONTA = '__nova__'
+/** Só no Claude: conta que entra por chave de API e abre o bloco de conversa. */
+const NOVA_CONTA_API = '__nova-api__'
 
 /**
  * Escolha da conta com que o terminal nasce, e o cadastro de contas novas.
@@ -461,6 +475,7 @@ function CampoConta({
   permitirCadeia?: boolean
 }) {
   const [criando, setCriando] = useState(false)
+  const [criandoApi, setCriandoApi] = useState(false)
   const [nome, setNome] = useState('')
   const [chave, setChave] = useState('')
   const [erro, setErro] = useState<string | null>(null)
@@ -468,8 +483,10 @@ function CampoConta({
   const [salvando, setSalvando] = useState(false)
   const [removendo, setRemovendo] = useState(false)
   const contaAtual = config.accounts.find((item) => item.id === config.accountId)
-  // Só o Openia guarda chave; os outros logam pela própria CLI no terminal.
-  const pedeChave = config.agentValue === 'openia'
+  // O Openia e a conta do Claude por chave de API guardam chave; os outros
+  // logam pela própria CLI no terminal.
+  const ofereceContaApi = config.agent?.id === 'claude' && permitirCadeia
+  const pedeChave = config.agentValue === 'openia' || (criandoApi && ofereceContaApi)
   const problemaDeConta = config.accountSelectionIssue
   // Com a lista ilegível nada pode ser criado nem conferido.
   const listaIlegivel = problemaDeConta?.status === 'list-failed'
@@ -483,7 +500,11 @@ function CampoConta({
     setSalvando(true)
     setErro(null)
 
-    const resultado = await config.createAccount(nome, pedeChave ? chave : undefined)
+    const resultado = await config.createAccount(
+      nome,
+      pedeChave ? chave : undefined,
+      criandoApi && ofereceContaApi ? 'api-key' : undefined,
+    )
 
     setSalvando(false)
 
@@ -495,6 +516,7 @@ function CampoConta({
     setNome('')
     setChave('')
     setCriando(false)
+    setCriandoApi(false)
   }
 
   async function remover() {
@@ -531,9 +553,10 @@ function CampoConta({
           id={`${prefixo}-account`}
           value={config.accountId}
           onChange={(value) => {
-            if (value === NOVA_CONTA) {
+            if (value === NOVA_CONTA || value === NOVA_CONTA_API) {
               setErroRemocao(null)
               setCriando(true)
+              setCriandoApi(value === NOVA_CONTA_API)
               return
             }
             setErroRemocao(null)
@@ -556,18 +579,37 @@ function CampoConta({
                   },
                 ]
               : []),
-            ...config.accounts.map((conta) => ({
-              value: conta.id,
-              label: conta.label,
-              description: 'Perfil local',
-              icon: <UserRound size={15} strokeWidth={1.5} />,
-            })),
+            ...config.accounts.map((conta) =>
+              isClaudeApiKeyAccount(conta)
+                ? {
+                    value: conta.id,
+                    label: conta.label,
+                    description: 'Chave de API · abre um bloco de conversa',
+                    icon: <KeyRound size={15} strokeWidth={1.5} />,
+                  }
+                : {
+                    value: conta.id,
+                    label: conta.label,
+                    description: 'Perfil local',
+                    icon: <UserRound size={15} strokeWidth={1.5} />,
+                  },
+            ),
             {
               value: NOVA_CONTA,
               label: 'Nova conta…',
               description: 'Cadastrar outro perfil de login',
               icon: <UserRound size={15} strokeWidth={1.5} />,
             },
+            ...(ofereceContaApi
+              ? [
+                  {
+                    value: NOVA_CONTA_API,
+                    label: 'Nova conta por chave de API…',
+                    description: 'Usa a chave da Anthropic, inclusive créditos do Agent SDK',
+                    icon: <KeyRound size={15} strokeWidth={1.5} />,
+                  },
+                ]
+              : []),
           ]}
           menuLabel="Contas disponíveis"
           aria-label="Conta"
@@ -606,6 +648,16 @@ function CampoConta({
             </button>
           )}
         </div>
+      )}
+
+      {config.isClaudeApi && !criando && (
+        <p
+          role={config.claudeApiIssue ? 'alert' : 'note'}
+          className={`-mt-2 mb-3 text-[11px] leading-snug ${config.claudeApiIssue ? 'text-theme-error' : 'text-zinc-500'}`}
+        >
+          {config.claudeApiIssue ??
+            'Abre um bloco de conversa em vez do terminal: o Claude Code roda sem a tela dele e cobra pela chave (inclusive créditos promocionais do Agent SDK).'}
+        </p>
       )}
 
       {viaCadeia && !problemaDeConta && (
@@ -650,9 +702,11 @@ function CampoConta({
       {criando && (
         <div className="mb-3 rounded-sm border border-white/10 bg-black/20 p-2">
           <p className="mb-2 text-[11px] leading-snug text-zinc-500">
-            {pedeChave
-              ? 'A conta guarda a chave do OpenRouter, cifrada pelo sistema.'
-              : 'A conta começa sem login: a própria CLI conduz a entrada na primeira vez que você abrir um terminal nela.'}
+            {criandoApi && ofereceContaApi
+              ? 'A conta guarda a chave de API da Anthropic (Console), cifrada pelo sistema. Ela abre um bloco de conversa, não o terminal.'
+              : pedeChave
+                ? 'A conta guarda a chave do OpenRouter, cifrada pelo sistema.'
+                : 'A conta começa sem login: a própria CLI conduz a entrada na primeira vez que você abrir um terminal nela.'}
           </p>
 
           <input
@@ -668,7 +722,7 @@ function CampoConta({
               value={chave}
               type="password"
               onChange={(event) => setChave(event.target.value)}
-              placeholder="Chave do OpenRouter"
+              placeholder={criandoApi && ofereceContaApi ? 'Chave de API da Anthropic (sk-ant-…)' : 'Chave do OpenRouter'}
               className={`${CAMPO} mb-2`}
             />
           )}
@@ -678,7 +732,7 @@ function CampoConta({
           <div className="flex gap-2">
             <button
               type="button"
-              disabled={!nome.trim() || salvando || listaIlegivel}
+              disabled={!nome.trim() || (pedeChave && !chave.trim()) || salvando || listaIlegivel}
               title={listaIlegivel ? problemaDeConta?.message : undefined}
               onClick={() => void criar()}
               className="felixo-btn flex-1 rounded-sm bg-zinc-700 px-2 py-1 text-xs text-zinc-100 hover:bg-zinc-600 disabled:opacity-40"
@@ -689,6 +743,7 @@ function CampoConta({
               type="button"
               onClick={() => {
                 setCriando(false)
+                setCriandoApi(false)
                 setErro(null)
               }}
               className="felixo-btn rounded-sm px-2 py-1 text-xs text-zinc-400 hover:bg-white/6"

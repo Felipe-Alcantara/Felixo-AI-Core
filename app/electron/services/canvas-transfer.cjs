@@ -109,6 +109,24 @@ function normalizeCanvasBundle(value) {
         },
       }
     }
+    if (node.type === 'claude-api') {
+      // O bloco de conversa viaja vazio: a conta, a pasta, o contexto e a
+      // conversa são desta pessoa e desta máquina. Ficam só o nome e as
+      // escolhas de modelo; quem importa escolhe a conta de novo.
+      const data = node.data && typeof node.data === 'object' ? node.data : {}
+      const { label, orderIndex, frameColor, apiModel, apiEffort, apiYolo } = data
+      return {
+        ...node,
+        data: {
+          ...(typeof label === 'string' ? { label } : {}),
+          ...(Number.isInteger(orderIndex) ? { orderIndex } : {}),
+          ...(typeof frameColor === 'string' ? { frameColor } : {}),
+          ...(typeof apiModel === 'string' ? { apiModel } : {}),
+          ...(typeof apiEffort === 'string' ? { apiEffort } : {}),
+          ...(apiYolo === true ? { apiYolo } : {}),
+        },
+      }
+    }
     if (node.type === 'file') {
       // External paths are machine-specific and may point at private files.
       // Keep the image/text label and safe metadata, but force repair after an

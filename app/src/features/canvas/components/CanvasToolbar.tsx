@@ -49,7 +49,11 @@ import { useWebviewProfiles } from '../hooks/useWebviewProfiles'
 import { FelixoSelect } from '../../shared/components/FelixoSelect'
 import type { ArrangeMode } from '../services/canvas-matrix-layout'
 import type { CanvasProject } from '../hooks/useCanvasProjects'
-import type { NewCloudSessionOptions, NewTerminalOptions } from '../services/new-terminal-options'
+import type {
+  NewClaudeApiOptions,
+  NewCloudSessionOptions,
+  NewTerminalOptions,
+} from '../services/new-terminal-options'
 import type { AnchorId } from '../../onboarding/onboarding-catalog'
 import { helpButtonLabel } from '../../onboarding/onboarding-help-label'
 import { OnboardingErrorBoundary } from '../../onboarding/OnboardingErrorBoundary'
@@ -105,6 +109,7 @@ type CanvasToolbarProps = {
   onAddTerminals: (optionsList: NewTerminalOptions[]) => void
   /** Cria o cartão "Agente na nuvem" já configurado no menu Agente; nada é disparado. */
   onAddCloudSession: (options: NewCloudSessionOptions) => void
+  onAddClaudeApi: (options: NewClaudeApiOptions) => void
   onOrganizeBlocks: (mode: ArrangeMode) => void
   arrangeableCount: number
   onAddFolder: () => Promise<string[]>
@@ -151,6 +156,7 @@ export function CanvasToolbar({
   agentMenuRequest = 0,
   onAddTerminals,
   onAddCloudSession,
+  onAddClaudeApi,
   onOrganizeBlocks,
   arrangeableCount,
   onAddFolder,
@@ -330,6 +336,7 @@ export function CanvasToolbar({
               onAdd={onAddTerminal}
               onAddMany={onAddTerminals}
               onAddCloud={onAddCloudSession}
+              onAddClaudeApi={onAddClaudeApi}
               onAddFolder={onAddFolder}
             />
             <NamedCreateButton

@@ -12,7 +12,14 @@ const { PtyProcessManager } = require('./services/pty-process-manager.cjs')
 const { createCliAccountStore } = require('./services/cli-account-store.cjs')
 const { createAccountChainRepository } = require('./services/storage/account-chain-repository.cjs')
 const { createAgentUsageRepository } = require('./services/storage/agent-usage-repository.cjs')
-const { listPresentInheritedCredentialNames } = require('./services/cli-account-profiles.cjs')
+const {
+  applyProfileEnv,
+  listPresentInheritedCredentialNames,
+} = require('./services/cli-account-profiles.cjs')
+const {
+  createClaudeApiSessionManager,
+} = require('./services/claude-api/claude-api-session-manager.cjs')
+const { registerClaudeApiIpcHandlers } = require('./services/claude-api/claude-api-ipc-handlers.cjs')
 const { createAccountChainRuntime } = require('./services/accounts/account-chain-runtime.cjs')
 const { createAccountOutputWatcher } = require('./services/accounts/account-output-watcher.cjs')
 const {
@@ -172,6 +179,7 @@ let terminalLogStore = null
 let cliAutoInstall = null
 let agentUsageWatching = null
 let cloudSessionService = null
+let claudeApiSessions = null
 let notionHandlers = null
 let agentBrowserWatching = null
 let agentCanvasReadWatching = null
@@ -453,8 +461,10 @@ app.whenReady().then(async () => {
         details: { providerId, targetAccountId, platform: platformName },
       })
     },
+    // A conta do Claude por chave de API não tem quota de assinatura para
+    // ler: o `/status` dela só gastaria um processo e voltaria vazio.
     listProfiles: () =>
-      cliAccounts.list().map((conta) => ({
+      cliAccounts.list().filter((conta) => conta.authKind !== 'api-key').map((conta) => ({
         id: conta.id,
         providerId: conta.providerId,
         label: conta.label,
@@ -692,14 +702,26 @@ app.whenReady().then(async () => {
   // o método por ela e o PTY a grava junto da conversa descoberta. Reaproveita
   // a detecção da abertura (`seed`, mais abaixo); a instância roteirizada não
   // roda CLI nenhuma, então ali nenhuma versão é conhecida.
+  // Conta do Claude por chave de API não abre terminal: o Claude Code
+  // interativo só cobra saldo comprado, e ela existe para o bloco de conversa
+  // (claude-api-session-manager.cjs), que roda o Claude sem tela.
+  function validatePtyAccount(accountId, providerId) {
+    if (cliAccounts.isApiKeyAccount(accountId)) {
+      return {
+        ok: false,
+        message:
+          'Conta do Claude por chave de API abre no bloco de conversa, não no terminal.',
+      }
+    }
+    return cliAccounts.validateAccount(accountId, providerId)
+  }
   const agentCliVersions = createAgentCliVersions({
     detect: fakeAuthCommandRunner
       ? async () => null
       : (provider) => detectAgentCliVersion(provider, createCliEnv()),
   })
   ptyHandlers = registerPtyIpcHandlers(getMainWindow, {
-    validateAccount: (accountId, providerId) =>
-      cliAccounts.validateAccount(accountId, providerId),
+    validateAccount: validatePtyAccount,
     onSessionExit: (sessionId) => accountChain.service.onSessionExit(sessionId),
     // A troca só abre o bloco novo com o ticket confirmado, uma vez, na conta
     // confirmada; o bloco que reabre sem ticket mantém a linhagem da troca.
@@ -712,8 +734,7 @@ app.whenReady().then(async () => {
     manager: new PtyProcessManager({
       spawnPty: devtoolsFakeCliPty?.createFakeCliPtyFactory(),
       getCliVersion: (provider) => agentCliVersions.peek(provider),
-      validateAccount: (accountId, providerId) =>
-        cliAccounts.validateAccount(accountId, providerId),
+      validateAccount: validatePtyAccount,
       buildAccountEnv: (accountId, providerId) =>
         cliAccounts.buildEnv(accountId, providerId),
       // Vigia de falha por conta no onData: limite, login e crédito da CLI
@@ -838,7 +859,14 @@ app.whenReady().then(async () => {
   // Agente na nuvem: a conta escolhida vira o ambiente do `claude --cloud`
   // pelo mesmo cadastro que os terminais usam; sem conta vale o Login do sistema.
   cloudSessionService = createCloudSessionService({
-    resolveProfileEnv: (accountId) => cliAccounts.buildEnv(accountId, 'claude'),
+    resolveProfileEnv: (accountId) => {
+      if (cliAccounts.isApiKeyAccount(accountId)) {
+        throw new Error(
+          'A sessão na nuvem precisa de uma conta do Claude com login; conta por chave de API não serve.',
+        )
+      }
+      return cliAccounts.buildEnv(accountId, 'claude')
+    },
     // Falha de integração com o Claude fica rastreável no QA Logger, sem a
     // tarefa, a mensagem, a pasta nem o ID da sessão.
     onEvent: (event) => logQaEvent({ scope: 'cloud-session', ...describeCloudSessionEvent(event) }),
@@ -850,6 +878,32 @@ app.whenReady().then(async () => {
     // automação que pediu falha de navegador, nada abre.
     shell: automationShell ?? shell,
   })
+
+  // Bloco de conversa do Claude por chave de API: um `claude -p` por bloco,
+  // no ambiente da conta (perfil + ANTHROPIC_API_KEY), sem as credenciais
+  // herdadas do app.
+  claudeApiSessions = createClaudeApiSessionManager({
+    spawnProcess: (command, args, options) => require('cross-spawn')(command, args, options),
+    validateAccount: (accountId) => {
+      if (!cliAccounts.isApiKeyAccount(accountId)) {
+        return { ok: false, message: 'Escolha uma conta do Claude por chave de API.' }
+      }
+      return cliAccounts.validateAccount(accountId, 'claude')
+    },
+    buildAccountEnv: (accountId) =>
+      applyProfileEnv(createCliEnv(), {
+        providerId: 'claude',
+        profileEnv: cliAccounts.buildEnv(accountId, 'claude'),
+      }),
+    emit: (sessionId, event) => {
+      const window = getMainWindow()
+      if (window && !window.isDestroyed()) {
+        window.webContents.send('claude-api:event', { sessionId, event })
+      }
+    },
+    log: (entry) => logQaEvent({ scope: 'claude-api', ...entry }),
+  })
+  registerClaudeApiIpcHandlers({ ipcMain, manager: claudeApiSessions })
 
   // Expõe a versão empacotada (definida pelo CI no release, não no
   // package.json versionado) para a interface conseguir mostrá-la.
@@ -906,6 +960,7 @@ app.on('before-quit', () => {
   openiaImageService?.shutdown()
   // Encerra os PTY descartáveis de um disparo em andamento.
   cloudSessionService?.dispose()
+  claudeApiSessions?.stopAll()
   if (agentBrowserWatching) {
     try {
       agentBrowserWatching.pararDeObservarPedidos()

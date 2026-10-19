@@ -18,6 +18,7 @@ const NODE_TYPES = new Set([
   'drawing',
   'excalidrawDrawing',
   'cloud-session',
+  'claude-api',
 ])
 
 function createCanvasRepository(database) {

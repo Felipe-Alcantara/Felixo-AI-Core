@@ -703,6 +703,64 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
     overlap: `${NODE_OVERLAP_BASE} Bloco médio (padrão 460×560, mínimo 340×320). A confirmação é inline dentro do próprio cartão (sem modal e sem window.confirm), então nada cobre o canvas.`,
   },
 
+  'claude-api': {
+    id: 'bloco-claude-api',
+    name: 'Bloco Claude por chave de API (conversa)',
+    layer: 'node',
+    owner: `${COMPONENTS}/ClaudeApiNode.tsx`,
+    states: {
+      normal: 'Barra com conta, projeto, modelo, esforço, Yolo/pede permissão e gasto em US$; lista da conversa (mensagens, ferramentas recolhíveis, avisos) e o campo de mensagem.',
+      loading: 'Turno em andamento: "Trabalhando…" ou o texto chegando com cursor; o botão Enviar vira Parar.',
+      empty: 'Conversa vazia: explica que é o Claude Code sem a tela do terminal e se pede permissão ou não. Com contexto do canvas, a primeira mensagem sai sozinha ao criar.',
+      pending: 'Pedido de permissão (sem Yolo): cartão com a ferramenta, o que ela vai fazer e Permitir/Negar.',
+      success: 'Resposta do Claude em Markdown; cada ferramenta mostra o resultado ao expandir.',
+      error: 'Aviso role="alert" na conversa: chave recusada, sem saldo, limite, processo que caiu ou CLI ausente, com o que fazer.',
+    },
+    controls: [
+      {
+        locator: 'aria-label="Mensagem para o Claude"',
+        kind: 'role',
+        effect: 'Enter envia (claude-api:start + claude-api:send); Shift+Enter quebra linha.',
+        failure: 'Falha ao abrir ou enviar vira aviso na conversa; o texto já saiu do campo.',
+        disabledWhen: 'Sem efeito enquanto um turno está em andamento.',
+      },
+      {
+        locator: 'title="Interromper"',
+        kind: 'button',
+        effect: 'Parar: manda o pedido de interrupção (claude-api:interrupt); o turno termina com "Interrompido.".',
+        failure: 'Sem processo vivo não faz nada.',
+        disabledWhen: 'Só aparece com turno em andamento.',
+      },
+      {
+        locator: 'Permitir',
+        kind: 'button',
+        effect: 'Responde ao pedido de permissão com allow e a entrada original (claude-api:respond-permission).',
+        failure: 'Pedido que já não está aberto vira aviso na conversa.',
+        disabledWhen: 'Só existe com pedido de permissão aberto.',
+      },
+      {
+        locator: 'Negar',
+        kind: 'button',
+        effect: 'Responde deny; a ferramenta aparece riscada como "negado" e o Claude segue sem ela.',
+        failure: 'Pedido que já não está aberto vira aviso na conversa.',
+        disabledWhen: 'Só existe com pedido de permissão aberto.',
+      },
+    ],
+    persistence: [
+      'canvas salvo (canvas_nodes tipo claude-api, migração 020: apiAccountId, apiAccountLabel, apiCwd, apiModel, apiEffort, apiYolo, apiInitialText, apiContextSent, apiConversation com mensagens, id da sessão do Claude e gasto)',
+      'Reabrir o app retoma a conversa com --resume no mesmo perfil da conta; exportar o canvas leva só nome e escolhas de modelo',
+    ],
+    ipc: ['claude-api:start', 'claude-api:send', 'claude-api:respond-permission', 'claude-api:interrupt', 'claude-api:stop', 'claude-api:event', 'canvas:save', 'canvas:delete'],
+    dependsOn: ['claude-api-conversation-store.ts (eventos fora do React)', 'window.felixo.claudeApi', 'addClaudeApiNode (CanvasView)'],
+    tests: [
+      { file: 'src/features/canvas/services/claude-api-conversation.test.ts' },
+      { file: 'electron/services/claude-api/claude-api-session-manager.test.cjs' },
+      { file: 'electron/services/storage/canvas-repository.test.cjs' },
+    ],
+    gaps: [],
+    overlap: `${NODE_OVERLAP_BASE} Bloco grande (padrão 560×640, mínimo 360×340). Pedidos de permissão aparecem dentro da própria conversa, sem modal.`,
+  },
+
   drawing: {
     id: 'bloco-desenho',
     name: 'Bloco Desenho leve (SVG)',
