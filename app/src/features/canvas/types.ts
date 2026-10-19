@@ -8,6 +8,7 @@ import type {
 import type { TerminalResumeBanner } from './services/terminal-resume-banner'
 import type { PromptInsertionMetadata } from '../shared/types/prompt-insertion'
 import type { CloudSessionErrorCode, CloudSessionInfo } from '../shared/types/cloud-session'
+import type { PersistedClaudeApiConversation } from './services/claude-api-conversation'
 
 export type CanvasNodeType =
   | 'terminal'
@@ -19,6 +20,7 @@ export type CanvasNodeType =
   | 'drawing'
   | 'excalidrawDrawing'
   | 'cloud-session'
+  | 'claude-api'
 
 export type GroupNodeData = {
   label?: string
@@ -300,6 +302,26 @@ export type CloudSessionNodeData = {
   cloudError?: { code: CloudSessionErrorCode; message: string }
 }
 
+/**
+ * Bloco de conversa do Claude por chave de API. Campos com prefixo `api`,
+ * porque `CanvasNodeData` é uma interseção plana: reusar `accountId` ou `cwd`
+ * faria as buscas por "bloco com conta" tratarem este bloco como terminal.
+ */
+export type ClaudeApiNodeData = {
+  label?: string
+  apiAccountId?: string
+  /** Nome da conta quando o bloco nasceu, para mostrar mesmo se a conta sumir. */
+  apiAccountLabel?: string
+  apiCwd?: string
+  apiModel?: string
+  apiEffort?: string
+  apiYolo?: boolean
+  /** Contexto do canvas a mandar como primeira mensagem, uma vez. */
+  apiInitialText?: string
+  apiContextSent?: boolean
+  apiConversation?: PersistedClaudeApiConversation
+}
+
 export type NoteColor = 'amber' | 'emerald' | 'sky' | 'rose' | 'zinc'
 
 export type NoteNodeData = {
@@ -383,6 +405,7 @@ export type CanvasNodeData = TerminalNodeData &
   DrawingNodeData &
   ExcalidrawDrawingNodeData &
   CloudSessionNodeData &
+  ClaudeApiNodeData &
   OrderedNodeData &
   FramedNodeData
 

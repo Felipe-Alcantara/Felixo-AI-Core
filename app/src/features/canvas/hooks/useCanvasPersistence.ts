@@ -229,6 +229,8 @@ const TRANSIENT_DATA_KEYS = new Set<string>([
   // Lista de projetos do canvas injetada no cartão "Agente na nuvem": mudaria
   // com os projetos, então nunca é gravada junto do bloco.
   'cloudProjects',
+  // Bloco de conversa do Claude por chave: a lista de contas é lida ao vivo.
+  'apiAccounts',
 ])
 
 function stripFunctions(data: Record<string, unknown>): CanvasNodeData {

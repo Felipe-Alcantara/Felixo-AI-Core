@@ -389,3 +389,27 @@ function createTempDir(prefix) {
 function removeTempDir(dirPath) {
   fs.rmSync(dirPath, { recursive: true, force: true })
 }
+
+test('canvas repository persists claude-api nodes across a restart', () => {
+  // Migração 020: sem ela o CHECK recusa o bloco e ele some ao reabrir o app.
+  const databaseDir = createTempDir('felixo-canvas-claude-api-')
+
+  try {
+    const database = createStorageDatabase({ databaseDir })
+    createCanvasRepository(database).save({
+      id: 'claude-api-1',
+      type: 'claude-api',
+      position: { x: 1, y: 2 },
+      data: { label: 'Claude', apiConversation: { items: [{ id: 'i1', role: 'user', text: 'oi' }], seq: 1 } },
+    })
+    database.close()
+
+    const reopened = createStorageDatabase({ databaseDir })
+    const [node] = createCanvasRepository(reopened).list()
+    assert.equal(node.type, 'claude-api')
+    assert.equal(node.data.apiConversation.items[0].text, 'oi')
+    reopened.close()
+  } finally {
+    removeTempDir(databaseDir)
+  }
+})

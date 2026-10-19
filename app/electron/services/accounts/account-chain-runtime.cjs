@@ -46,7 +46,9 @@ function createAccountChainRuntime({
   const usageRepository = createAgentUsageRepository(database)
   // Lança com o registro ilegível: o serviço trata como "contas desconhecidas"
   // e não apaga membro nenhum (fail-closed).
-  const listAccounts = () => cliAccounts.list()
+  // A conta do Claude por chave de API fica fora da cadeia: ela não abre
+  // terminal, e a cadeia só troca terminais.
+  const listAccounts = () => cliAccounts.list().filter((account) => account?.authKind !== 'api-key')
   const describeAccount = createAccountDescriber({
     listAccounts,
     getLatestSample: (accountId) => usageRepository.getLatestSample(accountId),

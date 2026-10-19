@@ -86,6 +86,22 @@ const CREDENCIAIS_HERDADAS = Object.freeze({
   openia: Object.freeze([]),
 })
 
+/**
+ * Conta do Claude que entra por chave de API em vez de login.
+ *
+ * O Claude Code interativo cobra só o saldo comprado do Console; no modo
+ * sem tela (`claude -p`, o mesmo motor do Agent SDK) a mesma chave também usa
+ * crédito promocional do Agent SDK. Por isso essa conta não abre terminal: abre
+ * o bloco de conversa, que roda o Claude sem tela. A pasta do perfil continua
+ * existindo (`CLAUDE_CONFIG_DIR`) para histórico e retomada não se misturarem
+ * com os de outras contas.
+ */
+const CLAUDE_API_KEY_AUTH_KIND = 'api-key'
+
+function isClaudeApiKeyAccount(account) {
+  return account?.providerId === 'claude' && account?.authKind === CLAUDE_API_KEY_AUTH_KIND
+}
+
 function getIsolation(providerId) {
   return ISOLATION[providerId] ?? null
 }
@@ -123,8 +139,9 @@ function isSafeSegment(value) {
  * @param {string} [options.profileDir] - Pasta do perfil, já criada.
  * @param {string} [options.secret] - Só para `env-secret`; nunca é registrado.
  * @param {string} [options.homeDir] - Home real, para o espelho do Gemini.
+ * @param {string} [options.authKind] - `api-key` na conta do Claude por chave.
  */
-function buildProfileEnv({ providerId, profileDir, secret, homeDir }) {
+function buildProfileEnv({ providerId, profileDir, secret, homeDir, authKind }) {
   const isolation = getIsolation(providerId)
 
   if (!isolation) {
@@ -140,6 +157,13 @@ function buildProfileEnv({ providerId, profileDir, secret, homeDir }) {
   }
 
   if (isolation.kind === 'env-dir') {
+    // A chave entra DEPOIS da remoção das credenciais herdadas
+    // (`applyProfileEnv` espalha o perfil por cima), então sobrevive só aqui.
+    if (isClaudeApiKeyAccount({ providerId, authKind })) {
+      return secret
+        ? { [isolation.variable]: profileDir, ANTHROPIC_API_KEY: secret }
+        : { [isolation.variable]: profileDir }
+    }
     return { [isolation.variable]: profileDir }
   }
 
@@ -251,6 +275,7 @@ function getMirrorEntries(providerId) {
 }
 
 module.exports = {
+  CLAUDE_API_KEY_AUTH_KIND,
   CREDENCIAIS_HERDADAS,
   ISOLATION,
   PROFILES_DIRNAME,
@@ -261,6 +286,7 @@ module.exports = {
   getIsolation,
   getMirrorEntries,
   getProfileDir,
+  isClaudeApiKeyAccount,
   listPresentInheritedCredentialNames,
   supportsProfiles,
 }

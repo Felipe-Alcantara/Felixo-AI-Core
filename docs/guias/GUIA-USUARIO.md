@@ -333,6 +333,15 @@ terminal, chaves ou caminhos de perfil.
   continua igual, ou faça o login por chave dentro da própria CLI naquele perfil.
   A aba **Cadeia** mostra só os **nomes** dessas variáveis quando estão no
   ambiente do app, nunca os valores.
+- **Claude por chave de API.** No agente **Claude**, **Conta → Nova conta por
+  chave de API…** guarda a chave do Console da Anthropic, cifrada. Essa conta
+  abre um **bloco de conversa** em vez do terminal. O bloco roda o Claude Code
+  sem a tela dele, e é esse modo que usa os créditos promocionais do Agent SDK;
+  o Claude Code no terminal só aceita saldo comprado.
+  - O bloco precisa de um **Projeto**.
+  - Sem **Yolo**, cada edição ou comando pede **Permitir/Negar** dentro do bloco.
+  - O gasto da conversa aparece em US$ no topo do bloco.
+  - Detalhes no [Guia de Contas e Limites](GUIA-CONTAS-E-LIMITES.md#claude-por-chave-de-api-bloco-de-conversa).
 - **Troca silenciosa corrigida.** Antes, se a lista de contas falhasse ou a conta
   salva tivesse sido removida, o configurador abria o bloco no Login do sistema
   sem avisar. Agora aparece "Não foi possível carregar as contas; o bloco não vai

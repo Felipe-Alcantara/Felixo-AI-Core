@@ -865,3 +865,82 @@ test('arquivo de chaves ilegível não é regravado: gravar, esquecer e remover 
     env.cleanup()
   }
 })
+
+test('conta do Claude por chave de API guarda a chave cifrada e põe ANTHROPIC_API_KEY no ambiente', () => {
+  const env = createEnvironment()
+  try {
+    const conta = env.store.create({ providerId: 'claude', label: 'API', authKind: 'api-key' })
+    assert.equal(conta.authKind, 'api-key')
+
+    // Sem chave, a barreira recusa: o processo nasceria sem credencial.
+    const semChave = env.store.validateAccount(conta.id, 'claude')
+    assert.equal(semChave.ok, false)
+    assert.match(semChave.message, /chave de API/)
+
+    env.store.setSecret(conta.id, 'sk-ant-chave-de-teste')
+    assert.equal(env.store.validateAccount(conta.id, 'claude').ok, true)
+    assert.equal(env.store.isApiKeyAccount(conta.id), true)
+
+    const ambiente = env.store.buildEnv(conta.id, 'claude')
+    assert.equal(ambiente.ANTHROPIC_API_KEY, 'sk-ant-chave-de-teste')
+    assert.equal(ambiente.CLAUDE_CONFIG_DIR, path.join(env.userData, 'cli-profiles', 'claude', conta.id))
+
+    const [publica] = env.store.list('claude')
+    assert.equal(publica.secretConfigured, true)
+    assert.equal(publica.authKind, 'api-key')
+    assert.equal(JSON.stringify(publica).includes('sk-ant'), false)
+
+    const arquivo = fs.readFileSync(path.join(env.userData, 'config', 'cli-account-secrets.bin'), 'utf8')
+    assert.match(arquivo, /^cifrado:/)
+  } finally {
+    env.cleanup()
+  }
+})
+
+test('conta do Claude com login não recebe chave nem ANTHROPIC_API_KEY', () => {
+  const env = createEnvironment()
+  try {
+    const conta = env.store.create({ providerId: 'claude', label: 'Max' })
+    assert.equal(conta.authKind, undefined)
+    assert.equal(env.store.isApiKeyAccount(conta.id), false)
+    assert.throws(() => env.store.setSecret(conta.id, 'sk-ant-x'), /não guarda chave/)
+    assert.deepEqual(Object.keys(env.store.buildEnv(conta.id, 'claude')), ['CLAUDE_CONFIG_DIR'])
+    const [publica] = env.store.list('claude')
+    assert.equal('secretConfigured' in publica, false)
+  } finally {
+    env.cleanup()
+  }
+})
+
+test('tipo de conta por chave só existe para o Claude', () => {
+  const env = createEnvironment()
+  try {
+    assert.throws(
+      () => env.store.create({ providerId: 'codex', label: 'X', authKind: 'api-key' }),
+      /não existe para esta CLI/,
+    )
+    assert.throws(
+      () => env.store.create({ providerId: 'claude', label: 'Y', authKind: 'outro' }),
+      /não existe para esta CLI/,
+    )
+    assert.deepEqual(env.store.list(), [])
+  } finally {
+    env.cleanup()
+  }
+})
+
+test('remover a conta do Claude por chave esquece a chave dela', () => {
+  const env = createEnvironment()
+  try {
+    const conta = env.store.create({ providerId: 'claude', label: 'API', authKind: 'api-key' })
+    const outra = env.store.create({ providerId: 'openia', label: 'OR' })
+    env.store.setSecret(conta.id, 'sk-ant-uma')
+    env.store.setSecret(outra.id, 'sk-or-outra')
+    env.store.remove(conta.id, CONFIRMADO)
+    assert.equal(env.store.buildEnv(outra.id, 'openia').OPENROUTER_API_KEY, 'sk-or-outra')
+    const arquivo = fs.readFileSync(path.join(env.userData, 'config', 'cli-account-secrets.bin'), 'utf8')
+    assert.equal(arquivo.includes('sk-ant-uma'), false)
+  } finally {
+    env.cleanup()
+  }
+})

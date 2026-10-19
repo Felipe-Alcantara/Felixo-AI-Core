@@ -48,6 +48,7 @@ import type {
 } from './features/shared/types/cli-accounts'
 import type { AccountChainBridge } from './features/shared/types/account-chain'
 import type { CloudSessionBridge } from './features/shared/types/cloud-session'
+import type { ClaudeApiBridge } from './features/shared/types/claude-api'
 import type { ExternalOpenFailure } from './features/shared/links/link-open-failure'
 import type { GpuPreference, GpuPreferenceStatus } from './features/shared/graphics/gpu-preference'
 import type { HardwareProfile } from './features/shared/performance/performance-suggestion'
@@ -91,6 +92,7 @@ type PersistedCanvasNode = {
     | 'drawing'
     | 'excalidrawDrawing'
     | 'cloud-session'
+    | 'claude-api'
   parentId?: string | null
   position: { x: number; y: number }
   width?: number | null
@@ -1010,7 +1012,7 @@ declare global {
           secretStorage?: { ok: boolean; reason: string | null }
           message?: string
         }>
-        create: (params: { providerId: string; label: string }) => Promise<{
+        create: (params: { providerId: string; label: string; authKind?: 'api-key' }) => Promise<{
           ok: boolean
           account?: CliAccount
           message?: string
@@ -1034,6 +1036,7 @@ declare global {
        * serviço, o cartão mostra o recurso como indisponível.
        */
       cloudSession?: CloudSessionBridge
+      claudeApi?: ClaudeApiBridge
       agentUsage?: {
         list: () => Promise<AgentUsageDashboard>
         refresh: () => Promise<AgentUsageDashboard>

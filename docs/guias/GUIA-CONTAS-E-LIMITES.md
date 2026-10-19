@@ -178,6 +178,62 @@ com a quota lida da pasta dela — é assim que duas contas do mesmo provedor
 aparecem com números separados. Enquanto a conta não tiver sido usada, a linha
 diz isso em vez de mostrar zero.
 
+### Claude por chave de API (bloco de conversa)
+
+No agente **Claude**, o campo **Conta** tem **Nova conta por chave de API…**. A
+conta guarda a chave do Console da Anthropic, cifrada pelo `safeStorage`, como a
+do Openia. Ela não abre terminal: **Abrir conversa** cria um **bloco de
+conversa** no canvas.
+
+**Por que um bloco e não o terminal.** Medido em 19/10/2026 com o Claude Code
+2.1.303, com uma organização que tinha saldo comprado zerado e crédito
+promocional disponível:
+
+| Jeito de rodar | Usa crédito promocional do Agent SDK? |
+|---|---|
+| Claude Code interativo (terminal), com login ou com chave | não: "Credit balance too low" |
+| Claude Code sem tela (`claude -p`, o motor do Agent SDK), com a chave | sim |
+| API direta / Playground | sim |
+
+**O que o bloco faz**
+- Roda o mesmo Claude Code, sem a tela dele:
+  `claude -p --input-format stream-json --output-format stream-json`.
+- Usa a pasta do projeto escolhido e o perfil da conta
+  (`CLAUDE_CONFIG_DIR` + `ANTHROPIC_API_KEY`). As credenciais do Claude herdadas
+  do ambiente do app são removidas antes.
+- Mostra:
+  - as respostas em Markdown;
+  - cada ferramenta usada, com o resultado recolhível;
+  - o gasto em US$ acumulado da conversa, informado pelo Claude Code a cada resposta.
+- Usa **Modelo**, **Esforço** e **Yolo** do painel de agentes.
+- **Sem Yolo**, cada ação que pede permissão (editar arquivo, rodar comando)
+  aparece no bloco com **Permitir** e **Negar**.
+- **Com Yolo**, roda em `bypassPermissions`.
+- O contexto do canvas (padrão de qualidade, identidade, preset, arquivo de
+  planejamento) vai como primeira mensagem, uma vez.
+- **Parar** interrompe o turno sem fechar a conversa.
+- A conversa fica gravada no bloco. Reabrir o app continua a mesma sessão do
+  Claude (`--resume`).
+- Remover o bloco encerra o processo dele.
+
+**Avisos na conversa**
+- Chave recusada (401): orienta a remover a conta e criar de novo com a chave certa.
+- Sem saldo: orienta a conferir saldo e créditos no Console.
+- Limite de requisições, API sobrecarregada, CLI ausente e processo que caiu também viram aviso.
+
+**Ficam de fora desta versão**
+- Os comandos de barra do Claude Code (`/model`, `/usage`…).
+- O modo fast (exige liberação no modo sem tela).
+- A cadeia de contas: conta por chave não entra na cadeia.
+- A linha da conta no painel **Limites e uso**, porque conta por chave não tem quota de assinatura.
+- Ligar arquivos `.md` ao bloco depois de criado.
+
+**Onde a conta por chave não serve**
+- Terminal: é recusada com uma mensagem que aponta para o bloco.
+- Agente na nuvem: também é recusada, porque ele exige uma conta com login.
+- Exportar o canvas leva o bloco vazio: só o nome e as escolhas de modelo, sem
+  conta, pasta, contexto nem conversa.
+
 ## Cadeia de contas
 
 Quando a conta de um terminal bate o limite de uso, perde o login ou fica sem

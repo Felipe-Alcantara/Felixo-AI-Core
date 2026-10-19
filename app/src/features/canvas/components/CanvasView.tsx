@@ -42,6 +42,8 @@ import { FileNode } from './FileNode'
 import { WebpageNode } from './WebpageNode'
 import { NotionTasksNode } from './NotionTasksNode'
 import { CloudSessionNode } from './CloudSessionNode'
+import { ClaudeApiNode } from './ClaudeApiNode'
+import { claudeApiConversations } from '../services/claude-api-conversation-store'
 import { createDraft as createCloudSessionDraft } from '../services/cloud-session-state'
 import { TerminalDrawer } from './TerminalDrawer'
 import { readingProfileFor } from '../terminal/reading/reading-profiles'
@@ -146,7 +148,11 @@ import { announceAgentCollaboration } from '../services/agent-collaboration-link
 import {
   buildTerminalHandoffPrompt,
 } from '../services/terminal-handoff'
-import type { NewTerminalOptions, NewCloudSessionOptions } from '../services/new-terminal-options'
+import type {
+  NewClaudeApiOptions,
+  NewTerminalOptions,
+  NewCloudSessionOptions,
+} from '../services/new-terminal-options'
 import {
   resolveTerminalSpawnPlan,
   terminalSpawnCacheDeps,
@@ -1339,7 +1345,8 @@ function CanvasInner({
         node.type === 'webpage' ||
         node.type === 'notionTasks' ||
         node.type === 'drawing' ||
-        node.type === 'excalidrawDrawing'
+        node.type === 'excalidrawDrawing' ||
+        node.type === 'claude-api'
       ) {
         return {
           ...withHandle,
@@ -1506,6 +1513,12 @@ function CanvasInner({
         (nodeId) => store.remove(nodeId),
         removeNode,
       )
+      // Bloco de conversa removido: encerra o processo do Claude dele.
+      for (const change of changes) {
+        if (change.type !== 'remove') continue
+        const removed = nodesRef.current.find((node) => node.id === change.id)
+        if (removed?.type === 'claude-api') claudeApiConversations.dispose(change.id)
+      }
       const removeGeneratedImage = window.felixo?.files?.removeGeneratedImage
       if (removeGeneratedImage) {
         for (const change of changes) {
@@ -1826,6 +1839,47 @@ function CanvasInner({
     openCloudTerminalRef.current = addTerminalNode
   }, [addTerminalNode])
 
+  // Conta do Claude por chave de API: em vez do terminal, o bloco de
+  // conversa. O contexto do canvas é o mesmo que o terminal receberia.
+  const addClaudeApiNode = useCallback(
+    (options: NewClaudeApiOptions) => {
+      void ensureProjectGuides([options.cwd]).then(() => {
+        const terminalData = buildTerminalNodeData(options.terminalOptions)
+        const size = getDefaultNodeSize('claude-api', window.innerWidth)
+        const position = findFreeNodePosition(nodesRef.current, size, visibleCanvasBounds())
+        const id = addNode(
+          'claude-api',
+          {
+            label: options.label,
+            apiAccountId: options.accountId,
+            apiAccountLabel: options.accountLabel,
+            apiCwd: options.cwd,
+            apiModel: options.model,
+            apiEffort: options.effort,
+            apiYolo: options.yolo,
+            apiInitialText: terminalData.initialText,
+            apiContextSent: false,
+          },
+          position,
+        )
+        setNodes((current) => current.map((node) => ({ ...node, selected: node.id === id })))
+        centerNodeInSafeArea(position, size, 0.8, 240)
+      })
+    },
+    [addNode, buildTerminalNodeData, centerNodeInSafeArea, ensureProjectGuides, setNodes, visibleCanvasBounds],
+  )
+
+  // A conversa vive fora do React (o bloco pode estar desmontado fora da
+  // tela); cada mudança que importa volta para o node e é gravada.
+  useEffect(
+    () =>
+      claudeApiConversations.onPersist((nodeId, persisted) => {
+        if (!nodesRef.current.some((node) => node.id === nodeId)) return
+        updateNodeData(nodeId, { apiConversation: persisted })
+      }),
+    [updateNodeData],
+  )
+
   /**
    * Cria o agente escolhido no diálogo já sabendo o que o anterior estava
    * fazendo. O destino vem da configuração que o usuário montou — qualquer
@@ -2062,6 +2116,7 @@ function CanvasInner({
       webpage: WebpageNode,
       notionTasks: NotionTasksNode,
       'cloud-session': CloudSessionNode,
+      'claude-api': ClaudeApiNode,
     }),
     [],
   )
@@ -2150,6 +2205,7 @@ function CanvasInner({
         onAddTerminal={addTerminalNode}
         onAddTerminals={addTerminalNodes}
         onAddCloudSession={addCloudSessionNode}
+        onAddClaudeApi={addClaudeApiNode}
         onOrganizeBlocks={organizeCanvasBlocks}
         arrangeableCount={arrangeableCount}
         onAddFolder={addProjectFolder}

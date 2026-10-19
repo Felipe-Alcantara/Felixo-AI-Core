@@ -15,6 +15,7 @@ import {
   Globe,
   GripVertical,
   Group,
+  KeyRound,
   Loader2,
   ListTodo,
   MessagesSquare,
@@ -89,6 +90,7 @@ const TYPE_ICON: Record<CanvasNodeType, typeof TerminalIcon> = {
   webpage: Globe,
   notionTasks: ListTodo,
   'cloud-session': Cloud,
+  'claude-api': KeyRound,
 }
 
 function elementTitle(node: Node<CanvasNodeData>) {

@@ -268,3 +268,36 @@ test('canvas transfer limits the task of an imported cloud-session card to 4000 
 
   assert.equal(bundle.nodes[0].data.cloudTask.length, 4000)
 })
+
+test('bloco de conversa do Claude por chave viaja sem conta, pasta, contexto nem conversa', () => {
+  const bundle = createCanvasBundle(
+    validSource({
+      nodes: [
+        {
+          id: 'claude-api-1',
+          type: 'claude-api',
+          position: { x: 0, y: 0 },
+          data: {
+            label: 'Claude API',
+            apiAccountId: 'conta-privada',
+            apiAccountLabel: 'Empresa',
+            apiCwd: '/home/pessoa/projeto',
+            apiModel: 'claude-sonnet-5-5',
+            apiEffort: 'high',
+            apiYolo: true,
+            apiInitialText: 'segredo do canvas',
+            apiConversation: { items: [{ id: 'i1', role: 'user', text: 'privado' }], claudeSessionId: 'x', totalCostUsd: 1, seq: 1 },
+          },
+        },
+      ],
+      edges: [],
+      files: [],
+    }),
+  )
+  assert.deepEqual(bundle.nodes[0].data, {
+    label: 'Claude API',
+    apiModel: 'claude-sonnet-5-5',
+    apiEffort: 'high',
+    apiYolo: true,
+  })
+})

@@ -29,8 +29,8 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 
 ## Números
 
-- **Elementos:** 97 (9 blocos, 16 ferramentas, 72 outras superfícies)
-- **Controles:** 371, dos quais 55 com teste específico
+- **Elementos:** 98 (10 blocos, 16 ferramentas, 72 outras superfícies)
+- **Controles:** 375, dos quais 55 com teste específico
 - **Elementos sem nenhum teste:** 4
 - **Lacunas:** 275 (alto 10, médio 147, baixo 118), em 78 tasks
 
@@ -764,6 +764,31 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `Trazer para cá` (button) | clique | Cria um terminal do Claude com --teleport <id> na mesma pasta e conta, sem texto inicial. Continua a conversa localmente. (desabilitado: Só existe depois de criada.) | Sem sessão local equivalente o CLI mostra o próprio erro no terminal; o cartão não é alterado. | — |
 | `onClick={() => setConfirming('new-session')}` (button) | clique | Abre a confirmação para voltar ao rascunho; a sessão atual continua existindo em claude.ai/code. (desabilitado: Só existe depois de criada.) | Sem falha própria. | — |
 | `onClick={() => void sendFollowUp()}` (button) | clique | Envia a mensagem à sessão (claude -p … --cloud <id>, sem TTY) e registra o resultado na lista de mensagens enviadas. (desabilitado: Texto vazio ou envio em andamento.) | Falha mostra a mensagem e mantém o texto digitado; a trava por nó impede dois envios ao mesmo tempo. | — |
+
+### Bloco Claude por chave de API (conversa)
+
+- **ID:** `bloco-claude-api` · **Dono:** `src/features/canvas/components/ClaudeApiNode.tsx`
+- **Persistência:** canvas salvo (canvas_nodes tipo claude-api, migração 020: apiAccountId, apiAccountLabel, apiCwd, apiModel, apiEffort, apiYolo, apiInitialText, apiContextSent, apiConversation com mensagens, id da sessão do Claude e gasto); Reabrir o app retoma a conversa com --resume no mesmo perfil da conta; exportar o canvas leva só nome e escolhas de modelo
+- **IPC:** `claude-api:start`, `claude-api:send`, `claude-api:respond-permission`, `claude-api:interrupt`, `claude-api:stop`, `claude-api:event`, `canvas:save`, `canvas:delete`
+- **Depende de:** `claude-api-conversation-store.ts (eventos fora do React)`, `window.felixo.claudeApi`, `addClaudeApiNode (CanvasView)`
+- **Sobreposição:** Bloco do React Flow, sem z próprio: fica abaixo de toda superfície fixa (topbar e statusbar 18, dock e painéis 20/30, sidebar 26, menus 50+). O cartão é overflow-hidden, então nada que nasce dentro dele passa das bordas. Bloco grande (padrão 560×640, mínimo 360×340). Pedidos de permissão aparecem dentro da própria conversa, sem modal.
+- **Testes:** `src/features/canvas/services/claude-api-conversation.test.ts`, `electron/services/claude-api/claude-api-session-manager.test.cjs`, `electron/services/storage/canvas-repository.test.cjs`
+
+| Estado | Quando |
+| --- | --- |
+| normal | Barra com conta, projeto, modelo, esforço, Yolo/pede permissão e gasto em US$; lista da conversa (mensagens, ferramentas recolhíveis, avisos) e o campo de mensagem. |
+| loading | Turno em andamento: "Trabalhando…" ou o texto chegando com cursor; o botão Enviar vira Parar. |
+| empty | Conversa vazia: explica que é o Claude Code sem a tela do terminal e se pede permissão ou não. Com contexto do canvas, a primeira mensagem sai sozinha ao criar. |
+| error | Aviso role="alert" na conversa: chave recusada, sem saldo, limite, processo que caiu ou CLI ausente, com o que fazer. |
+| pending | Pedido de permissão (sem Yolo): cartão com a ferramenta, o que ela vai fazer e Permitir/Negar. |
+| success | Resposta do Claude em Markdown; cada ferramenta mostra o resultado ao expandir. |
+
+| Controle | Gatilho | Efeito | Falha conhecida | Teste |
+| --- | --- | --- | --- | --- |
+| `aria-label="Mensagem para o Claude"` (role) | clique | Enter envia (claude-api:start + claude-api:send); Shift+Enter quebra linha. (desabilitado: Sem efeito enquanto um turno está em andamento.) | Falha ao abrir ou enviar vira aviso na conversa; o texto já saiu do campo. | — |
+| `title="Interromper"` (button) | clique | Parar: manda o pedido de interrupção (claude-api:interrupt); o turno termina com "Interrompido.". (desabilitado: Só aparece com turno em andamento.) | Sem processo vivo não faz nada. | — |
+| `Permitir` (button) | clique | Responde ao pedido de permissão com allow e a entrada original (claude-api:respond-permission). (desabilitado: Só existe com pedido de permissão aberto.) | Pedido que já não está aberto vira aviso na conversa. | — |
+| `Negar` (button) | clique | Responde deny; a ferramenta aparece riscada como "negado" e o Claude segue sem ela. (desabilitado: Só existe com pedido de permissão aberto.) | Pedido que já não está aberto vira aviso na conversa. | — |
 
 ### Bloco Desenho leve (SVG)
 
