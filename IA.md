@@ -1811,3 +1811,9 @@ source, roda local e não tem banco público, então não precisa de tantos gate
   empacotado não roda mais em lugar nenhum, e o gate do artefato é o `release-smoke.cjs`.
 - Mudar o `release.yml` publica uma release ao mesclar (é entrada de release por desenho, para
   exercitar o pipeline novo).
+
+**Medido no CI do PR #124 (mesma data).** Todos os 13 jobs verdes. Run inteira, do escopo ao último
+job: 5,1 min (antes 15 a 18). `Validate (windows-latest)`: 4,0 min (antes 14,7 a 17,4), com
+`npm test` em 61 s (antes 248 a 298 s), o node-pty em 34 s e o Vitest em 66 s. `Canvas smoke
+(ubuntu-latest)`: 5,0 min, em paralelo. macOS: 1,4 min; arm64: 24 s. O passo do Defender passou
+(6 s). Como o `ci.yml` mudou, o escopo ligou tudo nessa run.
