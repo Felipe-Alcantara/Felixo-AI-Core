@@ -28,8 +28,27 @@ function safeCall(fn, fallback) {
 /**
  * @param {{ ipcMain: { handle: Function }, manager: ReturnType<typeof import('./claude-api-session-manager.cjs').createClaudeApiSessionManager> }} deps
  */
-function registerClaudeApiIpcHandlers({ ipcMain, manager }) {
+function registerClaudeApiIpcHandlers({ ipcMain, manager, sessions }) {
   const invalid = { ok: false, message: 'Pedido inválido.' }
+
+  // `/resume` do bloco: conversas anteriores da conta neste projeto.
+  ipcMain.handle('claude-api:list-sessions', (_event, payload) => {
+    if (!isRecord(payload) || !str(payload.accountId, 200) || !str(payload.cwd, 4096) || !sessions) return invalid
+    return safeCall(
+      () => ({ ok: true, sessions: sessions.list({ accountId: payload.accountId, cwd: payload.cwd }) }),
+      'Não foi possível listar as conversas.',
+    )
+  })
+
+  ipcMain.handle('claude-api:read-transcript', (_event, payload) => {
+    if (!isRecord(payload) || !str(payload.accountId, 200) || !str(payload.cwd, 4096) || !str(payload.sessionId, 100) || !sessions) {
+      return invalid
+    }
+    return safeCall(() => {
+      const entries = sessions.read({ accountId: payload.accountId, cwd: payload.cwd, sessionId: payload.sessionId })
+      return entries ? { ok: true, entries } : { ok: false, message: 'Essa conversa não existe nesta conta e projeto.' }
+    }, 'Não foi possível ler a conversa.')
+  })
 
   ipcMain.handle('claude-api:start', (_event, payload) => {
     if (!isRecord(payload)) return invalid

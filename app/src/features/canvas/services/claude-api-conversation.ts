@@ -6,7 +6,11 @@
  * novo. Quem guarda e persiste é `claude-api-conversation-store.ts`.
  */
 
-import type { ClaudeApiErrorKind, ClaudeApiEvent } from '../../shared/types/claude-api'
+import type {
+  ClaudeApiErrorKind,
+  ClaudeApiEvent,
+  ClaudeApiTranscriptEntry,
+} from '../../shared/types/claude-api'
 
 export type ClaudeApiItem =
   | { id: string; role: 'user'; text: string; context?: boolean }
@@ -300,4 +304,85 @@ export function formatUsd(value: number): string {
   if (!value) return 'US$ 0,00'
   const digits = value < 0.01 ? 4 : 2
   return `US$ ${value.toFixed(digits).replace('.', ',')}`
+}
+
+/** Apelidos que o Claude Code aceita em `--model`; nomes completos também valem. */
+export const CLAUDE_API_MODEL_ALIASES = ['sonnet', 'opus', 'haiku'] as const
+
+const MODEL_NAME = /^[a-z0-9][a-z0-9.\-[\]]{0,79}$/i
+
+export type ClaudeApiSlashCommand =
+  | { kind: 'resume-list' }
+  | { kind: 'resume-pick'; target: string }
+  | { kind: 'model-show' }
+  | { kind: 'model-set'; model: string | null }
+  | { kind: 'model-invalid'; value: string }
+
+/**
+ * Comandos de barra que o próprio bloco atende. Sem a tela do Claude Code, o
+ * `/model` dele não existe: o bloco troca o modelo e o próximo envio reabre o
+ * processo com `--model` e `--resume`, continuando a mesma conversa.
+ * `null` = não é comando do bloco; vai como mensagem normal.
+ */
+export function parseClaudeApiSlashCommand(text: string): ClaudeApiSlashCommand | null {
+  const resume = /^\/resume(?:\s+(\S+))?\s*$/i.exec(text.trim())
+  if (resume) return resume[1] ? { kind: 'resume-pick', target: resume[1] } : { kind: 'resume-list' }
+  const match = /^\/model(?:\s+(.*))?$/i.exec(text.trim())
+  if (!match) return null
+  const value = (match[1] ?? '').trim()
+  if (!value) return { kind: 'model-show' }
+  if (/^(default|padr[aã]o)$/i.test(value)) return { kind: 'model-set', model: null }
+  return MODEL_NAME.test(value) ? { kind: 'model-set', model: value } : { kind: 'model-invalid', value }
+}
+
+export function noticeAdded(
+  state: ClaudeApiConversation,
+  text: string,
+  tone: 'info' | 'error' = 'info',
+): ClaudeApiConversation {
+  return push(state, { role: 'notice', text, tone })
+}
+
+/**
+ * Conversa retomada pelo `/resume`: o histórico gravado pelo Claude Code vira
+ * os itens do bloco, e o id passa a ser o da sessão escolhida (o próximo
+ * envio abre com `--resume` nela). O gasto anterior não está no arquivo, então
+ * o contador recomeça.
+ */
+export function conversationFromTranscript(
+  entries: ClaudeApiTranscriptEntry[],
+  claudeSessionId: string,
+): ClaudeApiConversation {
+  let state: ClaudeApiConversation = { ...createConversation(), claudeSessionId }
+  for (const entry of entries) {
+    if (entry.role === 'user') {
+      state = push(state, { role: 'user', text: clip(entry.text) })
+    } else if (entry.role === 'assistant') {
+      state = applyClaudeApiEvent(state, { kind: 'assistant-message', messageId: null, blocks: [{ type: 'text', text: entry.text }] })
+    } else if (entry.role === 'tool') {
+      state = applyClaudeApiEvent(state, {
+        kind: 'assistant-message',
+        messageId: null,
+        blocks: [{ type: 'tool_use', id: entry.toolUseId, name: entry.name, input: entry.input }],
+      })
+    } else {
+      state = applyClaudeApiEvent(state, { kind: 'tool-result', toolUseId: entry.toolUseId, isError: entry.isError, text: entry.text })
+    }
+  }
+  state = push(state, { role: 'notice', text: `Conversa ${claudeSessionId.slice(0, 8)} retomada. A próxima mensagem continua dela.`, tone: 'info' })
+  return { ...state, status: 'idle' }
+}
+
+export function formatSessionList(
+  sessions: { sessionId: string; updatedAt: string; firstPrompt: string; turns: number }[],
+  currentId: string | null,
+): string {
+  if (sessions.length === 0) return 'Nenhuma conversa anterior desta conta neste projeto.'
+  const lines = sessions.map((session, index) => {
+    const date = new Date(session.updatedAt)
+    const when = Number.isNaN(date.getTime()) ? session.updatedAt : date.toLocaleString('pt-BR')
+    const mark = session.sessionId === currentId ? ' (atual)' : ''
+    return `${index + 1}. ${when} · ${session.turns} msg · ${session.firstPrompt || '(sem texto)'}${mark}`
+  })
+  return `Conversas anteriores (use /resume <número>):\n${lines.join('\n')}`
 }

@@ -1911,3 +1911,76 @@ como o Claude Code se identifica.
 
 A chave foi colada no chat de uma conta compartilhada: recomendado revogá-la no Console depois dos
 testes.
+
+## 2026-10-19 — Bloco do Claude por chave: rolagem e `/model`
+
+**Rolagem.** O bloco abria parado no meio da conversa. O Markdown carrega depois (Suspense) e
+cresce a lista sem disparar o efeito que rolava ao fim. Agora:
+- um `ResizeObserver` no conteúdo mantém a lista no fim enquanto a pessoa não rolou para cima;
+- a lista usa a barra `felixo-sidebar-scroll`, sem rolagem horizontal e com `overscroll-contain`.
+
+Medido no app com 40 turnos: antes a lista parava em 5361 de 5897 px; agora abre no fim.
+
+**`/model`.** `parseClaudeApiSlashCommand` (em `claude-api-conversation.ts`) atende:
+- `/model` sozinho: mostra o modelo atual e as opções;
+- `/model <apelido | nome completo>`: troca o modelo;
+- `/model default`: volta ao padrão da conta;
+- nome inválido: vira aviso de erro na conversa.
+
+A troca grava `apiModel`. No próximo envio, o `start` vê a configuração diferente e reabre o
+processo com `--model` e `--resume`.
+
+Verificado no app real com a chave:
+1. pedi ao Haiku para guardar uma palavra;
+2. troquei para `/model sonnet`;
+3. o Sonnet respondeu a palavra e se identificou como Sonnet 5.5.
+
+Testes do bloco: 12 na conversa (vitest) e 12 no gerenciador.
+
+**`/resume` (mesma data).**
+- Arquivos:
+  - `claude-api-sessions.cjs` lista as conversas da conta no projeto. Lê os `.jsonl` em
+    `<CLAUDE_CONFIG_DIR do perfil>/projects/<pasta codificada>/`, aceita só nomes uuid e devolve
+    a data, a primeira pergunta e o número de mensagens.
+  - `readClaudeApiTranscript` converte uma conversa para o formato do bloco. Ignora subagente,
+    aviso sintético e linha cortada.
+  - Canais novos: `claude-api:list-sessions` e `claude-api:read-transcript`. Só respondem para
+    conta por chave.
+- No bloco:
+  - `/resume` lista as conversas;
+  - `/resume <n|id>` carrega o histórico, encerra o processo atual e faz o próximo envio abrir com
+    `--resume` na conversa escolhida.
+- **Bug achado no teste real.**
+  - Com o app aberto de dentro de um Claude Code, o `CLAUDE_CODE_SESSION_ID` herdado fazia todo
+    bloco gravar a conversa com o id da sessão pai.
+  - Correção: `sanitizeClaudeApiEnv` tira `CLAUDECODE`, `CLAUDE_*` e `ANTHROPIC_*` do processo do
+    bloco; ficam só `CLAUDE_CONFIG_DIR` e `ANTHROPIC_API_KEY` da conta.
+- **Verificado no app com a chave:**
+  1. dois blocos geraram ids diferentes;
+  2. `/resume` no bloco 2 listou as duas conversas, com a atual marcada;
+  3. `/resume 2` carregou a do bloco 1, e o Claude respondeu a palavra combinada nela.
+- **Testes:** 16 do gerenciador e das conversas no Node, 14 do bloco no Vitest.
+
+**Gasto e lentidão (mesma data, relato da pessoa).**
+- **Gasto.** O `total_cost_usd` do `result` é **acumulado do processo**, não do turno. Medido com a
+  chave: 0,0019 → 0,0024 → 0,0026 em três turnos, com os tokens de `modelUsage` crescendo junto.
+  - O bloco somava o acumulado a cada turno, então mostrava 0,0069 em vez de 0,0026.
+  - Correção: o gerenciador guarda o último total do processo (zera a cada processo novo) e manda
+    só a diferença.
+  - No app real, os três turnos mostraram US$ 0,0021 → 0,0026 → 0,0028.
+  - Blocos antigos continuam com o total já inflado: a correção vale dali em diante.
+- **Lentidão.** Cada letra digitada e cada pedaço de resposta re-renderizava todas as mensagens em
+  Markdown. Correção:
+  - `ItemView` com `memo`;
+  - o campo de mensagem virou o componente `Composer`, com o próprio rascunho.
+
+  Medido no app com 240 itens, 60 teclas por CDP:
+
+  | Versão | Tempo |
+  |---|---|
+  | antes | ~66 s |
+  | só com o memo | ~5,3 s |
+  | com o `Composer` | ~1,8 s |
+  | só a automação, sem o bloco | ~1,4 s |
+- **Observação.** Como root, `--permission-mode bypassPermissions` é recusado pelo Claude Code
+  ("cannot be used with root/sudo privileges"). Isso não afeta Windows nem macOS de usuário comum.

@@ -20,6 +20,10 @@ const {
   createClaudeApiSessionManager,
 } = require('./services/claude-api/claude-api-session-manager.cjs')
 const { registerClaudeApiIpcHandlers } = require('./services/claude-api/claude-api-ipc-handlers.cjs')
+const {
+  listClaudeApiSessions,
+  readClaudeApiTranscript,
+} = require('./services/claude-api/claude-api-sessions.cjs')
 const { createAccountChainRuntime } = require('./services/accounts/account-chain-runtime.cjs')
 const { createAccountOutputWatcher } = require('./services/accounts/account-output-watcher.cjs')
 const {
@@ -903,7 +907,20 @@ app.whenReady().then(async () => {
     },
     log: (entry) => logQaEvent({ scope: 'claude-api', ...entry }),
   })
-  registerClaudeApiIpcHandlers({ ipcMain, manager: claudeApiSessions })
+  // Pasta de conversas da conta: só conta por chave, nunca a de outra conta.
+  const claudeApiConfigDir = (accountId) =>
+    cliAccounts.isApiKeyAccount(accountId)
+      ? cliAccounts.buildEnv(accountId, 'claude').CLAUDE_CONFIG_DIR
+      : null
+  registerClaudeApiIpcHandlers({
+    ipcMain,
+    manager: claudeApiSessions,
+    sessions: {
+      list: ({ accountId, cwd }) => listClaudeApiSessions({ configDir: claudeApiConfigDir(accountId), cwd }),
+      read: ({ accountId, cwd, sessionId }) =>
+        readClaudeApiTranscript({ configDir: claudeApiConfigDir(accountId), cwd, sessionId }),
+    },
+  })
 
   // Expõe a versão empacotada (definida pelo CI no release, não no
   // package.json versionado) para a interface conseguir mostrá-la.

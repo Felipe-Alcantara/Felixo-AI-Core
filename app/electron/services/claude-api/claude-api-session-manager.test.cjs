@@ -220,3 +220,52 @@ test('start repetido com o id da sessão não reabre o processo; trocar o modelo
   manager.start({ sessionId: 'b', accountId: 'c', cwd: '/p', model: 'claude-sonnet-5-5' })
   assert.equal(spawned[0].child.exitCode, 0)
 })
+
+test('ambiente do bloco não herda sessão, entrada nem URL de um Claude Code pai', () => {
+  const { sanitizeClaudeApiEnv } = require('./claude-api-session-manager.cjs')
+  const env = sanitizeClaudeApiEnv({
+    PATH: '/bin',
+    CLAUDECODE: '1',
+    CLAUDE_CODE_SESSION_ID: 'pai',
+    CLAUDE_CODE_ENTRYPOINT: 'cli',
+    ANTHROPIC_BASE_URL: 'http://proxy',
+    CLAUDE_CONFIG_DIR: '/perfil',
+    ANTHROPIC_API_KEY: 'sk-ant-conta',
+  })
+  assert.deepEqual(env, { PATH: '/bin', CLAUDE_CONFIG_DIR: '/perfil', ANTHROPIC_API_KEY: 'sk-ant-conta' })
+  assert.deepEqual(sanitizeClaudeApiEnv({ claude_code_session_id: 'x', Path: 'C:' }, 'win32'), { Path: 'C:' })
+})
+
+test('o processo nasce com o ambiente limpo', () => {
+  const spawned = []
+  const manager = createClaudeApiSessionManager({
+    spawnProcess: (command, args, options) => {
+      const child = fakeChild()
+      spawned.push(options)
+      return child
+    },
+    validateAccount: () => ({ ok: true }),
+    buildAccountEnv: () => ({ CLAUDE_CODE_SESSION_ID: 'pai', ANTHROPIC_API_KEY: 'sk' }),
+    emit: () => {},
+  })
+  manager.start({ sessionId: 'b', accountId: 'c', cwd: '/p' })
+  manager.send('b', 'oi')
+  assert.deepEqual(spawned[0].env, { ANTHROPIC_API_KEY: 'sk' })
+})
+
+test('gasto: o total acumulado do processo vira o custo de cada turno', async () => {
+  const { manager, spawned, events } = setup()
+  manager.start({ sessionId: 'b', accountId: 'c', cwd: '/p' })
+  manager.send('b', 'um')
+  const first = spawned[0].child
+  for (const total of [0.0019, 0.0024, 0.0026]) first.say({ type: 'result', subtype: 'success', total_cost_usd: total })
+  await tick()
+  // Processo novo (depois de cair) recomeça do zero.
+  first.exitCode = 0
+  first.emit('close', 0, null)
+  manager.send('b', 'dois')
+  spawned[1].child.say({ type: 'result', subtype: 'success', total_cost_usd: 0.001 })
+  await tick()
+  const costs = events.filter((e) => e.kind === 'turn-end').map((e) => e.costUsd)
+  assert.deepEqual(costs, [0.0019, 0.0005, 0.0002, 0.001])
+})
