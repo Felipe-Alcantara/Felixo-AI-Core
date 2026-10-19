@@ -252,6 +252,40 @@ export function isCodexUpdateExitBanner(text: string): boolean {
   return compact.includes('updateransuccessfully') && compact.includes('restartcodex')
 }
 
+/** Cabeçalho que o Codex desenha ao abrir: `>_ OpenAI Codex (v0.163.0)`. */
+const CODEX_HEADER_VERSION = /OpenAI Codex \(v(\d+\.\d+\.\d+[^)\s]*)\)/
+
+/** Primeira versão do Codex com o compositor provisório (medido nos binários: 0.155.0 não tem, 0.158.0 tem). */
+const CODEX_PROVISIONAL_COMPOSER_SINCE = [0, 158, 0] as const
+
+/** A versão do Codex escrita no cabeçalho da tela, ou `undefined` se ele não aparece. */
+export function readCodexVersion(text: string): string | undefined {
+  return CODEX_HEADER_VERSION.exec(text.replace(ANSI_ESCAPE, ''))?.[1]
+}
+
+/**
+ * Esta versão do Codex desenha o compositor antes de terminar de abrir.
+ *
+ * Desde o 0.158 o Codex mostra "› Ask Codex to do anything" enquanto ainda
+ * inicializa e só depois decide se precisa de uma tela protegida (confiança na
+ * pasta, login, migração de modelo). Esse compositor provisório é igual ao de
+ * verdade na tela. Versão que não sabemos ler conta como antiga, o
+ * comportamento de antes.
+ */
+export function codexOpensProvisionalComposer(version: string): boolean {
+  const match = /^(\d+)\.(\d+)\.(\d+)/.exec(version)
+  if (!match) {
+    return false
+  }
+  const parts = match.slice(1, 4).map(Number)
+  for (let index = 0; index < parts.length; index += 1) {
+    if (parts[index] !== CODEX_PROVISIONAL_COMPOSER_SINCE[index]) {
+      return parts[index] > CODEX_PROVISIONAL_COMPOSER_SINCE[index]
+    }
+  }
+  return true
+}
+
 /** Diálogo do Codex que pergunta se a pasta é confiável. */
 export function isCodexTrustPrompt(text: string): boolean {
   const compact = compactWords(text)

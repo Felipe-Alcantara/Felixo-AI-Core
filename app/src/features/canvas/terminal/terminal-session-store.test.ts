@@ -1,5 +1,8 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CODEX_RELAUNCH_NEW_CONVERSATION_NOTICE, TerminalSessionStore } from './terminal-session-store'
+import type { TerminalFixture } from './__fixtures__/terminal-output/replay-fixture'
 import { closeLinkChooser, getLinkChooserState } from '../../shared/links/link-chooser-store'
 import { createCatalogPromptInsertion, createManualPromptInsertion } from '../../shared/types/prompt-insertion'
 import type { AgentResumeFailure, AgentSessionReference } from '../services/agent-session'
@@ -975,6 +978,182 @@ describe('TerminalSessionStore: entrega do texto de contexto', () => {
       ].join('\r\n'),
     )
     await vi.advanceTimersByTimeAsync(2500)
+
+    expect(contextWrites(harness.writes)).toHaveLength(1)
+  })
+})
+
+/**
+ * Abertura do Codex 0.158+: o compositor provisório.
+ *
+ * Desde o 0.158 o Codex desenha o compositor ("› Ask Codex to do anything")
+ * enquanto ainda inicializa, e só depois decide se mostra uma tela protegida
+ * (confiança na pasta, login, migração de modelo). Antes de cada uma, ele
+ * descarta o que foi digitado e espera a entrada ficar quieta por 1 s; texto
+ * digitado no compositor provisório fazia essa espera estourar, e o Codex saía
+ * com "Error: timed out discarding buffered terminal input" e o "Unsent draft"
+ * com o começo do nosso contexto (relato de 2026-10-19, no Windows).
+ *
+ * A gravação é a saída real do Codex 0.163.0 num PTY: compositor provisório,
+ * 5,9 s depois a tela de confiança, a pessoa confia e o chat abre (título da
+ * janela e OSC 7501). O título e o OSC 7501 só saem do chat de verdade.
+ */
+describe('TerminalSessionStore: abertura do Codex com compositor provisório', () => {
+  let harness: Harness | undefined
+
+  beforeEach(() => {
+    harness = undefined
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    harness?.store.clear()
+    vi.useRealTimers()
+  })
+
+  const recording = JSON.parse(
+    readFileSync(join(__dirname, '__fixtures__/terminal-output/codex-abertura-confianca.json'), 'utf8'),
+  ) as TerminalFixture
+  // eslint-disable-next-line no-control-regex
+  const ESCAPES = /\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\)|[=>78])/g
+  // eslint-disable-next-line no-control-regex
+  const WINDOW_TITLE = /\x1b\][02];[^\x07\x1b]*(?:\x07|\x1b\\)/g
+  // eslint-disable-next-line no-control-regex
+  const PROGRAM_STATUS = /\x1b\]7501;[^\x07\x1b]*(?:\x07|\x1b\\)/g
+  const visibleText = (data: string) => data.replace(ESCAPES, '')
+  /** Primeiro pedaço da gravação cujo texto visível contém `text`. */
+  const chunkShowing = (text: string): number => {
+    const index = recording.chunks.findIndex((chunk) => visibleText(chunk.data).includes(text))
+    if (index < 0) throw new Error(`a gravação não mostra: ${text}`)
+    return index
+  }
+  const output = (from: number, to = recording.chunks.length): string =>
+    recording.chunks.slice(from, to).map((chunk) => chunk.data).join('')
+  const TRUST_INDEX = chunkShowing('Folder access')
+  const TRUST_AT = recording.chunks[TRUST_INDEX].t
+  const PROVISIONAL = output(0, TRUST_INDEX)
+  const TRUST_SCREEN = output(TRUST_INDEX, TRUST_INDEX + 1)
+  const AFTER_TRUST = output(TRUST_INDEX + 1)
+
+  /** Bancada de Codex sem yolo, com o xterm do tamanho da gravação (o Codex posiciona o cursor por linha e coluna). */
+  const codexHarness = (): Harness => {
+    const created = createHarness(CONTEXT, 'codex', true, false, 1, { args: [] })
+    const sessions = (created.store as unknown as {
+      sessions: Map<string, { terminal: { resize: (cols: number, rows: number) => void } }>
+    }).sessions
+    sessions.get(SESSION_ID)?.terminal.resize(recording.cols, recording.rows)
+    return created
+  }
+
+  it('a gravação tem o que o teste supõe', () => {
+    expect(visibleText(PROVISIONAL)).toContain('OpenAI Codex (v0.163.0)')
+    expect(visibleText(PROVISIONAL)).toContain('Ask Codex to do anything')
+    expect(PROVISIONAL).not.toMatch(WINDOW_TITLE)
+    expect(PROVISIONAL).not.toMatch(PROGRAM_STATUS)
+    expect(visibleText(TRUST_SCREEN)).toContain('Trust and continue')
+    expect(AFTER_TRUST).toMatch(WINDOW_TITLE)
+    expect(AFTER_TRUST).toMatch(PROGRAM_STATUS)
+  })
+
+  it('não digita o contexto no compositor provisório: o Codex ainda vai perguntar se confia na pasta', async () => {
+    harness = codexHarness()
+    harness.feed(PROVISIONAL)
+    // O tempo que o compositor provisório ficou de pé na gravação.
+    await vi.advanceTimersByTimeAsync(TRUST_AT)
+    expect(contextWrites(harness.writes)).toEqual([])
+
+    harness.feed(TRUST_SCREEN)
+    await vi.advanceTimersByTimeAsync(1500)
+    expect(contextWrites(harness.writes)).toEqual([])
+  })
+
+  it('digita o contexto quando o chat abre, depois da confiança na pasta', async () => {
+    harness = codexHarness()
+    harness.feed(PROVISIONAL)
+    await vi.advanceTimersByTimeAsync(TRUST_AT)
+    harness.feed(TRUST_SCREEN)
+    await vi.advanceTimersByTimeAsync(1500)
+
+    harness.feed(AFTER_TRUST)
+    await vi.advanceTimersByTimeAsync(400)
+
+    expect(harness.contextBodies).toEqual([DELIVERED_QUALITY_CONTEXT])
+    expect(contextWrites(harness.writes)).toHaveLength(1)
+  })
+
+  it('o título sozinho abre, quando o OSC 7501 não chega (ConPTY antigo, Codex 0.158 a 0.162)', async () => {
+    harness = codexHarness()
+    harness.feed(PROVISIONAL)
+    await vi.advanceTimersByTimeAsync(TRUST_AT)
+    harness.feed(TRUST_SCREEN)
+    await vi.advanceTimersByTimeAsync(1500)
+
+    harness.feed(AFTER_TRUST.replace(PROGRAM_STATUS, ''))
+    await vi.advanceTimersByTimeAsync(400)
+
+    expect(contextWrites(harness.writes)).toHaveLength(1)
+  })
+
+  it('o OSC 7501 sozinho abre, quando o título está desligado na configuração do Codex', async () => {
+    harness = codexHarness()
+    harness.feed(PROVISIONAL)
+    await vi.advanceTimersByTimeAsync(TRUST_AT)
+    harness.feed(TRUST_SCREEN)
+    await vi.advanceTimersByTimeAsync(1500)
+
+    harness.feed(AFTER_TRUST.replace(WINDOW_TITLE, ''))
+    await vi.advanceTimersByTimeAsync(400)
+
+    expect(contextWrites(harness.writes)).toHaveLength(1)
+  })
+
+  it('o título que o cmd.exe põe antes de o Codex desenhar não conta como chat aberto', async () => {
+    harness = codexHarness()
+    // No Windows o ConPTY repassa o título do console logo no começo.
+    harness.feed('\x1b]0;C:\\WINDOWS\\system32\\cmd.exe - codex\x07')
+    harness.feed(PROVISIONAL)
+    await vi.advanceTimersByTimeAsync(TRUST_AT)
+
+    expect(contextWrites(harness.writes)).toEqual([])
+  })
+
+  it('o título que chega com a tela de confiança ainda desenhada conta, porque o compositor já apareceu', async () => {
+    harness = codexHarness()
+    harness.feed(PROVISIONAL)
+    await vi.advanceTimersByTimeAsync(TRUST_AT)
+    harness.feed(TRUST_SCREEN)
+    await vi.advanceTimersByTimeAsync(1500)
+    // O ConPTY pode mandar o título antes do quadro que apaga a tela de
+    // confiança: nesse instante não há compositor na tela.
+    harness.feed('\x1b]0;projeto\x07')
+    await vi.advanceTimersByTimeAsync(400)
+    expect(contextWrites(harness.writes)).toEqual([])
+
+    harness.feed(AFTER_TRUST.replace(WINDOW_TITLE, '').replace(PROGRAM_STATUS, ''))
+    await vi.advanceTimersByTimeAsync(400)
+
+    expect(contextWrites(harness.writes)).toHaveLength(1)
+  })
+
+  it('o prazo de emergência não digita na tela de confiança que a pessoa deixou aberta', async () => {
+    harness = codexHarness()
+    harness.feed(PROVISIONAL)
+    await vi.advanceTimersByTimeAsync(TRUST_AT)
+    harness.feed(TRUST_SCREEN)
+    // Os dígitos do contexto escolheriam uma opção do menu ("1. Trust and
+    // continue", "2. Back to Agent Command Center").
+    await vi.advanceTimersByTimeAsync(70_000)
+
+    expect(contextWrites(harness.writes)).toEqual([])
+  })
+
+  it('sem nenhum sinal do chat, o contexto ainda sai no prazo de emergência', async () => {
+    harness = codexHarness()
+    harness.feed(PROVISIONAL)
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(contextWrites(harness.writes)).toEqual([])
+
+    await vi.advanceTimersByTimeAsync(31_000)
 
     expect(contextWrites(harness.writes)).toHaveLength(1)
   })

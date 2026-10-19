@@ -11,6 +11,8 @@ import {
   isCodexTrustPrompt,
   isCodexUpdateExitBanner,
   looksLikeApprovalPrompt,
+  codexOpensProvisionalComposer,
+  readCodexVersion,
   readInputLineState,
 } from './terminal-screen-state'
 
@@ -140,6 +142,39 @@ describe('isCodexTrustPrompt', () => {
 
   it('does not fire on a normal approval prompt', () => {
     expect(isCodexTrustPrompt('Do you want to proceed? 1. Yes')).toBe(false)
+  })
+})
+
+describe('readCodexVersion', () => {
+  it('lê a versão do cabeçalho que o Codex desenha ao abrir', () => {
+    const screen = ['  >_ OpenAI Codex (v0.163.0)', '     /home/ana/projeto', '› Ask Codex to do anything'].join('\n')
+
+    expect(readCodexVersion(screen)).toBe('0.163.0')
+  })
+
+  it('aceita versão de pré-lançamento', () => {
+    expect(readCodexVersion('>_ OpenAI Codex (v0.164.0-alpha.3)')).toBe('0.164.0-alpha.3')
+  })
+
+  it('não inventa versão quando o cabeçalho não traz uma', () => {
+    expect(readCodexVersion('OpenAI Codex\ngpt-5.6 · medium\n›')).toBeUndefined()
+  })
+})
+
+describe('codexOpensProvisionalComposer', () => {
+  // Medido nos binários publicados: 0.155.0 não tem o compositor provisório;
+  // 0.158.0, 0.160.0, 0.162.1 e 0.163.0 têm.
+  it('vale a partir do 0.158.0', () => {
+    expect(codexOpensProvisionalComposer('0.157.1')).toBe(false)
+    expect(codexOpensProvisionalComposer('0.147.0')).toBe(false)
+    expect(codexOpensProvisionalComposer('0.158.0')).toBe(true)
+    expect(codexOpensProvisionalComposer('0.163.0')).toBe(true)
+    expect(codexOpensProvisionalComposer('0.164.0-alpha.3')).toBe(true)
+    expect(codexOpensProvisionalComposer('1.0.0')).toBe(true)
+  })
+
+  it('versão que não sabe ler não conta como nova', () => {
+    expect(codexOpensProvisionalComposer('latest')).toBe(false)
   })
 })
 
