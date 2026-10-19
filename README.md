@@ -454,9 +454,8 @@ use `FELIXO_AUTO_INSTALL_CLIS=0` para desativar essa rodada.
 Para avaliar uma substituição sem mudar o produto, use
 `npm run benchmark:package-managers -- --check` em `app/`. A bancada mede o
 npm-runtime, pnpm, Yarn Classic, Yarn moderno e Corepack em prefixos
-descartáveis, com bootstrap e fixtures locais. Em cada PR a comparação completa
-roda no Linux (os outros SOs medem só o npm-runtime); o workflow
-`.github/workflows/nightly.yml` repete a comparação completa nos quatro SOs
+descartáveis, com bootstrap e fixtures locais. Ela não roda em PR: o workflow
+`.github/workflows/nightly.yml` roda a comparação completa nos quatro SOs
 todo dia e publica um JSON por SO.
 O resultado Linux de 03/09/2026 manteve o npm como recomendação: pnpm foi
 funcional, mas maior e mais lento; Yarn Classic preservou global install com

@@ -36,7 +36,9 @@
   2026-10-15) na máquina de quem relatou, depois que o app dela atualizar para a `v0.1.462`. A
   abertura do Codex 0.158+ sem o "timed out discarding buffered terminal input" e a tela de
   confiança nova reconhecida (as duas entradas de 2026-10-19), no Windows: validadas só no Linux,
-  em PR em rascunho na branch `claude/wizardly-shannon-7qsc91`.
+  mesclado no PR #123 (`9748116`). O CI/CD enxugado (entrada "CI/CD: rodar só o que a mudança
+  pede", 2026-10-19): o tempo novo do Windows no CI do PR e se algum job que saiu era check
+  obrigatório da `main`.
 - **Próximo passo sugerido:** rodar a etapa 18 do checklist do Agente na nuvem em Linux ou macOS com a
   `v0.1.452` (o CI passou, mas a interface só foi conferida no Windows).
 - **Riscos abertos:** (1) a suíte vitest completa com os 16 workers padrão ficou instável numa
@@ -1719,3 +1721,93 @@ num xterm: as duas devolviam `false`. Efeitos:
 
 Estado: concluído e validado localmente no Linux, na mesma branch e PR em rascunho da entrada
 anterior; sem merge.
+
+## 2026-10-19 — CI/CD: rodar só o que a mudança pede e tirar as repetições
+
+### Pedido
+
+A pessoa notou que cada push levava quase 40 min, sobretudo pelo Windows, e pediu para cortar o que
+não é necessário: nada de repetir testes nem rodar processos caros por redundância. O AI Core é open
+source, roda local e não tem banco público, então não precisa de tantos gates.
+
+### O que foi medido (runs reais do GitHub Actions)
+
+- **Por push na `main`:** CI de 15 a 18 min (preso no `Validate (windows-latest)`, de 14,7 a 17,4
+  min) mais o Release de 17 a 23 min (preso no `Publish windows-latest`, ~16 min contra ~8 nos
+  outros). Dá os ~40 min.
+- **`npm test` no Windows:** 4 a 5 min, contra 23 s no Ubuntu. Somando a duração de cada teste:
+  844 s no Windows e 41 s no Ubuntu. Desses 844 s, **744 s** vêm dos 26 arquivos de teste que criam
+  um banco SQLite (13 s no Ubuntu). Cada teste aplica as 19 migrações, uma transação cada, e no
+  Windows cada COMMIT espera o disco. Testes que levam 0,05 s no Linux levavam 4 a 12 s lá.
+- **Repetições:**
+  - o smoke do canvas rodava no `Validate` dos quatro runners (5 a 8 min cada) e de novo no Release,
+    no app empacotado dos três SOs (4 a 5 min cada);
+  - as bancadas de gerenciador rodavam no `Dependency policy`, no job `Benchmarks` dos quatro SOs e
+    de novo no Release;
+  - a matriz do contexto inicial rodava 50 vezes por SO em todo PR, depois de já rodar uma vez no
+    `test:frontend`.
+- **Commits só de documentação:** 5 dos últimos 22 pushes na `main` mudavam só o `IA.md` ou o
+  `README.md` e rodavam os 22 jobs.
+
+### O que mudou
+
+- **Escopo do CI** (`.github/scripts/ci-scope.sh`, 19 casos em `ci-scope.test.sh`):
+  - o job `scope` lê os arquivos alterados do PR (ou do push) e liga só o que eles pedem;
+  - documentação sozinha não roda nada, exceto o `INVENTARIO-CANVAS.md`, que é testado;
+  - o launcher só roda quando muda; cada auditoria só roda quando as dependências dela mudam;
+  - na dúvida roda tudo: lista ilegível, arquivo fora das regras, mudança no próprio CI ou falha do
+    job `scope`, porque cada job só é pulado com `false` explícito.
+  - O reaproveitamento do CI do PR na `main` continua.
+- **`Validate` por sistema:**
+  - `npm test` em Linux, Windows e macOS;
+  - o node-pty nativo nos quatro;
+  - o Vitest em Linux e Windows;
+  - lint, typecheck, build e o benchmark do bundle uma vez, no Linux x64.
+  - O arm64 roda só o node-pty, que é a parte que muda de arquitetura.
+- **Smoke do canvas:** num job próprio, `Canvas smoke (ubuntu-latest)`, em paralelo aos testes.
+  Windows e macOS rodam no `Nightly`.
+- **SQLite dos testes:** `scripts/test-support/sqlite-sem-fsync.cjs`, carregado pelo
+  `run-node-unit-tests.cjs` via `NODE_OPTIONS` (vale também nos processos filhos), abre todo banco
+  dos testes com `PRAGMA synchronous = OFF`. O diário continua em disco, então um processo morto no
+  meio da transação ainda é desfeito. O app não carrega o arquivo.
+- **Defender:** no Windows, o repositório e as pastas temporárias saem da varredura antes do
+  `npm ci` (passo com `continue-on-error`).
+- **Saíram do CI de cada push:**
+  - os jobs `Benchmarks` e `Benchmarks exploratórios`;
+  - as 50 repetições do contexto;
+  - as bancadas de gerenciador do `Dependency policy`;
+  - o gate de regressão entre commits, que dependia do baseline por push;
+  - o launcher com Python 3.9 fora do Linux.
+- **Release:**
+  - saíram os dois benchmarks de gerenciador, o smoke do canvas no app empacotado e o job
+    `Smoke exploratório (Windows)`, que rodava depois da publicação;
+  - ficaram o build, o inventário, a validação do app instalado (`release-smoke.cjs`, que instala e
+    abre um PTY real), a atualização silenciosa com o app aberto no Windows (único gate que protege
+    o auto-update) e o Gatekeeper do macOS;
+  - o `release-relevant.sh` deixou de publicar instalador quando só esses scripts mudam.
+- **`Nightly`** ganhou o job `medicoes` (benchmarks de npm-runtime, saída do PTY, scrollback e as 50
+  repetições, nos quatro SOs) e o `canvas-smoke` (Windows e macOS).
+- Guia do Desenvolvedor (tabela do escopo, divisão do `Validate`, smoke e benchmarks), Guia de
+  dependências e README atualizados.
+
+### Evidência local
+
+- `npm test` com a pré-carga, no Linux: 2745 passaram, 0 falharam.
+- Pré-carga conferida no processo e num processo filho (`synchronous` 0, `journal_mode` delete).
+- `ci-scope.test.sh`, `release-relevant.test.sh` e os demais testes de `.github/scripts` passam.
+- Os três workflows são YAML válido.
+- O efeito no Windows só aparece no CI do PR.
+
+### Não validado e em aberto
+
+- O tempo novo do Windows sai no CI deste PR. A causa exata do SQLite lento (espera do disco ou o
+  Defender) não foi isolada: as duas correções entram juntas.
+- **Checks obrigatórios:** a proteção da `main` não pôde ser lida daqui. Se algum job que saiu
+  (`Benchmarks (…)`, `Benchmarks exploratórios (…)`, `Launcher (windows-latest|macos-latest,
+  Python 3.9)`, `Reaproveitar CI do PR`) for check obrigatório, os PRs vão esperar por ele até
+  alguém tirá-lo em Settings > Branches.
+- **Cobertura que ficou só no `Nightly`:** o smoke do canvas no Windows e no macOS e as medições.
+  Uma regressão de UI só nesses sistemas aparece no dia seguinte, não no PR. O smoke no app
+  empacotado não roda mais em lugar nenhum, e o gate do artefato é o `release-smoke.cjs`.
+- Mudar o `release.yml` publica uma release ao mesclar (é entrada de release por desenho, para
+  exercitar o pipeline novo).

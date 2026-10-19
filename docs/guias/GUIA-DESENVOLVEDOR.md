@@ -640,8 +640,9 @@ Dicas que valem para qualquer verificação com `felixo devtools`:
 
 `npm run test:canvas-smoke` (`app/scripts/canvas-smoke.cjs`) abre o app de
 verdade numa sessão `felixo devtools` isolada e confere a tela por CDP. Ele é
-um check obrigatório de PR: roda no job `Validate` dos quatro runners (Linux
-x64 e ARM, Windows e macOS). Nenhuma CLI real nem credencial entra: o renderer
+um check de PR quando o app muda: roda no job `Canvas smoke (ubuntu-latest)`,
+em paralelo aos testes. No Windows e no macOS ele roda uma vez por dia, no
+workflow `Nightly`. Nenhuma CLI real nem credencial entra: o renderer
 usa o PTY falso (`FELIXO_DEVTOOLS_MOCK_PTY=1`) ou o processo principal usa a
 CLI roteirizada (`FELIXO_DEVTOOLS_FAKE_CLI_PTY=1`, que também toca as gravações
 reais de CLI com `__felixo_smoke_gravacao_<nome>__`).
@@ -714,7 +715,7 @@ Instabilidades conhecidas da CI, para a triagem:
 | --- | --- | --- | --- |
 | "APP NÃO MONTOU" na primeira carga | smoke, sessões A/B, Windows | runner lento; o Vite compila sob demanda na primeira carga | a repetição cobre; nas 3 tentativas, é real |
 | `package.json` com bytes zero dentro do `app.asar` | `package-inventory.test.cjs`, Windows | corrida de disco logo depois do empacotamento | reexecutar o job |
-| gate `renderer-xterm count=1` (heap do stream) ou `adaptive count=1: resume` | job `Benchmarks` | o menor cenário oscila, até em commit só de docs | reexecutar o job; reprovar 3 runs seguidos é regressão |
+| gate `renderer-xterm count=1` (heap do stream) ou `adaptive count=1: resume` | job `Benchmarks e repetições` do `Nightly` | o menor cenário oscila | reexecutar o job; reprovar 3 runs seguidos é regressão |
 
 **Evidência.** Toda execução grava `app/build/canvas-smoke-evidencia/`
 (`canvas-smoke-evidencia.cjs`), enviada como artefato `canvas-smoke-evidencia-<os>`:
@@ -743,10 +744,10 @@ xvfb-run -a --server-args="-screen 0 1280x800x24" env FELIXO_SMOKE_SESSOES=A FEL
 Um `TMPDIR` próprio isola a sessão `felixo devtools` de outra que esteja rodando
 na mesma máquina.
 
-**No app empacotado.** A release roda o mesmo smoke no instalador daquele
-sistema antes de enviar os instaladores (passo "Smoke do canvas no app
-empacotado" do job `Publish <os>`, artefato `canvas-smoke-pacote-<os>`).
-Falhou, o instalador não sobe e a release não sai de pré-release. O
+**No app empacotado.** Desde 19/10/2026 a release não roda mais o smoke no
+instalador: ele repetia o do CI e somava ~5 min a cada sistema. O gate do
+artefato é o `release-smoke.cjs`, que instala o app e abre um PTY real. O smoke
+no pacote continua disponível para uma investigação à mão. O
 `packaged-canvas-smoke.cjs` desliga o que só o app empacotado faz ao abrir —
 instalar as CLIs que faltam (`FELIXO_AUTO_INSTALL_CLIS=0`) e procurar
 atualização (`FELIXO_DISABLE_AUTO_UPDATE=1`) —, para o pacote rodar nas mesmas
@@ -843,42 +844,66 @@ O arquivo `.github/workflows/ci.yml` roda em:
 - Pull requests
 - Push em `main`
 
+O CI roda só o que a mudança pede. O job `scope` (`Escopo do CI`) lê a lista de
+arquivos alterados (do PR, ou do push na `main`) e decide com
+`.github/scripts/ci-scope.sh`, testado em `ci-scope.test.sh`:
+
+| Mudou | Roda |
+| --- | --- |
+| só documentação (`*.md` fora de `app/`, `docs/`) | nada; a run fica verde |
+| `docs/projeto/INVENTARIO-CANVAS.md` | os testes do app (o arquivo é gerado e conferido por snapshot) |
+| `app/` | `Validate` nos quatro runners e `Canvas smoke (ubuntu-latest)` |
+| `app/package.json` ou o lockfile | o que roda para `app/` e o `dependency-policy` |
+| launcher (`start_app.py`, `felixo_launcher/`, `tests/`) | `launcher` |
+| `requirements.txt`/`.in` | `launcher` e `python-dependency-audit` |
+| `.github/scripts/`, `release.yml`, `release-gate.yml` | `release-scripts` |
+| o próprio `ci.yml`, o seletor, ou qualquer arquivo fora das regras | tudo |
+
+Se a lista de arquivos não puder ser lida (erro de API, PR com mais de 3000
+arquivos, push com mais de 300), roda tudo. Cada job só é pulado quando o escopo
+diz `false` explicitamente: se o job `scope` falhar, tudo roda.
+
+O `Validate` divide o trabalho por sistema: `npm test` (testes Node) roda no
+Linux, no Windows e no macOS; a integração nativa do node-pty roda nos quatro
+(inclusive arm64, cujo AppImage é publicado); o Vitest roda no Linux e no
+Windows (caminhos com barra invertida); lint, typecheck, build e o benchmark do
+bundle rodam uma vez, no Linux x64. No Windows, o repositório e as pastas
+temporárias saem da varredura do Defender antes do `npm ci`. Os testes Node
+carregam `scripts/test-support/sqlite-sem-fsync.cjs`, que abre todo banco SQLite
+dos testes com `PRAGMA synchronous = OFF`: no Windows cada COMMIT esperava o
+disco, e os 26 arquivos de teste com banco somavam 744 s (13 s no Linux).
+
 O job `dependency-policy` instala o lock npm, registra o audit completo e o
 comparativo `--omit=dev`, gera o SBOM CycloneDX, empacota o app e valida o
 inventário de `app.asar` e `npm-runtime`. O gate bloqueia vulnerabilidades na
 árvore de produção, advisories críticos no grafo completo e qualquer relatório
 ausente ou inválido; advisories completos não críticos permanecem disponíveis
 como evidência e aviso para as trilhas do Dependabot. O job `launcher` instala o
-lock Python com `--require-hashes`, testa Linux, Windows e macOS com Python 3.9
-e 3.13 e executa `start_app.py --help`. O job `python-dependency-audit` roda
-`pip-audit==2.10.1` contra o mesmo lock, falha se houver advisory ou erro de
-coleta e publica o SBOM do launcher. O job `release-scripts` valida os scripts
-Bash usados na publicação. O job `validate` testa o app nos três sistemas com
-Node 22, `npm test` e `npm run build`, além de verificar os arquivos de
-documentação vigentes; `npm run lint` roda uma vez, no Ubuntu, porque o ESLint
-analisa o código-fonte e dá o mesmo resultado em qualquer SO. Como
-`npm run build` chama o typecheck incremental oficial, o CI reutiliza o cache
-quando o runner o tiver; uma auditoria forçada pode ser executada separadamente
-com `npm run typecheck:full` sem alterar o caminho de produção. O workflow de
-Release repete o inventário no diretório produzido em cada SO e anexa o JSON à
-execução e à release.
+lock Python com `--require-hashes`, testa Linux, Windows e macOS com Python
+3.13, e o Linux também com 3.9, a mais antiga suportada; executa
+`start_app.py --help`. O job `python-dependency-audit` roda `pip-audit==2.10.1`
+contra o mesmo lock, falha se houver advisory ou erro de coleta e publica o SBOM
+do launcher. O job `release-scripts` valida os scripts Bash usados na publicação
+e no escopo do CI. Como `npm run build` chama o typecheck incremental oficial, o
+CI reutiliza o cache quando o runner o tiver; uma auditoria forçada pode ser
+executada separadamente com `npm run typecheck:full` sem alterar o caminho de
+produção. O workflow de Release repete o inventário no diretório produzido em
+cada SO e anexa o JSON à execução e à release.
 
-O job `benchmarks` mede, em cada SO, só o npm-runtime nas bancadas de
-gerenciador (`--managers=npm-runtime`); a comparação completa com
-pnpm/Yarn/Corepack roda em todo PR no `dependency-policy` (Linux) e, nos quatro
-SOs, no workflow `.github/workflows/nightly.yml` (diário e sob demanda), que
-também repete os audits npm e `pip-audit`. A bancada de responsividade do
-terminal durante a instalação fica no job `benchmarks-exploratory`, fora dos
-checks obrigatórios.
+Benchmarks não rodam em PR nem no Release. O workflow
+`.github/workflows/nightly.yml` (diário e sob demanda) roda nos quatro SOs a
+comparação completa de gerenciadores, os benchmarks de npm-runtime, do caminho
+de saída do PTY e da política de scrollback (com os mesmos `--check`), a matriz
+de 50 repetições do contexto inicial e o smoke completo do canvas no Windows e no
+macOS, e repete os audits npm e `pip-audit`, que pegam um advisory novo sem
+commit nosso.
 
-No push em `main`, o job `reuse` pode dispensar o resto do CI: se a árvore Git
-do commit for idêntica à do head do PR que o originou e a run `pull_request`
-desse head estiver verde, os demais jobs são pulados e a run fica verde (os
-artefatos `terminal-scrollback-<os>`, baseline do gate de regressão dos
-próximos PRs, são copiados da run do PR). Push direto, PR desatualizado ou
-qualquer erro de API caem no CI completo. A decisão mora em
-`.github/scripts/ci-reuse.sh`, testada com um `gh` falso em `ci-reuse.test.sh`
-(job `Release scripts`).
+No push em `main`, o CI reaproveita o do PR: se a árvore Git do commit for
+idêntica à do head do PR que o originou e a run `pull_request` desse head
+estiver verde, os demais jobs são pulados e a run fica verde. Push direto, PR
+desatualizado ou qualquer erro de API caem no escopo do diff do push. A decisão
+mora em `.github/scripts/ci-reuse.sh`, testada com um `gh` falso em
+`ci-reuse.test.sh` (job `Release scripts`).
 
 ---
 

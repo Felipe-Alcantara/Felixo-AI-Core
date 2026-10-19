@@ -9,9 +9,11 @@ um SBOM CycloneDX e inventaria o `app.asar` junto do `npm-runtime` que realmente
 entra no pacote. A árvore de produção precisa estar sem vulnerabilidades e o
 grafo completo não pode conter advisories críticos; advisories não críticos de
 ferramentas continuam registrados para as atualizações do Dependabot. O launcher
-Python também é auditado com `pip-audit` e publica seu SBOM. O workflow
-`nightly.yml` repete esses audits todo dia, com os mesmos gates, para que um
-advisory publicado sem nenhum commit novo apareça sem esperar o próximo PR.
+Python também é auditado com `pip-audit` e publica seu SBOM. Em PR, cada
+auditoria só roda quando as dependências dela mudam: o `package.json` ou o
+lockfile do app, ou o `requirements.txt`/`.in` do launcher. O workflow
+`nightly.yml` roda esses audits todo dia, com os mesmos gates, para que um
+advisory publicado sem nenhum commit novo apareça sem esperar um PR.
 
 Para repetir localmente:
 
