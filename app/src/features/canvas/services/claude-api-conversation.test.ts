@@ -191,3 +191,49 @@ describe('/model no bloco', () => {
     expect(start).not.toHaveBeenCalled()
   })
 })
+
+describe('/resume no bloco', () => {
+  const ID = '1b763539-ed0a-41c1-af33-b54382ca6328'
+
+  it('reconhece listar e escolher', async () => {
+    const { parseClaudeApiSlashCommand } = await import('./claude-api-conversation')
+    expect(parseClaudeApiSlashCommand('/resume')).toEqual({ kind: 'resume-list' })
+    expect(parseClaudeApiSlashCommand('/resume 2')).toEqual({ kind: 'resume-pick', target: '2' })
+    expect(parseClaudeApiSlashCommand(`/resume ${ID}`)).toEqual({ kind: 'resume-pick', target: ID })
+    expect(parseClaudeApiSlashCommand('/resumo')).toBeNull()
+  })
+
+  it('lista, escolhe pelo número, carrega o histórico e encerra o processo atual', async () => {
+    const bridge = {
+      listSessions: vi.fn(async () => ({
+        ok: true,
+        sessions: [{ sessionId: ID, updatedAt: '2026-10-19T10:00:00Z', firstPrompt: 'Crie ola.txt', turns: 2 }],
+      })),
+      readTranscript: vi.fn(async () => ({
+        ok: true,
+        entries: [
+          { role: 'user' as const, text: 'Crie ola.txt' },
+          { role: 'tool' as const, toolUseId: 't1', name: 'Write', input: { file_path: 'ola.txt' } },
+          { role: 'tool-result' as const, toolUseId: 't1', isError: false, text: 'ok' },
+          { role: 'assistant' as const, text: 'Feito.' },
+        ],
+      })),
+      stop: vi.fn(async () => ({ ok: true })),
+      onEvent: () => () => {},
+    } as unknown as ClaudeApiBridge
+    const store = createClaudeApiConversationStore(() => bridge)
+    store.hydrate('b', null)
+    const conta = { accountId: 'c', cwd: '/p' }
+    await store.resumeSession('b', '1', conta)
+    expect(store.get('b').items.at(-1)).toMatchObject({ tone: 'error' })
+    await store.listSessions('b', conta)
+    expect((store.get('b').items.at(-1) as { text: string }).text).toMatch(/1\. .* 2 msg · Crie ola\.txt/)
+    await store.resumeSession('b', '1', conta)
+    expect(bridge.readTranscript).toHaveBeenCalledWith({ accountId: 'c', cwd: '/p', sessionId: ID })
+    expect(bridge.stop).toHaveBeenCalledWith('b')
+    const state = store.get('b')
+    expect(state.claudeSessionId).toBe(ID)
+    expect(state.items.map((item) => item.role)).toEqual(['user', 'tool', 'assistant', 'notice'])
+    expect(state.items[1]).toMatchObject({ result: 'ok', summary: 'ola.txt' })
+  })
+})

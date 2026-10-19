@@ -46,6 +46,19 @@ export type ClaudeApiStartParams = {
   resumeSessionId?: string
 }
 
+export type ClaudeApiSessionSummary = {
+  sessionId: string
+  updatedAt: string
+  firstPrompt: string
+  turns: number
+}
+
+export type ClaudeApiTranscriptEntry =
+  | { role: 'user'; text: string }
+  | { role: 'assistant'; text: string }
+  | { role: 'tool'; toolUseId: string; name: string; input: Record<string, unknown> }
+  | { role: 'tool-result'; toolUseId: string; isError: boolean; text: string }
+
 export type ClaudeApiBridge = {
   start: (params: ClaudeApiStartParams) => Promise<ClaudeApiResult>
   send: (params: { sessionId: string; text: string }) => Promise<ClaudeApiResult>
@@ -58,5 +71,11 @@ export type ClaudeApiBridge = {
   }) => Promise<ClaudeApiResult>
   interrupt: (sessionId: string) => Promise<ClaudeApiResult>
   stop: (sessionId: string) => Promise<ClaudeApiResult>
+  listSessions?: (params: { accountId: string; cwd: string }) => Promise<
+    ClaudeApiResult & { sessions?: ClaudeApiSessionSummary[] }
+  >
+  readTranscript?: (params: { accountId: string; cwd: string; sessionId: string }) => Promise<
+    ClaudeApiResult & { entries?: ClaudeApiTranscriptEntry[] }
+  >
   onEvent: (callback: (payload: { sessionId: string; event: ClaudeApiEvent }) => void) => () => void
 }

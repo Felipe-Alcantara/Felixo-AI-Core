@@ -30,6 +30,27 @@ const ID_SESSAO_CLAUDE = /^[0-9a-f-]{8,64}$/i
 const MAX_MENSAGEM = 400_000
 const STDERR_GUARDADO = 4000
 
+/**
+ * Tira do ambiente tudo o que um Claude Code pai deixaria herdado.
+ *
+ * Com o Felixo aberto de dentro de um terminal com Claude Code, o ambiente traz
+ * `CLAUDE_CODE_SESSION_ID`, `CLAUDECODE`, `CLAUDE_CODE_ENTRYPOINT`,
+ * `ANTHROPIC_BASE_URL` e afins. Medido em 19/10/2026: com
+ * `CLAUDE_CODE_SESSION_ID` herdado, todo bloco gravava a conversa com o mesmo
+ * id da sessão pai. Só ficam as duas variáveis da conta.
+ */
+function sanitizeClaudeApiEnv(env, platformName = process.platform) {
+  const keep = new Set(['CLAUDE_CONFIG_DIR', 'ANTHROPIC_API_KEY'])
+  const clean = {}
+  for (const [key, value] of Object.entries(env ?? {})) {
+    const name = platformName === 'win32' ? key.toUpperCase() : key
+    const inherited = name === 'CLAUDECODE' || name.startsWith('CLAUDE_') || name.startsWith('ANTHROPIC_')
+    if (inherited && !keep.has(name)) continue
+    clean[key] = value
+  }
+  return clean
+}
+
 function buildClaudeApiArgs({ model, effort, yolo, resumeSessionId } = {}) {
   const args = [
     '-p',
@@ -93,7 +114,7 @@ function createClaudeApiSessionManager({
   }
 
   function spawnFor(sessionId, session) {
-    const env = buildAccountEnv(session.config.accountId)
+    const env = sanitizeClaudeApiEnv(buildAccountEnv(session.config.accountId))
     const args = buildClaudeApiArgs({
       ...session.config,
       resumeSessionId: session.claudeSessionId ?? session.config.resumeSessionId,
@@ -307,6 +328,7 @@ function createClaudeApiSessionManager({
 }
 
 module.exports = {
+  sanitizeClaudeApiEnv,
   buildClaudeApiArgs,
   createClaudeApiSessionManager,
 }

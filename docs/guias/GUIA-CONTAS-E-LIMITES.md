@@ -222,13 +222,21 @@ promocional disponível:
 - `/model sonnet`, `opus`, `haiku` ou um nome completo (`claude-sonnet-5-5`) troca o modelo. `/model default` volta ao padrão da conta.
 - A troca vale a partir da próxima mensagem: o processo reabre com o modelo novo e `--resume`, e a conversa continua.
 
+**`/resume` no bloco**
+- `/resume` lista as conversas anteriores desta conta neste projeto, da mais recente para a mais antiga, com data, número de mensagens e a primeira pergunta.
+- `/resume <número>` (ou o id completo) carrega o histórico daquela conversa no bloco. A próxima mensagem continua dela (`--resume`).
+- A lista vem da pasta do perfil da conta (`projects/` do `CLAUDE_CONFIG_DIR`), então só aparecem conversas desta conta.
+- O gasto em US$ recomeça do zero na conversa retomada, porque o arquivo do Claude Code não guarda o custo.
+
+O processo do bloco não herda as variáveis `CLAUDE*` e `ANTHROPIC_*` do ambiente do app; ficam só `CLAUDE_CONFIG_DIR` e `ANTHROPIC_API_KEY` da conta. Com o Felixo aberto de dentro de um Claude Code, o `CLAUDE_CODE_SESSION_ID` herdado fazia todo bloco gravar na mesma conversa.
+
 **Avisos na conversa**
 - Chave recusada (401): orienta a remover a conta e criar de novo com a chave certa.
 - Sem saldo: orienta a conferir saldo e créditos no Console.
 - Limite de requisições, API sobrecarregada, CLI ausente e processo que caiu também viram aviso.
 
 **Ficam de fora desta versão**
-- Os outros comandos de barra do Claude Code (`/usage`, `/compact`…). O `/model` funciona: veja abaixo.
+- Os outros comandos de barra do Claude Code (`/usage`, `/compact`…). O `/model` e o `/resume` funcionam: veja abaixo.
 - O modo fast (exige liberação no modo sem tela).
 - A cadeia de contas: conta por chave não entra na cadeia.
 - A linha da conta no painel **Limites e uso**, porque conta por chave não tem quota de assinatura.

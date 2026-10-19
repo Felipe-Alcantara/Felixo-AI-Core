@@ -220,3 +220,35 @@ test('start repetido com o id da sessão não reabre o processo; trocar o modelo
   manager.start({ sessionId: 'b', accountId: 'c', cwd: '/p', model: 'claude-sonnet-5-5' })
   assert.equal(spawned[0].child.exitCode, 0)
 })
+
+test('ambiente do bloco não herda sessão, entrada nem URL de um Claude Code pai', () => {
+  const { sanitizeClaudeApiEnv } = require('./claude-api-session-manager.cjs')
+  const env = sanitizeClaudeApiEnv({
+    PATH: '/bin',
+    CLAUDECODE: '1',
+    CLAUDE_CODE_SESSION_ID: 'pai',
+    CLAUDE_CODE_ENTRYPOINT: 'cli',
+    ANTHROPIC_BASE_URL: 'http://proxy',
+    CLAUDE_CONFIG_DIR: '/perfil',
+    ANTHROPIC_API_KEY: 'sk-ant-conta',
+  })
+  assert.deepEqual(env, { PATH: '/bin', CLAUDE_CONFIG_DIR: '/perfil', ANTHROPIC_API_KEY: 'sk-ant-conta' })
+  assert.deepEqual(sanitizeClaudeApiEnv({ claude_code_session_id: 'x', Path: 'C:' }, 'win32'), { Path: 'C:' })
+})
+
+test('o processo nasce com o ambiente limpo', () => {
+  const spawned = []
+  const manager = createClaudeApiSessionManager({
+    spawnProcess: (command, args, options) => {
+      const child = fakeChild()
+      spawned.push(options)
+      return child
+    },
+    validateAccount: () => ({ ok: true }),
+    buildAccountEnv: () => ({ CLAUDE_CODE_SESSION_ID: 'pai', ANTHROPIC_API_KEY: 'sk' }),
+    emit: () => {},
+  })
+  manager.start({ sessionId: 'b', accountId: 'c', cwd: '/p' })
+  manager.send('b', 'oi')
+  assert.deepEqual(spawned[0].env, { ANTHROPIC_API_KEY: 'sk' })
+})

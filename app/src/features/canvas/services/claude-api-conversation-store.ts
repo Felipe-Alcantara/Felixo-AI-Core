@@ -11,6 +11,8 @@ import type { ClaudeApiBridge, ClaudeApiEvent, ClaudeApiStartParams } from '../.
 import {
   applyClaudeApiEvent,
   createConversation,
+  conversationFromTranscript,
+  formatSessionList,
   fromPersisted,
   noticeAdded,
   permissionAnswered,
@@ -144,6 +146,50 @@ export function createClaudeApiConversationStore(getBridge: () => ClaudeApiBridg
     set(sessionId, noticeAdded(current, text, tone))
   }
 
+  /**
+   * `/resume` sem argumento: lista as conversas desta conta no projeto.
+   * Guarda a lista para `/resume <número>` escolher por posição.
+   */
+  const lastListing = new Map<string, string[]>()
+  async function listSessions(sessionId: string, params: { accountId: string; cwd: string }) {
+    const result = await getBridge()?.listSessions?.(params)
+    if (!result?.ok || !result.sessions) {
+      notice(sessionId, result?.message ?? 'Esta versão do app não lista conversas.', 'error')
+      return
+    }
+    lastListing.set(sessionId, result.sessions.map((session) => session.sessionId))
+    notice(sessionId, formatSessionList(result.sessions, get(sessionId).claudeSessionId))
+  }
+
+  /**
+   * `/resume <número | id>`: carrega o histórico da conversa no bloco e
+   * encerra o processo atual, para o próximo envio abrir com `--resume` nela.
+   */
+  async function resumeSession(sessionId: string, target: string, params: { accountId: string; cwd: string }) {
+    const bridge = getBridge()
+    if (!bridge?.readTranscript) {
+      notice(sessionId, 'Esta versão do app não retoma conversas.', 'error')
+      return
+    }
+    let claudeSessionId = target
+    if (/^\d{1,3}$/.test(target)) {
+      const listing = lastListing.get(sessionId)
+      const picked = listing?.[Number(target) - 1]
+      if (!picked) {
+        notice(sessionId, 'Número fora da lista. Rode /resume para ver as conversas.', 'error')
+        return
+      }
+      claudeSessionId = picked
+    }
+    const result = await bridge.readTranscript({ ...params, sessionId: claudeSessionId })
+    if (!result.ok || !result.entries) {
+      notice(sessionId, result.message ?? 'Não foi possível ler a conversa.', 'error')
+      return
+    }
+    await bridge.stop(sessionId)
+    set(sessionId, conversationFromTranscript(result.entries, claudeSessionId))
+  }
+
   function subscribe(listener: Listener) {
     listeners.add(listener)
     return () => {
@@ -162,7 +208,7 @@ export function createClaudeApiConversationStore(getBridge: () => ClaudeApiBridg
     return conversations.has(sessionId)
   }
 
-  return { hydrate, get, has, send, notice, answerPermission, interrupt, dispose, subscribe, onPersist, receive }
+  return { hydrate, get, has, send, notice, listSessions, resumeSession, answerPermission, interrupt, dispose, subscribe, onPersist, receive }
 }
 
 const EMPTY = createConversation()

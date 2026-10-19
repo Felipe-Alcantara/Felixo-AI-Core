@@ -430,6 +430,8 @@ contextBridge.exposeInMainWorld('felixo', {
     respondPermission: (params) => ipcRenderer.invoke('claude-api:respond-permission', params),
     interrupt: (sessionId) => ipcRenderer.invoke('claude-api:interrupt', sessionId),
     stop: (sessionId) => ipcRenderer.invoke('claude-api:stop', sessionId),
+    listSessions: (params) => ipcRenderer.invoke('claude-api:list-sessions', params),
+    readTranscript: (params) => ipcRenderer.invoke('claude-api:read-transcript', params),
     onEvent: (callback) => {
       const handler = (_event, payload) => callback(payload)
       ipcRenderer.on('claude-api:event', handler)

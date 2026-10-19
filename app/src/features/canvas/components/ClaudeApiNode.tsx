@@ -153,6 +153,17 @@ function ClaudeApiNodeComponent({ id, data, selected }: NodeProps) {
     setDraft('')
     stickToBottom.current = true
     const command = parseClaudeApiSlashCommand(text)
+    if (command?.kind === 'resume-list' || command?.kind === 'resume-pick') {
+      const account = { accountId: nodeData.apiAccountId ?? '', cwd: nodeData.apiCwd ?? '' }
+      if (!account.accountId || !account.cwd) {
+        claudeApiConversations.notice(id, 'Este bloco não tem conta ou projeto para procurar conversas.', 'error')
+        return
+      }
+      void (command.kind === 'resume-list'
+        ? claudeApiConversations.listSessions(id, account)
+        : claudeApiConversations.resumeSession(id, command.target, account))
+      return
+    }
     if (command?.kind === 'model-show') {
       claudeApiConversations.notice(
         id,

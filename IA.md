@@ -1936,3 +1936,27 @@ Verificado no app real com a chave:
 3. o Sonnet respondeu a palavra e se identificou como Sonnet 5.5.
 
 Testes do bloco: 12 na conversa (vitest) e 12 no gerenciador.
+
+**`/resume` (mesma data).**
+- Arquivos:
+  - `claude-api-sessions.cjs` lista as conversas da conta no projeto. Lê os `.jsonl` em
+    `<CLAUDE_CONFIG_DIR do perfil>/projects/<pasta codificada>/`, aceita só nomes uuid e devolve
+    a data, a primeira pergunta e o número de mensagens.
+  - `readClaudeApiTranscript` converte uma conversa para o formato do bloco. Ignora subagente,
+    aviso sintético e linha cortada.
+  - Canais novos: `claude-api:list-sessions` e `claude-api:read-transcript`. Só respondem para
+    conta por chave.
+- No bloco:
+  - `/resume` lista as conversas;
+  - `/resume <n|id>` carrega o histórico, encerra o processo atual e faz o próximo envio abrir com
+    `--resume` na conversa escolhida.
+- **Bug achado no teste real.**
+  - Com o app aberto de dentro de um Claude Code, o `CLAUDE_CODE_SESSION_ID` herdado fazia todo
+    bloco gravar a conversa com o id da sessão pai.
+  - Correção: `sanitizeClaudeApiEnv` tira `CLAUDECODE`, `CLAUDE_*` e `ANTHROPIC_*` do processo do
+    bloco; ficam só `CLAUDE_CONFIG_DIR` e `ANTHROPIC_API_KEY` da conta.
+- **Verificado no app com a chave:**
+  1. dois blocos geraram ids diferentes;
+  2. `/resume` no bloco 2 listou as duas conversas, com a atual marcada;
+  3. `/resume 2` carregou a do bloco 1, e o Claude respondeu a palavra combinada nela.
+- **Testes:** 16 do gerenciador e das conversas no Node, 14 do bloco no Vitest.
