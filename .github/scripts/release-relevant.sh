@@ -40,17 +40,10 @@ is_release_input() {
     # próprio (`nsis.include`), compilado dentro do instalador do Windows.
     app/scripts/bundle-npm-runtime.cjs|app/scripts/fix-native-pty-permissions.cjs) return 0 ;;
     app/installer/*) return 0 ;;
-    # Gates que o release.yml executa sobre o artefato (e o require local de
-    # package-manager-alternatives-performance.cjs).
+    # Gates que o release.yml executa sobre o artefato. Os benchmarks de
+    # gerenciador e o smoke do canvas no pacote saíram do Release em
+    # 19/10/2026; mudar só eles não publica instalador.
     app/scripts/release-smoke.cjs|app/scripts/package-inventory.cjs) return 0 ;;
-    app/scripts/package-manager-alternatives-performance.cjs) return 0 ;;
-    app/scripts/package-manager-operational-performance.cjs) return 0 ;;
-    app/scripts/package-manager-selection.cjs) return 0 ;;
-    app/scripts/npm-runtime-performance.cjs) return 0 ;;
-    # Prepara o instalador e chama o smoke do canvas no pacote. O smoke em si
-    # (`canvas-smoke*.cjs`) roda como processo e é validado em todo PR: mudar
-    # só ele não publica instalador.
-    app/scripts/packaged-canvas-smoke.cjs) return 0 ;;
     # Gate do Windows: atualização silenciosa com o app aberto.
     app/scripts/windows/reproduzir-nsis-app-aberto.ps1) return 0 ;;
     # Normalização de fim de linha: muda os bytes que o checkout do runner

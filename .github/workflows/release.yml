@@ -183,49 +183,10 @@ jobs:
           path: app/release/package-inventory-${{ matrix.os }}.json
           if-no-files-found: error
 
-      # A bancada roda sobre o npm-runtime desempacotado pelo mesmo
-      # electron-builder que será publicado. Cada SO entrega seu JSON
-      # sanitizado e o --check bloqueia a publicação se houver falha ou
-      # ultrapassagem dos budgets de tempo, memória, processos ou disco.
-      # `--managers=npm-runtime`: o release só distribui o npm-runtime, então
-      # é ele que precisa passar no gate aqui. A comparação com
-      # pnpm/Yarn/Corepack é pergunta arquitetural e roda no CI (job
-      # `Dependency policy` em todo PR) e no workflow `Nightly` (quatro SOs).
-      - name: Benchmark package managers in release artifact
-        shell: bash
-        run: >-
-          node scripts/package-manager-alternatives-performance.cjs
-          --check
-          --iterations=2
-          --managers=npm-runtime
-          --out="release/package-manager-alternatives-${{ matrix.os }}.json"
-
-      - name: Upload package manager benchmark
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: package-manager-alternatives-${{ matrix.os }}
-          path: app/release/package-manager-alternatives-${{ matrix.os }}.json
-          if-no-files-found: error
-
-      - name: Benchmark package-manager operational cost in release artifact
-        shell: bash
-        run: >-
-          node scripts/package-manager-operational-performance.cjs
-          --check
-          --iterations=2
-          --agents=1,2,5,10
-          --managers=npm-runtime
-          --out="release/package-manager-operational-${{ matrix.os }}.json"
-
-      - name: Upload package-manager operational benchmark
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: package-manager-operational-${{ matrix.os }}
-          path: app/release/package-manager-operational-${{ matrix.os }}.json
-          if-no-files-found: error
-
+      # Os benchmarks de gerenciador sobre o artefato e o smoke do canvas no app
+      # empacotado saíram daqui em 19/10/2026: repetiam o que o CI e o `Nightly`
+      # já medem e somavam ~7 min ao Windows. O gate do artefato é o passo
+      # abaixo, que instala o app e abre um PTY real com o binário empacotado.
       # O `xvfb-run` do Linux já vem na imagem ubuntu-latest (pacote xvfb no
       # README da imagem 24.04; o ci.yml usa `xvfb-run` sem instalar nada).
       - name: Validate installed release artifact
@@ -246,40 +207,15 @@ jobs:
           path: app/release/release-smoke-${{ matrix.os }}.json
           if-no-files-found: ignore
 
-      # O mesmo smoke do canvas do CI (sessões A–F), agora no app empacotado
-      # desta release — o instalador preparado como no passo de cima. É o gate
-      # "dev e pacote têm smoke equivalente": decisão de 01/10/2026, roda só
-      # aqui, antes de enviar os instaladores. Falhou (depois das 2 repetições
-      # por sessão do próprio smoke), o instalador deste SO não sobe e o
-      # `finalize` não tira a release de pré-release.
-      - name: Smoke do canvas no app empacotado
-        timeout-minutes: 25
-        shell: bash
-        run: |
-          if [[ "$RUNNER_OS" == "Linux" ]]; then
-            xvfb-run -a --server-args="-screen 0 1280x800x24" node scripts/packaged-canvas-smoke.cjs --release-dir release
-          else
-            node scripts/packaged-canvas-smoke.cjs --release-dir release
-          fi
-
-      - name: Upload evidência do smoke do canvas no pacote
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: canvas-smoke-pacote-${{ matrix.os }}
-          path: |
-            app/build/canvas-smoke-evidencia/**
-            app/build/canvas-visual-regression/**
-            app/build/canvas-reading-smoke/**
-          if-no-files-found: ignore
-
       # Atualização silenciosa com o app aberto (task "Instalador — investigar
       # instalador NSIS silencioso que não avança com o app aberto"): o
       # instalador desta release por cima da última promovida, instalada para
       # todos numa pasta 8.3, com o app e o instalador sem elevação. Até a
       # 0.1.438 os dois cenários travavam para sempre num MessageBox invisível.
-      # Fica depois do smoke do canvas, porque desinstala o Felixo preparado
-      # acima; o relatório vai para o RUNNER_TEMP, fora do upload da release.
+      # É o único gate que só existe aqui e protege o auto-update de quem já
+      # usa o app. Fica depois da validação do artefato, porque mexe na
+      # instalação do Felixo no runner; o relatório vai para o RUNNER_TEMP,
+      # fora do upload da release.
       - name: Atualização silenciosa com o app aberto (Windows)
         if: runner.os == 'Windows'
         timeout-minutes: 15
@@ -339,142 +275,6 @@ jobs:
           fi
 
           gh release upload "$FELIXO_RELEASE_TAG" "${files[@]}" --clobber
-
-  # Smokes exploratórios do Windows (cmd.exe e path longo). Nunca bloquearam
-  # o release (eram `continue-on-error` dentro do publish), mas somavam o
-  # tempo de duas instalações + smokes ao caminho crítico do job do Windows,
-  # que é o mais lento. Aqui rodam depois, sobre o MESMO instalador que o
-  # publish enviou para a release, e o `finalize` não espera por eles.
-  #
-  # `!cancelled()`: se só outro SO falhar no publish, o instalador do Windows
-  # já está na release e vale medir; se o do Windows falhou, o download não
-  # acha o .exe e este job falha sem afetar a run (`continue-on-error`).
-  windows-exploratory-smoke:
-    name: Smoke exploratório (Windows)
-    needs: [prepare, publish]
-    if: ${{ !cancelled() && needs.prepare.result == 'success' }}
-    runs-on: windows-latest
-    timeout-minutes: 30
-    continue-on-error: true
-    defaults:
-      run:
-        working-directory: app
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
-
-    steps:
-      # Mesmo commit que o publish empacotou.
-      - name: Checkout
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ inputs.commit_sha }}
-
-      # Sem `npm ci`: release-smoke.cjs só usa a stdlib do Node e
-      # electron/services/managed-cli-runtime.cjs (também só stdlib); o app
-      # testado é o instalado, com o próprio Electron e node-pty.
-      - name: Setup Node
-        uses: actions/setup-node@v5
-        with:
-          node-version: 22.x
-
-      # `artifactName` do Windows no package.json:
-      # Felixo-AI-Core-${version}-${os}-${arch}.${ext} → `*-win-x64.exe`
-      # (o padrão não pega o `.exe.blockmap`). Vai para app/release, onde o
-      # smoke procura o instalador da plataforma.
-      - name: Baixar o instalador do Windows publicado
-        id: download
-        shell: bash
-        run: |
-          # Caminho relativo (o job roda em app/): não depende de o Git Bash
-          # aceitar o D:\a\... de $GITHUB_WORKSPACE, que nenhum job Windows usava.
-          source ../.github/scripts/retry.sh
-          mkdir -p release
-          retry 3 5 -- gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
-            --pattern '*-win-x64.exe' --dir release --clobber
-
-      # O smoke padrão do publish roda no shell detectado pelo runner (Windows
-      # hospedado sempre tem PowerShell, é o que `getDefaultShell` acha
-      # primeiro). Este passo força cmd.exe explicitamente — a task pede os
-      # dois shells cobertos, não só um. Uma diferença real de comportamento
-      # entre os dois shells é informação, não motivo pra travar o release
-      # quando o padrão (PowerShell) já passou.
-      - name: Validar node-pty em cmd.exe (Windows)
-        # No passo, não só no job: com o `continue-on-error` apenas no job,
-        # uma falha aqui pintava o job de vermelho em todo release, embora a
-        # run seguisse verde. No passo, a falha vira anotação e o job
-        # continua verde, como era dentro do publish antes do #91. O job
-        # mantém o seu `continue-on-error` para o caso de o download falhar.
-        continue-on-error: true
-        shell: bash
-        env:
-          FELIXO_RELEASE_SMOKE_SHELL: cmd.exe
-        run: |
-          node scripts/release-smoke.cjs \
-            --release-dir release \
-            --report "release/release-smoke-cmd-windows-latest.json"
-
-      - name: Upload release smoke report (cmd.exe)
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: release-smoke-cmd-windows-latest
-          path: app/release/release-smoke-cmd-windows-latest.json
-          if-no-files-found: ignore
-
-      # `os.tmpdir()` de um runner é sempre curto por padrão — sem forçar,
-      # o smoke nunca reproduz o caminho longo que barra APIs Win32 sem
-      # suporte a \\?\ (MAX_PATH clássico, 260 caracteres). Limitação de path
-      # longo é uma característica conhecida do Windows, não necessariamente
-      # um bug do node-pty — a evidência importa mais que travar o release.
-      # Roda mesmo se o smoke de cmd.exe falhar (os dois são independentes).
-      # Resultado esperado hoje: falha com o diagnóstico do próprio app
-      # (`pty-spawn-error-long-path`, "318 caracteres, limite prático é ~260").
-      # Foi assim em toda release conferida (v0.1.416 a v0.1.419). A causa é
-      # o limite do Windows para a pasta de trabalho de um processo, e o
-      # tratamento está em aberto nas tasks do Notion "Terminal — investigar
-      # suporte real a path longo no Windows para o node-pty" e "decidir
-      # tratamento para node-pty falhando em cwd com path longo no Windows".
-      # O relatório JSON é a evidência; a falha vira anotação, não X vermelho.
-      - name: Validar node-pty em pasta com path longo (Windows)
-        if: ${{ !cancelled() && steps.download.outcome == 'success' }}
-        continue-on-error: true
-        shell: bash
-        env:
-          FELIXO_RELEASE_SMOKE_LONG_PATH: '1'
-        run: |
-          node scripts/release-smoke.cjs \
-            --release-dir release \
-            --report "release/release-smoke-longpath-windows-latest.json"
-
-      - name: Upload release smoke report (path longo)
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: release-smoke-longpath-windows-latest
-          path: app/release/release-smoke-longpath-windows-latest.json
-          if-no-files-found: ignore
-
-      # Antes, estes dois relatórios iam para a release junto dos instaladores
-      # (o "Upload installers" do publish envia todo arquivo de app/release).
-      # Mantém isso: a release pode já estar publicada, e anexar um asset a
-      # ela não muda o `latest*.yml` que o auto-update lê.
-      - name: Anexar relatórios à release
-        if: always()
-        shell: bash
-        run: |
-          # Caminho relativo (o job roda em app/): não depende de o Git Bash
-          # aceitar o D:\a\... de $GITHUB_WORKSPACE, que nenhum job Windows usava.
-          source ../.github/scripts/retry.sh
-          reports=()
-          for report in release/release-smoke-cmd-windows-latest.json release/release-smoke-longpath-windows-latest.json; do
-            if [[ -f "$report" ]]; then reports+=("$report"); fi
-          done
-          if (( ${#reports[@]} == 0 )); then
-            echo "Nenhum relatório para anexar."
-            exit 0
-          fi
-          retry 3 5 -- gh release upload "$RELEASE_TAG" "${reports[@]}" --repo "$GITHUB_REPOSITORY" --clobber
 
   # A release nasce como PRÉ-lançamento e só vira definitiva aqui, depois que os
   # três jobs passaram.

@@ -2,14 +2,10 @@ name: Nightly
 
 # Cobertura diária que não precisa (ou deixou de) rodar em cada PR.
 #
-# 1. Comparação completa de gerenciadores nos quatro SOs. Por decisão de
-#    25/09/2026, o job `Benchmarks (<os>)` do CI passou a medir só o
-#    npm-runtime (`--managers=npm-runtime`) em cada PR; a comparação com
-#    pnpm/Yarn/Corepack continua completa em todo PR apenas no Linux (job
-#    `Dependency policy`). Ela é uma pergunta arquitetural que não muda de um
-#    PR para o outro, mas depende do SO — então roda aqui, todo dia, nos
-#    mesmos quatro runners e com os mesmos flags e gates (`--check`) que o CI
-#    usava.
+# 1. Comparação completa de gerenciadores nos quatro SOs. É uma pergunta
+#    arquitetural que não muda de um PR para o outro, mas depende do SO —
+#    então roda aqui, todo dia, com os mesmos flags e gates (`--check`). Desde
+#    19/10/2026 nenhum benchmark de gerenciador roda no CI nem no Release.
 # 2. Audits de dependência (npm completo, npm --omit=dev e pip-audit). Um
 #    advisory novo é publicado sem nenhum commit nosso; sem uma execução
 #    agendada, ele só apareceria no próximo PR. Os passos são cópias dos jobs
@@ -18,6 +14,8 @@ name: Nightly
 #    (16 casos: tema × 7 viewports, mais o Modo Performance nas duas pontas);
 #    aqui roda a completa (44 casos: tema × 11 viewports × Modo Performance
 #    ligado e desligado), só a sessão A do smoke, nos três SOs.
+# 4. Benchmarks e a matriz de 50 repetições do contexto inicial (job `medicoes`).
+# 5. O smoke completo do canvas no Windows e no macOS (job `canvas-smoke`).
 #
 # Nada aqui é check obrigatório de PR nem dispara Release.
 on:
@@ -305,5 +303,140 @@ jobs:
           name: canvas-visual-matrix-${{ matrix.os }}
           path: |
             app/build/canvas-smoke-evidencia/**
+            app/build/canvas-visual-regression/**
+          if-no-files-found: ignore
+
+  # 4. O que saiu do CI de cada push em 19/10/2026 por ser repetição cara: os
+  #    benchmarks de npm-runtime, do caminho de saída do PTY e da política de
+  #    scrollback (com os mesmos `--check`), e a matriz de 50 repetições do
+  #    contexto inicial. Sem o gate de regressão entre commits, que dependia de
+  #    um baseline por push.
+  medicoes:
+    name: Benchmarks e repetições (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+          - macos-latest
+          - ubuntu-24.04-arm
+    defaults:
+      run:
+        working-directory: app
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Benchmark npm runtime
+        timeout-minutes: 10
+        shell: bash
+        run: npm run benchmark:npm-runtime:check -- --iterations=2 --out=npm-runtime-${{ matrix.os }}.json
+
+      - name: Benchmark PTY output path
+        timeout-minutes: 5
+        run: npm run benchmark:pty-output:check -- --chunks=500 --iterations=3
+
+      - name: Benchmark terminal scrollback policy
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          run_benchmark() {
+            if [ "$RUNNER_OS" = "Linux" ]; then
+              xvfb-run -a npm run benchmark:terminal:check -- --out=terminal-scrollback-${{ matrix.os }}.json
+            else
+              npm run benchmark:terminal:check -- --out=terminal-scrollback-${{ matrix.os }}.json
+            fi
+          }
+          # O node-pty derruba o processo de vez em quando no runner Windows
+          # (exit 139 e exit 3 no encerramento). Só ESSES códigos repetem, até 3
+          # vezes; qualquer outra falha do benchmark falha na hora.
+          for attempt in 1 2 3; do
+            set +e
+            run_benchmark
+            status=$?
+            set -e
+            if [ "$status" -ne 139 ] && [ "$status" -ne 3 ]; then exit "$status"; fi
+            echo "benchmark terminou com crash do node-pty (código $status), tentativa $attempt/3"
+          done
+          exit "$status"
+
+      - name: Test Canvas initial context E2E (50 repetições)
+        timeout-minutes: 15
+        env:
+          FELIXO_CONTEXT_MATRIX_RUNS: 50
+          FELIXO_CONTEXT_MATRIX_REPORT: build/canvas-context-matrix-${{ matrix.os }}.json
+        run: >-
+          npm run test:canvas-context --
+          --reporter=json
+          --outputFile=build/canvas-context-e2e-${{ matrix.os }}.json
+
+      - name: Upload benchmarks e relatórios
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: medicoes-${{ matrix.os }}
+          path: |
+            app/npm-runtime-${{ matrix.os }}.json
+            app/terminal-scrollback-${{ matrix.os }}.json
+            app/build/canvas-context-e2e-${{ matrix.os }}.json
+            app/build/canvas-context-matrix-${{ matrix.os }}.json
+          if-no-files-found: ignore
+
+  # 5. O smoke completo do canvas (sessões A–F) fora do Linux. No PR ele roda
+  #    só no Linux; o Release valida o app instalado em cada SO.
+  canvas-smoke:
+    name: Canvas smoke (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+          - macos-latest
+    defaults:
+      run:
+        working-directory: app
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test Canvas smoke
+        timeout-minutes: 20
+        run: npm run test:canvas-smoke
+
+      - name: Upload canvas smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: canvas-smoke-${{ matrix.os }}
+          path: |
+            app/build/canvas-smoke-evidencia/**
+            app/build/canvas-reading-smoke/**
             app/build/canvas-visual-regression/**
           if-no-files-found: ignore

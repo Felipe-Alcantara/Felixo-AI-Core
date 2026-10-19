@@ -20,7 +20,7 @@ esperar false "só documentação" $'docs/projeto/IA.md\ndocs/projeto/ARQUITETUR
 esperar false "só teste" $'app/src/features/canvas/services/x.test.ts\napp/electron/services/y.test.cjs\n'
 esperar false "só fixtures e testes do launcher" $'app/electron/__fixtures__/text-divergence.cjs\ntests/test_launcher.py\n'
 esperar false "smoke visual do canvas" $'app/scripts/canvas-smoke.cjs\napp/scripts/canvas-smoke-visual.cjs\napp/scripts/canvas-smoke-visual.test.cjs\n'
-esperar true "smoke do canvas no pacote (gate da release)" $'app/scripts/packaged-canvas-smoke.cjs\n'
+esperar false "smoke do canvas no pacote (saiu do Release em 19/10/2026)" $'app/scripts/packaged-canvas-smoke.cjs\n'
 esperar false "só o ci.yml" $'.github/workflows/ci.yml\n'
 esperar false "ajuste de caminhos no release gate" $'.github/workflows/release-gate.yml\n'
 esperar false "metadados locais e cópia do padrão de qualidade" $'.gitignore\nPadr├úo de qualidade - Felixo System Design/README.md\nPadr├úo de qualidade - Felixo System Design/scripts/powershell/install-felixo-powershell.ps1\n'
@@ -57,9 +57,9 @@ esperar true "hook afterPack do electron-builder" $'app/scripts/fix-native-pty-p
 esperar true "script NSIS próprio (nsis.include)" $'app/installer/instalador.nsh\n'
 esperar true "gate do Windows: atualização silenciosa com o app aberto" $'app/scripts/windows/reproduzir-nsis-app-aberto.ps1\n'
 esperar true "smoke do artefato (gate do release)" $'app/scripts/release-smoke.cjs\n'
-esperar true "require local da bancada de gerenciadores" $'app/scripts/npm-runtime-performance.cjs\n'
+esperar false "bancada de gerenciadores (só no Nightly desde 19/10/2026)" $'app/scripts/npm-runtime-performance.cjs\n'
 esperar true "script de versão usado no finalize" $'.github/scripts/release-version.sh\n'
-esperar true "seleção de gerenciadores (require dos gates do release)" $'app/scripts/package-manager-selection.cjs\n'
+esperar false "seleção de gerenciadores (só no Nightly desde 19/10/2026)" $'app/scripts/package-manager-selection.cjs\n'
 esperar true "normalização de fim de linha (muda bytes empacotados no Windows)" $'.gitattributes\n'
 
 # Sincronia: tudo que o Release executa ou empacota (derivado do release.yml e
