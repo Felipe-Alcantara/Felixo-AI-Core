@@ -34,9 +34,9 @@
   com a `v0.1.461` (a correção foi validada numa instância isolada da fonte; o app do dia a dia
   deste PC roda de dentro de `%TEMP%`). O "File not found: " vazio ao abrir agentes (entrada de
   2026-10-15) na máquina de quem relatou, depois que o app dela atualizar para a `v0.1.462`. A
-  abertura do Codex 0.158+ sem o "timed out discarding buffered terminal input" (entrada de
-  2026-10-19), no Windows: validada só no Linux, em PR em rascunho na branch
-  `claude/wizardly-shannon-7qsc91`.
+  abertura do Codex 0.158+ sem o "timed out discarding buffered terminal input" e a tela de
+  confiança nova reconhecida (as duas entradas de 2026-10-19), no Windows: validadas só no Linux,
+  em PR em rascunho na branch `claude/wizardly-shannon-7qsc91`.
 - **Próximo passo sugerido:** rodar a etapa 18 do checklist do Agente na nuvem em Linux ou macOS com a
   `v0.1.452` (o CI passou, mas a interface só foi conferida no Windows).
 - **Riscos abertos:** (1) a suíte vitest completa com os 16 workers padrão ficou instável numa
@@ -57,9 +57,6 @@
   (7) No Windows, `npm run test:native` completo falha de forma intermitente em "payload grande chega
   inteiro" ou "emoji não é partido" (`pty-write-queue`); isolado, passa. Derrubou o CI de `e7615c3`
   em 2026-10-14 e tem task própria no Notion.
-  (8) A tela de confiança do Codex 0.158+ ("Trust this folder? / 1. Trust and continue") não é
-  reconhecida como decisão: com o Yolo o app não aceita mais a pasta sozinho, e o card mostra
-  "trabalhando" nela (entrada de 2026-10-19, sugerida como tarefa separada).
 - **Como compactar de novo:** este arquivo e `docs/projeto/IA.md` crescem com cada sessão. Quando
   passarem de uns 1000 linhas, rode `node app/scripts/archive-ia-md.cjs` (dry-run por padrão); o
   passo a passo está no Guia para Desenvolvedores.
@@ -1664,3 +1661,61 @@ compositor provisório; o 0.158.0, o 0.160.0, o 0.162.1 e o 0.163.0 têm. Só o 
 
 Estado: concluído e validado localmente no Linux, em branch própria (`claude/wizardly-shannon-7qsc91`)
 com PR em rascunho; sem merge.
+
+## 2026-10-19 — Codex: a tela de confiança do 0.158+ volta a ser reconhecida
+
+Fecha o achado "fora do escopo" da entrada anterior, a pedido da pessoa na mesma sessão.
+
+### Causa
+
+Desde o 0.158 a confiança na pasta do Codex diz "Trust this folder? …" com as opções
+"1. Trust and continue" e "2. Back to Agent Command Center". `isCodexTrustPrompt` só conhecia o
+texto antigo ("Do you trust the contents of this directory?" e "Yes, continue"), e
+`looksLikeApprovalPrompt` não pega o cursor `›` nem a pergunta nova. Conferido com a gravação real
+num xterm: as duas devolviam `false`. Efeitos:
+- com o Yolo, o app parou de confiar na pasta sozinho, como fazia com o texto antigo;
+- o card mostrava "trabalhando"/ocioso nessa tela, em vez de "aguardando aprovação".
+
+### Correção (`app/src`)
+
+- `isCodexTrustPrompt` reconhece também a tela nova. Exige as duas frases juntas, "trust this
+  folder" e "trust and continue", porque só uma delas pode aparecer numa resposta qualquer.
+- `looksLikeApprovalPrompt` conta a confiança na pasta do Codex como decisão. Isso vale para o
+  estado do card e para a espera do texto inicial.
+- O aceite com o Yolo é o de antes (`handleCodexTrustPrompt`): um Enter 150 ms depois de a tela
+  aparecer. A seleção já começa em "Trust and continue". Sem o Yolo, nada é respondido.
+- O comentário do prazo de emergência da entrada anterior foi ajustado: a proteção continua para as
+  telas de abertura que não reconhecemos (login, migração de modelo).
+- Guia do Usuário: o card "aguardando aprovação" nessa tela e o aceite com o Yolo.
+
+### Evidência
+
+- Testes escritos antes, 5 falhando pelo motivo certo:
+  - `terminal-screen-state.test.ts`: a tela nova, com ANSI e quebras; só uma das frases não
+    dispara; a tela conta como decisão e não vira a entrada; o compositor não parece decisão;
+  - `terminal-session-store.test.ts`, com a gravação real do 0.163.0: com o Yolo sai um Enter e o
+    contexto entra quando o chat abre; sem o Yolo não sai Enter; o card fica em `waiting_approval`.
+- **App real** (mesma bancada da entrada anterior, Codex 0.163.0, pastas git novas):
+  - com o Yolo, o bloco abriu em YOLO mode, a confiança foi aceita sem tecla nenhuma (o Codex
+    gravou `trust_level = "trusted"` para a pasta) e o contexto entrou inteiro;
+  - sem o Yolo, o bloco parou na tela, nada foi gravado para a pasta e o card mostrou "aguardando
+    aprovação". Logo depois de abrir a gaveta ele passa um instante por "trabalhando", porque o
+    terminal muda de tamanho e a tela é redesenhada.
+- Gate no Linux: ver o fim desta entrada.
+
+### Não validado e em aberto
+
+- Windows, como na entrada anterior.
+- Se o Codex engolir o Enter (por exemplo, se ainda estiver esvaziando a entrada quando ele
+  chegar), a tela fica esperando a pessoa. Não há reenvio: um segundo Enter cairia na tela seguinte.
+- Outras telas de abertura do Codex (login, migração de modelo, revisão de hooks) continuam sem
+  reconhecimento próprio.
+- Gate no Linux (Node 22.22), com as duas mudanças do dia: `tsc -b` e `eslint .` limpos; vitest
+  completo com `--maxWorkers=4`: 205 arquivos, 3204 testes passando e 5 ignorados.
+- Como o Codex foi testado sem conta: `codex login --with-api-key` com uma chave inventada, num
+  `CODEX_HOME` temporário. A abertura (compositor, confiança, chat) é local e funciona igual; a
+  chave só é recusada quando o Codex fala com o servidor (o "1 warning" das telas é a lista de
+  modelos voltando 401). Não foram testados o envio de mensagem ao modelo nem o login com conta real.
+
+Estado: concluído e validado localmente no Linux, na mesma branch e PR em rascunho da entrada
+anterior; sem merge.
