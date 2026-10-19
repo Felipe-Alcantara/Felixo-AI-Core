@@ -9,7 +9,7 @@
   nos arquivos de docs/ia-archive/.
 -->
 
-Última atualização: [2026-10-15]
+Última atualização: [2026-10-19]
 
 - **Fase:** o canvas é o produto principal (o chat está depreciado). A divisão do `CanvasView`
   (partes 1 a 4) e o bloco Agente na nuvem estão na `main`: PRs #113 a #120 mesclados.
@@ -33,7 +33,10 @@
   no CI) e a retomada do terminal (entrada de 2026-10-09). A atualização do Claude no app instalado
   com a `v0.1.461` (a correção foi validada numa instância isolada da fonte; o app do dia a dia
   deste PC roda de dentro de `%TEMP%`). O "File not found: " vazio ao abrir agentes (entrada de
-  2026-10-15) na máquina de quem relatou, depois que o app dela atualizar para a `v0.1.462`.
+  2026-10-15) na máquina de quem relatou, depois que o app dela atualizar para a `v0.1.462`. A
+  abertura do Codex 0.158+ sem o "timed out discarding buffered terminal input" (entrada de
+  2026-10-19), no Windows: validada só no Linux, em PR em rascunho na branch
+  `claude/wizardly-shannon-7qsc91`.
 - **Próximo passo sugerido:** rodar a etapa 18 do checklist do Agente na nuvem em Linux ou macOS com a
   `v0.1.452` (o CI passou, mas a interface só foi conferida no Windows).
 - **Riscos abertos:** (1) a suíte vitest completa com os 16 workers padrão ficou instável numa
@@ -54,6 +57,9 @@
   (7) No Windows, `npm run test:native` completo falha de forma intermitente em "payload grande chega
   inteiro" ou "emoji não é partido" (`pty-write-queue`); isolado, passa. Derrubou o CI de `e7615c3`
   em 2026-10-14 e tem task própria no Notion.
+  (8) A tela de confiança do Codex 0.158+ ("Trust this folder? / 1. Trust and continue") não é
+  reconhecida como decisão: com o Yolo o app não aceita mais a pasta sozinho, e o card mostra
+  "trabalhando" nela (entrada de 2026-10-19, sugerida como tarefa separada).
 - **Como compactar de novo:** este arquivo e `docs/projeto/IA.md` crescem com cada sessão. Quando
   passarem de uns 1000 linhas, rode `node app/scripts/archive-ia-md.cjs` (dry-run por padrão); o
   passo a passo está no Guia para Desenvolvedores.
@@ -1565,3 +1571,96 @@ continua sem prazo por arquivo; ficou a task `3fa91f95-497e-812c-8171-ca83c4ab7c
 
 **Não validado.** O app instalado com a release nova. A janela de 5 min não foi esperada de verdade
 no app; ela é coberta pelos testes, com relógio injetado.
+
+## 2026-10-19 — Codex: o contexto digitado no compositor provisório derrubava a abertura
+
+### Relato
+
+Captura de uma pessoa no Windows: um bloco Codex na seção "Sem pasta de trabalho" nasce
+"encerrado" e o terminal mostra `Unsent draft:` com o começo do nosso contexto ("CONTEXTO
+ENTREGUE EM ARQUIVOS SOMENTE LEITURALeia todos os arquivos abaixo antes de agir…") e
+`Error: timed out discarding buffered terminal input`. É o mesmo erro que a entrada de 2026-10-12
+("Codex: flag de yolo repetida") viu no terminal virtual daqui com o 0.162.1 e deixou sem explicação.
+
+### Causa
+
+- **O Codex abre em duas etapas desde o 0.158.** Primeiro desenha um compositor provisório
+  ("› Ask Codex to do anything", com o cabeçalho `>_ OpenAI Codex (vX)`) enquanto inicializa
+  (`tui/src/startup_draft.rs`). Depois decide se precisa de uma tela protegida: confiança na pasta,
+  login, migração de modelo, revisão de hooks. Na tela, o compositor provisório é igual ao de verdade.
+- **Antes de cada tela protegida, o Codex esvazia a entrada** (`discard_pending_terminal_input`,
+  `tui/src/tui/input_boundary.rs`). Se a entrada não fica quieta em 1 s, ele devolve
+  `timed out discarding buffered terminal input`. Nas telas de abertura esse erro é fatal: o Codex
+  restaura o terminal, imprime o rascunho não enviado (`tui/src/startup_recovery.rs`) e sai com código 1.
+- **O app digitava no compositor provisório**: `readInputLineState` via o `›` e liberava o texto.
+- **No Linux, por que a espera não termina:** o `crossterm` do Codex lê no máximo 1024 bytes por
+  aviso do epoll (que é edge-triggered) e devolve o primeiro evento sem esvaziar o resto. O que sobra
+  no tty não gera aviso novo, então o `poll` do crossterm diz "nada", enquanto o `poll(0)` do Codex
+  diz "tem dado". O laço repete até 1 s. O strace mostra exatamente isso. Num PTY com o 0.163.0 e uma
+  pasta git nova: até 1500 caracteres digitados no provisório abriu; de 1550 em diante caiu sempre,
+  inclusive com 1875 caracteres ASCII (é o tamanho, não o conteúdo). A referência de contexto do app
+  tem ~1,9 mil caracteres.
+- **No Windows** o crossterm não usa epoll, então esse mecanismo exato não vale lá. O sintoma da
+  captura é o mesmo, mas não reproduzi no Windows.
+
+Medido nos binários publicados (strings e telas num PTY): o 0.150.0 e o 0.155.0 não têm o
+compositor provisório; o 0.158.0, o 0.160.0, o 0.162.1 e o 0.163.0 têm. Só o 0.163.0 emite o OSC
+7501. O título da janela (OSC 0) só sai quando o chat de verdade abre, no 0.158.0, no 0.162.1 e no
+0.163.0, nunca no provisório. No 0.158.0 o provisório ficou 7 s na tela antes da confiança, e no
+0.163.0 até 5,9 s: esperar um tempo fixo não resolve.
+
+### Correção (`app/src`)
+
+- `readCodexVersion` e `codexOpensProvisionalComposer` (`terminal-screen-state.ts`) leem a versão
+  do cabeçalho e dizem se ela tem o compositor provisório (0.158.0 em diante).
+- `CodexStartupState` (`terminal-session-store.ts`). Para Codex com o compositor provisório, o texto
+  inicial espera um sinal do chat de verdade:
+  - o OSC 7501 com `app=codex`, que o 0.163+ emite;
+  - ou um título de janela que chega depois de o compositor aparecer. O título que o ConPTY repassa
+    do `cmd.exe` antes de a CLI desenhar não conta, e a repetição do mesmo título também não.
+  - Vale também o título que chega com a tela de confiança ainda desenhada, desde que o compositor
+    já tenha aparecido antes, porque o ConPTY pode mandar o título antes do quadro.
+- O título passa pelo ConPTY no Windows. O 7501 pode ou não passar, por isso os dois sinais.
+- O prazo de emergência (60 s) continua, mas para esse Codex só digita com um compositor na tela.
+  A tela de confiança nova não é reconhecida como decisão, e os dígitos do contexto ("1…", "2…")
+  escolheriam uma opção do menu.
+- Sem versão no cabeçalho, ou com versão anterior ao 0.158, fica o comportamento de antes.
+- Guia do Usuário, seção 7: o erro, a causa e o que fazer.
+
+### Evidência
+
+- Gravação real do Codex 0.163.0 num PTY: compositor provisório, tela de confiança, a pessoa confia
+  e o chat abre. Está em `__fixtures__/terminal-output/codex-abertura-confianca.json`, com pasta
+  `/home/ana/projeto` e sem chave nem caminho do ambiente. Fica fora de `FIXTURE_NAMES` para não criar
+  snapshot novo nos testes da Leitura.
+- 9 testes novos no store, escritos antes da correção, com essa gravação: 4 falhavam (o contexto saía
+  no provisório) e 1 do prazo de emergência na tela de confiança falhava depois da primeira versão da
+  correção. 5 testes novos em `terminal-screen-state.test.ts`.
+- **App real** (Electron da fonte, Xvfb, perfil isolado, Codex 0.163.0 de verdade no PATH, chave de
+  API falsa, pasta git nova como pasta inicial, bloco criado por Criar > Agente > Codex):
+  - sem a correção, o bloco nasce "encerrado" com o mesmo `Unsent draft` e
+    `timed out discarding buffered terminal input` da captura;
+  - com a correção, o Codex fica vivo na tela de confiança, e depois do Enter o chat abre com o
+    contexto na entrada.
+- Gate no Linux (Node 22.22): `tsc -b` e `eslint .` limpos; vitest completo com
+  `--maxWorkers=4`: 205 arquivos, 3195 testes passando e 5 ignorados. A suíte Node (`npm test`)
+  não foi rodada, porque nada em `electron/` mudou.
+
+### Não validado e em aberto
+
+- **Windows não foi testado**, e é a plataforma do relato: nem o mecanismo da espera lá, nem se o
+  ConPTY repassa o OSC 7501. A correção conta com o título, que o ConPTY repassa. Também não sei a
+  versão do Codex de quem relatou, nem qual tela protegida apareceu.
+- Com o título desligado no Codex (`[tui].terminal_title = []`) e sem o 7501, o contexto só sai no
+  prazo de 60 s.
+- **Achado fora do escopo, defeito do Codex/crossterm no Linux:** depois que o chat abre, o fim de
+  uma referência de contexto longa fica parado no tty até a próxima tecla (visto no app real: a linha
+  do `skills-manifest` só apareceu depois de um `End`). Nada se perde, porque a próxima tecla da
+  pessoa traz o resto. É o mesmo mecanismo do epoll acima e vale relatar ao projeto do Codex.
+- **Achado fora do escopo:** `isCodexTrustPrompt` e `looksLikeApprovalPrompt` não reconhecem a tela
+  "Trust this folder? / 1. Trust and continue" do 0.158+. Com o Yolo, o app não aceita mais a pasta
+  sozinho, e o card mostra "trabalhando" nessa tela. Sugerido como tarefa separada.
+- Mudar `app/src` publica uma release ao mesclar.
+
+Estado: concluído e validado localmente no Linux, em branch própria (`claude/wizardly-shannon-7qsc91`)
+com PR em rascunho; sem merge.

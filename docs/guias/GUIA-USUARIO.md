@@ -1232,6 +1232,22 @@ da tela) fica no QA Logger, no escopo `terminal-launch`, e no arquivo
 reportar o problema. Para tirar a causa, procure o `codex` que soma a flag
 (`Get-Command codex -All` no PowerShell, `where codex` no cmd).
 
+**O bloco do Codex fecha logo ao abrir, com "Unsent draft:" e "Error: timed out discarding buffered terminal input".**
+
+Desde a versão 0.158, o Codex mostra a caixa de texto ("Ask Codex to do
+anything") enquanto ainda está abrindo. Depois disso ele pode mostrar uma tela de
+decisão (confiar na pasta, login, troca de modelo), e antes dela joga fora o que
+foi digitado. Se ainda estiver chegando texto, ele desiste e fecha. O "Unsent
+draft" é o começo do contexto que o app tinha digitado.
+
+A partir desta correção, o app espera o Codex avisar que a conversa abriu antes
+de digitar o contexto. O aviso é o título da janela, e no 0.163 em diante também
+um sinal próprio do Codex. Na tela "Trust this folder?", escolha a opção e o
+contexto entra logo depois. Se o bloco já fechou, use **Reiniciar terminal**.
+Se você desligou o título da janela na configuração do Codex
+(`tui.terminal_title`) e o sinal próprio não chegar, o contexto entra depois de
+60 segundos com a caixa de texto na tela.
+
 **O app não abre no Linux.**
 
 Se estiver usando AppImage, confirme a permissão de execução com `chmod +x Felixo-AI-Core-*.AppImage`.
