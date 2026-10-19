@@ -1911,3 +1911,28 @@ como o Claude Code se identifica.
 
 A chave foi colada no chat de uma conta compartilhada: recomendado revogá-la no Console depois dos
 testes.
+
+## 2026-10-19 — Bloco do Claude por chave: rolagem e `/model`
+
+**Rolagem.** O bloco abria parado no meio da conversa. O Markdown carrega depois (Suspense) e
+cresce a lista sem disparar o efeito que rolava ao fim. Agora:
+- um `ResizeObserver` no conteúdo mantém a lista no fim enquanto a pessoa não rolou para cima;
+- a lista usa a barra `felixo-sidebar-scroll`, sem rolagem horizontal e com `overscroll-contain`.
+
+Medido no app com 40 turnos: antes a lista parava em 5361 de 5897 px; agora abre no fim.
+
+**`/model`.** `parseClaudeApiSlashCommand` (em `claude-api-conversation.ts`) atende:
+- `/model` sozinho: mostra o modelo atual e as opções;
+- `/model <apelido | nome completo>`: troca o modelo;
+- `/model default`: volta ao padrão da conta;
+- nome inválido: vira aviso de erro na conversa.
+
+A troca grava `apiModel`. No próximo envio, o `start` vê a configuração diferente e reabre o
+processo com `--model` e `--resume`.
+
+Verificado no app real com a chave:
+1. pedi ao Haiku para guardar uma palavra;
+2. troquei para `/model sonnet`;
+3. o Sonnet respondeu a palavra e se identificou como Sonnet 5.5.
+
+Testes do bloco: 12 na conversa (vitest) e 12 no gerenciador.

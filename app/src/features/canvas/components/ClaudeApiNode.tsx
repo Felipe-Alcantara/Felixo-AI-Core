@@ -3,7 +3,12 @@ import { NodeResizer, useReactFlow, type NodeProps } from '@xyflow/react'
 import { KeyRound, Loader2, Send, ShieldAlert, Square, Wrench } from 'lucide-react'
 import { NODE_MIN_SIZE } from '../services/node-geometry'
 import { claudeApiConversations } from '../services/claude-api-conversation-store'
-import { formatUsd, type ClaudeApiItem } from '../services/claude-api-conversation'
+import {
+  CLAUDE_API_MODEL_ALIASES,
+  formatUsd,
+  parseClaudeApiSlashCommand,
+  type ClaudeApiItem,
+} from '../services/claude-api-conversation'
 import type { ClaudeApiNodeData } from '../types'
 import { DeferredMarkdownContent } from '../../shared/components/DeferredMarkdownContent'
 import { NodeHeader } from './NodeHeader'
@@ -137,13 +142,36 @@ function ClaudeApiNodeComponent({ id, data, selected }: NodeProps) {
   }, [])
 
   const busy = conversation.status !== 'idle'
-  const canSend = draft.trim() !== '' && !busy && Boolean(nodeData.apiAccountId) && Boolean(nodeData.apiCwd)
+  const canSend =
+    draft.trim() !== '' &&
+    !busy &&
+    ((Boolean(nodeData.apiAccountId) && Boolean(nodeData.apiCwd)) || /^\/model\b/i.test(draft.trim()))
 
   const submit = () => {
     if (!canSend) return
     const text = draft
     setDraft('')
     stickToBottom.current = true
+    const command = parseClaudeApiSlashCommand(text)
+    if (command?.kind === 'model-show') {
+      claudeApiConversations.notice(
+        id,
+        `Modelo atual: ${nodeData.apiModel || 'padrão da conta'}. Para trocar: /model ${CLAUDE_API_MODEL_ALIASES.join(' | ')} | <nome completo, ex.: claude-sonnet-5-5> | default.`,
+      )
+      return
+    }
+    if (command?.kind === 'model-invalid') {
+      claudeApiConversations.notice(id, `"${command.value}" não é um nome de modelo válido.`, 'error')
+      return
+    }
+    if (command?.kind === 'model-set') {
+      change({ apiModel: command.model ?? undefined })
+      claudeApiConversations.notice(
+        id,
+        `Modelo trocado para ${command.model ?? 'o padrão da conta'}. Vale a partir da próxima mensagem; a conversa continua.`,
+      )
+      return
+    }
     void claudeApiConversations.send(id, text, startParams())
   }
 

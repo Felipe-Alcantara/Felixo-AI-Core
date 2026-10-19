@@ -12,6 +12,7 @@ import {
   applyClaudeApiEvent,
   createConversation,
   fromPersisted,
+  noticeAdded,
   permissionAnswered,
   sendFailed,
   toPersisted,
@@ -136,6 +137,13 @@ export function createClaudeApiConversationStore(getBridge: () => ClaudeApiBridg
     for (const listener of listeners) listener()
   }
 
+  /** Aviso local na conversa (comandos do bloco), sem falar com o processo. */
+  function notice(sessionId: string, text: string, tone: 'info' | 'error' = 'info') {
+    ensureListening()
+    const current = conversations.get(sessionId) ?? createConversation()
+    set(sessionId, noticeAdded(current, text, tone))
+  }
+
   function subscribe(listener: Listener) {
     listeners.add(listener)
     return () => {
@@ -154,7 +162,7 @@ export function createClaudeApiConversationStore(getBridge: () => ClaudeApiBridg
     return conversations.has(sessionId)
   }
 
-  return { hydrate, get, has, send, answerPermission, interrupt, dispose, subscribe, onPersist, receive }
+  return { hydrate, get, has, send, notice, answerPermission, interrupt, dispose, subscribe, onPersist, receive }
 }
 
 const EMPTY = createConversation()

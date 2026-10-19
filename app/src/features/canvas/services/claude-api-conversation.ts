@@ -301,3 +301,36 @@ export function formatUsd(value: number): string {
   const digits = value < 0.01 ? 4 : 2
   return `US$ ${value.toFixed(digits).replace('.', ',')}`
 }
+
+/** Apelidos que o Claude Code aceita em `--model`; nomes completos também valem. */
+export const CLAUDE_API_MODEL_ALIASES = ['sonnet', 'opus', 'haiku'] as const
+
+const MODEL_NAME = /^[a-z0-9][a-z0-9.\-[\]]{0,79}$/i
+
+export type ClaudeApiSlashCommand =
+  | { kind: 'model-show' }
+  | { kind: 'model-set'; model: string | null }
+  | { kind: 'model-invalid'; value: string }
+
+/**
+ * Comandos de barra que o próprio bloco atende. Sem a tela do Claude Code, o
+ * `/model` dele não existe: o bloco troca o modelo e o próximo envio reabre o
+ * processo com `--model` e `--resume`, continuando a mesma conversa.
+ * `null` = não é comando do bloco; vai como mensagem normal.
+ */
+export function parseClaudeApiSlashCommand(text: string): ClaudeApiSlashCommand | null {
+  const match = /^\/model(?:\s+(.*))?$/i.exec(text.trim())
+  if (!match) return null
+  const value = (match[1] ?? '').trim()
+  if (!value) return { kind: 'model-show' }
+  if (/^(default|padr[aã]o)$/i.test(value)) return { kind: 'model-set', model: null }
+  return MODEL_NAME.test(value) ? { kind: 'model-set', model: value } : { kind: 'model-invalid', value }
+}
+
+export function noticeAdded(
+  state: ClaudeApiConversation,
+  text: string,
+  tone: 'info' | 'error' = 'info',
+): ClaudeApiConversation {
+  return push(state, { role: 'notice', text, tone })
+}

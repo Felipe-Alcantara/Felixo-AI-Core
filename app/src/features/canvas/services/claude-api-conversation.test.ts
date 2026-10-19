@@ -166,3 +166,28 @@ describe('store das conversas', () => {
     expect(store.has('b')).toBe(false)
   })
 })
+
+describe('/model no bloco', () => {
+  it('reconhece mostrar, trocar, voltar ao padrão e recusa nome inválido', async () => {
+    const { parseClaudeApiSlashCommand } = await import('./claude-api-conversation')
+    expect(parseClaudeApiSlashCommand('/model')).toEqual({ kind: 'model-show' })
+    expect(parseClaudeApiSlashCommand('  /model opus ')).toEqual({ kind: 'model-set', model: 'opus' })
+    expect(parseClaudeApiSlashCommand('/model claude-sonnet-5-5[1m]')).toEqual({ kind: 'model-set', model: 'claude-sonnet-5-5[1m]' })
+    expect(parseClaudeApiSlashCommand('/model default')).toEqual({ kind: 'model-set', model: null })
+    expect(parseClaudeApiSlashCommand('/model x; rm -rf /')).toEqual({ kind: 'model-invalid', value: 'x; rm -rf /' })
+    expect(parseClaudeApiSlashCommand('/models')).toBeNull()
+    expect(parseClaudeApiSlashCommand('use o /model opus')).toBeNull()
+  })
+
+  it('o aviso fica na conversa e é gravado, sem abrir processo', () => {
+    const start = vi.fn()
+    const store = createClaudeApiConversationStore(() => ({ start }) as unknown as ClaudeApiBridge)
+    const persisted: unknown[] = []
+    store.onPersist((_id, value) => persisted.push(value))
+    store.hydrate('b', null)
+    store.notice('b', 'Modelo trocado para opus.')
+    expect(store.get('b').items.at(-1)).toMatchObject({ role: 'notice', tone: 'info' })
+    expect(persisted).toHaveLength(1)
+    expect(start).not.toHaveBeenCalled()
+  })
+})

@@ -216,13 +216,19 @@ promocional disponível:
   Claude (`--resume`).
 - Remover o bloco encerra o processo dele.
 
+**`/model` no bloco**
+- O bloco atende o comando ele mesmo, porque sem a tela o `/model` do Claude Code não existe.
+- `/model` sozinho mostra o modelo atual e as opções.
+- `/model sonnet`, `opus`, `haiku` ou um nome completo (`claude-sonnet-5-5`) troca o modelo. `/model default` volta ao padrão da conta.
+- A troca vale a partir da próxima mensagem: o processo reabre com o modelo novo e `--resume`, e a conversa continua.
+
 **Avisos na conversa**
 - Chave recusada (401): orienta a remover a conta e criar de novo com a chave certa.
 - Sem saldo: orienta a conferir saldo e créditos no Console.
 - Limite de requisições, API sobrecarregada, CLI ausente e processo que caiu também viram aviso.
 
 **Ficam de fora desta versão**
-- Os comandos de barra do Claude Code (`/model`, `/usage`…).
+- Os outros comandos de barra do Claude Code (`/usage`, `/compact`…). O `/model` funciona: veja abaixo.
 - O modo fast (exige liberação no modo sem tela).
 - A cadeia de contas: conta por chave não entra na cadeia.
 - A linha da conta no painel **Limites e uso**, porque conta por chave não tem quota de assinatura.
