@@ -117,10 +117,24 @@ function ClaudeApiNodeComponent({ id, data, selected }: NodeProps) {
     void claudeApiConversations.send(id, nodeData.apiInitialText, startParams(), { context: true })
   }, [change, id, nodeData.apiContextSent, nodeData.apiInitialText, startParams])
 
+  // Gruda no fim enquanto a pessoa não rolou para cima. Um ResizeObserver no
+  // conteúdo, e não só um efeito por mensagem: o Markdown carrega depois
+  // (Suspense) e cresce sem mudar a lista, o que deixava a rolagem parada
+  // no meio da conversa ao abrir o bloco.
+  const contentRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
     const list = listRef.current
-    if (list && stickToBottom.current) list.scrollTop = list.scrollHeight
-  }, [conversation.items.length, conversation.streamingText, conversation.permissions.length])
+    const content = contentRef.current
+    if (!list || !content) return
+    const stick = () => {
+      if (stickToBottom.current) list.scrollTop = list.scrollHeight
+    }
+    stick()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(stick)
+    observer.observe(content)
+    return () => observer.disconnect()
+  }, [])
 
   const busy = conversation.status !== 'idle'
   const canSend = draft.trim() !== '' && !busy && Boolean(nodeData.apiAccountId) && Boolean(nodeData.apiCwd)
@@ -163,13 +177,21 @@ function ClaudeApiNodeComponent({ id, data, selected }: NodeProps) {
 
       <div
         ref={listRef}
+        onWheel={() => {
+          // Rolar com a roda é intenção da pessoa: decide pela posição depois do gesto.
+          window.requestAnimationFrame(() => {
+            const el = listRef.current
+            if (el) stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40
+          })
+        }}
         onScroll={(event) => {
           const el = event.currentTarget
           stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40
         }}
-        className="nodrag nowheel nopan flex min-h-0 flex-1 select-text flex-col gap-2 overflow-auto p-3 text-xs"
+        className="felixo-sidebar-scroll nodrag nowheel nopan min-h-0 flex-1 select-text overflow-y-auto overflow-x-hidden overscroll-contain text-xs"
         aria-live="polite"
       >
+        <div ref={contentRef} className="flex min-w-0 flex-col gap-2 p-3">
         {conversation.items.length === 0 && !conversation.streamingText && (
           <p className="text-[11px] text-(--f-core-secondary)">
             Claude Code pela chave de API, sem a tela do terminal. Ele lê e edita os arquivos do projeto e roda
@@ -223,6 +245,7 @@ function ClaudeApiNodeComponent({ id, data, selected }: NodeProps) {
             </div>
           </div>
         ))}
+        </div>
       </div>
 
       <div className="nodrag nowheel nopan flex items-end gap-2 border-t border-(--f-core-border) p-2">
