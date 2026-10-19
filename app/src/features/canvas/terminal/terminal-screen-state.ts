@@ -73,11 +73,16 @@ export function isBusyScreen(viewport: string): boolean {
  * Vale para qualquer CLI, ao contrário de `isCodexTrustPrompt`, que trata um
  * diálogo específico. Essas telas aparecem mesmo sob flags de aprovação
  * automática, já que não são checagens de permissão de ferramenta.
+ *
+ * A confiança na pasta do Codex entra por nome: o cursor dela é `›` e a
+ * pergunta ("Trust this folder?") não está entre as frases genéricas, então a
+ * heurística sozinha a lia como tela comum.
  */
 export function looksLikeApprovalPrompt(text: string): boolean {
   return (
     APPROVAL_OPTION_LINE.test(text) ||
-    (NUMBERED_OPTION_LIST.test(text) && CONFIRMATION_PHRASE.test(text))
+    (NUMBERED_OPTION_LIST.test(text) && CONFIRMATION_PHRASE.test(text)) ||
+    isCodexTrustPrompt(text)
   )
 }
 
@@ -252,7 +257,48 @@ export function isCodexUpdateExitBanner(text: string): boolean {
   return compact.includes('updateransuccessfully') && compact.includes('restartcodex')
 }
 
-/** Diálogo do Codex que pergunta se a pasta é confiável. */
+/** Cabeçalho que o Codex desenha ao abrir: `>_ OpenAI Codex (v0.163.0)`. */
+const CODEX_HEADER_VERSION = /OpenAI Codex \(v(\d+\.\d+\.\d+[^)\s]*)\)/
+
+/** Primeira versão do Codex com o compositor provisório (medido nos binários: 0.155.0 não tem, 0.158.0 tem). */
+const CODEX_PROVISIONAL_COMPOSER_SINCE = [0, 158, 0] as const
+
+/** A versão do Codex escrita no cabeçalho da tela, ou `undefined` se ele não aparece. */
+export function readCodexVersion(text: string): string | undefined {
+  return CODEX_HEADER_VERSION.exec(text.replace(ANSI_ESCAPE, ''))?.[1]
+}
+
+/**
+ * Esta versão do Codex desenha o compositor antes de terminar de abrir.
+ *
+ * Desde o 0.158 o Codex mostra "› Ask Codex to do anything" enquanto ainda
+ * inicializa e só depois decide se precisa de uma tela protegida (confiança na
+ * pasta, login, migração de modelo). Esse compositor provisório é igual ao de
+ * verdade na tela. Versão que não sabemos ler conta como antiga, o
+ * comportamento de antes.
+ */
+export function codexOpensProvisionalComposer(version: string): boolean {
+  const match = /^(\d+)\.(\d+)\.(\d+)/.exec(version)
+  if (!match) {
+    return false
+  }
+  const parts = match.slice(1, 4).map(Number)
+  for (let index = 0; index < parts.length; index += 1) {
+    if (parts[index] !== CODEX_PROVISIONAL_COMPOSER_SINCE[index]) {
+      return parts[index] > CODEX_PROVISIONAL_COMPOSER_SINCE[index]
+    }
+  }
+  return true
+}
+
+/**
+ * Diálogo do Codex que pergunta se a pasta é confiável.
+ *
+ * Desde o 0.158 a tela diz "Trust this folder? …" com a opção "1. Trust and
+ * continue" (e "2. Back to Agent Command Center"); antes era "Do you trust the
+ * contents of this directory?" com "Yes, continue". As duas frases da tela nova
+ * são exigidas juntas: só uma delas pode aparecer numa resposta qualquer.
+ */
 export function isCodexTrustPrompt(text: string): boolean {
   const compact = compactWords(text)
 
@@ -260,7 +306,8 @@ export function isCodexTrustPrompt(text: string): boolean {
     compact.includes('doyoutrustthecontentsofthisdirectory') ||
     (compact.includes('trust') &&
       compact.includes('untrustedcontents') &&
-      compact.includes('yescontinue'))
+      compact.includes('yescontinue')) ||
+    (compact.includes('trustthisfolder') && compact.includes('trustandcontinue'))
   )
 }
 

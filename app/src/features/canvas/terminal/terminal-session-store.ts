@@ -82,12 +82,15 @@ import {
 } from './terminal-buffer-reader'
 import {
   cleanPrompt,
+  codexOpensProvisionalComposer,
+  hasCodexInteractivePrompt,
   isBusyScreen,
   isClaudeBypassPermissionsWarning,
   isClaudeTrustPrompt,
   isCodexTrustPrompt,
   isCodexUpdateExitBanner,
   looksLikeApprovalPrompt,
+  readCodexVersion,
   readInputLineState,
 } from './terminal-screen-state'
 import type { SendTextInput, TerminalReadingSource } from './terminal-session-api'
@@ -492,6 +495,8 @@ type Session = {
   /** Últimos bytes de saída do Codex, para reconhecer na saída do processo
    * (`finishExit`) se ele acabou de se auto-atualizar. */
   codexUpdateBuffer: string
+  /** Abertura do Codex 0.158+, que desenha um compositor provisório; ver `isCodexStillStarting`. */
+  codexStartup: CodexStartupState
   claudeBypassBuffer: string
   claudeBypassHandled: boolean
   claudeTrustBuffer: string
@@ -519,6 +524,36 @@ type ResumeWatch = {
   confirmed: boolean
   pending?: AgentResumeFailure['reason']
 }
+
+/**
+ * O que o store sabe da abertura de um Codex.
+ *
+ * Desde o 0.158 o Codex desenha o compositor enquanto ainda inicializa e só
+ * depois decide se mostra uma tela protegida (confiança na pasta, login,
+ * migração de modelo). Antes dela, descarta o que foi digitado e espera a
+ * entrada ficar quieta por 1 s. Com o contexto digitado no compositor
+ * provisório essa espera estourava, e o Codex saía com "timed out discarding
+ * buffered terminal input". Na tela os dois compositores são iguais; o que o
+ * chat de verdade tem a mais é o título da janela (OSC 0/2) e, desde o
+ * 0.163, o estado do programa (OSC 7501). O provisório não emite nenhum dos dois.
+ */
+type CodexStartupState = {
+  /** O chat de verdade já abriu: veio o OSC 7501 ou um título depois do compositor. */
+  chatOpened: boolean
+  /**
+   * O compositor já apareceu na tela alguma vez. Só um título que chega depois
+   * disso é do Codex: no Windows o ConPTY repassa o título do console (o
+   * `cmd.exe`) antes de a CLI desenhar qualquer coisa.
+   */
+  composerSeen: boolean
+  /** Último título recebido, para a repetição do mesmo título não contar. */
+  lastTitle?: string
+  /** Versão lida do cabeçalho; `undefined` enquanto ele não aparece. */
+  version?: string
+}
+
+/** Estado do programa que o Codex 0.163+ emite: `ESC ] 7501 ; state=idle:app=codex`. */
+const CODEX_PROGRAM_STATUS_OSC = 7501
 
 /**
  * Conta quebras de linha sem alocar: roda em todo pedaço de saída de todo
@@ -862,6 +897,7 @@ export class TerminalSessionStore {
       codexTrustBuffer: '',
       codexTrustHandled: false,
       codexUpdateBuffer: '',
+      codexStartup: { chatOpened: false, composerSeen: false },
       claudeBypassBuffer: '',
       claudeBypassHandled: false,
       claudeTrustBuffer: '',
@@ -879,6 +915,10 @@ export class TerminalSessionStore {
     if (!pty) {
       this.update(session, { activity: 'error', message: 'Bridge PTY indisponível.' })
       return
+    }
+
+    if (session.command === 'codex') {
+      this.watchCodexStartup(session)
     }
 
     session.offData = this.routePtyData(pty, session.ptySessionId, (event) => {
@@ -1998,6 +2038,7 @@ export class TerminalSessionStore {
       session.lastMeaningfulAt = Date.now()
       session.paintedOutput = true
       this.markWorking(session)
+      this.trackCodexStartupScreen(session)
       // A tela acabou de mudar: a próxima checagem não precisa esperar o
       // intervalo de polling. Para Codex e Claude, a linha de entrada é a
       // confirmação de prontidão; se ela ainda não existir, scheduleInitialText
@@ -2363,12 +2404,22 @@ export class TerminalSessionStore {
       // digitado dentro do menu "No, exit / Yes, I trust this folder" em vez
       // de na entrada do REPL — a sessão começava sem contexto nenhum.
       const blockedByDecisionScreen = looksLikeApprovalPrompt(viewport)
+      // O Codex 0.158+ desenha o compositor antes de decidir se precisa de uma
+      // tela protegida; texto digitado ali o fazia sair com "timed out
+      // discarding buffered terminal input". Ver `CodexStartupState`.
+      const codexStillStarting = this.isCodexStillStarting(session, viewport)
       const processLooksReady =
         !blockedByDecisionScreen &&
+        !codexStillStarting &&
         session.paintedOutput &&
         (inputLine ? inputLine.ready : quietFor >= INITIAL_TEXT_READY_QUIET_MS)
+      // Sem sinal do chat, o prazo de emergência ainda vale, mas só com um
+      // compositor na tela: as telas de abertura do Codex 0.158+ que não
+      // reconhecemos como decisão (login, migração de modelo) são menus, e os
+      // dígitos do contexto escolheriam uma opção.
       const fallbackReady =
         !blockedByDecisionScreen &&
+        (!codexStillStarting || inputLine?.visible === true) &&
         elapsed >= (inputLine ? INITIAL_TEXT_INPUT_WAIT_MS : INITIAL_TEXT_MAX_WAIT_MS)
 
       // A PTY sobe muito antes de a CLI chegar no prompt: até lá, cada volta só
@@ -2691,6 +2742,89 @@ export class TerminalSessionStore {
     }
   }
 
+  /**
+   * Escuta os dois sinais de que o chat do Codex abriu de verdade: o estado do
+   * programa (OSC 7501, Codex 0.163+) e o título da janela depois que o
+   * compositor apareceu (0.158+). Ver `CodexStartupState`.
+   */
+  private watchCodexStartup(session: Session): void {
+    const { terminal } = session
+    terminal.parser.registerOscHandler(CODEX_PROGRAM_STATUS_OSC, (data) => {
+      if (data.includes('app=codex')) {
+        this.markCodexChatOpened(session)
+      }
+      // Nenhum outro tratador usa este OSC; `false` só deixa o xterm seguir.
+      return false
+    })
+    terminal.onTitleChange((title) => {
+      const startup = session.codexStartup
+      const repeated = title === startup.lastTitle
+      startup.lastTitle = title
+      if (startup.chatOpened || repeated) {
+        return
+      }
+      // O ConPTY pode mandar o título antes do quadro que apaga a tela de
+      // confiança; por isso vale também o compositor já visto antes.
+      if (startup.composerSeen || hasCodexInteractivePrompt(readViewport(terminal))) {
+        this.markCodexChatOpened(session)
+      }
+    })
+  }
+
+  /**
+   * Enquanto há contexto a entregar e o chat não abriu, guarda a versão do
+   * cabeçalho e se o compositor já apareceu. Roda a cada mudança de tela, e só
+   * nessa janela.
+   */
+  private trackCodexStartupScreen(session: Session): void {
+    const startup = session.codexStartup
+    if (
+      session.command !== 'codex' ||
+      startup.chatOpened ||
+      !session.rawInitialText ||
+      session.initialTextSent ||
+      (startup.composerSeen && startup.version !== undefined)
+    ) {
+      return
+    }
+    const viewport = readViewport(session.terminal)
+    startup.version ??= readCodexVersion(viewport)
+    startup.composerSeen ||= hasCodexInteractivePrompt(viewport)
+  }
+
+  private markCodexChatOpened(session: Session): void {
+    if (session.codexStartup.chatOpened || session.disposed) {
+      return
+    }
+    session.codexStartup.chatOpened = true
+    // O quadro do chat costuma chegar junto; não esperar a próxima volta da espera.
+    if (session.initialText && !session.initialTextSent) {
+      this.scheduleInitialText(session, 0)
+    }
+  }
+
+  /**
+   * O Codex ainda está abrindo atrás do compositor provisório.
+   *
+   * Só vale para versão lida do cabeçalho e que sabemos ter esse compositor
+   * (0.158+). Sem versão, fica o comportamento de antes: o compositor visível
+   * libera a escrita.
+   */
+  private isCodexStillStarting(session: Session, viewport: string): boolean {
+    const startup = session.codexStartup
+    if (session.command !== 'codex' || startup.chatOpened) {
+      return false
+    }
+    startup.version ??= readCodexVersion(viewport)
+    return startup.version !== undefined && codexOpensProvisionalComposer(startup.version)
+  }
+
+  /**
+   * Confiança na pasta do Codex (texto antigo e o do 0.158+, ver
+   * `isCodexTrustPrompt`). Só responde sozinho com o Yolo; sem ele, quem
+   * decide confiar numa pasta nova é a pessoa. A seleção já começa em confiar,
+   * então basta o Enter.
+   */
   private handleCodexTrustPrompt(session: Session, data: string): void {
     if (session.command !== 'codex' || session.codexTrustHandled || !data) {
       return

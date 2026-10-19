@@ -11,8 +11,22 @@ import {
   isCodexTrustPrompt,
   isCodexUpdateExitBanner,
   looksLikeApprovalPrompt,
+  codexOpensProvisionalComposer,
+  readCodexVersion,
   readInputLineState,
 } from './terminal-screen-state'
+
+/** Tela de confiança na pasta do Codex 0.163.0, como o xterm a desenha (capturada num PTY real). */
+const CODEX_FOLDER_TRUST_SCREEN = [
+  '  Folder access',
+  '  /home/ana/projeto',
+  '  Trust this folder? Codex can read, edit, and run files here, subject to your permission',
+  '  settings. Folder settings can run code automatically, even without a model request. Continue',
+  '  only if you trust these files. Your trust decision will be saved.',
+  '› 1. Trust and continue',
+  '  2. Back to Agent Command Center',
+  '  enter continue · esc back',
+].join('\n')
 
 describe('cleanPrompt', () => {
   it('strips ANSI escapes and collapses whitespace', () => {
@@ -140,6 +154,70 @@ describe('isCodexTrustPrompt', () => {
 
   it('does not fire on a normal approval prompt', () => {
     expect(isCodexTrustPrompt('Do you want to proceed? 1. Yes')).toBe(false)
+  })
+
+  it('reconhece a tela do Codex 0.158+ ("Trust this folder?")', () => {
+    expect(isCodexTrustPrompt(CODEX_FOLDER_TRUST_SCREEN)).toBe(true)
+  })
+
+  it('reconhece a tela nova com ANSI e quebras do TUI no meio', () => {
+    const screen = '\x1b[1mTrust this\x1b[0m\nfolder? Codex can read\n\x1b[2m› 1. Trust and\x1b[0m continue'
+
+    expect(isCodexTrustPrompt(screen)).toBe(true)
+  })
+
+  it('não dispara com só uma das frases da tela nova', () => {
+    expect(isCodexTrustPrompt('Should I trust this folder? It is new.')).toBe(false)
+    expect(isCodexTrustPrompt('Clique em "Trust and continue" no Codex.')).toBe(false)
+  })
+})
+
+describe('tela de confiança do Codex 0.158+ como decisão', () => {
+  it('conta como tela de decisão', () => {
+    expect(looksLikeApprovalPrompt(CODEX_FOLDER_TRUST_SCREEN)).toBe(true)
+  })
+
+  it('não vira a entrada do Codex', () => {
+    expect(hasCodexInteractivePrompt(CODEX_FOLDER_TRUST_SCREEN)).toBe(false)
+  })
+
+  it('o compositor do Codex continua sem parecer decisão', () => {
+    const composer = ['  >_ OpenAI Codex (v0.163.0)', '     /home/ana/projeto', '› Ask Codex to do anything', '  ? for shortcuts'].join('\n')
+
+    expect(looksLikeApprovalPrompt(composer)).toBe(false)
+  })
+})
+
+describe('readCodexVersion', () => {
+  it('lê a versão do cabeçalho que o Codex desenha ao abrir', () => {
+    const screen = ['  >_ OpenAI Codex (v0.163.0)', '     /home/ana/projeto', '› Ask Codex to do anything'].join('\n')
+
+    expect(readCodexVersion(screen)).toBe('0.163.0')
+  })
+
+  it('aceita versão de pré-lançamento', () => {
+    expect(readCodexVersion('>_ OpenAI Codex (v0.164.0-alpha.3)')).toBe('0.164.0-alpha.3')
+  })
+
+  it('não inventa versão quando o cabeçalho não traz uma', () => {
+    expect(readCodexVersion('OpenAI Codex\ngpt-5.6 · medium\n›')).toBeUndefined()
+  })
+})
+
+describe('codexOpensProvisionalComposer', () => {
+  // Medido nos binários publicados: 0.155.0 não tem o compositor provisório;
+  // 0.158.0, 0.160.0, 0.162.1 e 0.163.0 têm.
+  it('vale a partir do 0.158.0', () => {
+    expect(codexOpensProvisionalComposer('0.157.1')).toBe(false)
+    expect(codexOpensProvisionalComposer('0.147.0')).toBe(false)
+    expect(codexOpensProvisionalComposer('0.158.0')).toBe(true)
+    expect(codexOpensProvisionalComposer('0.163.0')).toBe(true)
+    expect(codexOpensProvisionalComposer('0.164.0-alpha.3')).toBe(true)
+    expect(codexOpensProvisionalComposer('1.0.0')).toBe(true)
+  })
+
+  it('versão que não sabe ler não conta como nova', () => {
+    expect(codexOpensProvisionalComposer('latest')).toBe(false)
   })
 })
 

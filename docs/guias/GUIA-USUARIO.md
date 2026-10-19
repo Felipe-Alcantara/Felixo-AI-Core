@@ -601,7 +601,7 @@ Por segurança, o app só abre arquivos que estejam dentro de um projeto registr
 - O botão **Organizar**, ao lado de **Agente**, também monta essa matriz para agentes já abertos em momentos diferentes. Ele move apenas agentes no nível principal do canvas; shells, arquivos, notas, grupos e agentes dentro de grupos permanecem onde estão.
 - Ao reabrir o aplicativo, um terminal de agente que já existia tenta voltar para a conversa anterior em vez de receber o prompt inicial. Ele só volta sozinho quando é, com certeza, a mesma conversa; nos outros casos o cartão explica o motivo e você escolhe. Veja [Retomar conversas de agentes](#retomar-conversas-de-agentes).
 - O prompt inicial de contexto (padrão de qualidade, identidade no canvas, arquivos ligados) é **digitado sem Enter**: ele fica na linha de entrada do agente esperando que você escreva o pedido depois dele, e vai junto quando você enviar. Só `/resume` e a passagem de responsabilidade são enviados sozinhos, porque carregam uma instrução de verdade.
-- Esse contexto é digitado quando a CLI mostra que a entrada dela está pronta, e não num tempo fixo depois da abertura — em agentes que abrem uma tela de aviso ou de confiança antes do prompt, ele espera essa tela ser respondida. Em modo yolo, o app responde sozinho o aviso do Claude Code, que aparece uma vez por máquina.
+- Esse contexto é digitado quando a CLI mostra que a entrada dela está pronta, e não num tempo fixo depois da abertura — em agentes que abrem uma tela de aviso ou de confiança antes do prompt, ele espera essa tela ser respondida. Em modo yolo, o app responde sozinho o aviso do Claude Code, que aparece uma vez por máquina, e a pergunta de confiança na pasta do Codex ("Trust this folder?").
 - Ao trocar de agente no configurador, a conta e a lista do agente anterior são limpas imediatamente. Consultas antigas que terminarem depois são descartadas, e o processo principal ainda confere conta, provedor e comando antes de criar o PTY; uma combinação incompatível não inicia o terminal.
 - Ao reiniciar um terminal pelo drawer lateral, o app reaproveita o `accountId` e o provedor persistidos no bloco. O restart continua no perfil selecionado; sem `accountId`, o terminal usa o login do sistema.
 - O histórico visual usa 20.000 linhas quando há até 9 terminais e 5.000 linhas quando o canvas já tem 10 ou mais. O limite é escolhido ao criar a sessão; terminais que já estavam abertos não são redimensionados nem perdem linhas quando outro terminal é adicionado.
@@ -1231,6 +1231,24 @@ da tela) fica no QA Logger, no escopo `terminal-launch`, e no arquivo
 `logs/qa/qa-AAAA-MM-DD.jsonl` do diretório de dados do app. Mande esse trecho ao
 reportar o problema. Para tirar a causa, procure o `codex` que soma a flag
 (`Get-Command codex -All` no PowerShell, `where codex` no cmd).
+
+**O bloco do Codex fecha logo ao abrir, com "Unsent draft:" e "Error: timed out discarding buffered terminal input".**
+
+Desde a versão 0.158, o Codex mostra a caixa de texto ("Ask Codex to do
+anything") enquanto ainda está abrindo. Depois disso ele pode mostrar uma tela de
+decisão (confiar na pasta, login, troca de modelo), e antes dela joga fora o que
+foi digitado. Se ainda estiver chegando texto, ele desiste e fecha. O "Unsent
+draft" é o começo do contexto que o app tinha digitado.
+
+A partir desta correção, o app espera o Codex avisar que a conversa abriu antes
+de digitar o contexto. O aviso é o título da janela, e no 0.163 em diante também
+um sinal próprio do Codex. Na tela "Trust this folder?", escolha a opção e o
+contexto entra logo depois. Enquanto essa tela espera, o card mostra
+**aguardando aprovação**. Com o **Yolo** marcado, o app confia na pasta sozinho.
+Se o bloco já fechou, use **Reiniciar terminal**.
+Se você desligou o título da janela na configuração do Codex
+(`tui.terminal_title`) e o sinal próprio não chegar, o contexto entra depois de
+60 segundos com a caixa de texto na tela.
 
 **O app não abre no Linux.**
 
