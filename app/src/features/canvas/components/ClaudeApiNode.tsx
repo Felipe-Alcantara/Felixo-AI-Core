@@ -20,7 +20,10 @@ type ClaudeApiNodeDataWithHandlers = ClaudeApiNodeData & {
 const BUTTON =
   'felixo-btn inline-flex items-center gap-1 rounded-sm px-2 py-1 text-[11px] disabled:opacity-50'
 
-function ItemView({ item }: { item: ClaudeApiItem }) {
+// Memo: cada letra digitada e cada pedaço de resposta re-renderizam o bloco;
+// sem isso, todas as mensagens em Markdown eram redesenhadas junto e o bloco
+// travava em conversas longas. O item só muda de identidade quando muda.
+const ItemView = memo(function ItemView({ item }: { item: ClaudeApiItem }) {
   if (item.role === 'user') {
     if (item.context) {
       return (
@@ -70,7 +73,74 @@ function ItemView({ item }: { item: ClaudeApiItem }) {
       {item.text}
     </p>
   )
-}
+})
+
+/**
+ * Campo de mensagem com o próprio rascunho: digitar re-renderiza só ele, não
+ * a conversa inteira (medido: 60 teclas numa conversa de 240 itens passavam de
+ * ~66 s para ~5 s só com o memo dos itens; separar o campo tira o resto).
+ */
+const Composer = memo(function Composer({
+  busy,
+  ready,
+  hasAccount,
+  onSubmit,
+  onInterrupt,
+}: {
+  busy: boolean
+  ready: boolean
+  hasAccount: boolean
+  onSubmit: { current: (text: string) => void }
+  onInterrupt: { current: () => void }
+}) {
+  const [draft, setDraft] = useState('')
+  const trimmed = draft.trim()
+  const canSend = trimmed !== '' && !busy && (ready || /^\/model\b/i.test(trimmed))
+  const submit = () => {
+    if (!canSend) return
+    const text = draft
+    setDraft('')
+    onSubmit.current(text)
+  }
+  return (
+    <div className="nodrag nowheel nopan flex items-end gap-2 border-t border-(--f-core-border) p-2">
+      <textarea
+        aria-label="Mensagem para o Claude"
+        value={draft}
+        rows={2}
+        onChange={(event) => setDraft(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+            event.preventDefault()
+            submit()
+          }
+        }}
+        placeholder={busy ? 'Aguarde a resposta…' : 'Mensagem (Enter envia, Shift+Enter quebra linha)'}
+        className="felixo-control min-h-0 flex-1 resize-none text-xs"
+      />
+      {busy ? (
+        <button
+          type="button"
+          className={`${BUTTON} felixo-secondary-action`}
+          onClick={() => onInterrupt.current()}
+          title="Interromper"
+        >
+          <Square size={12} aria-hidden /> Parar
+        </button>
+      ) : (
+        <button
+          type="button"
+          className={`${BUTTON} felixo-primary-action`}
+          disabled={!canSend}
+          onClick={submit}
+          title={!hasAccount ? 'Este bloco não tem conta: crie outro pelo menu Agentes.' : 'Enviar'}
+        >
+          <Send size={12} aria-hidden /> Enviar
+        </button>
+      )}
+    </div>
+  )
+})
 
 /**
  * Bloco de conversa do Claude por chave de API.
@@ -83,7 +153,6 @@ function ItemView({ item }: { item: ClaudeApiItem }) {
 function ClaudeApiNodeComponent({ id, data, selected }: NodeProps) {
   const { deleteElements } = useReactFlow()
   const nodeData = data as ClaudeApiNodeDataWithHandlers
-  const [draft, setDraft] = useState('')
   const listRef = useRef<HTMLDivElement | null>(null)
   const stickToBottom = useRef(true)
 
@@ -142,15 +211,9 @@ function ClaudeApiNodeComponent({ id, data, selected }: NodeProps) {
   }, [])
 
   const busy = conversation.status !== 'idle'
-  const canSend =
-    draft.trim() !== '' &&
-    !busy &&
-    ((Boolean(nodeData.apiAccountId) && Boolean(nodeData.apiCwd)) || /^\/model\b/i.test(draft.trim()))
+  const ready = Boolean(nodeData.apiAccountId) && Boolean(nodeData.apiCwd)
 
-  const submit = () => {
-    if (!canSend) return
-    const text = draft
-    setDraft('')
+  const submit = (text: string) => {
     stickToBottom.current = true
     const command = parseClaudeApiSlashCommand(text)
     if (command?.kind === 'resume-list' || command?.kind === 'resume-pick') {
@@ -185,6 +248,13 @@ function ClaudeApiNodeComponent({ id, data, selected }: NodeProps) {
     }
     void claudeApiConversations.send(id, text, startParams())
   }
+
+  // Refs estáveis para o Composer: ele não re-renderiza a cada mudança da conversa.
+  const submitRef = useRef(submit)
+  useEffect(() => {
+    submitRef.current = submit
+  })
+  const interruptRef = useRef(() => void claudeApiConversations.interrupt(id))
 
   const projectName = nodeData.apiCwd?.split(/[\\/]/).filter(Boolean).pop()
 
@@ -287,42 +357,13 @@ function ClaudeApiNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
 
-      <div className="nodrag nowheel nopan flex items-end gap-2 border-t border-(--f-core-border) p-2">
-        <textarea
-          aria-label="Mensagem para o Claude"
-          value={draft}
-          rows={2}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
-              event.preventDefault()
-              submit()
-            }
-          }}
-          placeholder={busy ? 'Aguarde a resposta…' : 'Mensagem (Enter envia, Shift+Enter quebra linha)'}
-          className="felixo-control min-h-0 flex-1 resize-none text-xs"
-        />
-        {busy ? (
-          <button
-            type="button"
-            className={`${BUTTON} felixo-secondary-action`}
-            onClick={() => void claudeApiConversations.interrupt(id)}
-            title="Interromper"
-          >
-            <Square size={12} aria-hidden /> Parar
-          </button>
-        ) : (
-          <button
-            type="button"
-            className={`${BUTTON} felixo-primary-action`}
-            disabled={!canSend}
-            onClick={submit}
-            title={!nodeData.apiAccountId ? 'Este bloco não tem conta: crie outro pelo menu Agentes.' : 'Enviar'}
-          >
-            <Send size={12} aria-hidden /> Enviar
-          </button>
-        )}
-      </div>
+      <Composer
+        busy={busy}
+        ready={ready}
+        hasAccount={Boolean(nodeData.apiAccountId)}
+        onSubmit={submitRef}
+        onInterrupt={interruptRef}
+      />
     </div>
   )
 }

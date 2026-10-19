@@ -126,6 +126,10 @@ function createClaudeApiSessionManager({
       windowsHide: true,
     })
     session.child = child
+    // O `total_cost_usd` do `result` é acumulado do processo (medido em
+    // 19/10/2026: 0,0019 → 0,0024 → 0,0026 em três turnos), não do turno.
+    // O bloco soma por turno, então aqui vai só a diferença.
+    session.processCostUsd = 0
     session.stderrTail = ''
     session.pendingPermissions = new Set()
 
@@ -136,7 +140,7 @@ function createClaudeApiSessionManager({
       } catch {
         return
       }
-      for (const event of translateClaudeStreamMessage(message)) {
+      for (let event of translateClaudeStreamMessage(message)) {
         if (event.kind === 'ready' && event.claudeSessionId) {
           session.claudeSessionId = event.claudeSessionId
         }
@@ -145,6 +149,10 @@ function createClaudeApiSessionManager({
         }
         if (event.kind === 'turn-end') {
           session.busy = false
+          const total = typeof event.costUsd === 'number' ? event.costUsd : 0
+          const delta = Math.max(0, total - (session.processCostUsd ?? 0))
+          session.processCostUsd = Math.max(session.processCostUsd ?? 0, total)
+          event = { ...event, costUsd: Math.round(delta * 1e9) / 1e9 }
         }
         emitTo(sessionId, event)
       }

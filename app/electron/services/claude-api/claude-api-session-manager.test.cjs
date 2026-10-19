@@ -252,3 +252,20 @@ test('o processo nasce com o ambiente limpo', () => {
   manager.send('b', 'oi')
   assert.deepEqual(spawned[0].env, { ANTHROPIC_API_KEY: 'sk' })
 })
+
+test('gasto: o total acumulado do processo vira o custo de cada turno', async () => {
+  const { manager, spawned, events } = setup()
+  manager.start({ sessionId: 'b', accountId: 'c', cwd: '/p' })
+  manager.send('b', 'um')
+  const first = spawned[0].child
+  for (const total of [0.0019, 0.0024, 0.0026]) first.say({ type: 'result', subtype: 'success', total_cost_usd: total })
+  await tick()
+  // Processo novo (depois de cair) recomeça do zero.
+  first.exitCode = 0
+  first.emit('close', 0, null)
+  manager.send('b', 'dois')
+  spawned[1].child.say({ type: 'result', subtype: 'success', total_cost_usd: 0.001 })
+  await tick()
+  const costs = events.filter((e) => e.kind === 'turn-end').map((e) => e.costUsd)
+  assert.deepEqual(costs, [0.0019, 0.0005, 0.0002, 0.001])
+})

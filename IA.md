@@ -1960,3 +1960,27 @@ Testes do bloco: 12 na conversa (vitest) e 12 no gerenciador.
   2. `/resume` no bloco 2 listou as duas conversas, com a atual marcada;
   3. `/resume 2` carregou a do bloco 1, e o Claude respondeu a palavra combinada nela.
 - **Testes:** 16 do gerenciador e das conversas no Node, 14 do bloco no Vitest.
+
+**Gasto e lentidão (mesma data, relato da pessoa).**
+- **Gasto.** O `total_cost_usd` do `result` é **acumulado do processo**, não do turno. Medido com a
+  chave: 0,0019 → 0,0024 → 0,0026 em três turnos, com os tokens de `modelUsage` crescendo junto.
+  - O bloco somava o acumulado a cada turno, então mostrava 0,0069 em vez de 0,0026.
+  - Correção: o gerenciador guarda o último total do processo (zera a cada processo novo) e manda
+    só a diferença.
+  - No app real, os três turnos mostraram US$ 0,0021 → 0,0026 → 0,0028.
+  - Blocos antigos continuam com o total já inflado: a correção vale dali em diante.
+- **Lentidão.** Cada letra digitada e cada pedaço de resposta re-renderizava todas as mensagens em
+  Markdown. Correção:
+  - `ItemView` com `memo`;
+  - o campo de mensagem virou o componente `Composer`, com o próprio rascunho.
+
+  Medido no app com 240 itens, 60 teclas por CDP:
+
+  | Versão | Tempo |
+  |---|---|
+  | antes | ~66 s |
+  | só com o memo | ~5,3 s |
+  | com o `Composer` | ~1,8 s |
+  | só a automação, sem o bloco | ~1,4 s |
+- **Observação.** Como root, `--permission-mode bypassPermissions` é recusado pelo Claude Code
+  ("cannot be used with root/sudo privileges"). Isso não afeta Windows nem macOS de usuário comum.
