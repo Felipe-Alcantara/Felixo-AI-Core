@@ -38,6 +38,17 @@ function listarTestes(diretorio) {
   return arquivos
 }
 
+/**
+ * `NODE_OPTIONS` com a pré-carga do SQLite sem fsync: vale para o runner, para
+ * cada arquivo de teste e para os processos filhos que os testes criam (os
+ * testes de vários processos abrem o banco em workers). Barras normais e aspas:
+ * o Node lê `\` dentro de aspas como escape, e o caminho do Windows o perderia.
+ */
+function nodeOptionsComPreCarga(atual) {
+  const preCarga = path.resolve(__dirname, 'test-support', 'sqlite-sem-fsync.cjs').replace(/\\/g, '/')
+  return [atual, `--require "${preCarga}"`].filter(Boolean).join(' ')
+}
+
 const testes = RAIZES.flatMap((raiz) => listarTestes(path.resolve(raiz))).sort()
 
 if (testes.length === 0) {
@@ -47,7 +58,10 @@ if (testes.length === 0) {
   const resultado = spawnSync(
     process.execPath,
     ['--test', ...testes.map((arquivo) => path.relative(process.cwd(), arquivo))],
-    { stdio: 'inherit' },
+    {
+      stdio: 'inherit',
+      env: { ...process.env, NODE_OPTIONS: nodeOptionsComPreCarga(process.env.NODE_OPTIONS) },
+    },
   )
 
   if (resultado.error) {
