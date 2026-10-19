@@ -73,11 +73,16 @@ export function isBusyScreen(viewport: string): boolean {
  * Vale para qualquer CLI, ao contrário de `isCodexTrustPrompt`, que trata um
  * diálogo específico. Essas telas aparecem mesmo sob flags de aprovação
  * automática, já que não são checagens de permissão de ferramenta.
+ *
+ * A confiança na pasta do Codex entra por nome: o cursor dela é `›` e a
+ * pergunta ("Trust this folder?") não está entre as frases genéricas, então a
+ * heurística sozinha a lia como tela comum.
  */
 export function looksLikeApprovalPrompt(text: string): boolean {
   return (
     APPROVAL_OPTION_LINE.test(text) ||
-    (NUMBERED_OPTION_LIST.test(text) && CONFIRMATION_PHRASE.test(text))
+    (NUMBERED_OPTION_LIST.test(text) && CONFIRMATION_PHRASE.test(text)) ||
+    isCodexTrustPrompt(text)
   )
 }
 
@@ -286,7 +291,14 @@ export function codexOpensProvisionalComposer(version: string): boolean {
   return true
 }
 
-/** Diálogo do Codex que pergunta se a pasta é confiável. */
+/**
+ * Diálogo do Codex que pergunta se a pasta é confiável.
+ *
+ * Desde o 0.158 a tela diz "Trust this folder? …" com a opção "1. Trust and
+ * continue" (e "2. Back to Agent Command Center"); antes era "Do you trust the
+ * contents of this directory?" com "Yes, continue". As duas frases da tela nova
+ * são exigidas juntas: só uma delas pode aparecer numa resposta qualquer.
+ */
 export function isCodexTrustPrompt(text: string): boolean {
   const compact = compactWords(text)
 
@@ -294,7 +306,8 @@ export function isCodexTrustPrompt(text: string): boolean {
     compact.includes('doyoutrustthecontentsofthisdirectory') ||
     (compact.includes('trust') &&
       compact.includes('untrustedcontents') &&
-      compact.includes('yescontinue'))
+      compact.includes('yescontinue')) ||
+    (compact.includes('trustthisfolder') && compact.includes('trustandcontinue'))
   )
 }
 

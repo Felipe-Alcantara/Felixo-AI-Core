@@ -16,6 +16,18 @@ import {
   readInputLineState,
 } from './terminal-screen-state'
 
+/** Tela de confiança na pasta do Codex 0.163.0, como o xterm a desenha (capturada num PTY real). */
+const CODEX_FOLDER_TRUST_SCREEN = [
+  '  Folder access',
+  '  /home/ana/projeto',
+  '  Trust this folder? Codex can read, edit, and run files here, subject to your permission',
+  '  settings. Folder settings can run code automatically, even without a model request. Continue',
+  '  only if you trust these files. Your trust decision will be saved.',
+  '› 1. Trust and continue',
+  '  2. Back to Agent Command Center',
+  '  enter continue · esc back',
+].join('\n')
+
 describe('cleanPrompt', () => {
   it('strips ANSI escapes and collapses whitespace', () => {
     expect(cleanPrompt('\x1b[32m  ola   mundo \x1b[0m')).toBe('ola mundo')
@@ -142,6 +154,37 @@ describe('isCodexTrustPrompt', () => {
 
   it('does not fire on a normal approval prompt', () => {
     expect(isCodexTrustPrompt('Do you want to proceed? 1. Yes')).toBe(false)
+  })
+
+  it('reconhece a tela do Codex 0.158+ ("Trust this folder?")', () => {
+    expect(isCodexTrustPrompt(CODEX_FOLDER_TRUST_SCREEN)).toBe(true)
+  })
+
+  it('reconhece a tela nova com ANSI e quebras do TUI no meio', () => {
+    const screen = '\x1b[1mTrust this\x1b[0m\nfolder? Codex can read\n\x1b[2m› 1. Trust and\x1b[0m continue'
+
+    expect(isCodexTrustPrompt(screen)).toBe(true)
+  })
+
+  it('não dispara com só uma das frases da tela nova', () => {
+    expect(isCodexTrustPrompt('Should I trust this folder? It is new.')).toBe(false)
+    expect(isCodexTrustPrompt('Clique em "Trust and continue" no Codex.')).toBe(false)
+  })
+})
+
+describe('tela de confiança do Codex 0.158+ como decisão', () => {
+  it('conta como tela de decisão', () => {
+    expect(looksLikeApprovalPrompt(CODEX_FOLDER_TRUST_SCREEN)).toBe(true)
+  })
+
+  it('não vira a entrada do Codex', () => {
+    expect(hasCodexInteractivePrompt(CODEX_FOLDER_TRUST_SCREEN)).toBe(false)
+  })
+
+  it('o compositor do Codex continua sem parecer decisão', () => {
+    const composer = ['  >_ OpenAI Codex (v0.163.0)', '     /home/ana/projeto', '› Ask Codex to do anything', '  ? for shortcuts'].join('\n')
+
+    expect(looksLikeApprovalPrompt(composer)).toBe(false)
   })
 })
 

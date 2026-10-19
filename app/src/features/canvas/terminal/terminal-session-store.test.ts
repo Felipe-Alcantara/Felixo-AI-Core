@@ -1135,6 +1135,58 @@ describe('TerminalSessionStore: abertura do Codex com compositor provisório', (
     expect(contextWrites(harness.writes)).toHaveLength(1)
   })
 
+  describe('a tela de confiança nova (Codex 0.158+)', () => {
+    /** Bancada de Codex com o Yolo marcado, do tamanho da gravação. */
+    const yoloCodexHarness = (): Harness => {
+      const created = createHarness(CONTEXT, 'codex', true, false, 1, {
+        args: ['--dangerously-bypass-approvals-and-sandbox'],
+      })
+      const sessions = (created.store as unknown as {
+        sessions: Map<string, { terminal: { resize: (cols: number, rows: number) => void } }>
+      }).sessions
+      sessions.get(SESSION_ID)?.terminal.resize(recording.cols, recording.rows)
+      return created
+    }
+    const enters = (writes: string[]) => writes.filter((data) => data === '\r')
+
+    it('com o Yolo, o app confia na pasta sozinho e o contexto entra quando o chat abre', async () => {
+      harness = yoloCodexHarness()
+      harness.feed(PROVISIONAL)
+      await vi.advanceTimersByTimeAsync(1000)
+      harness.feed(TRUST_SCREEN)
+      await vi.advanceTimersByTimeAsync(400)
+
+      expect(enters(harness.writes)).toHaveLength(1)
+      expect(contextWrites(harness.writes)).toEqual([])
+
+      harness.feed(AFTER_TRUST)
+      await vi.advanceTimersByTimeAsync(400)
+
+      expect(contextWrites(harness.writes)).toHaveLength(1)
+      expect(enters(harness.writes)).toHaveLength(1)
+    })
+
+    it('sem o Yolo, a decisão fica com a pessoa', async () => {
+      harness = codexHarness()
+      harness.feed(PROVISIONAL)
+      await vi.advanceTimersByTimeAsync(1000)
+      harness.feed(TRUST_SCREEN)
+      await vi.advanceTimersByTimeAsync(3000)
+
+      expect(enters(harness.writes)).toEqual([])
+    })
+
+    it('o card mostra que a tela espera uma decisão', async () => {
+      harness = codexHarness()
+      harness.feed(PROVISIONAL)
+      await vi.advanceTimersByTimeAsync(1000)
+      harness.feed(TRUST_SCREEN)
+      await vi.advanceTimersByTimeAsync(3000)
+
+      expect(harness.store.getSnapshot(SESSION_ID)?.activity).toBe('waiting_approval')
+    })
+  })
+
   it('o prazo de emergência não digita na tela de confiança que a pessoa deixou aberta', async () => {
     harness = codexHarness()
     harness.feed(PROVISIONAL)

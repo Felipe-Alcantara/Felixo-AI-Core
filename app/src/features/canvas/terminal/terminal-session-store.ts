@@ -2414,8 +2414,9 @@ export class TerminalSessionStore {
         session.paintedOutput &&
         (inputLine ? inputLine.ready : quietFor >= INITIAL_TEXT_READY_QUIET_MS)
       // Sem sinal do chat, o prazo de emergência ainda vale, mas só com um
-      // compositor na tela: a tela de confiança do Codex 0.158+ não é
-      // reconhecida como decisão, e os dígitos do contexto escolheriam uma opção.
+      // compositor na tela: as telas de abertura do Codex 0.158+ que não
+      // reconhecemos como decisão (login, migração de modelo) são menus, e os
+      // dígitos do contexto escolheriam uma opção.
       const fallbackReady =
         !blockedByDecisionScreen &&
         (!codexStillStarting || inputLine?.visible === true) &&
@@ -2818,6 +2819,12 @@ export class TerminalSessionStore {
     return startup.version !== undefined && codexOpensProvisionalComposer(startup.version)
   }
 
+  /**
+   * Confiança na pasta do Codex (texto antigo e o do 0.158+, ver
+   * `isCodexTrustPrompt`). Só responde sozinho com o Yolo; sem ele, quem
+   * decide confiar numa pasta nova é a pessoa. A seleção já começa em confiar,
+   * então basta o Enter.
+   */
   private handleCodexTrustPrompt(session: Session, data: string): void {
     if (session.command !== 'codex' || session.codexTrustHandled || !data) {
       return
