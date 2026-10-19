@@ -177,19 +177,29 @@ function ClaudeApiNodeComponent({ id, data, selected }: NodeProps) {
       model: nodeData.apiModel,
       effort: nodeData.apiEffort,
       yolo: nodeData.apiYolo === true,
+      // Contexto do canvas como instrução de sistema (--append-system-prompt-file).
+      // Antes ia como primeira mensagem e gastava um turno inteiro antes de a
+      // pessoa conseguir conversar. Blocos antigos que já mandaram o contexto
+      // como mensagem (`apiContextSent`) não recebem de novo.
+      systemContext: nodeData.apiContextSent ? undefined : nodeData.apiInitialText || undefined,
     }),
-    [nodeData.apiAccountId, nodeData.apiCwd, nodeData.apiModel, nodeData.apiEffort, nodeData.apiYolo],
+    [
+      nodeData.apiAccountId,
+      nodeData.apiCwd,
+      nodeData.apiModel,
+      nodeData.apiEffort,
+      nodeData.apiYolo,
+      nodeData.apiContextSent,
+      nodeData.apiInitialText,
+    ],
   )
 
-  // Contexto do canvas: vai uma vez, como primeira mensagem, igual ao que o
-  // terminal digita ao abrir.
-  const contextSending = useRef(false)
+  // Abre o Claude Code assim que o bloco aparece: a primeira mensagem não
+  // espera os ~3 s de abertura. Abrir não chama a API.
   useEffect(() => {
-    if (contextSending.current || nodeData.apiContextSent || !nodeData.apiInitialText?.trim()) return
-    contextSending.current = true
-    change({ apiContextSent: true })
-    void claudeApiConversations.send(id, nodeData.apiInitialText, startParams(), { context: true })
-  }, [change, id, nodeData.apiContextSent, nodeData.apiInitialText, startParams])
+    if (!nodeData.apiAccountId || !nodeData.apiCwd) return
+    void claudeApiConversations.warm(id, startParams())
+  }, [id, nodeData.apiAccountId, nodeData.apiCwd, startParams])
 
   // Gruda no fim enquanto a pessoa não rolou para cima. Um ResizeObserver no
   // conteúdo, e não só um efeito por mensagem: o Markdown carrega depois
@@ -306,6 +316,12 @@ function ClaudeApiNodeComponent({ id, data, selected }: NodeProps) {
             Claude Code pela chave de API, sem a tela do terminal. Ele lê e edita os arquivos do projeto e roda
             comandos{nodeData.apiYolo ? ' sem pedir permissão (Yolo)' : '; cada ação pede sua permissão aqui'}.
           </p>
+        )}
+        {nodeData.apiInitialText && !nodeData.apiContextSent && (
+          <details className="rounded border border-(--f-core-border) px-2 py-1 text-[11px] text-(--f-core-secondary)">
+            <summary className="cursor-pointer">Contexto do canvas entregue ao Claude (instrução de sistema)</summary>
+            <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap">{nodeData.apiInitialText}</pre>
+          </details>
         )}
         {conversation.items.map((item) => (
           <ItemView key={item.id} item={item} />

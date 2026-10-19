@@ -269,3 +269,61 @@ test('gasto: o total acumulado do processo vira o custo de cada turno', async ()
   const costs = events.filter((e) => e.kind === 'turn-end').map((e) => e.costUsd)
   assert.deepEqual(costs, [0.0019, 0.0005, 0.0002, 0.001])
 })
+
+test('warm abre o processo antes da mensagem, com o contexto como instrução de sistema', () => {
+  const spawned = []
+  const written = []
+  const manager = createClaudeApiSessionManager({
+    spawnProcess: (command, args, options) => {
+      const child = fakeChild()
+      spawned.push({ args, child })
+      return child
+    },
+    validateAccount: () => ({ ok: true }),
+    buildAccountEnv: () => ({}),
+    emit: () => {},
+    writeContextFile: (sessionId, text) => (written.push([sessionId, text]), `/ctx/${sessionId}.md`),
+    setTimer: () => ({}),
+    clearTimer: () => {},
+  })
+  manager.start({ sessionId: 'b', accountId: 'c', cwd: '/p', systemContext: 'Contexto do canvas', warm: true })
+  assert.equal(spawned.length, 1)
+  assert.deepEqual(written, [['b', 'Contexto do canvas']])
+  const args = spawned[0].args
+  assert.equal(args[args.indexOf('--append-system-prompt-file') + 1], '/ctx/b.md')
+  // Repetir o warm com a mesma configuração não abre outro processo.
+  manager.start({ sessionId: 'b', accountId: 'c', cwd: '/p', systemContext: 'Contexto do canvas', warm: true })
+  assert.equal(spawned.length, 1)
+  manager.send('b', 'oi')
+  assert.equal(spawned.length, 1)
+})
+
+test('processo parado encerra em silêncio e o próximo envio reabre com --resume', async () => {
+  const spawned = []
+  const events = []
+  const timers = []
+  const manager = createClaudeApiSessionManager({
+    spawnProcess: (command, args) => {
+      const child = fakeChild()
+      spawned.push({ args, child })
+      return child
+    },
+    validateAccount: () => ({ ok: true }),
+    buildAccountEnv: () => ({}),
+    emit: (_id, event) => events.push(event),
+    setTimer: (fn) => (timers.push(fn), timers.length),
+    clearTimer: () => {},
+  })
+  manager.start({ sessionId: 'b', accountId: 'c', cwd: '/p', warm: true })
+  manager.send('b', 'oi')
+  const first = spawned[0].child
+  first.say({ type: 'system', subtype: 'init', session_id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' })
+  first.say({ type: 'result', subtype: 'success', total_cost_usd: 0.001 })
+  await tick()
+  timers.at(-1)()
+  assert.equal(first.exitCode, 0)
+  assert.equal(events.some((e) => e.kind === 'process-exit'), false)
+  manager.send('b', 'de novo')
+  assert.equal(spawned.length, 2)
+  assert.ok(spawned[1].args.includes('--resume'))
+})

@@ -1984,3 +1984,33 @@ Testes do bloco: 12 na conversa (vitest) e 12 no gerenciador.
   | só a automação, sem o bloco | ~1,4 s |
 - **Observação.** Como root, `--permission-mode bypassPermissions` é recusado pelo Claude Code
   ("cannot be used with root/sudo privileges"). Isso não afeta Windows nem macOS de usuário comum.
+
+**Lentidão do bloco em relação ao Claude Code direto (mesma data).** Medido no app, com Haiku e as
+mesmas perguntas:
+
+| | 1ª mensagem | Mensagens seguintes |
+|---|---|---|
+| Bloco, antes | 5,3 s | 1,9 s |
+| Claude Code direto | 2,2 s | 1,0 s |
+
+Causas:
+- o processo só abria no primeiro envio (~3 s de abertura);
+- o contexto do canvas ia como primeira mensagem e gastava um turno inteiro antes de a pessoa
+  conversar.
+
+Correções:
+- `start({ warm: true })` abre o processo quando o bloco aparece (sem chamar a API);
+- o contexto vai como instrução de sistema (`--append-system-prompt-file`, arquivo por bloco em
+  `userData/claude-api-context`), com a impressão digital na chave de configuração;
+- processo parado há 15 min fecha em silêncio e reabre com `--resume` no próximo envio;
+- blocos antigos que já mandaram o contexto como mensagem (`apiContextSent`) não o recebem de novo.
+
+Depois, medindo a partir do keydown do Enter:
+
+| | 1ª letra | Fim da resposta |
+|---|---|---|
+| Bloco | 0,7 a 1,0 s | 1,1 a 1,3 s |
+| Claude Code direto | 0,7 s | 1,0 s |
+
+A primeira mensagem foi de 5,3 s para 2,3 s. O contexto como instrução de sistema foi conferido
+pela resposta "PITANGA".

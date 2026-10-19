@@ -62,6 +62,8 @@ function registerClaudeApiIpcHandlers({ ipcMain, manager, sessions }) {
           effort: str(payload.effort, 20),
           yolo: payload.yolo === true,
           resumeSessionId: str(payload.resumeSessionId, 100),
+          systemContext: str(payload.systemContext, 500_000),
+          warm: payload.warm === true,
         }),
       'Não foi possível abrir a conversa.',
     )

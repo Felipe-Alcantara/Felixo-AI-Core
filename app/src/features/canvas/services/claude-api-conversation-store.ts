@@ -112,6 +112,18 @@ export function createClaudeApiConversationStore(getBridge: () => ClaudeApiBridg
     return true
   }
 
+  /** Abre o processo antes da primeira mensagem (veja `warm` no gerenciador). */
+  async function warm(sessionId: string, startParams: Omit<ClaudeApiStartParams, 'sessionId' | 'resumeSessionId'>) {
+    ensureListening()
+    const current = conversations.get(sessionId)
+    await getBridge()?.start({
+      ...startParams,
+      sessionId,
+      warm: true,
+      ...(current?.claudeSessionId ? { resumeSessionId: current.claudeSessionId } : {}),
+    })
+  }
+
   async function answerPermission(sessionId: string, requestId: string, allow: boolean) {
     const current = conversations.get(sessionId)
     const permission = current?.permissions.find((item) => item.requestId === requestId)
@@ -208,7 +220,7 @@ export function createClaudeApiConversationStore(getBridge: () => ClaudeApiBridg
     return conversations.has(sessionId)
   }
 
-  return { hydrate, get, has, send, notice, listSessions, resumeSession, answerPermission, interrupt, dispose, subscribe, onPersist, receive }
+  return { hydrate, get, has, send, warm, notice, listSessions, resumeSession, answerPermission, interrupt, dispose, subscribe, onPersist, receive }
 }
 
 const EMPTY = createConversation()
