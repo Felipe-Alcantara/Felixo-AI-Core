@@ -1802,10 +1802,23 @@ source, roda local e não tem banco público, então não precisa de tantos gate
 
 - O tempo novo do Windows sai no CI deste PR. A causa exata do SQLite lento (espera do disco ou o
   Defender) não foi isolada: as duas correções entram juntas.
-- **Checks obrigatórios:** a proteção da `main` não pôde ser lida daqui. Se algum job que saiu
-  (`Benchmarks (…)`, `Benchmarks exploratórios (…)`, `Launcher (windows-latest|macos-latest,
-  Python 3.9)`, `Reaproveitar CI do PR`) for check obrigatório, os PRs vão esperar por ele até
-  alguém tirá-lo em Settings > Branches.
+- **Checks obrigatórios.** O merge foi barrado com "5 of 15 required status checks are
+  expected".
+  - A regra da `main` pode ser lida em `GET /repos/{owner}/{repo}/branches/main`, no campo
+    `protection.required_status_checks`. Essa leitura não exige admin.
+  - A regra exige:
+    - `Dependency policy`, `Python dependency audit` e `Release scripts`;
+    - `Validate` em ubuntu, windows e macos;
+    - `Launcher` nos 3 sistemas, com Python 3.9 e 3.13;
+    - `Benchmarks` em ubuntu, windows e macos.
+  - O Launcher com Python 3.9 voltou no Windows e no macOS: roda teste de verdade e leva menos
+    de 1 min.
+  - Um job de matriz pulado aparece com o nome sem expandir, como `Validate (${{ matrix.os }})`.
+    Isso foi visto na run 853 da `main`. O check exigido nunca aparece, por isso `Validate` e
+    `Launcher` rodam sempre em PR.
+  - Os três `Benchmarks (…)` não foram recriados. Criar um job que só tem o nome e não mede
+    nada contornaria a regra. Quem é admin precisa tirá-los da regra (Settings > Branches) ou
+    mesclar com bypass.
 - **Cobertura que ficou só no `Nightly`:** o smoke do canvas no Windows e no macOS e as medições.
   Uma regressão de UI só nesses sistemas aparece no dia seguinte, não no PR. O smoke no app
   empacotado não roda mais em lugar nenhum, e o gate do artefato é o `release-smoke.cjs`.

@@ -850,7 +850,7 @@ arquivos alterados (do PR, ou do push na `main`) e decide com
 
 | Mudou | Roda |
 | --- | --- |
-| só documentação (`*.md` fora de `app/`, `docs/`) | nada; a run fica verde |
+| só documentação (`*.md` fora de `app/`, `docs/`) | em PR, só `Validate` e `launcher`; no push da `main`, nada |
 | `docs/projeto/INVENTARIO-CANVAS.md` | os testes do app (o arquivo é gerado e conferido por snapshot) |
 | `app/` | `Validate` nos quatro runners e `Canvas smoke (ubuntu-latest)` |
 | `app/package.json` ou o lockfile | o que roda para `app/` e o `dependency-policy` |
@@ -862,6 +862,15 @@ arquivos alterados (do PR, ou do push na `main`) e decide com
 Se a lista de arquivos não puder ser lida (erro de API, PR com mais de 3000
 arquivos, push com mais de 300), roda tudo. Cada job só é pulado quando o escopo
 diz `false` explicitamente: se o job `scope` falhar, tudo roda.
+
+Em PR, `Validate` e `launcher` rodam sempre. Os nomes deles são checks
+exigidos pela regra de proteção da `main`. Quando um job de matriz é pulado, o
+GitHub o reporta com o nome sem expandir (`Validate (${{ matrix.os }})`). O
+check exigido nunca aparece, e o PR fica travado. Os jobs sem matriz
+(`dependency-policy`, `python-dependency-audit`, `release-scripts`,
+`Canvas smoke`) podem ser pulados, porque job pulado conta como aprovado. Para
+pular também `Validate` e `launcher` em PR, a regra da `main` precisaria
+trocar esses nomes por um check agregador, e só admin muda a regra.
 
 O `Validate` divide o trabalho por sistema: `npm test` (testes Node) roda no
 Linux, no Windows e no macOS; a integração nativa do node-pty roda nos quatro
@@ -880,7 +889,7 @@ inventário de `app.asar` e `npm-runtime`. O gate bloqueia vulnerabilidades na
 ausente ou inválido; advisories completos não críticos permanecem disponíveis
 como evidência e aviso para as trilhas do Dependabot. O job `launcher` instala o
 lock Python com `--require-hashes`, testa Linux, Windows e macOS com Python
-3.13, e o Linux também com 3.9, a mais antiga suportada; executa
+3.9 (a mais antiga suportada) e 3.13; executa
 `start_app.py --help`. O job `python-dependency-audit` roda `pip-audit==2.10.1`
 contra o mesmo lock, falha se houver advisory ou erro de coleta e publica o SBOM
 do launcher. O job `release-scripts` valida os scripts Bash usados na publicação

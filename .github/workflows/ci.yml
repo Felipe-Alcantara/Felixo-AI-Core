@@ -11,10 +11,12 @@ on:
 # `main` NUNCA cancela: o Release depende do CI de cada commit.
 #
 # O CI roda só o que a mudança pede (job `scope`, decisão em
-# .github/scripts/ci-scope.sh): documentação sozinha não roda teste, o launcher
-# Python só roda quando ele muda, as auditorias de dependência só quando o
-# lockfile ou o requirements mudam. Na dúvida (arquivo desconhecido, erro de
-# API, mudança no próprio CI) roda tudo.
+# .github/scripts/ci-scope.sh). As auditorias de dependência só rodam quando o
+# lockfile ou o requirements mudam, os scripts de release só quando eles mudam,
+# e o smoke do canvas só quando o app muda. Na dúvida (arquivo desconhecido,
+# erro de API, mudança no próprio CI) roda tudo. Em PR, Validate e Launcher
+# rodam sempre: são checks exigidos pela regra da `main`, e um job de matriz
+# pulado não reporta o nome que a regra espera (ver o `if` deles).
 #
 # Na `main`, a run de cada commit continua existindo e ficando verde (o Release
 # gate e o "Verify CI passed" do Release procuram por ela), mas REAPROVEITA o CI
@@ -229,13 +231,16 @@ jobs:
           if-no-files-found: error
 
   # The launcher is what every operating system runs first, so it keeps a
-  # cross-platform matrix — but only when it changes. Python 3.9 (the oldest
-  # supported, which needs `from __future__ import annotations` in
-  # start_app.py) runs once: the syntax check does not depend on the OS.
+  # cross-platform matrix — but only when it changes. Python 3.9 is the oldest
+  # supported (start_app.py needs `from __future__ import annotations`). Each
+  # job takes under a minute. The six names are required checks on `main`.
   launcher:
     name: Launcher (${{ matrix.os }}, Python ${{ matrix.python-version }})
     needs: scope
-    if: ${{ !cancelled() && needs.scope.outputs.launcher != 'false' }}
+    # Em PR, job de matriz não pode ser pulado: pulado, ele sai com o nome sem
+    # expandir ("(${{ matrix.os }})") e o check exigido pela regra da `main`
+    # nunca aparece. O escopo só pula esta matriz no push da main.
+    if: ${{ !cancelled() && (github.event_name == 'pull_request' || needs.scope.outputs.launcher != 'false') }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -246,7 +251,11 @@ jobs:
           - os: ubuntu-latest
             python-version: "3.13"
           - os: windows-latest
+            python-version: "3.9"
+          - os: windows-latest
             python-version: "3.13"
+          - os: macos-latest
+            python-version: "3.9"
           - os: macos-latest
             python-version: "3.13"
 
@@ -368,7 +377,10 @@ jobs:
   validate:
     name: Validate (${{ matrix.os }})
     needs: scope
-    if: ${{ !cancelled() && needs.scope.outputs.app != 'false' }}
+    # Em PR, job de matriz não pode ser pulado: pulado, ele sai com o nome sem
+    # expandir ("(${{ matrix.os }})") e o check exigido pela regra da `main`
+    # nunca aparece. O escopo só pula esta matriz no push da main.
+    if: ${{ !cancelled() && (github.event_name == 'pull_request' || needs.scope.outputs.app != 'false') }}
     runs-on: ${{ matrix.os }}
     # Teto do job: um passo pendurado falha claro em vez de ocupar o runner por horas.
     timeout-minutes: 30
