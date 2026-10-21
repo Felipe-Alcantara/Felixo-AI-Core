@@ -776,7 +776,9 @@ export function TerminalDrawer({
           cima dele, do mesmo tamanho: o xterm não muda de largura (o que faria
           a CLI redesenhar) e segue recebendo tudo; só sai do foco e do leitor
           de tela, para o conteúdo não ser lido duas vezes. */}
-      <div className={`relative min-h-0 flex-1 ${collapsed ? 'invisible w-0' : ''}`}>
+      {/* A tela do terminal fica escura em qualquer tema (as CLIs desenham para
+          fundo escuro); só a moldura da gaveta acompanha o tema. */}
+      <div className={`felixo-paleta-escura relative min-h-0 flex-1 bg-(--f-core-black-surface) ${collapsed ? 'invisible w-0' : ''}`}>
         <div
           ref={mountRef}
           id="canvas-terminal-output"

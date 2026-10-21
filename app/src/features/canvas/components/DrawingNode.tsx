@@ -119,7 +119,7 @@ function DrawingNodeComponent({ id, data, selected }: NodeProps) {
   }, [strokes, commitStrokes])
 
   return (
-    <div className="felixo-canvas-card felixo-canvas-card-drawing flex h-full w-full flex-col overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900 shadow-xl">
+    <div className="felixo-canvas-card felixo-canvas-card-drawing felixo-paleta-escura flex h-full w-full flex-col overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900 shadow-xl">
       <NodeResizer
         isVisible={selected}
         minWidth={NODE_MIN_SIZE.drawing.width}

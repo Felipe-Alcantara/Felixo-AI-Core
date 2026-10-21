@@ -133,7 +133,8 @@ function ColorSwatch({
       type="button"
       onClick={onSelect}
       aria-label={`Cor ${color}`}
-      className={`felixo-btn-icon h-3.5 w-3.5 rounded-full ring-1 ring-black/20 ${theme.swatch} ${
+      aria-pressed={active}
+      className={`felixo-note-swatch felixo-btn-icon h-3.5 w-3.5 rounded-full ring-1 ring-black/20 ${theme.swatch} ${
         active ? 'ring-2 ring-black/60' : ''
       }`}
     />

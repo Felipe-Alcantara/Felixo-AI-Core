@@ -62,6 +62,7 @@
     "test:canvas-context": "vitest run src/features/canvas/terminal/canvas-context-e2e.test.ts --reporter=verbose",
     "test:canvas-smoke": "node scripts/canvas-smoke.cjs",
     "docs:inventario-canvas": "vitest run src/features/canvas/inventory -u",
+    "tema:paleta-clara": "vitest run src/features/shared/theme/paleta-tema-claro.test.ts -u",
     "preview": "vite preview --host 127.0.0.1",
     "start": "node scripts/start-electron.cjs"
   },

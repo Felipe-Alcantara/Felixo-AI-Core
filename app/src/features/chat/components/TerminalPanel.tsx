@@ -193,7 +193,7 @@ export function TerminalPanel({
 
   if (!isOpen) {
     return (
-      <aside className="flex w-11 shrink-0 flex-col items-center border-l border-white/8 bg-[#111110] pt-3 text-zinc-500 max-[1020px]:hidden">
+      <aside className="felixo-paleta-escura flex w-11 shrink-0 flex-col items-center border-l border-white/8 bg-[#111110] pt-3 text-zinc-500 max-[1020px]:hidden">
         <button
           type="button"
           title="Abrir logs da CLI"
@@ -214,7 +214,7 @@ export function TerminalPanel({
     <aside
       style={{ width }}
       className={[
-        'relative flex shrink-0 flex-col border-l border-white/8 bg-[#111110] text-zinc-300 max-[1020px]:hidden',
+        'felixo-paleta-escura relative flex shrink-0 flex-col border-l border-white/8 bg-[#111110] text-zinc-300 max-[1020px]:hidden',
         dragging ? '' : 'transition-[width] duration-300 ease-in-out',
       ].join(' ')}
     >

@@ -6,6 +6,8 @@
    app/ inteiro (electron/, scripts/, resources/...); hoje a saída é a mesma
    (medido), mas texto desses arquivos poderia virar utility no futuro. */
 @import 'tailwindcss' source('.');
+/* Paleta do Tailwind espelhada para o tema claro (gerada; ver o gerador). */
+@import './features/shared/theme/paleta-tema-claro.css';
 
 @theme {
   --font-sans: 'Space Grotesk', 'Inter', ui-sans-serif, system-ui, sans-serif;
@@ -34,11 +36,21 @@
      (React Flow, Excalidraw, xterm), que também é sem camada. Onde uma
      variante precisa vencer a classe própria, a utility leva `!`. */
 @layer base {
-  :root {
+  /* Os tokens do tema escuro valem no app inteiro e também dentro de
+     `.felixo-paleta-escura` quando o tema claro está ligado: o terminal fica
+     escuro por decisão, e a nota é papel claro desenhado sobre a mesa escura.
+     Declarar o mesmo bloco nos dois seletores devolve essas cores à subárvore
+     sem copiar valor nenhum. */
+  :root,
+  :root[data-theme='light'] .felixo-paleta-escura {
+    /* As classes do Tailwind (`bg-white/5`, `bg-black/20`...) leem estas duas.
+       Ficam aqui, e não só no @theme, para a ilha escura recuperá-las. */
+    --color-white: #fff;
+    --color-black: #000;
     /* Canais da "tinta": o branco das bordas e brilhos do escuro. O CSS próprio
        escreve `rgb(var(--f-ink-rgb) / 0.08)` em vez de rgba(255,255,255,.08),
-       para um tema claro poder trocar a tinta por quase-preto. `--f-shade` multiplica a
-       opacidade das sombras e véus pretos, que num fundo claro pedem menos. */
+       e o tema claro troca a tinta por quase-preto. `--f-shade` multiplica a
+       opacidade das sombras e véus pretos, que no claro precisam de menos. */
     --f-ink-rgb: 255 255 255;
     --f-ink-warm-rgb: 247 247 244;
     --f-shade: 1;
@@ -172,7 +184,8 @@
     --felixo-notify-failed: #e26d8a;
   }
 
-  /* O que pinta o documento fica fora do bloco de tokens. */
+  /* O que pinta o documento fica fora do bloco de tokens: a ilha escura herda
+     tokens, não fundo nem fonte. */
   :root {
     color: var(--f-core-white-soft);
     background: var(--f-core-black-deep);
@@ -201,6 +214,81 @@
     --felixo-notify-needs-response: #fbbf24;
     --felixo-notify-finished: #4ade80;
     --felixo-notify-failed: #f87171;
+  }
+
+  /* Tema claro. A regra da marca continua ("em UI, luz indica atividade"), só
+     que invertida: no escuro o ativo é a luz sobre o preto; aqui é a tinta sobre
+     o papel. Por isso o branco do escuro vira tinta quase-preta, e a escada de
+     superfícies sobe do cinza-papel do canvas até o branco do que flutua. O
+     preto não vira branco: sombras e véus continuam pretos, mais fracos
+     (`--color-black` com alfa multiplica cada `bg-black/20` do Tailwind).
+     A paleta do Tailwind espelhada vem de `paleta-tema-claro.css`. */
+  :root[data-theme='light'] {
+    color-scheme: light;
+    --color-white: #141416;
+    --color-black: rgb(0 0 0 / 0.35);
+    --f-ink-rgb: 20 20 22;
+    --f-ink-warm-rgb: 24 24 21;
+    --f-shade: 0.35;
+    --f-star-strength: 0.32;
+    --f-canvas-dot: rgb(24 24 21 / 0.1);
+    --f-minimap-bg: #f7f7f5;
+    --f-minimap-mask: rgb(226 226 222 / 0.6);
+    --f-minimap-node: #d4d4cf;
+    --f-minimap-node-stroke: #8a8a86;
+    --f-minimap-label: #1b1b1d;
+    --f-chat-field: #ffffff;
+    --f-chat-dialog: #fbfbfa;
+    --f-chat-dialog-alt: #fbfbfa;
+    --f-chat-bubble: #ececea;
+    --f-chat-log: #f4f4f2;
+    --f-chat-search: #f7f7f5;
+    --f-structural-hover: #cfcfca;
+
+    --f-core-black-deep: #f3f3f1;
+    --f-core-black-surface: #f8f8f6;
+    --f-core-graphite: #ebebe8;
+    --f-core-structural: #dcdcd7;
+    --f-core-secondary: #57575a;
+    --f-core-muted: #737376;
+    --f-core-white-soft: #1b1b1d;
+    --f-core-white: #141416;
+    --f-core-active: #141416;
+    --f-core-selection-glow: 0 0 0 1px rgba(20, 20, 22, 0.16),
+      0 0 18px rgba(20, 20, 22, 0.05), 0 12px 28px rgba(0, 0, 0, 0.1);
+
+    --control-bg: #ffffff;
+    --control-bg-hover: #f5f5f3;
+    --control-bg-focus: #ffffff;
+    --control-border: rgba(20, 20, 22, 0.14);
+    --control-border-focus: rgba(20, 20, 22, 0.42);
+    --control-text: #1b1b1d;
+    --control-placeholder: #7b7b77;
+    --control-disabled: #9a9a96;
+    --popover-bg: #ffffff;
+    --popover-border: rgba(20, 20, 22, 0.12);
+    --popover-shadow: 0 16px 50px rgba(0, 0, 0, 0.14);
+    --option-hover: rgba(20, 20, 22, 0.05);
+    --option-selected: rgba(20, 20, 22, 0.085);
+
+    --f-surface-canvas: #ebebe8;
+    --f-surface-sidebar: #f1f1ee;
+    --f-surface-header: #f4f4f2;
+    --f-surface-panel: #f7f7f5;
+    --f-surface-control: #fbfbfa;
+    --f-surface-floating: #ffffff;
+
+    --color-input: #ffffff;
+    --color-border: rgba(20, 20, 22, 0.1);
+    --color-error: #a33a3a;
+    --color-success: #2f7449;
+    --color-warning: #85600f;
+    --shadow-base: 0 8px 24px rgba(0, 0, 0, 0.1);
+    --shadow-shell: 0 22px 70px rgba(0, 0, 0, 0.14);
+    --shadow-soft: 0 14px 36px rgba(0, 0, 0, 0.08);
+    --felixo-notify-needs-response: #b3770f;
+    --felixo-notify-finished: #2a8a5e;
+    --felixo-notify-failed: #c23f63;
   }
 
   * {
@@ -5222,4 +5310,218 @@
     background: Highlight;
     forced-color-adjust: none;
   }
+}
+
+/* ── Tema claro: o que o escuro escreve com cor literal ──────────────────────
+   Tokens e a paleta do Tailwind trocam sozinhos (ver o bloco
+   :root[data-theme='light']). Sobra o que foi escrito com hex ou rgba fixo
+   para o fundo preto. Em vez de trocar esses literais por tokens, o que
+   mudaria o escuro em um ou dois tons, cada um ganha aqui a sua versão clara.
+   `:root[data-theme='light'] .x` sempre vence `.x`; onde o escuro tem estado
+   (:hover, :checked), o estado é repetido, senão a regra clara apagaria o
+   estado do escuro por especificidade. */
+
+:root[data-theme='light'] .markdown-content .hljs-keyword,
+:root[data-theme='light'] .markdown-content .hljs-selector-tag,
+:root[data-theme='light'] .markdown-content .hljs-built_in {
+  color: #6a4780;
+}
+
+:root[data-theme='light'] .markdown-content .hljs-title,
+:root[data-theme='light'] .markdown-content .hljs-title.function_,
+:root[data-theme='light'] .markdown-content .hljs-function .hljs-title {
+  color: #39587a;
+}
+
+:root[data-theme='light'] .markdown-content .hljs-tag,
+:root[data-theme='light'] .markdown-content .hljs-name {
+  color: #2a6464;
+}
+
+:root[data-theme='light'] .felixo-switch {
+  background-color: rgb(20 20 22 / 0.14);
+}
+
+:root[data-theme='light'] .felixo-switch-thumb {
+  background-color: #ffffff;
+}
+
+:root[data-theme='light'] .felixo-sidebar-danger:hover {
+  border-color: rgba(185, 28, 28, 0.2);
+  background: rgba(220, 38, 38, 0.08);
+}
+
+/* O canvas é o fundo mais fundo: no claro, o cinza-papel da escada. */
+:root[data-theme='light'] .felixo-canvas-ambient,
+:root[data-theme='light'] [data-felixo-canvas-ready] > .relative.h-full.min-w-0.flex-1 {
+  background: var(--f-surface-canvas);
+}
+
+:root[data-theme='light'] .felixo-canvas-topbar {
+  background: linear-gradient(180deg, rgb(250 250 248 / 0.985) 0%, rgb(244 244 241 / 0.965) 100%);
+}
+
+:root[data-theme='light'] .felixo-topbar-ambient path {
+  stroke: rgb(24 24 21 / 0.12);
+}
+
+:root[data-theme='light'] .felixo-topbar-ambient path:nth-child(2) {
+  stroke: rgb(24 24 21 / 0.07);
+}
+
+:root[data-theme='light'] .felixo-topbar-ambient path:nth-child(3) {
+  stroke: rgb(24 24 21 / 0.05);
+}
+
+:root[data-theme='light'] .felixo-command-trigger {
+  background: rgb(255 255 255 / 0.86);
+}
+
+:root[data-theme='light'] .felixo-command-trigger:hover,
+:root[data-theme='light'] .felixo-command-trigger:focus-visible {
+  background: #ffffff;
+}
+
+:root[data-theme='light'] .felixo-workbench-sidebar,
+:root[data-theme='light'] .felixo-elements-inspector {
+  background: linear-gradient(180deg, #fafaf8 0%, var(--f-core-black-surface) 34%, #f0f0ed 100%);
+}
+
+:root[data-theme='light'] .felixo-sidebar-header,
+:root[data-theme='light'] .felixo-elements-inspector > div:first-child {
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.7), rgb(255 255 255 / 0.25));
+}
+
+:root[data-theme='light'] .felixo-activity-rail {
+  background: rgb(233 233 230 / 0.9);
+}
+
+:root[data-theme='light'] .felixo-field-label {
+  color: #626266;
+}
+
+:root[data-theme='light'] .felixo-select-chevron {
+  color: #6c6c70;
+}
+
+:root[data-theme='light'] .felixo-select-menu-label {
+  color: #68686c;
+}
+
+:root[data-theme='light'] .felixo-select-search {
+  color: #6c6c70;
+}
+
+:root[data-theme='light'] .felixo-select-search input::placeholder {
+  color: #919195;
+}
+
+:root[data-theme='light'] .felixo-select-option {
+  color: #2a2a2c;
+}
+
+:root[data-theme='light'] .felixo-select-option.is-disabled {
+  color: #9f9f9b;
+}
+
+:root[data-theme='light'] .felixo-select-option-icon {
+  color: #5c5c58;
+}
+
+:root[data-theme='light'] .felixo-select-option-description,
+:root[data-theme='light'] .felixo-select-option-meta {
+  color: #6c6c68;
+}
+
+:root[data-theme='light'] .felixo-select-option-meta {
+  color: #7a7a76;
+}
+
+:root[data-theme='light'] .felixo-select-empty {
+  color: #85857f;
+}
+
+/* Marcado, o checkbox vira tinta; o visto precisa ser papel. */
+:root[data-theme='light'] .felixo-checkbox::before {
+  border-right-color: var(--f-core-black-deep);
+  border-bottom-color: var(--f-core-black-deep);
+}
+
+:root[data-theme='light'] .felixo-checkbox-meta {
+  color: #73736f;
+}
+
+:root[data-theme='light'] .felixo-file-picker-button {
+  background: #efefec;
+  color: #3b3b39;
+}
+
+:root[data-theme='light'] .felixo-file-picker-button:hover,
+:root[data-theme='light'] .felixo-file-picker-button:focus-visible {
+  background: #e6e6e3;
+}
+
+:root[data-theme='light'] .felixo-secondary-action {
+  background: #efefec;
+  color: #2d2d2b;
+}
+
+:root[data-theme='light'] .felixo-secondary-action:hover:not(:disabled) {
+  background: #e5e5e2;
+}
+
+:root[data-theme='light'] .felixo-composer {
+  background: #ffffff;
+}
+
+:root[data-theme='light'] .felixo-composer textarea::placeholder {
+  color: #96969a;
+}
+
+:root[data-theme='light'] .felixo-sidebar-session-time {
+  color: #88888c;
+}
+
+:root[data-theme='light'] .felixo-activity-empty {
+  color: #8c8c90;
+}
+
+:root[data-theme='light'] .felixo-composer-hints {
+  color: #88888c;
+}
+
+:root[data-theme='light'] .felixo-composer-hints strong {
+  color: #58585c;
+}
+
+:root[data-theme='light'] .felixo-sidebar-model-vendor {
+  color: #838388;
+}
+
+/* A nota usa a superfície do cartão (a regra .felixo-canvas-card vence o
+   `bg-[#...]` de note-colors.ts), então no claro ela é cartão claro com o texto
+   escuro de note-colors. Só o placeholder (preto a 35%, que o preto mais fraco
+   do claro deixaria quase invisível) e o anel das cores precisam de ajuda. */
+:root[data-theme='light'] .felixo-canvas-card-note textarea::placeholder {
+  color: var(--control-placeholder);
+}
+
+:root[data-theme='light'] .felixo-note-swatch {
+  --tw-ring-color: rgb(20 20 22 / 0.28);
+}
+
+:root[data-theme='light'] .felixo-note-swatch[aria-pressed='true'] {
+  --tw-ring-color: rgb(20 20 22 / 0.75);
+}
+
+/* Bloco de arquivo e página web: no escuro o corpo sobe um degrau (cinza
+   estrutural sobre o grafite). No claro, subir é ir para o branco: o corpo
+   vira a folha onde o texto mora. */
+:root[data-theme='light'] .felixo-canvas-card-file > .nodrag,
+:root[data-theme='light'] .felixo-canvas-card-web > .nodrag,
+:root[data-theme='light'] .felixo-canvas-card-file textarea,
+:root[data-theme='light'] .felixo-canvas-card-file pre,
+:root[data-theme='light'] .felixo-canvas-card-file .markdown-content,
+:root[data-theme='light'] .felixo-canvas-card-web input {
+  background-color: var(--f-surface-floating);
 }

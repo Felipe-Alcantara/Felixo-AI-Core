@@ -440,7 +440,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
         type="button"
         onClick={() => nodeData.onExpand?.(id)}
         data-terminal-expand-trigger={id}
-        className="felixo-node-preview nodrag nowheel nopan flex min-h-0 flex-1 flex-col gap-1 p-2 text-left"
+        className="felixo-node-preview felixo-paleta-escura nodrag nowheel nopan flex min-h-0 flex-1 flex-col gap-1 p-2 text-left"
         aria-label={`Abrir ${nodeData.label || provider.label}`}
       >
         <ActivityBadge
