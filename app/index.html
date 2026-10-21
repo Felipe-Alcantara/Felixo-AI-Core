@@ -7,6 +7,19 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/brand/favicons/favicon-180.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Felixo AI Core</title>
+    <script>
+      // Aplica o tema salvo antes da primeira pintura. Sem isto, quem usa o
+      // tema claro vê a tela de boot preta até o React montar. A chave é a de
+      // src/features/shared/theme/theme-storage.ts (um teste confere).
+      try {
+        var temaSalvo = window.localStorage.getItem('felixo-ai-core.theme')
+        if (temaSalvo === 'light' || temaSalvo === 'high_contrast') {
+          document.documentElement.dataset.theme = temaSalvo
+        }
+      } catch (erro) {
+        // Sem localStorage o boot segue no escuro, como sempre foi.
+      }
+    </script>
   </head>
   <body>
     <!--
@@ -69,6 +82,22 @@
 
       html[data-felixo-app-ready='true'] #boot-fallback {
         display: none;
+      }
+
+      html[data-theme='light'],
+      html[data-theme='light'] body,
+      html[data-theme='light'] #boot-fallback {
+        color: #1b1b1d;
+        background: #f3f3f1;
+      }
+
+      html[data-theme='light'] #boot-fallback-message {
+        color: #57575a;
+      }
+
+      html[data-theme='light'] #boot-retry {
+        color: #f3f3f1;
+        background: #141416;
       }
     </style>
     <script>

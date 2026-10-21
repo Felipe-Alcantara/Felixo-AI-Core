@@ -19,15 +19,11 @@ import { PerformanceModeSection } from '../../../shared/performance/PerformanceM
 import { DictationSettingsSection } from './DictationSettingsSection'
 import { ClaudeTerminalScrollSection } from './ClaudeTerminalScrollSection'
 import { SystemDesignSettingsSection } from '../../../shared/system-design/SystemDesignSettingsSection'
-import { FelixoSelect, type FelixoSelectOption } from '../../../shared/components/FelixoSelect'
+import { FelixoSelect } from '../../../shared/components/FelixoSelect'
 import { FelixoToggle } from '../../../shared/components/FelixoToggle'
 import { useAppTheme } from '../../../shared/theme/theme-context'
 import type { AppTheme } from '../../../shared/theme/theme-storage'
-
-const THEME_OPTIONS: FelixoSelectOption[] = [
-  { value: 'dark', label: 'Escuro' },
-  { value: 'high_contrast', label: 'Alto contraste' },
-]
+import { THEME_OPTIONS } from '../../../shared/theme/theme-options'
 
 type SettingsPanelProps = {
   onClose: () => void

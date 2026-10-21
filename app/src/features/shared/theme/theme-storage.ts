@@ -1,6 +1,9 @@
-export type AppTheme = 'dark' | 'high_contrast'
+export type AppTheme = 'dark' | 'light' | 'high_contrast'
 
-const THEME_STORAGE_KEY = 'felixo-ai-core.theme'
+/** Também lida pelo script do `<head>` do index.html, antes do React montar. */
+export const THEME_STORAGE_KEY = 'felixo-ai-core.theme'
+
+const APP_THEMES: readonly AppTheme[] = ['dark', 'light', 'high_contrast']
 
 export function loadTheme(): AppTheme {
   try {
@@ -20,5 +23,5 @@ export function saveTheme(theme: AppTheme) {
 }
 
 export function isAppTheme(value: unknown): value is AppTheme {
-  return value === 'dark' || value === 'high_contrast'
+  return (APP_THEMES as readonly unknown[]).includes(value)
 }

@@ -2,18 +2,14 @@ import { BrainCircuit, MonitorCog, Palette, Save, User, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import type { AppTheme, OrchestratorMode, OrchestratorSettings } from '../types'
-import { FelixoSelect, type FelixoSelectOption } from '../../shared/components/FelixoSelect'
+import { FelixoSelect } from '../../shared/components/FelixoSelect'
 import { FelixoToggle } from '../../shared/components/FelixoToggle'
 import { GraphicsRecoverySection } from '../../shared/graphics/GraphicsRecoverySection'
 import { PerformanceModeSection } from '../../shared/performance/PerformanceModeSection'
 import { SystemDesignSettingsSection } from '../../shared/system-design/SystemDesignSettingsSection'
 import { DialogResizeHandles } from '../../shared/dialog/DialogResizeHandles'
 import { useResizableDialog } from '../../shared/dialog/useResizableDialog'
-
-const THEME_OPTIONS: FelixoSelectOption[] = [
-  { value: 'dark', label: 'Escuro' },
-  { value: 'high_contrast', label: 'Alto contraste' },
-]
+import { THEME_OPTIONS } from '../../shared/theme/theme-options'
 
 type FelixoSettingsModalProps = {
   isOpen: boolean

@@ -87,11 +87,14 @@ test('script externo e script dentro de comentário não entram nos hashes', () 
   assert.deepEqual(extractInlineScripts(html), ['conta()'])
 })
 
-test('o script inline do index.html real recebe hash', () => {
+test('os scripts inline do index.html real recebem hash', () => {
   const scripts = extractInlineScripts(INDEX_HTML)
-  assert.equal(scripts.length, 1)
-  assert.match(scripts[0], /boot-retry/)
-  assert.deepEqual(hashInlineScripts(INDEX_HTML), [hashInlineScript(scripts[0])])
+  // O do <head> aplica o tema salvo antes da primeira pintura; o do <body>
+  // liga o botão "Recarregar interface" do fallback de boot.
+  assert.equal(scripts.length, 2)
+  assert.match(scripts[0], /felixo-ai-core\.theme/)
+  assert.match(scripts[1], /boot-retry/)
+  assert.deepEqual(hashInlineScripts(INDEX_HTML), scripts.map(hashInlineScript))
 })
 
 test('as diretivas perigosas estão fechadas', () => {
