@@ -14,6 +14,7 @@ const os = require('node:os')
 const path = require('node:path')
 const { spawn, spawnSync } = require('node:child_process')
 const { ensureManagedCliRuntime } = require('../electron/services/managed-cli-runtime.cjs')
+const { findPackagedElectronDir, runInstallerKillSmoke } = require('./installer-kill-smoke.cjs')
 
 const CLI_PACKAGE_NAME = 'felixo-release-smoke-cli'
 const CLI_COMMAND_NAME = 'felixo-release-smoke-cli'
@@ -77,6 +78,17 @@ async function main(argv = process.argv.slice(2)) {
       temporaryRoot,
       timeoutMs: options.timeoutMs,
     })
+
+    // Cancelar e expirar a instalação pelo app empacotado não pode deixar processo
+    // para trás (PR #84, `core/process-tree.cjs`): é o único lugar onde isso é
+    // exercitado contra o `app.asar` e o npm do pacote, nos três sistemas.
+    report.installerKill = await runInstallerKillSmoke({
+      executable: prepared.executable,
+      electronDir: findPackagedElectronDir(prepared.resourcesPath),
+      npmCliPath: path.join(prepared.resourcesPath, 'npm-runtime', 'npm', 'bin', 'npm-cli.js'),
+      temporaryRoot,
+      timeoutMs: options.timeoutMs,
+    })
     report.result = 'passed'
   } catch (error) {
     report.result = 'failed'
@@ -92,6 +104,9 @@ async function main(argv = process.argv.slice(2)) {
     if (error?.status?.pty) report.pty = error.status.pty
     if (error?.status?.contextDelivery) report.contextDelivery = error.status.contextDelivery
     if (error?.status?.appVersion) report.appVersion = error.status.appVersion
+    // Mesma razão: o veredito por cenário (quem sobrou, em quanto tempo) é o que
+    // diz se o kill falhou ou se a árvore nem foi observada.
+    if (error?.installerKill) report.installerKill = error.installerKill
   } finally {
     if (temporaryRoot && !options.keepTemp) {
       removeTemporaryDirectory(temporaryRoot)
@@ -178,6 +193,7 @@ function createEmptyReport() {
     pty: null,
     contextDelivery: null,
     npmRuntime: null,
+    installerKill: null,
     nativeErrors: [],
     result: 'failed',
     error: null,

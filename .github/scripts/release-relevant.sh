@@ -44,6 +44,8 @@ is_release_input() {
     # gerenciador e o smoke do canvas no pacote saíram do Release em
     # 19/10/2026; mudar só eles não publica instalador.
     app/scripts/release-smoke.cjs|app/scripts/package-inventory.cjs) return 0 ;;
+    # Cenário de matar a árvore do instalador, carregado pelo release-smoke.cjs.
+    app/scripts/installer-kill-smoke.cjs) return 0 ;;
     # Gate do Windows: atualização silenciosa com o app aberto.
     app/scripts/windows/reproduzir-nsis-app-aberto.ps1) return 0 ;;
     # Normalização de fim de linha: muda os bytes que o checkout do runner

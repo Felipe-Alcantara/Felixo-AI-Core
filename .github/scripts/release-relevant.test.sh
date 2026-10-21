@@ -57,6 +57,8 @@ esperar true "hook afterPack do electron-builder" $'app/scripts/fix-native-pty-p
 esperar true "script NSIS próprio (nsis.include)" $'app/installer/instalador.nsh\n'
 esperar true "gate do Windows: atualização silenciosa com o app aberto" $'app/scripts/windows/reproduzir-nsis-app-aberto.ps1\n'
 esperar true "smoke do artefato (gate do release)" $'app/scripts/release-smoke.cjs\n'
+esperar true "cenário de matar a árvore do instalador (carregado pelo smoke do release)" $'app/scripts/installer-kill-smoke.cjs\n'
+esperar false "teste do cenário de matar a árvore do instalador" $'app/scripts/installer-kill-smoke.test.cjs\n'
 esperar false "bancada de gerenciadores (só no Nightly desde 19/10/2026)" $'app/scripts/npm-runtime-performance.cjs\n'
 esperar true "script de versão usado no finalize" $'.github/scripts/release-version.sh\n'
 esperar false "seleção de gerenciadores (só no Nightly desde 19/10/2026)" $'app/scripts/package-manager-selection.cjs\n'
