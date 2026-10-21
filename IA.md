@@ -21,6 +21,7 @@
   `IA.md`, divisão do README e o Agente na nuvem no menu Agente) foram enviados à `main`
   (`e7b7efe..d952f5b`) e o CI de `d952f5b` passou nos 22 jobs, inclusive esse exploratório do Windows.
 - **Claude por chave de API:** conta do Claude por chave abre um bloco de conversa (Claude Code sem tela, que usa o crédito promocional do Agent SDK); ver a entrada de 2026-10-19.
+- **Memória de longo prazo (ai-memory, 2026-10-21):** instalado na máquina (serviço no logon, MCP e hooks por usuário no Claude Code, Codex e Copilot). Este repositório tem o bloco gerenciado no `CLAUDE.md` e no `AGENTS.md` e as skills `ai-memory-*`; a captura vale para todos os projetos e a entrega dos eventos acontece nas fronteiras da sessão. Ver a entrada de 2026-10-21 "ai-memory instalado".
 - **Em andamento:** nada aberto no código nesta entrega. Em toda abertura (também na execução da
   fonte), a rodada das CLIs busca a versão mais nova publicada de Claude, Codex e Gemini, inclusive
   pré-lançamento, e atualiza a cópia do app e a do npm global, mesmo com a CLI aberta (o npm troca
@@ -2232,3 +2233,13 @@ O que dá para limitar é o que ele captura. A pessoa escolheu capturar todos.
   não diz se isso desfaz o PATH e as configurações dos agentes; as cópias de segurança servem para isso.
 - **Não validado:** as ferramentas MCP (`memory_*`) numa sessão nova, a recuperação de memória entre
   sessões, o Codex e o Copilot funcionando de fato (só foram ligados), e a instalação em macOS e Linux.
+
+**Correção (mesmo dia).** O trecho acima sobre o spool está errado. Os eventos não foram para
+`hook-spool/` por estouro de tempo na primeira subida: o hook nativo **sempre** grava o evento no
+spool local, para nunca prender o agente na rede, e a entrega é feita por um `hook-drain` separado,
+nas fronteiras da sessão (descrito em `docs/ARCHITECTURE.md` do ai-memory).
+- **Medido depois:** os eventos desta sessão ficaram parados no spool (4 itens, só envelhecendo, por
+  30 s), com o servidor saudável. `ai-memory hook-drain` entregou tudo (spool de 20 para 0) e o
+  `ai-memory status` passou a mostrar a sessão e as observações.
+- **Consequência:** `hook spool: N event(s) waiting` no `doctor` é normal durante a sessão.
+- **Continua não validado:** a drenagem automática no fim da sessão.
