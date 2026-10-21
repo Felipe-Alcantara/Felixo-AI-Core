@@ -4,6 +4,7 @@ const {
   createLineSplitter,
   translateClaudeStreamMessage,
 } = require('./claude-stream-events.cjs')
+const { buildClaudeApiUserContent, normalizeClaudeApiImages } = require('./claude-api-images.cjs')
 
 /**
  * Bloco de conversa do Claude por chave de API.
@@ -314,10 +315,18 @@ function createClaudeApiSessionManager({
     session.idleTimer?.unref?.()
   }
 
-  function send(sessionId, text) {
+  /**
+   * @param {string} text
+   * @param {unknown} [rawImages] - Imagens coladas no bloco (`{ mediaType, data }` em base64).
+   *   Com imagem, o texto pode vir vazio.
+   */
+  function send(sessionId, text, rawImages) {
     const session = sessions.get(sessionId)
     if (!session) return { ok: false, message: 'O bloco não está aberto.' }
-    if (typeof text !== 'string' || !text.trim()) return { ok: false, message: 'Mensagem vazia.' }
+    if (typeof text !== 'string') return { ok: false, message: 'Mensagem vazia.' }
+    const images = normalizeClaudeApiImages(rawImages)
+    if (!images.ok) return { ok: false, message: images.message }
+    if (!text.trim() && images.images.length === 0) return { ok: false, message: 'Mensagem vazia.' }
     if (text.length > MAX_MENSAGEM) return { ok: false, message: 'Mensagem grande demais.' }
     if (!session.child) {
       try {
@@ -333,7 +342,7 @@ function createClaudeApiSessionManager({
     }
     const ok = writeLine(session, {
       type: 'user',
-      message: { role: 'user', content: text },
+      message: { role: 'user', content: buildClaudeApiUserContent(text, images.images) },
     })
     return ok ? { ok: true } : { ok: false, message: 'O Claude Code não está aceitando mensagens.' }
   }

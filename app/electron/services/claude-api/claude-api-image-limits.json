@@ -1,0 +1,6 @@
+{
+  "types": ["image/png", "image/jpeg", "image/gif", "image/webp"],
+  "maxImagesPerMessage": 10,
+  "maxBase64Chars": 5242880,
+  "maxDimension": 8000
+}

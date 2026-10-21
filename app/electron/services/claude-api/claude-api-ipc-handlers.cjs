@@ -73,7 +73,10 @@ function registerClaudeApiIpcHandlers({ ipcMain, manager, sessions }) {
     if (!isRecord(payload) || typeof payload.sessionId !== 'string' || typeof payload.text !== 'string') {
       return invalid
     }
-    return safeCall(() => manager.send(payload.sessionId, payload.text), 'Não foi possível enviar.')
+    // Imagens seguem como vieram (só se for lista): quem valida tipo, bytes e
+    // tamanho é o gerenciador, em claude-api-images.cjs.
+    const images = Array.isArray(payload.images) ? payload.images : undefined
+    return safeCall(() => manager.send(payload.sessionId, payload.text, images), 'Não foi possível enviar.')
   })
 
   ipcMain.handle('claude-api:respond-permission', (_event, payload) => {

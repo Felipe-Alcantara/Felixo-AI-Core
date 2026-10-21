@@ -65,3 +65,33 @@ test('o histórico volta no formato do bloco, sem subagente, aviso sintético ne
     env.cleanup()
   }
 })
+
+test('mensagem com imagem volta com a contagem; conversa que começa só com imagem aparece na lista', () => {
+  const env = setup()
+  try {
+    const C = '3d985751-0f2c-43e3-a155-d76504eb8540'
+    const dir = path.join(env.configDir, 'projects', encodeProjectDir(env.cwd))
+    const imagem = { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'iVBORw0K' } }
+    const linhas = [
+      { type: 'user', message: { role: 'user', content: [imagem, imagem] } },
+      // O Claude Code grava também uma entrada interna com o caminho da imagem.
+      { type: 'user', isMeta: true, message: { content: [{ type: 'text', text: '[Image: source: /tmp/imagens/1.png]' }] } },
+      { type: 'assistant', message: { model: 'm', content: [{ type: 'text', text: 'Duas capturas.' }] } },
+      { type: 'user', message: { role: 'user', content: [imagem, { type: 'text', text: 'E esta?' }] } },
+    ]
+    fs.writeFileSync(path.join(dir, `${C}.jsonl`), linhas.map((l) => JSON.stringify(l)).join('\n'))
+    fs.utimesSync(path.join(dir, `${C}.jsonl`), new Date('2026-10-20T10:00:00Z'), new Date('2026-10-20T10:00:00Z'))
+
+    assert.deepEqual(readClaudeApiTranscript({ configDir: env.configDir, cwd: env.cwd, sessionId: C }), [
+      { role: 'user', text: '', images: 2 },
+      { role: 'assistant', text: 'Duas capturas.' },
+      { role: 'user', text: 'E esta?', images: 1 },
+    ])
+    const lista = listClaudeApiSessions({ configDir: env.configDir, cwd: env.cwd })
+    const conversa = lista.find((s) => s.sessionId === C)
+    assert.equal(conversa.firstPrompt, '(2 imagens)')
+    assert.equal(conversa.turns, 2)
+  } finally {
+    env.cleanup()
+  }
+})

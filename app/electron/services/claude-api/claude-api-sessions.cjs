@@ -55,6 +55,26 @@ function userText(entry) {
   return text || null
 }
 
+/** Imagens que a pessoa colou na mensagem (o bloco manda em base64). */
+function userImageCount(entry) {
+  if (entry?.type !== 'user' || entry.isMeta || entry.isSidechain) return 0
+  const content = entry.message?.content
+  if (!Array.isArray(content) || content.some((part) => part?.type === 'tool_result')) return 0
+  return content.filter((part) => part?.type === 'image').length
+}
+
+/** O que a pessoa mandou: texto e quantas imagens. `null` quando não é mensagem dela. */
+function userMessage(entry) {
+  const text = userText(entry)
+  const images = userImageCount(entry)
+  if (text === null && images === 0) return null
+  return { text: text ?? '', images }
+}
+
+function describeImages(count) {
+  return count === 1 ? '(1 imagem)' : `(${count} imagens)`
+}
+
 function clip(text, max = MAX_TEXT) {
   return text.length > max ? `${text.slice(0, max)}\n… (texto cortado)` : text
 }
@@ -91,7 +111,10 @@ function listClaudeApiSessions({ configDir, cwd, fileSystem = fs }) {
     } catch {
       continue
     }
-    const prompts = entries.map(userText).filter((text) => text && !text.startsWith('<'))
+    const prompts = entries
+      .map(userMessage)
+      .filter((message) => message && !message.text.startsWith('<'))
+      .map((message) => message.text || describeImages(message.images))
     if (prompts.length === 0) continue
     sessions.push({
       sessionId,
@@ -107,7 +130,7 @@ function listClaudeApiSessions({ configDir, cwd, fileSystem = fs }) {
  * Histórico de uma conversa, no formato que o bloco já entende.
  *
  * @returns {Array<
- *   | { role: 'user', text: string }
+ *   | { role: 'user', text: string, images?: number }
  *   | { role: 'assistant', text: string }
  *   | { role: 'tool', toolUseId: string, name: string, input: Record<string, unknown> }
  *   | { role: 'tool-result', toolUseId: string, isError: boolean, text: string }
@@ -126,9 +149,9 @@ function readClaudeApiTranscript({ configDir, cwd, sessionId, fileSystem = fs })
   const out = []
   for (const entry of parseLines(text)) {
     if (entry.isSidechain) continue
-    const typed = userText(entry)
+    const typed = userMessage(entry)
     if (typed !== null) {
-      out.push({ role: 'user', text: clip(typed) })
+      out.push({ role: 'user', text: clip(typed.text), ...(typed.images ? { images: typed.images } : {}) })
       continue
     }
     const content = entry.message?.content

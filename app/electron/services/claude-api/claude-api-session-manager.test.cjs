@@ -192,7 +192,7 @@ test('borda IPC repassa só campos conhecidos e recusa formato errado', async ()
     ipcMain: { handle: (channel, fn) => handlers.set(channel, fn) },
     manager: {
       start: (p) => (calls.push(['start', p]), { ok: true }),
-      send: (s, t) => (calls.push(['send', s, t]), { ok: true }),
+      send: (s, t, i) => (calls.push(['send', s, t, i]), { ok: true }),
       respondPermission: (s, r, d) => (calls.push(['perm', s, r, d]), { ok: true }),
       interrupt: () => ({ ok: true }),
       stop: () => {
@@ -208,6 +208,34 @@ test('borda IPC repassa só campos conhecidos e recusa formato errado', async ()
   assert.deepEqual(calls[1][3], { allow: true, input: { a: 1 }, message: undefined })
   assert.deepEqual(await handlers.get('claude-api:stop')(null, 'b'), { ok: false, message: 'quebrou' })
   assert.deepEqual(await handlers.get('claude-api:send')(null, { sessionId: 'b' }), { ok: false, message: 'Pedido inválido.' })
+  // Imagens passam como vieram: quem valida é o gerenciador.
+  const imagens = [{ mediaType: 'image/png', data: 'iVBORw0K' }]
+  await handlers.get('claude-api:send')(null, { sessionId: 'b', text: '', images: imagens })
+  assert.deepEqual(calls.at(-1), ['send', 'b', '', imagens])
+  await handlers.get('claude-api:send')(null, { sessionId: 'b', text: 'oi', images: 'não é lista' })
+  assert.deepEqual(calls.at(-1), ['send', 'b', 'oi', undefined])
+})
+
+test('mensagem com imagem vai como blocos; só imagem vale; imagem inválida não escreve nada', async () => {
+  const { manager, spawned } = setup()
+  manager.start({ sessionId: 'bloco-img', accountId: 'conta', cwd: '/projeto' })
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).toString('base64')
+  assert.equal(manager.send('bloco-img', 'o que é isto?', [{ mediaType: 'image/png', data: png }]).ok, true)
+  assert.equal(manager.send('bloco-img', '', [{ mediaType: 'image/png', data: png }]).ok, true)
+  const recusada = manager.send('bloco-img', 'e isto?', [{ mediaType: 'image/jpeg', data: png }])
+  assert.equal(recusada.ok, false)
+  assert.match(recusada.message, /não é uma imagem JPEG/)
+  assert.equal(manager.send('bloco-img', '   ', []).ok, false)
+  await tick()
+  const [{ child }] = spawned
+  assert.equal(child.written.length, 2)
+  assert.deepEqual(child.written[0].message.content, [
+    { type: 'image', source: { type: 'base64', media_type: 'image/png', data: png } },
+    { type: 'text', text: 'o que é isto?' },
+  ])
+  assert.deepEqual(child.written[1].message.content, [
+    { type: 'image', source: { type: 'base64', media_type: 'image/png', data: png } },
+  ])
 })
 
 test('start repetido com o id da sessão não reabre o processo; trocar o modelo reabre', () => {
