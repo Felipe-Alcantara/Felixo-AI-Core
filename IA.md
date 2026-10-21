@@ -2304,3 +2304,25 @@ real com neto real, mas não passa pelo `app.asar`, pelo npm do pacote nem pelo 
   real do npm, que passa pelo `cmd.exe`, o controle deixa órfão de verdade, como medido acima.
 - **Não validado:** macOS real e Linux real (a task pede os dois; só o CI, que não conta como "fora do
   CI", os cobre) e o cenário no Release do CI nos três SOs, que roda pela primeira vez neste push.
+
+**Acompanhamento do deploy (mesmo dia): o cenário achou um defeito no POSIX.**
+- **Release 39669539091 (primeiro com o cenário):** Windows passou. No macOS e no Ubuntu o kill FUNCIONOU
+  (0 sobreviventes nos dois cenários), mas o cenário reprovou porque o resultado veio `failed`, não
+  `cancelled`/`timeout`; a publicação ficou `skipped` e a v0.1.471 continuou a atual.
+- **Causa (`managed-cli-installer.cjs`, `runCommand`):** no POSIX o `killProcessTree` manda SIGTERM, o npm
+  morre na hora e o `close` dele chega enquanto o kill ainda espera os 2 s antes do SIGKILL. Quem resolvia
+  era o `close`, com "(codigo null)", sem `cancelled` e ANTES de a árvore terminar de morrer
+  (`resolvedAfterMs` de 25 ms no relatório do CI). A resolução do `finishAfterKill` era descartada. Os
+  testes existentes usavam um `killTree` que resolve na hora e um filho que nunca emite `close`, por isso
+  não pegavam. No Windows a ordem dos eventos não dispara a corrida.
+- **Conserto:** `killing` — quem mata a árvore é quem resolve (`close` durante o kill é ignorado) e um
+  `killTree` que rejeita não deixa a instalação pendurada (antes virava rejeição não tratada e a promessa
+  nunca resolvia). Efeito: no POSIX cancelar e expirar agora resolvem depois do SIGKILL de escalada
+  (uns 2 s), como o comentário do próprio `runCommand` já prometia.
+- **Prova:** 3 testes novos que FALHAM no código antigo (✖✖✖; o do `killTree` que rejeita pendurava o
+  processo de teste por 10 min, o tempo do timer de instalação) e passam no novo. No Windows, `app.asar`
+  novo (com o conserto dentro) e cenário de novo contra o app empacotado: `cancel` → `cancelled` em 162 ms,
+  `timeout` → `timeout`, 0 sobreviventes; controle com 2 sobreviventes.
+- **Intermitência registrada:** `npm test` fez 6 rodadas completas hoje, 2 com 1 falha cada, em testes
+  diferentes de `fetch-all` (`analyzeRepo ... pendentes de pull` e `executePlan faz o push ...`); cada um
+  passa 3 de 3 isolado. Não tem relação com o instalador.
