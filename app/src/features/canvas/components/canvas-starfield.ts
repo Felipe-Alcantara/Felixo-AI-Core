@@ -63,7 +63,10 @@ export function createStarField(layer: StarLayer): string {
     const x = Math.round(random() * STARFIELD_SPREAD)
     const y = Math.round(random() * STARFIELD_TILE)
     const alpha = (minAlpha + random() * (maxAlpha - minAlpha)).toFixed(2)
-    stars.push(`${x}px ${y}px rgba(255, 255, 255, ${alpha})`)
+    // Tinta do tema, não branco fixo: no claro a estrela vira um ponto de
+    // grafite, e `--f-star-strength` a deixa fraca o bastante para não parecer
+    // sujeira no papel. No escuro a força é 1 e o céu fica como sempre foi.
+    stars.push(`${x}px ${y}px rgb(var(--f-ink-rgb) / calc(${alpha} * var(--f-star-strength)))`)
   }
   return stars.join(', ')
 }

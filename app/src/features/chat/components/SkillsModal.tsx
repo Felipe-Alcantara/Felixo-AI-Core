@@ -249,7 +249,7 @@ export function SkillsModal({
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 placeholder="Django REST"
-                className="mt-1 h-10 w-full rounded-2xl border border-white/8 bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
+                className="mt-1 h-10 w-full rounded-2xl border border-white/8 bg-(--f-chat-field) px-3 text-sm text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
               />
             </label>
 
@@ -259,7 +259,7 @@ export function SkillsModal({
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
                 placeholder="Quando aplicar"
-                className="mt-1 h-10 w-full rounded-2xl border border-white/8 bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
+                className="mt-1 h-10 w-full rounded-2xl border border-white/8 bg-(--f-chat-field) px-3 text-sm text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
               />
             </label>
 
@@ -270,7 +270,7 @@ export function SkillsModal({
                 onChange={(event) => setPrompt(event.target.value)}
                 placeholder="Instrucao persistente da skill"
                 rows={8}
-                className="mt-1 min-h-44 w-full resize-none rounded-2xl border border-white/8 bg-[#1a1a19] px-3 py-2 text-sm leading-relaxed text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
+                className="mt-1 min-h-44 w-full resize-none rounded-2xl border border-white/8 bg-(--f-chat-field) px-3 py-2 text-sm leading-relaxed text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
               />
             </label>
 

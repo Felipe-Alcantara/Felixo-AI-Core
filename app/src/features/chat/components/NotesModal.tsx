@@ -204,7 +204,7 @@ export function NotesModal({
                       updatedAt: new Date().toISOString(),
                     })
                   }
-                  className="mb-3 h-10 w-full rounded-2xl border border-white/8 bg-[#1a1a19] px-3 text-sm font-medium text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
+                  className="mb-3 h-10 w-full rounded-2xl border border-white/8 bg-(--f-chat-field) px-3 text-sm font-medium text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
                 />
                 <textarea
                   value={selectedNote.content}
@@ -215,7 +215,7 @@ export function NotesModal({
                       updatedAt: new Date().toISOString(),
                     })
                   }
-                  className="min-h-0 flex-1 resize-none rounded-2xl border border-white/8 bg-[#1a1a19] px-3 py-3 font-mono text-[13px] leading-relaxed text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
+                  className="min-h-0 flex-1 resize-none rounded-2xl border border-white/8 bg-(--f-chat-field) px-3 py-3 font-mono text-[13px] leading-relaxed text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
                 />
                 <div className="mt-3 flex flex-wrap justify-end gap-2">
                   <button

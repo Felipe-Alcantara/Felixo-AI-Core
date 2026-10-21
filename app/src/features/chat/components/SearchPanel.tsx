@@ -66,7 +66,7 @@ export function SearchPanel({
     // lixeira dela — sem nada visível. Mesmo recurso da sidebar do canvas.
     <div
       className={[
-        'absolute inset-0 z-20 flex flex-col bg-[#272727]',
+        'absolute inset-0 z-20 flex flex-col bg-(--f-chat-search)',
         'transition-opacity duration-200',
         isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none',
       ].join(' ')}

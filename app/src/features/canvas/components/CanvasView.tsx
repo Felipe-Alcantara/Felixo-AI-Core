@@ -635,15 +635,19 @@ function CanvasInner({
             width={props.width}
             height={props.height}
             rx={props.borderRadius}
-            fill={props.color || '#3f3f46'}
-            stroke={props.strokeColor || '#52525b'}
+            // Por `style`, não por atributo: as cores são `var(--f-minimap-*)`,
+            // e atributo de apresentação do SVG não resolve variável CSS.
+            style={{
+              fill: props.color || '#3f3f46',
+              stroke: props.strokeColor || '#52525b',
+            }}
             strokeWidth={props.strokeWidth}
           />
           {label && (
             <text
               x={props.x + 5}
               y={props.y + props.height / 2}
-              fill="#f4f4f5"
+              style={{ fill: 'var(--f-minimap-label)' }}
               fontSize={labelFontSize}
               fontWeight="600"
               fontFamily="sans-serif"
@@ -2379,7 +2383,7 @@ function CanvasInner({
           panActivationKeyCode={null}
           className={canvasMode === 'pan' ? 'cursor-grab' : ''}
         >
-          <Background gap={32} size={1} color="rgba(237, 237, 234, 0.07)" />
+          <Background gap={32} size={1} color="var(--f-canvas-dot)" />
           {/* Pílula `− 100% +` no formato da prancha da marca. O offset da
               esquerda recolhe via `:has()` quando a sidebar vira trilho (ver
               index.css), sem estado extra aqui. */}
@@ -2406,10 +2410,11 @@ function CanvasInner({
                 width: miniMap.width,
                 height: miniMap.height,
               }}
-              bgColor="#0a0a0a"
-              maskColor="rgba(5, 5, 5, 0.66)"
-              nodeColor="#262626"
-              nodeStrokeColor="#858585"
+              // Cores por token: o minimapa acompanha o tema (index.css).
+              bgColor="var(--f-minimap-bg)"
+              maskColor="var(--f-minimap-mask)"
+              nodeColor="var(--f-minimap-node)"
+              nodeStrokeColor="var(--f-minimap-node-stroke)"
               nodeComponent={miniMapNode}
             />
           )}

@@ -128,7 +128,7 @@ export function ProjectsModal({
     >
       <div
         {...dialog.frameProps}
-        className="relative flex w-full max-w-lg flex-col rounded-2xl border border-white/8 bg-[#1e1e1d] shadow-2xl"
+        className="relative flex w-full max-w-lg flex-col rounded-2xl border border-white/8 bg-(--f-chat-dialog-alt) shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

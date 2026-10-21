@@ -130,7 +130,7 @@ export function QaLoggerPanel({
     <section
       style={{ height }}
       className={[
-        'relative shrink-0 border-t border-white/8 bg-[#10100f] text-zinc-300',
+        'relative shrink-0 border-t border-white/8 bg-(--f-chat-log) text-zinc-300',
         dragging ? '' : 'transition-[height] duration-300 ease-in-out',
       ].join(' ')}
     >

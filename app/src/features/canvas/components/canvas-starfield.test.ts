@@ -15,7 +15,14 @@ describe('createStarField', () => {
   })
 
   it('emits exactly one shadow per star', () => {
-    expect(createStarField(farLayer).split('px rgba').length - 1).toBe(farLayer.count)
+    expect(createStarField(farLayer).split('px rgb(').length - 1).toBe(farLayer.count)
+  })
+
+  it('paints the stars with the theme ink, so the light theme can dim them', () => {
+    const [firstStar] = createStarField(farLayer).split(', ')
+    expect(firstStar).toMatch(
+      /^\d+px \d+px rgb\(var\(--f-ink-rgb\) \/ calc\(0\.\d\d \* var\(--f-star-strength\)\)\)$/,
+    )
   })
 
   it('keeps every star inside the tile it loops over', () => {

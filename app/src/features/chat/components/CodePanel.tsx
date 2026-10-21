@@ -204,7 +204,7 @@ export function CodePanel({
     >
       <section
         {...dialog.frameProps}
-        className="relative flex max-h-[86vh] w-full max-w-[820px] flex-col rounded-3xl border border-white/10 bg-[#242423] shadow-shell"
+        className="relative flex max-h-[86vh] w-full max-w-[820px] flex-col rounded-3xl border border-white/10 bg-(--f-chat-dialog) shadow-shell"
         onClick={(event) => event.stopPropagation()}
       >
         <header className="flex items-center justify-between border-b border-white/8 px-5 py-4">
@@ -279,7 +279,7 @@ export function CodePanel({
               value={commitMessage}
               onChange={(event) => setCommitMessage(event.target.value)}
               placeholder="Mensagem do commit"
-              className="h-10 min-w-0 rounded-2xl border border-white/8 bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
+              className="h-10 min-w-0 rounded-2xl border border-white/8 bg-(--f-chat-field) px-3 text-sm text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
             />
 
             <button

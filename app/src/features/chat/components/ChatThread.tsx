@@ -101,7 +101,7 @@ export function ChatThread({ models, messages }: ChatThreadProps) {
                   className={`min-w-0 max-w-[78%] rounded-[1.45rem] border px-4 py-3 shadow-soft max-sm:max-w-[86%] ${
                     isUser
                       ? 'rounded-br-md border-white/15 bg-white/6'
-                      : 'rounded-bl-md border-white/8 bg-[#252524]'
+                      : 'rounded-bl-md border-white/8 bg-(--f-chat-bubble)'
                   }`}
                 >
                   <div className="mb-1.5 flex items-center justify-between gap-4">

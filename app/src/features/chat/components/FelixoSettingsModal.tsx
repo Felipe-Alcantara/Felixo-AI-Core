@@ -161,7 +161,7 @@ function FelixoSettingsDialog({
                 }
                 rows={5}
                 placeholder="Preferências, fatos estáveis e cuidados que o orquestrador deve lembrar."
-                className="mt-1 w-full resize-none rounded-2xl border border-white/8 bg-[#1a1a19] px-3 py-2 text-sm leading-relaxed text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
+                className="mt-1 w-full resize-none rounded-2xl border border-white/8 bg-(--f-chat-field) px-3 py-2 text-sm leading-relaxed text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
               />
             </label>
 
@@ -177,7 +177,7 @@ function FelixoSettingsDialog({
                 }
                 rows={4}
                 placeholder="Preferências de execução, restrições e cuidados recorrentes."
-                className="mt-1 w-full resize-none rounded-2xl border border-white/8 bg-[#1a1a19] px-3 py-2 text-sm leading-relaxed text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
+                className="mt-1 w-full resize-none rounded-2xl border border-white/8 bg-(--f-chat-field) px-3 py-2 text-sm leading-relaxed text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
               />
             </label>
 
@@ -192,7 +192,7 @@ function FelixoSettingsDialog({
                       defaultWorkflow: event.target.value,
                     }))
                   }
-                  className="mt-1 h-10 w-full rounded-2xl border border-white/8 bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
+                  className="mt-1 h-10 w-full rounded-2xl border border-white/8 bg-(--f-chat-field) px-3 text-sm text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
                 />
               </label>
 
@@ -267,7 +267,7 @@ function FelixoSettingsDialog({
             <div className="mt-3 flex justify-end">
               <button
                 type="submit"
-                className="felixo-btn flex h-9 items-center justify-center gap-2 rounded-2xl bg-zinc-100 px-3 text-xs font-medium text-zinc-950 hover:bg-white focus:outline-hidden! focus:ring-2 focus:ring-zinc-100 focus:ring-offset-2 focus:ring-offset-[#242423]"
+                className="felixo-btn flex h-9 items-center justify-center gap-2 rounded-2xl bg-zinc-100 px-3 text-xs font-medium text-zinc-950 hover:bg-white focus:outline-hidden! focus:ring-2 focus:ring-zinc-100 focus:ring-offset-2 focus:ring-offset-(--f-chat-dialog)"
               >
                 <Save size={14} aria-hidden="true" />
                 Salvar
@@ -347,7 +347,7 @@ function NumberField({
         step={step}
         value={value}
         onChange={onChange}
-        className="mt-1 h-10 w-full rounded-2xl border border-white/8 bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-hidden focus:ring-2 focus:ring-white/25"
+        className="mt-1 h-10 w-full rounded-2xl border border-white/8 bg-(--f-chat-field) px-3 text-sm text-zinc-100 outline-hidden focus:ring-2 focus:ring-white/25"
       />
     </label>
   )

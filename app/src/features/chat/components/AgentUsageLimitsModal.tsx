@@ -383,7 +383,7 @@ export function AgentUsageLimitsModal({
                   onChange={(event) => setLabel(event.target.value)}
                   placeholder="Conta principal"
                   maxLength={80}
-                  className="mt-1 h-9 w-full rounded-xl border border-white/8 bg-[#1a1a19] px-2 text-xs text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
+                  className="mt-1 h-9 w-full rounded-xl border border-white/8 bg-(--f-chat-field) px-2 text-xs text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
                 />
               </label>
 
@@ -394,7 +394,7 @@ export function AgentUsageLimitsModal({
                   onChange={(event) => setIdentityHint(event.target.value)}
                   placeholder="e-mail ou ID exibido pela CLI"
                   maxLength={160}
-                  className="mt-1 h-9 w-full rounded-xl border border-white/8 bg-[#1a1a19] px-2 text-xs text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
+                  className="mt-1 h-9 w-full rounded-xl border border-white/8 bg-(--f-chat-field) px-2 text-xs text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
                 />
                 <span className="mt-1 block text-[10px] text-zinc-600">
                   Não informe chave, token, cookie ou senha.
@@ -498,7 +498,7 @@ function AccountCard({
   const detailsSample = latest?.metadata.statusDetails ? latest : metricsSample
 
   return (
-    <article className="rounded-xl border border-white/[0.07] bg-[#1a1a19]/70 p-3">
+    <article className="rounded-xl border border-white/[0.07] bg-(--f-chat-field)/70 p-3">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">

@@ -88,7 +88,7 @@ export function AutomationsModal({
     >
       <section
         {...dialog.frameProps}
-        className="relative flex max-h-[86vh] w-full max-w-[860px] flex-col rounded-3xl border border-white/10 bg-[#242423] shadow-shell"
+        className="relative flex max-h-[86vh] w-full max-w-[860px] flex-col rounded-3xl border border-white/10 bg-(--f-chat-dialog) shadow-shell"
         onClick={(event) => event.stopPropagation()}
       >
         <header className="flex items-center justify-between border-b border-white/8 px-5 py-4">
@@ -189,7 +189,7 @@ export function AutomationsModal({
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 placeholder="Revisar release"
-                className="mt-1 h-10 w-full rounded-2xl border border-white/8 bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
+                className="mt-1 h-10 w-full rounded-2xl border border-white/8 bg-(--f-chat-field) px-3 text-sm text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
               />
             </label>
 
@@ -199,7 +199,7 @@ export function AutomationsModal({
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
                 placeholder="Quando usar este fluxo"
-                className="mt-1 h-10 w-full rounded-2xl border border-white/8 bg-[#1a1a19] px-3 text-sm text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
+                className="mt-1 h-10 w-full rounded-2xl border border-white/8 bg-(--f-chat-field) px-3 text-sm text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
               />
             </label>
 
@@ -221,7 +221,7 @@ export function AutomationsModal({
                 onChange={(event) => setPrompt(event.target.value)}
                 placeholder="Instrucao base da automacao"
                 rows={5}
-                className="mt-1 min-h-28 w-full resize-none rounded-2xl border border-white/8 bg-[#1a1a19] px-3 py-2 text-sm text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
+                className="mt-1 min-h-28 w-full resize-none rounded-2xl border border-white/8 bg-(--f-chat-field) px-3 py-2 text-sm text-zinc-100 outline-hidden placeholder:text-zinc-600 focus:ring-2 focus:ring-white/25"
               />
             </label>
 

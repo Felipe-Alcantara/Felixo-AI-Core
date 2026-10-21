@@ -640,7 +640,7 @@ function OrganizeButton({
           type="button"
           onClick={() => organize('single')}
           disabled={disabled}
-          className="felixo-btn-flat flex flex-1 items-center gap-2 bg-(--f-core-structural) px-3 py-2 text-sm text-(--f-core-white-soft) enabled:hover:bg-[#303030] disabled:cursor-not-allowed"
+          className="felixo-btn-flat flex flex-1 items-center gap-2 bg-(--f-core-structural) px-3 py-2 text-sm text-(--f-core-white-soft) enabled:hover:bg-(--f-structural-hover) disabled:cursor-not-allowed"
           title={
             disabled
               ? 'Adicione pelo menos dois blocos para organizá-los'
@@ -657,7 +657,7 @@ function OrganizeButton({
           aria-label="Modos de organização"
           aria-expanded={open}
           aria-controls="canvas-organize-modes"
-          className="felixo-btn-flat flex items-center border-l border-white/10 bg-(--f-core-structural) px-1.5 text-(--f-core-secondary) enabled:hover:bg-[#303030] disabled:cursor-not-allowed"
+          className="felixo-btn-flat flex items-center border-l border-white/10 bg-(--f-core-structural) px-1.5 text-(--f-core-secondary) enabled:hover:bg-(--f-structural-hover) disabled:cursor-not-allowed"
           title="Modos de organização"
         >
           <ChevronDown size={14} />
