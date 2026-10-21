@@ -390,7 +390,9 @@ function criarSessaoDaLeitura(deps) {
       { viewport: VIEWPORT, terminal: TERMINALS[0], marca: '(https://example.com/docs)', titulo: 'Resumo', cheio: true },
       { viewport: NARROW_VIEWPORT, terminal: TERMINALS[2], marca: "Use 'openia run <chave>'", titulo: null, cheio: false },
     ]
-    for (const theme of ['dark', 'high_contrast']) {
+    // O claro entra para provar a decisão de 21/10: a tela do terminal (e a
+    // Leitura, que fica por cima dela) continua escura com o app claro.
+    for (const theme of ['dark', 'high_contrast', 'light']) {
       for (const caso of casos) {
         const { viewport, terminal } = caso
         await page.evaluate((value) => window.localStorage.setItem('felixo-ai-core.theme', value), theme)
@@ -408,6 +410,11 @@ function criarSessaoDaLeitura(deps) {
         const leitura = await esperarLeitura(passo, `a Leitura em ${theme} ${viewport.width}px`, (estado) =>
           estado.visible && (caso.titulo ? estado.headings.includes(caso.titulo) : estado.code.length > 0))
         exigir(leitura.overflowX <= 1, passo, `a Leitura vaza para os lados em ${theme} ${viewport.width}px`, leitura.overflowX)
+        if (theme === 'light') {
+          const fundo = await page.locator(READING).evaluate((element) => getComputedStyle(element).backgroundColor)
+          const [r, g, b] = (fundo.match(/[\d.]+/g) ?? []).map(Number)
+          exigir(r + g + b < 120, passo, 'a Leitura deveria continuar escura no tema claro', fundo)
+        }
         const animando = await page.locator(READING).evaluate((element) =>
           [element, ...element.querySelectorAll('*')].filter((node) => {
             const style = getComputedStyle(node)

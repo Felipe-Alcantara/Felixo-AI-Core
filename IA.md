@@ -2096,3 +2096,10 @@ bem (cartão claro com o texto escuro de `note-colors`).
   processo principal não sabe o tema.
 - Excalidraw, o modal de imagem e as telas não visitadas pelo roteiro só foram vistos em parte.
 - macOS e Linux.
+
+**Smoke do canvas (mesma data).**
+- O F7 da Leitura (`canvas-smoke-leitura.cjs`) roda também no claro e exige que o fundo da Leitura
+  continue escuro: é a decisão "o terminal fica escuro" testada no app real.
+- A sessão F rodou local no Windows: ok em 98 s, com as capturas `f7-light-*`.
+- A matriz completa da noturna ganhou o claro (44 → 66 casos). O PR fica com 16, porque o claro só
+  muda cor, não posição de superfície.

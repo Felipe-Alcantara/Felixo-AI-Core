@@ -128,6 +128,12 @@ function findMissingSurfaces(surfaces, matrixCase, options = {}) {
 }
 
 const THEMES = ['dark', 'high_contrast']
+/**
+ * O claro só troca cor, não mexe em tamanho nem posição de superfície. Entra só
+ * na noturna, onde as capturas servem de evidência visual por viewport, sem
+ * custar 7 casos a mais em todo PR.
+ */
+const NIGHTLY_EXTRA_THEMES = ['light']
 const VIEWPORTS = [
   { width: 320, height: 720, deviceScaleFactor: 1 },
   { width: 320, height: 720, deviceScaleFactor: 2 },
@@ -152,7 +158,7 @@ const PR_PERFORMANCE_VIEWPORTS = [
 /**
  * `pr`: tema × os 7 viewports com Modo Performance desligado, mais as duas
  * pontas com ele ligado. `completa` (noturna, `FELIXO_SMOKE_MATRIZ=completa`):
- * tema × 11 viewports × Modo Performance ligado e desligado. A ordem é fixa
+ * tema (com o claro) × 11 viewports × Modo Performance ligado e desligado. A ordem é fixa
  * (sem sorteio), então duas execuções do mesmo commit medem os mesmos casos.
  */
 function buildMatrixCases(mode = 'pr') {
@@ -160,7 +166,7 @@ function buildMatrixCases(mode = 'pr') {
   const cases = []
   if (mode === 'completa') {
     for (const performance of [false, true]) {
-      for (const theme of THEMES) {
+      for (const theme of [...THEMES, ...NIGHTLY_EXTRA_THEMES]) {
         for (const viewport of [...VIEWPORTS, ...NIGHTLY_EXTRA_VIEWPORTS]) cases.push({ theme, viewport, performance })
       }
     }
