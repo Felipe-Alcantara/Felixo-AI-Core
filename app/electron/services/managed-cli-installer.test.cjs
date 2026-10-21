@@ -580,6 +580,90 @@ describe('chooseNewestPublishedVersion', () => {
     assert.deepEqual(killTreeCalls.map((call) => call.pid), [9911])
   })
 
+  // Caso real do POSIX, visto no CI (macOS e Ubuntu, 21/10/2026): o `killProcessTree`
+  // manda SIGTERM no grupo, o npm morre NA HORA e o `close` chega enquanto ele ainda
+  // espera os 2 s antes do SIGKILL. Quem resolvia era o `close`, com "(codigo null)" e
+  // sem `cancelled`, e antes de a árvore terminar de morrer. Quem mata a árvore é quem
+  // resolve, com o motivo certo e só depois do kill.
+  describe('quando o processo fecha durante o kill da arvore', () => {
+    function createClosingChild(pid) {
+      const child = new EventEmitter()
+      child.pid = pid
+      child.stdout = new EventEmitter()
+      child.stderr = new EventEmitter()
+      return child
+    }
+
+    async function installKilledBy({ timeoutMs, abort }) {
+      const controller = new AbortController()
+      const events = []
+      let child
+
+      const promessa = installManagedPackage({
+        npmPackage: '@openai/codex',
+        npmCliPath: '/npm/bin/npm-cli.js',
+        nodeExecutable: '/opt/app/felixo',
+        layout: LAYOUT,
+        signal: controller.signal,
+        ...(timeoutMs ? { timeoutMs } : {}),
+        spawn: () => {
+          child = createClosingChild(7001)
+          return child
+        },
+        killTree: async () => {
+          events.push('kill-comecou')
+          child.emit('close', null) // o SIGTERM derrubou o npm; a graça de 2 s ainda corre
+          await new Promise((resolve) => setTimeout(resolve, 20))
+          events.push('kill-terminou')
+        },
+      })
+
+      if (abort) controller.abort()
+      const result = await promessa
+      events.push('resolveu')
+      return { result, events }
+    }
+
+    it('cancelar devolve cancelled:true e so resolve depois de o kill terminar', async () => {
+      const { result, events } = await installKilledBy({ abort: true })
+
+      assert.equal(result.ok, false)
+      assert.equal(result.cancelled, true)
+      assert.match(result.message, /cancelada/)
+      assert.deepEqual(events, ['kill-comecou', 'kill-terminou', 'resolveu'])
+    })
+
+    it('o tempo limite diz que passou do tempo, nao "codigo null", e so resolve depois de o kill terminar', async () => {
+      const { result, events } = await installKilledBy({ timeoutMs: 5 })
+
+      assert.equal(result.ok, false)
+      assert.notEqual(result.cancelled, true)
+      assert.match(result.message, /tempo limite/)
+      assert.doesNotMatch(result.message, /codigo/)
+      assert.deepEqual(events, ['kill-comecou', 'kill-terminou', 'resolveu'])
+    })
+
+    it('um killTree que rejeita nao deixa a instalacao pendurada para sempre', async () => {
+      const controller = new AbortController()
+      const promessa = installManagedPackage({
+        npmPackage: '@openai/codex',
+        npmCliPath: '/npm/bin/npm-cli.js',
+        nodeExecutable: '/opt/app/felixo',
+        layout: LAYOUT,
+        signal: controller.signal,
+        spawn: () => createClosingChild(7002),
+        killTree: async () => {
+          throw new Error('taskkill nao existe')
+        },
+      })
+
+      controller.abort()
+      const result = await promessa
+
+      assert.equal(result.cancelled, true)
+    })
+  })
+
   it('cancelar DEPOIS que a instalacao ja terminou nao muda o resultado (nao ha corrida)', async () => {
     const controller = new AbortController()
     const killTreeCalls = []

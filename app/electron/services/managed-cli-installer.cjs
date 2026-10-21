@@ -562,9 +562,21 @@ function runCommand({
     // chama isto pode, na sequência, apagar a pasta temporária da instalação
     // (`cwd`) — resolver cedo demais arriscaria apagar um diretório que um
     // script de pós-instalação ainda não tinha soltado.
+    //
+    // Quem mata a árvore é quem resolve. No POSIX o SIGTERM derruba o npm na
+    // hora, e o `close` dele chega enquanto o `killProcessTree` ainda espera a
+    // graça antes do SIGKILL: se o `close` resolvesse primeiro, o resultado
+    // sairia como "codigo null", sem `cancelled`, antes de a árvore morrer (visto
+    // no macOS e no Ubuntu do CI em 21/10/2026). Daí o `killing`.
+    let killing = false
     const finishAfterKill = async (result) => {
-      if (settled) return
-      await killTree({ pid: child.pid, platformName })
+      if (settled || killing) return
+      killing = true
+      try {
+        await killTree({ pid: child.pid, platformName })
+      } catch {
+        // Melhor esforço: um kill que falha não pode deixar a instalação pendurada.
+      }
       finish(result)
     }
 
@@ -592,6 +604,7 @@ function runCommand({
     })
 
     child.once('close', (code) => {
+      if (killing) return
       finish(
         code === 0
           ? { ok: true, message: successMessage }
