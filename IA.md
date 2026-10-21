@@ -22,6 +22,7 @@
   (`e7b7efe..d952f5b`) e o CI de `d952f5b` passou nos 22 jobs, inclusive esse exploratório do Windows.
 - **Claude por chave de API:** conta do Claude por chave abre um bloco de conversa (Claude Code sem tela, que usa o crédito promocional do Agent SDK); ver a entrada de 2026-10-19.
 - **Memória de longo prazo (ai-memory, 2026-10-21):** instalado na máquina (serviço no logon, MCP e hooks por usuário no Claude Code, Codex e Copilot). Este repositório tem o bloco gerenciado no `CLAUDE.md` e no `AGENTS.md` e as skills `ai-memory-*`; a captura vale para todos os projetos e a entrega dos eventos acontece nas fronteiras da sessão. Ver a entrada de 2026-10-21 "ai-memory instalado".
+- **Instalador e árvore de processos (2026-10-21):** o `release-smoke.cjs` passou a cancelar e expirar a instalação de uma CLI pelo app empacotado e a provar, com uma sonda independente, que nenhum processo da árvore do npm sobra (`app/scripts/installer-kill-smoke.cjs`, nos três SOs do Release). Visto rodando fora do CI só no Windows; o macOS real segue pendente (roteiro em `docs/validation/CHECKLIST-INSTALADOR-ARVORE-DE-PROCESSOS.md`). Ver a entrada de 2026-10-21 "Instalador: cancelar e expirar pelo app empacotado".
 - **Em andamento:** nada aberto no código nesta entrega. Em toda abertura (também na execução da
   fonte), a rodada das CLIs busca a versão mais nova publicada de Claude, Codex e Gemini, inclusive
   pré-lançamento, e atualiza a cópia do app e a do npm global, mesmo com a CLI aberta (o npm troca
@@ -2243,3 +2244,63 @@ nas fronteiras da sessão (descrito em `docs/ARCHITECTURE.md` do ai-memory).
   `ai-memory status` passou a mostrar a sessão e as observações.
 - **Consequência:** `hook spool: N event(s) waiting` no `doctor` é normal durante a sessão.
 - **Continua não validado:** a drenagem automática no fim da sessão.
+
+## 2026-10-21 — Instalador: cancelar e expirar pelo app empacotado não deixa processo (cenário no release-smoke)
+
+**Pedido.** Task "Instalador — smoke empacotado real nos três SOs e validar kill de árvore fora do CI",
+derivada do PR #84 (`core/process-tree.cjs`): o `taskkill /T /F` e o kill de grupo POSIX só tinham
+prova no runner do CI e em teste unitário, e não havia smoke do instalador contra o app empacotado.
+
+**O que já existia.** `release-smoke.cjs` roda nos três SOs do Release: extrai o artefato real, abre o
+executável em `--release-smoke` e usa o npm do pacote para instalar e atualizar uma CLI de teste. Não
+havia nele nenhum cenário de cancelar ou expirar uma instalação. `process-tree.test.cjs` já tem processo
+real com neto real, mas não passa pelo `app.asar`, pelo npm do pacote nem pelo atalho `node` do runtime.
+
+**O que mudou.**
+- **`app/scripts/installer-kill-smoke.cjs` (novo):** instala um pacote local cujo `postinstall` sobe um
+  neto, pelo `managed-cli-installer` que está DENTRO do `app.asar` (o executável empacotado roda como
+  Node e carrega o módulo do asar), e dispara os dois caminhos: `cancel` (AbortController) e `timeout`
+  (prazo calculado a partir do tempo que o `cancel` mediu na máquina, de 20 a 120 s).
+- **Quem prova não é o código testado:** o driver só fotografa a árvore (`ps -A -o pid=,ppid=,comm=` no
+  POSIX, `Get-CimInstance Win32_Process` no Windows); o runner, depois que o driver saiu, confere pid a
+  pid e pelo nome do processo (pid reaproveitado não conta) e encerra o que sobrou.
+- **Controle negativo (`--control`):** mata só o npm, como o `child.kill()` de antes do PR #84, e PRECISA
+  deixar órfão. É o que prova que a sonda enxerga o defeito.
+- **`release-smoke.cjs` chama o cenário** depois do npm do pacote e grava `installerKill` no relatório
+  (só nomes de processo, contagens e tempos; nenhum caminho). `release-relevant.sh` ganhou o arquivo:
+  o `release-inputs.cjs` o deriva como entrada do Release e o teste de sincronia acusaria a falta.
+- **CLI própria:** `node scripts/installer-kill-smoke.cjs --artifact <app> [--only cancel] [--control]
+  [--source]`. O roteiro para máquina real está em `docs/validation/CHECKLIST-INSTALADOR-ARVORE-DE-PROCESSOS.md`.
+
+**O que foi medido (Windows 11 real, fora do CI, `win-unpacked` do commit `85d688d`).**
+- **`cancel`:** `cancelled`, 0 sobreviventes. O `postinstall` subiu em 5,8 s; árvore de 5 processos e 4
+  níveis (`Felixo AI Core.exe` → `cmd.exe` → `conhost.exe` → `Felixo AI Core.exe` → `Felixo AI Core.exe`);
+  tudo resolvido 182 ms depois do cancelamento.
+- **`timeout`:** `timeout`, 0 sobreviventes, mesma árvore, prazo de 20 s.
+- **Controle (`--control`):** matar só o npm deixou **2 sobreviventes** (o script e o neto). Falha antes,
+  passa depois, no mesmo app empacotado e na mesma árvore.
+- **Testes:** 21 no módulo novo (processo real nos dois sentidos: a sonda vê o órfão e não acusa onde a
+  árvore morreu) e o ponta a ponta contra a fonte com npm de verdade (FELIXO_REAL_INSTALLER_KILL=1, 40 s).
+  `npm test`: 2802 testes, 2793 aprovados, 0 falhas, 9 pulados, em duas rodadas completas; `npm run lint`
+  limpo; `release-relevant.test.sh` passa.
+
+**Achados que não eram desta task (viraram tasks).**
+- **Defeito do produto:** o atalho `node.cmd` que o app gera grava o caminho do executável em UTF-8, e o
+  `cmd.exe` o lê na página OEM do console. Com o console em cp850 (Windows pt-BR) ou cp437 e acento no
+  caminho do executável, o `node` não é achado ("O sistema não pode encontrar o caminho especificado");
+  com `chcp 65001` no topo do atalho funciona. Medido com o atalho real. O cenário agora recusa esse caso
+  com a causa, porque ele gastou 90 s mostrando um erro de npm que não era o que se queria provar.
+- **`npm run pack` no Windows:** `bundle-npm-runtime.cjs` falhou no `cpSync` logo depois do `rmSync` em 2
+  de 4 execuções (as outras 2 vieram depois de eu apagar a pasta à mão); e o `electron-builder` não recompila o
+  `node-pty` sem o Visual Studio (`-c.npmRebuild=false` contorna, o `node-pty` usa os binários prontos).
+- **`release-smoke` local:** falha na entrega de catálogo do PTY nesta máquina, com o mesmo erro em 13/10
+  e hoje, enquanto o `Publish windows-latest` do CI passou na v0.1.471. É anterior a este cenário.
+- **Teste intermitente:** `analyzeRepo detecta commits remotos pendentes de pull` falhou em 1 de 3
+  rodadas completas e passou 3 de 3 isolado.
+
+**Ponto de atenção.**
+- **No Windows um neto comum de um pai Node morre junto** (job object do libuv), então os testes unitários
+  só discriminam com neto `detached` (que escapa do job, como um daemon de pós-instalação). Na árvore
+  real do npm, que passa pelo `cmd.exe`, o controle deixa órfão de verdade, como medido acima.
+- **Não validado:** macOS real e Linux real (a task pede os dois; só o CI, que não conta como "fora do
+  CI", os cobre) e o cenário no Release do CI nos três SOs, que roda pela primeira vez neste push.
