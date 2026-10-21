@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   applyClaudeApiEvent,
+  conversationFromTranscript,
   createConversation,
   formatUsd,
   fromPersisted,
@@ -235,5 +236,62 @@ describe('/resume no bloco', () => {
     expect(state.claudeSessionId).toBe(ID)
     expect(state.items.map((item) => item.role)).toEqual(['user', 'tool', 'assistant', 'notice'])
     expect(state.items[1]).toMatchObject({ result: 'ok', summary: 'ola.txt' })
+  })
+})
+
+describe('imagens no bloco', () => {
+  const THUMB = 'data:image/jpeg;base64,/9j/4AAQSkZJRg=='
+
+  it('a mensagem guarda as miniaturas; só imagem, sem texto, também vale', () => {
+    const state = userSent(createConversation(), '', { images: [THUMB, THUMB] })
+    expect(state.items.at(-1)).toMatchObject({ role: 'user', text: '', images: [THUMB, THUMB] })
+    expect(state.status).toBe('working')
+    expect(userSent(createConversation(), 'oi').items.at(-1)).not.toHaveProperty('images')
+  })
+
+  it('persistência mantém miniatura válida e descarta o resto', () => {
+    const state = userSent(createConversation(), 'veja', { images: [THUMB] })
+    const persisted = toPersisted(state)
+    const sujo = {
+      ...persisted,
+      items: [
+        { ...persisted.items[0], images: [THUMB, 'javascript:alert(1)', 'data:image/png;base64,' + 'A'.repeat(50_000), 7] },
+      ],
+    }
+    expect(fromPersisted(sujo).items[0]).toMatchObject({ role: 'user', images: [THUMB] })
+    const semNenhuma = { ...persisted, items: [{ ...persisted.items[0], images: ['x'] }] }
+    expect(fromPersisted(semNenhuma).items[0]).not.toHaveProperty('images')
+  })
+
+  it('conversa retomada traz quantas imagens havia, sem miniatura', () => {
+    const state = conversationFromTranscript(
+      [
+        { role: 'user', text: '', images: 2 },
+        { role: 'assistant', text: 'Duas capturas.' },
+      ],
+      '1b763539-ed0a-41c1-af33-b54382ca6328',
+    )
+    expect(state.items[0]).toMatchObject({ role: 'user', text: '', imageCount: 2 })
+    expect(state.items[0]).not.toHaveProperty('images')
+  })
+
+  it('o store manda ao processo só tipo e dados; a miniatura fica no bloco', async () => {
+    const send = vi.fn(async () => ({ ok: true }))
+    const bridge: ClaudeApiBridge = {
+      start: vi.fn(async () => ({ ok: true })),
+      send,
+      respondPermission: vi.fn(async () => ({ ok: true })),
+      interrupt: vi.fn(async () => ({ ok: true })),
+      stop: vi.fn(async () => ({ ok: true })),
+      onEvent: () => () => {},
+    }
+    const store = createClaudeApiConversationStore(() => bridge)
+    store.hydrate('b', null)
+    const attachment = { id: 'a1', name: 'captura.png', mediaType: 'image/png' as const, data: 'iVBORw0K', thumb: THUMB, width: 10, height: 10 }
+    await store.send('b', 'o que é isto?', { accountId: 'c', cwd: '/p' }, { images: [attachment] })
+    expect(send).toHaveBeenCalledWith({ sessionId: 'b', text: 'o que é isto?', images: [{ mediaType: 'image/png', data: 'iVBORw0K' }] })
+    expect(store.get('b').items.at(-1)).toMatchObject({ role: 'user', images: [THUMB] })
+    await store.send('b', 'sem imagem', { accountId: 'c', cwd: '/p' })
+    expect(send).toHaveBeenLastCalledWith({ sessionId: 'b', text: 'sem imagem' })
   })
 })

@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { NodeResizer, useReactFlow, type NodeProps } from '@xyflow/react'
-import { KeyRound, Loader2, Send, ShieldAlert, Square, Wrench } from 'lucide-react'
+import { KeyRound, Loader2, Send, ShieldAlert, Square, Wrench, X } from 'lucide-react'
 import { NODE_MIN_SIZE } from '../services/node-geometry'
 import { claudeApiConversations } from '../services/claude-api-conversation-store'
 import {
@@ -9,6 +9,12 @@ import {
   parseClaudeApiSlashCommand,
   type ClaudeApiItem,
 } from '../services/claude-api-conversation'
+import {
+  acceptAttachmentCount,
+  imageFilesFromTransfer,
+  prepareClaudeApiAttachment,
+  type ClaudeApiAttachment,
+} from '../services/claude-api-images'
 import type { ClaudeApiNodeData } from '../types'
 import { DeferredMarkdownContent } from '../../shared/components/DeferredMarkdownContent'
 import { NodeHeader } from './NodeHeader'
@@ -33,8 +39,27 @@ const ItemView = memo(function ItemView({ item }: { item: ClaudeApiItem }) {
         </details>
       )
     }
+    const count = item.images?.length ?? item.imageCount ?? 0
     return (
       <div className="ml-8 self-end rounded-lg bg-(--f-core-surface-2,rgba(127,127,127,0.15)) px-3 py-2 whitespace-pre-wrap">
+        {item.images && (
+          <div className={`flex flex-wrap justify-end gap-1 ${item.text ? 'mb-1.5' : ''}`}>
+            {item.images.map((src, index) => (
+              <img
+                key={index}
+                src={src}
+                alt={`Imagem ${index + 1} de ${count} enviada ao Claude`}
+                className="h-16 max-w-28 rounded-sm object-cover"
+                draggable={false}
+              />
+            ))}
+          </div>
+        )}
+        {!item.images && count > 0 && (
+          <span className={`block text-[11px] text-(--f-core-secondary) ${item.text ? 'mb-1' : ''}`}>
+            {count === 1 ? '1 imagem' : `${count} imagens`} nesta mensagem
+          </span>
+        )}
         {item.text}
       </div>
     )
@@ -90,32 +115,123 @@ const Composer = memo(function Composer({
   busy: boolean
   ready: boolean
   hasAccount: boolean
-  onSubmit: { current: (text: string) => void }
+  onSubmit: { current: (text: string, images: ClaudeApiAttachment[]) => void }
   onInterrupt: { current: () => void }
 }) {
   const [draft, setDraft] = useState('')
+  const [attachments, setAttachments] = useState<ClaudeApiAttachment[]>([])
+  const [preparing, setPreparing] = useState(0)
+  const [imageError, setImageError] = useState<string | null>(null)
   const trimmed = draft.trim()
-  const canSend = trimmed !== '' && !busy && (ready || /^\/model\b/i.test(trimmed))
+  const hasContent = trimmed !== '' || attachments.length > 0
+  const canSend = hasContent && !busy && preparing === 0 && (ready || /^\/model\b/i.test(trimmed))
   const submit = () => {
     if (!canSend) return
     const text = draft
+    const images = attachments
     setDraft('')
-    onSubmit.current(text)
+    setAttachments([])
+    setImageError(null)
+    onSubmit.current(text, images)
   }
+
+  // Colar e soltar caem aqui. Cada imagem é lida (e reduzida, quando a API
+  // recusaria como está) antes de aparecer no campo.
+  const addFiles = (files: File[]) => {
+    const { accept, message } = acceptAttachmentCount(attachments.length + preparing, files.length)
+    setImageError(message)
+    const chosen = files.slice(0, accept)
+    if (chosen.length === 0) return
+    setPreparing((value) => value + chosen.length)
+    void Promise.allSettled(chosen.map((file) => prepareClaudeApiAttachment(file))).then((results) => {
+      setPreparing((value) => value - chosen.length)
+      const prepared = results.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : []))
+      // Cada arquivo que falhou diz o próprio motivo (não abriu, grande demais).
+      const failures = results.flatMap((result) =>
+        result.status === 'rejected'
+          ? [result.reason instanceof Error ? result.reason.message : 'Não foi possível ler a imagem.']
+          : [],
+      )
+      if (prepared.length > 0) setAttachments((current) => [...current, ...prepared])
+      if (failures.length > 0) setImageError([message, ...failures].filter(Boolean).join(' '))
+    })
+  }
+
   return (
-    <div className="nodrag nowheel nopan flex items-end gap-2 border-t border-(--f-core-border) p-2">
+    <div
+      className="nodrag nowheel nopan flex flex-col gap-1.5 border-t border-(--f-core-border) p-2"
+      onDragOver={(event) => {
+        if (!Array.from(event.dataTransfer.types).includes('Files')) return
+        event.preventDefault()
+        event.stopPropagation()
+        event.dataTransfer.dropEffect = 'copy'
+      }}
+      onDrop={(event) => {
+        const files = imageFilesFromTransfer(event.dataTransfer)
+        if (files.length === 0) return
+        event.preventDefault()
+        event.stopPropagation()
+        addFiles(files)
+      }}
+    >
+      {(attachments.length > 0 || preparing > 0) && (
+        <ul className="flex flex-wrap gap-1.5" aria-label="Imagens que vão com a mensagem">
+          {attachments.map((attachment, index) => (
+            <li key={attachment.id} className="relative">
+              <img
+                src={attachment.thumb}
+                alt={`Imagem ${index + 1}: ${attachment.name} (${attachment.width}×${attachment.height})`}
+                title={`${attachment.name} · ${attachment.width}×${attachment.height}`}
+                className="h-12 w-12 rounded-sm border border-(--f-core-border) object-cover"
+                draggable={false}
+              />
+              <button
+                type="button"
+                className="felixo-btn-icon absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-(--f-core-black-deep) text-(--f-core-white-soft) ring-1 ring-(--f-core-border)"
+                aria-label={`Remover imagem ${index + 1}`}
+                onClick={() => {
+                  setAttachments((current) => current.filter((item) => item.id !== attachment.id))
+                  setImageError(null)
+                }}
+              >
+                <X size={10} aria-hidden />
+              </button>
+            </li>
+          ))}
+          {preparing > 0 && (
+            <li role="status" className="flex h-12 items-center gap-1 px-1 text-[11px] text-(--f-core-secondary)">
+              <Loader2 size={12} className="motion-safe:animate-spin" aria-hidden /> Lendo imagem…
+            </li>
+          )}
+        </ul>
+      )}
+      {imageError && (
+        <p role="alert" className="text-[11px] text-theme-error">
+          {imageError}
+        </p>
+      )}
+      <div className="flex items-end gap-2">
       <textarea
         aria-label="Mensagem para o Claude"
         value={draft}
         rows={2}
         onChange={(event) => setDraft(event.target.value)}
+        onPaste={(event) => {
+          const files = imageFilesFromTransfer(event.clipboardData)
+          if (files.length === 0) return
+          // Imagem pura não cola nada no texto; com texto junto, o texto cola normal.
+          if (!event.clipboardData.getData('text/plain')) event.preventDefault()
+          addFiles(files)
+        }}
         onKeyDown={(event) => {
           if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
             event.preventDefault()
             submit()
           }
         }}
-        placeholder={busy ? 'Aguarde a resposta…' : 'Mensagem (Enter envia, Shift+Enter quebra linha)'}
+        placeholder={
+          busy ? 'Aguarde a resposta…' : 'Mensagem (Enter envia, Shift+Enter quebra linha; Ctrl+V cola imagem)'
+        }
         className="felixo-control min-h-0 flex-1 resize-none text-xs"
       />
       {busy ? (
@@ -138,6 +254,7 @@ const Composer = memo(function Composer({
           <Send size={12} aria-hidden /> Enviar
         </button>
       )}
+      </div>
     </div>
   )
 })
@@ -223,9 +340,15 @@ function ClaudeApiNodeComponent({ id, data, selected }: NodeProps) {
   const busy = conversation.status !== 'idle'
   const ready = Boolean(nodeData.apiAccountId) && Boolean(nodeData.apiCwd)
 
-  const submit = (text: string) => {
+  const submit = (text: string, images: ClaudeApiAttachment[] = []) => {
     stickToBottom.current = true
     const command = parseClaudeApiSlashCommand(text)
+    if (command && images.length > 0) {
+      claudeApiConversations.notice(
+        id,
+        `${images.length === 1 ? 'A imagem não foi' : 'As imagens não foram'} junto: /model e /resume não levam imagem.`,
+      )
+    }
     if (command?.kind === 'resume-list' || command?.kind === 'resume-pick') {
       const account = { accountId: nodeData.apiAccountId ?? '', cwd: nodeData.apiCwd ?? '' }
       if (!account.accountId || !account.cwd) {
@@ -256,7 +379,7 @@ function ClaudeApiNodeComponent({ id, data, selected }: NodeProps) {
       )
       return
     }
-    void claudeApiConversations.send(id, text, startParams())
+    void claudeApiConversations.send(id, text, startParams(), { images })
   }
 
   // Refs estáveis para o Composer: ele não re-renderiza a cada mudança da conversa.

@@ -8,6 +8,7 @@
  */
 
 import type { ClaudeApiBridge, ClaudeApiEvent, ClaudeApiStartParams } from '../../shared/types/claude-api'
+import type { ClaudeApiAttachment } from './claude-api-images'
 import {
   applyClaudeApiEvent,
   createConversation,
@@ -85,7 +86,7 @@ export function createClaudeApiConversationStore(getBridge: () => ClaudeApiBridg
     sessionId: string,
     text: string,
     startParams: Omit<ClaudeApiStartParams, 'sessionId' | 'resumeSessionId'>,
-    options: { context?: boolean } = {},
+    options: { context?: boolean; images?: ClaudeApiAttachment[] } = {},
   ): Promise<boolean> {
     ensureListening()
     const bridge = getBridge()
@@ -94,7 +95,9 @@ export function createClaudeApiConversationStore(getBridge: () => ClaudeApiBridg
       set(sessionId, sendFailed(current, 'Esta versão do app não tem o bloco de conversa do Claude.'))
       return false
     }
-    set(sessionId, userSent(current, text, options))
+    const attachments = options.images ?? []
+    // A miniatura fica na conversa do bloco; ao processo vão só tipo e bytes.
+    set(sessionId, userSent(current, text, { context: options.context, images: attachments.map((image) => image.thumb) }))
     const started = await bridge.start({
       ...startParams,
       sessionId,
@@ -104,7 +107,11 @@ export function createClaudeApiConversationStore(getBridge: () => ClaudeApiBridg
       set(sessionId, sendFailed(get(sessionId), started.message ?? 'Não foi possível abrir a conversa.'))
       return false
     }
-    const sent = await bridge.send({ sessionId, text })
+    const sent = await bridge.send(
+      attachments.length > 0
+        ? { sessionId, text, images: attachments.map(({ mediaType, data }) => ({ mediaType, data })) }
+        : { sessionId, text },
+    )
     if (!sent.ok) {
       set(sessionId, sendFailed(get(sessionId), sent.message ?? 'Não foi possível enviar a mensagem.'))
       return false

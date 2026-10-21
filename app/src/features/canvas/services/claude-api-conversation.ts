@@ -13,7 +13,16 @@ import type {
 } from '../../shared/types/claude-api'
 
 export type ClaudeApiItem =
-  | { id: string; role: 'user'; text: string; context?: boolean }
+  | {
+      id: string
+      role: 'user'
+      text: string
+      context?: boolean
+      /** Miniaturas (data URL) das imagens coladas nesta mensagem. */
+      images?: string[]
+      /** Quantas imagens havia, quando a conversa veio do `/resume` (sem miniatura). */
+      imageCount?: number
+    }
   | { id: string; role: 'assistant'; text: string }
   | {
       id: string
@@ -61,6 +70,10 @@ export type PersistedClaudeApiConversation = {
 
 export const MAX_ITEMS = 300
 export const MAX_ITEM_TEXT = 20_000
+/** Miniatura de 160 px em JPEG fica em ~5 a 15 KB; o teto barra lixo grande no banco. */
+const MAX_THUMB_CHARS = 40_000
+const MAX_THUMBS = 10
+const THUMB = /^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/
 
 export function createConversation(): ClaudeApiConversation {
   return {
@@ -144,10 +157,25 @@ function flushStreaming(state: ClaudeApiConversation): ClaudeApiConversation {
 export function userSent(
   state: ClaudeApiConversation,
   text: string,
-  options: { context?: boolean } = {},
+  options: { context?: boolean; images?: string[] } = {},
 ): ClaudeApiConversation {
-  const next = push(state, { role: 'user', text: clip(text), ...(options.context ? { context: true } : {}) })
+  const images = sanitizeThumbs(options.images)
+  const next = push(state, {
+    role: 'user',
+    text: clip(text),
+    ...(options.context ? { context: true } : {}),
+    ...(images ? { images } : {}),
+  })
   return { ...next, status: 'working', lastErrorKind: null }
+}
+
+/** Só miniatura que é imagem em data URL e pequena; `undefined` quando não sobra nenhuma. */
+function sanitizeThumbs(raw: unknown): string[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const thumbs = raw
+    .filter((value): value is string => typeof value === 'string' && value.length <= MAX_THUMB_CHARS && THUMB.test(value))
+    .slice(0, MAX_THUMBS)
+  return thumbs.length > 0 ? thumbs : undefined
 }
 
 export function sendFailed(state: ClaudeApiConversation, message: string): ClaudeApiConversation {
@@ -282,12 +310,22 @@ function isItem(value: unknown): value is ClaudeApiItem {
   return false
 }
 
+function cleanUserImages(item: ClaudeApiItem): ClaudeApiItem {
+  if (item.role !== 'user' || (item.images === undefined && item.imageCount === undefined)) return item
+  const { images: rawImages, imageCount: rawCount, ...rest } = item
+  const images = sanitizeThumbs(rawImages)
+  const imageCount = typeof rawCount === 'number' && Number.isInteger(rawCount) && rawCount > 0 ? Math.min(rawCount, 100) : undefined
+  return { ...rest, ...(images ? { images } : {}), ...(imageCount ? { imageCount } : {}) }
+}
+
 /** Lê o que veio do banco; o que não reconhece fica de fora. */
 export function fromPersisted(raw: unknown): ClaudeApiConversation {
   const base = createConversation()
   if (!raw || typeof raw !== 'object') return base
   const value = raw as Record<string, unknown>
-  const items = Array.isArray(value.items) ? value.items.filter(isItem).slice(-MAX_ITEMS) : []
+  const items = Array.isArray(value.items)
+    ? value.items.filter(isItem).slice(-MAX_ITEMS).map(cleanUserImages)
+    : []
   return {
     ...base,
     items,
@@ -356,7 +394,8 @@ export function conversationFromTranscript(
   let state: ClaudeApiConversation = { ...createConversation(), claudeSessionId }
   for (const entry of entries) {
     if (entry.role === 'user') {
-      state = push(state, { role: 'user', text: clip(entry.text) })
+      const imageCount = typeof entry.images === 'number' && entry.images > 0 ? entry.images : undefined
+      state = push(state, { role: 'user', text: clip(entry.text), ...(imageCount ? { imageCount } : {}) })
     } else if (entry.role === 'assistant') {
       state = applyClaudeApiEvent(state, { kind: 'assistant-message', messageId: null, blocks: [{ type: 'text', text: entry.text }] })
     } else if (entry.role === 'tool') {

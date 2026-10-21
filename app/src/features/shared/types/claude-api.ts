@@ -36,6 +36,12 @@ export type ClaudeApiEvent =
 
 export type ClaudeApiResult = { ok: boolean; message?: string; alreadyRunning?: boolean }
 
+/** Tipos que a API da Anthropic aceita (claude-api-image-limits.json). */
+export type ClaudeApiImageType = 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp'
+
+/** Imagem colada no bloco, já pronta para a API: bytes em base64, sem prefixo `data:`. */
+export type ClaudeApiImage = { mediaType: ClaudeApiImageType; data: string }
+
 export type ClaudeApiStartParams = {
   sessionId: string
   accountId: string
@@ -58,14 +64,14 @@ export type ClaudeApiSessionSummary = {
 }
 
 export type ClaudeApiTranscriptEntry =
-  | { role: 'user'; text: string }
+  | { role: 'user'; text: string; images?: number }
   | { role: 'assistant'; text: string }
   | { role: 'tool'; toolUseId: string; name: string; input: Record<string, unknown> }
   | { role: 'tool-result'; toolUseId: string; isError: boolean; text: string }
 
 export type ClaudeApiBridge = {
   start: (params: ClaudeApiStartParams) => Promise<ClaudeApiResult>
-  send: (params: { sessionId: string; text: string }) => Promise<ClaudeApiResult>
+  send: (params: { sessionId: string; text: string; images?: ClaudeApiImage[] }) => Promise<ClaudeApiResult>
   respondPermission: (params: {
     sessionId: string
     requestId: string
