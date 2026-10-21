@@ -2175,3 +2175,60 @@ de próximas do Felixo AI Core. A pessoa liberou fazer direto.
 - **Não validado:**
   - resposta com imagem usando uma chave de API real; a parte da API foi medida com o login do sistema;
   - macOS e Linux.
+
+## 2026-10-21 — ai-memory instalado (memória de longo prazo entre sessões e agentes)
+
+**Pedido.** "Instala o ai-memory aqui neste repositório", depois ampliado para "todos os meus
+repositórios, pelo menos os que estão na máquina". O ai-memory é o projeto
+`github.com/akitaonrails/ai-memory`; o `Felixo-Notion-MCP` já o usava desde 19/10/2026 (`e16717b`),
+mas o programa não existia nesta máquina.
+
+**Premissa que mudou o plano.** O ai-memory não tem instalação por projeto: o serviço, o MCP e os
+hooks são por usuário. Instalar "aqui" é instalar na máquina, e a captura vale para todo repositório.
+O que dá para limitar é o que ele captura. A pessoa escolheu capturar todos.
+
+**O que foi instalado na máquina** (versão 3.1.2, Windows nativo, marcado como experimental pelo autor):
+- **Programa:** `%LOCALAPPDATA%\Programs\ai-memory`, no PATH do usuário. O instalador oficial foi
+  baixado, lido e só então executado; ele confere o SHA-256 antes de extrair.
+- **Dados:** `%LOCALAPPDATA%\ai-memory` (wiki em Markdown versionada em git, índices SQLite, token
+  de acesso só do dono). Nada disso entra no repositório.
+- **Serviço:** entrada de logon em `HKCU\...\Run\ai-memory`, sem janela, em `127.0.0.1:49374`
+  com autenticação por token.
+- **Agentes ligados** (`ai-memory setup`): Claude Code, Codex e Copilot CLI, os três que já existiam
+  aqui. Em cada um entram MCP, hooks de captura e as seis skills, nas pastas do usuário.
+- **Cópia de segurança** das configurações alteradas: o próprio programa gravou uma ao lado de cada
+  arquivo, e outra foi guardada fora do repositório.
+
+**O que mudou neste repositório.**
+- `CLAUDE.md` e `AGENTS.md` novos, com o bloco gerenciado entre `<!-- ai-memory:start -->` e
+  `<!-- ai-memory:end -->`. Os dois existem porque o Claude Code lê o `CLAUDE.md` e os outros agentes
+  leem o `AGENTS.md`. Foi o mesmo desenho do `Felixo-Notion-MCP`.
+- As seis skills `ai-memory-*` em `.claude/skills/` e `.agents/skills/`, para o repositório carregar
+  a memória também em outra máquina, sem depender da instalação do usuário.
+- O bloco e as skills são do programa: para atualizar, `ai-memory install-instructions` troca só o
+  trecho entre os marcadores. Não editar à mão.
+
+**O que foi medido.**
+- `ai-memory setup --plan` antes de aplicar, depois `setup --yes`: `healthz: ok` e `memory_status: ok`.
+- `ai-memory doctor`: o projeto é reconhecido como `felipe-alcantara-felixo-ai-core` (coordenada
+  exata, pela URL do remoto) e "Every harness that ran in this project recently is captured".
+- O `~/.claude.json` manteve os 41 projetos e todas as chaves; o MCP `ai-memory` entrou ao lado de
+  `obs` e `whatsapp`. Os 9 eventos de hook entraram no `settings.json`.
+- `install-instructions` rodado duas vezes: a segunda deu `no-op`, ou seja, é idempotente.
+- **Spool na primeira subida:** o servidor gastou uns 25 s baixando o modelo local de embeddings,
+  e os primeiros eventos dos hooks estouraram o tempo e foram para `hook-spool/`.
+  `ai-memory hook-drain` entregou. O modelo fica em `models/`, então a próxima subida não deve repetir a espera.
+
+**Ponto de atenção.**
+- **Reiniciar os agentes.** Claude Code, Codex e Copilot só carregam o MCP e os hooks novos ao abrir
+  de novo. A sessão que fez a instalação já aparece capturada no `doctor`, mas as ferramentas `memory_*` do MCP só existem depois de reabrir.
+- **Codex pede duas coisas:** confiar nos hooks novos (aparece "Hooks need review") e ter a variável
+  `AI_MEMORY_AUTH_TOKEN` no ambiente onde o `codex` abre. O token não foi gravado em lugar nenhum
+  nem posto em variável de ambiente, para não ficar visível a todo processo.
+- **A captura é global e em modo denylist.** Prompts e uso de ferramentas de todo projeto vão para a
+  wiki local, com sanitização de segredos do próprio programa. Para tirar um repositório da
+  captura, um `.ai-memory.toml` na raiz dele com `[capture] ignore_paths`.
+- **Desinstalar:** `ai-memory uninstall --apply` para o serviço e tira a entrada de logon. O README
+  não diz se isso desfaz o PATH e as configurações dos agentes; as cópias de segurança servem para isso.
+- **Não validado:** as ferramentas MCP (`memory_*`) numa sessão nova, a recuperação de memória entre
+  sessões, o Codex e o Copilot funcionando de fato (só foram ligados), e a instalação em macOS e Linux.
