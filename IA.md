@@ -2014,3 +2014,85 @@ Depois, medindo a partir do keydown do Enter:
 
 A primeira mensagem foi de 5,3 s para 2,3 s. O contexto como instrução de sistema foi conferido
 pela resposta "PITANGA".
+
+## 2026-10-21 — Tema claro
+
+**Pedido.** "Whitemode: versão com tema claro": levantar onde as cores estão definidas e criar o tema
+claro com um seletor que guarde a escolha.
+
+**Decisões da pessoa (perguntadas antes de implementar).**
+- Os terminais continuam escuros no tema claro: as CLIs desenham para fundo escuro.
+- O seletor fica com Escuro, Claro e Alto contraste, e o padrão continua Escuro. "Seguir o sistema"
+  ficou de fora.
+
+**O que já existia.** `ThemeProvider` e `theme-storage.ts` (escuro e alto contraste) gravavam a escolha
+no `localStorage` e aplicavam `data-theme` no `<html>`. O alto contraste trocava só uns 15 tokens.
+O peso estava em outro lugar:
+- ~2.400 classes de cor do Tailwind em 97 componentes (`text-zinc-400`, `bg-white/5`...);
+- 266 cores literais no `index.css`;
+- hex soltos na tela de chat, no minimapa e nas estrelas do canvas.
+
+**Como o claro funciona.**
+- **Paleta do Tailwind espelhada.** No Tailwind 4, cada classe é só `var(--color-zinc-400)`. O
+  `paleta-tema-claro.css` troca cada degrau pelo oposto da mesma família (50↔950, 100↔900...), e os
+  97 componentes viram claros sem ser editados. O arquivo é gerado a partir do `theme.css` do Tailwind
+  instalado (`npm run tema:paleta-clara`). Um teste com `toMatchFileSnapshot` falha se ele ficar
+  desatualizado.
+- **Branco e preto.**
+  - `--color-white` vira tinta quase-preta (`#141416`).
+  - `--color-black` vira preto a 35%. Assim cada `bg-black/20` (poço) e `bg-black/55` (véu de modal)
+    continua preto, mais fraco.
+- **CSS próprio.**
+  - 134 `rgba` brancos e pretos viraram `rgb(var(--f-ink-rgb) / a)` e
+    `rgb(0 0 0 / calc(a * var(--f-shade)))`, por script e só depois dos blocos de tokens.
+  - ~45 hex de componente (selects, composer, topo, laterais, trilho, switch, checkbox...) ganharam a
+    versão clara numa seção no fim do `index.css`. Não viraram token porque isso mudaria o escuro
+    em um ou dois tons.
+- **Ilha escura.** `.felixo-paleta-escura` devolve à subárvore os tokens e a paleta do escuro. O mesmo
+  bloco de tokens é declarado para `:root` e para `:root[data-theme='light'] .felixo-paleta-escura`.
+  Ela vale em:
+  - na tela do terminal da gaveta;
+  - na prévia do bloco de terminal;
+  - no painel de terminal do chat;
+  - no bloco de desenho, porque o traço salvo (caneta branca) foi feito para fundo escuro.
+- **Antes do React.** Um script no `<head>` do `index.html` aplica o tema salvo, e a tela de boot já
+  nasce clara. A CSP recebe o hash do script novo no build. O teste da CSP passou a esperar dois
+  scripts inline, e um teste confere que o script usa a mesma chave de `theme-storage.ts`.
+- **Seletor.** As opções moram em `shared/theme/theme-options.ts`. Antes eram duas listas, uma no
+  canvas e outra no chat.
+
+**Medido.**
+- Para provar que o escuro e o alto contraste não mudaram, coletei `getComputedStyle` (17 propriedades
+  de cor, com `::before`, `::after` e `::placeholder`) de cada elemento visível em 8 estados:
+  - canvas com grupo, bloco .md, nota e desenho;
+  - painel de agente;
+  - Configurações;
+  - Ajuda;
+  - chat;
+  - notificações;
+  - projetos;
+  - canvas enquadrado.
+
+  Isso dá 4.673 linhas por tema, coletadas antes e depois de mudar o código.
+- **Ruído entre duas coletas sem mudança:** 0 (depois de esperar a tela parar de crescer).
+- **Resultado:** escuro 0 diferenças e alto contraste 0 diferenças, nos 8 estados.
+- **CSS do build.** Troquei no app as folhas do Vite pela `dist/assets/index-*.css` (passada pelo
+  lightningcss) e repeti:
+  - escuro e alto contraste: 0 diferenças contra a coleta original;
+  - claro: 2 linhas, do campo "Nome" com e sem foco entre as duas coletas.
+- **Tamanho:** o CSS do build foi de 189,6 KB para 222,9 KB.
+- **Testes:** gate completo verde: Node 2766 aprovados e 8 pulados de 2774; vitest 3232 aprovados e
+  3 pulados; lint 0; build ok.
+
+**Achado fora do escopo.** No escuro, a nota tem fundo `rgb(12,12,14)` e texto `rgb(21,21,21)`. A regra
+`.felixo-canvas-card` (sem camada) vence o `bg-[#ede9e0]` de `note-colors.ts`, então a nota nunca foi o
+"papel claro" que o comentário descreve, e o texto fica ilegível. Ficou como task. No claro a nota lê
+bem (cartão claro com o texto escuro de `note-colors`).
+
+**Não validado.**
+- O app instalado e o binário empacotado. Validei pela fonte (Vite) e pelo CSS do build trocado no
+  app.
+- O primeiro quadro da janela continua escuro: o `backgroundColor` da BrowserWindow é `#09090b`, e o
+  processo principal não sabe o tema.
+- Excalidraw, o modal de imagem e as telas não visitadas pelo roteiro só foram vistos em parte.
+- macOS e Linux.

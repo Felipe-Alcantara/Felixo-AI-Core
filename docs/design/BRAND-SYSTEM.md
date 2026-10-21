@@ -47,6 +47,33 @@ O frontend importa os tokens em
 em `app/src/index.css` existem apenas para compatibilidade com os componentes
 atuais e devem derivar desses valores.
 
+## Tema claro
+
+O app tem três temas: Escuro (padrão), Claro e Alto contraste. A escolha fica em
+`localStorage` (`felixo-ai-core.theme`) e vira `data-theme` no `<html>`. Um
+script no `<head>` do `index.html` aplica o tema antes da primeira pintura.
+
+A regra da marca continua valendo, só invertida: no escuro, o ativo é luz sobre
+o preto; no claro, é tinta quase-preta sobre papel. Como funciona:
+
+- Os tokens oficiais acima continuam sendo os do escuro. O tema claro troca os
+  **aliases** (`--f-core-*`, `--f-surface-*`, `--control-*`...) no bloco
+  `:root[data-theme='light']` de `index.css`.
+- As classes do Tailwind (`text-zinc-400`, `bg-white/5`...) viram claras sozinhas:
+  `paleta-tema-claro.css` espelha a paleta (50↔950, 100↔900...). O arquivo é
+  gerado do Tailwind instalado (`npm run tema:paleta-clara`), e um teste falha se
+  ele ficar desatualizado.
+- O branco do CSS próprio é escrito como tinta: `rgb(var(--f-ink-rgb) / 0.08)`.
+  O preto continua preto, com a força reduzida por `--f-shade` e pelo alfa de
+  `--color-black`.
+- A tela do terminal (gaveta, prévia do bloco e painel do chat) e o bloco de
+  desenho continuam escuros em qualquer tema, com a classe `.felixo-paleta-escura`.
+  As CLIs desenham para fundo escuro, e o traço do desenho também.
+
+Ao escrever código novo, use tokens ou classes da paleta. Se uma cor literal for
+inevitável, escreva também a versão clara na seção "Tema claro" do fim de
+`index.css`.
+
 ## Uso da marca
 
 - Prefira o símbolo sozinho quando “Felixo AI Core” já estiver escrito.

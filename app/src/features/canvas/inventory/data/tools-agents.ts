@@ -666,8 +666,8 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
       {
         locator: 'aria-label="Tema"',
         kind: 'select',
-        effect: 'useAppTheme.setTheme troca entre Escuro e Alto contraste na hora e grava localStorage felixo-ai-core.theme',
-        failure: 'Sem localStorage o tema vale só para a sessão (theme-storage engole o erro de propósito)',
+        effect: 'useAppTheme.setTheme troca entre Escuro, Claro e Alto contraste (THEME_OPTIONS em shared/theme/theme-options.ts) na hora e grava localStorage felixo-ai-core.theme; o script do <head> do index.html aplica o tema salvo antes do React montar. No Claro, a tela do terminal (gaveta, prévia do bloco e painel do chat) e o desenho continuam escuros por .felixo-paleta-escura',
+        failure: 'Sem localStorage o tema vale só para a sessão (theme-storage engole o erro de propósito) e o boot segue no escuro',
       },
       {
         locator: 'await persist(value)',
