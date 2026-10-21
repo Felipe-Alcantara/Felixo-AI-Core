@@ -205,6 +205,14 @@ promocional disponível:
   - as respostas em Markdown;
   - cada ferramenta usada, com o resultado recolhível;
   - o gasto em US$ acumulado da conversa, informado pelo Claude Code a cada resposta.
+- Aceita **imagem colada** (Ctrl+V) ou **solta** no campo de mensagem:
+  - aparece em miniatura, com × para tirar, e vai junto da mensagem;
+  - vale mandar só a imagem, sem texto;
+  - até 10 por mensagem, em PNG, JPEG, GIF ou WebP;
+  - outro formato (BMP, SVG, AVIF) vira PNG;
+  - imagem acima de 5 MB ou de 8000 px é reduzida até caber;
+  - a imagem vai em base64 dentro da mensagem, como a API recebe;
+  - cada imagem pesa no gasto do turno e volta no contexto dos turnos seguintes.
 - Usa **Modelo**, **Esforço** e **Yolo** do painel de agentes.
 - **Sem Yolo**, cada ação que pede permissão (editar arquivo, rodar comando)
   aparece no bloco com **Permitir** e **Negar**.

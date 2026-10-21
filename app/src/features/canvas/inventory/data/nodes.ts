@@ -709,20 +709,27 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
     layer: 'node',
     owner: `${COMPONENTS}/ClaudeApiNode.tsx`,
     states: {
-      normal: 'Barra com conta, projeto, modelo, esforço, Yolo/pede permissão e gasto em US$; lista da conversa (mensagens, ferramentas recolhíveis, avisos) e o campo de mensagem.',
+      normal: 'Barra com conta, projeto, modelo, esforço, Yolo/pede permissão e gasto em US$; lista da conversa (mensagens, ferramentas recolhíveis, avisos) e o campo de mensagem. Imagens coladas ou soltas aparecem como miniaturas acima do campo ("Imagens que vão com a mensagem"), com "Lendo imagem…" enquanto são preparadas; a mensagem enviada mostra as miniaturas.',
       loading: 'Turno em andamento: "Trabalhando…" ou o texto chegando com cursor; o botão Enviar vira Parar.',
       empty: 'Conversa vazia: explica que é o Claude Code sem a tela do terminal e se pede permissão ou não. Com contexto do canvas, a primeira mensagem sai sozinha ao criar.',
       pending: 'Pedido de permissão (sem Yolo): cartão com a ferramenta, o que ela vai fazer e Permitir/Negar.',
       success: 'Resposta do Claude em Markdown; cada ferramenta mostra o resultado ao expandir.',
-      error: 'Aviso role="alert" na conversa: chave recusada, sem saldo, limite, processo que caiu ou CLI ausente, com o que fazer.',
+      error: 'Aviso role="alert" na conversa: chave recusada, sem saldo, limite, processo que caiu ou CLI ausente, com o que fazer. No campo, role="alert" diz a imagem que não abriu ou o que passou do limite de 10.',
     },
     controls: [
       {
         locator: 'aria-label="Mensagem para o Claude"',
         kind: 'role',
-        effect: 'Enter envia (claude-api:start + claude-api:send); Shift+Enter quebra linha.',
-        failure: 'Falha ao abrir ou enviar vira aviso na conversa; o texto já saiu do campo.',
-        disabledWhen: 'Sem efeito enquanto um turno está em andamento.',
+        effect: 'Enter envia (claude-api:start + claude-api:send, com images em base64 quando há imagem); Shift+Enter quebra linha. Ctrl+V com imagem e soltar arquivo de imagem no campo anexam (claude-api-images.ts: até 10, PNG/JPEG/GIF/WebP como estão; o resto vira PNG; acima de 5 MB ou 8000 px é reduzido).',
+        failure: 'Falha ao abrir ou enviar vira aviso na conversa; o texto já saiu do campo. Imagem que não abre ou passa do limite vira aviso no campo; /model e /resume com imagem avisam que ela não foi junto.',
+        disabledWhen: 'Sem efeito enquanto um turno está em andamento ou uma imagem ainda está sendo lida.',
+      },
+      {
+        locator: 'aria-label={`Remover imagem',
+        kind: 'button',
+        effect: 'Tira a imagem da mensagem antes de enviar e limpa o aviso do campo.',
+        failure: 'Nenhuma conhecida: é só estado local, nada foi enviado ainda.',
+        disabledWhen: 'Só existe com imagem anexada.',
       },
       {
         locator: 'title="Interromper"',
@@ -749,11 +756,15 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
     persistence: [
       'canvas salvo (canvas_nodes tipo claude-api, migração 020: apiAccountId, apiAccountLabel, apiCwd, apiModel, apiEffort, apiYolo, apiInitialText, apiContextSent, apiConversation com mensagens, id da sessão do Claude e gasto)',
       'Reabrir o app retoma a conversa com --resume no mesmo perfil da conta; exportar o canvas leva só nome e escolhas de modelo',
+      'Mensagem com imagem guarda só miniaturas de até 160 px (JPEG, até 10, cada uma até 40 mil caracteres) em apiConversation; a imagem inteira fica no histórico do Claude Code, e o /resume mostra quantas havia',
     ],
     ipc: ['claude-api:start', 'claude-api:send', 'claude-api:respond-permission', 'claude-api:interrupt', 'claude-api:stop', 'claude-api:event', 'canvas:save', 'canvas:delete'],
     dependsOn: ['claude-api-conversation-store.ts (eventos fora do React)', 'window.felixo.claudeApi', 'addClaudeApiNode (CanvasView)'],
     tests: [
       { file: 'src/features/canvas/services/claude-api-conversation.test.ts' },
+      { file: 'src/features/canvas/services/claude-api-images.test.ts' },
+      { file: 'electron/services/claude-api/claude-api-images.test.cjs' },
+      { file: 'electron/services/claude-api/claude-api-sessions.test.cjs' },
       { file: 'electron/services/claude-api/claude-api-session-manager.test.cjs' },
       { file: 'electron/services/storage/canvas-repository.test.cjs' },
     ],

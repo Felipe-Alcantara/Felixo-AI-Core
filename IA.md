@@ -2103,3 +2103,75 @@ bem (cartão claro com o texto escuro de `note-colors`).
 - A sessão F rodou local no Windows: ok em 98 s, com as capturas `f7-light-*`.
 - A matriz completa da noturna ganhou o claro (44 → 66 casos). O PR fica com 16, porque o claro só
   muda cor, não posição de superfície.
+
+## 2026-10-21 — Bloco do Claude por chave: colar e soltar imagem
+
+**Pedido.** "Colocar imagem na versão de API: colar imagens no Claude Code rodando via API", da lista
+de próximas do Felixo AI Core. A pessoa liberou fazer direto.
+
+**Premissa medida antes de codar.** O Claude Code 2.1.306 aceita bloco de imagem no `stream-json`:
+`claude -p --input-format stream-json` com
+`content: [{ type: 'image', source: { type: 'base64', ... } }, { type: 'text', ... }]` respondeu
+"Gato kawaii em preto e branco com circuitos" para o PNG da marca (Haiku, 3,9 s).
+- O histórico `.jsonl` guarda o bloco em base64 na mensagem do usuário.
+- Ele grava também uma entrada `isMeta` com o caminho da imagem salva.
+
+**O que mudou.**
+- **Limites num JSON lido pelos dois lados** (`claude-api-image-limits.json`): PNG, JPEG, GIF e WebP;
+  até 10 por mensagem; 5 MB de base64 cada; até 8000 px de lado.
+- **Processo principal:**
+  - `claude-api-images.cjs` confere tipo, base64, assinatura dos bytes contra o tipo declarado e
+    tamanho, e monta a mensagem com as imagens antes do texto;
+  - `send(sessionId, text, images)` aceita mensagem só com imagem;
+  - sem imagem, o `content` continua sendo a string de sempre;
+  - a borda IPC só repassa `images` quando é lista.
+- **`/resume`:**
+  - mensagem com imagem volta com `images: n`;
+  - conversa que começa só com imagem aparece na lista como "(2 imagens)".
+- **Bloco (`ClaudeApiNode.tsx` e `claude-api-images.ts`):**
+  - Ctrl+V com imagem e soltar arquivo de imagem no campo anexam;
+  - o que a API aceita vai como está;
+  - BMP, SVG e AVIF viram PNG; acima de 5 MB ou 8000 px é reduzido;
+  - o SVG abre por `<img>`, porque `createImageBitmap` não abre SVG no Chromium (medido no app);
+  - as miniaturas aparecem com × e "Lendo imagem…";
+  - cada arquivo que falha diz o próprio motivo;
+  - acima de 10, avisa quantas ficaram de fora;
+  - `/model` e `/resume` com imagem avisam que ela não foi junto.
+- **Conversa:**
+  - a mensagem guarda só miniaturas JPEG de até 160 px, que a leitura do banco filtra (data URL de
+    imagem, até 40 mil caracteres, até 10);
+  - ao processo vão só `{ mediaType, data }`.
+
+**Verificado.**
+- **Gerenciador real** (`createClaudeApiSessionManager` com `cross-spawn` e o Claude Code
+  instalado, login do sistema, Haiku):
+  - duas imagens numa mensagem, o PNG da marca e uma captura do tema claro;
+  - a resposta descreveu o logo e o "fundo cinza-claro (off-white)" da interface, em 4,9 s;
+  - PNG declarado como JPEG foi recusado: "O arquivo não é uma imagem JPEG.".
+- **App pela fonte** (`felixo devtools`, perfil isolado, conta por chave com chave falsa):
+  - colar PNG + SVG + PNG quebrado deu duas miniaturas (o SVG convertido) e o aviso do quebrado;
+  - Enviar mostrou a mensagem com as duas miniaturas;
+  - `ipcProbe` contou 1 `claude-api:send`, e o Claude Code rodou até a API recusar a chave;
+  - recarregar manteve as miniaturas;
+  - soltar 2 imagens anexou 2; soltar mais 10 parou em 10 com "2 ficaram de fora";
+  - × tirou uma;
+  - `/model` com imagem avisou e mostrou o modelo;
+  - uma mensagem com 9 imagens também passou pelo gerenciador;
+  - no tema claro, o campo e as miniaturas ficam certos.
+- **Colar de verdade pela área de transferência do Windows:**
+  - uma captura PNG 1304×696 posta no clipboard do sistema e colada com
+    `mainWindow.webContents.paste()`, o mesmo caminho do Ctrl+V;
+  - virou a miniatura "image.png (1304×696)";
+  - o conteúdo anterior do clipboard foi guardado e devolvido.
+- **Testes:**
+  - 26 do Claude por chave no Node, incluindo 5 novos de imagem, 1 do gerenciador e 1 do `/resume`;
+  - 22 da conversa e das imagens no vitest.
+
+**Ponto de atenção.**
+- Cada imagem entra no histórico do Claude Code em base64 e volta no contexto dos turnos seguintes:
+  pesa no gasto e no tamanho do `.jsonl`.
+- O `/resume` ignora arquivo acima de 50 MB. Com capturas de 1 a 2 MB em base64, isso dá umas 25
+  imagens numa conversa.
+- **Não validado:**
+  - resposta com imagem usando uma chave de API real; a parte da API foi medida com o login do sistema;
+  - macOS e Linux.

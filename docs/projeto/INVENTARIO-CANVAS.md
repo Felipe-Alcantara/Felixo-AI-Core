@@ -30,7 +30,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 ## Números
 
 - **Elementos:** 98 (10 blocos, 16 ferramentas, 72 outras superfícies)
-- **Controles:** 375, dos quais 55 com teste específico
+- **Controles:** 376, dos quais 55 com teste específico
 - **Elementos sem nenhum teste:** 4
 - **Lacunas:** 275 (alto 10, médio 147, baixo 118), em 78 tasks
 
@@ -768,24 +768,25 @@ Sem controle próprio: as ações vêm de outros elementos.
 ### Bloco Claude por chave de API (conversa)
 
 - **ID:** `bloco-claude-api` · **Dono:** `src/features/canvas/components/ClaudeApiNode.tsx`
-- **Persistência:** canvas salvo (canvas_nodes tipo claude-api, migração 020: apiAccountId, apiAccountLabel, apiCwd, apiModel, apiEffort, apiYolo, apiInitialText, apiContextSent, apiConversation com mensagens, id da sessão do Claude e gasto); Reabrir o app retoma a conversa com --resume no mesmo perfil da conta; exportar o canvas leva só nome e escolhas de modelo
+- **Persistência:** canvas salvo (canvas_nodes tipo claude-api, migração 020: apiAccountId, apiAccountLabel, apiCwd, apiModel, apiEffort, apiYolo, apiInitialText, apiContextSent, apiConversation com mensagens, id da sessão do Claude e gasto); Reabrir o app retoma a conversa com --resume no mesmo perfil da conta; exportar o canvas leva só nome e escolhas de modelo; Mensagem com imagem guarda só miniaturas de até 160 px (JPEG, até 10, cada uma até 40 mil caracteres) em apiConversation; a imagem inteira fica no histórico do Claude Code, e o /resume mostra quantas havia
 - **IPC:** `claude-api:start`, `claude-api:send`, `claude-api:respond-permission`, `claude-api:interrupt`, `claude-api:stop`, `claude-api:event`, `canvas:save`, `canvas:delete`
 - **Depende de:** `claude-api-conversation-store.ts (eventos fora do React)`, `window.felixo.claudeApi`, `addClaudeApiNode (CanvasView)`
 - **Sobreposição:** Bloco do React Flow, sem z próprio: fica abaixo de toda superfície fixa (topbar e statusbar 18, dock e painéis 20/30, sidebar 26, menus 50+). O cartão é overflow-hidden, então nada que nasce dentro dele passa das bordas. Bloco grande (padrão 560×640, mínimo 360×340). Pedidos de permissão aparecem dentro da própria conversa, sem modal.
-- **Testes:** `src/features/canvas/services/claude-api-conversation.test.ts`, `electron/services/claude-api/claude-api-session-manager.test.cjs`, `electron/services/storage/canvas-repository.test.cjs`
+- **Testes:** `src/features/canvas/services/claude-api-conversation.test.ts`, `src/features/canvas/services/claude-api-images.test.ts`, `electron/services/claude-api/claude-api-images.test.cjs`, `electron/services/claude-api/claude-api-sessions.test.cjs`, `electron/services/claude-api/claude-api-session-manager.test.cjs`, `electron/services/storage/canvas-repository.test.cjs`
 
 | Estado | Quando |
 | --- | --- |
-| normal | Barra com conta, projeto, modelo, esforço, Yolo/pede permissão e gasto em US$; lista da conversa (mensagens, ferramentas recolhíveis, avisos) e o campo de mensagem. |
+| normal | Barra com conta, projeto, modelo, esforço, Yolo/pede permissão e gasto em US$; lista da conversa (mensagens, ferramentas recolhíveis, avisos) e o campo de mensagem. Imagens coladas ou soltas aparecem como miniaturas acima do campo ("Imagens que vão com a mensagem"), com "Lendo imagem…" enquanto são preparadas; a mensagem enviada mostra as miniaturas. |
 | loading | Turno em andamento: "Trabalhando…" ou o texto chegando com cursor; o botão Enviar vira Parar. |
 | empty | Conversa vazia: explica que é o Claude Code sem a tela do terminal e se pede permissão ou não. Com contexto do canvas, a primeira mensagem sai sozinha ao criar. |
-| error | Aviso role="alert" na conversa: chave recusada, sem saldo, limite, processo que caiu ou CLI ausente, com o que fazer. |
+| error | Aviso role="alert" na conversa: chave recusada, sem saldo, limite, processo que caiu ou CLI ausente, com o que fazer. No campo, role="alert" diz a imagem que não abriu ou o que passou do limite de 10. |
 | pending | Pedido de permissão (sem Yolo): cartão com a ferramenta, o que ela vai fazer e Permitir/Negar. |
 | success | Resposta do Claude em Markdown; cada ferramenta mostra o resultado ao expandir. |
 
 | Controle | Gatilho | Efeito | Falha conhecida | Teste |
 | --- | --- | --- | --- | --- |
-| `aria-label="Mensagem para o Claude"` (role) | clique | Enter envia (claude-api:start + claude-api:send); Shift+Enter quebra linha. (desabilitado: Sem efeito enquanto um turno está em andamento.) | Falha ao abrir ou enviar vira aviso na conversa; o texto já saiu do campo. | — |
+| `aria-label="Mensagem para o Claude"` (role) | clique | Enter envia (claude-api:start + claude-api:send, com images em base64 quando há imagem); Shift+Enter quebra linha. Ctrl+V com imagem e soltar arquivo de imagem no campo anexam (claude-api-images.ts: até 10, PNG/JPEG/GIF/WebP como estão; o resto vira PNG; acima de 5 MB ou 8000 px é reduzido). (desabilitado: Sem efeito enquanto um turno está em andamento ou uma imagem ainda está sendo lida.) | Falha ao abrir ou enviar vira aviso na conversa; o texto já saiu do campo. Imagem que não abre ou passa do limite vira aviso no campo; /model e /resume com imagem avisam que ela não foi junto. | — |
+| `aria-label={`Remover imagem` (button) | clique | Tira a imagem da mensagem antes de enviar e limpa o aviso do campo. (desabilitado: Só existe com imagem anexada.) | Nenhuma conhecida: é só estado local, nada foi enviado ainda. | — |
 | `title="Interromper"` (button) | clique | Parar: manda o pedido de interrupção (claude-api:interrupt); o turno termina com "Interrompido.". (desabilitado: Só aparece com turno em andamento.) | Sem processo vivo não faz nada. | — |
 | `Permitir` (button) | clique | Responde ao pedido de permissão com allow e a entrada original (claude-api:respond-permission). (desabilitado: Só existe com pedido de permissão aberto.) | Pedido que já não está aberto vira aviso na conversa. | — |
 | `Negar` (button) | clique | Responde deny; a ferramenta aparece riscada como "negado" e o Claude segue sem ela. (desabilitado: Só existe com pedido de permissão aberto.) | Pedido que já não está aberto vira aviso na conversa. | — |

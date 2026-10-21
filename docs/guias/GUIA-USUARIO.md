@@ -341,6 +341,8 @@ terminal, chaves ou caminhos de perfil.
   - O bloco precisa de um **Projeto**.
   - Sem **Yolo**, cada edição ou comando pede **Permitir/Negar** dentro do bloco.
   - O gasto da conversa aparece em US$ no topo do bloco.
+  - Dá para **colar** (Ctrl+V) ou **soltar** imagens no campo da mensagem, até 10
+    por vez.
   - Detalhes no [Guia de Contas e Limites](GUIA-CONTAS-E-LIMITES.md#claude-por-chave-de-api-bloco-de-conversa).
 - **Troca silenciosa corrigida.** Antes, se a lista de contas falhasse ou a conta
   salva tivesse sido removida, o configurador abria o bloco no Login do sistema
