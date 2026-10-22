@@ -580,6 +580,62 @@ describe('isolateEnvironmentForThisProcessOnly', () => {
       fs.rmSync(userData, { recursive: true, force: true })
     }
   })
+
+  // A detecção do app resolve o PRIMEIRO caminho do PATH. Medido em 22/10/2026 nesta máquina: o
+  // `codex.cmd` do Openia estava antes da pasta gerenciada, a detecção o escolhia e ele quebrava.
+  describe('pasta que já tem o executável da CLI sob teste', () => {
+    function montar() {
+      const raiz = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-path-teste-'))
+      const comAtalho = path.join(raiz, 'com-atalho')
+      const semAtalho = path.join(raiz, 'sem-atalho')
+      fs.mkdirSync(comAtalho)
+      fs.mkdirSync(semAtalho)
+      fs.writeFileSync(path.join(comAtalho, process.platform === 'win32' ? 'gemini.cmd' : 'gemini'), 'atalho de fora')
+      fs.writeFileSync(path.join(semAtalho, 'outra-ferramenta'), 'x')
+      const chaveDoPath = process.platform === 'win32' ? 'Path' : 'PATH'
+      const env = { [chaveDoPath]: [comAtalho, semAtalho].join(path.delimiter) }
+      return { raiz, comAtalho, semAtalho, chaveDoPath, env }
+    }
+
+    it('sai do PATH quando a CLI sob teste é o que a pasta tem; a outra pasta continua', () => {
+      const { raiz, semAtalho, chaveDoPath, env } = montar()
+      const casa = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-casa-teste-'))
+      try {
+        isolateEnvironmentForThisProcessOnly(casa, casa, env, getOfficialAiCli('gemini'))
+
+        assert.equal(env[chaveDoPath], semAtalho)
+      } finally {
+        fs.rmSync(raiz, { recursive: true, force: true })
+        fs.rmSync(casa, { recursive: true, force: true })
+      }
+    })
+
+    it('só vale para a CLI sob teste: o atalho de OUTRA CLI não tira a pasta do PATH', () => {
+      const { raiz, comAtalho, semAtalho, chaveDoPath, env } = montar()
+      const casa = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-casa-teste-'))
+      try {
+        isolateEnvironmentForThisProcessOnly(casa, casa, env, getOfficialAiCli('claude'))
+
+        assert.equal(env[chaveDoPath], [comAtalho, semAtalho].join(path.delimiter))
+      } finally {
+        fs.rmSync(raiz, { recursive: true, force: true })
+        fs.rmSync(casa, { recursive: true, force: true })
+      }
+    })
+
+    it('sem CLI informada o PATH só perde o que já perdia (compatível com quem chama sem o quarto argumento)', () => {
+      const { raiz, comAtalho, semAtalho, chaveDoPath, env } = montar()
+      const casa = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-casa-teste-'))
+      try {
+        isolateEnvironmentForThisProcessOnly(casa, casa, env)
+
+        assert.equal(env[chaveDoPath], [comAtalho, semAtalho].join(path.delimiter))
+      } finally {
+        fs.rmSync(raiz, { recursive: true, force: true })
+        fs.rmSync(casa, { recursive: true, force: true })
+      }
+    })
+  })
 })
 
 describe('main', () => {

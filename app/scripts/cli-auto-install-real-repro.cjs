@@ -643,7 +643,7 @@ function formatSummary(relatorio) {
  * respeita) passam a apontar para fora do que existe. Vale só para este
  * processo; o ambiente real da pessoa não é alterado.
  */
-function isolateEnvironmentForThisProcessOnly(fakeHome, userData, env = process.env) {
+function isolateEnvironmentForThisProcessOnly(fakeHome, userData, env = process.env, cli = null) {
   const roaming = path.join(fakeHome, 'AppData', 'Roaming')
   const local = path.join(fakeHome, 'AppData', 'Local')
   fs.mkdirSync(roaming, { recursive: true })
@@ -660,12 +660,34 @@ function isolateEnvironmentForThisProcessOnly(fakeHome, userData, env = process.
 
   const pathKey = process.platform === 'win32' ? 'Path' : 'PATH'
   const atual = env[pathKey] ?? env.PATH ?? ''
+  const nomes = executableNamesOf(cli)
   const filtrado = atual
     .split(path.delimiter)
     .filter((entrada) => !/felixo-ai-core[\\/]clis|[\\/]npm$/i.test(entrada))
+    // Qualquer pasta que já tenha o executável da CLI sob teste também sai: a detecção
+    // resolve o PRIMEIRO caminho do PATH, então um atalho de fora (medido em 22/10/2026:
+    // o `codex.cmd` do Openia, que quebrava) passava na frente da pasta gerenciada e a
+    // reprodução acabava medindo a máquina, não o ciclo.
+    .filter((entrada) => !hasAnyExecutable(entrada, nomes))
     .join(path.delimiter)
   env[pathKey] = filtrado
   env.PATH = filtrado
+}
+
+function executableNamesOf(cli) {
+  if (!cli?.command) return []
+  return [...new Set([cli.command, ...(cli.windowsAliases ?? []), `${cli.command}.cmd`, `${cli.command}.exe`, `${cli.command}.ps1`])]
+}
+
+function hasAnyExecutable(directory, names) {
+  if (!directory || names.length === 0) return false
+  return names.some((name) => {
+    try {
+      return fs.existsSync(path.join(directory, name))
+    } catch {
+      return false
+    }
+  })
 }
 
 function makeTempDir() {
@@ -699,7 +721,7 @@ async function main(argv = process.argv.slice(2)) {
   console.log(`[repro] CLI: ${args.cli} | plataforma: ${process.platform} | node: ${process.version}`)
   const userData = makeTempDir()
   const fakeHome = makeTempDir()
-  isolateEnvironmentForThisProcessOnly(fakeHome, userData)
+  isolateEnvironmentForThisProcessOnly(fakeHome, userData, process.env, cli)
   console.log('[repro] userData e HOME/APPDATA isolados em pastas descartáveis')
 
   const inicio = performance.now()
