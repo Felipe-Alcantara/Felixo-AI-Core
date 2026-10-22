@@ -78,7 +78,12 @@ jobs:
   ciclo:
     name: ${{ matrix.cli }} (windows-latest)
     runs-on: windows-latest
-    # Provisório até medir a duração real no runner (a task pede medir antes de fixar).
+    # Medido no windows-latest em 22/10/2026 (Node 22.23.3): o ciclo do claude leva 42 s e o
+    # do gemini 237 s (a primeira instalação sozinha, de 65 a 156 s: o registry do npm no
+    # runner é bem mais lento que numa máquina de desenvolvimento). Com a instalação
+    # extra do controle, 375 s. O pior caso legítimo é o de infra: 3 tentativas do script
+    # mais as esperas de 60 s e 120 s, perto de 20 min. 30 min é o teto do job; o do passo
+    # (25) é menor de propósito, para o resumo e a anotação ainda rodarem se ele estourar.
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -112,6 +117,7 @@ jobs:
       - name: Rodar o ciclo de instalação
         id: ciclo
         shell: bash
+        timeout-minutes: 25
         env:
           CONTROLE: ${{ inputs.controle }}
         run: |
