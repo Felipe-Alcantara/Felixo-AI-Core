@@ -43,6 +43,11 @@ on:
         required: false
         type: boolean
         default: false
+      infra:
+        description: 'Controle de infra: aponta o registry do npm para uma porta fechada só no passo do ciclo. A run PRECISA ficar vermelha com o veredito "infra", depois de 3 tentativas'
+        required: false
+        type: boolean
+        default: false
   push:
     branches:
       - main
@@ -120,11 +125,18 @@ jobs:
         timeout-minutes: 25
         env:
           CONTROLE: ${{ inputs.controle }}
+          INFRA: ${{ inputs.infra }}
         run: |
           SAIDA="$RUNNER_TEMP/ciclo-$CLI"
           mkdir -p "$SAIDA"
           args=(--cli "$CLI" --report "$SAIDA/relatorio.json" --summary "$SAIDA/resumo.md")
           if [ "$CONTROLE" = "true" ]; then args+=(--control-regressao); fi
+          # Controle de infra: só o passo do ciclo enxerga um registry que recusa a conexão
+          # (o `npm ci` acima já rodou com o registry normal). Prova, num runner de verdade,
+          # que a rede caída vira o veredito "infra" e que só ele é repetido.
+          if [ "$INFRA" = "true" ]; then
+            export npm_config_registry=http://127.0.0.1:9 npm_config_fetch_retries=0
+          fi
 
           codigo=0
           for tentativa in 1 2 3; do
