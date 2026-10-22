@@ -18,15 +18,9 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
-const { after, test } = require('node:test')
+const { test } = require('node:test')
 
 const { PtyProcessManager } = require('./pty-process-manager.cjs')
-// Encerrar a sessão no Windows dispara o auxiliar `conpty_console_list_agent`
-// do node-pty, que falha com `AttachConsole` no runner sem console — a mesma
-// guarda do teste de PTY nativa isola só essa falha conhecida.
-const { instalarGuardaDeConsoleListAgent } = require('../__fixtures__/conpty-console-list-agent-guard.cjs')
-
-after(instalarGuardaDeConsoleListAgent())
 
 const TEMPO_LIMITE_MS = 20_000
 const COMANDO = 'felixo-sonda-ps1'

@@ -23,14 +23,9 @@
 const assert = require('node:assert/strict')
 const os = require('node:os')
 const path = require('node:path')
-const { after, test } = require('node:test')
+const { test } = require('node:test')
 
 const { PtyProcessManager } = require('./pty-process-manager.cjs')
-// Encerrar a sessão no Windows dispara o auxiliar `conpty_console_list_agent`
-// do node-pty, que falha com `AttachConsole` no runner sem console.
-const { instalarGuardaDeConsoleListAgent } = require('../__fixtures__/conpty-console-list-agent-guard.cjs')
-
-after(instalarGuardaDeConsoleListAgent())
 
 const TEMPO_LIMITE_MS = 20_000
 const MARCADOR = '__FELIXO_SONDA_SYSTEM32_OK__'

@@ -19,17 +19,10 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
-const { after, test } = require('node:test')
+const { test } = require('node:test')
 
 const platform = require('../core/platform/index.cjs')
 const { PtyProcessManager } = require('./pty-process-manager.cjs')
-
-// Guarda da falha conhecida `AttachConsole` do node-pty no runner Windows —
-// a explicação completa mora em `../__fixtures__/conpty-console-list-agent-guard.cjs`.
-const { instalarGuardaDeConsoleListAgent } = require('../__fixtures__/conpty-console-list-agent-guard.cjs')
-
-const removerGuardaDeConsoleListAgent = instalarGuardaDeConsoleListAgent()
-after(removerGuardaDeConsoleListAgent)
 
 const TEMPO_LIMITE_MS = 15_000
 // No Windows a fixture entra em modo raw para Ctrl-Z chegar como caractere,
