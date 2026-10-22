@@ -14,6 +14,7 @@ const {
   resolveWindowsCodexPath,
 } = require('./pty-process-manager.cjs')
 const { ensureNodePtySpawnHelperExecutable } = require('./pty-native-assets.cjs')
+const { createNodePtySpawn } = require('./node-pty-windows-kill.cjs')
 
 /**
  * Lê a tela do `/status` do Codex numa sessão interativa descartável.
@@ -780,7 +781,7 @@ function loadNodePtySpawn(platformName = process.platform) {
     }
   }
 
-  return require('node-pty').spawn
+  return createNodePtySpawn(require('node-pty'), { platformName })
 }
 
 const readCodexStatusScreen = createCodexStatusScreenQuery()

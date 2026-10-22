@@ -36,6 +36,7 @@ const { normalizeCliVersion } = require('./agent-cli-versions.cjs')
 const { validatePtyAccountSelection } = require('./pty-account-validation.cjs')
 const { applyProfileEnv } = require('./cli-account-profiles.cjs')
 const { ensureNodePtySpawnHelperExecutable } = require('./pty-native-assets.cjs')
+const { createNodePtySpawn } = require('./node-pty-windows-kill.cjs')
 
 const DEFAULT_COLS = 80
 const DEFAULT_ROWS = 24
@@ -1107,8 +1108,7 @@ class PtyProcessManager {
       })
     }
 
-    const nodePty = require('node-pty')
-    return (file, args, options) => nodePty.spawn(file, args, options)
+    return createNodePtySpawn(require('node-pty'), { platformName: this.platform.name })
   }
 
   /**

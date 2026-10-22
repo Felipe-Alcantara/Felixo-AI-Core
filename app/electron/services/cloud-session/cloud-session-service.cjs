@@ -24,6 +24,7 @@ const { createCliEnv } = require('../cli-process-manager.cjs')
 const { applyProfileEnv } = require('../cli-account-profiles.cjs')
 const { createPtyLaunchSpec } = require('../pty-process-manager.cjs')
 const { ensureNodePtySpawnHelperExecutable } = require('../pty-native-assets.cjs')
+const { createNodePtySpawn } = require('../node-pty-windows-kill.cjs')
 const { buildPosixExecLine, buildWindowsCommandLine } = require('./cloud-session-command-line.cjs')
 const { resolveNativeClaude } = require('./cloud-session-executable.cjs')
 const {
@@ -93,7 +94,7 @@ function loadNodePtySpawn(platformName) {
       throw new Error(`não foi possível preparar o helper nativo do node-pty: ${helper.reason}`)
     }
   }
-  return require('node-pty').spawn
+  return createNodePtySpawn(require('node-pty'), { platformName })
 }
 
 /**

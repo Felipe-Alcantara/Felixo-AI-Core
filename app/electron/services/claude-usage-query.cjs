@@ -12,6 +12,7 @@ const {
   resolveWindowsCodexPath,
 } = require('./pty-process-manager.cjs')
 const { ensureNodePtySpawnHelperExecutable } = require('./pty-native-assets.cjs')
+const { createNodePtySpawn } = require('./node-pty-windows-kill.cjs')
 
 const DEFAULT_TIMEOUT_MS = 30_000
 const DEFAULT_STARTUP_FALLBACK_MS = 8_000
@@ -308,7 +309,7 @@ function loadNodePtySpawn(platformName = process.platform) {
     }
   }
 
-  return require('node-pty').spawn
+  return createNodePtySpawn(require('node-pty'), { platformName })
 }
 
 function parseClaudeUsageOutput(output, { now = () => Date.now() } = {}) {
