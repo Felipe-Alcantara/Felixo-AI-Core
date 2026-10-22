@@ -6,10 +6,19 @@ const FILTERABLE_PROPERTY_TYPES = ['select', 'multi_select', 'status'] as const
 
 export type NotionStatusScope = 'all' | 'open' | 'done'
 
+/**
+ * Valor que, dentro de `NotionPropertyFilter.values`, quer dizer "a propriedade
+ * está vazia". O Notion não tem uma opção para isso: uma tarefa sem Repositório
+ * não tem valor nenhum, e sem este marcador não havia como escolhê-la — qualquer
+ * filtro com valores a escondia. Fica gravado nas visualizações salvas, então o
+ * texto não muda.
+ */
+export const NO_VALUE_FILTER = '__sem-valor__'
+
 export type NotionPropertyFilter = {
   /** Nome da propriedade no schema da database (ex.: "Repositório"). */
   property: string
-  /** Tarefa entra na view se qualquer um destes valores estiver presente na propriedade. */
+  /** Tarefa entra na view se qualquer um destes valores estiver presente na propriedade (ou `NO_VALUE_FILTER` e ela estiver vazia). */
   values: string[]
 }
 
@@ -139,8 +148,34 @@ export function taskMatchesView(task: NotionTask, view: NotionTaskView): boolean
   return view.propertyFilters.every((filter) => {
     if (filter.values.length === 0) return true
     const taskValues = extractPropertyValues(task.fields?.[filter.property])
+    // Sem valor nenhum, a tarefa só entra se o filtro pediu "sem valor" de propósito.
+    if (taskValues.length === 0) return filter.values.includes(NO_VALUE_FILTER)
     return taskValues.some((value) => filter.values.includes(value))
   })
+}
+
+export type FilterValueChoice = { value: string; label: string }
+
+/** "Sem Repositório": o mesmo rótulo do cartão das tarefas sem valor no Painel. */
+export function noValueLabel(property: string): string {
+  return `Sem ${property}`
+}
+
+/**
+ * Escolhas de valor do editor de visualização: "Sem <propriedade>" primeiro,
+ * depois as opções do schema. `status` fica sem a escolha, porque no Notion ele
+ * sempre tem valor; só `select` e `multi_select` podem estar vazios.
+ */
+export function filterValueChoices(property: FilterableProperty): FilterValueChoice[] {
+  const options = property.options.map((option) => ({ value: option, label: option }))
+  return property.type === 'status'
+    ? options
+    : [{ value: NO_VALUE_FILTER, label: noValueLabel(property.name) }, ...options]
+}
+
+/** Texto legível dos valores de um filtro (dica da aba), sem mostrar o marcador interno. */
+export function describeFilterValues(property: string, values: string[]): string {
+  return values.map((value) => (value === NO_VALUE_FILTER ? noValueLabel(property) : value)).join(', ')
 }
 
 export function filterTasksByView(tasks: NotionTask[], view: NotionTaskView): NotionTask[] {

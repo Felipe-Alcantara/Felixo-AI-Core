@@ -2565,3 +2565,55 @@ versões sem necessidade.**
 - **Cuidado que isso impõe:** o `concurrency` do Release cancela o que está em andamento quando outro entra, e
   um Release cancelado no meio deixa pré-release órfão. Por isso nenhum push foi feito enquanto o Release de
   `80c67ac` rodava.
+
+## 2026-10-22 — Hotfix: o filtro das visualizações do Notion ganha "Sem <propriedade>" (tarefas sem repositório sumiam)
+
+**Pedido.** Hotfix pedido pelo Felipe com uma captura do bloco "Tarefas Notion" (database "Tarefas — HOME
+(pessoal)", editor "Editar visualização"): o filtro por Repositório só listava os repositórios existentes, e
+não havia como mostrar as tarefas **sem** repositório. Várias tarefas sem repositório explícito ficavam
+escondidas de qualquer visualização filtrada.
+
+**Causa.** `taskMatchesView` (`app/src/features/canvas/services/notion-task-views.ts`) exigia que a tarefa
+tivesse ao menos um dos valores escolhidos. Uma tarefa sem Repositório não tem valor nenhum, então nunca
+passava em filtro por propriedade, e o editor não oferecia nenhuma escolha que a representasse. O seletor do
+topo ("Todos os repositórios") e o Painel já tratavam o caso (`NO_GROUP_KEY`, cartão "Sem Repositório"); só o
+editor de visualização tinha a lacuna.
+
+**O que mudou.**
+- **Marcador `NO_VALUE_FILTER` (`__sem-valor__`) dentro de `values`.** Quer dizer "a propriedade está vazia".
+  É o mesmo texto do `NO_GROUP_KEY` do Painel. Sem valor na tarefa, ela entra só se o filtro pediu o marcador;
+  com valor, o comportamento de sempre (qualquer valor em comum). Uma escolha combinada
+  (`['Felixo-AI-Core', '__sem-valor__']`) traz os dois lados.
+- **Chip "Sem <propriedade>" no editor**, primeiro da lista, só para `select` e `multi_select`. `status` não
+  ganha: no Notion ele sempre tem valor. A lógica ficou em funções puras (`filterValueChoices`,
+  `noValueLabel`, `describeFilterValues`) para ser testável no ambiente `node` do vitest, que não tem
+  Testing Library.
+- **A dica da aba** mostra "Repositório: Sem Repositório", nunca o marcador interno.
+- **Compatível com o que já está salvo:** o formato da visualização não mudou (`values` continua
+  `string[]`), então não houve migração; visualização antiga continua escondendo a tarefa sem valor, como
+  antes, até a pessoa marcar o chip.
+- **Inventário do canvas:** o localizador do botão de valor mudou de `toggleViewDraftValue(option)` para
+  `toggleViewDraftValue(choice.value)`; `inventory/data/nodes.ts` e `docs/projeto/INVENTARIO-CANVAS.md`
+  (gerado por snapshot) foram atualizados juntos.
+
+**Medido.**
+- `notion-task-views.test.ts`: 24 testes (eram 8). Cobrem as 6 formas de valor vazio que chegam do Notion
+  (campo ausente, `null`, `undefined`, `''`, `[]`, `{}`), tarefa com repositório fora de "sem repositório",
+  escolha combinada, filtro sem o marcador mantendo o comportamento antigo, filtro sem valores deixando tudo
+  passar, combinação com o estado "abertas", visualização salva voltando do storage, `status` sem o chip,
+  rótulo igual ao do Painel e a dica sem o marcador.
+- **Mutação:** tirando a linha que devolve `filter.values.includes(NO_VALUE_FILTER)` para tarefa sem valor,
+  **9 testes reprovam**; restaurada, os 24 passam.
+- **Tela vista de verdade**, no app isolado (`felixo devtools`, perfil temporário, janela invisível), com uma
+  conexão e 6 tarefas de mentira (3 sem repositório) servidas por handlers IPC falsos de `notion:*` registrados
+  em `mainWindow.webContents.ipc`: o editor mostra "Sem Repositório", "Felixo-AI-Core" e "notion-tasks-cli"; ao
+  salvar, a aba "Sem repositório" lista só as 2 tarefas abertas sem repositório e a dica diz "Repositório: Sem
+  Repositório". A 3ª tarefa sem repositório estava concluída e fica de fora por causa do "mostrar
+  concluídas", que já era assim.
+- Gate: `npm run lint` e `tsc -p tsconfig.app.json --noEmit` com saída 0; vitest 3256 passando (209
+  arquivos); `npm test` 2926 passando, 0 falhas. O primeiro vitest apontou o teste do inventário do canvas
+  (localizador renomeado) e o snapshot do documento, os dois acertados acima.
+
+**Fora do escopo / limites.**
+- Visualizações já criadas não ganham o marcador sozinhas: a pessoa abre "Editar visualização" e marca o chip.
+- Não mexi no Painel nem no seletor do topo, que já cobriam o caso.

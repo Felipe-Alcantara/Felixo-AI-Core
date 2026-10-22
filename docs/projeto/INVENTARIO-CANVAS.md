@@ -1939,7 +1939,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `aria-label="Fechar editor de visualização"` (button) | clique | Fecha o editor de visualização e descarta o rascunho. | Sem falha própria. | — |
 | `aria-label="Estado incluído na visualização"` (select) | clique | Escolhe Todos/Só abertas/Só concluídas no rascunho da visualização. | Sem falha própria. | — |
 | `aria-label="Propriedade para filtrar"` (select) | clique | Escolhe a propriedade (select, multi-select, status) do filtro e zera os valores marcados. (desabilitado: Só aparece se a database tiver propriedades filtráveis.) | Sem falha própria. | — |
-| `onClick={() => toggleViewDraftValue(option)}` (button) | clique | Um por valor da propriedade: marca/desmarca o valor no rascunho do filtro. | Sem falha própria. | — |
+| `onClick={() => toggleViewDraftValue(choice.value)}` (button) | clique | Um por valor da propriedade, mais "Sem <propriedade>" (select e multi-select): marca/desmarca o valor no rascunho do filtro. "Sem <propriedade>" pega as tarefas com a propriedade vazia. | Sem falha própria. | — |
 | `onClick={cancelViewBuilder}>Cancelar` (button) | clique | Cancela o editor de visualização. | Sem falha própria. | — |
 | `{editingViewId ? 'Salvar alterações' : 'Criar visualização'}` (button) | clique | Submit: grava a visualização em felixo:notion-task-views:<conexão>:<database> e a ativa. | Nome vazio não envia (required); localStorage indisponível perde a visualização ao remontar. | — |
 | `aria-label="Fechar editor" title="Fechar editor"` (button) | clique | Fecha o formulário de tarefa e descarta o rascunho. | Sem falha própria. | — |

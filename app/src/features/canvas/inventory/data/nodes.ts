@@ -1059,9 +1059,9 @@ export const notionTasksTool: InventoryElement = {
       disabledWhen: 'Só aparece se a database tiver propriedades filtráveis.',
     },
     {
-      locator: 'onClick={() => toggleViewDraftValue(option)}',
+      locator: 'onClick={() => toggleViewDraftValue(choice.value)}',
       kind: 'button',
-      effect: 'Um por valor da propriedade: marca/desmarca o valor no rascunho do filtro.',
+      effect: 'Um por valor da propriedade, mais "Sem <propriedade>" (select e multi-select): marca/desmarca o valor no rascunho do filtro. "Sem <propriedade>" pega as tarefas com a propriedade vazia.',
       failure: 'Sem falha própria.',
     },
     {

@@ -52,7 +52,9 @@ import {
 import {
   BUILT_IN_VIEWS,
   createViewId,
+  describeFilterValues,
   filterTasksByView,
+  filterValueChoices,
   isBuiltInView,
   listFilterableProperties,
   readCustomViews,
@@ -252,6 +254,10 @@ export function NotionTasksPanel({
   }, [schema])
 
   const filterableProperties = useMemo(() => listFilterableProperties(schema), [schema])
+  const draftFilterChoices = useMemo(() => {
+    const property = filterableProperties.find((item) => item.name === viewDraft.property)
+    return property ? filterValueChoices(property) : []
+  }, [filterableProperties, viewDraft.property])
 
   // Propriedades que podem virar coluna extra na tabela: qualquer uma da
   // database, menos o título (que já é a coluna "Tarefa").
@@ -1150,7 +1156,7 @@ export function NotionTasksPanel({
                       aria-selected={isActive}
                       className={`rounded-sm px-1.5 py-1 text-[11px] ${isActive ? 'text-zinc-100' : 'text-zinc-500 hover:text-zinc-200'}`}
                       onClick={() => selectView(view.id)}
-                      title={editable && view.propertyFilters[0] ? `${view.propertyFilters[0].property}: ${view.propertyFilters[0].values.join(', ')}` : undefined}
+                      title={editable && view.propertyFilters[0] ? `${view.propertyFilters[0].property}: ${describeFilterValues(view.propertyFilters[0].property, view.propertyFilters[0].values)}` : undefined}
                     >
                       {view.name}
                     </button>
@@ -1206,10 +1212,10 @@ export function NotionTasksPanel({
                     />
                     {viewDraft.property && (
                       <div className="flex flex-wrap gap-1.5" role="group" aria-label={`Valores de ${viewDraft.property}`}>
-                        {filterableProperties.find((property) => property.name === viewDraft.property)?.options.map((option) => {
-                          const checked = viewDraft.values.includes(option)
+                        {draftFilterChoices.map((choice) => {
+                          const checked = viewDraft.values.includes(choice.value)
                           return (
-                            <button key={option} type="button" className={`rounded-full border px-2.5 py-1 text-[11px] ${checked ? 'border-white/10 bg-(--f-core-white)/15 text-(--f-core-white)' : 'border-white/10 text-zinc-400 hover:bg-white/5'}`} onClick={() => toggleViewDraftValue(option)}>{option}</button>
+                            <button key={choice.value} type="button" aria-pressed={checked} className={`rounded-full border px-2.5 py-1 text-[11px] ${checked ? 'border-white/10 bg-(--f-core-white)/15 text-(--f-core-white)' : 'border-white/10 text-zinc-400 hover:bg-white/5'}`} onClick={() => toggleViewDraftValue(choice.value)}>{choice.label}</button>
                           )
                         })}
                       </div>
