@@ -857,7 +857,7 @@ describe('runBufferedCommand: árvore de processos, cancelamento e saída', () =
       command: process.execPath,
       args: [
         '-e',
-        "process.stderr.write('ERROR: Could not install packages\\n\\n[notice] A new release of pip is available: 25.3 -> 26.2.2\\n[notice] To update, run: python.exe -m pip install --upgrade pip\\n'); process.exit(1)",
+        "process.stderr.write('ERROR: Could not install packages\\n\\n[notice] A new release of pip is available: 25.3 -> 26.2.2\\n[notice] To update, run: python.exe -m pip install --upgrade pip\\n'); process.exitCode = 1",
       ],
       timeoutMs: 20_000,
     })
@@ -871,7 +871,9 @@ describe('runBufferedCommand: árvore de processos, cancelamento e saída', () =
       command: process.execPath,
       args: [
         '-e',
-        "process.stderr.write('barulho de progresso\\n'.repeat(20000)); process.stderr.write('ERROR: ECONNRESET no fim'); process.exit(1)",
+        // `exitCode`, não `exit()`: no POSIX a escrita num pipe é assíncrona e `exit()` cortaria o fim
+        // da saída (visto no CI do Ubuntu e do macOS); no Windows ela é síncrona e esconderia isso.
+        "process.stderr.write('barulho de progresso\\n'.repeat(20000)); process.stderr.write('ERROR: ECONNRESET no fim'); process.exitCode = 1",
       ],
       timeoutMs: 20_000,
     })
