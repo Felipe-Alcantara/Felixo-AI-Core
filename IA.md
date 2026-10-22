@@ -2706,3 +2706,15 @@ task de acompanhamento (o E2E de contexto) segue aberto.
   publicaria o conserto. Por isso o teste de integração novo ainda não está na lista do `test:native`, e não há
   script `repro:pty-kill`: as duas linhas entram num commit à parte quando a política voltar ao verde. Até lá o teste
   roda à mão e o `pty-kill-windows.yml` cobre o mesmo cenário no runner.
+
+**Complemento de 22/10/2026 (deploy e a conta final do runner).**
+- **Deploy.** O CI da `main` (run 39838891380, que reaproveitou o do PR #130: mesma árvore), o Release gate
+  (39838930871) e o Release (39838968874) passaram; a v0.1.478 saiu às 16:18 como Latest, apontando para `bddc016`.
+  O smoke empacotado do Windows (`release-smoke-windows-latest.json`) registra `pty.ok: true`
+  (`FELIXO_RELEASE_PTY_OK`, exitCode 0), `nativeErrors: []` e `result: passed`.
+- **Conta das execuções do workflow no runner.** Foram 6 execuções de 10 repetições (39831517850, 39832831848,
+  39833755769, 39835350917, 39836260322 e 39837855249). Em todas o controle reproduziu o defeito (10 de 10 com ruído,
+  5006 a 5022 ms) e a correção saiu limpa (10 de 10 sem ruído, 1004 a 1019 ms). O passo nativo ficou verde em 59 de
+  60 repetições e com 0 linhas de ruído em todas. As duas execuções vermelhas não são da correção: a 39831517850
+  contou a palavra "AttachConsole" e pegou o título do próprio teste de integração (o padrão passou a ser o texto
+  exato do erro), e a 39836260322 pegou o flake do payload grande descrito acima.
