@@ -1,0 +1,178 @@
+name: Ciclo de instalação das CLIs (Windows)
+
+# Cobre a task "Felixo AI Core/Windows — integrar o runner de reprodução de
+# instalação de CLIs ao CI/release". Roda `app/scripts/cli-auto-install-real-repro.cjs`
+# num Windows descartável: instala uma CLI de verdade pelo caminho de produção do
+# app (`registerCliAutoInstallHandlers`) num perfil isolado e prova que a segunda
+# abertura e o upgrade NÃO reinstalam, e que um binário apagado É reinstalado.
+#
+# POR QUE UM WORKFLOW PRÓPRIO, e não o CI de PR nem o Release:
+# - Em PR não: é rede real e leva minutos, e falha por instabilidade do registry
+#   do npm, que não é culpa de quem abriu o PR.
+# - No Release não: o Release publica o instalador, e uma falha de rede de
+#   terceiros ali atrasaria a publicação e deixaria um pré-release órfão (foi o
+#   que o `v0.1.472` ficou, por outro motivo). O ciclo é uma verificação, não um
+#   passo de publicação.
+# - `official-cli-install.yml` já roda instalação real fora do PR, mas com
+#   `npm install -g` cru: prova que o npm instala a CLI, não que o Felixo decide
+#   certo sobre reinstalar. Aqui o que está sob teste é o código do app.
+#
+# QUANDO RODA:
+# - `push` na main, só quando muda código que o ciclo executa (lista abaixo, sem
+#   os testes) ou este arquivo. É onde nasce uma regressão como "alguém muda o
+#   `planAutoInstall` e volta a reinstalar sempre".
+# - Toda segunda-feira, para pegar uma publicação nova da CLI de terceiros que
+#   quebre a instalação vista pelo app, sem depender de commit nosso.
+# - Sob demanda (`workflow_dispatch`), inclusive com o controle negativo.
+#
+# FALHA DE INFRA × FALHA DO FELIXO. O script termina com um veredito e um código
+# de saída próprios: 1 regressão do ciclo, 2 infra (rede/registry), 3 falha de
+# instalação sem sinal de rede, 4 erro do runner. Só o código 2 é repetido aqui
+# (até 3 tentativas, com espera); uma regressão NUNCA é repetida, para o vermelho
+# real não ser mascarado. Cada código vira uma anotação com o dono do problema, e
+# o resumo da run traz a tabela das rodadas e a saída do npm das falhas.
+#
+# Codex fica de fora de propósito: no Windows ele tem o caso conhecido da
+# dependência nativa opcional (`@openai/codex-win32-x64`), que misturaria outro
+# sinal neste teste.
+on:
+  workflow_dispatch:
+    inputs:
+      controle:
+        description: 'Controle negativo: provoca a regressão de propósito. A run PRECISA ficar vermelha com o veredito "regressao"'
+        required: false
+        type: boolean
+        default: false
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/ciclo-instalacao-clis.yml
+      - app/scripts/cli-auto-install-real-repro.cjs
+      - app/electron/services/cli-auto-install*.cjs
+      - app/electron/services/cli-diagnostics.cjs
+      - app/electron/services/cli-process-manager.cjs
+      - app/electron/services/managed-cli-*.cjs
+      - app/electron/core/cli-detector.cjs
+      - app/electron/core/install-retry.cjs
+      - app/electron/core/managed-cli-*.cjs
+      - app/electron/core/node-runtime.cjs
+      - app/electron/core/official-cli-catalog.cjs
+      - app/electron/core/app-paths.cjs
+      - app/electron/core/platform/**
+      - '!app/electron/**/*.test.cjs'
+  schedule:
+    # Segunda-feira 09:30 UTC, meia hora depois do `official-cli-install.yml`.
+    - cron: '30 9 * * 1'
+
+permissions:
+  contents: read
+
+# Um push novo cancela o anterior (a verificação do commit velho perde o sentido);
+# execução agendada ou manual nunca é cancelada por outra.
+concurrency:
+  group: ciclo-instalacao-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
+
+jobs:
+  ciclo:
+    name: ${{ matrix.cli }} (windows-latest)
+    runs-on: windows-latest
+    # Provisório até medir a duração real no runner (a task pede medir antes de fixar).
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        cli:
+          - gemini
+          - claude
+    defaults:
+      run:
+        working-directory: app
+    env:
+      CLI: ${{ matrix.cli }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      # Sem scripts: o ciclo só precisa do `node_modules/npm` (o mesmo mecanismo do
+      # app empacotado) e do `cross-spawn`. Baixar o binário do Electron e compilar o
+      # node-pty seria tempo gasto à toa.
+      - name: Install dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Rodar o ciclo de instalação
+        id: ciclo
+        shell: bash
+        env:
+          CONTROLE: ${{ inputs.controle }}
+        run: |
+          SAIDA="$RUNNER_TEMP/ciclo-$CLI"
+          mkdir -p "$SAIDA"
+          args=(--cli "$CLI" --report "$SAIDA/relatorio.json" --summary "$SAIDA/resumo.md")
+          if [ "$CONTROLE" = "true" ]; then args+=(--control-regressao); fi
+
+          codigo=0
+          for tentativa in 1 2 3; do
+            echo "::group::Tentativa $tentativa de 3"
+            codigo=0
+            node scripts/cli-auto-install-real-repro.cjs "${args[@]}" 2>&1 | tee -a "$SAIDA/log.txt" || codigo=${PIPESTATUS[0]}
+            echo "::endgroup::"
+            # Só infra se repete. Regressão, falha de instalação e erro do runner
+            # saem na hora: repetir esconderia o vermelho que importa.
+            if [ "$codigo" -ne 2 ]; then break; fi
+            if [ "$tentativa" -lt 3 ]; then
+              espera=$((60 * tentativa))
+              echo "::warning title=Infra do npm ($CLI)::a tentativa $tentativa terminou em infra (rede ou registry); nova tentativa em ${espera}s"
+              sleep "$espera"
+            fi
+          done
+
+          echo "codigo=$codigo" >> "$GITHUB_OUTPUT"
+          echo "tentativas=$tentativa" >> "$GITHUB_OUTPUT"
+          exit "$codigo"
+
+      # Resumo e anotação rodam também quando o ciclo falhou: é onde mora a
+      # diferença entre "o Felixo regrediu" e "o registry tropeçou".
+      - name: Resumo da run
+        if: always()
+        shell: bash
+        run: |
+          SAIDA="$RUNNER_TEMP/ciclo-$CLI"
+          if [ -f "$SAIDA/resumo.md" ]; then cat "$SAIDA/resumo.md" >> "$GITHUB_STEP_SUMMARY"; fi
+
+      - name: Dizer de quem é a falha
+        if: always()
+        shell: bash
+        env:
+          CODIGO: ${{ steps.ciclo.outputs.codigo }}
+          TENTATIVAS: ${{ steps.ciclo.outputs.tentativas }}
+        run: |
+          case "$CODIGO" in
+            0) echo "Ciclo correto para $CLI em $TENTATIVAS tentativa(s)." ;;
+            1) echo "::error title=REGRESSÃO do ciclo de instalação ($CLI)::O Felixo reinstalou quando não devia, ou não reinstalou quando devia. É defeito do Felixo, não da rede. Veja o resumo da run." ;;
+            2) echo "::error title=INFRA (não é regressão do Felixo) $CLI::A instalação falhou com assinatura de rede ou de registry nas $TENTATIVAS tentativas. Rode a workflow de novo; se persistir por dias, veja o status do registry do npm." ;;
+            3) echo "::error title=FALHA DE INSTALAÇÃO ($CLI)::A instalação falhou sem sinal de rede: pacote publicado quebrado, dependência nativa ou defeito do Felixo. A saída do npm está no resumo da run." ;;
+            4) echo "::error title=ERRO DO RUNNER ($CLI)::O ambiente da reprodução não estava como o script espera; o resultado não prova nada sobre o ciclo. Veja o log." ;;
+            *) echo "::error title=O ciclo não terminou ($CLI)::O passo anterior não gravou o código de saída (tempo limite ou cancelamento)." ;;
+          esac
+
+      - name: Publicar o log e o relatório
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: ciclo-instalacao-${{ matrix.cli }}
+          path: |
+            ${{ runner.temp }}/ciclo-${{ matrix.cli }}/log.txt
+            ${{ runner.temp }}/ciclo-${{ matrix.cli }}/relatorio.json
+            ${{ runner.temp }}/ciclo-${{ matrix.cli }}/resumo.md
+          retention-days: 30
+          if-no-files-found: warn
