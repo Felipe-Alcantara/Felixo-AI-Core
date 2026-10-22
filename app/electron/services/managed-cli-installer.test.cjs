@@ -499,7 +499,30 @@ describe('chooseNewestPublishedVersion', () => {
 
     assert.equal(result.ok, false)
     assert.match(result.message, /tempo limite/)
+    // Estruturado, para o retry e o smoke não adivinharem o motivo pelo texto.
+    assert.equal(result.timedOut, true)
+    assert.notEqual(result.cancelled, true)
     assert.deepEqual(killTreeCalls, [{ pid: 4242, platformName: killTreeCalls[0]?.platformName }])
+  })
+
+  it('o executável que nem abre volta com o errorCode, para não ser confundido com falha de rede', async () => {
+    const result = await installManagedPackage({
+      npmPackage: '@openai/codex',
+      npmCliPath: '/npm/bin/npm-cli.js',
+      nodeExecutable: '/opt/app/felixo',
+      layout: LAYOUT,
+      spawn: () => {
+        const child = new EventEmitter()
+        child.stdout = new EventEmitter()
+        child.stderr = new EventEmitter()
+        setImmediate(() => child.emit('error', Object.assign(new Error('spawn /opt/app/felixo ENOENT'), { code: 'ENOENT' })))
+        return child
+      },
+    })
+
+    assert.equal(result.ok, false)
+    assert.equal(result.errorCode, 'ENOENT')
+    assert.equal(result.timedOut, undefined)
   })
 
   // Nasce com `detached: true` no POSIX: é o que torna o processo lider de um

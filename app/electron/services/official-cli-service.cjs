@@ -7,6 +7,7 @@ const {
   getOfficialAiCli,
   listOfficialAiClis,
 } = require('../core/official-cli-catalog.cjs')
+const { killProcessTree } = require('../core/process-tree.cjs')
 const {
   launchCommandInTerminal,
 } = require('../core/terminal-launcher.cjs')
@@ -410,7 +411,30 @@ function getPlatformCommand(descriptor, platformName = platform.name) {
  * quando não há login e imprime o JSON mesmo assim, então stdout e stderr
  * sempre voltam.
  *
- * @returns {Promise<{ ok: boolean, message: string, stdout: string, stderr: string, errorCode?: string, timedOut?: true }>}
+ * Interromper (prazo vencido ou `signal` abortado) encerra a árvore inteira de
+ * processos, não só o filho direto: o `py` lança o `python`, o pip lança o
+ * compilador do pacote, um `.cmd` lança o `node`. Matar só o primeiro deixava
+ * o resto rodando escondido (medido em 22/10/2026 com `py.exe` e Python 3.14:
+ * o neto sobrevivia ao prazo). No POSIX isso exige nascer `detached`, para o
+ * processo liderar um grupo próprio que `killProcessTree` alcança por inteiro;
+ * no Windows o `taskkill /T` desce a árvore e dispensa isso.
+ *
+ * Quem mata a árvore é quem resolve: o `close` do filho morto chega enquanto a
+ * graça do SIGKILL ainda corre, e resolver por ele devolveria "código null"
+ * sem `timedOut`/`cancelled` antes de a árvore morrer (mesmo defeito que o
+ * instalador do npm teve no macOS e no Ubuntu, ver `managed-cli-installer`).
+ *
+ * @param {object} options
+ * @param {string} options.command
+ * @param {string[]} [options.args]
+ * @param {string} [options.cwd]
+ * @param {Record<string, string>} [options.env]
+ * @param {number} [options.timeoutMs]
+ * @param {AbortSignal} [options.signal] - Cancelamento pedido de fora.
+ * @param {string} [options.platformName]
+ * @param {typeof spawnChildProcess} [options.spawn] - Injetável nos testes.
+ * @param {typeof killProcessTree} [options.killTree] - Injetável nos testes.
+ * @returns {Promise<{ ok: boolean, message: string, stdout: string, stderr: string, errorCode?: string, timedOut?: true, cancelled?: true }>}
  */
 function runBufferedCommand({
   command,
@@ -418,32 +442,75 @@ function runBufferedCommand({
   cwd = os.homedir(),
   env = process.env,
   timeoutMs = INSTALL_TIMEOUT_MS,
+  signal,
+  platformName = platform.name,
+  spawn = spawnChildProcess,
+  killTree = killProcessTree,
 }) {
+  if (signal?.aborted) {
+    return Promise.resolve({
+      ok: false,
+      message: `${command} foi cancelado antes de começar.`,
+      stdout: '',
+      stderr: '',
+      cancelled: true,
+    })
+  }
+
   return new Promise((resolve) => {
-    const childProcess = spawnChildProcess(command, args, {
+    const childProcess = spawn(command, args, {
       cwd,
       env,
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
+      detached: platformName !== 'win32',
     })
     let stdout = ''
     let stderr = ''
     let didSettle = false
-    const timer = setTimeout(() => {
+    let killing = false
+
+    const settle = (result) => {
       if (didSettle) {
         return
       }
 
       didSettle = true
-      childProcess.kill('SIGTERM')
-      resolve({
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', onAbort)
+      resolve({ stdout, stderr, ...result })
+    }
+
+    const stopTree = async (result) => {
+      if (didSettle || killing) {
+        return
+      }
+
+      killing = true
+      try {
+        await killTree({ pid: childProcess.pid, platformName })
+      } catch {
+        // Melhor esforço: um kill que falha não pode deixar a chamada pendurada.
+      }
+      settle(result)
+    }
+
+    const timer = setTimeout(() => {
+      void stopTree({
         ok: false,
         message: `${command} excedeu o tempo limite de execucao.`,
-        stdout,
-        stderr,
         timedOut: true,
       })
     }, timeoutMs)
+
+    const onAbort = () => {
+      void stopTree({
+        ok: false,
+        message: `${command} foi cancelado.`,
+        cancelled: true,
+      })
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
 
     childProcess.stdout.setEncoding('utf8')
     childProcess.stdout.on('data', (chunk) => {
@@ -456,45 +523,27 @@ function runBufferedCommand({
     })
 
     childProcess.on('error', (error) => {
-      if (didSettle) {
-        return
-      }
-
-      didSettle = true
-      clearTimeout(timer)
       const errorCode = typeof error?.code === 'string' ? error.code : undefined
-      resolve({
+      settle({
         ok: false,
         message: error instanceof Error ? error.message : String(error),
-        stdout,
-        stderr,
         ...(errorCode ? { errorCode } : {}),
       })
     })
 
-    childProcess.on('close', (code, signal) => {
-      if (didSettle) {
+    childProcess.on('close', (code, closeSignal) => {
+      if (killing) {
         return
       }
-
-      didSettle = true
-      clearTimeout(timer)
 
       if (code === 0) {
-        resolve({
-          ok: true,
-          message: 'Comando concluido.',
-          stdout,
-          stderr,
-        })
+        settle({ ok: true, message: 'Comando concluido.' })
         return
       }
 
-      resolve({
+      settle({
         ok: false,
-        message: createInstallErrorMessage(command, code, signal, stderr),
-        stdout,
-        stderr,
+        message: createInstallErrorMessage(command, code, closeSignal, stderr),
       })
     })
   })
@@ -505,14 +554,22 @@ function appendLimited(current, chunk) {
 }
 
 function createInstallErrorMessage(command, code, signal, stderr) {
-  const detail = String(stderr ?? '').trim()
+  // As linhas `[notice]` do pip ("A new release of pip is available") vêm DEPOIS
+  // do erro e tomariam o lugar dele no trecho final.
+  const detail = String(stderr ?? '')
+    .split(/\r?\n/)
+    .filter((line) => !/^\[notice\]/.test(line))
+    .join('\n')
+    .trim()
   const status = signal ? `sinal ${signal}` : `codigo ${code}`
 
   if (!detail) {
     return `${command} encerrou com ${status}.`
   }
 
-  return `${command} encerrou com ${status}: ${detail.slice(0, 1000)}`
+  // O fim da saída, não o começo: o erro final do pip e do npm vem por último, e
+  // o começo, depois de uma nova tentativa de rede, é só aviso de "Retrying".
+  return `${command} encerrou com ${status}: ${detail.slice(-1000)}`
 }
 
 module.exports = {

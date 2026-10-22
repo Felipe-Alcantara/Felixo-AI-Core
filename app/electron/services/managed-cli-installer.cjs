@@ -425,7 +425,7 @@ async function verifyManagedPackageIntegrity({
  * @param {Function} [options.spawn] - Injetável nos testes.
  * @param {number} [options.timeoutMs]
  * @param {string} [options.platformName]
- * @returns {Promise<{ ok: boolean, message: string, output: string, cancelled?: boolean }>}
+ * @returns {Promise<{ ok: boolean, message: string, output: string, cancelled?: boolean, timedOut?: boolean, errorCode?: string }>}
  */
 async function installManagedPackage({
   npmPackage,
@@ -583,6 +583,7 @@ function runCommand({
     const timer = setTimeout(() => {
       void finishAfterKill({
         ok: false,
+        timedOut: true,
         message: `${failureMessage} A instalacao passou do tempo limite.`,
       })
     }, timeoutMs)
@@ -599,6 +600,7 @@ function runCommand({
     child.once('error', (error) => {
       finish({
         ok: false,
+        ...(typeof error?.code === 'string' ? { errorCode: error.code } : {}),
         message: `${failureMessage} ${error?.message ?? ''}`.trim(),
       })
     })

@@ -1,5 +1,6 @@
 const { describe, it } = require('node:test')
 const assert = require('node:assert/strict')
+const { EventEmitter } = require('node:events')
 
 const {
   getOfficialCliAccountStatus,
@@ -398,5 +399,207 @@ describe('runBufferedCommand', () => {
     assert.deepEqual(JSON.parse(result.stdout), { loggedIn: false })
     assert.equal(result.timedOut, undefined)
     assert.equal(result.errorCode, undefined)
+  })
+})
+
+describe('runBufferedCommand: árvore de processos, cancelamento e saída', () => {
+  function criarFilho(pid = 5151) {
+    const filho = new EventEmitter()
+    filho.pid = pid
+    filho.stdout = Object.assign(new EventEmitter(), { setEncoding() {} })
+    filho.stderr = Object.assign(new EventEmitter(), { setEncoding() {} })
+    filho.kill = () => assert.fail('interromper deveria matar pela árvore (killTree), não por child.kill')
+    return filho
+  }
+
+  it('o prazo vencido mata a ÁRVORE do processo, não só o filho direto', async () => {
+    const chamadas = []
+    const result = await runBufferedCommand({
+      command: 'py',
+      timeoutMs: 5,
+      platformName: 'win32',
+      spawn: () => criarFilho(4242),
+      killTree: async (options) => chamadas.push(options),
+    })
+
+    assert.equal(result.ok, false)
+    assert.equal(result.timedOut, true)
+    assert.deepEqual(chamadas, [{ pid: 4242, platformName: 'win32' }])
+  })
+
+  it('nasce detached no POSIX, para o kill de grupo alcançar os netos; no Windows não', () => {
+    for (const [platformName, esperado] of [['linux', true], ['darwin', true], ['win32', false]]) {
+      let opcoes
+      void runBufferedCommand({
+        command: 'py',
+        platformName,
+        spawn: (_comando, _args, options) => {
+          opcoes = options
+          const filho = criarFilho()
+          setImmediate(() => filho.emit('close', 0, null))
+          return filho
+        },
+      })
+
+      assert.equal(opcoes.detached, esperado, `platformName=${platformName}`)
+    }
+  })
+
+  it('cancelar mata a árvore e devolve cancelled:true', async () => {
+    const controlador = new AbortController()
+    const chamadas = []
+    const promessa = runBufferedCommand({
+      command: 'python3',
+      signal: controlador.signal,
+      spawn: () => criarFilho(9911),
+      killTree: async (options) => chamadas.push(options.pid),
+    })
+
+    controlador.abort()
+    const result = await promessa
+
+    assert.equal(result.ok, false)
+    assert.equal(result.cancelled, true)
+    assert.equal(result.timedOut, undefined)
+    assert.match(result.message, /cancelado/)
+    assert.deepEqual(chamadas, [9911])
+  })
+
+  it('já cancelado antes de começar: nem nasce o processo', async () => {
+    const controlador = new AbortController()
+    controlador.abort()
+    const result = await runBufferedCommand({
+      command: 'python3',
+      signal: controlador.signal,
+      spawn: () => assert.fail('não deveria criar o processo'),
+    })
+
+    assert.equal(result.ok, false)
+    assert.equal(result.cancelled, true)
+  })
+
+  // Mesmo defeito que o instalador do npm teve no macOS e no Ubuntu: o SIGTERM derruba o filho
+  // na hora e o `close` chega enquanto o `killProcessTree` ainda espera a graça do SIGKILL.
+  describe('quando o processo fecha durante o kill da árvore', () => {
+    async function interrompidoPor({ timeoutMs, abortar }) {
+      const controlador = new AbortController()
+      const eventos = []
+      let filho
+
+      const promessa = runBufferedCommand({
+        command: 'python3',
+        signal: controlador.signal,
+        ...(timeoutMs ? { timeoutMs } : {}),
+        spawn: () => {
+          filho = criarFilho(7001)
+          return filho
+        },
+        killTree: async () => {
+          eventos.push('kill-comecou')
+          filho.emit('close', null, 'SIGTERM')
+          await new Promise((resolve) => setTimeout(resolve, 20))
+          eventos.push('kill-terminou')
+        },
+      })
+
+      if (abortar) controlador.abort()
+      const result = await promessa
+      eventos.push('resolveu')
+      return { result, eventos }
+    }
+
+    it('cancelar devolve cancelled:true e só resolve depois de o kill terminar', async () => {
+      const { result, eventos } = await interrompidoPor({ abortar: true })
+
+      assert.equal(result.cancelled, true)
+      assert.deepEqual(eventos, ['kill-comecou', 'kill-terminou', 'resolveu'])
+    })
+
+    it('o prazo diz que passou do tempo, não "sinal SIGTERM", e só resolve depois do kill', async () => {
+      const { result, eventos } = await interrompidoPor({ timeoutMs: 5 })
+
+      assert.equal(result.timedOut, true)
+      assert.doesNotMatch(result.message, /SIGTERM|codigo/)
+      assert.deepEqual(eventos, ['kill-comecou', 'kill-terminou', 'resolveu'])
+    })
+  })
+
+  it('um killTree que rejeita não deixa a chamada pendurada', async () => {
+    const controlador = new AbortController()
+    const promessa = runBufferedCommand({
+      command: 'python3',
+      signal: controlador.signal,
+      spawn: () => criarFilho(7002),
+      killTree: async () => {
+        throw new Error('taskkill não existe')
+      },
+    })
+
+    controlador.abort()
+
+    assert.equal((await promessa).cancelled, true)
+  })
+
+  it('cancelar DEPOIS de terminar não muda o resultado nem mata nada', async () => {
+    const controlador = new AbortController()
+    const result = await runBufferedCommand({
+      command: 'python3',
+      signal: controlador.signal,
+      spawn: () => {
+        const filho = criarFilho()
+        setImmediate(() => filho.emit('close', 0, null))
+        return filho
+      },
+      killTree: async () => assert.fail('o processo já tinha terminado'),
+    })
+
+    controlador.abort()
+
+    assert.equal(result.ok, true)
+  })
+
+  it('executável sem permissão (EACCES ao abrir) volta com o errorCode, sem confundir com rede', async () => {
+    const result = await runBufferedCommand({
+      command: 'instalar.sh',
+      spawn: () => {
+        const filho = criarFilho()
+        setImmediate(() => filho.emit('error', Object.assign(new Error('spawn instalar.sh EACCES'), { code: 'EACCES' })))
+        return filho
+      },
+    })
+
+    assert.equal(result.ok, false)
+    assert.equal(result.errorCode, 'EACCES')
+    assert.equal(result.timedOut, undefined)
+  })
+
+  it('o aviso [notice] do pip, que vem depois do erro, não toma o lugar dele na mensagem', async () => {
+    const result = await runBufferedCommand({
+      command: process.execPath,
+      args: [
+        '-e',
+        "process.stderr.write('ERROR: Could not install packages\\n\\n[notice] A new release of pip is available: 25.3 -> 26.2.2\\n[notice] To update, run: python.exe -m pip install --upgrade pip\\n'); process.exit(1)",
+      ],
+      timeoutMs: 20_000,
+    })
+
+    assert.match(result.message, /Could not install packages$/)
+    assert.doesNotMatch(result.message, /notice|new release/)
+  })
+
+  it('saída maior que o limite fica com o FIM, onde o pip e o npm põem o erro final', async () => {
+    const result = await runBufferedCommand({
+      command: process.execPath,
+      args: [
+        '-e',
+        "process.stderr.write('barulho de progresso\\n'.repeat(20000)); process.stderr.write('ERROR: ECONNRESET no fim'); process.exit(1)",
+      ],
+      timeoutMs: 20_000,
+    })
+
+    assert.equal(result.ok, false)
+    assert.ok(result.stderr.length <= 12000, `guardou ${result.stderr.length} caracteres`)
+    assert.ok(result.stderr.endsWith('ERROR: ECONNRESET no fim'))
+    assert.match(result.message, /ECONNRESET no fim$/, 'a mensagem mostra o fim da saída, não o começo')
   })
 })
