@@ -1,0 +1,123 @@
+name: Encerramento da PTY no Windows (repetido)
+
+# Ferramenta de validação da correção do `AttachConsole` no `kill()` do node-pty
+# (`app/electron/services/node-pty-windows-kill.cjs`). No Windows o `kill()` bifurcava
+# um auxiliar que chamava `AttachConsole` depois de o console já ter sido fechado:
+# ele falhava sempre, imprimia "Error: AttachConsole failed" e o timer de 5 s do
+# node-pty segurava o processo. Duas tentativas anteriores de corrigir (forçar a
+# `conpty.dll` e trocar o `kill()` por `taskkill`) pareciam resolver na primeira
+# execução e travavam na segunda, por isso esta validação REPETE, e a cada rodada
+# exige que o processo saia sozinho.
+#
+# Roda duas provas num `windows-latest`:
+#   1. `repro:pty-kill`: N execuções COM a correção e N SEM ela (o controle), cada
+#      uma num processo novo. O controle precisa reproduzir o defeito no runner, ou
+#      o "ok" não prova nada (veredito `controle-nao-reproduziu`, código 2).
+#   2. `npm run test:native` (o passo do CI) mais `pty-kill.integration.test.cjs`,
+#      repetidos N vezes: nenhuma execução pode falhar, passar de 10 min ou deixar
+#      `AttachConsole` no log.
+#
+# Rode ao mexer no caminho de encerramento de PTYs ou ao atualizar o node-pty (o
+# teste de unidade que fixa a forma interna do node-pty também avisa). Não roda em
+# push na `main` nem em PR: são minutos de runner Windows. Em branch `validar/pty-kill-*`
+# roda a cada push, para validar uma mudança antes de ela entrar na `main`.
+on:
+  workflow_dispatch:
+    inputs:
+      execucoes:
+        description: 'Repetições de cada prova'
+        required: false
+        default: '10'
+  push:
+    branches:
+      - 'validar/pty-kill-**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pty-kill-windows-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
+
+jobs:
+  repetir:
+    name: Encerramento da PTY (windows-latest)
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: app
+    env:
+      EXECUCOES: ${{ inputs.execucoes || '10' }}
+
+    steps:
+      # Mesmo preparo do job Validate do CI: sem a exclusão do Defender o tempo dos
+      # testes muda, e a prova precisa rodar nas mesmas condições.
+      - name: Tirar o repositório e as pastas temporárias da varredura do Defender
+        continue-on-error: true
+        shell: pwsh
+        working-directory: .
+        run: Add-MpPreference -ExclusionPath $env:GITHUB_WORKSPACE, $env:RUNNER_TEMP, $env:TEMP
+
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Antes e depois no runner (repro:pty-kill)
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          node scripts/repro-pty-kill.cjs --runs "$EXECUCOES" \
+            --summary "$GITHUB_STEP_SUMMARY" --report "$RUNNER_TEMP/pty-kill.json"
+
+      - name: Passo nativo do CI e teste de encerramento, repetidos
+        timeout-minutes: 30
+        shell: bash
+        run: |
+          {
+            echo "### \`npm run test:native\` e o teste de encerramento, repetidos ${EXECUCOES} vezes"
+            echo
+            echo '| Execução | Código | Segundos | Linhas com AttachConsole |'
+            echo '| ---: | ---: | ---: | ---: |'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          vermelhas=0
+          for i in $(seq 1 "$EXECUCOES"); do
+            inicio=$(date +%s)
+            # O teto por execução existe para um travamento virar vermelho claro (código
+            # 124) em vez de consumir o runner: era assim que as tentativas anteriores
+            # se mostravam.
+            { timeout 600 npm run test:native && timeout 120 node --test electron/services/pty-kill.integration.test.cjs; } > "$RUNNER_TEMP/native-$i.txt" 2>&1
+            codigo=$?
+            fim=$(date +%s)
+            # O texto exato do ruído, não só a palavra: o título do teste de integração
+            # também diz "AttachConsole".
+            ruido=$(grep -cE "Error: AttachConsole failed|conpty_console_list_agent" "$RUNNER_TEMP/native-$i.txt" || true)
+            echo "| $i | $codigo | $((fim - inicio)) | $ruido |" >> "$GITHUB_STEP_SUMMARY"
+            if [ "$codigo" -ne 0 ] || [ "$ruido" -ne 0 ]; then
+              vermelhas=$((vermelhas + 1))
+              echo "::error title=Execução $i do passo nativo::código $codigo e $ruido linhas com AttachConsole"
+            fi
+          done
+
+          [ "$vermelhas" -eq 0 ]
+
+      - name: Publicar os logs e o relatório
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: pty-kill-windows
+          path: |
+            ${{ runner.temp }}/pty-kill.json
+            ${{ runner.temp }}/native-*.txt
+          retention-days: 30
+          if-no-files-found: warn
