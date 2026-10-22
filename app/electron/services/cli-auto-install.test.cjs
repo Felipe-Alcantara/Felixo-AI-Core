@@ -94,6 +94,9 @@ function createRunner(
     // Por padrão nenhum teste toca no npm global da máquina que roda a suíte:
     // sem isto, a fase do sistema atualizaria CLIs de verdade.
     systemCli = SEM_INSTALACAO_DO_SISTEMA,
+    // Sem espera de verdade entre as tentativas de rede: o teste que repete
+    // injeta o `sleep`; os outros nunca chegam a esperar.
+    networkRetry = { sleep: async () => {} },
   },
 ) {
   const installed = []
@@ -106,6 +109,7 @@ function createRunner(
     platformName,
     arch,
     systemCli,
+    networkRetry,
     ...(verifyInstallation ? { verifyInstallation } : {}),
     ...(describePath ? { describePath } : {}),
     ...(userName !== undefined ? { userName } : {}),
@@ -582,7 +586,12 @@ function sistemaFalso({ versoes, instalar = 'ok' }) {
       install: async ({ npmPackage }) => {
         instalados.push(npmPackage)
         const at = npmPackage.lastIndexOf('@')
-        if (instalar === 'ok') atuais[npmPackage.slice(0, at)] = npmPackage.slice(at + 1)
+        if (instalar === 'rede-uma-vez' && instalados.length === 1) {
+          return { ok: false, busy: false, message: 'O npm falhou.', output: 'npm error code ECONNRESET' }
+        }
+        if (instalar === 'ok' || instalar === 'rede-uma-vez') {
+          atuais[npmPackage.slice(0, at)] = npmPackage.slice(at + 1)
+        }
         if (instalar === 'em-uso') return { ok: false, busy: true, message: 'EBUSY', output: 'npm error code EBUSY' }
         return { ok: true, busy: false, message: 'instalado', output: '' }
       },
@@ -687,4 +696,148 @@ test('instala o alvo confirmado no registry com a lista de versões revalidada, 
   // O cache continua sendo usado nos dois casos: só a lista de versões é revalidada.
   assert.ok(doRegistry[0].cacheDir)
   assert.ok(doManifesto[0].cacheDir)
+})
+
+// Falha de rede na instalação: antes só existia retry para "instalou mas a verificação falhou".
+// Uma queda de conexão na abertura do app marcava a CLI como "já tentou nesta versão" e ela
+// só voltava a instalar numa atualização do app ou no "Tentar de novo" manual.
+const SAIDA_DE_REDE = 'npm error code ENOTFOUND\nnpm error network This is a problem related to network connectivity.'
+const SAIDA_DE_PACOTE_INEXISTENTE = 'npm error code E404\nnpm error 404 Not Found - GET https://registry.npmjs.org/pacote-que-nao-existe'
+
+test('uma queda de rede na instalação é repetida sozinha e a CLI acaba instalada', async () => {
+  const profile = createProfile()
+  const tentativas = []
+  const esperas = []
+
+  try {
+    const { service } = createRunner(profile, {
+      detect: detectedOnly(['codex', 'gemini']),
+      verifyInstallation: () => ({ ok: true }),
+      networkRetry: { delaysMs: [7, 9], sleep: async (ms) => esperas.push(ms) },
+      installPackage: async ({ npmPackage }) => {
+        tentativas.push(npmPackage)
+        return tentativas.length < 3
+          ? { ok: false, message: 'Nao foi possivel instalar.', output: SAIDA_DE_REDE }
+          : { ok: true, message: `${npmPackage} instalado.`, output: '' }
+      },
+    })
+    const status = await service.run('startup')
+    service.stop()
+
+    assertPlanned(status)
+    assert.equal(tentativas.length, 3, 'a primeira tentativa e as duas novas')
+    assert.deepEqual(esperas, [7, 9])
+    assert.equal(status.clis.find((item) => item.id === 'claude').state, 'installed')
+    const state = JSON.parse(fs.readFileSync(path.join(profile.userData, 'config', 'cli-auto-install.json'), 'utf8'))
+    assert.equal(state.claude.ok, true)
+  } finally {
+    profile.cleanup()
+  }
+})
+
+test('o status e o log dizem que a rede falhou enquanto a instalação espera para tentar de novo', async () => {
+  const profile = createProfile()
+  const mensagens = []
+  const janela = { webContents: { isDestroyed: () => false, send: (_canal, status) => mensagens.push(status.message) } }
+
+  try {
+    const service = registerCliAutoInstallHandlers(() => janela, {
+      appPaths: profile.appPaths,
+      appVersion: '0.1.103',
+      detect: detectedOnly(['codex', 'gemini']),
+      systemCli: SEM_INSTALACAO_DO_SISTEMA,
+      verifyInstallation: () => ({ ok: true }),
+      networkRetry: { delaysMs: [0], retries: 1, sleep: async () => {} },
+      resolveLatestPackage: async () => ({ ok: false, message: 'fixture sem latest', output: '' }),
+      installPackage: (() => {
+        let chamadas = 0
+        return async ({ npmPackage }) => {
+          chamadas += 1
+          return chamadas === 1
+            ? { ok: false, message: 'Nao foi possivel instalar.', output: SAIDA_DE_REDE }
+            : { ok: true, message: `${npmPackage} instalado.`, output: '' }
+        }
+      })(),
+    })
+    await service.run('startup')
+    service.stop()
+
+    assert.ok(
+      mensagens.some((mensagem) => /Sem resposta da rede.*tentando de novo \(1 de 1\)/.test(mensagem)),
+      `nenhuma mensagem de nova tentativa em: ${JSON.stringify(mensagens)}`,
+    )
+  } finally {
+    profile.cleanup()
+  }
+})
+
+test('falha que a rede não explica (pacote inexistente) não é repetida', async () => {
+  const profile = createProfile()
+  let tentativas = 0
+
+  try {
+    const { service } = createRunner(profile, {
+      detect: detectedOnly(['codex', 'gemini']),
+      verifyInstallation: () => ({ ok: true }),
+      installPackage: async () => {
+        tentativas += 1
+        return { ok: false, message: 'Nao foi possivel instalar.', output: SAIDA_DE_PACOTE_INEXISTENTE }
+      },
+    })
+    const status = await service.run('startup')
+    service.stop()
+
+    assert.equal(tentativas, 1)
+    assert.equal(status.clis.find((item) => item.id === 'claude').state, 'failed')
+  } finally {
+    profile.cleanup()
+  }
+})
+
+test('com a rede fora o tempo todo, desiste depois das tentativas e registra a falha da versão', async () => {
+  const profile = createProfile()
+  let tentativas = 0
+
+  try {
+    const { service } = createRunner(profile, {
+      detect: detectedOnly(['codex', 'gemini']),
+      verifyInstallation: () => ({ ok: true }),
+      installPackage: async () => {
+        tentativas += 1
+        return { ok: false, message: 'Nao foi possivel instalar.', output: SAIDA_DE_REDE }
+      },
+    })
+    const status = await service.run('startup')
+    service.stop()
+
+    assert.equal(tentativas, 3, 'a primeira tentativa e as duas novas, nunca mais que isso')
+    const claude = status.clis.find((item) => item.id === 'claude')
+    assert.equal(claude.state, 'failed')
+    assert.match(claude.message, /A rede falhou nas 3 tentativas/)
+    const state = JSON.parse(fs.readFileSync(path.join(profile.userData, 'config', 'cli-auto-install.json'), 'utf8'))
+    assert.equal(state.claude.ok, false)
+  } finally {
+    profile.cleanup()
+  }
+})
+
+test('a atualização do npm global do sistema também repete quando a rede cai', async () => {
+  const claude = getManagedCliManifestEntry('claude')
+  const profile = createProfile({ managedClis: ['claude'], managedVersions: { claude: claude.version } })
+  const sistema = sistemaFalso({ versoes: { [claude.npmPackage]: '2.1.200' }, instalar: 'rede-uma-vez' })
+
+  try {
+    const { service } = createRunner(profile, {
+      detect: detectedOnly(['codex', 'claude', 'gemini']),
+      systemCli: sistema.systemCli,
+    })
+    const status = await service.run('startup')
+    service.stop()
+
+    assertPlanned(status)
+    assert.equal(sistema.instalados.length, 2, 'a primeira tentativa e uma nova')
+    assert.equal(status.systemUpdates[0].action, 'updated')
+  } finally {
+    profile.cleanup()
+  }
 })

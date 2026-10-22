@@ -21,6 +21,7 @@ const { ipcMain } = require('electron')
 const { detectCli } = require('../core/cli-detector.cjs')
 const { listOfficialAiClis } = require('../core/official-cli-catalog.cjs')
 const { getManagedCliLayout, getNpmRegistryCacheDir } = require('../core/managed-cli-paths.cjs')
+const { withNetworkRetry } = require('../core/install-retry.cjs')
 const { getManagedCliManifestEntry } = require('../core/managed-cli-manifest.cjs')
 const { getNodeExecutable, resolveNpmCliPath } = require('../core/node-runtime.cjs')
 const { createCliEnv, describeCliPath } = require('./cli-process-manager.cjs')
@@ -82,6 +83,8 @@ const BUSY_OUTPUT = /\b(?:EBUSY|EPERM)\b/
  * @param {(env: Record<string, string>) => Array<{ position: number, origin: string, path: string }>} [options.describePath]
  *   O PATH efetivo das CLIs (`describeCliPath`); injetável nos testes.
  * @param {string} [options.userName] - Conta atual, que some do texto de suporte.
+ * @param {Parameters<typeof withNetworkRetry>[1]} [options.networkRetry]
+ *   Quantidade e espera das novas tentativas por falha de rede; injetável nos testes.
  * @returns {{ getStatus: () => object, run: (reason?: string) => Promise<object>, stop: () => void }}
  */
 function registerCliAutoInstallHandlers(getMainWindow, options) {
@@ -97,6 +100,7 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
     fileSystem = fs,
     describePath = describeCliPath,
     userName = readUserName(),
+    networkRetry = {},
     systemCli = {
       resolveGlobalRoot: resolveSystemNpmGlobalRoot,
       readInstall: readSystemNpmInstall,
@@ -239,6 +243,24 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
         platformName,
         arch,
         fileSystem,
+        retry: {
+          ...networkRetry,
+          // A espera entre as tentativas é minutos de "Instalando" parado; o
+          // status diz que a rede é o motivo, e o log guarda o rastro.
+          onRetry: ({ retry, retries, delayMs }) => {
+            logQaEvent({
+              level: 'warn',
+              scope: 'cli:auto-install',
+              message: `Falha de rede ao instalar ${cli.name}; nova tentativa em ${Math.round(delayMs / 1000)} s (${retry} de ${retries}).`,
+              details: { id: cli.id, reason },
+            })
+            setStatus({
+              state: 'installing',
+              message: `Sem resposta da rede ao instalar ${cli.name}; tentando de novo (${retry} de ${retries}).`,
+              clis: progress,
+            })
+          },
+        },
         installOptions: {
           expectedIntegrity: latestPackage?.integrity,
           npmPackage,
@@ -408,11 +430,15 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
       const entry = getManagedCliManifestEntry(item.cli.id)
       let result
       try {
-        result = await systemCli.install({
-          npmPackage: `${entry.npmPackage}@${item.to}`,
-          cwd: os.homedir(),
-          platformName,
-        })
+        result = await withNetworkRetry(
+          () =>
+            systemCli.install({
+              npmPackage: `${entry.npmPackage}@${item.to}`,
+              cwd: os.homedir(),
+              platformName,
+            }),
+          networkRetry,
+        )
       } catch (error) {
         result = { ok: false, busy: false, message: getErrorMessage(error, 'Falha ao chamar o npm do sistema.'), output: '' }
       }
@@ -678,6 +704,14 @@ function hasManagedInstallation(
  * O npm pode declarar sucesso e ainda deixar uma optionalDependency do Codex
  * ausente. Repetir uma vez corrige a falha transitória; se não corrigir, o
  * erro original continua na mensagem que chega à interface.
+ *
+ * Cada instalação, a primeira e a repetição, também repete sozinha quando a
+ * falha é de rede (ver `core/install-retry`). Sem isso, uma queda de conexão na
+ * abertura do app marcava a CLI como "já tentou nesta versão" e ela só voltava
+ * a instalar numa atualização do app ou no "Tentar de novo" manual.
+ *
+ * @param {object} options
+ * @param {Parameters<typeof withNetworkRetry>[1]} [options.retry]
  */
 async function installAndVerifyManagedCli({
   cli,
@@ -687,8 +721,13 @@ async function installAndVerifyManagedCli({
   platformName = process.platform,
   arch = process.arch,
   fileSystem = fs,
+  retry = {},
 }) {
-  const install = () => installPackage(installOptions)
+  const install = () =>
+    withNetworkRetry(() => installPackage(installOptions), {
+      signal: installOptions.signal,
+      ...retry,
+    })
   const firstResult = await install()
 
   if (!firstResult.ok) {
