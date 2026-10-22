@@ -168,8 +168,15 @@ const OFFICIAL_AI_CLIS = Object.freeze([
     // `openia image` e o teste da chave antes do `run` (código 3 quando o
     // OpenRouter a recusa); a 0.2.1 separa o saldo abaixo do mínimo para imagem
     // (`minimum_balance`) do "sem saldo".
+    //
+    // `runtime`: o instalador procura um Python que sirva ANTES de rodar o pip
+    // (ver `core/python-runtime`), e o `command`/`windowsCommand` abaixo viram só
+    // o palpite inicial. `minVersion` é o `requires-python` do pyproject do
+    // Openia no commit pinado (>=3.10, lido em 22/10/2026); trocar o pino exige
+    // reler esse campo.
     install: {
       label: 'python3 -m pip install --user --upgrade Openia (GitHub)',
+      runtime: { kind: 'python', minVersion: '3.10' },
       command: 'python3',
       windowsCommand: 'py',
       args: [
@@ -228,7 +235,11 @@ function cloneOfficialCli(cli) {
   return {
     ...cli,
     windowsAliases: [...(cli.windowsAliases ?? [])],
-    install: { ...cli.install, args: [...cli.install.args] },
+    install: {
+      ...cli.install,
+      args: [...cli.install.args],
+      ...(cli.install.runtime ? { runtime: { ...cli.install.runtime } } : {}),
+    },
     update: { ...cli.update, args: [...cli.update.args] },
     login: { ...cli.login, args: [...cli.login.args] },
     accountSwitch: cli.accountSwitch

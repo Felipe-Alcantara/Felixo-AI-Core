@@ -3,11 +3,13 @@ const spawnChildProcess = require('cross-spawn')
 const platform = require('../core/platform/index.cjs')
 const { createCliEnv } = require('./cli-process-manager.cjs')
 const { detectCli } = require('../core/cli-detector.cjs')
+const { withNetworkRetry } = require('../core/install-retry.cjs')
 const {
   getOfficialAiCli,
   listOfficialAiClis,
 } = require('../core/official-cli-catalog.cjs')
 const { killProcessTree } = require('../core/process-tree.cjs')
+const { resolvePythonRuntime } = require('../core/python-runtime.cjs')
 const {
   launchCommandInTerminal,
 } = require('../core/terminal-launcher.cjs')
@@ -44,6 +46,31 @@ async function listOfficialCliCatalog() {
   return clis
 }
 
+/**
+ * Instala uma CLI oficial pelo instalador do próprio ecossistema dela (hoje, o
+ * pip do Python do sistema para o Openia).
+ *
+ * Interromper vale para a árvore inteira: o prazo vencido e o `signal`
+ * cancelado encerram o `py`/`python3` E o que ele subiu (o pip lança
+ * subprocessos para compilar pacotes), ver `runBufferedCommand`. Falha de rede
+ * é repetida com espera crescente (ver `install-retry`), e um Python ausente,
+ * antigo ou sem pip é explicado antes de qualquer instalação, em vez de virar
+ * "spawn py ENOENT".
+ *
+ * Quando a instalação não chega a rodar (runtime ausente) ou é cancelada, o
+ * resultado traz só `ok: false`, `message` e o motivo (`missingRuntime` ou
+ * `cancelled`): não há o que detectar nem modelos a importar.
+ *
+ * @param {string} id
+ * @param {object} [options]
+ * @param {boolean} [options.confirmed]
+ * @param {typeof runBufferedCommand} [options.runCommand] - Injetável nos testes.
+ * @param {typeof detectCli} [options.detect] - Injetável nos testes.
+ * @param {string} [options.platformName]
+ * @param {AbortSignal} [options.signal] - Cancelamento pedido de fora.
+ * @param {typeof resolveInstallRuntime} [options.resolveRuntime] - Injetável nos testes.
+ * @param {Parameters<typeof withNetworkRetry>[1]} [options.retry] - Espera e quantidade das novas tentativas de rede.
+ */
 async function installOfficialCli(
   id,
   {
@@ -51,6 +78,9 @@ async function installOfficialCli(
     runCommand = runBufferedCommand,
     detect = detectCli,
     platformName = platform.name,
+    signal,
+    resolveRuntime = resolveInstallRuntime,
+    retry = {},
   } = {},
 ) {
   const cli = getOfficialAiCli(id)
@@ -70,26 +100,52 @@ async function installOfficialCli(
     }
   }
 
-  const installCommand = getPlatformCommand(cli.install, platformName)
-  let installResult = await runCommand({
-    command: installCommand,
-    args: cli.install.args,
-    cwd: os.homedir(),
-    env: createCliEnv(),
-    timeoutMs: INSTALL_TIMEOUT_MS,
-  })
+  let installCommand = getPlatformCommand(cli.install, platformName)
+
+  if (cli.install.runtime) {
+    const runtime = await resolveRuntime({
+      runtime: cli.install.runtime,
+      label: cli.name,
+      platformName,
+      signal,
+    })
+
+    if (!runtime.ok) {
+      if (signal?.aborted) {
+        return { ok: false, cancelled: true, message: `Instalação de ${cli.name} cancelada.` }
+      }
+
+      return { ok: false, message: runtime.message, missingRuntime: runtime.reason }
+    }
+
+    installCommand = runtime.command
+  }
+
+  const runInstall = (args) =>
+    withNetworkRetry(
+      () =>
+        runCommand({
+          command: installCommand,
+          args,
+          cwd: os.homedir(),
+          env: createCliEnv(),
+          timeoutMs: INSTALL_TIMEOUT_MS,
+          signal,
+        }),
+      { signal, ...retry },
+    )
+
+  let installResult = await runInstall(cli.install.args)
 
   const retriedWithBreakSystemPackages =
     isExternallyManagedEnvironmentError(installResult) && isPipInstallCommand(cli.install.args)
 
   if (retriedWithBreakSystemPackages) {
-    installResult = await runCommand({
-      command: installCommand,
-      args: [...cli.install.args, BREAK_SYSTEM_PACKAGES_FLAG],
-      cwd: os.homedir(),
-      env: createCliEnv(),
-      timeoutMs: INSTALL_TIMEOUT_MS,
-    })
+    installResult = await runInstall([...cli.install.args, BREAK_SYSTEM_PACKAGES_FLAG])
+  }
+
+  if (installResult.cancelled) {
+    return { ok: false, cancelled: true, message: `Instalação de ${cli.name} cancelada.` }
   }
 
   const detection = await detect(cli, createCliEnv())
@@ -101,6 +157,31 @@ async function installOfficialCli(
     cli: createCatalogItem(cli, detection),
     models: cli.models.map((model) => ({ ...model })),
   }
+}
+
+/**
+ * Acha o runtime que a instalação da CLI declarou (`install.runtime`).
+ *
+ * @param {object} options
+ * @param {{ kind: string, minVersion?: string }} options.runtime
+ * @param {string} options.label
+ * @param {string} options.platformName
+ * @param {AbortSignal} [options.signal]
+ * @returns {ReturnType<typeof resolvePythonRuntime>}
+ */
+async function resolveInstallRuntime({ runtime, label, platformName, signal }) {
+  if (runtime.kind !== 'python') {
+    return { ok: false, reason: 'not-found', message: `Runtime desconhecido: ${runtime.kind}.` }
+  }
+
+  return resolvePythonRuntime({
+    platformName,
+    minVersion: runtime.minVersion,
+    label,
+    env: createCliEnv(),
+    signal,
+    runCommand: runBufferedCommand,
+  })
 }
 
 /**
@@ -580,6 +661,7 @@ module.exports = {
   listOfficialCliCatalog,
   openOfficialCliLogin,
   parseCodexLoginStatus,
+  resolveInstallRuntime,
   runBufferedCommand,
   switchOfficialCliAccount,
 }

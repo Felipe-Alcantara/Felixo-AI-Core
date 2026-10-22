@@ -8,9 +8,16 @@ const {
   listOfficialCliAccountSessions,
   openOfficialCliLogin,
   parseCodexLoginStatus,
+  resolveInstallRuntime,
   runBufferedCommand,
   switchOfficialCliAccount,
 } = require('./official-cli-service.cjs')
+
+/**
+ * O Python que a máquina de teste teria. Sem isto, a instalação do Openia
+ * perguntaria ao `py`/`python3` de quem roda a suíte.
+ */
+const pythonDisponivel = (command = 'python3') => async () => ({ ok: true, command, version: '3.12' })
 
 describe('official-cli-service', () => {
   it('exige consentimento antes de instalar o código remoto do Openia', async () => {
@@ -32,6 +39,7 @@ describe('official-cli-service', () => {
     const result = await installOfficialCli('openia', {
       confirmed: true,
       platformName: 'win32',
+      resolveRuntime: pythonDisponivel('py'),
       runCommand: async (options) => {
         invocation = options
         return { ok: true, stdout: 'Successfully installed openia', stderr: '' }
@@ -61,6 +69,7 @@ describe('official-cli-service', () => {
     const invocations = []
     const result = await installOfficialCli('openia', {
       confirmed: true,
+      resolveRuntime: pythonDisponivel(),
       runCommand: async (options) => {
         invocations.push(options)
         if (invocations.length === 1) {
@@ -87,6 +96,7 @@ describe('official-cli-service', () => {
     let calls = 0
     const result = await installOfficialCli('openia', {
       confirmed: true,
+      resolveRuntime: pythonDisponivel(),
       runCommand: async () => {
         calls += 1
         return {
@@ -108,6 +118,7 @@ describe('official-cli-service', () => {
   it('devolve mensagem redigida quando o PEP 668 persiste mesmo depois da nova tentativa', async () => {
     const result = await installOfficialCli('openia', {
       confirmed: true,
+      resolveRuntime: pythonDisponivel(),
       runCommand: async () => ({
         ok: false,
         stdout: '',
@@ -399,6 +410,274 @@ describe('runBufferedCommand', () => {
     assert.deepEqual(JSON.parse(result.stdout), { loggedIn: false })
     assert.equal(result.timedOut, undefined)
     assert.equal(result.errorCode, undefined)
+  })
+})
+
+// A rota Python (pip) do instalador: runtime, rede, permissão e interrupção. O catálogo tem
+// uma CLI instalada assim hoje (Openia); o instalador aceita qualquer comando.
+const SAIDA_PIP_SEM_REDE = [
+  'Collecting https://github.com/Felipe-Alcantara/Openia/archive/6f75f8f.zip',
+  '  WARNING: Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by',
+  "'NewConnectionError(<pip._vendor.urllib3.connection.HTTPSConnection object>: Failed to establish a new connection: [Errno 11001] getaddrinfo failed)'",
+  "ERROR: Could not install packages due to an OSError: HTTPSConnectionPool(host='github.com', port=443): Max retries exceeded with url",
+].join('\n')
+const SAIDA_PIP_404 = 'ERROR: HTTP error 404 while getting https://github.com/Felipe-Alcantara/Openia/archive/6f75f8f.zip'
+const SAIDA_PIP_PERMISSAO = "PermissionError: [WinError 5] Acesso negado: 'C:\\\\Python314\\\\Lib\\\\site-packages'"
+const detectado = async () => ({ detected: true, version: '0.2.1', path: '/home/u/.local/bin/openia', error: null })
+const naoDetectado = async () => ({ detected: false, version: null, path: null, error: null })
+
+describe('installOfficialCli: runtime do Python', () => {
+  it('usa o comando que a procura achou, não o palpite do catálogo (Python sem o launcher `py`)', async () => {
+    let invocation
+    const result = await installOfficialCli('openia', {
+      confirmed: true,
+      platformName: 'win32',
+      resolveRuntime: pythonDisponivel('python'),
+      runCommand: async (options) => {
+        invocation = options
+        return { ok: true, stdout: '', stderr: '' }
+      },
+      detect: detectado,
+    })
+
+    assert.equal(result.ok, true)
+    assert.equal(invocation.command, 'python')
+    assert.deepEqual(invocation.args.slice(0, 3), ['-m', 'pip', 'install'])
+  })
+
+  it('pergunta pelo runtime com o que o catálogo declara: Python, versão mínima e o nome da CLI', async () => {
+    let pedido
+    await installOfficialCli('openia', {
+      confirmed: true,
+      platformName: 'linux',
+      resolveRuntime: async (options) => {
+        pedido = options
+        return { ok: true, command: 'python3', version: '3.12' }
+      },
+      runCommand: async () => ({ ok: true, stdout: '', stderr: '' }),
+      detect: detectado,
+    })
+
+    assert.deepEqual(pedido.runtime, { kind: 'python', minVersion: '3.10' })
+    assert.equal(pedido.label, 'Openia (launcher OpenRouter)')
+    assert.equal(pedido.platformName, 'linux')
+  })
+
+  it('Python ausente, antigo ou sem pip: explica a causa e nem roda o pip', async () => {
+    let pipRodou = false
+    const result = await installOfficialCli('openia', {
+      confirmed: true,
+      resolveRuntime: async () => ({
+        ok: false,
+        reason: 'too-old',
+        message: 'O Python mais novo encontrado é o 3.9, mas Openia precisa do 3.10 ou mais novo.',
+      }),
+      runCommand: async () => {
+        pipRodou = true
+        return { ok: true, stdout: '', stderr: '' }
+      },
+      detect: async () => assert.fail('sem instalação não há o que detectar'),
+    })
+
+    assert.equal(pipRodou, false)
+    assert.equal(result.ok, false)
+    assert.equal(result.missingRuntime, 'too-old')
+    assert.match(result.message, /3\.9/)
+  })
+
+  it('cancelado enquanto procura o Python: devolve cancelled, não "Python ausente"', async () => {
+    const controlador = new AbortController()
+    const result = await installOfficialCli('openia', {
+      confirmed: true,
+      signal: controlador.signal,
+      resolveRuntime: async () => {
+        controlador.abort()
+        return { ok: false, reason: 'not-found', message: 'O Python não foi encontrado.' }
+      },
+      runCommand: async () => assert.fail('cancelado: não deveria instalar'),
+    })
+
+    assert.equal(result.ok, false)
+    assert.equal(result.cancelled, true)
+    assert.equal(result.missingRuntime, undefined)
+  })
+
+  it('a procura padrão consulta o Python de verdade desta máquina (ou explica que não há)', async () => {
+    const resultado = await resolveInstallRuntime({
+      runtime: { kind: 'python', minVersion: '3.0' },
+      label: 'o teste',
+      platformName: process.platform,
+    })
+
+    assert.equal(typeof resultado.ok, 'boolean')
+    if (resultado.ok) {
+      assert.match(resultado.version, /^3\.\d+$/)
+    } else {
+      assert.match(resultado.message, /Python/)
+    }
+  })
+
+  it('um tipo de runtime que o instalador não conhece falha com mensagem, não com exceção', async () => {
+    const resultado = await resolveInstallRuntime({ runtime: { kind: 'ruby' }, label: 'x', platformName: 'linux' })
+
+    assert.equal(resultado.ok, false)
+    assert.match(resultado.message, /ruby/)
+  })
+})
+
+describe('installOfficialCli: rede, permissão e interrupção', () => {
+  const opcoesBase = {
+    confirmed: true,
+    platformName: 'linux',
+    resolveRuntime: pythonDisponivel(),
+    detect: detectado,
+  }
+
+  it('repete a queda de rede do pip e termina instalado, dizendo quantas vezes repetiu', async () => {
+    const esperas = []
+    let chamadas = 0
+    const result = await installOfficialCli('openia', {
+      ...opcoesBase,
+      retry: { delaysMs: [11, 22], sleep: async (ms) => esperas.push(ms) },
+      runCommand: async () => {
+        chamadas += 1
+        return chamadas < 3
+          ? { ok: false, stdout: '', stderr: SAIDA_PIP_SEM_REDE, message: 'python3 encerrou com codigo 1' }
+          : { ok: true, stdout: 'Successfully installed openia', stderr: '', message: 'Comando concluido.' }
+      },
+    })
+
+    assert.equal(chamadas, 3)
+    assert.deepEqual(esperas, [11, 22])
+    assert.equal(result.ok, true)
+    assert.equal(result.networkRetries, 2)
+  })
+
+  it('com a rede fora o tempo todo desiste na terceira tentativa e a mensagem diz isso', async () => {
+    let chamadas = 0
+    const result = await installOfficialCli('openia', {
+      ...opcoesBase,
+      retry: { sleep: async () => {} },
+      runCommand: async () => {
+        chamadas += 1
+        return { ok: false, stdout: '', stderr: SAIDA_PIP_SEM_REDE, message: 'python3 encerrou com codigo 1' }
+      },
+      detect: naoDetectado,
+    })
+
+    assert.equal(chamadas, 3)
+    assert.equal(result.ok, false)
+    assert.match(result.message, /A rede falhou nas 3 tentativas\.$/)
+  })
+
+  it('não repete o que a rede não explica: arquivo inexistente (404) e permissão negada', async () => {
+    for (const stderr of [SAIDA_PIP_404, SAIDA_PIP_PERMISSAO]) {
+      let chamadas = 0
+      const result = await installOfficialCli('openia', {
+        ...opcoesBase,
+        retry: { sleep: async () => assert.fail('não deveria esperar') },
+        runCommand: async () => {
+          chamadas += 1
+          return { ok: false, stdout: '', stderr, message: 'python3 encerrou com codigo 1' }
+        },
+        detect: naoDetectado,
+      })
+
+      assert.equal(chamadas, 1, stderr)
+      assert.equal(result.ok, false)
+      assert.equal(result.networkRetries, 0)
+    }
+  })
+
+  it('não repete quando o pip nem abriu (EACCES no executável é problema da máquina)', async () => {
+    let chamadas = 0
+    await installOfficialCli('openia', {
+      ...opcoesBase,
+      retry: { sleep: async () => assert.fail('não deveria esperar') },
+      runCommand: async () => {
+        chamadas += 1
+        return { ok: false, stdout: '', stderr: SAIDA_PIP_SEM_REDE, errorCode: 'EACCES', message: 'spawn python3 EACCES' }
+      },
+      detect: naoDetectado,
+    })
+
+    assert.equal(chamadas, 1)
+  })
+
+  it('PEP 668 depois de uma queda de rede: repete a rede, depois repete com --break-system-packages', async () => {
+    const argumentos = []
+    const respostas = [
+      { ok: false, stdout: '', stderr: SAIDA_PIP_SEM_REDE, message: 'falhou' },
+      { ok: false, stdout: '', stderr: 'error: externally-managed-environment', message: 'falhou' },
+      { ok: true, stdout: 'Successfully installed openia', stderr: '', message: 'Comando concluido.' },
+    ]
+    const result = await installOfficialCli('openia', {
+      ...opcoesBase,
+      retry: { sleep: async () => {} },
+      runCommand: async ({ args }) => {
+        argumentos.push(args)
+        return respostas[argumentos.length - 1]
+      },
+    })
+
+    assert.equal(argumentos.length, 3)
+    assert.equal(argumentos[0].includes('--break-system-packages'), false)
+    assert.equal(argumentos[1].includes('--break-system-packages'), false)
+    assert.equal(argumentos[2].at(-1), '--break-system-packages')
+    assert.equal(result.ok, true)
+    assert.equal(result.retriedWithBreakSystemPackages, true)
+  })
+
+  it('leva o sinal de cancelamento e o prazo de 10 minutos até o processo do pip', async () => {
+    const controlador = new AbortController()
+    let recebido
+    await installOfficialCli('openia', {
+      ...opcoesBase,
+      signal: controlador.signal,
+      runCommand: async (options) => {
+        recebido = options
+        return { ok: true, stdout: '', stderr: '' }
+      },
+    })
+
+    assert.equal(recebido.signal, controlador.signal)
+    assert.equal(recebido.timeoutMs, 10 * 60 * 1000)
+  })
+
+  it('cancelar devolve cancelled sem detectar a CLI nem importar modelos', async () => {
+    const controlador = new AbortController()
+    const result = await installOfficialCli('openia', {
+      ...opcoesBase,
+      signal: controlador.signal,
+      runCommand: async () => {
+        controlador.abort()
+        return { ok: false, cancelled: true, stdout: '', stderr: '', message: 'python3 foi cancelado.' }
+      },
+      detect: async () => assert.fail('cancelado: não há o que detectar'),
+    })
+
+    assert.equal(result.ok, false)
+    assert.equal(result.cancelled, true)
+    assert.match(result.message, /cancelada/)
+    assert.equal(result.models, undefined)
+  })
+
+  it('cancelar durante a espera entre as tentativas de rede não tenta de novo', async () => {
+    const controlador = new AbortController()
+    let chamadas = 0
+    const result = await installOfficialCli('openia', {
+      ...opcoesBase,
+      signal: controlador.signal,
+      retry: { sleep: async () => controlador.abort() },
+      runCommand: async () => {
+        chamadas += 1
+        return { ok: false, stdout: '', stderr: SAIDA_PIP_SEM_REDE, message: 'falhou' }
+      },
+      detect: async () => assert.fail('cancelado: não há o que detectar'),
+    })
+
+    assert.equal(chamadas, 1)
+    assert.equal(result.cancelled, true)
   })
 })
 

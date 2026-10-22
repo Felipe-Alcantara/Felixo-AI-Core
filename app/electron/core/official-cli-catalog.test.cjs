@@ -90,4 +90,30 @@ describe('official-cli-catalog', () => {
       '@openai/codex',
     ])
   })
+
+  // O mapa das rotas de instalação (22/10/2026): três CLIs por npm, uma por Python, nenhuma por
+  // script. Uma CLI nova que instale de outro jeito quebra este teste de propósito: quem a
+  // acrescenta precisa declarar a rota (`install.runtime`) e cobrir cancelamento, prazo, rede e
+  // permissão dela em `install-routes-process-tree.test.cjs`, em vez de herdar o silêncio.
+  it('cada CLI instala por uma rota declarada: npm ou um runtime próprio (hoje, só Python)', () => {
+    const rotas = Object.fromEntries(
+      listOfficialAiClis().map((cli) => [
+        cli.id,
+        cli.install.runtime ? cli.install.runtime.kind : cli.install.npmPackage ? 'npm' : 'sem-rota',
+      ]),
+    )
+
+    assert.deepEqual(rotas, { codex: 'npm', claude: 'npm', gemini: 'npm', openia: 'python' })
+  })
+
+  it('o Openia exige o Python que o pyproject do commit pinado declara (>=3.10)', () => {
+    assert.deepEqual(getOfficialAiCli('openia').install.runtime, { kind: 'python', minVersion: '3.10' })
+  })
+
+  it('o runtime declarado também é clonado: mudar a cópia não muda o catálogo', () => {
+    const cli = getOfficialAiCli('openia')
+    cli.install.runtime.minVersion = '9.9'
+
+    assert.equal(getOfficialAiCli('openia').install.runtime.minVersion, '3.10')
+  })
 })

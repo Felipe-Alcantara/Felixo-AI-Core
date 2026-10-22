@@ -298,6 +298,8 @@ type OfficialCliInstallResult = CliInvokeResult & {
   requiresConfirmation?: boolean
   /** True quando o pip recusou por PEP 668 e a instalação repetiu sozinha com --break-system-packages. */
   retriedWithBreakSystemPackages?: boolean
+  /** Quantas vezes a instalação foi repetida sozinha porque a conexão falhou. */
+  networkRetries?: number
   stdout?: string
   stderr?: string
 }

@@ -244,14 +244,19 @@ export function ModelManagerModal({
       const notaPep668 = result.retriedWithBreakSystemPackages
         ? ' (o Python deste sistema exigiu uma segunda tentativa com --break-system-packages.)'
         : ''
+      // A conexão caiu no meio e o instalador repetiu sozinho até funcionar.
+      const notaRede = result.networkRetries
+        ? ' (a conexão falhou no meio e a instalação foi repetida sozinha.)'
+        : ''
+      const notas = `${notaPep668}${notaRede}`
 
       if (cli.isLauncher) {
         setStatus(
-          `${cli.name} instalado. Interface, modelo e chave ficam na configuração de spawn; o menu manual continua disponível.${notaPep668}`,
+          `${cli.name} instalado. Interface, modelo e chave ficam na configuração de spawn; o menu manual continua disponível.${notas}`,
         )
       } else {
         importOfficialModels(result.models ?? cli.models)
-        setStatus(`${cli.name} instalado e importado.${notaPep668}`)
+        setStatus(`${cli.name} instalado e importado.${notas}`)
       }
       await refreshOfficialDetection()
     } catch (error) {
