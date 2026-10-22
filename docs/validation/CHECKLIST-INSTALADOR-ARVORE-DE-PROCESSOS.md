@@ -85,7 +85,7 @@ O catálogo instala o Openia pelo `pip` do Python do sistema, e o instalador ace
 comando. Essas rotas passam por `runBufferedCommand` (`app/electron/services/official-cli-service.cjs`),
 não pelo npm do pacote, então o cenário acima não as cobre. A garantia é a mesma (prazo e
 cancelamento encerram a árvore inteira) e a prova é um teste de processo real, que também roda
-nos quatro sistemas do CI:
+no Windows, no Ubuntu e no macOS do CI (o job do Ubuntu ARM só roda os testes nativos):
 
 ```
 cd app

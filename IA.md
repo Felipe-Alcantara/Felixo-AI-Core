@@ -23,7 +23,7 @@
 - **Claude por chave de API:** conta do Claude por chave abre um bloco de conversa (Claude Code sem tela, que usa o crédito promocional do Agent SDK); ver a entrada de 2026-10-19.
 - **Memória de longo prazo (ai-memory, 2026-10-21):** instalado na máquina (serviço no logon, MCP e hooks por usuário no Claude Code, Codex e Copilot). Este repositório tem o bloco gerenciado no `CLAUDE.md` e no `AGENTS.md` e as skills `ai-memory-*`; a captura vale para todos os projetos e a entrega dos eventos acontece nas fronteiras da sessão. Ver a entrada de 2026-10-21 "ai-memory instalado".
 - **Instalador e árvore de processos (2026-10-21):** o `release-smoke.cjs` passou a cancelar e expirar a instalação de uma CLI pelo app empacotado e a provar, com uma sonda independente, que nenhum processo da árvore do npm sobra (`app/scripts/installer-kill-smoke.cjs`, nos três SOs do Release). Visto rodando fora do CI só no Windows; o macOS real segue pendente (roteiro em `docs/validation/CHECKLIST-INSTALADOR-ARVORE-DE-PROCESSOS.md`). Ver a entrada de 2026-10-21 "Instalador: cancelar e expirar pelo app empacotado".
-- **Instalador, rotas Python e script (2026-10-22):** a rota do pip (`runBufferedCommand`, hoje só o Openia) passou a encerrar a árvore inteira no prazo e no cancelamento, a procurar um Python que sirva antes de instalar (`core/python-runtime.cjs`) e, junto com o npm, a repetir a falha de rede duas vezes (`core/install-retry.cjs`). Prova com processo real nas 3 rotas em `install-routes-process-tree.test.cjs` (roda nos 4 sistemas do CI). Visto rodando fora do CI só no Windows; fechar o app no meio de uma instalação ainda não a cancela. Ver a entrada de 2026-10-22 "Instalador: Python e script".
+- **Instalador, rotas Python e script (2026-10-22):** a rota do pip (`runBufferedCommand`, hoje só o Openia) passou a encerrar a árvore inteira no prazo e no cancelamento, a procurar um Python que sirva antes de instalar (`core/python-runtime.cjs`) e, junto com o npm, a repetir a falha de rede duas vezes (`core/install-retry.cjs`). Prova com processo real nas 3 rotas em `install-routes-process-tree.test.cjs` (roda no Windows, no Ubuntu e no macOS do CI). Visto rodando fora do CI só no Windows; fechar o app no meio de uma instalação ainda não a cancela. Ver a entrada de 2026-10-22 "Instalador: Python e script".
 - **Em andamento:** nada aberto no código nesta entrega. Em toda abertura (também na execução da
   fonte), a rodada das CLIs busca a versão mais nova publicada de Claude, Codex e Gemini, inclusive
   pré-lançamento, e atualiza a cópia do app e a do npm global, mesmo com a CLI aberta (o npm troca
@@ -2417,3 +2417,33 @@ atualização do app ou no "Tentar de novo" manual.
 - **Não validado:** macOS real e Linux real (o `install-routes-process-tree.test.cjs` roda nos quatro
   sistemas do CI, mas isso não é "visto rodando" fora dele), e a rota de script contra uma CLI de verdade
   (não existe nenhuma no catálogo).
+
+**Acompanhamento do deploy (mesmo dia): dois testes meus reprovaram no CI, nenhum defeito de produção.**
+- **CI 39784321146 (`de9b2ac`, os 4 commits): reprovou no Ubuntu e no macOS** em um único teste, o da "saída
+  maior que o limite" do `runBufferedCommand`. O filho de teste escrevia ~400 KB no stderr e chamava
+  `process.exit(1)`: no POSIX a escrita num pipe é assíncrona e o `exit()` cortava o fim da saída, justo a
+  linha conferida. No Windows a escrita é síncrona e escondeu isso na máquina de desenvolvimento. As 9 provas
+  de processo real passaram nos dois sistemas, inclusive a rota Python com Python de verdade.
+- **CI 39785574078 (`a3e3877`, troca por `process.exitCode`): reprovou nos TRÊS sistemas, em dois testes.**
+  O executor da suíte (`scripts/run-node-unit-tests.cjs`) injeta uma pré-carga do SQLite em `NODE_OPTIONS`; no
+  Node 22 do CI isso imprime `ExperimentalWarning: SQLite is an experimental feature` no stderr de todo filho
+  Node, depois da saída dele (no Node 25 local, não). Com `exit()` o processo morria antes do aviso; com
+  `exitCode` ele vive o bastante para o aviso aparecer e o fim da mensagem deixou de ser o erro. Reproduzido
+  aqui com uma pré-carga que emite o mesmo aviso: a versão que reprovou no CI falha nos dois testes e a
+  corrigida passa nos 51 do arquivo.
+- **Conserto (`2e07de9`):** o filho desses dois testes roda com `NODE_OPTIONS` vazio. Só teste mudou.
+- **CI 39786633256 (`2e07de9`): verde** em `Validate` no Windows (2890 testes), Ubuntu e macOS (2893) e no
+  Ubuntu ARM (que só roda `test:native`, 7 testes). As 9 provas de processo real rodaram nos três primeiros,
+  sem nenhuma rota pulada (a Python incluída).
+- **Correção do que escrevi acima:** "roda nos quatro sistemas do CI" está errado. A matriz de processo real
+  roda em **três** (Windows, Ubuntu e macOS); o job do Ubuntu ARM não roda a suíte completa.
+- **Release gate 39787838820:** success (release relevante). **Release 39787884435: success** nos três
+  sistemas → **v0.1.474**, Latest, alvo `2e07de9`, 20 arquivos. O smoke empacotado do Release repetiu o
+  cenário de ontem com o `runCommand` alterado: `cancel` → `cancelled` e `timeout` → `timeout`, **0
+  sobreviventes**, no Windows, Ubuntu, macOS e na variante de quarentena do macOS (cancelamento resolvendo em
+  60 ms no Windows e em ~2 s no POSIX, a graça do SIGKILL).
+- **Fora desta task, achado ao acompanhar o deploy:** o Nightly de hoje (39770466812, 08:25, sobre `f8ffe8c`)
+  reprovou no `Canvas smoke (windows-latest)`: `[canvas-smoke:leitura] F3 … o xterm ficou menor que a gravação
+  (100×50) {"rows":67,"cols":65}`, nas 3 tentativas. Os 5 anteriores passaram. O intervalo desde o último verde
+  (`d0a2f54..f8ffe8c`) inclui o tema claro, cujo commit `b127a54` mexeu justo na sessão Leitura do smoke.
+  Suspeita, não confirmada; virou task.
