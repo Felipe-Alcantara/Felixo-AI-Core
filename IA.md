@@ -2617,3 +2617,81 @@ editor de visualização tinha a lacuna.
 **Fora do escopo / limites.**
 - Visualizações já criadas não ganham o marcador sozinhas: a pessoa abre "Editar visualização" e marca o chip.
 - Não mexi no Painel nem no seletor do topo, que já cobriam o caso.
+
+## 2026-10-22 — PTY no Windows: o `AttachConsole` falhava em todo `kill()` (causa medida e corrigida)
+
+**Pedido.** Task "Felixo AI Core/CI — corrigir causa raiz do AttachConsole no teste nativo de PTY Windows", aberta
+em 09/09 depois de duas tentativas revertidas: forçar `useConptyDll: true` (`e3eea0e`, revertido em `1fa44a6`) e
+trocar o `kill()` por `taskkill` (revertido em `e22dc31`/`ef8c3f8`, segundo a task). As duas pareciam resolver na
+primeira execução do CI e travavam na segunda.
+
+**A explicação antiga estava errada em três pontos.**
+- Dizia-se que o `AttachConsole` falha só em runner sem sessão de console. Medido: falha em **todo** `kill()`, no
+  runner (8 a 9 vezes por execução do Validate do Windows, em 5 execuções de 12/10 a 22/10) e numa máquina com
+  desktop (8 de 8, no Node 22.23.4 e no 25.3.0).
+- A guarda `conpty-console-list-agent-guard.cjs` (`uncaughtException`/`unhandledRejection` nos testes) nunca
+  disparou: a mensagem dela não aparece em nenhum dos 6 logs do Windows consultados. O erro nasce num processo
+  FILHO e chega ao teste só como texto no stderr herdado.
+- O crash `0xC0000374` (heap corruption) de 09/09 não vem do `AttachConsole`. No log do run 34375523192 o processo
+  que morreu foi o do arquivo de teste, o pai (`exitCode: 3221226356` aos 599 ms, nenhum subteste impresso), e um
+  processo filho não corrompe a heap do pai: os dois só coincidem no tempo. Não consegui reproduzi-lo. Nas 150
+  execuções do CI desde 01/10 o passo nativo do Windows falhou uma vez (14/10), por uma divergência de 9
+  caracteres no teste de payload grande, que não tem relação com isto.
+
+**Causa.** `WindowsPtyAgent.kill()` (node-pty 1.1.0, `lib/windowsPtyAgent.js`), no modo ConPTY sem DLL, chama
+`_getConsoleProcessList()`, que bifurca `conpty_console_list_agent.js`, e em seguida, no mesmo instante, fecha o
+pseudo-console (`_ptyNative.kill`). O auxiliar leva uns 45 ms para subir; quando chama `AttachConsole(shellPid)` o
+console e o shell já não existem. Resultado, em todo kill: o auxiliar morre imprimindo `Error: AttachConsole
+failed`; a promessa só resolve no timer de 5 s do próprio node-pty (`resolve([innerPid])`), que segura o loop de
+eventos por 5 s depois do kill; e então `process.kill(innerPid)` roda num PID que pode ter sido reaproveitado
+(possível, não observado). A 1.2.0-beta.15 tem o mesmo código, então atualizar não resolve. Chamar o mesmo auxiliar
+ANTES do kill funciona (lista de 3 PIDs em 45 ms), o que confirma a ordem como causa.
+
+**O que mudou.**
+- `electron/services/node-pty-windows-kill.cjs` responde à pergunta do auxiliar localmente: `_getConsoleProcessList`
+  da instância devolve `[pid do shell]` enquanto a sessão está viva e `[]` depois que ela saiu. Só no win32 e só se o
+  método existir; um node-pty de outra forma devolve `false` em vez de lançar. `createNodePtySpawn` envolve o
+  `spawn` e lê `nodePty.spawn` a cada chamada.
+- Os quatro pontos de produção que criam PTYs passam por ele: `pty-process-manager`, `claude-usage-query`,
+  `codex-status-screen` e `cloud-session-service`.
+- Testes: 13 de unidade em `node-pty-windows-kill.test.cjs` (um fixa a forma interna do node-pty instalado, para um
+  upgrade não desligar a correção em silêncio; outro reprova um ponto novo de produção que use o `spawn` cru) e
+  `pty-kill.integration.test.cjs` (PTY real num filho: stderr sem o erro e saída em menos de 4,5 s depois do kill),
+  ainda fora do `test:native` (ver Limites). Quatro mutações do módulo e do ponto de produção foram mortas.
+- A guarda de `AttachConsole` foi removida dos três testes nativos e apagada.
+- `scripts/repro-pty-kill.cjs` (`node scripts/repro-pty-kill.cjs --runs N`, 14 testes) e o workflow sob demanda
+  `pty-kill-windows.yml`: N execuções COM e N SEM a correção (o controle), cada uma num processo novo, medindo
+  ruído, tempo e travamento; mais o `npm run test:native` do CI e o teste de encerramento repetidos N vezes, com
+  teto de 600 s cada.
+
+**Medido.**
+- Windows 11 local, 8 execuções por caminho, Node 25 e Node 22: sem a correção 8 de 8 com ruído e o processo sai
+  ~5,9 s depois de iniciar (kill aos 0,8 s); com ela 0 de 8 e ~1,9 s. Todas com `onExit` entregue e sem travamento.
+- Sob o Electron 41.10.7 (Node 24.18.0), `cmd.exe` como shell: 1 `AttachConsole failed` por kill sem a correção (2 de
+  2), 0 com ela (2 de 2), `onExit` no mesmo tempo (~925 ms).
+- Sobreviventes (um `node` como shell que cria um neto no mesmo console): 0 em três modos (sem mexer, sem o
+  auxiliar e com a lista pedida antes do kill). Fechar o pseudo-console já encerra a árvore, e o auxiliar nunca
+  devolveu lista em nenhuma das medições, então a correção não tira nada.
+- `npm run test:native` local: antes 7 testes, 7 linhas de `AttachConsole` e 30 s; depois, com o teste novo
+  incluído à mão (8 testes), 0 linhas e 15 s.
+- No `windows-latest` (imagem `windows-2025-vs2026`, Node 22.23.x), três execuções do workflow com 10 repetições
+  cada: 39831517850 (com a guarda ainda instalada), 39832831848 (guarda removida) e 39835350917 (a árvore que
+  entra na `main`, sem a edição do `package.json`). Em todas: com a correção 10 de 10 sem ruído e saída entre 1005
+  e 1019 ms depois do kill; controle 10 de 10 com ruído e 5006 a 5022 ms (o runner reproduz o defeito); passo
+  nativo 10 de 10 verdes e 0 linhas de ruído (~15 a 18 s nas duas primeiras; na terceira, o `test:native` de 7
+  testes mais o teste de encerramento, 8 `ok` e 0 `not ok` em cada repetição).
+
+**Limites.**
+- Não reproduzi o crash `0xC0000374` de 09/09; se voltar, é outra causa e o teste novo não o cobre.
+- O teste com neto cobre processos que ficam no console; um processo que se desanexa dele não foi testado. Antes e
+  depois são iguais nesse caso, porque o auxiliar nunca devolveu lista.
+- Os benchmarks de PTY em `app/scripts` (`terminal-scrollback-benchmark.cjs`, `record-terminal-fixture.cjs`) ainda
+  usam o node-pty cru e não foram alterados: mudar o que o benchmark mede é decisão à parte.
+- Não reportei o defeito no repositório do node-pty.
+- **O `app/package.json` não foi alterado.** Qualquer mudança nele liga a política de dependências do CI
+  (`.github/scripts/ci-scope.sh`), e ela reprova hoje o `npm audit` completo (18 avisos, 1 crítico em `dompurify`, 4
+  altos em `brace-expansion`, `http-cache-semantics`, `undici` e `vite`), por avisos novos sem relação com este
+  trabalho; apareceu no PR #130. Na `main` isso deixaria o CI vermelho e o Release gate, que exige CI verde, não
+  publicaria o conserto. Por isso o teste de integração novo ainda não está na lista do `test:native`, e não há
+  script `repro:pty-kill`: as duas linhas entram num commit à parte quando a política voltar ao verde. Até lá o teste
+  roda à mão e o `pty-kill-windows.yml` cobre o mesmo cenário no runner.
