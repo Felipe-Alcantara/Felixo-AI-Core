@@ -24,6 +24,7 @@ compatibilidade com histórico legado.
 | [projeto/PLANO-AGENTE-NUVEM.md](projeto/PLANO-AGENTE-NUVEM.md) | Plano de implementação do Agente na nuvem em tarefas: arquivos, interfaces, testes e ordem. |
 | [validation/CHECKLIST-AGENTE-NUVEM.md](validation/CHECKLIST-AGENTE-NUVEM.md) | Roteiro manual do Agente na nuvem. Não roda no CI porque cria sessão real e gasta crédito. |
 | [validation/CHECKLIST-INSTALADOR-ARVORE-DE-PROCESSOS.md](validation/CHECKLIST-INSTALADOR-ARVORE-DE-PROCESSOS.md) | Roteiro para ver, numa máquina real, o app empacotado cancelar e expirar a instalação de uma CLI sem deixar processo órfão, nas rotas npm, Python (pip) e script. O mesmo cenário roda no CI dentro do `release-smoke` (npm) e em `install-routes-process-tree.test.cjs` (as três rotas). |
+| [validation/CICLO-INSTALACAO-CLIS.md](validation/CICLO-INSTALACAO-CLIS.md) | O runner que prova, com o npm de verdade, que a instalação automática das CLIs instala, não reinstala na 2ª abertura nem no upgrade e reinstala sem o binário, e o workflow do Windows que o roda no CI. Explica o veredito (regressão × infra × falha de instalação), o controle negativo e como rodar à mão. |
 | [projeto/POLITICA-VERSIONAMENTO.md](projeto/POLITICA-VERSIONAMENTO.md) | Política de branches e commits do projeto. |
 | [projeto/RODAR-VIA-CODIGO-FONTE.md](projeto/RODAR-VIA-CODIGO-FONTE.md) | Como rodar o app a partir do código-fonte. |
 | [design/BRAND-SYSTEM.md](design/BRAND-SYSTEM.md) | Tokens e princípios visuais do Felixo AI Core. |

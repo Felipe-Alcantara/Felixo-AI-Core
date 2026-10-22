@@ -24,6 +24,7 @@
 - **Memória de longo prazo (ai-memory, 2026-10-21):** instalado na máquina (serviço no logon, MCP e hooks por usuário no Claude Code, Codex e Copilot). Este repositório tem o bloco gerenciado no `CLAUDE.md` e no `AGENTS.md` e as skills `ai-memory-*`; a captura vale para todos os projetos e a entrega dos eventos acontece nas fronteiras da sessão. Ver a entrada de 2026-10-21 "ai-memory instalado".
 - **Instalador e árvore de processos (2026-10-21):** o `release-smoke.cjs` passou a cancelar e expirar a instalação de uma CLI pelo app empacotado e a provar, com uma sonda independente, que nenhum processo da árvore do npm sobra (`app/scripts/installer-kill-smoke.cjs`, nos três SOs do Release). Visto rodando fora do CI só no Windows; o macOS real segue pendente (roteiro em `docs/validation/CHECKLIST-INSTALADOR-ARVORE-DE-PROCESSOS.md`). Ver a entrada de 2026-10-21 "Instalador: cancelar e expirar pelo app empacotado".
 - **Instalador, rotas Python e script (2026-10-22):** a rota do pip (`runBufferedCommand`, hoje só o Openia) passou a encerrar a árvore inteira no prazo e no cancelamento, a procurar um Python que sirva antes de instalar (`core/python-runtime.cjs`) e, junto com o npm, a repetir a falha de rede duas vezes (`core/install-retry.cjs`). Prova com processo real nas 3 rotas em `install-routes-process-tree.test.cjs` (roda no Windows, no Ubuntu e no macOS do CI). Visto rodando fora do CI só no Windows; fechar o app no meio de uma instalação ainda não a cancela. Ver a entrada de 2026-10-22 "Instalador: Python e script".
+- **Ciclo de instalação das CLIs no CI (2026-10-22):** o runner que prova que a instalação automática não reinstala na 2ª abertura nem no upgrade (`app/scripts/cli-auto-install-real-repro.cjs`) roda sozinho no `windows-latest` (`ciclo-instalacao-clis.yml`: push por caminho, segunda 09:30 UTC e sob demanda), com veredito que separa regressão do Felixo de falha de infra (códigos 1 e 2) e controle negativo. Fora do PR e do Release. Ver `docs/validation/CICLO-INSTALACAO-CLIS.md` e a entrada de 2026-10-22 "CI: o ciclo de instalação das CLIs".
 - **Em andamento:** nada aberto no código nesta entrega. Em toda abertura (também na execução da
   fonte), a rodada das CLIs busca a versão mais nova publicada de Claude, Codex e Gemini, inclusive
   pré-lançamento, e atualiza a cópia do app e a do npm global, mesmo com a CLI aberta (o npm troca
@@ -2447,3 +2448,85 @@ atualização do app ou no "Tentar de novo" manual.
   (100×50) {"rows":67,"cols":65}`, nas 3 tentativas. Os 5 anteriores passaram. O intervalo desde o último verde
   (`d0a2f54..f8ffe8c`) inclui o tema claro, cujo commit `b127a54` mexeu justo na sessão Leitura do smoke.
   Suspeita, não confirmada; virou task.
+
+## 2026-10-22 — CI: o ciclo de instalação das CLIs no Windows ganha workflow, veredito e controle
+
+**Pedido.** Task "Windows — integrar o runner de reprodução de instalação de CLIs ao CI/release", segunda
+fatia da task "Windows — reproduzir instalação repetida de CLIs em app empacotado e após upgrade". O runner
+`app/scripts/cli-auto-install-real-repro.cjs` (commit `eb44b3f`, 25/09) rodava só à mão e terminava com 0 ou
+1. A terceira fatia (o app instalado pelo NSIS) segue em task própria.
+
+**Verificado antes de mexer.** O runner de setembro ainda funciona no código de hoje: gemini (32 s / 3,6 s /
+3,2 s / 45 s) e claude (17 s / 2,1 s / 1,8 s / 36 s), 4 rodadas, `EXIT=0`, Windows 11 de desenvolvimento.
+
+**Decisão: onde roda.** Um workflow próprio, `ciclo-instalacao-clis.yml`, e não o CI de PR nem o Release.
+- Em PR não: rede real, minutos de duração e falha por instabilidade do registry que não é culpa de quem
+  abriu o PR.
+- No Release não: ele publica o instalador, e uma falha de rede de terceiros ali atrasaria a publicação e
+  deixaria um pré-release órfão (o `v0.1.472` ficou assim, por outro motivo).
+- O `official-cli-install.yml` já roda instalação real fora do PR, mas com `npm install -g` cru: prova que o
+  npm instala a CLI, não que o Felixo decide certo sobre reinstalar.
+- Gatilhos: `push` na `main` só quando muda código que o ciclo executa (e o próprio workflow), toda segunda
+  09:30 UTC e `workflow_dispatch`. Nada disso é release-relevante: o Release gate respondeu
+  `Release relevante: false` e nenhuma versão saiu.
+
+**O que mudou.**
+- **O runner ganhou veredito e código de saída:** 0 ok, 1 regressão do ciclo, 2 infra (rede ou registry), 3
+  falha de instalação sem sinal de rede, 4 erro do runner. A classificação sai do resultado CRU do instalador
+  (`output`, `timedOut`, `errorCode`) pelo `isTransientNetworkFailure` do retry de rede de ontem, não do texto
+  de status.
+- **"Não reinstalou" tem dois sinais**, o estado (`idle`) e zero chamadas ao instalador: uma reinstalação
+  adiada por arquivo travado também termina em `idle`.
+- **O `latest` fica fixado entre as rodadas.** O Gemini publica um `nightly` por dia (o alvo medido hoje foi
+  `0.67.0-nightly.20261022.g09d81bf11`); sem fixar, uma publicação no meio do script viraria um falso
+  "reinstalou".
+- **Isolamento:** o npm global do sistema nunca é tocado (`systemCli` blindado); `FELIXO_MANAGED_CLI_ROOT` e
+  `FELIXO_AUTO_INSTALL_CLIS` saem do ambiente; o remendo do catálogo e do `require('electron')` não vaza mais
+  para o resto do processo (antes o catálogo ficava filtrado).
+- **Relatório JSON e resumo Markdown**, sem caminho da pasta temporária; a saída do npm só da falha, em um
+  bloco por rodada, guardando o começo (`npm error code …`) e o fim, com redação de URL e token linha a linha.
+- **Controle negativo** (`--control-regressao`): apaga o binário antes da rodada 2, e o runner PRECISA terminar
+  em `regressao`.
+- **O workflow** roda gemini e claude no `windows-latest` (o Codex fica fora: caso conhecido da dependência
+  nativa opcional). Só o código 2 é repetido (3 tentativas, esperas de 60 s e 120 s); uma regressão NUNCA é
+  repetida. Cada código vira uma anotação que diz de quem é o problema; log, relatório e resumo sobem como
+  artefato sempre. `npm ci --ignore-scripts`, sem baixar o Electron.
+
+**O que foi medido.**
+- **Clone limpo (worktree descartável):** `npm ci --ignore-scripts` em 44 s, os testes passando sem o binário
+  do Electron e o runner de verdade com veredito `ok` (67 s).
+- **Runner de verdade, rede real:** controle → `EXIT=1`, só a rodada 2 acusada. Infra provocado apontando o
+  registry do npm para `127.0.0.1:9` → `EXIT=2` em 15,5 s, com a saída REAL do npm (`ECONNREFUSED`), 3
+  tentativas do app (esperas de 3 s e 10 s). Isso achou um defeito de legibilidade que o instalador falso não
+  mostrava: o resumo repetia o mesmo bloco 3 vezes, e o `redactDiagnosticText` (que termina com um `slice` que
+  guarda só o começo) jogava fora o fim da saída antes do meu corte.
+- **Testes:** 42 offline (`cli-auto-install-real-repro.test.cjs`), com um instalador falso que grava os
+  arquivos que o npm gravaria, rodando o módulo de produção de verdade. **Teste de mutação:** 6 estragos no
+  runner (sem fixar o `latest`, controle que não apaga, toda falha virando rede, regressão sem contar chamadas,
+  catálogo não restaurado, instalador que esquece a rede), todos reprovados. Na primeira rodada DOIS
+  sobreviveram e acharam um teste que faltava (rodada `idle` que chamou o instalador) e um teste vazio (eu
+  importava `listOfficialAiClis` por desestruturação e ele nunca via o catálogo remendado).
+- **Passo bash do workflow, no Git Bash real:** com um runner falso, só o código 2 repete (esperas 60 e 120),
+  1, 3 e 4 saem na hora, e o controle só liga a flag quando pedido.
+- **Gate:** `npm test` 2932 testes (eram 2890), 0 falhas, 9 pulados; `npm run lint` limpo.
+
+**Medido no CI (`windows-latest`, Node 22.23.3).**
+
+| Run | claude | gemini |
+| --- | --- | --- |
+| push `6a3e107` (39793776727), verde | ciclo de 42 s; job de 1 min 43 s | ciclo de 237 s; job de 5 min; instalações de 131 s e 65 s |
+| controle (39795135591), vermelho | 78 s, veredito `regressao`, código 1 | 375 s, veredito `regressao`, código 1 |
+
+O registry do npm no runner é bem mais lento que numa máquina de desenvolvimento (a primeira instalação do
+gemini levou 131 s contra 26 s aqui). Timeout fixado com base nisso: 30 min no job e 25 no passo, que é menor
+de propósito para o resumo e a anotação ainda rodarem se ele estourar. O pior caso legítimo é o de infra, com
+3 tentativas e as esperas, perto de 20 min.
+
+**Ponto de atenção.**
+- **Nunca vi o veredito `infra` num runner do GitHub**, só na máquina de desenvolvimento com o registry
+  apontado para uma porta fechada, e a repetição entre tentativas do passo bash só foi exercida com runner
+  falso. O primeiro `infra` de verdade vai mostrar se as esperas de 60 s e 120 s bastam.
+- **A segunda-feira 09:30 UTC ainda não rodou**: a primeira execução agendada é a de 26/10.
+- **Não coberto:** o app empacotado (NSIS), macOS e Linux, e o Codex. Ver `docs/validation/CICLO-INSTALACAO-CLIS.md`.
+- **Custo:** o `push` por caminho dispara 2 jobs de Windows (uns 7 min no total) a cada commit que toca o
+  ciclo. É raro, mas se o ritmo subir vale trocar por um gatilho só da noite.
