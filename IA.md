@@ -2530,3 +2530,38 @@ de propósito para o resumo e a anotação ainda rodarem se ele estourar. O pior
 - **Não coberto:** o app empacotado (NSIS), macOS e Linux, e o Codex. Ver `docs/validation/CICLO-INSTALACAO-CLIS.md`.
 - **Custo:** o `push` por caminho dispara 2 jobs de Windows (uns 7 min no total) a cada commit que toca o
   ciclo. É raro, mas se o ritmo subir vale trocar por um gatilho só da noite.
+
+**Acompanhamento do deploy (mesmo dia): o ciclo provou o próprio vermelho, e o Release gate disparou duas
+versões sem necessidade.**
+- **Os dois controles, vistos num runner de verdade.** Controle de regressão (run 39795135591): gemini e claude
+  vermelhos com veredito `regressao`, código 1, só a rodada 2 acusada, anotação "REGRESSÃO do ciclo de
+  instalação". Controle de infra (run 39800353973, `npm_config_registry` apontado para `127.0.0.1:9` só no
+  passo do ciclo): os dois vermelhos com `infra`, código 2, 3 tentativas do script (cada uma com as 3 do app,
+  15 s), avisos das esperas de 60 s e 120 s, anotação "INFRA (não é regressão do Felixo)", rodadas 2 a 4 não
+  executadas; o passo do gemini levou 3 min 47 s (3 x 15 s mais 60 s e 120 s). Runs normais verdes: push
+  `6a3e107` (39793776727), `f3aeded` (39797797274, já com os timeouts fixados) e `80c67ac` (39800332154).
+- **O Codex achou uma falha do meu isolamento.** Medido localmente, o Codex fechava as 4 rodadas em `ok`, mas as
+  rodadas 2 e 3 diziam "Faltam CLIs de IA" (gemini e claude diziam "prontas"). Causa, com a sonda de
+  detecção: o `codex.cmd` do Openia, que está no `PATH` desta máquina, passava na frente da pasta gerenciada
+  (a detecção resolve o PRIMEIRO caminho) e quebrava. O ciclo estava certo; a reprodução medida era a da
+  máquina. Conserto (`1f7aae9`): o isolamento tira do `PATH` toda pasta que já tenha o executável da CLI
+  testada; 3 testes e uma sétima mutação, reprovada. Com o `PATH` limpo o Codex diz "prontas" e fecha em `ok`
+  (20 s / 0,7 s / 0,1 s / 36 s, alvo `@openai/codex@0.164.0-alpha.12`). Segue fora da matriz, que a task manda.
+- **Dois Releases sem necessidade, e uma versão publicada sem mudança de app.** O Release gate de dois commits
+  seguidos (alvos `f3aeded` e `80c67ac`) imprimiu "Nenhum commit de base confiável; decisão conservadora:
+  publicar", com a lista de arquivos vazia. O Release de `f3aeded` (39800386126) falhou em "Prepare release" com
+  "Nenhuma execução CI verde encontrada" e não consumiu versão; o de `80c67ac` (39801906973) publicou a
+  **v0.1.476** (Latest). Entre a v0.1.474 e a v0.1.476 não mudou nenhuma linha de `app/electron`, `app/src`,
+  `package.json` nem recurso empacotado (só script, teste, workflow, `IA.md` e docs): é o mesmo app.
+- **Causa medida: a consulta de "commits já avaliados" do gate é intermitentemente vazia.** O comando exato do
+  gate (`gh run list --workflow release-gate.yml --branch main --status completed --limit 1000 --json
+  headSha,conclusion`) devolveu, em chamadas seguidas e todas com `exit=0` e sem erro, 129, 67, 67, 129, **0**,
+  129 linhas e, mais tarde, 0, 129, 67, 0, 129. `release-gate.yml` esconde o erro (`2>/dev/null || true`) e
+  `release_base` não acha ancestral numa lista vazia, então "na dúvida, publica". Havia um incidente "Actions
+  Results" aberto no GitHub desde 14:18 UTC, mas a instabilidade seguiu com o status em "All Systems
+  Operational", então não é só ele. Dos 5 gates que chegaram a decidir no dia (os de CI vermelho nem rodam o passo), 3 acharam a base e 2 não.
+  **Não alterei o gate**: é infraestrutura de publicação, fora do escopo, e mexer nela sem testes poderia
+  deixar de publicar um app que precisa sair. Virou task, com o conserto sugerido.
+- **Cuidado que isso impõe:** o `concurrency` do Release cancela o que está em andamento quando outro entra, e
+  um Release cancelado no meio deixa pré-release órfão. Por isso nenhum push foi feito enquanto o Release de
+  `80c67ac` rodava.

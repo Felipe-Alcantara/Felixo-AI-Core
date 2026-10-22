@@ -36,7 +36,7 @@ não existe.
 - **Toda segunda-feira, 09:30 UTC.** Pega uma publicação nova da CLI de terceiros que quebre a
   instalação vista pelo app, sem depender de commit nosso.
 - **Sob demanda:** Actions > *Ciclo de instalação das CLIs (Windows)* > *Run workflow*. A opção
-  `controle` liga o controle negativo (abaixo).
+  `controle` e `infra` ligam os controles negativos (abaixo).
 
 Fica **fora do CI de PR** (rede real, minutos de duração, falha por instabilidade do registry) e
 **fora do Release** (uma falha de rede de terceiros atrasaria a publicação do instalador e deixaria
@@ -71,12 +71,18 @@ A página da run mostra o veredito na primeira linha, a tabela das rodadas e a s
 tentativas que falharam. Log, relatório JSON e resumo ficam no artefato `ciclo-instalacao-<cli>`
 (30 dias), também quando a run passa.
 
-## Controle negativo
+## Controles negativos
 
-`--control-regressao` (no workflow, a opção `controle`) apaga o binário **antes** da rodada 2, então
-ela reinstala. O runner PRECISA terminar em `regressao` (código 1). Serve para provar que o vermelho
-é visível: se uma execução de controle terminar em qualquer outro veredito, o runner deixou de
-enxergar o defeito e nada do que ele diz vale.
+São dois, e cada um PRECISA terminar vermelho com o veredito certo. Servem para provar que o vermelho
+é visível: se um controle terminar em qualquer outro veredito, o runner deixou de enxergar o defeito
+e nada do que ele diz vale.
+
+- **`controle` (regressão).** `--control-regressao` no script. Apaga o binário **antes** da rodada 2,
+  então ela reinstala; o veredito esperado é `regressao` (código 1), acusando só a rodada 2.
+- **`infra` (rede).** Só no workflow. Aponta `npm_config_registry` para uma porta fechada
+  (`127.0.0.1:9`) apenas no passo do ciclo; o `npm ci` anterior usa o registry normal. O veredito
+  esperado é `infra` (código 2), depois de 3 tentativas do script (cada uma com as 3 do app), com as
+  esperas de 60 s e 120 s anunciadas em avisos e as rodadas 2 a 4 não executadas.
 
 ## Rodar à mão
 
@@ -103,10 +109,28 @@ produção toma as decisões de verdade.
 | --- | --- | --- |
 | Windows 11 de desenvolvimento, Node 25 (22/10/2026) | 32 s / 3,6 s / 3,2 s / 45 s (rodadas 1 a 4) | 17 s / 2,1 s / 1,8 s / 36 s |
 | `windows-latest`, Node 22.23.3 (run 39793776727) | ciclo de **237 s**; instalação de 131 s e de 65 s | ciclo de **42 s** |
-| `windows-latest`, controle (run 39795135591) | 375 s, com a instalação extra | 78 s |
+| `windows-latest`, controle de regressão (run 39795135591) | 375 s, com a instalação extra | 78 s |
+| `windows-latest`, controle de infra (run 39800353973) | `infra` em 15 s por tentativa; o passo todo levou 3 min 47 s | `infra` em 15 s por tentativa |
 
-O job inteiro do gemini levou 5 min na run normal e perto de 7 na de controle; o `timeout-minutes`
-(30 no job, 25 no passo) cobre o pior caso legítimo, que é o de infra com 3 tentativas.
+O job inteiro do gemini levou 5 min na run normal e perto de 7 na de controle de regressão; o
+`timeout-minutes` (30 no job, 25 no passo) cobre o pior caso legítimo, que é o de infra com 3
+tentativas (o controle de infra mede o piso desse caso: 15 s x 3 mais 60 s e 120 s de espera).
+
+Medições locais que explicam o que o runner faz:
+
+- **Codex, no Windows de desenvolvimento (22/10/2026):** 4 rodadas em `ok` (20 s / 0,7 s / 0,1 s /
+  36 s), alvo `@openai/codex@0.164.0-alpha.12`. Ainda não medido no `windows-latest`.
+- **Registry apontado para uma porta fechada, local:** `infra` (código 2) em 15,5 s, com a saída real do
+  npm (`ECONNREFUSED`).
+
+## Isolamento do PATH
+
+A detecção do app resolve o **primeiro** caminho do `PATH`. O runner tira do `PATH` a pasta gerenciada
+real do Felixo, o npm global e **toda pasta que já tenha o executável da CLI sob teste**. Esta última
+regra veio de um erro medido: na máquina de desenvolvimento, o `codex.cmd` do Openia estava no `PATH` e
+passava na frente da pasta gerenciada; ele quebrava, a detecção dizia "Faltam CLIs de IA" e a
+reprodução medida era a da máquina, não a do ciclo. Num runner limpo isso não acontece. A pasta de
+**outra** CLI não é tocada.
 
 ## O que este runner não cobre
 
@@ -115,5 +139,9 @@ O job inteiro do gemini levou 5 min na run normal e perto de 7 na de controle; o
   `resources/npm-runtime`. Há uma task própria para isso.
 - **macOS e Linux.** O isolamento do ambiente e o layout são escritos pensando no Windows; o código
   roda em outros sistemas, mas não há workflow nem medição para eles.
-- **O Codex** (ver acima) e o **Openia**, que não passa pela instalação automática (instala por
-  `pip`, sob confirmação).
+- **O Codex no runner do GitHub.** Está fora da matriz de propósito (ver acima), mas medido localmente
+  em `ok`; falta medi-lo no `windows-latest` antes de incluí-lo. O **Openia** não passa pela instalação
+  automática (instala por `pip`, sob confirmação).
+- **Quando o próprio GitHub está instável.** O Actions teve um incidente em 22/10/2026 (listagens de
+  runs defasadas ou vazias). O ciclo em si não depende dessas listagens, mas o Release gate e o passo
+  "Verificar o CI" do Release dependem, e dispararam Releases sem necessidade naquele dia.
