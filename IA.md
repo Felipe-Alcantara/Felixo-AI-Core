@@ -9,7 +9,7 @@
   nos arquivos de docs/ia-archive/.
 -->
 
-Última atualização: [2026-10-19]
+Última atualização: [2026-10-22]
 
 - **Fase:** o canvas é o produto principal (o chat está depreciado). A divisão do `CanvasView`
   (partes 1 a 4) e o bloco Agente na nuvem estão na `main`: PRs #113 a #120 mesclados.
@@ -23,6 +23,7 @@
 - **Claude por chave de API:** conta do Claude por chave abre um bloco de conversa (Claude Code sem tela, que usa o crédito promocional do Agent SDK); ver a entrada de 2026-10-19.
 - **Memória de longo prazo (ai-memory, 2026-10-21):** instalado na máquina (serviço no logon, MCP e hooks por usuário no Claude Code, Codex e Copilot). Este repositório tem o bloco gerenciado no `CLAUDE.md` e no `AGENTS.md` e as skills `ai-memory-*`; a captura vale para todos os projetos e a entrega dos eventos acontece nas fronteiras da sessão. Ver a entrada de 2026-10-21 "ai-memory instalado".
 - **Instalador e árvore de processos (2026-10-21):** o `release-smoke.cjs` passou a cancelar e expirar a instalação de uma CLI pelo app empacotado e a provar, com uma sonda independente, que nenhum processo da árvore do npm sobra (`app/scripts/installer-kill-smoke.cjs`, nos três SOs do Release). Visto rodando fora do CI só no Windows; o macOS real segue pendente (roteiro em `docs/validation/CHECKLIST-INSTALADOR-ARVORE-DE-PROCESSOS.md`). Ver a entrada de 2026-10-21 "Instalador: cancelar e expirar pelo app empacotado".
+- **Instalador, rotas Python e script (2026-10-22):** a rota do pip (`runBufferedCommand`, hoje só o Openia) passou a encerrar a árvore inteira no prazo e no cancelamento, a procurar um Python que sirva antes de instalar (`core/python-runtime.cjs`) e, junto com o npm, a repetir a falha de rede duas vezes (`core/install-retry.cjs`). Prova com processo real nas 3 rotas em `install-routes-process-tree.test.cjs` (roda nos 4 sistemas do CI). Visto rodando fora do CI só no Windows; fechar o app no meio de uma instalação ainda não a cancela. Ver a entrada de 2026-10-22 "Instalador: Python e script".
 - **Em andamento:** nada aberto no código nesta entrega. Em toda abertura (também na execução da
   fonte), a rodada das CLIs busca a versão mais nova publicada de Claude, Codex e Gemini, inclusive
   pré-lançamento, e atualiza a cópia do app e a do npm global, mesmo com a CLI aberta (o npm troca
@@ -2326,3 +2327,93 @@ real com neto real, mas não passa pelo `app.asar`, pelo npm do pacote nem pelo 
 - **Intermitência registrada:** `npm test` fez 6 rodadas completas hoje, 2 com 1 falha cada, em testes
   diferentes de `fetch-all` (`analyzeRepo ... pendentes de pull` e `executePlan faz o push ...`); cada um
   passa 3 de 3 isolado. Não tem relação com o instalador.
+
+## 2026-10-22 — Instalador: Python e script ganham a garantia do npm (árvore de processos, runtime e retry de rede)
+
+**Pedido.** Task "Instalador — cobrir Python e script na matriz de instalação, detecção e retry",
+derivada da task "CLI — cobrir layout, scripts e reinício do instalador nos três sistemas". O PR #84
+(`core/process-tree.cjs`) deu ao npm a garantia de que cancelar ou estourar o prazo encerra a árvore
+inteira, e a entrada de 2026-10-21 provou isso pelo app empacotado. As outras rotas de instalação não
+tinham nada disso.
+
+**Mapa das rotas de instalação (lido no código em 22/10/2026).**
+- **npm** (Codex, Claude e Gemini, `autoInstall` padrão): `managed-cli-installer.runCommand`, que já
+  nascia `detached` no POSIX, matava a árvore e aceitava `signal`. Faltava repetir a falha de rede.
+- **Python/pip** (só o Openia: `autoInstall: false`, `requiresConfirmation`): `installOfficialCli` →
+  `runBufferedCommand`. Sem `detached`, no prazo só `childProcess.kill('SIGTERM')` no filho direto, sem
+  cancelamento, sem repetir a rede e com o comando fixo (`py` no Windows, `python3` no resto).
+- **Script:** nenhuma CLI do catálogo instala por script. O instalador aceita qualquer comando pelo
+  mesmo `runBufferedCommand`, então a rota vale para quem chegar (as tasks de MCP que dependem da
+  "matriz Python/script" são os primeiros consumidores previstos).
+- `runBufferedCommand` também roda `login status`, a consulta de uso e a elegibilidade de conta (prazo
+  de 30 s), então o conserto do prazo vale para elas.
+
+**Reproduzido antes de consertar (Windows 11, Python 3.14.2, `py.exe`).** `runBufferedCommand` com `py`
+rodando um Python que sobe um neto e `timeoutMs: 3000`: devolveu `timedOut`, e o neto `python.exe`
+**sobreviveu** (1 sobrevivente pelo `Get-CimInstance`, pai já morto). É o mesmo defeito que o PR #84
+consertou no npm.
+
+**O que mudou.**
+- **`official-cli-service.cjs`, `runBufferedCommand`:** nasce `detached` no POSIX, mata a árvore no prazo
+  e no cancelamento (`signal`) com o `killProcessTree` que já existia, e quem mata é quem resolve
+  (`killing`, o mesmo defeito de ordem do `close` que o npm teve no macOS e no Ubuntu). Devolve
+  `timedOut` ou `cancelled`. A mensagem de erro passa a mostrar o FIM da saída (onde o pip e o npm põem o
+  erro) sem as linhas `[notice]` do pip. `killTree`, `spawn` e `platformName` são injetáveis.
+- **`core/install-retry.cjs` (novo):** `withNetworkRetry` repete duas vezes, esperando 3 s e depois 10 s,
+  só quando `isTransientNetworkFailure` reconhece a falha como rede passageira. Padrões tirados da saída
+  MEDIDA do pip 25.3 e do npm 11.6.2 (`ECONNREFUSED`, `ENOTFOUND`, `npm error network`, os avisos
+  `Retrying (Retry(`, 5xx, 408, 429). Não repete 404, `EINTEGRITY`, `ETARGET`, permissão, prazo vencido
+  nem executável que nem abriu. O resultado ganha `networkRetries`.
+- **`core/python-runtime.cjs` (novo) e `install.runtime` no catálogo:** antes de rodar o pip, procura um
+  Python que sirva (`py`, `python`, `python3` no Windows; `python3`, `python` no resto) com
+  `python -m pip --version`, confere a versão mínima (`3.10`, o `requires-python` do pyproject do Openia
+  no commit pinado) e explica o que falta em vez de "spawn py ENOENT": não encontrado, antigo demais ou
+  sem pip (com o `apt install python3-pip` do Debian e Ubuntu). O atalho `python.exe` da Microsoft Store
+  não é Python e é pulado.
+- **`installOfficialCli`:** usa o runtime achado, repete a rede em cada rodada do pip (inclusive a do
+  `--break-system-packages`), aceita `signal` e devolve `cancelled` sem detectar nem importar modelos.
+- **`cli-auto-install.cjs`:** `installAndVerifyManagedCli` e a atualização do npm global do sistema
+  repetem a rede do mesmo jeito, e o status diz "Sem resposta da rede ao instalar X; tentando de novo
+  (1 de 2)". O `runCommand` do npm devolve `timedOut` e `errorCode`, sem ninguém adivinhar pelo texto.
+- **Interface:** o modal de modelos avisa "a conexão falhou no meio e a instalação foi repetida sozinha",
+  como já avisava do PEP 668.
+
+**Por que a repetição é estreita, e por que só duas.** O `cli-diagnostics` também classifica falha de
+instalação, mas para EXPLICAR: o padrão dele casa "proxy", "network" e certificado autoassinado, o que
+ajuda a mensagem e atrapalharia aqui, porque repetir não conserta proxy nem certificado. E o npm (duas
+vezes, de 10 a 60 s de espera) e o pip (cinco, com espera curta) já repetem dentro de uma execução: o que
+chega ao instalador é a conexão que ficou fora o tempo de uma sequência inteira. Sem a espera maior, uma
+queda de rede na abertura marcava a CLI como "já tentou nesta versão" e ela só voltava a instalar numa
+atualização do app ou no "Tentar de novo" manual.
+
+**O que foi medido.**
+- **Saída real de falha** (pip 25.3 e npm 11.6.2, Windows 11): pip sem DNS e com porta fechada traz os
+  avisos `Retrying (Retry(` e `NewConnectionError`/`ConnectTimeoutError`; contra um índice, o erro final é
+  só "No matching distribution found" (o sinal de rede são os avisos de tentativa); pacote inexistente e
+  `HTTP error 404` não trazem aviso nenhum; sem permissão vem como `PermissionError: [WinError 5] Acesso
+  negado`. npm traz `ECONNREFUSED`, `ENOTFOUND` e `npm error network`; 404 é `E404`.
+- **Teste de processo real** (`install-routes-process-tree.test.cjs`): 3 rotas (npm, Python, script) ×
+  prazo, cancelamento e um controle que mata só o processo imediato e PRECISA deixar o neto vivo. Contra o
+  código de antes: Python e script reprovam (neto órfão e processo vivo) e o npm reprova por faltar o
+  `timedOut`. Com o conserto: 9 de 9.
+- **Visto rodando (Windows real, `py.exe` e pip reais, sem instalar nada):** o prazo no mesmo cenário da
+  reprodução deixou 0 sobreviventes; `installOfficialCli('openia')` ponta a ponta contra uma porta fechada
+  fez 3 tentativas do pip com esperas de 300 e 600 ms e terminou "A rede falhou nas 3 tentativas."; cancelar
+  com `py.exe` e `python.exe` vivos devolveu `cancelled` e deixou 0 sobreviventes.
+- **Falha antes, passa depois no retry do npm:** 4 dos 5 testes novos de `cli-auto-install` reprovam no
+  código de `f8ffe8c` (o quinto, "não repete pacote inexistente", é a trava contra repetir demais e passa
+  nos dois).
+- **Gate:** `npm test` 2890 testes, 2881 aprovados, 0 falhas, 9 pulados (eram 2805); `npm run lint` e
+  `tsc -p tsconfig.app.json` limpos.
+
+**Ponto de atenção.**
+- **Instalação de verdade do Openia não foi rodada:** o comando é fixo (`pip --user` do Python do usuário)
+  e instalaria o pacote nesta máquina. O pip, o runtime e o retry rodaram de verdade, só o alvo foi trocado.
+- **Fechar o app no meio de uma instalação não a cancela** (nem a do npm nem a do pip): o `signal` existe
+  nas duas rotas e nenhuma camada acima o dispara. Virou task, junto com o botão "Cancelar".
+- **Rede fora por minutos:** as duas repetições cobrem segundos. Fora disso a falha continua gravada como
+  "já tentou nesta versão". Reagendar, como já se faz para arquivo travado, é decisão de produto (quanto
+  tentar enquanto offline) e virou task.
+- **Não validado:** macOS real e Linux real (o `install-routes-process-tree.test.cjs` roda nos quatro
+  sistemas do CI, mas isso não é "visto rodando" fora dele), e a rota de script contra uma CLI de verdade
+  (não existe nenhuma no catálogo).

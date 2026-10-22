@@ -79,6 +79,44 @@ copiada para um caminho sem acento:
 | `timeout` | `timeout`, 0 sobreviventes | prazo de 20 s (o mínimo, calculado a partir do tempo do `cancel`); mesma árvore |
 | `cancel --control` | 2 sobreviventes | matar só o npm deixou o script e o neto vivos (os dois `Felixo AI Core.exe`) |
 
+## Rotas Python (pip) e script
+
+O catálogo instala o Openia pelo `pip` do Python do sistema, e o instalador aceita qualquer
+comando. Essas rotas passam por `runBufferedCommand` (`app/electron/services/official-cli-service.cjs`),
+não pelo npm do pacote, então o cenário acima não as cobre. A garantia é a mesma (prazo e
+cancelamento encerram a árvore inteira) e a prova é um teste de processo real, que também roda
+nos quatro sistemas do CI:
+
+```
+cd app
+node --test electron/services/install-routes-process-tree.test.cjs
+```
+
+São três rotas (npm, Python, script `.cmd`/`.sh`) × prazo, cancelamento e um **controle** que mata só
+o processo imediato e precisa deixar o neto vivo. A rota Python é pulada, com aviso, se a máquina não
+tem Python 3. Todos passam: nenhum processo sobra. Se o controle falhar, o cenário não
+discrimina o defeito naquela máquina e o resto do resultado não prova nada.
+
+Referência (Windows 11, 22/10/2026, Python 3.14.2 pelo `py.exe`, pip 25.3), com o `py` e o `pip`
+reais e um alvo inalcançável, para não instalar nada:
+
+| O que | Resultado |
+| --- | --- |
+| Prazo de 3 s num Python que sobe um neto (antes do conserto) | `timedOut` e **1 sobrevivente** (o neto `python.exe`) |
+| O mesmo cenário depois do conserto | `timedOut` e 0 sobreviventes |
+| Cancelar um `pip install` travado conectando (`py.exe` + `python.exe` vivos) | `cancelled` em 3,4 s no total e 0 sobreviventes |
+| `installOfficialCli('openia')` contra uma porta fechada | 3 tentativas do pip, esperas de 300 e 600 ms, "A rede falhou nas 3 tentativas." |
+
+Para ver a procura do Python numa máquina real (Mac ou Linux), sem instalar nada:
+
+```
+cd app
+node -e "require('./electron/services/official-cli-service.cjs').resolveInstallRuntime({ runtime: { kind: 'python', minVersion: '3.10' }, label: 'o Openia', platformName: process.platform }).then(console.log)"
+```
+
+Devolve `{ ok: true, command, version }` ou a mensagem do que falta (Python ausente, antigo ou
+sem pip).
+
 ## Pontos de atenção
 
 - **Caminho com acento no Windows.** O atalho `node.cmd` que o app gera grava o caminho do
