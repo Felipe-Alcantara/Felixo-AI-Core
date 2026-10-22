@@ -16,6 +16,7 @@
  */
 
 const assert = require('node:assert/strict')
+const { spawn } = require('node:child_process')
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
@@ -100,14 +101,24 @@ if (
 // Em POSIX a escrita e inofensiva: o teste confere o arquivo, nao a saida.
 process.stdout.write(MARCADOR_DE_PRONTO + String.fromCharCode(13, 10))
 process.stdin.setEncoding('utf8')
+// O sinal de fim (Ctrl-D, Ctrl-Z ou o marcador) pode chegar partido entre dois
+// pedacos: o ConPTY entrega o marcador em fatias. Por isso a busca e no buffer
+// acumulado e a carga termina no PRIMEIRO sinal. Procurar pedaco a pedaco deixava
+// o comeco do marcador (CR + "__FELIXO", 9 caracteres) na carga, ou nunca
+// reconhecia o fim.
+const SINAIS_DE_FIM = [MARCADOR_DE_EOF_WINDOWS, '\u0004', '\u001a']
+function posicaoDoFim(texto) {
+  const posicoes = SINAIS_DE_FIM.map((sinal) => texto.indexOf(sinal)).filter(
+    (posicao) => posicao !== -1,
+  )
+  return posicoes.length > 0 ? Math.min(...posicoes) : -1
+}
 process.stdin.on('data', (dados) => {
-  const texto = String(dados)
-  const recebeuFim =
-    texto.includes('\u0004') ||
-    texto.includes('\u001a') ||
-    texto.includes(MARCADOR_DE_EOF_WINDOWS)
-  entrada += texto.replace(/[\u0004\u001a]/g, '').replaceAll(MARCADOR_DE_EOF_WINDOWS, '')
-  if (recebeuFim) finalizar()
+  entrada += String(dados)
+  const fim = posicaoDoFim(entrada)
+  if (fim === -1) return
+  entrada = entrada.slice(0, fim)
+  finalizar()
 })
 process.stdin.on('end', finalizar)
 process.stdin.resume()
@@ -331,4 +342,69 @@ test('linha grande com quebra chega intacta nos três terminais nativos', async 
     payload,
     `linha grande alterada — ${describeDivergence(payload, normalizarQuebras(recebido))}`,
   )
+})
+
+/**
+ * Roda o coletor com o stdin por pipe e entrega `pedacos` um a um, com uma pausa
+ * entre eles, para cada um chegar como um evento `data` separado. Sem PTY: o corte
+ * cai exatamente onde o teste quer, o que o ConPTY só faz de vez em quando.
+ */
+function coletarPorPipe(coletor, destino, pedacos) {
+  return new Promise((resolver, rejeitar) => {
+    const filho = spawn(process.execPath, [coletor, destino], {
+      stdio: ['pipe', 'ignore', 'ignore'],
+      windowsHide: true,
+    })
+    const limite = setTimeout(() => {
+      filho.kill()
+      rejeitar(new Error('o coletor não terminou: o sinal de fim não foi reconhecido'))
+    }, TEMPO_LIMITE_MS)
+    filho.on('error', rejeitar)
+    // O coletor pode sair antes do último pedaço; a escrita que sobra não importa.
+    filho.stdin.on('error', () => {})
+    filho.on('exit', () => {
+      clearTimeout(limite)
+      resolver()
+    })
+    pedacos.reduce(
+      (anterior, pedaco) =>
+        anterior.then(
+          () =>
+            new Promise((pronto) => {
+              filho.stdin.write(pedaco)
+              setTimeout(pronto, 80)
+            }),
+        ),
+      Promise.resolve(),
+    )
+  })
+}
+
+test('o coletor termina na carga mesmo quando o marcador de fim chega partido entre dois pedaços', async () => {
+  // Regressão do flake "payload grande ... 9 caracteres a mais" (CI de 20/09 e 14/10):
+  // o coletor procurava o marcador pedaço a pedaço e deixava na carga o começo dele,
+  // CR + "__FELIXO" (9 caracteres), quando o ConPTY o entregava partido.
+  const carga = 'linha 0\nlinha 1\nfim da carga\n__FELIXO_DEPOIS_DA_CARGA__\n'
+  const casos = {
+    'sinal e marcador no mesmo pedaço': [`${carga}\u001a\r__FELIXO_EOF__\r`],
+    'marcador partido depois do Ctrl-Z': [`${carga}\u001a\r__FELIXO`, '_EOF__\r'],
+    'marcador partido sem Ctrl-Z': [`${carga}__FELIXO`, '_EOF__\r'],
+    'marcador partido no fim': [`${carga}\u001a\r__FELIXO_EOF`, '__\r'],
+    'Ctrl-D': [`${carga}\u0004`],
+  }
+  const diretorio = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-pty-coletor-'))
+
+  try {
+    const coletor = criarColetorDeEntrada(diretorio)
+    let indice = 0
+    for (const [nome, pedacos] of Object.entries(casos)) {
+      indice += 1
+      const destino = path.join(diretorio, `recebido-${indice}.txt`)
+      await coletarPorPipe(coletor, destino, pedacos)
+
+      assert.equal(fs.readFileSync(destino, 'utf8'), carga, nome)
+    }
+  } finally {
+    await removerDiretorioTemporario(diretorio)
+  }
 })

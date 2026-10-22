@@ -2681,6 +2681,17 @@ ANTES do kill funciona (lista de 3 PIDs em 45 ms), o que confirma a ordem como c
   nativo 10 de 10 verdes e 0 linhas de ruído (~15 a 18 s nas duas primeiras; na terceira, o `test:native` de 7
   testes mais o teste de encerramento, 8 `ok` e 0 `not ok` em cada repetição).
 
+**Achado ao lado: o flake do payload grande.** Numa execução da validação repetida (run 39836260322, repetição 1
+de 10) o teste `payload grande chega inteiro...` falhou com 9 caracteres a mais no índice 53817, a mesma assinatura
+do CI de 14/10 e de 20/09, e sem nenhum ruído de `AttachConsole`: não é o `kill()`. Causa, reproduzida de forma
+determinística com o coletor do próprio teste e o stdin por pipe: o coletor procurava o marcador de fim
+(`__FELIXO_EOF__`) pedaço a pedaço, e quando o ConPTY o entregava partido o começo dele (CR + `__FELIXO`,
+exatamente 9 caracteres) ficava na carga; sem Ctrl-Z e com o marcador partido o coletor nunca terminava. Conserto só
+de teste: a busca passa para o buffer acumulado e a carga termina no primeiro sinal de fim; teste novo com cinco
+cortes, que reprova com o coletor antigo. Não dá para provar por repetição que o flake sumiu (aparecia cerca de uma
+vez em 40 repetições; no CI, uma vez em 150 execuções): a prova é a reprodução determinística. O outro flake da mesma
+task de acompanhamento (o E2E de contexto) segue aberto.
+
 **Limites.**
 - Não reproduzi o crash `0xC0000374` de 09/09; se voltar, é outra causa e o teste novo não o cobre.
 - O teste com neto cobre processos que ficam no console; um processo que se desanexa dele não foi testado. Antes e
