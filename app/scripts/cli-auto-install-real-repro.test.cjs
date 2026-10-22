@@ -329,6 +329,44 @@ describe('createInstallRecorder', () => {
   })
 })
 
+describe('saída do npm no relatório', () => {
+  it('uma saída longa guarda o começo (o código do erro) e o fim (o log completo), e diz quanto omitiu', async () => {
+    const pilha = 'npm error     at pilha de chamadas\n'.repeat(200)
+    const longa = `npm error code E404\n${pilha}npm error FIM-DA-SAIDA`
+    const gravador = createInstallRecorder(async () => ({ ok: false, message: 'falhou', output: longa }), () => 0)
+    gravador.startRound()
+    await gravador.installPackage({ npmPackage: 'a' })
+    const [falha] = gravador.endRound()
+
+    assert.ok(falha.saida.startsWith('npm error code E404'))
+    assert.ok(falha.saida.endsWith('npm error FIM-DA-SAIDA'))
+    assert.match(falha.saida, /\[… \d+ caracteres omitidos …\]/)
+    assert.ok(falha.saida.length < 1700)
+  })
+
+  it('o que vai para o relatório sai redigido: token de registry e URL com credencial não passam', async () => {
+    const segredo = 'npm_SEGREDO_MUITO_SECRETO_123'
+    const saida = `//registry.exemplo/:_authToken=${segredo}\nFetchError: https://usuario:${segredo}@registry.exemplo/pkg?token=${segredo}\nnpm error code E401`
+    const gravador = createInstallRecorder(async () => ({ ok: false, message: 'falhou', output: saida }), () => 0)
+    gravador.startRound()
+    await gravador.installPackage({ npmPackage: 'a' })
+    const [falha] = gravador.endRound()
+
+    assert.equal(falha.saida.includes(segredo), false, 'o segredo vazou')
+    assert.equal(falha.saida.includes('registry.exemplo/pkg'), false, 'a URL vazou')
+    assert.match(falha.saida, /npm error code E401/, 'o resto da saída continua legível')
+  })
+
+  it('uma saída curta passa inteira, sem marca de corte', async () => {
+    const gravador = createInstallRecorder(async () => ({ ok: false, message: 'falhou', output: SAIDA_QUEBRADA }), () => 0)
+    gravador.startRound()
+    await gravador.installPackage({ npmPackage: 'a' })
+
+    // A redação do diagnóstico troca a URL por [url]: o registry pode ter credencial nela.
+    assert.equal(gravador.endRound()[0].saida, 'npm error code E404\nnpm error 404 Not Found - GET [url]')
+  })
+})
+
 describe('createLatestPinner', () => {
   it('consulta o registry uma vez por pacote e reaproveita a resposta', async () => {
     let consultas = 0
@@ -489,7 +527,9 @@ describe('relatório e resumo', () => {
     assert.match(resumo, /\| 1 \| instala \| error \| 3 \| ausente \|/)
     assert.match(resumo, /\| 2 \| não reinstala \| não executada \|/)
     assert.match(resumo, /npm error network This is a problem related to network connectivity/)
-    assert.match(resumo, /\(assinatura de rede\)/)
+    // As 3 tentativas falharam do mesmo jeito: um bloco só, com a contagem, não 3 blocos iguais.
+    assert.match(resumo, /3 tentativa\(s\) falharam \(todas com assinatura de rede\)\. Saída da última:/)
+    assert.equal(resumo.match(/```text/g).length, 1)
 
     const ok = formatSummary((await relatorioDe()).relatorio)
     assert.doesNotMatch(ok, /Saída do npm/)

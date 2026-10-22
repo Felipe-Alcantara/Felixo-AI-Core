@@ -255,9 +255,26 @@ function createLatestPinner(resolveLatestPackage) {
   }
 }
 
+/**
+ * A saída do npm traz o código do erro no COMEÇO (`npm error code E404`) e o
+ * caminho do log completo no FIM; o meio é pilha de chamadas. Cortar só o fim
+ * perderia o código justo quando a saída é longa, então o corte guarda os dois
+ * pontas.
+ */
 function tail(texto, limite = SAIDA_DA_FALHA_MAX) {
-  const limpo = redactDiagnosticText(String(texto ?? '').trim(), { homeDir: os.homedir() })
-  return limpo.length > limite ? `…${limpo.slice(-limite)}` : limpo
+  // Redação linha a linha: `redactDiagnosticText` termina com um `slice` que
+  // mantém só o COMEÇO do texto, e aplicada à saída inteira jogaria fora o fim
+  // antes de o corte abaixo poder guardá-lo. Os padrões de segredo (URL,
+  // `_authToken=`, sequência longa) não atravessam linhas.
+  const limpo = String(texto ?? '')
+    .trim()
+    .split(/\r?\n/)
+    .map((linha) => redactDiagnosticText(linha, { homeDir: os.homedir() }))
+    .join('\n')
+  if (limpo.length <= limite) return limpo
+  const inicio = Math.floor(limite * 0.4)
+  const omitidos = limpo.length - limite
+  return `${limpo.slice(0, inicio)}\n[… ${omitidos} caracteres omitidos …]\n${limpo.slice(-(limite - inicio))}`
 }
 
 /**
@@ -586,16 +603,21 @@ function formatSummary(relatorio) {
     )
   })
 
-  const falhas = relatorio.rodadas.flatMap((rodada) => (rodada.instalacoes ?? []).filter((i) => !i.ok).map((i) => ({ rodada, i })))
-  if (falhas.length > 0) {
-    linhas.push('', 'Saída do npm nas tentativas que falharam:')
-    for (const { rodada, i } of falhas) {
+  const comFalha = relatorio.rodadas
+    .map((rodada, indice) => ({ rodada, numero: indice + 1, falhas: (rodada.instalacoes ?? []).filter((i) => !i.ok) }))
+    .filter((item) => item.falhas.length > 0)
+  if (comFalha.length > 0) {
+    linhas.push('', 'Saída do npm quando a instalação falhou:')
+    for (const { numero, falhas } of comFalha) {
+      const ultima = falhas[falhas.length - 1]
+      const todasRede = falhas.every((falha) => falha.redeTransitoria)
+      const algumaRede = falhas.some((falha) => falha.redeTransitoria)
+      const rede = todasRede ? 'todas com assinatura de rede' : algumaRede ? 'algumas com assinatura de rede' : 'nenhuma com assinatura de rede'
       linhas.push(
         '',
-        `Rodada ${RODADAS.findIndex((spec) => spec.chave === rodada.chave) + 1}, ${i.pacote}` +
-          `${i.redeTransitoria ? ' (assinatura de rede)' : ''}:`,
+        `Rodada ${numero}, \`${ultima.pacote}\`: ${falhas.length} tentativa(s) falharam (${rede}). Saída da última:`,
         '```text',
-        i.saida || '(sem saída)',
+        ultima.saida || '(sem saída)',
         '```',
       )
     }
