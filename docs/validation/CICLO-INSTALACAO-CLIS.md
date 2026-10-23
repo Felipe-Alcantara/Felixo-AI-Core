@@ -161,6 +161,8 @@ produção toma as decisões de verdade.
 | `windows-latest`, Node 22.23.3 (run 39793776727) | ciclo de **237 s**; instalação de 131 s e de 65 s | ciclo de **42 s** |
 | `windows-latest`, controle de regressão (run 39795135591) | 375 s, com a instalação extra | 78 s |
 | `windows-latest`, controle de infra (run 39800353973) | `infra` em 15 s por tentativa; o passo todo levou 3 min 47 s | `infra` em 15 s por tentativa |
+| `windows-latest`, app instalado pelo NSIS do v0.1.486 (run 40012434715) | não roda | ciclo `ok` em **46,9 s** (9,1 / 3,7 / 0,1 / 34,1 s); o NSIS silencioso levou 34 s (182 MB, npm 11.21.1 em `resources/npm-runtime`); job de 2 min 24 s |
+| `windows-latest`, controle `controle_npm` (run 40013209966) | não roda | `regressao` nas rodadas 1 e 4, 48,1 s; só o job `instalado` ficou vermelho |
 
 O job inteiro do gemini levou 5 min na run normal e perto de 7 na de controle de regressão; o
 `timeout-minutes` (30 no job, 25 no passo) cobre o pior caso legítimo, que é o de infra com 3
@@ -170,6 +172,13 @@ Medições locais que explicam o que o runner faz:
 
 - **Codex, no Windows de desenvolvimento (22/10/2026):** 4 rodadas em `ok` (20 s / 0,7 s / 0,1 s /
   36 s), alvo `@openai/codex@0.164.0-alpha.12`. Ainda não medido no `windows-latest`.
+- **App empacotado, no Windows de desenvolvimento (23/10/2026):** o conteúdo do NSIS do v0.1.486,
+  extraído com o `7za` (sem instalar), deu `ok` em 51,7 s (15,9 / 1,6 / 0,1 / 34,1 s); com
+  `--control-npm`, `regressao` (código 1) em 50,5 s. Um `win-unpacked` de 21/10, anterior ao
+  `install-retry.cjs`, saiu com 1 por `require` quebrado antes de o runner tratar isso (hoje sai com 4).
+- **`npm run pack` no Node 25.3.0 do Windows de desenvolvimento** falha no `cpSync` do
+  `bundle-npm-runtime.cjs` (`node_modules/npm/bin/node-gyp-bin/node-gyp`, erro com texto "The operation
+  completed successfully"). O CI usa Node 22 e empacota normalmente; a causa não foi investigada.
 - **Registry apontado para uma porta fechada, local:** `infra` (código 2) em 15,5 s, com a saída real do
   npm (`ECONNREFUSED`).
 

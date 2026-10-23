@@ -28,7 +28,7 @@
 - **Memória de longo prazo (ai-memory, 2026-10-21):** instalado na máquina (serviço no logon, MCP e hooks por usuário no Claude Code, Codex e Copilot). Este repositório tem o bloco gerenciado no `CLAUDE.md` e no `AGENTS.md` e as skills `ai-memory-*`; a captura vale para todos os projetos e a entrega dos eventos acontece nas fronteiras da sessão. Ver a entrada de 2026-10-21 "ai-memory instalado".
 - **Instalador e árvore de processos (2026-10-21):** o `release-smoke.cjs` passou a cancelar e expirar a instalação de uma CLI pelo app empacotado e a provar, com uma sonda independente, que nenhum processo da árvore do npm sobra (`app/scripts/installer-kill-smoke.cjs`, nos três SOs do Release). Visto rodando fora do CI só no Windows; o macOS real segue pendente (roteiro em `docs/validation/CHECKLIST-INSTALADOR-ARVORE-DE-PROCESSOS.md`). Ver a entrada de 2026-10-21 "Instalador: cancelar e expirar pelo app empacotado".
 - **Instalador, rotas Python e script (2026-10-22):** a rota do pip (`runBufferedCommand`, hoje só o Openia) passou a encerrar a árvore inteira no prazo e no cancelamento, a procurar um Python que sirva antes de instalar (`core/python-runtime.cjs`) e, junto com o npm, a repetir a falha de rede duas vezes (`core/install-retry.cjs`). Prova com processo real nas 3 rotas em `install-routes-process-tree.test.cjs` (roda no Windows, no Ubuntu e no macOS do CI). Visto rodando fora do CI só no Windows; fechar o app no meio de uma instalação ainda não a cancela. Ver a entrada de 2026-10-22 "Instalador: Python e script".
-- **Ciclo de instalação das CLIs no CI (2026-10-22):** o runner que prova que a instalação automática não reinstala na 2ª abertura nem no upgrade (`app/scripts/cli-auto-install-real-repro.cjs`) roda sozinho no `windows-latest` (`ciclo-instalacao-clis.yml`: push por caminho, segunda 09:30 UTC e sob demanda), com veredito que separa regressão do Felixo de falha de infra (códigos 1 e 2) e controle negativo. Fora do PR e do Release. Ver `docs/validation/CICLO-INSTALACAO-CLIS.md` e a entrada de 2026-10-22 "CI: o ciclo de instalação das CLIs".
+- **Ciclo de instalação das CLIs no CI (2026-10-22):** o runner que prova que a instalação automática não reinstala na 2ª abertura nem no upgrade (`app/scripts/cli-auto-install-real-repro.cjs`) roda sozinho no `windows-latest` (`ciclo-instalacao-clis.yml`: push por caminho, segunda 09:30 UTC e sob demanda), com veredito que separa regressão do Felixo de falha de infra (códigos 1 e 2) e controle negativo. Fora do PR e do Release. Desde 2026-10-23 a matriz tem também a entrada `instalado`: instala de verdade o NSIS do último Release no runner e roda o ciclo DENTRO do app instalado (`--packaged`), conferindo que o npm usado é o de `resources/npm-runtime` (controle `controle_npm`). Ver `docs/validation/CICLO-INSTALACAO-CLIS.md` e as entradas de 2026-10-22 "CI: o ciclo de instalação das CLIs" e de 2026-10-23 "CI: o ciclo roda dentro do app instalado pelo NSIS".
 - **PTY no Windows (2026-10-22, `v0.1.478`):** o `node-pty` falhava no `AttachConsole` em todo `kill()` (o
   auxiliar sobe uns 45 ms depois de o pseudo-console fechar) e segurava o processo por 5 s;
   `app/electron/services/node-pty-windows-kill.cjs` responde a lista de processos localmente nos quatro
@@ -44,7 +44,7 @@
   o Claude deixa de aceitar clique). Na tela cheia o xterm não tem barra, então a gaveta mostra um trilho de rolagem do app
   (meia página para cima e para baixo, ir ao fim, e o botão de fim acende quando o Claude mostra "Jump to bottom"); ele não
   mostra a posição, porque o Claude não a informa. O trilho depende das teclas, da frase do aviso e da tela alternativa do
-  Claude 2.1.309. Ver a entrada de 2026-10-23 "Terminal: o Claude Code não recebia o mouse".
+  Claude 2.1.309. Ver a entrada de 2026-10-23 "Terminal: o Claude Code não recebia o mouse". Desde a `v0.1.486` a preferência da rolagem vive na chave `felixo-ai-core.claude-terminal-scroll.v2`, para o padrão desligado chegar a quem tinha um "ligado" antigo.
 - **Em andamento:** nada aberto no código nesta entrega. Em toda abertura (também na execução da
   fonte), a rodada das CLIs busca a versão mais nova publicada de Claude, Codex e Gemini, inclusive
   pré-lançamento, e atualiza a cópia do app e a do npm global, mesmo com a CLI aberta (o npm troca
@@ -1131,3 +1131,73 @@ repetiu em 7 tentativas seguintes; a causa não foi identificada. macOS e Linux 
 trilho, e pesquisar um jeito de mostrar a posição da conversa. A task original da opção ganhou uma nota.
 
 Estado: concluído e publicado (v0.1.485); a conferência no app instalado fica com o dono.
+
+## 2026-10-23 — CI: o ciclo roda dentro do app instalado pelo NSIS (e o npm empacotado passa a ser conferido)
+
+**Pedido.** Task "Windows — validar o ciclo de instalação de CLIs no app empacotado (NSIS) de verdade", terceira
+fatia do ciclo (as duas primeiras foram o runner de setembro e o workflow de 22/10). Critério: o ciclo de
+instalação/upgrade provado dentro do app empacotado, não só rodando do código-fonte, com `resolveNpmCliPath`
+resolvendo para `resources/npm-runtime/npm`.
+
+**Verificado antes de mexer.** Com o executável do app como Node (`ELECTRON_RUN_AS_NODE=1`),
+`process.resourcesPath` existe e `resolveNpmCliPath()` devolve `resources/npm-runtime/npm/bin/npm-cli.js`
+(medido num `win-unpacked` de 21/10, npm 11.19.1). Nenhuma das duas origens anteriores passava por esse caminho: o
+runner de código-fonte usa o `node_modules/npm`.
+
+**O que mudou.**
+- **`--packaged <exe>` no runner.** Ele se reexecuta dentro do executável do app (`ELECTRON_RUN_AS_NODE=1`, com
+  `FELIXO_REPRO_ELECTRON_DIR` apontando para a `electron/` do `app.asar`), carrega os módulos de produção de lá e
+  roda as mesmas quatro rodadas. Os `require` de produção passam por `daProducao`; o instalador falso grava, a cada
+  chamada, o `npmCliPath` e o `nodeExecutable` usados.
+- **O runner agora julga o runtime.** Cada instalação precisa ter usado o npm de `resources/npm-runtime/npm/bin/npm-cli.js`
+  e o executável do app como Node; qualquer outro é `regressao` (código 1). O resumo traz "App instalado: `exe`
+  (versão); o ciclo rodou dentro dele, com npm X em `resources/npm-runtime/...`".
+- **`--control-npm`** (só com `--packaged`): troca o npm esperado por um fora do pacote; o veredito esperado é
+  `regressao`. Prova que o julgamento do caminho do npm consegue ficar vermelho. Limite: a frase do problema diz "não o
+  do pacote" citando o caminho que o app usou de verdade (que, no controle, é o certo); o resumo traz a nota de controle.
+- **Módulo ausente no app instalado sai com 4**, não com 1. O primeiro teste local contra um `win-unpacked` de 21/10
+  caiu em `Cannot find module …\app.asar\electron\core\install-retry.cjs` (o módulo entrou em 22/10): um `require`
+  quebrado sai com 1, que o workflow leria como "REGRESSÃO". Agora o filho nomeia o módulo e sai com `erro-do-runner`.
+- **Workflow:** a matriz ganha a origem `instalado` (só o `claude`: o que ela prova não depende da CLI). O passo
+  "Instalar o app pelo NSIS do Release" (PowerShell, porque o Git Bash reescreve `/S` e `/D=`) baixa o `*win-x64.exe` do
+  último Release (input `versao` escolhe a tag), instala em silêncio num runner descartável e roda o ciclo com
+  `--packaged`. Inputs novos `controle_npm` e `versao`; artefato e resumo por origem (`ciclo-instalacao-<cli>-<origem>`).
+  O NSIS só é instalado no runner descartável (o `release-smoke.cjs` segue a mesma regra); **nunca na máquina de uso**.
+- **70 testes offline do runner** (eram 42), inclusive um que reproduz o módulo ausente com um filho de verdade.
+  `docs/validation/CICLO-INSTALACAO-CLIS.md` ganhou a seção "O app instalado" e o terceiro controle.
+
+**Provas.**
+- **Local, sem instalar:** o conteúdo do NSIS do `v0.1.486`, extraído com o `7za.exe` que o electron-builder deixa em
+  `%LOCALAPPDATA%\electron-builder\Cache` (não há 7-Zip instalado), deu `ok` nas 4 rodadas (15,9 / 1,6 / 0,1 / 34,1 s),
+  npm 11.21.1 em `resources/npm-runtime`. Com `--control-npm`: `regressao` (código 1) nas rodadas 1 e 4.
+- **No `windows-latest`, com o instalador de verdade:** run 40012434715 (push `2784b59`), as três entradas da matriz
+  verdes. No `instalado`: `v0.1.486`, 182 MB instalados em silêncio em 34 s, ciclo `ok` em 46,9 s (9,1 / 3,7 / 0,1 /
+  34,1 s), job de 2 min 24 s. Controle `controle_npm=true` (run 40013209966): só o job `instalado` ficou vermelho, com
+  `regressao` nas rodadas 1 e 4; as duas de código-fonte seguiram verdes. CI do `2784b59` verde; o Release não disparou
+  (`release-relevant.sh` respondeu `false`).
+- **Achado no controle:** a anotação saiu com o título cortado em "(claude". O `::error` do GitHub separa as propriedades
+  por vírgula e eu tinha posto `($CLI, $ORIGEM)` no `title=`. Trocada por `($CLI/$ORIGEM)` com um comentário no workflow.
+
+**Descobertas fora do pedido.**
+- `npm run pack` falha no Windows de desenvolvimento (Node 25.3.0) no `cpSync` do `bundle-npm-runtime.cjs`, em
+  `node_modules/npm/bin/node-gyp-bin/node-gyp`, com a mensagem "The operation completed successfully". O CI usa Node 22
+  e empacota. Não investiguei a causa; fica registrado para quem empacotar localmente com Node 25.
+- O `win-unpacked` local era de 21/10: quem rodar o runner contra um pacote velho cai no código 4 agora, nomeando o
+  módulo que falta.
+
+**Não validado.** Um upgrade real entre dois instaladores (NSIS antigo, depois o novo por cima, conferindo que as CLIs
+gerenciadas em `userData` não são reinstaladas): a rodada 3 simula o upgrade trocando a versão que o app grava. O job
+`instalado` prova o instalador do último Release já publicado, não o do commit. Só o Windows; macOS e Linux sem
+workflow. A instalação silenciosa com o app aberto segue na task própria do instalador.
+
+**Registro que ficou pendente do dia: `v0.1.486`.** Commit `46795e3`: a preferência "Rolagem no terminal do Claude
+Code" passa a ser gravada na chave `felixo-ai-core.claude-terminal-scroll.v2`. Até 23/10 o padrão era ligado e a tela
+só gravava ao mexer, então um "ligado" guardado quase nunca era escolha; o padrão novo (desligado) não chegava a essas
+instalações, e o dono seguia sem mouse no Claude até desligar a opção à mão. O valor da chave antiga é ignorado; quem
+ligou de propósito antes liga de novo uma vez. CI e Release (39991384876) verdes. A conferência no app instalado fica
+com o dono.
+
+**Tasks abertas no Notion.** Upgrade real entre dois instaladores no app empacotado; investigar o `cpSync` do
+`bundle-npm-runtime` no Node 25.
+
+Estado: concluído e publicado (`2784b59` e o complemento do título da anotação); nenhum Release novo.

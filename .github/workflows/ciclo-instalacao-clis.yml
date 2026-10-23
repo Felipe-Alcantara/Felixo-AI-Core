@@ -236,13 +236,14 @@ jobs:
           CODIGO: ${{ steps.ciclo.outputs.codigo }}
           TENTATIVAS: ${{ steps.ciclo.outputs.tentativas }}
         run: |
+          # Sem vírgula no title=: o GitHub separa as propriedades do ::error por vírgula e corta o título.
           case "$CODIGO" in
             0) echo "Ciclo correto para $CLI em $TENTATIVAS tentativa(s)." ;;
-            1) echo "::error title=REGRESSÃO do ciclo de instalação ($CLI, $ORIGEM)::O Felixo reinstalou quando não devia, não reinstalou quando devia, ou (no app instalado) a instalação usou um npm ou um Node que não são os do pacote. É defeito do Felixo, não da rede. Veja o resumo da run." ;;
+            1) echo "::error title=REGRESSÃO do ciclo de instalação ($CLI/$ORIGEM)::O Felixo reinstalou quando não devia, não reinstalou quando devia, ou (no app instalado) a instalação usou um npm ou um Node que não são os do pacote. É defeito do Felixo, não da rede. Veja o resumo da run." ;;
             2) echo "::error title=INFRA (não é regressão do Felixo) $CLI::A instalação falhou com assinatura de rede ou de registry nas $TENTATIVAS tentativas. Rode a workflow de novo; se persistir por dias, veja o status do registry do npm." ;;
             3) echo "::error title=FALHA DE INSTALAÇÃO ($CLI)::A instalação falhou sem sinal de rede: pacote publicado quebrado, dependência nativa ou defeito do Felixo. A saída do npm está no resumo da run." ;;
-            4) echo "::error title=ERRO DO RUNNER ($CLI, $ORIGEM)::O ambiente da reprodução não estava como o script espera (no app instalado, também quando o Release é mais antigo que o runner e não tem um módulo que ele usa); o resultado não prova nada sobre o ciclo. Veja o log." ;;
-            *) echo "::error title=O ciclo não terminou ($CLI, $ORIGEM)::O passo anterior não gravou o código de saída: tempo limite, cancelamento ou, no app instalado, a instalação do NSIS falhou antes do ciclo." ;;
+            4) echo "::error title=ERRO DO RUNNER ($CLI/$ORIGEM)::O ambiente da reprodução não estava como o script espera (no app instalado, também quando o Release é mais antigo que o runner e não tem um módulo que ele usa); o resultado não prova nada sobre o ciclo. Veja o log." ;;
+            *) echo "::error title=O ciclo não terminou ($CLI/$ORIGEM)::O passo anterior não gravou o código de saída: tempo limite, cancelamento ou, no app instalado, a instalação do NSIS falhou antes do ciclo." ;;
           esac
 
       - name: Publicar o log e o relatório
