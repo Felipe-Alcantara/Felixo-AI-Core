@@ -11,6 +11,8 @@ const ACTIONS: ReadonlyArray<{ action: ClaudeScrollAction; label: string; key: s
 type TerminalScrollRailProps = {
   /** O Claude está mostrando o aviso de "ir para o fim": a conversa está rolada para cima. */
   scrolledUp: boolean
+  /** Atrás da Leitura: fica no lugar (o xterm não muda de largura), sem foco e fora do leitor de tela. */
+  inert?: boolean
   onScroll: (action: ClaudeScrollAction) => void
 }
 
@@ -24,11 +26,13 @@ type TerminalScrollRailProps = {
  * O `mousedown` não rouba o foco do terminal: quem digita no Claude continua
  * digitando depois do clique.
  */
-export function TerminalScrollRail({ scrolledUp, onScroll }: TerminalScrollRailProps) {
+export function TerminalScrollRail({ scrolledUp, inert = false, onScroll }: TerminalScrollRailProps) {
   return (
     <div
       role="group"
       aria-label="Rolagem do Claude Code"
+      aria-hidden={inert}
+      inert={inert}
       data-felixo-claude-scroll-rail
       data-scrolled-up={scrolledUp}
       className="flex w-6 shrink-0 flex-col items-center gap-0.5 border-l border-white/6 py-1"

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   CLAUDE_SCROLL_KEYS,
+  claudeScrollRailPlacement,
   isClaudeScrolledUp,
   shouldShowClaudeScrollRail,
 } from './terminal-claude-scroll'
@@ -72,5 +73,19 @@ describe('quando o trilho aparece', () => {
 
   it('não aparece com o processo encerrado', () => {
     expect(shouldShowClaudeScrollRail({ ...claudeEmTelaCheia, alive: false })).toBe(false)
+  })
+})
+
+describe('lugar do trilho na gaveta', () => {
+  // Medido no smoke da Leitura (F1): esconder o trilho com a Leitura à frente mudou o xterm de 106 para 109
+  // colunas, e trocar de aba não pode mudar a largura do terminal (a CLI redesenharia).
+  it('a aba não decide se o trilho existe: com a Leitura à frente ele fica no lugar, inerte', () => {
+    expect(claudeScrollRailPlacement({ visible: true, readingActive: false })).toEqual({ render: true, inert: false })
+    expect(claudeScrollRailPlacement({ visible: true, readingActive: true })).toEqual({ render: true, inert: true })
+  })
+
+  it('sem trilho para mostrar, nenhuma aba o cria', () => {
+    expect(claudeScrollRailPlacement({ visible: false, readingActive: false }).render).toBe(false)
+    expect(claudeScrollRailPlacement({ visible: false, readingActive: true }).render).toBe(false)
   })
 })

@@ -71,3 +71,18 @@ export function shouldShowClaudeScrollRail(state: {
 }): boolean {
   return state.isClaude && state.alternateScreen && state.alive
 }
+
+/**
+ * Onde o trilho fica na gaveta. Ele ocupa uma coluna do terminal, e trocar de aba
+ * (Terminal e Leitura) não pode mudar a largura do xterm: a CLI redesenharia a tela
+ * a cada troca. Por isso a aba não decide se o trilho existe; com a Leitura à
+ * frente ele continua no lugar, inerte (sem foco e fora do leitor de tela), coberto
+ * por ela. Medido no smoke da Leitura (F1): escondê-lo mudou o xterm de 106 para
+ * 109 colunas.
+ */
+export function claudeScrollRailPlacement(input: { visible: boolean; readingActive: boolean }): {
+  render: boolean
+  inert: boolean
+} {
+  return { render: input.visible, inert: input.readingActive }
+}

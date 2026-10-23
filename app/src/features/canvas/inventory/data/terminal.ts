@@ -170,7 +170,7 @@ export const terminalSurfaces: InventoryElement[] = [
     states: {
       normal: 'Coluna de 24 px à direita do terminal na gaveta, só com o Claude vivo na tela alternativa (o modo de tela cheia dele, que liga o mouse): botões Subir meia página, Descer meia página e Ir para o fim, com uma trilha entre os dois primeiros.',
       success: 'Conversa rolada para cima (o Claude desenha "Jump to bottom (ctrl+End) ↓" ou "N new messages"): data-scrolled-up="true", a trilha acende e o botão de ir ao fim ganha destaque.',
-      disabled: 'Não existe no modo clássico (o xterm já tem a barra), em outra CLI, com o processo encerrado, com a gaveta recolhida nem com a aba Leitura à frente.',
+      disabled: 'Não existe no modo clássico (o xterm já tem a barra), em outra CLI nem com o processo encerrado. Com a aba Leitura à frente fica no lugar, inerte e coberta por ela (o xterm não pode mudar de largura ao trocar de aba); recolhida, a gaveta inteira some.',
     },
     controls: [
       {
@@ -178,7 +178,7 @@ export const terminalSurfaces: InventoryElement[] = [
         kind: 'button',
         effect: 'Um botão por ação (Subir meia página, Descer meia página, Ir para o fim da conversa): store.scrollClaude escreve no PTY, pelo input do xterm, PageUp (ESC [ 5 ~), PageDown (ESC [ 6 ~) ou Ctrl+End (ESC [ 1 ; 5 F), que o Claude atende com a linha de entrada em foco; o mousedown não rouba o foco e o terminal é refocado depois do clique.',
         failure: 'Sem falha própria: se o Claude mudar a tecla, o botão não faz nada e não avisa. Sem o trilho visível o store não escreve nada.',
-        disabledWhen: 'O trilho some junto: modo clássico, outra CLI, processo encerrado, gaveta recolhida ou Leitura à frente.',
+        disabledWhen: 'O trilho some junto no modo clássico, em outra CLI e com o processo encerrado; fica inerte com a Leitura à frente e invisível com a gaveta recolhida.',
       },
     ],
     persistence: ['nenhuma (o estado vem da tela do Claude)'],

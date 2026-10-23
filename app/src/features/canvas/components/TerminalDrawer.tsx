@@ -19,6 +19,7 @@ import { CopyButton } from './TerminalCopyButton'
 import { TerminalReadingPanel } from './TerminalReadingPanel'
 import { TerminalScrollRail } from './TerminalScrollRail'
 import { useClaudeScrollRail } from '../hooks/useClaudeScrollRail'
+import { claudeScrollRailPlacement } from '../terminal/terminal-claude-scroll'
 import type { ReadingProfile } from '../terminal/reading/reading-profiles'
 import { resolveOpenEditorFile } from './terminal-open-file'
 import { useExitAnimation } from '../hooks/useExitAnimation'
@@ -197,6 +198,7 @@ export function TerminalDrawer({
   const readingPanelRef = useRef<HTMLDivElement | null>(null)
   const hasReading = Boolean(onReadingModeChange && readingProfile)
   const readingActive = hasReading && readingMode
+  const scrollRailPlacement = claudeScrollRailPlacement({ visible: scrollRail.visible, readingActive })
   const [width, setWidth] = useState(() => {
     const maxWidth = getDrawerMaxWidth(window.innerWidth)
     return readWidthPreference(
@@ -802,9 +804,10 @@ export function TerminalDrawer({
           className="h-full min-w-0 flex-1 overflow-hidden px-1 pb-2 pt-1"
         />
         {/* Claude em tela cheia: o xterm não tem barra nessa tela, então o app põe a dele ao lado. */}
-        {scrollRail.visible && !collapsed && !readingActive && (
+        {scrollRailPlacement.render && (
           <TerminalScrollRail
             scrolledUp={scrollRail.scrolledUp}
+            inert={scrollRailPlacement.inert}
             onScroll={(action) => store.scrollClaude(sessionId, action)}
           />
         )}
