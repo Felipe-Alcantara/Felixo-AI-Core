@@ -44,21 +44,18 @@
  * `regressao` (código 1). Serve para provar, no CI, que o vermelho é visível.
  */
 
+const childProcess = require('node:child_process')
 const fs = require('node:fs')
 const Module = require('node:module')
 const os = require('node:os')
 const path = require('node:path')
 const { performance } = require('node:perf_hooks')
 
-const { isTransientNetworkFailure } = require('../electron/core/install-retry.cjs')
-const { getManagedCliLayout, MANAGED_ROOT_ENV_KEY } = require('../electron/core/managed-cli-paths.cjs')
-const { getOfficialAiCli } = require('../electron/core/official-cli-catalog.cjs')
-const { hasManagedBinary, redactDiagnosticText } = require('../electron/services/cli-diagnostics.cjs')
-const {
-  installManagedPackage,
-  resolveLatestManagedPackage,
-} = require('../electron/services/managed-cli-installer.cjs')
-
+/**
+ * De onde vem o código de produção que o ciclo executa. Por padrão é a pasta `electron/` do
+ * código-fonte; com `--packaged` o runner se reexecuta DENTRO do executável do app instalado e
+ * esta variável aponta a `electron/` de dentro do `app.asar` (ver `launchPackaged`).
+ */
 const EXIT = Object.freeze({
   OK: 0,
   REGRESSAO: 1,
@@ -66,6 +63,31 @@ const EXIT = Object.freeze({
   FALHA_DE_INSTALACAO: 3,
   ERRO_DO_RUNNER: 4,
 })
+
+const ELECTRON_DIR = process.env.FELIXO_REPRO_ELECTRON_DIR || path.join(__dirname, '..', 'electron')
+
+/**
+ * Carrega um módulo de produção. Um app instalado mais antigo que este runner pode não ter o módulo:
+ * isso é diferença de versão, não regressão do ciclo. Sem este tratamento o `require` derruba o filho
+ * com código 1, que o workflow leria como "REGRESSÃO"; aqui sai como erro do runner (4).
+ */
+function daProducao(...partes) {
+  try {
+    return require(path.join(ELECTRON_DIR, ...partes))
+  } catch (error) {
+    if (!process.env.FELIXO_REPRO_ELECTRON_DIR || error.code !== 'MODULE_NOT_FOUND') throw error
+    console.error(
+      `[repro] o app instalado não tem um módulo que o runner usa (${partes.join('/')}); ele é mais antigo que este runner? ${error.message.split('\n')[0]}`,
+    )
+    process.exit(EXIT.ERRO_DO_RUNNER)
+  }
+}
+
+const { isTransientNetworkFailure } = daProducao('core', 'install-retry.cjs')
+const { getManagedCliLayout, MANAGED_ROOT_ENV_KEY } = daProducao('core', 'managed-cli-paths.cjs')
+const { getOfficialAiCli } = daProducao('core', 'official-cli-catalog.cjs')
+const { hasManagedBinary, redactDiagnosticText } = daProducao('services', 'cli-diagnostics.cjs')
+const { installManagedPackage, resolveLatestManagedPackage } = daProducao('services', 'managed-cli-installer.cjs')
 
 const VEREDITOS = Object.freeze({
   OK: 'ok',
@@ -141,6 +163,12 @@ const AJUDA = `Uso: node scripts/cli-auto-install-real-repro.cjs [opções]
   --summary <arquivo>   grava o resumo em Markdown (no CI, vai para o resumo da run)
   --control-regressao   controle negativo: provoca a regressão de propósito; o
                         veredito esperado é "regressao" (código 1)
+  --packaged <exe>      roda o ciclo DENTRO do app instalado (o executável do
+                        Felixo AI Core, p.ex. o instalado pelo NSIS ou o da pasta
+                        win-unpacked): o código e o npm são os do pacote
+  --control-npm         só com --packaged; controle negativo: troca de propósito o
+                        npm esperado por um fora do pacote; o veredito esperado é
+                        "regressao" (código 1)
   --help                esta ajuda
 
 Códigos de saída: 0 ok · 1 regressão do ciclo · 2 infra (rede/registry) ·
@@ -151,10 +179,18 @@ Códigos de saída: 0 ok · 1 regressão do ciclo · 2 infra (rede/registry) ·
 
 /**
  * @param {string[]} argv
- * @returns {{ cli: string, report: string | null, summary: string | null, controlRegression: boolean, help: boolean }}
+ * @returns {{ cli: string, report: string | null, summary: string | null, controlRegression: boolean, packaged: string | null, controlNpm: boolean, help: boolean }}
  */
 function parseArgs(argv) {
-  const args = { cli: 'gemini', report: null, summary: null, controlRegression: false, help: false }
+  const args = {
+    cli: 'gemini',
+    report: null,
+    summary: null,
+    controlRegression: false,
+    packaged: null,
+    controlNpm: false,
+    help: false,
+  }
   const valorDe = (indice, nome) => {
     const valor = argv[indice + 1]
     if (valor === undefined || valor.startsWith('--')) throw new Error(`${nome} precisa de um valor`)
@@ -167,11 +203,130 @@ function parseArgs(argv) {
     else if (arg === '--report') args.report = valorDe(i++, arg)
     else if (arg === '--summary') args.summary = valorDe(i++, arg)
     else if (arg === '--control-regressao') args.controlRegression = true
+    else if (arg === '--packaged') args.packaged = valorDe(i++, arg)
+    else if (arg === '--control-npm') args.controlNpm = true
     else if (arg === '--help' || arg === '-h') args.help = true
     else throw new Error(`opção desconhecida: ${arg}`)
   }
 
   return args
+}
+
+// ---------------------------------------------------------------------------
+// O app instalado
+//
+// O runner de código-fonte usa o `node_modules/npm` do projeto: mesmo mecanismo, outro caminho. No
+// app instalado o instalador das CLIs usa o npm de `resources/npm-runtime` (via
+// `process.resourcesPath`) e o próprio executável como Node. Para provar isso o runner se
+// reexecuta DENTRO do executável (`ELECTRON_RUN_AS_NODE`, o mesmo modo em que o app instala as
+// CLIs) carregando o código de dentro do `app.asar`, e o julgamento confere qual npm e qual Node a
+// instalação usou.
+
+/** Mesma comparação de caminho do sistema: no Windows não distingue maiúscula nem separador. */
+function samePath(a, b, platform = process.platform) {
+  if (!a || !b) return false
+  const sistema = platform === 'win32' ? path.win32 : path.posix
+  const normalizar = (caminho) => {
+    const resolvido = sistema.resolve(String(caminho))
+    return platform === 'win32' ? resolvido.toLowerCase() : resolvido
+  }
+  return normalizar(a) === normalizar(b)
+}
+
+/**
+ * Onde estão os recursos do app e o que a instalação precisa usar. Sem adivinhar: se o executável ou
+ * o `app.asar` (ou a pasta `app`, do win-unpacked de depuração) não existem, é erro.
+ *
+ * @param {string} executavel
+ * @param {{ exists?: (candidato: string) => boolean }} [options]
+ */
+function planPackagedLaunch(executavel, { exists = fs.existsSync } = {}) {
+  const exe = path.resolve(executavel)
+  if (!exists(exe)) throw new Error(`o executável do app não existe: ${path.basename(exe)}`)
+
+  // Windows e Linux: `resources/` ao lado do executável. macOS: `Contents/Resources`.
+  const candidatos = [path.join(path.dirname(exe), 'resources'), path.resolve(path.dirname(exe), '..', 'Resources')]
+  for (const resourcesPath of candidatos) {
+    for (const pasta of ['app.asar', 'app']) {
+      if (!exists(path.join(resourcesPath, pasta))) continue
+      return {
+        executavel: exe,
+        nodeExecutable: exe,
+        resourcesPath,
+        electronDir: path.join(resourcesPath, pasta, 'electron'),
+        npmCliPath: path.join(resourcesPath, 'npm-runtime', 'npm', 'bin', 'npm-cli.js'),
+      }
+    }
+  }
+  throw new Error(`não achei app.asar nem a pasta app em resources/ ao lado de ${path.basename(exe)}`)
+}
+
+/** Ambiente do filho: modo Node ligado, código do app apontado, sem o que faria o processo sem janela procurar a tela. */
+function buildPackagedChildEnv(baseEnv, electronDir) {
+  const env = { ...baseEnv, ELECTRON_RUN_AS_NODE: '1', FELIXO_REPRO_ELECTRON_DIR: electronDir }
+  delete env.ELECTRON_NO_ATTACH_CONSOLE
+  delete env.ELECTRON_FORCE_WINDOW_MENU_BAR
+  return env
+}
+
+function withoutPackagedFlag(argv) {
+  const indice = argv.indexOf('--packaged')
+  return indice === -1 ? [...argv] : [...argv.slice(0, indice), ...argv.slice(indice + 2)]
+}
+
+/** Este processo é o filho que roda dentro do executável do app instalado? */
+function isPackagedChild(env = process.env) {
+  return Boolean(env.FELIXO_REPRO_ELECTRON_DIR)
+}
+
+/**
+ * Reexecuta este mesmo script dentro do executável do app instalado e devolve o código de saída do
+ * filho (o veredito passa direto). Um filho que não termina com código é erro do runner, nunca sucesso.
+ *
+ * @param {string[]} argv
+ * @param {object} [options]
+ */
+function launchPackaged(
+  argv,
+  { spawnSync = childProcess.spawnSync, exists = fs.existsSync, env = process.env, script = __filename } = {},
+) {
+  const args = parseArgs(argv)
+  let plano
+  try {
+    plano = planPackagedLaunch(args.packaged, { exists })
+  } catch (error) {
+    console.error(`[repro] ${error.message}`)
+    return EXIT.ERRO_DO_RUNNER
+  }
+
+  console.log(`[repro] ciclo dentro do app instalado: ${path.basename(plano.executavel)}`)
+  const resultado = spawnSync(plano.nodeExecutable, [script, ...withoutPackagedFlag(argv)], {
+    env: buildPackagedChildEnv(env, plano.electronDir),
+    stdio: 'inherit',
+    windowsHide: true,
+  })
+  if (resultado.error || typeof resultado.status !== 'number') {
+    console.error(
+      `[repro] o app instalado não terminou o ciclo com um código de saída: ${resultado.error?.message ?? resultado.signal ?? 'sem status'}`,
+    )
+    return EXIT.ERRO_DO_RUNNER
+  }
+  return resultado.status
+}
+
+function readVersion(arquivo) {
+  try {
+    return JSON.parse(fs.readFileSync(arquivo, 'utf8')).version ?? null
+  } catch {
+    return null
+  }
+}
+
+/** Forma curta de um caminho para o relatório: de `resources` em diante, ou os 3 últimos trechos. Nunca o caminho absoluto. */
+function shortPath(caminho) {
+  const partes = String(caminho ?? '').split(/[\\/]+/).filter(Boolean)
+  const indice = partes.lastIndexOf('resources')
+  return (indice >= 0 ? partes.slice(indice) : partes.slice(-3)).join('/')
 }
 
 // ---------------------------------------------------------------------------
@@ -206,6 +361,8 @@ function createInstallRecorder(installPackage, now = () => performance.now()) {
           ok: false,
           redeTransitoria: false,
           duracaoMs: Math.round(now() - inicio),
+          npmCliPath: options.npmCliPath,
+          nodeExecutable: options.nodeExecutable,
           saida: tail(`o instalador lançou: ${error?.message ?? error}`),
         })
         throw error
@@ -218,6 +375,9 @@ function createInstallRecorder(installPackage, now = () => performance.now()) {
         redeTransitoria: !ok && isTransientNetworkFailure(resultado),
         prazoVencido: resultado?.timedOut === true || undefined,
         duracaoMs: Math.round(now() - inicio),
+        // O npm e o Node que o app escolheu: no app instalado é o que prova o caminho do pacote.
+        npmCliPath: options.npmCliPath,
+        nodeExecutable: options.nodeExecutable,
         ...(ok ? {} : { saida: tail(resultado?.output || resultado?.message || '') }),
       })
       return resultado
@@ -290,8 +450,8 @@ function tail(texto, limite = SAIDA_DA_FALHA_MAX) {
  */
 function loadCliAutoInstall(onlyCliId) {
   const originalLoad = Module._load
-  const catalogPath = require.resolve('../electron/core/official-cli-catalog.cjs')
-  const autoInstallPath = require.resolve('../electron/services/cli-auto-install.cjs')
+  const catalogPath = require.resolve(path.join(ELECTRON_DIR, 'core', 'official-cli-catalog.cjs'))
+  const autoInstallPath = require.resolve(path.join(ELECTRON_DIR, 'services', 'cli-auto-install.cjs'))
   const catalogModule = require(catalogPath)
   const originalList = catalogModule.listOfficialAiClis
 
@@ -332,6 +492,7 @@ function deleteManagedBinary(layout, cli, fileSystem) {
  * @param {boolean} [options.controlRegression]
  * @param {Function} [options.installPackage] - Injetável (padrão: o instalador real).
  * @param {Function} [options.resolveLatestPackage] - Injetável (padrão: o registry real).
+ * @param {{ npmCliPath: string, nodeExecutable: string } | null} [options.runtimeEsperado] - No app instalado: o npm e o Node que a instalação precisa usar.
  * @param {Function} [options.detect] - Injetável; sem ele, a detecção real.
  * @param {Function} [options.verifyInstallation]
  * @param {object} [options.networkRetry] - Espera e quantidade do retry de rede do app.
@@ -345,6 +506,7 @@ async function runCycle({
   controlRegression = false,
   installPackage = installManagedPackage,
   resolveLatestPackage = resolveLatestManagedPackage,
+  runtimeEsperado = null,
   detect,
   verifyInstallation,
   networkRetry,
@@ -411,7 +573,7 @@ async function runCycle({
     if (indice === 0 && !(rodada.estado === 'done' && rodada.binarioPresente)) break
   }
 
-  return { cli: cliId, alvo: latest.describe(), rodadas }
+  return { cli: cliId, alvo: latest.describe(), rodadas, ...(runtimeEsperado ? { runtimeEsperado } : {}) }
 }
 
 // ---------------------------------------------------------------------------
@@ -434,7 +596,7 @@ function falhouPorRede(rodada) {
  * @returns {{ veredito: string, codigoDeSaida: number, problemas: Array<{ tipo: string, rodada: number, detalhe: string }> }}
  */
 function evaluateCycle(ciclo) {
-  const problemas = []
+  const problemas = judgeRuntime(ciclo)
   const porChave = (chave) => ciclo.rodadas.find((rodada) => rodada.chave === chave)
   const numero = (chave) => RODADAS.findIndex((spec) => spec.chave === chave) + 1
 
@@ -508,6 +670,40 @@ function evaluateCycle(ciclo) {
   return concluir(problemas)
 }
 
+/**
+ * No app instalado, toda instalação precisa ter usado o npm de `resources/npm-runtime` e o próprio
+ * executável como Node. É regressão do Felixo (não infra): se o npm do `node_modules` de dentro do
+ * asar passar na frente, o app instalado quebra em máquinas sem esse caminho. Sem `runtimeEsperado`
+ * (código-fonte) nada é julgado. Um problema por rodada, no máximo.
+ */
+function judgeRuntime(ciclo) {
+  const esperado = ciclo.runtimeEsperado
+  if (!esperado) return []
+
+  const problemas = []
+  for (const [indice, rodada] of ciclo.rodadas.entries()) {
+    for (const instalacao of rodada.instalacoes ?? []) {
+      let detalhe = null
+      if (!instalacao.npmCliPath) {
+        detalhe = 'a instalação não informou qual npm usou: não dá para provar que é o do pacote (resources/npm-runtime)'
+      } else if (!samePath(instalacao.npmCliPath, esperado.npmCliPath)) {
+        detalhe =
+          `a instalação usou o npm "${shortPath(instalacao.npmCliPath)}" e não o do pacote (resources/npm-runtime): ` +
+          'o app instalado não está resolvendo o npm empacotado'
+      } else if (!samePath(instalacao.nodeExecutable, esperado.nodeExecutable)) {
+        detalhe =
+          `a instalação usou "${path.basename(String(instalacao.nodeExecutable ?? 'nenhum'))}" como Node e não o executável do app instalado ` +
+          `("${path.basename(esperado.nodeExecutable)}")`
+      }
+      if (detalhe) {
+        problemas.push({ tipo: VEREDITOS.REGRESSAO, rodada: indice + 1, detalhe })
+        break
+      }
+    }
+  }
+  return problemas
+}
+
 function concluir(problemas) {
   const veredito = PRECEDENCIA.find((tipo) => problemas.some((problema) => problema.tipo === tipo)) ?? VEREDITOS.OK
   return { veredito, codigoDeSaida: CODIGO_POR_VEREDITO[veredito], problemas }
@@ -535,13 +731,16 @@ const FRASE_DO_VEREDITO = Object.freeze({
  * @param {boolean} options.controlRegression
  * @param {number} options.duracaoTotalMs
  * @param {string} [options.erroDoRunner]
+ * @param {{ executavel: string, versaoDoApp: string | null, npmVersao: string | null, npmRelativo: string } | null} [options.empacotado]
+ * @param {boolean} [options.controlNpm]
  */
-function buildReport({ ciclo, avaliacao, controlRegression, duracaoTotalMs, erroDoRunner }) {
+function buildReport({ ciclo, avaliacao, controlRegression, duracaoTotalMs, erroDoRunner, empacotado = null, controlNpm = false }) {
   const executadas = new Map(ciclo.rodadas.map((rodada) => [rodada.chave, rodada]))
   return {
     cli: ciclo.cli,
     ambiente: { plataforma: process.platform, arquitetura: process.arch, node: process.version },
     controleDeRegressao: controlRegression,
+    ...(empacotado ? { empacotado, controleDoNpm: controlNpm } : {}),
     alvo: ciclo.alvo,
     veredito: avaliacao.veredito,
     codigoDeSaida: avaliacao.codigoDeSaida,
@@ -578,6 +777,23 @@ function formatSummary(relatorio) {
     linhas.push(
       '> Execução de CONTROLE: a regressão foi provocada de propósito. O veredito esperado é `regressao`; ' +
         'qualquer outro significa que o runner não enxerga o defeito.',
+      '',
+    )
+  }
+
+  if (relatorio.empacotado) {
+    const app = relatorio.empacotado
+    linhas.push(
+      `App instalado: \`${app.executavel}\`${app.versaoDoApp ? ` (${app.versaoDoApp})` : ''}; o ciclo rodou dentro dele, com ` +
+        `npm ${app.npmVersao ?? '?'} em \`${app.npmRelativo}\`.`,
+      '',
+    )
+  }
+
+  if (relatorio.controleDoNpm) {
+    linhas.push(
+      '> Execução de CONTROLE do caminho do npm: o npm esperado foi trocado de propósito por um fora do pacote. ' +
+        'O veredito esperado é `regressao`; qualquer outro significa que o runner não enxerga um npm que não é o do pacote.',
       '',
     )
   }
@@ -712,6 +928,35 @@ async function main(argv = process.argv.slice(2)) {
     return EXIT.OK
   }
 
+  if (args.controlNpm && !args.packaged && !isPackagedChild()) {
+    console.error(`[repro] --control-npm só vale com --packaged: o controle é sobre o npm do app instalado.\n\n${AJUDA}`)
+    return EXIT.ERRO_DO_RUNNER
+  }
+
+  // Pai: reexecuta este script dentro do app instalado. Filho: segue abaixo, com o código do app.
+  if (args.packaged && !isPackagedChild()) return launchPackaged(argv)
+
+  let runtimeEsperado = null
+  let empacotado = null
+  if (isPackagedChild()) {
+    if (!process.resourcesPath) {
+      console.error('[repro] FELIXO_REPRO_ELECTRON_DIR está definido, mas este processo não é o executável do app (sem resourcesPath).')
+      return EXIT.ERRO_DO_RUNNER
+    }
+    const npmDoPacote = path.join(process.resourcesPath, 'npm-runtime', 'npm', 'bin', 'npm-cli.js')
+    runtimeEsperado = {
+      // O controle espera um npm que não existe no pacote: a instalação (que usa o do pacote) tem de ser acusada.
+      npmCliPath: args.controlNpm ? path.join(process.resourcesPath, 'npm-fora-do-pacote', 'npm', 'bin', 'npm-cli.js') : npmDoPacote,
+      nodeExecutable: process.execPath,
+    }
+    empacotado = {
+      executavel: path.basename(process.execPath),
+      versaoDoApp: readVersion(path.join(ELECTRON_DIR, '..', 'package.json')),
+      npmVersao: readVersion(path.join(path.dirname(path.dirname(npmDoPacote)), 'package.json')),
+      npmRelativo: shortPath(npmDoPacote),
+    }
+  }
+
   const cli = getOfficialAiCli(args.cli)
   if (!cli || cli.autoInstall === false) {
     console.error(`[repro] a CLI "${args.cli}" não é instalada pela instalação automática do app.`)
@@ -731,6 +976,7 @@ async function main(argv = process.argv.slice(2)) {
       cliId: args.cli,
       userData,
       controlRegression: args.controlRegression,
+      runtimeEsperado,
       log: (linha) => console.log(linha),
     })
     relatorio = buildReport({
@@ -738,6 +984,8 @@ async function main(argv = process.argv.slice(2)) {
       avaliacao: evaluateCycle(ciclo),
       controlRegression: args.controlRegression,
       duracaoTotalMs: Math.round(performance.now() - inicio),
+      empacotado,
+      controlNpm: args.controlNpm,
     })
   } catch (error) {
     console.error('[repro] erro:', error.stack || error.message)
@@ -750,6 +998,8 @@ async function main(argv = process.argv.slice(2)) {
       controlRegression: args.controlRegression,
       duracaoTotalMs: Math.round(performance.now() - inicio),
       erroDoRunner: error.stack || error.message,
+      empacotado,
+      controlNpm: args.controlNpm,
     })
   } finally {
     fs.rmSync(userData, { recursive: true, force: true })
@@ -782,14 +1032,18 @@ module.exports = {
   EXIT,
   RODADAS,
   VEREDITOS,
+  buildPackagedChildEnv,
   buildReport,
   createInstallRecorder,
   createLatestPinner,
   evaluateCycle,
   formatSummary,
   isolateEnvironmentForThisProcessOnly,
+  launchPackaged,
   loadCliAutoInstall,
   main,
   parseArgs,
+  planPackagedLaunch,
   runCycle,
+  samePath,
 }

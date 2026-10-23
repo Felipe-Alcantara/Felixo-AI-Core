@@ -5,7 +5,8 @@ incomoda quem usa é ele **reinstalar a cada abertura** ou a cada atualização 
 unitários do ciclo (`cli-auto-install.test.cjs`) usam instalador e detecção falsos; este runner roda
 o **módulo de produção de verdade**, com o npm de verdade, e prova o ciclo inteiro. Ele roda sozinho
 no CI, num Windows descartável, no workflow `Ciclo de instalação das CLIs (Windows)`
-(`.github/workflows/ciclo-instalacao-clis.yml`).
+(`.github/workflows/ciclo-instalacao-clis.yml`), de duas origens: o **código-fonte** do commit e o
+**app empacotado** instalado pelo NSIS do último Release (seção "O app instalado", abaixo).
 
 ## O que o runner prova
 
@@ -28,6 +29,33 @@ um `nightly` por dia (o alvo medido em 22/10/2026 foi `0.67.0-nightly.20261022�
 publicação no meio do script faria o app reinstalar com razão e o runner acusaria uma regressão que
 não existe.
 
+## O app instalado (NSIS de verdade)
+
+Rodar do código-fonte usa o `node_modules/npm` do projeto. O app que o usuário instala não: ele
+resolve o npm por `resolveNpmCliPath` (`app/electron/core/node-runtime.cjs`), que procura primeiro
+`process.resourcesPath/npm-runtime/npm/bin/npm-cli.js` e só depois o `node_modules`, e usa o próprio
+executável do app como Node (`getNodeExecutable()` = `process.execPath`). Um defeito nesse caminho
+(o `npm-runtime` não entrar no pacote, ou a resolução cair no `node_modules` que não existe no
+instalado) passava despercebido pelas duas origens acima.
+
+Com `--packaged "<Felixo AI Core.exe>"` o runner **se reexecuta dentro do executável do app**
+(`ELECTRON_RUN_AS_NODE=1`), carrega os módulos de produção do `app.asar` dele e roda as mesmas quatro
+rodadas. Além do comportamento, ele agora **julga o runtime**: cada rodada que instala precisa ter usado
+o npm de `resources/npm-runtime/npm/bin/npm-cli.js` e o executável do app como Node; qualquer outro é
+`regressao`. O resumo traz a linha "App instalado: `<exe>` (versão); o ciclo rodou dentro dele, com
+npm X em `resources/npm-runtime/...`".
+
+No workflow isso é a entrada `instalado` da matriz (só o `claude`: o que ela prova não depende da CLI).
+O passo "Instalar o app pelo NSIS do Release" baixa o `*win-x64.exe` do último Release (ou da tag do
+input `versao`) e o instala em silêncio (`/S /D=<pasta>`, em PowerShell, porque o Git Bash reescreve
+`/S` e `/D=`). **O NSIS só é instalado nesse runner descartável**: numa máquina de uso pessoal ele
+viraria a instalação do Felixo (registro, atalhos, auto-update). Ele prova a **versão já publicada**,
+não o commit; só o script do runner vem do checkout.
+
+Se o Release for mais velho que o runner e não tiver um módulo que ele usa (`install-retry.cjs`, por
+exemplo), o filho sai com o código **4** (`erro-do-runner`) e nomeia o módulo, em vez de cair com o
+código 1 do `require` quebrado, que seria lido como regressão.
+
 ## Quando o workflow roda
 
 - **Push na `main`**, só quando muda código que o ciclo executa (a lista está em `on.push.paths`, sem
@@ -35,16 +63,18 @@ não existe.
   reinstalar sempre".
 - **Toda segunda-feira, 09:30 UTC.** Pega uma publicação nova da CLI de terceiros que quebre a
   instalação vista pelo app, sem depender de commit nosso.
-- **Sob demanda:** Actions > *Ciclo de instalação das CLIs (Windows)* > *Run workflow*. A opção
-  `controle` e `infra` ligam os controles negativos (abaixo).
+- **Sob demanda:** Actions > *Ciclo de instalação das CLIs (Windows)* > *Run workflow*. As opções
+  `controle`, `controle_npm` e `infra` ligam os controles negativos (abaixo); `versao` escolhe a tag do
+  Release cujo instalador o job `instalado` instala (vazio = o último).
 
 Fica **fora do CI de PR** (rede real, minutos de duração, falha por instabilidade do registry) e
 **fora do Release** (uma falha de rede de terceiros atrasaria a publicação do instalador e deixaria
 um pré-release órfão). O `official-cli-install.yml` também roda instalação real fora do PR, mas com
 `npm install -g` cru: prova que o npm instala a CLI, não que o Felixo decide certo sobre reinstalar.
 
-A matriz é `gemini` e `claude`. O **Codex fica de fora** de propósito: no Windows ele tem o caso
-conhecido da dependência nativa opcional (`@openai/codex-win32-x64`) e misturaria outro sinal.
+A matriz é `gemini` (fonte), `claude` (fonte) e `claude` (instalado). O **Codex fica de fora** de
+propósito: no Windows ele tem o caso conhecido da dependência nativa opcional
+(`@openai/codex-win32-x64`) e misturaria outro sinal.
 
 ## Veredito e código de saída
 
@@ -55,10 +85,10 @@ que diz de quem é o problema:
 | Código | Veredito | Significa | O que fazer |
 | --- | --- | --- | --- |
 | 0 | `ok` | as 4 rodadas como esperado | nada |
-| 1 | `regressao` | reinstalou quando não devia (rodadas 2 e 3) ou não reinstalou quando devia (rodada 4) | **defeito do Felixo.** Olhar o último commit que mexeu em `cli-auto-install*`, `managed-cli-*` ou no catálogo |
+| 1 | `regressao` | reinstalou quando não devia (rodadas 2 e 3), não reinstalou quando devia (rodada 4) ou, no app instalado, a instalação usou um npm que não é o de `resources/npm-runtime` (ou um Node que não é o do app) | **defeito do Felixo.** Olhar o último commit que mexeu em `cli-auto-install*`, `managed-cli-*`, `node-runtime.cjs`, no catálogo ou no `bundle-npm-runtime.cjs` |
 | 2 | `infra` | a instalação falhou **só** com assinatura de rede passageira, mesmo depois das repetições do app | **não é regressão.** O workflow já repetiu até 3 vezes; rodar de novo, e olhar o status do registry do npm se persistir |
 | 3 | `falha-de-instalacao` | a instalação falhou sem sinal de rede | pacote publicado quebrado, dependência nativa ou defeito do Felixo; a saída do npm está no resumo da run |
-| 4 | `erro-do-runner` | o ambiente isolado não estava limpo, a instalação automática estava desligada ou o script quebrou | o resultado não prova nada sobre o ciclo; ver o log |
+| 4 | `erro-do-runner` | o ambiente isolado não estava limpo, a instalação automática estava desligada, o script quebrou ou o app instalado é mais antigo que o runner e não tem um módulo que ele usa | o resultado não prova nada sobre o ciclo; ver o log |
 
 A distinção entre 2 e 3 usa o resultado **cru** do instalador (`output`, `timedOut`, `errorCode`) e a
 mesma regra do retry do app (`isTransientNetworkFailure`, em `electron/core/install-retry.cjs`), não
@@ -68,17 +98,23 @@ o texto de status da interface. Uma falha de rede misturada com uma de outro tip
 repetida: repetir mascararia o vermelho que importa.
 
 A página da run mostra o veredito na primeira linha, a tabela das rodadas e a saída do npm das
-tentativas que falharam. Log, relatório JSON e resumo ficam no artefato `ciclo-instalacao-<cli>`
-(30 dias), também quando a run passa.
+tentativas que falharam. Log, relatório JSON e resumo ficam no artefato
+`ciclo-instalacao-<cli>-<origem>` (30 dias), também quando a run passa.
 
 ## Controles negativos
 
-São dois, e cada um PRECISA terminar vermelho com o veredito certo. Servem para provar que o vermelho
+São três, e cada um PRECISA terminar vermelho com o veredito certo. Servem para provar que o vermelho
 é visível: se um controle terminar em qualquer outro veredito, o runner deixou de enxergar o defeito
 e nada do que ele diz vale.
 
 - **`controle` (regressão).** `--control-regressao` no script. Apaga o binário **antes** da rodada 2,
   então ela reinstala; o veredito esperado é `regressao` (código 1), acusando só a rodada 2.
+- **`controle_npm` (caminho do npm, só no app instalado).** `--control-npm` junto de `--packaged`.
+  Troca o npm esperado por um que não é o do pacote (`resources/npm-fora-do-pacote/...`); o app
+  instalado, que usa o certo, precisa ser acusado: veredito esperado `regressao` (código 1) nas
+  rodadas que instalam (1 e 4). Prova que o runner enxerga um npm resolvido no lugar errado. A frase
+  do problema diz "não o do pacote" e cita o caminho que o app usou de verdade, que nesta execução é
+  o certo; o resumo traz a nota de que é um controle.
 - **`infra` (rede).** Só no workflow. Aponta `npm_config_registry` para uma porta fechada
   (`127.0.0.1:9`) apenas no passo do ciclo; o `npm ci` anterior usa o registry normal. O veredito
   esperado é `infra` (código 2), depois de 3 tentativas do script (cada uma com as 3 do app), com as
@@ -94,12 +130,26 @@ node scripts/cli-auto-install-real-repro.cjs --cli claude --report relatorio.jso
 node scripts/cli-auto-install-real-repro.cjs --cli gemini --control-regressao   # sai com 1
 ```
 
+Contra um app já empacotado (pasta `win-unpacked` do `npm run pack` ou o conteúdo extraído do
+instalador; o `--packaged` aceita o `.exe` do app):
+
+```
+node scripts/cli-auto-install-real-repro.cjs --cli claude --packaged "C:\caminho\Felixo AI Core.exe"
+node scripts/cli-auto-install-real-repro.cjs --cli claude --packaged "C:\caminho\Felixo AI Core.exe" --control-npm   # sai com 1
+```
+
+**Não instale o NSIS na sua máquina para isso.** Para ver o conteúdo do instalador sem instalar, o
+`7za.exe` que o electron-builder deixa em `%LOCALAPPDATA%\electron-builder\Cache\7zip@...\bin` abre
+o `.exe` (`7za x -o<pasta-vazia> Felixo-AI-Core-<versão>-win-x64.exe`) e entrega exatamente a árvore
+que o NSIS grava. Isso prova o app empacotado; o que só o instalador de verdade prova (a instalação
+silenciosa em si) quem prova é o job `instalado` do workflow.
+
 (`npm run repro:cli-auto-install -- --cli gemini` faz o mesmo.) Faz chamadas reais ao registry do npm.
 Tudo acontece em pastas temporárias, com `HOME`, `APPDATA`, `LOCALAPPDATA` e `FELIXO_USER_DATA_DIR`
 apontando para fora do que existe, só neste processo: **suas CLIs e o seu perfil do Felixo não são
 tocados**, e o npm global do sistema nunca é consultado.
 
-O teste offline do próprio runner (`app/scripts/cli-auto-install-real-repro.test.cjs`, 42 testes) roda
+O teste offline do próprio runner (`app/scripts/cli-auto-install-real-repro.test.cjs`, 70 testes) roda
 no CI de cada PR, sem rede: um instalador falso grava os arquivos que o npm gravaria e o módulo de
 produção toma as decisões de verdade.
 
@@ -134,9 +184,13 @@ reprodução medida era a da máquina, não a do ciclo. Num runner limpo isso n�
 
 ## O que este runner não cobre
 
-- **O app empacotado instalado pelo NSIS.** O runner usa o `node_modules/npm` do projeto, que mexe no
-  mesmo código e no mesmo mecanismo, mas não passa por `process.resourcesPath` nem por
-  `resources/npm-runtime`. Há uma task própria para isso.
+- **Um upgrade real entre dois instaladores.** O job `instalado` instala **um** NSIS num runner
+  limpo e roda o ciclo; ele simula o upgrade (rodada 3) trocando a versão que o app grava, como o
+  resto do runner. Instalar o NSIS antigo, depois o novo por cima, e conferir que as CLIs gerenciadas
+  (que ficam em `userData`, e o NSIS não apaga por não ter `deleteAppDataOnUninstall`) não são
+  reinstaladas, ainda não foi medido.
+- **O Release só é provado depois de publicado.** O job `instalado` testa o instalador do último
+  Release, não o do commit; um defeito no empacotamento só aparece na run seguinte à publicação.
 - **macOS e Linux.** O isolamento do ambiente e o layout são escritos pensando no Windows; o código
   roda em outros sistemas, mas não há workflow nem medição para eles.
 - **O Codex no runner do GitHub.** Está fora da matriz de propósito (ver acima), mas medido localmente

@@ -15,10 +15,14 @@ const {
   createLatestPinner,
   evaluateCycle,
   formatSummary,
+  buildPackagedChildEnv,
   isolateEnvironmentForThisProcessOnly,
+  launchPackaged,
   main,
   parseArgs,
+  planPackagedLaunch,
   runCycle,
+  samePath,
 } = require('./cli-auto-install-real-repro.cjs')
 const { getManagedCliLayout } = require('../electron/core/managed-cli-paths.cjs')
 const { getManagedCliManifestEntry } = require('../electron/core/managed-cli-manifest.cjs')
@@ -156,14 +160,37 @@ function cicloSintetico(sobras = {}) {
 // ---------------------------------------------------------------------------
 
 describe('parseArgs', () => {
-  it('sem argumentos, instala o gemini e não grava nada', () => {
-    assert.deepEqual(parseArgs([]), { cli: 'gemini', report: null, summary: null, controlRegression: false, help: false })
+  it('sem argumentos, instala o gemini do código-fonte e não grava nada', () => {
+    assert.deepEqual(parseArgs([]), {
+      cli: 'gemini',
+      report: null,
+      summary: null,
+      controlRegression: false,
+      packaged: null,
+      controlNpm: false,
+      help: false,
+    })
   })
 
   it('lê a CLI, os arquivos de saída e o controle', () => {
     const args = parseArgs(['--cli', 'claude', '--report', 'r.json', '--summary', 's.md', '--control-regressao'])
 
-    assert.deepEqual(args, { cli: 'claude', report: 'r.json', summary: 's.md', controlRegression: true, help: false })
+    assert.deepEqual(args, {
+      cli: 'claude',
+      report: 'r.json',
+      summary: 's.md',
+      controlRegression: true,
+      packaged: null,
+      controlNpm: false,
+      help: false,
+    })
+  })
+
+  it('lê o app instalado e o controle do caminho do npm', () => {
+    const args = parseArgs(['--packaged', 'C:/Felixo/Felixo AI Core.exe', '--control-npm'])
+
+    assert.equal(args.packaged, 'C:/Felixo/Felixo AI Core.exe')
+    assert.equal(args.controlNpm, true)
   })
 
   it('recusa opção desconhecida e valor ausente, em vez de ignorar em silêncio', () => {
@@ -654,5 +681,263 @@ describe('main', () => {
     assert.equal(await main(['--cli', 'nao-existe']), EXIT.ERRO_DO_RUNNER)
     assert.match(String(erro.mock.calls[0].arguments[0]), /opção desconhecida: --bogus/)
     assert.match(String(erro.mock.calls[1].arguments[0]), /"openia" não é instalada pela instalação automática/)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// O app instalado: o ciclo roda DENTRO do executável do app, e o que ele usa para instalar
+// (o npm de resources/npm-runtime e o próprio executável como Node) entra no julgamento.
+
+describe('samePath', () => {
+  it('no Windows ignora separador e maiúscula; fora dele a maiúscula conta', () => {
+    assert.equal(samePath('C:\\Apps\\Felixo\\npm-cli.js', 'c:/apps/felixo/NPM-CLI.js', 'win32'), true)
+    assert.equal(samePath('C:\\Apps\\Felixo\\npm-cli.js', 'C:\\Apps\\Outro\\npm-cli.js', 'win32'), false)
+    assert.equal(samePath('/opt/Felixo/npm-cli.js', '/opt/felixo/npm-cli.js', 'linux'), false)
+    assert.equal(samePath('/opt/Felixo/./npm-cli.js', '/opt/Felixo/npm-cli.js', 'linux'), true)
+  })
+
+  it('caminho vazio nunca é igual a nada, nem a outro vazio', () => {
+    assert.equal(samePath('', '', 'win32'), false)
+    assert.equal(samePath(undefined, '/x', 'linux'), false)
+  })
+})
+
+describe('planPackagedLaunch', () => {
+  const raiz = path.join(os.tmpdir(), 'Felixo instalado')
+  const exe = path.join(raiz, 'Felixo AI Core.exe')
+  const existe = (...presentes) => (candidato) => presentes.includes(candidato)
+
+  it('acha o app.asar ao lado do executável e diz qual npm a instalação precisa usar', () => {
+    const resources = path.join(raiz, 'resources')
+    const plano = planPackagedLaunch(exe, { exists: existe(exe, path.join(resources, 'app.asar')) })
+
+    assert.equal(plano.resourcesPath, resources)
+    assert.equal(plano.electronDir, path.join(resources, 'app.asar', 'electron'))
+    assert.equal(plano.npmCliPath, path.join(resources, 'npm-runtime', 'npm', 'bin', 'npm-cli.js'))
+    assert.equal(plano.nodeExecutable, exe)
+  })
+
+  it('cai na pasta app quando o pacote não é um asar (win-unpacked de depuração)', () => {
+    const resources = path.join(raiz, 'resources')
+    const plano = planPackagedLaunch(exe, { exists: existe(exe, path.join(resources, 'app')) })
+
+    assert.equal(plano.electronDir, path.join(resources, 'app', 'electron'))
+  })
+
+  it('no macOS os recursos ficam em Contents/Resources, não ao lado do executável', () => {
+    const macExe = path.join(raiz, 'Felixo.app', 'Contents', 'MacOS', 'Felixo AI Core')
+    const resources = path.join(raiz, 'Felixo.app', 'Contents', 'Resources')
+    const plano = planPackagedLaunch(macExe, { exists: existe(macExe, path.join(resources, 'app.asar')) })
+
+    assert.equal(plano.resourcesPath, resources)
+  })
+
+  it('executável inexistente ou sem recursos do app: erro que diz o que faltou, nunca um caminho chutado', () => {
+    assert.throws(() => planPackagedLaunch(exe, { exists: existe() }), /executável do app não existe/)
+    assert.throws(() => planPackagedLaunch(exe, { exists: existe(exe) }), /não achei app\.asar nem a pasta app/)
+  })
+})
+
+describe('buildPackagedChildEnv', () => {
+  it('liga o modo Node, aponta o código do app e tira o que faria o processo sem janela procurar a tela', () => {
+    const base = { PATH: 'x', ELECTRON_NO_ATTACH_CONSOLE: '1', ELECTRON_FORCE_WINDOW_MENU_BAR: '1' }
+    const env = buildPackagedChildEnv(base, '/app/resources/app.asar/electron')
+
+    assert.equal(env.ELECTRON_RUN_AS_NODE, '1')
+    assert.equal(env.FELIXO_REPRO_ELECTRON_DIR, '/app/resources/app.asar/electron')
+    assert.equal(env.PATH, 'x')
+    assert.equal('ELECTRON_NO_ATTACH_CONSOLE' in env, false)
+    assert.equal('ELECTRON_FORCE_WINDOW_MENU_BAR' in env, false)
+    assert.equal('ELECTRON_RUN_AS_NODE' in base, false, 'não altera o ambiente de quem chamou')
+  })
+})
+
+describe('launchPackaged', () => {
+  const raiz = path.join(os.tmpdir(), 'Felixo instalado')
+  const exe = path.join(raiz, 'Felixo AI Core.exe')
+  const exists = (candidato) => [exe, path.join(raiz, 'resources', 'app.asar')].includes(candidato)
+
+  function espiao(resultado) {
+    const chamadas = []
+    return {
+      chamadas,
+      spawnSync(comando, argumentos, opcoes) {
+        chamadas.push({ comando, argumentos, opcoes })
+        return resultado
+      },
+    }
+  }
+
+  it('reexecuta o runner dentro do executável do app, sem o --packaged, e devolve o código do filho', () => {
+    const { chamadas, spawnSync } = espiao({ status: 1 })
+    const codigo = launchPackaged(
+      ['--cli', 'claude', '--packaged', exe, '--report', 'r.json'],
+      { spawnSync, exists, env: { PATH: 'p' }, script: '/repo/app/scripts/cli-auto-install-real-repro.cjs' },
+    )
+
+    assert.equal(codigo, 1, 'o veredito do filho é o código do pai (1 = regressão)')
+    assert.equal(chamadas[0].comando, exe)
+    assert.deepEqual(chamadas[0].argumentos, ['/repo/app/scripts/cli-auto-install-real-repro.cjs', '--cli', 'claude', '--report', 'r.json'])
+    assert.equal(chamadas[0].opcoes.env.ELECTRON_RUN_AS_NODE, '1')
+    assert.equal(chamadas[0].opcoes.env.FELIXO_REPRO_ELECTRON_DIR, path.join(raiz, 'resources', 'app.asar', 'electron'))
+    assert.equal(chamadas[0].opcoes.stdio, 'inherit')
+  })
+
+  it('o filho que não termina com código (sinal, falha ao abrir) é erro do runner, não sucesso', () => {
+    for (const resultado of [{ status: null, signal: 'SIGKILL' }, { status: null, error: new Error('spawn EACCES') }]) {
+      assert.equal(launchPackaged(['--packaged', exe], { spawnSync: espiao(resultado).spawnSync, exists }), EXIT.ERRO_DO_RUNNER)
+    }
+  })
+
+  it('o executável que não existe é erro do runner e o filho nem chega a abrir', () => {
+    const { chamadas, spawnSync } = espiao({ status: 0 })
+
+    assert.equal(launchPackaged(['--packaged', exe], { spawnSync, exists: () => false }), EXIT.ERRO_DO_RUNNER)
+    assert.equal(chamadas.length, 0)
+  })
+})
+
+describe('createInstallRecorder: o runtime que o app usou', () => {
+  it('guarda o npm e o Node de cada chamada, também quando o instalador lança', async () => {
+    const gravador = createInstallRecorder(async () => ({ ok: true }), () => 0)
+    gravador.startRound()
+    await gravador.installPackage({ npmPackage: 'a', npmCliPath: '/r/npm-cli.js', nodeExecutable: '/r/app.exe' })
+
+    assert.equal(gravador.endRound()[0].npmCliPath, '/r/npm-cli.js')
+    assert.equal(gravador.endRound()[0].nodeExecutable, '/r/app.exe')
+
+    const quebrado = createInstallRecorder(async () => {
+      throw new Error('boom')
+    })
+    quebrado.startRound()
+    await assert.rejects(() => quebrado.installPackage({ npmPackage: 'b', npmCliPath: '/r/npm-cli.js', nodeExecutable: '/r/app.exe' }))
+    assert.equal(quebrado.endRound()[0].npmCliPath, '/r/npm-cli.js')
+  })
+})
+
+describe('evaluateCycle: o app instalado usa o npm e o Node que vão no pacote', () => {
+  const pasta = path.join(os.tmpdir(), 'Felixo instalado')
+  const NPM = path.join(pasta, 'resources', 'npm-runtime', 'npm', 'bin', 'npm-cli.js')
+  const NODE = path.join(pasta, 'Felixo AI Core.exe')
+  const DO_ASAR = path.join(pasta, 'resources', 'app.asar', 'node_modules', 'npm', 'bin', 'npm-cli.js')
+  const usa = (npm = NPM, node = NODE) => instalacao({ npmCliPath: npm, nodeExecutable: node })
+  const cicloInstalado = (sobras = {}) => ({
+    ...cicloSintetico({ r1: { instalacoes: [usa()] }, r4: { instalacoes: [usa()] }, ...sobras }),
+    runtimeEsperado: { npmCliPath: NPM, nodeExecutable: NODE },
+  })
+
+  it('tudo no pacote: ok', () => {
+    assert.equal(evaluateCycle(cicloInstalado()).veredito, VEREDITOS.OK)
+  })
+
+  it('regressão (código 1): o npm veio do node_modules de dentro do asar, e não do npm-runtime', () => {
+    const avaliacao = evaluateCycle(cicloInstalado({ r1: { instalacoes: [usa(DO_ASAR)] } }))
+
+    assert.equal(avaliacao.veredito, VEREDITOS.REGRESSAO)
+    assert.equal(avaliacao.codigoDeSaida, EXIT.REGRESSAO)
+    assert.equal(avaliacao.problemas[0].rodada, 1)
+    assert.match(avaliacao.problemas[0].detalhe, /npm-runtime/)
+  })
+
+  it('regressão (código 1): o Node usado não é o executável do app instalado', () => {
+    const avaliacao = evaluateCycle(cicloInstalado({ r4: { instalacoes: [usa(NPM, path.join(os.tmpdir(), 'node.exe'))] } }))
+
+    assert.equal(avaliacao.veredito, VEREDITOS.REGRESSAO)
+    assert.equal(avaliacao.problemas[0].rodada, 4)
+    assert.match(avaliacao.problemas[0].detalhe, /Node/)
+  })
+
+  it('regressão (código 1): uma instalação que não disse qual npm usou não prova o caminho', () => {
+    const avaliacao = evaluateCycle(cicloInstalado({ r1: { instalacoes: [instalacao()] } }))
+
+    assert.equal(avaliacao.veredito, VEREDITOS.REGRESSAO)
+    assert.match(avaliacao.problemas[0].detalhe, /não informou/)
+  })
+
+  it('o caminho errado vale mais que a infra: a regressão passa na frente do aviso de rede', () => {
+    const avaliacao = evaluateCycle(cicloInstalado({
+      r1: { instalacoes: [usa(DO_ASAR)] },
+      r4: { estado: 'error', instalacoes: [falha({ redeTransitoria: true, npmCliPath: NPM, nodeExecutable: NODE })] },
+    }))
+
+    assert.equal(avaliacao.veredito, VEREDITOS.REGRESSAO)
+  })
+
+  it('rodando do código-fonte (sem runtime esperado) o caminho não é julgado', () => {
+    const ciclo = cicloSintetico({ r1: { instalacoes: [usa('/qualquer/npm-cli.js', '/qualquer/node')] } })
+
+    assert.equal(evaluateCycle(ciclo).veredito, VEREDITOS.OK)
+  })
+})
+
+describe('relatório do app instalado', () => {
+  const empacotado = {
+    executavel: 'Felixo AI Core.exe',
+    versaoDoApp: '0.1.486',
+    npmVersao: '11.21.1',
+    npmRelativo: 'resources/npm-runtime/npm/bin/npm-cli.js',
+  }
+  const montar = (extra = {}) => {
+    const ciclo = cicloSintetico()
+    return buildReport({ ciclo, avaliacao: evaluateCycle(ciclo), controlRegression: false, duracaoTotalMs: 1000, empacotado, ...extra })
+  }
+
+  it('o relatório diz qual app e qual npm foram exercitados, sem caminho absoluto', () => {
+    const relatorio = montar()
+
+    assert.deepEqual(relatorio.empacotado, empacotado)
+    assert.equal(JSON.stringify(relatorio).includes(os.tmpdir()), false)
+  })
+
+  it('o resumo abre dizendo que o ciclo rodou dentro do app instalado, com a versão e o npm do pacote', () => {
+    const resumo = formatSummary(montar())
+
+    assert.match(resumo, /App instalado: `Felixo AI Core\.exe` \(0\.1\.486\)/)
+    assert.match(resumo, /npm 11\.21\.1 em `resources\/npm-runtime\/npm\/bin\/npm-cli\.js`/)
+  })
+
+  it('o controle do caminho do npm aparece como execução de controle esperando a regressão', () => {
+    const resumo = formatSummary(montar({ controlNpm: true }))
+
+    assert.match(resumo, /CONTROLE do caminho do npm/)
+    assert.match(resumo, /`regressao`/)
+  })
+
+  it('sem app instalado o relatório não ganha o campo', () => {
+    const ciclo = cicloSintetico()
+    const relatorio = buildReport({ ciclo, avaliacao: evaluateCycle(ciclo), controlRegression: false, duracaoTotalMs: 1 })
+
+    assert.equal('empacotado' in relatorio, false)
+  })
+})
+
+describe('main: o app instalado', () => {
+  it('--control-npm sem --packaged é erro do runner: o controle só existe contra o app instalado', async (t) => {
+    const erro = t.mock.method(console, 'error', () => {})
+
+    assert.equal(await main(['--control-npm']), EXIT.ERRO_DO_RUNNER)
+    assert.match(String(erro.mock.calls[0].arguments[0]), /--control-npm só vale com --packaged/)
+  })
+
+  it('--packaged com um executável que não existe sai com 4 e explica', async (t) => {
+    const erro = t.mock.method(console, 'error', () => {})
+
+    assert.equal(await main(['--packaged', path.join(os.tmpdir(), 'nao-existe', 'Felixo.exe')]), EXIT.ERRO_DO_RUNNER)
+    assert.match(String(erro.mock.calls[0].arguments[0]), /executável do app não existe/)
+  })
+})
+
+describe('app instalado mais antigo que o runner', () => {
+  it('um módulo que falta no pacote sai com 4 (erro do runner), nunca com 1 (regressão)', (t) => {
+    const semModulos = fs.mkdtempSync(path.join(os.tmpdir(), 'repro-sem-modulos-'))
+    t.after(() => fs.rmSync(semModulos, { recursive: true, force: true }))
+
+    const filho = require('node:child_process').spawnSync(process.execPath, [require.resolve('./cli-auto-install-real-repro.cjs')], {
+      env: { ...process.env, FELIXO_REPRO_ELECTRON_DIR: semModulos },
+      encoding: 'utf8',
+    })
+
+    assert.equal(filho.status, EXIT.ERRO_DO_RUNNER)
+    assert.match(filho.stderr, /o app instalado não tem um módulo que o runner usa \(core\/install-retry\.cjs\)/)
   })
 })

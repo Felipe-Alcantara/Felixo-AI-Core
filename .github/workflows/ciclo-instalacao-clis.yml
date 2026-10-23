@@ -35,6 +35,16 @@ name: Ciclo de instalação das CLIs (Windows)
 # Codex fica de fora de propósito: no Windows ele tem o caso conhecido da
 # dependência nativa opcional (`@openai/codex-win32-x64`), que misturaria outro
 # sinal neste teste.
+#
+# ORIGEM "fonte" × "instalado". "fonte" roda o código do checkout com o npm do
+# `node_modules`. "instalado" baixa o instalador NSIS do último Release (ou da tag
+# pedida), instala em silêncio neste runner descartável e roda o MESMO runner DENTRO do
+# executável instalado (`--packaged`): o código vem do `app.asar` e o instalador das CLIs
+# usa o npm de `resources/npm-runtime` e o próprio executável como Node, que é o caminho
+# de quem instala o app. Ele prova a versão JÁ PUBLICADA (não o commit); só o runner (o
+# script) vem do checkout. O NSIS só é instalado aqui porque o runner é jogado fora: numa
+# máquina de uso pessoal ele viraria a instalação do Felixo (registro, atalhos e
+# auto-update).
 on:
   workflow_dispatch:
     inputs:
@@ -43,6 +53,16 @@ on:
         required: false
         type: boolean
         default: false
+      controle_npm:
+        description: 'Controle do caminho do npm (só no app instalado): troca o npm esperado por um fora do pacote. A run PRECISA ficar vermelha com o veredito "regressao" no job "instalado"'
+        required: false
+        type: boolean
+        default: false
+      versao:
+        description: 'Tag do Release cujo instalador será instalado no job "instalado" (vazio = o último Release)'
+        required: false
+        type: string
+        default: ''
       infra:
         description: 'Controle de infra: aponta o registry do npm para uma porta fechada só no passo do ciclo. A run PRECISA ficar vermelha com o veredito "infra", depois de 3 tentativas'
         required: false
@@ -81,7 +101,7 @@ concurrency:
 
 jobs:
   ciclo:
-    name: ${{ matrix.cli }} (windows-latest)
+    name: ${{ matrix.cli }} (${{ matrix.origem }}, windows-latest)
     runs-on: windows-latest
     # Medido no windows-latest em 22/10/2026 (Node 22.23.3): o ciclo do claude leva 42 s e o
     # do gemini 237 s (a primeira instalação sozinha, de 65 a 156 s: o registry do npm no
@@ -93,14 +113,21 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        cli:
-          - gemini
-          - claude
+        include:
+          - cli: gemini
+            origem: fonte
+          - cli: claude
+            origem: fonte
+          # Só o claude: o que o app instalado prova (qual npm e qual Node a instalação usa) não
+          # depende da CLI, e o gemini levaria 4 minutos a mais.
+          - cli: claude
+            origem: instalado
     defaults:
       run:
         working-directory: app
     env:
       CLI: ${{ matrix.cli }}
+      ORIGEM: ${{ matrix.origem }}
 
     steps:
       - name: Checkout
@@ -119,18 +146,53 @@ jobs:
       - name: Install dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
 
+      # O instalador do Release, instalado de verdade neste runner descartável. PowerShell e não
+      # bash: o Git Bash trata `/S` e `/D=...` como caminhos e os reescreve.
+      - name: Instalar o app pelo NSIS do Release
+        if: matrix.origem == 'instalado'
+        id: instalador
+        shell: pwsh
+        timeout-minutes: 10
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSAO: ${{ inputs.versao }}
+        run: |
+          $tag = if ($env:VERSAO) { $env:VERSAO } else { gh release view --repo $env:GITHUB_REPOSITORY --json tagName --jq .tagName }
+          if (-not $tag) { throw 'Não consegui descobrir a tag do Release.' }
+          $baixados = Join-Path $env:RUNNER_TEMP 'felixo-instalador'
+          New-Item -ItemType Directory -Force $baixados | Out-Null
+          gh release download $tag --repo $env:GITHUB_REPOSITORY --pattern '*win-x64.exe' --dir $baixados
+          $instalador = Get-ChildItem $baixados -Filter '*.exe' | Select-Object -First 1
+          if (-not $instalador) { throw "O Release $tag não tem instalador win-x64." }
+          $destino = Join-Path $env:RUNNER_TEMP 'felixo-instalado'
+          # /D= tem de ser o último argumento e sem aspas; o caminho não tem espaço.
+          $processo = Start-Process -FilePath $instalador.FullName -ArgumentList '/S', "/D=$destino" -Wait -PassThru
+          if ($processo.ExitCode -ne 0) { throw "O instalador saiu com código $($processo.ExitCode)." }
+          $exe = Join-Path $destino 'Felixo AI Core.exe'
+          if (-not (Test-Path $exe)) { throw "O instalador não deixou $exe." }
+          "exe=$exe" >> $env:GITHUB_OUTPUT
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "Instalado: $tag ($($instalador.Name), $([math]::Round($instalador.Length / 1MB)) MB) em $destino" | Write-Host
+
       - name: Rodar o ciclo de instalação
         id: ciclo
         shell: bash
         timeout-minutes: 25
         env:
           CONTROLE: ${{ inputs.controle }}
+          CONTROLE_NPM: ${{ inputs.controle_npm }}
           INFRA: ${{ inputs.infra }}
+          EXE_INSTALADO: ${{ steps.instalador.outputs.exe }}
         run: |
-          SAIDA="$RUNNER_TEMP/ciclo-$CLI"
+          SAIDA="$RUNNER_TEMP/ciclo-$CLI-$ORIGEM"
           mkdir -p "$SAIDA"
           args=(--cli "$CLI" --report "$SAIDA/relatorio.json" --summary "$SAIDA/resumo.md")
           if [ "$CONTROLE" = "true" ]; then args+=(--control-regressao); fi
+          # No app instalado o ciclo roda DENTRO do executável instalado; o controle do npm só existe aí.
+          if [ "$ORIGEM" = "instalado" ]; then
+            args+=(--packaged "$EXE_INSTALADO")
+            if [ "$CONTROLE_NPM" = "true" ]; then args+=(--control-npm); fi
+          fi
           # Controle de infra: só o passo do ciclo enxerga um registry que recusa a conexão
           # (o `npm ci` acima já rodou com o registry normal). Prova, num runner de verdade,
           # que a rede caída vira o veredito "infra" e que só ele é repetido.
@@ -164,7 +226,7 @@ jobs:
         if: always()
         shell: bash
         run: |
-          SAIDA="$RUNNER_TEMP/ciclo-$CLI"
+          SAIDA="$RUNNER_TEMP/ciclo-$CLI-$ORIGEM"
           if [ -f "$SAIDA/resumo.md" ]; then cat "$SAIDA/resumo.md" >> "$GITHUB_STEP_SUMMARY"; fi
 
       - name: Dizer de quem é a falha
@@ -176,21 +238,21 @@ jobs:
         run: |
           case "$CODIGO" in
             0) echo "Ciclo correto para $CLI em $TENTATIVAS tentativa(s)." ;;
-            1) echo "::error title=REGRESSÃO do ciclo de instalação ($CLI)::O Felixo reinstalou quando não devia, ou não reinstalou quando devia. É defeito do Felixo, não da rede. Veja o resumo da run." ;;
+            1) echo "::error title=REGRESSÃO do ciclo de instalação ($CLI, $ORIGEM)::O Felixo reinstalou quando não devia, não reinstalou quando devia, ou (no app instalado) a instalação usou um npm ou um Node que não são os do pacote. É defeito do Felixo, não da rede. Veja o resumo da run." ;;
             2) echo "::error title=INFRA (não é regressão do Felixo) $CLI::A instalação falhou com assinatura de rede ou de registry nas $TENTATIVAS tentativas. Rode a workflow de novo; se persistir por dias, veja o status do registry do npm." ;;
             3) echo "::error title=FALHA DE INSTALAÇÃO ($CLI)::A instalação falhou sem sinal de rede: pacote publicado quebrado, dependência nativa ou defeito do Felixo. A saída do npm está no resumo da run." ;;
-            4) echo "::error title=ERRO DO RUNNER ($CLI)::O ambiente da reprodução não estava como o script espera; o resultado não prova nada sobre o ciclo. Veja o log." ;;
-            *) echo "::error title=O ciclo não terminou ($CLI)::O passo anterior não gravou o código de saída (tempo limite ou cancelamento)." ;;
+            4) echo "::error title=ERRO DO RUNNER ($CLI, $ORIGEM)::O ambiente da reprodução não estava como o script espera (no app instalado, também quando o Release é mais antigo que o runner e não tem um módulo que ele usa); o resultado não prova nada sobre o ciclo. Veja o log." ;;
+            *) echo "::error title=O ciclo não terminou ($CLI, $ORIGEM)::O passo anterior não gravou o código de saída: tempo limite, cancelamento ou, no app instalado, a instalação do NSIS falhou antes do ciclo." ;;
           esac
 
       - name: Publicar o log e o relatório
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: ciclo-instalacao-${{ matrix.cli }}
+          name: ciclo-instalacao-${{ matrix.cli }}-${{ matrix.origem }}
           path: |
-            ${{ runner.temp }}/ciclo-${{ matrix.cli }}/log.txt
-            ${{ runner.temp }}/ciclo-${{ matrix.cli }}/relatorio.json
-            ${{ runner.temp }}/ciclo-${{ matrix.cli }}/resumo.md
+            ${{ runner.temp }}/ciclo-${{ matrix.cli }}-${{ matrix.origem }}/log.txt
+            ${{ runner.temp }}/ciclo-${{ matrix.cli }}-${{ matrix.origem }}/relatorio.json
+            ${{ runner.temp }}/ciclo-${{ matrix.cli }}-${{ matrix.origem }}/resumo.md
           retention-days: 30
           if-no-files-found: warn
