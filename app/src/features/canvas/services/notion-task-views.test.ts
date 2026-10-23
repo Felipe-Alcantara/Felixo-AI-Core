@@ -354,17 +354,58 @@ describe('notion-task-views', () => {
       expect(plan.create.map((view) => view.name)).toEqual(['Repo', 'Repo (Repositório)'])
     })
 
-    it('ignora valor vazio, o marcador "sem valor" e repetições da lista', () => {
+    it('ignora o valor vazio ("todos") e as repetições da lista', () => {
       const plan = planFor({
         repos: [
           { value: '', label: 'Todos os repositórios' },
-          { value: NO_VALUE_FILTER, label: 'Sem Repositório' },
           { value: 'Felixo-AI-Core', label: 'Felixo-AI-Core' },
           { value: 'Felixo-AI-Core', label: 'Felixo-AI-Core' },
         ],
       })
 
       expect(plan.create.map((view) => view.propertyFilters[0].values[0])).toEqual(['Felixo-AI-Core'])
+    })
+
+    // Decisão do dono em 23/10/2026: o botão cria também a aba das tarefas sem repositório, que a lista
+    // do seletor traz como "Sem Repositório" quando há alguma.
+    describe('aba das tarefas sem repositório', () => {
+      const COM_SEM_REPO = [...REPOS, { value: NO_VALUE_FILTER, label: 'Sem Repositório' }]
+
+      it('o item "Sem Repositório" da lista vira a última aba, com o filtro de valor vazio', () => {
+        const plan = planFor({ repos: COM_SEM_REPO })
+
+        expect(plan.create.map((view) => view.name)).toEqual(['Felixo-AI-Core', 'Meu-Ecoo-Prisma', 'Estudo-IA-Flashcards', 'Sem Repositório'])
+        expect(plan.create[3].propertyFilters).toEqual([{ property: 'Repositório', values: [NO_VALUE_FILTER] }])
+      })
+
+      it('a aba pega só as tarefas sem repositório, de qualquer jeito que o campo chegue vazio', () => {
+        const aba = planFor({ repos: [{ value: NO_VALUE_FILTER, label: 'Sem Repositório' }] }).create[0]
+        const comRepo = task({ id: 'a', fields: { Repositório: 'Felixo-AI-Core' } })
+        const semCampo = task({ id: 'b', fields: {} })
+        const nulo = task({ id: 'c', fields: { Repositório: null } })
+        const vazio = task({ id: 'd', fields: { Repositório: '' } })
+        const listaVazia = task({ id: 'e', fields: { Repositório: [] } })
+
+        expect(filterTasksByView([comRepo, semCampo, nulo, vazio, listaVazia], aba)).toEqual([semCampo, nulo, vazio, listaVazia])
+      })
+
+      it('não repete a aba "Sem Repositório" quando ela já existe, mesmo renomeada', () => {
+        const existing: NotionTaskView[] = [
+          { id: 'sem', name: 'Órfãs', statusFilter: 'open', propertyFilters: [{ property: 'Repositório', values: [NO_VALUE_FILTER] }] },
+        ]
+        const plan = planFor({ repos: COM_SEM_REPO, existing })
+
+        expect(plan.existing).toBe(1)
+        expect(plan.create.map((view) => view.name)).toEqual(['Felixo-AI-Core', 'Meu-Ecoo-Prisma', 'Estudo-IA-Flashcards'])
+      })
+
+      it('uma aba que junta um repositório e "sem repositório" não vale como a aba só das tarefas sem repositório', () => {
+        const existing: NotionTaskView[] = [
+          { id: 'misto', name: 'Core e sem', statusFilter: 'all', propertyFilters: [{ property: 'Repositório', values: ['Felixo-AI-Core', NO_VALUE_FILTER] }] },
+        ]
+
+        expect(planFor({ repos: [{ value: NO_VALUE_FILTER, label: 'Sem Repositório' }], existing }).create).toHaveLength(1)
+      })
     })
 
     it('sem coluna ou sem repositório não há o que criar', () => {
@@ -389,8 +430,8 @@ describe('notion-task-views', () => {
       const lista = repoChoices(cards, 'Repositório', null, false)
       const plan = planRepoViews({ property: 'Repositório', repos: lista, existing: [], statusFilter: 'open' })
 
-      // A lista do seletor traz "todos" e "Sem Repositório"; nenhum dos dois vira aba.
-      expect(plan.create.map((view) => view.name)).toEqual(['Felixo-AI-Core', 'Meu-Ecoo-Prisma'])
+      // A lista do seletor traz "todos" (que não vira aba), um item por repositório e "Sem Repositório" no fim.
+      expect(plan.create.map((view) => view.name)).toEqual(['Felixo-AI-Core', 'Meu-Ecoo-Prisma', 'Sem Repositório'])
       for (const view of plan.create) {
         const item = lista.find((choice) => choice.value === view.propertyFilters[0].values[0])
         expect(filterTasksByView(tasks, view)).toHaveLength(Number(item?.meta))

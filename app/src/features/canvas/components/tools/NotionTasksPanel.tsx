@@ -592,7 +592,7 @@ export function NotionTasksPanel({
   // "Uma por repositório": só dá para filtrar por coluna de escolha (select, multi-select, status);
   // agrupando por uma ligação entre databases o Painel funciona, mas a visualização não teria o que filtrar.
   const canCreateRepoViews = filterableProperties.some((property) => property.name === boardGroupBy)
-    && repoOptions.some((option) => option.value !== '' && option.value !== NO_VALUE_FILTER)
+    && repoOptions.some((option) => option.value !== '')
 
   function createRepoViews() {
     const what = repoViewsLabel(boardGroupBy)
@@ -611,10 +611,15 @@ export function NotionTasksPanel({
     }
     const count = plan.create.length
     const created = count === 1 ? '1 visualização' : `${count} visualizações`
+    // O item "Sem Repositório" da lista também vira aba: a das tarefas com a coluna vazia.
+    const withEmpty = plan.create.some((view) => view.propertyFilters[0]?.values.includes(NO_VALUE_FILTER))
+    const scope = withEmpty && count === 1
+      ? `a das tarefas sem ${what}`
+      : `uma para cada ${what} da lista${withEmpty ? ` e uma para as tarefas sem ${what}` : ''}`
     const kept = plan.existing > 0 ? ` Quem já tem a sua (${plan.existing}) fica como está.` : ''
-    if (!window.confirm(`Criar ${created}, uma para cada ${what} da lista?${kept} Você pode excluir qualquer uma depois; isso não afeta as tarefas no Notion.`)) return
+    if (!window.confirm(`Criar ${created}, ${scope}?${kept} Você pode excluir qualquer uma depois; isso não afeta as tarefas no Notion.`)) return
     persistCustomViews([...customViews, ...plan.create])
-    setMessage(`${count === 1 ? 'Criei 1 visualização' : `Criei ${count} visualizações`}, uma para cada ${what} da lista.${kept}`)
+    setMessage(`${count === 1 ? 'Criei 1 visualização' : `Criei ${count} visualizações`}, ${scope}.${kept}`)
   }
 
   function selectRepo(key: string) {
@@ -1203,7 +1208,7 @@ export function NotionTasksPanel({
               })}
               <button type="button" className="felixo-btn flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-zinc-400 hover:bg-white/5 hover:text-zinc-100" onClick={startCreatingView} aria-label="Criar nova visualização" title="Criar visualização com filtro avançado"><Plus size={12} /> Nova visualização</button>
               {canCreateRepoViews && (
-                <button type="button" className="felixo-btn flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-zinc-400 hover:bg-white/5 hover:text-zinc-100" onClick={createRepoViews} aria-label={`Criar uma visualização para cada ${repoViewsLabel(boardGroupBy)}`} title={`Cria uma aba para cada ${repoViewsLabel(boardGroupBy)} da lista; quem já tem a sua aba não é repetido`}><Layers size={12} /> Uma por {repoViewsLabel(boardGroupBy)}</button>
+                <button type="button" className="felixo-btn flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-zinc-400 hover:bg-white/5 hover:text-zinc-100" onClick={createRepoViews} aria-label={`Criar uma visualização para cada ${repoViewsLabel(boardGroupBy)}`} title={`Cria uma aba para cada ${repoViewsLabel(boardGroupBy)} da lista (e uma para as tarefas sem ${repoViewsLabel(boardGroupBy)}); quem já tem a sua aba não é repetido`}><Layers size={12} /> Uma por {repoViewsLabel(boardGroupBy)}</button>
               )}
               {/* Vale para todas as abas da tabela; o Painel já mostra um cartão por repositório. */}
               {!isBoard && repoOptions.length > 0 && (

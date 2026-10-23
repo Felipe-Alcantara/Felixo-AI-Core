@@ -211,9 +211,11 @@ function normalizedViewName(name: string): string {
  * Plano de "uma visualização para cada repositório": uma por valor da coluna de
  * agrupamento, só com o filtro dele. Quem já tem a sua (em `existing`, as fixas
  * e as próprias) fica de fora, então repetir a ação não duplica nada. O valor
- * vazio, o marcador "sem valor" e as repetições da lista não viram aba. O nome é
- * o do repositório; se outra aba já usa o nome, ganha a coluna entre parênteses
- * (e um número, no caso extremo) para as abas não ficarem iguais na barra.
+ * vazio (o "todos" do seletor) e as repetições da lista não viram aba. O item
+ * "Sem <coluna>" da lista (marcador `NO_VALUE_FILTER`) vira a aba das tarefas sem
+ * repositório, por decisão do dono. O nome é o do repositório; se outra aba já
+ * usa o nome, ganha a coluna entre parênteses (e um número, no caso extremo) para
+ * as abas não ficarem iguais na barra.
  */
 export function planRepoViews(input: {
   property: string
@@ -229,7 +231,7 @@ export function planRepoViews(input: {
   const usedNames = new Set(existing.map((view) => normalizedViewName(view.name)))
   const seen = new Set<string>()
   for (const repo of repos) {
-    if (!repo.value || repo.value === NO_VALUE_FILTER || seen.has(repo.value)) continue
+    if (!repo.value || seen.has(repo.value)) continue
     seen.add(repo.value)
     if (existing.some((view) => isViewOfRepo(view, property, repo.value))) {
       plan.existing += 1
