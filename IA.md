@@ -9,12 +9,15 @@
   nos arquivos de docs/ia-archive/.
 -->
 
-Última atualização: [2026-10-22]
+Última atualização: [2026-10-23]
 
 - **Fase:** o canvas é o produto principal (o chat está depreciado). A divisão do `CanvasView`
   (partes 1 a 4) e o bloco Agente na nuvem estão na `main`: PRs #113 a #120 mesclados.
-- **Padrão de qualidade:** auditado e alinhado em 2026-10-12 (ver a entrada daquele dia). Gate
-  verde no Windows: `tsc`, `eslint`, Python 104, Node 2677, vitest 3145. No CI de `37d6083`,
+- **Padrão de qualidade:** auditado e alinhado em 2026-10-12 e de novo em 2026-10-23 (ver as duas
+  entradas). Gate verde no Windows em 23/10: `tsc`, `eslint`, Python 104, Node 2962, vitest 3256;
+  `npm audit` sem crítico, sem alto e com a produção em 0 (sobram 2 moderados: o `ip-address`
+  embutido no npm e o Electron 41, linha sem suporte). Publicado na `v0.1.479`. Em 12/10, no CI de
+  `37d6083`,
   `Validate` (4 sistemas) e `Launcher` (3 sistemas, Python 3.9 e 3.13) passaram; só o job
   exploratório `Benchmarks exploratórios (windows-latest)`, que é `continue-on-error`, falhou no
   passo de responsividade do terminal e não foi investigado. Os commits seguintes (compactação dos
@@ -25,6 +28,12 @@
 - **Instalador e árvore de processos (2026-10-21):** o `release-smoke.cjs` passou a cancelar e expirar a instalação de uma CLI pelo app empacotado e a provar, com uma sonda independente, que nenhum processo da árvore do npm sobra (`app/scripts/installer-kill-smoke.cjs`, nos três SOs do Release). Visto rodando fora do CI só no Windows; o macOS real segue pendente (roteiro em `docs/validation/CHECKLIST-INSTALADOR-ARVORE-DE-PROCESSOS.md`). Ver a entrada de 2026-10-21 "Instalador: cancelar e expirar pelo app empacotado".
 - **Instalador, rotas Python e script (2026-10-22):** a rota do pip (`runBufferedCommand`, hoje só o Openia) passou a encerrar a árvore inteira no prazo e no cancelamento, a procurar um Python que sirva antes de instalar (`core/python-runtime.cjs`) e, junto com o npm, a repetir a falha de rede duas vezes (`core/install-retry.cjs`). Prova com processo real nas 3 rotas em `install-routes-process-tree.test.cjs` (roda no Windows, no Ubuntu e no macOS do CI). Visto rodando fora do CI só no Windows; fechar o app no meio de uma instalação ainda não a cancela. Ver a entrada de 2026-10-22 "Instalador: Python e script".
 - **Ciclo de instalação das CLIs no CI (2026-10-22):** o runner que prova que a instalação automática não reinstala na 2ª abertura nem no upgrade (`app/scripts/cli-auto-install-real-repro.cjs`) roda sozinho no `windows-latest` (`ciclo-instalacao-clis.yml`: push por caminho, segunda 09:30 UTC e sob demanda), com veredito que separa regressão do Felixo de falha de infra (códigos 1 e 2) e controle negativo. Fora do PR e do Release. Ver `docs/validation/CICLO-INSTALACAO-CLIS.md` e a entrada de 2026-10-22 "CI: o ciclo de instalação das CLIs".
+- **PTY no Windows (2026-10-22, `v0.1.478`):** o `node-pty` falhava no `AttachConsole` em todo `kill()` (o
+  auxiliar sobe uns 45 ms depois de o pseudo-console fechar) e segurava o processo por 5 s;
+  `app/electron/services/node-pty-windows-kill.cjs` responde a lista de processos localmente nos quatro
+  pontos que abrem PTY. O teste `pty-kill.integration.test.cjs` está no `test:native` desde 2026-10-23
+  (`v0.1.479`) e `npm run repro:pty-kill` mede o encerramento com e sem o contorno. Ver a entrada de
+  2026-10-22 "PTY no Windows" e a de 2026-10-23.
 - **Em andamento:** nada aberto no código nesta entrega. Em toda abertura (também na execução da
   fonte), a rodada das CLIs busca a versão mais nova publicada de Claude, Codex e Gemini, inclusive
   pré-lançamento, e atualiza a cópia do app e a do npm global, mesmo com a CLI aberta (o npm troca
@@ -61,9 +70,10 @@
    terminal por conta; em 2026-10-14 ela passou sem falhas no Windows (2738 testes, 8 ignorados).
   (6) Cada atualização de uma CLI aberta deixa a pasta antiga do pacote (`.claude-code-XXXX`, do
   tamanho do pacote) no npm global até uma instalação seguinte com o processo fechado.
-  (7) No Windows, `npm run test:native` completo falha de forma intermitente em "payload grande chega
-  inteiro" ou "emoji não é partido" (`pty-write-queue`); isolado, passa. Derrubou o CI de `e7615c3`
-  em 2026-10-14 e tem task própria no Notion.
+  (7) No Windows, `npm run test:native` completo falhava de forma intermitente em "payload grande chega
+  inteiro" (`pty-write-queue`); a causa era o coletor do teste (marcador de fim partido) e foi corrigida
+  em `bddc016` (2026-10-22). O "emoji não é partido" não apareceu em 60 repetições no runner. O E2E de
+  contexto (`contextIndex` -1) segue aberto na task própria do Notion.
 - **Como compactar de novo:** este arquivo e `docs/projeto/IA.md` crescem com cada sessão. Quando
   passarem de uns 1000 linhas, rode `node app/scripts/archive-ia-md.cjs` (dry-run por padrão); o
   passo a passo está no Guia para Desenvolvedores.
@@ -776,3 +786,102 @@ task de acompanhamento (o E2E de contexto) segue aberto.
   60 repetições e com 0 linhas de ruído em todas. As duas execuções vermelhas não são da correção: a 39831517850
   contou a palavra "AttachConsole" e pegou o título do próprio teste de integração (o padrão passou a ser o texto
   exato do erro), e a 39836260322 pegou o flake do payload grande descrito acima.
+
+## 2026-10-23 — Padrão de qualidade, segunda passada: dependências sem crítico nem alto, IA.md compactado, README e teste de encerramento da PTY ligados
+
+**Contexto.** Pedido: colocar o repositório no padrão de qualidade do Felixo System Design, dez dias depois da
+primeira passada (entrada de 2026-10-12). A pasta local do padrão não existe; a fonte foi o repositório público
+(`Felipe-Alcantara/Felixo-System-Design`, `main`, lido pela API do GitHub). A auditoria seguiu o Guia Mínimo de
+Qualidade (13 itens e checklist), a política de git, o template de `IA.md`, o guia do `start_app.py` e o guia de README.
+A leitura da entrada de 12/10 evitou refazer o que já estava conforme e mostrou quais lacunas tinham ficado abertas.
+
+**Já conforme, medido de novo, não refazer.** `start_app.py` com menu e as quatro ações mínimas; `requirements.txt`
+com hashes e `package-lock.json` versionado; CI em matriz de quatro sistemas; nenhum segredo versionado (só
+sentinelas e e-mails fictícios em arquivos de teste); 107 links relativos válidos nos `.md` (110 depois do README);
+`contextIsolation` e `sandbox` ligados; os dois `dangerouslySetInnerHTML` são uma folha de estilo fixa e a saída do
+realce de código; todo `target="_blank"` tem `rel`; nenhum `eval`. No GitHub: secret scanning, push protection e
+Dependabot de segurança ligados, e a branch apaga ao mesclar. As únicas branches remotas eram as dos PRs abertos
+(#128 de outra pessoa e #129 do Dependabot).
+
+**Gate medido antes de mexer** (Windows 11, árvore limpa): `tsc -b` e `eslint .` limpos; Python 104 testes OK (2
+pulados); Node 2962 testes, 2953 passam, 0 falham, 9 pulados; vitest 3256 testes, 0 falhas. O que estava vermelho:
+`npm audit` completo com 10 avisos (1 crítico, 4 altos, 5 moderados). A árvore de produção (`--omit=dev`) estava em
+0, e por isso a política de dependências do CI não via nada: ela só roda quando `package.json` ou o lockfile mudam.
+
+**O que mudou** (quatro temas, quatro commits ou grupos):
+
+1. **`IA.md` compactados sem perda (`075b104`).** O da raiz tinha 2721 linhas e o de `docs/projeto/`, 1308, acima das
+   ~1000 que o "Estado atual" manda compactar. `archive-ia-md.cjs --keep-from 2026-10-21` moveu 40 e 22 seções para
+   `docs/ia-archive/IA-ARCHIVE-2026-10.md` e `IA-PROJETO-ARCHIVE-2026-10.md`: 2721 → 779 e 1308 → 393 linhas. Conferi
+   além da prova do script: o conjunto de linhas do original é igual ao do novo mais o do arquivo, com só linhas em
+   branco, o cabeçalho do arquivo e os ponteiros a mais.
+2. **Dependências (PR #131: `bd5c80c` e `5660a95`).** `dompurify` 3.4.16 → 3.4.17 (o crítico), `vite` 8.2.2 → 8.3.5
+   com `rolldown` 1.2.15, `postcss`, `vitest ^4.1.12`; e o `npm` embutido 11.19.1 → 11.21.1, que leva dentro
+   `brace-expansion`, `undici` e `http-cache-semantics` corrigidos (os três altos). Resultado: **10 → 2 avisos, os dois
+   moderados; crítico 0, alto 0, produção 0.** O PR #129 do Dependabot (só o `vite`) fica superado.
+3. **Teste de encerramento da PTY no `test:native` e `repro:pty-kill` (`f2607eb`).** A pendência que ficou da
+   v0.1.478 (as duas linhas do `package.json`). O `test:native` passa a ter 5 arquivos e o workflow
+   `pty-kill-windows.yml` deixa de rodar o teste duas vezes.
+4. **README (`cf63003`).** Árvore de pastas ("Estrutura do repositório") e "Autor", itens obrigatórios do guia de
+   README que faltavam, no estilo do projeto (sem emojis), como a entrada de 12/10 decidiu.
+
+**Armadilhas de método, para a próxima pessoa.**
+
+- **Não gere o lockfile com o npm da sua máquina.** Com o npm 11.6.2 (o do Node 25 local), `npm audit fix
+  --package-lock-only` tirou `@emnapi/wasi-threads` do lock e o `npm ci` reprovava com EUSAGE ("Missing:
+  @emnapi/wasi-threads@1.2.3 from lock file"). O lock original passava no `npm ci --dry-run` com o mesmo npm: foi a
+  operação que o quebrou. Refiz com o npm do próprio projeto (`node app/node_modules/npm/bin/npm-cli.js`, 11.19.1) e
+  conferi com `npm ci --dry-run` e uma instalação limpa. É o mesmo problema do stash antigo de lockfile "podado".
+- **`npm install pacote@x --package-lock-only` com um pacote que não é direto o torna direto.** Ao instalar
+  `@vitest/mocker` por nome, ele entrou em `dependencies`. Subir só a faixa do `vitest` no `package.json` e rodar
+  `npm install --package-lock-only` sem argumento resolve a árvore inteira.
+- **Worktree instalado com `--ignore-scripts` fica sem o binário do Electron**, e 10 arquivos de teste Node mais o
+  E2E de contexto do vitest reprovam com "Electron failed to install correctly". Não é regressão: rode
+  `node node_modules/electron/install.js` (usa o cache) e eles passam (116 e 6 testes).
+- **`npm audit fix` não alcança as cópias embutidas no tarball do `npm`**, e o `npm update` não subiu o `vitest` por
+  conta própria (a faixa já permitia a 4.1.12): a faixa no `package.json` precisou subir.
+
+**Evidência.**
+
+- Instalação limpa (`npm ci`) no worktree: `tsc`, `eslint`, `vite build`; vitest 3256 testes (3250 mais 6 do E2E que
+  precisa do Electron), suíte Node 2962 testes, 0 falhas; `test:native` com os 5 arquivos, 9 testes, 0 linhas de
+  `AttachConsole` em 15 s; `repro:pty-kill --runs 3` com o veredito "ok" (com a correção 1006 a 1015 ms; controle
+  5009 a 5020 ms com o ruído nas 3).
+- O `npm` empacotado pelo `bundle-npm-runtime.cjs`, rodando pelo Electron como Node (v24.18.0): `npm -v` dá 11.21.1,
+  instalou um pacote real do registro, e `npm ls` e `npm view` funcionam.
+- PR #131: 13 checks verdes, entre eles `Dependency policy` (1 min 21 s, o job que antes reprovava), `Validate` nos
+  quatro sistemas (o teste novo "encerrar uma PTY nativa não imprime AttachConsole nem segura o processo depois do
+  kill" aparece como `ok` no passo nativo de Windows, Ubuntu, macOS e ARM) e `Canvas smoke (ubuntu-latest)`. O CI da
+  `main` rodou só o `Escopo do CI` e pulou o resto, reaproveitando o do PR (árvore idêntica); `Release gate` liberou; o Release 39897551675 terminou verde (5
+  jobs) e publicou a **v0.1.479** como Latest (alvo `f2607eb`, 20 arquivos). O smoke empacotado deu `result: passed`,
+  `nativeErrors: []` e `FELIXO_RELEASE_PTY_OK` nos três sistemas.
+
+**Por que `npm` 11.21.1 e não o 12.2.1.** Probei os dois numa cópia do lock: as dependências embutidas e o resultado
+do audit são idênticos. O 12 exige Node `^22.22.2 || ^24.15.0 || >=26`, e o projeto declara `engines >=22.12.0`; o
+11.21.1 aceita `^20.17.0 || >=22.9.0`. A task do npm embutido (do Notion) pedia preferir o major mais novo, e esta
+passada não a fecha: o `ip-address` embutido (10.7.2) ainda tem aviso novo e o 12.2.1 também o traz.
+
+**O que NÃO foi alterado, e por quê.**
+
+- **Os 2 moderados que sobram no `npm audit`:** `ip-address` dentro do `npm` (só sai com um `npm` que o atualize) e o
+  Electron 41, linha sem suporte desde o registro de 31/08, cuja correção pede um major (42 ou mais; o `npm audit`
+  sugere o 45). Migrar o Electron mexe no Chromium, no Node embutido e no ABI do `node-pty`: é planejamento à parte.
+- **Arquivos "faz-tudo".** Os maiores de produção: `terminal-session-store.ts` (3151 linhas), `CanvasView.tsx` (2495),
+  `pty-process-manager.cjs` (1679), `orchestration-runner.cjs` (1653), `ChatWorkspace.tsx` (1569),
+  `agent-usage-service.cjs` (1568). O guia manda tratá-los como sinal de refatoração; é a lacuna ARQ-01/ARQ-02 da
+  auditoria de 08/08 e segue por decisão de quem mantém, porque cada divisão pode mudar comportamento sem aviso.
+- **Actions fixadas por tag, não por SHA** (`actions/checkout@v5` etc.). O Dependabot de `github-actions` só abre PR de
+  segurança (as atualizações de versão estão desligadas); fixar por SHA é endurecimento opcional. `official-cli-install.yml` não declara `permissions:`, mas o padrão do
+  repositório é `read`.
+
+**Achado ao lado, não investigado.** O `Canvas smoke (windows-latest)` da rotina noturna de 22/10 reprovou nas três
+tentativas com "F3 copiar e abas pelo teclado: o xterm ficou menor que a gravação (100×50)" e `{rows: 67, cols: 65}`
+(execução 39770466812). As quatro noturnas anteriores passaram. Esse job só roda na noturna (o PR roda o do Ubuntu).
+Entre a última noturna verde (`d0a2f54`) e a vermelha (`f8ffe8c`) entraram os commits do tema claro (21/10), que
+mexem na Leitura do smoke: é uma hipótese, não foi medida.
+
+**Não validado.** O app instalado (NSIS) com o `npm` 11.21.1 não foi aberto por mim; a prova é o smoke empacotado do
+Release (instala e roda) mais a execução do `npm` empacotado descrita acima. Linux e macOS reais só pelo CI. A noturna
+de 23/10 é a primeira que vê o `Dependency policy` sem crítico na `main`.
+
+Estado: concluído e publicado (v0.1.479); decisões de quem mantém ficam em tasks no Notion.
