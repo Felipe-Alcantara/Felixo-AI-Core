@@ -1156,7 +1156,9 @@ Se estiver reportando um problema, inclua a versão do app, sistema operacional,
     guardam a conversa no histórico, e a Leitura alcança o começo dela. O custo
     dessa opção: no modo clássico o Claude Code não liga o mouse, então as opções
     da interface dele deixam de responder a clique e a roda do mouse. Desligada,
-    que é o padrão, o Claude usa a tela cheia dele, com mouse;
+    que é o padrão, o Claude usa a tela cheia dele: as opções respondem a clique,
+    a roda do mouse rola a conversa e o próprio Claude a mantém no fim sozinho;
+    o que não existe nesse modo é a barra de rolagem do app e o histórico antigo na Leitura;
   - o reconhecimento olha o estilo das letras. Um título sem negrito ou um
     código sem cor pode sair como parágrafo, e um parágrafo que começa com
     código pode sair como bloco de código. O texto nunca some: quando a
