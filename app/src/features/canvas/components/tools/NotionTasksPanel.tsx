@@ -15,6 +15,7 @@ import {
   Eye,
   EyeOff,
   KeyRound,
+  Layers,
   LayoutGrid,
   ListTodo,
   Pencil,
@@ -51,13 +52,16 @@ import {
 } from '../../services/notion-task-scope'
 import {
   BUILT_IN_VIEWS,
+  NO_VALUE_FILTER,
   createViewId,
   describeFilterValues,
   filterTasksByView,
   filterValueChoices,
   isBuiltInView,
   listFilterableProperties,
+  planRepoViews,
   readCustomViews,
+  repoViewsLabel,
   saveCustomViews,
   type NotionStatusScope,
   type NotionTaskView,
@@ -584,6 +588,34 @@ export function NotionTasksPanel({
     })
     return repoChoices(cards, boardGroupBy, groupFilter, taskScope.showCompleted)
   }, [boardGroupBy, tasks, taskScope.showCompleted, schema, detailsSource.details, groupFilter])
+
+  // "Uma por repositório": só dá para filtrar por coluna de escolha (select, multi-select, status);
+  // agrupando por uma ligação entre databases o Painel funciona, mas a visualização não teria o que filtrar.
+  const canCreateRepoViews = filterableProperties.some((property) => property.name === boardGroupBy)
+    && repoOptions.some((option) => option.value !== '' && option.value !== NO_VALUE_FILTER)
+
+  function createRepoViews() {
+    const what = repoViewsLabel(boardGroupBy)
+    const plan = planRepoViews({
+      property: boardGroupBy,
+      repos: repoOptions,
+      // As fixas escondidas (Todas, Concluídas) também contam para não repetir nome com elas.
+      existing: [...BUILT_IN_VIEWS, ...customViews],
+      // Com as concluídas à mostra, a aba nova mostra todas; sem elas, só as abertas, como a aba "Abertas".
+      statusFilter: taskScope.showCompleted ? 'all' : 'open',
+    })
+    setError(null)
+    if (plan.create.length === 0) {
+      setMessage(`Já existe uma visualização para cada ${what} da lista.`)
+      return
+    }
+    const count = plan.create.length
+    const created = count === 1 ? '1 visualização' : `${count} visualizações`
+    const kept = plan.existing > 0 ? ` Quem já tem a sua (${plan.existing}) fica como está.` : ''
+    if (!window.confirm(`Criar ${created}, uma para cada ${what} da lista?${kept} Você pode excluir qualquer uma depois; isso não afeta as tarefas no Notion.`)) return
+    persistCustomViews([...customViews, ...plan.create])
+    setMessage(`${count === 1 ? 'Criei 1 visualização' : `Criei ${count} visualizações`}, uma para cada ${what} da lista.${kept}`)
+  }
 
   function selectRepo(key: string) {
     const label = repoOptions.find((option) => option.value === key)?.label || key
@@ -1170,6 +1202,9 @@ export function NotionTasksPanel({
                 )
               })}
               <button type="button" className="felixo-btn flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-zinc-400 hover:bg-white/5 hover:text-zinc-100" onClick={startCreatingView} aria-label="Criar nova visualização" title="Criar visualização com filtro avançado"><Plus size={12} /> Nova visualização</button>
+              {canCreateRepoViews && (
+                <button type="button" className="felixo-btn flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-zinc-400 hover:bg-white/5 hover:text-zinc-100" onClick={createRepoViews} aria-label={`Criar uma visualização para cada ${repoViewsLabel(boardGroupBy)}`} title={`Cria uma aba para cada ${repoViewsLabel(boardGroupBy)} da lista; quem já tem a sua aba não é repetido`}><Layers size={12} /> Uma por {repoViewsLabel(boardGroupBy)}</button>
+              )}
               {/* Vale para todas as abas da tabela; o Painel já mostra um cartão por repositório. */}
               {!isBoard && repoOptions.length > 0 && (
                 <div className="ml-auto w-52 max-w-full">

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { NotionSchemaProperty, NotionTask } from '../../shared/types/notion'
+import { buildRepoCards } from './notion-repo-board'
+import { repoChoices } from './notion-task-scope'
 import {
   BUILT_IN_VIEWS,
   NO_VALUE_FILTER,
@@ -9,7 +11,9 @@ import {
   isBuiltInView,
   listFilterableProperties,
   noValueLabel,
+  planRepoViews,
   readCustomViews,
+  repoViewsLabel,
   saveCustomViews,
   taskMatchesView,
   type NotionTaskView,
@@ -232,6 +236,170 @@ describe('notion-task-views', () => {
       expect(describeFilterValues('Repositório', [NO_VALUE_FILTER])).toBe('Sem Repositório')
       expect(describeFilterValues('Repositório', ['Felixo-AI-Core', NO_VALUE_FILTER])).toBe('Felixo-AI-Core, Sem Repositório')
       expect(describeFilterValues('Repositório', ['Felixo-AI-Core'])).toBe('Felixo-AI-Core')
+    })
+  })
+
+  // Hotfix de 23/10/2026: criar de uma vez uma visualização para cada repositório da lista do
+  // seletor, em vez de abrir o editor e marcar um por um. Repetir a ação não pode duplicar abas.
+  describe('visualização para cada repositório', () => {
+    const REPOS = [
+      { value: 'Felixo-AI-Core', label: 'Felixo-AI-Core' },
+      { value: 'Meu-Ecoo-Prisma', label: 'Meu-Ecoo-Prisma' },
+      { value: 'Estudo-IA-Flashcards', label: 'Estudo-IA-Flashcards' },
+    ]
+
+    function sequentialIds() {
+      let next = 0
+      return () => `id-${(next += 1)}`
+    }
+
+    function planFor(overrides: Partial<Parameters<typeof planRepoViews>[0]> = {}) {
+      return planRepoViews({
+        property: 'Repositório',
+        repos: REPOS,
+        existing: [],
+        statusFilter: 'open',
+        newId: sequentialIds(),
+        ...overrides,
+      })
+    }
+
+    it('cria uma visualização por repositório, só com o filtro dele, na ordem recebida', () => {
+      const plan = planFor()
+
+      expect(plan.existing).toBe(0)
+      expect(plan.create).toEqual([
+        { id: 'id-1', name: 'Felixo-AI-Core', statusFilter: 'open', propertyFilters: [{ property: 'Repositório', values: ['Felixo-AI-Core'] }] },
+        { id: 'id-2', name: 'Meu-Ecoo-Prisma', statusFilter: 'open', propertyFilters: [{ property: 'Repositório', values: ['Meu-Ecoo-Prisma'] }] },
+        { id: 'id-3', name: 'Estudo-IA-Flashcards', statusFilter: 'open', propertyFilters: [{ property: 'Repositório', values: ['Estudo-IA-Flashcards'] }] },
+      ])
+    })
+
+    it('o estado da nova aba é o pedido: com as concluídas à mostra a aba mostra todas', () => {
+      expect(planFor({ statusFilter: 'all' }).create.every((view) => view.statusFilter === 'all')).toBe(true)
+    })
+
+    it('cada aba criada pega só as tarefas do próprio repositório', () => {
+      const core = task({ id: 'a', fields: { Repositório: { name: 'Felixo-AI-Core' } } })
+      const prisma = task({ id: 'b', fields: { Repositório: { name: 'Meu-Ecoo-Prisma' } } })
+      const semRepo = task({ id: 'c', fields: { Repositório: null } })
+      const [abaCore, abaPrisma] = planFor().create
+
+      expect(filterTasksByView([core, prisma, semRepo], abaCore)).toEqual([core])
+      expect(filterTasksByView([core, prisma, semRepo], abaPrisma)).toEqual([prisma])
+    })
+
+    it('não repete a aba de quem já tem uma, mesmo renomeada e com outro estado', () => {
+      const existing: NotionTaskView[] = [
+        { id: 'minha', name: 'Meu core', statusFilter: 'all', propertyFilters: [{ property: 'Repositório', values: ['Felixo-AI-Core'] }] },
+      ]
+      const plan = planFor({ existing })
+
+      expect(plan.existing).toBe(1)
+      expect(plan.create.map((view) => view.name)).toEqual(['Meu-Ecoo-Prisma', 'Estudo-IA-Flashcards'])
+    })
+
+    it('uma aba com mais de um valor, com outro filtro junto ou de outra propriedade não vale como a do repositório', () => {
+      const existing: NotionTaskView[] = [
+        { id: 'dois', name: 'Dois', statusFilter: 'all', propertyFilters: [{ property: 'Repositório', values: ['Felixo-AI-Core', 'Meu-Ecoo-Prisma'] }] },
+        {
+          id: 'dois-filtros',
+          name: 'Dois filtros',
+          statusFilter: 'all',
+          propertyFilters: [
+            { property: 'Repositório', values: ['Estudo-IA-Flashcards'] },
+            { property: 'Prioridade', values: ['Alta'] },
+          ],
+        },
+        { id: 'outra', name: 'Outra', statusFilter: 'all', propertyFilters: [{ property: 'Projeto', values: ['Felixo-AI-Core'] }] },
+      ]
+      const plan = planFor({ existing })
+
+      expect(plan.existing).toBe(0)
+      expect(plan.create).toHaveLength(3)
+    })
+
+    it('repetir a ação com o resultado da primeira não cria nada', () => {
+      const first = planFor()
+      const second = planFor({ existing: first.create })
+
+      expect(second.create).toEqual([])
+      expect(second.existing).toBe(3)
+    })
+
+    it('nome já usado por outra aba, inclusive as fixas, ganha a coluna entre parênteses', () => {
+      const existing: NotionTaskView[] = [
+        ...BUILT_IN_VIEWS,
+        { id: 'blog', name: 'Blog', statusFilter: 'all', propertyFilters: [{ property: 'Tipo', values: ['Conteúdo'] }] },
+      ]
+      const plan = planFor({
+        repos: [
+          { value: 'Abertas', label: 'Abertas' },
+          { value: 'blog', label: 'blog' },
+        ],
+        existing,
+      })
+
+      expect(plan.create.map((view) => view.name)).toEqual(['Abertas (Repositório)', 'blog (Repositório)'])
+    })
+
+    it('dois repositórios de mesmo nome não ficam com abas de mesmo nome', () => {
+      const plan = planFor({
+        repos: [
+          { value: 'a', label: 'Repo' },
+          { value: 'b', label: 'Repo' },
+        ],
+      })
+
+      expect(plan.create.map((view) => view.name)).toEqual(['Repo', 'Repo (Repositório)'])
+    })
+
+    it('ignora valor vazio, o marcador "sem valor" e repetições da lista', () => {
+      const plan = planFor({
+        repos: [
+          { value: '', label: 'Todos os repositórios' },
+          { value: NO_VALUE_FILTER, label: 'Sem Repositório' },
+          { value: 'Felixo-AI-Core', label: 'Felixo-AI-Core' },
+          { value: 'Felixo-AI-Core', label: 'Felixo-AI-Core' },
+        ],
+      })
+
+      expect(plan.create.map((view) => view.propertyFilters[0].values[0])).toEqual(['Felixo-AI-Core'])
+    })
+
+    it('sem coluna ou sem repositório não há o que criar', () => {
+      expect(planFor({ property: '' }).create).toEqual([])
+      expect(planFor({ repos: [] }).create).toEqual([])
+    })
+
+    it('as abas criadas a partir da lista do seletor trazem as mesmas tarefas que o número ao lado de cada item', () => {
+      const schema: Record<string, NotionSchemaProperty> = {
+        Repositório: { id: '1', name: 'Repositório', type: 'select', select: { options: [{ name: 'Felixo-AI-Core' }, { name: 'Meu-Ecoo-Prisma' }] } },
+      }
+      // O formato que o app entrega: select é o texto da opção e multi_select, a lista de textos.
+      const tasks = [
+        task({ id: '1', fields: { Repositório: 'Felixo-AI-Core' } }),
+        task({ id: '2', fields: { Repositório: 'Felixo-AI-Core' } }),
+        task({ id: '3', completed: true, fields: { Repositório: 'Felixo-AI-Core' } }),
+        task({ id: '4', fields: { Repositório: 'Meu-Ecoo-Prisma' } }),
+        task({ id: '5', fields: { Repositório: null } }),
+      ]
+      const abertas = tasks.filter((item) => !item.completed)
+      const cards = buildRepoCards({ tasks: abertas, schema, groupBy: 'Repositório', detailsVia: '', details: null, tagProperties: [], showEmpty: false, search: '' })
+      const lista = repoChoices(cards, 'Repositório', null, false)
+      const plan = planRepoViews({ property: 'Repositório', repos: lista, existing: [], statusFilter: 'open' })
+
+      // A lista do seletor traz "todos" e "Sem Repositório"; nenhum dos dois vira aba.
+      expect(plan.create.map((view) => view.name)).toEqual(['Felixo-AI-Core', 'Meu-Ecoo-Prisma'])
+      for (const view of plan.create) {
+        const item = lista.find((choice) => choice.value === view.propertyFilters[0].values[0])
+        expect(filterTasksByView(tasks, view)).toHaveLength(Number(item?.meta))
+      }
+    })
+
+    it('o nome da ação segue a coluna de agrupamento', () => {
+      expect(repoViewsLabel('Repositório')).toBe('repositório')
+      expect(repoViewsLabel('Projeto')).toBe('projeto')
     })
   })
 })

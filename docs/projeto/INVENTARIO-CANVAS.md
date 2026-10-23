@@ -30,7 +30,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 ## Números
 
 - **Elementos:** 98 (10 blocos, 16 ferramentas, 72 outras superfícies)
-- **Controles:** 376, dos quais 55 com teste específico
+- **Controles:** 377, dos quais 55 com teste específico
 - **Elementos sem nenhum teste:** 4
 - **Lacunas:** 275 (alto 10, médio 147, baixo 118), em 78 tasks
 
@@ -1936,6 +1936,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `aria-label={`Editar visualização ${view.name}`}` (button) | clique | Abre o editor preenchido com a visualização própria. (desabilitado: Só nas visualizações próprias e só no hover (hidden group-hover:flex): fora do alcance do teclado.) | Sem falha própria. | — |
 | `aria-label={`Excluir visualização ${view.name}`}` (button) | clique | Pede confirm e tira a visualização de felixo:notion-task-views:<conexão>:<database>; se era a ativa, volta à primeira. (desabilitado: Só nas visualizações próprias e só no hover.) | Cancelar o confirm não faz nada. | — |
 | `aria-label="Criar nova visualização"` (button) | clique | "Nova visualização": abre o editor vazio. | Sem falha própria. | — |
+| `onClick={createRepoViews}` (button) | clique | "Uma por repositório" (o nome segue a coluna do Painel): pede confirm e cria uma visualização para cada repositório da lista do seletor, só com o filtro dele (estado "Só abertas", ou "Todos" com as concluídas à mostra), gravadas em felixo:notion-task-views:<conexão>:<database>. Quem já tem a sua aba (um filtro só, com aquele valor) não é repetido; repetir a ação não cria nada e avisa. (desabilitado: Só aparece se a coluna do Painel for de escolha (select, multi-select ou status) e houver repositório na lista.) | Cancelar o confirm não faz nada; sem repositório novo mostra "Já existe uma visualização para cada repositório da lista."; localStorage indisponível só deixa de guardar. | — |
 | `aria-label="Fechar editor de visualização"` (button) | clique | Fecha o editor de visualização e descarta o rascunho. | Sem falha própria. | — |
 | `aria-label="Estado incluído na visualização"` (select) | clique | Escolhe Todos/Só abertas/Só concluídas no rascunho da visualização. | Sem falha própria. | — |
 | `aria-label="Propriedade para filtrar"` (select) | clique | Escolhe a propriedade (select, multi-select, status) do filtro e zera os valores marcados. (desabilitado: Só aparece se a database tiver propriedades filtráveis.) | Sem falha própria. | — |

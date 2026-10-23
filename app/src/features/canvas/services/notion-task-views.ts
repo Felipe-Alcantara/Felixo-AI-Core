@@ -181,3 +181,66 @@ export function describeFilterValues(property: string, values: string[]): string
 export function filterTasksByView(tasks: NotionTask[], view: NotionTaskView): NotionTask[] {
   return tasks.filter((task) => taskMatchesView(task, view))
 }
+
+export type RepoViewCandidate = { value: string; label: string }
+
+export type RepoViewPlan = {
+  /** Visualizações a criar, na ordem dos repositórios recebidos. */
+  create: NotionTaskView[]
+  /** Quantos repositórios já tinham a própria visualização e ficaram de fora. */
+  existing: number
+}
+
+/** "repositório" (ou o nome da coluna, em minúsculas): como a ação "uma por ..." chama o agrupamento do Painel. */
+export function repoViewsLabel(groupBy: string): string {
+  return /reposit/i.test(groupBy) ? 'repositório' : groupBy.toLowerCase()
+}
+
+/** A visualização do repositório é a que filtra só por ele e por mais nada: renomear ou mudar o estado não a descaracteriza. */
+function isViewOfRepo(view: NotionTaskView, property: string, value: string): boolean {
+  if (view.propertyFilters.length !== 1) return false
+  const [filter] = view.propertyFilters
+  return filter.property === property && filter.values.length === 1 && filter.values[0] === value
+}
+
+function normalizedViewName(name: string): string {
+  return name.trim().toLocaleLowerCase('pt-BR')
+}
+
+/**
+ * Plano de "uma visualização para cada repositório": uma por valor da coluna de
+ * agrupamento, só com o filtro dele. Quem já tem a sua (em `existing`, as fixas
+ * e as próprias) fica de fora, então repetir a ação não duplica nada. O valor
+ * vazio, o marcador "sem valor" e as repetições da lista não viram aba. O nome é
+ * o do repositório; se outra aba já usa o nome, ganha a coluna entre parênteses
+ * (e um número, no caso extremo) para as abas não ficarem iguais na barra.
+ */
+export function planRepoViews(input: {
+  property: string
+  repos: RepoViewCandidate[]
+  existing: NotionTaskView[]
+  statusFilter: NotionStatusScope
+  newId?: () => string
+}): RepoViewPlan {
+  const { property, repos, existing, statusFilter, newId = createViewId } = input
+  const plan: RepoViewPlan = { create: [], existing: 0 }
+  if (!property) return plan
+
+  const usedNames = new Set(existing.map((view) => normalizedViewName(view.name)))
+  const seen = new Set<string>()
+  for (const repo of repos) {
+    if (!repo.value || repo.value === NO_VALUE_FILTER || seen.has(repo.value)) continue
+    seen.add(repo.value)
+    if (existing.some((view) => isViewOfRepo(view, property, repo.value))) {
+      plan.existing += 1
+      continue
+    }
+    let name = repo.label
+    for (let attempt = 1; usedNames.has(normalizedViewName(name)); attempt += 1) {
+      name = attempt === 1 ? `${repo.label} (${property})` : `${repo.label} (${property}) ${attempt}`
+    }
+    usedNames.add(normalizedViewName(name))
+    plan.create.push({ id: newId(), name, statusFilter, propertyFilters: [{ property, values: [repo.value] }] })
+  }
+  return plan
+}

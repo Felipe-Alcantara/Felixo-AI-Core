@@ -1040,6 +1040,13 @@ export const notionTasksTool: InventoryElement = {
       failure: 'Sem falha própria.',
     },
     {
+      locator: 'onClick={createRepoViews}',
+      kind: 'button',
+      effect: '"Uma por repositório" (o nome segue a coluna do Painel): pede confirm e cria uma visualização para cada repositório da lista do seletor, só com o filtro dele (estado "Só abertas", ou "Todos" com as concluídas à mostra), gravadas em felixo:notion-task-views:<conexão>:<database>. Quem já tem a sua aba (um filtro só, com aquele valor) não é repetido; repetir a ação não cria nada e avisa.',
+      failure: 'Cancelar o confirm não faz nada; sem repositório novo mostra "Já existe uma visualização para cada repositório da lista."; localStorage indisponível só deixa de guardar.',
+      disabledWhen: 'Só aparece se a coluna do Painel for de escolha (select, multi-select ou status) e houver repositório na lista.',
+    },
+    {
       locator: 'aria-label="Fechar editor de visualização"',
       kind: 'button',
       effect: 'Fecha o editor de visualização e descarta o rascunho.',
