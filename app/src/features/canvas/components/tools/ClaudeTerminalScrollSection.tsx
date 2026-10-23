@@ -26,10 +26,12 @@ export function ClaudeTerminalScrollSection() {
           </div>
           <p className="mt-2 text-xs leading-relaxed text-zinc-500">
             Por padrão o Claude Code usa a tela cheia dele: as opções da interface respondem a
-            clique, a roda do mouse rola a conversa e o próprio Claude a mantém no fim sozinho. O que
-            não existe nesse modo é a barra de rolagem do app nem o histórico antigo na Leitura.
-            Ligado, os terminais novos do Claude abrem no modo clássico, com barra de rolagem e
-            histórico, e aí a interface dele deixa de responder ao mouse. Terminais já abertos não mudam.
+            clique, a roda do mouse rola a conversa e o próprio Claude a mantém no fim sozinho. Como
+            ele não entrega histórico ao terminal, o app põe um trilho de rolagem ao lado (sobe e
+            desce meia página, vai ao fim e acende quando a conversa está rolada para cima); o trilho
+            não mostra a posição, e a Leitura só alcança a tela atual. Ligado, os terminais novos do
+            Claude abrem no modo clássico, com a barra de rolagem de sempre e o histórico, e aí a
+            interface dele deixa de responder ao mouse. Terminais já abertos não mudam.
           </p>
         </div>
         <FelixoToggle checked={enabled} onChange={change} label="Rolagem no terminal do Claude Code" />

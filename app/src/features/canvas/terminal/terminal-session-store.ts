@@ -95,7 +95,15 @@ import {
 } from './terminal-screen-state'
 import type { SendTextInput, TerminalReadingSource } from './terminal-session-api'
 import { createPtyEventRouter, type PtyEventRouter } from './pty-event-router'
-import { loadClaudeTerminalScroll, shouldUseClassicScreen } from '../services/terminal-scroll-preference'
+import { isClaudeCommand, loadClaudeTerminalScroll, shouldUseClassicScreen } from '../services/terminal-scroll-preference'
+import {
+  CLAUDE_SCROLL_KEYS,
+  HIDDEN_CLAUDE_SCROLL_RAIL,
+  isClaudeScrolledUp,
+  shouldShowClaudeScrollRail,
+  type ClaudeScrollAction,
+  type ClaudeScrollRailState,
+} from './terminal-claude-scroll'
 import {
   TERMINAL_REPLAY_BUFFER_CHARS,
   describeTerminalScrollbackUsage,
@@ -1552,6 +1560,34 @@ export class TerminalSessionStore {
 
   focus(id: string): void {
     this.sessions.get(id)?.terminal.focus()
+  }
+
+  getClaudeScrollRail(id: string): ClaudeScrollRailState {
+    const session = this.sessions.get(id)
+    if (!session || session.disposed) {
+      return HIDDEN_CLAUDE_SCROLL_RAIL
+    }
+
+    const { activity } = session.snapshot
+    const visible = shouldShowClaudeScrollRail({
+      isClaude: isClaudeCommand(session.command),
+      alternateScreen: session.terminal.buffer.active.type === 'alternate',
+      alive: activity !== 'exited' && activity !== 'error',
+    })
+    return visible
+      ? { visible: true, scrolledUp: isClaudeScrolledUp(readViewport(session.terminal)) }
+      : HIDDEN_CLAUDE_SCROLL_RAIL
+  }
+
+  scrollClaude(id: string, action: ClaudeScrollAction): void {
+    const session = this.sessions.get(id)
+    if (!session || !this.getClaudeScrollRail(id).visible) {
+      return
+    }
+
+    // Pelo `input` do xterm, o mesmo caminho do teclado: o `onData` escreve no PTY.
+    session.terminal.input(CLAUDE_SCROLL_KEYS[action], true)
+    session.terminal.focus()
   }
 
   /** Types text into the session's PTY as if the user had typed it. */

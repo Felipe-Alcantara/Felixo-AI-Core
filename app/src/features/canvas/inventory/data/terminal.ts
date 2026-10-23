@@ -163,6 +163,47 @@ export const terminalSurfaces: InventoryElement[] = [
     overlap: 'Coluna encostada à direita, relative z-20 (focus-within z-30), altura total; a largura (mínimo 440, recolhida 44) é negociada com o painel e o inspector por splitHorizontalSpace, então empurra o canvas em vez de cobri-lo. Fica abaixo do cartão de pedido de página e dos toasts (z 50) e dos modais (z 60); clicar numa camada flutuante (data-felixo-floating-layer) não conta como clique fora.',
   },
   {
+    id: 'terminal-claude-scroll-rail',
+    name: 'Trilho de rolagem do Claude Code',
+    layer: 'terminal',
+    owner: 'src/features/canvas/components/TerminalScrollRail.tsx',
+    states: {
+      normal: 'Coluna de 24 px à direita do terminal na gaveta, só com o Claude vivo na tela alternativa (o modo de tela cheia dele, que liga o mouse): botões Subir meia página, Descer meia página e Ir para o fim, com uma trilha entre os dois primeiros.',
+      success: 'Conversa rolada para cima (o Claude desenha "Jump to bottom (ctrl+End) ↓" ou "N new messages"): data-scrolled-up="true", a trilha acende e o botão de ir ao fim ganha destaque.',
+      disabled: 'Não existe no modo clássico (o xterm já tem a barra), em outra CLI, com o processo encerrado, com a gaveta recolhida nem com a aba Leitura à frente.',
+    },
+    controls: [
+      {
+        locator: 'data-felixo-claude-scroll={action}',
+        kind: 'button',
+        effect: 'Um botão por ação (Subir meia página, Descer meia página, Ir para o fim da conversa): store.scrollClaude escreve no PTY, pelo input do xterm, PageUp (ESC [ 5 ~), PageDown (ESC [ 6 ~) ou Ctrl+End (ESC [ 1 ; 5 F), que o Claude atende com a linha de entrada em foco; o mousedown não rouba o foco e o terminal é refocado depois do clique.',
+        failure: 'Sem falha própria: se o Claude mudar a tecla, o botão não faz nada e não avisa. Sem o trilho visível o store não escreve nada.',
+        disabledWhen: 'O trilho some junto: modo clássico, outra CLI, processo encerrado, gaveta recolhida ou Leitura à frente.',
+      },
+    ],
+    persistence: ['nenhuma (o estado vem da tela do Claude)'],
+    ipc: ['pty:write'],
+    dependsOn: [
+      'useClaudeScrollRail',
+      'terminal-claude-scroll',
+      'TerminalSessionStore.getClaudeScrollRail',
+      'TerminalSessionStore.scrollClaude',
+      'TerminalDrawer (decide quando mostrar)',
+    ],
+    tests: [
+      { file: 'src/features/canvas/terminal/terminal-claude-scroll.test.ts' },
+      { file: 'src/features/canvas/terminal/terminal-session-store.test.ts' },
+    ],
+    gaps: [
+      {
+        what: 'Medido só no app isolado com o Claude Code 2.1.309 real e chave falsa (cliques e teclado pelo Playwright): nenhum teste do repositório abre o Claude, e o smoke não cobre o trilho. O trilho não mostra a posição da conversa: o Claude não a informa ao terminal.',
+        risk: 'médio',
+        task: '3db91f95-497e-8136-b7b0-cef894567cda',
+      },
+    ],
+    overlap: 'Coluna estática ao lado do xterm, dentro da gaveta (flex, sem camada z própria); a Leitura, absoluta por cima de tudo, a cobre quando está à frente.',
+  },
+  {
     id: 'terminal-reading',
     name: 'Leitura do terminal',
     layer: 'terminal',

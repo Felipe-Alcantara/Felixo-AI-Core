@@ -2763,3 +2763,110 @@ describe('TerminalSessionStore: lançamento do Codex', () => {
     expect(launchLogs(harness)).toEqual([])
   })
 })
+
+describe('TerminalSessionStore: trilho de rolagem do Claude em tela cheia', () => {
+  let harness: Harness | undefined
+
+  beforeEach(() => {
+    harness = undefined
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    harness?.store.clear()
+    vi.useRealTimers()
+  })
+
+  const TELA_ALTERNATIVA = '\x1b[?1049h\x1b[2J\x1b[H'
+  // O aviso divide a linha com o conteúdo, como o Claude 2.1.309 o desenha.
+  const ROLADO_PARA_CIMA = ['285', '289                                  Jump to bottom (ctrl+End) ↓', '❯'].join('\r\n')
+  const NO_FIM = '\x1b[2J\x1b[H300\r\n❯'
+
+  async function abrirNaTelaCheia(command: string): Promise<Harness> {
+    const aberto = createHarness('', command)
+    await vi.advanceTimersByTimeAsync(0)
+    aberto.feed(TELA_ALTERNATIVA)
+    await vi.advanceTimersByTimeAsync(50)
+    return aberto
+  }
+
+  it('só aparece depois que o Claude entra na tela alternativa', async () => {
+    harness = createHarness('', 'claude')
+    await vi.advanceTimersByTimeAsync(0)
+    harness.feed('Welcome to Claude Code\r\n')
+    await vi.advanceTimersByTimeAsync(50)
+    expect(harness.store.getClaudeScrollRail(SESSION_ID)).toEqual({ visible: false, scrolledUp: false })
+
+    harness.feed(TELA_ALTERNATIVA)
+    await vi.advanceTimersByTimeAsync(50)
+    expect(harness.store.getClaudeScrollRail(SESSION_ID)).toEqual({ visible: true, scrolledUp: false })
+  })
+
+  it('acende quando a tela mostra o aviso de conversa rolada e apaga quando ela volta ao fim', async () => {
+    harness = await abrirNaTelaCheia('claude')
+    harness.feed(ROLADO_PARA_CIMA)
+    await vi.advanceTimersByTimeAsync(50)
+    expect(harness.store.getClaudeScrollRail(SESSION_ID)).toEqual({ visible: true, scrolledUp: true })
+
+    harness.feed(NO_FIM)
+    await vi.advanceTimersByTimeAsync(50)
+    expect(harness.store.getClaudeScrollRail(SESSION_ID)).toEqual({ visible: true, scrolledUp: false })
+  })
+
+  it('não aparece em outra CLI, mesmo na tela alternativa', async () => {
+    harness = await abrirNaTelaCheia('codex')
+
+    expect(harness.store.getClaudeScrollRail(SESSION_ID).visible).toBe(false)
+  })
+
+  it('some quando o processo do Claude encerra', async () => {
+    harness = await abrirNaTelaCheia('claude')
+    harness.emitExit({ exitCode: 0 })
+    await vi.advanceTimersByTimeAsync(50)
+
+    expect(harness.store.getClaudeScrollRail(SESSION_ID).visible).toBe(false)
+  })
+
+  it('sessão que não existe não mostra trilho', () => {
+    harness = createHarness('', 'claude')
+
+    expect(harness.store.getClaudeScrollRail('outra-sessao')).toEqual({ visible: false, scrolledUp: false })
+  })
+
+  it('manda ao PTY a tecla que o Claude atende para cada ação do trilho', async () => {
+    harness = await abrirNaTelaCheia('claude')
+    harness.writes.length = 0
+
+    harness.store.scrollClaude(SESSION_ID, 'pageUp')
+    harness.store.scrollClaude(SESSION_ID, 'pageDown')
+    harness.store.scrollClaude(SESSION_ID, 'bottom')
+
+    expect(harness.writes).toEqual(['\x1b[5~', '\x1b[6~', '\x1b[1;5F'])
+  })
+
+  it('o clique no trilho não conta como digitação na linha de entrada', async () => {
+    harness = await abrirNaTelaCheia('claude')
+    harness.store.scrollClaude(SESSION_ID, 'pageUp')
+
+    expect(harness.store.getSnapshot(SESSION_ID)?.lastPrompt).toBeUndefined()
+  })
+
+  it('sem o trilho visível a ação não escreve nada: no modo clássico, em outra CLI ou sem sessão', async () => {
+    harness = createHarness('', 'claude')
+    await vi.advanceTimersByTimeAsync(0)
+    harness.feed('modo clássico, sem tela alternativa\r\n')
+    await vi.advanceTimersByTimeAsync(50)
+    harness.writes.length = 0
+    harness.store.scrollClaude(SESSION_ID, 'pageUp')
+    expect(harness.writes, 'modo clássico').toEqual([])
+    harness.store.clear()
+
+    harness = await abrirNaTelaCheia('codex')
+    harness.writes.length = 0
+    harness.store.scrollClaude(SESSION_ID, 'bottom')
+    expect(harness.writes, 'outra CLI').toEqual([])
+
+    harness.store.scrollClaude('outra-sessao', 'pageUp')
+    expect(harness.writes, 'sessão inexistente').toEqual([])
+  })
+})

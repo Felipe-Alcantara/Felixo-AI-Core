@@ -4,6 +4,7 @@ import type { TerminalScrollbackStatus } from './terminal-scrollback'
 import type { SessionMetadata } from './session-metadata'
 import type { PromptInsertion } from '../../shared/types/prompt-insertion'
 import type { ReadingBuffer } from './reading/reading-lines'
+import type { ClaudeScrollAction, ClaudeScrollRailState } from './terminal-claude-scroll'
 
 /** The small lifecycle vocabulary needed by cards, the dock, and notices. */
 export type SessionActivity =
@@ -138,6 +139,14 @@ export type TerminalSessionStoreApi = {
    * de cada redesenho. Sobrevive ao Reiniciar, como `subscribe`.
    */
   subscribeOutput: (id: string, listener: () => void) => () => void
+  /**
+   * O trilho de rolagem do app para o Claude em tela cheia: aparece só com o
+   * Claude vivo na tela alternativa, e diz se a conversa está rolada para cima
+   * (ver `terminal-claude-scroll.ts`).
+   */
+  getClaudeScrollRail: (id: string) => ClaudeScrollRailState
+  /** Manda ao Claude a tecla de rolagem do trilho; sem o trilho visível não escreve nada. */
+  scrollClaude: (id: string, action: ClaudeScrollAction) => void
   getSnapshot: (id: string) => SessionSnapshot | undefined
   getSessionMetadata: (id: string) => SessionMetadata | undefined
   getSnapshots: () => Record<string, SessionSnapshot>

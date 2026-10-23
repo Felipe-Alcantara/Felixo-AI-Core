@@ -1078,7 +1078,7 @@ export const agentToolSurfaces: InventoryElement[] = [
       {
         locator: 'label="Rolagem no terminal do Claude Code"',
         kind: 'toggle',
-        effect: 'saveClaudeTerminalScroll grava on/off; ligado, os próximos terminais do Claude nascem com CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1 (shouldUseClassicScreen), ganham barra de rolagem e perdem o mouse dentro da interface do Claude (a tela clássica não liga o mouse tracking); desligado, o padrão, o Claude usa a tela cheia, com mouse; os já abertos não mudam',
+        effect: 'saveClaudeTerminalScroll grava on/off; ligado, os próximos terminais do Claude nascem com CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1 (shouldUseClassicScreen), ganham barra de rolagem e perdem o mouse dentro da interface do Claude (a tela clássica não liga o mouse tracking); desligado, o padrão, o Claude usa a tela cheia, com mouse, e a gaveta mostra o trilho de rolagem do app (terminal-claude-scroll-rail); os já abertos não mudam',
         failure: 'Sem localStorage a escolha vale só até fechar o app (erro engolido de propósito)',
       },
     ],

@@ -17,6 +17,8 @@ import {
 } from '../terminal/terminal-session-context'
 import { CopyButton } from './TerminalCopyButton'
 import { TerminalReadingPanel } from './TerminalReadingPanel'
+import { TerminalScrollRail } from './TerminalScrollRail'
+import { useClaudeScrollRail } from '../hooks/useClaudeScrollRail'
 import type { ReadingProfile } from '../terminal/reading/reading-profiles'
 import { resolveOpenEditorFile } from './terminal-open-file'
 import { useExitAnimation } from '../hooks/useExitAnimation'
@@ -144,6 +146,7 @@ export function TerminalDrawer({
   const store = useTerminalSessions()
   const snapshot = useSessionSnapshot(sessionId)
   const scrollbackNotice = terminalScrollbackNotice(snapshot?.scrollback)
+  const scrollRail = useClaudeScrollRail(sessionId, snapshot?.generation, snapshot?.activity)
   const isLive = snapshot?.activity !== 'exited' && snapshot?.activity !== 'error'
   // Sem snapshot não há processo: nada a confirmar antes de (re)subir.
   const hasLiveProcess = snapshot !== undefined && isLive
@@ -788,7 +791,7 @@ export function TerminalDrawer({
           de tela, para o conteúdo não ser lido duas vezes. */}
       {/* A tela do terminal fica escura em qualquer tema (as CLIs desenham para
           fundo escuro); só a moldura da gaveta acompanha o tema. */}
-      <div className={`felixo-paleta-escura relative min-h-0 flex-1 bg-(--f-core-black-surface) ${collapsed ? 'invisible w-0' : ''}`}>
+      <div className={`felixo-paleta-escura relative flex min-h-0 flex-1 bg-(--f-core-black-surface) ${collapsed ? 'invisible w-0' : ''}`}>
         <div
           ref={mountRef}
           id="canvas-terminal-output"
@@ -796,8 +799,15 @@ export function TerminalDrawer({
           aria-labelledby={hasReading ? terminalTabId : undefined}
           aria-hidden={collapsed || readingActive}
           inert={readingActive}
-          className="h-full overflow-hidden px-1 pb-2 pt-1"
+          className="h-full min-w-0 flex-1 overflow-hidden px-1 pb-2 pt-1"
         />
+        {/* Claude em tela cheia: o xterm não tem barra nessa tela, então o app põe a dele ao lado. */}
+        {scrollRail.visible && !collapsed && !readingActive && (
+          <TerminalScrollRail
+            scrolledUp={scrollRail.scrolledUp}
+            onScroll={(action) => store.scrollClaude(sessionId, action)}
+          />
+        )}
         {hasReading && readingProfile && (
           <TerminalReadingPanel
             sessionId={sessionId}

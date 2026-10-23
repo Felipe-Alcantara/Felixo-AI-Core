@@ -9,6 +9,11 @@ import type {
   TerminalTranscript,
 } from './terminal-session-api'
 import type { SessionMetadata } from './session-metadata'
+import {
+  HIDDEN_CLAUDE_SCROLL_RAIL,
+  type ClaudeScrollAction,
+  type ClaudeScrollRailState,
+} from './terminal-claude-scroll'
 
 const EMPTY_TRANSCRIPT: TerminalTranscript = { text: '' }
 const EMPTY_SNAPSHOTS: Record<string, SessionSnapshot> = {}
@@ -172,6 +177,14 @@ export class DeferredTerminalSessionStore implements TerminalSessionStoreApi {
 
   getSessionMetadata(id: string): SessionMetadata | undefined {
     return this.realStore?.getSessionMetadata(id)
+  }
+
+  getClaudeScrollRail(id: string): ClaudeScrollRailState {
+    return this.realStore?.getClaudeScrollRail(id) ?? HIDDEN_CLAUDE_SCROLL_RAIL
+  }
+
+  scrollClaude(id: string, action: ClaudeScrollAction): void {
+    this.runDeferred((store) => store.scrollClaude(id, action))
   }
 
   getSnapshots(): Record<string, SessionSnapshot> {

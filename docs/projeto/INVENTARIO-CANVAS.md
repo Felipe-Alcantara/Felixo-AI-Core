@@ -29,10 +29,10 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 
 ## Números
 
-- **Elementos:** 98 (10 blocos, 16 ferramentas, 72 outras superfícies)
-- **Controles:** 377, dos quais 55 com teste específico
+- **Elementos:** 99 (10 blocos, 16 ferramentas, 73 outras superfícies)
+- **Controles:** 378, dos quais 55 com teste específico
 - **Elementos sem nenhum teste:** 4
-- **Lacunas:** 275 (alto 10, médio 147, baixo 118), em 78 tasks
+- **Lacunas:** 276 (alto 10, médio 148, baixo 118), em 79 tasks
 
 ## Moldura do canvas
 
@@ -1005,6 +1005,29 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Abrir a gaveta rola o shell para o lado por um instante. | baixo | `3e891f95-497e-819b-a75f-e5cec04e3173` |
 | Desafixada, clicar num painel da sidebar (Prompts, Skills) fecha a gaveta antes de o texto chegar ao terminal. | médio | `3eb91f95-497e-814a-8b2c-e471e09f6ff3` |
 | Com a gaveta aberta, a barra de status encolhe até 160 px e quebra. | médio | `3e791f95-497e-81bd-8e8c-de6f9e16cec5` |
+
+### Trilho de rolagem do Claude Code
+
+- **ID:** `terminal-claude-scroll-rail` · **Dono:** `src/features/canvas/components/TerminalScrollRail.tsx`
+- **Persistência:** nenhuma (o estado vem da tela do Claude)
+- **IPC:** `pty:write`
+- **Depende de:** `useClaudeScrollRail`, `terminal-claude-scroll`, `TerminalSessionStore.getClaudeScrollRail`, `TerminalSessionStore.scrollClaude`, `TerminalDrawer (decide quando mostrar)`
+- **Sobreposição:** Coluna estática ao lado do xterm, dentro da gaveta (flex, sem camada z própria); a Leitura, absoluta por cima de tudo, a cobre quando está à frente.
+- **Testes:** `src/features/canvas/terminal/terminal-claude-scroll.test.ts`, `src/features/canvas/terminal/terminal-session-store.test.ts`
+
+| Estado | Quando |
+| --- | --- |
+| normal | Coluna de 24 px à direita do terminal na gaveta, só com o Claude vivo na tela alternativa (o modo de tela cheia dele, que liga o mouse): botões Subir meia página, Descer meia página e Ir para o fim, com uma trilha entre os dois primeiros. |
+| success | Conversa rolada para cima (o Claude desenha "Jump to bottom (ctrl+End) ↓" ou "N new messages"): data-scrolled-up="true", a trilha acende e o botão de ir ao fim ganha destaque. |
+| disabled | Não existe no modo clássico (o xterm já tem a barra), em outra CLI, com o processo encerrado, com a gaveta recolhida nem com a aba Leitura à frente. |
+
+| Controle | Gatilho | Efeito | Falha conhecida | Teste |
+| --- | --- | --- | --- | --- |
+| `data-felixo-claude-scroll={action}` (button) | clique | Um botão por ação (Subir meia página, Descer meia página, Ir para o fim da conversa): store.scrollClaude escreve no PTY, pelo input do xterm, PageUp (ESC [ 5 ~), PageDown (ESC [ 6 ~) ou Ctrl+End (ESC [ 1 ; 5 F), que o Claude atende com a linha de entrada em foco; o mousedown não rouba o foco e o terminal é refocado depois do clique. (desabilitado: O trilho some junto: modo clássico, outra CLI, processo encerrado, gaveta recolhida ou Leitura à frente.) | Sem falha própria: se o Claude mudar a tecla, o botão não faz nada e não avisa. Sem o trilho visível o store não escreve nada. | — |
+
+| Lacuna | Risco | Task |
+| --- | --- | --- |
+| Medido só no app isolado com o Claude Code 2.1.309 real e chave falsa (cliques e teclado pelo Playwright): nenhum teste do repositório abre o Claude, e o smoke não cobre o trilho. O trilho não mostra a posição da conversa: o Claude não a informa ao terminal. | médio | `3db91f95-497e-8136-b7b0-cef894567cda` |
 
 ### Leitura do terminal
 
@@ -2349,7 +2372,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Controle | Gatilho | Efeito | Falha conhecida | Teste |
 | --- | --- | --- | --- | --- |
-| `label="Rolagem no terminal do Claude Code"` (toggle) | clique | saveClaudeTerminalScroll grava on/off; ligado, os próximos terminais do Claude nascem com CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1 (shouldUseClassicScreen), ganham barra de rolagem e perdem o mouse dentro da interface do Claude (a tela clássica não liga o mouse tracking); desligado, o padrão, o Claude usa a tela cheia, com mouse; os já abertos não mudam | Sem localStorage a escolha vale só até fechar o app (erro engolido de propósito) | — |
+| `label="Rolagem no terminal do Claude Code"` (toggle) | clique | saveClaudeTerminalScroll grava on/off; ligado, os próximos terminais do Claude nascem com CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1 (shouldUseClassicScreen), ganham barra de rolagem e perdem o mouse dentro da interface do Claude (a tela clássica não liga o mouse tracking); desligado, o padrão, o Claude usa a tela cheia, com mouse, e a gaveta mostra o trilho de rolagem do app (terminal-claude-scroll-rail); os já abertos não mudam | Sem localStorage a escolha vale só até fechar o app (erro engolido de propósito) | — |
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
@@ -2863,6 +2886,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3d791f95-497e-8190-84e0-df5328591a14` — 2 lacunas
 - `3d791f95-497e-81bf-a6c7-efef573d87ae` — 2 lacunas
 - `3d791f95-497e-81cd-b05c-c9d6370c81a3` — 2 lacunas
+- `3db91f95-497e-8136-b7b0-cef894567cda` — 1 lacuna
 - `3db91f95-497e-81a7-9554-c9cffa821c63` — 1 lacuna
 - `3e191f95-497e-81fd-b657-d7a63b5d17f0` — 3 lacunas
 - `3e291f95-497e-8109-8851-e4ff2193c4db` — 2 lacunas

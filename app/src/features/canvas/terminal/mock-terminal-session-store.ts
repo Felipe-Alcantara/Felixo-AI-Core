@@ -11,6 +11,11 @@ import {
   type PromptInsertion,
 } from '../../shared/types/prompt-insertion'
 import type { SessionMetadata } from './session-metadata'
+import {
+  HIDDEN_CLAUDE_SCROLL_RAIL,
+  type ClaudeScrollAction,
+  type ClaudeScrollRailState,
+} from './terminal-claude-scroll'
 import type {
   SendTextResult,
   SessionListener,
@@ -193,6 +198,17 @@ export class MockTerminalSessionStore implements TerminalSessionStoreApi {
     void id
     void listener
     return () => {}
+  }
+
+  getClaudeScrollRail(id: string): ClaudeScrollRailState {
+    // O PTY falso escreve num textarea, sem tela alternativa nem Claude.
+    void id
+    return HIDDEN_CLAUDE_SCROLL_RAIL
+  }
+
+  scrollClaude(id: string, action: ClaudeScrollAction): void {
+    void id
+    void action
   }
 
   getSnapshot(id: string): SessionSnapshot | undefined {
