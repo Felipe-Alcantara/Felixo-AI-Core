@@ -2349,11 +2349,11 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Controle | Gatilho | Efeito | Falha conhecida | Teste |
 | --- | --- | --- | --- | --- |
-| `label="Rolagem no terminal do Claude Code"` (toggle) | clique | saveClaudeTerminalScroll grava on/off; os próximos terminais do Claude nascem com CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1 (shouldUseClassicScreen) e ganham barra de rolagem; os já abertos não mudam | Sem localStorage a escolha vale só até fechar o app (erro engolido de propósito) | — |
+| `label="Rolagem no terminal do Claude Code"` (toggle) | clique | saveClaudeTerminalScroll grava on/off; ligado, os próximos terminais do Claude nascem com CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1 (shouldUseClassicScreen), ganham barra de rolagem e perdem o mouse dentro da interface do Claude (a tela clássica não liga o mouse tracking); desligado, o padrão, o Claude usa a tela cheia, com mouse; os já abertos não mudam | Sem localStorage a escolha vale só até fechar o app (erro engolido de propósito) | — |
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| O efeito no terminal real (menus, seleção com o mouse e redesenho do Claude no modo clássico) não foi conferido numa janela, como a própria seção avisa; nenhum teste liga o interruptor e abre um Claude | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
+| Medido em 23/10/2026 com o Claude Code 2.1.309 que a tela clássica não liga o mouse tracking e a padrão liga (?1049 e ?1000/1002/1003/1006); o redesenho e os menus do modo clássico numa janela do app não foram conferidos, e nenhum teste do repositório liga o interruptor e abre um Claude | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
 
 ## Modais
 

@@ -10,10 +10,17 @@ describe('rolagem do terminal no Claude Code', () => {
       expect(isClaudeCommand(c), String(c)).toBe(false)
     }
   })
-  it('vem ligado por padrão e só um "off" salvo desliga', () => {
-    expect(parseClaudeTerminalScroll(null)).toBe(true)
+  // Hotfix de 23/10/2026: com a tela clássica (CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1) o Claude Code 2.1.309 não liga o
+  // mouse tracking, e nenhuma opção da interface dele responde a clique. O padrão é a tela cheia do próprio Claude.
+  it('vem desligado por padrão e só um "on" salvo liga', () => {
+    expect(parseClaudeTerminalScroll(null)).toBe(false)
     expect(parseClaudeTerminalScroll('on')).toBe(true)
     expect(parseClaudeTerminalScroll('off')).toBe(false)
+    expect(parseClaudeTerminalScroll('qualquer coisa')).toBe(false)
+  })
+  it('sem escolha salva o terminal novo do Claude não pede a tela clássica', () => {
+    expect(shouldUseClassicScreen('claude', parseClaudeTerminalScroll(null))).toBe(false)
+    expect(shouldUseClassicScreen('claude', parseClaudeTerminalScroll('on'))).toBe(true)
   })
   it('desligado nunca pede a tela clássica', () => {
     expect(shouldUseClassicScreen('claude', false)).toBe(false)

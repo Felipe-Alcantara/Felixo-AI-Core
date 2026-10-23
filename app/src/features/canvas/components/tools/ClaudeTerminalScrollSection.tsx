@@ -25,17 +25,17 @@ export function ClaudeTerminalScrollSection() {
             Rolagem no terminal do Claude Code
           </div>
           <p className="mt-2 text-xs leading-relaxed text-zinc-500">
-            O Claude Code usa a tela alternativa do terminal, que não guarda histórico, então não
-            há barra de rolagem como no Codex. Ligado, os terminais novos do Claude abrem no modo
-            clássico dele (com barra de rolagem). Terminais já abertos não mudam. Efeitos em
-            menus, seleção com o mouse e redesenho ainda não foram conferidos numa janela real.
+            Por padrão o Claude Code usa a tela cheia dele: as opções da interface respondem a
+            clique e a roda do mouse, mas o terminal não tem barra de rolagem nem histórico. Ligado,
+            os terminais novos do Claude abrem no modo clássico, com barra de rolagem e histórico, e
+            aí a interface dele deixa de responder ao mouse. Terminais já abertos não mudam.
           </p>
         </div>
         <FelixoToggle checked={enabled} onChange={change} label="Rolagem no terminal do Claude Code" />
       </div>
       {enabled && (
         <p className="mt-2 text-[11px] leading-relaxed text-emerald-300/80">
-          Ativado — vale para os próximos terminais do Claude Code.
+          Ativado — vale para os próximos terminais do Claude Code, onde o mouse não age dentro da interface.
         </p>
       )}
     </section>
