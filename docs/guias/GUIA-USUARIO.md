@@ -1153,7 +1153,10 @@ Se estiver reportando um problema, inclua a versão do app, sistema operacional,
     Por padrão, o Claude desenha a conversa numa tela sem histórico: o que já
     rolou para fora da tela do Claude não aparece na Leitura. Com a opção
     **Rolagem no terminal do Claude Code** ligada, os terminais novos do Claude
-    guardam a conversa no histórico, e a Leitura alcança o começo dela;
+    guardam a conversa no histórico, e a Leitura alcança o começo dela. O custo
+    dessa opção: no modo clássico o Claude Code não liga o mouse, então as opções
+    da interface dele deixam de responder a clique e a roda do mouse. Desligada,
+    que é o padrão, o Claude usa a tela cheia dele, com mouse;
   - o reconhecimento olha o estilo das letras. Um título sem negrito ou um
     código sem cor pode sair como parágrafo, e um parágrafo que começa com
     código pode sair como bloco de código. O texto nunca some: quando a
