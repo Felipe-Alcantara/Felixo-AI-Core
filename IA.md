@@ -16,7 +16,8 @@
 - **Padrão de qualidade:** auditado e alinhado em 2026-10-12 e de novo em 2026-10-23 (ver as duas
   entradas). Gate verde no Windows em 23/10: `tsc`, `eslint`, Python 104, Node 2962, vitest 3256;
   `npm audit` sem crítico, sem alto e com a produção em 0 (sobram 2 moderados: o `ip-address`
-  embutido no npm e o Electron 41, linha sem suporte). Publicado na `v0.1.479`. Em 12/10, no CI de
+  embutido no npm e o Electron 41, linha sem suporte). Publicado na `v0.1.479`; o PR #128 foi integrado na
+  `v0.1.480` e o repositório ficou sem PR aberto e só com a `main`. Em 12/10, no CI de
   `37d6083`,
   `Validate` (4 sistemas) e `Launcher` (3 sistemas, Python 3.9 e 3.13) passaram; só o job
   exploratório `Benchmarks exploratórios (windows-latest)`, que é `continue-on-error`, falhou no
@@ -907,3 +908,28 @@ correção e mostra B com ela; clicar fora continua fechando. Suíte completa n�
 Estado: em branch `fix/abrir-terminal-cancela-fechamento`, rebaseada sobre o `main` em 21/10 (só o `IA.md` conflitou; as duas entradas foram mantidas) e enviada como PR; aguardando CI e revisão.
 
 > Integrado à `main` em 2026-10-23 (o commit do PR #128, de André, foi trazido para a `main` com `git cherry-pick`, com a autoria dele preservada; o PR ficou superado e a branch `fix/abrir-terminal-cancela-fechamento` foi apagada).
+
+## 2026-10-23 — Complemento: o PR #128 foi integrado e a política de branches fechou o que faltava
+
+**O que faltou na primeira entrega do dia.** Eu li a captura do GitHub Desktop do pedido como contexto e auditei
+o repositório pelo Guia Mínimo de Qualidade, mas deixei de fora a política de git do mesmo padrão
+(`docs/GIT-POLITICA-DE-VERSIONAMENTO.md` do Felixo System Design): "uma branch viva = trabalho em andamento; se o
+trabalho já entrou no main, a branch não deveria mais existir". A captura mostrava exatamente isso: o PR #128
+(André, correção de 84 linhas com 3 testes novos, CI verde) estava aberto havia dois dias, 43 commits atrás da
+`main`, e era a única branch restante. A pessoa avisou que o repositório não estava no padrão.
+
+**O que foi feito.** O commit do PR foi trazido para a `main` com `git cherry-pick` (`ac72475`, autoria do André
+preservada). O código aplicou sem conflito; só o `IA.md` conflitou (mantive o atual e acrescentei a entrada dele
+ao fim). Revalidado na `main` atual: `tsc` e `eslint` sem erro, vitest 3259 testes e 0 falhas (os 3 novos do
+controlador de animação incluídos). O PR foi fechado com um comentário e a branch remota apagada; o PR #129 do
+Dependabot já tinha sido superado. O repositório ficou sem PR aberto e só com a `main`.
+
+**Evidência.** CI da `main` verde; Release 39900269387 verde; **v0.1.480** como Latest (alvo `ac72475`, 20
+arquivos); smoke empacotado `result: passed` e `nativeErrors: []` nos três sistemas.
+
+**Para a próxima passada de qualidade.** Conferir também `git branch -a` e `gh pr list` antes de declarar o
+repositório no padrão: branch ou PR parado é item do checklist de git, não detalhe. O que continua fora, por
+decisão de quem mantém, está nas tasks do Notion (Electron 41, arquivos grandes, smoke noturno do Windows). Ficou
+também um `stash@{0}` local antigo (lockfile "podado" de 12/10), que não é meu e não mexi.
+
+Estado: concluído e publicado (v0.1.480).
