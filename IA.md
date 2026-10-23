@@ -35,9 +35,9 @@
   pontos que abrem PTY. O teste `pty-kill.integration.test.cjs` está no `test:native` desde 2026-10-23
   (`v0.1.479`) e `npm run repro:pty-kill` mede o encerramento com e sem o contorno. Ver a entrada de
   2026-10-22 "PTY no Windows" e a de 2026-10-23.
-- **Tarefas Notion (2026-10-23, `v0.1.481`):** o botão "Uma por repositório", ao lado de "Nova visualização", cria de uma
+- **Tarefas Notion (2026-10-23, `v0.1.482`):** o botão "Uma por repositório", ao lado de "Nova visualização", cria de uma
   vez uma aba para cada repositório da lista do seletor (`planRepoViews` em `notion-task-views.ts`; sem repetir quem já
-  tem a sua). O clique no app real ainda não foi conferido: o cliente do Notion não aponta para um servidor de teste.
+  tem a sua) e, quando há tarefa sem repositório, a aba "Sem Repositório". O clique no app real ainda não foi conferido: o cliente do Notion não aponta para um servidor de teste.
   Ver a entrada de 2026-10-23 "Tarefas Notion: Uma por repositório".
 - **Em andamento:** nada aberto no código nesta entrega. Em toda abertura (também na execução da
   fonte), a rodada das CLIs busca a versão mais nova publicada de Claude, Codex e Gemini, inclusive
@@ -982,3 +982,29 @@ Tabela acima de 2.000 linhas (`hasMore`): repositório sem tarefa na carga não 
 usado.
 
 Estado: concluído e publicado (v0.1.481); o clique no app real fica por conferir.
+
+## 2026-10-23 — Tarefas Notion: o botão "Uma por repositório" cria também a aba "Sem Repositório"
+
+**Contexto.** Complemento da entrada anterior do mesmo dia. Ao fechar a v0.1.481 perguntei ao dono, pela ferramenta de
+pergunta, se o botão deveria criar também a aba das tarefas sem repositório (a recomendação era não); a resposta foi
+**sim**. A mesma resposta autorizou mandar para a lixeira as três tasks duplicadas do Notion (feito pela CLI, com o
+`apagar-bloco`; o conector MCP do Notion está noutro workspace e não enxerga essas páginas).
+
+**O que mudou** (`78b6490` e `f71c744`).
+
+- `planRepoViews` deixa de pular o marcador `NO_VALUE_FILTER`: o item "Sem Repositório" que a lista do seletor traz,
+  quando há tarefa sem a coluna, vira a última aba, com o filtro de valor vazio. Segue as regras das outras: não repete
+  a que já existe (mesmo renomeada); uma aba que junta um repositório e "sem valor" não conta como ela.
+- `NotionTasksPanel.tsx`: o botão aparece com qualquer item da lista; confirmação e aviso dizem "e uma para as tarefas
+  sem repositório" (ou "a das tarefas sem repositório", se for a única).
+- Inventário do canvas, `INVENTARIO-CANVAS.md` regenerado e uma frase no guia do usuário.
+
+**Evidência.** O teste que dizia que o marcador era ignorado virou "ignora o valor vazio e as repetições"; quatro novos
+cobrem a aba (última da lista; pega a tarefa com o campo ausente, nulo, vazio ou lista vazia e não a que tem
+repositório; não repete; aba mista não vale). Os novos reprovaram antes da mudança (5 testes). Mutação: voltando a
+pular o marcador, 5 reprovam; sem a deduplicação, 3. vitest 3275 testes, `tsc`, `eslint` e `vite build` limpos. CI e
+Release: CI 39965759299 verde; Release gate 39966700041 liberou; Release 39966735610 verde (5 jobs): v0.1.482 publicada como Latest em 23/10/2026 11:06, alvo `f71c744`, 20 arquivos; smoke empacotado `passed` nos três sistemas.
+
+**Não validado.** Igual à entrada anterior: o clique no app real continua por conferir.
+
+Estado: concluído e publicado (v0.1.482).
