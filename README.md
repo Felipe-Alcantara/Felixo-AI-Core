@@ -10,6 +10,7 @@ Felixo AI Core é o núcleo inteligente do ecossistema FelixoVerse: uma aplicaç
 
 - [O que é](#o-que-é)
 - [Arquitetura atual](#arquitetura-atual)
+- [Estrutura do repositório](#estrutura-do-repositório)
 - [Status atual](#status-atual)
 - [Stack](#stack)
 - [Como rodar](#como-rodar)
@@ -47,6 +48,31 @@ MCP não substitui as CLIs nem vira uma API universal de modelos. No Felixo AI C
 Veja a [visão da arquitetura atual](./docs/projeto/ARQUITETURA.md). A antiga
 [especificação do orquestrador híbrido com MCP](./docs/_legado/arquitetura/ORQUESTRADOR-HIBRIDO-MCP.md)
 fica preservada apenas como referência histórica.
+
+---
+
+## Estrutura do repositório
+
+```text
+Felixo-AI-Core/
+├── start_app.py         porta de entrada: menu que instala, configura, inicia e mostra o status
+├── felixo_launcher/     pacote Python por trás do menu (Git, Node, dependências, processos)
+├── tests/               testes do launcher (unittest)
+├── app/                 o aplicativo desktop (Electron + React/Vite)
+│   ├── electron/        processo principal: IPC, PTY, SQLite, janelas e a CLI `felixo`
+│   ├── src/             interface em React: canvas, terminais e o chat legado
+│   ├── scripts/         automações do app: dev, benchmarks, smoke e release
+│   ├── installer/       ganchos do instalador NSIS do Windows
+│   └── resources/       skills que acompanham o app
+├── docs/                documentação ativa (guias, projeto, validação, design) e registros arquivados
+├── scripts/             utilitários do repositório (relatório diário de commits)
+├── ai-clis/             atalhos de shell que abrem as CLIs de IA no Konsole (Linux/KDE, uso legado)
+├── .github/             workflows de CI e Release, e os scripts que eles usam
+├── IA.md                contexto operacional: linha do tempo de decisões, para retomada por IA
+└── LICENSE              MIT
+```
+
+O mapa da documentação está em [docs/README.md](./docs/README.md).
 
 ---
 
@@ -499,3 +525,7 @@ Ver [ROADMAP.md](./docs/projeto/ROADMAP.md) para fases, checklists, metas e back
 Distribuído sob a licença MIT; o texto completo está em [LICENSE](./LICENSE).
 
 Contribuições são bem-vindas. O fluxo de branches e commits (direto na `main` por padrão, branch só nas exceções) está na [política de branch do Guia para Desenvolvedores](./docs/guias/GUIA-DESENVOLVEDOR.md#política-de-branch), e o [Roadmap](./docs/projeto/ROADMAP.md) lista a direção do projeto e as ideias abertas para quem quiser ajudar.
+
+### Autor
+
+Criado e mantido por Felipe Martin ([@Felipe-Alcantara](https://github.com/Felipe-Alcantara)).
