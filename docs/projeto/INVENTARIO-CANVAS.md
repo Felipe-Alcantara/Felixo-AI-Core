@@ -2345,7 +2345,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Estado | Quando |
 | --- | --- |
 | normal | Interruptor desligado por padrão, com a explicação da tela alternativa do Claude Code |
-| success | "Ativado — vale para os próximos terminais do Claude Code." com o interruptor ligado |
+| success | "Ativado — vale para os próximos terminais do Claude Code, onde o mouse não age dentro da interface." com o interruptor ligado |
 
 | Controle | Gatilho | Efeito | Falha conhecida | Teste |
 | --- | --- | --- | --- | --- |
