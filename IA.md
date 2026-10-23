@@ -35,6 +35,10 @@
   pontos que abrem PTY. O teste `pty-kill.integration.test.cjs` está no `test:native` desde 2026-10-23
   (`v0.1.479`) e `npm run repro:pty-kill` mede o encerramento com e sem o contorno. Ver a entrada de
   2026-10-22 "PTY no Windows" e a de 2026-10-23.
+- **Tarefas Notion (2026-10-23, `v0.1.481`):** o botão "Uma por repositório", ao lado de "Nova visualização", cria de uma
+  vez uma aba para cada repositório da lista do seletor (`planRepoViews` em `notion-task-views.ts`; sem repetir quem já
+  tem a sua). O clique no app real ainda não foi conferido: o cliente do Notion não aponta para um servidor de teste.
+  Ver a entrada de 2026-10-23 "Tarefas Notion: Uma por repositório".
 - **Em andamento:** nada aberto no código nesta entrega. Em toda abertura (também na execução da
   fonte), a rodada das CLIs busca a versão mais nova publicada de Claude, Codex e Gemini, inclusive
   pré-lançamento, e atualiza a cópia do app e a do npm global, mesmo com a CLI aberta (o npm troca
@@ -933,3 +937,48 @@ decisão de quem mantém, está nas tasks do Notion (Electron 41, arquivos grand
 também um `stash@{0}` local antigo (lockfile "podado" de 12/10), que não é meu e não mexi.
 
 Estado: concluído e publicado (v0.1.480).
+
+## 2026-10-23 — Tarefas Notion: "Uma por repositório" cria de uma vez a visualização de cada repositório
+
+**Contexto.** Pedido direto do dono (com captura do painel): uma função, na janela do Notion, que crie uma
+visualização no painel para cada repositório automaticamente. Antes, cada aba por repositório exigia abrir
+"Nova visualização", escolher `Repositório`, marcar o valor e salvar.
+
+**Medido antes de escrever.** As abas próprias moram em `localStorage` por conexão + database
+(`felixo:notion-task-views:<conexão>:<database>`) e só filtram select, multi-select e status; o Painel agrupa também
+por ligação entre databases. A lista que a pessoa vê no seletor é `repoOptions` (`buildRepoCards` + `repoChoices`).
+O app entrega select como texto e multi-select como lista de textos (`notion-client.cjs:444-448`). O `statusFilter` da
+aba é também a consulta ao servidor, então "Todos" carrega mais linhas que "Abertas".
+
+**O que mudou** (`786b6e0` e `373a462`).
+
+- `planRepoViews` e `repoViewsLabel` em `notion-task-views.ts` (puras, testadas): uma aba por repositório, só com o
+  filtro dele; quem já tem a aba (um filtro, aquele valor, mesmo renomeada ou com outro estado) fica de fora, então
+  repetir não duplica; valor vazio, o marcador "sem valor" e repetições não viram aba; nome já usado (inclusive as
+  fixas Todas e Concluídas, mesmo escondidas) ganha a coluna entre parênteses.
+- `NotionTasksPanel.tsx`: o botão "Uma por repositório", ao lado de "Nova visualização", com `window.confirm`, que grava
+  pelo mesmo `persistCustomViews`. Só aparece com a coluna do Painel de escolha e repositório na lista. A aba nova
+  mostra só as abertas, ou todas com as concluídas à mostra.
+- Inventário do canvas e `INVENTARIO-CANVAS.md` regenerado; uma frase no guia do usuário (commit à parte).
+
+**Decisões declaradas.** Só repositórios com tarefa na carga atual (a lista do seletor), e não todas as opções do
+select. "Sem Repositório" não vira aba. Confirmação antes de criar, porque desfazer em lote é excluir aba por aba.
+
+**Evidência.** 12 testes novos (36 no arquivo), entre eles um que monta a lista do seletor com os cartões do Painel e
+confere que cada aba traz as mesmas tarefas que o número ao lado do item. Mutação: sem a deduplicação, 3 testes
+reprovam; sem o tratamento do nome repetido, 3; aceitando o marcador "sem valor", 2. vitest 3271 testes, `tsc`,
+`eslint` e `vite build` limpos. CI 39954913702 verde (Validate nos 4 sistemas e Canvas smoke); Release 39955765747
+verde (5 jobs): v0.1.481 publicada como Latest em 23/10/2026 09:45, alvo `373a462`, 20 arquivos; smoke empacotado `passed` com `nativeErrors: []` nos três sistemas — https://github.com/Felipe-Alcantara/Felixo-AI-Core/releases/tag/v0.1.481.
+
+**Erro de método que custou uma volta.** O primeiro teste de integração usou `{ name }` nos campos (o formato dos
+testes antigos de visualização) e a lista de cartões saiu vazia: o Painel só lê texto e lista de textos. O formato
+real está em `notion-client.cjs:444-448`; os testes novos usam esse.
+
+**Não validado.** O botão em si (clique, confirm, mensagem em tela) nunca rodou no app: o cliente do Notion não tem
+como apontar para um servidor de teste (`DEFAULT_BASE_URL` fixo, `notion-client.cjs:4`) e não achei como trocar a
+ponte `window.felixo` sem mexer em código de produção. O roteiro de smoke com handlers IPC falsos foi acrescentado à
+task "smoke automatizado do editor de visualização do painel". As abas são locais à máquina, como as próprias de antes.
+Tabela acima de 2.000 linhas (`hasMore`): repositório sem tarefa na carga não entra até a próxima vez que o botão for
+usado.
+
+Estado: concluído e publicado (v0.1.481); o clique no app real fica por conferir.
