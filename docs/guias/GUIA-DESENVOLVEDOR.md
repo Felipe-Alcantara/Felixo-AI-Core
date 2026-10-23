@@ -485,6 +485,12 @@ npm run test:frontend
 runner Node portável; as integrações `*.integration.test.cjs` são executadas
 por `npm run test:native`.
 
+Essa lista inclui `pty-kill.integration.test.cjs`, que abre uma PTY real, mata o shell e
+reprova se o `kill()` deixar `AttachConsole failed` no stderr ou demorar a sair (no Windows o
+`node-pty` falhava nisso em todo encerramento; o contorno está em
+`app/electron/services/node-pty-windows-kill.cjs`). Para medir o encerramento com e sem o
+contorno, lado a lado: `npm run repro:pty-kill -- --runs 5`.
+
 Convenção de arquivos: `*.test.cjs` no mesmo diretório do módulo.
 
 ### Typecheck e cache incremental
