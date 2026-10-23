@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import subprocess
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from felixo_launcher import git
@@ -20,7 +21,8 @@ class GitOutputEncodingTest(unittest.TestCase):
     def test_todas_as_leituras_de_saida_fixam_utf8(self) -> None:
         # Varredura do módulo: qualquer subprocess que decodifique saída
         # precisa dizer em qual encoding, senão volta a depender do locale.
-        fonte = (git.__file__ and open(git.__file__, encoding="utf-8").read()) or ""
+        # Path.read_text fecha o arquivo; o open(...).read() solto deixava um ResourceWarning.
+        fonte = Path(git.__file__).read_text(encoding="utf-8") if git.__file__ else ""
         sem_encoding = [
             trecho
             for trecho in fonte.split("text=True")[1:]
