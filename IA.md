@@ -39,6 +39,12 @@
   vez uma aba para cada repositório da lista do seletor (`planRepoViews` em `notion-task-views.ts`; sem repetir quem já
   tem a sua) e, quando há tarefa sem repositório, a aba "Sem Repositório". O clique no app real ainda não foi conferido: o cliente do Notion não aponta para um servidor de teste.
   Ver a entrada de 2026-10-23 "Tarefas Notion: Uma por repositório".
+- **Terminal do Claude Code (2026-10-23, `v0.1.485`):** o Claude abre em tela cheia, com o mouse dele (a opção "Rolagem
+  no terminal do Claude Code" vem desligada: ligada, ela força o modo clássico, que tem a barra do xterm e o histórico, e
+  o Claude deixa de aceitar clique). Na tela cheia o xterm não tem barra, então a gaveta mostra um trilho de rolagem do app
+  (meia página para cima e para baixo, ir ao fim, e o botão de fim acende quando o Claude mostra "Jump to bottom"); ele não
+  mostra a posição, porque o Claude não a informa. O trilho depende das teclas, da frase do aviso e da tela alternativa do
+  Claude 2.1.309. Ver a entrada de 2026-10-23 "Terminal: o Claude Code não recebia o mouse".
 - **Em andamento:** nada aberto no código nesta entrega. Em toda abertura (também na execução da
   fonte), a rodada das CLIs busca a versão mais nova publicada de Claude, Codex e Gemini, inclusive
   pré-lançamento, e atualiza a cópia do app e a do npm global, mesmo com a CLI aberta (o npm troca
@@ -1008,3 +1014,120 @@ Release: CI 39965759299 verde; Release gate 39966700041 liberou; Release 3996673
 **Não validado.** Igual à entrada anterior: o clique no app real continua por conferir.
 
 Estado: concluído e publicado (v0.1.482).
+
+## 2026-10-23 — Terminal: o Claude Code não recebia o mouse, e rolagem mais clique viraram um trilho de rolagem do app
+
+**Contexto.** Três pedidos do dono em sequência, no mesmo assunto. (1) "alguma modificação no terminal está impedindo
+interações com o mouse em opções de interface no terminal dos agentes". (2) Ao ver a correção: "Vc tirou a rolagem? eu
+quero a rolagem automática e a interação". (3) Com o app atualizado: "os botões pelo mouse estão funcionando, mas a barra de
+rolagem sumiu [...] Eu quero ter os dois ativo".
+
+**Parte 1: por que o mouse não chegava.** Não havia commit recente no mouse do terminal (`terminal-mouse-selection.ts` e o
+`mousedown` de `terminal-session-store.ts` sem commit de mouse desde 01/10). A causa estava em outro lugar, achada
+descartando camadas, cada uma medida no app isolado (Electron com perfil temporário, nunca o app do dia a dia) pelo
+`ipcProbe` do main (`pty:write` antes e depois do gesto):
+
+1. Terminal roteirizado com `?1000;1006`: clique +2 escritas, arrasto +0 (vira seleção). Certo.
+2. Os modos reais do Codex 0.164.0 (`?1049` e `?1003;1006`, capturados num PTY) com um menu desenhado: clique +2,
+   movimento +2, arrasto +0. Certo.
+3. Bundle de desenvolvimento (Vite) e de produção (`dist`), com o toolchain antigo (vite 8.2.2) e o novo (8.3.5 com
+   rolldown 1.2.15): igual. Não foi o bundler da v0.1.479.
+4. **Claude Code 2.1.309 real** num PTY, `CLAUDE_CONFIG_DIR` temporário com `.claude.json` pré-aprovado, chave falsa, nada
+   enviado: sem `CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN` liga `?1049`, `?1000`, `?1002`, `?1003`, `?1006`; com a variável,
+   nenhum modo de mouse. O binário confirma em texto que a variável "força o renderizador clássico".
+5. O app aplica a variável em todo terminal novo do Claude quando "Rolagem no terminal do Claude Code" está ligada
+   (`pty-process-manager.cjs:237-240`), e ela vinha **ligada por padrão** desde o #106 (07/10).
+6. De ponta a ponta: no app isolado, com o Claude real e o padrão antigo, o `xterm` ficava sem `enable-mouse-events`.
+
+**Parte 2: por que não dá para ter a barra do xterm e o clique do Claude juntos (medido, não suposto).**
+
+- **Modo clássico:** o Claude ignora o clique mesmo quando o app o manda ao PTY. Com um xterm headless como tela, abri o
+  diálogo `/status` e mandei um clique SGR (`ESC [ < 0 ; col ; row M` e `m`) na aba "Stats": no padrão a tela mudou
+  ("No stats available"); no clássico não mudou. O app não consegue "ligar o mouse por conta própria" nesse modo.
+- **Tela cheia:** clique, roda do mouse e a rolagem automática do próprio Claude funcionam (`autoScrollEnabled`, padrão
+  ligado, só nesse modo, descrito no binário), mas o xterm fica sem histórico: `scrollHeight == clientHeight` do
+  `.xterm-viewport`, então não há a barra de sempre.
+- **O Claude não informa a posição da rolagem:** não achei no binário nenhuma barra própria no modo tela cheia (só o aviso
+  "Jump to bottom", "N new messages", "(click)", "fn+↓ to scroll") nem protocolo para o terminal ler o tamanho da conversa.
+- **Teclas que o Claude atende com a linha de entrada em foco** (PTY real, conversa de 300 linhas gerada pelo modo `!` do
+  Claude, que roda comando local sem chamar a API): PageUp e PageDown rolam 15 linhas (meia página numa tela de 36);
+  Ctrl+End (`ESC [ 1 ; 5 F`) volta ao fim; `End` sozinho não. O aviso "Jump to bottom (ctrl+End) ↓" divide a linha com o
+  conteúdo e some quando a conversa volta ao fim.
+- O comando `/tui` do Claude troca de renderizador reiniciando e retomando a sessão, mas grava `tui` nas configurações de
+  usuário do Claude (global, vale fora do Felixo): não usei.
+
+**Parte 3: o que mudou.**
+
+- `fefff13` e `06e178e` (v0.1.483): `parseClaudeTerminalScroll` passa a devolver `stored === 'on'`: sem escolha salva, o
+  Claude abre em tela cheia, com mouse; quem ligou a rolagem de propósito continua com ela. Texto da opção, inventário e
+  guia dizem o custo de cada lado.
+- `bacd2a8` e `9ea0bc7` (v0.1.484): o texto passa a dizer o que a tela cheia tem (roda, clique, rolagem automática do
+  Claude) e o que falta.
+- `dde2eda`, `fd7fd5b` e `16cc5ef` (v0.1.485): **o trilho de rolagem do app.** Uma coluna de 24 px ao lado do xterm na gaveta,
+  com Subir meia página, Descer meia página e Ir para o fim da conversa; só com o Claude vivo na tela alternativa (no
+  clássico o xterm já tem a barra), escondida com a gaveta recolhida ou a Leitura à frente. O botão de ir ao fim e a trilha
+  acendem quando o Claude desenha o aviso de conversa rolada. **Não mostra a posição**: o Claude não a informa. Peças:
+  `terminal-claude-scroll.ts` (teclas, reconhecimento do aviso, regra de aparecer; sem DOM nem PTY),
+  `TerminalSessionStore.getClaudeScrollRail` e `scrollClaude` (contrato, store adiado e simulado também),
+  `useClaudeScrollRail`, `TerminalScrollRail.tsx`, e o elemento `terminal-claude-scroll-rail` no inventário.
+  O `16cc5ef` corrige um defeito que o CI achou no `dde2eda` (abaixo).
+
+**O que o smoke achou no meu trilho (CI de `dde2eda`, nada foi publicado).** O `Canvas smoke (ubuntu-latest)` reprovou
+no passo F1 da Leitura: "trocar de aba mudou o tamanho do terminal" (`cols` 106 antes, 109 depois). Eu escondia o trilho com
+a Leitura à frente; ele ocupa 24 px do terminal, e sem ele o xterm ganhava 3 colunas. A gaveta tem a regra de que trocar de
+aba não muda a largura do xterm (a CLI redesenharia), e a gravação `claude-telacheia` tem tela alternativa e roda num
+terminal `claude`, então o trilho aparece nesse passo. Eu tinha previsto o risco para o limite de 100 colunas, não para
+essa comparação. Correção (`16cc5ef`): `claudeScrollRailPlacement`, com a aba nunca decidindo se o trilho existe (com a
+Leitura à frente ele fica no lugar, inerte). Controle negativo local, com `FELIXO_SMOKE_SESSOES=F node scripts/canvas-smoke.cjs`:
+com a correção a F1 a F7 passam; com o defeito reintroduzido de propósito a F1 reprova também (68 → 70 colunas).
+
+**Decisão do dono.** Perguntei pela ferramenta de pergunta como ele queria ter rolagem e interação, com três saídas:
+trilho do app, alternar por terminal entre Mouse e Barra, ou deixar como está. A resposta foi o **trilho do app**.
+
+**Evidência.**
+
+- Testes: 20 novos (12 do módulo, 8 do store com o xterm de verdade e a ponte falsa). **Sete mutações** reprovam testes:
+  guarda do trilho visível (1), tela alternativa invertida (4), ignorar se a CLI é o Claude (2), aviso sem a seta (1),
+  PageUp trocado por PageDown (2), Ctrl+End por End (2), trilho com o processo encerrado (2). vitest 3296 testes, `tsc`,
+  `eslint` e `vite build` limpos.
+- No app isolado com o Claude real e chave falsa: o trilho só aparece depois que o Claude entra em tela cheia; Subir rola 16
+  linhas por clique, Descer volta, Ir para o fim leva ao fim e apaga o aviso; o foco fica no terminal; digitar depois dos
+  cliques funcionou em 6 de 6 rodadas; clique nas abas do diálogo do Claude (Stats, Config, Status, Usage) troca a tela; a
+  roda rola e acende o aviso. CI 39983947084 verde (inclui o `Canvas smoke (ubuntu-latest)`) e Release 39984862482 verde: **v0.1.485** publicada como Latest em 23/10/2026 13:12, alvo `16cc5ef`, 20 arquivos, smoke empacotado `passed` nos três sistemas — https://github.com/Felipe-Alcantara/Felixo-AI-Core/releases/tag/v0.1.485 . O CI de `dde2eda` (39982053268) tinha reprovado o smoke e o Release gate não publicou nada com o defeito.
+
+**Método, para a próxima pessoa.**
+
+- O `felixo` do `%APPDATA%\felixo-ai-core\bin` é a CLI do **app instalado** e não traz o `devtools` ("Cannot find module
+  ../../scripts/dev-runner.cjs"); a da fonte roda com `node electron/cli/felixo.cjs devtools launch` a partir de `app/`.
+- Para o Electron carregar o `dist` (produção) com perfil temporário e CDP, sem Vite: `electron .` com
+  `FELIXO_DEVTOOLS_PORT`, `FELIXO_USER_DATA_DIR`, `FELIXO_DEVTOOLS_HEADLESS=1` e sem `VITE_DEV_SERVER_URL`.
+- Para o app abrir o Claude real isolado: ambiente **sem** nenhuma `CLAUDE*` herdada (a sessão de agente que investiga já
+  tem `CLAUDECODE` e a própria `CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN`), com `CLAUDE_CONFIG_DIR` temporário e um
+  `.claude.json` com `hasCompletedOnboarding`, `customApiKeyResponses.approved` (últimos 20 caracteres da chave falsa) e
+  a confiança da pasta; a tela de confiança do diretório de trabalho ainda pede Seta para baixo e Enter.
+- Para ter conversa longa sem API: o modo `!` do Claude (`!` seguido de `seq 1 100`) roda o comando local e põe a saída na
+  conversa. Para ver a tela fora do app: `node-pty` com `@xterm/headless` (já nas dependências) lendo o buffer.
+- Para rodar só uma sessão do smoke do canvas: `FELIXO_SMOKE_SESSOES=F node scripts/canvas-smoke.cjs` a partir de `app/`
+  (F é a Leitura; leva uns 100 s e abre uma janela do app isolado). Vale como controle negativo: reintroduza o defeito e
+  confira que o passo reprova.
+- **O shell come as barras.** Em `node -e` e em heredoc com `'\\x1b'` o Git Bash entregou caracteres de controle de
+  verdade, e o arquivo de teste deixou de compilar ("Unterminated string"). Para arquivo com escapes, use a ferramenta de
+  escrita e um script `.cjs` que só junta o conteúdo. Do mesmo modo, um `sed` de mutação que não casa devolve "137 passaram"
+  como se a mutação tivesse sido morta: o script de mutação precisa falhar quando a troca não se aplica.
+
+**Correção de uma afirmação minha.** A mensagem do commit `fefff13` diz que o Claude Code 2.1.309 "passou a trazer a
+tela cheia com mouse como padrão". O que foi medido é só que o 2.1.309 liga a tela alternativa e o mouse quando a
+variável não está presente; **não medi uma versão anterior** do Claude, então "passou a trazer" é hipótese.
+
+**Não validado.** O app instalado do dono (v0.1.480 em uso) com o Claude logado e uma conversa real: o teste usou chave
+falsa e conversa gerada pelo modo `!`. A rolagem automática do Claude seguindo uma resposta que chega aos poucos não foi
+observada (exigiria chamar a API). O clique foi medido como chegada ao processo e como a tela do Claude mudando (abas), não
+como escolher uma opção de permissão. O trilho depende de três coisas do Claude 2.1.309 (as teclas, a frase do aviso e a
+tela alternativa): uma versão que mude qualquer uma deixa o trilho sem efeito ou sem acender, sem aviso (há task para
+vigiar). A primeira rodada do roteiro do trilho não achou o texto digitado na tela depois dos cliques (`false`) e não se
+repetiu em 7 tentativas seguintes; a causa não foi identificada. macOS e Linux reais só pelo CI.
+
+**Tasks abertas no Notion.** Conferir tudo isso no app instalado, vigiar a cada versão do Claude as três dependências do
+trilho, e pesquisar um jeito de mostrar a posição da conversa. A task original da opção ganhou uma nota.
+
+Estado: concluído e publicado (v0.1.485); a conferência no app instalado fica com o dono.
