@@ -13,7 +13,13 @@
  * do Claude por barra de rolagem e histórico na Leitura.
  */
 
-const STORAGE_KEY = 'felixo-ai-core.claude-terminal-scroll'
+/**
+ * A chave leva a versão da decisão. Até 23/10/2026 o padrão era ligado e a tela só
+ * gravava quando a pessoa mexia, então muita instalação guardava um `on` que não era
+ * escolha: com a chave antiga, o padrão novo (desligado) não chegava a elas e o Claude
+ * seguia sem mouse. A chave nova ignora o que ficou gravado antes.
+ */
+const STORAGE_KEY = 'felixo-ai-core.claude-terminal-scroll.v2'
 
 /**
  * Desligado por padrão: sem escolha salva, os terminais do Claude abrem no modo

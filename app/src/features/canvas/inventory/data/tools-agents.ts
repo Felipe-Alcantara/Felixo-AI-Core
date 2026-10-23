@@ -1082,7 +1082,7 @@ export const agentToolSurfaces: InventoryElement[] = [
         failure: 'Sem localStorage a escolha vale só até fechar o app (erro engolido de propósito)',
       },
     ],
-    persistence: ['localStorage felixo-ai-core.claude-terminal-scroll (on/off)'],
+    persistence: ['localStorage felixo-ai-core.claude-terminal-scroll.v2 (on/off; o valor da chave sem .v2, de antes de 23/10/2026, é ignorado)'],
     ipc: [],
     dependsOn: ['loadClaudeTerminalScroll', 'saveClaudeTerminalScroll', 'shouldUseClassicScreen', 'FelixoToggle'],
     tests: [{ file: 'src/features/canvas/services/terminal-scroll-preference.test.ts' }],

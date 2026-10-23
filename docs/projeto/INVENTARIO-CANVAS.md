@@ -2359,7 +2359,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 ### Rolagem no terminal do Claude Code (Configurações)
 
 - **ID:** `settings-rolagem-claude` · **Dono:** `src/features/canvas/components/tools/ClaudeTerminalScrollSection.tsx`
-- **Persistência:** localStorage felixo-ai-core.claude-terminal-scroll (on/off)
+- **Persistência:** localStorage felixo-ai-core.claude-terminal-scroll.v2 (on/off; o valor da chave sem .v2, de antes de 23/10/2026, é ignorado)
 - **IPC:** nenhum
 - **Depende de:** `loadClaudeTerminalScroll`, `saveClaudeTerminalScroll`, `shouldUseClassicScreen`, `FelixoToggle`
 - **Sobreposição:** Seção dentro do painel Configurações (z-20/30), sem camada própria

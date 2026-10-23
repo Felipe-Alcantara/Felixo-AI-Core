@@ -1,5 +1,11 @@
-import { describe, expect, it } from 'vitest'
-import { isClaudeCommand, parseClaudeTerminalScroll, shouldUseClassicScreen } from './terminal-scroll-preference'
+import { afterEach, describe, expect, it } from 'vitest'
+import {
+  isClaudeCommand,
+  loadClaudeTerminalScroll,
+  parseClaudeTerminalScroll,
+  saveClaudeTerminalScroll,
+  shouldUseClassicScreen,
+} from './terminal-scroll-preference'
 
 describe('rolagem do terminal no Claude Code', () => {
   it('só o Claude Code recebe o interruptor', () => {
@@ -26,5 +32,40 @@ describe('rolagem do terminal no Claude Code', () => {
     expect(shouldUseClassicScreen('claude', false)).toBe(false)
     expect(shouldUseClassicScreen('claude', true)).toBe(true)
     expect(shouldUseClassicScreen('codex', true)).toBe(false)
+  })
+})
+
+describe('preferência gravada de antes do padrão novo', () => {
+  function armazenamento(inicial: Record<string, string>) {
+    const valores = new Map(Object.entries(inicial))
+    ;(globalThis as { window?: unknown }).window = {
+      localStorage: {
+        getItem: (chave: string) => valores.get(chave) ?? null,
+        setItem: (chave: string, valor: string) => void valores.set(chave, valor),
+      },
+    }
+    return valores
+  }
+
+  afterEach(() => {
+    delete (globalThis as { window?: unknown }).window
+  })
+
+  // O `on` antigo quase nunca foi escolha: o padrão era ligado e a tela gravava ao mexer. Com a chave antiga valendo,
+  // o dono ficou com o mouse quebrado mesmo depois de o padrão virar desligado.
+  it('um "on" gravado na chave antiga não liga a rolagem clássica', () => {
+    armazenamento({ 'felixo-ai-core.claude-terminal-scroll': 'on' })
+
+    expect(loadClaudeTerminalScroll()).toBe(false)
+  })
+
+  it('a escolha feita depois disso vale, e grava na chave nova', () => {
+    const valores = armazenamento({ 'felixo-ai-core.claude-terminal-scroll': 'on' })
+    saveClaudeTerminalScroll(true)
+
+    expect(loadClaudeTerminalScroll()).toBe(true)
+    expect(valores.get('felixo-ai-core.claude-terminal-scroll.v2')).toBe('on')
+    saveClaudeTerminalScroll(false)
+    expect(loadClaudeTerminalScroll()).toBe(false)
   })
 })
