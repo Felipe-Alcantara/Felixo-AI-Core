@@ -13,7 +13,7 @@ name: Encerramento da PTY no Windows (repetido)
 #   1. `repro:pty-kill`: N execuções COM a correção e N SEM ela (o controle), cada
 #      uma num processo novo. O controle precisa reproduzir o defeito no runner, ou
 #      o "ok" não prova nada (veredito `controle-nao-reproduziu`, código 2).
-#   2. `npm run test:native` (o passo do CI) mais `pty-kill.integration.test.cjs`,
+#   2. `npm run test:native` (o passo do CI, que já inclui `pty-kill.integration.test.cjs`),
 #      repetidos N vezes: nenhuma execução pode falhar, passar de 10 min ou deixar
 #      `AttachConsole` no log.
 #
@@ -84,7 +84,7 @@ jobs:
         shell: bash
         run: |
           {
-            echo "### \`npm run test:native\` e o teste de encerramento, repetidos ${EXECUCOES} vezes"
+            echo "### \`npm run test:native\` (com o teste de encerramento), repetido ${EXECUCOES} vezes"
             echo
             echo '| Execução | Código | Segundos | Linhas com AttachConsole |'
             echo '| ---: | ---: | ---: | ---: |'
@@ -96,7 +96,7 @@ jobs:
             # O teto por execução existe para um travamento virar vermelho claro (código
             # 124) em vez de consumir o runner: era assim que as tentativas anteriores
             # se mostravam.
-            { timeout 600 npm run test:native && timeout 120 node --test electron/services/pty-kill.integration.test.cjs; } > "$RUNNER_TEMP/native-$i.txt" 2>&1
+            timeout 600 npm run test:native > "$RUNNER_TEMP/native-$i.txt" 2>&1
             codigo=$?
             fim=$(date +%s)
             # O texto exato do ruído, não só a palavra: o título do teste de integração
