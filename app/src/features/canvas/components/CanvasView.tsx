@@ -412,6 +412,15 @@ function CanvasInner({
   // agora dentro da pílula de zoom.
   const [canvasLocked, setCanvasLocked] = useState(false)
   const [activeTool, setActiveTool] = useState<CanvasTool | null>(null)
+  const [toolOpenRequest, setToolOpenRequest] = useState(0)
+  // Todo pedido de ABRIR uma ferramenta passa por aqui (o alternar da barra
+  // não: ele troca o painel ou fecha). O contador faz o painel que já está
+  // aberto, mas na animação de saída, desistir de fechar; só `setActiveTool`
+  // com o mesmo valor não renderiza e o painel fecharia contra o pedido.
+  const openTool = useCallback((tool: CanvasTool) => {
+    setActiveTool(tool)
+    setToolOpenRequest((current) => current + 1)
+  }, [])
   // Atalho de editor para a busca global do canvas. Captura antes do xterm:
   // o terminal pode parar eventos no próprio textarea, mas Ctrl/Cmd+K deve
   // abrir a busca independentemente de onde o foco esteja no workspace.
@@ -422,11 +431,11 @@ function CanvasInner({
       }
       event.preventDefault()
       event.stopPropagation()
-      setActiveTool('search')
+      openTool('search')
     }
     window.addEventListener('keydown', onKeyDown, true)
     return () => window.removeEventListener('keydown', onKeyDown, true)
-  }, [])
+  }, [openTool])
   const {
     acknowledgeNodeNotifications,
     clearReadNotifications,
@@ -1996,7 +2005,7 @@ function CanvasInner({
       setHandoff({ sourceId, transcript: store.getTranscript(sourceId).text, reason }),
     openChainSettings: () => {
       requestAgentUsageTab('cadeia')
-      setActiveTool('agentUsage')
+      openTool('agentUsage')
     },
   })
 
@@ -2167,7 +2176,7 @@ function CanvasInner({
       >
       {isBusy && <div className="absolute inset-0 z-50 cursor-wait" aria-hidden="true" />}
       <CanvasTopbar
-        onOpenSearch={() => setActiveTool('search')}
+        onOpenSearch={() => openTool('search')}
         trailing={
           <DictationButton
             dictation={dictation}
@@ -2283,6 +2292,7 @@ function CanvasInner({
 
       <CanvasToolPanels
         activeTool={activeTool === 'notifications' ? null : activeTool}
+        openRequest={toolOpenRequest}
         toolsMenuOpen={sidebarCollapsed}
         onClose={() => setActiveTool(null)}
         nodes={nodes}

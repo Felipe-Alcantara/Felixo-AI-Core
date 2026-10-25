@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { usePanelOpenRequest } from '../../hooks/panel-open-request-context'
 import { useExitAnimation } from '../../hooks/useExitAnimation'
 import { useResizablePanelHeight } from '../../hooks/useResizablePanelHeight'
 import { useResizablePanelWidth } from '../../hooks/useResizablePanelWidth'
@@ -63,7 +64,11 @@ export function CanvasPanel({
   size = 'sm',
   variant = 'panel',
 }: CanvasPanelProps) {
-  const { closing, close } = useExitAnimation(PANEL_EXIT_MS, onClose)
+  const { closing, close, cancelClose } = useExitAnimation(PANEL_EXIT_MS, onClose)
+  const openRequest = usePanelOpenRequest()
+  useEffect(() => {
+    cancelClose()
+  }, [openRequest, cancelClose])
   const [collapsed, setCollapsed] = useState(false)
   const { width, minWidth, maxWidth, resizing, startResize, resizeBy, reset } =
     useResizablePanelWidth(panelId, size, collapsed)

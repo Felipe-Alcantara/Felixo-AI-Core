@@ -8,6 +8,7 @@ import { Component, Suspense, useMemo, type ReactNode } from 'react'
 import type { Node } from '@xyflow/react'
 import type { CanvasTool } from './tools/CanvasToolsMenu'
 import { CanvasPanel } from './tools/CanvasPanel'
+import { PanelOpenRequestContext } from '../hooks/panel-open-request-context'
 import {
   LazyAgentCanvasWriteRequestsPanel,
   LazyAgentPresetsPanel,
@@ -32,6 +33,8 @@ import { TOOL_LABELS } from './tools/canvas-tool-labels'
 
 type CanvasToolPanelsProps = {
   activeTool: CanvasTool | null
+  /** Muda a cada pedido de abrir uma ferramenta, inclusive a já aberta; ver `PanelOpenRequestContext`. */
+  openRequest: number
   /** Widens the toolbar column, so every panel slides further right to clear it. */
   toolsMenuOpen: boolean
   onClose: () => void
@@ -157,6 +160,7 @@ class ToolPanelErrorBoundary extends Component<
 
 export function CanvasToolPanels({
   activeTool,
+  openRequest,
   toolsMenuOpen,
   onClose,
   nodes,
@@ -308,22 +312,24 @@ export function CanvasToolPanels({
   })()
 
   return (
-    <ToolPanelErrorBoundary
-      activeTool={activeTool}
-      toolsMenuOpen={toolsMenuOpen}
-      onClose={closeActiveTool}
-    >
-      <Suspense
-        fallback={
-          <ToolPanelLoading
-            activeTool={activeTool}
-            toolsMenuOpen={toolsMenuOpen}
-            onClose={closeActiveTool}
-          />
-        }
+    <PanelOpenRequestContext.Provider value={openRequest}>
+      <ToolPanelErrorBoundary
+        activeTool={activeTool}
+        toolsMenuOpen={toolsMenuOpen}
+        onClose={closeActiveTool}
       >
-        {panel}
-      </Suspense>
-    </ToolPanelErrorBoundary>
+        <Suspense
+          fallback={
+            <ToolPanelLoading
+              activeTool={activeTool}
+              toolsMenuOpen={toolsMenuOpen}
+              onClose={closeActiveTool}
+            />
+          }
+        >
+          {panel}
+        </Suspense>
+      </ToolPanelErrorBoundary>
+    </PanelOpenRequestContext.Provider>
   )
 }

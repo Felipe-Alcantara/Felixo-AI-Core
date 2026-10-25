@@ -401,6 +401,35 @@ async function checarFocoAoAbrirFerramenta(page) {
   await page.getByRole('button', { name: 'Buscar' }).click()
 }
 
+/**
+ * Pedir de novo a ferramenta que já está na animação de saída (Ctrl+K na
+ * Buscar) tem de manter o painel aberto: a última intenção vence o fechamento
+ * pendente. Tudo roda dentro da página, em tempos próprios, porque os 160 ms
+ * da saída são curtos demais para ir e voltar pelo Playwright com folga.
+ */
+async function checarReaberturaDuranteSaidaDoPainel(page) {
+  await page.getByRole('button', { name: 'Buscar' }).click()
+  const panel = page.locator('[data-felixo-canvas-panel="search"]')
+  await panel.waitFor({ state: 'visible', timeout: INTERACTION_TIMEOUT_MS })
+  const aindaAberto = await page.evaluate(async () => {
+    const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+    document
+      .querySelector('[data-felixo-canvas-panel="search"] button[aria-label^="Fechar painel"]')
+      ?.click()
+    await esperar(40)
+    window.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true, cancelable: true }),
+    )
+    // Passa da duração da saída: o timer antigo, se sobrasse, já teria vencido.
+    await esperar(500)
+    return Boolean(document.querySelector('[data-felixo-canvas-panel="search"]'))
+  })
+  if (!aindaAberto) {
+    throw new Error('[canvas-smoke] pedir Buscar de novo durante a saida do painel nao manteve o painel aberto')
+  }
+  await page.getByRole('button', { name: 'Buscar' }).click()
+}
+
 async function prepararFixture(page) {
   const result = await page.evaluate(async (nodes) => {
     const bridge = window.felixo?.canvas
@@ -1363,6 +1392,7 @@ const SESSIONS = [
       await checarLandmarksVisiveis(page)
       await checarNavegacaoPorTab(page)
       await checarFocoAoAbrirFerramenta(page)
+      await checarReaberturaDuranteSaidaDoPainel(page)
       await prepararFixture(page)
       await checarOclusaoDoFixture(page)
       await checarAuditoriaDeAcessibilidade(page)

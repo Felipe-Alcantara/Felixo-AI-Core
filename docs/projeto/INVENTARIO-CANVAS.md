@@ -2020,7 +2020,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **ID:** `tool-panel-host` · **Dono:** `src/features/canvas/components/CanvasToolPanels.tsx`
 - **Persistência:** nenhuma: activeTool vive em useState do CanvasView (o reload fecha qualquer painel)
 - **IPC:** nenhum
-- **Depende de:** `CanvasView (activeTool, setActiveTool)`, `canvas-tool-loaders (Lazy*)`, `TOOL_LABELS`, `CanvasPanel`
+- **Depende de:** `CanvasView (activeTool, setActiveTool, openTool, toolOpenRequest)`, `canvas-tool-loaders (Lazy*)`, `TOOL_LABELS`, `CanvasPanel`
 - **Sobreposição:** sem superfície própria além dos fallbacks, que usam a moldura CanvasPanel (porte sm, z-20/z-30). Fechar devolve o foco no próximo quadro: Busca → [data-canvas-tool-trigger="search"]; demais → menu de ferramentas ou botão do rail que não esteja aria-hidden/inert. Trocar de ferramenta desmonta o painel anterior na hora, sem animação de saída
 - **Testes:** `scripts/canvas-smoke.cjs` → `checarFocoAoAbrirFerramenta`, `scripts/canvas-smoke-prompts.cjs` → `abrirPainel`, `src/features/onboarding/onboarding-catalog.test.ts`
 
@@ -2044,14 +2044,14 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **ID:** `tool-panel-frame` · **Dono:** `src/features/canvas/components/tools/CanvasPanel.tsx`
 - **Persistência:** localStorage felixo:canvas-panel-width:<panelId> (só depois de arrastar ou usar as setas; Home apaga); localStorage felixo:canvas-panel-height:<panelId>; nenhuma para recolhido
 - **IPC:** nenhum
-- **Depende de:** `useExitAnimation`, `useResizablePanelWidth`, `useResizablePanelHeight`, `useCanvasSurfaces (occupancy, reportPanelWidth, viewport)`, `getPanelMaxHeight`
+- **Depende de:** `useExitAnimation`, `usePanelOpenRequest (PanelOpenRequestContext, provido pelo CanvasToolPanels)`, `useResizablePanelWidth`, `useResizablePanelHeight`, `useCanvasSurfaces (occupancy, reportPanelWidth, viewport)`, `getPanelMaxHeight`
 - **Sobreposição:** absolute z-20, z-30 com foco dentro (focus-within); top-16 (workspace: top-4), left = 1rem + largura viva da sidebar; maxWidth = viewport − sidebar − inspector − 32 px. Abaixo da sidebar (26), do overlay isBusy/toasts (50), dos diálogos (60) e do FelixoSelect (1000); mesmo z da lista Elementos
-- **Testes:** `scripts/canvas-smoke.cjs` → `checarPainelNosDoisEixos`, `scripts/canvas-smoke.cjs` → `checarFocoAoAbrirFerramenta`, `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos`, `scripts/canvas-smoke-onboarding.cjs` → `sb6`, `src/features/canvas/services/panel-sizing.test.ts`, `src/features/canvas/services/canvas-surfaces.test.ts`, `src/features/canvas/hooks/exit-animation-controller.test.ts`
+- **Testes:** `scripts/canvas-smoke.cjs` → `checarPainelNosDoisEixos`, `scripts/canvas-smoke.cjs` → `checarFocoAoAbrirFerramenta`, `scripts/canvas-smoke.cjs` → `checarReaberturaDuranteSaidaDoPainel`, `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos`, `scripts/canvas-smoke-onboarding.cjs` → `sb6`, `src/features/canvas/services/panel-sizing.test.ts`, `src/features/canvas/services/canvas-surfaces.test.ts`, `src/features/canvas/hooks/exit-animation-controller.test.ts`
 
 | Estado | Quando |
 | --- | --- |
 | normal | region rotulada pelo título; entra com felixo-anim-panel-in e se foca se o foco não estiver dentro; largura = occupancy.panel (decidida pelo coordenador), altura do conteúdo até getPanelMaxHeight (janela − 112, piso 240). Recolhido: coluna de 44 px com a inicial do título, conteúdo hidden e sem alças. Alças role=separator (não contadas): largura com arrasto, setas ±24 (Shift ±80), Home/duplo clique = padrão; altura com ↑↓ e Home = altura do conteúdo |
-| pending | fechando: felixo-anim-panel-out por 160 ms (PANEL_EXIT_MS) antes do onClose |
+| pending | fechando: felixo-anim-panel-out por 160 ms (PANEL_EXIT_MS) antes do onClose; um pedido de abrir a mesma ferramenta nesse intervalo (Ctrl+K, o campo de pesquisa da topbar, a aba Cadeia de Limites e uso) cancela o fechamento e o painel fica aberto |
 
 | Controle | Gatilho | Efeito | Falha conhecida | Teste |
 | --- | --- | --- | --- | --- |

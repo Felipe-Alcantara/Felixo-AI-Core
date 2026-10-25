@@ -831,7 +831,12 @@ export const workspaceToolSurfaces: InventoryElement[] = [
     ],
     persistence: ['nenhuma: activeTool vive em useState do CanvasView (o reload fecha qualquer painel)'],
     ipc: [],
-    dependsOn: ['CanvasView (activeTool, setActiveTool)', 'canvas-tool-loaders (Lazy*)', 'TOOL_LABELS', 'CanvasPanel'],
+    dependsOn: [
+      'CanvasView (activeTool, setActiveTool, openTool, toolOpenRequest)',
+      'canvas-tool-loaders (Lazy*)',
+      'TOOL_LABELS',
+      'CanvasPanel',
+    ],
     tests: [
       { file: SMOKE, check: 'checarFocoAoAbrirFerramenta' },
       { file: SMOKE_PROMPTS, check: 'abrirPainel' },
@@ -860,7 +865,8 @@ export const workspaceToolSurfaces: InventoryElement[] = [
     states: {
       normal:
         'region rotulada pelo título; entra com felixo-anim-panel-in e se foca se o foco não estiver dentro; largura = occupancy.panel (decidida pelo coordenador), altura do conteúdo até getPanelMaxHeight (janela − 112, piso 240). Recolhido: coluna de 44 px com a inicial do título, conteúdo hidden e sem alças. Alças role=separator (não contadas): largura com arrasto, setas ±24 (Shift ±80), Home/duplo clique = padrão; altura com ↑↓ e Home = altura do conteúdo',
-      pending: 'fechando: felixo-anim-panel-out por 160 ms (PANEL_EXIT_MS) antes do onClose',
+      pending:
+        'fechando: felixo-anim-panel-out por 160 ms (PANEL_EXIT_MS) antes do onClose; um pedido de abrir a mesma ferramenta nesse intervalo (Ctrl+K, o campo de pesquisa da topbar, a aba Cadeia de Limites e uso) cancela o fechamento e o painel fica aberto',
     },
     controls: [
       {
@@ -887,6 +893,7 @@ export const workspaceToolSurfaces: InventoryElement[] = [
     ipc: [],
     dependsOn: [
       'useExitAnimation',
+      'usePanelOpenRequest (PanelOpenRequestContext, provido pelo CanvasToolPanels)',
       'useResizablePanelWidth',
       'useResizablePanelHeight',
       'useCanvasSurfaces (occupancy, reportPanelWidth, viewport)',
@@ -895,6 +902,7 @@ export const workspaceToolSurfaces: InventoryElement[] = [
     tests: [
       { file: SMOKE, check: 'checarPainelNosDoisEixos' },
       { file: SMOKE, check: 'checarFocoAoAbrirFerramenta' },
+      { file: SMOKE, check: 'checarReaberturaDuranteSaidaDoPainel' },
       { file: SMOKE, check: 'checarElementosAbertosEmViewportsCriticos' },
       { file: SMOKE_ONBOARDING, check: 'sb6' },
       { file: 'src/features/canvas/services/panel-sizing.test.ts' },
