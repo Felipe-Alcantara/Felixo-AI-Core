@@ -1201,3 +1201,57 @@ com o dono.
 `bundle-npm-runtime` no Node 25.
 
 Estado: concluído e publicado (`2784b59` e o complemento do título da anotação); nenhum Release novo.
+
+## 2026-10-25 — Canvas: pedir de novo uma ferramenta durante a saída do painel não a fecha mais (v0.1.487)
+
+**Sintoma.** Com o painel da Buscar na animação de saída (160 ms), Ctrl+K não o mantinha aberto: ele sumia mesmo
+assim. O mesmo valia para o campo de pesquisa da topbar e para a aba Cadeia de "Limites e uso" (aberta pelos avisos de
+troca de conta).
+
+**Causa.** Os três caminhos chamam `setActiveTool` com a ferramenta que já está ativa. O valor não muda, o React não
+renderiza, e o painel que já estava no `close()` do `useExitAnimation` segue até o timer vencer e chamar `onClose`
+(que limpa `activeTool`). A gaveta do terminal já tinha a defesa (`openRequest`, `ac72475`); os painéis de ferramenta
+não.
+
+**Correção.** `CanvasView.openTool` troca a ferramenta e conta o pedido (`toolOpenRequest`); o `CanvasToolPanels` leva o
+contador por `PanelOpenRequestContext` (`hooks/panel-open-request-context.ts`) e o `CanvasPanel` chama `cancelClose()`
+a cada mudança. O alternar da barra de ferramentas não mudou: ele troca de painel ou fecha. Commit `17ea054`.
+
+**Investigação da task (fatia 2 de "prioridade entre animações concorrentes e cancelamento por chave de superfície").**
+- *Cancelar por chave de superfície.* Trocar de ferramenta já era resolvido por construção: cada painel é um componente
+  `Lazy*` diferente, o anterior desmonta e o `dispose()` cancela o timer. A gaveta foi resolvida em `ac72475`. Faltava
+  só pedir o mesmo painel de novo.
+- *Notificação tardia.* Nenhum caminho abre painel ou gaveta sozinho a partir de uma notificação:
+  `useCanvasNotifications` só grava o histórico e toca o som; `setActiveTool` e `openTerminal` só rodam por clique,
+  atalho ou diálogo confirmado (`createContinuationNode`, depois do "Continuar", abre a gaveta do bloco novo de
+  propósito). O critério "notificação tardia não reabre painel fechado" vale por construção; não há teste (sem jsdom).
+- *Arrasto.* `useResizablePanelWidth` e `useResizablePanelHeight` cancelam o quadro agendado, tiram os ouvintes e
+  devolvem cursor e seleção de texto ao desmontar. Li o código; não testei desmontar no meio do arrasto.
+
+**Medido (app real, perfil isolado, janela invisível, `felixo devtools eval`).**
+- Reabrir com Ctrl+K 0, 40, 100 e 150 ms depois de fechar: sem a correção o painel não estava aberto em nenhum dos
+  quatro atrasos; com ela, estava nos quatro. Fechar sem pedir nada continua fechando.
+- Do clique em fechar até o painel sair do DOM (`MutationObserver` e `performance.now`, sem `requestAnimationFrame`, 5
+  amostras): 190,5 a 206,1 ms no padrão; 19,1 a 34,3 ms com `data-performance-mode=on` (atributo posto à mão, que é o
+  que o hook lê).
+
+**Validação.** `vitest` 3298 passaram, 3 puladas, 0 falhas; `eslint` e `build` (com `tsc`) saíram com 0. O check novo
+do smoke (`checarReaberturaDuranteSaidaDoPainel`) passou nas 5 execuções locais que chegaram até ele, mas a sessão A
+local marcou "passou-com-instabilidade": o SA1 do tutorial reprovou (`canvas:save`) em 3 de 5 tentativas com a mudança;
+o `HEAD` limpo reprovou 1 de 3, com a causa não guardada (amostra pequena; task aberta). CI `40207754580` verde nos 6 jobs, inclusive o smoke do
+Linux, onde a sessão A passou em 129,9 s; Release `40208306413` verde, **v0.1.487** como Latest.
+
+**Decisões do agente.** Contador em contexto, e não prop nos ~13 painéis de ferramenta. O alternar da barra de
+ferramentas segue fechando na hora se clicado durante a saída do mesmo painel (o botão ainda aparece marcado; reabrir
+seria a leitura oposta). Logs de transição atrás de flag não foram feitos (task aberta).
+
+**Não validado.** `prefers-reduced-motion` do sistema não foi emulado (só o Modo Performance); o app empacotado não foi
+aberto; macOS não roda o smoke do canvas. Não há teste de React para a ligação do `CanvasPanel` (o repositório não tem
+jsdom): ela é coberta pelo smoke e pela reprodução; o controlador (`cancel`) segue com testes próprios.
+
+**Fora do pedido, observado.** O `felixo.cmd` do perfil (`%APPDATA%\felixo-ai-core\bin`, gravado em 03/09/2026) aponta
+para `%TEMP%\felixo-release-smoke-4pap4S\installed`, e os 5 processos do app em uso rodam dessa pasta (instalação de
+02/09). Funciona enquanto a pasta existir, mas `felixo devtools` não existe no app empacotado: usei
+`node app/electron/cli/felixo.cjs`. Não mexi no shim.
+
+Estado: concluído e publicado (v0.1.487).
