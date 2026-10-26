@@ -44,6 +44,58 @@ export function buildUnhandledRejectionEntry(event: { reason?: unknown }): QaLog
   }
 }
 
+/**
+ * Janela em que as ocorrências repetidas do aviso do ResizeObserver viram uma
+ * entrada só. Um arrasto de gaveta de 120 quadros emite ~15 (medido no app real).
+ */
+const RESIZE_OBSERVER_LOOP_WINDOW_MS = 10_000
+
+/**
+ * O Chromium dispara `error` com esta mensagem quando um `ResizeObserver` (no
+ * app, o do React Flow) faz o layout mudar durante a própria entrega: as
+ * notificações que sobram são adiadas para o quadro seguinte. Nada se perde e
+ * o layout converge — não é falha —, mas é o sinal de "atualização dentro do
+ * ciclo de medida", então vira aviso contado em vez de ser descartado.
+ */
+export function isResizeObserverLoopNotice(event: { message?: string }): boolean {
+  return /^ResizeObserver loop/.test(event.message ?? '')
+}
+
+/**
+ * Conta o aviso do ResizeObserver e devolve uma entrada de log só na primeira
+ * ocorrência de cada janela; as repetições entram na conta da entrada seguinte
+ * (`omitidasDaJanelaAnterior`). Sem isto o arrasto de uma gaveta com terminal
+ * enchia o QA Logger de "erros" (153 de 176 entradas numa sessão de teste).
+ */
+export function createResizeObserverLoopMeter(
+  windowMs = RESIZE_OBSERVER_LOOP_WINDOW_MS,
+  now: () => number = () => performance.now(),
+) {
+  let windowStart = Number.NEGATIVE_INFINITY
+  let count = 0
+
+  return {
+    record(): QaLogEntryInput | null {
+      const t = now()
+      if (t - windowStart < windowMs) {
+        count += 1
+        return null
+      }
+
+      const omitted = Math.max(0, count - 1)
+      windowStart = t
+      count = 1
+      return {
+        level: 'warn',
+        scope: 'renderer:resize-observer-loop',
+        message:
+          'Um ResizeObserver mudou o layout durante a própria entrega; o Chromium adiou as notificações restantes para o próximo quadro.',
+        details: { omitidasDaJanelaAnterior: omitted },
+      }
+    },
+  }
+}
+
 /** Mesma extração usada pelos handlers do main (`global-error-handlers.cjs`) — mensagem legível tanto de `Error` quanto de valor solto. */
 function errorMessage(value: unknown): string {
   if (value instanceof Error) return value.message || value.name
@@ -70,8 +122,17 @@ function errorStack(value: unknown): string | null {
  * pelo mesmo motivo que os outros listeners globais do app: previsível em
  * teste, mesmo que o app real nunca precise desmontar isto.
  */
-export function installRendererErrorReporting(target: Window = window): () => void {
+export function installRendererErrorReporting(
+  target: Window = window,
+  now?: () => number,
+): () => void {
+  const loopMeter = createResizeObserverLoopMeter(RESIZE_OBSERVER_LOOP_WINDOW_MS, now)
   const onError = (event: ErrorEvent) => {
+    if (isResizeObserverLoopNotice(event)) {
+      const entry = loopMeter.record()
+      if (entry) void target.felixo?.qaLogger?.log(entry)
+      return
+    }
     void target.felixo?.qaLogger?.log(buildWindowErrorEntry(event))
   }
   const onUnhandledRejection = (event: PromiseRejectionEvent) => {

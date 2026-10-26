@@ -2037,7 +2037,10 @@ terminal/agente, sem copiar o corpo do prompt. Isso permite conferir a cadeia
 depois de restart e localizar uma falha sem depender do buffer em memória.
 
 - No renderer, `renderer-error-reporting.ts` cobre `window.onerror` e
-  `unhandledrejection`; `RendererRecoveryBoundary` (o último resort quando o
+  `unhandledrejection`. O aviso `ResizeObserver loop completed with undelivered
+  notifications` (um observer mudou o layout dentro da própria entrega; benigno)
+  vira `warn` com escopo `renderer:resize-observer-loop`, uma entrada por janela
+  de 10 s com a contagem das omitidas, e não `error`. `RendererRecoveryBoundary` (o último resort quando o
   React para de renderizar) também manda a entrada pro QA Logger antes de
   oferecer o botão de recarregar.
 - Botão "Reportar problema" (painel QA Logger) monta um pacote —
