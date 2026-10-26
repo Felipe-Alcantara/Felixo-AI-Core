@@ -196,6 +196,73 @@ describe('divisão de uma vez só entre painel e gaveta (splitHorizontalSpace)',
   })
 })
 
+describe('medida oscilante, janela pequena e gaveta fechada (splitHorizontalSpace)', () => {
+  const LARGURAS = [320, 415, 480, 700, 900, 1000, 1276, 1320, 1436, 1500, 1920, 2560, 3840]
+  const PEDIDOS = [0, 44, 200, 260, 360, 380, 440, 700, 900, 2000]
+  const INSPETORES = [0, 288]
+
+  // O que o loop de 12/09 fazia era devolver ao coordenador o valor JÁ CORTADO.
+  // Se a saída, repetida como pedido, mudasse, haveria um segundo valor para
+  // oscilar. Varre larguras, pedidos e inspector: a saída tem que ser um ponto fixo.
+  it('reaplicar a saída como pedido não muda nada: converge na mesma passada', () => {
+    for (const largura of LARGURAS) {
+      for (const inspetor of INSPETORES) {
+        for (const painel of PEDIDOS) {
+          for (const gaveta of PEDIDOS) {
+            const primeira = splitHorizontalSpace(largura, BARRA, painel, MIN_PAINEL, gaveta, MIN_GAVETA, undefined, inspetor)
+            const segunda = splitHorizontalSpace(
+              largura, BARRA, primeira.panel, MIN_PAINEL, primeira.drawer, MIN_GAVETA, undefined, inspetor,
+            )
+
+            expect(segunda, `${largura}px, inspector ${inspetor}, painel ${painel}, gaveta ${gaveta}`).toEqual(primeira)
+          }
+        }
+      }
+    }
+  })
+
+  it('viewport que oscila entre dois valores a cada quadro: a saída só acompanha a entrada, sem histerese nem deriva', () => {
+    const dividir = (largura: number) => splitHorizontalSpace(largura, BARRA, 380, MIN_PAINEL, 700, MIN_GAVETA, undefined, 288)
+    const larga = dividir(1600)
+    const estreita = dividir(1500)
+    expect(larga).not.toEqual(estreita)
+
+    for (let quadro = 0; quadro < 200; quadro++) {
+      expect(dividir(quadro % 2 === 0 ? 1600 : 1500)).toEqual(quadro % 2 === 0 ? larga : estreita)
+    }
+  })
+
+  it('gaveta fechada em janela pequena: não reserva nada e o painel fica no piso (sobreposição declarada), nunca em zero', () => {
+    for (const largura of [320, 415, 480, 720]) {
+      const resultado = splitHorizontalSpace(largura, BARRA, 360, MIN_PAINEL, 0, MIN_GAVETA, undefined, 288)
+
+      expect(resultado.drawer).toBe(0)
+      expect(resultado.panel).toBeGreaterThanOrEqual(MIN_PAINEL)
+      expect(Number.isFinite(resultado.panel)).toBe(true)
+    }
+  })
+
+  // Janela mínima do app (720 px) com sidebar e inspector expandidos: `available`
+  // é 0. O trilho recolhido sumia (0 px) e não havia como reabrir o terminal.
+  it('gaveta recolhida (44) em janela pequena: continua 44 e o painel não é espremido abaixo do piso', () => {
+    for (const largura of [417, 480, 720, 764]) {
+      const resultado = splitHorizontalSpace(largura, BARRA, 360, MIN_PAINEL, 44, MIN_GAVETA, undefined, 288)
+
+      expect(resultado.drawer, `${largura}px`).toBe(44)
+      expect(resultado.panel, `${largura}px`).toBeGreaterThanOrEqual(MIN_PAINEL)
+    }
+  })
+
+  it('painel recolhido (44) com a gaveta aberta em janela pequena: o trilho do painel continua 44', () => {
+    for (const largura of [417, 480, 720, 764]) {
+      const resultado = splitHorizontalSpace(largura, BARRA, 44, MIN_PAINEL, 800, MIN_GAVETA, undefined, 288)
+
+      expect(resultado.panel, `${largura}px`).toBe(44)
+      expect(resultado.drawer, `${largura}px`).toBeGreaterThanOrEqual(MIN_GAVETA)
+    }
+  })
+})
+
 describe('reserva de rodapé do dock "Elementos"', () => {
   // Bug real confirmado numa captura de tela em 760px de largura: um node
   // recém-criado nascia atrás do dock porque só 40px fixos eram reservados,

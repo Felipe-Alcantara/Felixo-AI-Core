@@ -151,16 +151,19 @@ export function splitHorizontalSpace(
   // um trilho de 44px, por exemplo) não está disputando espaço nenhum — é
   // uma escolha explícita, não uma superfície espremida. Devolve exatamente
   // o que foi pedido e deixa o resto pro outro lado, sem forçar o piso dele
-  // numa superfície que nem quer aquele tamanho.
+  // numa superfície que nem quer aquele tamanho. O teto é o piso dela
+  // (`Math.max(min, available)`, como nos ramos de uma superfície só): sem ele
+  // o trilho recolhido sumia (0 px) na janela mínima de 720 px, com sidebar e
+  // inspector expandidos, e a pessoa não tinha como reabrir o terminal.
   if (desiredPanel < minPanel) {
-    const finalPanel = Math.min(desiredPanel, available)
+    const finalPanel = Math.min(desiredPanel, Math.max(minPanel, available))
     return {
       panel: finalPanel,
       drawer: Math.min(desiredDrawer, Math.max(minDrawer, available - finalPanel)),
     }
   }
   if (desiredDrawer < minDrawer) {
-    const finalDrawer = Math.min(desiredDrawer, available)
+    const finalDrawer = Math.min(desiredDrawer, Math.max(minDrawer, available))
     return {
       panel: Math.min(desiredPanel, Math.max(minPanel, available - finalDrawer)),
       drawer: finalDrawer,
