@@ -1283,3 +1283,34 @@ Estado: concluído e publicado (v0.1.487).
 **Não validado.** `prefers-reduced-motion` do sistema e app empacotado não foram abertos; macOS só pelo CI. Os hooks de arrasto e os posicionadores de popover (menu Ajuda, ditado, tour) foram lidos, não medidos, e não têm teste de componente (sem jsdom). Zoom −2, −1, +1 e +2 só por teste de lógica. Sem GPU real nas medições de tempo.
 
 Estado: concluído e publicado (v0.1.488).
+
+## 2026-10-26 — Limites: o Atualizar abre no máximo 4 consultas por vez, o reset em horário de verão segue o Date e a redação de segredo passa por auditoria de canários (v0.1.489 e v0.1.490)
+
+**Pedido.** Task "Limites — medir orçamento de carga com N contas e auditar segredo fora do normalizador" (continua `5c95ed0`): carga com N contas, DST e fuso com o relógio do SO, auditoria de segredo além do normalizador e separação entre E2E falso e smoke real.
+
+**Medido (Windows 11, Node 25.3, Ryzen 7 5700G 8c/16t, 13,8 GB com ~1,7 GB livres).**
+- *Antes:* o Atualizar consultava todas as contas num `Promise.all` sem teto: 52 consultas em voo com 50 contas.
+- *Custo por conta,* pelo caminho de código do app e em perfil vazio: `claude auth status --json` 0,30 s (0,68 s a frio), `codex login status` 0,13 s (0,39 s a frio); 100 a 170 MB por comando de login em voo (2 CLIs = 7 processos e 338 MB; 4 = 14 processos e 406 MB; amostragem grossa); um `claude` recém-aberto em PTY ocupa 184 MB (2 processos) e os das sessões longas da máquina 351 a 477 MB. Isso preenche o "[A MEDIR]" de `PLANO-CADEIA-CONTAS.md` §15.1 para esta máquina.
+- *Depois (teto 4):* pico de 4 em voo de 5 a 200 contas; 50 contas levam 1,3 s contra 0,6 s sem teto (simulado, 30 ms por comando). Com processos de verdade: 24 contas, 46 processos, nunca mais de 4 vivos, nenhum sobrou; cancelamento com 25% travadas: 3,5 s, 21 processos, nenhum sobrou. Smoke real com 8 contas: 10 CLIs, no máximo 4 vivas.
+- *Custo do teto:* com metade das contas travadas (6 de 12) a rodada leva 61,5 s contra 30,7 s sem teto; com 3 de 12, 32 s nos dois.
+- *Relógio:* `reset-time.test.cjs` fixa `TZ=UTC` e nunca exercitou DST. Comparando `zonedDateToTimestamp` com o `Date` em 7 fusos, a lacuna do início do verão divergia (4 de 936 horas, só Nova York: 2:30 de 8/mar virava 01:30 EST em vez de 03:30 EDT) e a hora repetida ia para a 2ª ocorrência em Lisboa e em Lord Howe e para a 1ª em Nova York, enquanto o ramo do fuso do processo sempre ia para a 1ª.
+- *Segredo:* a bateria de canários achou vazando, nas duas camadas: nome de variável de ambiente (`OPENAI_API_KEY=`, `GITHUB_TOKEN=`: o `\b` do rótulo não separa o `_`), credencial em URL, JWT sem assinatura, OAuth do Google, AWS, Slack, npm, GitLab e PEM. O QA Logger guardava a entrada crua na memória e no evento ao renderer, e o disco só mascarava a chave `token` por nome: `OPENAI_API_KEY=…` ia em claro para o arquivo persistido. Os 9 handlers IPC do painel devolviam `error.message` cru.
+
+**Correções.**
+- `8b74ae7`: `mapWithConcurrency` (`bounded-concurrency.cjs`) e `REFRESH_MAX_CONCURRENCY = 4`. O teto de 90 s e o Reconectar cancelavam só a consulta ao vivo; o comando de login em voo seguia até o timeout de 30 s. O sinal agora chega aos três comandos e a fila cancelada não abre CLI nenhuma.
+- `f9d2032`: `zonedDateToTimestamp` pela regra do `Date` (lacuna para frente, repetição na 1ª ocorrência) nos dois ramos.
+- `ff426c9`, `91b71e1`: `redactSecrets` com limite à esquerda "não é letra nem dígito" e mais formatos, a mesma lista na camada de reserva do normalizador, mensagem de falha ao vivo redigida na fronteira, `assertSafeInput` e handlers IPC pelo mesmo redator, `logQaEvent` redigindo na entrada (memória e renderer só com o redator das CLIs, que mantém o `[oculto]`; disco com as duas).
+- `3ba9b67`: `npm run benchmark:agent-usage` (modos `sim`, `spawn` e `real`, este último só com `FELIXO_USAGE_REAL_CLI=1`, nunca no CI, em perfil vazio) com `:check`.
+- Um padrão que escrevi primeiro era quadrático: o esquema de URL sem teto levaria minutos em `a.a.a.…` de 1 MB (e o teste do normalizador, com strings de 1 milhão de caracteres, travou). Limitado a 16 caracteres, o pior caso medido é 149 ms por MB, com teste de regressão.
+
+**Tipos de teste de CLI (item 4).** Nenhum teste automático fala com a CLI real logada: o "integration" do Claude usa `node-pty` de verdade com uma fixture chamada `claude`. O único que abre as CLIs de verdade é o smoke real da bancada, opt-in, em perfil vazio. Tabela em `GUIA-DESENVOLVEDOR.md`.
+
+**Validação.** `npm test` 3010 testes, 0 falhas, 9 pulados; `eslint` 0; 23 testes novos, e cada defesa nova foi mutada e derruba o teste certo. CI `40272546904` (v0.1.489) verde nos jobs; CI `40273596154` (v0.1.490) reprovou uma vez no macOS e passou ao reexecutar o job (ver abaixo). Releases `40273014672` e `40274455294` verdes.
+
+**Decisões do agente.** Teto fixo de 4, não derivado das CPUs: o que pesa é memória. Redator de segredo ampliado em vez de unificado (a unificação virou task). Valor opaco sem rótulo (hex longo) não é mascarado de propósito: esconderia hashes de commit e ids de sessão. O `SECRET_PATTERN` do normalizador só ganhou prefixos de alto sinal, porque `token` sozinho derrubaria "200.000 tokens".
+
+**Falha isolada, não resolvida.** `claude-usage-query.integration.test.cjs` reprovou no macOS do CI (a asserção de 2 setas de navegação viu 1, com `EIO` de escrita na PTY) e uma vez no Windows local; passou ao reexecutar. O `redactSecrets` não altera nenhuma das 36 linhas da fixture. Hipótese de corrida de tempo (`navigationDelayMs: 20`, `resultSettleMs: 80`); virou task.
+
+**Não validado.** A consulta ao vivo de uma conta logada de verdade (exige login real) e a máquina de referência de 2 núcleos/4 threads; o custo de memória de 50 CLIs foi extrapolado, não medido (havia 1,7 GB livres). macOS só pelo CI. Os arquivos de teste novos não rodam em jsdom: o repositório não tem.
+
+Estado: concluído e publicado (v0.1.490).
