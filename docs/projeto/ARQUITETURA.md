@@ -2047,6 +2047,19 @@ depois de restart e localizar uma falha sem depender do buffer em memória.
   `qa-report-builder.cjs` — com versão do app, SO/arquitetura, as últimas N
   entradas do log e o estado de detecção de cada CLI, tudo redigido de novo
   (defesa em profundidade) antes de gravar em `reports/problema-<hora>.json`.
+- Redação de segredo no painel de Limites e no QA Logger (auditada em 26/10/2026 com
+  canários, `agent-usage-secrets.test.cjs`). Camadas, da entrada para a saída: (1)
+  `redactSecrets` (`official-cli-account-status.cjs`) em toda saída de CLI, no serviço e nos
+  adaptadores; (2) o `SECRET_PATTERN` do normalizador (`agent-usage-model.cjs`), que descarta o
+  valor inteiro; (3) a mensagem de falha da consulta ao vivo, redigida na fronteira do
+  serviço; (4) `logQaEvent`, que redige a entrada antes de guardar na memória, enviar ao
+  renderer e gravar em disco (o disco ainda passa pela redação do git); (5) a mensagem de
+  exceção devolvida pelos handlers IPC do painel. Cobre rótulo (`api_key:`), nome de variável de
+  ambiente (`OPENAI_API_KEY=`), credencial em URL, argumento de linha de comando
+  (`--token xyz`), JWT, OAuth do Google, GitHub, GitLab, Slack, AWS, npm e chave PEM. **Não
+  cobre** um valor opaco sem rótulo nem prefixo (um hex longo): mascará-lo esconderia também
+  hashes de commit e ids de sessão que a tela mostra. Há ainda quatro redatores separados
+  (CLIs, git, diagnóstico das CLIs e o do normalizador), com cobertura diferente.
 
 ## Fluxo legado de chat
 
