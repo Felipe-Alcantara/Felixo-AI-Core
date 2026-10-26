@@ -51,6 +51,8 @@
     "benchmark:canvas-heap-session": "node scripts/canvas-long-session-heap-capture.cjs",
     "heap-snapshot:analyze": "node scripts/heap-snapshot-analysis.cjs",
     "benchmark:fetch-all": "node scripts/fetch-all-scanner-benchmark.cjs",
+    "benchmark:agent-usage": "node scripts/agent-usage-load-benchmark.cjs",
+    "benchmark:agent-usage:check": "npm run benchmark:agent-usage -- --check",
     "inventory:package": "node scripts/package-inventory.cjs",
     "repro:cli-auto-install": "node scripts/cli-auto-install-real-repro.cjs",
     "repro:pty-kill": "node scripts/repro-pty-kill.cjs",
