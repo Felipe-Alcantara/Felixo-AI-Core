@@ -185,12 +185,12 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
     layer: 'panel',
     owner: `${TOOLS}/AgentUsagePanel.tsx`,
     states: {
-      normal: 'Aba "Uso agora": um cartão por provider com versão, a tabela de resumo das contas (AgentUsageProviderSummary.tsx: um `<tbody>` por conta, com a identidade e o aviso de bloqueio numa linha de largura inteira — `th scope="rowgroup"` — e, abaixo, plano, quanto sobra em cada janela da conta e selo de status) e, por conta, "— /status completo" recolhido num <details> que guarda o próprio estado entre coletas: barras por janela com reset (a de um modelo só leva a etiqueta "só este modelo"), fonte, horário da medição, resets bancados e os dados completos do /status; com a rodada atual sem número e uma leitura anterior guardada, as barras e as células do resumo ficam esmaecidas e uma linha diz "Último valor conhecido, lido (ou medido) há X" com o motivo (describeDisplayedAgentUsage); conta sem sessão mostra "Esta conta não está logada…" e o botão "Abrir terminal da conta"; o cartão do Codex avisa que os campos da conversa aberta ficam fora de propósito; as abas Cadeia e Trocas montam AccountChainSection e AccountSwitchHistory',
+      normal: 'Aba "Uso agora": um cartão por provider com versão, a tabela de resumo das contas (AgentUsageProviderSummary.tsx: um `<tbody>` por conta, com a identidade e o aviso de bloqueio numa linha de largura inteira — `th scope="rowgroup"` — e, abaixo, plano, quanto sobra em cada janela da conta e selo de status) e, por conta, "— /status completo" recolhido num <details> que guarda o próprio estado entre coletas: barras por janela com reset (a de um modelo só leva a etiqueta "só este modelo"), fonte, horário da medição, resets bancados e os dados completos do /status; com a rodada atual sem número e uma leitura anterior guardada, as barras e as células do resumo ficam esmaecidas e uma linha diz "Último valor conhecido, lido (ou medido) há X" com o motivo (describeDisplayedAgentUsage); conta sem sessão mostra "Esta conta não está logada…" e o botão "Abrir terminal da conta"; cada conta da tabela-resumo leva, ao lado do nome, o botão "Atualizar a conta" (AgentUsageRefreshAccountButton, agent-usage:refresh-account): consulta só a pasta de login dela e, sem login próprio, relê a sessão da máquina no provider; com 6 contas ou mais (AGENT_USAGE_FILTER_MIN_ACCOUNTS, medido em ~109 px por conta) aparece a barra de filtro (AgentUsageFilterBar) com a busca por nome, e-mail ou plano e o atalho "Precisa de atenção (N)", e o contador "X de Y contas" com "Limpar filtro" quando há filtro; o cartão do Codex avisa que os campos da conversa aberta ficam fora de propósito; as abas Cadeia e Trocas montam AccountChainSection e AccountSwitchHistory',
       loading: 'loading=true na abertura (lista o salvo e, só se a última coleta completa tiver 5 min ou mais — shouldRefreshAgentUsageOnOpen —, chama agent-usage:refresh) e no Atualizar; sem conteúdo mostra "Consultando as CLIs instaladas…" e o ícone gira',
-      empty: '!hasContent e !loading: "Nenhuma CLI foi detectada nesta máquina."; provider sem conta: "Nenhuma conta vinculada a este provider."; conta sem amostra mostra a limitação da fonte por extenso, nunca zero',
+      empty: '!hasContent e !loading: "Nenhuma CLI foi detectada nesta máquina."; provider sem conta: "Nenhuma conta vinculada a este provider."; conta sem amostra mostra a limitação da fonte por extenso, nunca zero; filtro sem resultado: "Nenhuma conta corresponde ao filtro." (o provider sem conta no filtro some, em vez de dizer "nenhuma conta vinculada")',
       error: 'statusMessage em faixa âmbar (falha de list/refresh/remover/reset ou "Não foi possível falar com o processo principal."); sem ponte: "Este painel só funciona no app desktop."; amostra com errorMessage aparece na linha da conta; a razão da falha (sessão ausente, rede, CLI ausente, tempo esgotado) vem de availability e aparece com uma frase fixa, sem a saída crua da CLI',
       success: 'Selo "ao vivo" depois de um refresh, de agent-usage:changed ou de uma abertura que reaproveitou a coleta recente (com a hora dela no title); "Reset aplicado com sucesso." depois de usar um reset',
-      disabled: 'Atualizar desabilitado durante loading; "Adicionar ao painel" sem nome; botão da coleta durante busy, e ausente quando ~/.claude/settings.json não é legível ou já tem outra statusLine',
+      disabled: 'Atualizar desabilitado durante loading; "Atualizar a conta" desabilitado durante loading (a rodada completa já lê todas) e enquanto aquela conta atualiza (gira e marca aria-busy); "Adicionar ao painel" sem nome; botão da coleta durante busy, e ausente quando ~/.claude/settings.json não é legível ou já tem outra statusLine',
     },
     controls: [
       {
@@ -233,7 +233,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
         locator: 'Ligar coleta do rate limit',
         kind: 'button',
         effect: 'agent-usage:enable-claude-statusline (ou disable, quando já instalada): grava ou remove a statusLine do app em ~/.claude/settings.json, com backup da anterior, e recarrega o painel',
-        failure: 'erro engolido: a mensagem de falha do main nunca aparece; se o handler lançar, o resultado de erro vira o estado e o botão some atrás de "Não foi possível ler ~/.claude/settings.json" (AgentUsagePanel.tsx:194-208)',
+        failure: 'erro engolido: a mensagem de falha do main nunca aparece; se o handler lançar, o resultado de erro vira o estado e o botão some atrás de "Não foi possível ler ~/.claude/settings.json" (AgentUsagePanel.tsx:213-227)',
         disabledWhen: 'busy; só existe no cartão do Claude, com settings legível e sem statusLine alheia',
       },
       {
@@ -267,11 +267,12 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
     persistence: [
       'processo principal: SQLite agent_usage_accounts e agent_usage_samples (contas extras e amostras de uso)',
       '~/.claude/settings.json: statusLine do app ao ligar a coleta, com backup da anterior; script e captura em userData/claude-statusline',
-      'nenhuma: aba e intervalo de reconsulta são estado do componente',
+      'nenhuma: aba, intervalo de reconsulta e filtro são estado do componente (o filtro volta vazio ao reabrir)',
     ],
     ipc: [
       'agent-usage:list',
       'agent-usage:refresh',
+      'agent-usage:refresh-account',
       'agent-usage:add-account',
       'agent-usage:remove-account',
       'agent-usage:consume-reset-credit',
@@ -295,15 +296,21 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
       'summarizeProviderAccounts',
       'describeDisplayedAgentUsage',
       'getAgentUsageLoginTerminal',
+      'filterAgentUsageGroups',
+      'AgentUsageFilterBar',
+      'AgentUsageRefreshAccountButton',
+      'useAgentUsageAccountRefresh',
       'AccountChainSection',
       'AccountSwitchHistory',
     ],
     tests: [
       { file: 'src/features/shared/agent-usage/agent-usage.test.ts' },
+      { file: 'src/features/shared/agent-usage/useAgentUsageAccountRefresh.test.ts' },
       { file: 'src/features/canvas/components/tools/AgentUsageProviderSummary.test.ts' },
       { file: 'electron/services/agent-usage-ipc-handlers.test.cjs' },
       { file: 'electron/services/agent-usage-service.test.cjs' },
       { file: 'electron/services/agent-usage-availability.test.cjs' },
+      { file: 'electron/services/agent-usage-refresh-account.test.cjs' },
       { file: 'electron/services/claude-statusline-service.test.cjs' },
       { file: 'electron/services/codex-status-query.test.cjs' },
       { file: 'electron/services/codex-status-screen.test.cjs' },
@@ -311,12 +318,12 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
     ],
     gaps: [
       {
-        what: 'Atualizar, Reconsultar, Remover, Adicionar conta e Ligar coleta não têm teste de interface (o smoke de contas só abre o painel e troca de aba); enable/disable da statusLine também não aparece em agent-usage-ipc-handlers.test.cjs',
+        what: 'Atualizar, Reconsultar, Remover, Adicionar conta e Ligar coleta não têm teste de interface (o smoke de contas só abre o painel e troca de aba), nem digitar na busca, ligar o atalho "Precisa de atenção" e acionar o "Atualizar a conta" (a estrutura sai testada por renderização estática, a regra do filtro e a chamada do botão são funções puras testadas, mas o clique e a digitação só foram vistos no app real); enable/disable da statusLine também não aparece em agent-usage-ipc-handlers.test.cjs',
         risk: 'médio',
         task: '3ec91f95-497e-81ca-8319-ee657b0b6492',
       },
       {
-        what: 'AgentUsagePanel.tsx:206-220 e 600-653: a resposta de agent-usage:enable/disable-claude-statusline substitui o estado sem olhar ok; a mensagem de falha (ex.: "Não foi possível gravar o script da status line.") nunca é exibida, e um erro lançado no handler vira estado sem settingsReadable, escondendo o botão atrás de "Não foi possível ler ~/.claude/settings.json"',
+        what: 'AgentUsagePanel.tsx:213-227 e 650-703: a resposta de agent-usage:enable/disable-claude-statusline substitui o estado sem olhar ok; a mensagem de falha (ex.: "Não foi possível gravar o script da status line.") nunca é exibida, e um erro lançado no handler vira estado sem settingsReadable, escondendo o botão atrás de "Não foi possível ler ~/.claude/settings.json"',
         risk: 'médio',
         task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
       },

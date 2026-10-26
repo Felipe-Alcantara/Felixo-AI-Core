@@ -82,6 +82,51 @@ pasta de login própria usa a pasta dela; a "Conta desta máquina" usa o login d
 sistema). O login em si é feito por você, no terminal: o app não o automatiza.
 Gemini e Openia não têm o botão.
 
+### Atualizar uma conta só e filtrar as contas
+
+Ao lado do identificador de cada conta há um botão **Atualizar a conta**, que
+refaz a consulta só dela, em vez de uma por conta como o **Atualizar** do topo.
+O que ele lê depende da conta, e o texto de ajuda do botão diz qual é o caso:
+
+- **conta com login próprio** (cadastrada em *Conta por terminal*): consulta só a
+  pasta de login dela. É uma CLI aberta em vez de uma por conta, e as outras
+  linhas ficam exatamente como estavam;
+- **"Conta desta máquina" e contas cadastradas à mão**: não têm pasta própria,
+  então todas dividem **uma** consulta por provedor, a do login do sistema. O
+  botão relê essa sessão, e o número aparece na conta a que a sessão pertence:
+  se você clicar numa conta cadastrada que não é a que está logada na máquina, ela
+  mostra "a CLI informou outra conta" e o número vai para a conta certa. É o mesmo
+  resultado que o **Atualizar** do topo daria, só sem consultar as demais.
+
+A atualização de uma conta não muda a hora da **última coleta completa** (a que o
+painel usa para decidir se consulta de novo ao abrir). Dois cliques na mesma
+consulta viram uma só, e os botões ficam desabilitados enquanto uma rodada
+completa está em andamento, porque ela já lê todas as contas. Se uma rodada completa
+(ou o **Reconectar**) começa durante a atualização de uma conta, essa atualização é
+cancelada e descartada: gravar o resultado dela por cima de uma leitura mais nova
+seria pior que não gravar. O mesmo teto de 90 segundos vale. O botão existe no
+painel do canvas e no modal **Uso e limites dos agentes** do chat.
+
+Com **6 contas ou mais** aparece uma barra de filtro acima da lista (abaixo disso o
+painel cabe em uma ou duas telas e a barra só ocuparia espaço). O número vem de uma
+medição: cada conta ocupa cerca de 109 px e o painel já rola com 3 contas numa
+janela de 696 px; com 6 são ~2,3 telas de rolagem. A barra tem:
+
+- uma **busca** por nome, e-mail (como o painel o exibe, mascarado) ou plano, sem
+  diferenciar acento nem maiúscula; vários termos exigem todos;
+- o atalho **Precisa de atenção (N)**, que mostra só as contas com erro, leitura
+  desatualizada, sem sessão ou ainda sem número. A conta cuja fonte nunca entrega
+  número (o Gemini, só no `/stats model` interativo) não conta: não há o que fazer
+  por ela, e ficaria para sempre na lista;
+- o contador **X de Y contas** e **Limpar filtro**, quando há filtro ligado.
+
+O provedor que fica sem nenhuma conta no filtro some da tela, em vez de dizer
+"nenhuma conta vinculada". O filtro é só de exibição: o **Atualizar** e o
+**Reconectar** continuam consultando todas as contas, e o filtro volta vazio ao
+reabrir o painel. A barra fica na tela enquanto houver filtro ligado, mesmo que
+o número de contas caia abaixo de 6, para o filtro nunca esconder uma conta em
+silêncio.
+
 No Claude Code, cada linha também traz **Dados completos do /status**: versão,
 sessão, peer, pasta, método de login, organização, e-mail, modelo, fontes de
 configuração, custo, duração, alterações, uso por modelo, janelas, resets,
