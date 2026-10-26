@@ -172,6 +172,32 @@ describe('attachTerminalFitLifecycle', () => {
     expect(fitCalls).toEqual(['sessao-1', 'sessao-1']) // um attach+fit por montagem, não acumulado
   })
 
+  it('medida oscilante: cada notificação gera um fit e nada se agenda sozinho (sem crescimento)', () => {
+    // A caixa alterna entre dois tamanhos a cada quadro (o pior caso de um
+    // observer teimoso). O ciclo só pode reagir às notificações: nenhum RAF
+    // novo, nenhum observer novo, nenhum fit a mais do que o recebido.
+    const container = createFakeContainer()
+    const { store, fitCalls } = createFakeStore()
+    const { FakeResizeObserver, instances } = createFakeResizeObserverClass()
+    const requestAnimationFrame = vi.fn(() => 1)
+
+    const cleanup = attachTerminalFitLifecycle(container, store, 'sessao-1', {
+      requestAnimationFrame,
+      cancelAnimationFrame: () => {},
+      ResizeObserverImpl: FakeResizeObserver,
+    })
+
+    const NOTIFICACOES = 200
+    for (let i = 0; i < NOTIFICACOES; i++) instances[0].trigger()
+
+    expect(fitCalls).toHaveLength(1 + NOTIFICACOES) // o ajuste imediato do attach + um por notificação
+    expect(requestAnimationFrame).toHaveBeenCalledTimes(1) // só o do attach: o callback do observer não re-arma RAF
+    expect(instances).toHaveLength(1)
+
+    cleanup()
+    expect(instances[0].disconnected).toBe(true)
+  })
+
   it('sessões diferentes não se confundem entre si', () => {
     const container = createFakeContainer()
     const { store, fitCalls, attachCalls } = createFakeStore()

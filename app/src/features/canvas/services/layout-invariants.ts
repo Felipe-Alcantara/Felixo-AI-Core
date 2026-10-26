@@ -57,8 +57,9 @@ export type LayoutInvariantViolation = {
  * ao mesmo tempo. Se as invariantes seguram aqui, seguram em qualquer
  * combinação mais folgada.
  *
- * @param viewport Viewport útil (sem levar em conta zoom/DPR — ver limitação
- *   no corpo da task de origem).
+ * @param viewport Viewport útil em pixels CSS. O zoom de página do Electron
+ *   entra como um viewport menor ou maior (largura da janela / 1,2^nível);
+ *   `layout-invariants.test.ts` varre os níveis -3 a +3.
  * @returns Violações encontradas; vazio quando o pior caso está seguro.
  */
 export function checkWorstCaseLayout(viewport: LayoutViewport): LayoutInvariantViolation[] {

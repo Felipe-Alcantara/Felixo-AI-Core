@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import {
   COMBINED_FLOOR_WIDTH,
+  DRAWER_MIN_WIDTH,
+  INSPECTOR_RESERVED_WIDTH,
+  MIN_GUARANTEED_CANVAS_STRIP,
+  PANEL_MIN_WIDTH,
+  TOOLBAR_WIDTH,
   checkWorstCaseLayout,
   detectLiveLayoutClamp,
   isWorstCaseLayoutSafe,
 } from './layout-invariants'
+import { canvasSurfaceLayoutWarning, freeCanvasArea, miniMapSize, splitHorizontalSpace } from './canvas-surfaces'
 
 // Bateria de breakpoints a partir de COMBINED_FLOOR_WIDTH (barra 176 + piso
 // do painel 260 + piso da gaveta 440 = 876px — corrigido em 12/09/2026: o
@@ -55,6 +61,97 @@ describe('pior caso simultâneo (sidebar + painel + gaveta + inspector) nunca so
     expect(violations.map((violation) => violation.rule)).toEqual([
       'barra+painel+gaveta+inspector-cabem-na-largura',
     ])
+  })
+})
+
+// Zoom de página do Electron (`electron/services/window-zoom-shortcuts.cjs`):
+// níveis de -3 a +3, fator do Chromium = 1,2^nível. O renderer enxerga a janela
+// já em pixels CSS (largura / fator), então o zoom é só um viewport menor ou
+// maior; os pixels da janela mudam de significado, as contas não. Medido no app
+// real em 1304 px: +3 vira 754×403 e -3 vira 2253×1202.
+const NIVEIS_DE_ZOOM = [-3, -2, -1, 0, 1, 2, 3]
+const JANELAS = [
+  { label: 'janela mínima do app (720×500)', width: 720, height: 500 },
+  { label: 'janela padrão (1320×760)', width: 1320, height: 760 },
+  { label: 'monitor grande (1920×1080)', width: 1920, height: 1080 },
+]
+const viewportComZoom = ({ width, height }: { width: number; height: number }, nivel: number) => ({
+  width: Math.round(width / 1.2 ** nivel),
+  height: Math.round(height / 1.2 ** nivel),
+})
+const OCUPACAO_NOS_PISOS = {
+  toolbar: TOOLBAR_WIDTH,
+  panel: PANEL_MIN_WIDTH,
+  drawer: DRAWER_MIN_WIDTH,
+  inspector: INSPECTOR_RESERVED_WIDTH,
+}
+
+describe('zoom de página: o mesmo layout em um viewport menor ou maior', () => {
+  it('em qualquer janela e zoom, painel e gaveta ficam em ou acima dos pisos e as contas são finitas', () => {
+    for (const janela of JANELAS) {
+      for (const nivel of NIVEIS_DE_ZOOM) {
+        const viewport = viewportComZoom(janela, nivel)
+        const { panel, drawer } = splitHorizontalSpace(
+          viewport.width, TOOLBAR_WIDTH, 380, PANEL_MIN_WIDTH, 800, DRAWER_MIN_WIDTH, undefined, INSPECTOR_RESERVED_WIDTH,
+        )
+        const livre = freeCanvasArea(viewport, { toolbar: TOOLBAR_WIDTH, panel, drawer, inspector: INSPECTOR_RESERVED_WIDTH })
+        const minimapa = miniMapSize(livre.width)
+        const contexto = `${janela.label}, zoom ${nivel} → ${viewport.width}×${viewport.height}`
+
+        expect(panel, contexto).toBeGreaterThanOrEqual(PANEL_MIN_WIDTH)
+        expect(drawer, contexto).toBeGreaterThanOrEqual(DRAWER_MIN_WIDTH)
+        expect(Number.isFinite(livre.width), contexto).toBe(true)
+        expect(livre.width, contexto).toBeGreaterThanOrEqual(0)
+        if (minimapa) expect(minimapa.width, contexto).toBeLessThanOrEqual(livre.width)
+        expect(() => checkWorstCaseLayout(viewport), contexto).not.toThrow()
+      }
+    }
+  })
+
+  it('onde os pisos cabem não há violação; onde não cabem, a de largura é a sobreposição intencional', () => {
+    for (const janela of JANELAS) {
+      for (const nivel of NIVEIS_DE_ZOOM) {
+        const viewport = viewportComZoom(janela, nivel)
+        const regras = checkWorstCaseLayout(viewport).map((violacao) => violacao.rule)
+        const contexto = `${janela.label}, zoom ${nivel} → ${viewport.width}×${viewport.height}`
+
+        if (viewport.width >= COMBINED_FLOOR_WIDTH && viewport.height >= 440) expect(regras, contexto).toEqual([])
+        if (viewport.width < COMBINED_FLOOR_WIDTH) {
+          expect(regras, contexto).toContain('barra+painel+gaveta+inspector-cabem-na-largura')
+        }
+      }
+    }
+  })
+
+  it('o aviso de pouco espaço liga exatamente quando os pisos deixam de caber', () => {
+    const limite = COMBINED_FLOOR_WIDTH + MIN_GUARANTEED_CANVAS_STRIP
+
+    expect(canvasSurfaceLayoutWarning({ width: limite, height: 800 }, OCUPACAO_NOS_PISOS)).toBeNull()
+    expect(canvasSurfaceLayoutWarning({ width: limite - 1, height: 800 }, OCUPACAO_NOS_PISOS)).toMatch(/horizontal/)
+  })
+
+  it('mais zoom nunca desliga o aviso: depois que aparece, fica até o zoom voltar', () => {
+    for (const janela of JANELAS) {
+      let avisou = false
+      for (const nivel of NIVEIS_DE_ZOOM) {
+        const aviso = canvasSurfaceLayoutWarning(viewportComZoom(janela, nivel), OCUPACAO_NOS_PISOS)
+        if (avisou) expect(aviso, `${janela.label}, zoom ${nivel}`).not.toBeNull()
+        if (aviso) avisou = true
+      }
+    }
+  })
+
+  it('zoom máximo na janela mínima: avisa e segura os pisos, sem NaN (417×289 CSS px)', () => {
+    const viewport = viewportComZoom(JANELAS[0], 3)
+    const { panel, drawer } = splitHorizontalSpace(
+      viewport.width, TOOLBAR_WIDTH, 380, PANEL_MIN_WIDTH, 800, DRAWER_MIN_WIDTH, undefined, INSPECTOR_RESERVED_WIDTH,
+    )
+
+    expect(viewport).toEqual({ width: 417, height: 289 })
+    expect({ panel, drawer }).toEqual({ panel: PANEL_MIN_WIDTH, drawer: DRAWER_MIN_WIDTH })
+    expect(canvasSurfaceLayoutWarning(viewport, { toolbar: TOOLBAR_WIDTH, panel, drawer, inspector: INSPECTOR_RESERVED_WIDTH })).toMatch(
+      /Pouco espa/,
+    )
   })
 })
 
