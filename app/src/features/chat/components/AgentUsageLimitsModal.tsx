@@ -2,6 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Activity, ExternalLink, Gauge, RefreshCw, Trash2, X } from 'lucide-react'
 import {
   AGENT_USAGE_STATUS_CLASSES,
+  EMPTY_AGENT_USAGE_FILTER,
+  countAgentUsageAccountsNeedingAttention,
+  filterAgentUsageGroups,
   formatAgentUsageDate,
   formatAgentUsageIdentity,
   formatAgentUsageMetric,
@@ -12,14 +15,19 @@ import {
   groupAgentUsageAccounts,
   shouldRefreshAgentUsageOnOpen,
   shouldRunScheduledAgentUsageRefresh,
+  shouldShowAgentUsageFilter,
   summarizeAgentUsage,
 } from '../../shared/agent-usage/agent-usage'
+import { AgentUsageFilterBar } from '../../shared/agent-usage/AgentUsageFilterBar'
+import { AgentUsageRefreshAccountButton } from '../../shared/agent-usage/AgentUsageRefreshAccountButton'
 import { AgentUsageStatusDetailsView } from '../../shared/agent-usage/AgentUsageStatusDetails'
 import { AgentUsageResetCreditsView } from '../../shared/agent-usage/AgentUsageResetCredits'
+import { useAgentUsageAccountRefresh } from '../../shared/agent-usage/useAgentUsageAccountRefresh'
 import { FelixoSelect, type FelixoSelectOption } from '../../shared/components/FelixoSelect'
 import type {
   AgentUsageAccount,
   AgentUsageDashboard,
+  AgentUsageFilter,
   AgentUsageMutationResult,
   AgentUsageProviderGroup,
 } from '../../shared/agent-usage/agent-usage'
@@ -157,6 +165,14 @@ export function AgentUsageLimitsModal({
     [accounts, providers],
   )
   const summary = useMemo(() => summarizeAgentUsage(accounts), [accounts])
+  const { refreshingIds, refreshAccount } = useAgentUsageAccountRefresh({
+    onDashboard: setDashboard,
+    onMessage: setStatusMessage,
+  })
+  // Sem memo: "precisa de atenção" depende do relógio (o tick de 30 s do modal).
+  const [filter, setFilter] = useState<AgentUsageFilter>(EMPTY_AGENT_USAGE_FILTER)
+  const visibleGroups = filterAgentUsageGroups(groups, filter)
+  const visibleAccountCount = visibleGroups.reduce((sum, group) => sum + group.accounts.length, 0)
 
   if (!isOpen) {
     return null
@@ -336,14 +352,32 @@ export function AgentUsageLimitsModal({
 
           <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
             <div className="space-y-4">
-              {groups.map((group) => (
+              {shouldShowAgentUsageFilter(accounts.length, filter) && (
+                <AgentUsageFilterBar
+                  filter={filter}
+                  onChange={setFilter}
+                  shown={visibleAccountCount}
+                  total={accounts.length}
+                  attentionCount={countAgentUsageAccountsNeedingAttention(accounts)}
+                />
+              )}
+              {visibleGroups.map((group) => (
                 <ProviderSection
                   key={group.id}
                   group={group}
                   onRemoveAccount={handleRemoveAccount}
                   onUseResetCredit={handleUseResetCredit}
+                  onRefreshAccount={refreshAccount}
+                  refreshingIds={refreshingIds}
+                  // Rodada completa em andamento: ela já lê todas as contas.
+                  refreshDisabled={loading}
                 />
               ))}
+              {groups.length > 0 && visibleGroups.length === 0 && (
+                <div className="rounded-2xl border border-dashed border-white/10 px-4 py-10 text-center text-xs text-zinc-500">
+                  Nenhuma conta corresponde ao filtro.
+                </div>
+              )}
               {groups.length === 0 && (
                 <div className="rounded-2xl border border-dashed border-white/10 px-4 py-10 text-center text-xs text-zinc-500">
                   Nenhum provider foi carregado.
@@ -423,6 +457,9 @@ function ProviderSection({
   group,
   onRemoveAccount,
   onUseResetCredit,
+  onRefreshAccount,
+  refreshingIds,
+  refreshDisabled,
 }: {
   group: AgentUsageProviderGroup
   onRemoveAccount: (account: AgentUsageAccount) => void
@@ -430,6 +467,9 @@ function ProviderSection({
     account: AgentUsageAccount,
     creditId: string,
   ) => Promise<AgentUsageMutationResult>
+  onRefreshAccount: (account: AgentUsageAccount) => void
+  refreshingIds: ReadonlySet<string>
+  refreshDisabled: boolean
 }) {
   return (
     <section className="rounded-2xl border border-white/8 bg-black/10 p-3">
@@ -472,6 +512,9 @@ function ProviderSection({
               key={account.id}
               account={account}
               onRemove={() => onRemoveAccount(account)}
+              onRefresh={onRefreshAccount}
+              refreshing={refreshingIds.has(account.id)}
+              refreshDisabled={refreshDisabled}
               onUseResetCredit={(creditId) => onUseResetCredit(account, creditId)}
             />
           ))
@@ -484,10 +527,16 @@ function ProviderSection({
 function AccountCard({
   account,
   onRemove,
+  onRefresh,
+  refreshing,
+  refreshDisabled,
   onUseResetCredit,
 }: {
   account: AgentUsageAccount
   onRemove: () => void
+  onRefresh: (account: AgentUsageAccount) => void
+  refreshing: boolean
+  refreshDisabled: boolean
   onUseResetCredit: (creditId: string) => Promise<AgentUsageMutationResult>
 }) {
   const status = getAccountStatus(account)
@@ -513,15 +562,23 @@ function AccountCard({
             {formatAgentUsageIdentity(account)}
           </p>
         </div>
-        <button
-          type="button"
-          title="Remover conta"
-          onClick={onRemove}
-          className="felixo-btn-icon flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-zinc-600 hover:bg-theme-error/10 hover:text-theme-error"
-        >
-          <Trash2 size={13} aria-hidden="true" />
-          <span className="sr-only">Remover conta</span>
-        </button>
+        <div className="flex shrink-0 items-center gap-1">
+          <AgentUsageRefreshAccountButton
+            account={account}
+            refreshing={refreshing}
+            disabled={refreshDisabled}
+            onRefresh={onRefresh}
+          />
+          <button
+            type="button"
+            title="Remover conta"
+            onClick={onRemove}
+            className="felixo-btn-icon flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-zinc-600 hover:bg-theme-error/10 hover:text-theme-error"
+          >
+            <Trash2 size={13} aria-hidden="true" />
+            <span className="sr-only">Remover conta</span>
+          </button>
+        </div>
       </div>
 
       {metricsSample && metricsSample.metrics.length > 0 ? (

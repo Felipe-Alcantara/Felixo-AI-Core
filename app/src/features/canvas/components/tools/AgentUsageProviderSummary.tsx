@@ -1,3 +1,4 @@
+import { AgentUsageRefreshAccountButton } from '../../../shared/agent-usage/AgentUsageRefreshAccountButton'
 import {
   AGENT_USAGE_STATUS_CLASSES,
   formatAgentUsageNumber,
@@ -22,9 +23,16 @@ import {
 export function ProviderSummaryTable({
   providerName,
   summary,
+  onRefreshAccount,
+  refreshingIds,
+  refreshDisabled,
 }: {
   providerName: string
   summary: AgentUsageProviderSummary
+  onRefreshAccount: (account: AgentUsageAccount) => void
+  refreshingIds: ReadonlySet<string>
+  /** Rodada completa em andamento: ela já lê todas as contas. */
+  refreshDisabled: boolean
 }) {
   if (summary.rows.length === 0) {
     return null
@@ -54,12 +62,20 @@ export function ProviderSummaryTable({
         <tbody key={row.account.id}>
           <tr className="border-t border-white/6">
             <th scope="rowgroup" colSpan={columnCount} className="pt-1.5 text-left font-normal">
-              <span
-                className="block whitespace-normal wrap-break-word text-zinc-200"
-                title={accountName(row.account)}
-              >
-                {accountName(row.account)}
-              </span>
+              <div className="flex items-start gap-1.5">
+                <span
+                  className="block min-w-0 flex-1 whitespace-normal wrap-break-word text-zinc-200"
+                  title={accountName(row.account)}
+                >
+                  {accountName(row.account)}
+                </span>
+                <AgentUsageRefreshAccountButton
+                  account={row.account}
+                  refreshing={refreshingIds.has(row.account.id)}
+                  disabled={refreshDisabled}
+                  onRefresh={onRefreshAccount}
+                />
+              </div>
               {row.warning && (
                 <span className="mt-0.5 block text-[10px] leading-snug text-(--color-warning)">
                   {row.warning}

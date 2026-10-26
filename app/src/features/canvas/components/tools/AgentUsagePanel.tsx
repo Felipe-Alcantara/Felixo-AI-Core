@@ -11,11 +11,16 @@ import {
 } from '../../services/agent-usage-panel-tab'
 import type { NewTerminalOptions } from '../../services/new-terminal-options'
 import { FelixoSelect, type FelixoSelectOption } from '../../../shared/components/FelixoSelect'
+import { AgentUsageFilterBar } from '../../../shared/agent-usage/AgentUsageFilterBar'
 import { AgentUsageResetCreditsView } from '../../../shared/agent-usage/AgentUsageResetCredits'
 import { AgentUsageStatusDetailsView } from '../../../shared/agent-usage/AgentUsageStatusDetails'
+import { useAgentUsageAccountRefresh } from '../../../shared/agent-usage/useAgentUsageAccountRefresh'
 import {
   AGENT_USAGE_STATUS_CLASSES,
+  EMPTY_AGENT_USAGE_FILTER,
   agentUsagePercent,
+  countAgentUsageAccountsNeedingAttention,
+  filterAgentUsageGroups,
   formatAgentUsageDate,
   formatAgentUsageNumber,
   formatAgentUsageReset,
@@ -28,11 +33,13 @@ import {
   groupAgentUsageAccounts,
   shouldRefreshAgentUsageOnOpen,
   shouldRunScheduledAgentUsageRefresh,
+  shouldShowAgentUsageFilter,
   summarizeProviderAccounts,
 } from '../../../shared/agent-usage/agent-usage'
 import type {
   AgentUsageAccount,
   AgentUsageDashboard,
+  AgentUsageFilter,
   AgentUsageMutationResult,
   AgentUsageMetric,
   AgentUsageProviderGroup,
@@ -273,6 +280,17 @@ export function AgentUsagePanel({
     [dashboard.accounts, dashboard.providers],
   )
 
+  const { refreshingIds, refreshAccount } = useAgentUsageAccountRefresh({
+    onDashboard: setDashboard,
+    onMessage: setStatusMessage,
+  })
+
+  // Sem memo: "precisa de atenção" depende do relógio (o tick de 30 s do painel).
+  const [filter, setFilter] = useState<AgentUsageFilter>(EMPTY_AGENT_USAGE_FILTER)
+  const allAccounts = dashboard.accounts ?? []
+  const visibleGroups = filterAgentUsageGroups(groups, filter)
+  const visibleAccountCount = visibleGroups.reduce((sum, group) => sum + group.accounts.length, 0)
+
   const removeAccount = useCallback(
     async (account: AgentUsageAccount) => {
       if (
@@ -461,13 +479,33 @@ export function AgentUsagePanel({
           </p>
         )}
 
+        {shouldShowAgentUsageFilter(allAccounts.length, filter) && (
+          <AgentUsageFilterBar
+            filter={filter}
+            onChange={setFilter}
+            shown={visibleAccountCount}
+            total={allAccounts.length}
+            attentionCount={countAgentUsageAccountsNeedingAttention(allAccounts)}
+          />
+        )}
+
+        {hasContent && visibleGroups.length === 0 && (
+          <p className="rounded-md border border-white/10 bg-white/2 px-3 py-4 text-center text-[12px] text-zinc-500">
+            Nenhuma conta corresponde ao filtro.
+          </p>
+        )}
+
         <div className="space-y-2.5">
-          {groups.map((group) => (
+          {visibleGroups.map((group) => (
             <ProviderCard
               key={group.id}
               group={group}
               onRemoveAccount={removeAccount}
               onUseResetCredit={useResetCredit}
+              onRefreshAccount={refreshAccount}
+              refreshingIds={refreshingIds}
+              // Rodada completa em andamento: ela já lê todas as contas.
+              refreshDisabled={loading}
               onAddTerminal={onAddTerminal}
               statusline={group.id === 'claude' ? statusline : null}
               onToggleStatusline={toggleStatusline}
@@ -496,6 +534,9 @@ function ProviderCard({
   group,
   onRemoveAccount,
   onUseResetCredit,
+  onRefreshAccount,
+  refreshingIds,
+  refreshDisabled,
   onAddTerminal,
   statusline,
   onToggleStatusline,
@@ -506,6 +547,9 @@ function ProviderCard({
     account: AgentUsageAccount,
     creditId: string,
   ) => Promise<AgentUsageMutationResult>
+  onRefreshAccount: (account: AgentUsageAccount) => void
+  refreshingIds: ReadonlySet<string>
+  refreshDisabled: boolean
   onAddTerminal?: (options: NewTerminalOptions) => void
   /** Só o Claude tem coleta por status line; nos demais vem nulo. */
   statusline: ClaudeStatuslineState | null
@@ -549,7 +593,13 @@ function ProviderCard({
         </p>
       ) : (
         <>
-          <ProviderSummaryTable providerName={group.name} summary={summary} />
+          <ProviderSummaryTable
+            providerName={group.name}
+            summary={summary}
+            onRefreshAccount={onRefreshAccount}
+            refreshingIds={refreshingIds}
+            refreshDisabled={refreshDisabled}
+          />
           <div className="mt-2 space-y-1.5">
             {group.accounts.map((account) => (
               // Sem `open` controlado: aberto ou fechado, o estado fica no

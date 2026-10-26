@@ -448,6 +448,106 @@ export function describeDisplayedAgentUsage(
   }
 }
 
+/**
+ * A partir de quantas contas o painel oferece o filtro. Medido no app (26/10/2026,
+ * janela de 696 px): cada conta ocupa ~109 px e o painel já rola com 3; com 6 são
+ * ~2,3 telas de rolagem. Abaixo disso a busca só ocuparia espaço.
+ */
+export const AGENT_USAGE_FILTER_MIN_ACCOUNTS = 6
+
+export type AgentUsageFilter = {
+  /** Texto livre: nome da conta, e-mail (como o painel o exibe) ou plano. */
+  query: string
+  /** Só contas com algo a fazer: erro, leitura velha ou sem sessão. */
+  attentionOnly: boolean
+}
+
+export const EMPTY_AGENT_USAGE_FILTER: AgentUsageFilter = { query: '', attentionOnly: false }
+
+export function isAgentUsageFilterActive(filter: AgentUsageFilter): boolean {
+  return filter.query.trim() !== '' || filter.attentionOnly
+}
+
+/** A barra de filtro aparece com muitas contas, e fica enquanto houver filtro ligado (ele não pode esconder conta em silêncio). */
+export function shouldShowAgentUsageFilter(accountCount: number, filter: AgentUsageFilter): boolean {
+  return accountCount >= AGENT_USAGE_FILTER_MIN_ACCOUNTS || isAgentUsageFilterActive(filter)
+}
+
+/**
+ * A conta tem algo a fazer? Erro, leitura velha, sem sessão ou ainda sem número.
+ * A que a fonte nunca entrega (Gemini interativo, provider sem fonte) não conta:
+ * não há o que a pessoa fazer, e ela ficaria para sempre na lista de atenção.
+ */
+export function accountNeedsAttention(
+  account: AgentUsageAccount,
+  now: () => number = Date.now,
+): boolean {
+  const { state } = account.availability
+  if (state === 'unsupported' || state === 'interactive-only') {
+    return false
+  }
+
+  return getAccountStatus(account, now) !== 'current'
+}
+
+export function countAgentUsageAccountsNeedingAttention(
+  accounts: AgentUsageAccount[],
+  now: () => number = Date.now,
+): number {
+  return accounts.filter((account) => accountNeedsAttention(account, now)).length
+}
+
+/** Sem acento e sem caixa: "joao" acha "João", "PLUS" acha "plus". */
+function normalizeAgentUsageSearch(text: string): string {
+  return text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
+}
+
+function matchesAgentUsageQuery(account: AgentUsageAccount, query: string): boolean {
+  const terms = normalizeAgentUsageSearch(query).split(/\s+/).filter(Boolean)
+  if (terms.length === 0) {
+    return true
+  }
+
+  const plan = getAgentUsagePlan(getDisplayedAgentUsageSample(account))
+  const haystack = normalizeAgentUsageSearch(
+    [account.label, account.identityDisplay, plan].filter(Boolean).join(' '),
+  )
+  return terms.every((term) => haystack.includes(term))
+}
+
+/**
+ * Os grupos com só as contas que passam no filtro. O provider que ficou sem conta
+ * some junto: "Nenhuma conta vinculada" seria mentira durante a busca. Filtro
+ * desligado devolve os grupos como vieram.
+ */
+export function filterAgentUsageGroups(
+  groups: AgentUsageProviderGroup[],
+  filter: AgentUsageFilter,
+  now: () => number = Date.now,
+): AgentUsageProviderGroup[] {
+  if (!isAgentUsageFilterActive(filter)) {
+    return groups
+  }
+
+  return groups
+    .map((group) => ({
+      ...group,
+      accounts: group.accounts.filter(
+        (account) =>
+          matchesAgentUsageQuery(account, filter.query) &&
+          (!filter.attentionOnly || accountNeedsAttention(account, now)),
+      ),
+    }))
+    .filter((group) => group.accounts.length > 0)
+}
+
+/** Texto de ajuda do botão "Atualizar" de uma conta: diz o que a consulta lê de verdade. */
+export function describeAgentUsageAccountRefresh(account: AgentUsageAccount): string {
+  return account.ownLogin
+    ? 'Consulta só esta conta, na pasta de login dela. As outras ficam como estão.'
+    : 'Esta conta usa o login desta máquina: relê a sessão do sistema neste provider e mostra a leitura na conta a que essa sessão pertence.'
+}
+
 // Subcomandos de login confirmados nas CLIs instaladas (claude 2.1.310, codex-cli
 // 0.165). Gemini e Openia ficam de fora: não há login por subcomando para abrir.
 const AGENT_LOGIN_COMMANDS: ReadonlyMap<string, { command: string; args: string[] }> = new Map([

@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import {
   getAgentUsageLastFailureNotice,
+  AGENT_USAGE_FILTER_MIN_ACCOUNTS,
   AGENT_USAGE_OPEN_REUSE_MS,
   AGENT_USAGE_STALE_AFTER_MS,
+  EMPTY_AGENT_USAGE_FILTER,
+  accountNeedsAttention,
   agentUsagePercent,
+  countAgentUsageAccountsNeedingAttention,
+  describeAgentUsageAccountRefresh,
   describeDisplayedAgentUsage,
   deriveDisplayStatus,
+  filterAgentUsageGroups,
   formatAgentUsageAge,
   formatAgentUsageMetric,
   formatAgentUsageNumber,
@@ -21,13 +27,16 @@ import {
   groupAgentUsageAccounts,
   shouldRefreshAgentUsageOnOpen,
   shouldRunScheduledAgentUsageRefresh,
+  shouldShowAgentUsageFilter,
   summarizeAgentUsage,
   summarizeProviderAccounts,
 } from './agent-usage'
 import type {
   AgentUsageAccount,
+  AgentUsageFilter,
   AgentUsageMetric,
   AgentUsageProvider,
+  AgentUsageProviderGroup,
   AgentUsageSample,
 } from './agent-usage'
 
@@ -727,5 +736,122 @@ describe('getAgentUsageLoginTerminal', () => {
     for (const providerId of ['gemini', 'openia', 'constructor', '__proto__', 'toString']) {
       expect(getAgentUsageLoginTerminal(semSessao({ providerId })), providerId).toBeNull()
     }
+  })
+})
+
+describe('filtro de contas e texto do botão Atualizar por conta', () => {
+  // As amostras da fixture nascem em 2026-08-28 12:00: o relógio fixo evita que `current` envelheça sozinho.
+  const AGORA = () => Date.parse('2026-08-28T12:05:00.000Z')
+  const conta = (
+    id: string,
+    status: AgentUsageSample['status'] | null,
+    overrides: Partial<AgentUsageAccount> = {},
+  ): AgentUsageAccount => ({ ...account(id, status), ...overrides })
+  const provedor = (id: string, name: string): AgentUsageProvider => ({
+    id,
+    name,
+    provider: id,
+    command: id,
+    detected: true,
+    version: null,
+    usageSource: { kind: 'assisted-event', label: 'Fonte', docsUrl: null, limitation: 'x', capability: 'available' },
+  })
+  const filtro = (overrides: Partial<AgentUsageFilter> = {}): AgentUsageFilter => ({ ...EMPTY_AGENT_USAGE_FILTER, ...overrides })
+
+  it('o filtro só aparece com muitas contas, e fica enquanto houver filtro ligado para não esconder conta em silêncio', () => {
+    // Valor medido no app (~109 px por conta, o painel já rola com 3): mudar exige medir de novo.
+    expect(AGENT_USAGE_FILTER_MIN_ACCOUNTS).toBe(6)
+    expect(shouldShowAgentUsageFilter(AGENT_USAGE_FILTER_MIN_ACCOUNTS - 1, filtro())).toBe(false)
+    expect(shouldShowAgentUsageFilter(AGENT_USAGE_FILTER_MIN_ACCOUNTS, filtro())).toBe(true)
+    expect(shouldShowAgentUsageFilter(2, filtro({ query: 'ana' }))).toBe(true)
+    expect(shouldShowAgentUsageFilter(2, filtro({ attentionOnly: true }))).toBe(true)
+    // Só espaços não é filtro: a barra some com poucas contas.
+    expect(shouldShowAgentUsageFilter(2, filtro({ query: '   ' }))).toBe(false)
+  })
+
+  it('precisa de atenção: erro, leitura velha, sem sessão e sem número; não a que a fonte nunca entrega', () => {
+    const semFonte = { state: 'interactive-only', message: 'só no /stats' } as const
+
+    expect(accountNeedsAttention(conta('a', 'current'), AGORA)).toBe(false)
+    expect(accountNeedsAttention(conta('b', 'stale'), AGORA)).toBe(true)
+    expect(accountNeedsAttention(conta('c', 'error'), AGORA)).toBe(true)
+    expect(accountNeedsAttention(conta('d', 'unavailable', { availability: { state: 'auth-required', message: 'x' } }), AGORA)).toBe(true)
+    expect(accountNeedsAttention(conta('e', null), AGORA)).toBe(true)
+    // Gemini: a fonte só existe dentro da sessão. Nada a fazer, então não polui a lista de atenção.
+    expect(accountNeedsAttention(conta('f', 'unavailable', { availability: semFonte }), AGORA)).toBe(false)
+    expect(accountNeedsAttention(conta('g', 'unavailable', { availability: { state: 'unsupported', message: 'x' } }), AGORA)).toBe(false)
+  })
+
+  it('a leitura "atual" que o relógio já envelheceu também precisa de atenção', () => {
+    const velha = conta('a', 'current')
+
+    expect(accountNeedsAttention(velha, AGORA)).toBe(false)
+    expect(accountNeedsAttention(velha, () => AGORA() + AGENT_USAGE_STALE_AFTER_MS + 60_000)).toBe(true)
+  })
+
+  it('conta quantas precisam de atenção', () => {
+    const contas = [conta('a', 'current'), conta('b', 'error'), conta('c', 'stale'), conta('d', 'current')]
+
+    expect(countAgentUsageAccountsNeedingAttention(contas, AGORA)).toBe(2)
+  })
+
+  describe('filterAgentUsageGroups', () => {
+    const plus = { ...sample('current'), metadata: { plan: 'plus' } }
+    const grupos = (): AgentUsageProviderGroup[] =>
+      groupAgentUsageAccounts(
+        [provedor('claude', 'Claude'), provedor('codex', 'Codex'), provedor('gemini', 'Gemini')],
+        [
+          conta('claude-1', 'current', { providerId: 'claude', label: 'Trabalho', identityDisplay: 'ana@exemplo.com' }),
+          conta('claude-2', 'error', { providerId: 'claude', label: 'Pessoal', identityDisplay: 'joão@exemplo.com' }),
+          conta('codex-1', 'current', { providerId: 'codex', label: 'Codex principal', latestSample: plus, lastKnownSample: null }),
+        ],
+      )
+
+    it('filtro desligado devolve os grupos como vieram, inclusive o provider sem conta', () => {
+      const todos = grupos()
+
+      expect(filterAgentUsageGroups(todos, filtro(), AGORA)).toBe(todos)
+      expect(filterAgentUsageGroups(todos, filtro({ query: '  ' }), AGORA)).toBe(todos)
+    })
+
+    it('a busca olha nome, e-mail e plano, sem diferenciar acento nem caixa', () => {
+      const ids = (query: string) =>
+        filterAgentUsageGroups(grupos(), filtro({ query }), AGORA).flatMap((grupo) => grupo.accounts.map((item) => item.id))
+
+      expect(ids('TRABALHO')).toEqual(['claude-1'])
+      expect(ids('joao')).toEqual(['claude-2'])
+      expect(ids('exemplo.com')).toEqual(['claude-1', 'claude-2'])
+      expect(ids('plus')).toEqual(['codex-1'])
+      expect(ids('exemplo trabalho')).toEqual(['claude-1'])
+      expect(ids('ninguém')).toEqual([])
+    })
+
+    it('o provider que ficou sem conta some, para não dizer "nenhuma conta vinculada" durante a busca', () => {
+      const resultado = filterAgentUsageGroups(grupos(), filtro({ query: 'pessoal' }), AGORA)
+
+      expect(resultado.map((grupo) => grupo.id)).toEqual(['claude'])
+      expect(resultado[0].accounts.map((item) => item.id)).toEqual(['claude-2'])
+    })
+
+    it('"precisa de atenção" combina com a busca', () => {
+      const so = (overrides: Partial<AgentUsageFilter>) =>
+        filterAgentUsageGroups(grupos(), filtro(overrides), AGORA).flatMap((grupo) => grupo.accounts.map((item) => item.id))
+
+      expect(so({ attentionOnly: true })).toEqual(['claude-2'])
+      expect(so({ attentionOnly: true, query: 'trabalho' })).toEqual([])
+      expect(so({ attentionOnly: true, query: 'joao' })).toEqual(['claude-2'])
+    })
+
+    it('não altera a lista original', () => {
+      const todos = grupos()
+      filterAgentUsageGroups(todos, filtro({ query: 'trabalho' }), AGORA)
+
+      expect(todos[0].accounts).toHaveLength(2)
+    })
+  })
+
+  it('o texto do botão diz o que a consulta lê: a pasta da conta, ou o login da máquina', () => {
+    expect(describeAgentUsageAccountRefresh(conta('a', 'current', { ownLogin: true }))).toMatch(/só esta conta/)
+    expect(describeAgentUsageAccountRefresh(conta('b', 'current', { ownLogin: false }))).toMatch(/login desta máquina/)
   })
 })
