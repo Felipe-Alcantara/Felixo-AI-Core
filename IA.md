@@ -1255,3 +1255,31 @@ para `%TEMP%\felixo-release-smoke-4pap4S\installed`, e os 5 processos do app em 
 `node app/electron/cli/felixo.cjs`. Não mexi no shim.
 
 Estado: concluído e publicado (v0.1.487).
+
+## 2026-10-26 — Canvas: mapa da medição de geometria, trilho recolhido que não some e aviso do ResizeObserver como warn (v0.1.488)
+
+**Pedido.** Task "mapear pipeline de medição geométrica e coalescer RAF entre superfícies" (continua `d21c937`): mapear toda leitura e escrita de geometria, decidir se o pipeline vira regra, investigar o RAF entre consumidores, avisar de atualização dentro do ciclo de medida, cobrir medida oscilante, janela pequena, gaveta fechada e zoom, e testar no app real.
+
+**Medido (app real, perfil isolado, terminal de verdade na gaveta).** A janela escondida do `felixo devtools` entrega ~2 quadros/s (RAF estrangulado), então a janela de teste foi exibida sem foco, transparente e sem clique. Os tempos absolutos não valem (sem GPU real); vale a comparação entre cenários.
+- Arrasto da gaveta, 120 quadros: 120 RAF do `scheduleResize` (um por quadro), 39 a 43 do auto-enquadramento da câmera, ~45 do xterm; observers novos 0; listeners líquidos 0. O `fit()` roda ≈ 1,8× por quadro com largura nova (efeito + callback do observer): 67 a 77 `pty:resize` por arrasto, a 0,2 ms de mediana por IPC (p95 0,6 ms) e ignorados pelo principal quando repetem colunas e linhas. Redundante e irrelevante.
+- A/B do auto-enquadramento (`CanvasView.tsx:793-812`): com a câmera nas mãos da pessoa, 0 RAF desse efeito e 0 `getBoundingClientRect` (contra 54 a 64), 4,0 a 4,1 s contra 5,2 a 5,5 s, p95 de quadro de 69 a 71 ms contra 118 a 134 ms. É o único consumidor com custo medido.
+- Resize real da janela (90 passos, 1000 a 1500 px, painel e gaveta abertos): geometria assentou 2 quadros depois do último passo. Gaveta aberta e fechada 15× e painel 15×: observers vivos voltam a 0 (1 com a gaveta aberta) e listeners de `window`/`document` líquidos 0.
+- Zoom de página (janela de 1304 px): +3 virou 754×403 CSS px, com painel 260 e gaveta 440 nos pisos, sobreposição declarada e aviso de pouco espaço; −3 virou 2253×1202, painel 380 e gaveta 492, sem aviso. Assenta em 0 quadros.
+
+**Dois achados que não estavam na task.**
+- *Aviso do ResizeObserver virando erro.* `renderer-error-reporting.ts` gravava todo evento `error` do window como `level: error`. O Chromium emite "ResizeObserver loop completed with undelivered notifications" quando um observer muda o layout dentro da própria entrega: 15 a 21 por arrasto de gaveta, e 153 das 176 entradas do QA Logger da sessão de teste (também em disco e no relatório de problema). Atribuído por gancho no `ResizeObserver` ao do React Flow (`@xyflow/react` 12.11.6): o callback dele dispara um render que aplica a largura pendente da gaveta na mesma entrega (`div.react-flow__renderer` 836→852 px, corpo da gaveta 467→451 px). A fatia 1 tinha concluído, por leitura, que não havia retroalimentação; ela não existe no `fit()` do xterm, mas existe entre o React Flow e o layout. Commit `d04c559`: o aviso vira `warn` (`renderer:resize-observer-loop`), uma entrada por janela de 10 s com `omitidasDaJanelaAnterior`. Depois: 45 eventos em 3 arrastos viraram 2 `warn` e nenhum `error`.
+- *Trilho recolhido sumia na janela mínima.* `splitHorizontalSpace` limitava o trilho de 44 px por `available`, sem o piso da superfície; com sidebar e inspector expandidos e janela de 720 px, `available` é 0. Medido: 16 px antes, 44 px depois. Os ramos de uma superfície só já usavam `Math.max(piso, available)`. Commit `ade43bf`; cada ramo foi mutado e derruba um teste.
+
+**Testes (item 5).** Ponto fixo de `splitHorizontalSpace` (reaplicar a saída como pedido não muda nada, 13 larguras × 10 pedidos × 2 inspectors), viewport oscilando a cada quadro, janela pequena com gaveta fechada ou recolhida, 200 notificações do observer no ciclo do `fit` (nenhum RAF ou observer novo), e varredura de zoom −3 a +3 em três janelas. Commit `06c966a`.
+
+**Validação.** `vitest` 3317 passaram, 3 puladas, 0 falhas (eram 3298); `eslint` e `build` saíram com 0. CI `40266604815` verde nos 6 jobs, inclusive Validate em macOS e Windows e o smoke do canvas; Release `40267079423` verde, **v0.1.488** como Latest com os instaladores de Windows, macOS e Linux.
+
+**Decisões do agente.**
+- O pipeline vira regra escrita em `docs/projeto/LAYOUT-SUPERFICIES.md` ("Mapa de medição e escrita de geometria", commit `751c24b`), não um framework: não há agendador de RAF compartilhado porque só um gesto de arrasto existe por vez e cada consumidor pede no máximo um RAF por quadro.
+- O item "warning de update no ciclo de medida" usa o sinal do próprio navegador, não uma heurística. O detector de vai-e-volta nos relatos de largura não foi construído (task aberta, prioridade baixa).
+- O auto-enquadramento durante o arrasto não foi alterado: muda o que a pessoa vê, então virou task com alternativas.
+- O `fit()` duplicado ficou como está (0,2 ms por IPC).
+
+**Não validado.** `prefers-reduced-motion` do sistema e app empacotado não foram abertos; macOS só pelo CI. Os hooks de arrasto e os posicionadores de popover (menu Ajuda, ditado, tour) foram lidos, não medidos, e não têm teste de componente (sem jsdom). Zoom −2, −1, +1 e +2 só por teste de lógica. Sem GPU real nas medições de tempo.
+
+Estado: concluído e publicado (v0.1.488).
