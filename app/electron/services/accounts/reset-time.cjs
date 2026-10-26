@@ -194,7 +194,8 @@ function parseResetFromText(text, options = {}) {
  * @param {string | null} [timeZone]
  * @returns {string | null}
  */
-const HALF_YEAR_MS = 183 * 24 * 60 * 60 * 1000
+const DAY_MS = 24 * 60 * 60 * 1000
+const HALF_YEAR_MS = 183 * DAY_MS
 
 function parseClaudeReset(value, nowMs, timeZone = null) {
   const text = String(value).replace(/\s+/g, ' ').trim()
@@ -309,45 +310,40 @@ function shiftCalendarDay(value, days) {
   }
 }
 
-/** Converte componentes de uma data local do fuso informado para UTC. */
+/**
+ * Converte componentes de uma data local do fuso informado para UTC, pela regra
+ * do `Date` do JS (a "compatible" do Temporal), a mesma do ramo do fuso do
+ * processo: uma hora que não existe (lacuna do início do verão) vai para
+ * frente, e uma hora que existe duas vezes (fim do verão) fica na primeira
+ * ocorrência. Antes, a lacuna caía uma hora para trás e a repetição escolhia a
+ * 2ª ocorrência em Lisboa e em Lord Howe e a 1ª em Nova York.
+ *
+ * Os dois candidatos vêm do deslocamento do fuso um dia antes e um dia depois da
+ * hora pedida, o que cobre qualquer transição que a afete.
+ */
 function zonedDateToTimestamp(value, timeZone) {
-  let guess = Date.UTC(
-    value.year,
-    value.month,
-    value.day,
-    value.hour,
-    value.minute,
-  )
-
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    const actual = getDatePartsInTimeZone(guess, timeZone)
-    if (!actual) {
-      return NaN
-    }
-
-    const actualAsUtc = Date.UTC(
-      actual.year,
-      actual.month,
-      actual.day,
-      actual.hour,
-      actual.minute,
-    )
-    const desiredAsUtc = Date.UTC(
-      value.year,
-      value.month,
-      value.day,
-      value.hour,
-      value.minute,
-    )
-    const difference = desiredAsUtc - actualAsUtc
-    guess += difference
-
-    if (difference === 0) {
-      break
-    }
+  const desired = Date.UTC(value.year, value.month, value.day, value.hour, value.minute)
+  const before = offsetAt(desired - DAY_MS, timeZone)
+  const after = offsetAt(desired + DAY_MS, timeZone)
+  if (before === null || after === null) {
+    return NaN
   }
 
-  return guess
+  const valid = [...new Set([desired - before, desired - after])].filter(
+    (candidate) => offsetAt(candidate, timeZone) === desired - candidate,
+  )
+
+  // Sem candidato válido a hora cai na lacuna: o deslocamento anterior à
+  // transição empurra para frente, como o `Date` faz.
+  return valid.length > 0 ? Math.min(...valid) : desired - before
+}
+
+/** Diferença, em ms, entre a hora de parede no fuso e o UTC; `timestamp` alinhado ao minuto. */
+function offsetAt(timestamp, timeZone) {
+  const parts = getDatePartsInTimeZone(timestamp, timeZone)
+  return parts
+    ? Date.UTC(parts.year, parts.month, parts.day, parts.hour, parts.minute) - timestamp
+    : null
 }
 
 function monthNumber(value) {
@@ -374,4 +370,5 @@ module.exports = {
   isValidTimeZone,
   parseClaudeReset,
   parseResetFromText,
+  zonedDateToTimestamp,
 }
