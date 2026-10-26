@@ -148,6 +148,100 @@ reserva 0). O ganho não paga o risco. Se a pessoa precisar de mais espaço, rec
 e o painel usa colunas flexíveis. O tamanho padrão continua o de sempre (1040 × 680,
 escalado pela janela).
 
+## Mapa de medição e escrita de geometria
+
+Levantado em 26/10/2026 para a task "mapear pipeline de medição geométrica e coalescer RAF
+entre superfícies": leitura de todo `app/src` (171 ocorrências de `getBoundingClientRect`,
+`ResizeObserver`, `requestAnimationFrame`, `innerWidth`…) e medição no app real
+(`felixo devtools`, perfil isolado, terminal de verdade na gaveta).
+
+### Regra para superfície nova (o pipeline "medir, resolver, aplicar uma vez, notificar só mudança efetiva")
+
+O desenho já existia em `CanvasSurfacesProvider`; a decisão desta task foi **escrevê-lo como
+regra**, não criar um framework (o motivo está em "Decisões" abaixo).
+
+1. **Pedir, não cortar.** A superfície publica o que QUER (`report*Width`), sem se limitar
+   pelo vizinho.
+2. **Resolver numa passada.** Uma conta pura decide todas as larguras de uma vez
+   (`splitHorizontalSpace`), só a partir dos pedidos. Teste de ponto fixo: reaplicar a saída
+   como pedido não muda nada (`canvas-surfaces.test.ts`).
+3. **Ler o resultado, nunca recalcular o teto do outro.** O valor final volta por
+   `useCanvasSurfaces().occupancy`.
+4. **Medir sem escrever no que se observa.** Observer e evento só leem; a posição de um
+   popover vai por `style.left/top` (não muda o tamanho que o observer vigia) e o gesto de
+   arrasto é coalescido em no máximo um RAF por consumidor.
+5. **Notificar só o que mudou.** Os setters comparam com o valor atual
+   (`current === width ? current : width`); o processo principal ignora `pty:resize` com as
+   mesmas colunas e linhas (`pty-process-manager.cjs:809`); o clamp só loga na transição.
+6. **Cleanup simétrico e testável.** Todo observer, listener, RAF e intervalo é desfeito no
+   cleanup; a lógica que não precisa de DOM mora num módulo puro
+   (`terminal-fit-lifecycle.ts`, `canvas-surfaces.ts`), porque o repositório não tem jsdom.
+7. **Piso da própria superfície.** Nenhuma superfície some por falta de espaço: o teto é
+   `Math.max(piso, disponível)`, inclusive o trilho recolhido (44 px).
+
+### Quem lê e quem escreve geometria
+
+| Quem | Lê | Escreve | Gatilho / agendamento | Limpeza |
+|---|---|---|---|---|
+| `CanvasSurfacesProvider.tsx:44-51` | `innerWidth/innerHeight` | estado `viewport` | `resize`, síncrono (React agrupa) | `removeEventListener` |
+| `useResizablePanelWidth.ts:69-177` | `innerWidth`, `clientX` | estado `width`, `body.style.cursor/userSelect` | `resize`; `mousemove` com 1 RAF coalescido (`:125-134`) | cancela RAF e ouvintes ao desmontar |
+| `useResizablePanelHeight.ts:54-116` | `innerHeight`, `clientY`, `getBoundingClientRect` só no início do arrasto (`:119`) | estado `height` | idem | idem |
+| `useResizableSidebarWidth.ts:67-125` | `innerWidth`, `clientX` | estado `width` | idem | idem |
+| `TerminalDrawer.tsx:396-475` | `innerWidth`, `clientX` | estado `width` | `mousemove` com 1 RAF coalescido (`:425-434`) | idem |
+| `TerminalDrawer.tsx:352-368` + `terminal-fit-lifecycle.ts:33-62` | container do xterm (via `fitAddon.fit()`) | linhas/colunas do xterm, `pty:resize` | efeito de `effectiveWidth`; `ResizeObserver` + 1 RAF no attach | `disconnect` + `cancelAnimationFrame`, idempotente (testado) |
+| `CanvasView.tsx:793-812` (auto-enquadramento) | `getBoundingClientRect` do container (`useSafeViewport.ts`) | câmera do React Flow (`setViewport`) | efeito de `fitCanvasViewSafely` (muda com `occupancy`); cancela o RAF pendente e pede outro | `cancelAnimationFrame` |
+| `CanvasView.tsx:503-571` (fechar a gaveta) | retângulos do nó e do container | foco, `dispatchNodeMountLatch` | 2 RAF de acomodação + até 12 tentativas de foco | só termina sozinho |
+| `CanvasPanel.tsx:265-270` | `innerHeight` | estado `maxHeight` | `resize` | `removeEventListener` |
+| `TerminalsPanel.tsx:387-396` (inspector) | nada: largura fixa | `reportInspectorWidth` | muda de estado | zera ao desmontar |
+| `DictationButton.tsx:99-118` | âncora e caixa | `style.left/top` | `ResizeObserver` na caixa + `resize` | `disconnect` + `removeEventListener` |
+| `OnboardingHelpMenu.tsx:168-191` | âncora e caixa | `style.left/top/maxHeight` | idem | idem |
+| `OnboardingTourLayer.tsx:232-324` | alvos, card, região do canvas | `style.top/left/width/maxHeight` do card e do anel | `ResizeObserver`, 2 `MutationObserver`, `resize`, `scroll`, `transitionend`, `animationend`, intervalo de reverificação (só age no fallback); tudo passa por 1 RAF (`schedule`) | desfaz tudo |
+| `useResizableDialog.ts:26-99` | `innerWidth/innerHeight`, `offsetWidth/Height` | estado do tamanho do modal | `mousemove` do arrasto | cleanup do efeito |
+| `FelixoSelect.tsx:111-120`, `LinkChooserHost.tsx:163,249`, `WebviewProfileMenu.tsx:36-38` | âncora e janela | posição do menu | uma leitura ao abrir | — |
+| `ClaudeApiNode.tsx:321-335`, `TerminalReadingPanel.tsx:74-89` | `scrollHeight/clientHeight` | `scrollTop` | `ResizeObserver` do conteúdo | `disconnect` |
+| `useMatrixArrange.ts:131-132` | — | posições dos blocos | 2 RAF aninhados (animação) | cancela ao reorganizar |
+| `getDefaultNodeSize(tipo, window.innerWidth)` (`CanvasView.tsx` ×6, `useWebpageOpeners.ts` ×2) | `innerWidth` na hora de criar | tamanho inicial do bloco | uma leitura | — |
+| RAF só de foco (barra de ferramentas ×13, `TerminalMenu` ×3, `GenerateImageButton`, `AccountChainSection`, `useAccountContinuation`, `useFocusRestore`…) | — | foco | 1 RAF por ação | — |
+
+De terceiros, sem dono no app: o `ResizeObserver` do React Flow (`@xyflow/react` 12.11.6) no
+container do canvas e o laço de repintura do xterm (RAF próprio).
+
+### Medido no app real (26/10/2026)
+
+Perfil isolado, terminal de verdade (Claude) na gaveta, janela de teste exibida sem foco e
+transparente (janela escondida estrangula o RAF a ~2 quadros/s). Os tempos absolutos não valem
+(renderização sem GPU real); vale a comparação entre cenários.
+
+| Cenário | Resultado |
+|---|---|
+| Arrasto da gaveta, 120 quadros (3 repetições) | 120 RAF do `scheduleResize` (1 por quadro), 39–43 do auto-enquadramento, ~45 do xterm; observers novos 0; listeners líquidos 0 |
+| `fit()` por quadro de arrasto | ≈ 1,8 (efeito + callback do observer): 67–77 `pty:resize` por arrasto. Cada ida e volta de IPC custa 0,2 ms (p95 0,6 ms), e o principal ignora o repetido. Redundante e irrelevante |
+| Mesmo arrasto com a câmera nas mãos da pessoa (auto-enquadramento desligado) | RAF do `CanvasView` 0 e `getBoundingClientRect` 0 (contra 54–64); 4,0–4,1 s contra 5,2–5,5 s; p95 69–71 ms contra 118–134 ms. Ocioso: mediana 12,4 ms |
+| Resize real da janela, 90 passos (1000–1500 px), painel + gaveta abertos | geometria assentou 2 quadros depois do último passo; observers novos 0; listeners líquidos 0 |
+| Abrir/fechar a gaveta 15× e o painel 15× | observers vivos voltam a 0 (1 com a gaveta aberta); listeners de `window`/`document` líquidos 0 |
+| Zoom de página (janela de 1304 px, painel + gaveta) | +3 → 754×403: painel 260 e gaveta 440 nos pisos, sobreposição declarada e aviso "Pouco espaço horizontal"; −3 → 2253×1202: painel 380, gaveta 492, sem aviso; assenta em 0 quadros |
+| Aviso `ResizeObserver loop completed with undelivered notifications` | 15–21 por arrasto de 120 quadros; era 153 de 176 entradas `error` do QA Logger |
+| Trilho recolhido da gaveta, janela de 720 px, sidebar e inspector expandidos | 16 px antes da correção, 44 px depois |
+
+### Decisões e o que ficou de fora
+
+- **Não há agendador de RAF compartilhado.** Só um gesto de arrasto existe por vez, cada
+  consumidor pede no máximo um RAF por quadro (120 pedidos para 120 movimentos, não mais), o
+  `resize` da janela é síncrono e o React agrupa as atualizações. Um coalescedor central não
+  reduziria nenhum desses números. O único consumidor com custo medido é o
+  auto-enquadramento da câmera, que refaz o enquadramento a cada largura nova da gaveta;
+  mudar isso (esperar o soltar do arrasto) altera o que a pessoa vê e ficou como task.
+- **O aviso do `ResizeObserver` é do React Flow, não do `fit()` do xterm.** O callback do
+  observer do React Flow dispara um render que aplica a largura pendente da gaveta dentro da
+  mesma entrega (o `div.react-flow__renderer` muda 836→852 px e o corpo da gaveta 467→451 px),
+  então o Chromium adia o resto para o quadro seguinte. É benigno (nada se perde e converge), por isso
+  `renderer-error-reporting.ts` o grava como `warn` com escopo `renderer:resize-observer-loop`,
+  uma entrada por janela de 10 s com a contagem das omitidas, em vez de `error`. Se um dia
+  subir para centenas por janela, é o sinal de laço real.
+- **Não coberto por teste de componente:** os hooks de arrasto e os posicionadores de popover
+  (o repositório não tem jsdom). A cobertura é a de lógica pura, a do ciclo do `fit` e a medição
+  acima.
+
 ## Estado
 
 Feito: altura dos painéis (PR #60); fonte única dos mínimos dos blocos, piso em
@@ -156,3 +250,9 @@ invariante em 10 larguras de janela (320–3840) × 8 tipos de bloco.
 
 Feito também: modais (12 componentes; teste de invariante de janela e do clique de soltar). Pendente: para tudo isto: conferir numa
 janela real — nada foi visto rodando por quem escreveu este documento.
+
+Feito em 26/10/2026: o mapa e a regra de superfície nova (acima), medidos num app real com
+terminal de verdade; testes de medida oscilante, ponto fixo, janela pequena, gaveta fechada ou
+recolhida e zoom de página; o trilho recolhido deixou de sumir na janela mínima; o aviso do
+`ResizeObserver` virou `warn` contado em vez de `error`. Não validado: `prefers-reduced-motion`
+do sistema, app empacotado e macOS.
