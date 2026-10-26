@@ -31,11 +31,36 @@ const SAFE_METADATA_KEYS = new Set([
   'window',
   'precision',
   'providerVersion',
+  // Por que a rodada não trouxe número (um dos `FAILURE_REASONS`).
+  'failureReason',
   // Dados seguros e estruturados que a consulta interativa do Claude publica
   // no `/status` (Status + Usage). O normalizador abaixo mantém a allowlist
   // também dentro deste objeto, sem deixar a saída crua chegar ao renderer.
   'statusDetails',
 ])
+// Razões da falha de uma rodada, as mesmas que `describeAvailability` devolve
+// como estado e que `AVAILABILITY_MESSAGES` explica em português.
+const FAILURE_REASONS = new Set([
+  'auth-required',
+  'network-disabled',
+  'cli-missing',
+  'timeout',
+  'query-failed',
+])
+const AVAILABILITY_MESSAGES = {
+  'auth-required': 'Esta conta não está logada: entre nela para voltar a ver os limites.',
+  'network-disabled': 'Sem rede, ou rede bloqueada: não foi possível consultar os limites agora.',
+  'cli-missing': 'A CLI não foi encontrada neste computador: instale-a ou ajuste o PATH.',
+  timeout: 'A consulta passou do tempo limite e foi encerrada; tente atualizar de novo.',
+  'query-failed': 'A consulta da CLI falhou nesta rodada; tente atualizar de novo.',
+}
+// Assinaturas de rede nas mensagens de erro de Node (`ENOTFOUND`...) e do cliente
+// HTTP da CLI. Heurística de texto, sem quantificador aninhado: o que não casar
+// fica `query-failed`, nunca `network-disabled` por chute.
+const NETWORK_FAILURE_PATTERN =
+  /ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ECONNRESET|ENETUNREACH|EHOSTUNREACH|ETIMEDOUT|getaddrinfo|dns error|error sending request|fetch failed|unable to connect|could not resolve|network is unreachable|connection (?:refused|reset|timed out)|sem conex[ãa]o|sem rede|offline/i
+const TIMEOUT_TEXT_PATTERN = /tempo limite|timed out|timeout/i
+
 // Inclui o formato de um JWT (`eyJ...`, o `{"alg":...}` em base64url) — sem
 // isto, um token bancado nesse formato passava como texto comum porque não
 // contém nenhuma das palavras-chave (api_key, bearer, secret...) que o resto
@@ -196,7 +221,7 @@ function normalizeMetadata(metadata) {
     }
 
     if (typeof value === 'string') {
-      if (looksLikeSecret(value)) {
+      if (looksLikeSecret(value) || (key === 'failureReason' && !FAILURE_REASONS.has(value))) {
         continue
       }
       normalized[key] = value.slice(0, 240)
@@ -497,7 +522,8 @@ function maskIdentity(identity) {
  *
  * Não cobre `network-disabled` nem `auth-required`: esses dependem do
  * resultado de uma rodada (rede bloqueada agora, sessão deslogada agora), não
- * da fonte em si — ver a task de continuação sobre capability em runtime.
+ * da fonte em si. Eles vêm de `classifyFailureReason` e entram na conta por
+ * `describeAvailability`, a segunda camada em cima desta.
  */
 function classifyUsageCapability(source) {
   if (!source || typeof source !== 'object' || !source.usage) {
@@ -520,6 +546,45 @@ function classifyUsageCapability(source) {
   return 'available'
 }
 
+/**
+ * Razão pela qual uma rodada não trouxe número, a partir de sinais estruturados
+ * (código do spawn, tempo esgotado, cancelamento, login) e do texto já redigido
+ * da saída ou da mensagem do adaptador. Ordem: sessão ausente, CLI ausente,
+ * assinatura explícita de rede (ganha da inferência por tempo esgotado: um
+ * `ETIMEDOUT` é rede), tempo esgotado, e por fim o genérico `query-failed`.
+ * Cancelar a rodada conta como `timeout`: o Reconectar descarta a rodada
+ * antes de gravar, então o que chega aqui cancelado foi o teto de 90 s.
+ */
+function classifyFailureReason({ authStatus, errorCode, timedOut, aborted, text } = {}) {
+  if (authStatus === 'logged_out') return 'auth-required'
+  if (errorCode === 'ENOENT') return 'cli-missing'
+  const hasText = typeof text === 'string'
+  if (hasText && NETWORK_FAILURE_PATTERN.test(text)) return 'network-disabled'
+  if (timedOut || aborted || (hasText && TIMEOUT_TEXT_PATTERN.test(text))) return 'timeout'
+  return 'query-failed'
+}
+
+/**
+ * Disponibilidade em runtime de uma conta: a capability estática da fonte
+ * (`classifyUsageCapability`) e, quando a fonte pode entregar, a razão que a
+ * última rodada gravou na amostra. `available` sem mensagem quer dizer que não
+ * há impedimento conhecido; um erro sem razão (identidade ambígua, por exemplo)
+ * continua explicado pela `errorMessage` da própria amostra.
+ */
+function describeAvailability({ capability, limitation, latestSample } = {}) {
+  if (capability === 'unsupported' || capability === 'interactive-only') {
+    return { state: capability, message: limitation ?? null }
+  }
+
+  const reason = latestSample?.metadata?.failureReason
+  const semNumero = latestSample?.status === 'error' || latestSample?.status === 'unavailable'
+  if (semNumero && FAILURE_REASONS.has(reason)) {
+    return { state: reason, message: AVAILABILITY_MESSAGES[reason] }
+  }
+
+  return { state: 'available', message: null }
+}
+
 function sampleHasMetrics(sample) {
   return Array.isArray(sample?.metrics) && sample.metrics.length > 0
 }
@@ -529,11 +594,15 @@ function cloneValue(value) {
 }
 
 module.exports = {
+  AVAILABILITY_MESSAGES,
+  FAILURE_REASONS,
   VALID_SAMPLE_STATUSES,
   VALID_SOURCE_KINDS,
+  classifyFailureReason,
   classifyUsageCapability,
   cloneValue,
   createIdentityFingerprint,
+  describeAvailability,
   maskIdentity,
   normalizeAccountInput,
   normalizeIdentity,

@@ -13,8 +13,10 @@ const {
   listAgentUsageSources,
 } = require('./agent-usage-sources.cjs')
 const {
+  classifyFailureReason,
   classifyUsageCapability,
   createIdentityFingerprint,
+  describeAvailability,
   normalizeTimestamp,
   sampleHasMetrics,
 } = require('./agent-usage-model.cjs')
@@ -140,6 +142,10 @@ function createAgentUsageService({
     return rememberCatalog(await readCatalog(listCatalog))
   }
 
+  /** O painel precisa saber quais linhas têm login próprio (perfil): só elas abrem terminal com `accountId`. */
+  const dashboardOf = (params) =>
+    buildDashboard({ ...params, profileIds: new Set(listProfiles().map((perfil) => perfil.id)) })
+
   async function list() {
     const catalog = await readRecentCatalog()
     const accounts = ensureDiscoveredAccounts({
@@ -150,7 +156,7 @@ function createAgentUsageService({
     })
     return {
       ok: true,
-      ...buildDashboard({
+      ...dashboardOf({
         accounts,
         catalog,
         repository,
@@ -295,7 +301,7 @@ function createAgentUsageService({
 
     return {
       ok: true,
-      ...buildDashboard({
+      ...dashboardOf({
         accounts: repository.listAccounts(),
         catalog,
         repository,
@@ -503,7 +509,7 @@ function createAgentUsageService({
 
     return {
       ok: true,
-      ...buildDashboard({
+      ...dashboardOf({
         accounts: repository.listAccounts(),
         // A releitura roda a cada gravação da statusline: um `--version` por
         // CLI aqui era o custo mais repetido do painel.
@@ -786,6 +792,12 @@ async function collectProviderSnapshot({
       }
     : source
 
+  // `claude auth status` e `codex login status` saem com código 1 justamente
+  // quando não há sessão, e ainda dizem isso na saída: sessão ausente é a
+  // resposta, não falha da consulta (que pintaria a conta de erro).
+  const queryFailed =
+    (result?.ok !== true && auth.authStatus !== 'logged_out') || liveQueryFailed
+
   return {
     providerId,
     source: snapshotSource,
@@ -803,8 +815,19 @@ async function collectProviderSnapshot({
     commandOk: result?.ok === true,
     auth,
     metrics,
-    queryFailed: result?.ok !== true || liveQueryFailed,
+    queryFailed,
     queryErrorMessage: liveQueryFailed ? liveMessage : null,
+    failureReason:
+      queryFailed || auth.authStatus === 'logged_out'
+        ? classifyFailureReason({
+            authStatus: auth.authStatus,
+            errorCode: result?.errorCode,
+            timedOut: result?.timedOut,
+            aborted: signal.aborted,
+            // Já redigidos: a saída do comando de login e a mensagem do adaptador.
+            text: `${safeOutput}\n${liveMessage ?? ''}`,
+          })
+        : null,
     statusDetails: mergeStatusDetails({
       liveDetails: liveResult?.ok === true ? liveResult.details ?? null : null,
       resetCreditsResult,
@@ -1116,6 +1139,19 @@ function saveProviderSamples({
       continue
     }
 
+    // Sem sessão não há identidade a resolver nem número a atribuir: isso é
+    // ausência de dado, não falha. Marcar como erro pintava de vermelho a CLI em
+    // que a pessoa simplesmente ainda não entrou. Vale antes da conta com perfil:
+    // uma pasta deslogada não tem "número a registrar", tem login a fazer.
+    if (snapshot.auth.authStatus === 'logged_out') {
+      repository.saveSample({
+        ...base,
+        status: 'unavailable',
+        errorMessage: LOGGED_OUT_MESSAGE,
+      })
+      continue
+    }
+
     // Amostra de conta com login próprio: veio da pasta daquela conta, então
     // a atribuição é certa por construção e não passa pela resolução de
     // identidade — que existe para o caso oposto, o do login compartilhado.
@@ -1140,18 +1176,6 @@ function saveProviderSamples({
         ...base,
         status: 'error',
         errorMessage: IDENTITY_MISMATCH_MESSAGE,
-      })
-      continue
-    }
-
-    // Sem sessão não há identidade a resolver: isso é ausência de dado, não
-    // falha. Marcar como erro pintava de vermelho a CLI em que a pessoa
-    // simplesmente ainda não entrou.
-    if (snapshot.auth.authStatus === 'logged_out') {
-      repository.saveSample({
-        ...base,
-        status: 'unavailable',
-        errorMessage: LOGGED_OUT_MESSAGE,
       })
       continue
     }
@@ -1255,6 +1279,7 @@ function createSampleBase({
       limitation: snapshot.source.usage.limitation,
       measuredAt: snapshot.measuredAt ?? undefined,
       providerVersion: providerVersion ?? undefined,
+      failureReason: snapshot.failureReason ?? undefined,
       // `statusDetails` (inclui os resets bancados do Codex) NÃO entra aqui.
       // Uma rodada sem `targetAccountId` (login do sistema) compartilha o
       // mesmo snapshot entre TODAS as contas do provider em `destino` — se
@@ -1397,8 +1422,10 @@ function buildDashboard({
   repository,
   now,
   lastRefreshAt,
+  profileIds = new Set(),
 }) {
   const providers = buildProviders(catalog, accounts)
+  const usageSourceById = new Map(providers.map((provider) => [provider.id, provider.usageSource]))
   const dashboardAccounts = accounts.map((account) => {
     const latestSample = normalizeDashboardSample(
       repository.getLatestSample(account.id),
@@ -1409,10 +1436,20 @@ function buildDashboard({
       now,
     )
 
+    const usageSource = usageSourceById.get(account.providerId)
+
     return {
       ...account,
+      // Conta com pasta de login própria (perfil): a "Conta desta máquina" usa o login do sistema.
+      ownLogin: profileIds.has(account.id),
       latestSample,
       lastKnownSample,
+      // A capability estática da fonte somada ao resultado da última rodada.
+      availability: describeAvailability({
+        capability: usageSource?.capability,
+        limitation: usageSource?.limitation,
+        latestSample,
+      }),
     }
   })
 
@@ -1526,6 +1563,8 @@ function createAbortedSnapshot({ providerId, targetAccountId, now, message }) {
     metrics: [],
     queryFailed: true,
     queryErrorMessage: message,
+    // O Reconectar descarta a rodada antes de gravar: o que chega aqui é o teto de 90 s.
+    failureReason: 'timeout',
   }
 }
 

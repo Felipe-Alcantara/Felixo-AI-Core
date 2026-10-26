@@ -74,7 +74,7 @@ const AGENT_USAGE_SOURCES = Object.freeze([
       label: 'Gemini CLI /stats model',
       docsUrl: 'https://geminicli.com/docs/reference/commands',
       limitation:
-        'A quota só sai do /stats model dentro da sessão interativa: em modo não interativo (-p) a CLI não responde, e nada de quota é gravado em ~/.gemini.',
+        'A quota só sai do /stats model, dentro da sessão interativa (em modo -p a CLI não responde e nada é gravado em ~/.gemini). Desde 18/06/2026 a Gemini CLI não atende contas individuais: a Antigravity CLI a substituiu.',
     },
   },
   {
