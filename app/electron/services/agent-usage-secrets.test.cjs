@@ -51,6 +51,7 @@ const CANARIOS = [
   ['cabeçalho Authorization', 'Authorization: Bearer CANARIOauth9012'],
   ['cookie', 'Cookie: sessionKey=CANARIOcookie3456; theme=dark'],
   ['parâmetro de URL', 'GET /v1/usage?api_key=CANARIOquery7890&x=1'],
+  ['argumento de linha de comando', 'minha-cli --token CANARIOarg1234 --verbose'],
 ]
 const TODOS = CANARIOS.map(([, texto]) => texto).join('\n')
 

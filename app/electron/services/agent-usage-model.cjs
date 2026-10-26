@@ -49,7 +49,7 @@ const SAFE_METADATA_KEYS = new Set([
 // palavras-chave, só prefixos de alto sinal (Google, GitHub, GitLab, Slack, AWS,
 // PEM, credencial em URL): "token" sozinho derrubaria "200.000 tokens".
 const SECRET_PATTERN =
-  /(api[_ -]?key|access[_ -]?token|auth[_ -]?token|\brefresh[_ -]?token|\bid[_ -]?token|bearer|cookie|password|secret|sk-[a-z0-9]|pk-[a-z0-9]|eyJ[a-z0-9_-]{8,}|ya29\.|(?<![a-z0-9/])1\/\/[a-z0-9_-]{20}|AIza[0-9a-z_-]{20}|gh[pousr]_[a-z0-9]{20}|github_pat_|glpat-|npm_[a-z0-9]{36}|xox[abprs]-|(?:AKIA|ASIA)[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY|[a-z][a-z0-9+.-]{0,15}:\/\/[^/?#\s@]+@)/i
+  /(api[_ -]?key|access[_ -]?token|auth[_ -]?token|\brefresh[_ -]?token|\bid[_ -]?token|bearer|cookie|password|secret|sk-[a-z0-9]|pk-[a-z0-9]|eyJ[a-z0-9_-]{8,}|ya29\.|(?<![a-z0-9/])1\/\/[a-z0-9_-]{20}|AIza[0-9a-z_-]{20}|gh[pousr]_[a-z0-9]{20}|github_pat_|glpat-|npm_[a-z0-9]{36}|xox[abprs]-|(?:AKIA|ASIA)[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY|[a-z][a-z0-9+.-]{0,15}:\/\/[^/?#\s@]+@|--(?:(?:access|auth|refresh)-)?token\b|--passw(?:or)?d\b|--secret\b|--api[-_]?key\b)/i
 // Atribuição de variável de ambiente (`GITHUB_TOKEN=…`): só em maiúsculas, para
 // não pegar "hotkey: Ctrl" ou "monkey: banana".
 const ENV_SECRET_ASSIGNMENT_PATTERN = /\b[A-Z][A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD)\s*[:=]/

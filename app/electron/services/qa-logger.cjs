@@ -1,5 +1,7 @@
 const { ipcMain } = require('electron')
 const { buildProblemReport, writeProblemReportFile } = require('./qa-report-builder.cjs')
+const { redactValue } = require('./qa-log-disk-store.cjs')
+const { redactSecrets } = require('./official-cli-account-status.cjs')
 
 const DEFAULT_MAX_ENTRIES = 400
 const qaLogStore = createQaLogStore(DEFAULT_MAX_ENTRIES)
@@ -71,7 +73,10 @@ function registerQaLoggerIpcHandlers(getWindow, options = {}) {
 }
 
 function logQaEvent(entry) {
-  const logEntry = qaLogStore.append(entry)
+  // Redigida na entrada, e não só na cópia do disco: a memória (o painel e o relatório de problema) e o
+  // evento ao renderer saíam com o texto cru de quem logou. Aqui só o redator das CLIs: quem já
+  // redigiu deixou `[oculto]`, e ele o mantém; o disco ainda passa também pela redação do git.
+  const logEntry = qaLogStore.append(redactValue(entry, 0, undefined, redactSecrets))
   // Melhor esforço, nunca bloqueia quem chamou: um handler de erro (main,
   // IPC, render-process-gone) não pode ficar preso esperando I/O de disco
   // pra terminar de tratar o próprio erro.

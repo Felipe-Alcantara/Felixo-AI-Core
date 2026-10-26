@@ -4,6 +4,7 @@ const fs = require('node:fs')
 const fsPromises = require('node:fs/promises')
 const path = require('node:path')
 const { redactSensitiveText, isSensitiveKeyName } = require('./git-secret-redaction.cjs')
+const { redactSecrets } = require('./official-cli-account-status.cjs')
 
 const QA_LOG_FILE_PATTERN = /^qa-(\d{4}-\d{2}-\d{2})\.jsonl$/
 const DEFAULT_MAX_DAYS = 14
@@ -151,6 +152,15 @@ function normalizeDirectory(directory) {
 }
 
 /**
+ * O texto que vai ao disco passa pelas duas redações: a do git acha URL com senha e rótulo solto; a
+ * das CLIs acha nome de variável de ambiente (`OPENAI_API_KEY=…`) e os formatos de token (Google,
+ * AWS, Slack, PEM…) que a do git não conhece.
+ */
+function redactForDisk(text) {
+  return redactSensitiveText(redactSecrets(text))
+}
+
+/**
  * Redige recursivamente todo texto de um valor JSON antes de gravar em
  * disco — `details` de um evento pode carregar qualquer coisa (env vars,
  * argumentos de CLI, resposta de rede), então a redação não pode se limitar
@@ -162,16 +172,19 @@ function normalizeDirectory(directory) {
  * propriedade — a string sozinha ("abc...") não tem "password:" nela pra
  * `redactSensitiveText` casar. Por isso o valor inteiro vira `***` quando a
  * própria chave já é sensível, antes mesmo de tentar redigir o conteúdo.
+ *
+ * `redactText` mascara cada string: o disco usa as duas redações (`redactForDisk`); a memória e o
+ * evento ao renderer usam só a das CLIs, que mantém o `[oculto]` que os produtores já deixaram.
  */
-function redactValue(value, depth = 0, keyName) {
+function redactValue(value, depth = 0, keyName, redactText = redactForDisk) {
   if (isSensitiveKeyName(keyName)) return '***'
   if (depth > 8) return '[profundidade máxima atingida]'
-  if (typeof value === 'string') return redactSensitiveText(value)
-  if (Array.isArray(value)) return value.map((item) => redactValue(item, depth + 1))
+  if (typeof value === 'string') return redactText(value)
+  if (Array.isArray(value)) return value.map((item) => redactValue(item, depth + 1, undefined, redactText))
   if (value && typeof value === 'object') {
     const redacted = {}
     for (const [key, item] of Object.entries(value)) {
-      redacted[key] = redactValue(item, depth + 1, key)
+      redacted[key] = redactValue(item, depth + 1, key, redactText)
     }
     return redacted
   }

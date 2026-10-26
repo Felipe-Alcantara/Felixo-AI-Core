@@ -145,3 +145,29 @@ test('logQaEvent não lança quando o disk store falha (best-effort)', async () 
   await Promise.resolve()
   __setDiskStoreForTests(null)
 })
+
+test('logQaEvent redige segredo na entrada: memória, evento ao renderer e disco guardam a mesma cópia limpa', async () => {
+  const noDisco = []
+  const noRenderer = []
+  __setDiskStoreForTests({ append: async (entry) => { noDisco.push(entry) } })
+  __setMainWindowGetterForTests(() => ({
+    isDestroyed: () => false,
+    webContents: { isDestroyed: () => false, send: (_channel, payload) => { noRenderer.push(payload) } },
+  }))
+
+  const entry = logQaEvent({
+    level: 'warn',
+    scope: 'agent-usage:live-query',
+    message: 'A consulta falhou com OPENAI_API_KEY=CANARIOqa123 e https://u:CANARIOqaurl@proxy.example.com',
+    details: { nota: 'GITHUB_TOKEN=CANARIOqa456', token: 'CANARIOqa789', provedor: 'claude' },
+  })
+  await Promise.resolve()
+
+  for (const [onde, copia] of [['memória', entry], ['renderer', noRenderer[0]], ['disco', noDisco[0]]]) {
+    assert.doesNotMatch(JSON.stringify(copia), /CANARIO/, `${onde} guardou o segredo`)
+    assert.match(copia.message, /A consulta falhou com/, `${onde}: o motivo continua legível`)
+    assert.equal(copia.details.provedor, 'claude', `${onde}: o que não é segredo fica`)
+  }
+  __setDiskStoreForTests(null)
+  __setMainWindowGetterForTests(() => null)
+})

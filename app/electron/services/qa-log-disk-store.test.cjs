@@ -147,3 +147,13 @@ test('redactValue redige string em qualquer profundidade de objeto/array aninhad
 test('redactValue não perde a estrutura de arrays e objetos não-sensíveis', () => {
   assert.deepEqual(redactValue({ a: 1, b: ['x', 'y'] }), { a: 1, b: ['x', 'y'] })
 })
+
+test('redactValue mascara segredo com nome de variável de ambiente e credencial em URL, não só rótulo solto', () => {
+  const redigido = redactValue({
+    message: 'OPENAI_API_KEY=CANARIOdisco1 e https://u:CANARIOdisco2@h.example.com',
+    details: { lista: ['GITHUB_TOKEN=CANARIOdisco3', 'ya29.CANARIOdisco4-AbCdEfGhIjKlMnOpQrStUv'], ok: 'Resets 6:50pm (America/Sao_Paulo)' },
+  })
+
+  assert.doesNotMatch(JSON.stringify(redigido), /CANARIO/)
+  assert.equal(redigido.details.ok, 'Resets 6:50pm (America/Sao_Paulo)')
+})

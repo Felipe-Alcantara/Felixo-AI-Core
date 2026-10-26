@@ -60,6 +60,10 @@ const SECRET_PATTERNS = [
  */
 const URL_USERINFO_PATTERN = /(\b[a-z][a-z0-9+.-]{0,15}:\/\/)[^/?#\s@]+@/gi
 
+/** `--token xyz`, `--password=xyz`: o valor de um argumento de linha de comando que carrega segredo. */
+const CLI_ARGUMENT_SECRET_PATTERN =
+  /(--(?:access[-_]?token|auth[-_]?token|refresh[-_]?token|token|password|passwd|secret|api[-_]?key|apikey))(=|\s+)\S+/gi
+
 const REDACTED = '[oculto]'
 
 /** Métodos de login que o Codex imprime; usados só para exibição. */
@@ -87,7 +91,9 @@ function redactSecrets(text) {
     (_match, label, separator) => `${label}${separator}${REDACTED}`,
   )
 
-  redacted = redacted.replace(URL_USERINFO_PATTERN, `$1${REDACTED}@`)
+  redacted = redacted
+    .replace(URL_USERINFO_PATTERN, `$1${REDACTED}@`)
+    .replace(CLI_ARGUMENT_SECRET_PATTERN, `$1$2${REDACTED}`)
 
   for (const pattern of SECRET_PATTERNS) {
     redacted = redacted.replace(pattern, REDACTED)
