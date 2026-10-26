@@ -366,7 +366,8 @@ geração falhar com o painel fechado, ganha um ícone de alerta. Ao
 terminar, a imagem entra no canvas como bloco temporário, com **Remover
 temporário**. Os erros aparecem com mensagens fixas: chave ausente ou recusada,
 falta de créditos (o OpenRouter exige saldo mínimo na conta para gerar imagem:
-US$ 1,00 em 09/10/2026), limite de requisições, modelo indisponível, rede, tempo
+US$ 1,00 em 09/10/2026), limite de gasto da própria chave esgotado (com um Openia
+mais novo que a 0.2.1), limite de requisições, modelo indisponível, rede, tempo
 esgotado ou catálogo indisponível (com **Tentar de novo**). É preciso ter o
 Openia 0.2.0 ou mais novo instalado, com a chave configurada, e rede para o
 catálogo. Com um Openia anterior (sem `openia image`), o painel diz isso e

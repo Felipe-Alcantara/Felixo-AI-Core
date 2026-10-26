@@ -56,6 +56,7 @@ openia image --json --model <empresa/modelo> --prompt=<texto> --output-dir <past
 | 4 | model_error (`model_not_found`, `model_unsupported`…) | `model_unavailable` |
 | 5 | limit_error (`rate_limit`, `request_too_large`…) | `limit_error` |
 | 5 | limit_error com `account_limit` ou `minimum_balance` (falta de créditos) | `insufficient_credits` |
+| 5 | limit_error com `key_limit` (limite de gasto da PRÓPRIA chave esgotado: HTTP 403 "Key limit exceeded") | `key_limit` |
 | 6 | network_error | `network_error` |
 | 124 | timeout | `timeout` |
 | 130 | cancelled | `cancelled` |
@@ -65,6 +66,15 @@ O `error.code` só vence o código de saída quando DETALHA a mesma classe: falt
 `minimum_balance`) é um limite de saída 5, mas pede outra ação (adicionar saldo). Medido em 09/10/2026 com uma
 conta de US$ 0,77: o endpoint de imagens responde HTTP 402 "Insufficient credits" (vira `account_limit`); o
 texto do saldo mínimo ("requires at least $1.00 in balance for image or video output") só veio pela API de chat.
+
+O `key_limit` é o outro limite que não é de requisições: o OpenRouter responde HTTP 403 "Key limit exceeded
+(total limit)" quando a chave é válida e a conta tem saldo, mas o limite de gasto configurado NA CHAVE acabou
+(medido no smoke do Openia em 07/10/2026). Antes dele o Openia devolvia `authentication_error` (saída 3,
+"chave rejeitada") e a pessoa trocava uma chave que estava certa; a ação certa é aumentar o limite da chave no
+OpenRouter, não adicionar créditos nem recadastrar a chave. O 401 e os demais 403 continuam
+`authentication_error`. O `key_limit` só existe no Openia **depois da 0.2.1** (commit `49beefc`, 26/10/2026): com o
+pino atual do catálogo (`6f75f8f`, 0.2.1) o Openia ainda manda `authentication_error` nesse caso, e o Felixo só
+passa a mostrar a mensagem própria quando o pino subir.
 
 **Openia antigo.** Um Openia anterior à 0.2.0 não tem `openia image`: o Typer sai com código 2 e nada em stdout.
 Nesse caso, e só nele, o Felixo consulta `openia --version`; abaixo de 0.2.0 o código público é
