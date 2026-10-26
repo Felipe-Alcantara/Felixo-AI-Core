@@ -1314,3 +1314,32 @@ Estado: concluído e publicado (v0.1.488).
 **Não validado.** A consulta ao vivo de uma conta logada de verdade (exige login real) e a máquina de referência de 2 núcleos/4 threads; o custo de memória de 50 CLIs foi extrapolado, não medido (havia 1,7 GB livres). macOS só pelo CI. Os arquivos de teste novos não rodam em jsdom: o repositório não tem.
 
 Estado: concluído e publicado (v0.1.490).
+
+## 2026-10-26 — Limites: a conta sem sessão deixa de ser erro, cada conta ganha disponibilidade em runtime e o último valor conhecido passa a parecer antigo (v0.1.491)
+
+**Pedido.** Task "Limites — capability em runtime (network-disabled/auth-required), last-known e fluxo do Gemini" (continua `ecae763`): uma segunda camada de capability que junta a fonte com o resultado da última rodada, auditoria de "last-known não parece leitura nova", fluxo do Gemini, troca de conta, logout, profile env e resposta parcial, e o painel consumindo a capability em vez de inferir.
+
+**Medido (Windows 11, claude 2.1.310, codex-cli 0.165.0-alpha.1, pastas de login vazias).**
+- *Sem sessão, as duas CLIs saem com código 1:* `claude auth status --json` imprime `{"loggedIn": false, ...}` e `codex login status` imprime "Not logged in". O serviço fazia `queryFailed = result.ok !== true || ...`, então a conta deslogada virava `error` com "A consulta da CLI falhou", e a conta com perfil deslogada dizia "abra um terminal nela para a CLI registrar o uso". O ramo "sessão ausente → indisponível" só era alcançado pelo Openia, que sai com 0. A prova do antes é por mutação com as saídas reais simuladas (reverter a linha derruba os dois testes de sessão ausente); no app real medi só o depois.
+- *Depois, no app real* (aberto isolado, `CLAUDE_CONFIG_DIR` e `CODEX_HOME` vazios): a conta do Codex mostra "Esta conta não está logada: entre nela para voltar a ver os limites.", selo **Indisponível**, e o botão "Abrir terminal da conta" aparece nas contas do Claude e do Codex (2 botões).
+- *Cobertura que já existia:* offline com último valor conhecido, troca de conta e `profileEnv` (conta com perfil sem as chaves de API herdadas). Faltavam logout com código 1, razão da falha e rodada parcial no mesmo provider.
+- *Gemini (fonte: anúncio da Google, "Transitioning Gemini CLI to Antigravity CLI"):* a Gemini CLI deixou de atender contas individuais (gratuita, AI Pro e Ultra) em 18/06/2026. O `/stats model` segue sendo o único lugar documentado com quota, sem forma não interativa.
+
+**O que mudou.**
+- `f619a53` (backend): `classifyFailureReason` e `describeAvailability` (`agent-usage-model.cjs`), `metadata.failureReason` na allowlist com validação de enum, `availability` e `ownLogin` por conta no dashboard, sessão ausente deixa de ser falha de consulta e passa a valer antes da conta com perfil. Razões: `auth-required`, `network-disabled`, `cli-missing`, `timeout`, `query-failed`, cada uma com frase fixa em português (a saída crua da CLI não vai para a tela). Limitação do Gemini com o motivo de 18/06/2026.
+- `337f8fc` (frontend): `describeDisplayedAgentUsage` (barras esmaecidas e "Último valor conhecido, lido/medido há X" com o motivo, também quando a rodada vem deslogada ou desatualizada, não só em erro), `getAgentUsageLoginTerminal` e o botão "Abrir terminal da conta" (`claude auth login`, `codex login`) pela nova prop `onAddTerminal` do `CanvasToolPanels`. A tabela-resumo ganhou `lastKnown` e `notice`.
+- `da5e8d1`: `GUIA-CONTAS-E-LIMITES.md` e o inventário do canvas (inclui as referências de linha de `AgentUsagePanel.tsx` que se deslocaram).
+
+**Decisões do Felipe (perguntadas).** Gemini: manter a limitação, sem terminal escondido. Último valor conhecido: barras esmaecidas com etiqueta. Conta sem sessão: mensagem mais o botão de abrir o terminal.
+
+**Decisões do agente.**
+- A razão sai de sinais estruturados (`ENOENT`, `timedOut`, sessão) e, só para a rede, de assinaturas de texto; o que não casa fica `query-failed`, nunca "sem rede" por chute. Cancelar a rodada conta como `timeout`: o Reconectar descarta a rodada antes de gravar, então o que chega cancelado foi o teto de 90 s.
+- Na falha genérica a mensagem da própria rodada vence o texto fixo, porque é o único detalhe que existe (já aparecia no card antes).
+- `launchMode: 'launcher'` no terminal de login: sem isso `buildTerminalNodeData` digitaria o contexto do canvas dentro do fluxo de login. `accountId` só em conta com pasta de login própria (`ownLogin`): o `pty:spawn` consulta o cofre de contas das CLIs e recusaria a "Conta desta máquina". Conferido contra `validatePtyAccountSelection` nas quatro formas que o botão gera.
+- `availability` e `ownLogin` são obrigatórios no tipo do frontend, para o contrato valer de fato (duas fixtures de teste atualizadas).
+
+**Validação.** `npm test` 3026 testes, 0 falhas, 9 pulados (16 novos, em `agent-usage-availability.test.cjs`); vitest 3342 passando (18 casos novos); `eslint` 0; `tsc -b` limpo; build ok. Mutação: 13 mutantes do backend e 15 do frontend, todos mortos (um sobreviveu na primeira rodada, `aborted: signal.aborted`, e levou à separação do teste do teto em "consulta em voo" e "esperando na fila"). CI `40284994792` verde nos quatro sistemas; Release `40285688762` publicou a v0.1.491.
+
+**Não validado.** O clique do botão com login real (abre o navegador e exige conta). As assinaturas de rede contra a CLI real sem rede (precisa de login e de rede cortada): são heurística de texto, validada só com mensagens escritas por mim. O visual do último valor conhecido no app real (só a sessão ausente foi vista; o resto é teste de função pura e tipos, e o repositório não tem jsdom). A Antigravity CLI como fonte de quota não foi pesquisada.
+
+Estado: concluído e publicado (v0.1.491).
