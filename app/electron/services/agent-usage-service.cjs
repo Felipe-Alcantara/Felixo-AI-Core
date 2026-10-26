@@ -28,8 +28,20 @@ const { applyProfileEnv } = require('./cli-account-profiles.cjs')
 const {
   createAgentUsageRepository,
 } = require('./storage/agent-usage-repository.cjs')
+const { mapWithConcurrency } = require('./bounded-concurrency.cjs')
 
 const COMMAND_TIMEOUT_MS = 30_000
+/**
+ * Quantas contas o Atualizar consulta ao mesmo tempo. A consulta ao vivo de uma
+ * conta logada abre uma CLI em PTY: um `claude` recém-aberto ocupa 184 MB (2
+ * processos) e os das sessões longas 351 a 477 MB (medido em 26/10/2026). Com
+ * todas as contas em paralelo, 10 contas logadas já pediam de 1,8 a 4,8 GB de
+ * uma vez. Quatro deixam o pior caso em ~0,7 a 1,9 GB e mantêm o caso comum (o
+ * login de cada CLI mais algumas contas com perfil) correndo junto, como antes.
+ * Uma rodada de 4 contas a mais ocupa um lote a mais: ver o orçamento de
+ * latência em `docs/projeto/POLITICA-PERFORMANCE.md`.
+ */
+const REFRESH_MAX_CONCURRENCY = 4
 /**
  * Teto da rodada inteira de atualização. Cada comando já tinha o seu limite,
  * mas a consulta ao vivo é uma função injetada que só RECEBE `timeoutMs` —
@@ -100,6 +112,8 @@ function createAgentUsageService({
   // a quota delas é lida da pasta delas — não do login do sistema.
   listProfiles = () => [],
   refreshDeadlineMs = REFRESH_DEADLINE_MS,
+  // Teto de consultas em voo na rodada (ver REFRESH_MAX_CONCURRENCY).
+  maxConcurrent = REFRESH_MAX_CONCURRENCY,
 } = {}) {
   let refreshPromise = null
   let lastRefreshAt = null
@@ -217,39 +231,37 @@ function createAgentUsageService({
     ]
 
     const perfis = listProfiles()
-    const snapshots = await Promise.all([
-      ...providerIds.map((providerId) =>
-        collectProviderSnapshot({
-          providerId,
-          runCommand,
-          now,
-          probe,
-          queryLiveUsage,
-          onLiveQueryFailure,
-          queryResetCredits,
-          signal: round.controller.signal,
-          abortMessage: () => (round.reason === 'reconnect' ? 'A consulta foi cancelada pelo Reconectar.' : deadlineMessage()),
-        }),
-      ),
+    const { signal } = round.controller
+    const abortMessage = () => (round.reason === 'reconnect' ? 'A consulta foi cancelada pelo Reconectar.' : deadlineMessage())
+    const consultas = [
+      ...providerIds.map((providerId) => ({ providerId })),
       // A conta com login próprio não precisa de adivinhação de identidade: a
       // amostra vai para ela porque foi a pasta dela que produziu o número.
-      ...perfis.map((perfil) =>
-        collectProviderSnapshot({
-          providerId: perfil.providerId,
-          runCommand,
-          now,
-          probe,
-          probeOptions: perfil.probeOptions,
-          profileEnv: perfil.profileEnv,
-          targetAccountId: perfil.id,
-          queryLiveUsage,
-          onLiveQueryFailure,
-          queryResetCredits,
-          signal: round.controller.signal,
-          abortMessage: () => (round.reason === 'reconnect' ? 'A consulta foi cancelada pelo Reconectar.' : deadlineMessage()),
-        }),
-      ),
-    ])
+      ...perfis.map((perfil) => ({
+        providerId: perfil.providerId,
+        probeOptions: perfil.probeOptions,
+        profileEnv: perfil.profileEnv,
+        targetAccountId: perfil.id,
+      })),
+    ]
+    // No máximo `maxConcurrent` CLIs abertas por vez. Depois do cancelamento
+    // (teto de tempo ou Reconectar) a fila não abre CLI nenhuma: as contas que
+    // não chegaram a ser consultadas recebem a mensagem do cancelamento.
+    const snapshots = await mapWithConcurrency(consultas, maxConcurrent, (consulta) =>
+      signal.aborted
+        ? createAbortedSnapshot({ ...consulta, now, message: abortMessage() })
+        : collectProviderSnapshot({
+            ...consulta,
+            runCommand,
+            now,
+            probe,
+            queryLiveUsage,
+            onLiveQueryFailure,
+            queryResetCredits,
+            signal,
+            abortMessage,
+          }),
+    )
 
     const idsDePerfil = new Set(perfis.map((perfil) => perfil.id))
 
@@ -620,10 +632,17 @@ async function collectProviderSnapshot({
     runCommand,
     probe,
     probeOptions,
+    signal,
     env: targetAccountId
       ? createProfileCommandEnv({ providerId, profileEnv })
       : createCommandEnv(providerId, profileEnv),
   })
+
+  // A rodada foi cancelada com o comando de login em voo: o resultado dele é
+  // "cancelado", não uma falha da CLI, e nada mais deve abrir para esta conta.
+  if (signal.aborted) {
+    return createAbortedSnapshot({ providerId, targetAccountId, now, message: abortMessage() })
+  }
 
   if (!source.auth) {
     return {
@@ -659,7 +678,11 @@ async function collectProviderSnapshot({
         runCommand,
         profileEnv,
         now,
+        signal,
       })
+      if (signal.aborted) {
+        liveResult = { ok: false, message: `${source.name}: ${abortMessage()}` }
+      }
     } else if (liveQueryFunction) {
       try {
         liveResult = await untilAborted(
@@ -722,7 +745,7 @@ async function collectProviderSnapshot({
       : []
     : authMetrics.length > 0
       ? authMetrics
-      : await runUsageCommand({ source, providerId, runCommand, profileEnv })
+      : await runUsageCommand({ source, providerId, runCommand, profileEnv, signal })
   const metrics = liveQueryEnabled
     ? commandMetrics
     : commandMetrics.length > 0
@@ -817,6 +840,7 @@ async function checkAccountAuth({
 }) {
   const startedAt = clock()
 
+  signal,
   if (!source) {
     return {
       source: null,
@@ -854,6 +878,7 @@ async function checkAccountAuth({
     })
   } catch {
     result = { ok: false }
+      signal,
   }
 
   // A saída é reduzida antes de qualquer parser. O snapshot nunca retorna a
@@ -927,7 +952,7 @@ function mergeStatusDetails({ liveDetails, resetCreditsResult }) {
  * A falha aqui não derruba a rodada: sem métrica, o painel mostra o estado de
  * autenticação e a limitação, como em qualquer fonte sem número.
  */
-async function runUsageCommand({ source, providerId, runCommand, profileEnv = {} }) {
+async function runUsageCommand({ source, providerId, runCommand, profileEnv = {}, signal }) {
   if (source.usage.kind !== 'cli-command' || !source.usage.command) {
     return []
   }
@@ -943,6 +968,7 @@ async function runUsageCommand({ source, providerId, runCommand, profileEnv = {}
     })
   } catch {
     return []
+      signal,
   }
 
   if (result?.ok !== true) {
@@ -964,6 +990,7 @@ async function runLiveUsageCommand({
 }) {
   let result
   try {
+  signal,
     result = await runCommand({
       command: source.usage.command,
       args: [...(source.usage.args ?? [])],
@@ -973,6 +1000,7 @@ async function runLiveUsageCommand({
     })
   } catch {
     return {
+      signal,
       ok: false,
       collectedAt: null,
       measuredAt: null,
@@ -1482,6 +1510,25 @@ async function readCatalog(listCatalog) {
 function createFallbackSource(providerId) {
   return {
     id: providerId,
+/**
+ * Resultado de uma conta que a rodada cancelada não consultou (ou cujo comando
+ * foi cancelado em voo): vira amostra de erro com a mensagem do cancelamento,
+ * e a última leitura conhecida continua a valer no painel.
+ */
+function createAbortedSnapshot({ providerId, targetAccountId, now, message }) {
+  return {
+    providerId,
+    source: getAgentUsageSource(providerId) ?? createFallbackSource(providerId),
+    targetAccountId,
+    collectedAt: nowIso(now),
+    commandOk: false,
+    auth: { authStatus: 'unknown' },
+    metrics: [],
+    queryFailed: true,
+    queryErrorMessage: message,
+  }
+}
+
     name: providerId,
     provider: providerId,
     command: providerId,
@@ -1562,6 +1609,7 @@ module.exports = {
   createAgentUsageService,
   buildDashboard,
   checkAccountAuth,
+  REFRESH_MAX_CONCURRENCY,
   collectProviderSnapshot,
   createProfileCommandEnv,
   resolveObservedIdentity,
