@@ -86,6 +86,26 @@ export type AgentUsageProvider = {
   }
 }
 
+/**
+ * Disponibilidade em runtime de uma conta (`describeAvailability`, no backend):
+ * a capability estática da fonte somada ao resultado da última rodada. Os cinco
+ * últimos estados são razões de falha; `available` sem mensagem é "nada a avisar".
+ */
+export type AgentUsageAvailabilityState =
+  | 'available'
+  | 'unsupported'
+  | 'interactive-only'
+  | 'auth-required'
+  | 'network-disabled'
+  | 'cli-missing'
+  | 'timeout'
+  | 'query-failed'
+
+export type AgentUsageAvailability = {
+  state: AgentUsageAvailabilityState
+  message: string | null
+}
+
 export type AgentUsageAccount = {
   id: string
   providerId: string
@@ -95,6 +115,9 @@ export type AgentUsageAccount = {
   identitySource: 'cli' | 'manual' | null
   createdAt: string
   updatedAt: string
+  /** Pasta de login própria (perfil); a "Conta desta máquina" usa o login do sistema. */
+  ownLogin: boolean
+  availability: AgentUsageAvailability
   latestSample: AgentUsageSample | null
   lastKnownSample: AgentUsageSample | null
 }
@@ -334,6 +357,138 @@ export function getDisplayedAgentUsageSample(
     : getLastKnownAgentUsage(account) ?? account.latestSample
 }
 
+/** Estados em que a rodada deveria ter trazido número e não trouxe. */
+const AGENT_USAGE_FAILURE_STATES: ReadonlySet<AgentUsageAvailabilityState> = new Set([
+  'auth-required',
+  'network-disabled',
+  'cli-missing',
+  'timeout',
+  'query-failed',
+])
+
+/**
+ * Idade de um instante em português curto ("há 5 min"). Instante no futuro
+ * (relógio que voltou) vira "agora há pouco", nunca "há -5 min"; data ausente
+ * ou ilegível devolve `null` em vez de inventar uma idade.
+ */
+export function formatAgentUsageAge(
+  value: string | null | undefined,
+  now: number = Date.now(),
+): string | null {
+  const timestamp = value ? Date.parse(value) : Number.NaN
+  if (!Number.isFinite(timestamp)) {
+    return null
+  }
+
+  const minutes = Math.floor((now - timestamp) / 60_000)
+  if (minutes < 1) {
+    return 'agora há pouco'
+  }
+  if (minutes < 60) {
+    return `há ${minutes} min`
+  }
+
+  const hours = Math.floor(minutes / 60)
+  return hours < 24 ? `há ${hours} h` : `há ${Math.floor(hours / 24)} d`
+}
+
+export type AgentUsageDisplay = {
+  /** O que o card mostra: a leitura mais recente com número, ou a mais recente. */
+  sample: AgentUsageSample | null
+  /** O número na tela não é da rodada mais recente (que falhou ou veio sem número). */
+  isLastKnown: boolean
+  /** Frase pronta sobre a idade do número e o motivo da rodada atual; `null` = nada a avisar. */
+  notice: string | null
+  /** Quando a rodada mais recente falhou, se falhou. */
+  failedAt: string | null
+}
+
+/**
+ * O que o card de uma conta mostra e o que precisa dizer sobre isso. Com a
+ * rodada atual sem número, o card cai para o último valor conhecido — e esse
+ * número precisa parecer o que é: antigo. A razão vem de `availability` (texto
+ * fixo, sem o erro cru da CLI); erro sem razão classificada mantém a mensagem
+ * da própria rodada. Limitação da fonte (Gemini) não é falha: o card já a mostra.
+ */
+export function describeDisplayedAgentUsage(
+  account: AgentUsageAccount,
+  now: number = Date.now(),
+): AgentUsageDisplay {
+  const sample = getDisplayedAgentUsageSample(account)
+  const latest = account.latestSample
+  const hasNumbers = Boolean(sample?.metrics.length)
+  const isLastKnown = hasNumbers && sample?.id !== latest?.id
+  const { state, message } = account.availability
+  const runtimeReason = AGENT_USAGE_FAILURE_STATES.has(state) ? message : null
+
+  if (!isLastKnown) {
+    return {
+      sample,
+      isLastKnown: false,
+      notice: hasNumbers ? null : runtimeReason,
+      failedAt: null,
+    }
+  }
+
+  const failureMessage = getAgentUsageLastFailureNotice(account, sample)?.message ?? null
+  // `query-failed` é o genérico: a mensagem da própria rodada diz mais que o texto fixo.
+  const reason =
+    (state === 'query-failed' ? failureMessage ?? runtimeReason : runtimeReason ?? failureMessage) ?? null
+  const measuredAt = getAgentUsageMeasuredAt(sample)
+  const age = formatAgentUsageAge(measuredAt ?? sample?.collectedAt, now)
+  const head = age
+    ? `Último valor conhecido, ${measuredAt ? 'medido' : 'lido'} ${age}.`
+    : 'Último valor conhecido.'
+
+  return {
+    sample,
+    isLastKnown: true,
+    notice: reason ? `${head} ${reason}` : head,
+    failedAt: latest?.status === 'error' || latest?.status === 'unavailable' ? latest.collectedAt : null,
+  }
+}
+
+// Subcomandos de login confirmados nas CLIs instaladas (claude 2.1.310, codex-cli
+// 0.165). Gemini e Openia ficam de fora: não há login por subcomando para abrir.
+const AGENT_LOGIN_COMMANDS: ReadonlyMap<string, { command: string; args: string[] }> = new Map([
+  ['claude', { command: 'claude', args: ['auth', 'login'] }],
+  ['codex', { command: 'codex', args: ['login'] }],
+])
+
+export type AgentUsageLoginTerminal = {
+  command: string
+  args: string[]
+  label: string
+  providerId: string
+  /** Só em conta com pasta de login própria: o processo principal não conhece a "Conta desta máquina". */
+  accountId?: string
+  /** Modo opaco: o contexto do canvas não é digitado dentro do fluxo de login. */
+  launchMode: 'launcher'
+}
+
+/**
+ * Terminal que faz o login de uma conta com sessão ausente, ou `null` quando a
+ * razão é outra ou a CLI não tem subcomando de login. Compatível com as opções
+ * de `addTerminalNode`; o login em si é feito pela pessoa, no terminal.
+ */
+export function getAgentUsageLoginTerminal(
+  account: AgentUsageAccount,
+): AgentUsageLoginTerminal | null {
+  const login = AGENT_LOGIN_COMMANDS.get(account.providerId)
+  if (account.availability.state !== 'auth-required' || !login) {
+    return null
+  }
+
+  return {
+    command: login.command,
+    args: [...login.args],
+    label: `Entrar · ${account.identityDisplay ?? account.label}`,
+    providerId: account.providerId,
+    ...(account.ownLogin ? { accountId: account.id } : {}),
+    launchMode: 'launcher',
+  }
+}
+
 export type AgentUsageSummaryColumn = { key: string; label: string }
 
 export type AgentUsageSummaryCell = {
@@ -348,6 +503,10 @@ export type AgentUsageSummaryRow = {
   status: AgentUsageStatus
   /** Aviso de bloqueio publicado pela CLI (uso bloqueado, limite atingido). */
   warning: string | null
+  /** As células são do último valor conhecido, não da rodada mais recente. */
+  lastKnown: boolean
+  /** Idade do número e razão da rodada atual (`describeDisplayedAgentUsage`). */
+  notice: string | null
   cells: Record<string, AgentUsageSummaryCell | null>
 }
 
@@ -369,10 +528,10 @@ export function summarizeProviderAccounts(
 ): AgentUsageProviderSummary {
   const columns: AgentUsageSummaryColumn[] = []
   const seen = new Set<string>()
-  const displayed = group.accounts.map((account) => ({
-    account,
-    sample: getDisplayedAgentUsageSample(account),
-  }))
+  const displayed = group.accounts.map((account) => {
+    const display = describeDisplayedAgentUsage(account, now())
+    return { account, display, sample: display.sample }
+  })
 
   for (const { sample } of displayed) {
     for (const metric of sample?.metrics ?? []) {
@@ -383,7 +542,7 @@ export function summarizeProviderAccounts(
     }
   }
 
-  const rows = displayed.map(({ account, sample }) => {
+  const rows = displayed.map(({ account, display, sample }) => {
     const cells: Record<string, AgentUsageSummaryCell | null> = {}
     for (const column of columns) {
       const metric = sample?.metrics.find((item) => item.key === column.key)
@@ -402,6 +561,8 @@ export function summarizeProviderAccounts(
       plan: getAgentUsagePlan(sample),
       status: getAccountStatus(account, now),
       warning: getAgentUsageBlockingWarning(account.latestSample ?? sample),
+      lastKnown: display.isLastKnown,
+      notice: display.notice,
       cells,
     }
   })

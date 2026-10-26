@@ -65,6 +65,16 @@ export function ProviderSummaryTable({
                   {row.warning}
                 </span>
               )}
+              {/* Idade do número e motivo da rodada: sem isto o último valor conhecido
+                  parece leitura nova, e a conta sem sessão parece só "Indisponível". */}
+              {row.notice && (
+                <span
+                  data-felixo-agent-usage-notice
+                  className={`mt-0.5 block text-[10px] leading-snug ${row.lastKnown ? 'text-(--color-warning)' : 'text-zinc-500'}`}
+                >
+                  {row.notice}
+                </span>
+              )}
             </th>
           </tr>
           <tr className="align-top">
@@ -78,7 +88,7 @@ export function ProviderSummaryTable({
               )}
             </td>
             {summary.columns.map((column) => (
-              <td key={column.key} className="py-1.5 pr-2">
+              <td key={column.key} className={`py-1.5 pr-2 ${row.lastKnown ? 'opacity-60' : ''}`}>
                 <SummaryCell cell={row.cells[column.key]} />
               </td>
             ))}

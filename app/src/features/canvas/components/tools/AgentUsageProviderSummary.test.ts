@@ -19,6 +19,8 @@ function account(id: string, identityDisplay: string | null): AgentUsageAccount 
     identitySource: null,
     createdAt: '2026-10-02T12:00:00.000Z',
     updatedAt: '2026-10-02T12:00:00.000Z',
+    ownLogin: false,
+    availability: { state: 'available', message: null },
     latestSample: null,
     lastKnownSample: null,
   }
@@ -35,6 +37,8 @@ const SUMMARY: AgentUsageProviderSummary = {
       plan: 'plus',
       status: 'current',
       warning: null,
+      lastKnown: false,
+      notice: null,
       cells: {
         'rate_limits.primary': { remaining: 80, usedPercent: 20, resetAt: null },
         'rate_limits.secondary': { remaining: 5, usedPercent: 95, resetAt: null },
@@ -45,6 +49,8 @@ const SUMMARY: AgentUsageProviderSummary = {
       plan: null,
       status: 'error',
       warning: 'O serviço bloqueou o uso comum desta conta.',
+      lastKnown: false,
+      notice: null,
       cells: { 'rate_limits.primary': null, 'rate_limits.secondary': null },
     },
   ],

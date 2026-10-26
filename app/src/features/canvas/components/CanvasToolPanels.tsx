@@ -28,6 +28,7 @@ import {
 import type { SkillActivationResult } from './tools/SkillsPanel'
 import type { CanvasSkill } from '../types'
 import type { PromptInsertion } from '../../shared/types/prompt-insertion'
+import type { NewTerminalOptions } from '../services/new-terminal-options'
 import type { RunFileOptions } from '../services/run-file-command'
 import { TOOL_LABELS } from './tools/canvas-tool-labels'
 
@@ -46,6 +47,8 @@ type CanvasToolPanelsProps = {
   onAddDrawing: () => void
   /** Creates a new full Excalidraw drawing block on the canvas (lazy-loaded). */
   onAddExcalidrawDrawing: () => void
+  /** Abre um terminal no canvas (o "Abrir terminal da conta" do painel de Limites). */
+  onAddTerminal: (options: NewTerminalOptions) => void
   onProjectsChanged: () => void
   /** Unregisters a folder from the shared projects list — nothing leaves disk. */
   onRemoveFolder: (projectId: string) => Promise<boolean>
@@ -168,6 +171,7 @@ export function CanvasToolPanels({
   onAddNote,
   onAddDrawing,
   onAddExcalidrawDrawing,
+  onAddTerminal,
   onProjectsChanged,
   onRemoveFolder,
   onRunFile,
@@ -281,6 +285,7 @@ export function CanvasToolPanels({
             toolsMenuOpen={toolsMenuOpen}
             onFocusNode={onFocusNode}
             existingNodeIds={new Set(nodes.map((node) => node.id))}
+            onAddTerminal={onAddTerminal}
           />
         )
       case 'orchestrator':

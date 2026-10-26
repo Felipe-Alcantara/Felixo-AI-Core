@@ -4,7 +4,9 @@ import {
   AGENT_USAGE_OPEN_REUSE_MS,
   AGENT_USAGE_STALE_AFTER_MS,
   agentUsagePercent,
+  describeDisplayedAgentUsage,
   deriveDisplayStatus,
+  formatAgentUsageAge,
   formatAgentUsageMetric,
   formatAgentUsageNumber,
   formatAgentUsageReset,
@@ -12,6 +14,7 @@ import {
   formatAgentUsageResetCreditType,
   formatAgentUsageSource,
   getAccountStatus,
+  getAgentUsageLoginTerminal,
   getAgentUsageMeasuredAt,
   getAgentUsagePlan,
   getAgentUsageResetCredits,
@@ -63,6 +66,8 @@ function account(
     identitySource: null,
     createdAt: '2026-08-28T12:00:00.000Z',
     updatedAt: '2026-08-28T12:00:00.000Z',
+    ownLogin: false,
+    availability: { state: 'available', message: null },
     latestSample: currentSample,
     lastKnownSample: currentSample?.metrics.length ? currentSample : null,
   }
@@ -510,5 +515,217 @@ describe('summarizeProviderAccounts', () => {
 
     expect(summary.rows[0].cells['rate_limits.primary']?.remaining).toBe(55)
     expect(summary.rows[0].status).toBe('error')
+    // A célula vem do último valor conhecido e a linha diz isso: não parece leitura nova.
+    expect(summary.rows[0].lastKnown).toBe(true)
+    expect(summary.rows[0].notice).toMatch(/^Último valor conhecido/)
+  })
+
+  it('conta que respondeu na rodada atual não leva aviso nem marca de valor antigo', () => {
+    const summary = summarizeProviderAccounts(group([codexAccount('conta-a', [window5h(40)])]), NOW)
+
+    expect(summary.rows[0].lastKnown).toBe(false)
+    expect(summary.rows[0].notice).toBeNull()
+  })
+})
+
+describe('formatAgentUsageAge', () => {
+  const AGORA = Date.parse('2026-10-26T12:00:00.000Z')
+  const atras = (ms: number) => new Date(AGORA - ms).toISOString()
+
+  it.each([
+    [30_000, 'agora há pouco'],
+    [60_000, 'há 1 min'],
+    [59 * 60_000, 'há 59 min'],
+    [60 * 60_000, 'há 1 h'],
+    [23 * 3_600_000 + 59 * 60_000, 'há 23 h'],
+    [24 * 3_600_000, 'há 1 d'],
+    [3 * 24 * 3_600_000, 'há 3 d'],
+    [-5 * 60_000, 'agora há pouco'], // relógio do futuro: nunca "há -5 min"
+  ])('%i ms atrás vira "%s"', (ms, esperado) => {
+    expect(formatAgentUsageAge(atras(ms), AGORA)).toBe(esperado)
+  })
+
+  it('data ausente ou ilegível não vira idade inventada', () => {
+    expect(formatAgentUsageAge(null, AGORA)).toBeNull()
+    expect(formatAgentUsageAge(undefined, AGORA)).toBeNull()
+    expect(formatAgentUsageAge('ontem à tarde', AGORA)).toBeNull()
+  })
+})
+
+describe('o que o card da conta mostra quando a rodada atual não trouxe número', () => {
+  const AGORA = Date.parse('2026-10-26T12:00:00.000Z')
+  const atras = (min: number) => new Date(AGORA - min * 60_000).toISOString()
+  const janela = metric({ key: 'rate_limits.seven_day', label: 'Janela de 7 dias', used: 40, limit: 100, remaining: 60 })
+  const leitura = (id: string, minutos: number, metadata: AgentUsageSample['metadata'] = {}): AgentUsageSample => ({
+    ...sample('current', [janela]),
+    id,
+    collectedAt: atras(minutos),
+    metadata,
+  })
+  const falha = (
+    status: 'error' | 'unavailable' | 'stale',
+    errorMessage: string | null,
+    metadata: AgentUsageSample['metadata'] = {},
+  ): AgentUsageSample => ({ ...sample(status), id: `falha-${status}`, collectedAt: atras(1), errorMessage, metadata })
+  const conta = (
+    latestSample: AgentUsageSample | null,
+    lastKnownSample: AgentUsageSample | null,
+    availability: AgentUsageAccount['availability'] = { state: 'available', message: null },
+  ): AgentUsageAccount => ({ ...account('conta-a', null), latestSample, lastKnownSample, availability })
+
+  it('leitura nova: o que está na tela é a última leitura, sem aviso', () => {
+    const nova = leitura('nova', 1)
+    const display = describeDisplayedAgentUsage(conta(nova, nova), AGORA)
+
+    expect(display).toEqual({ sample: nova, isLastKnown: false, notice: null, failedAt: null })
+  })
+
+  it('rede fora com número antigo na tela: marca como último valor conhecido, com a idade e o motivo da rodada', () => {
+    const antiga = leitura('antiga', 5)
+    const rede = falha('error', 'Codex: getaddrinfo ENOTFOUND chatgpt.com')
+    const display = describeDisplayedAgentUsage(
+      conta(rede, antiga, { state: 'network-disabled', message: 'Sem rede, ou rede bloqueada.' }),
+      AGORA,
+    )
+
+    expect(display.sample).toBe(antiga)
+    expect(display.isLastKnown).toBe(true)
+    expect(display.notice).toBe('Último valor conhecido, lido há 5 min. Sem rede, ou rede bloqueada.')
+    expect(display.failedAt).toBe(rede.collectedAt)
+    // O texto cru do erro (que pode ter host, caminho...) não vai para o aviso.
+    expect(display.notice).not.toMatch(/ENOTFOUND/)
+  })
+
+  it('o número que a CLI mediu em outro momento vira "medido há…", não "lido há…"', () => {
+    const antiga = leitura('antiga', 1, { measuredAt: atras(180) })
+    const display = describeDisplayedAgentUsage(
+      conta(falha('error', null), antiga, { state: 'timeout', message: 'A consulta passou do tempo limite.' }),
+      AGORA,
+    )
+
+    expect(display.notice).toBe('Último valor conhecido, medido há 3 h. A consulta passou do tempo limite.')
+  })
+
+  it('sessão ausente com número antigo: o aviso diz que falta entrar, e o número continua sendo o antigo', () => {
+    const antiga = leitura('antiga', 20)
+    const display = describeDisplayedAgentUsage(
+      conta(falha('unavailable', 'sem sessão'), antiga, { state: 'auth-required', message: 'Esta conta não está logada.' }),
+      AGORA,
+    )
+
+    expect(display.isLastKnown).toBe(true)
+    expect(display.notice).toBe('Último valor conhecido, lido há 20 min. Esta conta não está logada.')
+  })
+
+  it('falha genérica (query-failed): a mensagem da própria rodada diz mais que o texto fixo e é a que aparece', () => {
+    const display = describeDisplayedAgentUsage(
+      conta(falha('error', 'Claude: o /status não retornou os limites.'), leitura('antiga', 5), {
+        state: 'query-failed',
+        message: 'A consulta da CLI falhou nesta rodada.',
+      }),
+      AGORA,
+    )
+
+    expect(display.notice).toBe('Último valor conhecido, lido há 5 min. Claude: o /status não retornou os limites.')
+  })
+
+  it('erro sem razão classificada: o motivo é a mensagem da própria rodada (comportamento anterior)', () => {
+    const antiga = leitura('antiga', 2)
+    const display = describeDisplayedAgentUsage(
+      conta(falha('error', 'A CLI informou outra conta; nenhuma métrica foi copiada.'), antiga),
+      AGORA,
+    )
+
+    expect(display.notice).toBe(
+      'Último valor conhecido, lido há 2 min. A CLI informou outra conta; nenhuma métrica foi copiada.',
+    )
+  })
+
+  it('rodada atual desatualizada sem número, e sem falha: só avisa que é o último valor conhecido', () => {
+    const display = describeDisplayedAgentUsage(conta(falha('stale', 'limitação da fonte'), leitura('antiga', 40)), AGORA)
+
+    expect(display.isLastKnown).toBe(true)
+    expect(display.notice).toBe('Último valor conhecido, lido há 40 min.')
+    expect(display.failedAt).toBeNull()
+  })
+
+  it('sem nenhum número guardado: o aviso é só o motivo, e nada é marcado como valor antigo', () => {
+    const rede = falha('error', null)
+    const display = describeDisplayedAgentUsage(
+      conta(rede, null, { state: 'network-disabled', message: 'Sem rede, ou rede bloqueada.' }),
+      AGORA,
+    )
+
+    expect(display.sample).toBe(rede)
+    expect(display.isLastKnown).toBe(false)
+    expect(display.notice).toBe('Sem rede, ou rede bloqueada.')
+  })
+
+  it('limitação da fonte (Gemini) não vira aviso de falha: o card já mostra a limitação', () => {
+    const indisponivel = falha('unavailable', 'A quota só sai do /stats model.')
+    const display = describeDisplayedAgentUsage(
+      conta(indisponivel, null, { state: 'interactive-only', message: 'A quota só sai do /stats model.' }),
+      AGORA,
+    )
+
+    expect(display.notice).toBeNull()
+    expect(display.isLastKnown).toBe(false)
+  })
+
+  it('conta nunca consultada não tem aviso', () => {
+    expect(describeDisplayedAgentUsage(conta(null, null), AGORA)).toEqual({
+      sample: null,
+      isLastKnown: false,
+      notice: null,
+      failedAt: null,
+    })
+  })
+})
+
+describe('getAgentUsageLoginTerminal', () => {
+  const semSessao = (overrides: Partial<AgentUsageAccount>): AgentUsageAccount => ({
+    ...account('conta-a', null),
+    availability: { state: 'auth-required', message: 'Esta conta não está logada.' },
+    ...overrides,
+  })
+
+  it('Claude com pasta de login própria: abre `claude auth login` na conta, sem contexto do canvas', () => {
+    expect(
+      getAgentUsageLoginTerminal(semSessao({ providerId: 'claude', ownLogin: true, identityDisplay: 'ana@example.com' })),
+    ).toEqual({
+      command: 'claude',
+      args: ['auth', 'login'],
+      accountId: 'conta-a',
+      providerId: 'claude',
+      label: 'Entrar · ana@example.com',
+      // `launcher` é o modo opaco: o `initialText` do canvas não é digitado dentro do fluxo de login.
+      launchMode: 'launcher',
+    })
+  })
+
+  it('Codex usa `codex login`', () => {
+    expect(getAgentUsageLoginTerminal(semSessao({ providerId: 'codex', ownLogin: true }))?.args).toEqual(['login'])
+  })
+
+  it('a conta do login do sistema abre sem accountId (o main só aceita contas do cofre de perfis)', () => {
+    const terminal = getAgentUsageLoginTerminal(semSessao({ providerId: 'claude', ownLogin: false }))
+
+    expect(terminal).not.toBeNull()
+    expect(terminal).not.toHaveProperty('accountId')
+  })
+
+  it('só oferece o terminal quando a razão é sessão ausente', () => {
+    for (const state of ['available', 'network-disabled', 'cli-missing', 'timeout', 'query-failed', 'interactive-only', 'unsupported'] as const) {
+      expect(
+        getAgentUsageLoginTerminal(semSessao({ providerId: 'claude', availability: { state, message: 'x' } })),
+        state,
+      ).toBeNull()
+    }
+  })
+
+  it('provedor sem comando de login conhecido não ganha botão (nem por nome herdado do Object)', () => {
+    for (const providerId of ['gemini', 'openia', 'constructor', '__proto__', 'toString']) {
+      expect(getAgentUsageLoginTerminal(semSessao({ providerId })), providerId).toBeNull()
+    }
   })
 })

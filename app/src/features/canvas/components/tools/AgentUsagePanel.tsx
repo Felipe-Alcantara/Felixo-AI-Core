@@ -9,6 +9,7 @@ import {
   consumeRequestedAgentUsageTab,
   type AgentUsagePanelTab,
 } from '../../services/agent-usage-panel-tab'
+import type { NewTerminalOptions } from '../../services/new-terminal-options'
 import { FelixoSelect, type FelixoSelectOption } from '../../../shared/components/FelixoSelect'
 import { AgentUsageResetCreditsView } from '../../../shared/agent-usage/AgentUsageResetCredits'
 import { AgentUsageStatusDetailsView } from '../../../shared/agent-usage/AgentUsageStatusDetails'
@@ -19,11 +20,11 @@ import {
   formatAgentUsageNumber,
   formatAgentUsageReset,
   formatAgentUsageStatus,
+  describeDisplayedAgentUsage,
   getAccountStatus,
-  getAgentUsageLastFailureNotice,
+  getAgentUsageLoginTerminal,
   getAgentUsageMeasuredAt,
   getAgentUsagePlan,
-  getDisplayedAgentUsageSample,
   groupAgentUsageAccounts,
   shouldRefreshAgentUsageOnOpen,
   shouldRunScheduledAgentUsageRefresh,
@@ -47,6 +48,8 @@ type AgentUsagePanelProps = {
   onFocusNode?: (nodeId: string) => void
   /** Blocos que ainda existem, para não oferecer ir a um bloco já fechado. */
   existingNodeIds?: ReadonlySet<string>
+  /** Abre um terminal no canvas: o "Abrir terminal da conta" da conta sem sessão. */
+  onAddTerminal?: (options: NewTerminalOptions) => void
 }
 
 type UsageTab = AgentUsagePanelTab
@@ -96,6 +99,7 @@ export function AgentUsagePanel({
   toolsMenuOpen,
   onFocusNode,
   existingNodeIds,
+  onAddTerminal,
 }: AgentUsagePanelProps) {
   const [tab, setTab] = useState<UsageTab>(() => consumeRequestedAgentUsageTab() ?? 'uso')
   const tabsId = useId()
@@ -464,6 +468,7 @@ export function AgentUsagePanel({
               group={group}
               onRemoveAccount={removeAccount}
               onUseResetCredit={useResetCredit}
+              onAddTerminal={onAddTerminal}
               statusline={group.id === 'claude' ? statusline : null}
               onToggleStatusline={toggleStatusline}
             />
@@ -491,6 +496,7 @@ function ProviderCard({
   group,
   onRemoveAccount,
   onUseResetCredit,
+  onAddTerminal,
   statusline,
   onToggleStatusline,
 }: {
@@ -500,6 +506,7 @@ function ProviderCard({
     account: AgentUsageAccount,
     creditId: string,
   ) => Promise<AgentUsageMutationResult>
+  onAddTerminal?: (options: NewTerminalOptions) => void
   /** Só o Claude tem coleta por status line; nos demais vem nulo. */
   statusline: ClaudeStatuslineState | null
   onToggleStatusline: (enable: boolean) => Promise<void>
@@ -565,6 +572,7 @@ function ProviderCard({
                   sourceLabel={group.usageSource.label}
                   onRemove={() => void onRemoveAccount(account)}
                   onUseResetCredit={(creditId) => onUseResetCredit(account, creditId)}
+                  onAddTerminal={onAddTerminal}
                 />
               </details>
             ))}
@@ -650,15 +658,19 @@ function AccountRow({
   sourceLabel,
   onRemove,
   onUseResetCredit,
+  onAddTerminal,
 }: {
   account: AgentUsageAccount
   limitation: string
   sourceLabel: string
   onRemove: () => void
   onUseResetCredit: (creditId: string) => Promise<AgentUsageMutationResult>
+  onAddTerminal?: (options: NewTerminalOptions) => void
 }) {
   const status = getAccountStatus(account)
-  const sample: AgentUsageSample | null = getDisplayedAgentUsageSample(account)
+  const display = describeDisplayedAgentUsage(account)
+  const sample: AgentUsageSample | null = display.sample
+  const loginTerminal = getAgentUsageLoginTerminal(account)
   const detailsSample = account.latestSample?.metadata.statusDetails
     ? account.latestSample
     : sample?.metadata.statusDetails
@@ -666,7 +678,9 @@ function AccountRow({
       : null
   const plan = getAgentUsagePlan(sample)
   const measuredAt = getAgentUsageMeasuredAt(sample)
-  const lastFailure = getAgentUsageLastFailureNotice(account, sample)
+  // Razão específica (sessão, rede, CLI, tempo): o texto fixo basta. A falha genérica
+  // mantém a mensagem da própria rodada, que é o único detalhe que existe.
+  const specificReason = Boolean(display.notice) && account.availability.state !== 'query-failed'
 
   return (
     <div className="border-t border-white/6 p-2">
@@ -697,27 +711,45 @@ function AccountRow({
       </div>
 
       {sample?.metrics.length ? (
-        <div className="mt-2 space-y-2">
+        // Barras esmaecidas: o número na tela é o último valor conhecido, não a leitura de agora.
+        <div
+          className={`mt-2 space-y-2 ${display.isLastKnown ? 'opacity-60' : ''}`}
+          data-felixo-agent-usage-last-known={display.isLastKnown ? '' : undefined}
+        >
           {sample.metrics.map((metric) => (
             <MetricBar key={metric.key} metric={metric} />
           ))}
         </div>
       ) : (
         <p className="mt-1.5 text-[11px] leading-snug text-zinc-500">
-          {account.latestSample?.errorMessage ?? limitation}
+          {specificReason
+            ? display.notice
+            : account.latestSample?.errorMessage ?? display.notice ?? limitation}
         </p>
       )}
 
       {/* Com o último valor conhecido na tela, a falha da rodada atual sumiria
-          atrás dele: o motivo fica escrito no card, com o horário. */}
-      {lastFailure && (
+          atrás dele: a idade do número e o motivo ficam escritos no card, com o horário da falha. */}
+      {display.isLastKnown && display.notice && (
         <p
           role="status"
-          data-felixo-agent-usage-last-failure
+          data-felixo-agent-usage-notice
           className="mt-2 text-[10px] leading-snug text-(--color-warning)"
         >
-          Última consulta falhou ({formatAgentUsageDate(lastFailure.at)}): {lastFailure.message}
+          {display.notice}
+          {display.failedAt && ` (consulta de ${formatAgentUsageDate(display.failedAt)})`}
         </p>
+      )}
+
+      {loginTerminal && onAddTerminal && (
+        <button
+          type="button"
+          onClick={() => onAddTerminal(loginTerminal)}
+          title="Abre um terminal com o login da CLI nesta conta. O app não faz o login por você."
+          className="felixo-btn mt-2 rounded-md bg-zinc-800 px-2 py-1 text-[10px] text-zinc-200 ring-1 ring-white/10 hover:bg-zinc-700"
+        >
+          Abrir terminal da conta
+        </button>
       )}
 
       <p className="mt-2 text-[10px] leading-snug text-zinc-600">

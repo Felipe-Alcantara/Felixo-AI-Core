@@ -2300,6 +2300,7 @@ function CanvasInner({
         onAddNote={() => addNode('note', { text: '' })}
         onAddDrawing={() => addNode('drawing', { strokes: '' })}
         onAddExcalidrawDrawing={() => addNode('excalidrawDrawing', { scene: '' })}
+        onAddTerminal={addTerminalNode}
         onProjectsChanged={reloadProjects}
         onRemoveFolder={removeProjectFolder}
         onRunFile={runFileInTerminal}
