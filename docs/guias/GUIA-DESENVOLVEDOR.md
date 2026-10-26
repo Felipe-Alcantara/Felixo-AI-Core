@@ -493,6 +493,22 @@ contorno, lado a lado: `npm run repro:pty-kill -- --runs 5`.
 
 Convenção de arquivos: `*.test.cjs` no mesmo diretório do módulo.
 
+### O que cada teste de CLI toca de verdade
+
+"Integração" no nome do arquivo não quer dizer "CLI de verdade". Para o painel de Limites e as
+contas, o que cada camada executa:
+
+| Camada | Exemplo | Processo | CLI do fornecedor | Rede e credencial | Quando roda |
+| --- | --- | --- | --- | --- | --- |
+| Unitário com comando falso | `agent-usage-service.test.cjs`, `agent-usage-service-load.test.cjs`, `agent-usage-secrets.test.cjs` | nenhum (`runCommand` e consultas injetados) | não | não | `npm test`, CI |
+| Nativo com fixture | `claude-usage-query.integration.test.cjs` | `node-pty` de verdade (ConPTY, shell de login, launch direto) rodando um script chamado `claude` | **não**: o script só simula prompt, quadro Status/Usage e teclas | não | `npm run test:native`, CI nos 4 SOs |
+| Bancada com processos | `npm run benchmark:agent-usage -- --mode=spawn` | CLI falsa em Node, lançada pelo `runBufferedCommand` do app | não | não | sob demanda; `:check` reprova acima dos tetos |
+| Smoke real controlado | `npm run benchmark:agent-usage -- --mode=real` | `claude auth status --json` e `codex login status` de verdade, em perfil temporário **vazio** | **sim** | nenhuma credencial: sem login, a consulta ao vivo (PTY) não roda | só com `FELIXO_USAGE_REAL_CLI=1`; recusa com `CI` definido, com mais de 12 contas ou com menos de 1 GB de RAM livre |
+
+Nenhum teste automático fala com a CLI real do fornecedor logada: isso exigiria credencial
+pessoal e gastaria cota. A consulta ao vivo de uma conta logada (o PTY do `/status`) só é
+coberta pela fixture; o tempo dela em conta real segue sem medição.
+
 ### Typecheck e cache incremental
 
 `tsconfig.app.json` e `tsconfig.node.json` mantêm o typecheck completo, mas

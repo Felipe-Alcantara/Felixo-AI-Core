@@ -181,6 +181,71 @@ como está. Um valor que a pessoa salvou nunca é trocado.
 | Instalação de CLIs | `cli-auto-install.cjs` | uma por vez | Mantido. |
 | Detecção de CLIs na abertura | `cli-auto-install.cjs` (`detectWithSecondChance`) | todas juntas, com segunda chance | Mantido: processos curtos (`--version`), e a segunda chance já cobre a máquina ocupada. |
 | Scrollback adaptativo | `terminal-scrollback.ts` | a partir de 10 terminais | Mantido: é memória, não CPU. |
+| Consultas simultâneas do Atualizar (painel de Limites) | `agent-usage-service.cjs` (`REFRESH_MAX_CONCURRENCY`, opção `maxConcurrent`) | todas juntas: 52 com 50 contas | 4 fixas, **não** derivadas das CPUs: o que pesa é memória (cada consulta ao vivo é uma CLI em PTY, ≥ 184 MB), não CPU. Ver "Painel de Limites com N contas". |
+
+### Painel de Limites com N contas (26/10/2026)
+
+O **Atualizar** consulta, por conta com login próprio, o comando de login da CLI e, se há
+sessão, a consulta ao vivo (o `/status` do Claude abre um PTY; o Codex abre o app-server).
+Antes todas as contas corriam juntas num `Promise.all`; agora no máximo
+`REFRESH_MAX_CONCURRENCY` (4) por vez, a fila não abre CLI depois do cancelamento (teto de
+90 s ou **Reconectar**) e o cancelamento chega ao processo de login em voo, que antes seguia
+até o timeout de 30 s. Bancada: `npm run benchmark:agent-usage` (`:check` reprova acima
+dos tetos).
+
+**Custo de uma conta** (máquina do dono: Ryzen 7 5700G, 8 núcleos/16 threads, 13,8 GB; perfil
+temporário vazio, sem login, pelo caminho de código do app):
+
+| O quê | Medido |
+| --- | --- |
+| `claude auth status --json` | 300 ms a quente, 680 ms a frio |
+| `codex login status` | 130 ms a quente, 390 ms a frio |
+| CLIs de login em voo ao mesmo tempo | 2 CLIs: 7 processos, 338 MB; 4 CLIs: 14 processos, 406 MB (amostragem grossa: é limite inferior), ou **100 a 170 MB por comando** |
+| `claude` interativo recém-aberto (o piso de uma consulta ao vivo) | 184 MB, 2 processos; nas sessões longas desta máquina, 351 a 477 MB |
+
+Extrapolando o custo por comando (não rodei 50 CLIs de uma vez: a máquina tinha 1,7 GB livres),
+sem teto 50 contas pediam de 5 a 8,5 GB só de login em voo, ou de 9 a 24 GB com a consulta ao
+vivo de todas; com o teto, 4 comandos medidos são ~0,4 GB de login, ou 0,7 a 1,9 GB de PTYs. O
+tempo da consulta ao vivo **não foi medido**: exige login real, e a bancada não usa credencial
+pessoal.
+
+**Rampa de N contas** (modo `sim`, 30 ms por comando, Windows; teto de 4 contra o antigo, sem limite):
+
+| Contas | Em voo antes → depois | Rodada antes → depois |
+| --- | --- | --- |
+| 5 | 7 → 4 | 141 → 214 ms |
+| 10 | 12 → 4 | 256 → 314 ms |
+| 25 | 27 → 4 | 346 → 731 ms |
+| 50 | 52 → 4 | 614 → 1320 ms |
+| 100 | 102 → 4 | 1558 → 2664 ms |
+| 200 | 202 → 4 | 2142 → 7000 ms |
+
+Custo fixo por conta ≈ 11 ms (gravar amostra e montar o painel). Laço de eventos do processo
+principal: p99 de 16 a 27 ms em todos os casos (a base com resolução de 10 ms já é ~16 ms).
+Memória do processo principal: +8 MB com 50 contas, +23 MB com 200 sem teto.
+
+**Com processos de verdade** (modo `spawn`, CLI falsa em Node, lançada pelo `runBufferedCommand`):
+24 contas lançaram 46 processos, nunca mais de 4 vivos, nenhum sobrou. Cancelamento (12 contas, 25%
+travadas para sempre, teto de 3 s): rodada de 3,5 s, 21 processos, **nenhum sobrou** (a árvore
+chegou a 15 processos e 234 MB). O smoke real (`--mode=real`, 8 contas) abriu 10 CLIs de verdade
+com no máximo 4 vivas e nenhuma sobrou.
+
+**Tetos do `--check`** (definidos antes de medir; a latência foi calibrada na primeira
+medição, e todos só podem baixar): consultas em voo ≤ 4 e, com contas de sobra, = 4; toda
+conta com amostra e só as que falham de propósito em erro; rodada ≤ 2 × lotes × tempo da
+consulta + 15 ms por consulta + 500 ms; atraso do laço p99 ≤ 100 ms; memória do principal
+≤ +60 MB; nenhum filho vivo 2 s depois da rodada.
+
+**Limites declarados.**
+- *Contas travadas custam mais com o teto.* Uma CLI travada segura uma via até o timeout de
+  30 s. Com 3 de 12 travadas a rodada fez 32 s, como antes; com **metade** travada (6 de 12)
+  fez 61,5 s contra 30,7 s sem teto, ainda dentro dos 90 s.
+- *Até cerca de 55 contas logadas por rodada.* A rodada leva ~`ceil(contas / 4)` vezes o tempo
+  de uma conta. Supondo ~6 s por conta (estimativa: a consulta ao vivo não foi medida), acima de
+  ~55 contas o teto de 90 s corta o fim da fila, e essas contas mostram a última leitura com a
+  mensagem do teto. A fila tem sempre a mesma ordem, então são sempre as mesmas (task aberta).
+- *Não medido:* a máquina de referência de 2 núcleos/4 threads, o macOS, e a consulta ao vivo
+  de uma conta logada de verdade.
 
 ### Reduced motion (existe, parcial — gap real encontrado nesta investigação)
 `prefers-reduced-motion` do sistema operacional já é lido

@@ -1229,7 +1229,7 @@ Depois do push, acompanhar o CI até o estado final nos 4 SOs e anotar o SHA de 
   3. CPU no pior caso com 20 sessões = 20 × p95(varredura) / 400 ms ≤ **5%** de um núcleo. É calculado e reportado; reprova se passar.
 - **Calibração.** Depois da primeira medição na máquina do dono (`npm run benchmark:pty-output -- --sessions=20 --chunks=2000 --iterations=5 --json`), os tetos só podem **baixar**. Subir exige entrada datada no IA.md com o motivo. **[A MEDIR]**
 - **Modo Performance.** O modo é do renderer (`app/src/features/shared/performance/performance-mode-storage.ts`), e a vigia fica no main com orçamento fixo. Por isso o modo **não** desliga a vigia, que é segurança de custo e não enfeite. A medição do app com 10 blocos transmitindo e o modo ligado e desligado registra a CPU do processo principal, pela regra "Hardware do Felipe".
-- **Checagem de login.** Cada checagem é um processo de CLI [A MEDIR: 4–12 s estimados na máquina fraca]. Tetos: 3 por proposta, 2 simultâneas, nunca periódica, com reuso da amostra do painel.
+- **Checagem de login.** Cada checagem é um processo de CLI [A MEDIR: 4–12 s estimados na máquina fraca; medido em 26/10/2026 na máquina do dono, de 16 threads: `claude auth status --json` 0,30 s (0,68 s a frio) e `codex login status` 0,13 s (0,39 s a frio); a máquina fraca segue sem medição]. Tetos: 3 por proposta, 2 simultâneas, nunca periódica, com reuso da amostra do painel.
 
 ### 15.2 Outros riscos
 

@@ -53,7 +53,11 @@ abriu). Abaixo disso, a coleta recente vale para aquela abertura, e o selo
 **ao vivo** mostra a hora dela: abrir e fechar o painel várias vezes não refaz
 a consulta de todas as contas. O botão **Atualizar** sempre repete a consulta,
 e a atualização automática pode ser configurada em intervalos de 5, 15 ou 30
-minutos.
+minutos. Com muitas contas, o **Atualizar** consulta no máximo quatro por vez e as
+demais esperam a vez: a rodada demora mais, mas o computador não abre dezenas de CLIs
+ao mesmo tempo. Se a rodada passar de 90 segundos, ou se você usar **Reconectar**, as CLIs em
+andamento são encerradas e as contas que ainda não tinham sido consultadas ficam com a última
+leitura e a mensagem do cancelamento.
 
 No Claude Code, cada linha também traz **Dados completos do /status**: versão,
 sessão, peer, pasta, método de login, organização, e-mail, modelo, fontes de
