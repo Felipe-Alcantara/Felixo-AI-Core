@@ -48,6 +48,17 @@ function registerAgentUsageIpcHandlers({
     }
   })
 
+  // O botão "Atualizar" de uma conta: só a consulta dela, em vez de uma por conta.
+  ipcMain.handle('agent-usage:refresh-account', async (_event, accountId) => {
+    try {
+      return await service.refreshAccount(
+        requireString(accountId, 'ID da conta de agente inválido.'),
+      )
+    } catch (error) {
+      return usageErrorResult(error, 'Não foi possível atualizar esta conta.')
+    }
+  })
+
   // Abandona a rodada em andamento (encerra a consulta travada) e refaz do
   // zero: a saída que antes exigia reiniciar o app.
   ipcMain.handle('agent-usage:reconnect', async () => {

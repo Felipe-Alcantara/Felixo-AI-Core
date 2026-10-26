@@ -124,6 +124,10 @@ function createAgentUsageService({
   // sobrescreve o resultado de uma mais nova.
   let generation = 0
   let currentRound = null
+  // Atualizações de uma conta só (`refreshAccount`): uma por consulta distinta,
+  // e as rodadas delas, para a rodada completa poder cancelá-las.
+  const accountRefreshes = new Map()
+  const accountRounds = new Set()
   // Último catálogo lido e quando; ver CATALOG_REUSE_MS.
   let lastCatalog = null
 
@@ -173,12 +177,28 @@ function createAgentUsageService({
 
     const round = { id: ++generation, controller: new AbortController(), reason: null }
     currentRound = round
+    // A rodada completa lê todas as contas de novo: a leitura de uma conta só
+    // que ainda esteja em voo ficou redundante e gravaria por cima da nova.
+    for (const accountRound of accountRounds) {
+      abortRound(accountRound, 'superseded')
+    }
+
+    const promise = withDeadline(round, refreshInternal(round)).finally(() => {
+      if (refreshPromise === promise) {
+        refreshPromise = null
+      }
+    })
+    refreshPromise = promise
+    return promise
+  }
+
+  /** Teto de tempo da rodada, completa ou de uma conta só. */
+  function withDeadline(round, work) {
     const deadlineTimer = setTimeout(() => abortRound(round, 'deadline'), refreshDeadlineMs)
     // Sem unref de propósito: o teto PRECISA disparar mesmo que nada mais mantenha
     // o loop vivo (foi o que reprovou o CI). O timer é limpo quando a rodada
     // termina, então não vaza.
 
-    const work = refreshInternal(round)
     // Rede de segurança para um passo que ignore o cancelamento (o catálogo,
     // um runCommand injetado): passado o teto e a folga, o botão é solto com
     // o painel atual em vez de ficar preso na promessa.
@@ -190,14 +210,7 @@ function createAgentUsageService({
       work.finally(() => clearTimeout(timer)).catch(() => {})
     })
 
-    const promise = Promise.race([work, safety]).finally(() => {
-      clearTimeout(deadlineTimer)
-      if (refreshPromise === promise) {
-        refreshPromise = null
-      }
-    })
-    refreshPromise = promise
-    return promise
+    return Promise.race([work, safety]).finally(() => clearTimeout(deadlineTimer))
   }
 
   /**
@@ -231,14 +244,11 @@ function createAgentUsageService({
       now,
       profiles: listProfiles(),
     })
-    const catalogById = new Map(catalog.map((item) => [item.id, item]))
     const providerIds = [
       ...new Set(accounts.map((account) => account.providerId)),
     ]
 
     const perfis = listProfiles()
-    const { signal } = round.controller
-    const abortMessage = () => (round.reason === 'reconnect' ? 'A consulta foi cancelada pelo Reconectar.' : deadlineMessage())
     const consultas = [
       ...providerIds.map((providerId) => ({ providerId })),
       // A conta com login próprio não precisa de adivinhação de identidade: a
@@ -254,22 +264,8 @@ function createAgentUsageService({
     // (teto de tempo ou Reconectar) a fila não abre CLI nenhuma: as contas que
     // não chegaram a ser consultadas recebem a mensagem do cancelamento.
     const snapshots = await mapWithConcurrency(consultas, maxConcurrent, (consulta) =>
-      signal.aborted
-        ? createAbortedSnapshot({ ...consulta, now, message: abortMessage() })
-        : collectProviderSnapshot({
-            ...consulta,
-            runCommand,
-            now,
-            probe,
-            queryLiveUsage,
-            onLiveQueryFailure,
-            queryResetCredits,
-            signal,
-            abortMessage,
-          }),
+      collectSnapshot(consulta, round),
     )
-
-    const idsDePerfil = new Set(perfis.map((perfil) => perfil.id))
 
     // Rodada abandonada pelo Reconectar: uma mais nova já está valendo.
     if (round.id !== generation) {
@@ -277,27 +273,130 @@ function createAgentUsageService({
     }
 
     for (const snapshot of snapshots) {
-      // A amostra do login do sistema não disputa as contas com login próprio:
-      // elas têm amostra endereçada. Sem esta exclusão, duas contas de perfil
-      // recém-criadas faziam a linha do sistema cair em "identidade ambígua".
-      const providerAccounts = accounts.filter(
-        (account) =>
-          account.providerId === snapshot.providerId &&
-          (snapshot.targetAccountId
-            ? account.id === snapshot.targetAccountId
-            : !idsDePerfil.has(account.id)),
-      )
-
-      saveProviderSamples({
-        snapshot,
-        accounts: providerAccounts,
-        repository,
-        now,
-        providerVersion: catalogById.get(snapshot.providerId)?.version ?? null,
-      })
+      saveSnapshot(snapshot, { accounts, perfis, catalog })
     }
 
     lastRefreshAt = nowIso(now)
+
+    return {
+      ok: true,
+      ...dashboardOf({
+        accounts: repository.listAccounts(),
+        catalog,
+        repository,
+        now,
+        lastRefreshAt,
+      }),
+    }
+  }
+
+  /**
+   * Uma consulta (provider ou conta com perfil) dentro de uma rodada. Cancelada
+   * (teto, Reconectar, rodada nova), nem abre CLI: devolve o erro do cancelamento.
+   */
+  function collectSnapshot(consulta, round) {
+    const { signal } = round.controller
+    const abortMessage = () => (round.reason === 'reconnect' ? 'A consulta foi cancelada pelo Reconectar.' : deadlineMessage())
+    return signal.aborted
+      ? createAbortedSnapshot({ ...consulta, now, message: abortMessage() })
+      : collectProviderSnapshot({
+          ...consulta,
+          runCommand,
+          now,
+          probe,
+          queryLiveUsage,
+          onLiveQueryFailure,
+          queryResetCredits,
+          signal,
+          abortMessage,
+        })
+  }
+
+  function saveSnapshot(snapshot, { accounts, perfis, catalog }) {
+    const idsDePerfil = new Set(perfis.map((perfil) => perfil.id))
+    // A amostra do login do sistema não disputa as contas com login próprio:
+    // elas têm amostra endereçada. Sem esta exclusão, duas contas de perfil
+    // recém-criadas faziam a linha do sistema cair em "identidade ambígua".
+    const providerAccounts = accounts.filter(
+      (account) =>
+        account.providerId === snapshot.providerId &&
+        (snapshot.targetAccountId
+          ? account.id === snapshot.targetAccountId
+          : !idsDePerfil.has(account.id)),
+    )
+
+    saveProviderSamples({
+      snapshot,
+      accounts: providerAccounts,
+      repository,
+      now,
+      providerVersion: catalog.find((item) => item.id === snapshot.providerId)?.version ?? null,
+    })
+  }
+
+  /**
+   * "Atualizar" de uma conta só. A conta com login próprio tem consulta só dela:
+   * uma CLI aberta em vez de uma por conta. As demais (a "Conta desta máquina" e
+   * as cadastradas à mão) dividem a consulta do login do sistema no provider, então
+   * é essa que roda, e a leitura vale para todas elas como na rodada completa: o
+   * número é da sessão da máquina, não da conta que recebeu o clique.
+   *
+   * Não mexe em `refreshedAt`, que é a hora da última rodada completa.
+   */
+  async function refreshAccount(accountId) {
+    const id = requireString(accountId, 'ID da conta de agente inválido.')
+    const account = repository.getAccount(id)
+
+    if (!account) {
+      throw new Error('Conta de agente não encontrada.')
+    }
+
+    // A rodada completa em andamento já lê esta conta.
+    if (refreshPromise) {
+      return refreshPromise
+    }
+
+    const perfil = listProfiles().find((item) => item.id === account.id)
+    // Dois cliques na mesma consulta (ou em duas contas do login do sistema) viram uma só.
+    const key = perfil ? perfil.id : `sistema:${account.providerId}`
+    const running = accountRefreshes.get(key)
+    if (running) {
+      return running
+    }
+
+    const round = { id: null, startedAt: generation, controller: new AbortController(), reason: null }
+    accountRounds.add(round)
+    const promise = withDeadline(round, refreshAccountInternal(round, account, perfil)).finally(() => {
+      accountRounds.delete(round)
+      if (accountRefreshes.get(key) === promise) {
+        accountRefreshes.delete(key)
+      }
+    })
+    accountRefreshes.set(key, promise)
+    return promise
+  }
+
+  async function refreshAccountInternal(round, account, perfil) {
+    const catalog = await readRecentCatalog()
+    const snapshot = await collectSnapshot(
+      perfil
+        ? {
+            providerId: perfil.providerId,
+            probeOptions: perfil.probeOptions,
+            profileEnv: perfil.profileEnv,
+            targetAccountId: perfil.id,
+          }
+        : { providerId: account.providerId },
+      round,
+    )
+
+    // Uma rodada completa (ou o Reconectar) começou depois: ela lê esta conta de
+    // novo, e gravar aqui poderia cobrir uma leitura mais nova com uma mais velha.
+    if (round.startedAt !== generation) {
+      return list()
+    }
+
+    saveSnapshot(snapshot, { accounts: repository.listAccounts(), perfis: listProfiles(), catalog })
 
     return {
       ok: true,
@@ -527,6 +626,7 @@ function createAgentUsageService({
     list,
     reconnect,
     refresh,
+    refreshAccount,
     refreshLocal,
     removeAccount,
     consumeResetCredit,

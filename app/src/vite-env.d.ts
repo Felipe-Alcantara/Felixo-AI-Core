@@ -1042,6 +1042,8 @@ declare global {
       agentUsage?: {
         list: () => Promise<AgentUsageDashboard>
         refresh: () => Promise<AgentUsageDashboard>
+        /** Só a consulta desta conta (a do login da máquina, para quem não tem login próprio). */
+        refreshAccount: (accountId: string) => Promise<AgentUsageDashboard>
         /** Abandona a rodada travada (encerra a consulta) e refaz do zero. */
         reconnect: () => Promise<AgentUsageDashboard>
         addAccount: (params: {

@@ -20,6 +20,10 @@ test('agent usage IPC validates input and forwards only normalized parameters', 
   const service = {
     list: async () => ({ ok: true, providers: [], accounts: [] }),
     refresh: async () => ({ ok: true, providers: [], accounts: [] }),
+    refreshAccount: async (id) => {
+      calls.push(['refresh-account', id])
+      return { ok: true, providers: [], accounts: [] }
+    },
     addAccount: async (params) => {
       calls.push(['add', params])
       return { ok: true, account: { id: 'account-1' } }
@@ -69,6 +73,16 @@ test('agent usage IPC validates input and forwards only normalized parameters', 
   })
   assert.equal(invalidConsume.ok, false)
   assert.equal(calls.length, 3)
+
+  const refreshed = await handlers.get('agent-usage:refresh-account')({}, ' account-1 ')
+  assert.equal(refreshed.ok, true)
+  assert.deepEqual(calls[3], ['refresh-account', 'account-1'])
+
+  for (const invalidId of [undefined, '', '   ', 42, { id: 'account-1' }]) {
+    const invalidRefresh = await handlers.get('agent-usage:refresh-account')({}, invalidId)
+    assert.equal(invalidRefresh.ok, false, `id ${JSON.stringify(invalidId)} deve ser recusado`)
+  }
+  assert.equal(calls.length, 4, 'id inválido não chega ao serviço')
 })
 
 test('agent usage IPC não devolve ao renderer segredo que veio dentro da mensagem de uma exceção', async () => {
@@ -76,12 +90,13 @@ test('agent usage IPC não devolve ao renderer segredo que veio dentro da mensag
     throw new Error('spawn falhou: OPENAI_API_KEY=CANARIOipc0a1b2c e https://u:CANARIOipcurl9z@proxy.example.com')
   }
   registerAgentUsageIpcHandlers({
-    service: { list: falha, refresh: falha, reconnect: falha, addAccount: falha, removeAccount: falha, consumeResetCredit: falha },
+    service: { list: falha, refresh: falha, refreshAccount: falha, reconnect: falha, addAccount: falha, removeAccount: falha, consumeResetCredit: falha },
   })
 
   const respostas = await Promise.all([
     handlers.get('agent-usage:list')({}),
     handlers.get('agent-usage:refresh')({}),
+    handlers.get('agent-usage:refresh-account')({}, 'account-1'),
     handlers.get('agent-usage:reconnect')({}),
     handlers.get('agent-usage:add-account')({}, { providerId: 'codex', label: 'Principal' }),
     handlers.get('agent-usage:remove-account')({}, 'account-1'),

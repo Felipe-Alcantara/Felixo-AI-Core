@@ -27,7 +27,16 @@ const {
 const { getAgentUsageSource } = require('./agent-usage-sources.cjs')
 const { createAgentUsageService } = require('./agent-usage-service.cjs')
 
-const COM_SQLITE = { skip: hasNodeSqlite() ? false : 'node:sqlite indisponível neste runtime' }
+const {
+  COM_SQLITE,
+  contaDoPainel,
+  criarServico,
+  loginCodexOk,
+  pasta,
+  perfilClaude,
+  perfilCodex,
+  usoOk,
+} = require('./agent-usage-test-fixtures.cjs')
 
 // ---------------------------------------------------------------- modelo puro
 
@@ -120,79 +129,6 @@ test('o Gemini declara a limitação com o motivo de 18/06/2026, inteira o basta
 })
 
 // -------------------------------------------------------------------- serviço
-
-function criarServico({
-  perfis,
-  runCommand,
-  queryLiveUsage,
-  refreshDeadlineMs,
-  maxConcurrent,
-  agora = { valor: Date.parse('2026-10-26T12:00:00.000Z') },
-}) {
-  const databaseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-usage-disponibilidade-'))
-  const database = createStorageDatabase({ databaseDir })
-  const repository = createAgentUsageRepository(database)
-  const service = createAgentUsageService({
-    repository,
-    probe: () => null,
-    now: () => agora.valor,
-    listCatalog: async () => [],
-    listProfiles: () => perfis,
-    runCommand,
-    queryLiveUsage,
-    ...(refreshDeadlineMs ? { refreshDeadlineMs } : {}),
-    ...(maxConcurrent ? { maxConcurrent } : {}),
-  })
-  return {
-    service,
-    repository,
-    agora,
-    limpar: () => {
-      database.close()
-      fs.rmSync(databaseDir, { recursive: true, force: true })
-    },
-  }
-}
-
-const perfilCodex = (id) => ({
-  id,
-  providerId: 'codex',
-  label: id,
-  probeOptions: { codexHome: `/perfis/${id}` },
-  profileEnv: { CODEX_HOME: `/perfis/${id}` },
-})
-const perfilClaude = (id) => ({
-  id,
-  providerId: 'claude',
-  label: id,
-  profileEnv: { CLAUDE_CONFIG_DIR: `/perfis/${id}` },
-})
-const pasta = (env) => env?.CODEX_HOME ?? env?.CLAUDE_CONFIG_DIR ?? ''
-
-const loginCodexOk = (env) => ({ ok: true, stdout: `Logged in using ChatGPT\nAccount: ${path.basename(pasta(env))}@example.com`, stderr: '' })
-const metricas = (...chaves) =>
-  chaves.map((chave, indice) => ({
-    key: chave,
-    label: chave,
-    used: 10 + indice,
-    limit: 100,
-    remaining: 90 - indice,
-    unit: '%',
-    precision: 'percentage',
-    resetAt: null,
-  }))
-const usoOk = (...chaves) => ({
-  ok: true,
-  collectedAt: '2026-10-26T12:00:00.000Z',
-  measuredAt: '2026-10-26T12:00:00.000Z',
-  metrics: metricas(...chaves),
-  details: null,
-  message: null,
-})
-
-function contaDoPainel(dashboard, id) {
-  return dashboard.accounts.find((conta) => conta.id === id)
-}
 
 test(
   'Claude deslogado (a CLI sai com código 1 e imprime o JSON) é "sessão ausente", não erro de consulta',
@@ -468,12 +404,3 @@ test(
     }
   },
 )
-
-function hasNodeSqlite() {
-  try {
-    require('node:sqlite')
-    return true
-  } catch {
-    return false
-  }
-}
