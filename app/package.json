@@ -211,7 +211,7 @@
     "@types/react-dom": "^19.2.5",
     "@typescript/native": "npm:typescript@^7.0.2",
     "@vitejs/plugin-react": "^6.1.1",
-    "electron": "^41.10.7",
+    "electron": "^42.11.16",
     "electron-builder": "^26.15.3",
     "eslint": "^10.9.1",
     "eslint-plugin-react-hooks": "^7.1.1",
