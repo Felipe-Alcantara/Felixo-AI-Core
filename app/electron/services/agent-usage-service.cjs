@@ -751,6 +751,9 @@ async function collectProviderSnapshot({
     : commandMetrics.length > 0
       ? commandMetrics
       : local?.metrics ?? []
+  // A mensagem da consulta ao vivo vem de um adaptador (ou de um PTY): redigida na
+  // fronteira, antes de ir ao QA Logger e à amostra, e não só pelo normalizador.
+  const liveMessage = liveResult?.message ? redactOutput(liveResult.message) : null
   const liveQueryFailed =
     liveQueryEnabled &&
     auth.authStatus !== 'logged_out' &&
@@ -766,7 +769,7 @@ async function collectProviderSnapshot({
         providerId,
         targetAccountId,
         platform: process.platform,
-        message: liveResult?.message ?? null,
+        message: liveMessage,
       })
     } catch {
       // Ver comentário acima: observador nunca pode quebrar a coleta.
@@ -801,7 +804,7 @@ async function collectProviderSnapshot({
     auth,
     metrics,
     queryFailed: result?.ok !== true || liveQueryFailed,
-    queryErrorMessage: liveQueryFailed ? liveResult?.message ?? null : null,
+    queryErrorMessage: liveQueryFailed ? liveMessage : null,
     statusDetails: mergeStatusDetails({
       liveDetails: liveResult?.ok === true ? liveResult.details ?? null : null,
       resetCreditsResult,
@@ -837,10 +840,10 @@ async function checkAccountAuth({
   env = createCommandEnv(),
   timeoutMs = COMMAND_TIMEOUT_MS,
   clock = () => Date.now(),
+  signal,
 }) {
   const startedAt = clock()
 
-  signal,
   if (!source) {
     return {
       source: null,
@@ -875,10 +878,10 @@ async function checkAccountAuth({
       cwd: os.homedir(),
       env,
       timeoutMs,
+      signal,
     })
   } catch {
     result = { ok: false }
-      signal,
   }
 
   // A saída é reduzida antes de qualquer parser. O snapshot nunca retorna a
@@ -965,10 +968,10 @@ async function runUsageCommand({ source, providerId, runCommand, profileEnv = {}
       cwd: os.homedir(),
       env: createCommandEnv(providerId, profileEnv),
       timeoutMs: COMMAND_TIMEOUT_MS,
+      signal,
     })
   } catch {
     return []
-      signal,
   }
 
   if (result?.ok !== true) {
@@ -987,20 +990,20 @@ async function runLiveUsageCommand({
   runCommand,
   profileEnv = {},
   now,
+  signal,
 }) {
   let result
   try {
-  signal,
     result = await runCommand({
       command: source.usage.command,
       args: [...(source.usage.args ?? [])],
       cwd: os.homedir(),
       env: createCommandEnv(providerId, profileEnv),
       timeoutMs: COMMAND_TIMEOUT_MS,
+      signal,
     })
   } catch {
     return {
-      signal,
       ok: false,
       collectedAt: null,
       measuredAt: null,
@@ -1507,9 +1510,6 @@ async function readCatalog(listCatalog) {
   return []
 }
 
-function createFallbackSource(providerId) {
-  return {
-    id: providerId,
 /**
  * Resultado de uma conta que a rodada cancelada não consultou (ou cujo comando
  * foi cancelado em voo): vira amostra de erro com a mensagem do cancelamento,
@@ -1529,6 +1529,9 @@ function createAbortedSnapshot({ providerId, targetAccountId, now, message }) {
   }
 }
 
+function createFallbackSource(providerId) {
+  return {
+    id: providerId,
     name: providerId,
     provider: providerId,
     command: providerId,
@@ -1588,7 +1591,9 @@ function normalizeInput(value, maxLength, { optional = false } = {}) {
 }
 
 function assertSafeInput(value, message) {
-  if (SECRET_LIKE_INPUT_PATTERN.test(value)) {
+  // O redator é o mesmo da saída das CLIs: tudo que ele mascararia não é um nome nem
+  // um identificador público.
+  if (SECRET_LIKE_INPUT_PATTERN.test(value) || redactOutput(value) !== value) {
     throw new Error(message)
   }
 }
@@ -1604,12 +1609,12 @@ function nowIso(now) {
 
 module.exports = {
   REFRESH_DEADLINE_MS,
+  REFRESH_MAX_CONCURRENCY,
   COMMAND_TIMEOUT_MS,
   STALE_AFTER_MS,
   createAgentUsageService,
   buildDashboard,
   checkAccountAuth,
-  REFRESH_MAX_CONCURRENCY,
   collectProviderSnapshot,
   createProfileCommandEnv,
   resolveObservedIdentity,

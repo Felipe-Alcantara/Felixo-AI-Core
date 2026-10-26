@@ -70,3 +70,27 @@ test('agent usage IPC validates input and forwards only normalized parameters', 
   assert.equal(invalidConsume.ok, false)
   assert.equal(calls.length, 3)
 })
+
+test('agent usage IPC não devolve ao renderer segredo que veio dentro da mensagem de uma exceção', async () => {
+  const falha = () => {
+    throw new Error('spawn falhou: OPENAI_API_KEY=CANARIOipc0a1b2c e https://u:CANARIOipcurl9z@proxy.example.com')
+  }
+  registerAgentUsageIpcHandlers({
+    service: { list: falha, refresh: falha, reconnect: falha, addAccount: falha, removeAccount: falha, consumeResetCredit: falha },
+  })
+
+  const respostas = await Promise.all([
+    handlers.get('agent-usage:list')({}),
+    handlers.get('agent-usage:refresh')({}),
+    handlers.get('agent-usage:reconnect')({}),
+    handlers.get('agent-usage:add-account')({}, { providerId: 'codex', label: 'Principal' }),
+    handlers.get('agent-usage:remove-account')({}, 'account-1'),
+    handlers.get('agent-usage:consume-reset-credit')({}, { accountId: 'account-1', creditId: 'credit-1' }),
+  ])
+
+  for (const resposta of respostas) {
+    assert.equal(resposta.ok, false)
+    assert.doesNotMatch(JSON.stringify(resposta), /CANARIO/)
+    assert.match(resposta.message, /spawn falhou/, 'o motivo continua legível; só o segredo sai')
+  }
+})

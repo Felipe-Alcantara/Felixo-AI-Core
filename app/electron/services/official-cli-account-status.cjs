@@ -20,10 +20,13 @@
  * O valor mascarado é o resto da linha, não só a primeira palavra: em
  * `Authorization: Bearer <token>` o segredo está depois de um prefixo, e parar
  * no primeiro espaço deixaria o token exposto. O rótulo pode vir entre aspas,
- * como numa resposta JSON (`"api_key":"…"`).
+ * como numa resposta JSON (`"api_key":"…"`), e o rótulo pode ser o fim do nome
+ * de uma variável de ambiente (`OPENAI_API_KEY=…`, `GITHUB_TOKEN=…`): por isso
+ * o limite à esquerda é "não é letra nem dígito", e não `\b`, que trata o `_`
+ * como parte da palavra.
  */
 const LABELED_SECRET_PATTERN =
-  /\b(api[-_ ]?key|access[-_ ]?token|refresh[-_ ]?token|id[-_ ]?token|client[-_ ]?secret|secret|token|password|senha|cookie|authorization)\b(["']?\s*[:=]\s*)[^\n]+/gi
+  /(?<![A-Za-z0-9])(api[-_ ]?key|access[-_ ]?token|refresh[-_ ]?token|id[-_ ]?token|client[-_ ]?secret|secret|token|password|senha|cookie|authorization)\b(["']?\s*[:=]\s*)[^\n]+/gi
 
 /**
  * Formatos autoexplicativos: valem mesmo sem rótulo, porque uma chave colada
@@ -32,12 +35,30 @@ const LABELED_SECRET_PATTERN =
 const SECRET_PATTERNS = [
   /\bBearer\s+\S+/gi,
   /\bsk-[A-Za-z0-9_-]{8,}/g,
-  /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*/g,
+  // JWT com ou sem assinatura (`alg: none` termina no segundo trecho).
+  /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}(?:\.[A-Za-z0-9_-]*)?/g,
   // Chave de API do Google (Gemini) e tokens do GitHub.
   /\bAIza[0-9A-Za-z_-]{35}(?![0-9A-Za-z_-])/g,
   /\bgh[pousr]_[A-Za-z0-9]{20,}/g,
   /\bgithub_pat_[A-Za-z0-9_]{20,}/g,
+  // OAuth do Google (Gemini): acesso `ya29.` e renovação `1//`.
+  /\bya29\.[A-Za-z0-9_-]{20,}/g,
+  /(?<![A-Za-z0-9/])1\/\/[A-Za-z0-9_-]{20,}/g,
+  // Chaves de nuvem e de gerenciadores de pacote que um diagnóstico pode trazer.
+  /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/g,
+  /\bxox[abprs]-[A-Za-z0-9-]{10,}/g,
+  /\bnpm_[A-Za-z0-9]{36}\b/g,
+  /\bglpat-[A-Za-z0-9_-]{20,}/g,
+  // Chave privada em PEM: o bloco inteiro, ou até o fim se o END foi cortado.
+  /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/g,
 ]
+
+/**
+ * `esquema://usuário:senha@host`: usuário e senha saem, o resto da URL fica. O
+ * esquema tem poucos caracteres, e o teto de 16 mantém o custo linear: sem ele,
+ * "a.a.a.…" de 1 MB levava minutos (cada `.` abre um novo `\b`).
+ */
+const URL_USERINFO_PATTERN = /(\b[a-z][a-z0-9+.-]{0,15}:\/\/)[^/?#\s@]+@/gi
 
 const REDACTED = '[oculto]'
 
@@ -65,6 +86,8 @@ function redactSecrets(text) {
     LABELED_SECRET_PATTERN,
     (_match, label, separator) => `${label}${separator}${REDACTED}`,
   )
+
+  redacted = redacted.replace(URL_USERINFO_PATTERN, `$1${REDACTED}@`)
 
   for (const pattern of SECRET_PATTERNS) {
     redacted = redacted.replace(pattern, REDACTED)

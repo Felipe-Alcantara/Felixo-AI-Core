@@ -2,6 +2,7 @@
 
 const { ipcMain } = require('electron')
 const { toErrorResult } = require('./ipc-result.cjs')
+const { redactSecrets } = require('./official-cli-account-status.cjs')
 const path = require('node:path')
 const { createAgentUsageService } = require('./agent-usage-service.cjs')
 const { getAppPaths } = require('../core/app-paths.cjs')
@@ -9,6 +10,16 @@ const {
   createClaudeStatuslineService,
 } = require('./claude-statusline-service.cjs')
 const { createAgentUsageWatcher } = require('./agent-usage-watcher.cjs')
+
+/**
+ * Erro devolvido ao renderer. A mensagem de uma exceção pode trazer texto de CLI
+ * ou do ambiente (`OPENAI_API_KEY=…`, URL com senha): passa pelo mesmo redator
+ * da saída das CLIs, e o motivo continua legível.
+ */
+function usageErrorResult(error, fallbackMessage) {
+  const result = toErrorResult(error, fallbackMessage)
+  return { ...result, message: redactSecrets(result.message) }
+}
 
 /**
  * A superfície IPC do painel é pequena de propósito: listar, atualizar,
@@ -25,7 +36,7 @@ function registerAgentUsageIpcHandlers({
     try {
       return await service.list()
     } catch (error) {
-      return toErrorResult(error, 'Não foi possível carregar o uso dos agentes.')
+      return usageErrorResult(error, 'Não foi possível carregar o uso dos agentes.')
     }
   })
 
@@ -33,7 +44,7 @@ function registerAgentUsageIpcHandlers({
     try {
       return await service.refresh()
     } catch (error) {
-      return toErrorResult(error, 'Não foi possível atualizar o uso dos agentes.')
+      return usageErrorResult(error, 'Não foi possível atualizar o uso dos agentes.')
     }
   })
 
@@ -43,7 +54,7 @@ function registerAgentUsageIpcHandlers({
     try {
       return await service.reconnect()
     } catch (error) {
-      return toErrorResult(error, 'Não foi possível reconectar o monitor de uso.')
+      return usageErrorResult(error, 'Não foi possível reconectar o monitor de uso.')
     }
   })
 
@@ -61,7 +72,7 @@ function registerAgentUsageIpcHandlers({
               ),
       })
     } catch (error) {
-      return toErrorResult(error, 'Não foi possível adicionar a conta de agente.')
+      return usageErrorResult(error, 'Não foi possível adicionar a conta de agente.')
     }
   })
 
@@ -71,7 +82,7 @@ function registerAgentUsageIpcHandlers({
     try {
       return { ok: true, ...statusline.status() }
     } catch (error) {
-      return toErrorResult(error, 'Não foi possível ler o estado da coleta.')
+      return usageErrorResult(error, 'Não foi possível ler o estado da coleta.')
     }
   })
 
@@ -80,7 +91,7 @@ function registerAgentUsageIpcHandlers({
       const result = statusline.install()
       return { ...result, ...statusline.status() }
     } catch (error) {
-      return toErrorResult(error, 'Não foi possível ligar a coleta do Claude.')
+      return usageErrorResult(error, 'Não foi possível ligar a coleta do Claude.')
     }
   })
 
@@ -89,7 +100,7 @@ function registerAgentUsageIpcHandlers({
       const result = statusline.uninstall()
       return { ...result, ...statusline.status() }
     } catch (error) {
-      return toErrorResult(error, 'Não foi possível desligar a coleta do Claude.')
+      return usageErrorResult(error, 'Não foi possível desligar a coleta do Claude.')
     }
   })
 
@@ -99,7 +110,7 @@ function registerAgentUsageIpcHandlers({
         requireString(accountId, 'ID da conta de agente inválido.'),
       )
     } catch (error) {
-      return toErrorResult(error, 'Não foi possível remover a conta de agente.')
+      return usageErrorResult(error, 'Não foi possível remover a conta de agente.')
     }
   })
 
@@ -113,7 +124,7 @@ function registerAgentUsageIpcHandlers({
         creditId: requireString(params?.creditId, 'ID do reset inválido.'),
       })
     } catch (error) {
-      return toErrorResult(error, 'Não foi possível usar o reset da conta.')
+      return usageErrorResult(error, 'Não foi possível usar o reset da conta.')
     }
   })
 

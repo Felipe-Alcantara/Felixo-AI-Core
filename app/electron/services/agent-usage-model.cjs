@@ -42,8 +42,21 @@ const SAFE_METADATA_KEYS = new Set([
 // do padrão procura. Achado ao fuzzar `normalizeSample` com valores desse
 // formato (ver agent-usage-model.test.cjs) durante a task "Limites — validar
 // carga, privacidade, relógio e schema /status em múltiplas contas".
+//
+// É a camada de reserva: `redactSecrets` (official-cli-account-status.cjs) mascara a
+// saída de CLI na fronteira, e aqui o valor suspeito inteiro é descartado, para o
+// caso de um adaptador entregar texto livre sem ter passado por lá. Além das
+// palavras-chave, só prefixos de alto sinal (Google, GitHub, GitLab, Slack, AWS,
+// PEM, credencial em URL): "token" sozinho derrubaria "200.000 tokens".
 const SECRET_PATTERN =
-  /(api[_ -]?key|access[_ -]?token|auth[_ -]?token|bearer|cookie|password|secret|sk-[a-z0-9]|pk-[a-z0-9]|eyJ[a-z0-9_-]{8,})/i
+  /(api[_ -]?key|access[_ -]?token|auth[_ -]?token|\brefresh[_ -]?token|\bid[_ -]?token|bearer|cookie|password|secret|sk-[a-z0-9]|pk-[a-z0-9]|eyJ[a-z0-9_-]{8,}|ya29\.|(?<![a-z0-9/])1\/\/[a-z0-9_-]{20}|AIza[0-9a-z_-]{20}|gh[pousr]_[a-z0-9]{20}|github_pat_|glpat-|npm_[a-z0-9]{36}|xox[abprs]-|(?:AKIA|ASIA)[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY|[a-z][a-z0-9+.-]{0,15}:\/\/[^/?#\s@]+@)/i
+// Atribuição de variável de ambiente (`GITHUB_TOKEN=…`): só em maiúsculas, para
+// não pegar "hotkey: Ctrl" ou "monkey: banana".
+const ENV_SECRET_ASSIGNMENT_PATTERN = /\b[A-Z][A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD)\s*[:=]/
+
+function looksLikeSecret(value) {
+  return SECRET_PATTERN.test(value) || ENV_SECRET_ASSIGNMENT_PATTERN.test(value)
+}
 
 function normalizeAccountInput(account, { requireId = true } = {}) {
   if (!account || typeof account !== 'object') {
@@ -178,12 +191,12 @@ function normalizeMetadata(metadata) {
   const normalized = {}
 
   for (const [key, value] of Object.entries(metadata)) {
-    if (!SAFE_METADATA_KEYS.has(key) || SECRET_PATTERN.test(key)) {
+    if (!SAFE_METADATA_KEYS.has(key) || looksLikeSecret(key)) {
       continue
     }
 
     if (typeof value === 'string') {
-      if (SECRET_PATTERN.test(value)) {
+      if (looksLikeSecret(value)) {
         continue
       }
       normalized[key] = value.slice(0, 240)
@@ -308,7 +321,7 @@ function normalizeStatusDetails(value, depth = 0) {
 
   const normalized = {}
   for (const [key, item] of Object.entries(value)) {
-    if (!STATUS_DETAIL_KEYS.has(key) || SECRET_PATTERN.test(key)) {
+    if (!STATUS_DETAIL_KEYS.has(key) || looksLikeSecret(key)) {
       continue
     }
 
@@ -323,7 +336,7 @@ function normalizeStatusDetails(value, depth = 0) {
 
 function normalizeStatusDetailValue(value, depth) {
   if (typeof value === 'string') {
-    if (SECRET_PATTERN.test(value)) {
+    if (looksLikeSecret(value)) {
       return null
     }
     return value.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 500) || null
@@ -411,7 +424,7 @@ function cleanString(value, maxLength) {
 
 function cleanSafeMessage(value) {
   const message = cleanString(value, 500)
-  return message && !SECRET_PATTERN.test(message) ? message : message ? 'Falha sem detalhes seguros.' : null
+  return message && !looksLikeSecret(message) ? message : message ? 'Falha sem detalhes seguros.' : null
 }
 
 function createIdentityFingerprint(providerId, identity) {
