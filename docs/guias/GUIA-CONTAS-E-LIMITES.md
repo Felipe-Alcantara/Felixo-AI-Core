@@ -59,6 +59,29 @@ ao mesmo tempo. Se a rodada passar de 90 segundos, ou se você usar **Reconectar
 andamento são encerradas e as contas que ainda não tinham sido consultadas ficam com a última
 leitura e a mensagem do cancelamento.
 
+Quando a rodada não traz número, o painel diz por quê, com uma frase fixa por
+razão (a saída crua da CLI não vai para a tela): **a conta não está logada** (a
+CLI respondeu que não há sessão: é ausência de dado, então o selo é
+**Indisponível**, não **Erro**), **sem rede ou rede bloqueada**, **CLI não
+encontrada**, **a consulta passou do tempo limite** ou uma falha genérica, que
+mantém a mensagem da própria rodada. Sessão ausente, CLI ausente e tempo
+esgotado vêm de sinais do próprio comando; a rede é reconhecida por assinaturas
+de texto (`ENOTFOUND`, `ECONNREFUSED`, `error sending request`…), então o que não
+casar cai em falha genérica, nunca em "sem rede" por chute. Essa razão fica na
+amostra e o serviço a soma à capability da fonte numa **disponibilidade** por conta
+(`availability`), que o painel lê em vez de adivinhar por `metrics.length` ou
+pela limitação.
+
+Com a rodada atual sem número e uma leitura anterior guardada, o card e o resumo
+mostram essa leitura **esmaecida**, com a etiqueta **Último valor conhecido,
+lido há 5 min** (**medido**, quando a CLI informa o momento da medição) e o
+motivo da falha: o número antigo não parece uma leitura nova. Na conta sem
+sessão do Claude Code e do Codex o painel oferece **Abrir terminal da conta**,
+que abre um terminal rodando `claude auth login` ou `codex login` (a conta com
+pasta de login própria usa a pasta dela; a "Conta desta máquina" usa o login do
+sistema). O login em si é feito por você, no terminal: o app não o automatiza.
+Gemini e Openia não têm o botão.
+
 No Claude Code, cada linha também traz **Dados completos do /status**: versão,
 sessão, peer, pasta, método de login, organização, e-mail, modelo, fontes de
 configuração, custo, duração, alterações, uso por modelo, janelas, resets,
@@ -101,7 +124,7 @@ O que cada CLI publica hoje:
 | Codex | app-server ao vivo (limites, conta, configuração, modelos e histórico de tokens) e a tela do `/status`, por conta/perfil; rollout local só como fallback | janelas de 5 h e semanal, reserva semanal por modelo, resets, créditos, plano, configuração, modelos, histórico de tokens, avisos de bloqueio e o texto do `/status` |
 | Claude Code | `/status` interativo ao vivo por conta/perfil | Status + Usage completos, janelas de 5 h e semanal, resets, estatísticas e atribuição |
 | Openia | `openia statusline` ao vivo (créditos da conta no OpenRouter) | usado, restante e total em US$ |
-| Gemini | — | sem endpoint não interativo seguro: a quota só existe no `/stats model` interativo e fica explicitamente indisponível |
+| Gemini | — | sem endpoint não interativo seguro: a quota só existe no `/stats model` interativo e fica explicitamente indisponível, nunca 0% nem barra. Desde 18/06/2026 a Gemini CLI deixou de atender contas individuais (gratuita, AI Pro e Ultra) e a Antigravity CLI a substituiu, segundo o anúncio da Google. O app não abre terminal escondido para extrair esse dado |
 
 A coleta de status line do Claude Code continua **opcional e explícita** e serve
 como fallback local: pelo botão do painel, o app registra um script no arquivo
