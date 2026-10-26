@@ -740,6 +740,26 @@ test('falta de créditos tem mensagem própria, que diz do saldo mínimo para im
   assert.match(MESSAGES.insufficient_credits, /créditos/)
 })
 
+test('mapFailure: limite de gasto da chave (key_limit) vence o código de saída de limite, sem virar créditos nem chave recusada', () => {
+  assert.equal(mapFailure(5, 'key_limit'), 'key_limit')
+  assert.equal(mapFailure(undefined, 'key_limit'), 'key_limit')
+  assert.equal(mapFailure(3, 'authentication_error'), 'authentication_error', 'chave rejeitada de verdade continua igual')
+  assert.equal(mapFailure(5, 'rate_limit'), 'limit_error')
+})
+
+test('limite de gasto da chave tem mensagem própria: a chave está certa, o limite dela é que acabou', async () => {
+  const h = harness({ runImage: async () => ({ started: true, ok: false, exitCode: 5, stdout: failureEnvelope('key_limit') }) })
+  const result = await h.service.generate({ prompt: 'x', model: MODEL })
+  assert.equal(result.code, 'key_limit')
+  assert.equal(result.message, MESSAGES.key_limit)
+  assert.equal(JSON.stringify(result).includes(SECRET), false)
+  assert.match(MESSAGES.key_limit, /limite/)
+  assert.match(MESSAGES.key_limit, /chave/)
+  assert.notEqual(MESSAGES.key_limit, MESSAGES.authentication_error)
+  assert.notEqual(MESSAGES.key_limit, MESSAGES.insufficient_credits)
+  assert.doesNotMatch(MESSAGES.key_limit, /recusad|rejeitad/)
+})
+
 test('Openia antigo (sem o comando image): código 2 sem envelope + versão abaixo de 0.2.0 vira openia_outdated', async () => {
   const semComando = { started: true, ok: false, exitCode: 2, stdout: '' }
   const versoes = []

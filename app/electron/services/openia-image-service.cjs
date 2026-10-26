@@ -75,6 +75,8 @@ const MESSAGES = Object.freeze({
   limit_error: 'O OpenRouter recusou por limite ou falta de créditos.',
   insufficient_credits:
     'O OpenRouter recusou por falta de créditos: gerar imagem exige saldo mínimo na conta (US$ 1,00 em 09/10/2026). Adicione créditos e tente de novo.',
+  key_limit:
+    'O limite de gasto da chave do OpenRouter acabou. A chave está certa: aumente o limite dela no OpenRouter (ou use outra chave no Openia) e tente de novo.',
   openia_outdated: 'O Openia instalado não gera imagem: é preciso a versão 0.2.0 ou mais nova. Atualize o Openia e tente de novo.',
   model_unavailable: 'O modelo escolhido não está disponível para gerar imagem agora.',
   network_error: 'Falha de rede ao falar com o OpenRouter.',
@@ -123,10 +125,14 @@ const ERROR_CODE_TO_FAILURE = new Map([
  * credits", mesmo com saldo abaixo do mínimo para imagem — medido em
  * 09/10/2026 com US$ 0,77); o `minimum_balance` (Openia 0.2.1) é o texto
  * explícito do mínimo, se o OpenRouter o mandar. Os dois pedem a mesma ação.
+ * O `key_limit` (Openia depois de 0.2.1) é o 403 "Key limit exceeded": a chave
+ * é válida e a conta tem saldo, só o limite de gasto da própria chave acabou —
+ * a ação é aumentar esse limite, não adicionar créditos nem trocar a chave.
  */
 const REFINED_ERROR_CODES = new Map([
   ['account_limit', 'insufficient_credits'],
   ['minimum_balance', 'insufficient_credits'],
+  ['key_limit', 'key_limit'],
 ])
 
 /** Primeira versão do Openia com `openia image`. */
