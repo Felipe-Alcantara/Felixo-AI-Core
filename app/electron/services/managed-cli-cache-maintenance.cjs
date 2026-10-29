@@ -17,6 +17,7 @@
 const fs = require('node:fs')
 const path = require('node:path')
 const spawnChildProcess = require('cross-spawn')
+const { createNodeEnv } = require('../core/node-runtime.cjs')
 
 /** Teto do cache offline do npm — CLIs oficiais são pequenas; isto dá espaço para várias versões de várias CLIs sem crescer sem limite. */
 const DEFAULT_CACHE_BUDGET_BYTES = 200 * 1024 * 1024
@@ -85,10 +86,13 @@ async function pruneNpmCacheIfOverBudget({
   }
 
   const result = await new Promise((resolve) => {
+    // `nodeExecutable` é o exe do app: sem o modo Node ele ignora o npm e abre
+    // uma segunda janela do Felixo (medido em 29/10/2026, a cada abertura que
+    // atualizava uma CLI com o cache acima do orçamento).
     const child = spawn(
       nodeExecutable,
       [npmCliPath, 'cache', 'clean', '--force', '--cache', cacheDir, '--loglevel=error'],
-      { env },
+      { env: createNodeEnv(env) },
     )
     let stderr = ''
     child.stderr?.on('data', (chunk) => {

@@ -116,6 +116,30 @@ describe('pruneNpmCacheIfOverBudget', () => {
     ])
   })
 
+  it('roda o binário do app em modo Node, sem abrir outra janela do app', async () => {
+    // O `nodeExecutable` real é o próprio exe do app: sem ELECTRON_RUN_AS_NODE
+    // ele ignora o npm-cli.js e sobe uma segunda instância (medido em 29/10/2026).
+    const calls = []
+    await pruneNpmCacheIfOverBudget({
+      cacheDir: CACHE_DIR,
+      npmCliPath: '/npm-cli.js',
+      nodeExecutable: '/Felixo AI Core.exe',
+      env: { PATH: '/usr/bin' },
+      maxBytes: 100,
+      fileSystem: baseFs,
+      spawn: (command, args, options) => {
+        calls.push(options)
+        const child = new EventEmitter()
+        child.stderr = new EventEmitter()
+        process.nextTick(() => child.emit('close', 0))
+        return child
+      },
+    })
+
+    assert.equal(calls[0].env.ELECTRON_RUN_AS_NODE, '1')
+    assert.equal(calls[0].env.PATH, '/usr/bin')
+  })
+
   it('reporta a falha sem lançar quando a limpeza do npm falha', async () => {
     const result = await pruneNpmCacheIfOverBudget({
       cacheDir: CACHE_DIR,

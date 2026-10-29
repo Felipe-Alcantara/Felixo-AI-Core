@@ -1907,7 +1907,11 @@ limite). Zera o cache inteiro em vez de um LRU por entrada: pra um cache
 desse tamanho, "zerar e deixar repopular" é mais simples de manter para um
 ganho marginal que não compensa a complexidade de um LRU sob medida. Rodado
 de forma oportunista, só depois de uma instalação de verdade acontecer — não
-em toda checagem sem trabalho.
+em toda checagem sem trabalho. O `npm` roda no próprio exe do app, então a
+limpeza liga o modo Node (`createNodeEnv`, `ELECTRON_RUN_AS_NODE=1`) como as
+outras chamadas do npm gerenciado: sem ele, o exe ignorava o `npm-cli.js` e
+abria uma segunda janela do Felixo, e o cache nunca era limpo (corrigido em
+29/10/2026; ver `IA.md`).
 
 **Fatia 3/5 (garantia de segredo):** o cache do npm guarda só tarballs de
 pacotes públicos — nunca é o lugar onde login/credencial (`cli-profiles`)
