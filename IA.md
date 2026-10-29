@@ -1396,3 +1396,24 @@ Estado: concluído e publicado (v0.1.493).
 **Tasks abertas.** Remover conta com login próprio quebra o `list()` (decisão); consulta do login do sistema sem conta que a receba; validar o botão por conta com contas logadas de verdade; estabilizar o `canvas-context-e2e.test.ts`; decidir o destino da pré-release órfã v0.1.492 e se o `cancel-in-progress` do Release deve poder deixar uma.
 
 Estado: concluído e publicado (v0.1.493).
+
+## 2026-10-29 — Inicialização: a limpeza do cache das CLIs abria uma segunda janela do Felixo no boot (v0.1.494)
+
+**Pedido.** Hotfix pedido pelo Felipe no canvas, agente Tasks OpenIA + AI Core: com "Iniciar com o sistema" ligado, o Felixo abre duas vezes quando o PC liga, "não todas as vezes, mas bem recorrente". A task de 25/09 "impedir segunda instância do app" (Linux) já tinha o mesmo sintoma e registrava que o segundo gatilho do boot não apareceu nos registros.
+
+**Medido.**
+- *O login abre uma vez só:* o `Run` do Windows tem uma entrada do Felixo, e o log `Microsoft-Windows-Shell-Core/Operational` (9707/9708) mostra uma execução dela por login em 21, 22, 23, 27, 28 e 29/10. Pasta Inicializar e Agendador não têm Felixo; o relançamento por GPU só existe no Linux.
+- *O segundo início vem do próprio app:* no log de QA, cada processo novo grava `account-chain recover` com id 1. Em 22, 23, 27 e 28/10 há um início no login e outro 3 a 4 min depois, sem saída no meio, sempre 1 a 26 s depois da última atualização de CLI da rodada (ex.: 28/10, Claude do sistema atualizada às 11:12:46Z, segundo início às 11:12:47Z).
+- *Causa raiz:* depois de instalar algo, `cli-auto-install.cjs` chama `pruneNpmCacheIfOverBudget` com `getNodeExecutable()` (o `process.execPath`, ou seja, o exe do app) e `createCliEnv()`, que só monta o PATH. Sem `ELECTRON_RUN_AS_NODE=1` o exe ignora o `npm-cli.js` e sobe o app inteiro. As instalações passam por `createManagedInstallEnv` → `createNodeEnv` e não tinham o defeito. Existe desde `ade0c55` (12/09/2026).
+- *Por que repetia:* o cache desta máquina tem 3,4 GB para um orçamento de 200 MB. Como o npm nunca rodava, o cache nunca encolhia, e toda abertura com CLI para atualizar (quase todo dia, pelas versões nightly) abria a segunda janela. O vínculo com o autostart é de horário: as atualizações da noite caem na primeira abertura do dia.
+- *Reprodução com o binário real* (perfil e cache temporários; o modo release smoke só para o app gravar um status sem janela): `"Felixo AI Core.exe" npm-cli.js cache clean --force --cache <tmp>` sem a variável subiu o `main.cjs` em 1,3 s e não limpou o cache; com `ELECTRON_RUN_AS_NODE=1` o npm saiu com 0 em 1,5 s, limpou o cache e o app não subiu.
+
+**O que mudou** (`8a694bb`). `pruneNpmCacheIfOverBudget` passa a disparar o npm com `createNodeEnv(env)`, como `installManagedPackage` já faz; a correção fica na função que cria o processo, então nenhum chamador repete o erro. Teste novo reprovou antes (`actual: undefined, expected: '1'`) e passa depois. `ARQUITETURA.md` (expurgo do cache) cita o modo Node.
+
+**Decisões do agente.** A trava de instância única (`requestSingleInstanceLock`) **não** entrou: muda a abertura de `.fxai/.fxchat/.fxworkflow` com o app aberto e os fluxos que sobem instâncias de propósito, e já é a task de 25/09, complementada com este achado. O hotfix corrige a causa; a trava fica como defesa para outros lançamentos duplicados.
+
+**Validação.** `managed-cli-cache-maintenance.test.cjs` 7 de 7; `npm test` 3041 testes, 3032 passando, 0 falhas, 9 pulados (+1); `eslint` 0. CI `40877826498` verde (macOS, Ubuntu, Ubuntu ARM, Windows e o smoke do canvas), "Ciclo de instalação das CLIs (Windows)" `40877826393` verde, Release gate `40878805539` e Release `40878858327` verdes: **v0.1.494** (Latest, 20 artefatos, tag em `8a694bb`).
+
+**Não validado.** O boot real com a correção: a prova é o teste, a reprodução com o binário e a correlação do log; o próximo login com CLI para atualizar é a validação de verdade (uma janela só, um `recover` de manhã, `cli-cache` perto de zero). O app desta máquina roda de uma cópia em `%TEMP%\felixo-release-smoke-*` (o aviso da tela de "Iniciar com o sistema"), e é ela que o `Run` abre; se ela não receber a atualização, a correção não chega aqui. A primeira limpeza vai apagar o cache offline inteiro (~3,4 GB de tarballs públicos), como o expurgo foi desenhado. **Fora do escopo:** o Nightly `40874224575` (29/10, `b36bf81`, anterior a este commit) falhou com "processos órfãos detectados em npm-runtime" no benchmark operacional do Windows; o mesmo commit passou nos dois Nightly anteriores. Complementei a task do órfão intermitente desse benchmark.
+
+Estado: concluído e publicado (v0.1.494).
