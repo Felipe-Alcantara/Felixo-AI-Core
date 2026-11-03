@@ -27,9 +27,10 @@ export function PerformanceModeSection() {
             Desliga o céu animado do canvas, o minimapa e as transições de
             painéis, menus, docas e controles, e os terminais abertos com ele
             ligado guardam até 5.000 linhas de histórico visual (em vez de
-            20.000) — o terminal avisa antes de chegar no limite. Nenhum
-            processo, conversa ou bloco é fechado — pensado pra rodar liso em
-            máquinas mais fracas.
+            20.000) — o terminal avisa antes de chegar no limite. A atualização
+            automática do painel de limites passa para 5 minutos; o botão
+            Atualizar continua disponível. Nenhum processo, conversa ou bloco
+            é fechado — pensado pra rodar liso em máquinas mais fracas.
           </p>
         </div>
         <FelixoToggle

@@ -65,6 +65,11 @@ animado, minimapa, transições de painel/dock/toolbar) fica ligada.
 Toggle do usuário em Configurações (`PerformanceModeProvider`,
 `data-performance-mode` no `<html>`). Hoje desliga, tudo de uma vez:
 
+A preferência é persistida em `localStorage` pela chave versionada
+`felixo-ai-core.performance-mode.v1`. Na primeira leitura, o app migra o valor
+`on` ou `off` da chave anterior `felixo-ai-core.performance-mode`; se nenhuma
+das duas tiver um valor válido, o padrão continua Normal.
+
 - Céu animado do canvas (`CanvasAmbientLayer`) — não renderiza, não é só
   pausa de animação.
 - Minimapa do React Flow (`CanvasView.tsx:2730`).
@@ -73,6 +78,9 @@ Toggle do usuário em Configurações (`PerformanceModeProvider`,
   `CanvasView.tsx:2310`).
 - Scrollback do terminal força 5.000 linhas mesmo abaixo do limiar de 10
   (`terminalScrollbackForSessionCount(..., performanceMode)`).
+- A atualização automática do painel **Limites e uso** passa de 30 segundos
+  para 5 minutos; o painel continua visível e o botão **Atualizar** continua
+  disponível.
 
 Nada disso mexe em processo, PTY ou prompt: é corte de decoração e de
 buffer visual, nunca de estado. Ativar/desativar não reabre terminal nem
@@ -274,8 +282,43 @@ continua manual, como hoje. **Não implementado — task de acompanhamento.**
 | Céu animado, minimapa | sim, no Performance Mode | — |
 | Transições de painel/dock/toolbar | sim, no Performance Mode | — |
 | Scrollback visual do terminal | sim, reduz para 5.000 linhas, com aviso antes de chegar no limite (80% da capacidade) e no limite | o replay do processo principal (200.000 chars) continua intacto, mas só é reaplicado quando o terminal é recriado (recarregar a janela ou voltar do Chat); com linhas longas tem menos linhas que o histórico visual, com linhas curtas pode ter mais |
-| `AgentUsagePanel` (preview de uso) | pode cair para polling mais espaçado | nunca parar de existir — usuário precisa saber que o dado está atrasado, não sumido |
+| `AgentUsagePanel` (preview de uso) | no Modo Performance a atualização automática passa de 30 s para 5 min durante atividade; o painel continua visível e o botão Atualizar continua funcionando | nunca parar de existir — usuário precisa saber que o dado está atrasado, não sumido |
 | PTY, sessão de terminal, handoff, prompt em andamento | — | nunca. Nenhum modo aqui mata processo ou perde estado — só decoração e buffer visual |
+
+## Implementação e medição — 03/11/2026
+
+Os benchmarks de conexões e de saída do terminal agora cruzam seus modos de
+dados com os modos visuais Normal e Performance. O benchmark de conexões confere
+o atributo no documento e a presença do minimapa; o de terminal mede o painel
+com logs visíveis, a transição de largura e a preservação dos logs ao trocar de
+modo. `benchmark:ui-render` continua sendo a medição do app completo e aceita
+throttling de CPU para repetir a interação em uma máquina mais lenta.
+
+A mudança do modo não desmonta o observador que acompanha `data-performance-mode`
+nem cancela um refresh já ativo. As medições cobrem o minimapa, o céu animado, o
+tutorial aberto, o painel de uso e o refresh manual. A cadência automática do
+painel de uso é 30 segundos no modo Normal e 5 minutos no Modo Performance.
+
+Limite da evidência: o benchmark com throttling simula CPU lenta por CDP; não
+substitui uma medição em um notebook físico de referência. A matriz dos
+harnesses também não compara diretamente a versão anterior ao commit `44f8cec`.
+
+**Medição local do app completo (03/11/2026).** Windows x64 (build 10.0.26300),
+GPU integrada AMD Radeon (driver 31.0.21923.1000), 16 CPUs lógicas; 48 blocos e
+31 conexões, tutorial aberto, três rodadas de 3 s por modo, sem aquecimento,
+CDP `cpuThrottle=4`:
+
+| Modo | FPS | Quadro p95 | Estilo por quadro | Long tasks por rodada |
+|---|---:|---:|---:|---:|
+| Normal | 16,33 | 133,1 ms | 22,97 ms | 23 |
+| Performance | 35,33 | 83,1 ms | 1,512 ms | 16 |
+
+Nesta execução, Performance teve 116% mais FPS, quadro p95 38% menor e estilo
+por quadro 93% menor. A cobertura também confirmou que o toggle acessível
+persiste após reload, muda o atributo durante um drag ativo, deixa o drag
+terminar e permite restaurar Normal. É uma medição exploratória curta no PC
+atual: o throttling via CDP simula a CPU, não reproduz o notebook físico de
+referência e não constitui comparação histórica com o commit `44f8cec`.
 
 ## Trade-offs e telemetry opt-in
 

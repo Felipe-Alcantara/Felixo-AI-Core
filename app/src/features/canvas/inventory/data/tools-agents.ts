@@ -189,7 +189,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
       loading: 'loading=true na abertura (lista o salvo e, só se a última coleta completa tiver 5 min ou mais — shouldRefreshAgentUsageOnOpen —, chama agent-usage:refresh) e no Atualizar; sem conteúdo mostra "Consultando as CLIs instaladas…" e o ícone gira',
       empty: '!hasContent e !loading: "Nenhuma CLI foi detectada nesta máquina."; provider sem conta: "Nenhuma conta vinculada a este provider."; conta sem amostra mostra a limitação da fonte por extenso, nunca zero; filtro sem resultado: "Nenhuma conta corresponde ao filtro." (o provider sem conta no filtro some, em vez de dizer "nenhuma conta vinculada")',
       error: 'statusMessage em faixa âmbar (falha de list/refresh/remover/reset ou "Não foi possível falar com o processo principal."); sem ponte: "Este painel só funciona no app desktop."; amostra com errorMessage aparece na linha da conta; a razão da falha (sessão ausente, rede, CLI ausente, tempo esgotado) vem de availability e aparece com uma frase fixa, sem a saída crua da CLI',
-      success: 'Rótulo "Atualização automática: base de 30 s"; o scheduler do processo principal mantém um único timer para os painéis visíveis, agenda Codex app-server e Openia statusline, recebe Claude statusline pelo watcher e ignora o Gemini interativo; prioriza sessões ativas e leituras antigas e reduz as consultas em ociosidade prolongada (5 min) ou na bateria; pausa em segundo plano, no Modo Performance ou durante suspensão; selo "ao vivo" depois de um refresh, de agent-usage:changed ou de uma abertura que reaproveitou a coleta recente; "Reset aplicado com sucesso." depois de usar um reset',
+      success: 'Rótulo "Atualização automática: base de 30 s"; o scheduler do processo principal mantém um único timer para os painéis visíveis, agenda Codex app-server e Openia statusline, recebe Claude statusline pelo watcher e ignora o Gemini interativo; prioriza sessões ativas e leituras antigas; passa a 5 min no Modo Performance e reduz a frequência em ociosidade prolongada (5 min) ou na bateria (2 min); pausa em segundo plano ou durante suspensão; selo "ao vivo" depois de um refresh, de agent-usage:changed ou de uma abertura que reaproveitou a coleta recente; "Reset aplicado com sucesso." depois de usar um reset',
       disabled: 'Atualizar desabilitado durante loading; "Atualizar a conta" desabilitado durante loading (a rodada completa já lê todas) e enquanto aquela conta atualiza (gira e marca aria-busy); "Adicionar ao painel" sem nome; botão da coleta durante busy, e ausente quando ~/.claude/settings.json não é legível ou já tem outra statusLine',
     },
     controls: [
@@ -204,8 +204,8 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
       {
         locator: 'Atualizar',
         kind: 'button',
-        effect: 'agent-usage:refresh: atualização manual consulta por conta e perfil, abre uma sessão PTY descartável de /status para Claude e Codex e também lê o app-server do Codex; regrava as amostras e acende "ao vivo". Em paralelo, o processo principal agenda Codex app-server e Openia statusline com base de 30 s, recebe Claude statusline pelo watcher e ignora Gemini interativo; prioriza sessões ativas e leituras antigas e limita concorrência a quatro (duas em ociosidade prolongada ou na bateria)',
-        failure: 'ok: false ou exceção viram statusMessage âmbar; o painel continua com o último valor conhecido, esmaecido e com a etiqueta de idade e motivo; a rodada manual tem teto (REFRESH_DEADLINE_MS, 90 s); consultas agendadas são canceladas ao ocultar a janela, entrar no Modo Performance ou suspender; falhas usam backoff exponencial, 429 respeita Retry-After com mínimo de 5 min e autenticação ausente espera 15 min',
+        effect: 'agent-usage:refresh: atualização manual consulta por conta e perfil, abre uma sessão PTY descartável de /status para Claude e Codex e também lê o app-server do Codex; regrava as amostras e acende "ao vivo". Em paralelo, o processo principal agenda Codex app-server e Openia statusline com base de 30 s no modo Normal e 5 min no Modo Performance, recebe Claude statusline pelo watcher e ignora Gemini interativo; prioriza sessões ativas e leituras antigas e limita concorrência a quatro (duas em ociosidade prolongada ou na bateria)',
+        failure: 'ok: false ou exceção viram statusMessage âmbar; o painel continua com o último valor conhecido, esmaecido e com a etiqueta de idade e motivo; a rodada manual tem teto (REFRESH_DEADLINE_MS, 90 s); consultas agendadas são canceladas ao ocultar a janela ou suspender; o Modo Performance espaça a cadência para 5 min sem cancelar um refresh ativo, e o botão manual continua disponível; falhas usam backoff exponencial, 429 respeita Retry-After com mínimo de 5 min e autenticação ausente espera 15 min',
         disabledWhen: 'loading',
         test: { file: 'electron/services/agent-usage-refresh-scheduler.test.cjs' },
       },
@@ -309,6 +309,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
       { file: 'electron/services/agent-usage-availability.test.cjs' },
       { file: 'electron/services/agent-usage-refresh-account.test.cjs' },
       { file: 'electron/services/agent-usage-refresh-scheduler.test.cjs' },
+      { file: 'src/features/shared/agent-usage/useAgentUsageRefreshScheduler.test.ts' },
       { file: 'electron/services/claude-statusline-service.test.cjs' },
       { file: 'electron/services/codex-status-query.test.cjs' },
       { file: 'electron/services/codex-status-screen.test.cjs' },

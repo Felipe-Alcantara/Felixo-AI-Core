@@ -39,6 +39,11 @@ import {
   type CanvasConnectionPerformanceScenario,
 } from '../services/canvas-connection-performance'
 import { createCanvasConnectionIndex } from '../services/canvas-connection-index'
+import {
+  applyPerformanceModeBenchmarkMode,
+  PERFORMANCE_MODE_BENCHMARK_MODES,
+  type PerformanceModeBenchmarkMode,
+} from '../../shared/performance/performance-mode-benchmark'
 
 const PROFILER_ID = 'CanvasConnectionIndex'
 const DEFAULT_ITERATIONS = 5
@@ -65,6 +70,8 @@ type PerformanceSample = {
   heapDeltaBytes: number | null
   gcAvailable: boolean
   domNodeCount: number
+  performanceModeApplied: PerformanceModeBenchmarkMode
+  minimapVisible: boolean
 }
 
 type Summary = {
@@ -78,6 +85,7 @@ type CanvasConnectionPerformanceResult = {
   size: number
   scenario: CanvasConnectionPerformanceScenario
   mode: CanvasConnectionPerformanceMode
+  performanceMode: PerformanceModeBenchmarkMode
   nodes: number
   edges: number
   namedConnections: number
@@ -96,6 +104,7 @@ type CanvasConnectionPerformanceResult = {
 type CanvasConnectionPerformanceComparison = {
   size: number
   scenario: CanvasConnectionPerformanceScenario
+  performanceMode: PerformanceModeBenchmarkMode
   baselineProfilerP95Ms: number | null
   indexedProfilerP95Ms: number | null
   profilerP95ImprovementPercent: number | null
@@ -104,8 +113,17 @@ type CanvasConnectionPerformanceComparison = {
   indexedHeapDeltaOverBaselineBytes: number | null
 }
 
+type CanvasPerformanceModeComparison = {
+  size: number
+  scenario: CanvasConnectionPerformanceScenario
+  mode: CanvasConnectionPerformanceMode
+  normalProfilerP95Ms: number | null
+  performanceProfilerP95Ms: number | null
+  performanceProfilerImprovementPercent: number | null
+}
+
 export type CanvasConnectionPerformanceReport = {
-  schemaVersion: 1
+  schemaVersion: 2
   kind: 'canvas-connection-react-profiler'
   startedAt: string
   finishedAt: string
@@ -121,19 +139,22 @@ export type CanvasConnectionPerformanceReport = {
     gc: 'window.gc quando exposto pelo Electron'
     iterations: number
     warmupPasses: 1
-    modeOrder: 'alternado por cenário'
+    modeOrder: 'alternado por cenário e estado visual'
     sizes: number[]
     scenarios: CanvasConnectionPerformanceScenario[]
     modes: CanvasConnectionPerformanceMode[]
+    performanceModes: PerformanceModeBenchmarkMode[]
   }
   results: CanvasConnectionPerformanceResult[]
   comparisons: CanvasConnectionPerformanceComparison[]
+  performanceModeComparisons: CanvasPerformanceModeComparison[]
 }
 
 type BenchmarkOptions = {
   sizes: number[]
   scenarios: CanvasConnectionPerformanceScenario[]
   modes: CanvasConnectionPerformanceMode[]
+  performanceModes: PerformanceModeBenchmarkMode[]
   iterations: number
   timeoutMs: number
 }
@@ -141,6 +162,7 @@ type BenchmarkOptions = {
 type Surface = {
   key: string
   mode: CanvasConnectionPerformanceMode
+  performanceMode: PerformanceModeBenchmarkMode
   fixture: CanvasConnectionPerformanceFixture
 }
 
@@ -257,14 +279,17 @@ function createComparison(
   results: CanvasConnectionPerformanceResult[],
   size: number,
   scenario: CanvasConnectionPerformanceScenario,
+  performanceMode: PerformanceModeBenchmarkMode,
 ): CanvasConnectionPerformanceComparison {
   const baseline = results.find(
     (result) =>
-      result.size === size && result.scenario === scenario && result.mode === 'baseline',
+      result.size === size && result.scenario === scenario && result.mode === 'baseline' &&
+      result.performanceMode === performanceMode,
   )
   const indexed = results.find(
     (result) =>
-      result.size === size && result.scenario === scenario && result.mode === 'indexado',
+      result.size === size && result.scenario === scenario && result.mode === 'indexado' &&
+      result.performanceMode === performanceMode,
   )
   const baselineP95 = baseline?.profiler.p95 ?? null
   const indexedP95 = indexed?.profiler.p95 ?? null
@@ -278,6 +303,7 @@ function createComparison(
   return {
     size,
     scenario,
+    performanceMode,
     baselineProfilerP95Ms: baselineP95,
     indexedProfilerP95Ms: indexedP95,
     profilerP95ImprovementPercent: improvement,
@@ -290,15 +316,48 @@ function createComparison(
   }
 }
 
+function createPerformanceModeComparison(
+  results: CanvasConnectionPerformanceResult[],
+  size: number,
+  scenario: CanvasConnectionPerformanceScenario,
+  mode: CanvasConnectionPerformanceMode,
+): CanvasPerformanceModeComparison {
+  const normal = results.find(
+    (result) =>
+      result.size === size && result.scenario === scenario &&
+      result.mode === mode && result.performanceMode === 'normal',
+  )
+  const performance = results.find(
+    (result) =>
+      result.size === size && result.scenario === scenario &&
+      result.mode === mode && result.performanceMode === 'performance',
+  )
+  const normalP95 = normal?.profiler.p95 ?? null
+  const performanceP95 = performance?.profiler.p95 ?? null
+
+  return {
+    size,
+    scenario,
+    mode,
+    normalProfilerP95Ms: normalP95,
+    performanceProfilerP95Ms: performanceP95,
+    performanceProfilerImprovementPercent:
+      normalP95 !== null && normalP95 > 0 && performanceP95 !== null
+        ? Number((((normalP95 - performanceP95) / normalP95) * 100).toFixed(2))
+        : null,
+  }
+}
+
 function normalizeOptions(partial?: Partial<BenchmarkOptions>): BenchmarkOptions {
   const sizes = partial?.sizes ?? [...CANVAS_CONNECTION_PERFORMANCE_SIZES]
   const scenarios = partial?.scenarios ?? [...CANVAS_CONNECTION_PERFORMANCE_SCENARIOS]
   const modes = partial?.modes ?? [...CANVAS_CONNECTION_PERFORMANCE_MODES]
+  const performanceModes = partial?.performanceModes ?? [...PERFORMANCE_MODE_BENCHMARK_MODES]
   const iterations = partial?.iterations ?? DEFAULT_ITERATIONS
   const timeoutMs = partial?.timeoutMs ?? DEFAULT_TIMEOUT_MS
 
-  if (sizes.length === 0 || scenarios.length === 0 || modes.length === 0) {
-    throw new Error('a bancada precisa de ao menos um tamanho, cenário e modo')
+  if (sizes.length === 0 || scenarios.length === 0 || modes.length === 0 || performanceModes.length === 0) {
+    throw new Error('a bancada precisa de ao menos um tamanho, cenário, modo de dados e modo visual')
   }
   if (!Number.isInteger(iterations) || iterations < 2 || iterations > 20) {
     throw new Error('iterations deve estar entre 2 e 20')
@@ -315,11 +374,15 @@ function normalizeOptions(partial?: Partial<BenchmarkOptions>): BenchmarkOptions
   if (modes.some((mode) => !CANVAS_CONNECTION_PERFORMANCE_MODES.includes(mode))) {
     throw new Error('modes contém um modo desconhecido')
   }
+  if (performanceModes.some((mode) => !PERFORMANCE_MODE_BENCHMARK_MODES.includes(mode))) {
+    throw new Error('performanceModes contém um modo desconhecido')
+  }
 
   return {
     sizes: [...new Set(sizes)],
     scenarios: [...new Set(scenarios)],
     modes: [...new Set(modes)],
+    performanceModes: [...new Set(performanceModes)],
     iterations,
     timeoutMs,
   }
@@ -346,6 +409,7 @@ async function runBenchmark(
   const startedAt = new Date().toISOString()
   const benchmarkStartedAt = performance.now()
   const results: CanvasConnectionPerformanceResult[] = []
+  const initialPerformanceMode = document.documentElement.getAttribute('data-performance-mode')
 
   const clearSurface = async () => {
     setSurface(null)
@@ -355,6 +419,7 @@ async function runBenchmark(
   const warmupSurface = async (
     baseFixture: CanvasConnectionPerformanceFixture,
     mode: CanvasConnectionPerformanceMode,
+    performanceMode: PerformanceModeBenchmarkMode,
     size: number,
     scenarioName: CanvasConnectionPerformanceScenario,
   ) => {
@@ -363,6 +428,7 @@ async function runBenchmark(
     setSurface({
       key: `warmup-${mode}-${size}-${scenarioName}`,
       mode,
+      performanceMode,
       fixture: baseFixture,
     })
     await waitForProfileCommit(commits, warmupStartIndex, 'mount', options.timeoutMs)
@@ -379,107 +445,130 @@ async function runBenchmark(
       const scenarios = createCanvasConnectionPerformanceScenarios(baseFixture)
 
       for (const [scenarioIndex, scenarioName] of options.scenarios.entries()) {
-        // Alternar a ordem evita que um modo receba sempre o custo de ser
-        // medido depois do outro, especialmente no primeiro mount de 1.000 nós.
-        const modes = scenarioIndex % 2 === 0 ? options.modes : [...options.modes].reverse()
-        for (const mode of modes) {
-          const scenario = scenarios.find(({ nome }) => nome === scenarioName)
-          if (!scenario) throw new Error(`cenário não encontrado: ${scenarioName}`)
+        const performanceModes = scenarioIndex % 2 === 0
+          ? options.performanceModes
+          : [...options.performanceModes].reverse()
+        for (const [performanceModeIndex, performanceMode] of performanceModes.entries()) {
+          // Alternar primeiro o estado visual e depois a estratégia de dados
+          // reduz o viés de aquecimento em cada cenário.
+          const orderIndex = scenarioIndex + performanceModeIndex
+          const modes = orderIndex % 2 === 0 ? options.modes : [...options.modes].reverse()
+          applyPerformanceModeBenchmarkMode(performanceMode)
+          for (const mode of modes) {
+            const scenario = scenarios.find(({ nome }) => nome === scenarioName)
+            if (!scenario) throw new Error(`cenário não encontrado: ${scenarioName}`)
 
-          const samples: PerformanceSample[] = []
-          setStatus(`aquecendo ${mode} · ${size} nós · ${scenarioName}`)
-          await warmupSurface(baseFixture, mode, size, scenarioName)
-          setStatus(`${mode} · ${size} nós · ${scenarioName}`)
+            const samples: PerformanceSample[] = []
+            setStatus(`aquecendo ${performanceMode} · ${mode} · ${size} nós · ${scenarioName}`)
+            await warmupSurface(baseFixture, mode, performanceMode, size, scenarioName)
+            setStatus(`${performanceMode} · ${mode} · ${size} nós · ${scenarioName}`)
 
-          for (let iteration = 0; iteration < options.iterations; iteration += 1) {
-            await clearSurface()
-            const gcBefore = collectGarbage()
-            await settleRenderer()
-            const heapBefore = readHeapSnapshot()
-            const key = `${mode}-${size}-${scenarioName}-${iteration}`
-            const mountStartIndex = commits.length
+            for (let iteration = 0; iteration < options.iterations; iteration += 1) {
+              await clearSurface()
+              const gcBefore = collectGarbage()
+              await settleRenderer()
+              const heapBefore = readHeapSnapshot()
+              const key = `${performanceMode}-${mode}-${size}-${scenarioName}-${iteration}`
+              const mountStartIndex = commits.length
 
-            setSurface({ key, mode, fixture: baseFixture })
-            const mountCommit = await waitForProfileCommit(
-              commits,
-              mountStartIndex,
-              'mount',
-              options.timeoutMs,
-            )
-            await settleRenderer()
-
-            let measuredCommit = mountCommit
-            if (scenarioName !== 'render-inicial') {
-              const updateStartIndex = commits.length
-              setSurface({ key, mode, fixture: scenario.fixture })
-              measuredCommit = await waitForProfileCommit(
+              setSurface({ key, mode, performanceMode, fixture: baseFixture })
+              const mountCommit = await waitForProfileCommit(
                 commits,
-                updateStartIndex,
-                'update',
+                mountStartIndex,
+                'mount',
                 options.timeoutMs,
               )
               await settleRenderer()
+
+              let measuredCommit = mountCommit
+              if (scenarioName !== 'render-inicial') {
+                const updateStartIndex = commits.length
+                setSurface({ key, mode, performanceMode, fixture: scenario.fixture })
+                measuredCommit = await waitForProfileCommit(
+                  commits,
+                  updateStartIndex,
+                  'update',
+                  options.timeoutMs,
+                )
+                await settleRenderer()
+              }
+
+              const gcAfter = collectGarbage()
+              await settleRenderer()
+              const heapAfter = readHeapSnapshot()
+              const appliedMode = document.documentElement.getAttribute('data-performance-mode')
+              const minimapVisible = document.querySelector('.felixo-canvas-minimap') !== null
+              if (appliedMode !== (performanceMode === 'performance' ? 'on' : 'off')) {
+                throw new Error(`Modo Performance ${performanceMode} não foi aplicado ao documento`)
+              }
+              if (minimapVisible !== (performanceMode === 'normal')) {
+                throw new Error(`visibilidade do minimapa incorreta no modo ${performanceMode}`)
+              }
+              const heapDelta =
+                heapBefore.usedBytes !== null && heapAfter.usedBytes !== null
+                  ? heapAfter.usedBytes - heapBefore.usedBytes
+                  : null
+
+              samples.push({
+                actualDurationMs: Number(measuredCommit.actualDuration.toFixed(3)),
+                baseDurationMs: Number(measuredCommit.baseDuration.toFixed(3)),
+                heapBeforeBytes: heapBefore.usedBytes,
+                heapAfterBytes: heapAfter.usedBytes,
+                heapDeltaBytes: heapDelta,
+                gcAvailable: gcBefore && gcAfter,
+                domNodeCount: readPerformanceNodeCount(),
+                performanceModeApplied: performanceMode,
+                minimapVisible,
+              })
             }
 
-            const gcAfter = collectGarbage()
-            await settleRenderer()
-            const heapAfter = readHeapSnapshot()
-            const heapDelta =
-              heapBefore.usedBytes !== null && heapAfter.usedBytes !== null
-                ? heapAfter.usedBytes - heapBefore.usedBytes
-                : null
+            const profilerValues = samples.map((sample) => sample.actualDurationMs)
+            const heapBeforeValues = samples.flatMap((sample) =>
+              sample.heapBeforeBytes === null ? [] : [sample.heapBeforeBytes],
+            )
+            const heapAfterValues = samples.flatMap((sample) =>
+              sample.heapAfterBytes === null ? [] : [sample.heapAfterBytes],
+            )
+            const heapDeltaValues = samples.flatMap((sample) =>
+              sample.heapDeltaBytes === null ? [] : [sample.heapDeltaBytes],
+            )
 
-            samples.push({
-              actualDurationMs: Number(measuredCommit.actualDuration.toFixed(3)),
-              baseDurationMs: Number(measuredCommit.baseDuration.toFixed(3)),
-              heapBeforeBytes: heapBefore.usedBytes,
-              heapAfterBytes: heapAfter.usedBytes,
-              heapDeltaBytes: heapDelta,
-              gcAvailable: gcBefore && gcAfter,
-              domNodeCount: readPerformanceNodeCount(),
+            results.push({
+              size,
+              scenario: scenarioName,
+              mode,
+              performanceMode,
+              nodes: baseFixture.nodes.length,
+              edges: baseFixture.edges.length,
+              namedConnections: countNamedCanvasConnections(baseFixture),
+              repetitions: samples.length,
+              profiler: summarize(profilerValues),
+              heap: {
+                supported: heapDeltaValues.length === samples.length,
+                gcAvailable: samples.every((sample) => sample.gcAvailable),
+                beforeBytes: summarize(heapBeforeValues),
+                afterBytes: summarize(heapAfterValues),
+                deltaBytes: summarize(heapDeltaValues),
+              },
+              samples,
             })
           }
-
-          const profilerValues = samples.map((sample) => sample.actualDurationMs)
-          const heapBeforeValues = samples.flatMap((sample) =>
-            sample.heapBeforeBytes === null ? [] : [sample.heapBeforeBytes],
-          )
-          const heapAfterValues = samples.flatMap((sample) =>
-            sample.heapAfterBytes === null ? [] : [sample.heapAfterBytes],
-          )
-          const heapDeltaValues = samples.flatMap((sample) =>
-            sample.heapDeltaBytes === null ? [] : [sample.heapDeltaBytes],
-          )
-
-          results.push({
-            size,
-            scenario: scenarioName,
-            mode,
-            nodes: baseFixture.nodes.length,
-            edges: baseFixture.edges.length,
-            namedConnections: countNamedCanvasConnections(baseFixture),
-            repetitions: samples.length,
-            profiler: summarize(profilerValues),
-            heap: {
-              supported: heapDeltaValues.length === samples.length,
-              gcAvailable: samples.every((sample) => sample.gcAvailable),
-              beforeBytes: summarize(heapBeforeValues),
-              afterBytes: summarize(heapAfterValues),
-              deltaBytes: summarize(heapDeltaValues),
-            },
-            samples,
-          })
         }
       }
     }
   } finally {
     await clearSurface()
+    if (initialPerformanceMode === null) {
+      document.documentElement.removeAttribute('data-performance-mode')
+    } else {
+      document.documentElement.setAttribute('data-performance-mode', initialPerformanceMode)
+    }
     setStatus('Pronto')
   }
 
   const finishedAt = new Date().toISOString()
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     kind: 'canvas-connection-react-profiler',
     startedAt,
     finishedAt,
@@ -495,17 +584,32 @@ async function runBenchmark(
       gc: 'window.gc quando exposto pelo Electron',
       iterations: options.iterations,
       warmupPasses: 1,
-      modeOrder: 'alternado por cenário',
+      modeOrder: 'alternado por cenário e estado visual',
       sizes: options.sizes,
       scenarios: options.scenarios,
       modes: options.modes,
+      performanceModes: options.performanceModes,
     },
     results,
     comparisons: options.modes.includes('baseline') && options.modes.includes('indexado')
       ? options.sizes.flatMap((size) =>
-          options.scenarios.map((scenario) => createComparison(results, size, scenario)),
+          options.scenarios.flatMap((scenario) =>
+            options.performanceModes.map((performanceMode) =>
+              createComparison(results, size, scenario, performanceMode),
+            ),
+          ),
         )
       : [],
+    performanceModeComparisons:
+      options.performanceModes.includes('normal') && options.performanceModes.includes('performance')
+        ? options.sizes.flatMap((size) =>
+            options.scenarios.flatMap((scenario) =>
+              options.modes.map((mode) =>
+                createPerformanceModeComparison(results, size, scenario, mode),
+              ),
+            ),
+          )
+        : [],
   }
 }
 
@@ -528,12 +632,16 @@ function PerformanceNode({ id, data, selected }: NodeProps) {
     <div
       data-canvas-performance-node="true"
       data-canvas-performance-node-id={id}
-      className={`relative flex h-full w-full flex-col justify-between rounded-lg border px-2 py-1 text-[10px] text-zinc-100 shadow-lg ${
+      className={`felixo-canvas-performance-node relative flex h-full w-full flex-col justify-between rounded-lg border px-2 py-1 text-[10px] text-zinc-100 shadow-lg ${
         selected ? 'border-white/10 bg-white/4' : 'border-white/15 bg-zinc-900/90'
       }`}
     >
       <Handle type="target" position={Position.Left} />
-      <span className="truncate font-semibold">{label}</span>
+      <div className="felixo-node-header canvas-node-drag">
+        <span className="felixo-node-grip" aria-hidden="true">⋮</span>
+        <span className="truncate font-semibold">{label}</span>
+        <div className="felixo-node-actions" />
+      </div>
       <span className="text-zinc-400">conexões: {connections}</span>
       <Handle type="source" position={Position.Right} />
     </div>
@@ -545,9 +653,11 @@ const PerformanceNodeMemo = memo(PerformanceNode)
 function PerformanceFlow({
   fixture,
   mode,
+  performanceMode,
 }: {
   fixture: CanvasConnectionPerformanceFixture
   mode: CanvasConnectionPerformanceMode
+  performanceMode: PerformanceModeBenchmarkMode
 }) {
   const index = useMemo(
     () => (mode === 'indexado' ? createCanvasConnectionIndex(fixture.nodes, fixture.edges) : undefined),
@@ -584,7 +694,14 @@ function PerformanceFlow({
     >
       <Background gap={20} color="#1e293b" />
       <Controls position="bottom-left" />
-      <MiniMap position="top-right" pannable zoomable />
+      {performanceMode === 'normal' && (
+        <MiniMap
+          position="top-right"
+          pannable
+          zoomable
+          className="felixo-canvas-minimap"
+        />
+      )}
     </ReactFlow>
   )
 }
@@ -592,11 +709,12 @@ function PerformanceFlow({
 function PerformanceSurface({
   fixture,
   mode,
+  performanceMode,
   onRender,
 }: Surface & { onRender: ProfilerOnRenderCallback }) {
   return (
     <CanvasProfilerBoundary id={PROFILER_ID} enabled onRender={onRender}>
-      <PerformanceFlow fixture={fixture} mode={mode} />
+      <PerformanceFlow fixture={fixture} mode={mode} performanceMode={performanceMode} />
     </CanvasProfilerBoundary>
   )
 }
@@ -650,6 +768,7 @@ export function CanvasConnectionPerformanceHarness() {
         <PerformanceSurface
           key={surface.key}
           mode={surface.mode}
+          performanceMode={surface.performanceMode}
           fixture={surface.fixture}
           onRender={onRender}
         />

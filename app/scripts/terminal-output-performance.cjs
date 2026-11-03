@@ -26,6 +26,7 @@ const DEFAULT_SCENARIOS = [
   'multiplas-sessoes',
 ]
 const DEFAULT_MODES = ['baseline', 'atual']
+const DEFAULT_PERFORMANCE_MODES = ['normal', 'performance']
 const DEFAULT_ITERATIONS = 3
 const DEFAULT_TIMEOUT_MS = 120_000
 const MAX_ITERATIONS = 10
@@ -57,6 +58,7 @@ function parseArgs(argv = []) {
   const options = {
     scenarios: [...DEFAULT_SCENARIOS],
     modes: [...DEFAULT_MODES],
+    performanceModes: [...DEFAULT_PERFORMANCE_MODES],
     iterations: DEFAULT_ITERATIONS,
     timeoutMs: DEFAULT_TIMEOUT_MS,
     outputPath: null,
@@ -86,6 +88,14 @@ function parseArgs(argv = []) {
         argument.slice('--modes='.length),
         DEFAULT_MODES,
         'modes',
+      )
+      continue
+    }
+    if (argument.startsWith('--performance-modes=')) {
+      options.performanceModes = parseList(
+        argument.slice('--performance-modes='.length),
+        DEFAULT_PERFORMANCE_MODES,
+        'performance-modes',
       )
       continue
     }
@@ -157,19 +167,21 @@ function formatMiB(value) {
 
 function createComparisons(results) {
   const scenarios = [...new Set(results.map((result) => result.scenario))]
+  const performanceModes = [...new Set(results.map((result) => result.performanceMode))]
 
-  return scenarios.map((scenario) => {
+  return scenarios.flatMap((scenario) => performanceModes.map((performanceMode) => {
     const baseline = results.find(
-      (result) => result.scenario === scenario && result.mode === 'baseline',
+      (result) => result.scenario === scenario && result.mode === 'baseline' && result.performanceMode === performanceMode,
     )
     const current = results.find(
-      (result) => result.scenario === scenario && result.mode === 'atual',
+      (result) => result.scenario === scenario && result.mode === 'atual' && result.performanceMode === performanceMode,
     )
     const baselineP95 = baseline?.profiler.p95 ?? null
     const currentP95 = current?.profiler.p95 ?? null
 
     return {
       scenario,
+      performanceMode,
       baselineProfilerP95Ms: baselineP95,
       currentProfilerP95Ms: currentP95,
       profilerP95ImprovementPercent:
@@ -183,7 +195,29 @@ function createComparisons(results) {
       baselineMaxDomNodes: baseline?.maxDomNodes.max ?? null,
       currentMaxDomNodes: current?.maxDomNodes.max ?? null,
     }
-  })
+  }))
+}
+
+function createPerformanceModeComparisons(results) {
+  const scenarios = [...new Set(results.map((result) => result.scenario))]
+  const modes = [...new Set(results.map((result) => result.mode))]
+
+  return scenarios.flatMap((scenario) => modes.map((mode) => {
+    const normal = results.find((result) => result.scenario === scenario && result.mode === mode && result.performanceMode === 'normal')
+    const performance = results.find((result) => result.scenario === scenario && result.mode === mode && result.performanceMode === 'performance')
+    const normalP95 = normal?.profiler.p95 ?? null
+    const performanceP95 = performance?.profiler.p95 ?? null
+    return {
+      scenario,
+      mode,
+      normalProfilerP95Ms: normalP95,
+      performanceProfilerP95Ms: performanceP95,
+      performanceProfilerImprovementPercent:
+        normalP95 !== null && normalP95 > 0 && performanceP95 !== null
+          ? Number((((normalP95 - performanceP95) / normalP95) * 100).toFixed(2))
+          : null,
+    }
+  }))
 }
 
 function formatReport(report) {
@@ -193,20 +227,23 @@ function formatReport(report) {
     `Viewport: ${report.renderer?.viewport?.width ?? '?'}×${report.renderer?.viewport?.height ?? '?'}`,
     `Repetições: ${report.method?.iterations ?? '?'}`,
     '',
-    'cenário | baseline p50/p95 | atual p50/p95 | DOM máx baseline→atual | heap Δ p95 baseline→atual | RSS baseline→atual',
+    'Modo Performance | cenário | baseline p50/p95 | atual p50/p95 | DOM máx baseline→atual | heap Δ p95 baseline→atual | RSS baseline→atual',
   ]
 
   for (const comparison of report.comparisons ?? []) {
     const baseline = report.results.find(
       (result) =>
-        result.scenario === comparison.scenario && result.mode === 'baseline',
+        result.scenario === comparison.scenario && result.mode === 'baseline' &&
+        result.performanceMode === comparison.performanceMode,
     )
     const current = report.results.find(
       (result) =>
-        result.scenario === comparison.scenario && result.mode === 'atual',
+        result.scenario === comparison.scenario && result.mode === 'atual' &&
+        result.performanceMode === comparison.performanceMode,
     )
     lines.push(
       [
+        comparison.performanceMode,
         comparison.scenario,
         `${formatMilliseconds(comparison.baselineProfilerP95Ms === null ? null : baseline?.profiler.p50)}/${formatMilliseconds(comparison.baselineProfilerP95Ms)}`,
         `${formatMilliseconds(current?.profiler.p50)}/${formatMilliseconds(comparison.currentProfilerP95Ms)}`,
@@ -222,17 +259,33 @@ function formatReport(report) {
 
 function validateReport(report, options) {
   const failures = []
-  const expectedResults = options.scenarios.length * options.modes.length
+  const expectedResults = options.scenarios.length * options.modes.length * options.performanceModes.length
 
-  if (report.schemaVersion !== 1) failures.push('schemaVersion inesperado')
+  if (report.schemaVersion !== 2) failures.push('schemaVersion inesperado')
   if ((report.results ?? []).length !== expectedResults) {
     failures.push(`resultados incompletos: esperado=${expectedResults}`)
   }
 
+  const resultKeys = new Set((report.results ?? []).map((result) =>
+    `${result.scenario}|${result.mode}|${result.performanceMode}`,
+  ))
+  for (const scenario of options.scenarios) {
+    for (const mode of options.modes) {
+      for (const performanceMode of options.performanceModes) {
+        if (!resultKeys.has(`${scenario}|${mode}|${performanceMode}`)) {
+          failures.push(`combinação ausente: ${performanceMode}/${mode}/${scenario}`)
+        }
+      }
+    }
+  }
+
   for (const result of report.results ?? []) {
-    const label = `${result.mode}/${result.scenario}`
+    const label = `${result.performanceMode}/${result.mode}/${result.scenario}`
     if (result.iterations !== options.iterations) {
       failures.push(`${label}: repetições incompletas`)
+    }
+    if (!Array.isArray(result.samples) || result.samples.length !== options.iterations) {
+      failures.push(`${label}: amostras incompletas`)
     }
     if (result.profiler?.count <= 0 || result.updateLatency?.count <= 0) {
       failures.push(`${label}: commits do Profiler ausentes`)
@@ -254,7 +307,25 @@ function validateReport(report, options) {
     ) {
       failures.push(`${label}: DOM acima da janela global`)
     }
+    if (result.samples?.some((sample) => sample.performanceModeApplied !== result.performanceMode)) {
+      failures.push(`${label}: estado do Modo Performance ausente`)
+    }
+    if (result.samples?.some((sample) => !sample.panelVisible)) {
+      failures.push(`${label}: painel de atividade ausente`)
+    }
+    if (result.samples?.some((sample) => result.performanceMode === 'performance' && sample.panelTransitionDurationMs !== 0)) {
+      failures.push(`${label}: transição do painel ativa no Modo Performance`)
+    }
+    if (result.samples?.some((sample) => result.performanceMode === 'normal' && !sample.prefersReducedMotion && sample.panelTransitionDurationMs === 0)) {
+      failures.push(`${label}: transição normal ausente sem reduced motion`)
+    }
   }
+
+  const coverage = report.modeSwitchCoverage
+  if (!coverage?.testedWhileLogsVisible) failures.push('troca de modo sem logs ativos não foi medida')
+  if (!coverage?.logsPreserved) failures.push('logs desapareceram ao trocar o modo')
+  if (!coverage?.panelRemainedVisible) failures.push('painel desapareceu ao trocar o modo')
+  if (!coverage?.performanceTransitionDisabled) failures.push('transição do painel não foi cortada ao trocar o modo')
 
   return failures
 }
@@ -328,6 +399,7 @@ function printHelp() {
 Opções:
   --scenarios=curta,longa,alta-frequencia,multiplas-sessoes
   --modes=baseline,atual
+  --performance-modes=normal,performance
   --iterations=3                   repetições por combinação (2–${MAX_ITERATIONS})
   --timeout-ms=120000              timeout de cada commit (máx. ${MAX_TIMEOUT_MS})
   --out=arquivo.json               salva o relatório JSON
@@ -440,6 +512,11 @@ async function run(argv = process.argv.slice(2)) {
       },
       results,
       comparisons: createComparisons(results),
+      performanceModeComparisons:
+        options.performanceModes.includes('normal') &&
+        options.performanceModes.includes('performance')
+          ? createPerformanceModeComparisons(results)
+          : [],
       host: {
         platform: process.platform,
         arch: process.arch,
@@ -578,6 +655,7 @@ if (process.versions.electron && process.type === 'browser') {
 
 module.exports = {
   DEFAULT_MODES,
+  DEFAULT_PERFORMANCE_MODES,
   DEFAULT_SCENARIOS,
   formatReport,
   parseArgs,

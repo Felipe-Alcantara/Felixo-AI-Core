@@ -404,7 +404,7 @@ export function AgentUsagePanel({
             </span>
           )}
 
-          <span className="ml-auto text-[11px] text-zinc-500" title="Frequência reduzida em ociosidade prolongada ou usando bateria; pausada em segundo plano, no Modo Performance e durante suspensão">
+          <span className="ml-auto text-[11px] text-zinc-500" title="Atualização automática: 30 s no modo Normal e 5 min no Modo Performance; também desacelera em ociosidade ou bateria e pausa em segundo plano ou durante suspensão. Atualizar manualmente continua disponível.">
             Atualização automática: base de 30 s
           </span>
         </div>

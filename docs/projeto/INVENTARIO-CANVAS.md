@@ -32,7 +32,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **Elementos:** 99 (10 blocos, 16 ferramentas, 73 outras superfícies)
 - **Controles:** 378, dos quais 57 com teste específico
 - **Elementos sem nenhum teste:** 4
-- **Lacunas:** 276 (alto 10, médio 148, baixo 118), em 79 tasks
+- **Lacunas:** 274 (alto 10, médio 148, baixo 116), em 78 tasks
 
 ## Moldura do canvas
 
@@ -334,7 +334,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** nenhum
 - **Depende de:** `MiniMap (@xyflow/react)`, `useCanvasSurfaces (minimap)`, `usePerformanceMode`, `miniMapNode (CanvasView)`
 - **Sobreposição:** Panel do React Flow (bottom-right, mb-10), margem direita 19rem para não ficar sob o inspector (1rem com o puck, via :has()), opacidade 0,45 até hover/foco. Dentro do wrapper do React Flow (z 0): o dock (20) cobre o mapa se a margem falhar; o mapa cobre blocos no canto inferior direito.
-- **Testes:** `src/features/canvas/services/canvas-surfaces.test.ts`, `scripts/canvas-smoke.cjs` → `checarOclusaoDoFixture`, `scripts/canvas-smoke.cjs` → `checarMatrizVisual`
+- **Testes:** `src/features/canvas/services/canvas-surfaces.test.ts`, `scripts/canvas-connection-performance.cjs`, `scripts/ui-render-performance.cjs`, `scripts/canvas-smoke.cjs` → `checarOclusaoDoFixture`, `scripts/canvas-smoke.cjs` → `checarMatrizVisual`
 
 | Estado | Quando |
 | --- | --- |
@@ -347,7 +347,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | Arrastar e dar zoom pelo Mini Map (pannable, zoomable) não é exercitado; o smoke só mede o retângulo. | baixo | `3ec91f95-497e-818f-b9f2-f9710605c303` |
-| Custo do Mini Map (re-render do miniMapNode a cada mudança de nós) e o caminho do Modo Performance sem medição nos harnesses. | baixo | `3e691f95-497e-816a-a1c9-c0b3b37c8046` |
 
 ### Inspector "Elementos"
 
@@ -390,7 +389,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** nenhum
 - **Depende de:** `usePerformanceMode`, `canvas-starfield`
 - **Sobreposição:** absolute inset-0 z-0, pointer-events none e aria-hidden: fica por baixo de tudo na região do canvas e não intercepta clique.
-- **Testes:** `src/features/canvas/components/canvas-starfield.test.ts`
+- **Testes:** `src/features/canvas/components/canvas-starfield.test.ts`, `scripts/ui-render-performance.cjs`
 
 | Estado | Quando |
 | --- | --- |
@@ -399,10 +398,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | disabled | Modo Performance: o campo de estrelas não é montado; só o fundo preto. |
 
 Sem controle próprio: as ações vêm de outros elementos.
-
-| Lacuna | Risco | Task |
-| --- | --- | --- |
-| O caminho do Modo Performance (sem campo de estrelas) e o custo da camada não são medidos nos harnesses. | baixo | `3e691f95-497e-816a-a1c9-c0b3b37c8046` |
 
 ### Coordenação de largura das superfícies
 
@@ -1688,7 +1683,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `agent-usage:list`, `agent-usage:refresh`, `agent-usage:refresh-account`, `agent-usage:add-account`, `agent-usage:remove-account`, `agent-usage:consume-reset-credit`, `agent-usage:claude-statusline-status`, `agent-usage:enable-claude-statusline`, `agent-usage:disable-claude-statusline`, `agent-usage:changed`, `agent-usage:scheduler-state`
 - **Depende de:** `window.felixo.agentUsage`, `CanvasPanel`, `consumeRequestedAgentUsageTab`, `rovingIndex`, `FelixoSelect`, `shouldRefreshAgentUsageOnOpen`, `useAgentUsageRefreshScheduler`, `agent-usage-refresh-scheduler.cjs`, `getAccountStatus`, `AgentUsageResetCreditsView`, `AgentUsageStatusDetailsView`, `ProviderSummaryTable`, `summarizeProviderAccounts`, `describeDisplayedAgentUsage`, `getAgentUsageLoginTerminal`, `filterAgentUsageGroups`, `AgentUsageFilterBar`, `AgentUsageRefreshAccountButton`, `useAgentUsageAccountRefresh`, `AccountChainSection`, `AccountSwitchHistory`
 - **Sobreposição:** CanvasPanel: absolute z-20 (z-30 com foco dentro), top-16, à direita da barra lateral e deslocado quando o menu de ferramentas abre (toolsMenuOpen); largura limitada a viewport − barra − inspector Elementos (288 px) e altura a viewport − 112. Os menus do FelixoSelect abrem em portal z-1000 por cima; toasts (z 50) e AgentQuestionDialog/HandoffDialog (z 60) cobrem o painel. Em janela <768 px o painel passa da viewport (PANEL_MIN_WIDTH 260, task 3e691f95-497e-815c-a129-f4d2d6405cbc). Tamanho lg (o mais largo desta parte); o window.confirm do Remover é diálogo nativo, fora da escala de z
-- **Testes:** `src/features/shared/agent-usage/agent-usage.test.ts`, `src/features/shared/agent-usage/useAgentUsageAccountRefresh.test.ts`, `src/features/canvas/components/tools/AgentUsageProviderSummary.test.ts`, `electron/services/agent-usage-ipc-handlers.test.cjs`, `electron/services/agent-usage-service.test.cjs`, `electron/services/agent-usage-availability.test.cjs`, `electron/services/agent-usage-refresh-account.test.cjs`, `electron/services/agent-usage-refresh-scheduler.test.cjs`, `electron/services/claude-statusline-service.test.cjs`, `electron/services/codex-status-query.test.cjs`, `electron/services/codex-status-screen.test.cjs`, `scripts/canvas-smoke-contas.cjs` → `abrirLimitesEUso`
+- **Testes:** `src/features/shared/agent-usage/agent-usage.test.ts`, `src/features/shared/agent-usage/useAgentUsageAccountRefresh.test.ts`, `src/features/canvas/components/tools/AgentUsageProviderSummary.test.ts`, `electron/services/agent-usage-ipc-handlers.test.cjs`, `electron/services/agent-usage-service.test.cjs`, `electron/services/agent-usage-availability.test.cjs`, `electron/services/agent-usage-refresh-account.test.cjs`, `electron/services/agent-usage-refresh-scheduler.test.cjs`, `src/features/shared/agent-usage/useAgentUsageRefreshScheduler.test.ts`, `electron/services/claude-statusline-service.test.cjs`, `electron/services/codex-status-query.test.cjs`, `electron/services/codex-status-screen.test.cjs`, `scripts/canvas-smoke-contas.cjs` → `abrirLimitesEUso`
 
 | Estado | Quando |
 | --- | --- |
@@ -1696,13 +1691,13 @@ Sem controle próprio: as ações vêm de outros elementos.
 | loading | loading=true na abertura (lista o salvo e, só se a última coleta completa tiver 5 min ou mais — shouldRefreshAgentUsageOnOpen —, chama agent-usage:refresh) e no Atualizar; sem conteúdo mostra "Consultando as CLIs instaladas…" e o ícone gira |
 | empty | !hasContent e !loading: "Nenhuma CLI foi detectada nesta máquina."; provider sem conta: "Nenhuma conta vinculada a este provider."; conta sem amostra mostra a limitação da fonte por extenso, nunca zero; filtro sem resultado: "Nenhuma conta corresponde ao filtro." (o provider sem conta no filtro some, em vez de dizer "nenhuma conta vinculada") |
 | error | statusMessage em faixa âmbar (falha de list/refresh/remover/reset ou "Não foi possível falar com o processo principal."); sem ponte: "Este painel só funciona no app desktop."; amostra com errorMessage aparece na linha da conta; a razão da falha (sessão ausente, rede, CLI ausente, tempo esgotado) vem de availability e aparece com uma frase fixa, sem a saída crua da CLI |
-| success | Rótulo "Atualização automática: base de 30 s"; o scheduler do processo principal mantém um único timer para os painéis visíveis, agenda Codex app-server e Openia statusline, recebe Claude statusline pelo watcher e ignora o Gemini interativo; prioriza sessões ativas e leituras antigas e reduz as consultas em ociosidade prolongada (5 min) ou na bateria; pausa em segundo plano, no Modo Performance ou durante suspensão; selo "ao vivo" depois de um refresh, de agent-usage:changed ou de uma abertura que reaproveitou a coleta recente; "Reset aplicado com sucesso." depois de usar um reset |
+| success | Rótulo "Atualização automática: base de 30 s"; o scheduler do processo principal mantém um único timer para os painéis visíveis, agenda Codex app-server e Openia statusline, recebe Claude statusline pelo watcher e ignora o Gemini interativo; prioriza sessões ativas e leituras antigas; passa a 5 min no Modo Performance e reduz a frequência em ociosidade prolongada (5 min) ou na bateria (2 min); pausa em segundo plano ou durante suspensão; selo "ao vivo" depois de um refresh, de agent-usage:changed ou de uma abertura que reaproveitou a coleta recente; "Reset aplicado com sucesso." depois de usar um reset |
 | disabled | Atualizar desabilitado durante loading; "Atualizar a conta" desabilitado durante loading (a rodada completa já lê todas) e enquanto aquela conta atualiza (gira e marca aria-busy); "Adicionar ao painel" sem nome; botão da coleta durante busy, e ausente quando ~/.claude/settings.json não é legível ou já tem outra statusLine |
 
 | Controle | Gatilho | Efeito | Falha conhecida | Teste |
 | --- | --- | --- | --- | --- |
 | `role="tab"` (button) | clique ou setas/Home/End no tablist (rovingIndex) | Troca a aba entre Uso agora, Cadeia e Trocas (só o tabpanel ativo monta); a aba inicial pode vir pedida por consumeRequestedAgentUsageTab | sem falha própria | `scripts/canvas-smoke-contas.cjs` → `irParaAba` |
-| `Atualizar` (button) | clique | agent-usage:refresh: atualização manual consulta por conta e perfil, abre uma sessão PTY descartável de /status para Claude e Codex e também lê o app-server do Codex; regrava as amostras e acende "ao vivo". Em paralelo, o processo principal agenda Codex app-server e Openia statusline com base de 30 s, recebe Claude statusline pelo watcher e ignora Gemini interativo; prioriza sessões ativas e leituras antigas e limita concorrência a quatro (duas em ociosidade prolongada ou na bateria) (desabilitado: loading) | ok: false ou exceção viram statusMessage âmbar; o painel continua com o último valor conhecido, esmaecido e com a etiqueta de idade e motivo; a rodada manual tem teto (REFRESH_DEADLINE_MS, 90 s); consultas agendadas são canceladas ao ocultar a janela, entrar no Modo Performance ou suspender; falhas usam backoff exponencial, 429 respeita Retry-After com mínimo de 5 min e autenticação ausente espera 15 min | `electron/services/agent-usage-refresh-scheduler.test.cjs` |
+| `Atualizar` (button) | clique | agent-usage:refresh: atualização manual consulta por conta e perfil, abre uma sessão PTY descartável de /status para Claude e Codex e também lê o app-server do Codex; regrava as amostras e acende "ao vivo". Em paralelo, o processo principal agenda Codex app-server e Openia statusline com base de 30 s no modo Normal e 5 min no Modo Performance, recebe Claude statusline pelo watcher e ignora Gemini interativo; prioriza sessões ativas e leituras antigas e limita concorrência a quatro (duas em ociosidade prolongada ou na bateria) (desabilitado: loading) | ok: false ou exceção viram statusMessage âmbar; o painel continua com o último valor conhecido, esmaecido e com a etiqueta de idade e motivo; a rodada manual tem teto (REFRESH_DEADLINE_MS, 90 s); consultas agendadas são canceladas ao ocultar a janela ou suspender; o Modo Performance espaça a cadência para 5 min sem cancelar um refresh ativo, e o botão manual continua disponível; falhas usam backoff exponencial, 429 respeita Retry-After com mínimo de 5 min e autenticação ausente espera 15 min | `electron/services/agent-usage-refresh-scheduler.test.cjs` |
 | `Reconectar` (button) | clique | agent-usage:reconnect: abandona a rodada em andamento (aborta as consultas dela, que encerram o PTY do Claude e o app-server do Codex) e refaz do zero; só a resposta do pedido mais recente é aplicada no painel | ok: false ou exceção viram statusMessage âmbar, como no Atualizar; nunca desabilitado — é durante uma coleta presa que ele serve | `electron/services/agent-usage-service.test.cjs` |
 | `Abrir terminal da conta` (button) | clique | Abre no canvas um terminal que roda `claude auth login` ou `codex login` (getAgentUsageLoginTerminal), com launchMode "launcher" para o contexto do canvas não ser digitado dentro do login; conta com pasta de login própria leva o accountId, a "Conta desta máquina" usa o login do sistema; o login é feito pela pessoa, o app não o automatiza (desabilitado: só aparece na conta sem sessão, e só se o painel recebeu onAddTerminal) | a recusa do processo principal (pty:spawn) aparece no próprio terminal; só existe para Claude e Codex com availability.state "auth-required" | `src/features/shared/agent-usage/agent-usage.test.ts` |
 | `Ligar coleta do rate limit` (button) | clique | agent-usage:enable-claude-statusline (ou disable, quando já instalada): grava ou remove a statusLine do app em ~/.claude/settings.json, com backup da anterior, e recarrega o painel (desabilitado: busy; só existe no cartão do Claude, com settings legível e sem statusLine alheia) | erro engolido: a mensagem de falha do main nunca aparece; se o handler lançar, o resultado de erro vira o estado e o botão some atrás de "Não foi possível ler ~/.claude/settings.json" (AgentUsagePanel.tsx:213-227) | — |
@@ -2805,7 +2800,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 ### Avisos de hardware (volta da placa de vídeo e sugestão do Modo Performance)
 
 - **ID:** `hardware-avisos` · **Dono:** `src/features/shared/hardware/HardwareNotices.tsx`
-- **Persistência:** localStorage felixo-ai-core.performance-suggestion (resposta à sugestão); localStorage felixo-ai-core.performance-mode (Modo Performance ligado); processo principal: userData/gpu-preference.json (fallback reconhecido)
+- **Persistência:** localStorage felixo-ai-core.performance-suggestion (resposta à sugestão); localStorage felixo-ai-core.performance-mode.v1 (preferência do Modo Performance); migração da chave antiga felixo-ai-core.performance-mode; processo principal: userData/gpu-preference.json (fallback reconhecido)
 - **IPC:** `hardware:get-profile`, `graphics:get-config`, `graphics:gpu-preference-changed`, `graphics:acknowledge-gpu-fallback`
 - **Depende de:** `useGpuStatus (gpu-status-store)`, `usePerformanceMode (PerformanceModeContext)`, `shouldSuggestPerformanceMode`, `loadSuggestionAnswered`, `saveSuggestionAnswered`, `NoticeToast`
 - **Sobreposição:** Wrapper fixed inset-x-0 bottom-4 z 50 com pointer-events none; a caixa (w-[22rem], pointer-events auto) é [data-felixo-tour-avoid] e o card desvia dela (SB1 confere que os botões continuam clicáveis). Montado no App: vale no canvas e no chat.
@@ -2821,7 +2816,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Controle | Gatilho | Efeito | Falha conhecida | Teste |
 | --- | --- | --- | --- | --- |
-| `onClick={onPrimary}` (button) | clique | Ligar Modo Performance: saveSuggestionAnswered (localStorage felixo-ai-core.performance-suggestion = answered) e setPerformanceMode(true); o PerformanceModeProvider grava felixo-ai-core.performance-mode = on e põe data-performance-mode="on" no <html>; o aviso some. (desabilitado: só existe na sugestão do Modo Performance (o aviso da GPU não tem ação principal)) | Sem localStorage a resposta e o modo valem só nesta sessão (catch silencioso intencional). | — |
+| `onClick={onPrimary}` (button) | clique | Ligar Modo Performance: saveSuggestionAnswered (localStorage felixo-ai-core.performance-suggestion = answered) e setPerformanceMode(true); o PerformanceModeProvider grava felixo-ai-core.performance-mode.v1 = on e põe data-performance-mode="on" no <html>; o aviso some. A chave antiga felixo-ai-core.performance-mode é migrada na primeira leitura. (desabilitado: só existe na sugestão do Modo Performance (o aviso da GPU não tem ação principal)) | Sem localStorage a resposta e o modo valem só nesta sessão (catch silencioso intencional). | — |
 | `{secondaryLabel}` (button) | clique | Placa de vídeo, "Entendi": acknowledgeGpuFallback → graphics:acknowledge-gpu-fallback zera o fallback em userData/gpu-preference.json e o aviso some de todas as telas (Configurações inclusive). Sugestão, "Agora não": só grava a resposta; o modo continua desligado. | Erro engolido na placa de vídeo: se a IPC falhar, o finally some com o aviso mesmo assim, a rejeição de void acknowledgeGpuFallback() vira unhandledrejection só no QA Logger, o fallback continua gravado e o aviso volta na próxima abertura. | `scripts/canvas-smoke-onboarding.cjs` → `sb2` |
 | `aria-label={dismissLabel}` (button) | clique | × com rótulo próprio ("Dispensar aviso da placa de vídeo" ou "Dispensar sugestão do Modo Performance"): mesmo onSecondary do botão secundário. | A mesma do botão secundário (na placa de vídeo, rejeição solta e aviso que volta). | — |
 
@@ -2894,7 +2889,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3e691f95-497e-810e-a39b-f26d90a38c8e` — 3 lacunas
 - `3e691f95-497e-8116-8cbd-fad2823ce1da` — 1 lacuna
 - `3e691f95-497e-815c-a129-f4d2d6405cbc` — 2 lacunas
-- `3e691f95-497e-816a-a1c9-c0b3b37c8046` — 2 lacunas
 - `3e691f95-497e-81c8-ba05-c3074dc036f0` — 2 lacunas
 - `3e791f95-497e-81bd-8e8c-de6f9e16cec5` — 2 lacunas
 - `3e891f95-497e-8148-b00e-f27e78767664` — 2 lacunas

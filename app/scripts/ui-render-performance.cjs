@@ -5,9 +5,8 @@
  * Mede o custo de renderização da UI real do app com o Modo Performance
  * desligado e ligado, na GPU escolhida.
  *
- * Nenhuma das outras bancadas liga o Modo Performance: `canvas-connection-performance`
- * e `terminal-output-performance` comparam estruturas de dados, não o efeito
- * visual do toggle. Esta sobe o app de verdade (`electron .`, com o `dist` de
+ * As bancadas de conexões e logs comparam seu modo de dados separadamente do
+ * eixo visual. Esta sobe o app de verdade (`electron .`, com o `dist` de
  * produção, sem Vite), popula o canvas pela ponte `window.felixo.canvas`,
  * alterna o modo pelo mesmo `localStorage` que a tela de Configurações grava
  * e repete a MESMA interação (zoom e pan no canvas, abrir e fechar grupos da
@@ -52,7 +51,7 @@ const DEFAULT_NODES = 48
 const MAX_NODES = 1_000
 const DEFAULT_LAUNCH_TIMEOUT_MS = 60_000
 const JANK_FRAME_MS = 25
-const PERFORMANCE_MODE_STORAGE_KEY = 'felixo-ai-core.performance-mode'
+const PERFORMANCE_MODE_STORAGE_KEY = 'felixo-ai-core.performance-mode.v1'
 const MODES = ['off', 'on']
 // Grupos da sidebar que a interação abre e fecha. O botão Ajuda também tem
 // `aria-expanded` (abre um menu), mas não é grupo: fica de fora para a
@@ -90,6 +89,7 @@ function parseArgs(argv) {
     rounds: DEFAULT_ROUNDS,
     durationMs: DEFAULT_DURATION_MS,
     nodes: DEFAULT_NODES,
+    cpuThrottle: 1,
     appDir: path.resolve(__dirname, '..'),
     out: null,
     launchTimeoutMs: DEFAULT_LAUNCH_TIMEOUT_MS,
@@ -128,6 +128,9 @@ function parseArgs(argv) {
         break
       case '--nodes':
         options.nodes = parseBoundedInteger(value, DEFAULT_NODES, 4, MAX_NODES, 'nodes')
+        break
+      case '--cpu-throttle':
+        options.cpuThrottle = parseBoundedInteger(value, 1, 1, 16, 'cpu-throttle')
         break
       case '--app-dir':
         if (!value) throw new Error('--app-dir precisa de um caminho.')
@@ -469,6 +472,193 @@ async function waitHydrated(page, nodeIds, timeoutMs) {
   )
 }
 
+function assertPerformanceModeSurfaces(state, mode, onboarding = false) {
+  if (state.performanceMode !== mode) {
+    throw new Error(`[ui-render] o app não aplicou o modo ${mode} ao documento.`)
+  }
+  const expectedVisible = mode === 'off'
+  if (state.minimapVisible !== expectedVisible) {
+    throw new Error(`[ui-render] minimapa incorreto no modo ${mode}.`)
+  }
+  if (state.ambientStarfieldVisible !== expectedVisible) {
+    throw new Error(`[ui-render] céu animado incorreto no modo ${mode}.`)
+  }
+  if (state.onboardingVisible !== onboarding || state.onboardingRingVisible !== onboarding) {
+    throw new Error(`[ui-render] superfícies do tutorial incorretas no modo ${mode}.`)
+  }
+}
+
+async function waitForPerformanceMode(page, mode, timeoutMs) {
+  await page.waitForFunction(
+    (expected) => document.documentElement.getAttribute('data-performance-mode') === expected,
+    mode,
+    { timeout: timeoutMs },
+  )
+}
+
+/** Exercises the real Settings switch, persistence, and a live canvas drag. */
+async function verifyModeSettingsAndActiveDrag(page, nodeIds, timeoutMs) {
+  await page.reload()
+  await waitHydrated(page, nodeIds, timeoutMs)
+  const settingsButton = page.getByRole('button', { name: 'Configurações', exact: true })
+  const modeSwitch = page.getByRole('switch', { name: 'Modo Performance', exact: true })
+  await settingsButton.waitFor({ state: 'visible', timeout: timeoutMs })
+  if (await modeSwitch.count() === 0) await settingsButton.click()
+  await modeSwitch.waitFor({ state: 'visible', timeout: timeoutMs })
+
+  const accessibleSwitch =
+    (await modeSwitch.getAttribute('role')) === 'switch' &&
+    (await modeSwitch.getAttribute('aria-label')) === 'Modo Performance'
+  const summaryVisible = await page.getByText(/Desliga o céu animado do canvas/).isVisible()
+  if (!accessibleSwitch || !summaryVisible) {
+    throw new Error('[ui-render] o toggle ou o resumo do Modo Performance não está acessível.')
+  }
+
+  if ((await modeSwitch.getAttribute('aria-checked')) !== 'true') {
+    await modeSwitch.click()
+  }
+  await waitForPerformanceMode(page, 'on', timeoutMs)
+  await page.getByText(/Ativado\s+—\s+já aplicado/).waitFor({ state: 'visible', timeout: timeoutMs })
+  await page.waitForFunction(
+    (key) => window.localStorage.getItem(key) === 'on',
+    PERFORMANCE_MODE_STORAGE_KEY,
+    { timeout: timeoutMs },
+  )
+  await page.reload()
+  await waitHydrated(page, nodeIds, timeoutMs)
+  await waitForPerformanceMode(page, 'on', timeoutMs)
+  const persistedAfterReload = await page.evaluate(
+    (key) => window.localStorage.getItem(key) === 'on',
+    PERFORMANCE_MODE_STORAGE_KEY,
+  )
+  if (!persistedAfterReload) {
+    throw new Error('[ui-render] a preferência não sobreviveu ao reload do renderer.')
+  }
+
+  const dragTarget = await page.evaluate(() => {
+    const canvas = document.querySelector('.react-flow')
+    if (!canvas) return null
+    for (const node of document.querySelectorAll('.react-flow__node')) {
+      const handle = node.querySelector('.canvas-node-drag')
+      if (!handle) continue
+      const rect = handle.getBoundingClientRect()
+      const startX = rect.left + Math.min(3, rect.width / 5)
+      const startY = rect.top + rect.height / 2
+      const endX = startX + 64
+      const endY = startY + 32
+      if (rect.width < 8 || rect.height < 5 || endX >= innerWidth || endY >= innerHeight) continue
+      const hit = document.elementFromPoint(startX, startY)
+      const endHit = document.elementFromPoint(endX, endY)
+      if (
+        hit?.closest('.canvas-node-drag') &&
+        !hit.closest('.nodrag') &&
+        hit.closest('.react-flow__node') === node &&
+        endHit && canvas.contains(endHit)
+      ) {
+        const nodeRect = node.getBoundingClientRect()
+        return {
+          id: node.getAttribute('data-id'),
+          startX,
+          startY,
+          endX,
+          endY,
+          beforeX: nodeRect.x,
+          beforeY: nodeRect.y,
+        }
+      }
+    }
+    return null
+  })
+  if (!dragTarget?.id) {
+    const debug = await page.evaluate(() => ({
+      viewport: { width: innerWidth, height: innerHeight },
+      canvas: Boolean(document.querySelector('.react-flow')),
+      nodes: [...document.querySelectorAll('.react-flow__node')].slice(0, 5).map((node) => {
+        const handle = node.querySelector('.canvas-node-drag')
+        const rect = handle?.getBoundingClientRect()
+        const x = rect ? rect.left + Math.min(16, rect.width / 3) : -1
+        const y = rect ? rect.top + rect.height / 2 : -1
+        const hit = rect ? document.elementFromPoint(x, y) : null
+        return {
+          id: node.getAttribute('data-id'),
+          rect: rect ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null,
+          hitClass: hit?.className?.toString() ?? null,
+          handle: Boolean(hit?.closest('.canvas-node-drag')),
+          nodrag: Boolean(hit?.closest('.nodrag')),
+        }
+      }),
+    }))
+    throw new Error(`[ui-render] nenhum bloco visível recebeu o ponteiro para o drag de teste: ${JSON.stringify(debug)}`)
+  }
+  const node = page.locator(`[data-id="${dragTarget.id}"]`)
+  const startX = dragTarget.startX
+  const startY = dragTarget.startY
+  const endX = dragTarget.endX
+  const endY = dragTarget.endY
+  await page.mouse.move(startX, startY)
+  await page.mouse.down()
+  try {
+    await page.mouse.move(startX + 20, startY + 10, { steps: 2 })
+    await page.waitForFunction(
+      ({ id, beforeX, beforeY }) => {
+        const activeNode = document.querySelector(`[data-id="${id}"]`)
+        if (!activeNode) return false
+        const rect = activeNode.getBoundingClientRect()
+        return Math.abs(rect.x - beforeX) >= 3 || Math.abs(rect.y - beforeY) >= 3
+      },
+      { id: dragTarget.id, beforeX: dragTarget.beforeX, beforeY: dragTarget.beforeY },
+      { timeout: 5_000 },
+    )
+    await page.evaluate(() => {
+      document.documentElement.setAttribute('data-performance-mode', 'off')
+    })
+    await page.mouse.move(endX, endY, { steps: 6 })
+  } finally {
+    await page.mouse.up()
+  }
+
+  await page.waitForTimeout(150)
+  const after = await node.boundingBox()
+  const dragCompleted = Boolean(
+    after &&
+      (Math.abs(after.x - dragTarget.beforeX) >= 16 ||
+        Math.abs(after.y - dragTarget.beforeY) >= 16),
+  )
+  if (!dragCompleted) {
+    throw new Error('[ui-render] o drag ativo não terminou após trocar o Modo Performance.')
+  }
+
+  if (await modeSwitch.count() === 0) await settingsButton.click()
+  await modeSwitch.waitFor({ state: 'visible', timeout: timeoutMs })
+  const performanceModeStillChecked = (await modeSwitch.getAttribute('aria-checked')) === 'true'
+  if (!performanceModeStillChecked) {
+    throw new Error('[ui-render] o estado do toggle mudou fora da interação ativa.')
+  }
+  await modeSwitch.click()
+  await waitForPerformanceMode(page, 'off', timeoutMs)
+  const normalRestored = (await modeSwitch.getAttribute('aria-checked')) === 'false'
+  await page.waitForFunction(
+    (key) => window.localStorage.getItem(key) === 'off',
+    PERFORMANCE_MODE_STORAGE_KEY,
+    { timeout: timeoutMs },
+  )
+  await page.reload()
+  await waitHydrated(page, nodeIds, timeoutMs)
+  await waitForPerformanceMode(page, 'off', timeoutMs)
+  if (!normalRestored) {
+    throw new Error('[ui-render] o toggle não restaurou o modo Normal depois do drag.')
+  }
+
+  return {
+    settingsSwitchAccessible: accessibleSwitch,
+    settingsSummaryVisible: summaryVisible,
+    performanceModePersistedAfterReload: persistedAfterReload,
+    modeAttributeChangedDuringActiveDrag: true,
+    dragCompleted,
+    normalRestoredAfterReload: normalRestored,
+  }
+}
+
 async function readGpuInfo(browser) {
   const session = await browser.newBrowserCDPSession()
   try {
@@ -567,10 +757,11 @@ async function interact(page, durationMs, { tour = false } = {}) {
   const centerX = pane ? pane.x + pane.width / 2 : 600
   const centerY = pane ? pane.y + pane.height / 2 : 400
   const headings = page.locator(SIDEBAR_GROUPS_SELECTOR)
+  const dragHandle = page.locator('[data-id="bench-nota-1"] .canvas-node-drag')
   const startedAt = Date.now()
   let step = 0
   while (Date.now() - startedAt < durationMs) {
-    const phase = step % 8
+    const phase = step % 10
     if (phase < 2) {
       await page.mouse.move(centerX, centerY)
       await page.mouse.wheel(0, phase === 0 ? -240 : 240)
@@ -588,10 +779,20 @@ async function interact(page, durationMs, { tour = false } = {}) {
         if (covered) await heading.evaluate((element) => element.click()).catch(() => {})
         else await heading.click({ timeout: 2_000 }).catch(() => {})
       }
-    } else {
+    } else if (phase < 8) {
       const node = page.locator('.react-flow__node').nth(step % 6)
       const box = await node.boundingBox().catch(() => null)
       if (box) await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 4 })
+    } else {
+      const box = await dragHandle.boundingBox().catch(() => null)
+      if (box) {
+        const x = box.x + box.width / 2
+        const y = box.y + box.height / 2
+        await page.mouse.move(x, y)
+        await page.mouse.down()
+        await page.mouse.move(x + 48, y + 24, { steps: 6 })
+        await page.mouse.up()
+      }
     }
     step += 1
     await page.waitForTimeout(60)
@@ -634,9 +835,28 @@ async function prepareRound(page, { mode, nodeIds, options }) {
   await page.reload()
   await waitHydrated(page, nodeIds, options.launchTimeoutMs)
   if (options.onboarding) await openOnboardingTour(page, options.launchTimeoutMs)
+  const surfaces = await page.evaluate((cardSelector) => {
+    const card = document.querySelector(cardSelector)
+    const ring = document.querySelector('.felixo-onboarding-ring')
+    const visible = (element) => Boolean(
+      element &&
+      getComputedStyle(element).display !== 'none' &&
+      getComputedStyle(element).visibility !== 'hidden' &&
+      element.getBoundingClientRect().width > 0,
+    )
+    return {
+      performanceMode: document.documentElement.getAttribute('data-performance-mode'),
+      minimapVisible: visible(document.querySelector('.felixo-canvas-minimap')),
+      ambientStarfieldVisible: visible(document.querySelector('.felixo-ambient-starfield')),
+      onboardingVisible: visible(card),
+      onboardingRingVisible: visible(ring),
+    }
+  }, ONBOARDING_CARD_SELECTOR)
+  assertPerformanceModeSurfaces(surfaces, mode, options.onboarding)
+  return surfaces
 }
 
-async function measureRun(page, cdp, { mode, round, durationMs, tour = false }) {
+async function measureRun(page, cdp, { mode, round, durationMs, tour = false, surfaceState }) {
   const { events, actionResult } = await collectTrace(cdp, () => interact(page, durationMs, { tour }))
   const rendererPid = rendererPidFromTrace(events)
   const frames = frameStats(actionResult.intervals, durationMs)
@@ -644,6 +864,7 @@ async function measureRun(page, cdp, { mode, round, durationMs, tour = false }) 
   return {
     round,
     mode,
+    surfaceState,
     frames,
     trace,
     // O modo que desenha mais quadros soma mais paint no total só por isso;
@@ -671,6 +892,7 @@ async function run(options) {
   const launchStartedAt = performance.now()
   const app = await launchApp(options)
   let browser
+  let cpuSession
   try {
     browser = await chromium.connectOverCDP(`http://127.0.0.1:${app.port}`)
     const page = await findAppPage(browser, options.launchTimeoutMs)
@@ -678,9 +900,17 @@ async function run(options) {
     const aberturaMs = Number((performance.now() - launchStartedAt).toFixed(1))
     console.log(`[ui-render] abertura até o canvas hidratado: ${aberturaMs} ms${options.onboarding ? ' (rodadas com o tutorial aberto)' : ''}`)
     await populateCanvas(page, nodes, edges)
+    cpuSession = await page.context().newCDPSession(page)
+    await cpuSession.send('Emulation.setCPUThrottlingRate', { rate: options.cpuThrottle })
     const gpu = await readGpuInfo(browser)
     console.log(`[ui-render] GPU: ${gpu.renderer ?? 'desconhecida'} (${gpu.vendor ?? 's/ fornecedor'})`)
     if (options.render === 'gpu') assertRequestedGpu(options.gpu, gpu)
+    const modeToggleCoverage = await verifyModeSettingsAndActiveDrag(
+      page,
+      nodeIds,
+      options.launchTimeoutMs,
+    )
+    await populateCanvas(page, nodes, edges)
     // O domínio Tracing é do alvo browser, não da página: o trace sai de todos
     // os processos e `rendererPidFromTrace` isola o renderer da janela medida.
     const cdp = await browser.newBrowserCDPSession()
@@ -696,13 +926,9 @@ async function run(options) {
     }
     const runs = []
     for (const { round, mode } of roundOrder(options.rounds)) {
-      await prepareRound(page, { mode, nodeIds, options })
-      const applied = await page.evaluate(() => document.documentElement.getAttribute('data-performance-mode'))
-      if ((applied === 'on') !== (mode === 'on')) {
-        throw new Error(`[ui-render] o app não aplicou o modo ${mode} (data-performance-mode=${applied}).`)
-      }
+      const surfaceState = await prepareRound(page, { mode, nodeIds, options })
       await page.waitForTimeout(1_500)
-      const measured = await measureRun(page, cdp, { mode, round, durationMs: options.durationMs, tour: options.onboarding })
+      const measured = await measureRun(page, cdp, { mode, round, durationMs: options.durationMs, tour: options.onboarding, surfaceState })
       if (options.onboarding) {
         // A interação nunca fecha o tour (ele não é modal); se fechou, a rodada não mediu o que diz.
         measured.tutorialAberto = (await page.locator(ONBOARDING_CARD_SELECTOR).count()) === 1
@@ -723,8 +949,9 @@ async function run(options) {
       render: options.render,
       angle: options.angle,
       gpu,
-      config: { rounds: options.rounds, warmup: options.warmup, durationMs: options.durationMs, nodes: nodes.length, edges: edges.length, onboarding: options.onboarding },
+      config: { rounds: options.rounds, warmup: options.warmup, durationMs: options.durationMs, nodes: nodes.length, edges: edges.length, onboarding: options.onboarding, cpuThrottle: options.cpuThrottle },
       aberturaMs,
+      modeToggleCoverage,
       runs,
       summary: summarizeRuns(runs),
     }
@@ -737,6 +964,7 @@ async function run(options) {
     }
     return report
   } finally {
+    await cpuSession?.detach().catch(() => {})
     await browser?.close().catch(() => {})
     stopApp(app)
   }
@@ -754,6 +982,8 @@ module.exports = {
   isCoveredByTour,
   SIDEBAR_GROUPS_SELECTOR,
   assertRequestedGpu,
+  assertPerformanceModeSurfaces,
+  verifyModeSettingsAndActiveDrag,
   buildFixtureEdges,
   buildFixtureNodes,
   chromiumArgs,

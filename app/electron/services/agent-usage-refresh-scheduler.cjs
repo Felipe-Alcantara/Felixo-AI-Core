@@ -7,6 +7,7 @@ const { getRateLimitDetails, parseRetryAfterMs } = require('./agent-usage-backof
 const REFRESH_INTERVAL_MS = 30_000
 const IDLE_AFTER_SECONDS = 5 * 60
 const IDLE_INTERVAL_MS = 5 * 60_000
+const PERFORMANCE_MODE_INTERVAL_MS = 5 * 60_000
 const BATTERY_INTERVAL_MS = 2 * 60_000
 const FAILURE_BASE_MS = 60_000
 const RATE_LIMIT_MIN_MS = 5 * 60_000
@@ -37,6 +38,7 @@ function createAgentUsageRefreshScheduler({
   intervalMs = REFRESH_INTERVAL_MS,
   idleAfterSeconds = IDLE_AFTER_SECONDS,
   idleIntervalMs = IDLE_INTERVAL_MS,
+  performanceModeIntervalMs = PERFORMANCE_MODE_INTERVAL_MS,
   batteryIntervalMs = BATTERY_INTERVAL_MS,
   maxConcurrent = REFRESH_MAX_CONCURRENCY,
 } = {}) {
@@ -74,7 +76,15 @@ function createAgentUsageRefreshScheduler({
   function getIntervalMs() {
     const idleSeconds = readIdleSeconds()
     const onBattery = readOnBattery()
-    let delay = intervalMs
+    const hasNormalConsumer = [...consumers.values()].some(
+      (state) => state.visible && !state.performanceMode,
+    )
+    const hasPerformanceModeConsumer = [...consumers.values()].some(
+      (state) => state.visible && state.performanceMode,
+    )
+    let delay = hasNormalConsumer || !hasPerformanceModeConsumer
+      ? intervalMs
+      : performanceModeIntervalMs
 
     if (idleSeconds >= idleAfterSeconds) {
       delay = Math.max(delay, idleIntervalMs)
@@ -88,6 +98,17 @@ function createAgentUsageRefreshScheduler({
 
   function getScheduleDelayMs() {
     const delay = getIntervalMs()
+    const hasNormalConsumer = [...consumers.values()].some(
+      (state) => state.visible && !state.performanceMode,
+    )
+    const hasPerformanceModeConsumer = [...consumers.values()].some(
+      (state) => state.visible && state.performanceMode,
+    )
+    // In Performance Mode, avoid waking every 30 s just to re-check a panel
+    // whose automatic refresh is intentionally less frequent.
+    if (!hasNormalConsumer && hasPerformanceModeConsumer) {
+      return delay
+    }
     // Electron does not expose a user-activity event on every platform. While
     // idle on AC, wake the single timer every base interval to notice activity;
     // account backoff still prevents provider queries until the idle cadence.
@@ -115,9 +136,7 @@ function createAgentUsageRefreshScheduler({
       return false
     }
 
-    return [...consumers.values()].some(
-      (state) => state.visible && !state.performanceMode,
-    )
+    return [...consumers.values()].some((state) => state.visible)
   }
 
   function clearScheduledTimer() {
@@ -689,6 +708,7 @@ module.exports = {
   IDLE_AFTER_SECONDS,
   IDLE_INTERVAL_MS,
   MAX_BACKOFF_MS,
+  PERFORMANCE_MODE_INTERVAL_MS,
   RATE_LIMIT_MIN_MS,
   REFRESH_INTERVAL_MS,
   buildScheduledCandidates,

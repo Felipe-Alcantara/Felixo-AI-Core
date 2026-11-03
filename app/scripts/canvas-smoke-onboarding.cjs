@@ -61,7 +61,7 @@ const CHAVE_SESSAO = 'felixo:onboarding:sessao'
 const CHAVE_FALHA = 'felixo:onboarding:falha'
 const CHAVE_SIDEBAR = 'felixo:canvas-sidebar-collapsed'
 const CHAVE_TEMA = 'felixo-ai-core.theme'
-const CHAVE_MODO_PERFORMANCE = 'felixo-ai-core.performance-mode'
+const CHAVE_MODO_PERFORMANCE = 'felixo-ai-core.performance-mode.v1'
 /** Decisões automáticas que põem algo na tela; as demais deixam o canvas quieto. */
 const DECISOES_QUE_ABREM = new Set(['aberto', 'retomada', 'anunciado'])
 /** A ação da Ajuda que abre o tutorial do início, na ordem de preferência. */

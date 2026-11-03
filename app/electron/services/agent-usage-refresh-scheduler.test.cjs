@@ -7,6 +7,7 @@ const {
   FAILURE_BASE_MS,
   IDLE_INTERVAL_MS,
   MAX_BACKOFF_MS,
+  PERFORMANCE_MODE_INTERVAL_MS,
   RATE_LIMIT_MIN_MS,
   REFRESH_INTERVAL_MS,
   buildScheduledCandidates,
@@ -108,7 +109,11 @@ test('scheduler agenda só uma consulta quando uma tela visível está ativa', (
   assert.equal(clock.timers.size, 0)
 
   scheduler.setConsumerState('painel', { visible: true, performanceMode: true })
-  assert.equal(clock.timers.size, 0)
+  assert.equal(clock.timers.size, 1)
+  assert.equal(
+    [...clock.timers.values()][0].at,
+    clock.now() + PERFORMANCE_MODE_INTERVAL_MS,
+  )
 
   scheduler.setConsumerState('painel', { visible: true, performanceMode: false })
   assert.equal(clock.timers.size, 1)
@@ -116,6 +121,62 @@ test('scheduler agenda só uma consulta quando uma tela visível está ativa', (
 
   scheduler.setConsumerState('painel', { visible: false, performanceMode: false })
   assert.equal(clock.timers.size, 0)
+  scheduler.stop()
+})
+
+test('Modo Performance mantém cadência normal quando outro consumidor está no modo normal', () => {
+  const clock = fakeClock()
+  const scheduler = createAgentUsageRefreshScheduler({
+    service: { list: async () => dashboard(), refreshAccount: async () => dashboard() },
+    now: clock.now,
+    setTimeoutFn: clock.setTimeout,
+    clearTimeoutFn: clock.clearTimeout,
+  })
+
+  scheduler.setConsumerState('painel-performance', { visible: true, performanceMode: true })
+  scheduler.setConsumerState('modal-normal', { visible: true, performanceMode: false })
+  assert.equal([...clock.timers.values()][0].at, clock.now() + REFRESH_INTERVAL_MS)
+  scheduler.stop()
+})
+
+test('trocar para Modo Performance durante refresh ativo preserva a consulta e espaça a próxima', async () => {
+  const clock = fakeClock()
+  const onlyAccount = account({
+    id: 'codex-profile',
+    ownLogin: true,
+    status: 'current',
+    measuredAt: clock.now(),
+  })
+  let finishRefresh
+  let refreshSignal
+  let refreshCalls = 0
+  const scheduler = createAgentUsageRefreshScheduler({
+    service: {
+      list: async () => dashboard({ accounts: [onlyAccount] }),
+      refreshAccount: (_id, { signal }) => new Promise((resolve) => {
+        refreshCalls += 1
+        refreshSignal = signal
+        finishRefresh = resolve
+      }),
+    },
+    now: clock.now,
+    setTimeoutFn: clock.setTimeout,
+    clearTimeoutFn: clock.clearTimeout,
+  })
+
+  scheduler.setConsumerState('painel', { visible: true, performanceMode: false })
+  clock.advance(REFRESH_INTERVAL_MS)
+  await flushAsyncWork()
+  assert.equal(refreshCalls, 1)
+  assert.equal(refreshSignal.aborted, false)
+
+  scheduler.setConsumerState('painel', { visible: true, performanceMode: true })
+  assert.equal(refreshSignal.aborted, false)
+  finishRefresh(dashboard({ accounts: [onlyAccount] }))
+  await flushAsyncWork()
+
+  assert.equal(refreshCalls, 1)
+  assert.equal([...clock.timers.values()][0].at, clock.now() + PERFORMANCE_MODE_INTERVAL_MS)
   scheduler.stop()
 })
 
@@ -568,5 +629,26 @@ test('consultas manuais simultâneas mantêm o scheduler pausado até a última 
 
   scheduler.manualRefreshFinished(null, { startedAt: secondStartedAt })
   assert.equal(clock.timers.size, 1)
+  scheduler.stop()
+})
+
+test('refresh manual continua disponível e a cadência espaçada volta no Modo Performance', async () => {
+  const clock = fakeClock()
+  const scheduler = createAgentUsageRefreshScheduler({
+    service: { list: async () => dashboard(), refreshAccount: async () => dashboard() },
+    now: clock.now,
+    setTimeoutFn: clock.setTimeout,
+    clearTimeoutFn: clock.clearTimeout,
+  })
+
+  scheduler.setConsumerState('painel', { visible: true, performanceMode: true })
+  const startedAt = await scheduler.manualRefreshStarted()
+  assert.equal(clock.timers.size, 0)
+  scheduler.manualRefreshFinished(dashboard(), { startedAt })
+  assert.equal(clock.timers.size, 1)
+  assert.equal(
+    [...clock.timers.values()][0].at,
+    clock.now() + PERFORMANCE_MODE_INTERVAL_MS,
+  )
   scheduler.stop()
 })

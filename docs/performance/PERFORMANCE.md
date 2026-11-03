@@ -175,6 +175,11 @@ tanto no canvas quanto no chat), persistido em `localStorage` e aplicado via
 `data-performance-mode` no elemento raiz — sem reload, sem reiniciar
 terminal.
 
+A preferência atual usa `felixo-ai-core.performance-mode.v1`. Na primeira
+leitura, `on` ou `off` da chave antiga `felixo-ai-core.performance-mode` é
+migrado sem mudar a escolha; sem um valor válido, Normal continua sendo o
+padrão.
+
 Quando ligado, corta apenas decoração e coreografia, nunca dado ou contrato:
 
 - O céu animado do canvas (`CanvasAmbientLayer`) não monta: ~1.280 sombras de
@@ -185,6 +190,9 @@ Quando ligado, corta apenas decoração e coreografia, nunca dado ou contrato:
   já aplicava, agora também disponível por escolha manual (`index.css`, blocos
   logo após cada `@media (prefers-reduced-motion: reduce)`).
 - `useDeferredExpansionPanel` para de esperar uma animação que não vai rodar.
+- O painel **Limites e uso** permanece visível; a atualização automática passa
+  de 30 segundos para 5 minutos. O botão **Atualizar** continua disponível, e
+  uma consulta já iniciada não é cancelada quando o modo muda.
 
 Fora do escopo desta passada, de propósito: scrollback do xterm, política de
 batching de saída do terminal e modo gráfico (GPU/software, que já tem seu
@@ -202,6 +210,29 @@ $env:VITE_DEV_SERVER_URL='http://127.0.0.1:5173'
 npx electron scripts/canvas-connection-performance.cjs --sizes=100,500 --scenarios=render-inicial,drag --iterations=2 --out=../docs/performance/after-canvas-dev.json
 npx electron scripts/terminal-output-performance.cjs --scenarios=curta --iterations=2 --out=../docs/performance/after-terminal-output-dev.json
 ```
+
+As duas bancadas aceitam `--performance-modes=normal,performance` e usam essa
+matriz por padrão, cruzada com o modo de dados de cada uma. O benchmark de
+conexões verifica o atributo visual e o minimapa no fixture React Flow; o de
+saída do terminal verifica o painel, a transição de largura e os logs durante a
+troca de modo. Eles isolam subsistemas e não substituem
+`npm run benchmark:ui-render`, que mede o app completo. Para simular uma CPU
+mais lenta com o app real e o tutorial aberto:
+
+```powershell
+npx vite build
+node scripts/ui-render-performance.cjs --gpu=padrao --cpu-throttle=4 --onboarding --rounds=3 --out=../docs/performance/ui-render-throttled.json
+```
+
+O throttling usa CDP e é uma simulação; ele não substitui uma medição em um
+notebook físico de referência. Os harnesses também não comparam por si só a
+versão anterior ao commit `44f8cec`.
+
+A execução local de 03/11/2026 (Windows x64, AMD Radeon integrada, CDP throttle
+4×, 48 blocos, tutorial aberto, 3 rodadas de 3 s) mediu 16,33 FPS e quadro p95
+de 133,1 ms em Normal; em Performance, 35,33 FPS e 83,1 ms. O estilo por quadro
+caiu de 22,97 para 1,512 ms. A configuração completa e os limites da medição
+estão em [Política de performance](../projeto/POLITICA-PERFORMANCE.md).
 
 Artefatos desta auditoria:
 

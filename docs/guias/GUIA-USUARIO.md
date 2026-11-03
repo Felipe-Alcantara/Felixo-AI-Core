@@ -430,7 +430,9 @@ as transições de painéis, sem mudar nada de lugar. Em computadores com até 4
 processadores lógicos, o Felixo sugere ligá-lo uma vez (**Ligar o Modo
 Performance?**): o modo só liga se você clicar em **Ligar Modo Performance**, e
 **Agora não** faz a sugestão não aparecer de novo. Dá para ligar ou desligar
-depois nas Configurações.
+depois nas Configurações. O painel **Limites e uso** continua visível; a
+atualização automática passa para 5 minutos e o botão **Atualizar** continua
+disponível.
 
 ### Placa de vídeo (opção avançada)
 

@@ -52,17 +52,20 @@ completa tiver 5 minutos ou mais (ou se ainda não houve coleta desde que o app
 abriu). Abaixo disso, a coleta recente vale para aquela abertura, e o selo
 **ao vivo** mostra a hora dela: abrir e fechar o painel várias vezes não refaz
 a consulta de todas as contas. O botão **Atualizar** sempre repete a consulta
-completa. Enquanto o painel estiver visível e o Modo Performance desligado, um
-scheduler único no processo principal inicia uma rodada a cada ~30 segundos e
-consulta até quatro contas ao mesmo tempo, priorizando sessões abertas e leituras
-mais antigas. Nessa cadência, o Codex consulta só os limites pelo app-server e o
-Openia executa `statusline`; o Claude recebe atualizações da status line local
+completa. Enquanto o painel estiver visível, um scheduler único no processo
+principal inicia rodadas a cada ~30 segundos no modo Normal e a cada 5 minutos
+no Modo Performance. Ele consulta até quatro contas ao mesmo tempo, priorizando
+sessões abertas e leituras mais antigas. Nessa cadência, o Codex consulta só os
+limites pelo app-server e o Openia executa `statusline`; o Claude recebe atualizações da status line local
 pelo watcher, sem abrir PTY, e o Gemini fica fora por depender de uma sessão
 interativa. Assim, a atualização automática evita as fontes lentas ou sem quota
 consultável fora da sessão. Em ociosidade prolongada (5 minutos) ou usando
 bateria, a frequência cai para no máximo uma consulta por conta a cada 5 ou 2
-minutos, respectivamente, e a concorrência cai para duas. O scheduler pausa ao
-ocultar a janela, ativar o Modo Performance ou suspender o sistema. Uma falha
+minutos, respectivamente, e a concorrência cai para duas. A cadência de 5 minutos
+do Modo Performance permanece igual em atividade, ociosidade e bateria. O
+scheduler pausa ao ocultar a janela ou suspender o sistema, mas não interrompe
+uma consulta apenas por ligar o Modo Performance. O botão **Atualizar** continua
+disponível nesse modo. Uma falha
 aumenta o intervalo daquela conta até 15 minutos; para HTTP 429, respeita
 `Retry-After` com mínimo de 5 minutos, e conta sem autenticação tenta de novo
 após 15 minutos. O botão **Atualizar** não espera o backoff.

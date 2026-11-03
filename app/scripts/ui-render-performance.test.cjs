@@ -11,6 +11,8 @@ test('argumentos padrão medem a GPU padrão com três rodadas', () => {
   assert.equal(options.render, 'gpu')
   assert.equal(options.rounds, 3)
   assert.equal(options.warmup, 1)
+  assert.equal(options.cpuThrottle, 1)
+  assert.equal(bench.parseArgs(['--cpu-throttle=4']).cpuThrottle, 4)
   assert.equal(bench.parseArgs(['--warmup=0']).warmup, 0)
   assert.equal(options.appDir, path.resolve(__dirname, '..'))
 })
@@ -21,6 +23,8 @@ test('argumentos inválidos falham com mensagem que diz o formato certo', () => 
   assert.throws(() => bench.parseArgs(['--rounds=0']), /entre 1 e 10/)
   assert.throws(() => bench.parseArgs(['--warmup=6']), /entre 0 e 5/)
   assert.throws(() => bench.parseArgs(['--nodes=1001']), /entre 4 e 1000/)
+  assert.throws(() => bench.parseArgs(['--cpu-throttle=0']), /entre 1 e 16/)
+  assert.throws(() => bench.parseArgs(['--cpu-throttle=17']), /entre 1 e 16/)
   assert.equal(bench.parseArgs(['--nodes=1000']).nodes, 1000)
   assert.throws(() => bench.parseArgs(['--desconhecido']), /Argumento desconhecido/)
   assert.throws(() => bench.parseArgs(['--onboarding=sim']), /não recebe valor/)
@@ -135,6 +139,27 @@ test('a medição falha se a GPU que renderizou não é a pedida', () => {
 test('--onboarding abre o tutorial antes das rodadas; sem a flag o tour fica fechado', () => {
   assert.equal(bench.parseArgs([]).onboarding, false)
   assert.equal(bench.parseArgs(['--onboarding']).onboarding, true)
+})
+
+test('o app real mantém minimapa, céu e observadores do tutorial de acordo com o modo', () => {
+  const surfaces = (mode, onboarding) => ({
+    performanceMode: mode,
+    minimapVisible: mode === 'off',
+    ambientStarfieldVisible: mode === 'off',
+    onboardingVisible: onboarding,
+    onboardingRingVisible: onboarding,
+  })
+
+  assert.doesNotThrow(() => bench.assertPerformanceModeSurfaces(surfaces('off', true), 'off', true))
+  assert.doesNotThrow(() => bench.assertPerformanceModeSurfaces(surfaces('on', true), 'on', true))
+  assert.throws(
+    () => bench.assertPerformanceModeSurfaces({ ...surfaces('on', true), minimapVisible: true }, 'on', true),
+    /minimapa incorreto/,
+  )
+  assert.throws(
+    () => bench.assertPerformanceModeSurfaces(surfaces('on', false), 'on', true),
+    /superfícies do tutorial incorretas/,
+  )
 })
 
 test('a interação só alterna grupos da sidebar: o botão Ajuda fica de fora', () => {

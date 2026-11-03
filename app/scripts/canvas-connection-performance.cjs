@@ -25,6 +25,7 @@ const DEFAULT_SCENARIOS = [
   'mudanca-de-dados',
 ]
 const DEFAULT_MODES = ['baseline', 'indexado']
+const DEFAULT_PERFORMANCE_MODES = ['normal', 'performance']
 const DEFAULT_ITERATIONS = 5
 const DEFAULT_TIMEOUT_MS = 120000
 const MAX_ITERATIONS = 20
@@ -65,6 +66,7 @@ function parseArgs(argv = []) {
     sizes: [...DEFAULT_SIZES],
     scenarios: [...DEFAULT_SCENARIOS],
     modes: [...DEFAULT_MODES],
+    performanceModes: [...DEFAULT_PERFORMANCE_MODES],
     iterations: DEFAULT_ITERATIONS,
     timeoutMs: DEFAULT_TIMEOUT_MS,
     outputPath: null,
@@ -98,6 +100,14 @@ function parseArgs(argv = []) {
         argument.slice('--modes='.length),
         DEFAULT_MODES,
         'modes',
+      )
+      continue
+    }
+    if (argument.startsWith('--performance-modes=')) {
+      options.performanceModes = parseList(
+        argument.slice('--performance-modes='.length),
+        DEFAULT_PERFORMANCE_MODES,
+        'performance-modes',
       )
       continue
     }
@@ -161,12 +171,13 @@ function formatReport(report) {
     `Viewport: ${report.renderer?.viewport?.width ?? '?'}×${report.renderer?.viewport?.height ?? '?'}`,
     `Repetições: ${report.method?.iterations ?? '?'}`,
     '',
-    'nós | cenário | baseline p50/p95 | índice p50/p95 | ganho p95 | heap Δ baseline→índice p95',
+    'Modo Performance | nós | cenário | baseline p50/p95 | índice p50/p95 | ganho p95 | heap Δ baseline→índice p95',
   ]
 
   for (const comparison of report.comparisons ?? []) {
     lines.push(
       [
+        comparison.performanceMode,
         comparison.size,
         comparison.scenario,
         `${formatMilliseconds(comparison.baselineProfilerP95Ms === null ? null : findP50(report, comparison, 'baseline'))}/${formatMilliseconds(comparison.baselineProfilerP95Ms)}`,
@@ -188,36 +199,62 @@ function findP50(report, comparison, mode) {
       (result) =>
         result.size === comparison.size &&
         result.scenario === comparison.scenario &&
-        result.mode === mode,
+        result.mode === mode &&
+        result.performanceMode === comparison.performanceMode,
     )?.profiler?.p50 ?? null
   )
 }
 
 function validateReport(report, options) {
   const failures = []
-  const expectedResults = options.sizes.length * options.scenarios.length * options.modes.length
-  if (report.schemaVersion !== 1) failures.push('schemaVersion inesperado')
+  const expectedResults = options.sizes.length * options.scenarios.length * options.modes.length * options.performanceModes.length
+  if (report.schemaVersion !== 2) failures.push('schemaVersion inesperado')
   if ((report.results ?? []).length !== expectedResults) {
     failures.push(`resultados incompletos: esperado=${expectedResults}`)
   }
 
   for (const result of report.results ?? []) {
+    const label = `${result.performanceMode}/${result.mode}/${result.size}/${result.scenario}`
     if (result.repetitions !== options.iterations) {
-      failures.push(
-        `${result.mode}/${result.size}/${result.scenario}: repetições incompletas`,
-      )
+      failures.push(`${label}: repetições incompletas`)
+    }
+    if (!Array.isArray(result.samples) || result.samples.length !== options.iterations) {
+      failures.push(`${label}: amostras incompletas`)
     }
     if (result.profiler?.count !== options.iterations) {
-      failures.push(`${result.mode}/${result.size}/${result.scenario}: Profiler incompleto`)
+      failures.push(`${label}: Profiler incompleto`)
     }
     if (!result.heap?.supported) {
-      failures.push(`${result.mode}/${result.size}/${result.scenario}: heap indisponível`)
+      failures.push(`${label}: heap indisponível`)
     }
     if (!result.heap?.gcAvailable) {
-      failures.push(`${result.mode}/${result.size}/${result.scenario}: GC indisponível`)
+      failures.push(`${label}: GC indisponível`)
     }
     if (result.samples?.some((sample) => sample.domNodeCount <= 0)) {
-      failures.push(`${result.mode}/${result.size}/${result.scenario}: Canvas sem nós no DOM`)
+      failures.push(`${label}: Canvas sem nós no DOM`)
+    }
+    const expectedAttribute = result.performanceMode === 'performance' ? 'performance' : 'normal'
+    if (result.samples?.some((sample) => sample.performanceModeApplied !== expectedAttribute)) {
+      failures.push(`${label}: estado do Modo Performance ausente`)
+    }
+    const expectedMinimap = result.performanceMode === 'normal'
+    if (result.samples?.some((sample) => sample.minimapVisible !== expectedMinimap)) {
+      failures.push(`${label}: visibilidade do minimapa incorreta`)
+    }
+  }
+
+  const resultKeys = new Set((report.results ?? []).map((result) =>
+    `${result.size}|${result.scenario}|${result.mode}|${result.performanceMode}`,
+  ))
+  for (const size of options.sizes) {
+    for (const scenario of options.scenarios) {
+      for (const mode of options.modes) {
+        for (const performanceMode of options.performanceModes) {
+          if (!resultKeys.has(`${size}|${scenario}|${mode}|${performanceMode}`)) {
+            failures.push(`combinação ausente: ${performanceMode}/${mode}/${size}/${scenario}`)
+          }
+        }
+      }
     }
   }
 
@@ -284,6 +321,7 @@ Opções:
   --sizes=100,500,1000             tamanhos do fixture
   --scenarios=render-inicial,drag  cenários a medir
   --modes=baseline,indexado        modos comparados
+  --performance-modes=normal,performance  eixo visual comparado
   --iterations=5                   repetições por combinação (2–${MAX_ITERATIONS})
   --timeout-ms=120000              timeout de cada commit (máx. ${MAX_TIMEOUT_MS})
   --out=arquivo.json               salva o relatório JSON
@@ -485,6 +523,7 @@ if (process.versions.electron && process.type === 'browser') {
 module.exports = {
   DEFAULT_ITERATIONS,
   DEFAULT_MODES,
+  DEFAULT_PERFORMANCE_MODES,
   DEFAULT_SCENARIOS,
   DEFAULT_SIZES,
   MAX_ITERATIONS,

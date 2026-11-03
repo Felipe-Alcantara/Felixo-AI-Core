@@ -712,7 +712,7 @@ export const overlaySurfaces: InventoryElement[] = [
         locator: 'onClick={onPrimary}',
         kind: 'button',
         effect:
-          'Ligar Modo Performance: saveSuggestionAnswered (localStorage felixo-ai-core.performance-suggestion = answered) e setPerformanceMode(true); o PerformanceModeProvider grava felixo-ai-core.performance-mode = on e põe data-performance-mode="on" no <html>; o aviso some.',
+          'Ligar Modo Performance: saveSuggestionAnswered (localStorage felixo-ai-core.performance-suggestion = answered) e setPerformanceMode(true); o PerformanceModeProvider grava felixo-ai-core.performance-mode.v1 = on e põe data-performance-mode="on" no <html>; o aviso some. A chave antiga felixo-ai-core.performance-mode é migrada na primeira leitura.',
         failure: 'Sem localStorage a resposta e o modo valem só nesta sessão (catch silencioso intencional).',
         disabledWhen: 'só existe na sugestão do Modo Performance (o aviso da GPU não tem ação principal)',
       },
@@ -734,7 +734,7 @@ export const overlaySurfaces: InventoryElement[] = [
     ],
     persistence: [
       'localStorage felixo-ai-core.performance-suggestion (resposta à sugestão)',
-      'localStorage felixo-ai-core.performance-mode (Modo Performance ligado)',
+      'localStorage felixo-ai-core.performance-mode.v1 (preferência do Modo Performance); migração da chave antiga felixo-ai-core.performance-mode',
       'processo principal: userData/gpu-preference.json (fallback reconhecido)',
     ],
     ipc: ['hardware:get-profile', 'graphics:get-config', 'graphics:gpu-preference-changed', 'graphics:acknowledge-gpu-fallback'],

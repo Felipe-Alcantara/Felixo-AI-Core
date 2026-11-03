@@ -276,11 +276,13 @@ Com o Vite disponível, em Linux use um display virtual:
 
 ```bash
 xvfb-run -a npm run benchmark:terminal-output -- \
-  --iterations=3 --check --out=/tmp/felixo-terminal-output.json
+  --iterations=3 --performance-modes=normal,performance \
+  --check --out=/tmp/felixo-terminal-output.json
 ```
 
 A bancada abre o `TerminalPanel` real no Electron e executa os mesmos fixtures
-curto, longo, de alta frequência e com quatro sessões nos dois modos. Ela coleta
+curto, longo, de alta frequência e com quatro sessões nos modos `baseline` e
+`atual`, em Normal e Performance. Ela coleta
 `actualDuration` e latência do commit do React em p50/p95, quantidade máxima de
 chunks no DOM, heap usado antes/depois de GC e working set (RSS) do renderer por
 modo. A carga controlada usa 40 eventos brutos no fixture curto, 600 no longo,
@@ -294,8 +296,11 @@ separadamente pelo hook e pelos testes do fixture.
 O relatório JSON registra a política, a carga, o host, os commits, a janela
 visível e as limitações da coleta. O modo `--check` falha se faltar Profiler,
 heap/GC, RSS, fixture ou se a janela atual montar mais de 720 chunks na visão
-de orquestração. Esse benchmark usa Vite de desenvolvimento para manter o
-Profiler observável e não inicia CLIs, PTYs nem altera dados persistidos.
+de orquestração. Também verifica que os logs e o painel continuam visíveis ao
+trocar o modo, que a transição de largura é removida em Performance e que o
+`data-performance-mode` corresponde ao eixo medido. Esse benchmark usa Vite de
+desenvolvimento para manter o Profiler observável e não inicia CLIs, PTYs nem
+altera dados persistidos.
 
 ## Benchmark do scanner do Fetch All
 
@@ -331,6 +336,7 @@ sem tocar no canvas persistido:
 
 ```bash
 npm run benchmark:canvas-connections -- \
+  --performance-modes=normal,performance \
   --check --out=/tmp/felixo-canvas-connection.json
 ```
 
@@ -343,10 +349,13 @@ produção não emite os callbacks do Profiler sem uma variante de profiling.
 
 O padrão é 100/500/1.000 nós, 253/1.253/2.503 arestas e 20/100/200 conexões
 nomeadas, nos cenários render inicial, drag, resize, criação/remoção de aresta
-e mudança de dados. Cada combinação baseline/índice faz uma passada de
-aquecimento, alterna a ordem dos modos por cenário e repete cinco vezes. A
-tabela usa p50/p95 interpolados; `--check` exige repetições, commits do
-Profiler, heap, GC e nós no DOM.
+e mudança de dados. Cada combinação cruza `baseline`/`índice` com Normal e
+Performance, faz uma passada de aquecimento e repete cinco vezes. A ordem dos
+modos de dados e visuais alterna entre cenários. A tabela usa p50/p95
+interpolados; `--check` exige a matriz completa, repetições, commits do
+Profiler, heap, GC, nós no DOM, atributo visual aplicado e minimapa presente só
+em Normal. Use `--performance-modes=performance` para medir apenas o modo
+Performance.
 
 ### Resultado reproduzível em 01/09/2026
 
@@ -446,16 +455,20 @@ JavaScript acima de 500 kB.
 ## Renderização da UI com Modo Performance e GPU
 
 `npm run benchmark:ui-render` (`scripts/ui-render-performance.cjs`) mede o custo
-de desenhar a interface real, que nenhuma outra bancada mede. A de conexões e a
-de saída do terminal comparam estruturas de dados, e nenhuma delas liga o Modo
-Performance.
+de desenhar a interface real. As bancadas de conexões e de saída do terminal
+agora cruzam a estratégia de dados com o eixo visual Normal/Performance em
+fixtures dos respectivos subsistemas; esta mede o canvas completo e suas
+superfícies reais.
 
 A bancada sobe o app de verdade (`electron .` com o `dist` de produção, sem
 Vite) num perfil temporário e popula o canvas pela ponte `window.felixo.canvas`
-(notas, arquivos, grupos e conexões). Depois ela alterna o Modo Performance pelo
-mesmo `localStorage` que a tela de Configurações grava e repete a mesma
-interação em rodadas intercaladas: zoom e pan no canvas, abrir e fechar grupos da
-sidebar e hover nos blocos. Por rodada, ela registra:
+(notas, arquivos, grupos e conexões). Antes de medir, ela usa o toggle real de
+Configurações, verifica acessibilidade e resumo, confirma que a preferência
+persiste após reload e que um drag termina ao mudar o modo. Depois repete a
+mesma interação em rodadas intercaladas: zoom e pan no canvas, abrir e fechar
+grupos da sidebar, hover e drag nos blocos. Por rodada, ela também confirma que
+o minimapa e o céu animado só aparecem em Normal e que, com `--onboarding`, o
+card e o anel do tutorial permanecem visíveis nos dois modos. Ela registra:
 
 - intervalos entre quadros (`requestAnimationFrame`): FPS, p95/p99 e quadros
   acima de 25 ms;
@@ -469,10 +482,15 @@ bancada falha se ela não for a pedida.
 
 ```bash
 npx vite build
-node scripts/ui-render-performance.cjs --gpu=integrada --rounds=3 --out=ui-integrada.json
+node scripts/ui-render-performance.cjs --gpu=integrada --cpu-throttle=4 --rounds=3 --out=ui-integrada.json
 node scripts/ui-render-performance.cjs --gpu=dedicada --angle=vulkan --rounds=3 --out=ui-dedicada.json
 node scripts/ui-render-performance.cjs --render=software --out=ui-software.json
 ```
+
+`--cpu-throttle` usa `Emulation.setCPUThrottlingRate` do Chromium DevTools
+Protocol (1 por padrão; por exemplo, 4 simula uma CPU quatro vezes mais lenta).
+`--onboarding` mantém o tutorial aberto durante as rodadas e valida os seus
+observadores visuais.
 
 `--app-dir` aponta outro checkout (por exemplo, um worktree com outra versão do
 CSS), que precisa ter o próprio `dist` e `node_modules`. A janela precisa ficar

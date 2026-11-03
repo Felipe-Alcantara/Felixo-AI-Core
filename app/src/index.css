@@ -2155,6 +2155,10 @@
     transform: none;
   }
 
+  .felixo-terminal-panel {
+    transition: none;
+  }
+
   .felixo-resize-handle::before {
     transition-property: background-color;
   }
@@ -2211,6 +2215,10 @@
 
 :root[data-performance-mode='on'] .felixo-anim-corner-dock,
 :root[data-performance-mode='on'] .felixo-anim-corner-puck {
+  transition: none;
+}
+
+:root[data-performance-mode='on'] .felixo-terminal-panel {
   transition: none;
 }
 

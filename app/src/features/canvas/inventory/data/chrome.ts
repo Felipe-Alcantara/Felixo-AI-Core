@@ -908,6 +908,8 @@ export const chromeSurfaces: InventoryElement[] = [
     dependsOn: ['MiniMap (@xyflow/react)', 'useCanvasSurfaces (minimap)', 'usePerformanceMode', 'miniMapNode (CanvasView)'],
     tests: [
       { file: 'src/features/canvas/services/canvas-surfaces.test.ts' },
+      { file: 'scripts/canvas-connection-performance.cjs' },
+      { file: 'scripts/ui-render-performance.cjs' },
       { file: 'scripts/canvas-smoke.cjs', check: 'checarOclusaoDoFixture' },
       { file: 'scripts/canvas-smoke.cjs', check: 'checarMatrizVisual' },
     ],
@@ -916,11 +918,6 @@ export const chromeSurfaces: InventoryElement[] = [
         what: 'Arrastar e dar zoom pelo Mini Map (pannable, zoomable) não é exercitado; o smoke só mede o retângulo.',
         risk: 'baixo',
         task: '3ec91f95-497e-818f-b9f2-f9710605c303',
-      },
-      {
-        what: 'Custo do Mini Map (re-render do miniMapNode a cada mudança de nós) e o caminho do Modo Performance sem medição nos harnesses.',
-        risk: 'baixo',
-        task: '3e691f95-497e-816a-a1c9-c0b3b37c8046',
       },
     ],
     overlap: 'Panel do React Flow (bottom-right, mb-10), margem direita 19rem para não ficar sob o inspector (1rem com o puck, via :has()), opacidade 0,45 até hover/foco. Dentro do wrapper do React Flow (z 0): o dock (20) cobre o mapa se a margem falhar; o mapa cobre blocos no canto inferior direito.',
@@ -1039,14 +1036,11 @@ export const chromeSurfaces: InventoryElement[] = [
     persistence: ['nenhuma'],
     ipc: [],
     dependsOn: ['usePerformanceMode', 'canvas-starfield'],
-    tests: [{ file: 'src/features/canvas/components/canvas-starfield.test.ts' }],
-    gaps: [
-      {
-        what: 'O caminho do Modo Performance (sem campo de estrelas) e o custo da camada não são medidos nos harnesses.',
-        risk: 'baixo',
-        task: '3e691f95-497e-816a-a1c9-c0b3b37c8046',
-      },
+    tests: [
+      { file: 'src/features/canvas/components/canvas-starfield.test.ts' },
+      { file: 'scripts/ui-render-performance.cjs' },
     ],
+    gaps: [],
     overlap: 'absolute inset-0 z-0, pointer-events none e aria-hidden: fica por baixo de tudo na região do canvas e não intercepta clique.',
   },
   {

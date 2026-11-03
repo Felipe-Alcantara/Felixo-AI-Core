@@ -19,6 +19,11 @@ import {
   type TerminalOutputPerformanceState,
 } from './terminal-output-performance'
 import { TERMINAL_OUTPUT_VISUAL_POLICY } from '../hooks/terminal-output-store'
+import {
+  applyPerformanceModeBenchmarkMode,
+  PERFORMANCE_MODE_BENCHMARK_MODES,
+  type PerformanceModeBenchmarkMode,
+} from '../../shared/performance/performance-mode-benchmark'
 
 const PROFILER_ID = 'TerminalOutputHistory'
 const DEFAULT_ITERATIONS = 3
@@ -62,6 +67,10 @@ type PerformanceSample = {
   gcAvailable: boolean
   updateDurationsMs: number[]
   updateLatenciesMs: number[]
+  performanceModeApplied: PerformanceModeBenchmarkMode
+  panelVisible: boolean
+  panelTransitionDurationMs: number | null
+  prefersReducedMotion: boolean
 }
 
 type Summary = {
@@ -74,6 +83,7 @@ type Summary = {
 type TerminalOutputPerformanceResult = {
   scenario: TerminalOutputPerformanceScenario
   mode: TerminalOutputPerformanceMode
+  performanceMode: PerformanceModeBenchmarkMode
   iterations: number
   inputEvents: number
   batchSize: number
@@ -95,6 +105,7 @@ type TerminalOutputPerformanceResult = {
 
 type TerminalOutputPerformanceComparison = {
   scenario: TerminalOutputPerformanceScenario
+  performanceMode: PerformanceModeBenchmarkMode
   baselineProfilerP95Ms: number | null
   currentProfilerP95Ms: number | null
   profilerP95ImprovementPercent: number | null
@@ -106,8 +117,23 @@ type TerminalOutputPerformanceComparison = {
   currentMaxDomNodes: number | null
 }
 
+type PerformanceModeComparison = {
+  scenario: TerminalOutputPerformanceScenario
+  mode: TerminalOutputPerformanceMode
+  normalProfilerP95Ms: number | null
+  performanceProfilerP95Ms: number | null
+  performanceProfilerImprovementPercent: number | null
+}
+
+type ModeSwitchCoverage = {
+  testedWhileLogsVisible: boolean
+  logsPreserved: boolean
+  panelRemainedVisible: boolean
+  performanceTransitionDisabled: boolean
+}
+
 export type TerminalOutputPerformanceReport = {
-  schemaVersion: 1
+  schemaVersion: 2
   kind: 'terminal-output-react-profiler'
   startedAt: string
   finishedAt: string
@@ -125,6 +151,7 @@ export type TerminalOutputPerformanceReport = {
     iterations: number
     warmupPasses: 1
     modes: TerminalOutputPerformanceMode[]
+    performanceModes: PerformanceModeBenchmarkMode[]
     scenarios: TerminalOutputPerformanceScenario[]
     batchSize: Record<TerminalOutputPerformanceMode, number>
     productionBatching: 'requestAnimationFrame com fila por frame'
@@ -132,12 +159,15 @@ export type TerminalOutputPerformanceReport = {
   }
   results: TerminalOutputPerformanceResult[]
   comparisons: TerminalOutputPerformanceComparison[]
+  performanceModeComparisons: PerformanceModeComparison[]
+  modeSwitchCoverage: ModeSwitchCoverage
 }
 
 type BenchmarkOptions = {
   iterations: number
   timeoutMs: number
   modes: TerminalOutputPerformanceMode[]
+  performanceModes: PerformanceModeBenchmarkMode[]
   scenarios: TerminalOutputPerformanceScenario[]
 }
 
@@ -145,6 +175,7 @@ type Surface = {
   key: string
   sessions: Record<string, TerminalOutputPerformanceState['sessions'][string]>
   mode: TerminalOutputPerformanceMode
+  performanceMode: PerformanceModeBenchmarkMode
 }
 
 type BenchmarkApi = {
@@ -262,6 +293,7 @@ function normalizeOptions(partial?: Partial<BenchmarkOptions>): BenchmarkOptions
   const iterations = partial?.iterations ?? DEFAULT_ITERATIONS
   const timeoutMs = partial?.timeoutMs ?? DEFAULT_TIMEOUT_MS
   const modes = partial?.modes ?? [...TERMINAL_OUTPUT_PERFORMANCE_MODES]
+  const performanceModes = partial?.performanceModes ?? [...PERFORMANCE_MODE_BENCHMARK_MODES]
   const scenarios = partial?.scenarios ?? [...TERMINAL_OUTPUT_PERFORMANCE_SCENARIOS]
 
   if (!Number.isInteger(iterations) || iterations < 2 || iterations > 10) {
@@ -282,11 +314,18 @@ function normalizeOptions(partial?: Partial<BenchmarkOptions>): BenchmarkOptions
   ) {
     throw new Error('scenarios contém um cenário desconhecido')
   }
+  if (
+    performanceModes.length === 0 ||
+    performanceModes.some((mode) => !PERFORMANCE_MODE_BENCHMARK_MODES.includes(mode))
+  ) {
+    throw new Error('performanceModes contém um modo desconhecido')
+  }
 
   return {
     iterations,
     timeoutMs,
     modes: [...new Set(modes)],
+    performanceModes: [...new Set(performanceModes)],
     scenarios: [...new Set(scenarios)],
   }
 }
@@ -304,18 +343,20 @@ function summarizeState(state: TerminalOutputPerformanceState) {
 function createComparison(
   results: TerminalOutputPerformanceResult[],
   scenario: TerminalOutputPerformanceScenario,
+  performanceMode: PerformanceModeBenchmarkMode,
 ): TerminalOutputPerformanceComparison {
   const baseline = results.find(
-    (result) => result.scenario === scenario && result.mode === 'baseline',
+    (result) => result.scenario === scenario && result.mode === 'baseline' && result.performanceMode === performanceMode,
   )
   const current = results.find(
-    (result) => result.scenario === scenario && result.mode === 'atual',
+    (result) => result.scenario === scenario && result.mode === 'atual' && result.performanceMode === performanceMode,
   )
   const baselineP95 = baseline?.profiler.p95 ?? null
   const currentP95 = current?.profiler.p95 ?? null
 
   return {
     scenario,
+    performanceMode,
     baselineProfilerP95Ms: baselineP95,
     currentProfilerP95Ms: currentP95,
     profilerP95ImprovementPercent:
@@ -334,14 +375,16 @@ function createComparison(
 async function runSample(
   events: ReturnType<typeof createTerminalOutputPerformanceFixture>,
   mode: TerminalOutputPerformanceMode,
+  performanceMode: PerformanceModeBenchmarkMode,
   iteration: number,
   timeoutMs: number,
   setSurface: (surface: Surface | null) => void,
   commits: ProfileCommit[],
 ): Promise<PerformanceSample> {
-  const key = `${mode}-${iteration}-${performance.now()}`
+  applyPerformanceModeBenchmarkMode(performanceMode)
+  const key = `${performanceMode}-${mode}-${iteration}-${performance.now()}`
   const mountStartIndex = commits.length
-  flushSync(() => setSurface({ key, sessions: {}, mode }))
+  flushSync(() => setSurface({ key, sessions: {}, mode, performanceMode }))
   // O Profiler permanece montado com a tela de espera; a primeira superfície
   // do cenário, portanto, aparece como `update`, não como um novo mount do
   // próprio Profiler.
@@ -366,7 +409,7 @@ async function runSample(
     )
     const startIndex = commits.length
     const updateStartedAt = performance.now()
-    flushSync(() => setSurface({ key, sessions: state.sessions, mode }))
+    flushSync(() => setSurface({ key, sessions: state.sessions, mode, performanceMode }))
     const commit = await waitForProfileCommit(
       commits,
       startIndex,
@@ -383,6 +426,16 @@ async function runSample(
   await settleRenderer()
   const heapAfter = readHeapSnapshot()
   const stateSummary = summarizeState(state)
+  const panel = readTerminalPanelVisualState()
+  if (panel.performanceModeApplied !== performanceMode) {
+    throw new Error(`Modo Performance ${performanceMode} não foi aplicado ao painel Terminal`)
+  }
+  if (!panel.panelVisible) {
+    throw new Error('painel de atividade desapareceu durante a medição')
+  }
+  if (performanceMode === 'performance' && panel.panelTransitionDurationMs !== 0) {
+    throw new Error('transição de largura do painel Terminal continua ativa no Modo Performance')
+  }
 
   flushSync(() => setSurface(null))
   await settleRenderer()
@@ -401,7 +454,74 @@ async function runSample(
     gcAvailable,
     updateDurationsMs,
     updateLatenciesMs,
+    ...panel,
   }
+}
+
+function readTerminalPanelVisualState() {
+  const panel = document.querySelector<HTMLElement>('.felixo-terminal-panel')
+  const transitionDurationMs = panel
+    ? window.getComputedStyle(panel).transitionDuration
+        .split(',')
+        .map((part) => {
+          const duration = Number.parseFloat(part)
+          if (!Number.isFinite(duration)) return 0
+          return part.trim().endsWith('ms') ? duration : duration * 1_000
+        })
+        .reduce((maximum, duration) => Math.max(maximum, duration), 0)
+    : null
+
+  return {
+    performanceModeApplied:
+      document.documentElement.getAttribute('data-performance-mode') === 'on'
+        ? 'performance' as const
+        : 'normal' as const,
+    panelVisible: Boolean(panel && window.getComputedStyle(panel).display !== 'none'),
+    panelTransitionDurationMs: transitionDurationMs,
+    prefersReducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+  }
+}
+
+async function verifyActiveLogPanelModeSwitch(
+  timeoutMs: number,
+  setSurface: (surface: Surface | null) => void,
+  commits: ProfileCommit[],
+): Promise<ModeSwitchCoverage> {
+  const events = createTerminalOutputPerformanceFixture('curta').slice(0, 2)
+  const state = appendTerminalOutputPerformanceEvents(
+    createEmptyTerminalOutputPerformanceState(),
+    events,
+    'atual',
+    new Date().toISOString(),
+  )
+  const key = `mode-switch-${performance.now()}`
+  applyPerformanceModeBenchmarkMode('normal')
+  const startIndex = commits.length
+  flushSync(() => setSurface({
+    key,
+    sessions: state.sessions,
+    mode: 'atual',
+    performanceMode: 'normal',
+  }))
+  await waitForProfileCommit(commits, startIndex, 'update', timeoutMs)
+  await settleRenderer()
+  const panelBefore = readTerminalPanelVisualState()
+  const chunksBefore = readVisibleChunkCount()
+
+  applyPerformanceModeBenchmarkMode('performance')
+  await settleRenderer()
+  const panelAfter = readTerminalPanelVisualState()
+  const chunksAfter = readVisibleChunkCount()
+  const coverage = {
+    testedWhileLogsVisible: chunksBefore > 0,
+    logsPreserved: chunksBefore > 0 && chunksAfter === chunksBefore,
+    panelRemainedVisible: panelBefore.panelVisible && panelAfter.panelVisible,
+    performanceTransitionDisabled: panelAfter.panelTransitionDurationMs === 0,
+  }
+
+  flushSync(() => setSurface(null))
+  await settleRenderer()
+  return coverage
 }
 
 async function runBenchmark(
@@ -414,67 +534,88 @@ async function runBenchmark(
   const startedAt = new Date().toISOString()
   const benchmarkStartedAt = performance.now()
   const results: TerminalOutputPerformanceResult[] = []
+  const initialPerformanceMode = document.documentElement.getAttribute('data-performance-mode')
+  let modeSwitchCoverage: ModeSwitchCoverage
 
-  for (const scenario of options.scenarios) {
-    const events = createTerminalOutputPerformanceFixture(scenario)
+  try {
+    modeSwitchCoverage = await verifyActiveLogPanelModeSwitch(
+      options.timeoutMs,
+      setSurface,
+      commits,
+    )
 
-    for (const mode of options.modes) {
-      const samples: PerformanceSample[] = []
-      setStatus(`${mode} · ${scenario}`)
+    for (const scenario of options.scenarios) {
+      const events = createTerminalOutputPerformanceFixture(scenario)
 
-      for (let iteration = 1; iteration <= options.iterations; iteration += 1) {
-        samples.push(
-          await runSample(
-            events,
+      for (const performanceMode of options.performanceModes) {
+        for (const mode of options.modes) {
+          const samples: PerformanceSample[] = []
+          setStatus(`${performanceMode} · ${mode} · ${scenario}`)
+
+          for (let iteration = 1; iteration <= options.iterations; iteration += 1) {
+            samples.push(
+              await runSample(
+                events,
+                mode,
+                performanceMode,
+                iteration,
+                options.timeoutMs,
+                setSurface,
+                commits,
+              ),
+            )
+          }
+
+          results.push({
+            scenario,
             mode,
-            iteration,
-            options.timeoutMs,
-            setSurface,
-            commits,
-          ),
-        )
+            performanceMode,
+            iterations: samples.length,
+            inputEvents: events.length,
+            batchSize: MODE_BATCH_SIZE[mode],
+            profiler: summarize(samples.flatMap((sample) => sample.updateDurationsMs)),
+            updateLatency: summarize(samples.flatMap((sample) => sample.updateLatenciesMs)),
+            heap: {
+              supported: samples.every((sample) => sample.heapDeltaBytes !== null),
+              gcAvailable: samples.every((sample) => sample.gcAvailable),
+              beforeBytes: summarize(
+                samples.flatMap((sample) =>
+                  sample.heapBeforeBytes === null ? [] : [sample.heapBeforeBytes],
+                ),
+              ),
+              afterBytes: summarize(
+                samples.flatMap((sample) =>
+                  sample.heapAfterBytes === null ? [] : [sample.heapAfterBytes],
+                ),
+              ),
+              deltaBytes: summarize(
+                samples.flatMap((sample) =>
+                  sample.heapDeltaBytes === null ? [] : [sample.heapDeltaBytes],
+                ),
+              ),
+            },
+            retainedChunks: summarize(samples.map((sample) => sample.retainedChunks)),
+            droppedChunks: summarize(samples.map((sample) => sample.droppedChunks)),
+            visibleChars: summarize(samples.map((sample) => sample.visibleChars)),
+            maxDomNodes: summarize(samples.map((sample) => sample.maxDomNodes)),
+            samples,
+          })
+        }
       }
-
-      results.push({
-        scenario,
-        mode,
-        iterations: samples.length,
-        inputEvents: events.length,
-        batchSize: MODE_BATCH_SIZE[mode],
-        profiler: summarize(samples.flatMap((sample) => sample.updateDurationsMs)),
-        updateLatency: summarize(samples.flatMap((sample) => sample.updateLatenciesMs)),
-        heap: {
-          supported: samples.every((sample) => sample.heapDeltaBytes !== null),
-          gcAvailable: samples.every((sample) => sample.gcAvailable),
-          beforeBytes: summarize(
-            samples.flatMap((sample) =>
-              sample.heapBeforeBytes === null ? [] : [sample.heapBeforeBytes],
-            ),
-          ),
-          afterBytes: summarize(
-            samples.flatMap((sample) =>
-              sample.heapAfterBytes === null ? [] : [sample.heapAfterBytes],
-            ),
-          ),
-          deltaBytes: summarize(
-            samples.flatMap((sample) =>
-              sample.heapDeltaBytes === null ? [] : [sample.heapDeltaBytes],
-            ),
-          ),
-        },
-        retainedChunks: summarize(samples.map((sample) => sample.retainedChunks)),
-        droppedChunks: summarize(samples.map((sample) => sample.droppedChunks)),
-        visibleChars: summarize(samples.map((sample) => sample.visibleChars)),
-        maxDomNodes: summarize(samples.map((sample) => sample.maxDomNodes)),
-        samples,
-      })
     }
+  } finally {
+    flushSync(() => setSurface(null))
+    if (initialPerformanceMode === null) {
+      document.documentElement.removeAttribute('data-performance-mode')
+    } else {
+      document.documentElement.setAttribute('data-performance-mode', initialPerformanceMode)
+    }
+    setStatus('Pronto')
   }
 
-  setStatus('Pronto')
   const finishedAt = new Date().toISOString()
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     kind: 'terminal-output-react-profiler',
     startedAt,
     finishedAt,
@@ -492,6 +633,7 @@ async function runBenchmark(
       iterations: options.iterations,
       warmupPasses: 1,
       modes: options.modes,
+      performanceModes: options.performanceModes,
       scenarios: options.scenarios,
       batchSize: MODE_BATCH_SIZE,
       productionBatching: 'requestAnimationFrame com fila por frame',
@@ -500,8 +642,35 @@ async function runBenchmark(
     results,
     comparisons:
       options.modes.includes('baseline') && options.modes.includes('atual')
-        ? options.scenarios.map((scenario) => createComparison(results, scenario))
+        ? options.scenarios.flatMap((scenario) =>
+            options.performanceModes.map((performanceMode) =>
+              createComparison(results, scenario, performanceMode),
+            ),
+          )
         : [],
+    performanceModeComparisons:
+      options.performanceModes.includes('normal') &&
+      options.performanceModes.includes('performance')
+        ? options.scenarios.flatMap((scenario) =>
+            options.modes.map((mode) => {
+              const normal = results.find((result) => result.scenario === scenario && result.mode === mode && result.performanceMode === 'normal')
+              const performance = results.find((result) => result.scenario === scenario && result.mode === mode && result.performanceMode === 'performance')
+              const normalP95 = normal?.profiler.p95 ?? null
+              const performanceP95 = performance?.profiler.p95 ?? null
+              return {
+                scenario,
+                mode,
+                normalProfilerP95Ms: normalP95,
+                performanceProfilerP95Ms: performanceP95,
+                performanceProfilerImprovementPercent:
+                  normalP95 !== null && normalP95 > 0 && performanceP95 !== null
+                    ? Number((((normalP95 - performanceP95) / normalP95) * 100).toFixed(2))
+                    : null,
+              }
+            }),
+          )
+        : [],
+    modeSwitchCoverage,
   }
 }
 

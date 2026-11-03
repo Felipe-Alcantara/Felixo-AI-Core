@@ -105,7 +105,7 @@ const VISUAL_THEMES = MATRIX_THEMES
 const VISUAL_VIEWPORT_CASES = MATRIX_VIEWPORTS
 // `pr` no CI de cada PR; `completa` na noturna (nightly.yml).
 const MATRIX_MODE = process.env.FELIXO_SMOKE_MATRIZ || 'pr'
-const PERFORMANCE_STORAGE_KEY = 'felixo-ai-core.performance-mode'
+const PERFORMANCE_STORAGE_KEY = 'felixo-ai-core.performance-mode.v1'
 const CORE_LAYOUT_SELECTORS = [
   '[data-felixo-region="topbar"]',
   '[data-felixo-region="sidebar"]',
