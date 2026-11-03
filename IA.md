@@ -9,7 +9,7 @@
   nos arquivos de docs/ia-archive/.
 -->
 
-Última atualização: [2026-10-23]
+Última atualização: [2026-11-03]
 
 - **Fase:** o canvas é o produto principal (o chat está depreciado). A divisão do `CanvasView`
   (partes 1 a 4) e o bloco Agente na nuvem estão na `main`: PRs #113 a #120 mesclados.
@@ -45,7 +45,13 @@
   (meia página para cima e para baixo, ir ao fim, e o botão de fim acende quando o Claude mostra "Jump to bottom"); ele não
   mostra a posição, porque o Claude não a informa. O trilho depende das teclas, da frase do aviso e da tela alternativa do
   Claude 2.1.309. Ver a entrada de 2026-10-23 "Terminal: o Claude Code não recebia o mouse". Desde a `v0.1.486` a preferência da rolagem vive na chave `felixo-ai-core.claude-terminal-scroll.v2`, para o padrão desligado chegar a quem tinha um "ligado" antigo.
-- **Em andamento:** nada aberto no código nesta entrega. Em toda abertura (também na execução da
+- **Em andamento:** recuperar o baseline pré-`44f8cec` no Modo Performance. Os harnesses e a cobertura
+  de observers foram entregues em `f11da68`; a comparação full-app no renderer por software e CDP
+  throttle 4× mostra 36,33 FPS/66,6 ms p95 no
+  modo Performance contra 58 FPS/33,3 ms no pai do commit `44f8cec` (`b9e3555`). A tarefa original
+  segue aberta e a otimização está ligada como subtarefa no Notion:
+  https://app.notion.com/p/Felixo-AI-Core-Performance-recuperar-o-baseline-pr-44f8cec-no-Modo-Performance-40d91f95497e81ce8846f7f454a41e16.
+- **Atualização automática das CLIs:** Em toda abertura (também na execução da
   fonte), a rodada das CLIs busca a versão mais nova publicada de Claude, Codex e Gemini, inclusive
   pré-lançamento, e atualiza a cópia do app e a do npm global, mesmo com a CLI aberta (o npm troca
   o pacote com o executável antigo rodando). O rodapé avisa "CLIs atualizadas" (entradas de
@@ -1443,3 +1449,15 @@ O backoff é por conta: falha genérica exponencial até 15 min, autenticação 
 **Acompanhamento.** Task "Testes Windows — isolar a sonda de árvore de processos do harness": https://app.notion.com/p/Testes-Windows-isolar-a-sonda-de-rvore-de-processos-do-harness-40d91f95497e81ed8ac3d491c63ba4a8
 
 Estado: concluído e publicado (v0.1.496).
+
+## 2026-11-03 — Performance: harnesses cruzam modos, observers e baseline histórico
+
+**Pedido.** Tarefa [adaptar harnesses para medir o Modo Performance e cobrir observers](https://app.notion.com/p/Felixo-AI-Core-Performance-adaptar-harnesses-para-medir-Modo-Performance-e-cobrir-observers-minima-3e691f95497e816aa1c9c0b3b37c8046).
+
+**O que mudou.** O commit [`f11da68`](https://github.com/Felipe-Alcantara/Felixo-AI-Core/commit/f11da6839d5955ea527ae8cb62cace6c84e259d4) adaptou os harnesses de conexões, saída do terminal e UI real para cobrir Normal/Performance, settings, persistência, drag ativo, minimapa, céu, tutorial, painel e observers do scheduler. O commit [`125dfa2`](https://github.com/Felipe-Alcantara/Felixo-AI-Core/commit/125dfa25cdf5bd2c9ffeacbbf0d963a058ea1b75) acrescentou comparação reproduzível com um checkout histórico (`--legacy-baseline=<hash>`) e documentou os resultados.
+
+**Comparação final.** Mesmo Windows x64, Microsoft Basic Render Driver por software, CDP throttle 4×, 48 nós/31 arestas, três rodadas de 3 s por condição, um aquecimento, tutorial fechado e dois toggles concluídos por rodada. O pai de `44f8cec`, `b9e3555`, fez 58 FPS, quadro p95 33,3 ms e estilo 0,948 ms/quadro. No build `f11da68`, Normal fez 19,67 FPS, p95 116,57 ms e estilo 19,203 ms/quadro; Performance fez 36,33 FPS, p95 66,6 ms e estilo 1,282 ms/quadro. Performance melhora o Normal atual, mas fica 37,4% abaixo do FPS histórico, com p95 100% maior e estilo por quadro 35,2% maior. O critério de empatar/superar o baseline **não foi atendido**; não é medição num notebook físico.
+
+**Validação.** Frontend completo: 215 arquivos passaram, 2 ignorados; 3.372 testes passaram e 3 foram ignorados. Typecheck, lint, build, inventário de canvas e harnesses focados passaram; o novo teste do baseline fechou em 16/16. `npm test` teve 3 falhas dependentes do perfil local: duas em `agent-session-discovery` (metadados de fixture ausentes) e uma em `pty-process-manager` (`CODEX_HOME` do perfil herdado), fora dos arquivos alterados. CI [`41676452685`](https://github.com/Felipe-Alcantara/Felixo-AI-Core/actions/runs/41676452685) passou em Windows, Linux, ARM, macOS e Canvas smoke. Release Gate [`41677473109`](https://github.com/Felipe-Alcantara/Felixo-AI-Core/actions/runs/41677473109) e Release [`41677540943`](https://github.com/Felipe-Alcantara/Felixo-AI-Core/actions/runs/41677540943) passaram; [`v0.1.497`](https://github.com/Felipe-Alcantara/Felixo-AI-Core/releases/tag/v0.1.497) é Latest. O segundo CI [`41680750421`](https://github.com/Felipe-Alcantara/Felixo-AI-Core/actions/runs/41680750421) passou nos cinco alvos; Release Gate [`41681888547`](https://github.com/Felipe-Alcantara/Felixo-AI-Core/actions/runs/41681888547) concluiu sem publicar nova versão porque o commit só alterou harness/documentação.
+
+**Acompanhamento.** A tarefa original continua em andamento. A subtarefa [recuperar o baseline pré-44f8cec](https://app.notion.com/p/Felixo-AI-Core-Performance-recuperar-o-baseline-pr-44f8cec-no-Modo-Performance-40d91f95497e81ce8846f7f454a41e16) cobre a otimização e a medição no hardware físico quando disponível. Os relatórios brutos permaneceram em `%TEMP%`, fora do repositório.
