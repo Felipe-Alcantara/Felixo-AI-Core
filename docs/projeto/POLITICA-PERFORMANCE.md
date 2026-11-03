@@ -279,7 +279,7 @@ continua manual, como hoje. **Não implementado — task de acompanhamento.**
 
 | Elemento | Aceitável cortar | Nunca cortar |
 |---|---|---|
-| Céu animado, minimapa | sim, no Performance Mode | — |
+| Céu animado, grade pontilhada, minimapa | sim, no Performance Mode | — |
 | Transições de painel/dock/toolbar | sim, no Performance Mode | — |
 | Scrollback visual do terminal | sim, reduz para 5.000 linhas, com aviso antes de chegar no limite (80% da capacidade) e no limite | o replay do processo principal (200.000 chars) continua intacto, mas só é reaplicado quando o terminal é recriado (recarregar a janela ou voltar do Chat); com linhas longas tem menos linhas que o histórico visual, com linhas curtas pode ter mais |
 | `AgentUsagePanel` (preview de uso) | no Modo Performance a atualização automática passa de 30 s para 5 min durante atividade; o painel continua visível e o botão Atualizar continua funcionando | nunca parar de existir — usuário precisa saber que o dado está atrasado, não sumido |
@@ -339,6 +339,30 @@ baseline pré-`44f8cec` **segue aberta**. A comparação usa a mesma renderizaç
 por software e throttle sintético, mas não substitui a execução no notebook
 físico de referência. Acompanhar uma otimização do canvas e validar os mesmos
 critérios no hardware físico.
+
+### Atualização da comparação calibrada (03/11/2026)
+
+O harness agora exige dois toggles concluídos por amostra e calcula FPS com
+o tempo efetivamente amostrado. Esta execução de cinco rodadas substitui a
+leitura exploratória de três rodadas acima. O Modo Performance também deixou
+de montar a grade pontilhada decorativa do React Flow; os nós, as conexões, a
+seleção, o arraste e os observadores cobertos pelos harnesses continuam ativos.
+A calibração e a alteração estão em [f23da83](https://github.com/Felipe-Alcantara/Felixo-AI-Core/commit/f23da833be85c392bcb23796cfc2c3e1705a69c4).
+
+| Versão e modo | FPS | Quadro p95 | Estilo por quadro | Paint por quadro |
+|---|---:|---:|---:|---:|
+| b9e3555 Normal | 42,18 | 49,975 ms | 1,442 ms | 4,106 ms |
+| Atual Normal | 18,21 | 114,01 ms | 17,514 ms | 8,066 ms |
+| Atual Performance | 43,88 | 49,9 ms | 0,892 ms | 4,257 ms |
+
+Com cinco amostras, Performance ficou 4,0% acima do baseline em FPS, 0,075 ms
+abaixo no p95 e 38,1% abaixo no custo de estilo por quadro: os três limites
+de aceite da comparação foram atingidos. O paint por quadro permaneceu 3,7%
+acima, embora não seja um limite de aceite desta task. O relatório foi feito
+no Windows x64 com Microsoft Basic Render Driver por software, CDP
+cpuThrottle=4, 48 nós/31 arestas, aquecimento único e tutorial fechado. A
+carga do host oscilou entre 18% e 54%; não houve validação no notebook físico
+de referência. Repetir nessa máquina quando ela estiver acessível.
 
 ## Trade-offs e telemetry opt-in
 

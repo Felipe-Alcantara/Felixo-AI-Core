@@ -310,7 +310,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 
 | Estado | Quando |
 | --- | --- |
-| normal | Blocos e conexões renderizados (só os visíveis, salvo com a gaveta aberta), modo seleção: arrastar no fundo desenha caixa de seleção parcial, Shift soma, botão do meio ou direito move a tela. |
+| normal | Blocos e conexões renderizados (só os visíveis, salvo com a gaveta aberta), modo seleção: arrastar no fundo desenha caixa de seleção parcial, Shift soma, botão do meio ou direito move a tela. No Modo Performance, o céu animado, a grade pontilhada e o minimapa são removidos como decoração; o grafo e as interações permanecem. |
 | loading | hydrated falso: nós ainda não carregados (data-felixo-hydrated="false"); o primeiro enquadramento espera hydrated e flowReady. |
 | empty | nodes.length === 0: só o fundo, a grade e a atmosfera plena (atmosfera 1); o inspector mostra "Canvas livre". |
 | pending | isBusy (limpar, exportar ou importar): overlay de espera por cima da região. |

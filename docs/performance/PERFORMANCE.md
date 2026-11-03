@@ -240,8 +240,8 @@ Push-Location "$baseline\app"
 npm ci
 npx vite build
 Pop-Location
-node scripts/ui-render-performance.cjs "--app-dir=$baseline\app" --legacy-baseline=b9e3555 --render=software --rounds=3 --warmup=1 --duration-ms=3000 --nodes=48 --cpu-throttle=4 "--out=$env:TEMP\felixo-baseline.json"
-node scripts/ui-render-performance.cjs --render=software --rounds=3 --warmup=1 --duration-ms=3000 --nodes=48 --cpu-throttle=4 "--out=$env:TEMP\felixo-current.json"
+node scripts/ui-render-performance.cjs "--app-dir=$baseline\app" --legacy-baseline=b9e3555 --render=software --rounds=5 --warmup=1 --duration-ms=3000 --nodes=48 --cpu-throttle=4 "--out=$env:TEMP\felixo-baseline.json"
+node scripts/ui-render-performance.cjs --render=software --rounds=5 --warmup=1 --duration-ms=3000 --nodes=48 --cpu-throttle=4 "--out=$env:TEMP\felixo-current.json"
 ```
 
 A execução local de 03/11/2026 (Windows x64, AMD Radeon integrada, CDP throttle
@@ -271,6 +271,33 @@ com CPU simulada e rasterização por software, não uma prova em notebook físi
 a otimização e a validação em hardware real seguem em acompanhamento. Os
 relatórios JSON brutos ficaram no diretório temporário local e não foram
 adicionados ao repositório.
+
+**Comparação calibrada final (03/11/2026).** Esta tabela substitui os números
+exploratórios de três rodadas acima: o harness passou a exigir dois toggles
+de estado concluídos por rodada e calcula FPS usando o tempo real amostrado,
+incluindo o tempo de interação, em vez de dividir pela duração configurada.
+Ambas as execuções usaram Windows x64, Microsoft Basic Render Driver por
+software, CDP cpuThrottle=4, 48 nós/31 arestas, um aquecimento, cinco rodadas
+de 3 s e tutorial fechado. A carga do host oscilou entre 18% e 54% durante a
+sessão; repita no notebook físico de referência antes de generalizar o ganho.
+
+| Versão e modo | FPS | Quadro p95 | Estilo por quadro | Paint por quadro |
+|---|---:|---:|---:|---:|
+| b9e3555 Normal | 42,18 | 49,975 ms | 1,442 ms | 4,106 ms |
+| atual Normal | 18,21 | 114,01 ms | 17,514 ms | 8,066 ms |
+| atual Performance | 43,88 | 49,9 ms | 0,892 ms | 4,257 ms |
+
+No estado atual, Performance ficou 4,0% acima do baseline em FPS, 0,075 ms
+abaixo no p95 e 38,1% abaixo no custo de estilo por quadro. Frente ao Normal
+atual, o modo aumentou o FPS em 141%, reduziu o p95 em 56% e o estilo por
+quadro em 94,9%. O custo de paint por quadro ainda ficou 3,7% acima do
+baseline; esse diagnóstico não faz parte dos três limites explícitos da task.
+Cada amostra registrou dois toggles concluídos. O commit
+[f23da83](https://github.com/Felipe-Alcantara/Felixo-AI-Core/commit/f23da833be85c392bcb23796cfc2c3e1705a69c4)
+fez a calibração e a alteração medida: Performance deixa de montar a grade
+pontilhada do React Flow; nós, conexões, seleção e arraste continuam
+disponíveis. A versão histórica usa o
+controle de toolbar equivalente porque ainda não tinha a sidebar atual.
 
 Artefatos desta auditoria:
 
