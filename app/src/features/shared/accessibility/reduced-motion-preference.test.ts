@@ -3,6 +3,7 @@ import {
   readReducedMotionPreference,
   REDUCED_MOTION_MEDIA_QUERY,
   subscribeToReducedMotionPreference,
+  shouldReduceMotion,
   type ReducedMotionMediaQuery,
 } from './reduced-motion-preference'
 
@@ -22,6 +23,13 @@ function createMediaQuery(matches: boolean): ReducedMotionMediaQuery & {
 }
 
 describe('reduced-motion preference', () => {
+  it('combines the app mode with the operating-system preference', () => {
+    expect(shouldReduceMotion(false, false)).toBe(false)
+    expect(shouldReduceMotion(true, false)).toBe(true)
+    expect(shouldReduceMotion(false, true)).toBe(true)
+    expect(shouldReduceMotion(true, true)).toBe(true)
+  })
+
   it('reads whether the system asks for reduced motion', () => {
     const reduced = createMediaQuery(true)
     const noPreference = createMediaQuery(false)

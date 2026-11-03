@@ -898,14 +898,14 @@ export const chromeSurfaces: InventoryElement[] = [
     layer: 'chrome',
     owner: CANVAS_VIEW,
     states: {
-      normal: 'miniMap && !performanceMode: mapa no canto inferior direito (200×150, encolhe até 96×72 com a área livre), arrastável e com zoom; terminais com o nome escrito.',
+      normal: 'miniMap && !reduceMotion: mapa no canto inferior direito (200×150, encolhe até 96×72 com a área livre), arrastável e com zoom; terminais com o nome escrito.',
       empty: 'Some quando a área livre não comporta 96 px (miniMapSize devolve null).',
-      disabled: 'Modo Performance ligado: não é renderizado.',
+      disabled: 'Modo Performance ou reduced motion do sistema ligado: não é renderizado.',
     },
     controls: [],
     persistence: ['nenhuma'],
     ipc: [],
-    dependsOn: ['MiniMap (@xyflow/react)', 'useCanvasSurfaces (minimap)', 'usePerformanceMode', 'miniMapNode (CanvasView)'],
+    dependsOn: ['MiniMap (@xyflow/react)', 'useCanvasSurfaces (minimap)', 'shouldReduceMotion', 'useReducedMotionPreference', 'miniMapNode (CanvasView)'],
     tests: [
       { file: 'src/features/canvas/services/canvas-surfaces.test.ts' },
       { file: 'scripts/canvas-connection-performance.cjs' },
@@ -1030,12 +1030,12 @@ export const chromeSurfaces: InventoryElement[] = [
     states: {
       normal: 'Fundo preto com campo de estrelas em camadas (folha de estilo estática gerada uma vez).',
       empty: 'Canvas vazio: atmosfera plena (--felixo-atmosphere 1); com blocos ela recua (0,75 / 0,5 / 0,3) e a classe is-dense entra.',
-      disabled: 'Modo Performance: o campo de estrelas não é montado; só o fundo preto.',
+      disabled: 'Modo Performance ou reduced motion do sistema: o campo de estrelas não é montado; só o fundo preto.',
     },
     controls: [],
     persistence: ['nenhuma'],
     ipc: [],
-    dependsOn: ['usePerformanceMode', 'canvas-starfield'],
+    dependsOn: ['usePerformanceMode', 'useReducedMotionPreference', 'shouldReduceMotion', 'canvas-starfield'],
     tests: [
       { file: 'src/features/canvas/components/canvas-starfield.test.ts' },
       { file: 'scripts/ui-render-performance.cjs' },

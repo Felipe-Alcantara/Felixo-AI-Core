@@ -332,15 +332,15 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **ID:** `chrome-minimap` · **Dono:** `src/features/canvas/components/CanvasView.tsx`
 - **Persistência:** nenhuma
 - **IPC:** nenhum
-- **Depende de:** `MiniMap (@xyflow/react)`, `useCanvasSurfaces (minimap)`, `usePerformanceMode`, `miniMapNode (CanvasView)`
+- **Depende de:** `MiniMap (@xyflow/react)`, `useCanvasSurfaces (minimap)`, `shouldReduceMotion`, `useReducedMotionPreference`, `miniMapNode (CanvasView)`
 - **Sobreposição:** Panel do React Flow (bottom-right, mb-10), margem direita 19rem para não ficar sob o inspector (1rem com o puck, via :has()), opacidade 0,45 até hover/foco. Dentro do wrapper do React Flow (z 0): o dock (20) cobre o mapa se a margem falhar; o mapa cobre blocos no canto inferior direito.
 - **Testes:** `src/features/canvas/services/canvas-surfaces.test.ts`, `scripts/canvas-connection-performance.cjs`, `scripts/ui-render-performance.cjs`, `scripts/canvas-smoke.cjs` → `checarOclusaoDoFixture`, `scripts/canvas-smoke.cjs` → `checarMatrizVisual`
 
 | Estado | Quando |
 | --- | --- |
-| normal | miniMap && !performanceMode: mapa no canto inferior direito (200×150, encolhe até 96×72 com a área livre), arrastável e com zoom; terminais com o nome escrito. |
+| normal | miniMap && !reduceMotion: mapa no canto inferior direito (200×150, encolhe até 96×72 com a área livre), arrastável e com zoom; terminais com o nome escrito. |
 | empty | Some quando a área livre não comporta 96 px (miniMapSize devolve null). |
-| disabled | Modo Performance ligado: não é renderizado. |
+| disabled | Modo Performance ou reduced motion do sistema ligado: não é renderizado. |
 
 Sem controle próprio: as ações vêm de outros elementos.
 
@@ -387,7 +387,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **ID:** `chrome-ambient-layer` · **Dono:** `src/features/canvas/components/CanvasAmbientLayer.tsx`
 - **Persistência:** nenhuma
 - **IPC:** nenhum
-- **Depende de:** `usePerformanceMode`, `canvas-starfield`
+- **Depende de:** `usePerformanceMode`, `useReducedMotionPreference`, `shouldReduceMotion`, `canvas-starfield`
 - **Sobreposição:** absolute inset-0 z-0, pointer-events none e aria-hidden: fica por baixo de tudo na região do canvas e não intercepta clique.
 - **Testes:** `src/features/canvas/components/canvas-starfield.test.ts`, `scripts/ui-render-performance.cjs`
 
@@ -395,7 +395,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | --- | --- |
 | normal | Fundo preto com campo de estrelas em camadas (folha de estilo estática gerada uma vez). |
 | empty | Canvas vazio: atmosfera plena (--felixo-atmosphere 1); com blocos ela recua (0,75 / 0,5 / 0,3) e a classe is-dense entra. |
-| disabled | Modo Performance: o campo de estrelas não é montado; só o fundo preto. |
+| disabled | Modo Performance ou reduced motion do sistema: o campo de estrelas não é montado; só o fundo preto. |
 
 Sem controle próprio: as ações vêm de outros elementos.
 

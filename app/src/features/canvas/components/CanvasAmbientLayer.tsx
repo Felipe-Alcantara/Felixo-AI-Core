@@ -1,5 +1,6 @@
 import { STAR_FIELD_STYLE_SHEET, STAR_LAYERS } from './canvas-starfield'
 import { usePerformanceMode } from '../../shared/performance/performance-mode-context'
+import { useReducedMotionPreference, shouldReduceMotion } from '../../shared/accessibility/reduced-motion-preference'
 
 /**
  * Procedural, viewport-level atmosphere for the canvas: black, and a star
@@ -18,10 +19,12 @@ import { usePerformanceMode } from '../../shared/performance/performance-mode-co
  */
 export function CanvasAmbientLayer({ dense }: { dense: boolean }) {
   const { performanceMode } = usePerformanceMode()
+  const prefersReducedMotion = useReducedMotionPreference()
+  const reduceMotion = shouldReduceMotion(performanceMode, prefersReducedMotion)
 
   return (
     <div className={`felixo-canvas-ambient ${dense ? 'is-dense' : ''}`} aria-hidden="true">
-      {!performanceMode && (
+      {!reduceMotion && (
         <>
           <style dangerouslySetInnerHTML={{ __html: STAR_FIELD_STYLE_SHEET }} />
           <div className="felixo-ambient-starfield">

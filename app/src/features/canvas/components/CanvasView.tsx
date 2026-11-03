@@ -73,6 +73,7 @@ import {
 } from '../hooks/useResizableSidebarWidth'
 import { canvasSurfaceLayoutWarning, freeCanvasArea } from '../services/canvas-surfaces'
 import { usePerformanceMode } from '../../shared/performance/performance-mode-context'
+import { useReducedMotionPreference, shouldReduceMotion } from '../../shared/accessibility/reduced-motion-preference'
 import { CanvasPerformanceSuggestion } from './CanvasPerformanceSuggestion'
 import { toolbarColumnOffset } from './toolbar-flyout'
 import { CliSetupToast } from '../../setup/CliSetupNotice'
@@ -312,6 +313,8 @@ function CanvasInner({
   const layoutWarning = canvasSurfaceLayoutWarning(viewport, occupancy)
   const freeArea = freeCanvasArea(viewport, occupancy)
   const { performanceMode } = usePerformanceMode()
+  const prefersReducedMotion = useReducedMotionPreference()
+  const reduceMotion = shouldReduceMotion(performanceMode, prefersReducedMotion)
   const {
     nodes,
     setNodes,
@@ -2416,7 +2419,7 @@ function CanvasInner({
               perto da borda (via `:has()`, index.css) quando o inspector
               "Elementos" está no puck — mesmo mecanismo do offset da sidebar,
               espelhado do outro lado da tela. */}
-          {miniMap && !performanceMode && (
+          {miniMap && !reduceMotion && (
             <MiniMap
               pannable
               zoomable

@@ -265,15 +265,13 @@ consulta + 15 ms por consulta + 500 ms; atraso do laço p99 ≤ 100 ms; memória
 - *Não medido:* a máquina de referência de 2 núcleos/4 threads, o macOS, e a consulta ao vivo
   de uma conta logada de verdade.
 
-### Reduced motion (existe, parcial — gap real encontrado nesta investigação)
-`prefers-reduced-motion` do sistema operacional já é lido
-(`reduced-motion-preference.ts`) e combinado com `performanceMode` em DOIS
-lugares: `useExitAnimation` (saída de nó) e `CanvasView.tsx:2310` (fit/pan).
-Mas não é combinado no minimapa nem no céu animado (`CanvasAmbientLayer`,
-`CanvasView.tsx:2730` só olham `performanceMode` puro) — ou seja, alguém com
-`prefers-reduced-motion: reduce` no SO, sem nunca ter aberto Configurações,
-continua vendo o céu animado e o minimapa. **Gap real, não coberto por
-teste**; vira task de acompanhamento (ver Trade-offs).
+### Reduced motion (atualizado em 03/11/2026)
+`prefers-reduced-motion` do sistema operacional é combinado com o Modo
+Performance em saídas animadas, fit/pan, minimapa e céu do canvas. O minimapa
+e as estrelas deixam de ser montados quando qualquer uma das duas preferências
+está ativa. `useReducedMotionPreference` acompanha mudanças da preferência do
+sistema enquanto o app está aberto; ativar reduced motion não altera a opção
+salva do Modo Performance.
 
 ### Safe mode pós-crash (não existe)
 Não há hoje nenhum modo automático acionado depois de o app travar ou ser

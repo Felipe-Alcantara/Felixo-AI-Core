@@ -26,6 +26,11 @@ export function readReducedMotionPreference(matchMedia?: MatchMedia): boolean {
   return matchMedia?.(REDUCED_MOTION_MEDIA_QUERY).matches === true
 }
 
+/** Whether a visual surface should suppress nonessential motion. */
+export function shouldReduceMotion(performanceMode: boolean, prefersReducedMotion: boolean): boolean {
+  return performanceMode || prefersReducedMotion
+}
+
 /** Subscribes to operating-system preference changes without owning a setting. */
 export function subscribeToReducedMotionPreference(
   matchMedia: MatchMedia | undefined,

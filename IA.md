@@ -1499,3 +1499,23 @@ invocam as ações e verificam persistência e ativação. O DevTools da instala
 indisponível; a instância de desenvolvimento foi encerrada após o smoke.
 
 Estado: implementação e testes locais concluídos; validação visual sob carga pendente.
+
+## 2026-11-03 — Reduced motion do sistema em todo o canvas
+
+**Pedido.** Combinar a preferência `prefers-reduced-motion` com o Modo Performance
+nas superfícies que ainda consultavam somente a opção do app.
+
+**Entrega.** `CanvasAmbientLayer` deixa de montar o campo de estrelas, e `CanvasView`
+oculta o minimapa quando o sistema pede menos movimento ou o Modo Performance está
+ligado. A preferência continua acompanhada em tempo real pelo hook compartilhado;
+isso não altera a opção persistida do app. A regra conjunta está em
+`shouldReduceMotion` no módulo de acessibilidade.
+
+**Validação.** A preferência foi emulada na instância de desenvolvimento isolada via
+Playwright/CDP. No modo normal, estrelas e minimapa estavam presentes; em
+`prefers-reduced-motion: reduce`, ambos desapareceram; ao restaurar `no-preference`,
+ambos voltaram. Teste focado 4/4; inventário 9/9; frontend 3.377 testes passaram e 3
+foram ignorados. Typecheck/build, lint e `git diff --check` passaram.
+
+Estado: concluído; a preferência do sistema e o Modo Performance aplicam o mesmo corte
+às superfícies de movimento do canvas.
