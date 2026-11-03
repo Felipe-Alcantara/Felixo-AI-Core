@@ -820,7 +820,7 @@ export const chromeSurfaces: InventoryElement[] = [
     states: {
       loading: 'hydrated falso: nós ainda não carregados (data-felixo-hydrated="false"); o primeiro enquadramento espera hydrated e flowReady.',
       empty: 'nodes.length === 0: só o fundo, a grade e a atmosfera plena (atmosfera 1); o inspector mostra "Canvas livre".',
-      normal: 'Blocos e conexões renderizados (só os visíveis, salvo com a gaveta aberta), modo seleção: arrastar no fundo desenha caixa de seleção parcial, Shift soma, botão do meio ou direito move a tela.',
+      normal: 'Blocos e conexões renderizados (só os visíveis, salvo com a gaveta aberta), modo seleção: arrastar no fundo desenha caixa de seleção parcial, Shift soma, botão do meio ou direito move a tela. No Modo Performance, o céu animado, a grade pontilhada e o minimapa são removidos como decoração; o grafo e as interações permanecem.',
       disabled: 'canvasLocked: nodesDraggable, nodesConnectable, elementsSelectable e selectionOnDrag desligados.',
       pending: 'isBusy (limpar, exportar ou importar): overlay de espera por cima da região.',
     },

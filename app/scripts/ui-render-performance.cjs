@@ -52,6 +52,7 @@ const DEFAULT_NODES = 48
 const MAX_NODES = 1_000
 const DEFAULT_LAUNCH_TIMEOUT_MS = 60_000
 const JANK_FRAME_MS = 25
+const SIDEBAR_TOGGLES_PER_RUN = 2
 const PERFORMANCE_MODE_STORAGE_KEY = 'felixo-ai-core.performance-mode.v1'
 const MODES = ['off', 'on']
 // Grupos da sidebar que a interação abre e fecha. O botão Ajuda também tem
@@ -497,14 +498,26 @@ function assertPerformanceModeSurfaces(state, mode, onboarding = false) {
   if (state.ambientStarfieldVisible !== expectedVisible) {
     throw new Error(`[ui-render] céu animado incorreto no modo ${mode}.`)
   }
+  if (state.backgroundGridVisible !== expectedVisible) {
+    throw new Error(`[ui-render] grade pontilhada incorreta no modo ${mode}.`)
+  }
   if (state.onboardingVisible !== onboarding || state.onboardingRingVisible !== onboarding) {
     throw new Error(`[ui-render] superfícies do tutorial incorretas no modo ${mode}.`)
+  }
+}
+
+function assertInteractionProfile(actionResult) {
+  if (actionResult.sidebarToggleCount !== SIDEBAR_TOGGLES_PER_RUN) {
+    throw new Error(`[ui-render] perfil incompleto: esperados ${SIDEBAR_TOGGLES_PER_RUN} toggles concluídos, recebidos ${actionResult.sidebarToggleCount}.`)
   }
 }
 
 function assertLegacyBaselineSurfaces(state) {
   if (state.performanceMode !== null) {
     throw new Error('[ui-render] o baseline histórico deveria anteceder o atributo do Modo Performance.')
+  }
+  if (!state.backgroundGridVisible) {
+    throw new Error('[ui-render] a grade pontilhada deveria estar visível no baseline histórico.')
   }
   if (state.onboardingVisible || state.onboardingRingVisible) {
     throw new Error('[ui-render] o baseline histórico deveria medir com o tutorial fechado.')
@@ -532,7 +545,7 @@ async function verifyModeSettingsAndActiveDrag(page, nodeIds, timeoutMs) {
   const accessibleSwitch =
     (await modeSwitch.getAttribute('role')) === 'switch' &&
     (await modeSwitch.getAttribute('aria-label')) === 'Modo Performance'
-  const summaryVisible = await page.getByText(/Desliga o céu animado do canvas/).isVisible()
+  const summaryVisible = await page.getByText(/Desliga o céu animado[\s\S]*grade pontilhada/).isVisible()
   if (!accessibleSwitch || !summaryVisible) {
     throw new Error('[ui-render] o toggle ou o resumo do Modo Performance não está acessível.')
   }
@@ -750,6 +763,17 @@ function isCoveredByTour(element) {
   return Boolean(hit && !element.contains(hit) && hit.closest('[data-felixo-onboarding]'))
 }
 
+async function visibleToggleState(headings) {
+  return headings.evaluateAll((elements) => elements
+    .filter((element) => {
+      const style = getComputedStyle(element)
+      return style.display !== 'none' && style.visibility !== 'hidden' && element.getBoundingClientRect().width > 0
+    })
+    .map((element) => `${element.getAttribute('aria-label') ?? ''}:${element.getAttribute('aria-expanded') ?? ''}`)
+    .sort()
+    .join('|'))
+}
+
 /**
  * A interação medida: a MESMA sequência em todas as rodadas. Com `tour`, um grupo
  * coberto pelo card é acionado pelo DOM (o mesmo handler, como o teclado faria),
@@ -757,7 +781,7 @@ function isCoveredByTour(element) {
  */
 async function interact(page, durationMs, { tour = false, legacyBaseline = false } = {}) {
   await page.evaluate(() => {
-    window.__felixoUiRender = { intervals: [], longTasks: [], running: true }
+    window.__felixoUiRender = { intervals: [], longTasks: [], running: true, startedAt: performance.now() }
     const state = window.__felixoUiRender
     let last = performance.now()
     const tick = (now) => {
@@ -784,6 +808,36 @@ async function interact(page, durationMs, { tour = false, legacyBaseline = false
   const startedAt = Date.now()
   let step = 0
   let sidebarToggleCount = 0
+  while (sidebarToggleCount < SIDEBAR_TOGGLES_PER_RUN) {
+    const count = await headings.count()
+    let completed = false
+    for (let index = 0; index < count; index += 1) {
+      const heading = headings.nth(index)
+      try {
+        if (!(await heading.isVisible())) continue
+        const before = await visibleToggleState(headings)
+        const covered = tour && (await heading.evaluate(isCoveredByTour).catch(() => false))
+        if (covered) await heading.evaluate((element) => element.click())
+        else await heading.click({ timeout: 10_000, force: true })
+        if (legacyBaseline) {
+          const nextLabel = before.includes('Recolher funções auxiliares:true')
+            ? 'Expandir funções auxiliares'
+            : 'Recolher funções auxiliares'
+          await page.locator(`[data-felixo-canvas-ready] button[aria-label="${nextLabel}"]`).waitFor({ state: 'visible', timeout: 5_000 })
+        }
+        const after = await visibleToggleState(headings)
+        if (before === after) continue
+        sidebarToggleCount += 1
+        completed = true
+        break
+      } catch {
+        // Alvos ocultos/desativados não contam; tente o próximo visível.
+      }
+    }
+    if (!completed) {
+      throw new Error(`[ui-render] nenhum dos ${count} toggles visíveis concluiu a mudança de estado.`)
+    }
+  }
   while (Date.now() - startedAt < durationMs) {
     const phase = step % 10
     if (phase < 2) {
@@ -795,7 +849,7 @@ async function interact(page, durationMs, { tour = false, legacyBaseline = false
       await page.mouse.down({ button: 'middle' })
       await page.mouse.move(centerX + (phase === 2 ? 180 : -180), centerY + 60, { steps: 8 })
       await page.mouse.up({ button: 'middle' })
-    } else if (phase < 6) {
+    } else if (phase < 6 && sidebarToggleCount < SIDEBAR_TOGGLES_PER_RUN) {
       const count = await headings.count()
       if (count > 0) {
         const heading = headings.nth(step % count)
@@ -834,9 +888,12 @@ async function interact(page, durationMs, { tour = false, legacyBaseline = false
     return {
       intervals: state.intervals.slice(1),
       longTasks: state.longTasks,
+      durationMs: performance.now() - state.startedAt,
     }
   })
-  return { ...result, sidebarToggleCount }
+  const actionResult = { ...result, sidebarToggleCount }
+  assertInteractionProfile(actionResult)
+  return actionResult
 }
 
 /**
@@ -885,6 +942,7 @@ async function prepareRound(page, { mode, nodeIds, options }) {
       performanceMode: document.documentElement.getAttribute('data-performance-mode'),
       minimapVisible: visible(document.querySelector('.felixo-canvas-minimap')),
       ambientStarfieldVisible: visible(document.querySelector('.felixo-ambient-starfield')),
+      backgroundGridVisible: visible(document.querySelector('.react-flow__background')),
       onboardingVisible: visible(card),
       onboardingRingVisible: visible(ring),
     }
@@ -897,12 +955,13 @@ async function prepareRound(page, { mode, nodeIds, options }) {
 async function measureRun(page, cdp, { mode, round, durationMs, tour = false, surfaceState, legacyBaseline = false }) {
   const { events, actionResult } = await collectTrace(cdp, () => interact(page, durationMs, { tour, legacyBaseline }))
   const rendererPid = rendererPidFromTrace(events)
-  const frames = frameStats(actionResult.intervals, durationMs)
+  const frames = frameStats(actionResult.intervals, actionResult.durationMs)
   const trace = summarizeTrace(events, rendererPid)
   return {
     round,
     mode,
     surfaceState,
+    durationMs: Number(actionResult.durationMs.toFixed(3)),
     frames,
     trace,
     // O modo que desenha mais quadros soma mais paint no total só por isso;
@@ -999,7 +1058,7 @@ async function run(options) {
       runs.push(measured)
       console.log(
         `[ui-render] rodada ${round} modo=${mode}: fps=${measured.frames.fps} p95=${measured.frames.p95Ms}ms >25ms=${measured.frames.acimaDe25Ms} ` +
-        `estilo=${measured.trace.estiloMs}ms layout=${measured.trace.layoutMs}ms paint=${measured.trace.paintMs}ms ` +
+        `dur=${measured.durationMs}ms estilo=${measured.trace.estiloMs}ms layout=${measured.trace.layoutMs}ms paint=${measured.trace.paintMs}ms ` +
         `longTasks=${measured.longTasks.count} sidebarToggles=${measured.sidebarToggleCount}`,
       )
     }
@@ -1049,6 +1108,7 @@ module.exports = {
   LEGACY_TOOLBAR_TOGGLE_SELECTOR,
   assertRequestedGpu,
   assertPerformanceModeSurfaces,
+  assertInteractionProfile,
   assertLegacyBaselineSurfaces,
   verifyModeSettingsAndActiveDrag,
   buildFixtureEdges,

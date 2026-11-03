@@ -2397,7 +2397,8 @@ function CanvasInner({
           panActivationKeyCode={null}
           className={canvasMode === 'pan' ? 'cursor-grab' : ''}
         >
-          <Background gap={32} size={1} color="var(--f-canvas-dot)" />
+          {/* A grade é decoração; o modo Performance mantém o grafo e suas ações. */}
+          {!performanceMode && <Background gap={32} size={1} color="var(--f-canvas-dot)" />}
           {/* Pílula `− 100% +` no formato da prancha da marca. O offset da
               esquerda recolhe via `:has()` quando a sidebar vira trilho (ver
               index.css), sem estado extra aqui. */}

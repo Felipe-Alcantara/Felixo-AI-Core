@@ -4,10 +4,9 @@ import { FelixoToggle } from '../components/FelixoToggle'
 
 /**
  * Corta, de uma vez, a decoração e as transições que mais pesam em notebook
- * ou PC mais fraco: o céu animado do canvas, o minimapa e as animações de
- * painel/dock/toolbar/controles. Fica logo abaixo do tema de propósito — é
- * o primeiro ajuste que quem sente o app pesado deve encontrar, sem precisar
- * procurar em outro lugar.
+ * ou PC mais fraco: o céu animado, a grade pontilhada, o minimapa e as
+ * animações de painel/dock/toolbar/controles. Fica logo abaixo do tema para
+ * ser o primeiro ajuste que quem sente o app pesado encontra.
  *
  * Aplica na hora, pelo `data-performance-mode` no elemento raiz (ver
  * PerformanceModeProvider): não precisa reabrir o app nem reiniciar terminal.
@@ -24,9 +23,9 @@ export function PerformanceModeSection() {
             Modo Performance
           </div>
           <p className="mt-2 text-xs leading-relaxed text-zinc-500">
-            Desliga o céu animado do canvas, o minimapa e as transições de
-            painéis, menus, docas e controles, e os terminais abertos com ele
-            ligado guardam até 5.000 linhas de histórico visual (em vez de
+            Desliga o céu animado, a grade pontilhada do canvas, o minimapa e as
+            transições de painéis, menus, docas e controles. Os terminais abertos
+            com ele ligado guardam até 5.000 linhas de histórico visual (em vez de
             20.000) — o terminal avisa antes de chegar no limite. A atualização
             automática do painel de limites passa para 5 minutos; o botão
             Atualizar continua disponível. Nenhum processo, conversa ou bloco

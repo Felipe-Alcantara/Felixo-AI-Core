@@ -107,6 +107,13 @@ test('as rodadas alternam qual modo vai primeiro', () => {
   ])
 })
 
+test('o benchmark exige exatamente dois toggles de estado concluídos por rodada', () => {
+  assert.doesNotThrow(() => bench.assertInteractionProfile({ sidebarToggleCount: 2 }))
+  assert.throws(() => bench.assertInteractionProfile({ sidebarToggleCount: 0 }), /perfil incompleto/)
+  assert.throws(() => bench.assertInteractionProfile({ sidebarToggleCount: 1 }), /perfil incompleto/)
+  assert.throws(() => bench.assertInteractionProfile({ sidebarToggleCount: 3 }), /perfil incompleto/)
+})
+
 test('o resumo usa a mediana por modo e o custo por quadro', () => {
   const run = (mode, fps, estilo, frames) => ({
     mode,
@@ -148,11 +155,12 @@ test('--onboarding abre o tutorial antes das rodadas; sem a flag o tour fica fec
   assert.equal(bench.parseArgs(['--onboarding']).onboarding, true)
 })
 
-test('o app real mantém minimapa, céu e observadores do tutorial de acordo com o modo', () => {
+test('o app real mantém minimapa, céu, grade e observadores do tutorial de acordo com o modo', () => {
   const surfaces = (mode, onboarding) => ({
     performanceMode: mode,
     minimapVisible: mode === 'off',
     ambientStarfieldVisible: mode === 'off',
+    backgroundGridVisible: mode === 'off',
     onboardingVisible: onboarding,
     onboardingRingVisible: onboarding,
   })
@@ -164,6 +172,10 @@ test('o app real mantém minimapa, céu e observadores do tutorial de acordo com
     /minimapa incorreto/,
   )
   assert.throws(
+    () => bench.assertPerformanceModeSurfaces({ ...surfaces('on', true), backgroundGridVisible: true }, 'on', true),
+    /grade pontilhada incorreta/,
+  )
+  assert.throws(
     () => bench.assertPerformanceModeSurfaces(surfaces('on', false), 'on', true),
     /superfícies do tutorial incorretas/,
   )
@@ -172,6 +184,7 @@ test('o app real mantém minimapa, céu e observadores do tutorial de acordo com
 test('o baseline histórico é reconhecido sem exigir o modo Performance', () => {
   assert.doesNotThrow(() => bench.assertLegacyBaselineSurfaces({
     performanceMode: null,
+    backgroundGridVisible: true,
     minimapVisible: false,
     ambientStarfieldVisible: false,
     onboardingVisible: false,
@@ -179,11 +192,18 @@ test('o baseline histórico é reconhecido sem exigir o modo Performance', () =>
   }))
   assert.throws(() => bench.assertLegacyBaselineSurfaces({
     performanceMode: 'off',
+    backgroundGridVisible: true,
     minimapVisible: true,
     ambientStarfieldVisible: false,
     onboardingVisible: false,
     onboardingRingVisible: false,
   }), /anteceder o atributo/)
+  assert.throws(() => bench.assertLegacyBaselineSurfaces({
+    performanceMode: null,
+    backgroundGridVisible: false,
+    onboardingVisible: false,
+    onboardingRingVisible: false,
+  }), /grade pontilhada deveria estar visível/)
 })
 
 test('a interação só alterna grupos da sidebar: o botão Ajuda fica de fora', () => {
