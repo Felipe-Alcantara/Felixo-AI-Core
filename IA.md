@@ -45,12 +45,10 @@
   (meia página para cima e para baixo, ir ao fim, e o botão de fim acende quando o Claude mostra "Jump to bottom"); ele não
   mostra a posição, porque o Claude não a informa. O trilho depende das teclas, da frase do aviso e da tela alternativa do
   Claude 2.1.309. Ver a entrada de 2026-10-23 "Terminal: o Claude Code não recebia o mouse". Desde a `v0.1.486` a preferência da rolagem vive na chave `felixo-ai-core.claude-terminal-scroll.v2`, para o padrão desligado chegar a quem tinha um "ligado" antigo.
-- **Em andamento:** recuperar o baseline pré-`44f8cec` no Modo Performance. Os harnesses e a cobertura
-  de observers foram entregues em `f11da68`; a comparação full-app no renderer por software e CDP
-  throttle 4× mostra 36,33 FPS/66,6 ms p95 no
-  modo Performance contra 58 FPS/33,3 ms no pai do commit `44f8cec` (`b9e3555`). A tarefa original
-  segue aberta e a otimização está ligada como subtarefa no Notion:
-  https://app.notion.com/p/Felixo-AI-Core-Performance-recuperar-o-baseline-pr-44f8cec-no-Modo-Performance-40d91f95497e81ce8846f7f454a41e16.
+- **Modo Performance (2026-11-03):** a comparação sintética calibrada atingiu os três critérios
+  de FPS, quadro p95 e custo de estilo frente ao baseline `b9e3555`. A validação no notebook
+  físico de referência permanece pendente; os resultados e as condições estão na entrada final
+  de calibração e em `docs/performance/PERFORMANCE.md`.
 - **Atualização automática das CLIs:** Em toda abertura (também na execução da
   fonte), a rodada das CLIs busca a versão mais nova publicada de Claude, Codex e Gemini, inclusive
   pré-lançamento, e atualiza a cópia do app e a do npm global, mesmo com a CLI aberta (o npm troca
@@ -1461,3 +1459,26 @@ Estado: concluído e publicado (v0.1.496).
 **Validação.** Frontend completo: 215 arquivos passaram, 2 ignorados; 3.372 testes passaram e 3 foram ignorados. Typecheck, lint, build, inventário de canvas e harnesses focados passaram; o novo teste do baseline fechou em 16/16. `npm test` teve 3 falhas dependentes do perfil local: duas em `agent-session-discovery` (metadados de fixture ausentes) e uma em `pty-process-manager` (`CODEX_HOME` do perfil herdado), fora dos arquivos alterados. CI [`41676452685`](https://github.com/Felipe-Alcantara/Felixo-AI-Core/actions/runs/41676452685) passou em Windows, Linux, ARM, macOS e Canvas smoke. Release Gate [`41677473109`](https://github.com/Felipe-Alcantara/Felixo-AI-Core/actions/runs/41677473109) e Release [`41677540943`](https://github.com/Felipe-Alcantara/Felixo-AI-Core/actions/runs/41677540943) passaram; [`v0.1.497`](https://github.com/Felipe-Alcantara/Felixo-AI-Core/releases/tag/v0.1.497) é Latest. O segundo CI [`41680750421`](https://github.com/Felipe-Alcantara/Felixo-AI-Core/actions/runs/41680750421) passou nos cinco alvos; Release Gate [`41681888547`](https://github.com/Felipe-Alcantara/Felixo-AI-Core/actions/runs/41681888547) concluiu sem publicar nova versão porque o commit só alterou harness/documentação.
 
 **Acompanhamento.** A tarefa original continua em andamento. A subtarefa [recuperar o baseline pré-44f8cec](https://app.notion.com/p/Felixo-AI-Core-Performance-recuperar-o-baseline-pr-44f8cec-no-Modo-Performance-40d91f95497e81ce8846f7f454a41e16) cobre a otimização e a medição no hardware físico quando disponível. Os relatórios brutos permaneceram em `%TEMP%`, fora do repositório.
+
+## 2026-11-03 — Performance: comparação calibrada e validação física pendente
+
+**Atualização.** Esta entrada sucede a comparação exploratória e o estado de acompanhamento da
+entrada anterior. O commit `f23da83` calibrou o harness para exigir dois toggles concluídos por
+rodada e calcular FPS pelo tempo real amostrado; também deixou de montar a grade pontilhada no
+Modo Performance. A documentação da comparação foi atualizada em `f47b496`.
+
+**Resultado registrado.** No Windows x64, com renderer por software, throttle de CPU 4×, 48 nós,
+31 arestas, um aquecimento e cinco rodadas de 3 s por condição, o baseline `b9e3555` registrou
+42,18 FPS, p95 de 49,975 ms e 1,442 ms de estilo por quadro. O Modo Performance atual registrou
+43,88 FPS, p95 de 49,9 ms e 0,892 ms de estilo por quadro. Os três critérios sintéticos foram
+atingidos; a carga do host variou de 18% a 54%. O paint por quadro ficou 3,7% acima do baseline,
+fora dos três critérios de aceite. Condições e resultados completos estão em
+`docs/performance/PERFORMANCE.md` e `docs/projeto/POLITICA-PERFORMANCE.md`.
+
+**Validação desta atualização.** Os números foram conferidos com os documentos da comparação
+calibrada já registrados no repositório; o benchmark não foi repetido nesta atualização. A edição
+do resumo e desta entrada foi pontual: uma automação específica teria custo maior que a correção
+de contexto.
+
+Estado: comparação sintética concluída; validação no notebook físico de referência pendente de
+acesso à máquina.
