@@ -80,6 +80,10 @@ import type {
   StreamEvent,
 } from '../types'
 import { useTerminalOutput } from '../hooks/useTerminalOutput'
+import {
+  createManualPromptInsertion,
+  toPromptInsertionMetadata,
+} from '../../shared/types/prompt-insertion'
 import { useAutomations } from '../hooks/useAutomations'
 import { useNotes } from '../hooks/useNotes'
 import { useProjects } from '../hooks/useProjects'
@@ -463,6 +467,9 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
     }
 
     const sessionId = createSessionId()
+    const promptInsertion = toPromptInsertionMetadata(
+      createManualPromptInsertion(content, { autoSubmit: false }),
+    )
     ensureActiveChatSessionId()
     const useLeanContext = shouldUseLeanContextForCurrentPrompt(content)
     const threadId = useLeanContext
@@ -569,6 +576,7 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
         prompt: cliPrompt,
         resumePrompt,
         promptHint: content,
+        promptInsertion,
         model: effectiveModel,
         cwd: cliCwd,
         availableModels: models,

@@ -38,6 +38,59 @@ export type PromptInsertion = {
 /** Safe form suitable for node persistence and display telemetry. */
 export type PromptInsertionMetadata = Omit<PromptInsertion, 'content'>
 
+const PROMPT_INSERTION_SOURCES = new Set<PromptInsertionSource>([
+  'catalog',
+  'skill',
+  'manual',
+  'file',
+  'system',
+  'handoff',
+  'collaboration',
+  'rename',
+  'unknown',
+])
+
+/** Reads the body-free provenance string persisted in a terminal event. */
+export function parsePromptInsertionMetadata(
+  value: unknown,
+): PromptInsertionMetadata | null {
+  let candidate: unknown = value
+  if (typeof candidate === 'string') {
+    try {
+      candidate = JSON.parse(candidate)
+    } catch {
+      return null
+    }
+  }
+  if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+    return null
+  }
+
+  const metadata = candidate as Partial<PromptInsertionMetadata>
+  if (
+    typeof metadata.id !== 'string' ||
+    typeof metadata.source !== 'string' ||
+    !PROMPT_INSERTION_SOURCES.has(metadata.source as PromptInsertionSource) ||
+    !Array.isArray(metadata.combinedNames) ||
+    typeof metadata.autoSubmit !== 'boolean' ||
+    typeof metadata.timestamp !== 'string' ||
+    !Number.isFinite(Date.parse(metadata.timestamp))
+  ) {
+    return null
+  }
+
+  return {
+    id: metadata.id,
+    ...(typeof metadata.name === 'string' ? { name: metadata.name } : {}),
+    source: metadata.source,
+    combinedNames: metadata.combinedNames.filter(
+      (name): name is string => typeof name === 'string',
+    ),
+    autoSubmit: metadata.autoSubmit,
+    timestamp: new Date(metadata.timestamp).toISOString(),
+  }
+}
+
 export type PromptInsertionInput = {
   id?: string
   name?: string | null
@@ -220,6 +273,24 @@ const SOURCE_LABELS: Partial<Record<PromptInsertionSource, string>> = {
   handoff: 'Passagem de responsabilidade',
   collaboration: 'Colaboração entre agentes',
   rename: 'Renomeação do agente',
+}
+
+const SOURCE_DETAILS: Record<PromptInsertionSource, string> = {
+  catalog: 'Catálogo',
+  skill: 'Skill',
+  manual: 'Texto digitado',
+  file: 'Arquivo do canvas',
+  system: 'Contexto do app',
+  handoff: 'Passagem de responsabilidade',
+  collaboration: 'Colaboração entre agentes',
+  rename: 'Renomeação do agente',
+  unknown: 'Origem desconhecida',
+}
+
+export function getPromptInsertionSourceLabel(source: string | undefined) {
+  return source && Object.prototype.hasOwnProperty.call(SOURCE_DETAILS, source)
+    ? SOURCE_DETAILS[source as PromptInsertionSource]
+    : 'Origem não registrada'
 }
 
 /**

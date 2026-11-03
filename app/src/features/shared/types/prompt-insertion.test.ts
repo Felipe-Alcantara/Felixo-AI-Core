@@ -4,6 +4,8 @@ import {
   createManualPromptInsertion,
   createPromptInsertion,
   createSkillPromptInsertion,
+  getPromptInsertionSourceLabel,
+  parsePromptInsertionMetadata,
   resolvePromptDisplayLabel,
   toPromptInsertionMetadata,
 } from './prompt-insertion'
@@ -112,6 +114,39 @@ describe('PromptInsertion', () => {
     expect(insertion.id).toMatch(/^catalog-[0-9a-f]{8}$/)
     expect(insertion.content).toBe('texto legado')
     expect(insertion.name).toBeUndefined()
+  })
+})
+
+describe('terminal prompt provenance metadata', () => {
+  it('parses long Unicode names and repeated names without retaining a body', () => {
+    const metadata = {
+      id: 'catalog-combined',
+      name: 'Revisão — 東京 '.repeat(12),
+      source: 'catalog',
+      combinedNames: ['Revisão', '東京', 'Revisão'],
+      autoSubmit: false,
+      timestamp: '2026-11-03T13:00:00.000Z',
+      content: 'BODY-MUST-NOT-LEAK',
+    }
+
+    const parsed = parsePromptInsertionMetadata(JSON.stringify(metadata))
+    expect(parsed).toEqual({
+      id: 'catalog-combined',
+      name: metadata.name,
+      source: 'catalog',
+      combinedNames: ['Revisão', '東京', 'Revisão'],
+      autoSubmit: false,
+      timestamp: '2026-11-03T13:00:00.000Z',
+    })
+    expect(resolvePromptDisplayLabel('prévia', parsed)?.label).toBe(metadata.name.trim())
+    expect(
+      resolvePromptDisplayLabel('prévia', {
+        source: 'catalog',
+        combinedNames: ['Revisão', '東京', 'Revisão'],
+      })?.label,
+    ).toBe('Revisão, 東京, Revisão')
+    expect(getPromptInsertionSourceLabel('catalog')).toBe('Catálogo')
+    expect(parsePromptInsertionMetadata('{')).toBeNull()
   })
 })
 

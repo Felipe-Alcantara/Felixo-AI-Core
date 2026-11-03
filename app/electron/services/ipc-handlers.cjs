@@ -227,8 +227,15 @@ function registerCliIpcHandlers(getMainWindow, dependencies = {}) {
       return { ok: false, message: request.message }
     }
 
-    const { streamSessionId, threadId, prompt, resumePrompt, promptHint, projectCwd } =
-      request
+    const {
+      streamSessionId,
+      threadId,
+      prompt,
+      resumePrompt,
+      promptHint,
+      promptInsertion,
+      projectCwd,
+    } = request
     const model = params?.model
     const cliType = model?.cliType
     const adapter = getTerminalAdapter(cliType)
@@ -318,6 +325,7 @@ function registerCliIpcHandlers(getMainWindow, dependencies = {}) {
         cwd,
         orchestrationBridge,
         orchestrationContext: requestOrchestrationContext,
+        promptInsertion,
       })
     }
 
@@ -366,6 +374,7 @@ function registerCliIpcHandlers(getMainWindow, dependencies = {}) {
           usesNativeResume,
           providerSessionId: spawnContext.providerSessionId,
           promptHint: requestOrchestrationContext.promptHint ?? spawnPrompt,
+          promptInsertion,
         }),
       ])
       const childProcess = cliManager.spawn(threadId, command, args, cwd, {

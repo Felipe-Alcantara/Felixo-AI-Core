@@ -17,5 +17,6 @@ export type TerminalOutputEvent = {
   severity?: 'debug' | 'info' | 'warn' | 'error'
   kind?: TerminalOutputKind
   title?: string
+  /** `promptInsertion` stores JSON metadata with the prompt body removed. */
   metadata?: Record<string, string | number | boolean | null | undefined>
 }

@@ -28,6 +28,27 @@ test('terminal formatter creates a readable start event', () => {
   })
 })
 
+test('terminal formatter carries body-free prompt provenance alongside the preview', () => {
+  const promptInsertion = JSON.stringify({
+    id: 'manual-1',
+    source: 'manual',
+    combinedNames: [],
+    autoSubmit: false,
+    timestamp: '2026-11-03T13:00:00.000Z',
+  })
+  const event = createStartTerminalEvent({
+    command: 'codex',
+    cliType: 'codex',
+    isContinuation: false,
+    promptHint: 'pergunta digitada',
+    promptInsertion,
+  })
+
+  assert.equal(event.metadata.promptHint, 'pergunta digitada')
+  assert.equal(event.metadata.promptInsertion, promptInsertion)
+  assert.equal(event.metadata.promptInsertion.includes('content'), false)
+})
+
 test('terminal formatter labels continuation without native resume distinctly', () => {
   const event = createStartTerminalEvent({
     command: 'gemini',

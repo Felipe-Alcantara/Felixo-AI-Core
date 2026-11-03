@@ -63,6 +63,7 @@ function createPersistentCliSessionManager({
     cwd,
     orchestrationBridge,
     orchestrationContext,
+    promptInsertion,
   }) {
     const existingSession = getReusablePersistentSession(threadId, model, cwd)
     const isReusingProcess = Boolean(existingSession)
@@ -154,6 +155,7 @@ function createPersistentCliSessionManager({
           reusedProcess: isReusingProcess,
           providerSessionId: context.providerSessionId,
           promptHint: orchestrationContext.promptHint ?? spawnPrompt,
+          promptInsertion,
         }),
       ])
 

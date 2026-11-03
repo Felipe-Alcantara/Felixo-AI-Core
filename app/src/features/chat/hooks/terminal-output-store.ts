@@ -108,9 +108,19 @@ export function appendTerminalOutputToSession(
     visibleChars: getVisibleChars(chunks),
     historyAvailable: session.historyAvailable || historyAvailable,
     startMetadata:
-      session.startMetadata ??
-      (event.kind === 'lifecycle' ? event.metadata : undefined),
+      isPromptLifecycleEvent(event)
+        ? event.metadata
+        : session.startMetadata ??
+          (event.kind === 'lifecycle' ? event.metadata : undefined),
   }
+}
+
+function isPromptLifecycleEvent(event: TerminalOutputEvent) {
+  return (
+    event.kind === 'lifecycle' &&
+    (typeof event.metadata?.promptHint === 'string' ||
+      typeof event.metadata?.promptInsertion === 'string')
+  )
 }
 
 export function markTerminalOutputSessionStatus(

@@ -28,6 +28,7 @@ import type {
   SystemDesignSyncResult,
   TerminalOutputEvent,
 } from './features/chat/types'
+import type { PromptInsertionMetadata } from './features/shared/types/prompt-insertion'
 import type {
   CanvasAgentBrowserRequest,
   CanvasAgentQuestion,
@@ -473,6 +474,7 @@ declare global {
           prompt: string
           resumePrompt?: string
           promptHint?: string
+          promptInsertion?: PromptInsertionMetadata
           model: Model
           cwd?: string
           availableModels?: Model[]

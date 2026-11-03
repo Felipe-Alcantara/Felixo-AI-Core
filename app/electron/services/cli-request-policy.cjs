@@ -137,9 +137,64 @@ function validateCliRequest(params) {
     prompt,
     resumePrompt: getRequiredString(params?.resumePrompt),
     promptHint: getRequiredString(params?.promptHint),
+    promptInsertion: normalizePromptInsertionMetadata(params?.promptInsertion),
     projectCwd:
       typeof params?.cwd === 'string' && params.cwd ? params.cwd : null,
   }
+}
+
+const PROMPT_INSERTION_SOURCES = new Set([
+  'catalog',
+  'skill',
+  'manual',
+  'file',
+  'system',
+  'handoff',
+  'collaboration',
+  'rename',
+  'unknown',
+])
+
+function normalizePromptInsertionMetadata(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined
+  }
+
+  const source = typeof value.source === 'string' ? value.source.trim() : ''
+  const timestamp = typeof value.timestamp === 'string' ? value.timestamp : ''
+  const timestampMs = Date.parse(timestamp)
+  if (
+    !PROMPT_INSERTION_SOURCES.has(source) ||
+    typeof value.id !== 'string' ||
+    typeof value.autoSubmit !== 'boolean' ||
+    !Number.isFinite(timestampMs)
+  ) {
+    return undefined
+  }
+
+  const cleanText = (candidate, maxLength) =>
+    typeof candidate === 'string' && candidate.trim()
+      ? Array.from(candidate).slice(0, maxLength).join('')
+      : undefined
+  const combinedNames = Array.isArray(value.combinedNames)
+    ? value.combinedNames
+        .slice(0, 32)
+        .map((name) => cleanText(name, 4096))
+        .filter(Boolean)
+    : []
+  const metadata = {
+    id: cleanText(value.id, 512) ?? '',
+    source,
+    combinedNames,
+    autoSubmit: value.autoSubmit,
+    timestamp: new Date(timestampMs).toISOString(),
+  }
+  const name = cleanText(value.name, 4096)
+  if (name) metadata.name = name
+
+  // Serialize only the allowlisted metadata. The insertion body can never
+  // cross into terminal history, even if a caller supplies a `content` key.
+  return JSON.stringify(metadata)
 }
 
 /**
@@ -174,6 +229,7 @@ module.exports = {
   normalizeAvailableModel,
   normalizeAvailableModels,
   normalizeOrchestrationSettings,
+  normalizePromptInsertionMetadata,
   normalizeStringList,
   resolveCliCwd,
   toPositiveIntegerOrUndefined,

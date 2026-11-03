@@ -175,3 +175,52 @@ test('normaliza eventos externos e ignora linhas inválidas no replay', () => {
   assert.equal(sessions[0].sessionId, 'session-a')
   assert.equal(sessions[0].chunks[0].chunk, 'ok')
 })
+
+test('restores the latest prompt provenance from archived lifecycle events', async () => {
+  await withStore(async (store, directory) => {
+    const firstInsertion = JSON.stringify({
+      id: 'manual-1',
+      source: 'manual',
+      combinedNames: [],
+      autoSubmit: false,
+      timestamp: '2026-11-03T12:00:00.000Z',
+    })
+    const latestInsertion = JSON.stringify({
+      id: 'catalog-2',
+      name: 'Revisão — 東京',
+      source: 'catalog',
+      combinedNames: ['Revisão — 東京'],
+      autoSubmit: true,
+      timestamp: '2026-11-03T13:00:00.000Z',
+    })
+
+    store.append(makeEvent('thread-a', 'start', {
+      source: 'system',
+      kind: 'lifecycle',
+      metadata: { promptHint: 'pergunta digitada', promptInsertion: firstInsertion },
+    }))
+    store.append(makeEvent('thread-a', 'continuation', {
+      source: 'system',
+      kind: 'lifecycle',
+      metadata: { promptHint: 'prévia mais recente', promptInsertion: latestInsertion },
+    }))
+    store.append(makeEvent('thread-a', 'status', {
+      source: 'system',
+      kind: 'lifecycle',
+      metadata: { mode: 'processo-persistente' },
+    }))
+
+    const [session] = await store.getSessions()
+    assert.equal(session.startMetadata.promptHint, 'prévia mais recente')
+    assert.equal(session.startMetadata.promptInsertion, latestInsertion)
+    assert.equal(session.chunks.length, 3)
+    assert.deepEqual(
+      session.chunks.map((chunk) => chunk.metadata?.promptInsertion),
+      [firstInsertion, latestInsertion, undefined],
+    )
+
+    const logText = fs.readFileSync(store.getFilePath(), 'utf8')
+    assert.doesNotMatch(logText, /BODY-MUST-NOT-LEAK/)
+    assert.match(logText, /Revisão — 東京/)
+  })
+})

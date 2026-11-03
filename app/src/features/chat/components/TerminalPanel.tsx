@@ -10,6 +10,11 @@ import {
   TERMINAL_OUTPUT_VISUAL_POLICY,
   trimTerminalOutputChunks,
 } from '../hooks/terminal-output-store'
+import {
+  getPromptInsertionSourceLabel,
+  parsePromptInsertionMetadata,
+  resolvePromptDisplayLabel,
+} from '../../shared/types/prompt-insertion'
 
 type TerminalPanelProps = {
   sessions: TerminalOutputSession[]
@@ -78,6 +83,9 @@ export function TerminalPanel({
     () => createGroupedSessionRows(visibleSessions),
     [visibleSessions],
   )
+  const selectedPromptHistory = selectedSession
+    ? resolveSessionPromptHistory(selectedSession)
+    : []
   const allOrchestratorEntries = useMemo(
     () =>
       visibleSessions
@@ -285,7 +293,10 @@ export function TerminalPanel({
             </p>
           ) : (
             <div className="space-y-1">
-              {groupedSessionRows.map(({ session, isChild }) => (
+              {groupedSessionRows.map(({ session, isChild }) => {
+                const prompt = resolveSessionPrompt(session)
+
+                return (
                 <button
                   key={session.sessionId}
                   type="button"
@@ -321,19 +332,31 @@ export function TerminalPanel({
                     </span>
                     <span
                       className="mt-0.5 block truncate text-[10px] text-zinc-500"
-                      title={extractSessionPrompt(session) ?? undefined}
+                      title={prompt?.display.label ?? undefined}
                     >
-                      {extractSessionPrompt(session)
-                        ? `Prompt: ${extractSessionPrompt(session)}`
+                      {prompt?.display
+                        ? `Prompt: ${prompt.display.label}`
                         : 'Prompt não registrado'}
                     </span>
+                    {prompt?.insertion && (
+                      <span className="block truncate text-[9px] text-zinc-500">
+                        {getPromptInsertionSourceLabel(
+                          prompt.insertion.source,
+                        )}{' '}
+                        ·{' '}
+                        {prompt.insertion.autoSubmit
+                          ? 'envio automático'
+                          : 'ação manual'}
+                      </span>
+                    )}
                     <span className="block truncate text-[10px] text-zinc-600">
                       {formatStatus(session.status)} · {formatSessionEventCount(session)} ·{' '}
                       {formatBytes(session.outputSize)}
                     </span>
                   </span>
                 </button>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>
@@ -358,6 +381,52 @@ export function TerminalPanel({
               </span>
             )}
           </div>
+        )}
+
+        {viewMode === 'threads' && selectedSession && selectedPromptHistory.length > 0 && (
+          <details className="shrink-0 border-b border-white/6 px-3 py-2 text-[10px] text-zinc-400">
+            <summary className="felixo-btn block max-h-10 cursor-pointer select-none overflow-hidden break-words rounded-sm text-zinc-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/60">
+              Detalhes dos prompts ({selectedPromptHistory.length})
+            </summary>
+            <ol className="mt-2 max-h-52 space-y-2 overflow-y-auto">
+              {selectedPromptHistory.map((prompt, index) => (
+                <li
+                  key={`${prompt.insertion?.id ?? 'legacy'}-${prompt.insertion?.timestamp ?? index}-${index}`}
+                  className="border-t border-white/6 pt-2 first:border-0 first:pt-0"
+                >
+                  <p className="mb-1 break-words text-zinc-200">
+                    {prompt.display.label}
+                  </p>
+                  <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-1 leading-relaxed">
+                    <dt className="text-zinc-600">Origem</dt>
+                    <dd className="min-w-0 break-words">
+                      {prompt.insertion
+                        ? getPromptInsertionSourceLabel(prompt.insertion.source)
+                        : 'Não registrada'}
+                    </dd>
+                    <dt className="text-zinc-600">Envio</dt>
+                    <dd>
+                      {prompt.insertion
+                        ? prompt.insertion.autoSubmit
+                          ? 'Automático'
+                          : 'Após ação manual'
+                        : 'Não registrado'}
+                    </dd>
+                    <dt className="text-zinc-600">Registrado</dt>
+                    <dd>
+                      {prompt.insertion
+                        ? formatPromptInsertionTime(prompt.insertion.timestamp)
+                        : 'Horário indisponível'}
+                    </dd>
+                    <dt className="text-zinc-600">Prévia</dt>
+                    <dd className="min-w-0 break-words whitespace-pre-wrap">
+                      {prompt.display.detail}
+                    </dd>
+                  </dl>
+                </li>
+              ))}
+            </ol>
+          </details>
         )}
 
         <div className="relative min-h-0 flex-1">
@@ -660,22 +729,58 @@ function extractSessionModelName(session: TerminalOutputSession) {
       : 'CLI'
 }
 
-function extractSessionPrompt(session: TerminalOutputSession) {
-  const metadata = getSessionStartMetadata(session)
+function resolveSessionPrompt(session: TerminalOutputSession) {
+  return resolveSessionPromptHistory(session).at(-1) ?? null
+}
 
-  return metadata?.promptHint ? String(metadata.promptHint) : null
+function resolveSessionPromptHistory(session: TerminalOutputSession) {
+  const promptEvents = session.chunks.filter(
+    (chunk) =>
+      chunk.kind === 'lifecycle' &&
+      chunk.metadata &&
+      (typeof chunk.metadata.promptHint === 'string' ||
+        typeof chunk.metadata.promptInsertion === 'string'),
+  )
+  const metadataEntries =
+    promptEvents.length > 0
+      ? promptEvents.map((chunk) => chunk.metadata)
+      : session.startMetadata
+        ? [session.startMetadata]
+        : []
+
+  return metadataEntries.flatMap((metadata) => {
+    const insertion = parsePromptInsertionMetadata(metadata?.promptInsertion)
+    const display = resolvePromptDisplayLabel(
+      typeof metadata?.promptHint === 'string'
+        ? metadata.promptHint
+        : insertion?.name ?? insertion?.combinedNames.join(', ') ?? null,
+      insertion,
+    )
+
+    return display ? [{ display, insertion }] : []
+  })
 }
 
 function getSessionStartMetadata(session: TerminalOutputSession) {
-  if (session.startMetadata) {
-    return session.startMetadata
-  }
-
-  const startChunk = session.chunks.find(
-    (chunk) => chunk.kind === 'lifecycle' && chunk.metadata,
+  const latestPromptChunk = [...session.chunks].reverse().find(
+    (chunk) =>
+      chunk.kind === 'lifecycle' &&
+      chunk.metadata &&
+      (typeof chunk.metadata.promptHint === 'string' ||
+        typeof chunk.metadata.promptInsertion === 'string'),
   )
 
-  return startChunk?.metadata ?? null
+  return latestPromptChunk?.metadata ?? session.startMetadata ?? null
+}
+
+function formatPromptInsertionTime(timestamp: string) {
+  const date = new Date(timestamp)
+  return Number.isFinite(date.getTime())
+    ? new Intl.DateTimeFormat('pt-BR', {
+        dateStyle: 'short',
+        timeStyle: 'short',
+      }).format(date)
+    : 'Horário indisponível'
 }
 
 function formatSessionEventCount(session: TerminalOutputSession) {

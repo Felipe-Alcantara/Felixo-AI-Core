@@ -236,6 +236,37 @@ test('validateCliRequest apara espaços dos campos de texto', () => {
   assert.equal(result.promptHint, 'dica')
 })
 
+test('validateCliRequest preserves the CLI payload and serializes body-free prompt provenance', () => {
+  const result = validateCliRequest({
+    sessionId: 's1',
+    threadId: 't1',
+    prompt: 'payload completo da CLI',
+    resumePrompt: 'payload de retomada',
+    promptHint: 'revisar o projeto',
+    promptInsertion: {
+      id: 'catalog-1',
+      name: 'Revisão longa — 東京',
+      source: 'catalog',
+      content: 'BODY-MUST-NOT-LEAK',
+      combinedNames: ['Revisão longa — 東京', 'Duplicado', 'Duplicado'],
+      autoSubmit: true,
+      timestamp: '2026-11-03T13:00:00.000Z',
+    },
+  })
+
+  assert.equal(result.prompt, 'payload completo da CLI')
+  assert.equal(result.resumePrompt, 'payload de retomada')
+  assert.deepEqual(JSON.parse(result.promptInsertion), {
+    id: 'catalog-1',
+    name: 'Revisão longa — 東京',
+    source: 'catalog',
+    combinedNames: ['Revisão longa — 東京', 'Duplicado', 'Duplicado'],
+    autoSubmit: true,
+    timestamp: '2026-11-03T13:00:00.000Z',
+  })
+  assert.doesNotMatch(result.promptInsertion, /BODY-MUST-NOT-LEAK/)
+})
+
 test('validateCliRequest só aceita cwd string não vazia, senão null', () => {
   assert.equal(validateCliRequest({ sessionId: 's', prompt: 'p', cwd: '/tmp' }).projectCwd, '/tmp')
   assert.equal(validateCliRequest({ sessionId: 's', prompt: 'p', cwd: '' }).projectCwd, null)

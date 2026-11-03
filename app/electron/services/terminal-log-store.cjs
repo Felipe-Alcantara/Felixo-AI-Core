@@ -316,12 +316,13 @@ function appendEventToArchivedSession(session, event, sequence, capturedAt) {
   )
   session.status = inferSessionStatusFromTerminalEvent(event, session.status)
 
-  if (
-    !session.startMetadata &&
-    event.kind === 'lifecycle' &&
-    event.metadata
-  ) {
-    session.startMetadata = event.metadata
+  if (event.kind === 'lifecycle' && event.metadata) {
+    const isPromptLifecycleEvent =
+      typeof event.metadata.promptHint === 'string' ||
+      typeof event.metadata.promptInsertion === 'string'
+    if (isPromptLifecycleEvent || !session.startMetadata) {
+      session.startMetadata = event.metadata
+    }
   }
 }
 

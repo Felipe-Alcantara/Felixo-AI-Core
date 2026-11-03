@@ -167,6 +167,34 @@ describe('terminal-output-store', () => {
     expect(sessionB.chunks[0].id).toBe(2)
   })
 
+  it('keeps the most recent prompt metadata across later lifecycle events', () => {
+    const firstPrompt = JSON.stringify({ id: 'first', source: 'manual' })
+    const latestPrompt = JSON.stringify({ id: 'latest', source: 'catalog' })
+    let session: TerminalOutputSession | undefined
+
+    session = append(session, event('thread-a', 'first', {
+      kind: 'lifecycle',
+      metadata: { promptHint: 'first preview', promptInsertion: firstPrompt },
+    }), 1, 1)
+    session = append(session, event('thread-a', 'status', {
+      kind: 'lifecycle',
+      metadata: { mode: 'persistent' },
+    }), 2, 2)
+    expect(session.startMetadata).toEqual({
+      promptHint: 'first preview',
+      promptInsertion: firstPrompt,
+    })
+
+    session = append(session, event('thread-a', 'latest', {
+      kind: 'lifecycle',
+      metadata: { promptHint: 'latest preview', promptInsertion: latestPrompt },
+    }), 3, 3)
+    expect(session.startMetadata).toEqual({
+      promptHint: 'latest preview',
+      promptInsertion: latestPrompt,
+    })
+  })
+
   it('trimTerminalOutputChunks conserva o trecho mais recente no limite de caracteres', () => {
     const chunks: TerminalOutputChunk[] = Array.from({ length: 4 }, (_, index) => ({
       ...event('session-a', String(index).repeat(4), { kind: 'tool' }),
