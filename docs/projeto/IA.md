@@ -390,3 +390,8 @@ VALIDAÇÃO: usuário confirmou de ponta a ponta — Claude leu o protocolo, ent
 ALTERNATIVAS: (a) canvas + chat + `shared`; (b) chat como legado; (c) só cortar a dependência sem mover pastas.
 DECISÃO: (a) — três features irmãs, o compartilhado em `shared`, dependência num sentido só. Feito em branch `refactor/` (política), validando a cada passo.
 VALIDAÇÃO: tsc+vite+lint+test verdes em cada passo; canvas deixou de importar de `chat`. Suíte 380 pass.
+
+[2026-11-03] CONTEXTO: Avaliar coleta opt-in para saber se as recomendações do Modo Performance aparecem na carga adequada e ajudam a priorizar melhorias. Não há pipeline de telemetria no app. A recomendação atual aparece com 10 terminais ativos ou 300 nós; só persiste um marcador local `answered`, sem distinção entre aceitar e dispensar.
+ALTERNATIVAS: (a) não coletar e manter apenas benchmarks/feedback voluntário; (b) medir somente ativações; (c) desenhar um piloto opt-in com contagens agregadas de recomendações exibidas e respostas por faixa de carga.
+DECISÃO: o usuário escolheu (c), sem autorizar implementação nesta etapa. Preservar opt-in explícito desligado por padrão e não coletar conteúdo de terminal; o desenho deve abordar viés da amostra, consentimento, campos, transporte, retenção e exclusão.
+VALIDAÇÃO: política, limiares e persistência local da resposta inspecionados; o app não possui SDK ou endpoint de analytics. Task de desenho aberta: https://app.notion.com/p/Felixo-AI-Core-Performance-desenhar-piloto-opt-in-para-calibrar-recomenda-es-por-carga-40d91f95497e813f85b4dc6b5ef11d93.

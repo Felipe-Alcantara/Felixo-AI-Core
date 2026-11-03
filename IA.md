@@ -1519,3 +1519,21 @@ foram ignorados. Typecheck/build, lint e `git diff --check` passaram.
 
 Estado: concluído; a preferência do sistema e o Modo Performance aplicam o mesmo corte
 às superfícies de movimento do canvas.
+
+## 2026-11-03 — Performance: avaliação de telemetria opt-in
+
+**Pedido.** Avaliar se vale instrumentar o uso do Modo Performance antes de criar
+telemetria. O usuário esclareceu que os dados serviriam para calibrar as
+recomendações por carga e priorizar melhorias.
+
+**O que foi observado.** `classifyPerformanceScenario` considera o canvas carregado
+a partir de 10 terminais ativos ou 300 nós. `CanvasPerformanceSuggestion` mostra
+uma recomendação com opções de ligar ou dispensar, mas só persiste um marcador
+local `answered`; não conta exibições nem distingue as respostas. Os contadores
+propostos na tarefa original só cobririam ativações e não permitiriam medir o
+funil da recomendação. Não existe SDK, coletor ou endpoint de analytics no app.
+
+**Decisão.** O usuário escolheu desenhar um piloto opt-in, sem implementar coleta
+nesta etapa. O desenho deve avaliar exibições e respostas agregadas por faixa de
+carga, manter consentimento explícito desligado por padrão, excluir conteúdo de
+terminal e explicar o viés de amostra. Ver a [task de desenho do piloto](https://app.notion.com/p/Felixo-AI-Core-Performance-desenhar-piloto-opt-in-para-calibrar-recomenda-es-por-carga-40d91f95497e813f85b4dc6b5ef11d93).

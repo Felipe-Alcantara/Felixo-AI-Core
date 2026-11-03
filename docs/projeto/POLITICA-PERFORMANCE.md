@@ -382,6 +382,20 @@ Configurações, nunca ligado por padrão, e nunca incluir conteúdo de
 terminal — só contadores agregados (modo ligado/desligado, contagem de
 terminais no momento da ativação).
 
+### Avaliação em 03/11/2026
+
+O objetivo definido foi calibrar as recomendações por carga para priorizar
+melhorias. Hoje, o cenário carregado começa em 10 terminais ativos ou 300 nós,
+mas a sugestão guarda apenas um marcador local de que já foi respondida. A
+contagem de ativações, sozinha, não mostra quantas sugestões apareceram nem
+quantas foram recusadas; portanto, não basta para ajustar o limiar.
+
+O próximo passo escolhido é desenhar um piloto opt-in que avalie contagens
+agregadas de exibição e resposta por faixa de carga. A amostra será voluntária
+e não deve ser tratada como representativa de toda a base. Este direcionamento
+cobre o desenho do piloto, não autoriza implementar coleta ou infraestrutura.
+[Task de desenho do piloto](https://app.notion.com/p/Felixo-AI-Core-Performance-desenhar-piloto-opt-in-para-calibrar-recomenda-es-por-carga-40d91f95497e813f85b4dc6b5ef11d93).
+
 ## Aceite desta política — status
 
 - Tabela baseline/meta por cenário: acima. ✅
@@ -403,5 +417,5 @@ terminais no momento da ativação).
 2. Ativação automática do Performance Mode por carga (hoje só o scrollback
    adaptativo é automático; o resto da decoração exige toggle manual).
 3. Implementar Safe Mode pós-crash conforme a política proposta acima.
-4. Avaliar telemetry opt-in de uso do Performance Mode, se algum dia vier a
-   existir telemetria no app.
+4. Desenhar o piloto telemetry opt-in de uso do Performance Mode para calibrar
+   recomendações por carga ([task](https://app.notion.com/p/Felixo-AI-Core-Performance-desenhar-piloto-opt-in-para-calibrar-recomenda-es-por-carga-40d91f95497e813f85b4dc6b5ef11d93)).
