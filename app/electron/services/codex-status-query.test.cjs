@@ -59,6 +59,31 @@ test('junta métricas do app-server, detalhes e a tela do /status numa amostra',
   assert.deepEqual(result.details.usageCredits.credits, [])
 })
 
+test('consulta agendada do Codex usa só rate limits no app-server e não abre o PTY do /status', async () => {
+  let sessionOptions
+  let screenCalls = 0
+  const query = createCodexStatusQuery({
+    runSession: async (options) => {
+      sessionOptions = options
+      return sessionFrom({
+        'account/rateLimits/read': fixture.responses['account/rateLimits/read'],
+      })(options)
+    },
+    readScreen: async () => {
+      screenCalls += 1
+      return SCREEN
+    },
+    now: NOW,
+  })
+
+  const result = await query({ env: {}, scheduled: true })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(sessionOptions.requests, [STATUS_REQUESTS[0]])
+  assert.equal(screenCalls, 0)
+  assert.equal(result.details.screen, 'não consultada nesta rodada.')
+})
+
 test('pede ao app-server só leituras, com o limite como único pedido obrigatório', () => {
   assert.deepEqual(
     STATUS_REQUESTS.map(({ method, required }) => [method, Boolean(required)]),
@@ -121,6 +146,25 @@ test('limite que não veio derruba a amostra com a mensagem do app-server', asyn
     details: null,
     message: 'sessão não autenticada',
   })
+})
+
+test('falha rate limited do app-server preserva Retry-After estruturado', async () => {
+  const query = createCodexStatusQuery({
+    runSession: async () => ({
+      ok: false,
+      reason: 'server-error',
+      message: 'HTTP 429 rate limit; retry-after: 24m; token=private-value',
+      responses: {},
+    }),
+    readScreen: async () => SCREEN,
+    now: NOW,
+  })
+
+  const result = await query({ env: {} })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.rateLimited, true)
+  assert.equal(result.retryAfterMs, 24 * 60_000)
 })
 
 test('as duas leituras recebem o perfil da conta pedida, e só ele', async () => {

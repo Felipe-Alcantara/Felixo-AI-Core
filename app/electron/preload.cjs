@@ -397,6 +397,8 @@ contextBridge.exposeInMainWorld('felixo', {
     list: () => ipcRenderer.invoke('agent-usage:list'),
     refresh: () => ipcRenderer.invoke('agent-usage:refresh'),
     refreshAccount: (accountId) => ipcRenderer.invoke('agent-usage:refresh-account', accountId),
+    setSchedulerState: (consumerId, state) =>
+      ipcRenderer.send('agent-usage:scheduler-state', consumerId, state),
     reconnect: () => ipcRenderer.invoke('agent-usage:reconnect'),
     addAccount: (params) => ipcRenderer.invoke('agent-usage:add-account', params),
     removeAccount: (accountId) =>

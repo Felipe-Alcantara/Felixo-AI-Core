@@ -127,6 +127,13 @@ test(
       // na rodada com dois comandos (auth e `statusline`). Gemini não consulta
       // nada porque não tem comando de auth.
       assert.equal(calls.length, 4)
+      const externalMetrics = service.getExternalOperationMetrics()
+      assert.equal(externalMetrics.processesStarted, calls.length + 1)
+      assert.equal(externalMetrics.providerRequestsStarted, 2)
+      assert.equal(externalMetrics.inFlight, 0)
+      service.resetExternalOperationMetrics()
+      assert.equal(service.getExternalOperationMetrics().processesStarted, 0)
+      assert.equal(service.getExternalOperationMetrics().providerRequestsStarted, 0)
 
       const accounts = new Map(result.accounts.map((account) => [account.id, account]))
 
@@ -871,7 +878,11 @@ test(
       ],
       runCommand: async ({ args }) => {
         if (args.includes('statusline')) {
-          return { ok: false, stdout: '', stderr: 'falha simulada' }
+          return {
+            ok: false,
+            stdout: '',
+            stderr: 'HTTP 429 rate limit; Retry-After: 27m; token=private-value',
+          }
         }
         return { ok: true, stdout: JSON.stringify({ configured: true }), stderr: '' }
       },
@@ -887,6 +898,9 @@ test(
       assert.equal(failures[0].targetAccountId ?? null, null)
       assert.match(failures[0].message, /Openia/)
       assert.equal(account.latestSample.status, 'error')
+      assert.equal(account.latestSample.metadata.rateLimited, true)
+      assert.equal(account.latestSample.metadata.retryAfterMs, 27 * 60_000)
+      assert.equal(JSON.stringify(account.latestSample).includes('private-value'), false)
     } finally {
       database.close()
       fs.rmSync(databaseDir, { recursive: true, force: true })

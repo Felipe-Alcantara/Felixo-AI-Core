@@ -403,6 +403,45 @@ test(
 )
 
 test(
+  'cancelar a atualização agendada não grava amostra de erro nem substitui a leitura atual',
+  COM_SQLITE,
+  async () => {
+    const controller = new AbortController()
+    let pauseQuery = false
+    const { service, repository, chamadas, limpar } = criarMundo({
+      espera: async (id) => {
+        if (!pauseQuery || id !== 'codex-a') return
+        await new Promise((resolve) =>
+          controller.signal.addEventListener('abort', resolve, { once: true }),
+        )
+      },
+    })
+
+    try {
+      const antes = await service.refresh()
+      const sampleId = contaDoPainel(antes, 'codex-a').latestSample.id
+      const samplesBefore = repository.listSamples('codex-a').length
+      chamadas.consulta.length = 0
+      pauseQuery = true
+
+      const refresh = service.refreshAccount('codex-a', { signal: controller.signal })
+      await aguardar(
+        () => chamadas.consulta.includes('codex-a'),
+        'a consulta agendada da conta nunca começou',
+      )
+      controller.abort()
+      const depois = await refresh
+
+      assert.equal(contaDoPainel(depois, 'codex-a').latestSample.id, sampleId)
+      assert.equal(repository.listSamples('codex-a').length, samplesBefore)
+      assert.equal(contaDoPainel(depois, 'codex-a').latestSample.status, 'current')
+    } finally {
+      limpar()
+    }
+  },
+)
+
+test(
   'identificador inválido ou de conta que não existe (ou já foi removida) é recusado, sem consultar nada',
   COM_SQLITE,
   async () => {

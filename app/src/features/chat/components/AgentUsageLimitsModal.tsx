@@ -14,7 +14,6 @@ import {
   getLastKnownAgentUsage,
   groupAgentUsageAccounts,
   shouldRefreshAgentUsageOnOpen,
-  shouldRunScheduledAgentUsageRefresh,
   shouldShowAgentUsageFilter,
   summarizeAgentUsage,
 } from '../../shared/agent-usage/agent-usage'
@@ -23,7 +22,8 @@ import { AgentUsageRefreshAccountButton } from '../../shared/agent-usage/AgentUs
 import { AgentUsageStatusDetailsView } from '../../shared/agent-usage/AgentUsageStatusDetails'
 import { AgentUsageResetCreditsView } from '../../shared/agent-usage/AgentUsageResetCredits'
 import { useAgentUsageAccountRefresh } from '../../shared/agent-usage/useAgentUsageAccountRefresh'
-import { FelixoSelect, type FelixoSelectOption } from '../../shared/components/FelixoSelect'
+import { useAgentUsageRefreshScheduler } from '../../shared/agent-usage/useAgentUsageRefreshScheduler'
+import { FelixoSelect } from '../../shared/components/FelixoSelect'
 import type {
   AgentUsageAccount,
   AgentUsageDashboard,
@@ -39,13 +39,6 @@ type AgentUsageLimitsModalProps = {
   onClose: () => void
 }
 
-const AUTO_REFRESH_OPTIONS: FelixoSelectOption[] = [
-  { value: '0', label: 'Desligado' },
-  { value: '5', label: 'A cada 5 min' },
-  { value: '15', label: 'A cada 15 min' },
-  { value: '30', label: 'A cada 30 min' },
-]
-
 export function AgentUsageLimitsModal({
   isOpen,
   onClose,
@@ -54,7 +47,6 @@ export function AgentUsageLimitsModal({
   const [dashboard, setDashboard] = useState<AgentUsageDashboard>({ ok: true })
   const [loading, setLoading] = useState(false)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
-  const [autoRefreshMinutes, setAutoRefreshMinutes] = useState(0)
   const [providerId, setProviderId] = useState('codex')
   const [label, setLabel] = useState('')
   const [identityHint, setIdentityHint] = useState('')
@@ -67,6 +59,8 @@ export function AgentUsageLimitsModal({
   // (requestId === o valor atual da ref quando ela resolve) tem permissão de
   // aplicar seu resultado.
   const requestSeqRef = useRef(0)
+
+  useAgentUsageRefreshScheduler('chat-modal', isOpen)
 
   const loadDashboard = useCallback(async (refreshNow: boolean): Promise<AgentUsageDashboard | null> => {
     const api = window.felixo?.agentUsage
@@ -116,38 +110,6 @@ export function AgentUsageLimitsModal({
 
     return () => window.clearTimeout(timerId)
   }, [isOpen, loadDashboard])
-
-  useEffect(() => {
-    if (!isOpen || autoRefreshMinutes <= 0) {
-      return
-    }
-
-    const intervalId = window.setInterval(() => {
-      const shouldRun = shouldRunScheduledAgentUsageRefresh({
-        autoRefreshMinutes,
-        documentHidden: document.hidden,
-        performanceMode:
-          document.documentElement.getAttribute('data-performance-mode') === 'on',
-      })
-
-      if (shouldRun) {
-        void loadDashboard(true)
-      }
-    }, autoRefreshMinutes * 60_000)
-
-    return () => window.clearInterval(intervalId)
-  }, [autoRefreshMinutes, isOpen, loadDashboard])
-
-  // Ver o mesmo tick em AgentUsagePanel.tsx: `getAccountStatus` reavalia
-  // `current` → `stale` pelo relógio de agora, mas o React só rerenderiza
-  // quando algum estado muda — sem isto, o modal aberto e sem auto-refresh
-  // continuaria com o selo "Atualizado" bem depois de a amostra envelhecer.
-  const [, forceStatusTick] = useState(0)
-  useEffect(() => {
-    if (!isOpen) return
-    const intervalId = window.setInterval(() => forceStatusTick((n) => n + 1), 30_000)
-    return () => window.clearInterval(intervalId)
-  }, [isOpen])
 
   useEffect(() => {
     if (!isOpen) return
@@ -317,16 +279,12 @@ export function AgentUsageLimitsModal({
               <SummaryBadge label="Erros" value={summary.error} tone="error" />
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center gap-2 text-[11px] text-zinc-500">
-                Atualização automática
-                <FelixoSelect
-                  value={String(autoRefreshMinutes)}
-                  options={AUTO_REFRESH_OPTIONS}
-                  onChange={(value) => setAutoRefreshMinutes(Number(value))}
-                  aria-label="Atualização automática"
-                  className="min-w-38"
-                />
-              </div>
+              <span
+                className="text-[11px] text-zinc-500"
+                title="Frequência reduzida em ociosidade prolongada ou usando bateria; pausada em segundo plano, no Modo Performance e durante suspensão"
+              >
+                Atualização automática: base de 30 s
+              </span>
               <button
                 type="button"
                 disabled={loading}

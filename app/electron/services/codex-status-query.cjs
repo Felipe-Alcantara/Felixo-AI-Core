@@ -7,6 +7,7 @@ const {
 const { normalizeCodexRateLimitsResult } = require('./codex-account-rate-limits.cjs')
 const { buildCodexStatusDetails } = require('./codex-status-details.cjs')
 const { readCodexStatusScreen } = require('./codex-status-screen.cjs')
+const { getRateLimitDetails } = require('./agent-usage-backoff.cjs')
 
 /**
  * Consulta ao vivo do Codex para o painel "Limites e uso": tudo o que o
@@ -52,21 +53,32 @@ function createCodexStatusQuery({
   return async function queryCodexStatus({
     env = {},
     timeoutMs = DEFAULT_TIMEOUT_MS,
+    scheduled = false,
     // Teto da rodada ou "Reconectar": as duas leituras param na hora.
     signal = null,
   } = {}) {
+    const requests = scheduled
+      ? STATUS_REQUESTS.filter((request) => request.required)
+      : STATUS_REQUESTS
     const [session, screen] = await Promise.all([
       runSession({
         accountEnv: env,
         timeoutMs: Math.min(timeoutMs, APP_SERVER_TIMEOUT_MS),
-        requests: STATUS_REQUESTS,
+        requests,
         timeoutMessage: 'A consulta de limites do Codex excedeu o tempo limite.',
         signal,
       }),
-      readStatusScreen(readScreen, { env, timeoutMs: Math.min(timeoutMs, SCREEN_TIMEOUT_MS), signal }),
+      scheduled
+        ? null
+        : readStatusScreen(readScreen, {
+            env,
+            timeoutMs: Math.min(timeoutMs, SCREEN_TIMEOUT_MS),
+            signal,
+          }),
     ])
 
     if (!session.ok) {
+      const rateLimit = getRateLimitDetails(session.message, Number(now()))
       return {
         ok: false,
         collectedAt: null,
@@ -74,6 +86,10 @@ function createCodexStatusQuery({
         metrics: [],
         details: null,
         message: session.message ?? 'O app-server do Codex recusou a consulta de limites.',
+        ...(rateLimit.rateLimited ? { rateLimited: true } : {}),
+        ...(rateLimit.retryAfterMs === undefined
+          ? {}
+          : { retryAfterMs: rateLimit.retryAfterMs }),
       }
     }
 

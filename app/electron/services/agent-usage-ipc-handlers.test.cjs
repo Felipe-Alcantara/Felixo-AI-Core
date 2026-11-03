@@ -5,10 +5,17 @@ const assert = require('node:assert/strict')
 const Module = require('node:module')
 
 const handlers = new Map()
+const listeners = new Map()
 const originalLoad = Module._load
 Module._load = function patchedLoad(request, parent, isMain) {
   if (request === 'electron') {
-    return { ipcMain: { handle: (channel, handler) => handlers.set(channel, handler) } }
+    return {
+      ipcMain: {
+        handle: (channel, handler) => handlers.set(channel, handler),
+        on: (channel, handler) => listeners.set(channel, handler),
+        removeListener: (channel) => listeners.delete(channel),
+      },
+    }
   }
   return originalLoad.call(this, request, parent, isMain)
 }
@@ -83,6 +90,103 @@ test('agent usage IPC validates input and forwards only normalized parameters', 
     assert.equal(invalidRefresh.ok, false, `id ${JSON.stringify(invalidId)} deve ser recusado`)
   }
   assert.equal(calls.length, 4, 'id inválido não chega ao serviço')
+})
+
+test('agent usage IPC liga visibilidade, política de energia e refresh manual ao scheduler central', async () => {
+  const calls = []
+  const service = {
+    list: async () => ({ ok: true, providers: [], accounts: [] }),
+    refresh: async () => {
+      calls.push('refresh')
+      return { ok: true, providers: [], accounts: [] }
+    },
+    refreshAccount: async () => ({ ok: true, providers: [], accounts: [] }),
+  }
+  let schedulerOptions
+  const scheduler = {
+    setConsumerState: (...args) => calls.push(['consumer', ...args]),
+    refreshPowerPolicy: () => calls.push('power-policy'),
+    setWindowVisible: (visible) => calls.push(['window', visible]),
+    setSuspended: (suspended) => calls.push(['suspended', suspended]),
+    manualRefreshStarted: async () => {
+      calls.push('manual-start')
+      return 123
+    },
+    manualRefreshFinished: (dashboard, options) => calls.push(['manual-finish', dashboard, options]),
+    stop: () => calls.push('stop'),
+  }
+  const windowListeners = new Map()
+  const window = {
+    isDestroyed: () => false,
+    isVisible: () => true,
+    webContents: { id: 7, send() {} },
+    on: (event, handler) => windowListeners.set(event, handler),
+    removeListener: (event) => windowListeners.delete(event),
+  }
+  const powerListeners = new Map()
+  const powerMonitor = {
+    getSystemIdleTime: () => 90,
+    isOnBatteryPower: () => true,
+    on: (event, handler) => powerListeners.set(event, handler),
+    removeListener: (event) => powerListeners.delete(event),
+  }
+  const watching = registerAgentUsageIpcHandlers({
+    service,
+    getMainWindow: () => window,
+    powerMonitor,
+    createWatcher: () => ({ start() {}, stop() {} }),
+    createScheduler: (options) => {
+      schedulerOptions = options
+      return scheduler
+    },
+  })
+
+  assert.equal(schedulerOptions.getSystemIdleTime(), 90)
+  assert.equal(schedulerOptions.isOnBatteryPower(), true)
+  assert.deepEqual(schedulerOptions.getActiveSessions(), [])
+
+  listeners.get('agent-usage:scheduler-state')(
+    { sender: window.webContents },
+    'canvas-panel',
+    { visible: true, performanceMode: false },
+  )
+  listeners.get('agent-usage:scheduler-state')(
+    { sender: { id: 99 } },
+    'canvas-panel',
+    { visible: true, performanceMode: false },
+  )
+  assert.deepEqual(calls.filter((call) => Array.isArray(call) && call[0] === 'consumer'), [
+    ['consumer', '7:canvas-panel', { visible: true, performanceMode: false }],
+  ])
+
+  powerListeners.get('on-battery')()
+  powerListeners.get('suspend')()
+  powerListeners.get('resume')()
+  windowListeners.get('hide')()
+  assert.deepEqual(
+    calls.filter((call) => typeof call === 'string' || Array.isArray(call)),
+    [
+      ['consumer', '7:canvas-panel', { visible: true, performanceMode: false }],
+      'power-policy',
+      ['suspended', true],
+      ['suspended', false],
+      ['window', false],
+    ],
+  )
+
+  const refreshed = await handlers.get('agent-usage:refresh')({})
+  assert.equal(refreshed.ok, true)
+  assert.deepEqual(calls.slice(-3), [
+    'manual-start',
+    'refresh',
+    ['manual-finish', refreshed, { startedAt: 123 }],
+  ])
+
+  watching.stopWatching()
+  assert.equal(listeners.has('agent-usage:scheduler-state'), false)
+  assert.equal(windowListeners.size, 0)
+  assert.equal(powerListeners.size, 0)
+  assert.equal(calls.at(-1), 'stop')
 })
 
 test('agent usage IPC não devolve ao renderer segredo que veio dentro da mensagem de uma exceção', async () => {

@@ -26,7 +26,6 @@ import {
   getAgentUsageResetCredits,
   groupAgentUsageAccounts,
   shouldRefreshAgentUsageOnOpen,
-  shouldRunScheduledAgentUsageRefresh,
   shouldShowAgentUsageFilter,
   summarizeAgentUsage,
   summarizeProviderAccounts,
@@ -313,55 +312,6 @@ describe('metadados da amostra', () => {
     expect(formatAgentUsageResetCreditStatus('available')).toBe('Disponível')
     expect(formatAgentUsageResetCreditType('codexRateLimits')).toBe('Limites do Codex')
     expect(getAgentUsageResetCredits(sample('current'))).toBeNull()
-  })
-
-  describe('shouldRunScheduledAgentUsageRefresh', () => {
-    it('não roda sem intervalo escolhido (0 é "só ao abrir/atualizar")', () => {
-      expect(
-        shouldRunScheduledAgentUsageRefresh({
-          autoRefreshMinutes: 0,
-          documentHidden: false,
-          performanceMode: false,
-        }),
-      ).toBe(false)
-      expect(
-        shouldRunScheduledAgentUsageRefresh({
-          autoRefreshMinutes: -5,
-          documentHidden: false,
-          performanceMode: false,
-        }),
-      ).toBe(false)
-    })
-
-    it('não roda com a aba/janela oculta, mesmo com intervalo escolhido — é o gasto que a task pede pra cortar', () => {
-      expect(
-        shouldRunScheduledAgentUsageRefresh({
-          autoRefreshMinutes: 5,
-          documentHidden: true,
-          performanceMode: false,
-        }),
-      ).toBe(false)
-    })
-
-    it('não roda com o Modo Performance ligado', () => {
-      expect(
-        shouldRunScheduledAgentUsageRefresh({
-          autoRefreshMinutes: 5,
-          documentHidden: false,
-          performanceMode: true,
-        }),
-      ).toBe(false)
-    })
-
-    it('roda quando há intervalo escolhido, a aba está visível e o Modo Performance está desligado', () => {
-      expect(
-        shouldRunScheduledAgentUsageRefresh({
-          autoRefreshMinutes: 5,
-          documentHidden: false,
-          performanceMode: false,
-        }),
-      ).toBe(true)
-    })
   })
 
   describe('shouldRefreshAgentUsageOnOpen', () => {

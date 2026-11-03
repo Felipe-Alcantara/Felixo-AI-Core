@@ -33,6 +33,9 @@ const SAFE_METADATA_KEYS = new Set([
   'providerVersion',
   // Por que a rodada não trouxe número (um dos `FAILURE_REASONS`).
   'failureReason',
+  // Sinais numéricos seguros para aplicar backoff do provedor sem guardar a resposta crua.
+  'rateLimited',
+  'retryAfterMs',
   // Dados seguros e estruturados que a consulta interativa do Claude publica
   // no `/status` (Status + Usage). O normalizador abaixo mantém a allowlist
   // também dentro deste objeto, sem deixar a saída crua chegar ao renderer.
@@ -236,10 +239,13 @@ function normalizeMetadata(metadata) {
       continue
     }
 
-    if (typeof value === 'boolean' || typeof value === 'number') {
-      if (Number.isFinite(value)) {
-        normalized[key] = value
-      }
+    if (typeof value === 'boolean') {
+      normalized[key] = value
+      continue
+    }
+
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      normalized[key] = value
     }
   }
 

@@ -5,6 +5,9 @@ const { toErrorResult } = require('./ipc-result.cjs')
 const { redactSecrets } = require('./official-cli-account-status.cjs')
 const path = require('node:path')
 const { createAgentUsageService } = require('./agent-usage-service.cjs')
+const {
+  createAgentUsageRefreshScheduler,
+} = require('./agent-usage-refresh-scheduler.cjs')
 const { getAppPaths } = require('../core/app-paths.cjs')
 const {
   createClaudeStatuslineService,
@@ -31,7 +34,80 @@ function registerAgentUsageIpcHandlers({
   statusline = createClaudeStatuslineService({ baseDir: statuslineDir }),
   getMainWindow = () => null,
   createWatcher = createAgentUsageWatcher,
+  createScheduler = createAgentUsageRefreshScheduler,
+  getActiveSessions = () => [],
+  powerMonitor = null,
+  onSchedulerMetrics = () => {},
 } = {}) {
+  const sendDashboard = (dashboard) => {
+    const window = getMainWindow()
+    if (!window || window.isDestroyed?.()) return
+    window.webContents?.send('agent-usage:changed', dashboard)
+  }
+  const scheduler = createScheduler({
+    service,
+    getActiveSessions,
+    getSystemIdleTime: () => powerMonitor?.getSystemIdleTime?.() ?? 0,
+    isOnBatteryPower: () => powerMonitor?.isOnBatteryPower?.() === true,
+    isWindowVisible: () => {
+      const window = getMainWindow()
+      return Boolean(window && !window.isDestroyed?.() && window.isVisible?.() !== false)
+    },
+    onDashboard: sendDashboard,
+    onMetrics: onSchedulerMetrics,
+  })
+
+  async function runManualRefresh(operation, scope = {}) {
+    const startedAt = await scheduler.manualRefreshStarted()
+    try {
+      const dashboard = await operation()
+      scheduler.manualRefreshFinished(dashboard, { startedAt, ...scope })
+      return dashboard
+    } catch (error) {
+      scheduler.manualRefreshFinished(null, { startedAt, ...scope })
+      throw error
+    }
+  }
+
+  const consumerIds = new Set(['canvas-panel', 'chat-modal'])
+  const onSchedulerState = (event, consumerId, state) => {
+    const window = getMainWindow()
+    if (
+      !window ||
+      window.isDestroyed?.() ||
+      event?.sender !== window.webContents ||
+      !consumerIds.has(consumerId) ||
+      !state ||
+      typeof state !== 'object'
+    ) {
+      return
+    }
+
+    scheduler.setConsumerState(`${event.sender.id}:${consumerId}`, state)
+  }
+  ipcMain.on?.('agent-usage:scheduler-state', onSchedulerState)
+
+  const window = getMainWindow()
+  const onWindowHide = () => scheduler.setWindowVisible(false)
+  const onWindowShow = () => scheduler.setWindowVisible(true)
+  window?.on?.('hide', onWindowHide)
+  window?.on?.('show', onWindowShow)
+  window?.on?.('minimize', onWindowHide)
+  window?.on?.('restore', onWindowShow)
+
+  const powerListeners = []
+  const listenPowerEvent = (eventName, listener) => {
+    if (typeof powerMonitor?.on !== 'function') return
+    powerMonitor.on(eventName, listener)
+    powerListeners.push([eventName, listener])
+  }
+  listenPowerEvent('on-ac', () => scheduler.refreshPowerPolicy())
+  listenPowerEvent('on-battery', () => scheduler.refreshPowerPolicy())
+  listenPowerEvent('user-did-become-active', () => scheduler.refreshPowerPolicy())
+  listenPowerEvent('user-did-resign-active', () => scheduler.refreshPowerPolicy())
+  listenPowerEvent('suspend', () => scheduler.setSuspended(true))
+  listenPowerEvent('resume', () => scheduler.setSuspended(false))
+
   ipcMain.handle('agent-usage:list', async () => {
     try {
       return await service.list()
@@ -42,7 +118,7 @@ function registerAgentUsageIpcHandlers({
 
   ipcMain.handle('agent-usage:refresh', async () => {
     try {
-      return await service.refresh()
+      return await runManualRefresh(() => service.refresh())
     } catch (error) {
       return usageErrorResult(error, 'Não foi possível atualizar o uso dos agentes.')
     }
@@ -51,8 +127,10 @@ function registerAgentUsageIpcHandlers({
   // O botão "Atualizar" de uma conta: só a consulta dela, em vez de uma por conta.
   ipcMain.handle('agent-usage:refresh-account', async (_event, accountId) => {
     try {
-      return await service.refreshAccount(
-        requireString(accountId, 'ID da conta de agente inválido.'),
+      const id = requireString(accountId, 'ID da conta de agente inválido.')
+      return await runManualRefresh(
+        () => service.refreshAccount(id),
+        { accountId: id },
       )
     } catch (error) {
       return usageErrorResult(error, 'Não foi possível atualizar esta conta.')
@@ -63,7 +141,7 @@ function registerAgentUsageIpcHandlers({
   // zero: a saída que antes exigia reiniciar o app.
   ipcMain.handle('agent-usage:reconnect', async () => {
     try {
-      return await service.reconnect()
+      return await runManualRefresh(() => service.reconnect())
     } catch (error) {
       return usageErrorResult(error, 'Não foi possível reconectar o monitor de uso.')
     }
@@ -152,7 +230,7 @@ function registerAgentUsageIpcHandlers({
           return
         }
 
-        getMainWindow()?.webContents?.send('agent-usage:changed', dashboard)
+        sendDashboard(dashboard)
       } catch {
         // Uma leitura que falhou não derruba o observador: o arquivo seguinte
         // volta a tentar.
@@ -162,7 +240,20 @@ function registerAgentUsageIpcHandlers({
 
   watcher.start()
 
-  return { stopWatching: watcher.stop }
+  function stopWatching() {
+    watcher.stop()
+    scheduler.stop()
+    ipcMain.removeListener?.('agent-usage:scheduler-state', onSchedulerState)
+    window?.removeListener?.('hide', onWindowHide)
+    window?.removeListener?.('show', onWindowShow)
+    window?.removeListener?.('minimize', onWindowHide)
+    window?.removeListener?.('restore', onWindowShow)
+    for (const [eventName, listener] of powerListeners) {
+      powerMonitor?.removeListener?.(eventName, listener)
+    }
+  }
+
+  return { stopWatching, scheduler }
 }
 
 function requireString(value, message) {

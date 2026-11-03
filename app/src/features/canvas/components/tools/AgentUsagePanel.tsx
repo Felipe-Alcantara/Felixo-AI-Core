@@ -10,11 +10,12 @@ import {
   type AgentUsagePanelTab,
 } from '../../services/agent-usage-panel-tab'
 import type { NewTerminalOptions } from '../../services/new-terminal-options'
-import { FelixoSelect, type FelixoSelectOption } from '../../../shared/components/FelixoSelect'
+import { FelixoSelect } from '../../../shared/components/FelixoSelect'
 import { AgentUsageFilterBar } from '../../../shared/agent-usage/AgentUsageFilterBar'
 import { AgentUsageResetCreditsView } from '../../../shared/agent-usage/AgentUsageResetCredits'
 import { AgentUsageStatusDetailsView } from '../../../shared/agent-usage/AgentUsageStatusDetails'
 import { useAgentUsageAccountRefresh } from '../../../shared/agent-usage/useAgentUsageAccountRefresh'
+import { useAgentUsageRefreshScheduler } from '../../../shared/agent-usage/useAgentUsageRefreshScheduler'
 import {
   AGENT_USAGE_STATUS_CLASSES,
   EMPTY_AGENT_USAGE_FILTER,
@@ -32,7 +33,6 @@ import {
   getAgentUsagePlan,
   groupAgentUsageAccounts,
   shouldRefreshAgentUsageOnOpen,
-  shouldRunScheduledAgentUsageRefresh,
   shouldShowAgentUsageFilter,
   summarizeProviderAccounts,
 } from '../../../shared/agent-usage/agent-usage'
@@ -68,24 +68,6 @@ const USAGE_TABS: ReadonlyArray<{ id: UsageTab; label: string }> = [
 ]
 
 /**
- * A consulta ao `/status` do Claude abre uma sessão PTY descartável por conta
- * e perfil; por isso o painel consulta novamente ao abrir e no botão
- * Atualizar. O intervalo é opcional para acompanhar uma sessão aberta sem
- * reutilizar o cache da conta do sistema.
- */
-const AUTO_REFRESH_OPTIONS = [
-  { value: 0, label: 'Só ao abrir/atualizar' },
-  { value: 5, label: '+ 5 min' },
-  { value: 15, label: '+ 15 min' },
-  { value: 30, label: '+ 30 min' },
-]
-
-const AUTO_REFRESH_SELECT_OPTIONS: FelixoSelectOption[] = AUTO_REFRESH_OPTIONS.map((option) => ({
-  value: String(option.value),
-  label: option.label,
-}))
-
-/**
  * Limites e uso das CLIs, no canvas.
  *
  * Cada provider abre com um resumo das contas dele (plano, quanto sobra em
@@ -114,7 +96,6 @@ export function AgentUsagePanel({
   const [dashboard, setDashboard] = useState<AgentUsageDashboard>({ ok: true })
   const [loading, setLoading] = useState(true)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
-  const [autoRefreshMinutes, setAutoRefreshMinutes] = useState(0)
   const [isAddingAccount, setIsAddingAccount] = useState(false)
   const [statusline, setStatusline] = useState<ClaudeStatuslineState | null>(null)
   const [liveAt, setLiveAt] = useState<Date | null>(null)
@@ -122,6 +103,8 @@ export function AgentUsagePanel({
   // Só a resposta do pedido mais recente vale: a rodada abandonada pelo
   // Reconectar ainda responde depois, e não pode sobrescrever a nova.
   const latestRequest = useRef(0)
+
+  useAgentUsageRefreshScheduler('canvas-panel', true)
 
   useEffect(() => {
     mounted.current = true
@@ -235,40 +218,6 @@ export function AgentUsagePanel({
         setLiveAt(new Date())
       }
     })
-  }, [])
-
-  useEffect(() => {
-    if (autoRefreshMinutes <= 0) {
-      return
-    }
-
-    // A cada disparo, não só a cada troca de opção: a aba pode ficar oculta
-    // ou o Modo Performance pode ligar no meio do intervalo escolhido — não
-    // dá pra decidir isso só uma vez, quando o efeito monta.
-    const intervalId = window.setInterval(() => {
-      const shouldRun = shouldRunScheduledAgentUsageRefresh({
-        autoRefreshMinutes,
-        documentHidden: document.hidden,
-        performanceMode:
-          document.documentElement.getAttribute('data-performance-mode') === 'on',
-      })
-
-      if (shouldRun) {
-        void load(true)
-      }
-    }, autoRefreshMinutes * 60_000)
-    return () => window.clearInterval(intervalId)
-  }, [autoRefreshMinutes, load])
-
-  // `getAccountStatus` reavalia `current` → `stale` pelo relógio de agora
-  // (ver agent-usage.ts). Sem este tick, um painel aberto e sem auto-refresh
-  // (o padrão) continuaria mostrando "Atualizado" indefinidamente, porque o
-  // React só rerenderiza quando algum estado muda — nunca porque o tempo
-  // passou sozinho. Só força rerender; não busca nada de novo.
-  const [, forceStatusTick] = useState(0)
-  useEffect(() => {
-    const intervalId = window.setInterval(() => forceStatusTick((n) => n + 1), 30_000)
-    return () => window.clearInterval(intervalId)
   }, [])
 
   const groups = useMemo(
@@ -455,16 +404,9 @@ export function AgentUsagePanel({
             </span>
           )}
 
-          <div className="ml-auto flex items-center gap-1.5 text-[11px] text-zinc-500">
-            Reconsultar
-            <FelixoSelect
-              value={String(autoRefreshMinutes)}
-              options={AUTO_REFRESH_SELECT_OPTIONS}
-              onChange={(value) => setAutoRefreshMinutes(Number(value))}
-              aria-label="Intervalo de reconsulta"
-              className="min-w-40"
-            />
-          </div>
+          <span className="ml-auto text-[11px] text-zinc-500" title="Frequência reduzida em ociosidade prolongada ou usando bateria; pausada em segundo plano, no Modo Performance e durante suspensão">
+            Atualização automática: base de 30 s
+          </span>
         </div>
 
         {statusMessage && (

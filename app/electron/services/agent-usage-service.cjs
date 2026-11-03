@@ -31,6 +31,7 @@ const {
   createAgentUsageRepository,
 } = require('./storage/agent-usage-repository.cjs')
 const { mapWithConcurrency } = require('./bounded-concurrency.cjs')
+const { getRateLimitDetails } = require('./agent-usage-backoff.cjs')
 
 const COMMAND_TIMEOUT_MS = 30_000
 /**
@@ -119,6 +120,10 @@ function createAgentUsageService({
 } = {}) {
   let refreshPromise = null
   let lastRefreshAt = null
+  let externalOperationsInFlight = 0
+  let externalOperationsPeak = 0
+  let externalProcessesStarted = 0
+  let externalProviderRequestsStarted = 0
   // Cada rodada ganha um número. Só a rodada corrente grava amostras: uma
   // rodada abandonada (teto ou Reconectar) que termine depois nunca
   // sobrescreve o resultado de uma mais nova.
@@ -130,6 +135,44 @@ function createAgentUsageService({
   const accountRounds = new Set()
   // Último catálogo lido e quando; ver CATALOG_REUSE_MS.
   let lastCatalog = null
+
+  function trackExternalOperation(operation, { process = false, request = false } = {}) {
+    if (typeof operation !== 'function') {
+      return operation
+    }
+
+    return async (...args) => {
+      if (process) externalProcessesStarted += 1
+      if (request) externalProviderRequestsStarted += 1
+      externalOperationsInFlight += 1
+      externalOperationsPeak = Math.max(
+        externalOperationsPeak,
+        externalOperationsInFlight,
+      )
+      try {
+        return await operation(...args)
+      } finally {
+        externalOperationsInFlight = Math.max(0, externalOperationsInFlight - 1)
+      }
+    }
+  }
+
+  const trackedRunCommand = trackExternalOperation(runCommand, { process: true })
+  const trackedQueryResetCredits = trackExternalOperation(queryResetCredits, {
+    process: true,
+    request: true,
+  })
+  const trackedQueryLiveUsage =
+    typeof queryLiveUsage === 'function'
+      ? trackExternalOperation(queryLiveUsage, { process: true, request: true })
+      : queryLiveUsage && typeof queryLiveUsage === 'object'
+        ? Object.fromEntries(
+            Object.entries(queryLiveUsage).map(([key, operation]) => [
+              key,
+              trackExternalOperation(operation, { process: true, request: true }),
+            ]),
+          )
+        : queryLiveUsage
 
   function rememberCatalog(catalog) {
     lastCatalog = { catalog, readAt: now() }
@@ -296,19 +339,31 @@ function createAgentUsageService({
    */
   function collectSnapshot(consulta, round) {
     const { signal } = round.controller
-    const abortMessage = () => (round.reason === 'reconnect' ? 'A consulta foi cancelada pelo Reconectar.' : deadlineMessage())
+    const abortMessage = () => {
+      if (round.reason === 'reconnect') {
+        return 'A consulta foi cancelada pelo Reconectar.'
+      }
+      if (round.reason === 'paused') {
+        return 'A consulta agendada foi pausada porque o painel deixou de estar ativo.'
+      }
+      return deadlineMessage()
+    }
     return signal.aborted
       ? createAbortedSnapshot({ ...consulta, now, message: abortMessage() })
       : collectProviderSnapshot({
           ...consulta,
-          runCommand,
+          runCommand: trackedRunCommand,
           now,
           probe,
-          queryLiveUsage,
+          queryLiveUsage: trackedQueryLiveUsage,
           onLiveQueryFailure,
-          queryResetCredits,
+          queryResetCredits: trackedQueryResetCredits,
+          onExternalProviderRequest: () => {
+            externalProviderRequestsStarted += 1
+          },
           signal,
           abortMessage,
+          scheduled: round.scheduled === true,
         })
   }
 
@@ -343,9 +398,16 @@ function createAgentUsageService({
    *
    * Não mexe em `refreshedAt`, que é a hora da última rodada completa.
    */
-  async function refreshAccount(accountId) {
+  async function refreshAccount(
+    accountId,
+    { signal: callerSignal, scheduled = false } = {},
+  ) {
     const id = requireString(accountId, 'ID da conta de agente inválido.')
     const account = repository.getAccount(id)
+
+    if (callerSignal?.aborted) {
+      return list()
+    }
 
     if (!account) {
       throw new Error('Conta de agente não encontrada.')
@@ -364,9 +426,21 @@ function createAgentUsageService({
       return running
     }
 
-    const round = { id: null, startedAt: generation, controller: new AbortController(), reason: null }
+    const round = {
+      id: null,
+      startedAt: generation,
+      controller: new AbortController(),
+      reason: null,
+      scheduled: scheduled === true,
+    }
     accountRounds.add(round)
+    const abortFromCaller = () => abortRound(round, 'paused')
+    callerSignal?.addEventListener('abort', abortFromCaller, { once: true })
+    if (callerSignal?.aborted) {
+      abortFromCaller()
+    }
     const promise = withDeadline(round, refreshAccountInternal(round, account, perfil)).finally(() => {
+      callerSignal?.removeEventListener('abort', abortFromCaller)
       accountRounds.delete(round)
       if (accountRefreshes.get(key) === promise) {
         accountRefreshes.delete(key)
@@ -392,7 +466,7 @@ function createAgentUsageService({
 
     // Uma rodada completa (ou o Reconectar) começou depois: ela lê esta conta de
     // novo, e gravar aqui poderia cobrir uma leitura mais nova com uma mais velha.
-    if (round.startedAt !== generation) {
+    if (round.startedAt !== generation || round.reason === 'paused') {
       return list()
     }
 
@@ -620,14 +694,31 @@ function createAgentUsageService({
     }
   }
 
+  function getExternalOperationMetrics() {
+    return {
+      inFlight: externalOperationsInFlight,
+      peak: externalOperationsPeak,
+      processesStarted: externalProcessesStarted,
+      providerRequestsStarted: externalProviderRequestsStarted,
+    }
+  }
+
+  function resetExternalOperationMetrics() {
+    externalOperationsPeak = externalOperationsInFlight
+    externalProcessesStarted = 0
+    externalProviderRequestsStarted = 0
+  }
+
   return {
     addAccount,
+    getExternalOperationMetrics,
     getDashboard: list,
     list,
     reconnect,
     refresh,
     refreshAccount,
     refreshLocal,
+    resetExternalOperationMetrics,
     removeAccount,
     consumeResetCredit,
   }
@@ -710,8 +801,10 @@ async function collectProviderSnapshot({
   queryLiveUsage,
   onLiveQueryFailure,
   queryResetCredits,
+  onExternalProviderRequest = () => {},
   signal = new AbortController().signal,
   abortMessage = () => 'A consulta foi cancelada.',
+  scheduled = false,
 }) {
   const source = getAgentUsageSource(providerId)
   const collectedAt = nowIso(now)
@@ -782,6 +875,7 @@ async function collectProviderSnapshot({
         source,
         providerId,
         runCommand,
+        onExternalProviderRequest,
         profileEnv,
         now,
         signal,
@@ -797,14 +891,17 @@ async function collectProviderSnapshot({
             cwd: os.tmpdir(),
             timeoutMs: COMMAND_TIMEOUT_MS,
             signal,
+            scheduled,
           }),
           signal,
           () => ({ ok: false, message: `${source.name}: ${abortMessage()}` }),
         )
-      } catch {
+      } catch (error) {
+        const rateLimit = getRateLimitDetails(error?.message, Number(now()))
         liveResult = {
           ok: false,
           message: `A consulta ao vivo de ${source.name} falhou.`,
+          ...rateLimit,
         }
       }
     }
@@ -860,6 +957,11 @@ async function collectProviderSnapshot({
   // A mensagem da consulta ao vivo vem de um adaptador (ou de um PTY): redigida na
   // fronteira, antes de ir ao QA Logger e à amostra, e não só pelo normalizador.
   const liveMessage = liveResult?.message ? redactOutput(liveResult.message) : null
+  const liveRateLimit = getRateLimitDetails(liveMessage, Number(now()))
+  const rateLimited = liveResult?.rateLimited === true || liveRateLimit.rateLimited
+  const retryAfterMs = Number.isSafeInteger(liveResult?.retryAfterMs)
+    ? liveResult.retryAfterMs
+    : liveRateLimit.retryAfterMs
   const liveQueryFailed =
     liveQueryEnabled &&
     auth.authStatus !== 'logged_out' &&
@@ -917,6 +1019,8 @@ async function collectProviderSnapshot({
     metrics,
     queryFailed,
     queryErrorMessage: liveQueryFailed ? liveMessage : null,
+    rateLimited,
+    retryAfterMs,
     failureReason:
       queryFailed || auth.authStatus === 'logged_out'
         ? classifyFailureReason({
@@ -1111,11 +1215,13 @@ async function runLiveUsageCommand({
   source,
   providerId,
   runCommand,
+  onExternalProviderRequest = () => {},
   profileEnv = {},
   now,
   signal,
 }) {
   let result
+  onExternalProviderRequest()
   try {
     result = await runCommand({
       command: source.usage.command,
@@ -1125,7 +1231,8 @@ async function runLiveUsageCommand({
       timeoutMs: COMMAND_TIMEOUT_MS,
       signal,
     })
-  } catch {
+  } catch (error) {
+    const rateLimit = getRateLimitDetails(error?.message, Number(now()))
     return {
       ok: false,
       collectedAt: null,
@@ -1133,10 +1240,15 @@ async function runLiveUsageCommand({
       metrics: [],
       details: null,
       message: `A consulta ao uso ao vivo de ${source.name} falhou.`,
+      ...rateLimit,
     }
   }
 
   if (result?.ok !== true) {
+    const rateLimit = getRateLimitDetails(
+      `${result?.message ?? ''}\n${result?.stdout ?? ''}\n${result?.stderr ?? ''}`,
+      Number(now()),
+    )
     return {
       ok: false,
       collectedAt: null,
@@ -1144,6 +1256,7 @@ async function runLiveUsageCommand({
       metrics: [],
       details: null,
       message: `A consulta ao uso ao vivo de ${source.name} falhou.`,
+      ...rateLimit,
     }
   }
 
@@ -1380,6 +1493,11 @@ function createSampleBase({
       measuredAt: snapshot.measuredAt ?? undefined,
       providerVersion: providerVersion ?? undefined,
       failureReason: snapshot.failureReason ?? undefined,
+      rateLimited: snapshot.rateLimited === true ? true : undefined,
+      retryAfterMs:
+        Number.isSafeInteger(snapshot.retryAfterMs) && snapshot.retryAfterMs > 0
+          ? snapshot.retryAfterMs
+          : undefined,
       // `statusDetails` (inclui os resets bancados do Codex) NÃO entra aqui.
       // Uma rodada sem `targetAccountId` (login do sistema) compartilha o
       // mesmo snapshot entre TODAS as contas do provider em `destino` — se
@@ -1581,6 +1699,7 @@ function buildProviders(catalog, accounts) {
           docsUrl: source.usage.docsUrl ?? null,
           limitation: source.usage.limitation,
           capability: classifyUsageCapability(source),
+          scheduledRefresh: source.scheduledRefresh ?? 'none',
         },
       }
     }),
@@ -1599,6 +1718,7 @@ function buildProviders(catalog, accounts) {
           docsUrl: null,
           limitation: 'Este provider ainda não tem fonte de uso configurada.',
           capability: 'unsupported',
+          scheduledRefresh: 'none',
         },
       }))
       .filter((provider, index, all) =>

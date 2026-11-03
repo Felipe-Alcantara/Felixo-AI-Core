@@ -1,4 +1,13 @@
-const { app, BrowserWindow, Menu, ipcMain, safeStorage, session, shell } = require('electron')
+const {
+  app,
+  BrowserWindow,
+  Menu,
+  ipcMain,
+  powerMonitor,
+  safeStorage,
+  session,
+  shell,
+} = require('electron')
 const path = require('node:path')
 const fs = require('node:fs')
 const vm = require('node:vm')
@@ -860,6 +869,9 @@ app.whenReady().then(async () => {
   agentUsageWatching = registerAgentUsageIpcHandlers({
     service: agentUsageService,
     getMainWindow,
+    getActiveSessions: () => ptyHandlers?.manager?.listarSessoesVivas?.() ?? [],
+    powerMonitor,
+    onSchedulerMetrics: (event) => logQaEvent(event),
   })
   // Agente na nuvem: a conta escolhida vira o ambiente do `claude --cloud`
   // pelo mesmo cadastro que os terminais usam; sem conta vale o Login do sistema.

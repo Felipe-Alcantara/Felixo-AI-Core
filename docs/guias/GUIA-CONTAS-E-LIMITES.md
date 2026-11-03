@@ -42,22 +42,43 @@ Cada número mostra de onde veio e **quando foi medido**, que nem sempre é quan
 o app leu — uma fonte que só é atualizada durante a sessão continua exibindo o
 último valor conhecido, marcado como antigo em vez de apresentado como atual.
 Onde a CLI não oferece cota consultável sem interação, o painel diz isso por
-extenso, em vez de mostrar zero. As fontes declaradas com consulta ao vivo são
-executadas em cada atualização e por conta/perfil: o Codex lê o app-server
-autenticado e a tela do `/status` (ver abaixo), o Claude abre uma sessão PTY
-descartável e executa o `/status`, e o Openia chama seu `statusline`. Por
-isso o painel não copia o limite do login do sistema para outra linha. Ao
+extenso, em vez de mostrar zero. Na atualização manual, as fontes ao vivo são
+consultadas por conta/perfil: o Codex lê o app-server autenticado e a tela do
+`/status` (ver abaixo), o Claude abre uma sessão PTY descartável e executa o
+`/status`, e o Openia chama seu `statusline`. Por isso o painel não copia o
+limite do login do sistema para outra linha. Ao
 abrir, o painel mostra o que já tem e só consulta de novo se a última coleta
 completa tiver 5 minutos ou mais (ou se ainda não houve coleta desde que o app
 abriu). Abaixo disso, a coleta recente vale para aquela abertura, e o selo
 **ao vivo** mostra a hora dela: abrir e fechar o painel várias vezes não refaz
-a consulta de todas as contas. O botão **Atualizar** sempre repete a consulta,
-e a atualização automática pode ser configurada em intervalos de 5, 15 ou 30
-minutos. Com muitas contas, o **Atualizar** consulta no máximo quatro por vez e as
-demais esperam a vez: a rodada demora mais, mas o computador não abre dezenas de CLIs
-ao mesmo tempo. Se a rodada passar de 90 segundos, ou se você usar **Reconectar**, as CLIs em
-andamento são encerradas e as contas que ainda não tinham sido consultadas ficam com a última
-leitura e a mensagem do cancelamento.
+a consulta de todas as contas. O botão **Atualizar** sempre repete a consulta
+completa. Enquanto o painel estiver visível e o Modo Performance desligado, um
+scheduler único no processo principal inicia uma rodada a cada ~30 segundos e
+consulta até quatro contas ao mesmo tempo, priorizando sessões abertas e leituras
+mais antigas. Nessa cadência, o Codex consulta só os limites pelo app-server e o
+Openia executa `statusline`; o Claude recebe atualizações da status line local
+pelo watcher, sem abrir PTY, e o Gemini fica fora por depender de uma sessão
+interativa. Assim, a atualização automática evita as fontes lentas ou sem quota
+consultável fora da sessão. Em ociosidade prolongada (5 minutos) ou usando
+bateria, a frequência cai para no máximo uma consulta por conta a cada 5 ou 2
+minutos, respectivamente, e a concorrência cai para duas. O scheduler pausa ao
+ocultar a janela, ativar o Modo Performance ou suspender o sistema. Uma falha
+aumenta o intervalo daquela conta até 15 minutos; para HTTP 429, respeita
+`Retry-After` com mínimo de 5 minutos, e conta sem autenticação tenta de novo
+após 15 minutos. O botão **Atualizar** não espera o backoff.
+
+Ao ocultar ou suspender o app durante uma consulta agendada, a consulta é
+cancelada e sua resposta não substitui a última amostra salva. Se o **Atualizar**
+manual começar enquanto há uma consulta agendada, ela é cancelada antes da
+rodada completa. Como muitas contas podem demorar mais que 30 segundos para
+serem todas consultadas, cada uma é atualizada na próxima rodada em que estiver
+elegível; o intervalo é a cadência do scheduler, não uma promessa de que todas
+as contas terminem dentro de 30 segundos.
+
+Em uma atualização manual completa, as contas consultam no máximo quatro por
+vez e as demais esperam a vez. Se a rodada passar de 90 segundos, ou se você usar
+**Reconectar**, as CLIs em andamento são encerradas e as contas que ainda não
+tinham sido consultadas ficam com a última leitura e a mensagem do cancelamento.
 
 Quando a rodada não traz número, o painel diz por quê, com uma frase fixa por
 razão (a saída crua da CLI não vai para a tela): **a conta não está logada** (a
