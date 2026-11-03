@@ -73,6 +73,7 @@ import {
 } from '../hooks/useResizableSidebarWidth'
 import { canvasSurfaceLayoutWarning, freeCanvasArea } from '../services/canvas-surfaces'
 import { usePerformanceMode } from '../../shared/performance/performance-mode-context'
+import { CanvasPerformanceSuggestion } from './CanvasPerformanceSuggestion'
 import { toolbarColumnOffset } from './toolbar-flyout'
 import { CliSetupToast } from '../../setup/CliSetupNotice'
 import { useUpdateStatus } from '../../updates/useUpdateStatus'
@@ -2175,6 +2176,7 @@ function CanvasInner({
         tabIndex={0}
       >
       {isBusy && <div className="absolute inset-0 z-50 cursor-wait" aria-hidden="true" />}
+      <CanvasPerformanceSuggestion nodeCount={nodes.length} hydrated={hydrated} />
       <CanvasTopbar
         onOpenSearch={() => openTool('search')}
         trailing={

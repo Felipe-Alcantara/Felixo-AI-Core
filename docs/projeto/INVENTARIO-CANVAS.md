@@ -29,7 +29,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 
 ## Números
 
-- **Elementos:** 99 (10 blocos, 16 ferramentas, 73 outras superfícies)
+- **Elementos:** 100 (10 blocos, 16 ferramentas, 74 outras superfícies)
 - **Controles:** 378, dos quais 57 com teste específico
 - **Elementos sem nenhum teste:** 4
 - **Lacunas:** 274 (alto 10, médio 148, baixo 116), em 78 tasks
@@ -2796,6 +2796,23 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | Fixed bottom-6 no centro, z 70, sem [data-felixo-tour-avoid]: cobre o NoticeToast (z 50, também embaixo no centro) e os botões dele, e o card do tour não desvia dele. Nenhum teste põe o aviso junto com o NoticeToast ou com o card. | médio | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
+
+### Sugestão do Modo Performance por carga
+
+- **ID:** `performance-carga-aviso` · **Dono:** `src/features/canvas/components/CanvasPerformanceSuggestion.tsx`
+- **Persistência:** localStorage felixo-ai-core.performance-load-suggestion
+- **IPC:** nenhum
+- **Depende de:** `classifyPerformanceScenario`, `useSessionSnapshots`, `usePerformanceMode`, `NoticeToast`
+- **Sobreposição:** NoticeToast fixo no canto inferior esquerdo, com data-felixo-tour-avoid.
+- **Testes:** `src/features/canvas/components/CanvasPerformanceSuggestion.test.ts`
+
+| Estado | Quando |
+| --- | --- |
+| normal | Canvas hidratado com menos de 10 sessões ativas e 300 blocos: sem aviso. |
+| pending | A partir de 10 sessões ativas ou 300 blocos, sugere ligar o modo; Ligar salva e ativa, Agora não e × apenas salvam a resposta. |
+| disabled | Modo ligado, canvas não hidratado ou resposta já salva: sem aviso. |
+
+Sem controle próprio: as ações vêm de outros elementos.
 
 ### Avisos de hardware (volta da placa de vídeo e sugestão do Modo Performance)
 

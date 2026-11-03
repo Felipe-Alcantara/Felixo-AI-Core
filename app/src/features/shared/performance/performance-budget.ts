@@ -3,8 +3,7 @@
  * para o baseline medido e o raciocínio por trás de cada valor.
  *
  * Centralizado aqui (em vez de espalhado em comentário) para que qualquer
- * lugar do código que precise decidir "estamos dentro do orçamento?" — hoje
- * nenhum, é o gap de ativação automática por carga listado na política —
+ * lugar do código que precise decidir "estamos dentro do orçamento?" —
  * tenha uma única fonte de verdade a importar, e os testes possam travar
  * regressão nos números em vez de só no comentário.
  */

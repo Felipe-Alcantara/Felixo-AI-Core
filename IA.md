@@ -1482,3 +1482,20 @@ de contexto.
 
 Estado: comparação sintética concluída; validação no notebook físico de referência pendente de
 acesso à máquina.
+
+## 2026-11-03 — Sugestão de Modo Performance por carga
+
+**Pedido.** Sugerir ou ativar o modo quando o canvas ficar carregado, com aviso e escolha da pessoa.
+
+**Entrega.** `CanvasPerformanceSuggestion` usa `classifyPerformanceScenario` após a hidratação:
+10 sessões de terminal ativas ou 300 blocos mostram uma sugestão. Sessões encerradas ou com erro
+não contam. A pessoa escolhe ligar ou dispensar; a resposta é salva separadamente da sugestão por
+hardware. Sem armazenamento, vale durante a sessão. O modo pode ser desligado em Configurações.
+
+**Validação.** Testes focados: 4/4; frontend completo: 3.376 passaram e 3 foram ignorados;
+inventário: 9/9; lint e build passaram. A instância de desenvolvimento abriu com perfil isolado e
+canvas hidratado. Os cliques no aviso sob carga não foram exercitados no Electron; os testes
+invocam as ações e verificam persistência e ativação. O DevTools da instalação empacotada estava
+indisponível; a instância de desenvolvimento foi encerrada após o smoke.
+
+Estado: implementação e testes locais concluídos; validação visual sob carga pendente.

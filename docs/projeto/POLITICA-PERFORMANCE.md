@@ -175,6 +175,16 @@ e o app não sugere.
   `src/features/shared/performance/performance-suggestion.ts` e
   `src/features/shared/hardware/HardwareNotices.tsx`.
 
+#### Sugestão por carga do canvas (03/11/2026)
+
+Após carregar o canvas, 10 sessões de terminal ativas (incluindo inicialização e
+espera) ou 300 blocos acionam uma sugestão do Modo Performance. Sessões que
+terminaram ou falharam não contam. A pessoa escolhe ligar ou dispensar; o modo
+não é ativado sozinho e pode ser desligado em Configurações. A resposta fica em
+`localStorage` sob `felixo-ai-core.performance-load-suggestion`, separada da
+sugestão por hardware; sem armazenamento, vale durante a sessão da interface.
+O aviso usa o classificador de `performance-budget.ts` e não mede CPU ou FPS.
+
 #### Limites internos e o número de CPUs (26/09/2026)
 
 Mapa dos limites que rodam trabalho em paralelo e o que muda com as CPUs. Só é
