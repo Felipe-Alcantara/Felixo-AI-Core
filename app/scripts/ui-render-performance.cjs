@@ -40,11 +40,12 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 const net = require('node:net')
-const { spawn } = require('node:child_process')
+const { spawn, execFileSync } = require('node:child_process')
 const { performance } = require('node:perf_hooks')
 
 const DEFAULT_ROUNDS = 3
 const MAX_ROUNDS = 10
+// --legacy-baseline=<commit> mede somente o modo Normal de um checkout antigo.
 const DEFAULT_DURATION_MS = 6_000
 const DEFAULT_NODES = 48
 // A task de hardware pede o canvas com 1.000 blocos, um uso pesado real.
@@ -57,6 +58,7 @@ const MODES = ['off', 'on']
 // `aria-expanded` (abre um menu), mas não é grupo: fica de fora para a
 // sequência de cliques ser a mesma de antes do tutorial existir.
 const SIDEBAR_GROUPS_SELECTOR = '[data-felixo-region="sidebar"] button[aria-expanded]:not([data-felixo-help-trigger])'
+const LEGACY_TOOLBAR_TOGGLE_SELECTOR = '[data-felixo-canvas-ready] button[aria-label="Recolher funções auxiliares"], [data-felixo-canvas-ready] button[aria-label="Expandir funções auxiliares"]'
 // Retomada do tutorial por sessão: limpa antes de cada reload, para toda rodada
 // abrir o tour pela Ajuda do mesmo jeito.
 const ONBOARDING_SESSION_KEY = 'felixo:onboarding:sessao'
@@ -94,6 +96,7 @@ function parseArgs(argv) {
     out: null,
     launchTimeoutMs: DEFAULT_LAUNCH_TIMEOUT_MS,
     onboarding: false,
+    legacyBaseline: null,
   }
   for (const argument of argv) {
     const [rawKey, ...rest] = argument.split('=')
@@ -135,6 +138,12 @@ function parseArgs(argv) {
       case '--app-dir':
         if (!value) throw new Error('--app-dir precisa de um caminho.')
         options.appDir = path.resolve(value)
+        break
+      case '--legacy-baseline':
+        if (!/^[0-9a-f]{7,40}$/i.test(value)) {
+          throw new Error('--legacy-baseline exige um hash Git com 7 a 40 caracteres hexadecimais.')
+        }
+        options.legacyBaseline = value.toLowerCase()
         break
       case '--out':
         if (!value) throw new Error('--out precisa de um caminho.')
@@ -324,7 +333,10 @@ function buildFixtureEdges(nodes) {
 }
 
 /** Ordem das rodadas: alterna quem vai primeiro, para a deriva não favorecer um modo. */
-function roundOrder(rounds) {
+function roundOrder(rounds, legacyBaseline = false) {
+  if (legacyBaseline) {
+    return Array.from({ length: rounds }, (_, index) => ({ round: index + 1, mode: 'baseline' }))
+  }
   const order = []
   for (let round = 0; round < rounds; round += 1) {
     const modes = round % 2 === 0 ? MODES : [...MODES].reverse()
@@ -335,7 +347,7 @@ function roundOrder(rounds) {
 
 function summarizeRuns(runs) {
   const summary = {}
-  for (const mode of MODES) {
+  for (const mode of new Set(runs.map((run) => run.mode))) {
     const own = runs.filter((run) => run.mode === mode)
     if (!own.length) continue
     const pick = (read) => median(own.map(read))
@@ -463,11 +475,13 @@ async function findAppPage(browser, timeoutMs) {
   throw new Error('A janela principal do app não apareceu.')
 }
 
-async function waitHydrated(page, nodeIds, timeoutMs) {
+async function waitHydrated(page, nodeIds, timeoutMs, legacyBaseline = false) {
   await page.waitForFunction(
-    (ids) => document.querySelector('[data-felixo-hydrated="true"]') !== null
+    ({ ids, legacy }) => (legacy
+      ? document.querySelector('[data-felixo-canvas-ready]') !== null
+      : document.querySelector('[data-felixo-hydrated="true"]') !== null)
       && ids.every((id) => document.querySelector(`[data-id="${id}"]`)),
-    nodeIds,
+    { ids: nodeIds, legacy: legacyBaseline },
     { timeout: timeoutMs },
   )
 }
@@ -485,6 +499,15 @@ function assertPerformanceModeSurfaces(state, mode, onboarding = false) {
   }
   if (state.onboardingVisible !== onboarding || state.onboardingRingVisible !== onboarding) {
     throw new Error(`[ui-render] superfícies do tutorial incorretas no modo ${mode}.`)
+  }
+}
+
+function assertLegacyBaselineSurfaces(state) {
+  if (state.performanceMode !== null) {
+    throw new Error('[ui-render] o baseline histórico deveria anteceder o atributo do Modo Performance.')
+  }
+  if (state.onboardingVisible || state.onboardingRingVisible) {
+    throw new Error('[ui-render] o baseline histórico deveria medir com o tutorial fechado.')
   }
 }
 
@@ -732,7 +755,7 @@ function isCoveredByTour(element) {
  * coberto pelo card é acionado pelo DOM (o mesmo handler, como o teclado faria),
  * para o trabalho de abrir e fechar grupos ser o mesmo com e sem o tutorial.
  */
-async function interact(page, durationMs, { tour = false } = {}) {
+async function interact(page, durationMs, { tour = false, legacyBaseline = false } = {}) {
   await page.evaluate(() => {
     window.__felixoUiRender = { intervals: [], longTasks: [], running: true }
     const state = window.__felixoUiRender
@@ -756,10 +779,11 @@ async function interact(page, durationMs, { tour = false } = {}) {
   const pane = await page.locator('.react-flow__pane').boundingBox()
   const centerX = pane ? pane.x + pane.width / 2 : 600
   const centerY = pane ? pane.y + pane.height / 2 : 400
-  const headings = page.locator(SIDEBAR_GROUPS_SELECTOR)
+  const headings = page.locator(legacyBaseline ? LEGACY_TOOLBAR_TOGGLE_SELECTOR : SIDEBAR_GROUPS_SELECTOR)
   const dragHandle = page.locator('[data-id="bench-nota-1"] .canvas-node-drag')
   const startedAt = Date.now()
   let step = 0
+  let sidebarToggleCount = 0
   while (Date.now() - startedAt < durationMs) {
     const phase = step % 10
     if (phase < 2) {
@@ -776,8 +800,13 @@ async function interact(page, durationMs, { tour = false } = {}) {
       if (count > 0) {
         const heading = headings.nth(step % count)
         const covered = tour && (await heading.evaluate(isCoveredByTour).catch(() => false))
-        if (covered) await heading.evaluate((element) => element.click()).catch(() => {})
-        else await heading.click({ timeout: 2_000 }).catch(() => {})
+        try {
+          if (covered) await heading.evaluate((element) => element.click())
+          else await heading.click({ timeout: 2_000 })
+          sidebarToggleCount += 1
+        } catch {
+          // Um alvo coberto ou desativado não conta como interação executada.
+        }
       }
     } else if (phase < 8) {
       const node = page.locator('.react-flow__node').nth(step % 6)
@@ -798,7 +827,7 @@ async function interact(page, durationMs, { tour = false } = {}) {
     await page.waitForTimeout(60)
   }
 
-  return page.evaluate(() => {
+  const result = await page.evaluate(() => {
     const state = window.__felixoUiRender
     state.running = false
     state.observer?.disconnect()
@@ -807,6 +836,7 @@ async function interact(page, durationMs, { tour = false } = {}) {
       longTasks: state.longTasks,
     }
   })
+  return { ...result, sidebarToggleCount }
 }
 
 /**
@@ -826,14 +856,21 @@ async function openOnboardingTour(page, timeoutMs) {
 /** Recarrega no modo pedido e, com `--onboarding`, abre o tour antes de medir. */
 async function prepareRound(page, { mode, nodeIds, options }) {
   await page.evaluate(
-    ({ key, value, sessionKey, resetTour }) => {
-      window.localStorage.setItem(key, value)
+    ({ key, value, sessionKey, resetTour, legacy }) => {
+      if (legacy) window.localStorage.removeItem(key)
+      else window.localStorage.setItem(key, value)
       if (resetTour) window.sessionStorage.removeItem(sessionKey)
     },
-    { key: PERFORMANCE_MODE_STORAGE_KEY, value: mode, sessionKey: ONBOARDING_SESSION_KEY, resetTour: options.onboarding },
+    {
+      key: PERFORMANCE_MODE_STORAGE_KEY,
+      value: mode === 'baseline' ? 'off' : mode,
+      sessionKey: ONBOARDING_SESSION_KEY,
+      resetTour: options.onboarding,
+      legacy: Boolean(options.legacyBaseline),
+    },
   )
   await page.reload()
-  await waitHydrated(page, nodeIds, options.launchTimeoutMs)
+  await waitHydrated(page, nodeIds, options.launchTimeoutMs, Boolean(options.legacyBaseline))
   if (options.onboarding) await openOnboardingTour(page, options.launchTimeoutMs)
   const surfaces = await page.evaluate((cardSelector) => {
     const card = document.querySelector(cardSelector)
@@ -852,12 +889,13 @@ async function prepareRound(page, { mode, nodeIds, options }) {
       onboardingRingVisible: visible(ring),
     }
   }, ONBOARDING_CARD_SELECTOR)
-  assertPerformanceModeSurfaces(surfaces, mode, options.onboarding)
+  if (options.legacyBaseline) assertLegacyBaselineSurfaces(surfaces)
+  else assertPerformanceModeSurfaces(surfaces, mode, options.onboarding)
   return surfaces
 }
 
-async function measureRun(page, cdp, { mode, round, durationMs, tour = false, surfaceState }) {
-  const { events, actionResult } = await collectTrace(cdp, () => interact(page, durationMs, { tour }))
+async function measureRun(page, cdp, { mode, round, durationMs, tour = false, surfaceState, legacyBaseline = false }) {
+  const { events, actionResult } = await collectTrace(cdp, () => interact(page, durationMs, { tour, legacyBaseline }))
   const rendererPid = rendererPidFromTrace(events)
   const frames = frameStats(actionResult.intervals, durationMs)
   const trace = summarizeTrace(events, rendererPid)
@@ -874,10 +912,25 @@ async function measureRun(page, cdp, { mode, round, durationMs, tour = false, su
       count: actionResult.longTasks.length,
       totalMs: Number(actionResult.longTasks.reduce((total, value) => total + value, 0).toFixed(3)),
     },
+    sidebarToggleCount: actionResult.sidebarToggleCount,
   }
 }
 
 async function run(options) {
+  if (options.legacyBaseline) {
+    if (options.appDir === path.resolve(__dirname, '..')) {
+      throw new Error('--legacy-baseline exige --app-dir apontando para o checkout histórico.')
+    }
+    let actualCommit
+    try {
+      actualCommit = execFileSync('git', ['-C', options.appDir, 'rev-parse', '--short=40', 'HEAD'], { encoding: 'utf8' }).trim()
+    } catch {
+      throw new Error('[ui-render] não foi possível ler o commit do checkout indicado em --app-dir.')
+    }
+    if (!actualCommit.toLowerCase().startsWith(options.legacyBaseline)) {
+      throw new Error(`[ui-render] --app-dir está em ${actualCommit}, não no baseline ${options.legacyBaseline}.`)
+    }
+  }
   let chromium
   try {
     ({ chromium } = require(require.resolve('playwright-core', { paths: [options.appDir, __dirname] })))
@@ -896,7 +949,11 @@ async function run(options) {
   try {
     browser = await chromium.connectOverCDP(`http://127.0.0.1:${app.port}`)
     const page = await findAppPage(browser, options.launchTimeoutMs)
-    await page.waitForFunction(() => document.querySelector('[data-felixo-hydrated="true"]') !== null, null, { timeout: options.launchTimeoutMs })
+    await page.waitForFunction(
+      (legacy) => document.querySelector(legacy ? '[data-felixo-canvas-ready]' : '[data-felixo-hydrated="true"]') !== null,
+      Boolean(options.legacyBaseline),
+      { timeout: options.launchTimeoutMs },
+    )
     const aberturaMs = Number((performance.now() - launchStartedAt).toFixed(1))
     console.log(`[ui-render] abertura até o canvas hidratado: ${aberturaMs} ms${options.onboarding ? ' (rodadas com o tutorial aberto)' : ''}`)
     await populateCanvas(page, nodes, edges)
@@ -905,11 +962,9 @@ async function run(options) {
     const gpu = await readGpuInfo(browser)
     console.log(`[ui-render] GPU: ${gpu.renderer ?? 'desconhecida'} (${gpu.vendor ?? 's/ fornecedor'})`)
     if (options.render === 'gpu') assertRequestedGpu(options.gpu, gpu)
-    const modeToggleCoverage = await verifyModeSettingsAndActiveDrag(
-      page,
-      nodeIds,
-      options.launchTimeoutMs,
-    )
+    const modeToggleCoverage = options.legacyBaseline
+      ? { supportedByBaseline: false, baselineCommit: options.legacyBaseline }
+      : await verifyModeSettingsAndActiveDrag(page, nodeIds, options.launchTimeoutMs)
     await populateCanvas(page, nodes, edges)
     // O domínio Tracing é do alvo browser, não da página: o trace sai de todos
     // os processos e `rendererPidFromTrace` isola o renderer da janela medida.
@@ -919,16 +974,23 @@ async function run(options) {
     // ela é do modo `off`, inflava o ganho aparente do Modo Performance. Uma
     // passada completa da interação, fora do relatório, tira esse viés.
     for (let pass = 0; pass < options.warmup; pass += 1) {
-      await prepareRound(page, { mode: 'off', nodeIds, options })
+      await prepareRound(page, { mode: options.legacyBaseline ? 'baseline' : 'off', nodeIds, options })
       await page.waitForTimeout(1_500)
-      await interact(page, options.durationMs, { tour: options.onboarding })
+      await interact(page, options.durationMs, { tour: options.onboarding, legacyBaseline: Boolean(options.legacyBaseline) })
       console.log(`[ui-render] aquecimento ${pass + 1}/${options.warmup} descartado`)
     }
     const runs = []
-    for (const { round, mode } of roundOrder(options.rounds)) {
+    for (const { round, mode } of roundOrder(options.rounds, Boolean(options.legacyBaseline))) {
       const surfaceState = await prepareRound(page, { mode, nodeIds, options })
       await page.waitForTimeout(1_500)
-      const measured = await measureRun(page, cdp, { mode, round, durationMs: options.durationMs, tour: options.onboarding, surfaceState })
+      const measured = await measureRun(page, cdp, {
+        mode,
+        round,
+        durationMs: options.durationMs,
+        tour: options.onboarding,
+        surfaceState,
+        legacyBaseline: Boolean(options.legacyBaseline),
+      })
       if (options.onboarding) {
         // A interação nunca fecha o tour (ele não é modal); se fechou, a rodada não mediu o que diz.
         measured.tutorialAberto = (await page.locator(ONBOARDING_CARD_SELECTOR).count()) === 1
@@ -937,7 +999,8 @@ async function run(options) {
       runs.push(measured)
       console.log(
         `[ui-render] rodada ${round} modo=${mode}: fps=${measured.frames.fps} p95=${measured.frames.p95Ms}ms >25ms=${measured.frames.acimaDe25Ms} ` +
-        `estilo=${measured.trace.estiloMs}ms layout=${measured.trace.layoutMs}ms paint=${measured.trace.paintMs}ms longTasks=${measured.longTasks.count}`,
+        `estilo=${measured.trace.estiloMs}ms layout=${measured.trace.layoutMs}ms paint=${measured.trace.paintMs}ms ` +
+        `longTasks=${measured.longTasks.count} sidebarToggles=${measured.sidebarToggleCount}`,
       )
     }
     const report = {
@@ -949,6 +1012,8 @@ async function run(options) {
       render: options.render,
       angle: options.angle,
       gpu,
+      baselineCommit: options.legacyBaseline,
+      interactionProfile: options.legacyBaseline ? 'legacy-toolbar-toggle' : 'current-sidebar-groups',
       config: { rounds: options.rounds, warmup: options.warmup, durationMs: options.durationMs, nodes: nodes.length, edges: edges.length, onboarding: options.onboarding, cpuThrottle: options.cpuThrottle },
       aberturaMs,
       modeToggleCoverage,
@@ -981,8 +1046,10 @@ module.exports = {
   PERFORMANCE_MODE_STORAGE_KEY,
   isCoveredByTour,
   SIDEBAR_GROUPS_SELECTOR,
+  LEGACY_TOOLBAR_TOGGLE_SELECTOR,
   assertRequestedGpu,
   assertPerformanceModeSurfaces,
+  assertLegacyBaselineSurfaces,
   verifyModeSettingsAndActiveDrag,
   buildFixtureEdges,
   buildFixtureNodes,

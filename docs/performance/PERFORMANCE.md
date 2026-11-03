@@ -225,14 +225,52 @@ node scripts/ui-render-performance.cjs --gpu=padrao --cpu-throttle=4 --onboardin
 ```
 
 O throttling usa CDP e é uma simulação; ele não substitui uma medição em um
-notebook físico de referência. Os harnesses também não comparam por si só a
-versão anterior ao commit `44f8cec`.
+notebook físico de referência. O harness da UI agora também mede um checkout
+histórico em modo Normal: `--legacy-baseline=<hash>` valida o commit informado,
+usa o marcador antigo do canvas e registra que aquela versão não tinha o toggle.
+Para comparar com o código imediatamente anterior a `44f8cec`, use seu pai
+`b9e3555` e a mesma carga, GPU e throttle nas duas execuções.
+
+No PowerShell, com o comando rodado a partir da pasta `app/` do checkout atual:
+
+```powershell
+$baseline = Join-Path $env:TEMP 'felixo-perf-baseline-b9e3555'
+git worktree add --detach $baseline b9e3555
+Push-Location "$baseline\app"
+npm ci
+npx vite build
+Pop-Location
+node scripts/ui-render-performance.cjs "--app-dir=$baseline\app" --legacy-baseline=b9e3555 --render=software --rounds=3 --warmup=1 --duration-ms=3000 --nodes=48 --cpu-throttle=4 "--out=$env:TEMP\felixo-baseline.json"
+node scripts/ui-render-performance.cjs --render=software --rounds=3 --warmup=1 --duration-ms=3000 --nodes=48 --cpu-throttle=4 "--out=$env:TEMP\felixo-current.json"
+```
 
 A execução local de 03/11/2026 (Windows x64, AMD Radeon integrada, CDP throttle
 4×, 48 blocos, tutorial aberto, 3 rodadas de 3 s) mediu 16,33 FPS e quadro p95
 de 133,1 ms em Normal; em Performance, 35,33 FPS e 83,1 ms. O estilo por quadro
 caiu de 22,97 para 1,512 ms. A configuração completa e os limites da medição
 estão em [Política de performance](../projeto/POLITICA-PERFORMANCE.md).
+
+**Comparação histórica local (03/11/2026).** Windows x64, mesma instância do
+Microsoft Basic Render Driver (renderização por software), CDP `cpuThrottle=4`,
+48 nós/31 arestas, três rodadas de 3 s por condição, um aquecimento, tutorial
+fechado e dois toggles da barra/sidebar por rodada. A referência é `b9e3555`,
+pai de `44f8cec`; a versão atual é `f11da68`.
+
+| Versão e modo | FPS | Quadro p95 | Estilo por quadro | Long tasks por rodada |
+|---|---:|---:|---:|---:|
+| `b9e3555` Normal | 58,00 | 33,3 ms | 0,948 ms | 0 |
+| `f11da68` Normal | 19,67 | 116,57 ms | 19,203 ms | 27 |
+| `f11da68` Performance | 36,33 | 66,6 ms | 1,282 ms | 15 |
+
+Performance elevou o FPS em 85% frente ao Normal atual, reduziu o p95 em 43% e
+o estilo por quadro em 93%. Ainda ficou 37% abaixo do FPS e 100% acima do p95
+da referência histórica; o estilo por quadro ficou 35% maior. Portanto, o
+ganho dentro da versão atual está confirmado, mas o critério de igualar ou
+superar o baseline pré-`44f8cec` **não foi atendido**. É uma rodada exploratória
+com CPU simulada e rasterização por software, não uma prova em notebook físico;
+a otimização e a validação em hardware real seguem em acompanhamento. Os
+relatórios JSON brutos ficaram no diretório temporário local e não foram
+adicionados ao repositório.
 
 Artefatos desta auditoria:
 

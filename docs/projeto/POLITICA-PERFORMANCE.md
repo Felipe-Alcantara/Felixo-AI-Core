@@ -300,8 +300,10 @@ tutorial aberto, o painel de uso e o refresh manual. A cadência automática do
 painel de uso é 30 segundos no modo Normal e 5 minutos no Modo Performance.
 
 Limite da evidência: o benchmark com throttling simula CPU lenta por CDP; não
-substitui uma medição em um notebook físico de referência. A matriz dos
-harnesses também não compara diretamente a versão anterior ao commit `44f8cec`.
+substitui uma medição em um notebook físico de referência. O harness da UI
+agora aceita `--legacy-baseline=<hash>`, valida o commit do checkout, usa o
+marcador antigo do canvas e registra que a versão histórica não tinha toggle
+de Performance.
 
 **Medição local do app completo (03/11/2026).** Windows x64 (build 10.0.26300),
 GPU integrada AMD Radeon (driver 31.0.21923.1000), 16 CPUs lógicas; 48 blocos e
@@ -319,6 +321,24 @@ persiste após reload, muda o atributo durante um drag ativo, deixa o drag
 terminar e permite restaurar Normal. É uma medição exploratória curta no PC
 atual: o throttling via CDP simula a CPU, não reproduz o notebook físico de
 referência e não constitui comparação histórica com o commit `44f8cec`.
+
+**Comparação com o código anterior a `44f8cec` (03/11/2026).** A referência é
+`b9e3555`, pai direto de `44f8cec`. No mesmo Windows x64, usando o Microsoft
+Basic Render Driver (software), CDP `cpuThrottle=4`, 48 nós/31 arestas, três
+rodadas de 3 s por condição, um aquecimento e tutorial fechado, o baseline fez
+58 FPS, quadro p95 de 33,3 ms e 0,948 ms de estilo por quadro. No commit
+`f11da68`, Normal fez 19,67 FPS, p95 de 116,57 ms e 19,203 ms de estilo por
+quadro; Performance fez 36,33 FPS, p95 de 66,6 ms e 1,282 ms de estilo por
+quadro. Cada rodada concluiu dois toggles da barra/sidebar em ambos os
+checkouts.
+
+O Modo Performance atual elevou o FPS em 85% frente ao Normal e reduziu o p95
+em 43%, mas ficou 37% abaixo do FPS histórico e com p95 duas vezes maior; o
+estilo por quadro é 35% maior. Portanto, a meta de igualar ou superar o
+baseline pré-`44f8cec` **segue aberta**. A comparação usa a mesma renderização
+por software e throttle sintético, mas não substitui a execução no notebook
+físico de referência. Acompanhar uma otimização do canvas e validar os mesmos
+critérios no hardware físico.
 
 ## Trade-offs e telemetry opt-in
 

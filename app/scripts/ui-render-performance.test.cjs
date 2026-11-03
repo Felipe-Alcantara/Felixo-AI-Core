@@ -14,6 +14,7 @@ test('argumentos padrão medem a GPU padrão com três rodadas', () => {
   assert.equal(options.cpuThrottle, 1)
   assert.equal(bench.parseArgs(['--cpu-throttle=4']).cpuThrottle, 4)
   assert.equal(bench.parseArgs(['--warmup=0']).warmup, 0)
+  assert.equal(bench.parseArgs(['--legacy-baseline=44f8cec']).legacyBaseline, '44f8cec')
   assert.equal(options.appDir, path.resolve(__dirname, '..'))
 })
 
@@ -25,6 +26,7 @@ test('argumentos inválidos falham com mensagem que diz o formato certo', () => 
   assert.throws(() => bench.parseArgs(['--nodes=1001']), /entre 4 e 1000/)
   assert.throws(() => bench.parseArgs(['--cpu-throttle=0']), /entre 1 e 16/)
   assert.throws(() => bench.parseArgs(['--cpu-throttle=17']), /entre 1 e 16/)
+  assert.throws(() => bench.parseArgs(['--legacy-baseline=main']), /hash Git/)
   assert.equal(bench.parseArgs(['--nodes=1000']).nodes, 1000)
   assert.throws(() => bench.parseArgs(['--desconhecido']), /Argumento desconhecido/)
   assert.throws(() => bench.parseArgs(['--onboarding=sim']), /não recebe valor/)
@@ -99,6 +101,10 @@ test('as rodadas alternam qual modo vai primeiro', () => {
     { round: 2, mode: 'on' },
     { round: 2, mode: 'off' },
   ])
+  assert.deepEqual(bench.roundOrder(2, true), [
+    { round: 1, mode: 'baseline' },
+    { round: 2, mode: 'baseline' },
+  ])
 })
 
 test('o resumo usa a mediana por modo e o custo por quadro', () => {
@@ -109,7 +115,8 @@ test('o resumo usa a mediana por modo e o custo por quadro', () => {
     porQuadro: bench.perFrame({ estiloMs: estilo, layoutMs: 0, paintMs: 0, composicaoMs: 0 }, frames),
     longTasks: { count: 0, totalMs: 0 },
   })
-  const summary = bench.summarizeRuns([run('off', 10, 100, 50), run('off', 30, 300, 150), run('off', 20, 200, 100), run('on', 50, 60, 300)])
+  const summary = bench.summarizeRuns([run('baseline', 8, 120, 40), run('off', 10, 100, 50), run('off', 30, 300, 150), run('off', 20, 200, 100), run('on', 50, 60, 300)])
+  assert.equal(summary.baseline.fps, 8)
   assert.equal(summary.off.fps, 20)
   assert.equal(summary.off.estiloMs, 200)
   assert.equal(summary.off.estiloPorQuadroMs, 2)
@@ -162,9 +169,28 @@ test('o app real mantém minimapa, céu e observadores do tutorial de acordo com
   )
 })
 
+test('o baseline histórico é reconhecido sem exigir o modo Performance', () => {
+  assert.doesNotThrow(() => bench.assertLegacyBaselineSurfaces({
+    performanceMode: null,
+    minimapVisible: false,
+    ambientStarfieldVisible: false,
+    onboardingVisible: false,
+    onboardingRingVisible: false,
+  }))
+  assert.throws(() => bench.assertLegacyBaselineSurfaces({
+    performanceMode: 'off',
+    minimapVisible: true,
+    ambientStarfieldVisible: false,
+    onboardingVisible: false,
+    onboardingRingVisible: false,
+  }), /anteceder o atributo/)
+})
+
 test('a interação só alterna grupos da sidebar: o botão Ajuda fica de fora', () => {
   assert.match(bench.SIDEBAR_GROUPS_SELECTOR, /button\[aria-expanded\]/)
   assert.match(bench.SIDEBAR_GROUPS_SELECTOR, /:not\(\[data-felixo-help-trigger\]\)/)
+  assert.match(bench.LEGACY_TOOLBAR_TOGGLE_SELECTOR, /Recolher funções auxiliares/)
+  assert.match(bench.LEGACY_TOOLBAR_TOGGLE_SELECTOR, /Expandir funções auxiliares/)
 })
 
 test('um grupo debaixo do card do tutorial conta como coberto; sem o tour, nunca', () => {
