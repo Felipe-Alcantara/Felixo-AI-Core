@@ -1429,3 +1429,17 @@ O backoff é por conta: falha genérica exponencial até 15 min, autenticação 
 **Validação.** Testes focados: 62/62; typecheck; testes nativos 9/9; frontend 211 arquivos, 3.361 testes passando e 3 pulados; canvas-context 6/6; lint e build passaram. A suíte Node completa teve 3.060 testes: 3.048 passaram, 3 falharam e 9 foram pulados. As três falhas estão fora dos arquivos alterados e dependem do perfil local: duas em agent-session-discovery (metadados/sessão de fixture não encontrados) e uma em pty-process-manager (CODEX_HOME do perfil local presente quando o teste esperava ausência). O CI 41643528998 passou em Linux, Windows, macOS, ARM e smoke do canvas; Release gate 41644654511 passou; Release 41644702651 publicou v0.1.495 como Latest para Ubuntu, Windows e macOS, incluindo o smoke de atualização silenciosa no Windows.
 
 **Não medido em uso real.** A aplicação e contas reais não foram usadas numa rodada ao vivo; portanto CPU, RAM, duração e cadência instrumentadas ainda não foram observadas com providers reais. O trabalho implementa a coleta desses dados para validação operacional posterior.
+
+## 2026-11-03 — Terminal: origem e detalhes do prompt no painel de atividade (v0.1.496)
+
+**Pedido.** Task "Terminal — unificar TerminalPanel com a proveniência do prompt e expor origem/detalhe": mostrar no painel a origem e os detalhes de cada prompt enviado pelo Terminal, cobrindo envios sucessivos e preservando o texto e o fluxo de envio existentes.
+
+**O que mudou** (commit `09c3840`). `ChatWorkspace` anexa ao envio metadados de proveniência sem o corpo do prompt. O IPC propaga esses metadados tanto no envio direto quanto na sessão persistente; os registros mantêm o histórico e atualizam a proveniência mais recente da sessão. `TerminalPanel` exibe o nome/origem e o modo de envio, e permite expandir o histórico com origem, modo, horário e prévia. O detalhe é somente leitura e não reexecuta o prompt. A cobertura também confirma a preservação dos metadados no fallback inline de arquivo.
+
+**Validação.** Testes focados Node: 39/39; frontend focado: 21/21 nos tipos/armazenamento e 1/1 no painel; fallback de arquivo: 4 passaram (18 ignorados pelo filtro). `npm run test:frontend`: 212 arquivos passaram, 2 ignorados; 3.364 testes passaram e 3 foram ignorados. `npm run typecheck`, `npm run lint`, `npm run build` e `git diff --check` passaram (o build mantém o aviso existente de chunk acima de 500 kB). `npm test`: 3.063 testes, 3.051 passaram, 3 falharam e 9 foram ignorados. Após retirar `CODEX_HOME` herdado, as falhas restantes ficaram em `installer-kill-smoke.test.cjs`: a sonda de processos inclui processos GitHub Desktop já existentes como descendentes. A task de isolamento foi aberta. CI `41652088260` passou em Windows, Linux, ARM, macOS e Canvas smoke; Release gate `41653045630` passou; Release `41653097003` publicou **v0.1.496** como Latest, com instaladores e smoke de atualização silenciosa no Windows aprovados.
+
+**Não validado.** Inspeção visual manual no app Electron; a cobertura do painel é por teste de renderização estática. O detalhe expansível não foi exercitado numa sessão interativa real.
+
+**Acompanhamento.** Task "Testes Windows — isolar a sonda de árvore de processos do harness": https://app.notion.com/p/Testes-Windows-isolar-a-sonda-de-rvore-de-processos-do-harness-40d91f95497e81ed8ac3d491c63ba4a8
+
+Estado: concluído e publicado (v0.1.496).
