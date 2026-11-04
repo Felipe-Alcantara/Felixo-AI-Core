@@ -87,12 +87,17 @@ def get_unresolved_node_imports(env: dict[str, str]) -> list[str]:
     if not specifiers:
         return []
 
+    # `import.meta.resolve` não confere se o arquivo de destino existe: a
+    # existência é checada à parte, o que também pega pacote instalado pela metade.
     script = """
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 const specifiers = JSON.parse(process.argv[1]);
 const unresolved = [];
 for (const specifier of specifiers) {
   try {
-    import.meta.resolve(specifier);
+    const url = import.meta.resolve(specifier);
+    if (url.startsWith('file:') && !existsSync(fileURLToPath(url))) unresolved.push(specifier);
   } catch {
     unresolved.push(specifier);
   }
@@ -100,8 +105,21 @@ for (const specifier of specifiers) {
 console.log(JSON.stringify(unresolved));
 """
 
+    # Resolve com as condições de quem consome esses imports: `development`
+    # (o Vite do `npm run dev`) e `types` (o TypeScript). Sem elas, um
+    # subcaminho exportado só para o bundler ou só para os tipos, como
+    # `@excalidraw/excalidraw/index.css` e `.../types`, contava como faltando e
+    # disparava `npm install` a cada abertura. Arquivo ausente continua falhando.
     node_command = resolve_subprocess_command(
-        ["node", "--input-type=module", "-e", script, json.dumps(specifiers)],
+        [
+            "node",
+            "--conditions=development",
+            "--conditions=types",
+            "--input-type=module",
+            "-e",
+            script,
+            json.dumps(specifiers),
+        ],
         env,
     )
 
