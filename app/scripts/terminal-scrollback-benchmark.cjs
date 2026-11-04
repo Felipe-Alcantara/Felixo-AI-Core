@@ -44,6 +44,10 @@ const DEFAULT_NATIVE_DRAIN_MS = 2_000
 // (até o teto) e depois mais um respiro, antes da próxima fase abrir os seus.
 const NATIVE_TEARDOWN_TIMEOUT_MS = 15_000
 const NATIVE_TEARDOWN_SETTLE_MS = 3_000
+// Só quando uma sessão nativa para antes do fim: quanto esperar para ver se a
+// saída ainda chega, e quanto olhar depois do `kill` (ClosePseudoConsole).
+const NATIVE_FORENSICS_WAIT_MS = 3_000
+const NATIVE_FORENSICS_AFTER_KILL_MS = 1_500
 const DEFAULT_SAMPLE_INTERVAL_MS = 250
 const DEFAULT_TIMEOUT_MS = 120_000
 const MAX_COUNT = 20
@@ -523,6 +527,10 @@ async function benchmarkNativePtys({ spawnPty, count, ...options }) {
   const bytesBySession = Array(count).fill(0)
   const linesBySession = Array(count).fill(0)
   const exitedBySession = Array(count).fill(false)
+  // Para a investigação da perda de saída no Windows: quando cada sessão recebeu
+  // o último dado e quando o filho saiu (nada disso entra no veredito).
+  const lastDataAtBySession = Array(count).fill(null)
+  const exitedAtBySession = Array(count).fill(null)
   const outputStartedAt = performance.now()
   let lastDataAt = Date.now()
 
@@ -553,6 +561,7 @@ async function benchmarkNativePtys({ spawnPty, count, ...options }) {
 
     pty.onData((data) => {
       lastDataAt = Date.now()
+      lastDataAtBySession[index] = lastDataAt
       const text = String(data)
       bytesBySession[index] += Buffer.byteLength(text)
       linesBySession[index] += text.split('\n').length - 1
@@ -562,6 +571,7 @@ async function benchmarkNativePtys({ spawnPty, count, ...options }) {
     })
     pty.onExit(() => {
       exitedBySession[index] = true
+      exitedAtBySession[index] = Date.now()
     })
   }
 
@@ -636,12 +646,46 @@ async function benchmarkNativePtys({ spawnPty, count, ...options }) {
   console.log(
     `[benchmark] native count=${count} output-complete=${outputComplete} lines=${linesBySession.join(',')}`,
   )
+  // O resultado é o que havia no momento do veredito. O que chegar depois (na
+  // espera abaixo ou durante a desmontagem) é investigação, e não pode mudar
+  // as linhas de um resultado que já foi declarado incompleto.
+  const verdictAt = Date.now()
+  const linesAtVerdict = [...linesBySession]
+  const bytesAtVerdict = [...bytesBySession]
+  const shortIndexes = linesAtVerdict.flatMap((lineCount, index) => (
+    lineCount < options.nativeLinesPerTerminal ? [index] : []
+  ))
+  let forensics = null
+  if (shortIndexes.length > 0) {
+    // Perda de saída no Windows (task "sessão PTY para no meio no benchmark de
+    // scrollback"): grava o que distingue um filho travado, uma saída presa no
+    // ConPTY e uma saída perdida, em vez de só a contagem de linhas.
+    forensics = {
+      waitedMs: options.forensicsWaitMs ?? NATIVE_FORENSICS_WAIT_MS,
+      afterKillMs: options.forensicsAfterKillMs ?? NATIVE_FORENSICS_AFTER_KILL_MS,
+      shortSessions: shortIndexes.map((index) => ({
+        session: index,
+        active: index < activeCount,
+        pid: ptys[index].pid ?? null,
+        lines: linesAtVerdict[index],
+        bytes: bytesAtVerdict[index],
+        exited: exitedBySession[index],
+        childAlive: Boolean(ptys[index].pid) && isProcessAlive(ptys[index].pid),
+        lastDataMsBeforeVerdict: lastDataAtBySession[index] === null ? null : verdictAt - lastDataAtBySession[index],
+        exitedMsBeforeVerdict: exitedAtBySession[index] === null ? null : verdictAt - exitedAtBySession[index],
+        bytesGainedBeforeKill: 0,
+        bytesGainedAfterKill: 0,
+      })),
+    }
+    await sleep(forensics.waitedMs)
+  }
   if (outputComplete && options.nativeHoldMs > 0) {
     await sleep(Math.min(options.nativeHoldMs, 1_000))
   }
   clearInterval(timer)
   await sample()
 
+  const bytesAtKill = [...bytesBySession]
   console.log(`[benchmark] native count=${count} cleaning ${ptys.length} PTY handles`)
   for (const pty of ptys) {
     try {
@@ -651,6 +695,18 @@ async function benchmarkNativePtys({ spawnPty, count, ...options }) {
     }
   }
   console.log(`[benchmark] native count=${count} cleanup requested`)
+  if (forensics) {
+    await sleep(forensics.afterKillMs)
+    for (const entry of forensics.shortSessions) {
+      entry.bytesGainedBeforeKill = bytesAtKill[entry.session] - entry.bytes
+      entry.bytesGainedAfterKill = bytesBySession[entry.session] - bytesAtKill[entry.session]
+      console.log(
+        `[benchmark] native count=${count} sessão ${entry.session} (${entry.active ? 'ativa' : 'ociosa'}) pid=${entry.pid} parou em ${entry.lines}/${options.nativeLinesPerTerminal} linhas, ${entry.bytes} bytes; ` +
+        `filho ${entry.childAlive ? 'vivo' : 'ausente'}${entry.exited ? ' (onExit recebido)' : ''}; último dado há ${entry.lastDataMsBeforeVerdict ?? 'nunca'} ms; ` +
+        `+${entry.bytesGainedBeforeKill} bytes em ${forensics.waitedMs} ms de espera, +${entry.bytesGainedAfterKill} bytes depois do kill`,
+      )
+    }
+  }
   // Medido no Windows (branch exp/conpty-dll, run 36221548376, Electron): a
   // sequência 1→5→10→20 SEM esperar a desmontagem da fase anterior perdeu
   // saída em 1/8 rodadas (sessões paradas em 1.154/1.155 de 2.000 linhas);
@@ -670,9 +726,9 @@ async function benchmarkNativePtys({ spawnPty, count, ...options }) {
     activeCount,
     idleCount: count - activeCount,
     linesPerTerminal: options.nativeLinesPerTerminal,
-    outputBytes: bytesBySession.reduce((total, value) => total + value, 0),
-    outputBytesBySession: bytesBySession,
-    linesBySession,
+    outputBytes: bytesAtVerdict.reduce((total, value) => total + value, 0),
+    outputBytesBySession: bytesAtVerdict,
+    linesBySession: linesAtVerdict,
     firstOutputMs: summarize(firstOutputMs),
     ptyRssMiB: summarize(
       memorySamples
@@ -685,6 +741,7 @@ async function benchmarkNativePtys({ spawnPty, count, ...options }) {
     ),
     memorySamples: memorySamples.length,
     timedOut: !outputComplete,
+    ...(forensics ? { forensics } : {}),
   }
 }
 

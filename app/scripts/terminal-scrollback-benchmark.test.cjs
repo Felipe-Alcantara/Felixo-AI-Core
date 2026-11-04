@@ -281,6 +281,8 @@ const NATIVE_OPTIONS = {
   sampleIntervalMs: 5_000,
   teardownTimeoutMs: 1_000,
   teardownSettleMs: 0,
+  forensicsWaitMs: 40,
+  forensicsAfterKillMs: 40,
   lineWidth: 40,
   longPromptChars: 0,
   longEvery: 2_000,
@@ -299,6 +301,68 @@ test('o dreno do PTY nativo espera enquanto a saída ainda chega depois que o fi
   const result = await benchmark.benchmarkNativePtys({ spawnPty, count: 1, ...NATIVE_OPTIONS })
   assert.deepEqual(result.linesBySession, [4])
   assert.equal(result.timedOut, false)
+  assert.equal(result.forensics, undefined, 'uma fase completa não carrega investigação')
+})
+
+test('sessão que para antes do fim: o resultado fica no veredito e a investigação registra o que chegou depois', async () => {
+  // Perda de saída do ConPTY no Windows. A saída para em 2 linhas (o filho
+  // sai), o veredito sai, e depois chegam mais 2 bytes durante a espera e mais
+  // 2 depois do kill: o resultado não muda, mas a investigação diz onde estava
+  // a saída que faltava.
+  const dataListeners = []
+  const exitListeners = []
+  const spawnPty = () => {
+    setTimeout(() => dataListeners.forEach((listener) => listener('a\nb\n')), 10)
+    setTimeout(() => exitListeners.forEach((listener) => listener({ exitCode: 0 })), 40)
+    setTimeout(() => dataListeners.forEach((listener) => listener('c\n')), 300)
+    // Sem `pid`, o amostrador de memória não roda: no Windows ele abre um
+    // PowerShell, que atrasa o início da espera e tira a ordem dos eventos.
+    return {
+      onData: (listener) => dataListeners.push(listener),
+      onExit: (listener) => exitListeners.push(listener),
+      kill() {
+        setTimeout(() => dataListeners.forEach((listener) => listener('d\n')), 5)
+      },
+    }
+  }
+  const result = await benchmark.benchmarkNativePtys({
+    spawnPty,
+    count: 1,
+    ...NATIVE_OPTIONS,
+    nativeDrainMs: 100,
+    forensicsWaitMs: 300,
+    forensicsAfterKillMs: 150,
+  })
+
+  assert.equal(result.timedOut, true)
+  assert.deepEqual(result.linesBySession, [2], 'o que chegou depois do veredito não entra no resultado')
+  assert.deepEqual(result.outputBytesBySession, [4])
+  assert.equal(result.outputBytes, 4)
+
+  assert.equal(result.forensics.shortSessions.length, 1)
+  const [sessao] = result.forensics.shortSessions
+  assert.equal(sessao.session, 0)
+  assert.equal(sessao.active, true)
+  assert.equal(sessao.pid, null)
+  assert.equal(sessao.lines, 2)
+  assert.equal(sessao.bytes, 4)
+  assert.equal(sessao.exited, true)
+  assert.equal(sessao.childAlive, false)
+  assert.ok(sessao.lastDataMsBeforeVerdict >= 0 && sessao.exitedMsBeforeVerdict >= 0)
+  assert.equal(sessao.bytesGainedBeforeKill, 2, 'a saída que chegou durante a espera')
+  assert.equal(sessao.bytesGainedAfterKill, 2, 'a saída que chegou depois do kill')
+})
+
+test('só as sessões curtas entram na investigação', async () => {
+  const completa = fakeSpawnPty([{ at: 10, data: 'a\nb\nc\nd\n' }])
+  const curta = fakeSpawnPty([{ at: 10, data: 'a\n' }, { at: 40, exit: true }])
+  let abertas = 0
+  const spawnPty = (...args) => (abertas++ === 0 ? completa(...args) : curta(...args))
+  const result = await benchmark.benchmarkNativePtys({ spawnPty, count: 2, ...NATIVE_OPTIONS, nativeDrainMs: 100 })
+
+  assert.deepEqual(result.linesBySession, [4, 1])
+  assert.deepEqual(result.forensics.shortSessions.map((sessao) => [sessao.session, sessao.active, sessao.lines]), [[1, false, 1]])
+  assert.equal(result.forensics.shortSessions[0].pid, 2 ** 22 + 12345, 'o pid do PTY que parou fica no relatório')
 })
 
 test('o dreno do PTY nativo desiste quando a saída para de chegar', async () => {
