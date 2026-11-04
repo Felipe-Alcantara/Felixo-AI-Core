@@ -50,7 +50,8 @@ relatórios antigos continuam usando RSS como fallback. Para validar o ganho de
 memória, use pelo menos uma carga maior que o limite compacto, por exemplo
 `--lines=8000`.
 
-No CI, o mesmo comando roda nos três runners suportados. Linux usa `xvfb-run`;
+No `Nightly` (job `medicoes`), o mesmo comando roda nos quatro runners
+suportados; saiu do CI de cada push no PR #124. Linux usa `xvfb-run`;
 Windows e macOS abrem o Electron nativamente. Os JSONs são publicados como
 artefatos do job para comparar p95 de RSS do renderer, latência de resume e
 qualquer diferença de retenção entre sistemas.
@@ -531,6 +532,66 @@ visível, porque escondida o Chromium estrangula o `requestAnimationFrame`.
   de verdade, com o backend que ela consegue usar.
 
 A escolha de GPU só existe no Linux. Nos outros SOs, use `--gpu=padrao`.
+
+## Muitos agentes no mesmo renderer
+
+As bancadas acima medem partes isoladas: terminal sem canvas, conexões sem
+terminais, UI sem agentes. `scripts/canvas-many-agents-benchmark.cjs` junta
+tudo no app de verdade: agentes vivos transmitindo saída, blocos, conexões, o
+painel Buscar e a gaveta de um terminal abertos, zoom girando e refresh com os
+agentes de pé.
+
+```bash
+npx vite build
+npm run benchmark:many-agents -- --agents=20 --nodes=300 --check
+```
+
+- **App:** o `dist` de produção, pelo lançador do `ui-render-performance.cjs`,
+  com perfil temporário. A janela é mostrada sem foco e com opacidade 0:
+  escondida, o Chromium estrangula o `requestAnimationFrame`. O relatório grava
+  o fps ocioso (`idleFps`); abaixo de 30, o frame não conta no `--check`.
+- **Agentes:** blocos de terminal com a CLI roteirizada do processo principal
+  (`FELIXO_DEVTOOLS_FAKE_CLI_PTY=1`, `electron/services/devtools-fake-cli-pty.cjs`).
+  Nenhuma CLI real roda. Cada agente recebe `__felixo_smoke_stream__` a cada
+  3 s pelo `pty:write` e imprime ~20 linhas/s. Cada agente fica ligado a uma
+  nota; os blocos comuns e as conexões vêm do mesmo fixture do `ui-render`.
+- **Mede:** abertura até o canvas hidratado (`startupMs`), carga do fixture
+  (`loadMs`), refresh com os agentes vivos (`resumeMs`), frame, long task e
+  entrada → quadro (do `timeStamp` do `wheel` ao rAF seguinte) durante a carga,
+  RSS do renderer e do app inteiro (`app.getAppMetrics`, uma amostra por
+  segundo) e, em quatro pontos de controle (`vazio`, `carregado`,
+  `fim-da-carga`, `apos-refresh`, depois de um GC), DOM, listeners e documentos
+  (`Performance.getMetrics`), heap e os timers vivos do thread principal. Os
+  timers são contados por um script injetado antes do app, que embrulha
+  `setTimeout`/`setInterval`. Queda do renderer (`crash` ou janela fechada) e
+  agente sem saída também ficam no relatório.
+- **`--check`:** reprova queda, agente mudo e as metas de frame p95, long task
+  p95 e refresh do cenário da `docs/projeto/POLITICA-PERFORMANCE.md` (Leve até
+  9 agentes e 300 blocos; Carregado até 20 e 1.000). Acima do Carregado, só
+  queda e agente mudo. Entrada → quadro, RSS, heap, DOM, listeners e timers são
+  só relatório: a política não tem meta para eles.
+- **Relatório:** `canvas-many-agents-<plataforma>.json`, com os campos do
+  `terminal-scrollback` (`phase`, `count`, `resumeMs`, `rendererWorkingSetMiB`,
+  `heapBefore`/`heapAfterStream`). Dá para comparar dois relatórios com o
+  `benchmark-regression-gate.cjs` à mão. Não roda em nenhum workflow.
+
+### Resultado em 04/11/2026 (Windows 11, `main` em `a25e73e`)
+
+15 s de carga por cenário, 300 blocos comuns, uma execução cada:
+
+| Cenário | Abertura | Carga | Refresh | Frame p95 | Long task p95 | Entrada → quadro p95 | RSS renderer p95 | RSS app p95 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Leve: 9 agentes, 309 blocos, 208 conexões | 1,99 s | 1,66 s | 0,70 s | 83 ms | 78 ms | 219 ms | 715 MiB | 1.754 MiB |
+| Carregado: 20 agentes, 320 blocos, 219 conexões | 1,96 s | 2,99 s | 0,71 s | 116 ms | 101 ms | 271 ms | 722 MiB | 1.791 MiB |
+
+Os dois passaram no `--check`. No Carregado, de `carregado` a `fim-da-carga`,
+os listeners ficaram estáveis (4.855 → 4.856) e o DOM subiu 130 nós
+(22.193 → 22.323). Os timeouts vivos foram de 1 a 40 com os 20 agentes
+transmitindo e caíram para 23 depois do refresh; os intervalos ficaram em 1. O
+refresh mede até o canvas hidratado com todos os blocos, não até cada terminal
+redesenhar o histórico. Uma execução por cenário: pelo ruído medido no
+`Nightly` (seção "Gate de regressão entre commits"), os tempos variam muito
+entre execuções.
 
 ## Benchmark do typecheck
 

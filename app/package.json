@@ -48,6 +48,7 @@
     "benchmark:bundle": "electron --no-sandbox --disable-gpu scripts/bundle-load-benchmark.cjs",
     "benchmark:bundle:check": "npm run benchmark:bundle -- --check",
     "benchmark:canvas-connections": "node scripts/canvas-connection-performance.cjs",
+    "benchmark:many-agents": "node scripts/canvas-many-agents-benchmark.cjs",
     "benchmark:canvas-heap-session": "node scripts/canvas-long-session-heap-capture.cjs",
     "heap-snapshot:analyze": "node scripts/heap-snapshot-analysis.cjs",
     "benchmark:fetch-all": "node scripts/fetch-all-scanner-benchmark.cjs",

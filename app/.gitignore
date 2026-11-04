@@ -27,4 +27,5 @@ release
 # Recursos gerados no empacotamento (ver scripts/bundle-npm-runtime.cjs)
 bundle-load-*.json
 typecheck-performance-*.json
+canvas-many-agents-*.json
 build

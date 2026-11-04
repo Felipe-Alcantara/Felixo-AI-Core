@@ -424,7 +424,7 @@ async function launchApp(options) {
     // Sem pedido explícito, a instância com porta CDP rasteriza por software
     // (ver `shouldUseSoftwareRendering` em electron/core/graphics-mode.cjs).
     FELIXO_GRAPHICS_MODE: options.render === 'software' ? 'software' : 'hardware',
-  })
+  }, options.env)
   const args = ['.', ...(process.platform === 'linux' ? ['--no-sandbox'] : []), ...chromiumArgs(options)]
   const child = spawn(electronBinary(options.appDir), args, {
     cwd: options.appDir,
@@ -1114,13 +1114,18 @@ module.exports = {
   buildFixtureEdges,
   buildFixtureNodes,
   chromiumArgs,
+  findAppPage,
   frameStats,
   gpuEnvironment,
+  launchApp,
   parseArgs,
   percentile,
   perFrame,
+  populateCanvas,
   rendererPidFromTrace,
   roundOrder,
+  stopApp,
   summarizeRuns,
   summarizeTrace,
+  waitHydrated,
 }

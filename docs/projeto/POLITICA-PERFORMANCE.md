@@ -51,7 +51,12 @@ depende muito mais do hardware de quem usa do que de um teto único
 cross-machine; o sinal acionável é frame time e long
 task, que já refletem a UI travando, e são o que os benchmarks existentes
 (`npm run benchmark:terminal`, `npm run benchmark:canvas-connections`)
-sabem medir hoje.
+sabem medir hoje. `npm run benchmark:many-agents` mede o cenário inteiro desta
+tabela num renderer só (agentes falsos transmitindo, blocos, conexões, painéis
+e refresh) e o `--check` dele usa estas metas; em 04/11/2026, no Windows, Leve
+(9 agentes, 309 blocos) e Carregado (20 agentes, 320 blocos) ficaram dentro
+delas. Números em `app/benchmarks/README.md`, seção "Muitos agentes no mesmo
+renderer".
 
 ## Os quatro modos
 

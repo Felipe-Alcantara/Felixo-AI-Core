@@ -186,6 +186,7 @@ caso), e o teste pode passar mesmo quebrado. Depois do diff, rode
 | `npm run benchmark:terminal-output -- --check` | app/ | Compara retenção/renderização dos Logs da CLI no renderer Electron |
 | `npm run test:canvas-smoke` | app/ | Gate visual do canvas via CDP, com PTY fake: fixture, matriz visual e tutorial (sessões A e B), cadeia de contas (C), links (D), caminhos de prompt (E) e Leitura do terminal (F). `FELIXO_SMOKE_SESSOES=E` roda só as sessões listadas; ver [Gate visual do canvas](#gate-visual-do-canvas-smoke) |
 | `npm run benchmark:ui-render -- --onboarding` | app/ | Mede FPS e custo de estilo/paint com o tutorial aberto (manual, na máquina de referência) |
+| `npm run benchmark:many-agents -- --check` | app/ | Muitos agentes falsos, blocos, conexões, painéis e refresh no mesmo renderer: frame, long task, RSS, heap, DOM, listeners, timers e queda, contra as metas da política (manual; precisa de `npx vite build`) |
 
 ### Atualização automática das CLIs gerenciadas
 

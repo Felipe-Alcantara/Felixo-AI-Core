@@ -1649,3 +1649,52 @@ commits": uso manual, histórico, tabela de ruído e as decisões) e o cabeçalh
 do script. Testes do gate 21/21, eslint sem erros.
 
 **Não medido.** Repetir o cenário N vezes por execução e comparar a mediana.
+
+## 2026-11-04 — Performance: harness combinado de muitos agentes no mesmo renderer
+
+**Pedido.** Task de 25/09/2026 "harness combinado de muitos agentes com DOM,
+listeners, timers e crash", pendente da rodada que criou o gate de regressão.
+Agente Tasks OpenIA + AI Core.
+
+**O que mudou.** `scripts/canvas-many-agents-benchmark.cjs`
+(`npm run benchmark:many-agents`) sobe o `dist` de produção com o lançador do
+`ui-render-performance.cjs`, agora exportado e aceitando variáveis de ambiente
+extras. Os agentes usam a CLI roteirizada do processo principal
+(`FELIXO_DEVTOOLS_MOCK_PTY=0`, `FELIXO_DEVTOOLS_FAKE_CLI_PTY=1`): cada um recebe
+`__felixo_smoke_stream__` a cada 3 s pelo `pty:write` (`canvas:<id do bloco>`).
+Junto, os blocos e as conexões do fixture do `ui-render`, uma conexão de cada
+agente a uma nota, o painel Buscar e a gaveta de um terminal abertos, zoom
+girando e um refresh com os agentes vivos. Mede abertura, carga, refresh, frame,
+long task, entrada → quadro, RSS por `app.getAppMetrics`, e, em quatro pontos de
+controle, DOM, listeners e documentos (`Performance.getMetrics`), heap e timers
+vivos (script injetado antes do app). Também detecta queda do renderer e agente
+sem saída. O `--check` usa as metas da `POLITICA-PERFORMANCE.md`. O relatório
+tem os campos do `terminal-scrollback`, para o `benchmark-regression-gate.cjs`
+comparar à mão.
+
+**Decisões do agente.** Não pluguei no gate nem em workflow: o Felipe decidiu
+hoje, na task do gate, mantê-lo fora do CI e as métricas de tempo só no
+relatório; o harness segue a mesma linha e roda à mão. A janela é mostrada sem
+foco e com opacidade 0 (escondida, o rAF cai para ~2 fps); o relatório grava o
+fps ocioso e o `--check` ignora o frame abaixo de 30 fps. Entrada → quadro, RSS,
+heap, DOM, listeners e timers ficam só no relatório, porque a política não tem
+meta para eles.
+
+**Medido** (Windows 11, `dist` de `a25e73e`, 15 s de carga, uma execução por
+cenário): Leve, 9 agentes e 309 blocos — frame p95 83 ms, long task p95 78 ms,
+refresh 0,70 s, RSS do renderer p95 715 MiB; Carregado, 20 agentes e 320 blocos
+— frame p95 116 ms, long task p95 101 ms, refresh 0,71 s, carga 2,99 s, RSS do
+renderer p95 722 MiB e do app 1.791 MiB. Os dois dentro das metas. Durante a
+carga do Carregado os listeners ficaram em 4.855 → 4.856, o DOM subiu 130 nós e
+os timeouts vivos foram de 1 a 40, voltando a 23 depois do refresh. Todos os
+agentes produziram saída; nenhuma queda.
+
+**Validação.** `canvas-many-agents-benchmark.test.cjs` 7/7 (inclui o contador
+de timers com agendar, disparar e cancelar), `ui-render-performance.test.cjs`
+17/17, eslint sem erros. README dos benchmarks, política de performance e Guia
+do Desenvolvedor atualizados; a frase do README que punha o benchmark de
+terminal "no CI" passou a dizer `Nightly`.
+
+**Não validado.** Linux e macOS (a bancada usa só APIs do Electron e do CDP,
+mas não rodou lá); repetição de cada cenário; o refresh mede até o canvas
+hidratado, não até cada terminal redesenhar o histórico.
