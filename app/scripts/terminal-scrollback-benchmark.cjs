@@ -90,6 +90,10 @@ function heapStreamDeltaBytes(result) {
 // meio no benchmark de scrollback do Windows") vira aviso visível em vez de
 // reprovar o --check, enquanto a causa é investigada. Todo o resto continua
 // bloqueando: count=20 nos outros SOs, count 1/5/10 no Windows e o renderer.
+// Em 04/11/2026 o gatilho foi achado (ver `app/benchmarks/README.md`, "Perda de
+// saída do PTY nativo no Windows"): a carga de processos que a própria bancada
+// cria, em especial os 20 PowerShell por amostra de memória. A amostragem passou
+// a usar um PowerShell só. A quarentena fica até o Nightly confirmar, e sai depois.
 const NATIVE_QUARANTINE = Object.freeze({ platform: 'win32', count: 20 })
 
 function isQuarantinedNative(result, platform) {
@@ -487,7 +491,29 @@ function readProcessRssKiB(pid) {
   })
 }
 
+/**
+ * Soma a memória de todos os PIDs com UM PowerShell em vez de um por PID. Com 20
+ * PTYs, a amostragem abria 20 PowerShell em paralelo a cada 250 ms num runner de
+ * 4 núcleos, em cima da carga que a própria bancada mede.
+ */
+function sumWindowsProcessRssKiB(pids) {
+  const ids = pids.map(Number).filter((pid) => Number.isInteger(pid) && pid > 0)
+  if (ids.length === 0) return Promise.resolve(null)
+  return new Promise((resolve) => {
+    execFile(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-Command', `(Get-Process -Id ${ids.join(',')} -ErrorAction SilentlyContinue | Measure-Object -Property WorkingSet64 -Sum).Sum`],
+      { encoding: 'utf8', windowsHide: true },
+      (error, stdout) => {
+        const bytes = Number(String(stdout).trim())
+        resolve(!error && Number.isFinite(bytes) && bytes > 0 ? bytes / 1024 : null)
+      },
+    )
+  })
+}
+
 async function sumProcessRssKiB(pids) {
+  if (process.platform === 'win32') return sumWindowsProcessRssKiB(pids)
   const values = (await Promise.all(pids.map((pid) => readProcessRssKiB(pid))))
     .filter((value) => Number.isFinite(value) && value > 0)
   return values.length ? values.reduce((total, value) => total + value, 0) : null
@@ -886,6 +912,10 @@ async function run(argv = process.argv.slice(2)) {
   if (!helperState.ok) {
     console.warn(`[benchmark] spawn-helper do node-pty não preparado: ${helperState.reason ?? 'motivo desconhecido'}`)
   }
+  // O `spawn` cru do node-pty, não o do app (`createNodePtySpawn`): medido em
+  // 04/11/2026 no windows-latest, o do app derrubou a bancada com segfault antes
+  // do JSON em 8 de 49 tentativas (16%) contra 2 de 63 (3%) com o cru, e travou
+  // um job. Ver `app/benchmarks/README.md`.
   const { spawn: spawnPty } = require('node-pty')
 
   app.commandLine.appendSwitch('enable-precise-memory-info')
@@ -1072,6 +1102,7 @@ module.exports = {
   MAX_SCROLLBACK,
   benchmarkNativePtys,
   buildEmitterCode,
+  sumProcessRssKiB,
   waitForProcessesToExit,
   parseArgs,
   parsePolicies,

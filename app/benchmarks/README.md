@@ -187,6 +187,65 @@ ficam só no relatório; RSS e heap, com o piso absoluto, são as únicas que
 caberiam num critério. Repetir o cenário N vezes por execução e comparar a
 mediana não foi medido; cada execução leva 52–88 s por sistema.
 
+## Perda de saída do PTY nativo no Windows (`count=20`)
+
+Sintoma: na fase `native-pty` com 20 sessões, no Windows, uma ou mais sessões
+param no meio (por exemplo, 1.251 de 2.000 linhas) enquanto as outras terminam.
+O `--check` trata isso como aviso (quarentena de `native count=20` em `win32`,
+decisão de 26/09/2026): o resto da bancada continua bloqueando.
+
+**Frequência no `Nightly`** (artefatos `medicoes-windows-latest`, 20/10 a
+03/11/2026): 7 das 15 noites perderam saída no `count=20`. Nos outros três
+sistemas e nos outros `count` do Windows foram 0 em 225 fases. A quarentena
+esconde isso: o Nightly fica verde.
+
+**O que a perda é.** Desde 04/11/2026, quando uma sessão para antes do fim, o
+relatório grava em `forensics` o pid, se o filho segue vivo e recebeu `onExit`,
+há quanto tempo veio o último dado e quantos bytes chegaram numa espera de 3 s e
+depois do `kill`. Nas perdas medidas o filho já tinha saído, o último dado veio
+cerca de 10 s antes, e nada chegou na espera nem depois do `kill`: a saída foi
+**perdida**, e não está presa. Das 12 sessões ativas que pararam, 11 pararam em
+exatamente `4096·k + 24` bytes (o mesmo corte, 163.864, apareceu quatro vezes), o
+que aponta para um limite de leitura de 4 KiB do ConPTY e não para o filho.
+
+**Gatilho.** Experimento descartável no `windows-latest` (branch
+`exp/pty-count20-0411`, já apagada; runs `41874935929`, `41878868287`,
+`41881775009`, `41883049895` e `41885001559`), com a mesma sequência do job do
+Nightly (bancada do npm-runtime, bancada de saída do PTY e só então a de
+scrollback) e um job por amostra:
+
+| Variante | Perda no `count=20` | Tentativas que caíram antes do JSON |
+| --- | --- | --- |
+| bancada como estava | **8 de 28 (29%)** | 1 de 29 |
+| mesma, com o repositório fora da varredura do Defender | 2 de 6 | 0 de 6 |
+| `spawn` do app (`createNodePtySpawn`) | 0 de 7 | 0 de 7 |
+| **um PowerShell por amostra de memória** | **0 de 23** (Fisher p = 0,005) | 0 de 23 |
+| `spawn` do app e um PowerShell por amostra | 0 de 14 | 4 de 18 |
+
+Nos jobs de oito rodadas seguidas (primeiras duas rodadas do experimento), a
+bancada atual perdeu 1 vez em 2 primeiras rodadas e 0 em 14 das rodadas 2 a 8;
+as outras variantes, 0 em 3 e 0 em 32. Com tão poucas primeiras rodadas isso é
+só um indício de que o defeito aparece na primeira execução de uma máquina nova.
+Antes, a amostragem de memória abria um PowerShell por PTY a cada
+250 ms (20 em paralelo no `count=20`, num runner de 4 núcleos), em cima da carga
+que a bancada mede. A exclusão do Defender não mudou nada.
+
+**O que mudou.** `sumProcessRssKiB` usa um PowerShell só por amostra no Windows
+(`Get-Process -Id a,b,c`). **Não** troquei o `spawn` da bancada pelo do app: ele
+também some com a perda, mas a bancada caiu com segfault antes do JSON em 8 de 49
+tentativas (16%) contra 2 de 63 (3%) com o `spawn` cru (Fisher p = 0,018), e um
+job de oito rodadas ficou pendurado. É um sinal sobre o `kill()` do app que
+merece medida própria.
+
+**Quarentena.** Continua. Sai quando 10 Nightlies seguidos tiverem o
+`native count=20` do Windows completo (`linesBySession` com 2.000 em todas as
+sessões em `terminal-scrollback-windows-latest.json`); se voltar a perder, o
+`forensics` do mesmo arquivo diz como.
+
+**Não medido.** O mecanismo dentro do ConPTY (por que a leitura para num limite
+de 4 KiB); se o app real, com 20 agentes e outro trabalho criando processos ao
+mesmo tempo no Windows, perde saída do mesmo jeito.
+
 ## Degradação do Canvas no Linux
 
 A investigação de 03/09/2026 separou duas perguntas que costumavam aparecer

@@ -1838,3 +1838,55 @@ entradas deixadas e removidas, e a pasta base com 0 entradas antes e depois.
 
 **Não validado.** Linux e macOS (o runner usa só `fs`/`os`/`path`); o tempo de
 remoção da pasta num Windows com antivírus pesado (aqui, instantâneo).
+
+## 2026-11-04 — Benchmark de scrollback: a perda de saída do PTY nativo no Windows vinha da carga de PowerShell da própria bancada
+
+**Pedido.** Task de 25/09/2026 "sessão PTY para no meio no benchmark de scrollback
+do Windows (count=20)", aberta há 40 dias com seis atualizações e uma quarentena.
+Agente Tasks OpenIA + AI Core.
+
+**Medido.**
+- No `Nightly`, 7 das 15 noites de 20/10 a 03/11 perderam saída no `count=20` do
+  Windows; 0 em 225 fases nos outros três sistemas e nos outros `count`. A
+  quarentena deixava o Nightly verde.
+- Nas 12 sessões ativas que pararam em 4 execuções, 11 pararam em `4096·k + 24`
+  bytes (163.864 quatro vezes). O filho já tinha saído, o último dado veio cerca
+  de 10 s antes e nada chegou nem em 3 s de espera nem depois do `kill`: a saída
+  foi perdida, e não ficou presa.
+- Cinco rodadas de experimento no `windows-latest`, numa branch descartável. Só
+  a terceira em diante reproduziu o Nightly, ao repetir a sequência dele (bancada
+  do npm-runtime, bancada de saída do PTY e só então a de scrollback) com um job
+  por amostra. Nessa sequência: bancada como estava 8 de 28 (29%); com o
+  repositório fora da varredura do Defender 2 de 6; `spawn` do app 0 de 7; **um
+  PowerShell por amostra de memória 0 de 23 (Fisher p = 0,005)**; as duas
+  mudanças juntas 0 de 14. Fora dessa sequência, em jobs de oito rodadas seguidas,
+  a bancada atual perdeu 1 de 16 rodadas.
+- `spawn` do app (`createNodePtySpawn`): a bancada caiu com segfault antes do JSON
+  em 8 de 49 tentativas (16%) contra 2 de 63 (3%) com o `spawn` cru (p = 0,018), e
+  um job de oito rodadas ficou pendurado por mais de 40 minutos.
+
+**O que mudou.** `sumProcessRssKiB` soma a memória dos PTYs com **um** PowerShell
+(`Get-Process -Id a,b,c`) no Windows, em vez de um por PID; antes eram 20 em
+paralelo a cada 250 ms num runner de 4 núcleos. Duas peças permanentes de
+investigação (`f893b4d`): o relatório grava `forensics` quando uma sessão para, e
+as linhas e os bytes do resultado passam a ser os do momento do veredito. A
+seção "Perda de saída do PTY nativo no Windows" do `app/benchmarks/README.md`
+tem a tabela e os run ids.
+
+**Decisões do agente.**
+- Não troquei o `spawn` da bancada pelo do app, apesar de a hipótese de 22/10
+  apontar para isso: ele reduz a perda e aumenta o crash, e o `kill()` do app é
+  outro assunto (task aberta).
+- A quarentena continua. Sai quando 10 Nightlies seguidos tiverem o `count=20`
+  completo; é decisão que ficou registrada como task, não está no código.
+- Não rodei a exclusão do Defender no Nightly: o experimento mostrou que não muda
+  nada.
+
+**Validação.** `terminal-scrollback-benchmark.test.cjs` 20/20 (3 testes novos do
+`forensics` e 1 da soma de memória, com dois processos `node` de verdade);
+eslint sem erros; bancada real aqui (16 núcleos, onde a perda não aparece)
+com `count=1`, `5` e `20` completos e a memória dos PTYs coerente (47, 243 e 925 MiB).
+
+**Não validado.** O mecanismo dentro do ConPTY (por que a leitura para em 4 KiB);
+o efeito no Nightly de verdade, que só as próximas noites mostram; se o app real
+perde saída do mesmo jeito com 20 agentes e outro trabalho criando processos.

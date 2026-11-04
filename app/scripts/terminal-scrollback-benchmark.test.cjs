@@ -410,3 +410,23 @@ test('quarentena não vale fora do Windows nem para as outras contagens', () => 
   assert.deepEqual(benchmark.validateReport({ results: [nativo(10)] }, { platform: 'win32' }), ['native count=10: saída incompleta'])
   assert.deepEqual(benchmark.quarantineWarnings({ results: [nativo(10)] }, { platform: 'win32' }), [])
 })
+
+test('a soma de memória dos PTYs usa todos os pids de uma vez e ignora os que já saíram', async () => {
+  // No Windows isto é um PowerShell só; antes eram 20 em paralelo a cada 250 ms.
+  const { spawn } = require('node:child_process')
+  const filhos = [1, 2].map(() => spawn(process.execPath, ['-e', 'setTimeout(() => {}, 15000)'], { stdio: 'ignore' }))
+  try {
+    await Promise.all(filhos.map((filho) => new Promise((resolve) => filho.once('spawn', resolve))))
+    const dois = await benchmark.sumProcessRssKiB(filhos.map((filho) => filho.pid))
+    const comUmInexistente = await benchmark.sumProcessRssKiB([...filhos.map((filho) => filho.pid), 2 ** 22 + 99])
+    const so = await benchmark.sumProcessRssKiB([filhos[0].pid])
+    // Cada `node` ocioso passa de 20 MiB de memória residente.
+    assert.ok(dois > 2 * 20 * 1024, `soma dos dois processos: ${dois} KiB`)
+    assert.ok(so > 20 * 1024 && so < dois, 'um processo vale menos que dois')
+    assert.ok(comUmInexistente > 2 * 20 * 1024, 'um pid inexistente não derruba a amostra')
+    assert.equal(await benchmark.sumProcessRssKiB([]), null)
+    assert.equal(await benchmark.sumProcessRssKiB([2 ** 22 + 99]), null)
+  } finally {
+    for (const filho of filhos) filho.kill()
+  }
+})
