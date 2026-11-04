@@ -298,7 +298,9 @@ function parseWindowsSnapshot(output) {
 
 function windowsProcessIdentitiesScript(pids) {
   const values = pids.map((pid) => Number(pid)).filter((pid) => Number.isInteger(pid) && pid > 0)
-  return `$ids=${JSON.stringify(values)}; @(Get-CimInstance Win32_Process | Where-Object { $ids -contains [int]$_.ProcessId } | Select-Object ProcessId,Name,CreationDate) | ConvertTo-Json -Compress`
+  // `@(1,2)`, não `[1,2]`: no PowerShell `[...]` é um tipo, o script não compilava e
+  // a checagem de identidade caía em `process.kill(pid, 0)`, que conta PID reaproveitado.
+  return `$ids=@(${values.join(',')}); @(Get-CimInstance Win32_Process | Where-Object { $ids -contains [int]$_.ProcessId } | Select-Object ProcessId,ParentProcessId,Name,CreationDate,CommandLine) | ConvertTo-Json -Compress`
 }
 
 function parseWindowsProcessIdentities(output) {
@@ -307,9 +309,33 @@ function parseWindowsProcessIdentities(output) {
   const rows = parsed == null ? [] : (Array.isArray(parsed) ? parsed : [parsed])
   return new Map(rows.map((item) => [Number(item.ProcessId), {
     pid: Number(item.ProcessId),
+    parentPid: Number.isInteger(Number(item.ParentProcessId)) ? Number(item.ParentProcessId) : null,
     name: item.Name ? String(item.Name) : null,
     creationDate: item.CreationDate ? String(item.CreationDate) : null,
+    commandLine: item.CommandLine ? String(item.CommandLine) : null,
   }]).filter(([pid]) => Number.isInteger(pid)))
+}
+
+/** `ps -o pid=,ppid=,args=`: o nome é o executável do primeiro argumento. */
+function parsePsProcessDetails(output) {
+  const rows = String(output).split(/\r?\n/).map((line) => line.trim().match(/^(\d+)\s+(\d+)\s+(.*)$/)).filter(Boolean)
+  return new Map(rows.map(([, pid, parentPid, args]) => [Number(pid), {
+    pid: Number(pid),
+    parentPid: Number(parentPid),
+    name: path.basename(args.split(/\s+/)[0] || '') || null,
+    creationDate: null,
+    commandLine: args,
+  }]))
+}
+
+/** Nome, pai e linha de comando dos processos vivos entre `pids`. */
+async function currentProcessDetails(pids, { platform = process.platform } = {}) {
+  if (!pids.length) return new Map()
+  if (platform === 'win32') return (await currentWindowsProcessIdentities(pids)) ?? new Map()
+  try {
+    const { stdout } = await execFileAsync('ps', ['-o', 'pid=,ppid=,args=', '-p', pids.join(',')], { encoding: 'utf8' })
+    return parsePsProcessDetails(stdout)
+  } catch { return new Map() }
 }
 
 async function currentWindowsProcessIdentities(pids) {
@@ -341,12 +367,58 @@ async function findOrphans(samples) {
     }
     return pids.filter(processStillRunning)
   }
-  const orphans = await check()
-  if (process.platform !== 'win32' || orphans.length === 0) return orphans
+  let orphans = await check()
   // Windows can emit `close` while a short-lived cmd/node child is still
   // leaving the process table. Recheck while teardown settles, retaining the
   // identity checks so a genuinely persistent child still fails.
-  return settleOrphans(check)
+  if (process.platform === 'win32' && orphans.length > 0) orphans = await settleOrphans(check)
+  if (orphans.length === 0) return []
+  return describeOrphans(orphans, { check, describe: currentProcessDetails, identities })
+}
+
+/**
+ * O relatório guardava só o PID do órfão, e assim não dava para saber o que
+ * sobrou (task de 25/09/2026, falhas de 25/09 no yarn-classic e de 29/10 no
+ * npm-runtime). Depois do prazo do `settleOrphans`, registra nome, pai e linha
+ * de comando e segue olhando por `observeMs`: um órfão que sai nesse tempo é
+ * saída lenta da tabela de processos; um que segue vivo é órfão de verdade. O
+ * veredito não muda — os dois continuam reprovando.
+ */
+async function describeOrphans(pids, {
+  check,
+  describe,
+  identities = new Map(),
+  observeMs = 20_000,
+  intervalMs = 1_000,
+  sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  now = () => performance.now(),
+} = {}) {
+  const details = (await describe(pids)) ?? new Map()
+  const startedAt = now()
+  const exitedAfterMs = new Map()
+  let remaining = pids
+  while (remaining.length > 0 && now() - startedAt < observeMs) {
+    await sleep(intervalMs)
+    const alive = new Set(await check())
+    remaining = remaining.filter((pid) => {
+      if (alive.has(pid)) return true
+      exitedAfterMs.set(pid, Math.round(now() - startedAt))
+      return false
+    })
+  }
+  return pids.map((pid) => {
+    const current = details.get(pid) ?? {}
+    const sampled = identities.get(pid) ?? {}
+    return {
+      pid,
+      name: current.name ?? sampled.name ?? null,
+      parentPid: current.parentPid ?? null,
+      creationDate: current.creationDate ?? sampled.creationDate ?? null,
+      commandLine: current.commandLine ?? null,
+      exitedAfterMs: exitedAfterMs.get(pid) ?? null,
+      observedMs: observeMs,
+    }
+  })
 }
 
 /**
@@ -506,7 +578,9 @@ function runChild(command, args, { cwd, env, timeoutMs, samplePid = null, snapsh
       settled = true
       clearInterval(timer)
       if (timeoutTimer) clearTimeout(timeoutTimer)
-      const complete = async () => resolve({
+      const complete = async () => {
+        const orphans = await findOrphans(samples)
+        resolve({
           code: result.code ?? null,
           signal: result.signal ?? null,
           error: result.error ?? null,
@@ -515,8 +589,10 @@ function runChild(command, args, { cwd, env, timeoutMs, samplePid = null, snapsh
           stdout: stdout.slice(-2_000),
           stderr: stderr.slice(-2_000),
           samples,
-          orphanPids: await findOrphans(samples),
+          orphanPids: orphans.map((orphan) => orphan.pid),
+          orphans,
         })
+      }
       if (pendingSample) pendingSample.then(complete, complete)
       else complete()
     }
@@ -575,6 +651,20 @@ function processStillRunning(pid) {
   } catch { return false }
 }
 
+/** Uma linha por órfão na mensagem do `--check`; a linha de comando fica no JSON. */
+function describeOrphan(orphan) {
+  const fate = orphan.exitedAfterMs == null
+    ? `ainda vivo ${Math.round((orphan.observedMs ?? 0) / 1000)} s depois do prazo`
+    : `saiu ${orphan.exitedAfterMs} ms depois do prazo`
+  return `${orphan.name ?? 'processo'} pid ${orphan.pid}, ${fate}`
+}
+
+/** Linha de comando do órfão sem a pasta temporária nem a pasta do usuário. */
+function sanitizeCommandLine(value, root, home = os.homedir()) {
+  if (!value) return null
+  return String(value).replaceAll(root, '<temp>').replaceAll(home, '<home>').slice(0, 500)
+}
+
 function sanitizeOutput(value, root) {
   return String(value ?? '')
     .replaceAll(root, '<temp>')
@@ -619,6 +709,10 @@ async function runScenario(manager, agentCount, options, temporaryRoot) {
       processIo: { readBytes: aggregate.readBytes, writeBytes: aggregate.writeBytes },
       children: [...new Set(samples.flatMap((sample) => sample.pids))].length,
       orphanPids: [...new Set(results.flatMap((result) => result.orphanPids))],
+      orphans: results.flatMap((result) => result.orphans ?? []).map((orphan) => ({
+        ...orphan,
+        commandLine: sanitizeCommandLine(orphan.commandLine, root),
+      })),
       successful: results.every((result) => commandSucceeded(result) && result.orphanPids.length === 0),
       exitCodes: results.map((result) => result.code),
       sampling: {
@@ -805,7 +899,8 @@ function validateReport(report, expectedIterations, expectedAgentCounts) {
       for (const failure of budgetFailuresForScenario(scenario, budgets)) failures.push(`${id}: ${failure}`)
     }
     if (manager.scenarios.some((scenario) => scenario.cold?.orphanPids?.length > 0 || scenario.hot?.orphanPids?.length > 0)) {
-      failures.push(`processos órfãos detectados em ${id}`)
+      const orphans = manager.scenarios.flatMap((scenario) => [...(scenario.cold?.orphans ?? []), ...(scenario.hot?.orphans ?? [])])
+      failures.push(`processos órfãos detectados em ${id}${orphans.length ? ` (${orphans.map(describeOrphan).join('; ')})` : ''}`)
     }
   }
   return [...new Set(failures)]
@@ -876,6 +971,10 @@ if (require.main === module) {
 
 module.exports = {
   MANAGER_IDS,
+  currentProcessDetails,
+  describeOrphans,
+  parsePsProcessDetails,
+  sanitizeCommandLine,
   settleOrphans,
   aggregateSamples,
   createEnvironment,

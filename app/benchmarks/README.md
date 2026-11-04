@@ -773,8 +773,28 @@ fase com RSS/árvore observada e que os budgets não sejam excedidos. Fases
 ultracurtas que terminam antes da coleta ficam marcadas como indisponíveis no
 JSON, sem serem convertidas em zero. pnpm, Yarn ou Corepack ausentes são mantidos no relatório como
 `available: false`; isso permite comparar os três sistemas operacionais sem
-instalar ou alterar gerenciadores do usuário. O CI e o workflow de release
-publicam um relatório por artefato/SO.
+instalar ou alterar gerenciadores do usuário. O `Nightly` (job "Gerenciadores
+de pacote") publica um relatório por SO; desde o PR #124 a bancada não roda no
+CI de cada push nem no Release.
+
+**Órfãos.** Um processo da árvore amostrada que segue vivo depois que a
+instalação termina reprova a fase. "Vivo" quer dizer o mesmo processo: mesmo
+nome e mesma data de criação da amostra, porque o Windows reaproveita PIDs em
+segundos. No Windows, o detector ainda espera até 6 s a tabela de processos
+assentar (PR #66). Quando sobra órfão, a fase grava em `orphans` o nome, o pai,
+a data de criação e a linha de comando (sem a pasta temporária nem a do
+usuário), e observa por mais 20 s: `exitedAfterMs` diz quando ele saiu, ou
+`null` se continuou vivo. O veredito é o mesmo nos dois casos; a mensagem do
+`--check` traz o nome e o destino de cada um.
+
+Até 04/11/2026, a checagem de identidade nunca rodava no Windows: o script do
+PowerShell montava a lista de PIDs como `[1,2]`, que no PowerShell é um tipo, e
+saía com erro. O detector caía em `process.kill(pid, 0)`, que conta como órfão
+qualquer processo novo com o mesmo PID. Medido nesta data, num Windows 11:
+depois de ~440 processos curtos em 10 filas paralelas, 0 a 2 PIDs voltaram a
+responder em menos de 6 s, reaproveitados por outro programa. É a causa provável
+das falhas raras de 25/09 (yarn-classic, PID 7868) e de 29/10 (npm-runtime, PID
+1236), em que todas as instalações tinham saído com código 0.
 
 ### Resultado reproduzível em 02/09/2026
 

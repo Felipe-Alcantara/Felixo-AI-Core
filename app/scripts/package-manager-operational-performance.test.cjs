@@ -11,6 +11,10 @@ const {
 } = require('../electron/__fixtures__/link-fixtures.cjs')
 const {
   MANAGER_IDS,
+  currentProcessDetails,
+  describeOrphans,
+  parsePsProcessDetails,
+  sanitizeCommandLine,
   settleOrphans,
   aggregateSamples,
   createEnvironment,
@@ -346,6 +350,75 @@ test('settleOrphans: filho que PERMANECE depois do prazo continua reportado (gat
   const resultado = await settleOrphans(async () => [7], { settleMs: 2000, intervalMs: 500, sleep: async (ms) => { esperado += ms } })
   assert.deepEqual(resultado, [7])
   assert.equal(esperado, 2000)
+})
+
+test('describeOrphans: anota quem sai durante a observação e quem segue vivo, com nome e linha de comando', async () => {
+  let relogio = 0
+  const vivos = [[11, 12], [12], [12], [12]]
+  let chamadas = 0
+  const orfaos = await describeOrphans([11, 12], {
+    check: async () => vivos[Math.min(chamadas++, vivos.length - 1)],
+    describe: async () => new Map([[11, { name: 'node.exe', parentPid: 5, creationDate: '20261029', commandLine: 'node lifecycle.cjs' }]]),
+    identities: new Map([[12, { pid: 12, name: 'conhost.exe', creationDate: '20261029' }]]),
+    observeMs: 3000,
+    intervalMs: 1000,
+    sleep: async (ms) => { relogio += ms },
+    now: () => relogio,
+  })
+  assert.deepEqual(orfaos, [
+    { pid: 11, name: 'node.exe', parentPid: 5, creationDate: '20261029', commandLine: 'node lifecycle.cjs', exitedAfterMs: 2000, observedMs: 3000 },
+    // Sem detalhe atual, o nome vem da amostra; segue vivo até o fim da observação.
+    { pid: 12, name: 'conhost.exe', parentPid: null, creationDate: '20261029', commandLine: null, exitedAfterMs: null, observedMs: 3000 },
+  ])
+})
+
+test('validateReport diz o nome do órfão e se ele saiu depois do prazo', () => {
+  const lado = { processCount: { count: 1 }, rss: { count: 1 }, sampling: { processTree: true, rss: true } }
+  const report = {
+    managers: {
+      'npm-runtime': {
+        available: true,
+        scenarios: [{
+          successful: false,
+          cold: { ...lado, orphanPids: [1236, 7868], orphans: [
+            { pid: 1236, name: 'node.exe', exitedAfterMs: null, observedMs: 20000 },
+            { pid: 7868, name: 'cmd.exe', exitedAfterMs: 1500, observedMs: 20000 },
+          ] },
+          hot: lado,
+        }],
+      },
+    },
+  }
+  assert.match(
+    validateReport(report, 1, [1]).join('; '),
+    /processos órfãos detectados em npm-runtime \(node\.exe pid 1236, ainda vivo 20 s depois do prazo; cmd\.exe pid 7868, saiu 1500 ms depois do prazo\)/,
+  )
+})
+
+test('sanitizeCommandLine tira a pasta temporária e a do usuário', () => {
+  assert.equal(
+    sanitizeCommandLine('"C:\\Users\\ana\\node.exe" C:\\Temp\\x\\agent-1\\npm-cli.js install', 'C:\\Temp\\x', 'C:\\Users\\ana'),
+    '"<home>\\node.exe" <temp>\\agent-1\\npm-cli.js install',
+  )
+  assert.equal(sanitizeCommandLine(null, 'C:\\Temp\\x'), null)
+})
+
+test('parsePsProcessDetails lê pid, pai e linha de comando do ps', () => {
+  const detalhes = parsePsProcessDetails('  4321  100 /usr/bin/node /tmp/x/npm-cli.js install\n')
+  assert.deepEqual(detalhes.get(4321), { pid: 4321, parentPid: 100, name: 'node', creationDate: null, commandLine: '/usr/bin/node /tmp/x/npm-cli.js install' })
+})
+
+test('currentProcessDetails descreve um processo vivo de verdade', async (t) => {
+  const marcador = `felixo-orfao-${process.pid}`
+  const { spawn } = require('node:child_process')
+  const filho = spawn(process.execPath, ['-e', `setTimeout(() => {}, 30000) // ${marcador}`], { stdio: 'ignore', windowsHide: true })
+  t.after(() => filho.kill())
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  const detalhes = (await currentProcessDetails([filho.pid])).get(filho.pid)
+  assert.ok(detalhes, 'o processo vivo não foi encontrado')
+  assert.match(detalhes.name, /^node(\.exe)?$/i)
+  assert.equal(detalhes.parentPid, process.pid)
+  assert.match(detalhes.commandLine, new RegExp(marcador))
 })
 
 test('settleOrphans: sem órfãos não espera nada', async () => {

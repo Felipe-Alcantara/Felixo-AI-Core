@@ -1698,3 +1698,46 @@ terminal "no CI" passou a dizer `Nightly`.
 **Não validado.** Linux e macOS (a bancada usa só APIs do Electron e do CDP,
 mas não rodou lá); repetição de cada cenário; o refresh mede até o canvas
 hidratado, não até cada terminal redesenhar o histórico.
+
+## 2026-11-04 — Benchmark operacional: o detector de órfãos do Windows comparava só o PID
+
+**Pedido.** Task de 25/09/2026 "yarn-classic deixa processo órfão intermitente no
+benchmark operacional do Windows", complementada em 29/10 com a mesma falha no
+npm-runtime. Agente Tasks OpenIA + AI Core.
+
+**Medido.**
+- Frequência: no `Nightly`, o órfão reprovou 1 de 41 execuções (29/10,
+  `40874224575`, npm-runtime, 10 agentes, fase fria, PID 1236). As 10
+  instalações saíram com código 0, e o relatório não guardava nome do processo.
+- Causa: `windowsProcessIdentitiesScript` montava `$ids=[1,2]` com
+  `JSON.stringify`. No PowerShell, `[...]` é um tipo: o script sai com erro de
+  sintaxe (código 1, conferido rodando o script). `currentWindowsProcessIdentities`
+  devolvia `null` e `findOrphans` caía em `process.kill(pid, 0)`, sem conferir
+  nome nem data de criação. Existe desde `c34eaa9` (04/09/2026). A espera de 6 s
+  do PR #66 aumentava a janela para um PID ser reaproveitado.
+- Reaproveitamento de PID neste Windows 11: em 3 rodadas de ~440 processos curtos
+  (10 filas paralelas de `cmd`/`node`), 1, 0 e 2 PIDs já mortos voltaram a
+  responder em menos de 6 s, ocupados pelo navegador. É a mesma raridade das
+  falhas.
+- Sem regressão: a data de criação sai igual nos dois scripts
+  (`/Date(1793801673893)/`), então um órfão real continua casando nome e data. A
+  configuração do `Nightly` (`--iterations=2 --agents=1,2,5,10 --check`) passou
+  aqui em 2 min 28 s, com npm-runtime e pnpm (yarn-classic não está instalado
+  nesta máquina).
+
+**O que mudou.** A lista vai como `@(1,2)`. A mesma consulta passou a trazer o
+pai e a linha de comando. Quando sobra órfão depois do prazo, a fase grava em
+`orphans` nome, pai, data de criação e linha de comando (sem a pasta temporária
+nem a do usuário) e observa mais 20 s para anotar se ele saiu (`exitedAfterMs`).
+A mensagem do `--check` traz nome e destino de cada órfão. O veredito não mudou.
+README dos benchmarks atualizado, inclusive a frase que punha a bancada no CI e
+no Release (hoje só no `Nightly`).
+
+**Validação.** `package-manager-operational-performance.test.cjs` 25/25 (5
+novos). O teste com um `node` vivo de verdade falhava antes da correção ("o
+processo vivo não foi encontrado") e passa depois. eslint sem erros. Não rodei o
+`npm test` completo: nesta máquina ele abre janelas `git-askpass` (task aberta
+mais cedo, 40e91f95-497e-818e).
+
+**Não validado.** O yarn-classic no Windows (não instalado aqui) e a ausência de
+órfão no Nightly com a correção, que só as próximas noites mostram.
