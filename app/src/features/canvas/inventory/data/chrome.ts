@@ -139,11 +139,6 @@ export const notificationsTool: InventoryElement = {
       risk: 'baixo',
       task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
     },
-    {
-      what: 'Como todo CanvasPanel, o painel passa da viewport em janelas abaixo de 768 px (PANEL_MIN_WIDTH 260 nunca cede).',
-      risk: 'médio',
-      task: '3e691f95-497e-815c-a129-f4d2d6405cbc',
-    },
   ],
   overlap: 'CanvasPanel absolute z-20 (z-30 com foco dentro), top-16, left = sidebar + 1rem; a lista rola por dentro (max-h 38vh). Fica abaixo da sidebar (26) e acima de topbar e statusbar (18) e do aviso de layout (z-10, no mesmo canto: cobre o aviso). Disputa largura com gaveta e inspector por reportPanelWidth (splitHorizontalSpace). Marcar e remover do item só aparecem no hover ou com foco (opacity-0).',
 }
@@ -1060,7 +1055,7 @@ export const chromeSurfaces: InventoryElement[] = [
         task: '3e691f95-497e-8116-8cbd-fad2823ce1da',
       },
     ],
-    overlap: 'Sem superfície própria; é ele que impede painel, gaveta e inspector de se cobrirem (MIN_CANVAS_STRIP 160 px). Em janelas menores que a soma dos mínimos o painel não cede de 260 px e passa da viewport.',
+    overlap: 'Sem superfície própria; distribui o espaço entre painel, gaveta e inspector (MIN_CANVAS_STRIP 160 px). O CanvasPanel limita sua largura visual à viewport quando os mínimos não cabem.',
   },
   {
     id: 'chrome-layout-warning',

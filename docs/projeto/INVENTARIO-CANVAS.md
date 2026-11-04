@@ -32,7 +32,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **Elementos:** 100 (10 blocos, 16 ferramentas, 74 outras superfícies)
 - **Controles:** 378, dos quais 57 com teste específico
 - **Elementos sem nenhum teste:** 4
-- **Lacunas:** 272 (alto 9, médio 147, baixo 116), em 78 tasks
+- **Lacunas:** 270 (alto 9, médio 145, baixo 116), em 77 tasks
 
 ## Moldura do canvas
 
@@ -403,7 +403,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **Persistência:** nenhuma (estado de React; as larguras escolhidas persistem em cada superfície)
 - **IPC:** `qa-logger:log`
 - **Depende de:** `CanvasSurfacesContext`, `splitHorizontalSpace`, `detectLiveLayoutClamp`, `freeCanvasArea`, `miniMapSize`, `dockReservedBottom`
-- **Sobreposição:** Sem superfície própria; é ele que impede painel, gaveta e inspector de se cobrirem (MIN_CANVAS_STRIP 160 px). Em janelas menores que a soma dos mínimos o painel não cede de 260 px e passa da viewport.
+- **Sobreposição:** Sem superfície própria; distribui o espaço entre painel, gaveta e inspector (MIN_CANVAS_STRIP 160 px). O CanvasPanel limita sua largura visual à viewport quando os mínimos não cabem.
 - **Testes:** `src/features/canvas/services/canvas-surfaces.test.ts`, `src/features/canvas/services/layout-invariants.test.ts`, `scripts/canvas-smoke.cjs` → `checarPainelNosDoisEixos`, `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos`
 
 | Estado | Quando |
@@ -1411,7 +1411,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **Persistência:** nenhuma para o termo (useSearchQuery é useState: fechar o painel apaga a busca); localStorage felixo:canvas-panel-width:search e felixo:canvas-panel-height:search (moldura)
 - **IPC:** nenhum
 - **Depende de:** `useSearchQuery`, `useSearchInputFocus`, `CanvasPanel`, `focusNode (CanvasView)`
-- **Sobreposição:** CanvasPanel absolute z-20 (z-30 com foco dentro), top-16, left = 1rem + largura viva da sidebar; abaixo da sidebar (26), dos toasts/overlay isBusy (50), dos diálogos (60) e do FelixoSelect (1000); mesmo z da lista Elementos (z-20, direita). Porte sm; em 320 px sai ~8 px da viewport (PANEL_MIN_WIDTH 260 não cede), registrado como knownIssue no smoke
+- **Sobreposição:** CanvasPanel absolute z-20 (z-30 com foco dentro), top-16, left = 1rem + largura viva da sidebar; abaixo da sidebar (26), dos toasts/overlay isBusy (50), dos diálogos (60) e do FelixoSelect (1000); mesmo z da lista Elementos (z-20, direita). Porte sm; a largura visual é limitada à viewport em telas estreitas.
 - **Testes:** `scripts/canvas-smoke.cjs` → `checarFocoAoAbrirFerramenta`, `scripts/canvas-smoke.cjs` → `checarPainelNosDoisEixos`, `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos`, `scripts/canvas-smoke-onboarding.cjs` → `sb6`
 
 | Estado | Quando |
@@ -1905,7 +1905,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Nenhum botão interno do painel (marcar lida, remover, marcar todas, filtros, busca, limpar lidas, mudo, Reiniciar agora, Depois, Ver opções) é clicado por teste; o smoke só abre pelo sino, fecha com Esc e confere que o item da cadeia aparece. | médio | `3ec91f95-497e-818f-b9f2-f9710605c303` |
 | O realce do bloco com notificação não lida (notificationClassName em orderedNodes, CanvasView) não é conferido numa janela real nem no smoke. | baixo | `3e191f95-497e-81fd-b657-d7a63b5d17f0` |
 | erro engolido: o som da notificação falha em silêncio quando o Chromium bloqueia o áudio (audio.play().catch vazio, CanvasView.tsx:670); a pessoa liga o som e não sabe por que não toca. | baixo | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
-| Como todo CanvasPanel, o painel passa da viewport em janelas abaixo de 768 px (PANEL_MIN_WIDTH 260 nunca cede). | médio | `3e691f95-497e-815c-a129-f4d2d6405cbc` |
 
 ### Tarefas Notion (ferramenta e conteúdo do bloco)
 
@@ -2053,7 +2052,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| em telas < 768 px o painel sai da viewport (~8 px em 320 px: PANEL_MIN_WIDTH 260 + rail 52 + gap); o smoke só registra knownIssue e desliga o bounds-check | médio | `3e691f95-497e-815c-a129-f4d2d6405cbc` |
 | mesmo z da lista Elementos (TerminalsPanel absolute right-0 z-20): sem foco dentro do painel, a ordem do DOM decide quem cobre quem; coberto em janela pequena com a gaveta fixada | médio | `3eb91f95-497e-814a-8b2c-e471e09f6ff3` |
 | só o painel Buscar tem evidência visual nos viewports críticos; os outros painéis (portes md/xl e workspace) nunca foram medidos | médio | `3ce91f95-497e-81c9-8c3b-def9ed09d58c` |
 | Recolher/Expandir e o botão Fechar não são clicados por nenhum teste (o smoke fecha a Busca pelo botão do rail e por Esc); a alça de largura não é exercitada no smoke, só a de altura | médio | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
@@ -2903,7 +2901,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3e291f95-497e-815a-9863-d4b9f8f15e8f` — 1 lacuna
 - `3e691f95-497e-810e-a39b-f26d90a38c8e` — 1 lacuna
 - `3e691f95-497e-8116-8cbd-fad2823ce1da` — 1 lacuna
-- `3e691f95-497e-815c-a129-f4d2d6405cbc` — 2 lacunas
 - `3e691f95-497e-81c8-ba05-c3074dc036f0` — 2 lacunas
 - `3e791f95-497e-81bd-8e8c-de6f9e16cec5` — 2 lacunas
 - `3e891f95-497e-8148-b00e-f27e78767664` — 2 lacunas

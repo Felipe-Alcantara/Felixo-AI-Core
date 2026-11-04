@@ -12,8 +12,6 @@ const SMOKE_CONTAS = 'scripts/canvas-smoke-contas.cjs'
 
 /** Prompts/Skills com a gaveta aberta sem fixá-la e sem a lista Elementos cobrir o painel. */
 const TASK_GAVETA_PROMPTS = '3eb91f95-497e-814a-8b2c-e471e09f6ff3'
-/** Painel de ferramentas ultrapassa a viewport em telas < 768 px. */
-const TASK_PAINEL_TELA_PEQUENA = '3e691f95-497e-815c-a129-f4d2d6405cbc'
 /** Matriz visual de viewport, tema, zoom e quantidade de agentes. */
 const TASK_MATRIZ_VISUAL = '3ce91f95-497e-81c9-8c3b-def9ed09d58c'
 /** Prompts: pty:write falho ao entregar a referência. */
@@ -72,7 +70,7 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
         task: NOVA_SMOKE,
       },
     ],
-    overlap: `${PANEL_OVERLAP}. Porte sm; em 320 px sai ~8 px da viewport (PANEL_MIN_WIDTH 260 não cede), registrado como knownIssue no smoke`,
+    overlap: `${PANEL_OVERLAP}. Porte sm; a largura visual é limitada à viewport em telas estreitas.`,
   },
 
   projects: {
@@ -910,11 +908,6 @@ export const workspaceToolSurfaces: InventoryElement[] = [
       { file: 'src/features/canvas/hooks/exit-animation-controller.test.ts' },
     ],
     gaps: [
-      {
-        what: 'em telas < 768 px o painel sai da viewport (~8 px em 320 px: PANEL_MIN_WIDTH 260 + rail 52 + gap); o smoke só registra knownIssue e desliga o bounds-check',
-        risk: 'médio',
-        task: TASK_PAINEL_TELA_PEQUENA,
-      },
       {
         what: 'mesmo z da lista Elementos (TerminalsPanel absolute right-0 z-20): sem foco dentro do painel, a ordem do DOM decide quem cobre quem; coberto em janela pequena com a gaveta fixada',
         risk: 'médio',

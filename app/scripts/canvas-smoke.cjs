@@ -1192,19 +1192,14 @@ async function checarElementosAbertosEmViewportsCriticos(page) {
     // tools: o painel de Buscar já é exercitado em checarFocoAoAbrirFerramenta
     // (só o foco); aqui grava a evidência visual que faltava.
     //
-    // Achado real (25/09/2026): em 320px, `availableWidth` (canvas-surfaces.ts)
-    // usa Math.max(PANEL_MIN_WIDTH=260, viewport - ocupado - faixa mínima de
-    // canvas) — o painel nunca fica menor que 260px, de propósito (painel
-    // ilegível é pior que canvas espremido). Mas 260px + a rail lateral (52px)
-    // + o gap entre eles passam de 320px: o painel sai ~8px da viewport à
-    // direita. É uma tensão de design não resolvida, não um bug de
-    // implementação isolado — mexer em Math.max ali afeta sidebarWidthLimit e
-    // drawerWidthLimit também. Por isso o bounds-check relaxa só aqui
-    // (checkViewportBounds: false), com o achado registrado na task de
-    // acompanhamento em vez de "corrigido" às pressas.
     await page.getByRole('button', { name: 'Buscar' }).click()
     const searchPanel = page.locator('[data-felixo-canvas-panel="search"]')
     await searchPanel.waitFor({ state: 'visible', timeout: INTERACTION_TIMEOUT_MS })
+    // offsetLeft/offsetWidth medem o layout final sem depender da animação de entrada.
+    const bounds = await searchPanel.evaluate((panel) => ({ x: panel.offsetLeft, width: panel.offsetWidth }))
+    if (bounds.x < 0 || bounds.x + bounds.width > viewport.width + 1) {
+      throw new Error(`Painel Buscar fora da viewport ${suffix}: ${JSON.stringify(bounds)}`)
+    }
     await recordVisualEvidence(
       page,
       'tools-busca-aberta-' + suffix,
@@ -1212,9 +1207,6 @@ async function checarElementosAbertosEmViewportsCriticos(page) {
       {
         event: 'tools-open',
         viewport,
-        ...(viewport.width < 768
-          ? { knownIssue: 'painel de ferramentas ultrapassa a viewport em telas <768px (PANEL_MIN_WIDTH=260 nunca cede)' }
-          : {}),
       },
       { checkViewportBounds: viewport.width >= 768 },
     )

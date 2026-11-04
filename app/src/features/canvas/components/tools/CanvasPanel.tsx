@@ -82,6 +82,13 @@ export function CanvasPanel({
   // o painel nunca precisou de um segundo teto vindo do inspector — ele fica
   // à direita, não embaixo, então não disputa altura com o painel esquerdo.
   const maxHeight = useViewportPanelHeight()
+  // Em telas estreitas a sidebar expandida pode ocupar quase toda a janela.
+  // Nesse caso o painel se sobrepõe a ela, mantendo uma área utilizável.
+  const panelLeft = WORKSPACE_SIDE_GAP + Math.min(
+    occupancy.toolbar,
+    Math.max(0, viewport.width - WORKSPACE_SIDE_GAP * 2 - MIN_CANVAS_STRIP),
+  )
+  const viewportWidthLimit = Math.max(0, viewport.width - panelLeft - WORKSPACE_SIDE_GAP)
   const workspaceWidth = Math.max(
     PANEL_MIN_WIDTH,
     viewport.width -
@@ -143,7 +150,7 @@ export function CanvasPanel({
         }
       }}
       style={{
-        left: `calc(1rem + ${occupancy.toolbar}px)`,
+        left: panelLeft,
         width: collapsed
           ? COLLAPSED_SURFACE_WIDTH
           : isWorkspace
@@ -154,8 +161,8 @@ export function CanvasPanel({
             ? `${occupancy.inspector + WORKSPACE_SIDE_GAP}px`
             : undefined,
         maxWidth: isWorkspace
-          ? undefined
-          : `${Math.max(PANEL_MIN_WIDTH, viewport.width - occupancy.toolbar - occupancy.inspector - WORKSPACE_SIDE_GAP * 2)}px`,
+          ? viewportWidthLimit
+          : Math.min(viewportWidthLimit, Math.max(PANEL_MIN_WIDTH, viewport.width - occupancy.toolbar - occupancy.inspector - WORKSPACE_SIDE_GAP * 2)),
         maxHeight,
         // Workspace é página: ocupa a altura toda, e com ela definida os
         // filhos conseguem `height: 100%` e rolar cada coluna por dentro.
@@ -167,7 +174,7 @@ export function CanvasPanel({
         height: isWorkspace ? maxHeight : collapsed ? undefined : (heightResize.height ?? undefined),
       }}
       data-felixo-canvas-panel={panelId}
-      className={`absolute z-20 flex max-w-[calc(100vw-2rem)] flex-col overflow-hidden border border-white/10 bg-zinc-900 shadow-2xl focus-within:z-30 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-sky-400 ${
+      className={`absolute flex max-w-[calc(100vw-2rem)] flex-col overflow-hidden border border-white/10 bg-zinc-900 shadow-2xl focus-within:z-30 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-sky-400 ${panelLeft < WORKSPACE_SIDE_GAP + occupancy.toolbar ? 'z-30' : 'z-20'} ${
         isWorkspace ? 'top-4 rounded-xl' : 'top-16 rounded-lg'
       } ${
         resizing
@@ -223,9 +230,9 @@ export function CanvasPanel({
           role="separator"
           aria-label={`Redimensionar painel ${title}`}
           aria-orientation="vertical"
-          aria-valuenow={width}
-          aria-valuemin={minWidth}
-          aria-valuemax={maxWidth}
+          aria-valuenow={Math.min(width, viewportWidthLimit)}
+          aria-valuemin={Math.min(minWidth, viewportWidthLimit)}
+          aria-valuemax={Math.min(maxWidth, viewportWidthLimit)}
           aria-description="Use as setas para ajustar e Home para restaurar o tamanho padrão."
           tabIndex={0}
           title="Arraste para redimensionar; dois cliques para o tamanho padrão"

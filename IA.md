@@ -1576,3 +1576,16 @@ recolhida clicável fez o mesmo teste falhar.
 apontar o defeito antigo como presente. Inventário 9/9, lint e build passaram.
 Em 320 px com a sidebar expandida, ela interceptou o botão de recolher o
 inspetor; essa sobreposição diferente precisa de acompanhamento.
+
+## 2026-11-04 — Layout: painel de ferramentas em viewport estreita
+
+Em Electron, o painel Buscar ultrapassava a janela de 320 px (direita em
+328 px). O CanvasPanel agora limita a largura visual ao espaço na viewport;
+quando a sidebar expandida ocupa quase toda a janela, o painel se posiciona
+sobre ela. O cálculo compartilhado de largura da sidebar e da gaveta continua
+inalterado.
+
+O smoke verifica os limites do painel em viewports críticos; o inventário foi
+atualizado. No Electron isolado, o painel coube em 320 px e seu botão de fechar
+funcionou com a sidebar expandida. Os 48 testes de dimensionamento, os nove do
+inventário, lint e build passaram. O build mantém o aviso de chunks grandes.
