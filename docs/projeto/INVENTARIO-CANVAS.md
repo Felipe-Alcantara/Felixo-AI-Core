@@ -32,7 +32,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **Elementos:** 100 (10 blocos, 16 ferramentas, 74 outras superfícies)
 - **Controles:** 378, dos quais 57 com teste específico
 - **Elementos sem nenhum teste:** 4
-- **Lacunas:** 274 (alto 10, médio 148, baixo 116), em 78 tasks
+- **Lacunas:** 272 (alto 9, médio 147, baixo 116), em 78 tasks
 
 ## Moldura do canvas
 
@@ -296,7 +296,6 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 | --- | --- | --- |
 | Enquadrar da pílula usa fitView direto (CanvasZoomPill.tsx:54), sem a área útil que o Enquadrar da sidebar usa (fitCanvasViewSafely, CanvasView.tsx:1196): o smoke de links registra que ele deixa blocos sob a barra lateral em 1280×800. | médio | `3ec91f95-497e-8103-b360-c1979d6992f4` |
 | Aumentar zoom e o cadeado não são exercitados por teste. | baixo | `3ec91f95-497e-818f-b9f2-f9710605c303` |
-| Abaixo de 768 px a faixa vazia do dock de terminais (data-terminals-dock) intercepta os cliques na pílula; o smoke dispara o clique pelo DOM para contornar. | médio | `3e691f95-497e-810e-a39b-f26d90a38c8e` |
 | Um painel de ferramenta alto (z-20, até viewport − 112 px, a partir da mesma borda esquerda) cobre a pílula, que está dentro do React Flow (z 0); não há teste dessa combinação. | médio | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
 
 ### Área do canvas (React Flow)
@@ -355,7 +354,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `pty:write`, `canvas:save`
 - **Depende de:** `useCanvasSurfaces (reportInspectorWidth)`, `useTerminalSessions`, `useSessionSnapshot`, `terminals-panel-groups`, `terminals-panel-reorder`, `terminals-panel-navigation`, `terminals-panel-drafts`, `terminals-panel-collapse`
 - **Sobreposição:** Wrapper data-terminals-dock absolute (top-12, bottom-0, right-0) z-20, pointer-events-none; o inspector (w-72) e o puck (bottom-10 right-3) religam os cliques. Abaixo da topbar (começa em 48 px) e até a borda de baixo da janela, ao lado da statusbar (que para em right: 18rem); o puck fica acima da statusbar; topbar, statusbar e Mini Map reservam 18rem (1rem com o puck) via :has(). Publica a largura em reportInspectorWidth, que encolhe painel e gaveta.
-- **Testes:** `scripts/canvas-smoke-onboarding.cjs` → `recolherInspector`, `scripts/canvas-smoke-links.cjs` → `focar`, `scripts/canvas-smoke-prompts.cjs` → `abrirTerminal`, `scripts/canvas-smoke.cjs` → `checarOclusaoDoFixture`, `src/features/canvas/components/tools/terminals-panel-collapse.test.ts`, `src/features/canvas/components/tools/terminals-panel-drafts.test.ts`, `src/features/canvas/components/tools/terminals-panel-groups.test.ts`, `src/features/canvas/components/tools/terminals-panel-navigation.test.ts`, `src/features/canvas/components/tools/terminals-panel-reorder.test.ts`, `src/features/canvas/services/canvas-surfaces.test.ts`
+- **Testes:** `scripts/canvas-smoke.cjs` → `checarDockRecolhidaSemBloqueio`, `scripts/canvas-smoke-onboarding.cjs` → `recolherInspector`, `scripts/canvas-smoke-links.cjs` → `focar`, `scripts/canvas-smoke-prompts.cjs` → `abrirTerminal`, `scripts/canvas-smoke.cjs` → `checarOclusaoDoFixture`, `src/features/canvas/components/tools/terminals-panel-collapse.test.ts`, `src/features/canvas/components/tools/terminals-panel-drafts.test.ts`, `src/features/canvas/components/tools/terminals-panel-groups.test.ts`, `src/features/canvas/components/tools/terminals-panel-navigation.test.ts`, `src/features/canvas/components/tools/terminals-panel-reorder.test.ts`, `src/features/canvas/services/canvas-surfaces.test.ts`
 
 | Estado | Quando |
 | --- | --- |
@@ -377,7 +376,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Abaixo de 768 px a lista interna do dock intercepta cliques numa faixa da borda direita mesmo vazia (o container tem pointer-events-none, a lista não). | alto | `3e691f95-497e-810e-a39b-f26d90a38c8e` |
 | Com a gaveta aberta, a lista "Elementos" cobre os painéis Prompts e Skills. | médio | `3eb91f95-497e-814a-8b2c-e471e09f6ff3` |
 | Envio em massa e envio por linha apagam o rascunho sem olhar o resultado de store.sendText (TerminalsPanel.tsx:193): mensagem que não chegou ao PTY se perde sem aviso. | médio | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 | Modo de envio em massa, reordenar pelo grip ou Alt+↑/↓ e Shift+↑/↓ global não são exercitados por teste de interface (só as funções puras). | baixo | `3ec91f95-497e-818f-b9f2-f9710605c303` |
@@ -2903,7 +2901,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3e191f95-497e-81fd-b657-d7a63b5d17f0` — 3 lacunas
 - `3e291f95-497e-8109-8851-e4ff2193c4db` — 2 lacunas
 - `3e291f95-497e-815a-9863-d4b9f8f15e8f` — 1 lacuna
-- `3e691f95-497e-810e-a39b-f26d90a38c8e` — 3 lacunas
+- `3e691f95-497e-810e-a39b-f26d90a38c8e` — 1 lacuna
 - `3e691f95-497e-8116-8cbd-fad2823ce1da` — 1 lacuna
 - `3e691f95-497e-815c-a129-f4d2d6405cbc` — 2 lacunas
 - `3e691f95-497e-81c8-ba05-c3074dc036f0` — 2 lacunas

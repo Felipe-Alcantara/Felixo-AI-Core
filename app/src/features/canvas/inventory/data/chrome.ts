@@ -800,11 +800,6 @@ export const chromeSurfaces: InventoryElement[] = [
         task: '3ec91f95-497e-818f-b9f2-f9710605c303',
       },
       {
-        what: 'Abaixo de 768 px a faixa vazia do dock de terminais (data-terminals-dock) intercepta os cliques na pílula; o smoke dispara o clique pelo DOM para contornar.',
-        risk: 'médio',
-        task: '3e691f95-497e-810e-a39b-f26d90a38c8e',
-      },
-      {
         what: 'Um painel de ferramenta alto (z-20, até viewport − 112 px, a partir da mesma borda esquerda) cobre a pílula, que está dentro do React Flow (z 0); não há teste dessa combinação.',
         risk: 'médio',
         task: '3ec91f95-497e-8112-82f9-fd1b86e3ec7d',
@@ -987,6 +982,7 @@ export const chromeSurfaces: InventoryElement[] = [
     ipc: ['pty:write', 'canvas:save'],
     dependsOn: ['useCanvasSurfaces (reportInspectorWidth)', 'useTerminalSessions', 'useSessionSnapshot', 'terminals-panel-groups', 'terminals-panel-reorder', 'terminals-panel-navigation', 'terminals-panel-drafts', 'terminals-panel-collapse'],
     tests: [
+      { file: 'scripts/canvas-smoke.cjs', check: 'checarDockRecolhidaSemBloqueio' },
       { file: 'scripts/canvas-smoke-onboarding.cjs', check: 'recolherInspector' },
       { file: 'scripts/canvas-smoke-links.cjs', check: 'focar' },
       { file: 'scripts/canvas-smoke-prompts.cjs', check: 'abrirTerminal' },
@@ -999,11 +995,6 @@ export const chromeSurfaces: InventoryElement[] = [
       { file: 'src/features/canvas/services/canvas-surfaces.test.ts' },
     ],
     gaps: [
-      {
-        what: 'Abaixo de 768 px a lista interna do dock intercepta cliques numa faixa da borda direita mesmo vazia (o container tem pointer-events-none, a lista não).',
-        risk: 'alto',
-        task: '3e691f95-497e-810e-a39b-f26d90a38c8e',
-      },
       {
         what: 'Com a gaveta aberta, a lista "Elementos" cobre os painéis Prompts e Skills.',
         risk: 'médio',

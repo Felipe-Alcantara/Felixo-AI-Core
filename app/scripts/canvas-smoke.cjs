@@ -1105,6 +1105,37 @@ async function checarVariosAgentes(page) {
  * docs/projeto/... (task "Layout — validar matriz visual de viewport
  * pequeno, zoom, tema e DPI", 25/09/2026).
  */
+async function checarDockRecolhidaSemBloqueio(page) {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  const recolher = page.getByRole('button', { name: 'Recolher elementos' })
+  const abrir = page.getByRole('button', { name: 'Abrir elementos' })
+  for (const width of [320, 768]) {
+    await recolher.click()
+    await page.setViewportSize({ width, height: 640 })
+    await waitForViewport(page, { width, height: 640 })
+    await page.evaluate(() => {
+      const dock = document.querySelector('[data-terminals-dock]')
+      const alvo = document.createElement('button')
+      alvo.id = 'smoke-alvo-sob-dock'
+      alvo.textContent = 'Alvo sob a dock'
+      alvo.style.cssText = 'position:absolute;right:16px;top:240px;width:70px;height:40px;z-index:10'
+      alvo.addEventListener('click', () => { alvo.dataset.clicado = 'sim' })
+      dock.parentElement.appendChild(alvo)
+    })
+    try {
+      await page.locator('#smoke-alvo-sob-dock').click({ timeout: INTERACTION_TIMEOUT_MS })
+      if (await page.locator('#smoke-alvo-sob-dock').getAttribute('data-clicado') !== 'sim') {
+        throw new Error(`[canvas-smoke] dock recolhida bloqueou clique em ${width}px`)
+      }
+      await abrir.click({ timeout: INTERACTION_TIMEOUT_MS })
+    } finally {
+      await page.evaluate(() => document.querySelector('#smoke-alvo-sob-dock')?.remove())
+    }
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await waitForViewport(page, { width: 1280, height: 800 })
+  }
+}
+
 async function checarElementosAbertosEmViewportsCriticos(page) {
   await selectVisualTheme(page, 'dark')
   const viewports = [
@@ -1143,15 +1174,6 @@ async function checarElementosAbertosEmViewportsCriticos(page) {
     // reenquadrar, os nós da fixture nascem em coordenadas que podem cair
     // debaixo da rail/sidebar no viewport seguinte (achado real: fixture-group
     // ficou atrás do botão de notificações em 320px antes desta chamada).
-    //
-    // Achado real, o mais significativo da matriz (25/09/2026): a dock de
-    // terminais recolhidos (`data-terminals-dock`, faixa fixa top-12/bottom-7
-    // na borda direita) intercepta cliques em QUALQUER controle sob ela em
-    // viewport <768px, mesmo sem nenhum terminal recolhido visível — bateu
-    // aqui na pílula de zoom, antes no fixture-group e no fixture-note. O
-    // container tem pointer-events-none, mas a lista interna não, criando
-    // uma faixa "fantasma" clicável. A correção real (a lista vazia não devia
-    // interceptar nada) é da task de acompanhamento, não desta validação.
     //
     // `.click({force:true})` ainda passa pela checagem de "dentro da
     // viewport" do Playwright, que falhou de forma intermitente em 2
@@ -1389,6 +1411,7 @@ const SESSIONS = [
       const tutorial = cenariosDoTutorial(page)
       await checarMontagem(page)
       await tutorial.sa0()
+      await checarDockRecolhidaSemBloqueio(page)
       await checarLandmarksVisiveis(page)
       await checarNavegacaoPorTab(page)
       await checarFocoAoAbrirFerramenta(page)

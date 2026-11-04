@@ -1563,3 +1563,16 @@ de descoberta de sessão e um de isolamento do perfil falharam, como na task
 ele não recupera alterações que ainda não haviam sido gravadas na interrupção.
 A verificação de processo vivo usa PID e pode confundir PID reutilizado com a
 instância original, deixando de detectar aquela interrupção.
+
+## 2026-11-03 — Layout: clique sob o inspetor recolhido
+
+**Investigação.** O inspetor atual usa `inert` e `pointer-events: none` quando
+recolhido; a faixa fantasma descrita na task não se reproduziu após o redesenho.
+Em Electron com perfil isolado, cliques reais num alvo sob a dock e no botão de
+reabertura passaram em 320 e 768 px. Uma regressão injetada que torna a camada
+recolhida clicável fez o mesmo teste falhar.
+
+**Entrega.** O smoke do canvas protege esses cliques e o inventário deixa de
+apontar o defeito antigo como presente. Inventário 9/9, lint e build passaram.
+Em 320 px com a sidebar expandida, ela interceptou o botão de recolher o
+inspetor; essa sobreposição diferente precisa de acompanhamento.
