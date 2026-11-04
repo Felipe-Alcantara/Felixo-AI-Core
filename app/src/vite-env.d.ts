@@ -399,6 +399,10 @@ declare global {
       getFilePath?: (file: File) => string
       /** Versão empacotada do app (a do CI, não a do package.json versionado). */
       getVersion?: () => Promise<string>
+      performanceRecovery?: {
+        status: () => Promise<boolean>
+        acknowledge: () => Promise<void>
+      }
       graphics?: {
         getConfig: () => Promise<{
           ok: boolean

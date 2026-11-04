@@ -273,15 +273,18 @@ está ativa. `useReducedMotionPreference` acompanha mudanças da preferência do
 sistema enquanto o app está aberto; ativar reduced motion não altera a opção
 salva do Modo Performance.
 
-### Safe mode pós-crash (não existe)
-Não há hoje nenhum modo automático acionado depois de o app travar ou ser
-morto pelo SO por uso de memória. Política proposta para quando for
-implementado: ao detectar que a sessão anterior não fechou normalmente
-(sem o unmount limpo que `useCanvasPersistence`/`terminal-session-store`
-fazem), a próxima abertura entra em Performance Mode automaticamente e
-mostra um aviso dizendo por quê — nunca descarta terminais, nós ou
-sessões persistidas sozinho. Ativação automática, sem perguntar; desligar
-continua manual, como hoje. **Não implementado — task de acompanhamento.**
+### Safe mode pós-crash
+O processo principal registra a sessão em arquivo próprio por processo, dentro
+do perfil, e remove seu registro no encerramento normal. Ao encontrar uma
+sessão encerrada sem esse fechamento, ou após falha do renderer principal, o
+app ativa o Modo Performance antes de montar o workspace e informa o motivo.
+O aviso pode ser dispensado; o modo permanece ligado até a pessoa desligá-lo
+nas Configurações. Nenhum bloco, terminal ou sessão é removido pelo modo.
+O marcador detecta interrupção, não a causa exata; alterações ainda pendentes
+de gravação no momento da falha não são garantidas. Outra instância viva do
+mesmo perfil não é considerada uma falha. A verificação de instância usa PID:
+se o sistema reutilizar o PID de uma sessão interrompida para outro processo,
+ela pode ser confundida com uma instância viva e a recuperação não ser ativada.
 
 ## Degradações aceitáveis vs. não aceitáveis
 
@@ -403,12 +406,11 @@ cobre o desenho do piloto, não autoriza implementar coleta ou infraestrutura.
   um desliga estão listados; a UI (`PerformanceModeSection.tsx`) já descreve
   em linguagem simples o que o toggle atual faz. ✅
 - Usuário sabe o que foi reduzido: coberto pelo texto da UI existente para o
-  Performance Mode; Reduced Motion e Safe Mode ainda não têm aviso na UI
-  porque a lacuna do primeiro e a ausência do segundo são tratadas como
-  tasks de acompanhamento, não implementadas nesta rodada. ⚠️ parcial
+  Performance Mode; Safe Mode informa a ativação automática após interrupção.
+  Reduced Motion ainda não tem aviso próprio na UI. ⚠️ parcial
 - Ativação não perde prompt, dados ou processo: verificado no design atual
   (scrollback só afeta sessões novas; nenhum modo chama kill de processo).
-  ✅ para o que já existe; Safe Mode ainda não existe para validar.
+  ✅ o Safe Mode usa o mesmo toggle sem descartar dados persistidos.
 
 ## Tasks de acompanhamento abertas a partir desta política
 
@@ -416,6 +418,6 @@ cobre o desenho do piloto, não autoriza implementar coleta ou infraestrutura.
    do Performance Mode (hoje falta no céu animado e no minimapa).
 2. Ativação automática do Performance Mode por carga (hoje só o scrollback
    adaptativo é automático; o resto da decoração exige toggle manual).
-3. Implementar Safe Mode pós-crash conforme a política proposta acima.
+3. Safe Mode pós-crash implementado; ver a seção correspondente acima.
 4. Desenhar o piloto telemetry opt-in de uso do Performance Mode para calibrar
    recomendações por carga ([task](https://app.notion.com/p/Felixo-AI-Core-Performance-desenhar-piloto-opt-in-para-calibrar-recomenda-es-por-carga-40d91f95497e813f85b4dc6b5ef11d93)).

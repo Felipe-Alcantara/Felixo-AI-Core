@@ -3,6 +3,8 @@ import { createContext, useContext } from 'react'
 export type PerformanceModeContextValue = {
   performanceMode: boolean
   setPerformanceMode: (enabled: boolean) => void
+  recoveryNotice: boolean
+  dismissRecoveryNotice: () => void
 }
 
 // O contexto mora num arquivo sem componente para o fast refresh continuar

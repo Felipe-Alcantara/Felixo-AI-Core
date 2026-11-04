@@ -168,6 +168,7 @@ const platform = require('./core/platform/index.cjs')
 const { runPackagedReleaseSmoke } = require('./release-smoke.cjs')
 const { registerGlobalErrorHandlers, wrapIpcHandleWithLogging } = require('./services/global-error-handlers.cjs')
 const { registerSessionSecurity } = require('./services/session-security.cjs')
+const { startPerformanceRecovery } = require('./services/performance-recovery.cjs')
 
 // O mais cedo possível — antes de qualquer `ipcMain.handle` de outro módulo
 // registrar, e antes de `app.whenReady()`. Task "Observabilidade": nenhum
@@ -298,6 +299,17 @@ const { gpuStart, gpuLaunch } = startGpuPreference({
   softwareRendering: useSoftwareRendering,
   isDevelopment: Boolean(process.env.VITE_DEV_SERVER_URL),
 })
+const performanceRecovery = isReleaseSmoke ? null : startPerformanceRecovery({ userData: app.getPath('userData') })
+ipcMain.handle('performance-recovery:status', (event) =>
+  event.sender === mainWindow?.webContents && Boolean(performanceRecovery?.needsRecovery()),
+)
+ipcMain.handle('performance-recovery:acknowledge', (event) => {
+  if (event.sender === mainWindow?.webContents) performanceRecovery?.acknowledge()
+})
+app.on('render-process-gone', (_event, contents, details) => {
+  if (contents === mainWindow?.webContents && details?.reason !== 'clean-exit') performanceRecovery?.rendererCrashed()
+})
+app.on('will-quit', () => performanceRecovery?.close())
 // Antes do whenReady, para não perder o primeiro `gpu-info-update`: só depois
 // dele `app.getGPUFeatureStatus()` deixa de ser o padrão `disabled_software`.
 const gpuInfoWatcher = createGpuInfoWatcher(app)

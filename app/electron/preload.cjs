@@ -62,6 +62,10 @@ contextBridge.exposeInMainWorld('felixo', {
   },
   getFilePath: (file) => webUtils?.getPathForFile(file) ?? '',
   getVersion: () => ipcRenderer.invoke('app:get-version'),
+  performanceRecovery: {
+    status: () => ipcRenderer.invoke('performance-recovery:status'),
+    acknowledge: () => ipcRenderer.invoke('performance-recovery:acknowledge'),
+  },
   graphics: {
     getConfig: () => ipcRenderer.invoke('graphics:get-config'),
     setMode: (mode) => ipcRenderer.invoke('graphics:set-mode', mode),

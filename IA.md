@@ -1537,3 +1537,29 @@ funil da recomendação. Não existe SDK, coletor ou endpoint de analytics no ap
 nesta etapa. O desenho deve avaliar exibições e respostas agregadas por faixa de
 carga, manter consentimento explícito desligado por padrão, excluir conteúdo de
 terminal e explicar o viés de amostra. Ver a [task de desenho do piloto](https://app.notion.com/p/Felixo-AI-Core-Performance-desenhar-piloto-opt-in-para-calibrar-recomenda-es-por-carga-40d91f95497e813f85b4dc6b5ef11d93).
+
+## 2026-11-03 — Performance: recuperação após encerramento anormal
+
+**Pedido e entrega.** A sessão passa a ter um marcador por processo no perfil.
+Uma interrupção ou falha do renderer principal ativa o Modo Performance antes
+de montar o workspace na próxima abertura e exibe o motivo. O aviso é dispensável,
+o toggle continua manual e nenhum registro de canvas ou terminal é removido.
+Instâncias ainda vivas não são tratadas como falhas.
+
+**Validação local.** Quatro testes do serviço passaram, cobrindo saída normal,
+interrupção, falha de renderer e instância concorrente. A suíte frontend teve
+3.377 testes aprovados e 3 ignorados; lint, build e inventário passaram. Em
+Electron com perfil temporário, uma saída abrupta com código 23 foi seguida de
+reabertura com modo ligado, aviso e nota persistida; o fechamento normal seguinte
+não repetiu o aviso. Um evento de falha do renderer foi simulado em outra sessão,
+e o toggle em Configurações desligou o modo e persistiu após reload.
+
+`npm test` terminou com erro em testes alheios à mudança. Reexecutando apenas
+`agent-session-discovery` e `pty-process-manager`, 87/90 passaram: os dois testes
+de descoberta de sessão e um de isolamento do perfil falharam, como na task
+[existente de isolamento](https://app.notion.com/p/Felixo-AI-Core-Testes-isolar-agent-session-discovery-e-CODEX_HOME-do-perfil-local-40d91f95497e811ea808d8c03a40bff5).
+
+**Limite.** O marcador identifica encerramento anormal, sem identificar a causa;
+ele não recupera alterações que ainda não haviam sido gravadas na interrupção.
+A verificação de processo vivo usa PID e pode confundir PID reutilizado com a
+instância original, deixando de detectar aquela interrupção.

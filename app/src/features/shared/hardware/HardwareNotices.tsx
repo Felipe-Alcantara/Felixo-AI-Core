@@ -105,7 +105,7 @@ export function NoticeToast({
  */
 export function HardwareNotices() {
   const gpu = useGpuStatus()
-  const { performanceMode, setPerformanceMode } = usePerformanceMode()
+  const { performanceMode, setPerformanceMode, recoveryNotice, dismissRecoveryNotice } = usePerformanceMode()
   const [profile, setProfile] = useState<HardwareProfile | null>(null)
   const [answered, setAnswered] = useState(() => loadSuggestionAnswered())
 
@@ -123,6 +123,19 @@ export function HardwareNotices() {
       cancelled = true
     }
   }, [])
+
+  if (recoveryNotice) {
+    return (
+      <NoticeToast
+        icon={<AlertTriangle size={18} className="text-(--color-warning)" />}
+        title="Modo Performance ativado"
+        description="A sessão anterior não foi encerrada normalmente. O Modo Performance foi ativado para reduzir a carga; você pode desligá-lo em Configurações. O modo não remove blocos nem sessões."
+        secondaryLabel="Entendi"
+        onSecondary={dismissRecoveryNotice}
+        dismissLabel="Dispensar aviso de recuperação"
+      />
+    )
+  }
 
   if (gpu?.fallback) {
     return (

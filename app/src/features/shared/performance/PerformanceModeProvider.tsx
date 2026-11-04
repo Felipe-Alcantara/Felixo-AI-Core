@@ -14,18 +14,39 @@ import { loadPerformanceMode, savePerformanceMode } from './performance-mode-sto
  */
 export function PerformanceModeProvider({ children }: { children: ReactNode }) {
   const [performanceMode, setPerformanceModeState] = useState(() => loadPerformanceMode())
+  const [ready, setReady] = useState(() => !window.felixo?.performanceRecovery)
+  const [recoveryNotice, setRecoveryNotice] = useState(false)
 
   useEffect(() => {
+    const recovery = window.felixo?.performanceRecovery
+    if (!recovery) return
+    let cancelled = false
+    void recovery.status().then((needed) => {
+      if (cancelled) return
+      if (needed) {
+        savePerformanceMode(true)
+        setPerformanceModeState(true)
+        setRecoveryNotice(true)
+        void recovery.acknowledge().catch(() => {})
+      }
+    }).catch(() => {}).finally(() => { if (!cancelled) setReady(true) })
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    if (!ready) return
     document.documentElement.dataset.performanceMode = performanceMode ? 'on' : 'off'
     savePerformanceMode(performanceMode)
-  }, [performanceMode])
+  }, [performanceMode, ready])
 
   const setPerformanceMode = useCallback((next: boolean) => setPerformanceModeState(next), [])
+  const dismissRecoveryNotice = useCallback(() => setRecoveryNotice(false), [])
   const value = useMemo(
-    () => ({ performanceMode, setPerformanceMode }),
-    [performanceMode, setPerformanceMode],
+    () => ({ performanceMode, setPerformanceMode, recoveryNotice, dismissRecoveryNotice }),
+    [performanceMode, setPerformanceMode, recoveryNotice, dismissRecoveryNotice],
   )
 
+  if (!ready) return <div role="status">Preparando workspace…</div>
   return (
     <PerformanceModeContext.Provider value={value}>{children}</PerformanceModeContext.Provider>
   )

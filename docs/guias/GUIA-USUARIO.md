@@ -428,11 +428,16 @@ As configurações de CLIs ficam em **Modelos**. A área **Felixo** não é uma 
 Em **Configurações**, o **Modo Performance** desliga o céu animado, o minimapa e
 as transições de painéis, sem mudar nada de lugar. Em computadores com até 4
 processadores lógicos, o Felixo sugere ligá-lo uma vez (**Ligar o Modo
-Performance?**): o modo só liga se você clicar em **Ligar Modo Performance**, e
+Performance?**): nessa sugestão o modo liga quando você clicar em **Ligar Modo Performance**, e
 **Agora não** faz a sugestão não aparecer de novo. Dá para ligar ou desligar
 depois nas Configurações. O painel **Limites e uso** continua visível; a
 atualização automática passa para 5 minutos e o botão **Atualizar** continua
 disponível.
+
+Se a sessão anterior não foi encerrada normalmente, o app liga o Modo
+Performance na próxima abertura e explica o motivo em um aviso. Nenhum bloco ou
+sessão é removido pelo modo; você pode desligá-lo nas Configurações. Uma
+interrupção repentina ainda pode impedir que alterações pendentes sejam salvas.
 
 ### Placa de vídeo (opção avançada)
 
