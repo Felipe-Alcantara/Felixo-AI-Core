@@ -8,10 +8,10 @@
  * codificado, que é o que `--check` daquele script já faz (compara política
  * `current` vs `adaptive` DENTRO da mesma execução).
  *
- * O baseline é sempre o artefato do último run verde em `main` (ver
- * `.github/workflows/ci.yml`, job `benchmarks`) — decisão explícita: sem
- * infraestrutura nova, mas artefatos do GitHub Actions expiram, então um PR
- * sem baseline disponível não deve falhar por isso (ver `--baseline-missing-ok`).
+ * Nenhum workflow roda este gate desde o PR #124 (19/10/2026); o uso é manual,
+ * com dois relatórios do mesmo sistema (ver `app/benchmarks/README.md`, seção
+ * "Gate de regressão entre commits"). Artefatos expiram, então a ausência de
+ * baseline não deve reprovar (ver `--baseline-missing-ok`).
  *
  * Cenários são casados por `phase+count+scrollback+policy`; um cenário que só
  * existe de um lado (contagem nova, política nova) é ignorado, não comparado.

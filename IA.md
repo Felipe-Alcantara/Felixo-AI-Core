@@ -1619,3 +1619,33 @@ caixa de 67); depois, passou na primeira. No Electron isolado, fonte normal em
 320 e 1280 px: caixas iguais às de antes (60–144 e 148–232), ícones de 15 px.
 Em 137,5%, um botão por linha, com 141 px. Lint, build e os 9 testes do
 inventário passaram; o build mantém o aviso de chunks grandes.
+
+## 2026-11-04 — Performance: o gate de regressão entre commits fica fora; tempo só no relatório
+
+**Pedido.** Task de 25/09/2026 "devolver métricas de tempo ao gate e conter a
+deriva do baseline móvel". Agente Tasks OpenIA + AI Core.
+
+**Achado.** O gate (`app/scripts/benchmark-regression-gate.cjs`) não roda em
+nenhum workflow desde o PR #124 (19/10/2026), que o tirou do CI junto com os
+benchmarks. O `app/benchmarks/README.md` e o cabeçalho do script ainda o
+descreviam como ativo no CI de cada PR.
+
+**Medido.** Relatórios `terminal-scrollback-<os>.json` dos artefatos
+`medicoes-<os>` de 15 noites do `Nightly` (20/10 a 03/11/2026), 4 sistemas, 8
+cenários `renderer-xterm`. Com o MESMO commit (`49528bd` em 4 noites,
+`b36bf81` em 3; 64 grupos), a amplitude típica foi 46% no resume, 2,7% no
+frame p95, 23% no long task p95, 5,7% no RSS p95 e 15% no heap; os piores
+casos, +111,5%, +139%, +115%, +20% e +131% (este em `count=1`, abaixo do piso
+de 32 MiB). Contra a mediana das 5 noites anteriores, o resume ainda passou de
++190% num cenário do macOS. Cada execução do benchmark leva 52–88 s por
+sistema.
+
+**Decisões do Felipe** (perguntadas com as medições): o gate fica fora e a
+task se resolve em documentação; as métricas de tempo ficam só no relatório;
+se o gate um dia voltar, ele avisa no resumo do job em vez de reprovar.
+
+**O que mudou.** README dos benchmarks (seção "Gate de regressão entre
+commits": uso manual, histórico, tabela de ruído e as decisões) e o cabeçalho
+do script. Testes do gate 21/21, eslint sem erros.
+
+**Não medido.** Repetir o cenário N vezes por execução e comparar a mediana.

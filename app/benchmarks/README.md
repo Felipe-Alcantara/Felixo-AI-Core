@@ -118,8 +118,8 @@ adaptativo não deve ser habilitado naquele release.
 `--check` (acima) compara a política `current` com a `adaptive` DENTRO da
 mesma execução — não protege contra o benchmark inteiro piorando de um commit
 para outro (ex.: os dois ficarem mais lentos igualmente). Para isso existe
-`scripts/benchmark-regression-gate.cjs`, que compara o relatório do PR contra
-o baseline de um commit anterior:
+`scripts/benchmark-regression-gate.cjs`, que compara um relatório contra o
+baseline de um commit anterior:
 
 ```bash
 node scripts/benchmark-regression-gate.cjs \
@@ -128,49 +128,63 @@ node scripts/benchmark-regression-gate.cjs \
   --threshold=20
 ```
 
-No CI (job `benchmarks`, `.github/workflows/ci.yml`), o baseline é sempre o
-artefato `terminal-scrollback-<os>` do último run bem-sucedido do workflow CI
-em `main` — decisão explícita: sem armazenamento próprio (banco, branch
-dedicado), ao custo de depender da retenção padrão de artefatos do GitHub
-Actions. Roda só em `pull_request`; `main` é o baseline das próximas
-comparações, não tem "commit anterior" útil para comparar consigo mesma.
+**Hoje nenhum workflow roda o gate: o uso é manual**, com dois relatórios do
+mesmo sistema (por exemplo, os artefatos `medicoes-<os>` de duas noites do
+`Nightly`). De 25/09 a 19/10/2026 ele rodou no CI de cada PR, contra o artefato
+do último CI verde da `main`; saiu no PR #124, junto com os benchmarks, para o
+CI de cada push cair de 15–18 min para ~5 min. Em 04/11/2026, com as medições
+abaixo, o Felipe decidiu mantê-lo fora (task "devolver métricas de tempo ao
+gate e conter a deriva do baseline móvel"): sem gate, não há baseline móvel
+para derivar. Se um dia voltar, a preferência registrada é que ele avise no
+resumo do job em vez de reprovar.
+
 `--baseline-missing-ok` faz o gate não falhar quando não há baseline
-disponível (repositório novo, artefato expirado) — ausência de baseline não é
-evidência de regressão.
-
-O relatório do benchmark não carrega o commit, então o CI passa
-`--baseline-commit`, `--baseline-run-url` e `--current-commit` (SHA do head do
-PR). O texto do gate cita esses três, o critério usado e as métricas medidas
-mas fora do critério, e vai para o resumo do job — visível na página do PR sem
-baixar artefato. Uma chave desconhecida em `--exclude-metric` é erro, não é
-ignorada: um erro de digitação manteria a métrica no critério em silêncio.
-
-O baseline anda sozinho a cada run verde de `main` — ou seja, só por PR
-mesclado que passou pelo próprio gate. Limitação conhecida de baseline
-móvel: várias pioras pequenas, cada uma abaixo do limiar, podem se acumular
-sem nenhuma falhar isoladamente.
+disponível (artefato expirado, por exemplo): ausência de baseline não é
+evidência de regressão. O relatório do benchmark não carrega o commit, então
+`--baseline-commit`, `--baseline-run-url` e `--current-commit` entram no texto
+do gate, junto com o critério e as métricas medidas mas fora dele. Uma chave
+desconhecida em `--exclude-metric` é erro, não é ignorada: um erro de digitação
+manteria a métrica no critério em silêncio.
 
 Cenários são casados por `phase+count+scrollback+policy`; um cenário que só
 existe de um lado (nova contagem testada, por exemplo) é ignorado, não conta
 como regressão nem falha o gate. Cada métrica também tem um piso de diferença
 absoluta, além do percentual: um cenário de baixa carga (poucas sessões) pode
 mostrar um percentual grande sobre uma base pequena sem representar diferença
-real — medido no mesmo PR, o heap de `count=1` no macOS "regrediu" 72,8%
+real — medido no PR #89, o heap de `count=1` no macOS "regrediu" 72,8%
 (19,8 → 34,2 MiB) entre duas execuções do mesmo commit, mas a diferença real
 (~14 MiB) é ruído, não regressão.
 
-O limiar padrão do script é 20%, mas o CI passa `--threshold=60`. Mesmo assim,
-"resume (ms)" continuou instável demais para decidir o gate: o mesmo cenário
-(`count=10`, `scrollback=20000`, política `current`) variou entre 47% e 63%
-comparando o MESMO commit consigo mesmo, em execuções diferentes do runner
-hospedado — a variância cresce com a carga (mais sessões, mais tempo de
-resume, mais ruído absoluto também), então nenhum limiar fixo pareceu confiável
-sem arriscar mascarar uma regressão real de outra ordem de grandeza. O CI passa
-`--exclude-metric=resumeMs`: resume continua medido e aparece no relatório,
-só não decide pass/fail. RSS e heap (p95, com piso absoluto) se mostraram bem
-mais estáveis e continuam sendo o critério do gate. 20% sem exclusões continua
-o default para quem rodar localmente contra dois benchmarks da mesma máquina,
-onde esse ruído entre runners não existe.
+O limiar padrão do script é 20%; no CI ele rodava com `--threshold=60` e
+`--exclude-metric=resumeMs`. "resume (ms)" era instável demais para decidir o
+gate: no PR #89 o mesmo cenário (`count=10`, `scrollback=20000`, política
+`current`) variou entre 47% e 63% comparando o MESMO commit consigo mesmo, em
+execuções diferentes do runner hospedado. Resume continua medido e aparece no
+relatório, só não decide pass/fail. 20% sem exclusões continua o default para
+quem comparar dois benchmarks da mesma máquina, onde esse ruído entre runners
+não existe.
+
+**Ruído medido no `Nightly` (04/11/2026).** 15 noites (20/10 a 03/11/2026),
+quatro sistemas, os 8 cenários `renderer-xterm`, uma execução por noite. O
+`Nightly` rodou o mesmo commit em várias noites (`49528bd` em 4, `b36bf81` em
+3), o que dá ruído puro: nesses 64 grupos (2 commits × 4 sistemas × 8
+cenários), a amplitude entre o maior e o menor valor com o MESMO código foi
+
+| Métrica | Amplitude típica (mediana dos 64 grupos) | Pior caso |
+| --- | --- | --- |
+| resume (ms) | 46% | +111,5% (macOS, `current` `count=10`) |
+| frame p95 | 2,7% | +139% (Linux, `adaptive` `count=20`) |
+| long task p95 | 23% | +115% (macOS, `current` `count=1`) |
+| RSS renderer p95 | 5,7% | +20% (Linux, `current` `count=1`) |
+| delta de heap do stream | 15% | +131% (Linux, `adaptive` `count=1`; 14,5 → 33,5 MiB, abaixo do piso de 32 MiB) |
+
+Comparar cada noite com a mediana das 5 anteriores (o baseline de tendência que
+conteria a deriva) não resolve o tempo: o resume ainda passou de +190% num
+cenário do macOS. O frame p95 é quantizado no quadro (16,7 / 33,3 / 50 ms),
+então um padrão de quadro perdido dobra o valor. Por isso as métricas de tempo
+ficam só no relatório; RSS e heap, com o piso absoluto, são as únicas que
+caberiam num critério. Repetir o cenário N vezes por execução e comparar a
+mediana não foi medido; cada execução leva 52–88 s por sistema.
 
 ## Degradação do Canvas no Linux
 
