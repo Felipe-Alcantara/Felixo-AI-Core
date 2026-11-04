@@ -1589,3 +1589,33 @@ O smoke verifica os limites do painel em viewports críticos; o inventário foi
 atualizado. No Electron isolado, o painel coube em 320 px e seu botão de fechar
 funcionou com a sidebar expandida. Os 48 testes de dimensionamento, os nove do
 inventário, lint e build passaram. O build mantém o aviso de chunks grandes.
+
+## 2026-11-04 — Layout: "Selecionar" e "Enquadrar" colavam com fonte maior
+
+**Pedido.** Task de 25/09/2026, achada na matriz visual (cenário
+`fonte-maior-320`): com a fonte base em 137,5%, os dois botões lado a lado da
+seção ORGANIZAR liam "SelecionarEnquadrar". Agente Tasks OpenIA + AI Core.
+
+**Medido.** O espaço entre os botões existia (`gap: 0.22rem`). Em 320 px e
+137,5%, a grade fixa de duas colunas deixava cada botão com 67 px para um
+conteúdo de 69 px: o ícone SVG encolhia até 0 px e o texto vazava da caixa,
+sobrando 5 px entre os rótulos (16 px na fonte normal). Com a borda
+transparente, os dois liam como uma frase só.
+
+**O que mudou.** `.felixo-sidebar-button-grid` passou de grade fixa a
+`flex-wrap`: cada botão tem `flex: 1 1 0` e `min-width: max-content`, então
+ficam lado a lado e com a mesma largura enquanto cabem, e cada um desce para a
+própria linha quando não cabem. O recuo lateral caiu de 0.35rem para 0.2rem:
+com o conteúdo centralizado ele só define a largura mínima, e com 0.35rem os
+dois botões já quebravam de linha na fonte normal, mesmo em 1280 px (medido no
+Windows, Segoe UI): o par cabia na grade antiga por menos de 1 px. A fonte é a do sistema, mais larga no Linux; lá a quebra acontece
+mais cedo, em vez de o ícone sumir.
+
+**Validação.** Asserção nova no smoke
+(`checarDimensoesDeAcessibilidadeAdicionais`): reprova se o ícone de algum
+botão da grade tiver menos de 14 px ou se o conteúdo passar da caixa. Antes da
+correção, a sessão A falhou nas 3 tentativas (ícone 0, conteúdo 69,4 numa
+caixa de 67); depois, passou na primeira. No Electron isolado, fonte normal em
+320 e 1280 px: caixas iguais às de antes (60–144 e 148–232), ícones de 15 px.
+Em 137,5%, um botão por linha, com 141 px. Lint, build e os 9 testes do
+inventário passaram; o build mantém o aviso de chunks grandes.

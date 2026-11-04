@@ -411,7 +411,7 @@ export const chromeSurfaces: InventoryElement[] = [
     layer: 'chrome',
     owner: TOOLBAR,
     states: {
-      normal: 'Organizar (botão dividido com setinha), Selecionar/Mover e Enquadrar.',
+      normal: 'Organizar (botão dividido com setinha), Selecionar/Mover e Enquadrar lado a lado; quando não cabem (fonte maior), cada um ocupa a própria linha.',
       disabled: 'arrangeableCount < 2: as duas metades de Organizar ficam desabilitadas ("Adicione pelo menos dois blocos para organizá-los").',
       pending: 'Matriz animando: os blocos movidos levam AGENT_MATRIX_MOVING_CLASS até o fim da animação (sem animação no Modo Performance ou com reduced motion).',
     },
@@ -468,6 +468,7 @@ export const chromeSurfaces: InventoryElement[] = [
       { file: 'src/features/canvas/services/canvas-matrix-layout.test.ts' },
       { file: 'src/features/canvas/services/canvas-interaction-geometry.test.ts' },
       { file: 'scripts/canvas-smoke-onboarding.cjs', check: 'conferirTeclasDoCanvasSobAPergunta' },
+      { file: 'scripts/canvas-smoke.cjs', check: 'checarDimensoesDeAcessibilidadeAdicionais' },
     ],
     gaps: [
       {

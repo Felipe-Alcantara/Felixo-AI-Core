@@ -1750,17 +1750,24 @@
   background: var(--f-core-structural);
 }
 
+/* Dois por linha, com a mesma largura, enquanto o conteúdo cabe. Quando a
+   fonte cresce, cada botão desce para a própria linha: numa grade fixa de duas
+   colunas o ícone encolhia até 0 px e o texto vazava para o vizinho. O recuo
+   lateral curto só baixa a largura mínima (o conteúdo é centralizado): com
+   0.35rem, "Selecionar" já não cabia ao lado de "Enquadrar" na fonte normal. */
 .felixo-sidebar-button-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.22rem;
 }
 
 .felixo-sidebar-button-grid .felixo-sidebar-action {
+  flex: 1 1 0;
+  min-width: max-content;
   justify-content: center;
   gap: 0.35rem;
-  padding-right: 0.35rem;
-  padding-left: 0.35rem;
+  padding-right: 0.2rem;
+  padding-left: 0.2rem;
   font-size: 0.71rem;
 }
 

@@ -1309,6 +1309,25 @@ async function checarDimensoesDeAcessibilidadeAdicionais(page) {
   if (fontOverflow.scrollWidth > fontOverflow.clientWidth) {
     throw new Error(`[canvas-smoke] fonte maior (137,5%) causou overflow horizontal: ${JSON.stringify(fontOverflow)}`)
   }
+  // Achado de 25/09/2026: os botões lado a lado de ORGANIZAR espremiam o
+  // ícone até 0 px e o texto vazava da caixa, lendo "Selecionar Enquadrar".
+  // A medida independe da rolagem da sidebar, que precisa estar expandida.
+  const botoesLadoALado = await page.evaluate(() =>
+    [...document.querySelectorAll('.felixo-sidebar-button-grid button')].map((botao) => {
+      const conteudo = document.createRange()
+      conteudo.selectNodeContents(botao)
+      return {
+        rotulo: botao.textContent.trim(),
+        icone: botao.querySelector('svg')?.getBoundingClientRect().width ?? 0,
+        conteudo: conteudo.getBoundingClientRect().width,
+        caixa: botao.clientWidth,
+      }
+    }),
+  )
+  const espremidos = botoesLadoALado.filter((b) => b.icone < 14 || b.conteudo > b.caixa)
+  if (botoesLadoALado.length < 2 || espremidos.length > 0) {
+    throw new Error(`[canvas-smoke] fonte maior (137,5%) espremeu os botões de ORGANIZAR: ${JSON.stringify(botoesLadoALado)}`)
+  }
   await recordVisualEvidence(page, 'fonte-maior-320', CORE_LAYOUT_SELECTORS, {
     event: 'accessibility-dimension',
     dimension: 'font-scale-137.5',

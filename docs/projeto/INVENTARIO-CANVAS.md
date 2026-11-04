@@ -134,11 +134,11 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **IPC:** `canvas:save`
 - **Depende de:** `OrganizeButton`, `arrangeNodesAsMatrix`, `fitCanvasViewSafely (CanvasView)`, `fitBoundsSafely (CanvasView)`, `usePerformanceMode`
 - **Sobreposição:** Dentro da sidebar (z-26); o grupo de modos é inline (felixo-sidebar-inline-panel) e não cobre o canvas. Organizar continua ativo com o canvas travado (a trava só desliga arrastar, conectar e selecionar).
-- **Testes:** `src/features/canvas/services/canvas-matrix-layout.test.ts`, `src/features/canvas/services/canvas-interaction-geometry.test.ts`, `scripts/canvas-smoke-onboarding.cjs` → `conferirTeclasDoCanvasSobAPergunta`
+- **Testes:** `src/features/canvas/services/canvas-matrix-layout.test.ts`, `src/features/canvas/services/canvas-interaction-geometry.test.ts`, `scripts/canvas-smoke-onboarding.cjs` → `conferirTeclasDoCanvasSobAPergunta`, `scripts/canvas-smoke.cjs` → `checarDimensoesDeAcessibilidadeAdicionais`
 
 | Estado | Quando |
 | --- | --- |
-| normal | Organizar (botão dividido com setinha), Selecionar/Mover e Enquadrar. |
+| normal | Organizar (botão dividido com setinha), Selecionar/Mover e Enquadrar lado a lado; quando não cabem (fonte maior), cada um ocupa a própria linha. |
 | pending | Matriz animando: os blocos movidos levam AGENT_MATRIX_MOVING_CLASS até o fim da animação (sem animação no Modo Performance ou com reduced motion). |
 | disabled | arrangeableCount < 2: as duas metades de Organizar ficam desabilitadas ("Adicione pelo menos dois blocos para organizá-los"). |
 
