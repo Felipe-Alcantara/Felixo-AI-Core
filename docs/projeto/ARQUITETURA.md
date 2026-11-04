@@ -112,6 +112,24 @@ linhas isso é a diferença entre ~792 e ~15.000 chamadas de formatação.
 quando a tabela carregada está truncada, deixando claro que ordenação/filtro
 valem só pro que já chegou.
 
+## Uma instância por pasta de dados
+
+`electron/core/single-instance.cjs` pede `app.requestSingleInstanceLock()` logo
+depois de o `main.cjs` definir o `userData` (release smoke, `npm run dev` e
+`FELIXO_USER_DATA_DIR`) e antes da GPU e do marcador de sessão
+(`performance-recovery/<pid>.json`). Sem a trava, a segunda abertura sai com
+`app.exit(0)`, e o resto do `main.cjs` não roda: ela não deixa marcador nem
+pedido de GPU na pasta da primeira. Com a trava, cada nova abertura chega em
+`second-instance`. Se o `argv` traz um `.fxai`, `.fxchat` ou `.fxworkflow`, o
+arquivo vai para o mesmo `handleFileOpen` do macOS; senão, a janela existente é
+restaurada e focada. A trava vale por pasta de dados: os perfis isolados (smoke,
+`felixo devtools`, benchmarks) e o `npm run dev` seguem abrindo ao lado do app
+instalado. O release smoke não pede a trava.
+
+O relançamento de GPU do AppImage (`core/gpu-launch.cjs`) sobe o processo novo
+antes de o velho sair; por isso libera a trava antes de relançar e a retoma se o
+relançamento falhar.
+
 ## DevTools isolado
 
 `felixo devtools` é a superfície de automação de UI para qualquer agente. O

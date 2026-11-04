@@ -146,6 +146,7 @@ const { createTerminalLogStore } = require('./services/terminal-log-store.cjs')
 const { initAppPaths, resolveDevUserDataOverride } = require('./core/app-paths.cjs')
 const { shouldQuitWhenAllWindowsClosed } = require('./core/app-lifecycle.cjs')
 const { isReleaseSmokeProcess } = require('./core/release-smoke-mode.cjs')
+const { claimSingleInstance, fileFromArgv } = require('./core/single-instance.cjs')
 const {
   persistGraphicsMode,
   resolveGraphicsProfile,
@@ -269,6 +270,21 @@ if (devUserDataOverride) {
   app.setPath('userData', devUserDataOverride)
 }
 
+// Uma instância por pasta de dados (`core/single-instance.cjs`): abrir de novo
+// foca a janela que já existe e entrega a ela o `.fxai` pedido. Vem logo depois
+// do `userData` e antes da GPU e do marcador de sessão, que a segunda abertura
+// não pode tocar. O release smoke usa a própria pasta e sai sozinho.
+if (!isReleaseSmoke) {
+  claimSingleInstance({
+    app,
+    onSecondInstance: ({ argv, workingDirectory }) => {
+      const filePath = fileFromArgv(argv, workingDirectory, SUPPORTED_EXTENSIONS)
+      if (filePath) handleFileOpen(filePath)
+      else focusMainWindow()
+    },
+  })
+}
+
 // A aceleração precisa ser decidida antes de `app.whenReady()`. O modo padrão
 // preserva o GPU; só o heurístico explícito de Windows com pouca memória ou a
 // escolha manual de modo compatível ativa rasterização por software. DevTools
@@ -340,11 +356,17 @@ function handleFileOpen(filePath) {
 
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('file:opened', { filePath, ext })
-    if (mainWindow.isMinimized()) mainWindow.restore()
-    mainWindow.focus()
+    focusMainWindow()
   } else {
     pendingFilePath = filePath
   }
+}
+
+function focusMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.show()
+  mainWindow.focus()
 }
 
 // macOS: file opened via Finder or drag-and-drop
@@ -709,10 +731,10 @@ app.whenReady().then(async () => {
     getMainWindow,
     listEnvCredentialNames: () => listPresentInheritedCredentialNames(process.env),
   })
-  // Limitação conhecida: sem trava de instância única, uma segunda instância
-  // no MESMO perfil invalida as propostas e tickets abertos pela primeira
-  // (fail-closed: vencem, nada é executado). A instância de automação usa
-  // perfil isolado.
+  // Antes da trava de instância única (`core/single-instance.cjs`), uma segunda
+  // instância no MESMO perfil invalidava aqui as propostas e tickets abertos
+  // pela primeira (fail-closed: vencem, nada é executado). Agora a segunda
+  // abertura sai antes de chegar a este ponto; a de automação usa perfil isolado.
   try {
     accountChain.service.recoverOnStartup()
   } catch (error) {

@@ -48,12 +48,20 @@ function fakeApp(events) {
     relaunch() {
       throw new Error('o app.relaunch() real não pode ser chamado no teste')
     },
+    releaseSingleInstanceLock() {
+      events.push('release-lock')
+    },
+    requestSingleInstanceLock() {
+      events.push('request-lock')
+      return this.lockAvailable ?? true
+    },
   }
 }
 
-function start({ preference, environment, relaunchResult = { ok: true, method: 'appimage', detail: null }, ...rest }) {
+function start({ preference, environment, relaunchResult = { ok: true, method: 'appimage', detail: null }, lockAvailable, ...rest }) {
   const events = []
   const app = fakeApp(events)
+  app.lockAvailable = lockAvailable
   const userDataPath = profileWith(preference)
   const relaunchCalls = []
   const result = startGpuPreference({
@@ -78,7 +86,7 @@ test('Integrada com o prime-run: o ambiente é limpo e marcado ANTES de relança
   const { events, relaunchCalls, result } = start({ preference: 'integrada', environment })
 
   assert.equal(result.exiting, true)
-  assert.deepEqual(events, ['relaunch', 'exit 0'])
+  assert.deepEqual(events, ['release-lock', 'relaunch', 'exit 0'])
   assert.deepEqual(relaunchCalls, [{ HOME: '/home/pessoa', FELIXO_GPU_ENV_SANITIZED: '1' }])
   assert.deepEqual(result.gpuLaunch.unsetEnv, Object.keys(PRIME_RUN_ENV))
 })
@@ -91,7 +99,7 @@ test('o pid do relançado vai para o pedido antes de o processo sair', () => {
     relaunchResult: { ok: true, method: 'appimage', detail: null, pid: 4242 },
   })
   assert.equal(result.exiting, true)
-  assert.deepEqual(events, ['relaunch', 'exit 0'])
+  assert.deepEqual(events, ['release-lock', 'relaunch', 'exit 0'])
   // Uma abertura enquanto ele nasce reconhece o relançamento em andamento por ele.
   assert.deepEqual(readGpuPreferenceState(userDataPath).pendingRelaunch, {
     preference: 'integrada',
@@ -130,7 +138,7 @@ test('relançamento recusado: não sai, apaga a marca e segue no Automático com
   })
 
   assert.equal(result.exiting, false)
-  assert.deepEqual(events, ['relaunch'])
+  assert.deepEqual(events, ['release-lock', 'relaunch', 'request-lock'])
   // Este processo segue aberto no Automático: os terminais e CLIs abertos por
   // ele herdam o ambiente com que a pessoa abriu o app, sem a marca.
   assert.deepEqual(environment, { ...PRIME_RUN_ENV })
@@ -139,6 +147,17 @@ test('relançamento recusado: não sai, apaga a marca e segue no Automático com
   assert.equal(result.gpuStart.applied, 'auto')
   assert.equal(result.gpuStart.relaunchFailure, 'appimage: o Felixo.AppImage não abriu')
   assert.equal(readGpuPreferenceState(userDataPath).fallback.reason, 'relaunch-failed')
+})
+
+test('relançamento recusado e a trava já é de outra abertura: este processo sai e ela fica', () => {
+  const { events, result } = start({
+    preference: 'integrada',
+    environment: { ...PRIME_RUN_ENV },
+    relaunchResult: { ok: false, method: 'appimage', detail: 'o Felixo.AppImage não abriu' },
+    lockAvailable: false,
+  })
+  assert.equal(result.exiting, true)
+  assert.deepEqual(events, ['release-lock', 'relaunch', 'request-lock', 'exit 0'])
 })
 
 test('release smoke (sem perfil) não grava nada nem relança, mesmo com o prime-run', () => {

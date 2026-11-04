@@ -1741,3 +1741,58 @@ mais cedo, 40e91f95-497e-818e).
 
 **Não validado.** O yarn-classic no Windows (não instalado aqui) e a ausência de
 órfão no Nightly com a correção, que só as próximas noites mostram.
+
+## 2026-11-04 — Inicialização: uma instância por pasta de dados, launcher sem reinstalação falsa e .desktop sem MimeType repetido
+
+**Pedido.** Task de 25/09/2026 "impedir segunda instância do app e parar a
+reinstalação falsa de dependências no launcher", com o complemento de 29/10 (o
+segundo gatilho do boot era a limpeza do cache das CLIs, corrigida na v0.1.494;
+a trava seguia como defesa). Agente Tasks OpenIA + AI Core.
+
+**Trava de instância única.** `electron/core/single-instance.cjs` pede
+`app.requestSingleInstanceLock()` logo depois do `userData` definido e antes da
+GPU e do marcador de sessão; sem a trava, `app.exit(0)`. Medido com o Electron
+do projeto: `app.exit(0)` e `process.exit(0)` antes do `ready` não deixam o
+código seguinte rodar. Em `second-instance`, um `.fxai/.fxchat/.fxworkflow` do
+`argv` vai para o `handleFileOpen` (resolvido na pasta de origem); senão a
+janela é restaurada, mostrada e focada (`focusMainWindow`). O release smoke não
+pede a trava. O relançamento de GPU do AppImage sobe o processo novo antes de o
+velho sair: `gpu-launch.cjs` libera a trava antes de relançar e a retoma se
+falhar (e sai se outra abertura a pegou).
+
+Prova no Electron real (fonte, perfil isolado), A aberta e B na mesma pasta com
+um `.fxai`: com a correção, B saiu em 549 ms com código 0, o arquivo chegou a A
+(`file:opened`, mesmo caminho) e `performance-recovery/` continuou só com o
+marcador de A; um app numa pasta diferente seguiu vivo depois de 10 s. Com o
+`main.cjs` antigo, B ainda estava vivo depois de 20 s, o arquivo não chegou a A
+e B deixou o próprio `<pid>.json` na pasta de A, que a próxima abertura poderia
+ler como encerramento anormal.
+
+**Launcher.** `felixo_launcher/node_deps.py` resolvia os imports com as
+condições padrão do Node. O `@excalidraw/excalidraw` 0.18.1 exporta `./*` só em
+`types` e `./index.css` só em `development`/`production`, então os três imports
+do canvas contavam como faltando e cada abertura rodava `npm install`
+(reproduzido no Windows). Agora resolve com `--conditions=development
+--conditions=types` e confere se o arquivo resolvido existe, porque
+`import.meta.resolve` não confere (medido): pacote ausente e arquivo ausente
+continuam acusados. Teste novo com um pacote falso no formato do Excalidraw
+(falhava com os 3 falsos positivos); no app real, 35 imports externos e nada
+faltando.
+
+**.desktop.** O electron-builder 26.15.3 monta o `MimeType` com
+`asArray(linux.mimeTypes)`, que devolve o próprio array da configuração, e
+empurra nele os tipos das `fileAssociations`. Chamando o
+`LinuxTargetHelper.computeDesktopEntry` real uma vez por alvo, a linha tinha 6,
+9 e 12 tipos; sem `linux.mimeTypes` (as associações já declaram os tipos), 3, 3
+e 3. Teste novo em `package-build-config.test.cjs`, que falha com o
+`package.json` antigo.
+
+**Validação.** `single-instance.test.cjs` 4/4; `gpu-launch.test.cjs` com a
+ordem nova (libera a trava, relança, sai; ou retoma a trava) e um caso novo;
+testes que leem o `main.cjs` 32/32; launcher 105 testes OK; eslint sem erros;
+sessão A do smoke do canvas ok em 111611 ms (sobe e encerra o app várias vezes, por perfis isolados). Não rodei o `npm test` completo: nesta
+máquina ele abre janelas `git-askpass` (task 40e91f95-497e-818e).
+
+**Não validado.** O app instalado aberto duas vezes por ícone/autostart (a prova
+foi com o app de fonte); Linux e macOS (o caminho do `open-file` do macOS não
+mudou); o AppImage relançando com a trava; o próximo boot do Felipe.

@@ -68,6 +68,9 @@ function startGpuPreference({
   // `main.cjs`, então só um processo novo, com o ambiente limpo, sobe na
   // integrada. O pedido gravado por `prepareGpuStart` cobre o relançado que
   // não nasce.
+  // No AppImage o relançado nasce antes de este processo sair: com a trava de
+  // instância única ainda aqui, ele a perderia e fecharia, e o app sumiria.
+  app.releaseSingleInstanceLock?.()
   const outcome = relaunch({ app, environment })
   if (outcome.ok) {
     // Com o pid, uma abertura enquanto o relançado ainda nasce não confunde o
@@ -79,7 +82,12 @@ function startGpuPreference({
 
   // Sem processo novo, fechar deixaria a pessoa sem app: segue aqui, no
   // Automático, com o aviso, e com o ambiente com que foi aberto (sem a marca,
-  // que o plano pôs).
+  // que o plano pôs). Retoma a trava; se outra abertura a pegou nesse meio
+  // tempo, é ela que fica.
+  if (app.requestSingleInstanceLock && !app.requestSingleInstanceLock()) {
+    app.exit(0)
+    return { gpuStart, gpuLaunch, exiting: true }
+  }
   const restoredEnv = restoreGpuLaunchEnv(gpuLaunch, environment)
   delete environment[GPU_ENV_SANITIZED_FLAG]
   return {
