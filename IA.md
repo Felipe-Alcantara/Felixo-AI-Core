@@ -1796,3 +1796,45 @@ máquina ele abre janelas `git-askpass` (task 40e91f95-497e-818e).
 **Não validado.** O app instalado aberto duas vezes por ícone/autostart (a prova
 foi com o app de fonte); Linux e macOS (o caminho do `open-file` do macOS não
 mudou); o AppImage relançando com a trava; o próximo boot do Felipe.
+
+## 2026-11-04 — Testes: o npm test passa a rodar com um temporário só dele
+
+**Pedido.** Task de 25/09/2026 "limpar as pastas felixo-* que o npm test deixa no
+diretório temporário". Agente Tasks OpenIA + AI Core.
+
+**Medido.** Com `TEMP`/`TMP`/`TMPDIR` apontando para uma pasta vazia (para não
+misturar com outros agentes), a suíte Node deixa **203 entradas** por execução,
+igual em três medições: 63 `felixo-openia-image-`, 35 `felixo-cli-`, 20
+`felixo-devtools-test-`, 12 `felixo-pedidos-`, 11 `felixo-paths-` e o resto em
+poucas unidades, vindas de 22 arquivos de teste (13 deles não removem nada). No
+temporário real desta máquina havia 23.509 entradas `felixo-*` acumuladas; não
+apaguei nenhuma, porque entre elas está a `felixo-release-smoke-*` de onde o
+Felixo do Felipe roda.
+
+**O que mudou.** `scripts/run-node-unit-tests.cjs` cria `felixo-testes-<pid>-…`
+(`scripts/test-support/temporario-dos-testes.cjs`), roda a suíte com
+`TEMP`/`TMP`/`TMPDIR` apontando para ela, conta o que os testes deixaram, apaga a
+pasta e imprime uma linha com o total e as maiores origens. A pasta de uma execução
+interrompida é apagada pela próxima, se o pid dela já não existir. Optei por isso
+em vez de consertar os 22 arquivos: cobre os de hoje e os de amanhã com uma mudança
+só. Os testes continuam vazando dentro da pasta da execução; a linha final mantém
+isso visível, e rodar um arquivo direto (`node --test arquivo`) segue usando o
+temporário real.
+
+**Validação.** Executor real com uma pasta base limpa: 3.101 testes, 0 falhas, 204
+entradas deixadas e removidas, e a pasta base com 0 entradas antes e depois.
+`temporario-dos-testes.test.cjs` 7/7; eslint sem erros.
+
+**Dois achados.**
+- O teste do `/status` do Codex (`codex-status-screen.test.cjs`) falha com `TEMP`
+  de 116 caracteres ou mais (112 passa), porque o rodapé da tela quebra e a pasta
+  de trabalho não é reconhecida. A pasta do runner soma cerca de 27 caracteres ao
+  `TEMP` de quem roda.
+- As janelas `git-askpass` que apareceram hoje cedo vêm do Git Bash:
+  `SSH_ASKPASS=/ucrt64/bin/git-askpass.exe` e `DISPLAY=needs-to-be-defined`. Com
+  essas variáveis vazias, `system-design-service.test.cjs` passa em 0,9 s; pelo
+  PowerShell também, em 0,6 s, sem janela. A correção anterior no registro
+  (“o app abre a janela sem pedir”) estava exagerada: o gatilho é o ambiente.
+
+**Não validado.** Linux e macOS (o runner usa só `fs`/`os`/`path`); o tempo de
+remoção da pasta num Windows com antivírus pesado (aqui, instantâneo).

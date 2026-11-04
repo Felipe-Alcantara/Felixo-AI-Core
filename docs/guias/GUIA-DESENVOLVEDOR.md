@@ -486,6 +486,22 @@ npm run test:frontend
 runner Node portável; as integrações `*.integration.test.cjs` são executadas
 por `npm run test:native`.
 
+O runner roda a suíte com `TEMP`/`TMP`/`TMPDIR` apontando para uma pasta própria
+(`felixo-testes-<pid>-…`, em `scripts/test-support/temporario-dos-testes.cjs`) e a
+apaga no fim, para o `npm test` não deixar `felixo-*` no temporário do sistema.
+Ao terminar, ele imprime quantas entradas os testes deixaram lá dentro e as maiores
+origens: é a lista do que ainda falta limpar em cada teste. Uma execução
+interrompida deixa a pasta, e a próxima apaga as de pids que já não existem. Rodar
+um arquivo direto (`node --test arquivo.test.cjs`) não passa pelo runner e usa o
+temporário real. O teste do `/status` do Codex
+(`electron/services/codex-status-screen.test.cjs`) falha quando o `TEMP` passa de
+cerca de 115 caracteres, então não aponte o `TEMP` do runner para um caminho comprido.
+
+No Git Bash, `SSH_ASKPASS` vem definido (`/ucrt64/bin/git-askpass.exe`) e `DISPLAY` vale
+`needs-to-be-defined`: `system-design-service.test.cjs` abre então uma janela de senha do
+Git e passa do limite de 45 s. No PowerShell passa. No Git Bash, rode com
+`SSH_ASKPASS= DISPLAY= npm test`.
+
 Essa lista inclui `pty-kill.integration.test.cjs`, que abre uma PTY real, mata o shell e
 reprova se o `kill()` deixar `AttachConsole failed` no stderr ou demorar a sair (no Windows o
 `node-pty` falhava nisso em todo encerramento; o contorno está em

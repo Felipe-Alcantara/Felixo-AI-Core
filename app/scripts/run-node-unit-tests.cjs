@@ -12,6 +12,11 @@
 const fs = require('node:fs')
 const path = require('node:path')
 const { spawnSync } = require('node:child_process')
+const {
+  criarTemporario,
+  descartarTemporario,
+  descreverSobras,
+} = require('./test-support/temporario-dos-testes.cjs')
 
 const RAIZES = ['electron', 'scripts']
 
@@ -55,14 +60,25 @@ if (testes.length === 0) {
   console.error('[test] nenhum teste Node unitário foi encontrado')
   process.exitCode = 1
 } else {
+  // Pasta temporária só desta execução (ver `test-support/temporario-dos-testes.cjs`):
+  // o que os testes não limparem some junto com ela, em vez de ficar no sistema.
+  const temporario = criarTemporario()
   const resultado = spawnSync(
     process.execPath,
     ['--test', ...testes.map((arquivo) => path.relative(process.cwd(), arquivo))],
     {
       stdio: 'inherit',
-      env: { ...process.env, NODE_OPTIONS: nodeOptionsComPreCarga(process.env.NODE_OPTIONS) },
+      env: {
+        ...process.env,
+        TEMP: temporario,
+        TMP: temporario,
+        TMPDIR: temporario,
+        NODE_OPTIONS: nodeOptionsComPreCarga(process.env.NODE_OPTIONS),
+      },
     },
   )
+  const sobras = descreverSobras(descartarTemporario(temporario), temporario)
+  if (sobras) console.log(sobras)
 
   if (resultado.error) {
     console.error(`[test] não foi possível iniciar o runner: ${resultado.error.message}`)
