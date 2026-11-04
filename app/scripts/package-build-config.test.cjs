@@ -27,3 +27,31 @@ test('build.afterPack restaura execução do helper POSIX do node-pty', () => {
     'build.afterPack deve preparar a permissão do spawn-helper do node-pty',
   )
 })
+
+/**
+ * O electron-builder 26 monta a linha `MimeType` do `.desktop` com
+ * `asArray(linux.mimeTypes)`, que devolve o próprio array da configuração, e
+ * empurra nele os tipos das `fileAssociations`. Cada alvo Linux (AppImage x64,
+ * AppImage arm64, deb) repetia os três tipos mais uma vez: o `.desktop`
+ * instalado pelo `.deb` saía com eles repetidos (relato de 25/09/2026). As
+ * `fileAssociations` já declaram os tipos; `linux.mimeTypes` fica de fora.
+ */
+test('o .desktop de cada alvo Linux lista cada MimeType uma vez só', async () => {
+  const { LinuxTargetHelper } = require('app-builder-lib/out/targets/LinuxTargetHelper')
+  const linux = pkg.build.linux
+  const helper = new LinuxTargetHelper({
+    appInfo: { productName: pkg.build.productName, productFilename: pkg.build.productName, sanitizedName: pkg.name, description: pkg.description, version: pkg.version },
+    executableName: pkg.name,
+    info: { metadata: { desktopName: `${pkg.name}.desktop` } },
+    fileAssociations: pkg.build.fileAssociations,
+    config: { protocols: [] },
+    platformSpecificBuildOptions: linux,
+  })
+  const esperados = pkg.build.fileAssociations.map((associacao) => associacao.mimeType)
+  // Um `.desktop` por alvo e arquitetura, como no `electron-builder --linux`.
+  for (const _alvo of linux.target.flatMap((alvo) => alvo.arch)) {
+    const entrada = await helper.computeDesktopEntry(linux, pkg.name, {})
+    const tipos = (entrada.match(/^MimeType=(.*)$/m)?.[1] ?? '').split(';').filter(Boolean)
+    assert.deepEqual(tipos, esperados)
+  }
+})

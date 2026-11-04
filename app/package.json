@@ -148,11 +148,6 @@
       ],
       "category": "Development",
       "maintainer": "Felipe Alcantara",
-      "mimeTypes": [
-        "application/x-felixo-project",
-        "application/x-felixo-chat",
-        "application/x-felixo-workflow"
-      ],
       "artifactName": "Felixo-AI-Core-${version}-${os}-${arch}.${ext}"
     },
     "mac": {
