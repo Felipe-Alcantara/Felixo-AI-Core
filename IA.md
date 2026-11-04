@@ -1890,3 +1890,15 @@ com `count=1`, `5` e `20` completos e a memória dos PTYs coerente (47, 243 e 92
 **Não validado.** O mecanismo dentro do ConPTY (por que a leitura para em 4 KiB);
 o efeito no Nightly de verdade, que só as próximas noites mostram; se o app real
 perde saída do mesmo jeito com 20 agentes e outro trabalho criando processos.
+
+## 2026-11-04 — Correção da entrada anterior sobre a perda de saída do PTY nativo
+
+Duas contagens da entrada "a perda de saída do PTY nativo no Windows vinha da carga
+de PowerShell da própria bancada" estavam erradas. Os testes novos são 2 do
+`forensics` e 1 da soma de memória (a entrada diz 3 e 1). Das 20 sessões ativas
+que pararam, somando os Nightlies (7) e o experimento (13), 19 pararam em
+`4096·k + 24` bytes: o corte 163.864 apareceu 7 vezes, 167.960 quatro e 172.056
+duas, e a exceção parou em 258.071 (a entrada diz 11 de 12 e quatro vezes). O
+README dos benchmarks já traz os números certos. O CI do `1ac57c5` passou nos
+quatro sistemas, e no Windows do CI o teste da soma de memória rodou com
+PowerShell de verdade.

@@ -204,9 +204,11 @@ relatório grava em `forensics` o pid, se o filho segue vivo e recebeu `onExit`,
 há quanto tempo veio o último dado e quantos bytes chegaram numa espera de 3 s e
 depois do `kill`. Nas perdas medidas o filho já tinha saído, o último dado veio
 cerca de 10 s antes, e nada chegou na espera nem depois do `kill`: a saída foi
-**perdida**, e não está presa. Das 12 sessões ativas que pararam, 11 pararam em
-exatamente `4096·k + 24` bytes (o mesmo corte, 163.864, apareceu quatro vezes), o
-que aponta para um limite de leitura de 4 KiB do ConPTY e não para o filho.
+**perdida**, e não está presa. Das 20 sessões ativas que pararam (7 nos Nightlies
+e 13 no experimento), 19 pararam em exatamente `4096·k + 24` bytes (o corte
+163.864 apareceu 7 vezes, 167.960 quatro e 172.056 duas; a exceção parou em
+258.071, perto do fim), o que aponta para um limite de leitura de 4 KiB do
+ConPTY e não para o filho.
 
 **Gatilho.** Experimento descartável no `windows-latest` (branch
 `exp/pty-count20-0411`, já apagada; runs `41874935929`, `41878868287`,
