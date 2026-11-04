@@ -241,12 +241,17 @@ jobs:
     # expandir ("(${{ matrix.os }})") e o check exigido pela regra da `main`
     # nunca aparece. O escopo só pula esta matriz no push da main.
     if: ${{ !cancelled() && (github.event_name == 'pull_request' || needs.scope.outputs.launcher != 'false') }}
-    runs-on: ${{ matrix.os }}
+    # `runner` separa a máquina do rótulo: o nome do check segue com `os`.
+    runs-on: ${{ matrix.runner || matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
+          # O ubuntu-latest virou Ubuntu 26.04, e o setup-python não publica o
+          # 3.9 para ele ("The version '3.9' ... was not found for Ubuntu
+          # 26.04", CI 41858504141, 04/11/2026). O 24.04 ainda tem.
           - os: ubuntu-latest
+            runner: ubuntu-24.04
             python-version: "3.9"
           - os: ubuntu-latest
             python-version: "3.13"
