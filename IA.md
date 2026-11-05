@@ -994,3 +994,9 @@ mais uma ocorrência, na 1ª tentativa de uma execução com 1 tentativa só) e 
 **Limites.** O deslocamento foi medido em janela sem quadros reais (a janela escondida do devtools entrega ~2 quadros por
 segundo), então "por um instante" na tela de quem usa não foi cronometrado; o guarda do smoke roda com o terminal falso. Não
 olhei o macOS nem o Linux, onde o `overflow: clip` é o mesmo do Chromium.
+
+**Adendo (2026-11-05, depois do push): CI e Release.** O CI de `22b9286` (run 42074304709) passou em Windows, macOS, Ubuntu,
+Ubuntu ARM e no `Canvas smoke (ubuntu-latest)`, onde o guarda `exigirShellSemRolar` rodou no Linux/xvfb; o Release gate (run
+42075215660) e o Release (run 42075255480) saíram verdes e publicaram a `v0.1.514`, nos três sistemas. **Não conferido:** o guarda
+no Windows e no macOS do CI, porque o smoke do canvas só roda lá na Nightly das 06:00 UTC (a de 06/11/2026); no Windows local ele
+passou. A instabilidade do `page.screenshot` do primeiro caso da matriz ganhou mais uma ocorrência na task que a investiga.
