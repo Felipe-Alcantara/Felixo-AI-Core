@@ -32,7 +32,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **Elementos:** 100 (10 blocos, 16 ferramentas, 74 outras superfícies)
 - **Controles:** 378, dos quais 57 com teste específico
 - **Elementos sem nenhum teste:** 4
-- **Lacunas:** 269 (alto 9, médio 144, baixo 116), em 77 tasks
+- **Lacunas:** 268 (alto 9, médio 143, baixo 116), em 76 tasks
 
 ## Moldura do canvas
 
@@ -815,11 +815,11 @@ Sem controle próprio: as ações vêm de outros elementos.
 ### Bloco Desenho Excalidraw
 
 - **ID:** `bloco-excalidraw` · **Dono:** `src/features/canvas/components/ExcalidrawDrawingNode.tsx`
-- **Persistência:** canvas salvo (canvas_nodes.data_json: scene em JSON com elements e viewBackgroundColor, label, frameColor)
+- **Persistência:** canvas salvo (canvas_nodes.data_json: scene em JSON com elements e viewBackgroundColor, label, frameColor), só quando a cena muda de fato (sceneToPersist)
 - **IPC:** `canvas:save`, `canvas:delete`
 - **Depende de:** `useReactFlow`, `React.lazy(ExcalidrawCanvas)`, `onDataChange (updateNodeData, CanvasView)`
 - **Sobreposição:** Bloco do React Flow, sem z próprio: fica abaixo de toda superfície fixa (topbar e statusbar 18, dock e painéis 20/30, sidebar 26, menus 50+). O cartão é overflow-hidden, então nada que nasce dentro dele passa das bordas. Os menus e diálogos internos do Excalidraw ficam presos ao cartão: num bloco de mínimo 360×280 a barra de ferramentas e os popovers podem ser cortados.
-- **Testes:** `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`, `scripts/canvas-smoke.cjs` → `checarInteracoes`
+- **Testes:** `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`, `scripts/canvas-smoke.cjs` → `checarInteracoes`, `src/features/canvas/components/excalidraw-scene.test.ts`
 
 | Estado | Quando |
 | --- | --- |
@@ -832,7 +832,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| O bloco regrava a cena a cada segundo com o canvas parado (onChange do Excalidraw dispara em qualquer mudança de appState). | médio | `3e891f95-497e-815b-b675-d1d696a7968e` |
 | Debounce de 600 ms sem flush (ExcalidrawDrawingNode.tsx:52-63): fechar ou recarregar o app logo depois de desenhar perde a última edição, e o timer sobrevive à desmontagem; useFileNodeDocument faz o flush que falta aqui. | baixo | `3ec91f95-497e-81a3-9be3-c0d354bf7621` |
 | Sem error boundary em volta do lazy: falha do chunk ou cena que faz o Excalidraw lançar derruba o canvas inteiro. | médio | `3ec91f95-497e-8176-bef0-dfde828936dc` |
 | Desenhar, gravar e reabrir a cena não tem teste (o smoke só conecta no handle e a auditoria de acessibilidade ignora .excalidraw). | médio | `3ec91f95-497e-8141-b6c1-d1833aac5664` |
@@ -2903,7 +2902,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3e691f95-497e-81c8-ba05-c3074dc036f0` — 2 lacunas
 - `3e791f95-497e-81bd-8e8c-de6f9e16cec5` — 1 lacuna
 - `3e891f95-497e-8148-b00e-f27e78767664` — 2 lacunas
-- `3e891f95-497e-815b-b675-d1d696a7968e` — 1 lacuna
 - `3e891f95-497e-81b3-8857-da9125ff3f49` — 2 lacunas
 - `3e991f95-497e-8104-a090-d5b295ba4747` — 2 lacunas
 - `3e991f95-497e-8109-832d-f789917f708d` — 1 lacuna

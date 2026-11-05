@@ -842,16 +842,11 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
       error: 'data.scene inválido ou sem "elements" vira cena vazia sem aviso (parseScene devolve null).',
     },
     controls: [],
-    persistence: ['canvas salvo (canvas_nodes.data_json: scene em JSON com elements e viewBackgroundColor, label, frameColor)'],
+    persistence: ['canvas salvo (canvas_nodes.data_json: scene em JSON com elements e viewBackgroundColor, label, frameColor), só quando a cena muda de fato (sceneToPersist)'],
     ipc: ['canvas:save', 'canvas:delete'],
     dependsOn: ['useReactFlow', 'React.lazy(ExcalidrawCanvas)', 'onDataChange (updateNodeData, CanvasView)'],
-    tests: [...FIXTURE_TESTS, smoke('checarInteracoes')],
+    tests: [...FIXTURE_TESTS, smoke('checarInteracoes'), unit(`${COMPONENTS}/excalidraw-scene.test.ts`)],
     gaps: [
-      {
-        what: 'O bloco regrava a cena a cada segundo com o canvas parado (onChange do Excalidraw dispara em qualquer mudança de appState).',
-        risk: 'médio',
-        task: '3e891f95-497e-815b-b675-d1d696a7968e',
-      },
       {
         what: 'Debounce de 600 ms sem flush (ExcalidrawDrawingNode.tsx:52-63): fechar ou recarregar o app logo depois de desenhar perde a última edição, e o timer sobrevive à desmontagem; useFileNodeDocument faz o flush que falta aqui.',
         risk: 'baixo',
