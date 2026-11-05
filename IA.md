@@ -785,6 +785,7 @@ causa:
   passada e no CI de `33e631c`. Fica registrado como flake visto uma vez, com 2 s de margem sobre um teto de 100 ms; a
   causa (carga do runner) não foi medida. Se repetir, vale alargar a margem ou separar o tempo de criação do SQLite.
 
-O CI de `33e631c` passou nos quatro sistemas e o Release saiu na ``v0.1.510` (os smokes dos três sistemas mostram o `npm` embutido em 11.21.2, `pty.ok`, `contextDelivery.ok` e `npmRuntime.ok` verdadeiros)`. **Dependabot, conferido depois do lock
-novo na `main`: 22 alertas abertos no início da passada, 1 agora** (o `minimatch` médio, que depende do upstream); os
+O CI de `33e631c` passou nos quatro sistemas e o Release saiu na `v0.1.510` (os smokes dos três sistemas mostram o
+`npm` embutido em 11.21.2 e `pty.ok`, `contextDelivery.ok` e `npmRuntime.ok` verdadeiros). **Dependabot, conferido
+depois do lock novo na `main`: 22 alertas abertos no início da passada, 1 agora** (o `minimatch` médio, que depende do upstream); os
 3 altos e 2 médios de `undici`, o `zod` e o `ip-address` fecharam sozinhos.
