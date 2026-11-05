@@ -704,7 +704,7 @@ export const chromeSurfaces: InventoryElement[] = [
     owner: 'src/features/canvas/components/CanvasStatusBar.tsx',
     states: {
       loading: 'hydrated && edgesHydrated falso: "Carregando canvas…".',
-      normal: '"Canvas pronto", "N blocos" e "N conexões"; com seleção, a frase da seleção e o botão Remover.',
+      normal: '"Canvas pronto", "N blocos" e "N conexões"; com seleção, a frase da seleção e o botão Remover. Com pouca largura (gaveta do terminal aberta) o texto sai por cortes de container query e o botão fica, no fim só com o ícone.',
       disabled: 'Canvas travado (removeDisabled = canvasLocked): Remover desabilitado com "Destrave o canvas para remover".',
     },
     controls: [
@@ -725,12 +725,13 @@ export const chromeSurfaces: InventoryElement[] = [
       { file: 'src/features/canvas/services/canvas-selection.test.ts' },
       { file: 'scripts/canvas-smoke.cjs', check: 'checarMontagem' },
       { file: 'scripts/canvas-smoke.cjs', check: 'checarMatrizVisual' },
+      { file: 'scripts/canvas-smoke.cjs', check: 'checarBarraComGaveta' },
     ],
     gaps: [
       {
-        what: 'A barra encolhe para 160 px e quebra com a gaveta do terminal aberta.',
-        risk: 'médio',
-        task: '3e791f95-497e-81bd-8e8c-de6f9e16cec5',
+        what: 'Abaixo de ~740 px de janela com a gaveta aberta, ou com a gaveta maximizada, a área do canvas some e a barra fica sob a sidebar (a sobreposição de 320 px já conhecida).',
+        risk: 'baixo',
+        task: '3ed91f95-497e-8114-a246-f72c73ae50c4',
       },
       {
         what: 'O clique em Remover não é exercitado: o teste só renderiza o botão (rótulo, atalho e desabilitado).',
@@ -738,7 +739,7 @@ export const chromeSurfaces: InventoryElement[] = [
         task: '3ec91f95-497e-818f-b9f2-f9710605c303',
       },
     ],
-    overlap: 'footer absolute bottom 0, left var(--felixo-sidebar-width) (3.25rem recolhida), right 18rem (1rem com o inspector no puck), z-18, pointer-events só no botão. Fica sob sidebar (26), dock e painéis (20/30); a pílula de zoom fica logo acima (margem statusbar + 0,5rem).',
+    overlap: 'footer absolute bottom 0, left var(--felixo-sidebar-width) (3.25rem recolhida), right 0, z-18, pointer-events só no botão, overflow hidden e container felixo-statusbar (cortes por largura em index.css). O inspector termina no topo dela (não há sobreposição); fica sob sidebar (26); a pílula de zoom fica logo acima (margem statusbar + 0,5rem).',
   },
   {
     id: 'chrome-zoom-pill',
@@ -930,7 +931,7 @@ export const chromeSurfaces: InventoryElement[] = [
       {
         locator: 'aria-label="Abrir elementos"',
         kind: 'button',
-        effect: 'Puck: toggleCollapsed expande o inspector, grava felixo:elements-dock-collapsed = "0" e publica INSPECTOR_WIDTH (reportInspectorWidth); topbar, statusbar e Mini Map voltam a reservar 18rem.',
+        effect: 'Puck: toggleCollapsed expande o inspector, grava felixo:elements-dock-collapsed = "0" e publica INSPECTOR_WIDTH (reportInspectorWidth); topbar e Mini Map voltam a reservar 18rem (a statusbar não: ela vai até a borda direita nos dois estados).',
         failure: 'Sem localStorage a escolha vale só nesta sessão.',
         disabledWhen: 'só visível e focável com o inspector recolhido',
         test: { file: 'scripts/canvas-smoke-onboarding.cjs', check: 'recolherInspector' },
@@ -1007,7 +1008,7 @@ export const chromeSurfaces: InventoryElement[] = [
         task: '3ec91f95-497e-818f-b9f2-f9710605c303',
       },
     ],
-    overlap: 'Wrapper data-terminals-dock absolute (top-12, bottom-0, right-0) z-20, pointer-events-none; o inspector (w-72) e o puck (bottom-10 right-3) religam os cliques. Abaixo da topbar (começa em 48 px) e até a borda de baixo da janela, ao lado da statusbar (que para em right: 18rem); o puck fica acima da statusbar; topbar, statusbar e Mini Map reservam 18rem (1rem com o puck) via :has(). Publica a largura em reportInspectorWidth, que encolhe painel e gaveta.',
+    overlap: 'Wrapper data-terminals-dock absolute (top-12, bottom = altura da statusbar, right-0) z-20, pointer-events-none; o inspector (w-72) e o puck (bottom-2.5 right-3, o mesmo lugar de antes na tela) religam os cliques. Abaixo da topbar (começa em 48 px) e até o topo da statusbar, que passa por baixo dele de ponta a ponta (right: 0); topbar e Mini Map reservam 18rem (1rem com o puck) via :has(). Publica a largura em reportInspectorWidth, que encolhe painel e gaveta.',
   },
   {
     id: 'chrome-ambient-layer',

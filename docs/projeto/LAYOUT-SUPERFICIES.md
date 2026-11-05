@@ -31,6 +31,7 @@ outras superfícies (a altura do painel) não precisa falar com o coordenador.
 | Gaveta do terminal (`TerminalDrawer`) | **sim** (`col-resize`) | não — **por decisão** (ver abaixo) | 440 (`DRAWER_MIN_WIDTH`) | Coluna de altura total (`h-full`); só existe com um terminal expandido. Tem recolher e maximizar. |
 | Inspector "Elementos" | não — **por decisão** (288 fixo, `INSPECTOR_WIDTH`) | preenche | 288 | Recolhe para um puck (não reserva espaço). |
 | Sidebar | não (288 expandida / 52 trilho) | preenche | 52 | Recolher/expandir. |
+| Barra de status (`CanvasStatusBar`) | não — ocupa o espaço entre a sidebar e a borda direita da área do canvas | 1,875 rem (`--felixo-statusbar-height`) | ~92 px com o Remover (88 px de barra em 768 px com a gaveta aberta), ícone só no último corte | Nunca quebra linha: o que não cabe sai por cortes de container query (ver "Decisões"). O inspector "Elementos" termina logo acima dela. |
 | Mini Map | encolhe sozinho (200×150 → 96×72) | idem | 96×72 | É a única superfície que **pode sumir** (nenhuma ação depende dele). |
 
 ## Blocos do canvas (`NodeResizer`, dois eixos)
@@ -143,6 +144,28 @@ Torná-lo variável faria dele um terceiro disputante em `splitHorizontalSpace`
 (painel × gaveta × inspector) — exatamente o acoplamento que gerou o loop de
 12/09 — para uma superfície que já devolve espaço quando recolhida (vira um puck e
 reserva 0). O ganho não paga o risco. Se a pessoa precisar de mais espaço, recolhe.
+
+**Barra de status: de borda a borda, com o inspector acima dela, e cortes por largura**
+(05/11/2026, task `3e791f95-497e-81bd-8e8c-de6f9e16cec5`). A barra parava na borda
+esquerda do inspector (`right: 18rem`), então a gaveta do terminal aberta a deixava com
+**160 px em 1320 px de janela e 32 px em 768 px**: o texto quebrava e o Remover ficava
+fora da caixa, por baixo do inspector. Das três saídas da task (nowrap com
+truncamento, container query ou a barra passar por baixo do inspector), valeu a
+combinação das duas últimas: `right: 0` e `bottom` do wrapper do inspector igual à altura
+da barra (`TerminalsPanel`), mais `container-type: inline-size` na barra, com
+`@container felixo-statusbar` escondendo por `data-corte` (tudo → sem workspace, "Delete" e
+texto do estado, abaixo de 40 rem de conteúdo → só números nas contagens e sem a frase da
+seleção, abaixo de 28 rem → sem contagens se há botão, abaixo de 13 rem → botão só com o
+ícone, abaixo de 7 rem). O que sai fica só para leitor de tela (1 px recortado), e o
+Remover nunca sai. Medido (Electron 42, Windows, janela de 768 a 1700 px com a gaveta
+aberta e um bloco selecionado): sem estouro, uma linha, o Remover recebe o clique em
+768 px ou mais. Truncar com reticências foi descartado: cortaria o número de blocos no
+meio ("1 bl…"), pior do que tirar a palavra inteira. **Reverte** o comentário antigo do
+`TerminalsPanel` (o inspector ia até a borda de baixo para não sobrar uma faixa vazia de
+canvas sob ele): agora a faixa é a própria barra. **Limite:** abaixo de ~740 px de janela
+com a gaveta aberta, ou com a gaveta maximizada, a área do canvas some e a barra fica sob
+a sidebar; isso é a sobreposição já conhecida de 320 px (task `3ed91f95-497e-8114-a246-f72c73ae50c4`),
+não um defeito da barra.
 
 **Tarefas Notion: mínimo 480 × 320** (era 760 × 460). O conteúdo do bloco rola por dentro
 e o painel usa colunas flexíveis. O tamanho padrão continua o de sempre (1040 × 680,

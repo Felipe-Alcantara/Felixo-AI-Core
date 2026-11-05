@@ -19,6 +19,10 @@
   `minimatch` embutidos no `npm` e no `@electron/universal`, sem conserto que não seja rebaixar versão). O app está no
   Electron 42.11.16 (`v0.1.509`); a 42 não é a linha mais nova, e a migração para uma linha suportada tem task
   própria. O repositório ficou sem PR aberto, só com a `main`, e sem alerta de secret scanning aberto.
+- **Barra de status do canvas (2026-11-05):** vai de borda a borda e o inspector "Elementos" termina logo acima dela; com
+  a gaveta do terminal aberta ela encolhe o texto por cortes de container query (`data-corte`), sem quebrar linha, e o
+  Remover fica visível e clicável em 768 px ou mais. O cenário `checarBarraComGaveta` do `canvas-smoke` guarda isso.
+  Ver a entrada de 2026-11-05 "Layout: a barra de status deixa de encolher para 160 px".
 - **Claude por chave de API:** conta do Claude por chave abre um bloco de conversa (Claude Code sem tela, que usa o crédito promocional do Agent SDK); ver a entrada de 2026-10-19.
 - **Memória de longo prazo (ai-memory, 2026-10-21):** instalado na máquina (serviço no logon, MCP e hooks por usuário no Claude Code, Codex e Copilot). Este repositório tem o bloco gerenciado no `CLAUDE.md` e no `AGENTS.md` e as skills `ai-memory-*`; a captura vale para todos os projetos e a entrega dos eventos acontece nas fronteiras da sessão. Ver a entrada de 2026-10-21 "ai-memory instalado".
 - **Instalador e árvore de processos (2026-10-21):** o `release-smoke.cjs` passou a cancelar e expirar a instalação de uma CLI pelo app empacotado e a provar, com uma sonda independente, que nenhum processo da árvore do npm sobra (`app/scripts/installer-kill-smoke.cjs`, nos três SOs do Release). Visto rodando fora do CI só no Windows; o macOS real segue pendente (roteiro em `docs/validation/CHECKLIST-INSTALADOR-ARVORE-DE-PROCESSOS.md`). Ver a entrada de 2026-10-21 "Instalador: cancelar e expirar pelo app empacotado".
@@ -789,3 +793,65 @@ O CI de `33e631c` passou nos quatro sistemas e o Release saiu na `v0.1.510` (os 
 `npm` embutido em 11.21.2 e `pty.ok`, `contextDelivery.ok` e `npmRuntime.ok` verdadeiros). **Dependabot, conferido
 depois do lock novo na `main`: 22 alertas abertos no início da passada, 1 agora** (o `minimatch` médio, que depende do upstream); os
 3 altos e 2 médios de `undici`, o `zod` e o `ip-address` fecharam sozinhos.
+
+---
+
+## 2026-11-05 — Layout: a barra de status deixa de encolher para 160 px e de quebrar com a gaveta do terminal aberta
+
+**Contexto.** Task `3e791f95-497e-81bd-8e8c-de6f9e16cec5` (achado da verificação do PR #94, que acrescentou "1 bloco
+selecionado" e o botão Remover à barra). Com a gaveta aberta, a barra do canvas media 160 px em 1320 px de janela e
+quebrava em duas linhas; o Remover ficava fora da caixa e por baixo do inspector. Critério de aceite: com a gaveta
+aberta e um bloco selecionado, a barra não quebra linha e o Remover fica visível e clicável em 768 px ou mais.
+
+**Causa (medida no app de fonte, perfil isolado, PTY roteirizado).** A barra era `right: 18rem` para parar na borda
+esquerda do inspector "Elementos", e a gaveta (irmã do canvas na linha flex, `min(720 px, 45%)`, mínimo 440 px) tira a
+largura do canvas: em 1320 px a área do canvas fica com 736 px, e 736 − sidebar 288 − inspector 288 deixa 160 px. Em 768
+px a conta ficava negativa e restava só o padding (32 px). No `HEAD` `474b0a7`, janela de 1320 px: barra de 240 a 446,
+Remover de 560 a 682, clique no centro dele não chegava ao botão (o inspector, z 20, cobre a barra, z 18), 291 px de
+conteúdo para fora e 2 px de altura extra (quebra).
+
+**Decisão (tomada pelo agente; a task listava três saídas).** A barra passa a ir de borda a borda (`right: 0`), o
+wrapper do inspector termina logo acima dela (`bottom` igual à altura da barra) e a barra encolhe o conteúdo por
+container query, nunca por quebra. Isto **reverte** o comentário antigo do `TerminalsPanel`, que mandava o inspector
+até a borda de baixo para não sobrar uma faixa vazia de canvas sob ele: agora a faixa é a própria barra. Descartados:
+só `nowrap` com reticências (cortaria "1 bl…" no meio, pior que tirar a palavra inteira) e a barra por cima do
+inspector (z maior), que mantinha a barra com 160 px e quebrava a escala de z documentada.
+
+**O que mudou.**
+
+1. `app/src/index.css`: `.felixo-canvas-statusbar` com `right: 0`, `container: felixo-statusbar / inline-size`,
+   `overflow: hidden` e `white-space: nowrap`; bloco `@container felixo-statusbar` com quatro cortes por largura do
+   conteúdo (< 40 rem: some o nome do canvas, o "Delete" e o texto do estado; < 28 rem: contagens só em número e sem a
+   frase da seleção; < 13 rem: sem contagens quando há botão; < 7 rem: o botão fica só com o ícone). O que sai é
+   recortado em 1 px, não removido: continua na árvore de acessibilidade. A regra do `:has()` que levava a barra a
+   `right: 1rem` com o inspector recolhido deixou de valer para ela.
+2. `CanvasStatusBar.tsx`: `data-corte="N"` marca o que sai em cada corte; o botão nunca tem corte, só o rótulo dele
+   (4) e a tecla (1).
+3. `TerminalsPanel.tsx`: wrapper com `bottom-(--felixo-statusbar-height)` e puck de `bottom-10` para `bottom-2.5`, que
+   o mantém no mesmo lugar da tela (medido: 40 px da borda de baixo, 10 px acima da barra).
+4. Testes: `CanvasStatusBar.test.ts` (o botão e o ícone de estado não têm corte); `canvas-smoke-matriz.cjs` ganhou
+   `medirBarraDeStatus` (roda no renderer) e `findStatusbarProblems` (puro), com 5 testes em
+   `canvas-smoke-matriz.test.cjs` (incluindo o estado de antes com os números medidos); `canvas-smoke.cjs` ganhou
+   `checarBarraComGaveta`, chamado com a gaveta aberta em 1320×800 e 768×900, que confere uma linha, sem estouro, o
+   Remover dentro da barra, na janela e recebendo o clique (`elementFromPoint`).
+5. Docs: decisão em `LAYOUT-SUPERFICIES.md`, entrada `chrome-statusbar` e do dock no inventário (`chrome.ts`, com o
+   `INVENTARIO-CANVAS.md` regenerado; o item de lacuna que apontava para esta task saiu e entrou o limite novo), e uma
+   frase em `GUIA-CANVAS.md` e `GUIA-USUARIO.md`.
+
+**Medido depois.** Janela de 768 a 1700 px com a gaveta aberta e um bloco selecionado: sem estouro, em uma linha, e
+`elementFromPoint` no centro do Remover devolve o próprio botão. Barra de 486 px em 1320 px (contagens com a palavra,
+frase da seleção e botão), 344 px em 1024 px (contagens em número e botão), 88 px em 768 px (botão só com o ícone e o
+ícone de estado). Larguras naturais dos grupos: 606 px com tudo, 400 px sem o nome do canvas/"Delete"/texto do estado,
+168 px sem a frase da seleção, 92 px só o botão e o ícone de estado. O teste novo reprova o `HEAD` nos dois tamanhos
+(estouro, quebra, Remover fora da barra e coberto) e passa com a mudança.
+
+**Limites.** Abaixo de ~740 px de janela com a gaveta aberta, ou com a gaveta maximizada (que deixa o canvas com ~120
+px), a área do canvas é menor que a sidebar e a barra fica sob ela: é a sobreposição de 320 px já conhecida (task
+`3ed91f95-497e-8114-a246-f72c73ae50c4`). Os cortes foram medidos no Windows; a folga entre cada limite e o que o corte
+seguinte pede (28 contra 25 rem, 13 contra 10,5, 7 contra 5,8) cobre a diferença de fonte entre sistemas, mas só o CI
+do macOS e do Linux confirma. O clique no Remover continua sem teste que remova de verdade (task
+`3ec91f95-497e-818f-b9f2-f9710605c303`). Tema claro e alto contraste não foram olhados com os cortes ativos. Na
+primeira execução do `canvas-smoke` sessão A (3 tentativas) o `page.screenshot` do primeiro caso da matriz (320×720)
+estourou 30 s e a sessão passou na repetição ("passou-com-instabilidade"); uma segunda execução, com uma tentativa só
+(`FELIXO_SMOKE_TENTATIVAS=1`), passou de primeira. O cenário novo passou nas três passagens; a causa do estouro de
+30 s não foi achada.

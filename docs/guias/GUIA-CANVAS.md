@@ -57,7 +57,9 @@ selecionada", "N blocos selecionados" ou "N itens selecionados") e mostra
 seleção. O botão faz o mesmo que a tecla: remover blocos leva junto as conexões
 ligadas a eles, um terminal removido encerra a sessão, e não há confirmação nem
 desfazer. Com o canvas travado (cadeado na pílula de zoom), o botão fica
-desativado.
+desativado. Com a gaveta do terminal aberta ou a janela estreita, a barra mostra
+menos texto (primeiro o nome do canvas e a tecla, depois a frase da seleção e as
+contagens, por fim o rótulo do botão), mas o botão **Remover** continua nela.
 
 Conexões com blocos que têm um único ponto de ligação (nota, desenho, Excalidraw,
 Página Web e Tarefas Notion) também aparecem no canvas e podem ser clicadas para

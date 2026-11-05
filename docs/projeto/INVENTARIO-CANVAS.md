@@ -32,7 +32,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **Elementos:** 100 (10 blocos, 16 ferramentas, 74 outras superfícies)
 - **Controles:** 378, dos quais 57 com teste específico
 - **Elementos sem nenhum teste:** 4
-- **Lacunas:** 270 (alto 9, médio 145, baixo 116), em 77 tasks
+- **Lacunas:** 270 (alto 9, médio 144, baixo 117), em 78 tasks
 
 ## Moldura do canvas
 
@@ -253,12 +253,12 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **Persistência:** nenhuma (só exibe o estado do canvas)
 - **IPC:** `canvas:delete`, `canvas:delete-edge`
 - **Depende de:** `summarizeCanvasSelection`, `removeSelection (CanvasView)`
-- **Sobreposição:** footer absolute bottom 0, left var(--felixo-sidebar-width) (3.25rem recolhida), right 18rem (1rem com o inspector no puck), z-18, pointer-events só no botão. Fica sob sidebar (26), dock e painéis (20/30); a pílula de zoom fica logo acima (margem statusbar + 0,5rem).
-- **Testes:** `src/features/canvas/components/CanvasStatusBar.test.ts`, `src/features/canvas/services/canvas-selection.test.ts`, `scripts/canvas-smoke.cjs` → `checarMontagem`, `scripts/canvas-smoke.cjs` → `checarMatrizVisual`
+- **Sobreposição:** footer absolute bottom 0, left var(--felixo-sidebar-width) (3.25rem recolhida), right 0, z-18, pointer-events só no botão, overflow hidden e container felixo-statusbar (cortes por largura em index.css). O inspector termina no topo dela (não há sobreposição); fica sob sidebar (26); a pílula de zoom fica logo acima (margem statusbar + 0,5rem).
+- **Testes:** `src/features/canvas/components/CanvasStatusBar.test.ts`, `src/features/canvas/services/canvas-selection.test.ts`, `scripts/canvas-smoke.cjs` → `checarMontagem`, `scripts/canvas-smoke.cjs` → `checarMatrizVisual`, `scripts/canvas-smoke.cjs` → `checarBarraComGaveta`
 
 | Estado | Quando |
 | --- | --- |
-| normal | "Canvas pronto", "N blocos" e "N conexões"; com seleção, a frase da seleção e o botão Remover. |
+| normal | "Canvas pronto", "N blocos" e "N conexões"; com seleção, a frase da seleção e o botão Remover. Com pouca largura (gaveta do terminal aberta) o texto sai por cortes de container query e o botão fica, no fim só com o ícone. |
 | loading | hydrated && edgesHydrated falso: "Carregando canvas…". |
 | disabled | Canvas travado (removeDisabled = canvasLocked): Remover desabilitado com "Destrave o canvas para remover". |
 
@@ -268,7 +268,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| A barra encolhe para 160 px e quebra com a gaveta do terminal aberta. | médio | `3e791f95-497e-81bd-8e8c-de6f9e16cec5` |
+| Abaixo de ~740 px de janela com a gaveta aberta, ou com a gaveta maximizada, a área do canvas some e a barra fica sob a sidebar (a sobreposição de 320 px já conhecida). | baixo | `3ed91f95-497e-8114-a246-f72c73ae50c4` |
 | O clique em Remover não é exercitado: o teste só renderiza o botão (rótulo, atalho e desabilitado). | baixo | `3ec91f95-497e-818f-b9f2-f9710605c303` |
 
 ### Pílula de zoom
@@ -353,7 +353,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **Persistência:** localStorage felixo:elements-dock-collapsed (recolhido); canvas salvo (ordem do dock em data.orderIndex, via reorderNodes → canvas:save); nenhuma para modo de envio em massa e rascunhos
 - **IPC:** `pty:write`, `canvas:save`
 - **Depende de:** `useCanvasSurfaces (reportInspectorWidth)`, `useTerminalSessions`, `useSessionSnapshot`, `terminals-panel-groups`, `terminals-panel-reorder`, `terminals-panel-navigation`, `terminals-panel-drafts`, `terminals-panel-collapse`
-- **Sobreposição:** Wrapper data-terminals-dock absolute (top-12, bottom-0, right-0) z-20, pointer-events-none; o inspector (w-72) e o puck (bottom-10 right-3) religam os cliques. Abaixo da topbar (começa em 48 px) e até a borda de baixo da janela, ao lado da statusbar (que para em right: 18rem); o puck fica acima da statusbar; topbar, statusbar e Mini Map reservam 18rem (1rem com o puck) via :has(). Publica a largura em reportInspectorWidth, que encolhe painel e gaveta.
+- **Sobreposição:** Wrapper data-terminals-dock absolute (top-12, bottom = altura da statusbar, right-0) z-20, pointer-events-none; o inspector (w-72) e o puck (bottom-2.5 right-3, o mesmo lugar de antes na tela) religam os cliques. Abaixo da topbar (começa em 48 px) e até o topo da statusbar, que passa por baixo dele de ponta a ponta (right: 0); topbar e Mini Map reservam 18rem (1rem com o puck) via :has(). Publica a largura em reportInspectorWidth, que encolhe painel e gaveta.
 - **Testes:** `scripts/canvas-smoke.cjs` → `checarDockRecolhidaSemBloqueio`, `scripts/canvas-smoke-onboarding.cjs` → `recolherInspector`, `scripts/canvas-smoke-links.cjs` → `focar`, `scripts/canvas-smoke-prompts.cjs` → `abrirTerminal`, `scripts/canvas-smoke.cjs` → `checarOclusaoDoFixture`, `src/features/canvas/components/tools/terminals-panel-collapse.test.ts`, `src/features/canvas/components/tools/terminals-panel-drafts.test.ts`, `src/features/canvas/components/tools/terminals-panel-groups.test.ts`, `src/features/canvas/components/tools/terminals-panel-navigation.test.ts`, `src/features/canvas/components/tools/terminals-panel-reorder.test.ts`, `src/features/canvas/services/canvas-surfaces.test.ts`
 
 | Estado | Quando |
@@ -367,7 +367,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Controle | Gatilho | Efeito | Falha conhecida | Teste |
 | --- | --- | --- | --- | --- |
-| `aria-label="Abrir elementos"` (button) | clique | Puck: toggleCollapsed expande o inspector, grava felixo:elements-dock-collapsed = "0" e publica INSPECTOR_WIDTH (reportInspectorWidth); topbar, statusbar e Mini Map voltam a reservar 18rem. (desabilitado: só visível e focável com o inspector recolhido) | Sem localStorage a escolha vale só nesta sessão. | `scripts/canvas-smoke-onboarding.cjs` → `recolherInspector` |
+| `aria-label="Abrir elementos"` (button) | clique | Puck: toggleCollapsed expande o inspector, grava felixo:elements-dock-collapsed = "0" e publica INSPECTOR_WIDTH (reportInspectorWidth); topbar e Mini Map voltam a reservar 18rem (a statusbar não: ela vai até a borda direita nos dois estados). (desabilitado: só visível e focável com o inspector recolhido) | Sem localStorage a escolha vale só nesta sessão. | `scripts/canvas-smoke-onboarding.cjs` → `recolherInspector` |
 | `aria-label="Recolher elementos"` (button) | clique | Cabeçalho "Elementos": recolhe para o puck, grava felixo:elements-dock-collapsed = "1" e publica largura 0; painel, gaveta e Mini Map ganham o espaço. | Sem localStorage a escolha vale só nesta sessão. | `scripts/canvas-smoke-onboarding.cjs` → `recolherInspector` |
 | `Alternar modo de enviar mensagens em massa` (button) | clique | Liga ou desliga o modo de envio em massa (campo de mensagem sob cada terminal); ligar com o inspector recolhido também o expande. | Sem falha própria; o modo e os rascunhos não persistem. | — |
 | `onClick={sendAllDrafts}` (button) | clique | Enviar para todos: para cada rascunho não vazio, store.sendText com Enter (prompt manual) no PTY do terminal (pty:write) e limpa o rascunho. (desabilitado: nenhum rascunho pendente) | erro engolido: o resultado de sendText é ignorado e o rascunho é apagado mesmo se a entrega falhar (TerminalsPanel.tsx:193). | — |
@@ -2902,7 +2902,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3e691f95-497e-810e-a39b-f26d90a38c8e` — 1 lacuna
 - `3e691f95-497e-8116-8cbd-fad2823ce1da` — 1 lacuna
 - `3e691f95-497e-81c8-ba05-c3074dc036f0` — 2 lacunas
-- `3e791f95-497e-81bd-8e8c-de6f9e16cec5` — 2 lacunas
+- `3e791f95-497e-81bd-8e8c-de6f9e16cec5` — 1 lacuna
 - `3e891f95-497e-8148-b00e-f27e78767664` — 2 lacunas
 - `3e891f95-497e-815b-b675-d1d696a7968e` — 1 lacuna
 - `3e891f95-497e-819b-a75f-e5cec04e3173` — 1 lacuna
@@ -2960,6 +2960,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3ec91f95-497e-81ca-8319-ee657b0b6492` — 28 lacunas
 - `3ec91f95-497e-81e8-8f18-e2a529b0568e` — 10 lacunas
 - `3ec91f95-497e-81f7-8b12-c5c252d020c7` — 5 lacunas
+- `3ed91f95-497e-8114-a246-f72c73ae50c4` — 1 lacuna
 - `3f291f95-497e-81fe-8670-fe2fc871318d` — 1 lacuna
 - `3f491f95-497e-8126-b0ec-fab2a600214a` — 1 lacuna
 - `3fa91f95-497e-81fc-b87c-e65a5bdce2a5` — 1 lacuna
