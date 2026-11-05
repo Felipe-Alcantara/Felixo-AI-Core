@@ -1,7 +1,12 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { GpuFallbackAlert, GpuPreferenceFieldView, type GpuPreferenceFieldViewProps } from './GpuPreferenceField'
+import {
+  GPU_SELECT_ID,
+  GpuFallbackAlert,
+  GpuPreferenceFieldView,
+  type GpuPreferenceFieldViewProps,
+} from './GpuPreferenceField'
 import type { GpuPreferenceStatus } from './gpu-preference'
 
 const STATUS: GpuPreferenceStatus = {
@@ -42,6 +47,10 @@ describe('opção de placa de vídeo nas Configurações', () => {
     expect(html).not.toContain(' open=""')
     expect(html).toContain('<summary')
     expect(html).toContain('Opções avançadas: placa de vídeo')
+  })
+
+  it('o seletor tem um id fixo, para o foco voltar a ele depois de salvar', () => {
+    expect(render()).toContain(`id="${GPU_SELECT_ID}"`)
   })
 
   it('explica quando vale, o custo em bateria e mostra a GPU em uso', () => {

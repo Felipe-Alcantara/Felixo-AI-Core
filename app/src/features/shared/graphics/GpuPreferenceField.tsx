@@ -1,5 +1,5 @@
 import { AlertTriangle, MonitorCog, Save } from 'lucide-react'
-import { useState, type SyntheticEvent } from 'react'
+import { useEffect, useRef, useState, type SyntheticEvent } from 'react'
 import { FelixoSelect } from '../components/FelixoSelect'
 import { isSoftwareRenderer, readActiveGpuRenderer } from './active-gpu-renderer'
 import {
@@ -13,7 +13,11 @@ import {
   type GpuPreference,
   type GpuPreferenceStatus,
 } from './gpu-preference'
+import { runGpuSave } from './gpu-save-flow'
 import { acknowledgeGpuFallback, saveGpuPreference, useGpuStatus } from './gpu-status-store'
+
+/** O seletor tem id fixo para o foco voltar a ele depois de salvar (ver `gpu-save-flow.ts`). */
+export const GPU_SELECT_ID = 'felixo-gpu-preference-select'
 
 type GpuFallbackAlertProps = {
   fallback: GpuFallback
@@ -97,6 +101,7 @@ export function GpuPreferenceFieldView({
       <div className="mt-2 block text-xs text-zinc-400">
         Placa de vídeo
         <FelixoSelect
+          id={GPU_SELECT_ID}
           value={selected}
           options={gpuPreferenceOptions(status)}
           onChange={(value) => {
@@ -151,6 +156,16 @@ export function GpuPreferenceField() {
   const [justSaved, setJustSaved] = useState(false)
   const [open, setOpen] = useState(false)
   const [renderer, setRenderer] = useState<string | null | undefined>(undefined)
+  const focusPending = useRef(false)
+
+  // Salvar desliga o seletor e o botão, e o controle que desliga com o foco nele
+  // o perde para o BODY. O foco volta ao seletor quando `saving` já é falso, isto
+  // é, com ele ligado de novo.
+  useEffect(() => {
+    if (saving || !focusPending.current) return
+    focusPending.current = false
+    document.getElementById(GPU_SELECT_ID)?.focus()
+  }, [saving])
 
   if (!status) return null
 
@@ -162,15 +177,20 @@ export function GpuPreferenceField() {
 
   const selected = draft ?? status.preference
 
-  async function save() {
-    setSaving(true)
-    const result = await saveGpuPreference(selected)
-    setMessage(result.message)
-    if (result.ok) {
-      setDraft(null)
-      setJustSaved(true)
-    }
-    setSaving(false)
+  function save() {
+    return runGpuSave(
+      {
+        holdField: setJustSaved,
+        setSaving,
+        setMessage,
+        clearDraft: () => setDraft(null),
+        requestFocusRestore: () => {
+          focusPending.current = true
+        },
+        save: () => saveGpuPreference(selected),
+      },
+      justSaved,
+    )
   }
 
   async function acknowledge() {

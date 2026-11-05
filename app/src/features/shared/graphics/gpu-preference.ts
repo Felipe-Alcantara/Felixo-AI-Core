@@ -113,17 +113,35 @@ export function describeGpuChoiceLimit(status: GpuPreferenceStatus): string | nu
     const reasons = Object.values(status.unavailablePreferences ?? {})
     return reasons.length > 0 ? reasons.map((reason) => UNAVAILABLE_REASON_TEXT[reason]).join(' ') : null
   }
+  // Sem duas placas o campo só aparece para desfazer uma escolha salva (ou logo
+  // depois de salvar Automático, com a confirmação): com Automático salvo não há
+  // mais o que limitar, e o aviso de antes ficaria apontando para uma escolha que
+  // a pessoa acabou de tirar.
+  if (status.preference === 'auto') return null
   if (status.notApplied === 'software-rendering') {
     return 'No modo compatível (sem GPU) o Felixo não lê as placas de vídeo e a escolha salva não tem efeito; só dá para voltar para Automático.'
   }
+  if (status.applied === status.preference) {
+    return 'Nesta abertura o Felixo não encontrou duas placas de vídeo, mas aplicou a escolha salva; só dá para voltar para Automático.'
+  }
   return 'Nesta abertura o Felixo não encontrou duas placas de vídeo, então só dá para voltar para Automático.'
+}
+
+/** O que a opção salva diz de si mesma quando não há duas placas: sem contradizer `describeAppliedGpu`. */
+function describeSavedOption(status: GpuPreferenceStatus): string {
+  if (status.notApplied === 'software-rendering') return 'Salva, mas sem efeito no modo compatível.'
+  return status.applied === status.preference ? 'Salva e aplicada nesta abertura.' : 'Salva para a próxima abertura.'
 }
 
 /** As opções do seletor, com as que não valem nesta abertura desligadas e o motivo na descrição. */
 export function gpuPreferenceOptions(status: GpuPreferenceStatus): FelixoSelectOption[] {
   return GPU_PREFERENCE_OPTIONS.map((option) => {
     if (option.value === 'auto') return option
-    if (!status.multipleGpus) return { ...option, disabled: true, description: 'Indisponível nesta abertura.' }
+    if (!status.multipleGpus) {
+      // A escolha salva não é "indisponível": é a que está valendo (ou vai valer).
+      if (option.value === status.preference) return { ...option, disabled: true, description: describeSavedOption(status) }
+      return { ...option, disabled: true, description: 'Indisponível nesta abertura.' }
+    }
     const unavailable = status.unavailablePreferences?.[option.value as Exclude<GpuPreference, 'auto'>]
     return unavailable ? { ...option, disabled: true, description: 'Sem efeito neste computador.' } : option
   })

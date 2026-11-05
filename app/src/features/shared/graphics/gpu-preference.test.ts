@@ -62,7 +62,12 @@ describe('preferência de placa de vídeo', () => {
       ['integrada', true],
       ['dedicada', true],
     ])
+    // A Dedicada salva foi aplicada nesta abertura, e o texto não a chama de indisponível.
     expect(describeGpuChoiceLimit(singleGpu)).toBe(
+      'Nesta abertura o Felixo não encontrou duas placas de vídeo, mas aplicou a escolha salva; só dá para voltar para Automático.',
+    )
+    // Salva para a próxima abertura (ainda não aplicada): o texto de antes.
+    expect(describeGpuChoiceLimit({ ...singleGpu, applied: 'auto' })).toBe(
       'Nesta abertura o Felixo não encontrou duas placas de vídeo, então só dá para voltar para Automático.',
     )
 
@@ -82,6 +87,43 @@ describe('preferência de placa de vídeo', () => {
     // ...menos logo depois de a pessoa salvar Automático por ele: o campo fica
     // com a confirmação em vez de sumir no clique.
     expect(shouldShowGpuChoice({ ...compatible, preference: 'auto' }, { justSaved: true })).toBe(true)
+  })
+
+  it('sem duas placas, a opção salva não se diz indisponível quando a abertura a aplicou', () => {
+    const single: GpuPreferenceStatus = { ...BASE_STATUS, devices: [BASE_STATUS.devices[1]], multipleGpus: false }
+    const describe = (status: GpuPreferenceStatus) =>
+      Object.fromEntries(gpuPreferenceOptions(status).map((option) => [option.value, option.description]))
+
+    // Aplicada: "Nesta abertura: Dedicada." e a opção Dedicada concordam.
+    const applied: GpuPreferenceStatus = { ...single, preference: 'dedicada', applied: 'dedicada' }
+    expect(describeAppliedGpu(applied)).toBe('Nesta abertura: Dedicada.')
+    expect(describe(applied)).toMatchObject({
+      dedicada: 'Salva e aplicada nesta abertura.',
+      integrada: 'Indisponível nesta abertura.',
+    })
+
+    // Salva depois do início: vale na próxima.
+    expect(describe({ ...single, preference: 'dedicada' }).dedicada).toBe('Salva para a próxima abertura.')
+    // No modo compatível a escolha salva não tem efeito, e a opção diz isso.
+    expect(describe({ ...single, preference: 'dedicada', notApplied: 'software-rendering', devices: [] }).dedicada).toBe(
+      'Salva, mas sem efeito no modo compatível.',
+    )
+    // Nenhuma opção "indisponível nesta abertura" é a que esta abertura aplicou.
+    for (const status of [applied, { ...applied, preference: 'integrada', applied: 'integrada' } as GpuPreferenceStatus]) {
+      const appliedOption = describe(status)[status.applied as string]
+      expect(appliedOption).not.toBe('Indisponível nesta abertura.')
+    }
+  })
+
+  it('depois de salvar Automático sem duas placas, o aviso de limite sai (o campo fica só com a confirmação)', () => {
+    const single: GpuPreferenceStatus = { ...BASE_STATUS, devices: [BASE_STATUS.devices[1]], multipleGpus: false }
+    expect(describeGpuChoiceLimit({ ...single, preference: 'auto' })).toBeNull()
+    // Também no modo compatível, onde o aviso falava da escolha salva que acabou de sair.
+    expect(describeGpuChoiceLimit({ ...single, preference: 'auto', notApplied: 'software-rendering', devices: [] })).toBeNull()
+    // Com a escolha ainda salva, o aviso continua.
+    expect(describeGpuChoiceLimit({ ...single, preference: 'dedicada', notApplied: 'software-rendering', devices: [] })).toMatch(
+      /modo compatível/,
+    )
   })
 
   it('no macOS com placa NVIDIA desliga só a Dedicada, com o motivo', () => {
