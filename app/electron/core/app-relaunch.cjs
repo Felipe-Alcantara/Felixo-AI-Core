@@ -110,12 +110,20 @@ function resolveRunningAppImage(options) {
 }
 
 /**
+ * Marca, no ambiente do relançado, que o `APPIMAGE_EXTRACT_AND_RUN` foi posto
+ * pelo relançamento e não herdado da pessoa. Só com ela o relançado o apaga
+ * depois de subir (`restoreRelaunchEnvironment`).
+ */
+const EXTRACT_AND_RUN_ADDED_FLAG = 'FELIXO_APPIMAGE_EXTRACT_AND_RUN_ADDED'
+
+/**
  * O ambiente do `.AppImage` reaberto: o deste processo sem as entradas da
  * montagem (ou extração) atual nas listas de caminhos que o `AppRun`
  * prefixa; uma lista que fica vazia sai do ambiente. Com o app extraído, o
  * runtime consumiu o `--appimage-extract-and-run` da linha de comando, então
  * o relançado recebe `APPIMAGE_EXTRACT_AND_RUN=1` para também não depender de
- * FUSE. Não altera `environment`.
+ * FUSE (com a marca `EXTRACT_AND_RUN_ADDED_FLAG` quando a variável não era da
+ * pessoa). Não altera `environment`.
  */
 function buildAppImageRelaunchEnv(environment, { appDirs, extracted }) {
   const childEnvironment = { ...environment }
@@ -126,8 +134,29 @@ function buildAppImageRelaunchEnv(environment, { appDirs, extracted }) {
     if (kept.length === 0) delete childEnvironment[key]
     else childEnvironment[key] = kept.join(path.delimiter)
   }
-  if (extracted) childEnvironment.APPIMAGE_EXTRACT_AND_RUN = '1'
+  if (extracted) {
+    if (childEnvironment.APPIMAGE_EXTRACT_AND_RUN === undefined) childEnvironment[EXTRACT_AND_RUN_ADDED_FLAG] = '1'
+    childEnvironment.APPIMAGE_EXTRACT_AND_RUN = '1'
+  }
   return childEnvironment
+}
+
+/**
+ * Chamada no processo relançado, depois de subir: tira do ambiente o que o
+ * relançamento pôs só para o AppImage abrir sem FUSE. O `APPIMAGE_EXTRACT_AND_RUN`
+ * só importa ao runtime do AppImage, antes do Electron; se ficasse, os
+ * terminais e os apps abertos pelo Felixo o herdariam. O que a pessoa já tinha
+ * (sem a marca) fica. Altera `environment` no lugar.
+ *
+ * @param {Record<string, string | undefined>} environment
+ * @returns {string[]} Os nomes removidos (sem a marca).
+ */
+function restoreRelaunchEnvironment(environment) {
+  if (environment[EXTRACT_AND_RUN_ADDED_FLAG] === undefined) return []
+  delete environment[EXTRACT_AND_RUN_ADDED_FLAG]
+  if (environment.APPIMAGE_EXTRACT_AND_RUN === undefined) return []
+  delete environment.APPIMAGE_EXTRACT_AND_RUN
+  return ['APPIMAGE_EXTRACT_AND_RUN']
 }
 
 /**
@@ -203,8 +232,10 @@ function relaunchApp({
 
 module.exports = {
   APPDIR_PATH_LIST_VARIABLES,
+  EXTRACT_AND_RUN_ADDED_FLAG,
   buildAppImageRelaunchEnv,
   describeRunningAppImage,
   relaunchApp,
   resolveRunningAppImage,
+  restoreRelaunchEnvironment,
 }

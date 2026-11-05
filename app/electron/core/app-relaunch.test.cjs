@@ -7,7 +7,13 @@ const os = require('node:os')
 const path = require('node:path')
 const test = require('node:test')
 
-const { relaunchApp, resolveRunningAppImage } = require('./app-relaunch.cjs')
+const {
+  EXTRACT_AND_RUN_ADDED_FLAG,
+  buildAppImageRelaunchEnv,
+  relaunchApp,
+  resolveRunningAppImage,
+  restoreRelaunchEnvironment,
+} = require('./app-relaunch.cjs')
 
 // A montagem de AppImage destes testes usa caminhos, links e o separador de PATH
 // do POSIX; o AppImage só existe no Linux (no macOS eles também valem).
@@ -149,11 +155,55 @@ test('com o AppImage extraído (--appimage-extract-and-run) o relançado também
   const { result, calls } = relaunchFromAppImage({ environment, execPath: path.join(fixture.extracted, 'felixo-ai-core') })
   assert.equal(result.ok, true)
   assert.equal(calls[0].options.env.APPIMAGE_EXTRACT_AND_RUN, '1')
+  // Foi o relançamento que a pôs: a marca deixa o relançado apagá-la depois de subir.
+  assert.equal(calls[0].options.env[EXTRACT_AND_RUN_ADDED_FLAG], '1')
   assert.equal(calls[0].options.env.PATH, '/usr/local/bin:/usr/bin')
 
   // Montado por FUSE, a variável não é posta.
   const mounted = relaunchFromAppImage({ environment: appRunEnvironment(fixture.mount) })
   assert.equal('APPIMAGE_EXTRACT_AND_RUN' in mounted.calls[0].options.env, false)
+  assert.equal(EXTRACT_AND_RUN_ADDED_FLAG in mounted.calls[0].options.env, false)
+})
+
+test('APPIMAGE_EXTRACT_AND_RUN que a pessoa já tinha não leva a marca de "posta pelo relançamento"', { skip: SO_EM_POSIX }, () => {
+  const environment = { ...appRunEnvironment(fixture.extracted), APPIMAGE_EXTRACT_AND_RUN: '1' }
+  const { calls } = relaunchFromAppImage({ environment, execPath: path.join(fixture.extracted, 'felixo-ai-core') })
+  assert.equal(calls[0].options.env.APPIMAGE_EXTRACT_AND_RUN, '1')
+  assert.equal(EXTRACT_AND_RUN_ADDED_FLAG in calls[0].options.env, false)
+})
+
+test('o ambiente do relançado marca o APPIMAGE_EXTRACT_AND_RUN que ele mesmo pôs (em qualquer SO)', () => {
+  const running = { appDirs: ['/tmp/appimage_extracted_0123'], extracted: true }
+  const added = buildAppImageRelaunchEnv({ HOME: '/home/pessoa' }, running)
+  assert.equal(added.APPIMAGE_EXTRACT_AND_RUN, '1')
+  assert.equal(added[EXTRACT_AND_RUN_ADDED_FLAG], '1')
+
+  // A variável da pessoa não leva a marca.
+  const owned = buildAppImageRelaunchEnv({ APPIMAGE_EXTRACT_AND_RUN: '1' }, running)
+  assert.equal(owned.APPIMAGE_EXTRACT_AND_RUN, '1')
+  assert.equal(EXTRACT_AND_RUN_ADDED_FLAG in owned, false)
+
+  // Montado por FUSE, nem a variável nem a marca.
+  const mounted = buildAppImageRelaunchEnv({}, { ...running, extracted: false })
+  assert.equal('APPIMAGE_EXTRACT_AND_RUN' in mounted, false)
+  assert.equal(EXTRACT_AND_RUN_ADDED_FLAG in mounted, false)
+})
+
+test('o relançado apaga o APPIMAGE_EXTRACT_AND_RUN que o relançamento pôs, e só ele', () => {
+  // Posta pelo relançamento: sai junto com a marca (terminais e apps abertos pelo Felixo não a herdam).
+  const environment = { HOME: '/home/pessoa', APPIMAGE_EXTRACT_AND_RUN: '1', [EXTRACT_AND_RUN_ADDED_FLAG]: '1' }
+  assert.deepEqual(restoreRelaunchEnvironment(environment), ['APPIMAGE_EXTRACT_AND_RUN'])
+  assert.deepEqual(environment, { HOME: '/home/pessoa' })
+
+  // A da pessoa fica, assim como num ambiente que nunca passou por relançamento.
+  const owned = { HOME: '/home/pessoa', APPIMAGE_EXTRACT_AND_RUN: '1' }
+  assert.deepEqual(restoreRelaunchEnvironment(owned), [])
+  assert.deepEqual(owned, { HOME: '/home/pessoa', APPIMAGE_EXTRACT_AND_RUN: '1' })
+
+  // Marca solta, sem a variável (alguém a apagou): só a marca sai.
+  const orphan = { [EXTRACT_AND_RUN_ADDED_FLAG]: '1' }
+  assert.deepEqual(restoreRelaunchEnvironment(orphan), [])
+  assert.deepEqual(orphan, {})
 })
 
 test('.AppImage que não abre (sem pid ou exceção) é relançamento falho, sem cair para o app.relaunch()', () => {

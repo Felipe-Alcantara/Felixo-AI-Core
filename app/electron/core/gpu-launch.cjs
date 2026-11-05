@@ -12,12 +12,14 @@
  *   `process.env` deste (sem as variáveis que forçam a dedicada e com a marca
  *   `FELIXO_GPU_ENV_SANITIZED`);
  * - fora do relançamento, a marca sai do `process.env`: ela é só do processo
- *   relançado, e os terminais e apps abertos a partir daqui não a herdam.
+ *   relançado, e os terminais e apps abertos a partir daqui não a herdam. O
+ *   mesmo vale para o `APPIMAGE_EXTRACT_AND_RUN` que o relançamento pôs (ver
+ *   `restoreRelaunchEnvironment`).
  */
 
 const { GPU_ENV_SANITIZED_FLAG, applyGpuLaunchPlan, restoreGpuLaunchEnv } = require('./gpu-preference.cjs')
 const { abandonGpuRelaunch, prepareGpuStart, recordGpuRelaunchChild } = require('./gpu-start-guard.cjs')
-const { relaunchApp } = require('./app-relaunch.cjs')
+const { relaunchApp, restoreRelaunchEnvironment } = require('./app-relaunch.cjs')
 
 /**
  * @param {object} options
@@ -60,6 +62,7 @@ function startGpuPreference({
 
   if (!gpuStart.relaunch) {
     delete environment[GPU_ENV_SANITIZED_FLAG]
+    restoreRelaunchEnvironment(environment)
     return { gpuStart, gpuLaunch, exiting: false }
   }
 
