@@ -1218,21 +1218,28 @@
   font-weight: 600;
 }
 
+/* Vai de borda a borda do espaço ao lado da sidebar: o inspector "Elementos"
+   termina logo acima dela (TerminalsPanel). Com `right: 18rem` a barra media
+   160 px com a gaveta do terminal aberta (1320 px de janela) e 32 px em 768 px.
+   Nunca quebra linha: o que não cabe sai por cortes (`data-corte`, abaixo). */
 .felixo-canvas-statusbar {
   position: absolute;
-  right: 18rem;
+  right: 0;
   bottom: 0;
   left: var(--felixo-sidebar-width);
   z-index: 18;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  container: felixo-statusbar / inline-size;
   height: var(--felixo-statusbar-height);
   padding: 0 1rem;
+  overflow: hidden;
   border-top: 1px solid var(--color-border);
   background: var(--f-surface-header);
   color: var(--f-core-secondary);
   font-size: 0.7rem;
+  white-space: nowrap;
   pointer-events: none;
   transition: left 180ms var(--f-core-ease);
 }
@@ -1302,6 +1309,58 @@
   font-size: 0.62rem;
   font-weight: 500;
   line-height: 1.1rem;
+}
+
+/* Cortes por largura da barra (CanvasStatusBar.tsx marca cada parte com
+   `data-corte="N"`). Quem sai fica só para leitor de tela (1 px recortado), e
+   o botão Remover é o último a perder algo: só o rótulo, no corte 4. Larguras
+   medidas em 05/11/2026 (Electron 42, Windows, fonte 0,7 rem), em conteúdo
+   útil da barra (sem os 2 rem de padding): tudo com seleção pede ~38 rem;
+   sem workspace, "Delete" e o texto de "Canvas pronto", ~25 rem; contagens
+   só em número e sem a frase da seleção, ~10,5 rem; só o botão e o ícone de
+   pronto, ~5,8 rem. Cada limite abaixo deixa folga sobre o que o corte
+   seguinte pede, porque a fonte muda de largura entre sistemas. */
+@container felixo-statusbar (width < 40rem) {
+  [data-corte='1'] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+}
+
+@container felixo-statusbar (width < 28rem) {
+  [data-corte='2'] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+}
+
+/* Com o botão na barra, as contagens saem antes dele; sem seleção elas ficam
+   até o último corte. */
+@container felixo-statusbar (width < 13rem) {
+  .felixo-statusbar-group:has(.felixo-statusbar-action) .felixo-statusbar-count {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+}
+
+@container felixo-statusbar (width < 7rem) {
+  [data-corte='4'],
+  .felixo-statusbar-count {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
 }
 
 /* Mesmo respiro do Mini Map (19rem, recolhe pra 1rem com o inspector no
@@ -1427,10 +1486,9 @@
 /* Espelho do bloco acima, do outro lado da tela: recolher o inspector
    "Elementos" (`felixo-anim-corner-dock-collapsed`, ver TerminalsPanel.tsx)
    também devolve espaço real, sem precisar subir esse estado até aqui em
-   JS — a barra superior, a de status, o Mini Map e o sino de notificações
-   leem o mesmo seletor. */
-[data-felixo-canvas-ready]:has(.felixo-elements-inspector.felixo-anim-corner-dock-collapsed) .felixo-canvas-topbar,
-[data-felixo-canvas-ready]:has(.felixo-elements-inspector.felixo-anim-corner-dock-collapsed) .felixo-canvas-statusbar {
+   JS — a barra superior, o Mini Map e o sino de notificações leem o mesmo
+   seletor. A barra de status não: ela já vai até a borda direita. */
+[data-felixo-canvas-ready]:has(.felixo-elements-inspector.felixo-anim-corner-dock-collapsed) .felixo-canvas-topbar {
   right: 1rem;
 }
 

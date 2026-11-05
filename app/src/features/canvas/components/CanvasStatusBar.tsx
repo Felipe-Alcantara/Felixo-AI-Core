@@ -16,6 +16,11 @@ type CanvasStatusBarProps = {
  * Barra de estado compacta; expõe dados já presentes no canvas sem criar estado
  * paralelo. Com algo selecionado, também oferece remover a seleção: quem não
  * sabe da tecla Delete/Backspace não tinha outro jeito de apagar uma conexão.
+ *
+ * A largura sobra pouco com a gaveta do terminal aberta, então a barra nunca
+ * quebra linha: `data-corte="N"` marca o que sai quando a barra fica mais
+ * estreita que o corte N (index.css, `@container felixo-statusbar`). O botão
+ * Remover nunca sai; no último corte perde só o rótulo e vira um ícone.
  */
 export function CanvasStatusBar({
   nodeCount,
@@ -28,20 +33,24 @@ export function CanvasStatusBar({
   return (
     <footer className="felixo-canvas-statusbar" aria-live="polite">
       <div className="felixo-statusbar-group">
-        <span className="felixo-statusbar-workspace">Meu canvas</span>
-        <span className="felixo-statusbar-separator" aria-hidden />
-        <span className="felixo-statusbar-item">
-          <Layers3 size={13} aria-hidden />
-          {nodeCount} {nodeCount === 1 ? 'bloco' : 'blocos'}
+        <span className="felixo-statusbar-workspace" data-corte="1">
+          Meu canvas
         </span>
-        <span className="felixo-statusbar-item">
+        <span className="felixo-statusbar-separator" aria-hidden data-corte="1" />
+        <span className="felixo-statusbar-item felixo-statusbar-count">
+          <Layers3 size={13} aria-hidden />
+          {nodeCount}{' '}
+          <span data-corte="2">{nodeCount === 1 ? 'bloco' : 'blocos'}</span>
+        </span>
+        <span className="felixo-statusbar-item felixo-statusbar-count">
           <GitFork size={13} aria-hidden />
-          {edgeCount} {edgeCount === 1 ? 'conexão' : 'conexões'}
+          {edgeCount}{' '}
+          <span data-corte="2">{edgeCount === 1 ? 'conexão' : 'conexões'}</span>
         </span>
         {selectionLabel && (
           <>
-            <span className="felixo-statusbar-separator" aria-hidden />
-            <span className="felixo-statusbar-item">
+            <span className="felixo-statusbar-separator" aria-hidden data-corte="2" />
+            <span className="felixo-statusbar-item" data-corte="2">
               <MousePointer2 size={13} aria-hidden />
               {selectionLabel}
             </span>
@@ -59,8 +68,10 @@ export function CanvasStatusBar({
               }
             >
               <Trash2 size={12} aria-hidden />
-              Remover{' '}
-              <kbd className="felixo-statusbar-kbd">Delete</kbd>
+              <span data-corte="4">Remover</span>{' '}
+              <kbd className="felixo-statusbar-kbd" data-corte="1">
+                Delete
+              </kbd>
             </button>
           </>
         )}
@@ -68,7 +79,7 @@ export function CanvasStatusBar({
       <div className="felixo-statusbar-group">
         <span className={`felixo-statusbar-save ${hydrated ? 'is-ready' : ''}`}>
           <CheckCircle2 size={13} aria-hidden />
-          {hydrated ? 'Canvas pronto' : 'Carregando canvas…'}
+          <span data-corte="1">{hydrated ? 'Canvas pronto' : 'Carregando canvas…'}</span>
         </span>
       </div>
     </footer>
