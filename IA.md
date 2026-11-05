@@ -903,3 +903,11 @@ confirmar que o `npm ls --all` sai com 0.
 **Limites.** O defeito original do lightningcss não foi reproduzido em nenhum estado do lock, então o teste do lock prova
 que o guarda o detectaria (árvore sintética), não que ele já tenha acontecido. Não rodei `npm run build` nem o app: o lock é
 idêntico. O defeito do npm 11.6.2 não foi reportado ao npm.
+
+**Adendo (2026-11-05, depois do push): CI e Release.** O CI de `28ecbc7` (run 42056743462) passou em Windows, macOS,
+Ubuntu, Ubuntu ARM e no Canvas smoke, com o teste novo (`lockfile-consistency.test.cjs`) rodando com o npm do projeto nos
+quatro; o job `Dependency policy` reprovou na primeira tentativa por um **504 (Gateway Time-out)** no download do
+`electron-builder` ("Build unpacked application"), sem relação com a mudança, e passou na reexecução do job
+(`gh run rerun --failed`). Release gate e Release (run 42058411491) saíram verdes e publicaram a `v0.1.512`, nos três
+sistemas. **Correção de precisão:** acima, "npm 10.9.4 (o do Node 22 do CI)" é inferência: medi o 10.9.4 por `npx`, mas não
+li no log do CI qual npm o Node 22.x do `setup-node` traz; o teste novo não depende disso, porque usa o npm do projeto.
