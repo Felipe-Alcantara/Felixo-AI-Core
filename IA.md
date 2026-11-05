@@ -911,3 +911,56 @@ quatro; o job `Dependency policy` reprovou na primeira tentativa por um **504 (G
 (`gh run rerun --failed`). Release gate e Release (run 42058411491) saíram verdes e publicaram a `v0.1.512`, nos três
 sistemas. **Correção de precisão:** acima, "npm 10.9.4 (o do Node 22 do CI)" é inferência: medi o 10.9.4 por `npx`, mas não
 li no log do CI qual npm o Node 22.x do `setup-node` traz; o teste novo não depende disso, porque usa o npm do projeto.
+
+---
+
+## 2026-11-05 — GPU: os seis não bloqueantes da última revisão da placa de vídeo, cada um com teste que falhava antes
+
+**Contexto.** Task `3e791f95-497e-818e-b0b7-e022c3aa70ec` (aberta em 26/09/2026, da terceira verificação adversarial do PR #95,
+v0.1.424): seis pontos de nicho que ficaram fora do PR, com o critério "cada item com teste que falha antes, ou justificado como
+'não fazer' no `IA.md`". Os seis foram feitos; nenhum virou "não fazer".
+
+**Os seis itens: o que mudou, o teste que falhava antes e o que foi medido.**
+
+1. **Foco ao salvar (`GpuPreferenceField.tsx`, `gpu-save-flow.ts`).** Sem duas placas e salvando Automático, o store publica a
+   escolha nova antes de `saveGpuPreference` devolver; `shouldShowGpuChoice` ficava falso nesse instante e o campo era
+   desmontado (foco no BODY), voltando só quando `justSaved` subia. Agora o campo é segurado antes de salvar e o foco volta ao
+   seletor (`id` fixo) depois de `saving` virar falso. A ordem mora em `runGpuSave` (puro, 4 testes em
+   `gpu-save-flow.test.ts`; trocando a ordem para a antiga, 3 dos 4 reprovam). **No app real** (fonte, perfil isolado,
+   Windows, 1 placa AMD, Integrada salva pelo IPC, escolhi Automático e salvei): antes, o nó do campo ficou desconectado
+   (remontado) e o foco foi para o BODY; depois, o mesmo nó e o foco em `felixo-gpu-preference-select`.
+2. **Textos que se contradiziam (`gpu-preference.ts`).** Com uma placa só, a opção salva aparecia como "Indisponível nesta
+   abertura" ao lado de "Nesta abertura: Dedicada."; e o aviso "só dá para voltar para Automático" continuava depois de salvar
+   Automático. A opção salva agora diz "Salva e aplicada nesta abertura", "Salva para a próxima abertura" ou "Salva, mas sem
+   efeito no modo compatível"; o aviso de limite sai com Automático salvo e, quando a escolha foi aplicada, diz que o Felixo
+   aplicou a escolha salva mesmo sem encontrar duas placas. 3 testes novos em `gpu-preference.test.ts` (os três reprovavam).
+   **No app real:** a descrição da opção passou de "Indisponível nesta abertura." para "Salva para a próxima abertura.", e o
+   aviso de limite sumiu depois de salvar Automático.
+3. **`APPIMAGE_EXTRACT_AND_RUN` vazando (`app-relaunch.cjs`, `gpu-launch.cjs`).** O relançamento pôs a variável no ambiente do
+   relançado e ela ficava para os terminais abertos pelo app. Agora o relançamento marca a variável que ele mesmo pôs
+   (`FELIXO_APPIMAGE_EXTRACT_AND_RUN_ADDED`; a que a pessoa já tinha não leva a marca) e o processo relançado a apaga depois de
+   decidir a GPU (`restoreRelaunchEnvironment`, junto com a marca de ambiente limpo). Testes novos em `app-relaunch.test.cjs`
+   e `gpu-launch.test.cjs` (reprovavam: a função não existia). **Não rodado** com um AppImage de verdade (só existe no Linux).
+4. **Relançamento em andamento (`gpu-start-guard.cjs`, `isGpuRelaunchInProgress`).** Um pid gravado e já morto dentro dos 30 s
+   ainda contava como relançado nascendo, e com o relógio atrasado a idade dava "desconhecida" e o teto de 5 min não valia.
+   Agora, **com pid, vale o pid** (morto = não está nascendo, mesmo dentro do prazo curto), a idade é o **módulo** da diferença
+   (um relógio que voltou 3 h não tira o teto), e data ilegível não segura a escolha. Sem pid, o prazo de 30 s continua. 3
+   testes novos em `gpu-start-guard.test.cjs` (reprovavam).
+5. **Teste que não pegava a mutação (`gpu-launch.test.cjs`).** O `app.exit()` falso só registrava, então gravar o pid DEPOIS do
+   `exit` passava. Agora o falso lança (como o real, que não volta). Medido: com `recordGpuRelaunchChild` movido para depois do
+   `exit`, os testes de antes passavam 6/6 e os de agora reprovam em "o pid do relançado vai para o pedido antes de o processo
+   sair".
+6. **Aviso do modo compatível (`graphics-recommendation.cjs`, `main.cjs`).** A janela de leitura era de 2 s depois do primeiro
+   `gpu-info-update`; uma GPU que caía depois não gerava a recomendação. Com `keepWatching` (ligado no `main.cjs`) o app segue
+   lendo o status a cada `gpu-info-update` e grava a recomendação para a próxima abertura; a escuta tardia só acrescenta
+   (uma leitura saudável nunca a apaga) e devolve `stopWatching`. 2 testes novos reprovavam, com uma sequência de eventos
+   simulada. **Não reproduzido no app real:** uma queda tardia da GPU exigiria matar o processo de GPU do Electron.
+
+**Medido (Windows 11, Node 25.3.0, Electron 42.11.16).** `tsc -b` e `eslint .` limpos; vitest 217 arquivos, 3387 testes
+(eram 3380); `npm test` 3126 testes, 3116 passam, 0 falham, 0 cancelados, 10 pulados (eram 3110, 9 pulados: o teste novo de
+AppImage só roda no Linux e no macOS).
+
+**Limites.** Itens 3 e 6 não foram exercitados fora de testes (AppImage real e queda de GPU real); o foco do item 1 foi medido
+por `focus()` e `click()` pelo DOM, não por Tab e Enter. O item 4 assume o que o código já dizia: o pid gravado é o do
+`.AppImage`, que vira o Electron no mesmo processo; se o runtime fizesse fork em vez de exec, um pid que morre cedo com o
+relançado vivo reverteria a escolha à toa; não medi o pid do AppImage nesta passada (sem Linux por perto).
