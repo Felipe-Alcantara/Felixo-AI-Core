@@ -767,3 +767,24 @@ do push do lock fica para ser conferida (esperado: os 4 de `undici` fecham).
 **Evidência.** `app/scripts/archive-ia-md.cjs --file IA.md --keep-from 2026-10-29 --apply` (prova do script e prova
 independente do multiconjunto de linhas); `npm audit` antes e depois; runs do CI, do gate e dos Releases de cada
 commit; verificador de links com controle negativo (fora do repositório).
+
+**Adendo (2026-11-05, mesmo dia): o CI do primeiro push reprovou, e por quê.** O CI de `e508449` (o lock do `npm` e do
+`zod` mais o registro acima) reprovou o `Validate` do Windows e o do macOS, cada um por um teste de temporização
+diferente, e o Release gate ficou `skipped`: nenhuma versão com o lock novo saiu nesse commit. Cada falha tem sua
+causa:
+
+- **macOS, `terminal-scrollback-benchmark.test.cjs:414`** ("a soma de memória dos PTYs usa todos os pids de uma vez"):
+  teste **meu**, de 04/11 (`1ac57c5`). Ele esperava o evento `spawn`, que só diz que o processo foi criado. No macOS do
+  CI a soma dos dois `node` era 7504 KiB (uns 3,7 MiB cada, ainda subindo) contra os 40 MiB exigidos; no Windows a
+  soma já passa de 99 MiB nesse instante, por isso o teste passou aqui e nos CIs de ontem. Corrigido em `33e631c`: o
+  filho imprime uma marca no stdout depois de subir e o teste só mede depois de lê-la. Não reproduzi o macOS
+  localmente; o `Validate (macos-latest)` do CI de `33e631c` passou.
+- **Windows, `agent-usage-service-load.test.cjs:233`** ("o teto de tempo cancela os comandos em voo e a fila não
+  começa"): a rodada com `refreshDeadlineMs: 100` levou mais de 2 s (o teste inteiro, 7,9 s) e a asserção
+  `Date.now() - inicio < 2000` falhou. Não mudei nada: o teste passou nas duas execuções completas locais desta
+  passada e no CI de `33e631c`. Fica registrado como flake visto uma vez, com 2 s de margem sobre um teto de 100 ms; a
+  causa (carga do runner) não foi medida. Se repetir, vale alargar a margem ou separar o tempo de criação do SQLite.
+
+O CI de `33e631c` passou nos quatro sistemas e o Release saiu na ``v0.1.510` (os smokes dos três sistemas mostram o `npm` embutido em 11.21.2, `pty.ok`, `contextDelivery.ok` e `npmRuntime.ok` verdadeiros)`. **Dependabot, conferido depois do lock
+novo na `main`: 22 alertas abertos no início da passada, 1 agora** (o `minimatch` médio, que depende do upstream); os
+3 altos e 2 médios de `undici`, o `zod` e o `ip-address` fecharam sozinhos.
