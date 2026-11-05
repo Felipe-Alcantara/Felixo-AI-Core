@@ -111,10 +111,17 @@ sendo uma possível melhoria, não uma etapa obrigatória do fluxo atual.
 3. Depois de um CI verde para um commit em `main`, o `Release gate` dispara o
    `release.yml` quando esse commit muda algo do instalador; o `release.yml`
    cria a pré-release, publica os artefatos de Linux, Windows e macOS e a
-   promove. O gate olha só o último commit do push: se ele for só de teste ou
-   de documentação, a publicação não sai sozinha.
-4. Um `workflow_dispatch` pode repetir a publicação (ou fazê-la no caso acima),
-   mas exige o SHA exato de um commit que já passou no CI.
+   promove. O gate compara o commit validado com o mais novo que já está
+   coberto por um Release: publicado (a tag de uma release que saiu de
+   pré-release) ou em andamento (a run do `release.yml` cujo título traz o
+   SHA). Por isso um commit de app não fica sem publicação porque o CI dele
+   falhou, nem porque um commit de teste ou de documentação veio depois, nem
+   porque o Release despachado para ele falhou: o próximo gate o inclui no
+   diff. Um commit que já tem Release publicada ou em andamento não despacha
+   outro.
+4. Um `workflow_dispatch` pode repetir a publicação sem esperar o próximo push
+   (por exemplo, depois de um Release que falhou), mas exige o SHA exato de um
+   commit que já passou no CI.
 5. O `electron-updater` detecta a nova versão em apps instalados.
 
 ---

@@ -49,17 +49,31 @@ jobs:
           # Qualquer falha ao ler o diff cai em `true`: na dúvida, publica.
           # Preserve UTF-8 path names: core.quotePath's default C escapes stop
           # the selector from recognizing ignored non-ASCII local-copy paths.
-          AVALIADOS="$(gh run list --workflow release-gate.yml --branch main --status completed --limit 1000 --json headSha,conclusion --jq '.[] | select(.conclusion == "success") | .headSha' 2>/dev/null || true)"
-          BASE="$(printf '%s\n' "$AVALIADOS" | release_base "$TARGET_SHA")"
-          if [[ -n "$BASE" ]]; then
-            FILES="$(git -c core.quotePath=false diff --name-only "$BASE" "$TARGET_SHA" 2>/dev/null || true)"
-            echo "Commit de base avaliado: $BASE"
-          else
+          #
+          # A base é o commit mais novo já coberto por um Release: publicado (a
+          # tag de uma release que saiu de pré-release) ou em andamento (o título
+          # da run, `run-name` do release.yml, traz o SHA). Um Release que falhou
+          # não cobre nada, então o commit de app dele volta ao diff do próximo
+          # gate. Falha ao listar vira lista vazia, ou seja, sem base: publica.
+          EM_ANDAMENTO="$(for estado in queued in_progress waiting requested pending; do gh run list --workflow release.yml --status "$estado" --json displayTitle --jq '.[].displayTitle' 2>/dev/null || true; done)"
+          PUBLICADOS="$(gh release list --exclude-drafts --exclude-pre-releases --limit 100 --json tagName --jq '.[].tagName' 2>/dev/null || true)"
+          COBERTOS="$(release_candidates "$EM_ANDAMENTO" "$PUBLICADOS")"
+          BASE="$(printf '%s\n' "$COBERTOS" | release_base "$TARGET_SHA")"
+          if release_covered "$TARGET_SHA" "$COBERTOS"; then
             FILES=""
-            echo "Nenhum commit de base confiável; decisão conservadora: publicar."
+            RELEVANT="false"
+            echo "Commit $TARGET_SHA já tem Release publicada ou em andamento."
+          else
+            if [[ -n "$BASE" ]]; then
+              FILES="$(git -c core.quotePath=false diff --name-only "$BASE" "$TARGET_SHA" 2>/dev/null || true)"
+              echo "Último commit coberto por um Release: $BASE"
+            else
+              FILES=""
+              echo "Nenhum commit de base confiável; decisão conservadora: publicar."
+            fi
+            RELEVANT="$(printf '%s\n' "$FILES" | release_relevant)"
           fi
-          RELEVANT="$(printf '%s\n' "$FILES" | release_relevant)"
-          echo "Arquivos alterados neste commit:"
+          echo "Arquivos alterados desde a base:"
           printf '%s\n' "$FILES"
           echo "Release relevante: $RELEVANT"
           echo "relevant=$RELEVANT" >> "$GITHUB_OUTPUT"

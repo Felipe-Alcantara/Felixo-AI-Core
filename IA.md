@@ -1902,3 +1902,58 @@ duas, e a exceção parou em 258.071 (a entrada diz 11 de 12 e quatro vezes). O
 README dos benchmarks já traz os números certos. O CI do `1ac57c5` passou nos
 quatro sistemas, e no Windows do CI o teste da soma de memória rodou com
 PowerShell de verdade.
+
+## 2026-11-05 — Release gate: a base do diff é o último commit coberto por um Release, não o último avaliado
+
+**Pedido.** Task de 25/09/2026 "Release gate comparar com o último commit
+publicado, não só com HEAD^", com cinco ocorrências reais anotadas (28/09, 29/09,
+30/09, 05/10 e 08/10). Agente Tasks OpenIA + AI Core.
+
+**Medido.**
+- A correção de 13/10 (`a90e91e`, `release-base.sh`) já tinha trocado `HEAD^` pelo
+  último commit que o próprio gate avaliou com sucesso. Isso resolve o cenário da
+  task (CI do commit de app falhou, o seguinte é de documentação: o gate pulado
+  não conta como avaliado), mas deixa uma brecha: o gate aprova o commit de app, o
+  Release despachado falha, e o commit de documentação seguinte compara com esse
+  commit "avaliado", vê só documentação e não publica nada, sem aviso.
+- Desde 21/09: 114 runs do `release.yml` (106 com sucesso, 4 falhas, 3 cancelados,
+  1 pulado). Depois de cada falha ou cancelamento, o próximo Release que publicou
+  veio em 0,1 a 0,5 h, menos em 05/10 (44,5 h, com CI vermelho no meio). Ou seja,
+  alguém notou e republicou; nenhum caso da brecha foi flagrado, mas nada no gate a
+  impedia.
+- 188 gates com sucesso desde 21/09: 108 despacharam Release e 80 decidiram "não
+  relevante". Só 2 dos 80 aconteceram com outro Release ainda rodando.
+
+**O que mudou.**
+- `release-base.sh`: a base é o commit mais novo já **coberto** por um Release:
+  publicado (o commit da tag de cada release fora de pré-release, `gh release list`)
+  ou em andamento (a run do `release.yml` na fila ou rodando; o título dela traz o
+  SHA). `release_base` passou a escolher o mais novo da linha do head, em qualquer
+  ordem; `release_candidates` monta a lista; `release_covered` pula o commit que já
+  tem Release.
+- `release.yml`: `run-name: Release ${{ inputs.commit_sha }}`, para o gate ler o
+  SHA nos títulos. Sem o título, um commit de documentação validado com o Release
+  de app ainda rodando despacharia outro Release e cancelaria o primeiro, que é o
+  que o cabeçalho do gate diz evitar.
+- `release-gate.yml`: usa as duas listas em vez dos 1.000 gates anteriores. Falha ao
+  listar vira lista vazia, e sem base o gate publica, como antes.
+- `GUIA-DESENVOLVEDOR.md` e `POLITICA-VERSIONAMENTO.md` (esta ainda dizia que o gate
+  olhava só o último commit do push).
+
+**Validação.** `release-base.test.sh` com 20 casos, seis dos quais falham contra o
+`release-base.sh` antigo (inclusive "o Release de R falhou: o commit de
+documentação ainda publica" e "o Release de R está em andamento: o commit de
+documentação não publica"); os outros cinco `*.test.sh` do `.github/scripts`
+passam. O bloco `run:` do passo do gate, executado localmente contra os dados
+reais do GitHub, deu: `916f1ca`, `1ac57c5` e `ef9ae2d` "não relevante";
+`02f245b` (o `main.cjs`) "relevante" com base na v0.1.505; `745d079`, que já tem
+release, "já tem Release". Um comentário meu no `release.yml` citava o caminho do
+`release-base.sh` e o `release-relevant.test.sh` o tomou por entrada do Release:
+reescrevi sem o caminho.
+
+**Não validado.** O gate de verdade: o primeiro run com esta mudança é o do
+próprio commit (ele mexe no `release.yml`, que é relevante, e publica uma
+versão). Que o `actions/checkout` com `fetch-depth: 0` traga as tags (sem elas a
+lista de publicados fica vazia e o gate publica por precaução, o que aparece no
+log). Que `gh run list --status` devolva o título com o `run-name` nas runs em
+andamento.

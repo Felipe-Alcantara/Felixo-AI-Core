@@ -1,5 +1,11 @@
 name: Release
 
+# O título da run leva o SHA do commit publicado: o Release gate lê os títulos
+# das runs em andamento (o `release_base` do gate) para saber que commits já têm
+# um Release a caminho, e não despachar outro, que cancelaria esse
+# (`concurrency` abaixo).
+run-name: Release ${{ inputs.commit_sha }}
+
 # Publica os instaladores dos três SOs a cada push em main — mas só depois
 # do CI daquele commit passar. `workflow_run` é o que permite esse
 # encadeamento: o gatilho é a CONCLUSÃO do CI, não o push em si, então um
