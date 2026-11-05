@@ -414,9 +414,14 @@ test('quarentena não vale fora do Windows nem para as outras contagens', () => 
 test('a soma de memória dos PTYs usa todos os pids de uma vez e ignora os que já saíram', async () => {
   // No Windows isto é um PowerShell só; antes eram 20 em paralelo a cada 250 ms.
   const { spawn } = require('node:child_process')
-  const filhos = [1, 2].map(() => spawn(process.execPath, ['-e', 'setTimeout(() => {}, 15000)'], { stdio: 'ignore' }))
+  const filhos = [1, 2].map(() =>
+    spawn(process.execPath, ['-e', "console.log('pronto'); setTimeout(() => {}, 15000)"], { stdio: ['ignore', 'pipe', 'ignore'] }),
+  )
   try {
-    await Promise.all(filhos.map((filho) => new Promise((resolve) => filho.once('spawn', resolve))))
+    // O evento `spawn` só diz que o processo foi criado: no macOS do CI o `node`
+    // ainda tinha ~3,7 MiB de memória residente nesse instante. A marca no stdout
+    // diz que ele terminou de subir, e é só então que passa de 20 MiB.
+    await Promise.all(filhos.map((filho) => new Promise((resolve) => filho.stdout.once('data', resolve))))
     const dois = await benchmark.sumProcessRssKiB(filhos.map((filho) => filho.pid))
     const comUmInexistente = await benchmark.sumProcessRssKiB([...filhos.map((filho) => filho.pid), 2 ** 22 + 99])
     const so = await benchmark.sumProcessRssKiB([filhos[0].pid])
