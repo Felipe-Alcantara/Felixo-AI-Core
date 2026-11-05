@@ -17,11 +17,12 @@
  * `pendingRelaunch` (e, depois do spawn, o pid do relançado); o processo
  * relançado, que nasce com `FELIXO_GPU_ENV_SANITIZED=1`, o apaga. Uma
  * abertura SEM essa marca que ainda encontra o pedido:
- * - com o relançado ainda nascendo (pedido com menos de `RELAUNCH_GRACE_MS`
- *   ou pid vivo), é a pessoa abrindo o app de novo enquanto nenhuma janela
- *   apareceu: segue no Automático sem gravar nada, e o relançado assume o
- *   pedido quando nascer;
- * - passado o prazo e com o pid morto, sabe que o relançado nunca nasceu
+ * - com o relançado ainda nascendo (sem pid: pedido com menos de
+ *   `RELAUNCH_GRACE_MS`; com pid: pid vivo, até `RELAUNCH_PID_MAX_AGE_MS`), é a
+ *   pessoa abrindo o app de novo enquanto nenhuma janela apareceu: segue no
+ *   Automático sem gravar nada, e o relançado assume o pedido quando nascer;
+ * - com o pid morto (mesmo dentro do prazo curto) ou, sem pid, passado o
+ *   prazo, sabe que o relançado nunca nasceu
  *   (medido em 26/09/2026: no AppImage, o `app.relaunch()` antes do
  *   `whenReady` não traz o app de volta) e volta para Automático em vez de
  *   relançar de novo.
@@ -74,11 +75,16 @@ function defaultIsProcessAlive(pid) {
 function isGpuRelaunchInProgress(pendingRelaunch, { nowMs, isProcessAlive }) {
   if (!pendingRelaunch) return false
   const startedMs = pendingRelaunch.startedAt ? Date.parse(pendingRelaunch.startedAt) : Number.NaN
-  // Relógio que voltou no tempo (idade negativa) não prova nada: só o pid vale.
-  const ageMs = Number.isFinite(startedMs) && Number.isFinite(nowMs) && nowMs >= startedMs ? nowMs - startedMs : null
-  if (ageMs !== null && ageMs < RELAUNCH_GRACE_MS) return true
-  if (!Number.isInteger(pendingRelaunch.pid)) return false
-  if (ageMs !== null && ageMs >= RELAUNCH_PID_MAX_AGE_MS) return false
+  // Sem data legível a idade não dá para provar, e o teto do pid não teria como
+  // valer: não segura a escolha.
+  if (!Number.isFinite(startedMs) || !Number.isFinite(nowMs)) return false
+  // Módulo: relógio que voltou no tempo (ajuste manual, bateria da placa-mãe)
+  // também mede o quanto o pedido está longe de agora, e o teto de 5 min vale.
+  const ageMs = Math.abs(nowMs - startedMs)
+  // Sem pid (`app.relaunch()` não o devolve), só o prazo curto diz que o relançado ainda nasce.
+  if (!Number.isInteger(pendingRelaunch.pid)) return ageMs < RELAUNCH_GRACE_MS
+  // Com pid, vale o pid, até o teto: um processo já morto não está nascendo, mesmo dentro do prazo curto.
+  if (ageMs >= RELAUNCH_PID_MAX_AGE_MS) return false
   try {
     return Boolean(isProcessAlive(pendingRelaunch.pid))
   } catch {

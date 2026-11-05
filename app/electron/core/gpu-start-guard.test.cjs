@@ -230,6 +230,58 @@ test('um pid reaproveitado por outro processo não prende a escolha para sempre'
   assert.equal(muchLater.revertedFromPreviousStart.reason, 'relaunch-failed')
 })
 
+test('com o pid anotado e o processo já morto, o prazo curto não segura a escolha: o relançado morreu', () => {
+  const profile = profileWith('integrada')
+  prepare(profile, { environment: { ...PRIME_RUN_ENV } })
+  recordGpuRelaunchChild({ userDataPath: profile, pid: 4242 })
+
+  // Morto 5 s depois do pedido: não há nada nascendo, o prazo de 30 s só vale sem pid.
+  const dead = prepare(profile, { environment: { ...PRIME_RUN_ENV }, now: after(5_000), isProcessAlive: () => false })
+  assert.equal(dead.notApplied, null)
+  assert.equal(dead.revertedFromPreviousStart.reason, 'relaunch-failed')
+  assert.equal(readGpuPreferenceState(profile).preference, 'auto')
+
+  // Vivo no mesmo instante, ainda é o relançado nascendo.
+  const alive = profileWith('integrada')
+  prepare(alive, { environment: { ...PRIME_RUN_ENV } })
+  recordGpuRelaunchChild({ userDataPath: alive, pid: 4242 })
+  assert.equal(
+    prepare(alive, { environment: { ...PRIME_RUN_ENV }, now: after(5_000), isProcessAlive: () => true }).notApplied,
+    'relaunch-in-progress',
+  )
+})
+
+test('relógio atrasado não tira o teto de 5 minutos do pid vivo', () => {
+  const profile = profileWith('integrada')
+  prepare(profile, { environment: { ...PRIME_RUN_ENV } })
+  recordGpuRelaunchChild({ userDataPath: profile, pid: 4242 })
+
+  // O relógio voltou 3 horas depois do pedido: a idade negativa não prova que o
+  // pid ainda é o do relançado, e um pid reaproveitado prenderia a escolha.
+  const behind = prepare(profile, { environment: { ...PRIME_RUN_ENV }, now: after(-3 * 60 * 60_000), isProcessAlive: () => true })
+  assert.equal(behind.revertedFromPreviousStart.reason, 'relaunch-failed')
+  assert.equal(readGpuPreferenceState(profile).preference, 'auto')
+
+  // Um recuo de segundos (ajuste do relógio pela rede) continua sendo o relançado nascendo.
+  const slewed = profileWith('integrada')
+  prepare(slewed, { environment: { ...PRIME_RUN_ENV } })
+  recordGpuRelaunchChild({ userDataPath: slewed, pid: 4242 })
+  assert.equal(
+    prepare(slewed, { environment: { ...PRIME_RUN_ENV }, now: after(-2_000), isProcessAlive: () => true }).notApplied,
+    'relaunch-in-progress',
+  )
+})
+
+test('pedido sem data legível e com pid vivo não prende a escolha: a idade não dá para provar', () => {
+  const profile = profileWith('integrada')
+  fs.writeFileSync(
+    path.join(profile, GPU_PREFERENCE_FILE),
+    JSON.stringify({ preference: 'integrada', pendingRelaunch: { preference: 'integrada', startedAt: 'ontem', pid: 4242 } }),
+  )
+  const start = prepare(profile, { environment: { ...PRIME_RUN_ENV }, isProcessAlive: () => true })
+  assert.equal(start.revertedFromPreviousStart.reason, 'relaunch-failed')
+})
+
 test('o pid só é anotado num pedido que ainda existe', () => {
   const profile = profileWith('integrada')
   prepare(profile, { environment: { ...PRIME_RUN_ENV } })
