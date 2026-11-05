@@ -1,4 +1,4 @@
-import { lazy, memo, Suspense, useCallback, useMemo, useRef } from 'react'
+import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef } from 'react'
 import { NODE_MIN_SIZE } from '../services/node-geometry'
 import {
   Handle,
@@ -11,6 +11,7 @@ import { Loader2 } from 'lucide-react'
 import { NodeHeader } from './NodeHeader'
 import type { ExcalidrawDrawingNodeData } from '../types'
 import type { ExcalidrawScene } from './ExcalidrawCanvas'
+import { sceneToPersist } from './excalidraw-scene'
 
 /**
  * Data carried by an Excalidraw drawing node. `onDataChange` is injected by
@@ -52,11 +53,25 @@ function ExcalidrawDrawingNodeComponent({ id, data, selected }: NodeProps) {
   const saveTimer = useRef<number | undefined>(undefined)
   const { deleteElements } = useReactFlow()
 
+  // A cena que o bloco já tem gravada: o `onChange` do Excalidraw também dispara
+  // sem edição (a cada atualização do componente), e gravar de novo a mesma cena
+  // reiniciava o ciclo uma vez por segundo. Fica numa ref sincronizada por efeito
+  // para o callback agendado comparar com o valor de agora, não o de quando foi
+  // agendado.
+  const savedSceneRef = useRef(nodeData.scene)
+  useEffect(() => {
+    savedSceneRef.current = nodeData.scene
+  }, [nodeData.scene])
+
   const handleSceneChange = useCallback(
     (scene: ExcalidrawScene) => {
       if (saveTimer.current) window.clearTimeout(saveTimer.current)
       saveTimer.current = window.setTimeout(() => {
-        onDataChange?.(id, { scene: scene.elements.length ? JSON.stringify(scene) : '' })
+        const next = sceneToPersist(scene, savedSceneRef.current)
+        if (next === null) return
+        // Antes de o estado voltar do canvas: um segundo `onChange` na espera não regrava.
+        savedSceneRef.current = next
+        onDataChange?.(id, { scene: next })
       }, SCENE_SAVE_DEBOUNCE_MS)
     },
     [id, onDataChange],
