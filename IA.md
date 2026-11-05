@@ -888,3 +888,11 @@ levou segundos; cada pausa de 1 s entre mudanças fecha um ciclo de debounce): s
 quantas seriam num uso normal. O `onChange` continua novo a cada render do `ExcalidrawCanvas` (o Excalidraw atualiza sem
 necessidade a cada render do pai); a comparação corta a gravação, não esse render, e não mexi nele. O debounce de 600 ms sem
 flush ao fechar o app (outra lacuna do inventário) segue como está. Não olhei macOS nem Linux.
+
+**Adendo (2026-11-05, depois do push): CI, Release e uma correção de precisão.** O CI de `2080d8c` (run 42080331611) passou em
+Windows, macOS, Ubuntu, Ubuntu ARM e no `Canvas smoke (ubuntu-latest)`, onde o SA1 rodou com o bloco Excalidraw na fixture; o
+Release gate (run 42081536576) e o Release (run 42081581788) saíram verdes e publicaram a `v0.1.515`, nos três sistemas. **Não
+conferido:** o SA1 com o Excalidraw no Windows e no macOS do CI, porque o smoke do canvas só roda lá na Nightly das 06:00 UTC
+(a de 06/11/2026); no Windows local passou. **Correção de precisão:** acima, a gravação única no carregamento da cena não vazia
+está atribuída "à ordenação do canvas"; a causa não foi isolada (pode ser a normalização da cena ao abrir). O que a medição
+prova é que não há regravação contínua depois dela.
