@@ -9,21 +9,16 @@
   nos arquivos de docs/ia-archive/.
 -->
 
-Última atualização: [2026-11-03]
+Última atualização: [2026-11-05]
 
 - **Fase:** o canvas é o produto principal (o chat está depreciado). A divisão do `CanvasView`
   (partes 1 a 4) e o bloco Agente na nuvem estão na `main`: PRs #113 a #120 mesclados.
-- **Padrão de qualidade:** auditado e alinhado em 2026-10-12 e de novo em 2026-10-23 (ver as duas
-  entradas). Gate verde no Windows em 23/10: `tsc`, `eslint`, Python 104, Node 2962, vitest 3256;
-  `npm audit` sem crítico, sem alto e com a produção em 0 (sobram 2 moderados: o `ip-address`
-  embutido no npm e o Electron 41, linha sem suporte). Publicado na `v0.1.479`; o PR #128 foi integrado na
-  `v0.1.480` e o repositório ficou sem PR aberto e só com a `main`. Em 12/10, no CI de
-  `37d6083`,
-  `Validate` (4 sistemas) e `Launcher` (3 sistemas, Python 3.9 e 3.13) passaram; só o job
-  exploratório `Benchmarks exploratórios (windows-latest)`, que é `continue-on-error`, falhou no
-  passo de responsividade do terminal e não foi investigado. Os commits seguintes (compactação dos
-  `IA.md`, divisão do README e o Agente na nuvem no menu Agente) foram enviados à `main`
-  (`e7b7efe..d952f5b`) e o CI de `d952f5b` passou nos 22 jobs, inclusive esse exploratório do Windows.
+- **Padrão de qualidade:** auditado e alinhado em 2026-10-12, 2026-10-23 e 2026-11-05 (ver as três
+  entradas). Gate verde no Windows em 05/11: `tsc`, `eslint`, Python 105, Node 3105, vitest 3377, `test:native` 9;
+  `npm audit` sem crítico e sem alto, com a produção em 0 (sobram 46 moderados de desenvolvimento: `glob` e
+  `minimatch` embutidos no `npm` e no `@electron/universal`, sem conserto que não seja rebaixar versão). O app está no
+  Electron 42.11.16 (`v0.1.509`); a 42 não é a linha mais nova, e a migração para uma linha suportada tem task
+  própria. O repositório ficou sem PR aberto, só com a `main`, e sem alerta de secret scanning aberto.
 - **Claude por chave de API:** conta do Claude por chave abre um bloco de conversa (Claude Code sem tela, que usa o crédito promocional do Agent SDK); ver a entrada de 2026-10-19.
 - **Memória de longo prazo (ai-memory, 2026-10-21):** instalado na máquina (serviço no logon, MCP e hooks por usuário no Claude Code, Codex e Copilot). Este repositório tem o bloco gerenciado no `CLAUDE.md` e no `AGENTS.md` e as skills `ai-memory-*`; a captura vale para todos os projetos e a entrega dos eventos acontece nas fronteiras da sessão. Ver a entrada de 2026-10-21 "ai-memory instalado".
 - **Instalador e árvore de processos (2026-10-21):** o `release-smoke.cjs` passou a cancelar e expirar a instalação de uma CLI pelo app empacotado e a provar, com uma sonda independente, que nenhum processo da árvore do npm sobra (`app/scripts/installer-kill-smoke.cjs`, nos três SOs do Release). Visto rodando fora do CI só no Windows; o macOS real segue pendente (roteiro em `docs/validation/CHECKLIST-INSTALADOR-ARVORE-DE-PROCESSOS.md`). Ver a entrada de 2026-10-21 "Instalador: cancelar e expirar pelo app empacotado".
@@ -669,3 +664,106 @@ o `run-name` chega ao `gh run list`. O CI do commit levou 19 s porque o
 `ci-scope.sh` pulou os jobs de app (só workflows, scripts e documentação
 mudaram). Seguem sem aparecer em produção: um Release que falha seguido de um
 commit de documentação, e a lista de publicados vindo vazia.
+
+## 2026-11-05 — Padrão de qualidade, terceira passada: janela de senha do Git, alertas de dependência, IA.md compactado e GitHub limpo
+
+**Contexto.** Pedido do Felipe, com uma captura do GitHub Desktop que mostrava um PR aberto e duas branches além
+da `main`: colocar o repositório no padrão de qualidade do Felixo System Design, treze dias depois da segunda
+passada (entrada de 2026-10-23). A régua não mudou: o clone local `Felixo-System-Design` está no `cc4aae7`, o mesmo
+commit das duas passadas anteriores. A auditoria seguiu o Guia Mínimo de Qualidade (13 itens e checklist), a
+política de git, o template de `IA.md`, o guia do `start_app.py` e o de README. A leitura das duas entradas
+anteriores evitou refazer o que já estava conforme.
+
+**Já conforme, medido de novo, não refazer.** `start_app.py --help` responde; `requirements.txt` com hashes e
+`package-lock.json` versionado; CI em matriz de quatro sistemas; nenhum padrão de segredo fora de testes (chave
+privada, `ghp_`, `github_pat_`, `sk-ant-`, `AKIA`, `AIzaSy`) e só o `.env.example` versionado; 168 links relativos
+válidos em 148 `.md` (o verificador achou os 2 erros plantados no controle negativo); README com Índice, Estrutura do
+repositório, Licença e contribuições e Autor; raiz sem script solto. No GitHub: secret scanning, push protection e
+Dependabot de segurança ligados, `main` protegida com 12 checks obrigatórios, branch apagada ao mesclar, licença MIT.
+
+**Gate medido antes de mexer** (Windows 11, Node 25.3.0, npm 11.6.2, Python 3.14.2, `95c8283`): `tsc -b` e
+`eslint .` limpos; Python 105 testes OK (2 pulados); Node 3104 testes, 3094 passam, 0 falham, 9 pulados e **1
+cancelado por timeout de 45 s**; vitest 216 arquivos e 3377 testes passam (3 pulados), com 4 workers; `test:native`
+9 de 9; `npm audit` completo com **51 avisos (48 moderados, 3 altos)** e a produção em 0.
+
+**O estado do GitHub que a captura mostrava.** PR #132 do Dependabot (Electron 41 para 42, `undici`, `fast-uri`)
+aberto desde 26/10 e bloqueado por um check de launcher que a `main` já tinha consertado; 22 alertas de Dependabot
+abertos (8 altos: `electron` e `undici`), todos em `app/package-lock.json` e de desenvolvimento; 1 alerta de secret
+scanning; a branch `fix/abrir-terminal-cancela-fechamento` (PR #128, fechado, com o conteúdo já na `main` em
+`ac72475`); e o `dependabot.yml` pedindo 4 labels que o repositório não tinha.
+
+**O que mudou.**
+
+1. **O Git sem clique não abre mais a janela de senha (`d0fe333`).** O teste cancelado era um defeito de produto, o
+   mesmo da pendência de 04/11. Para pedir senha por HTTPS o Git procura `GIT_ASKPASS`, `core.askpass` e `SSH_ASKPASS`
+   (que o Git Bash define), e `SSH_ASKPASS_REQUIRE` só vale para o `ssh`. `GIT_ASKPASS` vazio, mas definido, no
+   ambiente "sem clique" impede a busca. O teste do Git real foi de 45 s (timeout, com um `git-askpass` vivo na tela)
+   para 678 ms, sem janela. Publicado na `v0.1.508`.
+2. **`IA.md` da raiz compactado (`3529cc6`).** 1970 para 671 linhas; 21 seções de outubro foram para
+   `IA-ARCHIVE-2026-10.md`; 0 linhas perdidas na prova independente.
+3. **Dependências.** PR #132 (`bac3cfd`): Electron 41.10.7 para 42.11.16, `undici` 6.29.1 e 7.30.2, `fast-uri` 3.1.9;
+   o CI do PR passou nos quatro sistemas (13 checks, 0 falhas). Publicado na `v0.1.509`. Depois, só no lock e com o
+   npm do próprio projeto (`54521f0`): `npm` embutido 11.21.1 para 11.21.2 (traz `undici` 6.29.1 e `ip-address`
+   10.7.5) e `zod` 4.3.6 para 4.6.7. `npm audit`: **51 para 46 avisos, altos 3 para 0, produção 0.**
+4. **GitHub.** Os 4 labels do `dependabot.yml` foram criados (o aviso "labels could not be found" do #132 era de
+   26/10); a branch do #128 foi apagada (recria com `git branch fix/abrir-terminal-cancela-fechamento
+   8ced745fd10de14eb7d73768c615439c9c09dbdd`; o commit segue em `refs/pull/128/head`); o alerta de secret scanning #1
+   foi dispensado como `used_in_tests` (o valor é um alfabeto em ordem, fabricado). Alertas do Dependabot: 22 para 5
+   depois do merge do #132 (3 altos e 1 médio de `undici`, o 6.29.0 embutido no `npm` 11.21.1, e 1 médio de
+   `minimatch`); o lock novo traz o `undici` 6.29.1.
+
+**Gate depois das mudanças** (Windows 11, árvore com Electron 42.11.16 e o lock novo): `tsc -b` e `eslint .`
+limpos; Python 105 testes OK (2 pulados); Node 3105 testes, 3096 passam, 0 falham, 0 cancelados, 9 pulados (94 s);
+vitest 216 arquivos e 3377 testes passam (3 pulados); `test:native` 9 de 9; `npm audit` com **46 avisos moderados,
+0 altos, 0 críticos** e a produção em 0. No Release `v0.1.509` os relatórios de smoke do instalador (`pty.ok`,
+`contextDelivery.ok`, `npmRuntime.ok`) deram verdadeiro nos três sistemas, e o do Windows, comparado com o da
+`v0.1.508` (Electron 41), só difere em tamanho (instalador 190,6 para 195,6 MB) e tempo (abertura 522 para 414 ms);
+`installerKill.control=false` é igual nas duas versões, ou seja, é desenho. O app aberto de fonte com `node
+electron/cli/felixo.cjs devtools launch` (perfil isolado) mostrou `Electron/42.11.16` e `Chrome/148` e renderizou o
+canvas.
+
+**Armadilhas de método, para a próxima pessoa.**
+
+- **Neste disco (`J:`), `fs.rmSync` volta sem erro e não apaga o arquivo; `fs.unlinkSync` apaga.** Medido com Node 25.3.0
+  no Windows: no `C:` os dois funcionam. Um script de limpeza que use `rmSync` aqui deixa lixo na árvore.
+- **`gh pr edit` exige o escopo `read:project` no token.** Para rotular um PR sem ele: `gh api -X POST
+  repos/<dono>/<repo>/issues/<n>/labels -f 'labels[]=nome'`.
+- **`npm audit fix --dry-run` só propõe rebaixar** `eslint`, `electron-builder` e `npm` para majors antigas: as 46
+  moderadas que sobram são `glob` e `minimatch` (no `npm` embutido e no `@electron/universal`) e dependem de o upstream
+  publicar versões novas. Antes de atualizar o `npm` embutido, conferi o que o tarball traz: `npm pack npm@11.21.2` e
+  ler `package/node_modules/<pacote>/package.json`.
+- **O lock de dependências se edita com o npm do projeto** (`node app/node_modules/npm/bin/npm-cli.js update <pacote>
+  --package-lock-only`), não com o da máquina; conferi com `npm ci --dry-run` e uma instalação limpa.
+- **Um push de dependência durante um Release em andamento cancela o Release** (`cancel-in-progress` do
+  `release.yml`); só o commit só de documentação é protegido pelo gate. Esperei o Release do Electron terminar antes de
+  enviar o do lock.
+- **`node_modules/electron/dist/electron.exe` com 4 MB e `spawn EFTYPE` ou "Exec format error" é extração
+  interrompida.** Apareceu depois que encerrei à força uma árvore de `npm test` pendurada (os arquivos do `dist` têm o
+  horário desse minuto; não sei se foi a causa). Conserto sem baixar de novo: `fs.unlinkSync` em `dist/version` e
+  `node node_modules/electron/install.js`, que extrai do cache (`%LOCALAPPDATA%\electron\Cache`).
+- **O shim global `%APPDATA%\felixo-ai-core\bin\felixo.cmd` ainda aponta para uma instalação de smoke em `%TEMP%`** e não
+  tem `devtools`; de fonte, o caminho é `cd app && node electron/cli/felixo.cjs devtools launch`.
+- **Um `npm test` ficou pendurado uma vez e não reproduziu.** Eram 15 arquivos do primeiro lote parados, com CPU ~0,
+  por mais de 4 minutos, logo depois de um `npm ci`, com 1,6 GB de RAM livre; rodando de novo na mesma árvore, deu 3105
+  testes e 0 cancelados em 94 s. Causa não achada. Das três execuções desta passada, uma pendurou.
+
+**Observações que ficaram como estavam, de propósito.**
+
+- Arquivos grandes, sinal de refatoração segundo o guia: `app/src/index.css` (5542 linhas), `terminal-session-store.ts`
+  (3187), `CanvasView.tsx` (2516), `canvas-smoke-onboarding.cjs` (1968). Já eram conhecidos; não é escopo desta passada.
+- Cinco comentários de código citam o nome de usuário "Felipe Martins" para documentar o bug do caminho com espaço
+  (`cli-detector.cjs`, `cli-diagnostics.cjs`, `openia-service.cjs`, `pty-process-manager.cjs` e
+  `openia-windows-limpo.cjs`): não afetam comportamento.
+- O Electron 42 também não é a linha mais nova (a 45 existe no registro); a migração para uma linha suportada tem
+  task própria. Não conferi o calendário oficial de suporte.
+- Sobram 46 avisos moderados de desenvolvimento, sem conserto que não seja rebaixar versão.
+
+**Não validado.** O instalador da `v0.1.509` não foi instalado nem aberto à mão neste Windows (o smoke do Release o
+instala e roda no `windows-latest`). Na abertura local de fonte, o terminal (PTY) de verdade não foi exercitado: ele
+está coberto pelo `test:native` (9 de 9) e pelo `pty.ok` do smoke do instalador nos três sistemas. A causa do
+`npm test` pendurado e a do `electron.exe` truncado seguem sem explicação. A consulta de alertas do Dependabot depois
+do push do lock fica para ser conferida (esperado: os 4 de `undici` fecham).
+
+**Evidência.** `app/scripts/archive-ia-md.cjs --file IA.md --keep-from 2026-10-29 --apply` (prova do script e prova
+independente do multiconjunto de linhas); `npm audit` antes e depois; runs do CI, do gate e dos Releases de cada
+commit; verificador de links com controle negativo (fora do repositório).
