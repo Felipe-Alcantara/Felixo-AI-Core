@@ -181,9 +181,72 @@ function describeCase({ theme, viewport, performance }) {
   return `${theme}-${viewport.width}x${viewport.height}-dpr${viewport.deviceScaleFactor}${performance ? '-performance' : ''}`
 }
 
+/**
+ * Barra de status com a gaveta do terminal aberta e um bloco selecionado (abrir
+ * a gaveta seleciona o terminal): a gaveta tira a largura do canvas, e a barra
+ * media 160 px em 1320 e 32 px em 768, quebrando linha e deixando o Remover para
+ * fora da caixa. Nesses dois viewports ela não pode quebrar nem estourar, e o
+ * Remover tem de estar na barra, na janela e receber o clique (task
+ * 3e791f95-497e-81bd-8e8c-de6f9e16cec5).
+ */
+const STATUSBAR_DRAWER_VIEWPORTS = [
+  { width: 1320, height: 800 },
+  { width: 768, height: 900 },
+]
+
+/**
+ * Roda no renderer (`page.evaluate`): não pode usar nada de fora desta função.
+ * `elementFromPoint` no centro do botão diz se o clique chega nele, e não em
+ * outra superfície por cima (o inspector "Elementos" cobria a barra).
+ */
+function medirBarraDeStatus() {
+  const bar = document.querySelector('.felixo-canvas-statusbar')
+  const button = bar?.querySelector('.felixo-statusbar-action') ?? null
+  const box = (element) => {
+    const { left, top, right, bottom } = element.getBoundingClientRect()
+    return { left, top, right, bottom }
+  }
+  let buttonHit = false
+  if (button) {
+    const { left, top, right, bottom } = button.getBoundingClientRect()
+    const hit = document.elementFromPoint((left + right) / 2, (top + bottom) / 2)
+    buttonHit = Boolean(hit) && (hit === button || button.contains(hit))
+  }
+  return {
+    bar: bar ? box(bar) : null,
+    button: button ? box(button) : null,
+    buttonHit,
+    overflowX: bar ? bar.scrollWidth - bar.clientWidth : 0,
+    overflowY: bar ? bar.scrollHeight - bar.clientHeight : 0,
+    viewport: { width: window.innerWidth, height: window.innerHeight },
+  }
+}
+
+/**
+ * `measure`: o que `medirBarraDeStatus` devolve. Cada problema vem com o tipo
+ * e o dado que o provou, para a falha dizer o que quebrou sem reexecutar.
+ */
+function findStatusbarProblems(measure, tolerance = 1) {
+  const { bar, button, buttonHit, overflowX, overflowY, viewport } = measure
+  if (!bar) return [{ tipo: 'barra-ausente' }]
+  if (!button) return [{ tipo: 'remover-ausente' }]
+  const problems = []
+  if (overflowX > tolerance) problems.push({ tipo: 'conteudo-estoura-a-barra', overflowX })
+  if (overflowY > tolerance) problems.push({ tipo: 'quebra-linha', overflowY })
+  const insideBar = button.left >= bar.left - tolerance && button.right <= bar.right + tolerance &&
+    button.top >= bar.top - tolerance && button.bottom <= bar.bottom + tolerance
+  if (!insideBar) problems.push({ tipo: 'remover-fora-da-barra', button, bar })
+  if (button.left < -tolerance || button.right > viewport.width + tolerance) {
+    problems.push({ tipo: 'remover-fora-da-janela', button, viewport })
+  }
+  if (!buttonHit) problems.push({ tipo: 'remover-coberto', button })
+  return problems
+}
+
 module.exports = {
   ALLOWED_OUTSIDE,
   ALLOWED_OVERLAPS,
+  STATUSBAR_DRAWER_VIEWPORTS,
   THEMES,
   VIEWPORTS,
   MATRIX_SURFACES,
@@ -191,5 +254,7 @@ module.exports = {
   buildMatrixCases,
   describeCase,
   findMissingSurfaces,
+  findStatusbarProblems,
   findSurfaceOverlaps,
+  medirBarraDeStatus,
 }

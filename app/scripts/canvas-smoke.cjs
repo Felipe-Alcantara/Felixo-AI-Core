@@ -37,12 +37,15 @@ const {
 const {
   MATRIX_SURFACES,
   OVERLAP_THRESHOLD_CSS_PX,
+  STATUSBAR_DRAWER_VIEWPORTS,
   THEMES: MATRIX_THEMES,
   VIEWPORTS: MATRIX_VIEWPORTS,
   buildMatrixCases,
   describeCase,
   findMissingSurfaces,
+  findStatusbarProblems,
   findSurfaceOverlaps,
+  medirBarraDeStatus,
 } = require('./canvas-smoke-matriz.cjs')
 const { corromperEstadoNoPerfil, criarCenariosDoTutorial, registrarPerguntaNoPerfil } = require('./canvas-smoke-onboarding.cjs')
 const { criarSessaoDaCadeia } = require('./canvas-smoke-contas.cjs')
@@ -532,6 +535,46 @@ async function checarAuditoriaDeAcessibilidade(page) {
   }
 }
 
+/**
+ * Com a gaveta do terminal aberta (o terminal fica selecionado) a barra de
+ * status não pode quebrar linha nem estourar, e o Remover tem de ficar na
+ * barra, na janela e receber o clique, em 1320 e em 768 px (critério de aceite
+ * da task 3e791f95-497e-81bd-8e8c-de6f9e16cec5). Mede de novo até assentar: a
+ * barra anima o `left` por 180 ms depois de cada resize. Devolve a janela ao
+ * tamanho de antes, com a gaveta ainda aberta.
+ */
+async function checarBarraComGaveta(page) {
+  const original = await page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }))
+  const problemas = []
+  try {
+    for (const viewport of STATUSBAR_DRAWER_VIEWPORTS) {
+      await page.setViewportSize(viewport)
+      await waitForViewport(page, viewport)
+      await esperarAte(
+        async () => findStatusbarProblems(await page.evaluate(medirBarraDeStatus)).length === 0,
+        { timeoutMs: INTERACTION_TIMEOUT_MS },
+      )
+      const medida = await page.evaluate(medirBarraDeStatus)
+      const achados = findStatusbarProblems(medida)
+      const label = 'gaveta-barra-' + viewport.width + 'x' + viewport.height
+      await recordVisualEvidence(
+        page,
+        label,
+        ['.felixo-canvas-statusbar', '[data-canvas-terminal-drawer]'],
+        { event: 'drawer-statusbar', requestedViewport: viewport, statusbar: medida, problems: achados },
+      )
+      for (const achado of achados) problemas.push({ caso: label, ...achado })
+    }
+  } finally {
+    await page.setViewportSize(original)
+    await waitForViewport(page, original)
+  }
+  if (problemas.length) {
+    visualReport.failure = { scenario: 'barra-com-gaveta', message: problemas.length + ' problemas' }
+    throw new Error('[canvas-smoke] barra de status com a gaveta aberta: ' + JSON.stringify(problemas))
+  }
+}
+
 async function checarInteracoes(page) {
   const group = page.locator('[data-id="fixture-group"]')
   // Use a real pointer hit test here. This catches a fixed surface or the
@@ -613,6 +656,7 @@ async function checarInteracoes(page) {
     [...CORE_LAYOUT_SELECTORS, '[data-canvas-terminal-drawer]', '[data-felixo-mock-terminal="fixture-terminal"]'],
     { event: 'drawer-open', fixture: 'mock-agent' },
   )
+  await checarBarraComGaveta(page)
   await page.getByRole('button', { name: 'Fechar terminal' }).click()
   await page.waitForFunction(() => !document.querySelector('[data-canvas-terminal-drawer]'), null, { timeout: INTERACTION_TIMEOUT_MS })
   const focusAfterDrawer = await page.evaluate(() => ({

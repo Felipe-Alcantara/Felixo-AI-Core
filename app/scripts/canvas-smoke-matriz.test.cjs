@@ -7,9 +7,11 @@ const {
   ALLOWED_OUTSIDE,
   ALLOWED_OVERLAPS,
   MATRIX_SURFACES,
+  STATUSBAR_DRAWER_VIEWPORTS,
   buildMatrixCases,
   describeCase,
   findMissingSurfaces,
+  findStatusbarProblems,
   findSurfaceOverlaps,
 } = require('./canvas-smoke-matriz.cjs')
 
@@ -115,4 +117,56 @@ test('toda permissão de superfície fora da janela nomeia superfície medida, m
     assert.ok(entry.motivo?.trim(), `${entry.name} sem motivo`)
     assert.match(entry.task, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)
   }
+})
+
+// Barra de status com a gaveta aberta e um bloco selecionado (task 3e791f95).
+const barra = (over = {}) => ({
+  bar: rect(240, 870, 726, 900),
+  button: rect(565, 875, 643, 897),
+  buttonHit: true,
+  overflowX: 0,
+  overflowY: 0,
+  viewport: { width: 1320, height: 900 },
+  ...over,
+})
+
+test('a barra com a gaveta aberta é medida em 1320 e em 768 px (critério de aceite)', () => {
+  assert.deepEqual(STATUSBAR_DRAWER_VIEWPORTS.map((viewport) => viewport.width), [1320, 768])
+})
+
+test('barra de uma linha, com o Remover dentro dela e recebendo o clique, não tem problema', () => {
+  assert.deepEqual(findStatusbarProblems(barra()), [])
+  const estreita = barra({ bar: rect(240, 870, 328, 900), button: rect(256, 875, 284, 897), viewport: { width: 768, height: 900 } })
+  assert.deepEqual(findStatusbarProblems(estreita), [])
+})
+
+test('o estado de antes da correção reprova: texto que estoura e quebra, e Remover fora da caixa e coberto', () => {
+  // Medido em 05/11/2026 no `HEAD` (474b0a7), janela de 1320 px com a gaveta
+  // aberta e o terminal selecionado: barra de 240 a 446, botão de 560 a 682 e
+  // o clique no centro dele não chegava ao botão (o inspector ficava por cima).
+  const antes = barra({
+    bar: rect(240, 870, 446, 900),
+    button: rect(560.2, 874.5, 682.3, 896.5),
+    buttonHit: false,
+    overflowX: 291,
+    overflowY: 2,
+    viewport: { width: 1320, height: 900 },
+  })
+  assert.deepEqual(findStatusbarProblems(antes).map((problem) => problem.tipo), [
+    'conteudo-estoura-a-barra',
+    'quebra-linha',
+    'remover-fora-da-barra',
+    'remover-coberto',
+  ])
+})
+
+test('acusa barra ou botão ausente e botão fora da janela', () => {
+  assert.deepEqual(findStatusbarProblems(barra({ bar: null })), [{ tipo: 'barra-ausente' }])
+  assert.deepEqual(findStatusbarProblems(barra({ button: null })), [{ tipo: 'remover-ausente' }])
+  const fora = findStatusbarProblems(barra({ bar: rect(240, 870, 1400, 900), button: rect(1300, 875, 1380, 897) }))
+  assert.deepEqual(fora.map((problem) => problem.tipo), ['remover-fora-da-janela'])
+})
+
+test('meio pixel de arredondamento não é estouro nem quebra', () => {
+  assert.deepEqual(findStatusbarProblems(barra({ overflowX: 1, overflowY: 1 })), [])
 })
