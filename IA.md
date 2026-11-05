@@ -855,3 +855,11 @@ primeira execução do `canvas-smoke` sessão A (3 tentativas) o `page.screensho
 estourou 30 s e a sessão passou na repetição ("passou-com-instabilidade"); uma segunda execução, com uma tentativa só
 (`FELIXO_SMOKE_TENTATIVAS=1`), passou de primeira. O cenário novo passou nas três passagens; a causa do estouro de
 30 s não foi achada.
+
+**Adendo (2026-11-05, depois do push): CI e Release.** O CI de `e1f6c9f` (run 42048717046) passou em Windows, macOS,
+Ubuntu, Ubuntu ARM e no `Canvas smoke (ubuntu-latest)`, que roda o cenário `checarBarraComGaveta` no Linux/xvfb; o Release
+gate (run 42049624490) e o Release (run 42049666406) saíram verdes e publicaram a `v0.1.511`, com as etapas "Validate
+installed release artifact" em `ok: true` nos três sistemas. **Não conferido:** o cenário novo no Windows e no macOS do
+CI, porque o smoke do canvas só roda lá na Nightly das 06:00 UTC (a de 06/11/2026 é a primeira conferência; task aberta
+no Notion para ler o resultado, no tema de alto contraste e com a sidebar recolhida). Task aberta também para o estouro
+de `page.screenshot` da primeira execução local do smoke.
