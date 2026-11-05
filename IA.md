@@ -101,27 +101,7 @@ Registros antigos movidos, na íntegra e sem edição, para o arquivo. A linha d
 - [2026-10-12] Registros de 2026-09 (95 seções) movidos para [docs/ia-archive/IA-ARCHIVE-2026-09.md](docs/ia-archive/IA-ARCHIVE-2026-09.md)
 - [2026-10-23] Registros de 2026-10 (40 seções) movidos para [docs/ia-archive/IA-ARCHIVE-2026-10.md](docs/ia-archive/IA-ARCHIVE-2026-10.md)
 - [2026-11-05] Registros de 2026-10 (21 seções) movidos para [docs/ia-archive/IA-ARCHIVE-2026-10.md](docs/ia-archive/IA-ARCHIVE-2026-10.md)
-
-## 2026-10-29 — Inicialização: a limpeza do cache das CLIs abria uma segunda janela do Felixo no boot (v0.1.494)
-
-**Pedido.** Hotfix pedido pelo Felipe no canvas, agente Tasks OpenIA + AI Core: com "Iniciar com o sistema" ligado, o Felixo abre duas vezes quando o PC liga, "não todas as vezes, mas bem recorrente". A task de 25/09 "impedir segunda instância do app" (Linux) já tinha o mesmo sintoma e registrava que o segundo gatilho do boot não apareceu nos registros.
-
-**Medido.**
-- *O login abre uma vez só:* o `Run` do Windows tem uma entrada do Felixo, e o log `Microsoft-Windows-Shell-Core/Operational` (9707/9708) mostra uma execução dela por login em 21, 22, 23, 27, 28 e 29/10. Pasta Inicializar e Agendador não têm Felixo; o relançamento por GPU só existe no Linux.
-- *O segundo início vem do próprio app:* no log de QA, cada processo novo grava `account-chain recover` com id 1. Em 22, 23, 27 e 28/10 há um início no login e outro 3 a 4 min depois, sem saída no meio, sempre 1 a 26 s depois da última atualização de CLI da rodada (ex.: 28/10, Claude do sistema atualizada às 11:12:46Z, segundo início às 11:12:47Z).
-- *Causa raiz:* depois de instalar algo, `cli-auto-install.cjs` chama `pruneNpmCacheIfOverBudget` com `getNodeExecutable()` (o `process.execPath`, ou seja, o exe do app) e `createCliEnv()`, que só monta o PATH. Sem `ELECTRON_RUN_AS_NODE=1` o exe ignora o `npm-cli.js` e sobe o app inteiro. As instalações passam por `createManagedInstallEnv` → `createNodeEnv` e não tinham o defeito. Existe desde `ade0c55` (12/09/2026).
-- *Por que repetia:* o cache desta máquina tem 3,4 GB para um orçamento de 200 MB. Como o npm nunca rodava, o cache nunca encolhia, e toda abertura com CLI para atualizar (quase todo dia, pelas versões nightly) abria a segunda janela. O vínculo com o autostart é de horário: as atualizações da noite caem na primeira abertura do dia.
-- *Reprodução com o binário real* (perfil e cache temporários; o modo release smoke só para o app gravar um status sem janela): `"Felixo AI Core.exe" npm-cli.js cache clean --force --cache <tmp>` sem a variável subiu o `main.cjs` em 1,3 s e não limpou o cache; com `ELECTRON_RUN_AS_NODE=1` o npm saiu com 0 em 1,5 s, limpou o cache e o app não subiu.
-
-**O que mudou** (`8a694bb`). `pruneNpmCacheIfOverBudget` passa a disparar o npm com `createNodeEnv(env)`, como `installManagedPackage` já faz; a correção fica na função que cria o processo, então nenhum chamador repete o erro. Teste novo reprovou antes (`actual: undefined, expected: '1'`) e passa depois. `ARQUITETURA.md` (expurgo do cache) cita o modo Node.
-
-**Decisões do agente.** A trava de instância única (`requestSingleInstanceLock`) **não** entrou: muda a abertura de `.fxai/.fxchat/.fxworkflow` com o app aberto e os fluxos que sobem instâncias de propósito, e já é a task de 25/09, complementada com este achado. O hotfix corrige a causa; a trava fica como defesa para outros lançamentos duplicados.
-
-**Validação.** `managed-cli-cache-maintenance.test.cjs` 7 de 7; `npm test` 3041 testes, 3032 passando, 0 falhas, 9 pulados (+1); `eslint` 0. CI `40877826498` verde (macOS, Ubuntu, Ubuntu ARM, Windows e o smoke do canvas), "Ciclo de instalação das CLIs (Windows)" `40877826393` verde, Release gate `40878805539` e Release `40878858327` verdes: **v0.1.494** (Latest, 20 artefatos, tag em `8a694bb`).
-
-**Não validado.** O boot real com a correção: a prova é o teste, a reprodução com o binário e a correlação do log; o próximo login com CLI para atualizar é a validação de verdade (uma janela só, um `recover` de manhã, `cli-cache` perto de zero). O app desta máquina roda de uma cópia em `%TEMP%\felixo-release-smoke-*` (o aviso da tela de "Iniciar com o sistema"), e é ela que o `Run` abre; se ela não receber a atualização, a correção não chega aqui. A primeira limpeza vai apagar o cache offline inteiro (~3,4 GB de tarballs públicos), como o expurgo foi desenhado. **Fora do escopo:** o Nightly `40874224575` (29/10, `b36bf81`, anterior a este commit) falhou com "processos órfãos detectados em npm-runtime" no benchmark operacional do Windows; o mesmo commit passou nos dois Nightly anteriores. Complementei a task do órfão intermitente desse benchmark.
-
-Estado: concluído e publicado (v0.1.494).
+- [2026-11-05] Registros de 2026-10 (1 seção) movidos para [docs/ia-archive/IA-ARCHIVE-2026-10.md](docs/ia-archive/IA-ARCHIVE-2026-10.md)
 
 ## 2026-11-03 — Limites: scheduler central, backoff por conta e atualização base de 30 s (v0.1.495)
 
@@ -964,3 +944,53 @@ AppImage só roda no Linux e no macOS).
 por `focus()` e `click()` pelo DOM, não por Tab e Enter. O item 4 assume o que o código já dizia: o pid gravado é o do
 `.AppImage`, que vira o Electron no mesmo processo; se o runtime fizesse fork em vez de exec, um pid que morre cedo com o
 relançado vivo reverteria a escolha à toa; não medi o pid do AppImage nesta passada (sem Linux por perto).
+
+---
+
+## 2026-11-05 — Canvas: abrir a gaveta do terminal deixa de rolar o shell de lado
+
+**Contexto.** Task `3e891f95-497e-819b-a75f-e5cec04e3173` (achado do PR #96, 26/09/2026): abrir a gaveta rolava o contêiner do
+shell (`overflow: hidden`) uns 438 px para o lado por um instante, e a moldura inteira pulava. A task sugeria
+`focus({ preventScroll: true })` no terminal "ou corrigir o contêiner que rola".
+
+**O que a medição mostrou (app de fonte, Windows, Electron 42.11.16, clique real do mouse por CDP, sondas de `scrollLeft` a cada 2
+ms e evento de rolagem em captura).**
+
+1. **O xterm real não é a causa.** `Terminal.focus()` do xterm 6.0.0 já chama `textarea.focus({ preventScroll: true })`. Com o terminal
+   real, abrir a gaveta deu 0 eventos de rolagem em quatro larguras de janela (1320, 1000, 800 e 704 px).
+2. **O terminal falso do smoke rola o shell.** `mock-terminal-session-store.ts` foca o `textarea` sem `preventScroll`: com ele
+   (`FELIXO_DEVTOOLS_MOCK_PTY=1`, o padrão das sessões A e B do canvas-smoke), o `div.h-screen.overflow-hidden` de `App.tsx` foi a
+   **434 px** em 215 ms e voltou a 0 em ~400 ms (1320 px) e a 421 px em janela de 800 px. Foi o que o SA3 do tutorial viu.
+3. **Mas existe caminho de produção.** Com a aba **Leitura** ativa, `TerminalDrawer.tsx` chama `readingPanelRef.current?.focus()`
+   (e a faixa de retomada, o gatilho recolhido e a troca de aba fazem o mesmo) **sem `preventScroll`**. Com o xterm real e a Leitura
+   ativa, o shell foi a 434 px do mesmo jeito. Instrumentando o `focus()`: no instante da chamada a gaveta tinha 1 px de largura
+   (`x` 901 a 902), o painel focado estava em `x` 902 a 926, e o shell tinha `scrollWidth` 1754 contra `clientWidth` 1320: o conteúdo da
+   gaveta, ainda sem largura, transbordava 434 px à direita, e o navegador rolou o shell (`overflow: hidden` continua sendo um
+   contêiner rolável) para mostrar o foco. O valor fica até o layout assentar.
+
+**O que mudou.**
+
+1. `app/src/App.tsx`: o shell passa de `overflow-hidden` a `overflow-clip` (corta igual, mas não rola nunca). É a correção na
+   raiz: vale para todo `focus()` sem `preventScroll` dentro da gaveta (Leitura, faixa de retomada, gatilho recolhido) e para
+   qualquer `scrollIntoView`, em vez de chamar a lista de pontos um a um. Testado ao vivo antes de editar o código
+   (`style.overflow = 'clip'` no app aberto: 0 eventos, `scrollLeft` sempre 0).
+2. `app/scripts/canvas-smoke.cjs`: `iniciarSondaDoShell` e `exigirShellSemRolar`, ligados antes do clique que abre a gaveta; leem o
+   `scrollLeft` de `[data-felixo-app-shell]` a cada 4 ms e contam os eventos de rolagem por 600 ms. **Reprova sem a correção**:
+   `abrir a gaveta rolou o shell de lado: {"maior":434,"eventos":5}`; passa com ela.
+3. Docs e comentários: a lacuna saiu do inventário do terminal (`INVENTARIO-CANVAS.md` regenerado); `ARQUITETURA.md`, o
+   comentário do `onScroll` do `OnboardingTourLayer.tsx` e o do SA3 em `canvas-smoke-onboarding.cjs` dizem que o shell não rola
+   mais (a escuta do tutorial segue valendo para a sidebar e outros contêineres).
+
+**Decisão.** `overflow-clip` no lugar de `preventScroll` nos pontos de foco: o `preventScroll` cobre só o `focus()` que alguém lembrar de
+escrever com ele, e o clip cobre também o `scrollIntoView`; o terminal falso do smoke continua focando sem `preventScroll` de
+propósito, porque é ele que reproduz um `focus()` comum dentro da gaveta e mantém o guarda honesto.
+
+**Medido.** `tsc -b` e `eslint .` limpos; vitest 217 arquivos e 3387 testes; `npm test` 3126 testes, 0 falham; `canvas-smoke` sessão
+A `passou` e sessão B (tutorial) `passou`. Nas rodadas deste dia a sessão A caiu duas vezes antes do guarda, por motivos que não são
+este: `page.screenshot` de 30 s no primeiro caso da matriz (a mesma instabilidade já registrada na entrada da barra de status;
+mais uma ocorrência, na 1ª tentativa de uma execução com 1 tentativa só) e `arrasto-persistido` com `fixture-note`
+`missing-or-hidden` (uma vez, logo depois de `felixo devtools quit`); com as 3 tentativas padrão a sessão passou.
+
+**Limites.** O deslocamento foi medido em janela sem quadros reais (a janela escondida do devtools entrega ~2 quadros por
+segundo), então "por um instante" na tela de quem usa não foi cronometrado; o guarda do smoke roda com o terminal falso. Não
+olhei o macOS nem o Linux, onde o `overflow: clip` é o mesmo do Chromium.

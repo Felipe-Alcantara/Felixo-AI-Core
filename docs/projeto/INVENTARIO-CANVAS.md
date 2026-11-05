@@ -32,7 +32,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **Elementos:** 100 (10 blocos, 16 ferramentas, 74 outras superfícies)
 - **Controles:** 378, dos quais 57 com teste específico
 - **Elementos sem nenhum teste:** 4
-- **Lacunas:** 270 (alto 9, médio 144, baixo 117), em 78 tasks
+- **Lacunas:** 269 (alto 9, médio 144, baixo 116), em 77 tasks
 
 ## Moldura do canvas
 
@@ -995,7 +995,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Recolher, Maximizar e Ver arquivo em modo renderizado não são clicados em nenhum teste (o smoke só abre, fixa, passa responsabilidade e fecha). | médio | `3ec91f95-497e-81e8-8f18-e2a529b0568e` |
 | Reiniciar e os botões da faixa de retomada na gaveta não têm teste de clique; o store falso do smoke A não reproduz a faixa. | médio | `3eb91f95-497e-811b-8eb0-e620c6f37e21` |
 | O cabeçalho não nomeia "waiting_approval", "starting" nem "error": o rótulo fica vazio justo quando o agente pede aprovação (TerminalDrawer.tsx:533-541; o cartão e a notificação dizem "Precisa de resposta"). | baixo | `3ec91f95-497e-8103-b360-c1979d6992f4` |
-| Abrir a gaveta rola o shell para o lado por um instante. | baixo | `3e891f95-497e-819b-a75f-e5cec04e3173` |
 | Desafixada, clicar num painel da sidebar (Prompts, Skills) fecha a gaveta antes de o texto chegar ao terminal. | médio | `3eb91f95-497e-814a-8b2c-e471e09f6ff3` |
 | Com a gaveta aberta, a barra de status encolhe até 160 px e quebra. | médio | `3e791f95-497e-81bd-8e8c-de6f9e16cec5` |
 
@@ -2905,7 +2904,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3e791f95-497e-81bd-8e8c-de6f9e16cec5` — 1 lacuna
 - `3e891f95-497e-8148-b00e-f27e78767664` — 2 lacunas
 - `3e891f95-497e-815b-b675-d1d696a7968e` — 1 lacuna
-- `3e891f95-497e-819b-a75f-e5cec04e3173` — 1 lacuna
 - `3e891f95-497e-81b3-8857-da9125ff3f49` — 2 lacunas
 - `3e991f95-497e-8104-a090-d5b295ba4747` — 2 lacunas
 - `3e991f95-497e-8109-832d-f789917f708d` — 1 lacuna

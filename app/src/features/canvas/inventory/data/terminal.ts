@@ -145,11 +145,6 @@ export const terminalSurfaces: InventoryElement[] = [
         task: '3ec91f95-497e-8103-b360-c1979d6992f4',
       },
       {
-        what: 'Abrir a gaveta rola o shell para o lado por um instante.',
-        risk: 'baixo',
-        task: '3e891f95-497e-819b-a75f-e5cec04e3173',
-      },
-      {
         what: 'Desafixada, clicar num painel da sidebar (Prompts, Skills) fecha a gaveta antes de o texto chegar ao terminal.',
         risk: 'médio',
         task: '3eb91f95-497e-814a-8b2c-e471e09f6ff3',

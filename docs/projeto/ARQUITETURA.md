@@ -1527,7 +1527,9 @@ posicionamento desvia de `[data-felixo-tour-avoid]` (toast das CLIs e
 alvo não depender de onde o card está. O recálculo acontece em resize, mudança de
 tamanho dos alvos e do card, estrutura da sidebar, atributos dos alvos, fim de
 transição da sidebar e do inspector e em qualquer rolagem que mova um alvo (abrir
-a gaveta do terminal rola o shell de lado por um instante), sempre com no máximo
+a gaveta do terminal rolava o shell de lado por um instante, até o shell virar
+`overflow: clip` em 05/11/2026; a escuta segue valendo para a sidebar e para
+outros contêineres rolantes), sempre com no máximo
 um quadro por vez e só com o tour ou o aviso na tela. Enquanto o tour aponta uma
 alternativa ao alvo preferido (o menu do canvas com a sidebar recolhida, por
 exemplo), a posição também é conferida a cada 500 ms: o que cobriu ou deslocou o
