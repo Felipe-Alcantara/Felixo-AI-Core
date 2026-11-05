@@ -863,3 +863,43 @@ installed release artifact" em `ok: true` nos três sistemas. **Não conferido:*
 CI, porque o smoke do canvas só roda lá na Nightly das 06:00 UTC (a de 06/11/2026 é a primeira conferência; task aberta
 no Notion para ler o resultado, no tema de alto contraste e com a sidebar recolhida). Task aberta também para o estouro
 de `page.screenshot` da primeira execução local do smoke.
+
+---
+
+## 2026-11-05 — Deps: o `npm ls --all` volta a sair com 0, o lightningcss já estava alinhado e o lockfile ganha um guarda
+
+**Contexto.** Task `3e791f95-497e-81bc-a366-c4f58fc01463` (aberta em 26/09/2026, na migração para o Tailwind 4, PR #93): o
+Tailwind 4.3.3 fixa o lightningcss 1.32.0, o Vite 8 traz o 1.33, e o lock teria resolvido o binário opcional
+`lightningcss-linux-x64-musl` para o 1.33, com `npm ls --all` saindo em `ELSPROBLEMS`. Pedido: alinhar as versões e
+confirmar que o `npm ls --all` sai com 0.
+
+**O que a medição mostrou (05/11/2026, Windows, Node 25.3.0).**
+
+1. **O lightningcss já estava alinhado.** No lock de hoje, o `@tailwindcss/node` tem o seu `lightningcss` 1.32.0 com os 11
+   binários aninhados em 1.32.0, e o Vite tem o 1.33.0 com os 11 binários no topo em 1.33.0. Medi o
+   `npm ls --all --package-lock-only` em 11 versões do lockfile (de `d3e2566` a `54521f0`, cada uma num diretório
+   temporário): nenhuma teve problema de lightningcss, nem a do merge do #93 (`cc34310`). Não achei o estado em que o
+   defeito existiu; a evidência da task provavelmente veio de um `node_modules` instalado antes do lock final.
+2. **O `ELSPROBLEMS` de hoje era outro.** O `npm ls --all` desta máquina (npm 11.6.2, o do Node 25.3.0) saía com 1 e três
+   `invalid` (`@types/react`, `@types/react-dom`, `react-dom`) desde `f01f69f` (05/10), o commit do override aninhado
+   `@excalidraw/excalidraw > sass > chokidar`. O **mesmo lockfile** dá 0 problemas no npm 10.9.4 (o do Node 22 do CI),
+   no 11.10.0 e no 11.21.2 (o do projeto), e removendo o override aninhado o 11.6.2 também dá 0: é defeito do npm 11.6.2 com
+   override aninhado, não do lock.
+
+**O que mudou.**
+
+1. `app/package.json`: o override passa de `"@excalidraw/excalidraw": { "sass": { "chokidar": "^4.0.3" } }` para
+   `"sass": { "chokidar": "^4.0.3" }`. O `sass` só entra como dependência do Excalidraw (`npm ls sass`), então o alcance é o
+   mesmo. O `package-lock.json` **não muda**: regenerado numa cópia com o npm do projeto, 0 de 1050 entradas diferentes, e o
+   `chokidar` continua 4.0.3 sob o `sass` 1.51.0 (o que tira o `braces` vulnerável, ver `f01f69f`).
+2. `app/scripts/lockfile-consistency.test.cjs` (6 testes, entram no `npm test`): cada binário opcional do lightningcss tem
+   de resolver, pela regra do Node, para a versão exata que o pai pede (com um teste que reprova o defeito original numa
+   árvore sintética); e o `npm ls --all --package-lock-only` do **npm do projeto** (não o do PATH, que varia por máquina)
+   tem de sair sem problemas, com um teste que prova que ele enxerga um lock fora do `package.json`.
+
+**Medido depois.** `npm ls --all` na árvore real: saída 0 no npm 11.6.2 e no 11.21.2 (antes: 1 e 0); `npm ci --dry-run` 0;
+`npm audit --omit=dev` 0 vulnerabilidades; `npm test` 3116 testes, 3107 passam, 0 falham, 0 cancelados, 9 pulados.
+
+**Limites.** O defeito original do lightningcss não foi reproduzido em nenhum estado do lock, então o teste do lock prova
+que o guarda o detectaria (árvore sintética), não que ele já tenha acontecido. Não rodei `npm run build` nem o app: o lock é
+idêntico. O defeito do npm 11.6.2 não foi reportado ao npm.
