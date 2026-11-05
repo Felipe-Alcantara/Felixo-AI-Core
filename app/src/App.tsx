@@ -50,8 +50,13 @@ function App() {
     // depender de qual tela está montada.
     <ThemeProvider>
       <PerformanceModeProvider>
+        {/* `overflow-clip`, e não `overflow-hidden`: o hidden ainda é um contêiner
+            rolável, e um `focus()` sem `preventScroll` dentro da gaveta do terminal
+            (a Leitura, a faixa de retomada) enquanto ela tem largura quase zero e o
+            conteúdo transborda rolava o shell uns 434 px de lado: a moldura inteira
+            pulava e voltava. O clip corta do mesmo jeito e não rola nunca. */}
         <div
-          className="relative h-screen overflow-hidden bg-(--color-main-bg) text-zinc-50"
+          className="relative h-screen overflow-clip bg-(--color-main-bg) text-zinc-50"
           data-felixo-app-shell
         >
           <Suspense fallback={<ScreenLoading />}>

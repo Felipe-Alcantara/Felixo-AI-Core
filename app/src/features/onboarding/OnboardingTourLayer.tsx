@@ -292,9 +292,11 @@ function useSurfacePlacement({ surfaceRef, ringRef, targets, trackKey, revealKey
     const onChromeMotionEnd = (event: Event) => {
       if (event.target instanceof Element && event.target.closest(ANIMATED_CHROME_SELECTOR)) schedule()
     }
-    // Abrir a gaveta do terminal rola o shell (sem barra de rolagem) de lado por um
+    // Abrir a gaveta do terminal rolava o shell (sem barra de rolagem) de lado por um
     // instante: o alvo muda de lugar sem mudar de tamanho, e nenhum observador
-    // acima dispara. Só rolagens que movem um candidato contam (a do xterm, não).
+    // acima dispara. O shell agora é `overflow: clip` e não rola mais (App.tsx), mas
+    // outros contêineres ainda rolam e movem alvos. Só rolagens que movem um
+    // candidato contam (a do xterm, não).
     // A rolagem da sidebar também diz quem a fez: o eco da do tour ou a da pessoa,
     // que tira do tour o direito de rolar até o fim do passo.
     const onScroll = (event: Event) => {
