@@ -235,6 +235,7 @@ function gpuEvents(sequence) {
     }
   }
   return {
+    app,
     options: {
       getGPUFeatureStatus: () => app.status,
       waitForGpuInfo: () => watcher.wait(1_000),
@@ -260,6 +261,77 @@ test('evaluateGpuAfterReady: GPU que cai logo depois do primeiro evento ainda re
 
   assert.equal(resultado.recommended, true)
   assert.deepEqual(readGraphicsRecommendation('/perfil', fileSystem).disabledFeatures, ['gpu_compositing', 'rasterization'])
+})
+
+const tick = () => new Promise((resolve) => setTimeout(resolve, 20))
+
+test('evaluateGpuAfterReady: GPU que cai bem depois da janela ainda gera a recomendação para a próxima abertura', async () => {
+  // A janela (settleMs) acaba aos ~255 ms; o status só cai aos ~405 ms.
+  const fileSystem = fakeFileSystem()
+  const { options, play } = gpuEvents([
+    { status: HEALTHY, afterMs: 5 },
+    { status: SOFTWARE, afterMs: 400 },
+  ])
+  const evaluation = evaluateGpuAfterReady({ userDataPath: '/perfil', fileSystem, keepWatching: true, ...options })
+  const playing = play()
+  const resultado = await evaluation
+  assert.deepEqual({ ...resultado, stopWatching: typeof resultado.stopWatching }, { evaluated: true, recommended: false, stopWatching: 'function' })
+  assert.equal(readGraphicsRecommendation('/perfil', fileSystem), null)
+
+  await playing
+  await tick()
+  assert.deepEqual(readGraphicsRecommendation('/perfil', fileSystem).disabledFeatures, ['gpu_compositing', 'rasterization'])
+  resultado.stopWatching()
+})
+
+test('evaluateGpuAfterReady: sem keepWatching o evento tardio continua sem efeito (comportamento de antes)', async () => {
+  const fileSystem = fakeFileSystem()
+  const { options, play } = gpuEvents([
+    { status: HEALTHY, afterMs: 5 },
+    { status: SOFTWARE, afterMs: 400 },
+  ])
+  const evaluation = evaluateGpuAfterReady({ userDataPath: '/perfil', fileSystem, ...options })
+  const playing = play()
+  assert.deepEqual(await evaluation, { evaluated: true, recommended: false })
+  await playing
+  await tick()
+  assert.equal(readGraphicsRecommendation('/perfil', fileSystem), null)
+})
+
+test('evaluateGpuAfterReady: evento tardio saudável não apaga a recomendação, e parar de observar encerra', async () => {
+  const fileSystem = fakeFileSystem()
+  const { app, options, play } = gpuEvents([
+    { status: SOFTWARE, afterMs: 5 },
+    { status: HEALTHY, afterMs: 400 },
+  ])
+  // Quantas assinaturas de gpu-info-update estão de pé: a da janela e a tardia.
+  let subscribers = 0
+  const onGpuInfoUpdate = (listener) => {
+    subscribers += 1
+    const stop = options.onGpuInfoUpdate(listener)
+    return () => {
+      subscribers -= 1
+      stop()
+    }
+  }
+  const evaluation = evaluateGpuAfterReady({ userDataPath: '/perfil', fileSystem, keepWatching: true, ...options, onGpuInfoUpdate })
+  const playing = play()
+  const resultado = await evaluation
+  assert.equal(resultado.recommended, true)
+  assert.equal(subscribers, 1, 'só a assinatura tardia fica de pé depois da janela')
+  await playing
+  await tick()
+  // O evento tardio saudável não desfaz a recomendação que a janela gravou.
+  assert.notEqual(readGraphicsRecommendation('/perfil', fileSystem), null)
+
+  // Depois de parar, um evento tardio ruim não grava nada.
+  clearGraphicsRecommendation('/perfil', fileSystem)
+  resultado.stopWatching()
+  assert.equal(subscribers, 0)
+  app.status = SOFTWARE
+  app.emit('gpu-info-update')
+  await tick()
+  assert.equal(readGraphicsRecommendation('/perfil', fileSystem), null)
 })
 
 test('evaluateGpuAfterReady: um evento saudável depois, dentro da janela, não apaga o aviso já salvo', async () => {

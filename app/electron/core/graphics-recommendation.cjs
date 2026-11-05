@@ -131,6 +131,12 @@ function dismissGraphicsRecommendation(userDataPath, fileSystem = fs) {
  * a apaga; a recomendação antiga só é limpa no fim, se a janela inteira foi
  * saudável.
  *
+ * Com `keepWatching`, depois da janela o app continua ouvindo os
+ * `gpu-info-update`: uma GPU que cai para software minutos depois de subir
+ * saudável também grava a recomendação (para a próxima abertura). A escuta
+ * tardia só acrescenta: uma leitura saudável nunca apaga a recomendação, e o
+ * resultado traz `stopWatching` para encerrá-la.
+ *
  * @param {object} options
  * @param {string} options.userDataPath
  * @param {() => (Record<string, string> | Promise<Record<string, string>>)} [options.getGPUFeatureStatus] -
@@ -143,12 +149,14 @@ function dismissGraphicsRecommendation(userDataPath, fileSystem = fs) {
  *   Assina os `gpu-info-update` seguintes e devolve a função que cancela.
  *   Sem ela, o status é lido uma vez só.
  * @param {number} [options.settleMs] - A janela depois do primeiro evento.
+ * @param {boolean} [options.keepWatching] - Segue lendo o status a cada
+ *   `gpu-info-update` depois da janela, só para gravar recomendação.
  * @param {boolean} [options.alreadyUsingSoftwareRendering] - Se a sessão já
  *   está em software (manual ou heurística de memória) — nesse caso não há
  *   nada a recomendar, e uma recomendação antiga (de antes da troca) é limpa.
  * @param {() => string} [options.now]
  * @param {typeof fs} [options.fileSystem]
- * @returns {Promise<{ evaluated: boolean, recommended: boolean, recommendation?: object, dismissed?: boolean }>}
+ * @returns {Promise<{ evaluated: boolean, recommended: boolean, recommendation?: object, dismissed?: boolean, stopWatching?: () => void }>}
  */
 async function evaluateGpuAfterReady({
   userDataPath,
@@ -156,6 +164,7 @@ async function evaluateGpuAfterReady({
   waitForGpuInfo,
   onGpuInfoUpdate,
   settleMs = GPU_STATUS_SETTLE_MS,
+  keepWatching = false,
   alreadyUsingSoftwareRendering = false,
   now = () => new Date().toISOString(),
   fileSystem = fs,
@@ -218,11 +227,25 @@ async function evaluateGpuAfterReady({
     await readings
   }
 
-  if (seen.recommendation) return { evaluated: true, recommended: true, recommendation: seen.recommendation }
-  if (seen.dismissed) return { evaluated: true, recommended: false, dismissed: true }
-  if (!seen.healthy) return { evaluated: false, recommended: false }
-  clearGraphicsRecommendation(userDataPath, fileSystem)
-  return { evaluated: true, recommended: false }
+  let verdict
+  if (seen.recommendation) verdict = { evaluated: true, recommended: true, recommendation: seen.recommendation }
+  else if (seen.dismissed) verdict = { evaluated: true, recommended: false, dismissed: true }
+  else if (!seen.healthy) verdict = { evaluated: false, recommended: false }
+  else {
+    clearGraphicsRecommendation(userDataPath, fileSystem)
+    verdict = { evaluated: true, recommended: false }
+  }
+
+  if (keepWatching && typeof onGpuInfoUpdate === 'function') {
+    // Uma leitura por vez, como na janela. `readStatusOnce` só grava quando o
+    // status é incompatível; nunca apaga nada.
+    let lateReadings = Promise.resolve()
+    const stopWatching = onGpuInfoUpdate(() => {
+      lateReadings = lateReadings.then(readStatusOnce)
+    })
+    return { ...verdict, stopWatching: typeof stopWatching === 'function' ? stopWatching : () => {} }
+  }
+  return verdict
 }
 
 module.exports = {

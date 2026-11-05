@@ -413,6 +413,9 @@ app.whenReady().then(async () => {
       // logo depois (41 ms, medido), então os seguintes, numa janela curta,
       // também contam.
       onGpuInfoUpdate: (listener) => gpuInfoWatcher.onUpdate(listener),
+      // Depois da janela, uma GPU que cai para software ainda grava a
+      // recomendação, para a próxima abertura.
+      keepWatching: true,
       alreadyUsingSoftwareRendering: useSoftwareRendering,
     }).catch(() => {})
   }
