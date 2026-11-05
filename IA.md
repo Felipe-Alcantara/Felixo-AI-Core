@@ -1957,3 +1957,13 @@ versão). Que o `actions/checkout` com `fetch-depth: 0` traga as tags (sem elas 
 lista de publicados fica vazia e o gate publica por precaução, o que aparece no
 log). Que `gh run list --status` devolva o título com o `run-name` nas runs em
 andamento.
+
+**Validação em produção (gate do `45594f9`, 05/11/2026 08:26).** O log dele
+trouxe "Último commit coberto por um Release: e17a2c2", que é o commit da
+v0.1.506, a última publicada: o `actions/checkout` com `fetch-depth: 0` trouxe as
+tags e a lista de publicados funcionou (a base antiga, o último gate avaliado,
+seria `916f1ca`). A run do Release saiu com o título `Release 45594f92…`, então
+o `run-name` chega ao `gh run list`. O CI do commit levou 19 s porque o
+`ci-scope.sh` pulou os jobs de app (só workflows, scripts e documentação
+mudaram). Seguem sem aparecer em produção: um Release que falha seguido de um
+commit de documentação, e a lista de publicados vindo vazia.
