@@ -763,28 +763,10 @@ function criarCenariosDoTutorial(deps) {
     }))
   }
 
-  /**
-   * O bloco Excalidraw da fixture regrava a si mesmo cerca de uma vez por segundo
-   * com o canvas parado (o `onChange` do Excalidraw dispara sem edição e o
-   * `updatedAt` muda com a cena igual). Isso é do bloco, não do tour, e tornaria
-   * impossível provar "zero escritas no canvas" durante o percurso. Ele sai da
-   * fixture antes das sondas; o canvas continua com blocos (o caso "não vazio").
-   */
-  async function removerBlocosQueGravamSozinhos() {
-    const removidos = await page.evaluate(async () => {
-      const { nodes = [] } = await window.felixo.canvas.list()
-      const alvo = nodes.filter((node) => node.type === 'excalidrawDrawing')
-      for (const node of alvo) await window.felixo.canvas.delete(node.id)
-      return alvo.length
-    })
-    if (removidos > 0) await recarregar()
-  }
-
   /** SA1: percurso manual pela Ajuda com a fixture, e as sondas em volta. */
   async function sa1() {
     const cenario = 'SA1'
     await definirViewport(VIEWPORT_PADRAO)
-    await removerBlocosQueGravamSozinhos()
     const alvos = await alvosDoPercurso()
     const sondas = await abrirSondas(cenario)
     await abrirTourPelaAjuda(cenario)
