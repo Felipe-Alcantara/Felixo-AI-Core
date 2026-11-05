@@ -1002,8 +1002,9 @@ function criarCenariosDoTutorial(deps) {
     exigir(!depoisDoDialogo.noCartao, cenario, 'o tour puxou o foco depois do diálogo', depoisDoDialogo)
     await page.getByRole('button', { name: 'Fechar terminal' }).click()
     await page.waitForFunction(() => !document.querySelector('[data-canvas-terminal-drawer]'), null, { timeout })
-    // Abrir a gaveta rola o shell de lado por um instante (o alvo sai da tela e o
-    // tour cai no menu do canvas); quando o shell volta, o anel volta para a moldura.
+    // Antes de 05/11/2026 abrir a gaveta rolava o shell de lado por um instante (o
+    // alvo saía da tela e o tour caía no menu do canvas); o shell agora não rola
+    // (canvas-smoke.cjs guarda isso), e a espera só confirma o anel de volta na moldura.
     await esperarPasso(cenario, 'agente', 'criar-agente')
 
     // Fora da janela das sondas: "Agente" (PTY fake) com o tour aberto cria o terminal (T1.d).

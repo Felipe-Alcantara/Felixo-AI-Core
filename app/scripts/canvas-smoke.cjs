@@ -575,6 +575,51 @@ async function checarBarraComGaveta(page) {
   }
 }
 
+/**
+ * Abrir a gaveta do terminal não pode rolar o shell do app de lado (task
+ * 3e891f95-497e-819b-a75f-e5cec04e3173). O foco que entra na gaveta enquanto ela
+ * ainda tem largura quase zero, com o conteúdo transbordando para a direita,
+ * fazia o navegador rolar o shell (`overflow: hidden` ainda é um contêiner
+ * rolável) em ~434 px: a moldura inteira pulava de lado e voltava. Com
+ * `overflow: clip` ele deixa de ser rolável. A sonda é ligada ANTES do clique e
+ * lê o `scrollLeft` a cada 4 ms (mais o evento de rolagem), porque o desvio
+ * dura poucos quadros e uma leitura só no fim não o veria.
+ */
+async function iniciarSondaDoShell(page) {
+  await page.evaluate(() => {
+    const shell = document.querySelector('[data-felixo-app-shell]')
+    const sonda = { maior: 0, eventos: 0 }
+    const ler = () => {
+      sonda.maior = Math.max(sonda.maior, shell?.scrollLeft ?? 0)
+    }
+    const onScroll = (event) => {
+      if (event.target === shell) {
+        sonda.eventos += 1
+        ler()
+      }
+    }
+    document.addEventListener('scroll', onScroll, true)
+    const timer = setInterval(ler, 4)
+    window.__sondaDoShell = {
+      parar: () => {
+        clearInterval(timer)
+        document.removeEventListener('scroll', onScroll, true)
+        return { ...sonda, achouOShell: Boolean(shell) }
+      },
+    }
+  })
+}
+
+async function exigirShellSemRolar(page) {
+  // A gaveta leva 180 ms para assentar; o deslocamento aparecia nos primeiros quadros.
+  await page.waitForTimeout(600)
+  const resultado = await page.evaluate(() => window.__sondaDoShell.parar())
+  if (!resultado.achouOShell) throw new Error('[canvas-smoke] a sonda do shell não achou [data-felixo-app-shell]')
+  if (resultado.maior !== 0 || resultado.eventos !== 0) {
+    throw new Error('[canvas-smoke] abrir a gaveta rolou o shell de lado: ' + JSON.stringify(resultado))
+  }
+}
+
 async function checarInteracoes(page) {
   const group = page.locator('[data-id="fixture-group"]')
   // Use a real pointer hit test here. This catches a fixed surface or the
@@ -644,12 +689,14 @@ async function checarInteracoes(page) {
   // Native click in Electron can dispatch React's handler before focus lands
   // on a transformed node button; focus it first so the return contract is
   // deterministic while still exercising the real open/close handlers.
+  await iniciarSondaDoShell(page)
   await terminalTrigger.focus()
   await terminalTrigger.click()
   await page.locator('[data-canvas-terminal-drawer]').waitFor({ state: 'visible', timeout: INTERACTION_TIMEOUT_MS })
   await page.locator('[data-felixo-mock-terminal="fixture-terminal"]').waitFor({ state: 'visible', timeout: INTERACTION_TIMEOUT_MS })
   const terminalFocused = await page.evaluate(() => document.activeElement?.getAttribute('data-felixo-mock-terminal') === 'fixture-terminal')
   if (!terminalFocused) throw new Error('[canvas-smoke] abrir a gaveta nao focou o terminal fake')
+  await exigirShellSemRolar(page)
   await recordVisualEvidence(
     page,
     'gaveta-terminal-aberta',
