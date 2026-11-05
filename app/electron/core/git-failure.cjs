@@ -39,6 +39,12 @@ const GIT_FAILURE = Object.freeze({
  * Credential Manager (`GCM_INTERACTIVE=never`: "fail if interaction is
  * required") nem o askpass do SSH (`SSH_ASKPASS_REQUIRE=never`).
  *
+ * `GIT_ASKPASS` vazio fecha o último caminho: para pedir usuário e senha por
+ * HTTPS o Git tenta `GIT_ASKPASS`, depois `core.askpass` e, por fim,
+ * `SSH_ASKPASS` (que o Git Bash define), e `SSH_ASKPASS_REQUIRE` só vale para o
+ * `ssh`. Uma variável vazia, mas definida, impede essa busca e faz o Git cair
+ * direto em "terminal prompts disabled", o motivo `login` que o app mostra.
+ *
  * @param {{ interactive?: boolean, baseEnv?: NodeJS.ProcessEnv }} options
  * @returns {NodeJS.ProcessEnv}
  */
@@ -47,6 +53,7 @@ function gitEnvironment({ interactive = false, baseEnv = process.env } = {}) {
   if (!interactive) {
     env.GCM_INTERACTIVE = 'never'
     env.SSH_ASKPASS_REQUIRE = 'never'
+    env.GIT_ASKPASS = ''
   }
   return env
 }

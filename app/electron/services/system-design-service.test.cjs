@@ -280,6 +280,7 @@ test('sem clique, o Git roda sem poder pedir login e com o prazo curto', async (
     assert.equal(call.options.env.GIT_TERMINAL_PROMPT, '0')
     assert.equal(call.options.env.GCM_INTERACTIVE, 'never')
     assert.equal(call.options.env.SSH_ASKPASS_REQUIRE, 'never')
+    assert.equal(call.options.env.GIT_ASKPASS, '')
     assert.equal(call.options.timeout, 60_000)
   }
 })

@@ -17,7 +17,19 @@ describe('gitEnvironment', () => {
     assert.equal(env.GIT_TERMINAL_PROMPT, '0')
     assert.equal(env.GCM_INTERACTIVE, 'never')
     assert.equal(env.SSH_ASKPASS_REQUIRE, 'never')
+    assert.equal(env.GIT_ASKPASS, '')
     assert.equal(env.PATH, '/bin')
+  })
+
+  it('sem clique: um SSH_ASKPASS herdado (o Git Bash define um) não vira janela de senha por HTTPS', () => {
+    // O Git procura GIT_ASKPASS, core.askpass e SSH_ASKPASS nessa ordem; só uma
+    // GIT_ASKPASS definida e vazia o impede de chegar ao último.
+    const env = gitEnvironment({
+      interactive: false,
+      baseEnv: { SSH_ASKPASS: '/mingw64/bin/git-askpass.exe', GIT_ASKPASS: '/mingw64/bin/git-askpass.exe' },
+    })
+    assert.equal(env.GIT_ASKPASS, '')
+    assert.equal(Object.hasOwn(env, 'GIT_ASKPASS'), true)
   })
 
   it('com clique: a janela de login pode abrir, mas o terminal invisível continua fechado', () => {
@@ -25,6 +37,7 @@ describe('gitEnvironment', () => {
     assert.equal(env.GIT_TERMINAL_PROMPT, '0')
     assert.equal('GCM_INTERACTIVE' in env, false)
     assert.equal('SSH_ASKPASS_REQUIRE' in env, false)
+    assert.equal('GIT_ASKPASS' in env, false)
   })
 
   it('com clique, respeita uma configuração do Git Credential Manager que a pessoa já tinha', () => {
