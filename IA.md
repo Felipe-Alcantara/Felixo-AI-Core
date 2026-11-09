@@ -896,3 +896,32 @@ conferido:** o SA1 com o Excalidraw no Windows e no macOS do CI, porque o smoke 
 (a de 06/11/2026); no Windows local passou. **Correção de precisão:** acima, a gravação única no carregamento da cena não vazia
 está atribuída "à ordenação do canvas"; a causa não foi isolada (pode ser a normalização da cena ao abrir). O que a medição
 prova é que não há regravação contínua depois dela.
+
+---
+
+## 2026-11-08 — Windows: o Shell do app deixa de recusar `codex`, `claude` e `gemini` pela política de execução do PowerShell
+
+**Contexto.** Feedback de um usuário (Windows, `v0.1.515`, três capturas): (1) um agente Codex fechava ao abrir com
+"O Codex encerrou logo ao abrir (código 1)" e `Error: stdin is not a terminal`; (2) num bloco Shell, digitar `codex` dava
+"o arquivo `...\felixo-ai-core\clis\codex.ps1` não pode ser carregado porque a execução de scripts foi desabilitada neste sistema".
+
+**Causa do (2) (medida).** O Shell interativo abria `powershell.exe -NoLogo -NoProfile`, sem política de execução. Na pasta
+`clis` do app o npm deixa `codex`, `codex.cmd` e `codex.ps1`; o PowerShell prefere o `.ps1`, e a política padrão de uma máquina
+cliente (Restricted) o recusa. Reproduzido aqui com `powershell -ExecutionPolicy Restricted -Command "& codex.ps1 --version"`
+(a mesma mensagem) e resolvido com `-ExecutionPolicy Bypass` (`codex-cli 0.168.0-alpha.1`).
+
+**O que mudou.** `getShellArgs` do adaptador win32 (e o reserva em `pty-process-manager.cjs`) passa a abrir o PowerShell com
+`-NoLogo -NoProfile -ExecutionPolicy Bypass`, o mesmo `POWERSHELL_SCRIPT_FLAGS` que o app já usava para rodar `.ps1` (decisão do
+Felipe de 07/10/2026 para o Openia). Vale só para o processo do terminal; uma política de grupo (MachinePolicy/UserPolicy) ainda
+vence o flag. O teste de `platform/index.test.cjs` reprovava antes e passa; suíte Node 3126 testes, 0 falham.
+
+**O (1) não foi resolvido.** Não reproduzi. Lançando o Codex como o app faz, com os mesmos argumentos (`--model gpt-5.6-luna -c
+model_reasoning_effort=max --dangerously-bypass-approvals-and-sandbox`), pelo ConPTY do node-pty: `cmd.exe /d /s /c call codex.cmd`,
+o mesmo sem `call` (caminho sem espaço, como o do usuário) e `powershell -File codex.ps1`, os três sobem a TUI
+(`OpenAI Codex (v0.168.0-alpha.1)`). O texto `stdin is not a terminal` vem do próprio `codex.exe`: ele recebeu uma entrada que não
+é console. Fica uma task com o roteiro de coleta (log de QA do escopo `terminal-launch`, versão do Windows, se o `codex` roda num
+PowerShell fora do Felixo e a versão do Codex), porque sem esses dados qualquer correção seria palpite.
+
+**Limites.** O Bypass vale também para scripts que a pessoa rode no Shell do app (é o preço de `.ps1` funcionar); a alternativa
+de apagar os `.ps1` da pasta `clis` foi descartada porque o npm os recria a cada instalação. Não abri o app com a política
+Restricted de verdade, só provei o flag no processo.
