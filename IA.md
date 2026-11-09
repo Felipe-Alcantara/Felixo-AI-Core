@@ -1000,3 +1000,15 @@ x64 e ARM) e no ciclo de instalação das CLIs. O Release gate despachou o Relea
 PTY ok. Esse smoke roda num Windows **com Node**, então prova que o app instalado abre, não que o Codex abre sem Node; a guarda no CI
 virou task. Abertas no Notion, ligadas à task do Codex: a decisão do Node para o Gemini, o acento nos atalhos `node.cmd` e `npm.cmd`, a
 confirmação com o usuário na `v0.1.517` e a guarda no CI sem Node.
+
+---
+
+## 2026-11-09 — GPU: o que deu para validar no Windows real (uma placa) e o que depende de hardware que não temos
+
+**Contexto.** Task "GPU — validar a escolha de placa em Windows e macOS reais e medir o custo na abertura" (PR #95). Esta máquina é um Windows 11 x64 com **uma** GPU (AMD Radeon) e o Electron 42.11.16 (Chromium 148); não há Optimus nem Mac.
+
+**Passo 2 (Windows com uma placa só): lógica conferida no Electron real.** `app.getGPUInfo('basic')` devolveu duas entradas: a AMD (`0x1002:0x1638`, `gpuPreference` 0) e `0x1414:0x008C`, o Microsoft Basic Render Driver (WARP). `describeGpuDevices` descartou o WARP, deixou 1 dispositivo e deu `multipleGpus: false`, então a opção "Placa de vídeo" não deve aparecer. Conferi a função com o dado real, **não** abri a tela de Configurações para ver a opção sumida.
+
+**Passo 4 (custo na abertura): medido.** `getGPUInfo('basic')`, 3 execuções do Electron, 6 chamadas cada: a primeira custa **28,4 / 21,7 / 19,8 ms** (a que a abertura paga) e as seguintes ~1,5 a 2,3 ms (o resultado é guardado em `readDevices`). Na thread principal são 20 a 30 ms uma vez, sem sinal de DXGI/DXCore lento nesta máquina. Um driver ou notebook híbrido pode custar mais: só o passo 1 mede isso.
+
+**Passos 1 e 3: não executados.** Pedem um notebook Windows Intel+NVIDIA (Optimus) e um Mac com duas GPUs (Intel+AMD) e outro com NVIDIA, que não há aqui. Task aberta no Notion com o roteiro e o que medir.
