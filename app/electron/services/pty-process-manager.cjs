@@ -1434,7 +1434,7 @@ function getDefaultPtyShellArgs(command, adapter) {
     return adapter.getShellArgs(command)
   }
 
-  return /(?:powershell|pwsh)/i.test(command) ? ['-NoLogo', '-NoProfile'] : ['/d']
+  return /(?:powershell|pwsh)/i.test(command) ? ['-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass'] : ['/d']
 }
 
 /**

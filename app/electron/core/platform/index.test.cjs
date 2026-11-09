@@ -58,12 +58,18 @@ describe('adaptadores de plataforma: shell do PTY', () => {
       assert.deepEqual(getAdapter('darwin').getShellArgs('/bin/zsh'), ['-c'])
     })
 
-    it('no Windows mantém o shell interativo e sem perfil/AutoRun', () => {
+    it('no Windows mantém o shell interativo e sem perfil/AutoRun, com a política de execução liberada só nele', () => {
       const win32 = getAdapter('win32')
+      // O PowerShell prefere o `codex.ps1` ao `codex.cmd` da pasta clis, e a política
+      // padrão de uma máquina cliente (Restricted) recusa o .ps1: sem o Bypass, `codex`,
+      // `claude` e `gemini` digitados num Shell do app davam "execução de scripts desabilitada".
       assert.deepEqual(win32.getShellArgs('C:\\Program Files\\PowerShell\\7\\pwsh.exe'), [
         '-NoLogo',
         '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
       ])
+      assert.deepEqual(win32.getShellArgs('powershell.exe'), ['-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass'])
       assert.deepEqual(win32.getShellArgs('cmd.exe'), ['/d'])
     })
   })

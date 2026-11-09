@@ -59,7 +59,11 @@ function getShellArgs(shell) {
   if (lower.includes('powershell') || lower.includes('pwsh')) {
     // Keep a PTY interactive, but avoid user profiles that may contain a
     // stale `cd` or startup script and make the terminal fail at launch.
-    return ['-NoLogo', '-NoProfile']
+    // `-ExecutionPolicy Bypass` vale só para este processo: o PowerShell prefere
+    // o `codex.ps1` ao `codex.cmd` da pasta clis do app, e a política padrão de uma
+    // máquina cliente recusa o .ps1 ("a execução de scripts foi desabilitada").
+    // Uma política de grupo (MachinePolicy/UserPolicy) ainda vence este flag.
+    return [...POWERSHELL_SCRIPT_FLAGS]
   }
 
   // Disable CMD AutoRun registry commands for the same reason. Do not add
