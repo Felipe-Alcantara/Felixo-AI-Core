@@ -339,9 +339,11 @@ const MODAL_CHECK_MS = 250
  * houver `[aria-modal="true"]` na tela, a superfície fica `inert` (fora do Tab e
  * da árvore de acessibilidade, sem clique nem tecla) e continua no mesmo passo e
  * no mesmo lugar (a posição congela, `placementFrozen`).
- * O AgentQuestionDialog não pega o foco e escuta o teclado na janela: sem isto o
- * foco ficava num card coberto pelo overlay, o Enter avançava o tour por baixo e
- * o Esc de quem achava estar no tour dispensava a pergunta do agente.
+ * Sem isto o foco ficava num card coberto pelo overlay, o Enter avançava o tour por
+ * baixo e o Esc de quem achava estar no tour dispensava a pergunta do agente. O
+ * AgentQuestionDialog pega o foco ao abrir (o controle do tour que o tinha chega
+ * pelo `relatedTarget` do `focusin`) e, ao fechar, tenta devolvê-lo ao mesmo
+ * controle, que ainda está `inert`: quem o devolve é este hook, no quadro seguinte.
  *
  * Confere a cada `MODAL_CHECK_MS` e a cada troca de foco (o HandoffDialog puxa o
  * foco ao abrir). Ao ceder, o foco que estava no tour vai para o ponto de espera
@@ -360,29 +362,34 @@ function useYieldToModal(
   const yieldState = useRef<ModalYield>(NOT_YIELDED)
   const focusToReturn = useRef<unknown>(null)
 
-  const check = useEffectEvent(() => {
+  const check = useEffectEvent((anterior: EventTarget | null) => {
     const previous = yieldState.current
     const next = nextModalYield(previous, {
       modalAberto: hasOpenModal(document),
       ativo: document.activeElement,
       superficie: surfaceRef.current,
+      anterior: anterior instanceof Node ? anterior : null,
     })
     if (next === previous) return
     // Antes de focar: o `focusin` da espera chama esta conferência de novo e acha o estado já cedido.
     yieldState.current = next
-    focusHoldOnYield(next, holdRef.current)?.focus({ preventScroll: true })
+    const focoNoTour = surfaceRef.current?.contains(document.activeElement) ?? false
+    focusHoldOnYield(next, holdRef.current, focoNoTour)?.focus({ preventScroll: true })
     focusToReturn.current = next.cedido ? null : previous.foco
     setCedido(next.cedido)
   })
 
   useLayoutEffect(() => {
-    const run = () => check()
-    run()
-    const timer = window.setInterval(run, MODAL_CHECK_MS)
-    document.addEventListener('focusin', run, true)
+    const tick = () => check(null)
+    // `relatedTarget` do `focusin` é quem perdeu o foco: com o diálogo pegando o foco ao abrir,
+    // é o único rastro do controle do tour a que o foco volta quando ele fechar.
+    const onFocusIn = (event: FocusEvent) => check(event.relatedTarget)
+    tick()
+    const timer = window.setInterval(tick, MODAL_CHECK_MS)
+    document.addEventListener('focusin', onFocusIn, true)
     return () => {
       window.clearInterval(timer)
-      document.removeEventListener('focusin', run, true)
+      document.removeEventListener('focusin', onFocusIn, true)
     }
   }, [])
 

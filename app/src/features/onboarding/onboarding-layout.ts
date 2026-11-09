@@ -799,12 +799,24 @@ export const NOT_YIELDED: ModalYield = Object.freeze({ cedido: false, foco: null
  */
 export function nextModalYield<N>(
   state: ModalYield,
-  input: { modalAberto: boolean; ativo: N | null; superficie: { contains(node: N | null): boolean } | null },
+  input: {
+    modalAberto: boolean
+    ativo: N | null
+    superficie: { contains(node: N | null): boolean } | null
+    /**
+     * Quem acabou de perder o foco (o `relatedTarget` do `focusin`). Um diálogo que
+     * pega o foco ao abrir (o AgentQuestionDialog) já o tem quando a conferência
+     * roda, e `ativo` é ele; o controle do tour que o tinha chega aqui.
+     */
+    anterior?: N | null
+  },
 ): ModalYield {
   if (input.modalAberto === state.cedido) return state
   if (!input.modalAberto) return NOT_YIELDED
-  const focoNoTour = input.ativo !== null && input.superficie !== null && input.superficie.contains(input.ativo)
-  return { cedido: true, foco: focoNoTour ? input.ativo : null }
+  const estaNoTour = (node: N | null | undefined): node is N =>
+    node !== null && node !== undefined && input.superficie !== null && input.superficie.contains(node)
+  if (estaNoTour(input.ativo)) return { cedido: true, foco: input.ativo }
+  return { cedido: true, foco: estaNoTour(input.anterior) ? input.anterior : null }
 }
 
 /**
@@ -814,9 +826,13 @@ export function nextModalYield<N>(
  * canvas e apaga o bloco selecionado por baixo do diálogo (sem desfazer,
  * soltando a sessão do terminal), e `q` troca o modo seleção/pan. Foco que não
  * era do tour fica onde está (`null`).
+ *
+ * `focoNoTour` é se o foco AINDA está no tour. Um diálogo que pega o foco ao abrir
+ * já o tem quando o tour cede (o controle do tour que o tinha só chega como
+ * `anterior`): levá-lo ao ponto de espera tiraria o foco do diálogo.
  */
-export function focusHoldOnYield<T>(yielded: ModalYield, hold: T | null): T | null {
-  return yielded.cedido && yielded.foco !== null ? hold : null
+export function focusHoldOnYield<T>(yielded: ModalYield, hold: T | null, focoNoTour = true): T | null {
+  return yielded.cedido && yielded.foco !== null && focoNoTour ? hold : null
 }
 
 /**

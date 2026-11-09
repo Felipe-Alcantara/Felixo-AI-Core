@@ -1009,7 +1009,8 @@ function criarCenariosDoTutorial(deps) {
     })
     await conferirPerguntaSobreOTour(cenario)
     await fecharTourSeAberto(cenario)
-    log('SA3 Esc em camadas: ok (flyout, Busca, HandoffDialog e pergunta do agente donos do teclado; Delete, Backspace e q sob a pergunta não agem no canvas; Agente cria terminal com o tour aberto)')
+    await conferirPerguntaPrendeOFoco(cenario)
+    log('SA3 Esc em camadas: ok (flyout, Busca, HandoffDialog e pergunta do agente donos do teclado; Delete, Backspace e q sob a pergunta não agem no canvas; Agente cria terminal com o tour aberto; a pergunta pega o foco, prende o Tab, não deixa o clique nem a tecla agirem por baixo e o Esc fecha só ela, com a gaveta aberta)')
   }
 
   /**
@@ -1035,6 +1036,12 @@ function criarCenariosDoTutorial(deps) {
         const card = document.querySelector('[data-felixo-onboarding="card"]')
         return !document.querySelector('[aria-modal="true"]') && Boolean(card) && !card.hasAttribute('inert')
       })
+    // A pergunta pega o foco ao abrir (o tour cede, sem o ponto de espera, que é para diálogo sem foco).
+    const focoNaPergunta = () =>
+      page.evaluate(() => {
+        const painel = document.querySelector('[role="dialog"][aria-modal="true"]')
+        return Boolean(painel && painel.contains(document.activeElement))
+      })
     const focarProximo = async () => {
       await page.evaluate((selector) => document.querySelector(selector)?.focus(), `${SEL.cartao} ${acao('proximo')}`)
       exigir((await foco()).acao === 'proximo', cenario, 'o foco não entrou no Próximo do card', await foco())
@@ -1044,6 +1051,7 @@ function criarCenariosDoTutorial(deps) {
     await focarProximo()
     deps.registrarPerguntaDoAgente({ pergunta: 'Smoke do tutorial: qual opção?', opcoes: ['Primeira', 'Segunda'] })
     await cedeu()
+    exigir(await focoNaPergunta(), cenario, 'a pergunta não pegou o foco', await foco())
     await conferirCardParadoSobAPergunta(cenario)
     await page.keyboard.press('Enter')
     await measureStableGeometry(page, `${cenario} Enter sob a pergunta`, [SEL.cartao], QUADROS_CURTOS)
@@ -1057,24 +1065,27 @@ function criarCenariosDoTutorial(deps) {
     )
     exigir((await cartao())?.passo === passo, cenario, 'a pergunta mudou o passo do tour', await cartao())
 
-    // 2) Tab com a pergunta aberta nunca entra no card; o foco levado para fora fica lá.
-    await focarProximo()
+    // 2) O foco estava fora do tour (a pessoa o levou para o Enquadrar): a pergunta o pega, o Tab
+    // nunca entra no card inerte, e fechada ela o devolve a quem o tinha, sem o tour puxá-lo.
+    const enquadrar = '.felixo-zoom-pill button[aria-label="Enquadrar todos os blocos"]'
+    await page.locator(enquadrar).focus()
     deps.registrarPerguntaDoAgente({ pergunta: 'Smoke do tutorial: outra?', opcoes: ['A', 'B'] })
     await cedeu()
     for (let index = 0; index < 3; index += 1) {
       await page.keyboard.press('Tab')
       const atual = await foco()
       exigir(!atual.noCartao, cenario, 'Tab entrou no card inerte', atual)
+      exigir(await focoNaPergunta(), cenario, 'Tab tirou o foco da pergunta', atual)
     }
-    const levado = await foco()
     await page.keyboard.press('Escape')
     await retomou()
+    await esperar(cenario, 'o foco voltar ao Enquadrar', (seletor) => document.activeElement === document.querySelector(seletor), enquadrar)
     await measureStableGeometry(page, `${cenario} depois da pergunta`, [SEL.cartao], QUADROS_CURTOS)
     const final = await foco()
-    exigir(!final.noCartao, cenario, 'o tour puxou de volta o foco que a pessoa levou para fora', { levado, final })
+    exigir(!final.noCartao, cenario, 'o tour puxou de volta o foco que a pessoa levou para fora', final)
     exigir((await cartao())?.passo === passo, cenario, 'a pergunta mudou o passo do tour', await cartao())
 
-    await conferirTeclasDoCanvasSobAPergunta(cenario, { cedeu, retomou, focarProximo })
+    await conferirTeclasDoCanvasSobAPergunta(cenario, { cedeu, retomou, focarProximo, focoNaPergunta })
   }
 
   /**
@@ -1120,7 +1131,7 @@ function criarCenariosDoTutorial(deps) {
    * seleção/pan. O foco que era do tour espera num ponto neutro (`nokey`, fora do
    * card) e volta ao Próximo quando a pergunta fecha.
    */
-  async function conferirTeclasDoCanvasSobAPergunta(cenario, { cedeu, retomou, focarProximo }) {
+  async function conferirTeclasDoCanvasSobAPergunta(cenario, { cedeu, retomou, focarProximo, focoNaPergunta }) {
     const alvo = 'fixture-terminal'
     const lerCanvas = () =>
       page.evaluate(async (id) => {
@@ -1166,7 +1177,7 @@ function criarCenariosDoTutorial(deps) {
       exigir(depois.pan === antes.pan, cenario, `${tecla} trocou o modo do canvas por baixo da pergunta`, evidencia)
     }
     const esperando = await foco()
-    exigir(esperando.naEspera && esperando.nokey && !esperando.noCartao, cenario, 'o foco cedido não ficou no ponto de espera do tour', esperando)
+    exigir(esperando.nokey && !esperando.noCartao && (await focoNaPergunta()), cenario, 'o foco cedido não ficou na pergunta', esperando)
     exigir(
       (await page.evaluate(() => document.querySelectorAll('[role="dialog"][aria-modal="true"]').length)) === 1,
       cenario,
@@ -1183,6 +1194,132 @@ function criarCenariosDoTutorial(deps) {
     await page.keyboard.press('Escape')
     await esperar(cenario, 'o bloco da fixture deixar de estar selecionado', (id) =>
       !document.querySelector(`.react-flow__node[data-id="${id}"]`)?.classList.contains('selected'), alvo)
+  }
+
+  /**
+   * AgentQuestionDialog SEM o tutorial, com a gaveta do terminal aberta e um bloco
+   * selecionado por baixo. O diálogo é `aria-modal`: pega o foco ao abrir, o Tab e o
+   * Shift+Tab ficam dentro dele, clicar no texto ou no fundo não leva o foco ao canvas
+   * (onde `q` troca o modo e Delete apaga o bloco selecionado), nenhuma tecla age por
+   * baixo, clicar nele não fecha a gaveta (camada flutuante) e um Esc fecha só a
+   * pergunta: a gaveta continua e o foco volta ao controle que o tinha.
+   */
+  async function conferirPerguntaPrendeOFoco(cenario) {
+    exigir(typeof deps.registrarPerguntaDoAgente === 'function', cenario, 'o smoke não recebeu como gravar uma pergunta de agente')
+    const alvo = 'fixture-terminal'
+    const dialogo = '[role="dialog"][aria-modal="true"]'
+    const lerPergunta = () =>
+      page.evaluate(
+        ({ seletor, id }) => {
+          const painel = document.querySelector(seletor)
+          const ativo = document.activeElement
+          const node = document.querySelector(`.react-flow__node[data-id="${id}"]`)
+          const rotulo = ativo?.getAttribute('aria-label')
+          return {
+            aberta: Boolean(painel),
+            focoDentro: Boolean(painel && ativo && painel.contains(ativo)),
+            foco: ativo ? `${ativo.tagName}${ativo.id ? `#${ativo.id}` : ''}${rotulo ? `[${rotulo}]` : ''}:${(ativo.textContent ?? '').slice(0, 12)}` : null,
+            gaveta: Boolean(document.querySelector('[data-canvas-terminal-drawer]')),
+            noGatilho: ativo?.hasAttribute('data-canvas-handoff-trigger') ?? false,
+            blocoNoDom: Boolean(node),
+            blocoSelecionado: Boolean(node?.classList.contains('selected')),
+            pan: document.querySelector('.react-flow')?.classList.contains('cursor-grab') ?? null,
+          }
+        },
+        { seletor: dialogo, id: alvo },
+      )
+    const noDisco = () =>
+      page.evaluate(async (id) => ((await window.felixo.canvas.list()).nodes ?? []).some((item) => item.id === id), alvo)
+    const dentro = async (etapa) => {
+      const atual = await lerPergunta()
+      exigir(atual.aberta && atual.focoDentro, cenario, `o foco saiu da pergunta (${etapa})`, atual)
+      exigir(atual.gaveta, cenario, `a gaveta fechou (${etapa})`, atual)
+      return atual
+    }
+
+    // Gaveta solta (um clique fora a fecharia) e o bloco da fixture selecionado pelo teclado.
+    await page.evaluate(() => localStorage.setItem('felixo:terminal-drawer-pinned', '0'))
+    await page.evaluate(() => {
+      document
+        .querySelector('.felixo-zoom-pill button[aria-label="Enquadrar todos os blocos"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }))
+    })
+    await esperar(cenario, 'o bloco da fixture na tela', (id) => document.querySelector(`.react-flow__node[data-id="${id}"]`) !== null, alvo)
+    exigir(
+      await page.evaluate((id) => {
+        const node = document.querySelector(`.react-flow__node[data-id="${id}"]`)
+        node?.focus({ preventScroll: true })
+        return document.activeElement === node
+      }, alvo),
+      cenario,
+      'o foco não entrou no bloco da fixture',
+    )
+    await page.keyboard.press('Enter')
+    await esperar(cenario, 'o bloco da fixture ficar selecionado', (id) =>
+      Boolean(document.querySelector(`.react-flow__node[data-id="${id}"]`)?.classList.contains('selected')), alvo)
+    await page.locator(`[data-terminal-expand-trigger="${alvo}"]`).first().focus()
+    await page.keyboard.press('Enter')
+    await page.locator('[data-canvas-terminal-drawer]').waitFor({ state: 'visible', timeout })
+    // O foco no gatilho do Handoff: um Esc ali fechava a gaveta junto com a pergunta.
+    await page.locator('[data-canvas-handoff-trigger]').focus()
+    const antes = await lerPergunta()
+    exigir(antes.gaveta && antes.noGatilho && antes.blocoNoDom && antes.blocoSelecionado && antes.pan === false, cenario, 'o cenário da pergunta não está pronto', antes)
+
+    // 1) A pergunta chega e pega o foco; a gaveta continua aberta.
+    deps.registrarPerguntaDoAgente({ pergunta: 'Smoke: e o foco da pergunta?', opcoes: ['A', 'B', 'C'] })
+    await page.locator(dialogo).waitFor({ state: 'visible', timeout })
+    await esperar(cenario, 'o foco entrar na pergunta', (seletor) => {
+      const painel = document.querySelector(seletor)
+      return Boolean(painel && painel.contains(document.activeElement))
+    }, dialogo)
+    await dentro('ao abrir')
+
+    // 2) Tab e Shift+Tab giram dentro do diálogo (painel + 3 opções + Dispensar), sem passar ao canvas.
+    for (const tecla of ['Tab', 'Shift+Tab']) {
+      const passou = new Set()
+      for (let indice = 0; indice < 8; indice += 1) {
+        await page.keyboard.press(tecla)
+        passou.add((await dentro(`${tecla} ${indice + 1}`)).foco)
+      }
+      exigir(passou.size >= 4, cenario, `${tecla} não girou pelas 3 opções e pelo Dispensar`, [...passou])
+    }
+
+    // 3) Clicar no texto ou no fundo não leva o foco ao canvas nem fecha a gaveta.
+    await page.locator('#agent-question-title').click()
+    await dentro('clique no texto da pergunta')
+    await page.mouse.click(4, 4)
+    await dentro('clique no fundo da pergunta')
+
+    // 4) Nenhuma tecla age por baixo: o bloco selecionado fica, o modo do canvas também.
+    for (const tecla of ['Delete', 'Backspace', 'q']) {
+      await page.keyboard.press(tecla)
+      const depois = await dentro(tecla)
+      const evidencia = { tecla, antes, depois, noDisco: await noDisco() }
+      exigir(depois.blocoNoDom && evidencia.noDisco, cenario, `${tecla} apagou o bloco selecionado por baixo da pergunta`, evidencia)
+      exigir(depois.pan === antes.pan, cenario, `${tecla} trocou o modo do canvas por baixo da pergunta`, evidencia)
+    }
+
+    // 5) Mesmo com o foco caído no body (o que um controle removido faz), a tecla é da pergunta.
+    await page.evaluate(() => document.activeElement?.blur())
+    await page.keyboard.press('Delete')
+    const semFoco = await lerPergunta()
+    exigir(semFoco.aberta && semFoco.blocoNoDom && (await noDisco()), cenario, 'sem foco, Delete agiu no canvas', semFoco)
+    await page.keyboard.press('Tab')
+    await dentro('Tab com o foco no body')
+
+    // 6) Esc fecha só a pergunta: a gaveta continua e o foco volta ao gatilho do Handoff.
+    await page.keyboard.press('Escape')
+    await page.locator(dialogo).waitFor({ state: 'detached', timeout })
+    await esperar(cenario, 'o foco voltar ao gatilho do Handoff', () =>
+      document.activeElement?.hasAttribute('data-canvas-handoff-trigger') === true,
+    )
+    const depoisDoEsc = await lerPergunta()
+    exigir(depoisDoEsc.gaveta, cenario, 'o Esc da pergunta fechou também a gaveta do terminal', depoisDoEsc)
+    exigir(depoisDoEsc.blocoNoDom && depoisDoEsc.blocoSelecionado && (await noDisco()), cenario, 'o bloco selecionado não sobreviveu à pergunta', depoisDoEsc)
+
+    // 7) Sem pergunta, o Esc volta a ser da gaveta.
+    await page.keyboard.press('Escape')
+    await page.waitForFunction(() => !document.querySelector('[data-canvas-terminal-drawer]'), null, { timeout })
   }
 
   /** SA4: o que o leitor de tela recebe (árvore de acessibilidade real) e a região live. */

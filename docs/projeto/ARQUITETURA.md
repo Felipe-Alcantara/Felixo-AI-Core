@@ -353,6 +353,25 @@ De 2 a 4 opcoes, limites de tamanho em `agent-requests.cjs`. A CLI ao
 contrario de `canvas escrever`, BLOQUEIA ate responderem (5 min): codigo 0 =
 escolha no stdout, 3 = dispensada, 1 = sem resposta no prazo.
 
+O `AgentQuestionDialog` e modal de verdade (`aria-modal`), e o teclado respeita
+isso: ao abrir pega o foco no painel (`tabIndex=-1`, nome = a pergunta; nunca
+numa opcao, para um Enter apressado nao responder), prende Tab e Shift+Tab
+(`getFocusableElements` + `tabTrapTarget`, o mesmo ciclo do `AccountSwitchDialog`)
+e trata Esc e 1–N no proprio conteiner (`onKeyDown` com `stopPropagation`, regra
+pura em `questionKeyAction`), nao mais na janela: nada age no canvas, na gaveta
+ou no tutorial por baixo, e o Esc fecha so a pergunta. Se o foco cair fora dela
+(um controle que sai da pagina), um ouvinte de captura no documento trata a
+tecla do mesmo jeito, a nao ser que o foco esteja noutro modal. O overlay e
+`nokey` e camada flutuante (`data-felixo-floating-layer`: clicar nele nao fecha a
+gaveta solta), clicar no fundo nao leva o foco ao canvas, e fechado ele devolve o
+foco a quem o tinha (`questionFocusReturnTarget`; a regiao do canvas se esse
+elemento saiu da pagina). As opcoes usam `aria-disabled` enquanto respondem, nao
+`disabled`: um botao focado que desabilita perde o foco para o body. Com o
+tutorial aberto, o tour cede (`inert`) e guarda o controle que tinha o foco pelo
+`relatedTarget` do `focusin` do dialogo (`nextModalYield`, `anterior`); quem o
+devolve ao fechar e o tour (`resolveFocusAfterModal`), porque o card ainda esta
+inerte quando o dialogo tenta devolve-lo.
+
 ## Modo fast do Codex ao criar agente
 
 Contrato confirmado no proprio Codex 0.154.0, nao por documentacao: cada

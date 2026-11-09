@@ -706,6 +706,27 @@ describe('diálogo modal por cima do tour (nextModalYield e resolveFocusAfterMod
     expect(resolveFocusAfterModal({ saved: cedeu.foco, current: body, surface: card })).toBeNull()
   })
 
+  it('o diálogo que pega o foco ao abrir: o controle do tour que o perdeu é o guardado', () => {
+    // O AgentQuestionDialog focaliza o painel; quando a conferência roda, `ativo` já é ele.
+    const painel = focusNode('DIV', '[role="dialog"]')
+    const cedeu = nextModalYield(NOT_YIELDED, { modalAberto: true, ativo: painel, superficie: card, anterior: proximo })
+    expect(cedeu).toEqual({ cedido: true, foco: proximo })
+    // Fechado o diálogo (que não conseguiu devolver o foco a um card inerte), o tour o devolve.
+    expect(resolveFocusAfterModal({ saved: cedeu.foco, current: body, surface: card })).toBe(proximo)
+  })
+
+  it('quem perdeu o foco fora do tour, ou ninguém, não é guardado', () => {
+    const painel = focusNode('DIV', '[role="dialog"]')
+    for (const anterior of [terminal, body, null, undefined]) {
+      const cedeu = nextModalYield(NOT_YIELDED, { modalAberto: true, ativo: painel, superficie: card, anterior })
+      expect(cedeu).toEqual({ cedido: true, foco: null })
+    }
+  })
+
+  it('o foco que ainda está no tour vence o anterior', () => {
+    expect(nextModalYield(NOT_YIELDED, { modalAberto: true, ativo: proximo, superficie: card, anterior: terminal }).foco).toBe(proximo)
+  })
+
   it('sem mudança devolve o mesmo estado (a conferência periódica não re-renderiza)', () => {
     expect(nextModalYield(NOT_YIELDED, { modalAberto: false, ativo: proximo, superficie: card })).toBe(NOT_YIELDED)
     const cedeu = nextModalYield(NOT_YIELDED, { modalAberto: true, ativo: proximo, superficie: card })
@@ -752,6 +773,14 @@ describe('diálogo modal por cima do tour (nextModalYield e resolveFocusAfterMod
     const noTerminal = nextModalYield(NOT_YIELDED, { modalAberto: true, ativo: terminal, superficie: card })
     expect(focusHoldOnYield(noTerminal, espera)).toBeNull()
     expect(focusHoldOnYield(NOT_YIELDED, espera)).toBeNull()
+  })
+
+  it('o diálogo que já pegou o foco não o perde para o ponto de espera', () => {
+    const painel = focusNode('DIV', '[role="dialog"]')
+    const cedeu = nextModalYield(NOT_YIELDED, { modalAberto: true, ativo: painel, superficie: card, anterior: proximo })
+    expect(cedeu.foco).toBe(proximo)
+    expect(focusHoldOnYield(cedeu, espera, false)).toBeNull()
+    expect(focusHoldOnYield(cedeu, espera, true)).toBe(espera)
   })
 
   it('o foco que esperou volta ao mesmo botão: a espera não conta como "levado para outro lugar"', () => {

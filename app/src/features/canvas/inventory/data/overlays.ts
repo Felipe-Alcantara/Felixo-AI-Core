@@ -124,8 +124,8 @@ export const overlaySurfaces: InventoryElement[] = [
     ],
     gaps: [
       {
-        what: 'A cessão ao diálogo depende de sondagem (MODAL_CHECK_MS = 250 ms) porque o AgentQuestionDialog não pega o foco nem prende o Tab; nesse intervalo só o hasOpenModal dos handlers impede o Enter de avançar o tour por baixo.',
-        risk: 'médio',
+        what: 'A cessão ao diálogo depende de sondagem (MODAL_CHECK_MS = 250 ms) e do focusin; o AgentQuestionDialog já pega o foco ao abrir (cede na hora), mas um diálogo modal que não pegue o foco só cede na próxima sondagem, e nesse intervalo só o hasOpenModal dos handlers impede o Enter de avançar o tour por baixo.',
+        risk: 'baixo',
         task: '3e891f95-497e-81b3-8857-da9125ff3f49',
       },
     ],

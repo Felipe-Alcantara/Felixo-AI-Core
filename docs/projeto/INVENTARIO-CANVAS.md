@@ -32,7 +32,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **Elementos:** 100 (10 blocos, 16 ferramentas, 74 outras superfícies)
 - **Controles:** 378, dos quais 57 com teste específico
 - **Elementos sem nenhum teste:** 4
-- **Lacunas:** 268 (alto 9, médio 143, baixo 116), em 76 tasks
+- **Lacunas:** 267 (alto 8, médio 142, baixo 117), em 76 tasks
 
 ## Moldura do canvas
 
@@ -2374,25 +2374,24 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **ID:** `agent-question-dialog` · **Dono:** `src/features/canvas/components/AgentQuestionDialog.tsx`
 - **Persistência:** processo principal: fila de pedidos de agente (pasta agent-requests, um arquivo por pedido)
 - **IPC:** `canvas:list-questions`, `canvas:answer-question`, `canvas:agent-questions`
-- **Depende de:** `agent-question-dialog (pickPendingQuestion, optionIndexForKey)`, `window.felixo.canvas`
-- **Sobreposição:** fixed inset-0 z-60 com fundo bg-black/50, montado no CanvasView; cobre canvas, gaveta e painéis; o card do tutorial fica inert por baixo. Não redimensiona (bloqueante, max-w-md).
-- **Testes:** `src/features/canvas/components/agent-question-dialog.test.ts`, `electron/services/agent-question-ipc-handlers.test.cjs`, `scripts/canvas-smoke-onboarding.cjs` → `criarCenariosDoTutorial`
+- **Depende de:** `agent-question-dialog (pickPendingQuestion, optionIndexForKey, questionKeyAction, questionFocusReturnTarget)`, `keyboard-focus (getFocusableElements, tabTrapTarget)`, `window.felixo.canvas`
+- **Sobreposição:** fixed inset-0 z-60 com fundo bg-black/50, montado no CanvasView; cobre canvas, gaveta e painéis; o card do tutorial fica inert por baixo. Pega o foco no painel (tabIndex -1), prende o Tab, é nokey e camada flutuante (clicar nele não fecha a gaveta solta). Não redimensiona (bloqueante, max-w-md).
+- **Testes:** `src/features/canvas/components/agent-question-dialog.test.ts`, `electron/services/agent-question-ipc-handlers.test.cjs`, `scripts/canvas-smoke-onboarding.cjs` → `criarCenariosDoTutorial`, `scripts/canvas-smoke-onboarding.cjs` → `conferirPerguntaPrendeOFoco`
 
 | Estado | Quando |
 | --- | --- |
 | normal | A pergunta pendente mais antiga (pickPendingQuestion) com origem, texto puro e opções numeradas. |
 | empty | Sem pergunta pendente: não renderiza nada. |
 | error | Resposta recusada: "Não foi possível responder." (ou a mensagem do main) em vermelho. |
-| pending | busy enquanto responde: opções e Dispensar desabilitados. |
+| pending | busy enquanto responde: opções e Dispensar com aria-disabled (continuam focáveis; answer ignora o clique). |
 
 | Controle | Gatilho | Efeito | Falha conhecida | Teste |
 | --- | --- | --- | --- | --- |
-| `onClick={() => void answer(indice)}` (button) | clique ou tecla 1–4 (ouvinte na janela inteira) | Botão repetido por opção: canvas:answer-question { id, indice }; o main resolve o pedido com a opção do arquivo gravado e o agente bloqueado recebe a resposta; a lista é recarregada (canvas:list-questions). (desabilitado: busy) | Recusa: mensagem em vermelho. IPC rejeitado: try/finally sem catch, só o busy volta. | `scripts/canvas-smoke-onboarding.cjs` → `criarCenariosDoTutorial` |
-| `Dispensar (Esc)` (button) | clique ou Esc em qualquer lugar da janela | answer(null): o main resolve o pedido como recusado (aceito: false) e o diálogo some. (desabilitado: busy) | Mesma da resposta: recusa em vermelho, rejeição sem tratamento. | `scripts/canvas-smoke-onboarding.cjs` → `criarCenariosDoTutorial` |
+| `onClick={() => void answer(indice)}` (button) | clique ou tecla 1–4 (onKeyDown do contêiner; com o foco fora da pergunta, ouvinte de captura no documento) | Botão repetido por opção: canvas:answer-question { id, indice }; o main resolve o pedido com a opção do arquivo gravado e o agente bloqueado recebe a resposta; a lista é recarregada (canvas:list-questions). (desabilitado: busy) | Recusa: mensagem em vermelho. IPC rejeitado: try/finally sem catch, só o busy volta. | `scripts/canvas-smoke-onboarding.cjs` → `criarCenariosDoTutorial` |
+| `Dispensar (Esc)` (button) | clique ou Esc (onKeyDown do contêiner; fecha só a pergunta, a gaveta e o tour não recebem a tecla) | answer(null): o main resolve o pedido como recusado (aceito: false) e o diálogo some. (desabilitado: busy) | Mesma da resposta: recusa em vermelho, rejeição sem tratamento. | `scripts/canvas-smoke-onboarding.cjs` → `criarCenariosDoTutorial` |
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Não pega o foco nem prende o Tab, e Esc e 1–4 são ouvidos na janela inteira: digitar um número no terminal ou num campo com a pergunta aberta responde a pergunta. | alto | `3e891f95-497e-81b3-8857-da9125ff3f49` |
 | Mesma camada z 60 do HandoffDialog e do AccountSwitchDialog; pela ordem do DOM a pergunta fica por baixo deles, e as teclas 1–4 continuam valendo. Sem teste dos dois abertos. | médio | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
 | O smoke responde pelo teclado; o clique nas opções e em Dispensar não é exercitado. | baixo | `3ec91f95-497e-81e8-8f18-e2a529b0568e` |
 | answer e load não tratam IPC rejeitado: nenhum aviso (AgentQuestionDialog.tsx:28-56). | baixo | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
@@ -2596,7 +2595,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| A cessão ao diálogo depende de sondagem (MODAL_CHECK_MS = 250 ms) porque o AgentQuestionDialog não pega o foco nem prende o Tab; nesse intervalo só o hasOpenModal dos handlers impede o Enter de avançar o tour por baixo. | médio | `3e891f95-497e-81b3-8857-da9125ff3f49` |
+| A cessão ao diálogo depende de sondagem (MODAL_CHECK_MS = 250 ms) e do focusin; o AgentQuestionDialog já pega o foco ao abrir (cede na hora), mas um diálogo modal que não pegue o foco só cede na próxima sondagem, e nesse intervalo só o hasOpenModal dos handlers impede o Enter de avançar o tour por baixo. | baixo | `3e891f95-497e-81b3-8857-da9125ff3f49` |
 
 ### Card do tutorial (Pular, Voltar, Próximo/Concluir)
 
@@ -2902,7 +2901,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3e691f95-497e-81c8-ba05-c3074dc036f0` — 2 lacunas
 - `3e791f95-497e-81bd-8e8c-de6f9e16cec5` — 1 lacuna
 - `3e891f95-497e-8148-b00e-f27e78767664` — 2 lacunas
-- `3e891f95-497e-81b3-8857-da9125ff3f49` — 2 lacunas
+- `3e891f95-497e-81b3-8857-da9125ff3f49` — 1 lacuna
 - `3e991f95-497e-8104-a090-d5b295ba4747` — 2 lacunas
 - `3e991f95-497e-8109-832d-f789917f708d` — 1 lacuna
 - `3e991f95-497e-810b-9f94-ed5201606718` — 1 lacuna
