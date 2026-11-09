@@ -315,6 +315,84 @@ describe('procurador da store do tutorial', () => {
   })
 })
 
+/** Uma store mínima, só para ver o que o procurador repassa (sem a decisão da store real). */
+function fakeStore(calls: string[], throwOn: string[] = []) {
+  const record = (name: string) => () => {
+    calls.push(name)
+    if (throwOn.includes(name)) throw new Error(`${name} lançou`)
+  }
+  return {
+    subscribe: () => () => {},
+    getSnapshot: () => INITIAL,
+    getServerSnapshot: () => INITIAL,
+    canvasReady: record('canvasReady'),
+    next: record('next'),
+    back: record('back'),
+    load: async () => {},
+    settled: async () => {},
+    focusBeforeOpen: () => null,
+  } as unknown as OnboardingStore
+}
+const INITIAL = createDirect().store.getSnapshot()
+
+describe('procurador da store: bordas que a revisão adversarial deixou', () => {
+  it('desativado pelo reportFailure antes de a store ser pedida: ready() não a ressuscita nem repassa o que ficou na fila', async () => {
+    const calls: string[] = []
+    let downloads = 0
+    const proxy = createOnboardingStoreProxy({
+      loadStore: async () => {
+        downloads++
+        return fakeStore(calls)
+      },
+      read: null,
+    })
+    proxy.next()
+    proxy.reportFailure(new Error('render quebrou'))
+    await expect(proxy.ready()).rejects.toThrow('não carregou')
+    await proxy.settled()
+    expect(downloads).toBe(0)
+    expect(calls).toEqual([])
+    expect(proxy.getSnapshot().fase).toBe('desativado')
+  })
+
+  it('ponte que lança de forma síncrona na leitura antecipada não escapa do canvasReady', () => {
+    const proxy = createOnboardingStoreProxy({
+      loadStore: () => new Promise(() => {}),
+      read: () => {
+        throw new Error('ponte indisponível')
+      },
+    })
+    expect(() => proxy.canvasReady(0)).not.toThrow()
+  })
+
+  it('no replay, uma chamada que lança não aborta as seguintes, e o erro vai para o log', async () => {
+    const calls: string[] = []
+    const logs: OnboardingLogEntry[] = []
+    const proxy = createOnboardingStoreProxy({
+      loadStore: async () => fakeStore(calls, ['next']),
+      read: null,
+      log: (entry) => {
+        logs.push(entry)
+      },
+    })
+    proxy.canvasReady(0)
+    proxy.next()
+    proxy.back()
+    await proxy.settled()
+    expect(calls).toEqual(['canvasReady', 'next', 'back'])
+    expect(logs.filter((entry) => entry.level === 'error')).toHaveLength(1)
+  })
+
+  it('a fila antes da store não descarta chamadas: cinco chegam as cinco, na ordem', async () => {
+    const calls: string[] = []
+    const proxy = createOnboardingStoreProxy({ loadStore: async () => fakeStore(calls), read: null })
+    for (const call of ['next', 'back', 'next', 'back', 'next'] as const) proxy[call]()
+    proxy.canvasReady(0)
+    await proxy.settled()
+    expect(calls).toEqual(['next', 'back', 'next', 'back', 'next', 'canvasReady'])
+  })
+})
+
 describe('store da janela', () => {
   it('loadOnboardingUi entrega a interface com a store real já ligada (nunca o snapshot provisório)', async () => {
     expect(onboardingStore.getSnapshot().ajuda).toHaveLength(0)

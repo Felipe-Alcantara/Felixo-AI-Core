@@ -101,13 +101,22 @@ export function createOnboardingStoreProxy(deps: OnboardingStoreProxyDeps): Onbo
 
   function ensureStore(): Promise<OnboardingStore | null> {
     if (loading) return loading
+    // Desativado sem a store (reportFailure antes de ela ser pedida): não a ressuscita.
+    if (failed) return Promise.resolve(null)
     loading = deps.loadStore(storeRead).then(
       (created) => {
         store = created
         created.subscribe(emit)
         const queued = pending
         pending = []
-        queued.forEach((call) => call(created))
+        // Uma chamada que lança não pode abortar as seguintes: a store veria uma sequência furada.
+        queued.forEach((call) => {
+          try {
+            call(created)
+          } catch (error) {
+            log({ level: 'error', message: 'Uma chamada guardada do tutorial lançou ao ser repassada.', details: describeError(error) })
+          }
+        })
         emit()
         return created
       },
@@ -145,7 +154,12 @@ export function createOnboardingStoreProxy(deps: OnboardingStoreProxyDeps): Onbo
     },
     canvasReady(...args: Parameters<OnboardingStore['canvasReady']>) {
       if (!store && !failed && read && !prefetched) {
-        prefetched = read()
+        try {
+          prefetched = read()
+        } catch (error) {
+          // Ponte que lança de forma síncrona vira rejeição: quem trata é a store.
+          prefetched = Promise.reject(error)
+        }
         // Quem trata o resultado é a store; aqui só não deixa a rejeição solta.
         prefetched.catch(() => undefined)
       }

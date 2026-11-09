@@ -55,7 +55,7 @@ import type {
   NewTerminalOptions,
 } from '../services/new-terminal-options'
 import type { AnchorId } from '../../onboarding/onboarding-catalog'
-import { helpButtonLabel } from '../../onboarding/onboarding-help-label'
+import { helpButtonLabel, helpMenuControls } from '../../onboarding/onboarding-help-label'
 import { OnboardingErrorBoundary } from '../../onboarding/OnboardingErrorBoundary'
 import { loadOnboardingUi, onboardingStore, useOnboardingNovelties } from '../../onboarding/onboarding-store-proxy'
 import type { HelpMenuCloseReason } from '../../onboarding/OnboardingHelpMenu'
@@ -273,7 +273,7 @@ export function CanvasToolbar({
           label={helpButtonLabel(help.novidades)}
           active={help.open}
           expanded={help.open}
-          controls={help.menuId}
+          {...helpMenuControls(help.open, help.menuId)}
           onClick={help.toggle}
           tourAnchor="rail-ajuda"
           helpTrigger

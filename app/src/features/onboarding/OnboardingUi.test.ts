@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { ONBOARDING_TOURS, type StepDef } from './onboarding-catalog'
-import { helpButtonLabel } from './onboarding-help-label'
+import { helpButtonLabel, helpMenuControls } from './onboarding-help-label'
 import { formatOnboardingMessage, type MessageKey } from './onboarding-messages'
 import type { HelpEntry } from './onboarding-state'
 import type { NoticeSession, TourSession } from './onboarding-store'
@@ -391,5 +391,12 @@ describe('menu Ajuda (todos os estados)', () => {
       expect(text.startsWith('[')).toBe(true)
     }
     expect(describeHelpMenu({ ajuda: [entry()], persistencia: 'ok', lang: 'fr' }).lang).toBe('pt-BR')
+  })
+})
+
+describe('aria-controls do botão Ajuda', () => {
+  it('só aponta para o menu quando ele está aberto (fechado, o id não existe no DOM)', () => {
+    expect(helpMenuControls(true, 'menu-ajuda')).toEqual({ controls: 'menu-ajuda' })
+    expect(helpMenuControls(false, 'menu-ajuda')).toEqual({})
   })
 })

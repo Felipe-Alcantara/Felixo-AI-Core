@@ -1012,3 +1012,20 @@ confirmação com o usuário na `v0.1.517` e a guarda no CI sem Node.
 **Passo 4 (custo na abertura): medido.** `getGPUInfo('basic')`, 3 execuções do Electron, 6 chamadas cada: a primeira custa **28,4 / 21,7 / 19,8 ms** (a que a abertura paga) e as seguintes ~1,5 a 2,3 ms (o resultado é guardado em `readDevices`). Na thread principal são 20 a 30 ms uma vez, sem sinal de DXGI/DXCore lento nesta máquina. Um driver ou notebook híbrido pode custar mais: só o passo 1 mede isso.
 
 **Passos 1 e 3: não executados.** Pedem um notebook Windows Intel+NVIDIA (Optimus) e um Mac com duas GPUs (Intel+AMD) e outro com NVIDIA, que não há aqui. Task aberta no Notion com o roteiro e o que medir.
+
+---
+
+## 2026-11-09 — Onboarding: parte dos não bloqueantes da revisão adversarial do tutorial
+
+**Contexto.** Task "Onboarding — tratar os não bloqueantes da revisão adversarial do tutorial" (PR #96, ~20 itens, prioridade baixa). Tratei os que se provam em teste de unidade; os de UX, foco e concorrência dependem do smoke visual do canvas (SA1, SA5, SA8) e ficaram fora.
+
+**Corrigido (teste que reprova antes e passa depois).**
+- `onboarding-store-proxy.ts`: `ensureStore` não ressuscita um tutorial desativado pelo `reportFailure` antes de a store ser pedida (antes, `ready()` baixava a store e repassava a fila velha; o item é o `ensureStore`/`failed` e a mutação M14); uma ponte que lança de forma síncrona na leitura antecipada deixa de escapar do `canvasReady`; no replay, uma chamada guardada que lança não aborta as seguintes e vai para o log.
+- A mutação M13 (descartar a chamada mais antiga da fila) agora morre: o teste de cinco chamadas na ordem já passava e a fixa.
+- `aria-controls` do botão Ajuda: `helpMenuControls` só o declara com o menu aberto (fechado, o id não existe no DOM).
+
+**Já resolvido ou "não fazer".** `knownFeatures` fora do padrão já é descartado na leitura (`onboarding-state.test.ts:118-142`). "Redefinir" apagar a novidade é desenho testado (`:444`): preservar `knownFeatures` evita uma rajada de novidades; não mudar.
+
+**Não feito (precisa do smoke visual ou de leitor de tela):** card do passo 1 cobrindo Criar a 1280×800, aviso sobre Página Web, rail a 800×500, progresso depois do reinício, downgrade perdendo campos de `context`/`appVersion`, v1 reparável com aviso único, as três concorrências, foco do menu Ajuda pelo teclado e a latência do foco na janela oculta, o prazo de 4 s da leitura inicial, a sonda IPC e o boundary do menu. Task aberta com a lista.
+
+**Validação.** `vitest` inteiro 3398 passam (3 pulados), `tsc -b` e `eslint` limpos; 4 testes novos no procurador e 1 no `aria-controls`. Não rodei o `test:canvas-smoke`.

@@ -21,3 +21,12 @@ export function helpButtonLabel(novidades: number): string {
   const form = new Intl.PluralRules('pt-BR').select(novidades) === 'one' ? 'one' : 'other'
   return HELP_BUTTON_LABEL_WITH_NEWS[form].replace('{n}', String(novidades))
 }
+
+/**
+ * `aria-controls` do botão Ajuda: o menu só existe no DOM aberto, e um
+ * `aria-controls` que aponta para um id ausente é referência quebrada. Fechado,
+ * o botão não declara nada.
+ */
+export function helpMenuControls(open: boolean, menuId: string): { controls?: string } {
+  return open ? { controls: menuId } : {}
+}
