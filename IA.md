@@ -1059,3 +1059,25 @@ confirmação com o usuário na `v0.1.517` e a guarda no CI sem Node.
 **Validação.** Os testes focados de `system-cli-update`, `cli-auto-install-plan` e `cli-auto-install` passaram: 56/56. O gate anterior passou em `npm run typecheck` e `npm run lint`. A suíte completa anterior teve 3 falhas não relacionadas nos testes de `agent-session-discovery` e `pty-process-manager`, causadas pelo ambiente/perfil atual; 3139 passaram, 10 foram pulados.
 
 **Limites.** Não apliquei uma instalação npm global na máquina durante esta sessão, nem publiquei/empacotei o app; a correção precisa entrar na próxima versão do Felixo para o atualizador instalado recebê-la.
+
+Estado: concluído e publicado (v0.1.494).
+
+## 2026-11-09 — Canvas: a pergunta do agente passa a pegar o foco, prender o Tab e tratar o Esc só nela
+
+**Pedido.** Task do Notion "Felixo AI Core/Canvas — AgentQuestionDialog pegar o foco, prender o Tab e tratar o Esc só no diálogo" (aberta em 26/09 e complementada em 29/09 pelos PRs #96 e #98).
+
+**Medido (antes).** O `AgentQuestionDialog` escutava `keydown` na `window`, não pegava o foco e não prendia o Tab, apesar de `aria-modal="true"`. Medido na task: Tab saía para o canvas; clicar no texto levava o foco à "Área de trabalho do canvas", onde `q` troca o modo e Delete apaga o bloco selecionado; um Esc com o foco no gatilho do Handoff dispensava a pergunta **e** fechava a gaveta; o `mousedown` na pergunta fechava uma gaveta solta; o menu de link ficava por cima. Prova de mutação desta task: com o diálogo antigo e o SA3 novo, o smoke reprova em "a pergunta não pegou o foco" (2 de 2 tentativas).
+
+**O que mudou.**
+- `AgentQuestionDialog.tsx`: foco no painel (`tabIndex=-1`, nunca numa opção, para um Enter apressado não responder) a cada pergunta; foco anterior guardado ao abrir e devolvido ao fechar (a região do canvas se saiu da página); Tab/Shift+Tab presos com `getFocusableElements` + `tabTrapTarget`; Esc e 1–N no `onKeyDown` do contêiner com `stopPropagation` em toda tecla; overlay `nokey` + `data-felixo-floating-layer`; `mousedown` no fundo não tira o foco; `aria-disabled` no lugar de `disabled` (botão focado que desabilita perde o foco para o body). Ouvinte de captura no documento só para tecla com o foco fora da pergunta e fora de outro modal (o `AccountSwitchDialog` fica por cima).
+- `agent-question-dialog.ts`: `questionKeyAction` e `questionFocusReturnTarget` (puras, testadas). Ctrl/Meta/Alt+1–N deixa de escolher opção.
+- Tutorial: `nextModalYield` recebe `anterior` (o `relatedTarget` do `focusin`), porque o diálogo já tem o foco quando o tour confere; `focusHoldOnYield` só leva ao ponto de espera se o foco ainda está no tour. Quem devolve o foco ao Próximo ao fechar é o tour (`resolveFocusAfterModal`): o card ainda está `inert` quando o diálogo tenta devolvê-lo.
+- Smoke: `conferirPerguntaPrendeOFoco` no SA3 (gaveta aberta, bloco selecionado, Tab/Shift+Tab, clique no texto e no fundo, Delete/Backspace/q, foco no body, Esc fecha só a pergunta e o foco volta ao Handoff). As premissas antigas do SA3 ("o foco levado para fora fica lá", "o foco cedido espera no ponto de espera") foram trocadas pelas novas.
+
+**Decisões do agente.** Foco inicial no painel, não na primeira opção. Ouvinte de captura no documento além do `onKeyDown` do contêiner (a task pedia só o contêiner): sem ele, foco caído no body deixa Delete agir no canvas. Menu de link não ganhou código: o foco no diálogo dispara o `focus-left` que já existe.
+
+**Validação.** `tsc -b` limpo; `eslint .` 0; `vitest` 3380 passando, 3 pulados; `npm test` 3041, 7 falhas **idênticas na árvore limpa** (Windows: descoberta de sessão Claude, razões de CLI ausente, árvore de processos do pip), não são desta task. `FELIXO_SMOKE_SESSOES=A npm run test:canvas-smoke` no app real: sessão A verde, SA3 incluído (SA4 e SA5 também).
+
+**Não validado.** Menu de link fechando quando a pergunta chega (sessão D do smoke não foi estendida; só a regra `focus-left` está coberta por teste). Leitor de tela real (NVDA/VoiceOver). Sessões B–F do smoke (a CI roda). Pergunta aberta junto com `HandoffDialog`/`AccountSwitchDialog`.
+
+Estado: concluído (publicação abaixo, no commit).
