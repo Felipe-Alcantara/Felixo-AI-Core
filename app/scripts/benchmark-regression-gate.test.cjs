@@ -142,6 +142,35 @@ test('o salto de heap do count=1 entre runners não é regressão — casos reai
   }
 })
 
+test('os 9 saltos de heap do count=1 dos PRs #95 a #103 não reprovam, e uma retenção real de buffer reprova', () => {
+  // Deltas do stream (bytes) medidos nos falsos positivos da task "renderer-xterm
+  // count=1 acusa sem mudança real": o maior foi 23,7 MiB, abaixo do piso de 32 MiB.
+  const observados = [
+    [22_200_087, 37_950_736], // #95 macOS
+    [14_032_168, 35_386_938], // #96 Ubuntu
+    [14_258_630, 33_962_770], // #96 ARM
+    [22_225_119, 40_312_219], // #97 macOS
+    [14_215_338, 32_543_788], // #98 Windows
+    [17_492_328, 39_167_654], // #98 Ubuntu
+    [19_117_835, 40_420_864], // #99 macOS
+    [17_413_315, 40_316_371], // #102 macOS
+    [14_022_864, 38_841_792], // #103 Ubuntu
+  ]
+  const umCenario = (heapAfterStream) =>
+    ({ results: [scenario({ count: 1, scrollback: 20_000, heapBefore: { usedJsHeapBytes: 0 }, heapAfterStream: { usedJsHeapBytes: heapAfterStream } })] })
+
+  for (const [baseline, current] of observados) {
+    const result = compareReports({ baseline: umCenario(baseline), current: umCenario(current) })
+    assert.equal(result.compared, 1)
+    assert.equal(result.ok, true, `delta de ${(current - baseline) / 1048576} MiB não pode reprovar`)
+  }
+
+  // Controle: o gate não ficou cego. +40 MiB sobre o mesmo baseline é retenção de verdade.
+  const real = compareReports({ baseline: umCenario(14_000_000), current: umCenario(14_000_000 + 40 * 1048576) })
+  assert.equal(real.ok, false)
+  assert.equal(real.regressions[0].metric, 'delta de heap do stream (bytes)')
+})
+
 test('% grande sobre base pequena AINDA é regressão quando a diferença absoluta também é grande', () => {
   const baseline = {
     results: [scenario({ heapBefore: { usedJsHeapBytes: 0 }, heapAfterStream: { usedJsHeapBytes: 20_000_000 } })],

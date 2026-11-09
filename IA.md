@@ -1029,3 +1029,19 @@ confirmação com o usuário na `v0.1.517` e a guarda no CI sem Node.
 **Não feito (precisa do smoke visual ou de leitor de tela):** card do passo 1 cobrindo Criar a 1280×800, aviso sobre Página Web, rail a 800×500, progresso depois do reinício, downgrade perdendo campos de `context`/`appVersion`, v1 reparável com aviso único, as três concorrências, foco do menu Ajuda pelo teclado e a latência do foco na janela oculta, o prazo de 4 s da leitura inicial, a sonda IPC e o boundary do menu. Task aberta com a lista.
 
 **Validação.** `vitest` inteiro 3398 passam (3 pulados), `tsc -b` e `eslint` limpos; 4 testes novos no procurador e 1 no `aria-controls`. Não rodei o `test:canvas-smoke`.
+
+---
+
+## 2026-11-09 — CI: o falso positivo do `renderer-xterm count=1` já não pode reprovar; o que reprova hoje é o `count=10`
+
+**Contexto.** Task de 27/09/2026 "cenário renderer-xterm count=1 do gate de regressão acusa sem mudança real" (10 ocorrências em PRs de #95 a #103, sempre no delta de heap do stream, nunca no RSS).
+
+**Achado: a task estava resolvida por mudanças posteriores, sem ninguém a fechar.** (1) O piso absoluto do delta de heap subiu de 15 para 32 MiB em 09/10 (`48bc384`, PR #112), medido em 8 runs verdes da main com o mesmo código (12,0 a 35,8 MiB). (2) O gate entre commits saiu do CI no PR #124 (19/10) e hoje é manual (entrada de 2026-11-04). (3) O `--check` do `Nightly` (`benchmark:terminal:check`) só compara o adaptativo com o atual a partir do limite adaptativo (`count >= 10`); o `count=1` não é avaliado.
+
+**Medido.** Reexecutei no gate atual os 9 deltas das ocorrências da task (PRs #95, #96 x2, #97, #98 x2, #99, #102, #103): de 15,0 a 23,7 MiB, **nenhum reprova**. Uma retenção de +40 MiB no `count=1` reprova, e +70 MiB no `count=10` também, então o gate não ficou cego. O teste novo em `benchmark-regression-gate.test.cjs` fixa isso e **reprova** se o piso voltar a 15 MiB (mutação feita e desfeita). "10 execuções seguidas da main": não se aplica, porque nenhum workflow executa esse gate hoje; as 12 últimas noites do `Nightly` não reprovaram por `count=1`.
+
+**O que reprova de fato no Nightly.** 3 falhas em 12 noites (29/10, 03/11, 06/11): a de 29/10 é do benchmark de gerenciadores de pacote, a de 03/11 é do canvas smoke no Windows e a de 06/11 (macOS) é **`adaptive count=10: resume regrediu mais de 25%`**, outro cenário e outra métrica. A entrada de 2026-11-04 mediu amplitude típica de 46% no resume com o mesmo commit, então esse critério de 25% é frágil; virou task.
+
+**Corrigido.** A tabela de instabilidades do `GUIA-DESENVOLVEDOR.md` ainda dizia que o `count=1` reprova no `Nightly`; agora cita o `count=10` e explica por que o `count=1` saiu.
+
+**Limites.** Não vi a mensagem do `--check` das falhas de 29/10 e 03/11 (não são deste benchmark). Não repeti o benchmark real 10 vezes por sistema: o gate que ele alimentaria não roda.

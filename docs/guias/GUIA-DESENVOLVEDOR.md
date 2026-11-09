@@ -777,7 +777,7 @@ Instabilidades conhecidas da CI, para a triagem:
 | --- | --- | --- | --- |
 | "APP NÃO MONTOU" na primeira carga | smoke, sessões A/B, Windows | runner lento; o Vite compila sob demanda na primeira carga | a repetição cobre; nas 3 tentativas, é real |
 | `package.json` com bytes zero dentro do `app.asar` | `package-inventory.test.cjs`, Windows | corrida de disco logo depois do empacotamento | reexecutar o job |
-| gate `renderer-xterm count=1` (heap do stream) ou `adaptive count=1: resume` | job `Benchmarks e repetições` do `Nightly` | o menor cenário oscila | reexecutar o job; reprovar 3 runs seguidos é regressão |
+| `adaptive count=10: resume regrediu mais de 25%` | job `Benchmarks e repetições` do `Nightly` (`--check`) | o resume oscila até 46% com o mesmo commit | reexecutar o job; reprovar 3 runs seguidos é regressão. O `count=1` não reprova mais: o `--check` só compara a partir do limite adaptativo, e o gate entre commits saiu do CI |
 
 **Evidência.** Toda execução grava `app/build/canvas-smoke-evidencia/`
 (`canvas-smoke-evidencia.cjs`), enviada como artefato `canvas-smoke-evidencia-<os>`:
