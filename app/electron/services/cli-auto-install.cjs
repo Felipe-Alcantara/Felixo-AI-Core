@@ -86,6 +86,8 @@ const BUSY_OUTPUT = /\b(?:EBUSY|EPERM)\b/
  * @param {string} [options.userName] - Conta atual, que some do texto de suporte.
  * @param {Parameters<typeof withNetworkRetry>[1]} [options.networkRetry]
  *   Quantidade e espera das novas tentativas por falha de rede; injetável nos testes.
+ * @param {(callback: () => void, delayMs: number) => unknown} [options.setTimeoutFn]
+ * @param {(timer: unknown) => void} [options.clearTimeoutFn]
  * @returns {{ getStatus: () => object, run: (reason?: string) => Promise<object>, stop: () => void }}
  */
 function registerCliAutoInstallHandlers(getMainWindow, options) {
@@ -102,6 +104,8 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
     describePath = describeCliPath,
     userName = readUserName(),
     networkRetry = {},
+    setTimeoutFn = setTimeout,
+    clearTimeoutFn = clearTimeout,
     systemCli = {
       resolveGlobalRoot: resolveSystemNpmGlobalRoot,
       readInstall: readSystemNpmInstall,
@@ -411,7 +415,8 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
         .filter((item) => item.action === 'deferred')
         .map((item) => `${item.name} (sistema)`),
     ]
-    scheduleDeferredRetry(deferred.length > 0)
+    const registryUnavailable = latestPackages.some((item) => item.source === 'manifest-fallback')
+    scheduleDeferredRetry({ deferred, registryUnavailable })
 
     const summary =
       pending.length === 0
@@ -426,10 +431,17 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
     return setStatus({
       ...summary,
       ...(summary.state === 'idle' && updates.length > 0 ? { state: 'done' } : {}),
-      message:
+      message: [
+        summary.message,
         deferred.length > 0
-          ? `${summary.message} Arquivos travados: ${deferred.join(', ')}; nova tentativa em ${DEFERRED_RETRY_MINUTES} min.`
-          : summary.message,
+          ? `Arquivos travados: ${deferred.join(', ')}; nova tentativa em ${DEFERRED_RETRY_MINUTES} min.`
+          : '',
+        registryUnavailable
+          ? `Registry indisponivel; nova verificacao em ${DEFERRED_RETRY_MINUTES} min.`
+          : '',
+      ]
+        .filter(Boolean)
+        .join(' '),
       clis: progress,
       updates,
       systemUpdates: systemResults,
@@ -438,8 +450,9 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
 
   /**
    * Leva a instalação da CLI no npm global do sistema para o mesmo alvo da cópia
-   * do app. Só com alvo confirmado no registry; a decisão fica em
-   * `planSystemUpdates` e o que pode dar errado vira resultado, nunca exceção.
+   * do app ou repara o shim da versão já instalada quando o registry está fora.
+   * A decisão fica em `planSystemUpdates` e o que pode dar errado vira resultado,
+   * nunca exceção.
    */
   async function updateSystemInstalls({ catalog, latestPackages, attempts, reason }) {
     let globalRoot = null
@@ -452,7 +465,16 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
 
     const installs = catalog.map((cli) => {
       const entry = getManagedCliManifestEntry(cli.id)
-      return entry ? systemCli.readInstall({ globalRoot, npmPackage: entry.npmPackage, fileSystem }) : null
+      return entry
+        ? systemCli.readInstall({
+            globalRoot,
+            npmPackage: entry.npmPackage,
+            command: cli.command,
+            aliases: cli.windowsAliases,
+            platformName,
+            fileSystem,
+          })
+        : null
     })
     const plan = planSystemUpdates({
       catalog,
@@ -495,14 +517,26 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
       }
 
       // Sucesso é a versão nova no disco, não só o código de saída do npm.
-      const after = systemCli.readInstall({ globalRoot, npmPackage: entry.npmPackage, fileSystem })
-      const ok = result.ok && after?.version === item.to
+      const after = systemCli.readInstall({
+        globalRoot,
+        npmPackage: entry.npmPackage,
+        command: item.cli.command,
+        aliases: item.cli.windowsAliases,
+        platformName,
+        fileSystem,
+      })
+      const executableReady = after?.executableReady !== false
+      const ok = result.ok && after?.version === item.to && executableReady
       const redactOptions = { homeDir: os.homedir() }
       const message = redactDiagnosticText(
         ok
-          ? `${item.cli.name} do sistema atualizada de ${item.from ?? 'versao desconhecida'} para ${item.to}.`
+          ? item.repair
+            ? `${item.cli.name} do sistema reparada na versao ${item.to}.`
+            : `${item.cli.name} do sistema atualizada de ${item.from ?? 'versao desconhecida'} para ${item.to}.`
           : result.ok
-            ? `O npm terminou, mas a ${item.cli.name} do sistema continua em ${after?.version ?? 'versao desconhecida'}.`
+            ? after?.executableReady === false
+              ? `O npm terminou, mas o executavel da ${item.cli.name} do sistema nao foi materializado.`
+              : `O npm terminou, mas a ${item.cli.name} do sistema continua em ${after?.version ?? 'versao desconhecida'}.`
             : result.message,
         redactOptions,
       )
@@ -529,11 +563,11 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
     return results
   }
 
-  function scheduleDeferredRetry(needed) {
-    clearTimeout(retryTimer)
+  function scheduleDeferredRetry({ deferred = [], registryUnavailable = false } = {}) {
+    clearTimeoutFn(retryTimer)
     retryTimer = null
-    if (!needed) return
-    retryTimer = setTimeout(() => run('retry'), DEFERRED_RETRY_MINUTES * 60 * 1000)
+    if (deferred.length === 0 && !registryUnavailable) return
+    retryTimer = setTimeoutFn(() => run('retry'), DEFERRED_RETRY_MINUTES * 60 * 1000)
     // A nova tentativa nunca segura o processo aberto sozinha.
     retryTimer.unref?.()
   }
@@ -577,15 +611,15 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
   if (enabled) {
     // O atraso deixa a janela desenhar antes: a instalação é longa e não pode
     // disputar com a abertura do app o mesmo instante de CPU.
-    startupTimer = setTimeout(() => run('startup'), STARTUP_DELAY_MS)
+    startupTimer = setTimeoutFn(() => run('startup'), STARTUP_DELAY_MS)
   }
 
   return {
     getStatus: () => status,
     run,
     stop: () => {
-      clearTimeout(startupTimer)
-      clearTimeout(retryTimer)
+      clearTimeoutFn(startupTimer)
+      clearTimeoutFn(retryTimer)
     },
   }
 }

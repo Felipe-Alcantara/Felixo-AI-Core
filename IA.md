@@ -1045,3 +1045,17 @@ confirmação com o usuário na `v0.1.517` e a guarda no CI sem Node.
 **Corrigido.** A tabela de instabilidades do `GUIA-DESENVOLVEDOR.md` ainda dizia que o `count=1` reprova no `Nightly`; agora cita o `count=10` e explica por que o `count=1` saiu.
 
 **Limites.** Não vi a mensagem do `--check` das falhas de 29/10 e 03/11 (não são deste benchmark). Não repeti o benchmark real 10 vezes por sistema: o gate que ele alimentaria não roda.
+
+---
+
+## 2026-11-09 — Atualização automática do Codex: reparar shim global e repetir consulta ao registry
+
+**Agente / repositório.** Hotfix AI Core — Felixo-AI-Core (`J:/Programação/GitHub/Repositórios/Felixo-AI-Core`).
+
+**Causa medida.** O pacote global `@openai/codex` estava em `0.168.0-alpha.3`, mas `%APPDATA%\npm\codex.cmd` não existia; só havia arquivos temporários `.codex.cmd-*`. O leitor de instalação olhava apenas `package.json`, então classificava esse estado como atualizado e não reparava o comando. Separadamente, a consulta ao registry que falhava usava o manifesto de fallback, mas a rodada só agendava retry para arquivos `EBUSY`/`EPERM`; uma falha de rede podia ficar sem nova consulta até reiniciar o app.
+
+**Corrigido.** `readSystemNpmInstall` agora valida o shim real do comando e `planSystemUpdates` agenda a reinstalação da versão já instalada quando ela é mais nova que o alvo, sem downgrade. O `cli-auto-install` agenda nova consulta em cinco minutos quando qualquer CLI usa o manifesto de fallback, mesmo sem instalação pendente. O README documenta os dois comportamentos.
+
+**Validação.** Os testes focados de `system-cli-update`, `cli-auto-install-plan` e `cli-auto-install` passaram: 56/56. O gate anterior passou em `npm run typecheck` e `npm run lint`. A suíte completa anterior teve 3 falhas não relacionadas nos testes de `agent-session-discovery` e `pty-process-manager`, causadas pelo ambiente/perfil atual; 3139 passaram, 10 foram pulados.
+
+**Limites.** Não apliquei uma instalação npm global na máquina durante esta sessão, nem publiquei/empacotei o app; a correção precisa entrar na próxima versão do Felixo para o atualizador instalado recebê-la.

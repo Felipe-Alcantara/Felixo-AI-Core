@@ -470,11 +470,13 @@ versão mais nova entre eles a cópia que o app mantém no prefixo gerenciado e,
 existir, a instalação feita pelo npm global do sistema. Instalação nativa, Homebrew,
 pnpm ou Volta não são alteradas. Uma CLI aberta (por um agente ou por outro programa,
 como a extensão do Claude no navegador) é atualizada assim mesmo: o npm troca o
-pacote e o processo aberto segue na versão antiga até ser reiniciado. Só se o npm
-encontrar arquivos travados a atualização fica para uma nova tentativa, 5 minutos
-depois. O que mudou de versão aparece num aviso curto. Se o registry estiver
-indisponível, a cópia do app usa a última versão/hash revisados no manifesto do
-release (a do sistema não é tocada), e a instalação ainda confere o
+pacote e o processo aberto segue na versão antiga até ser reiniciado. Se o npm
+encontrar arquivos travados, ou se o registry estiver indisponível, a rodada fica
+agendada para uma nova tentativa em 5 minutos. O que mudou de versão aparece num
+aviso curto. A cópia do app usa a última versão/hash revisados no manifesto do
+release; a instalação global do sistema não é atualizada com esse fallback, mas
+um shim ausente de um pacote global já existente pode ser reparado na própria
+versão instalada. A instalação ainda confere o
 `dist.integrity` da versão exata antes de extrair o pacote. Em automações isoladas,
 use `FELIXO_AUTO_INSTALL_CLIS=0` para desativar essa rodada.
 

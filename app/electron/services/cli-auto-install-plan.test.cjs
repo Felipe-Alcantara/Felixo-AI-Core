@@ -280,6 +280,19 @@ describe('cli-auto-install-plan', () => {
 describe('planSystemUpdates', () => {
   const alvo = ['0.163.0-alpha.11', '2.1.300', '0.65.0-preview.0']
 
+  it('repara o shim ausente sem rebaixar um pacote global mais novo', () => {
+    const plan = planSystemUpdates({
+      catalog: [CATALOG[0]],
+      systemInstalls: [{ version: '0.200.0', executableReady: false }],
+      targetVersions: ['0.163.0'],
+      appVersion: '0.1.460',
+    })
+
+    assert.deepEqual(plan.map(({ action, from, to, repair }) => ({ action, from, to, repair })), [
+      { action: 'update', from: '0.200.0', to: '0.200.0', repair: true },
+    ])
+  })
+
   it('atualiza a instalação do npm global que ficou para trás e deixa a que está em dia', () => {
     const plan = planSystemUpdates({
       catalog: CATALOG,

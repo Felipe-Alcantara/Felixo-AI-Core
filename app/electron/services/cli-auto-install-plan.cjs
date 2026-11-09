@@ -9,7 +9,8 @@
  */
 
 /**
- * A instalação automática roda sempre que o aplicativo abre.
+ * A instalação automática roda quando o aplicativo abre e pode repetir a
+ * consulta quando o registry ou um arquivo travado impedir a rodada.
  *
  * A variável de ambiente permite desativá-la em automações que precisam
  * manter o ambiente isolado.
@@ -290,12 +291,12 @@ function summarizeAutoInstall(progress) {
  *
  * @param {object} options
  * @param {Array<{ id: string, name: string }>} options.catalog
- * @param {Array<{ version: string | null } | null>} options.systemInstalls - Na ordem do catálogo; `null` quando não há instalação pelo npm global.
+ * @param {Array<{ version: string | null, executableReady?: boolean } | null>} options.systemInstalls - Na ordem do catálogo; `null` quando não há instalação pelo npm global.
  * @param {Array<string | null>} options.targetVersions - Alvo confirmado no registry, na ordem do catálogo.
  * @param {Record<string, object>} [options.previousState]
  * @param {string} options.appVersion
  * @param {'startup' | 'manual' | 'retry'} [options.reason]
- * @returns {Array<{ cli: object, action: 'update' | 'current' | 'skipped', from: string | null, to: string, message?: string }>}
+ * @returns {Array<{ cli: object, action: 'update' | 'current' | 'skipped', from: string | null, to: string, repair?: boolean, message?: string }>}
  */
 function planSystemUpdates({
   catalog,
@@ -309,23 +310,47 @@ function planSystemUpdates({
   catalog.forEach((cli, index) => {
     const install = systemInstalls[index]
     const to = targetVersions[index]
-    if (!install || !to) return
+    if (!install) return
 
     const from = install.version ?? null
-    if (!isTargetNewer(from, to)) {
+    const executableNeedsRepair = install.executableReady === false
+    const versionNeedsUpdate = isTargetNewer(from, to)
+    // Se o pacote ja e mais novo que o alvo, reparar o shim deve reinstalar a
+    // propria versao instalada, nunca rebaixar para o alvo antigo.
+    const repairTarget = versionNeedsUpdate ? to : from
+    const effectiveTarget = executableNeedsRepair ? repairTarget : to
+    if (!effectiveTarget) return
+
+    if (!executableNeedsRepair && !versionNeedsUpdate) {
       plan.push({ cli, action: 'current', from, to })
       return
     }
 
     const stateKey = systemStateKey(cli.id)
-    if (reason !== 'manual' && hasFailedForVersion(previousState, stateKey, appVersion, to)) {
-      plan.push({ cli, action: 'skipped', from, to, message: previousState[stateKey]?.message ?? '' })
+    if (
+      !executableNeedsRepair &&
+      reason !== 'manual' &&
+      hasFailedForVersion(previousState, stateKey, appVersion, effectiveTarget)
+    ) {
+      plan.push({
+        cli,
+        action: 'skipped',
+        from,
+        to: effectiveTarget,
+        message: previousState[stateKey]?.message ?? '',
+      })
       return
     }
 
     // Uma CLI aberta não é motivo para esperar: o npm troca o pacote com o
     // executável antigo rodando (ver `system-cli-update`).
-    plan.push({ cli, action: 'update', from, to })
+    plan.push({
+      cli,
+      action: 'update',
+      from,
+      to: effectiveTarget,
+      ...(executableNeedsRepair ? { repair: true } : {}),
+    })
   })
   return plan
 }

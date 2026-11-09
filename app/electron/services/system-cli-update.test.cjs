@@ -104,6 +104,42 @@ test('lê a versão instalada no npm global, e só quando o pacote está lá', (
   }
 })
 
+test('detecta pacote global sem shim e passa a reconhece-lo quando o npm materializa o comando', () => {
+  const base = tempDir('felixo-npm-shim-')
+  const prefix = path.join(base, 'prefix')
+  const globalRoot = process.platform === 'win32' ? path.join(prefix, 'node_modules') : path.join(prefix, 'lib', 'node_modules')
+  const binDir = process.platform === 'win32' ? prefix : path.join(prefix, 'bin')
+  const packageDir = path.join(globalRoot, '@openai', 'codex')
+
+  try {
+    fs.mkdirSync(packageDir, { recursive: true })
+    fs.writeFileSync(path.join(packageDir, 'package.json'), JSON.stringify({ version: '0.169.0-alpha.3' }))
+
+    const incomplete = readSystemNpmInstall({
+      globalRoot,
+      npmPackage: '@openai/codex',
+      command: 'codex',
+      aliases: ['codex.cmd', 'codex.ps1'],
+    })
+    assert.equal(incomplete.executableReady, false)
+
+    fs.mkdirSync(binDir, { recursive: true })
+    const executablePath = path.join(binDir, process.platform === 'win32' ? 'codex.cmd' : 'codex')
+    fs.writeFileSync(executablePath, '')
+
+    const complete = readSystemNpmInstall({
+      globalRoot,
+      npmPackage: '@openai/codex',
+      command: 'codex',
+      aliases: ['codex.cmd', 'codex.ps1'],
+    })
+    assert.equal(complete.executableReady, true)
+    assert.equal(complete.executablePath, executablePath)
+  } finally {
+    fs.rmSync(base, { recursive: true, force: true })
+  }
+})
+
 // Medido em 14/10/2026 com o Claude Code real: o `claude.exe --chrome-native-host`
 // que o navegador mantém aberto não impede a troca. O npm renomeia a pasta antiga
 // e instala a nova ao lado, com o executável antigo rodando. Por isso a rodada não

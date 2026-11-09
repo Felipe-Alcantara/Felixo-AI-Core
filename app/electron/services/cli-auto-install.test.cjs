@@ -91,6 +91,8 @@ function createRunner(
     arch = process.arch,
     describePath,
     userName,
+    setTimeoutFn,
+    clearTimeoutFn,
     // Por padrão nenhum teste toca no npm global da máquina que roda a suíte:
     // sem isto, a fase do sistema atualizaria CLIs de verdade.
     systemCli = SEM_INSTALACAO_DO_SISTEMA,
@@ -113,6 +115,8 @@ function createRunner(
     ...(verifyInstallation ? { verifyInstallation } : {}),
     ...(describePath ? { describePath } : {}),
     ...(userName !== undefined ? { userName } : {}),
+    ...(setTimeoutFn ? { setTimeoutFn } : {}),
+    ...(clearTimeoutFn ? { clearTimeoutFn } : {}),
     resolveLatestPackage:
       resolveLatestPackage ??
       (async ({ npmPackage }) => {
@@ -572,8 +576,9 @@ test(
 )
 
 /** npm global falso, com estado: a versão no disco muda depois de instalar. */
-function sistemaFalso({ versoes, instalar = 'ok' }) {
+function sistemaFalso({ versoes, instalar = 'ok', executaveis = {} }) {
   const atuais = { ...versoes }
+  const shims = { ...executaveis }
   const instalados = []
   return {
     instalados,
@@ -581,7 +586,11 @@ function sistemaFalso({ versoes, instalar = 'ok' }) {
       resolveGlobalRoot: async () => path.join(os.tmpdir(), 'npm-global-falso'),
       readInstall: ({ npmPackage }) =>
         npmPackage in atuais
-          ? { version: atuais[npmPackage], packageDir: path.join(os.tmpdir(), 'npm-global-falso', npmPackage) }
+          ? {
+              version: atuais[npmPackage],
+              packageDir: path.join(os.tmpdir(), 'npm-global-falso', npmPackage),
+              ...(npmPackage in shims ? { executableReady: shims[npmPackage] } : {}),
+            }
           : null,
       install: async ({ npmPackage }) => {
         instalados.push(npmPackage)
@@ -591,6 +600,7 @@ function sistemaFalso({ versoes, instalar = 'ok' }) {
         }
         if (instalar === 'ok' || instalar === 'rede-uma-vez') {
           atuais[npmPackage.slice(0, at)] = npmPackage.slice(at + 1)
+          shims[npmPackage.slice(0, at)] = true
         }
         if (instalar === 'em-uso') return { ok: false, busy: true, message: 'EBUSY', output: 'npm error code EBUSY' }
         return { ok: true, busy: false, message: 'instalado', output: '' }
@@ -598,6 +608,30 @@ function sistemaFalso({ versoes, instalar = 'ok' }) {
     },
   }
 }
+
+test('repara o shim ausente de uma CLI global mesmo quando a versao do pacote ja esta em dia', async () => {
+  const claude = getManagedCliManifestEntry('claude')
+  const profile = createProfile({ managedClis: ['claude'], managedVersions: { claude: claude.version } })
+  const sistema = sistemaFalso({
+    versoes: { [claude.npmPackage]: claude.version },
+    executaveis: { [claude.npmPackage]: false },
+  })
+
+  try {
+    const { service } = createRunner(profile, {
+      detect: detectedOnly(['codex', 'claude', 'gemini']),
+      systemCli: sistema.systemCli,
+    })
+    const status = await service.run('startup')
+    service.stop()
+
+    assert.deepEqual(sistema.instalados, [`${claude.npmPackage}@${claude.version}`])
+    assert.equal(status.systemUpdates.find((item) => item.id === 'claude').action, 'updated')
+    assert.match(status.systemUpdates.find((item) => item.id === 'claude').message, /reparada/)
+  } finally {
+    profile.cleanup()
+  }
+})
 
 test('atualiza a CLI do npm global do sistema para o mesmo alvo e avisa no status', async () => {
   const claude = getManagedCliManifestEntry('claude')
@@ -703,6 +737,34 @@ test('instala o alvo confirmado no registry com a lista de versões revalidada, 
 // só voltava a instalar numa atualização do app ou no "Tentar de novo" manual.
 const SAIDA_DE_REDE = 'npm error code ENOTFOUND\nnpm error network This is a problem related to network connectivity.'
 const SAIDA_DE_PACOTE_INEXISTENTE = 'npm error code E404\nnpm error 404 Not Found - GET https://registry.npmjs.org/pacote-que-nao-existe'
+
+test('uma falha ao consultar o registry agenda nova verificacao mesmo sem instalacao pendente', async () => {
+  const versions = Object.fromEntries(
+    ['codex', 'claude', 'gemini'].map((id) => [id, getManagedCliManifestEntry(id).version]),
+  )
+  const profile = createProfile({ managedClis: ['codex', 'claude', 'gemini'], managedVersions: versions })
+  const timers = []
+
+  try {
+    const { service } = createRunner(profile, {
+      detect: detectedOnly(['codex', 'claude', 'gemini']),
+      resolveLatestPackage: async () => ({ ok: false, message: 'registry indisponivel', output: '' }),
+      setTimeoutFn: (callback, delayMs) => {
+        const timer = { callback, delayMs, unref: () => {} }
+        timers.push(timer)
+        return timer
+      },
+      clearTimeoutFn: () => {},
+    })
+    const status = await service.run('startup')
+    service.stop()
+
+    assert.match(status.message, /Registry indisponivel; nova verificacao em 5 min\./)
+    assert.ok(timers.some((timer) => timer.delayMs === 5 * 60 * 1000), 'a nova verificacao nao foi agendada')
+  } finally {
+    profile.cleanup()
+  }
+})
 
 test('uma queda de rede na instalação é repetida sozinha e a CLI acaba instalada', async () => {
   const profile = createProfile()

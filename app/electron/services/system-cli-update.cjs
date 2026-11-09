@@ -92,17 +92,83 @@ async function resolveSystemNpmGlobalRoot({
  * @param {object} options
  * @param {string} options.globalRoot
  * @param {string} options.npmPackage - Ex.: `@anthropic-ai/claude-code`.
+ * @param {string} [options.command] - Comando que o pacote deve expor no PATH.
+ * @param {string[]} [options.aliases] - Aliases de executavel aceitos pela plataforma.
+ * @param {string} [options.platformName]
  * @param {typeof fs} [options.fileSystem]
- * @returns {{ version: string | null, packageDir: string } | null}
+ * @returns {{ version: string | null, packageDir: string, executableReady?: boolean, executablePath?: string } | null}
  */
-function readSystemNpmInstall({ globalRoot, npmPackage, fileSystem = fs }) {
+function readSystemNpmInstall({
+  globalRoot,
+  npmPackage,
+  command,
+  aliases = [],
+  platformName = process.platform,
+  fileSystem = fs,
+}) {
   const packageDir = path.join(globalRoot, ...npmPackage.split('/'))
   try {
     const manifest = JSON.parse(fileSystem.readFileSync(path.join(packageDir, 'package.json'), 'utf8'))
-    return { version: typeof manifest.version === 'string' ? manifest.version : null, packageDir }
+    const install = { version: typeof manifest.version === 'string' ? manifest.version : null, packageDir }
+    if (!command) return install
+
+    const executablePath = findSystemNpmExecutable({
+      globalRoot,
+      command,
+      aliases,
+      platformName,
+      fileSystem,
+    })
+    return {
+      ...install,
+      executableReady: Boolean(executablePath),
+      ...(executablePath ? { executablePath } : {}),
+    }
   } catch {
     return null
   }
+}
+
+/**
+ * Procura o shim que o npm global deveria materializar para o pacote.
+ *
+ * O npm pode deixar o package.json atualizado e os arquivos temporarios
+ * `.codex.cmd-*` no prefixo quando a troca do shim falha no Windows. Ler apenas
+ * a versao do pacote nesse estado faz o atualizador acreditar que a CLI esta
+ * pronta e nunca tentar reparar o comando.
+ */
+function findSystemNpmExecutable({ globalRoot, command, aliases = [], platformName, fileSystem = fs }) {
+  const platformPath = platformName === 'win32' ? path.win32 : path.posix
+  const binDirectories =
+    platformName === 'win32'
+      ? [
+          platformPath.resolve(globalRoot, '..'),
+          platformPath.resolve(globalRoot, '..', 'bin'),
+        ]
+      : [
+          platformPath.resolve(globalRoot, '..', '..', 'bin'),
+          platformPath.resolve(globalRoot, '..', 'bin'),
+          platformPath.resolve(globalRoot, '..'),
+        ]
+  const names = [...new Set([command, ...aliases])]
+    .filter((value) => typeof value === 'string' && value.trim())
+    .map((value) => platformPath.basename(value).replace(/\.(?:cmd|exe|bat|ps1)$/i, ''))
+  const extensions = platformName === 'win32' ? ['.cmd', '.exe', '.bat', '.ps1', ''] : ['']
+
+  for (const directory of binDirectories) {
+    for (const name of names) {
+      for (const extension of extensions) {
+        const candidate = platformPath.join(directory, `${name}${extension}`)
+        try {
+          if (fileSystem.existsSync(candidate)) return candidate
+        } catch {
+          // Uma pasta de PATH ilegivel nao invalida as outras candidatas.
+        }
+      }
+    }
+  }
+
+  return null
 }
 
 /**
