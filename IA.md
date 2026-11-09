@@ -11,7 +11,7 @@
 
 Última atualização: [2026-11-09]
 
-- **Windows sem Node (2026-11-09):** o Codex agora abre em máquina sem Node (o `node` do app é o Electron, que não entrega console
+- **Windows sem Node (2026-11-09, `v0.1.517`):** o Codex agora abre em máquina sem Node (o `node` do app é o Electron, que não entrega console
   ao `codex.exe`): o app grava `clis\native-bin\codex.cmd`, que abre o executável nativo, e só enquanto falta Node de verdade. Fica
   de fora o Gemini, que precisa de um `node.exe` de verdade. Ver a entrada de 2026-11-09 "Windows sem Node" e a de 2026-11-08
   (PowerShell).
@@ -993,3 +993,10 @@ código OEM, e um perfil como `C:\Users\João` corromperia um caminho gravado po
   testes unitários; o triplo `aarch64-pc-windows-msvc` segue o `codex.js`). `CODEX_MANAGED_BY_NPM=1` está lá por paridade com o
   `codex.js` e pode fazer o Codex oferecer "atualizar via npm" dentro da TUI; o app já atualiza a cada abertura, então é raro, e o `npm`
   que isso chamaria cairia de novo no Electron-como-Node.
+
+**Adendo (CI e Release).** O push de `06154f9` passou no CI (run 42612267275: todos os jobs, com o Validate no Windows, macOS, Ubuntu
+x64 e ARM) e no ciclo de instalação das CLIs. O Release gate despachou o Release (run 42613136986), que publicou a `v0.1.517`
+(09/11/2026 11:58 UTC) apontando para `06154f9`. O `release-smoke` do Windows (NSIS) deu `passed`: app `0.1.517`, subida em 303 ms,
+PTY ok. Esse smoke roda num Windows **com Node**, então prova que o app instalado abre, não que o Codex abre sem Node; a guarda no CI
+virou task. Abertas no Notion, ligadas à task do Codex: a decisão do Node para o Gemini, o acento nos atalhos `node.cmd` e `npm.cmd`, a
+confirmação com o usuário na `v0.1.517` e a guarda no CI sem Node.
