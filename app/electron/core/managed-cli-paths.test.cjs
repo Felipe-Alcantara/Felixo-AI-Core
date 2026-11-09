@@ -24,6 +24,10 @@ describe('managed-cli-paths', () => {
       layout.runtimeBin,
       '/home/pessoa/.config/felixo-ai-core/clis/runtime-bin',
     )
+    assert.equal(
+      layout.nativeBin,
+      '/home/pessoa/.config/felixo-ai-core/clis/native-bin',
+    )
   })
 
   // O npm nao usa `bin/` no Windows: os executaveis vao direto para o prefixo.
@@ -49,7 +53,10 @@ describe('managed-cli-paths', () => {
     assert.equal(layout.root, '/opt/felixo-clis')
   })
 
-  it('exposes both the packages and the runtime folders to the PATH', () => {
+  // A ordem e o teste: `native-bin` precisa vencer `packagesBin` para o atalho
+  // nativo do Codex tomar o lugar do `codex.cmd`/`codex.ps1` do npm, e
+  // `runtimeBin` segue por ultimo para qualquer Node de verdade vencer o do app.
+  it('exposes the native, packages and runtime folders to the PATH, in that order', () => {
     const layout = getManagedCliLayout({
       userData: '/home/pessoa/.config/felixo-ai-core',
       platformName: 'linux',
@@ -57,6 +64,7 @@ describe('managed-cli-paths', () => {
     })
 
     assert.deepEqual(getManagedCliPathCandidates(layout), [
+      layout.nativeBin,
       layout.packagesBin,
       layout.runtimeBin,
     ])

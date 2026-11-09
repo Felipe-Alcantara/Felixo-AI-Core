@@ -99,11 +99,11 @@ test('describeCliPath lista cada pasta uma vez, na ordem do createCliEnv e com a
   const inherited = path.join(root, 'herdada')
   const agentBin = path.join(root, 'perfil', 'bin')
   const managedRoot = path.join(root, 'gerenciadas')
-  const { packagesBin } = getManagedCliLayout({
+  const { packagesBin, runtimeBin, nativeBin } = getManagedCliLayout({
     userData: root,
     env: { FELIXO_MANAGED_CLI_ROOT: managedRoot },
   })
-  for (const dir of [userBin, configured, inherited, agentBin, packagesBin]) {
+  for (const dir of [userBin, configured, inherited, agentBin, packagesBin, runtimeBin, nativeBin]) {
     fs.mkdirSync(dir, { recursive: true })
   }
   const env = {
@@ -129,6 +129,13 @@ test('describeCliPath lista cada pasta uma vez, na ordem do createCliEnv e com a
   assert.deepEqual(originsOf(inherited), [CLI_PATH_ORIGINS.PROCESS])
   assert.deepEqual(originsOf(agentBin), [CLI_PATH_ORIGINS.APP])
   assert.deepEqual(originsOf(packagesBin), [CLI_PATH_ORIGINS.MANAGED])
+  // O atalho nativo do Codex (native-bin) precisa vencer o codex.cmd/.ps1 do
+  // npm (packagesBin), e o node do app (runtime-bin) fica por último para um
+  // Node de verdade, em qualquer pasta anterior, ter prioridade.
+  assert.deepEqual(
+    entries.filter((entry) => entry.origin === CLI_PATH_ORIGINS.MANAGED).map((entry) => entry.path),
+    [nativeBin, packagesBin, runtimeBin],
+  )
   assert.equal(entries.some((entry) => entry.path.endsWith('nao-existe')), false)
 
   // As origens aparecem na ordem do CLI_PATH_ORIGINS, que é a ordem da junção.

@@ -9,8 +9,12 @@
   nos arquivos de docs/ia-archive/.
 -->
 
-Última atualização: [2026-11-05]
+Última atualização: [2026-11-09]
 
+- **Windows sem Node (2026-11-09):** o Codex agora abre em máquina sem Node (o `node` do app é o Electron, que não entrega console
+  ao `codex.exe`): o app grava `clis\native-bin\codex.cmd`, que abre o executável nativo, e só enquanto falta Node de verdade. Fica
+  de fora o Gemini, que precisa de um `node.exe` de verdade. Ver a entrada de 2026-11-09 "Windows sem Node" e a de 2026-11-08
+  (PowerShell).
 - **Fase:** o canvas é o produto principal (o chat está depreciado). A divisão do `CanvasView`
   (partes 1 a 4) e o bloco Agente na nuvem estão na `main`: PRs #113 a #120 mesclados.
 - **Padrão de qualidade:** auditado e alinhado em 2026-10-12, 2026-10-23 e 2026-11-05 (ver as três
@@ -925,3 +929,67 @@ PowerShell fora do Felixo e a versão do Codex), porque sem esses dados qualquer
 **Limites.** O Bypass vale também para scripts que a pessoa rode no Shell do app (é o preço de `.ps1` funcionar); a alternativa
 de apagar os `.ps1` da pasta `clis` foi descartada porque o npm os recria a cada instalação. Não abri o app com a política
 Restricted de verdade, só provei o flag no processo.
+
+---
+
+## 2026-11-09 — Windows sem Node: o Codex fechava ao abrir com "stdin is not a terminal"; agora abre pelo executável nativo
+
+**Contexto.** Segunda metade do feedback do usuário `v0.1.515` (as mesmas três capturas da entrada de 2026-11-08): o agente Codex
+(`gpt-5.6-luna`, "yolo") do canvas fechava ao abrir com "O Codex encerrou logo ao abrir (código 1)" e `Error: stdin is not a terminal`.
+A entrada anterior deixou isso sem conserto porque não reproduziu: a máquina dela tinha Node. O pedido do Felipe é que a instalação
+resolva sozinha. O fix do PowerShell daquela entrada já saiu na `v0.1.516`; este é o do Codex.
+
+**Causa (medida).** Sem Node na máquina, o `codex.cmd` do npm chama `node codex.js`, e o `node` que o PATH das CLIs enxerga é o
+`runtime-bin\node.cmd` do app: `ELECTRON_RUN_AS_NODE=1 "Felixo AI Core.exe"`. O Electron é um executável de subsistema GUI. Num ConPTY
+(node-pty, a mesma rota do app) medi `process.stdin.isTTY` no `node` e no filho dele com `stdio: 'inherit'`:
+
+| `node` do PATH | no `codex.js` | no `codex.exe` (filho) |
+|---|---|---|
+| Node de verdade | `true` | `true` |
+| Electron-como-Node (o `node.cmd` do app) | `undefined` | `undefined` |
+
+O `codex.exe` exige um stdin de console para subir a TUI e, sem ele, sai com `Error: stdin is not a terminal`. Quatro variações do atalho
+(`<CON >CON`, `start /b /wait`, `powershell Start-Process -NoNewWindow -Wait` e um Node de verdade repassando os handles com
+`spawnSync(electron, { stdio: 'inherit' })`) deram `undefined` do mesmo jeito: não existe `node.cmd` melhor, o Electron é que não entrega o
+console. Foi por isso que o agente anterior não reproduziu (Node instalado) e que o erro só aparece para quem não tem Node.
+
+**Reprodução do usuário, antes e depois.** Com o Codex `0.168.0-alpha.1` real, os mesmos argumentos da captura, o `PtyProcessManager` do
+app e um PATH sem Node (`ProgramFiles` apontado para o vazio, porque o app injeta `C:\Program Files\nodejs` por conta própria):
+antes, `Error: stdin is not a terminal`, código 1, em 1,8 s, idêntico à captura; depois, a TUI `>_ OpenAI Codex (v0.168.0-alpha.1)` sobe
+e segue viva aos 12 s.
+
+**O que mudou.** `app/electron/services/managed-codex-native-shim.cjs` (novo) grava `clis\native-bin\codex.cmd`, que abre o
+`codex.exe` nativo direto, com as variáveis que o `codex.js` define (`CODEX_MANAGED_BY_NPM`, `CODEX_MANAGED_PACKAGE_ROOT`). `native-bin`
+entra no PATH **antes** de `clis` (`getManagedCliPathCandidates`: `native-bin`, `clis`, `runtime-bin`), e o PowerShell resolve por pasta,
+não por extensão (medido: um `codex.cmd` numa pasta anterior vence o `codex.ps1` de uma posterior). Assim o agente do canvas, o `codex`
+digitado no Shell e as telas que abrem o Codex por PTY (status, limites) usam o mesmo atalho, sem editar os arquivos que o npm recria. O
+atalho só existe quando falta Node de verdade (`isNodeProvidedByApp`: o primeiro `node` do PATH é o do app, ou não há nenhum) e o
+`codex.exe` está no disco; com um Node de verdade no PATH ele é removido e o `codex.js` oficial segue valendo, então quem tem Node não
+muda. `cli-auto-install.cjs` o reconcilia no registro, antes de qualquer terminal nascer (um bloco restaurado lança em segundos, e a
+rodada de instalação só começa 4 s depois), e depois de instalar algo (instalação limpa). Não regrava um atalho já certo, porque o
+`cmd.exe` lê o `.cmd` aos poucos enquanto roda. Os caminhos saem de `%~dp0` e o arquivo é só ASCII: o `cmd.exe` lê o `.cmd` na página de
+código OEM, e um perfil como `C:\Users\João` corromperia um caminho gravado por extenso.
+
+**Validação.**
+- `managed-codex-native-shim.test.cjs` (25 testes: gravar, remover, idempotência, os layouts aninhado, içado e antigo do npm, ARM64,
+  perfil acentuado, só ASCII e CRLF) e a ordem do PATH em `managed-cli-paths.test.cjs` e `cli-process-manager.test.cjs`.
+- `managed-codex-native-shim.integration.test.cjs`, no `test:native` (ConPTY real, perfil `João Antônio` com espaço): o `node.cmd` do app
+  e o `codex.cmd` do npm falham de propósito, e o `codex.exe` (uma cópia do Node) recebe stdin e stdout de terminal, os argumentos
+  `com espaço` e `ação`, as variáveis e a raiz do pacote normalizada; o PowerShell resolve o atalho nativo, não o `codex.ps1`. 2 de 2; o `test:native` inteiro deu 11 de 11 (eram 9).
+- `eslint` limpo nos arquivos tocados. Suíte Node: 3151 testes, 3141 passam, 0 falham, 10 pulados (eram 3126; os 25 novos são do
+  módulo). Numa primeira rodada, 5 testes de `agent-session-discovery` e `agent-usage-availability` falharam por herdar
+  `CLAUDE_CONFIG_DIR` do perfil isolado em que este agente roda; sem as variáveis `CLAUDE*` passam 28 de 28 e a suíte inteira
+  ficou verde. É efeito do ambiente, não do código.
+
+**Limites e pendências.**
+- **Gemini** segue sem console quando só há o `node` do app. Medido: com Node de verdade abre a TUI ("Waiting for authentication...");
+  com o Electron-como-Node sai com código 41 pedindo um método de autenticação (cai no modo sem terminal). Mesma causa, mas o Gemini é
+  JavaScript puro e não tem binário nativo para chamar: precisa de um `node.exe` de verdade (cerca de 85 MB no instalador, ou outra
+  rota). É decisão de tamanho do instalador, não resolvida aqui; task própria.
+- **Atalhos `node.cmd` e `npm.cmd` com perfil acentuado:** `createWindowsShim` grava UTF-8 e o `cmd.exe` lê em OEM. Com um acento no
+  caminho do app (`...\Programação\...`) o atalho dá "O sistema não pode encontrar o caminho especificado" (medido; `chcp 65001`
+  resolveu). Afeta o `node` do app para quem tem acento no perfil. Não corrigido aqui.
+- **Não conferido:** o app instalado de verdade (só o PTY do app com o Codex real, num ambiente montado) e o Windows ARM64 (só pelos
+  testes unitários; o triplo `aarch64-pc-windows-msvc` segue o `codex.js`). `CODEX_MANAGED_BY_NPM=1` está lá por paridade com o
+  `codex.js` e pode fazer o Codex oferecer "atualizar via npm" dentro da TUI; o app já atualiza a cada abertura, então é raro, e o `npm`
+  que isso chamaria cairia de novo no Electron-como-Node.

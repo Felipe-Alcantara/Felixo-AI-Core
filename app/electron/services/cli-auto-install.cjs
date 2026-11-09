@@ -26,6 +26,7 @@ const { getManagedCliManifestEntry } = require('../core/managed-cli-manifest.cjs
 const { getNodeExecutable, resolveNpmCliPath } = require('../core/node-runtime.cjs')
 const { createCliEnv, describeCliPath } = require('./cli-process-manager.cjs')
 const { ensureManagedCliRuntime } = require('./managed-cli-runtime.cjs')
+const { ensureManagedCodexNativeShim } = require('./managed-codex-native-shim.cjs')
 const {
   installManagedPackage,
   resolveLatestManagedPackage,
@@ -122,6 +123,47 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
   let running = null
   let startupTimer = null
   let retryTimer = null
+
+  /**
+   * Em máquina sem Node o `codex.cmd` do npm cai no Electron-como-Node, que não
+   * entrega console ao Codex ("stdin is not a terminal"). O atalho nativo tira
+   * o Node do caminho (ver `managed-codex-native-shim`). Nunca derruba quem
+   * chama: é ajuste de lançamento, não o objetivo da instalação.
+   */
+  function reconcileCodexNativeLaunch(origin) {
+    try {
+      const effectivePath = describePath(process.env)
+        .map((entry) => entry.path)
+        .join(';')
+      const result = ensureManagedCodexNativeShim({
+        layout,
+        effectivePath,
+        platformName,
+        arch,
+        fileSystem,
+      })
+
+      if (['created', 'updated', 'removed'].includes(result.action)) {
+        logQaEvent({
+          level: 'info',
+          scope: 'cli:auto-install',
+          message: `Atalho nativo do Codex: ${result.action} (${result.reason}).`,
+          details: { origin },
+        })
+      }
+    } catch (error) {
+      logQaEvent({
+        level: 'warn',
+        scope: 'cli:auto-install',
+        message: 'Falha ao ajustar o atalho nativo do Codex.',
+        details: { origin, error: getErrorMessage(error, 'erro desconhecido') },
+      })
+    }
+  }
+
+  // Antes de qualquer terminal nascer: um bloco Codex restaurado na abertura
+  // lança em segundos, bem antes da rodada de instalação (STARTUP_DELAY_MS).
+  reconcileCodexNativeLaunch('registro')
 
   function setStatus(next) {
     status = { ...status, ...next, updatedAt: new Date().toISOString() }
@@ -320,6 +362,11 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
         message: safeMessage,
         details: { id: cli.id, reason, output: redactDiagnosticText(result.output, redactOptions) },
       })
+    }
+
+    // Instalação limpa: o `codex.exe` só passou a existir agora.
+    if (pending.length > 0) {
+      reconcileCodexNativeLaunch('instalacao')
     }
 
     const systemResults = await updateSystemInstalls({

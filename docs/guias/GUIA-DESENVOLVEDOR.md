@@ -229,6 +229,28 @@ novo libera uma nova tentativa.
 Defina `FELIXO_AUTO_INSTALL_CLIS=0` somente para desativar a rodada em uma
 automação isolada.
 
+#### O Codex no Windows sem Node instalado
+
+Sem Node na máquina, o `codex.cmd` do npm chama o `node` do PATH, que cai no
+`runtime-bin\node.cmd` do app (o Electron rodando como Node). O Electron é um
+executável de subsistema GUI e não entrega console ao filho: o `codex.exe` recebe um
+stdin que não é terminal e o bloco do agente fecha com `Error: stdin is not a
+terminal`. Nenhum atalho de `node` conserta isso (medido: `process.stdin.isTTY` fica
+`undefined` mesmo com os handles repassados), então `managed-codex-native-shim.cjs`
+tira o Node do caminho: grava `clis\native-bin\codex.cmd`, que abre o `codex.exe`
+direto. `native-bin` entra no PATH **antes** de `clis` (`getManagedCliPathCandidates`),
+e o agente do canvas e um `codex` digitado no Shell passam por ele (o PowerShell
+resolve por pasta, não por extensão).
+
+O atalho só existe enquanto precisa: `cli-auto-install.cjs` o reconcilia no registro
+(antes de qualquer terminal nascer) e depois de uma instalação, e o remove quando um
+`node.exe` de verdade aparece no PATH. Os caminhos saem de `%~dp0` e o arquivo é só
+ASCII, porque o `cmd.exe` lê o `.cmd` na página de código OEM e um perfil acentuado
+(`C:\Users\João`) corromperia um caminho literal. O Gemini, que é JavaScript puro e
+não tem binário nativo, segue sem console nessa situação: ele precisa de um Node de
+verdade (ver a entrada de 09/11/2026 no `IA.md`). A prova com ConPTY real é
+`managed-codex-native-shim.integration.test.cjs` (`npm run test:native`).
+
 Os contratos principais ficam cobertos por `node:test`:
 
 ```bash

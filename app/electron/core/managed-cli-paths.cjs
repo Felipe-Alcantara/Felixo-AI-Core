@@ -17,6 +17,8 @@ const MANAGED_ROOT_ENV_KEY = 'FELIXO_MANAGED_CLI_ROOT'
  * @property {string} root - Prefixo passado ao npm.
  * @property {string} packagesBin - Pasta dos executáveis instalados pelo npm.
  * @property {string} runtimeBin - Pasta dos atalhos `node`/`npm` do app.
+ * @property {string} nativeBin - Pasta dos atalhos que abrem o executável nativo
+ *   de uma CLI sem passar pelo Node do app (só o Windows, só quando falta Node).
  */
 
 /**
@@ -48,6 +50,7 @@ function getManagedCliLayout({
     // `<prefix>` no Windows.
     packagesBin: platformName === 'win32' ? root : platformPath.join(root, 'bin'),
     runtimeBin: platformPath.join(root, 'runtime-bin'),
+    nativeBin: platformPath.join(root, 'native-bin'),
   }
 }
 
@@ -151,6 +154,11 @@ function getNpmRegistryCacheDir(userData, platformName = process.platform) {
  * conta própria, é a instalação dela que deve valer. A do app é rede de
  * segurança, não substituição.
  *
+ * `nativeBin` vem antes de `packagesBin` de propósito: os atalhos dela existem
+ * para tomar o lugar do `codex.cmd`/`codex.ps1` do npm quando o `node` do app
+ * (o Electron) não consegue entregar um console ao Codex. A pasta só aparece
+ * no PATH enquanto existir (ver `describeCliPath`), então sem atalho nada muda.
+ *
  * @param {ManagedCliLayout} layout
  * @returns {string[]}
  */
@@ -159,7 +167,7 @@ function getManagedCliPathCandidates(layout) {
     return []
   }
 
-  return [layout.packagesBin, layout.runtimeBin].filter(Boolean)
+  return [layout.nativeBin, layout.packagesBin, layout.runtimeBin].filter(Boolean)
 }
 
 module.exports = {

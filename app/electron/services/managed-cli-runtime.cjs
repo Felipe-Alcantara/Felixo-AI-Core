@@ -99,5 +99,6 @@ function writeShim(fileSystem, shimPath, content, isWindows) {
 }
 
 module.exports = {
+  SHIM_HEADER,
   ensureManagedCliRuntime,
 }
