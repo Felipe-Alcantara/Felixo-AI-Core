@@ -76,6 +76,7 @@ import type { SessionMetadata } from './session-metadata'
 import {
   computePreview,
   computeSignature,
+  isAlternateScreen,
   readBuffer,
   readShellHistory,
   readViewport,
@@ -158,6 +159,12 @@ export type SessionSnapshot = {
 export type TerminalTranscript = {
   /** Text currently available in xterm's active scrollback buffer. */
   text: string
+  /**
+   * `true` quando o terminal está na tela alternativa: `text` é só a tela
+   * visível, não a conversa. Quem promete "histórico" à pessoa ou ao agente
+   * precisa dizer isso (Handoff, troca de conta).
+   */
+  screenOnly?: boolean
 }
 
 /**
@@ -1887,7 +1894,10 @@ export class TerminalSessionStore {
   /** Returns the complete text available in the active xterm scrollback. */
   getTranscript(id: string): TerminalTranscript {
     const session = this.sessions.get(id)
-    return { text: session ? readBuffer(session.terminal) : '' }
+    return {
+      text: session ? readBuffer(session.terminal) : '',
+      screenOnly: session ? isAlternateScreen(session.terminal) : false,
+    }
   }
 
   /**

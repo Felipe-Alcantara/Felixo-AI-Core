@@ -4,6 +4,7 @@ import { getFocusableElements, tabTrapTarget } from '../services/keyboard-focus'
 import { buildAccountSwitchDialogModel, escapeDeclines, initialDialogSelection } from '../services/account-switch-dialog'
 import type { AccountSwitchDialogBinding } from '../hooks/useAccountContinuation'
 import { useClockTick } from '../hooks/useAccountChain'
+import { SCREEN_ONLY_NOTICE } from '../services/terminal-handoff'
 
 const AVISO =
   'rounded-sm border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-2.5 py-2 text-[11px] leading-relaxed text-(--color-warning)'
@@ -287,6 +288,11 @@ export function AccountSwitchDialog({ binding }: { binding: AccountSwitchDialogB
 
         {!model.empty && transcriptReady && model.costNotice && <p className={`mb-2 ${AVISO}`}>{model.costNotice}</p>}
         {!model.empty && model.providerSwitchNotice && <p className={`mb-2 ${AVISO}`}>{model.providerSwitchNotice}</p>}
+        {!model.empty && binding.screenOnly && (
+          <p role="note" className="mb-2 text-[11px] text-zinc-400">
+            {SCREEN_ONLY_NOTICE}
+          </p>
+        )}
         {model.multipleSessionsNotice && <p className="mb-2 text-[11px] text-zinc-400">{model.multipleSessionsNotice}</p>}
 
         <section aria-label="Terminal antigo" className="mb-3 rounded-sm border border-white/10 bg-black/20 p-2.5 text-[11px] text-zinc-400">

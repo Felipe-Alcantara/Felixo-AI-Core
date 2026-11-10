@@ -28,7 +28,7 @@ export type SessionSnapshot = {
   generation?: number
 }
 
-export type TerminalTranscript = { text: string }
+export type TerminalTranscript = { text: string; screenOnly?: boolean }
 
 /**
  * A tela do terminal para a Leitura: o buffer ativo do xterm e a largura.

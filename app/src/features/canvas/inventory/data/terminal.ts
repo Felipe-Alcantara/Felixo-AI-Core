@@ -56,8 +56,8 @@ export const terminalSurfaces: InventoryElement[] = [
       {
         locator: 'data-canvas-handoff-trigger',
         kind: 'button',
-        effect: 'Lê o histórico inteiro do xterm (getTranscript) e abre o HandoffDialog com ele (setHandoff no CanvasView).',
-        failure: 'Histórico vazio: faixa vermelha "Este terminal ainda não tem histórico para transferir." e nenhum diálogo. Com o Claude na tela alternativa o histórico pode sair incompleto.',
+        effect: 'Lê o buffer ativo do xterm (getTranscript: { text, screenOnly }) e abre o HandoffDialog com ele (setHandoff no CanvasView). Com o terminal na tela alternativa (Claude Code), o texto é só a tela e o diálogo, o prompt do agente e a troca de conta dizem isso (SCREEN_ONLY_NOTICE).',
+        failure: 'Histórico vazio: faixa vermelha "Este terminal ainda não tem histórico para transferir." e nenhum diálogo. Com o Claude na tela alternativa só a tela vai, e o diálogo avisa.',
         disabledWhen: 'some recolhida ou sem onPassResponsibility',
         test: { file: SMOKE, check: 'checarElementosAbertosEmViewportsCriticos' },
       },
@@ -270,11 +270,6 @@ export const terminalSurfaces: InventoryElement[] = [
         what: 'Falha do clipboard é engolida e, sem navigator.clipboard, o ✓ aparece sem copiar (terminal-session-store.ts:1716-1728, TerminalCopyButton.tsx:22-28); store.copy não tem teste.',
         risk: 'baixo',
         task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
-      },
-      {
-        what: 'Copiar com o Claude na tela alternativa pega só a tela, não o histórico inteiro.',
-        risk: 'médio',
-        task: '3e991f95-497e-81e0-8c54-f507189f8729',
       },
     ],
     overlap: 'Mora no cabeçalho da gaveta (z-20/30) e no cabeçalho do cartão (nodrag); herda a camada de quem o contém, sem risco próprio.',
@@ -833,9 +828,9 @@ export const terminalSurfaces: InventoryElement[] = [
         task: '3e991f95-497e-811e-a0a3-c9c0dd6d0c48',
       },
       {
-        what: 'Com o Claude na tela alternativa o histórico enviado pode sair incompleto.',
+        what: 'Com o Claude na tela alternativa só a tela vai como contexto (avisado ao usuário e ao agente); a conversa inteira exige ler o arquivo da sessão do Claude (.jsonl) em vez do terminal.',
         risk: 'médio',
-        task: '3e991f95-497e-81e0-8c54-f507189f8729',
+        task: '41491f95-497e-81da-a20c-ce16ce0f3b5a',
       },
       {
         what: 'Falha do account-chain:record-manual some sem aviso: a passagem pode faltar no registro de trocas (HandoffDialog.tsx:127-136, intencional).',

@@ -28,6 +28,8 @@ type DialogState = {
   /** Proposta recalculada que o main devolveu numa recusa (SUPERSEDED/NOT_ELIGIBLE). */
   override: AccountSwitchProposal | null
   transcript: TranscriptPreparation | null
+  /** O terminal de origem estava na tela alternativa: o transcript é só a tela. */
+  screenOnly: boolean
   busy: boolean
   error: string | null
   sourceActiveRequired: boolean
@@ -38,6 +40,8 @@ export type AccountSwitchDialogBinding = {
   /** A proposta fechou em outro lugar (expirou, foi decidida, bloco fixado). */
   closedElsewhere: boolean
   transcript: TranscriptPreparation | null
+  /** O terminal de origem estava na tela alternativa: só a tela vai como contexto. */
+  screenOnly: boolean
   busy: boolean
   error: string | null
   sourceActiveRequired: boolean
@@ -167,18 +171,19 @@ export function useAccountContinuation({
       const sourceNodeId = nodeIdFromPtySessionId(proposal?.sourceSessionId)
       if (!proposal || !sourceNodeId) return
       triggerRef.current = trigger
+      const source = sessions.getTranscript(sourceNodeId)
       setDialog({
         proposalId,
         sourceNodeId,
         openedProposal: proposal,
         override: null,
         transcript: null,
+        screenOnly: source.screenOnly === true,
         busy: false,
         error: null,
         sourceActiveRequired: false,
       })
-      const raw = sessions.getTranscript(sourceNodeId).text
-      void prepareRedactedTranscript(store.bridge, raw).then((transcript) => {
+      void prepareRedactedTranscript(store.bridge, source.text).then((transcript) => {
         setDialog((current) => (current?.proposalId === proposalId ? { ...current, transcript } : current))
       })
     },
@@ -302,6 +307,7 @@ export function useAccountContinuation({
             autoSubmit: params.autoSubmit,
             acknowledgeSourceActive: params.acknowledgeSourceActive,
             transcript: dialog.transcript,
+            screenOnly: dialog.screenOnly,
           },
           {
             bridge: store.bridge,
@@ -359,6 +365,7 @@ export function useAccountContinuation({
           proposal: dialogProposal,
           closedElsewhere: !liveProposal && !dialog.override,
           transcript: dialog.transcript,
+          screenOnly: dialog.screenOnly,
           busy: dialog.busy,
           error: dialog.error,
           sourceActiveRequired: dialog.sourceActiveRequired,

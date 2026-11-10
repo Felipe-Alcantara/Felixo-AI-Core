@@ -70,6 +70,8 @@ export type ContinuationRequest = {
   autoSubmit: boolean
   acknowledgeSourceActive: boolean
   transcript: RedactedTranscript
+  /** O terminal de origem estava na tela alternativa: o transcript é só a tela. */
+  screenOnly?: boolean
 }
 
 export type ContinuationOutcome =
@@ -135,6 +137,7 @@ export async function performContinuation(
     cwd: source.cwd,
     targetLabel: launch.label,
     transcript: request.transcript.text,
+    screenOnly: request.screenOnly,
     ...(proposal.failureClass && proposal.detectedAt
       ? {
           reason: {

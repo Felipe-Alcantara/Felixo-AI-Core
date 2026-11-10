@@ -375,6 +375,8 @@ function CanvasInner({
   const [handoff, setHandoff] = useState<{
     sourceId: string
     transcript: string
+    /** O terminal estava na tela alternativa: o transcript é só a tela. */
+    screenOnly?: boolean
     reason?: ContinuationReason
   } | null>(null)
   // 'select' = drag draws a selection box; 'pan' = drag grabs and moves the canvas.
@@ -1963,6 +1965,7 @@ function CanvasInner({
       transcript: string,
       options: NewTerminalOptions,
       reason?: ContinuationReason,
+      screenOnly?: boolean,
     ): Promise<{ ok: boolean; message?: string }> => {
       const source = nodesRef.current.find((node) => node.id === sourceId)
       if (!source || source.type !== 'terminal') {
@@ -1978,6 +1981,7 @@ function CanvasInner({
         cwd: options.cwd ?? sourceData.cwd,
         targetLabel: options.label,
         transcript,
+        screenOnly,
         // Motivo só quando a passagem nasceu de uma detecção confirmada.
         ...(reason && reason.detectedAt
           ? {
@@ -2005,8 +2009,10 @@ function CanvasInner({
     updateNodeData,
     focusNode,
     openTerminal,
-    openHandoff: (sourceId, reason) =>
-      setHandoff({ sourceId, transcript: store.getTranscript(sourceId).text, reason }),
+    openHandoff: (sourceId, reason) => {
+      const { text, screenOnly } = store.getTranscript(sourceId)
+      setHandoff({ sourceId, transcript: text, screenOnly, reason })
+    },
     openChainSettings: () => {
       requestAgentUsageTab('cadeia')
       openTool('agentUsage')
@@ -2478,8 +2484,8 @@ function CanvasInner({
           onRestart={() => relaunchTerminal(expandedTerminalId)}
           resumeBanner={expandedNodeData?.resumeBanner ?? null}
           onResumeAction={(action) => handleResumeAction(expandedTerminalId, action)}
-          onPassResponsibility={(transcript) =>
-            setHandoff({ sourceId: expandedTerminalId, transcript })
+          onPassResponsibility={(transcript, screenOnly) =>
+            setHandoff({ sourceId: expandedTerminalId, transcript, screenOnly })
           }
           onOpenFilePreview={openTextFileNode}
           readingMode={expandedNodeData?.readingMode === true}
@@ -2499,8 +2505,9 @@ function CanvasInner({
           onAddFolder={addProjectFolder}
           sourceSessionId={ptySessionIdForNode(handoff.sourceId)}
           reason={handoff.reason}
+          screenOnly={handoff.screenOnly}
           onConfirm={(options) =>
-            passResponsibility(handoff.sourceId, handoff.transcript, options, handoff.reason)
+            passResponsibility(handoff.sourceId, handoff.transcript, options, handoff.reason, handoff.screenOnly)
           }
           onClose={closeHandoff}
         />

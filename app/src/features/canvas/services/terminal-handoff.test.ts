@@ -3,6 +3,7 @@ import {
   buildTerminalHandoffPrompt,
   describeHandoffReason,
   prepareHandoffTranscript,
+  SCREEN_ONLY_NOTICE,
 } from './terminal-handoff'
 
 describe('terminal handoff', () => {
@@ -88,5 +89,36 @@ describe('terminal handoff', () => {
     expect(prompt).toContain(middle)
     expect(prompt).not.toContain('trecho do meio do histórico omitido')
     expect(prompt).toContain('histórico completo')
+  })
+})
+
+describe('transcript de um terminal em tela alternativa', () => {
+  const base = {
+    sourceLabel: 'Claude A',
+    sourceCommand: 'claude',
+    cwd: '/repo',
+    targetLabel: 'Codex continuação',
+    transcript: 'só a tela de agora',
+  }
+
+  it('diz ao agente que o transcript é só a tela, sem prometer o histórico completo', () => {
+    const prompt = buildTerminalHandoffPrompt({ ...base, screenOnly: true })
+
+    expect(prompt).toContain('SÓ a tela visível')
+    expect(prompt).toContain('NÃO está aqui')
+    expect(prompt).not.toContain('histórico completo')
+    expect(prompt).toContain('só a tela de agora')
+  })
+
+  it('sem screenOnly o texto de antes não muda', () => {
+    const prompt = buildTerminalHandoffPrompt(base)
+
+    expect(prompt).toContain('histórico completo disponível')
+    expect(prompt).not.toContain('SÓ a tela visível')
+  })
+
+  it('o aviso da pessoa explica a diferença e como ter histórico nos próximos terminais', () => {
+    expect(SCREEN_ONLY_NOTICE).toContain('não o histórico inteiro')
+    expect(SCREEN_ONLY_NOTICE).toContain('Rolagem no terminal do Claude Code')
   })
 })

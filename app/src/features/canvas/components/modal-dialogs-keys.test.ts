@@ -25,6 +25,7 @@ function binding(overrides: Partial<AccountSwitchDialogBinding> = {}): AccountSw
     onOpenChainSettings: noop,
     onGoToSource: noop,
     onClose: noop,
+    screenOnly: false,
     ...overrides,
   }
 }
@@ -74,5 +75,48 @@ describe('modais sobre o canvas', () => {
       }),
     )
     expect(outerClasses(html)).toContain('nokey')
+  })
+})
+
+describe('texto dos diálogos de passagem quando o terminal está na tela alternativa', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  const handoff = (screenOnly: boolean) => {
+    vi.stubGlobal('window', {
+      localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+      innerWidth: 1280,
+      innerHeight: 800,
+    })
+    return renderToStaticMarkup(
+      createElement(HandoffDialog, {
+        sourceLabel: 'Claude A',
+        projects: [],
+        onAddFolder: async () => [],
+        onConfirm: async () => ({ ok: true }),
+        onClose: () => {},
+        screenOnly,
+      }),
+    )
+  }
+
+  it('o Handoff só promete o histórico inteiro quando ele existe', () => {
+    const completo = handoff(false)
+    expect(completo).toContain('O histórico vai inteiro')
+    expect(completo).not.toContain('Não é a conversa inteira')
+
+    const soTela = handoff(true)
+    expect(soTela).not.toContain('vai inteiro')
+    expect(soTela).toContain('a tela de')
+    expect(soTela).toContain('Não é a conversa inteira')
+    expect(soTela).toContain('não o histórico inteiro')
+  })
+
+  it('a troca de conta avisa que só a tela vai como contexto', () => {
+    const sem = renderToStaticMarkup(createElement(AccountSwitchDialog, { binding: binding({ screenOnly: false }) }))
+    const com = renderToStaticMarkup(createElement(AccountSwitchDialog, { binding: binding({ screenOnly: true }) }))
+    expect(sem).not.toContain('tela alternativa')
+    expect(com).toContain('tela alternativa')
   })
 })

@@ -6,6 +6,7 @@ import { AgentConfigFields } from './AgentConfigFields'
 import { getFocusableElements, tabTrapTarget } from '../services/keyboard-focus'
 import { DialogResizeHandles } from '../../shared/dialog/DialogResizeHandles'
 import { useResizableDialog } from '../../shared/dialog/useResizableDialog'
+import { SCREEN_ONLY_NOTICE } from '../services/terminal-handoff'
 import type { ContinuationReason } from '../services/account-switch-dialog'
 import { failureClassLabel, formatClockTime } from '../services/account-chain-view'
 import { getAccountChainBridge } from '../services/account-chain-client'
@@ -26,6 +27,8 @@ type Props = {
    * Login do sistema ou cadeia desligada): vai ao prompt e ao registro.
    */
   reason?: ContinuationReason
+  /** O terminal de origem está na tela alternativa: só a tela vai como contexto. */
+  screenOnly?: boolean
 }
 
 /**
@@ -44,6 +47,7 @@ export function HandoffDialog({
   onClose,
   sourceSessionId,
   reason,
+  screenOnly = false,
 }: Props) {
   const dialogSize = useResizableDialog<HTMLDivElement>('handoff')
   // A passagem de responsabilidade tem uma configuração própria e temporária;
@@ -172,8 +176,9 @@ export function HandoffDialog({
               Passar responsabilidade
             </h2>
             <p className="mt-1 text-xs text-zinc-400">
-              O novo agente recebe o histórico de <strong>{sourceLabel}</strong> como contexto e
-              continua o trabalho.
+              O novo agente recebe {screenOnly ? 'a tela de' : 'o histórico de'}{' '}
+              <strong>{sourceLabel}</strong> como contexto e continua o trabalho.
+              {screenOnly && ' Não é a conversa inteira.'}
             </p>
             {reason && (
               <p className="mt-1 text-xs text-(--color-warning)">
@@ -201,10 +206,15 @@ export function HandoffDialog({
         />
 
         <p className="mb-3 rounded-sm border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-2.5 py-2 text-[11px] leading-relaxed text-(--color-warning)">
-          O histórico vai inteiro para o novo agente e pode conter tokens, senhas ou dados
-          pessoais. Ele recebe o texto marcado como contexto não confiável, para validar o
-          estado do projeto antes de agir.
+          {screenOnly ? 'O texto da tela' : 'O histórico vai inteiro para o novo agente e'} pode
+          conter tokens, senhas ou dados pessoais. Ele recebe o texto marcado como contexto não
+          confiável, para validar o estado do projeto antes de agir.
         </p>
+        {screenOnly && (
+          <p role="note" className="mb-3 text-[11px] leading-relaxed text-zinc-400">
+            {SCREEN_ONLY_NOTICE}
+          </p>
+        )}
 
         {erro && <p className="mb-3 text-xs text-theme-error">{erro}</p>}
 

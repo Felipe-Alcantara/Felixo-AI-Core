@@ -96,7 +96,7 @@ type TerminalDrawerProps = {
    * completo da sessão. Sempre disponível: passar responsabilidade é uma
    * decisão do usuário, não a consequência de um estado detectado.
    */
-  onPassResponsibility?: (transcript: string) => void
+  onPassResponsibility?: (transcript: string, screenOnly: boolean) => void
   /**
    * Cria (ou reaproveita) o bloco "arquivo" apontando para o caminho dado, já
    * em modo visualização — o mesmo bloco que o painel Projetos cria ao abrir
@@ -257,14 +257,14 @@ export function TerminalDrawer({
       return
     }
 
-    const transcript = store.getTranscript(sessionId).text
+    const { text: transcript, screenOnly } = store.getTranscript(sessionId)
     if (!transcript.trim()) {
       setHandoffError('Este terminal ainda não tem histórico para transferir.')
       return
     }
 
     setHandoffError(undefined)
-    onPassResponsibility(transcript)
+    onPassResponsibility(transcript, screenOnly === true)
   }, [onPassResponsibility, sessionId, store])
 
   // Abre o arquivo que está sendo editado aqui como um bloco "arquivo" (que

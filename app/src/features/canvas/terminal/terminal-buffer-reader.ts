@@ -40,7 +40,16 @@ export function readViewport(terminal: Terminal): string {
   return joinTrimmed(lines)
 }
 
-/** Buffer inteiro, incluindo o histórico rolado. */
+/**
+ * O terminal está na tela alternativa (Claude Code e outros apps de tela cheia)?
+ * Ali o buffer ativo tem só as linhas da tela: o histórico da conversa não existe
+ * no terminal, e `readBuffer` devolve apenas o que está desenhado agora.
+ */
+export function isAlternateScreen(terminal: Terminal): boolean {
+  return terminal.buffer.active.type === 'alternate'
+}
+
+/** Buffer inteiro, incluindo o histórico rolado. Na tela alternativa, só a tela (ver `isAlternateScreen`). */
 export function readBuffer(terminal: Terminal): string {
   const lines: string[] = []
 

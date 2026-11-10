@@ -32,7 +32,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **Elementos:** 100 (10 blocos, 16 ferramentas, 74 outras superfícies)
 - **Controles:** 378, dos quais 57 com teste específico
 - **Elementos sem nenhum teste:** 4
-- **Lacunas:** 267 (alto 8, médio 142, baixo 117), em 76 tasks
+- **Lacunas:** 266 (alto 8, médio 141, baixo 117), em 76 tasks
 
 ## Moldura do canvas
 
@@ -983,7 +983,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `Maximizar terminal` (button) | clique | Pede a largura innerWidth − 120 ao coordenador (splitHorizontalSpace decide a final) e marca aria-pressed; tira o recolhido e grava felixo:terminal-drawer-collapsed="0". O maximizado não é persistido. (desabilitado: some com a gaveta recolhida) | Sem falha própria; a largura final pode sair menor que a pedida quando o painel da esquerda ocupa espaço. | — |
 | `aria-label="Reiniciar terminal"` (button) | clique | Com retomada pendente não sobe nada: revela a faixa para o processo atual e foca o primeiro botão dela. Sem pendência, pede window.confirm se o processo está vivo e chama relaunchTerminal do CanvasView (resolveTerminalRelaunch → store.restart → pty:kill + pty:spawn, generation + 1, sessionStartedAt gravado no nó). (desabilitado: some com a gaveta recolhida) | Cancelar o confirm não faz nada. O retorno "held"/"missing" de relaunchTerminal é ignorado: nada acontece e nada é dito. Spawn recusado vira activity "error" com a mensagem na faixa vermelha. | — |
 | `Ver arquivo em modo renderizado` (button) | clique | resolveOpenEditorFile acha o arquivo aberto com nano/vim (opções de lançamento ou histórico do shell via getShellHistory) e chama openTextFileNode: cria ou reaproveita o bloco arquivo em visualização ao lado. (desabilitado: some recolhida ou sem onOpenFilePreview) | Sem arquivo detectado: faixa vermelha "Não achei nenhum arquivo aberto com nano/vim neste terminal.". | — |
-| `data-canvas-handoff-trigger` (button) | clique | Lê o histórico inteiro do xterm (getTranscript) e abre o HandoffDialog com ele (setHandoff no CanvasView). (desabilitado: some recolhida ou sem onPassResponsibility) | Histórico vazio: faixa vermelha "Este terminal ainda não tem histórico para transferir." e nenhum diálogo. Com o Claude na tela alternativa o histórico pode sair incompleto. | `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos` |
+| `data-canvas-handoff-trigger` (button) | clique | Lê o buffer ativo do xterm (getTranscript: { text, screenOnly }) e abre o HandoffDialog com ele (setHandoff no CanvasView). Com o terminal na tela alternativa (Claude Code), o texto é só a tela e o diálogo, o prompt do agente e a troca de conta dizem isso (SCREEN_ONLY_NOTICE). (desabilitado: some recolhida ou sem onPassResponsibility) | Histórico vazio: faixa vermelha "Este terminal ainda não tem histórico para transferir." e nenhum diálogo. Com o Claude na tela alternativa só a tela vai, e o diálogo avisa. | `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos` |
 | `Fixar terminal` (button) | clique | Alterna fixada e grava localStorage felixo:terminal-drawer-pinned; fixada, o mousedown fora não fecha a gaveta (shouldCloseOnOutsideClick). (desabilitado: some com a gaveta recolhida) | Sem falha própria; desafixada, clicar na sidebar ou num painel fecha a gaveta. | `scripts/canvas-smoke-prompts.cjs` → `criarSessaoDePrompts` |
 | `aria-label="Fechar terminal"` (button) | clique, Esc fora do xterm ou mousedown fora da gaveta não fixada (exceto camada flutuante) | Animação de saída (DRAWER_EXIT_MS) e closeExpandedTerminal: a gaveta desmonta, reporta largura 0 e o foco volta ao gatilho do bloco; o PTY segue vivo. | Sem falha própria: fechar nunca encerra o processo. | `scripts/canvas-smoke.cjs` → `checarInteracoes` |
 | `data-felixo-terminal-tab` (button) | clique, ou seta esquerda/direita na lista de abas | Abas Terminal \| Leitura (WAI-ARIA tabs): grava readingMode no nó (updateNodeData, persistido no canvas) e leva o foco junto — ao xterm no Terminal, ao painel na Leitura. Na Leitura o xterm fica por baixo, do mesmo tamanho, inert e aria-hidden; o PTY não é redimensionado. (desabilitado: some recolhida) | Sem falha própria: trocar de aba não toca o processo. Só aparece com onReadingModeChange e um perfil de leitura. | `scripts/canvas-smoke-leitura.cjs` → `copiarEAbas` |
@@ -1066,7 +1066,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | Falha do clipboard é engolida e, sem navigator.clipboard, o ✓ aparece sem copiar (terminal-session-store.ts:1716-1728, TerminalCopyButton.tsx:22-28); store.copy não tem teste. | baixo | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
-| Copiar com o Claude na tela alternativa pega só a tela, não o histórico inteiro. | médio | `3e991f95-497e-81e0-8c54-f507189f8729` |
 
 ### Detalhes do terminal
 
@@ -2422,7 +2421,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | --- | --- | --- |
 | Os smokes só abrem o diálogo e fecham com Esc: confirmar a passagem (bloco novo + PTY) nunca é exercitado ponta a ponta. | médio | `3ec91f95-497e-81e8-8f18-e2a529b0568e` |
 | A passagem manual manda o histórico sem redigir segredos (só avisa no texto). | médio | `3e991f95-497e-811e-a0a3-c9c0dd6d0c48` |
-| Com o Claude na tela alternativa o histórico enviado pode sair incompleto. | médio | `3e991f95-497e-81e0-8c54-f507189f8729` |
+| Com o Claude na tela alternativa só a tela vai como contexto (avisado ao usuário e ao agente); a conversa inteira exige ler o arquivo da sessão do Claude (.jsonl) em vez do terminal. | médio | `41491f95-497e-81da-a20c-ce16ce0f3b5a` |
 | Falha do account-chain:record-manual some sem aviso: a passagem pode faltar no registro de trocas (HandoffDialog.tsx:127-136, intencional). | baixo | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 
 ### Trocar de conta?
@@ -2918,7 +2917,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3e991f95-497e-81c9-a900-f0d5585956f9` — 1 lacuna
 - `3e991f95-497e-81ce-9286-cbe3532f3044` — 1 lacuna
 - `3e991f95-497e-81d4-af04-fc0a218a66dc` — 1 lacuna
-- `3e991f95-497e-81e0-8c54-f507189f8729` — 2 lacunas
 - `3ea91f95-497e-8117-8506-d4abe67709ff` — 1 lacuna
 - `3ea91f95-497e-8126-88c8-c6a7ce21bee0` — 1 lacuna
 - `3ea91f95-497e-8129-acde-f3b1049c09ed` — 1 lacuna
@@ -2959,3 +2957,4 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3f291f95-497e-81fe-8670-fe2fc871318d` — 1 lacuna
 - `3f491f95-497e-8126-b0ec-fab2a600214a` — 1 lacuna
 - `3fa91f95-497e-81fc-b87c-e65a5bdce2a5` — 1 lacuna
+- `41491f95-497e-81da-a20c-ce16ce0f3b5a` — 1 lacuna
