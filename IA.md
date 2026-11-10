@@ -1081,3 +1081,15 @@ Estado: concluído e publicado (v0.1.494).
 **Não validado.** Menu de link fechando quando a pergunta chega (sessão D do smoke não foi estendida; só a regra `focus-left` está coberta por teste). Leitor de tela real (NVDA/VoiceOver). Sessões B–F do smoke (a CI roda). Pergunta aberta junto com `HandoffDialog`/`AccountSwitchDialog`.
 
 Estado: concluído (publicação abaixo, no commit).
+
+## 2026-11-10 — Tutorial do canvas: validação manual da seção 9 do checklist (parcial, nenhum PASS novo)
+
+**Pedido.** Task "Felixo AI Core/Onboarding — validar à mão o que a automação não cobre no tutorial" (Etapa: Delegar; o registro de 09/11 já dizia que nenhum item foi executado).
+
+**Medido.** Item 4 (dois processos no mesmo perfil), Windows 11, Electron do projeto (fonte, não instalado), perfil novo com `FELIXO_DEVTOOLS_ONBOARDING=1`: com a instância 1 aberta (1 página, 1 card do tour), um 2º `electron .` com a mesma `FELIXO_USER_DATA_DIR` e um `.fxai` no argv **saiu com código 0 em 4,8 s**; depois disso a instância 1 seguia com 1 página e 1 card. Coerente com `single-instance.cjs` (trava desde 04/11).
+
+**Não executado, e por quê.** Leitor de tela, janela visível com teclado e mouse físicos, pergunta de uma CLI real, macOS (`activate`), NSIS, fonte do sistema a 150%, boot com até 4 CPUs lógicas, benchmark no hardware de referência e tradução real: dependem de hardware, instalação ou pessoa. O checklist diz que item sem execução não vale como PASS; nenhum foi marcado. O item 4 só conta como **parcial**: faltam o app instalado, o duplo clique real no Explorer e o macOS.
+
+**O que mudou.** `docs/validation/RELEASE_CHECKLIST.md`, itens 3 e 4: a pergunta agora pega o foco e prende o Tab (09/11), e a trava de instância única muda o esperado do item 4.
+
+Estado: aguardando execução humana (a task segue em "Delegar").

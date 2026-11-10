@@ -141,10 +141,15 @@ executado:
       armadilha da seção 8): Tab, Shift+Tab, Enter, Esc e clique fora com o tour
       aberto; o foco volta à Ajuda ao fechar.
 - [ ] **Pergunta de agente real por cima do tour** (`AgentQuestionDialog`, exige uma
-      CLI instalada): o diálogo fica acima, as teclas 1–4 e o Esc são dele, e o tour
-      continua no mesmo passo.
+      CLI instalada): o diálogo fica acima e pega o foco, o Tab e o Shift+Tab ficam
+      nele, as teclas 1–4 e o Esc são dele (o Esc fecha só a pergunta), o tour
+      continua no mesmo passo e, ao fechar, o foco volta ao botão do tour que o tinha.
+      (O SA3 do smoke prova isso com a pergunta gravada na fila do perfil isolado, não
+      com uma CLI de verdade.)
 - [ ] **Dois processos Electron no mesmo perfil** (abrir um `.fxai` com o app
-      aberto) no Windows e no macOS: o tutorial automático aparece uma vez só.
+      aberto) no Windows e no macOS: o tutorial automático aparece uma vez só. Desde
+      04/11/2026 há trava de instância única (`single-instance.cjs`): o esperado é o
+      segundo processo sair na hora e o primeiro seguir com uma janela e um card.
 - [ ] **macOS, janela recriada** (fechar a janela e reabrir pelo Dock, evento
       `activate`): nada reabre sozinho; um tour em andamento aparece como
       "Interrompido" na Ajuda.
