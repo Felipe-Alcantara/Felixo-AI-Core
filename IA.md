@@ -1114,3 +1114,23 @@ Estado: aguardando execução humana (a task segue em "Delegar").
 **Não validado.** Nada rodou: é decisão e documentação.
 
 Estado: concluído (decisão registrada; implementação em task própria).
+
+## 2026-11-10 — Terminal: Handoff e troca de conta param de prometer o "histórico inteiro" quando o Claude está na tela alternativa
+
+**Pedido.** Task "Felixo AI Core/Terminal — corrigir Handoff e Copiar com o Claude na tela alternativa e o texto de histórico inteiro" (aberta em 28/09, prioridade Alta).
+
+**Medido.** Teste novo com **xterm real** (`terminal-alternate-screen.test.ts`, o mesmo `@xterm/xterm` do app, sem DOM): com a tela alternativa ativa e 30 respostas redesenhadas, o buffer ativo tem **5 linhas (a tela)** e só contém a última resposta; o buffer normal só guarda o que veio antes de o app subir (o `$ claude`). Ou seja, nenhuma leitura do terminal entrega a conversa; a task acertava. No código, `getTranscript` usava `readBuffer(buffer.active)`; `HandoffDialog` dizia "O histórico vai inteiro" e `buildTerminalHandoffPrompt` dizia "histórico completo disponível". O botão Copiar já diz "Copiar seleção (ou a tela visível)": não promete o que não entrega.
+
+**O que mudou.**
+- `TerminalTranscript` ganha `screenOnly` (`isAlternateScreen` em `terminal-buffer-reader.ts`; `getTranscript` o preenche).
+- `terminal-handoff.ts`: `SCREEN_ONLY_NOTICE` e `describeTranscriptScope`; o prompt do agente diz "SÓ a tela visível… a conversa NÃO está aqui" e manda reconstruir o estado pelo repositório.
+- `HandoffDialog` e `AccountSwitchDialog` avisam a pessoa (e a orientam a ligar "Rolagem no terminal do Claude Code", que vale para terminais novos). O flag atravessa `TerminalDrawer` → `CanvasView` → `passResponsibility` e `useAccountContinuation` → `performContinuation`.
+- Inventário do canvas: removida a lacuna do Copiar (o botão é honesto); a do Handoff aponta para a task nova.
+
+**Decisões do agente.** Não juntei buffer normal + tela (só adicionaria o `$ claude`, e sugeriria um histórico que não existe). Copiar não foi mudado. A entrega da conversa inteira é feature à parte: ler o `.jsonl` da sessão do Claude (o app já o localiza em `agent-session-discovery.cjs`); task aberta.
+
+**Validação.** `tsc -b` limpo; `eslint src/features/canvas` 0; `vitest` 3422 passando, 3 pulados. Mutação: sem o ramo `screenOnly` do prompt, e sem o texto condicional do diálogo, os 2 testes correspondentes reprovam (restaurado). Smoke no app real, sessão A: verde (SA3 inclui o HandoffDialog; SA5).
+
+**Não validado.** O diálogo de Handoff com um Claude de verdade em tela alternativa (o smoke usa PTY falso, sem xterm); só a marcação do diálogo (renderização no servidor) e o xterm real em Node foram testados, cada um por si. A sessão da troca de conta com `screenOnly` não tem teste de ponta a ponta.
+
+Estado: concluído e publicado (ver commit abaixo).
