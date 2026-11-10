@@ -1093,3 +1093,24 @@ Estado: concluído (publicação abaixo, no commit).
 **O que mudou.** `docs/validation/RELEASE_CHECKLIST.md`, itens 3 e 4: a pergunta agora pega o foco e prende o Tab (09/11), e a trava de instância única muda o esperado do item 4.
 
 Estado: aguardando execução humana (a task segue em "Delegar").
+
+## 2026-11-10 — Tutorial do canvas: revisão das 5 decisões de produto (a–e); a (e) foi trocada
+
+**Pedido.** Task "Felixo AI Core/Onboarding — revisar as 5 decisões de produto do tutorial tomadas sem pergunta (a–e)": decisões tomadas em 26/09 sob o pedido "não pergunte nada", devolvidas ao Felipe para confirmar ou trocar.
+
+**Respostas do Felipe (10/11/2026, perguntadas uma a uma, recomendação "manter" nas cinco).**
+- a) Quem já usa o app não recebe o tutorial automático: **mantida**.
+- b) Primeiro uso abre sozinho, sem bloquear: **mantida**.
+- c) Feature nova: aviso discreto e mini-tour só ao clicar em "Ver": **mantida**.
+- d) i18n próprio em pt-BR, sem biblioteca: **mantida**.
+- e) Roteiro de 5 passos mais "onde reabrir": **trocada pelo roteiro longo** (Organizar, Página Web, Gerar imagem, Tarefas Notion).
+
+**O que mudou.** Só documentação: `PLANO-TUTORIAL-CANVAS.md` ganhou a seção "Revisão das decisões a–e pelo Felipe". Nenhum código: o roteiro no ar segue com 6 telas.
+
+**Decisão do agente.** A troca foi lida como "roteiro mais longo", não "passos interativos" (essa opção estava separada na pergunta); a regra de que o tour nunca clica nem cria continua. A objeção original ("rede e crédito") só vale para passos que agem.
+
+**Pendências.** Task de implementação aberta (ligada a esta), com a pergunta de "substituir ou estender" e de agrupar as ferramentas; localizar onde moram Gerar imagem e Tarefas Notion; subir a versão do tour e a revisão do catálogo; ajustar o smoke (SA1, SA4, SA5, SB1).
+
+**Não validado.** Nada rodou: é decisão e documentação.
+
+Estado: concluído (decisão registrada; implementação em task própria).

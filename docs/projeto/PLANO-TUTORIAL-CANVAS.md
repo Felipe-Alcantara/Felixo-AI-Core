@@ -169,6 +169,20 @@ Este plano sintetiza três propostas e dois julgamentos.
 - passos interativos ("clique em Agente");
 - um roteiro longo com Organizar, Página Web, Gerar imagem ou Tarefas Notion (rede e crédito).
 
+### Revisão das decisões a–e pelo Felipe (10/11/2026)
+
+As cinco decisões acima foram tomadas sem pergunta (pedido de 26/09: "não pergunte nada"). Em 10/11/2026 o Felipe respondeu cada uma:
+
+| Decisão | Resposta |
+|---|---|
+| a) Quem já usa não recebe o tutorial automático | **Mantida** |
+| b) Primeiro uso: abre sozinho, não bloqueante | **Mantida** |
+| c) Feature nova: aviso discreto, mini-tour só ao clicar em "Ver" | **Mantida** |
+| d) i18n próprio em pt-BR, sem biblioteca | **Mantida** |
+| e) Roteiro de 5 passos mais "onde reabrir" | **Trocada: roteiro longo** (Organizar, Página Web, Gerar imagem, Tarefas Notion) |
+
+A troca de (e) ainda **não está implementada**: o roteiro no ar segue com seis telas. A objeção original a um roteiro longo ("rede e crédito") vale para passos que agem nos alvos; o Felipe escolheu o roteiro longo, não passos interativos, então a regra "o tour nunca clica nem cria" segue valendo até nova decisão. A implementação está numa task própria (ver o IA.md de 10/11/2026).
+
 ### Decisões técnicas registradas (alternativas descartadas)
 
 | Decisão | Motivo | Descartado |
