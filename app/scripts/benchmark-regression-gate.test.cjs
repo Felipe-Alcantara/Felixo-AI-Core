@@ -301,3 +301,111 @@ test('sem baseline e sem --baseline-missing-ok, main falha de forma explícita',
 
   assert.throws(() => main([`--baseline=${path.join(dir, 'nao-existe.json')}`, `--current=${current}`]), /Baseline não encontrado/)
 })
+
+function manyAgentsPhase(overrides = {}) {
+  return {
+    phase: 'canvas-many-agents:gaveta-aberta',
+    count: 20,
+    frameReliable: true,
+    frameMs: { count: 900, p50: 17, p95: 100, max: 300 },
+    longTaskMs: { count: 40, p50: 60, p95: 100, max: 200 },
+    keyEchoMs: { count: 50, p50: 20, p95: 30, max: 60 },
+    ...overrides,
+  }
+}
+
+test('frame p95, long task p95 e tecla → eco p95 que pioram acima do limiar e do piso reprovam o gate', () => {
+  const baseline = { results: [manyAgentsPhase()] }
+  const current = {
+    results: [manyAgentsPhase({
+      frameMs: { count: 900, p95: 130 },
+      longTaskMs: { count: 60, p95: 160 },
+      keyEchoMs: { count: 50, p95: 50 },
+    })],
+  }
+
+  const result = compareReports({ baseline, current })
+
+  assert.equal(result.ok, false)
+  assert.deepEqual(result.regressions.map((regression) => regression.metric), [
+    'frame p95 (ms)',
+    'long task p95 (ms)',
+    'tecla → eco p95 (ms)',
+  ])
+})
+
+test('frame, long task e eco que pioram abaixo do piso absoluto não reprovam — ruído da mesma máquina', () => {
+  const baseline = { results: [manyAgentsPhase({ frameMs: { p95: 20 }, longTaskMs: { count: 3, p95: 60 }, keyEchoMs: { p95: 20 } })] }
+  const current = { results: [manyAgentsPhase({ frameMs: { p95: 26 }, longTaskMs: { count: 5, p95: 100 }, keyEchoMs: { p95: 30 } })] }
+
+  assert.equal(compareReports({ baseline, current }).ok, true)
+})
+
+test('frame de janela estrangulada não entra na comparação, de nenhum dos lados', () => {
+  const baseline = { results: [manyAgentsPhase({ frameReliable: false, frameMs: { p95: 20 } })] }
+  const current = { results: [manyAgentsPhase({ frameMs: { p95: 400 } })] }
+
+  assert.equal(compareReports({ baseline, current }).ok, true)
+  assert.equal(compareReports({ baseline: current, current: baseline }).ok, true)
+})
+
+test('long task que aparece onde não havia nenhuma reprova, mesmo com baseline zero', () => {
+  const baseline = { results: [manyAgentsPhase({ longTaskMs: { count: 0, p50: null, p95: null, max: null } })] }
+  const current = { results: [manyAgentsPhase({ longTaskMs: { count: 12, p95: 300 } })] }
+
+  const result = compareReports({ baseline, current })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.regressions[0].metric, 'long task p95 (ms)')
+  assert.match(formatReport(result), /long task p95 \(ms\): 0 → 300 \(antes não havia\)/)
+})
+
+test('o canvas com muitos agentes casa também pelo número de blocos', () => {
+  const baseline = { results: [manyAgentsPhase({ nodes: 320 })] }
+  const current = { results: [manyAgentsPhase({ nodes: 1_020, frameMs: { p95: 400 } })] }
+
+  const result = compareReports({ baseline, current })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.compared, 0)
+  assert.match(result.skipped[0], /nodes=1020/)
+})
+
+function phaseRun(frameP95, longTaskP95) {
+  return { results: [manyAgentsPhase({ frameMs: { count: 900, p95: frameP95 }, longTaskMs: { count: 20, p95: longTaskP95 } })] }
+}
+
+test('com várias rodadas de cada lado o gate compara a mediana: um quadro a mais numa rodada não reprova', () => {
+  // Medido em 11/11/2026 (Windows, mesmo código): o frame p95 anda em degraus de um quadro (33,3 → 49,9 ms).
+  const baseline = [phaseRun(49.9, 77.6), phaseRun(33.3, 61), phaseRun(33.3, 60.1)]
+  const current = [phaseRun(33.3, 63.1), phaseRun(49.9, 60), phaseRun(33.3, 58.9)]
+
+  assert.equal(compareReports({ baseline: baseline[1], current: current[1] }).ok, false)
+  const result = compareReports({ baseline, current })
+  assert.equal(result.ok, true)
+  assert.equal(result.compared, 1)
+})
+
+test('uma regressão que aparece em todas as rodadas reprova pela mediana', () => {
+  const baseline = [phaseRun(33.3, 60), phaseRun(33.3, 61), phaseRun(49.9, 62)]
+  const current = [phaseRun(66.6, 60), phaseRun(66.6, 140), phaseRun(50, 150)]
+
+  const result = compareReports({ baseline, current })
+
+  assert.equal(result.ok, false)
+  assert.deepEqual(
+    result.regressions.map((regression) => [regression.metric, regression.baselineValue, regression.currentValue]),
+    [['frame p95 (ms)', 33.3, 66.6], ['long task p95 (ms)', 61, 140]],
+  )
+  assert.match(formatReport(result), /mediana de 3 rodada\(s\) de cada lado/)
+})
+
+test('main aceita várias rodadas separadas por vírgula em --baseline e --current', () => {
+  const dir = tempDir()
+  const baseline = ['b1', 'b2', 'b3'].map((name, index) => writeJson(dir, `${name}.json`, phaseRun([49.9, 33.3, 33.3][index], 60)))
+  const current = ['c1', 'c2', 'c3'].map((name, index) => writeJson(dir, `${name}.json`, phaseRun([33.3, 49.9, 33.3][index], 60)))
+
+  const code = main([`--baseline=${baseline.join(',')}`, `--current=${current.join(',')}`])
+
+  assert.equal(code, 0)
+})

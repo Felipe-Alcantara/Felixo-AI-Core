@@ -4,16 +4,17 @@
 /**
  * Gate de regressão de performance: compara o relatório do benchmark de
  * scrollback do terminal (schemaVersion 1, ver `terminal-scrollback-benchmark.cjs`)
- * contra um baseline de um commit anterior — não contra um limiar fixo
- * codificado, que é o que `--check` daquele script já faz (compara política
- * `current` vs `adaptive` DENTRO da mesma execução).
+ * ou o do canvas com muitos agentes (`canvas-many-agents-benchmark.cjs`, que
+ * acrescenta frame, long task e tecla → eco por fase) contra um baseline de um
+ * commit anterior — não contra um limiar fixo codificado, que é o que `--check`
+ * daqueles scripts já faz.
  *
  * Nenhum workflow roda este gate desde o PR #124 (19/10/2026); o uso é manual,
  * com dois relatórios do mesmo sistema (ver `app/benchmarks/README.md`, seção
  * "Gate de regressão entre commits"). Artefatos expiram, então a ausência de
  * baseline não deve reprovar (ver `--baseline-missing-ok`).
  *
- * Cenários são casados por `phase+count+scrollback+policy`; um cenário que só
+ * Cenários são casados por `phase+count+scrollback+policy+nodes`; um cenário que só
  * existe de um lado (contagem nova, política nova) é ignorado, não comparado.
  */
 
@@ -67,23 +68,70 @@ const METRICS = [
     read: heapStreamDeltaBytes,
     minAbsoluteDelta: 32 * 1024 * 1024,
   },
+  // Frame, long task e eco (decisão de 11/11/2026: +20% e piso absoluto, gate manual). Os pisos: meio
+  // quadro a 60 Hz, o próprio limiar de long task e um quadro inteiro. Vêm do `canvas-many-agents`.
+  {
+    key: 'frameMs.p95',
+    label: 'frame p95 (ms)',
+    // Janela estrangulada pelo Chromium: o frame mede o estrangulamento, não o app.
+    read: (result) => (result.frameReliable === false ? undefined : readPath(result, 'frameMs.p95')),
+    minAbsoluteDelta: 8,
+  },
+  {
+    key: 'longTaskMs.p95',
+    label: 'long task p95 (ms)',
+    // Sem nenhuma long task o p95 é nulo: conta como 0, para a primeira que aparecer reprovar.
+    read: (result) => (result.longTaskMs?.count === 0 ? 0 : readPath(result, 'longTaskMs.p95')),
+    minAbsoluteDelta: 50,
+    zeroBaselineIsMeaningful: true,
+  },
+  {
+    key: 'keyEchoMs.p95',
+    label: 'tecla → eco p95 (ms)',
+    read: (result) => readPath(result, 'keyEchoMs.p95'),
+    minAbsoluteDelta: 16,
+  },
 ]
 
 function scenarioKey(result) {
-  return [result.phase, result.count, result.scrollback ?? '', result.policy ?? ''].join('|')
+  // `nodes` só existe no `canvas-many-agents`: 20 agentes com 300 e com 1.000 blocos são cenários diferentes.
+  return [result.phase, result.count, result.scrollback ?? '', result.policy ?? '', result.nodes ?? ''].join('|')
 }
 
 function scenarioLabel(result) {
   const parts = [`phase=${result.phase}`, `count=${result.count}`]
+  if (result.nodes !== undefined) parts.push(`nodes=${result.nodes}`)
   if (result.scrollback !== undefined) parts.push(`scrollback=${result.scrollback}`)
   if (result.policy) parts.push(`policy=${result.policy}`)
   return parts.join(' ')
 }
 
+/** Resultados de um ou mais relatórios, agrupados pelo cenário (na ordem em que aparecem). */
+function resultsByScenario(reports) {
+  const byKey = new Map()
+  for (const report of Array.isArray(reports) ? reports : [reports]) {
+    for (const result of report?.results ?? []) {
+      const key = scenarioKey(result)
+      byKey.set(key, [...(byKey.get(key) ?? []), result])
+    }
+  }
+  return byKey
+}
+
+/** Mediana dos valores finitos da métrica nas rodadas de um cenário. */
+function medianMetric(results, metric) {
+  const values = results.map((result) => metric.read(result)).filter(Number.isFinite).sort((a, b) => a - b)
+  if (values.length === 0) return undefined
+  const middle = Math.floor(values.length / 2)
+  return values.length % 2 ? values[middle] : (values[middle - 1] + values[middle]) / 2
+}
+
 /**
  * @param {object} options
- * @param {object} options.baseline - Relatório JSON do último run verde em main.
- * @param {object} options.current - Relatório JSON da execução atual (PR/local).
+ * @param {object | object[]} options.baseline - Relatório JSON do commit de referência, ou várias
+ *   rodadas dele: com mais de uma, cada métrica é a mediana (o frame p95 de uma rodada só oscila
+ *   um quadro inteiro com o mesmo código).
+ * @param {object | object[]} options.current - Relatório JSON da execução atual, ou várias rodadas.
  * @param {number} [options.thresholdPercent] - Regressão tolerada antes de falhar.
  * @param {string[]} [options.excludeMetrics] - Chaves de METRICS a não usar como
  *   critério de pass/fail. A métrica continua sendo reportada normalmente se
@@ -109,32 +157,34 @@ function compareReports({
   }
   const excluded = new Set(excludeMetrics)
   const activeMetrics = METRICS.filter((metric) => !excluded.has(metric.key))
-  const baselineByKey = new Map((baseline?.results ?? []).map((result) => [scenarioKey(result), result]))
+  const baselineByKey = resultsByScenario(baseline)
+  const currentByKey = resultsByScenario(current)
   const regressions = []
   const skipped = []
   let compared = 0
 
-  for (const currentResult of current?.results ?? []) {
-    const key = scenarioKey(currentResult)
-    const baselineResult = baselineByKey.get(key)
-    if (!baselineResult) {
+  for (const [key, currentResults] of currentByKey) {
+    const currentResult = currentResults[0]
+    const baselineResults = baselineByKey.get(key)
+    if (!baselineResults) {
       skipped.push(`${scenarioLabel(currentResult)}: sem baseline correspondente`)
       continue
     }
 
     let scenarioCompared = false
     for (const metric of activeMetrics) {
-      const baselineValue = metric.read(baselineResult)
-      const currentValue = metric.read(currentResult)
+      const baselineValue = medianMetric(baselineResults, metric)
+      const currentValue = medianMetric(currentResults, metric)
       if (!Number.isFinite(baselineValue) || !Number.isFinite(currentValue)) continue
       // Baseline ~0 tornaria qualquer valor positivo uma regressão de "infinitos
-      // %" — sem sinal real para decidir nada, então o par é pulado.
-      if (baselineValue <= 0) continue
+      // %" — sem sinal real para decidir nada, então o par é pulado. Exceção:
+      // métrica em que 0 é um estado real (nenhuma long task), decidida só pelo piso.
+      if (baselineValue <= 0 && !metric.zeroBaselineIsMeaningful) continue
 
       scenarioCompared = true
       const absoluteDelta = currentValue - baselineValue
-      const deltaPercent = (absoluteDelta / baselineValue) * 100
-      const crossesPercentThreshold = deltaPercent > thresholdPercent
+      const deltaPercent = baselineValue > 0 ? (absoluteDelta / baselineValue) * 100 : null
+      const crossesPercentThreshold = deltaPercent === null || deltaPercent > thresholdPercent
       const crossesAbsoluteFloor = !Number.isFinite(metric.minAbsoluteDelta) || absoluteDelta >= metric.minAbsoluteDelta
       if (crossesPercentThreshold && crossesAbsoluteFloor) {
         regressions.push({
@@ -142,7 +192,7 @@ function compareReports({
           metric: metric.label,
           baselineValue,
           currentValue,
-          deltaPercent: Number(deltaPercent.toFixed(1)),
+          deltaPercent: deltaPercent === null ? null : Number(deltaPercent.toFixed(1)),
           thresholdPercent,
         })
       }
@@ -154,6 +204,10 @@ function compareReports({
     ok: regressions.length === 0,
     regressions,
     compared,
+    runs: {
+      baseline: Array.isArray(baseline) ? baseline.length : 1,
+      current: Array.isArray(current) ? current.length : 1,
+    },
     skipped,
     thresholdPercent,
     checkedMetrics: activeMetrics.map((metric) => metric.label),
@@ -168,6 +222,12 @@ function formatReport(result, { baselineCommit, currentCommit, baselineRunUrl } 
     lines.push(`Baseline: ${[baselineCommit, baselineRunUrl].filter(Boolean).join(' — ')}`)
   }
   if (currentCommit) lines.push(`Atual: ${currentCommit}`)
+  if (result.runs && (result.runs.baseline > 1 || result.runs.current > 1)) {
+    const runs = result.runs.baseline === result.runs.current
+      ? `${result.runs.baseline} rodada(s) de cada lado`
+      : `${result.runs.baseline} rodada(s) no baseline e ${result.runs.current} na atual`
+    lines.push(`Valores: mediana de ${runs}.`)
+  }
   if (result.checkedMetrics?.length) {
     lines.push(
       `Critério: ${result.checkedMetrics.join(', ')} — falha se piorar mais de ` +
@@ -183,10 +243,13 @@ function formatReport(result, { baselineCommit, currentCommit, baselineRunUrl } 
   } else {
     lines.push(`${result.regressions.length} regressão(ões) encontrada(s):`)
     for (const regression of result.regressions) {
+      const change =
+        regression.deltaPercent === null
+          ? '(antes não havia)'
+          : `(+${regression.deltaPercent}%, limiar ${regression.thresholdPercent}%)`
       lines.push(
         `  - ${regression.scenario} · ${regression.metric}: ` +
-          `${regression.baselineValue} → ${regression.currentValue} ` +
-          `(+${regression.deltaPercent}%, limiar ${regression.thresholdPercent}%)`,
+          `${regression.baselineValue} → ${regression.currentValue} ${change}`,
       )
     }
   }
@@ -232,12 +295,13 @@ function parseArgs(argv) {
 function printHelp() {
   console.log(`Gate de regressão de performance
 
-Compara o relatório do benchmark de scrollback do terminal contra um
+Compara o relatório do benchmark de scrollback do terminal ou do canvas com
+muitos agentes contra um
 baseline de outro commit (não os limiares fixos internos de --check).
 
 Opções:
-  --baseline=arquivo.json   relatório do commit de referência (main)
-  --current=arquivo.json    relatório da execução atual
+  --baseline=a.json[,b.json] relatório(s) do commit de referência; com vários, mediana
+  --current=a.json[,b.json]  relatório(s) da execução atual; com vários, mediana
   --threshold=20            regressão tolerada em % antes de falhar (default 20)
   --exclude-metric=chave    ignora uma métrica no pass/fail (repetível); chaves
                             válidas: ${METRICS.map((metric) => metric.key).join(', ')}
@@ -260,18 +324,24 @@ function main(argv = process.argv.slice(2)) {
     throw new Error('--current é obrigatório.')
   }
 
-  if (!options.baselinePath || !fs.existsSync(options.baselinePath)) {
+  // Várias rodadas: caminhos separados por vírgula, e cada métrica vira a mediana delas.
+  const baselinePaths = (options.baselinePath ?? '').split(',').filter(Boolean)
+  const missingBaseline = baselinePaths.filter((file) => !fs.existsSync(file))
+  if (baselinePaths.length === 0 || missingBaseline.length > 0) {
     if (options.baselineMissingOk) {
       // Escreve o --out também aqui: o resumo do job no CI mostra o relatório,
       // e "sem baseline" precisa aparecer lá explicitamente, não como silêncio.
       writeOutput(options.outputPath, 'Gate de regressão de performance — sem baseline disponível (artefato de main ausente ou expirado); nada comparado, não é falha.')
       return 0
     }
-    throw new Error(`Baseline não encontrado: ${options.baselinePath ?? '(não informado)'}`)
+    throw new Error(`Baseline não encontrado: ${missingBaseline.join(', ') || '(não informado)'}`)
   }
 
-  const baseline = JSON.parse(fs.readFileSync(options.baselinePath, 'utf8'))
-  const current = JSON.parse(fs.readFileSync(options.currentPath, 'utf8'))
+  const readReports = (files) => files.map((file) => JSON.parse(fs.readFileSync(file, 'utf8')))
+  const baselineReports = readReports(baselinePaths)
+  const currentReports = readReports(options.currentPath.split(',').filter(Boolean))
+  const baseline = baselineReports.length === 1 ? baselineReports[0] : baselineReports
+  const current = currentReports.length === 1 ? currentReports[0] : currentReports
   const result = compareReports({
     baseline,
     current,
@@ -282,9 +352,9 @@ function main(argv = process.argv.slice(2)) {
   writeOutput(
     options.outputPath,
     formatReport(result, {
-      baselineCommit: options.baselineCommit || baseline?.commit,
+      baselineCommit: options.baselineCommit || baselineReports[0]?.commit,
       baselineRunUrl: options.baselineRunUrl,
-      currentCommit: options.currentCommit || current?.commit,
+      currentCommit: options.currentCommit || currentReports[0]?.commit,
     }),
   )
 
