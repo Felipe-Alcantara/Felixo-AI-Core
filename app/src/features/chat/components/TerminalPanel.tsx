@@ -5,11 +5,12 @@ import type {
   TerminalOutputSession,
   TerminalSessionStatus,
 } from '../hooks/useTerminalOutput'
+import { TERMINAL_OUTPUT_VISUAL_POLICY } from '../hooks/terminal-output-store'
 import {
-  getVisibleChars,
-  TERMINAL_OUTPUT_VISUAL_POLICY,
-  trimTerminalOutputChunks,
-} from '../hooks/terminal-output-store'
+  createVisibleSessions,
+  isOrchestratorTurnSession,
+  selectOrchestratorEntries,
+} from './terminal-panel-sessions'
 import {
   getPromptInsertionSourceLabel,
   parsePromptInsertionMetadata,
@@ -28,6 +29,7 @@ type TerminalPanelProps = {
 const MIN_WIDTH = 280
 const MAX_WIDTH = 640
 const DEFAULT_WIDTH = 360
+const NO_SESSIONS: TerminalOutputSession[] = []
 
 export function TerminalPanel({
   sessions,
@@ -47,22 +49,24 @@ export function TerminalPanel({
   const isDragging = useRef(false)
   const startX = useRef(0)
   const startWidth = useRef(0)
-  const visibleSessions = useMemo(() => createVisibleSessions(sessions), [sessions])
+  // Fechado, o painel só mostra o ícone: nada de mesclar e ordenar todas as sessões a cada flush.
+  const panelSessions = isOpen ? sessions : NO_SESSIONS
+  const visibleSessions = useMemo(() => createVisibleSessions(panelSessions), [panelSessions])
   const hiddenSessionParentId = useMemo(() => {
     const hiddenParents = new Map<string, string>()
 
-    for (const session of sessions) {
+    for (const session of panelSessions) {
       if (
         isOrchestratorTurnSession(session) &&
         session.parentThreadId &&
-        sessions.some((item) => item.sessionId === session.parentThreadId)
+        panelSessions.some((item) => item.sessionId === session.parentThreadId)
       ) {
         hiddenParents.set(session.sessionId, session.parentThreadId)
       }
     }
 
     return hiddenParents
-  }, [sessions])
+  }, [panelSessions])
 
   const effectiveSelectedSessionId =
     visibleSessions.some((session) => session.sessionId === selectedSessionId)
@@ -86,37 +90,13 @@ export function TerminalPanel({
   const selectedPromptHistory = selectedSession
     ? resolveSessionPromptHistory(selectedSession)
     : []
-  const allOrchestratorEntries = useMemo(
-    () =>
-      visibleSessions
-        .flatMap((session) =>
-          session.chunks
-            .filter((chunk) => chunk.kind !== 'tool')
-            .map((chunk) => ({
-              chunk,
-              sessionId: session.sessionId,
-            })),
-        )
-        .sort(
-          (a, b) =>
-            new Date(a.chunk.createdAt).getTime() -
-              new Date(b.chunk.createdAt).getTime() ||
-            a.chunk.id - b.chunk.id,
-        ),
-    [visibleSessions],
+  const {
+    entries: orchestratorEntries,
+    dropped: orchestratorEntriesDropped,
+  } = useMemo(
+    () => selectOrchestratorEntries(visibleSessions, orchestratorWindowSize),
+    [visibleSessions, orchestratorWindowSize],
   )
-  const orchestratorEntries = useMemo(
-    () =>
-      allOrchestratorEntries.length <=
-        orchestratorWindowSize
-        ? allOrchestratorEntries
-        : allOrchestratorEntries.slice(
-            -orchestratorWindowSize,
-          ),
-    [allOrchestratorEntries, orchestratorWindowSize],
-  )
-  const orchestratorEntriesDropped =
-    allOrchestratorEntries.length - orchestratorEntries.length
 
   const selectedThreadEntries = useMemo(
     () => selectedSession?.chunks ?? [],
@@ -566,112 +546,6 @@ function HistoryWindowNotice({ session }: { session: TerminalOutputSession }) {
   )
 }
 
-function createVisibleSessions(sessions: TerminalOutputSession[]) {
-  const sessionsById = new Map(
-    sessions.map((session) => [session.sessionId, session]),
-  )
-  const hiddenSessionIds = new Set<string>()
-  const mergedSessions = new Map<string, TerminalOutputSession>()
-
-  for (const session of sessions) {
-    if (
-      !isOrchestratorTurnSession(session) ||
-      !session.parentThreadId ||
-      !sessionsById.has(session.parentThreadId)
-    ) {
-      continue
-    }
-
-    hiddenSessionIds.add(session.sessionId)
-    const parentSession =
-      mergedSessions.get(session.parentThreadId) ??
-      cloneTerminalSession(sessionsById.get(session.parentThreadId)!)
-    mergedSessions.set(
-      session.parentThreadId,
-      mergeTerminalSessions(parentSession, session),
-    )
-  }
-
-  return sessions
-    .filter((session) => !hiddenSessionIds.has(session.sessionId))
-    .map((session) => mergedSessions.get(session.sessionId) ?? session)
-    .sort(
-      (a, b) =>
-        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-    )
-}
-
-function cloneTerminalSession(
-  session: TerminalOutputSession,
-): TerminalOutputSession {
-  return {
-    ...session,
-    chunks: [...session.chunks],
-    startMetadata: session.startMetadata
-      ? { ...session.startMetadata }
-      : undefined,
-  }
-}
-
-function mergeTerminalSessions(
-  parentSession: TerminalOutputSession,
-  childSession: TerminalOutputSession,
-): TerminalOutputSession {
-  const chunks = trimTerminalOutputChunks(
-    [...parentSession.chunks, ...childSession.chunks].sort(
-      (a, b) =>
-        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime() ||
-        a.id - b.id,
-    ),
-  )
-  const totalChunkCount =
-    parentSession.totalChunkCount + childSession.totalChunkCount
-  const startedAt =
-    new Date(parentSession.startedAt).getTime() <=
-    new Date(childSession.startedAt).getTime()
-      ? parentSession.startedAt
-      : childSession.startedAt
-  const updatedAt =
-    new Date(parentSession.updatedAt).getTime() >=
-    new Date(childSession.updatedAt).getTime()
-      ? parentSession.updatedAt
-      : childSession.updatedAt
-
-  return {
-    ...parentSession,
-    chunks,
-    status: mergeSessionStatus(parentSession.status, childSession.status),
-    startedAt,
-    updatedAt,
-    outputSize: parentSession.outputSize + childSession.outputSize,
-    totalChunkCount,
-    droppedChunkCount: Math.max(0, totalChunkCount - chunks.length),
-    visibleChars: getVisibleChars(chunks),
-    historyAvailable:
-      parentSession.historyAvailable && childSession.historyAvailable,
-    startMetadata: parentSession.startMetadata ?? childSession.startMetadata,
-  }
-}
-
-function mergeSessionStatus(
-  parentStatus: TerminalSessionStatus,
-  childStatus: TerminalSessionStatus,
-): TerminalSessionStatus {
-  if (parentStatus === 'error' || childStatus === 'error') {
-    return 'error'
-  }
-
-  if (parentStatus === 'running' || childStatus === 'running') {
-    return 'running'
-  }
-
-  if (parentStatus === 'stopped' || childStatus === 'stopped') {
-    return 'stopped'
-  }
-
-  return 'completed'
-}
-
 function createGroupedSessionRows(sessions: TerminalOutputSession[]) {
   const sessionsById = new Map(
     sessions.map((session) => [session.sessionId, session]),
@@ -805,10 +679,6 @@ function getSessionRoleClassName(session: TerminalOutputSession) {
   }
 
   return `${base} border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] text-(--color-warning)`
-}
-
-function isOrchestratorTurnSession(session: TerminalOutputSession) {
-  return session.sessionId.includes('orchestrator-turn')
 }
 
 function getChunkClassName(chunk: TerminalOutputChunk) {
