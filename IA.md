@@ -1193,3 +1193,10 @@ unitário. O visualizador com TUI de tela cheia (Claude Code) não foi medido: o
 histórico. A poda só roda no boot e a cada rotação de 8 MB; **Limpar** o canvas não apaga o arquivo (sai pelos 14 dias). No
 fechamento, uma escrita assíncrona ainda em voo pode chegar depois do último lote síncrono, ou não chegar. Nenhum smoke abre o
 Histórico arquivado (lacuna no inventário, task `3ec91f95-497e-81e8-8f18-e2a529b0568e`).
+
+**Adendo (2026-11-11, depois do push): CI e Release.** O CI de `c783124` (run 43021733813, 09:35–09:42) passou no escopo, no
+Validate em Windows, macOS, Ubuntu e Ubuntu ARM e no `Canvas smoke (ubuntu-latest)`, que roda a gaveta com o botão novo; o
+Release gate (run 43022705005) e o Release (run 43022741363, 09:43–09:52) saíram verdes e publicaram a `v0.1.522` nos três
+sistemas, com a validação do app instalado e a atualização silenciosa com o app aberto no Windows (3 min 46 s, no normal de
+3 a 3,7 min). **Não conferido:** o Histórico arquivado no app instalado: a validação do artefato (`release-smoke.cjs`) abre um PTY real,
+mas por um `PtyProcessManager` próprio, sem o arquivo.
