@@ -651,6 +651,18 @@ manual de links, labels, prompts, retomada e remoção no Canvas real.
   pagina por offset do fim ao começo (Histórico arquivado da gaveta). A saída é
   crua, sem redação, por decisão de 11/11/2026; o custo por pedaço é medido pela
   variante `atual+arquivo` do `benchmark:pty-output`.
+- O transporte para o renderer é agrupado (`pty-data-batcher.cjs`): a saída de
+  todas as sessões sai numa mensagem `pty:data` a cada 8 ms (lista de
+  `{ sessionId, data }`, concatenada por sessão; o preload desdobra), com saída
+  imediata acima de 64 K caracteres pendentes, nos 100 ms depois de um
+  `pty:write` (eco de tecla) e antes do `pty:exit` e do `pty:kill`. No reanexo o
+  pendente é descartado, porque o replay já o contém. Controle de fluxo por
+  marca d'água (`terminal-flow-control.ts`): o renderer pede `pty:flow` para
+  pausar o socket do node-pty acima de 2 M caracteres ainda não processados pelo
+  xterm e retomar abaixo de 500 K; o reanexo retoma sozinho. As marcas são altas
+  porque, pausado, o socket segura o `exit` no Windows e, no Linux e no macOS, é
+  destruído 200 ms depois do fim do processo. O `terminal.write` que lança
+  ("write data discarded") vira aviso no snapshot em vez de perder o fim.
 - Arquivos `.md` do canvas vivem na área de dados do usuário e podem ser
   ligados a vários agentes. Eles são a memória compartilhada recomendada.
 - O manifesto `.fxcanvas` transporta layout, conexões e conteúdo dos arquivos

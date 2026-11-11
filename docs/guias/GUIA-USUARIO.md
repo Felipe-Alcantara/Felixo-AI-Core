@@ -625,6 +625,7 @@ Por segurança, o app só abre arquivos que estejam dentro de um projeto registr
 - O histórico visual usa 20.000 linhas quando há até 9 terminais e 5.000 linhas quando o canvas já tem 10 ou mais. O limite é escolhido ao criar a sessão; terminais que já estavam abertos não são redimensionados nem perdem linhas quando outro terminal é adicionado.
 - Se o histórico visual ultrapassar o limite, o cartão e a gaveta avisam. Recarregar a janela ou voltar do Chat recria o terminal só com os últimos 200.000 caracteres da saída; quando o processo já tinha impresso mais que isso, o aviso diz que o começo ficou de fora. **Copiar** e **Handoff** usam o trecho que ainda está no buffer visual.
 - A saída inteira de cada terminal fica guardada em disco por 14 dias, como saiu (sem esconder senha ou token que uma ferramenta tenha impresso). O botão **Histórico arquivado** (ícone de relógio na barra da gaveta) abre essa saída por cima do terminal, que segue rodando por baixo; **Carregar mais** traz o trecho anterior, até o começo, e **Voltar ao terminal** fecha. Cada processo novo do bloco começa com a linha "── [Felixo] novo processo em … ──". O que passou de 14 dias sem escrita, de 64 MB por terminal ou de 1 GB no total sai do disco, o mais antigo primeiro.
+- Quando um comando despeja saída mais rápido do que o terminal consegue desenhar, o app segura o processo até o terminal alcançar, sem perder nada. Se mesmo assim parte da saída não entrar na tela, o aviso amarelo diz quantos caracteres ficaram de fora; eles estão no Histórico arquivado.
 
 ### Agente na nuvem
 

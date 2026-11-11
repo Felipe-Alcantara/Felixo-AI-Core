@@ -1200,3 +1200,50 @@ Release gate (run 43022705005) e o Release (run 43022741363, 09:43–09:52) saí
 sistemas, com a validação do app instalado e a atualização silenciosa com o app aberto no Windows (3 min 46 s, no normal de
 3 a 3,7 min). **Não conferido:** o Histórico arquivado no app instalado: a validação do artefato (`release-smoke.cjs`) abre um PTY real,
 mas por um `PtyProcessManager` próprio, sem o arquivo.
+
+---
+
+## 2026-11-11 — Terminal: `pty:data` em lote no processo principal, controle de fluxo por marca d'água e `write` do xterm à prova de exceção
+
+**Agente / repositório.** Resolver hotfix — Felixo-AI-Core (`J:/Programação/GitHub/Repositórios/Felixo-AI-Core`). Task
+`3e991f95-497e-81d4-af04-fc0a218a66dc` (pendência da fatia 1 de performance, 28/09).
+
+**Contexto.** Cada pedaço do node-pty virava uma mensagem `pty:data`, sem agrupamento nem controle de fluxo; e o store do
+renderer incrementava `pendingWrites` antes de várias checagens e chamava `terminal.write` sem `try/catch`: acima de 50 MB
+pendentes o xterm 6 lança "write data discarded", o pedaço sumia e o `exit` nunca era mostrado.
+
+**O que mudou.**
+
+1. `electron/services/pty-data-batcher.cjs` (novo): a saída de todas as sessões sai numa mensagem a cada 8 ms
+   (`[{ sessionId, data }]`, concatenada por sessão), na hora acima de 64 K caracteres pendentes da sessão, nos 100 ms depois de
+   um `pty:write` (eco) e antes do `pty:exit` e do `pty:kill`. No reanexo o pendente é **descartado**, não enviado: o replay que o
+   main reenvia já o contém, e mandar os dois duplicaria o fim no xterm novo. O preload desdobra o lote, isolando a exceção de uma
+   sessão para não tirar a saída das outras.
+2. Controle de fluxo: `terminal-flow-control.ts` conta o que foi entregue ao `terminal.write` e ainda não processado; acima de
+   2 M caracteres o renderer pede `pty:flow` (pausa o socket do node-pty, a CLI bloqueia ao escrever), abaixo de 500 K retoma.
+   `PtyProcessManager.setFlowPaused` ignora PTY sem `pause` e retoma sozinho no reanexo (o xterm que pediu a pausa não existe mais).
+   **Por que marcas altas:** com a janela minimizada o Chromium desacelera os timers do xterm, e uma marca baixa frearia agentes
+   em segundo plano; e, pausado, o socket segura o `exit` no Windows e é destruído 200 ms depois do fim do processo no Linux e no
+   macOS (`node-pty` `unixTerminal.js`, `DESTROY_SOCKET_TIMEOUT_MS`), perdendo o resto do buffer do sistema.
+3. `terminal-session-store.ts`: `writeOutput` sobe o `pendingWrites` só junto do `write`, captura a exceção, soma os caracteres em
+   `scrollback.droppedOutputChars` e segue o fim normalmente; o aviso aponta o Histórico arquivado (a saída está no disco).
+4. `benchmark:pty-output` ganhou a variante `ipc` (timers reais, 20 terminais a um pedaço por 10 ms): mensagens por segundo,
+   serialização (`v8.serialize`), espera de um pedaço, eco e conferência de ordem e completude. Tetos antes de medir: mensagens
+   agrupadas ≤ 25% das de antes, eco p95 ≤ 2 ms, serialização não maior.
+5. Inventário: a lacuna "pty:data chega pedaço a pedaço" saiu; `pty:flow` e o estado de saída descartada entraram.
+
+**Medido.** `npm test` 3182 passam, 0 falham (14 novos, entre eles a propriedade do agrupador com 200 sementes: nada perdido,
+nada reordenado, fim depois do último dado); vitest 221 arquivos, 3432 testes; `test:native` 11/11; `tsc -b`, `eslint .` e
+`vite build` limpos. **Os dois testes novos do store falham sem a correção** (rodados contra o store anterior e restaurados).
+Bancada (Node, Windows): 1.282 mensagens/s antes contra 109 depois (0,085), serialização 10,5 → 5,0 ms/s, eco p95 0,02 ms,
+saída inteira e em ordem nos dois lados; a espera de um pedaço comum ficou em ~15,7 ms (o timer de 8 ms cai na granularidade
+de 15,6 ms do Windows). App isolado (devtools): três shells com um laço de spinner entregaram 672 eventos por sessão em 250
+mensagens; uma enxurrada de 11,2 MB passou sem pausar (o xterm acompanhou); com o renderer travado 4 s durante uma enxurrada
+de 33,6 MB, o `pty:flow` foi chamado 2 vezes (pausa e retomada), o arquivo terminou em `FIM-TRAVADA-42` e a tela mostrou o fim
+sem aviso de descarte.
+
+**Limites.** Não validei macOS nem Linux no app; o risco do socket destruído 200 ms depois do fim do processo pausado é real
+lá e só foi reduzido (marca alta), não eliminado. O descarte no reanexo perde um aviso sintético do main (`[Felixo] Camada…`)
+que esteja nos 8 ms do lote, porque ele não entra no replay. Não medi a latência do eco no app (só na bancada) nem com 20
+terminais reais. O flake de perda de saída do PTY nativo no Windows (`count=20`) continua em quarentena e não tem relação
+com esta mudança.
