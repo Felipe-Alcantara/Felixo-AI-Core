@@ -139,6 +139,21 @@ function createAgentUsageRefreshScheduler({
     return [...consumers.values()].some((state) => state.visible)
   }
 
+  /** Painel ou modal de limites à vista, com a janela visível — sem as regras de agendamento do `hasVisibleConsumer`. */
+  function isConsumerVisible() {
+    if (windowVisibleOverride === false) {
+      return false
+    }
+    try {
+      if (isWindowVisible() === false) {
+        return false
+      }
+    } catch {
+      return false
+    }
+    return [...consumers.values()].some((state) => state.visible)
+  }
+
   function clearScheduledTimer() {
     if (timer !== null) {
       clearTimeoutFn(timer)
@@ -445,6 +460,7 @@ function createAgentUsageRefreshScheduler({
   }
 
   return {
+    isConsumerVisible,
     setConsumerState,
     removeConsumer,
     refreshPowerPolicy,

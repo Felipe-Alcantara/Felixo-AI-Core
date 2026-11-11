@@ -24,6 +24,7 @@ import {
   getAgentUsageMeasuredAt,
   getAgentUsagePlan,
   getAgentUsageResetCredits,
+  replaceAgentUsageAccount,
   groupAgentUsageAccounts,
   shouldRefreshAgentUsageOnOpen,
   shouldShowAgentUsageFilter,
@@ -32,6 +33,7 @@ import {
 } from './agent-usage'
 import type {
   AgentUsageAccount,
+  AgentUsageDashboard,
   AgentUsageFilter,
   AgentUsageMetric,
   AgentUsageProvider,
@@ -803,5 +805,27 @@ describe('filtro de contas e texto do botão Atualizar por conta', () => {
   it('o texto do botão diz o que a consulta lê: a pasta da conta, ou o login da máquina', () => {
     expect(describeAgentUsageAccountRefresh(conta('a', 'current', { ownLogin: true }))).toMatch(/só esta conta/)
     expect(describeAgentUsageAccountRefresh(conta('b', 'current', { ownLogin: false }))).toMatch(/login desta máquina/)
+  })
+})
+
+describe('replaceAgentUsageAccount', () => {
+  const account = (id: string, used: number) =>
+    ({ id, providerId: 'claude', label: id, latestSample: { metrics: [{ used }] } }) as unknown as AgentUsageAccount
+
+  it('troca só a conta avisada e mantém o resto do painel (o aviso chega por conta, não o painel inteiro)', () => {
+    const other = account('codex', 10)
+    const dashboard: AgentUsageDashboard = { ok: true, providers: [], accounts: [account('claude', 40), other], refreshedAt: 'r' }
+
+    const next = replaceAgentUsageAccount(dashboard, account('claude', 41))
+
+    expect(next.accounts?.map((item) => item.latestSample?.metrics[0].used)).toEqual([41, 10])
+    expect(next.accounts?.[1]).toBe(other)
+    expect(next.refreshedAt).toBe('r')
+  })
+
+  it('ignora o aviso de uma conta que o painel ainda não carregou', () => {
+    const dashboard: AgentUsageDashboard = { ok: true, accounts: [account('claude', 40)] }
+
+    expect(replaceAgentUsageAccount(dashboard, account('nova', 1))).toBe(dashboard)
   })
 })

@@ -224,13 +224,21 @@ function registerAgentUsageIpcHandlers({
     claudeStatuslineDir: statuslineDir,
     onChange: async (providerId) => {
       try {
-        const dashboard = await service.refreshLocal(providerId)
+        const result = await service.refreshLocal(providerId)
 
-        if (!dashboard) {
+        // Número novo vai sempre; leitura repetida (só o `measuredAt` avança) vai só com o
+        // painel ou o modal visível, para a hora da medição e o selo de desatualizado
+        // seguirem certos. Ao abrir, o painel relê o banco, que já tem a confirmação.
+        if (!result || (result.kind === 'confirmed' && !scheduler.isConsumerVisible())) {
           return
         }
 
-        sendDashboard(dashboard)
+        const account = await service.describeAccount(result.accountId)
+        const window = getMainWindow()
+        if (!account || !window || window.isDestroyed?.()) {
+          return
+        }
+        window.webContents?.send('agent-usage:account-changed', account)
       } catch {
         // Uma leitura que falhou não derruba o observador: o arquivo seguinte
         // volta a tentar.

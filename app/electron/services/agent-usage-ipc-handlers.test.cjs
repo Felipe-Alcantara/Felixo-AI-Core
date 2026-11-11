@@ -213,3 +213,56 @@ test('agent usage IPC não devolve ao renderer segredo que veio dentro da mensag
     assert.match(resposta.message, /spawn falhou/, 'o motivo continua legível; só o segredo sai')
   }
 })
+
+test('a status line avisa a tela de uma conta só, e uma confirmação só com o painel visível', async () => {
+  const sent = []
+  let watcherOnChange
+  let visible = false
+  let refreshResult = null
+  const service = {
+    refreshLocal: async () => refreshResult,
+    describeAccount: async (accountId) => ({ id: accountId, latestSample: { status: 'current' } }),
+  }
+  const window = {
+    isDestroyed: () => false,
+    isVisible: () => true,
+    webContents: { id: 7, send: (channel, payload) => sent.push([channel, payload]) },
+    on() {},
+    removeListener() {},
+  }
+  const watching = registerAgentUsageIpcHandlers({
+    service,
+    getMainWindow: () => window,
+    createWatcher: ({ onChange }) => {
+      watcherOnChange = onChange
+      return { start() {}, stop() {} }
+    },
+    createScheduler: () => ({
+      isConsumerVisible: () => visible,
+      setConsumerState() {},
+      refreshPowerPolicy() {},
+      setWindowVisible() {},
+      setSuspended() {},
+      stop() {},
+    }),
+  })
+
+  try {
+    // Número novo: a conta vai para a tela, com o painel aberto ou fechado.
+    refreshResult = { ok: true, kind: 'sample', accountId: 'claude-account' }
+    await watcherOnChange('claude')
+    // Leitura repetida com o painel fechado: nada (antes, o painel inteiro ia a cada resposta do Claude).
+    refreshResult = { ok: true, kind: 'confirmed', accountId: 'claude-account' }
+    await watcherOnChange('claude')
+    // Painel aberto: a confirmação vai, para a hora da medição e o selo de desatualizado seguirem certos.
+    visible = true
+    await watcherOnChange('claude')
+    refreshResult = null
+    await watcherOnChange('claude')
+
+    assert.deepEqual(sent.map(([channel]) => channel), ['agent-usage:account-changed', 'agent-usage:account-changed'])
+    assert.deepEqual(sent[0][1], { id: 'claude-account', latestSample: { status: 'current' } })
+  } finally {
+    watching.stopWatching?.()
+  }
+})

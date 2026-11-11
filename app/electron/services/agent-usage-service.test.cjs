@@ -1448,3 +1448,68 @@ test(
     }
   },
 )
+
+test(
+  'leituras repetidas da status line confirmam a última amostra em vez de gravar outra, e o measuredAt avança',
+  { skip: hasNodeSqlite() ? false : 'node:sqlite indisponível neste runtime' },
+  async () => {
+    // Medido em 15/10/2026: 96% das amostras do Claude repetiam a anterior, porque o script grava um
+    // `measuredAt` novo a cada execução e a comparação exigia o mesmo horário.
+    const databaseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-agent-usage-confirm-'))
+    const database = createStorageDatabase({ databaseDir })
+    const repository = createAgentUsageRepository(database)
+    const catalog = listAgentUsageSources().map((source) => ({
+      id: source.id,
+      name: source.name,
+      provider: source.provider,
+      command: source.command,
+      detected: true,
+      version: 'test',
+    }))
+    repository.createAccount({ id: 'claude-account', providerId: 'claude', label: 'Claude' })
+    const metric = (used) => ({
+      key: 'five_hour',
+      label: 'Janela de 5 horas',
+      used,
+      limit: 100,
+      remaining: 100 - used,
+      unit: '%',
+      precision: 'percentage',
+      resetAt: null,
+    })
+    let reading = { metrics: [metric(40)], identity: null, collectedAt: '2026-11-11T12:00:00.000Z' }
+    const service = createAgentUsageService({
+      repository,
+      probe: (name) => (name === 'claude-statusline' ? reading : null),
+      now: () => Date.parse('2026-11-11T12:10:00.000Z'),
+      listCatalog: async () => catalog,
+      runCommand: async () => ({ ok: false, stdout: '', stderr: '' }),
+    })
+    const rows = () => repository.listSamples('claude-account', { limit: 200 })
+
+    try {
+      assert.deepEqual(await service.refreshLocal('claude'), { ok: true, kind: 'sample', accountId: 'claude-account' })
+
+      for (let index = 1; index <= 50; index += 1) {
+        reading = { ...reading, collectedAt: new Date(Date.parse('2026-11-11T12:00:00.000Z') + index * 1_000).toISOString() }
+        assert.deepEqual(await service.refreshLocal('claude'), { ok: true, kind: 'confirmed', accountId: 'claude-account' })
+      }
+      // O mesmo arquivo relido sem medição nova não faz nada.
+      assert.equal(await service.refreshLocal('claude'), null)
+
+      assert.equal(rows().length, 1)
+      assert.equal(repository.getLatestSample('claude-account').metadata.measuredAt, '2026-11-11T12:00:50.000Z')
+      const described = await service.describeAccount('claude-account')
+      assert.equal(described.id, 'claude-account')
+      assert.equal(described.latestSample.metadata.measuredAt, '2026-11-11T12:00:50.000Z')
+      assert.equal(described.latestSample.status, 'current')
+
+      reading = { ...reading, metrics: [metric(41)], collectedAt: '2026-11-11T12:01:00.000Z' }
+      assert.deepEqual(await service.refreshLocal('claude'), { ok: true, kind: 'sample', accountId: 'claude-account' })
+      assert.equal(rows().length, 2)
+    } finally {
+      database.close()
+      fs.rmSync(databaseDir, { recursive: true, force: true })
+    }
+  },
+)

@@ -32,6 +32,7 @@ import {
   getAgentUsageMeasuredAt,
   getAgentUsagePlan,
   groupAgentUsageAccounts,
+  replaceAgentUsageAccount,
   shouldRefreshAgentUsageOnOpen,
   shouldShowAgentUsageFilter,
   summarizeProviderAccounts,
@@ -215,6 +216,17 @@ export function AgentUsagePanel({
     return window.felixo?.agentUsage?.onChanged((next) => {
       if (mounted.current) {
         setDashboard(next)
+        setLiveAt(new Date())
+      }
+    })
+  }, [])
+
+  // A status line (ou o rollout) avisa uma conta só: número novo, ou o mesmo valor confirmado
+  // com o painel aberto. Antes, o painel inteiro vinha a cada resposta do Claude.
+  useEffect(() => {
+    return window.felixo?.agentUsage?.onAccountChanged?.((account) => {
+      if (mounted.current) {
+        setDashboard((current) => replaceAgentUsageAccount(current, account))
         setLiveAt(new Date())
       }
     })

@@ -652,3 +652,29 @@ test('refresh manual continua disponível e a cadência espaçada volta no Modo 
   )
   scheduler.stop()
 })
+
+test('isConsumerVisible responde só se o painel ou o modal está à vista, mesmo durante um refresh manual', async () => {
+  const clock = fakeClock()
+  let windowVisible = true
+  const service = { list: async () => dashboard(), refreshAccount: async () => dashboard() }
+  const scheduler = createAgentUsageRefreshScheduler({
+    service,
+    now: clock.now,
+    setTimeoutFn: clock.setTimeout,
+    clearTimeoutFn: clock.clearTimeout,
+    isWindowVisible: () => windowVisible,
+  })
+
+  assert.equal(scheduler.isConsumerVisible(), false)
+  scheduler.setConsumerState('painel', { visible: true, performanceMode: false })
+  assert.equal(scheduler.isConsumerVisible(), true)
+  // O refresh manual tira o agendamento do ar, mas o painel continua aberto.
+  await scheduler.manualRefreshStarted()
+  assert.equal(scheduler.isConsumerVisible(), true)
+  windowVisible = false
+  assert.equal(scheduler.isConsumerVisible(), false)
+  windowVisible = true
+  scheduler.setConsumerState('painel', { visible: false, performanceMode: false })
+  assert.equal(scheduler.isConsumerVisible(), false)
+  scheduler.stop()
+})

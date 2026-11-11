@@ -160,6 +160,22 @@ export type AgentUsageProviderGroup = AgentUsageProvider & {
   accounts: AgentUsageAccount[]
 }
 
+/**
+ * Aviso de uma conta só (`agentUsage.onAccountChanged`): troca a entrada dela e mantém o resto.
+ * Conta que o painel ainda não carregou fica para o próximo `list`.
+ */
+export function replaceAgentUsageAccount(
+  dashboard: AgentUsageDashboard,
+  account: AgentUsageAccount,
+): AgentUsageDashboard {
+  const accounts = dashboard.accounts ?? []
+  const index = accounts.findIndex((item) => item.id === account.id)
+  if (index === -1) {
+    return dashboard
+  }
+  return { ...dashboard, accounts: accounts.map((item, position) => (position === index ? account : item)) }
+}
+
 export function groupAgentUsageAccounts(
   providers: AgentUsageProvider[],
   accounts: AgentUsageAccount[],

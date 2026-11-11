@@ -17,6 +17,7 @@ const {
   classifyUsageCapability,
   createIdentityFingerprint,
   describeAvailability,
+  normalizeMetrics,
   normalizeTimestamp,
   sampleHasMetrics,
 } = require('./agent-usage-model.cjs')
@@ -626,8 +627,11 @@ function createAgentUsageService({
    * trocamos os números; conta, plano e estado de login continuam sendo os da
    * última rodada completa, que é o que eles são.
    *
-   * Devolve `null` quando não há número novo para mostrar, para quem chama não
-   * gravar amostra nem avisar a interface à toa.
+   * Devolve `null` quando não há medição nova. Leitura nova com os mesmos
+   * números, a mesma fonte e a mesma identidade é uma confirmação (`kind:
+   * 'confirmed'`): avança o `measuredAt` da última amostra em vez de gravar
+   * outra igual. Números novos gravam amostra (`kind: 'sample'`). Quem chama
+   * monta a conta para a tela com `describeAccount`, só se for avisar.
    */
   async function refreshLocal(providerId) {
     const source = getAgentUsageSource(providerId)
@@ -652,12 +656,17 @@ function createAgentUsageService({
     }
 
     const previous = repository.getLatestSample(target.id)
-
-    if (isSameLocalReading(previous, local)) {
-      return null
-    }
-
     const localSource = getLocalUsageSource(providerId, source)
+
+    if (isSameLocalReading(previous, local, { sourceKind: localSource.kind, identityKey: target.identityKey })) {
+      const measuredAt = local.collectedAt ?? null
+      if (!measuredAt || measuredAt === (previous.metadata?.measuredAt ?? null)) {
+        return null
+      }
+      // A cadeia de contas decide pela medição atual: a confirmação mantém a amostra "current".
+      repository.updateSampleMetadata(previous.id, { ...previous.metadata, measuredAt })
+      return { ok: true, kind: 'confirmed', accountId: target.id }
+    }
 
     repository.saveSample({
       id: randomUUID(),
@@ -680,18 +689,28 @@ function createAgentUsageService({
       },
     })
 
-    return {
-      ok: true,
-      ...dashboardOf({
-        accounts: repository.listAccounts(),
-        // A releitura roda a cada gravação da statusline: um `--version` por
-        // CLI aqui era o custo mais repetido do painel.
-        catalog: await readRecentCatalog(),
-        repository,
-        now,
-        lastRefreshAt,
-      }),
+    return { ok: true, kind: 'sample', accountId: target.id }
+  }
+
+  /**
+   * A entrada de uma conta como o painel a recebe (a mesma do `list`), para
+   * avisar a tela de uma conta só em vez de remontar e reenviar o painel inteiro
+   * (2 consultas por conta, ~35 KB de JSON) a cada resposta do Claude.
+   */
+  async function describeAccount(accountId) {
+    const account = repository.getAccount(accountId)
+    if (!account) {
+      return null
     }
+    // O catálogo é o cacheado: um `--version` por CLI aqui era o custo mais repetido do painel.
+    const providers = buildProviders(await readRecentCatalog(), [account])
+    return buildDashboardAccount({
+      account,
+      repository,
+      now,
+      usageSource: providers.find((provider) => provider.id === account.providerId)?.usageSource,
+      profileIds: new Set(listProfiles().map((perfil) => perfil.id)),
+    })
   }
 
   function getExternalOperationMetrics() {
@@ -718,6 +737,7 @@ function createAgentUsageService({
     refresh,
     refreshAccount,
     refreshLocal,
+    describeAccount,
     resetExternalOperationMetrics,
     removeAccount,
     consumeResetCredit,
@@ -775,18 +795,19 @@ function pickLocalTarget(accounts, providerId, identity) {
   return accounts.length === 1 ? accounts[0] : null
 }
 
-/** Nada mudou desde a última amostra: mesma medição, mesmos números. */
-function isSameLocalReading(previous, local) {
-  if (!previous) {
-    return false
-  }
-
-  const sameMeasurement =
-    (previous.metadata?.measuredAt ?? null) === (local.collectedAt ?? null)
-
-  return (
-    sameMeasurement &&
-    JSON.stringify(previous.metrics) === JSON.stringify(local.metrics)
+/**
+ * A leitura repete a última amostra: mesma fonte, mesma identidade, mesmos
+ * números. O horário da medição fica de fora de propósito — o script da
+ * status line do Claude grava um `measuredAt` novo a cada execução, e exigir o
+ * mesmo horário fazia 96% das amostras do Claude serem cópias (15/10/2026).
+ */
+function isSameLocalReading(previous, local, { sourceKind, identityKey }) {
+  return Boolean(
+    previous &&
+      previous.status === 'current' &&
+      previous.sourceKind === sourceKind &&
+      (previous.observedIdentityKey ?? null) === (identityKey ?? null) &&
+      JSON.stringify(previous.metrics) === JSON.stringify(normalizeMetrics(local.metrics)),
   )
 }
 
@@ -1644,37 +1665,45 @@ function buildDashboard({
 }) {
   const providers = buildProviders(catalog, accounts)
   const usageSourceById = new Map(providers.map((provider) => [provider.id, provider.usageSource]))
-  const dashboardAccounts = accounts.map((account) => {
-    const latestSample = normalizeDashboardSample(
-      repository.getLatestSample(account.id),
+  const dashboardAccounts = accounts.map((account) =>
+    buildDashboardAccount({
+      account,
+      repository,
       now,
-    )
-    const lastKnownSample = normalizeDashboardSample(
-      repository.getLastAvailableSample(account.id),
-      now,
-    )
-
-    const usageSource = usageSourceById.get(account.providerId)
-
-    return {
-      ...account,
-      // Conta com pasta de login própria (perfil): a "Conta desta máquina" usa o login do sistema.
-      ownLogin: profileIds.has(account.id),
-      latestSample,
-      lastKnownSample,
-      // A capability estática da fonte somada ao resultado da última rodada.
-      availability: describeAvailability({
-        capability: usageSource?.capability,
-        limitation: usageSource?.limitation,
-        latestSample,
-      }),
-    }
-  })
+      usageSource: usageSourceById.get(account.providerId),
+      profileIds,
+    }),
+  )
 
   return {
     providers,
     accounts: dashboardAccounts,
     refreshedAt: lastRefreshAt,
+  }
+}
+
+function buildDashboardAccount({ account, repository, now, usageSource, profileIds }) {
+  const latestSample = normalizeDashboardSample(
+    repository.getLatestSample(account.id),
+    now,
+  )
+  const lastKnownSample = normalizeDashboardSample(
+    repository.getLastAvailableSample(account.id),
+    now,
+  )
+
+  return {
+    ...account,
+    // Conta com pasta de login própria (perfil): a "Conta desta máquina" usa o login do sistema.
+    ownLogin: profileIds.has(account.id),
+    latestSample,
+    lastKnownSample,
+    // A capability estática da fonte somada ao resultado da última rodada.
+    availability: describeAvailability({
+      capability: usageSource?.capability,
+      limitation: usageSource?.limitation,
+      latestSample,
+    }),
   }
 }
 

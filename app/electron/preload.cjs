@@ -430,11 +430,18 @@ contextBridge.exposeInMainWorld('felixo', {
       ipcRenderer.invoke('agent-usage:enable-claude-statusline'),
     disableClaudeStatusline: () =>
       ipcRenderer.invoke('agent-usage:disable-claude-statusline'),
-    // Empurrado pelo processo principal quando a CLI grava um número novo.
+    // Empurrado pelo processo principal: o painel inteiro depois de uma rodada agendada.
     onChanged: (callback) => {
       const handler = (_event, dashboard) => callback(dashboard)
       ipcRenderer.on('agent-usage:changed', handler)
       return () => ipcRenderer.removeListener('agent-usage:changed', handler)
+    },
+    // Uma conta só, quando a status line ou o rollout trazem um número novo (ou confirmam o
+    // valor com o painel aberto).
+    onAccountChanged: (callback) => {
+      const handler = (_event, account) => callback(account)
+      ipcRenderer.on('agent-usage:account-changed', handler)
+      return () => ipcRenderer.removeListener('agent-usage:account-changed', handler)
     },
   },
   // Agente na nuvem: o main cria a sessão e valida cada pedido; o renderer só

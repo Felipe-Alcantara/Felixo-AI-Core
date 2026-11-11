@@ -55,6 +55,7 @@ import type { GpuPreference, GpuPreferenceStatus } from './features/shared/graph
 import type { HardwareProfile } from './features/shared/performance/performance-suggestion'
 import type { PromptInsertionMetadata } from './features/shared/types/prompt-insertion'
 import type {
+  AgentUsageAccount,
   AgentUsageDashboard,
   ClaudeStatuslineState,
   AgentUsageMutationResult,
@@ -1085,6 +1086,9 @@ declare global {
         disableClaudeStatusline: () => Promise<ClaudeStatuslineState>
         onChanged: (
           callback: (dashboard: AgentUsageDashboard) => void,
+        ) => () => void
+        onAccountChanged: (
+          callback: (account: AgentUsageAccount) => void,
         ) => () => void
       }
       systemDesign?: {
