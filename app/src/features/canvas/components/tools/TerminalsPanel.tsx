@@ -26,7 +26,7 @@ import {
   Terminal as TerminalIcon,
 } from 'lucide-react'
 import {
-  useSessionSnapshot,
+  useSessionActivity,
   useTerminalSessions,
 } from '../../terminal/terminal-session-context'
 import { toSubmittedTerminalText } from '../../terminal/terminal-input'
@@ -124,6 +124,9 @@ function elementTitle(node: Node<CanvasNodeData>) {
  * choice is persisted. A folder header is visual only and never participates
  * in the list indices.
  */
+/** Um pouco além da dobra da dock (220 ms), para as linhas sumirem só depois dela. */
+const DOCK_FOLD_MS = 260
+
 export function TerminalsPanel({
   nodes,
   activeTerminalId,
@@ -155,6 +158,10 @@ export function TerminalsPanel({
   // Collapsed the dock is just its title bar, so the canvas' bottom-right
   // corner stays usable. The choice is remembered across sessions.
   const [collapsed, setCollapsed] = useState(() => readDockCollapsed(browserStorage()))
+  // Recolhida, a lista sai do DOM depois da dobra (`felixo-anim-corner-dock`,
+  // 220 ms em index.css): cada linha assina a atividade de uma sessão e
+  // seguia re-renderizando escondida. Ao abrir, as linhas voltam na hora.
+  const [rowsMounted, setRowsMounted] = useState(() => !collapsed)
   const [drafts, setDrafts] = useState<TerminalDrafts>({})
   // Reorder-by-drag, driven by pointer events rather than HTML5 drag-and-drop:
   // the row must travel INSIDE the dock, pushing its neighbours aside, instead
@@ -181,7 +188,14 @@ export function TerminalsPanel({
   const setCollapsedPreference = (next: boolean) => {
     setCollapsed(next)
     writeDockCollapsed(next, browserStorage())
+    if (!next) setRowsMounted(true)
   }
+
+  useEffect(() => {
+    if (!collapsed) return
+    const timer = window.setTimeout(() => setRowsMounted(false), DOCK_FOLD_MS)
+    return () => window.clearTimeout(timer)
+  }, [collapsed])
 
   const toggleCollapsed = () => setCollapsedPreference(!collapsed)
 
@@ -566,7 +580,7 @@ export function TerminalsPanel({
             <span>Canvas livre</span>
             <p>Crie um agente, arquivo ou grupo para começar a organizar seu fluxo.</p>
           </li>
-        ) : dockGroups.map((group) => (
+        ) : !rowsMounted ? null : dockGroups.map((group) => (
           <Fragment key={`repository-${group.key || 'none'}`}>
             {showRepositoryHeaders && (
               <RepositoryHeading
@@ -685,8 +699,8 @@ function ElementRow({
   onGrabPointerUp: () => void
 }) {
   const isTerminal = node.type === 'terminal'
-  const snapshot = useSessionSnapshot(node.id)
-  const activity = snapshot?.activity ?? 'starting'
+  // Só a atividade: a linha não re-renderiza a cada prévia nova da sessão.
+  const activity = useSessionActivity(node.id)
   const Icon = TYPE_ICON[(node.type as CanvasNodeType) ?? 'note']
 
   return (

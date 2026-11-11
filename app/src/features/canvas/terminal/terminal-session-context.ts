@@ -7,6 +7,7 @@ import {
   useSyncExternalStore,
 } from 'react'
 import type {
+  SessionActivity,
   SessionSnapshot,
   TerminalSessionStoreApi,
 } from './terminal-session-api'
@@ -64,4 +65,58 @@ export function useSessionSnapshots(): Record<string, SessionSnapshot> {
   const getSnapshot = useCallback(() => store.getSnapshots(), [store])
 
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+}
+
+/**
+ * Devolve o valor anterior enquanto o novo for igual segundo `isEqual`: é o
+ * que deixa um `useSyncExternalStore` sobre TODOS os snapshots re-renderizar só
+ * quando o derivado muda, e não a cada pedaço de saída de qualquer terminal.
+ */
+export function createStableValue<T>(isEqual: (previous: T, next: T) => boolean): (next: T) => T {
+  let has = false
+  let last: T
+  return (next) => {
+    if (has && isEqual(last, next)) return last
+    has = true
+    last = next
+    return next
+  }
+}
+
+/**
+ * Um derivado de todos os snapshots. Quem lê re-renderiza só quando o
+ * derivado muda (o `CanvasView` antes re-renderizava a cada transição de
+ * qualquer sessão, para usar só o conjunto de blocos que pedem ação).
+ */
+export function useSessionSnapshotsSelector<T>(
+  select: (snapshots: Record<string, SessionSnapshot>) => T,
+  isEqual: (previous: T, next: T) => boolean,
+): T {
+  const store = useTerminalSessions()
+  const [stabilize] = useState(() => createStableValue(isEqual))
+  const subscribe = useCallback(
+    (listener: () => void) => store.subscribeAll(listener),
+    [store],
+  )
+  const getSnapshot = useCallback(
+    () => stabilize(select(store.getSnapshots())),
+    [select, stabilize, store],
+  )
+
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+}
+
+/** Só a atividade de uma sessão: quem mostra só isso não re-renderiza a cada prévia nova. */
+export function useSessionActivity(sessionId: string): SessionActivity {
+  const store = useTerminalSessions()
+  const subscribe = useCallback(
+    (listener: () => void) => store.subscribe(sessionId, () => listener()),
+    [store, sessionId],
+  )
+  const getActivity = useCallback(
+    () => store.getSnapshot(sessionId)?.activity ?? 'starting',
+    [store, sessionId],
+  )
+
+  return useSyncExternalStore(subscribe, getActivity, getActivity)
 }

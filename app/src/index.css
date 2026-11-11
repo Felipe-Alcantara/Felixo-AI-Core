@@ -2287,6 +2287,12 @@
   transition: none;
 }
 
+/* Ícone de "trabalhando" do cartão do agente (TerminalNode): sob reduced
+   motion ele já não gira (motion-safe:); no Modo Performance também não. */
+:root[data-performance-mode='on'] .felixo-busy-spin {
+  animation: none;
+}
+
 :root[data-performance-mode='on'] .felixo-anim-corner-dock-collapsed,
 :root[data-performance-mode='on'] .felixo-anim-corner-puck-hidden {
   transform: none;

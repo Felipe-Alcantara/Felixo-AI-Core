@@ -22,6 +22,15 @@ export function getActionRequiredNodeIds(
   )
 }
 
+/** Mesmos ids, em qualquer ordem: o conjunto que pede ação não mudou. */
+export function sameIdSet(previous: ReadonlySet<string>, next: ReadonlySet<string>): boolean {
+  if (previous.size !== next.size) return false
+  for (const id of next) {
+    if (!previous.has(id)) return false
+  }
+  return true
+}
+
 export function findNewNotificationIds(
   previous: ReadonlySet<string>,
   current: ReadonlySet<string>,

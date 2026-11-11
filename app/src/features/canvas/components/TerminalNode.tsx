@@ -571,7 +571,9 @@ function ActivityBadge({
 
   return (
     <span className={`felixo-node-activity flex items-center gap-1 text-[11px] font-medium ${className}`}>
-      {activity === 'working' && <Loader2 size={11} className="animate-spin" />}
+      {/* Gira só com movimento permitido e fora do Modo Performance (index.css):
+          com 20 agentes trabalhando eram 20 animações contínuas no canvas. */}
+      {activity === 'working' && <Loader2 size={11} className="felixo-busy-spin motion-safe:animate-spin" />}
       {activity === 'waiting_approval' && <AlertCircle size={11} />}
       {activity === 'idle' && <span className="h-1.5 w-1.5 rounded-full bg-(--f-core-active)" />}
       {label}

@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Node } from '@xyflow/react'
-import { useSessionSnapshots, type useTerminalSessions } from '../terminal/terminal-session-context'
+import { useSessionSnapshotsSelector, type useTerminalSessions } from '../terminal/terminal-session-context'
+import type { SessionSnapshot } from '../terminal/terminal-session-api'
 import {
   findNewNotificationIds,
   getActionRequiredNodeIds,
+  sameIdSet,
 } from '../terminal/session-notifications'
 import {
   appendCanvasNotifications,
@@ -36,11 +38,13 @@ type CanvasNotificationsOptions = {
  * sem repetir o mesmo pedido depois que a pessoa já o consumiu.
  */
 export function useCanvasNotifications({ hydrated, nodes, store }: CanvasNotificationsOptions) {
-  const sessionSnapshots = useSessionSnapshots()
-  const actionableNotificationIds = useMemo(
-    () => getActionRequiredNodeIds(nodes, sessionSnapshots),
-    [nodes, sessionSnapshots],
+  // Só o conjunto de blocos que pedem ação re-renderiza o CanvasView; o resto
+  // dos snapshots é lido do store na hora em que o efeito precisa.
+  const selectActionable = useCallback(
+    (snapshots: Record<string, SessionSnapshot>) => getActionRequiredNodeIds(nodes, snapshots),
+    [nodes],
   )
+  const actionableNotificationIds = useSessionSnapshotsSelector(selectActionable, sameIdSet)
   const [notificationHistory, setNotificationHistory] = useState<CanvasNotification[]>(
     () => readNotificationHistory(),
   )
@@ -108,6 +112,7 @@ export function useCanvasNotifications({ hydrated, nodes, store }: CanvasNotific
   useEffect(() => {
     if (!hydrated) return
 
+    const sessionSnapshots = store.getSnapshots()
     const acknowledgements = acknowledgedNotificationPromptsRef.current
     for (const [nodeId, promptAtAcknowledgement] of acknowledgements) {
       const snapshot = sessionSnapshots[nodeId]
@@ -149,7 +154,7 @@ export function useCanvasNotifications({ hydrated, nodes, store }: CanvasNotific
     void audio.play().catch(() => {
       // Browsers may block playback until the user has interacted with the app.
     })
-  }, [actionableNotificationIds, hydrated, notificationSoundEnabled, sessionSnapshots])
+  }, [actionableNotificationIds, hydrated, notificationSoundEnabled, store])
 
   useEffect(() => {
     if (notificationAudioRef.current) {

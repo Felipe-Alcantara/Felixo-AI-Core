@@ -4,6 +4,7 @@ import {
   findNewNotificationIds,
   getActionRequiredNodeIds,
   isActionRequired,
+  sameIdSet,
 } from './session-notifications'
 
 function snapshot(activity: SessionSnapshot['activity']): SessionSnapshot {
@@ -38,5 +39,15 @@ describe('notification transitions', () => {
     expect(findNewNotificationIds(new Set(['agent-1']), new Set(['agent-1', 'agent-2']))).toEqual([
       'agent-2',
     ])
+  })
+})
+
+describe('sameIdSet (o CanvasView só re-renderiza quando o conjunto muda)', () => {
+  it('é igual com os mesmos ids em qualquer ordem e diferente com um a mais, a menos ou trocado', () => {
+    expect(sameIdSet(new Set(['a', 'b']), new Set(['b', 'a']))).toBe(true)
+    expect(sameIdSet(new Set(), new Set())).toBe(true)
+    expect(sameIdSet(new Set(['a']), new Set(['a', 'b']))).toBe(false)
+    expect(sameIdSet(new Set(['a', 'b']), new Set(['a']))).toBe(false)
+    expect(sameIdSet(new Set(['a', 'b']), new Set(['a', 'c']))).toBe(false)
   })
 })
