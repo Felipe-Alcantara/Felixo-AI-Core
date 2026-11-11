@@ -1540,11 +1540,6 @@ export const nodeSurfaces: InventoryElement[] = [
         risk: 'baixo',
         task: '3ec91f95-497e-8141-b6c1-d1833aac5664',
       },
-      {
-        what: 'edgesWithHandles depende de nodes e recalcula todas as arestas a cada quadro de arrasto.',
-        risk: 'baixo',
-        task: '3e991f95-497e-81c5-ad8f-f058eb3b93b7',
-      },
     ],
     overlap: 'SVG de arestas do React Flow, abaixo dos blocos; sem z próprio. Terminal e arquivo têm source e target sobrepostos em cada lado; os outros blocos, um handle de entrada à esquerda e um de saída à direita.',
   },

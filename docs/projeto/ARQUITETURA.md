@@ -609,11 +609,24 @@ testes; a API de producao continua usando os adaptadores nativos por padrao.
 
 No canvas, `canvas-connection-index.ts` constrói uma vez os mapas de nós,
 terminais ligados a arquivos e nomes de arquivos ligados a terminais, dentro de
-um `useMemo` dependente de `nodes` e `edges`. O mesmo índice é usado pelo
-`renderedNodes` e pelo efeito que resolve os caminhos dos arquivos, eliminando
-buscas completas por aresta e `nodes.find()` repetidos em cada terminal. O
-fixture de desempenho é opt-in com
+um `useMemo` dependente da lista **estrutural** de nós e de `edges`. O mesmo
+índice é usado pelo `data` injetado nos blocos e pelo efeito que resolve os
+caminhos dos arquivos, eliminando buscas completas por aresta e `nodes.find()`
+repetidos em cada terminal. O fixture de desempenho é opt-in com
 `$env:FELIXO_CONNECTION_BENCHMARK='1'; npx vitest run src/features/canvas/services/canvas-connection-index-benchmark.test.ts`.
+
+O quadro de arrasto separa o estrutural do posicional (`node-data-cache.ts`):
+`stableNodeStructure` devolve a mesma lista enquanto só posição, tamanho ou
+seleção mudam, e dela saem o índice, o `data` injetado (`nodeDataById`) e os
+rótulos do minimapa (um `Map`, não um `find` por bloco). Por quadro só se
+montam os objetos entregues ao React Flow, e `createReusePass` devolve o MESMO
+objeto de nó, de nó com moldura e de aresta quando nada mudou: o React Flow 12
+só pula o NodeWrapper de um bloco quando recebe o mesmo objeto
+(`userNode === internalNode.internals.userNode`). O `CanvasView` assina dos
+snapshots de sessão só o conjunto de blocos que pedem ação
+(`useSessionSnapshotsSelector` + `sameIdSet`), e a linha da dock só a atividade
+(`useSessionActivity`). A bancada pura do quadro de arrasto é opt-in com
+`$env:FELIXO_CANVAS_DRAG_BENCHMARK='1'; npx vitest run src/features/canvas/services/canvas-drag-frame-benchmark.test.ts`.
 
 Para medir o renderer, a bancada `npm run benchmark:canvas-connections --
 --check --out=arquivo.json` abre uma rota controlada no Electron com ReactFlow
@@ -938,9 +951,12 @@ novo. Criação, foco, abertura de página/tarefa e `fitView`/organização apli
 essa mesma geometria; o deslocamento do viewport mantém o resultado visível
 quando o chrome muda de tamanho.
 
-Os gatilhos de terminal permanecem montados depois que a gaveta foi aberta uma
-vez. Isso evita que o culling de nós remova o elemento antes da animação de
-fechamento devolver o foco. A auditoria E2E verifica landmarks, nomes
+Os blocos ficam todos montados (sem o culling do React Flow) enquanto a gaveta
+está aberta e até o foco devolvido ao gatilho sair dele (`node-mount-latch.ts`):
+isso evita que o culling remova o gatilho antes do fechamento devolver o foco.
+O cenário `checarTravaDeMontagemSolta` do `canvas-smoke` abre e fecha a gaveta,
+tira o foco, aproxima o zoom até um bloco do fixture sair da janela, confere que
+ele sai do DOM e volta o zoom pelo mesmo número de passos. A auditoria E2E verifica landmarks, nomes
 acessíveis, hit testing, arrasto curto, handles de conexão, `Tab`/`Escape`,
 foco do terminal e reidratação sem duplicar nós, edges ou sessões. O cenário
 usa `MockTerminalSessionStore`, ativado só no DevTools isolado por

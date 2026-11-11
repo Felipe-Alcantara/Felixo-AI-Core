@@ -1252,3 +1252,51 @@ com esta mudança.
 Validate em Windows, macOS, Ubuntu e Ubuntu ARM e no `Canvas smoke (ubuntu-latest)`; o Release gate (run 43028481767) e o
 Release (run 43028520221, 10:22–10:32) saíram verdes e publicaram a `v0.1.523` nos três sistemas, com a validação do app
 instalado e a atualização silenciosa com o app aberto no Windows (3 min 52 s).
+
+---
+
+## 2026-11-11 — Canvas: o arrasto só recria o bloco arrastado, sessões e dock param de re-renderizar o que não mostram, e a trava de montagem ganha cenário no smoke
+
+**Agente / repositório.** Resolver hotfix — Felixo-AI-Core (`J:/Programação/GitHub/Repositórios/Felixo-AI-Core`). Task
+`3e991f95-497e-81c5-ad8f-f058eb3b93b7` (item 4 do pedido de performance de 28/09).
+
+**Contexto (conferido no código de hoje, não só na investigação de 28/09).** `renderedNodes` criava `{ ...node, dragHandle }`
+para todo bloco a cada mudança de `nodes`, e o React Flow 12.11.6 só reaproveita o nó interno quando recebe o mesmo objeto
+(`userNode === internalNode.internals.userNode`, `@xyflow/system`), então todo NodeWrapper montado re-renderizava a cada
+`pointermove`; `orderedNodes` e `edgesWithHandles` também recriavam objetos; o índice de conexões, o `data` injetado e a
+assinatura de agentes (O(arquivos × terminais)) rodavam por quadro; o minimapa fazia um `nodes.find` por bloco. O
+`CanvasView` re-renderizava a cada transição de qualquer sessão (`useCanvasNotifications` → `useSessionSnapshots`) para usar
+só o conjunto de blocos que pedem ação; a linha da dock assinava o snapshot inteiro para mostrar a atividade; a dock recolhida
+mantinha as linhas montadas; o spinner do cartão girava sob reduced motion e no Modo Performance.
+
+**O que mudou.**
+
+1. `node-data-cache.ts`: `createReusePass` (genérico; `createNodeDataReuse` virou um caso dele), `stableNodeStructure` e
+   `createNodeStructureTracker`. No `CanvasView`, a lista estrutural (mesma enquanto só posição, tamanho ou seleção mudam)
+   alimenta o índice, o `data` injetado (`nodeDataById`, assinatura de terminais uma vez por passagem) e os rótulos do
+   minimapa (`Map`); por quadro, `renderedNodes`, `orderedNodes` e `edgesWithHandles` reaproveitam o objeto de quem não mudou.
+2. `terminal-session-context.ts`: `createStableValue`, `useSessionSnapshotsSelector` e `useSessionActivity`;
+   `useCanvasNotifications` assina só o conjunto que pede ação (`sameIdSet`) e lê o resto do store na hora do efeito; a linha
+   da dock usa `useSessionActivity`.
+3. Dock recolhida desmonta as linhas 260 ms depois (fim da dobra de 220 ms) e as remonta na hora ao abrir; spinner do cartão
+   com `motion-safe:animate-spin` e regra do Modo Performance (`.felixo-busy-spin`).
+4. `canvas-smoke.cjs`: `checarTravaDeMontagemSolta` (depois do `checarZoomVisual`) abre e fecha a gaveta, tira o foco do
+   gatilho, aproxima o zoom em passos de 1,2× (abaixo do `maxZoom` 2) até um bloco do fixture sair do DOM e volta o mesmo
+   número de passos, conferindo a escala exata do viewport. Primeira versão falhou "34% → 47%": cada clique saía no meio da
+   animação de 180 ms; agora o passo seguinte espera a escala parar.
+5. Bancada opt-in `canvas-drag-frame-benchmark.ts` (300 e 1.000 blocos, 60 quadros), inventário (lacunas resolvidas, a que
+   sobrou reescrita) e arquitetura.
+
+**Medido.** Bancada: 300 blocos 1,08 → 0,11 ms por quadro (p50) e 300 → 1 objeto de nó com identidade nova por quadro;
+1.000 blocos 9,05 → 0,32 ms e 1.000 → 1; arestas 100/333 → 0. App de fonte (devtools, Windows, React de desenvolvimento),
+300 notas montadas, arrasto de 30 passos com `?canvas-profiler=1`, 3 rodadas de cada lado com o canvas resemeado e o bloco
+conferido no lugar final: antes 122 commits e 6.205–6.272 ms somados; depois 62 commits e 3.901–3.950 ms (−49% e −37%).
+`tsc -b`, `eslint .` e `vite build` limpos; vitest 222 arquivos, 3439 testes; `npm test` 3182, 0 falham. Smoke local com as
+mudanças: A (com o cenário novo), B, D e F passam; C4 e P3 falham **igual no `main` sem as mudanças** (A/B com `git stash`)
+e passam no CI (Windows e macOS no Nightly 43032576510): falha desta máquina, task aberta.
+
+**Limites.** O custo por commit do arrasto ficou em ~35–45 ms nesse build: não é mais o NodeWrapper dos blocos parados, e sim
+o próprio `CanvasView` e o minimapa, que seguem re-renderizando por quadro (task aberta para medir em produção e cortar). Não
+contei renders de NodeWrapper diretamente (o React Profiler do app mede o `CanvasView` inteiro): a prova é a identidade dos
+objetos na bancada, o código do xyflow e a queda de commits. O seletor de sessão relê o conjunto a cada transição (O(blocos)),
+só não re-renderiza. A dock recolhida no Modo Performance (sem transição) ainda espera os 260 ms para desmontar.

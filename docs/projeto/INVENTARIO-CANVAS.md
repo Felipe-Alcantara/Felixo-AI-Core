@@ -32,7 +32,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **Elementos:** 101 (10 blocos, 16 ferramentas, 75 outras superfícies)
 - **Controles:** 381, dos quais 57 com teste específico
 - **Elementos sem nenhum teste:** 4
-- **Lacunas:** 266 (alto 8, médio 141, baixo 117), em 75 tasks
+- **Lacunas:** 265 (alto 8, médio 141, baixo 116), em 75 tasks
 
 ## Moldura do canvas
 
@@ -322,7 +322,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Com o canvas travado, Delete/Backspace ainda apaga a seleção feita antes de travar: o deleteKeyCode do React Flow (CanvasView.tsx:3193) não olha a trava, enquanto o Remover da statusbar fica desabilitado ("Destrave o canvas para remover"). | médio | `3ec91f95-497e-8143-a0b4-cceb0ace7599` |
 | focusNode centraliza pelo node.position (CanvasView.tsx:1753), que num filho de grupo é relativo ao grupo: o item do inspector "Elementos" e o das Notificações levam a câmera para o lugar errado quando o bloco está dentro de um grupo. | médio | `3ec91f95-497e-8103-b360-c1979d6992f4` |
 | Os atalhos do canvas só têm teste negativo (Delete, Backspace e Q não agem sob um diálogo): apagar com Delete/Backspace, alternar com Q, Shift para somar à seleção e soltar um bloco num grupo não são exercitados. | médio | `3ec91f95-497e-818f-b9f2-f9710605c303` |
-| Recálculo por quadro durante o arrasto e renders nas transições de sessão. | médio | `3e991f95-497e-81c5-ad8f-f058eb3b93b7` |
+| O CanvasView e o minimapa ainda re-renderizam a cada quadro de arrasto: ~35–45 ms por commit com 300 blocos no build de desenvolvimento (os blocos parados não re-renderizam mais desde 11/11/2026). | médio | `41591f95-497e-8166-84cb-cf8af3736c2b` |
 | Centralizar um bloco com zoom que caiba na área livre em telas pequenas (focusNode usa zoom fixo 1,2). | médio | `3ea91f95-497e-819a-bdd9-fbc178f27b3e` |
 | A visão que não reseta mais ao abrir e fechar gaveta ou painel (planAutoFit) ainda não foi conferida no app real. | baixo | `3e291f95-497e-815a-9863-d4b9f8f15e8f` |
 
@@ -368,7 +368,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Controle | Gatilho | Efeito | Falha conhecida | Teste |
 | --- | --- | --- | --- | --- |
 | `aria-label="Abrir elementos"` (button) | clique | Puck: toggleCollapsed expande o inspector, grava felixo:elements-dock-collapsed = "0" e publica INSPECTOR_WIDTH (reportInspectorWidth); topbar e Mini Map voltam a reservar 18rem (a statusbar não: ela vai até a borda direita nos dois estados). (desabilitado: só visível e focável com o inspector recolhido) | Sem localStorage a escolha vale só nesta sessão. | `scripts/canvas-smoke-onboarding.cjs` → `recolherInspector` |
-| `aria-label="Recolher elementos"` (button) | clique | Cabeçalho "Elementos": recolhe para o puck, grava felixo:elements-dock-collapsed = "1" e publica largura 0; painel, gaveta e Mini Map ganham o espaço. | Sem localStorage a escolha vale só nesta sessão. | `scripts/canvas-smoke-onboarding.cjs` → `recolherInspector` |
+| `aria-label="Recolher elementos"` (button) | clique | Cabeçalho "Elementos": recolhe para o puck, grava felixo:elements-dock-collapsed = "1" e publica largura 0; painel, gaveta e Mini Map ganham o espaço. As linhas saem do DOM 260 ms depois (fim da dobra) e voltam na hora ao abrir. | Sem localStorage a escolha vale só nesta sessão. | `scripts/canvas-smoke-onboarding.cjs` → `recolherInspector` |
 | `Alternar modo de enviar mensagens em massa` (button) | clique | Liga ou desliga o modo de envio em massa (campo de mensagem sob cada terminal); ligar com o inspector recolhido também o expande. | Sem falha própria; o modo e os rascunhos não persistem. | — |
 | `onClick={sendAllDrafts}` (button) | clique | Enviar para todos: para cada rascunho não vazio, store.sendText com Enter (prompt manual) no PTY do terminal (pty:write) e limpa o rascunho. (desabilitado: nenhum rascunho pendente) | erro engolido: o resultado de sendText é ignorado e o rascunho é apagado mesmo se a entrega falhar (TerminalsPanel.tsx:193). | — |
 | `onClick={onSelect}` (button) | clique | Linha do bloco: marca a linha ativa, focusNode centraliza e seleciona o bloco e, se for terminal, openTerminal abre a gaveta e marca as notificações dele como lidas. Shift+↑/↓ faz o mesmo de qualquer lugar; Alt+↑/↓ e o grip reordenam dentro da pasta (orderIndex salvo). | Bloco dentro de grupo é centralizado no lugar errado (ver lacuna de foco na área do canvas). | `scripts/canvas-smoke-links.cjs` → `focar` |
@@ -910,7 +910,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | --- | --- | --- |
 | Erros engolidos em services/canvas-storage.ts:54-66 e 173-198: saveCanvasEdge, deleteCanvasEdge e deleteCanvasNode têm catch vazio e não conferem ok; uma aresta criada some (ou uma removida volta) no próximo início sem aviso nem log. | médio | `3ec91f95-497e-81a3-9be3-c0d354bf7621` |
 | Remover aresta (selecionar + Delete/Backspace ou Remover da barra de status) não tem teste; o smoke só cria por arrasto e confere a persistência. | baixo | `3ec91f95-497e-8141-b6c1-d1833aac5664` |
-| edgesWithHandles depende de nodes e recalcula todas as arestas a cada quadro de arrasto. | baixo | `3e991f95-497e-81c5-ad8f-f058eb3b93b7` |
 
 ### Ligação arquivo ↔ terminal (contexto do agente)
 
@@ -2939,7 +2938,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3e991f95-497e-8172-b092-f3aa9f111ccc` — 2 lacunas
 - `3e991f95-497e-817d-b6a4-c2c1825b3afc` — 1 lacuna
 - `3e991f95-497e-81b4-ac92-d7db960c9ae0` — 1 lacuna
-- `3e991f95-497e-81c5-ad8f-f058eb3b93b7` — 2 lacunas
 - `3e991f95-497e-81c9-a900-f0d5585956f9` — 1 lacuna
 - `3e991f95-497e-81ce-9286-cbe3532f3044` — 1 lacuna
 - `3ea91f95-497e-8117-8506-d4abe67709ff` — 1 lacuna
@@ -2983,3 +2981,4 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3f491f95-497e-8126-b0ec-fab2a600214a` — 1 lacuna
 - `3fa91f95-497e-81fc-b87c-e65a5bdce2a5` — 1 lacuna
 - `41491f95-497e-81da-a20c-ce16ce0f3b5a` — 1 lacuna
+- `41591f95-497e-8166-84cb-cf8af3736c2b` — 1 lacuna

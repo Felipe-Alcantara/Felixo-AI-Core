@@ -867,9 +867,9 @@ export const chromeSurfaces: InventoryElement[] = [
         task: '3ec91f95-497e-818f-b9f2-f9710605c303',
       },
       {
-        what: 'Recálculo por quadro durante o arrasto e renders nas transições de sessão.',
+        what: 'O CanvasView e o minimapa ainda re-renderizam a cada quadro de arrasto: ~35–45 ms por commit com 300 blocos no build de desenvolvimento (os blocos parados não re-renderizam mais desde 11/11/2026).',
         risk: 'médio',
-        task: '3e991f95-497e-81c5-ad8f-f058eb3b93b7',
+        task: '41591f95-497e-8166-84cb-cf8af3736c2b',
       },
       {
         what: 'Centralizar um bloco com zoom que caiba na área livre em telas pequenas (focusNode usa zoom fixo 1,2).',
@@ -939,7 +939,7 @@ export const chromeSurfaces: InventoryElement[] = [
       {
         locator: 'aria-label="Recolher elementos"',
         kind: 'button',
-        effect: 'Cabeçalho "Elementos": recolhe para o puck, grava felixo:elements-dock-collapsed = "1" e publica largura 0; painel, gaveta e Mini Map ganham o espaço.',
+        effect: 'Cabeçalho "Elementos": recolhe para o puck, grava felixo:elements-dock-collapsed = "1" e publica largura 0; painel, gaveta e Mini Map ganham o espaço. As linhas saem do DOM 260 ms depois (fim da dobra) e voltam na hora ao abrir.',
         failure: 'Sem localStorage a escolha vale só nesta sessão.',
         test: { file: 'scripts/canvas-smoke-onboarding.cjs', check: 'recolherInspector' },
       },
