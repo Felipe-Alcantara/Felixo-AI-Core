@@ -53,9 +53,20 @@ function createClaudeStatuslineService({
     )
   }
 
-  /** O app só reconhece como sua a status line que ele mesmo marcou. */
+  /**
+   * É do app a status line que ele marcou ou cujo comando chama o script desta pasta: a marca
+   * some quando outra ferramenta regrava o settings.json (aconteceu em 14/10/2026), e o painel
+   * passava a chamar de "alheio" o próprio script, sem jeito de desligar.
+   */
   function isManagedByApp(statusLine) {
-    return Boolean(statusLine && statusLine[OWNER_KEY] === true)
+    if (!statusLine || typeof statusLine !== 'object') {
+      return false
+    }
+    if (statusLine[OWNER_KEY] === true) {
+      return true
+    }
+    const commandScript = scriptPathInCommand(statusLine.command)
+    return Boolean(commandScript) && samePath(commandScript, scriptPath)
   }
 
   function status() {
@@ -123,8 +134,11 @@ function createClaudeStatuslineService({
           command: `node ${JSON.stringify(scriptPath)}`,
           [OWNER_KEY]: true,
           // Guardado para a desinstalação devolver o estado anterior, mesmo
-          // que ele fosse "não existia".
-          [BACKUP_KEY]: settings.statusLine ?? null,
+          // que ele fosse "não existia". Religar por cima da própria status line
+          // mantém o anterior dela: guardá-la como anterior faria o desligar religar.
+          [BACKUP_KEY]: isManagedByApp(settings.statusLine)
+            ? settings.statusLine[BACKUP_KEY] ?? null
+            : settings.statusLine ?? null,
         },
       })
     } catch {
@@ -213,6 +227,25 @@ function createClaudeStatuslineService({
     status,
     uninstall,
   }
+}
+
+/** O caminho no `command` que o próprio app grava: `node "<caminho em JSON>"`. */
+function scriptPathInCommand(command) {
+  const match = /^node\s+("(?:[^"\\]|\\.)*")\s*$/.exec(String(command ?? '').trim())
+  if (!match) {
+    return null
+  }
+  try {
+    return JSON.parse(match[1])
+  } catch {
+    return null
+  }
+}
+
+function samePath(left, right) {
+  const a = path.resolve(left)
+  const b = path.resolve(right)
+  return process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b
 }
 
 module.exports = {

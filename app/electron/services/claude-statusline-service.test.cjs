@@ -226,3 +226,64 @@ test('payload sem rate limit não apaga a captura anterior nem quebra a linha', 
     fs.rmSync(env.root, { recursive: true, force: true })
   }
 })
+
+test('a status line do app sem a marca é reconhecida: aparece ligada e desligar funciona', () => {
+  // Caso real de 14/10/2026: o settings.json ficou só com `type` e `command`, e o painel dizia
+  // "status line alheia" enquanto o script do app seguia entregando leituras.
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-statusline-'))
+  const baseDir = path.join(root, 'userData', 'claude-statusline')
+  const scriptPath = path.join(baseDir, 'felixo-statusline.cjs')
+  const env = createEnvironment({ model: 'sonnet', statusLine: { type: 'command', command: `node ${JSON.stringify(scriptPath)}` } })
+  const service = createClaudeStatuslineService({ homeDir: env.homeDir, baseDir })
+
+  try {
+    assert.deepEqual(service.status(), { installed: true, settingsReadable: true, conflictingStatusLine: false })
+
+    const result = service.uninstall()
+
+    assert.equal(result.ok, true)
+    assert.match(result.message, /desligada/)
+    assert.deepEqual(env.readSettings(), { model: 'sonnet' })
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+    fs.rmSync(env.root, { recursive: true, force: true })
+  }
+})
+
+test('ligar de novo regrava a marca sem guardar a própria status line do app como a anterior', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-statusline-'))
+  const baseDir = path.join(root, 'userData', 'claude-statusline')
+  const command = `node ${JSON.stringify(path.join(baseDir, 'felixo-statusline.cjs'))}`
+  const env = createEnvironment({ statusLine: { type: 'command', command } })
+  const service = createClaudeStatuslineService({ homeDir: env.homeDir, baseDir })
+
+  try {
+    assert.equal(service.install().ok, true)
+    const statusLine = env.readSettings().statusLine
+    assert.equal(statusLine.felixoManaged, true)
+    // Guardar o próprio script como "anterior" faria o desligar religá-lo.
+    assert.equal(statusLine.felixoPreviousStatusLine, null)
+
+    assert.equal(service.uninstall().ok, true)
+    assert.equal(env.readSettings().statusLine, undefined)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+    fs.rmSync(env.root, { recursive: true, force: true })
+  }
+})
+
+test('o script com o mesmo nome em outra pasta continua sendo de outra instalação', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-statusline-'))
+  const baseDir = path.join(root, 'userData', 'claude-statusline')
+  const other = `node ${JSON.stringify(path.join(root, 'outro-perfil', 'claude-statusline', 'felixo-statusline.cjs'))}`
+  const env = createEnvironment({ statusLine: { type: 'command', command: other } })
+  const service = createClaudeStatuslineService({ homeDir: env.homeDir, baseDir })
+
+  try {
+    assert.equal(service.status().conflictingStatusLine, true)
+    assert.equal(service.install().ok, false)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+    fs.rmSync(env.root, { recursive: true, force: true })
+  }
+})
