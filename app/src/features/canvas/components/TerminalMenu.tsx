@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { Cloud, ChevronDown, Plus, TerminalSquare, Trash2, X } from 'lucide-react'
-import { CLOUD_AGENT_VALUE } from '../services/agent-launch-preferences'
+import { CHAIN_ACCOUNT_VALUE, CLOUD_AGENT_VALUE } from '../services/agent-launch-preferences'
+import { confirmChainLaunch, getAccountChainBridge, previewChainLaunch } from '../services/account-chain-client'
+import { startLaunchQueue, type QueuedLaunch } from '../services/terminal-launch-queue'
 import { useAgentConfig, type AgentConfigProject } from '../hooks/useAgentConfig'
 import type {
   NewClaudeApiOptions,
@@ -51,7 +53,7 @@ export function TerminalMenu({
   const isCloud = config.agentValue === CLOUD_AGENT_VALUE
   // Configs queued up to start together — lets one click launch a whole
   // agent setup instead of repeating "configure, open" once per terminal.
-  const [queue, setQueue] = useState<NewTerminalOptions[]>([])
+  const [queue, setQueue] = useState<QueuedLaunch[]>([])
   const [launching, setLaunching] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -156,27 +158,52 @@ export function TerminalMenu({
   // Adds the currently configured agent to the queue instead of opening it
   // right away, so the user can stack up several different setups (agent,
   // model, project…) and start them all in one go.
+  // "Automática (cadeia)" entra na fila com a conta que a prévia mostrou, sem
+  // confirmar: o ticket da confirmação vence em 2 min, e a fila iniciada depois
+  // disso abria blocos em erro. A confirmação é o clique em "Iniciar".
   const queueCurrent = async () => {
     if (launching) return
     setLaunching(true)
     try {
-      if (!(await config.prepareForLaunch())) return
+      if (!(await config.prepareForLaunch({ confirmChain: false }))) return
       config.savePreferences()
-      setQueue((current) => [...current, config.buildOptions()])
+      const preview = config.accountId === CHAIN_ACCOUNT_VALUE ? config.chainPreview : null
+      const options = config.buildOptions()
+      setQueue((current) => [
+        ...current,
+        preview?.status === 'ready'
+          ? { options, chain: { proposal: preview.proposal, summary: preview.summary } }
+          : { options },
+      ])
+      // Cada item da cadeia tem a sua proposta, como se abrisse sozinho.
+      if (preview) config.refreshChainPreview()
       config.setName('')
     } finally {
       setLaunching(false)
     }
   }
 
-  const startQueue = () => {
-    if (queue.length === 0) {
+  const startQueue = async () => {
+    if (queue.length === 0 || launching) {
       return
     }
-    onAddMany(queue)
-    setQueue([])
-    closeSettings()
-    window.requestAnimationFrame(() => triggerRef.current?.focus())
+    setLaunching(true)
+    try {
+      const bridge = getAccountChainBridge()
+      const { toOpen, remaining } = await startLaunchQueue(queue, {
+        confirm: (proposal) => confirmChainLaunch(bridge, proposal),
+        preview: (providerId) => previewChainLaunch(bridge, providerId),
+      })
+      if (toOpen.length > 0) onAddMany(toOpen)
+      setQueue(remaining)
+      // O que não abriu fica na fila, com o motivo e a conta nova, para outro clique.
+      if (remaining.length === 0) {
+        closeSettings()
+        window.requestAnimationFrame(() => triggerRef.current?.focus())
+      }
+    } finally {
+      setLaunching(false)
+    }
   }
 
   const removeQueued = (index: number) => {
@@ -185,7 +212,7 @@ export function TerminalMenu({
 
   const renameQueued = (index: number, label: string) => {
     setQueue((current) =>
-      current.map((item, i) => (i === index ? { ...item, label } : item)),
+      current.map((item, i) => (i === index ? { ...item, options: { ...item.options, label } } : item)),
     )
   }
 
@@ -300,30 +327,48 @@ export function TerminalMenu({
                 {queue.map((item, index) => (
                   <li
                     key={index}
-                    className="flex items-center gap-1 rounded-sm bg-zinc-900 px-1.5 py-1"
+                    className="rounded-sm bg-zinc-900 px-1.5 py-1"
                   >
-                    <input
-                      value={item.label}
-                      onChange={(event) => renameQueued(index, event.target.value)}
-                      title="Renomear antes de iniciar"
-                      aria-label={`Renomear "${item.label}" antes de iniciar`}
-                      className="min-w-0 flex-1 rounded-sm bg-transparent px-1 py-0.5 text-xs text-zinc-200 outline-hidden ring-1 ring-transparent hover:ring-white/10 focus:bg-zinc-950 focus:ring-white/40"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeQueued(index)}
-                      aria-label={`Remover "${item.label}" da fila`}
-                      className="felixo-btn-icon shrink-0 text-zinc-500 hover:text-zinc-300"
-                    >
-                      <X size={12} />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <input
+                        value={item.options.label}
+                        onChange={(event) => renameQueued(index, event.target.value)}
+                        title="Renomear antes de iniciar"
+                        aria-label={`Renomear "${item.options.label}" antes de iniciar`}
+                        className="min-w-0 flex-1 rounded-sm bg-transparent px-1 py-0.5 text-xs text-zinc-200 outline-hidden ring-1 ring-transparent hover:ring-white/10 focus:bg-zinc-950 focus:ring-white/40"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeQueued(index)}
+                        aria-label={`Remover "${item.options.label}" da fila`}
+                        className="felixo-btn-icon shrink-0 text-zinc-500 hover:text-zinc-300"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                    {item.chain && (
+                      <p className="px-1 text-[11px] text-zinc-400">
+                        Automática (cadeia): {item.chain.summary}
+                      </p>
+                    )}
+                    {item.chain?.message && (
+                      <p role="alert" className="px-1 text-[11px] text-amber-300">
+                        Não abriu: {item.chain.message}
+                      </p>
+                    )}
                   </li>
                 ))}
               </ul>
               <button
                 type="button"
-                onClick={startQueue}
-                className="felixo-btn w-full rounded-sm felixo-primary-action px-3 py-1.5 text-sm "
+                onClick={() => void startQueue()}
+                disabled={launching}
+                title={
+                  queue.some((item) => item.chain)
+                    ? 'Iniciar confirma a conta mostrada em cada item "Automática (cadeia)"'
+                    : undefined
+                }
+                className="felixo-btn w-full rounded-sm felixo-primary-action px-3 py-1.5 text-sm disabled:opacity-50"
               >
                 Iniciar {queue.length} terminais
               </button>

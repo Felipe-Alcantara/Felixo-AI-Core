@@ -327,6 +327,20 @@ export function useAgentConfig(
     return false
   }, [chainPreview, chainPreviewKey, chainSelectionIssue])
 
+  /**
+   * Fila do botão Agente: a conta da cadeia tem de estar mostrada, mas a
+   * confirmação fica para "Iniciar fila" — o ticket venceria em 2 min na fila.
+   */
+  const cadeiaProntaParaFila = useCallback((): boolean => {
+    setChainLaunchError(undefined)
+    if (chainSelectionIssue) return false
+    if (!chainPreview || chainPreview.status !== 'ready') {
+      setChainLaunchError('A cadeia ainda está escolhendo a conta. Tente de novo em instantes.')
+      return false
+    }
+    return true
+  }, [chainPreview, chainSelectionIssue])
+
   const setAccountSelectionIssue = useCallback((issue: AccountSelectionIssue | null) => {
     accountSelectionIssueRef.current = issue
     setAccountSelectionIssueState(issue)
@@ -701,12 +715,17 @@ export function useAgentConfig(
     }
   }, [carregarContas, openiaKeyDraft])
 
-  /** Garante que a configuração da interface já foi feita antes de criar o node. */
-  const prepareForLaunch = useCallback(async (): Promise<boolean> => {
+  /**
+   * Garante que a configuração da interface já foi feita antes de criar o node.
+   * `confirmChain: false` é a fila: "Automática (cadeia)" só precisa da conta
+   * mostrada, e a confirmação acontece ao iniciar a fila.
+   */
+  const prepareForLaunch = useCallback(async ({ confirmChain = true }: { confirmChain?: boolean } = {}): Promise<boolean> => {
     // Conta que não pode ser conferida nunca abre, nem cai no login do sistema.
     if (accountSelectionIssueRef.current) return false
     const viaCadeia = accountIdRef.current === CHAIN_ACCOUNT_VALUE
-    if (!agent?.isLauncher) return viaCadeia ? confirmarCadeia() : true
+    const cadeia = () => (confirmChain ? confirmarCadeia() : cadeiaProntaParaFila())
+    if (!agent?.isLauncher) return viaCadeia ? cadeia() : true
 
     let interfaces = openiaInterfaces
     let models = openiaModels
@@ -747,7 +766,7 @@ export function useAgentConfig(
     // Pela cadeia, a chave é da conta que o main escolher: a elegibilidade
     // dele já exclui conta Openia sem chave ('sem-chave').
     if (viaCadeia) {
-      return confirmarCadeia()
+      return cadeia()
     }
 
     if (openiaKeyDraft.trim()) {
@@ -792,7 +811,7 @@ export function useAgentConfig(
     }
     setOpeniaError('Configure a chave do OpenRouter na interface antes de abrir o Openia.')
     return false
-  }, [agent, carregarContas, confirmarCadeia, loadOpenia, openiaInterfaces, openiaKeyDraft, openiaModels, projectId, projects, saveOpeniaKey])
+  }, [agent, cadeiaProntaParaFila, carregarContas, confirmarCadeia, loadOpenia, openiaInterfaces, openiaKeyDraft, openiaModels, projectId, projects, saveOpeniaKey])
 
   const changeModel = useCallback(
     (valor: string) => {

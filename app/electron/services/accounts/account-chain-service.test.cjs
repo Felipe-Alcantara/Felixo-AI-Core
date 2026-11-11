@@ -1020,3 +1020,28 @@ test('terminal antigo que avisa "limite resetou" depois da troca ganha só um av
     assert.equal(env.repository.listSwitchEvents().length, eventsBefore)
   })
 })
+
+test('fila do botão Agente: confirmar ao iniciar, minutos depois da prévia, abre; o ticket confirmado ao enfileirar vencia', async () => {
+  // Decisão do Felipe (11/11/2026): a fila guarda a proposta (30 min) e confirma ao iniciar; antes ela
+  // confirmava ao enfileirar, e o ticket (2 min) vencia antes de a pessoa iniciar a fila.
+  await withService(async (env) => {
+    env.enableChain()
+    env.recordLogin('conta-c')
+
+    // Como era: confirmar ao enfileirar e iniciar a fila 3 minutos depois.
+    const antes = await env.service.previewLaunch({ providerId: 'claude' })
+    const ticketAntigo = await env.service.confirm({ proposalId: antes.proposal.id, destinationAccountId: 'conta-c' })
+    env.advance(3 * MINUTE)
+    const recusado = env.service.beginTicketSpawn({ ticket: ticketAntigo.ticket, accountId: 'conta-c', sessionId: 'fila-antes' })
+    assert.equal(recusado.ok, false)
+    assert.equal(recusado.code, 'TICKET_EXPIRED')
+
+    // Como fica: a prévia ao enfileirar, a confirmação ao iniciar, 3 minutos depois.
+    env.recordLogin('conta-c')
+    const proposta = await env.service.previewLaunch({ providerId: 'claude' })
+    env.advance(3 * MINUTE)
+    const confirmado = await env.service.confirm({ proposalId: proposta.proposal.id, destinationAccountId: 'conta-c' })
+    assert.equal(confirmado.ok, true)
+    assert.equal(env.service.beginTicketSpawn({ ticket: confirmado.ticket, accountId: 'conta-c', sessionId: 'fila-depois' }).ok, true)
+  })
+})
