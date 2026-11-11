@@ -1554,3 +1554,9 @@ marca e religar sem guardar a si mesma, `replaceAgentUsageAccount`. `npm test` 3
 não foi exercitada no app (abrir o painel chama as CLIs reais da conta); está coberta por teste. O botão de desligar a coleta
 na status line sem a marca não foi clicado no app desta máquina (mexeria no `~/.claude/settings.json` real); está coberto por
 teste com um settings igual ao desta máquina.
+
+**Adendo (2026-11-11, depois do push): CI e Release.** O CI de `63a65d6` (run 43084992157, 16:12–16:18) passou no escopo, no
+Validate em Windows, macOS, Ubuntu e Ubuntu ARM e no `Canvas smoke (ubuntu-latest)`; o Release gate (run 43085946864) e o Release
+(run 43085981244, 16:18–16:28) saíram verdes e publicaram a `v0.1.528` nos três sistemas. A primeira abertura dessa versão em cada
+máquina faz a poda grande e o VACUUM. Pendência aberta no Notion: conferir no app, com uma sessão real do Claude, a confirmação com
+o painel aberto e o desligar da coleta sem a marca.
