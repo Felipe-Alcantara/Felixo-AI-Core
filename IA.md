@@ -1440,3 +1440,8 @@ caminho em fluxo, nenhuma entrada por pedaço.
 **Limites.** Nenhuma CLI real foi rodada no chat (gastaria a conta): o resumo no `cli:close` foi conferido por teste unitário e
 estrutural. Passados 256 MB numa execução, a exportação e o `felixo canvas ler` começam no trecho mais antigo guardado, sem aviso na
 sessão. O teste do painel fechado espia o módulo; o resto do componente segue sem teste de render além do existente.
+
+**Adendo (2026-11-11, depois do push): CI e Release.** O CI de `6e39f5c` (run 43060930176, 13:42–13:49) passou no escopo, no
+Validate em Windows, macOS, Ubuntu e Ubuntu ARM e no `Canvas smoke (ubuntu-latest)`; o Release gate (run 43062040266) e o Release
+(run 43062080158, 13:49–13:58) saíram verdes e publicaram a `v0.1.527` nos três sistemas. Pendências abertas no Notion: conferir com
+uma CLI real o resumo no `cli:close` e avisar quando o teto de 256 MB descartar o começo da execução.
