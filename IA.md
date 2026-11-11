@@ -1300,3 +1300,9 @@ o próprio `CanvasView` e o minimapa, que seguem re-renderizando por quadro (tas
 contei renders de NodeWrapper diretamente (o React Profiler do app mede o `CanvasView` inteiro): a prova é a identidade dos
 objetos na bancada, o código do xyflow e a queda de commits. O seletor de sessão relê o conjunto a cada transição (O(blocos)),
 só não re-renderiza. A dock recolhida no Modo Performance (sem transição) ainda espera os 260 ms para desmontar.
+
+**Adendo (2026-11-11, depois do push): CI e Release.** O CI de `76d52b9` (run 43039543532, 11:33–11:38) passou no escopo, no
+Validate em Windows, macOS, Ubuntu e Ubuntu ARM e no `Canvas smoke (ubuntu-latest)`, onde o cenário novo rodou
+(`[canvas-visual] trava-de-montagem-solta`) com as sessões A a F; o Release gate (run 43040504818) e o Release (run
+43040539242, 11:39–11:47) saíram verdes e publicaram a `v0.1.524` nos três sistemas. **Não conferido:** o cenário novo no
+Windows e no macOS do CI, que só rodam o smoke no Nightly das 06:00 UTC (o de 12/11/2026); no Windows local passou.
