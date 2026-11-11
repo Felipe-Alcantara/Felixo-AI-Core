@@ -1503,3 +1503,54 @@ só os botões da pílula de zoom não (o texto do commit `0cedbed` dava a enten
 abertas no Notion: o quadro a mais da gaveta aberta e a pílula de zoom; a sessão de heap completa no Windows entrou como nota na
 task da matriz de heap, e a bancada nova, na task do harness em Linux, macOS e 1.000 blocos. A espera do CI em segundo plano e a
 sessão de heap foram interrompidas pelo Claude Code por falta de memória na máquina.
+
+---
+
+## 2026-11-11 — Limites: retenção das amostras de uso, leitura repetida da status line confirma em vez de gravar, e a status line do app reconhecida sem a marca
+
+**Agente / repositório.** Resolver hotfix — Felixo-AI-Core (`J:/Programação/GitHub/Repositórios/Felixo-AI-Core`). Tasks
+`3e991f95-497e-8189-81c1-e2068468cd65` (retenção) e, a pedido do Felipe, a irmã `3fa91f95-497e-8199-a29e-cd1128c23e9d` (parar de
+gravar e reenviar o painel inteiro a cada resposta do Claude).
+
+**Contexto.** `agent_usage_samples` só recebia INSERT: nesta máquina, 46.502 linhas e ~62 MB de um banco de 69 MB, com até 2.700
+linhas num dia. A maior parte vinha da status line do Claude, que grava um `measuredAt` novo a cada resposta enquanto a
+comparação exigia o mesmo horário — cada leitura repetida virava linha e remontava e reenviava o painel inteiro para a tela,
+com o painel aberto ou fechado. O `settings.json` desta máquina perdeu a marca `felixoManaged`, e o painel chamava o próprio
+script de "status line alheia", sem jeito de desligar.
+
+**Decisões do Felipe (Trilha B, 11/11/2026).** 200 amostras por conta (sempre com a última com métrica); VACUUM uma vez; nenhuma
+cópia do que sai; as duas tasks juntas.
+
+**O que mudou.**
+
+1. `agent-usage-repository.cjs`: poda por conta em cada `saveSample` (as 200 mais recentes e a última com status
+   `current`/`stale` e métrica); `maintainSamples` no boot, antes da janela, numa transação, com VACUUM só depois de uma poda de
+   5.000+ linhas; `updateSampleMetadata`. O `main.cjs` registra a poda no QA Logger (`agent-usage:retencao`).
+2. `agent-usage-service.cjs`: `refreshLocal` compara fonte, identidade e métricas normalizadas com a última amostra; repetidas,
+   só avança o `measuredAt` dela (`kind: 'confirmed'`), números novos gravam (`kind: 'sample'`); `describeAccount` monta uma
+   conta só (`buildDashboardAccount`, extraída do `buildDashboard`).
+3. `agent-usage-ipc-handlers.cjs` e o agendador: o watcher manda `agent-usage:account-changed` com a conta — número novo sempre,
+   confirmação só com o painel ou o modal visível (`isConsumerVisible`), porque a tela calcula o "desatualizado" pelo
+   `measuredAt` que recebeu. O preload ganhou `onAccountChanged`; o painel troca a conta com `replaceAgentUsageAccount`.
+4. `claude-statusline-service.cjs`: é do app a status line marcada ou cujo `command` é `node "<caminho>"` do script desta pasta;
+   religar por cima dela mantém o backup antigo (guardá-la como "anterior" faria o desligar religar).
+5. Inventário do painel de Limites (estados, controle da coleta, persistência e o canal novo) e `INVENTARIO-CANVAS.md`
+   regenerado.
+
+**Medido.** Banco desta máquina, só em leitura: 46.460 amostras (43.665 da conta Claude), a tabela com 50,2 MB e os índices
+dela com 12,5 MB de 72,3 MB; uma conta com 188 amostras sem métrica depois da última boa. A primeira cópia por `cp` saiu
+corrompida (o app gravava no meio): o banco real passou no `quick_check`, e as cópias seguintes foram pela API de backup do
+SQLite. Na cópia, pelo caminho do boot (migrações + `maintainSamples`): 46.502 → 1.928 linhas, 69,1 → 12 MiB, 1,1 s na
+primeira vez e 2,6 ms na seguinte; a última amostra e a última com métrica das 14 contas intactas. Poda de manutenção: 0,14 ms
+por gravação. No app (devtools, perfil isolado, painel fechado), 50 capturas da status line com os mesmos números e
+`measuredAt` novo: antes (código anterior via `git stash`) 49 amostras e 49 painéis inteiros enviados à tela; depois 1 amostra
+com o `measuredAt` da última captura, nenhum painel inteiro e 1 aviso de conta. A status line desta máquina (sem a marca) passa
+a ler `installed: true`. Testes novos (falhavam antes): retenção por conta com a última boa preservada, manutenção do boot,
+confirmação de leitura repetida, aviso por conta e confirmação só com o painel visível, `isConsumerVisible`, status line sem a
+marca e religar sem guardar a si mesma, `replaceAgentUsageAccount`. `npm test` 3224, 0 falham; vitest 3454; `tsc -b`,
+`eslint .` e `vite build` limpos.
+
+**Limites.** A poda do boot bloqueia o processo principal ~1,1 s uma vez (antes da janela). A confirmação com o painel aberto
+não foi exercitada no app (abrir o painel chama as CLIs reais da conta); está coberta por teste. O botão de desligar a coleta
+na status line sem a marca não foi clicado no app desta máquina (mexeria no `~/.claude/settings.json` real); está coberto por
+teste com um settings igual ao desta máquina.
