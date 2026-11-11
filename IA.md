@@ -1494,3 +1494,12 @@ processos), os que pedem comportamento novo falhavam antes; `npm test` 3216, 0 f
 **Limites.** A sessão de heap foi interrompida pelo Claude Code por falta de memória na máquina depois do segundo ponto de
 controle; a sessão completa (30 min) no Windows ficou para outra task. Uma rodada da bancada leva ~1,5 min e o gate pede três de
 cada lado. A pílula de zoom não respeita o Modo Performance, como a política dizia; virou task.
+
+**Adendo (2026-11-11, depois do push): CI, Release e uma correção.** O CI de `19892eb` (run 43071022791, 14:44–14:50) passou no
+escopo, no Validate em Windows, macOS, Ubuntu e Ubuntu ARM e no `Canvas smoke (ubuntu-latest)`; o Release gate (run 43072021039,
+14:50–14:52) saiu verde e pulou o Release, porque nada do app mudou (só scripts de bancada e documentação) — a versão publicada
+segue a `v0.1.527`. Correção da política: o enquadramento depois de **Organizar** (`useMatrixArrange`) respeita o Modo Performance;
+só os botões da pílula de zoom não (o texto do commit `0cedbed` dava a entender que nenhum fit/pan respeitava). Pendências
+abertas no Notion: o quadro a mais da gaveta aberta e a pílula de zoom; a sessão de heap completa no Windows entrou como nota na
+task da matriz de heap, e a bancada nova, na task do harness em Linux, macOS e 1.000 blocos. A espera do CI em segundo plano e a
+sessão de heap foram interrompidas pelo Claude Code por falta de memória na máquina.

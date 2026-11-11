@@ -82,10 +82,11 @@ das duas tiver um valor válido, o padrão continua Normal.
   `shouldReduceMotion(performanceMode, prefersReducedMotion)`).
 - Transições CSS de painel/dock/toolbar/controles (`index.css`).
 - Animações de saída de painel e da gaveta (`useExitAnimation` lê
-  `data-performance-mode` e fecha sem esperar a animação). As animações de
-  fit e zoom da pílula de zoom (`CanvasZoomPill`, 180 e 240 ms) **não**
-  olham o modo — conferido em 11/11/2026; antes esta linha dizia que o modo
-  também cortava fit/pan.
+  `data-performance-mode` e fecha sem esperar a animação) e o enquadramento
+  depois de **Organizar** (`useMatrixArrange` recebe `performanceMode` e
+  enquadra sem animação). Os botões de zoom e de enquadrar da pílula de zoom
+  (`CanvasZoomPill`, 180 e 240 ms) **não** olham o modo — conferido em
+  11/11/2026.
 - Scrollback do terminal força 5.000 linhas mesmo abaixo do limiar de 10
   (`terminalScrollbackForSessionCount(..., performanceMode)`).
 - A atualização automática do painel **Limites e uso** passa de 30 segundos
