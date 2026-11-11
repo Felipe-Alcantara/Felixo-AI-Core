@@ -934,6 +934,99 @@ async function checarZoomVisual(page) {
   }
 }
 
+/**
+ * A trava que mantém todos os blocos montados (`node-mount-latch.ts`) tem de
+ * soltar depois da gaveta. Até a fatia 1 de performance ela ficava presa para
+ * sempre depois da primeira gaveta, e só o redutor tinha teste: a ligação no
+ * CanvasView foi conferida ao vivo (2 → 41 → 41 → 2 blocos no DOM). Aqui:
+ * abre e fecha a gaveta, tira o foco do gatilho, aproxima o zoom até um bloco
+ * do fixture sair da janela e confere que ele sai do DOM. O zoom volta pelo
+ * mesmo número de passos (aproximar e reduzir são o mesmo fator de 1,2×), e a
+ * porcentagem é conferida, para os cenários seguintes acharem o canvas igual.
+ */
+async function checarTravaDeMontagemSolta(page) {
+  const fixtureIds = FIXTURE_NODES.map((node) => node.id)
+  const terminalTrigger = page.locator('[data-terminal-expand-trigger="fixture-terminal"]').first()
+  await terminalTrigger.focus()
+  await terminalTrigger.click()
+  await page.locator('[data-canvas-terminal-drawer]').waitFor({ state: 'visible', timeout: INTERACTION_TIMEOUT_MS })
+  await page.getByRole('button', { name: 'Fechar terminal' }).click()
+  await page.waitForFunction(() => !document.querySelector('[data-canvas-terminal-drawer]'), null, { timeout: INTERACTION_TIMEOUT_MS })
+  await page.waitForFunction(
+    () => document.activeElement?.getAttribute('data-terminal-expand-trigger') === 'fixture-terminal',
+    null,
+    { timeout: INTERACTION_TIMEOUT_MS },
+  )
+  // Foco fora do gatilho: o `focusout` solta a trava.
+  await page.evaluate(() => document.activeElement?.blur())
+
+  // Escala exata do viewport (a pílula arredonda a porcentagem).
+  const lerEscala = () =>
+    page.evaluate(() => {
+      const match = /scale\(([\d.]+)\)/.exec(document.querySelector('.react-flow__viewport')?.style.transform ?? '')
+      return match ? Number(match[1]) : Number.NaN
+    })
+  // `zoomIn`/`zoomOut` animam por 180 ms: o próximo passo só sai com a escala
+  // parada, senão parte do meio da animação e a volta não fecha com a ida.
+  const clicarZoom = async (rotulo) => {
+    const anterior = await lerEscala()
+    await page.locator(`.felixo-zoom-pill button[aria-label="${rotulo}"]`).click()
+    let ultima = anterior
+    const assentou = await esperarAte(
+      async () => {
+        const atual = await lerEscala()
+        const parada = atual !== anterior && atual === ultima
+        ultima = atual
+        return parada
+      },
+      { timeoutMs: INTERACTION_TIMEOUT_MS, intervalMs: 120 },
+    )
+    if (!assentou) throw new Error(`[canvas-smoke] o zoom não assentou depois de "${rotulo}"`)
+  }
+  const ausentes = () => page.evaluate((ids) => ids.filter((id) => !document.querySelector(`[data-id="${id}"]`)), fixtureIds)
+  const escalaInicial = await lerEscala()
+  if (!Number.isFinite(escalaInicial)) throw new Error('[canvas-smoke] escala inicial do viewport ilegível')
+  if ((await ausentes()).length > 0) throw new Error('[canvas-smoke] bloco do fixture fora do DOM antes de aproximar')
+
+  let passos = 0
+  let saiu = []
+  // maxZoom padrão do React Flow é 2: o último passo tem de caber abaixo dele,
+  // senão o zoom trava no teto e voltar o mesmo número de passos não devolve a escala.
+  while ((await lerEscala()) * 1.2 < 1.9) {
+    await clicarZoom('Aumentar zoom')
+    passos += 1
+    saiu = await ausentes()
+    if (saiu.length > 0) break
+  }
+  const montados = await page.evaluate(() => document.querySelectorAll('.react-flow__node').length)
+
+  for (let passo = 0; passo < passos; passo += 1) {
+    await clicarZoom('Reduzir zoom')
+  }
+  await page.waitForFunction(
+    (ids) => ids.every((id) => document.querySelector(`[data-id="${id}"]`)),
+    fixtureIds,
+    { timeout: INTERACTION_TIMEOUT_MS },
+  )
+  const escalaFinal = await lerEscala()
+
+  if (saiu.length === 0) {
+    throw new Error(
+      `[canvas-smoke] depois de fechar a gaveta e tirar o foco, nenhum bloco fora da janela saiu do DOM (${passos} passos de zoom, ${montados} blocos montados): a trava de montagem ficou presa`,
+    )
+  }
+  if (Math.abs(escalaFinal - escalaInicial) > 1e-3) {
+    throw new Error(`[canvas-smoke] o zoom não voltou ao de antes: escala ${escalaInicial} → ${escalaFinal}`)
+  }
+  await recordVisualEvidence(page, 'trava-de-montagem-solta', CORE_LAYOUT_SELECTORS, {
+    event: 'node-mount-latch-released',
+    passosDeZoom: passos,
+    blocosForaDoDom: saiu,
+    blocosMontados: montados,
+    escala: escalaFinal,
+  })
+}
+
 async function lerSuperficies(page) {
   return page.evaluate((specs) => specs.map(({ name, selector }) => {
     const element = document.querySelector(selector)
@@ -1526,6 +1619,7 @@ const SESSIONS = [
       await checarPainelNosDoisEixos(page)
       await checarViewportMinimo(page)
       await checarZoomVisual(page)
+      await checarTravaDeMontagemSolta(page)
       await checarMatrizVisual(page)
       await checarVariosAgentes(page)
       await checarElementosAbertosEmViewportsCriticos(page)
