@@ -1578,3 +1578,37 @@ pulados por `SO_EM_POSIX`; fora do Windows, ou com outro erro, a falha continua 
 pulados com o motivo e 0 falhas; o `npm test` inteiro de hoje deu 3214 passam e 0 falhas. No CI 43084992157 (`63a65d6`), os 5
 casos de AppImage, inclusive "TMPDIR por link simbólico", rodam e passam no Ubuntu e no macOS (`ok 103`) e só o Windows os pula
 (`# SKIP montagem de AppImage com caminhos POSIX`).
+
+---
+
+## 2026-11-11 — Contas: a fila do botão Agente confirma a conta "Automática (cadeia)" ao iniciar
+
+**Agente / repositório.** Resolver hotfix — Felixo-AI-Core (`J:/Programação/GitHub/Repositórios/Felixo-AI-Core`). Task
+`3e991f95-497e-81ce-9286-cbe3532f3044` (aberta na trilha da interface da cadeia, PR #97).
+
+**Contexto.** Com "Automática (cadeia)", o "Adicionar à fila" chamava o `prepareForLaunch`, que confirmava a cadeia e guardava um
+ticket de uso único (2 min, `TICKET_TTL_MS`); o `buildOptions` levava esse ticket para o item. Iniciar a fila depois disso fazia o
+`pty:spawn` ser recusado (`TICKET_EXPIRED`): o bloco nascia em erro, sem cobrança.
+
+**Decisões do Felipe (Trilha B, 11/11/2026).** Opção A (confirmar ao iniciar a fila); um item cuja conta deixou de ser apta fica
+de fora com o motivo e a conta nova sugerida, nunca abre noutra; cada item da cadeia como se abrisse sozinho.
+
+**O que mudou.**
+
+1. `useAgentConfig`: `prepareForLaunch({ confirmChain: false })` — para a fila, a cadeia só precisa da conta mostrada (prévia
+   pronta); a confirmação fica para depois. Sem argumento (abrir agora, passar responsabilidade), confirma como antes.
+2. `services/terminal-launch-queue.ts`: `startLaunchQueue` confirma cada item da cadeia na conta mostrada, ao iniciar, e devolve os
+   que abrem (com `accountMode: 'chain'` e o ticket novo) e os que ficam (com o motivo e a prévia recalculada, ou uma prévia nova
+   quando a proposta venceu).
+3. `TerminalMenu`: a fila guarda `{ options, chain: { proposal, summary } }`, mostra "Automática (cadeia): Vai abrir na conta …" e
+   "Não abriu: <motivo>", pede uma prévia nova depois de cada item da cadeia e só fecha quando tudo abriu.
+4. Inventário: os controles da fila descrevem o fluxo novo; a lacuna do ticket na fila saiu.
+
+**Medido.** Testes de `startLaunchQueue` (4, falhavam antes: o módulo não existia): itens da cadeia confirmados só ao iniciar, na
+ordem, com o ticket novo e a conta confirmada; conta fixa passa intacta; conta que ficou inapta fica na fila com o motivo e a
+prévia recalculada; proposta vencida pede prévia nova; sem conta apta, nada abre. No serviço real da cadeia com relógio
+controlado: confirmar e usar o ticket 3 min depois dá `TICKET_EXPIRED`; prévia e confirmação 3 min depois abrem. `npm test` 3224
+(3214 passam, 0 falham); vitest 3458; `tsc -b`, `eslint .` e `vite build` limpos.
+
+**Limites.** O fluxo não foi exercitado no app: o perfil isolado não tem cadeia configurada (exige contas com login conferido).
+A fila na interface (adicionar, remover, esvaziar, iniciar) continua sem teste de componente (lacuna própria no inventário).
