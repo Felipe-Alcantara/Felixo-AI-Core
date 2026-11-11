@@ -12,6 +12,7 @@ import {
   formatBilling,
   formatCapacity,
   formatClockTime,
+  cooldownAction,
   formatCooldown,
   formatLogin,
   formatMultiplier,
@@ -527,5 +528,32 @@ describe('groupPendingProposals', () => {
       },
       { key: 'outra', proposalIds: ['p3'], firstProposalId: 'p3', text: 'Conta Trabalho (Codex) bateu o limite em 1 bloco' },
     ])
+  })
+})
+
+describe('cooldownAction', () => {
+  const base = {
+    accountId: 'conta-a',
+    providerId: 'codex' as const,
+    failureClass: 'limit' as const,
+    detectedAt: '2026-09-28T17:32:05.000Z',
+    untilAt: '2026-09-28T19:40:00.000Z',
+    untilSource: 'texto' as const,
+    alternativeUntilAt: null,
+    alternativeUntilSource: null,
+    evidence: null,
+    needsCheck: false,
+  }
+
+  it('espera de limite vencida pede conferir o login, não "Não era limite" (que não tinha efeito nela)', () => {
+    // Decisão do Felipe (11/11/2026, opção B): a regra 5 da política continua — a conta só volta depois da checagem.
+    expect(cooldownAction({ ...base, needsCheck: true })).toBe('check-login')
+  })
+
+  it('espera de limite correndo oferece "Não era limite"; cobrança, "Já recarreguei"; login, nada', () => {
+    expect(cooldownAction(base)).toBe('not-a-limit')
+    expect(cooldownAction({ ...base, failureClass: 'billing', untilAt: null, untilSource: 'checagem' })).toBe('recharged')
+    expect(cooldownAction({ ...base, failureClass: 'auth', untilAt: null, untilSource: 'checagem' })).toBeNull()
+    expect(cooldownAction(null)).toBeNull()
   })
 })

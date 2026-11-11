@@ -8,6 +8,7 @@ import {
   STRATEGY_OPTIONS,
   formatBilling,
   formatCapacity,
+  cooldownAction,
   formatCooldown,
   formatLogin,
   formatMultiplier,
@@ -417,7 +418,19 @@ function ChainMemberRow({
             <dt className="text-zinc-500">Espera</dt>
             <dd className="flex flex-wrap items-center gap-2">
               <span>{cooldownText}</span>
-              {member.cooldown?.failureClass === 'limit' && (
+              {cooldownAction(member.cooldown) === 'check-login' && !member.locked && (
+                <button
+                  type="button"
+                  onClick={onCheckLogin}
+                  disabled={busy}
+                  aria-label={`Conferir o login de ${label} para sair da espera`}
+                  className={`${BOTAO_PEQUENO} flex items-center gap-1`}
+                >
+                  <RefreshCw size={10} aria-hidden="true" />
+                  Conferir login
+                </button>
+              )}
+              {cooldownAction(member.cooldown) === 'not-a-limit' && (
                 <button
                   type="button"
                   onClick={() => onRelease('not-a-limit')}
@@ -427,7 +440,7 @@ function ChainMemberRow({
                   Não era limite
                 </button>
               )}
-              {member.cooldown?.failureClass === 'billing' && (
+              {cooldownAction(member.cooldown) === 'recharged' && (
                 <button
                   type="button"
                   onClick={() => onRelease('recharged')}

@@ -173,6 +173,22 @@ export function untilSourceLabel(source: AccountCooldownUntilSource): string {
  * Espera da conta em uma linha: "em espera até 16:40 · fonte: horário impresso
  * pela CLI". Auth e billing não têm horário: esperam uma ação.
  */
+/**
+ * O botão ao lado da espera. Vencida pelo prazo, a espera de limite só sai com
+ * uma checagem de login posterior (regra 5 da política); ali "Não era limite"
+ * não tinha efeito, e no lugar dele vai "Conferir login" (decisão do Felipe,
+ * 11/11/2026).
+ */
+export function cooldownAction(
+  cooldown: AccountCooldown | null,
+): 'check-login' | 'not-a-limit' | 'recharged' | null {
+  if (!cooldown) return null
+  if (cooldown.needsCheck) return 'check-login'
+  if (cooldown.failureClass === 'limit') return 'not-a-limit'
+  if (cooldown.failureClass === 'billing') return 'recharged'
+  return null
+}
+
 export function formatCooldown(cooldown: AccountCooldown | null, options: TimeOptions = {}): string {
   if (!cooldown) return ''
   if (cooldown.needsCheck) {

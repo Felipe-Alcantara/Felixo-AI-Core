@@ -1045,3 +1045,38 @@ test('fila do botão Agente: confirmar ao iniciar, minutos depois da prévia, ab
     assert.equal(env.service.beginTicketSpawn({ ticket: confirmado.ticket, accountId: 'conta-c', sessionId: 'fila-depois' }).ok, true)
   })
 })
+
+test('espera de limite vencida pelo prazo: "Não era limite" não a solta; conferir o login, sim', async () => {
+  // Por isso a lista da cadeia troca o botão por "Conferir login" nesse estado (decisão do Felipe,
+  // 11/11/2026, opção B): a regra 5 da política continua valendo.
+  await withService(async (env) => {
+    chainReady(env)
+    // O dublê da política trata qualquer espera liberada como livre; aqui vale a regra real da espera.
+    const { cooldownBlocks } = require('./account-chain-policy.cjs')
+    const fakeEvaluate = env.policy.evaluateEligibility
+    env.policy.evaluateEligibility = (input) =>
+      input.cooldown && cooldownBlocks(input.cooldown, input.loginCheck, input.nowMs)
+        ? { eligible: false, reason: 'em-espera' }
+        : fakeEvaluate({ ...input, cooldown: null })
+    env.repository.upsertCooldown({
+      accountId: 'conta-a',
+      providerId: 'codex',
+      failureClass: 'limit',
+      detectedAt: env.nowIso(),
+      untilAt: new Date(env.clock.ms + 10 * MINUTE).toISOString(),
+      untilSource: 'texto',
+    })
+    env.advance(11 * MINUTE)
+    env.service.sweep()
+    assert.equal(env.repository.getCooldown('conta-a').releasedBy, 'vencimento')
+    const member = () => env.service.getState().members.find((item) => item.accountId === 'conta-a')
+    assert.equal(member().reason, 'em-espera')
+
+    assert.deepEqual(await env.service.releaseCooldown({ accountId: 'conta-a', reason: 'not-a-limit' }), { ok: true, released: false })
+    assert.equal(member().reason, 'em-espera')
+
+    env.loginResults.set('conta-a', 'logged_in')
+    await env.service.checkLoginNow({ accountIds: ['conta-a'] })
+    assert.notEqual(member().reason, 'em-espera')
+  })
+})

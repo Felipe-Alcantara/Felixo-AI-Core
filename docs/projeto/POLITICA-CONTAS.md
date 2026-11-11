@@ -147,7 +147,10 @@ Fonte do horário, em ordem: medição atual, texto impresso pela CLI (com o fus
 impresso, ou o fuso local quando não houver) e, por fim, o padrão estimado (5 h
 no Claude, 15 min nos demais). Se medição e texto divergirem, vale o mais tarde.
 Uma leitura a mais de 8 dias é descartada. Reiniciar o app não tira a conta da
-espera. "Não era limite" libera a espera e silencia aquela evidência.
+espera. "Não era limite" libera a espera e silencia aquela evidência. Depois que
+o prazo de uma espera de limite vence, ela só sai com uma checagem de login
+posterior; por isso a lista da cadeia troca, nesse estado, o "Não era limite"
+por "Conferir login" (decisão de 11/11/2026).
 
 ## Confirmação
 
