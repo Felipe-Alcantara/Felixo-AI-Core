@@ -1560,3 +1560,21 @@ Validate em Windows, macOS, Ubuntu e Ubuntu ARM e no `Canvas smoke (ubuntu-lates
 (run 43085981244, 16:18–16:28) saíram verdes e publicaram a `v0.1.528` nos três sistemas. A primeira abertura dessa versão em cada
 máquina faz a poda grande e o VACUUM. Pendência aberta no Notion: conferir no app, com uma sessão real do Claude, a confirmação com
 o painel aberto e o desligar da coleta sem a marca.
+
+---
+
+## 2026-11-11 — Testes: o app-relaunch no Windows sem link simbólico já estava resolvido (conferido)
+
+**Agente / repositório.** Resolver hotfix — Felixo-AI-Core (`J:/Programação/GitHub/Repositórios/Felixo-AI-Core`). Task
+`3e991f95-497e-8176-ab39-c5772fb56d11` (pendência da fatia 1 de performance, 28/09).
+
+**Contexto.** Em 28/09 o `npm test` falhava no Windows sem Modo Desenvolvedor: a fixture de AppImage do
+`electron/core/app-relaunch.test.cjs` criava um link simbólico ao carregar o módulo, e o `EPERM` derrubava o arquivo inteiro.
+
+**Estado conferido.** O commit `85c1cdf` (12/10/2026) já tolera o `EPERM` só no Windows, onde os testes que usam o link são
+pulados por `SO_EM_POSIX`; fora do Windows, ou com outro erro, a falha continua alta. Nada a mudar no código.
+
+**Medido.** Esta máquina não tem o privilégio (`fs.symlinkSync` → `EPERM`), ou seja, é o caso da task: o arquivo dá 6 passam, 5
+pulados com o motivo e 0 falhas; o `npm test` inteiro de hoje deu 3214 passam e 0 falhas. No CI 43084992157 (`63a65d6`), os 5
+casos de AppImage, inclusive "TMPDIR por link simbólico", rodam e passam no Ubuntu e no macOS (`ok 103`) e só o Windows os pula
+(`# SKIP montagem de AppImage com caminhos POSIX`).
