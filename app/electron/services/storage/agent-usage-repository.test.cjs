@@ -176,6 +176,85 @@ test(
   },
 )
 
+function usageSample(accountId, index, overrides = {}) {
+  return {
+    id: `${accountId}-${String(index).padStart(4, '0')}`,
+    accountId,
+    status: 'current',
+    sourceKind: 'assisted-event',
+    sourceLabel: 'status line do Claude Code',
+    collectedAt: new Date(Date.parse('2026-11-01T00:00:00.000Z') + index * 60_000).toISOString(),
+    metrics: [{ key: 'five_hour', label: 'Janela de 5 horas', used: index % 100, limit: 100, remaining: 100 - (index % 100), unit: '%', precision: 'percentage', resetAt: null }],
+    metadata: {},
+    ...overrides,
+  }
+}
+
+test(
+  'retenção: acima do teto sobram as mais recentes de cada conta e sempre a última com métrica',
+  { skip: hasNodeSqlite() ? false : 'node:sqlite indisponível neste runtime' },
+  () => {
+    const databaseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-agent-usage-retencao-'))
+    const database = createStorageDatabase({ databaseDir })
+
+    try {
+      const repository = createAgentUsageRepository(database)
+      repository.createAccount({ id: 'conta-erros', providerId: 'codex', label: 'Codex' })
+      repository.createAccount({ id: 'conta-claude', providerId: 'claude', label: 'Claude' })
+      const count = (accountId) =>
+        database.connection.prepare('SELECT count(*) n FROM agent_usage_samples WHERE account_id = ?').get(accountId).n
+
+      // Uma leitura boa e, depois dela, 250 falhas seguidas: o painel mostra a boa como "último valor conhecido".
+      repository.saveSample(usageSample('conta-erros', 0))
+      for (let index = 1; index <= 250; index += 1) {
+        repository.saveSample(usageSample('conta-erros', index, { status: 'error', metrics: [], errorMessage: 'falhou' }))
+      }
+      for (let index = 0; index < 230; index += 1) {
+        repository.saveSample(usageSample('conta-claude', index))
+      }
+
+      assert.equal(count('conta-erros'), 201)
+      assert.equal(count('conta-claude'), 200)
+      assert.equal(repository.getLatestSample('conta-erros').id, 'conta-erros-0250')
+      assert.equal(repository.getLastAvailableSample('conta-erros').id, 'conta-erros-0000')
+      assert.equal(repository.getLatestSample('conta-claude').id, 'conta-claude-0229')
+      assert.equal(repository.listSamples('conta-claude', { limit: 200 }).at(-1).id, 'conta-claude-0030')
+    } finally {
+      database.close()
+      fs.rmSync(databaseDir, { recursive: true, force: true })
+    }
+  },
+)
+
+test(
+  'manutenção do boot: poda o que já estava gravado e compacta o arquivo só depois de uma poda grande',
+  { skip: hasNodeSqlite() ? false : 'node:sqlite indisponível neste runtime' },
+  () => {
+    const databaseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-agent-usage-manutencao-'))
+    const database = createStorageDatabase({ databaseDir })
+
+    try {
+      const repository = createAgentUsageRepository(database)
+      repository.createAccount({ id: 'conta-claude', providerId: 'claude', label: 'Claude' })
+      // Linhas de antes da retenção: gravadas direto, como estavam no banco.
+      const insert = database.connection.prepare(
+        `INSERT INTO agent_usage_samples (id, account_id, status, source_kind, source_label, collected_at, metrics_json, metadata_json)
+         VALUES (?, ?, 'current', 'assisted-event', 'status line', ?, '[{"key":"five_hour"}]', '{}')`,
+      )
+      for (let index = 0; index < 600; index += 1) {
+        insert.run(`antiga-${index}`, 'conta-claude', new Date(Date.parse('2026-10-01T00:00:00.000Z') + index * 1000).toISOString())
+      }
+
+      assert.deepEqual(repository.maintainSamples({ vacuumAfter: 300 }), { deleted: 400, vacuumed: true })
+      assert.deepEqual(repository.maintainSamples({ vacuumAfter: 300 }), { deleted: 0, vacuumed: false })
+      assert.equal(repository.getLatestSample('conta-claude').id, 'antiga-599')
+    } finally {
+      database.close()
+      fs.rmSync(databaseDir, { recursive: true, force: true })
+    }
+  },
+)
+
 function hasNodeSqlite() {
   try {
     require('node:sqlite')

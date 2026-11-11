@@ -450,6 +450,26 @@ app.whenReady().then(async () => {
   // Remover uma conta também a tira da cadeia (membro, espera e checagem).
   const accountChainRepository = createAccountChainRepository(storageDatabase)
   const agentUsageRepository = createAgentUsageRepository(storageDatabase)
+  // Retenção das amostras de uso (200 por conta): a primeira poda depois da mudança tira dezenas
+  // de milhares de linhas e compacta o banco. Síncrona e antes da janela, para não congelar a tela.
+  try {
+    const maintenance = agentUsageRepository.maintainSamples()
+    if (maintenance.deleted > 0) {
+      logQaEvent({
+        level: 'info',
+        scope: 'agent-usage:retencao',
+        message: `${maintenance.deleted} amostras de uso antigas removidas${maintenance.vacuumed ? '; banco compactado' : ''}.`,
+        details: maintenance,
+      })
+    }
+  } catch (error) {
+    logQaEvent({
+      level: 'warn',
+      scope: 'agent-usage:retencao',
+      message: 'Não foi possível podar as amostras de uso antigas.',
+      details: { message: error instanceof Error ? error.message : String(error) },
+    })
+  }
   const mergeAccountReferences = ({ canonicalId, duplicateIds }) => {
     let firstFailure = null
     try {

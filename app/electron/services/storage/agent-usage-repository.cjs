@@ -5,11 +5,40 @@ const {
   normalizeSample,
 } = require('../agent-usage-model.cjs')
 
+// Retenção das amostras (decisão de 11/11/2026): por conta, as 200 mais recentes (o teto do
+// `listSamples`; nada lê além delas) e sempre a última com métrica, que o painel mostra como
+// "último valor conhecido" mesmo depois de uma fileira de falhas. Antes a tabela só crescia
+// (46.502 linhas e ~62 MB do banco de 69 MB nesta máquina em 11/11/2026).
+const SAMPLES_RETENTION_PER_ACCOUNT = 200
+// A primeira poda depois desta mudança tira dezenas de milhares de linhas; só uma poda desse
+// tamanho compacta o arquivo (VACUUM, ~0,8 s medidos), e as seguintes quase não tiram nada.
+const VACUUM_AFTER_DELETED_SAMPLES = 5_000
+const PRUNE_ACCOUNT_SAMPLES_SQL = `DELETE FROM agent_usage_samples
+  WHERE account_id = ?
+    AND rowid NOT IN (
+      SELECT rowid FROM agent_usage_samples WHERE account_id = ?
+      ORDER BY collected_at DESC, rowid DESC LIMIT ?
+    )
+    AND rowid IS NOT (
+      SELECT rowid FROM agent_usage_samples
+      WHERE account_id = ? AND status IN ('current', 'stale') AND metrics_json != '[]'
+      ORDER BY collected_at DESC, rowid DESC LIMIT 1
+    )`
+
 function createAgentUsageRepository(database) {
   const connection = database?.connection ?? database
 
   if (!connection?.prepare) {
     throw new Error('Conexao SQLite invalida para agent usage repository.')
+  }
+
+  /** @returns {number} Quantas amostras da conta saíram. */
+  function pruneAccountSamples(accountId) {
+    return Number(
+      connection
+        .prepare(PRUNE_ACCOUNT_SAMPLES_SQL)
+        .run(accountId, accountId, SAMPLES_RETENTION_PER_ACCOUNT, accountId).changes,
+    )
   }
 
   return {
@@ -169,8 +198,55 @@ function createAgentUsageRepository(database) {
           normalized.errorMessage,
           JSON.stringify(normalized.metadata),
         )
+      // ~0,14 ms por gravação numa conta já podada.
+      pruneAccountSamples(normalized.accountId)
 
       return normalized
+    },
+
+    /**
+     * Leitura repetida: a mesma amostra confirma o valor com o horário novo da medição
+     * (`metadata.measuredAt`), em vez de virar outra linha igual.
+     */
+    updateSampleMetadata(sampleId, metadata) {
+      connection
+        .prepare('UPDATE agent_usage_samples SET metadata_json = ? WHERE id = ?')
+        .run(
+          JSON.stringify(metadata && typeof metadata === 'object' ? metadata : {}),
+          requireString(sampleId, 'ID da amostra de uso invalido.'),
+        )
+    },
+
+    /**
+     * Poda todas as contas (a retenção de cada gravação só alcança a conta gravada) e, depois de
+     * uma poda grande, compacta o arquivo. Roda no boot, antes da janela: síncrono no processo
+     * principal, 1,3 s + 0,8 s medidos na primeira vez com o banco desta máquina.
+     *
+     * @returns {{ deleted: number, vacuumed: boolean }}
+     */
+    maintainSamples({ vacuumAfter = VACUUM_AFTER_DELETED_SAMPLES } = {}) {
+      const accountIds = connection
+        .prepare('SELECT DISTINCT account_id FROM agent_usage_samples')
+        .all()
+        .map((row) => row.account_id)
+      let deleted = 0
+
+      connection.exec('BEGIN IMMEDIATE')
+      try {
+        for (const accountId of accountIds) {
+          deleted += pruneAccountSamples(accountId)
+        }
+        connection.exec('COMMIT')
+      } catch (error) {
+        connection.exec('ROLLBACK')
+        throw error
+      }
+
+      const vacuumed = deleted >= vacuumAfter
+      if (vacuumed) {
+        connection.exec('VACUUM')
+      }
+      return { deleted, vacuumed }
     },
 
     listSamples(accountId, options = {}) {
@@ -431,6 +507,7 @@ function clampLimit(value, fallback) {
 }
 
 module.exports = {
+  SAMPLES_RETENTION_PER_ACCOUNT,
   createAgentUsageRepository,
   mapAccountRow,
   mapSampleRow,
