@@ -1646,3 +1646,10 @@ como livre): espera de limite com fim em 10 min, 11 min depois a varredura a mar
 
 **Limites.** O botão não foi clicado no app (o perfil isolado não tem cadeia configurada); a lista da cadeia segue sem teste de
 componente, como o inventário já registrava.
+
+**Adendo (2026-11-11, depois do push): CI e Release.** O CI de `530c73e` (run 43094438080) falhou na 1ª tentativa por dois motivos
+alheios à mudança: o `installer-kill-smoke.test.cjs` no Windows contou quatro processos a mais como órfãos (nenhum dos 40 CIs
+anteriores tinha falhado; virou task no Notion) e o envio dos artefatos do smoke do canvas falhou com o GitHub instável (502 e a
+execução presa ~50 min depois de todos os passos). A 2ª tentativa (só os jobs que falharam, 18:03–18:10) passou no Validate em
+Windows e no `Canvas smoke (ubuntu-latest)`; os demais já tinham passado. O Release gate (run 43100802457) e o Release (run
+43100835830, 18:10–18:18) saíram verdes e publicaram a `v0.1.530` nos três sistemas.
