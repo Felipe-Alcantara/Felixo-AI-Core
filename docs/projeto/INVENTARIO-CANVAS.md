@@ -32,7 +32,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **Elementos:** 101 (10 blocos, 16 ferramentas, 75 outras superfícies)
 - **Controles:** 381, dos quais 57 com teste específico
 - **Elementos sem nenhum teste:** 4
-- **Lacunas:** 262 (alto 8, médio 139, baixo 115), em 73 tasks
+- **Lacunas:** 261 (alto 8, médio 138, baixo 115), em 72 tasks
 
 ## Moldura do canvas
 
@@ -1143,15 +1143,14 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `ref={triggerRef}` (button) | clique | Metade "Agente": prepareForLaunch → buildOptions → savePreferences (localStorage felixo:last-agent-launch-preferences) → onAdd cria o bloco terminal, que sobe o PTY; limpa o nome, fecha o flyout e devolve o foco. (desabilitado: launching) | Configuração inválida reabre o flyout com o erro. Exceção do prepareForLaunch (IPC rejeitado) não é capturada: try/finally sem catch. | `scripts/canvas-smoke-onboarding.cjs` → `criarCenariosDoTutorial` |
 | `onClick={toggleSettings}` (button) | clique | Abre ou fecha o flyout inline (role="group" "Configurar novo agente") com os campos do agente; Esc dentro dele e clique fora (exceto popover do FelixoSelect) fecham e devolvem o foco à pílula. | Sem falha própria. | `scripts/canvas-smoke-contas.cjs` → `criarSessaoDaCadeia` |
 | `Abrir agente` (button) | clique | Mesmo caminho da metade "Agente" (openTerminal) com o flyout aberto: cria o bloco e sobe o PTY com a conta, o modelo e o projeto escolhidos. Com "Agente na nuvem" no seletor o botão vira "Abrir agente na nuvem" e cria o cartão em rascunho (onAddCloud → addCloudSessionNode) com a tarefa, a pasta e a conta escolhidas, sem gravar a nuvem como último agente; nada é disparado, a sessão só nasce da confirmação do cartão. (desabilitado: launching ou accountSelectionIssue) | Configuração inválida mantém o flyout com o erro; exceção do preparo sem catch. | `scripts/canvas-smoke-contas.cjs` → `criarSessaoDaCadeia` |
-| `aria-label="Adicionar à fila de terminais"` (button) | clique | queueCurrent: prepareForLaunch e savePreferences, depois empilha buildOptions na fila local do menu e limpa o nome. (desabilitado: launching ou accountSelectionIssue) | Configuração inválida não enfileira (erro nos campos). Com "Automática (cadeia)" o ticket é pedido na hora de enfileirar. | — |
+| `aria-label="Adicionar à fila de terminais"` (button) | clique | queueCurrent: prepareForLaunch({ confirmChain: false }) e savePreferences, depois empilha buildOptions na fila local do menu e limpa o nome. Com "Automática (cadeia)", o item guarda a proposta da prévia (vale 30 min) sem confirmar, a fila mostra "Automática (cadeia): Vai abrir na conta …" e uma prévia nova é pedida para o próximo item. (desabilitado: launching ou accountSelectionIssue) | Configuração inválida não enfileira (erro nos campos). Com "Automática (cadeia)" ainda sem conta mostrada, não enfileira ("A cadeia ainda está escolhendo a conta."). | — |
 | `aria-label="Esvaziar fila de terminais"` (button) | clique | Esvazia a fila de uma vez, sem confirmação. (desabilitado: some com a fila vazia) | Sem falha própria. | — |
-| `Remover "${item.label}" da fila` (button) | clique | Botão repetido em cada item: tira aquele item da fila. | Sem falha própria. | — |
-| `Iniciar {queue.length} terminais` (button) | clique | onAddMany(queue): o canvas acha posições livres para todos (findFreeNodePositions) e cria os blocos de uma vez; esvazia a fila e fecha o flyout. (desabilitado: some com a fila vazia) | Itens preparados há tempo (ticket da cadeia, conta removida) podem falhar só no spawn de cada bloco. | — |
+| `Remover "${item.options.label}" da fila` (button) | clique | Botão repetido em cada item: tira aquele item da fila. | Sem falha própria. | — |
+| `Iniciar {queue.length} terminais` (button) | clique | startLaunchQueue: o clique confirma cada item "Automática (cadeia)" na conta mostrada (ticket novo, de 2 min, gerado na hora) e onAddMany com os que abriram: o canvas acha posições livres para todos (findFreeNodePositions) e cria os blocos de uma vez; com a fila vazia, fecha o flyout. (desabilitado: launching; some com a fila vazia) | Item da cadeia cuja conta deixou de ser apta (ou cuja proposta passou de 30 min) não abre noutra conta: fica na fila com "Não abriu: <motivo>" e a conta nova sugerida, e os outros abrem. Conta fixa removida ainda falha só no spawn do bloco. | — |
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | A fila (adicionar, remover, esvaziar, iniciar N) não é exercitada por nenhum teste. | médio | `3ec91f95-497e-81e8-8f18-e2a529b0568e` |
-| A fila com a conta "Automática (cadeia)" guarda tickets pedidos no enfileiramento. | médio | `3e991f95-497e-81ce-9286-cbe3532f3044` |
 | openTerminal e queueCurrent usam try/finally sem catch: IPC rejeitado no preparo vira rejeição não tratada, sem aviso (TerminalMenu.tsx:99-136). | baixo | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 
 ### Campos de configuração do agente
@@ -2934,7 +2933,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3e991f95-497e-817d-b6a4-c2c1825b3afc` — 1 lacuna
 - `3e991f95-497e-81b4-ac92-d7db960c9ae0` — 1 lacuna
 - `3e991f95-497e-81c9-a900-f0d5585956f9` — 1 lacuna
-- `3e991f95-497e-81ce-9286-cbe3532f3044` — 1 lacuna
 - `3ea91f95-497e-8117-8506-d4abe67709ff` — 1 lacuna
 - `3ea91f95-497e-8126-88c8-c6a7ce21bee0` — 1 lacuna
 - `3ea91f95-497e-8129-acde-f3b1049c09ed` — 1 lacuna

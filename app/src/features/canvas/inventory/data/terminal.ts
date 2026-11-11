@@ -457,8 +457,8 @@ export const terminalSurfaces: InventoryElement[] = [
       {
         locator: 'aria-label="Adicionar à fila de terminais"',
         kind: 'button',
-        effect: 'queueCurrent: prepareForLaunch e savePreferences, depois empilha buildOptions na fila local do menu e limpa o nome.',
-        failure: 'Configuração inválida não enfileira (erro nos campos). Com "Automática (cadeia)" o ticket é pedido na hora de enfileirar.',
+        effect: 'queueCurrent: prepareForLaunch({ confirmChain: false }) e savePreferences, depois empilha buildOptions na fila local do menu e limpa o nome. Com "Automática (cadeia)", o item guarda a proposta da prévia (vale 30 min) sem confirmar, a fila mostra "Automática (cadeia): Vai abrir na conta …" e uma prévia nova é pedida para o próximo item.',
+        failure: 'Configuração inválida não enfileira (erro nos campos). Com "Automática (cadeia)" ainda sem conta mostrada, não enfileira ("A cadeia ainda está escolhendo a conta.").',
         disabledWhen: 'launching ou accountSelectionIssue',
       },
       {
@@ -469,7 +469,7 @@ export const terminalSurfaces: InventoryElement[] = [
         disabledWhen: 'some com a fila vazia',
       },
       {
-        locator: 'Remover "${item.label}" da fila',
+        locator: 'Remover "${item.options.label}" da fila',
         kind: 'button',
         effect: 'Botão repetido em cada item: tira aquele item da fila.',
         failure: 'Sem falha própria.',
@@ -477,9 +477,9 @@ export const terminalSurfaces: InventoryElement[] = [
       {
         locator: 'Iniciar {queue.length} terminais',
         kind: 'button',
-        effect: 'onAddMany(queue): o canvas acha posições livres para todos (findFreeNodePositions) e cria os blocos de uma vez; esvazia a fila e fecha o flyout.',
-        failure: 'Itens preparados há tempo (ticket da cadeia, conta removida) podem falhar só no spawn de cada bloco.',
-        disabledWhen: 'some com a fila vazia',
+        effect: 'startLaunchQueue: o clique confirma cada item "Automática (cadeia)" na conta mostrada (ticket novo, de 2 min, gerado na hora) e onAddMany com os que abriram: o canvas acha posições livres para todos (findFreeNodePositions) e cria os blocos de uma vez; com a fila vazia, fecha o flyout.',
+        failure: 'Item da cadeia cuja conta deixou de ser apta (ou cuja proposta passou de 30 min) não abre noutra conta: fica na fila com "Não abriu: <motivo>" e a conta nova sugerida, e os outros abrem. Conta fixa removida ainda falha só no spawn do bloco.',
+        disabledWhen: 'launching; some com a fila vazia',
       },
     ],
     persistence: [
@@ -498,11 +498,6 @@ export const terminalSurfaces: InventoryElement[] = [
         what: 'A fila (adicionar, remover, esvaziar, iniciar N) não é exercitada por nenhum teste.',
         risk: 'médio',
         task: '3ec91f95-497e-81e8-8f18-e2a529b0568e',
-      },
-      {
-        what: 'A fila com a conta "Automática (cadeia)" guarda tickets pedidos no enfileiramento.',
-        risk: 'médio',
-        task: '3e991f95-497e-81ce-9286-cbe3532f3044',
       },
       {
         what: 'openTerminal e queueCurrent usam try/finally sem catch: IPC rejeitado no preparo vira rejeição não tratada, sem aviso (TerminalMenu.tsx:99-136).',
