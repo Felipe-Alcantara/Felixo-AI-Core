@@ -60,8 +60,19 @@ function arquivoOk() {
   }
 }
 
+/** Relatório da variante ipc dentro de todos os tetos. */
+function ipcOk() {
+  const side = (messagesPerSecond, serializeMsPerSecond) => ({
+    messagesPerSecond,
+    serializeMsPerSecond,
+    echoMs: { p50: 0.01, p95: 0.02, count: 6 },
+    intact: true,
+  })
+  return { antes: side(1280, 10), depois: side(110, 5), messagesRatio: 0.086 }
+}
+
 test('o --check reprova cauda diferente, pedaço perdido e ganho abaixo do mínimo', () => {
-  const ok = { sameReplay: true, deliveredAll: true, speedup: 500, vigia: vigiaOk(), arquivo: arquivoOk() }
+  const ok = { sameReplay: true, deliveredAll: true, speedup: 500, vigia: vigiaOk(), arquivo: arquivoOk(), ipc: ipcOk() }
   assert.deepEqual(benchmark.validateReport(ok), [])
   assert.match(benchmark.validateReport({ ...ok, sameReplay: false }).join(), /mesma cauda/)
   assert.match(benchmark.validateReport({ ...ok, deliveredAll: false }).join(), /não chegou/)
@@ -195,4 +206,27 @@ test('o --check do arquivo reprova saída incompleta, custo extra e lote lento, 
     benchmark.validateArchive({ ...arquivoOk(), flushMs: { p95: benchmark.MAX_ARCHIVE_FLUSH_P95_MS + 0.1 } }).join(),
     /lote do arquivo/,
   )
+})
+
+test('a variante ipc entrega a saída inteira e em ordem nos dois lados e agrupa as mensagens', async () => {
+  const ipc = await benchmark.runIpcBenchmark({ ipcMs: 250 })
+
+  assert.equal(ipc.antes.intact, true)
+  assert.equal(ipc.depois.intact, true)
+  assert.ok(ipc.depois.messagesPerSecond < ipc.antes.messagesPerSecond, 'agrupar tem de mandar menos mensagens')
+  assert.ok(ipc.depois.echoMs.count > 0, 'o eco precisa ter sido medido')
+  assert.match(benchmark.formatReport({ ...benchmark.runBenchmark({ sessions: 1, chunks: 5, iterations: 1 }), ipc }), /ipc depois \(agrupado\)/)
+})
+
+test('o --check da ipc reprova saída fora de ordem, pouco agrupamento, eco lento e serialização maior', () => {
+  assert.deepEqual(benchmark.validateIpc(ipcOk()), [])
+  assert.match(benchmark.validateIpc(undefined).join(), /não rodou/)
+  const com = (patch) => ({ ...ipcOk(), ...patch })
+  assert.match(benchmark.validateIpc(com({ depois: { ...ipcOk().depois, intact: false } })).join(), /inteira e em ordem/)
+  assert.match(benchmark.validateIpc(com({ messagesRatio: benchmark.MAX_IPC_MESSAGES_RATIO + 0.01 })).join(), /mensagens agrupadas/)
+  assert.match(
+    benchmark.validateIpc(com({ depois: { ...ipcOk().depois, echoMs: { p95: benchmark.MAX_ECHO_P95_MS + 1 } } })).join(),
+    /eco de tecla/,
+  )
+  assert.match(benchmark.validateIpc(com({ depois: { ...ipcOk().depois, serializeMsPerSecond: 11 } })).join(), /serialização/)
 })

@@ -164,7 +164,20 @@ contextBridge.exposeInMainWorld('felixo', {
     resize: (params) => ipcRenderer.invoke('pty:resize', params),
     kill: (params) => ipcRenderer.invoke('pty:kill', params),
     onData: (callback) => {
-      const handler = (_event, data) => callback(data)
+      // O main manda em lote ([{ sessionId, data }, ...]); quem assina recebe um evento por sessão.
+      const handler = (_event, payload) => {
+        if (!Array.isArray(payload)) return callback(payload)
+        for (const item of payload) {
+          try {
+            callback(item)
+          } catch (error) {
+            // Erro de uma sessão não pode tirar a saída das outras do mesmo lote.
+            queueMicrotask(() => {
+              throw error
+            })
+          }
+        }
+      }
       ipcRenderer.on('pty:data', handler)
       return () => ipcRenderer.removeListener('pty:data', handler)
     },
@@ -180,6 +193,7 @@ contextBridge.exposeInMainWorld('felixo', {
     },
     cliVersions: () => ipcRenderer.invoke('pty:cli-versions'),
     readArchive: (params) => ipcRenderer.invoke('pty:archive-read', params),
+    flow: (params) => ipcRenderer.invoke('pty:flow', params),
   },
   projects: {
     pickFolder: () => ipcRenderer.invoke('projects:pick-folder'),

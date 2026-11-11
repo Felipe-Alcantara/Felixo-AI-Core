@@ -42,6 +42,16 @@
  * medir: custo extra por pedaço p50 ≤ 10% (ou ≤ 0,5 µs, o piso da vigia) e
  * lote de todas as sessões p95 ≤ 2 ms.
  *
+ * Variante `ipc` (11/11/2026): o transporte para o renderer. Com timers reais,
+ * 20 terminais emitem um pedaço a cada 10 ms (100 pedaços/s cada) por
+ * `ipcMs`; `antes` manda uma mensagem `pty:data` por pedaço (o handler até
+ * 11/11), `depois` passa pelo `pty-data-batcher.cjs`. Mede mensagens por
+ * segundo, o custo de serializar as mensagens (`v8.serialize`, o mesmo clone
+ * estruturado do IPC do Electron), a espera de um pedaço comum e a do eco de
+ * tecla, e confere que a saída de cada sessão chega inteira e em ordem. Tetos
+ * definidos antes de medir: `depois` ≤ 25% das mensagens de `antes`, eco p95
+ * ≤ 2 ms e serialização não maior que a de `antes`.
+ *
  * Uso: `npm run benchmark:pty-output -- --sessions=20 --chunks=2000 --iterations=5 [--check] [--json]`
  */
 
@@ -54,6 +64,8 @@ const {
 const { createAccountOutputWatcher } = require('../electron/services/accounts/account-output-watcher.cjs')
 const { OUTPUT_WATCHER_DEBOUNCE_MS } = require('../electron/services/accounts/account-chain-constants.cjs')
 const { createPtyOutputArchive } = require('../electron/services/pty-output-archive.cjs')
+const { createPtyDataBatcher } = require('../electron/services/pty-data-batcher.cjs')
+const v8 = require('node:v8')
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
@@ -99,6 +111,13 @@ const MIN_ARCHIVE_OVERHEAD_US = MIN_WATCHER_OVERHEAD_US
 const MAX_ARCHIVE_FLUSH_P95_MS = 2
 /** A cada quantos pedaços por sessão a bancada força o lote do arquivo. */
 const ARCHIVE_FLUSH_EVERY_CHUNKS = 25
+
+/** Variante `ipc` (11/11/2026): tetos definidos antes de medir. */
+const IPC_SESSIONS = 20
+const IPC_CHUNK_INTERVAL_MS = 10
+const DEFAULT_IPC_MS = 1000
+const MAX_IPC_MESSAGES_RATIO = 0.25
+const MAX_ECHO_P95_MS = 2
 
 /**
  * Percentil linear, igual ao usado nas outras bancadas do projeto.
@@ -564,6 +583,100 @@ async function runArchiveBenchmark(options) {
   }
 }
 
+/**
+ * Um lado da variante `ipc`: `batched` decide se passa pelo agrupador. A cada
+ * 100 ms a sessão 0 recebe uma "tecla" (`noteInput`) e o eco logo depois, e a
+ * espera dele entre `push` e `send` é medida à parte da espera dos pedaços
+ * comuns (só no lado agrupado; sem agrupar, tudo sai na hora).
+ */
+function runIpcSide({ batched, ipcMs }) {
+  return new Promise((resolve) => {
+    const received = Array.from({ length: IPC_SESSIONS }, () => [])
+    const emitted = Array.from({ length: IPC_SESSIONS }, () => [])
+    const queuedAt = new Map()
+    const waitMs = []
+    const echoMs = []
+    let messages = 0
+    let serializeMs = 0
+    let echoChunk = null
+
+    const deliver = (batch) => {
+      messages += 1
+      const startedAt = performance.now()
+      v8.serialize(batch)
+      serializeMs += performance.now() - startedAt
+      const now = performance.now()
+      for (const { sessionId, data } of batch) {
+        const session = Number(sessionId.slice(1))
+        received[session].push(data)
+        if (echoChunk && sessionId === 's0' && data.includes(echoChunk.data)) {
+          echoMs.push(now - echoChunk.at)
+          echoChunk = null
+        }
+        const at = queuedAt.get(sessionId)
+        if (at !== undefined) {
+          waitMs.push(now - at)
+          queuedAt.delete(sessionId)
+        }
+      }
+    }
+    const batcher = batched ? createPtyDataBatcher({ send: deliver }) : null
+    const push = (sessionId, data) => {
+      if (!queuedAt.has(sessionId)) queuedAt.set(sessionId, performance.now())
+      if (batcher) batcher.push(sessionId, data)
+      else deliver([{ sessionId, data }])
+    }
+
+    let tick = 0
+    const startedAt = performance.now()
+    const interval = setInterval(() => {
+      tick += 1
+      for (let session = 0; session < IPC_SESSIONS; session += 1) {
+        const data = `${chunkFor(session, tick)}`
+        emitted[session].push(data)
+        push(`s${session}`, data)
+      }
+      if (tick % 10 === 0) {
+        const data = `eco-${tick};`
+        emitted[0].push(data)
+        batcher?.noteInput('s0')
+        echoChunk = { data, at: performance.now() }
+        push('s0', data)
+      }
+      if (performance.now() - startedAt >= ipcMs) {
+        clearInterval(interval)
+        batcher?.flushAll()
+        const seconds = (performance.now() - startedAt) / 1000
+        const intact = received.every((parts, session) => parts.join('') === emitted[session].join(''))
+        resolve({
+          messages,
+          messagesPerSecond: Number((messages / seconds).toFixed(1)),
+          chunksPerSecond: Number((emitted.reduce((sum, parts) => sum + parts.length, 0) / seconds).toFixed(1)),
+          serializeMsPerSecond: Number((serializeMs / seconds).toFixed(3)),
+          waitMs: { p50: percentile(waitMs, 0.5), p95: percentile(waitMs, 0.95) },
+          echoMs: { p50: percentile(echoMs, 0.5), p95: percentile(echoMs, 0.95), count: echoMs.length },
+          intact,
+        })
+      }
+    }, IPC_CHUNK_INTERVAL_MS)
+  })
+}
+
+/** A variante `ipc`: os dois lados em sequência, com o mesmo fluxo. */
+async function runIpcBenchmark({ ipcMs = DEFAULT_IPC_MS } = {}) {
+  const antes = await runIpcSide({ batched: false, ipcMs })
+  const depois = await runIpcSide({ batched: true, ipcMs })
+  return {
+    sessions: IPC_SESSIONS,
+    chunkIntervalMs: IPC_CHUNK_INTERVAL_MS,
+    ipcMs,
+    antes,
+    depois,
+    messagesRatio: antes.messagesPerSecond > 0 ? Number((depois.messagesPerSecond / antes.messagesPerSecond).toFixed(3)) : null,
+    tetos: { messagesRatio: MAX_IPC_MESSAGES_RATIO, echoP95Ms: MAX_ECHO_P95_MS },
+  }
+}
+
 function summarize(samples, totalChunks) {
   const perChunkUs = samples.map((ms) => (ms * 1000) / totalChunks)
   return {
@@ -647,6 +760,28 @@ function validateReport(report, minSpeedup = MIN_SPEEDUP) {
   }
   problems.push(...validateWatcher(report.vigia))
   problems.push(...validateArchive(report.arquivo))
+  problems.push(...validateIpc(report.ipc))
+  return problems
+}
+
+/** Tetos da variante `ipc`; um relatório sem ela reprova. */
+function validateIpc(ipc) {
+  if (!ipc) return ['a variante ipc não rodou']
+
+  const problems = []
+  if (!ipc.antes?.intact || !ipc.depois?.intact) {
+    problems.push('no transporte, a saída de alguma sessão não chegou inteira e em ordem')
+  }
+  if (!(ipc.messagesRatio !== null && ipc.messagesRatio <= MAX_IPC_MESSAGES_RATIO)) {
+    problems.push(`mensagens agrupadas em ${ipc.messagesRatio} das de antes, acima de ${MAX_IPC_MESSAGES_RATIO}`)
+  }
+  const echoP95 = ipc.depois?.echoMs?.p95 ?? null
+  if (!(echoP95 !== null && echoP95 <= MAX_ECHO_P95_MS)) {
+    problems.push(`eco de tecla p95 ${echoP95} ms acima de ${MAX_ECHO_P95_MS} ms`)
+  }
+  if (!(ipc.depois?.serializeMsPerSecond <= ipc.antes?.serializeMsPerSecond)) {
+    problems.push(`serialização agrupada ${ipc.depois?.serializeMsPerSecond} ms/s maior que a de antes ${ipc.antes?.serializeMsPerSecond} ms/s`)
+  }
   return problems
 }
 
@@ -723,7 +858,19 @@ function formatReport(report, json = false) {
     `  ganho: ${report.speedup}× · mesma cauda no attach: ${report.sameReplay ? 'sim' : 'NÃO'} · todos os pedaços entregues: ${report.deliveredAll ? 'sim' : 'NÃO'}`,
     ...formatWatcher(report.vigia),
     ...formatArchive(report.arquivo),
+    ...formatIpc(report.ipc),
   ].join('\n')
+}
+
+function formatIpc(ipc) {
+  if (!ipc) return []
+  const side = (label, data) =>
+    `  ipc ${label}: ${data.messagesPerSecond} mensagens/s para ${data.chunksPerSecond} pedaços/s · serialização ${data.serializeMsPerSecond} ms/s · espera de um pedaço p50 ${data.waitMs.p50} ms, p95 ${data.waitMs.p95} ms · eco p95 ${data.echoMs.p95} ms (${data.echoMs.count}) · saída inteira e em ordem: ${data.intact ? 'sim' : 'NÃO'}`
+  return [
+    side('antes (uma mensagem por pedaço)', ipc.antes),
+    side('depois (agrupado)', ipc.depois),
+    `  ipc: ${ipc.sessions} terminais, um pedaço a cada ${ipc.chunkIntervalMs} ms por ${ipc.ipcMs} ms · mensagens depois/antes ${ipc.messagesRatio} · tetos: ≤ ${ipc.tetos.messagesRatio}, eco p95 ≤ ${ipc.tetos.echoP95Ms} ms`,
+  ]
 }
 
 function formatArchive(arquivo) {
@@ -746,7 +893,11 @@ function formatWatcher(vigia) {
 
 async function main(argv = process.argv.slice(2)) {
   const options = parseArgs(argv)
-  const report = { ...runBenchmark(options), arquivo: await runArchiveBenchmark(options) }
+  const report = {
+    ...runBenchmark(options),
+    arquivo: await runArchiveBenchmark(options),
+    ipc: await runIpcBenchmark(),
+  }
   console.log(formatReport(report, options.json))
 
   if (options.check) {
@@ -767,6 +918,8 @@ if (require.main === module) {
 }
 
 module.exports = {
+  MAX_ECHO_P95_MS,
+  MAX_IPC_MESSAGES_RATIO,
   MAX_ARCHIVE_FLUSH_P95_MS,
   MAX_ARCHIVE_OVERHEAD_PCT,
   MIN_ARCHIVE_OVERHEAD_US,
@@ -782,7 +935,9 @@ module.exports = {
   percentile,
   runArchiveBenchmark,
   runBenchmark,
+  runIpcBenchmark,
   validateArchive,
+  validateIpc,
   validateReport,
   validateWatcher,
   worstCaseChunkFor,

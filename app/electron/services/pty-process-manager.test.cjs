@@ -2196,3 +2196,36 @@ test('a saída inteira vai para o arquivo em disco e o reanexo avisa quando o re
   assert.equal(manager.replayTruncated('canvas:term-arquivo'), false, 'sessão encerrada não tem reanexo')
   await archive.closeAll()
 })
+
+test('controle de fluxo: pausa e retoma o PTY uma vez por mudança, e o reanexo retoma sozinho', () => {
+  const { fakePty, spawnPty } = createFakePty()
+  const calls = []
+  fakePty.pause = () => calls.push('pause')
+  fakePty.resume = () => calls.push('resume')
+  const manager = new PtyProcessManager({ spawnPty })
+  manager.spawn('canvas:fluxo', { command: 'claude', onData: () => {} })
+
+  assert.equal(manager.setFlowPaused('canvas:fluxo', true), true)
+  assert.equal(manager.setFlowPaused('canvas:fluxo', true), false, 'pausar o que já está pausado não chama de novo')
+  assert.equal(manager.setFlowPaused('canvas:fluxo', false), true)
+  assert.deepEqual(calls, ['pause', 'resume'])
+
+  // O xterm que pediu a pausa foi recriado: sem retomar, a CLI ficaria presa.
+  manager.setFlowPaused('canvas:fluxo', true)
+  manager.spawn('canvas:fluxo', { command: 'claude', reuseExisting: true, onData: () => {} })
+  assert.deepEqual(calls, ['pause', 'resume', 'pause', 'resume'])
+
+  assert.equal(manager.setFlowPaused('canvas:nao-existe', true), false)
+})
+
+test('controle de fluxo: PTY sem pause (falso, ou já encerrado) ignora o pedido sem lançar', () => {
+  const { fakePty, spawnPty } = createFakePty()
+  const manager = new PtyProcessManager({ spawnPty })
+  manager.spawn('canvas:sem-pausa', { command: 'claude', onData: () => {} })
+  assert.equal(manager.setFlowPaused('canvas:sem-pausa', true), false)
+
+  fakePty.pause = () => {
+    throw new Error('pty fechado')
+  }
+  assert.equal(manager.setFlowPaused('canvas:sem-pausa', true), false)
+})

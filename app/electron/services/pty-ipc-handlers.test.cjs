@@ -106,7 +106,8 @@ test('pty:spawn starts a session and streams data/exit to the window', () => {
   assert.equal(spawnCall.options.command, 'claude')
 
   assert.deepEqual(sent, [
-    { channel: 'pty:data', payload: { sessionId: 'term-1', data: 'boot\r\n' } },
+    // Em lote, e o exit grava o lote antes de sair: o fim nunca passa na frente do dado.
+    { channel: 'pty:data', payload: [{ sessionId: 'term-1', data: 'boot\r\n' }] },
     {
       channel: 'pty:exit',
       payload: { sessionId: 'term-1', exitCode: 0, signal: undefined },
@@ -547,4 +548,88 @@ test('dispose grava o lote pendente do arquivo antes de matar os PTYs', () => {
 
   api.dispose()
   assert.deepEqual(order, ['flushAllSync', 'killAll'])
+})
+
+/** Manager que guarda o onData de cada sessão, para o teste emitir quando quiser. */
+function setupWithStreams() {
+  handlers.clear()
+  const sent = []
+  const window = { isDestroyed: () => false, webContents: { send: (channel, payload) => sent.push({ channel, payload }) } }
+  const streams = new Map()
+  const flow = []
+  const manager = {
+    ...createFakeManager(),
+    spawn(sessionId, options) {
+      streams.set(sessionId, options)
+    },
+    has: (sessionId) => streams.has(sessionId),
+    setFlowPaused: (sessionId, paused) => {
+      flow.push({ sessionId, paused })
+      return true
+    },
+  }
+  const timers = []
+  const batcher = require('./pty-data-batcher.cjs').createPtyDataBatcher({
+    send: (batch) => sent.push({ channel: 'pty:data', payload: batch }),
+    setTimer: (fn) => {
+      timers.push(fn)
+      return fn
+    },
+    clearTimer: (fn) => {
+      const index = timers.indexOf(fn)
+      if (index >= 0) timers.splice(index, 1)
+    },
+  })
+  registerPtyIpcHandlers(() => window, { manager, batcher })
+  const invoke = (channel, params) => handlers.get(channel)(null, params)
+  const tick = () => timers.splice(0).forEach((fn) => fn())
+  return { sent, streams, flow, invoke, tick }
+}
+
+test('pty:data de várias sessões sai numa mensagem só, concatenada por sessão', () => {
+  const { sent, streams, invoke, tick } = setupWithStreams()
+  invoke('pty:spawn', { sessionId: 'canvas:a' })
+  invoke('pty:spawn', { sessionId: 'canvas:b' })
+  streams.get('canvas:a').onData('a1')
+  streams.get('canvas:b').onData('b1')
+  streams.get('canvas:a').onData('a2')
+  assert.deepEqual(sent, [])
+
+  tick()
+  assert.deepEqual(sent, [
+    { channel: 'pty:data', payload: [{ sessionId: 'canvas:a', data: 'a1a2' }, { sessionId: 'canvas:b', data: 'b1' }] },
+  ])
+})
+
+test('depois de um pty:write, o eco sai sem esperar o lote', async () => {
+  const { sent, streams, invoke } = setupWithStreams()
+  invoke('pty:spawn', { sessionId: 'canvas:a' })
+  await invoke('pty:write', { sessionId: 'canvas:a', data: 'x' })
+  streams.get('canvas:a').onData('x')
+  assert.deepEqual(sent, [{ channel: 'pty:data', payload: [{ sessionId: 'canvas:a', data: 'x' }] }])
+})
+
+test('pty:kill grava o lote da sessão antes de matar; o reanexo descarta o lote (o replay já o contém)', () => {
+  const { sent, streams, invoke, tick } = setupWithStreams()
+  invoke('pty:spawn', { sessionId: 'canvas:a' })
+  invoke('pty:spawn', { sessionId: 'canvas:b' })
+  streams.get('canvas:a').onData('fim do a')
+  invoke('pty:kill', { sessionId: 'canvas:a', force: true })
+  assert.deepEqual(sent, [{ channel: 'pty:data', payload: [{ sessionId: 'canvas:a', data: 'fim do a' }] }])
+
+  streams.get('canvas:b').onData('já no replay')
+  invoke('pty:spawn', { sessionId: 'canvas:b', reuseExisting: true })
+  tick()
+  assert.equal(sent.length, 1, 'o pendente do reanexo não sai')
+})
+
+test('pty:flow repassa só o booleano de pausa ao gerenciador', () => {
+  const { flow, invoke } = setupWithStreams()
+  assert.deepEqual(invoke('pty:flow', { sessionId: 'canvas:a', paused: true }), { ok: true, changed: true })
+  invoke('pty:flow', { sessionId: 'canvas:a', paused: 'sim' })
+  assert.deepEqual(flow, [
+    { sessionId: 'canvas:a', paused: true },
+    { sessionId: 'canvas:a', paused: false },
+  ])
+  assert.equal(invoke('pty:flow', {}).ok, false)
 })

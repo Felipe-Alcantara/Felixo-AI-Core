@@ -730,6 +730,9 @@ class PtyProcessManager {
     entry.onData = options.onData
     entry.onExit = options.onExit
     entry.onSession = options.onSession
+    // O xterm que pediu a pausa não existe mais (recarga, volta do Chat): o
+    // novo nunca mandaria o "retomar", e a CLI ficaria presa escrevendo.
+    this.setFlowPaused(sessionId, false)
 
     // O reanexo (todo remonte do canvas com reuseExisting) só reemite a
     // conversa já conhecida. Sem ela, não mexe na descoberta: a janela é do
@@ -899,6 +902,36 @@ class PtyProcessManager {
     void this.outputArchive?.close(sessionId)
 
     this.sessions.delete(sessionId)
+  }
+
+  /**
+   * Controle de fluxo PTY↔xterm: o renderer pede pausa quando o xterm acumula
+   * saída demais para processar, e retomada quando ele escoa. Pausar o socket
+   * do node-pty enche o buffer do sistema e a CLI bloqueia ao escrever, sem
+   * perder nada. PTY sem `pause` (os falsos dos testes) ignora o pedido.
+   *
+   * @param {string} sessionId
+   * @param {boolean} paused
+   * @returns {boolean} Se o estado mudou.
+   */
+  setFlowPaused(sessionId, paused) {
+    const entry = this.sessions.get(sessionId)
+    const wanted = Boolean(paused)
+    if (!entry || Boolean(entry.flowPaused) === wanted) {
+      return false
+    }
+    const method = wanted ? entry.ptyProcess.pause : entry.ptyProcess.resume
+    if (typeof method !== 'function') {
+      return false
+    }
+    try {
+      method.call(entry.ptyProcess)
+    } catch {
+      // Processo já encerrado: não há o que pausar nem retomar.
+      return false
+    }
+    entry.flowPaused = wanted
+    return true
   }
 
   /**

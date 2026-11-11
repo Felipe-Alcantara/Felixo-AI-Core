@@ -26,6 +26,7 @@ const {
   PtyProcessManager,
 } = require('./pty-process-manager.cjs')
 const { validatePtyAccountSelection } = require('./pty-account-validation.cjs')
+const { createPtyDataBatcher } = require('./pty-data-batcher.cjs')
 
 /** Código do `pty:spawn` quando o ticket da cadeia não vale (contrato `account-chain.ts`). */
 const CHAIN_TICKET_REFUSED = 'CHAIN_TICKET_REFUSED'
@@ -71,6 +72,8 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
       window.webContents.send(channel, payload)
     }
   }
+  // `pty:data` sai em lote (`pty-data-batcher.cjs`); o preload desdobra.
+  const batcher = dependencies.batcher ?? createPtyDataBatcher({ send: (batch) => send('pty:data', batch) })
 
   ipcMain.handle('pty:spawn', (_event, params = {}) => {
     try {
@@ -103,6 +106,11 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
       }
 
       const reused = Boolean(params.reuseExisting && manager.has?.(sessionId))
+      // O replay do reanexo já contém o que estava no lote: mandar os dois
+      // duplicaria o fim da saída no xterm novo.
+      if (reused) {
+        batcher.discard(sessionId)
+      }
 
       try {
         spawnSession(sessionId, params, accountValidation, accountMode, ticket.lineageId)
@@ -195,8 +203,10 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
       providerId: accountValidation.providerId,
       // Fixa (padrão) ou da cadeia de contas; só o enum atravessa.
       accountMode: accountMode.value,
-      onData: (data) => send('pty:data', { sessionId, data }),
+      onData: (data) => batcher.push(sessionId, data),
       onExit: (event) => {
+        // O fim nunca chega antes do último dado do lote.
+        batcher.flush(sessionId)
         send('pty:exit', {
           sessionId,
           exitCode: event.exitCode,
@@ -218,6 +228,8 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
   ipcMain.handle('pty:write', async (_event, params = {}) => {
     try {
       const sessionId = requireSessionId(params.sessionId)
+      // Entrada: a saída das próximas dezenas de ms (o eco) vai sem esperar o lote.
+      batcher.noteInput(sessionId)
       const delivered = manager.write(sessionId, String(params.data ?? ''))
       // Só responde depois que a carga saiu de verdade. Texto grande vai
       // fatiado, e quem escreve precisa distinguir "aceito" de "entregue" —
@@ -244,6 +256,8 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
   ipcMain.handle('pty:kill', (_event, params = {}) => {
     try {
       const sessionId = requireSessionId(params.sessionId)
+      batcher.flush(sessionId)
+      batcher.forget(sessionId)
       const killed = manager.kill(sessionId, { force: Boolean(params.force) })
       return { ok: true, killed }
     } catch (error) {
@@ -260,6 +274,19 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
       return { ok: true, versions }
     } catch (error) {
       return toErrorResult(error, 'Nao foi possivel ler a versao das CLIs.')
+    }
+  })
+
+  // Controle de fluxo PTY↔xterm: o renderer pede pausa quando o xterm acumula
+  // saída demais e retomada quando escoa (marcas d'água em
+  // `terminal-flow-control.ts`). Só um booleano atravessa.
+  ipcMain.handle('pty:flow', (_event, params = {}) => {
+    try {
+      const sessionId = requireSessionId(params.sessionId)
+      const changed = manager.setFlowPaused?.(sessionId, params.paused === true) ?? false
+      return { ok: true, changed }
+    } catch (error) {
+      return toErrorResult(error, 'Nao foi possivel ajustar o fluxo do terminal.')
     }
   })
 
@@ -290,6 +317,7 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
     } catch {
       // Melhor esforço no fechamento do app.
     }
+    batcher.flushAll()
     manager.killAll({ force: true })
   }
 
