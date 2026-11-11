@@ -143,6 +143,11 @@ const { createCliEnv } = require('./services/cli-process-manager.cjs')
 const { createStorageDatabase } = require('./services/storage/sqlite-database.cjs')
 const { createSettingsRepository } = require('./services/storage/settings-repository.cjs')
 const { createTerminalLogStore } = require('./services/terminal-log-store.cjs')
+const {
+  createPtyOutputArchive,
+  exportCanvasTerminalOutputs,
+  importCanvasTerminalOutputs,
+} = require('./services/pty-output-archive.cjs')
 const { initAppPaths, resolveDevUserDataOverride } = require('./core/app-paths.cjs')
 const { shouldQuitWhenAllWindowsClosed } = require('./core/app-lifecycle.cjs')
 const { isReleaseSmokeProcess } = require('./core/release-smoke-mode.cjs')
@@ -192,6 +197,7 @@ let textFileHandlers = null
 let storageDatabase = null
 let settingsRepository = null
 let terminalLogStore = null
+let ptyOutputArchive = null
 let cliAutoInstall = null
 let agentUsageWatching = null
 let cloudSessionService = null
@@ -434,6 +440,12 @@ app.whenReady().then(async () => {
   settingsRepository = createSettingsRepository(storageDatabase)
   terminalLogStore = createTerminalLogStore({
     directory: path.join(appPaths.logs, 'terminal-output'),
+  })
+  // Saída dos terminais do canvas em disco, 14 dias (`pty-output-archive.cjs`).
+  // A poda roda no boot, sem segurar a janela.
+  ptyOutputArchive = createPtyOutputArchive({ directory: path.join(appPaths.userData, 'pty-output') })
+  void ptyOutputArchive.prune().catch((error) => {
+    console.error('[felixo] falha ao podar o arquivo da saída dos terminais:', error)
   })
   // Remover uma conta também a tira da cadeia (membro, espera e checagem).
   const accountChainRepository = createAccountChainRepository(storageDatabase)
@@ -794,6 +806,7 @@ app.whenReady().then(async () => {
       onOutputFailure: (detection) => {
         void accountChain.service.onOutputFailure(detection)
       },
+      outputArchive: ptyOutputArchive,
     }),
   })
   registerFileAttachmentIpcHandlers(appPaths, { getMainWindow })
@@ -850,6 +863,9 @@ app.whenReady().then(async () => {
     clearFiles: () => canvasFilesHandlers.clear(),
     exportFiles: () => canvasFilesHandlers.exportFiles(),
     replaceFiles: (files) => canvasFilesHandlers.replaceFiles(files),
+    // Só quando a pessoa pede "Exportar com a saída dos terminais".
+    exportTerminalOutputs: (nodes) => exportCanvasTerminalOutputs(ptyOutputArchive, nodes),
+    importTerminalOutputs: (outputs) => importCanvasTerminalOutputs(ptyOutputArchive, outputs),
     // Limpar o canvas apaga os blocos que carregavam as permissoes de arquivo;
     // manter as concessoes vivas depois disso seria guardar acesso sem dono.
     revokeTextFiles: () => textFileHandlers?.revokeAll(),

@@ -114,7 +114,7 @@ class PtyProcessManager {
    * @param {((detection: object) => void) | null} [dependencies.onOutputFailure] - Recebe cada detecção da vigia, com a sessão, a conta e o modo.
    * @param {(provider: string) => string | null} [dependencies.getCliVersion] - Última versão lida da CLI (`agent-cli-versions.cjs`), gravada junto de cada conversa.
    */
-  constructor({ spawnPty, now, platform: platformAdapter, logger, resolveCodexPath, isDebugSession, discoverAgentSession: discover = discoverAgentSession, buildAccountEnv, validateAccount, createOutputWatcher = null, onOutputFailure = null, getCliVersion = null } = {}) {
+  constructor({ spawnPty, now, platform: platformAdapter, logger, resolveCodexPath, isDebugSession, discoverAgentSession: discover = discoverAgentSession, buildAccountEnv, validateAccount, createOutputWatcher = null, onOutputFailure = null, getCliVersion = null, outputArchive = null } = {}) {
     this.sessions = new Map()
     this.injectedSpawnPty = spawnPty ?? null
     this.now = now ?? (() => Date.now())
@@ -132,6 +132,9 @@ class PtyProcessManager {
     this.onOutputFailure = typeof onOutputFailure === 'function' ? onOutputFailure : null
     // Sem leitor de versão (testes antigos), as conversas saem sem versão, como antes.
     this.getCliVersion = typeof getCliVersion === 'function' ? getCliVersion : () => null
+    // Arquivo em disco da saída (`pty-output-archive.cjs`). Sem ele (testes
+    // antigos, bancada `atual`) a saída vive só no replay, como antes.
+    this.outputArchive = outputArchive && typeof outputArchive.append === 'function' ? outputArchive : null
   }
 
   /**
@@ -368,6 +371,8 @@ class PtyProcessManager {
       args: [...args],
       cwd,
       outputBuffer: createReplayBuffer(MAX_REPLAY_BUFFER_CHARS),
+      // Tudo que o processo emitiu; passou do replay = o reanexo vem cortado.
+      outputChars: 0,
       exitEvent: null,
       onData: options.onData,
       onExit: options.onExit,
@@ -417,6 +422,9 @@ class PtyProcessManager {
     })
 
     this.sessions.set(sessionId, entry)
+    if (!isFallbackRetry) {
+      this.archiveRunMarker(sessionId)
+    }
     if (entry.agentSession) {
       // Retomada por ID: nada de descoberta nem de reabertura na mensagem. A
       // CLI grava a retomada no arquivo ANTIGO da conversa, nascido antes de
@@ -428,7 +436,9 @@ class PtyProcessManager {
     }
 
     ptyProcess.onData((data) => {
-      entry.outputBuffer.append(String(data))
+      const text = String(data)
+      entry.outputBuffer.append(text)
+      entry.outputChars += text.length
       entry.lastOutputAt = this.now()
       try {
         // ConPTY can start a default shell successfully and only then report
@@ -464,6 +474,9 @@ class PtyProcessManager {
       } catch {
         // A renderer callback must not bring down the PTY process.
       }
+      // Também depois do renderer: por pedaço o arquivo só empilha (O(1)); o
+      // disco é um lote assíncrono que nunca lança aqui.
+      this.outputArchive?.append(sessionId, text)
       // Depois do renderer, nunca antes: a vigia não atrasa o pedaço que a
       // pessoa vê. Por pedaço ela só marca "há texto novo" (O(1)).
       if (entry.watcher !== null) {
@@ -882,8 +895,40 @@ class PtyProcessManager {
     }
     entry.filaDeEscrita?.descartar()
     this.finishSessionOutputWatcher(entry, { flush: false })
+    // Grava o último lote e solta o segmento aberto; o arquivo fica (14 dias).
+    void this.outputArchive?.close(sessionId)
 
     this.sessions.delete(sessionId)
+  }
+
+  /**
+   * O reanexo desta sessão devolve só a cauda do replay: o processo já emitiu
+   * mais do que `MAX_REPLAY_BUFFER_CHARS`, e o começo está só no arquivo.
+   *
+   * @param {string} sessionId
+   * @returns {boolean}
+   */
+  replayTruncated(sessionId) {
+    const entry = this.sessions.get(sessionId)
+    return Boolean(entry && entry.outputChars > entry.outputBuffer.length)
+  }
+
+  /**
+   * Separa no arquivo a saída de um processo novo da do anterior do mesmo
+   * bloco (Reiniciar, reabrir o app). Sai da tela alternativa e zera o estilo
+   * que o processo anterior deixou, para quem relê não herdar o modo dele.
+   *
+   * @param {string} sessionId
+   */
+  archiveRunMarker(sessionId) {
+    if (!this.outputArchive) {
+      return
+    }
+    const when = new Date(this.now()).toLocaleString('pt-BR')
+    this.outputArchive.append(
+      sessionId,
+      `\u001b[?1049l\u001b[0m\r\n\u001b[2m── [Felixo] novo processo em ${when} ──\u001b[0m\r\n`,
+    )
   }
 
   /**

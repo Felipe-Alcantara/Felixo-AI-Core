@@ -474,3 +474,77 @@ test('spawn que falha com ticket marca a troca como falha, sem nova tentativa', 
   assert.equal(repository.getSwitchEvent(TICKET).state, 'spawn_failed')
   assert.equal(spawn({ sessionId: 'canvas:novo', accountId: 'conta-b', accountMode: 'chain', chainTicket: TICKET }).code, CHAIN_TICKET_REFUSED)
 })
+
+test('pty:spawn avisa replayTruncated só no reanexo de uma sessão que passou do replay', () => {
+  const { manager, invoke } = setup()
+  let truncated = true
+  manager.has = () => true
+  manager.replayTruncated = () => truncated
+
+  assert.deepEqual(invoke('pty:spawn', { sessionId: 'canvas:t1', reuseExisting: true }), {
+    ok: true,
+    sessionId: 'canvas:t1',
+    reused: true,
+    replayTruncated: true,
+  })
+
+  truncated = false
+  assert.deepEqual(invoke('pty:spawn', { sessionId: 'canvas:t1', reuseExisting: true }), {
+    ok: true,
+    sessionId: 'canvas:t1',
+    reused: true,
+  })
+
+  // Processo novo: não há reanexo, então não há corte a avisar.
+  truncated = true
+  assert.deepEqual(invoke('pty:spawn', { sessionId: 'canvas:t1' }), { ok: true, sessionId: 'canvas:t1' })
+})
+
+test('pty:archive-read devolve a página pedida e só repassa offset e tamanho válidos', async () => {
+  const { manager, invoke } = setup()
+  const reads = []
+  manager.outputArchive = {
+    read: async (sessionId, request) => {
+      reads.push({ sessionId, request })
+      return { text: 'trecho', start: 10, end: 16, total: 16, firstOffset: 0 }
+    },
+  }
+
+  assert.deepEqual(await invoke('pty:archive-read', { sessionId: 'canvas:t1', before: 16, maxBytes: 6 }), {
+    ok: true,
+    text: 'trecho',
+    start: 10,
+    end: 16,
+    total: 16,
+    firstOffset: 0,
+  })
+  await invoke('pty:archive-read', { sessionId: 'canvas:t1', before: -1, maxBytes: '9' })
+  assert.deepEqual(reads, [
+    { sessionId: 'canvas:t1', request: { before: 16, maxBytes: 6 } },
+    { sessionId: 'canvas:t1', request: { before: undefined, maxBytes: undefined } },
+  ])
+
+  const missing = await invoke('pty:archive-read', {})
+  assert.equal(missing.ok, false)
+})
+
+test('pty:archive-read sem arquivo configurado responde erro em vez de lançar', async () => {
+  const { invoke } = setup()
+  const result = await invoke('pty:archive-read', { sessionId: 'canvas:t1' })
+  assert.equal(result.ok, false)
+  assert.match(result.message, /arquivo da saída/)
+})
+
+test('dispose grava o lote pendente do arquivo antes de matar os PTYs', () => {
+  const { manager, api } = setup()
+  const order = []
+  manager.outputArchive = { flushAllSync: () => order.push('flushAllSync') }
+  const killAll = manager.killAll.bind(manager)
+  manager.killAll = (options) => {
+    order.push('killAll')
+    killAll(options)
+  }
+
+  api.dispose()
+  assert.deepEqual(order, ['flushAllSync', 'killAll'])
+})

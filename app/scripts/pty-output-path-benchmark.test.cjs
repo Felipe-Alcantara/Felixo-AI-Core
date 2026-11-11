@@ -48,8 +48,20 @@ function vigiaOk() {
   return { spinner: { ...flow(), prefilterHits: 0 }, piorCaso: flow(), cpuPct: 2, cpuSessions: 20 }
 }
 
+/** Relatório do arquivo em disco dentro de todos os tetos. */
+function arquivoOk() {
+  return {
+    intact: true,
+    deliveredAll: true,
+    overheadPct: { p50: 3, p95: 9, blocks: 5 },
+    atual: { usPerChunk: { p50: 0.4, p95: 0.6 } },
+    atualArquivo: { usPerChunk: { p50: 0.41, p95: 0.63 } },
+    flushMs: { p50: 0.1, p95: 0.3, count: 10 },
+  }
+}
+
 test('o --check reprova cauda diferente, pedaço perdido e ganho abaixo do mínimo', () => {
-  const ok = { sameReplay: true, deliveredAll: true, speedup: 500, vigia: vigiaOk() }
+  const ok = { sameReplay: true, deliveredAll: true, speedup: 500, vigia: vigiaOk(), arquivo: arquivoOk() }
   assert.deepEqual(benchmark.validateReport(ok), [])
   assert.match(benchmark.validateReport({ ...ok, sameReplay: false }).join(), /mesma cauda/)
   assert.match(benchmark.validateReport({ ...ok, deliveredAll: false }).join(), /não chegou/)
@@ -144,4 +156,43 @@ test('os tetos da vigia são os da política de contas', () => {
   assert.equal(benchmark.MAX_WATCHER_CPU_PCT, 5)
   assert.notEqual(benchmark.worstCaseChunkFor(0, 1), benchmark.worstCaseChunkFor(1, 1))
   assert.match(benchmark.worstCaseChunkFor(0, 1), /rate limit 429/)
+})
+
+test('a variante atual+arquivo grava a saída inteira de cada sessão em disco e mede o lote à parte', async () => {
+  const arquivo = await benchmark.runArchiveBenchmark({ sessions: 2, chunks: 60, iterations: 1 })
+
+  assert.equal(arquivo.intact, true)
+  assert.equal(arquivo.deliveredAll, true)
+  assert.ok(arquivo.archivedBytes > 2 * 200_000, 'o prefill da cauda também vai para o disco')
+  assert.equal(arquivo.flushMs.count, 2)
+  assert.ok(arquivo.atualArquivo.usPerChunk.p50 > 0)
+  assert.match(benchmark.formatReport({ ...benchmark.runBenchmark({ sessions: 1, chunks: 5, iterations: 1 }), arquivo }), /saída inteira em disco: sim/)
+})
+
+test('o --check do arquivo reprova saída incompleta, custo extra e lote lento, e exige a variante', () => {
+  assert.deepEqual(benchmark.validateArchive(arquivoOk()), [])
+  assert.match(benchmark.validateArchive(undefined).join(), /não rodou/)
+  assert.match(benchmark.validateArchive({ ...arquivoOk(), intact: false }).join(), /inteira e em ordem/)
+  assert.match(benchmark.validateArchive({ ...arquivoOk(), deliveredAll: false }).join(), /não chegou ao callback/)
+  assert.match(
+    benchmark.validateArchive({
+      ...arquivoOk(),
+      overheadPct: { p50: benchmark.MAX_ARCHIVE_OVERHEAD_PCT + 1 },
+      atualArquivo: { usPerChunk: { p50: 0.4 + benchmark.MIN_ARCHIVE_OVERHEAD_US + 0.01 } },
+    }).join(),
+    /custo extra do arquivo/,
+  )
+  // Acima do percentual mas abaixo do piso absoluto passa, como na vigia.
+  assert.deepEqual(
+    benchmark.validateArchive({
+      ...arquivoOk(),
+      overheadPct: { p50: benchmark.MAX_ARCHIVE_OVERHEAD_PCT + 5 },
+      atualArquivo: { usPerChunk: { p50: 0.45 } },
+    }),
+    [],
+  )
+  assert.match(
+    benchmark.validateArchive({ ...arquivoOk(), flushMs: { p95: benchmark.MAX_ARCHIVE_FLUSH_P95_MS + 0.1 } }).join(),
+    /lote do arquivo/,
+  )
 })

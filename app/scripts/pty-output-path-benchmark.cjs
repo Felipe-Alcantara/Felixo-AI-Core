@@ -32,6 +32,16 @@
  * É a parte do caminho que as bancadas de terminal existentes não alcançam —
  * `benchmark:terminal` usa node-pty e xterm crus, sem manager, IPC nem replay.
  *
+ * Variante `atual+arquivo` (11/11/2026): o mesmo manager com o arquivo em
+ * disco da saída (`pty-output-archive.cjs`), comparado com ele mesmo sem
+ * arquivo, intercalados como a vigia. Por pedaço o arquivo só empilha; o
+ * lote (a cada 25 pedaços por sessão, cerca de 250 ms a 100 pedaços/s) é
+ * forçado pela bancada e medido à parte, só a parte síncrona (a escrita em
+ * disco é assíncrona, fora da thread principal). Confere que a saída
+ * inteira de cada sessão chegou ao disco, na ordem. Tetos definidos antes de
+ * medir: custo extra por pedaço p50 ≤ 10% (ou ≤ 0,5 µs, o piso da vigia) e
+ * lote de todas as sessões p95 ≤ 2 ms.
+ *
  * Uso: `npm run benchmark:pty-output -- --sessions=20 --chunks=2000 --iterations=5 [--check] [--json]`
  */
 
@@ -43,6 +53,10 @@ const {
 } = require('../electron/services/pty-process-manager.cjs')
 const { createAccountOutputWatcher } = require('../electron/services/accounts/account-output-watcher.cjs')
 const { OUTPUT_WATCHER_DEBOUNCE_MS } = require('../electron/services/accounts/account-chain-constants.cjs')
+const { createPtyOutputArchive } = require('../electron/services/pty-output-archive.cjs')
+const fs = require('node:fs')
+const os = require('node:os')
+const path = require('node:path')
 
 const DEFAULT_SESSIONS = 20
 const DEFAULT_CHUNKS = 2_000
@@ -78,6 +92,13 @@ const MAX_WATCHER_CPU_PCT = 5
 const WATCHER_CPU_SESSIONS = 20
 /** A cada quantos pedaços por sessão a bancada força a varredura. */
 const WATCHER_SCAN_EVERY_CHUNKS = 40
+
+/** Tetos do arquivo em disco (11/11/2026), definidos antes de medir. */
+const MAX_ARCHIVE_OVERHEAD_PCT = 10
+const MIN_ARCHIVE_OVERHEAD_US = MIN_WATCHER_OVERHEAD_US
+const MAX_ARCHIVE_FLUSH_P95_MS = 2
+/** A cada quantos pedaços por sessão a bancada força o lote do arquivo. */
+const ARCHIVE_FLUSH_EVERY_CHUNKS = 25
 
 /**
  * Percentil linear, igual ao usado nas outras bancadas do projeto.
@@ -403,6 +424,146 @@ function summarizeWatcherFlow(runs, totalChunks) {
   }
 }
 
+/** Manager real com PTY falso e sessões `codex`, com ou sem o arquivo em disco. */
+function createArchiveBench({ sessions, archive }) {
+  const { ptys, spawnPty } = createFakePtyFactory()
+  const bench = { ptys, elapsedMs: 0, delivered: 0, manager: null, ids: [] }
+  bench.manager = new PtyProcessManager({
+    spawnPty,
+    platform: { name: 'linux', getDefaultShell: () => '/bin/bash' },
+    discoverAgentSession: () => null,
+    ...(archive ? { outputArchive: archive } : {}),
+  })
+  bench.ids = Array.from({ length: sessions }, (_, session) => `bench:${archive ? 'arquivo' : 'base'}:${session}`)
+  for (const id of bench.ids) {
+    bench.manager.spawn(id, { command: 'codex', onData: () => { bench.delivered += 1 } })
+  }
+  return bench
+}
+
+/** Lê o arquivo inteiro de uma sessão, do fim ao começo, como o "carregar mais". */
+async function readWholeArchive(archive, sessionId) {
+  const pages = []
+  let page = await archive.read(sessionId, { maxBytes: 4 * 1024 * 1024 })
+  pages.unshift(page.text)
+  while (page.start > page.firstOffset) {
+    page = await archive.read(sessionId, { before: page.start, maxBytes: 4 * 1024 * 1024 })
+    pages.unshift(page.text)
+  }
+  return { text: pages.join(''), firstOffset: page.firstOffset }
+}
+
+/**
+ * `atual` contra `atual+arquivo` no mesmo fluxo, intercalados pedaço a pedaço
+ * como a vigia, com o custo extra amostrado por bloco de 40 pedaços. O lote
+ * do arquivo (`flushAll`) roda a cada 25 pedaços por sessão e é medido à
+ * parte: o atraso de 250 ms do arquivo nunca dispara dentro do laço síncrono.
+ */
+async function runArchivePair({ sessions, chunks }) {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-pty-archive-bench-'))
+  const archive = createPtyOutputArchive({ directory, flushDelayMs: 60_000, logger: { warn: () => {} } })
+  const base = createArchiveBench({ sessions, archive: null })
+  const archived = createArchiveBench({ sessions, archive })
+  const emitted = archived.ids.map(() => [])
+  const writes = []
+  try {
+    // Cauda de replay cheia nos dois lados, como nas outras variantes.
+    for (const bench of [base, archived]) {
+      bench.ptys.forEach((pty, session) => {
+        for (const chunk of prefillChunks(session)) {
+          pty.emitData(chunk)
+          if (bench === archived) emitted[session].push(chunk)
+        }
+      })
+      bench.delivered = 0
+    }
+    writes.push(archive.flushAll())
+
+    const overheadPct = []
+    const flushMs = []
+    let blockBaseMs = 0
+    let blockArchivedMs = 0
+    for (let index = 0; index < chunks; index += 1) {
+      const order = index % 2 === 0 ? [base, archived] : [archived, base]
+      for (const bench of order) {
+        const startedAt = performance.now()
+        for (let session = 0; session < sessions; session += 1) {
+          bench.ptys[session].emitData(chunkFor(session, index))
+        }
+        const elapsedMs = performance.now() - startedAt
+        bench.elapsedMs += elapsedMs
+        if (bench === base) blockBaseMs += elapsedMs
+        else blockArchivedMs += elapsedMs
+      }
+      for (let session = 0; session < sessions; session += 1) emitted[session].push(chunkFor(session, index))
+      if ((index + 1) % WATCHER_SCAN_EVERY_CHUNKS === 0 || index === chunks - 1) {
+        if (blockBaseMs > 0) overheadPct.push(((blockArchivedMs - blockBaseMs) / blockBaseMs) * 100)
+        blockBaseMs = 0
+        blockArchivedMs = 0
+      }
+      if ((index + 1) % ARCHIVE_FLUSH_EVERY_CHUNKS === 0) {
+        const startedAt = performance.now()
+        writes.push(archive.flushAll())
+        flushMs.push(performance.now() - startedAt)
+      }
+    }
+
+    for (const bench of [base, archived]) {
+      for (const id of bench.ids) bench.manager.kill(id, { force: true })
+    }
+    await Promise.all(writes)
+    await archive.closeAll()
+
+    let intact = true
+    let archivedBytes = 0
+    for (const [session, id] of archived.ids.entries()) {
+      const { text, firstOffset } = await readWholeArchive(archive, id)
+      archivedBytes += Buffer.byteLength(text)
+      // Depois da marca do processo novo vem a saída inteira, na ordem.
+      intact &&= firstOffset === 0 && text.endsWith(emitted[session].join(''))
+    }
+
+    return {
+      baseMs: base.elapsedMs,
+      archivedMs: archived.elapsedMs,
+      overheadPct,
+      flushMs,
+      intact,
+      archivedBytes,
+      deliveredAll: base.delivered === sessions * chunks && archived.delivered === sessions * chunks,
+    }
+  } finally {
+    await archive.closeAll()
+    fs.rmSync(directory, { recursive: true, force: true })
+  }
+}
+
+/** A variante `atual+arquivo`, em rodadas; assíncrona por causa da conferência em disco. */
+async function runArchiveBenchmark(options) {
+  const totalChunks = options.sessions * options.chunks
+  const runs = []
+  for (let iteration = 0; iteration < options.iterations; iteration += 1) {
+    runs.push(await runArchivePair(options))
+  }
+  const overheadPct = runs.flatMap((run) => run.overheadPct)
+  const flushMs = runs.flatMap((run) => run.flushMs)
+  return {
+    flushEveryChunks: ARCHIVE_FLUSH_EVERY_CHUNKS,
+    atual: summarize(runs.map((run) => run.baseMs), totalChunks),
+    atualArquivo: summarize(runs.map((run) => run.archivedMs), totalChunks),
+    overheadPct: { p50: percentile(overheadPct, 0.5), p95: percentile(overheadPct, 0.95), blocks: overheadPct.length },
+    flushMs: { p50: percentile(flushMs, 0.5), p95: percentile(flushMs, 0.95), count: flushMs.length },
+    intact: runs.every((run) => run.intact),
+    deliveredAll: runs.every((run) => run.deliveredAll),
+    archivedBytes: runs[0]?.archivedBytes ?? 0,
+    tetos: {
+      overheadPct: MAX_ARCHIVE_OVERHEAD_PCT,
+      overheadUs: MIN_ARCHIVE_OVERHEAD_US,
+      flushP95Ms: MAX_ARCHIVE_FLUSH_P95_MS,
+    },
+  }
+}
+
 function summarize(samples, totalChunks) {
   const perChunkUs = samples.map((ms) => (ms * 1000) / totalChunks)
   return {
@@ -485,6 +646,35 @@ function validateReport(report, minSpeedup = MIN_SPEEDUP) {
     problems.push(`ganho de ${report.speedup}× abaixo do mínimo de ${minSpeedup}×`)
   }
   problems.push(...validateWatcher(report.vigia))
+  problems.push(...validateArchive(report.arquivo))
+  return problems
+}
+
+/** Tetos da variante `atual+arquivo`; um relatório sem ela reprova. */
+function validateArchive(arquivo) {
+  if (!arquivo) return ['a variante atual+arquivo não rodou']
+
+  const problems = []
+  if (!arquivo.intact) problems.push('a saída de alguma sessão não chegou inteira e em ordem ao arquivo em disco')
+  if (!arquivo.deliveredAll) problems.push('com o arquivo, algum pedaço não chegou ao callback do renderer')
+  const withArchive = arquivo.atualArquivo?.usPerChunk?.p50
+  const without = arquivo.atual?.usPerChunk?.p50
+  const extraUs =
+    Number.isFinite(withArchive) && Number.isFinite(without) ? Number((withArchive - without).toFixed(3)) : null
+  const overheadP50 = arquivo.overheadPct?.p50 ?? null
+  if (
+    overheadP50 === null ||
+    extraUs === null ||
+    (overheadP50 > MAX_ARCHIVE_OVERHEAD_PCT && extraUs > MIN_ARCHIVE_OVERHEAD_US)
+  ) {
+    problems.push(
+      `custo extra do arquivo por pedaço p50 ${overheadP50}% (${extraUs} µs) acima de ${MAX_ARCHIVE_OVERHEAD_PCT}% e de ${MIN_ARCHIVE_OVERHEAD_US} µs`,
+    )
+  }
+  const flushP95 = arquivo.flushMs?.p95 ?? null
+  if (!(flushP95 !== null && flushP95 <= MAX_ARCHIVE_FLUSH_P95_MS)) {
+    problems.push(`lote do arquivo p95 ${flushP95} ms acima de ${MAX_ARCHIVE_FLUSH_P95_MS} ms`)
+  }
   return problems
 }
 
@@ -532,7 +722,15 @@ function formatReport(report, json = false) {
     `  atual (pty-replay-buffer): p50 ${report.atual.usPerChunk.p50} µs/pedaço (p95 ${report.atual.usPerChunk.p95}); rodada p50 ${report.atual.totalMs.p50} ms`,
     `  ganho: ${report.speedup}× · mesma cauda no attach: ${report.sameReplay ? 'sim' : 'NÃO'} · todos os pedaços entregues: ${report.deliveredAll ? 'sim' : 'NÃO'}`,
     ...formatWatcher(report.vigia),
+    ...formatArchive(report.arquivo),
   ].join('\n')
+}
+
+function formatArchive(arquivo) {
+  if (!arquivo) return []
+  return [
+    `  atual+arquivo: p50 ${arquivo.atualArquivo.usPerChunk.p50} µs/pedaço contra ${arquivo.atual.usPerChunk.p50} sem arquivo · custo extra p50 ${arquivo.overheadPct.p50}% (p95 ${arquivo.overheadPct.p95}%, ${arquivo.overheadPct.blocks} blocos) · lote de todas as sessões a cada ${arquivo.flushEveryChunks} pedaços: p50 ${arquivo.flushMs.p50} ms, p95 ${arquivo.flushMs.p95} ms · saída inteira em disco: ${arquivo.intact ? 'sim' : 'NÃO'} (${arquivo.archivedBytes.toLocaleString('pt-BR')} bytes por rodada) · tetos: extra ≤ ${arquivo.tetos.overheadPct}% ou ${arquivo.tetos.overheadUs} µs, lote p95 ≤ ${arquivo.tetos.flushP95Ms} ms`,
+  ]
 }
 
 function formatWatcher(vigia) {
@@ -546,9 +744,9 @@ function formatWatcher(vigia) {
   ]
 }
 
-function main(argv = process.argv.slice(2)) {
+async function main(argv = process.argv.slice(2)) {
   const options = parseArgs(argv)
-  const report = runBenchmark(options)
+  const report = { ...runBenchmark(options), arquivo: await runArchiveBenchmark(options) }
   console.log(formatReport(report, options.json))
 
   if (options.check) {
@@ -562,10 +760,16 @@ function main(argv = process.argv.slice(2)) {
 }
 
 if (require.main === module) {
-  main()
+  main().catch((error) => {
+    console.error('[pty-output-path] falhou:', error)
+    process.exitCode = 1
+  })
 }
 
 module.exports = {
+  MAX_ARCHIVE_FLUSH_P95_MS,
+  MAX_ARCHIVE_OVERHEAD_PCT,
+  MIN_ARCHIVE_OVERHEAD_US,
   MAX_WATCHER_CPU_PCT,
   MAX_WATCHER_OVERHEAD_PCT,
   MIN_WATCHER_OVERHEAD_US,
@@ -576,7 +780,9 @@ module.exports = {
   main,
   parseArgs,
   percentile,
+  runArchiveBenchmark,
   runBenchmark,
+  validateArchive,
   validateReport,
   validateWatcher,
   worstCaseChunkFor,

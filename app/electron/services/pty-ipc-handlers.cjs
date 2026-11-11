@@ -112,7 +112,15 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
       }
       finishChainTicket(ticket, sessionId, true)
 
-      return { ok: true, sessionId, ...(reused ? { reused: true } : {}) }
+      // No reanexo, o renderer só recebe a cauda do replay: avisa quando o
+      // começo ficou só no arquivo em disco ("carregar mais" da gaveta).
+      const replayTruncated = reused && manager.replayTruncated?.(sessionId) === true
+      return {
+        ok: true,
+        sessionId,
+        ...(reused ? { reused: true } : {}),
+        ...(replayTruncated ? { replayTruncated: true } : {}),
+      }
     } catch (error) {
       const result = toErrorResult(error, 'Nao foi possivel iniciar o terminal.')
       // O código deixa o renderer distinguir "a sessão viva é de outra conta"
@@ -255,7 +263,33 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
     }
   })
 
+  // Página do arquivo em disco da saída, do fim para o começo: o renderer
+  // passa o `start` da página que já tem como `before` da próxima.
+  ipcMain.handle('pty:archive-read', async (_event, params = {}) => {
+    try {
+      const sessionId = requireSessionId(params.sessionId)
+      const archive = manager.outputArchive
+      if (!archive) {
+        return { ok: false, message: 'O arquivo da saída dos terminais não está disponível.' }
+      }
+      const page = await archive.read(sessionId, {
+        before: Number.isSafeInteger(params.before) && params.before >= 0 ? params.before : undefined,
+        maxBytes: Number.isSafeInteger(params.maxBytes) && params.maxBytes > 0 ? params.maxBytes : undefined,
+      })
+      return { ok: true, ...page }
+    } catch (error) {
+      return toErrorResult(error, 'Nao foi possivel ler o arquivo da saida do terminal.')
+    }
+  })
+
   const dispose = () => {
+    // Antes de matar: o processo sai sem esperar promessa, e o último lote
+    // (até 250 ms de saída) só chega ao disco se for gravado agora, síncrono.
+    try {
+      manager.outputArchive?.flushAllSync?.()
+    } catch {
+      // Melhor esforço no fechamento do app.
+    }
     manager.killAll({ force: true })
   }
 

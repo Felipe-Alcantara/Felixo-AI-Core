@@ -2159,3 +2159,40 @@ test('Windows: o agente vai pelo cmd.exe com caminho absoluto, nunca pelo nome s
 
   assert.equal(launch.command, cmdDoSistema)
 })
+
+test('a saída inteira vai para o arquivo em disco e o reanexo avisa quando o replay cortou', async () => {
+  const { createPtyOutputArchive } = require('./pty-output-archive.cjs')
+  const archive = createPtyOutputArchive({
+    directory: fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-pty-manager-archive-')),
+    logger: { warn: () => {} },
+  })
+  const { fakePty, spawnPty } = createFakePty()
+  const manager = new PtyProcessManager({ spawnPty, outputArchive: archive, now: () => Date.UTC(2026, 10, 11, 12, 0) })
+  const emitted = []
+
+  manager.spawn('canvas:term-arquivo', { command: 'claude', onData: () => {} })
+  fakePty.emitData('primeira linha\r\n')
+  emitted.push('primeira linha\r\n')
+  assert.equal(manager.replayTruncated('canvas:term-arquivo'), false)
+
+  for (let index = 0; index < 4_000; index += 1) {
+    const chunk = `linha ${String(index).padStart(5, '0')} ⠋ 😀 ${'x'.repeat(50)}\r\n`
+    emitted.push(chunk)
+    fakePty.emitData(chunk)
+  }
+  assert.ok(emitted.join('').length > MAX_REPLAY_BUFFER_CHARS)
+  assert.equal(manager.replayTruncated('canvas:term-arquivo'), true)
+
+  // O reanexo continua devolvendo só a cauda; o começo mora no arquivo.
+  const replayed = []
+  manager.spawn('canvas:term-arquivo', { command: 'claude', reuseExisting: true, onData: (data) => replayed.push(data) })
+  assert.equal(replayed.join('').includes('primeira linha'), false)
+
+  manager.kill('canvas:term-arquivo', { force: true })
+  const page = await archive.read('canvas:term-arquivo', { maxBytes: 4 * 1024 * 1024 })
+  assert.equal(page.start, 0)
+  assert.match(page.text, /^\u001b\[\?1049l\u001b\[0m\r\n\u001b\[2m── \[Felixo\] novo processo em .+ ──\u001b\[0m\r\n/)
+  assert.ok(page.text.endsWith(emitted.join('')), 'a saída do processo inteira, na ordem, depois da marca')
+  assert.equal(manager.replayTruncated('canvas:term-arquivo'), false, 'sessão encerrada não tem reanexo')
+  await archive.closeAll()
+})
