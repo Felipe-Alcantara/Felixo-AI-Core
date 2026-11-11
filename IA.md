@@ -1247,3 +1247,8 @@ lá e só foi reduzido (marca alta), não eliminado. O descarte no reanexo perde
 que esteja nos 8 ms do lote, porque ele não entra no replay. Não medi a latência do eco no app (só na bancada) nem com 20
 terminais reais. O flake de perda de saída do PTY nativo no Windows (`count=20`) continua em quarentena e não tem relação
 com esta mudança.
+
+**Adendo (2026-11-11, depois do push): CI e Release.** O CI de `b18c07a` (run 43027484226, 10:15–10:22) passou no escopo, no
+Validate em Windows, macOS, Ubuntu e Ubuntu ARM e no `Canvas smoke (ubuntu-latest)`; o Release gate (run 43028481767) e o
+Release (run 43028520221, 10:22–10:32) saíram verdes e publicaram a `v0.1.523` nos três sistemas, com a validação do app
+instalado e a atualização silenciosa com o app aberto no Windows (3 min 52 s).
