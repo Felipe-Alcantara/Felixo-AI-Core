@@ -1612,3 +1612,9 @@ controlado: confirmar e usar o ticket 3 min depois dá `TICKET_EXPIRED`; prévia
 
 **Limites.** O fluxo não foi exercitado no app: o perfil isolado não tem cadeia configurada (exige contas com login conferido).
 A fila na interface (adicionar, remover, esvaziar, iniciar) continua sem teste de componente (lacuna própria no inventário).
+
+**Adendo (2026-11-11, depois do push): CI e Release.** O CI de `05c4d5c` (run 43090250630, 16:46–16:53) passou no escopo, no
+Validate em Windows, macOS, Ubuntu e Ubuntu ARM e no `Canvas smoke (ubuntu-latest)`; o Release gate (run 43091385529) e o Release
+(run 43091421068, 16:53–17:02) saíram verdes e publicaram a `v0.1.529` nos três sistemas. Pendência aberta no Notion: conferir no
+app a fila iniciada depois de 2 minutos, com a cadeia ligada; nota deixada na task das prévias acumuladas (reaproveitar a prévia
+aberta não pode juntar dois itens da fila na mesma proposta).
