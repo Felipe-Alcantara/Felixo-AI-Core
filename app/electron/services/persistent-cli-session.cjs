@@ -21,6 +21,7 @@ const {
   FIRST_VISIBLE_OUTPUT_TIMEOUT_MS,
   PERSISTENT_SESSION_IDLE_TIMEOUT_MS,
   createChunkDetails,
+  createStdoutSummary,
   createExitErrorMessage,
   createModelSessionKey,
   createNoVisibleOutputMessage,
@@ -254,6 +255,7 @@ function createPersistentCliSessionManager({
       threadSession,
       activeRun: null,
       lastRunFinalEvent: null,
+      stdoutSummary: createStdoutSummary(),
     }
 
     persistentCliSessions.set(threadId, persistentSession)
@@ -274,13 +276,7 @@ function createPersistentCliSessionManager({
     })
     const stdoutGuard = createJsonlOutputGuard(
       (chunk) => {
-        logQaEvent({
-          level: 'debug',
-          scope: 'cli:stdout',
-          sessionId: threadId,
-          message: `stdout from persistent ${command}.`,
-          details: createChunkDetails(chunk),
-        })
+        persistentSession.stdoutSummary.noteChunk(chunk)
         stdoutReader.push(chunk)
       },
       (output) => {
@@ -337,16 +333,7 @@ function createPersistentCliSessionManager({
     const streamSessionId = activeRun?.streamSessionId
     const durationMs = Date.now() - (activeRun?.startedAt ?? Date.now())
 
-    logQaEvent({
-      level: 'debug',
-      scope: 'cli:jsonl',
-      sessionId: threadId,
-      message: `Parsed JSONL line from persistent ${command}.`,
-      details: {
-        streamSessionId,
-        preview: createTextPreview(line, 500),
-      },
-    })
+    persistentSession.stdoutSummary.noteLine(line)
 
     const { cliEvent, parseError } = parseAdapterLine(adapter, line)
 
@@ -641,6 +628,7 @@ function createPersistentCliSessionManager({
         code,
         signal,
         didComplete,
+        stdout: persistentSession.stdoutSummary.toDetails(),
         stderrPreview: createTextPreview(activeRun?.stderrOutput ?? ''),
       },
     })

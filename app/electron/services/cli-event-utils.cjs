@@ -265,6 +265,32 @@ function createChunkDetails(chunk) {
   }
 }
 
+/**
+ * Resumo da saída de uma execução para o QA Logger: vai uma vez, no `cli:close`, no lugar de um
+ * registro `debug` por pedaço de stdout e por linha JSONL (decisão de 11/11/2026). O conteúdo
+ * completo continua no arquivo de saída das CLIs (`terminal-log-store`).
+ */
+function createStdoutSummary() {
+  let chunks = 0
+  let bytes = 0
+  let jsonlLines = 0
+  let lastLine = ''
+
+  return {
+    noteChunk(chunk) {
+      chunks += 1
+      bytes += Buffer.byteLength(String(chunk))
+    },
+    noteLine(line) {
+      jsonlLines += 1
+      lastLine = line
+    },
+    toDetails() {
+      return { chunks, bytes, jsonlLines, lastLinePreview: createTextPreview(lastLine, 500) }
+    },
+  }
+}
+
 function createTextPreview(value, maxLength = 1000) {
   const text = String(value ?? '')
 
@@ -287,6 +313,7 @@ module.exports = {
   createModelSessionKey,
   createNoVisibleOutputMessage,
   createNonJsonStdoutMessage,
+  createStdoutSummary,
   createTextPreview,
   createToolLoopLimitMessage,
   createToolLoopProgressState,

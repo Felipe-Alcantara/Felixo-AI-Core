@@ -102,7 +102,11 @@ function createQaLogStore(maxEntries = DEFAULT_MAX_ENTRIES) {
       }
 
       nextId += 1
-      entries = [...entries, logEntry].slice(-maxEntries)
+      // No lugar: recopiar o array a cada entrada custava duas cópias de 400 itens por log.
+      entries.push(logEntry)
+      if (entries.length > maxEntries) {
+        entries.splice(0, entries.length - maxEntries)
+      }
 
       return logEntry
     },
@@ -117,7 +121,8 @@ function createQaLogStore(maxEntries = DEFAULT_MAX_ENTRIES) {
       entries = []
     },
     getEntries() {
-      return entries
+      // Cópia na leitura (rara: painel aberto, relatório), já que o buffer agora muda no lugar.
+      return entries.slice()
     },
   }
 }

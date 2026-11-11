@@ -51,3 +51,33 @@ test('linha entendida segue sem parseError', () => {
   assert.equal(parseError, null)
   assert.equal(cliEvent.providerSessionId, 'sessao-1')
 })
+
+test('createStdoutSummary resume a saída de uma execução: pedaços, bytes, linhas JSONL e a última linha', () => {
+  const { createStdoutSummary } = require('./cli-event-utils.cjs')
+  const summary = createStdoutSummary()
+
+  assert.deepEqual(summary.toDetails(), { chunks: 0, bytes: 0, jsonlLines: 0, lastLinePreview: '' })
+
+  summary.noteChunk('{"a":1}\n{"b":"ção"')
+  summary.noteChunk('}\n')
+  summary.noteLine('{"a":1}')
+  summary.noteLine(`{"b":"${'x'.repeat(600)}"}`)
+
+  const details = summary.toDetails()
+  assert.equal(details.chunks, 2)
+  assert.equal(details.bytes, Buffer.byteLength('{"a":1}\n{"b":"ção"}\n'))
+  assert.equal(details.jsonlLines, 2)
+  assert.equal(details.lastLinePreview, `{"b":"${'x'.repeat(494)}...`)
+})
+
+test('o chat legado não registra no QA Logger um debug por pedaço de stdout nem por linha JSONL', () => {
+  // Decisão de 11/11/2026: um resumo por execução no `cli:close`. Cada registro por pedaço custava
+  // ~70 µs síncronos no processo principal, ~1,2 KB em disco e empurrava os erros para fora do buffer.
+  const fs = require('node:fs')
+  const path = require('node:path')
+  for (const file of ['ipc-handlers.cjs', 'persistent-cli-session.cjs']) {
+    const source = fs.readFileSync(path.join(__dirname, file), 'utf8')
+    assert.doesNotMatch(source, /level: 'debug',\s*scope: 'cli:(stdout|jsonl)'/, file)
+    assert.match(source, /scope: 'cli:close',[\s\S]{0,400}stdout: [\w.]+\.toDetails\(\)/, file)
+  }
+})

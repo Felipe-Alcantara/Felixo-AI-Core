@@ -58,6 +58,7 @@ const {
   FIRST_VISIBLE_OUTPUT_TIMEOUT_MS,
   collectThreadFamily,
   createChunkDetails,
+  createStdoutSummary,
   createExitErrorMessage,
   createModelSessionKey,
   createNoVisibleOutputMessage,
@@ -423,17 +424,9 @@ function registerCliIpcHandlers(getMainWindow, dependencies = {}) {
           pid: childProcess.pid,
         },
       })
+      const stdoutSummary = createStdoutSummary()
       const stdoutReader = createJsonlLineReader((line) => {
-        logQaEvent({
-          level: 'debug',
-          scope: 'cli:jsonl',
-          sessionId: threadId,
-          message: `Parsed JSONL line from ${command}.`,
-          details: {
-            streamSessionId,
-            preview: createTextPreview(line, 500),
-          },
-        })
+        stdoutSummary.noteLine(line)
         const { cliEvent, parseError } = parseAdapterLine(adapter, line)
         sendTerminalEvents(
           targetWebContents,
@@ -509,16 +502,7 @@ function registerCliIpcHandlers(getMainWindow, dependencies = {}) {
       const flushStdout = () => stdoutReader.flush()
       const stdoutGuard = createJsonlOutputGuard(
         (chunk) => {
-          logQaEvent({
-            level: 'debug',
-            scope: 'cli:stdout',
-            sessionId: threadId,
-            message: `stdout from ${command}.`,
-            details: {
-              streamSessionId,
-              ...createChunkDetails(chunk),
-            },
-          })
+          stdoutSummary.noteChunk(chunk)
           stdoutReader.push(chunk)
         },
         (output) => {
@@ -627,6 +611,7 @@ function registerCliIpcHandlers(getMainWindow, dependencies = {}) {
             code,
             signal,
             didComplete,
+            stdout: stdoutSummary.toDetails(),
             stderrPreview: createTextPreview(stderrOutput),
           },
         })
