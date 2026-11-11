@@ -13,8 +13,9 @@
  *
  * Roteiro (task): baseline → fixture criada → carga estabilizada →
  * estado degradado (fim da duração) → depois de remover terminais/webviews →
- * depois de "Limpar canvas". Um .heapsnapshot + métricas CDP + RSS real (via
- * `ps`) em cada checkpoint; diff entre checkpoints ao final.
+ * depois de "Limpar canvas". Um .heapsnapshot + métricas CDP + RSS real da
+ * árvore de processos (`ps` no Linux; `Win32_Process` pelo PowerShell no
+ * Windows, desde 11/11/2026) em cada checkpoint; diff entre checkpoints ao final.
  */
 
 const fs = require('node:fs')
@@ -58,8 +59,17 @@ function startFixtureServer() {
   })
 }
 
-function realPs(deps = {}) {
-  const output = (deps.execFileSync ?? execFileSync)('ps', ['-eo', 'pid,ppid,rss,comm', '--no-headers'], { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 })
+// Sem `ps` no Windows: a mesma tabela (pid, ppid, working set em KiB, nome) pelo CIM, no formato que `parsePsOutput` lê.
+const WINDOWS_PROCESS_TABLE_COMMAND =
+  "Get-CimInstance Win32_Process | ForEach-Object { '{0} {1} {2} {3}' -f $_.ProcessId, $_.ParentProcessId, [math]::Round($_.WorkingSetSize / 1024), $_.Name }"
+
+/** Tabela de processos para somar o RSS da árvore do Electron (renderers, GPU, utility e os shells dos PTYs). */
+function readProcessTable(deps = {}) {
+  const exec = deps.execFileSync ?? execFileSync
+  const options = { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, windowsHide: true }
+  const output = (deps.platform ?? process.platform) === 'win32'
+    ? exec('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', WINDOWS_PROCESS_TABLE_COMMAND], options)
+    : exec('ps', ['-eo', 'pid,ppid,rss,comm', '--no-headers'], options)
   return parsePsOutput(output)
 }
 
@@ -68,7 +78,7 @@ async function captureCheckpoint(name, { outDir, mainPid, deps = {} }) {
   await devtools.executarDevtools(['heap-snapshot', heapFile])
   const metricsResult = await devtools.executarDevtools(['metrics'])
   const metrics = JSON.parse(metricsResult.saida)
-  const processes = realPs(deps)
+  const processes = readProcessTable(deps)
   const pids = collectDescendantPids(mainPid, processes)
   const rss = summarizeRss(processes, pids)
   const checkpoint = { name, at: new Date().toISOString(), heapFile, metrics, rss }
@@ -210,7 +220,7 @@ async function runLongSession(options, deps = {}) {
       if (options.terminals > 0) {
         try { await simulateActivityBurst(); burstCount += 1 } catch { /* alternância idle/ativo tolera falha isolada de digitação */ }
       }
-      const processes = realPs(deps)
+      const processes = readProcessTable(deps)
       const pids = collectDescendantPids(mainPid, processes)
       const sample = { at: new Date().toISOString(), rss: summarizeRss(processes, pids) }
       fs.appendFileSync(path.join(options.outDir, 'rss-samples.jsonl'), `${JSON.stringify(sample)}\n`)
@@ -262,7 +272,7 @@ async function main(argv) {
   return report
 }
 
-module.exports = { captureCheckpoint, clearCanvasWithConfirm, createTerminals, createWebviews, parseArgs, removeAllTerminalAndWebviewNodes, runLongSession, startFixtureServer }
+module.exports = { captureCheckpoint, clearCanvasWithConfirm, createTerminals, createWebviews, parseArgs, readProcessTable, removeAllTerminalAndWebviewNodes, runLongSession, startFixtureServer }
 
 if (require.main === module) {
   main(process.argv.slice(2)).catch((error) => {
