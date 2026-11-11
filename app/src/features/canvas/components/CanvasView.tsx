@@ -2252,7 +2252,7 @@ function CanvasInner({
           setCanvasMode((mode) => (mode === 'select' ? 'pan' : 'select'))
         }
         onFitView={() => fitCanvasViewSafely(240)}
-        onExport={() => void exportAll()}
+        onExport={(options) => void exportAll(options)}
         onImportFile={(event) => void importFile(event)}
         onClear={() => void clearAll()}
         isBusy={isBusy}

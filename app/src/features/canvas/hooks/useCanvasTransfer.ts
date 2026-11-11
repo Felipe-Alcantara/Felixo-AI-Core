@@ -74,11 +74,12 @@ export function useCanvasTransfer({
     setEdges(() => [])
   }, [cancelPendingSaves, onReset, setEdges, setNodes, store])
 
-  const exportAll = useCallback(async () => {
+  const exportAll = useCallback(async (options: { includeTerminalOutput?: boolean } = {}) => {
     setIsTransferring(true)
     const result = await exportCanvasBundle(
       nodes.map(toPersistedNode),
       edges.map(toPersistedEdge),
+      options,
     )
 
     if (!result.ok || !result.bundle) {

@@ -572,6 +572,8 @@ declare global {
           CliInvokeResult & {
             sessionId?: string
             reused?: boolean
+            /** Reanexo que trouxe só a cauda do replay: o começo está no arquivo em disco. */
+            replayTruncated?: boolean
             /**
              * `PTY_SESSION_ACCOUNT_MISMATCH`: a sessão viva deste bloco nasceu em outra conta.
              * `CHAIN_TICKET_REFUSED`: o ticket da cadeia não vale para este spawn.
@@ -620,6 +622,14 @@ declare global {
          * guardada por alguns minutos. `null` = não respondeu ou não existe.
          */
         cliVersions?: () => Promise<CliInvokeResult & { versions?: Record<string, string | null> }>
+        /**
+         * Página do arquivo em disco da saída do PTY (14 dias), do fim para o
+         * começo: a próxima página passa o `start` desta como `before`.
+         * Offsets em bytes; `firstOffset` é o começo do que ainda está guardado.
+         */
+        readArchive?: (params: { sessionId: string; before?: number; maxBytes?: number }) => Promise<
+          CliInvokeResult & { text?: string; start?: number; end?: number; total?: number; firstOffset?: number }
+        >
       }
       projects?: {
         pickFolder: () => Promise<string | null>
@@ -752,6 +762,8 @@ declare global {
         exportBundle: (state: {
           nodes: PersistedCanvasNode[]
           edges: PersistedCanvasEdge[]
+          /** Leva a cauda do arquivo em disco de cada terminal (opção do menu). */
+          includeTerminalOutput?: boolean
         }) => Promise<CliInvokeResult & { bundle?: unknown }>
         validateImport: (content: string) => Promise<
           CliInvokeResult & {

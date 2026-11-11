@@ -123,7 +123,7 @@ type CanvasToolbarProps = {
   canvasMode: 'select' | 'pan'
   onToggleMode: () => void
   onFitView: () => void
-  onExport: () => void
+  onExport: (options?: { includeTerminalOutput?: boolean }) => void
   onImportFile: (event: ChangeEvent<HTMLInputElement>) => void
   onClear: () => void
   isBusy: boolean

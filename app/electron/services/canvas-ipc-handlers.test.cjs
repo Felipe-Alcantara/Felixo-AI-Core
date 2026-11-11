@@ -166,3 +166,38 @@ test('canvas IPC devolve as skills do sistema ocultas para o painel poder restau
     fs.rmSync(databaseDir, { recursive: true, force: true })
   }
 })
+
+test('canvas IPC exporta a saída dos terminais só com a opção e a devolve ao importar', async () => {
+  const databaseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-canvas-ipc-saida-'))
+  const database = createStorageDatabase({ databaseDir })
+  const exported = []
+  const imported = []
+
+  try {
+    registerCanvasIpcHandlers({
+      database,
+      exportTerminalOutputs: async (nodes) => {
+        exported.push(nodes.map((node) => node.id))
+        return [{ nodeId: 'terminal-1', text: 'saída', truncated: false }]
+      },
+      importTerminalOutputs: async (outputs) => imported.push(outputs),
+    })
+    const nodes = [{ id: 'terminal-1', type: 'terminal', position: { x: 0, y: 0 }, data: { command: 'codex' } }]
+
+    const plain = await handlers.get('canvas:export')(null, { nodes, edges: [] })
+    assert.equal(plain.ok, true)
+    assert.equal('terminalOutputs' in plain.bundle, false)
+    assert.deepEqual(exported, [])
+
+    const withOutput = await handlers.get('canvas:export')(null, { nodes, edges: [], includeTerminalOutput: true })
+    assert.deepEqual(exported, [['terminal-1']])
+    assert.deepEqual(withOutput.bundle.terminalOutputs, [{ nodeId: 'terminal-1', text: 'saída', truncated: false }])
+
+    const result = await handlers.get('canvas:import')(null, JSON.stringify(withOutput.bundle))
+    assert.equal(result.ok, true)
+    assert.equal(result.terminalOutputsImported, 1)
+    assert.deepEqual(imported, [withOutput.bundle.terminalOutputs])
+  } finally {
+    database.close()
+  }
+})

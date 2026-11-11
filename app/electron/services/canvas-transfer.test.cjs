@@ -301,3 +301,28 @@ test('bloco de conversa do Claude por chave viaja sem conta, pasta, contexto nem
     apiYolo: true,
   })
 })
+
+test('a saída dos terminais só entra no pacote quando vem e volta igual na importação', () => {
+  const without = createCanvasBundle(validSource())
+  assert.equal('terminalOutputs' in without, false, 'pacote sem a opção fica igual ao de antes')
+
+  const bundle = createCanvasBundle(
+    validSource({ terminalOutputs: [{ nodeId: 'terminal-1', text: '\u001b[32mok\u001b[0m\r\n', truncated: true }] }),
+  )
+  assert.deepEqual(bundle.terminalOutputs, [{ nodeId: 'terminal-1', text: '\u001b[32mok\u001b[0m\r\n', truncated: true }])
+  assert.deepEqual(parseCanvasBundle(JSON.stringify(bundle)), bundle)
+})
+
+test('a saída dos terminais do pacote precisa de bloco, texto e tamanho válidos', () => {
+  const parse = (terminalOutputs) =>
+    parseCanvasBundle(JSON.stringify({ ...createCanvasBundle(validSource()), terminalOutputs }))
+
+  assert.throws(() => parse({}), /saidas de terminal/)
+  assert.throws(() => parse([{ nodeId: 'nao-existe', text: 'x' }]), /sem bloco correspondente/)
+  assert.throws(
+    () => parse([{ nodeId: 'terminal-1', text: 'a' }, { nodeId: 'terminal-1', text: 'b' }]),
+    /sem bloco correspondente/,
+  )
+  assert.throws(() => parse([{ nodeId: 'terminal-1', text: 42 }]), /Texto invalido/)
+  assert.throws(() => parse([{ nodeId: 'terminal-1', text: 'x'.repeat(1024 * 1024 + 1) }]), /muito grande/)
+})

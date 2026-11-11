@@ -95,6 +95,7 @@ type TransferResult = {
 export async function exportCanvasBundle(
   nodes: PersistedCanvasNode[],
   edges: PersistedCanvasEdge[],
+  options: { includeTerminalOutput?: boolean } = {},
 ): Promise<TransferResult> {
   const bridge = window.felixo?.canvas
   if (!bridge) {
@@ -102,7 +103,11 @@ export async function exportCanvasBundle(
   }
 
   try {
-    const result = await bridge.exportBundle({ nodes, edges })
+    const result = await bridge.exportBundle({
+      nodes,
+      edges,
+      ...(options.includeTerminalOutput ? { includeTerminalOutput: true } : {}),
+    })
     if (!result.ok || !result.bundle) {
       return { ok: false, message: result.message ?? 'Não foi possível exportar.' }
     }

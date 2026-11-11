@@ -116,10 +116,17 @@ function registerCanvasIpcHandlers(options = {}) {
     try {
       const files =
         typeof options.exportFiles === 'function' ? await options.exportFiles() : []
+      const nodes = Array.isArray(state.nodes) ? state.nodes : repository.list()
+      // A saída dos terminais só viaja quando a pessoa pede (opção do menu).
+      const terminalOutputs =
+        state.includeTerminalOutput === true && typeof options.exportTerminalOutputs === 'function'
+          ? await options.exportTerminalOutputs(nodes)
+          : undefined
       const bundle = createCanvasBundle({
-        nodes: Array.isArray(state.nodes) ? state.nodes : repository.list(),
+        nodes,
         edges: Array.isArray(state.edges) ? state.edges : repository.listEdges(),
         files,
+        terminalOutputs,
       })
       return { ok: true, bundle }
     } catch (error) {
@@ -163,11 +170,24 @@ function registerCanvasIpcHandlers(options = {}) {
         throw error
       }
 
+      // Depois do canvas já trocado e sem desfazê-lo: a saída é histórico de
+      // leitura, e perdê-la não vale reverter os blocos que a pessoa importou.
+      let terminalOutputsImported = 0
+      if (bundle.terminalOutputs && typeof options.importTerminalOutputs === 'function') {
+        try {
+          await options.importTerminalOutputs(bundle.terminalOutputs)
+          terminalOutputsImported = bundle.terminalOutputs.length
+        } catch (error) {
+          console.error('[felixo] nao foi possivel restaurar a saida dos terminais importados:', error)
+        }
+      }
+
       return {
         ok: true,
         nodes: repository.list(),
         edges: repository.listEdges(),
         filesImported: bundle.files.length,
+        terminalOutputsImported,
       }
     } catch (error) {
       return toErrorResult(error, 'Nao foi possivel importar o canvas.')

@@ -11,6 +11,7 @@ import {
   Notebook,
   PenLine,
   RefreshCw,
+  ScrollText,
   Sparkles,
   Terminal,
   Upload,
@@ -76,8 +77,8 @@ const TOOL_GROUPS: Array<{ label: string; tools: ToolEntry[] }> = [
 type CanvasToolsMenuProps = {
   activeTool: CanvasTool | null
   onSelect: (tool: CanvasTool) => void
-  /** Saves the whole canvas to a portable file. */
-  onExport: () => void
+  /** Saves the whole canvas to a portable file; a saída dos terminais só com a opção. */
+  onExport: (options?: { includeTerminalOutput?: boolean }) => void
   /** Opens the file picker that restores a canvas export. */
   onImport: () => void
   /** Export/import touch the whole canvas, so they wait on any pending work. */
@@ -126,7 +127,13 @@ export function CanvasToolsMenu({
       <div className="felixo-sidebar-tool-group">
         <span className="felixo-sidebar-tool-group-label">Transferência</span>
         {[
-          { label: 'Exportar canvas', icon: Download, run: onExport },
+          { label: 'Exportar canvas', icon: Download, run: () => onExport() },
+          // Opção separada: a saída vai crua (pode ter segredo que uma CLI imprimiu).
+          {
+            label: 'Exportar com a saída dos terminais',
+            icon: ScrollText,
+            run: () => onExport({ includeTerminalOutput: true }),
+          },
           { label: 'Importar canvas', icon: Upload, run: onImport },
         ].map(({ label, icon: Icon, run }) => (
           <button

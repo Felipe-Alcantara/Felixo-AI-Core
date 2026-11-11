@@ -3,6 +3,10 @@ const {
   normalizeEdge,
   normalizeNode,
 } = require('./storage/canvas-repository.cjs')
+const {
+  EXPORT_MAX_BYTES_PER_TERMINAL,
+  EXPORT_MAX_TOTAL_BYTES,
+} = require('./pty-output-archive.cjs')
 
 const CANVAS_TRANSFER_FORMAT = 'felixo-canvas'
 const CANVAS_TRANSFER_VERSION = 1
@@ -15,7 +19,7 @@ const PORTABLE_AGENT_COMMANDS = new Set(['claude', 'codex', 'gemini'])
 // Mesmo teto do cartão "Agente na nuvem" (cloud-session-state.ts e cloud-session-input.cjs).
 const CLOUD_TASK_MAX = 4000
 
-function createCanvasBundle({ nodes, edges, files }) {
+function createCanvasBundle({ nodes, edges, files, terminalOutputs }) {
   return normalizeCanvasBundle({
     format: CANVAS_TRANSFER_FORMAT,
     version: CANVAS_TRANSFER_VERSION,
@@ -23,6 +27,7 @@ function createCanvasBundle({ nodes, edges, files }) {
     nodes,
     edges,
     files,
+    ...(terminalOutputs ? { terminalOutputs } : {}),
   })
 }
 
@@ -217,6 +222,7 @@ function normalizeCanvasBundle(value) {
       name,
       content: providedFilesByName.get(normalizedName)?.content ?? '',
     }))
+  const terminalOutputs = normalizeTerminalOutputs(value.terminalOutputs, nodeIds)
 
   return {
     format: CANVAS_TRANSFER_FORMAT,
@@ -228,7 +234,50 @@ function normalizeCanvasBundle(value) {
     nodes,
     edges,
     files,
+    // Pacote sem a saída (o padrão, e todo pacote antigo) fica igual ao de antes.
+    ...(terminalOutputs.length > 0 ? { terminalOutputs } : {}),
   }
+}
+
+/**
+ * Saída arquivada dos terminais, só quando a pessoa pediu "Exportar com a
+ * saída dos terminais". Vai crua (decisão de 11/11/2026): o texto só volta
+ * para o arquivo em disco do bloco, nunca é enviado ao terminal.
+ *
+ * @param {unknown} value
+ * @param {Set<string>} nodeIds
+ * @returns {Array<{ nodeId: string, text: string, truncated: boolean }>}
+ */
+function normalizeTerminalOutputs(value, nodeIds) {
+  if (value === undefined) {
+    return []
+  }
+  requireArrayWithinLimit(value, MAX_NODES, 'saidas de terminal')
+
+  let totalBytes = 0
+  const seen = new Set()
+  return value.map((raw) => {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      throw new Error('Saida de terminal invalida no pacote.')
+    }
+    const nodeId = typeof raw.nodeId === 'string' ? raw.nodeId : ''
+    if (!nodeIds.has(nodeId) || seen.has(nodeId)) {
+      throw new Error('Saida de terminal sem bloco correspondente no pacote.')
+    }
+    if (typeof raw.text !== 'string') {
+      throw new Error('Texto invalido na saida de terminal do pacote.')
+    }
+    const size = Buffer.byteLength(raw.text, 'utf8')
+    if (size > EXPORT_MAX_BYTES_PER_TERMINAL) {
+      throw new Error('Saida de terminal muito grande no pacote.')
+    }
+    totalBytes += size
+    if (totalBytes > EXPORT_MAX_TOTAL_BYTES) {
+      throw new Error('O pacote excede o limite total de saida de terminal.')
+    }
+    seen.add(nodeId)
+    return { nodeId, text: raw.text, truncated: raw.truncated === true }
+  })
 }
 
 function requireArrayWithinLimit(value, limit, label) {
