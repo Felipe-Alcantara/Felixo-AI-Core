@@ -1348,3 +1348,41 @@ linha de entrada (Gemini, Openia) não têm varredura de aceite, então nada mud
 **Adendo (2026-11-11, depois do push): CI e Release.** O CI de `afabd0c` (run 43047183720, 12:19–12:26) passou no escopo, no
 Validate em Windows, macOS, Ubuntu e Ubuntu ARM e no `Canvas smoke (ubuntu-latest)`; o Release gate (run 43048435370) e o Release
 (run 43048476681, 12:27–12:34) saíram verdes e publicaram a `v0.1.525` nos três sistemas.
+
+---
+
+## 2026-11-11 — Terminal: ir ao Chat solta o store de terminais em vez de deixá-lo órfão, sem matar os PTYs
+
+**Agente / repositório.** Resolver hotfix — Felixo-AI-Core (`J:/Programação/GitHub/Repositórios/Felixo-AI-Core`). Task
+`3e991f95-497e-8104-a090-d5b295ba4747` (pendência da fatia 1 de performance, 28/09).
+
+**Contexto.** Ir ao Chat desmonta o canvas; na volta, o `TerminalSessionProvider` cria outro store, e o antigo ficava para trás com
+os xterms (e o scrollback deles), os timers e o ouvinte do `pty:data` da ponte vivos. Os processos PTY devem sobreviver (o novo
+store reanexa pelo replay); o que sobrava era o lado do renderer.
+
+**O que mudou.**
+
+1. `TerminalSessionStore.detachAll()`: o desligamento do `remove` (timers, ouvintes do DOM, rotas `pty:data`/`pty:exit`/`pty:session`,
+   `terminal.dispose()`) sem `pty.kill` e sem liberar os arquivos de contexto (são do processo, que segue vivo), num `releaseRenderer`
+   comum aos dois. Retoma o PTY que o xterm tinha pausado pelo controle de fluxo: sem isso, a CLI ficaria bloqueada escrevendo até
+   alguém voltar ao canvas. Os ouvintes do React por id ficam, para uma sessão recriada no mesmo store os reaproveitar.
+2. `DeferredTerminalSessionStore.detachAll()`: avança a mesma geração do `clear`, cancelando os `ensure` enfileirados antes de o
+   runtime carregar — é o que torna seguro o desmonte simulado do StrictMode no desenvolvimento. `MockTerminalSessionStore`: sem
+   efeito (o PTY falso vive dentro da sessão).
+3. `TerminalSessionProvider`: `useEffect(() => () => store.detachAll(), [store])`.
+4. Inventário: as duas lacunas do store órfão saíram.
+
+**Medido.** App de fonte (devtools, Windows): 4 shells com 3.000 linhas cada, cinco idas ao Chat e voltas, heap depois de
+`HeapProfiler.collectGarbage` a cada volta (playwright-core via CDP). Antes (código anterior via `git stash`): 27,4 → 37,5 → 45,5 →
+56,1 → 69,4 → 85,1 MB (+57,7 MB, ~11,5 MB por volta). Depois: 30,4 → 31,9 → 31,8 → 32,0 → 32,3 → 32,6 MB e, numa segunda
+rodada, 27,7 → 32,3 (primeira carga do Chat) → 32,3 → 32,4 → 32,7 → 33,0 MB. Em todas as voltas as quatro sessões reanexaram pelo
+replay (a espera exigia a última linha impressa de cada uma). Testes novos: no store real (xterm de verdade), `detachAll` chama
+`dispose`, zera os ouvintes da ponte, não chama `pty.kill` nem `contextFiles.release`, nenhum timer escreve depois, e um store novo
+reanexa (spawn com reuso) mostrando o replay sem redigitar o contexto; o PTY pausado é retomado; no store adiado, o `ensure`
+enfileirado antes do runtime é cancelado e a remontagem seguinte vale, e com o runtime carregado a sessão sai sem kill. vitest 223
+arquivos, 3449 testes; `npm test` 3182, 0 falham; `tsc -b`, `eslint .` e `vite build` limpos; smoke local A, B, D (duas rodadas de
+primeira) e F passam.
+
+**Limites.** O provider não tem teste de componente (o repositório não testa `.tsx`): a ligação foi conferida pela medição de heap no
+app. O L9 do smoke (toque em link do terminal) é instável nesta máquina com ou sem a mudança (no `main` falhou na 1ª tentativa e
+passou na 2ª); registrado na task das falhas locais do smoke.

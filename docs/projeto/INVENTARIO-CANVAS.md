@@ -32,7 +32,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **Elementos:** 101 (10 blocos, 16 ferramentas, 75 outras superfícies)
 - **Controles:** 381, dos quais 57 com teste específico
 - **Elementos sem nenhum teste:** 4
-- **Lacunas:** 264 (alto 8, médio 141, baixo 115), em 74 tasks
+- **Lacunas:** 262 (alto 8, médio 139, baixo 115), em 73 tasks
 
 ## Moldura do canvas
 
@@ -66,7 +66,6 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | Projetos e Configurações do trilho não são clicados por nenhum teste (Projetos só é medido como âncora do tutorial). | baixo | `3ec91f95-497e-818f-b9f2-f9710605c303` |
-| Trocar para o Chat desmonta o canvas e deixa o store de terminais órfão. | médio | `3e991f95-497e-8104-a090-d5b295ba4747` |
 
 ### Coluna da sidebar (marca, alça e rodapé)
 
@@ -1286,7 +1285,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 ### Ciclo do processo PTY no renderer
 
 - **ID:** `terminal-pty-session` · **Dono:** `src/features/canvas/terminal/terminal-session-store.ts`
-- **Persistência:** processo principal: PTY vivo, reanexado por canvas:<id> (reuseExisting) depois de recarregar ou voltar do chat; memória do renderer: xterm e scrollback (o main reemite o buffer de replay no reanexo; result.replayTruncated avisa quando o replay cortou o começo); processo principal: arquivo em disco da saída inteira (pty-output-archive.cjs, 14 dias)
+- **Persistência:** processo principal: PTY vivo, reanexado por canvas:<id> (reuseExisting) depois de recarregar ou voltar do chat; ao ir ao Chat, o provider chama detachAll (xterms, timers e rotas da ponte soltos, sem pty:kill); memória do renderer: xterm e scrollback (o main reemite o buffer de replay no reanexo; result.replayTruncated avisa quando o replay cortou o começo); processo principal: arquivo em disco da saída inteira (pty-output-archive.cjs, 14 dias)
 - **IPC:** `pty:spawn`, `pty:write`, `pty:resize`, `pty:kill`, `pty:data`, `pty:flow`, `pty:exit`, `pty:session`, `context-file:write`, `context-file:path-typed`, `context-file:release`, `files:save-attachment`, `files:save-clipboard-image`
 - **Depende de:** `TerminalSessionProvider`, `pty-event-router`, `resume-outcome-detector`, `terminal-input`, `terminal-screen-state`, `terminal-scrollback`, `context-file-delivery`, `xterm (FitAddon, WebLinksAddon)`
 - **Sobreposição:** Não renderiza superfície própria: o elemento xterm é anexado ao cartão ou à gaveta (attach limpa o container antes, para não empilhar terminais).
@@ -1331,7 +1330,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | Falha ao importar o runtime do terminal fica só no console: o bloco não mostra erro nem sai de "iniciando" (deferred-terminal-session-store.ts:78-85). | médio | `3ec91f95-497e-8176-bef0-dfde828936dc` |
-| O store de terminais fica órfão ao trocar para o Chat. | médio | `3e991f95-497e-8104-a090-d5b295ba4747` |
 | O store falso do smoke A diverge do real (sem faixa, sem retomada). | médio | `3eb91f95-497e-811b-8eb0-e620c6f37e21` |
 
 ### Vigia da retomada recusada
@@ -2925,7 +2923,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3e791f95-497e-81bd-8e8c-de6f9e16cec5` — 1 lacuna
 - `3e891f95-497e-8148-b00e-f27e78767664` — 2 lacunas
 - `3e891f95-497e-81b3-8857-da9125ff3f49` — 1 lacuna
-- `3e991f95-497e-8104-a090-d5b295ba4747` — 2 lacunas
 - `3e991f95-497e-810b-9f94-ed5201606718` — 1 lacuna
 - `3e991f95-497e-811d-93e4-c6f283e26dde` — 1 lacuna
 - `3e991f95-497e-811e-a0a3-c9c0dd6d0c48` — 1 lacuna

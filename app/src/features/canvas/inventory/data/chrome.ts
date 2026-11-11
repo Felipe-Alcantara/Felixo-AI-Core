@@ -240,11 +240,6 @@ export const chromeSurfaces: InventoryElement[] = [
         risk: 'baixo',
         task: '3ec91f95-497e-818f-b9f2-f9710605c303',
       },
-      {
-        what: 'Trocar para o Chat desmonta o canvas e deixa o store de terminais órfão.',
-        risk: 'médio',
-        task: '3e991f95-497e-8104-a090-d5b295ba4747',
-      },
     ],
     overlap: 'nav.felixo-activity-rail dentro da aside da sidebar (z-26), coluna fixa de 52 px na borda esquerda, acima da topbar e da statusbar (18). Ajuda é o sexto botão do grupo de cima (≈ 271 de ≈ 289 px na altura mínima): um botão novo acima dela recorta o alvo. O menu Ajuda abre em portal (z 1000).',
   },

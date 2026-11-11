@@ -1191,7 +1191,7 @@ export const terminalSurfaces: InventoryElement[] = [
     },
     controls: [],
     persistence: [
-      'processo principal: PTY vivo, reanexado por canvas:<id> (reuseExisting) depois de recarregar ou voltar do chat',
+      'processo principal: PTY vivo, reanexado por canvas:<id> (reuseExisting) depois de recarregar ou voltar do chat; ao ir ao Chat, o provider chama detachAll (xterms, timers e rotas da ponte soltos, sem pty:kill)',
       'memória do renderer: xterm e scrollback (o main reemite o buffer de replay no reanexo; result.replayTruncated avisa quando o replay cortou o começo)',
       'processo principal: arquivo em disco da saída inteira (pty-output-archive.cjs, 14 dias)',
     ],
@@ -1285,11 +1285,6 @@ export const terminalSurfaces: InventoryElement[] = [
         what: 'Falha ao importar o runtime do terminal fica só no console: o bloco não mostra erro nem sai de "iniciando" (deferred-terminal-session-store.ts:78-85).',
         risk: 'médio',
         task: '3ec91f95-497e-8176-bef0-dfde828936dc',
-      },
-      {
-        what: 'O store de terminais fica órfão ao trocar para o Chat.',
-        risk: 'médio',
-        task: '3e991f95-497e-8104-a090-d5b295ba4747',
       },
       {
         what: 'O store falso do smoke A diverge do real (sem faixa, sem retomada).',
