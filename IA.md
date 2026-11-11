@@ -1386,3 +1386,7 @@ primeira) e F passam.
 **Limites.** O provider não tem teste de componente (o repositório não testa `.tsx`): a ligação foi conferida pela medição de heap no
 app. O L9 do smoke (toque em link do terminal) é instável nesta máquina com ou sem a mudança (no `main` falhou na 1ª tentativa e
 passou na 2ª); registrado na task das falhas locais do smoke.
+
+**Adendo (2026-11-11, depois do push): CI e Release.** O CI de `818070b` (run 43053517966, 12:57–13:04) passou no escopo, no
+Validate em Windows, macOS, Ubuntu e Ubuntu ARM e no `Canvas smoke (ubuntu-latest)`; o Release gate (run 43054671784) e o Release
+(run 43054719317, 13:04–13:13) saíram verdes e publicaram a `v0.1.526` nos três sistemas.
