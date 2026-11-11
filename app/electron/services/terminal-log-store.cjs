@@ -3,9 +3,13 @@
 const fs = require('node:fs')
 const fsPromises = require('node:fs/promises')
 const path = require('node:path')
+const { createJsonlLineReader } = require('./jsonl-line-reader.cjs')
 
 const TERMINAL_LOG_VERSION = 1
 const TERMINAL_LOG_FILE_PATTERN = /^session-\d+-\d+-\d+\.jsonl$/
+// Teto da execução (decisão de 11/11/2026): dois arquivos de metade do teto que se revezam; ao
+// encher o atual, o anterior sai inteiro, e a leitura vê sempre os últimos 128 a 256 MB.
+const DEFAULT_MAX_BYTES = 256 * 1024 * 1024
 const TERMINAL_OUTPUT_SOURCES = new Set(['stdout', 'stderr', 'system'])
 const TERMINAL_OUTPUT_KINDS = new Set([
   'assistant',
@@ -41,6 +45,14 @@ function createTerminalLogStore(options = {}) {
   let nextSequence = 1
   let ignoredSessionIds = new Set()
   let disposed = false
+  const segmentBytes = Math.max(
+    1,
+    Math.floor((Number.isFinite(options.maxBytes) ? options.maxBytes : DEFAULT_MAX_BYTES) / 2),
+  )
+  let currentBytes = 0
+  // Arquivo que encheu: `{ filePath, done }`, onde `done` termina o writer dele.
+  let previous = null
+  let pendingRemoval = Promise.resolve()
 
   function append(event) {
     const normalizedEvent = normalizeTerminalOutputEvent(event)
@@ -55,7 +67,6 @@ function createTerminalLogStore(options = {}) {
       return false
     }
 
-    const currentWriter = getWriter()
     const record = {
       version: TERMINAL_LOG_VERSION,
       sequence: nextSequence,
@@ -65,6 +76,13 @@ function createTerminalLogStore(options = {}) {
     nextSequence += 1
 
     const line = `${JSON.stringify(record)}\n`
+    const lineBytes = Buffer.byteLength(line, 'utf8')
+    if (currentBytes > 0 && currentBytes + lineBytes > segmentBytes) {
+      rotate()
+    }
+    currentBytes += lineBytes
+
+    const currentWriter = getWriter()
     currentWriter.pending += 1
     try {
       currentWriter.stream.write(line, 'utf8', (error) => {
@@ -83,22 +101,42 @@ function createTerminalLogStore(options = {}) {
     return true
   }
 
+  function rotate() {
+    const dropped = previous
+    previous = {
+      filePath,
+      done: writer ? finishWriter(writer).catch(() => {}) : Promise.resolve(),
+    }
+    generation += 1
+    filePath = createLogFilePath(directory, generation)
+    writer = null
+    currentBytes = 0
+
+    if (dropped) {
+      pendingRemoval = pendingRemoval
+        .then(() => dropped.done)
+        .then(() => fsPromises.rm(dropped.filePath, { force: true }))
+        .catch(() => {})
+    }
+  }
+
   async function getSessions() {
     const currentWriter = writer
+    const filePaths = previous ? [previous.filePath, filePath] : [filePath]
+    await previous?.done
     if (currentWriter) {
       await flushWriter(currentWriter)
     }
+    await pendingRemoval
 
-    let content = ''
-    try {
-      content = await fsPromises.readFile(filePath, 'utf8')
-    } catch (error) {
-      if (error?.code !== 'ENOENT') {
-        throw error
-      }
+    // Em fluxo, linha a linha: o arquivo pode ter centenas de MB, e lê-lo inteiro numa string (e
+    // depois o array das linhas) dobrava ou triplicava esse pico no processo principal.
+    const aggregator = createTerminalLogAggregator()
+    for (const currentFilePath of filePaths) {
+      await readLogLines(currentFilePath, aggregator.addLine)
     }
 
-    return aggregateTerminalLogRecords(content)
+    return aggregator.result()
   }
 
   async function clear(options = {}) {
@@ -112,15 +150,19 @@ function createTerminalLogStore(options = {}) {
 
     const previousWriter = writer
     const previousFilePath = filePath
+    const rotated = previous
     generation += 1
     filePath = createLogFilePath(directory, generation)
     writer = null
+    currentBytes = 0
+    previous = null
 
     if (previousWriter) {
       await finishWriter(previousWriter)
     }
 
     await fsPromises.rm(previousFilePath, { force: true })
+    await removeRotated(rotated)
 
     return { ok: true }
   }
@@ -133,13 +175,24 @@ function createTerminalLogStore(options = {}) {
     disposed = true
     const currentWriter = writer
     const currentFilePath = filePath
+    const rotated = previous
     writer = null
+    previous = null
 
     if (currentWriter) {
       await finishWriter(currentWriter)
     }
 
     await fsPromises.rm(currentFilePath, { force: true })
+    await removeRotated(rotated)
+  }
+
+  async function removeRotated(rotated) {
+    await pendingRemoval
+    if (rotated) {
+      await rotated.done
+      await fsPromises.rm(rotated.filePath, { force: true })
+    }
   }
 
   function getWriter() {
@@ -229,42 +282,72 @@ function settleWriterWaiters(writer) {
   }
 }
 
-function aggregateTerminalLogRecords(content) {
-  const sessions = new Map()
-  const lines = String(content ?? '').split('\n')
+async function readLogLines(filePath, onLine) {
+  // Não o `readline`: ele também quebra em U+2028/U+2029, que o JSON guarda literais dentro do texto.
+  const reader = createJsonlLineReader(onLine)
 
-  for (const line of lines) {
-    if (!line.trim()) {
-      continue
+  try {
+    for await (const chunk of fs.createReadStream(filePath, { encoding: 'utf8' })) {
+      reader.push(chunk)
     }
-
-    let record
-    try {
-      record = JSON.parse(line)
-    } catch {
-      continue
+  } catch (error) {
+    if (error?.code === 'ENOENT') {
+      return
     }
-
-    const event = normalizeTerminalOutputEvent(record?.event)
-    if (!event) {
-      continue
-    }
-
-    const capturedAt = normalizeDateString(record?.capturedAt) ?? new Date().toISOString()
-    const sequence = Number.isInteger(record?.sequence)
-      ? record.sequence
-      : Number.MAX_SAFE_INTEGER
-    const session =
-      sessions.get(event.sessionId) ?? createArchivedSession(event, capturedAt)
-
-    appendEventToArchivedSession(session, event, sequence, capturedAt)
-    sessions.set(event.sessionId, session)
+    throw error
   }
 
-  return [...sessions.values()].sort(
-    (left, right) =>
-      new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime(),
-  )
+  reader.flush()
+}
+
+function aggregateTerminalLogRecords(content) {
+  const aggregator = createTerminalLogAggregator()
+
+  for (const line of String(content ?? '').split('\n')) {
+    aggregator.addLine(line)
+  }
+
+  return aggregator.result()
+}
+
+function createTerminalLogAggregator() {
+  const sessions = new Map()
+
+  return {
+    addLine(line) {
+      if (!line.trim()) {
+        return
+      }
+
+      let record
+      try {
+        record = JSON.parse(line)
+      } catch {
+        return
+      }
+
+      const event = normalizeTerminalOutputEvent(record?.event)
+      if (!event) {
+        return
+      }
+
+      const capturedAt = normalizeDateString(record?.capturedAt) ?? new Date().toISOString()
+      const sequence = Number.isInteger(record?.sequence)
+        ? record.sequence
+        : Number.MAX_SAFE_INTEGER
+      const session =
+        sessions.get(event.sessionId) ?? createArchivedSession(event, capturedAt)
+
+      appendEventToArchivedSession(session, event, sequence, capturedAt)
+      sessions.set(event.sessionId, session)
+    },
+    result() {
+      return [...sessions.values()].sort(
+        (left, right) =>
+          new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime(),
+      )
+    },
+  }
 }
 
 function createArchivedSession(event, capturedAt) {
@@ -285,35 +368,30 @@ function createArchivedSession(event, capturedAt) {
 }
 
 function appendEventToArchivedSession(session, event, sequence, capturedAt) {
-  const lastChunk = session.chunks[session.chunks.length - 1]
-  const shouldMerge = shouldMergeTerminalOutput(lastChunk, event)
-  const chunk = shouldMerge
-    ? {
-        ...lastChunk,
-        chunk: `${lastChunk.chunk}${event.chunk}`,
-        metadata: {
-          ...lastChunk.metadata,
-          ...event.metadata,
-        },
-      }
-    : {
-        ...event,
-        id: Number.isSafeInteger(sequence) ? sequence : session.totalChunkCount + 1,
-        createdAt: capturedAt,
-      }
+  // No lugar, sem recopiar o array nem somar todos os pedaços de novo: a agregação era quadrática.
+  const lastIndex = session.chunks.length - 1
+  const lastChunk = session.chunks[lastIndex]
 
-  session.chunks = shouldMerge
-    ? [...session.chunks.slice(0, -1), chunk]
-    : [...session.chunks, chunk]
-  if (!shouldMerge) {
+  if (shouldMergeTerminalOutput(lastChunk, event)) {
+    session.chunks[lastIndex] = {
+      ...lastChunk,
+      chunk: `${lastChunk.chunk}${event.chunk}`,
+      metadata: {
+        ...lastChunk.metadata,
+        ...event.metadata,
+      },
+    }
+  } else {
+    session.chunks.push({
+      ...event,
+      id: Number.isSafeInteger(sequence) ? sequence : session.totalChunkCount + 1,
+      createdAt: capturedAt,
+    })
     session.totalChunkCount += 1
   }
   session.updatedAt = capturedAt
   session.outputSize += Buffer.byteLength(event.chunk, 'utf8')
-  session.visibleChars = session.chunks.reduce(
-    (total, currentChunk) => total + currentChunk.chunk.length,
-    0,
-  )
+  session.visibleChars += event.chunk.length
   session.status = inferSessionStatusFromTerminalEvent(event, session.status)
 
   if (event.kind === 'lifecycle' && event.metadata) {

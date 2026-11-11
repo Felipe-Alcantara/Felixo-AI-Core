@@ -224,3 +224,59 @@ test('restores the latest prompt provenance from archived lifecycle events', asy
     assert.match(logText, /Revisão — 東京/)
   })
 })
+
+test('agrega 20.000 eventos que não se mesclam numa sessão em tempo linear', () => {
+  // A agregação antiga recopiava o array de pedaços e somava todos eles a cada evento: quadrática
+  // (1,6 s para 20.000 eventos nesta máquina). O critério da task é abaixo de 150 ms; o teto aqui
+  // tem folga para a máquina do CI.
+  const lines = []
+  for (let index = 0; index < 20_000; index += 1) {
+    lines.push(JSON.stringify({
+      version: 1,
+      sequence: index + 1,
+      capturedAt: new Date(1_800_000_000_000 + index).toISOString(),
+      event: makeEvent('sessao-unica', `pedaço ${index}`, { kind: 'tool', title: 'Bash' }),
+    }))
+  }
+  const content = `${lines.join('\n')}\n`
+
+  const started = process.hrtime.bigint()
+  const [session] = aggregateTerminalLogRecords(content)
+  const elapsedMs = Number(process.hrtime.bigint() - started) / 1e6
+
+  assert.equal(session.chunks.length, 20_000)
+  assert.equal(session.totalChunkCount, 20_000)
+  assert.equal(session.visibleChars, lines.reduce((total, _line, index) => total + `pedaço ${index}`.length, 0))
+  assert.equal(session.chunks[19_999].chunk, 'pedaço 19999')
+  assert.ok(elapsedMs < 400, `levou ${Math.round(elapsedMs)} ms`)
+})
+
+test('passa do teto: reveza dois arquivos e descarta o trecho mais antigo', async () => {
+  const directory = await fsPromises.mkdtemp(path.join(os.tmpdir(), 'felixo-terminal-log-store-'))
+  const store = createTerminalLogStore({ directory, maxBytes: 8 * 1024 })
+
+  try {
+    for (let index = 0; index < 200; index += 1) {
+      store.append(makeEvent('sessao-longa', `linha ${String(index).padStart(3, '0')} ${'x'.repeat(100)}`, { kind: 'tool' }))
+    }
+
+    const sessions = await store.getSessions()
+    const files = fs.readdirSync(directory)
+    const bytesOnDisk = files.reduce((total, name) => total + fs.statSync(path.join(directory, name)).size, 0)
+    const chunks = sessions[0].chunks.map((item) => item.chunk.slice(0, 9))
+
+    assert.ok(files.length <= 2, `arquivos: ${files.join(', ')}`)
+    assert.ok(bytesOnDisk <= 8 * 1024, `${bytesOnDisk} bytes no disco`)
+    assert.equal(chunks.at(-1), 'linha 199')
+    assert.ok(!chunks.includes('linha 000'), 'o trecho mais antigo devia ter saído')
+    // Contíguo e em ordem: o arquivo anterior é lido antes do atual.
+    const first = Number(chunks[0].slice(6))
+    assert.deepEqual(chunks, Array.from({ length: 200 - first }, (_, offset) => `linha ${String(first + offset).padStart(3, '0')}`))
+
+    await store.clear()
+    assert.deepEqual(fs.readdirSync(directory), [])
+  } finally {
+    await store.dispose().catch(() => {})
+    await fsPromises.rm(directory, { recursive: true, force: true })
+  }
+})
