@@ -1445,3 +1445,52 @@ sessão. O teste do painel fechado espia o módulo; o resto do componente segue 
 Validate em Windows, macOS, Ubuntu e Ubuntu ARM e no `Canvas smoke (ubuntu-latest)`; o Release gate (run 43062040266) e o Release
 (run 43062080158, 13:49–13:58) saíram verdes e publicaram a `v0.1.527` nos três sistemas. Pendências abertas no Notion: conferir com
 uma CLI real o resumo no `cli:close` e avisar quando o teto de 256 MB descartar o começo da execução.
+
+---
+
+## 2026-11-11 — Performance: estado real do canvas com terminais e gaveta medido, e frame, long task e eco no gate
+
+**Agente / repositório.** Resolver hotfix — Felixo-AI-Core (`J:/Programação/GitHub/Repositórios/Felixo-AI-Core`). Task
+`3e991f95-497e-811a-93e3-c3dfe8629bcd` (pendência da fatia 1 de performance, 28/09).
+
+**Contexto.** A fatia 1 (28/09) provou os ganhos do renderer só por teste. Faltava medir o app real: canvas com terminais, gaveta
+aberta e fechada, arrasto, nós fora da janela, latência de tecla → eco com 20 terminais transmitindo, frame e long task no gate
+entre commits, a sessão de heap no Windows e um baseline local. Desde 04/11 a `canvas-many-agents-benchmark.cjs` já cobria parte
+(agentes vivos pelo PTY roteirizado, gaveta sempre aberta, roda), e o relatório dela já tinha os campos do gate.
+
+**Decisões do Felipe (Trilha B, 11/11/2026).** Gate com +20% e piso absoluto (frame +8 ms, long task +50 ms, eco +16 ms); gate
+manual; antes/depois com as mudanças de hoje (a bancada não existe na fatia 1); tudo de uma vez.
+
+**O que mudou.**
+
+1. `canvas-many-agents-benchmark.cjs`: três fases (gaveta fechada, gaveta aberta com digitação, arrasto), cada uma um resultado
+   `canvas-many-agents:<fase>` para o gate; tecla → eco (keydown de `q`/`z`/`w` ao quadro seguinte à chegada do eco pelo
+   `pty:data`) num terminal parado a mais, porque no PTY falso o eco entra na fila atrás do roteiro (2,5 s medidos no agente que
+   transmite) e o `x` aparecia no eco do gatilho (`felixo`); blocos montados e fora da área, e mutações de DOM dentro deles com o
+   controle dos blocos à vista; zoom fixo de 6 passos abaixo do terminal de digitação (enquadrado, tudo cabe na tela e a
+   virtualização não aparece); tempo até a virtualização voltar; coletores desligados no fim de cada fase.
+2. `benchmark-regression-gate.cjs`: métricas `frameMs.p95` (fora quando a janela está estrangulada), `longTaskMs.p95` (0 quando
+   não houve nenhuma, decidido só pelo piso) e `keyEchoMs.p95`; cenário casado também por `nodes`; várias rodadas por vírgula
+   em `--baseline`/`--current`, com a mediana por métrica.
+3. `canvas-long-session-heap-capture.cjs`: no Windows a tabela de processos vem do `Win32_Process` pelo PowerShell, no formato
+   do `ps`.
+4. Documentação: README das bancadas (fases, gate, procedimento por worktree, resultado), `docs/performance/PERFORMANCE.md`
+   (baseline local e o fim do "NÃO MEDIDO" de latência), três relatórios do `main` como baseline local, e a política com
+   símbolos no lugar de `CanvasView.tsx:2730`/`:2310`, corrigindo a linha que dizia que o Modo Performance corta fit/pan (a
+   pílula de zoom tem duração fixa de 180/240 ms).
+
+**Medido** (Windows 11, 16 núcleos, 13,8 GiB; `dist` de produção; 20 agentes, 300 blocos + o terminal de digitação; 15 s por
+fase). Antes = `main` em `25ed4ad` (10/11) por worktree; depois = `main` em `c064518`; mediana de 3 rodadas intercaladas:
+gaveta fechada frame p95 33,3 → 33,3 ms, long task p95 61,0 → 63,6 ms, entrada → quadro 49,0 → 49,2 ms; gaveta aberta 49,8 →
+49,8 ms, 84,2 → 86,0 ms, tecla → eco p95 104,3 → 108,9 ms (36 teclas); arrasto 16,8 → 16,7 ms, 100,8 → 66,0 ms; refresh 670 →
+632 ms; virtualização de volta 578 → 566 ms; RSS p95 do renderer 774 → 742 MiB. A gaveta aberta monta os 321 blocos (300 fora da
+área) contra 53 com ela fechada, e sobe o frame p95 um quadro. Fora da área, zero mutação de DOM em todas as fases e rodadas,
+contra 5–10/s nos blocos à vista. Gate: antes × depois, mediana de 3, sem regressão nas 6 métricas dos 4 cenários; controles com
+o mesmo código: 1 × 1 acusou 3 falsas regressões (frame 33,3 → 49,9 ms; eco 89,9 → 118,5 ms), 2 × 2 acusou o eco no limite
+(+20,0%), 3 × 3 nos dois sentidos, nenhuma. Sessão de heap no Windows: 387 processos lidos em 1,2 s; RSS da árvore 823,7 MiB (8
+processos) no início e 872,5 MiB (11: electron, 3 shells e conhost) com a fixture. Testes: 12 novos (gate, bancada, tabela de
+processos), os que pedem comportamento novo falhavam antes; `npm test` 3216, 0 falham; vitest 3452; `tsc -b` e `eslint .` limpos.
+
+**Limites.** A sessão de heap foi interrompida pelo Claude Code por falta de memória na máquina depois do segundo ponto de
+controle; a sessão completa (30 min) no Windows ficou para outra task. Uma rodada da bancada leva ~1,5 min e o gate pede três de
+cada lado. A pílula de zoom não respeita o Modo Performance, como a política dizia; virou task.
