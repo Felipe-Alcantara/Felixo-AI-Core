@@ -1390,3 +1390,53 @@ passou na 2ª); registrado na task das falhas locais do smoke.
 **Adendo (2026-11-11, depois do push): CI e Release.** O CI de `818070b` (run 43053517966, 12:57–13:04) passou no escopo, no
 Validate em Windows, macOS, Ubuntu e Ubuntu ARM e no `Canvas smoke (ubuntu-latest)`; o Release gate (run 43054671784) e o Release
 (run 43054719317, 13:04–13:13) saíram verdes e publicaram a `v0.1.526` nos três sistemas.
+
+---
+
+## 2026-11-11 — Logs: custo dos logs do chat legado e do orquestrador no processo principal limitado
+
+**Agente / repositório.** Resolver hotfix — Felixo-AI-Core (`J:/Programação/GitHub/Repositórios/Felixo-AI-Core`). Task
+`3e991f95-497e-81a5-9814-f17fb58c9240` (pendência da fatia 1 de performance, 28/09).
+
+**Contexto.** A investigação de 28/09 confirmou cinco custos que não tocam a carga do canvas, só o chat legado e os sub-agentes do
+orquestrador: o QA Logger gravava um `debug` por pedaço de stdout e por linha JSONL; o `terminal-log-store` relia e agregava o JSONL
+inteiro de forma quadrática a cada `getSessions` (exportação do chat, `felixo canvas ler`), sem teto; o `TerminalPanel` do chat
+mesclava e reordenava tudo a cada flush, mesmo fechado; o prune do QA só rodava no boot e apagava o dia atual acima de 5 MiB; os
+`outputBuffers` da ponte de orquestração não tinham teto e ficavam retidos quando o sub-agente era parado; o `jsonl-line-reader`
+refazia o split do pendente inteiro a cada push.
+
+**Decisões do Felipe (Trilha B, 11/11/2026).** stdout e JSONL viram um resumo por execução; stderr segue um registro por pedaço;
+teto do arquivo de saída das CLIs de 256 MB; sem remoção automática de sessões encerradas no painel.
+
+**O que mudou.**
+
+1. `jsonl-line-reader`: guarda os pedaços da linha aberta e só junta quando ela fecha (linear).
+2. `terminal-log-store`: agregação no lugar (push e `visibleChars` incremental); `getSessions` lê em fluxo pelo leitor JSONL (o
+   `readline` quebra em U+2028, que o JSON guarda literal); teto de 256 MB em dois arquivos de 128 MB que se revezam. Sem cache
+   residente: guardaria até 256 MB no processo principal, e a leitura linear já cumpre o critério.
+3. QA Logger: `cli:stdout`/`cli:jsonl` por pedaço saem; `createStdoutSummary` (em `cli-event-utils`) leva
+   `stdout: { chunks, bytes, jsonlLines, lastLinePreview }` ao `cli:close` da execução única e do processo persistente. O buffer de
+   400 muda no lugar em vez de recopiar o array; `getEntries` devolve cópia.
+4. QA em disco: o dia é gravado em partes de 1 MiB (`qa-AAAA-MM-DD.jsonl`, `qa-AAAA-MM-DD.N.jsonl`); o prune roda também ao virar
+   o dia ou abrir uma parte e nunca apaga a parte em uso; ordenação por dia e parte.
+5. Ponte de orquestração: `discardThread` (chamado em `cli:stop` e `cli:reset-thread`) apaga o buffer do sub-agente e a guarda de
+   texto livre do orquestrador, que antes ainda disparava depois da parada; o texto do sub-agente guarda no máximo o último
+   1.000.000 de caracteres, com aviso no início do que saiu.
+6. `TerminalPanel`: fechado, deriva sobre lista vazia; a mescla pai + turnos é reaproveitada por identidade dos objetos; as ordenações
+   leem o horário uma vez por item. As derivações foram para `terminal-panel-sessions.ts`.
+
+**Medido** (Windows, Node 25.3, scripts do agente; antes = código anterior via `git stash`). `getSessions` de ponta a ponta:
+10.000 eventos de uma sessão 226,8 → 32,7 ms; 20.000 de uma sessão 1.554,6 → 52,7 ms; 20.000 em 20 sessões 140,9 → 53,7 ms.
+Agregação pura, 20.000 eventos de uma sessão: 1.640,9 → 48,1 ms (10.000 → 20.000 dobra). Leitor JSONL, linha de 8 MB em pedaços de
+64 KB: 193,7 → 5,1 ms. QA Logger por pedaço de stdout: ~72 µs síncronos, ~500 µs com o disco e ~1,2 KB por entrada (2.000 entradas
+reais com disco) → ~0,25 µs e nenhuma entrada. Painel, derivação por flush (240 pedaços por sessão): 20 sessões 8,7 → 1,0 ms; 50
+sessões 24,3 → 2,7 ms, com a mesma assinatura de resultado; fechado, nada. Testes que falhavam antes: leitor linear (1.065 ms com teto
+de 300), agregação de 20.000 (1.559 ms com teto de 400), revezamento dos arquivos, resumo e ausência de debug por pedaço, prune sem
+apagar o dia e com partes, descarte e teto da ponte, painel fechado sem derivar e mescla reaproveitada; equivalência do painel com a
+implementação anterior em 60 cenários aleatórios. vitest 224 arquivos, 3452 testes; `npm test` 3204, 0 falham; `tsc -b`, `eslint .`
+e `vite build` limpos. Smoke no app de fonte (devtools): boot grava `logs/qa/qa-2026-11-11.jsonl`, `getTerminalLogs` responde pelo
+caminho em fluxo, nenhuma entrada por pedaço.
+
+**Limites.** Nenhuma CLI real foi rodada no chat (gastaria a conta): o resumo no `cli:close` foi conferido por teste unitário e
+estrutural. Passados 256 MB numa execução, a exportação e o `felixo canvas ler` começam no trecho mais antigo guardado, sem aviso na
+sessão. O teste do painel fechado espia o módulo; o resto do componente segue sem teste de render além do existente.
