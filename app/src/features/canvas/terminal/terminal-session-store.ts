@@ -97,6 +97,7 @@ import {
 } from './terminal-screen-state'
 import type { SendTextInput, TerminalReadingSource } from './terminal-session-api'
 import { createPtyEventRouter, type PtyEventRouter } from './pty-event-router'
+import { createFlowControl, type FlowControl } from './terminal-flow-control'
 import { isClaudeCommand, loadClaudeTerminalScroll, shouldUseClassicScreen } from '../services/terminal-scroll-preference'
 import {
   CLAUDE_SCROLL_KEYS,
@@ -394,6 +395,8 @@ type Session = {
    */
   paintedOutput: boolean
   pendingWrites: number
+  /** Marcas d'água do que o xterm ainda não processou (pausa/retoma o PTY). */
+  flow: FlowControl
   pendingExit?: { exitCode: number; signal?: number }
   /** Já existe uma microtarefa agendada para ler a tela depois desta fatia. */
   outputFlushQueued: boolean
@@ -620,8 +623,9 @@ function readScrollbackStatus(
       alreadyTruncated: previous?.limit === limit && previous.historyTruncated,
     }),
     replayLimitChars: TERMINAL_REPLAY_BUFFER_CHARS,
-    // O corte da retomada é deste xterm: vale até ele ser recriado.
+    // O corte da retomada e a saída descartada são deste xterm: valem até ele ser recriado.
     ...(previous?.replayTruncated ? { replayTruncated: true } : {}),
+    ...(previous?.droppedOutputChars ? { droppedOutputChars: previous.droppedOutputChars } : {}),
   }
 }
 
@@ -876,6 +880,9 @@ export class TerminalSessionStore {
       outputLineCount: 0,
       paintedOutput: false,
       pendingWrites: 0,
+      flow: createFlowControl((paused) => {
+        void window.felixo?.pty?.flow?.({ sessionId: ptySessionIdForNode(id), paused })
+      }),
       outputFlushQueued: false,
       outputFlushGeneration: 0,
       command: options.command,
@@ -943,27 +950,12 @@ export class TerminalSessionStore {
       if (event.sessionId === session.ptySessionId) {
         session.receivedOutput ||= event.data.length > 0
         session.outputLineCount += countLineFeeds(event.data)
-        session.pendingWrites += 1
         this.handleCodexTrustPrompt(session, event.data)
         this.handleClaudeBypassWarning(session, event.data)
         this.handleClaudeTrustPrompt(session, event.data)
         this.trackCodexUpdateBanner(session, event.data)
         this.watchResumeOutcome(session, event.data)
-        terminal.write(event.data, () => {
-          session.pendingWrites -= 1
-          if (session.disposed) {
-            return
-          }
-
-          if (session.pendingWrites === 0 && session.pendingExit) {
-            const pendingExit = session.pendingExit
-            session.pendingExit = undefined
-            this.finishExit(session, pendingExit)
-            return
-          }
-
-          this.scheduleOutputFlush(session)
-        })
+        this.writeOutput(session, event.data)
       }
     })
 
@@ -2010,6 +2002,49 @@ export class TerminalSessionStore {
       this.ptyDataRouters.set(pty, router)
     }
     return router.route(ptySessionId, handler)
+  }
+
+  /**
+   * Entrega a saída ao xterm. O `write` lança acima de 50 MB pendentes ("write
+   * data discarded"): antes, o pedaço sumia em silêncio e o `pendingWrites`
+   * nunca voltava a zero, então o fim do processo nunca era mostrado. Agora a
+   * perda vira aviso no snapshot (o trecho está no Histórico arquivado) e o
+   * fim segue normal. O contador sobe só junto do `write`, para nenhuma
+   * checagem anterior deixá-lo preso.
+   */
+  private writeOutput(session: Session, data: string): void {
+    const settle = () => {
+      session.pendingWrites -= 1
+      session.flow.parsed(data.length)
+      if (session.disposed) {
+        return
+      }
+
+      if (session.pendingWrites === 0 && session.pendingExit) {
+        const pendingExit = session.pendingExit
+        session.pendingExit = undefined
+        this.finishExit(session, pendingExit)
+        return
+      }
+
+      this.scheduleOutputFlush(session)
+    }
+
+    session.pendingWrites += 1
+    session.flow.written(data.length)
+    try {
+      session.terminal.write(data, settle)
+    } catch {
+      this.recordDroppedOutput(session, data.length)
+      settle()
+    }
+  }
+
+  private recordDroppedOutput(session: Session, chars: number): void {
+    const current = session.snapshot.scrollback ?? readScrollbackStatus(session.terminal, session.outputLineCount)
+    this.update(session, {
+      scrollback: { ...current, droppedOutputChars: (current.droppedOutputChars ?? 0) + chars },
+    })
   }
 
   /** Permanently ends a session and frees its resources. */

@@ -66,6 +66,11 @@ export type TerminalScrollbackStatus = {
    * e o começo está só no arquivo em disco (Histórico arquivado da gaveta).
    */
   replayTruncated?: boolean
+  /**
+   * Caracteres que o xterm recusou ("write data discarded", acima de 50 MB
+   * pendentes): não entraram na tela, mas estão no arquivo em disco.
+   */
+  droppedOutputChars?: number
 }
 
 /**
@@ -129,6 +134,10 @@ export function terminalScrollbackNotice(
   if (!status) return undefined
   const limit = formatTerminalScrollbackLines(status.limit)
   const replay = formatTerminalScrollbackLines(status.replayLimitChars)
+
+  if (status.droppedOutputChars) {
+    return `Parte da saída (${formatTerminalScrollbackLines(status.droppedOutputChars)} caracteres) chegou mais rápido do que o terminal conseguia desenhar e não entrou na tela. Ela está no Histórico arquivado da gaveta.`
+  }
 
   if (status.replayTruncated) {
     return `Ao recriar o terminal (recarregar a janela ou voltar do Chat), só os últimos ${replay} caracteres da saída voltaram para a tela. O começo está no Histórico arquivado da gaveta.`

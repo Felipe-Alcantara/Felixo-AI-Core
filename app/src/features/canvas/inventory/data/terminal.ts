@@ -1186,7 +1186,7 @@ export const terminalSurfaces: InventoryElement[] = [
       loading: 'starting: xterm criado e pty:spawn pedido, até a primeira saída ou o retorno do spawn.',
       pending: 'waiting_approval: tela parada que parece aprovação (looksLikeApprovalPrompt).',
       success: 'exited com código 0; reanexo (result.reused) não reenvia o texto inicial nem vigia retomada.',
-      error: 'Spawn recusado (result.ok false) com a mensagem do main; saída sem saída em menos de 5 s: "O comando … encerrou sem produzir saída."; sem ponte: "Bridge PTY indisponível.".',
+      error: 'Spawn recusado (result.ok false) com a mensagem do main; saída sem saída em menos de 5 s: "O comando … encerrou sem produzir saída."; sem ponte: "Bridge PTY indisponível."; pedaço que o xterm recusou (acima de 50 MB pendentes): aviso com os caracteres descartados, que estão no Histórico arquivado, e o fim do processo segue normal.',
       denied: 'Conta de outra sessão viva (PTY_SESSION_ACCOUNT_MISMATCH), conta inexistente ou ticket da cadeia recusado: spawn recusado com código.',
     },
     controls: [],
@@ -1201,6 +1201,7 @@ export const terminalSurfaces: InventoryElement[] = [
       'pty:resize',
       'pty:kill',
       'pty:data',
+      'pty:flow',
       'pty:exit',
       'pty:session',
       'context-file:write',
@@ -1220,6 +1221,8 @@ export const terminalSurfaces: InventoryElement[] = [
       'xterm (FitAddon, WebLinksAddon)',
     ],
     tests: [
+      { file: 'src/features/canvas/terminal/terminal-flow-control.test.ts' },
+      { file: 'electron/services/pty-data-batcher.test.cjs' },
       { file: 'src/features/canvas/terminal/terminal-session-store.test.ts' },
       { file: 'src/features/canvas/terminal/pty-event-router.test.ts' },
       { file: 'src/features/canvas/terminal/terminal-output-coalescing.test.ts' },
@@ -1245,11 +1248,6 @@ export const terminalSurfaces: InventoryElement[] = [
         what: 'Falha do pty:write do texto inicial é engolida (.catch vazio).',
         risk: 'médio',
         task: '3d791f95-497e-81cd-b05c-c9d6370c81a3',
-      },
-      {
-        what: 'pty:data chega pedaço a pedaço, sem agrupamento nem controle de fluxo no main.',
-        risk: 'médio',
-        task: '3e991f95-497e-81d4-af04-fc0a218a66dc',
       },
       {
         what: 'As varreduras de telas de aceite continuam depois de o REPL ser reconhecido.',

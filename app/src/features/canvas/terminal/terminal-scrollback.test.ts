@@ -61,7 +61,12 @@ describe('política de scrollback do terminal', () => {
     expect(retomada).toContain('só os últimos 200.000 caracteres da saída voltaram')
     expect(retomada).toContain('Histórico arquivado')
 
-    for (const texto of [perto, cheio, retomada]) {
+    // Saída recusada pelo xterm vence tudo: é perda na tela, não só aviso de limite.
+    const descartada = terminalScrollbackNotice({ ...base, replayTruncated: true, droppedOutputChars: 1234567 })
+    expect(descartada).toContain('Parte da saída (1.234.567 caracteres)')
+    expect(descartada).toContain('Histórico arquivado')
+
+    for (const texto of [perto, cheio, retomada, descartada]) {
       // Reabrir a gaveta não reaplica nada e fechar o bloco mata o processo: o
       // texto antigo mandava "fechar e reabrir" como se isso recuperasse algo.
       expect(texto).not.toMatch(/reabr/i)

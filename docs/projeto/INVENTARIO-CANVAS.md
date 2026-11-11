@@ -32,7 +32,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **Elementos:** 101 (10 blocos, 16 ferramentas, 75 outras superfícies)
 - **Controles:** 381, dos quais 57 com teste específico
 - **Elementos sem nenhum teste:** 4
-- **Lacunas:** 267 (alto 8, médio 142, baixo 117), em 76 tasks
+- **Lacunas:** 266 (alto 8, médio 141, baixo 117), em 75 tasks
 
 ## Moldura do canvas
 
@@ -1288,16 +1288,16 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 - **ID:** `terminal-pty-session` · **Dono:** `src/features/canvas/terminal/terminal-session-store.ts`
 - **Persistência:** processo principal: PTY vivo, reanexado por canvas:<id> (reuseExisting) depois de recarregar ou voltar do chat; memória do renderer: xterm e scrollback (o main reemite o buffer de replay no reanexo; result.replayTruncated avisa quando o replay cortou o começo); processo principal: arquivo em disco da saída inteira (pty-output-archive.cjs, 14 dias)
-- **IPC:** `pty:spawn`, `pty:write`, `pty:resize`, `pty:kill`, `pty:data`, `pty:exit`, `pty:session`, `context-file:write`, `context-file:path-typed`, `context-file:release`, `files:save-attachment`, `files:save-clipboard-image`
+- **IPC:** `pty:spawn`, `pty:write`, `pty:resize`, `pty:kill`, `pty:data`, `pty:flow`, `pty:exit`, `pty:session`, `context-file:write`, `context-file:path-typed`, `context-file:release`, `files:save-attachment`, `files:save-clipboard-image`
 - **Depende de:** `TerminalSessionProvider`, `pty-event-router`, `resume-outcome-detector`, `terminal-input`, `terminal-screen-state`, `terminal-scrollback`, `context-file-delivery`, `xterm (FitAddon, WebLinksAddon)`
 - **Sobreposição:** Não renderiza superfície própria: o elemento xterm é anexado ao cartão ou à gaveta (attach limpa o container antes, para não empilhar terminais).
-- **Testes:** `src/features/canvas/terminal/terminal-session-store.test.ts`, `src/features/canvas/terminal/pty-event-router.test.ts`, `src/features/canvas/terminal/terminal-output-coalescing.test.ts`, `src/features/canvas/terminal/terminal-screen-state.test.ts`, `src/features/canvas/terminal/terminal-scrollback.test.ts`, `src/features/canvas/terminal/canvas-context-e2e.test.ts`, `electron/services/pty-ipc-handlers.test.cjs`, `electron/services/pty-process-manager.test.cjs`, `scripts/canvas-smoke-contas.cjs` → `criarSessaoDaCadeia`
+- **Testes:** `src/features/canvas/terminal/terminal-flow-control.test.ts`, `electron/services/pty-data-batcher.test.cjs`, `src/features/canvas/terminal/terminal-session-store.test.ts`, `src/features/canvas/terminal/pty-event-router.test.ts`, `src/features/canvas/terminal/terminal-output-coalescing.test.ts`, `src/features/canvas/terminal/terminal-screen-state.test.ts`, `src/features/canvas/terminal/terminal-scrollback.test.ts`, `src/features/canvas/terminal/canvas-context-e2e.test.ts`, `electron/services/pty-ipc-handlers.test.cjs`, `electron/services/pty-process-manager.test.cjs`, `scripts/canvas-smoke-contas.cjs` → `criarSessaoDaCadeia`
 
 | Estado | Quando |
 | --- | --- |
 | normal | working (tela mudando além do spinner) ou idle (1,5 s sem mudança significativa e sem banner de ocupado): PTY canvas:<id> de pé. |
 | loading | starting: xterm criado e pty:spawn pedido, até a primeira saída ou o retorno do spawn. |
-| error | Spawn recusado (result.ok false) com a mensagem do main; saída sem saída em menos de 5 s: "O comando … encerrou sem produzir saída."; sem ponte: "Bridge PTY indisponível.". |
+| error | Spawn recusado (result.ok false) com a mensagem do main; saída sem saída em menos de 5 s: "O comando … encerrou sem produzir saída."; sem ponte: "Bridge PTY indisponível."; pedaço que o xterm recusou (acima de 50 MB pendentes): aviso com os caracteres descartados, que estão no Histórico arquivado, e o fim do processo segue normal. |
 | pending | waiting_approval: tela parada que parece aprovação (looksLikeApprovalPrompt). |
 | success | exited com código 0; reanexo (result.reused) não reenvia o texto inicial nem vigia retomada. |
 | denied | Conta de outra sessão viva (PTY_SESSION_ACCOUNT_MISMATCH), conta inexistente ou ticket da cadeia recusado: spawn recusado com código. |
@@ -1309,7 +1309,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | pty.spawn(...).then sem catch: se o invoke rejeitar, a sessão fica em "starting" para sempre, sem mensagem (terminal-session-store.ts:965-1036). | baixo | `3ec91f95-497e-8176-bef0-dfde828936dc` |
 | A saída silenciosa ("encerrou sem produzir saída"), a ponte ausente e store.copy não têm teste no store. | médio | `3ec91f95-497e-81e8-8f18-e2a529b0568e` |
 | Falha do pty:write do texto inicial é engolida (.catch vazio). | médio | `3d791f95-497e-81cd-b05c-c9d6370c81a3` |
-| pty:data chega pedaço a pedaço, sem agrupamento nem controle de fluxo no main. | médio | `3e991f95-497e-81d4-af04-fc0a218a66dc` |
 | As varreduras de telas de aceite continuam depois de o REPL ser reconhecido. | baixo | `3e991f95-497e-8109-832d-f789917f708d` |
 | O erro de spawn só diz para verificar instalação e autenticação; o diagnóstico da CLI não aparece na interface. | baixo | `3e291f95-497e-8109-8851-e4ff2193c4db` |
 | O scrollback do xterm encolhe o histórico; não há arquivo em disco nem "carregar mais". | baixo | `3e991f95-497e-810b-9f94-ed5201606718` |
@@ -2943,7 +2942,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3e991f95-497e-81c5-ad8f-f058eb3b93b7` — 2 lacunas
 - `3e991f95-497e-81c9-a900-f0d5585956f9` — 1 lacuna
 - `3e991f95-497e-81ce-9286-cbe3532f3044` — 1 lacuna
-- `3e991f95-497e-81d4-af04-fc0a218a66dc` — 1 lacuna
 - `3ea91f95-497e-8117-8506-d4abe67709ff` — 1 lacuna
 - `3ea91f95-497e-8126-88c8-c6a7ce21bee0` — 1 lacuna
 - `3ea91f95-497e-8129-acde-f3b1049c09ed` — 1 lacuna

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { Terminal } from '@xterm/xterm'
 import { CODEX_RELAUNCH_NEW_CONVERSATION_NOTICE, TerminalSessionStore } from './terminal-session-store'
 import type { TerminalFixture } from './__fixtures__/terminal-output/replay-fixture'
 import { closeLinkChooser, getLinkChooserState } from '../../shared/links/link-chooser-store'
@@ -2868,5 +2869,58 @@ describe('TerminalSessionStore: trilho de rolagem do Claude em tela cheia', () =
 
     harness.store.scrollClaude('outra-sessao', 'pageUp')
     expect(harness.writes, 'sessão inexistente').toEqual([])
+  })
+})
+
+describe('saída grande: write recusado pelo xterm e controle de fluxo', () => {
+  let harness: Harness | undefined
+
+  beforeEach(() => {
+    harness = undefined
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    harness?.store.clear()
+    vi.useRealTimers()
+  })
+
+  it('o pedaço que o xterm recusa vira aviso no bloco e o fim do processo ainda aparece', async () => {
+    harness = createHarness('', 'claude')
+    await vi.advanceTimersByTimeAsync(0)
+    // O xterm 6 lança assim acima de 50 MB pendentes (WriteBuffer.ts).
+    vi.spyOn(Terminal.prototype, 'write').mockImplementationOnce(() => {
+      throw new Error('write data discarded, use flow control to avoid losing data')
+    })
+
+    harness.feed('perdido')
+    harness.emitExit({ exitCode: 0 })
+    await vi.advanceTimersByTimeAsync(50)
+
+    const snapshot = harness.store.getSnapshot(SESSION_ID)
+    expect(snapshot?.scrollback?.droppedOutputChars).toBe('perdido'.length)
+    expect(snapshot?.activity, 'antes, o pendingWrites preso escondia o fim').toBe('exited')
+  })
+
+  it('acima da marca alta pede a pausa do PTY e, escoado, pede a retomada', async () => {
+    harness = createHarness('', 'claude')
+    await vi.advanceTimersByTimeAsync(0)
+    const flow = vi.fn(async () => ({ ok: true }))
+    ;(window as unknown as { felixo: { pty: { flow: typeof flow } } }).felixo.pty.flow = flow
+    // Callbacks do xterm seguram até o teste soltar: o pendente só cresce.
+    const callbacks: Array<() => void> = []
+    vi.spyOn(Terminal.prototype, 'write').mockImplementation((_data, callback) => {
+      if (callback) callbacks.push(callback)
+    })
+
+    const chunk = 'x'.repeat(500_000)
+    for (let index = 0; index < 5; index += 1) harness.feed(chunk)
+    expect(flow).toHaveBeenCalledTimes(1)
+    expect(flow).toHaveBeenLastCalledWith({ sessionId: PTY_SESSION_ID, paused: true })
+
+    callbacks.splice(0).forEach((callback) => callback())
+    expect(flow).toHaveBeenCalledTimes(2)
+    expect(flow).toHaveBeenLastCalledWith({ sessionId: PTY_SESSION_ID, paused: false })
   })
 })

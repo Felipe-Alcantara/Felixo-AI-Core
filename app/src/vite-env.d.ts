@@ -627,6 +627,8 @@ declare global {
          * começo: a próxima página passa o `start` desta como `before`.
          * Offsets em bytes; `firstOffset` é o começo do que ainda está guardado.
          */
+        /** Pausa (true) ou retoma o PTY: o xterm acumulou saída demais (`terminal-flow-control.ts`). */
+        flow?: (params: { sessionId: string; paused: boolean }) => Promise<CliInvokeResult & { changed?: boolean }>
         readArchive?: (params: { sessionId: string; before?: number; maxBytes?: number }) => Promise<
           CliInvokeResult & { text?: string; start?: number; end?: number; total?: number; firstOffset?: number }
         >
