@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   createNodeDataReuse,
+  createReusePass,
   countTerminalOrder,
+  stableNodeStructure,
   type NodeDataCacheEntry,
+  type ReuseCacheEntry,
 } from './node-data-cache'
 
 describe('createNodeDataReuse', () => {
@@ -151,5 +154,65 @@ describe('countTerminalOrder', () => {
 
   it('lida com lista vazia', () => {
     expect(countTerminalOrder([]).size).toBe(0)
+  })
+})
+
+describe('createReusePass (objetos de nó e de aresta entregues ao React Flow)', () => {
+  type Rendered = { id: string; position: { x: number } }
+  const nodes = [
+    { id: 'a', position: { x: 1 } },
+    { id: 'b', position: { x: 2 } },
+  ]
+
+  it('num quadro de arrasto só o nó arrastado vira objeto novo', () => {
+    const cache = new Map<string, ReuseCacheEntry<Rendered>>()
+    const pass = (list: typeof nodes) => {
+      const { reuse, commit } = createReusePass(cache)
+      const rendered = list.map((node) => reuse(node.id, [node], () => ({ ...node })))
+      commit()
+      return rendered
+    }
+
+    const first = pass(nodes)
+    const dragged = [nodes[0], { ...nodes[1], position: { x: 9 } }]
+    const second = pass(dragged)
+
+    expect(second[0]).toBe(first[0])
+    expect(second[1]).not.toBe(first[1])
+    expect(second[1].position.x).toBe(9)
+  })
+
+  it('o commit tira do cache o que não foi visitado', () => {
+    const cache = new Map<string, ReuseCacheEntry<number>>()
+    const first = createReusePass(cache)
+    first.reuse('a', [], () => 1)
+    first.reuse('b', [], () => 2)
+    first.commit()
+    const second = createReusePass(cache)
+    second.reuse('a', [], () => 3)
+    second.commit()
+    expect([...cache.keys()]).toEqual(['a'])
+  })
+})
+
+describe('stableNodeStructure (derivados estruturais fora do quadro de arrasto)', () => {
+  const data = { label: 'x' }
+  const before = [
+    { id: 'a', type: 'note', data, position: { x: 0, y: 0 } },
+    { id: 'b', type: 'terminal', data: {}, position: { x: 0, y: 0 } },
+  ]
+
+  it('mantém a lista anterior quando só posição, tamanho ou seleção mudaram', () => {
+    const moved = [{ ...before[0], position: { x: 50, y: 5 }, selected: true, width: 300 }, before[1]]
+    expect(stableNodeStructure(before, moved)).toBe(before)
+  })
+
+  it('troca a lista quando muda bloco, ordem, tipo, dados ou pai', () => {
+    expect(stableNodeStructure(before, [...before, { id: 'c', type: 'note', data: {}, position: { x: 0, y: 0 } }])).not.toBe(before)
+    expect(stableNodeStructure(before, [before[1], before[0]])).not.toBe(before)
+    expect(stableNodeStructure(before, [{ ...before[0], data: { label: 'y' } }, before[1]])).not.toBe(before)
+    expect(stableNodeStructure(before, [{ ...before[0], type: 'group' }, before[1]])).not.toBe(before)
+    expect(stableNodeStructure(before, [{ ...before[0], parentId: 'g' }, before[1]])).not.toBe(before)
+    expect(stableNodeStructure(null, before)).toBe(before)
   })
 })

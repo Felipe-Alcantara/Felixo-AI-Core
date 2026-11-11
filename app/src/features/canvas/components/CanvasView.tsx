@@ -52,7 +52,10 @@ import { NODE_DRAG_HANDLE_CLASS } from './NodeHeader'
 import {
   countTerminalOrder,
   createNodeDataReuse,
+  createNodeStructureTracker,
+  createReusePass,
   type NodeDataCacheEntry,
+  type ReuseCacheEntry,
 } from '../services/node-data-cache'
 import {
   INITIAL_NODE_MOUNT_LATCH,
@@ -333,6 +336,11 @@ function CanvasInner({
   useEffect(() => {
     nodesRef.current = nodes
   }, [nodes])
+  // A mesma lista enquanto só posição, tamanho ou seleção mudam: o que é
+  // estrutural (índice de conexões, dados injetados, rótulos do minimapa) parte
+  // dela e não é recalculado a cada quadro de arrasto. Não ler posição dela.
+  const [trackNodeStructure] = useState(() => createNodeStructureTracker<Node>())
+  const structuralNodes = useMemo(() => trackNodeStructure(nodes), [nodes, trackNodeStructure])
   const addImageNodeRef = useRef<
     (artifact: CanvasImageArtifact, position?: { x: number; y: number }) => string
   >(() => '')
@@ -340,8 +348,8 @@ function CanvasInner({
   const [edgesHydrated, setEdgesHydrated] = useState(false)
   const { activeRouteKeys, markRouteDelivered, routeKey } = useRouteHighlight()
   const connectionIndex = useMemo(
-    () => createCanvasConnectionIndex(nodes, edges),
-    [nodes, edges],
+    () => createCanvasConnectionIndex(structuralNodes, edges),
+    [structuralNodes, edges],
   )
   const [terminalCanvasFilePaths, setTerminalCanvasFilePaths] = useState<
     Record<string, string[]>
@@ -631,17 +639,24 @@ function CanvasInner({
     () =>
       countUnreadCanvasNotifications(
         notificationHistory,
-        nodes.filter((node) => node.type === 'terminal').map((node) => node.id),
+        structuralNodes.filter((node) => node.type === 'terminal').map((node) => node.id),
       ) + (updateNotificationItem ? 1 : 0),
-    [notificationHistory, nodes, updateNotificationItem],
+    [notificationHistory, structuralNodes, updateNotificationItem],
+  )
+  // Rótulo de cada agente no minimapa, por id: antes era um `nodes.find` por
+  // bloco desenhado (O(N²), 2 ms por quadro com 1.000 blocos).
+  const miniMapLabels = useMemo(
+    () =>
+      new Map(
+        structuralNodes
+          .filter((node) => node.type === 'terminal')
+          .map((node) => [node.id, String(node.data.label || node.data.command || 'Agente')]),
+      ),
+    [structuralNodes],
   )
   const miniMapNode = useCallback(
     (props: MiniMapNodeProps) => {
-      const node = nodes.find((item) => item.id === props.id)
-      const isAgent = node?.type === 'terminal'
-      const label = isAgent
-        ? String(node.data.label || node.data.command || 'Agente')
-        : ''
+      const label = miniMapLabels.get(props.id) ?? ''
       const labelFontSize = Math.max(10, Math.min(props.height * 0.22, props.width * 0.08))
 
       return (
@@ -679,7 +694,7 @@ function CanvasInner({
         </g>
       )
     },
-    [nodes],
+    [miniMapLabels],
   )
   const {
     isClearing,
@@ -788,6 +803,11 @@ function CanvasInner({
   const [nodeDataCache] = useState(
     () => new Map<string, NodeDataCacheEntry>(),
   )
+  // Os objetos entregues ao React Flow (nó, nó com moldura, aresta) também
+  // são reaproveitados: ele só pula o NodeWrapper quando recebe o MESMO objeto.
+  const [renderedNodeCache] = useState(() => new Map<string, ReuseCacheEntry<Node>>())
+  const [framedNodeCache] = useState(() => new Map<string, ReuseCacheEntry<Node>>())
+  const [routedEdgeCache] = useState(() => new Map<string, ReuseCacheEntry<Edge>>())
 
   const {
     centerNodeInSafeArea,
@@ -1302,62 +1322,58 @@ function CanvasInner({
   // actual inputs change. Position changes (drag/resize) recreate the outer
   // node objects but reuse the same data reference, so React.memo keeps every
   // untouched block from re-rendering — the main render cost on weak GPUs.
-  const renderedNodes = useMemo(() => {
+  //
+  // Dois passos: o `data` injetado sai da lista ESTRUTURAL (não muda num
+  // arrasto), e o objeto do nó de cada quadro só é recriado para quem mudou.
+  const nodeDataById = useMemo(() => {
     const { reuseData, commit } = createNodeDataReuse(nodeDataCache)
-    const terminalOrder = countTerminalOrder(nodes)
+    const terminalOrder = countTerminalOrder(structuralNodes)
     const terminalCount = terminalOrder.size
+    const terminals = connectionIndex.terminalNodes
+    // Uma vez por passagem, não uma por arquivo: era O(arquivos × terminais),
+    // 7 ms com 333 × 333.
+    const terminalsSignature = terminals
+      .map((terminal) => `${terminal.id}:${agentLabelOf(terminal)}`)
+      .join('|')
+    const dataById = new Map<string, Node['data']>()
 
-    const rendered = nodes.map((node) => {
-      const withHandle = { ...node, dragHandle: `.${NODE_DRAG_HANDLE_CLASS}` }
-
+    const injected = structuralNodes.map((node): Node['data'] | undefined => {
       if (node.type === 'file') {
         const linkedIds = connectionIndex.getLinkedAgentIds(node.id)
-        const terminals = connectionIndex.terminalNodes
-        const agentsSignature = terminals
-          .map(
-            (terminal) =>
-              `${linkedIds.has(terminal.id) ? '+' : '-'}${terminal.id}:${agentLabelOf(terminal)}`,
-          )
-          .join('|')
+        const linkedSignature = [...linkedIds].join('|')
 
-        return {
-          ...withHandle,
-          data: reuseData(node.id, [node.data, agentsSignature], () => {
-            const connectedAgents = terminals
-              .filter((terminal) => linkedIds.has(terminal.id))
-              .map((terminal) => ({ id: terminal.id, label: agentLabelOf(terminal) }))
-            const availableAgents = terminals
-              .filter((terminal) => !linkedIds.has(terminal.id))
-              .map((terminal) => ({ id: terminal.id, label: agentLabelOf(terminal) }))
+        return reuseData(node.id, [node.data, terminalsSignature, linkedSignature], () => {
+          const connectedAgents = terminals
+            .filter((terminal) => linkedIds.has(terminal.id))
+            .map((terminal) => ({ id: terminal.id, label: agentLabelOf(terminal) }))
+          const availableAgents = terminals
+            .filter((terminal) => !linkedIds.has(terminal.id))
+            .map((terminal) => ({ id: terminal.id, label: agentLabelOf(terminal) }))
 
-            return {
-              ...node.data,
-              onDataChange: updateNodeData,
-              onGenerateDiagnosis: generateDiagnosis,
-              onDuplicateImage: duplicateImageNode,
-              onRepairImage: repairImageNode,
-              onRemoveTemporaryImage: removeTemporaryImageNode,
-              connectedAgents,
-              availableAgents,
-              onLinkAgent: linkAgentToFile,
-              onUnlinkAgent: unlinkAgentFromFile,
-            }
-          }),
-        }
+          return {
+            ...node.data,
+            onDataChange: updateNodeData,
+            onGenerateDiagnosis: generateDiagnosis,
+            onDuplicateImage: duplicateImageNode,
+            onRepairImage: repairImageNode,
+            onRemoveTemporaryImage: removeTemporaryImageNode,
+            connectedAgents,
+            availableAgents,
+            onLinkAgent: linkAgentToFile,
+            onUnlinkAgent: unlinkAgentFromFile,
+          }
+        })
       }
 
       // `cloudProjects` é dado transitório (ver TRANSIENT_DATA_KEYS); as funções
       // são descartadas ao salvar.
       if (node.type === 'cloud-session') {
-        return {
-          ...withHandle,
-          data: reuseData(node.id, [node.data, projects], () => ({
-            ...node.data,
-            cloudProjects: projects,
-            onDataChange: updateNodeData,
-            onOpenTerminal: openCloudTerminal,
-          })),
-        }
+        return reuseData(node.id, [node.data, projects], () => ({
+          ...node.data,
+          cloudProjects: projects,
+          onDataChange: updateNodeData,
+          onOpenTerminal: openCloudTerminal,
+        }))
       }
 
       if (
@@ -1369,13 +1385,10 @@ function CanvasInner({
         node.type === 'excalidrawDrawing' ||
         node.type === 'claude-api'
       ) {
-        return {
-          ...withHandle,
-          data: reuseData(node.id, [node.data], () => ({
-            ...node.data,
-            onDataChange: updateNodeData,
-          })),
-        }
+        return reuseData(node.id, [node.data], () => ({
+          ...node.data,
+          onDataChange: updateNodeData,
+        }))
       }
 
       if (node.type === 'terminal') {
@@ -1391,40 +1404,41 @@ function CanvasInner({
           agentCliVersions,
         })
         const terminalIndex = terminalOrder.get(node.id)
-        return {
-          ...withHandle,
-          data: reuseData(
-            node.id,
-            [node.data, ...terminalSpawnCacheDeps(spawn), terminalIndex, terminalCount],
-            () => ({
-              ...node.data,
-              ...terminalSpawnData(node.data, spawn),
-              terminalIndex,
-              terminalCount,
-              onExpand: openTerminal,
-              onDetails: setDetailsTerminalId,
-              onSessionStarted: (nodeId: string, startedAt: number) =>
-                updateNodeData(nodeId, { sessionStartedAt: startedAt }),
-              onAgentSession: handleAgentSession,
-              onResumeFailure: handleResumeFailure,
-              onResumeAction: handleResumeAction,
-              onRestart: relaunchTerminal,
-              onSessionEnsured: markTerminalStarted,
-              onClearAgentSession: forgetAgentSession,
-              onDataChange: updateNodeData,
-              onRenameCommit: notifyTerminalRenamed,
-            }),
-          ),
-        }
+        return reuseData(
+          node.id,
+          [node.data, ...terminalSpawnCacheDeps(spawn), terminalIndex, terminalCount],
+          () => ({
+            ...node.data,
+            ...terminalSpawnData(node.data, spawn),
+            terminalIndex,
+            terminalCount,
+            onExpand: openTerminal,
+            onDetails: setDetailsTerminalId,
+            onSessionStarted: (nodeId: string, startedAt: number) =>
+              updateNodeData(nodeId, { sessionStartedAt: startedAt }),
+            onAgentSession: handleAgentSession,
+            onResumeFailure: handleResumeFailure,
+            onResumeAction: handleResumeAction,
+            onRestart: relaunchTerminal,
+            onSessionEnsured: markTerminalStarted,
+            onClearAgentSession: forgetAgentSession,
+            onDataChange: updateNodeData,
+            onRenameCommit: notifyTerminalRenamed,
+          }),
+        )
       }
 
-      return withHandle
+      return undefined
+    })
+    structuralNodes.forEach((node, index) => {
+      const data = injected[index]
+      if (data) dataById.set(node.id, data)
     })
 
     // Fecha a passagem: o cache fica só com os blocos ainda no canvas.
     commit()
 
-    return rendered
+    return dataById
   }, [
     nodeDataCache,
     agentCliVersions,
@@ -1438,7 +1452,7 @@ function CanvasInner({
     handleResumeFailure,
     linkAgentToFile,
     notifyTerminalRenamed,
-    nodes,
+    structuralNodes,
     openCloudTerminal,
     openTerminal,
     projects,
@@ -1454,6 +1468,20 @@ function CanvasInner({
     unlinkAgentFromFile,
     updateNodeData,
   ])
+
+  const renderedNodes = useMemo(() => {
+    const { reuse, commit } = createReusePass(renderedNodeCache)
+    const rendered = nodes.map((node) => {
+      const data = nodeDataById.get(node.id) ?? node.data
+      return reuse(node.id, [node, data], () => ({
+        ...node,
+        dragHandle: `.${NODE_DRAG_HANDLE_CLASS}`,
+        data,
+      }))
+    })
+    commit()
+    return rendered
+  }, [nodeDataById, nodes, renderedNodeCache])
   useEffect(() => {
     renderedNodesRef.current = renderedNodes
   }, [renderedNodes])
@@ -1464,16 +1492,20 @@ function CanvasInner({
     // Notificação não lida vira um segundo realce, na cor da categoria (a mesma
     // do painel); o CSS a declara depois da moldura, então ela vence enquanto existir.
     const notifyByNode = unreadCategoryByNode(notificationHistory)
+    const { reuse, commit } = createReusePass(framedNodeCache)
     const framed = renderedNodes.map((node) => {
       const frame = frameClassName(node.data?.frameColor)
       const category = notifyByNode.get(node.id)
       const extra = [frame, category ? notificationClassName(category) : undefined].filter(Boolean)
-      return extra.length ? { ...node, className: [node.className, ...extra].filter(Boolean).join(' ') } : node
+      if (!extra.length) return node
+      const className = [node.className, ...extra].filter(Boolean).join(' ')
+      return reuse(node.id, [node, className], () => ({ ...node, className }))
     })
+    commit()
     const groups = framed.filter((node) => node.type === 'group')
     const rest = framed.filter((node) => node.type !== 'group')
     return [...groups, ...rest]
-  }, [notificationHistory, renderedNodes])
+  }, [framedNodeCache, notificationHistory, renderedNodes])
 
   const [colorMenu, setColorMenu] = useState<{ nodeId: string; x: number; y: number } | null>(null)
   const closeColorMenu = useCallback(() => setColorMenu(null), [])
@@ -1484,26 +1516,33 @@ function CanvasInner({
   // Recomputing here also re-routes wires as nodes are dragged around. Blocks
   // without side handles (note, Notion tasks...) keep their single handle —
   // asking them for `t-top` made React Flow drop the edge from the screen.
+  // A aresta que não mudou de alça nem de classe continua o mesmo objeto.
   const edgesWithHandles = useMemo(() => {
     const byId = new Map(nodes.map((node) => [node.id, node]))
-    return edges.map((edge) => {
+    const { reuse, commit } = createReusePass(routedEdgeCache)
+    const routed = edges.map((edge) => {
       const source = byId.get(edge.source)
       const target = byId.get(edge.target)
       if (!source || !target) {
         return edge
       }
-      return {
+      const { sourceHandle, targetHandle } = edgeHandlesBetween(source, target)
+      const className = [
+        edge.className,
+        activeRouteKeys.has(routeKey(edge)) ? 'felixo-edge-route-active' : undefined,
+      ]
+        .filter(Boolean)
+        .join(' ') || undefined
+      return reuse(edge.id, [edge, sourceHandle, targetHandle, className], () => ({
         ...edge,
-        ...edgeHandlesBetween(source, target),
-        className: [
-          edge.className,
-          activeRouteKeys.has(routeKey(edge)) ? 'felixo-edge-route-active' : undefined,
-        ]
-          .filter(Boolean)
-          .join(' ') || undefined,
-      }
+        sourceHandle,
+        targetHandle,
+        className,
+      }))
     })
-  }, [activeRouteKeys, edges, nodes, routeKey])
+    commit()
+    return routed
+  }, [activeRouteKeys, edges, nodes, routeKey, routedEdgeCache])
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
