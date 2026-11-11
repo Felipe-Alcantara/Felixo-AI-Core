@@ -157,3 +157,60 @@ test('redactValue mascara segredo com nome de variável de ambiente e credencial
   assert.doesNotMatch(JSON.stringify(redigido), /CANARIO/)
   assert.equal(redigido.details.ok, 'Resets 6:50pm (America/Sao_Paulo)')
 })
+
+test('QA_LOG_FILE_PATTERN também casa as partes do dia e captura a data', () => {
+  assert.equal(QA_LOG_FILE_PATTERN.test('qa-2026-09-14.3.jsonl'), true)
+  assert.equal(QA_LOG_FILE_PATTERN.exec('qa-2026-09-14.3.jsonl')[1], '2026-09-14')
+})
+
+test('prune nunca apaga a parte em uso do dia atual, mesmo sozinha acima do orçamento', async () => {
+  // O prune antigo apagava até o arquivo de hoje quando ele sozinho passava do orçamento: o
+  // histórico que o "Reportar problema" mais precisa sumia.
+  const directory = tempDir()
+  fs.writeFileSync(path.join(directory, 'qa-2026-09-13.jsonl'), 'b'.repeat(50))
+  fs.writeFileSync(path.join(directory, 'qa-2026-09-14.jsonl'), 'c'.repeat(200))
+  const store = createQaLogDiskStore({ directory, maxDays: 30, maxTotalBytes: 80, now: () => new Date('2026-09-14T10:00:00.000Z') })
+
+  await store.prune()
+
+  assert.deepEqual(fs.readdirSync(directory), ['qa-2026-09-14.jsonl'])
+})
+
+test('append abre uma parte nova ao passar do tamanho e roda o prune sem esperar o próximo boot', async () => {
+  const directory = tempDir()
+  const store = createQaLogDiskStore({
+    directory,
+    maxDays: 30,
+    maxTotalBytes: 600,
+    maxPartBytes: 200,
+    now: () => new Date('2026-09-14T10:00:00.000Z'),
+  })
+
+  for (let id = 1; id <= 30; id += 1) {
+    store.append({ id, level: 'warn', scope: 'test', message: `entrada ${String(id).padStart(2, '0')}` })
+  }
+  await store.flush()
+
+  const files = fs.readdirSync(directory)
+  const bytes = files.reduce((total, name) => total + fs.statSync(path.join(directory, name)).size, 0)
+  assert.ok(files.length > 1, `uma parte só: ${files.join(', ')}`)
+  assert.ok(bytes <= 600 + 200, `${bytes} bytes no disco`)
+  assert.ok(files.every((name) => QA_LOG_FILE_PATTERN.test(name)), files.join(', '))
+  // As partes do dia são lidas na ordem em que foram escritas.
+  const recent = await store.loadRecent(4)
+  assert.deepEqual(recent.map((entry) => entry.id), [27, 28, 29, 30])
+})
+
+test('virar o dia durante a execução apaga o que passou de maxDays sem esperar o boot', async () => {
+  const directory = tempDir()
+  let current = new Date('2026-09-01T10:00:00.000Z')
+  const store = createQaLogDiskStore({ directory, maxDays: 14, now: () => current })
+
+  store.append({ id: 1, message: 'primeiro dia' })
+  await store.flush()
+  current = new Date('2026-09-20T10:00:00.000Z')
+  store.append({ id: 2, message: 'dias depois' })
+  await store.flush()
+
+  assert.deepEqual(fs.readdirSync(directory), ['qa-2026-09-20.jsonl'])
+})

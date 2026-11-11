@@ -6,9 +6,11 @@ const path = require('node:path')
 const { redactSensitiveText, isSensitiveKeyName } = require('./git-secret-redaction.cjs')
 const { redactSecrets } = require('./official-cli-account-status.cjs')
 
-const QA_LOG_FILE_PATTERN = /^qa-(\d{4}-\d{2}-\d{2})\.jsonl$/
+// `qa-AAAA-MM-DD.jsonl` é a primeira parte do dia; `qa-AAAA-MM-DD.N.jsonl`, as seguintes.
+const QA_LOG_FILE_PATTERN = /^qa-(\d{4}-\d{2}-\d{2})(?:\.(\d+))?\.jsonl$/
 const DEFAULT_MAX_DAYS = 14
 const DEFAULT_MAX_TOTAL_BYTES = 5 * 1024 * 1024 // 5 MiB
+const DEFAULT_MAX_PART_BYTES = 1024 * 1024 // 1 MiB
 
 /**
  * Persistência do QA Logger em disco, com rotação por dia e por tamanho.
@@ -25,6 +27,11 @@ const DEFAULT_MAX_TOTAL_BYTES = 5 * 1024 * 1024 // 5 MiB
  * segredo). Rotação: arquivos com mais de `maxDays` dias são apagados; se o
  * total ainda passar de `maxTotalBytes`, os mais antigos saem primeiro até
  * caber.
+ *
+ * O dia é gravado em partes de até `maxPartBytes`, e o prune roda também
+ * durante a execução (ao virar o dia ou abrir uma parte), nunca apagando a
+ * parte em uso: antes ele só rodava no boot e, com o arquivo do dia sozinho
+ * acima do orçamento, apagava o dia inteiro.
  */
 function createQaLogDiskStore(options = {}) {
   const directory = normalizeDirectory(options.directory)
@@ -32,6 +39,7 @@ function createQaLogDiskStore(options = {}) {
   const fileSystemPromises = options.fsPromises ?? fsPromises
   const maxDays = Number.isFinite(options.maxDays) ? options.maxDays : DEFAULT_MAX_DAYS
   const maxTotalBytes = Number.isFinite(options.maxTotalBytes) ? options.maxTotalBytes : DEFAULT_MAX_TOTAL_BYTES
+  const maxPartBytes = Number.isFinite(options.maxPartBytes) ? options.maxPartBytes : DEFAULT_MAX_PART_BYTES
   const now = options.now ?? (() => new Date())
 
   fileSystem.mkdirSync(directory, { recursive: true })
@@ -40,14 +48,43 @@ function createQaLogDiskStore(options = {}) {
   // (handlers de erro incluídos), e escritas fora de ordem embaralhariam a
   // linha do tempo do log num crash real.
   let writeQueue = Promise.resolve()
+  // Parte em uso, `{ day, part, bytes }`: descoberta no disco na primeira escrita de cada dia.
+  let current = null
 
-  function todayFilePath() {
-    return path.join(directory, `qa-${dayKey(now())}.jsonl`)
+  function latestPartOf(day) {
+    const parts = listLogFiles(directory, fileSystem)
+      .map(parseLogFileName)
+      .filter((file) => file.day === day)
+    const part = parts.reduce((max, file) => Math.max(max, file.part), 0)
+    let bytes = 0
+    try {
+      bytes = fileSystem.statSync(path.join(directory, logFileName(day, part))).size
+    } catch {
+      // Ainda não existe: a parte começa vazia.
+    }
+    return { day, part, bytes }
   }
 
   function append(entry) {
     const line = `${JSON.stringify(redactValue(entry))}\n`
-    const task = writeQueue.then(() => fileSystemPromises.appendFile(todayFilePath(), line, 'utf8'))
+    const lineBytes = Buffer.byteLength(line, 'utf8')
+    const task = writeQueue.then(async () => {
+      const day = dayKey(now())
+      let opened = false
+      if (current?.day !== day) {
+        current = latestPartOf(day)
+        opened = true
+      }
+      if (current.bytes > 0 && current.bytes + lineBytes > maxPartBytes) {
+        current = { day, part: current.part + 1, bytes: 0 }
+        opened = true
+      }
+      current.bytes += lineBytes
+      await fileSystemPromises.appendFile(path.join(directory, logFileName(day, current.part)), line, 'utf8')
+      if (opened) {
+        await prune().catch(() => {})
+      }
+    })
     // Uma escrita que falhar não pode travar as próximas — o log em disco é
     // best-effort; o buffer em memória do qa-logger continua funcionando.
     writeQueue = task.catch(() => {})
@@ -60,7 +97,7 @@ function createQaLogDiskStore(options = {}) {
 
   /** Lê as últimas `limit` entradas, do arquivo mais recente pra trás, para hidratar o buffer em memória depois de um restart. */
   async function loadRecent(limit) {
-    const files = listLogFiles(directory, fileSystem).sort().reverse()
+    const files = listLogFiles(directory, fileSystem).sort(compareLogFiles).reverse()
     const collected = []
 
     for (const file of files) {
@@ -80,23 +117,25 @@ function createQaLogDiskStore(options = {}) {
 
   /** Remove arquivos com mais de `maxDays` dias e, se ainda passar de `maxTotalBytes`, os mais antigos até caber. */
   async function prune() {
-    const files = listLogFiles(directory, fileSystem)
+    const inUse = current ?? latestPartOf(dayKey(now()))
+    const keep = logFileName(inUse.day, inUse.part)
+    const files = listLogFiles(directory, fileSystem).sort(compareLogFiles)
     const cutoff = now().getTime() - maxDays * 24 * 60 * 60 * 1000
     const kept = []
 
     for (const file of files) {
-      const fileDate = new Date(`${QA_LOG_FILE_PATTERN.exec(file)[1]}T00:00:00.000Z`).getTime()
-      if (fileDate < cutoff) {
+      const fileDate = new Date(`${parseLogFileName(file).day}T00:00:00.000Z`).getTime()
+      if (fileDate < cutoff && file !== keep) {
         await fileSystemPromises.rm(path.join(directory, file), { force: true })
         continue
       }
       kept.push(file)
     }
 
-    await pruneBySize(kept.sort())
+    await pruneBySize(kept, keep)
   }
 
-  async function pruneBySize(sortedOldestFirst) {
+  async function pruneBySize(sortedOldestFirst, keep) {
     const sizes = await Promise.all(
       sortedOldestFirst.map(async (file) => {
         try {
@@ -111,6 +150,7 @@ function createQaLogDiskStore(options = {}) {
     let total = sizes.reduce((sum, entry) => sum + entry.size, 0)
     for (const entry of sizes) {
       if (total <= maxTotalBytes) break
+      if (entry.file === keep) continue
       await fileSystemPromises.rm(path.join(directory, entry.file), { force: true })
       total -= entry.size
     }
@@ -125,6 +165,22 @@ function listLogFiles(directory, fileSystem) {
   } catch {
     return []
   }
+}
+
+function logFileName(day, part) {
+  return part > 0 ? `qa-${day}.${part}.jsonl` : `qa-${day}.jsonl`
+}
+
+function parseLogFileName(name) {
+  const match = QA_LOG_FILE_PATTERN.exec(name)
+  return { day: match[1], part: match[2] ? Number(match[2]) : 0 }
+}
+
+/** Ordem cronológica: dia, depois parte (`qa-…-14.jsonl` antes de `qa-…-14.1.jsonl`, que o sort de texto inverteria). */
+function compareLogFiles(left, right) {
+  const a = parseLogFileName(left)
+  const b = parseLogFileName(right)
+  return a.day === b.day ? a.part - b.part : a.day < b.day ? -1 : 1
 }
 
 function parseJsonLines(content) {
