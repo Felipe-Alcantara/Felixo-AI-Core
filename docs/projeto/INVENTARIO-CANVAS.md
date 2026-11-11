@@ -30,9 +30,9 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 ## Números
 
 - **Elementos:** 101 (10 blocos, 16 ferramentas, 75 outras superfícies)
-- **Controles:** 381, dos quais 57 com teste específico
+- **Controles:** 382, dos quais 57 com teste específico
 - **Elementos sem nenhum teste:** 4
-- **Lacunas:** 261 (alto 8, médio 138, baixo 115), em 72 tasks
+- **Lacunas:** 259 (alto 8, médio 138, baixo 113), em 71 tasks
 
 ## Moldura do canvas
 
@@ -2297,14 +2297,14 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `para baixo` (button) | clique, ou Alt+↓ com a linha focada | Mesmo caminho do ↑, uma posição para baixo, gravado por account-chain:update-members (desabilitado: busy ou última posição) | Recusa ou conflito: a ordem não muda e o aviso aparece em âmbar | — |
 | `Cobrança declarada de` (select) | clique | patchMember grava billingDeclared (Não declarada/Assinatura/Cobrança por uso) por account-chain:update-members; o texto ao lado compara com a cobrança detectada (desabilitado: busy) | Recusa ou conflito em aviso âmbar | — |
 | `Conferir agora` (button) | clique | account-chain:check-login da conta no main e recarrega o estado; a linha Login mostra o resultado novo (desabilitado: busy; some em conta travada) | erro engolido: o { ok: false, message } de checkLogin não chega à tela (account-chain-client.ts:252-262 não grava message e AccountChainSection.tsx:191 descarta o retorno) | — |
-| `Não era limite` (button) | clique | account-chain:release-cooldown com not-a-limit solta a espera classificada como limite e recarrega o estado (desabilitado: busy; só com espera de classe limit) | erro engolido: a recusa do main não aparece (mesmo caminho do Conferir agora) | — |
+| `Conferir login` (button) | clique | Na linha Espera, com a espera de limite vencida pelo prazo (needsCheck, cooldownAction = check-login): a mesma checagem do Conferir agora; um login OK posterior ao fim da espera tira a conta dela (regra 5 da política) (desabilitado: busy; some em conta travada e fora da espera vencida) | erro engolido: o mesmo caminho do Conferir agora | — |
+| `Não era limite` (button) | clique | account-chain:release-cooldown com not-a-limit solta a espera classificada como limite e recarrega o estado (desabilitado: busy; só com espera de classe limit ainda correndo (vencida pelo prazo, dá lugar a Conferir login: ali o main devolvia released false e o clique não tinha efeito)) | erro engolido: a recusa do main não aparece (mesmo caminho do Conferir agora) | — |
 | `Já recarreguei` (button) | clique | account-chain:release-cooldown com recharged solta a espera de cobrança e recarrega o estado (desabilitado: busy; só com espera de classe billing) | erro engolido: a recusa do main e o requiresCheck devolvido não aparecem | — |
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | Botões ↑/↓, Estratégia (o smoke só lê o valor), Cobrança, multiplicador, Conferir agora, Não era limite e Já recarreguei não são acionados em teste de interface; a reordenação só é exercitada por Alt+↓ na linha | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
 | Falha de Conferir agora, Não era limite e Já recarreguei é engolida: account-chain-client.ts:252-278 devolve { ok: false, message } sem gravar snapshot.message e AccountChainSection.tsx:191-194 descarta o retorno com void | médio | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
-| "Não era limite" solta a espera sem regra para uma espera já vencida pelo prazo | baixo | `3e991f95-497e-814a-ba35-d65bacdde06f` |
 | Contas do Gemini ficam travadas ("o app não confere o login deste provedor") e não entram na cadeia | baixo | `3e991f95-497e-811d-93e4-c6f283e26dde` |
 
 ### Registro de trocas de conta (aba Trocas)
@@ -2482,7 +2482,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | onLater e onNotALimit fecham antes da resposta e descartam a mensagem de erro do decline; onCheckLogin descarta o resultado (useAccountContinuation.ts:367-376 e 392). | médio | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 | Não bloqueantes de acessibilidade da interface da cadeia. | baixo | `3e991f95-497e-815c-845c-da8829970c0c` |
 | O mesmo limite pode voltar a propor depois de "Agora não". | baixo | `3e991f95-497e-81c9-a900-f0d5585956f9` |
-| "Não era limite" com espera já vencida pelo prazo. | baixo | `3e991f95-497e-814a-ba35-d65bacdde06f` |
 | O aviso de continuação automática do Claude no terminal antigo não oferece cancelar. | médio | `3e991f95-497e-812d-b877-e7bb0162a60f` |
 
 ### Alças de redimensionar dos modais
@@ -2927,7 +2926,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3e991f95-497e-811e-a0a3-c9c0dd6d0c48` — 1 lacuna
 - `3e991f95-497e-812b-8456-e0073877e9d7` — 1 lacuna
 - `3e991f95-497e-812d-b877-e7bb0162a60f` — 1 lacuna
-- `3e991f95-497e-814a-ba35-d65bacdde06f` — 2 lacunas
 - `3e991f95-497e-815c-845c-da8829970c0c` — 1 lacuna
 - `3e991f95-497e-8172-b092-f3aa9f111ccc` — 2 lacunas
 - `3e991f95-497e-817d-b6a4-c2c1825b3afc` — 1 lacuna

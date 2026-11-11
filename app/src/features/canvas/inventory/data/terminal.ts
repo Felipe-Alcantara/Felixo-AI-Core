@@ -1034,11 +1034,6 @@ export const terminalSurfaces: InventoryElement[] = [
         task: '3e991f95-497e-81c9-a900-f0d5585956f9',
       },
       {
-        what: '"Não era limite" com espera já vencida pelo prazo.',
-        risk: 'baixo',
-        task: '3e991f95-497e-814a-ba35-d65bacdde06f',
-      },
-      {
         what: 'O aviso de continuação automática do Claude no terminal antigo não oferece cancelar.',
         risk: 'médio',
         task: '3e991f95-497e-812d-b877-e7bb0162a60f',

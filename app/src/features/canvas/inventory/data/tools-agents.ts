@@ -872,11 +872,18 @@ export const agentToolSurfaces: InventoryElement[] = [
         disabledWhen: 'busy; some em conta travada',
       },
       {
+        locator: 'Conferir login',
+        kind: 'button',
+        effect: 'Na linha Espera, com a espera de limite vencida pelo prazo (needsCheck, cooldownAction = check-login): a mesma checagem do Conferir agora; um login OK posterior ao fim da espera tira a conta dela (regra 5 da política)',
+        failure: 'erro engolido: o mesmo caminho do Conferir agora',
+        disabledWhen: 'busy; some em conta travada e fora da espera vencida',
+      },
+      {
         locator: 'Não era limite',
         kind: 'button',
         effect: 'account-chain:release-cooldown com not-a-limit solta a espera classificada como limite e recarrega o estado',
         failure: 'erro engolido: a recusa do main não aparece (mesmo caminho do Conferir agora)',
-        disabledWhen: 'busy; só com espera de classe limit',
+        disabledWhen: 'busy; só com espera de classe limit ainda correndo (vencida pelo prazo, dá lugar a Conferir login: ali o main devolvia released false e o clique não tinha efeito)',
       },
       {
         locator: 'Já recarreguei',
@@ -928,11 +935,6 @@ export const agentToolSurfaces: InventoryElement[] = [
         what: 'Falha de Conferir agora, Não era limite e Já recarreguei é engolida: account-chain-client.ts:252-278 devolve { ok: false, message } sem gravar snapshot.message e AccountChainSection.tsx:191-194 descarta o retorno com void',
         risk: 'médio',
         task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
-      },
-      {
-        what: '"Não era limite" solta a espera sem regra para uma espera já vencida pelo prazo',
-        risk: 'baixo',
-        task: '3e991f95-497e-814a-ba35-d65bacdde06f',
       },
       {
         what: 'Contas do Gemini ficam travadas ("o app não confere o login deste provedor") e não entram na cadeia',
