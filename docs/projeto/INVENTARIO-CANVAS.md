@@ -32,7 +32,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **Elementos:** 101 (10 blocos, 16 ferramentas, 75 outras superfícies)
 - **Controles:** 381, dos quais 57 com teste específico
 - **Elementos sem nenhum teste:** 4
-- **Lacunas:** 265 (alto 8, médio 141, baixo 116), em 75 tasks
+- **Lacunas:** 264 (alto 8, médio 141, baixo 115), em 74 tasks
 
 ## Moldura do canvas
 
@@ -1308,7 +1308,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | pty.spawn(...).then sem catch: se o invoke rejeitar, a sessão fica em "starting" para sempre, sem mensagem (terminal-session-store.ts:965-1036). | baixo | `3ec91f95-497e-8176-bef0-dfde828936dc` |
 | A saída silenciosa ("encerrou sem produzir saída"), a ponte ausente e store.copy não têm teste no store. | médio | `3ec91f95-497e-81e8-8f18-e2a529b0568e` |
 | Falha do pty:write do texto inicial é engolida (.catch vazio). | médio | `3d791f95-497e-81cd-b05c-c9d6370c81a3` |
-| As varreduras de telas de aceite continuam depois de o REPL ser reconhecido. | baixo | `3e991f95-497e-8109-832d-f789917f708d` |
 | O erro de spawn só diz para verificar instalação e autenticação; o diagnóstico da CLI não aparece na interface. | baixo | `3e291f95-497e-8109-8851-e4ff2193c4db` |
 | O scrollback do xterm encolhe o histórico; não há arquivo em disco nem "carregar mais". | baixo | `3e991f95-497e-810b-9f94-ed5201606718` |
 
@@ -2927,7 +2926,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3e891f95-497e-8148-b00e-f27e78767664` — 2 lacunas
 - `3e891f95-497e-81b3-8857-da9125ff3f49` — 1 lacuna
 - `3e991f95-497e-8104-a090-d5b295ba4747` — 2 lacunas
-- `3e991f95-497e-8109-832d-f789917f708d` — 1 lacuna
 - `3e991f95-497e-810b-9f94-ed5201606718` — 1 lacuna
 - `3e991f95-497e-811d-93e4-c6f283e26dde` — 1 lacuna
 - `3e991f95-497e-811e-a0a3-c9c0dd6d0c48` — 1 lacuna

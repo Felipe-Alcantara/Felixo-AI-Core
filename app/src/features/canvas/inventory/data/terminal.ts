@@ -1250,11 +1250,6 @@ export const terminalSurfaces: InventoryElement[] = [
         task: '3d791f95-497e-81cd-b05c-c9d6370c81a3',
       },
       {
-        what: 'As varreduras de telas de aceite continuam depois de o REPL ser reconhecido.',
-        risk: 'baixo',
-        task: '3e991f95-497e-8109-832d-f789917f708d',
-      },
-      {
         what: 'O erro de spawn só diz para verificar instalação e autenticação; o diagnóstico da CLI não aparece na interface.',
         risk: 'baixo',
         task: '3e291f95-497e-8109-8851-e4ff2193c4db',

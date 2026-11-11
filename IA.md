@@ -1306,3 +1306,41 @@ Validate em Windows, macOS, Ubuntu e Ubuntu ARM e no `Canvas smoke (ubuntu-lates
 (`[canvas-visual] trava-de-montagem-solta`) com as sessões A a F; o Release gate (run 43040504818) e o Release (run
 43040539242, 11:39–11:47) saíram verdes e publicaram a `v0.1.524` nos três sistemas. **Não conferido:** o cenário novo no
 Windows e no macOS do CI, que só rodam o smoke no Nightly das 06:00 UTC (o de 12/11/2026); no Windows local passou.
+
+---
+
+## 2026-11-11 — Terminal: as varreduras das telas de aceite param quando o REPL é reconhecido
+
+**Agente / repositório.** Resolver hotfix — Felixo-AI-Core (`J:/Programação/GitHub/Repositórios/Felixo-AI-Core`). Task
+`3e991f95-497e-8109-832d-f789917f708d` (pendência da fatia 1 de performance, 28/09).
+
+**Contexto.** `handleCodexTrustPrompt`, `handleClaudeBypassWarning` e `handleClaudeTrustPrompt` refaziam `(buffer + pedaço).slice(-12000)`
+e rodavam os reconhecedores a cada pedaço até a tela delas aparecer — numa pasta já confiável, a sessão inteira; o aviso do modo e a
+confiança do Claude mantinham dois buffers com o mesmo fluxo; `trackCodexUpdateBanner` copiava a janela a cada pedaço só para o
+`finishExit` ler no fim. Não dava para parar pelo `initialTextSent`: o prazo de emergência de `scheduleInitialText` o marca pelo relógio.
+
+**O que mudou.**
+
+1. `terminal/rolling-text.ts` (novo): janela rolante dos últimos N caracteres, pedaço = inserção numa lista (técnica do
+   `pty-replay-buffer.cjs`), junção só na leitura.
+2. `terminal-session-store.ts`: uma janela só para as três varreduras (`scanAcceptScreens`), rolante também a do banner de update;
+   sinal positivo `replRecognized` em `trackReplRecognized`, chamado a cada mudança de tela no `onOutput` enquanto alguma varredura
+   está pendente: linha de entrada pronta (`readInputLineState`), sem tela de decisão (`looksLikeApprovalPrompt`) e, no Codex 0.158+,
+   com o chat de verdade aberto (`isCodexStillStarting` falso — o compositor provisório vem antes da tela de confiança). Reconhecido,
+   as varreduras não rodam mais e a janela é esvaziada.
+3. Inventário: a lacuna "as varreduras continuam depois do REPL" saiu.
+
+**Medido.** Testes novos no store (xterm real): com espião em `isClaudeTrustPrompt`/`isClaudeBypassPermissionsWarning`, rodam antes do
+REPL e nenhuma vez depois, nem com 20 quadros de spinner e uma tela de confiança na sequência; o mesmo para `isCodexTrustPrompt` depois do
+compositor; e uma tela de confiança tardia, depois de o prazo de emergência ter digitado o contexto pelo relógio, sem REPL, ainda é aceita
+(seta e Enter). **O teste do espião falha com o store anterior** (`git checkout` do arquivo, `1 failed`) e o da tela tardia passa nos
+dois. Janela rolante: propriedade com 200 sementes igual ao `concat + slice`, e teto de memória. Medição por pedaço de spinner (100
+caracteres, 20.000 pedaços, Node): varredura do Claude antes do REPL 99,33 → 94,01 µs (o custo agora é dos reconhecedores, só na
+abertura); depois do REPL, as varreduras não rodam; janela do banner de update 2,76 → 0,47 µs. Essa medição pegou um defeito da
+primeira versão da janela (guardava a junção inteira e crescia sem teto quando lida a cada pedaço: 486 µs), corrigido antes do
+commit e coberto pelo teste do teto. vitest 223 arquivos, 3445 testes; `npm test` 3182, 0 falham; `tsc -b`, `eslint .` e `vite build`
+limpos; smoke local A, B, D e F passam (C e E têm a falha só desta máquina, registrada à parte).
+
+**Limites.** Não abri o Claude Code nem o Codex reais no app: os testes usam saídas capturadas das CLIs num PTY real. Antes do REPL a
+varredura ainda custa ~94 µs por pedaço (os reconhecedores compactam a janela de 12.000), só durante a abertura. CLIs sem leitor de
+linha de entrada (Gemini, Openia) não têm varredura de aceite, então nada muda para elas.
