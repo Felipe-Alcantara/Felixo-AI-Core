@@ -2059,19 +2059,9 @@ export class TerminalSessionStore {
       return
     }
 
-    session.disposed = true
-    this.clearIdleTimer(session)
-    this.clearInitialTextTimer(session)
-    this.clearSubmitRetryTimer(session)
-    this.clearContextRetryTimer(session)
-    session.offLinkContextMenu?.()
-    session.offMouseSelection?.()
-    session.offData()
-    session.offExit()
-    session.offSession()
+    this.releaseRenderer(session)
     void window.felixo?.pty?.kill({ sessionId: session.ptySessionId, force: true })
     void window.felixo?.contextFiles?.release({ sessionId: session.ptySessionId })
-    session.terminal.dispose()
     this.sessions.delete(id)
     this.listeners.delete(id)
     if (id in this.snapshots) {
@@ -2087,6 +2077,44 @@ export class TerminalSessionStore {
     for (const id of Array.from(this.sessions.keys())) {
       this.remove(id)
     }
+  }
+
+  /**
+   * Solta o lado do renderer de todas as sessões, SEM encerrar os processos:
+   * o canvas desmontou (ir ao Chat) e o provider vai criar outro store ao
+   * voltar, que reanexa cada PTY pelo replay do processo principal. Antes, o
+   * store antigo ficava para trás com os xterms, os timers e o ouvinte do
+   * `pty:data` da ponte vivos. Os arquivos de contexto ficam: são do processo,
+   * que segue rodando. Os ouvintes do React (por id) também ficam: uma sessão
+   * recriada neste mesmo store (o StrictMode remonta assim) os reaproveita.
+   */
+  detachAll(): void {
+    for (const session of this.sessions.values()) {
+      // Pausa pedida por este xterm (controle de fluxo) não pode sobreviver a
+      // ele: a CLI ficaria bloqueada escrevendo até alguém voltar ao canvas.
+      session.flow.release()
+      this.releaseRenderer(session)
+    }
+    this.sessions.clear()
+    if (Object.keys(this.snapshots).length > 0) {
+      this.snapshots = {}
+      this.notifyAll()
+    }
+  }
+
+  /** Timers, rotas da ponte, ouvintes do DOM e o xterm: tudo do renderer, nada do processo. */
+  private releaseRenderer(session: Session): void {
+    session.disposed = true
+    this.clearIdleTimer(session)
+    this.clearInitialTextTimer(session)
+    this.clearSubmitRetryTimer(session)
+    this.clearContextRetryTimer(session)
+    session.offLinkContextMenu?.()
+    session.offMouseSelection?.()
+    session.offData()
+    session.offExit()
+    session.offSession()
+    session.terminal.dispose()
   }
 
   /**

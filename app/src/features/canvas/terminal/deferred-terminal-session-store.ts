@@ -43,9 +43,11 @@ export class DeferredTerminalSessionStore implements TerminalSessionStoreApi {
   private realStore: TerminalSessionStoreApi | null = null
   private loading: Promise<TerminalSessionStoreApi> | null = null
   /**
-   * Invalidates `ensure()` calls queued before a bulk canvas reset. Without
-   * this boundary, clearing while the lazy runtime was importing could let a
-   * late card mount recreate a session after the canvas was already empty.
+   * Invalidates `ensure()` calls queued before a bulk canvas reset or a
+   * `detachAll()`. Without this boundary, clearing while the lazy runtime was
+   * importing could let a late card mount recreate a session after the canvas
+   * was already empty — and, no desmonte simulado do StrictMode, o `ensure` da
+   * primeira montagem subiria depois do desligamento.
    */
   private clearGeneration = 0
   private pendingAllListeners = new Set<PendingListener>()
@@ -240,6 +242,23 @@ export class DeferredTerminalSessionStore implements TerminalSessionStoreApi {
       this.runDeferred((store) => {
         if (generation === this.clearGeneration) {
           store.clear()
+        }
+      })
+    }
+  }
+
+  detachAll(): void {
+    const generation = ++this.clearGeneration
+    if (this.realStore) {
+      this.realStore.detachAll()
+      return
+    }
+    // Sem runtime carregado não há xterm a soltar; com o import em voo, solta
+    // depois das ações já enfileiradas, como o `clear`.
+    if (this.loading) {
+      this.runDeferred((store) => {
+        if (generation === this.clearGeneration) {
+          store.detachAll()
         }
       })
     }

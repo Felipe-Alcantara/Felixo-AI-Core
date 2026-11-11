@@ -154,4 +154,9 @@ export type TerminalSessionStoreApi = {
   subscribe: (id: string, listener: SessionListener) => () => void
   remove: (id: string) => void
   clear: () => void
+  /**
+   * Solta xterms, timers e rotas da ponte de todas as sessões sem encerrar os
+   * processos (o canvas desmontou; ao voltar, cada sessão reanexa pelo replay).
+   */
+  detachAll: () => void
 }

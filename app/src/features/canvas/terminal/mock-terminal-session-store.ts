@@ -259,6 +259,13 @@ export class MockTerminalSessionStore implements TerminalSessionStoreApi {
     this.allSubscribers.forEach((listener) => listener())
   }
 
+  /**
+   * O PTY falso do devtools vive dentro da própria sessão: soltá-la seria
+   * perder o "processo". Ao trocar de tela o provider cria outro mock de
+   * qualquer jeito, então aqui não há o que soltar.
+   */
+  detachAll(): void {}
+
   clear(): void {
     this.sessions.clear()
     this.pendingListeners.clear()

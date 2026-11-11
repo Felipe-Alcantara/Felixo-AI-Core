@@ -115,6 +115,8 @@ type Harness = {
   releaseCalls: string[]
   /** Eventos gravados no log de QA pelo store, na ordem. */
   qaLogs: Array<{ level: string; scope: string; message: string; details: Record<string, unknown> }>
+  /** Quantos ouvintes da ponte (`pty.onData`/`onExit`/`onSession`) estão assinados agora. */
+  activeListeners: () => { data: number; exit: number; session: number }
 }
 
 type SpawnRequest = {
@@ -272,6 +274,7 @@ function createHarness(
       for (const listener of [...exitListeners]) listener({ sessionId: PTY_SESSION_ID, ...event })
     },
     resolveSpawn: () => releaseSpawn(),
+    activeListeners: () => ({ data: dataListeners.size, exit: exitListeners.size, session: sessionListeners.size }),
   }
 }
 
@@ -2994,5 +2997,76 @@ describe('varreduras das telas de aceite: param quando o REPL é reconhecido', (
     const down = harness.writes.indexOf('\x1b[B')
     expect(down).toBeGreaterThan(-1)
     expect(harness.writes.indexOf('\r', down)).toBeGreaterThan(down)
+  })
+})
+
+describe('detachAll: o canvas desmonta (ir ao Chat) e os PTYs seguem vivos', () => {
+  let harness: Harness | undefined
+
+  beforeEach(() => {
+    harness = undefined
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    harness?.store.clear()
+    vi.useRealTimers()
+  })
+
+  it('solta o xterm e as rotas da ponte sem matar o processo nem liberar o contexto, e um store novo reanexa pelo replay', async () => {
+    harness = createHarness()
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(READY_PROMPT)
+    await vi.advanceTimersByTimeAsync(50)
+    const bridge = (window as unknown as {
+      felixo: { pty: { kill: unknown; flow?: unknown }; contextFiles: { release: unknown } }
+    }).felixo
+    const kill = vi.fn(async () => ({ ok: true }))
+    const release = vi.fn(async () => ({ ok: true }))
+    bridge.pty.kill = kill
+    bridge.contextFiles.release = release
+    const dispose = vi.spyOn(Terminal.prototype, 'dispose')
+    expect(harness.activeListeners()).toEqual({ data: 1, exit: 1, session: 1 })
+
+    harness.store.detachAll()
+
+    expect(dispose).toHaveBeenCalledTimes(1)
+    expect(harness.activeListeners(), 'rotas da ponte desfeitas').toEqual({ data: 0, exit: 0, session: 0 })
+    expect(kill, 'o PTY sobrevive à troca de tela').not.toHaveBeenCalled()
+    expect(release, 'o contexto é do processo, que segue vivo').not.toHaveBeenCalled()
+    expect(harness.store.getSnapshot(SESSION_ID)).toBeUndefined()
+    // Nenhum timer do store antigo escreve no PTY depois de solto.
+    const writesBefore = harness.writes.length
+    await vi.advanceTimersByTimeAsync(15_000)
+    expect(harness.writes).toHaveLength(writesBefore)
+
+    // Volta ao canvas: o provider cria outro store, que reanexa o mesmo PTY.
+    harness.setSpawnResult({ ok: true, reused: true })
+    const back = new TerminalSessionStore()
+    back.ensure(SESSION_ID, { command: 'claude', args: ['--dangerously-skip-permissions'], cwd: '/tmp', initialText: CONTEXT })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(harness.spawnRequests).toHaveLength(2)
+    harness.feed('saída reenviada pelo replay\r\n')
+    await vi.advanceTimersByTimeAsync(50)
+    expect(back.getTranscript(SESSION_ID).text).toContain('saída reenviada pelo replay')
+    // Reanexo não é processo novo: o contexto não é digitado de novo.
+    await vi.advanceTimersByTimeAsync(15_000)
+    expect(contextWrites(harness.writes.slice(writesBefore))).toEqual([])
+    back.clear()
+  })
+
+  it('retoma o PTY que este xterm tinha pausado, para a CLI não ficar presa no Chat', async () => {
+    harness = createHarness()
+    await vi.advanceTimersByTimeAsync(0)
+    const flow = vi.fn(async () => ({ ok: true }))
+    ;(window as unknown as { felixo: { pty: { flow: typeof flow } } }).felixo.pty.flow = flow
+    vi.spyOn(Terminal.prototype, 'write').mockImplementation(() => {})
+    harness.feed('x'.repeat(2_500_000))
+    expect(flow).toHaveBeenLastCalledWith({ sessionId: PTY_SESSION_ID, paused: true })
+
+    harness.store.detachAll()
+
+    expect(flow).toHaveBeenLastCalledWith({ sessionId: PTY_SESSION_ID, paused: false })
   })
 })

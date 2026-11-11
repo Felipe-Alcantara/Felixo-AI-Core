@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { TerminalSessionContext } from './terminal-session-context'
 import { DeferredTerminalSessionStore } from './deferred-terminal-session-store'
 import { MockTerminalSessionStore } from './mock-terminal-session-store'
@@ -15,6 +15,10 @@ export function TerminalSessionProvider({ children }: { children: ReactNode }) {
         ? new MockTerminalSessionStore()
         : new DeferredTerminalSessionStore(),
   )
+  // Ir ao Chat desmonta o canvas e, na volta, este provider cria outro store:
+  // o antigo solta os xterms e as rotas da ponte, e os PTYs seguem vivos para o
+  // novo reanexar pelo replay.
+  useEffect(() => () => store.detachAll(), [store])
 
   return (
     <TerminalSessionContext.Provider value={store}>
