@@ -1,0 +1,267 @@
+{
+  "schemaVersion": 1,
+  "startedAt": "2026-11-11T17:28:20.439Z",
+  "host": {
+    "platform": "win32",
+    "arch": "x64",
+    "cpus": 16,
+    "totalMemGiB": 13.8
+  },
+  "scenario": {
+    "agents": 20,
+    "nodes": 321,
+    "edges": 219,
+    "durationMs": 15000
+  },
+  "results": [
+    {
+      "phase": "canvas-many-agents",
+      "count": 20,
+      "nodes": 321,
+      "edges": 219,
+      "budgetScenario": "carregado",
+      "startupMs": 1723.6,
+      "loadMs": 2787.8,
+      "resumeMs": 649.5,
+      "idleFps": 60.8,
+      "frameReliable": true,
+      "virtualizationRestoreMs": 566.1,
+      "zoom": {
+        "before": 0.05,
+        "after": 0.368
+      },
+      "rendererWorkingSetMiB": {
+        "count": 45,
+        "p50": 688.746,
+        "p95": 728.824,
+        "max": 736.73
+      },
+      "appWorkingSetMiB": {
+        "count": 45,
+        "p50": 1105.07,
+        "p95": 1147.166,
+        "max": 1153.793
+      },
+      "heapBefore": {
+        "usedJsHeapBytes": 19229332
+      },
+      "heapAfterStream": {
+        "usedJsHeapBytes": 23433700
+      },
+      "agentsWithOutput": 20,
+      "checkpoints": [
+        {
+          "name": "vazio",
+          "domNodes": 421,
+          "listeners": 237,
+          "documents": 1,
+          "jsHeapUsedBytes": 5408124,
+          "timers": {
+            "timeouts": 2,
+            "intervals": 1
+          },
+          "rendererWorkingSetMiB": 135.094,
+          "appWorkingSetMiB": 512.648
+        },
+        {
+          "name": "carregado",
+          "domNodes": 9153,
+          "listeners": 1069,
+          "documents": 1,
+          "jsHeapUsedBytes": 19229332,
+          "timers": {
+            "timeouts": 0,
+            "intervals": 1
+          },
+          "rendererWorkingSetMiB": 289.027,
+          "appWorkingSetMiB": 713.598
+        },
+        {
+          "name": "fim-da-carga",
+          "domNodes": 10016,
+          "listeners": 1310,
+          "documents": 1,
+          "jsHeapUsedBytes": 23433700,
+          "timers": {
+            "timeouts": 20,
+            "intervals": 1
+          },
+          "rendererWorkingSetMiB": 326.086,
+          "appWorkingSetMiB": 742.031
+        },
+        {
+          "name": "apos-refresh",
+          "domNodes": 22656,
+          "listeners": 4787,
+          "documents": 1,
+          "jsHeapUsedBytes": 24975272,
+          "timers": {
+            "timeouts": 44,
+            "intervals": 1
+          },
+          "rendererWorkingSetMiB": 288.082,
+          "appWorkingSetMiB": 711.957
+        }
+      ],
+      "crashed": null
+    },
+    {
+      "phase": "canvas-many-agents:gaveta-fechada",
+      "count": 20,
+      "nodes": 321,
+      "edges": 219,
+      "budgetScenario": "carregado",
+      "frameReliable": true,
+      "frameMs": {
+        "count": 796,
+        "p50": 16.6,
+        "p95": 33.3,
+        "max": 149.9
+      },
+      "longTaskMs": {
+        "count": 27,
+        "p50": 54,
+        "p95": 63.1,
+        "max": 73
+      },
+      "inputToFrameMs": {
+        "count": 46,
+        "p50": 39.45,
+        "p95": 49.175,
+        "max": 209.4
+      },
+      "keyEchoMs": {
+        "count": 0,
+        "p50": null,
+        "p95": null,
+        "max": null
+      },
+      "mountedNodes": {
+        "count": 16,
+        "p50": 35,
+        "p95": 53,
+        "max": 53
+      },
+      "mountedOutsideViewport": {
+        "count": 16,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "outsideMutationsPerSecond": 0,
+      "insideMutationsPerSecond": 4.9,
+      "rendererWorkingSetMiB": {
+        "count": 15,
+        "p50": 460.48,
+        "p95": 511.531,
+        "max": 512.66
+      }
+    },
+    {
+      "phase": "canvas-many-agents:gaveta-aberta",
+      "count": 20,
+      "nodes": 321,
+      "edges": 219,
+      "budgetScenario": "carregado",
+      "frameReliable": true,
+      "frameMs": {
+        "count": 728,
+        "p50": 16.6,
+        "p95": 49.8,
+        "max": 99.9
+      },
+      "longTaskMs": {
+        "count": 36,
+        "p50": 69,
+        "p95": 86,
+        "max": 88
+      },
+      "inputToFrameMs": {
+        "count": 35,
+        "p50": 41,
+        "p95": 64.46,
+        "max": 65.6
+      },
+      "keyEchoMs": {
+        "count": 35,
+        "p50": 84.1,
+        "p95": 108.1,
+        "max": 119.3
+      },
+      "mountedNodes": {
+        "count": 16,
+        "p50": 321,
+        "p95": 321,
+        "max": 321
+      },
+      "mountedOutsideViewport": {
+        "count": 16,
+        "p50": 301.5,
+        "p95": 303,
+        "max": 303
+      },
+      "outsideMutationsPerSecond": 0,
+      "insideMutationsPerSecond": 9.8,
+      "rendererWorkingSetMiB": {
+        "count": 15,
+        "p50": 698.879,
+        "p95": 709.687,
+        "max": 715.52
+      }
+    },
+    {
+      "phase": "canvas-many-agents:arrasto",
+      "count": 20,
+      "nodes": 321,
+      "edges": 219,
+      "budgetScenario": "carregado",
+      "frameReliable": true,
+      "frameMs": {
+        "count": 884,
+        "p50": 16.6,
+        "p95": 16.7,
+        "max": 83.2
+      },
+      "longTaskMs": {
+        "count": 2,
+        "p50": 62,
+        "p95": 72.8,
+        "max": 74
+      },
+      "inputToFrameMs": {
+        "count": 390,
+        "p50": 5.4,
+        "p95": 16.1,
+        "max": 33.4
+      },
+      "keyEchoMs": {
+        "count": 0,
+        "p50": null,
+        "p95": null,
+        "max": null
+      },
+      "mountedNodes": {
+        "count": 16,
+        "p50": 53,
+        "p95": 53,
+        "max": 53
+      },
+      "mountedOutsideViewport": {
+        "count": 16,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "outsideMutationsPerSecond": 0,
+      "insideMutationsPerSecond": 5.3,
+      "rendererWorkingSetMiB": {
+        "count": 15,
+        "p50": 705.559,
+        "p95": 732.2,
+        "max": 736.73
+      }
+    }
+  ],
+  "finishedAt": "2026-11-11T17:29:30.450Z",
+  "durationMs": 70010
+}

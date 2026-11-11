@@ -326,3 +326,25 @@ com as limitações acima.
 - Input latency humana/frame time durante gesto: **NÃO MEDIDO** nesta rodada;
   a garantia aqui é estrutural (sem easing no drag e batching por frame), não
   uma promessa de milissegundos para todo hardware.
+
+## Estado real com terminais e gaveta (2026-11-11)
+
+A linha "Input latency humana/frame time durante gesto: **NÃO MEDIDO**" acima
+deixou de valer para o canvas: a bancada `npm run benchmark:many-agents` mede,
+no app de produção com 20 agentes transmitindo e 300 blocos, frame, long task,
+entrada → quadro e **tecla → eco** em três fases (gaveta fechada, gaveta aberta
+e arrasto), mais os blocos montados fora da área do canvas e as mutações de DOM
+dentro deles. Resultados, procedimento e o gate entre commits (que agora
+compara frame p95, long task p95 e tecla → eco p95, pela mediana de três
+rodadas de cada lado) estão em `app/benchmarks/README.md`, seções "Muitos
+agentes no mesmo renderer" e "Gate de regressão entre commits".
+
+Baseline local do Windows (16 núcleos, 13,8 GiB), mediana de 3 rodadas no
+`main` `c064518`: gaveta fechada frame p95 33,3 ms e long task p95 63,6 ms;
+gaveta aberta 49,8 ms, 86,0 ms e tecla → eco p95 108,9 ms; arrasto 16,7 ms e
+66,0 ms. Os três relatórios estão em
+`baseline-canvas-many-agents-win32-{1,2,3}.json`, nesta pasta.
+
+A sessão longa de heap (`npm run benchmark:canvas-heap-session`) passou a ler o
+RSS da árvore de processos também no Windows (`Win32_Process` pelo PowerShell,
+no mesmo formato do `ps`).

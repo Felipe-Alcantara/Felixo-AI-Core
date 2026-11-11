@@ -77,10 +77,15 @@ das duas tiver um valor válido, o padrão continua Normal.
 
 - Céu animado do canvas (`CanvasAmbientLayer`) — não renderiza, não é só
   pausa de animação.
-- Minimapa do React Flow (`CanvasView.tsx:2730`).
+- Minimapa do React Flow (o `<MiniMap>` do `CanvasView` só monta com
+  `miniMap && !reduceMotion`, e `reduceMotion` vem de
+  `shouldReduceMotion(performanceMode, prefersReducedMotion)`).
 - Transições CSS de painel/dock/toolbar/controles (`index.css`).
-- Animações de fit/pan do canvas e de saída de nó (`useExitAnimation`,
-  `CanvasView.tsx:2310`).
+- Animações de saída de painel e da gaveta (`useExitAnimation` lê
+  `data-performance-mode` e fecha sem esperar a animação). As animações de
+  fit e zoom da pílula de zoom (`CanvasZoomPill`, 180 e 240 ms) **não**
+  olham o modo — conferido em 11/11/2026; antes esta linha dizia que o modo
+  também cortava fit/pan.
 - Scrollback do terminal força 5.000 linhas mesmo abaixo do limiar de 10
   (`terminalScrollbackForSessionCount(..., performanceMode)`).
 - A atualização automática do painel **Limites e uso** passa de 30 segundos

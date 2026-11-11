@@ -147,7 +147,7 @@ do gate, junto com o critério e as métricas medidas mas fora dele. Uma chave
 desconhecida em `--exclude-metric` é erro, não é ignorada: um erro de digitação
 manteria a métrica no critério em silêncio.
 
-Cenários são casados por `phase+count+scrollback+policy`; um cenário que só
+Cenários são casados por `phase+count+scrollback+policy+nodes`; um cenário que só
 existe de um lado (nova contagem testada, por exemplo) é ignorado, não conta
 como regressão nem falha o gate. Cada métrica também tem um piso de diferença
 absoluta, além do percentual: um cenário de baixa carga (poucas sessões) pode
@@ -186,6 +186,33 @@ então um padrão de quadro perdido dobra o valor. Por isso as métricas de temp
 ficam só no relatório; RSS e heap, com o piso absoluto, são as únicas que
 caberiam num critério. Repetir o cenário N vezes por execução e comparar a
 mediana não foi medido; cada execução leva 52–88 s por sistema.
+
+**Frame, long task e tecla → eco no critério (11/11/2026).** Decisão do
+Felipe: frame p95, long task p95 e tecla → eco p95 entram no critério com o
+mesmo +20% e um piso absoluto (frame +8 ms, meio quadro a 60 Hz; long task
++50 ms, o próprio limiar de long task; eco +16 ms, um quadro), e o gate segue
+manual. As três vêm das fases do `canvas-many-agents`. Frame de janela
+estrangulada (`frameReliable: false`) fica fora da comparação; uma fase sem
+nenhuma long task conta como 0, para a primeira que aparecer reprovar. Como o
+frame p95 anda em degraus de um quadro, **uma rodada só não serve**: com o
+mesmo código, `antes-2` × `antes-1` deu três "regressões" (frame p95
+33,3 → 49,9 ms e 33,4 → 55,8 ms; eco 89,9 → 118,5 ms). Por isso `--baseline` e
+`--current` aceitam várias rodadas separadas por vírgula, e cada métrica vira a
+mediana delas; o procedimento é **três rodadas de cada lado**, na mesma máquina:
+
+```bash
+npx vite build
+for i in 1 2 3; do npm run benchmark:many-agents -- --agents=20 --nodes=300 --out=depois-$i.json; done
+node scripts/benchmark-regression-gate.cjs \
+  --baseline=antes-1.json,antes-2.json,antes-3.json \
+  --current=depois-1.json,depois-2.json,depois-3.json
+```
+
+Para o "antes" de outro commit: `git worktree add --detach <pasta> <commit>`, um
+junction (ou symlink) de `app/node_modules` para a pasta, `npx vite build`
+dentro dela e a bancada do commit atual com `--app-dir=<pasta>/app`. A
+bancada só funciona em commits a partir de 04/11/2026 (o PTY roteirizado e o
+`devtools.mainEval` entraram nessa data).
 
 ## Perda de saída do PTY nativo no Windows (`count=20`)
 
@@ -599,8 +626,10 @@ A escolha de GPU só existe no Linux. Nos outros SOs, use `--gpu=padrao`.
 As bancadas acima medem partes isoladas: terminal sem canvas, conexões sem
 terminais, UI sem agentes. `scripts/canvas-many-agents-benchmark.cjs` junta
 tudo no app de verdade: agentes vivos transmitindo saída, blocos, conexões, o
-painel Buscar e a gaveta de um terminal abertos, zoom girando e refresh com os
-agentes de pé.
+painel Buscar aberto e refresh com os agentes de pé, em três fases de
+`--duration-ms` cada (padrão 15 s): **gaveta fechada** (zoom girando),
+**gaveta aberta** no terminal de digitação (zoom girando e uma tecla por volta
+no xterm dela) e **arrasto** de um bloco com a gaveta fechada de novo.
 
 ```bash
 npx vite build
@@ -615,26 +644,42 @@ npm run benchmark:many-agents -- --agents=20 --nodes=300 --check
   (`FELIXO_DEVTOOLS_FAKE_CLI_PTY=1`, `electron/services/devtools-fake-cli-pty.cjs`).
   Nenhuma CLI real roda. Cada agente recebe `__felixo_smoke_stream__` a cada
   3 s pelo `pty:write` e imprime ~20 linhas/s. Cada agente fica ligado a uma
-  nota; os blocos comuns e as conexões vêm do mesmo fixture do `ui-render`.
+  nota; os blocos comuns e as conexões vêm do mesmo fixture do `ui-render`. Um
+  terminal a mais (`bench-digitacao`) fica parado e recebe a digitação: no PTY
+  falso o eco entra na fila atrás do roteiro, então digitar num agente que
+  transmite mediria essa fila (2,5 s), não o app.
+- **Zoom:** depois de carregar, a bancada aproxima o zoom em 6 passos de roda
+  logo abaixo do terminal de digitação (0,05 → 0,368 no Windows): enquadrados,
+  todos os blocos ficam à vista e a virtualização que a gaveta aberta desliga
+  (`keepCanvasNodesMounted`) não apareceria.
 - **Mede:** abertura até o canvas hidratado (`startupMs`), carga do fixture
-  (`loadMs`), refresh com os agentes vivos (`resumeMs`), frame, long task e
-  entrada → quadro (do `timeStamp` do `wheel` ao rAF seguinte) durante a carga,
-  RSS do renderer e do app inteiro (`app.getAppMetrics`, uma amostra por
-  segundo) e, em quatro pontos de controle (`vazio`, `carregado`,
-  `fim-da-carga`, `apos-refresh`, depois de um GC), DOM, listeners e documentos
-  (`Performance.getMetrics`), heap e os timers vivos do thread principal. Os
-  timers são contados por um script injetado antes do app, que embrulha
-  `setTimeout`/`setInterval`. Queda do renderer (`crash` ou janela fechada) e
-  agente sem saída também ficam no relatório.
+  (`loadMs`), refresh com os agentes vivos (`resumeMs`), quanto a
+  virtualização leva para voltar depois de fechar a gaveta
+  (`virtualizationRestoreMs`), RSS do renderer e do app inteiro
+  (`app.getAppMetrics`, uma amostra por segundo) e, em quatro pontos de
+  controle (`vazio`, `carregado`, `fim-da-carga`, `apos-refresh`, depois de um
+  GC), DOM, listeners e documentos (`Performance.getMetrics`), heap e os timers
+  vivos do thread principal (contados por um script injetado antes do app, que
+  embrulha `setTimeout`/`setInterval`). Por fase: frame, long task, entrada →
+  quadro (do `timeStamp` do `wheel` ou do `pointermove` ao rAF seguinte),
+  **tecla → eco** (do `keydown` de `q`, `z` ou `w`, que nem o roteiro nem o eco
+  do gatilho imprimem, ao quadro seguinte à chegada do eco pelo `pty:data`),
+  blocos montados e quantos estão fora da área do canvas (uma amostra por
+  segundo) e mutações de DOM por segundo dentro dos blocos fora da área, com as
+  dos blocos à vista como controle (sem o controle, um zero não provaria nada).
+  Queda do renderer (`crash` ou janela fechada) e agente sem saída também ficam
+  no relatório.
 - **`--check`:** reprova queda, agente mudo e as metas de frame p95, long task
-  p95 e refresh do cenário da `docs/projeto/POLITICA-PERFORMANCE.md` (Leve até
-  9 agentes e 300 blocos; Carregado até 20 e 1.000). Acima do Carregado, só
-  queda e agente mudo. Entrada → quadro, RSS, heap, DOM, listeners e timers são
-  só relatório: a política não tem meta para eles.
-- **Relatório:** `canvas-many-agents-<plataforma>.json`, com os campos do
-  `terminal-scrollback` (`phase`, `count`, `resumeMs`, `rendererWorkingSetMiB`,
-  `heapBefore`/`heapAfterStream`). Dá para comparar dois relatórios com o
-  `benchmark-regression-gate.cjs` à mão. Não roda em nenhum workflow.
+  p95 (em cada fase) e refresh do cenário da `docs/projeto/POLITICA-PERFORMANCE.md`
+  (Leve até 9 agentes e 300 blocos; Carregado até 20 e 1.000). Acima do
+  Carregado, só queda e agente mudo. Entrada → quadro, eco, RSS, heap, DOM,
+  listeners e timers são só relatório: a política não tem meta para eles.
+- **Relatório:** `canvas-many-agents-<plataforma>.json`. O primeiro resultado
+  (`phase: canvas-many-agents`) tem os campos do `terminal-scrollback`
+  (`resumeMs`, `rendererWorkingSetMiB`, `heapBefore`/`heapAfterStream`); cada
+  fase é um resultado `canvas-many-agents:<fase>` com `frameMs`, `longTaskMs` e
+  `keyEchoMs`. O `benchmark-regression-gate.cjs` compara os dois tipos (seção
+  "Gate de regressão entre commits"). Não roda em nenhum workflow.
 
 ### Resultado em 04/11/2026 (Windows 11, `main` em `a25e73e`)
 
@@ -653,6 +698,41 @@ refresh mede até o canvas hidratado com todos os blocos, não até cada termina
 redesenhar o histórico. Uma execução por cenário: pelo ruído medido no
 `Nightly` (seção "Gate de regressão entre commits"), os tempos variam muito
 entre execuções.
+
+### Resultado em 11/11/2026 (Windows 11, 16 núcleos, 13,8 GiB; fases e eco)
+
+Carregado (20 agentes, 300 blocos comuns + o terminal de digitação, 219
+conexões), 15 s por fase, `dist` de produção. "Antes" é o `main` em `25ed4ad`
+(10/11, antes das tasks de 11/11: saída do PTY em disco, `pty:data` em lote com
+controle de fluxo, arrasto, varreduras de aceite, store ao ir ao Chat, logs do
+chat); "depois" é o `main` em `c064518` com esta bancada. Mediana de 3 rodadas
+de cada lado, intercaladas:
+
+| Fase | Frame p95 | Long task p95 | Entrada → quadro p95 | Tecla → eco p95 | Blocos montados (fora da área) | Mutações/s fora da área (à vista) |
+| --- | --- | --- | --- | --- | --- | --- |
+| Gaveta fechada, antes | 33,3 ms | 61,0 ms | 49,0 ms | — | 53 (0) | 0 (5,0) |
+| Gaveta fechada, depois | 33,3 ms | 63,6 ms | 49,2 ms | — | 53 (0) | 0 (4,9) |
+| Gaveta aberta, antes | 49,8 ms | 84,2 ms | 66,9 ms | 104,3 ms (36 teclas) | 321 (300) | 0 (9,9) |
+| Gaveta aberta, depois | 49,8 ms | 86,0 ms | 65,4 ms | 108,9 ms (36 teclas) | 321 (303) | 0 (9,9) |
+| Arrasto, antes | 16,8 ms | 100,8 ms | 16,1 ms | — | 53 (0) | 0 (5,5) |
+| Arrasto, depois | 16,7 ms | 66,0 ms | 16,1 ms | — | 53 (0) | 0 (5,3) |
+
+Refresh 670 → 632 ms; virtualização de volta depois de fechar a gaveta
+578 → 566 ms; RSS p95 do renderer 774 → 742 MiB e do app 1.195 → 1.162 MiB.
+
+- **A gaveta aberta monta tudo:** de 53 blocos montados para os 321, 300 deles
+  fora da área (`keepCanvasNodesMounted`), e o frame p95 sobe um quadro
+  (33,3 → 49,8 ms). Fechada, a virtualização volta em ~0,57 s.
+- **Fora da área, nada redesenha:** com 20 agentes transmitindo, zero mutação
+  de DOM nos blocos fora da área em todas as fases e rodadas, contra 5–10/s nos
+  blocos à vista (o controle). É a prova no app real do que a fatia 1 de 28/09
+  provou por teste.
+- **Gate:** antes × depois, mediana de 3, sem regressão nas 6 métricas dos 4
+  cenários. Controles com o mesmo código: uma rodada contra uma acusou 3
+  "regressões" (degraus de um quadro e eco); 2 contra 2 ainda acusou o eco no
+  limite (+20,0%, +18,6 ms); 3 contra 3, nos dois sentidos, nenhuma.
+- **Baseline local:** as três rodadas do "depois" estão em
+  `docs/performance/baseline-canvas-many-agents-win32-{1,2,3}.json`.
 
 ## Benchmark do typecheck
 
