@@ -1344,3 +1344,7 @@ limpos; smoke local A, B, D e F passam (C e E têm a falha só desta máquina, r
 **Limites.** Não abri o Claude Code nem o Codex reais no app: os testes usam saídas capturadas das CLIs num PTY real. Antes do REPL a
 varredura ainda custa ~94 µs por pedaço (os reconhecedores compactam a janela de 12.000), só durante a abertura. CLIs sem leitor de
 linha de entrada (Gemini, Openia) não têm varredura de aceite, então nada muda para elas.
+
+**Adendo (2026-11-11, depois do push): CI e Release.** O CI de `afabd0c` (run 43047183720, 12:19–12:26) passou no escopo, no
+Validate em Windows, macOS, Ubuntu e Ubuntu ARM e no `Canvas smoke (ubuntu-latest)`; o Release gate (run 43048435370) e o Release
+(run 43048476681, 12:27–12:34) saíram verdes e publicaram a `v0.1.525` nos três sistemas.
