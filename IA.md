@@ -1618,3 +1618,31 @@ Validate em Windows, macOS, Ubuntu e Ubuntu ARM e no `Canvas smoke (ubuntu-lates
 (run 43091421068, 16:53–17:02) saíram verdes e publicaram a `v0.1.529` nos três sistemas. Pendência aberta no Notion: conferir no
 app a fila iniciada depois de 2 minutos, com a cadeia ligada; nota deixada na task das prévias acumuladas (reaproveitar a prévia
 aberta não pode juntar dois itens da fila na mesma proposta).
+
+---
+
+## 2026-11-11 — Contas: espera de limite vencida oferece "Conferir login" no lugar do "Não era limite" sem efeito
+
+**Agente / repositório.** Resolver hotfix — Felixo-AI-Core (`J:/Programação/GitHub/Repositórios/Felixo-AI-Core`). Task
+`3e991f95-497e-814a-ba35-d65bacdde06f` (aberta na revisão da interface da cadeia, PR #97).
+
+**Contexto.** Vencida pelo prazo (`released_by = vencimento`), a espera de limite continua bloqueando até uma checagem de login
+posterior (regra 5 da política; `cooldownBlocks`). A lista da cadeia mostrava "espera vencida · precisa conferir o login antes de
+voltar" com o botão "Não era limite" ao lado, e o `releaseCooldown` devolvia `released: false`: o clique não fazia nada.
+
+**Decisões do Felipe (Trilha B, 11/11/2026).** Opção B (manter a regra 5 e trocar o botão por "Conferir login"); o botão fica na
+linha da espera; a faixa do bloco do terminal fica como está (lá o clique fecha o aviso daquela sessão).
+
+**O que mudou.** `cooldownAction` (`account-chain-view.ts`) escolhe o botão da espera — `check-login` com `needsCheck`,
+`not-a-limit` com a espera de limite correndo, `recharged` na de cobrança — e a `AccountChainSection` mostra "Conferir login" (a
+mesma checagem do "Conferir agora") nesse estado. A política diz que o "Não era limite" vale com a espera correndo. Inventário:
+controle novo e as duas lacunas desta task removidas. Main e faixa sem mudança.
+
+**Medido.** No serviço real da cadeia, com a regra real da espera (o dublê de política do harness trata qualquer espera liberada
+como livre): espera de limite com fim em 10 min, 11 min depois a varredura a marca `vencimento`; o membro segue `em-espera`;
+"Não era limite" devolve `{ ok: true, released: false }` e ele continua `em-espera`; uma checagem de login OK o tira da espera.
+`cooldownAction` com 2 testes (falhavam antes). `npm test` 3226 (3216 passam, 0 falham); vitest 3460; `tsc -b`, `eslint .` e
+`vite build` limpos.
+
+**Limites.** O botão não foi clicado no app (o perfil isolado não tem cadeia configurada); a lista da cadeia segue sem teste de
+componente, como o inventário já registrava.
