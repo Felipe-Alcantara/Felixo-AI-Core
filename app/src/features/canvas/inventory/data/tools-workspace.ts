@@ -955,7 +955,7 @@ export const workspaceToolSurfaces: InventoryElement[] = [
         locator: 'onClick={run}',
         kind: 'button',
         effect:
-          'Exportar: canvas:export monta o pacote e files:save-text abre o "Salvar como" de um .fxcanvas; Importar: abre o seletor (input escondido na barra), valida tamanho (60 MB) e conteúdo (canvas:validate-import), pede confirmação e substitui o canvas (canvas:import), fechando qualquer ferramenta',
+          'Exportar: canvas:export monta o pacote e files:save-text abre o "Salvar como" de um .fxcanvas; Exportar com a saída dos terminais: o mesmo, levando a cauda (até 1 MB por terminal, 8 MB no total) do arquivo em disco de cada bloco, crua, que a importação devolve ao arquivo do bloco; Importar: abre o seletor (input escondido na barra), valida tamanho (60 MB) e conteúdo (canvas:validate-import), pede confirmação e substitui o canvas (canvas:import), fechando qualquer ferramenta',
         failure:
           'erros viram window.alert com a mensagem ("Não foi possível exportar o canvas.", "Arquivo .fxcanvas inválido." …); cancelar o salvar ou o confirm não faz nada; importação falha regrava os blocos atuais',
         disabledWhen: 'isBusy',

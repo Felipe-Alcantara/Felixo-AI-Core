@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useId, useRef, useState } from 'react'
 import {
   ArrowRightLeft,
   ChevronLeft,
   ChevronRight,
   Eye,
+  History,
   Maximize2,
   Minimize2,
   Pin,
@@ -17,6 +18,7 @@ import {
 } from '../terminal/terminal-session-context'
 import { CopyButton } from './TerminalCopyButton'
 import { TerminalReadingPanel } from './TerminalReadingPanel'
+import { ptySessionIdForNode } from '../terminal/pty-session-id'
 import { TerminalScrollRail } from './TerminalScrollRail'
 import { useClaudeScrollRail } from '../hooks/useClaudeScrollRail'
 import { claudeScrollRailPlacement } from '../terminal/terminal-claude-scroll'
@@ -129,6 +131,11 @@ const MIN_WIDTH = DRAWER_MIN_WIDTH
  * node. It attaches the session's already-running xterm element (the PTY never
  * stopped), so expanding just reveals ongoing work.
  */
+// Sob demanda: o painel traz o próprio xterm, que fica fora do carregamento inicial.
+const TerminalArchivePanel = lazy(() =>
+  import('./TerminalArchivePanel').then((module) => ({ default: module.TerminalArchivePanel })),
+)
+
 export function TerminalDrawer({
   sessionId,
   title,
@@ -198,6 +205,9 @@ export function TerminalDrawer({
   const readingPanelRef = useRef<HTMLDivElement | null>(null)
   const hasReading = Boolean(onReadingModeChange && readingProfile)
   const readingActive = hasReading && readingMode
+  // Aberto para ESTE bloco: trocar de terminal na gaveta fecha sem efeito extra.
+  const [archiveFor, setArchiveFor] = useState<string | null>(null)
+  const archiveOpen = archiveFor === sessionId
   const scrollRailPlacement = claudeScrollRailPlacement({ visible: scrollRail.visible, readingActive })
   const [width, setWidth] = useState(() => {
     const maxWidth = getDrawerMaxWidth(window.innerWidth)
@@ -630,6 +640,20 @@ export function TerminalDrawer({
           {!collapsed && (
             <button
               type="button"
+              onClick={() => setArchiveFor(archiveOpen ? null : sessionId)}
+              className={`felixo-btn-icon rounded-sm p-1 hover:bg-white/10 hover:text-zinc-100 ${
+                archiveOpen ? 'bg-white/10 text-zinc-100' : 'text-zinc-400'
+              }`}
+              aria-label="Histórico arquivado"
+              aria-pressed={archiveOpen}
+              title="Histórico arquivado: a saída inteira deste terminal, guardada em disco por 14 dias"
+            >
+              <History size={16} />
+            </button>
+          )}
+          {!collapsed && (
+            <button
+              type="button"
               onClick={restart}
               className="felixo-btn-icon rounded-sm p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
               aria-label="Reiniciar terminal"
@@ -799,8 +823,8 @@ export function TerminalDrawer({
           id="canvas-terminal-output"
           role={hasReading ? 'tabpanel' : undefined}
           aria-labelledby={hasReading ? terminalTabId : undefined}
-          aria-hidden={collapsed || readingActive}
-          inert={readingActive}
+          aria-hidden={collapsed || readingActive || archiveOpen}
+          inert={readingActive || archiveOpen}
           className="h-full min-w-0 flex-1 overflow-hidden px-1 pb-2 pt-1"
         />
         {/* Claude em tela cheia: o xterm não tem barra nessa tela, então o app põe a dele ao lado. */}
@@ -820,6 +844,17 @@ export function TerminalDrawer({
             labelledBy={readingTabId}
             panelRef={readingPanelRef}
           />
+        )}
+        {archiveOpen && !collapsed && (
+          <Suspense fallback={null}>
+            <TerminalArchivePanel
+              ptySessionId={ptySessionIdForNode(sessionId)}
+              onClose={() => {
+                setArchiveFor(null)
+                store.focus(sessionId)
+              }}
+            />
+          </Suspense>
         )}
       </div>
     </div>

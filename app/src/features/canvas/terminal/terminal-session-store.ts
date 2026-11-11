@@ -1,6 +1,7 @@
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
+import { ptySessionIdForNode } from './pty-session-id'
 import { findSpanningUrlLinks } from './terminal-spanning-url-links'
 import {
   describeTerminalLinkHover,
@@ -619,6 +620,8 @@ function readScrollbackStatus(
       alreadyTruncated: previous?.limit === limit && previous.historyTruncated,
     }),
     replayLimitChars: TERMINAL_REPLAY_BUFFER_CHARS,
+    // O corte da retomada é deste xterm: vale até ele ser recriado.
+    ...(previous?.replayTruncated ? { replayTruncated: true } : {}),
   }
 }
 
@@ -853,7 +856,7 @@ export class TerminalSessionStore {
       // The id must survive renderer HMR, navigation to Chat and a drawer
       // remount. The Electron process uses it to reattach instead of spawning
       // a second CLI in the same project.
-      ptySessionId: `canvas:${id}`,
+      ptySessionId: ptySessionIdForNode(id),
       terminal,
       fitAddon,
       listeners: this.listeners.get(id) ?? new Set(),
@@ -1139,6 +1142,13 @@ export class TerminalSessionStore {
             // Reanexo não é retomada: o processo vivo já respondeu à retomada
             // dele há muito tempo, e o que chegou até aqui foi o eco do buffer.
             session.resumeWatch = undefined
+            if (result.replayTruncated) {
+              // O xterm recriado só recebeu a cauda do replay: o aviso aponta o
+              // Histórico arquivado da gaveta, onde está o começo.
+              this.update(session, {
+                scrollback: { ...readScrollbackStatus(session.terminal, session.outputLineCount), replayTruncated: true },
+              })
+            }
             this.markWorking(session)
             return
           }

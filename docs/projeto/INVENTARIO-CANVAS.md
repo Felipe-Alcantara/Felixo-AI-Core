@@ -29,10 +29,10 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 
 ## Números
 
-- **Elementos:** 100 (10 blocos, 16 ferramentas, 74 outras superfícies)
-- **Controles:** 378, dos quais 57 com teste específico
+- **Elementos:** 101 (10 blocos, 16 ferramentas, 75 outras superfícies)
+- **Controles:** 381, dos quais 57 com teste específico
 - **Elementos sem nenhum teste:** 4
-- **Lacunas:** 266 (alto 8, médio 141, baixo 117), em 76 tasks
+- **Lacunas:** 267 (alto 8, médio 142, baixo 117), em 76 tasks
 
 ## Moldura do canvas
 
@@ -962,9 +962,9 @@ Sem controle próprio: as ações vêm de outros elementos.
 ### Gaveta do terminal
 
 - **ID:** `terminal-drawer` · **Dono:** `src/features/canvas/components/TerminalDrawer.tsx`
-- **Persistência:** localStorage felixo:terminal-drawer-pinned; localStorage felixo:terminal-drawer-collapsed; localStorage felixo:terminal-drawer-width (gravado ao soltar o arrasto, setas ou Home); processo principal: PTY vivo (fechar ou recolher não encerra); canvas salvo (dados do nó): resumeChoice, resumeFailure e sessionStartedAt gravados pelas ações; canvas salvo (dados do nó): readingMode, gravado pelas abas Terminal \| Leitura
-- **IPC:** `pty:spawn`, `pty:kill`, `pty:resize`
-- **Depende de:** `TerminalSessionProvider`, `useTerminalSessions`, `useSessionSnapshot`, `useCanvasSurfaces`, `useExitAnimation`, `terminal-drawer-pin`, `attachTerminalFitLifecycle`, `visibleTerminalResumeBanner`, `resolveOpenEditorFile`, `CanvasView.relaunchTerminal`, `CanvasView.handleResumeAction`
+- **Persistência:** localStorage felixo:terminal-drawer-pinned; localStorage felixo:terminal-drawer-collapsed; localStorage felixo:terminal-drawer-width (gravado ao soltar o arrasto, setas ou Home); processo principal: PTY vivo (fechar ou recolher não encerra); canvas salvo (dados do nó): resumeChoice, resumeFailure e sessionStartedAt gravados pelas ações; canvas salvo (dados do nó): readingMode, gravado pelas abas Terminal \| Leitura; processo principal: arquivo em disco da saída do PTY (userData/pty-output, 14 dias), lido pelo Histórico arquivado
+- **IPC:** `pty:spawn`, `pty:kill`, `pty:resize`, `pty:archive-read`
+- **Depende de:** `TerminalSessionProvider`, `useTerminalSessions`, `useSessionSnapshot`, `useCanvasSurfaces`, `useExitAnimation`, `terminal-drawer-pin`, `attachTerminalFitLifecycle`, `visibleTerminalResumeBanner`, `resolveOpenEditorFile`, `CanvasView.relaunchTerminal`, `CanvasView.handleResumeAction`, `TerminalArchivePanel (lazy)`
 - **Sobreposição:** Coluna encostada à direita, relative z-20 (focus-within z-30), altura total; a largura (mínimo 440, recolhida 44) é negociada com o painel e o inspector por splitHorizontalSpace, então empurra o canvas em vez de cobri-lo. Fica abaixo do cartão de pedido de página e dos toasts (z 50) e dos modais (z 60); clicar numa camada flutuante (data-felixo-floating-layer) não conta como clique fora.
 - **Testes:** `src/features/canvas/components/terminal-drawer-pin.test.ts`, `src/features/canvas/components/terminal-fit-lifecycle.test.ts`, `src/features/canvas/components/terminal-open-file.test.ts`, `src/features/canvas/services/canvas-surfaces.test.ts`, `src/features/shared/focus/floating-layer.test.ts`, `scripts/canvas-smoke.cjs` → `checarInteracoes`, `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos`, `scripts/canvas-smoke-prompts.cjs` → `criarSessaoDePrompts`, `scripts/canvas-smoke-links.cjs` → `criarSessaoDeLinks`, `scripts/canvas-smoke-contas.cjs` → `criarSessaoDaCadeia`
 
@@ -973,7 +973,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | normal | Bloco expandido: o xterm vivo da sessão é anexado (attach + fit) e o PTY segue de pé; o cabeçalho mostra "trabalhando" (working), "aguardando" (idle) ou "encerrado" (exited). |
 | loading | Sem snapshot ou com activity "starting": rótulo vazio no cabeçalho e ponto amarelo no trilho recolhido. |
 | empty | Passar responsabilidade sem histórico ("Este terminal ainda não tem histórico para transferir.") ou prévia sem nano/vim ("Não achei nenhum arquivo aberto com nano/vim neste terminal.") em faixa vermelha. |
-| error | snapshot.message (spawn recusado, "encerrou sem produzir saída", ponte PTY ausente) em faixa vermelha; contextWarning e aviso de scrollback em faixa amarela. |
+| error | snapshot.message (spawn recusado, "encerrou sem produzir saída", ponte PTY ausente) em faixa vermelha; contextWarning e aviso de scrollback em faixa amarela (inclusive o corte da retomada: o reanexo trouxe só a cauda do replay e o começo está no Histórico arquivado). |
 | pending | Retomada pendente sem processo (awaitingResumeChoice): rótulo "aguardando escolha" e a faixa de retomada com as saídas. |
 | disabled | Recolhida (trilho de 44 px, COLLAPSED_WIDTH): só Expandir e Fechar; o xterm fica invisível e aria-hidden, o PTY continua rodando. |
 
@@ -982,6 +982,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `Recolher terminal` (button) | clique | Alterna recolhida (trilho de 44 px) e expandida, grava localStorage felixo:terminal-drawer-collapsed ("1"/"0") e sai do maximizado; ao expandir refaz o fit (pty:resize) e devolve o foco ao xterm. | Sem falha própria: o PTY não é tocado. setItem sem try/catch: storage bloqueado lançaria dentro do updater do estado. | — |
 | `Maximizar terminal` (button) | clique | Pede a largura innerWidth − 120 ao coordenador (splitHorizontalSpace decide a final) e marca aria-pressed; tira o recolhido e grava felixo:terminal-drawer-collapsed="0". O maximizado não é persistido. (desabilitado: some com a gaveta recolhida) | Sem falha própria; a largura final pode sair menor que a pedida quando o painel da esquerda ocupa espaço. | — |
 | `aria-label="Reiniciar terminal"` (button) | clique | Com retomada pendente não sobe nada: revela a faixa para o processo atual e foca o primeiro botão dela. Sem pendência, pede window.confirm se o processo está vivo e chama relaunchTerminal do CanvasView (resolveTerminalRelaunch → store.restart → pty:kill + pty:spawn, generation + 1, sessionStartedAt gravado no nó). (desabilitado: some com a gaveta recolhida) | Cancelar o confirm não faz nada. O retorno "held"/"missing" de relaunchTerminal é ignorado: nada acontece e nada é dito. Spawn recusado vira activity "error" com a mensagem na faixa vermelha. | — |
+| `aria-label="Histórico arquivado"` (button) | clique | Abre e fecha, por cima do xterm, o Histórico arquivado deste bloco (TerminalArchivePanel, carregado sob demanda): a saída inteira do PTY lida do arquivo em disco (pty:archive-read). O xterm vivo fica por baixo, inert e aria-hidden, do mesmo tamanho; aria-pressed marca aberto, e trocar de bloco na gaveta fecha. (desabilitado: some com a gaveta recolhida) | Sem falha própria: erro de leitura aparece no painel. Não toca o processo. | — |
 | `Ver arquivo em modo renderizado` (button) | clique | resolveOpenEditorFile acha o arquivo aberto com nano/vim (opções de lançamento ou histórico do shell via getShellHistory) e chama openTextFileNode: cria ou reaproveita o bloco arquivo em visualização ao lado. (desabilitado: some recolhida ou sem onOpenFilePreview) | Sem arquivo detectado: faixa vermelha "Não achei nenhum arquivo aberto com nano/vim neste terminal.". | — |
 | `data-canvas-handoff-trigger` (button) | clique | Lê o buffer ativo do xterm (getTranscript: { text, screenOnly }) e abre o HandoffDialog com ele (setHandoff no CanvasView). Com o terminal na tela alternativa (Claude Code), o texto é só a tela e o diálogo, o prompt do agente e a troca de conta dizem isso (SCREEN_ONLY_NOTICE). (desabilitado: some recolhida ou sem onPassResponsibility) | Histórico vazio: faixa vermelha "Este terminal ainda não tem histórico para transferir." e nenhum diálogo. Com o Claude na tela alternativa só a tela vai, e o diálogo avisa. | `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos` |
 | `Fixar terminal` (button) | clique | Alterna fixada e grava localStorage felixo:terminal-drawer-pinned; fixada, o mousedown fora não fecha a gaveta (shouldCloseOnOutsideClick). (desabilitado: some com a gaveta recolhida) | Sem falha própria; desafixada, clicar na sidebar ou num painel fecha a gaveta. | `scripts/canvas-smoke-prompts.cjs` → `criarSessaoDePrompts` |
@@ -991,11 +992,37 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Recolher, Maximizar e Ver arquivo em modo renderizado não são clicados em nenhum teste (o smoke só abre, fixa, passa responsabilidade e fecha). | médio | `3ec91f95-497e-81e8-8f18-e2a529b0568e` |
+| Recolher, Maximizar, Histórico arquivado e Ver arquivo em modo renderizado não são clicados em nenhum teste (o smoke só abre, fixa, passa responsabilidade e fecha). | médio | `3ec91f95-497e-81e8-8f18-e2a529b0568e` |
 | Reiniciar e os botões da faixa de retomada na gaveta não têm teste de clique; o store falso do smoke A não reproduz a faixa. | médio | `3eb91f95-497e-811b-8eb0-e620c6f37e21` |
 | O cabeçalho não nomeia "waiting_approval", "starting" nem "error": o rótulo fica vazio justo quando o agente pede aprovação (TerminalDrawer.tsx:533-541; o cartão e a notificação dizem "Precisa de resposta"). | baixo | `3ec91f95-497e-8103-b360-c1979d6992f4` |
 | Desafixada, clicar num painel da sidebar (Prompts, Skills) fecha a gaveta antes de o texto chegar ao terminal. | médio | `3eb91f95-497e-814a-8b2c-e471e09f6ff3` |
 | Com a gaveta aberta, a barra de status encolhe até 160 px e quebra. | médio | `3e791f95-497e-81bd-8e8c-de6f9e16cec5` |
+
+### Histórico arquivado do terminal
+
+- **ID:** `terminal-archive` · **Dono:** `src/features/canvas/components/TerminalArchivePanel.tsx`
+- **Persistência:** processo principal: arquivo em disco userData/pty-output (segmentos de 8 MB, 64 MB por sessão, 1 GB no total, 14 dias sem escrita), saída crua; nenhuma para a janela: relida a cada abertura
+- **IPC:** `pty:archive-read`
+- **Depende de:** `terminal-output-archive (páginas e janela)`, `pty-session-id (canvas:<id>)`, `TerminalDrawer (abre e fecha)`
+- **Sobreposição:** Absoluto (inset-0, z-10) dentro da área do terminal na gaveta, por cima do xterm, do trilho do Claude e da Leitura; o xterm vivo fica por baixo, inert e do mesmo tamanho (a CLI não redesenha).
+- **Testes:** `src/features/canvas/terminal/terminal-output-archive.test.ts`, `electron/services/pty-output-archive.test.cjs`, `electron/services/pty-ipc-handlers.test.cjs`
+
+| Estado | Quando |
+| --- | --- |
+| normal | Painel por cima do xterm na gaveta: a cauda (256 KB) do arquivo em disco da saída do PTY num xterm só de leitura, com "Mostrando X de Y guardados". Cada processo novo do bloco começa com a marca "── [Felixo] novo processo em … ──". |
+| loading | Antes da primeira página: "Lendo o Histórico arquivado…"; durante Carregar mais, o botão diz "Carregando…". |
+| empty | Bloco sem saída gravada: "Nada arquivado ainda para este terminal." |
+| error | Arquivo indisponível ou leitura recusada: a mensagem do main em faixa vermelha (role=alert); a janela já lida continua na tela. |
+| disabled | Carregar mais desabilitado no começo do arquivo ("desde o começo") ou quando o trecho mais antigo já saiu (14 dias sem escrita, teto de 64 MB por sessão ou de 1 GB no total). |
+
+| Controle | Gatilho | Efeito | Falha conhecida | Teste |
+| --- | --- | --- | --- | --- |
+| `Carregar mais` (button) | clique | Pede ao main (pty:archive-read) a página de 256 KB que termina no começo da janela e a põe na frente; acima de 2 MB as páginas mais novas saem da janela. O xterm de leitura é reescrito inteiro e rola para o topo, onde chegou o trecho novo. (desabilitado: sem saída guardada antes da janela, ou enquanto carrega) | Erro do main em faixa vermelha; a janela não muda. | — |
+| `Voltar ao terminal` (button) | clique | Fecha o painel e devolve o foco ao xterm vivo. | Sem falha própria. | — |
+
+| Lacuna | Risco | Task |
+| --- | --- | --- |
+| Nenhum smoke abre o painel, clica em Carregar mais nem confere o xterm de leitura; a interface foi conferida só no app isolado (devtools). | médio | `3ec91f95-497e-81e8-8f18-e2a529b0568e` |
 
 ### Trilho de rolagem do Claude Code
 
@@ -1260,7 +1287,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 ### Ciclo do processo PTY no renderer
 
 - **ID:** `terminal-pty-session` · **Dono:** `src/features/canvas/terminal/terminal-session-store.ts`
-- **Persistência:** processo principal: PTY vivo, reanexado por canvas:<id> (reuseExisting) depois de recarregar ou voltar do chat; memória do renderer: xterm e scrollback (o main reemite o buffer de replay no reanexo)
+- **Persistência:** processo principal: PTY vivo, reanexado por canvas:<id> (reuseExisting) depois de recarregar ou voltar do chat; memória do renderer: xterm e scrollback (o main reemite o buffer de replay no reanexo; result.replayTruncated avisa quando o replay cortou o começo); processo principal: arquivo em disco da saída inteira (pty-output-archive.cjs, 14 dias)
 - **IPC:** `pty:spawn`, `pty:write`, `pty:resize`, `pty:kill`, `pty:data`, `pty:exit`, `pty:session`, `context-file:write`, `context-file:path-typed`, `context-file:release`, `files:save-attachment`, `files:save-clipboard-image`
 - **Depende de:** `TerminalSessionProvider`, `pty-event-router`, `resume-outcome-detector`, `terminal-input`, `terminal-screen-state`, `terminal-scrollback`, `context-file-delivery`, `xterm (FitAddon, WebLinksAddon)`
 - **Sobreposição:** Não renderiza superfície própria: o elemento xterm é anexado ao cartão ou à gaveta (attach limpa o container antes, para não empilhar terminais).
@@ -2071,7 +2098,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Controle | Gatilho | Efeito | Falha conhecida | Teste |
 | --- | --- | --- | --- | --- |
 | `onClick={() => onSelect(tool)}` (button) | clique | hover/foco pré-carrega o chunk daquela ferramenta (preloadCanvasTool); o clique alterna activeTool no CanvasView (a mesma ferramenta fecha); Tarefas Notion não abre painel: cria/foca o bloco NotionTasksNode | falha no pré-carregamento é engolida de propósito; a falha real aparece no painel de erro do hospedeiro ao abrir | `scripts/canvas-smoke-prompts.cjs` → `abrirPainel` |
-| `onClick={run}` (button) | clique | Exportar: canvas:export monta o pacote e files:save-text abre o "Salvar como" de um .fxcanvas; Importar: abre o seletor (input escondido na barra), valida tamanho (60 MB) e conteúdo (canvas:validate-import), pede confirmação e substitui o canvas (canvas:import), fechando qualquer ferramenta (desabilitado: isBusy) | erros viram window.alert com a mensagem ("Não foi possível exportar o canvas.", "Arquivo .fxcanvas inválido." …); cancelar o salvar ou o confirm não faz nada; importação falha regrava os blocos atuais | — |
+| `onClick={run}` (button) | clique | Exportar: canvas:export monta o pacote e files:save-text abre o "Salvar como" de um .fxcanvas; Exportar com a saída dos terminais: o mesmo, levando a cauda (até 1 MB por terminal, 8 MB no total) do arquivo em disco de cada bloco, crua, que a importação devolve ao arquivo do bloco; Importar: abre o seletor (input escondido na barra), valida tamanho (60 MB) e conteúdo (canvas:validate-import), pede confirmação e substitui o canvas (canvas:import), fechando qualquer ferramenta (desabilitado: isBusy) | erros viram window.alert com a mensagem ("Não foi possível exportar o canvas.", "Arquivo .fxcanvas inválido." …); cancelar o salvar ou o confirm não faz nada; importação falha regrava os blocos atuais | — |
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
@@ -2951,7 +2978,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3ec91f95-497e-8197-a218-ef49c302013d` — 8 lacunas
 - `3ec91f95-497e-81a3-9be3-c0d354bf7621` — 13 lacunas
 - `3ec91f95-497e-81ca-8319-ee657b0b6492` — 28 lacunas
-- `3ec91f95-497e-81e8-8f18-e2a529b0568e` — 10 lacunas
+- `3ec91f95-497e-81e8-8f18-e2a529b0568e` — 11 lacunas
 - `3ec91f95-497e-81f7-8b12-c5c252d020c7` — 5 lacunas
 - `3ed91f95-497e-8114-a246-f72c73ae50c4` — 1 lacuna
 - `3f291f95-497e-81fe-8670-fe2fc871318d` — 1 lacuna

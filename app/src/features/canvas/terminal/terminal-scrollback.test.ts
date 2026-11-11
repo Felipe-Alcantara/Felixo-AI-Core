@@ -47,14 +47,21 @@ describe('política de scrollback do terminal', () => {
 
     const perto = terminalScrollbackNotice({ ...base, nearLimit: true })
     expect(perto).toContain('perto do limite de 5.000 linhas')
-    expect(perto).toContain('últimos 200.000 caracteres')
+    expect(perto).toContain('Histórico arquivado')
 
     const cheio = terminalScrollbackNotice({ ...base, historyTruncated: true })
     expect(cheio).toContain('no limite de 5.000 linhas')
     expect(cheio).toContain('recarregar a janela ou voltar do Chat')
+    expect(cheio).toContain('últimos 200.000 caracteres')
+    expect(cheio).toContain('Histórico arquivado')
     expect(cheio).toContain('Copiar e Handoff não trazem de volta o que já saiu')
 
-    for (const texto of [perto, cheio]) {
+    // O corte na retomada vence: é o que acabou de sumir da tela sem aviso.
+    const retomada = terminalScrollbackNotice({ ...base, historyTruncated: true, replayTruncated: true })
+    expect(retomada).toContain('só os últimos 200.000 caracteres da saída voltaram')
+    expect(retomada).toContain('Histórico arquivado')
+
+    for (const texto of [perto, cheio, retomada]) {
       // Reabrir a gaveta não reaplica nada e fechar o bloco mata o processo: o
       // texto antigo mandava "fechar e reabrir" como se isso recuperasse algo.
       expect(texto).not.toMatch(/reabr/i)

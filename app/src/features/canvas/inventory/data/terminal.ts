@@ -21,7 +21,7 @@ export const terminalSurfaces: InventoryElement[] = [
       normal: 'Bloco expandido: o xterm vivo da sessão é anexado (attach + fit) e o PTY segue de pé; o cabeçalho mostra "trabalhando" (working), "aguardando" (idle) ou "encerrado" (exited).',
       loading: 'Sem snapshot ou com activity "starting": rótulo vazio no cabeçalho e ponto amarelo no trilho recolhido.',
       pending: 'Retomada pendente sem processo (awaitingResumeChoice): rótulo "aguardando escolha" e a faixa de retomada com as saídas.',
-      error: 'snapshot.message (spawn recusado, "encerrou sem produzir saída", ponte PTY ausente) em faixa vermelha; contextWarning e aviso de scrollback em faixa amarela.',
+      error: 'snapshot.message (spawn recusado, "encerrou sem produzir saída", ponte PTY ausente) em faixa vermelha; contextWarning e aviso de scrollback em faixa amarela (inclusive o corte da retomada: o reanexo trouxe só a cauda do replay e o começo está no Histórico arquivado).',
       empty: 'Passar responsabilidade sem histórico ("Este terminal ainda não tem histórico para transferir.") ou prévia sem nano/vim ("Não achei nenhum arquivo aberto com nano/vim neste terminal.") em faixa vermelha.',
       disabled: 'Recolhida (trilho de 44 px, COLLAPSED_WIDTH): só Expandir e Fechar; o xterm fica invisível e aria-hidden, o PTY continua rodando.',
     },
@@ -44,6 +44,13 @@ export const terminalSurfaces: InventoryElement[] = [
         kind: 'button',
         effect: 'Com retomada pendente não sobe nada: revela a faixa para o processo atual e foca o primeiro botão dela. Sem pendência, pede window.confirm se o processo está vivo e chama relaunchTerminal do CanvasView (resolveTerminalRelaunch → store.restart → pty:kill + pty:spawn, generation + 1, sessionStartedAt gravado no nó).',
         failure: 'Cancelar o confirm não faz nada. O retorno "held"/"missing" de relaunchTerminal é ignorado: nada acontece e nada é dito. Spawn recusado vira activity "error" com a mensagem na faixa vermelha.',
+        disabledWhen: 'some com a gaveta recolhida',
+      },
+      {
+        locator: 'aria-label="Histórico arquivado"',
+        kind: 'button',
+        effect: 'Abre e fecha, por cima do xterm, o Histórico arquivado deste bloco (TerminalArchivePanel, carregado sob demanda): a saída inteira do PTY lida do arquivo em disco (pty:archive-read). O xterm vivo fica por baixo, inert e aria-hidden, do mesmo tamanho; aria-pressed marca aberto, e trocar de bloco na gaveta fecha.',
+        failure: 'Sem falha própria: erro de leitura aparece no painel. Não toca o processo.',
         disabledWhen: 'some com a gaveta recolhida',
       },
       {
@@ -101,8 +108,9 @@ export const terminalSurfaces: InventoryElement[] = [
       'processo principal: PTY vivo (fechar ou recolher não encerra)',
       'canvas salvo (dados do nó): resumeChoice, resumeFailure e sessionStartedAt gravados pelas ações',
       'canvas salvo (dados do nó): readingMode, gravado pelas abas Terminal | Leitura',
+      'processo principal: arquivo em disco da saída do PTY (userData/pty-output, 14 dias), lido pelo Histórico arquivado',
     ],
-    ipc: ['pty:spawn', 'pty:kill', 'pty:resize'],
+    ipc: ['pty:spawn', 'pty:kill', 'pty:resize', 'pty:archive-read'],
     dependsOn: [
       'TerminalSessionProvider',
       'useTerminalSessions',
@@ -115,6 +123,7 @@ export const terminalSurfaces: InventoryElement[] = [
       'resolveOpenEditorFile',
       'CanvasView.relaunchTerminal',
       'CanvasView.handleResumeAction',
+      'TerminalArchivePanel (lazy)',
     ],
     tests: [
       { file: 'src/features/canvas/components/terminal-drawer-pin.test.ts' },
@@ -130,7 +139,7 @@ export const terminalSurfaces: InventoryElement[] = [
     ],
     gaps: [
       {
-        what: 'Recolher, Maximizar e Ver arquivo em modo renderizado não são clicados em nenhum teste (o smoke só abre, fixa, passa responsabilidade e fecha).',
+        what: 'Recolher, Maximizar, Histórico arquivado e Ver arquivo em modo renderizado não são clicados em nenhum teste (o smoke só abre, fixa, passa responsabilidade e fecha).',
         risk: 'médio',
         task: '3ec91f95-497e-81e8-8f18-e2a529b0568e',
       },
@@ -156,6 +165,57 @@ export const terminalSurfaces: InventoryElement[] = [
       },
     ],
     overlap: 'Coluna encostada à direita, relative z-20 (focus-within z-30), altura total; a largura (mínimo 440, recolhida 44) é negociada com o painel e o inspector por splitHorizontalSpace, então empurra o canvas em vez de cobri-lo. Fica abaixo do cartão de pedido de página e dos toasts (z 50) e dos modais (z 60); clicar numa camada flutuante (data-felixo-floating-layer) não conta como clique fora.',
+  },
+  {
+    id: 'terminal-archive',
+    name: 'Histórico arquivado do terminal',
+    layer: 'terminal',
+    owner: 'src/features/canvas/components/TerminalArchivePanel.tsx',
+    states: {
+      normal: 'Painel por cima do xterm na gaveta: a cauda (256 KB) do arquivo em disco da saída do PTY num xterm só de leitura, com "Mostrando X de Y guardados". Cada processo novo do bloco começa com a marca "── [Felixo] novo processo em … ──".',
+      loading: 'Antes da primeira página: "Lendo o Histórico arquivado…"; durante Carregar mais, o botão diz "Carregando…".',
+      empty: 'Bloco sem saída gravada: "Nada arquivado ainda para este terminal."',
+      error: 'Arquivo indisponível ou leitura recusada: a mensagem do main em faixa vermelha (role=alert); a janela já lida continua na tela.',
+      disabled: 'Carregar mais desabilitado no começo do arquivo ("desde o começo") ou quando o trecho mais antigo já saiu (14 dias sem escrita, teto de 64 MB por sessão ou de 1 GB no total).',
+    },
+    controls: [
+      {
+        locator: 'Carregar mais',
+        kind: 'button',
+        effect: 'Pede ao main (pty:archive-read) a página de 256 KB que termina no começo da janela e a põe na frente; acima de 2 MB as páginas mais novas saem da janela. O xterm de leitura é reescrito inteiro e rola para o topo, onde chegou o trecho novo.',
+        failure: 'Erro do main em faixa vermelha; a janela não muda.',
+        disabledWhen: 'sem saída guardada antes da janela, ou enquanto carrega',
+      },
+      {
+        locator: 'Voltar ao terminal',
+        kind: 'button',
+        effect: 'Fecha o painel e devolve o foco ao xterm vivo.',
+        failure: 'Sem falha própria.',
+      },
+    ],
+    persistence: [
+      'processo principal: arquivo em disco userData/pty-output (segmentos de 8 MB, 64 MB por sessão, 1 GB no total, 14 dias sem escrita), saída crua',
+      'nenhuma para a janela: relida a cada abertura',
+    ],
+    ipc: ['pty:archive-read'],
+    dependsOn: [
+      'terminal-output-archive (páginas e janela)',
+      'pty-session-id (canvas:<id>)',
+      'TerminalDrawer (abre e fecha)',
+    ],
+    tests: [
+      { file: 'src/features/canvas/terminal/terminal-output-archive.test.ts' },
+      { file: 'electron/services/pty-output-archive.test.cjs' },
+      { file: 'electron/services/pty-ipc-handlers.test.cjs' },
+    ],
+    gaps: [
+      {
+        what: 'Nenhum smoke abre o painel, clica em Carregar mais nem confere o xterm de leitura; a interface foi conferida só no app isolado (devtools).',
+        risk: 'médio',
+        task: '3ec91f95-497e-81e8-8f18-e2a529b0568e',
+      },
+    ],
+    overlap: 'Absoluto (inset-0, z-10) dentro da área do terminal na gaveta, por cima do xterm, do trilho do Claude e da Leitura; o xterm vivo fica por baixo, inert e do mesmo tamanho (a CLI não redesenha).',
   },
   {
     id: 'terminal-claude-scroll-rail',
@@ -1132,7 +1192,8 @@ export const terminalSurfaces: InventoryElement[] = [
     controls: [],
     persistence: [
       'processo principal: PTY vivo, reanexado por canvas:<id> (reuseExisting) depois de recarregar ou voltar do chat',
-      'memória do renderer: xterm e scrollback (o main reemite o buffer de replay no reanexo)',
+      'memória do renderer: xterm e scrollback (o main reemite o buffer de replay no reanexo; result.replayTruncated avisa quando o replay cortou o começo)',
+      'processo principal: arquivo em disco da saída inteira (pty-output-archive.cjs, 14 dias)',
     ],
     ipc: [
       'pty:spawn',

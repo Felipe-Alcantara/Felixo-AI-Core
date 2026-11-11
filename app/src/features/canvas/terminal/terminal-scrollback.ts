@@ -60,6 +60,12 @@ export type TerminalScrollbackStatus = {
   nearLimit: boolean
   /** Replay kept by the main process for a renderer reattach. */
   replayLimitChars: number
+  /**
+   * O reanexo (recarregar a janela, voltar do Chat) recriou o xterm só com a
+   * cauda do replay: o processo já tinha emitido mais que `replayLimitChars`,
+   * e o começo está só no arquivo em disco (Histórico arquivado da gaveta).
+   */
+  replayTruncated?: boolean
 }
 
 /**
@@ -124,12 +130,16 @@ export function terminalScrollbackNotice(
   const limit = formatTerminalScrollbackLines(status.limit)
   const replay = formatTerminalScrollbackLines(status.replayLimitChars)
 
+  if (status.replayTruncated) {
+    return `Ao recriar o terminal (recarregar a janela ou voltar do Chat), só os últimos ${replay} caracteres da saída voltaram para a tela. O começo está no Histórico arquivado da gaveta.`
+  }
+
   if (status.historyTruncated) {
-    return `Histórico visual no limite de ${limit} linhas: as linhas mais antigas estão saindo da tela. Além dela, o app guarda só os últimos ${replay} caracteres da saída, reaplicados quando o terminal é recriado (recarregar a janela ou voltar do Chat); Copiar e Handoff não trazem de volta o que já saiu.`
+    return `Histórico visual no limite de ${limit} linhas: as linhas mais antigas estão saindo da tela, e recriar o terminal (recarregar a janela ou voltar do Chat) traz de volta só os últimos ${replay} caracteres. A saída inteira fica no Histórico arquivado da gaveta por 14 dias; Copiar e Handoff não trazem de volta o que já saiu da tela.`
   }
 
   if (status.nearLimit) {
-    return `Histórico visual perto do limite de ${limit} linhas: ao chegar nele, as linhas mais antigas saem da tela. Além dela, o app guarda só os últimos ${replay} caracteres da saída.`
+    return `Histórico visual perto do limite de ${limit} linhas: ao chegar nele, as linhas mais antigas saem da tela. A saída inteira fica no Histórico arquivado da gaveta por 14 dias.`
   }
 
   return undefined
