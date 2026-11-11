@@ -342,3 +342,54 @@ test('orchestration IPC bridge does NOT fire early guard if structured event arr
   assert.deepEqual(aborted, [], 'must not abort when structured event arrives in time')
   assert.equal(invokeCalls.length, 0)
 })
+
+function createFakeRunner(agentThreadIds = []) {
+  const completed = []
+  const guardChecks = []
+  return {
+    completed,
+    guardChecks,
+    getAgentJobByThreadId: (threadId) => (agentThreadIds.includes(threadId) ? { threadId } : null),
+    onAgentJobCompleted: async (params) => {
+      completed.push(params)
+    },
+    checkOrchestratorDoneWithoutSpawn: async (params) => {
+      guardChecks.push(params)
+    },
+  }
+}
+
+test('parar a thread descarta a saída acumulada do sub-agente e a guarda de texto livre do orquestrador', async () => {
+  // Parado, o sub-agente não emite `done` nem `error`: o texto dele ficava retido na ponte para
+  // sempre, e a guarda do orquestrador ainda disparava depois da parada.
+  const runner = createFakeRunner(['agente-1'])
+  const bridge = createOrchestrationIpcBridge({ runner, freeTextTimeoutMs: 20 })
+
+  bridge.handleCliEvent({ cliEvent: { type: 'text', text: 'saída antiga' }, streamSessionId: 's1', threadId: 'agente-1' })
+  bridge.handleCliEvent({ cliEvent: { type: 'text', text: 'resposta livre' }, streamSessionId: 's2', threadId: 'orquestrador-1' })
+  bridge.discardThread('agente-1')
+  bridge.discardThread('orquestrador-1')
+  await new Promise((resolve) => setTimeout(resolve, 60))
+
+  bridge.handleCliEvent({ cliEvent: { type: 'text', text: 'saída nova' }, streamSessionId: 's3', threadId: 'agente-1' })
+  await bridge.handleCliEvent({ cliEvent: { type: 'done' }, streamSessionId: 's3', threadId: 'agente-1' }).promise
+
+  assert.deepEqual(runner.completed.map((call) => call.result), ['saída nova'])
+  assert.deepEqual(runner.guardChecks, [])
+})
+
+test('a saída acumulada de um sub-agente tem teto e guarda o fim, com aviso do que saiu', () => {
+  const buffers = new Map()
+  const piece = 'x'.repeat(999)
+  for (let index = 0; index < 2500; index += 1) {
+    appendOutput(buffers, 'agente-1', `${piece}${index % 10}`)
+  }
+
+  const output = consumeOutput(buffers, 'agente-1')
+  const [marker, ...rest] = output.split('\n')
+  const kept = rest.join('\n')
+
+  assert.equal(kept.length, 1_000_000)
+  assert.ok(kept.endsWith(`${piece}9`))
+  assert.match(marker, /1500000 caracteres iniciais da saída do sub-agente descartados/)
+})

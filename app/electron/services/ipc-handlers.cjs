@@ -808,6 +808,7 @@ function registerCliIpcHandlers(getMainWindow, dependencies = {}) {
     const cancelledProviderSwitches =
       orchestrationRunner.cancelProviderSwitchesForThread(threadId)
     stoppedSessions.add(threadId)
+    orchestrationBridge.discardThread(threadId)
     const killed = cliManager.kill(threadId)
     const targetWebContents = getTargetWebContents(getMainWindow, event.sender)
     logQaEvent({
@@ -868,6 +869,7 @@ function registerCliIpcHandlers(getMainWindow, dependencies = {}) {
       hadPersistentSession =
         persistentSessions.hasPersistentSession(resetThreadId) || hadPersistentSession
       stoppedSessions.add(resetThreadId)
+      orchestrationBridge.discardThread(resetThreadId)
       const didKill = persistentSessions.closePersistentSession(resetThreadId, {
         force: true,
       })

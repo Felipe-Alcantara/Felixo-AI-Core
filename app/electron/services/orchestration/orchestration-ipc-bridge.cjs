@@ -186,7 +186,17 @@ function createOrchestrationIpcBridge({
     return { handled: false }
   }
 
+  /**
+   * Thread parada ou reiniciada: o processo morre sem `done` nem `error`, então nada consumiria o
+   * texto acumulado do sub-agente nem cancelaria a guarda de texto livre do orquestrador.
+   */
+  function discardThread(threadId) {
+    outputBuffers.delete(threadId)
+    clearGuardState(threadId)
+  }
+
   return {
+    discardThread,
     handleCliEvent,
   }
 }
@@ -258,21 +268,37 @@ function hasActiveAgentJobs(run) {
   return run.agentJobs?.some((job) => job.status === 'pending' || job.status === 'running')
 }
 
+// Teto do texto de um sub-agente que volta ao orquestrador: guarda o fim, onde fica a conclusão.
+const AGENT_OUTPUT_MAX_CHARS = 1_000_000
+
 function appendOutput(outputBuffers, threadId, text) {
   if (!String(text ?? '').trim()) {
     return
   }
 
-  outputBuffers.set(
-    threadId,
-    `${outputBuffers.get(threadId) ?? ''}${text}`,
-  )
+  const buffer = outputBuffers.get(threadId) ?? { text: '', droppedChars: 0 }
+  buffer.text += text
+  // Corta só ao passar do dobro do teto: a cópia do corte fica amortizada por caractere recebido.
+  if (buffer.text.length > 2 * AGENT_OUTPUT_MAX_CHARS) {
+    buffer.droppedChars += buffer.text.length - AGENT_OUTPUT_MAX_CHARS
+    buffer.text = buffer.text.slice(-AGENT_OUTPUT_MAX_CHARS)
+  }
+  outputBuffers.set(threadId, buffer)
 }
 
 function consumeOutput(outputBuffers, threadId) {
-  const output = outputBuffers.get(threadId) ?? ''
+  const buffer = outputBuffers.get(threadId)
   outputBuffers.delete(threadId)
-  return output
+  if (!buffer) {
+    return ''
+  }
+
+  const extra = Math.max(0, buffer.text.length - AGENT_OUTPUT_MAX_CHARS)
+  const droppedChars = buffer.droppedChars + extra
+  const text = extra > 0 ? buffer.text.slice(extra) : buffer.text
+  return droppedChars > 0
+    ? `[… ${droppedChars} caracteres iniciais da saída do sub-agente descartados …]\n${text}`
+    : text
 }
 
 module.exports = {
