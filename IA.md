@@ -1134,3 +1134,62 @@ Estado: concluído (decisão registrada; implementação em task própria).
 **Não validado.** O diálogo de Handoff com um Claude de verdade em tela alternativa (o smoke usa PTY falso, sem xterm); só a marcação do diálogo (renderização no servidor) e o xterm real em Node foram testados, cada um por si. A sessão da troca de conta com `screenOnly` não tem teste de ponta a ponta.
 
 Estado: concluído e publicado (ver commit abaixo).
+
+---
+
+## 2026-11-11 — Terminal: a saída inteira do PTY vai para disco por 14 dias, com Histórico arquivado na gaveta e aviso quando a retomada corta o começo
+
+**Agente / repositório.** Resolver hotfix — Felixo-AI-Core (`J:/Programação/GitHub/Repositórios/Felixo-AI-Core`). Task
+`3e991f95-497e-810b-9f94-ed5201606718` (item 2 do pedido de performance de 28/09, que a fatia 1 deixou de fora).
+
+**Contexto.** O replay do processo principal guarda os últimos 200.000 caracteres e o xterm 5.000 ou 20.000 linhas; nada da
+saída do PTY do canvas ia para disco (o `terminal-log-store` só atende o `cli:*` do chat). Recarregar a janela ou voltar do
+Chat recriava o xterm só com o replay, sem aviso, e não havia "carregar mais".
+
+**Decisões do Felipe (11/11/2026, quatro perguntas pela ferramenta interativa, antes de qualquer código).** Retenção:
+**14 dias** (eu recomendei "enquanto o terminal existir"). Segredos: **gravar cru** (eu recomendei redigir com a redação do
+log de QA). Exportação do canvas: **entra, opcional**. Escopo: **tudo de uma vez** (arquivo, carregar mais e aviso).
+
+**O que mudou.**
+
+1. `electron/services/pty-output-archive.cjs` (novo): uma pasta por sessão em `userData/pty-output` (hash do id, porque
+   `canvas:` tem `:`), segmentos de 8 MB cujo nome é o offset do primeiro byte (apagar um antigo não muda o offset dos outros),
+   64 MB por sessão, 1 GB no total, 14 dias sem escrita, poda no boot e a cada rotação sem tocar o segmento em uso. O `append`
+   só empilha; um timer único grava o lote de todas as sessões a cada 250 ms (256 K caracteres pendentes gravam já), por uma
+   fila por sessão. Falha de disco desliga só aquela sessão até o PTY fechar e nunca lança no `onData`. Leitura paginada do
+   fim ao começo, com o começo avançado até um caractere UTF-8 inteiro.
+2. `pty-process-manager.cjs`: alimenta o arquivo depois do renderer (como a vigia), escreve a marca
+   `── [Felixo] novo processo em … ──` (saindo da tela alternativa) a cada processo novo do bloco, fecha o segmento no
+   `cleanup` e expõe `replayTruncated(sessionId)` (o processo já emitiu mais que o replay).
+3. `pty-ipc-handlers.cjs`: `pty:spawn` do reanexo devolve `replayTruncated`; canal novo `pty:archive-read`; o `dispose` grava
+   o último lote síncrono antes de matar os PTYs. `main.cjs` cria o arquivo e poda no boot.
+4. Renderer: `TerminalArchivePanel.tsx` (carregado sob demanda: 3,76 kB, o xterm fica fora do pacote inicial) com xterm só de
+   leitura, `scrollOnEraseInDisplay` (o `ESC[2J` do ConPTY e das TUIs manda a tela para o histórico em vez de apagar a marca),
+   link OSC 8 desligado e janela de 2 MB (`terminal-output-archive.ts`, puro); botão **Histórico arquivado** na gaveta; o aviso
+   de histórico ganhou o corte da retomada e passou a apontar o arquivo. `ptySessionIdForNode` saiu do store para
+   `pty-session-id.ts`, que a gaveta importa sem puxar o xterm.
+5. Exportação: **Exportar com a saída dos terminais** em Ferramentas → Transferência. O `.fxcanvas` leva `terminalOutputs`
+   (cauda de até 1 MB por terminal, 8 MB no total), validado no `parseCanvasBundle` (bloco existente, sem duplicata, tamanho);
+   a importação devolve a saída só ao arquivo do bloco, depois de trocar o canvas e sem desfazê-lo se falhar.
+6. `benchmark:pty-output` ganhou a variante `atual+arquivo` (tetos antes de medir: extra por pedaço p50 ≤ 10% ou ≤ 0,5 µs,
+   lote de todas as sessões p95 ≤ 2 ms, e a saída inteira de cada sessão conferida no disco).
+7. Inventário do canvas (`terminal-archive` novo, gaveta, store, transferência), guia do usuário e arquitetura.
+
+**Medido.** `npm test` 3168 passam, 0 falham (22 testes novos no main e no benchmark); vitest 220 arquivos, 3427 testes;
+`tsc -b`, `eslint .` e `vite build` limpos, tudo depois de mesclar o `main` de outros agentes (só o `INVENTARIO-CANVAS.md`
+conflitou, regenerado). Benchmark padrão (20 terminais × 2000 pedaços × 5): `atual+arquivo` 0,366–0,414 µs/pedaço contra
+0,349–0,359 sem arquivo; lote p95 0,40–0,41 ms; saída inteira em disco: sim (8.841.380 bytes por rodada). Com um timer por
+sessão (primeira versão) o custo extra por bloco era p50 25%; com o timer único, 18–20% (0,02–0,06 µs), aprovado pelo piso
+absoluto da vigia. App de fonte isolado (devtools, Windows): PowerShell real imprimindo 4.000 linhas de 92 caracteres gravou
+376.168 bytes num segmento só, com a linha 1, a 4000 e `FIM-DA-SAIDA`; o reanexo devolveu `replayTruncated: true`; o cartão e
+a gaveta mostraram o aviso novo; o painel abriu com "Mostrando 256 KB de 367 KB guardados.", o Carregar mais chegou a "desde o
+começo" com a marca e a `linha 00001` no topo e o botão desabilitado; o xterm vivo ficou `inert`. Exportar sem a opção não
+levou `terminalOutputs`; com ela levou os 376.168 bytes, e o pacote passou no `canvas:validate-import`. Antes do
+`scrollOnEraseInDisplay` a marca não aparecia: o `ESC[2J` do ConPTY a apagava no visualizador (visto no começo cru do arquivo).
+
+**Limites.** A saída fica crua em disco e no `.fxcanvas` exportado com a opção (decisão acima): token impresso por uma CLI fica
+lá por até 14 dias. Não validei macOS nem Linux, nem o app empacotado; a importação de um pacote com saída só tem teste
+unitário. O visualizador com TUI de tela cheia (Claude Code) não foi medido: os redesenhos entram como telas sucessivas no
+histórico. A poda só roda no boot e a cada rotação de 8 MB; **Limpar** o canvas não apaga o arquivo (sai pelos 14 dias). No
+fechamento, uma escrita assíncrona ainda em voo pode chegar depois do último lote síncrono, ou não chegar. Nenhum smoke abre o
+Histórico arquivado (lacuna no inventário, task `3ec91f95-497e-81e8-8f18-e2a529b0568e`).

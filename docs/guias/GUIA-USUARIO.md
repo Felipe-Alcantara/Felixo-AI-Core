@@ -623,7 +623,8 @@ Por segurança, o app só abre arquivos que estejam dentro de um projeto registr
 - Ao trocar de agente no configurador, a conta e a lista do agente anterior são limpas imediatamente. Consultas antigas que terminarem depois são descartadas, e o processo principal ainda confere conta, provedor e comando antes de criar o PTY; uma combinação incompatível não inicia o terminal.
 - Ao reiniciar um terminal pelo drawer lateral, o app reaproveita o `accountId` e o provedor persistidos no bloco. O restart continua no perfil selecionado; sem `accountId`, o terminal usa o login do sistema.
 - O histórico visual usa 20.000 linhas quando há até 9 terminais e 5.000 linhas quando o canvas já tem 10 ou mais. O limite é escolhido ao criar a sessão; terminais que já estavam abertos não são redimensionados nem perdem linhas quando outro terminal é adicionado.
-- Se o histórico visual ultrapassar o limite, o cartão e a gaveta avisam. Fechar e reabrir o terminal reaplica o replay vivo mantido pelo processo principal, de até 200.000 caracteres; **Copiar** e **Handoff** usam o trecho que ainda está no buffer visual.
+- Se o histórico visual ultrapassar o limite, o cartão e a gaveta avisam. Recarregar a janela ou voltar do Chat recria o terminal só com os últimos 200.000 caracteres da saída; quando o processo já tinha impresso mais que isso, o aviso diz que o começo ficou de fora. **Copiar** e **Handoff** usam o trecho que ainda está no buffer visual.
+- A saída inteira de cada terminal fica guardada em disco por 14 dias, como saiu (sem esconder senha ou token que uma ferramenta tenha impresso). O botão **Histórico arquivado** (ícone de relógio na barra da gaveta) abre essa saída por cima do terminal, que segue rodando por baixo; **Carregar mais** traz o trecho anterior, até o começo, e **Voltar ao terminal** fecha. Cada processo novo do bloco começa com a linha "── [Felixo] novo processo em … ──". O que passou de 14 dias sem escrita, de 64 MB por terminal ou de 1 GB no total sai do disco, o mais antigo primeiro.
 
 ### Agente na nuvem
 
@@ -930,7 +931,7 @@ A seção **Ferramentas** da barra lateral do canvas (fechada por padrão; cliqu
 
 - **Workspace:** Projetos, Notas, Modelos, Prompts, Skills e Source Control;
 - **Operação:** Fetch All, Tarefas Notion, Limites e uso, Orquestrador, QA Logger, Pedidos de escrita e Presets de agente;
-- **Transferência:** Exportar canvas e Importar canvas.
+- **Transferência:** Exportar canvas, Exportar com a saída dos terminais e Importar canvas.
 
 Escolher uma ferramenta abre o painel correspondente. **Buscar**, **Notificações**, **Ajuda** e **Configurações** não ficam nessa seção: são botões da faixa de ícones à esquerda da barra, onde também estão **Chat** e um atalho para **Projetos**. Se as configurações de **Agente** ou **Notificações** também estiverem abertas, elas se deslocam para a coluna seguinte para não cobrir as opções de Ferramentas. A barra pode ser recolhida; nesse estado, a faixa de ícones continua visível, com as notificações e o botão **Expandir sidebar**.
 
@@ -1075,7 +1076,7 @@ associados aos blocos de arquivo.
 
 Para levar o canvas a outro computador:
 
-1. Clique em **Exportar** e salve o arquivo `.fxcanvas`.
+1. Clique em **Exportar canvas** (ou em **Exportar com a saída dos terminais**, veja abaixo) e salve o arquivo `.fxcanvas`.
 2. Transfira esse arquivo para o outro computador.
 3. No Felixo do computador de destino, clique em **Importar** e selecione o manifesto.
 4. Confira o aviso e confirme a substituição do canvas atual.
@@ -1085,6 +1086,13 @@ pasta local do Felixo. Arquivos registrados que estavam ausentes são recriados 
 Caminhos de projeto, argumentos de terminal e comandos desconhecidos não são
 transportados, pois dependem da máquina de origem ou poderiam executar instruções não
 confiáveis.
+
+**Exportar com a saída dos terminais** (em **Ferramentas → Transferência**) leva também o
+fim do Histórico arquivado de cada terminal: até 1 MB por terminal e 8 MB no total. A
+saída vai como saiu, então pode carregar senha ou token que alguma ferramenta imprimiu:
+use só quando for levar o arquivo para você mesmo ou para quem pode ver isso. Ao importar,
+essa saída volta para o Histórico arquivado do bloco correspondente; ela nunca é enviada
+ao terminal.
 
 O botão **Limpar** pede confirmação e exclui permanentemente todos os blocos,
 conexões e arquivos `.md` pertencentes ao canvas. Essa ação não remove outros tipos de

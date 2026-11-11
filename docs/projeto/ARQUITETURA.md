@@ -639,11 +639,25 @@ manual de links, labels, prompts, retomada e remoção no Canvas real.
   5.000 a partir de 10. `CanvasView` passa apenas o total renderizado; o dado
   não é persistido e uma sessão viva não é redimensionada depois. O processo
   principal mantém até 200.000 caracteres de replay para reanexar o renderer,
-  enquanto o snapshot expõe o rollover para a UI.
+  enquanto o snapshot expõe o rollover para a UI. Quando o processo já emitiu
+  mais que o replay, o `pty:spawn` do reanexo devolve `replayTruncated` e o aviso
+  aponta o Histórico arquivado.
+- A saída inteira de cada PTY do canvas vai para disco (`pty-output-archive.cjs`,
+  `userData/pty-output`): uma pasta por sessão (hash do id), segmentos de 8 MB
+  com o offset do primeiro byte no nome, 64 MB por sessão, 1 GB no total e 14 dias
+  sem escrita, podado no boot. No `onData` o arquivo só empilha o pedaço; um timer
+  único grava o lote de todas as sessões a cada 250 ms, assíncrono e em ordem por
+  sessão, e o `before-quit` grava o último lote síncrono. O `pty:archive-read`
+  pagina por offset do fim ao começo (Histórico arquivado da gaveta). A saída é
+  crua, sem redação, por decisão de 11/11/2026; o custo por pedaço é medido pela
+  variante `atual+arquivo` do `benchmark:pty-output`.
 - Arquivos `.md` do canvas vivem na área de dados do usuário e podem ser
   ligados a vários agentes. Eles são a memória compartilhada recomendada.
 - O manifesto `.fxcanvas` transporta layout, conexões e conteúdo dos arquivos
-  referenciados, mas não leva comandos ou caminhos dependentes da máquina.
+  referenciados, mas não leva comandos ou caminhos dependentes da máquina. Com a
+  opção do menu, leva também `terminalOutputs` (a cauda do arquivo de cada
+  terminal, até 1 MB cada e 8 MB no total), que a importação devolve só ao
+  arquivo em disco do bloco, nunca ao terminal.
 
 ### Retomada de conversa: plano com motivo
 
