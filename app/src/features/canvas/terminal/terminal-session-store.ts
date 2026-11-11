@@ -98,6 +98,7 @@ import {
 import type { SendTextInput, TerminalReadingSource } from './terminal-session-api'
 import { createPtyEventRouter, type PtyEventRouter } from './pty-event-router'
 import { createFlowControl, type FlowControl } from './terminal-flow-control'
+import { createRollingText, type RollingText } from './rolling-text'
 import { isClaudeCommand, loadClaudeTerminalScroll, shouldUseClassicScreen } from '../services/terminal-scroll-preference'
 import {
   CLAUDE_SCROLL_KEYS,
@@ -509,16 +510,23 @@ type Session = {
    * salvo duas vezes e o caminho digitado duas vezes.
    */
   lastImagePasteAt: number
-  codexTrustBuffer: string
+  /**
+   * Saída recente lida pelas varreduras de tela de aceite (confiança do Codex;
+   * aviso do modo yolo e confiança do Claude), uma janela só para as três.
+   */
+  acceptScreenWindow: RollingText
+  /**
+   * A linha de entrada da CLI apareceu sem tela de decisão: as telas de aceite
+   * só vêm antes dela, então as varreduras param (`trackReplRecognized`).
+   */
+  replRecognized: boolean
   codexTrustHandled: boolean
   /** Últimos bytes de saída do Codex, para reconhecer na saída do processo
-   * (`finishExit`) se ele acabou de se auto-atualizar. */
-  codexUpdateBuffer: string
+   * (`finishExit`) se ele acabou de se auto-atualizar. Só é lida no fim. */
+  codexUpdateWindow: RollingText
   /** Abertura do Codex 0.158+, que desenha um compositor provisório; ver `isCodexStillStarting`. */
   codexStartup: CodexStartupState
-  claudeBypassBuffer: string
   claudeBypassHandled: boolean
-  claudeTrustBuffer: string
   claudeTrustHandled: boolean
   /** Opções de lançamento originais, guardadas para relançar sozinho após um
    * auto-update do Codex — ver `finishExit`. `startedAt` não entra: um
@@ -919,13 +927,12 @@ export class TerminalSessionStore {
       linkGestureOrigin: undefined,
       fileDropBound: false,
       lastImagePasteAt: 0,
-      codexTrustBuffer: '',
+      acceptScreenWindow: createRollingText(ACCEPT_SCREEN_BUFFER_LIMIT),
+      replRecognized: false,
       codexTrustHandled: false,
-      codexUpdateBuffer: '',
+      codexUpdateWindow: createRollingText(ACCEPT_SCREEN_BUFFER_LIMIT),
       codexStartup: { chatOpened: false, composerSeen: false },
-      claudeBypassBuffer: '',
       claudeBypassHandled: false,
-      claudeTrustBuffer: '',
       claudeTrustHandled: false,
       launchOptions: options,
     }
@@ -950,9 +957,7 @@ export class TerminalSessionStore {
       if (event.sessionId === session.ptySessionId) {
         session.receivedOutput ||= event.data.length > 0
         session.outputLineCount += countLineFeeds(event.data)
-        this.handleCodexTrustPrompt(session, event.data)
-        this.handleClaudeBypassWarning(session, event.data)
-        this.handleClaudeTrustPrompt(session, event.data)
+        this.scanAcceptScreens(session, event.data)
         this.trackCodexUpdateBanner(session, event.data)
         this.watchResumeOutcome(session, event.data)
         this.writeOutput(session, event.data)
@@ -2130,6 +2135,7 @@ export class TerminalSessionStore {
       session.paintedOutput = true
       this.markWorking(session)
       this.trackCodexStartupScreen(session)
+      this.trackReplRecognized(session)
       // A tela acabou de mudar: a próxima checagem não precisa esperar o
       // intervalo de polling. Para Codex e Claude, a linha de entrada é a
       // confirmação de prontidão; se ela ainda não existir, scheduleInitialText
@@ -2162,7 +2168,7 @@ export class TerminalSessionStore {
     if (
       session.command === 'codex' &&
       event.exitCode === 0 &&
-      isCodexUpdateExitBanner(session.codexUpdateBuffer)
+      isCodexUpdateExitBanner(session.codexUpdateWindow.toString())
     ) {
       // O Codex se auto-atualiza via npm e sai sozinho (código 0) só depois de
       // avisar "Please restart Codex" — sem isto, o bloco ficava "encerrado"
@@ -2916,16 +2922,8 @@ export class TerminalSessionStore {
    * decide confiar numa pasta nova é a pessoa. A seleção já começa em confiar,
    * então basta o Enter.
    */
-  private handleCodexTrustPrompt(session: Session, data: string): void {
-    if (session.command !== 'codex' || session.codexTrustHandled || !data) {
-      return
-    }
-
-    session.codexTrustBuffer = (
-      session.codexTrustBuffer + data
-    ).slice(-ACCEPT_SCREEN_BUFFER_LIMIT)
-
-    if (!isCodexTrustPrompt(session.codexTrustBuffer)) {
+  private handleCodexTrustPrompt(session: Session, screen: string): void {
+    if (!this.awaitsCodexTrust(session) || !isCodexTrustPrompt(screen)) {
       return
     }
 
@@ -2960,9 +2958,75 @@ export class TerminalSessionStore {
       return
     }
 
-    session.codexUpdateBuffer = (
-      session.codexUpdateBuffer + data
-    ).slice(-ACCEPT_SCREEN_BUFFER_LIMIT)
+    session.codexUpdateWindow.append(data)
+  }
+
+  /**
+   * As três varreduras de tela de aceite leem a mesma janela de saída recente.
+   * Rodam a cada pedaço só até a tela delas aparecer ou o REPL ser reconhecido
+   * (`trackReplRecognized`): antes, numa pasta já confiável a tela nunca vinha
+   * e a varredura rodava a sessão inteira (~83 µs por pedaço, 28/09/2026).
+   */
+  private scanAcceptScreens(session: Session, data: string): void {
+    if (!data || !this.hasPendingAcceptScreen(session)) {
+      return
+    }
+
+    session.acceptScreenWindow.append(data)
+    const screen = session.acceptScreenWindow.toString()
+    this.handleCodexTrustPrompt(session, screen)
+    this.handleClaudeBypassWarning(session, screen)
+    this.handleClaudeTrustPrompt(session, screen)
+  }
+
+  private hasPendingAcceptScreen(session: Session): boolean {
+    return (
+      !session.replRecognized &&
+      (this.awaitsCodexTrust(session) ||
+        this.awaitsClaudeBypassWarning(session) ||
+        this.awaitsClaudeTrust(session))
+    )
+  }
+
+  private awaitsCodexTrust(session: Session): boolean {
+    return session.command === 'codex' && !session.codexTrustHandled
+  }
+
+  private isClaudeYolo(session: Session): boolean {
+    return session.command === 'claude' && session.args.includes('--dangerously-skip-permissions')
+  }
+
+  private awaitsClaudeBypassWarning(session: Session): boolean {
+    return this.isClaudeYolo(session) && !session.claudeBypassHandled
+  }
+
+  private awaitsClaudeTrust(session: Session): boolean {
+    return this.isClaudeYolo(session) && !session.claudeTrustHandled
+  }
+
+  /**
+   * Sinal positivo de que as telas de aceite ficaram para trás: a linha de
+   * entrada da CLI está pronta (`readInputLineState`), sem tela de decisão e,
+   * no Codex 0.158+, com o chat de verdade aberto (o compositor provisório vem
+   * ANTES da tela de confiança). Não serve o `initialTextSent`: o prazo de
+   * emergência de `scheduleInitialText` o marca pelo relógio, sem REPL, e uma
+   * tela de confiança tardia ficaria sem resposta, com a sessão presa no menu.
+   * Roda a cada mudança de tela, só enquanto alguma varredura está pendente.
+   */
+  private trackReplRecognized(session: Session): void {
+    if (!this.hasPendingAcceptScreen(session)) {
+      return
+    }
+    const viewport = readViewport(session.terminal)
+    if (
+      !readInputLineState(session.command, viewport)?.ready ||
+      looksLikeApprovalPrompt(viewport) ||
+      this.isCodexStillStarting(session, viewport)
+    ) {
+      return
+    }
+    session.replRecognized = true
+    session.acceptScreenWindow.clear()
   }
 
   /**
@@ -3073,21 +3137,8 @@ export class TerminalSessionStore {
    * as mesmas teclas na tela de confiança na pasta (onde a seleção já começa em
    * "Yes, proceed") escolheriam sair e matariam a CLI.
    */
-  private handleClaudeBypassWarning(session: Session, data: string): void {
-    if (
-      session.command !== 'claude' ||
-      !session.args.includes('--dangerously-skip-permissions') ||
-      session.claudeBypassHandled ||
-      !data
-    ) {
-      return
-    }
-
-    session.claudeBypassBuffer = (
-      session.claudeBypassBuffer + data
-    ).slice(-ACCEPT_SCREEN_BUFFER_LIMIT)
-
-    if (!isClaudeBypassPermissionsWarning(session.claudeBypassBuffer)) {
+  private handleClaudeBypassWarning(session: Session, screen: string): void {
+    if (!this.awaitsClaudeBypassWarning(session) || !isClaudeBypassPermissionsWarning(screen)) {
       return
     }
 
@@ -3109,21 +3160,8 @@ export class TerminalSessionStore {
    * terminal e é ela quem decide confiar ou não numa pasta nova — não é uma
    * decisão para o app tomar em silêncio.
    */
-  private handleClaudeTrustPrompt(session: Session, data: string): void {
-    if (
-      session.command !== 'claude' ||
-      !session.args.includes('--dangerously-skip-permissions') ||
-      session.claudeTrustHandled ||
-      !data
-    ) {
-      return
-    }
-
-    session.claudeTrustBuffer = (
-      session.claudeTrustBuffer + data
-    ).slice(-ACCEPT_SCREEN_BUFFER_LIMIT)
-
-    if (!isClaudeTrustPrompt(session.claudeTrustBuffer)) {
+  private handleClaudeTrustPrompt(session: Session, screen: string): void {
+    if (!this.awaitsClaudeTrust(session) || !isClaudeTrustPrompt(screen)) {
       return
     }
 

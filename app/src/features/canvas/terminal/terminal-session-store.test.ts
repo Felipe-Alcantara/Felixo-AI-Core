@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Terminal } from '@xterm/xterm'
+import * as screenState from './terminal-screen-state'
 import { CODEX_RELAUNCH_NEW_CONVERSATION_NOTICE, TerminalSessionStore } from './terminal-session-store'
 import type { TerminalFixture } from './__fixtures__/terminal-output/replay-fixture'
 import { closeLinkChooser, getLinkChooserState } from '../../shared/links/link-chooser-store'
@@ -2922,5 +2923,76 @@ describe('saída grande: write recusado pelo xterm e controle de fluxo', () => {
     callbacks.splice(0).forEach((callback) => callback())
     expect(flow).toHaveBeenCalledTimes(2)
     expect(flow).toHaveBeenLastCalledWith({ sessionId: PTY_SESSION_ID, paused: false })
+  })
+})
+
+describe('varreduras das telas de aceite: param quando o REPL é reconhecido', () => {
+  let harness: Harness | undefined
+
+  beforeEach(() => {
+    harness = undefined
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    harness?.store.clear()
+    vi.useRealTimers()
+  })
+
+  it('rodam a cada pedaço antes do REPL e nenhum reconhecedor roda depois dele', async () => {
+    const trust = vi.spyOn(screenState, 'isClaudeTrustPrompt')
+    const bypass = vi.spyOn(screenState, 'isClaudeBypassPermissionsWarning')
+    harness = createHarness()
+    harness.feed(BOOT_ESCAPES)
+    expect(trust, 'antes do REPL a varredura roda').toHaveBeenCalled()
+    expect(bypass).toHaveBeenCalled()
+
+    harness.feed(READY_PROMPT)
+    await vi.advanceTimersByTimeAsync(50)
+    trust.mockClear()
+    bypass.mockClear()
+
+    // Spinner, resposta do agente... e até uma tela de confiança: nada é varrido.
+    for (let frame = 0; frame < 20; frame += 1) harness.feed(`\r⠋ Thinking ${frame}`)
+    harness.feed(TRUST_PROMPT)
+    await vi.advanceTimersByTimeAsync(600)
+
+    expect(trust).not.toHaveBeenCalled()
+    expect(bypass).not.toHaveBeenCalled()
+    expect(harness.writes, 'nenhuma tecla de aceite depois do REPL').not.toContain('\x1b[B')
+  })
+
+  it('no Codex a varredura de confiança também para quando o compositor de verdade aparece', async () => {
+    const codexTrust = vi.spyOn(screenState, 'isCodexTrustPrompt')
+    harness = createHarness(CONTEXT, 'codex')
+    harness.feed(BOOT_ESCAPES)
+    expect(codexTrust, 'antes do compositor a varredura roda').toHaveBeenCalled()
+
+    harness.feed(CODEX_READY_PROMPT)
+    await vi.advanceTimersByTimeAsync(50)
+    codexTrust.mockClear()
+    harness.feed('\r\n> Do you trust the contents of this directory?\r\n')
+    await vi.advanceTimersByTimeAsync(600)
+
+    expect(codexTrust).not.toHaveBeenCalled()
+  })
+
+  it('uma tela de confiança tardia, sem REPL reconhecido, ainda é aceita depois do prazo de emergência do contexto', async () => {
+    harness = createHarness()
+    harness.feed(BOOT_ESCAPES)
+    // Nem REPL nem tela de decisão: o prazo de emergência digita o contexto pelo relógio.
+    harness.feed('Carregando...')
+    await vi.advanceTimersByTimeAsync(61_000)
+    expect(contextWrites(harness.writes), 'o contexto saiu pelo prazo, sem REPL').toHaveLength(1)
+
+    harness.feed('\x1b[2J\x1b[H')
+    harness.feed(TRUST_PROMPT)
+    await vi.advanceTimersByTimeAsync(600)
+
+    // Seta e Enter, nessa ordem (a tela não sai no teste, então o aceite ainda reenvia).
+    const down = harness.writes.indexOf('\x1b[B')
+    expect(down).toBeGreaterThan(-1)
+    expect(harness.writes.indexOf('\r', down)).toBeGreaterThan(down)
   })
 })
