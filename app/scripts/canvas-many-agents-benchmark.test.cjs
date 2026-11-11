@@ -25,9 +25,12 @@ test('o cenário segue as faixas da política e não tem meta acima do Carregado
 })
 
 test('o fixture liga cada agente a uma nota e só usa a CLI falsa', () => {
-  const { nodes, edges, agentIds } = bench.buildFixture(3, 12)
+  const { nodes, edges, agentIds, typingId } = bench.buildFixture(3, 12)
   assert.deepEqual(agentIds, ['bench-agente-0', 'bench-agente-1', 'bench-agente-2'])
-  assert.equal(nodes.length, 15)
+  // Mais o terminal parado da digitação, que não recebe o gatilho de streaming.
+  assert.equal(nodes.length, 16)
+  assert.equal(agentIds.includes(typingId), false)
+  assert.equal(nodes.find((node) => node.id === typingId).type, 'terminal')
   const agents = nodes.filter((node) => node.type === 'terminal')
   assert.ok(agents.every((node) => node.data.command === 'mock' && node.data.launchMode === 'agent'))
   const ids = new Set(nodes.map((node) => node.id))
@@ -103,4 +106,54 @@ test('o contador de timers acompanha agendar, disparar e cancelar sem mudar o co
   listeners[0]({ sessionId: 'canvas:bench-agente-0', data: 'x' })
   listeners[0]({ sessionId: 'canvas:bench-agente-0', data: 'y' })
   assert.deepEqual(sessionsWithOutput(), ['canvas:bench-agente-0'])
+})
+
+test('as teclas do eco nunca saem no roteiro nem no eco do gatilho de streaming', () => {
+  const { createFakeCliPtyFactory, SMOKE_STREAM_TRIGGER } = require('../electron/services/devtools-fake-cli-pty.cjs')
+  const queue = []
+  const factory = createFakeCliPtyFactory({ chunkDelayMs: 0, setTimer: (fn) => queue.push(fn), clearTimer: () => {} })
+  const pty = factory('claude', [], { cols: 80, rows: 24 })
+  let output = ''
+  pty.onData((data) => {
+    output += data
+  })
+  while (queue.length) queue.shift()()
+  output = ''
+
+  pty.write(`${SMOKE_STREAM_TRIGGER}\r`)
+  while (queue.length) queue.shift()()
+
+  assert.match(output, /linha 60 de 60/)
+  for (const key of bench.ECHO_KEYS) assert.equal(output.includes(key), false, `"${key}" aparece na saída`)
+})
+
+test('cada fase vira um resultado do gate, com eco, nós fora da área e mutações por segundo', () => {
+  const phase = bench.summarizePhase(
+    {
+      phase: 'gaveta-aberta',
+      elapsedMs: 4_000,
+      frames: [16, 17, 50],
+      longTasks: [],
+      input: [8, 12],
+      keyEcho: [20, 30],
+      mounted: [320, 320],
+      mountedOutside: [300, 298],
+      outsideMutations: 10,
+      insideMutations: 40,
+      rss: [{ rendererMiB: 500 }],
+    },
+    { count: 20, nodes: 320, edges: 219, budgetScenario: 'carregado' },
+    true,
+  )
+
+  assert.equal(phase.phase, 'canvas-many-agents:gaveta-aberta')
+  assert.equal(phase.nodes, 320)
+  assert.deepEqual(phase.keyEchoMs, { count: 2, p50: 25, p95: 29.5, max: 30 })
+  assert.equal(phase.longTaskMs.count, 0)
+  assert.equal(phase.mountedOutsideViewport.max, 300)
+  assert.equal(phase.outsideMutationsPerSecond, 2.5)
+  assert.equal(phase.insideMutationsPerSecond, 10)
+  // Uma fase não tem os campos do resultado principal: o --check só olha as metas dela.
+  assert.deepEqual(bench.checkReport(phase), [])
+  assert.match(bench.checkReport({ ...phase, longTaskMs: { p95: 500 } }).join(), /long task p95 500 .*\[gaveta-aberta\]/)
 })

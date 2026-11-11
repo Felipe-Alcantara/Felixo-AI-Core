@@ -11,15 +11,20 @@
  * `ui-render-performance.cjs` e troca o `node-pty` pela CLI roteirizada do
  * processo principal (`FELIXO_DEVTOOLS_FAKE_CLI_PTY=1`): nenhuma CLI real
  * roda. Cada agente recebe o gatilho de streaming a cada 3 s e imprime
- * ~20 linhas/s enquanto a medição gira o zoom do canvas e o painel de
- * ferramentas e a gaveta de um terminal ficam abertos.
+ * ~20 linhas/s, com o painel de busca aberto, em três fases de `--duration-ms`
+ * cada: gaveta fechada (girando o zoom), gaveta de um agente aberta (girando o
+ * zoom e digitando no xterm dela) e arrasto de um bloco com a gaveta fechada.
  *
- * Mede abertura, carga, steady state (frame, long task, entrada → quadro),
- * RSS de todos os processos (`app.getAppMetrics`), heap, DOM, listeners e
- * timers do renderer em pontos de controle, refresh com os agentes vivos e
- * queda do renderer. O relatório usa os campos do `terminal-scrollback`
- * (`resumeMs`, `rendererWorkingSetMiB`, `heapBefore`/`heapAfterStream`), então
- * o `benchmark-regression-gate.cjs` compara dois relatórios à mão.
+ * Mede abertura, carga, refresh com os agentes vivos, queda do renderer, RSS
+ * de todos os processos (`app.getAppMetrics`), heap, DOM, listeners e timers
+ * em pontos de controle e o tempo até a virtualização voltar depois de fechar
+ * a gaveta. Por fase: frame, long task, entrada → quadro, tecla → eco (só com
+ * a gaveta aberta), nós montados e quantos estão fora da área do canvas, e
+ * mutações de DOM dentro deles por segundo. O primeiro resultado usa os campos
+ * do `terminal-scrollback` (`resumeMs`, `rendererWorkingSetMiB`,
+ * `heapBefore`/`heapAfterStream`) e cada fase vira um resultado próprio
+ * (`canvas-many-agents:<fase>`), então o `benchmark-regression-gate.cjs`
+ * compara dois relatórios à mão, inclusive frame, long task e eco.
  *
  * Uso: `npx vite build && npm run benchmark:many-agents -- --agents=20 --nodes=300`.
  */
@@ -43,6 +48,15 @@ const RSS_SAMPLE_INTERVAL_MS = 1_000
 const WHEEL_INTERVAL_MS = 250
 // Abaixo disso a janela está sendo estrangulada pelo Chromium e o frame não mede o app.
 const MIN_IDLE_FPS = 30
+// Letras que nem o roteiro ("linha N de 60 da saída em streaming") nem o eco do gatilho imprimem.
+const ECHO_KEYS = Object.freeze(['q', 'z', 'w'])
+const DRAG_DISTANCE_PX = 120
+const DRAG_STEPS = 12
+const DRAWER_CLOSE_TIMEOUT_MS = 15_000
+const TYPING_TERMINAL_ID = 'bench-digitacao'
+// Passos de roda (-240) a partir do enquadramento inicial: com tudo enquadrado nada fica fora da área,
+// e a virtualização que a gaveta aberta desliga não apareceria na medição.
+const ZOOM_IN_STEPS = 6
 
 /**
  * Orçamento de `docs/projeto/POLITICA-PERFORMANCE.md` ("Cenários e
@@ -95,22 +109,36 @@ function budgetScenario(agents, nodes) {
   return null
 }
 
-/** Agentes numa faixa acima dos blocos comuns, cada um ligado a uma nota. */
-function buildFixture(agentCount, nodeCount) {
-  const fillers = ui.buildFixtureNodes(nodeCount)
-  const agents = Array.from({ length: agentCount }, (_, index) => ({
-    id: `bench-agente-${index}`,
+function terminalNode(id, label, x) {
+  return {
+    id,
     type: 'terminal',
-    position: { x: index * 560, y: -480 },
+    position: { x, y: -480 },
     width: 520,
     height: 360,
-    data: { label: `Agente ${index}`, command: 'mock', args: [], cwd: '', launchMode: 'agent' },
-  }))
+    data: { label, command: 'mock', args: [], cwd: '', launchMode: 'agent' },
+  }
+}
+
+/**
+ * Agentes numa faixa acima dos blocos comuns, cada um ligado a uma nota, e um
+ * terminal parado para a digitação: no PTY falso o eco entra na fila atrás do
+ * roteiro, então digitar num agente que transmite mediria a fila, não o app.
+ */
+function buildFixture(agentCount, nodeCount) {
+  const fillers = ui.buildFixtureNodes(nodeCount)
+  const agents = Array.from({ length: agentCount }, (_, index) => terminalNode(`bench-agente-${index}`, `Agente ${index}`, index * 560))
+  const typing = terminalNode(TYPING_TERMINAL_ID, 'Digitação', -560)
   const notes = fillers.filter((node) => node.type === 'note')
   const links = notes.length
     ? agents.map((agent, index) => ({ id: `bench-ligacao-${index}`, source: agent.id, target: notes[index % notes.length].id }))
     : []
-  return { nodes: [...agents, ...fillers], edges: [...ui.buildFixtureEdges(fillers), ...links], agentIds: agents.map((agent) => agent.id) }
+  return {
+    nodes: [...agents, typing, ...fillers],
+    edges: [...ui.buildFixtureEdges(fillers), ...links],
+    agentIds: agents.map((agent) => agent.id),
+    typingId: typing.id,
+  }
 }
 
 /** `{count, p50, p95, max}`, o formato do `terminal-scrollback`. */
@@ -124,20 +152,41 @@ function stats(values) {
   }
 }
 
-/** Falhas do `--check`: queda, agente mudo e as metas da política. */
+/** Resultado de uma fase, no formato que o `benchmark-regression-gate.cjs` compara (`phase`+`count`+`nodes`). */
+function summarizePhase(phase, scenario, frameReliable) {
+  const seconds = phase.elapsedMs / 1_000
+  return {
+    phase: `canvas-many-agents:${phase.phase}`,
+    ...scenario,
+    frameReliable,
+    frameMs: stats(phase.frames),
+    longTaskMs: stats(phase.longTasks),
+    inputToFrameMs: stats(phase.input),
+    keyEchoMs: stats(phase.keyEcho),
+    mountedNodes: stats(phase.mounted),
+    mountedOutsideViewport: stats(phase.mountedOutside),
+    outsideMutationsPerSecond: seconds > 0 ? Number((phase.outsideMutations / seconds).toFixed(1)) : null,
+    // Controle: mutações nos blocos à vista. Sem elas, um zero fora da área não provaria nada.
+    insideMutationsPerSecond: seconds > 0 ? Number((phase.insideMutations / seconds).toFixed(1)) : null,
+    rendererWorkingSetMiB: stats(phase.rss.map((sample) => sample.rendererMiB)),
+  }
+}
+
+/** Falhas do `--check` de um resultado: queda, agente mudo e as metas da política. */
 function checkReport(result) {
   const failures = []
+  const label = result.phase && result.phase !== 'canvas-many-agents' ? ` [${result.phase.replace('canvas-many-agents:', '')}]` : ''
   if (result.crashed) failures.push(`o renderer caiu (${result.crashed})`)
-  if (result.agentsWithOutput < result.count) {
+  if (Number.isFinite(result.agentsWithOutput) && result.agentsWithOutput < result.count) {
     failures.push(`só ${result.agentsWithOutput} de ${result.count} agentes produziram saída`)
   }
   const budget = BUDGETS[result.budgetScenario]
   if (!budget) return failures
-  if (result.frameReliable && result.frameMs.p95 > budget.frameP95Ms) {
-    failures.push(`frame p95 ${result.frameMs.p95} ms acima da meta ${budget.frameP95Ms} ms (${result.budgetScenario})`)
+  if (result.frameReliable && result.frameMs?.p95 > budget.frameP95Ms) {
+    failures.push(`frame p95 ${result.frameMs.p95} ms acima da meta ${budget.frameP95Ms} ms (${result.budgetScenario})${label}`)
   }
-  if (result.longTaskMs.p95 > budget.longTaskP95Ms) {
-    failures.push(`long task p95 ${result.longTaskMs.p95} ms acima da meta ${budget.longTaskP95Ms} ms (${result.budgetScenario})`)
+  if (result.longTaskMs?.p95 > budget.longTaskP95Ms) {
+    failures.push(`long task p95 ${result.longTaskMs.p95} ms acima da meta ${budget.longTaskP95Ms} ms (${result.budgetScenario})${label}`)
   }
   if (result.resumeMs > budget.resumeMs) {
     failures.push(`refresh ${result.resumeMs} ms acima da meta ${budget.resumeMs} ms (${result.budgetScenario})`)
@@ -255,9 +304,30 @@ async function measureIdleFps(page) {
   }))
 }
 
-async function startCollectors(page) {
-  await page.evaluate(() => {
-    const collected = { running: true, frames: [], longTasks: [], input: [] }
+/**
+ * Coletores de uma fase, desligados no fim dela (o observador de long task da
+ * versão anterior ficava vivo e somaria as fases seguintes):
+ * - intervalos entre quadros, long tasks e entrada → quadro (roda e ponteiro);
+ * - tecla → eco: do `keydown` de uma das `echoKeys` ao quadro seguinte à
+ *   chegada do eco dela pelo `pty:data` da sessão em foco;
+ * - nós do React Flow montados, e quantos estão fora da área do canvas (a
+ *   gaveta aberta desliga a virtualização), amostrados a cada segundo;
+ * - mutações de DOM dentro desses nós fora da área: os renders que chegam à tela.
+ */
+async function startCollectors(page, echoSessionId = null) {
+  await page.evaluate(({ echoSessionId: watchedSession, echoKeys }) => {
+    const collected = {
+      running: true,
+      startedAt: performance.now(),
+      frames: [],
+      longTasks: [],
+      input: [],
+      keyEcho: [],
+      mounted: [],
+      mountedOutside: [],
+      outsideMutations: 0,
+      insideMutations: 0,
+    }
     window.__felixoManyAgentsRun = collected
     let last = performance.now()
     const tick = (now) => {
@@ -266,21 +336,90 @@ async function startCollectors(page) {
       if (collected.running) requestAnimationFrame(tick)
     }
     requestAnimationFrame(tick)
-    new PerformanceObserver((list) => {
+    const longTasks = new PerformanceObserver((list) => {
       for (const entry of list.getEntries()) collected.longTasks.push(entry.duration)
-    }).observe({ type: 'longtask' })
+    })
+    longTasks.observe({ type: 'longtask' })
     // Entrada → próximo quadro: do carimbo do evento ao rAF seguinte.
-    window.addEventListener('wheel', (event) => {
+    const onInput = (event) => {
       requestAnimationFrame((now) => collected.input.push(now - event.timeStamp))
-    }, { capture: true, passive: true })
-  })
+    }
+    window.addEventListener('wheel', onInput, { capture: true, passive: true })
+    window.addEventListener('pointermove', onInput, { capture: true, passive: true })
+
+    const pendingKeys = new Map()
+    const onKey = (event) => {
+      if (echoKeys.includes(event.key)) pendingKeys.set(event.key, event.timeStamp)
+    }
+    window.addEventListener('keydown', onKey, true)
+    const stopEcho = watchedSession
+      ? window.felixo.pty.onData((payload) => {
+          if (pendingKeys.size === 0 || payload?.sessionId !== watchedSession) return
+          const data = String(payload.data ?? '')
+          for (const [key, pressedAt] of pendingKeys) {
+            if (!data.includes(key)) continue
+            pendingKeys.delete(key)
+            requestAnimationFrame((now) => collected.keyEcho.push(now - pressedAt))
+          }
+        })
+      : null
+
+    const flow = document.querySelector('.react-flow')
+    let outside = new Set()
+    const sampleMounted = () => {
+      const area = flow.getBoundingClientRect()
+      const nodes = flow.querySelectorAll('.react-flow__node')
+      outside = new Set()
+      for (const node of nodes) {
+        const rect = node.getBoundingClientRect()
+        if (rect.right < area.left || rect.left > area.right || rect.bottom < area.top || rect.top > area.bottom) {
+          outside.add(node)
+        }
+      }
+      collected.mounted.push(nodes.length)
+      collected.mountedOutside.push(outside.size)
+    }
+    sampleMounted()
+    const sampler = setInterval(sampleMounted, 1_000)
+    const mutations = new MutationObserver((records) => {
+      for (const record of records) {
+        const element = record.target.nodeType === 1 ? record.target : record.target.parentElement
+        const owner = element?.closest('.react-flow__node')
+        if (!owner) continue
+        if (outside.has(owner)) collected.outsideMutations += 1
+        else collected.insideMutations += 1
+      }
+    })
+    mutations.observe(flow, { subtree: true, childList: true, attributes: true, characterData: true })
+
+    collected.dispose = () => {
+      longTasks.disconnect()
+      mutations.disconnect()
+      clearInterval(sampler)
+      window.removeEventListener('wheel', onInput, true)
+      window.removeEventListener('pointermove', onInput, true)
+      window.removeEventListener('keydown', onKey, true)
+      stopEcho?.()
+    }
+  }, { echoSessionId, echoKeys: ECHO_KEYS })
 }
 
 async function stopCollectors(page) {
   return page.evaluate(() => {
     const collected = window.__felixoManyAgentsRun
     collected.running = false
-    return { frames: collected.frames.slice(1), longTasks: collected.longTasks, input: collected.input }
+    collected.dispose()
+    return {
+      elapsedMs: performance.now() - collected.startedAt,
+      frames: collected.frames.slice(1),
+      longTasks: collected.longTasks,
+      input: collected.input,
+      keyEcho: collected.keyEcho,
+      mounted: collected.mounted,
+      mountedOutside: collected.mountedOutside,
+      outsideMutations: collected.outsideMutations,
+      insideMutations: collected.insideMutations,
+    }
   })
 }
 
@@ -290,23 +429,154 @@ async function writeToAgents(page, agentIds) {
   ), { ids: agentIds, data: `${SMOKE_STREAM_TRIGGER}\r` })
 }
 
-async function openPanels(page, agentId) {
+async function openSearchPanel(page) {
   await page.getByRole('button', { name: 'Buscar' }).first().click()
   await page.locator('[data-felixo-canvas-panel="search"]').waitFor({ state: 'visible' })
-  // Pelo DOM: o bloco pode estar fora da área visível do canvas.
-  await page.locator(`[data-terminal-expand-trigger="${agentId}"]`).first().dispatchEvent('click')
-  await page.locator('[data-canvas-terminal-drawer]').waitFor({ state: 'visible' })
 }
 
-async function steadyState(page, agentIds, durationMs) {
+/** Abre a gaveta do agente e põe o foco no xterm dela, onde as teclas da medição de eco vão cair. */
+async function openDrawer(page, agentId) {
+  // Pelo DOM: o bloco pode estar fora da área visível do canvas.
+  await page.locator(`[data-terminal-expand-trigger="${agentId}"]`).first().dispatchEvent('click')
+  const drawer = page.locator('[data-canvas-terminal-drawer]')
+  await drawer.waitFor({ state: 'visible' })
+  await drawer.locator('.xterm-helper-textarea').first().focus()
+}
+
+/**
+ * Fecha a gaveta e devolve quanto a virtualização levou para voltar: até sair
+ * algum bloco montado (com o zoom de `zoomIn`, quase todos ficam fora da área).
+ * Não "até o número da fase fechada": fechar a gaveta pode mover a vista e
+ * mostrar um bloco a mais, e a espera nunca terminaria.
+ */
+async function closeDrawer(page, totalNodes, timeoutMs) {
+  const startedAt = performance.now()
+  await page.locator('[data-canvas-terminal-drawer] [aria-label="Fechar terminal"]').first().click()
+  await page.locator('[data-canvas-terminal-drawer]').waitFor({ state: 'hidden', timeout: timeoutMs })
+  try {
+    await page.waitForFunction(
+      (total) => document.querySelectorAll('.react-flow__node').length < total,
+      totalNodes,
+      { timeout: timeoutMs },
+    )
+  } catch {
+    const mounted = await page.evaluate(() => document.querySelectorAll('.react-flow__node').length)
+    throw new Error(`a virtualização não voltou em ${timeoutMs} ms depois de fechar a gaveta: ${mounted} de ${totalNodes} blocos montados.`)
+  }
+  return Number((performance.now() - startedAt).toFixed(1))
+}
+
+/**
+ * Um ponto onde a roda cai no próprio canvas (fundo ou bloco), e não num
+ * painel ou na gaveta por cima dele: do centro para fora, pelo teste de toque.
+ */
+async function canvasPoint(page) {
+  const point = await page.evaluate(() => {
+    const flow = document.querySelector('.react-flow')
+    const area = flow.getBoundingClientRect()
+    const onCanvas = (x, y) => {
+      const hit = document.elementFromPoint(x, y)
+      return Boolean(hit && flow.contains(hit) && !hit.closest('.nowheel, [data-felixo-canvas-panel], [data-canvas-terminal-drawer]'))
+    }
+    for (let ring = 0; ring <= 4; ring += 1) {
+      for (const [dx, dy] of [[0, 0], [-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, 1], [-1, 1], [1, -1]]) {
+        const x = area.left + area.width * (0.5 + (dx * ring) / 10)
+        const y = area.top + area.height * (0.5 + (dy * ring) / 10)
+        if (onCanvas(x, y)) return { x, y }
+      }
+    }
+    return null
+  })
+  if (!point) throw new Error('nenhum ponto livre do canvas para a roda.')
+  return point
+}
+
+/** Zoom atual do React Flow, lido do `transform` da viewport. */
+async function readZoom(page) {
+  return page.evaluate(() => {
+    const transform = getComputedStyle(document.querySelector('.react-flow__viewport')).transform
+    return transform && transform !== 'none' ? Number(new DOMMatrix(transform).a.toFixed(3)) : 1
+  })
+}
+
+/**
+ * Aproxima o zoom, sempre os mesmos passos, até a maior parte dos blocos sair
+ * da área. A roda gira logo abaixo do bloco `anchorId`, no fundo do canvas: o
+ * ponto sob o cursor fica parado, então o bloco segue à vista (e montado).
+ */
+async function zoomIn(page, anchorId) {
+  const before = await readZoom(page)
+  const anchor = await page.evaluate((id) => {
+    const flow = document.querySelector('.react-flow')
+    const rect = document.querySelector(`.react-flow__node[data-id="${id}"]`)?.getBoundingClientRect()
+    if (!rect) return null
+    const x = rect.left + rect.width / 2
+    const y = rect.bottom + 4
+    const hit = document.elementFromPoint(x, y)
+    return hit && flow.contains(hit) && !hit.closest('.nowheel, [data-felixo-canvas-panel]') ? { x, y } : null
+  }, anchorId)
+  const point = anchor ?? (await canvasPoint(page))
+  await page.mouse.move(point.x, point.y)
+  for (let step = 0; step < ZOOM_IN_STEPS; step += 1) {
+    await page.mouse.wheel(0, -240)
+    await page.waitForTimeout(100)
+  }
+  await page.waitForTimeout(500)
+  return { before, after: await readZoom(page) }
+}
+
+/** Um bloco comum à vista, pela alça de arrasto (a mesma escolha do `ui-render`). */
+async function findDragTarget(page) {
+  // Com todos os blocos enquadrados a alça fica pequena demais: aproxima no centro até uma servir.
+  const point = await canvasPoint(page)
+  await page.mouse.move(point.x, point.y)
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const target = await pickDragTarget(page)
+    if (target) return target
+    await page.mouse.wheel(0, -240)
+    await page.waitForTimeout(150)
+  }
+  throw new Error('nenhum bloco à vista recebeu o ponteiro para o arrasto.')
+}
+
+async function pickDragTarget(page) {
+  return page.evaluate((distance) => {
+    const canvas = document.querySelector('.react-flow')
+    for (const node of document.querySelectorAll('.react-flow__node')) {
+      if (node.matches('.react-flow__node-terminal')) continue
+      const handle = node.querySelector('.canvas-node-drag')
+      if (!handle) continue
+      const rect = handle.getBoundingClientRect()
+      const x = rect.left + Math.min(3, rect.width / 5)
+      const y = rect.top + rect.height / 2
+      if (rect.width < 8 || rect.height < 5 || x + distance >= innerWidth) continue
+      const hit = document.elementFromPoint(x, y)
+      const endHit = document.elementFromPoint(x + distance, y)
+      if (hit?.closest('.react-flow__node') === node && !hit.closest('.nodrag') && endHit && canvas.contains(endHit)) {
+        return { id: node.getAttribute('data-id'), x, y }
+      }
+    }
+    return null
+  }, DRAG_DISTANCE_PX)
+}
+
+/**
+ * Uma fase da carga: os agentes recebem o gatilho de streaming a cada 3 s e,
+ * conforme a fase, a medição gira o zoom (gaveta fechada ou aberta, esta com
+ * uma tecla a cada volta no xterm da gaveta, apagada em seguida para o
+ * gatilho seguinte não ficar na mesma linha) ou arrasta um bloco de um lado
+ * para o outro.
+ */
+async function runPhase(page, phase, { agentIds, durationMs, echoSessionId = null, dragTarget = null }) {
   const rss = []
-  const box = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }))
-  await page.mouse.move(box.width * 0.6, box.height * 0.5)
-  await startCollectors(page)
+  const point = await canvasPoint(page)
+  if (!dragTarget) await page.mouse.move(point.x, point.y)
+  await startCollectors(page, echoSessionId)
   const startedAt = performance.now()
   let nextStream = 0
   let nextRss = 0
   let direction = 1
+  let keyIndex = 0
   while (performance.now() - startedAt < durationMs) {
     const elapsed = performance.now() - startedAt
     if (elapsed >= nextStream) {
@@ -317,16 +587,27 @@ async function steadyState(page, agentIds, durationMs) {
       rss.push(await readMemory(page))
       nextRss += RSS_SAMPLE_INTERVAL_MS
     }
-    await page.mouse.wheel(0, 120 * direction)
+    if (dragTarget) {
+      const offset = direction > 0 ? DRAG_DISTANCE_PX : 0
+      await page.mouse.move(dragTarget.x + DRAG_DISTANCE_PX - offset, dragTarget.y)
+      await page.mouse.down()
+      await page.mouse.move(dragTarget.x + offset, dragTarget.y, { steps: DRAG_STEPS })
+      await page.mouse.up()
+      await page.waitForTimeout(WHEEL_INTERVAL_MS / 2)
+    } else {
+      await page.mouse.wheel(0, 120 * direction)
+      if (echoSessionId) await page.keyboard.press(ECHO_KEYS[keyIndex++ % ECHO_KEYS.length])
+      await page.waitForTimeout(WHEEL_INTERVAL_MS)
+      if (echoSessionId) await page.keyboard.press('Backspace')
+    }
     direction = -direction
-    await page.waitForTimeout(WHEEL_INTERVAL_MS)
   }
-  return { ...(await stopCollectors(page)), rss }
+  return { phase, ...(await stopCollectors(page)), rss }
 }
 
 async function run(options) {
   const { chromium } = require(require.resolve('playwright-core', { paths: [options.appDir, __dirname] }))
-  const { nodes, edges, agentIds } = buildFixture(options.agents, options.nodes)
+  const { nodes, edges, agentIds, typingId } = buildFixture(options.agents, options.nodes)
   const nodeIds = nodes.map((node) => node.id)
   const report = {
     schemaVersion: 1,
@@ -364,10 +645,24 @@ async function run(options) {
     await ui.populateCanvas(page, nodes, edges)
     await page.reload()
     const loadMs = await waitLoaded(page, nodeIds, options.launchTimeoutMs)
-    await openPanels(page, agentIds[0])
+    await openSearchPanel(page)
+    const zoom = await zoomIn(page, typingId)
     checkpoints.push(await checkpoint(page, cdp, 'carregado'))
 
-    const steady = await steadyState(page, agentIds, options.durationMs)
+    // Gaveta fechada, gaveta aberta (com tecla → eco no xterm dela) e arrasto com a gaveta fechada de novo.
+    const phases = [await runPhase(page, 'gaveta-fechada', { agentIds, durationMs: options.durationMs })]
+    await openDrawer(page, typingId)
+    phases.push(await runPhase(page, 'gaveta-aberta', {
+      agentIds,
+      durationMs: options.durationMs,
+      echoSessionId: `canvas:${typingId}`,
+    }))
+    const virtualizationRestoreMs = await closeDrawer(page, nodes.length, DRAWER_CLOSE_TIMEOUT_MS)
+    phases.push(await runPhase(page, 'arrasto', {
+      agentIds,
+      durationMs: options.durationMs,
+      dragTarget: await findDragTarget(page),
+    }))
     const agentsWithOutput = (await page.evaluate(() => window.__felixoManyAgents.sessionsWithOutput()))
       .filter((sessionId) => agentIds.includes(sessionId.replace(/^canvas:/, ''))).length
     checkpoints.push(await checkpoint(page, cdp, 'fim-da-carga'))
@@ -378,29 +673,32 @@ async function run(options) {
 
     const loaded = checkpoints.find((point) => point.name === 'carregado')
     const end = checkpoints.find((point) => point.name === 'fim-da-carga')
-    const result = {
-      phase: 'canvas-many-agents',
+    const scenario = {
       count: options.agents,
       nodes: nodes.length,
       edges: edges.length,
-      budgetScenario: budgetScenario(options.agents, nodes.length - options.agents),
+      budgetScenario: budgetScenario(options.agents, options.nodes),
+    }
+    const frameReliable = idleFps >= MIN_IDLE_FPS
+    report.results.push({
+      phase: 'canvas-many-agents',
+      ...scenario,
       startupMs,
       loadMs,
       resumeMs,
       idleFps,
-      frameReliable: idleFps >= MIN_IDLE_FPS,
-      frameMs: stats(steady.frames),
-      longTaskMs: stats(steady.longTasks),
-      inputToFrameMs: stats(steady.input),
-      rendererWorkingSetMiB: stats(steady.rss.map((sample) => sample.rendererMiB)),
-      appWorkingSetMiB: stats(steady.rss.map((sample) => sample.appMiB)),
+      frameReliable,
+      virtualizationRestoreMs,
+      zoom,
+      rendererWorkingSetMiB: stats(phases.flatMap((item) => item.rss.map((sample) => sample.rendererMiB))),
+      appWorkingSetMiB: stats(phases.flatMap((item) => item.rss.map((sample) => sample.appMiB))),
       heapBefore: { usedJsHeapBytes: loaded.jsHeapUsedBytes },
       heapAfterStream: { usedJsHeapBytes: end.jsHeapUsedBytes },
       agentsWithOutput,
       checkpoints,
       crashed,
-    }
-    report.results.push(result)
+    })
+    for (const item of phases) report.results.push(summarizePhase(item, scenario, frameReliable))
   } finally {
     await browser?.close().catch(() => {})
     ui.stopApp(app)
@@ -413,15 +711,19 @@ async function run(options) {
 async function main(argv) {
   const options = parseArgs(argv)
   const report = await run(options)
-  const [result] = report.results
+  const [result, ...phases] = report.results
   const output = options.out ?? path.join(options.appDir, `canvas-many-agents-${process.platform}.json`)
   fs.writeFileSync(output, `${JSON.stringify(report, null, 2)}\n`)
   console.log(`[many-agents] ${result.count} agentes, ${result.nodes} blocos, ${result.edges} conexões: abertura ${result.startupMs} ms, carga ${result.loadMs} ms, refresh ${result.resumeMs} ms`)
-  console.log(`[many-agents] frame p95 ${result.frameMs.p95} ms (ocioso ${result.idleFps} fps${result.frameReliable ? '' : ', janela estrangulada: frame não conta'}), long task p95 ${result.longTaskMs.p95} ms, entrada → quadro p95 ${result.inputToFrameMs.p95} ms`)
+  console.log(`[many-agents] ocioso ${result.idleFps} fps${result.frameReliable ? '' : ' (janela estrangulada: frame não conta)'}; zoom ${result.zoom.before} → ${result.zoom.after}; virtualização de volta ${result.virtualizationRestoreMs} ms depois de fechar a gaveta`)
+  for (const phase of phases) {
+    const echo = phase.keyEchoMs.count ? `, tecla → eco p95 ${phase.keyEchoMs.p95} ms (${phase.keyEchoMs.count})` : ''
+    console.log(`[many-agents] ${phase.phase.replace('canvas-many-agents:', '')}: frame p95 ${phase.frameMs.p95} ms, long task p95 ${phase.longTaskMs.p95} ms, entrada → quadro p95 ${phase.inputToFrameMs.p95} ms${echo}; montados ${phase.mountedNodes.max} (fora da área ${phase.mountedOutsideViewport.max}), mutações fora da área ${phase.outsideMutationsPerSecond}/s (à vista ${phase.insideMutationsPerSecond}/s)`)
+  }
   console.log(`[many-agents] RSS p95: renderer ${result.rendererWorkingSetMiB.p95} MiB, app ${result.appWorkingSetMiB.p95} MiB; agentes com saída ${result.agentsWithOutput}/${result.count}`)
   console.log(`[many-agents] relatório: ${output}`)
   if (options.check) {
-    const failures = checkReport(result)
+    const failures = report.results.flatMap(checkReport)
     if (failures.length) {
       for (const failure of failures) console.error(`[many-agents] FALHA: ${failure}`)
       process.exitCode = 1
@@ -431,7 +733,7 @@ async function main(argv) {
   }
 }
 
-module.exports = { BUDGETS, budgetScenario, buildFixture, checkReport, instrumentPage, parseArgs, stats }
+module.exports = { BUDGETS, ECHO_KEYS, budgetScenario, buildFixture, checkReport, instrumentPage, parseArgs, stats, summarizePhase }
 
 if (require.main === module) {
   main(process.argv.slice(2)).catch((error) => {
