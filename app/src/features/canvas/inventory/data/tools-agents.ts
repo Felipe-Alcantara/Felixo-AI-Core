@@ -189,7 +189,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
       loading: 'loading=true na abertura (lista o salvo e, só se a última coleta completa tiver 5 min ou mais — shouldRefreshAgentUsageOnOpen —, chama agent-usage:refresh) e no Atualizar; sem conteúdo mostra "Consultando as CLIs instaladas…" e o ícone gira',
       empty: '!hasContent e !loading: "Nenhuma CLI foi detectada nesta máquina."; provider sem conta: "Nenhuma conta vinculada a este provider."; conta sem amostra mostra a limitação da fonte por extenso, nunca zero; filtro sem resultado: "Nenhuma conta corresponde ao filtro." (o provider sem conta no filtro some, em vez de dizer "nenhuma conta vinculada")',
       error: 'statusMessage em faixa âmbar (falha de list/refresh/remover/reset ou "Não foi possível falar com o processo principal."); sem ponte: "Este painel só funciona no app desktop."; amostra com errorMessage aparece na linha da conta; a razão da falha (sessão ausente, rede, CLI ausente, tempo esgotado) vem de availability e aparece com uma frase fixa, sem a saída crua da CLI',
-      success: 'Rótulo "Atualização automática: base de 30 s"; o scheduler do processo principal mantém um único timer para os painéis visíveis, agenda Codex app-server e Openia statusline, recebe Claude statusline pelo watcher e ignora o Gemini interativo; prioriza sessões ativas e leituras antigas; passa a 5 min no Modo Performance e reduz a frequência em ociosidade prolongada (5 min) ou na bateria (2 min); pausa em segundo plano ou durante suspensão; selo "ao vivo" depois de um refresh, de agent-usage:changed ou de uma abertura que reaproveitou a coleta recente; "Reset aplicado com sucesso." depois de usar um reset',
+      success: 'Rótulo "Atualização automática: base de 30 s"; o scheduler do processo principal mantém um único timer para os painéis visíveis, agenda Codex app-server e Openia statusline, recebe Claude statusline pelo watcher (leitura repetida só avança o horário da medição da última amostra, sem gravar outra; a conta que mudou chega sozinha por agent-usage:account-changed, e a confirmação só com o painel ou o modal visível) e ignora o Gemini interativo; prioriza sessões ativas e leituras antigas; passa a 5 min no Modo Performance e reduz a frequência em ociosidade prolongada (5 min) ou na bateria (2 min); pausa em segundo plano ou durante suspensão; selo "ao vivo" depois de um refresh, de agent-usage:changed, de agent-usage:account-changed ou de uma abertura que reaproveitou a coleta recente; "Reset aplicado com sucesso." depois de usar um reset',
       disabled: 'Atualizar desabilitado durante loading; "Atualizar a conta" desabilitado durante loading (a rodada completa já lê todas) e enquanto aquela conta atualiza (gira e marca aria-busy); "Adicionar ao painel" sem nome; botão da coleta durante busy, e ausente quando ~/.claude/settings.json não é legível ou já tem outra statusLine',
     },
     controls: [
@@ -227,7 +227,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
       {
         locator: 'Ligar coleta do rate limit',
         kind: 'button',
-        effect: 'agent-usage:enable-claude-statusline (ou disable, quando já instalada): grava ou remove a statusLine do app em ~/.claude/settings.json, com backup da anterior, e recarrega o painel',
+        effect: 'agent-usage:enable-claude-statusline (ou disable, quando já instalada): grava ou remove a statusLine do app em ~/.claude/settings.json, com backup da anterior, e recarrega o painel; a statusLine cujo comando chama o script do app conta como dele mesmo sem a marca felixoManaged (religar mantém o backup antigo)',
         failure: 'erro engolido: a mensagem de falha do main nunca aparece; se o handler lançar, o resultado de erro vira o estado e o botão some atrás de "Não foi possível ler ~/.claude/settings.json" (AgentUsagePanel.tsx:213-227)',
         disabledWhen: 'busy; só existe no cartão do Claude, com settings legível e sem statusLine alheia',
       },
@@ -260,7 +260,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
       },
     ],
     persistence: [
-      'processo principal: SQLite agent_usage_accounts e agent_usage_samples (contas extras e amostras de uso)',
+      'processo principal: SQLite agent_usage_accounts e agent_usage_samples (contas extras e amostras de uso; até 200 amostras por conta e sempre a última com métrica, podadas a cada gravação e no boot)',
       '~/.claude/settings.json: statusLine do app ao ligar a coleta, com backup da anterior; script e captura em userData/claude-statusline',
       'nenhuma preferência salva: timer e backoff vivem em memória no processo principal; aba e filtro são estado do componente (o filtro volta vazio ao reabrir)',
     ],
@@ -275,6 +275,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
       'agent-usage:enable-claude-statusline',
       'agent-usage:disable-claude-statusline',
       'agent-usage:changed',
+      'agent-usage:account-changed',
       'agent-usage:scheduler-state',
     ],
     dependsOn: [
