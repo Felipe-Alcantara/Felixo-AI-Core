@@ -253,6 +253,10 @@ sua.
 - O foco começa na opção recomendada, e Enter sobre ela não confirma. Os botões
   são **Abrir bloco novo em ‹destino›**, **Agora não** (também com Esc), **Não era
   limite** e **Fixar este bloco na conta atual**.
+- Depois de **Agora não**, a mesma proposta não volta sozinha. Se a CLI avisar o
+  mesmo limite de novo depois que você mandar outra mensagem, o bloco mostra só
+  uma faixa discreta lembrando que você recusou a troca, com **Trocar de conta**
+  (abre o diálogo de novo) e **Dispensar**.
 - Num bloco no **Login do sistema**, o app só avisa: não há conta própria para
   pôr em espera nem para trocar.
 

@@ -239,6 +239,7 @@ Os handlers ficam em `app/electron/services/account-chain-ipc-handlers.cjs`. Ele
 | `account-chain:confirm` | `{proposalId, destinationAccountId, acknowledgeSourceActive?:boolean}` | `{ok, ticket, destination, alreadyConfirmed?}` ou `{ok:false, code:'SUPERSEDED'\|'EXPIRED'\|'SOURCE_ACTIVE'\|'NOT_ELIGIBLE'\|'NOT_PENDING'}` |
 | `account-chain:decline` | `{proposalId, reason:'later'\|'not-a-limit'}` | `{ok}` |
 | `account-chain:resolve-ambiguous` | `{detectionId, treatAs:'limit'\|'ignore'}` | `{ok}` |
+| `account-chain:request-switch` | `{detectionId}` (do aviso `declined_again`) | `{ok, proposalId}` (nulo sem proposta aberta) ou `{ok:false, code:'NOT_PENDING'}`; vale uma vez por aviso |
 | `account-chain:set-session-mode` | `{sessionId, mode:'pinned'\|'chain'}` | `{ok}`; fixar expira as propostas abertas |
 | `account-chain:release-cooldown` | `{accountId, reason:'not-a-limit'\|'recharged'\|'manual'}` | `{ok}`; auth e billing exigem nova checagem |
 | `account-chain:redact-transcript` | `{text}` (≤ 32 MB, mesmo teto de `context-files-ipc-handlers.cjs:21`) | `{ok, text, chars}` |
@@ -460,7 +461,7 @@ Várias sessões da mesma conta na mesma detecção fazem um único UPSERT, e va
 ### 4.3 Por sessão (vigia)
 
 A vigia passa por `observando → detectou → (proposta aberta | aviso) → observando`. Para não repetir:
-- cada `evidence_hash` visto na sessão é guardado (até 32 por sessão, LRU) e a mesma evidência nunca gera segunda detecção;
+- cada `evidence_hash` visto na sessão é guardado (até 32 por sessão, LRU) e a mesma evidência nunca gera segunda detecção; a exceção é a CLI imprimir a mesma linha de novo depois de um Enter da pessoa: sai uma vez por Enter marcada `repeat`, e o serviço só a usa quando aquela evidência foi recusada com "Agora não" (aviso no bloco, sem proposta; decisão de 12/11/2026);
 - uma sessão que já foi origem de `spawned` fica "sucedida": não recebe nova proposta, mas continua avisando.
 
 ### 4.4 Invariantes (cada uma com teste)
@@ -470,7 +471,7 @@ A vigia passa por `observando → detectou → (proposta aberta | aviso) → obs
 - **I3** O `accountId` do processo nascido com ticket é igual ao `to_account_id`.
 - **I4** Nenhuma proposta `proposed`, `confirmed` ou `spawning` sobrevive a um reinício, e nenhuma é executada depois dele.
 - **I5** Há no máximo `max_hops_per_lineage` saltos por linhagem. A origem e as contas visitadas em espera nunca são destino.
-- **I6** Recusar silencia a mesma evidência. Só evidência nova gera proposta nova.
+- **I6** Recusar silencia a mesma evidência. Só evidência nova gera proposta nova. Depois de "Agora não", a mesma evidência repetida vira só aviso no bloco, e a proposta sai apenas pelo pedido da pessoa ("Trocar de conta", `account-chain:request-switch`).
 - **I7** Rede, provedor, tempo e cancelado nunca gravam espera nem proposta.
 - **I8** Nenhum spawn nasce da cadeia sem `confirm` (a contagem de `pty:spawn` na sonda prova isso no smoke).
 - **I9** Nenhum segredo sentinela aparece em banco, push, log QA ou retorno de IPC.

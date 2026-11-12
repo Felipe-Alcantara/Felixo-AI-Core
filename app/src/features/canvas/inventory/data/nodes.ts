@@ -64,7 +64,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
       {
         locator: 'chainActions.onBannerAction({',
         kind: 'button',
-        effect: 'Ações das faixas da cadeia de contas (BANNER_ACTION_LABELS, via useAccountContinuation.onBannerAction): "Ver opções" abre o diálogo de troca de conta; "Não era limite" recusa a proposta ou solta a espera (account-chain:decline / release-cooldown); "Sim, tratar como limite" e "Ignorar" resolvem a detecção ambígua (account-chain:resolve-ambiguous); "Dispensar" só limpa a detecção local; "Refazer login neste terminal" abre a gaveta; "Passar responsabilidade…" abre o Handoff; "Ir para o bloco novo" foca o sucessor.',
+        effect: 'Ações das faixas da cadeia de contas (BANNER_ACTION_LABELS, via useAccountContinuation.onBannerAction): "Ver opções" abre o diálogo de troca de conta; "Não era limite" recusa a proposta ou solta a espera (account-chain:decline / release-cooldown); "Sim, tratar como limite" e "Ignorar" resolvem a detecção ambígua (account-chain:resolve-ambiguous); "Trocar de conta", na faixa do mesmo limite depois de "Agora não", pede a proposta (account-chain:request-switch, vale uma vez por aviso) e abre o diálogo dela; "Dispensar" só limpa a detecção local; "Refazer login neste terminal" abre a gaveta; "Passar responsabilidade…" abre o Handoff; "Ir para o bloco novo" foca o sucessor.',
         failure: 'A mensagem de erro da ação aparece no cartão em role="alert" (chainActions.errorFor). Sem o contexto da cadeia os botões não aparecem.',
         disabledWhen: 'Só existe com AccountChainActionsContext e uma faixa com ações.',
         test: { file: SMOKE_CONTAS, check: 'confirmarTroca' },
@@ -92,6 +92,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
       'account-chain:changed',
       'account-chain:decline',
       'account-chain:resolve-ambiguous',
+      'account-chain:request-switch',
       'account-chain:release-cooldown',
       'canvas:save',
       'canvas:delete',

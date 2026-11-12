@@ -32,7 +32,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **Elementos:** 101 (10 blocos, 16 ferramentas, 75 outras superfícies)
 - **Controles:** 382, dos quais 57 com teste específico
 - **Elementos sem nenhum teste:** 4
-- **Lacunas:** 259 (alto 8, médio 138, baixo 113), em 71 tasks
+- **Lacunas:** 258 (alto 8, médio 138, baixo 112), em 70 tasks
 
 ## Moldura do canvas
 
@@ -542,7 +542,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 - **ID:** `bloco-terminal` · **Dono:** `src/features/canvas/components/TerminalNode.tsx`
 - **Persistência:** canvas salvo (canvas_nodes.data_json: label, command, args, cwd, accountId/accountMode, agentSession, resumeFailure, lastPromptInsertion só com metadata, sessionStartedAt, chainSuccessorNodeId, frameColor); processo principal: PTY vivo no pty-process-manager (sobrevive a reload da interface e à ida ao chat); memória do renderer: resumeChoice no terminalRunRegistry (TRANSIENT_DATA_KEYS, nunca vai ao disco)
-- **IPC:** `pty:spawn`, `pty:kill`, `pty:write`, `pty:data`, `pty:exit`, `pty:session`, `account-chain:get-state`, `account-chain:changed`, `account-chain:decline`, `account-chain:resolve-ambiguous`, `account-chain:release-cooldown`, `canvas:save`, `canvas:delete`
+- **IPC:** `pty:spawn`, `pty:kill`, `pty:write`, `pty:data`, `pty:exit`, `pty:session`, `account-chain:get-state`, `account-chain:changed`, `account-chain:decline`, `account-chain:resolve-ambiguous`, `account-chain:request-switch`, `account-chain:release-cooldown`, `canvas:save`, `canvas:delete`
 - **Depende de:** `useTerminalSessions`, `useSessionSnapshot`, `useSessionMetadata`, `usePerformanceMode`, `useReactFlow`, `useCliAccountLabel`, `useAccountChain`, `useAccountChainActions (AccountChainActionsContext)`, `visibleTerminalResumeBanner (terminal-resume-banner)`, `buildTerminalChainBanners (account-chain-view)`, `relaunchTerminal / handleResumeAction (CanvasView)`
 - **Sobreposição:** Bloco do React Flow, sem z próprio: fica abaixo de toda superfície fixa (topbar e statusbar 18, dock e painéis 20/30, sidebar 26, menus 50+). O cartão é overflow-hidden, então nada que nasce dentro dele passa das bordas. Faixas de retomada e da cadeia vivem dentro do cartão (nodrag nowheel nopan). A gaveta do terminal (coluna à direita) e a dock de terminais recolhidos cobrem o bloco quando ele cai embaixo delas.
 - **Testes:** `src/features/canvas/services/terminal-resume-banner.test.ts`, `src/features/canvas/services/account-chain-view.test.ts`, `src/features/canvas/services/terminal-run-registry.test.ts`, `src/features/canvas/services/repository-grouping.test.ts`, `src/features/canvas/terminal/terminal-session-store.test.ts`, `src/features/canvas/terminal/terminal-scrollback.test.ts`, `src/features/canvas/terminal/prompt-origins-e2e.test.ts`, `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`, `scripts/canvas-smoke.cjs` → `checarInteracoes`, `scripts/canvas-smoke.cjs` → `checarVariosAgentes`, `scripts/canvas-smoke-contas.cjs` → `abrirBlocoDaCadeia`, `scripts/canvas-smoke-prompts.cjs` → `esperarCartao`
@@ -563,7 +563,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `aria-label="Ver detalhes do terminal"` (button) | clique | onDetails → setDetailsTerminalId: abre o painel de detalhes (TerminalDetailsPanel) deste bloco. | Sem falha própria (estado local do canvas). | — |
 | `aria-label="Expandir terminal"` (button) | clique | onExpand → openTerminal: abre a gaveta TerminalDrawer com o xterm vivo deste bloco e foca o terminal; ao fechar a gaveta o foco volta a este botão (data-terminal-expand-trigger). | Sem falha própria: o PTY segue no store com ou sem a gaveta. | `scripts/canvas-smoke.cjs` → `checarInteracoes` |
 | `onClick={() => runResumeAction(action.id)}` (button) | clique | Botões da faixa de retomada ("Escolher na lista (/resume)", "Abrir conversa nova", "Tentar retomar de novo", "Dispensar aviso"). Os que relançam pedem confirm com processo vivo; onResumeAction → handleResumeAction grava resumeChoice (transitória, só no registro da execução) ou limpa resumeFailure (persistida) e relança pelo mesmo plano do Reiniciar. "Dispensar aviso" só limpa a falha, o agente de pé continua. (desabilitado: Só existe com a faixa de retomada visível.) | Cancelar o confirm não faz nada. Se a CLI recusar de novo, onResumeFailure grava a falha e a faixa volta com o motivo. | — |
-| `chainActions.onBannerAction({` (button) | clique | Ações das faixas da cadeia de contas (BANNER_ACTION_LABELS, via useAccountContinuation.onBannerAction): "Ver opções" abre o diálogo de troca de conta; "Não era limite" recusa a proposta ou solta a espera (account-chain:decline / release-cooldown); "Sim, tratar como limite" e "Ignorar" resolvem a detecção ambígua (account-chain:resolve-ambiguous); "Dispensar" só limpa a detecção local; "Refazer login neste terminal" abre a gaveta; "Passar responsabilidade…" abre o Handoff; "Ir para o bloco novo" foca o sucessor. (desabilitado: Só existe com AccountChainActionsContext e uma faixa com ações.) | A mensagem de erro da ação aparece no cartão em role="alert" (chainActions.errorFor). Sem o contexto da cadeia os botões não aparecem. | `scripts/canvas-smoke-contas.cjs` → `confirmarTroca` |
+| `chainActions.onBannerAction({` (button) | clique | Ações das faixas da cadeia de contas (BANNER_ACTION_LABELS, via useAccountContinuation.onBannerAction): "Ver opções" abre o diálogo de troca de conta; "Não era limite" recusa a proposta ou solta a espera (account-chain:decline / release-cooldown); "Sim, tratar como limite" e "Ignorar" resolvem a detecção ambígua (account-chain:resolve-ambiguous); "Trocar de conta", na faixa do mesmo limite depois de "Agora não", pede a proposta (account-chain:request-switch, vale uma vez por aviso) e abre o diálogo dela; "Dispensar" só limpa a detecção local; "Refazer login neste terminal" abre a gaveta; "Passar responsabilidade…" abre o Handoff; "Ir para o bloco novo" foca o sucessor. (desabilitado: Só existe com AccountChainActionsContext e uma faixa com ações.) | A mensagem de erro da ação aparece no cartão em role="alert" (chainActions.errorFor). Sem o contexto da cadeia os botões não aparecem. | `scripts/canvas-smoke-contas.cjs` → `confirmarTroca` |
 | `aria-label={`Abrir ${nodeData.label \|\| provider.label}`}` (button) | clique | A prévia inteira é um botão: onExpand abre a gaveta do terminal, como o Expandir. Mostra selo de atividade, último prompt, aviso de contexto (data-felixo-context-warning), aviso de scrollback cortado e as últimas linhas. | Sem falha própria. No bloco mínimo (200×120), faixas de retomada e da cadeia espremem a prévia até ela sumir. | — |
 
 | Lacuna | Risco | Task |
@@ -2481,7 +2481,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Conferir login, Configurar cadeia, Fechar, Medir agora, Ir para o terminal antigo, Fixar e Não era limite não são clicados em nenhum teste (a sessão C confirma e usa Esc). | médio | `3ec91f95-497e-81e8-8f18-e2a529b0568e` |
 | onLater e onNotALimit fecham antes da resposta e descartam a mensagem de erro do decline; onCheckLogin descarta o resultado (useAccountContinuation.ts:367-376 e 392). | médio | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 | Não bloqueantes de acessibilidade da interface da cadeia. | baixo | `3e991f95-497e-815c-845c-da8829970c0c` |
-| O mesmo limite pode voltar a propor depois de "Agora não". | baixo | `3e991f95-497e-81c9-a900-f0d5585956f9` |
 | O aviso de continuação automática do Claude no terminal antigo não oferece cancelar. | médio | `3e991f95-497e-812d-b877-e7bb0162a60f` |
 
 ### Alças de redimensionar dos modais
@@ -2930,7 +2929,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3e991f95-497e-8172-b092-f3aa9f111ccc` — 2 lacunas
 - `3e991f95-497e-817d-b6a4-c2c1825b3afc` — 1 lacuna
 - `3e991f95-497e-81b4-ac92-d7db960c9ae0` — 1 lacuna
-- `3e991f95-497e-81c9-a900-f0d5585956f9` — 1 lacuna
 - `3ea91f95-497e-8117-8506-d4abe67709ff` — 1 lacuna
 - `3ea91f95-497e-8126-88c8-c6a7ce21bee0` — 1 lacuna
 - `3ea91f95-497e-8129-acde-f3b1049c09ed` — 1 lacuna

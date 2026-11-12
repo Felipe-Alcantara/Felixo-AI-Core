@@ -172,6 +172,12 @@ por "Conferir login" (decisão de 11/11/2026).
   "Reiniciar", recarregar a janela) como um spawn comum na mesma conta, e mantém
   a linhagem da troca.
 - Uma proposta vence em 30 minutos; um ticket não usado vence em 2 minutos.
+- "Agora não" não pergunta de novo pela mesma evidência. Se a CLI imprimir o
+  mesmo limite outra vez depois de um Enter da pessoa, o bloco mostra só um
+  aviso ("Limite … de novo às 14:40 · você recusou a troca às 14:33") com
+  **Trocar de conta**, que abre uma proposta nova e o diálogo dela. Nada abre
+  sozinho, nada vai para as notificações e cada aviso vale um pedido. "Não era
+  limite" continua mudo (decisão de 12/11/2026).
 - "Automática (cadeia)" ao abrir um bloco mostra antes qual conta será usada; o
   clique em Abrir é a confirmação. Sem conta apta, a abertura é recusada, nunca
   cai no Login do sistema.
