@@ -61,6 +61,7 @@ const DETECTION_OUTCOMES = Object.freeze({
   transient: 'informational',
   model_limit: 'informational',
   source_resumed: 'source_resumed',
+  declined_again: 'declined_again',
 })
 
 const CONFIRM_ERROR_CODES = Object.freeze(['SUPERSEDED', 'EXPIRED', 'SOURCE_ACTIVE', 'NOT_ELIGIBLE', 'NOT_PENDING'])
@@ -370,6 +371,7 @@ function createAccountChainView({ repository, describeAccount, listLiveSessions 
           ? (event.candidates ?? []).filter((item) => typeof item?.accountId === 'string').map(exclusion)
           : [],
       postSwitchFailure: payload?.postSwitchFailure === true,
+      declinedAt: outcome === 'declined_again' ? toIsoOrNull(event?.decidedAt) : null,
     }
   }
 

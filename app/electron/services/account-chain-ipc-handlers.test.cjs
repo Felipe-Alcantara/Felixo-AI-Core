@@ -226,6 +226,50 @@ test('canais da cadeia: estado, liga, proposta por detecção, confirma e histó
   assertNoSecrets([initial, enabled, members, state, confirmed, history, redacted, checked, sent])
 })
 
+test('limite já recusado com "Agora não": a faixa chega sem proposta e request-switch abre uma só a pedido', async (t) => {
+  const { runtime, invoke, sent, cleanup } = setup()
+  t.after(cleanup)
+  const enabled = await invoke('account-chain:update-settings', { enabled: true, expectedRevision: 0 })
+  await invoke('account-chain:update-members', {
+    members: [
+      { accountId: 'conta-a', enabled: true, billingDeclared: null, multiplierDeclared: null },
+      { accountId: 'conta-b', enabled: true, billingDeclared: null, multiplierDeclared: null },
+    ],
+    expectedRevision: enabled.state.revision,
+  })
+  const detection = {
+    sessionId: 'canvas:a',
+    accountId: 'conta-a',
+    providerId: 'codex',
+    accountMode: 'chain',
+    failure: { failureClass: 'limit', scope: 'account', ambiguous: false, evidence: 'Usage limit reached.', evidenceHash: 'hash-recusa' },
+  }
+  const first = await runtime.service.onOutputFailure(detection)
+  assert.equal((await invoke('account-chain:decline', { proposalId: first.event.id, reason: 'later' })).ok, true)
+
+  const propostas = sent.filter((item) => item.channel === 'account-chain:proposal' && item.payload.type === 'opened').length
+  await runtime.service.onOutputFailure(detection)
+  const aviso = sent.filter((item) => item.channel === 'account-chain:detection').at(-1).payload
+  assert.equal(aviso.outcome, 'declined_again')
+  assert.equal(aviso.proposalId, null)
+  assert.match(aviso.id, /^[0-9a-f-]{36}$/)
+  assert.ok(aviso.declinedAt, 'hora da recusa')
+  assert.equal(sent.filter((item) => item.channel === 'account-chain:proposal' && item.payload.type === 'opened').length, propostas)
+
+  for (const params of [undefined, {}, { detectionId: 'nao-e-uuid' }]) {
+    assert.equal((await invoke('account-chain:request-switch', params)).code, 'INVALID')
+  }
+  const pedido = await invoke('account-chain:request-switch', { detectionId: aviso.id })
+  assert.deepEqual(Object.keys(pedido).sort(), ['ok', 'proposalId'])
+  assert.notEqual(pedido.proposalId, first.event.id)
+  const aberta = sent.filter((item) => item.channel === 'account-chain:proposal').at(-1).payload
+  assert.equal(aberta.type, 'opened')
+  assert.equal(aberta.proposal.id, pedido.proposalId)
+  const repetido = await invoke('account-chain:request-switch', { detectionId: aviso.id })
+  assert.equal(repetido.code, 'NOT_PENDING')
+  assert.match(repetido.message, /aviso já foi usado/)
+})
+
 test('sem serviço montado, todo canal responde falha no formato do contrato', async () => {
   const handlers = new Map()
   registerAccountChainIpcHandlers({

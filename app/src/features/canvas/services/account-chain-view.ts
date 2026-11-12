@@ -629,6 +629,7 @@ export type TerminalChainBannerAction =
   | 'dismiss'
   | 'relogin'
   | 'go-to-successor'
+  | 'switch-account'
 
 export type TerminalChainBanner = {
   key: string
@@ -745,6 +746,19 @@ function detectionBanner(detection: AccountChainDetection, time: TimeOptions): T
       actions: ['dismiss'],
     }
   }
+  if (detection.outcome === 'declined_again') {
+    // Limite já recusado com "Agora não": avisa sem proposta; a troca sai só a pedido.
+    const cooldown = formatCooldown(detection.cooldown, time)
+    const declined = detection.declinedAt
+      ? `você recusou a troca às ${formatClockTime(detection.declinedAt, time)}`
+      : 'você recusou a troca'
+    return {
+      ...base,
+      tone: 'info',
+      text: `${capitalizeFirst(failureClassLabel(detection.failureClass))} ${where} de novo às ${at}${cooldown ? ` · ${cooldown}` : ''} · ${declined}`,
+      actions: ['switch-account', 'dismiss'],
+    }
+  }
   if (detection.outcome === 'informational') {
     return {
       ...base,
@@ -831,4 +845,5 @@ export const BANNER_ACTION_LABELS: Record<TerminalChainBannerAction, string> = {
   dismiss: 'Dispensar',
   relogin: 'Refazer login neste terminal',
   'go-to-successor': 'Ir para o bloco novo',
+  'switch-account': 'Trocar de conta',
 }

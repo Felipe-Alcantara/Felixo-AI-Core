@@ -186,6 +186,8 @@ function normalizeDetection(input) {
       evidenceHash: isNonEmptyText(detected.evidenceHash) ? detected.evidenceHash.slice(0, EVIDENCE_HASH_HEX_CHARS) : null,
       notice: detected.notice === LIMIT_RESET_NOTICE ? LIMIT_RESET_NOTICE : null,
     },
+    // A vigia reemitiu a mesma evidência impressa de novo depois de um Enter.
+    repeat: input.repeat === true,
   }
 }
 
@@ -218,6 +220,9 @@ function createAccountChainService({
 
   const sessionQueues = new Map()
   const ambiguousDetections = new Map()
+  // Mesmo limite depois de "Agora não": uma detecção por sessão, a mais recente, à espera de a
+  // pessoa pedir a troca pelo aviso do bloco (decisão do Felipe, 12/11/2026).
+  const declinedDetections = new Map()
 
   // ── Saídas (push e log QA), que nunca derrubam o serviço ──────────────────
 
@@ -676,7 +681,11 @@ function createAccountChainService({
     return null
   }
 
-  async function processActionable(detection) {
+  /**
+   * @param {{ requestedByPerson?: boolean }} [options] - `requestedByPerson`: o clique em "Trocar de
+   *   conta" do aviso pede a proposta que a recusa da mesma evidência silenciou.
+   */
+  async function processActionable(detection, { requestedByPerson = false } = {}) {
     const nowMs = now()
     const detectedAt = toIso(nowMs)
     const postSwitch = markPostSwitchFailure(detection, nowMs)
@@ -684,10 +693,17 @@ function createAccountChainService({
     const cooldownView = cooldown ? { untilAt: cooldown.untilAt, untilSource: cooldown.untilSource } : null
 
     const { evidenceHash } = detection.failure
-    const previous = evidenceHash
+    const previous = evidenceHash && !requestedByPerson
       ? repository.findLatestSwitchEventForEvidence({ sessionId: detection.sessionId, evidenceHash })
       : null
     if (previous && previous.state !== 'expired') {
+      if (previous.state === 'declined') {
+        // "Agora não" segue sem proposta automática (I6), mas o bloco avisa que o limite voltou e
+        // oferece a troca sob demanda. "Não era limite" (dismissed) continua mudo.
+        const detectionId = rememberDeclined(detection)
+        publishDetection(detection, { action: 'declined_again', detectionId, eventId: previous.id })
+        return { action: 'silenced', event: previous, cooldown, detectionId }
+      }
       // A mesma evidência nunca gera segunda proposta; recusada, fica silenciada (I6).
       return { action: SILENCING_STATES.includes(previous.state) ? 'silenced' : 'duplicate', event: previous, cooldown }
     }
@@ -722,8 +738,28 @@ function createAccountChainService({
     return detectionId
   }
 
+  function rememberDeclined(detection) {
+    for (const [detectionId, item] of declinedDetections) {
+      if (item.sessionId === detection.sessionId) declinedDetections.delete(detectionId)
+    }
+    const detectionId = randomUUID()
+    declinedDetections.set(detectionId, detection)
+    while (declinedDetections.size > MAX_PENDING_AMBIGUOUS_DETECTIONS) {
+      declinedDetections.delete(declinedDetections.keys().next().value)
+    }
+    return detectionId
+  }
+
   async function handleDetection(detection) {
     const { failureClass, scope, ambiguous, notice } = detection.failure
+    if (detection.repeat) {
+      // O limite voltou depois de um Enter: só a recusa com "Agora não" pede aviso (no bloco, sem
+      // proposta). Todo o resto segue valendo uma vez por sessão, como antes da reemissão existir.
+      const previous = detection.failure.evidenceHash
+        ? repository.findLatestSwitchEventForEvidence({ sessionId: detection.sessionId, evidenceHash: detection.failure.evidenceHash })
+        : null
+      return previous?.state === 'declined' ? processActionable(detection) : { action: 'duplicate' }
+    }
     if (notice === LIMIT_RESET_NOTICE && repository.hasSpawnedFromSession(detection.sessionId)) {
       // O terminal antigo pode voltar a trabalhar na conta antiga enquanto o
       // bloco novo continua o mesmo trabalho: só avisa, nunca escreve nele.
@@ -783,6 +819,18 @@ function createAccountChainService({
     }
     const asLimit = { ...detection, failure: { ...detection.failure, failureClass: 'limit', scope: 'account', ambiguous: false } }
     const outcome = await serialize(detection.sessionId, () => processActionable(asLimit))
+    return { ok: true, action: outcome.action, event: outcome.event ?? null }
+  }
+
+  /**
+   * "Trocar de conta" no aviso do mesmo limite depois de "Agora não": a pessoa pede, então a
+   * proposta sai mesmo com a evidência silenciada. O pedido vale uma vez por aviso.
+   */
+  async function requestSwitch({ detectionId } = {}) {
+    const detection = declinedDetections.get(detectionId)
+    if (!detection) return failure('NOT_PENDING')
+    declinedDetections.delete(detectionId)
+    const outcome = await serialize(detection.sessionId, () => processActionable(detection, { requestedByPerson: true }))
     return { ok: true, action: outcome.action, event: outcome.event ?? null }
   }
 
@@ -1110,8 +1158,10 @@ function createAccountChainService({
   /** A sessão de origem saiu: a proposta aberta dela vence sem executar nada. */
   function onSessionExit(sessionId) {
     if (!isNonEmptyText(sessionId)) return 0
-    for (const [detectionId, detection] of ambiguousDetections) {
-      if (detection.sessionId === sessionId) ambiguousDetections.delete(detectionId)
+    for (const pending of [ambiguousDetections, declinedDetections]) {
+      for (const [detectionId, detection] of pending) {
+        if (detection.sessionId === sessionId) pending.delete(detectionId)
+      }
     }
     const expired = expireOpenProposals((event) => event.sourceSessionId === sessionId, 'origem-saiu')
     if (expired > 0) emitChanged('source-exited')
@@ -1335,6 +1385,7 @@ function createAccountChainService({
     })
     const pruned = repository.pruneSwitchEvents()
     ambiguousDetections.clear()
+    declinedDetections.clear()
     safeLog({
       transition: 'recover',
       expired: result.expired,
@@ -1362,6 +1413,7 @@ function createAccountChainService({
     recoverOnStartup,
     releaseCooldown,
     resolveAmbiguous,
+    requestSwitch,
     setSessionMode,
     startExpirySweeper,
     sweep,

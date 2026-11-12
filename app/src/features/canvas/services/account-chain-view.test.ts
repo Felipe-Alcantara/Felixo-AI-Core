@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   accountChipLabel,
+  BANNER_ACTION_LABELS,
   buildTerminalChainBanners,
   groupPendingProposals,
   chainLaunchSummary,
@@ -496,6 +497,26 @@ describe('faixas do bloco', () => {
       successor: null,
     })
     expect(auth.actions[0]).toBe('relogin')
+  })
+
+  it('o mesmo limite depois de "Agora não" avisa sem proposta e oferece a troca sob demanda', () => {
+    const [aviso] = buildTerminalChainBanners({
+      proposal: null,
+      detection: makeDetection({
+        outcome: 'declined_again',
+        proposalId: null,
+        detectedAt: '2026-09-28T17:40:00.000Z',
+        declinedAt: '2026-09-28T17:33:00.000Z',
+      }),
+      successor: null,
+      timeOptions: SP,
+    })
+    expect(aviso.tone).toBe('info')
+    expect(aviso.text).toBe('Limite de uso da conta Pessoal de novo às 14:40 · você recusou a troca às 14:33')
+    expect(aviso.actions).toEqual(['switch-account', 'dismiss'])
+    expect(aviso.detectionId).toBe('deteccao-1')
+    expect(aviso.proposalId).toBeNull()
+    expect(BANNER_ACTION_LABELS['switch-account']).toBe('Trocar de conta')
   })
 
   it('bloco antigo mostra "continuado em" e só foca o novo', () => {

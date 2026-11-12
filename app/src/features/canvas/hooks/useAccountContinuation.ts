@@ -256,6 +256,20 @@ export function useAccountContinuation({
             }
           })
           return
+        case 'switch-account':
+          // O main abre a proposta (e troca a faixa); aqui só abre o diálogo dela.
+          run(async () => {
+            if (!banner.detectionId || !store.bridge) return null
+            try {
+              const result = await store.bridge.requestSwitch({ detectionId: banner.detectionId })
+              if (!result.ok) return result.message ?? 'Não foi possível pedir a troca.'
+              if (result.proposalId) openProposal(result.proposalId, trigger)
+              return null
+            } catch {
+              return 'Não foi possível falar com o processo principal.'
+            }
+          })
+          return
         case 'dismiss':
           store.clearDetection(sessionId)
           setBannerError(nodeId, null)

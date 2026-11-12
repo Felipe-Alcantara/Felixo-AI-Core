@@ -1080,3 +1080,70 @@ test('espera de limite vencida pelo prazo: "Não era limite" não a solta; confe
     assert.notEqual(member().reason, 'em-espera')
   })
 })
+
+test('depois de "Agora não", o mesmo limite avisa no bloco (sem proposta) e a troca só sai quando a pessoa pede', async () => {
+  // Decisão do Felipe (12/11/2026, opção B): aviso discreto só no bloco, com "Trocar de conta" sob demanda;
+  // nada abre sozinho e a mesma evidência continua sem gerar proposta automática (I6).
+  await withService(async (env) => {
+    chainReady(env)
+    const recusada = await proposeFromSession1(env)
+    await env.service.decline({ proposalId: recusada.id, reason: 'later' })
+    const propostasAntes = env.channel('account-chain:proposal').length
+
+    // A vigia reemite a mesma linha impressa de novo depois de um Enter, marcada `repeat`.
+    const outcome = await env.service.onOutputFailure(env.detection({ repeat: true }))
+    assert.equal(outcome.action, 'silenced')
+    assert.equal(env.channel('account-chain:proposal').length, propostasAntes, 'nenhuma proposta automática')
+    const aviso = env.channel('account-chain:detection').at(-1)
+    assert.equal(aviso.action, 'declined_again')
+    assert.equal(aviso.eventId, recusada.id)
+    assert.ok(aviso.detectionId)
+
+    // A CLI repete o aviso: o bloco ganha um aviso novo e o anterior deixa de valer.
+    const repetido = await env.service.onOutputFailure(env.detection({ repeat: true }))
+    assert.notEqual(repetido.detectionId, outcome.detectionId)
+    assert.equal((await env.service.requestSwitch({ detectionId: outcome.detectionId })).code, 'NOT_PENDING')
+
+    const pedido = await env.service.requestSwitch({ detectionId: repetido.detectionId })
+    assert.equal(pedido.ok, true)
+    assert.equal(pedido.action, 'proposed')
+    assert.notEqual(pedido.event.id, recusada.id)
+    assert.equal(env.repository.getSwitchEvent(pedido.event.id).state, 'proposed')
+    assert.equal((await env.service.requestSwitch({ detectionId: repetido.detectionId })).code, 'NOT_PENDING', 'o pedido vale uma vez')
+  })
+})
+
+test('depois de "Não era limite", o mesmo aviso da CLI continua totalmente silencioso', async () => {
+  await withService(async (env) => {
+    chainReady(env)
+    const proposal = await proposeFromSession1(env)
+    await env.service.decline({ proposalId: proposal.id, reason: 'not-a-limit' })
+    const detectionsAntes = env.channel('account-chain:detection').length
+
+    const outcome = await env.service.onOutputFailure(env.detection())
+
+    assert.equal(outcome.action, 'silenced')
+    assert.equal(outcome.detectionId, undefined)
+    assert.equal(env.channel('account-chain:detection').length, detectionsAntes)
+  })
+})
+
+test('a reemissão da vigia (repeat) só responde ao limite recusado com "Agora não"; o resto segue uma vez por sessão', async () => {
+  await withService(async (env) => {
+    chainReady(env)
+    const proposta = await proposeFromSession1(env)
+    const detectionsAntes = env.channel('account-chain:detection').length
+
+    // Proposta ainda aberta: a repetição não publica nada nem mexe na proposta.
+    assert.equal((await env.service.onOutputFailure(env.detection({ repeat: true }))).action, 'duplicate')
+    // Evidência que nunca virou evento (rede, ambíguo): continua valendo só a primeira vez.
+    const rede = { ...LIMIT_FAILURE, failureClass: 'network', evidenceHash: 'hash-rede' }
+    assert.equal((await env.service.onOutputFailure(env.detection({ sessionId: 'sessao-2', failure: rede, repeat: true }))).action, 'duplicate')
+    assert.equal(env.channel('account-chain:detection').length, detectionsAntes)
+    assert.equal(env.repository.getSwitchEvent(proposta.id).state, 'proposed')
+
+    await env.service.decline({ proposalId: proposta.id, reason: 'not-a-limit' })
+    assert.equal((await env.service.onOutputFailure(env.detection({ repeat: true }))).action, 'duplicate')
+    assert.equal(env.channel('account-chain:detection').length, detectionsAntes, '"Não era limite" continua mudo')
+  })
+})

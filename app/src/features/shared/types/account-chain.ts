@@ -413,6 +413,11 @@ export type AccountChainDeclineReason = 'later' | 'not-a-limit'
 
 export type AccountChainSimpleResult = { ok: true } | AccountChainFailure
 
+/** `proposalId` nulo: o main não abriu proposta (sem conta apta, aviso ou espera). */
+export type AccountChainRequestSwitchResult =
+  | { ok: true; proposalId: string | null }
+  | AccountChainFailure
+
 export type AccountChainDeclineResult =
   | { ok: true }
   | { ok: false; code: 'NOT_PENDING'; message?: string }
@@ -497,7 +502,9 @@ export type AccountChainHistoryResult =
  * - `ambiguous`: a pessoa decide se trata como limite;
  * - `informational`: rede, provedor, tempo ou limite só do modelo — trocar de
  *   conta não resolve;
- * - `source_resumed`: o terminal antigo voltou a trabalhar na conta antiga.
+ * - `source_resumed`: o terminal antigo voltou a trabalhar na conta antiga;
+ * - `declined_again`: o mesmo limite de uma proposta recusada com "Agora não"
+ *   — sem proposta automática; a troca sai só pelo `requestSwitch`.
  */
 export type AccountChainDetectionOutcome =
   | 'noticed'
@@ -506,9 +513,10 @@ export type AccountChainDetectionOutcome =
   | 'ambiguous'
   | 'informational'
   | 'source_resumed'
+  | 'declined_again'
 
 export type AccountChainDetection = {
-  /** Id da detecção; é o que `resolve-ambiguous` recebe. */
+  /** Id da detecção; é o que `resolve-ambiguous` e `request-switch` recebem. */
   id: string
   /** Sessão PTY (`canvas:<nodeId>`). */
   sessionId: string
@@ -531,6 +539,8 @@ export type AccountChainDetection = {
   exclusions: AccountChainExclusion[]
   /** O bloco nasceu de uma troca há menos de 3 min e a conta de destino já falhou. */
   postSwitchFailure: boolean
+  /** Quando a proposta foi recusada; presente quando `outcome === 'declined_again'`. */
+  declinedAt: string | null
 }
 
 export type AccountChainProposalEvent =
@@ -570,6 +580,8 @@ export type AccountChainBridge = {
     detectionId: string
     treatAs: 'limit' | 'ignore'
   }) => Promise<AccountChainSimpleResult>
+  /** "Trocar de conta" num limite já recusado (`outcome === 'declined_again'`); vale uma vez por detecção. */
+  requestSwitch: (params: { detectionId: string }) => Promise<AccountChainRequestSwitchResult>
   /** Fixar expira as propostas abertas da sessão. */
   setSessionMode: (params: {
     sessionId: string

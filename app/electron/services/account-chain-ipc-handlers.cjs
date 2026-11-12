@@ -277,6 +277,15 @@ function registerAccountChainIpcHandlers({
     return result?.ok ? { ok: true } : fail(result?.code ?? 'FAILED')
   })
 
+  // "Trocar de conta" na faixa de um limite já recusado: a proposta sai só a pedido da pessoa.
+  handle('account-chain:request-switch', async (service, params) => {
+    if (!isPlainObject(params) || !isUuid(params.detectionId)) return invalid()
+    const result = await service.requestSwitch({ detectionId: params.detectionId })
+    if (result?.code === 'NOT_PENDING') return fail('NOT_PENDING', { message: 'Este aviso já foi usado ou o bloco fechou; a troca não sai mais por aqui.' })
+    if (!result?.ok) return fail(result?.code ?? 'FAILED')
+    return { ok: true, proposalId: result.action === 'proposed' ? (result.event?.id ?? null) : null }
+  })
+
   handle('account-chain:set-session-mode', (service, params) => {
     if (!isPlainObject(params) || !isText(params.sessionId) || !SESSION_MODES.includes(params.mode)) return invalid()
     const result = service.setSessionMode({ sessionId: params.sessionId, mode: params.mode })
