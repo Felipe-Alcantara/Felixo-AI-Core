@@ -1653,3 +1653,37 @@ anteriores tinha falhado; virou task no Notion) e o envio dos artefatos do smoke
 execução presa ~50 min depois de todos os passos). A 2ª tentativa (só os jobs que falharam, 18:03–18:10) passou no Validate em
 Windows e no `Canvas smoke (ubuntu-latest)`; os demais já tinham passado. O Release gate (run 43100802457) e o Release (run
 43100835830, 18:10–18:18) saíram verdes e publicaram a `v0.1.530` nos três sistemas.
+
+---
+
+## 2026-11-11 — Orquestrador: Parar na conversa encerra o run que espera a confirmação de troca de provedor
+
+**Pedido.** Task do Notion "Felixo AI Core/Orquestrador — decidir se parar a conversa encerra o run que espera confirmação de troca de provedor". A pergunta vem da validação final da cadeia de contas (28/09, arquivo de 2026-09): "se o stop do chat encerra o run" ficou como decisão de produto em aberto. A página do Notion não abriu daqui (o conector está em outro workspace); o escopo saiu do título, do arquivo do IA e do código.
+
+**Medido (antes).** Reprodução no runner real, com script avulso fora do repositório:
+- **A — um sub-agente, esperando a confirmação.** Depois do Parar, a pergunta saía cancelada, mas o run ficava em `waiting_agents` e ainda ligado à thread. Só o timeout do run o derrubava, mandando um erro atrasado ao chat. A mensagem seguinte da mesma conversa caía nesse run velho, com o job cancelado (`a1:error`) e o `originalPrompt` antigo.
+- **B — dois sub-agentes, um esperando e outro rodando.** Quando o outro terminava, o orquestrador era reinvocado sozinho (1 vez), apesar do Parar.
+- Pela leitura do código, o `cli:stop` só matava o processo da thread da conversa. Turno reinvocado (`<runId>:orchestrator-turn-N`) e sub-agentes seguiam vivos. Com o orquestrador já fechado, `kill` devolvia `false` e só a tela marcava "Execução interrompida.".
+
+**Decisão do dono (11/11/2026, pergunta com três opções, recomendação "encerra tudo").** **Parar encerra tudo:** a pergunta é cancelada, o run é marcado como interrompido, os sub-agentes que ainda rodam param, nada reinvoca o orquestrador e a próxima mensagem abre um run novo. As outras opções eram encerrar deixando os sub-agentes terminarem com o resultado descartado, ou manter como estava.
+
+**O que mudou.**
+- `orchestration-runner.cjs`: `stopRunsForThread(threadId)` substitui `cancelProviderSwitchesForThread`. As decisões do run ou da thread saem como `cancelled` (registro `refused`/`cancelled`, como antes). O run ativo falha com "Execução interrompida pela pessoa." e o contexto é esquecido. O método devolve os runs encerrados. Saiu o `reinvoke: false` de `finishAgentJob`/`refuseProviderSwitch`, que só existia para esse caminho, e o ramo `cancelled` de `describeRefusedSwitchError`.
+- `ipc-handlers.cjs`: o `cli:stop` chama `stopRunsForThread` e para também o turno reinvocado e os sub-agentes `running` (`collectRunProcessThreadIds`, exportada). Cada um passa por `stopCliProcess`, que marca `stoppedSessions` para o `close` não virar erro nem `done`. As threads paradas recebem o "Interrompido" (o terminal do sub-agente fica `stopped`). Quando havia run, o chat recebe `done` com `stopped: true` e o IPC devolve `ok: true`, mesmo sem processo do orquestrador vivo. `getOrchestratorTurnThreadId` é a única fonte do nome da thread do turno. Integrado sobre o `b3e81eae` (mesmo dia): o `orchestrationBridge.discardThread` que ele pôs no `cli:stop` agora vale também para o turno e os sub-agentes parados, para a saída retida deles não ficar na ponte.
+- Documentação: `GUIA-USUARIO.md` (o Parar no card de troca), `ARQUITETURA.md` (orquestrador do chat) e `PLANO-CADEIA-CONTAS.md` §10.3.
+
+**Decisões do agente.** A regra vale para qualquer run ativo da conversa, não só para o que espera a confirmação. Com sub-agentes rodando e sem pergunta pendente, o mesmo defeito B aparecia, e um Parar que encerra só às vezes seria incoerente com a resposta do dono. Os jobs do run parado ficam no status em que estavam, como no `resetThread`; quem conta é o status `failed` do run. O Parar não manda `error` ao chat.
+
+**Validação.**
+- `node --test` no runner (47/47) e no `ipc-handlers` (22/22). Dois testes novos no runner (A e B acima, incluindo a próxima mensagem abrir `run-2`) e um no IPC (escolha das threads a parar).
+- Mutação: sem o `failRun` e o `forgetRunContext` em `stopRunsForThread`, os dois testes novos do runner reprovam. O arquivo foi restaurado idêntico (`cmp`).
+- `eslint` nos quatro arquivos: 0.
+- Depois de integrar sobre a `main` de `2f7ef8a5` (worktree separado, para não tocar no trabalho não commitado de outro agente no checkout principal): runner 47/47, `ipc-handlers` 22/22, `orchestration-ipc-bridge` 13/13, `expired-runs-sweeper` 5/5, `eslint` 0. A suíte completa abaixo rodou na base anterior (`25ed4ad2`).
+- `npm test` (Windows): 3.180 testes, 3.163 passaram, 12 pulados, nenhuma falha em orquestração ou IPC. As falhas, todas fora desta mudança:
+  - `devtools-fake-cli-pty-guard` ("contrato do main"): lê o `main.cjs`, modificado no working tree por outro trabalho em andamento (arquivo de saída do PTY) e fora deste diff.
+  - `agent-usage-refresh-account` (teto de tempo) e `terminal-scrollback-benchmark` (dreno do PTY): passam isolados (13/13 e 20/20); a falha só aparece com a suíte sob carga.
+  - `install-routes-process-tree` (duas falhas de "árvore inteira" e a rota pip): as falhas de ambiente do Windows já registradas em 09/11.
+
+**Não validado.** O Parar no app real, com orquestrador, sub-agente e card de troca vivos: nenhum smoke cobre o orquestrador com troca de provedor, e o `cli:stop` não tem teste de handler (só a parte pura). A corrida em que o turno reinvocado emite `spawn_agent` entre o fim do run e o `kill` não foi exercitada; nesse caso o chat receberia um erro de run já finalizado.
+
+Estado: concluído e publicado (ver commits abaixo).
