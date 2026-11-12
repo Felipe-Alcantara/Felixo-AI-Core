@@ -1687,3 +1687,10 @@ Windows e no `Canvas smoke (ubuntu-latest)`; os demais já tinham passado. O Rel
 **Não validado.** O Parar no app real, com orquestrador, sub-agente e card de troca vivos: nenhum smoke cobre o orquestrador com troca de provedor, e o `cli:stop` não tem teste de handler (só a parte pura). A corrida em que o turno reinvocado emite `spawn_agent` entre o fim do run e o `kill` não foi exercitada; nesse caso o chat receberia um erro de run já finalizado.
 
 Estado: concluído e publicado (ver commits abaixo).
+
+**Adendo (2026-11-11, 22:4x, Resolver hotfix): deploy e registro no Notion.** O CI de `0f46efb` (run 43126449286, 21:19–21:25)
+passou, e o Release gate (run 43127180224) e o Release (run 43127212095, 21:25–21:34) publicaram a `v0.1.531`. Conferido no
+`main` atual: runner e `ipc-handlers` 69/69, inclusive "cli:stop na conversa encerra o run que espera a troca; a próxima mensagem
+abre outro" (run `failed` com "Execução interrompida pela pessoa.", nenhuma reinvocação, a pergunta sai `cancelled`, outra thread
+não é afetada). Como a página da task não abria do lado do agente que fez a mudança, a evidência, o relatório do dia e a conclusão
+foram registrados no Notion por esta sessão, sem mudar código.
