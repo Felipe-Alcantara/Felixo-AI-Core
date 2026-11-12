@@ -1810,3 +1810,45 @@ Estado: concluído (deploy no adendo).
 macOS, Ubuntu e Ubuntu ARM e no smoke do canvas, inclusive com "C7 … o diálogo dizendo o modo de permissão (mesmo provedor) …:
 ok" na sessão C. O Release gate (run 43225965519) e o Release (run 43226008454, 10:18–10:27) publicaram a `v0.1.533` nos três
 sistemas.
+
+## 2026-11-12 — Contas: o estado da cadeia sobrevive ao reload, e "Conferir login agora" roda a CLI
+
+**Agente / repositório.** Resolver hotfix — Felixo-AI-Core. Task `3e991f95-497e-811e-bcb6-d4bc81d44e99` (aberta na revisão do
+PR #97).
+
+**O que a task mediu (28/09) e o estado em 12/11.**
+1. O `view.state` descartava as `ambiguousDetections` do serviço, e as faixas de detecção só chegavam por push: um reload do
+   renderer perdia "Tratar como limite?", os avisos e o "você recusou a troca". Seguia aberto.
+2. `alternativeUntilAt` saía sempre `null`: a política calculava os dois horários (medição e texto), mas a espera só gravava o
+   que vale. Seguia aberto.
+3. "Conferir login agora" chamava `checkLogin(accountId)` sem opções, e o runtime não repassava `force`: uma amostra do painel com
+   login de até 15 min valia como checagem. Seguia aberto.
+4. A segunda instância no mesmo perfil já estava resolvida pela trava de instância única (`core/single-instance.cjs`, task de
+   25/09): ela sai antes do `ready`, longe do `recoverOnStartup`. O `felixo devtools --real-profile` recusa abrir com o perfil em
+   uso, e o release smoke usa pasta própria.
+
+**O que mudou.**
+- Serviço: guarda a última detecção publicada por sessão (mesmo `id` e `detectedAt` do push) e o `getState` a devolve em
+  `detections`. Ficam de fora a proposta aberta (que tem faixa própria), a pergunta já respondida e o aviso de "Agora não" já
+  usado. `dismissDetection` (canal `account-chain:dismiss-detection`) esquece a detecção só se o id for o que a pessoa viu. A
+  sessão que encerra e a recuperação limpam tudo.
+- Renderer: o store junta as detecções do `get-state` às do push (`mergeDetections`). A mais nova da sessão vence, porque a
+  ordem entre o push e a resposta não é garantida, e uma faixa dispensada nesta janela não volta. O `clearDetection` avisa o main.
+- Migration 021: `alternative_until_at` e `alternative_until_source` em `account_cooldowns`. A política devolve o horário que
+  perdeu com a fonte, o serviço o grava e a view o mostra.
+- `force: true` no "Conferir login agora", repassado pelo runtime até `account-eligibility`.
+- Teste de contrato: `claimSingleInstance` vem antes do `recoverOnStartup` no `main.cjs`.
+- Smoke da sessão C, C10: a faixa do bloco fixo (C4) tem de voltar depois do reload.
+
+**Validação.**
+- Antes da mudança falhavam 8 testes: política (alternativo), repositório (alternativo gravado), migration 021 sobre um banco
+  na versão 20, serviço (detecções no `getState`, alternativo na espera, `force`), IPC (reload pelo `get-state` e dispensar) e
+  o aviso de "Agora não" relido no `get-state`. O teste do store (vitest) também falhava antes.
+- `npm test`: 3239 testes, 3229 passam, 10 pulados, 0 falham. vitest inteiro: 3465 passam. `eslint .` e `npm run build` limpos.
+- Smoke da sessão C local (Windows): falha no C4 ("bloco fixo: nada troca sozinho" não aparece) com e sem esta mudança (rodado
+  também com `git stash`), então é do ambiente local. O C10 novo vale no CI (Ubuntu).
+
+**Não validado.** Reload no app instalado com contas reais; a pergunta "Tratar como limite?" depois do reload só tem teste de
+unidade e de IPC (o smoke não tem gatilho ambíguo).
+
+Estado: concluído (deploy no adendo).
