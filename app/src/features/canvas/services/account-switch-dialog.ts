@@ -76,6 +76,13 @@ export type AccountSwitchDialogModel = {
   emptyText: string
   costNotice: string | null
   providerSwitchNotice: string | null
+  /**
+   * Outro provedor com agente nativo: o diálogo mostra a caixa "Yolo no bloco
+   * novo", que começa marcada (decisão de 12/11/2026) e a pessoa pode desmarcar.
+   */
+  offersYoloChoice: boolean
+  /** Mesmo provedor (repete o modo do bloco antigo) ou Openia (escolhe no próprio menu). */
+  permissionNotice: string | null
   multipleSessionsNotice: string | null
   oldTerminal: {
     untouched: string
@@ -132,6 +139,8 @@ function truncateEvidence(evidence: string | null): string | null {
 export function buildAccountSwitchDialogModel(params: {
   proposal: AccountSwitchProposal
   selectedAccountId: string | null
+  /** O bloco antigo abriu com Yolo (`hasYoloFlag` nos argumentos dele). */
+  sourceYolo: boolean
   transcriptChars: number
   transcriptLines: number
   nowMs: number
@@ -186,6 +195,17 @@ export function buildAccountSwitchDialogModel(params: {
   const providerSwitchNotice = crossProvider
     ? `Outro provedor: a retomada nativa não vale entre provedores. O histórico deste terminal (${size}, com segredos mascarados) será enviado a ${providerLabel(selected.providerId)}, que abre com o modelo e o esforço padrão dele.`
     : null
+  const destinationAgent = selected ? getAgent(selected.providerId as AgentId) : undefined
+  const offersYoloChoice = crossProvider && Boolean(destinationAgent) && !destinationAgent?.isLauncher
+  const permissionNotice = !selected
+    ? null
+    : destinationAgent?.isLauncher
+      ? `O ${providerLabel(selected.providerId)} pergunta as permissões no próprio menu ao abrir.`
+      : crossProvider
+        ? null
+        : params.sourceYolo
+          ? 'Abre com Yolo (acesso total, sem confirmações), como o bloco antigo.'
+          : 'Abre sem Yolo, como o bloco antigo.'
 
   const others = proposal.otherSessionsInIncident
   const multipleSessionsNotice =
@@ -235,6 +255,8 @@ export function buildAccountSwitchDialogModel(params: {
     emptyText: 'Nenhuma conta apta agora.',
     costNotice,
     providerSwitchNotice,
+    offersYoloChoice,
+    permissionNotice,
     multipleSessionsNotice,
     oldTerminal: {
       untouched: 'O terminal antigo não será encerrado nem receberá nada.',
@@ -306,6 +328,11 @@ const YOLO_FLAGS = new Set([
   '--yolo',
 ])
 
+/** O bloco abriu com o modo sem confirmações (Yolo) de algum agente. */
+export function hasYoloFlag(args: readonly string[] | undefined): boolean {
+  return (args ?? []).some((arg) => YOLO_FLAGS.has(arg))
+}
+
 export type ContinuationSource = {
   command?: string
   args?: string[]
@@ -322,15 +349,18 @@ export type ContinuationLaunch = {
 
 /**
  * Como o bloco novo abre (§9.1). No mesmo provedor, repete comando e
- * argumentos do antigo (mesmo modelo e esforço). Em outro provedor, modelo e
- * esforço voltam ao padrão do destino; só o modo de permissão escolhido para
- * o trabalho acompanha. `null` = o destino não tem agente conhecido.
+ * argumentos do antigo (mesmo modelo, esforço e Yolo). Em outro provedor,
+ * modelo e esforço voltam ao padrão do destino e o Yolo é o que a pessoa
+ * deixou marcado no diálogo (`yolo`); o do bloco antigo não passa sozinho.
+ * `null` = o destino não tem agente conhecido.
  */
 export function buildContinuationLaunch(params: {
   source: ContinuationSource
   sourceProviderId: AccountChainProviderId
   destinationProviderId: AccountChainProviderId
   destinationLabel: string | null
+  /** A caixa "Yolo no bloco novo" do diálogo; só vale para outro provedor. */
+  yolo: boolean
 }): ContinuationLaunch | null {
   const sourceLabel = params.source.label?.trim() || 'Terminal'
   const accountLabel = params.destinationLabel?.trim() || 'conta sem nome'
@@ -352,8 +382,7 @@ export function buildContinuationLaunch(params: {
     // menu do próprio Openia, sem inventar flags.
     return { command: agent.command, launchMode: 'launcher', label }
   }
-  const yolo = (params.source.args ?? []).some((arg) => YOLO_FLAGS.has(arg))
-  const args = buildAgentArgs({ agentId: agent.id, yolo }) ?? []
+  const args = buildAgentArgs({ agentId: agent.id, yolo: params.yolo }) ?? []
   return { command: agent.command, ...(args.length ? { args } : {}), label }
 }
 

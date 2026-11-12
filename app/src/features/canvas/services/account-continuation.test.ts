@@ -34,6 +34,7 @@ const request = {
   destinationAccountId: 'conta-b',
   autoSubmit: true,
   acknowledgeSourceActive: false,
+  yolo: true,
   transcript: TRANSCRIPT,
 }
 
@@ -122,6 +123,21 @@ describe('performContinuation', () => {
     const { env: e, created } = env()
     await performContinuation({ ...request, autoSubmit: false }, e)
     expect(created[0].options.handoffAutoSubmit).toBe(false)
+  })
+
+  it('outro provedor abre com o Yolo escolhido no diálogo, não com o do bloco antigo', async () => {
+    const bridge = createFakeBridge({
+      confirm: () => ({ ok: true, ticket: 'proposta-1', destination: { accountId: 'conta-b', providerId: 'claude', label: 'Max' } }),
+    })
+    const source = { command: 'codex', args: ['--dangerously-bypass-approvals-and-sandbox'], label: 'Codex', cwd: '/repo' }
+    const desmarcado = env({ bridge, getSource: () => source })
+    await performContinuation({ ...request, yolo: false }, desmarcado.env)
+    expect(desmarcado.created[0].options).toMatchObject({ command: 'claude', providerId: 'claude' })
+    expect(desmarcado.created[0].options.args).toBeUndefined()
+
+    const marcado = env({ bridge, getSource: () => ({ ...source, args: [] }) })
+    await performContinuation(request, marcado.env)
+    expect(marcado.created[0].options.args).toEqual(['--dangerously-skip-permissions'])
   })
 
   it('origem que sumiu não confirma nada', async () => {

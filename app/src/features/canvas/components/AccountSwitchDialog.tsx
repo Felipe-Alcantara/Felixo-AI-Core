@@ -24,6 +24,8 @@ export function AccountSwitchDialog({ binding }: { binding: AccountSwitchDialogB
   const nowMs = useClockTick(5_000)
   const [selectedId, setSelectedId] = useState<string | null>(() => initialDialogSelection(proposal))
   const [autoSubmit, setAutoSubmit] = useState(true)
+  // Outro provedor: começa marcado (decisão de 12/11/2026); a pessoa pode desmarcar.
+  const [yolo, setYolo] = useState(true)
   const [acknowledged, setAcknowledged] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
   const radiogroupRef = useRef<HTMLDivElement>(null)
@@ -34,6 +36,7 @@ export function AccountSwitchDialog({ binding }: { binding: AccountSwitchDialogB
   const model = buildAccountSwitchDialogModel({
     proposal,
     selectedAccountId: selectedId,
+    sourceYolo: binding.sourceYolo,
     transcriptChars: transcript?.ok ? transcript.chars : 0,
     transcriptLines: transcript?.ok ? transcript.lines : 0,
     nowMs,
@@ -113,6 +116,7 @@ export function AccountSwitchDialog({ binding }: { binding: AccountSwitchDialogB
       destinationAccountId: chosenId,
       autoSubmit,
       acknowledgeSourceActive: needsAck && acknowledged,
+      yolo,
     })
   }
 
@@ -321,6 +325,27 @@ export function AccountSwitchDialog({ binding }: { binding: AccountSwitchDialogB
             />
             O terminal antigo ainda está produzindo saída. Entendo; abrir mesmo assim.
           </label>
+        )}
+
+        {!model.empty && model.offersYoloChoice && (
+          <label className="mb-2 flex items-start gap-2 text-[12px] text-zinc-300">
+            <input
+              type="checkbox"
+              checked={yolo}
+              onChange={(event) => setYolo(event.target.checked)}
+              onKeyDown={blockEnter}
+              className="mt-0.5 accent-sky-400"
+            />
+            <span>
+              Yolo no bloco novo
+              <span className="block text-[11px] text-zinc-400">
+                Acesso total, sem confirmações. Desmarcado, o bloco novo pede as confirmações do provedor.
+              </span>
+            </span>
+          </label>
+        )}
+        {!model.empty && model.permissionNotice && (
+          <p className="mb-2 text-[11px] text-zinc-400">{model.permissionNotice}</p>
         )}
 
         {!model.empty && (

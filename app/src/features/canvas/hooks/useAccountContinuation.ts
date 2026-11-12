@@ -17,7 +17,7 @@ import {
   type ContinuationNodeOptions,
   type TranscriptPreparation,
 } from '../services/account-continuation'
-import type { ContinuationReason } from '../services/account-switch-dialog'
+import { hasYoloFlag, type ContinuationReason } from '../services/account-switch-dialog'
 import { canvasNodeSelector, focusReturnTarget, focusWasLost } from '../services/keyboard-focus'
 
 type DialogState = {
@@ -33,6 +33,8 @@ type DialogState = {
   busy: boolean
   error: string | null
   sourceActiveRequired: boolean
+  /** O bloco antigo abriu com Yolo (lido ao abrir o diálogo). */
+  sourceYolo: boolean
 }
 
 export type AccountSwitchDialogBinding = {
@@ -45,11 +47,15 @@ export type AccountSwitchDialogBinding = {
   busy: boolean
   error: string | null
   sourceActiveRequired: boolean
+  /** O bloco antigo abriu com Yolo: o diálogo diz isso no mesmo provedor. */
+  sourceYolo: boolean
   canPin: boolean
   onConfirm: (params: {
     destinationAccountId: string
     autoSubmit: boolean
     acknowledgeSourceActive: boolean
+    /** "Yolo no bloco novo"; só vale quando o destino é outro provedor. */
+    yolo: boolean
   }) => void
   onLater: () => void
   onNotALimit: () => void
@@ -182,12 +188,15 @@ export function useAccountContinuation({
         busy: false,
         error: null,
         sourceActiveRequired: false,
+        sourceYolo: hasYoloFlag(
+          nodesRef.current?.find((node) => node.id === sourceNodeId && node.type === 'terminal')?.data.args,
+        ),
       })
       void prepareRedactedTranscript(store.bridge, source.text).then((transcript) => {
         setDialog((current) => (current?.proposalId === proposalId ? { ...current, transcript } : current))
       })
     },
-    [sessions, store],
+    [nodesRef, sessions, store],
   )
 
   const decline = useCallback(
@@ -312,7 +321,7 @@ export function useAccountContinuation({
   const dialogProposal = dialog ? (dialog.override ?? liveProposal ?? dialog.openedProposal) : null
 
   const confirm = useCallback(
-    async (params: { destinationAccountId: string; autoSubmit: boolean; acknowledgeSourceActive: boolean }) => {
+    async (params: { destinationAccountId: string; autoSubmit: boolean; acknowledgeSourceActive: boolean; yolo: boolean }) => {
       if (!dialog || !dialogProposal || busyRef.current) return
       if (!dialog.transcript?.ok) return
       busyRef.current = true
@@ -325,6 +334,7 @@ export function useAccountContinuation({
             destinationAccountId: params.destinationAccountId,
             autoSubmit: params.autoSubmit,
             acknowledgeSourceActive: params.acknowledgeSourceActive,
+            yolo: params.yolo,
             transcript: dialog.transcript,
             screenOnly: dialog.screenOnly,
           },
@@ -388,6 +398,7 @@ export function useAccountContinuation({
           busy: dialog.busy,
           error: dialog.error,
           sourceActiveRequired: dialog.sourceActiveRequired,
+          sourceYolo: dialog.sourceYolo,
           canPin: Boolean(dialogProposal.from.accountId),
           onConfirm: (params) => void confirm(params),
           onLater: () => {

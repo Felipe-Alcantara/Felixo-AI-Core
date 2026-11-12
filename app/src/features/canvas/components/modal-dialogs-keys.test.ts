@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AccountSwitchDialog } from './AccountSwitchDialog'
 import { HandoffDialog } from './HandoffDialog'
 import type { AccountSwitchDialogBinding } from '../hooks/useAccountContinuation'
-import { makeProposal } from '../services/__fixtures__/account-chain-fixtures'
+import { makeCandidate, makeProposal } from '../services/__fixtures__/account-chain-fixtures'
 
 function binding(overrides: Partial<AccountSwitchDialogBinding> = {}): AccountSwitchDialogBinding {
   const noop = () => {}
@@ -15,6 +15,7 @@ function binding(overrides: Partial<AccountSwitchDialogBinding> = {}): AccountSw
     busy: false,
     error: null,
     sourceActiveRequired: false,
+    sourceYolo: false,
     canPin: true,
     onConfirm: noop,
     onLater: noop,
@@ -52,6 +53,22 @@ describe('modais sobre o canvas', () => {
     const closeButton = (html: string) => /<button[^>]*aria-label="Agora não"[^>]*>/.exec(html)?.[0] ?? ''
     expect(closeButton(idle)).not.toMatch(/\sdisabled=""/)
     expect(closeButton(busy)).toMatch(/\sdisabled=""/)
+  })
+
+  it('outro provedor: a caixa "Yolo no bloco novo" vem marcada; mesmo provedor só diz o modo do bloco antigo', () => {
+    const outro = renderToStaticMarkup(
+      createElement(AccountSwitchDialog, {
+        binding: binding({
+          proposal: makeProposal({ candidates: [makeCandidate({ accountId: 'conta-b', label: 'Max', providerId: 'claude' })] }),
+        }),
+      }),
+    )
+    const caixa = outro.split('</label>').find((parte) => parte.includes('Yolo no bloco novo')) ?? ''
+    expect(caixa).toMatch(/<input type="checkbox"[^>]*checked=""/)
+
+    const mesmo = renderToStaticMarkup(createElement(AccountSwitchDialog, { binding: binding({ sourceYolo: true }) }))
+    expect(mesmo).not.toContain('Yolo no bloco novo')
+    expect(mesmo).toContain('Abre com Yolo (acesso total, sem confirmações), como o bloco antigo.')
   })
 
   afterEach(() => {

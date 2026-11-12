@@ -12,10 +12,11 @@ import { makeCandidate, makeProposal } from './__fixtures__/account-chain-fixtur
 const SP = { timeZone: 'America/Sao_Paulo' }
 const NOW = Date.parse('2026-09-28T17:34:05.000Z')
 
-function model(overrides: Parameters<typeof makeProposal>[0] = {}, selectedAccountId: string | null = null) {
+function model(overrides: Parameters<typeof makeProposal>[0] = {}, selectedAccountId: string | null = null, sourceYolo = false) {
   return buildAccountSwitchDialogModel({
     proposal: makeProposal(overrides),
     selectedAccountId,
+    sourceYolo,
     transcriptChars: 3277,
     transcriptLines: 48,
     nowMs: NOW,
@@ -97,6 +98,22 @@ describe('buildAccountSwitchDialogModel', () => {
     expect(model().providerSwitchNotice).toBeNull()
   })
 
+  it('permissão: outro provedor oferece o Yolo; mesmo provedor só diz; o Openia escolhe no próprio menu', () => {
+    // Decisão do Felipe (12/11/2026): em outro provedor a caixa "Yolo no bloco novo" começa marcada,
+    // mesmo que o bloco antigo não tivesse Yolo, e a pessoa pode desmarcar.
+    const claude = model({ candidates: [makeCandidate({ accountId: 'conta-b', label: 'Max', providerId: 'claude' })] })
+    expect(claude.offersYoloChoice).toBe(true)
+    expect(claude.permissionNotice).toBeNull()
+
+    expect(model().offersYoloChoice).toBe(false)
+    expect(model().permissionNotice).toBe('Abre sem Yolo, como o bloco antigo.')
+    expect(model({}, null, true).permissionNotice).toBe('Abre com Yolo (acesso total, sem confirmações), como o bloco antigo.')
+
+    const openia = model({ candidates: [makeCandidate({ accountId: 'conta-r', label: 'Router', providerId: 'openia' })] })
+    expect(openia.offersYoloChoice).toBe(false)
+    expect(openia.permissionNotice).toBe('O Openia pergunta as permissões no próprio menu ao abrir.')
+  })
+
   it('várias sessões na mesma conta e retomada automática do Claude', () => {
     expect(model({ otherSessionsInIncident: 2 }).multipleSessionsNotice).toBe(
       'Outros 2 blocos nesta conta também pararam. Cada continuação que você confirmar envia o contexto dela à conta de destino.',
@@ -165,6 +182,8 @@ describe('buildContinuationLaunch', () => {
         sourceProviderId: 'codex',
         destinationProviderId: 'codex',
         destinationLabel: 'Trabalho',
+        // No mesmo provedor a escolha do diálogo não entra: os argumentos se repetem.
+        yolo: false,
       }),
     ).toEqual({
       command: 'codex',
@@ -173,15 +192,25 @@ describe('buildContinuationLaunch', () => {
     })
   })
 
-  it('outro provedor volta ao modelo padrão e mantém só o modo de permissão', () => {
-    expect(
-      buildContinuationLaunch({
-        source: { command: 'codex', args: ['--model', 'gpt-5', '--dangerously-bypass-approvals-and-sandbox'], label: 'Codex' },
-        sourceProviderId: 'codex',
-        destinationProviderId: 'claude',
-        destinationLabel: 'Max',
-      }),
-    ).toEqual({ command: 'claude', args: ['--dangerously-skip-permissions'], label: 'Codex · continuação (Max)' })
+  it('outro provedor volta ao modelo padrão e a permissão é a escolhida no diálogo', () => {
+    const codexYolo = { command: 'codex', args: ['--model', 'gpt-5', '--dangerously-bypass-approvals-and-sandbox'], label: 'Codex' }
+    const base = { sourceProviderId: 'codex', destinationProviderId: 'claude', destinationLabel: 'Max' } as const
+    expect(buildContinuationLaunch({ ...base, source: codexYolo, yolo: true })).toEqual({
+      command: 'claude',
+      args: ['--dangerously-skip-permissions'],
+      label: 'Codex · continuação (Max)',
+    })
+    // Desmarcado no diálogo: o Yolo do bloco antigo não passa sozinho.
+    expect(buildContinuationLaunch({ ...base, source: codexYolo, yolo: false })).toEqual({
+      command: 'claude',
+      label: 'Codex · continuação (Max)',
+    })
+    // Marcado (o padrão): vale mesmo que o bloco antigo não tivesse Yolo.
+    expect(buildContinuationLaunch({ ...base, source: { command: 'codex', label: 'Codex' }, yolo: true })).toEqual({
+      command: 'claude',
+      args: ['--dangerously-skip-permissions'],
+      label: 'Codex · continuação (Max)',
+    })
   })
 
   it('Openia de destino abre o menu dele, sem inventar flags', () => {
@@ -191,6 +220,7 @@ describe('buildContinuationLaunch', () => {
         sourceProviderId: 'claude',
         destinationProviderId: 'openia',
         destinationLabel: 'Router',
+        yolo: true,
       }),
     ).toEqual({ command: 'openia', launchMode: 'launcher', label: 'Claude · continuação (Router)' })
   })

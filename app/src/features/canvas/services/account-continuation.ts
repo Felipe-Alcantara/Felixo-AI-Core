@@ -69,6 +69,8 @@ export type ContinuationRequest = {
   destinationAccountId: string
   autoSubmit: boolean
   acknowledgeSourceActive: boolean
+  /** "Yolo no bloco novo" do diálogo; só vale quando o destino é outro provedor. */
+  yolo: boolean
   transcript: RedactedTranscript
   /** O terminal de origem estava na tela alternativa: o transcript é só a tela. */
   screenOnly?: boolean
@@ -126,6 +128,7 @@ export async function performContinuation(
     sourceProviderId: proposal.from.providerId,
     destinationProviderId: destination.providerId,
     destinationLabel: destination.label,
+    yolo: request.yolo,
   })
   if (!launch) {
     return { ok: false, code: null, message: 'O agente do provedor de destino não é conhecido por este app.' }

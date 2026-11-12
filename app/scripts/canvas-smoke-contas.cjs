@@ -428,6 +428,10 @@ function criarSessaoDaCadeia(deps) {
     await bloco.getByRole('button', { name: 'Ver opções' }).click()
     const dialogo = page.getByRole('dialog')
     await dialogo.waitFor({ state: 'visible', timeout })
+    // Mesmo provedor: o diálogo só diz o modo do bloco antigo (decisão de 12/11/2026), sem caixa de Yolo.
+    const textoDoDialogo = (await dialogo.textContent()) ?? ''
+    exigir(/Abre (sem|com) Yolo.*como o bloco antigo/.test(textoDoDialogo), passo, 'o diálogo não diz o modo de permissão do bloco novo')
+    exigir(!textoDoDialogo.includes('Yolo no bloco novo'), passo, 'o mesmo provedor ganhou a caixa de Yolo')
     await checarViewportMinimoDoDialogo('C12 viewport 375×667', dialogo)
     const confirmar = dialogo.getByRole('button', { name: `Abrir bloco novo em ${contas.segunda}` })
     // Clique duplo: o segundo clique não pode abrir outro bloco.
@@ -439,7 +443,7 @@ function criarSessaoDaCadeia(deps) {
     await bloco.locator('[role="status"]', { hasText: 'continuado em' }).waitFor({ state: 'visible', timeout })
     const antigoVivo = await bloco.evaluate((node) => !/Encerrado|Erro/.test(node.textContent ?? ''))
     exigir(antigoVivo, passo, 'o bloco antigo não está mais vivo')
-    log(`C7 confirmar (com clique duplo) deu exatamente +1 pty:spawn; bloco novo em ${contas.segunda} com selo cadeia e o antigo parado com "continuado em": ok`)
+    log(`C7 confirmar (com clique duplo) deu exatamente +1 pty:spawn; bloco novo em ${contas.segunda} com selo cadeia, o diálogo dizendo o modo de permissão (mesmo provedor) e o antigo parado com "continuado em": ok`)
     log('C9 clique duplo no confirmar continua +1: ok')
     return depois
   }
