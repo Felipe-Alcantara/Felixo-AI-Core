@@ -1747,3 +1747,15 @@ local e anterior. A etapa C6b fica com o CI (Ubuntu). O botão não foi clicado 
 aviso inteiro a cada Enter, cada Enter conta como repetição. Isso só mostra de novo a faixa da recusa, nunca uma proposta.
 
 Estado: concluído (deploy no adendo).
+
+**Adendo (2026-11-12, 09:47): CI, duas correções e Release.** O CI de `bf509f7` (run 43215712608, 09:11–09:17) passou no
+Validate dos quatro sistemas. O smoke do canvas parou na etapa nova: a faixa "você recusou a troca" apareceu, sem proposta nem
+diálogo (a reemissão da vigia funcionou no app), mas o clique em **Trocar de conta** não achava o botão estável. O bloco recusado
+fica em parte fora da área visível, atrás da barra lateral, e o C6 já usa foco + Enter nele pelo mesmo motivo. `dc0bcc9` passou a
+C6b para o teclado. No CI seguinte (run 43216643905, 09:18–09:23) o pedido criou a proposta (a faixa virou "a cadeia tem uma
+proposta de troca"), mas o diálogo não abriu. O `openProposal` procura a proposta no estado do renderer no instante da resposta
+do IPC, e ela ainda não estava lá. Em `d08400d` o hook relê o estado (`store.refresh()`) quando a proposta pedida falta, e a C6b
+passou a relatar o texto do bloco e as propostas abertas se o diálogo não abrir. O CI de `d08400d` (run 43218491733, 09:30–09:36)
+passou inteiro, com "C6b … [Trocar de conta] abre o diálogo e o Esc fecha sem pty:spawn: ok" na primeira tentativa. O Release
+gate (run 43219437312) e o Release (run 43219477627, 09:36–09:45) publicaram a `v0.1.532` nos três sistemas. A causa exata do
+atraso (a ordem entre o push `opened` e a resposta do `invoke`) não foi isolada. O hook não depende mais dela.
