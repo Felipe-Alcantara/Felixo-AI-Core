@@ -359,6 +359,28 @@ function criarSessaoDaCadeia(deps) {
     log('C6 [Ver opções] pelo teclado: foco no rádio recomendado; Esc ("Agora não") fecha, encerra a proposta, devolve o foco ao bloco e não gera pty:spawn: ok')
   }
 
+  async function checarLimiteRecusadoDeNovo(contas, blocos) {
+    const passo = 'C6b mesmo limite depois de "Agora não"'
+    const bloco = nodePorId(blocos.recusa)
+    const antes = await contadores()
+    await digitarNoBloco(passo, bloco, GATILHO_LIMITE)
+    await bloco.locator('[role="status"]', { hasText: 'você recusou a troca' }).waitFor({ state: 'visible', timeout })
+    await pausa(JANELA_DE_SILENCIO_MS)
+    exigir(await page.locator('[role="dialog"]').count() === 0, passo, 'um diálogo abriu sozinho')
+    exigir(await bloco.getByRole('button', { name: 'Ver opções' }).count() === 0, passo, 'o limite recusado ganhou proposta automática')
+    // A troca sai só a pedido: o botão abre uma proposta nova e o diálogo dela.
+    await bloco.getByRole('button', { name: 'Trocar de conta' }).click()
+    const dialogo = page.getByRole('dialog')
+    await dialogo.waitFor({ state: 'visible', timeout })
+    exigir(await dialogo.getByRole('button', { name: `Abrir bloco novo em ${contas.segunda}` }).count() === 1, passo, 'o diálogo não oferece a conta de destino')
+    await page.keyboard.press('Escape')
+    await dialogo.waitFor({ state: 'detached', timeout })
+    await pausa(JANELA_DE_SILENCIO_MS)
+    const depois = await contadores()
+    exigir(depois.spawn === antes.spawn, passo, 'pedir a troca e fechar gerou pty:spawn', { antes, depois })
+    log('C6b o mesmo limite depois de "Agora não": faixa "você recusou a troca" sem proposta nem diálogo; [Trocar de conta] abre o diálogo e o Esc fecha sem pty:spawn: ok')
+  }
+
   async function checarViewportMinimoDoDialogo(passo, dialogo) {
     await page.setViewportSize(VIEWPORT_MINIMO)
     try {
@@ -525,6 +547,7 @@ function criarSessaoDaCadeia(deps) {
       await abrirBlocoFixo(contas)
       await checarPropostaENotificacao(blocos)
       await checarDialogoEAgoraNao(contas, blocos)
+      await checarLimiteRecusadoDeNovo(contas, blocos)
       await confirmarTroca(contas, blocos)
       await checarAbaTrocas(contas)
       await checarReloadSemReenvio()

@@ -410,6 +410,8 @@ class PtyProcessManager {
       // terminal que ainda está trabalhando.
       lastOutputAt: null,
       watcher: null,
+      // Colagem entre colchetes aberta para a vigia: o Enter dentro dela não é envio.
+      watcherInPaste: false,
     }
     entry.watcher = this.createSessionOutputWatcher(sessionId, entry, options)
 
@@ -785,8 +787,22 @@ class PtyProcessManager {
     }
     if (delivered) {
       this.rearmAgentSessionDiscoveryOnSubmit(sessionId, entry, input)
+      this.markWatcherSubmit(entry, input)
     }
     return delivered
+  }
+
+  /** Enter da pessoa: o que a CLI imprimir depois é ocorrência nova para a vigia de contas. */
+  markWatcherSubmit(entry, input) {
+    if (!entry.watcher || typeof input !== 'string') return
+    const scan = scanSubmittedInput(input, entry.watcherInPaste)
+    entry.watcherInPaste = scan.inPaste
+    if (!scan.submitted) return
+    try {
+      entry.watcher.markSubmit(entry.outputChars)
+    } catch {
+      // A vigia é segurança de custo, não pode derrubar a escrita no terminal.
+    }
   }
 
   /**
@@ -983,6 +999,7 @@ class PtyProcessManager {
       return this.createOutputWatcher({
         providerId: entry.providerId,
         readTail: (count) => entry.outputBuffer.tail(count),
+        readOutputChars: () => entry.outputChars,
         now: this.now,
         logger: this.logger,
         // Conta e modo são lidos na hora da detecção: o modo do bloco pode

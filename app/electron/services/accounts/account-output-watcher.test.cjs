@@ -37,9 +37,11 @@ function criarVigia({ providerId = 'claude', onDetection } = {}) {
   const warnings = []
   const detections = []
   const buffer = createReplayBuffer(200_000)
+  let outputChars = 0
   const watcher = createAccountOutputWatcher({
     providerId,
     readTail: (count) => buffer.tail(count),
+    readOutputChars: () => outputChars,
     onDetection: onDetection ?? ((detection) => detections.push(detection)),
     now: () => clock,
     setTimer: (callback, delayMs) => {
@@ -64,7 +66,12 @@ function criarVigia({ providerId = 'claude', onDetection } = {}) {
     now: () => clock,
     write(text) {
       buffer.append(text)
+      outputChars += text.length
       watcher.push()
+    },
+    /** Enter da pessoa, como o manager avisa. */
+    submit() {
+      watcher.markSubmit(outputChars)
     },
     /** Avança o relógio disparando, em ordem, os timers que vencem no caminho. */
     advance(ms) {
@@ -137,6 +144,37 @@ test('depois: o aviso redesenhado 50 vezes continua sendo 1 detecção', () => {
 
   assert.equal(vigia.detections.length, 1)
   assert.ok(vigia.watcher.stats.scans >= 50)
+})
+
+test('o mesmo aviso impresso de novo depois de um Enter sai de novo, uma vez por Enter e marcado repeat', () => {
+  const vigia = criarVigia({ providerId: 'codex' })
+  vigia.write(`${CODEX_BANNER}\r\n`)
+  vigia.advance(OUTPUT_WATCHER_DEBOUNCE_MS + 10)
+  assert.equal(vigia.detections.length, 1)
+  assert.equal(vigia.detections[0].repeat, undefined)
+
+  // Enter sem a CLI repetir o aviso (só o eco): o aviso velho na cauda não conta.
+  vigia.submit()
+  vigia.write('› continua\r\n')
+  vigia.advance(OUTPUT_WATCHER_DEBOUNCE_MS + 10)
+  assert.equal(vigia.detections.length, 1)
+
+  // A CLI imprime o mesmo aviso depois do Enter: é o limite voltando.
+  vigia.write(`${CODEX_BANNER}\r\n`)
+  vigia.advance(OUTPUT_WATCHER_DEBOUNCE_MS + 10)
+  assert.equal(vigia.detections.length, 2)
+  assert.equal(vigia.detections[1].repeat, true)
+  assert.equal(vigia.detections[1].failure.evidenceHash, vigia.detections[0].failure.evidenceHash)
+
+  // Redesenho sem novo Enter continua mudo; outro Enter com o aviso de novo vale outra vez.
+  vigia.write(`\r\x1b[2K${CODEX_BANNER}\r\n`)
+  vigia.advance(OUTPUT_WATCHER_DEBOUNCE_MS + 10)
+  assert.equal(vigia.detections.length, 2)
+  vigia.submit()
+  vigia.write(`${CODEX_BANNER}\r\n`)
+  vigia.advance(OUTPUT_WATCHER_DEBOUNCE_MS + 10)
+  assert.equal(vigia.detections.length, 3)
+  assert.equal(vigia.detections[2].repeat, true)
 })
 
 test('debounce: varre depois de 400 ms de silêncio, não antes', () => {

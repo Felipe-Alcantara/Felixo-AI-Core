@@ -30,7 +30,10 @@
  * normaliza uma vez só.
  *
  * A mesma evidência não gera segunda detecção: cada sessão lembra as
- * `OUTPUT_WATCHER_SEEN_EVIDENCE_MAX` impressões digitais mais recentes.
+ * `OUTPUT_WATCHER_SEEN_EVIDENCE_MAX` impressões digitais mais recentes. A
+ * exceção é a CLI imprimir a mesma linha de novo depois de um Enter da pessoa
+ * (`markSubmit`): é o limite voltando, não um redesenho, e sai uma vez por
+ * Enter marcada `repeat` — quem consome decide se isso pede alguma coisa.
  *
  * Esta vigia não decide nada: entrega a detecção a quem a criou
  * (`onDetection`), e uma falha desse consumidor nunca derruba a vigia nem o
@@ -115,7 +118,7 @@ function defaultClearTimer(handle) {
  * @typedef {ReturnType<typeof classifyFailure>} FailureResult
  *
  * @typedef {(
- *   | { kind: 'failure', failure: FailureResult, detectedAt: number }
+ *   | { kind: 'failure', failure: FailureResult, detectedAt: number, repeat?: true }
  *   | { kind: 'notice', notice: 'limit_reset', providerId: string, detectedAt: number }
  * )} OutputDetection
  *
@@ -123,6 +126,8 @@ function defaultClearTimer(handle) {
  * @property {(at?: number) => void} push - Um pedaço novo chegou (O(1)).
  * @property {() => OutputDetection[]} scan - Varre agora e devolve o que emitiu.
  * @property {() => OutputDetection[]} flush - Varre agora só se há saída não lida.
+ * @property {(outputChars: number) => void} markSubmit - A pessoa mandou um Enter quando a sessão
+ *   tinha emitido `outputChars` caracteres: a mesma evidência impressa depois disso sai de novo (uma vez).
  * @property {() => void} dispose - Desarma o timer; depois disso nada mais roda.
  * @property {number} lastChunkAt - Horário do último pedaço recebido (0 = nenhum).
  * @property {boolean} pending - Há saída ainda não varrida.
@@ -137,6 +142,8 @@ function defaultClearTimer(handle) {
  * @param {string | null | undefined} options.providerId - Provedor (ou tipo de CLI) da sessão.
  * @param {(count: number) => string} options.readTail - Últimos `count` caracteres da saída.
  * @param {(detection: OutputDetection) => void} options.onDetection - Recebe cada detecção nova.
+ * @param {() => number} [options.readOutputChars] - Total de caracteres que a sessão já emitiu;
+ *   sem ele o `markSubmit` não tem efeito.
  * @param {() => number} [options.now]
  * @param {(callback: () => void, delayMs: number) => unknown} [options.setTimer]
  * @param {(handle: unknown) => void} [options.clearTimer]
@@ -147,6 +154,7 @@ function createAccountOutputWatcher({
   providerId: rawProviderId,
   readTail,
   onDetection,
+  readOutputChars = null,
   now = Date.now,
   setTimer = defaultSetTimer,
   clearTimer = defaultClearTimer,
@@ -168,6 +176,8 @@ function createAccountOutputWatcher({
   let timer = null
   /** O aviso de "limite voltou" estava na cauda na última varredura. */
   let noticeVisible = false
+  /** Total de saída no último Enter da pessoa; `null` = nada armado. */
+  let submittedAt = null
 
   function warn(message, error) {
     try {
@@ -200,7 +210,7 @@ function createAccountOutputWatcher({
    * @param {FailureResult} result
    * @returns {OutputDetection[]}
    */
-  function emitNew(result) {
+  function emitNew(result, tail) {
     const emitted = []
     const detectedAt = now()
 
@@ -210,6 +220,7 @@ function createAccountOutputWatcher({
       // o aviso que continua na tela é o último a ser esquecido.
       remember(result.evidenceHash)
       if (!known) emit({ kind: 'failure', failure: result, detectedAt }, emitted)
+      else if (repeatedAfterSubmit(result.evidenceHash, tail)) emit({ kind: 'failure', failure: result, detectedAt, repeat: true }, emitted)
     }
 
     // O aviso de reset não tem evidência própria no resultado: vale a
@@ -240,7 +251,11 @@ function createAccountOutputWatcher({
       return []
     }
     stats.prefilterHits += 1
+    return emitNew(classifyLines(tail, lower), tail)
+  }
 
+  /** Só as últimas linhas com palavra do provedor vão à taxonomia. */
+  function classifyLines(tail, lower) {
     // Linha a linha, de trás para frente: só as que têm palavra do provedor.
     // `toLowerCase` nunca cria nem apaga um LF, então as duas listas se
     // correspondem posição a posição.
@@ -251,8 +266,23 @@ function createAccountOutputWatcher({
       if (passesPrefilter(lowerLines[index], prefilterWords)) kept.push(rawLines[index])
     }
     kept.reverse()
+    return classifyFailure({ text: kept.join('\n'), origin: 'pty', providerId })
+  }
 
-    return emitNew(classifyFailure({ text: kept.join('\n'), origin: 'pty', providerId }))
+  /**
+   * A mesma evidência só volta a sair se estiver no que a CLI imprimiu depois
+   * do último Enter: um redesenho sem Enter continua mudo, e cada Enter vale
+   * uma reemissão.
+   */
+  function repeatedAfterSubmit(evidenceHash, tail) {
+    if (submittedAt === null || typeof readOutputChars !== 'function') return false
+    const fresh = readOutputChars() - submittedAt
+    if (!(fresh > 0)) return false
+    const after = tail.slice(-Math.min(fresh, tail.length))
+    const lower = after.toLowerCase()
+    if (!passesPrefilter(lower, prefilterWords) || classifyLines(after, lower).evidenceHash !== evidenceHash) return false
+    submittedAt = null
+    return true
   }
 
   /** @returns {OutputDetection[]} */
@@ -301,6 +331,10 @@ function createAccountOutputWatcher({
     if (timer === null) timer = setTimer(onTimer, OUTPUT_WATCHER_DEBOUNCE_MS)
   }
 
+  function markSubmit(outputChars) {
+    if (!disposed && Number.isFinite(outputChars)) submittedAt = outputChars
+  }
+
   function flush() {
     return !disposed && dirty ? scan() : []
   }
@@ -319,6 +353,7 @@ function createAccountOutputWatcher({
     push,
     scan,
     flush,
+    markSubmit,
     dispose,
     get lastChunkAt() {
       return lastChunkAt

@@ -1840,6 +1840,32 @@ test('vigia: a detecção sai com a sessão, a conta, o provedor e o modo do blo
   }
 })
 
+test('vigia: o mesmo limite impresso de novo depois de um Enter sai de novo marcado repeat; Enter dentro de colagem não conta', () => {
+  const { manager, fakePty, detections, fireTimers } = criarManagerComVigia()
+  try {
+    manager.spawn('canvas:cadeia', { command: 'codex', accountId: 'conta-a', providerId: 'codex', accountMode: 'chain' })
+    fakePty.emitData(LIMITE_CODEX)
+    fireTimers()
+    assert.equal(detections.length, 1)
+
+    // Enter só dentro de uma colagem entre colchetes: não é envio.
+    manager.write('canvas:cadeia', '\u001b[200~linha 1\rlinha 2\u001b[201~')
+    fakePty.emitData(LIMITE_CODEX)
+    fireTimers()
+    assert.equal(detections.length, 1)
+
+    manager.write('canvas:cadeia', 'continua\r')
+    fakePty.emitData(LIMITE_CODEX)
+    fireTimers()
+    assert.equal(detections.length, 2)
+    assert.equal(detections[1].repeat, true)
+    assert.equal(detections[1].sessionId, 'canvas:cadeia')
+    assert.equal(detections[1].failure.evidenceHash, detections[0].failure.evidenceHash)
+  } finally {
+    manager.killAll({ force: true })
+  }
+})
+
 test('vigia: o login do sistema também é vigiado (só aviso); shell, Openia e manager sem consumidor não têm vigia', () => {
   const { manager, fakePty, detections, created, fireTimers } = criarManagerComVigia()
   try {
