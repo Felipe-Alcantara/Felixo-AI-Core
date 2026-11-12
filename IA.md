@@ -1805,3 +1805,8 @@ provedor. Ela fica coberta pelo HTML renderizado e pelo modelo, e a lacuna está
 contas reais de dois provedores.
 
 Estado: concluído (deploy no adendo).
+
+**Adendo (2026-11-12, 10:30): CI e Release.** O CI de `cf4f40b` (run 43224887062, 10:11–10:17) passou no Validate de Windows,
+macOS, Ubuntu e Ubuntu ARM e no smoke do canvas, inclusive com "C7 … o diálogo dizendo o modo de permissão (mesmo provedor) …:
+ok" na sessão C. O Release gate (run 43225965519) e o Release (run 43226008454, 10:18–10:27) publicaram a `v0.1.533` nos três
+sistemas.
