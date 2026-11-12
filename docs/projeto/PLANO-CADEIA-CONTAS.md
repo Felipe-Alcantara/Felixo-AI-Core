@@ -762,7 +762,7 @@ A faixa oferece "Passar responsabilidade…", que abre o `HandoffDialog` existen
 - **Nó antigo:** ganha `chainSuccessorNodeId`. O processo dele não é tocado.
 - **Idempotência no renderer:** antes de criar, procura um nó com `chainOrigin.switchEventId` igual ao da proposta. Se existir, não cria outro. A trava definitiva é o ticket no main (§4.1).
 - No modo continuação, `config.savePreferences()` **não** roda (`HandoffDialog.tsx:107`). A troca não muda a configuração do botão Agente.
-- **Adaptação entre provedores:** o `useAgentConfig` do diálogo é inicializado com o agente e a conta do destino, e modelo e esforço voltam ao padrão desse agente. O transcript vai por arquivo de contexto (`app/electron/services/context-files-ipc-handlers.cjs:206`), então o tamanho não estoura a janela do destino de uma vez: o agente lê o arquivo sob demanda.
+- **Adaptação entre provedores:** o `useAgentConfig` do diálogo é inicializado com o agente e a conta do destino, e modelo e esforço voltam ao padrão desse agente. O Yolo é o da caixa **Yolo no bloco novo** do diálogo, que começa marcada; o do bloco antigo não passa sozinho. No mesmo provedor os argumentos se repetem e o diálogo só diz o modo; no Openia, ele escolhe no próprio menu (decisão de 12/11/2026). O transcript vai por arquivo de contexto (`app/electron/services/context-files-ipc-handlers.cjs:206`), então o tamanho não estoura a janela do destino de uma vez: o agente lê o arquivo sob demanda.
 
 ### 9.2 Terminal antigo (decisão 6)
 

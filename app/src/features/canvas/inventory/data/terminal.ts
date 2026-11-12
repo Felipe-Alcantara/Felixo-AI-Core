@@ -977,7 +977,7 @@ export const terminalSurfaces: InventoryElement[] = [
       {
         locator: 'model.confirmLabel',
         kind: 'button',
-        effect: 'performContinuation: account-chain:confirm devolve o ticket, cria o bloco novo na conta de destino com o histórico redigido e chainTicket (pty:spawn), marca o antigo com chainSuccessorNodeId e fecha; clique duplo dá um único spawn.',
+        effect: 'performContinuation: account-chain:confirm devolve o ticket, cria o bloco novo na conta de destino com o histórico redigido e chainTicket (pty:spawn), marca o antigo com chainSuccessorNodeId e fecha; clique duplo dá um único spawn. Em outro provedor de agente nativo, leva a caixa "Yolo no bloco novo" (começa marcada, decisão de 12/11/2026) para o buildContinuationLaunch; no mesmo provedor os argumentos se repetem e o diálogo só diz o modo do bloco antigo; no Openia, diz que ele pergunta no próprio menu.',
         failure: 'Erro do main em role="alert"; SOURCE_ACTIVE passa a exigir a caixa de ciência; proposta alterada vira override.',
         disabledWhen: 'busy, proposta encerrada em outro lugar, sem destino, histórico não redigido ou ciência pendente',
         test: { file: SMOKE_CONTAS, check: 'criarSessaoDaCadeia' },
@@ -1014,7 +1014,7 @@ export const terminalSurfaces: InventoryElement[] = [
     ],
     gaps: [
       {
-        what: 'Conferir login, Configurar cadeia, Fechar, Medir agora, Ir para o terminal antigo, Fixar e Não era limite não são clicados em nenhum teste (a sessão C confirma e usa Esc).',
+        what: 'Conferir login, Configurar cadeia, Fechar, Medir agora, Ir para o terminal antigo, Fixar e Não era limite não são clicados em nenhum teste (a sessão C confirma e usa Esc). A caixa "Yolo no bloco novo" só aparece com destino em outro provedor, que a sessão C (só contas Codex) não tem: ela é coberta pelo HTML renderizado e pelo modelo, não por clique.',
         risk: 'médio',
         task: '3ec91f95-497e-81e8-8f18-e2a529b0568e',
       },

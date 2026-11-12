@@ -267,7 +267,11 @@ orientado a conferir o estado real do repositório antes de refazer qualquer
 ação. A caixa **Pedir para o agente continuar assim que abrir** vem marcada;
 desmarcada, o contexto chega sem ser enviado. Se a troca muda de provedor, o
 diálogo avisa que a retomada nativa não vale entre provedores e que o histórico
-irá para o outro provedor.
+irá para o outro provedor, e mostra a caixa **Yolo no bloco novo** (acesso
+total, sem confirmações), que vem marcada. Desmarque para o bloco novo pedir as
+confirmações do provedor. No mesmo provedor, o diálogo só diz se o
+bloco novo abre com ou sem Yolo, igual ao antigo. Com o Openia de destino, as
+permissões são escolhidas no menu dele.
 
 O terminal antigo fica **parado e intacto**. O app não escreve nele, não o pausa
 e não o fecha. A faixa dele passa a apontar para o bloco que continuou o

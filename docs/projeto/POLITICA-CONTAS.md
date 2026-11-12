@@ -172,6 +172,13 @@ por "Conferir login" (decisão de 11/11/2026).
   "Reiniciar", recarregar a janela) como um spawn comum na mesma conta, e mantém
   a linhagem da troca.
 - Uma proposta vence em 30 minutos; um ticket não usado vence em 2 minutos.
+- Permissão do bloco novo (decisão de 12/11/2026). Em outro provedor, o
+  diálogo mostra a caixa **Yolo no bloco novo** (acesso total, sem
+  confirmações), que começa marcada mesmo que o bloco antigo não tivesse Yolo;
+  desmarcada, o bloco novo abre com as confirmações do provedor. O Yolo do
+  bloco antigo não passa sozinho. No mesmo provedor, os argumentos se repetem
+  e o diálogo só diz o modo ("Abre com Yolo…, como o bloco antigo"). Com o
+  Openia de destino não há caixa: ele pergunta as permissões no próprio menu.
 - "Agora não" não pergunta de novo pela mesma evidência. Se a CLI imprimir o
   mesmo limite outra vez depois de um Enter da pessoa, o bloco mostra só um
   aviso ("Limite … de novo às 14:40 · você recusou a troca às 14:33") com
