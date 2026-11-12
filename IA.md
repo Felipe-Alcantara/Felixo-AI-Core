@@ -1905,3 +1905,7 @@ por um problema antigo. Handoff fechado, troca de provedor e itens removidos da 
 janela não descarta a prévia segurada: ela vence em 30 min e sai do registro e da retenção.
 
 Estado: concluído (deploy no adendo).
+
+**Adendo (2026-11-12, 16:52): CI e Release.** O CI de `68f2dda` (run 43291537437, 16:34–16:41) passou no Validate de Windows,
+macOS, Ubuntu e Ubuntu ARM e no smoke do canvas. Na sessão C saiu "C4 a prévia da cadeia some ao escolher a conta fixa; …: ok".
+O Release gate (run 43292706405) e o Release (run 43292746227, 16:41–16:49) publicaram a `v0.1.536` nos três sistemas.
