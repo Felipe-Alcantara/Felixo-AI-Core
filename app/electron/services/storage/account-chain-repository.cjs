@@ -56,6 +56,9 @@ const CHOSEN_BY_VALUES = Object.freeze(['chain', 'person'])
 // O fim alternativo só existe quando medição e texto divergem (migration 021).
 const ALTERNATIVE_UNTIL_SOURCES = Object.freeze(['medicao', 'texto', 'texto_fuso_local'])
 const OPEN_STATES_SQL = OPEN_SWITCH_EVENT_STATES.map((state) => `'${state}'`).join(', ')
+// Prévia de "Automática (cadeia)" que ninguém confirmou: aberta para a pessoa ver a conta, não é troca.
+// A substituída nasceu de um "Abrir" cujo destino mudou, e a que valeu é a nova.
+const UNCONFIRMED_LAUNCH_SQL = "kind = 'launch' AND (decided_at IS NULL OR state = 'superseded')"
 
 // ── Validação de formato ────────────────────────────────────────────────────
 
@@ -824,9 +827,14 @@ function createAccountChainRepository(database) {
     const cursor = optionalIso(before, 'before')
     const rows = cursor
       ? connection
-          .prepare('SELECT * FROM account_switch_events WHERE proposed_at < ? ORDER BY proposed_at DESC, rowid DESC LIMIT ?')
+          .prepare(
+            `SELECT * FROM account_switch_events WHERE NOT (${UNCONFIRMED_LAUNCH_SQL}) AND proposed_at < ?
+             ORDER BY proposed_at DESC, rowid DESC LIMIT ?`,
+          )
           .all(cursor, pageSize)
-      : connection.prepare('SELECT * FROM account_switch_events ORDER BY proposed_at DESC, rowid DESC LIMIT ?').all(pageSize)
+      : connection
+          .prepare(`SELECT * FROM account_switch_events WHERE NOT (${UNCONFIRMED_LAUNCH_SQL}) ORDER BY proposed_at DESC, rowid DESC LIMIT ?`)
+          .all(pageSize)
     return rows.map(mapSwitchEventRow)
   }
 
@@ -1165,9 +1173,29 @@ function createAccountChainRepository(database) {
    *
    * @returns {number} Quantas linhas saíram.
    */
+  /**
+   * Descarta a prévia de "Automática (cadeia)" que a pessoa deixou de ver (fechou o configurador,
+   * trocou de conta ou de provedor). Só apaga a que segue aberta e sem confirmação: um ticket
+   * nunca some por aqui.
+   *
+   * @returns {boolean} Se apagou.
+   */
+  function deleteLaunchPreview(id) {
+    const result = connection
+      .prepare("DELETE FROM account_switch_events WHERE id = ? AND kind = 'launch' AND state = 'proposed'")
+      .run(requireText(id, 'id'))
+    return result.changes === 1
+  }
+
   function pruneSwitchEvents({ keep = SWITCH_EVENTS_RETENTION } = {}) {
     const limit = optionalNumber(keep, 'keep', { min: 0, integer: true })
-    return Number(
+    // As prévias que venceram sem confirmação saem antes: não ocupam o lugar das trocas.
+    const previews = Number(
+      connection
+        .prepare(`DELETE FROM account_switch_events WHERE state NOT IN (${OPEN_STATES_SQL}) AND ${UNCONFIRMED_LAUNCH_SQL}`)
+        .run().changes,
+    )
+    return previews + Number(
       connection
         .prepare(
           `DELETE FROM account_switch_events
@@ -1181,6 +1209,7 @@ function createAccountChainRepository(database) {
   }
 
   return {
+    deleteLaunchPreview,
     expireDueSwitchEvents,
     findLastSpawnedDestination,
     findLatestSwitchEventForEvidence,

@@ -475,6 +475,35 @@ test('retenção: ficam as N mais recentes e uma linha aberta nunca é apagada',
   })
 })
 
+test('prévia de "Automática (cadeia)" não confirmada fica fora do registro e da retenção; descartar apaga só ela', () => {
+  withRepository((repo) => {
+    const at = (minute) => `2026-09-28T12:${String(minute).padStart(2, '0')}:00.000Z`
+    const launch = (id, overrides) =>
+      proposal(id, { kind: 'launch', sourceSessionId: null, fromAccountId: null, failureClass: null, detectedAt: null, ...overrides })
+    repo.insertSwitchEvent(launch('previa-aberta', { proposedAt: at(1) }))
+    repo.insertSwitchEvent(launch('previa-vencida', { state: 'expired', proposedAt: at(2) }))
+    repo.insertSwitchEvent(launch('aberta-pela-cadeia', { state: 'spawned', decidedAt: at(3), proposedAt: at(3) }))
+    repo.insertSwitchEvent(launch('substituida', { state: 'superseded', decidedAt: at(4), proposedAt: at(4) }))
+    repo.insertSwitchEvent(proposal('troca', { proposedAt: at(5) }))
+
+    // O registro mostra trocas e blocos abertos pela cadeia, não as prévias que ninguém confirmou.
+    assert.deepEqual(repo.listSwitchEvents().map((event) => event.id), ['troca', 'aberta-pela-cadeia'])
+    assert.deepEqual(repo.listSwitchEvents({ before: at(5) }).map((event) => event.id), ['aberta-pela-cadeia'])
+
+    // Descartar vale só para a prévia ainda aberta: troca e bloco já aberto ficam.
+    assert.equal(repo.deleteLaunchPreview('troca'), false)
+    assert.equal(repo.deleteLaunchPreview('aberta-pela-cadeia'), false)
+    assert.equal(repo.deleteLaunchPreview('previa-aberta'), true)
+    assert.equal(repo.getSwitchEvent('previa-aberta'), null)
+    assert.equal(repo.deleteLaunchPreview('previa-aberta'), false)
+
+    // As prévias mortas não ocupam a retenção: saem antes da contagem.
+    assert.equal(repo.pruneSwitchEvents({ keep: 1 }), 3)
+    assert.deepEqual(repo.listSwitchEvents().map((event) => event.id), ['troca'])
+    assert.equal(repo.getSwitchEvent('previa-vencida'), null)
+  })
+})
+
 test('candidates_json corrompido vira item corrupted sem derrubar a lista', () => {
   withRepository((repo, database) => {
     repo.insertSwitchEvent(proposal('boa', { sourceSessionId: 's-1' }))
