@@ -1959,3 +1959,8 @@ aberta na revisão do PR #97).
 hoje, então a diferença de PATH só valia para quem viesse a usar esse caminho.
 
 Estado: concluído (deploy no adendo).
+
+**Adendo (2026-11-12, 17:57): CI e Release.** O CI de `6b9099d` (run 43302430078, 17:39–17:45) passou no Validate de Windows,
+macOS, Ubuntu e Ubuntu ARM e no smoke do canvas; o "Ciclo de instalação das CLIs (Windows)" (run 43302430101) também, porque
+o `cli-process-manager.cjs` mudou. O Release gate (run 43303453650) e o Release (run 43303488393, 17:45–17:55) publicaram a
+`v0.1.537` nos três sistemas.
