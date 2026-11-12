@@ -907,6 +907,34 @@ test('bloco "Automática (cadeia)": só contas do provedor pedido; sem apta, rec
   })
 })
 
+test('prévia de "Automática (cadeia)": abrir e fechar dez vezes deixa no máximo uma aberta e confere o login uma vez no TTL', async () => {
+  await withService(async (env) => {
+    env.enableChain()
+    env.loginResults.set('conta-a', 'logged_in')
+    const openLaunches = () => env.repository.listOpenSwitchEvents().filter((event) => event.kind === 'launch')
+    let last = null
+    for (let vez = 0; vez < 10; vez++) {
+      const preview = await env.service.previewLaunch({ providerId: 'codex' })
+      assert.equal(preview.ok, true)
+      assert.equal(openLaunches().length, 1, `abertura ${vez + 1}`)
+      // Fechar o configurador (ou trocar de conta) descarta a prévia que ele segurava.
+      assert.deepEqual(env.service.discardPreview({ proposalId: preview.proposal.id }), { ok: true, discarded: true })
+      last = preview.proposal.id
+      env.advance(MINUTE)
+    }
+    assert.deepEqual(openLaunches(), [])
+    assert.deepEqual(env.checkCalls, ['conta-a'], 'a checagem de login roda uma vez dentro do TTL')
+
+    // Descartar não toca no que já foi confirmado: a abertura continua exigindo o ticket.
+    const held = await env.service.previewLaunch({ providerId: 'codex' })
+    assert.equal((await env.service.confirm({ proposalId: held.proposal.id, destinationAccountId: 'conta-a' })).ok, true)
+    assert.deepEqual(env.service.discardPreview({ proposalId: held.proposal.id }), { ok: true, discarded: false })
+    assert.equal(env.repository.getSwitchEvent(held.proposal.id).state, 'confirmed')
+    assert.deepEqual(env.service.discardPreview({ proposalId: last }), { ok: true, discarded: false })
+    assert.equal(env.service.discardPreview({ proposalId: '' }).code, 'INVALID')
+  })
+})
+
 test('rodízio: o cursor vem do último destino que nasceu, passado à política', async () => {
   await withService(async (env) => {
     chainReady(env)

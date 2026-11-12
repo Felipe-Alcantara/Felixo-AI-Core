@@ -372,6 +372,18 @@ export async function previewChainLaunch(
   }
 }
 
+/**
+ * A prévia saiu da tela sem virar abertura: o main apaga a proposta `launch`,
+ * que senão ficaria aberta 30 min. Melhor esforço; uma confirmada não muda.
+ */
+export async function discardChainPreview(bridge: AccountChainBridge | null, proposalId: string): Promise<void> {
+  try {
+    await bridge?.discardPreview({ proposalId })
+  } catch {
+    // Sem resposta, a proposta só vence no prazo, como antes.
+  }
+}
+
 /** Conta decidida pelo `confirm`, com o ticket de uso único para o spawn. */
 export type ChainLaunchTicket = {
   ticket: string

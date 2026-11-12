@@ -300,6 +300,16 @@ function criarSessaoDaCadeia(deps) {
     await page.getByRole('button', { name: 'Abrir agente' }).click()
     const fixo = await esperarBloco(passo, `${contas.primeira} · fixa`)
     await exigirSpawns(passo, 'abrir o bloco fixo', antes.spawn + 1)
+    // Trocar "Automática (cadeia)" pela conta fixa tira a prévia da tela: o main apaga a proposta
+    // launch dela, em vez de deixá-la aberta 30 min.
+    const previasAbertas = async () => (await estadoDaCadeia()).pendingProposals.filter((proposal) => proposal.kind === 'launch')
+    const limiteDaPrevia = Date.now() + timeout
+    let previas = await previasAbertas()
+    while (previas.length > 0 && Date.now() < limiteDaPrevia) {
+      await pausa(200)
+      previas = await previasAbertas()
+    }
+    exigir(previas.length === 0, passo, 'a prévia da cadeia continuou aberta depois de escolher a conta fixa', previas.map((proposal) => proposal.id))
     await page.getByRole('button', { name: 'Configurar novo agente' }).click()
 
     await digitarNoBloco(passo, fixo, GATILHO_LIMITE)
@@ -309,7 +319,7 @@ function criarSessaoDaCadeia(deps) {
     exigir(propostas.length === 0, passo, 'o bloco fixo gerou proposta de troca', propostas)
     exigir(await page.locator('[role="dialog"]').count() === 0, passo, 'um diálogo abriu sozinho')
     exigir(await fixo.getByRole('button', { name: 'Ver opções' }).count() === 0, passo, 'o bloco fixo ganhou [Ver opções]')
-    log('C4 gatilho de limite no bloco fixo: faixa "bloco fixo", sem proposta e sem diálogo: ok')
+    log('C4 a prévia da cadeia some ao escolher a conta fixa; gatilho de limite no bloco fixo: faixa "bloco fixo", sem proposta e sem diálogo: ok')
   }
 
   async function dispararLimiteNaCadeia(passo, nodeId) {

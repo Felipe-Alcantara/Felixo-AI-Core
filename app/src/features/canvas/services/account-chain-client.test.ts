@@ -6,6 +6,7 @@ import {
   changeSessionAccountMode,
   confirmChainLaunch,
   createAccountChainStore,
+  discardChainPreview,
   getAccountChainBridge,
   previewChainLaunch,
 } from './account-chain-client'
@@ -206,6 +207,23 @@ describe('changeSessionAccountMode', () => {
 })
 
 describe('Automática (cadeia): prévia e confirmação', () => {
+  it('descartar a prévia pede ao main para apagar a proposta, sem lançar quando ele não responde', async () => {
+    const bridge = createFakeBridge()
+    await discardChainPreview(bridge, 'proposta-1')
+    expect(bridge.calls.find((call) => call.method === 'discardPreview')?.params).toEqual({ proposalId: 'proposta-1' })
+    await expect(
+      discardChainPreview(
+        createFakeBridge({
+          discardPreview: () => {
+            throw new Error('ipc caiu')
+          },
+        }),
+        'proposta-1',
+      ),
+    ).resolves.toBeUndefined()
+    await expect(discardChainPreview(null, 'proposta-1')).resolves.toBeUndefined()
+  })
+
   it('prévia pronta diz a conta; sem conta apta recusa com os motivos', async () => {
     const pronta = await previewChainLaunch(createFakeBridge(), 'codex')
     expect(pronta).toMatchObject({ status: 'ready' })

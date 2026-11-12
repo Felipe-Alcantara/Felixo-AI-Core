@@ -294,6 +294,25 @@ test('reload: a faixa de detecção volta pelo get-state até a pessoa dispensá
   assert.deepEqual((await invoke('account-chain:get-state')).detections, [])
 })
 
+test('prévia de "Automática (cadeia)": discard-preview apaga a prévia aberta, e ela não entra no registro de trocas', async (t) => {
+  const { invoke, cleanup } = setup()
+  t.after(cleanup)
+  const enabled = await invoke('account-chain:update-settings', { enabled: true, expectedRevision: 0 })
+  await invoke('account-chain:update-members', {
+    members: [{ accountId: 'conta-b', enabled: true, billingDeclared: null, multiplierDeclared: null }],
+    expectedRevision: enabled.state.revision,
+  })
+  const preview = await invoke('account-chain:preview-launch', { providerId: 'codex' })
+  assert.equal(preview.ok, true)
+  assert.deepEqual((await invoke('account-chain:history', { limit: 10 })).entries, [], 'prévia não confirmada não é troca')
+
+  for (const params of [undefined, {}, { proposalId: 'nao-e-uuid' }]) {
+    assert.equal((await invoke('account-chain:discard-preview', params)).code, 'INVALID')
+  }
+  assert.deepEqual(await invoke('account-chain:discard-preview', { proposalId: preview.proposal.id }), { ok: true })
+  assert.deepEqual((await invoke('account-chain:get-state')).pendingProposals, [])
+})
+
 test('sem serviço montado, todo canal responde falha no formato do contrato', async () => {
   const handlers = new Map()
   registerAccountChainIpcHandlers({

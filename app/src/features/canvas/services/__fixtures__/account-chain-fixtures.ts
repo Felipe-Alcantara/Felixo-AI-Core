@@ -197,6 +197,7 @@ export function createFakeBridge(
     updateMembers: invoke('updateMembers', { ok: true, state: initialState }),
     checkLogin: invoke('checkLogin', { ok: true, results: [] }),
     previewLaunch: invoke('previewLaunch', { ok: true, proposal: makeProposal({ kind: 'launch' }) }),
+    discardPreview: invoke('discardPreview', { ok: true }),
     confirm: invoke('confirm', {
       ok: true,
       ticket: 'proposta-1',

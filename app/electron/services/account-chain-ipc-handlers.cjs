@@ -234,6 +234,13 @@ function registerAccountChainIpcHandlers({
     return { ok: false, code, reasons: view.launchReasons(result?.reasons), message: MESSAGES[code] }
   })
 
+  // A prévia de "Automática (cadeia)" que saiu da tela: a proposta launch não fica aberta à toa.
+  handle('account-chain:discard-preview', (service, params) => {
+    if (!isPlainObject(params) || !isUuid(params.proposalId)) return invalid()
+    const result = service.discardPreview({ proposalId: params.proposalId })
+    return result?.ok ? { ok: true } : fail(result?.code ?? 'FAILED')
+  })
+
   handle('account-chain:confirm', async (service, params) => {
     if (!isPlainObject(params) || !isUuid(params.proposalId) || !isText(params.destinationAccountId)) return invalid()
     if (params.acknowledgeSourceActive !== undefined && typeof params.acknowledgeSourceActive !== 'boolean') return invalid()

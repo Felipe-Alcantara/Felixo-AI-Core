@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { Cloud, ChevronDown, Plus, TerminalSquare, Trash2, X } from 'lucide-react'
 import { CHAIN_ACCOUNT_VALUE, CLOUD_AGENT_VALUE } from '../services/agent-launch-preferences'
-import { confirmChainLaunch, getAccountChainBridge, previewChainLaunch } from '../services/account-chain-client'
+import { confirmChainLaunch, discardChainPreview, getAccountChainBridge, previewChainLaunch } from '../services/account-chain-client'
 import { startLaunchQueue, type QueuedLaunch } from '../services/terminal-launch-queue'
 import { useAgentConfig, type AgentConfigProject } from '../hooks/useAgentConfig'
 import type {
@@ -175,8 +175,9 @@ export function TerminalMenu({
           ? { options, chain: { proposal: preview.proposal, summary: preview.summary } }
           : { options },
       ])
-      // Cada item da cadeia tem a sua proposta, como se abrisse sozinho.
-      if (preview) config.refreshChainPreview()
+      // Cada item da cadeia tem a sua proposta, como se abrisse sozinho: a da
+      // prévia fica com o item, e o configurador pede outra.
+      if (preview) config.refreshChainPreview({ keepCurrent: preview.status === 'ready' })
       config.setName('')
     } finally {
       setLaunching(false)
@@ -206,7 +207,15 @@ export function TerminalMenu({
     }
   }
 
+  // Item que sai da fila sem abrir: a proposta dele não fica aberta à toa.
+  const discardQueued = (items: readonly QueuedLaunch[]) => {
+    for (const item of items) {
+      if (item.chain) void discardChainPreview(getAccountChainBridge(), item.chain.proposal.id)
+    }
+  }
+
   const removeQueued = (index: number) => {
+    discardQueued(queue.slice(index, index + 1))
     setQueue((current) => current.filter((_, i) => i !== index))
   }
 
@@ -315,7 +324,10 @@ export function TerminalMenu({
                 <span>Fila ({queue.length})</span>
                 <button
                   type="button"
-                  onClick={() => setQueue([])}
+                  onClick={() => {
+                    discardQueued(queue)
+                    setQueue([])
+                  }}
                   title="Esvaziar fila"
                   aria-label="Esvaziar fila de terminais"
                   className="felixo-btn-icon text-zinc-500 hover:text-zinc-300"

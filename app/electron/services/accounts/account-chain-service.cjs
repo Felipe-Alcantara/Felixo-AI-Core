@@ -1142,6 +1142,20 @@ function createAccountChainService({
   }
 
   /**
+   * A prévia que a pessoa deixou de ver (fechou o configurador, trocou de conta ou de provedor)
+   * sai na hora, em vez de ficar aberta 30 min e entrar na conta da retenção. Confirmada, fica.
+   */
+  function discardPreview({ proposalId } = {}) {
+    if (!isNonEmptyText(proposalId)) return failure('INVALID')
+    const discarded = repository.deleteLaunchPreview(proposalId)
+    if (discarded) {
+      safeLog({ transition: 'preview-discarded', eventId: proposalId })
+      emitChanged('launch-discarded')
+    }
+    return { ok: true, discarded }
+  }
+
+  /**
    * "Passar responsabilidade…" feita pela pessoa por causa de uma detecção.
    * Não há ticket: a escolha foi dela, pelo fluxo que já existe. Fica como
    * `accepted`, para não contar como vez do rodízio nem marcar a origem como
@@ -1445,6 +1459,7 @@ function createAccountChainService({
     checkLoginNow,
     confirm,
     decline,
+    discardPreview,
     dismissDetection,
     finishTicketSpawn,
     lineageForSession,

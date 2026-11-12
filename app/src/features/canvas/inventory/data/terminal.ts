@@ -457,21 +457,21 @@ export const terminalSurfaces: InventoryElement[] = [
       {
         locator: 'aria-label="Adicionar à fila de terminais"',
         kind: 'button',
-        effect: 'queueCurrent: prepareForLaunch({ confirmChain: false }) e savePreferences, depois empilha buildOptions na fila local do menu e limpa o nome. Com "Automática (cadeia)", o item guarda a proposta da prévia (vale 30 min) sem confirmar, a fila mostra "Automática (cadeia): Vai abrir na conta …" e uma prévia nova é pedida para o próximo item.',
+        effect: 'queueCurrent: prepareForLaunch({ confirmChain: false }) e savePreferences, depois empilha buildOptions na fila local do menu e limpa o nome. Com "Automática (cadeia)", o item guarda a proposta da prévia (vale 30 min) sem confirmar, a fila mostra "Automática (cadeia): Vai abrir na conta …" e uma prévia nova é pedida para o próximo item (a do item fica com ele, não é descartada).',
         failure: 'Configuração inválida não enfileira (erro nos campos). Com "Automática (cadeia)" ainda sem conta mostrada, não enfileira ("A cadeia ainda está escolhendo a conta.").',
         disabledWhen: 'launching ou accountSelectionIssue',
       },
       {
         locator: 'aria-label="Esvaziar fila de terminais"',
         kind: 'button',
-        effect: 'Esvazia a fila de uma vez, sem confirmação.',
+        effect: 'Esvazia a fila de uma vez, sem confirmação; as propostas dos itens "Automática (cadeia)" são descartadas no main (account-chain:discard-preview).',
         failure: 'Sem falha própria.',
         disabledWhen: 'some com a fila vazia',
       },
       {
         locator: 'Remover "${item.options.label}" da fila',
         kind: 'button',
-        effect: 'Botão repetido em cada item: tira aquele item da fila.',
+        effect: 'Botão repetido em cada item: tira aquele item da fila; se for "Automática (cadeia)", a proposta dele é descartada no main (account-chain:discard-preview).',
         failure: 'Sem falha própria.',
       },
       {
@@ -486,7 +486,7 @@ export const terminalSurfaces: InventoryElement[] = [
       'localStorage felixo:last-agent-launch-preferences',
       'fila: só em memória (estado do menu, some ao desmontar)',
     ],
-    ipc: ['account-chain:preview-launch', 'account-chain:confirm', 'cli-accounts:list', 'pty:spawn'],
+    ipc: ['account-chain:preview-launch', 'account-chain:discard-preview', 'account-chain:confirm', 'cli-accounts:list', 'pty:spawn'],
     dependsOn: ['useAgentConfig', 'AgentConfigFields', 'isFelixoPopoverTarget', 'CanvasToolbar (onAdd, onAddMany, onAddFolder)'],
     tests: [
       { file: 'src/features/canvas/services/agent-launch-preferences.test.ts' },
@@ -612,7 +612,7 @@ export const terminalSurfaces: InventoryElement[] = [
       {
         locator: 'Recalcular',
         kind: 'button',
-        effect: 'refreshChainPreview: novo account-chain:preview-launch para "Automática (cadeia)" (cada prévia cria uma proposta launch no main).',
+        effect: 'refreshChainPreview: novo account-chain:preview-launch para "Automática (cadeia)" (cada prévia cria uma proposta launch no main; a anterior, que sai da tela, é apagada por account-chain:discard-preview).',
         failure: 'Prévia não pronta deixa "A cadeia está escolhendo a conta…".',
         disabledWhen: 'só com "Automática (cadeia)" sem problema de conta',
       },

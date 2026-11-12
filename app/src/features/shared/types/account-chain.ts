@@ -576,6 +576,8 @@ export type AccountChainBridge = {
   previewLaunch: (params: {
     providerId: AccountChainProviderId
   }) => Promise<AccountChainPreviewLaunchResult>
+  /** A prévia launch saiu da tela sem confirmar: o main a apaga. Uma confirmada não muda. */
+  discardPreview: (params: { proposalId: string }) => Promise<AccountChainSimpleResult>
   confirm: (params: AccountChainConfirmParams) => Promise<AccountChainConfirmResult>
   decline: (params: {
     proposalId: string

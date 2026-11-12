@@ -27,6 +27,7 @@ import { useAccountChain } from './useAccountChain'
 import {
   confirmChainLaunch,
   getAccountChainBridge,
+  discardChainPreview,
   previewChainLaunch,
   type ChainLaunchPreview,
   type ChainLaunchTicket,
@@ -254,7 +255,8 @@ export function useAgentConfig(
 
   // "Automática (cadeia)": o main escolhe a conta e a abertura confirma. A
   // prévia é pedida uma vez por provedor (e de novo depois de cada abertura
-  // ou recusa); cada pedido cria uma proposta `launch` no main.
+  // ou recusa); cada pedido cria uma proposta `launch` no main, descartada
+  // quando sai da tela sem virar abertura nem item da fila.
   const { snapshot: chainSnapshot } = useAccountChain()
   const chainState = chainSnapshot.state
   const chainEnabled = chainState?.settings.enabled === true
@@ -274,6 +276,8 @@ export function useAgentConfig(
     chainPreviewEntry && chainPreviewEntry.key === chainPreviewKey ? chainPreviewEntry.preview : null
   const [chainLaunchError, setChainLaunchError] = useState<string | undefined>()
   const chainLaunchRef = useRef<ChainLaunchTicket | null>(null)
+  // Prévias que viraram abertura ou item da fila: sair da tela não as descarta.
+  const keptChainPreviewsRef = useRef(new Set<string>())
 
   useEffect(() => {
     if (!isChainSelection || !chainLaunchAvailable || !providerId) return
@@ -281,12 +285,32 @@ export function useAgentConfig(
     void previewChainLaunch(getAccountChainBridge(), providerId as AccountChainProviderId).then(
       (preview) => {
         if (!cancelled) setChainPreviewEntry({ key: chainPreviewKey, preview })
+        // Chegou depois de a pessoa mudar de provedor ou de conta: ninguém vai vê-la.
+        else if (preview.status === 'ready') void discardChainPreview(getAccountChainBridge(), preview.proposal.id)
       },
     )
     return () => {
       cancelled = true
     }
   }, [chainLaunchAvailable, chainPreviewKey, isChainSelection, providerId])
+
+  // A prévia que sai da tela (outro provedor, outra conta, prévia nova ou o
+  // configurador desmontado, como o Handoff fechado) é descartada no main, em
+  // vez de ficar aberta 30 min e ocupar o registro de trocas.
+  const heldChainProposalId =
+    isChainSelection && chainPreview?.status === 'ready' ? chainPreview.proposal.id : null
+  useEffect(() => {
+    if (!heldChainProposalId) return
+    const kept = keptChainPreviewsRef.current
+    return () => {
+      // Voltar a "Automática (cadeia)" pede outra prévia, em vez de mostrar a descartada.
+      setChainPreviewEntry((current) =>
+        current?.preview.status === 'ready' && current.preview.proposal.id === heldChainProposalId ? null : current,
+      )
+      if (kept.delete(heldChainProposalId)) return
+      void discardChainPreview(getAccountChainBridge(), heldChainProposalId)
+    }
+  }, [heldChainProposalId])
 
   const chainSelectionIssue = describeChainSelectionIssue(accountId, {
     chainStatus: chainSnapshot.status,
@@ -299,10 +323,15 @@ export function useAgentConfig(
       : { status: 'pending' },
   })
 
-  const refreshChainPreview = useCallback(() => {
-    setChainLaunchError(undefined)
-    setChainPreviewNonce((value) => value + 1)
-  }, [])
+  /** `keepCurrent`: a prévia atual foi para a fila, que a confirma ao iniciar. */
+  const refreshChainPreview = useCallback(
+    ({ keepCurrent = false }: { keepCurrent?: boolean } = {}) => {
+      if (keepCurrent && chainPreview?.status === 'ready') keptChainPreviewsRef.current.add(chainPreview.proposal.id)
+      setChainLaunchError(undefined)
+      setChainPreviewNonce((value) => value + 1)
+    },
+    [chainPreview],
+  )
 
   /** Abrir com "Automática (cadeia)" é a confirmação: `confirm` e ticket. */
   const confirmarCadeia = useCallback(async (): Promise<boolean> => {
@@ -315,6 +344,7 @@ export function useAgentConfig(
     }
     const result = await confirmChainLaunch(getAccountChainBridge(), chainPreview.proposal)
     if (result.ok) {
+      keptChainPreviewsRef.current.add(chainPreview.proposal.id)
       chainLaunchRef.current = result.launch
       return true
     }

@@ -393,6 +393,7 @@ contextBridge.exposeInMainWorld('felixo', {
     resolveAmbiguous: (params) => ipcRenderer.invoke('account-chain:resolve-ambiguous', params),
     requestSwitch: (params) => ipcRenderer.invoke('account-chain:request-switch', params),
     dismissDetection: (params) => ipcRenderer.invoke('account-chain:dismiss-detection', params),
+    discardPreview: (params) => ipcRenderer.invoke('account-chain:discard-preview', params),
     setSessionMode: (params) => ipcRenderer.invoke('account-chain:set-session-mode', params),
     releaseCooldown: (params) => ipcRenderer.invoke('account-chain:release-cooldown', params),
     redactTranscript: (params) => ipcRenderer.invoke('account-chain:redact-transcript', params),
