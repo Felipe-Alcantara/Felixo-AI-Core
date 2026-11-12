@@ -193,6 +193,11 @@ por "Conferir login" (decisão de 11/11/2026).
 - "Automática (cadeia)" ao abrir um bloco mostra antes qual conta será usada; o
   clique em Abrir é a confirmação. Sem conta apta, a abertura é recusada, nunca
   cai no Login do sistema.
+- A prévia que sai da tela sem virar abertura (outro provedor, outra conta,
+  configurador fechado, item removido da fila) é apagada na hora, e prévias
+  nunca confirmadas não aparecem no registro de trocas nem ocupam a retenção
+  (12/11/2026). A checagem de login da prévia segue a validade de 15 min: abrir
+  o configurador de novo nesse prazo não roda a CLI outra vez.
 
 ## A sessão ativa e o terminal antigo
 

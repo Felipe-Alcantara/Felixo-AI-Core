@@ -236,6 +236,7 @@ Os handlers ficam em `app/electron/services/account-chain-ipc-handlers.cjs`. Ele
 | `account-chain:update-members` | `{members:[{accountId, enabled, billingDeclared, multiplierDeclared}] (em ordem), expectedRevision}` | CAS; a lista é regravada inteira |
 | `account-chain:check-login` | `{accountIds[] (≤5)}` | resultado redigido por conta |
 | `account-chain:preview-launch` | `{providerId}` | proposta `launch` ou `{ok:false, reasons[]}` |
+| `account-chain:discard-preview` | `{proposalId}` | `{ok}`; apaga a proposta `launch` ainda `proposed` (a confirmada não muda) |
 | `account-chain:confirm` | `{proposalId, destinationAccountId, acknowledgeSourceActive?:boolean}` | `{ok, ticket, destination, alreadyConfirmed?}` ou `{ok:false, code:'SUPERSEDED'\|'EXPIRED'\|'SOURCE_ACTIVE'\|'NOT_ELIGIBLE'\|'NOT_PENDING'}` |
 | `account-chain:decline` | `{proposalId, reason:'later'\|'not-a-limit'}` | `{ok}` |
 | `account-chain:resolve-ambiguous` | `{detectionId, treatAs:'limit'\|'ignore'}` | `{ok}` |
@@ -743,6 +744,7 @@ Vale a cobrança declarada; na falta dela, a detectada. Se as duas divergirem, a
 - A opção aparece no `CampoConta` (`app/src/features/canvas/components/AgentConfigFields.tsx:424`) só quando a cadeia está ligada e o provedor tem checagem.
 - Ao escolher, o renderer chama `account-chain:preview-launch {providerId}`. O main cria uma proposta `kind:'launch'` e a tela mostra "A cadeia vai usar: Conta B, primeira apta na ordem manual". O clique em **Abrir** é a confirmação: `confirm`, depois ticket, depois spawn.
 - Se nenhuma conta estiver apta, a abertura é **recusada**, com a lista de motivos. Nunca há queda para o Login do sistema.
+- A prévia não se acumula (12/11/2026). O `useAgentConfig` segura uma proposta por vez. Quando ela sai da tela (outro provedor, outra conta, prévia nova ou o configurador desmontado, como o Handoff fechado), o hook chama `account-chain:discard-preview`, e o main apaga a proposta se ela ainda está `proposed`. A que virou abertura ou item da fila fica; a fila descarta a do item removido ou esvaziado. O registro de trocas e a retenção deixam de fora as `launch` nunca confirmadas (`decided_at` nulo ou substituída). Medido antes: 10 prévias seguidas deixavam 10 propostas abertas e 10 linhas no registro, com 1 checagem de login só, porque a validade de 15 min já segura a checagem. Por isso não há debounce. Também não há reuso entre configuradores no main: a fila guarda uma proposta por item, e dois itens com a mesma proposta receberiam o mesmo ticket (o segundo bloco seria recusado).
 
 ### 8.6 Passagem manual por causa de uma detecção (bloco fixo, Login do sistema ou cadeia desligada)
 
