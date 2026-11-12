@@ -1759,3 +1759,49 @@ passou a relatar o texto do bloco e as propostas abertas se o diálogo não abri
 passou inteiro, com "C6b … [Trocar de conta] abre o diálogo e o Esc fecha sem pty:spawn: ok" na primeira tentativa. O Release
 gate (run 43219437312) e o Release (run 43219477627, 09:36–09:45) publicaram a `v0.1.532` nos três sistemas. A causa exata do
 atraso (a ordem entre o push `opened` e a resposta do `invoke`) não foi isolada. O hook não depende mais dela.
+
+---
+
+## 2026-11-12 — Contas: continuação para outro provedor pergunta o Yolo no diálogo, marcado por padrão
+
+**Agente / repositório.** Resolver hotfix — Felixo-AI-Core. Task `3e991f95-497e-81cb-b09d-ebb8d88079c6` (aberta na política da
+cadeia, PR #97).
+
+**Contexto.** A continuação em outro provedor (decisão 2: qualquer provedor) herdava calada o modo de permissão do bloco antigo. O
+`buildContinuationLaunch` lia nos argumentos antigos as flags de Yolo (`--dangerously-skip-permissions`,
+`--dangerously-bypass-approvals-and-sandbox`, `--yolo`) e punha a do destino. O diálogo avisava que modelo e esforço voltam ao
+padrão, mas não falava da permissão.
+
+**Decisões do Felipe (Trilha B, 12/11/2026).**
+- **Outro provedor:** a caixa de Yolo fica "sempre ativa, com opção de desativar". Ela aparece no diálogo marcada mesmo que o bloco
+  antigo não tivesse Yolo. As alternativas eram herdar e só avisar, usar sempre o padrão do destino, ou mostrar a caixa marcada
+  com o padrão do destino (desmarcada) ou com o estado do bloco antigo.
+- **Mesmo provedor:** só dizer, sem controle. Os argumentos continuam se repetindo.
+- **Openia:** esconder a caixa e explicar que ele pergunta as permissões no próprio menu.
+
+**O que mudou.**
+- `account-switch-dialog.ts`:
+  - O modelo ganha `offersYoloChoice`, para outro provedor de agente nativo, e `permissionNotice` ("Abre com Yolo (acesso total,
+    sem confirmações), como o bloco antigo." / "Abre sem Yolo, como o bloco antigo." / "O Openia pergunta as permissões no
+    próprio menu ao abrir.").
+  - `hasYoloFlag` sai exportada.
+  - `buildContinuationLaunch` recebe `yolo` da caixa e deixa de deduzir dos argumentos antigos.
+- `AccountSwitchDialog`: caixa "Yolo no bloco novo" (começa marcada), mais o aviso. O `onConfirm` leva `yolo`, que passa pelo hook
+  e pelo `performContinuation`. O hook lê o Yolo do bloco antigo ao abrir o diálogo, e não no render (regra `react-hooks/refs`).
+- Smoke da sessão C, C7 (Codex → Codex): o diálogo diz o modo e não mostra a caixa.
+- Política (Confirmação), guia do usuário, plano (§9.1) e inventário.
+
+**Validação.**
+- Antes da mudança falhavam três testes: o modelo (caixa só em outro provedor, aviso no mesmo provedor e no Openia), o lançamento
+  (desmarcado tira o Yolo mesmo com o antigo em Yolo; marcado põe o Yolo mesmo sem ele no antigo) e o `performContinuation`
+  (Codex → Claude com a escolha do diálogo).
+- Novo: o diálogo renderizado em HTML (`modal-dialogs-keys.test.ts`), com a caixa marcada em outro provedor e só o aviso no mesmo.
+- `npm test`: 3234 testes, 3224 passam, 10 pulados, 0 falham. `tsc -b`, `eslint .` e `vite build` limpos. Inventário regenerado.
+- vitest inteiro: 3462 e 3463 passam em duas rodadas. Em cada uma falhou um teste diferente, ambos fora desta mudança
+  (`deferred-terminal-session-store` na 1ª, `canvas-context-e2e` na 2ª), e os dois passam isolados (9/9). Instabilidade sob carga.
+
+**Não validado.** A caixa não foi clicada em nenhum teste de interface: a sessão C só tem contas Codex, sem destino em outro
+provedor. Ela fica coberta pelo HTML renderizado e pelo modelo, e a lacuna está no inventário. Também não foi conferida no app com
+contas reais de dois provedores.
+
+Estado: concluído (deploy no adendo).
