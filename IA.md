@@ -1861,3 +1861,47 @@ macOS, Ubuntu e Ubuntu ARM e no smoke do canvas. Na sessão C saíram "C4 … fa
 **Adendo (2026-11-12, 13:58): inventário.** O inventário ainda dizia que "Dispensar" só limpava a detecção local; `a8a0835`
 corrige a frase (agora avisa o main pelo `account-chain:dismiss-detection`) e regenera o `INVENTARIO-CANVAS.md`. CI 43261085296
 (13:39–13:45) verde, Release gate 43262206665 e Release 43262253317 (13:46–13:55) verdes: `v0.1.535`.
+
+## 2026-11-12 — Contas: a prévia de "Automática (cadeia)" não acumula propostas nem entra no registro de trocas
+
+**Agente / repositório.** Resolver hotfix — Felixo-AI-Core. Task `3e991f95-497e-81b4-ac92-d7db960c9ae0` (aberta na revisão do
+PR #97).
+
+**O que foi medido (12/11, antes da mudança).**
+- Script com o serviço e o SQLite reais: 10 prévias seguidas deixaram 10 propostas `launch` abertas e 10 linhas no registro de
+  trocas, com 1 checagem de login. A checagem já não se repetia: qualquer resultado gravado vale 15 min, e a
+  `account-eligibility` junta as checagens em voo da mesma conta.
+- No `TerminalMenu` o `useAgentConfig` fica montado: abrir e fechar o painel não pedia prévia nova. As propostas vinham de três
+  lugares:
+  - cada troca de provedor com "Automática (cadeia)" escolhida;
+  - cada abertura do Handoff, que monta o hook de novo com a última conta salva;
+  - a prévia pedida depois de cada abertura ou item da fila.
+  Nenhuma era solta: ficavam `proposed` por 30 min, entravam no registro e ocupavam a retenção de 1000 linhas.
+
+**O que mudou.**
+- Repositório:
+  - `deleteLaunchPreview` apaga só a `launch` ainda `proposed`.
+  - `listSwitchEvents` (o registro) e `pruneSwitchEvents` deixam de fora as `launch` nunca confirmadas (`decided_at` nulo ou
+    substituída). O prune as apaga antes de contar a retenção.
+- Serviço `discardPreview` e canal `account-chain:discard-preview` (UUID).
+- `useAgentConfig`:
+  - Deriva a proposta que segura e a descarta quando ela sai da tela: outro provedor, outra conta, prévia nova ou desmontagem.
+  - A prévia que chega depois de a pessoa já ter mudado também é descartada.
+  - A que virou abertura ou item da fila fica (`refreshChainPreview({ keepCurrent })`).
+- `TerminalMenu`: remover um item ou esvaziar a fila descarta as propostas dos itens da cadeia.
+- Smoke da sessão C, C4: depois de trocar "Automática (cadeia)" pela conta fixa, nenhuma `launch` fica aberta.
+- Não fiz debounce de checagem (a medição mostrou que não há repetição) nem reuso entre configuradores no main. Pela nota de
+  11/11, a fila guarda uma proposta por item, e dois itens com a mesma proposta receberiam o mesmo ticket.
+
+**Validação.**
+- Antes da mudança falhavam 3 testes de node: repositório (registro, descarte e retenção), serviço (10 aberturas e fechamentos com
+  no máximo 1 aberta e 1 checagem de login no TTL) e IPC (`discard-preview` e registro sem a prévia). O teste do
+  `discardChainPreview` (vitest) é novo.
+- Depois: `npm test` com 3242 testes, 3232 passam, 10 pulados e 0 falham. vitest com 3466 passando. `eslint .` e `npm run build`
+  limpos. O mesmo script de medição dá 0 linhas de prévia no registro.
+
+**Não validado.** O descarte pelo hook só tem o C4 do smoke (troca para a conta fixa), que roda no CI; esta máquina para no C4
+por um problema antigo. Handoff fechado, troca de provedor e itens removidos da fila não têm teste de interface. Um reload da
+janela não descarta a prévia segurada: ela vence em 30 min e sai do registro e da retenção.
+
+Estado: concluído (deploy no adendo).
