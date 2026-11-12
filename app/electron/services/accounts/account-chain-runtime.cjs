@@ -71,8 +71,9 @@ function createAccountChainRuntime({
     ...(runCommand ? { runCommand } : {}),
   })
 
-  async function checkLogin(accountId) {
-    const check = await eligibility.checkLogin(accountId)
+  /** `options.force` ignora a amostra do painel ("Conferir login agora"). */
+  async function checkLogin(accountId, options) {
+    const check = await eligibility.checkLogin(accountId, options)
     if (check) repository.recordLoginCheck(check)
     return check
   }

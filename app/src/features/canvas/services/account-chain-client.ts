@@ -84,6 +84,27 @@ export function applyProposalEvent(
   }
 }
 
+/**
+ * Junta as faixas que o get-state trouxe (é assim que elas voltam depois de um
+ * reload) às que chegaram por push. O push e a resposta do get-state não têm
+ * ordem garantida entre si: a faixa mais nova da sessão vence, e uma que a
+ * pessoa já dispensou nesta janela não volta.
+ */
+export function mergeDetections(
+  current: Readonly<Record<string, AccountChainDetection>>,
+  fromState: readonly AccountChainDetection[] = [],
+  dismissedIds: ReadonlySet<string> = new Set(),
+): Readonly<Record<string, AccountChainDetection>> {
+  let next = current
+  for (const detection of fromState) {
+    const local = next[detection.sessionId]
+    if (dismissedIds.has(detection.id)) continue
+    if (local && Date.parse(local.detectedAt) >= Date.parse(detection.detectedAt)) continue
+    next = { ...next, [detection.sessionId]: detection }
+  }
+  return next
+}
+
 export type AccountChainStore = ReturnType<typeof createAccountChainStore>
 
 export function createAccountChainStore(bridge: AccountChainBridge | null) {
@@ -97,6 +118,8 @@ export function createAccountChainStore(bridge: AccountChainBridge | null) {
   let retainCount = 0
   let unsubscribers: Array<() => void> = []
   let loadToken = 0
+  // Faixas dispensadas nesta janela (poucas): um estado lido antes de o main saber não as traz de volta.
+  const dismissedDetectionIds = new Set<string>()
 
   const emit = () => {
     listeners.forEach((listener) => listener())
@@ -108,7 +131,12 @@ export function createAccountChainStore(bridge: AccountChainBridge | null) {
   }
 
   const setState = (state: AccountChainState, message: string | null = null) => {
-    set({ status: 'ready', state, message })
+    set({
+      status: 'ready',
+      state,
+      message,
+      detections: mergeDetections(snapshot.detections, state.detections, dismissedDetectionIds),
+    })
   }
 
   const refresh = async (): Promise<void> => {
@@ -131,6 +159,7 @@ export function createAccountChainStore(bridge: AccountChainBridge | null) {
         pendingProposals: result.pendingProposals,
         cooldowns: result.cooldowns,
         envCredentialNames: result.envCredentialNames,
+        detections: result.detections,
       })
     } catch {
       if (token !== loadToken) return
@@ -279,7 +308,13 @@ export function createAccountChainStore(bridge: AccountChainBridge | null) {
     },
     /** Some a faixa da detecção de uma sessão (a pessoa já agiu sobre ela). */
     clearDetection(sessionId: string) {
-      if (!(sessionId in snapshot.detections)) return
+      const detection = snapshot.detections[sessionId]
+      if (!detection) return
+      dismissedDetectionIds.add(detection.id)
+      // Melhor esforço: sem a resposta, a faixa ainda some aqui; só voltaria num reload.
+      void Promise.resolve()
+        .then(() => bridge?.dismissDetection({ sessionId, detectionId: detection.id }))
+        .catch(() => {})
       const next = { ...snapshot.detections }
       delete next[sessionId]
       set({ detections: next })

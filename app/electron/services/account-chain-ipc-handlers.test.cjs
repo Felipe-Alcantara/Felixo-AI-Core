@@ -255,6 +255,8 @@ test('limite já recusado com "Agora não": a faixa chega sem proposta e request
   assert.match(aviso.id, /^[0-9a-f-]{36}$/)
   assert.ok(aviso.declinedAt, 'hora da recusa')
   assert.equal(sent.filter((item) => item.channel === 'account-chain:proposal' && item.payload.type === 'opened').length, propostas)
+  // Um reload relê a mesma faixa pelo get-state.
+  assert.deepEqual((await invoke('account-chain:get-state')).detections, [aviso])
 
   for (const params of [undefined, {}, { detectionId: 'nao-e-uuid' }]) {
     assert.equal((await invoke('account-chain:request-switch', params)).code, 'INVALID')
@@ -268,6 +270,28 @@ test('limite já recusado com "Agora não": a faixa chega sem proposta e request
   const repetido = await invoke('account-chain:request-switch', { detectionId: aviso.id })
   assert.equal(repetido.code, 'NOT_PENDING')
   assert.match(repetido.message, /aviso já foi usado/)
+  assert.deepEqual((await invoke('account-chain:get-state')).detections, [], 'o aviso usado não volta no reload')
+})
+
+test('reload: a faixa de detecção volta pelo get-state até a pessoa dispensá-la', async (t) => {
+  const { runtime, invoke, sent, cleanup } = setup()
+  t.after(cleanup)
+  await runtime.service.onOutputFailure({
+    sessionId: 'canvas:a',
+    accountId: 'conta-a',
+    providerId: 'codex',
+    accountMode: 'chain',
+    failure: { failureClass: 'network', scope: 'account', ambiguous: false, evidence: 'ECONNRESET' },
+  })
+  const pushed = sent.filter((item) => item.channel === 'account-chain:detection').at(-1).payload
+  assert.equal(pushed.outcome, 'informational')
+  assert.deepEqual((await invoke('account-chain:get-state')).detections, [pushed])
+
+  for (const params of [undefined, { sessionId: 'canvas:a' }, { sessionId: '', detectionId: pushed.id }, { sessionId: 'canvas:a', detectionId: 'nao-e-uuid' }]) {
+    assert.equal((await invoke('account-chain:dismiss-detection', params)).code, 'INVALID')
+  }
+  assert.deepEqual(await invoke('account-chain:dismiss-detection', { sessionId: 'canvas:a', detectionId: pushed.id }), { ok: true })
+  assert.deepEqual((await invoke('account-chain:get-state')).detections, [])
 })
 
 test('sem serviço montado, todo canal responde falha no formato do contrato', async () => {
@@ -311,4 +335,7 @@ test('contrato: o preload expõe exatamente a AccountChainBridge e o main liga s
   ]) {
     assert.ok(main.includes(wiring), `main.cjs sem ${wiring}`)
   }
+  // A segunda instância no mesmo perfil sai na trava, antes da recuperação: ela nunca vence as
+  // propostas e os tickets que a primeira abriu.
+  assert.ok(main.indexOf('claimSingleInstance({') < main.indexOf('accountChain.service.recoverOnStartup()'), 'a recuperação roda antes da trava de instância única')
 })

@@ -88,6 +88,7 @@ function withService(action, options = {}) {
     sessions,
     loginResults,
     checkCalls,
+    checkOptions: [],
     emitted,
     logged,
     advance(ms) {
@@ -144,8 +145,9 @@ function withService(action, options = {}) {
   env.service = createAccountChainService({
     repository,
     policy,
-    async checkLogin(accountId) {
+    async checkLogin(accountId, checkOptions) {
       checkCalls.push(accountId)
+      env.checkOptions.push(checkOptions ?? null)
       const status = loginResults.get(accountId)
       if (status) env.recordLogin(accountId, status)
     },
@@ -296,6 +298,60 @@ test('ambíguo (403) não entra em espera sozinho; "tratar como limite" põe em 
       action: 'ignored',
     })
     assert.equal(env.service.getState().ambiguousDetections.length, 0)
+  })
+})
+
+test('reload: getState devolve a última detecção de cada sessão até ser resolvida, dispensada ou a sessão sair', async () => {
+  await withService(async (env) => {
+    chainReady(env)
+    env.addSession('sessao-2', { accountMode: 'pinned' })
+    env.addSession('sessao-3')
+    const forbidden = { failureClass: 'auth', scope: 'account', ambiguous: true, evidence: '403 Forbidden', evidenceHash: 'h-403' }
+    const ambiguous = await env.service.onOutputFailure(env.detection({ failure: forbidden }))
+    await env.service.onOutputFailure(env.detection({ sessionId: 'sessao-2', accountMode: 'pinned', failure: { ...LIMIT_FAILURE, evidenceHash: 'h-fixo' } }))
+    await env.service.onOutputFailure(env.detection({ sessionId: 'sessao-3', failure: { failureClass: 'network', scope: 'account', ambiguous: false, evidence: 'ECONNRESET' } }))
+
+    const detections = env.service.getState().detections
+    assert.deepEqual(detections.map((item) => [item.sessionId, item.action]).sort(), [
+      ['sessao-1', 'ambiguous'],
+      ['sessao-2', 'noticed'],
+      ['sessao-3', 'transient'],
+    ])
+    // Mesmo id e mesmo horário do push: a faixa recarregada é a mesma que a pessoa viu.
+    const pushed = env.channel('account-chain:detection')
+    for (const item of detections) {
+      assert.ok(pushed.some((push) => push.id === item.id && push.detectedAt === item.detectedAt), item.sessionId)
+    }
+
+    // A pergunta respondida não volta; a proposta aberta já tem a própria faixa.
+    await env.service.resolveAmbiguous({ detectionId: ambiguous.detectionId, treatAs: 'ignore' })
+    await proposeFromSession1(env)
+    assert.deepEqual(env.service.getState().detections.map((item) => item.sessionId).sort(), ['sessao-2', 'sessao-3'])
+
+    // Dispensar vale só para a detecção que a pessoa viu.
+    const fixed = env.service.getState().detections.find((item) => item.sessionId === 'sessao-2')
+    assert.deepEqual(env.service.dismissDetection({ sessionId: 'sessao-2', detectionId: 'outra' }), { ok: true, dismissed: false })
+    assert.deepEqual(env.service.dismissDetection({ sessionId: 'sessao-2', detectionId: fixed.id }), { ok: true, dismissed: true })
+    assert.equal(env.service.dismissDetection({ sessionId: '', detectionId: fixed.id }).code, 'INVALID')
+
+    env.service.onSessionExit('sessao-3')
+    assert.deepEqual(env.service.getState().detections, [])
+  })
+})
+
+test('a espera grava o fim alternativo quando medição e texto divergem', async () => {
+  await withService(async (env) => {
+    chainReady(env)
+    env.policy.resolveCooldownEnd = ({ nowMs }) => ({
+      untilAt: new Date(nowMs + 3 * 60 * MINUTE).toISOString(),
+      untilSource: 'texto',
+      alternativeUntilAt: new Date(nowMs + 2 * 60 * MINUTE).toISOString(),
+      alternativeUntilSource: 'medicao',
+    })
+    await proposeFromSession1(env)
+    const cooldown = env.repository.getCooldown('conta-a')
+    assert.deepEqual([cooldown.untilSource, cooldown.alternativeUntilSource], ['texto', 'medicao'])
+    assert.equal(cooldown.alternativeUntilAt, new Date(START_MS + 2 * 60 * MINUTE).toISOString())
   })
 })
 
@@ -977,6 +1033,8 @@ test('"Conferir login agora" roda a checagem por conta, devolve o resultado sem 
     const result = await env.service.checkLoginNow({ accountIds: ['conta-a', 'conta-b', 'conta-a'] })
     assert.equal(result.ok, true)
     assert.deepEqual(env.checkCalls.sort(), ['conta-a', 'conta-b'], 'conta repetida é conferida uma vez')
+    // "Conferir login agora" roda a CLI: a amostra do painel (até 15 min) não vale aqui.
+    assert.deepEqual(env.checkOptions, [{ force: true }, { force: true }])
     assert.deepEqual(result.results.map((item) => [item.accountId, item.loginCheck.status]), [
       ['conta-a', 'logged_in'],
       ['conta-b', 'logged_out'],

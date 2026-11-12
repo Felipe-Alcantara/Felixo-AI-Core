@@ -302,6 +302,11 @@ export type AccountChainState = {
   cooldowns: AccountCooldown[]
   /** Só os NOMES das variáveis de credencial presentes no ambiente do app. */
   envCredentialNames: string[]
+  /**
+   * Última detecção de cada sessão ainda à mostra (a faixa do bloco), para um
+   * reload não a perder; a proposta aberta não entra, porque tem faixa própria.
+   */
+  detections: AccountChainDetection[]
 }
 
 // ---------------------------------------------------------------------------
@@ -582,6 +587,8 @@ export type AccountChainBridge = {
   }) => Promise<AccountChainSimpleResult>
   /** "Trocar de conta" num limite já recusado (`outcome === 'declined_again'`); vale uma vez por detecção. */
   requestSwitch: (params: { detectionId: string }) => Promise<AccountChainRequestSwitchResult>
+  /** A faixa saiu da tela: o main esquece a detecção, e o get-state não a traz de volta. */
+  dismissDetection: (params: { sessionId: string; detectionId: string }) => Promise<AccountChainSimpleResult>
   /** Fixar expira as propostas abertas da sessão. */
   setSessionMode: (params: {
     sessionId: string

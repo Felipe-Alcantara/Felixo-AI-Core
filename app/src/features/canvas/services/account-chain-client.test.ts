@@ -130,6 +130,32 @@ describe('createAccountChainStore', () => {
     expect(store.getSnapshot().state?.revision).toBe(9)
   })
 
+  it('reload: as faixas voltam pelo get-state, sem apagar um push mais novo nem ressuscitar a dispensada', async () => {
+    const pergunta = makeDetection({ id: 'deteccao-ambigua', sessionId: 'canvas:bloco-1', outcome: 'ambiguous', proposalId: null })
+    const aviso = makeDetection({ id: 'deteccao-fixa', sessionId: 'canvas:bloco-2', outcome: 'noticed', proposalId: null })
+    const bridge = createFakeBridge({}, makeState({ detections: [pergunta, aviso] }))
+    const store = createAccountChainStore(bridge)
+    store.retain()
+    await flush()
+    expect(store.getSnapshot().detections).toEqual({ 'canvas:bloco-1': pergunta, 'canvas:bloco-2': aviso })
+
+    // A pessoa dispensa: o main é avisado e um estado lido antes disso não traz a faixa de volta.
+    store.clearDetection('canvas:bloco-2')
+    await flush()
+    expect(bridge.calls.find((call) => call.method === 'dismissDetection')?.params).toEqual({
+      sessionId: 'canvas:bloco-2',
+      detectionId: 'deteccao-fixa',
+    })
+    bridge.emitChanged(makeState({ detections: [pergunta, aviso] }))
+    expect(store.getSnapshot().detections['canvas:bloco-2']).toBeUndefined()
+
+    // Um push mais novo da mesma sessão vence o estado que chegou atrasado.
+    const nova = makeDetection({ id: 'deteccao-nova', sessionId: 'canvas:bloco-1', detectedAt: '2026-09-28T18:00:00.000Z' })
+    bridge.emitDetection(nova)
+    bridge.emitChanged(makeState({ detections: [pergunta] }))
+    expect(store.getSnapshot().detections['canvas:bloco-1']).toBe(nova)
+  })
+
   it('conferir login e liberar espera recarregam o estado', async () => {
     const bridge = createFakeBridge()
     const store = createAccountChainStore(bridge)

@@ -464,16 +464,20 @@ function criarSessaoDaCadeia(deps) {
     log('C8 aba Trocas mostra "bloco aberto" com motivo e horário: ok')
   }
 
-  async function checarReloadSemReenvio() {
+  async function checarReloadSemReenvio(contas) {
     const passo = 'C10 reload'
+    // A faixa do C4 só chegava por push: tem de voltar pelo get-state depois do reload.
+    const faixaDoFixo = () => nodeDaConta(`${contas.primeira} · fixa`).locator('[role="status"]', { hasText: 'bloco fixo: nada troca sozinho' })
+    exigir(await faixaDoFixo().count() === 1, passo, 'a faixa do bloco fixo (C4) não estava à mostra antes do reload')
     await pausa(JANELA_DE_SILENCIO_MS)
     const antes = await contadores()
     await page.reload()
     await checarMontagem(page)
+    await faixaDoFixo().waitFor({ state: 'visible', timeout })
     await pausa(JANELA_DE_SILENCIO_MS * 2)
     const depois = await contadores()
     exigir(depois.write === antes.write, passo, 'o reload reenviou algo ao terminal (pty:write subiu)', { antes, depois })
-    log(`C10 reload sem reenvio (pty:write ${antes.write} → ${depois.write}): ok`)
+    log(`C10 reload sem reenvio (pty:write ${antes.write} → ${depois.write}) e a faixa do bloco fixo continua: ok`)
   }
 
   async function checarRedeSemItem(contas) {
@@ -565,7 +569,7 @@ function criarSessaoDaCadeia(deps) {
       await checarLimiteRecusadoDeNovo(contas, blocos)
       await confirmarTroca(contas, blocos)
       await checarAbaTrocas(contas)
-      await checarReloadSemReenvio()
+      await checarReloadSemReenvio(contas)
       await checarRedeSemItem(contas)
       await checarNomesAcessiveis()
       await checarCardDoOrquestrador()

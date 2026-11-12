@@ -223,6 +223,9 @@ function createAccountChainService({
   // Mesmo limite depois de "Agora não": uma detecção por sessão, a mais recente, à espera de a
   // pessoa pedir a troca pelo aviso do bloco (decisão do Felipe, 12/11/2026).
   const declinedDetections = new Map()
+  // Última detecção publicada por sessão: o get-state a devolve para a faixa sobreviver a um reload
+  // do renderer. Sai quando a pessoa a dispensa, quando a sessão encerra e na recuperação.
+  const recentDetections = new Map()
 
   // ── Saídas (push e log QA), que nunca derrubam o serviço ──────────────────
 
@@ -259,7 +262,9 @@ function createAccountChainService({
   }
 
   function publishDetection(detection, extra) {
-    safeEmit('account-chain:detection', {
+    const payload = {
+      id: extra.detectionId ?? extra.eventId ?? randomUUID(),
+      detectedAt: toIso(now()),
       sessionId: detection.sessionId,
       accountId: detection.accountId,
       providerId: detection.providerId,
@@ -268,6 +273,25 @@ function createAccountChainService({
       ambiguous: detection.failure.ambiguous,
       evidence: detection.failure.evidence,
       ...extra,
+    }
+    recentDetections.delete(payload.sessionId)
+    recentDetections.set(payload.sessionId, payload)
+    while (recentDetections.size > MAX_PENDING_AMBIGUOUS_DETECTIONS) {
+      recentDetections.delete(recentDetections.keys().next().value)
+    }
+    safeEmit('account-chain:detection', payload)
+  }
+
+  /**
+   * Detecções que o get-state devolve. A proposta aberta tem faixa própria; a pergunta e o aviso
+   * de "Agora não" só voltam enquanto ainda dá para responder.
+   */
+  function listRecentDetections() {
+    return [...recentDetections.values()].filter((payload) => {
+      if (payload.action === 'proposed') return false
+      if (payload.action === 'ambiguous') return ambiguousDetections.has(payload.detectionId)
+      if (payload.action === 'declined_again') return declinedDetections.has(payload.detectionId)
+      return true
     })
   }
 
@@ -459,9 +483,9 @@ function createAccountChainService({
     return released
   }
 
-  async function runLoginCheck(accountId) {
+  async function runLoginCheck(accountId, options) {
     try {
-      await checkLogin(accountId)
+      await checkLogin(accountId, options)
     } catch (error) {
       // Checagem que falhou deixa a conta fora (fail-closed); o motivo fica no repositório.
       safeLog({ transition: 'login-check-failed', accountId, message: redactSecrets(error?.message ?? '') })
@@ -482,7 +506,13 @@ function createAccountChainService({
         nowMs,
       })
       if (until && (until.untilAt === null || Number.isFinite(Date.parse(until.untilAt))) && isNonEmptyText(until.untilSource)) {
-        return { untilAt: until.untilAt, untilSource: until.untilSource }
+        const alternative = isNonEmptyText(until.alternativeUntilAt) && isNonEmptyText(until.alternativeUntilSource)
+        return {
+          untilAt: until.untilAt,
+          untilSource: until.untilSource,
+          alternativeUntilAt: alternative ? until.alternativeUntilAt : null,
+          alternativeUntilSource: alternative ? until.alternativeUntilSource : null,
+        }
       }
     } catch (error) {
       safeLog({ transition: 'cooldown-end-failed', message: redactSecrets(error?.message ?? '') })
@@ -500,6 +530,8 @@ function createAccountChainService({
       detectedAt,
       untilAt: until.untilAt,
       untilSource: until.untilSource,
+      alternativeUntilAt: until.alternativeUntilAt ?? null,
+      alternativeUntilSource: until.alternativeUntilSource ?? null,
       evidence: detection.failure.evidence,
       evidenceHash: detection.failure.evidenceHash,
       sessionId: detection.sessionId,
@@ -1163,6 +1195,7 @@ function createAccountChainService({
         if (detection.sessionId === sessionId) pending.delete(detectionId)
       }
     }
+    recentDetections.delete(sessionId)
     const expired = expireOpenProposals((event) => event.sourceSessionId === sessionId, 'origem-saiu')
     if (expired > 0) emitChanged('source-exited')
     return expired
@@ -1216,7 +1249,7 @@ function createAccountChainService({
   async function checkLoginNow({ accountIds } = {}) {
     if (!Array.isArray(accountIds) || accountIds.some((id) => !isNonEmptyText(id))) return failure('INVALID')
     const results = await Promise.all(
-      [...new Set(accountIds)].map(async (accountId) => ({ accountId, loginCheck: publicLoginCheck(await runLoginCheck(accountId)) })),
+      [...new Set(accountIds)].map(async (accountId) => ({ accountId, loginCheck: publicLoginCheck(await runLoginCheck(accountId, { force: true })) })),
     )
     emitChanged('login-checked')
     return { ok: true, results }
@@ -1332,7 +1365,16 @@ function createAccountChainService({
         evidence: detection.failure.evidence,
         detectedAt: detection.detectedAt,
       })),
+      detections: listRecentDetections(),
     }
+  }
+
+  /** "Dispensar" a faixa: some também do get-state. Vale só para a detecção que a pessoa viu. */
+  function dismissDetection({ sessionId, detectionId } = {}) {
+    if (!isNonEmptyText(sessionId) || !isNonEmptyText(detectionId)) return failure('INVALID')
+    const dismissed = recentDetections.get(sessionId)?.id === detectionId
+    if (dismissed) recentDetections.delete(sessionId)
+    return { ok: true, dismissed }
   }
 
   function history({ limit, before } = {}) {
@@ -1386,6 +1428,7 @@ function createAccountChainService({
     const pruned = repository.pruneSwitchEvents()
     ambiguousDetections.clear()
     declinedDetections.clear()
+    recentDetections.clear()
     safeLog({
       transition: 'recover',
       expired: result.expired,
@@ -1402,6 +1445,7 @@ function createAccountChainService({
     checkLoginNow,
     confirm,
     decline,
+    dismissDetection,
     finishTicketSpawn,
     lineageForSession,
     getState,

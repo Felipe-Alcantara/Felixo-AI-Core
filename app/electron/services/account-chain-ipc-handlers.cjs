@@ -277,6 +277,13 @@ function registerAccountChainIpcHandlers({
     return result?.ok ? { ok: true } : fail(result?.code ?? 'FAILED')
   })
 
+  // "Dispensar" (ou outra ação que resolve a faixa): o main esquece a detecção e o reload não a traz de volta.
+  handle('account-chain:dismiss-detection', (service, params) => {
+    if (!isPlainObject(params) || !isText(params.sessionId) || !isUuid(params.detectionId)) return invalid()
+    const result = service.dismissDetection({ sessionId: params.sessionId, detectionId: params.detectionId })
+    return result?.ok ? { ok: true } : fail(result?.code ?? 'FAILED')
+  })
+
   // "Trocar de conta" na faixa de um limite já recusado: a proposta sai só a pedido da pessoa.
   handle('account-chain:request-switch', async (service, params) => {
     if (!isPlainObject(params) || !isUuid(params.detectionId)) return invalid()

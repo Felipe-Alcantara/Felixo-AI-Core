@@ -134,9 +134,9 @@ function createAccountChainView({ repository, describeAccount, listLiveSessions 
       detectedAt: row.detectedAt,
       untilAt: row.untilAt ?? null,
       untilSource: row.untilSource,
-      // O fim alternativo (medição × texto) não é gravado na espera; só o que vale.
-      alternativeUntilAt: null,
-      alternativeUntilSource: null,
+      // Quando medição e texto divergem, o horário que perdeu, com a fonte (migration 021).
+      alternativeUntilAt: row.alternativeUntilAt ?? null,
+      alternativeUntilSource: row.alternativeUntilSource ?? null,
       evidence: clipText(row.evidence, EVIDENCE_MAX_CHARS),
       needsCheck: expired && policy.cooldownBlocks(row, repository.getLoginCheck(row.accountId), nowMs),
     }
@@ -300,6 +300,8 @@ function createAccountChainView({ repository, describeAccount, listLiveSessions 
       members: (serviceState?.members ?? []).map((item) => member(item, nowMs)),
       pendingProposals: pendingProposals(nowMs),
       cooldowns: repository.listCooldowns().map((row) => cooldown(row, nowMs)).filter(Boolean),
+      // As faixas dos blocos, para um reload não as perder (só chegavam por push).
+      detections: (serviceState?.detections ?? []).map((payload) => detection(payload)),
       envCredentialNames: [...envCredentialNames],
     }
   }
@@ -341,8 +343,9 @@ function createAccountChainView({ repository, describeAccount, listLiveSessions 
 
   /**
    * `AccountChainDetection` a partir do push do serviço
-   * (`{ sessionId, accountId, providerId, failureClass, scope, ambiguous,
-   * evidence, action, eventId?, detectionId?, postSwitchFailure? }`).
+   * (`{ id, detectedAt, sessionId, accountId, providerId, failureClass, scope,
+   * ambiguous, evidence, action, eventId?, detectionId?, postSwitchFailure? }`),
+   * o mesmo que o get-state devolve depois de um reload.
    */
   function detection(payload, { id } = {}) {
     const nowMs = now()
@@ -351,7 +354,7 @@ function createAccountChainView({ repository, describeAccount, listLiveSessions 
     const live = findLiveSession(payload?.sessionId)
     const accountId = payload?.accountId ?? null
     return {
-      id: payload?.detectionId ?? payload?.eventId ?? id,
+      id: payload?.detectionId ?? payload?.eventId ?? payload?.id ?? id,
       sessionId: payload?.sessionId,
       accountId,
       accountLabel: accountId ? clipText(safeDescribe(accountId)?.label, SWITCH_LABEL_MAX_CHARS) : null,
@@ -361,7 +364,7 @@ function createAccountChainView({ repository, describeAccount, listLiveSessions 
       scope: payload?.scope === 'model' ? 'model' : 'account',
       ambiguous: payload?.ambiguous === true,
       evidence: clipText(payload?.evidence, EVIDENCE_MAX_CHARS),
-      detectedAt: new Date(nowMs).toISOString(),
+      detectedAt: toIsoOrNull(payload?.detectedAt) ?? new Date(nowMs).toISOString(),
       cooldown: accountId ? cooldown(repository.getCooldown(accountId), nowMs) : null,
       outcome,
       proposalId: outcome === 'proposed' ? (payload?.eventId ?? null) : null,

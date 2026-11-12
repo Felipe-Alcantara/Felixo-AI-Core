@@ -81,6 +81,7 @@ export function makeState(overrides: Partial<AccountChainState> = {}): AccountCh
     pendingProposals: [],
     cooldowns: [],
     envCredentialNames: [],
+    detections: [],
     ...overrides,
   }
 }
@@ -204,6 +205,7 @@ export function createFakeBridge(
     decline: invoke('decline', { ok: true }),
     resolveAmbiguous: invoke('resolveAmbiguous', { ok: true }),
     requestSwitch: invoke('requestSwitch', { ok: true, proposalId: null }),
+    dismissDetection: invoke('dismissDetection', { ok: true }),
     setSessionMode: invoke('setSessionMode', { ok: true }),
     releaseCooldown: invoke('releaseCooldown', { ok: true, requiresCheck: false }),
     redactTranscript: async (params) => {
