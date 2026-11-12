@@ -1852,3 +1852,8 @@ PR #97).
 unidade e de IPC (o smoke não tem gatilho ambíguo).
 
 Estado: concluído (deploy no adendo).
+
+**Adendo (2026-11-12, 13:40): CI e Release.** O CI de `5ab853e` (run 43257395610, 13:19–13:31) passou no Validate de Windows,
+macOS, Ubuntu e Ubuntu ARM e no smoke do canvas. Na sessão C saíram "C4 … faixa "bloco fixo" …: ok" e "C10 reload sem reenvio
+(pty:write 105 → 105) e a faixa do bloco fixo continua: ok", então o C4 que falha na máquina local passa no Ubuntu. O Release gate
+(run 43259203561) e o Release (run 43259243823, 13:29–13:37) publicaram a `v0.1.534` nos três sistemas.
