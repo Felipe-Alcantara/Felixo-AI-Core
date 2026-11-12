@@ -368,8 +368,10 @@ function criarSessaoDaCadeia(deps) {
     await pausa(JANELA_DE_SILENCIO_MS)
     exigir(await page.locator('[role="dialog"]').count() === 0, passo, 'um diálogo abriu sozinho')
     exigir(await bloco.getByRole('button', { name: 'Ver opções' }).count() === 0, passo, 'o limite recusado ganhou proposta automática')
-    // A troca sai só a pedido: o botão abre uma proposta nova e o diálogo dela.
-    await bloco.getByRole('button', { name: 'Trocar de conta' }).click()
+    // A troca sai só a pedido: o botão abre uma proposta nova e o diálogo dela. Pelo teclado,
+    // como no C6: este bloco fica em parte fora da área visível, atrás da barra lateral.
+    await bloco.getByRole('button', { name: 'Trocar de conta' }).focus()
+    await page.keyboard.press('Enter')
     const dialogo = page.getByRole('dialog')
     await dialogo.waitFor({ state: 'visible', timeout })
     exigir(await dialogo.getByRole('button', { name: `Abrir bloco novo em ${contas.segunda}` }).count() === 1, passo, 'o diálogo não oferece a conta de destino')
