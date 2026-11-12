@@ -488,11 +488,8 @@ class OrchestrationRunner {
   /**
    * Fecha o job com resultado ou erro e, se o turno inteiro terminou,
    * reinvoca o orquestrador com os resultados.
-   *
-   * @param {{ reinvoke?: boolean }} params - `reinvoke: false` fecha sem
-   *   chamar o orquestrador (execução interrompida pela pessoa).
    */
-  async finishAgentJob({ runId, agentId, error, result, reinvoke = true }) {
+  async finishAgentJob({ runId, agentId, error, result }) {
     const run = error
       ? this.store.failAgentJob(runId, agentId, { error })
       : this.store.completeAgentJob(runId, agentId, { result: result ?? '' })
@@ -507,7 +504,7 @@ class OrchestrationRunner {
       error: error ?? null,
     })
 
-    if (!reinvoke || !areCurrentTurnJobsTerminal(run)) {
+    if (!areCurrentTurnJobsTerminal(run)) {
       return { handled: true, ok: true, run }
     }
 
@@ -942,19 +939,17 @@ class OrchestrationRunner {
   }
 
   /**
-   * Recusa (da pessoa, por prazo ou por interrupção): nenhum provedor é
-   * trocado. O spawn inicial falha com o motivo; o meio da tarefa segue com o
-   * erro original. Com `reinvoke`, o orquestrador recebe o resultado quando o
-   * turno fecha.
+   * Recusa (da pessoa ou por prazo): nenhum provedor é trocado. O spawn
+   * inicial falha com o motivo; o meio da tarefa segue com o erro original.
+   * O orquestrador recebe o resultado quando o turno fecha.
    */
-  async refuseProviderSwitch(decision, { outcome, note, reinvoke = true }) {
+  async refuseProviderSwitch(decision, { outcome, note }) {
     this.closeProviderSwitch(decision, { outcome, note })
 
     const finished = await this.finishAgentJob({
       runId: decision.runId,
       agentId: decision.agentId,
       error: describeRefusedSwitchError(decision, outcome),
-      reinvoke,
     })
 
     return { outcome, run: finished.run }
@@ -983,30 +978,43 @@ class OrchestrationRunner {
   }
 
   /**
-   * `cli:stop` na conversa: as decisões do run daquela thread saem como
-   * recusa, sem reinvocar o orquestrador que a pessoa acabou de parar.
+   * `cli:stop` na conversa encerra o run dela (decisão do dono, 11/11/2026):
+   * as perguntas de troca saem canceladas, o run falha como interrompido e
+   * nada o reinvoca depois, nem o timeout nem um sub-agente que termine. A
+   * próxima mensagem da conversa abre um run novo.
    *
-   * @returns {string[]} Os ids das decisões canceladas.
+   * @returns {object[]} Os runs encerrados, para quem chamou parar os
+   *   processos deles (turno reinvocado e sub-agentes).
    */
-  cancelProviderSwitchesForThread(threadId) {
-    const runId = this.runContexts.get(threadId)?.runId ?? null
-    const cancelled = []
+  stopRunsForThread(threadId) {
+    const runIds = new Set()
+    const contextRunId = this.runContexts.get(threadId)?.runId
+    if (contextRunId) {
+      runIds.add(contextRunId)
+    }
 
     for (const decision of [...this.pendingProviderSwitches.values()]) {
-      if (decision.parentThreadId !== threadId && decision.runId !== runId) {
+      if (decision.parentThreadId !== threadId && !runIds.has(decision.runId)) {
         continue
       }
 
       this.pendingProviderSwitches.delete(decision.decisionId)
-      cancelled.push(decision.decisionId)
-      void this.settleRefusalSafely(decision, {
+      runIds.add(decision.runId)
+      this.closeProviderSwitch(decision, {
         outcome: PROVIDER_SWITCH_OUTCOMES.cancelled,
         note: 'Execução interrompida pela pessoa; nenhum provedor foi trocado.',
-        reinvoke: false,
       })
     }
 
-    return cancelled
+    const stoppedRuns = []
+    for (const runId of runIds) {
+      if (isRunActive(this.store.get(runId))) {
+        stoppedRuns.push(this.store.failRun(runId, 'Execução interrompida pela pessoa.'))
+      }
+      this.forgetRunContext(runId)
+    }
+
+    return stoppedRuns
   }
 
   async settleRefusalSafely(decision, options) {
@@ -1599,9 +1607,7 @@ function describeRefusedSwitchError(decision, outcome) {
   const why =
     outcome === PROVIDER_SWITCH_OUTCOMES.expired
       ? `Troca de provedor ${route} sem resposta no prazo`
-      : outcome === PROVIDER_SWITCH_OUTCOMES.cancelled
-        ? `Execução interrompida pela pessoa antes da troca de provedor ${route}`
-        : `Troca de provedor ${route} recusada pela pessoa`
+      : `Troca de provedor ${route} recusada pela pessoa`
 
   if (decision.kind === 'initial') {
     return `${why}; o sub-agente não rodou e nenhum provedor foi trocado.`

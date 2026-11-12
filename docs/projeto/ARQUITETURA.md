@@ -1921,7 +1921,13 @@ resposta por `cli:provider-switch:respond`. As pendentes são recuperadas por
 existia trata a decisão como recusa. O store do orquestrador é em memória, então
 um reinício apaga a decisão sem executá-la. Cada decisão vai para o registro de
 trocas como `provider_switch`, com `accepted` ou `refused`. Codex → Codex App
-Server é só troca de transporte e não pergunta.
+Server é só troca de transporte e não pergunta. `cli:stop` na conversa encerra o
+run dela (decisão do dono, 11/11/2026): `stopRunsForThread` fecha as decisões como
+`cancelled`, falha o run com "Execução interrompida pela pessoa." e esquece o
+contexto, então nada o reinvoca e a próxima mensagem abre outro run. O handler
+para junto o turno reinvocado (`<runId>:orchestrator-turn-N`) e os sub-agentes
+`running` (`collectRunProcessThreadIds`), marcados em `stoppedSessions` para o
+`close` não virar erro.
 
 **Custo no caminho quente.** Por pedaço de saída, a vigia só marca uma flag,
 guarda o horário e agenda um timer quando ainda não há um: sem regex, cópia ou

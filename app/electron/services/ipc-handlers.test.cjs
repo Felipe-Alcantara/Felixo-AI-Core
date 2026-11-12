@@ -4,6 +4,7 @@ const {
   getAdapterSpawnArgs,
 } = require('./orchestrator/cli-execution-planner.cjs')
 const {
+  collectRunProcessThreadIds,
   collectThreadFamily,
   createOrchestrationModel,
   createOrchestrationStatusResponse,
@@ -560,6 +561,27 @@ test('cli:provider-switch:respond valida o formato antes de chegar ao runner', a
 
   const accepted = await respondToProviderSwitch(runner, { decisionId, accept: true })
   assert.deepEqual(accepted, { ok: true, outcome: 'accepted' }, 'o run não atravessa o IPC')
+})
+
+test('cli:stop para o turno reinvocado e os sub-agentes que rodam, nunca a thread da conversa', () => {
+  const runs = [
+    {
+      runId: 'run-1',
+      currentTurn: 2,
+      agentJobs: [
+        { agentId: 'a1', status: 'pending', threadId: null },
+        { agentId: 'a2', status: 'running', threadId: 'run-1:a2' },
+        { agentId: 'a3', status: 'completed', threadId: 'run-1:a3' },
+        { agentId: 'a4', status: 'running', threadId: 'thread-chat' },
+      ],
+    },
+  ]
+
+  assert.deepEqual(collectRunProcessThreadIds(runs, 'thread-chat'), [
+    'run-1:orchestrator-turn-2',
+    'run-1:a2',
+  ])
+  assert.deepEqual(collectRunProcessThreadIds([], 'thread-chat'), [])
 })
 
 test('cli:provider-switch:list devolve as decisões pendentes do runner', () => {

@@ -864,6 +864,7 @@ Mapa declarativo `CREDENCIAIS_HERDADAS` em `cli-account-profiles.cjs`. Os nomes 
 - `failExpiredRuns` (`:637-659`) passa a chamar também `expirePendingProviderSwitches(now)`. Ele já roda a cada 60 s pela varredura existente (`ipc-handlers.cjs:913-921`), então não há timer novo.
 - Uma decisão vencida (10 min, ou o prazo do run se vier antes) é tratada como **recusa**, com o motivo "sem resposta em 10 min". O job falha com mensagem clara e **nenhum** provedor é trocado.
 - `cli:stop` (`ipc-handlers.cjs:780`) e o fim do run (`failRun`, `forgetRunContext`) limpam as decisões do run.
+  - **Decisão do dono (11/11/2026):** o `cli:stop` também **encerra o run**. Antes, só a pergunta era cancelada: o run ficava pendurado até o timeout, a próxima mensagem caía nele e outro sub-agente que terminasse reinvocava o orquestrador. Agora o run falha como "Execução interrompida pela pessoa.", e o turno reinvocado e os sub-agentes dele param junto (`stopRunsForThread`, `collectRunProcessThreadIds`).
 - O store de orquestração é em memória, então um reinício apaga a decisão sem executar nada.
 - Isso muda de propósito o princípio "a tarefa deve concluir de alguma forma" (`spawn-model-selector.cjs:156-158`), por decisão do dono.
 

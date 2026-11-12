@@ -1373,24 +1373,85 @@ test('resposta depois do fim do run devolve RUN_FINISHED e não roda nada', asyn
   assert.deepEqual(calls.records.map((record) => record.state), ['refused'])
 })
 
-test('cli:stop na conversa cancela a decisão sem reinvocar o orquestrador', async () => {
+test('cli:stop na conversa encerra o run que espera a troca; a próxima mensagem abre outro', async () => {
+  let runCounter = 0
   const { runner, calls } = createSwitchHarness({
-    validateSpawnAgent: () =>
-      choice(CODEX_MODEL, 'provider-fallback', { fallbackFromCliType: 'claude' }),
+    idGenerator: () => `run-${(runCounter += 1)}`,
+    validateSpawnAgent: ({ event }) =>
+      event.agentId === 'reviewer-1'
+        ? choice(CODEX_MODEL, 'provider-fallback', { fallbackFromCliType: 'claude' })
+        : choice(CLAUDE_MODEL, 'best-available-model'),
   })
   await runner.handleOrchestrationEvent(createSpawnEvent(), createContext())
+  await runner.handleOrchestrationEvent(
+    { type: 'awaiting_agents', agentIds: ['reviewer-1'] },
+    createContext({ runId: 'run-1' }),
+  )
 
-  const cancelled = runner.cancelProviderSwitchesForThread('thread-codex-1')
+  assert.deepEqual(runner.stopRunsForThread('outra-thread'), [])
+  const stopped = runner.stopRunsForThread('thread-codex-1')
   await flushAsync()
 
-  assert.deepEqual(cancelled, ['decision-1'])
+  assert.deepEqual(stopped.map((run) => run.runId), ['run-1'])
+  const run = runner.getRun('run-1')
+  assert.equal(run.status, 'failed', 'o run não fica pendurado até o timeout')
+  assert.equal(run.error, 'Execução interrompida pela pessoa.')
   assert.equal(runner.listProviderSwitches().length, 0)
-  assert.equal(runner.getRun('run-1').agentJobs[0].status, 'error')
   assert.equal(calls.invoke.length, 0, 'a pessoa parou: o orquestrador não volta sozinho')
   assert.equal(calls.spawn.length, 0)
   const resolved = calls.chat.find((event) => event.type === 'provider_switch_resolved')
   assert.equal(resolved.outcome, 'cancelled')
-  assert.deepEqual(runner.cancelProviderSwitchesForThread('outra-thread'), [])
+  assert.equal(resolved.sessionId, 'session-codex-1')
+  assert.deepEqual(
+    calls.records.map((record) => [record.state, record.outcome]),
+    [['refused', 'cancelled']],
+  )
+  assert.equal(
+    calls.chat.some((event) => event.type === 'error'),
+    false,
+    'parar não é erro no chat',
+  )
+  assert.equal(runner.getRunByThreadId('thread-codex-1'), null)
+  assert.deepEqual(runner.stopRunsForThread('thread-codex-1'), [], 'parar de novo não faz nada')
+
+  const next = await runner.handleOrchestrationEvent(
+    createSpawnEvent({ agentId: 'writer-1', prompt: 'Nova tarefa.' }),
+    createContext({ originalPrompt: 'Nova mensagem' }),
+  )
+  assert.equal(next.run.runId, 'run-2', 'a nova mensagem não cai no run parado')
+  assert.deepEqual(next.run.agentJobs.map((job) => job.agentId), ['writer-1'])
+  assert.equal(next.run.originalPrompt, 'Nova mensagem')
+})
+
+test('cli:stop com outro sub-agente rodando: ele terminar não reinvoca o orquestrador', async () => {
+  const { runner, calls } = createSwitchHarness({
+    validateSpawnAgent: ({ event }) =>
+      event.agentId === 'reviewer-1'
+        ? choice(CODEX_MODEL, 'provider-fallback', { fallbackFromCliType: 'claude' })
+        : choice(CLAUDE_MODEL, 'best-available-model'),
+  })
+  await runner.handleOrchestrationEvent(createSpawnEvent(), createContext())
+  await runner.handleOrchestrationEvent(
+    createSpawnEvent({ agentId: 'writer-1' }),
+    createContext({ runId: 'run-1' }),
+  )
+  await runner.handleOrchestrationEvent(
+    { type: 'awaiting_agents', agentIds: ['reviewer-1', 'writer-1'] },
+    createContext({ runId: 'run-1' }),
+  )
+
+  const [stopped] = runner.stopRunsForThread('thread-codex-1')
+  const writer = stopped.agentJobs.find((job) => job.agentId === 'writer-1')
+  assert.deepEqual(
+    { status: writer.status, threadId: writer.threadId },
+    { status: 'running', threadId: 'thread-writer-1' },
+    'quem chamou recebe a thread do sub-agente vivo para pará-lo',
+  )
+
+  const late = await runner.onAgentJobCompleted({ threadId: 'thread-writer-1', result: 'feito' })
+  assert.equal(late.handled, false)
+  assert.equal(calls.invoke.length, 0)
+  assert.equal(runner.getRun('run-1').status, 'failed')
 })
 
 test('fim do run (reset da thread) limpa as decisões dele', async () => {

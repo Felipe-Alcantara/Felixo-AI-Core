@@ -157,7 +157,7 @@ function registerCliIpcHandlers(getMainWindow, dependencies = {}) {
         sendCliRequest,
       }),
     invokeOrchestrator: ({ run, prompt, context }) => {
-      const threadId = `${run.runId}:orchestrator-turn-${run.currentTurn}`
+      const threadId = getOrchestratorTurnThreadId(run)
 
       return sendCliRequest(
         {
@@ -803,46 +803,51 @@ function registerCliIpcHandlers(getMainWindow, dependencies = {}) {
       return { ok: false, message: 'Sessão inválida.' }
     }
 
-    // Parar a conversa também encerra as perguntas de troca de provedor do
-    // run dela: nenhuma resposta tardia pode subir um sub-agente depois.
-    const cancelledProviderSwitches =
-      orchestrationRunner.cancelProviderSwitchesForThread(threadId)
-    stoppedSessions.add(threadId)
-    orchestrationBridge.discardThread(threadId)
-    const killed = cliManager.kill(threadId)
+    // Parar a conversa encerra o run dela (decisão do dono, 11/11/2026): a
+    // pergunta de troca de provedor sai cancelada, nada reinvoca o
+    // orquestrador e o turno reinvocado e os sub-agentes do run param junto.
+    const stoppedRuns = orchestrationRunner.stopRunsForThread(threadId)
+    const runThreadIds = collectRunProcessThreadIds(stoppedRuns, threadId)
+    for (const stoppingThreadId of [threadId, ...runThreadIds]) {
+      orchestrationBridge.discardThread(stoppingThreadId)
+    }
+    const killed = stopCliProcess(threadId)
+    const killedRunThreadIds = runThreadIds.filter(stopCliProcess)
+    const stopped = killed || stoppedRuns.length > 0
     const targetWebContents = getTargetWebContents(getMainWindow, event.sender)
     logQaEvent({
-      level: killed ? 'info' : 'warn',
+      level: stopped ? 'info' : 'warn',
       scope: 'cli:stop',
       sessionId: threadId,
-      message: killed ? 'Stop signal sent.' : 'No process found to stop.',
+      message: stopped ? 'Stop signal sent.' : 'No process found to stop.',
       details: {
         streamSessionId,
-        cancelledProviderSwitches: cancelledProviderSwitches.length,
+        stoppedRunIds: stoppedRuns.map((run) => run.runId),
+        killedRunThreadIds,
       },
     })
 
-    if (killed) {
-      sendTerminalEvents(targetWebContents, threadId, [
-        {
-          source: 'system',
-          kind: 'lifecycle',
-          severity: 'warn',
-          title: 'Interrompido',
-          chunk: 'Execução interrompida pelo usuário.',
-        },
-      ])
+    if (stopped) {
+      for (const stoppedThreadId of [threadId, ...killedRunThreadIds]) {
+        sendTerminalEvents(targetWebContents, stoppedThreadId, [
+          {
+            source: 'system',
+            kind: 'lifecycle',
+            severity: 'warn',
+            title: 'Interrompido',
+            chunk: 'Execução interrompida pelo usuário.',
+          },
+        ])
+      }
       sendCliEvent(targetWebContents, {
         type: 'done',
         sessionId: streamSessionId,
         threadId,
         stopped: true,
       })
-    } else {
-      stoppedSessions.delete(threadId)
     }
 
-    return { ok: killed }
+    return { ok: stopped }
   })
 
   ipcMain.handle('cli:reset-thread', (event, params) => {
@@ -1101,6 +1106,35 @@ function getTargetWebContents(getMainWindow, fallbackWebContents) {
   return fallbackWebContents
 }
 
+// O turno 1 roda na thread da conversa; os reinvocados, cada um na sua.
+function getOrchestratorTurnThreadId(run) {
+  return `${run.runId}:orchestrator-turn-${run.currentTurn}`
+}
+
+/** Threads que podem ter processo vivo nos runs parados: turno e sub-agentes. */
+function collectRunProcessThreadIds(runs, conversationThreadId) {
+  return runs
+    .flatMap((run) => [
+      getOrchestratorTurnThreadId(run),
+      ...run.agentJobs
+        .filter((job) => job.status === 'running')
+        .map((job) => job.threadId),
+    ])
+    .filter((threadId) => threadId && threadId !== conversationThreadId)
+}
+
+/** Para o processo da thread sem que o `close` dele vire erro ou `done`. */
+function stopCliProcess(threadId) {
+  stoppedSessions.add(threadId)
+
+  if (cliManager.kill(threadId)) {
+    return true
+  }
+
+  stoppedSessions.delete(threadId)
+  return false
+}
+
 function spawnOrchestrationAgent({
   run,
   event,
@@ -1230,6 +1264,7 @@ function createOrchestrationStatusResponse(orchestrationRunner, params = {}) {
 }
 
 module.exports = {
+  collectRunProcessThreadIds,
   collectThreadFamily,
   createOrchestrationModel,
   createOrchestrationStatusResponse,

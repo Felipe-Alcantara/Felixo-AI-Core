@@ -372,7 +372,10 @@ com de → para (provedor e modelo), o motivo, a regra, o prazo e o custo ("muda
 provedor e de conta de cobrança; roda no login do sistema do destino"), com
 **Trocar para ‹provedor›** e **Não trocar**. Enquanto isso, a linha de status diz
 "Aguardando sua confirmação…". Sem resposta em 10 minutos, vale como recusa: a
-tarefa falha com uma mensagem clara e nenhum provedor é trocado. Trocas dentro da
+tarefa falha com uma mensagem clara e nenhum provedor é trocado. Clicar em
+**Parar** na conversa encerra a orquestração inteira: a pergunta sai cancelada,
+os sub-agentes que ainda rodam param e o orquestrador não volta sozinho depois; a
+próxima mensagem começa do zero. Trocas dentro da
 mesma família (outro modelo, ou Codex → Codex App Server) seguem sem pergunta. O
 orquestrador continua no Login do sistema e não usa as contas da cadeia.
 
