@@ -1857,3 +1857,7 @@ Estado: concluído (deploy no adendo).
 macOS, Ubuntu e Ubuntu ARM e no smoke do canvas. Na sessão C saíram "C4 … faixa "bloco fixo" …: ok" e "C10 reload sem reenvio
 (pty:write 105 → 105) e a faixa do bloco fixo continua: ok", então o C4 que falha na máquina local passa no Ubuntu. O Release gate
 (run 43259203561) e o Release (run 43259243823, 13:29–13:37) publicaram a `v0.1.534` nos três sistemas.
+
+**Adendo (2026-11-12, 13:58): inventário.** O inventário ainda dizia que "Dispensar" só limpava a detecção local; `a8a0835`
+corrige a frase (agora avisa o main pelo `account-chain:dismiss-detection`) e regenera o `INVENTARIO-CANVAS.md`. CI 43261085296
+(13:39–13:45) verde, Release gate 43262206665 e Release 43262253317 (13:46–13:55) verdes: `v0.1.535`.
