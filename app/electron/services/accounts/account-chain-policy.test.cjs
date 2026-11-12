@@ -522,6 +522,12 @@ test('fim da espera: medição e texto, vale o mais tarde e os dois voltam', () 
   assert.equal(earlier.untilAt, iso(NOW + 2 * HOUR))
   assert.equal(earlier.untilSource, 'medicao')
   assert.equal(earlier.textUntilAt, iso(NOW + 30 * MIN))
+
+  // O que perdeu vira o fim alternativo, com a fonte dele: é o que a espera grava e a UI mostra.
+  assert.deepEqual([later.alternativeUntilAt, later.alternativeUntilSource], [iso(NOW + 2 * HOUR), 'medicao'])
+  assert.deepEqual([earlier.alternativeUntilAt, earlier.alternativeUntilSource], [iso(NOW + 30 * MIN), 'texto'])
+  const onlyText = resolveCooldownEnd({ providerId: 'codex', failureClass: 'limit', detectedAtMs: NOW, nowMs: NOW, resetText: 'try again in 3 hours' })
+  assert.deepEqual([onlyText.alternativeUntilAt, onlyText.alternativeUntilSource], [null, null])
 })
 
 test('fim da espera: leitura a mais de 8 dias é inválida e cai para a fonte seguinte', () => {

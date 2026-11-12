@@ -158,3 +158,29 @@ test('a migration 017 (cadeia de contas) sobre um banco na versao 16 com dados: 
     }
   })
 })
+
+test('a migration 021 (fim alternativo da espera) sobre um banco na versao 20 com uma espera: a linha fica e o alternativo nasce vazio', () => {
+  comDiretorioTemporario((diretorio) => {
+    const todas = listStorageMigrations()
+    assert.ok(todas.some((migration) => migration.version === 21), 'a migration 021 precisa existir')
+    const ate20 = todas.filter((migration) => migration.version <= 20)
+
+    const antigo = createStorageDatabase({ databaseDir: diretorio, migrations: ate20 })
+    antigo.connection
+      .prepare(
+        `INSERT INTO account_cooldowns (account_id, provider_id, failure_class, detected_at, until_at, until_source)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run('conta-pessoal', 'codex', 'limit', '2026-11-12T12:00:00.000Z', '2026-11-12T15:00:00.000Z', 'texto')
+    antigo.close()
+
+    const atualizado = createStorageDatabase({ databaseDir: diretorio, migrations: todas })
+    try {
+      const espera = createAccountChainRepository(atualizado).getCooldown('conta-pessoal')
+      assert.equal(espera.untilAt, '2026-11-12T15:00:00.000Z', 'a espera de antes da atualizacao mudou')
+      assert.deepEqual([espera.alternativeUntilAt, espera.alternativeUntilSource], [null, null])
+    } finally {
+      atualizado.close()
+    }
+  })
+})

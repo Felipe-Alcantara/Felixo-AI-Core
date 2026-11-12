@@ -311,6 +311,25 @@ test('espera: nunca encurta uma espera ativa; mais tarde vence; até checagem ve
   })
 })
 
+test('espera: o fim alternativo (medição × texto) é gravado com a fonte e acompanha a espera que vence', () => {
+  withRepository((repo) => {
+    assert.deepEqual(
+      [repo.upsertCooldown(limitCooldown()).cooldown.alternativeUntilAt, repo.getCooldown('conta-a').alternativeUntilSource],
+      [null, null],
+    )
+    const alternative = { alternativeUntilAt: '2026-09-28T15:00:00.000Z', alternativeUntilSource: 'medicao' }
+    const later = repo.upsertCooldown(limitCooldown({ untilAt: '2026-09-28T17:00:00.000Z', ...alternative }))
+    assert.deepEqual([later.cooldown.alternativeUntilAt, later.cooldown.alternativeUntilSource], ['2026-09-28T15:00:00.000Z', 'medicao'])
+
+    // Uma detecção que não estende a espera não mexe no fim alternativo dela.
+    repo.upsertCooldown(limitCooldown({ untilAt: '2026-09-28T16:00:00.000Z' }))
+    assert.equal(repo.getCooldown('conta-a').alternativeUntilAt, '2026-09-28T15:00:00.000Z')
+
+    assert.throws(() => repo.upsertCooldown(limitCooldown({ untilAt: '2026-09-28T18:00:00.000Z', alternativeUntilAt: '2026-09-28T15:00:00.000Z', alternativeUntilSource: 'padrao' })), /Valor inválido/)
+    assert.throws(() => repo.upsertCooldown(limitCooldown({ untilAt: '2026-09-28T18:00:00.000Z', alternativeUntilAt: '2026-09-28T15:00:00.000Z' })), /fonte/)
+  })
+})
+
 test('espera: liberar com revisão velha não aplica; liberada, uma detecção nova abre outra espera', () => {
   withRepository((repo) => {
     repo.upsertCooldown(limitCooldown())

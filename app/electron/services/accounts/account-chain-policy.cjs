@@ -315,7 +315,10 @@ function cooldownBlocks(cooldown, loginCheck, nowMs) {
  * ("continuing automatically at …"), para o registro de trocas avisar que o
  * terminal antigo pode retomar.
  *
- * @returns {{ untilAt: string | null, untilSource: 'medicao' | 'texto' | 'texto_fuso_local' | 'padrao' | 'checagem', estimated: boolean, measuredUntilAt: string | null, textUntilAt: string | null, autoResumeAt: string | null }}
+ * `alternativeUntilAt` é o horário da fonte que perdeu quando medição e texto
+ * divergem, com a fonte dele (`alternativeUntilSource`): a espera grava os dois.
+ *
+ * @returns {{ untilAt: string | null, untilSource: 'medicao' | 'texto' | 'texto_fuso_local' | 'padrao' | 'checagem', estimated: boolean, measuredUntilAt: string | null, textUntilAt: string | null, autoResumeAt: string | null, alternativeUntilAt: string | null, alternativeUntilSource: 'medicao' | 'texto' | 'texto_fuso_local' | null }}
  */
 function resolveCooldownEnd({ providerId, failureClass, detectedAtMs, nowMs, sample = null, resetText = null, localTimeZone }) {
   if (failureClass !== 'limit') {
@@ -326,6 +329,8 @@ function resolveCooldownEnd({ providerId, failureClass, detectedAtMs, nowMs, sam
       measuredUntilAt: null,
       textUntilAt: null,
       autoResumeAt: null,
+      alternativeUntilAt: null,
+      alternativeUntilSource: null,
     }
   }
 
@@ -348,10 +353,30 @@ function resolveCooldownEnd({ providerId, failureClass, detectedAtMs, nowMs, sam
   const autoResumeAt = textMs !== null && text.autoResume ? textUntilAt : null
 
   if (measuredMs !== null && (textMs === null || measuredMs >= textMs)) {
-    return { untilAt: measuredUntilAt, untilSource: 'medicao', estimated: false, measuredUntilAt, textUntilAt, autoResumeAt }
+    const diverges = textMs !== null && textMs !== measuredMs
+    return {
+      untilAt: measuredUntilAt,
+      untilSource: 'medicao',
+      estimated: false,
+      measuredUntilAt,
+      textUntilAt,
+      autoResumeAt,
+      alternativeUntilAt: diverges ? textUntilAt : null,
+      alternativeUntilSource: diverges ? text.source : null,
+    }
   }
   if (textMs !== null) {
-    return { untilAt: textUntilAt, untilSource: text.source, estimated: false, measuredUntilAt, textUntilAt, autoResumeAt }
+    // Aqui a medição, se existe, termina antes do texto.
+    return {
+      untilAt: textUntilAt,
+      untilSource: text.source,
+      estimated: false,
+      measuredUntilAt,
+      textUntilAt,
+      autoResumeAt,
+      alternativeUntilAt: measuredUntilAt,
+      alternativeUntilSource: measuredUntilAt ? 'medicao' : null,
+    }
   }
 
   const startMs = Number.isFinite(detectedAtMs) ? detectedAtMs : nowMs
@@ -363,6 +388,8 @@ function resolveCooldownEnd({ providerId, failureClass, detectedAtMs, nowMs, sam
     measuredUntilAt: null,
     textUntilAt: null,
     autoResumeAt: null,
+    alternativeUntilAt: null,
+    alternativeUntilSource: null,
   }
 }
 

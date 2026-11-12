@@ -53,6 +53,8 @@ const SETTINGS_ROW_ID = 1
 const ID_MAX_CHARS = 200
 const SHORT_TEXT_MAX_CHARS = 64
 const CHOSEN_BY_VALUES = Object.freeze(['chain', 'person'])
+// O fim alternativo só existe quando medição e texto divergem (migration 021).
+const ALTERNATIVE_UNTIL_SOURCES = Object.freeze(['medicao', 'texto', 'texto_fuso_local'])
 const OPEN_STATES_SQL = OPEN_SWITCH_EVENT_STATES.map((state) => `'${state}'`).join(', ')
 
 // ── Validação de formato ────────────────────────────────────────────────────
@@ -210,6 +212,8 @@ function mapCooldownRow(row) {
     detectedAt: row.detected_at,
     untilAt: row.until_at ?? null,
     untilSource: row.until_source,
+    alternativeUntilAt: row.alternative_until_at ?? null,
+    alternativeUntilSource: row.alternative_until_source ?? null,
     evidence: row.evidence ?? null,
     evidenceHash: row.evidence_hash ?? null,
     sessionId: row.session_id ?? null,
@@ -547,9 +551,14 @@ function createAccountChainRepository(database) {
       detectedAt: requireIso(input.detectedAt, 'detectedAt'),
       untilAt: optionalIso(input.untilAt, 'untilAt'),
       untilSource: requireEnum(input.untilSource, COOLDOWN_UNTIL_SOURCES, 'untilSource'),
+      alternativeUntilAt: optionalIso(input.alternativeUntilAt, 'alternativeUntilAt'),
+      alternativeUntilSource: optionalEnum(input.alternativeUntilSource, ALTERNATIVE_UNTIL_SOURCES, 'alternativeUntilSource'),
       evidence: optionalText(input.evidence, 'evidence', EVIDENCE_MAX_CHARS),
       evidenceHash: optionalText(input.evidenceHash, 'evidenceHash', SHORT_TEXT_MAX_CHARS),
       sessionId: optionalText(input.sessionId, 'sessionId'),
+    }
+    if ((cooldown.alternativeUntilAt === null) !== (cooldown.alternativeUntilSource === null)) {
+      throw new Error('Fim alternativo da espera sem horário ou sem fonte.')
     }
 
     return inImmediateTransaction(connection, () => {
@@ -561,8 +570,9 @@ function createAccountChainRepository(database) {
         .prepare(
           `INSERT INTO account_cooldowns
              (account_id, provider_id, failure_class, detected_at, until_at, until_source,
+              alternative_until_at, alternative_until_source,
               evidence, evidence_hash, session_id, released_at, released_by, revision)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 1)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 1)
            ON CONFLICT(account_id) DO UPDATE SET
              provider_id = excluded.provider_id,
              failure_class = excluded.failure_class,
@@ -575,6 +585,8 @@ function createAccountChainRepository(database) {
              END,
              until_at = excluded.until_at,
              until_source = excluded.until_source,
+             alternative_until_at = excluded.alternative_until_at,
+             alternative_until_source = excluded.alternative_until_source,
              evidence = excluded.evidence,
              evidence_hash = excluded.evidence_hash,
              session_id = excluded.session_id,
@@ -589,6 +601,8 @@ function createAccountChainRepository(database) {
           cooldown.detectedAt,
           cooldown.untilAt,
           cooldown.untilSource,
+          cooldown.alternativeUntilAt,
+          cooldown.alternativeUntilSource,
           cooldown.evidence,
           cooldown.evidenceHash,
           cooldown.sessionId,
@@ -995,7 +1009,8 @@ function createAccountChainRepository(database) {
               .prepare(
                 `UPDATE account_cooldowns
                  SET provider_id = ?, failure_class = ?, detected_at = ?, until_at = ?,
-                     until_source = ?, evidence = ?, evidence_hash = ?, session_id = ?,
+                     until_source = ?, alternative_until_at = ?, alternative_until_source = ?,
+                     evidence = ?, evidence_hash = ?, session_id = ?,
                      released_at = ?, released_by = ?, revision = ?
                  WHERE account_id = ?`,
               )
@@ -1005,6 +1020,8 @@ function createAccountChainRepository(database) {
                 duplicateCooldown.detected_at,
                 duplicateCooldown.until_at,
                 duplicateCooldown.until_source,
+                duplicateCooldown.alternative_until_at,
+                duplicateCooldown.alternative_until_source,
                 duplicateCooldown.evidence,
                 duplicateCooldown.evidence_hash,
                 duplicateCooldown.session_id,
