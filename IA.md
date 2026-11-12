@@ -1694,3 +1694,56 @@ passou, e o Release gate (run 43127180224) e o Release (run 43127212095, 21:25�
 abre outro" (run `failed` com "Execução interrompida pela pessoa.", nenhuma reinvocação, a pergunta sai `cancelled`, outra thread
 não é afetada). Como a página da task não abria do lado do agente que fez a mudança, a evidência, o relatório do dia e a conclusão
 foram registrados no Notion por esta sessão, sem mudar código.
+
+---
+
+## 2026-11-12 — Contas: o mesmo limite depois de "Agora não" avisa no bloco, e a troca sai só a pedido
+
+**Agente / repositório.** Resolver hotfix — Felixo-AI-Core. Task `3e991f95-497e-81c9-a900-f0d5585956f9` (aberta no teste de
+ponta a ponta da cadeia, sessão C do PR #97).
+
+**Contexto.** Depois de "Agora não", o mesmo limite na mesma sessão não gerava proposta nem faixa: só a saída do terminal o
+mostrava, e a pessoa podia esquecer que recusou e perder a opção de continuar em outra conta.
+
+**Medido (antes).** Havia duas camadas de silêncio, não uma. O serviço silencia a evidência recusada (I6). Antes dele, a vigia do
+terminal guarda cada `evidence_hash` da sessão (LRU de 32) e nunca o emite de novo, então a linha repetida pela CLI nem chegava ao
+serviço. Só uma vigia nova (o PTY reaberto no mesmo bloco) a deixava passar. Mexer só no serviço não mudaria nada no app.
+
+**Decisões do Felipe (Trilha B, 12/11/2026).** Opção B: aviso discreto no bloco, sem proposta automática. **Trocar de conta**
+sob demanda abre a proposta e o diálogo dela. O aviso fica só no bloco (nada nas notificações). As alternativas eram manter o
+silêncio (a troca fica em Limites e uso) ou reabrir a proposta depois de X minutos.
+
+**O que mudou.**
+- Vigia (`account-output-watcher.cjs`): `markSubmit(outputChars)` arma a vigia. Se a mesma evidência aparecer no que a CLI imprimiu
+  depois do Enter, ela sai de novo uma vez, marcada `repeat`. Redesenho sem Enter continua mudo. O `PtyProcessManager` chama o
+  `markSubmit` em todo `write` com Enter fora de colagem entre colchetes (`scanSubmittedInput`) e passa `readOutputChars`.
+- Serviço: o `repeat` só responde quando a última proposta daquela evidência foi recusada com "Agora não". Todo o resto (proposta
+  aberta, "Não era limite", rede, ambíguo, bloco fixo) segue valendo uma vez por sessão, como antes. A recusa repetida publica a
+  detecção `declined_again`, com um id guardado por sessão. `requestSwitch` abre a proposta só a pedido e vale uma vez por aviso. A
+  saída da sessão e o reinício limpam esses ids.
+- IPC `account-chain:request-switch` (`{ detectionId }` → `{ ok, proposalId }`), preload e tipos. A view manda `declinedAt`.
+- Faixa do bloco: "Limite de uso da conta Pessoal de novo às 14:40 · você recusou a troca às 14:33", tom informativo, com
+  **Trocar de conta** e **Dispensar**. O clique abre o diálogo da proposta nova.
+- Smoke da sessão C: etapa C6b (o mesmo gatilho no bloco recusado → faixa sem proposta nem diálogo → **Trocar de conta** abre o
+  diálogo → Esc fecha sem `pty:spawn`).
+- Política (Confirmação), guia do usuário, plano da cadeia (vigia, I6, canal novo) e inventário (ação, canal, lacuna removida).
+
+**Decisões do agente.** "De novo" é a CLI imprimir a linha depois de um Enter da pessoa. Um redesenho não conta, porque reabrir a
+faixa a cada redesenho a faria voltar depois do "Dispensar". O `repeat` não cria proposta em nenhum caso, só o aviso da recusa,
+para não mudar o que já valia nos outros estados.
+
+**Validação.**
+- Testes que falhavam antes da mudança: o do serviço ("depois de Agora não, o mesmo limite avisa no bloco…") e o da vigia ("o
+  mesmo aviso impresso de novo depois de um Enter…"), conferidos com a mudança fora. Novos: o `repeat` só responde à recusa
+  (serviço), o canal `request-switch` de ponta a ponta com o runtime real (formato, `INVALID`, `NOT_PENDING` na 2ª vez,
+  proposta `opened` antes da resposta), o Enter no manager (inclusive o Enter dentro de colagem, que não conta) e a faixa
+  (texto, tom, ações).
+- `npm test`: 3234 testes, 3224 passam, 10 pulados, 0 falham. vitest: 3461 passam. `tsc -b`, `eslint .` e `vite build` limpos;
+  inventário regenerado.
+
+**Não validado.** A sessão C do smoke não roda nesta máquina (Windows). Ela para no C4 ("bloco fixo") porque o bloco nasce na
+borda da área visível e o terminal fica estreito demais para a frase. O `main` sem esta mudança falha igual, então o problema é
+local e anterior. A etapa C6b fica com o CI (Ubuntu). O botão não foi clicado no app com contas reais. Numa TUI que redesenha o
+aviso inteiro a cada Enter, cada Enter conta como repetição. Isso só mostra de novo a faixa da recusa, nunca uma proposta.
+
+Estado: concluído (deploy no adendo).
