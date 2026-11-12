@@ -145,7 +145,9 @@ presumida como assinatura.
 
 Fonte do horário, em ordem: medição atual, texto impresso pela CLI (com o fuso
 impresso, ou o fuso local quando não houver) e, por fim, o padrão estimado (5 h
-no Claude, 15 min nos demais). Se medição e texto divergirem, vale o mais tarde.
+no Claude, 15 min nos demais). Se medição e texto divergirem, vale o mais tarde,
+e o outro horário fica gravado na espera com a fonte dele: a tela mostra os dois,
+também depois de recarregar a janela ou reabrir o app (12/11/2026).
 Uma leitura a mais de 8 dias é descartada. Reiniciar o app não tira a conta da
 espera. "Não era limite" libera a espera e silencia aquela evidência. Depois que
 o prazo de uma espera de limite vence, ela só sai com uma checagem de login
@@ -157,6 +159,9 @@ por "Conferir login" (decisão de 11/11/2026).
 - A proposta **nunca** abre um modal sozinha: aparece como faixa no bloco e como
   item fixo nas notificações. Um Enter digitado em outro terminal não confirma
   nada.
+- As faixas dos blocos (aviso, "Tratar como limite?", "você recusou a troca")
+  continuam depois de recarregar a janela, até a pessoa agir sobre elas ou o
+  bloco encerrar. Fechar o app limpa todas: os terminais morrem com ele.
 - O diálogo mostra origem, destino, motivo, horário da detecção, a linha que a
   CLI imprimiu (redigida), o fim da espera com a fonte, os candidatos aptos com
   o motivo da posição, os que estão fora com o motivo, e o custo: o tamanho do

@@ -581,7 +581,7 @@ Se nenhuma razão bloqueia, a conta está **apta**. Toda razão tem texto em pt-
   - São **no máximo 3 checagens por proposta**, com **no máximo 2 CLIs ao mesmo tempo**.
   - Há dedupe por conta, com um mapa de promessas em voo.
   - O timeout é de 30 s (`COMMAND_TIMEOUT_MS`, `agent-usage-service.cjs:30`).
-  - **Nunca** roda em timer de fundo. Há também o botão "Conferir login agora".
+  - **Nunca** roda em timer de fundo. Há também o botão "Conferir login agora", que sempre roda a CLI (`force`): a amostra do painel com login de até 15 min só vale na busca da proposta (12/11/2026).
 - **Identidade.** O `identityKey` resultante é comparado com o `identityKey` da conta em `agent_usage_accounts`. Igual vale `matched`, ausente na conta vale `unbound`, diferente vale `different`. Igual ao de outro membro vale `duplicate`.
 - **Limite declarado [INFERIDO].** `codex login status` e `claude auth status` provam que a credencial local existe, não que o servidor a aceita. O diálogo diz "login conferido pela CLI há N min (checagem local)". Uma falha de auth no bloco novo volta ao registro como `post_switch_failure` (§4.1).
 
@@ -788,6 +788,9 @@ A correção vale para toda passagem, porque é um bug.
 
 - O reattach já não reenvia texto (`terminal-session-store.ts:890-893`).
 - No main, o reattach com `accountId` diferente lança um erro tipado, "A sessão viva deste bloco está em outra conta". O card oferece reiniciar na conta do bloco. Ambiente antigo nunca é reaproveitado.
+- As faixas dos blocos sobrevivem ao reload (12/11/2026). O serviço guarda a última detecção publicada de cada sessão, com o mesmo `id` e `detectedAt` do push, e o `get-state` a devolve em `detections`. A proposta aberta não entra (tem faixa própria); a pergunta "Tratar como limite?" e o aviso de "Agora não" só voltam enquanto ainda dá para responder. "Dispensar" chama `account-chain:dismiss-detection` e o main esquece a detecção. A sessão que encerra e a recuperação no início limpam tudo. No renderer, a faixa mais nova da sessão vence e uma dispensada na janela não volta, porque o push e a resposta do `get-state` não têm ordem garantida.
+- O fim alternativo da espera (medição × texto) é gravado na própria espera (migration 021), então o "(medição: 15:00)" ao lado do horário que vale também volta depois do reload e de reabrir o app.
+- Uma segunda instância no mesmo perfil não chega à recuperação: sai na trava de instância única (`core/single-instance.cjs`), que vem antes do `recoverOnStartup` no `main.cjs` (teste de contrato em `account-chain-ipc-handlers.test.cjs`).
 
 ### 9.5 Isolamento: credenciais herdadas **(muda comportamento)**
 
