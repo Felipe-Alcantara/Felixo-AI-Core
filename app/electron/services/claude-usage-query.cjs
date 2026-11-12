@@ -2,8 +2,7 @@
 
 const os = require('node:os')
 const platform = require('../core/platform/index.cjs')
-const { createCliEnv } = require('./cli-process-manager.cjs')
-const { buildAccountProcessEnv } = require('./cli-account-profiles.cjs')
+const { createAccountCliEnv } = require('./cli-process-manager.cjs')
 const { redactSecrets } = require('./official-cli-account-status.cjs')
 const { parseClaudeReset } = require('./accounts/reset-time.cjs')
 const {
@@ -65,7 +64,7 @@ function createClaudeUsageQuery({
     signal = null,
   } = {}) {
     return new Promise((resolve) => {
-      const queryEnv = createCliEnv(buildAccountProcessEnv(process.env, { providerId: 'claude', profileEnv: accountEnv }))
+      const queryEnv = createAccountCliEnv({ providerId: 'claude', profileEnv: accountEnv })
       // A quota check must not create a resumable conversation just to read a
       // local status view. This flag is supported by Claude Code and also
       // makes the query safe to repeat from the refresh button.

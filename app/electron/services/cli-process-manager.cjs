@@ -5,6 +5,7 @@ const path = require('node:path')
 const platform = require('../core/platform/index.cjs')
 const { getNvmNodeBinCandidates } = require('../core/platform/nvm.cjs')
 const { getAppPaths } = require('../core/app-paths.cjs')
+const { buildAccountProcessEnv } = require('./cli-account-profiles.cjs')
 const {
   getManagedCliLayout,
   getManagedCliPathCandidates,
@@ -185,6 +186,23 @@ function createCliEnv(baseEnv = process.env) {
   return nextEnv
 }
 
+/**
+ * Ambiente de todo processo de uma conta: o terminal dela e o que o painel, a
+ * cadeia e as consultas ao vivo rodam nela. Com perfil, é o ambiente do app
+ * (PATH montado pela home real) sem as credenciais herdadas e com o perfil por
+ * cima; sem perfil é o Login do sistema, e o ambiente da pessoa segue intacto.
+ * Um caminho só, para o que é conferido ser o que será lançado (decisão do
+ * Felipe, 12/11/2026): montar o PATH depois do perfil o calculava pela home
+ * do perfil quando ela troca o HOME (Gemini).
+ *
+ * @param {{ providerId?: string | null, profileEnv?: Record<string, string> }} profile
+ * @param {string} [platformName]
+ * @returns {Record<string, string | undefined>}
+ */
+function createAccountCliEnv({ providerId = null, profileEnv = {} } = {}, platformName = process.platform) {
+  return buildAccountProcessEnv(createCliEnv(), { providerId, profileEnv }, platformName)
+}
+
 function collectCliPathParts(baseEnv) {
   const pathKey = platform.getPathEnvKey(baseEnv)
   const tag = (origin) => (candidate) => ({ origin, path: candidate })
@@ -357,6 +375,7 @@ function directoryExists(candidate) {
 module.exports = {
   CLI_PATH_ORIGINS,
   CliProcessManager,
+  createAccountCliEnv,
   createCliEnv,
   describeCliPath,
 }

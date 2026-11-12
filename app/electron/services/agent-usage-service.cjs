@@ -6,8 +6,7 @@ const {
   listOfficialCliCatalog,
   runBufferedCommand,
 } = require('./official-cli-service.cjs')
-const { createCliEnv } = require('./cli-process-manager.cjs')
-const { buildAccountProcessEnv } = require('./cli-account-profiles.cjs')
+const { createAccountCliEnv, createCliEnv } = require('./cli-process-manager.cjs')
 const {
   getAgentUsageSource,
   listAgentUsageSources,
@@ -27,7 +26,6 @@ const {
   parseAgentUsage,
 } = require('./agent-usage-report.cjs')
 const { runLocalProbe } = require('./agent-usage-local-probes.cjs')
-const { applyProfileEnv } = require('./cli-account-profiles.cjs')
 const {
   createAgentUsageRepository,
 } = require('./storage/agent-usage-repository.cjs')
@@ -853,9 +851,7 @@ async function collectProviderSnapshot({
     probe,
     probeOptions,
     signal,
-    env: targetAccountId
-      ? createProfileCommandEnv({ providerId, profileEnv })
-      : createCommandEnv(providerId, profileEnv),
+    env: createAccountCliEnv({ providerId, profileEnv }),
   })
 
   // A rodada foi cancelada com o comando de login em voo: o resultado dele é
@@ -1085,7 +1081,7 @@ async function checkAccountAuth({
   runCommand = runBufferedCommand,
   probe = runLocalProbe,
   probeOptions,
-  env = createCommandEnv(),
+  env = createCliEnv(),
   timeoutMs = COMMAND_TIMEOUT_MS,
   clock = () => Date.now(),
   signal,
@@ -1214,7 +1210,7 @@ async function runUsageCommand({ source, providerId, runCommand, profileEnv = {}
       command: source.usage.command,
       args: [...(source.usage.args ?? [])],
       cwd: os.homedir(),
-      env: createCommandEnv(providerId, profileEnv),
+      env: createAccountCliEnv({ providerId, profileEnv }),
       timeoutMs: COMMAND_TIMEOUT_MS,
       signal,
     })
@@ -1248,7 +1244,7 @@ async function runLiveUsageCommand({
       command: source.usage.command,
       args: [...(source.usage.args ?? [])],
       cwd: os.homedir(),
-      env: createCommandEnv(providerId, profileEnv),
+      env: createAccountCliEnv({ providerId, profileEnv }),
       timeoutMs: COMMAND_TIMEOUT_MS,
       signal,
     })
@@ -1309,24 +1305,6 @@ function resolveLiveQuery(queryLiveUsage, liveQueryName) {
   return typeof queryLiveUsage[liveQueryName] === 'function'
     ? queryLiveUsage[liveQueryName]
     : null
-}
-
-/**
- * Conta com perfil: sem as credenciais que o app herdou (com
- * `ANTHROPIC_API_KEY` ou `CLAUDE_CODE_USE_BEDROCK` no ambiente, o status
- * leria outra conta, não a do perfil). Login do sistema: o ambiente da pessoa.
- */
-function createCommandEnv(providerId, profileEnv = {}) {
-  return createCliEnv(buildAccountProcessEnv(process.env, { providerId, profileEnv }))
-}
-
-/**
- * Ambiente de um comando que roda NA conta com perfil: o mesmo que o terminal
- * dela recebe no spawn (`pty-process-manager.cjs`), sem as credenciais de API
- * herdadas do app. Assim o que é conferido é o que será lançado.
- */
-function createProfileCommandEnv({ providerId, profileEnv = {} }, platformName = process.platform) {
-  return applyProfileEnv(createCliEnv(), { providerId, profileEnv }, platformName)
 }
 
 function saveProviderSamples({
@@ -1904,6 +1882,5 @@ module.exports = {
   buildDashboard,
   checkAccountAuth,
   collectProviderSnapshot,
-  createProfileCommandEnv,
   resolveObservedIdentity,
 }

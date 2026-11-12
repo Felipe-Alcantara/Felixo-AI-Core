@@ -22,10 +22,7 @@ const { PtyProcessManager } = require('./services/pty-process-manager.cjs')
 const { createCliAccountStore } = require('./services/cli-account-store.cjs')
 const { createAccountChainRepository } = require('./services/storage/account-chain-repository.cjs')
 const { createAgentUsageRepository } = require('./services/storage/agent-usage-repository.cjs')
-const {
-  applyProfileEnv,
-  listPresentInheritedCredentialNames,
-} = require('./services/cli-account-profiles.cjs')
+const { listPresentInheritedCredentialNames } = require('./services/cli-account-profiles.cjs')
 const {
   createClaudeApiSessionManager,
 } = require('./services/claude-api/claude-api-session-manager.cjs')
@@ -139,7 +136,7 @@ const {
   describeCloudSessionEvent,
 } = require('./services/cloud-session/cloud-session-service.cjs')
 const { registerCloudSessionIpcHandlers } = require('./services/cloud-session-ipc-handlers.cjs')
-const { createCliEnv } = require('./services/cli-process-manager.cjs')
+const { createAccountCliEnv, createCliEnv } = require('./services/cli-process-manager.cjs')
 const { createStorageDatabase } = require('./services/storage/sqlite-database.cjs')
 const { createSettingsRepository } = require('./services/storage/settings-repository.cjs')
 const { createTerminalLogStore } = require('./services/terminal-log-store.cjs')
@@ -981,10 +978,7 @@ app.whenReady().then(async () => {
       return cliAccounts.validateAccount(accountId, 'claude')
     },
     buildAccountEnv: (accountId) =>
-      applyProfileEnv(createCliEnv(), {
-        providerId: 'claude',
-        profileEnv: cliAccounts.buildEnv(accountId, 'claude'),
-      }),
+      createAccountCliEnv({ providerId: 'claude', profileEnv: cliAccounts.buildEnv(accountId, 'claude') }),
     emit: (sessionId, event) => {
       const window = getMainWindow()
       if (window && !window.isDestroyed()) {

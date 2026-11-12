@@ -30,11 +30,10 @@ const path = require('node:path')
 const fs = require('node:fs')
 const platform = require('../core/platform/index.cjs')
 const { resolveCommandPath } = require('../core/cli-detector.cjs')
-const { createCliEnv } = require('./cli-process-manager.cjs')
+const { createAccountCliEnv } = require('./cli-process-manager.cjs')
 const { discoverAgentSession, isSafeSessionId, selectDiscoveryContext } = require('./agent-session-discovery.cjs')
 const { normalizeCliVersion } = require('./agent-cli-versions.cjs')
 const { validatePtyAccountSelection } = require('./pty-account-validation.cjs')
-const { applyProfileEnv } = require('./cli-account-profiles.cjs')
 const { ensureNodePtySpawnHelperExecutable } = require('./pty-native-assets.cjs')
 const { createNodePtySpawn } = require('./node-pty-windows-kill.cjs')
 
@@ -230,13 +229,7 @@ class PtyProcessManager {
     // do app (senão a CLI cobraria pela chave, não pela conta escolhida). Sem
     // conta escolhida o objeto vem vazio e nada muda: é o login do sistema.
     const accountEnv = this.buildAccountEnv(options.accountId, accountValidation.providerId)
-    const env = accountId
-      ? applyProfileEnv(
-          createCliEnv(),
-          { providerId: accountValidation.providerId, profileEnv: accountEnv },
-          this.platform.name,
-        )
-      : { ...createCliEnv(), ...accountEnv }
+    const env = createAccountCliEnv({ providerId: accountValidation.providerId, profileEnv: accountEnv }, this.platform.name)
     // Rolagem no Claude Code: sem alternate screen o xterm guarda scrollback.
     if (options.classicScreen === true && isClaudeCommandName(options.command)) {
       env.CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN = '1'

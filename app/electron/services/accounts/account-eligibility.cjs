@@ -16,7 +16,7 @@
  *   --json`, `openia key status --json`) e o probe local de identidade, via
  *   `checkAccountAuth`, o mesmo pedaço que o painel usa. A consulta ao vivo de
  *   uso (cara: o `/status` do Claude abre um PTY) não roda;
- * - com o ambiente com que o terminal da conta nasce (`createProfileCommandEnv`:
+ * - com o ambiente com que o terminal da conta nasce (`createAccountCliEnv`:
  *   perfil da conta, sem as chaves de API herdadas do app). O que é conferido
  *   é o que será lançado.
  *
@@ -39,7 +39,8 @@ const {
   SWITCH_LABEL_MAX_CHARS,
 } = require('./account-chain-constants.cjs')
 const { classifyBilling, detectPlanMultiplier } = require('./account-chain-policy.cjs')
-const { checkAccountAuth, createProfileCommandEnv } = require('../agent-usage-service.cjs')
+const { checkAccountAuth } = require('../agent-usage-service.cjs')
+const { createAccountCliEnv } = require('../cli-process-manager.cjs')
 const { getAgentUsageSource } = require('../agent-usage-sources.cjs')
 const { runLocalProbe } = require('../agent-usage-local-probes.cjs')
 const { redactSecrets } = require('../official-cli-account-status.cjs')
@@ -223,7 +224,7 @@ function createAccountEligibilityChecker({
         runCommand,
         probe,
         probeOptions: account.probeOptions,
-        env: createProfileCommandEnv(
+        env: createAccountCliEnv(
           { providerId: account.providerId, profileEnv: account.profileEnv ?? {} },
           platformName,
         ),

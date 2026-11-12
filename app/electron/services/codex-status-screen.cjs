@@ -5,8 +5,7 @@ const os = require('node:os')
 const path = require('node:path')
 const { Terminal } = require('@xterm/headless')
 const platform = require('../core/platform/index.cjs')
-const { createCliEnv } = require('./cli-process-manager.cjs')
-const { buildAccountProcessEnv } = require('./cli-account-profiles.cjs')
+const { createAccountCliEnv } = require('./cli-process-manager.cjs')
 const { redactSecrets } = require('./official-cli-account-status.cjs')
 const {
   createPtyLaunchSpec,
@@ -145,9 +144,7 @@ function createCodexStatusScreenQuery({
         return
       }
 
-      const queryEnv = createCliEnv(
-        buildAccountProcessEnv(process.env, { providerId: 'codex', profileEnv: accountEnv }),
-      )
+      const queryEnv = createAccountCliEnv({ providerId: 'codex', profileEnv: accountEnv })
       const launchCommand = resolvePtyCommand('codex', true, queryEnv, platformAdapter, resolveCodexPath)
       const launch = createPtyLaunchSpec(
         launchCommand,

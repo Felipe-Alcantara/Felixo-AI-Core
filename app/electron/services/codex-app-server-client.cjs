@@ -1,8 +1,7 @@
 'use strict'
 
 const spawnChildProcess = require('cross-spawn')
-const { createCliEnv } = require('./cli-process-manager.cjs')
-const { buildAccountProcessEnv } = require('./cli-account-profiles.cjs')
+const { createAccountCliEnv } = require('./cli-process-manager.cjs')
 
 /**
  * Conversa JSON-RPC com o `codex app-server --stdio` da própria CLI.
@@ -131,7 +130,7 @@ function runCodexAppServerSession({
 
     try {
       child = spawnProcess('codex', ['app-server', '--stdio'], {
-        env: createCliEnv(buildAccountProcessEnv(process.env, { providerId: 'codex', profileEnv: accountEnv })),
+        env: createAccountCliEnv({ providerId: 'codex', profileEnv: accountEnv }),
         stdio: ['pipe', 'pipe', 'pipe'],
         windowsHide: true,
       })
