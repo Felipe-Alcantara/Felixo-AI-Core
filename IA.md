@@ -1909,3 +1909,53 @@ Estado: concluído (deploy no adendo).
 **Adendo (2026-11-12, 16:52): CI e Release.** O CI de `68f2dda` (run 43291537437, 16:34–16:41) passou no Validate de Windows,
 macOS, Ubuntu e Ubuntu ARM e no smoke do canvas. Na sessão C saiu "C4 a prévia da cadeia some ao escolher a conta fixa; …: ok".
 O Release gate (run 43292706405) e o Release (run 43292746227, 16:41–16:49) publicaram a `v0.1.536` nos três sistemas.
+
+## 2026-11-12 — Limites: o painel mede a conta com perfil no mesmo ambiente do terminal dela
+
+**Agente / repositório.** Resolver hotfix — Felixo-AI-Core. Task `3e991f95-497e-810a-8e0f-f8fceb130110` (Pesquisa/Decisão,
+aberta na revisão do PR #97).
+
+**O que foi medido (antes).**
+- Havia dois caminhos de ambiente para uma conta com perfil:
+  - `createProfileCommandEnv`, igual ao spawn do terminal: monta o ambiente do app e depois aplica o perfil. Era usado na
+    checagem de login.
+  - `createCommandEnv` e a mesma montagem repetida no `claude-usage-query`, no `codex-app-server-client` e no
+    `codex-status-screen`: filtravam as credenciais do `process.env` e só depois montavam o PATH. Eram usados nos comandos de
+    uso e nas consultas ao vivo.
+- Script comparando os dois por provedor: Codex e Claude dão ambientes idênticos.
+- No perfil que troca o HOME (Gemini), o segundo caminho calcula as pastas de CLI pela home do perfil. O teste novo mediu que
+  ele perde a `~/.volta/bin` da home real.
+
+**Decisões do Felipe (Trilha B, 12/11/2026).**
+- **Ambiente:** A, o mesmo do terminal ("o que é conferido é o que será lançado"), em vez de B, manter só o filtro de
+  credenciais.
+- **Alcance:** todos os processos de conta, e não só o serviço do painel.
+- **Proteção:** teste painel × terminal por provedor, sem teste de contrato.
+
+**O que mudou.**
+- `createAccountCliEnv({ providerId, profileEnv })` em `cli-process-manager.cjs` é o caminho único: `createCliEnv()` e depois
+  `buildAccountProcessEnv`. Sem perfil é o Login do sistema, com o ambiente intacto.
+- Usam a função nova:
+  - o spawn do PTY;
+  - o painel (login e uso);
+  - a checagem da cadeia (`account-eligibility`);
+  - o uso ao vivo do Claude;
+  - o `/status` e o app-server do Codex;
+  - o bloco do Claude por chave (`main.cjs`).
+- Saíram `createCommandEnv` e `createProfileCommandEnv`.
+- A sessão na nuvem mantém a regra própria (filtra até no Login do sistema) e já montava na ordem do terminal.
+- Regra de "é conta": perfil não vazio. O PTY usava o `accountId`; os dois só diferem numa conta sem perfil, o que hoje só
+  acontece no Openia sem chave, que não tem credencial herdada para tirar.
+
+**Validação.**
+- `account-process-env.test.cjs` (novo; falhava antes) captura o ambiente no ponto de chamada real, com o spawn trocado por um
+  dublê:
+  - terminal × painel (login e uso), uso ao vivo do Claude, `/status` e app-server do Codex, com a loja de contas real;
+  - Login do sistema com as chaves;
+  - o HOME trocado com o PATH da home real.
+- `npm test`: 3244 testes, 3234 passam, 10 pulados, 0 falham. vitest com 3466 passando. `eslint .` e `npm run build` limpos.
+
+**Não validado.** Nenhuma medição real do painel com contas Gemini: o painel não roda comando de uso nem de login para o Gemini
+hoje, então a diferença de PATH só valia para quem viesse a usar esse caminho.
+
+Estado: concluído (deploy no adendo).
