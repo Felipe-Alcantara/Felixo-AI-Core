@@ -373,7 +373,16 @@ function criarSessaoDaCadeia(deps) {
     await bloco.getByRole('button', { name: 'Trocar de conta' }).focus()
     await page.keyboard.press('Enter')
     const dialogo = page.getByRole('dialog')
-    await dialogo.waitFor({ state: 'visible', timeout })
+    try {
+      await dialogo.waitFor({ state: 'visible', timeout })
+    } catch (error) {
+      const estado = await page.evaluate(() => window.felixo.accountChain.getState())
+      falhar(passo, '[Trocar de conta] não abriu o diálogo', {
+        erro: error.message.split('\n')[0],
+        bloco: (await bloco.textContent())?.slice(0, 400),
+        propostas: (estado.pendingProposals ?? []).map((item) => ({ id: item.id, origem: item.sourceSessionId, estado: item.state })),
+      })
+    }
     exigir(await dialogo.getByRole('button', { name: `Abrir bloco novo em ${contas.segunda}` }).count() === 1, passo, 'o diálogo não oferece a conta de destino')
     await page.keyboard.press('Escape')
     await dialogo.waitFor({ state: 'detached', timeout })

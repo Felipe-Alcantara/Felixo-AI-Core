@@ -263,7 +263,12 @@ export function useAccountContinuation({
             try {
               const result = await store.bridge.requestSwitch({ detectionId: banner.detectionId })
               if (!result.ok) return result.message ?? 'Não foi possível pedir a troca.'
-              if (result.proposalId) openProposal(result.proposalId, trigger)
+              if (!result.proposalId) return null
+              // A resposta pode chegar antes de o estado do renderer ter a proposta: relê e só então abre.
+              if (!store.getSnapshot().state?.pendingProposals.some((item) => item.id === result.proposalId)) {
+                await store.refresh()
+              }
+              openProposal(result.proposalId, trigger)
               return null
             } catch {
               return 'Não foi possível falar com o processo principal.'
