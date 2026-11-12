@@ -227,6 +227,12 @@ Em todo spawn com perfil (e na checagem de login dessa conta), saem:
 O Login do sistema não muda. O painel mostra só os **nomes** das variáveis de
 credencial presentes no ambiente do app, nunca os valores.
 
+Tudo o que roda numa conta com perfil usa exatamente o ambiente do terminal
+dela (decisão de 12/11/2026): a checagem de login e os comandos de uso do
+painel, a checagem da cadeia, a consulta ao vivo do Claude e o `/status` e o
+app-server do Codex. O que é conferido é o que será lançado, inclusive o PATH,
+que vem da home real mesmo quando o perfil troca o HOME (Gemini).
+
 ## Orquestrador do chat
 
 - Pede confirmação **só quando a família de provedor muda** (Anthropic, OpenAI,
