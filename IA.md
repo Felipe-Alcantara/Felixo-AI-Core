@@ -2244,3 +2244,41 @@ Estado: concluído (deploy no adendo).
 macOS, Ubuntu e Ubuntu ARM e no smoke do canvas. Na sessão C saiu "C6c "Fixar nesta conta" e "Voltar para a cadeia" pelo teclado: o
 foco fica no botão nas duas trocas: ok", e C4, C6b, C7 e C10 passaram com `data-terminal-chain-banner`. O Release gate (run
 43454078840) e o Release (run 43454118543, 12:35–12:43) publicaram a `v0.1.542`.
+
+## 2026-11-13 — Contas: a vigia classifica o que chegou desde a última varredura
+
+**Agente / repositório.** Resolver hotfix — Felixo-AI-Core. Task `3e991f95-497e-819f-9830-fcf2afe2d03d`.
+
+**O que foi medido.**
+- A vigia (`account-output-watcher.cjs`) classificava a janela inteira, ou seja, as últimas 40 linhas que passam no pré-filtro.
+  `classifyFailure` devolve só uma falha, escolhida por precedência (`auth` > `billing` > `limit` > ...).
+- Uma linha antiga de login, já emitida, continuava na janela. Por isso um aviso de limite que chegava depois perdia para ela.
+  A varredura devolvia de novo a mesma evidência de `auth`, e o dedupe descartava essa repetição. O limite novo não saía.
+- Teste com um aviso de refresh token do Codex, seguido do banner de limite do Codex: a segunda varredura devolvia `[]`.
+
+**O que mudou.**
+- A vigia guarda quanto da saída já tinha visto na última varredura (`scannedChars`, lido de `readOutputChars`).
+- Quando a falha de topo da janela já foi emitida, ela classifica de novo só o trecho que chegou depois (`unmaskedFailure`).
+  O corte recua até o começo da linha, para não partir uma frase que chegou em dois pedaços.
+- Se esse trecho tem uma falha que ainda não foi vista, é ela que sai. Se não tem, o resultado da janela vale como antes.
+- O `push` continua O(1). A segunda classificação só roda quando a falha de topo é repetida, e só sobre o trecho novo.
+
+**Validação.**
+- Dois testes novos em `account-output-watcher.test.cjs` falhavam sem a mudança (conferido com `git stash`):
+  - login antigo seguido de um limite novo;
+  - uma frase partida entre duas varreduras.
+  Os 21 testes do arquivo passam.
+- Bancada `npm run benchmark:pty-output -- --sessions=20 --chunks=2000 --iterations=5 --check`: exit 0, varredura do pior caso
+  p95 0,139 ms (teto 1 ms), CPU 0,695% (teto 5%).
+- Medida à parte, só do caso mascarado: p95 de 0,024 ms, contra 0,018 ms da varredura comum.
+- Gate:
+  - `npm test`: 3254 testes, 3244 passam, 10 pulados, 0 falham;
+  - vitest: 3478 passam;
+  - `eslint .` limpo.
+
+**Não validado.**
+- CLI real (Codex, Claude) batendo no limite depois de um aviso de login: só a saída gravada nos testes.
+- Redesenho de tela inteira (Claude em tela alternativa): a linha antiga volta no trecho novo, e a precedência vale até ela sair da
+  tela. O limite está documentado em `unmaskedFailure`.
+
+Estado: concluído (deploy no adendo).
