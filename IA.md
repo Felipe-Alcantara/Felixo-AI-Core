@@ -2485,3 +2485,7 @@ A primeira tentativa (run 43481594507) falhou no `posix_spawnp` do macOS e no Ge
 - Versões do Claude diferentes da 2.1.323: se o rodapé mudar, o botão diz que não há o que cancelar e não escreve nada.
 
 Estado: concluído (deploy no adendo).
+
+**Adendo (2026-11-13, 16:46): CI e Release.** O CI de `abc6225` (run 43492776673, 16:30–16:36) passou no Validate de Windows,
+macOS, Ubuntu e Ubuntu ARM e no smoke do canvas. O Release gate (run 43493877899) e o Release (run 43493913227, 16:37–16:44)
+publicaram a `v0.1.547`.
