@@ -2150,3 +2150,49 @@ Estado: concluído (deploy no adendo).
 pulado. O CI de `e576be3` (run 43441667890, 11:19–11:26) passou no Validate de Windows, macOS, Ubuntu e Ubuntu ARM e no smoke do
 canvas. O Release gate (run 43442694797) e o Release (run 43442725486, 11:26–11:35) publicaram a `v0.1.540`, a primeira com o
 Gemini na cadeia.
+
+## 2026-11-13 — CLIs: a Antigravity CLI (`agy`) entra no terminal do canvas e no painel de limites, fora da cadeia
+
+**Pedido.** Mesma task da entrada anterior ("Contas — checagem de login por conta do Gemini para entrar na cadeia"), na sessão que fez o `da1c0d3`. Diante da conclusão de que a Antigravity não cabe na cadeia, o Felipe pediu (13/11/2026) para **instalar a CLI agora e implementar**. A entrada anterior avaliou só pela documentação; esta mede a CLI real.
+
+**Medido (Windows 11, `agy` 1.5.8).**
+- **Instalação.** O script oficial (`irm https://antigravity.google/cli/install.ps1 | iex`) foi lido antes de rodar. Ele baixa um manifesto, confere o SHA-512, grava `%LOCALAPPDATA%\agy\bin\agy.exe` (244 MB) e põe a pasta só no PATH do usuário; um app já aberto não a enxerga.
+- **Sem login.** `agy models` sai com código 1 em 3 s ("Please sign in to view available models"), mesmo com HOME, USERPROFILE, APPDATA e LOCALAPPDATA isolados. Os dados vão para `HOME/.gemini/antigravity-cli` e `HOME/.gemini/config`.
+- **Login.** Foi feito pela pessoa, na `agy` interativa. Antes dele o Gerenciador de Credenciais não tinha nenhuma entrada do Google ou da Antigravity; depois apareceu `LegacyGeneric:target=gemini:antigravity`.
+- **HOME não isola.** `agy models` lista os mesmos 6 modelos com a HOME real (4,8 s) e com a isolada (3,6 s). Isso confirma por medição o que a entrada anterior tirou da documentação: a cadeia não tem como separar contas Google da Antigravity.
+- **Opções.** A ajuda não tem subcomando de auth, status nem uso. Tem `--model`, `--effort low|medium|high|xhigh|max` e `--dangerously-skip-permissions`. O binário traz `fileTokenStorage`, mas não há opção conhecida para usá-lo no lugar do cofre.
+
+**O que mudou.**
+- **Catálogo e detecção.** Entrada `antigravity` (`agy`) no catálogo de CLIs oficiais e no `cli-detector`. `%LOCALAPPDATA%\agy\bin` entrou nas pastas de CLI do Windows; no Unix o script grava em `~/.local/bin`, que o app já procura.
+- **Instalação.** Pelo script oficial: rota "script", a mesma linha da matriz de `install-routes-process-tree.test.cjs`. Exige confirmação (`requiresConfirmation`) e fica fora da instalação automática (`autoInstall: false`). O catálogo ganhou `install.windowsArgs` (PowerShell no Windows, bash no resto). A atualização é `agy update`, e a CLI também se atualiza sozinha.
+- **Painel de limites.** Fonte `antigravity` com `auth: agy models` (confere o login sem gastar cota) e uso `unsupported`, com o motivo.
+- **Prazo por fonte.** `checkAccountAuth` usa `source.auth.timeoutMs` quando ninguém passa outro prazo: 60 s na Antigravity, 150 s na chamada ao modelo do Gemini da cadeia. Na primeira rodada no app, a Antigravity deu erro por `timeout` com os 30 s padrão.
+- **Canvas.** Agente `antigravity` com modelos do `agy models`, esforço e yolo. A identidade "Antigravity" vem do comando, com o ícone de terminal (não há SVG próprio).
+- **Fora da cadeia.** A Antigravity não entrou em `CHAIN_PROVIDER_IDS` nem nos perfis de conta: com o login no cofre não existe conta com pasta própria. Guias de usuário e de contas e limites, e política de contas, atualizados.
+
+**Decisões do agente.** Ficam para a task de pesquisa da Antigravity, que já existe:
+- retomada de conversa (`--continue`/`--conversation`) e descoberta de sessões;
+- ícone próprio;
+- modelos no chat e no orquestrador;
+- contas por chave (`GEMINI_API_KEY`).
+
+**Validação.**
+- Testes novos: catálogo e rota "script" (confirmação, PowerShell e bash, clone de `windowsArgs`); instalação; parser do `agy models` com as saídas medidas; prazo por fonte (60 s na `agy`, 30 s no Codex); argumentos e identidade do `agy`. Ajustados os que contavam 4 CLIs.
+- Suíte Node (`scripts/run-node-unit-tests.cjs`): 3.252 testes, 3.234 passam, 12 pulados e 6 falham.
+  - Três eram desta mudança e foram corrigidas, passando depois (83/83 nos arquivos delas): duas em `cli-auto-install-real-repro`, que listavam as 4 CLIs do catálogo, e a do `node-pty-windows-kill`, que reprovou porque o `lib` do `node-pty` tinha sido recompilado (ver o ponto de atenção abaixo).
+  - As outras não tocam esta mudança: as duas de árvore de processos e a rota pip do instalador, já registradas como de ambiente no Windows; o dreno do PTY nativo, sob carga; e `terminal-log-store` "agrega 20.000 eventos", 929 ms contra o teto (arquivo não tocado).
+- vitest completo: 3.469 passam e 2 falham, ambas explicadas. O inventário já estava corrigido pelo `e576be3`. O `canvas-context-e2e` falhou sob carga e passa isolado. `tsc -b` limpo e `eslint` 0 nos arquivos tocados.
+- App real (`felixo devtools`, perfil isolado, da fonte):
+  - a Antigravity aparece detectada (1.5.8, instalação com confirmação);
+  - depois do prazo próprio, a conta do painel fica `unavailable` com o motivo e o login `logged_in` (13,3 s sozinha);
+  - a rodada inteira levou 75,7 s, sem `timeout` na Antigravity. Na mesma rodada, o Claude teve `timeout` na leitura ao vivo do `/status`, um caminho que não mudou.
+- O verificador real, fora do app, com um shell que não tinha a pasta no PATH, achou a `agy` pelo PATH do app (`logged_in`, 13 s).
+
+**Não validado.**
+- O bloco da `agy` aberto e usado no canvas: só os argumentos e a identidade foram testados.
+- O botão "Instalar" da Antigravity no app (o script foi rodado à mão).
+- Linux e macOS.
+
+**Ponto de atenção do ambiente.** Rodar `npm test` num worktree cujo `node_modules` é um link para o do checkout principal faz o `pretest` (`npm rebuild node-pty`) regravar o `lib` do `node-pty` desse checkout. Aqui o `tsc` do TypeScript 6 regravou os 36 arquivos com outro JavaScript e ainda acusou TS5108 (`target=ES5`); o teste `node-pty-windows-kill` reprovou por isso. O `lib` foi reposto a partir do pacote publicado (`npm pack node-pty@1.1.0`, `diff -r` igual); sobra só um `lib/tsconfig.tsbuildinfo` inerte. Os binários nativos (`prebuilds`) não mudaram, e um PTY real abriu depois. Num worktree assim, rode a suíte direto por `scripts/run-node-unit-tests.cjs`.
+
+Estado: concluído e publicado (ver o commit abaixo).
