@@ -2059,3 +2059,35 @@ do §15.1 do plano.
 **Não validado.** O notebook de referência; o macOS e o Linux no app (só o Windows do desktop).
 
 Estado: concluído. Sem mudança de código; os tetos do `validateReport` não mudaram.
+
+## 2026-11-13 — Contas: a conta Openia sem crédito na medição atual fica fora da cadeia
+
+**Agente / repositório.** Resolver hotfix — Felixo-AI-Core. Task `3e991f95-497e-8150-8074-f439cf12b0a5` (aberta na revisão do
+PR #97).
+
+**O que foi medido.**
+- A elegibilidade só via a medição por `findExhaustedWindow` e `readPercentWindows`, que olham métricas em %.
+- O Openia mede o saldo do OpenRouter em US$ (`parseOpeniaCredits`, métrica `credits`, `unit: 'US$'`) e não imprime mensagem de
+  falta de crédito. Por isso, uma conta Openia com US$ 0 medido agora passava como apta e podia receber uma troca.
+- Os dois testes novos falhavam antes da mudança.
+
+**O que mudou.**
+- Política, `findExhaustedCredits`: métrica em US$ com `remaining ≤ 0` numa medição atual. É a mesma regra estrita das janelas:
+  só amostra `current` com horário de até 15 min.
+- Razão nova `sem-credito-pela-medicao` ("A medição atual mostra a conta sem créditos."), logo depois de `esgotada-pela-medicao`.
+  Ela entrou no contrato da view, na união TS e no glossário do renderer ("sem créditos pela medição atual").
+- Não nasce espera de cobrança: o bloqueio dura enquanto a medição atual mostrar o saldo zerado. A conta volta quando o painel mede
+  crédito, ou quando a medição deixa de ser atual, como na regra das janelas.
+- `POLITICA-CONTAS.md` (detecção e elegibilidade) e `PLANO-CADEIA-CONTAS.md` (§6.1).
+
+**Validação.**
+- `account-chain-policy.test.cjs`:
+  - a razão na ordem da política;
+  - US$ 0 e negativo ficam fora, e US$ 3,20 fica apto;
+  - medição de 16 min atrás, sem horário ou com erro não prova nada;
+  - uma janela em % zerada continua sendo a outra razão.
+- `npm test`: 3245 testes, 3235 passam, 10 pulados, 0 falham. vitest com 3466 passando. `eslint .` e `npm run build` limpos.
+
+**Não validado.** Nenhuma conta Openia real sem crédito foi medida no app.
+
+Estado: concluído (deploy no adendo).
