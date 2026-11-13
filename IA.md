@@ -2430,3 +2430,8 @@ Estado: concluído (deploy no adendo).
 - O Gemini e o Claude logados com conta Google ou assinatura de verdade.
 
 Estado: concluído (deploy no adendo).
+
+**Adendo (2026-11-13, 16:00): CI e Release.** O CI de `3ebf3f9` (run 43484989664, 15:40–15:48) passou no Validate de Windows,
+macOS, Ubuntu e Ubuntu ARM e no smoke do canvas. O teste das 9 gravações rodou nos quatro sistemas. O Release gate (run 43486171296) e
+o Release (run 43486209570, 15:48–15:57) publicaram a `v0.1.546`. Gravações: workflow "Gravar banner de limite", run 43483569728.
+A primeira tentativa (run 43481594507) falhou no `posix_spawnp` do macOS e no Gemini estável recusando a pasta, e foi corrigida em `206fdf3`.
