@@ -212,13 +212,21 @@ por "Conferir login" (decisão de 11/11/2026).
 ## A sessão ativa e o terminal antigo
 
 - O processo vivo nunca troca de conta, e o app nunca escreve no terminal
-  antigo, nunca o pausa e nunca o encerra.
+  antigo por conta própria, nunca o pausa e nunca o encerra. A única escrita é
+  o Esc de "Cancelar a continuação automática", e só com o clique da pessoa
+  (abaixo).
 - Se o terminal antigo ainda estiver produzindo saída (menos de 5 s desde a
   última), a confirmação pede um segundo "abrir mesmo assim", que fica
   registrado.
 - O Claude pode estar programado para continuar sozinho na conta antiga
   ("continuing automatically at …"). O diálogo avisa que isso poria dois agentes
-  no mesmo trabalho e oferece ir ao terminal antigo.
+  no mesmo trabalho e oferece ir ao terminal antigo ou **Cancelar a
+  continuação automática** (13/11/2026). O botão manda um Esc, um só, e só se o
+  rodapé "Continuing automatically … · Esc to cancel" estiver na tela: com o
+  Claude já trabalhando, um Esc o interromperia. O resultado vem da tela
+  ("Automatic continue cancelled"). Com texto digitado na caixa o Esc não
+  cancela, e o diálogo diz para cancelar no terminal. Medido no Claude Code
+  2.1.323.
 - O bloco novo recebe o contexto redigido, uma única vez, com o aviso de que o
   último pedido pode ter ficado pela metade.
 

@@ -742,7 +742,7 @@ Vale a cobrança declarada; na falta dela, a detectada. Se as duas divergirem, a
 ### 8.4 Origem ainda ativa e retomada automática do Claude
 
 - Se a origem produziu saída há menos de 5 s, `confirm` devolve `SOURCE_ACTIVE`. O diálogo mostra "O terminal antigo ainda está produzindo saída" com a caixa "Entendo; abrir mesmo assim". Com ela marcada, `acknowledgeSourceActive: true` passa, e isso fica gravado.
-- O app **nunca** escreve no terminal antigo. Cancelar a continuação automática com Esc fica para uma task própria, depois de medir numa sessão real (§16).
+- O app **nunca** escreve no terminal antigo por conta própria. Cancelar a continuação automática com Esc ficou para uma task própria, depois de medir numa sessão real (§16). Feito em 13/11/2026: o botão "Cancelar a continuação automática" do diálogo manda um Esc só com o clique, só com o rodapé da continuação na tela, e confere o resultado pela tela (`cancelClaudeAutoContinue`).
 - Se depois da troca o terminal antigo imprimir "Your usage limit has reset · press enter to continue" ou voltar a trabalhar, a faixa dele diz "Este terminal voltou a trabalhar na conta antiga; há outro bloco continuando o mesmo trabalho".
 
 ### 8.5 "Automática (cadeia)" ao abrir um bloco
@@ -775,7 +775,7 @@ A faixa oferece "Passar responsabilidade…", que abre o `HandoffDialog` existen
 ### 9.2 Terminal antigo (decisão 6)
 
 1. O processo vivo nunca troca de conta (P2).
-2. O app não escreve no terminal antigo, não o pausa e não o encerra. Só a pessoa o fecha, pelo botão já existente.
+2. O app não escreve no terminal antigo por conta própria, não o pausa e não o encerra. Só a pessoa o fecha, pelo botão já existente. A exceção é o Esc de "Cancelar a continuação automática", só com o clique da pessoa.
 3. A faixa dele mostra "Parado por limite · continuado em ‹bloco› às HH:MM →", que foca o bloco novo.
 4. Mudar a cadeia ou o modo não afeta processos vivos.
 5. Remover a conta com terminal vivo exige confirmação e lista os blocos afetados (§3.5).
@@ -1254,7 +1254,7 @@ Depois do push, acompanhar o CI até o estado final nos 4 SOs e anotar o SHA de 
    - dedupe.
 2. **As fixtures são strings de pacote, não fluxo real de bytes da TUI.** Quebra de linha, truncamento em bloco estreito e repintura do ConPTY podem esconder o banner. O efeito é não detectar, que é fail-closed. Os testes cobrem variantes sintéticas, e a captura real vira task (§16). Captura feita em 13/11/2026: o banner da TUI real do Codex, do Claude e do Gemini foi gravado nos três sistemas, contra um backend local. Ela achou o diálogo de cota do Gemini 0.68+ ("Usage limit reached for <modelo>."), que a vigia não detectava.
 3. **O vocabulário muda com a versão da CLI.** O CI não tem as CLIs. O script de extração roda de novo a cada atualização, e as fixtures registram a versão. Um provedor sem padrões fica sem detecção declarada no painel.
-4. **Retomada automática do Claude na conta antiga.** Pode pôr dois agentes no mesmo trabalho. O app avisa e registra (`source_auto_resume_at`), mas não escreve no terminal. Cancelar com Esc vira task, depois de medir.
+4. **Retomada automática do Claude na conta antiga.** Pode pôr dois agentes no mesmo trabalho. O app avisa e registra (`source_auto_resume_at`), mas não escreve no terminal. Cancelar com Esc vira task, depois de medir. Medido e feito em 13/11/2026: um Esc cancela ("Automatic continue cancelled"), o segundo não faz nada, e com texto digitado na caixa o Esc não cancela. O diálogo oferece o cancelamento por clique.
 5. **Checagem de login só local [INFERIDO].** Mitigação: o texto diz "checagem local" e há `post_switch_failure`.
 6. **Remover as credenciais herdadas** muda o comportamento de quem usa perfil e chave de API de propósito. O aviso fica no GUIA e o painel mostra os nomes das variáveis.
 7. **Orquestrador parado esperando decisão.** Mitigação: 10 min e depois recusa pela varredura existente, respostas idempotentes e `RUN_FINISHED`.

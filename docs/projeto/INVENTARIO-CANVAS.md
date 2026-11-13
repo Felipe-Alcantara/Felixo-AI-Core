@@ -30,7 +30,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 ## Números
 
 - **Elementos:** 101 (10 blocos, 16 ferramentas, 75 outras superfícies)
-- **Controles:** 381, dos quais 58 com teste específico
+- **Controles:** 382, dos quais 58 com teste específico
 - **Elementos sem nenhum teste:** 4
 - **Lacunas:** 257 (alto 8, médio 138, baixo 111), em 69 tasks
 
@@ -2450,7 +2450,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `account-chain:redact-transcript`, `account-chain:confirm`, `account-chain:decline`, `account-chain:set-session-mode`, `account-chain:check-login`, `account-chain:get-state`, `agent-usage:refresh`, `pty:spawn`
 - **Depende de:** `useAccountContinuation`, `useAccountChain`, `useClockTick`, `account-switch-dialog (buildAccountSwitchDialogModel)`, `performContinuation`, `keyboard-focus (tabTrapTarget)`
 - **Sobreposição:** fixed inset-0 z-60 (nokey), max-w-lg, não redimensiona; prende o Tab e devolve o foco a quem abriu. Viewport 375×667 coberto pela sessão C (C12). Divide a camada z 60 com a pergunta de agente, que pela ordem do DOM fica por baixo.
-- **Testes:** `src/features/canvas/components/modal-dialogs-keys.test.ts`, `src/features/canvas/services/account-switch-dialog.test.ts`, `src/features/canvas/services/account-continuation.test.ts`, `electron/services/account-chain-ipc-handlers.test.cjs`, `scripts/canvas-smoke-contas.cjs` → `criarSessaoDaCadeia`
+- **Testes:** `src/features/canvas/components/modal-dialogs-keys.test.ts`, `src/features/canvas/services/account-switch-dialog.test.ts`, `src/features/canvas/services/account-continuation.test.ts`, `src/features/canvas/terminal/terminal-session-store.test.ts`, `src/features/canvas/terminal/terminal-screen-state.test.ts`, `electron/services/account-chain-ipc-handlers.test.cjs`, `scripts/canvas-smoke-contas.cjs` → `criarSessaoDaCadeia`
 
 | Estado | Quando |
 | --- | --- |
@@ -2469,6 +2469,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `onClick={binding.onClose}` (button) | clique | Fecha sem responder (estado vazio); o foco volta a quem abriu. (desabilitado: só no estado vazio) | Sem falha própria: a proposta continua aberta. | — |
 | `Medir agora` (button) | clique | agent-usage:refresh e depois account-chain:get-state: a capacidade das opções é recalculada. (desabilitado: só com a estratégia most_capacity) | Falha da medição é engolida de propósito; a lista fica com a capacidade anterior. | — |
 | `Ir para o terminal antigo` (button) | clique | focusNode(sourceNodeId): centraliza o bloco de origem por baixo do modal, que continua aberto. | Sem falha própria; o efeito só aparece depois de fechar o diálogo. | — |
+| `data-felixo-cancel-auto-continue` (button) | clique | Só com o Claude programado para continuar sozinho (sourceAutoResumeAt): cancelClaudeAutoContinue manda um Esc ao terminal antigo, e só se o rodapé "Continuing automatically … · Esc to cancel" está na tela; depois confere pela tela ("Automatic continue cancelled") e diz o resultado em role="status". (desabilitado: aria-disabled enquanto confere e depois de cancelar, sem rodapé ou sem sessão) | Com texto digitado na caixa o Esc não cancela: o status manda cancelar no terminal, e o botão fica para outra tentativa. Sem o rodapé (o Claude já continuou) ou sem sessão, nada é escrito. | — |
 | `Fixar este bloco na conta atual` (button) | clique | onPin: account-chain:set-session-mode (pinned); persist grava accountMode "pinned" no nó; a mensagem vai para a faixa do bloco; fecha e foca o bloco. (desabilitado: busy; só com conta própria na origem (canPin)) | Recusa ou main fora: mensagem na faixa do bloco (setBannerError). | — |
 | `Não era limite` (button) | clique | onNotALimit: account-chain:decline (not-a-limit), limpa a detecção e fecha. (desabilitado: busy; só com failureClass "limit") | A mensagem de erro do decline é descartada. | — |
 | `onClick={binding.onLater} disabled={binding.busy} className={BOTAO_SECUNDARIO}` (button) | clique ou Esc (fora do busy) | Botão de texto "Agora não": mesmo onLater do X, sem nenhum pty:spawn. (desabilitado: busy) | A mensagem de erro do decline é descartada. | `scripts/canvas-smoke-contas.cjs` → `criarSessaoDaCadeia` |
@@ -2476,7 +2477,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Conferir login, Configurar cadeia, Fechar, Medir agora, Ir para o terminal antigo, Fixar e Não era limite não são clicados em nenhum teste (a sessão C confirma e usa Esc). A caixa "Yolo no bloco novo" só aparece com destino em outro provedor, que a sessão C (só contas Codex) não tem: ela é coberta pelo HTML renderizado e pelo modelo, não por clique. | médio | `3ec91f95-497e-81e8-8f18-e2a529b0568e` |
+| Conferir login, Configurar cadeia, Fechar, Medir agora, Ir para o terminal antigo, Cancelar a continuação automática, Fixar e Não era limite não são clicados em nenhum teste (a sessão C confirma e usa Esc). A caixa "Yolo no bloco novo" só aparece com destino em outro provedor, que a sessão C (só contas Codex) não tem: ela é coberta pelo HTML renderizado e pelo modelo, não por clique. | médio | `3ec91f95-497e-81e8-8f18-e2a529b0568e` |
 | onLater e onNotALimit fecham antes da resposta e descartam a mensagem de erro do decline; onCheckLogin descarta o resultado (useAccountContinuation.ts:367-376 e 392). | médio | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 | Não bloqueantes de acessibilidade da interface da cadeia. | baixo | `3e991f95-497e-815c-845c-da8829970c0c` |
 | O aviso de continuação automática do Claude no terminal antigo não oferece cancelar. | médio | `3e991f95-497e-812d-b877-e7bb0162a60f` |

@@ -946,6 +946,13 @@ export const terminalSurfaces: InventoryElement[] = [
         failure: 'Sem falha própria; o efeito só aparece depois de fechar o diálogo.',
       },
       {
+        locator: 'data-felixo-cancel-auto-continue',
+        kind: 'button',
+        effect: 'Só com o Claude programado para continuar sozinho (sourceAutoResumeAt): cancelClaudeAutoContinue manda um Esc ao terminal antigo, e só se o rodapé "Continuing automatically … · Esc to cancel" está na tela; depois confere pela tela ("Automatic continue cancelled") e diz o resultado em role="status".',
+        failure: 'Com texto digitado na caixa o Esc não cancela: o status manda cancelar no terminal, e o botão fica para outra tentativa. Sem o rodapé (o Claude já continuou) ou sem sessão, nada é escrito.',
+        disabledWhen: 'aria-disabled enquanto confere e depois de cancelar, sem rodapé ou sem sessão',
+      },
+      {
         locator: 'Fixar este bloco na conta atual',
         kind: 'button',
         effect: 'onPin: account-chain:set-session-mode (pinned); persist grava accountMode "pinned" no nó; a mensagem vai para a faixa do bloco; fecha e foca o bloco.',
@@ -1003,12 +1010,14 @@ export const terminalSurfaces: InventoryElement[] = [
       { file: 'src/features/canvas/components/modal-dialogs-keys.test.ts' },
       { file: 'src/features/canvas/services/account-switch-dialog.test.ts' },
       { file: 'src/features/canvas/services/account-continuation.test.ts' },
+      { file: 'src/features/canvas/terminal/terminal-session-store.test.ts' },
+      { file: 'src/features/canvas/terminal/terminal-screen-state.test.ts' },
       { file: 'electron/services/account-chain-ipc-handlers.test.cjs' },
       { file: SMOKE_CONTAS, check: 'criarSessaoDaCadeia' },
     ],
     gaps: [
       {
-        what: 'Conferir login, Configurar cadeia, Fechar, Medir agora, Ir para o terminal antigo, Fixar e Não era limite não são clicados em nenhum teste (a sessão C confirma e usa Esc). A caixa "Yolo no bloco novo" só aparece com destino em outro provedor, que a sessão C (só contas Codex) não tem: ela é coberta pelo HTML renderizado e pelo modelo, não por clique.',
+        what: 'Conferir login, Configurar cadeia, Fechar, Medir agora, Ir para o terminal antigo, Cancelar a continuação automática, Fixar e Não era limite não são clicados em nenhum teste (a sessão C confirma e usa Esc). A caixa "Yolo no bloco novo" só aparece com destino em outro provedor, que a sessão C (só contas Codex) não tem: ela é coberta pelo HTML renderizado e pelo modelo, não por clique.',
         risk: 'médio',
         task: '3ec91f95-497e-81e8-8f18-e2a529b0568e',
       },
