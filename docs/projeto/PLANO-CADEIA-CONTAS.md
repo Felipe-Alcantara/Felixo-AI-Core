@@ -1287,7 +1287,9 @@ Depois do push, acompanhar o CI até o estado final nos 4 SOs e anotar o SHA de 
 **Tasks existentes relacionadas (relacionar, não duplicar):**
 - **Medição de uso por conta sob demanda** (3e691f95-497e-812e): destrava "Mais quota" com medição automática, limitada, dos candidatos no momento da proposta.
 - **Validação com contas reais no macOS e no Windows** (3da91f95-497e-815e).
-- **Pendência do `allowScripts` do Electron** (registrada à parte durante a investigação), sem relação com a cadeia.
+- **Pendência do `allowScripts` do Electron** (registrada à parte durante a investigação), sem relação com a cadeia. Resolvida
+  em 13/11/2026 (3e991f95-497e-8108). O Electron 42 não tem mais script de instalação, e a entrada saiu. O fsevents, que só é
+  instalado no macOS, entrou. O teste `scripts/allow-scripts-policy.test.cjs` mantém o `allowScripts` alinhado ao lockfile.
 
 **Irmãs cobertas por este plano:** ao concluir, marcar como concluídas com a evidência dos commits:
 - 3e691f95-497e-8194 (failover no PTY);
