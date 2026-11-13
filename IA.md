@@ -2435,3 +2435,53 @@ Estado: concluído (deploy no adendo).
 macOS, Ubuntu e Ubuntu ARM e no smoke do canvas. O teste das 9 gravações rodou nos quatro sistemas. O Release gate (run 43486171296) e
 o Release (run 43486209570, 15:48–15:57) publicaram a `v0.1.546`. Gravações: workflow "Gravar banner de limite", run 43483569728.
 A primeira tentativa (run 43481594507) falhou no `posix_spawnp` do macOS e no Gemini estável recusando a pasta, e foi corrigida em `206fdf3`.
+
+## 2026-11-13 — Contas: cancelar com um clique a continuação automática do Claude no terminal antigo
+
+**Agente / repositório.** Resolver hotfix — Felixo-AI-Core. Task `3e991f95-497e-812d-b877-e7bb0162a60f`.
+
+**O que foi medido.** Claude Code 2.1.323 real, em modo de assinatura, contra o backend local do gravador do banner
+(`scripts/record-limit-banner.cjs`), sem conta. No limite, a tela mostra o rodapé
+`Continuing automatically at 7:20pm · Esc to cancel`.
+- **Um Esc:** `● Automatic continue cancelled · /rate-limit-options to re-arm`, e o rodapé some.
+- **O segundo Esc** (2,5 s depois): nada muda, e não abre o "voltar a uma mensagem anterior".
+- **Com texto digitado na caixa:** um Esc **não cancela** e não apaga o texto; o rodapé continua.
+- **Linha do histórico:** `● Usage limit reached · continuing automatically at … · esc to cancel`, em minúsculas, fica na tela
+  depois de cancelar ou de o Claude voltar a trabalhar. Contá-la como "armada" faria um Esc interromper o Claude trabalhando.
+
+**O que mudou.**
+- **Reconhecimento da tela** (`terminal-screen-state.ts`):
+  - `isClaudeAutoContinueArmed` procura o rodapé, com "Continuing" e "Esc" maiúsculos;
+  - `isClaudeAutoContinueCancelled` procura "Automatic continue cancelled".
+- **Store:** `cancelClaudeAutoContinue(id)`.
+  - Sem sessão ou sem o rodapé, não escreve nada (`no-session` / `not-armed`).
+  - Com o rodapé, escreve um único Esc no PTY e confere a tela por até 3 s (`cancelled` / `not-cancelled`).
+  - Mock e store diferido acompanham.
+- **Diálogo "Trocar de conta?"**, seção Terminal antigo, só quando o Claude está programado para continuar sozinho:
+  - botão **Cancelar a continuação automática**, com `aria-disabled` enquanto confere e depois de resolvido;
+  - o resultado aparece numa região `role="status"`, montada antes.
+  - O aviso agora sugere o botão, e "não receberá nada" passou a dizer "ao abrir o bloco novo".
+- **Docs:** `POLITICA-CONTAS.md` e `PLANO-CADEIA-CONTAS.md` registram a exceção: a única escrita no terminal antigo é esse Esc, e só
+  com o clique. Inventário do canvas atualizado e regenerado.
+
+**Validação.**
+- Testes novos:
+  - reconhecimento com as telas medidas: armada, cancelada e trabalhando depois de continuar;
+  - store: um Esc só e `cancelled`; `not-cancelled` sem segundo Esc; nada escrito com o Claude trabalhando, sem sessão ou com o
+    processo encerrado;
+  - modelo: as mensagens;
+  - HTML do diálogo: o botão com e sem a continuação programada.
+- As funções de reconhecimento passaram pelo viewport real do xterm da sonda: no limite, armada; depois do Esc, cancelada; com
+  texto digitado, armada depois do Esc.
+- Gate:
+  - `npm test`: 3262 testes, 3252 passam, 10 pulados, 0 falham;
+  - vitest: 3488 passam;
+  - `eslint .` e `tsc -b` limpos.
+
+**Não validado.**
+- O clique no app com uma proposta real da cadeia: o smoke da sessão C só tem contas Codex, e a CLI falsa não tem o banner do
+  Claude (nota na task de cobertura do smoke).
+- Uma conta Claude com limite de verdade.
+- Versões do Claude diferentes da 2.1.323: se o rodapé mudar, o botão diz que não há o que cancelar e não escreve nada.
+
+Estado: concluído (deploy no adendo).
