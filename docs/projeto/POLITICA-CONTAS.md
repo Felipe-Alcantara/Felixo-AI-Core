@@ -272,10 +272,14 @@ continuação. "Limite" **nunca** nomeia erro de rede ou de servidor.
 
 ## Limitações conhecidas
 
-- As frases de falha vêm dos pacotes das CLIs, não da captura de bytes reais da
-  interface de cada uma. Quebra de linha, truncamento num bloco estreito e a
-  repintura do ConPTY podem esconder a mensagem: o efeito é **não detectar**,
-  nunca trocar por engano.
+- As frases de falha vêm dos pacotes das CLIs. Quebra de linha, truncamento
+  num bloco estreito e a repintura do ConPTY podem esconder a mensagem: o efeito
+  é **não detectar**, nunca trocar por engano.
+- O banner de limite do Codex, do Claude e do Gemini também é gravado pela TUI
+  real nos três sistemas, com um servidor local no lugar do backend
+  (`app/electron/__fixtures__/limit-banners`, workflow "Gravar banner de
+  limite"). Com 100 colunas, a vigia o detecta em todos (13/11/2026). Blocos
+  mais estreitos e o limite real de uma conta não foram gravados.
 - O vocabulário muda com a versão da CLI; o script
   `app/scripts/extract-cli-failure-vocabulary.cjs` confere a fixture de novo a
   cada atualização.

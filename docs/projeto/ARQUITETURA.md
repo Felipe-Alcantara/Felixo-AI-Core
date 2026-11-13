@@ -1749,6 +1749,14 @@ versão, cada frase com classe, escopo e uma linha de exemplo.
 pacotes instalados, só lendo arquivos (sem executar CLI nem tocar credencial). O
 CI não tem as CLIs, então os testes rodam sobre a fixture.
 
+O banner de limite tem também gravações do fluxo real de bytes
+(`app/electron/__fixtures__/limit-banners`, uma por CLI e sistema), feitas por
+`app/scripts/record-limit-banner.cjs`. A CLI de verdade roda num PTY e desenha
+o próprio banner, mas fala com um servidor local que responde 429 como o
+backend no limite; nenhuma conta é usada. O workflow manual "Gravar banner de
+limite" grava nos três sistemas. O teste da vigia reproduz cada gravação pedaço
+a pedaço e exige a detecção.
+
 No renderer ficam o contrato tipado (`shared/types/account-chain.ts`), os
 formatadores e o modelo de visão puros (`canvas/services/account-chain-view.ts`
 e `account-switch-dialog.ts`), os hooks `useAccountChain` e

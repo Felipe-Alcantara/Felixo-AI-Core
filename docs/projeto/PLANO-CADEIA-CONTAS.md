@@ -155,6 +155,8 @@ app/electron/services/account-chain-ipc-handlers.cjs   IPC fino
 app/electron/services/devtools-fake-cli-pty.cjs        só na instância DevTools com flag própria (smoke)
 app/electron/__fixtures__/cli-failure-vocabulary.json  vocabulário versionado das CLIs
 app/scripts/extract-cli-failure-vocabulary.cjs         regenera as fixtures lendo os pacotes instalados
+app/electron/__fixtures__/limit-banners/               banner de limite gravado da TUI real, por CLI e sistema
+app/scripts/record-limit-banner.cjs                    grava o banner contra um backend local (sem conta)
 app/scripts/canvas-smoke-contas.cjs                    smoke da sessão C
 app/src/features/shared/types/account-chain.ts          contrato tipado do IPC
 app/src/features/canvas/services/account-chain-view.ts  formatadores puros (motivo, horário, capacidade)
@@ -1250,7 +1252,7 @@ Depois do push, acompanhar o CI até o estado final nos 4 SOs e anotar o SHA de 
    - confirmação obrigatória, sem modal;
    - "Não era limite";
    - dedupe.
-2. **As fixtures são strings de pacote, não fluxo real de bytes da TUI.** Quebra de linha, truncamento em bloco estreito e repintura do ConPTY podem esconder o banner. O efeito é não detectar, que é fail-closed. Os testes cobrem variantes sintéticas, e a captura real vira task (§16).
+2. **As fixtures são strings de pacote, não fluxo real de bytes da TUI.** Quebra de linha, truncamento em bloco estreito e repintura do ConPTY podem esconder o banner. O efeito é não detectar, que é fail-closed. Os testes cobrem variantes sintéticas, e a captura real vira task (§16). Captura feita em 13/11/2026: o banner da TUI real do Codex, do Claude e do Gemini foi gravado nos três sistemas, contra um backend local. Ela achou o diálogo de cota do Gemini 0.68+ ("Usage limit reached for <modelo>."), que a vigia não detectava.
 3. **O vocabulário muda com a versão da CLI.** O CI não tem as CLIs. O script de extração roda de novo a cada atualização, e as fixtures registram a versão. Um provedor sem padrões fica sem detecção declarada no painel.
 4. **Retomada automática do Claude na conta antiga.** Pode pôr dois agentes no mesmo trabalho. O app avisa e registra (`source_auto_resume_at`), mas não escreve no terminal. Cancelar com Esc vira task, depois de medir.
 5. **Checagem de login só local [INFERIDO].** Mitigação: o texto diz "checagem local" e há `post_switch_failure`.
