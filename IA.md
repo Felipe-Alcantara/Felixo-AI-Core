@@ -2091,3 +2091,7 @@ PR #97).
 **Não validado.** Nenhuma conta Openia real sem crédito foi medida no app.
 
 Estado: concluído (deploy no adendo).
+
+**Adendo (2026-11-13, 08:14): CI e Release.** O CI de `d7d10df` (run 43412886504, 07:55–08:01) passou no Validate de Windows,
+macOS, Ubuntu e Ubuntu ARM e no smoke do canvas. O Release gate (run 43413688055) e o Release (run 43413730650, 08:01–08:11)
+publicaram a `v0.1.539` nos três sistemas.
