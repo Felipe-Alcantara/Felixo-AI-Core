@@ -43,6 +43,20 @@ export async function prepareRedactedTranscript(
   }
 }
 
+/**
+ * Texto da "Passar responsabilidade" manual: o histórico passa pela mesma
+ * redação da continuação da cadeia antes de ir ao bloco novo (segredo nunca
+ * sai). Se a redação falhar, nada é enviado. Sem segredo, o texto é o mesmo.
+ */
+export async function buildRedactedHandoffText(
+  bridge: AccountChainBridge | null,
+  input: Parameters<typeof buildTerminalHandoffPrompt>[0],
+): Promise<{ ok: true; text: string } | { ok: false; message: string }> {
+  const redacted = await prepareRedactedTranscript(bridge, input.transcript)
+  if (!redacted.ok) return redacted
+  return { ok: true, text: buildTerminalHandoffPrompt({ ...input, transcript: redacted.text }) }
+}
+
 export type ContinuationSourceNode = ContinuationSource & { cwd?: string }
 
 export type ContinuationNodeOptions = NewTerminalOptions & {

@@ -1,11 +1,14 @@
+import { createRequire } from 'node:module'
 import { describe, expect, it } from 'vitest'
 import {
+  buildRedactedHandoffText,
   performContinuation,
   prepareRedactedTranscript,
   type ContinuationEnv,
   type ContinuationNodeOptions,
 } from './account-continuation'
 import { createFakeBridge, makeProposal } from './__fixtures__/account-chain-fixtures'
+import { buildTerminalHandoffPrompt } from './terminal-handoff'
 
 const TRANSCRIPT = { text: 'trabalho em andamento\n[redigido]', chars: 32, lines: 2 }
 
@@ -145,5 +148,57 @@ describe('performContinuation', () => {
     const { env: e } = env({ bridge, getSource: () => null })
     expect(await performContinuation(request, e)).toMatchObject({ ok: false })
     expect(bridge.calls).toEqual([])
+  })
+})
+
+describe('buildRedactedHandoffText ("Passar responsabilidade" manual)', () => {
+  // O mesmo `redactSecrets` que o main roda no `account-chain:redact-transcript`.
+  const require = createRequire(import.meta.url)
+  const { redactSecrets } = require('../../../../electron/services/official-cli-account-status.cjs') as {
+    redactSecrets: (text: string) => string
+  }
+  const ponteDoMain = createFakeBridge({
+    redactTranscript: (params) => {
+      const text = redactSecrets((params as { text: string }).text)
+      return { ok: true, text, chars: text.length }
+    },
+  })
+  const entrada = (transcript: string) => ({
+    sourceLabel: 'Claude · repo',
+    sourceCommand: 'claude',
+    cwd: '/repo',
+    targetLabel: 'Codex · repo · continuação',
+    transcript,
+  })
+  const SEGREDOS = [
+    'sk-proj-AbCdEf0123456789AbCdEf0123456789AbCd',
+    'ghp_0123456789abcdefghijABCDEFGHIJ012345',
+  ]
+
+  it('nenhum segredo do terminal chega ao texto da passagem', async () => {
+    const transcript = [
+      '$ export OPENAI_API_KEY=' + SEGREDOS[0],
+      '$ git push https://x:' + SEGREDOS[1] + '@github.com/acme/repo.git',
+      'feito',
+    ].join('\n')
+    // Antes, a passagem manual montava o texto com o histórico cru.
+    expect(buildTerminalHandoffPrompt(entrada(transcript))).toContain(SEGREDOS[0])
+    const result = await buildRedactedHandoffText(ponteDoMain, entrada(transcript))
+    expect(result.ok).toBe(true)
+    const text = result.ok ? result.text : ''
+    for (const segredo of SEGREDOS) expect(text).not.toContain(segredo)
+    expect(text).toContain('feito')
+  })
+
+  it('sem segredo, o texto é exatamente o de antes', async () => {
+    const transcript = 'trabalho em andamento\n$ npm test\n3252 testes passaram'
+    const result = await buildRedactedHandoffText(ponteDoMain, entrada(transcript))
+    expect(result).toEqual({ ok: true, text: buildTerminalHandoffPrompt(entrada(transcript)) })
+  })
+
+  it('sem a ponte ou com falha na redação, nada é enviado', async () => {
+    expect((await buildRedactedHandoffText(null, entrada('x'))).ok).toBe(false)
+    const falha = createFakeBridge({ redactTranscript: () => ({ ok: false, message: 'grande demais' }) })
+    expect(await buildRedactedHandoffText(falha, entrada('x'))).toEqual({ ok: false, message: 'grande demais' })
   })
 })

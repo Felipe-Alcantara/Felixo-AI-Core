@@ -150,9 +150,8 @@ import { createCanvasConnectionIndex } from '../services/canvas-connection-index
 import { releaseRemovedCanvasNodes } from '../services/canvas-node-removal'
 import { CanvasProfilerBoundary } from '../services/canvas-performance-profiler.tsx'
 import { announceAgentCollaboration } from '../services/agent-collaboration-links'
-import {
-  buildTerminalHandoffPrompt,
-} from '../services/terminal-handoff'
+import { buildRedactedHandoffText } from '../services/account-continuation'
+import { getAccountChainBridge } from '../services/account-chain-client'
 import type {
   NewClaudeApiOptions,
   NewTerminalOptions,
@@ -2018,7 +2017,8 @@ function CanvasInner({
       }
 
       const sourceData = source.data
-      const handoffText = buildTerminalHandoffPrompt({
+      // O histórico passa pela mesma redação da continuação da cadeia: segredo nunca sai para o bloco novo.
+      const handoff = await buildRedactedHandoffText(getAccountChainBridge(), {
         sourceLabel: sourceData.label,
         sourceCommand: sourceData.command,
         // O diretório do destino é o que o usuário escolheu; só cai no do
@@ -2037,7 +2037,8 @@ function CanvasInner({
             }
           : {}),
       })
-      const newId = createContinuationNode(sourceId, { ...options, handoffText })
+      if (!handoff.ok) return { ok: false, message: handoff.message }
+      const newId = createContinuationNode(sourceId, { ...options, handoffText: handoff.text })
       return newId
         ? { ok: true }
         : { ok: false, message: 'O terminal de origem não está mais disponível.' }
