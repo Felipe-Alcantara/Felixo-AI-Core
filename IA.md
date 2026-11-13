@@ -2489,3 +2489,42 @@ Estado: concluído (deploy no adendo).
 **Adendo (2026-11-13, 16:46): CI e Release.** O CI de `abc6225` (run 43492776673, 16:30–16:36) passou no Validate de Windows,
 macOS, Ubuntu e Ubuntu ARM e no smoke do canvas. O Release gate (run 43493877899) e o Release (run 43493913227, 16:37–16:44)
 publicaram a `v0.1.547`.
+
+## 2026-11-13 — Canvas: a "Passar responsabilidade" manual redige segredos
+
+**Agente / repositório.** Resolver hotfix — Felixo-AI-Core. Task `3e991f95-497e-811e-a0a3-c9c0dd6d0c48`.
+
+**O que foi medido.**
+- **Passagem manual:** o `CanvasView.passResponsibility` montava o texto (`buildTerminalHandoffPrompt`) com o histórico cru. Só a continuação da cadeia passava pelo `account-chain:redact-transcript` (`redactSecrets` no main).
+- **Ponta a ponta no app isolado**, com a CLI falsa do smoke (`FELIXO_DEVTOOLS_FAKE_CLI_PTY=1`), já com a redação ligada:
+  - digitei `export OPENAI_API_KEY=sk-proj-… e GH ghp_…` e passei a responsabilidade;
+  - o `handoff.txt` entregue ao bloco novo trouxe `OPENAI_API_KEY=[oculto]`, mas também `0123456789abcdefghijABCDEFGHIJ012345`, a cauda do token do GitHub.
+- **Causa:** a linha quebrou na largura da gaveta. O `readBuffer` devolve cada linha do buffer, sem juntar as quebras automáticas (`isWrapped`), então o token chegava partido e nenhum padrão o reconhecia. O mesmo valia para a continuação da cadeia.
+
+**O que mudou.**
+- **`readTranscript`** (`terminal-buffer-reader.ts`):
+  - o buffer inteiro com as linhas quebradas só pela largura juntadas de volta;
+  - a linha que continua na seguinte guarda os espaços do fim, porque a quebra pode cair entre palavras.
+
+  O `getTranscript` (passagem manual e continuação da cadeia) passa a usá-lo. O `readBuffer` segue para os outros usos.
+- **`buildRedactedHandoffText`** (`account-continuation.ts`): redige com o mesmo `prepareRedactedTranscript` da cadeia e monta o texto. Se a redação falha, nada é enviado e o diálogo mostra o erro. O `passResponsibility` usa essa função.
+- **Docs:** inventário do canvas (efeito, IPC e testes da "Passar responsabilidade"; a lacuna foi fechada) e `PLANO-CADEIA-CONTAS.md` (§9.1 e §16).
+
+**Validação.**
+- Testes novos:
+  - com o `redactSecrets` real atrás da ponte: nenhuma das chaves no texto; sem segredo, o texto é idêntico ao de antes; sem a ponte ou com falha, nada é enviado;
+  - com um xterm real de 20 colunas: o token partido na largura volta inteiro; as quebras de verdade e o espaço na borda ficam.
+  - Os dois conjuntos falhavam antes.
+- **Ponta a ponta de novo, com a mudança:** com duas chaves partidas na largura (OpenAI e duas do GitHub), nenhuma chegou ao `handoff.txt`. As linhas saíram inteiras: `OPENAI_API_KEY=[oculto]` e `https://[oculto]@github.com/…`.
+- Gate:
+  - `npm test`: 3262 testes, 3252 passam, 10 pulados, 0 falham;
+  - vitest: 3493 passam;
+  - `eslint .` e `tsc -b` limpos.
+
+**Não validado.**
+- Segredo partido por uma quebra **da própria CLI** (linha nova de verdade, sem `isWrapped`, como o Claude faz em respostas longas): continua passando em pedaços.
+- Segredo que o `redactSecrets` não reconhece: a redação é a mesma da cadeia, por padrões.
+
+**Mudança de formato.** O histórico das duas passagens agora traz as linhas longas inteiras, e não cortadas na largura do terminal. Sem segredo, a redação não muda nada.
+
+Estado: concluído (deploy no adendo).
