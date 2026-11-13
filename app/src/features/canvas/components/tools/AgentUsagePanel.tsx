@@ -7,6 +7,7 @@ import { CodexSessionFieldsNotice, ProviderSummaryTable } from './AgentUsageProv
 import { rovingIndex } from '../../services/keyboard-focus'
 import {
   consumeRequestedAgentUsageTab,
+  subscribeAgentUsageTabRequests,
   type AgentUsagePanelTab,
 } from '../../services/agent-usage-panel-tab'
 import type { NewTerminalOptions } from '../../services/new-terminal-options'
@@ -91,9 +92,28 @@ export function AgentUsagePanel({
   existingNodeIds,
   onAddTerminal,
 }: AgentUsagePanelProps) {
-  const [tab, setTab] = useState<UsageTab>(() => consumeRequestedAgentUsageTab() ?? 'uso')
+  const [requestedTab] = useState(consumeRequestedAgentUsageTab)
+  const [tab, setTab] = useState<UsageTab>(requestedTab ?? 'uso')
   const tabsId = useId()
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
+
+  // A aba pedida por "Configurar cadeia" ganha o foco, ao montar ou com o
+  // painel já aberto: o diálogo de troca fecha sem devolver o foco a ninguém.
+  const focusTab = useCallback((next: UsageTab) => {
+    const index = USAGE_TABS.findIndex((item) => item.id === next)
+    window.requestAnimationFrame(() => tabRefs.current[index]?.focus())
+  }, [])
+  useEffect(() => {
+    if (requestedTab) focusTab(requestedTab)
+  }, [focusTab, requestedTab])
+  useEffect(
+    () =>
+      subscribeAgentUsageTabRequests((next) => {
+        setTab(next)
+        focusTab(next)
+      }),
+    [focusTab],
+  )
   const [dashboard, setDashboard] = useState<AgentUsageDashboard>({ ok: true })
   const [loading, setLoading] = useState(true)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
