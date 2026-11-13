@@ -995,11 +995,15 @@ function criarCenariosDoTutorial(deps) {
     await esperarNode(cenario, 'o terminal novo ser criado com o tour aberto', async () =>
       (await page.evaluate(async () => (await window.felixo.canvas.list()).nodes?.length ?? 0)) === antes + 1,
     )
+    // Criar um agente abre o terminal dele na gaveta, com o foco no terminal: recolhido, o
+    // cartão mostrava a CLI esperando sem lugar para responder (feedback de usuário, 13/11/2026).
+    await page.locator('[data-canvas-terminal-drawer]').waitFor({ state: 'visible', timeout })
+    await esperar(cenario, 'o foco ir para o terminal do agente novo', () =>
+      Boolean(document.activeElement?.closest('[data-canvas-terminal-drawer]')),
+    )
     await noAgente('criar um agente')
-    if (await page.locator('[data-canvas-terminal-drawer]').count()) {
-      await page.getByRole('button', { name: 'Fechar terminal' }).click()
-      await page.waitForFunction(() => !document.querySelector('[data-canvas-terminal-drawer]'), null, { timeout })
-    }
+    await page.getByRole('button', { name: 'Fechar terminal' }).click()
+    await page.waitForFunction(() => !document.querySelector('[data-canvas-terminal-drawer]'), null, { timeout })
     // O "Agente" (ou a gaveta fechada) devolve o foco um quadro depois, e até lá ele
     // fica no body. Sem esperar, esse foco chegava depois do Próximo focado abaixo, e
     // o Enter sob a pergunta abria um segundo agente em vez de cair no tour cedido.

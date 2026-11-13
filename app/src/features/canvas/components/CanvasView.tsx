@@ -1887,13 +1887,19 @@ function CanvasInner({
   // Criar espera a camada do projeto da pasta (com prazo curto): o lembrete
   // nasce gravado no bloco, então precisa já citar os guias certos.
   const ensureProjectGuides = projectGuides.ensure
+  // Quem cria um agente vai falar com ele: o terminal abre na gaveta, com o foco.
+  // Recolhido, o cartão mostrava a CLI esperando (a confiança na pasta, ou o
+  // primeiro pedido) sem lugar para responder (feedback de usuário, 13/11/2026).
+  // Um quadro depois, porque o menu do Agente devolve o foco ao botão no quadro
+  // seguinte ao clique e o tiraria do terminal.
   const addTerminalNode = useCallback(
     (options: NewTerminalOptions) => {
       void ensureProjectGuides([options.cwd]).then(() => {
-        addNode('terminal', buildTerminalNodeData(options))
+        const id = addNode('terminal', buildTerminalNodeData(options))
+        window.requestAnimationFrame(() => openTerminal(id))
       })
     },
-    [addNode, buildTerminalNodeData, ensureProjectGuides],
+    [addNode, buildTerminalNodeData, ensureProjectGuides, openTerminal],
   )
   useEffect(() => {
     openCloudTerminalRef.current = addTerminalNode
