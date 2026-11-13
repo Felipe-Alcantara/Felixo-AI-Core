@@ -2337,3 +2337,42 @@ Estado: concluído (deploy no adendo).
   rodada do job (attempt 2), passou. Era o mesmo código de app do `add87c7`, então a falha não vem desta mudança. Ficou uma task
   aberta para a instabilidade.
 - O Release gate (run 43465813229) e o Release (run 43465853513, 13:45–13:54) publicaram a `v0.1.544`.
+
+## 2026-11-13 — Canvas: criar um agente abre o terminal na gaveta (feedback de usuário)
+
+**Agente / repositório.** Resolver hotfix — Felixo-AI-Core. Origem: feedback de um usuário no Discord, anexado à task `3e991f95-497e-8142-8839-e213ac8db0da`. Ele relatou: "faz ele abrir um chat e ficar aguardando input; aí você tem que abrir o console na lateral pra ele voltar ao normal".
+
+**O que foi medido (app isolado, `felixo devtools`).**
+- Clicar em "Agente" criava o bloco recolhido e centralizava o canvas nele, mas a gaveta não abria. O foco voltava ao botão: o
+  `TerminalMenu` devolve o foco no quadro seguinte ao clique.
+- O Claude abria na tela de confiança na pasta, ou esperando o primeiro pedido numa pasta já confiável. O cartão mostrava
+  "aguardando aprovação" e "Enter to confirm", mas nada do que a pessoa digitava chegava à CLI. Só abrir a gaveta deixava responder.
+- Fora do yolo, o app não responde sozinho à confiança na pasta, de propósito (`handleClaudeTrustPrompt`): a decisão é da pessoa.
+  Só que a pessoa não via o terminal.
+- Nenhum commit desde 20/10 mudou quando a gaveta abre. Não é regressão de código: a gaveta nunca abria ao criar.
+
+**O que mudou.**
+- `addTerminalNode` abre o terminal novo na gaveta (`openTerminal`) um quadro depois de criar o bloco. O quadro de atraso existe
+  porque o menu devolve o foco ao botão nesse quadro.
+- Vale para todo pedido explícito de um terminal: o botão Agente, "Abrir agente", o terminal de login do painel de Limites e o
+  arquivo executado pelo painel de projetos.
+- Criar vários de uma vez (`addTerminalNodes`, a fila) continua só com os cartões.
+- Fechar a gaveta devolve o foco ao cartão novo.
+
+**Validação.**
+- No app isolado:
+  - "Agente" abre a gaveta com o foco em `xterm-helper-textarea`;
+  - "Fechar terminal" devolve o foco ao `data-terminal-expand-trigger` do bloco novo.
+- Smoke: o SA3 passou a exigir que a gaveta abra e que o foco vá para o terminal depois de "Agente". Antes ele só fechava a gaveta
+  se ela existisse. A sessão A passou aqui (`FELIXO_SMOKE_SESSOES=A`).
+- Inventário do canvas atualizado e regenerado.
+- Gate:
+  - `npm test`: 3256 testes, 3246 passam, 10 pulados, 0 falham;
+  - vitest: 3478 passam;
+  - `eslint .` e `tsc -b` limpos.
+
+**Não validado.**
+- Com a CLI do próprio usuário: não se sabe a versão nem a pasta dele.
+- macOS e Linux, a não ser pelo smoke do CI (Ubuntu).
+
+Estado: concluído (deploy no adendo).
