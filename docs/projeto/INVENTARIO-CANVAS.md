@@ -30,7 +30,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 ## Números
 
 - **Elementos:** 101 (10 blocos, 16 ferramentas, 75 outras superfícies)
-- **Controles:** 382, dos quais 57 com teste específico
+- **Controles:** 381, dos quais 58 com teste específico
 - **Elementos sem nenhum teste:** 4
 - **Lacunas:** 257 (alto 8, médio 138, baixo 111), em 69 tasks
 
@@ -1106,14 +1106,13 @@ Sem controle próprio: as ações vêm de outros elementos.
 | normal | Painel com pasta, estado, idade e início da sessão PTY, IDs do elemento e da sessão, agente, conversa associada, plano de retomada (explainAgentResume), capacidade da CLI, conversa anterior, última inserção, conta, modo e trocas do bloco. |
 | empty | Sem metadados (sessão não iniciada): "sessão não iniciada" e "não informado"; sem conversa: "sem conversa associada: ao reabrir, a CLI mostra a lista (/resume)". |
 | error | Main recusou ou está fora: mensagem em role="alert" abaixo do modo. |
-| pending | busy durante a troca de modo da conta: Fixar nesta conta e Voltar para a cadeia desabilitados. |
+| pending | busy durante a troca de modo da conta: o botão de modo fica aria-disabled (continua focável, o clique é ignorado). |
 
 | Controle | Gatilho | Efeito | Falha conhecida | Teste |
 | --- | --- | --- | --- | --- |
 | `Esquecer associação da conversa` (button) | clique | Depois de window.confirm, forgetAgentSession limpa agentSession e resumeFailure do nó (canvas salvo) e registra o ID esquecido em felixo:canvas-terminal-run, para o reanexo do mesmo PTY não regravá-lo; o terminal atual não é encerrado. (desabilitado: some sem conversa associada) | Cancelar o confirm não faz nada. | — |
 | `Copiar ${label}` (button) | clique | Botão repetido em cada detalhe copiável (pasta, ID do elemento, ID da sessão PTY, ID da conversa): navigator.clipboard.writeText do valor. (desabilitado: some quando o detalhe não tem valor copiável) | erro engolido: promessa com void, sem retorno visual de sucesso nem de erro. | — |
-| `Fixar nesta conta` (button) | clique | changeSessionAccountMode(pinned) → account-chain:set-session-mode; grava accountMode "pinned" no nó mesmo com o main fora (ficar fixo nunca troca nada). (desabilitado: busy; só aparece com conta própria em modo cadeia) | Recusa ou main fora: mensagem em role="alert"; o modo fixo é gravado assim mesmo. | — |
-| `Voltar para a cadeia` (button) | clique | changeSessionAccountMode(chain) → account-chain:set-session-mode; só grava accountMode "chain" no nó se o main aceitar. Vale para as próximas detecções e o próximo spawn, nunca toca o processo vivo. (desabilitado: busy; só com conta própria, modo fixo e cadeia ligada) | Recusa ou main fora: mensagem em role="alert" e nada é gravado. | — |
+| `Fixar nesta conta` (button) | clique | Um botão só, que troca de texto (o foco fica nele na troca; se ele some, vai para o texto do modo). "Fixar nesta conta": changeSessionAccountMode(pinned) → account-chain:set-session-mode; grava accountMode "pinned" no nó mesmo com o main fora (ficar fixo nunca troca nada). "Voltar para a cadeia": changeSessionAccountMode(chain); só grava accountMode "chain" no nó se o main aceitar. Vale para as próximas detecções e o próximo spawn, nunca toca o processo vivo. (desabilitado: aria-disabled com busy; "Fixar" só com conta própria em modo cadeia, "Voltar" só com conta própria, modo fixo e cadeia ligada) | Recusa ou main fora: mensagem em role="alert"; ao fixar, o modo fixo é gravado assim mesmo; ao voltar, nada é gravado. | `scripts/canvas-smoke-contas.cjs` → `checarFocoDoModoNoDetalhe` |
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
@@ -2326,7 +2325,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Controle | Gatilho | Efeito | Falha conhecida | Teste |
 | --- | --- | --- | --- | --- |
 | `Atualizar` (button) | clique | account-chain:history com limite 50 e redesenha a lista (desabilitado: loading; não existe no modo compacto) | Recusa ou exceção viram a mensagem role=alert; a lista anterior continua na tela | — |
-| `Ir para o bloco` (button) | clique | onFocusNode centraliza e seleciona no canvas o bloco da troca; só foca, não abre nada | sem falha própria; bloco fechado não oferece o botão | — |
+| `Ir para o bloco` (button) | clique | onFocusNode centraliza e seleciona no canvas o bloco da troca; só foca, não abre nada. O nome acessível é o row.focusLabel ("Ir para o bloco: origem para destino, hora"), único por linha | sem falha própria; bloco fechado não oferece o botão | — |
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |

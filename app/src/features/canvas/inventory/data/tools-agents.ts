@@ -962,7 +962,7 @@ export const agentToolSurfaces: InventoryElement[] = [
       {
         locator: 'Ir para o bloco',
         kind: 'button',
-        effect: 'onFocusNode centraliza e seleciona no canvas o bloco da troca; só foca, não abre nada',
+        effect: 'onFocusNode centraliza e seleciona no canvas o bloco da troca; só foca, não abre nada. O nome acessível é o row.focusLabel ("Ir para o bloco: origem para destino, hora"), único por linha',
         failure: 'sem falha própria; bloco fechado não oferece o botão',
       },
     ],

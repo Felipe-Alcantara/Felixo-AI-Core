@@ -342,7 +342,7 @@ export const terminalSurfaces: InventoryElement[] = [
     states: {
       normal: 'Painel com pasta, estado, idade e início da sessão PTY, IDs do elemento e da sessão, agente, conversa associada, plano de retomada (explainAgentResume), capacidade da CLI, conversa anterior, última inserção, conta, modo e trocas do bloco.',
       empty: 'Sem metadados (sessão não iniciada): "sessão não iniciada" e "não informado"; sem conversa: "sem conversa associada: ao reabrir, a CLI mostra a lista (/resume)".',
-      pending: 'busy durante a troca de modo da conta: Fixar nesta conta e Voltar para a cadeia desabilitados.',
+      pending: 'busy durante a troca de modo da conta: o botão de modo fica aria-disabled (continua focável, o clique é ignorado).',
       error: 'Main recusou ou está fora: mensagem em role="alert" abaixo do modo.',
     },
     controls: [
@@ -363,16 +363,10 @@ export const terminalSurfaces: InventoryElement[] = [
       {
         locator: 'Fixar nesta conta',
         kind: 'button',
-        effect: 'changeSessionAccountMode(pinned) → account-chain:set-session-mode; grava accountMode "pinned" no nó mesmo com o main fora (ficar fixo nunca troca nada).',
-        failure: 'Recusa ou main fora: mensagem em role="alert"; o modo fixo é gravado assim mesmo.',
-        disabledWhen: 'busy; só aparece com conta própria em modo cadeia',
-      },
-      {
-        locator: 'Voltar para a cadeia',
-        kind: 'button',
-        effect: 'changeSessionAccountMode(chain) → account-chain:set-session-mode; só grava accountMode "chain" no nó se o main aceitar. Vale para as próximas detecções e o próximo spawn, nunca toca o processo vivo.',
-        failure: 'Recusa ou main fora: mensagem em role="alert" e nada é gravado.',
-        disabledWhen: 'busy; só com conta própria, modo fixo e cadeia ligada',
+        effect: 'Um botão só, que troca de texto (o foco fica nele na troca; se ele some, vai para o texto do modo). "Fixar nesta conta": changeSessionAccountMode(pinned) → account-chain:set-session-mode; grava accountMode "pinned" no nó mesmo com o main fora (ficar fixo nunca troca nada). "Voltar para a cadeia": changeSessionAccountMode(chain); só grava accountMode "chain" no nó se o main aceitar. Vale para as próximas detecções e o próximo spawn, nunca toca o processo vivo.',
+        failure: 'Recusa ou main fora: mensagem em role="alert"; ao fixar, o modo fixo é gravado assim mesmo; ao voltar, nada é gravado.',
+        disabledWhen: 'aria-disabled com busy; "Fixar" só com conta própria em modo cadeia, "Voltar" só com conta própria, modo fixo e cadeia ligada',
+        test: { file: SMOKE_CONTAS, check: 'checarFocoDoModoNoDetalhe' },
       },
     ],
     persistence: [
