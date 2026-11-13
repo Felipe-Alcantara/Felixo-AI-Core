@@ -2095,3 +2095,58 @@ Estado: concluído (deploy no adendo).
 **Adendo (2026-11-13, 08:14): CI e Release.** O CI de `d7d10df` (run 43412886504, 07:55–08:01) passou no Validate de Windows,
 macOS, Ubuntu e Ubuntu ARM e no smoke do canvas. O Release gate (run 43413688055) e o Release (run 43413730650, 08:01–08:11)
 publicaram a `v0.1.539` nos três sistemas.
+
+## 2026-11-13 — Contas: o Gemini entra na cadeia conferido por uma chamada mínima ao modelo; Antigravity CLI avaliada
+
+**Agentes / repositório.** Felixo-AI-Core, task `3e991f95-497e-811d-93e4-c6f283e26dde` (aberta na revisão do PR #97). Dois agentes
+pegaram a mesma task. A implementação é do commit `da1c0d3`, de outra sessão. Esta entrada é do Resolver hotfix, que mediu a CLI,
+corrigiu o CI, avaliou a Antigravity e fez os registros.
+
+**O que foi medido (Gemini CLI 0.69.0-preview.0, a gerenciada pelo Felixo).**
+- Não existe comando de status de login. `gemini --list-models` e `gemini models -o json` respondem a mesma lista fixa com o HOME
+  vazio, sem login, então não provam nada.
+- `gemini -p … -o json` sem login sai em ~2 s com o código 41 (`FatalAuthenticationError`, conferido no pacote). O JSON de erro
+  ("Please set an Auth method…") vai para o **stderr** e o stdout fica vazio. Com login, ele chama o modelo e gasta uma requisição.
+- Numa pasta não confiável, `--approval-mode plan` vira `default`; `--skip-trust` evita isso.
+- O Gemini real desta máquina não tem login, então nenhuma requisição foi gasta e a saída logada não foi vista.
+
+**Decisão do Felipe (Trilha B, 13/11/2026).** Checar o login do Gemini com um `gemini -p` mínimo. As alternativas eram manter o
+Gemini fora ou ler só o método configurado. Ele pediu também a avaliação da Antigravity CLI na mesma task.
+
+**O que mudou.**
+- `da1c0d3` (outro agente):
+  - `chainLoginCheck` no Gemini (`gemini -p 'Responda só: ok' -m gemini-3.1-flash-lite -o json --skip-trust`, `NO_BROWSER`, prazo
+    de 150 s), lido por `getChainLoginSource`;
+  - o `auth` do Gemini continua nulo, então o painel, que atualiza sozinho, nunca gasta cota;
+  - leitor `parseGeminiModelCallAuth`: resposta do modelo é login, código 41 é falta de login, e conta individual recusada vira erro
+    com motivo fixo;
+  - elegibilidade, política, view, tela e docs.
+- `e576be3` (este agente): o CI de `da1c0d3` reprovou no Ubuntu e no Windows no `canvas-inventory.test`. A lacuna "Contas do Gemini
+  ficam travadas…" saiu à mão do `INVENTARIO-CANVAS.md`, mas continuava em `inventory/data/tools-agents.ts`, de onde o Markdown é
+  gerado. Ela saiu da fonte e o documento foi regenerado.
+
+**Antigravity CLI (`agy`), avaliada pela documentação oficial** (`antigravity.google/docs/install?tab=cli` e
+`/docs/cli/reference/`):
+- Desde 18/06/2026 a Gemini CLI não atende contas individuais (Gemini Code Assist for individuals, Google AI Pro e Ultra), e o
+  Google aponta a Antigravity CLI como substituta (`developers.google.com/gemini-code-assist/docs/deprecations/code-assist-individuals`).
+- O login fica no **chaveiro do sistema operacional**, sem escolha de perfil. O `settings.json` fica em
+  `~/.gemini/antigravity-cli/`, sem variável nem flag para outro diretório. O isolamento do Felixo, pelo ambiente do terminal de
+  cada conta, não separa duas contas Google; só contas por chave (`GEMINI_API_KEY` com `"modelProvider": "gemini"`) seriam isoláveis.
+- Não há comando de status, whoami ou auth. A checagem seria um `agy -p` (gasta cota), com códigos de saída não documentados.
+- Binário fechado, instalado por script (`curl | bash` e `irm | iex`). O instalador gerenciado das CLIs precisaria suportar isso.
+- **Conclusão:** não cabe na cadeia hoje para contas Google. Ficou uma task de decisão: suportar só contas por chave, ou esperar a
+  CLI ganhar perfis e status.
+
+**Validação.**
+- `npm test`: 3248 testes, 3238 passam, 10 pulados, 0 falham. vitest com 3469 passando. `eslint .` e `npm run build` limpos.
+- CI 43441667890 verde nos 4 sistemas e no smoke.
+
+**Não validado.** A saída do `gemini -p` com login de verdade (nenhuma conta Gemini logada nesta máquina) e a checagem no app com
+uma conta Gemini corporativa ou por chave.
+
+Estado: concluído (deploy no adendo).
+
+**Adendo (2026-11-13, 11:38): CI e Release.** O CI de `da1c0d3` (run 43429248704) reprovou no inventário e teve o Release gate
+pulado. O CI de `e576be3` (run 43441667890, 11:19–11:26) passou no Validate de Windows, macOS, Ubuntu e Ubuntu ARM e no smoke do
+canvas. O Release gate (run 43442694797) e o Release (run 43442725486, 11:26–11:35) publicaram a `v0.1.540`, a primeira com o
+Gemini na cadeia.
