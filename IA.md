@@ -2009,3 +2009,53 @@ Estado: concluído (deploy no adendo).
 **Adendo (2026-11-13, 02:28): CI e Release.** O CI de `84d1701` (run 43370158317, 02:09–02:16) passou no Validate de Windows,
 macOS, Ubuntu e Ubuntu ARM e no smoke do canvas. O Release gate (run 43371001628) e o Release (run 43371030034, 02:17–02:25)
 publicaram a `v0.1.538`; houve release porque o `agent-session-discovery.cjs` é código do app.
+
+## 2026-11-13 — Performance: bancada da vigia e app com 10 blocos, Modo Performance ligado e desligado (tetos mantidos)
+
+**Agente / repositório.** Resolver hotfix — Felixo-AI-Core. Task `3e991f95-497e-8169-940e-f7cc40b75228` (aberta na revisão do
+PR #97).
+
+**Máquina.** Desktop do dono: Ryzen 7 5700G, 16 threads, 14 GiB, Windows 11, Node 25.3.0. Durante a medição, o uso de fundo foi
+de 17% da CPU total, com o navegador (7%) e o Felixo instalado (5%) abertos. **Não** é o notebook de referência (2c/4t, HD 520)
+do §15.1 do plano.
+
+**Bancada** (`npm run benchmark:pty-output -- --sessions=20 --chunks=2000 --iterations=5 --json`, 3 rodadas, `--check` verde):
+
+| Métrica | Rodadas | Teto |
+| --- | --- | --- |
+| Vigia, custo extra por pedaço p50 (spinner) | 6,9 · 9,0 · 9,0% (0,028 · 0,033 · 0,024 µs) | ≤ 10% ou ≤ 0,5 µs |
+| Vigia, varredura p95 (spinner / pior caso) | 0,03 / 0,154 · 0,139 · 0,142 ms | pior caso ≤ 1 ms |
+| Vigia, CPU com 20 sessões | 0,77 · 0,70 · 0,71% de um núcleo | ≤ 5% |
+| Arquivo, custo extra p50 | 18,3 · 20,1 · 20,2% (0,033 · 0,073 · 0,065 µs) | ≤ 10% ou ≤ 0,5 µs |
+| Arquivo, lote p95 | 0,47 · 0,40 · 0,43 ms | ≤ 2 ms |
+| IPC, mensagens depois/antes · eco p95 | 0,085 · 0,015 a 0,07 ms | ≤ 0,25 · ≤ 2 ms |
+| Ganho do buffer sobre o concat+slice | 243 a 250× | ≥ 10× |
+
+**Nightly de 12/11** (run 43241570381, `--chunks=500 --iterations=3`):
+- Vigia, custo extra p50: Ubuntu 11,6%, Windows 13,5%, macOS 8,5%, Ubuntu ARM 8,9%. Os dois acima de 10% aprovam só pelo piso
+  de 0,5 µs.
+- Varredura do pior caso p95: de 0,089 a 0,2 ms. CPU da vigia: de 0,45 a 1%.
+- Em setembro, no notebook 2c/4t carregado (carga média de 14 a 19): 0,714 ms e 3,57%.
+
+**App com 10 blocos transmitindo.**
+- Montagem: `felixo devtools` de fonte, em perfil isolado, com a janela renderizando (opacidade 0, sem foco). Dez blocos `codex`
+  com um Codex falso no começo do PATH via `FELIXO_CLI_PATHS`. Ele imprime um spinner de ~105 caracteres a cada 10 ms, ~640
+  pedaços/s no total, pelo node-pty real e com a vigia anexada.
+- CPU por processo em `app.getAppMetrics()`, 60 s por rodada, % de um núcleo (principal / renderer / GPU):
+  - Normal: 20,1 / 37,7 / 95,6.
+  - Performance: 17,3 / 19,2 / 12,0.
+  - Normal de novo: 18,6 / 23,7 / 98,2.
+  - Controle pareado, os mesmos fluxos como `node` (sem vigia) e depois como `codex` (com vigia): principal 20,0 e 19,0.
+- O modo não muda o processo principal, e a vigia não se distingue do ruído. O ganho do modo está na GPU e no renderer. Tabela em
+  `POLITICA-PERFORMANCE.md`.
+- Uma rodada intermediária foi descartada: limpar o canvas pela ponte não mata os PTYs, e ela mediu as sessões antigas. As
+  sessões foram encerradas por `pty.kill` e o controle refeito.
+
+**Decisões do Felipe (Trilha B, 13/11/2026).**
+- **Os tetos ficam como estão.** O desktop não é a referência, e no notebook a varredura carregada já usou 71% do teto.
+- **O teto em % por pedaço fica junto do piso de 0,5 µs.** Em sub-microssegundo o percentual é ruído, e o piso cobre isso.
+- **Abrir task para medir no notebook 2c/4t** com a máquina livre, com o mesmo roteiro.
+
+**Não validado.** O notebook de referência; o macOS e o Linux no app (só o Windows do desktop).
+
+Estado: concluído. Sem mudança de código; os tetos do `validateReport` não mudaram.
