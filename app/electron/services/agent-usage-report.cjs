@@ -102,9 +102,41 @@ function parseAgentAuth(providerId, output) {
     })
   }
 
+  if (providerId === 'gemini') {
+    return createAuthSnapshot(providerId, parseGeminiModelCallAuth(safeOutput))
+  }
+
   return createAuthSnapshot(providerId, {
     authStatus: inferAuthStatusFromText(safeOutput),
   })
+}
+
+// Texto fixo, não a saída crua: só ele chega à tela da cadeia (cabe nos 120
+// caracteres de `SWITCH_LABEL_MAX_CHARS`).
+const GEMINI_INDIVIDUAL_REFUSED =
+  'a Gemini CLI não atende mais contas individuais desde 18/06/2026 (a substituta é a Antigravity CLI)'
+
+/**
+ * Saída de `gemini -p … -o json`, a checagem de login da cadeia. O
+ * `JsonFormatter` da CLI imprime o objeto em várias linhas e a CLI mistura
+ * avisos no stderr, então as chaves são procuradas no texto. Resposta do
+ * modelo prova o login. O código 41 (`FatalAuthenticationError`) é falta de
+ * login, em JSON ("Please set an Auth method") ou em texto ("Manual
+ * authorization is required", com `NO_BROWSER`). Conta individual recusada,
+ * rede e o resto ficam `unknown`, e a checagem vira `erro`.
+ */
+function parseGeminiModelCallAuth(safeOutput) {
+  if (/"error"\s*:\s*\{/.test(safeOutput)) {
+    return { authStatus: /"code"\s*:\s*41\b/.test(safeOutput) ? 'logged_out' : 'unknown' }
+  }
+  if (/"response"\s*:/.test(safeOutput)) return { authStatus: 'logged_in' }
+  if (/Manual authorization is required|Please set an Auth method/i.test(safeOutput)) {
+    return { authStatus: 'logged_out' }
+  }
+  if (/no longer supported for Gemini Code Assist for individuals/i.test(safeOutput)) {
+    return { authStatus: 'unknown', method: GEMINI_INDIVIDUAL_REFUSED }
+  }
+  return { authStatus: 'unknown' }
 }
 
 /**

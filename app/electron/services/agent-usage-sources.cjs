@@ -75,6 +75,21 @@ const AGENT_USAGE_SOURCES = Object.freeze([
     provider: 'Google',
     command: 'gemini',
     auth: null,
+    // Só a cadeia de contas usa. A Gemini CLI (0.69) não tem comando de login
+    // não interativo: `gemini models` responde sem login e o `authenticate` do
+    // ACP abre o fluxo OAuth. A prova é uma chamada mínima ao modelo, que gasta
+    // cota; por isso fica fora do `auth`, que o painel roda a cada atualização.
+    // `NO_BROWSER` faz a conta sem credencial sair com o código 41 em vez de
+    // abrir o login no navegador. O prazo cobre os 40–65 s que a CLI levou só
+    // para subir numa máquina de 2c/4t.
+    chainLoginCheck: {
+      kind: 'model-call',
+      label: 'gemini -p (chamada mínima ao modelo)',
+      command: 'gemini',
+      args: ['-p', 'Responda só: ok', '-m', 'gemini-3.1-flash-lite', '-o', 'json', '--skip-trust'],
+      env: { NO_BROWSER: 'true' },
+      timeoutMs: 150_000,
+    },
     usage: {
       kind: 'assisted-event',
       label: 'Gemini CLI /stats model',
@@ -120,12 +135,29 @@ function getAgentUsageSource(providerId) {
   return source ? cloneSource(source) : null
 }
 
+/**
+ * Fonte com o comando que a cadeia de contas usa para conferir o login: o
+ * `auth` do painel ou, sem ele, o `chainLoginCheck`. `auth` nulo aqui quer dizer
+ * que o provedor não tem checagem nenhuma e fica fora da cadeia.
+ */
+function getChainLoginSource(providerId) {
+  const source = getAgentUsageSource(providerId)
+  return source ? { ...source, auth: source.auth ?? source.chainLoginCheck ?? null } : null
+}
+
 function cloneSource(source) {
   return {
     ...source,
     localProbe: source.localProbe ?? null,
     auth: source.auth
       ? { ...source.auth, args: [...source.auth.args] }
+      : null,
+    chainLoginCheck: source.chainLoginCheck
+      ? {
+          ...source.chainLoginCheck,
+          args: [...source.chainLoginCheck.args],
+          env: { ...source.chainLoginCheck.env },
+        }
       : null,
     usage: {
       ...source.usage,
@@ -137,5 +169,6 @@ function cloneSource(source) {
 module.exports = {
   AGENT_USAGE_SOURCES,
   getAgentUsageSource,
+  getChainLoginSource,
   listAgentUsageSources,
 }

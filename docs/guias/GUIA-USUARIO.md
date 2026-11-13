@@ -206,8 +206,11 @@ confirma. A regra completa está na
    **multiplicador** do plano, de 1 a 100 (20 para um plano "20x", por exemplo).
    Sem declaração, o multiplicador vale 1 e aparece como "não declarado".
 
-As contas do Gemini aparecem travadas, com o motivo "Fora da cadeia até o app
-conferir o login do Gemini". O **Login do sistema** nunca entra na cadeia nem
+As contas do Gemini entram na cadeia, mas o login delas é conferido com uma
+chamada pequena ao modelo (a Gemini CLI não tem outro jeito de confirmar), que
+gasta um pouco de cota a cada checagem e leva até um minuto. Conta individual do
+Google (gratuita, AI Pro ou Ultra) aparece com "a checagem falhou" e o motivo:
+desde 18/06/2026 a Gemini CLI não as atende. O **Login do sistema** nunca entra na cadeia nem
 recebe uma troca, porque a identidade dele muda por fora do app.
 
 **Quando uma conta está apta.** Uma conta só recebe uma troca quando está
@@ -1208,7 +1211,8 @@ Se estiver reportando um problema, inclua a versão do app, sistema operacional,
     CLI. Uma versão nova, uma quebra de linha num bloco estreito ou a repintura
     do terminal podem esconder a mensagem. O efeito é o app **não** detectar,
     nunca trocar por engano; nesse caso, use **Passar responsabilidade** à mão;
-  - o Gemini fica fora da cadeia até o app ter uma checagem de login para ele;
+  - no Gemini, cada checagem de login é uma chamada ao modelo e gasta cota; só
+    funcionam contas Workspace, Vertex ou com chave de API;
   - no Openia, a falta de crédito não é detectada no terminal, só pela medição
     de créditos do painel;
   - a checagem de login é local: a credencial existe na pasta da conta, mas o

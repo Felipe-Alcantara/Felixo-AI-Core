@@ -78,13 +78,25 @@ test('membro com login conferido, sem espera e fora da linhagem está apto', () 
   assert.deepEqual(evaluateEligibility(baseInput()), { eligible: true, reason: null, reasonText: null })
 })
 
+test('Gemini com login conferido entra na cadeia; sem checagem, erro ou checagem velha, não', () => {
+  const gemini = { accountId: 'gemini-a', providerId: 'gemini', enabled: true }
+  const geminiWith = (loginCheck) => evaluateEligibility(baseInput({ member: gemini, loginCheck }))
+
+  assert.deepEqual(geminiWith(loggedIn()), { eligible: true, reason: null, reasonText: null })
+  assert.equal(geminiWith(null).reason, 'login-nao-conferido')
+  assert.equal(geminiWith(loggedIn({ checkedAt: iso(NOW - 16 * MIN) })).reason, 'login-nao-conferido')
+  // Conta individual recusada pelo Google sai da checagem como `erro`.
+  assert.equal(geminiWith(loggedIn({ status: 'erro' })).reason, 'checagem-falhou')
+})
+
 test('cada razão de inelegibilidade, na ordem da política, com texto em pt-BR', () => {
   const cases = [
     ['cadeia-desligada', { chainEnabled: false }],
     ['membro-desabilitado', { member: { accountId: 'claude-b', providerId: 'claude', enabled: false } }],
     ['conta-removida', { accountStatus: 'removed' }],
-    // A regra não cita o Gemini: fica fora quem não tem comando de login.
-    ['sem-checagem-de-login', { member: { accountId: 'gemini-a', providerId: 'gemini', enabled: true } }],
+    // A regra não cita provedor: fica fora quem não tem comando de login (o
+    // Gemini tem, por chamada ao modelo; ver o teste logo abaixo).
+    ['sem-checagem-de-login', { member: { accountId: 'outro-a', providerId: 'desconhecido', enabled: true } }],
     ['sem-chave', { member: { accountId: 'openia-a', providerId: 'openia', enabled: true }, accountStatus: 'missing_key' }],
     ['em-espera', { cooldown: { failureClass: 'limit', detectedAt: iso(NOW - HOUR), untilAt: iso(NOW + HOUR) } }],
     ['esgotada-pela-medicao', { sample: currentSample([percent(0, { resetAt: iso(NOW + HOUR) })]) }],

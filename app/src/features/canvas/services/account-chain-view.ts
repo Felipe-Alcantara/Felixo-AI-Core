@@ -285,15 +285,25 @@ export function isUsageBilling(
   return (declared ?? detected) === 'uso'
 }
 
-/** Login em uma linha: "conferido pela CLI há 3 min (checagem local)". */
-export function formatLogin(login: AccountLoginCheck | null, nowMs: number): string {
+/**
+ * Login em uma linha: "conferido pela CLI há 3 min (checagem local)". O
+ * Gemini não tem comando de login e é conferido por uma chamada ao modelo;
+ * quando a checagem dele falha por um motivo conhecido (conta individual), o
+ * main manda o motivo em `method`, num texto fixo.
+ */
+export function formatLogin(
+  login: AccountLoginCheck | null,
+  nowMs: number,
+  providerId?: string,
+): string {
   if (!login) return 'login não conferido'
   const when = formatAgo(login.checkedAt, nowMs)
+  const gemini = providerId === 'gemini'
   switch (login.status) {
     case 'logged_in':
       return login.source === 'amostra_do_painel'
         ? `conferido pelo painel de uso ${when}`
-        : `conferido pela CLI ${when} (checagem local)`
+        : `conferido pela CLI ${when} (${gemini ? 'chamada ao modelo' : 'checagem local'})`
     case 'logged_out':
       return `sem login na última checagem (${when})`
     case 'cli_ausente':
@@ -301,9 +311,11 @@ export function formatLogin(login: AccountLoginCheck | null, nowMs: number): str
     case 'tempo_esgotado':
       return `a checagem demorou demais (${when})`
     case 'erro':
-      return `a checagem falhou (${when})`
+      return gemini && login.method
+        ? `a checagem falhou (${when}): ${login.method}`
+        : `a checagem falhou (${when})`
     case 'sem_checagem':
-      return 'o app ainda não confere o login deste provedor'
+      return 'a CLI deste provedor não oferece como conferir o login'
     default:
       return `login incerto (${when})`
   }
@@ -313,7 +325,7 @@ const INELIGIBILITY_TEXT: Record<AccountIneligibilityReason, string> = {
   'cadeia-desligada': 'a cadeia está desligada',
   'membro-desabilitado': 'não habilitada na cadeia',
   'conta-removida': 'a conta não existe mais',
-  'sem-checagem-de-login': 'fora da cadeia até o app conferir o login deste provedor',
+  'sem-checagem-de-login': 'fora da cadeia: a CLI deste provedor não oferece como conferir o login',
   'sem-chave': 'sem chave configurada',
   'em-espera': 'em espera',
   'esgotada-pela-medicao': 'esgotada pela medição atual',

@@ -590,6 +590,8 @@ Se nenhuma razão bloqueia, a conta está **apta**. Toda razão tem texto em pt-
 
 O Gemini aparece na lista **desabilitado e travado**, com o texto "Fora da cadeia até o app conferir o login do Gemini". A regra 3 exclui qualquer provedor sem `source.auth`. Quando existir checagem, o Gemini entra sem mudar o código da política.
 
+**Atualização (13/11/2026, decisão do dono):** a Gemini CLI 0.69 não tem comando de login não interativo (`gemini models` responde sem login; o `authenticate` do ACP abre o fluxo OAuth). O Gemini passou a entrar na cadeia por uma chamada mínima ao modelo (`chainLoginCheck` da fonte, lida por `getChainLoginSource`), que gasta cota e por isso não roda no painel. A regra 3 agora olha `getChainLoginSource(...).auth`. Conta individual do Google sai como `erro`, com o motivo, porque a Gemini CLI não as atende desde 18/06/2026.
+
 ### 6.4 Fim da espera: fonte, em ordem
 
 1. **Medição:** amostra atual (§7.2) da conta, com uma janela % em `remaining = 0`. Vale o `resetAt` dessa janela (Codex `rateLimits.*.resetsAt`, `codex-account-rate-limits.cjs:306-348`; Claude `/status`).

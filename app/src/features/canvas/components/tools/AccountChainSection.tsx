@@ -393,7 +393,7 @@ function ChainMemberRow({
 
         <dt className="text-zinc-500">Login</dt>
         <dd className="flex flex-wrap items-center gap-2">
-          <span>{formatLogin(member.login, nowMs)}</span>
+          <span>{formatLogin(member.login, nowMs, member.providerId)}</span>
           {!member.locked && (
             <button
               type="button"

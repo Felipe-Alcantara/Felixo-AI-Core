@@ -130,12 +130,82 @@ test('CLI ausente, prazo vencido e falha sem saída têm status próprios', asyn
 })
 
 test('provedor sem comando de login fica sem_checagem e não roda CLI', async () => {
-  const { checker, calls } = createChecker()
+  const { checker, calls } = createChecker({
+    resolveAccount: () => ({ accountId: 'outro', providerId: 'desconhecido', profileEnv: {} }),
+  })
 
-  const check = await checker.checkLogin('gemini-casa')
+  const check = await checker.checkLogin('outro')
 
   assert.equal(check.status, 'sem_checagem')
   assert.equal(calls.length, 0)
+})
+
+// Saídas medidas com a Gemini CLI 0.69.0-preview.0 no Windows (13/11/2026); a
+// de sucesso segue o JsonFormatter da própria CLI, com o aviso que ela põe no stderr.
+const GEMINI_OUTPUTS = {
+  sucesso: {
+    ok: true,
+    stdout: '{\n  "session_id": "s-1",\n  "response": "ok",\n  "stats": {\n    "models": {}\n  }\n}',
+    stderr: 'Warning: True color (24-bit) support not detected.',
+  },
+  semMetodo: {
+    ok: false,
+    stdout: '',
+    stderr:
+      '{\n  "session_id": "s-2",\n  "error": {\n    "type": "Error",\n    "message": "Please set an Auth method in your /perfis/g/.gemini/settings.json or specify one of the following environment variables before running: GEMINI_API_KEY, GOOGLE_GENAI_USE_VERTEXAI, GOOGLE_GENAI_USE_GCA",\n    "code": 41\n  }\n}',
+  },
+  oauthSemCredencial: {
+    ok: false,
+    stdout: '',
+    stderr:
+      '\u001b[31mManual authorization is required but the current session is non-interactive. Please run the Gemini CLI in an interactive terminal to log in, provide a GEMINI_API_KEY, or ensure Application Default Credentials are configured.\u001b[0m',
+  },
+  contaIndividual: {
+    ok: false,
+    stdout: '',
+    stderr:
+      'Ripgrep is not available. Falling back to GrepTool.\nAn unexpected critical error occurred: This client is no longer supported for Gemini Code Assist for individuals. To continue using Gemini, please migrate to the Antigravity suite of products: https://antigravity.google',
+  },
+}
+
+test('Gemini confere o login com uma chamada mínima ao modelo, sem navegador e com prazo próprio', async () => {
+  const { checker, calls } = createChecker({
+    runCommand: async (request) => {
+      calls.push(request)
+      return GEMINI_OUTPUTS.sucesso
+    },
+  })
+
+  const check = await checker.checkLogin('gemini-casa')
+
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].command, 'gemini')
+  assert.deepEqual(calls[0].args, ['-p', 'Responda só: ok', '-m', 'gemini-3.1-flash-lite', '-o', 'json', '--skip-trust'])
+  assert.equal(calls[0].env.NO_BROWSER, 'true', 'conta sem credencial não pode abrir o login no navegador')
+  assert.equal(calls[0].env.HOME, '/perfis/g', 'roda na pasta de login da conta')
+  assert.equal(calls[0].timeoutMs, 150_000)
+  assert.equal(check.status, 'logged_in')
+  assert.equal(check.source, 'checagem')
+})
+
+test('Gemini: código 41 é falta de login; conta individual recusada vira erro com o motivo fixo', async () => {
+  const cases = [
+    ['semMetodo', 'logged_out', null],
+    ['oauthSemCredencial', 'logged_out', null],
+    ['contaIndividual', 'erro', /não atende mais contas individuais desde 18\/06\/2026/],
+  ]
+
+  for (const [name, expected, method] of cases) {
+    const { checker } = createChecker({ runCommand: async () => GEMINI_OUTPUTS[name] })
+    const check = await checker.checkLogin('gemini-casa', { force: true })
+    assert.equal(check.status, expected, name)
+    if (method) {
+      assert.match(check.method, method)
+      assert.doesNotMatch(check.method, /antigravity\.google/, 'a saída crua da CLI não chega à tela')
+    } else {
+      assert.equal(check.method, null, name)
+    }
+  }
 })
 
 test('conta que não existe mais devolve null', async () => {

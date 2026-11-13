@@ -31,7 +31,7 @@ import {
   toMemberUpdates,
 } from './account-chain-view'
 import { makeCandidate, makeDetection, makeMember, makeProposal, makeState } from './__fixtures__/account-chain-fixtures'
-import type { AccountSwitchHistoryEntry } from '../../shared/types/account-chain'
+import type { AccountLoginCheck, AccountSwitchHistoryEntry } from '../../shared/types/account-chain'
 
 const SP = { timeZone: 'America/Sao_Paulo' }
 const NOW = Date.parse('2026-09-28T17:35:05.000Z')
@@ -197,12 +197,43 @@ describe('formatLogin', () => {
   it('sem checagem diz que não foi conferido', () => {
     expect(formatLogin(null, NOW)).toBe('login não conferido')
   })
+
+  const check = (values: Partial<AccountLoginCheck>): AccountLoginCheck => ({
+    status: 'logged_in',
+    checkedAt: '2026-09-28T17:32:05.000Z',
+    source: 'checagem',
+    method: null,
+    plan: null,
+    identityStatus: 'unbound',
+    ...values,
+  })
+
+  it('Gemini é conferido por chamada ao modelo, não por checagem local', () => {
+    expect(formatLogin(check({}), NOW, 'gemini')).toBe('conferido pela CLI há 3 min (chamada ao modelo)')
+  })
+
+  it('o motivo da falha só aparece no Gemini, onde o main manda um texto fixo', () => {
+    const motivo = 'a Gemini CLI não atende mais contas individuais desde 18/06/2026 (a substituta é a Antigravity CLI)'
+    expect(formatLogin(check({ status: 'erro', method: motivo }), NOW, 'gemini')).toBe(
+      `a checagem falhou (há 3 min): ${motivo}`,
+    )
+    // No Openia o método é sempre "OpenRouter key store": não é motivo de falha.
+    expect(formatLogin(check({ status: 'erro', method: 'OpenRouter key store' }), NOW, 'openia')).toBe(
+      'a checagem falhou (há 3 min)',
+    )
+  })
+
+  it('provedor sem checagem não promete que ela vem', () => {
+    expect(formatLogin(check({ status: 'sem_checagem' }), NOW)).toBe(
+      'a CLI deste provedor não oferece como conferir o login',
+    )
+  })
 })
 
 describe('ineligibilityText', () => {
   it('prefere o texto do main e cai no glossário', () => {
     expect(ineligibilityText('em-espera', 'em espera até 16:40')).toBe('em espera até 16:40')
-    expect(ineligibilityText('sem-checagem-de-login')).toMatch(/até o app conferir o login/)
+    expect(ineligibilityText('sem-checagem-de-login')).toMatch(/não oferece como conferir o login/)
     expect(ineligibilityText(null)).toBe('')
   })
 })

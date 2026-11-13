@@ -18,7 +18,7 @@
 const defaultPolicy = require('./account-chain-policy.cjs')
 const { computeAccountFigures } = require('./account-chain-port.cjs')
 const { EVIDENCE_MAX_CHARS, SWITCH_LABEL_MAX_CHARS, SWITCH_REASON_MAX_CHARS } = require('./account-chain-constants.cjs')
-const { getAgentUsageSource } = require('../agent-usage-sources.cjs')
+const { getChainLoginSource } = require('../agent-usage-sources.cjs')
 const { redactSecrets } = require('../official-cli-account-status.cjs')
 
 /** Razões que o contrato conhece (`AccountIneligibilityReason`). */
@@ -185,7 +185,7 @@ function createAccountChainView({ repository, describeAccount, listLiveSessions 
     return {
       ...view,
       enabled: serviceMember.enabled === true,
-      locked: !getAgentUsageSource(view.providerId)?.auth,
+      locked: !getChainLoginSource(view.providerId)?.auth,
       eligible: serviceMember.eligible === true,
       ...reason(serviceMember.eligible ? null : serviceMember.reason),
       cooldown: cooldown(repository.getCooldown(serviceMember.accountId), nowMs),

@@ -382,18 +382,27 @@ test(
     const database = createStorageDatabase({ databaseDir })
     const repository = createAgentUsageRepository(database)
     repository.createAccount({ id: 'gemini-conta', providerId: 'gemini', label: 'Gemini' })
+    const comandos = []
     const service = createAgentUsageService({
       repository,
       probe: () => null,
       listCatalog: async () => [],
       listProfiles: () => [],
-      runCommand: async () => ({ ok: true, stdout: '', stderr: '' }),
+      runCommand: async (request) => {
+        comandos.push(request)
+        return { ok: true, stdout: '', stderr: '' }
+      },
     })
 
     try {
       const conta = contaDoPainel(await service.refresh(), 'gemini-conta')
       const fonte = getAgentUsageSource('gemini')
 
+      // A checagem da cadeia é uma chamada ao modelo e gasta cota: o painel,
+      // que atualiza sozinho, nunca a roda.
+      assert.equal(fonte.auth, null)
+      assert.ok(fonte.chainLoginCheck, 'a cadeia tem a checagem dela')
+      assert.equal(comandos.filter((request) => request.command === 'gemini').length, 0)
       assert.equal(conta.latestSample.status, 'unavailable')
       assert.deepEqual(conta.latestSample.metrics, [])
       assert.deepEqual(conta.availability, { state: 'interactive-only', message: fonte.usage.limitation })

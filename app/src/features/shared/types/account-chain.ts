@@ -211,8 +211,9 @@ export type AccountChainAccountView = {
 export type AccountChainMember = AccountChainAccountView & {
   enabled: boolean
   /**
-   * O provedor não tem checagem de login (hoje, o Gemini): fica na lista,
-   * desabilitado e travado, sem o código da política citar o nome dele.
+   * O provedor não tem checagem de login (hoje, nenhum: o Gemini é conferido
+   * por chamada ao modelo): fica na lista, desabilitado e travado, sem o
+   * código da política citar o nome dele.
    */
   locked: boolean
   eligible: boolean

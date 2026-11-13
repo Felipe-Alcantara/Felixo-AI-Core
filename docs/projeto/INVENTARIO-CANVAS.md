@@ -2305,7 +2305,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | --- | --- | --- |
 | Botões ↑/↓, Estratégia (o smoke só lê o valor), Cobrança, multiplicador, Conferir agora, Não era limite e Já recarreguei não são acionados em teste de interface; a reordenação só é exercitada por Alt+↓ na linha | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
 | Falha de Conferir agora, Não era limite e Já recarreguei é engolida: account-chain-client.ts:252-278 devolve { ok: false, message } sem gravar snapshot.message e AccountChainSection.tsx:191-194 descarta o retorno com void | médio | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
-| Contas do Gemini ficam travadas ("o app não confere o login deste provedor") e não entram na cadeia | baixo | `3e991f95-497e-811d-93e4-c6f283e26dde` |
 
 ### Registro de trocas de conta (aba Trocas)
 

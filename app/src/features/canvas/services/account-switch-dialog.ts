@@ -161,7 +161,7 @@ export function buildAccountSwitchDialogModel(params: {
     billing: formatBilling(candidate.billingDeclared, candidate.billingDetected),
     plan: candidate.planText,
     capacity: formatCapacity(candidate.capacity, candidate.multiplier, time),
-    login: candidate.checkingLogin ? 'Conferindo login…' : formatLogin(candidate.login, nowMs),
+    login: candidate.checkingLogin ? 'Conferindo login…' : formatLogin(candidate.login, nowMs, candidate.providerId),
     checkingLogin: candidate.checkingLogin,
     identity: identityText(candidate),
     explanation: explainCandidateRank(proposal.strategy, candidate, index, time),

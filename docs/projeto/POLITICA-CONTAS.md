@@ -39,7 +39,10 @@ Derivadas do aceite:
 - uma conta só é **apta** com login conferido pela própria CLI, naquela conta,
   há pouco tempo;
 - a quota só pesa com **medição atual** (valor antigo nunca prova nada);
-- o Gemini fica fora da cadeia até o app ter checagem de login para ele.
+- o Gemini entra na cadeia conferido por uma **chamada mínima ao modelo**, porque
+  a Gemini CLI não tem comando de login não interativo (decisão do dono,
+  13/11/2026). Ela gasta cota, só a cadeia a roda (o painel não) e conta
+  individual do Google sai recusada desde 18/06/2026.
 
 ## Princípios (cada um com teste)
 
@@ -94,7 +97,7 @@ A primeira razão que bloqueia decide, nesta ordem. Toda razão tem texto na UI.
 
 1. Cadeia desligada ou membro desabilitado.
 2. Conta removida.
-3. Provedor sem checagem de login (hoje, o Gemini).
+3. Provedor sem checagem de login (hoje, nenhum).
 4. Openia sem chave.
 5. Em espera, ou com espera vencida sem checagem posterior.
 6. Esgotada por medição atual (alguma janela em 0%), até o reset dela; no Openia,
@@ -278,8 +281,6 @@ continuação. "Limite" **nunca** nomeia erro de rede ou de servidor.
 
 ## Ideias para quem quiser contribuir
 
-- Checagem de login por conta para o Gemini (destrava o Gemini na cadeia sem
-  mudar a política).
 - Captura do fluxo real de bytes do aviso de limite em Linux, macOS e Windows.
 - Detecção de falta de crédito na saída do Openia, quando houver mensagem
   própria.

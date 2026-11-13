@@ -28,7 +28,7 @@ const {
   RESET_MAX_AHEAD_MS,
 } = require('./account-chain-constants.cjs')
 const { parseResetFromText } = require('./reset-time.cjs')
-const { getAgentUsageSource } = require('../agent-usage-sources.cjs')
+const { getChainLoginSource } = require('../agent-usage-sources.cjs')
 
 // ── Razões de inelegibilidade ────────────────────────────────────────────────
 
@@ -40,7 +40,7 @@ const ELIGIBILITY_REASONS = Object.freeze({
   'cadeia-desligada': 'A cadeia de contas está desligada.',
   'membro-desabilitado': 'Conta desabilitada na cadeia.',
   'conta-removida': 'A conta não existe mais no app.',
-  'sem-checagem-de-login': 'Fora da cadeia até o app conseguir conferir o login deste provedor.',
+  'sem-checagem-de-login': 'Fora da cadeia: a CLI deste provedor não oferece como conferir o login.',
   'sem-chave': 'A conta não tem chave configurada.',
   'em-espera': 'A conta está em espera.',
   'esgotada-pela-medicao': 'A medição atual mostra a quota esgotada.',
@@ -451,7 +451,7 @@ function evaluateEligibility({
   if (!member?.enabled) return blocked('membro-desabilitado')
   if (accountStatus !== 'ok' && accountStatus !== 'missing_key') return blocked('conta-removida')
   // A regra não cita provedor: fica fora quem não tem comando de login.
-  if (!getAgentUsageSource(member.providerId)?.auth) return blocked('sem-checagem-de-login')
+  if (!getChainLoginSource(member.providerId)?.auth) return blocked('sem-checagem-de-login')
   if (accountStatus === 'missing_key') return blocked('sem-chave')
   if (cooldownBlocks(cooldown, loginCheck, nowMs)) return blocked('em-espera')
   if (findExhaustedWindow(sample, nowMs)) return blocked('esgotada-pela-medicao')

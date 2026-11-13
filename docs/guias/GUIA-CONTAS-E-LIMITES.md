@@ -385,8 +385,7 @@ Como usar, passo a passo, no [Guia do Usuário](GUIA-USUARIO.md#cadeia-de-contas
 a regra completa na [Política de Contas](../projeto/POLITICA-CONTAS.md); as
 camadas e o fluxo na [Arquitetura](../projeto/ARQUITETURA.md#cadeia-de-contas).
 
-Ideias para quem quiser contribuir: checagem de login por conta para o Gemini
-(que hoje fica fora da cadeia), captura do aviso de limite como ele aparece de
+Ideias para quem quiser contribuir: captura do aviso de limite como ele aparece de
 verdade no terminal em Linux, macOS e Windows, e medição de uso por conta sob
 demanda para "Mais quota" comparar mais contas.
 

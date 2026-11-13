@@ -16,6 +16,9 @@
  *   --json`, `openia key status --json`) e o probe local de identidade, via
  *   `checkAccountAuth`, o mesmo pedaço que o painel usa. A consulta ao vivo de
  *   uso (cara: o `/status` do Claude abre um PTY) não roda;
+ * - no Gemini, que não tem comando de login, uma chamada mínima ao modelo
+ *   (`chainLoginCheck` da fonte): gasta cota e prova que o servidor aceita a
+ *   conta, não só que a credencial existe;
  * - com o ambiente com que o terminal da conta nasce (`createAccountCliEnv`:
  *   perfil da conta, sem as chaves de API herdadas do app). O que é conferido
  *   é o que será lançado.
@@ -41,7 +44,7 @@ const {
 const { classifyBilling, detectPlanMultiplier } = require('./account-chain-policy.cjs')
 const { checkAccountAuth } = require('../agent-usage-service.cjs')
 const { createAccountCliEnv } = require('../cli-process-manager.cjs')
-const { getAgentUsageSource } = require('../agent-usage-sources.cjs')
+const { getChainLoginSource } = require('../agent-usage-sources.cjs')
 const { runLocalProbe } = require('../agent-usage-local-probes.cjs')
 const { redactSecrets } = require('../official-cli-account-status.cjs')
 const { runBufferedCommand } = require('../official-cli-service.cjs')
@@ -98,7 +101,7 @@ function clipText(value) {
 }
 
 function hasLoginCommand(providerId) {
-  return Boolean(getAgentUsageSource(providerId)?.auth)
+  return Boolean(getChainLoginSource(providerId)?.auth)
 }
 
 /**
@@ -219,15 +222,23 @@ function createAccountEligibilityChecker({
   async function runCheck(account) {
     await acquireSlot()
     try {
+      // O Gemini confere por chamada ao modelo (`chainLoginCheck`), com
+      // ambiente e prazo próprios; os outros, pelo mesmo `auth` do painel.
+      const source = getChainLoginSource(account.providerId)
       const outcome = await checkAccountAuth({
         providerId: account.providerId,
+        source,
         runCommand,
         probe,
         probeOptions: account.probeOptions,
-        env: createAccountCliEnv(
-          { providerId: account.providerId, profileEnv: account.profileEnv ?? {} },
-          platformName,
-        ),
+        env: {
+          ...createAccountCliEnv(
+            { providerId: account.providerId, profileEnv: account.profileEnv ?? {} },
+            platformName,
+          ),
+          ...source.auth.env,
+        },
+        timeoutMs: source.auth.timeoutMs,
         clock: now,
       })
       const status = resolveLoginStatus({ supported: true, auth: outcome.auth, result: outcome.result })
@@ -252,7 +263,7 @@ function createAccountEligibilityChecker({
    *
    * Sem `force`, uma amostra do painel com login conferido há até `ttlMs`
    * vale como checagem e nenhuma CLI roda. Provedor sem comando de login
-   * (hoje o Gemini) devolve `sem_checagem` sem rodar nada.
+   * devolve `sem_checagem` sem rodar nada.
    *
    * @param {string} accountId
    * @param {{ force?: boolean }} [options] `force` ignora a amostra do painel ("Conferir login agora").
