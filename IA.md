@@ -2528,3 +2528,7 @@ publicaram a `v0.1.547`.
 **Mudança de formato.** O histórico das duas passagens agora traz as linhas longas inteiras, e não cortadas na largura do terminal. Sem segredo, a redação não muda nada.
 
 Estado: concluído (deploy no adendo).
+
+**Adendo (2026-11-13, 17:23): CI e Release.** O CI de `bd1e066` (run 43498119647, 17:04–17:11) passou no Validate de Windows,
+macOS, Ubuntu e Ubuntu ARM e no smoke do canvas. O Release gate (run 43499319136) e o Release (run 43499353136, 17:12–17:20)
+publicaram a `v0.1.548`.
