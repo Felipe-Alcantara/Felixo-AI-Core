@@ -123,6 +123,28 @@ a ser a composição (9 a 18 s de composição numa janela de 6 s). Isso confirm
 modo é necessário mas não suficiente; o próximo ganho precisa vir de virtualização ou de menos camadas por
 nó, não de decoração.
 
+#### Processo principal com 10 blocos transmitindo (13/11/2026)
+
+Medido no desktop do dono (Ryzen 7 5700G, 16 threads, Windows 11), **não** no notebook de referência. O app
+de fonte (`felixo devtools`, perfil isolado) rodou com a janela renderizando de verdade (opacidade 0, sem
+foco, 46 a 145 quadros/s) e 10 blocos `codex`. Cada bloco era um Codex falso posto no começo do PATH por
+`FELIXO_CLI_PATHS`, que imprime um spinner de ~105 caracteres a cada 10 ms (cerca de 64 pedaços/s por
+bloco, 640 no total, pelo passo do timer do Windows), pelo node-pty real e com a vigia da cadeia
+anexada. CPU por processo em `app.getAppMetrics()`, janelas de 60 s, em % de um núcleo:
+
+| Rodada | Principal | Renderer | GPU | Quadros/s |
+| --- | ---: | ---: | ---: | ---: |
+| Normal | 20,1 | 37,7 | 95,6 | ~50 |
+| Performance | 17,3 | 19,2 | **12,0** | ~145 |
+| Normal de novo | 18,6 | 23,7 | 98,2 | ~53 |
+| Normal, os mesmos fluxos como `node` (sem vigia) | 20,0 | 28,5 | 95,2 | ~56 |
+| Normal, `codex` com vigia (pareada com a de cima) | 19,0 | 38,1 | 96,2 | ~51 |
+
+O modo não muda o processo principal (17 a 20% em todas as rodadas), como esperado: ele não toca em PTY
+nem na vigia. O ganho é no renderer (cerca da metade) e na GPU (de ~96% para 12%, sem o céu animado), e o
+quadro sai do limite da GPU para o do monitor. A vigia não se distingue do ruído no app: 19,0% com ela
+contra 20,0% sem.
+
 #### Tutorial do canvas aberto (26/09/2026)
 
 Medido com `npm run benchmark:ui-render -- --gpu=integrada --onboarding`, que abre o tutorial pela Ajuda antes
