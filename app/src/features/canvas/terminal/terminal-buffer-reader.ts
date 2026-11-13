@@ -61,6 +61,29 @@ export function readBuffer(terminal: Terminal): string {
 }
 
 /**
+ * O histórico que vai adiante (Handoff e continuação da cadeia): o buffer
+ * inteiro, como `readBuffer`, mas com as linhas que o terminal só quebrou na
+ * largura (`isWrapped`) juntadas de volta. Assim um segredo mais longo que a
+ * linha chega inteiro à redação (partido, a cauda passava), e o agente
+ * seguinte lê a linha como a CLI a imprimiu. A linha que continua na seguinte
+ * guarda os espaços do fim: a quebra pode cair num espaço entre palavras.
+ */
+export function readTranscript(terminal: Terminal): string {
+  const buffer = terminal.buffer.active
+  const lines: string[] = []
+
+  for (let row = 0; row < buffer.length; row += 1) {
+    const line = buffer.getLine(row)
+    const continues = buffer.getLine(row + 1)?.isWrapped === true
+    const text = line?.translateToString(!continues) ?? ''
+    if (line?.isWrapped && lines.length > 0) lines[lines.length - 1] += text
+    else lines.push(text)
+  }
+
+  return joinTrimmed(lines.map((line) => line.trimEnd()))
+}
+
+/**
  * Histórico de comandos do shell — o buffer **normal**, não o `active`.
  *
  * Enquanto um app de tela cheia (nano, vim, less, htop…) está rodando, o

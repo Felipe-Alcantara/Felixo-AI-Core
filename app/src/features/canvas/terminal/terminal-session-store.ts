@@ -80,6 +80,7 @@ import {
   isAlternateScreen,
   readBuffer,
   readShellHistory,
+  readTranscript,
   readViewport,
 } from './terminal-buffer-reader'
 import {
@@ -1929,7 +1930,7 @@ export class TerminalSessionStore {
   getTranscript(id: string): TerminalTranscript {
     const session = this.sessions.get(id)
     return {
-      text: session ? readBuffer(session.terminal) : '',
+      text: session ? readTranscript(session.terminal) : '',
       screenOnly: session ? isAlternateScreen(session.terminal) : false,
     }
   }

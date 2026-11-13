@@ -6,6 +6,7 @@ import {
   readBuffer,
   readShellHistory,
   readTerminalTail,
+  readTranscript,
   readViewport,
 } from './terminal-buffer-reader'
 
@@ -151,5 +152,27 @@ describe('computeSignature', () => {
     const after = fakeTerminal(['igual', 'igual'], { rows: 1 })
 
     expect(computeSignature(before)).not.toBe(computeSignature(after))
+  })
+})
+
+describe('readTranscript (o histórico que vai adiante: Handoff e continuação da cadeia)', () => {
+  /** Um xterm de verdade, estreito: a quebra automática (`isWrapped`) só existe no buffer real. */
+  async function terminalCom(texto: string, cols = 20): Promise<Terminal> {
+    const { Terminal: Xterm } = await import('@xterm/xterm')
+    const terminal = new Xterm({ cols, rows: 6, scrollback: 100, allowProposedApi: true })
+    await new Promise<void>((resolve) => terminal.write(texto, resolve))
+    return terminal
+  }
+
+  it('junta as linhas que o terminal só quebrou na largura: o token chega inteiro', async () => {
+    const terminal = await terminalCom('$ git push https://x:ghp_0123456789abcdefghijABCDEFGHIJ012345@github.com\r\nfeito')
+    expect(readBuffer(terminal)).not.toContain('ghp_0123456789abcdefghijABCDEFGHIJ012345')
+    expect(readTranscript(terminal)).toBe('$ git push https://x:ghp_0123456789abcdefghijABCDEFGHIJ012345@github.com\nfeito')
+  })
+
+  it('mantém as quebras de verdade e o espaço que caiu na borda da linha', async () => {
+    // "uma linha exata de " tem 19 colunas; o espaço da coluna 20 não pode sumir na junção.
+    const terminal = await terminalCom('uma linha exata de  vinte\r\nsegunda\r\n\r\nquarta')
+    expect(readTranscript(terminal)).toBe('uma linha exata de  vinte\nsegunda\n\nquarta')
   })
 })
