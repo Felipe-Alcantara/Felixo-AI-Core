@@ -16,6 +16,7 @@ function binding(overrides: Partial<AccountSwitchDialogBinding> = {}): AccountSw
     error: null,
     sourceActiveRequired: false,
     sourceYolo: false,
+    openiaModelPrice: null,
     canPin: true,
     onConfirm: noop,
     onLater: noop,

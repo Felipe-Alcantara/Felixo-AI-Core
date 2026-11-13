@@ -6,6 +6,7 @@ import {
   escapeDeclines,
   formatTranscriptSize,
   initialDialogSelection,
+  openiaModelArg,
 } from './account-switch-dialog'
 import { makeCandidate, makeProposal } from './__fixtures__/account-chain-fixtures'
 
@@ -87,6 +88,47 @@ describe('buildAccountSwitchDialogModel', () => {
       candidates: [makeCandidate({ accountId: 'conta-b', label: 'Router', providerId: 'openia' })],
     })
     expect(openia.costNotice).toContain('créditos por uso do OpenRouter em Router')
+  })
+
+  it('Openia para Openia mostra o preço do modelo que o bloco novo repete; sem modelo conhecido, não inventa', () => {
+    const deOpenia = (openiaModelPrice: { model: string; completionPrice: number } | null) =>
+      buildAccountSwitchDialogModel({
+        proposal: makeProposal({
+          from: { ...makeProposal().from, providerId: 'openia', label: 'Pessoal' },
+          candidates: [makeCandidate({ accountId: 'conta-b', label: 'Router', providerId: 'openia' })],
+        }),
+        selectedAccountId: null,
+        sourceYolo: false,
+        openiaModelPrice,
+        transcriptChars: 3277,
+        transcriptLines: 48,
+        nowMs: NOW,
+        timeOptions: SP,
+      }).costNotice
+    expect(deOpenia({ model: 'anthropic/claude-sonnet-4', completionPrice: 0.000015 })).toContain(
+      'créditos por uso do OpenRouter em Router (modelo anthropic/claude-sonnet-4: $15.00/M tokens de saída)',
+    )
+    expect(deOpenia({ model: 'meta/llama-free', completionPrice: 0 })).toContain('(modelo meta/llama-free: gratuito)')
+    expect(deOpenia(null)).toMatch(/créditos por uso do OpenRouter em Router\.$/)
+
+    // De outro provedor, o Openia abre sem modelo (escolhido no menu dele): não há preço a mostrar.
+    const deCodex = buildAccountSwitchDialogModel({
+      proposal: makeProposal({ candidates: [makeCandidate({ accountId: 'conta-b', label: 'Router', providerId: 'openia' })] }),
+      selectedAccountId: null,
+      sourceYolo: false,
+      openiaModelPrice: { model: 'anthropic/claude-sonnet-4', completionPrice: 0.000015 },
+      transcriptChars: 3277,
+      transcriptLines: 48,
+      nowMs: NOW,
+      timeOptions: SP,
+    })
+    expect(deCodex.costNotice).not.toContain('modelo')
+  })
+
+  it('lê o modelo dos argumentos do Openia', () => {
+    expect(openiaModelArg(['run', '--model', 'openai/gpt-x', '--interface', 'claude'])).toBe('openai/gpt-x')
+    expect(openiaModelArg(['run', '--no-model'])).toBeNull()
+    expect(openiaModelArg(undefined)).toBeNull()
   })
 
   it('outro provedor avisa que o histórico mascarado vai para ele', () => {

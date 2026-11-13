@@ -141,6 +141,12 @@ export function buildAccountSwitchDialogModel(params: {
   selectedAccountId: string | null
   /** O bloco antigo abriu com Yolo (`hasYoloFlag` nos argumentos dele). */
   sourceYolo: boolean
+  /**
+   * Preço do modelo que o bloco antigo do Openia usava (`--model`). Só vale de
+   * Openia para Openia, em que os argumentos se repetem (§8.2); de outro
+   * provedor o Openia abre sem modelo e a pessoa escolhe no menu dele.
+   */
+  openiaModelPrice?: { model: string; completionPrice: number } | null
   transcriptChars: number
   transcriptLines: number
   nowMs: number
@@ -189,7 +195,8 @@ export function buildAccountSwitchDialogModel(params: {
     : `${capitalize(reason)} detectado às ${detectedClock} na conta ${fromDescribed}. Nenhuma conta apta agora.`
 
   const size = formatTranscriptSize(params.transcriptChars, params.transcriptLines)
-  const costNotice = selected ? buildCostNotice(selected, size) : null
+  const modelPrice = from.providerId === 'openia' ? (params.openiaModelPrice ?? null) : null
+  const costNotice = selected ? buildCostNotice(selected, size, modelPrice) : null
 
   const crossProvider = selected !== null && selected.providerId !== from.providerId
   const providerSwitchNotice = crossProvider
@@ -305,11 +312,27 @@ function capitalize(text: string): string {
   return text ? `${text[0].toUpperCase()}${text.slice(1)}` : text
 }
 
-function buildCostNotice(candidate: AccountSwitchCandidate, size: string): string {
+/** Modelo que o bloco do Openia recebeu (`openia run --model <id>`); `null` com `--no-model` ou sem argumentos. */
+export function openiaModelArg(args: readonly string[] | undefined): string | null {
+  const index = args?.indexOf('--model') ?? -1
+  const value = index >= 0 ? args?.[index + 1] : undefined
+  return value && !value.startsWith('-') ? value : null
+}
+
+function buildCostNotice(
+  candidate: AccountSwitchCandidate,
+  size: string,
+  modelPrice: { model: string; completionPrice: number } | null,
+): string {
   const name = candidate.label.trim() || 'conta sem nome'
+  // O mesmo formato do configurador do Openia (`AgentConfigFields`): preço por milhão de tokens de saída.
+  const perMillion = modelPrice && modelPrice.completionPrice > 0
+    ? `$${(modelPrice.completionPrice * 1_000_000).toFixed(2)}/M tokens de saída`
+    : 'gratuito'
+  const price = modelPrice ? ` (modelo ${modelPrice.model}: ${perMillion})` : ''
   const consumption =
     candidate.providerId === 'openia'
-      ? `créditos por uso do OpenRouter em ${name}`
+      ? `créditos por uso do OpenRouter em ${name}${price}`
       : isUsageBilling(candidate.billingDeclared, candidate.billingDetected)
         ? `cobrança por uso da conta ${name}`
         : candidate.billingDeclared === 'assinatura' || candidate.billingDetected === 'assinatura'

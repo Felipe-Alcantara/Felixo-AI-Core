@@ -37,6 +37,7 @@ export function AccountSwitchDialog({ binding }: { binding: AccountSwitchDialogB
     proposal,
     selectedAccountId: selectedId,
     sourceYolo: binding.sourceYolo,
+    openiaModelPrice: binding.openiaModelPrice,
     transcriptChars: transcript?.ok ? transcript.chars : 0,
     transcriptLines: transcript?.ok ? transcript.lines : 0,
     nowMs,

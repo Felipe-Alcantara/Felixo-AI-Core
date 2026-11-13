@@ -17,7 +17,7 @@ import {
   type ContinuationNodeOptions,
   type TranscriptPreparation,
 } from '../services/account-continuation'
-import { hasYoloFlag, type ContinuationReason } from '../services/account-switch-dialog'
+import { hasYoloFlag, openiaModelArg, type ContinuationReason } from '../services/account-switch-dialog'
 import { canvasNodeSelector, focusReturnTarget, focusWasLost } from '../services/keyboard-focus'
 
 type DialogState = {
@@ -35,6 +35,8 @@ type DialogState = {
   sourceActiveRequired: boolean
   /** O bloco antigo abriu com Yolo (lido ao abrir o diálogo). */
   sourceYolo: boolean
+  /** Preço do modelo do bloco antigo do Openia, buscado no catálogo depois de abrir. */
+  openiaModelPrice: { model: string; completionPrice: number } | null
 }
 
 export type AccountSwitchDialogBinding = {
@@ -49,6 +51,8 @@ export type AccountSwitchDialogBinding = {
   sourceActiveRequired: boolean
   /** O bloco antigo abriu com Yolo: o diálogo diz isso no mesmo provedor. */
   sourceYolo: boolean
+  /** Preço do modelo do Openia de origem (só de Openia para Openia). */
+  openiaModelPrice: { model: string; completionPrice: number } | null
   canPin: boolean
   onConfirm: (params: {
     destinationAccountId: string
@@ -178,6 +182,7 @@ export function useAccountContinuation({
       if (!proposal || !sourceNodeId) return
       triggerRef.current = trigger
       const source = sessions.getTranscript(sourceNodeId)
+      const sourceArgs = nodesRef.current?.find((node) => node.id === sourceNodeId && node.type === 'terminal')?.data.args
       setDialog({
         proposalId,
         sourceNodeId,
@@ -188,10 +193,21 @@ export function useAccountContinuation({
         busy: false,
         error: null,
         sourceActiveRequired: false,
-        sourceYolo: hasYoloFlag(
-          nodesRef.current?.find((node) => node.id === sourceNodeId && node.type === 'terminal')?.data.args,
-        ),
+        sourceYolo: hasYoloFlag(sourceArgs),
+        openiaModelPrice: null,
       })
+      // §8.2: no Openia o custo diz também o preço do modelo, que o bloco novo repete.
+      const openiaModel = proposal.from.providerId === 'openia' ? openiaModelArg(sourceArgs) : null
+      if (openiaModel) {
+        void Promise.resolve(window.felixo?.openia?.listModels())
+          .then((result) => {
+            const found = result?.ok ? result.models?.find((item) => item.id === openiaModel) : undefined
+            if (!found) return
+            const price = { model: found.id, completionPrice: found.completionPrice }
+            setDialog((current) => (current?.proposalId === proposalId ? { ...current, openiaModelPrice: price } : current))
+          })
+          .catch(() => undefined)
+      }
       void prepareRedactedTranscript(store.bridge, source.text).then((transcript) => {
         setDialog((current) => (current?.proposalId === proposalId ? { ...current, transcript } : current))
       })
@@ -399,6 +415,7 @@ export function useAccountContinuation({
           error: dialog.error,
           sourceActiveRequired: dialog.sourceActiveRequired,
           sourceYolo: dialog.sourceYolo,
+          openiaModelPrice: dialog.openiaModelPrice,
           canPin: Boolean(dialogProposal.from.accountId),
           onConfirm: (params) => void confirm(params),
           onLater: () => {
