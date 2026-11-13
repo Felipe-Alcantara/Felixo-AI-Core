@@ -2286,3 +2286,45 @@ Estado: concluído (deploy no adendo).
 **Adendo (2026-11-13, 13:15): CI e Release.** O CI de `add87c7` (run 43458105431, 12:59–13:06) passou no Validate de Windows,
 macOS, Ubuntu e Ubuntu ARM e no smoke do canvas. O Release gate (run 43459269767) e o Release (run 43459307259, 13:06–13:13)
 publicaram a `v0.1.543`.
+
+## 2026-11-13 — Deps: `allowScripts` alinhado ao lockfile
+
+**Agente / repositório.** Resolver hotfix — Felixo-AI-Core. Task `3e991f95-497e-8108-bf74-f5ec9466cb07`.
+
+**O que foi medido.**
+- A task (28/09) citava o Electron 41.10.7. O lock de hoje instala o 42.11.16, e o pacote 42 não tem mais script de instalação:
+  ele baixa o binário na primeira execução (`downloadElectron` em `index.js`). A entrada `electron@41.3.0` não cobria nenhum
+  pacote. O `npm install-scripts prune --dry-run` a dá como "package not installed".
+- O lock tem três pacotes com script de instalação: `electron-winstaller@5.4.0` e `node-pty@1.1.0`, ambos cobertos, e
+  `fsevents@2.3.3` (`node-gyp rebuild`), que é opcional, só é instalado no macOS e não estava coberto.
+- Quem avisava era o npm 11.21 do projeto (`devDependency`), e não o 10.9.9 do runner. No CI do macOS (run 43458105431), o
+  `npm rebuild node-pty` do `pretest` avisava "1 package has install scripts not yet covered by allowScripts".
+- Reproduzido no Windows com `npm ci --os=darwin --cpu=arm64 --strict-allow-scripts --dry-run`, que falhava com
+  `ESTRICTALLOWSCRIPTS` e "fsevents@2.3.3".
+
+**O que mudou.**
+- `allowScripts`: saiu `electron@41.3.0` e entrou `fsevents@2.3.3`, aprovado como o script já rodava. `node-pty` e
+  `electron-winstaller` seguem fixados na versão do lock.
+- Teste novo, `scripts/allow-scripts-policy.test.cjs`. Ele usa a regra de casamento do próprio npm (`script-allowed.js` do arborist)
+  e lê só o `package.json` e o lock, então vale em todas as plataformas. Exige duas coisas:
+  - todo pacote do lock com script de instalação tem entrada;
+  - toda entrada cobre algum pacote.
+
+**Validação.**
+- O teste novo falhava antes da mudança, com os dois casos (`node_modules/fsevents@2.3.3` e `electron@41.3.0`), e agora passa.
+- Com o npm do projeto, numa cópia temporária:
+  - `npm ci --os=darwin --cpu=arm64 --strict-allow-scripts --dry-run` sai com 0;
+  - um `npm ci` real no Windows sai com 0 e sem nenhum aviso de allowScripts;
+  - `npm install-scripts ls` diz "No packages with unreviewed install scripts".
+- Gate:
+  - `npm test`: 3256 testes, 3246 passam, 10 pulados, 0 falham;
+  - vitest: 3478 passam;
+  - `eslint .` limpo.
+
+**Não validado.**
+- O `npm ci` real no macOS fica para o CI; aqui foi só a simulação com `--os=darwin`.
+
+**Ponto de atenção.** Não rode `npm install-scripts prune` no Windows nem no Linux. O comando olha só o que está instalado e tiraria
+o `fsevents@2.3.3`. Se isso acontecer, o teste novo falha.
+
+Estado: concluído (deploy no adendo).
