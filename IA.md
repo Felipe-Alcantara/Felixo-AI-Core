@@ -2196,3 +2196,46 @@ Gemini na cadeia.
 **Ponto de atenção do ambiente.** Rodar `npm test` num worktree cujo `node_modules` é um link para o do checkout principal faz o `pretest` (`npm rebuild node-pty`) regravar o `lib` do `node-pty` desse checkout. Aqui o `tsc` do TypeScript 6 regravou os 36 arquivos com outro JavaScript e ainda acusou TS5108 (`target=ES5`); o teste `node-pty-windows-kill` reprovou por isso. O `lib` foi reposto a partir do pacote publicado (`npm pack node-pty@1.1.0`, `diff -r` igual); sobra só um `lib/tsconfig.tsbuildinfo` inerte. Os binários nativos (`prebuilds`) não mudaram, e um PTY real abriu depois. Num worktree assim, rode a suíte direto por `scripts/run-node-unit-tests.cjs`.
 
 Estado: concluído e publicado (ver o commit abaixo).
+
+## 2026-11-13 — Contas: acessibilidade da interface da cadeia (os não bloqueantes da revisão do PR #97)
+
+**Agente / repositório.** Resolver hotfix — Felixo-AI-Core. Task `3e991f95-497e-815c-845c-da8829970c0c`.
+
+**O que foi medido (código de 13/11; os seis itens de 28/09 seguiam abertos).**
+1. "Configurar cadeia" com o painel "Limites e uso" já aberto: o pedido de aba (`requestAgentUsageTab`) só era lido ao montar, e
+   o diálogo fechava sem devolver o foco, que caía no `body`.
+2. "Fixar nesta conta" / "Voltar para a cadeia" no painel de detalhes:
+   - eram dois botões diferentes, e o focado desmontava na troca;
+   - `disabled` durante o pedido já tirava o foco no Chromium.
+3. Card de troca de provedor do orquestrador: a região inteira era `aria-live`, e o "em N min" do prazo, que se atualiza a cada
+   30 s, reanunciava o card.
+4. Faixas da cadeia: cada uma nascia já preenchida dentro do próprio `role="status"`, e o leitor de tela não anuncia uma região viva
+   que entra no DOM com o texto pronto.
+5. §8.2: o custo do diálogo no Openia não dizia o preço do modelo.
+6. Registro de trocas: todos os "Ir para o bloco" tinham o mesmo nome acessível.
+
+**O que mudou** (um commit por item, de `3925c0c` a `69c835c`, mais `bc040fe` do smoke e `bde4fd5` do inventário):
+1. O painel montado assina os pedidos de aba (`subscribeAgentUsageTabRequests`) e põe o foco na aba pedida, também ao montar.
+2. Um botão só, que troca de texto, com `aria-disabled`. Se ele some (cadeia desligada), o foco vai para o texto do modo.
+3. O parágrafo do prazo fica `aria-live="off"` e a região anuncia só os cards novos (`aria-relevant="additions"`).
+4. `TerminalChainAnnouncer`: uma região viva invisível, montada com o bloco, em que cada faixa entra como um parágrafo novo. A faixa
+   visível passa a ser `data-terminal-chain-banner`.
+5. De Openia para Openia, o hook lê o `--model` do bloco antigo e busca o preço no catálogo (`openia.listModels`). O custo diz
+   "(modelo X: $N/M tokens de saída)" ou "gratuito". De outro provedor o Openia abre sem modelo, e nada é inventado.
+6. `row.focusLabel`: "Ir para o bloco: origem para destino, hora", único por linha, começando pelo texto visível.
+
+**Validação.**
+- vitest: os testes novos dos itens 1, 3, 4, 5 e 6 falhavam antes da mudança (o do item 3 conferido também com `git stash`).
+- Item 2: o passo C6c do smoke da sessão C aciona os dois textos com Enter e exige o foco no botão.
+- C4, C6b, C7 e C10 passaram a procurar a faixa por `data-terminal-chain-banner`. A região viva invisível também é `role="status"`
+  e tem o mesmo texto, então passaria pelo seletor antigo.
+- `npm test`: 3252 testes, 3242 passam, 10 pulados, 0 falham. vitest com 3478 passando. `eslint .` e `npm run build` limpos.
+  Inventário regenerado.
+
+**Não validado.**
+- O item 1 não foi conferido pelo teclado no app: "Configurar cadeia" só aparece no diálogo sem conta apta, que o smoke não monta.
+- Nenhum leitor de tela real (NVDA, VoiceOver) foi usado.
+- As faixas de retomada e de chave recusada do mesmo bloco seguem com o padrão antigo (`role="status"` já preenchido); ficaram fora
+  do escopo da cadeia.
+
+Estado: concluído (deploy no adendo).
