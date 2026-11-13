@@ -400,6 +400,8 @@ export type AccountSwitchHistoryRow = {
   stateLabel: string
   /** Bloco de destino (ou de origem) para "Ir para o bloco". */
   nodeId: string | null
+  /** Nome acessível do "Ir para o bloco": o texto visível mais a rota e a hora, único por linha. */
+  focusLabel: string
 }
 
 export function toHistoryRow(
@@ -412,10 +414,11 @@ export function toHistoryRow(
   const to = entry.to
     ? endpointLabel(entry.to.label, entry.to.accountId, entry.to.providerId)
     : null
+  const when = formatDateTime(at, options)
   return {
     id: entry.id,
     at,
-    when: formatDateTime(at, options),
+    when,
     whenRelative: formatAgo(at, nowMs),
     route: to ? `${from} → ${to}` : from,
     reason: entry.reason.trim() || failureClassLabel(entry.failureClass),
@@ -423,6 +426,7 @@ export function toHistoryRow(
     stateLabel: switchStateLabel(entry.state),
     nodeId:
       nodeIdFromPtySessionId(entry.targetSessionId) ?? nodeIdFromPtySessionId(entry.sourceSessionId),
+    focusLabel: `Ir para o bloco: ${to ? `${from} para ${to}` : from}, ${when}`,
   }
 }
 

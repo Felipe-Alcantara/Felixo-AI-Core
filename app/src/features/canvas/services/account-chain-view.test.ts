@@ -393,6 +393,24 @@ describe('toHistoryRow', () => {
     expect(row.nodeId).toBe('bloco-2')
   })
 
+  it('"Ir para o bloco" tem nome acessível próprio por linha, começando pelo texto visível', () => {
+    // Antes todos os botões do registro se chamavam só "Ir para o bloco".
+    const primeira = toHistoryRow(entry, NOW, SP)
+    const segunda = toHistoryRow(
+      {
+        ...entry,
+        id: 'evento-2',
+        to: { accountId: 'conta-c', providerId: 'claude', label: 'Max' },
+        spawnedAt: '2026-09-28T18:10:00.000Z',
+      },
+      NOW,
+      SP,
+    )
+    expect(primeira.focusLabel).toBe('Ir para o bloco: Pessoal (Codex) para Trabalho (Codex), 28/09/2026, 14:33')
+    expect(segunda.focusLabel).toMatch(/^Ir para o bloco: Pessoal \(Codex\) para Max \(Claude\), 28\/09\/2026, 15:10$/)
+    expect(primeira.focusLabel).not.toBe(segunda.focusLabel)
+  })
+
   it('aviso sem destino aponta para o bloco de origem; Login do sistema tem nome', () => {
     const row = toHistoryRow(
       {

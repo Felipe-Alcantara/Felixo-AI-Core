@@ -134,6 +134,7 @@ export function AccountSwitchHistory({
                 {canFocus && row.nodeId && (
                   <button
                     type="button"
+                    aria-label={row.focusLabel}
                     onClick={() => onFocusNode?.(row.nodeId as string)}
                     className="felixo-btn mt-1 rounded-sm px-1.5 py-0.5 text-[11px] text-sky-300 hover:bg-white/6"
                   >
