@@ -32,7 +32,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **Elementos:** 101 (10 blocos, 16 ferramentas, 75 outras superfícies)
 - **Controles:** 382, dos quais 57 com teste específico
 - **Elementos sem nenhum teste:** 4
-- **Lacunas:** 258 (alto 8, médio 138, baixo 112), em 70 tasks
+- **Lacunas:** 257 (alto 8, médio 138, baixo 111), em 69 tasks
 
 ## Moldura do canvas
 
@@ -2920,7 +2920,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3e891f95-497e-8148-b00e-f27e78767664` — 2 lacunas
 - `3e891f95-497e-81b3-8857-da9125ff3f49` — 1 lacuna
 - `3e991f95-497e-810b-9f94-ed5201606718` — 1 lacuna
-- `3e991f95-497e-811d-93e4-c6f283e26dde` — 1 lacuna
 - `3e991f95-497e-811e-a0a3-c9c0dd6d0c48` — 1 lacuna
 - `3e991f95-497e-812b-8456-e0073877e9d7` — 1 lacuna
 - `3e991f95-497e-812d-b877-e7bb0162a60f` — 1 lacuna

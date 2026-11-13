@@ -936,11 +936,6 @@ export const agentToolSurfaces: InventoryElement[] = [
         risk: 'médio',
         task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
       },
-      {
-        what: 'Contas do Gemini ficam travadas ("o app não confere o login deste provedor") e não entram na cadeia',
-        risk: 'baixo',
-        task: '3e991f95-497e-811d-93e4-c6f283e26dde',
-      },
     ],
     overlap: 'Dentro do painel Limites e uso (CanvasPanel z-20/30, tamanho lg); os FelixoSelect de estratégia e cobrança abrem em portal z-1000; Alt+↑/↓ só é tratado quando o alvo é a própria linha, sem disputar teclas com os campos',
   },
