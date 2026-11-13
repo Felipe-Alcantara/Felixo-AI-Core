@@ -51,6 +51,7 @@ import {
   buildTerminalChainBanners,
   ptySessionIdForNode,
 } from '../services/account-chain-view'
+import { TerminalChainAnnouncer } from './TerminalChainAnnouncer'
 
 type TerminalNodeDataWithHandlers = TerminalNodeData & {
   onExpand?: (nodeId: string) => void
@@ -293,6 +294,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
         minHeight={NODE_MIN_SIZE.terminal.height}
       />
       <TerminalSideHandles />
+      <TerminalChainAnnouncer banners={chainBanners} />
       <NodeHeader
         icon={<ProviderMark command={nodeData.command} />}
         editableValue={nodeData.label ?? ''}
@@ -397,7 +399,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
           {chainBanners.map((banner) => (
             <div
               key={banner.key}
-              role="status"
+              data-terminal-chain-banner
               className={`rounded-sm border px-1.5 py-1 text-[10px] leading-snug ${
                 banner.tone === 'warning'
                   ? 'border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] text-(--color-warning)'
