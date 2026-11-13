@@ -529,4 +529,4 @@ if (require.main === module) {
   })
 }
 
-module.exports = { anonymize, assertAnonymous, assertNoSecrets, mergeChunks, parseArgs, scenarioFor, SECRET_PATTERNS }
+module.exports = { anonymize, assertAnonymous, assertNoSecrets, createScreen, mergeChunks, parseArgs, scenarioFor, SECRET_PATTERNS }
