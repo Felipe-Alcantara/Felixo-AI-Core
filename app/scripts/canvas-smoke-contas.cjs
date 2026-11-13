@@ -313,7 +313,7 @@ function criarSessaoDaCadeia(deps) {
     await page.getByRole('button', { name: 'Configurar novo agente' }).click()
 
     await digitarNoBloco(passo, fixo, GATILHO_LIMITE)
-    await fixo.locator('[role="status"]', { hasText: 'bloco fixo: nada troca sozinho' }).waitFor({ state: 'visible', timeout })
+    await fixo.locator('[data-terminal-chain-banner]', { hasText: 'bloco fixo: nada troca sozinho' }).waitFor({ state: 'visible', timeout })
     await pausa(JANELA_DE_SILENCIO_MS)
     const propostas = await propostasDeTroca()
     exigir(propostas.length === 0, passo, 'o bloco fixo gerou proposta de troca', propostas)
@@ -374,7 +374,7 @@ function criarSessaoDaCadeia(deps) {
     const bloco = nodePorId(blocos.recusa)
     const antes = await contadores()
     await digitarNoBloco(passo, bloco, GATILHO_LIMITE)
-    await bloco.locator('[role="status"]', { hasText: 'você recusou a troca' }).waitFor({ state: 'visible', timeout })
+    await bloco.locator('[data-terminal-chain-banner]', { hasText: 'você recusou a troca' }).waitFor({ state: 'visible', timeout })
     await pausa(JANELA_DE_SILENCIO_MS)
     exigir(await page.locator('[role="dialog"]').count() === 0, passo, 'um diálogo abriu sozinho')
     exigir(await bloco.getByRole('button', { name: 'Ver opções' }).count() === 0, passo, 'o limite recusado ganhou proposta automática')
@@ -400,6 +400,25 @@ function criarSessaoDaCadeia(deps) {
     const depois = await contadores()
     exigir(depois.spawn === antes.spawn, passo, 'pedir a troca e fechar gerou pty:spawn', { antes, depois })
     log('C6b o mesmo limite depois de "Agora não": faixa "você recusou a troca" sem proposta nem diálogo; [Trocar de conta] abre o diálogo e o Esc fecha sem pty:spawn: ok')
+  }
+
+  // Os dois botões de modo eram elementos diferentes, e o focado sumia na troca (o foco caía no body).
+  async function checarFocoDoModoNoDetalhe(blocos) {
+    const passo = 'C6c foco do modo no painel de detalhes'
+    const bloco = nodePorId(blocos.recusa)
+    await bloco.getByRole('button', { name: 'Ver detalhes do terminal' }).focus()
+    await page.keyboard.press('Enter')
+    const painel = page.getByRole('region', { name: 'Detalhes do terminal' })
+    await painel.waitFor({ state: 'visible', timeout })
+    const focoEm = (texto) =>
+      esperar(passo, `o foco ficar em "${texto}"`, (alvo) => document.activeElement?.textContent?.trim() === alvo, texto)
+    await painel.getByRole('button', { name: 'Fixar nesta conta' }).focus()
+    await page.keyboard.press('Enter')
+    await focoEm('Voltar para a cadeia')
+    await page.keyboard.press('Enter')
+    await focoEm('Fixar nesta conta')
+    await painel.getByRole('button', { name: 'Fechar painel Detalhes do terminal' }).click()
+    log('C6c "Fixar nesta conta" e "Voltar para a cadeia" pelo teclado: o foco fica no botão nas duas trocas: ok')
   }
 
   async function checarViewportMinimoDoDialogo(passo, dialogo) {
@@ -450,7 +469,7 @@ function criarSessaoDaCadeia(deps) {
     const depois = await exigirSpawns(passo, 'confirmar com clique duplo', antes.spawn + 1)
     exigir(await nodeDaConta(`${contas.segunda} · cadeia`).count() === 1, passo, 'mais de um bloco novo na conta de destino')
     exigir(await bloco.count() === 1, passo, 'o bloco antigo sumiu')
-    await bloco.locator('[role="status"]', { hasText: 'continuado em' }).waitFor({ state: 'visible', timeout })
+    await bloco.locator('[data-terminal-chain-banner]', { hasText: 'continuado em' }).waitFor({ state: 'visible', timeout })
     const antigoVivo = await bloco.evaluate((node) => !/Encerrado|Erro/.test(node.textContent ?? ''))
     exigir(antigoVivo, passo, 'o bloco antigo não está mais vivo')
     log(`C7 confirmar (com clique duplo) deu exatamente +1 pty:spawn; bloco novo em ${contas.segunda} com selo cadeia, o diálogo dizendo o modo de permissão (mesmo provedor) e o antigo parado com "continuado em": ok`)
@@ -477,7 +496,7 @@ function criarSessaoDaCadeia(deps) {
   async function checarReloadSemReenvio(contas) {
     const passo = 'C10 reload'
     // A faixa do C4 só chegava por push: tem de voltar pelo get-state depois do reload.
-    const faixaDoFixo = () => nodeDaConta(`${contas.primeira} · fixa`).locator('[role="status"]', { hasText: 'bloco fixo: nada troca sozinho' })
+    const faixaDoFixo = () => nodeDaConta(`${contas.primeira} · fixa`).locator('[data-terminal-chain-banner]', { hasText: 'bloco fixo: nada troca sozinho' })
     exigir(await faixaDoFixo().count() === 1, passo, 'a faixa do bloco fixo (C4) não estava à mostra antes do reload')
     await pausa(JANELA_DE_SILENCIO_MS)
     const antes = await contadores()
@@ -577,6 +596,7 @@ function criarSessaoDaCadeia(deps) {
       await checarPropostaENotificacao(blocos)
       await checarDialogoEAgoraNao(contas, blocos)
       await checarLimiteRecusadoDeNovo(contas, blocos)
+      await checarFocoDoModoNoDetalhe(blocos)
       await confirmarTroca(contas, blocos)
       await checarAbaTrocas(contas)
       await checarReloadSemReenvio(contas)
