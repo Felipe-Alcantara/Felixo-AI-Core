@@ -26,6 +26,7 @@ const path = require('node:path')
 const { execFileSync } = require('node:child_process')
 const { anonymize, assertAnonymous, assertNoSecrets, createScreen, mergeChunks } = require('./record-terminal-fixture.cjs')
 const { createNodePtySpawn } = require('../electron/services/node-pty-windows-kill.cjs')
+const { ensureNodePtySpawnHelperExecutable } = require('../electron/services/pty-native-assets.cjs')
 
 const APP_DIR = path.resolve(__dirname, '..')
 const DEFAULT_OUT = path.join(APP_DIR, 'electron', '__fixtures__', 'limit-banners')
@@ -142,7 +143,8 @@ function launchPlan(provider, { baseUrl, home, workdir }) {
   }))
   return {
     command: 'gemini',
-    args: ['-i', PROMPT],
+    // A versão estável recusa pasta não confiada antes do pedido; a gravação usa uma pasta temporária.
+    args: ['--skip-trust', '-i', PROMPT],
     env: { GEMINI_CLI_HOME: home, GEMINI_API_KEY: 'chave-falsa-da-gravacao', GOOGLE_GEMINI_BASE_URL: baseUrl },
   }
 }
@@ -204,7 +206,9 @@ function startBackend(provider) {
 }
 
 async function record(args) {
-  // O mesmo `spawn` do app: no Windows o `kill()` cru do node-pty imprime "AttachConsole failed".
+  // O mesmo `spawn` do app: no macOS o `spawn-helper` do npm vem sem permissão de execução
+  // (`posix_spawnp failed`), e no Windows o `kill()` cru do node-pty imprime "AttachConsole failed".
+  ensureNodePtySpawnHelperExecutable()
   const spawnPty = createNodePtySpawn(require('node-pty'))
   const server = await startBackend(args.provider)
   // Caminhos longos (`realpath.native`): no Windows a pasta temporária vem no formato curto (C:\Users\NOME~1),
@@ -243,7 +247,11 @@ async function record(args) {
   while (!BANNER_ON_SCREEN[args.provider].test(screen.text()) && Date.now() < deadline && !exited) await sleep(200)
   const seen = BANNER_ON_SCREEN[args.provider].test(screen.text())
   if (seen) await sleep(AFTER_BANNER_MS)
+  // Como o gravador da Leitura: espera a sessão sair antes de seguir, ou o PTY segura o processo.
   if (!exited) child.kill()
+  for (let waited = 0; !exited && waited < 3000; waited += 250) await sleep(250)
+  if (!exited) child.kill('SIGKILL')
+  server.closeAllConnections?.()
   server.close()
 
   if (!seen) {
