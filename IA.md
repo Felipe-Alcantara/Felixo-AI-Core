@@ -2239,3 +2239,8 @@ Estado: concluído e publicado (ver o commit abaixo).
   do escopo da cadeia.
 
 Estado: concluído (deploy no adendo).
+
+**Adendo (2026-11-13, 12:46): CI e Release.** O CI de `fa290c8` (run 43452779202, 12:27–12:35) passou no Validate de Windows,
+macOS, Ubuntu e Ubuntu ARM e no smoke do canvas. Na sessão C saiu "C6c "Fixar nesta conta" e "Voltar para a cadeia" pelo teclado: o
+foco fica no botão nas duas trocas: ok", e C4, C6b, C7 e C10 passaram com `data-terminal-chain-banner`. O Release gate (run
+43454078840) e o Release (run 43454118543, 12:35–12:43) publicaram a `v0.1.542`.
