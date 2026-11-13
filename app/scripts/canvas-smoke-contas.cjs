@@ -454,7 +454,10 @@ function criarSessaoDaCadeia(deps) {
     const passo = 'C7 confirmar a troca'
     const bloco = await dispararLimiteNaCadeia(passo, blocos.confirmacao)
     const antes = await contadores()
-    await bloco.getByRole('button', { name: 'Ver opções' }).click()
+    // Pelo teclado, como no C6: cada "Abrir agente" abre a gaveta e reenquadra o canvas, e o
+    // bloco pode ficar sob a barra lateral, que tomaria o clique.
+    await bloco.getByRole('button', { name: 'Ver opções' }).focus()
+    await page.keyboard.press('Enter')
     const dialogo = page.getByRole('dialog')
     await dialogo.waitFor({ state: 'visible', timeout })
     // Mesmo provedor: o diálogo só diz o modo do bloco antigo (decisão de 12/11/2026), sem caixa de Yolo.
