@@ -2328,3 +2328,12 @@ publicaram a `v0.1.543`.
 o `fsevents@2.3.3`. Se isso acontecer, o teste novo falha.
 
 Estado: concluído (deploy no adendo).
+
+**Adendo (2026-11-13, 13:56): CI e Release.**
+
+- O CI de `52b21d2` (run 43463503408) passou no Validate de Windows, macOS, Ubuntu e Ubuntu ARM e na Dependency policy. No macOS,
+  o `npm rebuild node-pty` do `pretest` terminou sem o aviso de allowScripts, e os dois testes novos passaram.
+- O Canvas smoke reprovou na primeira rodada: o SA3 ("o foco ir para o campo da Busca") falhou 3 de 3 no mesmo runner. Na nova
+  rodada do job (attempt 2), passou. Era o mesmo código de app do `add87c7`, então a falha não vem desta mudança. Ficou uma task
+  aberta para a instabilidade.
+- O Release gate (run 43465813229) e o Release (run 43465853513, 13:45–13:54) publicaram a `v0.1.544`.
