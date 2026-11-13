@@ -32,7 +32,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **Elementos:** 101 (10 blocos, 16 ferramentas, 75 outras superfícies)
 - **Controles:** 382, dos quais 58 com teste específico
 - **Elementos sem nenhum teste:** 4
-- **Lacunas:** 257 (alto 8, médio 138, baixo 111), em 69 tasks
+- **Lacunas:** 256 (alto 8, médio 137, baixo 111), em 68 tasks
 
 ## Moldura do canvas
 
@@ -2418,10 +2418,10 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 - **ID:** `handoff-dialog` · **Dono:** `src/features/canvas/components/HandoffDialog.tsx`
 - **Persistência:** localStorage felixo:dialog-size:handoff; localStorage felixo:last-agent-launch-preferences (só ao confirmar); canvas salvo: bloco de continuação com handoffText; processo principal: registro de trocas (record-manual)
-- **IPC:** `account-chain:record-manual`, `account-chain:confirm`, `pty:spawn`
-- **Depende de:** `useAgentConfig`, `AgentConfigFields`, `useResizableDialog`, `keyboard-focus (tabTrapTarget)`, `CanvasView.passResponsibility`, `buildTerminalHandoffPrompt`, `getAccountChainBridge`
+- **IPC:** `account-chain:redact-transcript`, `account-chain:record-manual`, `account-chain:confirm`, `pty:spawn`
+- **Depende de:** `useAgentConfig`, `AgentConfigFields`, `useResizableDialog`, `keyboard-focus (tabTrapTarget)`, `CanvasView.passResponsibility`, `buildRedactedHandoffText`, `buildTerminalHandoffPrompt`, `getAccountChainBridge`
 - **Sobreposição:** fixed inset-0 z-60 (nokey), fundo bg-black/60; prende o Tab e fica por cima do tour (verificado no smoke). Redimensionável (max-w-md, max-h 100dvh − 2rem). Divide a camada z 60 com a pergunta de agente: pela ordem do DOM, fica por cima dela.
-- **Testes:** `src/features/canvas/components/modal-dialogs-keys.test.ts`, `src/features/canvas/services/terminal-handoff.test.ts`, `src/features/shared/dialog/dialog-sizing.test.ts`, `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos`, `scripts/canvas-smoke-onboarding.cjs` → `criarCenariosDoTutorial`
+- **Testes:** `src/features/canvas/components/modal-dialogs-keys.test.ts`, `src/features/canvas/services/terminal-handoff.test.ts`, `src/features/canvas/services/account-continuation.test.ts`, `src/features/canvas/terminal/terminal-buffer-reader.test.ts`, `src/features/shared/dialog/dialog-sizing.test.ts`, `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos`, `scripts/canvas-smoke-onboarding.cjs` → `criarCenariosDoTutorial`
 
 | Estado | Quando |
 | --- | --- |
@@ -2434,12 +2434,11 @@ Sem controle próprio: as ações vêm de outros elementos.
 | --- | --- | --- | --- | --- |
 | `aria-label="Fechar"` (button) | clique, Esc ou mousedown no fundo | closeHandoff: fecha sem criar nada; a configuração temporária é descartada. | Sem falha própria. | — |
 | `Cancelar` (button) | clique | closeHandoff: mesmo efeito do Fechar. (desabilitado: busy) | Sem falha própria. | — |
-| `onClick={() => void confirmar()}` (button) | clique | prepareForLaunch → buildOptions (sufixo " · continuação" sem nome próprio) → passResponsibility monta buildTerminalHandoffPrompt com o histórico e cria o bloco de continuação (createContinuationNode → PTY novo com handoffText); vindo de detecção, account-chain:record-manual; savePreferences e fecha. (desabilitado: busy ou accountSelectionIssue) | Configuração inválida ou origem ausente: erro em texto, diálogo aberto. Falha do record-manual é engolida de propósito (.catch). | — |
+| `onClick={() => void confirmar()}` (button) | clique | prepareForLaunch → buildOptions (sufixo " · continuação" sem nome próprio) → passResponsibility redige o histórico (buildRedactedHandoffText → account-chain:redact-transcript, o mesmo redactSecrets da cadeia, sobre o readTranscript com as quebras de largura juntadas), monta buildTerminalHandoffPrompt e cria o bloco de continuação (createContinuationNode → PTY novo com handoffText); vindo de detecção, account-chain:record-manual; savePreferences e fecha. (desabilitado: busy ou accountSelectionIssue) | Configuração inválida, origem ausente ou falha da redação (nada é enviado): erro em texto, diálogo aberto. Falha do record-manual é engolida de propósito (.catch). | — |
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | Os smokes só abrem o diálogo e fecham com Esc: confirmar a passagem (bloco novo + PTY) nunca é exercitado ponta a ponta. | médio | `3ec91f95-497e-81e8-8f18-e2a529b0568e` |
-| A passagem manual manda o histórico sem redigir segredos (só avisa no texto). | médio | `3e991f95-497e-811e-a0a3-c9c0dd6d0c48` |
 | Com o Claude na tela alternativa só a tela vai como contexto (avisado ao usuário e ao agente); a conversa inteira exige ler o arquivo da sessão do Claude (.jsonl) em vez do terminal. | médio | `41491f95-497e-81da-a20c-ce16ce0f3b5a` |
 | Falha do account-chain:record-manual some sem aviso: a passagem pode faltar no registro de trocas (HandoffDialog.tsx:127-136, intencional). | baixo | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 
@@ -2920,7 +2919,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3e891f95-497e-8148-b00e-f27e78767664` — 2 lacunas
 - `3e891f95-497e-81b3-8857-da9125ff3f49` — 1 lacuna
 - `3e991f95-497e-810b-9f94-ed5201606718` — 1 lacuna
-- `3e991f95-497e-811e-a0a3-c9c0dd6d0c48` — 1 lacuna
 - `3e991f95-497e-812b-8456-e0073877e9d7` — 1 lacuna
 - `3e991f95-497e-812d-b877-e7bb0162a60f` — 1 lacuna
 - `3e991f95-497e-815c-845c-da8829970c0c` — 1 lacuna

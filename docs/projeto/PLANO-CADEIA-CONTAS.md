@@ -763,7 +763,7 @@ A faixa oferece "Passar responsabilidade…", que abre o `HandoffDialog` existen
 ### 9.1 Montagem
 
 - `useAccountContinuation` extrai do `CanvasView.passResponsibility` (`:2269-2328`) uma função compartilhada `criarBlocoDeContinuacao(sourceId, transcript, options, extra)`, que já leva cwd e os links de arquivo do canvas (`:2300-2320`). O `CanvasView.tsx` tem 2935 linhas; a lógica nova não entra nele.
-- O transcript vem de `store.getTranscript(id).text`, como no `TerminalDrawer`. Ele passa por `account-chain:redact-transcript` (main, `redactSecrets`) **antes** de montar o prompt. É uma chamada IPC por continuação, com custo registrado no teste.
+- O transcript vem de `store.getTranscript(id).text`, como no `TerminalDrawer`. Ele passa por `account-chain:redact-transcript` (main, `redactSecrets`) **antes** de montar o prompt. É uma chamada IPC por continuação, com custo registrado no teste. Desde 13/11/2026 o `getTranscript` junta as linhas que o terminal só quebrou na largura (`readTranscript`, `isWrapped`), para um segredo mais longo que a linha chegar inteiro à redação. A passagem manual redige do mesmo jeito.
 - `buildTerminalHandoffPrompt` (`terminal-handoff.ts:38-69`) ganha `reason?` opcional. Sem ele, o texto de hoje não muda; o comentário de `:53-56`, sobre não inventar motivo, continua valendo. Com motivo confirmado, a linha é: "O terminal anterior parou porque a conta usada atingiu o limite de uso (detectado pelo app às HH:MM). A continuação foi confirmada pela pessoa. O último pedido pode ter ficado pela metade: confirme o estado real do repositório antes de refazer qualquer ação." A linha não identifica a conta.
 - As salvaguardas existentes continuam: o transcript não é autoridade, e o agente confere o estado real. **O último pedido não é redigitado.**
 - **Nó novo:** `accountId = destino`, `providerId`, `accountMode = 'chain'`, `chainTicket` (transitório), `chainOrigin`, e rótulo "‹rótulo› · continuação (‹conta›)".
@@ -1277,7 +1277,7 @@ Depois do push, acompanhar o CI até o estado final nos 4 SOs e anotar o SHA de 
 3. **Capturar o fluxo real de bytes do banner de limite** em Linux, macOS e Windows (ConPTY), para testar a detecção sobre a renderização real da TUI.
 4. **Openia: detecção de falta de crédito na saída da CLI**, quando existir mensagem própria ou fixture da interface executada.
 5. **Medir a colisão de refresh de token** com duas sessões, ou checagem + sessão, na mesma pasta de perfil.
-6. **Redigir segredos também na "Passar responsabilidade" manual** (hoje só a continuação da cadeia redige).
+6. **Redigir segredos também na "Passar responsabilidade" manual** (hoje só a continuação da cadeia redige). Feito em 13/11/2026. A passagem manual passa pelo mesmo `account-chain:redact-transcript` (`buildRedactedHandoffText`); se a redação falha, nada é enviado. O histórico das duas junta as linhas que o terminal só quebrou na largura (`readTranscript`): partido, um token mais longo que a linha passava pela redação.
 7. **Aplicar em código `maxCostEstimate` e `requireConfirmationForSensitiveActions`** do orquestrador.
 8. **Orquestrador usando contas próprias da cadeia.**
 9. **Confirmação de custo na geração de imagem e no ditado**, que cobram por uso fora da cadeia.
