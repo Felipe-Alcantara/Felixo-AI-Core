@@ -28,6 +28,25 @@ import {
   type TimeOptions,
 } from './account-chain-view'
 import { buildAgentArgs, getAgent, type AgentId } from './agent-launch-options'
+import type { ClaudeAutoContinueCancelResult } from '../terminal/terminal-session-api'
+
+/**
+ * O que o diálogo diz depois de "Cancelar a continuação automática": o
+ * resultado vem da tela do terminal antigo, não da suposição de que o Esc
+ * funcionou (com texto digitado na caixa, ele não cancela).
+ */
+export function autoContinueCancelMessage(result: ClaudeAutoContinueCancelResult): string {
+  switch (result) {
+    case 'cancelled':
+      return 'Continuação automática cancelada: o Claude do terminal antigo não vai continuar sozinho.'
+    case 'not-cancelled':
+      return 'O Esc foi enviado, mas o Claude não cancelou. Com texto digitado na caixa do terminal antigo o Esc não cancela: abra o terminal antigo e cancele lá.'
+    case 'not-armed':
+      return 'O terminal antigo não está esperando para continuar sozinho; nada foi enviado.'
+    case 'no-session':
+      return 'O terminal antigo não está mais aberto; nada foi enviado.'
+  }
+}
 
 /** Saída do terminal antigo mais recente que isto conta como "ainda ativo" (§8.4). */
 export const SOURCE_ACTIVE_WINDOW_MS = 5_000
@@ -227,7 +246,7 @@ export function buildAccountSwitchDialogModel(params: {
     : 'Sem saída desde que abriu.'
 
   const autoResume = proposal.sourceAutoResumeAt
-    ? `O Claude deste terminal está programado para continuar sozinho às ${formatClockTime(proposal.sourceAutoResumeAt, time)} na conta antiga. Isso poria dois agentes no mesmo trabalho. Se for continuar aqui, pressione Esc no terminal antigo ou feche-o.`
+    ? `O Claude deste terminal está programado para continuar sozinho às ${formatClockTime(proposal.sourceAutoResumeAt, time)} na conta antiga. Isso poria dois agentes no mesmo trabalho. Se for continuar aqui, cancele a continuação automática (o app manda um Esc ao terminal antigo) ou feche-o.`
     : null
 
   return {
@@ -266,7 +285,7 @@ export function buildAccountSwitchDialogModel(params: {
     permissionNotice,
     multipleSessionsNotice,
     oldTerminal: {
-      untouched: 'O terminal antigo não será encerrado nem receberá nada.',
+      untouched: 'O terminal antigo não será encerrado nem receberá nada ao abrir o bloco novo.',
       activity: sourceActive
         ? 'O terminal antigo ainda está produzindo saída.'
         : stoppedFor,

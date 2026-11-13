@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  autoContinueCancelMessage,
   buildAccountSwitchDialogModel,
   buildContinuationLaunch,
   countLines,
@@ -164,6 +165,15 @@ describe('buildAccountSwitchDialogModel', () => {
     expect(model({ sourceAutoResumeAt: '2026-09-28T19:40:00.000Z' }).oldTerminal.autoResume).toContain(
       'continuar sozinho às 16:40 na conta antiga',
     )
+  })
+
+  it('o resultado do cancelamento da continuação automática diz o que a tela mostrou, não o que se esperava', () => {
+    expect(autoContinueCancelMessage('cancelled')).toBe(
+      'Continuação automática cancelada: o Claude do terminal antigo não vai continuar sozinho.',
+    )
+    expect(autoContinueCancelMessage('not-cancelled')).toMatch(/^O Esc foi enviado, mas o Claude não cancelou\..*cancele lá\.$/)
+    expect(autoContinueCancelMessage('not-armed')).toMatch(/nada foi enviado\.$/)
+    expect(autoContinueCancelMessage('no-session')).toMatch(/nada foi enviado\.$/)
   })
 
   it('terminal antigo intacto; saída recente pede a segunda confirmação', () => {

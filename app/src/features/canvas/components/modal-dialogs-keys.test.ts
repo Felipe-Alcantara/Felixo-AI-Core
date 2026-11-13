@@ -26,6 +26,7 @@ function binding(overrides: Partial<AccountSwitchDialogBinding> = {}): AccountSw
     onCheckLogin: noop,
     onOpenChainSettings: noop,
     onGoToSource: noop,
+    onCancelAutoContinue: async () => 'not-armed',
     onClose: noop,
     screenOnly: false,
     ...overrides,
@@ -70,6 +71,21 @@ describe('modais sobre o canvas', () => {
     const mesmo = renderToStaticMarkup(createElement(AccountSwitchDialog, { binding: binding({ sourceYolo: true }) }))
     expect(mesmo).not.toContain('Yolo no bloco novo')
     expect(mesmo).toContain('Abre com Yolo (acesso total, sem confirmações), como o bloco antigo.')
+  })
+
+  it('o Claude programado para continuar sozinho ganha "Cancelar a continuação automática", com a região do resultado já montada', () => {
+    const programado = renderToStaticMarkup(
+      createElement(AccountSwitchDialog, {
+        binding: binding({ proposal: makeProposal({ sourceAutoResumeAt: '2026-09-28T19:40:00.000Z' }) }),
+      }),
+    )
+    const botao = /<button[^>]*data-felixo-cancel-auto-continue[^>]*>([^<]*)<\/button>/.exec(programado)
+    expect(botao?.[1]).toBe('Cancelar a continuação automática')
+    expect(botao?.[0]).toContain('aria-disabled="false"')
+    expect(programado).toMatch(/data-felixo-cancel-auto-continue[^>]*>[^<]*<\/button><p role="status"/)
+
+    const semContinuacao = renderToStaticMarkup(createElement(AccountSwitchDialog, { binding: binding() }))
+    expect(semContinuacao).not.toContain('data-felixo-cancel-auto-continue')
   })
 
   afterEach(() => {

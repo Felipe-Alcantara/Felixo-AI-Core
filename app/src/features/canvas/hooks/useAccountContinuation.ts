@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } fro
 import type { AccountSwitchProposal } from '../../shared/types/account-chain'
 import type { CanvasFlowNode } from './useCanvasPersistence'
 import type { TerminalNodeData } from '../types'
-import type { TerminalSessionStoreApi } from '../terminal/terminal-session-api'
+import type { ClaudeAutoContinueCancelResult, TerminalSessionStoreApi } from '../terminal/terminal-session-api'
 import { useAccountChain } from './useAccountChain'
 import type { AccountChainCanvasActions } from './account-chain-actions-context'
 import { changeSessionAccountMode } from '../services/account-chain-client'
@@ -68,6 +68,8 @@ export type AccountSwitchDialogBinding = {
   onCheckLogin: (accountIds: string[]) => void
   onOpenChainSettings: () => void
   onGoToSource: () => void
+  /** Um Esc no terminal antigo, só por este clique: cancela a continuação automática do Claude. */
+  onCancelAutoContinue: () => Promise<ClaudeAutoContinueCancelResult>
   onClose: () => void
 }
 
@@ -449,6 +451,7 @@ export function useAccountContinuation({
             openChainSettings()
           },
           onGoToSource: () => focusNode(dialog.sourceNodeId),
+          onCancelAutoContinue: () => sessions.cancelClaudeAutoContinue(dialog.sourceNodeId),
           onClose: () => closeDialog('trigger', dialog.sourceNodeId),
         }
       : null

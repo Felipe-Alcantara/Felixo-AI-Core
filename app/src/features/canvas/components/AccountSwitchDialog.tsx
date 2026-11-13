@@ -1,8 +1,14 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
 import { ArrowRightLeft, X } from 'lucide-react'
 import { getFocusableElements, tabTrapTarget } from '../services/keyboard-focus'
-import { buildAccountSwitchDialogModel, escapeDeclines, initialDialogSelection } from '../services/account-switch-dialog'
+import {
+  autoContinueCancelMessage,
+  buildAccountSwitchDialogModel,
+  escapeDeclines,
+  initialDialogSelection,
+} from '../services/account-switch-dialog'
 import type { AccountSwitchDialogBinding } from '../hooks/useAccountContinuation'
+import type { ClaudeAutoContinueCancelResult } from '../terminal/terminal-session-api'
 import { useClockTick } from '../hooks/useAccountChain'
 import { SCREEN_ONLY_NOTICE } from '../services/terminal-handoff'
 
@@ -27,6 +33,20 @@ export function AccountSwitchDialog({ binding }: { binding: AccountSwitchDialogB
   // Outro provedor: começa marcado (decisão de 12/11/2026); a pessoa pode desmarcar.
   const [yolo, setYolo] = useState(true)
   const [acknowledged, setAcknowledged] = useState(false)
+  // "Cancelar a continuação automática": o resultado vem da tela do terminal antigo.
+  const [autoContinue, setAutoContinue] = useState<{ busy: boolean; result: ClaudeAutoContinueCancelResult | null }>({
+    busy: false,
+    result: null,
+  })
+  const autoContinueDone = autoContinue.result !== null && autoContinue.result !== 'not-cancelled'
+  const cancelAutoContinue = () => {
+    if (autoContinue.busy || autoContinueDone) return
+    setAutoContinue({ busy: true, result: null })
+    void binding.onCancelAutoContinue().then(
+      (result) => setAutoContinue({ busy: false, result }),
+      () => setAutoContinue({ busy: false, result: 'no-session' }),
+    )
+  }
   const panelRef = useRef<HTMLDivElement>(null)
   const radiogroupRef = useRef<HTMLDivElement>(null)
   const titleId = useId()
@@ -305,7 +325,24 @@ export function AccountSwitchDialog({ binding }: { binding: AccountSwitchDialogB
           <p className={model.oldTerminal.sourceActive ? 'text-(--color-warning)' : undefined}>
             {model.oldTerminal.activity}
           </p>
-          {model.oldTerminal.autoResume && <p className="mt-1 text-(--color-warning)">{model.oldTerminal.autoResume}</p>}
+          {model.oldTerminal.autoResume && (
+            <>
+              <p className="mt-1 text-(--color-warning)">{model.oldTerminal.autoResume}</p>
+              {/* Um Esc no terminal antigo, só por este clique (o app nunca escreve lá sozinho). */}
+              <button
+                type="button"
+                data-felixo-cancel-auto-continue
+                aria-disabled={autoContinue.busy || autoContinueDone}
+                onClick={cancelAutoContinue}
+                className="felixo-btn mt-1 mr-2 rounded-sm px-1.5 py-0.5 text-[11px] text-sky-300 hover:bg-white/6 aria-disabled:opacity-50"
+              >
+                {autoContinue.busy ? 'Cancelando…' : 'Cancelar a continuação automática'}
+              </button>
+              <p role="status" className="mt-1">
+                {autoContinue.result ? autoContinueCancelMessage(autoContinue.result) : ''}
+              </p>
+            </>
+          )}
           <button
             type="button"
             onClick={binding.onGoToSource}
