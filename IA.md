@@ -2385,3 +2385,48 @@ Estado: concluído (deploy no adendo).
   smoke de primeira, inclusive o SA3 com a gaveta e o C7, e no Validate dos quatro sistemas.
 - O Release gate (43477039925) e o Release (43477078309, 14:52–15:01) publicaram a `v0.1.545`.
 - A resposta ao usuário foi enviada no Discord, a pedido do Felipe.
+
+## 2026-11-13 — Contas: banner de limite gravado da TUI real nos três sistemas
+
+**Agente / repositório.** Resolver hotfix — Felixo-AI-Core. Task `3e991f95-497e-8142-8839-e213ac8db0da`. Decisões do Felipe: simular pela CLI real; gravar Codex, Claude e Gemini; macOS e Linux por um workflow manual.
+
+**O que foi medido.**
+- **Simulação pela CLI real:** a CLI de verdade, apontada para um servidor local que responde 429 como o backend no limite, desenha o próprio banner, sem conta nenhuma:
+  - Codex: provedor próprio, `usage_limit_reached`;
+  - Claude: token no formato da assinatura e os cabeçalhos `anthropic-ratelimit-unified-*`. Com chave de API ele só repete a chamada ("Retrying… attempt N/10");
+  - Gemini: chave falsa e `GOOGLE_GEMINI_BASE_URL`.
+- **No terminal cru** (node-pty sem xterm), a TUI do Codex parava em "Working". Com o xterm do app respondendo ao terminal, ela desenha o banner.
+- **Gravações em Windows, macOS e Linux** (Codex 0.169.0, Claude 2.1.323, Gemini 0.68.0; run 43483569728). Passadas pela vigia, pedaço a pedaço:
+  - Codex: `■ You’ve hit your usage limit…`, quebrado no meio da URL com 100 colunas: detectado;
+  - Claude: `Usage limit reached · continuing automatically at…`. No macOS a linha abre com `⏺`; no Linux e no Windows, com `●`. Detectado;
+  - **Gemini: não detectado.** Desde a 0.68 a cota é um diálogo em caixa, `│ Usage limit reached for <modelo>. │` (trocar de modelo / parar), no lugar do `[API Error: …]` que o vocabulário (0.57) conhecia. O pré-filtro do Gemini (`exhausted`) nem deixava a linha chegar à taxonomia.
+- **Outros achados**, que ficaram numa task:
+  - no Claude 2.1.323 a linha `You've hit your 5-hour limit · resets…` e o rodapé `⚠ Usage limit reached · limit resets…` dão `unknown`;
+  - o extrator acusa 6 frases do Claude e 2 do Codex como ausentes dos pacotes novos;
+  - o banner do Claude ainda é detectado pela linha da continuação automática.
+
+**O que mudou.**
+- **`scripts/record-limit-banner.cjs`**, com teste:
+  - o ambiente vai sem variáveis das CLIs, e as pastas de configuração são temporárias;
+  - a gravação é anonimizada e conferida como as da Leitura;
+  - usa o `spawn` e o ajuste do `spawn-helper` do app;
+  - espera a sessão sair depois do `kill`.
+- **Workflow manual** `.github/workflows/gravar-banner-limite.yml`, nos três sistemas.
+- **Gemini:** padrão `Usage limit reached for` (limite, escopo modelo). O pré-filtro ganha `reached` sozinho. Vocabulário do Gemini em 0.69.0-preview.0, com 5 de 5 frases no pacote (conferido pelo extrator). O Claude e o Codex não mudaram.
+- **As 9 gravações** em `electron/__fixtures__/limit-banners`. O teste da vigia exige a cobertura (3 CLIs × 3 sistemas) e a detecção de `limit` em todas, sem outra classe.
+- **Docs:** `ARQUITETURA.md`, `PLANO-CADEIA-CONTAS.md` (lista de arquivos e risco 2) e `POLITICA-CONTAS.md` (limitações).
+
+**Validação.**
+- Sem o padrão novo (`git stash`), o teste falha: `gemini 0.68.0 em darwin: o banner não foi detectado ([])`. Com ele, as 9 dão `limit`.
+- Gate:
+  - `npm test`: 3262 testes, 3252 passam, 10 pulados, 0 falham;
+  - vitest: 3478 passam;
+  - `eslint .` limpo.
+- Bancada `--check`: exit 0, varredura do pior caso p95 0,128 ms, CPU 0,64%.
+
+**Não validado.**
+- O limite real de uma conta: o backend foi simulado, e a resposta real pode diferir da imitada.
+- Blocos mais estreitos que 100 colunas.
+- O Gemini e o Claude logados com conta Google ou assinatura de verdade.
+
+Estado: concluído (deploy no adendo).
