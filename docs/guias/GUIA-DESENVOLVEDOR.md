@@ -525,6 +525,18 @@ No Git Bash, `SSH_ASKPASS` vem definido (`/ucrt64/bin/git-askpass.exe`) e `DISPL
 Git e passa do limite de 45 s. No PowerShell passa. No Git Bash, rode com
 `SSH_ASKPASS= DISPLAY= npm test`.
 
+Rodar a suíte num terminal do próprio Felixo, como faz um agente no canvas, não muda o
+resultado. Esse terminal traz variáveis que outro terminal não traz:
+
+- o terminal de conta traz o `CODEX_HOME` ou o `CLAUDE_CONFIG_DIR` do perfil (no Gemini, o `HOME`);
+- a rolagem clássica traz `CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1`;
+- o Login do sistema traz as chaves de API.
+
+Nenhum teste lê esses valores do processo sem fixá-los antes. Isso foi medido em 13/11/2026
+com cada um desses ambientes, com stdin aberto e com cópias do teste do Openia rodando em
+paralelo. Um teste novo que dependa de uma dessas variáveis deve defini-la e restaurá-la, ou
+passar o `env` explícito; não deve contar com o valor herdado.
+
 Essa lista inclui `pty-kill.integration.test.cjs`, que abre uma PTY real, mata o shell e
 reprova se o `kill()` deixar `AttachConsole failed` no stderr ou demorar a sair (no Windows o
 `node-pty` falhava nisso em todo encerramento; o contorno está em
