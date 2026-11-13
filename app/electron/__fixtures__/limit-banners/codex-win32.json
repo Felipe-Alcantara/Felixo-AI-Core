@@ -1,0 +1,60 @@
+{
+ "provider": "codex",
+ "version": "0.169.0",
+ "platform": "win32",
+ "cols": 100,
+ "rows": 40,
+ "recordedAt": "2026-11-13",
+ "simulated": "servidor local respondendo como o backend no limite; nenhuma conta",
+ "anonymized": true,
+ "chunks": [
+  {
+   "t": 55,
+   "data": "\u001b[?9001h\u001b[?1004h\u001b[?25l\u001b[2J\u001b[m\u001b[H\u001b]0;Administrator:  C:\\Windows\\system32\\cmd.exe \u0007\u001b[?25h"
+  },
+  {
+   "t": 142,
+   "data": "\u001b[?2004h\u001b[?2026h\u001b[?25l\u001b[?1049h\u001b[?1003;1006h\u001b[?2026h\u001b[0 q\u001b[?2026l\u001b[?2026l\u001b[?2026h\u001b[?2026l\u001b[?2026h\u001b[?2026l\u001b[?2026h\u001b[?2026l\u001b[?2026h\u001b[?2026l\u001b[?2026h\u001b[?2026l\u001b[?2026h\u001b[?2026l\u001b[?2026h\u001b[?2026l\u001b[K\r\n  \u001b[38;5;75m>_ \u001b[m\u001b[1mOpenAI Codex\u001b[22m\u001b[2m (v0.169.0)\u001b[22m\u001b[K\r\n     \u001b[2m/tmp/felixo-fixture\u001b[22m\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\u001b[1m\r\n›\u001b[22m \u001b[2mAsk Codex to do anything\u001b[22m\u001b[K\r\n\u001b[K\r\n  \u001b[1m?\u001b[22m for shortcuts\u001b[K\u001b[38;3H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?2026h\u001b[?2026l"
+  },
+  {
+   "t": 226,
+   "data": "\u001b[?2026h\u001b[?2026l"
+  },
+  {
+   "t": 511,
+   "data": "\u001b[?2026h\u001b[?2026l\u001b[?2026h\u001b[?2026l"
+  },
+  {
+   "t": 572,
+   "data": "\u001b[?2026h\u001b[?2026l\u001b[?2026h\u001b[?2026l\u001b[?2026h\u001b[?2026l\u001b[?2026h\u001b[?2026l\u001b[?2026h\u001b[?2026l\u001b[?2026h\u001b[?2026l\u001b[?2026h\u001b[?2026l\u001b[?2026h\u001b[?2026l\u001b[?2026h\u001b[?2026l\u001b[?2026h\u001b[?2026l\u001b[?2026h\u001b[?2026l"
+  },
+  {
+   "t": 617,
+   "data": "\u001b[?2026h\u001b[?2026l\u001b[?2026h\u001b[?2026l\u001b]0;felixo-limite-pasta-n...\u0007"
+  },
+  {
+   "t": 886,
+   "data": "\u001b]7501;state=working:app=codex\u001b\\\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[2;2H\u001b[K\n\u001b[K\u001b[32;3HSet\u001b[1Cup\u001b[1Cthe\u001b[1CCodex\u001b[1Cagent\u001b[1Csandbox\u001b[1Cto\u001b[1Cprotect\u001b[1Cyour\u001b[1Cfiles\u001b[1Cand\u001b[1Ccontrol\u001b[1Cnetwork\u001b[1Caccess.\u001b[1CLearn\u001b[1Cmore\u001b[33;3H<\u001b]8;id=6164-1;https://developers.openai.com/codex/windows\u001b\\https://developers.openai.com/codex/windows\u001b]8;;\u001b\\>\u001b[1m\u001b[7m\u001b[36;1H› 1. Set up default sandbox (requires Administrator permissions)                                    \u001b[22m\u001b[27m\u001b[37;3H2.\u001b[1CUse\u001b[1Cnon-admin\u001b[1Csandbox\u001b[1C(higher\u001b[1Crisk\u001b[1Cif\u001b[1Cprompt\u001b[1Cinjected)\r\n \u001b[1C3. Quit\u001b[K\u001b[1m\u001b[40;3Henter\u001b[22m\u001b[2m select · \u001b[22m\u001b[1mesc\u001b[22m\u001b[2m back                                                                           \u001b[?2026h\u001b[22m\u001b[38;5;75m\u001b[2;3H>_ \u001b[m\u001b[1mOpenAI Codex\u001b[22m\u001b[2m (v0.169.0)\u001b[3;6H/tmp/felixo-fixture\u001b[5;1H  To get started, describe a task or try one of these commands:\u001b[22m\u001b[7;3H/init\u001b[2m - create an AGENTS.md file with instructions for Codex\u001b[22m\u001b[8;3H/status\u001b[2m - show current session configuration\u001b[22m\u001b[9;3H/permissions\u001b[2m - choose what Codex is allowed to do\u001b[22m\u001b[10;3H/model\u001b[2m - choose what model and reasoning effort to use\u001b[22m\u001b[11;3H/review\u001b[2m - review any changes and find issues\u001b[38;5;255m\u001b[48;5;238m\u001b[22m\u001b[13;1H\u001b[K\u001b[1m\u001b[2m\r\n› \u001b[22mdiga oi\u001b[K\r\n\u001b[K\u001b[100C\u001b[?2026l"
+  },
+  {
+   "t": 940,
+   "data": "\u001b[m"
+  },
+  {
+   "t": 984,
+   "data": "\u001b[?2026h\u001b[?2026l\u001b[?2026h\u001b[?2026l\u001b[?2026h\u001b[?2026l"
+  },
+  {
+   "t": 1069,
+   "data": "\u001b[?2026h\u001b[?2026l\u001b]7501;state=error:app=codex\u001b\\\u001b[?2026h\u001b[?2026l"
+  },
+  {
+   "t": 1114,
+   "data": "\u001b[38;5;1m\u001b[17;1H■ You’ve hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://\r\nchatgpt.com/settings/usage to purchase more credits or try again at 9:34 PM.\u001b[?2026h\u001b[?2026l\u001b[m"
+  },
+  {
+   "t": 4393,
+   "data": "\u001b[?9001l\u001b[?1004l"
+  }
+ ]
+}

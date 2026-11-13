@@ -1,0 +1,68 @@
+{
+ "provider": "claude",
+ "version": "2.1.323",
+ "platform": "win32",
+ "cols": 100,
+ "rows": 40,
+ "recordedAt": "2026-11-13",
+ "simulated": "servidor local respondendo como o backend no limite; nenhuma conta",
+ "anonymized": true,
+ "chunks": [
+  {
+   "t": 57,
+   "data": "\u001b[?9001h\u001b[?1004h"
+  },
+  {
+   "t": 399,
+   "data": "\u001b[?25l\u001b[2J\u001b[m\u001b[H\u001b]0;claude\u0007\u001b[?25h"
+  },
+  {
+   "t": 1149,
+   "data": "\u001b[?2004h\u001b[?2031h\u001b[?1004h\u001b]0;✳ Claude Code\u0007"
+  },
+  {
+   "t": 1225,
+   "data": "\u001b[?1049h\u001b[2J\u001b[?1000h\u001b[?1002h\u001b[?1003h\u001b[?1006h\u001b[K\u001b[38;2;215;119;87m\r\n ▐\u001b[48;2;0;0;0m▛███▛█\u001b[m   \u001b[1mClaude Code\u001b[22m \u001b[38;2;153;153;153mv2.1.323\u001b[K\u001b[38;2;215;119;87m\r\n▝▜\u001b[48;2;0;0;0m█████\u001b[49m█▀  \u001b[38;2;153;153;153mSonnet 5.5 · Claude API\u001b[K\u001b[38;2;215;119;87m\r\n ▝▝   ▝▝   \u001b[38;2;153;153;153m/tmp/felixo-fixture\u001b[K\u001b[m\r\n\u001b[K\u001b[38;2;215;119;87m\r\n▎ \u001b[m\u001b[1mAuto mode is now Claude Code's default permission mode.\u001b[22m\u001b[K\u001b[38;2;215;119;87m\r\n▎ \u001b[38;2;153;153;153mAuto mode lets Claude handle permission prompts automatically. Claude checks each tool call for   \u001b[38;2;215;119;87m\r\n▎ \u001b[38;2;153;153;153mrisky actions and prompt injection before executing, runs the ones it assesses as lower-risk, and \u001b[38;2;215;119;87m▎ \u001b[38;2;153;153;153mblocks the rest.\u001b[K\u001b[38;2;215;119;87m\r\n▎ \u001b[38;2;153;153;153mhttps://code.claude.com/docs/en/permission-modes\u001b[K\u001b[m\r\n\u001b[K\u001b[38;2;153;153;153m\u001b[48;2;55;55;55m\r\n❯ \u001b[38;2;255;255;255mdiga oi                                                                                           \u001b[m\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\u001b[38;2;215;119;87m\r\n· Burrowing…\u001b[K\u001b[m\r\n\u001b[80X\u001b[38;2;153;153;153m\u001b[80C◐ medium · /effort  \u001b[38;2;136;136;136m\r\n────────────────────────────────────────────────────────────────────────────────────────────────────\u001b[m❯ \u001b[7m \u001b[27m\u001b[K\u001b[38;2;136;136;136m\r\n────────────────────────────────────────────────────────────────────────────────────────────────────\u001b[m  \u001b[38;2;255;193;7m⏵⏵ auto mode on \u001b[38;2;153;153;153m(shift+tab to cycle) · ← for agents\u001b[K\u001b[?25l\u001b[47C\u001b[m"
+  },
+  {
+   "t": 1355,
+   "data": "\u001b]0;◐ Claude Code\u0007\u001b[38;2;153;153;153m\u001b[38;1H❯ \u001b[40;42Hesc to interrupt · ← for agents\u001b[>0q\u001b[?u\u001b]7501;?\u0007\u001b[m"
+  },
+  {
+   "t": 1530,
+   "data": "\u001b[38;2;215;119;87m\u001b[35;1H✢\u001b[m\u001b[38;3H\u001b[K\u001b[98C"
+  },
+  {
+   "t": 1603,
+   "data": "\u001b[38;2;215;119;87m\u001b[48;2;0;0;0m\u001b[2;3H▟\u001b[3C▟\u001b[49m\u001b[35;1H*\u001b[m"
+  },
+  {
+   "t": 1745,
+   "data": "\u001b]0;✳ Claude Code\u0007\u001b[38;2;153;153;153m\u001b[13;1H  ⎿  \u001b[38;2;255;107;128mYou've hit your 5-hour limit · resets 9:34pm (UTC)\u001b[38;2;153;153;153m\u001b[15;1H●\u001b[1CUsage limit reached · continuing automatically at 9:34pm · esc to cancel\u001b[17;1H✻\u001b[1CChurned for 0s · done 6:34 PM\u001b[34;81H◐ medium · /effort\u001b[38;2;136;136;136m\r\n────────────────────────────────────────────────────────────────────────────────────────────────────\u001b[m❯ \u001b[78C\u001b[K\u001b[38;1H  \u001b[38;2;255;255;255m⚠ Usage limit reached · limit resets 9:34pm\u001b[m\r\n    \u001b[38;2;255;255;255mContinuing automatically at 9:34pm · Esc to cancel                                              \u001b[38;2;153;153;153m\u001b[40;42H← for agents\u001b[K\u001b[47C"
+  },
+  {
+   "t": 1826,
+   "data": "\u001b[m\u001b[38;2;215;119;87m\u001b[48;2;0;0;0m\u001b[2;3H█▟\u001b[2C█▟\u001b[m"
+  },
+  {
+   "t": 1969,
+   "data": "\u001b[38;2;215;119;87m\u001b[48;2;0;0;0m\u001b[2;3H▟█\u001b[2C▟█\u001b[m"
+  },
+  {
+   "t": 2101,
+   "data": "\u001b[38;2;215;119;87m\r▗▟\u001b[48;2;0;0;0m▛\u001b[3C▛\u001b[49m\u001b[1C▄\r\n \u001b[7C▘\u001b[m"
+  },
+  {
+   "t": 2298,
+   "data": "\u001b[38;2;215;119;87m\u001b[2;1H ▐\u001b[m\u001b[6C \u001b[38;2;215;119;87m\r\n▝\u001b[7C▀\u001b[m"
+  },
+  {
+   "t": 4405,
+   "data": "\u001b[?1006l\u001b[?1003l\u001b[?1002l\u001b[?1000l\u001b[36;3H\u001b[?25h\u001b[?1049l\u001b[>4m\u001b[>4m\u001b[?2031l\u001b[?2004l\u001b[?1016l\u001b[?1006l\u001b[?1003l\u001b[?1002l\u001b[?1000l\u001b[?1016l\u001b[>4m\u001b[?2031l\u001b[?2004l\u001b[?25l\u001b[H\u001b[K\u001b[2m\r\nResume this session with:\u001b[22m\u001b[K\u001b[2m\r\nclaude --resume 00000000-0000-4000-8000-000000000000\u001b[22m\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\u001b[4;1H\u001b]0;\u0007\u001b[?25h"
+  },
+  {
+   "t": 4448,
+   "data": "\u001b[?9001l\u001b[?1004l"
+  }
+ ]
+}

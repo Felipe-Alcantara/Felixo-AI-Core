@@ -490,3 +490,36 @@ test('a frase partida entre duas varreduras ainda é lida inteira: o que chegou 
   vigia.write(`${CODEX_BANNER.slice(metade)}\r\n`)
   assert.deepEqual(vigia.watcher.scan().map((item) => item.failure.failureClass), ['limit'])
 })
+
+/** O banner de limite desenhado pela própria CLI, gravado por `scripts/record-limit-banner.cjs`: uma gravação por CLI e sistema. */
+const LIMIT_BANNERS_DIR = path.join(__dirname, '..', '..', '__fixtures__', 'limit-banners')
+function gravacoesDoBanner() {
+  return fs
+    .readdirSync(LIMIT_BANNERS_DIR)
+    .filter((name) => name.endsWith('.json'))
+    .map((name) => JSON.parse(fs.readFileSync(path.join(LIMIT_BANNERS_DIR, name), 'utf8')))
+}
+
+test('as gravações do banner de limite cobrem o Codex, o Claude e o Gemini nos três sistemas', () => {
+  const vistas = gravacoesDoBanner().map(({ provider, platform }) => `${provider}-${platform}`).sort()
+  const esperadas = ['claude', 'codex', 'gemini'].flatMap((provider) =>
+    ['darwin', 'linux', 'win32'].map((platform) => `${provider}-${platform}`),
+  )
+  assert.deepEqual(vistas, esperadas)
+})
+
+test('a vigia detecta o limite no fluxo real gravado do banner, pedaço a pedaço, em cada CLI e sistema', () => {
+  for (const gravacao of gravacoesDoBanner()) {
+    const quem = `${gravacao.provider} ${gravacao.version} em ${gravacao.platform}`
+    const vigia = criarVigia({ providerId: gravacao.provider })
+    const achados = []
+    // Varre depois de cada pedaço: a frase pode chegar partida e a TUI repinta a tela.
+    for (const pedaco of gravacao.chunks) {
+      vigia.write(pedaco.data)
+      achados.push(...vigia.watcher.scan())
+    }
+    const classes = achados.map((item) => item.failure.failureClass)
+    assert.ok(classes.includes('limit'), `${quem}: o banner não foi detectado (${JSON.stringify(classes)})`)
+    assert.deepEqual([...new Set(classes)], ['limit'], `${quem}: classe além do limite`)
+  }
+})

@@ -1,0 +1,72 @@
+{
+ "provider": "claude",
+ "version": "2.1.323",
+ "platform": "darwin",
+ "cols": 100,
+ "rows": 40,
+ "recordedAt": "2026-11-13",
+ "simulated": "servidor local respondendo como o backend no limite; nenhuma conta",
+ "anonymized": true,
+ "chunks": [
+  {
+   "t": 707,
+   "data": "\u001b7\u001b[r\u001b8\u001b[?25h"
+  },
+  {
+   "t": 984,
+   "data": "\u001b[?2004h\u001b[?2031h\u001b[?1004h\u001b]0;✳ Claude Code\u0007"
+  },
+  {
+   "t": 1121,
+   "data": "\u001b[?1049h\u001b[2J\u001b[H\u001b[?1000h\u001b[?1002h\u001b[?1003h\u001b[?1006h\u001b[?25l\u001b[?25l\u001b[H\r\u001b[1B\u001b[38;2;215;119;87m ▐\u001b[48;2;0;0;0m▛███▛█\u001b[12G\u001b[39m\u001b[49m\u001b[1mClaude Code\u001b[24G\u001b[22m\u001b[38;2;153;153;153mv2.1.323\r\u001b[1B\u001b[38;2;215;119;87m▝▜\u001b[48;2;0;0;0m█████\u001b[49m█▀\u001b[12G\u001b[38;2;153;153;153mSonnet 5.5 · Claude API\r\u001b[1B\u001b[38;2;215;119;87m ▝▝   ▝▝ \u001b[12G\u001b[38;2;153;153;153m/tmp/felixo-fixture\r\u001b[2B\u001b[38;2;215;119;87m▎\u001b[3G\u001b[39m\u001b[1mAuto mode is now Claude Code's default permission mode.\r\u001b[1B\u001b[22m\u001b[38;2;215;119;87m▎\u001b[3G\u001b[38;2;153;153;153mAuto mode lets Claude handle permission prompts automatically. Claude checks each tool call for \r\u001b[1B\u001b[38;2;215;119;87m▎\u001b[3G\u001b[38;2;153;153;153mrisky actions and prompt injection before executing, runs the ones it assesses as lower-risk, and \r\u001b[1B\u001b[38;2;215;119;87m▎\u001b[3G\u001b[38;2;153;153;153mblocks the rest.\r\u001b[1B\u001b[38;2;215;119;87m▎\u001b[3G\u001b[38;2;153;153;153mhttps://code.claude.com/docs/en/permission-modes\r\u001b[2B\u001b[48;2;55;55;55m❯ \u001b[38;2;255;255;255mdiga oi\u001b[39m                                                                                           \r\u001b[23B\u001b[49m\u001b[38;2;215;119;87m✢\u001b[3GPuzzling… \r\u001b[80C\u001b[1B\u001b[38;2;153;153;153m◐ medium · /effort\r\u001b[1B\u001b[38;2;136;136;136m────────────────────────────────────────────────────────────────────────────────────────────────────\r\u001b[1B\u001b[39m❯ \u001b[7m \r\u001b[1B\u001b[27m\u001b[38;2;136;136;136m────────────────────────────────────────────────────────────────────────────────────────────────────\r\u001b[2C\u001b[1B\u001b[38;2;255;193;7m⏵⏵ auto mode on\u001b[38;2;153;153;153m (shift+tab to cycle) · ← for agents\u001b[39m\u001b[40;1H\u001b[38;3H"
+  },
+  {
+   "t": 1312,
+   "data": "\u001b]0;◐ Claude Code\u0007\u001b[H\r\u001b[37B\u001b[38;2;153;153;153m❯ \r\u001b[41C\u001b[2Besc to interrupt · ← for agents\u001b[39m\u001b[40;1H\u001b[38;3H\u001b[>0q\u001b[?u\u001b]7501;?\u0007\u001b[c"
+  },
+  {
+   "t": 1429,
+   "data": "\u001b[H\r\u001b[34B\u001b[38;2;215;119;87m✳\r\u001b[2C\u001b[3B\u001b[39m\u001b[K\u001b[40;1H\u001b[38;3H\u001b[H\r\u001b[34B\u001b[38;2;215;119;87m✶\u001b[39m\u001b[40;1H\u001b[38;3H"
+  },
+  {
+   "t": 1488,
+   "data": "\u001b[H\r\u001b[6C\u001b[3B\u001b[38;2;215;119;87m  \u001b[39m\u001b[40;1H\u001b[38;3H"
+  },
+  {
+   "t": 2049,
+   "data": "\u001b[H\r\u001b[34B\u001b[38;2;215;119;87m✽\u001b[39m\u001b[40;1H\u001b[38;3H"
+  },
+  {
+   "t": 2165,
+   "data": "\u001b]0;✳ Claude Code\u0007\u001b[H\r\u001b[12B\u001b[38;2;153;153;153m  ⎿  \u001b[38;2;255;107;128mYou've hit your 5-hour limit · resets 9:34pm (UTC)\r\u001b[2B\u001b[38;2;153;153;153m⏺\u001b[3GUsage limit reached · continuing automatically at 9:34pm · esc to cancel\r\u001b[2B✻\u001b[3GCogitated for 0s · done 6:34 PM\r\u001b[80C\u001b[17B◐ medium · /effort\r\u001b[1B\u001b[38;2;136;136;136m────────────────────────────────────────────────────────────────────────────────────────────────────\r\u001b[1B\u001b[39m❯ \u001b[81G\u001b[K\r\u001b[2B  \u001b[38;2;255;255;255m⚠ Usage limit reached · limit resets 9:34pm\r\u001b[1B\u001b[39m    \u001b[38;2;255;255;255mContinuing automatically at 9:34pm · Esc to cancel\u001b[39m\u001b[K\r\u001b[41C\u001b[1B\u001b[38;2;153;153;153m← for agents\u001b[39m\u001b[K\u001b[40;1H\u001b[36;3H\u001b[H\r\u001b[1C\u001b[3B\u001b[38;2;215;119;87m  \u001b[7G▝▝\u001b[39m\u001b[40;1H\u001b[36;3H"
+  },
+  {
+   "t": 2318,
+   "data": "\u001b[H\r\u001b[1C\u001b[3B\u001b[38;2;215;119;87m▝▝\u001b[7G  \u001b[39m\u001b[40;1H\u001b[36;3H"
+  },
+  {
+   "t": 2445,
+   "data": "\u001b[H\r\u001b[1C\u001b[3B\u001b[38;2;215;119;87m  \u001b[7G▝▝\u001b[39m\u001b[40;1H\u001b[36;3H"
+  },
+  {
+   "t": 2570,
+   "data": "\u001b[H\r\u001b[1C\u001b[3B\u001b[38;2;215;119;87m▝▝\u001b[7G  \u001b[39m\u001b[40;1H\u001b[36;3H"
+  },
+  {
+   "t": 2641,
+   "data": "\u001b[H\r\u001b[1C\u001b[3B\u001b[38;2;215;119;87m  \u001b[7G▝▝\u001b[39m\u001b[40;1H\u001b[36;3H"
+  },
+  {
+   "t": 2707,
+   "data": "\u001b[H\r\u001b[1B\u001b[38;2;215;119;87m▗▟\u001b[9G▄\r\u001b[1B \u001b[9G▘\r\u001b[1C\u001b[1B▝▝\u001b[39m\u001b[40;1H\u001b[36;3H"
+  },
+  {
+   "t": 2899,
+   "data": "\u001b[H\r\u001b[1B\u001b[38;2;215;119;87m ▐\u001b[9G\u001b[39m \r\u001b[1B\u001b[38;2;215;119;87m▝\u001b[9G▀\u001b[39m\u001b[40;1H\u001b[36;3H"
+  },
+  {
+   "t": 4756,
+   "data": "\u001b[?1006l\u001b[?1003l\u001b[?1002l\u001b[?1000l\u001b[?25h\u001b[?1004l\u001b[?1049l\u001b[>4m\u001b[>4m\u001b[?2031l\u001b[?2004l\u001b(B\u000f\u001b[?1016l\u001b[?1006l\u001b[?1003l\u001b[?1002l\u001b[?1000l\u001b[?25h\u001b7\u001b[r\u001b8\u001b[?25h\u001b(B\u000f\u001b[?1016l\u001b[?1006l\u001b[?1003l\u001b[?1002l\u001b[?1000l\u001b[>4m\u001b[?1004l\u001b[?2031l\u001b[?2004l\u001b[?25h\u001b7\u001b[r\u001b8\u001b]0;\u0007\u001b[2m\u001b[22m\r\n\u001b[2mResume this session with:\u001b[22m\r\n\u001b[2mclaude --resume 00000000-0000-4000-8000-000000000000\u001b[22m\r\n\u001b[2m\u001b[22m\u001b[?25h"
+  }
+ ]
+}
