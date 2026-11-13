@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Copy, Info, Terminal as TerminalIcon } from 'lucide-react'
 import { CanvasPanel } from './tools/CanvasPanel'
 import { AccountSwitchHistory } from './tools/AccountSwitchHistory'
@@ -200,9 +200,29 @@ function AccountModeDetails({
   const mode = data.accountMode === 'chain' ? 'chain' : 'pinned'
   const chainEnabled = snapshot.state?.settings.enabled === true
   const sessionId = ptySessionIdForNode(nodeId)
+  // Um botão só, que troca de texto: o React mantém o mesmo elemento e o foco
+  // fica nele. Eram dois, e o focado sumia na troca (o foco caía no body).
+  const action: { next: 'pinned' | 'chain'; label: string } | null = !data.accountId
+    ? null
+    : mode === 'chain'
+      ? { next: 'pinned', label: 'Fixar nesta conta' }
+      : chainEnabled
+        ? { next: 'chain', label: 'Voltar para a cadeia' }
+        : null
+  const actionRef = useRef<HTMLButtonElement>(null)
+  const modeTextRef = useRef<HTMLSpanElement>(null)
+  const keepFocus = useRef(false)
+
+  // Com a cadeia desligada, "Fixar" não tem volta: o botão some e o foco vai para o texto do modo.
+  useEffect(() => {
+    if (busy || !keepFocus.current) return
+    keepFocus.current = false
+    ;(actionRef.current ?? modeTextRef.current)?.focus()
+  }, [busy, mode])
 
   const change = async (next: 'pinned' | 'chain') => {
     if (busy) return
+    keepFocus.current = document.activeElement === actionRef.current
     setBusy(true)
     setMessage(null)
     try {
@@ -220,31 +240,23 @@ function AccountModeDetails({
       <div className="space-y-1">
         <div className="text-[10px] uppercase tracking-wide text-zinc-500">Modo</div>
         <div className="flex flex-wrap items-center gap-2 rounded-sm border border-white/5 bg-black/20 px-2 py-1.5">
-          <span className="min-w-0 flex-1" title={chip.title}>
+          <span ref={modeTextRef} tabIndex={-1} className="min-w-0 flex-1 outline-none" title={chip.title}>
             {!data.accountId
               ? 'Login do sistema: só recebe aviso, nunca proposta de troca.'
               : mode === 'chain'
                 ? 'Cadeia: se a conta bater o limite, a cadeia propõe outra e pede sua confirmação.'
                 : 'Fixa: se a conta bater o limite, você recebe um aviso; nada troca sozinho.'}
           </span>
-          {data.accountId && mode === 'chain' && (
+          {action && (
+            // aria-disabled, não disabled: desabilitar o botão focado também tirava o foco dele.
             <button
+              ref={actionRef}
               type="button"
-              disabled={busy}
-              onClick={() => void change('pinned')}
-              className="felixo-btn rounded-sm bg-white/6 px-2 py-1 text-[11px] text-zinc-200 hover:bg-white/12 disabled:opacity-50"
+              aria-disabled={busy || undefined}
+              onClick={() => void change(action.next)}
+              className="felixo-btn rounded-sm bg-white/6 px-2 py-1 text-[11px] text-zinc-200 hover:bg-white/12 aria-disabled:opacity-50"
             >
-              Fixar nesta conta
-            </button>
-          )}
-          {data.accountId && mode === 'pinned' && chainEnabled && (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void change('chain')}
-              className="felixo-btn rounded-sm bg-white/6 px-2 py-1 text-[11px] text-zinc-200 hover:bg-white/12 disabled:opacity-50"
-            >
-              Voltar para a cadeia
+              {action.label}
             </button>
           )}
         </div>
