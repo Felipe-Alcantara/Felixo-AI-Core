@@ -352,3 +352,24 @@ export function isClaudeTrustPrompt(text: string): boolean {
 
   return compact.includes('trustthisfolder') && compact.includes('noexit')
 }
+
+/**
+ * O Claude está esperando o limite com a continuação automática armada: o
+ * rodapé "Continuing automatically at … · Esc to cancel" está na tela. A linha
+ * do histórico ("● Usage limit reached · continuing automatically … · esc to
+ * cancel", em minúsculas) fica na tela depois de cancelar ou de o Claude voltar
+ * a trabalhar, e não conta: um Esc ali interromperia o trabalho. Medido no
+ * Claude Code 2.1.323 (13/11/2026); se o rodapé mudar, a resposta é "não
+ * armada" e nada é enviado.
+ */
+export function isClaudeAutoContinueArmed(viewport: string): boolean {
+  return viewport
+    .replace(ANSI_ESCAPE, '')
+    .split('\n')
+    .some((line) => /\bContinuing automatically\b/.test(line) && /\bEsc to cancel\b/.test(line))
+}
+
+/** O Claude confirmou o cancelamento: "Automatic continue cancelled · /rate-limit-options to re-arm". */
+export function isClaudeAutoContinueCancelled(viewport: string): boolean {
+  return /automatic continue cancel/i.test(viewport.replace(ANSI_ESCAPE, ''))
+}

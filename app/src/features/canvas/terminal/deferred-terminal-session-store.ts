@@ -1,4 +1,5 @@
 import type {
+  ClaudeAutoContinueCancelResult,
   SendTextResult,
   SendTextInput,
   SessionListener,
@@ -187,6 +188,10 @@ export class DeferredTerminalSessionStore implements TerminalSessionStoreApi {
 
   scrollClaude(id: string, action: ClaudeScrollAction): void {
     this.runDeferred((store) => store.scrollClaude(id, action))
+  }
+
+  cancelClaudeAutoContinue(id: string): Promise<ClaudeAutoContinueCancelResult> {
+    return this.load().then((store) => store.cancelClaudeAutoContinue(id))
   }
 
   getSnapshots(): Record<string, SessionSnapshot> {

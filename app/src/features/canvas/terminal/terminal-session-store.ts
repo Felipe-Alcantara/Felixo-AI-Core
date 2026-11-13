@@ -87,6 +87,8 @@ import {
   codexOpensProvisionalComposer,
   hasCodexInteractivePrompt,
   isBusyScreen,
+  isClaudeAutoContinueArmed,
+  isClaudeAutoContinueCancelled,
   isClaudeBypassPermissionsWarning,
   isClaudeTrustPrompt,
   isCodexTrustPrompt,
@@ -95,7 +97,7 @@ import {
   readCodexVersion,
   readInputLineState,
 } from './terminal-screen-state'
-import type { SendTextInput, TerminalReadingSource } from './terminal-session-api'
+import type { ClaudeAutoContinueCancelResult, SendTextInput, TerminalReadingSource } from './terminal-session-api'
 import { createPtyEventRouter, type PtyEventRouter } from './pty-event-router'
 import { createFlowControl, type FlowControl } from './terminal-flow-control'
 import { createRollingText, type RollingText } from './rolling-text'
@@ -256,6 +258,9 @@ const SCREEN_ACCEPT_DELAY_MS = 150
 const KEY_SEQUENCE_DELAY_MS = 200
 /** Reconferência do aceite: a tela diz se a tecla foi recebida. */
 const SCREEN_ACCEPT_ATTEMPTS = 3
+/** Quanto esperar o Claude confirmar na tela o cancelamento da continuação automática. */
+const AUTO_CONTINUE_CANCEL_WAIT_MS = 3_000
+const AUTO_CONTINUE_CANCEL_POLL_MS = 100
 /** Depois de aceitar a tela, tempo para a CLI sair dela e carregar o REPL. */
 /** Após o aceite, basta dar ao TUI uma volta curta antes de reler a tela. */
 const POST_ACCEPT_INITIAL_TEXT_DELAY_MS = 250
@@ -1602,6 +1607,28 @@ export class TerminalSessionStore {
     // Pelo `input` do xterm, o mesmo caminho do teclado: o `onData` escreve no PTY.
     session.terminal.input(CLAUDE_SCROLL_KEYS[action], true)
     session.terminal.focus()
+  }
+
+  /**
+   * Um Esc no Claude que espera o limite, para ele não continuar sozinho na
+   * conta antiga. Só por clique da pessoa no diálogo de troca: o app nunca
+   * escreve no terminal antigo por conta própria. Sem o rodapé da continuação
+   * na tela nada vai (com o Claude trabalhando, o Esc o interromperia), e o
+   * resultado vem da tela: com texto digitado na caixa, o Esc não cancela.
+   */
+  async cancelClaudeAutoContinue(id: string): Promise<ClaudeAutoContinueCancelResult> {
+    const session = this.sessions.get(id)
+    if (!session || session.disposed || session.snapshot.activity === 'exited') return 'no-session'
+    if (!isClaudeAutoContinueArmed(readViewport(session.terminal))) return 'not-armed'
+
+    this.writePtySafely(session, '\x1b')
+    for (let waited = 0; waited < AUTO_CONTINUE_CANCEL_WAIT_MS; waited += AUTO_CONTINUE_CANCEL_POLL_MS) {
+      await new Promise((resolve) => setTimeout(resolve, AUTO_CONTINUE_CANCEL_POLL_MS))
+      if (session.disposed) return 'no-session'
+      const viewport = readViewport(session.terminal)
+      if (!isClaudeAutoContinueArmed(viewport) && isClaudeAutoContinueCancelled(viewport)) return 'cancelled'
+    }
+    return 'not-cancelled'
   }
 
   /** Types text into the session's PTY as if the user had typed it. */

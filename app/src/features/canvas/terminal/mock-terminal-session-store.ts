@@ -17,6 +17,7 @@ import {
   type ClaudeScrollRailState,
 } from './terminal-claude-scroll'
 import type {
+  ClaudeAutoContinueCancelResult,
   SendTextResult,
   SessionListener,
   SessionOptions,
@@ -209,6 +210,10 @@ export class MockTerminalSessionStore implements TerminalSessionStoreApi {
   scrollClaude(id: string, action: ClaudeScrollAction): void {
     void id
     void action
+  }
+
+  async cancelClaudeAutoContinue(id: string): Promise<ClaudeAutoContinueCancelResult> {
+    return this.sessions.has(id) ? 'not-armed' : 'no-session'
   }
 
   getSnapshot(id: string): SessionSnapshot | undefined {

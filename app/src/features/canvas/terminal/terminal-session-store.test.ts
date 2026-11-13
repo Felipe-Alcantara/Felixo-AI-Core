@@ -3070,3 +3070,76 @@ describe('detachAll: o canvas desmonta (ir ao Chat) e os PTYs seguem vivos', () 
     expect(flow).toHaveBeenLastCalledWith({ sessionId: PTY_SESSION_ID, paused: false })
   })
 })
+
+describe('TerminalSessionStore: cancelar a continuação automática do Claude', () => {
+  let harness: Harness | undefined
+
+  beforeEach(() => {
+    harness = undefined
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    harness?.store.clear()
+    vi.useRealTimers()
+  })
+
+  // Claude Code 2.1.323 no limite, medido contra o backend do gravador do banner (13/11/2026).
+  const HISTORICO = [
+    '❯ diga oi',
+    "  ⎿  You've hit your 5-hour limit · resets 7:20pm (America/Sao_Paulo)",
+    '● Usage limit reached · continuing automatically at 7:20pm · esc to cancel',
+  ]
+  const ESPERANDO = [...HISTORICO, '❯', '  ⚠ Usage limit reached · limit resets 7:20pm', '    Continuing automatically at 7:20pm · Esc to cancel'].join('\r\n')
+  const CANCELADA = `\x1b[2J\x1b[H${[...HISTORICO, '● Automatic continue cancelled · /rate-limit-options to re-arm', '❯'].join('\r\n')}`
+  const TRABALHANDO = `\x1b[2J\x1b[H${[...HISTORICO, '● Vou continuar de onde parei.', '✻ Thinking… (3s · esc to interrupt)'].join('\r\n')}`
+
+  async function noLimite(): Promise<Harness> {
+    const aberto = createHarness('', 'claude')
+    await vi.advanceTimersByTimeAsync(0)
+    aberto.feed(ESPERANDO)
+    await vi.advanceTimersByTimeAsync(50)
+    aberto.writes.length = 0
+    return aberto
+  }
+
+  it('manda um Esc só e confirma pela tela que o Claude cancelou', async () => {
+    harness = await noLimite()
+    const resultado = harness.store.cancelClaudeAutoContinue(SESSION_ID)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(harness.writes).toEqual(['\x1b'])
+
+    harness.feed(CANCELADA)
+    await vi.advanceTimersByTimeAsync(300)
+    await expect(resultado).resolves.toBe('cancelled')
+    expect(harness.writes).toEqual(['\x1b'])
+  })
+
+  it('com texto digitado na caixa o Esc não cancela: o resultado diz isso, sem um segundo Esc', async () => {
+    harness = await noLimite()
+    const resultado = harness.store.cancelClaudeAutoContinue(SESSION_ID)
+    await vi.advanceTimersByTimeAsync(3_500)
+
+    await expect(resultado).resolves.toBe('not-cancelled')
+    expect(harness.writes).toEqual(['\x1b'])
+  })
+
+  it('com o Claude trabalhando depois de continuar não escreve nada: o Esc interromperia o trabalho', async () => {
+    harness = await noLimite()
+    harness.feed(TRABALHANDO)
+    await vi.advanceTimersByTimeAsync(50)
+
+    await expect(harness.store.cancelClaudeAutoContinue(SESSION_ID)).resolves.toBe('not-armed')
+    expect(harness.writes).toEqual([])
+  })
+
+  it('sem sessão, ou com o processo encerrado, não escreve nada', async () => {
+    harness = await noLimite()
+    await expect(harness.store.cancelClaudeAutoContinue('outra-sessao')).resolves.toBe('no-session')
+    harness.emitExit({ exitCode: 0 })
+    await vi.advanceTimersByTimeAsync(50)
+
+    await expect(harness.store.cancelClaudeAutoContinue(SESSION_ID)).resolves.toBe('no-session')
+    expect(harness.writes).toEqual([])
+  })
+})

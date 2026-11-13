@@ -110,6 +110,14 @@ export type SendTextOptions = {
 export type SendTextInput = SendTextOptions | PromptInsertion
 
 /**
+ * Resultado de `cancelClaudeAutoContinue`: `cancelled` o Claude confirmou na
+ * tela; `not-cancelled` o Esc foi e a continuação seguiu armada (com texto
+ * digitado na caixa o Esc não cancela); `not-armed` e `no-session` nada foi
+ * escrito.
+ */
+export type ClaudeAutoContinueCancelResult = 'cancelled' | 'not-cancelled' | 'not-armed' | 'no-session'
+
+/**
  * Runtime surface shared by the canvas and the real xterm-backed store.
  * Keeping this contract free of the concrete store lets the canvas render
  * before the PTY implementation is downloaded.
@@ -147,6 +155,12 @@ export type TerminalSessionStoreApi = {
   getClaudeScrollRail: (id: string) => ClaudeScrollRailState
   /** Manda ao Claude a tecla de rolagem do trilho; sem o trilho visível não escreve nada. */
   scrollClaude: (id: string, action: ClaudeScrollAction) => void
+  /**
+   * Cancela com um Esc a continuação automática do Claude, só por clique
+   * explícito da pessoa (diálogo de troca). Sem a continuação armada na tela
+   * não escreve nada; depois do Esc, confere pela tela se cancelou.
+   */
+  cancelClaudeAutoContinue: (id: string) => Promise<ClaudeAutoContinueCancelResult>
   getSnapshot: (id: string) => SessionSnapshot | undefined
   getSessionMetadata: (id: string) => SessionMetadata | undefined
   getSnapshots: () => Record<string, SessionSnapshot>

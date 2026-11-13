@@ -6,6 +6,8 @@ import {
   hasEmptyClaudeInput,
   hasEmptyCodexInput,
   isBusyScreen,
+  isClaudeAutoContinueArmed,
+  isClaudeAutoContinueCancelled,
   isClaudeBypassPermissionsWarning,
   isClaudeTrustPrompt,
   isCodexTrustPrompt,
@@ -471,5 +473,53 @@ describe('readInputLineState', () => {
   it('responde "não sei" para CLI cuja entrada não sabemos reconhecer', () => {
     expect(readInputLineState('gemini', '❯ qualquer coisa')).toBeUndefined()
     expect(readInputLineState(undefined, CLAUDE_READY)).toBeUndefined()
+  })
+})
+
+// Telas do Claude Code 2.1.323 no limite, medidas contra o backend do gravador do banner (13/11/2026).
+const CLAUDE_LIMITE_HISTORICO = [
+  '❯ diga oi',
+  "  ⎿  You've hit your 5-hour limit · resets 7:20pm (America/Sao_Paulo)",
+  '● Usage limit reached · continuing automatically at 7:20pm · esc to cancel',
+  '✻ Cogitated for 0s · done 16:20',
+]
+const CLAUDE_ESPERANDO_O_LIMITE = [
+  ...CLAUDE_LIMITE_HISTORICO,
+  '❯',
+  '  ⚠ Usage limit reached · limit resets 7:20pm',
+  '    Continuing automatically at 7:20pm · Esc to cancel',
+  '  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents',
+].join('\n')
+const CLAUDE_CONTINUACAO_CANCELADA = [
+  ...CLAUDE_LIMITE_HISTORICO,
+  '● Automatic continue cancelled · /rate-limit-options to re-arm',
+  '❯',
+  '  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents',
+].join('\n')
+const CLAUDE_TRABALHANDO_DEPOIS_DE_CONTINUAR = [
+  ...CLAUDE_LIMITE_HISTORICO,
+  '● Vou continuar a tarefa de onde parei.',
+  '✻ Thinking… (3s · esc to interrupt)',
+  '❯',
+].join('\n')
+
+describe('continuação automática do Claude no limite', () => {
+  it('está armada com o rodapé "Continuing automatically … · Esc to cancel" na tela', () => {
+    expect(isClaudeAutoContinueArmed(CLAUDE_ESPERANDO_O_LIMITE)).toBe(true)
+    expect(isClaudeAutoContinueCancelled(CLAUDE_ESPERANDO_O_LIMITE)).toBe(false)
+  })
+
+  it('o cancelamento tira o rodapé e o Claude confirma na tela', () => {
+    expect(isClaudeAutoContinueArmed(CLAUDE_CONTINUACAO_CANCELADA)).toBe(false)
+    expect(isClaudeAutoContinueCancelled(CLAUDE_CONTINUACAO_CANCELADA)).toBe(true)
+  })
+
+  it('a linha do histórico não conta: com o Claude trabalhando, um Esc interromperia o trabalho', () => {
+    expect(isClaudeAutoContinueArmed(CLAUDE_TRABALHANDO_DEPOIS_DE_CONTINUAR)).toBe(false)
+  })
+
+  it('fora do limite não há nada armado', () => {
+    expect(isClaudeAutoContinueArmed('')).toBe(false)
+    expect(isClaudeAutoContinueArmed('❯ continuing automatically when the build ends, esc to cancel')).toBe(false)
   })
 })
