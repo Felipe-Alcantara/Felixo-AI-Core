@@ -238,7 +238,6 @@ function createAccountEligibilityChecker({
           ),
           ...source.auth.env,
         },
-        timeoutMs: source.auth.timeoutMs,
         clock: now,
       })
       const status = resolveLoginStatus({ supported: true, auth: outcome.auth, result: outcome.result })

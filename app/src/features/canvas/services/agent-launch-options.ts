@@ -7,6 +7,8 @@
  *   (níveis conferidos no `claude --help` da 2.1.285)
  * - Codex:       --model <m> · -c model_reasoning_effort=<...> · -c service_tier=priority (fast) · --dangerously-bypass-approvals-and-sandbox
  * - Gemini:      --model <m> · (no effort) · --yolo
+ * - Antigravity: --model <m> · --effort <low|medium|high|xhigh|max> · --dangerously-skip-permissions
+ *   (`agy --help` da 1.5.8; os modelos são os do `agy models` com a conta logada)
  *
  * Codex model slugs and their supported effort levels come straight from
  * `~/.codex/models_cache.json` (fetched by the installed CLI itself) — each
@@ -14,7 +16,7 @@
  * Luna doesn't, so effort options must be looked up per model, not per agent.
  */
 
-export type AgentId = 'claude' | 'codex' | 'gemini' | 'openia'
+export type AgentId = 'claude' | 'codex' | 'gemini' | 'antigravity' | 'openia'
 
 export type EffortLevel = 'low' | 'medium' | 'high' | 'max' | 'xhigh' | 'ultra'
 
@@ -68,6 +70,20 @@ export const AGENTS: AgentDefinition[] = [
     label: 'Gemini',
     models: ['gemini-3-pro-preview', 'gemini-3-flash', 'gemini-2.5-pro'],
     effortLevels: null,
+  },
+  {
+    id: 'antigravity',
+    command: 'agy',
+    label: 'Antigravity',
+    models: [
+      'gemini-3.8-flash-high',
+      'gemini-3.8-flash-medium',
+      'gemini-3.8-flash-low',
+      'claude-sonnet-4-6',
+      'claude-opus-4-6-thinking',
+      'gpt-oss-120b-medium',
+    ],
+    effortLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
   },
   {
     id: 'openia',
@@ -130,7 +146,7 @@ export function isEffortValidForModel(
 }
 
 /**
- * True when `command` is a native agent CLI (claude/codex/gemini) — the only
+ * True when `command` is a native agent CLI (claude/codex/gemini/agy) — the only
  * terminals meant to receive a standing instruction typed after they spawn
  * (quality standard, `/resume`). A terminal running an arbitrary command
  * (e.g. `python file.py` from the Projects panel) has a command too, but
@@ -187,7 +203,7 @@ export function buildAgentArgs(choices: AgentLaunchChoices): string[] | null {
 
   const availableEffortLevels = getEffortLevels(agent, choices.model ?? '')
   if (choices.effort && availableEffortLevels?.includes(choices.effort)) {
-    if (agent.id === 'claude') {
+    if (agent.id === 'claude' || agent.id === 'antigravity') {
       args.push('--effort', choices.effort)
     } else if (agent.id === 'codex') {
       args.push('-c', `model_reasoning_effort=${choices.effort}`)
@@ -199,7 +215,7 @@ export function buildAgentArgs(choices: AgentLaunchChoices): string[] | null {
   }
 
   if (choices.yolo) {
-    if (agent.id === 'claude') {
+    if (agent.id === 'claude' || agent.id === 'antigravity') {
       args.push('--dangerously-skip-permissions')
     } else if (agent.id === 'codex') {
       args.push('--dangerously-bypass-approvals-and-sandbox')

@@ -20,6 +20,27 @@ const {
 const pythonDisponivel = (command = 'python3') => async () => ({ ok: true, command, version: '3.12' })
 
 describe('official-cli-service', () => {
+  it('a Antigravity só instala com confirmação, pelo script oficial de cada sistema', async () => {
+    const chamadas = []
+    const runCommand = async (options) => {
+      chamadas.push(options)
+      return { ok: true, stdout: 'Antigravity CLI binary placed successfully', stderr: '' }
+    }
+    const detect = async () => ({ detected: true, version: '1.5.8', path: 'agy', error: null })
+
+    const semConfirmar = await installOfficialCli('antigravity', { runCommand, detect })
+    assert.equal(semConfirmar.requiresConfirmation, true)
+    assert.equal(chamadas.length, 0, 'nada roda antes da confirmação')
+
+    await installOfficialCli('antigravity', { confirmed: true, platformName: 'win32', runCommand, detect })
+    await installOfficialCli('antigravity', { confirmed: true, platformName: 'linux', runCommand, detect })
+
+    assert.equal(chamadas[0].command, 'powershell.exe')
+    assert.equal(chamadas[0].args.at(-1), 'irm https://antigravity.google/cli/install.ps1 | iex')
+    assert.equal(chamadas[1].command, 'bash')
+    assert.deepEqual(chamadas[1].args, ['-c', 'curl -fsSL https://antigravity.google/cli/install.sh | bash'])
+  })
+
   it('exige consentimento antes de instalar o código remoto do Openia', async () => {
     let called = false
     const result = await installOfficialCli('openia', {

@@ -14,6 +14,8 @@ const {
   listAgentUsageSources,
 } = require('./agent-usage-sources.cjs')
 const {
+  COMMAND_TIMEOUT_MS,
+  checkAccountAuth,
   collectProviderSnapshot,
   createAgentUsageService,
 } = require('./agent-usage-service.cjs')
@@ -124,9 +126,10 @@ test(
       const result = await service.refresh()
       assert.equal(result.ok, true)
       // Codex e Claude já tinham conta; Openia foi descoberto agora e entrou
-      // na rodada com dois comandos (auth e `statusline`). Gemini não consulta
-      // nada porque não tem comando de auth.
-      assert.equal(calls.length, 4)
+      // na rodada com dois comandos (auth e `statusline`), e a Antigravity com
+      // um (`agy models`, o login). Gemini não consulta nada porque não tem
+      // comando de auth no painel.
+      assert.equal(calls.length, 5)
       const externalMetrics = service.getExternalOperationMetrics()
       assert.equal(externalMetrics.processesStarted, calls.length + 1)
       assert.equal(externalMetrics.providerRequestsStarted, 2)
@@ -141,7 +144,7 @@ test(
       // existiam — o Codex continua com as duas contas cadastradas na mão.
       assert.deepEqual(
         countAccountsByProvider(result.accounts),
-        { codex: 2, claude: 1, gemini: 1, openia: 1 },
+        { codex: 2, claude: 1, gemini: 1, antigravity: 1, openia: 1 },
       )
       assert.equal(accounts.get('codex-alice').latestSample.status, 'current')
       assert.equal(accounts.get('codex-alice').latestSample.metrics[0].used, 0)
@@ -1513,3 +1516,20 @@ test(
     }
   },
 )
+
+test('o login da Antigravity usa o prazo da própria fonte; as outras CLIs seguem com 30 s', async () => {
+  // Medido em 13/11/2026: `agy models` passou dos 30 s com o painel consultando
+  // as outras CLIs ao mesmo tempo, e a amostra virou erro de tempo esgotado.
+  const prazos = {}
+  const runCommand = async (request) => {
+    prazos[request.command] = request.timeoutMs
+    return { ok: true, stdout: 'gemini-3.8-flash-high\tGemini 3.8 Flash (High)', stderr: '' }
+  }
+
+  const agy = await checkAccountAuth({ providerId: 'antigravity', runCommand, probe: () => null })
+  await checkAccountAuth({ providerId: 'codex', runCommand, probe: () => null })
+
+  assert.equal(prazos.agy, 60_000)
+  assert.equal(prazos.codex, COMMAND_TIMEOUT_MS)
+  assert.equal(agy.auth.authStatus, 'logged_in')
+})

@@ -135,13 +135,16 @@ async function installOfficialCli(
       { signal, ...retry },
     )
 
-  let installResult = await runInstall(cli.install.args)
+  // Instalador por script (Antigravity) tem argumentos próprios no Windows.
+  const installArgs =
+    platformName === 'win32' && cli.install.windowsArgs ? cli.install.windowsArgs : cli.install.args
+  let installResult = await runInstall(installArgs)
 
   const retriedWithBreakSystemPackages =
-    isExternallyManagedEnvironmentError(installResult) && isPipInstallCommand(cli.install.args)
+    isExternallyManagedEnvironmentError(installResult) && isPipInstallCommand(installArgs)
 
   if (retriedWithBreakSystemPackages) {
-    installResult = await runInstall([...cli.install.args, BREAK_SYSTEM_PACKAGES_FLAG])
+    installResult = await runInstall([...installArgs, BREAK_SYSTEM_PACKAGES_FLAG])
   }
 
   if (installResult.cancelled) {

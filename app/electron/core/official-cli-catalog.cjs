@@ -147,6 +147,56 @@ const OFFICIAL_AI_CLIS = Object.freeze([
     ],
   },
   {
+    // Substituta da Gemini CLI para contas individuais do Google desde
+    // 18/06/2026. Medido com a 1.5.8 no Windows (13/11/2026): não é pacote npm,
+    // se atualiza sozinha e guarda o login no cofre do sistema (no Windows, a
+    // entrada `gemini:antigravity` do Gerenciador de Credenciais), não na HOME.
+    // Por isso não tem conta com pasta de login própria nem entra na cadeia.
+    id: 'antigravity',
+    name: 'Antigravity CLI',
+    provider: 'Google',
+    command: 'agy',
+    windowsAliases: ['agy.exe'],
+    versionFlag: '--version',
+    category: 'ai-provider',
+    // O instalador oficial é um script remoto: fica fora da instalação
+    // automática e só roda pelo botão, com confirmação explícita.
+    autoInstall: false,
+    installUrl: 'https://antigravity.google',
+    authUrl: 'https://antigravity.google',
+    install: {
+      label: 'instalador oficial da Antigravity (antigravity.google/cli)',
+      // Rota "script": o mesmo `runBufferedCommand` da linha "script" de
+      // `install-routes-process-tree.test.cjs` (prazo e cancelamento matam a
+      // árvore inteira). O próprio instalador confere o SHA-512 do binário.
+      scriptInstaller: true,
+      command: 'bash',
+      args: ['-c', 'curl -fsSL https://antigravity.google/cli/install.sh | bash'],
+      windowsCommand: 'powershell.exe',
+      windowsArgs: [
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-Command',
+        'irm https://antigravity.google/cli/install.ps1 | iex',
+      ],
+      requiresConfirmation: true,
+    },
+    update: {
+      label: 'agy update',
+      command: 'agy',
+      windowsCommand: 'agy.exe',
+      args: ['update'],
+    },
+    login: {
+      label: 'agy',
+      command: 'agy',
+      windowsCommand: 'agy.exe',
+      args: [],
+    },
+    models: [],
+  },
+  {
     id: 'openia',
     name: 'Openia (launcher OpenRouter)',
     provider: 'OpenRouter',
@@ -238,6 +288,7 @@ function cloneOfficialCli(cli) {
     install: {
       ...cli.install,
       args: [...cli.install.args],
+      ...(cli.install.windowsArgs ? { windowsArgs: [...cli.install.windowsArgs] } : {}),
       ...(cli.install.runtime ? { runtime: { ...cli.install.runtime } } : {}),
     },
     update: { ...cli.update, args: [...cli.update.args] },

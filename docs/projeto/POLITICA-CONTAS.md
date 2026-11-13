@@ -43,6 +43,9 @@ Derivadas do aceite:
   a Gemini CLI não tem comando de login não interativo (decisão do dono,
   13/11/2026). Ela gasta cota, só a cadeia a roda (o painel não) e conta
   individual do Google sai recusada desde 18/06/2026.
+- a Antigravity CLI não entra na cadeia: o login dela fica no cofre do sistema,
+  não numa pasta, então não existe conta com login próprio para trocar (medido
+  na 1.5.8, 13/11/2026).
 
 ## Princípios (cada um com teste)
 

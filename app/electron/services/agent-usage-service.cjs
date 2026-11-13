@@ -1082,7 +1082,9 @@ async function checkAccountAuth({
   probe = runLocalProbe,
   probeOptions,
   env = createCliEnv(),
-  timeoutMs = COMMAND_TIMEOUT_MS,
+  // Fonte lenta para subir declara o próprio prazo (Antigravity, e a chamada
+  // ao modelo do Gemini na cadeia); as outras ficam nos 30 s de sempre.
+  timeoutMs = source?.auth?.timeoutMs ?? COMMAND_TIMEOUT_MS,
   clock = () => Date.now(),
   signal,
 }) {

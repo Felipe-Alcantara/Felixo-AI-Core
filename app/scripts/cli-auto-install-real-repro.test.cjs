@@ -504,7 +504,7 @@ describe('runCycle: o ciclo de produção contra um instalador falso que grava a
     const catalogo = require('../electron/core/official-cli-catalog.cjs')
     assert.deepEqual(
       catalogo.listOfficialAiClis().map((cli) => cli.id),
-      ['codex', 'claude', 'gemini', 'openia'],
+      ['codex', 'claude', 'gemini', 'antigravity', 'openia'],
     )
     const caminho = require.resolve('../electron/services/cli-auto-install.cjs')
     assert.equal(require.cache[caminho], undefined)

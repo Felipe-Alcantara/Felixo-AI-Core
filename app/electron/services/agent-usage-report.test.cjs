@@ -197,3 +197,22 @@ test('agent usage report aceita saldo zerado do openia como zero', () => {
   assert.equal(metric.remaining, 0)
   assert.equal(metric.limit, 0)
 })
+
+// Saídas medidas com a Antigravity CLI 1.5.8 no Windows (13/11/2026), sem e com login.
+test('Antigravity: a lista do `agy models` prova o login; "Please sign in" é falta de login', () => {
+  const logada = parseAgentAuth(
+    'antigravity',
+    'gemini-3.8-flash-high\tGemini 3.8 Flash (High)\nclaude-sonnet-4-6\tClaude Sonnet 4.6 (Thinking)\n\nFetching available models...',
+  )
+  assert.equal(logada.authStatus, 'logged_in')
+  assert.equal(logada.method, 'login do Google (cofre do sistema)')
+
+  const deslogada = parseAgentAuth(
+    'antigravity',
+    'Fetching available models...\nError: Please sign in to view available models. Launch the CLI without arguments to sign in.',
+  )
+  assert.equal(deslogada.authStatus, 'logged_out')
+  assert.equal(deslogada.method, null)
+
+  assert.equal(parseAgentAuth('antigravity', 'Fetching available models...').authStatus, 'unknown')
+})

@@ -194,6 +194,7 @@ O que cada CLI publica hoje:
 | Claude Code | `/status` interativo ao vivo por conta/perfil | Status + Usage completos, janelas de 5 h e semanal, resets, estatísticas e atribuição |
 | Openia | `openia statusline` ao vivo (créditos da conta no OpenRouter) | usado, restante e total em US$ |
 | Gemini | — | sem endpoint não interativo seguro: a quota só existe no `/stats model` interativo e fica explicitamente indisponível, nunca 0% nem barra. Desde 18/06/2026 a Gemini CLI deixou de atender contas individuais (gratuita, AI Pro e Ultra) e a Antigravity CLI a substituiu, segundo o anúncio da Google. O app não abre terminal escondido para extrair esse dado |
+| Antigravity | `agy models` (só o login) | a CLI 1.5.8 não publica quota por comando não interativo: o painel confere o login, que leva de 3 a 5 s e não gasta cota, e a amostra fica indisponível com o motivo |
 
 A coleta de status line do Claude Code continua **opcional e explícita** e serve
 como fallback local: pelo botão do painel, o app registra um script no arquivo
@@ -248,6 +249,7 @@ Como cada CLI isola o login (medido, não presumido):
 | Codex | `CODEX_HOME` | variável dedicada |
 | Claude Code | `CLAUDE_CONFIG_DIR` | variável dedicada |
 | Gemini | `HOME` próprio | não tem variável dedicada; o perfil recebe cópia de `.gitconfig`, `.ssh` e `.npmrc` para o trabalho no repositório continuar funcionando |
+| Antigravity | nenhum | o login fica no cofre do sistema (no Windows, a entrada `gemini:antigravity` do Gerenciador de Credenciais), não na `HOME`: trocar a `HOME` não troca a conta (medido na 1.5.8). Por isso não há conta com pasta de login própria nem lugar na cadeia |
 | Openia | `OPENROUTER_API_KEY` por conta; chave global sem conta | é o único caso em que o app guarda um segredo, cifrado pelo `safeStorage` do sistema; sem chaveiro disponível, o app recusa guardar em vez de salvar em texto |
 
 Um terminal com conta própria não herda as chaves de API do ambiente do app

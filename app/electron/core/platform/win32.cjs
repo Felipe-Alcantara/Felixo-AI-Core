@@ -124,6 +124,9 @@ function getUserCliPaths(home) {
 
   if (env.LOCALAPPDATA) {
     candidates.push(path.join(env.LOCALAPPDATA, 'Programs', 'nodejs'))
+    // Antigravity CLI: o instalador oficial grava o `agy.exe` aqui e só põe a
+    // pasta no PATH do usuário, que um app já aberto não enxerga.
+    candidates.push(path.join(env.LOCALAPPDATA, 'agy', 'bin'))
   }
 
   candidates.push(path.join(home, 'AppData', 'Roaming', 'npm'))

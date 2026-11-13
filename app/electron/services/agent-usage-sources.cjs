@@ -100,6 +100,30 @@ const AGENT_USAGE_SOURCES = Object.freeze([
     scheduledRefresh: 'interactive',
   },
   {
+    id: 'antigravity',
+    name: 'Antigravity CLI',
+    provider: 'Google',
+    command: 'agy',
+    // `agy models` exige login e não gasta cota: com sessão lista os modelos
+    // e sai com 0 (3–16 s na 1.5.8); sem sessão sai com 1 e "Please sign in".
+    // No app, junto com as outras CLIs da rodada, passou dos 30 s padrão: o
+    // prazo próprio fica abaixo do teto de 90 s da rodada do painel.
+    auth: {
+      kind: 'cli-command',
+      label: 'agy models',
+      command: 'agy',
+      args: ['models'],
+      timeoutMs: 60_000,
+    },
+    usage: {
+      kind: 'unsupported',
+      label: 'Antigravity CLI',
+      docsUrl: 'https://antigravity.google',
+      limitation:
+        'A Antigravity CLI não publica quota por comando não interativo (1.5.8): o painel só confere o login. O login dela fica no cofre do sistema, não numa pasta, então vale para o usuário inteiro da máquina.',
+    },
+  },
+  {
     id: 'openia',
     name: 'Openia (launcher OpenRouter)',
     provider: 'OpenRouter',

@@ -106,9 +106,27 @@ function parseAgentAuth(providerId, output) {
     return createAuthSnapshot(providerId, parseGeminiModelCallAuth(safeOutput))
   }
 
+  if (providerId === 'antigravity') {
+    const authStatus = parseAntigravityModelsAuth(safeOutput)
+    return createAuthSnapshot(providerId, {
+      authStatus,
+      method: authStatus === 'logged_in' ? 'login do Google (cofre do sistema)' : null,
+    })
+  }
+
   return createAuthSnapshot(providerId, {
     authStatus: inferAuthStatusFromText(safeOutput),
   })
+}
+
+/**
+ * Saída de `agy models` (Antigravity CLI 1.5.8). Com sessão, uma linha por
+ * modelo no formato "id<TAB>nome"; sem sessão, "Please sign in to view
+ * available models". Só a lista de modelos prova o login.
+ */
+function parseAntigravityModelsAuth(safeOutput) {
+  if (/please sign in|not logged into antigravity/i.test(safeOutput)) return 'logged_out'
+  return /^[\w.-]+\t\S/m.test(safeOutput) ? 'logged_in' : 'unknown'
 }
 
 // Texto fixo, não a saída crua: só ele chega à tela da cadeia (cabe nos 120

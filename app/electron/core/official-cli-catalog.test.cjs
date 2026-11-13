@@ -11,10 +11,10 @@ describe('official-cli-catalog', () => {
   it('contains official install commands for supported AI CLIs', () => {
     const clis = listOfficialAiClis()
 
-    assert.equal(clis.length, 4)
+    assert.equal(clis.length, 5)
     assert.deepEqual(
       clis.map((cli) => cli.id),
-      ['codex', 'claude', 'gemini', 'openia'],
+      ['codex', 'claude', 'gemini', 'antigravity', 'openia'],
     )
     assert.deepEqual(getOfficialAiCli('codex').install.args, [
       'i',
@@ -91,19 +91,41 @@ describe('official-cli-catalog', () => {
     ])
   })
 
-  // O mapa das rotas de instalação (22/10/2026): três CLIs por npm, uma por Python, nenhuma por
-  // script. Uma CLI nova que instale de outro jeito quebra este teste de propósito: quem a
+  // O mapa das rotas de instalação (22/10/2026; a Antigravity entrou em 13/11/2026): três CLIs
+  // por npm, uma por Python e uma pelo script oficial do fornecedor, que roda pela linha "script"
+  // da matriz de `install-routes-process-tree.test.cjs`. Uma CLI nova que instale de outro jeito quebra este teste de propósito: quem a
   // acrescenta precisa declarar a rota (`install.runtime`) e cobrir cancelamento, prazo, rede e
   // permissão dela em `install-routes-process-tree.test.cjs`, em vez de herdar o silêncio.
   it('cada CLI instala por uma rota declarada: npm ou um runtime próprio (hoje, só Python)', () => {
     const rotas = Object.fromEntries(
       listOfficialAiClis().map((cli) => [
         cli.id,
-        cli.install.runtime ? cli.install.runtime.kind : cli.install.npmPackage ? 'npm' : 'sem-rota',
+        cli.install.runtime
+          ? cli.install.runtime.kind
+          : cli.install.npmPackage
+            ? 'npm'
+            : cli.install.scriptInstaller
+              ? 'script'
+              : 'sem-rota',
       ]),
     )
 
-    assert.deepEqual(rotas, { codex: 'npm', claude: 'npm', gemini: 'npm', openia: 'python' })
+    assert.deepEqual(rotas, { codex: 'npm', claude: 'npm', gemini: 'npm', antigravity: 'script', openia: 'python' })
+  })
+
+  it('a Antigravity instala pelo script oficial só com confirmação, fora da instalação automática', () => {
+    const cli = getOfficialAiCli('antigravity')
+
+    assert.equal(cli.command, 'agy')
+    assert.equal(cli.autoInstall, false)
+    assert.equal(cli.install.requiresConfirmation, true)
+    assert.deepEqual(cli.install.args, ['-c', 'curl -fsSL https://antigravity.google/cli/install.sh | bash'])
+    assert.equal(cli.install.windowsCommand, 'powershell.exe')
+    assert.equal(cli.install.windowsArgs.at(-1), 'irm https://antigravity.google/cli/install.ps1 | iex')
+    assert.deepEqual(cli.update.args, ['update'])
+
+    cli.install.windowsArgs.push('mutado')
+    assert.equal(getOfficialAiCli('antigravity').install.windowsArgs.includes('mutado'), false)
   })
 
   it('o Openia exige o Python que o pyproject do commit pinado declara (>=3.10)', () => {

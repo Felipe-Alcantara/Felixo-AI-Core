@@ -66,6 +66,15 @@ const SUPPORTED_CLIS = [
     installUrl: 'https://geminicli.com/docs/get-started/installation/',
   },
   {
+    name: 'Antigravity CLI',
+    command: 'agy',
+    windowsAliases: ['agy.exe'],
+    versionFlag: '--version',
+    authCheckFlag: null,
+    category: 'ai-provider',
+    installUrl: 'https://antigravity.google',
+  },
+  {
     name: 'Openia (launcher OpenRouter)',
     command: 'openia',
     windowsAliases: ['openia.exe', 'openia.cmd', 'openia.ps1'],

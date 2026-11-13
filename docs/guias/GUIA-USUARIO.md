@@ -129,6 +129,14 @@ Perfis padrão atuais:
 - `Codex App Server` com comando `codex app-server`.
 - `Gemini ACP` com comando `gemini --experimental-acp`.
 - `Openia` como launcher das interfaces compatíveis com OpenRouter.
+- `Antigravity CLI` com comando `agy`: a substituta da Gemini CLI para contas
+  individuais do Google desde 18/06/2026. O instalador é um script oficial do
+  Google: o app não o roda sozinho na primeira abertura, só pelo botão de
+  instalar, depois de você confirmar. O login é feito por você, rodando `agy`
+  num terminal. Ele fica no cofre do sistema (no Windows, o Gerenciador de
+  Credenciais), não numa pasta, então vale para o usuário inteiro: a
+  Antigravity não tem conta com pasta de login própria nem entra na cadeia de
+  contas.
 
 Cerca de quatro segundos depois de abrir, o Felixo confere as CLIs oficiais em
 cada abertura e as leva para a versão mais nova publicada, **inclusive
@@ -170,6 +178,7 @@ Links oficiais úteis:
 - Claude Code: https://docs.anthropic.com/en/docs/claude-code/getting-started
 - Codex CLI: https://developers.openai.com/codex/cli
 - Gemini CLI: https://google-gemini.github.io/gemini-cli/docs/get-started/
+- Antigravity CLI: https://antigravity.google
 - Git: https://git-scm.com/downloads
 - Ollama: https://ollama.com/
 

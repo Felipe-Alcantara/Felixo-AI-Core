@@ -266,6 +266,7 @@ const PROVIDER_LABELS: Record<AgentId, string> = {
   claude: 'Claude Code',
   codex: 'Codex',
   gemini: 'Gemini CLI',
+  antigravity: 'Antigravity CLI',
   openia: 'Openia',
 }
 

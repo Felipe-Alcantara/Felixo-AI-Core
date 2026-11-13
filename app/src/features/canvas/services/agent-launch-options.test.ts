@@ -92,6 +92,20 @@ describe('modo fast do Codex', () => {
   })
 })
 
+describe('Antigravity CLI (agy)', () => {
+  it('monta as flags do `agy --help` 1.5.8: modelo, esforço e yolo', () => {
+    expect(getAgent('antigravity')?.command).toBe('agy')
+    expect(
+      buildAgentArgs({ agentId: 'antigravity', model: 'gemini-3.8-flash-high', effort: 'high', yolo: true }),
+    ).toEqual(['--model', 'gemini-3.8-flash-high', '--effort', 'high', '--dangerously-skip-permissions'])
+    expect(buildAgentArgs({ agentId: 'antigravity', fast: true })).toEqual([])
+  })
+
+  it('é agente nativo: recebe a instrução padrão depois de subir', () => {
+    expect(isKnownAgentCommand('agy')).toBe(true)
+  })
+})
+
 describe('effort do Claude Code', () => {
   it('oferece os níveis do `claude --help` 2.1.285, na mesma ordem, com xhigh', () => {
     expect(getEffortLevels(getAgent('claude')!, 'opus')).toEqual(['low', 'medium', 'high', 'xhigh', 'max'])
