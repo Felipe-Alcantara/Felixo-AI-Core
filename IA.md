@@ -1964,3 +1964,44 @@ Estado: concluído (deploy no adendo).
 macOS, Ubuntu e Ubuntu ARM e no smoke do canvas; o "Ciclo de instalação das CLIs (Windows)" (run 43302430101) também, porque
 o `cli-process-manager.cjs` mudou. O Release gate (run 43303453650) e o Release (run 43303488393, 17:45–17:55) publicaram a
 `v0.1.537` nos três sistemas.
+
+## 2026-11-13 — Testes: a suíte node não depende do ambiente de um terminal do Felixo
+
+**Agente / repositório.** Resolver hotfix — Felixo-AI-Core. Task `3e991f95-497e-810a-b0d0-ce2b87dd9403` (aberta na revisão do
+PR #97).
+
+**O que a task pedia e o estado em 13/11.**
+- `classicScreen` falhando com `CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1` herdada: **já resolvido** em `8617f80` (29/09). O teste
+  apaga a variável e a restaura; passa com ela definida.
+- `openia-image-service.test.cjs` travando sob carga: **já resolvido** em `28a64c6` (15/10). A causa eram esperas fixas de
+  30 ms; no Node 25 o runner esperava para sempre uma promessa pendurada.
+- Medido agora, com stdin aberto (um pipe que não fecha) e `CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1`:
+  - 12 cópias paralelas do teste do Openia: 12 de 12, 35/35 cada;
+  - `npm test` com um laço de 4 cópias do Openia rodando junto: 3234 passam e 0 falham, com 68 cópias de carga verdes.
+
+**O que a medição achou além da task.** O caso real de "uma sessão do Claude Code" aqui é um agente rodando a suíte num terminal
+de conta do Felixo. Com o ambiente desse terminal, **8 testes falhavam**:
+- `CLAUDE_CONFIG_DIR` derrubava 5 (`agent-session-discovery` e `agent-usage-availability`).
+- `CODEX_HOME` derrubava 3 (`agent-session-discovery` e o "sem conta segue o login do sistema" do `pty-process-manager`).
+- As chaves de API e a variável da rolagem clássica não derrubavam nenhum.
+
+**O que mudou.**
+- `discoverAgentSession`: o `env` padrão passa de `process.env` para `{}`. Em produção o PTY sempre passa o `env` do spawn
+  (`selectDiscoveryContext`); o padrão só servia aos testes e deixava o ambiente do processo escolher a pasta procurada.
+- Teste do PTY: sem conta, o terminal recebe o `CODEX_HOME` da pessoa (`process.env.CODEX_HOME`), em vez de exigir `undefined`.
+- `agent-usage-test-fixtures`: `pasta()` só aceita as pastas falsas `/perfis/<id>`; uma herdada não se passa por conta do teste.
+  O teste do ENOENT identifica a conta pela pasta, não pela presença de `CLAUDE_CONFIG_DIR`.
+- Guia do desenvolvedor (Testes): a regra para teste novo que dependa dessas variáveis.
+
+**Validação.**
+- Os 8 testes falhavam com `CLAUDE_CONFIG_DIR`/`CODEX_HOME` definidos e agora passam: 123/123 nos 4 arquivos, com cada variável.
+- `npm test` passou nos três ambientes, com stdin aberto, 3234 passam e 0 falham em cada um:
+  - ambiente de terminal de conta, com 52 cópias de carga do Openia em paralelo;
+  - HOME trocado do Gemini;
+  - ambiente normal.
+- vitest no ambiente de conta: 3466 passam. `eslint .` limpo.
+
+**Não validado.** A suíte não roda no CI com o ambiente de um terminal do Felixo, então uma regressão só aparece quando alguém
+roda dentro do app. Abri task para decidir isso.
+
+Estado: concluído (deploy no adendo).
