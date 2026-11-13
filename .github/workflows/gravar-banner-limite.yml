@@ -1,0 +1,76 @@
+name: Gravar banner de limite
+
+# Grava o fluxo real de bytes do banner de limite do Codex, do Claude e do Gemini
+# nos três sistemas, para as fixtures da vigia da cadeia de contas
+# (`app/electron/__fixtures__/limit-banners`). A CLI de verdade roda num PTY e
+# desenha o próprio banner; quem responde no lugar do backend é um servidor
+# local (`app/scripts/record-limit-banner.cjs`). Nenhuma conta nem segredo:
+# chave e token falsos, pastas de configuração temporárias.
+#
+# Rode depois de atualizar uma CLI e baixe o artefato de cada sistema para a
+# pasta das fixtures; o teste da vigia exige a detecção em todas. Não roda em
+# push nem em PR: depende do npm registry e das versões publicadas das CLIs.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gravar:
+    name: Banner de limite (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+    defaults:
+      run:
+        working-directory: app
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # O gravador roda no Node, não no Electron.
+      - name: node-pty para o Node
+        run: npm rebuild node-pty
+
+      - name: Instalar as CLIs (npm install -g)
+        shell: bash
+        run: |
+          npm install -g @openai/codex @anthropic-ai/claude-code @google/gemini-cli
+          codex --version
+          claude --version
+          gemini --version
+
+      - name: Gravar
+        shell: bash
+        run: |
+          status=0
+          for provider in codex claude gemini; do
+            node scripts/record-limit-banner.cjs --provider "$provider" --out "$RUNNER_TEMP/limit-banners" || status=1
+          done
+          exit "$status"
+
+      - name: Enviar as gravações
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: limit-banners-${{ matrix.os }}
+          path: ${{ runner.temp }}/limit-banners
+          if-no-files-found: warn
