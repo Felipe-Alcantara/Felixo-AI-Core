@@ -212,6 +212,8 @@ ptyProcess.onData ─► entry.outputBuffer.append(data)                 (como h
 watcher.scan() (debounce 400 ms, espera máx. 2 s)
    └─ tail = outputBuffer.tail(4096) → normaliza (controle→espaço) → pré-filtro indexOf do provedor
         └─ failure-taxonomy(últimas 40 linhas, origem 'pty', provedor) → dedupe por hash da evidência
+             ├─ topo já emitido (ex.: login antigo na janela) → reclassifica só o que chegou desde a
+             │  última varredura, do começo da linha (13/11/2026): um limite novo não fica escondido
              └─ onOutputFailure({sessionId, accountId|null, providerId, accountMode, lineageId, failure})
 accountChainService.onDetection
    ├─ limit/auth/billing com accountId → UPSERT da espera (SQLite)
