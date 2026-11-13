@@ -428,7 +428,7 @@ export const terminalSurfaces: InventoryElement[] = [
       {
         locator: 'ref={triggerRef}',
         kind: 'button',
-        effect: 'Metade "Agente": prepareForLaunch → buildOptions → savePreferences (localStorage felixo:last-agent-launch-preferences) → onAdd cria o bloco terminal, que sobe o PTY; limpa o nome, fecha o flyout e devolve o foco.',
+        effect: 'Metade "Agente": prepareForLaunch → buildOptions → savePreferences (localStorage felixo:last-agent-launch-preferences) → onAdd cria o bloco terminal, que sobe o PTY, e um quadro depois abre o terminal na gaveta com o foco nele (addTerminalNode → openTerminal); limpa o nome e fecha o flyout. Fechar a gaveta devolve o foco ao cartão novo.',
         failure: 'Configuração inválida reabre o flyout com o erro. Exceção do prepareForLaunch (IPC rejeitado) não é capturada: try/finally sem catch.',
         disabledWhen: 'launching',
         test: { file: SMOKE_TUTORIAL, check: 'criarCenariosDoTutorial' },
