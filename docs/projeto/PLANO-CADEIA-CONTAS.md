@@ -563,7 +563,7 @@ O renderer para de classificar. `sendCliEvent` (`ipc-handlers.cjs:1046-1052`) an
 3. `sem-checagem-de-login`: a fonte do provedor não tem `auth` (`agent-usage-sources.cjs:71`). Hoje é o caso do Gemini. A regra não cita o nome do provedor.
 4. `sem-chave`: Openia sem chave (`cli-account-store.cjs:103-108`).
 5. `em-espera`: espera ativa, ou vencida sem checagem posterior.
-6. `esgotada-pela-medicao`: medição **atual** (§7.2) com alguma janela % em `remaining ≤ 0`, até o `resetAt` dela.
+6. `esgotada-pela-medicao`: medição **atual** (§7.2) com alguma janela % em `remaining ≤ 0`, até o `resetAt` dela. Logo depois, `sem-credito-pela-medicao` (13/11/2026): medição **atual** com uma métrica em US$ (os créditos do Openia, `parseOpeniaCredits`) em `remaining ≤ 0`. O Openia não tem janela em %, então a regra das janelas nunca o pegava.
 7. `login-nao-conferido`: não há checagem com `logged_in` e `checked_at` ≤ 15 min (`ELIGIBILITY_TTL_MS` = `STALE_AFTER_MS`, `agent-usage-service.cjs:31`).
 8. `deslogada`, `cli-ausente` ou `tempo-esgotado`, conforme a última checagem.
 9. `identidade-diferente` ou `identidade-duplicada`: `identity_status` `different` (a CLI informa outra conta) ou `duplicate` (a mesma identidade da origem ou de um membro mais bem colocado).

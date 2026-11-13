@@ -84,7 +84,9 @@ Regras do terminal:
   up" é a janela de tolerância do Claude, com o agente ainda trabalhando).
 - Um código de status isolado (`429`, "line 429") nunca basta.
 - O Openia não tem mensagem própria de falta de crédito: fica **sem** detecção
-  no terminal, e a falta de crédito só aparece pela medição de créditos.
+  no terminal, e a falta de crédito só aparece pela medição de créditos. Com a
+  medição atual em US$ 0 ou menos, a conta fica fora da cadeia ("sem créditos
+  pela medição atual"); medição velha, sem horário ou com erro não prova nada.
 
 ## Quem pode receber uma troca (elegibilidade)
 
@@ -95,7 +97,9 @@ A primeira razão que bloqueia decide, nesta ordem. Toda razão tem texto na UI.
 3. Provedor sem checagem de login (hoje, o Gemini).
 4. Openia sem chave.
 5. Em espera, ou com espera vencida sem checagem posterior.
-6. Esgotada por medição atual (alguma janela em 0%), até o reset dela.
+6. Esgotada por medição atual (alguma janela em 0%), até o reset dela; no Openia,
+   sem créditos na medição atual (saldo do OpenRouter em US$ ≤ 0), enquanto a
+   medição seguir atual (13/11/2026).
 7. Login não conferido nos últimos 15 minutos.
 8. Deslogada, CLI ausente, checagem com tempo esgotado ou checagem que não
    confirmou a conta ("A checagem de login não confirmou a conta.").
