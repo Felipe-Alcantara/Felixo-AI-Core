@@ -301,7 +301,7 @@ test(
     const { service, limpar } = criarServico({
       perfis,
       runCommand: async ({ env }) =>
-        env?.CLAUDE_CONFIG_DIR
+        pasta(env).endsWith('claude-sem-cli')
           ? { ok: false, errorCode: 'ENOENT', message: 'spawn claude ENOENT', stdout: '', stderr: '' }
           : { ok: false, timedOut: true, message: 'codex excedeu o tempo limite de execucao.', stdout: '', stderr: '' },
       queryLiveUsage: {},

@@ -62,6 +62,10 @@ function selectDiscoveryContext(env = {}) {
  *
  * `platform` só muda a regra de caixa do `.project_root` do Gemini; existe
  * para o teste simular o Windows em qualquer sistema.
+ *
+ * `env` é o do spawn (`selectDiscoveryContext`); sem ele, nada vem do
+ * processo: um `CODEX_HOME` ou `CLAUDE_CONFIG_DIR` herdado (a suíte rodando
+ * num terminal de conta do Felixo) mudaria a pasta procurada sem ninguém pedir.
  */
 function discoverAgentSession({
   command,
@@ -71,7 +75,7 @@ function discoverAgentSession({
   excludeSessionIds,
   now = Date.now(),
   homeDir = os.homedir(),
-  env = process.env,
+  env = {},
   platform = process.platform,
 }) {
   if (!command || !cwd || !Number.isFinite(startedAt)) return null

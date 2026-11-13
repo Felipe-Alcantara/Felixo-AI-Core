@@ -1650,7 +1650,8 @@ test('o terminal nasce na conta escolhida, e sem conta segue o login do sistema'
     manager.spawn('sessao-b', { command: 'codex' })
 
     assert.equal(calls[0].options.env.CODEX_HOME, '/perfis/trabalho')
-    assert.equal(calls[1].options.env.CODEX_HOME, undefined)
+    // Sem conta é o ambiente da pessoa: o CODEX_HOME dela, se houver (a suíte rodando num terminal de conta).
+    assert.equal(calls[1].options.env.CODEX_HOME, process.env.CODEX_HOME)
     // O PATH montado pelo app continua valendo nos dois casos.
     assert.ok(calls[0].options.env.PATH && calls[1].options.env.PATH)
     assert.deepEqual(environmentCalls, [

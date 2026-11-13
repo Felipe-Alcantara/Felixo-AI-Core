@@ -61,7 +61,9 @@ const perfilClaude = (id) => ({
   label: id,
   profileEnv: { CLAUDE_CONFIG_DIR: `/perfis/${id}` },
 })
-const pasta = (env) => env?.CODEX_HOME ?? env?.CLAUDE_CONFIG_DIR ?? ''
+// Os perfis falsos moram em `/perfis/<id>`: uma pasta herdada do ambiente (a suíte num terminal de conta do
+// Felixo) nunca começa assim, e não pode se passar por uma das contas do teste.
+const pasta = (env) => [env?.CODEX_HOME, env?.CLAUDE_CONFIG_DIR].find((valor) => valor?.startsWith('/perfis/')) ?? ''
 
 const loginCodexOk = (env) => ({ ok: true, stdout: `Logged in using ChatGPT\nAccount: ${path.basename(pasta(env))}@example.com`, stderr: '' })
 const metricas = (...chaves) =>
