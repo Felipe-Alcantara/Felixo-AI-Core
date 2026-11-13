@@ -2376,3 +2376,12 @@ Estado: concluído (deploy no adendo).
 - macOS e Linux, a não ser pelo smoke do CI (Ubuntu).
 
 Estado: concluído (deploy no adendo).
+
+**Adendo (2026-11-13, 15:05): CI, Release e resposta ao usuário.**
+
+- O CI de `86cbe8d` (run 43473820210) reprovou no Canvas smoke, na sessão C, passo C7. O clique em "Ver opções" foi tomado pela
+  barra lateral: cada "Abrir agente" agora abre a gaveta e reenquadra o canvas, e o bloco ficou embaixo dela.
+- `8e9ac1c` passou o C7 para o teclado, como o C6 e o `digitarNoBloco` já faziam. O CI 43476064067 passou em todas as sessões do
+  smoke de primeira, inclusive o SA3 com a gaveta e o C7, e no Validate dos quatro sistemas.
+- O Release gate (43477039925) e o Release (43477078309, 14:52–15:01) publicaram a `v0.1.545`.
+- A resposta ao usuário foi enviada no Discord, a pedido do Felipe.
