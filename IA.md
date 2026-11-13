@@ -2005,3 +2005,7 @@ de conta do Felixo. Com o ambiente desse terminal, **8 testes falhavam**:
 roda dentro do app. Abri task para decidir isso.
 
 Estado: concluído (deploy no adendo).
+
+**Adendo (2026-11-13, 02:28): CI e Release.** O CI de `84d1701` (run 43370158317, 02:09–02:16) passou no Validate de Windows,
+macOS, Ubuntu e Ubuntu ARM e no smoke do canvas. O Release gate (run 43371001628) e o Release (run 43371030034, 02:17–02:25)
+publicaram a `v0.1.538`; houve release porque o `agent-session-discovery.cjs` é código do app.
