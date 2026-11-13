@@ -44,6 +44,7 @@ const ELIGIBILITY_REASONS = Object.freeze({
   'sem-chave': 'A conta não tem chave configurada.',
   'em-espera': 'A conta está em espera.',
   'esgotada-pela-medicao': 'A medição atual mostra a quota esgotada.',
+  'sem-credito-pela-medicao': 'A medição atual mostra a conta sem créditos.',
   'login-nao-conferido': 'Login não conferido pela CLI nos últimos 15 min.',
   deslogada: 'A CLI informa que não há login nesta conta.',
   'cli-ausente': 'A CLI deste provedor não foi encontrada.',
@@ -132,6 +133,24 @@ function findExhaustedWindow(sample, nowMs) {
     }
   }
   return null
+}
+
+/**
+ * Créditos esgotados numa medição atual: métrica em moeda (o Openia mede o
+ * saldo do OpenRouter em US$, sem janela em %) com `remaining ≤ 0`. O Openia
+ * não imprime mensagem própria de falta de crédito, então só a medição mostra.
+ * Amostra velha, sem horário ou com erro não prova nada: a regra só vale com a
+ * medição atual, como a das janelas.
+ *
+ * @returns {{ key: string | null } | null}
+ */
+function findExhaustedCredits(sample, nowMs) {
+  if (!isMeasurementCurrent(sample, nowMs)) return null
+  const metrics = Array.isArray(sample?.metrics) ? sample.metrics : []
+  const exhausted = metrics.find(
+    (metric) => metric?.unit === 'US$' && typeof metric.remaining === 'number' && Number.isFinite(metric.remaining) && metric.remaining <= 0,
+  )
+  return exhausted ? { key: exhausted.key ?? null } : null
 }
 
 /**
@@ -436,6 +455,7 @@ function evaluateEligibility({
   if (accountStatus === 'missing_key') return blocked('sem-chave')
   if (cooldownBlocks(cooldown, loginCheck, nowMs)) return blocked('em-espera')
   if (findExhaustedWindow(sample, nowMs)) return blocked('esgotada-pela-medicao')
+  if (findExhaustedCredits(sample, nowMs)) return blocked('sem-credito-pela-medicao')
   if (!loginCheck || !isWithinTtl(loginCheck.checkedAt, nowMs)) return blocked('login-nao-conferido')
   if (loginCheck.status !== 'logged_in') return blocked(LOGIN_STATUS_REASONS[loginCheck.status] ?? 'checagem-falhou')
   if (loginCheck.identityStatus === 'different') return blocked('identidade-diferente')

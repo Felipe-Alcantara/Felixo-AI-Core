@@ -30,6 +30,7 @@ const CONTRACT_REASONS = Object.freeze([
   'sem-chave',
   'em-espera',
   'esgotada-pela-medicao',
+  'sem-credito-pela-medicao',
   'login-nao-conferido',
   'deslogada',
   'cli-ausente',

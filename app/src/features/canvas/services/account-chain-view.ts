@@ -317,6 +317,7 @@ const INELIGIBILITY_TEXT: Record<AccountIneligibilityReason, string> = {
   'sem-chave': 'sem chave configurada',
   'em-espera': 'em espera',
   'esgotada-pela-medicao': 'esgotada pela medição atual',
+  'sem-credito-pela-medicao': 'sem créditos pela medição atual',
   'login-nao-conferido': 'login não conferido há pouco',
   deslogada: 'sem login',
   'cli-ausente': 'a CLI não está instalada',

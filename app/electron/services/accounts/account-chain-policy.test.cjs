@@ -40,6 +40,13 @@ function percent(remaining, extra = {}) {
   return { key: `janela-${remaining}`, unit: '%', used: 100 - remaining, limit: 100, remaining, resetAt: null, ...extra }
 }
 
+/** Créditos do OpenRouter como `parseOpeniaCredits` os lê da linha do `openia statusline`. */
+function credits(remaining, extra = {}) {
+  return { key: 'credits', label: 'Créditos da conta', used: 5 - remaining, limit: 5, remaining, unit: 'US$', precision: 'reported', resetAt: null, ...extra }
+}
+
+const OPENIA_MEMBER = Object.freeze({ accountId: 'openia-a', providerId: 'openia', enabled: true })
+
 function currentSample(metrics, measuredAtMs = NOW - MIN) {
   return { status: 'current', collectedAt: iso(NOW - MIN), metrics, metadata: { measuredAt: iso(measuredAtMs) } }
 }
@@ -81,6 +88,7 @@ test('cada razão de inelegibilidade, na ordem da política, com texto em pt-BR'
     ['sem-chave', { member: { accountId: 'openia-a', providerId: 'openia', enabled: true }, accountStatus: 'missing_key' }],
     ['em-espera', { cooldown: { failureClass: 'limit', detectedAt: iso(NOW - HOUR), untilAt: iso(NOW + HOUR) } }],
     ['esgotada-pela-medicao', { sample: currentSample([percent(0, { resetAt: iso(NOW + HOUR) })]) }],
+    ['sem-credito-pela-medicao', { member: OPENIA_MEMBER, sample: currentSample([credits(0)]) }],
     ['login-nao-conferido', { loginCheck: null }],
     ['login-nao-conferido', { loginCheck: loggedIn({ checkedAt: iso(NOW - 16 * MIN) }) }],
     ['login-nao-conferido', { loginCheck: loggedIn({ checkedAt: 'agora há pouco' }) }],
@@ -103,6 +111,25 @@ test('cada razão de inelegibilidade, na ordem da política, com texto em pt-BR'
     assert.equal(result.reasonText, ELIGIBILITY_REASONS[reason])
     assert.match(result.reasonText, /\S/)
   }
+})
+
+test('Openia sem crédito: só a medição atual tira a conta da cadeia; amostra velha, sem horário ou com erro não prova nada', () => {
+  const openia = (sample) => evaluateEligibility(baseInput({ member: OPENIA_MEMBER, sample }))
+
+  for (const restante of [0, -0.37]) {
+    const result = openia(currentSample([credits(restante)]))
+    assert.equal(result.reason, 'sem-credito-pela-medicao', `restante ${restante}`)
+    assert.match(result.reasonText, /créditos/)
+  }
+  assert.deepEqual(openia(currentSample([credits(3.2)])), { eligible: true, reason: null, reasonText: null })
+
+  // Valor antigo nunca prova nada (contrato de 24/09): a conta segue para as outras regras.
+  assert.equal(openia(currentSample([credits(0)], NOW - 16 * MIN)).eligible, true, 'medição de 16 min atrás')
+  assert.equal(openia({ status: 'current', metrics: [credits(0)], metadata: {} }).eligible, true, 'medição sem horário')
+  assert.equal(openia({ ...currentSample([credits(0)]), status: 'error' }).eligible, true, 'medição com erro')
+
+  // Uma janela em % zerada continua sendo a outra razão, e o crédito positivo não a esconde.
+  assert.equal(openia(currentSample([credits(3.2), percent(0)])).reason, 'esgotada-pela-medicao')
 })
 
 test('vale a primeira razão que bloqueia', () => {
