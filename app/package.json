@@ -233,8 +233,8 @@
     }
   },
   "allowScripts": {
-    "electron@41.3.0": true,
     "electron-winstaller@5.4.0": true,
+    "fsevents@2.3.3": true,
     "node-pty@1.1.0": true
   }
 }
