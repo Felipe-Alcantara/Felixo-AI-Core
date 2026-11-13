@@ -178,6 +178,8 @@ function createAccountOutputWatcher({
   let noticeVisible = false
   /** Total de saída no último Enter da pessoa; `null` = nada armado. */
   let submittedAt = null
+  /** Total de saída na última varredura: o que passou disso chegou depois dela. */
+  let scannedChars = 0
 
   function warn(message, error) {
     try {
@@ -210,17 +212,17 @@ function createAccountOutputWatcher({
    * @param {FailureResult} result
    * @returns {OutputDetection[]}
    */
-  function emitNew(result, tail) {
+  function emitNew(result, tail, failure = result) {
     const emitted = []
     const detectedAt = now()
 
-    if (result.failureClass !== 'unknown' && result.evidenceHash) {
-      const known = seen.has(result.evidenceHash)
+    if (failure.failureClass !== 'unknown' && failure.evidenceHash) {
+      const known = seen.has(failure.evidenceHash)
       // Visto de novo (a TUI redesenhou o aviso) também renova a recência:
       // o aviso que continua na tela é o último a ser esquecido.
-      remember(result.evidenceHash)
-      if (!known) emit({ kind: 'failure', failure: result, detectedAt }, emitted)
-      else if (repeatedAfterSubmit(result.evidenceHash, tail)) emit({ kind: 'failure', failure: result, detectedAt, repeat: true }, emitted)
+      remember(failure.evidenceHash)
+      if (!known) emit({ kind: 'failure', failure, detectedAt }, emitted)
+      else if (repeatedAfterSubmit(failure.evidenceHash, tail)) emit({ kind: 'failure', failure, detectedAt, repeat: true }, emitted)
     }
 
     // O aviso de reset não tem evidência própria no resultado: vale a
@@ -245,13 +247,44 @@ function createAccountOutputWatcher({
       tail = firstBreak ? tail.slice(firstBreak.index) : ''
     }
 
+    // O que a sessão emitiu desde a varredura anterior (sem `readOutputChars`, nada se sabe).
+    const outputChars = typeof readOutputChars === 'function' ? readOutputChars() : null
+    const freshChars = Number.isFinite(outputChars) ? outputChars - scannedChars : 0
+    if (Number.isFinite(outputChars)) scannedChars = outputChars
+
     const lower = tail.toLowerCase()
     if (!passesPrefilter(lower, prefilterWords)) {
       noticeVisible = false
       return []
     }
     stats.prefilterHits += 1
-    return emitNew(classifyLines(tail, lower), tail)
+    const result = classifyLines(tail, lower)
+    return emitNew(result, tail, unmaskedFailure(result, tail, freshChars))
+  }
+
+  /**
+   * A taxonomia devolve só a falha de maior precedência da janela. Se ela já
+   * saiu (um login antigo que continua na tela), uma falha nova de classe mais
+   * baixa ficaria escondida até a antiga sair da janela: um limite novo não
+   * era detectado. Então, só nesse caso, classifica o que chegou desde a
+   * última varredura, recuando até o começo da linha em que esse trecho
+   * começa (uma frase partida entre duas varreduras chega inteira). A janela
+   * inteira continua valendo para o aviso de reset e para a reemissão.
+   *
+   * Limite: se a CLI redesenha a tela inteira, a linha antiga volta no trecho
+   * novo e a precedência continua valendo até ela sair da tela.
+   */
+  function unmaskedFailure(result, tail, freshChars) {
+    if (result.failureClass === 'unknown' || !result.evidenceHash || !seen.has(result.evidenceHash)) return result
+    if (!(freshChars > 0) || freshChars >= tail.length) return result
+    const cut = tail.length - freshChars
+    const lineStart = Math.max(tail.lastIndexOf('\n', cut - 1), tail.lastIndexOf('\r', cut - 1)) + 1
+    const fresh = tail.slice(lineStart)
+    const lower = fresh.toLowerCase()
+    if (!passesPrefilter(lower, prefilterWords)) return result
+    const freshResult = classifyLines(fresh, lower)
+    const isNew = freshResult.failureClass !== 'unknown' && freshResult.evidenceHash && !seen.has(freshResult.evidenceHash)
+    return isNew ? freshResult : result
   }
 
   /** Só as últimas linhas com palavra do provedor vão à taxonomia. */

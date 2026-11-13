@@ -461,3 +461,32 @@ test('push por pedaço não lê a cauda nem classifica: só a varredura lê', ()
   watcher.scan()
   assert.equal(reads, 1)
 })
+
+test('um limite novo aparece mesmo com uma linha antiga de login, de classe mais alta, ainda na janela', () => {
+  // A taxonomia escolhe pela precedência (auth > limit) entre as últimas linhas: o login antigo,
+  // já emitido, escondia o limite novo até sair da janela.
+  const vigia = criarVigia({ providerId: 'codex' })
+  vigia.write('Your access token could not be refreshed because your refresh token was already used.\r\n')
+  assert.deepEqual(vigia.watcher.scan().map((item) => item.failure.failureClass), ['auth'])
+
+  vigia.write(`${SPINNER}\r\n› continue\r\n${CODEX_BANNER}\r\n`)
+  const depois = vigia.watcher.scan()
+  assert.deepEqual(depois.map((item) => item.failure.failureClass), ['limit'])
+  assert.match(depois[0].failure.evidence, /usage limit/)
+
+  // O login antigo continua sem segunda detecção, e a mesma tela redesenhada não repete o limite.
+  vigia.write(`${SPINNER}\r\n`)
+  assert.deepEqual(vigia.watcher.scan(), [])
+})
+
+test('a frase partida entre duas varreduras ainda é lida inteira: o que chegou depois recua até o começo da linha', () => {
+  const vigia = criarVigia({ providerId: 'codex' })
+  vigia.write('Your access token could not be refreshed because your refresh token was already used.\r\n')
+  vigia.watcher.scan()
+  // Corta no meio da frase que a taxonomia procura: nenhuma das metades a tem inteira.
+  const metade = CODEX_BANNER.indexOf('usage limit') + 3
+  vigia.write(CODEX_BANNER.slice(0, metade))
+  assert.deepEqual(vigia.watcher.scan(), [])
+  vigia.write(`${CODEX_BANNER.slice(metade)}\r\n`)
+  assert.deepEqual(vigia.watcher.scan().map((item) => item.failure.failureClass), ['limit'])
+})
