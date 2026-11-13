@@ -65,7 +65,8 @@ export function ProviderSwitchRequest({
         {rule && <p className="text-zinc-400">Regra: {rule}</p>}
         <p className="text-zinc-400">{PROVIDER_SWITCH_COST_NOTICE}</p>
         {deadline && !expired && (
-          <p className="text-zinc-400">
+          // O "em N min" muda a cada 30 s: anunciado junto com o card novo, nunca de novo sozinho.
+          <p aria-live="off" className="text-zinc-400">
             Responda <time dateTime={request.expiresAt}>{deadline}</time>; sem resposta, conta
             como recusa e nada é trocado.
           </p>
@@ -147,6 +148,7 @@ export function ProviderSwitchRequestList({
       role="region"
       aria-label="Trocas de provedor esperando sua confirmação"
       aria-live="polite"
+      aria-relevant="additions"
       className={hasRequests ? 'flex shrink-0 flex-col gap-2 px-5 py-2' : 'hidden'}
     >
       {requests.map((request) => (

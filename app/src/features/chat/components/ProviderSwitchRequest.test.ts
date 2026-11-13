@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
-import { ProviderSwitchRequest } from './ProviderSwitchRequest'
+import { ProviderSwitchRequest, ProviderSwitchRequestList } from './ProviderSwitchRequest'
 import type { ProviderSwitchRequest as ProviderSwitchRequestData } from '../types'
 
 const REQUEST: ProviderSwitchRequestData = {
@@ -53,5 +53,20 @@ describe('ProviderSwitchRequest', () => {
     expect(buttons.every((button) => /\sdisabled=""/.test(button))).toBe(true)
     expect(html).toContain('Prazo vencido: sem resposta a tempo conta como recusa e nada é trocado.')
     expect(html).not.toContain('Responda ')
+  })
+
+  it('o prazo que se atualiza a cada 30 s não é reanunciado; a região anuncia só card novo', () => {
+    // A região inteira era aria-live: o "em N min" mudando reanunciava o card a cada 30 s.
+    const html = renderToStaticMarkup(
+      createElement(ProviderSwitchRequestList, {
+        // A lista usa o relógio real: o prazo precisa estar no futuro.
+        requests: [{ ...REQUEST, expiresAt: new Date(Date.now() + 10 * 60_000).toISOString() }],
+        getCardState: () => ({ busy: false, error: null, stale: false }),
+        onRespond: () => {},
+        onDismiss: () => {},
+      }),
+    )
+    expect(html).toMatch(/<div role="region"[^>]*aria-live="polite"[^>]*aria-relevant="additions"/)
+    expect(html).toMatch(/<p[^>]*aria-live="off"[^>]*>Responda <time/)
   })
 })
