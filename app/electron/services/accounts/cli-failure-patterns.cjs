@@ -130,6 +130,9 @@ const PROVIDER_PATTERNS = Object.freeze({
       { phrase: 'exhausted your capacity', failureClass: 'provider', scope: 'model', capacity: true },
       { phrase: 'RESOURCE_EXHAUSTED', alsoRequires: 'Quota exceeded', failureClass: 'limit', scope: 'account' },
       { phrase: 'You have exhausted your daily quota on this model', failureClass: 'limit', scope: 'model' },
+      // A partir da 0.69 a cota vira um diálogo em caixa ("Usage limit reached for <modelo>.", com
+      // a troca de modelo como opção), no lugar do "[API Error: ...]" (gravação de 13/11/2026).
+      { phrase: 'Usage limit reached for', failureClass: 'limit', scope: 'model' },
     ]),
     exclude: Object.freeze([]),
     notices: Object.freeze([]),
