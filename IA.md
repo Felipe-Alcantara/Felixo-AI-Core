@@ -2282,3 +2282,7 @@ foco fica no botão nas duas trocas: ok", e C4, C6b, C7 e C10 passaram com `data
   tela. O limite está documentado em `unmaskedFailure`.
 
 Estado: concluído (deploy no adendo).
+
+**Adendo (2026-11-13, 13:15): CI e Release.** O CI de `add87c7` (run 43458105431, 12:59–13:06) passou no Validate de Windows,
+macOS, Ubuntu e Ubuntu ARM e no smoke do canvas. O Release gate (run 43459269767) e o Release (run 43459307259, 13:06–13:13)
+publicaram a `v0.1.543`.
