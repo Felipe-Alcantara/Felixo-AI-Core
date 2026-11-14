@@ -292,6 +292,11 @@ continuação. "Limite" **nunca** nomeia erro de rede ou de servidor.
   `app/scripts/extract-cli-failure-vocabulary.cjs` confere a fixture de novo a
   cada atualização.
 - A checagem de login é local.
+- **Refresh de token no mesmo perfil** (medido em 14/11/2026, sem conta):
+  - a checagem não colide com uma sessão viva;
+  - dois processos do Codex do mesmo perfil abertos juntos com o token velho colidiam, e um ficava sem login ("refresh token was already used").
+  - Desde então, aberturas do Codex no mesmo `CODEX_HOME` (terminais e painel) esperam a vez, com 2,5 s entre elas. Se a renovação passar disso, a colisão volta a ser possível.
+  - O Claude Code já serializa o refresh entre processos.
 - A troca por limite reage à falha; não há troca proativa por limiar de uso.
 
 ## Ideias para quem quiser contribuir

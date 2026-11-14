@@ -1260,7 +1260,10 @@ Depois do push, acompanhar o CI até o estado final nos 4 SOs e anotar o SHA de 
 7. **Orquestrador parado esperando decisão.** Mitigação: 10 min e depois recusa pela varredura existente, respostas idempotentes e `RUN_FINISHED`.
 8. **Mudança de classificação no orquestrador.** O 429 solto e o `no_login` com prazo mudam. A tabela do §5.6 vira teste de regressão, e a mudança fica registrada.
 9. **Comparação de capacidade entre provedores é heurística.** O diálogo mostra os números e a fonte.
-10. **Colisão de refresh de token** entre a checagem e uma sessão viva no mesmo perfil (não medida). Mitigação: dedupe por conta e checagem nunca periódica. Vira task de medição.
+10. **Colisão de refresh de token** entre a checagem e uma sessão viva no mesmo perfil (não medida). Mitigação: dedupe por conta e checagem nunca periódica. Vira task de medição. **Medida em 14/11/2026**, com as CLIs reais, credenciais e endpoints de token falsos e nada saindo da máquina (ver `IA.md`):
+    - **Checagem + sessão:** não colidem em nenhum dos dois provedores. O `codex login status` não renova o token. O `claude auth status` renova quando o token venceu, mas o Claude Code serializa o refresh entre processos (um só pedido).
+    - **Duas sessões do Codex no mesmo perfil, abertas juntas com o token velho:** colidem. O Codex não tem trava; o segundo refresh com o mesmo token é recusado, e se a recusa chega antes de o primeiro gravar o `auth.json`, a sessão fica sem login ("refresh token was already used"). O `app-server` do painel colide igual.
+    - **Corrigido:** a vez por perfil (`codex-launch-gate.cjs`, 2,5 s entre aberturas do mesmo `CODEX_HOME`), no `pty:spawn` (com cancelamento pelo `pty:kill` na espera), no `app-server` e no `/status` do painel. O chat (`cli-process-manager`) ficou de fora.
 11. **Concorrência entre dois Felixo no mesmo perfil.** Mitigação: CAS, índice parcial único e teste multiprocesso.
 12. **Tempo do smoke no Windows** (teto de 10 min). Mitigação: roteiro mínimo e medição no PR.
 13. **Escopo grande num PR** (30 commits). Mitigação: a cadeia desligada mantém o comportamento até a pessoa ligar. As mudanças visíveis são correções ou decisões do dono, marcadas nos commits.
@@ -1276,7 +1279,7 @@ Depois do push, acompanhar o CI até o estado final nos 4 SOs e anotar o SHA de 
 2. **Claude: cancelar a continuação automática do terminal antigo com consentimento** (Esc uma vez, só com clique explícito), depois de medir numa sessão real.
 3. **Capturar o fluxo real de bytes do banner de limite** em Linux, macOS e Windows (ConPTY), para testar a detecção sobre a renderização real da TUI.
 4. **Openia: detecção de falta de crédito na saída da CLI**, quando existir mensagem própria ou fixture da interface executada.
-5. **Medir a colisão de refresh de token** com duas sessões, ou checagem + sessão, na mesma pasta de perfil.
+5. **Medir a colisão de refresh de token** com duas sessões, ou checagem + sessão, na mesma pasta de perfil. Feito em 13–14/11/2026 (risco 10 acima).
 6. **Redigir segredos também na "Passar responsabilidade" manual** (hoje só a continuação da cadeia redige). Feito em 13/11/2026. A passagem manual passa pelo mesmo `account-chain:redact-transcript` (`buildRedactedHandoffText`); se a redação falha, nada é enviado. O histórico das duas junta as linhas que o terminal só quebrou na largura (`readTranscript`): partido, um token mais longo que a linha passava pela redação.
 7. **Aplicar em código `maxCostEstimate` e `requireConfirmationForSensitiveActions`** do orquestrador.
 8. **Orquestrador usando contas próprias da cadeia.**
