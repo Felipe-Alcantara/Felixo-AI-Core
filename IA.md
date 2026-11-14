@@ -2590,3 +2590,7 @@ publicaram a `v0.1.548`.
 - O Gemini: as contas da cadeia são por chave ou corporativas, com o refresh do Google, que não gira o token.
 
 Estado: concluído (deploy no adendo).
+
+**Adendo (2026-11-14, 12:24): CI e Release.** O CI de `b12b069` (run 43608274813, 12:05–12:12) passou no Validate de Windows,
+macOS, Ubuntu e Ubuntu ARM e no smoke do canvas. O Release gate (run 43608913443) e o Release (run 43608933929, 12:12–12:21)
+publicaram a `v0.1.549`.
