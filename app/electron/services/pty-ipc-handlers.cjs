@@ -27,9 +27,12 @@ const {
 } = require('./pty-process-manager.cjs')
 const { validatePtyAccountSelection } = require('./pty-account-validation.cjs')
 const { createPtyDataBatcher } = require('./pty-data-batcher.cjs')
+const { codexLaunchGate } = require('./codex-launch-gate.cjs')
 
 /** Código do `pty:spawn` quando o ticket da cadeia não vale (contrato `account-chain.ts`). */
 const CHAIN_TICKET_REFUSED = 'CHAIN_TICKET_REFUSED'
+/** Código do `pty:spawn` fechado (`pty:kill`) enquanto esperava a vez do Codex. */
+const PTY_SPAWN_CANCELLED = 'PTY_SPAWN_CANCELLED'
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /** Motivo pt-BR de cada recusa do serviço da cadeia (`beginTicketSpawn`). */
@@ -74,6 +77,10 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
   }
   // `pty:data` sai em lote (`pty-data-batcher.cjs`); o preload desdobra.
   const batcher = dependencies.batcher ?? createPtyDataBatcher({ send: (batch) => send('pty:data', batch) })
+  // A vez de cada perfil do Codex (compartilhada com o painel); `null` desliga.
+  const launchGate = dependencies.codexLaunchGate === undefined ? codexLaunchGate : dependencies.codexLaunchGate
+  /** Aberturas do Codex esperando a vez; o `pty:kill` e o `dispose` as cancelam. */
+  const waitingSpawns = new Map()
 
   ipcMain.handle('pty:spawn', (_event, params = {}) => {
     try {
@@ -112,30 +119,61 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
         batcher.discard(sessionId)
       }
 
-      try {
-        spawnSession(sessionId, params, accountValidation, accountMode, ticket.lineageId)
-      } catch (error) {
-        finishChainTicket(ticket, sessionId, false)
-        throw error
-      }
-      finishChainTicket(ticket, sessionId, true)
+      const open = () => {
+        try {
+          spawnSession(sessionId, params, accountValidation, accountMode, ticket.lineageId)
+        } catch (error) {
+          finishChainTicket(ticket, sessionId, false)
+          throw error
+        }
+        finishChainTicket(ticket, sessionId, true)
 
-      // No reanexo, o renderer só recebe a cauda do replay: avisa quando o
-      // começo ficou só no arquivo em disco ("carregar mais" da gaveta).
-      const replayTruncated = reused && manager.replayTruncated?.(sessionId) === true
-      return {
-        ok: true,
-        sessionId,
-        ...(reused ? { reused: true } : {}),
-        ...(replayTruncated ? { replayTruncated: true } : {}),
+        // No reanexo, o renderer só recebe a cauda do replay: avisa quando o
+        // começo ficou só no arquivo em disco ("carregar mais" da gaveta).
+        const replayTruncated = reused && manager.replayTruncated?.(sessionId) === true
+        return {
+          ok: true,
+          sessionId,
+          ...(reused ? { reused: true } : {}),
+          ...(replayTruncated ? { replayTruncated: true } : {}),
+        }
       }
+
+      // Codex aberto logo depois de outro do mesmo perfil espera a vez: o
+      // anterior renova o token velho e grava o auth.json antes de este o ler
+      // (`codex-launch-gate.cjs`). O reanexo não abre processo e não espera.
+      const profile = reused || !launchGate
+        ? null
+        : manager.codexProfileFor?.({ command: params.command, accountId: params.accountId, providerId: accountValidation.providerId })
+      const waitMs = profile ? launchGate.reserve(profile) : 0
+      if (waitMs <= 0) {
+        return open()
+      }
+      const waiting = { cancelled: false }
+      const previous = waitingSpawns.get(sessionId)
+      if (previous) previous.cancelled = true
+      waitingSpawns.set(sessionId, waiting)
+      return new Promise((resolve) => setTimeout(resolve, waitMs))
+        .then(() => {
+          if (waitingSpawns.get(sessionId) === waiting) waitingSpawns.delete(sessionId)
+          if (waiting.cancelled) {
+            finishChainTicket(ticket, sessionId, false)
+            return { ok: false, code: PTY_SPAWN_CANCELLED, message: 'O terminal foi fechado antes de abrir.' }
+          }
+          return open()
+        })
+        .catch(spawnErrorResult)
     } catch (error) {
-      const result = toErrorResult(error, 'Nao foi possivel iniciar o terminal.')
-      // O código deixa o renderer distinguir "a sessão viva é de outra conta"
-      // de uma falha qualquer de spawn.
-      return error?.code === PTY_SESSION_ACCOUNT_MISMATCH ? { ...result, code: error.code } : result
+      return spawnErrorResult(error)
     }
   })
+
+  function spawnErrorResult(error) {
+    const result = toErrorResult(error, 'Nao foi possivel iniciar o terminal.')
+    // O código deixa o renderer distinguir "a sessão viva é de outra conta"
+    // de uma falha qualquer de spawn.
+    return error?.code === PTY_SESSION_ACCOUNT_MISMATCH ? { ...result, code: error.code } : result
+  }
 
   function beginChainTicket(params, sessionId, mode) {
     const hasTicket = params.chainTicket !== undefined && params.chainTicket !== null
@@ -256,6 +294,12 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
   ipcMain.handle('pty:kill', (_event, params = {}) => {
     try {
       const sessionId = requireSessionId(params.sessionId)
+      // Fechado enquanto esperava a vez do Codex: não abre depois.
+      const waiting = waitingSpawns.get(sessionId)
+      if (waiting) {
+        waiting.cancelled = true
+        waitingSpawns.delete(sessionId)
+      }
       batcher.flush(sessionId)
       batcher.forget(sessionId)
       const killed = manager.kill(sessionId, { force: Boolean(params.force) })
@@ -318,6 +362,9 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
       // Melhor esforço no fechamento do app.
     }
     batcher.flushAll()
+    // O app fecha: nada que esperava a vez do Codex abre depois.
+    for (const waiting of waitingSpawns.values()) waiting.cancelled = true
+    waitingSpawns.clear()
     manager.killAll({ force: true })
   }
 
@@ -359,6 +406,7 @@ function requireSessionId(sessionId) {
 
 module.exports = {
   CHAIN_TICKET_REFUSED,
+  PTY_SPAWN_CANCELLED,
   parseAccountMode,
   registerPtyIpcHandlers,
   requireSessionId,

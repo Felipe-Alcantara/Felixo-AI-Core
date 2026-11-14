@@ -2256,3 +2256,16 @@ test('controle de fluxo: PTY sem pause (falso, ou já encerrado) ignora o pedido
   }
   assert.equal(manager.setFlowPaused('canvas:sem-pausa', true), false)
 })
+
+test('o perfil do Codex de uma abertura vem do ambiente da conta; outra CLI não tem perfil', () => {
+  const buildAccountEnv = (accountId) => (accountId ? { CODEX_HOME: `/perfis/${accountId}` } : {})
+  // PTY injetado (testes, CLI roteirizada do smoke) não renova token: fica fora da vez.
+  const comPtyFalso = new PtyProcessManager({ spawnPty: () => { throw new Error('não abre') }, buildAccountEnv })
+  assert.equal(comPtyFalso.codexProfileFor({ command: 'codex' }), null)
+  const manager = new PtyProcessManager({ buildAccountEnv })
+  assert.equal(manager.codexProfileFor({ command: 'codex' }), 'padrao')
+  assert.notEqual(manager.codexProfileFor({ accountId: 'a', providerId: 'codex' }), manager.codexProfileFor({ accountId: 'b', providerId: 'codex' }))
+  assert.equal(manager.codexProfileFor({ accountId: 'a', providerId: 'codex' }), manager.codexProfileFor({ command: 'codex', accountId: 'a' }))
+  assert.equal(manager.codexProfileFor({ command: 'claude', accountId: 'a', providerId: 'claude' }), null)
+  assert.equal(manager.codexProfileFor({ command: 'bash' }), null)
+})

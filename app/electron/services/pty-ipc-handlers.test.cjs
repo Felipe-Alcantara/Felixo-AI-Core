@@ -633,3 +633,72 @@ test('pty:flow repassa só o booleano de pausa ao gerenciador', () => {
   ])
   assert.equal(invoke('pty:flow', {}).ok, false)
 })
+
+// --- A vez do Codex por perfil (codex-launch-gate.cjs) -----------------------
+
+const { createCodexLaunchGate } = require('./codex-launch-gate.cjs')
+
+/** Gerenciador falso que conhece o perfil do Codex de cada conta, como o de verdade. */
+function setupComVez({ spacingMs = 60 } = {}) {
+  handlers.clear()
+  const manager = createFakeManager()
+  manager.vivas = new Set()
+  manager.has = (sessionId) => manager.vivas.has(sessionId)
+  manager.codexProfileFor = ({ command, accountId, providerId }) =>
+    (providerId ?? (command === 'codex' ? 'codex' : null)) === 'codex' ? `perfil:${accountId ?? 'padrao'}` : null
+  const fim = []
+  const chainTickets = {
+    begin: () => ({ ok: true, lineageId: 'linhagem-1' }),
+    finish: (params) => fim.push(params),
+  }
+  const window = { isDestroyed: () => false, webContents: { send: () => {} } }
+  registerPtyIpcHandlers(() => window, {
+    manager,
+    validateAccount: (_accountId, providerId) => ({ ok: true, providerId }),
+    chainTickets,
+    codexLaunchGate: createCodexLaunchGate({ spacingMs }),
+  })
+  const invoke = (channel, params) => handlers.get(channel)(null, params)
+  const spawns = () => manager.calls.filter((call) => call.method === 'spawn').map((call) => call.sessionId)
+  return { manager, invoke, spawns, fim }
+}
+
+test('o segundo Codex do mesmo perfil espera a vez; o primeiro abre na hora', async () => {
+  const { invoke, spawns } = setupComVez()
+  const primeiro = invoke('pty:spawn', { sessionId: 'a', command: 'codex', accountId: 'conta-a', providerId: 'codex' })
+  assert.equal(primeiro.ok, true)
+  const segundo = invoke('pty:spawn', { sessionId: 'b', command: 'codex', accountId: 'conta-a', providerId: 'codex' })
+  assert.equal(typeof segundo.then, 'function')
+  assert.deepEqual(spawns(), ['a'])
+  assert.equal((await segundo).ok, true)
+  assert.deepEqual(spawns(), ['a', 'b'])
+})
+
+test('outro perfil, outra CLI e o reanexo não esperam', () => {
+  const { manager, invoke, spawns } = setupComVez()
+  assert.equal(invoke('pty:spawn', { sessionId: 'a', command: 'codex', accountId: 'conta-a', providerId: 'codex' }).ok, true)
+  assert.equal(invoke('pty:spawn', { sessionId: 'b', command: 'codex', accountId: 'conta-b', providerId: 'codex' }).ok, true)
+  assert.equal(invoke('pty:spawn', { sessionId: 'c', command: 'claude', accountId: 'conta-c', providerId: 'claude' }).ok, true)
+  manager.vivas.add('a')
+  assert.equal(invoke('pty:spawn', { sessionId: 'a', command: 'codex', accountId: 'conta-a', providerId: 'codex', reuseExisting: true }).ok, true)
+  assert.deepEqual(spawns(), ['a', 'b', 'c', 'a'])
+})
+
+test('fechado enquanto esperava a vez, o bloco não abre depois e o ticket da cadeia volta sem uso', async () => {
+  const { invoke, spawns, fim } = setupComVez()
+  invoke('pty:spawn', { sessionId: 'a', command: 'codex', accountId: 'conta-a', providerId: 'codex' })
+  const esperando = invoke('pty:spawn', {
+    sessionId: 'b',
+    command: 'codex',
+    accountId: 'conta-a',
+    providerId: 'codex',
+    accountMode: 'chain',
+    chainTicket: '11111111-2222-4333-8444-555555555555',
+  })
+  assert.equal(invoke('pty:kill', { sessionId: 'b' }).ok, true)
+  const resultado = await esperando
+  assert.equal(resultado.ok, false)
+  assert.equal(resultado.code, 'PTY_SPAWN_CANCELLED')
+  assert.deepEqual(spawns(), ['a'])
+  assert.deepEqual(fim, [{ ticket: '11111111-2222-4333-8444-555555555555', sessionId: 'b', ok: false }])
+})

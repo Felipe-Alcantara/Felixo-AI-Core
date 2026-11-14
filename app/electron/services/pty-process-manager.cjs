@@ -36,6 +36,7 @@ const { normalizeCliVersion } = require('./agent-cli-versions.cjs')
 const { validatePtyAccountSelection } = require('./pty-account-validation.cjs')
 const { ensureNodePtySpawnHelperExecutable } = require('./pty-native-assets.cjs')
 const { createNodePtySpawn } = require('./node-pty-windows-kill.cjs')
+const { codexProfileKey } = require('./codex-launch-gate.cjs')
 
 const DEFAULT_COLS = 80
 const DEFAULT_ROWS = 24
@@ -183,6 +184,22 @@ class PtyProcessManager {
    *   retries through WinPTY after a ConPTY startup-path error.
    * @returns {PtyHandle}
    */
+  /**
+   * Perfil do Codex de uma abertura nova (`CODEX_HOME` da conta, ou o padrão
+   * do login do sistema), para a vez de `codex-launch-gate.cjs`; `null` quando
+   * a sessão não é do Codex.
+   *
+   * @param {{ command?: string, accountId?: string, providerId?: string | null }} options
+   * @returns {string | null}
+   */
+  codexProfileFor(options = {}) {
+    // PTY injetado (testes, CLI roteirizada do smoke) não é o Codex de verdade e não renova token.
+    if (this.injectedSpawnPty) return null
+    const providerId = options.providerId ?? (isCodexCommand(options.command) ? 'codex' : null)
+    if (providerId !== 'codex') return null
+    return codexProfileKey(this.buildAccountEnv(options.accountId, 'codex'), this.platform.name)
+  }
+
   spawn(
     sessionId,
     options = {},
