@@ -2532,3 +2532,61 @@ Estado: concluído (deploy no adendo).
 **Adendo (2026-11-13, 17:23): CI e Release.** O CI de `bd1e066` (run 43498119647, 17:04–17:11) passou no Validate de Windows,
 macOS, Ubuntu e Ubuntu ARM e no smoke do canvas. O Release gate (run 43499319136) e o Release (run 43499353136, 17:12–17:20)
 publicaram a `v0.1.548`.
+
+## 2026-11-14 — Contas: colisão de refresh de token no mesmo perfil, medida e corrigida no Codex
+
+**Agente / repositório.** Resolver hotfix — Felixo-AI-Core. Task `3e991f95-497e-8159-a58b-f623d1fba62b`.
+
+**Como foi medido (sem conta nenhuma).** Usei as CLIs reais com credenciais falsas e vencidas, numa pasta de perfil temporária, e um servidor local no papel do endpoint de token, com **rotação**: cada refresh token vale uma vez, e o reuso recebe o erro de reuso. Cada pedido ao backend leva a geração do token que usou.
+- **Codex 0.171.0-alpha.4:** `CODEX_REFRESH_TOKEN_URL_OVERRIDE`.
+- **Claude Code 2.1.323:** proxy local (`HTTPS_PROXY`) que atende `platform.claude.com` e `api.anthropic.com` com uma CA de teste (`NODE_EXTRA_CA_CERTS`, só no processo da bancada) e recusa qualquer outro host.
+- **Ressalva:** duas rodadas do Claude, antes do proxy, mandaram um refresh token **falso** (`sk-ant-ort01-teste-1`, sem dado da pessoa) ao endpoint real da Anthropic, que o recusou.
+
+**O que foi medido.**
+
+| Cenário | Codex | Claude Code |
+| --- | --- | --- |
+| A checagem renova o token? | **não**: `codex login status` não fez pedido nem tocou o `auth.json` | **sim**, com o token vencido; mas o refresh é serializado entre processos |
+| Checagem + sessão juntas | 1 refresh; sem colisão | 1 refresh; sem colisão (nas duas ordens) |
+| Duas sessões juntas | **2 refresh com o mesmo token; um recusado** | 1 refresh; sem colisão |
+| Duas sessões, recusa antes de o vencedor gravar | **sessão sem login:** 4 refresh recusados, 13 pedidos com o token vencido, "refresh token was already used. Please log out and sign in again" | sem colisão |
+| `codex app-server` (painel) ×2 | **colide igual** (renova ao abrir) | — |
+
+- No Codex, quando a recusa chega **depois** de o vencedor gravar o `auth.json`, quem perdeu relê o arquivo e segue: os 50 pedidos saíram com o token novo.
+- O `auth.json` nunca ficou estragado.
+- No Felixo, a sessão sem login viraria falha `auth` na vigia e tiraria a conta da cadeia sem motivo.
+
+**O que mudou.**
+- **`codex-launch-gate.cjs`:** a vez de abrir o Codex em cada perfil (`CODEX_HOME`, ou `padrao` no login do sistema). O primeiro abre na hora, e o seguinte do mesmo perfil espera `CODEX_LAUNCH_SPACING_MS` (2,5 s) depois do anterior. Com o perfil livre, abre no mesmo tique.
+- **Terminais:** o `pty:spawn` espera a vez nas aberturas novas do Codex, com o perfil vindo de `PtyProcessManager.codexProfileFor`. O reanexo não espera. O `pty:kill` na espera cancela a abertura (`PTY_SPAWN_CANCELLED`) e devolve o ticket da cadeia sem uso; o `dispose` cancela as que esperam. PTY injetado (testes, CLI roteirizada do smoke) fica fora.
+- **Painel:** o `runCodexAppServerSession` (só com o processo de verdade) e a leitura do `/status` entram na mesma vez. O `app-server` e o `/status` da mesma conta deixam de abrir juntos.
+- **Fora, de propósito:**
+  - a checagem de login, que não renova;
+  - o Claude, que já serializa;
+  - o chat (`cli-process-manager`, síncrono, um processo por pedido da pessoa), que ficou sem a vez.
+- **Docs:** `PLANO-CADEIA-CONTAS.md` (risco 10, §16) e `POLITICA-CONTAS.md` (limitações).
+
+**Validação.**
+- **Prova com a CLI real** (duas sessões do Codex, recusa primeiro):
+
+| Abertura | Refresh | "already used" | Pedidos com o token vencido |
+| --- | --- | --- | --- |
+| juntas | 1 ok + 4 recusados | 5 | 13 |
+| com 2,5 s de espaço | 1 ok | 0 | 0 |
+
+- Testes novos:
+  - a vez (ordem, perfis e chave);
+  - o `pty:spawn`: o segundo espera; outro perfil, outra CLI e o reanexo não esperam; o `pty:kill` na espera cancela e devolve o ticket;
+  - o `app-server` espera e não abre se cancelado na espera;
+  - o `codexProfileFor`.
+- Gate:
+  - `npm test`: 3270 testes, 3260 passam, 10 pulados, 0 falham;
+  - vitest: 3493 passam;
+  - `eslint .` limpo.
+
+**Não validado.**
+- Contas reais e os servidores reais: a rotação e o tempo de resposta foram imitados. Se a renovação de verdade passar de 2,5 s, a colisão volta a ser possível.
+- O Codex estável (0.169); aqui foi o 0.171.0-alpha.4.
+- O Gemini: as contas da cadeia são por chave ou corporativas, com o refresh do Google, que não gira o token.
+
+Estado: concluído (deploy no adendo).
