@@ -244,3 +244,39 @@ test('readCodexVersion lê a versão do userAgent do initialize', () => {
   assert.equal(readCodexVersion({ userAgent: 'sem versão' }), null)
   assert.equal(readCodexVersion(null), null)
 })
+
+test('o app-server espera a vez do perfil (codex-launch-gate) e só então abre o processo', async () => {
+  const { createCodexLaunchGate } = require('./codex-launch-gate.cjs')
+  const launchGate = createCodexLaunchGate({ spacingMs: 60 })
+  const accountEnv = { CODEX_HOME: '/perfis/conta-a' }
+  // Outro processo do mesmo perfil acabou de abrir: este espera.
+  launchGate.reserve(require('./codex-launch-gate.cjs').codexProfileKey(accountEnv))
+  const child = fakeAppServer({ answers: { 'account/rateLimits/read': { result: { rateLimits: {} } } } })
+  let abriuEm = null
+  const inicio = Date.now()
+  const spawnProcess = (command, args, options) => {
+    abriuEm = Date.now() - inicio
+    return spawnWith(child)(command, args, options)
+  }
+  const session = await runCodexAppServerSession({ spawnProcess, launchGate, accountEnv, requests: [REQUESTS[0]] })
+  assert.equal(session.ok, true)
+  assert.ok(abriuEm >= 50, `abriu em ${abriuEm} ms, antes da vez`)
+})
+
+test('cancelado enquanto esperava a vez, o app-server nem abre', async () => {
+  const { createCodexLaunchGate } = require('./codex-launch-gate.cjs')
+  const launchGate = createCodexLaunchGate({ spacingMs: 60 })
+  launchGate.reserve('padrao')
+  const controller = new AbortController()
+  let abriu = false
+  const promessa = runCodexAppServerSession({
+    spawnProcess: () => { abriu = true; return fakeAppServer() },
+    launchGate,
+    signal: controller.signal,
+    requests: [REQUESTS[0]],
+  })
+  controller.abort()
+  const session = await promessa
+  assert.equal(session.reason, 'cancelled')
+  assert.equal(abriu, false)
+})

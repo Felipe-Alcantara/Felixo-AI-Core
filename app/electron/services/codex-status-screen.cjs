@@ -14,6 +14,7 @@ const {
 } = require('./pty-process-manager.cjs')
 const { ensureNodePtySpawnHelperExecutable } = require('./pty-native-assets.cjs')
 const { createNodePtySpawn } = require('./node-pty-windows-kill.cjs')
+const { codexLaunchGate, openOnCodexTurn } = require('./codex-launch-gate.cjs')
 
 /**
  * Lê a tela do `/status` do Codex numa sessão interativa descartável.
@@ -781,7 +782,16 @@ function loadNodePtySpawn(platformName = process.platform) {
   return createNodePtySpawn(require('node-pty'), { platformName })
 }
 
-const readCodexStatusScreen = createCodexStatusScreenQuery()
+const readCodexStatusScreenNow = createCodexStatusScreenQuery()
+
+/**
+ * A leitura do painel espera a vez do perfil (`codex-launch-gate.cjs`): a TUI
+ * renova o token ao abrir quando ele está velho, e o painel abre o app-server
+ * do mesmo perfil junto. Um `signal` abortado na espera vira cancelamento lá dentro.
+ */
+function readCodexStatusScreen(options = {}) {
+  return openOnCodexTurn(codexLaunchGate, options.env, () => readCodexStatusScreenNow(options))
+}
 
 module.exports = {
   CODEX_SESSION_LABELS,

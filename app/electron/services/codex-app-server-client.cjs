@@ -2,6 +2,7 @@
 
 const spawnChildProcess = require('cross-spawn')
 const { createAccountCliEnv } = require('./cli-process-manager.cjs')
+const { codexLaunchGate, openOnCodexTurn } = require('./codex-launch-gate.cjs')
 
 /**
  * Conversa JSON-RPC com o `codex app-server --stdio` da própria CLI.
@@ -36,6 +37,9 @@ const MAX_BUFFER_CHARS = 4_000_000
  * @param {string} [options.timeoutMessage]
  * @param {AbortSignal | null} [options.signal] Cancelamento de fora (teto da
  *   rodada ou "Reconectar"): encerra o app-server na hora.
+ * @param {{ reserve: (profile: string) => number } | null} [options.launchGate]
+ *   A vez do perfil (`codex-launch-gate.cjs`); por padrão, a do processo
+ *   principal quando o processo é o de verdade, e nenhuma com um falso.
  * @returns {Promise<{
  *   ok: boolean,
  *   reason: null | 'spawn' | 'initialize' | 'server-error' | 'timeout' | 'exit' | 'io' | 'cancelled',
@@ -44,7 +48,18 @@ const MAX_BUFFER_CHARS = 4_000_000
  *   responses: Record<string, { status: 'ok', result: unknown } | { status: 'error', message: string | null } | { status: 'timeout' }>,
  * }>}
  */
-function runCodexAppServerSession({
+function runCodexAppServerSession(options) {
+  const realProcess = !options.spawnProcess || options.spawnProcess === spawnChildProcess
+  const launchGate = options.launchGate !== undefined ? options.launchGate : realProcess ? codexLaunchGate : null
+  // O app-server renova o token ao abrir quando ele está velho: dois do mesmo perfil juntos colidem.
+  return openOnCodexTurn(launchGate, options.accountEnv, () =>
+    options.signal?.aborted
+      ? Promise.resolve({ ok: false, reason: 'cancelled', message: 'A consulta ao app-server do Codex foi cancelada.', initialize: null, responses: {} })
+      : startCodexAppServerSession(options),
+  )
+}
+
+function startCodexAppServerSession({
   spawnProcess = spawnChildProcess,
   accountEnv = {},
   timeoutMs = DEFAULT_TIMEOUT_MS,
