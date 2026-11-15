@@ -2655,3 +2655,9 @@ publicaram a `v0.1.549`.
 - O AppImage e o DMG não passam pelo ciclo real (só o NSIS do Windows).
 
 Estado: concluído (deploy no adendo).
+
+**Adendo (2026-11-15, 19:06): CI e Release.**
+- O CI de `7e32cf3` (run 43765056679) falhou no Validate do Ubuntu e do macOS. O instalador falso do `cli-auto-install-real-repro.test.cjs` gravava o package.json em `<prefix>/node_modules`, a mesma suposição de Windows que a correção tirou do app. Corrigido em `896c146` com `layout.nodeModules`.
+- O CI de `896c146` (run 43765960119) passou no Validate de Windows, macOS, Ubuntu e Ubuntu ARM e no smoke do canvas. Os dois cenários do `managed-cli-npm.integration.test.cjs` passaram nos quatro.
+- O Release gate (run 43766515343) e o Release (run 43766532637, até 19:05) publicaram a `v0.1.550`.
+- O ciclo com o registry real (run 43765056611) passou nos 5 jobs. O Claude Code de verdade, no `ubuntu-latest` e no `macos-latest`, instalou e não reinstalou na segunda abertura nem no upgrade; com o binário apagado, reinstalou.
