@@ -67,7 +67,8 @@ function instaladorFalso(layout, roteiro = []) {
       }
       const arroba = options.npmPackage.lastIndexOf('@')
       const versao = arroba > 0 ? options.npmPackage.slice(arroba + 1) : '1.0.0'
-      const pasta = path.join(layout.root, 'node_modules', ...pacote.split('/'))
+      // Onde o npm grava de verdade: `lib/node_modules` no POSIX, `node_modules` no Windows.
+      const pasta = path.join(layout.nodeModules, ...pacote.split('/'))
       fs.mkdirSync(pasta, { recursive: true })
       fs.writeFileSync(path.join(pasta, 'package.json'), JSON.stringify({ name: pacote, version: versao }))
       fs.mkdirSync(layout.packagesBin, { recursive: true })
