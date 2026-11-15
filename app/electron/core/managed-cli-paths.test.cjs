@@ -20,6 +20,9 @@ describe('managed-cli-paths', () => {
 
     assert.equal(layout.root, '/home/pessoa/.config/felixo-ai-core/clis')
     assert.equal(layout.packagesBin, '/home/pessoa/.config/felixo-ai-core/clis/bin')
+    // `npm -g --prefix` grava os pacotes em `lib/node_modules` no POSIX. Ler
+    // `clis/node_modules` aqui dava versão desconhecida e reinstalava a cada abertura.
+    assert.equal(layout.nodeModules, '/home/pessoa/.config/felixo-ai-core/clis/lib/node_modules')
     assert.equal(
       layout.runtimeBin,
       '/home/pessoa/.config/felixo-ai-core/clis/runtime-bin',
@@ -41,6 +44,7 @@ describe('managed-cli-paths', () => {
     })
 
     assert.equal(layout.packagesBin, layout.root)
+    assert.equal(layout.nodeModules, path.win32.join(layout.root, 'node_modules'))
   })
 
   it('lets an environment variable relocate the managed folder', () => {

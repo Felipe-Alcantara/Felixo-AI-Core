@@ -47,6 +47,19 @@ describe('managed-cli-installer', () => {
     assert.equal(args.at(-1), '@anthropic-ai/claude-code')
   })
 
+  // Caso de 15/11/2026: com `ignore-scripts=true` no .npmrc da pessoa, o npm deu
+  // sucesso e deixou o placeholder no `bin/claude.exe` (medido com o npm 11.21.2).
+  it('roda os scripts de instalação mesmo com ignore-scripts na configuração da pessoa', () => {
+    const args = createNpmInstallArgs({
+      npmCliPath: '/opt/app/resources/npm/bin/npm-cli.js',
+      npmPackage: '@anthropic-ai/claude-code',
+      prefix: LAYOUT.root,
+    })
+
+    assert.ok(args.includes('--ignore-scripts=false'))
+    assert.ok(args.indexOf('--ignore-scripts=false') < args.indexOf('@anthropic-ai/claude-code'))
+  })
+
   // Fatia 2/5 e 4/5 de "cache offline por perfil": sem cacheDir, nada muda —
   // o comportamento de antes continua valendo pra quem não passa a opção.
   it('não usa cache offline quando cacheDir não é passado', () => {

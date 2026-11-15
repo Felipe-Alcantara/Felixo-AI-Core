@@ -15,6 +15,7 @@ const {
   readSystemNpmInstall,
   resolveSystemNpmGlobalRoot,
 } = require('./system-cli-update.cjs')
+const { NPM_PLACEHOLDER_STUB, buildExecutableFor } = require('../__fixtures__/native-executables.cjs')
 
 function fakeChild({ code = 0, stdout = '' } = {}) {
   const child = new EventEmitter()
@@ -104,6 +105,55 @@ test('lê a versão instalada no npm global, e só quando o pacote está lá', (
   }
 })
 
+/** Pacote do Codex da plataforma desta máquina, com um executável inteiro. */
+function writeHostCodexNative(globalRoot) {
+  const triple = {
+    win32: { x64: 'x86_64-pc-windows-msvc', arm64: 'aarch64-pc-windows-msvc' },
+    linux: { x64: 'x86_64-unknown-linux-musl', arm64: 'aarch64-unknown-linux-musl' },
+    darwin: { x64: 'x86_64-apple-darwin', arm64: 'aarch64-apple-darwin' },
+  }[process.platform][process.arch]
+  const nativeDir = path.join(globalRoot, '@openai', `codex-${process.platform}-${process.arch}`)
+  const vendorBin = path.join(nativeDir, 'vendor', triple, 'bin')
+  fs.mkdirSync(vendorBin, { recursive: true })
+  fs.writeFileSync(path.join(nativeDir, 'package.json'), '{}')
+  fs.writeFileSync(
+    path.join(vendorBin, process.platform === 'win32' ? 'codex.exe' : 'codex'),
+    buildExecutableFor(process.platform, process.arch),
+  )
+}
+
+// O mesmo caso do relato de 15/11/2026, no npm global da pessoa: o app atualizou
+// o Claude do sistema com sucesso e o `bin/claude.exe` ficou o placeholder.
+test('o Claude do npm global com o placeholder no bin/claude.exe não conta como pronto', () => {
+  const base = tempDir('felixo-npm-stub-')
+  const globalRoot = path.join(base, 'node_modules')
+  const binDir = process.platform === 'win32' ? base : path.join(base, 'bin')
+  const packageBin = path.join(globalRoot, '@anthropic-ai', 'claude-code', 'bin')
+  const read = () =>
+    readSystemNpmInstall({
+      globalRoot,
+      npmPackage: '@anthropic-ai/claude-code',
+      command: 'claude',
+      aliases: ['claude.exe', 'claude.cmd'],
+      platformName: process.platform,
+    })
+
+  try {
+    fs.mkdirSync(packageBin, { recursive: true })
+    fs.writeFileSync(path.join(globalRoot, '@anthropic-ai', 'claude-code', 'package.json'), '{"version":"2.1.324"}')
+    fs.mkdirSync(binDir, { recursive: true })
+    fs.writeFileSync(path.join(binDir, process.platform === 'win32' ? 'claude.cmd' : 'claude'), '')
+
+    fs.writeFileSync(path.join(packageBin, 'claude.exe'), NPM_PLACEHOLDER_STUB)
+    assert.equal(read().executableReady, false)
+
+    fs.writeFileSync(path.join(packageBin, 'claude.exe'), buildExecutableFor(process.platform, process.arch))
+    assert.equal(read().executableReady, true)
+  } finally {
+    fs.rmSync(base, { recursive: true, force: true })
+  }
+})
+
 test('detecta pacote global sem shim e passa a reconhece-lo quando o npm materializa o comando', () => {
   const base = tempDir('felixo-npm-shim-')
   const prefix = path.join(base, 'prefix')
@@ -126,6 +176,15 @@ test('detecta pacote global sem shim e passa a reconhece-lo quando o npm materia
     fs.mkdirSync(binDir, { recursive: true })
     const executablePath = path.join(binDir, process.platform === 'win32' ? 'codex.cmd' : 'codex')
     fs.writeFileSync(executablePath, '')
+    // O shim sozinho não basta: o executável nativo do pacote da plataforma também.
+    const shimOnly = readSystemNpmInstall({
+      globalRoot,
+      npmPackage: '@openai/codex',
+      command: 'codex',
+      aliases: ['codex.cmd', 'codex.ps1'],
+    })
+    assert.equal(shimOnly.executableReady, false)
+    writeHostCodexNative(globalRoot)
 
     const complete = readSystemNpmInstall({
       globalRoot,
@@ -220,7 +279,17 @@ test('instala a versão exata no npm global e marca como passageira a falha de a
   // `--prefer-online`: a versão acabou de vir do registry; o cache do npm não pode
   // responder com uma lista de versões de antes dela (ETARGET).
   assert.deepEqual(calls, [
-    ['npm', 'install', '--global', '--prefer-online', '--no-audit', '--no-fund', '--loglevel=error', '@anthropic-ai/claude-code@2.1.300'],
+    [
+      'npm',
+      'install',
+      '--global',
+      '--prefer-online',
+      '--no-audit',
+      '--no-fund',
+      '--loglevel=error',
+      '--ignore-scripts=false',
+      '@anthropic-ai/claude-code@2.1.300',
+    ],
   ])
   assert.equal(ok.ok, true)
   assert.deepEqual({ ok: busy.ok, busy: busy.busy }, { ok: false, busy: true })

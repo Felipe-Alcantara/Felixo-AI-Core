@@ -16,6 +16,7 @@ const MANAGED_ROOT_ENV_KEY = 'FELIXO_MANAGED_CLI_ROOT'
  * @typedef {object} ManagedCliLayout
  * @property {string} root - Prefixo passado ao npm.
  * @property {string} packagesBin - Pasta dos executáveis instalados pelo npm.
+ * @property {string} [nodeModules] - Pasta dos pacotes instalados pelo npm.
  * @property {string} runtimeBin - Pasta dos atalhos `node`/`npm` do app.
  * @property {string} nativeBin - Pasta dos atalhos que abrem o executável nativo
  *   de uma CLI sem passar pelo Node do app (só o Windows, só quando falta Node).
@@ -49,6 +50,11 @@ function getManagedCliLayout({
     // O npm instala os executáveis em `<prefix>/bin` no POSIX, mas direto em
     // `<prefix>` no Windows.
     packagesBin: platformName === 'win32' ? root : platformPath.join(root, 'bin'),
+    // E os pacotes em `<prefix>/lib/node_modules` no POSIX, `<prefix>/node_modules` no Windows.
+    nodeModules:
+      platformName === 'win32'
+        ? platformPath.join(root, 'node_modules')
+        : platformPath.join(root, 'lib', 'node_modules'),
     runtimeBin: platformPath.join(root, 'runtime-bin'),
     nativeBin: platformPath.join(root, 'native-bin'),
   }

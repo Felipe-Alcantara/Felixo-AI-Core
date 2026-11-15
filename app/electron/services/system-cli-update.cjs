@@ -19,6 +19,8 @@ const os = require('node:os')
 const path = require('node:path')
 const crossSpawn = require('cross-spawn')
 const { INSTALL_TIMEOUT_MS, LATEST_LOOKUP_TIMEOUT_MS, runCommand } = require('./managed-cli-installer.cjs')
+const { verifyCliPackage } = require('./managed-cli-health.cjs')
+const { MANAGED_CLI_MANIFEST } = require('../core/managed-cli-manifest.cjs')
 
 /** Variáveis que o app usa para dirigir o npm gerenciado e não podem vazar para o do sistema. */
 const MANAGED_NPM_KEYS = ['npm_config_prefix', 'npm_config_global', 'NPM_CONFIG_PREFIX', 'ELECTRON_RUN_AS_NODE']
@@ -119,9 +121,16 @@ function readSystemNpmInstall({
       platformName,
       fileSystem,
     })
+    // O shim existir não basta: atrás dele pode estar o placeholder do Claude ou
+    // um binário cortado. Reprovado aqui, o plano repara a instalação do sistema.
+    const providerId = Object.keys(MANAGED_CLI_MANIFEST).find(
+      (id) => MANAGED_CLI_MANIFEST[id].npmPackage === npmPackage,
+    )
+    const nativeReady =
+      !providerId || verifyCliPackage({ providerId, nodeModules: globalRoot, platformName, fileSystem }).ok
     return {
       ...install,
-      executableReady: Boolean(executablePath),
+      executableReady: Boolean(executablePath) && nativeReady,
       ...(executablePath ? { executablePath } : {}),
     }
   } catch {
@@ -194,7 +203,18 @@ async function installSystemNpmPackage({
 }) {
   const result = await runCommand({
     command: 'npm',
-    args: ['install', '--global', '--prefer-online', '--no-audit', '--no-fund', '--loglevel=error', npmPackage],
+    // `--ignore-scripts=false`: sem o `postinstall`, o Claude Code fica com o
+    // placeholder no lugar do binário (ver `createNpmInstallArgs`).
+    args: [
+      'install',
+      '--global',
+      '--prefer-online',
+      '--no-audit',
+      '--no-fund',
+      '--loglevel=error',
+      '--ignore-scripts=false',
+      npmPackage,
+    ],
     env,
     cwd,
     spawn,

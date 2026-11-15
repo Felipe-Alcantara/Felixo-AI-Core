@@ -49,13 +49,23 @@ describe('managed-cli-manifest', () => {
       }),
       '@openai/codex-win32-arm64',
     )
+    // Linux e macOS também abrem o Codex por um pacote nativo opcional; antes só o
+    // Windows era conferido, e um pacote faltando lá passava como instalado.
     assert.equal(
       getManagedCliPlatformPackage('codex', {
         platformName: 'linux',
         arch: 'x64',
       }),
-      null,
+      '@openai/codex-linux-x64',
     )
+    assert.equal(
+      getManagedCliPlatformPackage('codex', {
+        platformName: 'darwin',
+        arch: 'arm64',
+      }),
+      '@openai/codex-darwin-arm64',
+    )
+    assert.equal(getManagedCliPlatformPackage('codex', { platformName: 'freebsd', arch: 'x64' }), null)
   })
 
   it('nunca aponta para uma versão solta ("latest" implícito)', () => {

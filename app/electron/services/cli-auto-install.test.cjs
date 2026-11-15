@@ -27,6 +27,11 @@ const {
   getManagedCliManifestEntry,
   getPinnedInstallTarget,
 } = require('../core/managed-cli-manifest.cjs')
+const {
+  NPM_PLACEHOLDER_STUB,
+  buildExecutableFor,
+  buildPe,
+} = require('../__fixtures__/native-executables.cjs')
 
 const GEMINI_PINNED = getPinnedInstallTarget('gemini')
 
@@ -64,6 +69,9 @@ function createProfile({ managedClis = [], managedVersions = {}, state = {} } = 
     const entry = getManagedCliManifestEntry(providerId)
     if (!entry) continue
     writePackage(layout, entry.npmPackage, version)
+    if (providerId === 'claude') {
+      writeClaudeExecutable(layout, buildExecutableFor(process.platform, process.arch))
+    }
   }
 
   fs.writeFileSync(
@@ -165,8 +173,15 @@ function detectedOnly(ids) {
   return async (cli) => ({ detected: ids.includes(cli.id), version: '1.0.0' })
 }
 
+/** O `bin/claude.exe` que o `postinstall` deixa (ou o placeholder, quando ele não rodou). */
+function writeClaudeExecutable(layout, content) {
+  const binDir = path.join(layout.nodeModules, '@anthropic-ai', 'claude-code', 'bin')
+  fs.mkdirSync(binDir, { recursive: true })
+  fs.writeFileSync(path.join(binDir, 'claude.exe'), content)
+}
+
 function writePackage(layout, packageName, version) {
-  const packageDir = path.join(layout.root, 'node_modules', ...packageName.split('/'))
+  const packageDir = path.join(layout.nodeModules, ...packageName.split('/'))
   fs.mkdirSync(packageDir, { recursive: true })
   fs.writeFileSync(
     path.join(packageDir, 'package.json'),
@@ -236,6 +251,47 @@ test(
 )
 
 test(
+  'o Claude com o placeholder do npm no bin/claude.exe é reinstalado na abertura, mesmo com a versão em dia',
+  async () => {
+    // O caso relatado em 15/11/2026 ("não é compatível com a versão do Windows"):
+    // o npm terminou com sucesso sem rodar o `postinstall` (`ignore-scripts=true`
+    // no .npmrc) e o estado ficou "instalado". A versão no package.json era a do
+    // alvo e o atalho existia, então a abertura pulava a CLI para sempre.
+    const claude = getManagedCliManifestEntry('claude')
+    const profile = createProfile({
+      managedClis: ['claude'],
+      managedVersions: { claude: claude.version },
+      state: { claude: { version: '0.1.102', ok: true, message: 'instalado' } },
+    })
+    const layout = getManagedCliLayout({ userData: profile.userData })
+    writeClaudeExecutable(layout, NPM_PLACEHOLDER_STUB)
+
+    try {
+      const { service, installed } = createRunner(profile, {
+        // O stub falha no `claude --version`, então a detecção não acha o Claude.
+        detect: detectedOnly(['codex', 'gemini']),
+        installPackage: async ({ npmPackage }) => {
+          installed.push(npmPackage)
+          // A reinstalação explícita roda o `postinstall` de novo (medido com o
+          // npm 11.21.2: "changed 2 packages") e o binário volta.
+          writeClaudeExecutable(layout, buildExecutableFor(process.platform, process.arch))
+          return { ok: true, message: `${npmPackage} instalado.`, output: '' }
+        },
+      })
+
+      const status = await service.run('startup')
+      service.stop()
+
+      assertPlanned(status)
+      assert.deepEqual(installed, [getPinnedInstallTarget('claude')])
+      assert.equal(status.clis.find((item) => item.id === 'claude').state, 'installed')
+    } finally {
+      profile.cleanup()
+    }
+  },
+)
+
+test(
   'usa o fallback versionado quando o registry nao responde',
   async () => {
     const profile = createProfile()
@@ -244,6 +300,8 @@ test(
       const { service, installed } = createRunner(profile, {
         detect: detectedOnly([]),
         platformName: 'linux',
+        // O alvo é o assunto aqui; a conferência do executável tem testes próprios.
+        verifyInstallation: () => ({ ok: true }),
         resolveLatestPackage: async () => ({
           ok: false,
           message: 'registry indisponivel',
@@ -319,6 +377,15 @@ test(
 
           if (installCount === 2) {
             writePackage(layout, codexPackage)
+            const vendorBin = path.join(
+              layout.nodeModules,
+              ...codexPackage.split('/'),
+              'vendor',
+              'x86_64-pc-windows-msvc',
+              'bin',
+            )
+            fs.mkdirSync(vendorBin, { recursive: true })
+            fs.writeFileSync(path.join(vendorBin, 'codex.exe'), buildPe())
             fs.writeFileSync(path.join(layout.packagesBin, 'codex.cmd'), '', 'utf8')
           }
 

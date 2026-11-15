@@ -20,12 +20,20 @@ const MANAGED_CLI_MANIFEST = Object.freeze({
     npmPackage: '@openai/codex',
     version: '0.162.1',
     // O pacote principal delega o executável nativo a uma dependência
-    // opcional diferente por plataforma/arquitetura. No Windows, npm pode
-    // terminar com código 0 sem materializar essa dependência.
+    // opcional diferente por plataforma/arquitetura. O npm pode terminar com
+    // código 0 sem materializar essa dependência (visto no Windows).
     platformPackages: Object.freeze({
       win32: Object.freeze({
         x64: '@openai/codex-win32-x64',
         arm64: '@openai/codex-win32-arm64',
+      }),
+      linux: Object.freeze({
+        x64: '@openai/codex-linux-x64',
+        arm64: '@openai/codex-linux-arm64',
+      }),
+      darwin: Object.freeze({
+        x64: '@openai/codex-darwin-x64',
+        arm64: '@openai/codex-darwin-arm64',
       }),
     }),
     // Capturado em 13/10/2026 via `npm view @openai/codex@0.162.1 dist.integrity`.

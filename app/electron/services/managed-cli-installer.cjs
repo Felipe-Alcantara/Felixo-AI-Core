@@ -59,6 +59,10 @@ function createNpmInstallArgs({ npmCliPath, npmPackage, prefix, cacheDir, prefer
     '--no-audit',
     '--no-fund',
     '--loglevel=error',
+    // O Claude Code só fica com o binário nativo se o `postinstall` dele rodar.
+    // Um `ignore-scripts=true` no .npmrc da pessoa (conselho comum contra pacote
+    // malicioso) deixava o placeholder no `bin/claude.exe` com o npm dando sucesso.
+    '--ignore-scripts=false',
     ...(cacheDir ? ['--cache', cacheDir, preferOnline ? '--prefer-online' : '--prefer-offline'] : []),
     npmPackage,
   ]
