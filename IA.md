@@ -2594,3 +2594,64 @@ Estado: concluído (deploy no adendo).
 **Adendo (2026-11-14, 12:24): CI e Release.** O CI de `b12b069` (run 43608274813, 12:05–12:12) passou no Validate de Windows,
 macOS, Ubuntu e Ubuntu ARM e no smoke do canvas. O Release gate (run 43608913443) e o Release (run 43608933929, 12:12–12:21)
 publicaram a `v0.1.549`.
+
+
+## 2026-11-15 — CLIs: instalação incompleta do Claude ou do Codex deixa de passar por instalada ("não é compatível com a versão do Windows")
+
+**Agente / repositório.** Resolver hotfix — Felixo-AI-Core. Task `41991f95-497e-81ef-aaa1-fdef9e3ba17e`.
+
+**Relato.** Depois de algumas atualizações, abrir um agente voltou a dar, no Windows, "Esta versão de …\clis\node_modules\@anthropic-ai\claude-code\bin\claude.exe não é compatível com a versão do Windows sendo executada". Era a terceira ou quarta volta do mesmo tipo de erro de abertura.
+
+**Causa raiz.** Toda conferência de "CLI instalada" confiava no `package.json` e na existência de arquivo. Nenhuma olhava o executável que o terminal abre:
+- O `@anthropic-ai/claude-code` publica `bin/claude.exe` como **placeholder de texto** (500 bytes), e só o `postinstall` (`install.cjs`) copia o binário nativo da plataforma por cima. Quando o `postinstall` não roda, ou o pacote da plataforma não chega, o `install.cjs` sai com 0, e o npm também.
+- O Claude não tinha conferência nenhuma (`verifyManagedCliInstallation` devolvia `ok` sem pacote de plataforma no manifesto). O Codex só conferia o `package.json` do pacote nativo, e só no Windows.
+- O atualizador do npm **do sistema** só conferia se o atalho (`claude.cmd`) existia.
+- Resultado: a instalação quebrada ficava "instalada" para sempre. A abertura seguinte não reparava, porque a versão era a do alvo e o estado dizia sucesso.
+
+**Como foi medido** (npm 11.21.2, o do app, e o Claude Code 2.1.323 real do cache do app, sem rede para o pacote):
+- `npm_config_ignore_scripts=true` (conselho comum de segurança no `.npmrc`): "added 2 packages", código 0, `bin/claude.exe` = o placeholder. A verificação antiga respondia **`instalada: true`**.
+- `npm_config_omit=optional` na instalação global: o npm instalou o pacote nativo mesmo assim, então não é causa.
+- npm morto no meio da extração do pacote nativo: sobra exatamente o estado achado no npm global desta máquina (o placeholder no `bin`, o nativo cortado em 100 de 373 MB, sem `package.json`). O npm 11 também tira os atalhos antigos do lugar (`.claude.cmd-tY1bWhwZ`). Sem os atalhos, o app já reinstalava; o caso que **prende** é o npm terminar com sucesso.
+- Pacote da plataforma com erro 500 no registry (teste novo, npm real): o npm trata a optionalDependency como opcional, sai com 0 e deixa o placeholder.
+- Reinstalar a **mesma versão** por cima ("changed 2 packages") extrai tudo de novo e roda o `postinstall`: o reparo que já existia (a nova tentativa de `installAndVerifyManagedCli`) basta, desde que a verificação dispare.
+- Nesta máquina, sem relação com o app: o Claude do npm global (2.1.324) está com o placeholder e o nativo cortado em 201 de 373 MB. Mexeram nele às 16:58 e às 17:01 de 13/11, sem registro no log de QA do app; é provável o autoatualizador do próprio Claude. O pacote nativo do Codex gerenciado está cortado: 68 de 80 MB de outro executável, sem o `codex.exe`.
+
+**Mesma suposição em outro lugar, achada e corrigida.** No Linux e no macOS, `npm -g --prefix` grava os pacotes em `<prefix>/lib/node_modules`, e o app lia `<prefix>/node_modules`. A versão gerenciada saía desconhecida e `isTargetNewer(null, alvo)` dava verdadeiro: a cópia gerenciada era **reinstalada a cada abertura** fora do Windows. Ninguém via, porque o ciclo de instalação real só rodava no Windows.
+
+**O que mudou.**
+- **`core/native-executable.cjs` (novo):** confere, só pelo cabeçalho, se um arquivo é um programa deste sistema. Lê o PE no Windows, o ELF no Linux e o Mach-O (inclusive o universal) no macOS. Confere a arquitetura, aceitando o x64 emulado no Windows e no macOS ARM, e se o arquivo tem todos os bytes que o cabeçalho promete (seções, assinatura Authenticode, segmentos). Distingue `ausente`, `stub`, `formato`, `arquitetura` e `truncado`. Lê só o cabeçalho (alguns KB), sem executar nada; os 9 arquivos reais conferidos, entre eles o `claude.exe` de 367 MB, levaram 0,15 s com a partida do Node.
+- **`managed-cli-health.cjs`:** `verifyManagedCliInstallation` confere o executável real: o `bin/claude.exe` no Claude e o `vendor/<alvo>/bin/codex(.exe)` do pacote da plataforma no Codex, nos três sistemas. A mensagem cita o caminho relativo, sem o nome do usuário. A mesma conferência (`verifyCliPackage`) vale para o npm global do sistema.
+- **Manifesto:** o Codex declara o pacote nativo também no Linux e no macOS.
+- **Layout:** `getManagedCliLayout` traz `nodeModules` (`lib/node_modules` no POSIX), e a versão gerenciada é lida dali.
+- **npm:** `--ignore-scripts=false` na instalação gerenciada e na atualização do npm do sistema. Sem o `postinstall` o Claude não funciona, então o `.npmrc` da pessoa não pode desligá-lo para esse pacote.
+- **`system-cli-update.cjs`:** `executableReady` exige o atalho **e** o executável nativo inteiro; reprovado, o plano repara a instalação do sistema.
+- **CI:** o teste novo `managed-cli-npm.integration.test.cjs` entra no `test:native`, que roda no Validate do Windows, do macOS, do Ubuntu e do Ubuntu ARM e trava o Release. O ciclo de instalação real (`ciclo-instalacao-clis.yml`) ganhou o Claude no `ubuntu-latest` e no `macos-latest`.
+
+**Validação.**
+- **Testes que falham antes da correção:**
+  - Saúde: o Claude com o placeholder, o Claude cortado, o Codex com o pacote mas sem o `codex.exe` inteiro, o Codex no Linux e no macOS, e a versão em `lib/node_modules`.
+  - Abertura: o Claude com o placeholder e a versão em dia agora é reinstalado.
+  - npm do sistema: o Claude com o placeholder não conta como pronto.
+  - Integração com o npm real: sem a correção, o `claude --version` devolve **a mesma mensagem do relato** ("não é compatível com a versão do Windows").
+- **Integração (npm 11.21.2 real, registry local, o Node como binário nativo):**
+  - com `ignore-scripts=true`, o `claude --version` responde;
+  - com o pacote nativo em erro 500, o npm sai com 0 e deixa o placeholder; a verificação recusa e a reinstalação repara.
+  - Leva 19 s.
+- **Mutação:** com a checagem de truncamento desligada de propósito, 2 testes do verificador falham.
+- **Nas instalações reais desta máquina:**
+  - Claude gerenciado: `ok`.
+  - Codex gerenciado: recusado (já era).
+  - Gemini: `ok`.
+  - Claude do npm global: `executableReady=false`. Antes era `true`, só pelo atalho.
+- **Gate:**
+  - `npm test`: 3288 testes, 3278 passam, 10 pulados, 0 falham;
+  - `test:native`: 13 de 13;
+  - `eslint .` limpo.
+
+**Não validado.**
+- O Linux e o macOS de verdade só pelo CI. Aqui não há distribuição Linux no WSL, e o macOS não está disponível.
+- **Quem interrompeu as extrações** nesta máquina e na do relato: não dá para provar daqui. Pode ter sido o autoatualizador do Claude, o app fechado no meio de uma atualização ou queda de rede. A correção não depende do gatilho.
+- **O terminal com a CLI quebrada antes do reparo:** se a reinstalação falhar (sem rede), o terminal continua mostrando o erro do sistema até a próxima abertura do app; a interface mostra a falha da instalação.
+- O AppImage e o DMG não passam pelo ciclo real (só o NSIS do Windows).
+
+Estado: concluído (deploy no adendo).
