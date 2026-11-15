@@ -1,4 +1,4 @@
-name: Ciclo de instalação das CLIs (Windows)
+name: Ciclo de instalação das CLIs
 
 # Cobre a task "Felixo AI Core/Windows — integrar o runner de reprodução de
 # instalação de CLIs ao CI/release". Roda `app/scripts/cli-auto-install-real-repro.cjs`
@@ -81,6 +81,7 @@ on:
       - app/electron/core/cli-detector.cjs
       - app/electron/core/install-retry.cjs
       - app/electron/core/managed-cli-*.cjs
+      - app/electron/core/native-executable.cjs
       - app/electron/core/node-runtime.cjs
       - app/electron/core/official-cli-catalog.cjs
       - app/electron/core/app-paths.cjs
@@ -101,8 +102,8 @@ concurrency:
 
 jobs:
   ciclo:
-    name: ${{ matrix.cli }} (${{ matrix.origem }}, windows-latest)
-    runs-on: windows-latest
+    name: ${{ matrix.cli }} (${{ matrix.origem }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     # Medido no windows-latest em 22/10/2026 (Node 22.23.3): o ciclo do claude leva 42 s e o
     # do gemini 237 s (a primeira instalação sozinha, de 65 a 156 s: o registry do npm no
     # runner é bem mais lento que numa máquina de desenvolvimento). Com a instalação
@@ -116,12 +117,25 @@ jobs:
         include:
           - cli: gemini
             origem: fonte
+            os: windows-latest
           - cli: claude
             origem: fonte
+            os: windows-latest
+          # Linux e macOS desde 15/11/2026: lá o npm global grava em `lib/node_modules`, e o
+          # app lia `node_modules` (versão desconhecida, reinstalação a cada abertura) sem
+          # ninguém ver, porque o ciclo só rodava no Windows. O Claude é a CLI cujo binário
+          # nativo depende do `postinstall`.
+          - cli: claude
+            origem: fonte
+            os: ubuntu-latest
+          - cli: claude
+            origem: fonte
+            os: macos-latest
           # Só o claude: o que o app instalado prova (qual npm e qual Node a instalação usa) não
           # depende da CLI, e o gemini levaria 4 minutos a mais.
           - cli: claude
             origem: instalado
+            os: windows-latest
     defaults:
       run:
         working-directory: app

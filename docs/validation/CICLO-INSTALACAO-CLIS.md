@@ -1,10 +1,10 @@
-# Ciclo de instalação das CLIs no Windows (runner e workflow)
+# Ciclo de instalação das CLIs (runner e workflow)
 
 O app instala as CLIs de IA (Claude, Gemini e Codex) sozinho na abertura. O defeito que mais
 incomoda quem usa é ele **reinstalar a cada abertura** ou a cada atualização do app. Os testes
 unitários do ciclo (`cli-auto-install.test.cjs`) usam instalador e detecção falsos; este runner roda
 o **módulo de produção de verdade**, com o npm de verdade, e prova o ciclo inteiro. Ele roda sozinho
-no CI, num Windows descartável, no workflow `Ciclo de instalação das CLIs (Windows)`
+no CI, em runners descartáveis, no workflow `Ciclo de instalação das CLIs`
 (`.github/workflows/ciclo-instalacao-clis.yml`), de duas origens: o **código-fonte** do commit e o
 **app empacotado** instalado pelo NSIS do último Release (seção "O app instalado", abaixo).
 
@@ -63,7 +63,7 @@ código 1 do `require` quebrado, que seria lido como regressão.
   reinstalar sempre".
 - **Toda segunda-feira, 09:30 UTC.** Pega uma publicação nova da CLI de terceiros que quebre a
   instalação vista pelo app, sem depender de commit nosso.
-- **Sob demanda:** Actions > *Ciclo de instalação das CLIs (Windows)* > *Run workflow*. As opções
+- **Sob demanda:** Actions > *Ciclo de instalação das CLIs* > *Run workflow*. As opções
   `controle`, `controle_npm` e `infra` ligam os controles negativos (abaixo); `versao` escolhe a tag do
   Release cujo instalador o job `instalado` instala (vazio = o último).
 
@@ -200,8 +200,10 @@ reprodução medida era a da máquina, não a do ciclo. Num runner limpo isso n�
   reinstaladas, ainda não foi medido.
 - **O Release só é provado depois de publicado.** O job `instalado` testa o instalador do último
   Release, não o do commit; um defeito no empacotamento só aparece na run seguinte à publicação.
-- **macOS e Linux.** O isolamento do ambiente e o layout são escritos pensando no Windows; o código
-  roda em outros sistemas, mas não há workflow nem medição para eles.
+- **macOS e Linux, só pela origem fonte.** Desde 15/11/2026 o Claude roda também no `ubuntu-latest`
+  e no `macos-latest`. Lá o npm global grava em `lib/node_modules`, e o app lia `node_modules`
+  (versão desconhecida, reinstalação a cada abertura) sem nenhum job ver. O job `instalado` continua
+  só no Windows (o NSIS); o AppImage e o DMG não passam pelo ciclo.
 - **O Codex no runner do GitHub.** Está fora da matriz de propósito (ver acima), mas medido localmente
   em `ok`; falta medi-lo no `windows-latest` antes de incluí-lo. O **Openia** não passa pela instalação
   automática (instala por `pip`, sob confirmação).
