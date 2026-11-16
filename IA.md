@@ -3186,3 +3186,42 @@ Estado: concluído (deploy no adendo).
 - **Release:**
   - o gate 43832877066 e o Release 43832905684 publicaram a `v0.1.559` (até `bfab59a`, concluído às 05:46);
   - o gate 43834691368 e o Release 43834730059 publicaram a `v0.1.560` (com `ecdf4bb`, concluído às 06:00).
+
+## 2026-11-16 — Navegador: popups da Página Web mostram o site no título, têm limite por bloco e fecham com o bloco
+
+Task: Felixo AI Core/Navegador — mostrar a origem e limitar a quantidade dos popups de login do bloco Página Web (Notion `3ea91f95-497e-8129-acde-f3b1049c09ed`), aberta em 29/09 a partir da política única de URL. Agente: Resolver hotfix (Claude Code, Claude Opus 5.5), 06:06 em diante. Trilha A: a direção estava na task; o título da janela (e não uma barra) e o aviso no bloco foram escolhas técnicas.
+
+**Antes** (`webview-lifecycle.cjs`):
+- `resolveWindowOpenAction` aprovava todo `window.open` que não fosse aba, sem contar janelas.
+- A janela do popup mostrava o título que a página escolhia, e nada indicava o site.
+- Popups de um bloco removido ficavam abertos.
+
+**Feito.**
+- **`popupWindowTitle`:** "‹site› — ‹título da página›", com "http://" visível e "Abrindo…" no `about:blank` do começo. `labelPopupWindow` cancela o `page-title-updated` da janela e mantém o site no título a cada navegação. A barra de título é do sistema, e o site não a falsifica.
+- **`createPopupTracker`:** no máximo 2 popups ao mesmo tempo por bloco (o webContents do bloco), contando os que um popup abre.
+  - A vaga é reservada ao aprovar e vira janela no `did-create-window`.
+  - Reserva que nunca vira janela expira em 10 s.
+  - Janela fechada libera a vaga.
+  - O excedente é negado, e o main manda `webview-popups:blocked` para o bloco, que mostra "Esta página tentou abrir mais de 2 janelas ao mesmo tempo…" até fechar o aviso ou navegar.
+- **Órfãos:** o `destroyed` do webview do bloco fecha os popups dele (bloco removido ou webview recriado pela troca de perfil).
+- **Login:** nada muda na criação da janela (sem `parent` nem `modal`), então o handshake de login fica como estava.
+- **Docs:** GUIA-USUARIO ("Janelas de login da Página Web"), ARQUITETURA e o inventário do canvas.
+
+**Validação.**
+- **Testes:**
+  - `webview-lifecycle.test.cjs`: 6 novos (título; título que a página não troca; limite com aviso e vaga liberada; popup de popup no mesmo bloco; reserva que expira; bloco destruído fechando os popups);
+  - o fake de janela dos testes antigos ganhou `on`, `setTitle`, `isDestroyed` e `close`.
+- **Mutações:** sem o limite, 4 testes falham; sem fechar os órfãos, 1; com a página trocando o título, 1.
+- **Gates:**
+  - `npm test`: 3343 testes, 3333 passam, 10 pulados, 0 falham;
+  - `vitest`: 3523 passam;
+  - `eslint .` e `tsc -b` limpos;
+  - o smoke do canvas, sessões A e D, passou de primeira localmente.
+- **App de fonte, com site de teste em http://127.0.0.1:8788:**
+  - o popup abriu com o título "http://127.0.0.1:8788 — Banco Exemplo - entre aqui", e o `postMessage` de volta chegou a quem abriu (`token-ok:?n=1`);
+  - 5 `window.open` seguidos: 1 abriu e 4 foram negados, 2 janelas no total, com a faixa no bloco;
+  - remover o bloco fechou as 2 janelas.
+
+**Não validado.** O login real do Google (precisa de uma conta) e o comportamento no macOS. A task "conferir a faixa de permissão com sites reais" (`41a91f95-497e-813a-8503-d10794366b4a`) já cobre o popup de login real.
+
+Estado: concluído (deploy no adendo).
