@@ -81,12 +81,14 @@ function criarJanela({
           throw new Error(`script inesperado: ${script.slice(0, 60)}`)
         },
       }
-      this.loadURL = async () => {}
-      this.loadFile = async (arquivo) => {
-        estado.carregado = arquivo
+      const carregarApp = async (alvo) => {
+        estado.carregado = alvo
         estado.pagina.push(...violacoesNoBoot)
         for (const texto of consoleNoBoot) emitirConsole(texto)
       }
+      // `about:blank` só dá um documento ao CDP; o app vem por loadURL (app://) ou loadFile.
+      this.loadURL = async (url) => (url === 'about:blank' ? undefined : carregarApp(url))
+      this.loadFile = carregarApp
       this.isDestroyed = () => estado.destruida
       this.destroy = () => {
         estado.destruida = true
@@ -129,6 +131,13 @@ test('passa com o app montado, a <meta> presente, as sondas ok e o controle posi
   assert.equal(janela.estado.carregado, '/pacote/dist/index.html')
   assert.equal(janela.estado.destruida, true)
   assert.equal(janela.estado.desanexado, true)
+})
+
+test('com rendererUrl, o renderer abre pela URL (app://felixo), como no app empacotado', async () => {
+  const janela = criarJanela()
+  const resultado = await rodar(janela, { rendererUrl: 'app://felixo/index.html' })
+  assert.equal(resultado.ok, true)
+  assert.equal(janela.estado.carregado, 'app://felixo/index.html')
 })
 
 test('reprova e lista a violação do boot (o hash errado do script inline)', async () => {
@@ -219,6 +228,7 @@ test('nada sai para a rede: só file:, data:, blob: e devtools: passam, e janela
     return resposta.cancel
   }
   assert.equal(decidir('file:///pacote/dist/assets/index.js'), false)
+  assert.equal(decidir('app://felixo/assets/index.js'), false)
   assert.equal(decidir('data:image/png;base64,AAAA'), false)
   assert.equal(decidir('blob:file:///abc'), false)
   assert.equal(decidir('https://esm.sh/fonte.woff2'), true)

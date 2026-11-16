@@ -120,7 +120,14 @@ function runPackagedRendererCspSmoke() {
   const { BrowserWindow } = require('electron')
   const { mainWindowOptions } = require('./core/window-options.cjs')
   const { rendererBuildPath } = require('./core/paths.cjs')
-  return runRendererCspSmoke({ BrowserWindow, windowOptions: mainWindowOptions, rendererPath: rendererBuildPath })
+  // Como o app abre: por app://felixo (o main.cjs instala o protocolo antes do smoke).
+  const { APP_INDEX_URL } = require('./core/app-protocol.cjs')
+  return runRendererCspSmoke({
+    BrowserWindow,
+    windowOptions: mainWindowOptions,
+    rendererPath: rendererBuildPath,
+    rendererUrl: APP_INDEX_URL,
+  })
 }
 
 /**

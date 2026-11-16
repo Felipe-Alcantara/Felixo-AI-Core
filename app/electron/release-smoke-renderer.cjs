@@ -4,7 +4,8 @@
  * O renderer do build sob a CSP de verdade, dentro do app empacotado.
  *
  * A CSP só existe no build (`vite.config.ts`): vai numa <meta> do
- * `dist/index.html` que o app instalado abre por `file://` de dentro do asar.
+ * `dist/index.html` que o app instalado abre por `app://felixo` (o
+ * `core/app-protocol.cjs` serve o build de dentro do asar).
  * Uma diretiva que falte (som, `blob:`, worker) ou um hash errado do script
  * inline quebram em silêncio, e só no app instalado. Este passo do
  * `--release-smoke` abre esse mesmo `index.html`, com o mesmo preload, numa
@@ -31,7 +32,7 @@
  * um evento que deixou de chegar passariam como "zero violações".
  *
  * Nada sai para a rede: navegação, `window.open` e qualquer request fora de
- * `file:`, `data:`, `blob:` e `devtools:` são cancelados.
+ * `app:`, `file:`, `data:`, `blob:` e `devtools:` são cancelados.
  */
 
 const fs = require('node:fs')
@@ -39,7 +40,8 @@ const path = require('node:path')
 
 const RENDERER_SMOKE_TIMEOUT_MS = 30_000
 const SETTLE_MS = 500
-const LOCAL_REQUEST = /^(?:file|data|blob|devtools):/i
+// `app:` é o próprio build (core/app-protocol.cjs); `file:` fica para quem ainda usa loadFile.
+const LOCAL_REQUEST = /^(?:app|file|data|blob|devtools):/i
 const CSP_MESSAGE = /Content Security Policy/i
 const CANARY_IMAGE_URL = 'https://felixo-release-smoke.invalid/controle.png'
 const EXCALIDRAW_CHUNK = /^ExcalidrawCanvas-[\w-]+\.js$/
@@ -199,13 +201,15 @@ function buildProbeScript({ canvas, subsetWorker, font }) {
  * @param {object} options
  * @param {Function} options.BrowserWindow - Construtor do Electron (ou falso, nos testes).
  * @param {object} options.windowOptions - As mesmas opções da janela principal.
- * @param {string} options.rendererPath - `dist/index.html` do pacote.
+ * @param {string} options.rendererPath - `dist/index.html` do pacote (os chunks são achados a partir dele).
+ * @param {string} [options.rendererUrl] - Como o app abre o renderer (`app://felixo/index.html`); sem ela, `loadFile`.
  * @returns {Promise<object>} `ok` só com boot, sondas, controle positivo e zero violações.
  */
 async function runRendererCspSmoke({
   BrowserWindow,
   windowOptions,
   rendererPath,
+  rendererUrl,
   timeoutMs = RENDERER_SMOKE_TIMEOUT_MS,
   excalidrawChunks = findExcalidrawChunks(rendererPath),
   wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
@@ -269,7 +273,7 @@ async function runRendererCspSmoke({
       if (isCspViolationMessage(details?.message)) consoleViolations.push(String(details.message).slice(0, 500))
     })
 
-    await win.loadFile(rendererPath)
+    await (rendererUrl ? win.loadURL(rendererUrl) : win.loadFile(rendererPath))
     while (!result.booted && Date.now() < deadline) {
       result.booted = (await run("document.documentElement.dataset.felixoAppReady === 'true'")) === true
       if (!result.booted) await wait(100)
