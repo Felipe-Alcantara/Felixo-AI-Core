@@ -2850,3 +2850,7 @@ Task: Felixo AI Core/Orquestrador — aplicar em código o teto de custo e a con
 - O teto de tokens de contexto continua só no prompt. Ficou task.
 
 Estado: concluído (deploy no adendo).
+
+**Adendo (2026-11-16, 01:14): CI e Release.**
+- **CI** de `897ea98` (run 43801192651): passou no Validate de Windows, macOS, Ubuntu e Ubuntu ARM e no smoke do canvas.
+- **Release:** o gate (run 43801850411) e o Release (run 43801884621, concluído às 01:12) publicaram a `v0.1.553`.
