@@ -1235,6 +1235,13 @@ Portões do processo principal:
   - **Sessão do app** (padrão): concede, como antes (ditado, clipboard).
   - **Partição de um perfil** do navegador interno: o `webview-site-permissions.cjs` pergunta numa faixa do bloco e lembra a resposta por perfil e origem (migração 023). O `setPermissionCheckHandler` responde "concedido" só com decisão gravada.
   - **Outra sessão:** nega.
+- `download-guard.cjs`: o `will-download` de toda sessão endurecida (o app e as partições) passa pelo `handleDownload`:
+  - o arquivo baixa numa pasta temporária (`<temp>/felixo-downloads`), sem pausa, porque um `blob:` não retoma;
+  - programa ou script (`classifyDownload`: extensão; MIME só sem extensão) pergunta antes, com a origem, e o padrão é Cancelar;
+  - o diálogo de salvar começa em Downloads, e o arquivo só vai para o destino no fim; recusar ou cancelar apaga o temporário;
+  - o QA Logger registra `scope: download` com origem (esquema + host; num `blob:`, a origem de dentro), nome, tamanho e resultado, nunca a query;
+  - os diálogos são assíncronos e não travam o processo principal; o app não conta com o diálogo implícito do Electron;
+  - só na instância de automação, `FELIXO_DEVTOOLS_DOWNLOAD_DIR` (e `FELIXO_DEVTOOLS_DOWNLOAD_CONFIRM=sim`) respondem os diálogos sem abrir janela. Na janela do app, o Playwright do `felixo devtools` desvia os downloads dela; o webview dos blocos não é afetado.
 
 #### Escolha de destino: nenhum link abre direto
 

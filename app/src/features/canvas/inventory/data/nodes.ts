@@ -572,11 +572,6 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
         task: '3ec91f95-497e-8103-b360-c1979d6992f4',
       },
       {
-        what: 'Downloads do bloco sem política de tipo, destino e registro.',
-        risk: 'médio',
-        task: '3ea91f95-497e-8155-a6bc-ea704c00ef65',
-      },
-      {
         what: 'Foco no bloco Página Web que nasce fora da tela sem cobertura no smoke.',
         risk: 'baixo',
         task: '3ea91f95-497e-81c4-84ff-f279d9ba4683',

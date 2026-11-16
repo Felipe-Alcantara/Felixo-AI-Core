@@ -996,6 +996,15 @@ Quando um site num bloco **Página Web** abre uma janela (o login do Google, da 
 - **No máximo duas por bloco:** cada bloco abre até 2 janelas ao mesmo tempo, contando as que uma janela abre. Se o site tentar mais, a extra não abre e o bloco avisa. Fechar uma das janelas libera a vaga.
 - **Remover o bloco fecha as janelas dele.**
 
+### Downloads da Página Web
+
+Quando um site num bloco **Página Web** baixa um arquivo:
+
+- **Você escolhe onde salvar:** abre o diálogo de salvar do sistema, começando na pasta Downloads. Se você cancelar, nada é salvo.
+- **Programas e scripts perguntam antes:** um arquivo que executa ou instala algo (`.exe`, `.msi`, `.bat`, `.ps1`, `.lnk`, `.dmg`, `.sh`, `.AppImage`…) abre antes uma pergunta, "Baixar um programa?", que diz de qual site ele veio. O botão em destaque é **Cancelar**; para salvar, escolha **Baixar mesmo assim**.
+- **Exportações continuam funcionando:** um arquivo que o próprio site monta (uma planilha exportada, por exemplo) segue o mesmo caminho. A exportação de conversas do chat também.
+- **Registro:** o QA Logger guarda de qual site veio, o nome, o tamanho e o resultado de cada download, nunca o endereço completo.
+
 ### Permissões dos sites na Página Web
 
 Um site aberto num bloco **Página Web** não usa nada sensível sem a sua resposta: microfone, câmera, localização, notificações, área de transferência (ler ou escrever), captura da tela, tela cheia e as demais permissões do navegador.
