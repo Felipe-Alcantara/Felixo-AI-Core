@@ -2789,3 +2789,64 @@ Estado: concluído (deploy no adendo).
 - **CI** de `37a9b2a` (run 43793979495): passou no Validate de Windows, macOS, Ubuntu e Ubuntu ARM e no smoke do canvas.
 - **Ciclo de instalação das CLIs** (run 43793979523): passou.
 - **Release:** o gate (run 43794645676) e o Release (run 43794674898, concluído às 23:59 de 15/11) publicaram a `v0.1.552`.
+
+## 2026-11-16 — Orquestrador: teto de custo e confirmação de ações sensíveis passam a valer em código
+
+Task: Felixo AI Core/Orquestrador — aplicar em código o teto de custo e a confirmação de ações sensíveis (Notion `3e991f95-497e-812b-8456-e0073877e9d7`), aberta em 28/09 no PR #97. Agente: Resolver hotfix (Claude Code, Claude Opus 5.5), 00:29 em diante.
+
+**Antes.** `maxCostEstimate` e `requireConfirmationForSensitiveActions` só entravam no texto do prompt. O processo principal não lia nenhum dos dois, e o inventário registrava a lacuna como risco alto.
+
+**Medido.**
+- **Custo:** só o adapter do Claude informa custo (`total_cost_usd`); Codex e Gemini não informam nada. No processo persistente, o total do Claude é acumulado. O bloco Claude API já tratava isso e calculava a diferença.
+- **Permissões:** os sub-agentes rodavam com acesso total:
+  - Claude em `bypassPermissions`;
+  - Codex com `danger-full-access` e `approval_policy="never"`;
+  - Gemini com `--yolo`.
+
+  Os pedidos de aprovação do Codex App Server e do Gemini ACP eram aprovados sozinhos.
+- **Definição:** "ação sensível" não existia em lugar nenhum do código.
+
+**Decisões do Felipe** (`AskUserQuestion`):
+1. **Medição:** soma o custo informado, e o que não informa fica de fora com aviso.
+2. **No teto:** pausa e pergunta.
+3. **Ação sensível:** é o pedido de permissão da própria CLI.
+4. **Escopo:** os dois juntos.
+
+**Feito.**
+- **`cli-request-policy.cjs`:** `maxCostEstimate` e `requireConfirmationForSensitiveActions` chegam ao processo principal. O teto vai para os limites da execução como `maxCostUsd`.
+- **Executor:** `recordRunCost` soma o custo das respostas da execução, contando as que vêm sem custo. `checkCostCap` pausa um sub-agente novo no teto com a pergunta `kind: 'cost'`, uma só por execução; quem chega enquanto ela está aberta espera junto.
+  - "Continuar" libera mais um teto.
+  - "Parar", ou o prazo vencido, falha quem esperava, e os próximos falham sem perguntar.
+  - O teto não entra no registro de trocas.
+- **Ponte do orquestrador:** todo `done` vai para `recordRunCost`.
+- **Processo persistente:**
+  - o custo da resposta é a diferença do total acumulado (`takeResponseCost`);
+  - com a opção ligada, o pedido de permissão fica retido (`holdPermissionRequest`), vira o card `kind: 'permission'` e só segue com a resposta (`respondPermission`), ou é negado em 10 minutos (`expirePermissionRequests`, na varredura de 60 s);
+  - a opção entra na chave de reuso do processo.
+- **Opções de abertura e adapters:** com a opção, o Codex App Server abre com `workspace-write` e `on-request`, e o Gemini ACP sem `--yolo`. Os adapters entregam a resposta de aprovar, a de negar e a descrição (comando, pasta, motivo; ferramenta).
+- **IPC:** `cli:provider-switch:list` junta os pedidos de permissão; `respond` manda o pedido de permissão para a sessão persistente, e o resto para o executor.
+- **Card do chat:** título, botões, prazo e detalhes por tipo.
+- **Configurações:** "Teto de custo (US$)", e o texto que explica a confirmação de ações sensíveis.
+
+**Defeito achado no app e corrigido.** `toProviderSwitchRequest` copiava só uma lista fixa de campos. Os campos novos sumiam no caminho do evento até o card, e isso também valia para os rótulos de conta da v0.1.552: o card de troca de conta mostraria "conta atual → outra conta".
+- O teste pelo caminho do evento falhou antes da correção e passou depois.
+- No app, os três cards (teto, permissão e conta) apareceram completos, com eventos injetados pelo processo principal.
+
+**Validação.**
+- **Testes novos:** 3 do executor (teto), 3 do processo persistente (retenção e negação, prazo e sem a opção, custo por resposta), 4 dos adapters, 1 do IPC, 1 da política e 3 do renderer. Os 2 testes de formato da política foram atualizados.
+- **Mutações:**
+  - desligar a pausa no teto derrubou 2 testes do executor;
+  - aprovar sem reter o pedido derrubou 2 testes do processo persistente.
+- **Gates:**
+  - `npm test`: 3314 testes, 3304 passam, 10 pulados, 0 falham;
+  - `vitest`: 3508 passam;
+  - `eslint .` e `tsc -b` limpos.
+  - Três testes do terminal do canvas falharam com a máquina carregada pela suíte do Node rodando junto e passaram sozinhos (9 de 9).
+
+**Não validado.**
+- Nenhuma CLI real rodou: nem o Codex App Server pedindo aprovação de verdade, nem o Gemini sem `--yolo`, nem o teto com o Claude.
+- Quantas perguntas uma tarefa comum gera, em especial no Gemini.
+- O Claude e o Codex de uma resposta seguem com acesso total, por decisão do Felipe.
+- O teto de tokens de contexto continua só no prompt. Ficou task.
+
+Estado: concluído (deploy no adendo).
