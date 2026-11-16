@@ -907,6 +907,67 @@ test('bloco "Automática (cadeia)": só contas do provedor pedido; sem apta, rec
   })
 })
 
+test('chat em "Automática (cadeia)": escolhe a conta apta do provedor sem criar proposta nem ticket, e pula as já tentadas', async () => {
+  await withService(async (env) => {
+    env.enableChain()
+    env.recordLogin('conta-a')
+    env.recordLogin('conta-b')
+    env.recordLogin('conta-c')
+
+    assert.deepEqual(await env.service.pickAccount({ providerId: 'codex' }), { ok: true, accountId: 'conta-a', label: 'Pessoal' })
+    assert.deepEqual(await env.service.pickAccount({ providerId: 'claude' }), { ok: true, accountId: 'conta-c', label: 'Claude Max' })
+    // A que bateu o limite fica de fora da próxima escolha.
+    assert.equal((await env.service.pickAccount({ providerId: 'codex', exclude: ['conta-a'] })).accountId, 'conta-b')
+    const semOutra = await env.service.pickAccount({ providerId: 'codex', exclude: ['conta-a', 'conta-b'] })
+    assert.equal(semOutra.code, 'NO_CANDIDATE')
+    assert.deepEqual(env.repository.listSwitchEvents(), [])
+
+    env.service.updateSettings({ enabled: false, expectedRevision: env.repository.readSettings().revision })
+    assert.equal((await env.service.pickAccount({ providerId: 'codex' })).code, 'CHAIN_DISABLED')
+  })
+})
+
+test('limite visto no chat põe a conta em espera e a próxima escolha passa por ela; rede e limite do modelo não', async () => {
+  await withService(async (env) => {
+    env.enableChain()
+    env.recordLogin('conta-a')
+    env.recordLogin('conta-b')
+
+    assert.deepEqual(
+      env.service.recordAccountFailure({
+        accountId: 'conta-a',
+        providerId: 'codex',
+        sessionId: 'chat-thread-1',
+        failure: { failureClass: 'network', scope: 'account', evidence: 'ECONNRESET' },
+      }),
+      { ok: true, cooldown: null },
+    )
+    assert.equal(
+      env.service.recordAccountFailure({
+        accountId: 'conta-a',
+        providerId: 'codex',
+        sessionId: 'chat-thread-1',
+        failure: { failureClass: 'limit', scope: 'model', evidence: 'limite do modelo' },
+      }).cooldown,
+      null,
+    )
+    assert.equal((await env.service.pickAccount({ providerId: 'codex' })).accountId, 'conta-a')
+
+    const espera = env.service.recordAccountFailure({
+      accountId: 'conta-a',
+      providerId: 'codex',
+      sessionId: 'chat-thread-1',
+      failure: LIMIT_FAILURE,
+    })
+    assert.equal(espera.ok, true)
+    assert.notEqual(espera.cooldown, null)
+    assert.equal(env.repository.getCooldown('conta-a').failureClass, 'limit')
+    assert.equal((await env.service.pickAccount({ providerId: 'codex' })).accountId, 'conta-b')
+    // Sem proposta: no chat, quem pergunta é o card de troca do orquestrador.
+    assert.deepEqual(env.repository.listSwitchEvents(), [])
+  })
+})
+
 test('prévia de "Automática (cadeia)": abrir e fechar dez vezes deixa no máximo uma aberta e confere o login uma vez no TTL', async () => {
   await withService(async (env) => {
     env.enableChain()

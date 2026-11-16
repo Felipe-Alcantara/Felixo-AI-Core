@@ -1142,6 +1142,59 @@ function createAccountChainService({
   }
 
   /**
+   * Conta para um pedido do chat ou de um sub-agente do orquestrador em
+   * "Automática (cadeia)". Mesma escolha do bloco novo (estratégia, apta,
+   * checagem de login preguiçosa), mas sem proposta nem ticket: no chat, o
+   * envio com a cadeia escolhida é a confirmação, e cada pedido abre um
+   * processo próprio. `exclude` tira contas já tentadas (a que bateu o limite).
+   *
+   * @returns {Promise<{ ok: true, accountId: string, label: string | null }
+   *   | { ok: false, code: string, reasons?: Array<{ accountId: string, label: string | null, reason: string | null }> }>}
+   */
+  async function pickAccount({ providerId, exclude = [] } = {}) {
+    if (!CHAIN_PROVIDER_IDS.includes(providerId)) return failure('INVALID')
+    sweep()
+    const settings = repository.readSettings()
+    if (!settings.enabled) return failure('CHAIN_DISABLED', { reasons: [] })
+    const visited = (Array.isArray(exclude) ? exclude : []).filter(isNonEmptyText)
+    const selection = await selectDestination({
+      settings,
+      sourceAccountId: visited[0] ?? null,
+      visitedAccountIds: visited,
+      providerFilter: providerId,
+    })
+    if (!selection.recommended) {
+      return failure('NO_CANDIDATE', {
+        reasons: selection.candidates.map((item) => ({ accountId: item.accountId, label: item.label, reason: item.reason })),
+      })
+    }
+    const { member, account } = selection.recommended
+    return { ok: true, accountId: member.accountId, label: clip(account?.label, SWITCH_LABEL_MAX_CHARS) ?? null }
+  }
+
+  /**
+   * Falha de conta vista no chat (limite, login ou crédito): põe a conta em
+   * espera, como a vigia do terminal faz, para a próxima escolha da cadeia
+   * passar por ela. Não cria proposta: no chat, quem pergunta é o card de
+   * troca do orquestrador. Limite só do modelo e caso ambíguo não põem em espera.
+   *
+   * @param {{ accountId: string, providerId: string, sessionId: string,
+   *   failure: { failureClass: string, scope?: string, ambiguous?: boolean, evidence?: string | null } }} input
+   */
+  function recordAccountFailure(input = {}) {
+    const detection = normalizeDetection(input)
+    if (!detection?.accountId) return { ok: false, code: 'INVALID' }
+    const { failureClass, scope, ambiguous } = detection.failure
+    if (!COOLDOWN_FAILURE_CLASSES.includes(failureClass) || scope === 'model' || ambiguous) {
+      return { ok: true, cooldown: null }
+    }
+    const nowMs = now()
+    const cooldown = putInCooldown(detection, toIso(nowMs), nowMs)
+    emitChanged('cooldown')
+    return { ok: true, cooldown: cooldown ? { untilAt: cooldown.untilAt, untilSource: cooldown.untilSource } : null }
+  }
+
+  /**
    * A prévia que a pessoa deixou de ver (fechou o configurador, trocou de conta ou de provedor)
    * sai na hora, em vez de ficar aberta 30 min e entrar na conta da retenção. Confirmada, fica.
    */
@@ -1467,7 +1520,9 @@ function createAccountChainService({
     history,
     onOutputFailure,
     onSessionExit,
+    pickAccount,
     previewLaunch,
+    recordAccountFailure,
     recordManual,
     recoverOnStartup,
     releaseCooldown,
