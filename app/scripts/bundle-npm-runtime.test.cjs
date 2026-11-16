@@ -99,3 +99,26 @@ test('a política nunca descarta arquivos executáveis pelo tipo de extensão', 
     fs.rmSync(temporaryRoot, { recursive: true, force: true })
   }
 })
+
+test('reempacotar troca o runtime inteiro, mesmo num caminho com acento (o rmSync do Node 25 não apagava ali)', () => {
+  // `os.tmpdir()` aqui é ASCII; a pasta com acento reproduz o checkout em "Programação\…".
+  const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-npm-runtime-acento-'))
+  const source = path.join(temporaryRoot, 'source')
+  const target = path.join(temporaryRoot, 'Programação', 'build', 'npm-runtime', 'npm')
+
+  try {
+    writeFile(path.join(source, 'bin', 'npm-cli.js'), '#!/usr/bin/env node\n')
+    writeFile(path.join(source, 'lib', 'novo.js'), 'module.exports = 2\n')
+    // Sobra do empacotamento anterior: um arquivo que a versão nova não tem.
+    writeFile(path.join(target, 'lib', 'velho.js'), 'module.exports = 1\n')
+    writeFile(path.join(target, 'bin', 'npm-cli.js'), '// versão antiga\n')
+
+    copyNpmRuntime({ source, target })
+
+    assert.equal(fs.existsSync(path.join(target, 'lib', 'velho.js')), false, 'sobrou arquivo do runtime anterior')
+    assert.equal(fs.readFileSync(path.join(target, 'bin', 'npm-cli.js'), 'utf8'), '#!/usr/bin/env node\n')
+    assert.ok(fs.existsSync(path.join(target, 'lib', 'novo.js')))
+  } finally {
+    fs.rmSync(temporaryRoot, { recursive: true, force: true })
+  }
+})

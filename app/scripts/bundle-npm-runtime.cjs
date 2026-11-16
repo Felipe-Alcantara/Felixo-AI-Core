@@ -19,6 +19,7 @@
 
 const fs = require('node:fs')
 const path = require('node:path')
+const { removeTreeSync } = require('./build-output.cjs')
 
 const APP_ROOT = path.join(__dirname, '..')
 const SOURCE = path.join(APP_ROOT, 'node_modules', 'npm')
@@ -76,7 +77,9 @@ function copyNpmRuntime({
     )
   }
 
-  fs.rmSync(target, { recursive: true, force: true })
+  // Não `rmSync`: no Node 25, num caminho com acento, ele não apagava e o
+  // `cpSync` por cima falhava (`build-output.cjs`).
+  removeTreeSync(target)
   fs.mkdirSync(path.dirname(target), { recursive: true })
   fs.cpSync(source, target, {
     recursive: true,
