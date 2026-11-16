@@ -1007,7 +1007,10 @@ que ainda não podem ser usados:
 
 O Vite usa `base: './'`: o app instalado abre o build por `app://felixo/` (ver
 "Protocolo app:// do renderer") e os benchmarks ainda por `file://`, e o
-caminho relativo funciona nos dois. O benchmark `npm run benchmark:bundle:check` abre o artefato
+caminho relativo funciona nos dois. Depois de gravar, o plugin
+`felixo-clean-build-output` deixa no `dist` só o que o bundle emitiu e o que
+veio da `public`. O `emptyOutDir` do Vite não basta: no Node 25, o
+`fs.rmSync` dele não apaga em caminho com acento (ver o GUIA-DESENVOLVEDOR). O benchmark `npm run benchmark:bundle:check` abre o artefato
 real em novas janelas com `userData` temporário, mede startup/menu, registra
 bytes crus e gzip, confirma o `import()` do Fetch All e verifica todas as
 referências relativas de JS/CSS. O mesmo check roda depois do build no CI dos

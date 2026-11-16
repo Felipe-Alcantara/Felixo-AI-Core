@@ -477,6 +477,17 @@ executa essa validação na matriz dos três sistemas antes de permitir que a
 pré-release seja promovida; o JSON do smoke sobe junto dos artefatos da
 release para deixar o resultado auditável.
 
+O build local deixa no `dist` só o que acabou de gerar. O plugin
+`felixo-clean-build-output` (`scripts/build-output.cjs`) apaga, depois de
+gravar, o que não é do bundle nem da `public`, e o build falha se algo
+resistir. Isso existe porque, no Node 25, `fs.rmSync` volta sem erro e não
+apaga nada num caminho com acento (um checkout em "Programação\…"): o
+`emptyOutDir` do Vite deixava os chunks de todos os builds anteriores, e um
+pacote local de 21/10/2026 levava 1282 assets, com 7 `index-*.js`. O
+`bundle-npm-runtime` usa a mesma remoção (`removeTreeSync`), que confere se
+apagou. Em script novo de build ou de empacotamento, não use `fs.rmSync` em
+caminho do repositório.
+
 ### Benchmark operacional de gerenciadores
 
 Depois de gerar um unpacked (`npm run pack` ou `npx electron-builder
