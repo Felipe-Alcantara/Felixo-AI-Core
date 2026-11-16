@@ -2722,3 +2722,8 @@ Task: Felixo AI Core/Custo — confirmar custo na geração de imagem e no ditad
 - **Preço da imagem por token:** mostra a tarifa, não o total.
 
 Estado: concluído (deploy no adendo).
+
+**Adendo (2026-11-15, 21:37): CI e Release.**
+- **CI** de `23a6557` (run 43779848444): passou no Validate de Windows, macOS, Ubuntu e Ubuntu ARM e no smoke do canvas.
+- **Release:** o gate (run 43780441966) e o Release (run 43780463324, concluído às 21:35) publicaram a `v0.1.551`.
+- **Efeito colateral da validação:** ao subir, a sessão isolada do `devtools` rodou a atualização automática das CLIs do sistema e atualizou o Codex do npm global da máquina de 0.171.0-alpha.4 para 0.171.0-alpha.7. É o comportamento normal do app; o perfil isolado não isola as CLIs do sistema.
