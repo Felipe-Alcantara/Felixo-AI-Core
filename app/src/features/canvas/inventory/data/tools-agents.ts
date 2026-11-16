@@ -994,7 +994,7 @@ export const agentToolSurfaces: InventoryElement[] = [
     layer: 'panel',
     owner: `${TOOLS}/DictationSettingsSection.tsx`,
     states: {
-      normal: 'Motor (nuvem ou servidor local, deduzido do endereço), chave (só na nuvem), endereço, modelo, idioma, atalho e estado do microfone',
+      normal: 'Motor (nuvem ou servidor local, deduzido do endereço), chave (só na nuvem), endereço, modelo, idioma, custo (só na nuvem: describeDictationCost e se o ditado pede confirmação antes de gravar), atalho e estado do microfone',
       error: 'Mensagem vermelha role=status: atalho sem Ctrl/Cmd ou Alt, falha ao salvar a configuração ou ao guardar a chave',
       success: 'Mensagem verde: "Configuração salva.", "Chave guardada com criptografia do sistema.", "Chave removida." ou o lembrete de salvar depois de trocar o motor',
       pending: 'capturing: o botão do atalho mostra "Pressione as teclas… (Esc cancela)" e escuta o teclado da janela em fase de captura',
@@ -1023,6 +1023,13 @@ export const agentToolSurfaces: InventoryElement[] = [
         failure: 'Mensagem do main ou "Não foi possível salvar." em vermelho; com config nula (get-config falhou) o clique não faz nada',
       },
       {
+        locator: 'onClick={forgetCost}',
+        kind: 'button',
+        effect: '"Voltar a perguntar": tira o endereço e o modelo de felixo:cost-consent; a próxima gravação pela nuvem pede confirmação do custo de novo',
+        failure: 'Sem armazenamento, a escolha não fica lembrada e a confirmação volta sempre (o lado seguro)',
+        disabledWhen: 'só aparece na nuvem com "não perguntar de novo" lembrado para o endereço e o modelo',
+      },
+      {
         locator: 'aria-pressed={capturing}',
         kind: 'button',
         trigger: 'clique liga a captura; a próxima combinação vira o atalho; Esc ou perder o foco cancela',
@@ -1045,6 +1052,7 @@ export const agentToolSurfaces: InventoryElement[] = [
     ],
     persistence: [
       'localStorage felixo:dictation-shortcut',
+      'localStorage felixo:cost-consent (endereço e modelo com "não perguntar de novo" para o custo)',
       'processo principal: userData/config/speech-config.json (endereço, modelo, idioma)',
       'processo principal: userData/config/speech-key.bin, cifrado com safeStorage',
     ],

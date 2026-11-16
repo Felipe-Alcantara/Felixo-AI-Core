@@ -30,9 +30,9 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 ## Números
 
 - **Elementos:** 101 (10 blocos, 16 ferramentas, 75 outras superfícies)
-- **Controles:** 382, dos quais 58 com teste específico
+- **Controles:** 388, dos quais 58 com teste específico
 - **Elementos sem nenhum teste:** 4
-- **Lacunas:** 256 (alto 8, médio 137, baixo 111), em 68 tasks
+- **Lacunas:** 254 (alto 8, médio 136, baixo 110), em 67 tasks
 
 ## Moldura do canvas
 
@@ -159,15 +159,15 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 ### Gerar imagem (Openia)
 
 - **ID:** `chrome-generate-image` · **Dono:** `src/features/canvas/components/GenerateImageButton.tsx`
-- **Persistência:** localStorage felixo:openia-image-model (último modelo); sessionStorage felixo:openia-image-pending (pedido em andamento, reconsultado por openia:image-status ao recarregar); processo principal: arquivo da imagem gerada (openia-image-service) e o bloco salvo pelo canvas
-- **IPC:** `openia:image-models`, `openia:generate-image`, `openia:cancel-image`, `openia:image-status`, `canvas:image-generated`, `cli:install-official`
+- **Persistência:** localStorage felixo:openia-image-model (último modelo); localStorage felixo:cost-consent (modelos com "não perguntar de novo" para o custo); sessionStorage felixo:openia-image-pending (pedido em andamento, reconsultado por openia:image-status ao recarregar); processo principal: arquivo da imagem gerada (openia-image-service) e o bloco salvo pelo canvas
+- **IPC:** `openia:image-models`, `openia:image-pricing`, `openia:generate-image`, `openia:cancel-image`, `openia:image-status`, `canvas:image-generated`, `cli:install-official`
 - **Depende de:** `useOpeniaImageGeneration`, `openiaImageStore`, `FelixoSelect`, `addImageNodeFromArtifact (CanvasView)`, `updateOpenia (openia-update)`
 - **Sobreposição:** Popover inline dentro da sidebar (z-26), não flutua sobre o canvas; o menu de modelos (FelixoSelect) abre em portal (z 1000). O Esc que fecha o menu de modelos não fecha o popover junto (defaultPrevented).
 - **Testes:** `src/features/canvas/services/openia-image-store.test.ts`, `src/features/canvas/services/openia-update.test.ts`, `electron/services/openia-image-service.test.cjs`
 
 | Estado | Quando |
 | --- | --- |
-| normal | Botão "Gerar imagem" na seção Criar; aberto, popover com descrição (até 4.000 caracteres), modelo, aviso de custo e Gerar/Cancelar. |
+| normal | Botão "Gerar imagem" na seção Criar; aberto, popover com descrição (até 4.000 caracteres), modelo, preço do modelo (describeImagePricing: por imagem, com a faixa por resolução, ou por milhão de tokens de imagem; data-image-pricing diz se está carregando, pronto ou indisponível) e Gerar/Cancelar. Sem "não perguntar de novo" para o modelo, Gerar troca os botões pela confirmação do custo (Confirmar e gerar/Voltar). |
 | loading | Catálogo carregando (models.status === "loading", seletor com loading). |
 | empty | Catálogo sem modelo de imagem: "Nenhum modelo de imagem no catálogo" e seletor desabilitado. |
 | error | Catálogo indisponível (mensagem + "Tentar de novo"), descrição vazia/longa ou sem modelo (role="alert" no campo), falha da geração (mensagem do serviço; falta de créditos tem mensagem própria, insufficient_credits, que fala do saldo mínimo para imagem) e, com o popover fechado, ícone de alerta no gatilho. Openia antigo (openia_outdated): a mensagem vem com "Atualizar o Openia". |
@@ -180,8 +180,11 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 | `Gerar uma imagem por IA com o Openia (OpenRouter) e colocá-la no canvas` (button) | clique | toggle: abre o popover e pede o catálogo (loadModels → openia:image-models, uma vez; o serviço guarda 10 min); fechar (também Esc e clique fora) esquece o desfecho mostrado (acknowledge) e devolve o foco; uma geração em andamento continua. | Catálogo que falha vira estado de erro no popover; sem a ponte, "A integração do Openia não está disponível nesta versão do Felixo." | — |
 | `menuLabel="Modelos que geram imagem"` (select) | clique | Escolhe o modelo (setModel) e grava felixo:openia-image-model; com mais de 8 modelos o menu tem busca. (desabilitado: catálogo sem opções (carregando, erro ou vazio)) | Modelo lembrado que saiu do catálogo é descartado ao carregar (a pessoa escolhe outro). | — |
 | `Consultar o catálogo de modelos de imagem de novo` (button) | clique | "Tentar de novo": loadModels({ force: true }) consulta openia:image-models de novo. (desabilitado: só aparece com o catálogo em erro) | Nova falha mantém o estado de erro com a mensagem do serviço. | — |
-| `onClick={pending ? undefined : submit}` (button) | clique | Gerar (ou Ctrl/Cmd+Enter): valida descrição e modelo, grava o pedido em sessionStorage felixo:openia-image-pending e chama openia:generate-image; o processo principal grava a imagem e emite canvas:image-generated, que vira bloco de imagem selecionado e centralizado. (desabilitado: aria-disabled durante a geração) | Descrição vazia ou longa e modelo ausente viram role="alert" com foco no campo; pedido já em andamento: "Já há uma imagem sendo gerada. Aguarde ou cancele."; falha do serviço vira o estado de erro com a mensagem. | — |
-| `Interromper a geração em andamento` (button) | clique | Cancelar: marca cancelling e chama openia:cancel-image; o desfecho "A geração de imagem foi cancelada." chega pela resposta do pedido. (desabilitado: aria-disabled sem geração em andamento ou já cancelando) | erro engolido: falha de openia:cancel-image cai num catch vazio (openia-image-store.ts:241); o botão fica em "Cancelando…" até o pedido terminar, e a geração pode concluir (e cobrar). | — |
+| `onClick={pending ? undefined : () => submit()}` (button) | clique | Gerar (ou Ctrl/Cmd+Enter): valida descrição e modelo; sem "não perguntar de novo" lembrado para o modelo (felixo:cost-consent), mostra a confirmação do custo e não pede nada ao Openia; com ele, grava o pedido em sessionStorage felixo:openia-image-pending e chama openia:generate-image; o processo principal grava a imagem e emite canvas:image-generated, que vira bloco de imagem selecionado e centralizado. (desabilitado: aria-disabled durante a geração) | Descrição vazia ou longa e modelo ausente viram role="alert" com foco no campo; pedido já em andamento: "Já há uma imagem sendo gerada. Aguarde ou cancele."; falha do serviço vira o estado de erro com a mensagem. | — |
+| `Confirmar e gerar` (button) | clique | generate({ confirmed: true, remember }): gera com o custo confirmado; com "Não perguntar de novo para este modelo" marcado, grava o modelo em felixo:cost-consent e as próximas gerações dele não perguntam. (desabilitado: só aparece na confirmação do custo) | As mesmas do Gerar; o preço que não veio aparece como "O OpenRouter não informou o preço deste modelo agora." e a confirmação continua valendo. | — |
+| `onClick={() => setConfirmingCost(false)}` (button) | clique | Voltar: fecha a confirmação sem gerar e devolve Gerar/Cancelar. (desabilitado: só aparece na confirmação do custo) | Nenhuma. | — |
+| `onClick={image.forgetCostChoice}` (button) | clique | "Voltar a perguntar": tira o modelo de felixo:cost-consent; o próximo Gerar dele pede confirmação de novo. (desabilitado: só aparece com "não perguntar de novo" lembrado para o modelo) | Sem armazenamento, a escolha não fica lembrada e a confirmação volta sempre (o lado seguro). | — |
+| `Interromper a geração em andamento` (button) | clique | Cancelar: marca cancelling e chama openia:cancel-image; o desfecho "A geração de imagem foi cancelada." chega pela resposta do pedido. (desabilitado: aria-disabled sem geração em andamento ou já cancelando) | erro engolido: falha de openia:cancel-image cai num catch vazio (openia-image-store.ts:337); o botão fica em "Cancelando…" até o pedido terminar, e a geração pode concluir (e cobrar). | — |
 | `Atualizar o Openia` (button) | clique | Só com a geração em erro openia_outdated (ou depois de uma atualização que falhou): mostra o aviso de que a instalação executa código do GitHub do Openia e os botões de confirmação. (desabilitado: só aparece com a geração em openia_outdated ou com a atualização em "failed") | Nenhuma: só troca o estado local do popover. | — |
 | `Confirmar atualização` (button) | clique | updateOpenia → cli:install-official { id: "openia", confirmed: true } (pip --user no commit fixado no catálogo, com a repetição do PEP 668); "Atualizando o Openia…" e depois "Openia atualizado. Clique em Gerar de novo." (desabilitado: só aparece depois de "Atualizar o Openia") | Falha volta como alerta com a mensagem do processo principal (ou "Não foi possível atualizar o Openia.") e "Atualizar o Openia" de novo; fora do app desktop: "A atualização automática só existe no app desktop." | — |
 | `Agora não` (button) | clique | Desiste da atualização: volta ao estado inicial e some (a oferta reaparece enquanto a geração estiver em openia_outdated). (desabilitado: só aparece depois de "Atualizar o Openia") | Nenhuma. | — |
@@ -189,8 +192,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | O popover não tem teste de interface na CI (abrir, escolher modelo, Gerar, Cancelar, Tentar de novo, alerta no gatilho, Atualizar o Openia); só a store, o serviço do processo principal e a lógica de atualização são testados. A geração real pela tela foi vista em 09/10/2026, num roteiro fora do repositório. | médio | `3f491f95-497e-8126-b0ec-fab2a600214a` |
-| Gerar cobra créditos do OpenRouter sem confirmação; só há o aviso de texto no popover. | médio | `3e991f95-497e-8172-b092-f3aa9f111ccc` |
-| erro engolido: falha de openia:cancel-image não aparece (catch vazio em openia-image-store.ts:241); a pessoa vê "Cancelando…" e a imagem pode sair mesmo assim. | baixo | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
+| erro engolido: falha de openia:cancel-image não aparece (catch vazio em openia-image-store.ts:337); a pessoa vê "Cancelando…" e a imagem pode sair mesmo assim. | baixo | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 | Fechar o popover por clique fora devolve o foco ao gatilho mesmo quando a pessoa clicou em outro controle. | baixo | `3ea91f95-497e-81d9-a3d8-ed3971b18a24` |
 
 ### Barra superior
@@ -217,7 +219,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 ### Ditado por voz
 
 - **ID:** `chrome-dictation` · **Dono:** `src/features/canvas/components/DictationButton.tsx`
-- **Persistência:** localStorage felixo:dictation-shortcut (atalho); processo principal: configuração e chave cifrada do ditado (speech-settings-store)
+- **Persistência:** localStorage felixo:dictation-shortcut (atalho); localStorage felixo:cost-consent (endereço e modelo com "não perguntar de novo" para o custo); processo principal: configuração e chave cifrada do ditado (speech-settings-store)
 - **IPC:** `speech:get-config`, `speech:microphone-status`, `speech:request-microphone`, `speech:transcribe`, `pty:write`
 - **Depende de:** `useDictation`, `useDictationShortcut`, `createVoiceRecorder`, `useTerminalSessions (typeText)`
 - **Sobreposição:** Dentro da barra superior (z-18, overflow hidden). O balão usa z-50, mas o z vale só dentro da barra e a área dele fica fora do recorte (some). Se o recorte sair, o balão (w-72, à direita) cai sobre o inspector "Elementos" (z-20, fora do contexto da barra) e ficaria por baixo dele.
@@ -225,7 +227,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 
 | Estado | Quando |
 | --- | --- |
-| normal | Microfone na barra superior: "Ditar por voz (<atalho>)", atalho padrão Mod+Shift+M. |
+| normal | Microfone na barra superior: "Ditar por voz (<atalho>)", atalho padrão Mod+Shift+M. Pela nuvem, sem "não perguntar de novo" para o endereço e o modelo, o primeiro toque abre o balão de custo (state.phase === "confirming", role="alertdialog") com o destino, o preço por minuto (tabela da OpenAI de 15/11/2026, describeDictationCost) e o teto de uma gravação, antes de abrir o microfone; o servidor local não pergunta. |
 | loading | Transcrevendo (state.phase === "transcribing"): spinner e botão desabilitado. |
 | error | state.phase === "error": ícone de microfone cortado e mensagem (falha da gravação ou da transcrição, texto sem nada digitável). |
 | pending | Gravando (state.phase === "recording"): fundo vermelho, ponto pulsando, cronômetro e "Descartar gravação"; para sozinho em 90 s. |
@@ -238,13 +240,14 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 | `data-dictation-state={state.phase}` (button) | clique | toggle: parado ou com erro, confere a configuração (speech:get-config) e o microfone (speech:microphone-status, speech:request-microphone) e começa a gravar; gravando, para, transcreve no processo principal (speech:transcribe) e entrega o texto sem Enter: digita na gaveta aberta (pty:write via typeText) ou, sem gaveta, copia para a área de transferência. (desabilitado: transcrevendo) | Cada recusa vira state.phase "error" com a mensagem; a entrega que falha no terminal diz "O texto foi copiado." sem copiar (ver lacuna). | — |
 | `Descartar gravação` (button) | clique | cancel: para o gravador sem transcrever (recorder.cancel) e volta ao estado parado. (desabilitado: só aparece gravando) | Sem falha própria. | — |
 | `onClick={dismiss}` (button) | clique | Fechar do aviso: dispatch "dismiss" e limpa o notice; o balão some. (desabilitado: só aparece com erro ou aviso) | Sem falha própria. | — |
+| `Cancelar` (button) | clique | Cancelar, no balão de custo (também Esc, clique fora ou sair da janela): dispatch "dismiss" e volta ao repouso sem abrir o microfone nem mandar nada. (desabilitado: só aparece no balão de custo) | Sem falha própria. | — |
+| `confirmCost(rememberCost)` (button) | clique | Gravar, no balão de custo: com "Não perguntar de novo para este endereço e modelo" marcado, grava o destino em felixo:cost-consent; depois segue o begin (microfone e gravação) sem perguntar de novo. (desabilitado: só aparece no balão de custo) | As mesmas recusas do toggle (microfone bloqueado vira "error"); clique repetido não abre o microfone duas vezes (pendingCostKeyRef). | — |
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | O balão de erro e de aviso do ditado (absolute top-full, DictationButton.tsx:66) fica abaixo da barra superior, que tem overflow: hidden (index.css:3216): a mensagem é recortada e não aparece. A pessoa não vê por que o ditado falhou (sem chave, microfone negado). | alto | `3ec91f95-497e-8103-b360-c1979d6992f4` |
 | Quando typeText falha, o aviso diz "Não consegui digitar no terminal. O texto foi copiado." mas nada é copiado (CanvasView.tsx:1839): o texto ditado se perde. | médio | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 | Nenhum teste de interface do ditado (gravar, transcrever, descartar, fechar o aviso, atalho global). | baixo | `3ec91f95-497e-818f-b9f2-f9710605c303` |
-| A transcrição pela nuvem pode cobrar e não pede confirmação. | baixo | `3e991f95-497e-8172-b092-f3aa9f111ccc` |
 
 ### Barra de status
 
@@ -2334,7 +2337,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 ### Ditado por voz (Configurações)
 
 - **ID:** `settings-ditado` · **Dono:** `src/features/canvas/components/tools/DictationSettingsSection.tsx`
-- **Persistência:** localStorage felixo:dictation-shortcut; processo principal: userData/config/speech-config.json (endereço, modelo, idioma); processo principal: userData/config/speech-key.bin, cifrado com safeStorage
+- **Persistência:** localStorage felixo:dictation-shortcut; localStorage felixo:cost-consent (endereço e modelo com "não perguntar de novo" para o custo); processo principal: userData/config/speech-config.json (endereço, modelo, idioma); processo principal: userData/config/speech-key.bin, cifrado com safeStorage
 - **IPC:** `speech:get-config`, `speech:save-config`, `speech:set-key`, `speech:clear-key`, `speech:microphone-status`, `speech:request-microphone`
 - **Depende de:** `useDictationShortcut`, `window.felixo.speech`, `dictation (shortcutFromEvent, describeMicrophoneStatus, isLoopbackEndpoint)`
 - **Sobreposição:** Seção dentro do painel Configurações (z-20/30); a captura do atalho escuta keydown da janela inteira em fase de captura e para no blur, para não roubar teclas de menus do mesmo painel
@@ -2342,7 +2345,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Estado | Quando |
 | --- | --- |
-| normal | Motor (nuvem ou servidor local, deduzido do endereço), chave (só na nuvem), endereço, modelo, idioma, atalho e estado do microfone |
+| normal | Motor (nuvem ou servidor local, deduzido do endereço), chave (só na nuvem), endereço, modelo, idioma, custo (só na nuvem: describeDictationCost e se o ditado pede confirmação antes de gravar), atalho e estado do microfone |
 | error | Mensagem vermelha role=status: atalho sem Ctrl/Cmd ou Alt, falha ao salvar a configuração ou ao guardar a chave |
 | pending | capturing: o botão do atalho mostra "Pressione as teclas… (Esc cancela)" e escuta o teclado da janela em fase de captura |
 | success | Mensagem verde: "Configuração salva.", "Chave guardada com criptografia do sistema.", "Chave removida." ou o lembrete de salvar depois de trocar o motor |
@@ -2354,6 +2357,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `onClick={() => void saveKey()}` (button) | clique | Guardar: speech:set-key cifra a chave com safeStorage no main (speech-key.bin), limpa o campo e marca keyConfigured (desabilitado: campo de chave vazio; some no motor local) | Mensagem do main ou "Não foi possível guardar a chave." em vermelho | — |
 | `onClick={() => void clearKey()}` (button) | clique | Remover: speech:clear-key apaga a chave guardada e mostra "Chave removida." (desabilitado: só aparece com chave configurada e motor na nuvem) | erro engolido: o retorno não é lido e o handler do main não tem try (speech-ipc-handlers.cjs:63-66); se ele lançar, a promessa rejeita sem aviso | — |
 | `Salvar endereço, modelo e idioma` (button) | clique | speech:save-config grava baseUrl, model e language em speech-config.json e a tela recebe a configuração normalizada | Mensagem do main ou "Não foi possível salvar." em vermelho; com config nula (get-config falhou) o clique não faz nada | — |
+| `onClick={forgetCost}` (button) | clique | "Voltar a perguntar": tira o endereço e o modelo de felixo:cost-consent; a próxima gravação pela nuvem pede confirmação do custo de novo (desabilitado: só aparece na nuvem com "não perguntar de novo" lembrado para o endereço e o modelo) | Sem armazenamento, a escolha não fica lembrada e a confirmação volta sempre (o lado seguro) | — |
 | `aria-pressed={capturing}` (button) | clique liga a captura; a próxima combinação vira o atalho; Esc ou perder o foco cancela | Grava o atalho em localStorage felixo:dictation-shortcut e avisa quem escuta (felixo:dictation-shortcut-changed) | Combinação sem Ctrl/Cmd ou Alt mostra a regra em vermelho e continua capturando | — |
 | `Restaurar padrão` (button) | clique | Volta o atalho para DEFAULT_DICTATION_SHORTCUT (desabilitado: só aparece com atalho diferente do padrão) | sem falha própria | — |
 | `Verificar/permitir microfone` (button) | clique | speech:request-microphone pede a permissão pelo main no macOS (askForMediaAccess) e mostra o estado que ficou; no Windows e no Linux só informa | Resposta sem ok é ignorada; recusa aparece como estado denied com a dica do sistema | — |
@@ -2922,7 +2926,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3e991f95-497e-812b-8456-e0073877e9d7` — 1 lacuna
 - `3e991f95-497e-812d-b877-e7bb0162a60f` — 1 lacuna
 - `3e991f95-497e-815c-845c-da8829970c0c` — 1 lacuna
-- `3e991f95-497e-8172-b092-f3aa9f111ccc` — 2 lacunas
 - `3e991f95-497e-817d-b6a4-c2c1825b3afc` — 1 lacuna
 - `3e991f95-497e-81b4-ac92-d7db960c9ae0` — 1 lacuna
 - `3ea91f95-497e-8117-8506-d4abe67709ff` — 1 lacuna
