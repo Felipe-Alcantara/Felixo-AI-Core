@@ -3229,3 +3229,42 @@ Estado: concluído (deploy no adendo).
 **Adendo (2026-11-16, 06:36): CI e Release.**
 - **CI** de `f9c4c38` (run 43838467152): passou no Validate de Windows, macOS, Ubuntu e Ubuntu ARM e no smoke do canvas, sem nova tentativa.
 - **Release:** o gate (run 43839320271) e o Release (run 43839353801, concluído às 06:33) publicaram a `v0.1.561`.
+
+## 2026-11-16 — Segurança: a URL do bloco Página Web sai sem tokens no .fxcanvas e na leitura por agentes
+
+Task: Felixo AI Core/Segurança — redigir tokens de URL no bloco Página Web, no .fxcanvas e na leitura por agentes (Notion `3ea91f95-497e-8126-88c8-c6a7ce21bee0`), aberta em 29/09 a partir da política única de URL. Agente: Resolver hotfix (Claude Code, Claude Opus 5.5), 06:42 em diante.
+
+**Antes.**
+- O `data.url` do bloco (com query e fragmento) ia inteiro para o banco, para o `.fxcanvas` (`normalizeCanvasBundle` já tirava o `filePath` dos blocos de arquivo, mas não tocava na URL) e para o rótulo que `canvas-agent-read.cjs` dá aos agentes.
+
+**Decisões do Felipe** (`AskUserQuestion`):
+1. **Estratégia:** "gravar completa; redigir só fora". O SQLite local guarda a URL inteira, e o bloco reabre onde estava; só o `.fxcanvas` e a leitura pelos agentes saem redigidos. A recomendação era redigir em tudo.
+2. **Parâmetro sensível:** sai da URL, em vez de virar `[redigido]`.
+3. **Canvas já salvos:** só daqui para frente. Como o export e a leitura redigem na hora, valem também para canvas antigos sem mexer no que está gravado.
+
+**Feito.**
+- **`url-secret-redaction.cjs` (`redactUrlSecrets`):** tira da URL o que é sensível.
+  - **O que sai:** usuário e senha; os parâmetros de nome sensível (os de `isSensitiveKeyName` do `git-secret-redaction.cjs`, mais `code`, `key`, `auth`, `otp`, `ticket`, `jwt`, `session`, `assertion`, `SAMLResponse`, `oauth_verifier`…); os prefixos `X-Amz-*` e `X-Goog-*`; e valores com cara de token (JWT, `ghp_`, `sk-`…).
+  - **Fragmento:** só é tratado quando é de pares (`#access_token=…&token_type=…`); uma âncora comum fica.
+  - **Sem nada a tirar:** a URL volta exatamente como veio (sem reserializar a query nem pôr "/" no fim).
+- **Aplicado em:** `canvas-transfer.cjs` (blocos `webpage` no `.fxcanvas`) e `canvas-agent-read.cjs` (rótulo do bloco para os agentes).
+- **Inventário:** saíram as lacunas desta task e as das duas anteriores (permissões e popups), que tinham ficado para trás.
+- **Docs:** GUIA-USUARIO (export) e ARQUITETURA.
+
+**Validação.**
+- **Testes:**
+  - 16 casos em tabela no `url-secret-redaction.test.cjs` (OAuth, redefinição de senha, login mágico, AWS, Google, Azure SAS, JWT num nome inocente, usuário e senha, busca e documento intactos);
+  - o critério de aceite no `canvas-transfer.test.cjs`: o export de `https://x.com/cb?code=abc&lang=pt#access_token=def` não contém `abc` nem `def` e mantém `lang=pt`;
+  - no `canvas-agent-read.test.cjs`, o agente vê `https://x.com/cb`.
+- **Mutações:** sem a redação no export, 1 teste falha; na leitura por agentes, 1.
+- **Gates:**
+  - `npm test`: 3346 testes, 3336 passam, 10 pulados, 0 falham;
+  - `vitest`: 3523 passam;
+  - `eslint .` e `tsc -b` limpos.
+- **App de fonte:** com um bloco em `http://127.0.0.1:8788/cb?code=abc123&lang=pt#access_token=def456&token_type=bearer`, o banco guardou a URL completa e o `exportBundle` saiu com `http://127.0.0.1:8788/cb?lang=pt#token_type=bearer`, sem `abc123` nem `def456`.
+
+**Não validado.**
+- **Leitura pelos agentes no app:** não foi conferida pela fila da CLI; o `listarElementos` que ela usa está testado.
+- **Exportar com a saída dos terminais:** leva a saída como saiu, e um token impresso no terminal viaja. Isso já está avisado no guia e fica fora desta task.
+
+Estado: concluído (deploy no adendo).
