@@ -2854,3 +2854,55 @@ Estado: concluído (deploy no adendo).
 **Adendo (2026-11-16, 01:14): CI e Release.**
 - **CI** de `897ea98` (run 43801192651): passou no Validate de Windows, macOS, Ubuntu e Ubuntu ARM e no smoke do canvas.
 - **Release:** o gate (run 43801850411) e o Release (run 43801884621, concluído às 01:12) publicaram a `v0.1.553`.
+
+## 2026-11-16 — Contas: o código estruturado das CLIs vira a fonte primária da taxonomia no chat e no orquestrador
+
+Task: Felixo AI Core/Contas — usar os códigos estruturados das CLIs como fonte primária da taxonomia (Notion `3e991f95-497e-8163-a069-d8502ee1f129`), aberta em 28/09 no PR #97. Agente: Resolver hotfix (Claude Code, Claude Opus 5.5), 01:20 em diante. Trilha A: a direção estava na task.
+
+**Antes.** A taxonomia (`failure-taxonomy.cjs`) classificava só pelo texto do erro. Os adapters tinham o código em mãos e o jogavam fora.
+
+**Medido nas versões instaladas** (sem rede nem conta; `app/electron/__fixtures__/cli-error-codes.json`):
+- **Claude Code 2.1.323:** o binário traz a lista `api_error:*`, com `authentication_failed`, `oauth_org_not_allowed`, `account_on_hold`, `verification_required`, `cloud_credential_error`, `billing_error`, `rate_limit`, `overloaded`, `server_error`, `invalid_request`, `model_not_found`, `max_output_tokens` e `unknown`.
+  - O código chega no campo `error` da mensagem `assistant`, e o `result` traz `api_error_status`.
+  - A fixture real "You're out of extra usage · resets 1:20pm" vem com `rate_limit` e 429.
+- **Codex 0.171.0-alpha.7:** `codex app-server generate-json-schema` dá o `CodexErrorInfo`, com 23 códigos. Ele é um enum ou um objeto com `httpStatusCode`.
+  - A notificação `error` traz `{ error: TurnError, threadId, turnId, willRetry }`.
+  - O adapter lia `params.message`, que não existe: a mensagem real se perdia, e um erro com `willRetry` (que o Codex tenta de novo) encerrava o pedido.
+- **Gemini CLI 0.69.0-preview.0 (ACP):** o erro JSON-RPC do pedido sai com `code` igual ao status HTTP (`new RequestError(status, …)`, 429 com "Rate limit exceeded"), e `-32000` é "Authentication required". O `stopReason` só diz como a resposta terminou.
+
+**Feito.**
+- **`accounts/cli-failure-codes.cjs` (novo):** tabela por provedor que reaproveita a de status HTTP (`STATUS_CODES`).
+  - Código conhecido que não é da conta vira `unknown`.
+  - `unknown` do Claude e `other` do Codex devolvem a decisão ao texto.
+  - Na variante de conexão do Codex, o status que vier junto decide.
+- **`failure-taxonomy.cjs`:** `classifyFailure` aceita `code` e `httpStatus`. Na origem `fluxo`, o código decide; o `pty` não muda.
+  - O escopo continua vindo do texto quando a classe é a mesma.
+  - A evidência é a primeira linha redigida.
+  - O resultado diz `source` (`codigo` ou `texto`) e `code`.
+- **Adapters:**
+  - Claude: `failureCode` e `httpStatus`;
+  - Codex App Server: `failureCode` e `httpStatus`, a mensagem certa, e `willRetry` não encerra;
+  - Gemini ACP: `failureCode` com o `code`.
+- **Caminho até a decisão:** `model-availability` (`recordCliEvent`, `detectAvailabilityIssue`, `describeCliFailure`), `ipc-handlers` (`withCliFailure`, espera da conta), a ponte e o executor (`errorCode`, `errorHttpStatus`).
+
+**Mudança de comportamento registrada.** "Out of extra usage · resets …" passa a ser limite no chat, pelo código, e volta no horário. No terminal continua cobrança, pelo texto. Ficou task para decidir se o terminal acompanha.
+
+**Validação.**
+- **Testes novos:**
+  - 4 dos códigos: toda versão medida tem decisão; o código vence o texto; status; reserva e `pty`;
+  - 2 do Codex App Server;
+  - 1 do Gemini ACP;
+  - 1 da disponibilidade;
+  - 1 do executor.
+- **Testes ajustados:** 3 dos adapters passam a esperar o código.
+- **Mutação:** sem a decisão pelo código, 4 testes falham.
+- **Gates:**
+  - `npm test`: 3322 testes, 3312 passam, 10 pulados, 0 falham;
+  - `eslint .` e `tsc -b` limpos;
+  - `vitest`: tudo passa, menos 2 testes de `deferred-terminal-session-store`, que falham só na suíte inteira (perto de 1 s de espera sob carga) e passaram 3 de 3 rodando sozinhos. Não são desta mudança; ficou task.
+
+**Não validado.**
+- Nenhum erro real das CLIs foi provocado. As formas vêm do binário, do esquema e do bundle instalados, e a única fixture de execução real é a do Claude.
+- O Codex de uma resposta (`codex exec --json`) e o Gemini de uma resposta não têm código no evento de erro e continuam no texto.
+
+Estado: concluído (deploy no adendo).
