@@ -231,7 +231,9 @@ export function createOrchestratorContextBlock(
     `- Modo: ${formatOrchestratorMode(settings.mode)}.`,
     `- Workflow padrao: ${settings.defaultWorkflow || 'nao configurado'}.`,
     `- Limites: max ${settings.maxAgentsPerTurn} sub-agentes por turno, ${settings.maxTotalAgents} no total, ${settings.maxTurns} turnos, ${settings.maxRuntimeMinutes} min.`,
-    settings.maxCostEstimate > 0 ? `- Limite de custo estimado: ${settings.maxCostEstimate}.` : null,
+    settings.maxCostEstimate > 0
+      ? `- Teto de custo: US$ ${settings.maxCostEstimate} (o app pausa e pergunta à pessoa ao chegar nele).`
+      : null,
     settings.maxContextTokens > 0 ? `- Limite de contexto: ${settings.maxContextTokens} tokens.` : null,
     `- Confirmar acoes sensiveis: ${settings.requireConfirmationForSensitiveActions ? 'sim' : 'nao'}.`,
   ]

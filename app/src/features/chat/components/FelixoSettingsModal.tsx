@@ -231,7 +231,7 @@ function FelixoSettingsDialog({
                 onChange={(event) => updateNumber('maxRuntimeMinutes', event)}
               />
               <NumberField
-                label="Custo est."
+                label="Teto US$"
                 value={settingsDraft.maxCostEstimate}
                 min={0}
                 step={0.01}

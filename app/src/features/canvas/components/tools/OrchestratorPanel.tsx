@@ -45,7 +45,11 @@ const LIMIT_FIELDS: Array<{
   { key: 'maxTurns', label: 'Rodadas', help: 'ciclos de delegação por execução' },
   { key: 'maxTotalAgents', label: 'Agentes no total', help: 'teto da execução inteira' },
   { key: 'maxRuntimeMinutes', label: 'Minutos de execução', help: 'tempo máximo da execução' },
-  { key: 'maxCostEstimate', label: 'Custo estimado', help: '0 = sem teto de custo' },
+  {
+    key: 'maxCostEstimate',
+    label: 'Teto de custo (US$)',
+    help: '0 = sem teto; no teto o chat pergunta se continua. Só o Claude informa custo',
+  },
   { key: 'maxContextTokens', label: 'Tokens de contexto', help: '0 = sem teto de contexto' },
 ]
 
@@ -189,7 +193,13 @@ export function OrchestratorPanel({ onClose, toolsMenuOpen }: OrchestratorPanelP
               }
               className="mt-0.5 h-3.5 w-3.5"
             />
-            Pedir confirmação em ações sensíveis
+            <span>
+              Pedir confirmação em ações sensíveis
+              <span className="block text-[10px] text-zinc-500">
+                Codex App Server e Gemini ACP pedem permissão no chat antes de sair da pasta de trabalho ou usar
+                ferramentas; Claude e Codex de uma resposta seguem com acesso total.
+              </span>
+            </span>
           </label>
 
           <div className="border-t border-white/10 pt-2">
