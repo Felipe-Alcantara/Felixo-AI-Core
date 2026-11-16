@@ -2906,3 +2906,7 @@ Task: Felixo AI Core/Contas — usar os códigos estruturados das CLIs como font
 - O Codex de uma resposta (`codex exec --json`) e o Gemini de uma resposta não têm código no evento de erro e continuam no texto.
 
 Estado: concluído (deploy no adendo).
+
+**Adendo (2026-11-16, 01:50): CI e Release.**
+- **CI** de `2e6eba8` (run 43804644766): passou no Validate de Windows, macOS, Ubuntu e Ubuntu ARM e no smoke do canvas.
+- **Release:** o gate (run 43805399003) e o Release (run 43805417670, concluído às 01:48) publicaram a `v0.1.554`.
