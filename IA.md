@@ -3012,3 +3012,7 @@ Task: Felixo AI Core/Onboarding — anunciar a cadeia de contas no catálogo de 
 **Não validado.** O aviso não foi conferido no app instalado, atualizando de uma versão anterior com estado real. O smoke e o estado semeado cobrem o mesmo caminho.
 
 Estado: concluído (deploy no adendo).
+
+**Adendo (2026-11-16, 03:34): CI e Release.**
+- **CI** de `4f5af2a` (run 43815577185): passou no Validate de Windows, macOS, Ubuntu e Ubuntu ARM e no smoke do canvas.
+- **Release:** o gate (run 43816345030) e o Release (run 43816367733, concluído às 03:32) publicaram a `v0.1.556`.
