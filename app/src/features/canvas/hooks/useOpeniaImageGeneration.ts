@@ -10,8 +10,10 @@ export function useOpeniaImageGeneration() {
   return {
     ...snapshot,
     loadModels: openiaImageStore.loadModels,
+    loadPricing: openiaImageStore.loadPricing,
     setPrompt: openiaImageStore.setPrompt,
     setModel: openiaImageStore.setModel,
+    forgetCostChoice: openiaImageStore.forgetCostChoice,
     generate: openiaImageStore.generate,
     cancel: openiaImageStore.cancel,
     acknowledge: openiaImageStore.acknowledge,

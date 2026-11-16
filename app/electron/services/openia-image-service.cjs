@@ -85,6 +85,7 @@ const MESSAGES = Object.freeze({
   save_failed: 'Não foi possível salvar a imagem gerada.',
   timeout: 'A geração de imagem demorou demais e foi interrompida.',
   cancelled: 'A geração de imagem foi cancelada.',
+  pricing_unavailable: 'O OpenRouter não informou o preço deste modelo agora.',
 })
 
 /** Código de saída do Openia (`ImageError.exit_code`) → código público do Felixo. */
@@ -176,6 +177,7 @@ function createOpeniaImageService({
   saveImage,
   notify = () => {},
   fetchCatalog = fetchImageCatalog,
+  fetchPricing = fetchImagePricing,
   runImage = runOpeniaImageProcess,
   readVersion = readInstalledOpeniaVersion,
   now = () => Date.now(),
@@ -186,6 +188,7 @@ function createOpeniaImageService({
   const active = new Map()
   const history = new Map()
   let catalogCache = null
+  const pricingCache = new Map()
 
   function setState(requestId, state, extra = {}) {
     history.set(requestId, { requestId, state, updatedAt: now(), ...extra })
@@ -202,6 +205,31 @@ function createOpeniaImageService({
     }
     const value = { ok: true, models: Array.isArray(models) ? models : [] }
     catalogCache = { at: now(), value }
+    return value
+  }
+
+  /**
+   * Preço do modelo para a confirmação antes de gerar. Só de modelo do
+   * catálogo (o cache fica do tamanho dele); falha não é guardada, para a
+   * próxima abertura tentar de novo.
+   */
+  async function imagePricing(params) {
+    const model = typeof params?.model === 'string' ? params.model.trim() : ''
+    if (model.length > 300 || !MODEL_PATTERN.test(model)) return fail('invalid_request')
+    const cached = pricingCache.get(model)
+    if (cached && now() - cached.at < CATALOG_CACHE_MS) return cached.value
+    const catalog = await imageModels()
+    if (!catalog.ok) return fail('catalog_unavailable')
+    if (!catalog.models.some((item) => item.id === model)) return fail('model_not_image_capable')
+    let pricing
+    try {
+      pricing = await fetchPricing(model)
+    } catch {
+      return fail('pricing_unavailable')
+    }
+    if (!pricing) return fail('pricing_unavailable')
+    const value = { ok: true, pricing }
+    pricingCache.set(model, { at: now(), value })
     return value
   }
 
@@ -374,6 +402,7 @@ function createOpeniaImageService({
       if (!catalog.ok) return { ok: false, code: 'catalog_unavailable', message: MESSAGES.catalog_unavailable }
       return { ok: true, models: catalog.models }
     },
+    imagePricing,
     generate,
     cancel,
     status,
@@ -522,11 +551,18 @@ async function removeSaved(artifacts, fileSystem = fs) {
  * fornecedor e modalidades de uma lista fechada; ignora entradas malformadas.
  */
 async function fetchImageCatalog({ fetchImpl = globalThis.fetch, timeoutMs = CATALOG_TIMEOUT_MS, maxBytes = CATALOG_MAX_BYTES } = {}) {
+  const payload = await fetchPublicJson(IMAGE_MODELS_URL, { fetchImpl, timeoutMs, maxBytes })
+  if (!payload || !Array.isArray(payload.data)) throw new Error('formato inválido')
+  return payload.data.map(parseCatalogEntry).filter(Boolean)
+}
+
+/** GET público ao OpenRouter, sem chave nem redirecionamento, com limite de tempo e de tamanho. */
+async function fetchPublicJson(url, { fetchImpl, timeoutMs, maxBytes }) {
   if (typeof fetchImpl !== 'function') throw new Error('fetch indisponível')
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    const response = await fetchImpl(IMAGE_MODELS_URL, {
+    const response = await fetchImpl(url, {
       method: 'GET',
       redirect: 'error',
       headers: { accept: 'application/json' },
@@ -535,13 +571,47 @@ async function fetchImageCatalog({ fetchImpl = globalThis.fetch, timeoutMs = CAT
     if (!response?.ok) throw new Error('catálogo indisponível')
     const declared = Number(response.headers?.get?.('content-length'))
     if (Number.isFinite(declared) && declared > maxBytes) throw new Error('catálogo grande demais')
-    const text = await readLimitedText(response, maxBytes)
-    const payload = JSON.parse(text)
-    if (!payload || !Array.isArray(payload.data)) throw new Error('formato inválido')
-    return payload.data.map(parseCatalogEntry).filter(Boolean)
+    return JSON.parse(await readLimitedText(response, maxBytes))
   } finally {
     clearTimeout(timer)
   }
+}
+
+/** Pontos de acesso de um modelo de imagem, com o preço de cada fornecedor (o catálogo não traz preço). */
+function imagePricingUrl(model) {
+  // `model` já passou por MODEL_PATTERN: um `/`, sem `?`, `#` nem segmento `..`.
+  return `${IMAGE_MODELS_URL}/${model}/endpoints`
+}
+
+async function fetchImagePricing(model, { fetchImpl = globalThis.fetch, timeoutMs = CATALOG_TIMEOUT_MS, maxBytes = CATALOG_MAX_BYTES } = {}) {
+  return summarizeImagePricing(await fetchPublicJson(imagePricingUrl(model), { fetchImpl, timeoutMs, maxBytes }))
+}
+
+const PRICING_UNITS = new Set(['image', 'token'])
+
+/**
+ * Preço de gerar uma imagem, a partir dos pontos de acesso do modelo: só o que
+ * é cobrado pela imagem gerada (`output_image`). Fica "por imagem" quando algum
+ * fornecedor cobra assim (a faixa cobre as variantes de resolução); senão, "por
+ * token", e o total depende da resolução. A entrada (texto da descrição) é
+ * centavos de centavo e fica de fora. Sem preço legível, `null`.
+ *
+ * @returns {{ unit: 'image' | 'token', minUsd: number, maxUsd: number } | null}
+ */
+function summarizeImagePricing(payload) {
+  const costs = { image: [], token: [] }
+  for (const endpoint of Array.isArray(payload?.endpoints) ? payload.endpoints : []) {
+    for (const entry of Array.isArray(endpoint?.pricing) ? endpoint.pricing : []) {
+      if (entry?.billable !== 'output_image' || !PRICING_UNITS.has(entry.unit)) continue
+      // `null` ou texto vazio virariam 0 com Number(): preço ausente não pode parecer grátis.
+      const raw = entry.cost_usd
+      const cost = typeof raw === 'number' || (typeof raw === 'string' && raw.trim()) ? Number(raw) : Number.NaN
+      if (Number.isFinite(cost) && cost >= 0) costs[entry.unit].push(cost)
+    }
+  }
+  const unit = costs.image.length ? 'image' : costs.token.length ? 'token' : null
+  if (!unit) return null
+  return { unit, minUsd: Math.min(...costs[unit]), maxUsd: Math.max(...costs[unit]) }
 }
 
 async function readLimitedText(response, maxBytes) {
@@ -673,6 +743,7 @@ function runOpeniaImageProcess({
  */
 function registerOpeniaImageIpcHandlers({ service } = {}) {
   ipcMain.handle('openia:image-models', () => service.imageModels())
+  ipcMain.handle('openia:image-pricing', (_event, params) => service.imagePricing(params))
   ipcMain.handle('openia:generate-image', (_event, params) => service.generate(params))
   ipcMain.handle('openia:cancel-image', (_event, params) => service.cancel(params))
   ipcMain.handle('openia:image-status', (_event, params) => service.status(params))
@@ -687,6 +758,8 @@ module.exports = {
   collectFiles,
   createOpeniaImageService,
   fetchImageCatalog,
+  fetchImagePricing,
+  imagePricingUrl,
   mapFailure,
   parseEnvelope,
   parseRequest,
@@ -695,4 +768,5 @@ module.exports = {
   runOpeniaImageProcess,
   sanitizeArgsForShell,
   sniffRasterMimeType,
+  summarizeImagePricing,
 }

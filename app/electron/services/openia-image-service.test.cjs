@@ -22,6 +22,7 @@ const {
   collectFiles,
   createOpeniaImageService,
   fetchImageCatalog,
+  fetchImagePricing,
   mapFailure,
   parseEnvelope,
   parseRequest,
@@ -30,6 +31,7 @@ const {
   runOpeniaImageProcess,
   sanitizeArgsForShell,
   sniffRasterMimeType,
+  summarizeImagePricing,
 } = require('./openia-image-service.cjs')
 const { saveGeneratedImage } = require('./file-attachments-ipc-handlers.cjs')
 Module._load = originalLoad
@@ -505,7 +507,76 @@ test('reiniciar preserva a referência gravada e a varredura só apaga pastas e 
   assert.equal(fs.existsSync(artifactPath), true)
 })
 
-test('registra só os quatro canais de imagem do Openia', async () => {
+test('preço da imagem: só o que a imagem gerada custa, por imagem quando houver, e preço ausente nunca vira grátis', () => {
+  const endpoints = (...pricings) => ({ endpoints: pricings.map((pricing) => ({ pricing })) })
+  // Formato medido em 15/11/2026 (black-forest-labs/flux-3-image): variantes por resolução.
+  assert.deepEqual(
+    summarizeImagePricing(
+      endpoints([
+        { billable: 'output_image', unit: 'image', cost_usd: 0.041, variant: '768' },
+        { billable: 'output_image', unit: 'image', cost_usd: 0.607, variant: '4k' },
+      ]),
+    ),
+    { unit: 'image', minUsd: 0.041, maxUsd: 0.607 },
+  )
+  // openai/gpt-image-1-mini: entrada não conta; a saída é por token.
+  assert.deepEqual(
+    summarizeImagePricing(
+      endpoints([
+        { billable: 'input_text', unit: 'token', cost_usd: 0.000002 },
+        { billable: 'output_image', unit: 'token', cost_usd: 0.000008 },
+      ]),
+    ),
+    { unit: 'token', minUsd: 0.000008, maxUsd: 0.000008 },
+  )
+  // Dois fornecedores (google/gemini-3.1-flash-image): a faixa cobre os dois.
+  assert.deepEqual(
+    summarizeImagePricing(
+      endpoints([{ billable: 'output_image', unit: 'token', cost_usd: 0.000066 }], [{ billable: 'output_image', unit: 'token', cost_usd: '0.00006' }]),
+    ),
+    { unit: 'token', minUsd: 0.00006, maxUsd: 0.000066 },
+  )
+  assert.equal(summarizeImagePricing(endpoints([{ billable: 'output_image', unit: 'image', cost_usd: null }])), null)
+  assert.equal(summarizeImagePricing(endpoints([{ billable: 'output_image', unit: 'image', cost_usd: '' }])), null)
+  assert.equal(summarizeImagePricing(endpoints([{ billable: 'output_image', unit: 'segundo', cost_usd: 1 }])), null)
+  assert.equal(summarizeImagePricing({ endpoints: 'lixo' }), null)
+  assert.equal(summarizeImagePricing(null), null)
+})
+
+test('preço da imagem: consulta pública por modelo do catálogo, guardada, e falha não fica guardada', async () => {
+  const consultas = []
+  let falhar = true
+  const fetchPricing = async (model) => {
+    consultas.push(model)
+    if (falhar) throw new Error('sem rede')
+    return { unit: 'image', minUsd: 0.04, maxUsd: 0.04 }
+  }
+  const service = createOpeniaImageService({ userData: tmp(), saveImage: async () => ({ ok: true }), fetchCatalog: catalog(), fetchPricing })
+
+  assert.equal((await service.imagePricing({ model: MODEL })).code, 'pricing_unavailable')
+  falhar = false
+  assert.deepEqual(await service.imagePricing({ model: MODEL }), { ok: true, pricing: { unit: 'image', minUsd: 0.04, maxUsd: 0.04 } })
+  await service.imagePricing({ model: MODEL })
+  assert.deepEqual(consultas, [MODEL, MODEL])
+
+  assert.equal((await service.imagePricing({ model: 'outro/fora-do-catalogo' })).code, 'model_not_image_capable')
+  assert.equal((await service.imagePricing({ model: '../../etc' })).code, 'invalid_request')
+  assert.equal((await service.imagePricing({})).code, 'invalid_request')
+  assert.deepEqual(consultas, [MODEL, MODEL])
+
+  let chamada
+  await fetchImagePricing('acme/pixel-1', {
+    fetchImpl: async (url, init) => {
+      chamada = { url, init }
+      return fakeResponse({ endpoints: [] })
+    },
+  })
+  assert.equal(chamada.url, `${IMAGE_MODELS_URL}/acme/pixel-1/endpoints`)
+  assert.equal(chamada.init.redirect, 'error')
+  assert.equal(chamada.init.headers.authorization, undefined)
+})
+
+test('registra só os cinco canais de imagem do Openia', async () => {
   handlers.clear()
   const h = harness({ runImage: child() })
   registerOpeniaImageIpcHandlers({ service: h.service })
@@ -513,6 +584,7 @@ test('registra só os quatro canais de imagem do Openia', async () => {
     'openia:cancel-image',
     'openia:generate-image',
     'openia:image-models',
+    'openia:image-pricing',
     'openia:image-status',
   ])
   const recusa = await handlers.get('openia:generate-image')({}, { prompt: 'x', model: MODEL, outDir: '/tmp' })

@@ -21,6 +21,21 @@ HTTP 200 sem credencial em 21/09/2026) para listar e validar:
   `architecture.output_modalities` inclui `image`; ids malformados são ignorados;
 - cache de 10 min; catálogo indisponível → `catalog_unavailable` (nada é executado).
 
+**Preço (15/11/2026).** O catálogo não traz preço. Cada modelo tem
+`GET https://openrouter.ai/api/v1/images/models/<id>/endpoints`, também público, com o preço de cada
+fornecedor em `endpoints[].pricing[]` (`billable`, `unit`, `cost_usd`, às vezes `variant` por resolução).
+O canal `openia:image-pricing` consulta só modelo do catálogo, com os mesmos limites, e resume só o que é
+cobrado pela imagem gerada (`billable: output_image`):
+
+- por imagem (`unit: image`) quando algum fornecedor cobra assim, com a faixa entre variantes e
+  fornecedores (ex.: `black-forest-labs/flux-3-image`, US$ 0,041 a 0,607 conforme a resolução);
+- senão, por token de imagem (`unit: token`), mostrado por milhão; o total depende da resolução
+  (ex.: `openai/gpt-image-1-mini`, US$ 8 por milhão);
+- `cost_usd` ausente, nulo ou vazio não vira zero: sem preço legível → `pricing_unavailable`, e a
+  falha não é guardada no cache (o preço que veio fica 10 min).
+
+A interface mostra esse preço e **pede confirmação antes de gerar** (seção 4).
+
 ## 2. Geração — `openia image` (como o Felixo chama)
 
 ```
@@ -107,3 +122,9 @@ estado da geração fica fora do componente, em `app/src/features/canvas/service
 o pedido pode durar minutos e sobreviver ao botão desmontar. O id do pedido pendente vai para o
 `sessionStorage` e é reconsultado por `openia:image-status` depois de uma recarga. A imagem chega ao canvas
 pelo evento `canvas:image-generated`, como antes.
+
+Confirmação do custo (15/11/2026): `generate()` da store só chama `openia:generate-image` com
+`{ confirmed: true }` (o clique em **Confirmar e gerar**) ou com o modelo lembrado em
+`localStorage felixo:cost-consent` ("Não perguntar de novo para este modelo"). Sem um dos dois, devolve
+`field: 'cost'` e o popover troca Gerar/Cancelar pela confirmação, com o preço do modelo. A escolha é por
+modelo, porque o preço muda de um para outro, e **Voltar a perguntar** a desfaz.

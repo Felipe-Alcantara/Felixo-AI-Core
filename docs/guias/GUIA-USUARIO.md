@@ -936,7 +936,9 @@ Na seção **Criar** da barra lateral, **Gerar imagem** (logo abaixo de **Abrir 
 1. **Descrição da imagem**, obrigatória, com até 4.000 caracteres.
 2. **Modelo de imagem**, escolhido no catálogo público do OpenRouter (tem busca).
 
-Depois, clique em **Gerar** ou use Ctrl/Cmd+Enter. Quem gera é o Openia, com a chave do OpenRouter configurada nele. O Felixo não lê essa chave, e cada geração pode consumir créditos da sua conta. Por isso, na primeira vez nenhum modelo vem escolhido; depois, o último escolhido é lembrado.
+Depois, clique em **Gerar** ou use Ctrl/Cmd+Enter. Quem gera é o Openia, com a chave do OpenRouter configurada nele. O Felixo não lê essa chave, e cada geração consome créditos da sua conta. Por isso, na primeira vez nenhum modelo vem escolhido; depois, o último escolhido é lembrado.
+
+Abaixo do modelo, o painel mostra quanto ele cobra, segundo o próprio OpenRouter. Alguns modelos cobram por imagem, com uma faixa conforme a resolução: o FLUX 3 Image vai de US$ 0,04 a US$ 0,61. Outros cobram por token de imagem, e aí o total só se sabe depois: o GPT Image 1 Mini custa US$ 8,00 por milhão de tokens. Nada é cobrado sem você confirmar. O primeiro **Gerar** de cada modelo mostra o preço e pede **Confirmar e gerar**. Marque **Não perguntar de novo para este modelo** se usa muito. **Voltar a perguntar**, ao lado do preço, desfaz a escolha.
 
 Enquanto gera, o painel mostra o tempo decorrido, e **Cancelar** interrompe o pedido. Esc ou um clique fora fecham o painel sem interromper a geração. A imagem pronta entra no canvas como um bloco de imagem temporário; **Remover temporário** apaga o bloco e o arquivo. Se faltar a chave, o crédito acabar, o modelo sair do catálogo ou a rede cair, o painel diz qual foi o problema. Para imagem, o OpenRouter exige um saldo mínimo na conta (US$ 1,00 em 09/10/2026): abaixo disso, o painel pede para adicionar créditos. É preciso ter o Openia 0.2.0 ou mais novo, com a chave configurada. Se o Openia for antigo, o painel avisa e mostra **Atualizar o Openia**; a atualização instala a versão nova a partir do GitHub do Openia, só para o seu usuário, depois de você confirmar.
 

@@ -181,6 +181,9 @@ type OpeniaImageModel = {
   outputModalities: string[]
 }
 
+/** Preço da imagem gerada, segundo os fornecedores do modelo no OpenRouter: por imagem ou por token de imagem. */
+type OpeniaImagePricing = { unit: 'image' | 'token'; minUsd: number; maxUsd: number }
+
 type OpeniaImageState = 'pending' | 'success' | 'error' | 'cancelled' | 'unknown'
 
 /** Resultado de uma geração: artefatos já gravados, ou um código fixo com mensagem fixa (nunca texto do filho). */
@@ -536,6 +539,7 @@ declare global {
         keyStatus: () => Promise<CliInvokeResult & { configured?: boolean; active?: string | null }>
         setKey: (params: { name?: string; key: string }) => Promise<CliInvokeResult & { configured?: boolean }>
         listImageModels: () => Promise<CliInvokeResult & { code?: string; models?: OpeniaImageModel[] }>
+        imagePricing: (params: { model: string }) => Promise<CliInvokeResult & { code?: string; pricing?: OpeniaImagePricing }>
         generateImage: (params: { prompt: string; model: string; requestId?: string }) => Promise<OpeniaImageResult>
         cancelImage: (params: { requestId: string }) => Promise<CliInvokeResult & { cancelled?: boolean }>
         /** Estado de um pedido; em erro/cancelamento traz a mesma mensagem fixa que `generateImage` daria. */

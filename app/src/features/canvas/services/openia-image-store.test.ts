@@ -4,6 +4,7 @@ import {
   IMAGE_PROMPT_MAX_CHARS,
   OPENIA_IMAGE_MESSAGES,
   createOpeniaImageStore,
+  describeImagePricing,
   generationOutcome,
   validateImageRequest,
   type OpeniaImageModel,
@@ -37,6 +38,7 @@ function fakeBridge(overrides: Partial<Bridge> = {}) {
     keyStatus: vi.fn(),
     setKey: vi.fn(),
     listImageModels: vi.fn(async () => ({ ok: true, models: MODELS })),
+    imagePricing: vi.fn(async () => ({ ok: true, pricing: { unit: 'image' as const, minUsd: 0.04, maxUsd: 0.04 } })),
     generateImage: vi.fn(() => new Promise<OpeniaImageResult>((resolve) => pending.push(resolve))),
     cancelImage: vi.fn(async () => ({ ok: true, cancelled: true })),
     imageStatus: vi.fn(async ({ requestId }: { requestId: string }) => ({ ok: true, requestId, state: 'unknown' as const })),
@@ -44,6 +46,9 @@ function fakeBridge(overrides: Partial<Bridge> = {}) {
   } as unknown as Bridge
   return { bridge, pending }
 }
+
+/** O clique em "Confirmar e gerar". */
+const CONFIRMED = { confirmed: true } as const
 
 function storeWith(bridge: Bridge | undefined, extra: Parameters<typeof createOpeniaImageStore>[1] = {}) {
   let counter = 0
@@ -74,6 +79,22 @@ describe('validateImageRequest', () => {
     expect(validateImageRequest('x'.repeat(IMAGE_PROMPT_MAX_CHARS + 1), MODEL)?.field).toBe('prompt')
     expect(validateImageRequest('um gato', '')).toEqual({ field: 'model', message: OPENIA_IMAGE_MESSAGES.noModel })
     expect(validateImageRequest(`  ${'x'.repeat(IMAGE_PROMPT_MAX_CHARS)}  `, MODEL)).toBeNull()
+  })
+})
+
+describe('describeImagePricing', () => {
+  it('diz o preço por imagem (ou a faixa por resolução), por milhão de tokens, ou que ele não veio', () => {
+    const ready = (pricing: { unit: 'image' | 'token'; minUsd: number; maxUsd: number }) =>
+      describeImagePricing({ status: 'ready', model: MODEL, pricing })
+    expect(ready({ unit: 'image', minUsd: 0.04, maxUsd: 0.04 })).toBe('Custo: US$ 0,04 por imagem.')
+    expect(ready({ unit: 'image', minUsd: 0.041, maxUsd: 0.607 })).toBe(
+      'Custo: de US$ 0,04 a US$ 0,61 por imagem, conforme a resolução.',
+    )
+    expect(ready({ unit: 'token', minUsd: 0.000008, maxUsd: 0.000008 })).toBe(
+      'Custo: US$ 8,00 por milhão de tokens de imagem; o total depende da resolução.',
+    )
+    expect(describeImagePricing({ status: 'unavailable', model: MODEL })).toMatch(/não informou o preço/)
+    expect(describeImagePricing({ status: 'loading', model: MODEL })).toMatch(/Consultando/)
   })
 })
 
@@ -154,7 +175,7 @@ describe('openia image store', () => {
     store.setModel(MODEL)
     expect(local.data.get('felixo:openia-image-model')).toBe(MODEL)
 
-    const outcome = store.generate()
+    const outcome = store.generate(CONFIRMED)
     if (!outcome.ok) throw new Error('deveria ter iniciado')
     expect(bridge.generateImage).toHaveBeenCalledWith({ prompt: 'um gato astronauta', model: MODEL, requestId: 'img-teste-1' })
     expect(store.getSnapshot().generation).toEqual({ status: 'pending', requestId: 'img-teste-1', startedAt: 1_000, cancelling: false })
@@ -180,7 +201,7 @@ describe('openia image store', () => {
     const { store } = storeWith(bridge)
     store.setPrompt('um gato')
     store.setModel(MODEL)
-    const outcome = store.generate()
+    const outcome = store.generate(CONFIRMED)
     if (!outcome.ok) throw new Error('deveria ter iniciado')
 
     await store.cancel()
@@ -203,13 +224,13 @@ describe('openia image store', () => {
     const { store } = storeWith(bridge)
     store.setPrompt('um gato')
     store.setModel(MODEL)
-    const first = store.generate()
+    const first = store.generate(CONFIRMED)
     if (!first.ok) throw new Error('deveria ter iniciado')
     pending[0]({ ok: false, requestId: 'img-teste-1', state: 'error', code: 'authentication_error', message: 'Configure no Openia.' })
     await first.done
     expect(store.getSnapshot().generation).toMatchObject({ status: 'error', code: 'authentication_error', message: 'Configure no Openia.' })
 
-    expect(store.generate()).toMatchObject({ ok: true, requestId: 'img-teste-2' })
+    expect(store.generate(CONFIRMED)).toMatchObject({ ok: true, requestId: 'img-teste-2' })
   })
 
   it('falha do IPC em si vira mensagem fixa, nunca exceção solta', async () => {
@@ -217,7 +238,7 @@ describe('openia image store', () => {
     const { store } = storeWith(bridge)
     store.setPrompt('um gato')
     store.setModel(MODEL)
-    const outcome = store.generate()
+    const outcome = store.generate(CONFIRMED)
     if (!outcome.ok) throw new Error('deveria ter iniciado')
     await outcome.done
     expect(store.getSnapshot().generation).toMatchObject({ status: 'error', message: OPENIA_IMAGE_MESSAGES.requestFailed })
@@ -259,6 +280,79 @@ describe('openia image store', () => {
     expect(store.reconcile()).toBeUndefined()
   })
 
+  it('sem confirmar o custo, Gerar não pede nada ao Openia', () => {
+    const { bridge } = fakeBridge()
+    const { store } = storeWith(bridge)
+    store.setPrompt('um gato')
+    store.setModel(MODEL)
+    expect(store.generate()).toEqual({ ok: false, field: 'cost', message: OPENIA_IMAGE_MESSAGES.confirmCost })
+    expect(bridge.generateImage).not.toHaveBeenCalled()
+    expect(store.getSnapshot().generation).toEqual({ status: 'idle' })
+  })
+
+  it('"não perguntar de novo" vale para o modelo confirmado, sobrevive a reabrir o app e pode ser desfeito', async () => {
+    const { bridge, pending } = fakeBridge()
+    const { store, local } = storeWith(bridge)
+    store.setPrompt('um gato')
+    store.setModel(MODEL)
+    const first = store.generate({ confirmed: true, remember: true })
+    if (!first.ok) throw new Error('deveria ter iniciado')
+    expect(store.getSnapshot().costRemembered).toBe(true)
+    pending[0]({ ok: true, requestId: first.requestId, state: 'success', artifacts: [] })
+    await first.done
+
+    // Outra janela/abertura lendo o mesmo armazenamento já não pergunta para este modelo…
+    const reopened = createOpeniaImageStore(() => bridge, { local: () => local, newRequestId: () => 'img-reaberto' })
+    reopened.setPrompt('um cão')
+    expect(reopened.getSnapshot().costRemembered).toBe(true)
+    expect(reopened.generate()).toMatchObject({ ok: true, requestId: 'img-reaberto' })
+
+    // …mas outro modelo tem outro preço e pede confirmação.
+    store.setModel('acme/pixel-2')
+    expect(store.getSnapshot().costRemembered).toBe(false)
+    expect(store.generate()).toMatchObject({ ok: false, field: 'cost' })
+
+    store.setModel(MODEL)
+    store.forgetCostChoice()
+    expect(store.getSnapshot().costRemembered).toBe(false)
+    expect(store.generate()).toMatchObject({ ok: false, field: 'cost' })
+    expect(bridge.generateImage).toHaveBeenCalledTimes(2)
+  })
+
+  it('confirmar uma vez sem "não perguntar de novo" vale só para aquela geração', async () => {
+    const { bridge, pending } = fakeBridge()
+    const { store } = storeWith(bridge)
+    store.setPrompt('um gato')
+    store.setModel(MODEL)
+    const outcome = store.generate(CONFIRMED)
+    if (!outcome.ok) throw new Error('deveria ter iniciado')
+    pending[0]({ ok: true, requestId: outcome.requestId, state: 'success', artifacts: [] })
+    await outcome.done
+    expect(store.generate()).toMatchObject({ ok: false, field: 'cost' })
+  })
+
+  it('busca o preço do modelo escolhido, e o preço atrasado de outro modelo não sobrescreve', async () => {
+    let release: (value: { ok: true; pricing: { unit: 'image'; minUsd: number; maxUsd: number } }) => void = () => {}
+    const imagePricing = vi
+      .fn()
+      .mockImplementationOnce(() => new Promise((resolve) => (release = resolve)))
+      .mockImplementationOnce(async () => ({ ok: true, pricing: { unit: 'token', minUsd: 0.000008, maxUsd: 0.000008 } }))
+    const { bridge } = fakeBridge({ imagePricing } as Partial<Bridge>)
+    const { store } = storeWith(bridge)
+    store.setModel(MODEL)
+    expect(store.getSnapshot().pricing).toEqual({ status: 'loading', model: MODEL })
+    store.setModel('acme/pixel-2')
+    await vi.waitFor(() => expect(store.getSnapshot().pricing.status).toBe('ready'))
+    release({ ok: true, pricing: { unit: 'image', minUsd: 9, maxUsd: 9 } })
+    await Promise.resolve()
+    expect(store.getSnapshot().pricing).toEqual({
+      status: 'ready',
+      model: 'acme/pixel-2',
+      pricing: { unit: 'token', minUsd: 0.000008, maxUsd: 0.000008 },
+    })
+    expect(imagePricing).toHaveBeenNthCalledWith(1, { model: MODEL })
+  })
+
   it('armazenamento bloqueado não impede gerar', async () => {
     const blocked = () => {
       throw new Error('bloqueado')
@@ -267,7 +361,7 @@ describe('openia image store', () => {
     const store = createOpeniaImageStore(() => bridge, { session: blocked, local: blocked, newRequestId: () => 'img-sem-storage' })
     store.setPrompt('um gato')
     store.setModel(MODEL)
-    const outcome = store.generate()
+    const outcome = store.generate(CONFIRMED)
     if (!outcome.ok) throw new Error('deveria ter iniciado')
     pending[0]({ ok: true, requestId: 'img-sem-storage', state: 'success', artifacts: [] })
     await outcome.done

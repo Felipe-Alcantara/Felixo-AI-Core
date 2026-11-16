@@ -6,7 +6,7 @@ import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent } f
 import { ChevronDown, CircleAlert, LoaderCircle, RotateCw, WandSparkles } from 'lucide-react'
 import { FelixoSelect, type FelixoSelectOption } from '../../shared/components/FelixoSelect'
 import { useOpeniaImageGeneration } from '../hooks/useOpeniaImageGeneration'
-import { IMAGE_PROMPT_MAX_CHARS, type ImageGenerationState } from '../services/openia-image-store'
+import { IMAGE_PROMPT_MAX_CHARS, describeImagePricing, type ImageGenerationState } from '../services/openia-image-store'
 import {
   OPENIA_UPDATE_MESSAGES,
   needsOpeniaUpdate,
@@ -31,9 +31,13 @@ const ERROR_TEXT = 'text-xs leading-snug text-theme-error'
  */
 export function GenerateImageButton({ triggerClassName }: Props) {
   const image = useOpeniaImageGeneration()
-  const { acknowledge, loadModels } = image
+  const { acknowledge, loadModels, loadPricing } = image
   const [open, setOpen] = useState(false)
   const [fieldError, setFieldError] = useState<FieldError | null>(null)
+  // Confirmação do custo: aparece no lugar de Gerar/Cancelar até a pessoa decidir.
+  const [confirmingCost, setConfirmingCost] = useState(false)
+  const [rememberCost, setRememberCost] = useState(false)
+  const confirmRef = useRef<HTMLButtonElement>(null)
   const [openiaUpdate, setOpeniaUpdate] = useState<OpeniaUpdateState>({ status: 'idle' })
   const popoverId = useId()
   const promptId = `${popoverId}-prompt`
@@ -49,6 +53,7 @@ export function GenerateImageButton({ triggerClassName }: Props) {
   const close = useCallback(() => {
     setOpen(false)
     setFieldError(null)
+    setConfirmingCost(false)
     // Quem fechou já viu o desfecho; um pedido em andamento continua.
     acknowledge()
     window.requestAnimationFrame(() => triggerRef.current?.focus())
@@ -89,16 +94,26 @@ export function GenerateImageButton({ triggerClassName }: Props) {
     setOpen(true)
     // O catálogo é uma consulta de rede: só quando a pessoa abre, e uma vez só (o serviço guarda 10 min).
     void loadModels()
+    // O preço que falhou antes é consultado de novo; o que já veio fica.
+    void loadPricing()
   }
 
-  const submit = () => {
-    const outcome = image.generate()
+  const submit = (confirmation?: { confirmed: true; remember: boolean }) => {
+    const outcome = image.generate(confirmation)
+    setConfirmingCost(false)
     if (outcome.ok) {
       setFieldError(null)
       setOpeniaUpdate({ status: 'idle' })
       return
     }
-    setFieldError(outcome)
+    if (outcome.field === 'cost') {
+      setFieldError(null)
+      setRememberCost(false)
+      setConfirmingCost(true)
+      window.requestAnimationFrame(() => confirmRef.current?.focus())
+      return
+    }
+    setFieldError({ field: outcome.field, message: outcome.message })
     window.requestAnimationFrame(() => {
       if (outcome.field === 'prompt') promptRef.current?.focus()
       else if (outcome.field === 'model') document.getElementById(modelId)?.focus()
@@ -107,7 +122,7 @@ export function GenerateImageButton({ triggerClassName }: Props) {
 
   const onPromptKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     // Enter quebra linha (descrições longas são comuns); Ctrl/Cmd+Enter gera.
-    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !pending) {
+    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !pending && !confirmingCost) {
       event.preventDefault()
       submit()
     }
@@ -248,8 +263,25 @@ export function GenerateImageButton({ triggerClassName }: Props) {
             </div>
           )}
 
-          <p className="mb-2 text-[11px] leading-relaxed text-zinc-500">
-            O Openia gera com a sua chave do OpenRouter, que pode cobrar créditos.
+          {/* Na confirmação o preço já está no quadro dela; aqui sairia repetido. */}
+          <p
+            className="mb-2 text-[11px] leading-relaxed text-zinc-500"
+            data-image-pricing={image.pricing.status}
+            hidden={confirmingCost}
+          >
+            {describeImagePricing(image.pricing)} Cobrado dos créditos da sua conta do OpenRouter.
+            {image.costRemembered && (
+              <>
+                {' '}Sem confirmação para este modelo.{' '}
+                <button
+                  type="button"
+                  onClick={image.forgetCostChoice}
+                  className="underline decoration-dotted underline-offset-2 hover:text-zinc-300"
+                >
+                  Voltar a perguntar
+                </button>
+              </>
+            )}
           </p>
 
           <GenerationStatus generation={generation} extraError={generationError?.message} />
@@ -270,10 +302,51 @@ export function GenerateImageButton({ triggerClassName }: Props) {
             `aria-disabled` (não `disabled`): o foco não cai para o `<body>` no
             meio da geração, e o Esc continua fechando o popover.
           */}
+          {/*
+            A confirmação toma o lugar dos botões, com o texto do preço em cima:
+            o segundo clique de um duplo clique em "Gerar" cai no texto, não em
+            "Confirmar e gerar".
+          */}
+          {confirmingCost ? (
+            <div
+              role="group"
+              aria-label="Confirmar o custo da geração"
+              className="rounded-md bg-black/20 p-2 ring-1 ring-amber-300/30"
+            >
+              <p className="mb-1.5 text-xs leading-snug text-zinc-200">
+                Gerar cobra dos créditos da sua conta do OpenRouter. {describeImagePricing(image.pricing)}
+              </p>
+              <label className="mb-2 flex items-center gap-1.5 text-[11px] text-zinc-400">
+                <input
+                  type="checkbox"
+                  checked={rememberCost}
+                  onChange={(event) => setRememberCost(event.target.checked)}
+                />
+                Não perguntar de novo para este modelo
+              </label>
+              <div className="flex gap-1.5">
+                <button
+                  ref={confirmRef}
+                  type="button"
+                  onClick={() => submit({ confirmed: true, remember: rememberCost })}
+                  className="felixo-btn felixo-primary-action flex-1 px-3 py-1.5 text-sm"
+                >
+                  Confirmar e gerar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmingCost(false)}
+                  className="felixo-btn rounded-sm px-3 py-1.5 text-sm text-(--f-core-white-soft) ring-1 ring-white/15 hover:bg-white/6"
+                >
+                  Voltar
+                </button>
+              </div>
+            </div>
+          ) : (
           <div className="flex gap-1.5">
             <button
               type="button"
-              onClick={pending ? undefined : submit}
+              onClick={pending ? undefined : () => submit()}
               aria-disabled={pending || undefined}
               className="felixo-btn felixo-primary-action flex-1 px-3 py-1.5 text-sm aria-disabled:cursor-not-allowed aria-disabled:opacity-60"
             >
@@ -289,6 +362,7 @@ export function GenerateImageButton({ triggerClassName }: Props) {
               {pending && generation.cancelling ? 'Cancelando…' : 'Cancelar'}
             </button>
           </div>
+          )}
         </div>
       )}
     </div>

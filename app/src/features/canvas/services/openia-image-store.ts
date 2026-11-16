@@ -15,11 +15,15 @@
  * pedido fica no `sessionStorage` e o desfecho é reconsultado por `imageStatus`.
  */
 
+import { formatUsd } from './claude-api-conversation'
+import { createCostConsent, imageCostConsentKey, type CostConsent } from './usage-cost-consent'
+
 type Bridge = NonNullable<NonNullable<Window['felixo']>['openia']>
 
 /** Modelo do catálogo público do OpenRouter com saída de imagem, como o preload o entrega. */
 export type OpeniaImageModel = NonNullable<Awaited<ReturnType<Bridge['listImageModels']>>['models']>[number]
 export type OpeniaImageResult = Awaited<ReturnType<Bridge['generateImage']>>
+export type OpeniaImagePricing = NonNullable<Awaited<ReturnType<Bridge['imagePricing']>>['pricing']>
 
 /** Mesmo teto do serviço (`MAX_PROMPT_CHARS`); o Openia aceita mais, o Felixo não. */
 export const IMAGE_PROMPT_MAX_CHARS = 4_000
@@ -37,7 +41,38 @@ export const OPENIA_IMAGE_MESSAGES = Object.freeze({
   longPrompt: `A descrição passa do limite de ${IMAGE_PROMPT_MAX_CHARS} caracteres.`,
   noModel: 'Escolha o modelo que vai gerar a imagem.',
   alreadyRunning: 'Já há uma imagem sendo gerada. Aguarde ou cancele.',
+  confirmCost: 'Confirme o custo antes de gerar.',
 })
+
+export type ImagePricingState =
+  | { status: 'idle' }
+  | { status: 'loading'; model: string }
+  | { status: 'ready'; model: string; pricing: OpeniaImagePricing }
+  | { status: 'unavailable'; model: string }
+
+/** Preço do modelo escolhido, em uma frase. `formatUsd` arredonda para centavos (ou 4 casas abaixo de 1 centavo). */
+export function describeImagePricing(state: ImagePricingState): string {
+  switch (state.status) {
+    case 'idle':
+      return 'Escolha o modelo para ver o preço.'
+    case 'loading':
+      return 'Consultando o preço do modelo…'
+    case 'unavailable':
+      return 'O OpenRouter não informou o preço deste modelo agora.'
+    case 'ready': {
+      const { unit, minUsd, maxUsd } = state.pricing
+      // Por token, a tarifa é minúscula: fica por milhão, como os fornecedores publicam.
+      const scale = unit === 'token' ? 1_000_000 : 1
+      const price =
+        minUsd === maxUsd
+          ? formatUsd(minUsd * scale)
+          : `de ${formatUsd(minUsd * scale)} a ${formatUsd(maxUsd * scale)}`
+      return unit === 'image'
+        ? `Custo: ${price} por imagem${minUsd === maxUsd ? '' : ', conforme a resolução'}.`
+        : `Custo: ${price} por milhão de tokens de imagem; o total depende da resolução.`
+    }
+  }
+}
 
 export type ImageModelsState =
   | { status: 'idle' }
@@ -57,13 +92,17 @@ export type OpeniaImageSnapshot = {
   model: string
   models: ImageModelsState
   generation: ImageGenerationState
+  pricing: ImagePricingState
+  /** A pessoa marcou "não perguntar de novo" para o custo deste modelo. */
+  costRemembered: boolean
 }
 
 export type ImageRequestProblem = { field: 'prompt' | 'model'; message: string }
 
+/** `cost`: falta a confirmação do custo; nada foi pedido ao Openia. */
 export type GenerateOutcome =
   | { ok: true; requestId: string; done: Promise<void> }
-  | { ok: false; field: 'prompt' | 'model' | 'generation'; message: string }
+  | { ok: false; field: 'prompt' | 'model' | 'generation' | 'cost'; message: string }
 
 type KeyValueStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
 
@@ -74,6 +113,8 @@ type StoreDeps = {
   session?: () => KeyValueStorage | undefined
   /** Lembra o último modelo escolhido entre sessões. */
   local?: () => KeyValueStorage | undefined
+  /** "Não perguntar de novo" do custo; por padrão, no mesmo armazenamento de `local`. */
+  consent?: CostConsent
   schedule?: (callback: () => void, ms: number) => void
 }
 
@@ -149,12 +190,16 @@ export function createOpeniaImageStore(getBridge: () => Bridge | undefined, deps
   const now = deps.now ?? (() => Date.now())
   const newRequestId = deps.newRequestId ?? defaultRequestId
   const schedule = deps.schedule ?? ((callback: () => void, ms: number) => void setTimeout(callback, ms))
+  const consent = deps.consent ?? createCostConsent(deps.local ?? (() => undefined))
 
+  const initialModel = safeGet(deps.local, MODEL_STORAGE_KEY) ?? ''
   let snapshot: OpeniaImageSnapshot = {
     prompt: '',
-    model: safeGet(deps.local, MODEL_STORAGE_KEY) ?? '',
+    model: initialModel,
     models: { status: 'idle' },
     generation: { status: 'idle' },
+    pricing: { status: 'idle' },
+    costRemembered: Boolean(initialModel) && consent.has(imageCostConsentKey(initialModel)),
   }
   let reconcileStarted = false
   const listeners = new Set<() => void>()
@@ -192,10 +237,40 @@ export function createOpeniaImageStore(getBridge: () => Bridge | undefined, deps
       const models = result.models ?? []
       // Um modelo lembrado que saiu do catálogo seria recusado pelo serviço: melhor pedir outro já.
       const model = models.some((item) => item.id === snapshot.model) ? snapshot.model : ''
-      update({ models: { status: 'ready', models }, model })
+      update({ models: { status: 'ready', models } })
+      selectModel(model)
     } catch {
       update({ models: { status: 'error', message: OPENIA_IMAGE_MESSAGES.catalogFailed } })
     }
+  }
+
+  /** Troca o modelo e busca o preço dele: cada modelo tem o seu, e a escolha lembrada também é por modelo. */
+  function selectModel(model: string) {
+    update({ model, costRemembered: Boolean(model) && consent.has(imageCostConsentKey(model)) })
+    void loadPricing()
+  }
+
+  async function loadPricing(): Promise<void> {
+    const model = snapshot.model
+    const bridge = getBridge()
+    if (!model || !bridge?.imagePricing) {
+      update({ pricing: model ? { status: 'unavailable', model } : { status: 'idle' } })
+      return
+    }
+    const current = snapshot.pricing
+    if (current.status !== 'idle' && current.status !== 'unavailable' && current.model === model) return
+    update({ pricing: { status: 'loading', model } })
+    let result: Awaited<ReturnType<Bridge['imagePricing']>> | undefined
+    try {
+      result = await bridge.imagePricing({ model })
+    } catch {
+      result = undefined
+    }
+    // A pessoa pode ter trocado de modelo enquanto o preço vinha: o atrasado não sobrescreve.
+    if (snapshot.model !== model) return
+    update({
+      pricing: result?.ok && result.pricing ? { status: 'ready', model, pricing: result.pricing } : { status: 'unavailable', model },
+    })
   }
 
   function setPrompt(prompt: string) {
@@ -204,10 +279,21 @@ export function createOpeniaImageStore(getBridge: () => Bridge | undefined, deps
 
   function setModel(model: string) {
     safeSet(deps.local, MODEL_STORAGE_KEY, model || null)
-    update({ model })
+    selectModel(model)
   }
 
-  function generate(): GenerateOutcome {
+  /** Desfaz o "não perguntar de novo" do modelo atual: a próxima geração volta a pedir confirmação. */
+  function forgetCostChoice() {
+    if (snapshot.model) consent.forget(imageCostConsentKey(snapshot.model))
+    update({ costRemembered: false })
+  }
+
+  /**
+   * Gera só com o custo confirmado: `confirmed` vem do clique em "Confirmar e
+   * gerar"; sem ele, vale o "não perguntar de novo" lembrado para o modelo.
+   * Faltando os dois, nada é pedido ao Openia (devolve `field: 'cost'`).
+   */
+  function generate({ confirmed = false, remember = false }: { confirmed?: boolean; remember?: boolean } = {}): GenerateOutcome {
     if (snapshot.generation.status === 'pending') {
       return { ok: false, field: 'generation', message: OPENIA_IMAGE_MESSAGES.alreadyRunning }
     }
@@ -221,6 +307,14 @@ export function createOpeniaImageStore(getBridge: () => Bridge | undefined, deps
 
     const prompt = snapshot.prompt.trim()
     const model = snapshot.model
+    const consentKey = imageCostConsentKey(model)
+    if (!confirmed && !consent.has(consentKey)) {
+      return { ok: false, field: 'cost', message: OPENIA_IMAGE_MESSAGES.confirmCost }
+    }
+    if (confirmed && remember) {
+      consent.remember(consentKey)
+      update({ costRemembered: true })
+    }
     const requestId = newRequestId()
     const startedAt = now()
     safeSet(deps.session, PENDING_STORAGE_KEY, JSON.stringify({ requestId, startedAt }))
@@ -310,8 +404,10 @@ export function createOpeniaImageStore(getBridge: () => Bridge | undefined, deps
       }
     },
     loadModels,
+    loadPricing,
     setPrompt,
     setModel,
+    forgetCostChoice,
     generate,
     cancel,
     acknowledge,
