@@ -3629,3 +3629,5 @@ Task: Felixo AI Core/Arquitetura — avaliar um protocolo próprio (app://) no l
 - **Volta a `file://`:** não exercitada, embora a cópia antiga seja mantida.
 
 Estado: concluído (deploy no adendo).
+
+**Adendo de deploy (14:51).** O CI de `e8da885` reprovou na primeira tentativa (14:28 → 14:39) só no teste nativo de PTY do Windows ("consulta o /status do Claude por PTY nativa e navega até Usage", a navegação não atravessou a PTY em 356 ms). Esse teste não é tocado por esta task; na segunda tentativa, só do job que falhou, ficou verde. Release gate verde e Release verde (14:39 → 14:48), publicando a **v0.1.568**. O smoke de cada SO, com o renderer aberto por `app://felixo`, saiu com `rendererCsp.ok: true`, as sete sondas ok e zero violações: Windows em 1,5 s, Ubuntu em 1,9 s e macOS em 4,3 s.
