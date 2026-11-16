@@ -24,6 +24,59 @@ const RULE_LABELS: Record<string, string> = {
   'best-available-model': 'Melhor modelo disponível',
   'preferred-model': 'Modelo preferido',
   'account-chain': 'Próxima conta apta da cadeia (a conta atual bateu o limite)',
+  'cost-cap': 'Teto de custo da execução',
+  'cli-permission': 'Pedido de permissão da CLI (ação sensível)',
+}
+
+function formatUsd(value: number) {
+  const digits = value > 0 && value < 0.01 ? 4 : 2
+  return `US$ ${value.toFixed(digits).replace('.', ',')}`
+}
+
+/** Título do card, por tipo de pergunta. */
+export function formatProviderSwitchTitle(request: ProviderSwitchRequest) {
+  if (request.kind === 'cost') return 'Continuar acima do teto de custo?'
+  if (request.kind === 'permission') return `Permitir? ${request.reason ?? 'A CLI pede permissão'}`
+  return request.kind === 'account' ? 'Trocar de conta?' : 'Trocar de provedor?'
+}
+
+/** Rótulos dos dois botões. */
+export function formatProviderSwitchActions(request: ProviderSwitchRequest) {
+  if (request.kind === 'cost') return { accept: 'Continuar', refuse: 'Parar' }
+  if (request.kind === 'permission') return { accept: 'Permitir', refuse: 'Negar' }
+  return { accept: `Trocar para ${formatProviderSwitchTarget(request)}`, refuse: 'Não trocar' }
+}
+
+/** O que acontece sem resposta no prazo. */
+export function formatProviderSwitchTimeoutNote(request: ProviderSwitchRequest) {
+  if (request.kind === 'cost') return 'sem resposta, a execução para no teto.'
+  if (request.kind === 'permission') return 'sem resposta, a permissão é negada.'
+  return 'sem resposta, conta como recusa e nada é trocado.'
+}
+
+/**
+ * Linhas de contexto do card. No teto de custo, quanto se gastou e o que a
+ * soma não cobre (só o Claude informa custo); no pedido de permissão, o que a
+ * CLI quer fazer.
+ */
+export function formatProviderSwitchDetails(request: ProviderSwitchRequest): string[] {
+  if (request.kind === 'cost') {
+    const lines = [
+      `Gasto informado: ${formatUsd(request.spentUsd ?? 0)} de ${formatUsd(request.capUsd ?? 0)}.`,
+      'Continuar libera mais um teto; Parar não abre mais nenhum sub-agente nesta execução.',
+    ]
+    const unknown = request.unknownCostCount ?? 0
+    if (unknown > 0) {
+      lines.push(
+        `${unknown} ${unknown === 1 ? 'resposta ficou' : 'respostas ficaram'} fora da soma: só o Claude informa custo (Codex e Gemini, não).`,
+      )
+    }
+    return lines
+  }
+  if (request.kind === 'permission') {
+    return (request.permissionDetail ?? '').split('\n').filter(Boolean)
+  }
+  return []
 }
 
 const ERROR_MESSAGES: Record<ProviderSwitchErrorCode, string> = {
@@ -54,6 +107,10 @@ export function formatProviderLabel(cliType: OrchestrationCliType | string) {
 }
 
 export function formatProviderSwitchRoute(request: ProviderSwitchRequest) {
+  if (request.kind === 'cost' || request.kind === 'permission') {
+    return `(${formatProviderLabel(request.toCliType)})`
+  }
+
   if (isAccountSwitch(request)) {
     const from = request.fromAccountLabel ?? 'conta atual'
     return `${from} → ${formatProviderSwitchTarget(request)} (${formatProviderLabel(request.toCliType)})`
@@ -75,6 +132,12 @@ export function formatProviderSwitchRule(rule: string | null) {
 }
 
 export function formatProviderSwitchStage(request: ProviderSwitchRequest) {
+  if (request.kind === 'cost') return `O sub-agente ${request.agentId} espera para abrir.`
+  if (request.kind === 'permission') {
+    return request.agentId === 'conversa'
+      ? 'A conversa está parada esperando a resposta.'
+      : `O sub-agente ${request.agentId} está parado esperando a resposta.`
+  }
   return request.kind === 'initial'
     ? `O sub-agente ${request.agentId} ainda não começou.`
     : `O sub-agente ${request.agentId} parou no meio da tarefa.`
@@ -173,6 +236,13 @@ function toProviderSwitchRequest(event: ProviderSwitchRequestStreamEvent): Provi
     toCliType: event.toCliType,
     toModelId: event.toModelId,
     toModelName: event.toModelName,
+    // Campos de cada tipo: sem eles o card de conta, de teto ou de permissão sai vazio.
+    fromAccountLabel: event.fromAccountLabel ?? null,
+    toAccountLabel: event.toAccountLabel ?? null,
+    spentUsd: event.spentUsd ?? null,
+    capUsd: event.capUsd ?? null,
+    unknownCostCount: event.unknownCostCount ?? null,
+    permissionDetail: event.permissionDetail ?? null,
     rule: event.rule,
     reason: event.reason,
     requestedAt: event.requestedAt,

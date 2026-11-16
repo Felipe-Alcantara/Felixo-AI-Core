@@ -5,7 +5,10 @@ import type { ProviderSwitchCardState } from '../hooks/useProviderSwitchRequests
 import {
   ACCOUNT_SWITCH_COST_NOTICE,
   PROVIDER_SWITCH_COST_NOTICE,
-  formatProviderSwitchTarget,
+  formatProviderSwitchActions,
+  formatProviderSwitchDetails,
+  formatProviderSwitchTimeoutNote,
+  formatProviderSwitchTitle,
   isAccountSwitch,
   formatProviderSwitchDeadline,
   formatProviderSwitchRoute,
@@ -46,8 +49,11 @@ export function ProviderSwitchRequest({
   const descriptionId = `provider-switch-${request.decisionId}-description`
   const rule = formatProviderSwitchRule(request.rule)
   const deadline = formatProviderSwitchDeadline(request.expiresAt, now)
-  const target = formatProviderSwitchTarget(request)
+  const actions = formatProviderSwitchActions(request)
   const accountSwitch = isAccountSwitch(request)
+  // Teto e permissão não trocam de provedor: sem o aviso de custo da troca.
+  const isSwitch = request.kind !== 'cost' && request.kind !== 'permission'
+  const details = formatProviderSwitchDetails(request)
   // Depois do prazo o main trata qualquer resposta como recusa: nada de
   // "Trocar" clicável mostrando "vencida" até a varredura fechar a decisão.
   const expired = isProviderSwitchExpired(request.expiresAt, now)
@@ -60,18 +66,23 @@ export function ProviderSwitchRequest({
     >
       <h2 id={titleId} className="flex items-center gap-1.5 text-[13px] font-medium text-zinc-100">
         <ArrowRightLeft size={13} aria-hidden />
-        {accountSwitch ? 'Trocar de conta?' : 'Trocar de provedor?'} {formatProviderSwitchRoute(request)}
+        {formatProviderSwitchTitle(request)} {formatProviderSwitchRoute(request)}
       </h2>
       <div id={descriptionId} className="mt-1.5 space-y-1">
         <p>{formatProviderSwitchStage(request)}</p>
-        {request.reason && <p>Motivo: {request.reason}</p>}
+        {details.map((line) => (
+          <p key={line}>{line}</p>
+        ))}
+        {request.reason && request.kind !== 'permission' && <p>Motivo: {request.reason}</p>}
         {rule && <p className="text-zinc-400">Regra: {rule}</p>}
-        <p className="text-zinc-400">{accountSwitch ? ACCOUNT_SWITCH_COST_NOTICE : PROVIDER_SWITCH_COST_NOTICE}</p>
+        {isSwitch && (
+          <p className="text-zinc-400">{accountSwitch ? ACCOUNT_SWITCH_COST_NOTICE : PROVIDER_SWITCH_COST_NOTICE}</p>
+        )}
         {deadline && !expired && (
           // O "em N min" muda a cada 30 s: anunciado junto com o card novo, nunca de novo sozinho.
           <p aria-live="off" className="text-zinc-400">
-            Responda <time dateTime={request.expiresAt}>{deadline}</time>; sem resposta, conta
-            como recusa e nada é trocado.
+            Responda <time dateTime={request.expiresAt}>{deadline}</time>;{' '}
+            {formatProviderSwitchTimeoutNote(request)}
           </p>
         )}
         {expired && (
@@ -103,7 +114,7 @@ export function ProviderSwitchRequest({
               onClick={() => onRespond(request.decisionId, true)}
               className={`felixo-btn rounded-sm border border-white/20 bg-white/10 px-3 py-1.5 font-medium text-zinc-100 hover:bg-white/15 disabled:opacity-50 ${BUTTON_FOCUS}`}
             >
-              Trocar para {target}
+              {actions.accept}
             </button>
             <button
               type="button"
@@ -111,7 +122,7 @@ export function ProviderSwitchRequest({
               onClick={() => onRespond(request.decisionId, false)}
               className={`felixo-btn rounded-sm border border-white/10 px-3 py-1.5 hover:border-white/30 disabled:opacity-50 ${BUTTON_FOCUS}`}
             >
-              Não trocar
+              {actions.refuse}
             </button>
           </>
         )}

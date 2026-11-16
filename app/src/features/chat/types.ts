@@ -157,8 +157,11 @@ export type CliErrorFailure = {
 }
 
 /** Quando o orquestrador pediu a troca: no spawn ou no meio da tarefa. */
-/** `account`: mesmo provedor, outra conta da cadeia (limite numa conta no meio da tarefa). */
-export type ProviderSwitchDecisionKind = 'initial' | 'mid-task' | 'account'
+/**
+ * `account`: mesmo provedor, outra conta da cadeia (limite numa conta no meio da tarefa).
+ * `cost`: a execução chegou ao teto de custo; `permission`: a CLI pede permissão (ação sensível).
+ */
+export type ProviderSwitchDecisionKind = 'initial' | 'mid-task' | 'account' | 'cost' | 'permission'
 
 /** Como uma pergunta de troca de provedor terminou (decidido no main). */
 export type ProviderSwitchOutcome =
@@ -188,6 +191,12 @@ export type ProviderSwitchRequest = {
   /** Só na troca de conta: rótulos das contas de origem e de destino. */
   fromAccountLabel?: string | null
   toAccountLabel?: string | null
+  /** Só no teto de custo: gasto informado, teto e respostas sem custo (US$). */
+  spentUsd?: number | null
+  capUsd?: number | null
+  unknownCostCount?: number | null
+  /** Só no pedido de permissão: o que a CLI quer fazer (comando, pasta, motivo). */
+  permissionDetail?: string | null
   rule: string | null
   reason: string | null
   requestedAt: string

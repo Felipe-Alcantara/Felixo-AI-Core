@@ -11,8 +11,13 @@ import {
   describeProviderSwitchError,
   formatProviderSwitchDeadline,
   formatProviderSwitchRoute,
+  formatProviderSwitchActions,
+  formatProviderSwitchDetails,
   formatProviderSwitchRule,
+  formatProviderSwitchStage,
   formatProviderSwitchTarget,
+  formatProviderSwitchTimeoutNote,
+  formatProviderSwitchTitle,
   formatProviderSwitchWaitingStatus,
   isProviderSwitchExpired,
   mergeProviderSwitchList,
@@ -174,5 +179,60 @@ describe('troca de conta (limite numa conta da cadeia)', () => {
     expect(formatProviderSwitchRule('account-chain')).toMatch(/Próxima conta apta da cadeia/)
     // A troca de provedor continua como antes.
     expect(formatProviderSwitchTarget(request())).toBe('Codex')
+  })
+})
+
+describe('teto de custo e pedido de permissão no card', () => {
+  it('o teto diz o gasto, o teto e o que ficou fora da soma, com Continuar e Parar', () => {
+    const cost = request({
+      kind: 'cost',
+      fromCliType: 'claude',
+      toCliType: 'claude',
+      rule: 'cost-cap',
+      spentUsd: 1.2,
+      capUsd: 1,
+      unknownCostCount: 2,
+    })
+    expect(formatProviderSwitchTitle(cost)).toBe('Continuar acima do teto de custo?')
+    expect(formatProviderSwitchActions(cost)).toEqual({ accept: 'Continuar', refuse: 'Parar' })
+    expect(formatProviderSwitchDetails(cost)[0]).toBe('Gasto informado: US$ 1,20 de US$ 1,00.')
+    expect(formatProviderSwitchDetails(cost)[2]).toMatch(/2 respostas ficaram fora da soma: só o Claude informa custo/)
+    expect(formatProviderSwitchTimeoutNote(cost)).toMatch(/a execução para no teto/)
+  })
+
+  it('o pedido de permissão mostra o que a CLI quer fazer, com Permitir e Negar', () => {
+    const permission = request({
+      kind: 'permission',
+      fromCliType: 'codex-app-server',
+      toCliType: 'codex-app-server',
+      agentId: 'conversa',
+      rule: 'cli-permission',
+      reason: 'O Codex quer rodar um comando',
+      permissionDetail: 'Comando: git push\nPasta: /projeto',
+    })
+    expect(formatProviderSwitchTitle(permission)).toBe('Permitir? O Codex quer rodar um comando')
+    expect(formatProviderSwitchActions(permission)).toEqual({ accept: 'Permitir', refuse: 'Negar' })
+    expect(formatProviderSwitchDetails(permission)).toEqual(['Comando: git push', 'Pasta: /projeto'])
+    expect(formatProviderSwitchStage(permission)).toBe('A conversa está parada esperando a resposta.')
+    expect(formatProviderSwitchTimeoutNote(permission)).toMatch(/a permissão é negada/)
+    // A troca de provedor segue com os rótulos de sempre.
+    expect(formatProviderSwitchActions(request())).toEqual({ accept: 'Trocar para Codex', refuse: 'Não trocar' })
+  })
+})
+
+describe('o evento do main chega inteiro ao card', () => {
+  it('conta, teto de custo e pedido de permissão não perdem os campos próprios no caminho', () => {
+    const extras = {
+      fromAccountLabel: 'Claude Pessoal',
+      toAccountLabel: 'Claude Trabalho',
+      spentUsd: 1.2,
+      capUsd: 1,
+      unknownCostCount: 2,
+      permissionDetail: 'Comando: git push',
+    }
+    const [card] = applyProviderSwitchEvent([], requestEvent({ kind: 'cost', ...extras }))
+    expect(card).toMatchObject(extras)
+    const [listed] = mergeProviderSwitchList([], [request({ kind: 'permission', ...extras })])
+    expect(listed.permissionDetail).toBe('Comando: git push')
   })
 })
