@@ -10,6 +10,11 @@ import { LazyCanvasConnectionPerformanceHarness } from './features/canvas/benchm
 import { LazyTerminalOutputPerformanceHarness } from './features/chat/benchmarks/TerminalOutputPerformanceHarnessLoader'
 import { installRendererErrorReporting } from './renderer-error-reporting'
 import { captureOnboardingBootSignals } from './features/onboarding/onboarding-boot-signals'
+import { excalidrawAssetPath } from './excalidraw-asset-path'
+
+// As fontes do desenho saem do build, não do CDN do Excalidraw (a CSP não
+// libera rede). Antes do render: o chunk do Excalidraw só carrega depois.
+window.EXCALIDRAW_ASSET_PATH = excalidrawAssetPath(document.baseURI)
 
 // Espelho renderer dos handlers globais do main (`global-error-handlers.cjs`):
 // sem isto, um erro fora de um componente React (listener de DOM, timer,

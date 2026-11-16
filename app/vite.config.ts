@@ -1,7 +1,9 @@
+import fs from 'node:fs'
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { injectRendererCsp, verifyRendererCsp } from './scripts/renderer-csp.cjs'
+import { listExcalidrawFonts, resolveDevFontRequest, stripExcalidrawCdnFallback } from './scripts/excalidraw-fonts.cjs'
 
 // Identifies this project's dev server so the Electron launch script can
 // tell it apart from an unrelated dev server that happens to already be
@@ -64,6 +66,63 @@ function felixoRendererCspPlugin(): Plugin {
   }
 }
 
+/**
+ * Fontes do Excalidraw pelo próprio app (`scripts/excalidraw-fonts.cjs`): o
+ * build emite em `excalidraw-assets/fonts/` e o dev server serve a mesma URL
+ * direto do `node_modules`. O renderer aponta o Excalidraw para lá
+ * (`src/excalidraw-asset-path.ts`), e a CSP fica sem host remoto.
+ *
+ * No build, o código do Excalidraw também perde a URL do CDN que ele põe no
+ * fim da lista de cada fonte (`stripExcalidrawCdnFallback`). Em dev não há
+ * CSP, e a URL local, que vem primeiro, é a que carrega.
+ */
+function felixoExcalidrawFontsPlugin(): Plugin[] {
+  let cdnFallbackRemoved = 0
+  return [
+    {
+      name: 'felixo-excalidraw-fonts-dev',
+      apply: 'serve',
+      configureServer(server) {
+        server.middlewares.use((req, res, next) => {
+          const file = resolveDevFontRequest(req.url)
+          if (!file || !fs.existsSync(file)) {
+            next()
+            return
+          }
+          res.setHeader('Content-Type', 'font/woff2')
+          fs.createReadStream(file).pipe(res)
+        })
+      },
+    },
+    {
+      name: 'felixo-excalidraw-fonts',
+      apply: 'build',
+      transform(code, id) {
+        if (!id.includes('@excalidraw/excalidraw') || !code.includes('ASSETS_FALLBACK_URL')) return null
+        const stripped = stripExcalidrawCdnFallback(code)
+        cdnFallbackRemoved += stripped.removed
+        return { code: stripped.code, map: null }
+      },
+      generateBundle() {
+        // Exatamente uma: zero é uma versão do Excalidraw que mudou o trecho
+        // (o CDN voltaria em silêncio); mais de uma, um padrão largo demais.
+        if (cdnFallbackRemoved !== 1) {
+          this.error(
+            `[excalidraw-fonts] a URL do CDN saiu ${cdnFallbackRemoved} vez(es) do Excalidraw, esperava 1: revise stripExcalidrawCdnFallback.`,
+          )
+        }
+        const fonts = listExcalidrawFonts()
+        if (fonts.length === 0) {
+          this.error('[excalidraw-fonts] nenhuma fonte do Excalidraw encontrada: o desenho ficaria sem fonte.')
+        }
+        for (const font of fonts) {
+          this.emitFile({ type: 'asset', fileName: font.fileName, source: fs.readFileSync(font.absolutePath) })
+        }
+      },
+    },
+  ]
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   // O app empacotado carrega o renderer com `loadFile()`, isto é, por
@@ -74,7 +133,7 @@ export default defineConfig({
   base: './',
   // Tailwind 4 pelo plugin dedicado do Vite (recomendação do guia oficial de
   // upgrade no lugar do plugin PostCSS); a configuração vive em src/index.css.
-  plugins: [react(), tailwindcss(), felixoDevMarkerPlugin(), felixoRendererCspPlugin()],
+  plugins: [react(), tailwindcss(), felixoDevMarkerPlugin(), felixoExcalidrawFontsPlugin(), felixoRendererCspPlugin()],
   optimizeDeps: {
     include: [
       'highlight.js/lib/core',
