@@ -5,7 +5,14 @@
 // persistentes vive em persistent-cli-session.cjs; helpers puros
 // compartilhados vivem em cli-event-utils.cjs.
 const { app, ipcMain } = require('electron')
-const { CliProcessManager } = require('./cli-process-manager.cjs')
+const { CliProcessManager, createAccountCliEnv, createCliEnv } = require('./cli-process-manager.cjs')
+const {
+  createChatAccountResolver,
+  normalizeChatAccountSelection,
+  providerForCliType,
+} = require('./chat-account.cjs')
+const { codexLaunchGate, openOnCodexTurn } = require('./codex-launch-gate.cjs')
+const { classifyFailure } = require('./accounts/failure-taxonomy.cjs')
 const {
   createCliExecutionPlan,
   getAdapterSpawnArgs,
@@ -89,6 +96,10 @@ const stoppedSessions = new Set()
 const cliThreadSessions = new Map()
 const terminalSessionParents = new Map()
 const modelAvailabilityRegistry = createModelAvailabilityRegistry()
+// Conta em que cada thread do chat rodou por último (Login do sistema = sem entrada).
+const threadAccounts = new Map()
+let chatAccountResolver = null
+let getAccountChainService = () => null
 let terminalLogStore = null
 const persistentSessions = createPersistentCliSessionManager({
   cliManager,
@@ -100,6 +111,16 @@ const persistentSessions = createPersistentCliSessionManager({
 
 function registerCliIpcHandlers(getMainWindow, dependencies = {}) {
   terminalLogStore = dependencies.terminalLogStore ?? null
+  getAccountChainService =
+    typeof dependencies.getAccountChain === 'function' ? dependencies.getAccountChain : () => null
+  chatAccountResolver = dependencies.cliAccounts
+    ? createChatAccountResolver({
+        accounts: dependencies.cliAccounts,
+        getChain: getAccountChainService,
+        accountEnv: (providerId, profileEnv) => createAccountCliEnv({ providerId, profileEnv }),
+        systemEnv: () => createCliEnv(),
+      })
+    : null
 
   ipcMain.handle('cli:terminal-logs:get', async () => {
     try {
@@ -146,6 +167,17 @@ function registerCliIpcHandlers(getMainWindow, dependencies = {}) {
   const recordSwitchDecision = createProviderSwitchRecorder(dependencies.database)
   const orchestrationRunner = createOrchestrationRunner({
     recordSwitchDecision,
+    pickChainAccount: async ({ cliType, exclude }) => {
+      const providerId = providerForCliType(cliType)
+      const chain = getAccountChainService()
+      if (!providerId || !chain?.pickAccount) return null
+      try {
+        const picked = await chain.pickAccount({ providerId, exclude })
+        return picked?.ok ? { accountId: picked.accountId, label: picked.label ?? null } : null
+      } catch {
+        return null
+      }
+    },
     validateSpawnAgent: ({ event, context }) =>
       validateOrchestrationSpawnModel(event, context),
     spawnAgent: ({ run, event, threadId, context }) =>
@@ -182,6 +214,7 @@ function registerCliIpcHandlers(getMainWindow, dependencies = {}) {
           availableModels: context.availableModels,
           orchestratorSettings: context.orchestratorSettings,
           limits: context.limits,
+          accountSelection: context.accountSelection,
         },
       )
     },
@@ -214,7 +247,45 @@ function registerCliIpcHandlers(getMainWindow, dependencies = {}) {
     },
   })
 
-  function sendCliRequest(params, targetWebContents, orchestrationContext = {}) {
+  /**
+   * Resolve a conta do pedido (escolha do compositor, ou a conta já confirmada
+   * numa troca por limite) e só então abre a CLI. O Codex numa conta entra na
+   * mesma vez por perfil dos terminais e do painel: dois processos do mesmo
+   * `CODEX_HOME` abertos juntos com o token velho colidem na renovação.
+   */
+  async function sendCliRequest(params, targetWebContents, orchestrationContext = {}) {
+    const { forcedAccountId = null, ...context } = orchestrationContext
+    const accountSelection = normalizeChatAccountSelection(params?.account ?? context.accountSelection)
+    const cliType = params?.model?.cliType
+    const account = chatAccountResolver
+      ? await chatAccountResolver.resolve({ selection: accountSelection, cliType, accountId: forcedAccountId })
+      : null
+    const request = validateCliRequest(params)
+
+    // Só numa conta: o Login do sistema do chat segue fora da vez, como antes.
+    if (request.ok && account?.accountId && providerForCliType(cliType) === 'codex') {
+      const cwd = request.projectCwd ?? resolveCliCwd()
+      const reuses = persistentSessions.canReusePersistentSession(
+        request.threadId,
+        params.model,
+        cwd,
+        account?.accountId ?? null,
+      )
+      if (!reuses) {
+        await openOnCodexTurn(codexLaunchGate, account.env, () => undefined)
+      }
+    }
+
+    const result = startCliRequest(params, targetWebContents, { ...context, accountSelection }, account)
+    if (!account || result?.ok === false) return result
+    return {
+      ...result,
+      account: { accountId: account.accountId, label: account.label, mode: account.mode },
+      ...(account.notice ? { accountNotice: account.notice } : {}),
+    }
+  }
+
+  function startCliRequest(params, targetWebContents, orchestrationContext = {}, account = null) {
     const request = validateCliRequest(params)
 
     if (!request.ok) {
@@ -296,6 +367,20 @@ function registerCliIpcHandlers(getMainWindow, dependencies = {}) {
       terminalSessionParents.set(threadId, requestOrchestrationContext.parentThreadId)
     }
 
+    if (account?.accountId) threadAccounts.set(threadId, account)
+    else threadAccounts.delete(threadId)
+    if (account?.notice) {
+      sendTerminalEvents(targetWebContents, threadId, [
+        {
+          source: 'system',
+          kind: 'lifecycle',
+          severity: 'warn',
+          title: 'Conta da cadeia indisponível',
+          chunk: account.notice,
+        },
+      ])
+    }
+
     const threadSession = getCliThreadSession(threadId, model)
     const spawnContext = {
       cwd,
@@ -327,6 +412,7 @@ function registerCliIpcHandlers(getMainWindow, dependencies = {}) {
         orchestrationBridge,
         orchestrationContext: requestOrchestrationContext,
         promptInsertion,
+        account,
       })
     }
 
@@ -376,10 +462,12 @@ function registerCliIpcHandlers(getMainWindow, dependencies = {}) {
           providerSessionId: spawnContext.providerSessionId,
           promptHint: requestOrchestrationContext.promptHint ?? spawnPrompt,
           promptInsertion,
+          accountLabel: account?.accountId ? account.label : null,
         }),
       ])
       const childProcess = cliManager.spawn(threadId, command, args, cwd, {
         openStdin: Boolean(stdinInput),
+        ...(account?.env ? { env: account.env } : {}),
       })
       threadSession.hasStarted = true
       firstVisibleOutputTimer = setTimeout(() => {
@@ -981,6 +1069,14 @@ function recordModelAvailabilityEvent({
   targetWebContents,
   threadId,
 }) {
+  // Numa conta, o limite é da conta: a cadeia põe ela em espera e o Login do
+  // sistema (que a disponibilidade global descreve) continua valendo.
+  const account = threadAccounts.get(threadId)
+  if (account?.accountId) {
+    recordAccountFailure({ account, cliEvent, cliType, threadId })
+    return null
+  }
+
   const issue = modelAvailabilityRegistry.recordCliEvent({
     cliEvent,
     cliType,
@@ -1020,6 +1116,29 @@ function recordModelAvailabilityEvent({
   ])
 
   return issue
+}
+
+function recordAccountFailure({ account, cliEvent, cliType, threadId }) {
+  if (cliEvent?.type !== 'error' || typeof cliEvent.message !== 'string') return
+  const providerId = providerForCliType(cliType)
+  const chain = getAccountChainService()
+  if (!providerId || !chain?.recordAccountFailure) return
+  try {
+    const failure = classifyFailure({ text: cliEvent.message, origin: 'fluxo', providerId })
+    chain.recordAccountFailure({
+      accountId: account.accountId,
+      providerId,
+      sessionId: threadId,
+      failure: { ...failure, evidence: cliEvent.message },
+    })
+  } catch (error) {
+    logQaEvent({
+      level: 'warn',
+      scope: 'chat:account',
+      sessionId: threadId,
+      message: `Falha ao registrar a espera da conta: ${error instanceof Error ? error.message : String(error)}`,
+    })
+  }
 }
 
 function formatAvailabilityIssue(issue) {
@@ -1135,7 +1254,7 @@ function stopCliProcess(threadId) {
   return false
 }
 
-function spawnOrchestrationAgent({
+async function spawnOrchestrationAgent({
   run,
   event,
   threadId,
@@ -1150,7 +1269,7 @@ function spawnOrchestrationAgent({
     return resolvedModel
   }
 
-  return sendCliRequest(
+  const result = await sendCliRequest(
     {
       sessionId: threadId,
       threadId,
@@ -1172,8 +1291,12 @@ function spawnOrchestrationAgent({
       availableModels: context.availableModels,
       orchestratorSettings: context.orchestratorSettings,
       limits: context.limits,
+      accountSelection: context.accountSelection,
+      // Troca de conta aceita no card: o respawn abre na conta confirmada.
+      forcedAccountId: event.accountId ?? null,
     },
   )
+  return result?.ok === false ? result : { ...result, model: resolvedModel.model }
 }
 
 // O main gera o id da decisão com randomUUID: qualquer outra coisa vinda do

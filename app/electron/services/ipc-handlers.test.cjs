@@ -360,7 +360,7 @@ test('ipc handlers do not log completed persistent closes as errors', () => {
   assert.equal(getPersistentCloseLogLevel({ code: 0, didComplete: false }), 'info')
 })
 
-test('spawnOrchestrationAgent routes the spawn through sendCliRequest with selected model', () => {
+test('spawnOrchestrationAgent routes the spawn through sendCliRequest with selected model', async () => {
   const calls = []
   const sendCliRequest = (params, _webContents, ctx) => {
     calls.push({ params, ctx })
@@ -375,14 +375,15 @@ test('spawnOrchestrationAgent routes the spawn through sendCliRequest with selec
     cliType: 'claude',
   }
 
-  const result = spawnOrchestrationAgent({
+  const result = await spawnOrchestrationAgent({
     run: { runId: 'r1', parentThreadId: 't1', orchestratorCliType: 'claude', orchestratorModel: claudeModel, originalPrompt: 'orig' },
-    event: { agentId: 'a1', cliType: 'claude', prompt: 'analise o auth.py' },
+    event: { agentId: 'a1', cliType: 'claude', prompt: 'analise o auth.py', accountId: 'conta-b' },
     threadId: 'thread-a1',
     context: {
       availableModels: [claudeModel],
       orchestratorSettings: {},
       cwd: '/tmp',
+      accountSelection: { mode: 'chain' },
     },
     sendCliRequest,
   })
@@ -395,10 +396,15 @@ test('spawnOrchestrationAgent routes the spawn through sendCliRequest with selec
   assert.equal(calls[0].params.model.reasoningEffort, 'medium')
   assert.equal(calls[0].ctx.role, 'agent')
   assert.equal(calls[0].ctx.agentId, 'a1')
+  // A escolha de conta da conversa segue para o sub-agente, e a troca aceita força a conta confirmada.
+  assert.deepEqual(calls[0].ctx.accountSelection, { mode: 'chain' })
+  assert.equal(calls[0].ctx.forcedAccountId, 'conta-b')
+  // O modelo usado volta no resultado: a troca por limite respawna no mesmo modelo.
+  assert.equal(result.model.cliType, 'claude')
 })
 
-test('spawnOrchestrationAgent fails fast when no model available', () => {
-  const result = spawnOrchestrationAgent({
+test('spawnOrchestrationAgent fails fast when no model available', async () => {
+  const result = await spawnOrchestrationAgent({
     run: { runId: 'r1', parentThreadId: 't1' },
     event: { agentId: 'a1', cliType: 'claude', prompt: 'tarefa' },
     threadId: 'thread-a1',

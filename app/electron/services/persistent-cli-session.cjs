@@ -65,8 +65,10 @@ function createPersistentCliSessionManager({
     orchestrationBridge,
     orchestrationContext,
     promptInsertion,
+    account = null,
   }) {
-    const existingSession = getReusablePersistentSession(threadId, model, cwd)
+    const accountId = account?.accountId ?? null
+    const existingSession = getReusablePersistentSession(threadId, model, cwd, accountId)
     const isReusingProcess = Boolean(existingSession)
     const spawnPrompt = choosePersistentPrompt({
       adapter,
@@ -93,6 +95,7 @@ function createPersistentCliSessionManager({
           model,
           cwd,
           streamSessionId,
+          account,
         })
       } else {
         persistentSession.targetWebContents = targetWebContents
@@ -157,6 +160,7 @@ function createPersistentCliSessionManager({
           providerSessionId: context.providerSessionId,
           promptHint: orchestrationContext.promptHint ?? spawnPrompt,
           promptInsertion,
+          accountLabel: accountId ? account.label : null,
         }),
       ])
 
@@ -235,10 +239,13 @@ function createPersistentCliSessionManager({
     model,
     cwd,
     streamSessionId,
+    account = null,
   }) {
     const { command, args } = adapter.getPersistentSpawnArgs(context)
     const childProcess = cliManager.spawn(threadId, command, args, cwd, {
       openStdin: true,
+      // Sem conta, o `cliManager` usa o Login do sistema.
+      ...(account?.env ? { env: account.env } : {}),
     })
     const persistentSession = {
       adapter,
@@ -249,6 +256,8 @@ function createPersistentCliSessionManager({
       cwd,
       idleTimer: null,
       modelKey: createModelSessionKey(model),
+      // A conta faz parte da sessão: o processo nasceu com o ambiente dela.
+      accountId: account?.accountId ?? null,
       modelName: model?.name,
       targetWebContents,
       threadId,
@@ -747,7 +756,19 @@ function createPersistentCliSessionManager({
     }
   }
 
-  function getReusablePersistentSession(threadId, model, cwd) {
+  /** O processo vivo da thread serve a este pedido? Sem efeito colateral. */
+  function canReusePersistentSession(threadId, model, cwd, accountId = null) {
+    const persistentSession = persistentCliSessions.get(threadId)
+    return Boolean(
+      persistentSession &&
+        cliManager.has(threadId) &&
+        persistentSession.modelKey === createModelSessionKey(model) &&
+        persistentSession.cwd === cwd &&
+        (persistentSession.accountId ?? null) === accountId,
+    )
+  }
+
+  function getReusablePersistentSession(threadId, model, cwd, accountId = null) {
     const persistentSession = persistentCliSessions.get(threadId)
 
     if (!persistentSession) {
@@ -759,9 +780,11 @@ function createPersistentCliSessionManager({
       return null
     }
 
+    // Trocar de conta no meio da conversa fecha o processo da conta anterior.
     if (
       persistentSession.modelKey !== createModelSessionKey(model) ||
-      persistentSession.cwd !== cwd
+      persistentSession.cwd !== cwd ||
+      (persistentSession.accountId ?? null) !== accountId
     ) {
       closePersistentSession(threadId, { force: true })
       return null
@@ -834,6 +857,7 @@ function createPersistentCliSessionManager({
   }
 
   return {
+    canReusePersistentSession,
     closePersistentSession,
     hasPersistentSession,
     sendPersistentCliRequest,

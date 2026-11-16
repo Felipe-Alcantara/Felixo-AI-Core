@@ -20,7 +20,8 @@ class CliProcessManager {
 
   spawn(sessionId, command, args = [], cwd = process.cwd(), options = {}) {
     this.kill(sessionId)
-    const env = createCliEnv()
+    // `options.env`: ambiente de uma conta (`createAccountCliEnv`); sem ele, o Login do sistema.
+    const env = options.env ?? createCliEnv()
 
     const childProcess = spawnChildProcess(command, args, {
       cwd,

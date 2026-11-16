@@ -83,3 +83,81 @@ test('o fallback de prompt é sempre cancelado antes de ser reagendado', () => {
     'o agendamento deveria ser guardado por uma checagem de timer já existente',
   )
 })
+
+// ── Conta do chat no processo persistente (15/11/2026) ───────────────────────
+
+test('o processo persistente só é reaproveitado na mesma conta; trocar de conta abre outro com o ambiente dela', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const { EventEmitter } = require('node:events')
+  const { PassThrough } = require('node:stream')
+  const { createPersistentCliSessionManager } = require('./persistent-cli-session.cjs')
+
+  const spawns = []
+  const live = new Set()
+  const cliManager = {
+    spawn(threadId, command, args, cwd, options) {
+      spawns.push({ threadId, env: options.env ?? null })
+      live.add(threadId)
+      const child = new EventEmitter()
+      child.stdout = new PassThrough()
+      child.stderr = new PassThrough()
+      child.pid = spawns.length
+      return child
+    },
+    has: (threadId) => live.has(threadId),
+    write: () => true,
+    kill(threadId) {
+      live.delete(threadId)
+      return true
+    },
+  }
+  const manager = createPersistentCliSessionManager({
+    cliManager,
+    stoppedSessions: new Set(),
+    sendTerminalEvents: () => {},
+    sendCliEvent: () => {},
+    recordModelAvailabilityEvent: () => null,
+  })
+  const adapter = {
+    getPersistentSpawnArgs: () => ({ command: 'cli-falsa', args: [] }),
+    createPersistentInput: () => ({ input: 'prompt\n', didStartSession: true, didSendPrompt: true }),
+  }
+  const model = { id: 'm', name: 'Modelo', cliType: 'codex-app-server' }
+  const contaA = { accountId: 'codex-a', label: 'Pessoal', env: { CODEX_HOME: '/perfis/a' } }
+  const contaB = { accountId: 'codex-b', label: 'Trabalho', env: { CODEX_HOME: '/perfis/b' } }
+  const send = (account) =>
+    manager.sendPersistentCliRequest({
+      adapter,
+      targetWebContents: null,
+      streamSessionId: 's',
+      threadId: 'thread-1',
+      prompt: 'oi',
+      context: { isContinuation: false },
+      threadSession: {},
+      cliType: 'codex-app-server',
+      model,
+      cwd: '/projeto',
+      orchestrationBridge: null,
+      orchestrationContext: {},
+      account,
+    })
+
+  assert.equal(send(contaA).ok, true)
+  assert.deepEqual(spawns.map((item) => item.env), [{ CODEX_HOME: '/perfis/a' }])
+  assert.equal(manager.canReusePersistentSession('thread-1', model, '/projeto', 'codex-a'), true)
+  assert.equal(manager.canReusePersistentSession('thread-1', model, '/projeto', 'codex-b'), false)
+  assert.equal(manager.canReusePersistentSession('thread-1', model, '/projeto', null), false)
+
+  // Mesma conta: o processo vivo continua sendo o da conversa (ainda ocupado, não abre outro).
+  assert.equal(send(contaA).ok, false)
+  assert.equal(spawns.length, 1)
+
+  // Outra conta: o processo da anterior fecha e o novo nasce com o ambiente dela.
+  assert.equal(send(contaB).ok, true)
+  assert.deepEqual(spawns.map((item) => item.env), [{ CODEX_HOME: '/perfis/a' }, { CODEX_HOME: '/perfis/b' }])
+
+  // Login do sistema: sem ambiente próprio (o cliManager usa o de sempre).
+  assert.equal(send(null).ok, true)
+  assert.equal(spawns[2].env, null)
+  manager.closePersistentSession('thread-1', { force: true })
+})

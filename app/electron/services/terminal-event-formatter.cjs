@@ -10,6 +10,7 @@ function createStartTerminalEvent({
   providerSessionId,
   promptHint,
   promptInsertion,
+  accountLabel = null,
 }) {
   const mode = createStartMode({
     isContinuation,
@@ -29,6 +30,10 @@ function createStartTerminalEvent({
     details.push(`Workspace: ${cwd}.`)
   }
 
+  if (accountLabel) {
+    details.push(`Conta: ${accountLabel}.`)
+  }
+
   return {
     source: 'system',
     kind: 'lifecycle',
@@ -40,6 +45,7 @@ function createStartTerminalEvent({
       cliType,
       modelName,
       cwd,
+      accountLabel: accountLabel || undefined,
       mode: mode.metadata,
       persistent: usesPersistentProcess || undefined,
       reusedProcess: reusedProcess || undefined,

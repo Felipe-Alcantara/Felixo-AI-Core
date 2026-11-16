@@ -735,7 +735,14 @@ app.whenReady().then(async () => {
       reportsDirectory: appPaths.reports,
     }),
   })
-  registerCliIpcHandlers(getMainWindow, { terminalLogStore, database: storageDatabase })
+  registerCliIpcHandlers(getMainWindow, {
+    terminalLogStore,
+    database: storageDatabase,
+    // Conta do chat e dos sub-agentes do orquestrador (Login do sistema, conta fixa ou cadeia).
+    cliAccounts,
+    // A cadeia nasce logo abaixo; o chat só a consulta quando a pessoa envia.
+    getAccountChain: () => accountChain.service,
+  })
   registerOfficialCliAccountIpcHandlers({
     getPtyManager: () => ptyHandlers?.manager ?? null,
   })
