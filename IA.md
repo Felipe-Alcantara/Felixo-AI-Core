@@ -2784,3 +2784,8 @@ Nenhum recebia conta, e o processo persistente era reaproveitado comparando só 
 - O turno do orquestrador que bate o limite na conta não pergunta: só os sub-agentes trocam de conta no meio da tarefa.
 
 Estado: concluído (deploy no adendo).
+
+**Adendo (2026-11-16, 00:01): CI e Release.**
+- **CI** de `37a9b2a` (run 43793979495): passou no Validate de Windows, macOS, Ubuntu e Ubuntu ARM e no smoke do canvas.
+- **Ciclo de instalação das CLIs** (run 43793979523): passou.
+- **Release:** o gate (run 43794645676) e o Release (run 43794674898, concluído às 23:59 de 15/11) publicaram a `v0.1.552`.
