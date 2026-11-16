@@ -74,6 +74,8 @@ class OrchestrationRunner {
     this.pickChainAccount = options.pickChainAccount ?? (async () => null)
     // `runId:agentId` → conta em que o sub-agente rodou, o modelo e as contas já tentadas.
     this.agentJobAccounts = new Map()
+    // `runId` → gasto informado pelas CLIs (US$), respostas sem custo, teto liberado e "Parar".
+    this.runCosts = new Map()
     this.providerSwitchTimeoutMs =
       options.providerSwitchTimeoutMs ?? PROVIDER_SWITCH_TIMEOUT_MS
     // Decisões de troca de provedor esperando a pessoa. Em memória, como o
@@ -116,41 +118,148 @@ class OrchestrationRunner {
       })
 
       const threadId = this.createThreadId(run, event)
+      const spawn = { event, threadId, resolvedModel, resolvedCliType, resolvedEvent, modelChoice }
 
-      if (requiresProviderSwitchConfirmation(event.cliType, resolvedCliType)) {
-        // O job fica `pending` enquanto a pessoa decide: o turno não fecha
-        // (`areCurrentTurnJobsTerminal`) e o run espera, sem bloquear nada.
-        this.emitModelChoice({ run, event, threadId, modelChoice })
-        this.requestProviderSwitch({
-          kind: 'initial',
-          run,
-          agentId: event.agentId,
-          fromCliType: event.cliType,
-          toCliType: resolvedCliType,
-          toModel: resolvedModel,
-          rule: modelChoice?.selectionRule,
-          reason: modelChoice?.reason,
-          payload: { event, threadId },
-        })
-
-        return {
-          handled: true,
-          ok: true,
-          run: this.store.get(run.runId),
-          awaitingConfirmation: true,
-        }
+      const costGate = await this.checkCostCap(run, spawn)
+      if (costGate) {
+        return costGate
       }
 
-      return await this.startSpawnedJob({
-        run,
-        event,
-        resolvedEvent,
-        resolvedCliType,
-        threadId,
-        modelChoice,
-      })
+      return await this.continueSpawn(run, spawn)
     } catch (error) {
       return this.failRunFromError(run?.runId, error, context)
+    }
+  }
+
+  /** O resto da abertura de um sub-agente, depois do teto de custo: troca de provedor ou spawn. */
+  async continueSpawn(run, { event, threadId, resolvedModel, resolvedCliType, resolvedEvent, modelChoice }) {
+    if (requiresProviderSwitchConfirmation(event.cliType, resolvedCliType)) {
+      // O job fica `pending` enquanto a pessoa decide: o turno não fecha
+      // (`areCurrentTurnJobsTerminal`) e o run espera, sem bloquear nada.
+      this.emitModelChoice({ run, event, threadId, modelChoice })
+      this.requestProviderSwitch({
+        kind: 'initial',
+        run,
+        agentId: event.agentId,
+        fromCliType: event.cliType,
+        toCliType: resolvedCliType,
+        toModel: resolvedModel,
+        rule: modelChoice?.selectionRule,
+        reason: modelChoice?.reason,
+        payload: { event, threadId },
+      })
+
+      return {
+        handled: true,
+        ok: true,
+        run: this.store.get(run.runId),
+        awaitingConfirmation: true,
+      }
+    }
+
+    return this.startSpawnedJob({
+      run,
+      event,
+      resolvedEvent,
+      resolvedCliType,
+      threadId,
+      modelChoice,
+    })
+  }
+
+  // ── Teto de custo (decisão do dono, 16/11/2026) ──────────────────────────
+
+  /** Teto da execução em US$ (`maxCostEstimate` das configurações); `null` sem teto. */
+  costCapFor(runId) {
+    const base = this.getRunContext(runId).limits?.maxCostUsd
+    return typeof base === 'number' && Number.isFinite(base) && base > 0 ? base : null
+  }
+
+  getRunCost(runId) {
+    let entry = this.runCosts.get(runId)
+    if (!entry) {
+      entry = { spentUsd: 0, unknownCount: 0, capUsd: null, refused: false }
+      this.runCosts.set(runId, entry)
+    }
+    return entry
+  }
+
+  /**
+   * Fim de uma resposta (turno do orquestrador ou sub-agente): soma o custo que
+   * a CLI informou. Só o Claude informa; resposta sem custo conta como
+   * desconhecida, e o card diz quantas ficaram de fora da soma.
+   */
+  recordRunCost({ threadId, runId = null, cost } = {}) {
+    const id =
+      runId ??
+      this.threadAgentJobs.get(threadId)?.runId ??
+      this.runContexts.get(threadId)?.runId ??
+      null
+    if (!id || !this.store.get(id)) {
+      return null
+    }
+
+    const entry = this.getRunCost(id)
+    if (typeof cost === 'number' && Number.isFinite(cost) && cost >= 0) {
+      entry.spentUsd = roundUsd(entry.spentUsd + cost)
+    } else {
+      entry.unknownCount += 1
+    }
+    return entry
+  }
+
+  /**
+   * Gasto no teto: o sub-agente não abre. Pergunta no chat "Continuar ou
+   * Parar" (uma pergunta por execução; os sub-agentes que chegam enquanto ela
+   * está aberta esperam a mesma resposta). Depois de "Parar", os próximos
+   * falham sem perguntar de novo.
+   */
+  async checkCostCap(run, spawn) {
+    const base = this.costCapFor(run.runId)
+    if (!base) {
+      return null
+    }
+
+    const cost = this.getRunCost(run.runId)
+    const cap = cost.capUsd ?? base
+    if (cost.spentUsd < cap) {
+      return null
+    }
+
+    if (cost.refused) {
+      const finished = await this.finishAgentJob({
+        runId: run.runId,
+        agentId: spawn.event.agentId,
+        error: describeCostStop(cost, cap, 'refused'),
+      })
+      return { handled: true, ok: false, run: finished.run, message: describeCostStop(cost, cap, 'refused') }
+    }
+
+    const pending = [...this.pendingProviderSwitches.values()].find(
+      (decision) => decision.kind === 'cost' && decision.runId === run.runId,
+    )
+    if (pending) {
+      pending.payload.spawns.push(spawn)
+    } else {
+      this.requestProviderSwitch({
+        kind: 'cost',
+        run,
+        agentId: spawn.event.agentId,
+        fromCliType: spawn.resolvedCliType,
+        toCliType: spawn.resolvedCliType,
+        toModel: spawn.resolvedModel,
+        rule: 'cost-cap',
+        reason: `O gasto informado desta execução chegou a ${formatUsd(cost.spentUsd)}, e o teto é ${formatUsd(cap)}.`,
+        payload: { spawns: [spawn] },
+        costInfo: { spentUsd: cost.spentUsd, capUsd: cap, unknownCostCount: cost.unknownCount },
+      })
+    }
+
+    return {
+      handled: true,
+      ok: true,
+      run: this.store.get(run.runId),
+      awaitingConfirmation: true,
     }
   }
 
@@ -801,7 +910,7 @@ class OrchestrationRunner {
    * runner continua reagindo a eventos, e a resposta chega por
    * `resolveProviderSwitch` (ou vence pela varredura).
    */
-  requestProviderSwitch({ kind, run, agentId, fromCliType, toCliType, toModel, rule, reason, payload, fromAccountLabel = null, toAccountLabel = null }) {
+  requestProviderSwitch({ kind, run, agentId, fromCliType, toCliType, toModel, rule, reason, payload, fromAccountLabel = null, toAccountLabel = null, costInfo = null }) {
     const nowMs = getTimeMs(this.now())
     const expiresAtMs = getProviderSwitchDeadlineMs(run, nowMs, this.providerSwitchTimeoutMs)
     const decision = {
@@ -817,6 +926,9 @@ class OrchestrationRunner {
       toModelName: toModel?.name ?? null,
       fromAccountLabel,
       toAccountLabel,
+      spentUsd: costInfo?.spentUsd ?? null,
+      capUsd: costInfo?.capUsd ?? null,
+      unknownCostCount: costInfo?.unknownCostCount ?? null,
       rule: rule ?? null,
       reason: createSwitchReason(reason),
       requestedAt: new Date(nowMs).toISOString(),
@@ -909,6 +1021,21 @@ class OrchestrationRunner {
   }
 
   async acceptProviderSwitch(decision, run) {
+    if (decision.kind === 'cost') {
+      // "Continuar" libera mais um teto inteiro: a pergunta volta quando o gasto chegar lá.
+      const cost = this.getRunCost(run.runId)
+      cost.capUsd = roundUsd(cost.spentUsd + (this.costCapFor(run.runId) ?? 0))
+      this.closeProviderSwitch(decision, { outcome: PROVIDER_SWITCH_OUTCOMES.accepted })
+      let current = run
+      let spawned = false
+      for (const spawn of decision.payload.spawns) {
+        const result = await this.continueSpawn(this.store.get(run.runId) ?? current, spawn)
+        current = result?.run ?? current
+        spawned = spawned || result?.ok !== false
+      }
+      return { outcome: 'accepted', run: current, spawned }
+    }
+
     if (decision.kind === 'account') {
       // Mesmo provedor e modelo: só a conta muda, e é a que a pessoa viu no card.
       // Se ela deixou de servir, o spawn cai no Login do sistema com aviso.
@@ -1048,6 +1175,19 @@ class OrchestrationRunner {
   async refuseProviderSwitch(decision, { outcome, note }) {
     this.closeProviderSwitch(decision, { outcome, note })
 
+    if (decision.kind === 'cost') {
+      this.getRunCost(decision.runId).refused = true
+      let finished = null
+      for (const spawn of decision.payload.spawns) {
+        finished = await this.finishAgentJob({
+          runId: decision.runId,
+          agentId: spawn.event.agentId,
+          error: describeRefusedSwitchError(decision, outcome),
+        })
+      }
+      return { outcome, run: finished?.run ?? this.store.get(decision.runId) }
+    }
+
     const finished = await this.finishAgentJob({
       runId: decision.runId,
       agentId: decision.agentId,
@@ -1151,7 +1291,7 @@ class OrchestrationRunner {
     const view = toPublicProviderSwitch(decision)
     const decidedAt = new Date(getTimeMs(this.now())).toISOString()
 
-    if (outcome !== PROVIDER_SWITCH_OUTCOMES.superseded) {
+    if (outcome !== PROVIDER_SWITCH_OUTCOMES.superseded && decision.kind !== 'cost') {
       try {
         this.recordSwitchDecision({
           ...view,
@@ -1526,6 +1666,7 @@ class OrchestrationRunner {
         this.agentJobAccounts.delete(key)
       }
     }
+    this.runCosts.delete(runId)
 
     for (const [key, value] of this.runContexts) {
       if (value?.runId === runId) {
@@ -1705,6 +1846,9 @@ function toPublicProviderSwitch(decision) {
     toModelName: decision.toModelName,
     fromAccountLabel: decision.fromAccountLabel ?? null,
     toAccountLabel: decision.toAccountLabel ?? null,
+    spentUsd: decision.spentUsd ?? null,
+    capUsd: decision.capUsd ?? null,
+    unknownCostCount: decision.unknownCostCount ?? null,
     rule: decision.rule,
     reason: decision.reason,
     requestedAt: decision.requestedAt,
@@ -1712,7 +1856,25 @@ function toPublicProviderSwitch(decision) {
   }
 }
 
+function roundUsd(value) {
+  return Math.round(value * 1e6) / 1e6
+}
+
+function formatUsd(value) {
+  const digits = value > 0 && value < 0.01 ? 4 : 2
+  return `US$ ${value.toFixed(digits).replace('.', ',')}`
+}
+
+function describeCostStop(cost, cap, outcome) {
+  const how = outcome === PROVIDER_SWITCH_OUTCOMES.expired ? 'sem resposta no prazo' : 'pela pessoa'
+  return `Execução parada no teto de custo (${formatUsd(cost.spentUsd)} de ${formatUsd(cap)}) ${how}; o sub-agente não rodou.`
+}
+
 function describeRefusedSwitchError(decision, outcome) {
+  if (decision.kind === 'cost') {
+    return describeCostStop({ spentUsd: decision.spentUsd ?? 0 }, decision.capUsd ?? 0, outcome)
+  }
+
   const isAccount = decision.kind === 'account'
   const route = isAccount
     ? `${decision.fromAccountLabel ?? 'conta'} → ${decision.toAccountLabel ?? 'conta'}`

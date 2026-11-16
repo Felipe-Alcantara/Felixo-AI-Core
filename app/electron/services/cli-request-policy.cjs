@@ -109,7 +109,16 @@ function normalizeOrchestrationSettings(value) {
     maxTurns: toPositiveIntegerOrUndefined(value.maxTurns),
     maxTotalAgents: toPositiveIntegerOrUndefined(value.maxTotalAgents),
     maxRuntimeMinutes: toPositiveIntegerOrUndefined(value.maxRuntimeMinutes),
+    // Teto em US$ do que as CLIs informam de custo (0 ou ausente = sem teto).
+    maxCostEstimate: toPositiveNumberOrUndefined(value.maxCostEstimate),
+    // Pedido de permissão das CLIs que perguntam (Codex App Server, Gemini ACP) vai ao chat.
+    requireConfirmationForSensitiveActions: value.requireConfirmationForSensitiveActions === true,
   }
+}
+
+function toPositiveNumberOrUndefined(value) {
+  const number = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(number) && number > 0 ? number : undefined
 }
 
 /**
@@ -220,6 +229,7 @@ function createOrchestrationLimits(settings) {
     maxTurns: settings.maxTurns,
     maxTotalAgents: settings.maxTotalAgents,
     maxRuntimeMinutes: settings.maxRuntimeMinutes,
+    maxCostUsd: settings.maxCostEstimate,
   }
 }
 

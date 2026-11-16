@@ -43,6 +43,11 @@ function createOrchestrationIpcBridge({
       return { handled: false }
     }
 
+    // Toda resposta que termina entra no gasto da execução (teto de custo).
+    if (cliEvent.type === 'done') {
+      runner.recordRunCost?.({ threadId, runId: context.runId ?? null, cost: cliEvent.cost })
+    }
+
     const agentJob = runner.getAgentJobByThreadId(threadId)
 
     if (agentJob && cliEvent.type === 'text') {

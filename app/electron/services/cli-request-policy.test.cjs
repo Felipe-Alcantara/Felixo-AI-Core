@@ -136,8 +136,22 @@ test('normalizeOrchestrationSettings preenche listas e limites a partir de entra
       maxTurns: 3,
       maxTotalAgents: undefined,
       maxRuntimeMinutes: undefined,
+      maxCostEstimate: undefined,
+      requireConfirmationForSensitiveActions: false,
     },
   )
+})
+
+test('o teto de custo e a confirmação de ações sensíveis chegam ao processo principal', () => {
+  const settings = normalizeOrchestrationSettings({ maxCostEstimate: 2.5, requireConfirmationForSensitiveActions: true })
+  assert.equal(settings.maxCostEstimate, 2.5)
+  assert.equal(settings.requireConfirmationForSensitiveActions, true)
+  assert.equal(createOrchestrationLimits(settings).maxCostUsd, 2.5)
+  // 0 é "sem teto"; texto, negativo e lixo também; só `true` liga a confirmação.
+  for (const value of [0, -1, 'abc', null]) {
+    assert.equal(normalizeOrchestrationSettings({ maxCostEstimate: value }).maxCostEstimate, undefined)
+  }
+  assert.equal(normalizeOrchestrationSettings({ requireConfirmationForSensitiveActions: 'sim' }).requireConfirmationForSensitiveActions, false)
 })
 
 test('normalizeOrchestrationSettings devolve null para entrada que não é objeto', () => {
@@ -161,6 +175,7 @@ test('createOrchestrationLimits extrai só os limites, ignorando as listas de mo
     maxTurns: 4,
     maxTotalAgents: 8,
     maxRuntimeMinutes: 30,
+    maxCostUsd: undefined,
   })
 })
 

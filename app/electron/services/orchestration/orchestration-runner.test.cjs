@@ -1652,3 +1652,74 @@ test('sem outra conta apta, ou em conta fixa, segue o fallback de provedor de se
   assert.equal(fixa.picks.length, 0, 'conta escolhida à mão continua fixa')
   assert.equal(fixa.runner.listProviderSwitches()[0].kind, 'mid-task')
 })
+
+// ── Teto de custo da execução (16/11/2026) ──────────────────────────────────
+
+function costContext(overrides = {}) {
+  return createContext({ limits: { maxCostUsd: 1, maxAgentsPerTurn: 6, maxTotalAgents: 10 }, ...overrides })
+}
+
+function createCostHarness() {
+  return createSwitchHarness({ validateSpawnAgent: () => choice(CLAUDE_MODEL, 'best-available-model') })
+}
+
+test('teto de custo: abaixo dele abre normal; no teto o sub-agente espera a pergunta, uma só por execução', async () => {
+  const { runner, calls } = createCostHarness()
+  await runner.handleOrchestrationEvent(createSpawnEvent({ agentId: 'a1' }), costContext())
+  assert.equal(calls.spawn.length, 1)
+
+  runner.recordRunCost({ runId: 'run-1', cost: 0.7 })
+  runner.recordRunCost({ runId: 'run-1', cost: undefined })
+  runner.recordRunCost({ runId: 'run-1', cost: 0.5 })
+
+  const waiting = await runner.handleOrchestrationEvent(createSpawnEvent({ agentId: 'a2' }), costContext({ runId: 'run-1' }))
+  await runner.handleOrchestrationEvent(createSpawnEvent({ agentId: 'a3' }), costContext({ runId: 'run-1' }))
+
+  assert.equal(waiting.awaitingConfirmation, true)
+  assert.equal(calls.spawn.length, 1, 'nada abre no teto sem resposta')
+  const pendentes = runner.listProviderSwitches()
+  assert.equal(pendentes.length, 1, 'uma pergunta por execução')
+  assert.equal(pendentes[0].kind, 'cost')
+  assert.equal(pendentes[0].spentUsd, 1.2)
+  assert.equal(pendentes[0].capUsd, 1)
+  assert.equal(pendentes[0].unknownCostCount, 1)
+
+  const accepted = await runner.resolveProviderSwitch({ decisionId: 'decision-1', accept: true })
+
+  assert.equal(accepted.outcome, 'accepted')
+  assert.deepEqual(calls.spawn.map((call) => call.event.agentId), ['a1', 'a2', 'a3'])
+  // "Continuar" libera mais um teto: a próxima pergunta vem em US$ 2,20.
+  runner.recordRunCost({ runId: 'run-1', cost: 0.9 })
+  await runner.handleOrchestrationEvent(createSpawnEvent({ agentId: 'a4' }), costContext({ runId: 'run-1' }))
+  assert.equal(calls.spawn.length, 4)
+  // O teto não é troca: não entra no registro de trocas.
+  assert.deepEqual(calls.records, [])
+})
+
+test('teto de custo: "Parar" falha os que esperavam e os próximos falham sem perguntar de novo', async () => {
+  const { runner, calls } = createCostHarness()
+  await runner.handleOrchestrationEvent(createSpawnEvent({ agentId: 'a1' }), costContext())
+  runner.recordRunCost({ runId: 'run-1', cost: 1 })
+  await runner.handleOrchestrationEvent(createSpawnEvent({ agentId: 'a2' }), costContext({ runId: 'run-1' }))
+
+  const refused = await runner.resolveProviderSwitch({ decisionId: 'decision-1', accept: false })
+
+  assert.equal(refused.outcome, 'refused')
+  const job = runner.getRun('run-1').agentJobs.find((item) => item.agentId === 'a2')
+  assert.equal(job.status, 'error')
+  assert.match(job.error, /teto de custo \(US\$ 1,00 de US\$ 1,00\) pela pessoa/)
+
+  const depois = await runner.handleOrchestrationEvent(createSpawnEvent({ agentId: 'a3' }), costContext({ runId: 'run-1' }))
+  assert.equal(depois.ok, false)
+  assert.equal(runner.listProviderSwitches().length, 0)
+  assert.equal(calls.spawn.length, 1)
+})
+
+test('sem teto configurado, o gasto não segura nenhum sub-agente', async () => {
+  const { runner, calls } = createCostHarness()
+  await runner.handleOrchestrationEvent(createSpawnEvent({ agentId: 'a1' }), createContext())
+  runner.recordRunCost({ runId: 'run-1', cost: 50 })
+  await runner.handleOrchestrationEvent(createSpawnEvent({ agentId: 'a2' }), createContext({ runId: 'run-1' }))
+  assert.equal(calls.spawn.length, 2)
+  assert.equal(runner.recordRunCost({ threadId: 'thread-desconhecida', cost: 1 }), null, 'resposta fora de execução não conta')
+})
