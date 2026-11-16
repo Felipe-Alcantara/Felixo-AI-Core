@@ -159,3 +159,56 @@ test('grant devolve o caminho resolvido, que e o que deve circular daqui pra fre
   assert.equal(access.grant(atalho), arquivoEscolhido)
   assert.equal(access.authorize(arquivoEscolhido), arquivoEscolhido)
 })
+
+test('imagem do Markdown: dentro do projeto, ou na pasta (e subpastas) de um arquivo escolhido', () => {
+  const imagemNoProjeto = path.join(projeto, 'assets', 'logo.png')
+  const imagemPerto = path.resolve('/home/user/Documentos/img/foto.png')
+  const imagemLonge = path.resolve('/home/user/Imagens/foto.png')
+  const access = criar(
+    [projeto],
+    fakeRealPath({
+      [projeto]: projeto,
+      [imagemNoProjeto]: imagemNoProjeto,
+      [arquivoEscolhido]: arquivoEscolhido,
+      [imagemPerto]: imagemPerto,
+      [imagemLonge]: imagemLonge,
+    }),
+  )
+
+  assert.equal(access.authorizeImageNear(imagemNoProjeto), imagemNoProjeto)
+  // Antes de a pessoa escolher o .md, a pasta dele não autoriza nada.
+  assert.throws(() => access.authorizeImageNear(imagemPerto), /fora dos projetos/)
+  access.grant(arquivoEscolhido)
+  assert.equal(access.authorizeImageNear(imagemPerto), imagemPerto)
+  assert.throws(() => access.authorizeImageNear(imagemLonge), /fora dos projetos/)
+  // A regra de texto continua só o arquivo exato.
+  assert.throws(() => access.authorize(imagemPerto), /fora dos projetos/)
+})
+
+test('imagem do Markdown: link simbólico para fora não passa, nem pela pasta do arquivo escolhido', () => {
+  const linkNoProjeto = path.join(projeto, 'assets', 'link.png')
+  const linkPerto = path.resolve('/home/user/Documentos/link.png')
+  const segredo = path.resolve('/home/user/.ssh/foto.png')
+  const access = criar(
+    [projeto],
+    fakeRealPath({
+      [projeto]: projeto,
+      [arquivoEscolhido]: arquivoEscolhido,
+      [linkNoProjeto]: segredo,
+      [linkPerto]: segredo,
+      [segredo]: segredo,
+    }),
+  )
+  access.grant(arquivoEscolhido)
+
+  assert.throws(() => access.authorizeImageNear(linkNoProjeto), /fora dos projetos/)
+  assert.throws(() => access.authorizeImageNear(linkPerto), /fora dos projetos/)
+})
+
+test('imagem do Markdown: um arquivo escolhido na raiz do disco não abre o disco inteiro', () => {
+  const naRaiz = path.resolve('/notas.md')
+  const qualquer = path.resolve('/home/user/foto.png')
+  const access = criar([], fakeRealPath({ [naRaiz]: naRaiz, [qualquer]: qualquer }))
+  access.grant(naRaiz)
+  assert.throws(() => access.authorizeImageNear(qualquer), /fora dos projetos/)
+})

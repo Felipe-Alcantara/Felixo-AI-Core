@@ -48,7 +48,7 @@ const TEXT_FILE_FILTERS = [
  * @param {() => (import('electron').BrowserWindow | null)} getMainWindow
  * @param {object} options
  * @param {() => string[]} options.listProjectRoots
- * @returns {{ dispose: () => void, revokeAll: () => void }}
+ * @returns {{ dispose: () => void, revokeAll: () => void, authorizeImageNear: (filePath: string) => string }}
  */
 function registerTextFileIpcHandlers(getMainWindow, options = {}) {
   const access = createTextFileAccess({ listProjectRoots: options.listProjectRoots })
@@ -194,6 +194,8 @@ function registerTextFileIpcHandlers(getMainWindow, options = {}) {
       dispose()
       access.revokeAll()
     },
+    /** Imagem relativa do Markdown: as mesmas concessoes, pelo caminho real (`app-protocol.cjs`). */
+    authorizeImageNear: (filePath) => access.authorizeImageNear(filePath),
   }
 }
 

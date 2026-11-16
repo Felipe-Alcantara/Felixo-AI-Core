@@ -85,12 +85,32 @@ function createTextFileAccess({ listProjectRoots, realPath = defaultRealPath }) 
     throw new Error('Arquivo fora dos projetos registrados. Abra-o pelo seletor de arquivos.')
   }
 
+  /**
+   * Imagem que o Markdown de um arquivo autorizado pode mostrar (rota
+   * `__imagem-local` do protocolo `app://`). Mesma raiz que o renderer usa
+   * (`markdownImageRoot`): um projeto registrado ou, fora de projeto, a pasta
+   * (e subpastas) de um arquivo que a pessoa escolheu. Pelo caminho real, entao
+   * um link simbolico para fora nao passa. So para imagem: o protocolo confere a
+   * extensao do destino real.
+   *
+   * @param {unknown} filePath
+   * @returns {string}
+   */
+  function authorizeImageNear(filePath) {
+    const resolved = resolveExisting(filePath, realPath)
+    for (const file of granted) {
+      const folder = path.dirname(file)
+      if (!isFilesystemRoot(folder) && isPathInside(folder, resolved)) return resolved
+    }
+    return authorize(resolved)
+  }
+
   /** Esquece as concessoes — usado ao limpar o canvas. */
   function revokeAll() {
     granted.clear()
   }
 
-  return { authorize, grant, revokeAll }
+  return { authorize, authorizeImageNear, grant, revokeAll }
 }
 
 /**
