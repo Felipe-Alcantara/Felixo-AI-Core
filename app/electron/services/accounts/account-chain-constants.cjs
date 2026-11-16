@@ -94,6 +94,11 @@ const DEFAULT_MAX_HOPS_PER_LINEAGE = 3
 const MIN_MAX_HOPS_PER_LINEAGE = 1
 const MAX_MAX_HOPS_PER_LINEAGE = 10
 
+/** Troca antecipada por limiar de uso: desligada por padrão; ao ligar, 90% (decisão de 16/11/2026). */
+const DEFAULT_PROACTIVE_THRESHOLD_PERCENT = 90
+const MIN_PROACTIVE_THRESHOLD_PERCENT = 50
+const MAX_PROACTIVE_THRESHOLD_PERCENT = 99
+
 /** Provedores que podem ser membros da lista (Gemini entra travado, sem checagem de login). */
 const CHAIN_PROVIDER_IDS = Object.freeze(['codex', 'claude', 'gemini', 'openia'])
 
@@ -213,6 +218,9 @@ module.exports = Object.freeze({
   DEFAULT_CHAIN_STRATEGY,
   DEFAULT_LIMIT_COOLDOWN_MS,
   DEFAULT_MAX_HOPS_PER_LINEAGE,
+  DEFAULT_PROACTIVE_THRESHOLD_PERCENT,
+  MIN_PROACTIVE_THRESHOLD_PERCENT,
+  MAX_PROACTIVE_THRESHOLD_PERCENT,
   EVIDENCE_HASH_HEX_CHARS,
   EVIDENCE_LEAD_CHARS,
   ELIGIBILITY_TTL_MS,

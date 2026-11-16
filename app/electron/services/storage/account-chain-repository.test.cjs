@@ -75,10 +75,29 @@ test('sem linha de settings a cadeia está DESLIGADA, em ordem manual, revisão 
       enabled: false,
       strategy: 'manual',
       maxHopsPerLineage: 3,
+      proactiveEnabled: false,
+      proactiveThresholdPercent: 90,
       revision: 0,
       updatedAt: null,
     })
     assert.deepEqual(repo.listMembers(), [])
+  })
+})
+
+test('troca antecipada: desligada por padrão, liga com 90% e aceita só limiar inteiro entre 50 e 99', () => {
+  withRepository((repo) => {
+    const ligada = repo.updateSettings({ expectedRevision: 0, enabled: true, proactiveEnabled: true, nowIso: NOW })
+    assert.deepEqual(
+      [ligada.settings.proactiveEnabled, ligada.settings.proactiveThresholdPercent],
+      [true, 90],
+    )
+    const ajustada = repo.updateSettings({ expectedRevision: 1, proactiveThresholdPercent: 95, nowIso: NOW })
+    assert.equal(ajustada.settings.proactiveThresholdPercent, 95)
+    assert.equal(ajustada.settings.proactiveEnabled, true, 'mudar o limiar não desliga')
+    for (const invalido of [49, 100, 92.5]) {
+      assert.throws(() => repo.updateSettings({ expectedRevision: 2, proactiveThresholdPercent: invalido, nowIso: NOW }))
+    }
+    assert.throws(() => repo.updateSettings({ expectedRevision: 2, proactiveEnabled: 'sim', nowIso: NOW }))
   })
 })
 

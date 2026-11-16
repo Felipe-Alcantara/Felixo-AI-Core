@@ -104,7 +104,7 @@ test('canais da cadeia: estado, liga, proposta por detecção, confirma e histó
 
   const initial = await invoke('account-chain:get-state')
   assert.equal(initial.ok, true)
-  assert.deepEqual(initial.settings, { enabled: false, strategy: 'manual', maxHopsPerLineage: 3, updatedAt: null })
+  assert.deepEqual(initial.settings, { enabled: false, strategy: 'manual', maxHopsPerLineage: 3, proactiveEnabled: false, proactiveThresholdPercent: 90, updatedAt: null })
   assert.deepEqual(initial.members, [])
   assert.deepEqual(initial.envCredentialNames, ['OPENAI_API_KEY'])
 
@@ -357,4 +357,16 @@ test('contrato: o preload expõe exatamente a AccountChainBridge e o main liga s
   // A segunda instância no mesmo perfil sai na trava, antes da recuperação: ela nunca vence as
   // propostas e os tickets que a primeira abriu.
   assert.ok(main.indexOf('claimSingleInstance({') < main.indexOf('accountChain.service.recoverOnStartup()'), 'a recuperação roda antes da trava de instância única')
+})
+
+test('update-settings aceita a troca antecipada com limiar inteiro de 50 a 99', () => {
+  assert.deepEqual(parseSettingsUpdate({ proactiveEnabled: true, proactiveThresholdPercent: 95, expectedRevision: 2 }), {
+    expectedRevision: 2,
+    proactiveEnabled: true,
+    proactiveThresholdPercent: 95,
+  })
+  for (const percent of [49, 100, 92.5, '90']) {
+    assert.equal(parseSettingsUpdate({ proactiveThresholdPercent: percent, expectedRevision: 0 }), null)
+  }
+  assert.equal(parseSettingsUpdate({ proactiveEnabled: 'sim', expectedRevision: 0 }), null)
 })

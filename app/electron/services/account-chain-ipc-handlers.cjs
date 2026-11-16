@@ -32,6 +32,8 @@ const {
   MAX_MAX_HOPS_PER_LINEAGE,
   MAX_PLAN_MULTIPLIER,
   MIN_MAX_HOPS_PER_LINEAGE,
+  MAX_PROACTIVE_THRESHOLD_PERCENT,
+  MIN_PROACTIVE_THRESHOLD_PERCENT,
   MIN_PLAN_MULTIPLIER,
   SWITCH_HISTORY_PAGE_MAX,
 } = require('./accounts/account-chain-constants.cjs')
@@ -110,6 +112,21 @@ function parseSettingsUpdate(params) {
       return null
     }
     update.maxHops = params.maxHops
+  }
+  if (params.proactiveEnabled !== undefined) {
+    if (typeof params.proactiveEnabled !== 'boolean') return null
+    update.proactiveEnabled = params.proactiveEnabled
+  }
+  if (params.proactiveThresholdPercent !== undefined) {
+    const percent = params.proactiveThresholdPercent
+    if (
+      !Number.isInteger(percent) ||
+      percent < MIN_PROACTIVE_THRESHOLD_PERCENT ||
+      percent > MAX_PROACTIVE_THRESHOLD_PERCENT
+    ) {
+      return null
+    }
+    update.proactiveThresholdPercent = percent
   }
   return update
 }

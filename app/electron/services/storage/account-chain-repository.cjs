@@ -31,6 +31,9 @@ const {
   COOLDOWN_UNTIL_SOURCES,
   DEFAULT_CHAIN_STRATEGY,
   DEFAULT_MAX_HOPS_PER_LINEAGE,
+  DEFAULT_PROACTIVE_THRESHOLD_PERCENT,
+  MAX_PROACTIVE_THRESHOLD_PERCENT,
+  MIN_PROACTIVE_THRESHOLD_PERCENT,
   EVIDENCE_MAX_CHARS,
   IDENTITY_STATUSES,
   LOGIN_CHECK_SOURCES,
@@ -178,6 +181,8 @@ function mapSettingsRow(row) {
     enabled: row.enabled === 1,
     strategy: row.strategy,
     maxHopsPerLineage: row.max_hops_per_lineage,
+    proactiveEnabled: row.proactive_enabled === 1,
+    proactiveThresholdPercent: row.proactive_threshold_percent ?? DEFAULT_PROACTIVE_THRESHOLD_PERCENT,
     revision: row.revision,
     updatedAt: row.updated_at,
   }
@@ -189,6 +194,8 @@ function defaultSettings() {
     enabled: false,
     strategy: DEFAULT_CHAIN_STRATEGY,
     maxHopsPerLineage: DEFAULT_MAX_HOPS_PER_LINEAGE,
+    proactiveEnabled: false,
+    proactiveThresholdPercent: DEFAULT_PROACTIVE_THRESHOLD_PERCENT,
     revision: 0,
     updatedAt: null,
   }
@@ -397,16 +404,27 @@ function createAccountChainRepository(database) {
   function writeSettingsRow(settings, revision, nowIso) {
     connection
       .prepare(
-        `INSERT INTO account_chain_settings (id, enabled, strategy, max_hops_per_lineage, revision, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)
+        `INSERT INTO account_chain_settings (id, enabled, strategy, max_hops_per_lineage, proactive_enabled, proactive_threshold_percent, revision, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            enabled = excluded.enabled,
            strategy = excluded.strategy,
            max_hops_per_lineage = excluded.max_hops_per_lineage,
+           proactive_enabled = excluded.proactive_enabled,
+           proactive_threshold_percent = excluded.proactive_threshold_percent,
            revision = excluded.revision,
            updated_at = excluded.updated_at`,
       )
-      .run(SETTINGS_ROW_ID, settings.enabled ? 1 : 0, settings.strategy, settings.maxHopsPerLineage, revision, nowIso)
+      .run(
+        SETTINGS_ROW_ID,
+        settings.enabled ? 1 : 0,
+        settings.strategy,
+        settings.maxHopsPerLineage,
+        settings.proactiveEnabled ? 1 : 0,
+        settings.proactiveThresholdPercent,
+        revision,
+        nowIso,
+      )
   }
 
   /** Sobe a revisão sem mudar os valores: a lista de membros mudou por fora da interface. */
@@ -422,7 +440,15 @@ function createAccountChainRepository(database) {
    *
    * @returns {{ applied: true, settings: object } | { applied: false, settings: object }}
    */
-  function updateSettings({ expectedRevision, enabled, strategy, maxHopsPerLineage, nowIso }) {
+  function updateSettings({
+    expectedRevision,
+    enabled,
+    strategy,
+    maxHopsPerLineage,
+    proactiveEnabled,
+    proactiveThresholdPercent,
+    nowIso,
+  }) {
     requireRevision(expectedRevision)
     const now = requireIso(nowIso, 'nowIso')
     const changes = {
@@ -436,6 +462,15 @@ function createAccountChainRepository(database) {
               max: MAX_MAX_HOPS_PER_LINEAGE,
               integer: true,
             }),
+      proactiveEnabled: proactiveEnabled === undefined ? undefined : requireBoolean(proactiveEnabled, 'proactiveEnabled'),
+      proactiveThresholdPercent:
+        proactiveThresholdPercent === undefined
+          ? undefined
+          : optionalNumber(proactiveThresholdPercent, 'proactiveThresholdPercent', {
+              min: MIN_PROACTIVE_THRESHOLD_PERCENT,
+              max: MAX_PROACTIVE_THRESHOLD_PERCENT,
+              integer: true,
+            }),
     }
 
     return inImmediateTransaction(connection, () => {
@@ -445,6 +480,8 @@ function createAccountChainRepository(database) {
         enabled: changes.enabled ?? current.enabled,
         strategy: changes.strategy ?? current.strategy,
         maxHopsPerLineage: changes.maxHopsPerLineage ?? current.maxHopsPerLineage,
+        proactiveEnabled: changes.proactiveEnabled ?? current.proactiveEnabled,
+        proactiveThresholdPercent: changes.proactiveThresholdPercent ?? current.proactiveThresholdPercent,
       }
       writeSettingsRow(next, current.revision + 1, now)
       return { applied: true, settings: readSettings() }
