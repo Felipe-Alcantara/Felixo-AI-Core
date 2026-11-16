@@ -18,6 +18,7 @@ const SONDAS_OK = {
   workerBlob: 'ok',
   excalidraw: 'ok',
   workerExcalidraw: 'ok',
+  fonteExcalidraw: 'ok',
 }
 
 /**
@@ -270,18 +271,34 @@ test('mensagem de console só conta quando é da CSP', () => {
   assert.equal(isCspViolationMessage(undefined), false)
 })
 
-test('acha o chunk do Excalidraw e o worker de fontes só quando há exatamente um de cada', () => {
-  const fsFalso = (nomes) => ({ readdirSync: () => nomes })
+test('acha o chunk do Excalidraw, o worker de fontes e uma Excalifont do build', () => {
+  // Árvore falsa por pasta: assets/ e excalidraw-assets/fonts/Excalifont/.
+  const fsFalso = (assets, excalifont = []) => ({
+    readdirSync: (pasta) => (pasta.endsWith('Excalifont') ? excalifont : assets),
+  })
   const dist = path.join('pacote', 'dist', 'index.html')
 
   assert.deepEqual(
-    findExcalidrawChunks(dist, fsFalso(['ExcalidrawCanvas-BDXB-D3j.js', 'ExcalidrawCanvas-D_O2bRP1.css', 'subset-worker.chunk-CdMLauNP.js'])),
-    { canvas: './assets/ExcalidrawCanvas-BDXB-D3j.js', subsetWorker: './assets/subset-worker.chunk-CdMLauNP.js' },
+    findExcalidrawChunks(
+      dist,
+      fsFalso(
+        ['ExcalidrawCanvas-BDXB-D3j.js', 'ExcalidrawCanvas-D_O2bRP1.css', 'subset-worker.chunk-CdMLauNP.js'],
+        ['Excalifont-Regular-b.woff2', 'Excalifont-Regular-a.woff2', 'LEIAME.txt'],
+      ),
+    ),
+    {
+      canvas: './assets/ExcalidrawCanvas-BDXB-D3j.js',
+      subsetWorker: './assets/subset-worker.chunk-CdMLauNP.js',
+      font: 'fonts/Excalifont/Excalifont-Regular-a.woff2',
+    },
   )
+  // Build sem as fontes: a sonda reprova ("fonte não encontrada").
+  assert.equal(findExcalidrawChunks(dist, fsFalso(['ExcalidrawCanvas-a.js'], [])).font, null)
   // Sobra de build antigo: a sonda não escolhe e reprova ("chunk não encontrado").
   assert.equal(findExcalidrawChunks(dist, fsFalso(['ExcalidrawCanvas-a.js', 'ExcalidrawCanvas-b.js'])).canvas, null)
   assert.deepEqual(findExcalidrawChunks(dist, { readdirSync: () => { throw new Error('ENOENT') } }), {
     canvas: null,
     subsetWorker: null,
+    font: null,
   })
 })

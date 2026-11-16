@@ -23,7 +23,8 @@
  * ao processo principal falham. Por isso as funcionalidades entram como
  * sondas que fazem o mesmo pedido que elas: o som de notificação, a imagem
  * `data:` e a `blob:` (prévia colada), o worker `blob:`, o chunk do
- * Excalidraw e o worker de fontes dele.
+ * Excalidraw, o worker de fontes dele e uma fonte do desenho, servida pelo
+ * build.
  *
  * Controle positivo: um `eval` e uma imagem `https:`, que a política recusa,
  * precisam ser barrados e vistos. Sem isso, uma <meta> que sumiu do pacote ou
@@ -85,15 +86,29 @@ function findBuildChunk(rendererPath, pattern, fsImpl = fs) {
   }
 }
 
-/** O canvas do Excalidraw (chunk preguiçoso) e o worker de subset de fontes dele. */
+/** Uma Excalifont do build, relativa a `window.EXCALIDRAW_ASSET_PATH` (`src/excalidraw-asset-path.ts`). */
+function findExcalidrawFont(rendererPath, fsImpl = fs) {
+  try {
+    const font = fsImpl
+      .readdirSync(path.join(path.dirname(rendererPath), 'excalidraw-assets', 'fonts', 'Excalifont'))
+      .filter((name) => name.endsWith('.woff2'))
+      .sort()[0]
+    return font ? `fonts/Excalifont/${font}` : null
+  } catch {
+    return null
+  }
+}
+
+/** O canvas do Excalidraw (chunk preguiçoso), o worker de subset de fontes e uma fonte do desenho. */
 function findExcalidrawChunks(rendererPath, fsImpl = fs) {
   return {
     canvas: findBuildChunk(rendererPath, EXCALIDRAW_CHUNK, fsImpl),
     subsetWorker: findBuildChunk(rendererPath, EXCALIDRAW_SUBSET_WORKER, fsImpl),
+    font: findExcalidrawFont(rendererPath, fsImpl),
   }
 }
 
-function buildProbeScript({ canvas, subsetWorker }) {
+function buildProbeScript({ canvas, subsetWorker, font }) {
   return `(async () => {
   const notes = {}
   const settle = (start) => new Promise((resolve) => {
@@ -113,6 +128,7 @@ function buildProbeScript({ canvas, subsetWorker }) {
   const bytes = Uint8Array.from(atob(png), (char) => char.charCodeAt(0))
   const canvas = ${JSON.stringify(canvas)}
   const subsetWorker = ${JSON.stringify(subsetWorker)}
+  const font = ${JSON.stringify(font ?? null)}
   const probes = {
     imagemData: await image('data:image/png;base64,' + png),
     imagemBlob: await image(URL.createObjectURL(new Blob([bytes], { type: 'image/png' }))),
@@ -159,6 +175,21 @@ function buildProbeScript({ canvas, subsetWorker }) {
         }
       })
       : 'chunk não encontrado',
+    // A fonte do desenho sai do build, sem rede: o caminho dado ao Excalidraw
+    // é local e absoluto, a fonte carrega (FontFace, como no desenho) e é lida
+    // (fetch, como no export, que a embute).
+    fonteExcalidraw: font
+      ? await (async () => {
+        const base = window.EXCALIDRAW_ASSET_PATH
+        if (typeof base !== 'string' || new URL(base).protocol !== location.protocol) return 'caminho: ' + String(base)
+        const url = new URL(font, base).href
+        const face = new FontFace('FelixoSondaExcalifont', 'url(' + JSON.stringify(url) + ')')
+        await face.load()
+        const response = await fetch(url)
+        const bytes = (await response.arrayBuffer()).byteLength
+        return face.status === 'loaded' && response.ok && bytes > 0 ? 'ok' : 'erro: ' + face.status + ' ' + response.status
+      })().catch((error) => 'erro: ' + error.message)
+      : 'fonte não encontrada',
   }
   return { probes, notes }
 })()`
