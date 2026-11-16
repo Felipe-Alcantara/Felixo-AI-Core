@@ -157,7 +157,8 @@ export type CliErrorFailure = {
 }
 
 /** Quando o orquestrador pediu a troca: no spawn ou no meio da tarefa. */
-export type ProviderSwitchDecisionKind = 'initial' | 'mid-task'
+/** `account`: mesmo provedor, outra conta da cadeia (limite numa conta no meio da tarefa). */
+export type ProviderSwitchDecisionKind = 'initial' | 'mid-task' | 'account'
 
 /** Como uma pergunta de troca de provedor terminou (decidido no main). */
 export type ProviderSwitchOutcome =
@@ -184,6 +185,9 @@ export type ProviderSwitchRequest = {
   toCliType: OrchestrationCliType
   toModelId: string | null
   toModelName: string | null
+  /** Só na troca de conta: rótulos das contas de origem e de destino. */
+  fromAccountLabel?: string | null
+  toAccountLabel?: string | null
   rule: string | null
   reason: string | null
   requestedAt: string

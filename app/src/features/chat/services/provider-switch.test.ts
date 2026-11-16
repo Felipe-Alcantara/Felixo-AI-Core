@@ -12,6 +12,7 @@ import {
   formatProviderSwitchDeadline,
   formatProviderSwitchRoute,
   formatProviderSwitchRule,
+  formatProviderSwitchTarget,
   formatProviderSwitchWaitingStatus,
   isProviderSwitchExpired,
   mergeProviderSwitchList,
@@ -155,5 +156,23 @@ describe('provider-switch', () => {
     await expect(respond('decision-1', false)).resolves.toMatchObject({ ok: false })
     await expect(respond('decision-1', false)).resolves.toEqual({ ok: true, outcome: 'refused' })
     expect(send).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('troca de conta (limite numa conta da cadeia)', () => {
+  it('o card diz as duas contas, o provedor que fica e a regra', () => {
+    const account = request({
+      kind: 'account',
+      fromCliType: 'claude',
+      toCliType: 'claude',
+      fromAccountLabel: 'Claude Pessoal',
+      toAccountLabel: 'Claude Trabalho',
+      rule: 'account-chain',
+    })
+    expect(formatProviderSwitchRoute(account)).toBe('Claude Pessoal → Claude Trabalho (Claude)')
+    expect(formatProviderSwitchTarget(account)).toBe('Claude Trabalho')
+    expect(formatProviderSwitchRule('account-chain')).toMatch(/Próxima conta apta da cadeia/)
+    // A troca de provedor continua como antes.
+    expect(formatProviderSwitchTarget(request())).toBe('Codex')
   })
 })

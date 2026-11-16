@@ -53,9 +53,10 @@ function describeDecision(decision) {
     return decision.note
   }
 
+  const what = decision.kind === 'account' ? 'Troca de conta' : 'Troca de provedor'
   return decision.state === 'accepted'
-    ? 'Troca de provedor aceita pela pessoa.'
-    : 'Troca de provedor recusada pela pessoa.'
+    ? `${what} aceita pela pessoa.`
+    : `${what} recusada pela pessoa.`
 }
 
 /**
@@ -82,9 +83,10 @@ function buildProviderSwitchEventRecord(decision) {
     // A linhagem de uma decisão do orquestrador é o run que a pediu.
     lineageId: decision.runId ?? null,
     fromProviderId: getProviderIdForCliType(decision.fromCliType) ?? 'desconhecido',
-    fromLabel: clip(decision.fromCliType, SWITCH_LABEL_MAX_CHARS),
+    // Troca de conta: o rótulo é o da conta (mesmo provedor nas duas pontas).
+    fromLabel: clip(decision.fromAccountLabel ?? decision.fromCliType, SWITCH_LABEL_MAX_CHARS),
     toProviderId: getProviderIdForCliType(decision.toCliType),
-    toLabel: clip(decision.toModelName ?? decision.toCliType, SWITCH_LABEL_MAX_CHARS),
+    toLabel: clip(decision.toAccountLabel ?? decision.toModelName ?? decision.toCliType, SWITCH_LABEL_MAX_CHARS),
     reason: clip(parts.join(' '), SWITCH_REASON_MAX_CHARS),
     proposedAt: decision.requestedAt,
     decidedAt: decision.decidedAt,

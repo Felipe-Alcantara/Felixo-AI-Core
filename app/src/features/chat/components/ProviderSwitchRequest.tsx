@@ -3,8 +3,10 @@ import { ArrowRightLeft } from 'lucide-react'
 
 import type { ProviderSwitchCardState } from '../hooks/useProviderSwitchRequests'
 import {
+  ACCOUNT_SWITCH_COST_NOTICE,
   PROVIDER_SWITCH_COST_NOTICE,
-  formatProviderLabel,
+  formatProviderSwitchTarget,
+  isAccountSwitch,
   formatProviderSwitchDeadline,
   formatProviderSwitchRoute,
   formatProviderSwitchRule,
@@ -44,7 +46,8 @@ export function ProviderSwitchRequest({
   const descriptionId = `provider-switch-${request.decisionId}-description`
   const rule = formatProviderSwitchRule(request.rule)
   const deadline = formatProviderSwitchDeadline(request.expiresAt, now)
-  const target = formatProviderLabel(request.toCliType)
+  const target = formatProviderSwitchTarget(request)
+  const accountSwitch = isAccountSwitch(request)
   // Depois do prazo o main trata qualquer resposta como recusa: nada de
   // "Trocar" clicável mostrando "vencida" até a varredura fechar a decisão.
   const expired = isProviderSwitchExpired(request.expiresAt, now)
@@ -57,13 +60,13 @@ export function ProviderSwitchRequest({
     >
       <h2 id={titleId} className="flex items-center gap-1.5 text-[13px] font-medium text-zinc-100">
         <ArrowRightLeft size={13} aria-hidden />
-        Trocar de provedor? {formatProviderSwitchRoute(request)}
+        {accountSwitch ? 'Trocar de conta?' : 'Trocar de provedor?'} {formatProviderSwitchRoute(request)}
       </h2>
       <div id={descriptionId} className="mt-1.5 space-y-1">
         <p>{formatProviderSwitchStage(request)}</p>
         {request.reason && <p>Motivo: {request.reason}</p>}
         {rule && <p className="text-zinc-400">Regra: {rule}</p>}
-        <p className="text-zinc-400">{PROVIDER_SWITCH_COST_NOTICE}</p>
+        <p className="text-zinc-400">{accountSwitch ? ACCOUNT_SWITCH_COST_NOTICE : PROVIDER_SWITCH_COST_NOTICE}</p>
         {deadline && !expired && (
           // O "em N min" muda a cada 30 s: anunciado junto com o card novo, nunca de novo sozinho.
           <p aria-live="off" className="text-zinc-400">

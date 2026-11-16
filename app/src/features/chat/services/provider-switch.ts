@@ -23,6 +23,7 @@ const RULE_LABELS: Record<string, string> = {
   'last-resort': 'Último recurso (nenhum provedor sem limite)',
   'best-available-model': 'Melhor modelo disponível',
   'preferred-model': 'Modelo preferido',
+  'account-chain': 'Próxima conta apta da cadeia (a conta atual bateu o limite)',
 }
 
 const ERROR_MESSAGES: Record<ProviderSwitchErrorCode, string> = {
@@ -34,13 +35,30 @@ const ERROR_MESSAGES: Record<ProviderSwitchErrorCode, string> = {
 
 /** Custo da troca, sempre visível no card (decisão 1: confirmar sabendo o custo). */
 export const PROVIDER_SWITCH_COST_NOTICE =
-  'Muda de provedor e de conta de cobrança; roda no login do sistema do destino.'
+  'Muda de provedor e de conta de cobrança; o destino roda na conta escolhida no chat para ele, ou no Login do sistema.'
+
+/** Troca de conta: o provedor e o modelo ficam; muda a conta (e a cota que ela gasta). */
+export const ACCOUNT_SWITCH_COST_NOTICE = 'Mesmo provedor e modelo; muda a conta e a cota que ela gasta.'
+
+export function isAccountSwitch(request: ProviderSwitchRequest) {
+  return request.kind === 'account'
+}
+
+/** Para onde a troca leva: a conta, na troca de conta; o provedor, nas outras. */
+export function formatProviderSwitchTarget(request: ProviderSwitchRequest) {
+  return isAccountSwitch(request) ? (request.toAccountLabel ?? 'outra conta') : formatProviderLabel(request.toCliType)
+}
 
 export function formatProviderLabel(cliType: OrchestrationCliType | string) {
   return PROVIDER_LABELS[cliType as OrchestrationCliType] ?? cliType
 }
 
 export function formatProviderSwitchRoute(request: ProviderSwitchRequest) {
+  if (isAccountSwitch(request)) {
+    const from = request.fromAccountLabel ?? 'conta atual'
+    return `${from} → ${formatProviderSwitchTarget(request)} (${formatProviderLabel(request.toCliType)})`
+  }
+
   const target = request.toModelName
     ? `${formatProviderLabel(request.toCliType)} (${request.toModelName})`
     : formatProviderLabel(request.toCliType)

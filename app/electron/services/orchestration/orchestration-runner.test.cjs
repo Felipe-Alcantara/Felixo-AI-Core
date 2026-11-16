@@ -1553,3 +1553,102 @@ test('uma falha ao gravar o registro não trava a decisão', async () => {
   assert.equal(result.ok, true)
   assert.equal(calls.spawn.length, 1)
 })
+
+// ── Conta da cadeia no orquestrador (15/11/2026) ─────────────────────────────
+
+const CLAUDE_LIMIT = "You're out of extra usage · resets 4:40pm"
+
+/** Sub-agente que abre numa conta: o spawn devolve a conta e o modelo usados. */
+function createAccountHarness({ accounts = ['claude-a', 'claude-b'], mode = 'chain', pick, ...options } = {}) {
+  const picks = []
+  let spawnCount = 0
+  const labels = { 'claude-a': 'Claude Pessoal', 'claude-b': 'Claude Trabalho' }
+  const harness = createSwitchHarness({
+    validateSpawnAgent: ({ event }) =>
+      /Tarefa original do sub-agente/.test(event.prompt)
+        ? choice(CODEX_MODEL, 'provider-fallback', { fallbackFromCliType: 'claude' })
+        : choice(CLAUDE_MODEL, 'best-available-model'),
+    spawnAgent: async (params) => {
+      harness.calls.spawn.push(params)
+      const accountId = params.event.accountId ?? accounts[Math.min(spawnCount, accounts.length - 1)]
+      spawnCount += 1
+      return {
+        ok: true,
+        threadId: params.threadId,
+        model: params.event.selectedModel ?? CLAUDE_MODEL,
+        account: { accountId, label: labels[accountId] ?? accountId, mode },
+      }
+    },
+    pickChainAccount: async (request) => {
+      picks.push(request)
+      return pick ? pick(request) : { accountId: 'claude-b', label: 'Claude Trabalho' }
+    },
+    ...options,
+  })
+  return { ...harness, picks }
+}
+
+test('limite numa conta da cadeia: o card pergunta pela próxima conta do mesmo provedor e o aceite reabre nela', async () => {
+  const recordedErrors = []
+  const { runner, calls, picks } = createAccountHarness()
+  await runner.handleOrchestrationEvent(
+    createSpawnEvent(),
+    createContext({ modelAvailabilityRegistry: { recordError: (entry) => recordedErrors.push(entry) } }),
+  )
+
+  const waiting = await runner.onAgentJobCompleted({ runId: 'run-1', agentId: 'reviewer-1', error: CLAUDE_LIMIT })
+
+  assert.equal(waiting.awaitingConfirmation, true)
+  assert.deepEqual(picks, [{ cliType: 'claude', exclude: ['claude-a'] }])
+  const [pergunta] = runner.listProviderSwitches()
+  assert.equal(pergunta.kind, 'account')
+  assert.equal(pergunta.fromAccountLabel, 'Claude Pessoal')
+  assert.equal(pergunta.toAccountLabel, 'Claude Trabalho')
+  assert.equal(pergunta.toCliType, 'claude')
+  const card = calls.chat.find((event) => event.type === 'provider_switch_request')
+  assert.equal(card.toAccountLabel, 'Claude Trabalho')
+  // O limite é da conta: a disponibilidade global (Login do sistema) não muda.
+  assert.deepEqual(recordedErrors, [])
+  assert.equal(calls.spawn.length, 1, 'nada troca antes do sim')
+
+  const accepted = await runner.resolveProviderSwitch({ decisionId: 'decision-1', accept: true })
+
+  assert.equal(accepted.outcome, 'accepted')
+  assert.equal(accepted.spawned, true)
+  assert.equal(calls.spawn.length, 2)
+  assert.equal(calls.spawn[1].event.accountId, 'claude-b')
+  assert.equal(calls.spawn[1].event.cliType, 'claude')
+  assert.equal(calls.spawn[1].event.selectedModel, CLAUDE_MODEL)
+  assert.deepEqual(
+    calls.records.map((record) => [record.state, record.kind, record.fromAccountLabel, record.toAccountLabel]),
+    [['accepted', 'account', 'Claude Pessoal', 'Claude Trabalho']],
+  )
+})
+
+test('troca de conta recusada: o sub-agente falha com o erro original e nenhuma conta muda', async () => {
+  const { runner, calls } = createAccountHarness()
+  await runner.handleOrchestrationEvent(createSpawnEvent(), createContext())
+  await runner.onAgentJobCompleted({ runId: 'run-1', agentId: 'reviewer-1', error: CLAUDE_LIMIT })
+
+  const refused = await runner.resolveProviderSwitch({ decisionId: 'decision-1', accept: false })
+
+  assert.equal(refused.outcome, 'refused')
+  assert.equal(calls.spawn.length, 1)
+  const job = runner.getRun('run-1').agentJobs[0]
+  assert.equal(job.status, 'error')
+  assert.equal(job.error, CLAUDE_LIMIT)
+})
+
+test('sem outra conta apta, ou em conta fixa, segue o fallback de provedor de sempre', async () => {
+  const semOutra = createAccountHarness({ pick: () => null })
+  await semOutra.runner.handleOrchestrationEvent(createSpawnEvent(), createContext())
+  await semOutra.runner.onAgentJobCompleted({ runId: 'run-1', agentId: 'reviewer-1', error: CLAUDE_LIMIT })
+  assert.equal(semOutra.picks.length, 1)
+  assert.equal(semOutra.runner.listProviderSwitches()[0].kind, 'mid-task')
+
+  const fixa = createAccountHarness({ mode: 'pinned' })
+  await fixa.runner.handleOrchestrationEvent(createSpawnEvent(), createContext())
+  await fixa.runner.onAgentJobCompleted({ runId: 'run-1', agentId: 'reviewer-1', error: CLAUDE_LIMIT })
+  assert.equal(fixa.picks.length, 0, 'conta escolhida à mão continua fixa')
+  assert.equal(fixa.runner.listProviderSwitches()[0].kind, 'mid-task')
+})

@@ -70,6 +70,10 @@ class OrchestrationRunner {
     this.availabilitySubscriptions = new WeakMap()
     this.createDecisionId = options.createDecisionId ?? (() => randomUUID())
     this.recordSwitchDecision = options.recordSwitchDecision ?? (() => {})
+    // Próxima conta apta da cadeia para o mesmo provedor (`{ accountId, label }` ou null).
+    this.pickChainAccount = options.pickChainAccount ?? (async () => null)
+    // `runId:agentId` → conta em que o sub-agente rodou, o modelo e as contas já tentadas.
+    this.agentJobAccounts = new Map()
     this.providerSwitchTimeoutMs =
       options.providerSwitchTimeoutMs ?? PROVIDER_SWITCH_TIMEOUT_MS
     // Decisões de troca de provedor esperando a pessoa. Em memória, como o
@@ -239,6 +243,7 @@ class OrchestrationRunner {
     }
 
     const childThreadId = result?.threadId ?? threadId
+    this.rememberJobAccount(run.runId, event.agentId, result, resolvedEvent.selectedModel ?? null)
     run = this.store.startAgentJob(run.runId, event.agentId, {
       threadId: childThreadId,
     })
@@ -544,8 +549,10 @@ class OrchestrationRunner {
     }
 
     const runContext = this.getRunContext(locatedJob.runId)
+    const jobAccount = this.agentJobAccounts.get(attemptKey)
 
-    if (runContext.modelAvailabilityRegistry?.recordError) {
+    // Numa conta, o limite é dela: a disponibilidade global descreve o Login do sistema.
+    if (!jobAccount?.accountId && runContext.modelAvailabilityRegistry?.recordError) {
       runContext.modelAvailabilityRegistry.recordError({
         message: errorMessage,
         cliType: job.cliType,
@@ -563,6 +570,39 @@ class OrchestrationRunner {
         previousModelName: null,
       }),
     }
+    const accountSwitch = await this.planAccountSwitch({ run, job, issue })
+
+    if (accountSwitch) {
+      const { used, next, triedAccountIds } = accountSwitch
+      this.threadAgentJobs.delete(job.threadId)
+      this.requestProviderSwitch({
+        kind: 'account',
+        run,
+        agentId: locatedJob.agentId,
+        fromCliType: job.cliType,
+        toCliType: job.cliType,
+        toModel: used.model,
+        fromAccountLabel: used.label,
+        toAccountLabel: next.label,
+        rule: 'account-chain',
+        reason: issue.reason ?? errorMessage,
+        payload: {
+          locatedJob,
+          continuationEvent,
+          originalError: error,
+          reason: issue.reason ?? errorMessage,
+          plan: {
+            newModel: used.model,
+            newCliType: job.cliType,
+            accountId: next.accountId,
+            triedAccountIds,
+          },
+        },
+      })
+
+      return { awaitingConfirmation: true, run: this.store.get(run.runId) }
+    }
+
     const plan = this.planMidTaskFallback({ run, job, continuationEvent })
 
     if (!plan) {
@@ -681,6 +721,7 @@ class OrchestrationRunner {
       requestedCliType: continuationEvent.cliType,
       cliType: newCliType,
       selectedModel: newModel,
+      ...(plan.accountId ? { accountId: plan.accountId } : {}),
     }
 
     // Thread nova para a tentativa, em vez de reusar a do processo que acabou
@@ -711,7 +752,46 @@ class OrchestrationRunner {
       return null
     }
 
+    this.rememberJobAccount(locatedJob.runId, locatedJob.agentId, spawnResult, newModel, plan.triedAccountIds ?? [])
     return { respawned: true, run }
+  }
+
+  /** Conta em que o sub-agente acabou de abrir (o resultado do spawn diz), para a troca por limite. */
+  rememberJobAccount(runId, agentId, spawnResult, model, triedAccountIds = []) {
+    const key = `${runId}:${agentId}`
+    const account = spawnResult?.account
+    if (!account?.accountId) {
+      this.agentJobAccounts.delete(key)
+      return
+    }
+    this.agentJobAccounts.set(key, {
+      accountId: account.accountId,
+      label: account.label ?? null,
+      mode: account.mode,
+      model: spawnResult.model ?? model ?? null,
+      triedAccountIds,
+    })
+  }
+
+  /**
+   * Limite, login ou crédito numa conta da cadeia: a próxima conta apta do
+   * mesmo provedor, para o card perguntar. `null` fora da cadeia, em conta
+   * fixa, num limite só do modelo ou sem outra conta apta (aí segue o fallback
+   * de provedor de sempre).
+   */
+  async planAccountSwitch({ run, job, issue }) {
+    const used = this.agentJobAccounts.get(`${run.runId}:${job.agentId}`)
+    if (!used?.accountId || used.mode !== 'chain' || issue.scope === 'model') return null
+    if (issue.status !== 'limit_reached' && issue.status !== 'no_login') return null
+    const triedAccountIds = [...new Set([...(used.triedAccountIds ?? []), used.accountId])]
+    let next = null
+    try {
+      next = await this.pickChainAccount({ cliType: job.cliType, exclude: triedAccountIds })
+    } catch {
+      next = null
+    }
+    if (!next?.accountId || triedAccountIds.includes(next.accountId)) return null
+    return { used, next, triedAccountIds }
   }
 
   // ── Troca de provedor com confirmação (decisão do dono) ──────────────────
@@ -721,7 +801,7 @@ class OrchestrationRunner {
    * runner continua reagindo a eventos, e a resposta chega por
    * `resolveProviderSwitch` (ou vence pela varredura).
    */
-  requestProviderSwitch({ kind, run, agentId, fromCliType, toCliType, toModel, rule, reason, payload }) {
+  requestProviderSwitch({ kind, run, agentId, fromCliType, toCliType, toModel, rule, reason, payload, fromAccountLabel = null, toAccountLabel = null }) {
     const nowMs = getTimeMs(this.now())
     const expiresAtMs = getProviderSwitchDeadlineMs(run, nowMs, this.providerSwitchTimeoutMs)
     const decision = {
@@ -735,6 +815,8 @@ class OrchestrationRunner {
       toCliType,
       toModelId: toModel?.id ?? null,
       toModelName: toModel?.name ?? null,
+      fromAccountLabel,
+      toAccountLabel,
       rule: rule ?? null,
       reason: createSwitchReason(reason),
       requestedAt: new Date(nowMs).toISOString(),
@@ -827,6 +909,26 @@ class OrchestrationRunner {
   }
 
   async acceptProviderSwitch(decision, run) {
+    if (decision.kind === 'account') {
+      // Mesmo provedor e modelo: só a conta muda, e é a que a pessoa viu no card.
+      // Se ela deixou de servir, o spawn cai no Login do sistema com aviso.
+      this.closeProviderSwitch(decision, { outcome: PROVIDER_SWITCH_OUTCOMES.accepted })
+      const respawn = await this.executeMidTaskFallback({
+        run,
+        ...decision.payload,
+        plan: decision.payload.plan,
+      })
+      if (!respawn) {
+        const finished = await this.finishAgentJob({
+          runId: run.runId,
+          agentId: decision.agentId,
+          error: decision.payload.originalError,
+        })
+        return { outcome: 'accepted', run: finished.run, spawned: false }
+      }
+      return { outcome: 'accepted', run: respawn.run, spawned: true }
+    }
+
     // Revalida: até 10 min se passaram, e a disponibilidade pode ter mudado.
     const target =
       decision.kind === 'initial'
@@ -1419,6 +1521,12 @@ class OrchestrationRunner {
     // Antes de soltar o contexto: o aviso ao chat usa a janela guardada nele.
     this.dropProviderSwitchesForRun(runId)
 
+    for (const key of this.agentJobAccounts.keys()) {
+      if (key.startsWith(`${runId}:`)) {
+        this.agentJobAccounts.delete(key)
+      }
+    }
+
     for (const [key, value] of this.runContexts) {
       if (value?.runId === runId) {
         this.runContexts.delete(key)
@@ -1595,6 +1703,8 @@ function toPublicProviderSwitch(decision) {
     toCliType: decision.toCliType,
     toModelId: decision.toModelId,
     toModelName: decision.toModelName,
+    fromAccountLabel: decision.fromAccountLabel ?? null,
+    toAccountLabel: decision.toAccountLabel ?? null,
     rule: decision.rule,
     reason: decision.reason,
     requestedAt: decision.requestedAt,
@@ -1603,11 +1713,15 @@ function toPublicProviderSwitch(decision) {
 }
 
 function describeRefusedSwitchError(decision, outcome) {
-  const route = `${decision.fromCliType} → ${decision.toCliType}`
+  const isAccount = decision.kind === 'account'
+  const route = isAccount
+    ? `${decision.fromAccountLabel ?? 'conta'} → ${decision.toAccountLabel ?? 'conta'}`
+    : `${decision.fromCliType} → ${decision.toCliType}`
+  const what = isAccount ? 'Troca de conta' : 'Troca de provedor'
   const why =
     outcome === PROVIDER_SWITCH_OUTCOMES.expired
-      ? `Troca de provedor ${route} sem resposta no prazo`
-      : `Troca de provedor ${route} recusada pela pessoa`
+      ? `${what} ${route} sem resposta no prazo`
+      : `${what} ${route} recusada pela pessoa`
 
   if (decision.kind === 'initial') {
     return `${why}; o sub-agente não rodou e nenhum provedor foi trocado.`
@@ -1616,9 +1730,10 @@ function describeRefusedSwitchError(decision, outcome) {
   // Meio da tarefa: o orquestrador recebe o erro original do sub-agente,
   // com a nota do que aconteceu com a troca.
   const originalError = stringifyAgentError(decision.payload.originalError)
+  const nothing = isAccount ? 'nenhuma conta foi trocada' : 'nenhum provedor foi trocado'
   return outcome === PROVIDER_SWITCH_OUTCOMES.refused
     ? originalError || `${why}.`
-    : `${originalError}\n\n(${why}; nenhum provedor foi trocado.)`.trim()
+    : `${originalError}\n\n(${why}; ${nothing}.)`.trim()
 }
 
 function getResponseSessionId(run, context = {}) {
