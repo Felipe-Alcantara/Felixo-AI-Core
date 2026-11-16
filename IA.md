@@ -3272,3 +3272,51 @@ Estado: concluído (deploy no adendo).
 **Adendo (2026-11-16, 07:14): CI e Release.**
 - **CI** de `ff76dcc` (run 43844198358): passou no Validate de Windows, macOS, Ubuntu e Ubuntu ARM e no smoke do canvas, sem nova tentativa.
 - **Release:** o gate (run 43845122474) e o Release (run 43845160452, concluído às 07:12) publicaram a `v0.1.562`.
+
+## 2026-11-16 — Navegador: downloads passam pelo diálogo de salvar, programas pedem confirmação com a origem e o registro sai sem query
+
+Task: Felixo AI Core/Navegador — tratar downloads do bloco Página Web com política de tipo, destino e registro redigido (Notion `3ea91f95-497e-8155-a6bc-ea704c00ef65`), aberta em 29/09 a partir da política única de URL. Agente: Resolver hotfix (Claude Code, Claude Opus 5.5), 07:17 em diante.
+
+**Antes.** Não havia `will-download` em lugar nenhum. Os downloads de sites e do app seguiam o padrão do Electron, sem política de tipo, sem destino definido e sem registro.
+
+**Decisões do Felipe** (`AskUserQuestion`, todas na opção recomendada):
+1. **Programa ou script:** confirmação mostrando a origem.
+2. **Destino:** diálogo de salvar, começando em Downloads.
+3. **Onde perguntar:** numa janela do sistema.
+
+**Medido no app de fonte** (site de teste em 127.0.0.1:8789 e ganchos de automação):
+- **Pausar quebra o `blob:`:** pausar e retomar um download `blob:` da janela do app terminava como `interrupted`, porque o `blob:` não retoma. Por isso o fluxo não pausa.
+- **Playwright desvia os downloads da janela do app:** o `felixo devtools` controla essa janela via `connectOverCDP`. O download terminava como `completed` fora do caminho definido (`rename` com ENOENT). O webview dos blocos não é afetado.
+- **O caminho do app funciona fora da automação:** numa janela escondida noutra sessão, um `blob:` com o `revokeObjectURL` imediato, como na exportação do chat, foi salvo.
+
+**Feito.**
+- **`download-guard.cjs`:**
+  - `classifyDownload`: extensões de programa, script, atalho e imagem de disco de Windows, macOS e Linux. O MIME só conta sem extensão.
+  - `describeDownloadSource`: esquema + host; num `blob:`, a origem de dentro; `data:`.
+  - `safeFileName`.
+  - `handleDownload`: temporário em `<temp>/felixo-downloads` com nome aleatório; confirmação se for perigoso; diálogo de salvar em Downloads; move no fim, com cópia entre discos; recusar ou cancelar apaga o temporário.
+  - `createDownloadDialogs`: `showMessageBox` com Cancelar padrão e `showSaveDialog`, assíncronos e com a janela do app como mãe. Só na automação, `FELIXO_DEVTOOLS_DOWNLOAD_DIR`/`_CONFIRM` respondem os diálogos.
+- **`session-security.cjs`:** `onDownload` no `will-download` de toda sessão endurecida.
+- **`main.cjs`:** registro `scope: download` no QA Logger (resultado, origem, nome, bytes, extensão e se é perigoso).
+- **Docs:** GUIA-USUARIO ("Downloads da Página Web") e ARQUITETURA. A lacuna da task saiu do inventário.
+
+**Validação.**
+- **Testes:**
+  - 8 novos em `download-guard.test.cjs`, com arquivos reais numa pasta temporária;
+  - 1 em `session-security.test.cjs` (o `will-download` das duas sessões chega ao `onDownload`).
+- **Mutações:** sem a confirmação, 2 testes falham; sem apagar o temporário, 1.
+- **Gates:**
+  - `npm test`: 3355 testes, 3345 passam, 10 pulados, 0 falham;
+  - `vitest`: 3523 passam;
+  - `eslint .` e `tsc -b` limpos.
+- **App de fonte com a automação respondendo:**
+  - confirmação "não": `relatorio.pdf` foi salvo (registro `salvo`, origem `http://127.0.0.1:8789`, sem o `?token=segredo`); `instalador.exe` não foi salvo (`recusado`); a exportação `blob:` do site foi salva;
+  - confirmação "sim": o `.exe` foi salvo (`salvo-com-confirmacao`);
+  - numa janela noutra sessão: um `blob:` com revoke imediato foi salvo.
+
+**Não validado.**
+- **Diálogos de verdade:** não abri o diálogo de salvar nem a confirmação reais, porque abririam na tela de quem usa. Na automação, eles respondem sozinhos.
+- **Exportação do chat:** não foi conferida na janela do app, por causa do desvio do Playwright.
+- **macOS e Linux:** o comportamento dos diálogos não foi conferido.
+
+Estado: concluído (deploy no adendo).
