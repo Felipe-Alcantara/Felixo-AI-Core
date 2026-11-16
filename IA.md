@@ -3016,3 +3016,44 @@ Estado: concluído (deploy no adendo).
 **Adendo (2026-11-16, 03:34): CI e Release.**
 - **CI** de `4f5af2a` (run 43815577185): passou no Validate de Windows, macOS, Ubuntu e Ubuntu ARM e no smoke do canvas.
 - **Release:** o gate (run 43816345030) e o Release (run 43816367733, concluído às 03:32) publicaram a `v0.1.556`.
+
+## 2026-11-16 — Contas: o configurador lembra uma conta por provedor (`accountByProvider`)
+
+Task: Felixo AI Core/Contas — preferência de conta por provedor no configurador (Notion `3e991f95-497e-817b-b2e7-c5ab8c016dfa`), item 12 do §16 do plano da cadeia (PR #97). Agente: Resolver hotfix (Claude Code, Claude Opus 5.5), 03:39 em diante. Trilha A: a direção estava na task.
+
+**Antes.** `felixo:last-agent-launch-preferences` guardava uma conta só (`accountId` e `accountLabel`), a do último agente. O configurador só a reaproveitava no mesmo provedor (`contaSalvaRef.providerId`).
+- A gravação roda a cada mudança do formulário. Ao trocar de agente, o campo zera antes de a lista do provedor novo chegar, e esse vazio era gravado.
+- Resultado: trocar de agente perdia a conta do outro.
+
+**Feito.**
+- **`agent-launch-preferences.ts`:**
+  - `accountByProvider` (id do provedor → `{ accountId, accountLabel? }`). A leitura sempre devolve o mapa, descartando provedor desconhecido e conta sem id.
+  - Migração: sem o mapa, a conta única vira a do provedor do agente salvo (o shell não tem provedor).
+  - `accountId` e `accountLabel` continuam sendo gravados, os do agente atual, que uma versão anterior ainda lê.
+  - `rememberProviderAccount` decide o mapa a gravar. Só entra a conta de um provedor cuja seleção já foi decidida; vazio decidido (Login do sistema) tira o provedor do mapa.
+- **`useAgentConfig.ts`:**
+  - `contasSalvasRef` (o mapa) e `contaDecididaRef`;
+  - a lista aplicada e a escolha explícita (`setAccountId`) marcam o provedor como decidido; `changeAgent` desmarca;
+  - `aplicarListagem` usa a conta lembrada do provedor da lista;
+  - `savePreferences` grava o mapa.
+- **Ponto de atenção da task:** conta lembrada que sumiu continua no aviso "A conta salva X não existe mais" (`selectAccountFromList` → `saved-missing`), que bloqueia a abertura. Nada cai no Login do sistema sem escolha.
+- **Docs:** GUIA-USUARIO ("Uma conta por agente", em "Mudanças que você pode notar ao atualizar") e o inventário do canvas (campos Agente e Conta).
+
+**Validação.**
+- **Testes:** 6 novos em `agent-launch-preferences.test.ts` e 2 ajustados (a leitura devolve o mapa).
+  - migração, inclusive a do shell;
+  - mapa com três provedores e leitura que descarta lixo;
+  - `rememberProviderAccount`: grava sem mexer nos outros, o vazio da troca não apaga, Login do sistema tira do mapa, sem mudança devolve o mesmo mapa.
+- **Mutações:** sem a guarda de seleção decidida, 1 teste falha; sem a migração, 2.
+- **Gates:**
+  - `npm test`: 3329 testes, 3319 passam, 10 pulados, 0 falham;
+  - `vitest`: 3519 passam;
+  - `eslint .` e `tsc -b` limpos.
+- **App de fonte com perfil isolado e duas contas de teste** (pastas de perfil, sem login):
+  - Claude com "Teste Claude" e Codex com "Teste Codex": voltar a cada um restaura a conta dele, inclusive depois do reload;
+  - removida a conta do Codex, voltar ao Codex mostra "Selecionar…" e o alerta "A conta salva "Teste Codex" não existe mais", com o campo inválido;
+  - uma preferência no formato antigo virou `accountByProvider.claude` no primeiro reload.
+
+**Não validado.** O app instalado não foi aberto, atualizando de uma versão anterior com contas reais. A migração foi conferida no app de fonte com o formato antigo gravado à mão.
+
+Estado: concluído (deploy no adendo).
