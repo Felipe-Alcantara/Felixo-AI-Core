@@ -32,7 +32,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **Elementos:** 101 (10 blocos, 16 ferramentas, 75 outras superfícies)
 - **Controles:** 389, dos quais 58 com teste específico
 - **Elementos sem nenhum teste:** 4
-- **Lacunas:** 254 (alto 7, médio 137, baixo 110), em 67 tasks
+- **Lacunas:** 253 (alto 7, médio 137, baixo 109), em 66 tasks
 
 ## Moldura do canvas
 
@@ -2657,17 +2657,13 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Estado | Quando |
 | --- | --- |
 | normal | Fase "aviso": role="region" ancorada à direita do botão Ajuda com o título da novidade, Ver e Agora não; sem foco automático e sem timer (fica até uma ação, Esc nele ou abrir a Ajuda). |
-| pending | Nasce invisível até o posicionamento; com um tour já na tela a novidade espera o tour fechar. |
+| pending | Nasce invisível até o posicionamento; com um tour ou outro aviso na tela, a novidade espera ele fechar. |
 | disabled | Diálogo modal aberto: o aviso fica inert no mesmo lugar e os handlers saem sem efeito. |
 
 | Controle | Gatilho | Efeito | Falha conhecida | Teste |
 | --- | --- | --- | --- | --- |
 | `data-felixo-onboarding-action="ver"` (button) | clique | store.viewNotice → open(tourId, "novidade"): o aviso dá lugar ao mini-tour da feature com o foco no card; ABRIR enfileirado para onboarding:write. (desabilitado: diálogo modal aberto (aviso inert)) | Escrita recusada: o mini-tour abre em memória, persistência "indisponivel" e warn no QA Logger. | `scripts/canvas-smoke-onboarding.cjs` → `sb5` |
-| `data-felixo-onboarding-action="agora-nao"` (button) | clique, ou Esc com o foco no aviso | store.dismissNotice: fase volta a "ocioso" sem gravar nada (o anúncio já foi gravado ao aparecer); a novidade fica "Novo" no menu Ajuda e não volta sozinha. O foco volta a quem o tinha. (desabilitado: diálogo modal aberto (aviso inert)) | Sem falha própria (estado da sessão). | `scripts/canvas-smoke-onboarding.cjs` → `sb6` |
-
-| Lacuna | Risco | Task |
-| --- | --- | --- |
-| O aviso só existe para features do catálogo de novidades; a cadeia de contas ainda não está lá, então ninguém é avisado dela. | baixo | `3e991f95-497e-817d-b6a4-c2c1825b3afc` |
+| `data-felixo-onboarding-action="agora-nao"` (button) | clique, ou Esc com o foco no aviso | store.dismissNotice: fase volta a "ocioso" sem gravar nada (o anúncio já foi gravado ao aparecer); a novidade fica "Novo" no menu Ajuda e não volta sozinha. O foco volta a quem o tinha. Se houver outra novidade ainda não anunciada, ela aparece em seguida, uma de cada vez. (desabilitado: diálogo modal aberto (aviso inert)) | Sem falha própria (estado da sessão). | `scripts/canvas-smoke-onboarding.cjs` → `sb6` |
 
 ### Menu Ajuda (tutorial, novidades e Redefinir tutoriais)
 
@@ -2926,7 +2922,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3e991f95-497e-810b-9f94-ed5201606718` — 1 lacuna
 - `3e991f95-497e-812d-b877-e7bb0162a60f` — 1 lacuna
 - `3e991f95-497e-815c-845c-da8829970c0c` — 1 lacuna
-- `3e991f95-497e-817d-b6a4-c2c1825b3afc` — 1 lacuna
 - `3e991f95-497e-81b4-ac92-d7db960c9ae0` — 1 lacuna
 - `3ea91f95-497e-8117-8506-d4abe67709ff` — 1 lacuna
 - `3ea91f95-497e-8126-88c8-c6a7ce21bee0` — 1 lacuna

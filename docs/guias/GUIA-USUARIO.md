@@ -203,7 +203,9 @@ de qual conta sai, para qual vai e por quê, e só acontece depois que você
 confirma. A regra completa está na
 [Política de Contas](../projeto/POLITICA-CONTAS.md).
 
-**Como ligar.**
+**Como ligar.** Quem já usava o app vê uma vez o aviso **Novidade: Cadeia de
+contas**. **Ver** mostra onde ela fica, e a novidade continua em **Ajuda →
+Novidades**.
 
 1. Abra **Ferramentas → Limites e uso** e escolha a aba **Cadeia**.
 2. Ligue **Cadeia de contas**. Ela começa na estratégia **Ordem manual**, com

@@ -856,6 +856,15 @@ da entrada, nunca pela versão do app. Para anunciar uma função:
    ponha o tipo em `CANVAS_TRIGGER_NODE_TYPES`
    (`onboarding-canvas-triggers.ts`). O canvas lê essa lista sem carregar o catálogo,
    que fica no chunk preguiçoso da store; sem o tipo na lista, o build reprova.
+7. Função sem âncora própria (ex.: a cadeia de contas, dentro de Limites e uso):
+   aponte uma âncora que já existe (`secao-ferramentas`, com `rail-menu` de
+   reserva) e dê o caminho no texto, com `citaFerramentas` para o teste conferir o
+   nome da ferramenta.
+
+Quem já usava o app recebe as novidades uma de cada vez: dispensar uma traz a
+próxima. Os testes não fixam a lista: as fixtures usam `CURRENT_FEATURE_IDS` e
+`NEXT_CATALOG_REVISION`. O smoke (SB5 a SB7) deixa só a Ajuda como novidade e as
+outras entradas conhecidas.
 
 O chunk do canvas só tem o procurador da store (`onboarding-store-proxy.ts`). A
 store, o estado e o catálogo vêm num chunk preguiçoso baixado quando o canvas monta,

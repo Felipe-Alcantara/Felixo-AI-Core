@@ -213,7 +213,7 @@ export const overlaySurfaces: InventoryElement[] = [
     states: {
       normal:
         'Fase "aviso": role="region" ancorada à direita do botão Ajuda com o título da novidade, Ver e Agora não; sem foco automático e sem timer (fica até uma ação, Esc nele ou abrir a Ajuda).',
-      pending: 'Nasce invisível até o posicionamento; com um tour já na tela a novidade espera o tour fechar.',
+      pending: 'Nasce invisível até o posicionamento; com um tour ou outro aviso na tela, a novidade espera ele fechar.',
       disabled: 'Diálogo modal aberto: o aviso fica inert no mesmo lugar e os handlers saem sem efeito.',
     },
     controls: [
@@ -231,7 +231,7 @@ export const overlaySurfaces: InventoryElement[] = [
         kind: 'button',
         trigger: 'clique, ou Esc com o foco no aviso',
         effect:
-          'store.dismissNotice: fase volta a "ocioso" sem gravar nada (o anúncio já foi gravado ao aparecer); a novidade fica "Novo" no menu Ajuda e não volta sozinha. O foco volta a quem o tinha.',
+          'store.dismissNotice: fase volta a "ocioso" sem gravar nada (o anúncio já foi gravado ao aparecer); a novidade fica "Novo" no menu Ajuda e não volta sozinha. O foco volta a quem o tinha. Se houver outra novidade ainda não anunciada, ela aparece em seguida, uma de cada vez.',
         failure: 'Sem falha própria (estado da sessão).',
         disabledWhen: 'diálogo modal aberto (aviso inert)',
         test: { file: SMOKE_TUTORIAL, check: 'sb6' },
@@ -248,13 +248,7 @@ export const overlaySurfaces: InventoryElement[] = [
       { file: SMOKE_TUTORIAL, check: 'sb5' },
       { file: SMOKE_TUTORIAL, check: 'sb6' },
     ],
-    gaps: [
-      {
-        what: 'O aviso só existe para features do catálogo de novidades; a cadeia de contas ainda não está lá, então ninguém é avisado dela.',
-        risk: 'baixo',
-        task: '3e991f95-497e-817d-b6a4-c2c1825b3afc',
-      },
-    ],
+    gaps: [],
     overlap:
       'fixed, z 55, min(18rem, 100vw − 24px), ancorado à direita do botão Ajuda pelo mesmo cálculo do card e desviando dos mesmos obstáculos. Abrir a Ajuda dispensa o aviso, então ele não disputa lugar com o menu.',
   },
