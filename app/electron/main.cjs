@@ -1252,6 +1252,7 @@ app.on('window-all-closed', () => {
     shouldQuitWhenAllWindowsClosed({
       platformName: platform.name,
       isDevelopment: Boolean(process.env.VITE_DEV_SERVER_URL),
+      isReleaseSmoke,
     })
   ) {
     app.quit()

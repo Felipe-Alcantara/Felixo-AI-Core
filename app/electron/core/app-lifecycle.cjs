@@ -6,12 +6,18 @@
  * start-up session and must be released when the last window closes, or the
  * next `npm run dev` inherits a stale port.
  *
+ * No `--release-smoke` quem encerra é o próprio smoke (`app.exit`): a janela
+ * oculta da CSP fecha antes do PTY, e sair ali derrubava o resto do smoke no
+ * Windows e no Linux.
+ *
  * @param {object} options
  * @param {string} options.platformName
  * @param {boolean} options.isDevelopment
+ * @param {boolean} [options.isReleaseSmoke]
  * @returns {boolean}
  */
-function shouldQuitWhenAllWindowsClosed({ platformName, isDevelopment }) {
+function shouldQuitWhenAllWindowsClosed({ platformName, isDevelopment, isReleaseSmoke = false }) {
+  if (isReleaseSmoke) return false
   return platformName !== 'darwin' || Boolean(isDevelopment)
 }
 

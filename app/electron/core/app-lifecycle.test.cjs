@@ -29,3 +29,12 @@ test('Linux e Windows continuam encerrando ao fechar a última janela', () => {
     true,
   )
 })
+test('no --release-smoke quem encerra é o smoke: fechar a janela oculta da CSP não derruba o PTY', () => {
+  for (const platformName of ['win32', 'linux', 'darwin']) {
+    assert.equal(
+      shouldQuitWhenAllWindowsClosed({ platformName, isDevelopment: false, isReleaseSmoke: true }),
+      false,
+      platformName,
+    )
+  }
+})
