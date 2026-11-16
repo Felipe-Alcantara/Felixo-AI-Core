@@ -323,3 +323,42 @@ test('ações sensíveis: com a opção, o Codex App Server abre na pasta de tra
   assert.equal(args.includes('approval_policy="never"'), false)
   assert.equal(args.includes('sandbox_mode="danger-full-access"'), false)
 })
+
+test('erro do app-server no protocolo atual: mensagem e código vêm de params.error; willRetry não encerra', () => {
+  // Forma de ErrorNotification no esquema gerado pelo Codex 0.171.0-alpha.7.
+  const limite = adapter.parseLine(JSON.stringify({
+    jsonrpc: '2.0',
+    method: 'error',
+    params: {
+      error: { message: "You've hit your usage limit.", codexErrorInfo: 'usageLimitExceeded', additionalDetails: null },
+      threadId: 't',
+      turnId: 'u',
+      willRetry: false,
+    },
+  }))
+  assert.deepEqual(limite, { type: 'error', message: "You've hit your usage limit.", failureCode: 'usageLimitExceeded' })
+
+  const conexao = adapter.parseLine(JSON.stringify({
+    jsonrpc: '2.0',
+    method: 'error',
+    params: {
+      error: { message: 'stream disconnected', codexErrorInfo: { responseStreamDisconnected: { httpStatusCode: 503 } } },
+      threadId: 't',
+      turnId: 'u',
+      willRetry: false,
+    },
+  }))
+  assert.deepEqual(conexao, {
+    type: 'error',
+    message: 'stream disconnected',
+    failureCode: 'responseStreamDisconnected',
+    httpStatus: 503,
+  })
+
+  const vaiTentar = adapter.parseLine(JSON.stringify({
+    jsonrpc: '2.0',
+    method: 'error',
+    params: { error: { message: 'Reconnecting… 1/5', codexErrorInfo: { responseStreamDisconnected: { httpStatusCode: null } } }, threadId: 't', turnId: 'u', willRetry: true },
+  }))
+  assert.equal(vaiTentar, null, 'o Codex tenta de novo sozinho; não é o fim do pedido')
+})

@@ -146,15 +146,40 @@ function parseServerNotification(payload) {
     case 'item/completed':
       return null
 
-    case 'error':
+    case 'error': {
+      // Protocolo atual: `{ error: TurnError, threadId, turnId, willRetry }`. Com
+      // `willRetry`, o próprio Codex tenta de novo: não é o fim do pedido.
+      if (payload.params?.willRetry === true) {
+        return null
+      }
+      const turnError = payload.params?.error ?? {}
       return {
         type: 'error',
-        message: payload.params?.message ?? 'Codex app-server emitiu um erro.',
+        message: turnError.message ?? payload.params?.message ?? 'Codex app-server emitiu um erro.',
+        ...readCodexErrorInfo(turnError.codexErrorInfo),
       }
+    }
 
     default:
       return null
   }
+}
+
+/**
+ * `codexErrorInfo` é um enum (`usageLimitExceeded`) ou um objeto de uma
+ * chave com `httpStatusCode` (`{ httpConnectionFailed: { httpStatusCode: 503 } }`).
+ */
+function readCodexErrorInfo(info) {
+  if (typeof info === 'string' && info) {
+    return { failureCode: info }
+  }
+  if (info && typeof info === 'object') {
+    const [code] = Object.keys(info)
+    if (!code) return {}
+    const status = info[code]?.httpStatusCode
+    return { failureCode: code, ...(Number.isInteger(status) ? { httpStatus: status } : {}) }
+  }
+  return {}
 }
 
 function parseServerRequest(payload) {
