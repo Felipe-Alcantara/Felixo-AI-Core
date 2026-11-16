@@ -10,14 +10,20 @@
  * oculta da CSP fecha antes do PTY, e sair ali derrubava o resto do smoke no
  * Windows e no Linux.
  *
+ * Antes de a janela principal existir também não: a migração do
+ * `localStorage` para a origem `app://` (`renderer-origin-migration.cjs`) abre
+ * e fecha janelas ocultas no início, e o app saía antes de abrir (medido no
+ * pacote: código 0, com o marcador da migração gravado).
+ *
  * @param {object} options
  * @param {string} options.platformName
  * @param {boolean} options.isDevelopment
  * @param {boolean} [options.isReleaseSmoke]
+ * @param {boolean} [options.mainWindowCreated] - Sem o valor, conta como criada.
  * @returns {boolean}
  */
-function shouldQuitWhenAllWindowsClosed({ platformName, isDevelopment, isReleaseSmoke = false }) {
-  if (isReleaseSmoke) return false
+function shouldQuitWhenAllWindowsClosed({ platformName, isDevelopment, isReleaseSmoke = false, mainWindowCreated = true }) {
+  if (isReleaseSmoke || !mainWindowCreated) return false
   return platformName !== 'darwin' || Boolean(isDevelopment)
 }
 

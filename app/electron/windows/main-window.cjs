@@ -1,6 +1,5 @@
-const { pathToFileURL } = require('node:url')
 const { BrowserWindow, dialog, screen } = require('electron')
-const { rendererBuildPath } = require('../core/paths.cjs')
+const { APP_INDEX_URL } = require('../core/app-protocol.cjs')
 const { mainWindowOptions } = require('../core/window-options.cjs')
 const {
   EXTERNAL_OPEN_FAILED_CHANNEL,
@@ -85,7 +84,7 @@ function createMainWindow({ contarSessoesVivas, settingsRepository, screenApi = 
     }),
   )
   registerMainWindowNavigationGuard(mainWindow.webContents, {
-    appUrl: process.env.VITE_DEV_SERVER_URL || pathToFileURL(rendererBuildPath).href,
+    appUrl: process.env.VITE_DEV_SERVER_URL || APP_INDEX_URL,
     openExternal,
   })
   registerWindowZoomShortcuts(mainWindow)
@@ -109,7 +108,8 @@ function createMainWindow({ contarSessoesVivas, settingsRepository, screenApi = 
     return mainWindow
   }
 
-  mainWindow.loadFile(rendererBuildPath)
+  // O build por app://, não file:// (core/app-protocol.cjs): 'self' passa a ser só o build.
+  mainWindow.loadURL(APP_INDEX_URL)
   return mainWindow
 }
 

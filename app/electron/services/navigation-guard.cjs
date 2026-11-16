@@ -22,9 +22,11 @@ const { EXTERNAL_WEB_SCHEMES, classifyExternalUrl } = require('./external-url-po
  */
 
 /**
- * O destino é o próprio app? Em produção o app é um arquivo (`file://` do
- * build): só o mesmo arquivo conta, com qualquer query ou âncora. Em
- * desenvolvimento é o servidor do Vite: a mesma origem conta.
+ * O destino é o próprio app? Em produção o app é `app://felixo/index.html`
+ * (`core/app-protocol.cjs`; antes, o `file://` do build): só o mesmo
+ * documento conta, com qualquer query ou âncora — as rotas internas do
+ * protocolo (imagem local, migração) não. Em desenvolvimento é o servidor do
+ * Vite: a mesma origem conta.
  *
  * Só origem http(s) vale como referência. `about:blank`, `data:` e a página de
  * erro do Chromium (`chrome-error://`) têm origem opaca, que o `URL` escreve
@@ -39,8 +41,8 @@ function isAppDocument(targetUrl, appUrl) {
   try {
     const target = new URL(targetUrl)
     const app = new URL(appUrl)
-    if (app.protocol === 'file:') {
-      return target.protocol === 'file:' && target.host === app.host && target.pathname === app.pathname
+    if (app.protocol === 'file:' || app.protocol === 'app:') {
+      return target.protocol === app.protocol && target.host === app.host && target.pathname === app.pathname
     }
     if (app.protocol !== 'http:' && app.protocol !== 'https:') return false
     return target.origin === app.origin

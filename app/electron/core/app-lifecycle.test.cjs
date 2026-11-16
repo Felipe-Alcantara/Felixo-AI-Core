@@ -38,3 +38,18 @@ test('no --release-smoke quem encerra é o smoke: fechar a janela oculta da CSP 
     )
   }
 })
+
+test('antes da janela principal existir, fechar as janelas ocultas do início (migração de origem) não encerra o app', () => {
+  for (const platformName of ['win32', 'linux']) {
+    assert.equal(
+      shouldQuitWhenAllWindowsClosed({ platformName, isDevelopment: false, mainWindowCreated: false }),
+      false,
+      platformName,
+    )
+    assert.equal(
+      shouldQuitWhenAllWindowsClosed({ platformName, isDevelopment: false, mainWindowCreated: true }),
+      true,
+      platformName,
+    )
+  }
+})

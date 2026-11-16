@@ -4,7 +4,9 @@ const {
   dialog,
   Menu,
   ipcMain,
+  net,
   powerMonitor,
+  protocol,
   safeStorage,
   session,
   shell,
@@ -51,6 +53,9 @@ const {
 } = require('./services/file-attachments-ipc-handlers.cjs')
 const { registerFileExportIpcHandlers } = require('./services/file-export-ipc-handlers.cjs')
 const { registerQaLoggerIpcHandlers, logQaEvent, initQaDiskStore } = require('./services/qa-logger.cjs')
+const { MIGRATION_PAGE_URL, registerAppProtocol, registerAppScheme } = require('./core/app-protocol.cjs')
+const { rendererBuildPath } = require('./core/paths.cjs')
+const { migrateFileOriginStorage } = require('./services/renderer-origin-migration.cjs')
 const { createQaLogDiskStore } = require('./services/qa-log-disk-store.cjs')
 const { registerProjectsIpcHandlers } = require('./services/projects-ipc-handlers.cjs')
 const { registerNotesIpcHandlers } = require('./services/notes-ipc-handlers.cjs')
@@ -236,6 +241,9 @@ let pendingFilePath = null
 // argumento para compatibilidade e usa esta flag de ambiente como sinal
 // autoritativo, antes de qualquer acesso ao perfil normal da pessoa.
 const isReleaseSmoke = isReleaseSmokeProcess()
+// O renderer empacotado carrega por app://felixo, não file:// (core/app-protocol.cjs).
+// O esquema precisa existir antes do `ready`, inclusive no modo de smoke.
+registerAppScheme(protocol)
 const devtoolsPort = Number.parseInt(process.env.FELIXO_DEVTOOLS_PORT ?? '', 10)
 
 // Sonda de invocações IPC, só na instância de automação e antes de qualquer
@@ -411,6 +419,18 @@ function resolveRuntimeAppVersion() {
 }
 
 app.whenReady().then(async () => {
+  // Antes do smoke: ele também abre o renderer por app://. A imagem local do
+  // Markdown só é autorizada depois que os handlers de arquivo existem.
+  registerAppProtocol({
+    protocol,
+    net,
+    distDir: path.dirname(rendererBuildPath),
+    authorizeLocalImage: (filePath) => {
+      if (!textFileHandlers) throw new Error('Acesso a arquivos ainda não registrado.')
+      return textFileHandlers.authorizeImageNear(filePath)
+    },
+  })
+
   if (isReleaseSmoke) {
     try {
       await runPackagedReleaseSmoke({ app })
@@ -598,6 +618,24 @@ app.whenReady().then(async () => {
   // Função, não número: `ptyHandlers` só é criado algumas linhas abaixo. Lido
   // agora daria sempre zero, e a guarda nunca perguntaria nada.
   const contarSessoesVivas = () => ptyHandlers?.manager?.contarSessoesVivas?.() ?? 0
+
+  // Uma vez: o localStorage da origem file:// vai para app://felixo antes de o
+  // app subir (a cópia antiga fica). Em dev o renderer é o servidor do Vite.
+  if (!process.env.VITE_DEV_SERVER_URL) {
+    const migracao = await migrateFileOriginStorage({
+      BrowserWindow,
+      userData: app.getPath('userData'),
+      targetUrl: MIGRATION_PAGE_URL,
+    })
+    if (migracao.status !== 'feita') {
+      logQaEvent({
+        level: migracao.status === 'falhou' ? 'warn' : 'info',
+        scope: 'origem-app',
+        message: `migracao do localStorage: ${migracao.status}`,
+        details: migracao,
+      })
+    }
+  }
 
   mainWindow = createMainWindow({
     contarSessoesVivas,
@@ -1253,6 +1291,8 @@ app.on('window-all-closed', () => {
       platformName: platform.name,
       isDevelopment: Boolean(process.env.VITE_DEV_SERVER_URL),
       isReleaseSmoke,
+      // As janelas ocultas da migração de origem fecham antes da principal existir.
+      mainWindowCreated: mainWindow !== null,
     })
   ) {
     app.quit()

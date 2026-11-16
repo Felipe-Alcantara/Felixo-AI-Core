@@ -58,6 +58,17 @@ test('o app é só o próprio documento: o mesmo arquivo do build ou a origem do
   assert.equal(isAppDocument('não é url', DEV_URL), false)
 })
 
+test('app://felixo/index.html é o documento do app; outra página do build, outro host ou as rotas internas não', () => {
+  const APP = 'app://felixo/index.html'
+  assert.equal(isAppDocument(APP, APP), true)
+  assert.equal(isAppDocument(`${APP}?x=1#/canvas`, APP), true)
+  assert.equal(isAppDocument('app://felixo/__imagem-local?caminho=/etc/x.png', APP), false)
+  assert.equal(isAppDocument('app://felixo/__migracao-origem', APP), false)
+  assert.equal(isAppDocument('app://felixo/assets/index.js', APP), false)
+  assert.equal(isAppDocument('app://outro/index.html', APP), false)
+  assert.equal(isAppDocument('file:///C:/app/dist/index.html', APP), false)
+})
+
 test('documento de origem opaca nunca serve de referência de app', () => {
   // `about:blank`, `data:` e a página de erro do Chromium têm origem "null";
   // comparar origem com origem deixaria passar qualquer outro destino opaco.
