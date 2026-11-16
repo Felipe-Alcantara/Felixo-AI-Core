@@ -3366,3 +3366,67 @@ Task: Felixo AI Core/Segurança — prender a imagem relativa do Markdown a uma 
 Estado: concluído (deploy no adendo).
 
 **Adendo de deploy (08:51).** v0.1.564 publicada a partir de `3f2b89b`: CI verde (08:33 → 08:39), Release gate verde (08:39), Release verde (08:39 → 08:49), 20 artefatos (Windows, macOS, Linux .deb e AppImage). O app instalado não foi aberto para conferir a prévia do Markdown.
+
+## 2026-11-16 — Release: o smoke de release confere a CSP do renderer no artefato dos três SOs
+
+Task: Felixo AI Core/Release — validar a CSP do renderer no artefato real dos três SOs pelo release-smoke (Notion `3ea91f95-497e-8166-b6a7-de55f657eb56`), aberta em 29/09 a partir da política única de URL. Agente: Resolver hotfix (Claude Code, Claude Opus 5.5), 09:33 em diante. Trilha A: a direção estava na task.
+
+**Antes.**
+- A CSP só existe no build: uma `<meta>` no `dist/index.html`, que o app instalado abre por `file://` de dentro do asar.
+- O `--release-smoke` exercitava o PTY, a entrega de contexto e o npm do pacote, mas não abria o renderer.
+- Resultado: nenhuma checagem de CSP rodava sobre o artefato. Uma diretiva faltando ou um hash errado só apareceria no app instalado.
+
+**Medido no Electron 42, com o build.**
+- **Sem os handlers de IPC** (o modo de smoke sai antes deles), o React monta: o `BootMarker` liga `data-felixo-app-ready`.
+- **Canais:**
+  - **`console-message`:** recebe as violações de carregamento de recurso ("Loading the image … violates …") e a do script inline, mas não a de um `eval` recusado. Essa só chega como issue do DevTools e como `securitypolicyviolation`.
+  - **Ouvinte posto pelo CDP** (`Page.addScriptToEvaluateOnNewDocument`): entra antes de qualquer script do documento. O CDP só responde depois de a janela ter um documento (`about:blank`); antes disso, o `Log.enable` não voltava.
+- **Prova contrária**, com três cópias do `dist` com a CSP estragada; as três reprovam:
+  - **hash do script inline trocado:** `script-src-elem inline`;
+  - **sem `blob:` no `img-src`:** a sonda `imagemBlob` falha, mais `img-src blob`;
+  - **sem a `<meta>`:** o controle positivo inteiro em falso.
+- **Worker de fontes do Excalidraw** (`subset-worker.chunk-*.js`): a CSP deixa carregar, mas ele quebra ao rodar com `ReferenceError: document is not defined`. É um defeito do build, fora desta task, e fica em `notes`.
+
+**Feito.**
+- **`electron/release-smoke-renderer.cjs` (novo):** abre o `dist/index.html` do pacote numa janela oculta, com as opções e o preload da janela principal.
+  - **Isolamento:** sem rede (só `file:`, `data:`, `blob:` e `devtools:` passam), sem navegação e sem `window.open`.
+  - **Sondas:** imagem `data:` e `blob:`, o som de notificação, worker `blob:`, `import()` do chunk do Excalidraw e o worker de fontes dele.
+  - **Controle positivo:** um `eval` e uma imagem `https:` precisam ser barrados e vistos.
+  - **Reprova** com qualquer violação, sonda falha ou boot que não acontece.
+- **`electron/release-smoke.cjs`:** roda o passo antes do PTY e grava `rendererCsp` no status. O `scripts/release-smoke.cjs` copia o campo para o relatório e reprova sem ele.
+- **Duas correções que a validação no pacote mostrou:**
+  - **Smoke derrubado no Windows e no Linux:** destruir a janela oculta disparava o `window-all-closed`, e o app saía no meio do smoke. No CI, a release teria reprovado nesses dois SOs. Agora `shouldQuitWhenAllWindowsClosed` devolve `false` em `--release-smoke`, porque quem encerra é o smoke.
+  - **Diagnóstico lotado de ruído:** cada chamada do renderer sem handler imprimia "No handler registered" no stderr, e o diagnóstico guarda só os primeiros 2000 caracteres, o que escondia o erro real. Agora o ruído vira a contagem `ipcSemHandler`, e o `console.error` volta ao original no fim do passo.
+- **Docs:** ARQUITETURA ("CSP do renderer") e GUIA-DESENVOLVEDOR (smoke do artefato).
+
+**Validação.**
+- **Testes:** 12 em `release-smoke-renderer.test.cjs`, 1 novo em `release-smoke.test.cjs` (reprova antes do PTY) e 1 em `app-lifecycle.test.cjs`, que falhou antes da correção (`AssertionError: win32`).
+- **Mutações**, todas pegas:
+  - sem o controle positivo;
+  - sem as violações da página;
+  - sem as do console;
+  - sem o boot;
+  - sem as sondas;
+  - sem o portão em `runPackagedReleaseSmoke`.
+  
+  A checagem da `<meta>` não decide (vira diagnóstico): sem ela, o controle positivo já reprova, e uma CSP por cabeçalho também passaria.
+- **Pacote real do Windows**, com `electron-builder --dir` e `release-smoke.cjs --artifact`:
+  - `rendererCsp.ok: true`;
+  - seis sondas ok;
+  - controle positivo visto nos dois canais;
+  - zero violações, em cerca de 1,5 a 2,4 s.
+- **Passada manual** no mesmo pacote (`felixo devtools launch --packaged`, perfil isolado): Página Web com `https://example.com` carregada e zero violações no renderer.
+- **Gates:**
+  - `npm test`: 3369 testes, 3359 passam, 10 pulados, 0 falham. Na primeira rodada, `installer-kill-smoke` falhou por tempo; isolado, passou 3 de 3;
+  - `vitest`: 3527 passam;
+  - `eslint .` e `tsc -b` limpos.
+
+**Não validado.**
+- **macOS e Linux:** só o deploy (smoke da Release) prova.
+- **Entrega de contexto local:** o smoke completo local reprova nela. No PowerShell do PTY, `felixo` é uma função do perfil desta máquina, de outro projeto, que tem precedência sobre o shim. O relatório local de 13/10 já reprovava igual.
+- **Markdown no app instalado:** a passada manual não cobriu imagem relativa nem `data:`. A criação do bloco de arquivo pela automação não funcionou.
+- **Renderização completa do Excalidraw:** só o `import()` do chunk e o worker foram cobertos.
+
+**Ambiente.** O disco J: chegou a 0 bytes livres durante o empacotamento, e o `electron-builder` saiu com código 0 deixando um pacote incompleto. Os empacotamentos foram para o C:.
+
+Estado: concluído (deploy no adendo).
