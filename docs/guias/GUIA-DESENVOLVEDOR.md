@@ -420,6 +420,11 @@ artefato real do sistema e executa `npm run release:smoke`. O smoke:
 
 - abre o executável empacotado em modo de validação e cria uma sessão PTY real
   com `node-pty`;
+- antes do PTY, abre o `dist/index.html` do pacote numa janela oculta e
+  reprova qualquer violação da CSP (`rendererCsp` no relatório; ver "CSP do
+  renderer" na ARQUITETURA). Sem os handlers de IPC, que o modo de validação
+  não registra, o renderer chama o processo principal e falha: esses erros
+  viram a contagem `ipcSemHandler`, em vez de lotar o diagnóstico;
 - localiza o `npm-cli.js` em `resources/npm-runtime`, instala e atualiza uma CLI
   local de fixture sem rede e sem tocar no npm global da máquina;
 - confere o PATH, os shims `node`/`npm`, permissões POSIX ou `.cmd` no Windows,

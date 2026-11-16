@@ -1449,6 +1449,20 @@ limite é da origem, não da política, e fechá-lo exigiria um protocolo própr
 `frame-src` não controla `<webview>`, então o isolamento do webview continua
 sendo do processo principal.
 
+A política é conferida no artefato de cada SO pelo smoke de release
+(`electron/release-smoke-renderer.cjs`). O pacote abre o próprio
+`dist/index.html` numa janela oculta, com o preload da janela principal, sem
+rede e sem navegação. As violações são ouvidas por `securitypolicyviolation`,
+instalado pelo CDP antes de qualquer script, e pelo `console-message`. No
+Electron 42, um `eval` recusado não chega pelo console, só pelo evento.
+
+Sondas fazem os mesmos pedidos das funcionalidades: imagem `data:` e
+`blob:`, o som de notificação, worker `blob:`, o chunk do Excalidraw e o
+worker de fontes dele. Um controle positivo (`eval` e imagem `https:`)
+precisa ser barrado e visto. Sem ele, uma `<meta>` que sumisse passaria como
+"zero violações". Qualquer violação ou sonda falha reprova a release daquele
+SO.
+
 ### Sincronização segura do Felixo System Design
 
 `system-design-service.cjs` executa `git` com `execFile` e argumentos
