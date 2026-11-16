@@ -30,7 +30,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 ## Números
 
 - **Elementos:** 101 (10 blocos, 16 ferramentas, 75 outras superfícies)
-- **Controles:** 388, dos quais 58 com teste específico
+- **Controles:** 389, dos quais 58 com teste específico
 - **Elementos sem nenhum teste:** 4
 - **Lacunas:** 254 (alto 7, médio 137, baixo 110), em 67 tasks
 
@@ -2284,7 +2284,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Estado | Quando |
 | --- | --- |
-| normal | Interruptor da cadeia com o resumo (summarizeChain), estratégia com descrição e a lista ordenada: posição, provider, apta/fora agora, motivo, cobrança, multiplicador, login, espera e capacidade; mover anuncia a posição nova por aria-live e o foco segue a linha |
+| normal | Interruptor da cadeia com o resumo (summarizeChain), estratégia com descrição, a troca antecipada (Trocar antes do limite + Limiar de uso) e a lista ordenada: posição, provider, apta/fora agora, motivo, cobrança, multiplicador, login, espera e capacidade; mover anuncia a posição nova por aria-live e o foco segue a linha |
 | loading | snapshot.status loading: "Carregando a cadeia de contas…" |
 | empty | "Nenhuma conta com login próprio. Crie contas no campo Conta ao abrir um agente." |
 | error | snapshot.status error: mensagem role=alert no lugar da aba; mudança recusada ou conflito de revisão aparecem em aviso âmbar (snapshot.message); multiplicador inválido marca aria-invalid e mostra a regra |
@@ -2295,6 +2295,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | --- | --- | --- | --- | --- |
 | `label="Cadeia de contas"` (toggle) | clique | account-chain:update-settings com enabled e a revisão atual; o main devolve o estado novo (desligada: nenhum bloco troca de conta; ligada: só propõe e toda troca pede confirmação) (desabilitado: busy) | Conflito de revisão recarrega o estado e mostra o aviso de conflito; recusa do main aparece em âmbar; main fora do ar mostra MAIN_UNREACHABLE_MESSAGE | `scripts/canvas-smoke-contas.cjs` → `ligarEOrdenarCadeia` |
 | `Estratégia da cadeia` (select) | clique | account-chain:update-settings com a estratégia escolhida em STRATEGY_OPTIONS; a descrição embaixo acompanha (desabilitado: busy ou cadeia desligada) | Conflito ou recusa do main em aviso âmbar | — |
+| `label="Trocar antes do limite"` (toggle) | clique | account-chain:update-settings com proactiveEnabled (desligada por padrão). Ligada: com a medição atual de uma conta acima do limiar (campo "Limiar de uso", 50 a 99, padrão 90, salvo ao sair do campo), a cadeia propõe a troca antes da falha nos blocos em "Automática (cadeia)", uma vez por janela, e a conta acima do limiar fica por último como destino (desabilitado: busy ou cadeia desligada (o limiar também com a troca antecipada desligada)) | Conflito ou recusa do main em aviso âmbar; limiar fora de 50 a 99 volta ao valor gravado | — |
 | `para cima` (button) | clique, ou Alt+↑ com a linha focada | moveChainMember regrava a lista inteira por account-chain:update-members; aceito pelo main, o aria-live anuncia a posição nova e o foco segue a linha (desabilitado: busy ou primeira posição) | Recusa ou conflito: a ordem não muda e o aviso aparece em âmbar | — |
 | `para baixo` (button) | clique, ou Alt+↓ com a linha focada | Mesmo caminho do ↑, uma posição para baixo, gravado por account-chain:update-members (desabilitado: busy ou última posição) | Recusa ou conflito: a ordem não muda e o aviso aparece em âmbar | — |
 | `Cobrança declarada de` (select) | clique | patchMember grava billingDeclared (Não declarada/Assinatura/Cobrança por uso) por account-chain:update-members; o texto ao lado compara com a cobrança detectada (desabilitado: busy) | Recusa ou conflito em aviso âmbar | — |

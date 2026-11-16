@@ -349,7 +349,21 @@ continuação. "Limite" **nunca** nomeia erro de rede ou de servidor.
   - dois processos do Codex do mesmo perfil abertos juntos com o token velho colidiam, e um ficava sem login ("refresh token was already used").
   - Desde então, aberturas do Codex no mesmo `CODEX_HOME` (terminais e painel) esperam a vez, com 2,5 s entre elas. Se a renovação passar disso, a colisão volta a ser possível.
   - O Claude Code já serializa o refresh entre processos.
-- A troca por limite reage à falha; não há troca proativa por limiar de uso.
+- **Troca antecipada** (16/11/2026): é desligada por padrão e, ao ligar, o
+  limiar começa em 90% (vai de 50% a 99%).
+  - **Gatilho:** só com medição atual (até 15 min) e só em bloco em "Automática
+    (cadeia)". A cada amostra gravada pelo painel ou pela captura, a cadeia
+    confere a janela mais usada da conta (`findWindowOverThreshold`).
+  - **Proposta:** a mesma da troca por limite (`continuation`, classe
+    `threshold`, com o terminal antigo ainda ativo), sem pôr a conta em espera e
+    sem "Não era limite".
+  - **Frequência:** uma vez por janela (conta + janela + reset) por bloco;
+    **Agora não** silencia até a janela renovar.
+  - **Destino:** com a opção ligada, a conta acima do limiar fica por último na
+    escolha.
+  - **Fonte da medição:** a troca só é tão rápida quanto as amostras chegam. O
+    Claude atualiza a cada resposta pela statusline; os demais, pela coleta do
+    painel.
 
 ## Ideias para quem quiser contribuir
 

@@ -245,6 +245,22 @@ tem o botão **Medir agora**. Comparar capacidade entre provedores diferentes é
 uma aproximação, por isso o diálogo mostra os números e a fonte, e a decisão é
 sua.
 
+**Trocar antes do limite.** Logo abaixo da estratégia, **Trocar antes do limite** vem
+desligado. Ligado, quando a medição atual de uma conta passa do **Limiar de uso**
+(começa em 90% e vai de 50% a 99%), a cadeia propõe a troca antes de a CLI parar:
+
+- **Onde vale:** só nos blocos em "Automática (cadeia)" daquela conta, e só com
+  medição feita nos últimos 15 minutos. Medição velha não dispara nada.
+- **Faixa no bloco:** "Uso acima do limiar da conta Pessoal às 14:32", com **Ver
+  opções**. O diálogo é o mesmo da troca por limite; como o terminal antigo ainda
+  trabalha, ele avisa isso antes de abrir o bloco novo.
+- **Sem espera:** a conta não entra em espera, porque ainda roda.
+- **Uma vez por janela:** **Agora não** silencia até a janela renovar. O limite de
+  verdade continua propondo como sempre.
+- **Destino:** com a opção ligada, uma conta acima do limiar fica por último na
+  escolha de outra troca ou de um bloco novo. Só é escolhida se não houver outra
+  abaixo dele.
+
 **Quando uma conta bate o limite.**
 
 - O bloco mostra uma faixa, por exemplo "Limite da conta Pessoal às 14:32 · em

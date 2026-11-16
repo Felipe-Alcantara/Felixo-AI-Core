@@ -818,7 +818,7 @@ export const agentToolSurfaces: InventoryElement[] = [
     layer: 'panel',
     owner: `${TOOLS}/AccountChainSection.tsx`,
     states: {
-      normal: 'Interruptor da cadeia com o resumo (summarizeChain), estratégia com descrição e a lista ordenada: posição, provider, apta/fora agora, motivo, cobrança, multiplicador, login, espera e capacidade; mover anuncia a posição nova por aria-live e o foco segue a linha',
+      normal: 'Interruptor da cadeia com o resumo (summarizeChain), estratégia com descrição, a troca antecipada (Trocar antes do limite + Limiar de uso) e a lista ordenada: posição, provider, apta/fora agora, motivo, cobrança, multiplicador, login, espera e capacidade; mover anuncia a posição nova por aria-live e o foco segue a linha',
       loading: 'snapshot.status loading: "Carregando a cadeia de contas…"',
       empty: '"Nenhuma conta com login próprio. Crie contas no campo Conta ao abrir um agente."',
       error: 'snapshot.status error: mensagem role=alert no lugar da aba; mudança recusada ou conflito de revisão aparecem em aviso âmbar (snapshot.message); multiplicador inválido marca aria-invalid e mostra a regra',
@@ -840,6 +840,13 @@ export const agentToolSurfaces: InventoryElement[] = [
         effect: 'account-chain:update-settings com a estratégia escolhida em STRATEGY_OPTIONS; a descrição embaixo acompanha',
         failure: 'Conflito ou recusa do main em aviso âmbar',
         disabledWhen: 'busy ou cadeia desligada',
+      },
+      {
+        locator: 'label="Trocar antes do limite"',
+        kind: 'toggle',
+        effect: 'account-chain:update-settings com proactiveEnabled (desligada por padrão). Ligada: com a medição atual de uma conta acima do limiar (campo "Limiar de uso", 50 a 99, padrão 90, salvo ao sair do campo), a cadeia propõe a troca antes da falha nos blocos em "Automática (cadeia)", uma vez por janela, e a conta acima do limiar fica por último como destino',
+        failure: 'Conflito ou recusa do main em aviso âmbar; limiar fora de 50 a 99 volta ao valor gravado',
+        disabledWhen: 'busy ou cadeia desligada (o limiar também com a troca antecipada desligada)',
       },
       {
         locator: 'para cima',
