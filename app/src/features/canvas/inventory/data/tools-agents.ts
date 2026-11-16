@@ -394,9 +394,9 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
         task: '3ec91f95-497e-81a3-9be3-c0d354bf7621',
       },
       {
-        what: 'Custo estimado, Tokens de contexto e "Pedir confirmação em ações sensíveis" só entram no texto do prompt: nenhum código do processo principal lê maxCostEstimate, maxContextTokens ou requireConfirmationForSensitiveActions',
-        risk: 'alto',
-        task: '3e991f95-497e-812b-8456-e0073877e9d7',
+        what: 'Tokens de contexto só entra no texto do prompt: nenhum código do processo principal lê maxContextTokens (o teto de custo e a confirmação de ações sensíveis valem em código desde 16/11/2026)',
+        risk: 'médio',
+        task: '41a91f95-497e-810d-af12-e81c33aa550a',
       },
       {
         what: 'A execução ao vivo só mostra orquestrações disparadas pela tela de chat; o canvas ainda não orquestra sub-agentes',

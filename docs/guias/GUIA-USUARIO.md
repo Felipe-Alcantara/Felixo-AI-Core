@@ -451,9 +451,26 @@ Abra **Ferramentas → Orquestrador** para ajustar:
 - workflow padrão;
 - skills;
 - contexto personalizado;
-- limites de agentes, turnos, tempo, custo estimado e tokens;
+- limites de agentes, turnos, tempo, teto de custo (US$) e tokens;
 - modelos preferidos ou bloqueados para spawn;
 - confirmação para ações sensíveis.
+
+**Teto de custo.** A execução soma o custo que as CLIs informam a cada resposta. Hoje só o
+Claude informa; respostas do Codex e do Gemini ficam fora da soma, e o card diz quantas.
+Quando o gasto chega ao teto, nenhum sub-agente novo abre, e o chat pergunta **Continuar** ou
+**Parar**:
+
+- **Continuar** libera mais um teto inteiro: se o teto é US$ 1, a pergunta volta em US$ 2.
+- **Parar** encerra os sub-agentes que esperavam, e nenhum outro abre nessa execução.
+- Sem resposta em 10 minutos, vale **Parar**.
+- Com o teto em 0, não há teto.
+
+**Ações sensíveis.** Com **Confirmar ações sensíveis** ligado, o Codex App Server roda na
+pasta de trabalho e pede aprovação para sair dela (rede, outra pasta, permissão extra), e o
+Gemini ACP pede permissão a cada ferramenta que muda algo. Cada pedido vira o card
+**Permitir?** no chat, com o comando ou a ferramenta, e só segue com **Permitir**. Sem
+resposta em 10 minutos, a permissão é negada. O Claude e o Codex de uma resposta só não
+conseguem perguntar no meio do trabalho e seguem com acesso total.
 
 ### Felixo
 

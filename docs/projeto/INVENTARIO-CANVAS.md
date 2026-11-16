@@ -32,7 +32,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **Elementos:** 101 (10 blocos, 16 ferramentas, 75 outras superfícies)
 - **Controles:** 388, dos quais 58 com teste específico
 - **Elementos sem nenhum teste:** 4
-- **Lacunas:** 254 (alto 8, médio 136, baixo 110), em 67 tasks
+- **Lacunas:** 254 (alto 7, médio 137, baixo 110), em 67 tasks
 
 ## Moldura do canvas
 
@@ -1756,7 +1756,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | --- | --- | --- |
 | Painel sem teste de interface (modo, limites, preferidos/bloqueados, Salvar) e sem teste da camada orchestrator-settings-storage do renderer | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
 | OrchestratorPanel.tsx:101-107 aceita 0 e decimais em Agentes por rodada, Rodadas, Agentes no total e Minutos; normalizePositiveInteger (orchestrator-settings-storage.ts:497) troca esses valores pelo padrão (3, 5, 10, 20) ao salvar, mas a tela continua mostrando o número digitado com "Salvo" | médio | `3ec91f95-497e-81a3-9be3-c0d354bf7621` |
-| Custo estimado, Tokens de contexto e "Pedir confirmação em ações sensíveis" só entram no texto do prompt: nenhum código do processo principal lê maxCostEstimate, maxContextTokens ou requireConfirmationForSensitiveActions | alto | `3e991f95-497e-812b-8456-e0073877e9d7` |
+| Tokens de contexto só entra no texto do prompt: nenhum código do processo principal lê maxContextTokens (o teto de custo e a confirmação de ações sensíveis valem em código desde 16/11/2026) | médio | `41a91f95-497e-810d-af12-e81c33aa550a` |
 | A execução ao vivo só mostra orquestrações disparadas pela tela de chat; o canvas ainda não orquestra sub-agentes | baixo | `3eb91f95-497e-8131-9977-f8d21c950c68` |
 
 ### QA Logger
@@ -2923,7 +2923,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3e891f95-497e-8148-b00e-f27e78767664` — 2 lacunas
 - `3e891f95-497e-81b3-8857-da9125ff3f49` — 1 lacuna
 - `3e991f95-497e-810b-9f94-ed5201606718` — 1 lacuna
-- `3e991f95-497e-812b-8456-e0073877e9d7` — 1 lacuna
 - `3e991f95-497e-812d-b877-e7bb0162a60f` — 1 lacuna
 - `3e991f95-497e-815c-845c-da8829970c0c` — 1 lacuna
 - `3e991f95-497e-817d-b6a4-c2c1825b3afc` — 1 lacuna
@@ -2970,3 +2969,4 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3fa91f95-497e-81fc-b87c-e65a5bdce2a5` — 1 lacuna
 - `41491f95-497e-81da-a20c-ce16ce0f3b5a` — 1 lacuna
 - `41591f95-497e-8166-84cb-cf8af3736c2b` — 1 lacuna
+- `41a91f95-497e-810d-af12-e81c33aa550a` — 1 lacuna
