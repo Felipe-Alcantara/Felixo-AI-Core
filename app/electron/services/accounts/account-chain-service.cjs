@@ -50,6 +50,8 @@ const crypto = require('node:crypto')
 
 const { redactSecrets } = require('../official-cli-account-status.cjs')
 const { FAILURE_CLASSES } = require('./failure-taxonomy.cjs')
+// Regra pura, sem dependência injetada: o limiar lê a mesma medição atual da política.
+const { findWindowOverThreshold } = require('./account-chain-policy.cjs')
 const { parseResetFromText: parseResetFromTextDefault } = require('./reset-time.cjs')
 const {
   CHAIN_PROVIDER_IDS,
@@ -104,6 +106,9 @@ function clip(value, maxChars) {
   return typeof value === 'string' && value ? value.slice(0, maxChars) : null
 }
 
+/** Classe da proposta antecipada: não é falha (a conta ainda roda), por isso sem espera nem "Não era limite". */
+const THRESHOLD_FAILURE_CLASS = 'threshold'
+
 function providerName(providerId) {
   return PROVIDER_NAMES[providerId] ?? providerId
 }
@@ -113,12 +118,14 @@ function failure(code, extra = {}) {
 }
 
 /** Motivo gravado no registro: fato + origem, sem a linha crua da CLI. */
-function buildReason({ failureClass, fromLabel, fromAccountId, fromProviderId, kind, suffix }) {
+function buildReason({ failureClass, fromLabel, fromAccountId, fromProviderId, kind, suffix, usage = null }) {
   const who = fromAccountId
     ? `na conta ${fromLabel ?? fromAccountId} (${providerName(fromProviderId)})`
     : `no ${SYSTEM_LOGIN_LABEL} (${providerName(fromProviderId)})`
   const base =
-    kind === 'launch'
+    failureClass === THRESHOLD_FAILURE_CLASS && usage
+      ? `Uso em ${usage.usedPercent}% ${who}${usage.windowLabel ? ` (${usage.windowLabel})` : ''}, acima do limiar de ${usage.thresholdPercent}%`
+      : kind === 'launch'
       ? `Conta automática pela cadeia para um bloco novo de ${providerName(fromProviderId)}`
       : failureClass === 'auth'
         ? `Login perdido ${who}`
@@ -360,6 +367,18 @@ function createAccountChainService({
     return { member, account, cooldown, loginCheck, eligibility, explanation: null }
   }
 
+  /**
+   * Com a troca antecipada ligada, a conta acima do limiar continua apta, mas
+   * vai para o fim da fila: só é escolhida sem outra abaixo dele (decisão de
+   * 16/11/2026). A ordem da estratégia se mantém dentro de cada grupo.
+   */
+  function lastAboveThreshold(ranked, settings, nowMs) {
+    if (!settings.proactiveEnabled) return ranked
+    const above = (entry) =>
+      findWindowOverThreshold(entry.account?.measurement, nowMs, settings.proactiveThresholdPercent) !== null
+    return [...ranked.filter((entry) => !above(entry)), ...ranked.filter(above)]
+  }
+
   /** Apta, ou só falta conferir o login (a checagem é preguiçosa, §6.2). */
   function isSelectable(entry) {
     return entry.eligibility.eligible || entry.eligibility.reason === LOGIN_NOT_CHECKED_REASON
@@ -425,7 +444,11 @@ function createAccountChainService({
       .listMembers()
       .filter((member) => !providerFilter || member.providerId === providerFilter)
     const evaluated = members.map((member) => evaluateMember(member, context))
-    const ranked = rankPool(settings.strategy, evaluated.filter(isSelectable), context.nowMs)
+    const ranked = lastAboveThreshold(
+      rankPool(settings.strategy, evaluated.filter(isSelectable), context.nowMs),
+      settings,
+      context.nowMs,
+    )
 
     let recommended = null
     let checks = 0
@@ -1194,6 +1217,89 @@ function createAccountChainService({
     return { ok: true, cooldown: cooldown ? { untilAt: cooldown.untilAt, untilSource: cooldown.untilSource } : null }
   }
 
+  // ── Troca antecipada por limiar de uso ────────────────────────────────────
+
+  /**
+   * Medição nova de uma conta (o painel ou a captura gravou uma amostra). Com
+   * a troca antecipada ligada e a medição ATUAL acima do limiar, propõe a
+   * troca para cada bloco vivo em "Automática (cadeia)" nessa conta, antes da
+   * falha. Sempre com confirmação, e uma vez por janela: a mesma janela (conta
+   * + janela + reset) nunca gera a segunda proposta no mesmo bloco, nem depois
+   * de "Agora não". Nunca lança.
+   */
+  async function onUsageMeasured({ accountId } = {}) {
+    if (!isNonEmptyText(accountId)) return { action: 'invalid' }
+    try {
+      const settings = repository.readSettings()
+      if (!settings.enabled || !settings.proactiveEnabled) return { action: 'off' }
+      const window = findWindowOverThreshold(safeDescribe(accountId)?.measurement, now(), settings.proactiveThresholdPercent)
+      if (!window) return { action: 'below' }
+      let sessions = []
+      try {
+        sessions = (listLiveSessions() ?? []).filter(
+          (session) => session?.accountId === accountId && session.accountMode === CHAIN_ACCOUNT_MODE,
+        )
+      } catch {
+        sessions = []
+      }
+      const outcomes = await Promise.all(
+        sessions.map((session) =>
+          serialize(session.sessionId, () => proposeAhead(session, window, settings)).catch(() => ({ action: 'error' })),
+        ),
+      )
+      return { action: 'checked', outcomes }
+    } catch (error) {
+      safeLog({ transition: 'threshold-failed', message: redactSecrets(error?.message ?? '') })
+      return { action: 'error' }
+    }
+  }
+
+  async function proposeAhead(session, window, settings) {
+    const evidenceHash = crypto
+      .createHash('sha256')
+      .update(`limiar|${session.accountId}|${window.key ?? ''}|${window.resetAt ?? ''}`)
+      .digest('hex')
+      .slice(0, EVIDENCE_HASH_HEX_CHARS)
+    // Uma vez por janela: qualquer evento anterior desta janela no bloco (aberto, recusado, vencido) silencia.
+    if (repository.findLatestSwitchEventForEvidence({ sessionId: session.sessionId, evidenceHash })) {
+      return { action: 'silenced' }
+    }
+    if (repository.findOpenSwitchEventForSession(session.sessionId)) return { action: 'duplicate' }
+    if (repository.hasSpawnedFromSession(session.sessionId)) return { action: 'continued' }
+
+    const nowMs = now()
+    const context = {
+      kind: 'continuation',
+      sourceSessionId: session.sessionId,
+      fromAccountId: session.accountId,
+      fromProviderId: session.providerId,
+      fromLabel: clip(safeDescribe(session.accountId)?.label, SWITCH_LABEL_MAX_CHARS),
+      lineageId: isNonEmptyText(session.lineageId) ? session.lineageId : session.sessionId,
+      failureClass: THRESHOLD_FAILURE_CLASS,
+      evidenceHash,
+      incidentKey: null,
+      detectedAt: toIso(nowMs),
+      sourceAutoResumeAt: null,
+      providerFilter: null,
+      usage: { usedPercent: window.usedPercent, thresholdPercent: settings.proactiveThresholdPercent, windowLabel: window.label },
+    }
+    const result = await createProposal(context, settings)
+    if (!result.inserted) return { action: 'duplicate', event: result.event }
+    const action = result.event.state === 'proposed' ? 'proposed' : 'no_candidate'
+    publishDetection(
+      {
+        sessionId: session.sessionId,
+        accountId: session.accountId,
+        providerId: session.providerId,
+        failure: { failureClass: THRESHOLD_FAILURE_CLASS, scope: 'account', ambiguous: false, evidence: result.event.reason },
+      },
+      { action, eventId: result.event.id },
+    )
+    if (action === 'proposed') safeEmit('account-chain:proposal', result.event)
+    emitChanged('threshold')
+    return { action, event: result.event }
+  }
+
   /**
    * A prévia que a pessoa deixou de ver (fechou o configurador, trocou de conta ou de provedor)
    * sai na hora, em vez de ficar aberta 30 min e entrar na conta da retenção. Confirmada, fica.
@@ -1347,10 +1453,18 @@ function createAccountChainService({
     return result.applied
   }
 
-  function updateSettings({ enabled, strategy, maxHops, expectedRevision } = {}) {
+  function updateSettings({ enabled, strategy, maxHops, proactiveEnabled, proactiveThresholdPercent, expectedRevision } = {}) {
     let result
     try {
-      result = repository.updateSettings({ expectedRevision, enabled, strategy, maxHopsPerLineage: maxHops, nowIso: toIso(now()) })
+      result = repository.updateSettings({
+        expectedRevision,
+        enabled,
+        strategy,
+        maxHopsPerLineage: maxHops,
+        proactiveEnabled,
+        proactiveThresholdPercent,
+        nowIso: toIso(now()),
+      })
     } catch {
       return failure('INVALID')
     }
@@ -1418,7 +1532,13 @@ function createAccountChainService({
     })
     return {
       ok: true,
-      settings: { enabled: settings.enabled, strategy: settings.strategy, maxHops: settings.maxHopsPerLineage },
+      settings: {
+        enabled: settings.enabled,
+        strategy: settings.strategy,
+        maxHops: settings.maxHopsPerLineage,
+        proactiveEnabled: settings.proactiveEnabled,
+        proactiveThresholdPercent: settings.proactiveThresholdPercent,
+      },
       revision: settings.revision,
       members,
       pendingProposals: repository.listOpenSwitchEvents(),
@@ -1520,6 +1640,7 @@ function createAccountChainService({
     history,
     onOutputFailure,
     onSessionExit,
+    onUsageMeasured,
     pickAccount,
     previewLaunch,
     recordAccountFailure,

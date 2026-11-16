@@ -153,7 +153,7 @@ function withService(action, options = {}) {
     },
     describeAccount(accountId) {
       const account = accounts.get(accountId)
-      return account ? { ...account, measurement: null } : null
+      return account ? { ...account, measurement: account.measurement ?? null } : null
     },
     listAccounts() {
       if (options.accountsUnreadable) throw new Error('registro ilegível')
@@ -1292,5 +1292,110 @@ test('a reemissão da vigia (repeat) só responde ao limite recusado com "Agora 
     await env.service.decline({ proposalId: proposta.id, reason: 'not-a-limit' })
     assert.equal((await env.service.onOutputFailure(env.detection({ repeat: true }))).action, 'duplicate')
     assert.equal(env.channel('account-chain:detection').length, detectionsAntes, '"Não era limite" continua mudo')
+  })
+})
+
+// ── Troca antecipada por limiar de uso (16/11/2026) ─────────────────────────
+
+/** Medição atual da conta, com uma janela em % (restante) e reset em 3 h. */
+function measure(env, accountId, remaining, { ageMs = 0, resetInMs = 3 * 60 * MINUTE, key = 'cinco-horas' } = {}) {
+  env.accounts.get(accountId).measurement = {
+    status: 'current',
+    collectedAt: new Date(env.clock.ms - ageMs).toISOString(),
+    metrics: [
+      {
+        key,
+        label: 'janela de 5 h',
+        unit: '%',
+        remaining,
+        resetAt: new Date(env.clock.ms + resetInMs).toISOString(),
+      },
+    ],
+  }
+}
+
+function enableProactive(env, settings = {}) {
+  const result = env.service.updateSettings({
+    proactiveEnabled: true,
+    expectedRevision: env.repository.readSettings().revision,
+    ...settings,
+  })
+  assert.equal(result.ok, true)
+}
+
+test('troca antecipada: com a medição atual acima do limiar, propõe antes da falha, sem pôr a conta em espera', async () => {
+  await withService(async (env) => {
+    chainReady(env)
+    enableProactive(env)
+    measure(env, 'conta-a', 8)
+
+    const outcome = await env.service.onUsageMeasured({ accountId: 'conta-a' })
+
+    const [proposta] = outcome.outcomes
+    assert.equal(proposta.action, 'proposed')
+    assert.equal(proposta.event.failureClass, 'threshold')
+    assert.equal(proposta.event.sourceSessionId, 'sessao-1')
+    assert.equal(proposta.event.toAccountId, 'conta-b')
+    assert.match(proposta.event.reason, /Uso em 92% na conta Pessoal \(Codex\) \(janela de 5 h\), acima do limiar de 90%/)
+    assert.equal(env.repository.getCooldown('conta-a'), null, 'a conta ainda roda: nada de espera')
+    assert.ok(env.emitted.some((item) => item.channel === 'account-chain:proposal'))
+  })
+})
+
+test('troca antecipada: uma vez por janela — "Agora não" silencia até a janela renovar', async () => {
+  await withService(async (env) => {
+    chainReady(env)
+    enableProactive(env)
+    measure(env, 'conta-a', 5)
+    const primeira = (await env.service.onUsageMeasured({ accountId: 'conta-a' })).outcomes[0]
+
+    assert.equal((await env.service.onUsageMeasured({ accountId: 'conta-a' })).outcomes[0].action, 'silenced')
+    assert.equal((await env.service.decline({ proposalId: primeira.event.id, reason: 'later' })).ok, true)
+    measure(env, 'conta-a', 2)
+    assert.equal((await env.service.onUsageMeasured({ accountId: 'conta-a' })).outcomes[0].action, 'silenced')
+
+    // A janela renovou (reset novo): pode propor de novo.
+    env.advance(4 * 60 * MINUTE)
+    env.recordLogin('conta-b')
+    measure(env, 'conta-a', 4, { resetInMs: 5 * 60 * MINUTE })
+    assert.equal((await env.service.onUsageMeasured({ accountId: 'conta-a' })).outcomes[0].action, 'proposed')
+  })
+})
+
+test('troca antecipada não propõe com a opção desligada, abaixo do limiar, com medição velha ou em bloco fixo', async () => {
+  await withService(async (env) => {
+    chainReady(env)
+    measure(env, 'conta-a', 1)
+    assert.equal((await env.service.onUsageMeasured({ accountId: 'conta-a' })).action, 'off', 'desligada por padrão')
+
+    enableProactive(env, { proactiveThresholdPercent: 95 })
+    measure(env, 'conta-a', 8)
+    assert.equal((await env.service.onUsageMeasured({ accountId: 'conta-a' })).action, 'below', '92% < 95%')
+
+    measure(env, 'conta-a', 1, { ageMs: 20 * MINUTE })
+    assert.equal((await env.service.onUsageMeasured({ accountId: 'conta-a' })).action, 'below', 'medição velha não prova nada')
+
+    measure(env, 'conta-a', 1)
+    env.sessions.get('sessao-1').accountMode = 'pinned'
+    assert.deepEqual((await env.service.onUsageMeasured({ accountId: 'conta-a' })).outcomes, [], 'conta escolhida à mão continua fixa')
+    assert.deepEqual(env.repository.listSwitchEvents(), [])
+  })
+})
+
+test('com a troca antecipada ligada, a conta acima do limiar fica por último na escolha do destino', async () => {
+  await withService(async (env) => {
+    chainReady(env)
+    measure(env, 'conta-b', 3)
+
+    const semLimiar = await proposeFromSession1(env)
+    assert.equal(semLimiar.toAccountId, 'conta-b', 'sem a opção, a ordem é a de sempre')
+    assert.equal((await env.service.decline({ proposalId: semLimiar.id, reason: 'later' })).ok, true)
+
+    enableProactive(env)
+    env.addSession('sessao-2')
+    const comLimiar = await env.service.onOutputFailure(env.detection({ sessionId: 'sessao-2', lineageId: 'linhagem-2', failure: { ...LIMIT_FAILURE, evidenceHash: 'hash-limite-b' } }))
+    assert.equal(comLimiar.action, 'proposed')
+    assert.equal(comLimiar.event.toAccountId, 'conta-c', 'conta-b em 97% fica atrás da conta-c')
+    assert.deepEqual(comLimiar.event.candidates.map((item) => item.accountId).slice(0, 2), ['conta-c', 'conta-b'])
   })
 })

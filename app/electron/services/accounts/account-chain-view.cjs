@@ -295,6 +295,9 @@ function createAccountChainView({ repository, describeAccount, listLiveSessions 
         enabled: serviceState?.settings?.enabled === true,
         strategy: serviceState?.settings?.strategy ?? stored.strategy,
         maxHopsPerLineage: serviceState?.settings?.maxHops ?? stored.maxHopsPerLineage,
+        proactiveEnabled: (serviceState?.settings?.proactiveEnabled ?? stored.proactiveEnabled) === true,
+        proactiveThresholdPercent:
+          serviceState?.settings?.proactiveThresholdPercent ?? stored.proactiveThresholdPercent,
         updatedAt: stored.updatedAt ?? null,
       },
       revision: serviceState?.revision ?? stored.revision,

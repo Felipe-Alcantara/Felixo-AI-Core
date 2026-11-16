@@ -612,3 +612,22 @@ test('login e cobrança não têm fim por relógio: saem por checagem', () => {
     assert.equal(result.untilSource, 'checagem')
   }
 })
+
+test('troca antecipada: a janela mais usada de uma medição atual acima do limiar; reset passado, modelo e medição velha não contam', () => {
+  const { findWindowOverThreshold } = require('./account-chain-policy.cjs')
+  const nowMs = Date.parse('2026-11-16T05:00:00.000Z')
+  const futuro = '2026-11-16T08:00:00.000Z'
+  const amostra = (metrics, collectedAt = '2026-11-16T04:58:00.000Z') => ({ status: 'current', collectedAt, metrics })
+  const janela = (key, remaining, extra = {}) => ({ key, label: key, unit: '%', remaining, resetAt: futuro, ...extra })
+
+  assert.deepEqual(
+    findWindowOverThreshold(amostra([janela('5h', 15), janela('semana', 6)]), nowMs, 90),
+    { key: 'semana', label: 'semana', usedPercent: 94, resetAt: futuro },
+  )
+  assert.equal(findWindowOverThreshold(amostra([janela('5h', 11)]), nowMs, 90), null, '89% fica abaixo')
+  assert.equal(findWindowOverThreshold(amostra([janela('5h', 10)]), nowMs, 90).usedPercent, 90, 'no limiar já vale')
+  assert.equal(findWindowOverThreshold(amostra([janela('5h', 2, { resetAt: '2026-11-16T04:00:00.000Z' })]), nowMs, 90), null)
+  assert.equal(findWindowOverThreshold(amostra([janela('gpt-5', 0, { scope: 'model' })]), nowMs, 90), null)
+  assert.equal(findWindowOverThreshold(amostra([janela('5h', 1)], '2026-11-16T04:30:00.000Z'), nowMs, 90), null)
+  assert.equal(findWindowOverThreshold({ ...amostra([janela('5h', 1)]), status: 'stale' }, nowMs, 90), null)
+})

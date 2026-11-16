@@ -118,6 +118,34 @@ function readPercentWindows(sample) {
 }
 
 /**
+ * Troca antecipada (16/11/2026): a janela mais usada de uma medição ATUAL que
+ * passou do limiar (`usado ≥ limiar`, com usado = 100 − restante). Medição
+ * velha ou sem horário nunca dispara nada. Janela com reset já passado não
+ * conta: a medição é de antes da renovação.
+ *
+ * @returns {{ key: string | null, label: string | null, usedPercent: number, resetAt: string | null } | null}
+ */
+function findWindowOverThreshold(sample, nowMs, thresholdPercent) {
+  if (!Number.isFinite(thresholdPercent) || !isMeasurementCurrent(sample, nowMs)) return null
+  let worst = null
+  for (const metric of readPercentWindows(sample)) {
+    const resetMs = parseInstant(metric.resetAt)
+    if (resetMs !== null && resetMs <= nowMs) continue
+    const usedPercent = Math.round(Math.min(100, Math.max(0, 100 - metric.remaining)))
+    if (usedPercent < thresholdPercent) continue
+    if (!worst || usedPercent > worst.usedPercent) {
+      worst = {
+        key: metric.key ?? null,
+        label: typeof metric.label === 'string' && metric.label ? metric.label : null,
+        usedPercent,
+        resetAt: resetMs === null ? null : new Date(resetMs).toISOString(),
+      }
+    }
+  }
+  return worst
+}
+
+/**
  * Janela esgotada numa medição atual: `remaining ≤ 0` e o reset dela ainda
  * não passou (sem `resetAt`, vale enquanto a medição for atual).
  *
@@ -640,6 +668,7 @@ module.exports = {
   evaluateMembers,
   filterMembersForKind,
   findExhaustedWindow,
+  findWindowOverThreshold,
   isMeasurementCurrent,
   isWithinTtl,
   rankCandidates,

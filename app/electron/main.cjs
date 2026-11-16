@@ -447,6 +447,20 @@ app.whenReady().then(async () => {
   // Remover uma conta também a tira da cadeia (membro, espera e checagem).
   const accountChainRepository = createAccountChainRepository(storageDatabase)
   const agentUsageRepository = createAgentUsageRepository(storageDatabase)
+  // Troca antecipada por limiar: cada medição gravada avisa a cadeia, que nasce mais abaixo
+  // (até lá, a referência é nula e nada é avisado). Fora do caminho da gravação: nunca a atrasa.
+  let accountChainForUsage = null
+  const saveUsageSample = agentUsageRepository.saveSample
+  agentUsageRepository.saveSample = (sample) => {
+    const saved = saveUsageSample(sample)
+    const accountId = typeof sample?.accountId === 'string' ? sample.accountId : null
+    if (accountId && accountChainForUsage) {
+      setImmediate(() => {
+        void accountChainForUsage?.service?.onUsageMeasured?.({ accountId })
+      })
+    }
+    return saved
+  }
   // Retenção das amostras de uso (200 por conta): a primeira poda depois da mudança tira dezenas
   // de milhares de linhas e compacta o banco. Síncrona e antes da janela, para não congelar a tela.
   try {
@@ -764,6 +778,7 @@ app.whenReady().then(async () => {
       logQaEvent({ level: 'info', scope, message: transition ?? 'account-chain', details }),
     ...(fakeAuthCommandRunner ? { runCommand: fakeAuthCommandRunner } : {}),
   })
+  accountChainForUsage = accountChain
   accountChainIpc = registerAccountChainIpcHandlers({
     getService: () => accountChain.service,
     view: accountChain.view,
