@@ -681,7 +681,11 @@ remotas viram texto alternativo e não geram request automático; uma imagem
 `data:` precisa ser rasterizada e ter no máximo 2 MiB. Imagens relativas só
 viram `file://` quando o bloco tem o `baseDir` de um arquivo já autorizado; sem
 essa origem, o preview mostra o texto alternativo em vez de tentar acessar o
-disco.
+disco. A imagem relativa também não sai da raiz do arquivo: o projeto aberto
+que contém o arquivo ou, fora de projeto, a pasta do próprio arquivo. Assim,
+um documento em `docs/` mostra `../assets/logo.png` do mesmo repositório, mas
+`../../../../` (ou a mesma coisa codificada, como `%2e%2e/`) vira só o texto
+alternativo.
 
 Por segurança, o app só abre arquivos que estejam dentro de um projeto registrado ou que você tenha escolhido no seletor. As escolhas do seletor valem enquanto o app estiver aberto: ao reabrir, um bloco apontando para fora dos projetos pede que você escolha o arquivo de novo.
 
