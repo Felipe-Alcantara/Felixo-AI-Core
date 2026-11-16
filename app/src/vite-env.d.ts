@@ -1035,6 +1035,9 @@ declare global {
         ) => Promise<CliInvokeResult & { profile?: Record<string, unknown> }>
         delete: (profileId: string) => Promise<CliInvokeResult & { deleted?: boolean }>
       }
+      webviewPopups?: {
+        onBlocked: (callback: (payload: { webContentsId: number; max: number }) => void) => () => void
+      }
       webviewPermissions?: {
         pending: () => Promise<CliInvokeResult & { pending?: unknown[] }>
         respond: (params: { id: string; allow: boolean }) => Promise<CliInvokeResult>

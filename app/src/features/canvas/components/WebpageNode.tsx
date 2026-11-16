@@ -14,6 +14,7 @@ import {
   Globe,
   RotateCw,
   ShieldAlert,
+  X,
 } from 'lucide-react'
 import type { WebviewTag } from 'electron'
 import { NodeHeader } from './NodeHeader'
@@ -92,6 +93,15 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
   const { pending: permissionRequests, respond: respondPermission } = useWebviewSitePermissions()
   const requestsHere = guestId === null ? [] : permissionRequests.filter((item) => item.webContentsId === guestId)
   const permissionRequest = requestsHere[0]
+  // Limite de popups do bloco quando o main negou um: o aviso fica até fechar ou navegar.
+  const [popupLimit, setPopupLimit] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (guestId === null) return undefined
+    return window.felixo?.webviewPopups?.onBlocked((payload) => {
+      if (payload?.webContentsId === guestId) setPopupLimit(payload.max)
+    })
+  }, [guestId])
 
   // CanvasView recreates `data` (and this handler) whenever the node's own
   // data changes — e.g. every time this effect calls onDataChange itself —
@@ -190,6 +200,7 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
 
     const onNavigate = () => {
       setLoadError(null)
+      setPopupLimit(null)
       const url = webview.getURL()
       // A barra mostra onde a página está de fato, mesmo que seja um endereço
       // que o bloco não grava. O aviso de recusa (e o `aria-invalid`) falava
@@ -423,6 +434,26 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
             className="felixo-btn rounded-sm px-2 py-0.5 text-[11px] hover:bg-white/10"
           >
             Negar
+          </button>
+        </div>
+      )}
+
+      {popupLimit !== null && (
+        <div
+          role="status"
+          className="nodrag flex items-center gap-2 border-b border-white/10 bg-[color-mix(in_srgb,var(--color-warning)_14%,transparent)] px-2 py-1 text-[11px] text-(--f-core-white)"
+        >
+          <span className="min-w-0 flex-1">
+            Esta página tentou abrir mais de {popupLimit} janelas ao mesmo tempo, e a extra não abriu. Feche uma
+            das janelas dela e tente de novo.
+          </span>
+          <button
+            type="button"
+            onClick={() => setPopupLimit(null)}
+            aria-label="Fechar o aviso de janelas"
+            className="felixo-btn-icon rounded-sm p-0.5 hover:bg-white/10"
+          >
+            <X size={12} aria-hidden />
           </button>
         </div>
       )}
