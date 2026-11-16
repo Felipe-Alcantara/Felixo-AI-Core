@@ -360,6 +360,14 @@ contextBridge.exposeInMainWorld('felixo', {
     save: (profile) => ipcRenderer.invoke('webview-profiles:save', profile),
     delete: (profileId) => ipcRenderer.invoke('webview-profiles:delete', profileId),
   },
+  // Popup de um bloco Página Web negado por passar do limite (aviso no bloco).
+  webviewPopups: {
+    onBlocked: (callback) => {
+      const handler = (_event, payload) => callback(payload)
+      ipcRenderer.on('webview-popups:blocked', handler)
+      return () => ipcRenderer.removeListener('webview-popups:blocked', handler)
+    },
+  },
   // Permissões dos sites nos blocos Página Web: a faixa responde, as listas revogam.
   webviewPermissions: {
     pending: () => ipcRenderer.invoke('webview-permissions:pending'),

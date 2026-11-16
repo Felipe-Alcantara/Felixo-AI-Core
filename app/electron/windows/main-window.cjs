@@ -89,7 +89,13 @@ function createMainWindow({ contarSessoesVivas, settingsRepository, screenApi = 
     openExternal,
   })
   registerWindowZoomShortcuts(mainWindow)
-  registerWebviewLifecycle(mainWindow, { onPopupCreated: onWebviewPopup })
+  registerWebviewLifecycle(mainWindow, {
+    onPopupCreated: onWebviewPopup,
+    // O bloco que passou do limite de popups mostra o aviso (WebpageNode).
+    onPopupBlocked: (block, max) => {
+      if (!mainWindow.isDestroyed()) mainWindow.webContents.send('webview-popups:blocked', { webContentsId: block.id, max })
+    },
+  })
 
   if (typeof contarSessoesVivas === 'function') {
     registrarGuardaDeFechamento(mainWindow, {
