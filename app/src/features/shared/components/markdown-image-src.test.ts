@@ -1,5 +1,7 @@
+import { createRequire } from 'node:module'
 import { describe, expect, it } from 'vitest'
 import {
+  LOCAL_IMAGE_URL_BASE,
   MAX_INLINE_MARKDOWN_IMAGE_BYTES,
   dirnameOf,
   isRelativeMarkdownLink,
@@ -7,6 +9,21 @@ import {
   resolveMarkdownImageSrc,
   sanitizeMarkdownUrl,
 } from './markdown-image-src'
+
+/** A rota da imagem local do protocolo do app, que o processo principal autoriza. */
+const local = (caminho: string) => `app://felixo/__imagem-local?caminho=${encodeURIComponent(caminho)}`
+
+describe('rota da imagem local', () => {
+  it('é a mesma que o processo principal serve', () => {
+    const { APP_ORIGIN, LOCAL_IMAGE_PATH } = createRequire(import.meta.url)('../../../../electron/core/app-protocol.cjs')
+    expect(LOCAL_IMAGE_URL_BASE).toBe(`${APP_ORIGIN}${LOCAL_IMAGE_PATH}`)
+  })
+
+  it('escrita à mão no Markdown é recusada no renderer (só a resolução de um relativo a monta)', () => {
+    expect(resolveMarkdownImageSrc(local('/etc/foto.png'), '/home/p/proj', '/home/p/proj')).toBeUndefined()
+    expect(resolveMarkdownImageSrc('app://felixo/index.html', '/home/p/proj')).toBeUndefined()
+  })
+})
 
 describe('resolveMarkdownImageSrc', () => {
   it('bloqueia URL remota para impedir request automático', () => {
@@ -22,18 +39,18 @@ describe('resolveMarkdownImageSrc', () => {
         './foto.png',
         '/home/user/blog/src/content/posts/ola-mundo',
       ),
-    ).toBe('file:///home/user/blog/src/content/posts/ola-mundo/foto.png')
+    ).toBe(local('/home/user/blog/src/content/posts/ola-mundo/foto.png'))
 
     // Sem o `./` também — é o mesmo caminho relativo.
     expect(
       resolveMarkdownImageSrc('foto.png', '/home/user/blog/src/content/posts/ola-mundo'),
-    ).toBe('file:///home/user/blog/src/content/posts/ola-mundo/foto.png')
+    ).toBe(local('/home/user/blog/src/content/posts/ola-mundo/foto.png'))
   })
 
   it('resolve subida de diretório (..) quando o destino segue dentro da raiz', () => {
     expect(
       resolveMarkdownImageSrc('../capa/foto.png', '/home/user/posts/ola-mundo', '/home/user/posts'),
-    ).toBe('file:///home/user/posts/capa/foto.png')
+    ).toBe(local('/home/user/posts/capa/foto.png'))
   })
 
   it('recusa caminho relativo quando não há baseDir autorizado', () => {
@@ -47,11 +64,11 @@ describe('resolveMarkdownImageSrc', () => {
 
   it('escapa espaço e acento no nome do arquivo', () => {
     expect(resolveMarkdownImageSrc('foto com espaço.png', '/home/user/posts')).toBe(
-      'file:///home/user/posts/foto%20com%20espa%C3%A7o.png',
+      local('/home/user/posts/foto com espaço.png'),
     )
     expect(
       resolveMarkdownImageSrc('foto%20com%20espa%C3%A7o.png', '/home/user/posts'),
-    ).toBe('file:///home/user/posts/foto%20com%20espa%C3%A7o.png')
+    ).toBe(local('/home/user/posts/foto com espaço.png'))
   })
 
   it('devolve undefined/vazio como veio, sem quebrar', () => {
@@ -177,12 +194,12 @@ describe('imagem relativa presa à raiz autorizada', () => {
 
   it('dentro da raiz continua aparecendo, inclusive ../assets de docs/', () => {
     expect(resolveMarkdownImageSrc('../assets/logo.png', '/home/p/proj/docs', '/home/p/proj')).toBe(
-      'file:///home/p/proj/assets/logo.png',
+      local('/home/p/proj/assets/logo.png'),
     )
-    expect(resolveMarkdownImageSrc('img/x.png', '/home/p/notas', undefined)).toBe('file:///home/p/notas/img/x.png')
+    expect(resolveMarkdownImageSrc('img/x.png', '/home/p/notas', undefined)).toBe(local('/home/p/notas/img/x.png'))
     // Windows: letra de unidade e pastas sem diferenciar maiúsculas.
     expect(resolveMarkdownImageSrc('..\\assets\\logo.png', 'c:\\Users\\P\\Proj\\docs', 'C:\\Users\\p\\proj')).toBe(
-      'file:///c:/Users/P/Proj/assets/logo.png',
+      local('c:/Users/P/Proj/assets/logo.png'),
     )
   })
 

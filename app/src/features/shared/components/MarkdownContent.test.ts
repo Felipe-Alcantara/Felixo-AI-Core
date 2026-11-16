@@ -145,7 +145,7 @@ describe('MarkdownContent', () => {
     expect(html).toContain('remota')
     expect(html).not.toContain('src="https://example.com/foto.png"')
     expect(html).toContain('src="data:image/png;base64,AAAA"')
-    expect(html).toContain('src="file:///home/user/posts/ola-mundo/foto%20com%20espa%C3%A7o.png"')
+    expect(html).toContain(`src="app://felixo/__imagem-local?caminho=${encodeURIComponent('/home/user/posts/ola-mundo/foto com espaço.png')}"`)
   })
 
   it('avisa quando o conteúdo excede o limite de segurança', () => {
@@ -179,13 +179,13 @@ describe('MarkdownContent', () => {
     const noProjeto = renderToStaticMarkup(
       createElement(MarkdownContent, { content: conteudo, baseDir: '/home/p/proj/docs', imageRoot: '/home/p/proj' }),
     )
-    expect(noProjeto).toContain('src="file:///home/p/proj/assets/logo.png"')
-    expect(noProjeto).not.toMatch(/src="file:[^"]*segredo/)
+    expect(noProjeto).toContain(`src="app://felixo/__imagem-local?caminho=${encodeURIComponent('/home/p/proj/assets/logo.png')}"`)
+    expect(noProjeto).not.toMatch(/src="[^"]*segredo/)
     expect(noProjeto).toContain('fora codificado')
 
     // Sem projeto, a raiz é a pasta do arquivo: ../assets já fica de fora.
     const semProjeto = renderMarkdown(conteudo, '/home/p/proj/docs')
-    expect(semProjeto).not.toContain('src="file:')
+    expect(semProjeto).not.toContain('__imagem-local')
     expect(semProjeto).toContain('dentro')
   })
 

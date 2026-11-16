@@ -17,6 +17,10 @@ describe('excalidrawAssetPath', () => {
     )
   })
 
+  it('no app instalado (app://felixo) aponta para a pasta do build servida pelo protocolo', () => {
+    expect(excalidrawAssetPath('app://felixo/index.html')).toBe('app://felixo/excalidraw-assets/')
+  })
+
   it('em dev aponta para o dev server, que serve as fontes do node_modules', () => {
     expect(excalidrawAssetPath('http://127.0.0.1:5173/')).toBe('http://127.0.0.1:5173/excalidraw-assets/')
   })

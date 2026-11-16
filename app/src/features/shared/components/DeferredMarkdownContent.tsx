@@ -19,7 +19,7 @@ type DeferredMarkdownContentProps = {
 /**
  * O parser Markdown e os realçadores de sintaxe só são necessários quando uma
  * prévia realmente aparece. O fallback preserva o espaço do conteúdo enquanto
- * o chunk local é carregado, inclusive em um renderer `file://` empacotado.
+ * o chunk local é carregado, inclusive no renderer empacotado (`app://felixo`).
  */
 export function DeferredMarkdownContent({
   content,

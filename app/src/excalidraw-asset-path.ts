@@ -12,10 +12,11 @@ declare global {
 }
 
 /**
- * Base absoluta das fontes do Excalidraw para o documento atual: `file://…/dist/`
- * no app instalado, `http://127.0.0.1:5173/` em dev. Absoluta porque o
- * Excalidraw resolve "/…" e "./…" contra `location.origin`, que sob `file://`
- * é "null".
+ * Base absoluta das fontes do Excalidraw para o documento atual:
+ * `app://felixo/` no app instalado, `http://127.0.0.1:5173/` em dev (e
+ * `file://…/dist/` em quem ainda abre o build por arquivo, como os benchmarks).
+ * Absoluta porque o Excalidraw resolve "/…" e "./…" contra `location.origin`,
+ * que sob `file://` é "null".
  */
 export function excalidrawAssetPath(baseUri: string): string {
   return new URL(`./${EXCALIDRAW_ASSETS_DIR}/`, baseUri).href

@@ -7,8 +7,10 @@
  * requests automáticos. Caminho relativo (`./foto.png`, a
  * convenção do blog para imagem de post — ver `src/content/posts/<slug>/` no
  * felixo-blog) só carrega se soubermos de que pasta ele é relativo: por isso
- * ele é resolvido contra `baseDir` (a pasta do arquivo aberto) e vira uma URL
- * `file://`.
+ * ele é resolvido contra `baseDir` (a pasta do arquivo aberto) e vira a rota
+ * da imagem local do protocolo do app (`app://felixo/__imagem-local`), que o
+ * processo principal só serve depois de conferir o caminho real e a raiz
+ * autorizada. Sob `app://` o Chromium não deixa a página buscar `file://`.
  *
  * Sem `baseDir` (uso em contexto sem arquivo em disco, como uma mensagem de
  * chat), caminho relativo é recusado. Isso evita que conteúdo externo ganhe
@@ -113,7 +115,7 @@ export function resolveMarkdownImageSrc(
 
   const resolved = joinAndNormalize(baseDir, relative)
   if (!isWithinDirectory(resolved, rootDir)) return undefined
-  return toFileUrl(resolved)
+  return toLocalImageUrl(resolved)
 }
 
 /**
@@ -261,7 +263,7 @@ function decodeRelativePath(value: string): string {
     return decodeURIComponent(value)
   } catch {
     // A malformed escape is treated as a literal path character and will be
-    // escaped safely by `toFileUrl` below.
+    // escaped safely by `toLocalImageUrl` below.
     return value
   }
 }
@@ -330,18 +332,13 @@ function joinAndNormalize(baseDir: string, relative: string): string {
   return `${drive}${isAbsolute || drive ? '/' : ''}${joined}`
 }
 
-/** Monta uma `file://` URL, com cada segmento do caminho escapado à parte. */
-function toFileUrl(path: string): string {
-  const normalized = path.replace(/\\/g, '/')
-  const withLeadingSlash = normalized.startsWith('/') ? normalized : `/${normalized}`
-  const encoded = withLeadingSlash
-    .split('/')
-    // A letra de unidade do Windows ("C:") não é um nome de arquivo — não
-    // teria por que escapar o ":" dela.
-    .map((segment) =>
-      /^[a-zA-Z]:$/.test(segment) ? segment : encodeURIComponent(segment),
-    )
-    .join('/')
+/**
+ * A rota da imagem local do protocolo do app (`electron/core/app-protocol.cjs`).
+ * O caminho vai inteiro, em `/`; quem decide se ele pode sair é o processo
+ * principal (projeto registrado ou pasta do arquivo escolhido, pelo caminho real).
+ */
+export const LOCAL_IMAGE_URL_BASE = 'app://felixo/__imagem-local'
 
-  return `file://${encoded}`
+function toLocalImageUrl(path: string): string {
+  return `${LOCAL_IMAGE_URL_BASE}?caminho=${encodeURIComponent(path.replace(/\\/g, '/'))}`
 }

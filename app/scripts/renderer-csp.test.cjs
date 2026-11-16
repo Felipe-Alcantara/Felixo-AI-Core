@@ -125,6 +125,14 @@ test("nenhuma diretiva libera 'unsafe-eval' e o script-src não tem 'unsafe-inli
   assert.ok(!mapa.has('script-src-attr'))
 })
 
+test('nenhuma diretiva libera file:: o renderer é app://felixo, e a imagem local vem pela rota do próprio app', () => {
+  const mapa = diretivas(buildRendererCsp(INDEX_HTML).policy)
+  for (const [name, values] of mapa) {
+    assert.ok(!values.some((value) => /^file:/i.test(value)), `${name} libera file:`)
+  }
+  assert.deepEqual(mapa.get('img-src'), ["'self'", 'data:', 'blob:'])
+})
+
 test('nenhuma diretiva libera origem de rede: as fontes do Excalidraw saem do build', () => {
   const mapa = diretivas(buildRendererCsp(INDEX_HTML).policy)
   // Host sem esquema (`esm.sh`, `*.cdn.com`) também é origem de rede numa CSP.

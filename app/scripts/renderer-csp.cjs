@@ -3,9 +3,9 @@
 /**
  * Content-Security-Policy do renderer empacotado.
  *
- * O app instalado abre `dist/index.html` por `file://` (`loadFile` em
- * `electron/windows/main-window.cjs`): não existe servidor HTTP no meio para
- * mandar a política num header, então ela vai numa
+ * O app instalado abre `dist/index.html` por `app://felixo/index.html`
+ * (`electron/core/app-protocol.cjs`): o protocolo serve os arquivos do build
+ * como estão, sem header de política, então ela vai numa
  * `<meta http-equiv="Content-Security-Policy">` que o plugin do Vite injeta no
  * HTML final do build (ver `vite.config.ts`). Este módulo é a parte pura e
  * testável: monta a política e calcula o hash de cada `<script>` inline a
@@ -24,12 +24,12 @@ const { createHash } = require('node:crypto')
  * Diretivas fixas. O `script-src` recebe os hashes do HTML em
  * `buildRendererCsp`; o resto não depende do conteúdo.
  *
- * Medido no Electron do projeto com o renderer do build (file://):
- * - `'self'` sob `file://` casa com QUALQUER URL `file:`, inclusive fora de
- *   `dist/` (script, módulo e imagem de outra pasta carregaram). É o limite da
- *   origem `file://`, não desta política; o que a política garante é que nada
- *   inline sem hash e nada de `eval` roda, e que nenhuma diretiva libera
- *   origem de rede.
+ * Medido no Electron do projeto com o renderer do build:
+ * - Sob `file://` (até a v0.1.567), `'self'` casava com QUALQUER URL `file:`:
+ *   um script de outra pasta do disco executava. Sob `app://felixo`, `'self'`
+ *   é só o build, e a página não busca `file://` nenhum (prova de conceito de
+ *   16/11/2026). Nenhuma diretiva libera `file:` nem origem de rede, e nada
+ *   inline sem hash nem `eval` roda.
  * - `frame-src` não controla `<webview>`: o bloco "Página Web" continua
  *   carregando com `frame-src 'none'`. O isolamento do webview é do processo
  *   principal (`will-attach-webview`), não desta política.
@@ -52,13 +52,12 @@ const RENDERER_CSP_DIRECTIVES = Object.freeze([
   ['style-src', ["'self'", "'unsafe-inline'"]],
   // data: → imagem inline do Markdown (MIME raster e limite de tamanho
   // checados em markdown-image-src.ts) e ícones da UI; blob: → prévia de
-  // imagem colada no Composer (URL.createObjectURL); file: → imagem relativa
-  // do Markdown, que `toFileUrl` resolve para file://. Hoje o 'self' já cobre
-  // file: (ver acima), mas fica explícito para essa dependência não sumir se o
-  // renderer um dia trocar de esquema. Sem http(s): a imagem remota já é
-  // recusada no renderer, e a CSP é a segunda barreira contra request de
-  // rastreio disparado por conteúdo.
-  ['img-src', ["'self'", 'data:', 'blob:', 'file:']],
+  // imagem colada no Composer (URL.createObjectURL). A imagem relativa do
+  // Markdown vem pela rota `app://felixo/__imagem-local`, que é 'self' e que o
+  // processo principal só serve depois de autorizar o caminho real. Sem
+  // http(s): a imagem remota já é recusada no renderer, e a CSP é a segunda
+  // barreira contra request de rastreio disparado por conteúdo.
+  ['img-src', ["'self'", 'data:', 'blob:']],
   // As fontes do desenho do Excalidraw (Excalifont, Xiaolai, …) saem do
   // próprio build (`dist/excalidraw-assets/fonts`, ver
   // `scripts/excalidraw-fonts.cjs`), apontadas por `window.EXCALIDRAW_ASSET_PATH`.
