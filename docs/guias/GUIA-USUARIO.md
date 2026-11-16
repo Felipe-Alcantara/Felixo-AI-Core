@@ -988,6 +988,17 @@ Boa parte dos "erros" contados é só formatação, como "10 km" escrito "10 qui
 
 No Linux, o caminho inteiro foi conferido com um microfone virtual: gravação, texto no terminal, avisos, permissão negada, erros de endereço e de chave, e o microfone liberado ao parar, cancelar ou fechar o app. O ditado também foi conferido **sem internet**, no app instalado, com o servidor local. Microfone físico, Windows e macOS ainda não foram conferidos.
 
+### Permissões dos sites na Página Web
+
+Um site aberto num bloco **Página Web** não usa nada sensível sem a sua resposta: microfone, câmera, localização, notificações, área de transferência (ler ou escrever), captura da tela, tela cheia e as demais permissões do navegador.
+
+- **A pergunta:** quando o site pede, aparece uma faixa no topo do próprio bloco, por exemplo "meet.exemplo.com quer usar o microfone e usar a câmera.", com **Permitir** e **Negar**. A faixa não tira o foco de onde você está nem trava o app. Se você não responder, o site fica sem a permissão; navegar para outra página ou fechar o bloco conta como negar. Um pedido feito por uma janela que a página abriu (um login, por exemplo) aparece no bloco de onde ela veio.
+- **A memória:** a resposta vale para aquele site naquele perfil do navegador, até você revogar. **Negar** também fica lembrado: o site não pergunta de novo. Outro perfil pergunta por conta própria.
+- **Revogar:** no menu do perfil, no cabeçalho do bloco, em **Permissões dos sites neste perfil** (revoga tudo do site), ou em **Configurações → Permissões dos sites (Página Web)**, uma permissão por vez. Depois de revogar, o site volta a perguntar. Excluir um perfil apaga as respostas dele junto com os logins.
+- **O app em si:** o ditado e a área de transferência do próprio Felixo não passam por essa pergunta.
+
+Um site pode mostrar "bloqueado" antes de perguntar (por exemplo, "notificações bloqueadas"): sem resposta sua, o navegador interno informa a permissão como negada, e alguns sites só pedem quando você clica em algo que precisa dela.
+
 ### Gerar uma imagem no canvas
 
 Na seção **Criar** da barra lateral, **Gerar imagem** (logo abaixo de **Abrir imagem**) abre um painel com dois campos:

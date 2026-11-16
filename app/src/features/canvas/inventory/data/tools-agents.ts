@@ -1125,4 +1125,32 @@ export const agentToolSurfaces: InventoryElement[] = [
     ],
     overlap: 'Seção dentro do painel Configurações (z-20/30), sem camada própria',
   },
+  {
+    id: 'settings-permissoes-dos-sites',
+    name: 'Permissões dos sites (Configurações)',
+    layer: 'panel',
+    owner: `${TOOLS}/WebviewSitePermissionsSection.tsx`,
+    states: {
+      normal: 'Explica que um site num bloco Página Web só usa microfone, câmera, localização, notificações, clipboard ou tela cheia depois de "Permitir" na faixa do bloco; lista cada site com o perfil e cada permissão "Permitido" ou "Negado".',
+      empty: '"Nenhuma permissão respondida ainda."',
+      error: 'role="alert" com a mensagem da recusa ao revogar.',
+    },
+    controls: [
+      {
+        locator: 'aria-label={`Revogar: ${displayOrigin(site.origin)} ${item.label}`}',
+        kind: 'button',
+        effect: 'Uma por permissão respondida: webview-permissions:revoke daquela permissão do site no perfil; o site volta a perguntar.',
+        failure: 'role="alert" com a mensagem; a lista se atualiza pelo aviso webview-permissions:changed.',
+      },
+    ],
+    persistence: ['processo principal: SQLite webview_site_permissions (perfil, origem, permissão, decisão, data)'],
+    ipc: ['webview-permissions:list', 'webview-permissions:revoke', 'webview-permissions:changed'],
+    dependsOn: ['useWebviewSitePermissions', 'useWebviewProfiles', 'groupSitePermissions / displayOrigin (webview-site-permissions)'],
+    tests: [
+      { file: 'src/features/canvas/services/webview-site-permissions.test.ts' },
+      { file: 'electron/services/webview-site-permissions.test.cjs' },
+    ],
+    gaps: [],
+    overlap: 'Seção dentro do painel Configurações (z-20/30), sem camada própria',
+  },
 ]

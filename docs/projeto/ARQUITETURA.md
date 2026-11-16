@@ -1226,7 +1226,10 @@ Portões do processo principal:
 - `session-security.cjs`: o Chromium pede a permissão `openExternal` quando uma
   página navega para `vscode:`, `ms-msdt:` e afins. Em toda sessão, inclusive
   nas partições dos perfis, essa permissão passa pela mesma política. As outras
-  permissões mantêm o padrão do Electron.
+  permissões dependem da sessão, lida pelo `storagePath`:
+  - **Sessão do app** (padrão): concede, como antes (ditado, clipboard).
+  - **Partição de um perfil** do navegador interno: o `webview-site-permissions.cjs` pergunta numa faixa do bloco e lembra a resposta por perfil e origem (migração 023). O `setPermissionCheckHandler` responde "concedido" só com decisão gravada.
+  - **Outra sessão:** nega.
 
 #### Escolha de destino: nenhum link abre direto
 

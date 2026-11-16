@@ -29,8 +29,8 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 
 ## Números
 
-- **Elementos:** 101 (10 blocos, 16 ferramentas, 75 outras superfícies)
-- **Controles:** 389, dos quais 58 com teste específico
+- **Elementos:** 102 (10 blocos, 16 ferramentas, 76 outras superfícies)
+- **Controles:** 393, dos quais 58 com teste específico
 - **Elementos sem nenhum teste:** 4
 - **Lacunas:** 253 (alto 7, médio 137, baixo 109), em 66 tasks
 
@@ -678,21 +678,24 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 - **ID:** `bloco-pagina-web` · **Dono:** `src/features/canvas/components/WebpageNode.tsx`
 - **Persistência:** canvas salvo (canvas_nodes.data_json: url persistível, label, profileId, frameColor); processo principal: cookies e logins na partição do perfil (persist:…); histórico de navegação: só na sessão do webview, nunca serializado
-- **IPC:** `canvas:save`, `canvas:delete`, `external-links:open-failed`
-- **Depende de:** `useReactFlow`, `partitionForWebviewProfile (webview-profile)`, `explainUrlInput / persistableNavigationUrl (url-utils)`, `resolveGuestSrc / shouldCreateGuest / staleGuests (webview-mount)`, `webviewLinkMenu (webview-context-menu)`, `openLinkChooser / runLinkChoice`, `WebviewProfileMenu`
+- **IPC:** `canvas:save`, `canvas:delete`, `external-links:open-failed`, `webview-permissions:pending`, `webview-permissions:respond`
+- **Depende de:** `useReactFlow`, `useWebviewSitePermissions / describeSitePermissionRequest (webview-site-permissions)`, `partitionForWebviewProfile (webview-profile)`, `explainUrlInput / persistableNavigationUrl (url-utils)`, `resolveGuestSrc / shouldCreateGuest / staleGuests (webview-mount)`, `webviewLinkMenu (webview-context-menu)`, `openLinkChooser / runLinkChoice`, `WebviewProfileMenu`
 - **Sobreposição:** Bloco do React Flow, sem z próprio: fica abaixo de toda superfície fixa (topbar e statusbar 18, dock e painéis 20/30, sidebar 26, menus 50+). O cartão é overflow-hidden, então nada que nasce dentro dele passa das bordas. O <webview> composita por cima do DOM do cartão e engole o mousedown nas bordas: um véu (pointer-events-auto) só liga durante o resize. Cliques dentro do guest não chegam ao document, então menus que fecham por mousedown fora (perfil) ficam abertos.
-- **Testes:** `src/features/canvas/services/url-utils.test.ts`, `src/features/canvas/services/webview-mount.test.ts`, `src/features/canvas/services/webview-context-menu.test.ts`, `electron/services/webview-lifecycle.test.cjs`, `electron/services/webview-profile-partition.test.cjs`, `scripts/canvas-smoke-links.cjs` → `paginaWebBarraEBotao`, `scripts/canvas-smoke-links.cjs` → `paginaWebMenuDeLink`, `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`
+- **Testes:** `src/features/canvas/services/webview-site-permissions.test.ts`, `src/features/canvas/services/url-utils.test.ts`, `src/features/canvas/services/webview-mount.test.ts`, `src/features/canvas/services/webview-context-menu.test.ts`, `electron/services/webview-lifecycle.test.cjs`, `electron/services/webview-profile-partition.test.cjs`, `scripts/canvas-smoke-links.cjs` → `paginaWebBarraEBotao`, `scripts/canvas-smoke-links.cjs` → `paginaWebMenuDeLink`, `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`
 
 | Estado | Quando |
 | --- | --- |
 | normal | Webview na URL gravada (ou google.com), barra de endereço com a URL atual, título da página como rótulo enquanto a pessoa não renomeia. |
 | loading | Antes do dom-ready o guest está em branco e Voltar/Avançar ficam desabilitados; não há indicador de carregamento. |
 | error | did-fail-load (exceto -3, ABORTED): faixa vermelha com a descrição do erro. |
+| pending | Pedido de permissão do site (ou de um popup que a página abriu) sem decisão lembrada: faixa role="region" "Pedido de permissão do site" com o site e o que ele quer, Permitir e Negar; sem foco automático; "(mais N na fila)" quando há outros pedidos do bloco. |
 | disabled | Voltar/Avançar sem histórico (canGoBack/canGoForward falsos). |
 | denied | Endereço recusado pela política de URL (explainUrlInput): faixa role="alert" "Endereço não aberto: …", aria-invalid na barra e o foco fica nela. |
 
 | Controle | Gatilho | Efeito | Falha conhecida | Teste |
 | --- | --- | --- | --- | --- |
+| `onClick={() => void respondPermission(permissionRequest.id, true)}` (button) | clique | Permitir: webview-permissions:respond com allow=true; o main grava "granted" para cada permissão do pedido (perfil + origem), responde ao site e resolve os outros pedidos do mesmo site e perfil. | Pedido que já sumiu (a página navegou ou o bloco fechou) devolve "Pedido de permissão não encontrado." e a faixa some pelo aviso de pendentes. | — |
+| `onClick={() => void respondPermission(permissionRequest.id, false)}` (button) | clique | Negar: webview-permissions:respond com allow=false; o main grava "denied" (lembrado até revogar) e responde ao site; sem resposta nenhuma o site também fica sem a permissão. | Mesmo caso do Permitir: pedido que sumiu não grava nada. | — |
 | `aria-label="Voltar"` (button) | clique | webview.goBack(); did-navigate atualiza a barra, o histórico e grava a URL persistível (data.url). (desabilitado: Sem histórico para trás.) | Sem try: antes do dom-ready do guest (ex.: logo após trocar de perfil, com canGoBack ainda do guest antigo) o Electron lança síncrono. | — |
 | `aria-label="Avançar"` (button) | clique | webview.goForward(); mesma atualização da barra e da URL gravada. (desabilitado: Sem histórico para frente.) | Mesmo risco do Voltar: lança antes do dom-ready. | — |
 | `aria-label="Recarregar"` (button) | clique | webview.reload(); a navegação troca o texto da barra pela URL real e apaga o aviso de endereço recusado. | Sem try e sempre habilitado: clicado antes do dom-ready (página inicial carregando, guest recriado pela troca de perfil) lança síncrono. | `scripts/canvas-smoke-links.cjs` → `paginaWebBarraEBotao` |
@@ -2390,6 +2393,25 @@ Sem controle próprio: as ações vêm de outros elementos.
 | --- | --- | --- |
 | Medido em 23/10/2026 com o Claude Code 2.1.309 que a tela clássica não liga o mouse tracking e a padrão liga (?1049 e ?1000/1002/1003/1006); o redesenho e os menus do modo clássico numa janela do app não foram conferidos, e nenhum teste do repositório liga o interruptor e abre um Claude | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
 
+### Permissões dos sites (Configurações)
+
+- **ID:** `settings-permissoes-dos-sites` · **Dono:** `src/features/canvas/components/tools/WebviewSitePermissionsSection.tsx`
+- **Persistência:** processo principal: SQLite webview_site_permissions (perfil, origem, permissão, decisão, data)
+- **IPC:** `webview-permissions:list`, `webview-permissions:revoke`, `webview-permissions:changed`
+- **Depende de:** `useWebviewSitePermissions`, `useWebviewProfiles`, `groupSitePermissions / displayOrigin (webview-site-permissions)`
+- **Sobreposição:** Seção dentro do painel Configurações (z-20/30), sem camada própria
+- **Testes:** `src/features/canvas/services/webview-site-permissions.test.ts`, `electron/services/webview-site-permissions.test.cjs`
+
+| Estado | Quando |
+| --- | --- |
+| normal | Explica que um site num bloco Página Web só usa microfone, câmera, localização, notificações, clipboard ou tela cheia depois de "Permitir" na faixa do bloco; lista cada site com o perfil e cada permissão "Permitido" ou "Negado". |
+| empty | "Nenhuma permissão respondida ainda." |
+| error | role="alert" com a mensagem da recusa ao revogar. |
+
+| Controle | Gatilho | Efeito | Falha conhecida | Teste |
+| --- | --- | --- | --- | --- |
+| `aria-label={`Revogar: ${displayOrigin(site.origin)} ${item.label}`}` (button) | clique | Uma por permissão respondida: webview-permissions:revoke daquela permissão do site no perfil; o site volta a perguntar. | role="alert" com a mensagem; a lista se atualiza pelo aviso webview-permissions:changed. | — |
+
 ## Modais
 
 ### Pergunta de agente (felixo perguntar)
@@ -2542,11 +2564,11 @@ Sem controle próprio: as ações vêm de outros elementos.
 ### Menu de perfil do navegador (Página Web)
 
 - **ID:** `menu-perfil-do-navegador` · **Dono:** `src/features/canvas/components/WebviewProfileMenu.tsx`
-- **Persistência:** processo principal: SQLite webview_profiles (id, nome, cor) e a partição persist:… de cada perfil; canvas salvo (data.profileId do bloco)
-- **IPC:** `webview-profiles:list`, `webview-profiles:save`, `webview-profiles:delete`, `canvas:save`
-- **Depende de:** `useWebviewProfiles (webviewProfilesStore, useSyncExternalStore)`, `describeWebviewProfile / isCustomProfileId (webview-profile)`, `FRAME_COLOR_SWATCHES`, `createPortal`
+- **Persistência:** processo principal: SQLite webview_profiles (id, nome, cor) e a partição persist:… de cada perfil; processo principal: SQLite webview_site_permissions (perfil, origem, permissão, decisão), apagada junto com o perfil; canvas salvo (data.profileId do bloco)
+- **IPC:** `webview-profiles:list`, `webview-profiles:save`, `webview-profiles:delete`, `canvas:save`, `webview-permissions:list`, `webview-permissions:revoke`
+- **Depende de:** `useWebviewProfiles (webviewProfilesStore, useSyncExternalStore)`, `useWebviewSitePermissions / groupSitePermissions (webview-site-permissions)`, `describeWebviewProfile / isCustomProfileId (webview-profile)`, `FRAME_COLOR_SWATCHES`, `createPortal`
 - **Sobreposição:** Portal fixed z-70, w-52, clampado à largura da janela (left ≥ 8): acima de menu de cor (50), anel/card do tutorial (54/55) e diálogos (60); abaixo só dos FelixoSelect (1000). Não reposiciona quando o canvas se move.
-- **Testes:** `src/features/canvas/services/webview-profile.test.ts`, `src/features/canvas/services/webview-profiles-store.test.ts`, `electron/services/webview-profiles-ipc-handlers.test.cjs`, `electron/services/storage/webview-profiles-repository.test.cjs`, `electron/services/webview-profile-partition.test.cjs`
+- **Testes:** `src/features/canvas/services/webview-site-permissions.test.ts`, `electron/services/webview-site-permissions.test.cjs`, `src/features/canvas/services/webview-profile.test.ts`, `src/features/canvas/services/webview-profiles-store.test.ts`, `electron/services/webview-profiles-ipc-handlers.test.cjs`, `electron/services/storage/webview-profiles-repository.test.cjs`, `electron/services/webview-profile-partition.test.cjs`
 
 | Estado | Quando |
 | --- | --- |
@@ -2563,6 +2585,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `onChange(item.id)` (button) | clique | Um por perfil (role="menuitemradio"): grava data.profileId no bloco (canvas:save); a partição muda e o webview é recriado na mesma página com os logins do outro perfil; o menu fecha. | Falha de canvas:save só no console; o guest recriado ainda não tem dom-ready e Voltar/Recarregar podem lançar (ver bloco Página Web). | — |
 | `aria-label={`Excluir o perfil ${item.name}`}` (button) | clique | Um por perfil próprio: confirm e webview-profiles:delete (o processo principal apaga cookies e logins da partição e tira o perfil); some da lista em todos os blocos. (desabilitado: Não existe no Padrão.) | role="alert" com a mensagem; cancelar o confirm não faz nada; blocos que usavam o perfil passam a "Perfil removido". | — |
 | `aria-label="Criar perfil"` (button) | clique | Valida o nome (validateWebviewProfileName), grava em webview-profiles:save, aplica o perfil novo ao bloco e fecha o menu (Enter no campo faz o mesmo). (desabilitado: Nome vazio.) | role="alert" com o motivo da recusa ou "Não foi possível criar o perfil.". | — |
+| `aria-label={`Revogar as permissões de ${displayOrigin(site.origin)}`}` (button) | clique | Um por site com permissão respondida neste perfil ("Permissões dos sites neste perfil", com o que cada um pode e não pode): webview-permissions:revoke do site inteiro; o site volta a perguntar. (desabilitado: A seção só aparece com alguma permissão respondida no perfil.) | role="alert" com a mensagem da recusa; a lista se atualiza pelo aviso webview-permissions:changed. | — |
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
