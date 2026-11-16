@@ -51,6 +51,19 @@ export type AgentLaunchPreferences = {
    * sumir, o aviso "a conta salva X não existe mais" ainda sabe dizer qual.
    */
   accountLabel?: string
+  /**
+   * Conta escolhida por último em cada provedor (id do provedor → conta), para
+   * trocar de agente não perder a conta do outro. `accountId`/`accountLabel`
+   * continuam sendo os do agente atual, que uma versão anterior ainda lê.
+   * A leitura sempre devolve o mapa; quem grava pode omiti-lo.
+   */
+  accountByProvider?: Readonly<Record<string, SavedProviderAccount>>
+}
+
+/** Conta lembrada de um provedor. Só o id e o nome; nada da credencial. */
+export type SavedProviderAccount = {
+  accountId: string
+  accountLabel?: string
 }
 
 /** O que o seletor de agente pode ter marcado: o que se grava, mais a nuvem. */
@@ -79,6 +92,7 @@ const DEFAULT_PREFERENCES: AgentLaunchPreferences = {
   openiaInterface: 'orchat',
   openiaModel: '',
   accountId: '',
+  accountByProvider: {},
 }
 
 function getBrowserStorage(): Storage | undefined {
@@ -106,6 +120,60 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function stringValue(value: unknown): string {
   return typeof value === 'string' ? value : ''
+}
+
+function savedAccount(accountId: string, accountLabel: string): SavedProviderAccount {
+  return accountLabel ? { accountId, accountLabel } : { accountId }
+}
+
+/**
+ * Lê o mapa de contas por provedor, descartando provedor desconhecido e conta
+ * sem id. Sem o mapa (preferência de antes dele), a conta única do agente
+ * salvo vira a conta desse provedor: é a migração do valor antigo.
+ */
+function normalizeAccountByProvider(
+  value: Record<string, unknown>,
+  agentValue: AgentLaunchPreferences['agentValue'],
+): Record<string, SavedProviderAccount> {
+  const map: Record<string, SavedProviderAccount> = {}
+  if (isRecord(value.accountByProvider)) {
+    for (const [providerId, entry] of Object.entries(value.accountByProvider)) {
+      if (!getAgent(providerId as AgentId) || !isRecord(entry)) continue
+      const accountId = stringValue(entry.accountId)
+      if (accountId) map[providerId] = savedAccount(accountId, stringValue(entry.accountLabel))
+    }
+  }
+  const legacyAccountId = stringValue(value.accountId)
+  if (agentValue !== SHELL_AGENT_VALUE && legacyAccountId && !map[agentValue]) {
+    map[agentValue] = savedAccount(legacyAccountId, stringValue(value.accountLabel))
+  }
+  return map
+}
+
+/**
+ * Mapa a gravar depois da escolha atual. Só a conta de um provedor cuja seleção
+ * já foi decidida (pela lista dele ou pela pessoa) entra: logo depois de trocar
+ * de agente o campo fica vazio até a lista chegar, e gravar esse vazio apagaria
+ * a conta lembrada do provedor. Vazio decidido é o Login do sistema e sai do mapa.
+ */
+export function rememberProviderAccount(params: {
+  saved: Readonly<Record<string, SavedProviderAccount>>
+  providerId: string
+  decidedProviderId: string
+  accountId: string
+  accountLabel?: string
+}): Readonly<Record<string, SavedProviderAccount>> {
+  const { saved, providerId, decidedProviderId, accountId, accountLabel = '' } = params
+  if (!providerId || providerId !== decidedProviderId) return saved
+  const current = saved[providerId]
+  if (!accountId) {
+    if (!current) return saved
+    const next = { ...saved }
+    delete next[providerId]
+    return next
+  }
+  if (current?.accountId === accountId && (current.accountLabel ?? '') === accountLabel) return saved
+  return { ...saved, [providerId]: savedAccount(accountId, accountLabel) }
 }
 
 function normalizePreferences(
@@ -142,6 +210,7 @@ function normalizePreferences(
     openiaModel: stringValue(value.openiaModel),
     accountId: stringValue(value.accountId),
     ...(stringValue(value.accountLabel) ? { accountLabel: stringValue(value.accountLabel) } : {}),
+    accountByProvider: normalizeAccountByProvider(value, agentValue),
   }
 }
 

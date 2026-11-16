@@ -4,6 +4,7 @@ import {
   CLOUD_AGENT_VALUE,
   providerIdOf,
   readAgentLaunchPreferences,
+  rememberProviderAccount,
   saveAgentLaunchPreferences,
   SHELL_AGENT_VALUE,
 } from './agent-launch-preferences'
@@ -76,6 +77,7 @@ describe('agent launch preferences', () => {
       accountId: 'conta-trabalho',
       openiaInterface: 'aichat',
       openiaModel: 'anthropic/claude-sonnet-4',
+      accountByProvider: { codex: { accountId: 'conta-trabalho' } },
     })
   })
 
@@ -146,7 +148,65 @@ describe('agent launch preferences', () => {
       openiaInterface: 'orchat',
       openiaModel: '',
       accountId: '',
+      accountByProvider: {},
     })
+  })
+
+  it('migra a conta única antiga para a conta do provedor do agente salvo', () => {
+    const storage = createStorage({
+      'felixo:last-agent-launch-preferences': JSON.stringify({
+        agentValue: 'codex',
+        accountId: 'conta-trabalho',
+        accountLabel: 'Trabalho',
+      }),
+    })
+    expect(readAgentLaunchPreferences(storage).accountByProvider).toEqual({
+      codex: { accountId: 'conta-trabalho', accountLabel: 'Trabalho' },
+    })
+
+    // O shell não tem provedor: a conta antiga dele não vai para ninguém.
+    const shell = createStorage({
+      'felixo:last-agent-launch-preferences': JSON.stringify({ agentValue: SHELL_AGENT_VALUE, accountId: 'x' }),
+    })
+    expect(readAgentLaunchPreferences(shell).accountByProvider).toEqual({})
+  })
+
+  it('cada provedor lembra a sua conta, e a leitura descarta provedor desconhecido e conta sem id', () => {
+    const storage = createStorage()
+    saveAgentLaunchPreferences(
+      {
+        agentValue: 'claude',
+        model: '',
+        effort: '',
+        yolo: false,
+        fast: false,
+        projectId: '',
+        planningFile: '',
+        openiaInterface: 'orchat',
+        openiaModel: '',
+        accountId: 'conta-claude',
+        accountLabel: 'Claude Max',
+        accountByProvider: {
+          claude: { accountId: 'conta-claude', accountLabel: 'Claude Max' },
+          codex: { accountId: CHAIN_ACCOUNT_VALUE },
+          gemini: { accountId: 'conta-gemini' },
+        },
+      },
+      storage,
+    )
+    expect(readAgentLaunchPreferences(storage).accountByProvider).toEqual({
+      claude: { accountId: 'conta-claude', accountLabel: 'Claude Max' },
+      codex: { accountId: '@cadeia' },
+      gemini: { accountId: 'conta-gemini' },
+    })
+
+    const corrompido = createStorage({
+      'felixo:last-agent-launch-preferences': JSON.stringify({
+        agentValue: 'claude',
+        accountByProvider: { inventado: { accountId: 'x' }, codex: { accountId: 4 }, gemini: 'conta', claude: [] },
+      }),
+    })
+    expect(readAgentLaunchPreferences(corrompido).accountByProvider).toEqual({})
   })
 
   it('preserves interface/model but never stores a key in the reusable settings', () => {
@@ -204,5 +264,48 @@ describe('providerIdOf', () => {
   it('um agente comum usa o próprio provedor', () => {
     expect(providerIdOf('codex')).toBe('codex')
     expect(providerIdOf('claude')).toBe('claude')
+  })
+})
+
+describe('rememberProviderAccount', () => {
+  const saved = {
+    claude: { accountId: 'conta-claude', accountLabel: 'Claude Max' },
+    codex: { accountId: 'conta-codex' },
+  }
+
+  it('grava a conta do provedor decidido sem mexer na dos outros', () => {
+    expect(
+      rememberProviderAccount({
+        saved,
+        providerId: 'codex',
+        decidedProviderId: 'codex',
+        accountId: 'conta-trabalho',
+        accountLabel: 'Trabalho',
+      }),
+    ).toEqual({ claude: saved.claude, codex: { accountId: 'conta-trabalho', accountLabel: 'Trabalho' } })
+  })
+
+  it('logo depois de trocar de agente (lista ainda não chegou), o campo vazio não apaga a conta lembrada', () => {
+    const next = rememberProviderAccount({ saved, providerId: 'codex', decidedProviderId: '', accountId: '' })
+    expect(next).toBe(saved)
+  })
+
+  it('Login do sistema escolhido tira o provedor do mapa; o shell não tem provedor', () => {
+    expect(rememberProviderAccount({ saved, providerId: 'codex', decidedProviderId: 'codex', accountId: '' })).toEqual({
+      claude: saved.claude,
+    })
+    expect(rememberProviderAccount({ saved, providerId: '', decidedProviderId: '', accountId: 'x' })).toBe(saved)
+  })
+
+  it('sem mudança devolve o mesmo mapa', () => {
+    expect(
+      rememberProviderAccount({
+        saved,
+        providerId: 'claude',
+        decidedProviderId: 'claude',
+        accountId: 'conta-claude',
+        accountLabel: 'Claude Max',
+      }),
+    ).toBe(saved)
   })
 })
