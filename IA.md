@@ -3679,3 +3679,5 @@ Task: Felixo AI Core/Build — limpar os chunks órfãos de dist/assets antes de
 - **`dist` antigo:** o que afastei de manhã (`app/release/dist-antigo-1116`, 435 MB) continua lá; é sobra de build, que pode ser apagada.
 
 Estado: concluído (deploy no adendo).
+
+**Adendo de deploy (15:44).** v0.1.569 publicada a partir de `7dbf9a4`: CI verde na primeira tentativa (15:26 → 15:32), Release gate verde e Release verde nos três SOs (15:32 → 15:41). No checkout limpo do CI, o plugin não teve nada a remover (nenhuma mensagem `[build-output]`), e os instaladores ficaram do mesmo tamanho da v0.1.568: a mudança vale para o build local.
