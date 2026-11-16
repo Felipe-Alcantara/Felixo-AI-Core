@@ -3324,3 +3324,43 @@ Estado: concluído (deploy no adendo).
 **Adendo (2026-11-16, 07:46): CI e Release.**
 - **CI** de `4192384` (run 43849597367): passou no Validate de Windows, macOS, Ubuntu e Ubuntu ARM e no smoke do canvas, sem nova tentativa.
 - **Release:** o gate (run 43850467467) e o Release (run 43850517120, concluído às 07:44) publicaram a `v0.1.563`.
+
+## 2026-11-16 — Segurança: a imagem relativa do Markdown não sai da raiz autorizada
+
+Task: Felixo AI Core/Segurança — prender a imagem relativa do Markdown a uma raiz autorizada (Notion `3ea91f95-497e-8181-a158-c32ba5c25cc4`), aberta em 29/09 a partir da política única de URL. Agente: Resolver hotfix (Claude Code, Claude Opus 5.5), 08:25 em diante. Trilha A: a direção estava na task (raiz = projeto aberto ou, fora de projeto, a pasta do arquivo).
+
+**Antes** (`markdown-image-src.ts`):
+- `resolveMarkdownImageSrc` decodificava o caminho (`%2e%2e/` vira `../`) e o `joinAndNormalize` resolvia `..` com `stack.pop()` sem limite inferior.
+- Medido no teste antes da correção: `../../../../x.png` virava `file:///x.png`, a raiz do disco.
+- A CSP (`img-src file:`) não segura essa saída.
+
+**Feito.**
+- **`resolveMarkdownImageSrc(src, baseDir, rootDir = baseDir)`:**
+  - depois de decodificar, recusa o relativo que virou absoluto (`%2Fetc`, `C%3A%5C`, `%5C%5Cservidor`);
+  - depois de normalizar, exige que o caminho final esteja dentro de `rootDir`, pasta a pasta (`/home/pedro` não está em `/home/p`) e sem diferenciar maiúsculas quando há letra de unidade;
+  - fora da raiz, a imagem vira só o texto alternativo, como já acontecia com as recusas.
+- **`markdownImageRoot(absolutePath, projectRoots)`:** o projeto aberto mais específico que contém o arquivo; sem projeto, a pasta do arquivo.
+- **Fiação:**
+  - `ProjectRootsContext`, novo, fornecido pelo `CanvasView` com as pastas de `useCanvasProjects`;
+  - o `FileNode` calcula a raiz;
+  - `DeferredMarkdownContent`, `MarkdownContent` e `MarkdownImage` levam `imageRoot` até o resolvedor, inclusive no Markdown aninhado do bloco de código.
+- **Symlink:** a checagem é pelo caminho, no renderer. Um link simbólico dentro da raiz que aponte para fora não é seguido aqui; para isso seria preciso um `realpath` no processo principal.
+- **Docs:** GUIA-USUARIO.
+
+**Validação.**
+- **Testes de tabela em `markdown-image-src.test.ts`:**
+  - 12 saídas da raiz: `../`, `%2e%2e/`, `..%2f`, maiúsculas codificadas, barra invertida e `%5c`, `docs/../../..`, sem projeto, absolutos codificados, UNC codificado e pasta irmã;
+  - o que segue dentro: `../assets` de `docs/`, relativo simples e Windows sem diferenciar maiúsculas;
+  - a escolha da raiz: projeto mais específico, fora de projeto, prefixo de nome.
+- **`MarkdownContent.test.ts`:** renderizado, `../assets/logo.png` vira `file:///home/p/proj/assets/logo.png` com a raiz do projeto, nada de `segredo` vira `file:`, e sem projeto `../assets` já fica de fora.
+- **Teste antigo ajustado:** "resolve subida de diretório" passa a informar a raiz do projeto.
+- **Antes da correção**, os testes novos falharam (`expected 'file:///x.png' to be undefined`).
+- **Mutações:** sem a checagem de raiz, 1 teste falha; com a imagem ignorando o `imageRoot`, 1.
+- **Gates:**
+  - `npm test`: 3355 testes, 3345 passam, 10 pulados, 0 falham;
+  - `vitest`: 3527 passam;
+  - `eslint .` e `tsc -b` limpos.
+
+**Não validado.** O bloco de arquivo com imagens não foi conferido no app de fonte: o clique sintético em "Criar" não criou o bloco, e abrir um `.md` externo pede o seletor de arquivos nativo. A fiação até a imagem foi conferida no teste de componente; a do `FileNode`, pelo `tsc`.
+
+Estado: concluído (deploy no adendo).
