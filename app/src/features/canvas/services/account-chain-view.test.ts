@@ -240,7 +240,7 @@ describe('ineligibilityText', () => {
 
 describe('summarizeChain', () => {
   it('desligada por padrão', () => {
-    expect(summarizeChain(makeState({ settings: { enabled: false, strategy: 'manual', maxHopsPerLineage: 3, updatedAt: null } }))).toMatch(
+    expect(summarizeChain(makeState({ settings: { enabled: false, strategy: 'manual', maxHopsPerLineage: 3, proactiveEnabled: false, proactiveThresholdPercent: 90, updatedAt: null } }))).toMatch(
       /^Desligada/,
     )
   })
@@ -499,6 +499,17 @@ describe('faixas do bloco', () => {
       'Limite de uso da conta Pessoal às 14:32 · em espera até 16:40 · fonte: horário impresso pela CLI · a cadeia tem uma proposta de troca',
     )
     expect(banner.actions).toEqual(['view-options', 'not-a-limit'])
+  })
+
+  it('troca antecipada: "Uso acima do limiar", sem espera e sem "Não era limite"', () => {
+    const [banner] = buildTerminalChainBanners({
+      proposal: makeProposal({ failureClass: 'threshold', cooldown: null }),
+      detection: null,
+      successor: null,
+      timeOptions: SP,
+    })
+    expect(banner.text).toBe('Uso acima do limiar da conta Pessoal às 14:32 · a cadeia tem uma proposta de troca')
+    expect(banner.actions).toEqual(['view-options'])
   })
 
   it('bloco fixo: aviso e Passar responsabilidade, nunca proposta', () => {

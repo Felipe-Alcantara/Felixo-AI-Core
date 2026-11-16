@@ -67,7 +67,7 @@ describe('createAccountChainStore', () => {
   })
 
   it('mutação manda a revisão atual e aplica o estado devolvido', async () => {
-    const next = makeState({ revision: 2, settings: { enabled: false, strategy: 'manual', maxHopsPerLineage: 3, updatedAt: null } })
+    const next = makeState({ revision: 2, settings: { enabled: false, strategy: 'manual', maxHopsPerLineage: 3, proactiveEnabled: false, proactiveThresholdPercent: 90, updatedAt: null } })
     const bridge = createFakeBridge({ updateSettings: () => ({ ok: true, state: next }) })
     const store = createAccountChainStore(bridge)
     store.retain()

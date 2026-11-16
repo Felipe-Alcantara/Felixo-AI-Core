@@ -75,7 +75,7 @@ export function makeCandidate(overrides: Partial<AccountSwitchCandidate> = {}): 
 
 export function makeState(overrides: Partial<AccountChainState> = {}): AccountChainState {
   return {
-    settings: { enabled: true, strategy: 'manual', maxHopsPerLineage: 3, updatedAt: null },
+    settings: { enabled: true, strategy: 'manual', maxHopsPerLineage: 3, proactiveEnabled: false, proactiveThresholdPercent: 90, updatedAt: null },
     revision: 1,
     members: [makeMember()],
     pendingProposals: [],

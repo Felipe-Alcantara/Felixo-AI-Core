@@ -110,6 +110,7 @@ const FAILURE_CLASS_LABELS: Record<AccountFailureClass, string> = {
   timeout: 'tempo esgotado',
   cancelled: 'cancelamento',
   unknown: 'falha desconhecida',
+  threshold: 'uso acima do limiar',
 }
 
 /** Motivo em linguagem simples. Rede e servidor nunca viram "limite". */

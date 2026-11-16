@@ -41,6 +41,8 @@ export type AccountFailureClass =
   | 'timeout'
   | 'cancelled'
   | 'unknown'
+  /** Não é falha: proposta antecipada, com a medição atual acima do limiar (a conta ainda roda). */
+  | 'threshold'
 
 /** `model`: limite só daquele modelo (Codex); não põe a conta em espera. */
 export type AccountFailureScope = 'account' | 'model'
@@ -133,6 +135,10 @@ export type AccountChainSettings = {
   strategy: AccountChainStrategy
   /** Teto de saltos por linhagem (1 a 10; padrão 3). */
   maxHopsPerLineage: number
+  /** Troca antecipada: propõe antes da falha quando a medição atual passa do limiar. */
+  proactiveEnabled: boolean
+  /** Limiar de uso em % (50 a 99; padrão 90). */
+  proactiveThresholdPercent: number
   updatedAt: string | null
 }
 
@@ -341,6 +347,8 @@ export type AccountChainSettingsUpdate = {
   enabled?: boolean
   strategy?: AccountChainStrategy
   maxHops?: number
+  proactiveEnabled?: boolean
+  proactiveThresholdPercent?: number
   expectedRevision: number
 }
 

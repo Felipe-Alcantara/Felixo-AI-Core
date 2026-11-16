@@ -48,6 +48,8 @@ export function AccountChainSection() {
   const { snapshot, store } = useAccountChain()
   const [announcement, setAnnouncement] = useState('')
   const [busy, setBusy] = useState(false)
+  // Limiar digitado e ainda não salvo; null mostra o valor gravado no main.
+  const [thresholdEditing, setThresholdDraft] = useState<string | null>(null)
   const listRef = useRef<HTMLOListElement>(null)
   const helpId = useId()
   const state = snapshot.state
@@ -72,6 +74,17 @@ export function AccountChainSection() {
       return await action()
     } finally {
       setBusy(false)
+    }
+  }
+
+  const thresholdDraft = thresholdEditing ?? String(state.settings.proactiveThresholdPercent)
+  /** Salva ao sair do campo (ou Enter); fora de 50 a 99, volta ao valor gravado. */
+  const commitThreshold = () => {
+    const percent = Number(thresholdEditing)
+    setThresholdDraft(null)
+    if (thresholdEditing === null || !Number.isInteger(percent) || percent < 50 || percent > 99) return
+    if (percent !== state.settings.proactiveThresholdPercent) {
+      void run(() => store.updateSettings({ proactiveThresholdPercent: percent }))
     }
   }
 
@@ -154,6 +167,41 @@ export function AccountChainSection() {
       <p className="-mt-2 text-[11px] leading-snug text-zinc-500">
         {STRATEGY_OPTIONS.find((option) => option.value === state.settings.strategy)?.description}
       </p>
+
+      <div className="flex items-start gap-3 rounded-lg border border-white/10 bg-white/2 p-2.5">
+        <FelixoToggle
+          checked={state.settings.proactiveEnabled}
+          onChange={(proactiveEnabled) => void run(() => store.updateSettings({ proactiveEnabled }))}
+          label="Trocar antes do limite"
+          disabled={busy || !state.settings.enabled}
+        />
+        <div className="min-w-0 flex-1">
+          <p className="text-[13px] font-medium text-zinc-100">Trocar antes do limite</p>
+          <p className="mt-0.5 text-[11px] leading-snug text-zinc-500">
+            Com a medição atual da conta acima do limiar, a cadeia propõe a troca antes de a CLI parar.
+            Uma vez por janela; a conta acima do limiar fica por último como destino.
+          </p>
+          <label className="mt-1.5 flex items-center gap-2 text-[11px] text-zinc-400">
+            Limiar de uso
+            <input
+              type="number"
+              min={50}
+              max={99}
+              step={1}
+              value={thresholdDraft}
+              onChange={(event) => setThresholdDraft(event.target.value)}
+              onBlur={commitThreshold}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') commitThreshold()
+              }}
+              disabled={busy || !state.settings.enabled || !state.settings.proactiveEnabled}
+              aria-label="Limiar de uso em porcentagem"
+              className="felixo-field w-16 px-1.5 py-0.5 text-[12px] disabled:opacity-50"
+            />
+            %
+          </label>
+        </div>
+      </div>
 
       {snapshot.message && (
         <p role="status" className={AVISO}>
