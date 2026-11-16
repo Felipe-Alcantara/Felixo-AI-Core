@@ -3553,3 +3553,5 @@ Task: Felixo AI Core/Terminal — trocar a regex do WebLinksAddon por uma própr
 - **Dica e menu do clique:** não foram conferidos no app, só o sublinhado. Eles não mudaram nesta task.
 
 Estado: concluído (deploy no adendo).
+
+**Adendo de deploy (13:30).** v0.1.567 publicada a partir de `091a48b`: CI verde na primeira tentativa (13:11 → 13:17, os quatro Validate e o smoke do canvas), Release gate verde e Release verde (13:18 → 13:28) nos três SOs. A mudança é de comportamento no renderer: o smoke de release não exercita o destaque de links do terminal.
