@@ -3174,3 +3174,15 @@ Task: Felixo AI Core/Segurança — decidir por permissão o que um site no bloc
 - **Leitura do clipboard:** num site sem foco, o Chromium recusa antes de perguntar.
 
 Estado: concluído (deploy no adendo).
+
+**Adendo (2026-11-16, 06:02): CI, correção de foco e Release.**
+- **CI de `90d0be0` (run 43828675082) falhou:** o smoke do canvas no Ubuntu travou no SA3 nas três tentativas (Esc no configurador do agente e Ctrl+K: a Busca abria, mas o foco não chegava nela).
+  - **A/B local:** com o `WebpageNode.tsx` e o `WebviewProfileMenu.tsx` antigos, o SA3 passou; a captura da falha mostrava o foco na seta "Configurar novo agente".
+  - **Causa:** os menus devolviam o foco ao botão num `requestAnimationFrame` sem conferir se ele já tinha ido para outro lugar. Na janela escondida (~2 fps) esse quadro chega depois do Ctrl+K. As re-renderizações novas do bloco mudaram o tempo o bastante para a corrida aparecer.
+- **Correção em duas etapas:**
+  - `bfab59a` corrigiu os menus de Agente e Página Web da barra, mas o CI dele (run 43831851677) ainda falhou o SA3 na primeira tentativa;
+  - `ecdf4bb` corrigiu o caminho certo, o `TerminalMenu` (o configurador do agente). `restoreFocusIfLost` (`services/restore-focus.ts`) só devolve o foco se ele caiu no body, e vale para os três menus.
+- **CI de `ecdf4bb` (run 43833791737):** passou em todos os jobs, e o SA3 passou de primeira.
+- **Release:**
+  - o gate 43832877066 e o Release 43832905684 publicaram a `v0.1.559` (até `bfab59a`, concluído às 05:46);
+  - o gate 43834691368 e o Release 43834730059 publicaram a `v0.1.560` (com `ecdf4bb`, concluído às 06:00).
