@@ -280,7 +280,7 @@ test('a janela principal nega window.open e liga as guardas antes de carregar o 
 
   const denyOpen = firstCall('mainWindow.webContents.setWindowOpenHandler(')
   const navigationGuard = firstCall('registerMainWindowNavigationGuard(mainWindow.webContents,')
-  const webviewLifecycle = firstCall('registerWebviewLifecycle(mainWindow)')
+  const webviewLifecycle = firstCall('registerWebviewLifecycle(mainWindow')
   const loads = [...codeIndexes(source, 'mainWindow.loadFile('), ...codeIndexes(source, 'mainWindow.loadURL(')]
 
   assert.notEqual(denyOpen, -1, 'main-window.cjs deixou de chamar setWindowOpenHandler')
@@ -313,7 +313,7 @@ test('o main registra a segurança de sessão antes de app.whenReady()', () => {
   // Antes do `ready` porque a permissão `openExternal` de toda sessão precisa
   // estar no lugar antes de qualquer sessão existir.
   const source = readFileSync(path.join(__dirname, '..', 'main.cjs'), 'utf8')
-  const register = codeIndexes(source, 'registerSessionSecurity(app, session)')
+  const register = codeIndexes(source, 'registerSessionSecurity(app, session')
   const whenReady = codeIndexes(source, 'app.whenReady()')
 
   assert.ok(register.length > 0, 'main.cjs deixou de chamar registerSessionSecurity(app, session)')

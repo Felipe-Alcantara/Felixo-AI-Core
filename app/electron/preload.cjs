@@ -360,6 +360,23 @@ contextBridge.exposeInMainWorld('felixo', {
     save: (profile) => ipcRenderer.invoke('webview-profiles:save', profile),
     delete: (profileId) => ipcRenderer.invoke('webview-profiles:delete', profileId),
   },
+  // Permissões dos sites nos blocos Página Web: a faixa responde, as listas revogam.
+  webviewPermissions: {
+    pending: () => ipcRenderer.invoke('webview-permissions:pending'),
+    respond: (params) => ipcRenderer.invoke('webview-permissions:respond', params),
+    list: (params) => ipcRenderer.invoke('webview-permissions:list', params),
+    revoke: (params) => ipcRenderer.invoke('webview-permissions:revoke', params),
+    onPending: (callback) => {
+      const handler = (_event, pending) => callback(pending)
+      ipcRenderer.on('webview-permissions:pending', handler)
+      return () => ipcRenderer.removeListener('webview-permissions:pending', handler)
+    },
+    onChanged: (callback) => {
+      const handler = () => callback()
+      ipcRenderer.on('webview-permissions:changed', handler)
+      return () => ipcRenderer.removeListener('webview-permissions:changed', handler)
+    },
+  },
   agentPresets: {
     list: () => ipcRenderer.invoke('agent-presets:list'),
     save: (preset) => ipcRenderer.invoke('agent-presets:save', preset),

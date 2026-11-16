@@ -50,10 +50,14 @@ function resolveWindowOpenAction(disposition) {
   }
 }
 
-function registerWebviewLifecycle(mainWindow) {
+/**
+ * @param {{ onPopupCreated?: (child: import('electron').WebContents, parent: import('electron').WebContents) => void }} [options]
+ *   Avisa quem precisa saber de que bloco veio um popup (a faixa de permissão).
+ */
+function registerWebviewLifecycle(mainWindow, options = {}) {
   registerWebviewAttachGuard(mainWindow)
   mainWindow.webContents.on('did-attach-webview', (_event, guestWebContents) => {
-    applyWindowOpenPolicy(guestWebContents)
+    applyWindowOpenPolicy(guestWebContents, options.onPopupCreated)
   })
 }
 
@@ -63,8 +67,9 @@ function registerWebviewLifecycle(mainWindow) {
  * abrir outras janelas sem nenhuma restrição, em cascata.
  *
  * @param {import('electron').WebContents} webContents
+ * @param {(child: import('electron').WebContents, parent: import('electron').WebContents) => void} [onPopupCreated]
  */
-function applyWindowOpenPolicy(webContents) {
+function applyWindowOpenPolicy(webContents, onPopupCreated) {
   webContents.setWindowOpenHandler(({ url, disposition }) => {
     // Só página web vira aba no bloco ou popup. O `loadURL` abaixo é uma
     // navegação iniciada pelo processo principal, que o Chromium NÃO filtra
@@ -82,7 +87,8 @@ function applyWindowOpenPolicy(webContents) {
   })
 
   webContents.on('did-create-window', (childWindow) => {
-    applyWindowOpenPolicy(childWindow.webContents)
+    onPopupCreated?.(childWindow.webContents, webContents)
+    applyWindowOpenPolicy(childWindow.webContents, onPopupCreated)
   })
 }
 

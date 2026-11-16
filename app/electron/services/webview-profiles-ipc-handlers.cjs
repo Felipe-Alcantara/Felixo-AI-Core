@@ -10,7 +10,7 @@ const { isValidProfileId, partitionForProfile } = require('./webview-profile-par
  * localStorage…): sem isso os logins ficariam num diretório de partição sem
  * dono, sem nenhum jeito de a pessoa removê-los depois.
  *
- * @param {{ database: unknown, clearProfileStorage?: (partition: string) => Promise<void> }} options
+ * @param {{ database: unknown, clearProfileStorage?: (partition: string) => Promise<void>, onProfileDeleted?: (profileId: string) => void }} options
  */
 function registerWebviewProfilesIpcHandlers(options = {}) {
   const repository = createWebviewProfilesRepository(options.database)
@@ -49,7 +49,9 @@ function registerWebviewProfilesIpcHandlers(options = {}) {
         throw new Error('O perfil Padrao nao pode ser excluido.')
       }
       await clearProfileStorage(partitionForProfile(profileId))
-      return { ok: true, deleted: repository.delete(profileId) }
+      const deleted = repository.delete(profileId)
+      options.onProfileDeleted?.(profileId)
+      return { ok: true, deleted }
     } catch (error) {
       return toErrorResult(error, 'Nao foi possivel excluir o perfil do navegador.')
     }

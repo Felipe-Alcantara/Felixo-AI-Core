@@ -55,7 +55,7 @@ function criarPerguntaNativa(browserWindow) {
  *   (`devtools-shell-open-guard.cjs`).
  * @returns {import('electron').BrowserWindow}
  */
-function createMainWindow({ contarSessoesVivas, settingsRepository, screenApi = screen, electronShell } = {}) {
+function createMainWindow({ contarSessoesVivas, settingsRepository, screenApi = screen, electronShell, onWebviewPopup } = {}) {
   let savedState = null
   try {
     savedState = settingsRepository?.get('window.main.state') ?? null
@@ -89,7 +89,7 @@ function createMainWindow({ contarSessoesVivas, settingsRepository, screenApi = 
     openExternal,
   })
   registerWindowZoomShortcuts(mainWindow)
-  registerWebviewLifecycle(mainWindow)
+  registerWebviewLifecycle(mainWindow, { onPopupCreated: onWebviewPopup })
 
   if (typeof contarSessoesVivas === 'function') {
     registrarGuardaDeFechamento(mainWindow, {

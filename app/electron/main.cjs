@@ -171,6 +171,9 @@ const platform = require('./core/platform/index.cjs')
 const { runPackagedReleaseSmoke } = require('./release-smoke.cjs')
 const { registerGlobalErrorHandlers, wrapIpcHandleWithLogging } = require('./services/global-error-handlers.cjs')
 const { registerSessionSecurity } = require('./services/session-security.cjs')
+const { createSitePermissionBroker } = require('./services/webview-site-permissions.cjs')
+const { createWebviewSitePermissionsRepository } = require('./services/storage/webview-site-permissions-repository.cjs')
+const { registerWebviewSitePermissionsIpcHandlers } = require('./services/webview-site-permissions-ipc-handlers.cjs')
 const { startPerformanceRecovery } = require('./services/performance-recovery.cjs')
 
 // O mais cedo possível — antes de qualquer `ipcMain.handle` de outro módulo
@@ -182,8 +185,13 @@ const { startPerformanceRecovery } = require('./services/performance-recovery.cj
 registerGlobalErrorHandlers({ log: logQaEvent, processObj: process, electronApp: app })
 wrapIpcHandleWithLogging(ipcMain, logQaEvent)
 // Antes de qualquer sessão existir: a permissão `openExternal` de toda sessão
-// (padrão e partições do navegador interno) passa pela política de URL.
-registerSessionSecurity(app, session)
+// (padrão e partições do navegador interno) passa pela política de URL, e as
+// outras permissões de um site (bloco Página Web) perguntam à pessoa. O broker
+// nasce depois do banco; até lá, pedido de site é negado.
+let webviewSitePermissions = null
+registerSessionSecurity(app, session, console, { getSitePermissions: () => webviewSitePermissions })
+// Popup de um bloco: a pergunta de permissão aparece no bloco que o abriu.
+const linkWebviewPopup = (child, parent) => webviewSitePermissions?.linkPopup(child, parent)
 
 let mainWindow = null
 let ptyHandlers = null
@@ -576,7 +584,12 @@ app.whenReady().then(async () => {
   // agora daria sempre zero, e a guarda nunca perguntaria nada.
   const contarSessoesVivas = () => ptyHandlers?.manager?.contarSessoesVivas?.() ?? 0
 
-  mainWindow = createMainWindow({ contarSessoesVivas, settingsRepository, electronShell: automationShell ?? undefined })
+  mainWindow = createMainWindow({
+    contarSessoesVivas,
+    settingsRepository,
+    electronShell: automationShell ?? undefined,
+    onWebviewPopup: linkWebviewPopup,
+  })
   const getMainWindow = () => mainWindow ?? BrowserWindow.getAllWindows()[0]
 
   const gpuSession = createGpuPreferenceSession({
@@ -925,7 +938,19 @@ app.whenReady().then(async () => {
     appPaths,
     database: storageDatabase,
   })
-  const webviewProfiles = registerWebviewProfilesIpcHandlers({ database: storageDatabase })
+  webviewSitePermissions = createSitePermissionBroker({
+    repository: createWebviewSitePermissionsRepository(storageDatabase),
+    notify: (channel, payload) => {
+      const target = getMainWindow()
+      if (target && !target.isDestroyed()) target.webContents.send(channel, payload)
+    },
+  })
+  registerWebviewSitePermissionsIpcHandlers({ getBroker: () => webviewSitePermissions })
+  const webviewProfiles = registerWebviewProfilesIpcHandlers({
+    database: storageDatabase,
+    // As decisões de permissão do perfil saem junto com os logins dele.
+    onProfileDeleted: (profileId) => webviewSitePermissions?.forgetProfile(profileId),
+  })
   agentBrowserWatching = registerAgentBrowserIpcHandlers(getMainWindow, appPaths, {
     // A mesma troca da janela: com FELIXO_DEVTOOLS_SHELL_OPEN=falha, o
     // "Abrir no navegador" do cartão de pedido também não abre nada.
@@ -1076,7 +1101,12 @@ app.whenReady().then(async () => {
       // A janela recriada precisa da MESMA guarda: no macOS este é o caminho
       // normal de voltar ao app depois de fechar, e uma janela sem guarda
       // desfaria a proteção na segunda vez.
-      mainWindow = createMainWindow({ contarSessoesVivas, settingsRepository, electronShell: automationShell ?? undefined })
+      mainWindow = createMainWindow({
+    contarSessoesVivas,
+    settingsRepository,
+    electronShell: automationShell ?? undefined,
+    onWebviewPopup: linkWebviewPopup,
+  })
     }
   })
 })

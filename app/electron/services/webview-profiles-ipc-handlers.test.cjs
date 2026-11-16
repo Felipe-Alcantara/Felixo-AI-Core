@@ -17,11 +17,11 @@ const { createStorageDatabase } = require('./storage/sqlite-database.cjs')
 const { registerWebviewProfilesIpcHandlers } = require('./webview-profiles-ipc-handlers.cjs')
 Module._load = originalLoad
 
-function setup(clearProfileStorage) {
+function setup(clearProfileStorage, onProfileDeleted) {
   handlers.clear()
   const databaseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-webview-ipc-'))
   const database = createStorageDatabase({ databaseDir })
-  registerWebviewProfilesIpcHandlers({ database, clearProfileStorage })
+  registerWebviewProfilesIpcHandlers({ database, clearProfileStorage, onProfileDeleted })
   return {
     cleanup: () => {
       database.close()
@@ -32,23 +32,27 @@ function setup(clearProfileStorage) {
 
 test('excluir limpa a sessão da partição do perfil e só então o tira da lista', async () => {
   const limpezas = []
-  const { cleanup } = setup(async (partition) => { limpezas.push(partition) })
+  const esquecidos = []
+  const { cleanup } = setup(async (partition) => { limpezas.push(partition) }, (id) => esquecidos.push(id))
   try {
     await handlers.get('webview-profiles:save')(null, { id: 'trabalho-ab12', name: 'Trabalho' })
     const result = await handlers.get('webview-profiles:delete')(null, 'trabalho-ab12')
     assert.equal(result.ok, true)
     assert.equal(result.deleted, true)
     assert.deepEqual(limpezas, ['persist:felixo-webview-trabalho-ab12'])
+    assert.deepEqual(esquecidos, ['trabalho-ab12'], 'as permissões dos sites do perfil saem junto')
     assert.deepEqual((await handlers.get('webview-profiles:list')()).profiles, [])
   } finally { cleanup() }
 })
 
 test('se a limpeza falha, o perfil continua existindo (não sobra sessão sem dono)', async () => {
-  const { cleanup } = setup(async () => { throw new Error('disco travado') })
+  const esquecidos = []
+  const { cleanup } = setup(async () => { throw new Error('disco travado') }, (id) => esquecidos.push(id))
   try {
     await handlers.get('webview-profiles:save')(null, { id: 'trabalho-ab12', name: 'Trabalho' })
     const result = await handlers.get('webview-profiles:delete')(null, 'trabalho-ab12')
     assert.equal(result.ok, false)
+    assert.deepEqual(esquecidos, [], 'perfil que ficou mantém as permissões')
     assert.match(result.message, /disco travado/)
     assert.equal((await handlers.get('webview-profiles:list')()).profiles.length, 1)
   } finally { cleanup() }

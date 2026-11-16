@@ -4,6 +4,7 @@ const {
   classifyExternalUrl,
   describeExternalUrlForLog,
 } = require('./external-url-policy.cjs')
+const { profileIdFromStoragePath } = require('./webview-site-permissions.cjs')
 
 /**
  * Permissão `openExternal` de todas as sessões do app (a padrão e as
@@ -16,8 +17,8 @@ const {
  * `external-links.cjs`, então vale a mesma política. Um redirecionamento de
  * uma página web para um esquema desses cai aqui também.
  *
- * As outras permissões continuam com o padrão do Electron (conceder); mudar
- * câmera, microfone ou notificação está fora do escopo desta barreira.
+ * As outras permissões dependem da sessão (ver `registerSessionSecurity`):
+ * a do app concede, como antes; a de um site pergunta à pessoa.
  *
  * @param {string} permission
  * @param {{ externalURL?: string } | undefined} details
@@ -29,24 +30,58 @@ function decidePermissionRequest(permission, details) {
 }
 
 /**
+ * De quem é a sessão: um perfil do navegador interno (site), o app (a sessão
+ * padrão, do renderer) ou outra (nega). Lida no pedido, não no registro: a
+ * padrão só existe depois do ready.
+ *
+ * @returns {{ kind: 'site', profileId: string } | { kind: 'app' } | { kind: 'other' }}
+ */
+function classifySession(target, defaultSession) {
+  const profileId = profileIdFromStoragePath(target?.storagePath)
+  if (profileId) return { kind: 'site', profileId }
+  return target && target === defaultSession ? { kind: 'app' } : { kind: 'other' }
+}
+
+/**
  * @param {import('electron').App} electronApp
  * @param {{ defaultSession: import('electron').Session }} electronSession
  * @param {{ warn: (message: string) => void }} [logger]
+ * @param {{ getSitePermissions?: () => ReturnType<typeof import('./webview-site-permissions.cjs').createSitePermissionBroker> | null }} [options]
+ *   O broker nasce depois do banco; até lá, pedido de site é negado.
  */
-function registerSessionSecurity(electronApp, electronSession, logger = console) {
+function registerSessionSecurity(electronApp, electronSession, logger = console, options = {}) {
   const hardened = new WeakSet()
+  const getSitePermissions = options.getSitePermissions ?? (() => null)
 
   const harden = (target) => {
     if (!target || hardened.has(target)) return
     hardened.add(target)
-    target.setPermissionRequestHandler((_webContents, permission, callback, details) => {
-      const granted = decidePermissionRequest(permission, details)
-      if (!granted) {
-        logger.warn(
-          `[session-security] esquema externo recusado: ${describeExternalUrlForLog(details?.externalURL)}`,
-        )
+    target.setPermissionRequestHandler((webContents, permission, callback, details) => {
+      if (permission === 'openExternal') {
+        const granted = decidePermissionRequest(permission, details)
+        if (!granted) {
+          logger.warn(
+            `[session-security] esquema externo recusado: ${describeExternalUrlForLog(details?.externalURL)}`,
+          )
+        }
+        return callback(granted)
       }
-      callback(granted)
+      const owner = classifySession(target, electronSession.defaultSession)
+      if (owner.kind === 'app') return callback(true)
+      const broker = owner.kind === 'site' ? getSitePermissions() : null
+      if (!broker) return callback(false)
+      return broker.request({ webContents, permission, details, profileId: owner.profileId, callback })
+    })
+    // Sem este handler o Electron responde "concedido" a toda consulta
+    // (`navigator.permissions.query`, `Notification.permission`), e o site
+    // usaria a API sem pedir. Sem decisão o estado é "negado": o Electron não
+    // tem "perguntar", mas o pedido ainda chega ao handler acima (medido).
+    target.setPermissionCheckHandler?.((_webContents, permission, requestingOrigin, details) => {
+      if (permission === 'openExternal') return true
+      const owner = classifySession(target, electronSession.defaultSession)
+      if (owner.kind === 'app') return true
+      const broker = owner.kind === 'site' ? getSitePermissions() : null
+      return Boolean(broker?.check({ profileId: owner.profileId, permission, requestingOrigin, details }))
     })
   }
 
@@ -57,6 +92,7 @@ function registerSessionSecurity(electronApp, electronSession, logger = console)
 }
 
 module.exports = {
+  classifySession,
   decidePermissionRequest,
   registerSessionSecurity,
 }
