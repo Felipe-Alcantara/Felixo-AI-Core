@@ -2727,3 +2727,60 @@ Estado: concluído (deploy no adendo).
 - **CI** de `23a6557` (run 43779848444): passou no Validate de Windows, macOS, Ubuntu e Ubuntu ARM e no smoke do canvas.
 - **Release:** o gate (run 43780441966) e o Release (run 43780463324, concluído às 21:35) publicaram a `v0.1.551`.
 - **Efeito colateral da validação:** ao subir, a sessão isolada do `devtools` rodou a atualização automática das CLIs do sistema e atualizou o Codex do npm global da máquina de 0.171.0-alpha.4 para 0.171.0-alpha.7. É o comportamento normal do app; o perfil isolado não isola as CLIs do sistema.
+
+## 2026-11-15 — Chat e orquestrador: a conversa e os sub-agentes rodam na conta escolhida, inclusive pela cadeia
+
+Task: Felixo AI Core/Orquestrador — usar as contas da cadeia em vez do login do sistema (Notion `3e991f95-497e-81d8-9b29-f440d7efac0c`), aberta em 28/09 no PR #97. Agente: Resolver hotfix (Claude Code, Claude Opus 5.5), 22:10 em diante.
+
+**Antes.** Os três caminhos do chat terminavam em `cliManager.spawn` com `createCliEnv()`, o Login do sistema:
+- a mensagem (`cli:send`);
+- o turno do orquestrador (`invokeOrchestrator`);
+- o sub-agente (`spawnOrchestrationAgent`).
+
+Nenhum recebia conta, e o processo persistente era reaproveitado comparando só modelo e pasta.
+
+**Decisões do Felipe** (perguntas pelo `AskUserQuestion`):
+1. **Escolha:** um seletor que pode ser trocado a qualquer momento no chat.
+2. **Sub-agentes:** na cadeia, cada um pega a conta apta do próprio provedor. Com conta fixa, o mesmo provedor usa a conta e outro provedor usa o Login do sistema.
+3. **Sem conta apta:** o pedido cai no Login do sistema com aviso. É diferente do bloco, que recusa a abertura.
+4. **Limite no meio da tarefa:** o card propõe a próxima conta, com confirmação.
+
+**Feito.**
+- **`chat-account.cjs` (novo):** `createChatAccountResolver` resolve a conta de cada pedido (`system`, `pinned` ou `chain`) e o ambiente dela (`createAccountCliEnv`). Quando cai no sistema, devolve o aviso.
+- **Serviço da cadeia:**
+  - `pickAccount` usa a mesma escolha do bloco novo (`selectDestination`, com o provedor e as contas já tentadas), sem proposta nem ticket;
+  - `recordAccountFailure` põe a conta em espera quando o chat vê limite, login ou crédito. O limite só do modelo, o caso ambíguo e a rede não entram.
+- **`ipc-handlers.cjs`:**
+  - `sendCliRequest` ficou assíncrono: resolve a conta e chama `startCliRequest`, que é o corpo antigo;
+  - o Codex numa conta entra na vez de abertura do perfil (`openOnCodexTurn`); no Login do sistema, o chat segue fora da vez, como antes;
+  - a falha numa conta vai para a espera da cadeia (`threadAccounts`), não para a disponibilidade global;
+  - o sub-agente recebe `accountSelection` e, na troca aceita, `forcedAccountId`.
+- **Processo persistente:** só é reaproveitado com a mesma conta (`canReusePersistentSession`) e abre com o ambiente dela.
+- **Terminal do chat:** mostra "Conta: …" no início de cada pedido.
+- **Executor:** guarda a conta de cada sub-agente (`agentJobAccounts`). No limite, em conta da cadeia, `planAccountSwitch` pede a próxima conta e abre a pergunta `kind: 'account'`.
+  - O aceite respawna no mesmo modelo, na conta confirmada; a recusa e o prazo vencido falham com o erro original.
+  - Sem outra conta, segue o fallback de provedor. O registro de trocas grava os rótulos das contas.
+- **Interface:**
+  - seletor "Conta do chat" no compositor (`useChatAccount`, `localStorage felixo:chat-account`), ativo também durante a resposta;
+  - o aviso de queda no Login do sistema aparece acima do compositor;
+  - o card diz "Trocar de conta?" com as duas contas.
+
+**Validação.**
+- **Testes novos:** 6 do resolvedor, 2 da cadeia, 3 do executor, 1 do processo persistente e 4 + 1 do renderer. Os 2 testes de `spawnOrchestrationAgent` viraram assíncronos e conferem a escolha e a conta confirmada.
+- **Mutação:** tirar a conta da comparação de reuso derrubou o teste do processo persistente.
+- **Gates:**
+  - `npm test`: 3302 testes, 3292 passam, 10 pulados, 0 falham;
+  - `vitest run`: 3509 passam e 4 pulados;
+  - `eslint .` e `tsc -b` limpos.
+- **App de fonte com perfil isolado:**
+  - o seletor aparece com Login do sistema e "Automática (cadeia)", com o aviso de cadeia desligada;
+  - uma conta de teste do Codex aparece como "Conta fixa" e continua escolhida depois de recarregar;
+  - com a CLI trocada para o Claude, o seletor mostra "Login do sistema" sem apagar a escolha guardada.
+
+**Não validado.**
+- Nenhuma mensagem foi enviada no app: rodaria uma CLI real numa conta real.
+- O caminho do envio está coberto pelos testes do resolvedor, do executor e do processo persistente.
+- Não há teste de ponta a ponta do `cli:send` com o `cliManager` real, porque o módulo instancia o gerenciador no topo.
+- O turno do orquestrador que bate o limite na conta não pergunta: só os sub-agentes trocam de conta no meio da tarefa.
+
+Estado: concluído (deploy no adendo).
