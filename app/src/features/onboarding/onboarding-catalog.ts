@@ -121,12 +121,12 @@ export const ALWAYS_VISIBLE_ANCHORS: readonly AnchorId[] = Object.freeze([
   'canvas',
 ])
 
-export type TourId = 'inicial' | 'novidade-ajuda'
-export type FeatureId = 'feature.ajuda'
+export type TourId = 'inicial' | 'novidade-ajuda' | 'novidade-cadeia-contas'
+export type FeatureId = 'feature.ajuda' | 'feature.cadeia-contas'
 /** Nenhuma capability condicional no catálogo v1; o tipo existe para os passos e features futuros. */
 export type CapabilityId = string
 
-export const ONBOARDING_CATALOG_REVISION = 1
+export const ONBOARDING_CATALOG_REVISION = 2
 
 /**
  * Livro de versões do catálogo: cada revisão lista TODOS os ids vigentes nela.
@@ -136,6 +136,11 @@ export const ONBOARDING_CATALOG_REVISION = 1
  */
 export const CATALOG_HISTORY = [
   { revision: 1, tours: ['inicial', 'novidade-ajuda'], features: ['feature.ajuda'] },
+  {
+    revision: 2,
+    tours: ['inicial', 'novidade-ajuda', 'novidade-cadeia-contas'],
+    features: ['feature.ajuda', 'feature.cadeia-contas'],
+  },
 ] as const
 
 const PASSO_MENU_AGENTE = {
@@ -215,6 +220,35 @@ export const ONBOARDING_TOURS = {
       },
     ],
   },
+  'novidade-cadeia-contas': {
+    id: 'novidade-cadeia-contas',
+    version: 1,
+    kind: 'novidade',
+    title: 'tour.novidade-cadeia-contas.titulo',
+    steps: [
+      {
+        id: 'cadeia-contas-novidade',
+        title: 'passo.cadeia-contas-novidade.titulo',
+        // A cadeia mora em Limites e uso, que não tem âncora própria: aponta a
+        // seção Ferramentas (fechada; o tour nunca expande nada) e o texto dá o caminho.
+        targets: [
+          {
+            anchor: 'secao-ferramentas',
+            body: 'passo.cadeia-contas-novidade.corpo',
+            label: 'Ferramentas',
+            side: 'direita',
+          },
+          {
+            anchor: 'rail-menu',
+            body: 'passo.cadeia-contas-novidade.corpo-menu',
+            label: 'menu do canvas',
+            side: 'direita',
+          },
+        ],
+        citaFerramentas: ['agentUsage'],
+      },
+    ],
+  },
 } as const satisfies Record<TourId, TourDef & { id: TourId }>
 
 /**
@@ -233,6 +267,14 @@ export const ONBOARDING_FEATURES = [
     trigger: { tipo: 'capability' },
     // A própria Ajuda é novidade para quem já usava o app: sem o aviso, ninguém
     // descobriria onde reabrir o tutorial (decisão a + c do plano).
+    anunciarParaQuemJaUsa: true,
+  },
+  {
+    id: 'feature.cadeia-contas',
+    tourId: 'novidade-cadeia-contas',
+    title: 'novidade.cadeia-contas.titulo',
+    trigger: { tipo: 'capability' },
+    // A cadeia vem desligada: sem o aviso, quem já usava o app não a descobre.
     anunciarParaQuemJaUsa: true,
   },
 ] as const satisfies ReadonlyArray<FeatureDef & { id: FeatureId; tourId: TourId; trigger: BuildFeatureTrigger }>

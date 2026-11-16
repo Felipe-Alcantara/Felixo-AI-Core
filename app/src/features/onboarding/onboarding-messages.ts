@@ -60,6 +60,15 @@ export const PT_BR = {
   'passo.ajuda-novidade.corpo':
     'Novidade: a Ajuda reúne o tutorial do canvas e as novidades. Reabra o tutorial quando quiser.',
 
+  // Mini-tour da novidade "Cadeia de contas"
+  'tour.novidade-cadeia-contas.titulo': 'Novidade: cadeia de contas',
+  'novidade.cadeia-contas.titulo': 'Cadeia de contas',
+  'passo.cadeia-contas-novidade.titulo': 'Cadeia de contas',
+  'passo.cadeia-contas-novidade.corpo':
+    'Novidade: quando uma conta bate o limite, a cadeia de contas propõe outra, sempre com a sua confirmação. Vem desligada; ligue em Ferramentas, Limites e uso, aba Cadeia.',
+  'passo.cadeia-contas-novidade.corpo-menu':
+    'Novidade: quando uma conta bate o limite, a cadeia de contas propõe outra, sempre com a sua confirmação. Vem desligada; abra o menu do canvas e ligue em Ferramentas, Limites e uso, aba Cadeia.',
+
   // Card do tour
   'card.contador': 'Passo {n} de {m}',
   'card.pular': 'Pular tutorial',

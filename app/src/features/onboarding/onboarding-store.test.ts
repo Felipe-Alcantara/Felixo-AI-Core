@@ -13,6 +13,7 @@ import {
   CATALOG_WITH_CANVAS_TRIGGER,
   CATALOG_WITH_NEW_FEATURE,
   CATALOG_WITH_REQUIRES,
+  CURRENT_FEATURE_IDS,
   FIRST_BOOT,
   FIXED_NOW,
   INTERRUPTED_FIRST_BOOT,
@@ -166,7 +167,7 @@ describe('store do tutorial: primeiro boot', () => {
 })
 
 describe('store do tutorial: uso anterior, updates e novidades', () => {
-  it('uso anterior → linha de base gravada, Ajuda "Não visto" e o aviso da Ajuda uma vez', async () => {
+  it('uso anterior → linha de base gravada, Ajuda "Não visto" e cada novidade avisada uma vez, uma de cada vez', async () => {
     const disk = createDisk()
     const h = createHarness({ disk, signals: PREVIOUS_USE })
     h.setActive('input-da-busca')
@@ -187,15 +188,28 @@ describe('store do tutorial: uso anterior, updates e novidades', () => {
     expect(h.disk.writes.map((write) => write.applied)).toEqual([true, true])
     expect(diskValue(disk)?.origin).toBe('uso-anterior')
 
+    // Dispensar reavalia as novidades: a cadeia de contas (desligada por padrão) vem em seguida.
     h.store.dismissNotice()
-    expect(h.snapshot().fase).toBe('ocioso')
+    await h.store.settled()
+    expect(h.snapshot().aviso).toEqual({
+      featureId: 'feature.cadeia-contas',
+      tourId: 'novidade-cadeia-contas',
+      titulo: 'novidade.cadeia-contas.titulo',
+      lang: 'pt-BR',
+    })
     expect(h.snapshot().ajuda[1]).toMatchObject({ featureId: 'feature.ajuda', status: 'novo' })
+    expect(diskValue(disk)?.knownFeatures).toEqual(['feature.ajuda', 'feature.cadeia-contas'])
+
+    h.store.dismissNotice()
+    await h.store.settled()
+    expect(h.snapshot().fase).toBe('ocioso')
+    const escritas = disk.writes.length
 
     const restart = createHarness({ disk, signals: PREVIOUS_USE })
     restart.store.canvasReady(0)
     await restart.store.settled()
     expect(restart.snapshot().fase).toBe('ocioso')
-    expect(disk.writes).toHaveLength(2)
+    expect(disk.writes).toHaveLength(escritas)
   })
 
   it('blocos no canvas contam como uso anterior mesmo sem chaves', async () => {
@@ -526,7 +540,7 @@ describe('store do tutorial: ações da pessoa', () => {
 
       externalWrite(disk, (value) => ({
         ...value,
-        knownFeatures: ['feature.ajuda', 'feature.futura'],
+        knownFeatures: [...CURRENT_FEATURE_IDS, 'feature.futura'],
         tours: { ...(value?.tours as object), 'tour-externo': { status: 'concluido' } },
       }))
       if (close === 'skip') h.store.skip('botao')
@@ -534,7 +548,7 @@ describe('store do tutorial: ações da pessoa', () => {
       await h.store.settled()
 
       const value = diskValue(disk)
-      expect(value?.knownFeatures).toEqual(['feature.ajuda', 'feature.futura'])
+      expect(value?.knownFeatures).toEqual([...CURRENT_FEATURE_IDS, 'feature.futura'])
       expect((value?.tours as Record<string, unknown>)['tour-externo']).toEqual({ status: 'concluido' })
       expect(tourStatus(disk)).toBe(close === 'skip' ? 'dispensado' : 'concluido')
       expect(disk.writes.map((write) => write.applied)).toEqual([false, true])
@@ -551,7 +565,7 @@ describe('store do tutorial: ações da pessoa', () => {
     await h.store.settled()
     const value = diskValue(disk)
     expect(value?.resetAt).toBe(toIso(FIXED_NOW))
-    expect(value?.knownFeatures).toEqual(['feature.ajuda'])
+    expect(value?.knownFeatures).toEqual([...CURRENT_FEATURE_IDS])
     expect(tourStatus(disk)).toBe('ativo')
     expect(disk.writes.every((write) => write.applied)).toBe(true)
   })
