@@ -3493,3 +3493,63 @@ Task: Felixo AI Core/Canvas — servir as fontes do Excalidraw pelo build e tira
 Estado: concluído (deploy no adendo).
 
 **Adendo de deploy (12:41).** O primeiro CI (`183c301`, 12:12 → 12:19) reprovou no Validate do Ubuntu x64 e do macOS. O teste do dev server esperava que `..%5c..%5c` fosse recusado, mas no POSIX a barra invertida é nome de arquivo, e o resultado mudava conforme o SO. A correção `427f7e9` aceita só a forma `<Família>/<arquivo>.woff2` antes de qualquer operação de caminho e testa com `path.posix` e `path.win32`; o teste falhou antes da correção. Com ela, CI verde (12:22 → 12:28), Release gate verde e Release verde (12:29 → 12:39), publicando a **v0.1.566**. O smoke de cada SO saiu com `fonteExcalidraw: ok` e zero violações (Windows 1,3 s, Ubuntu 1,3 s, macOS 3,2 s). Instaladores contra a v0.1.565: exe +12,8 MB (+6,9%), dmg +12,6 MB (+5,8%), deb +12,5 MB (+6,8%), AppImage +12,5 MB (+5,4% e +5,5%).
+
+## 2026-11-16 — Terminal: regex própria para os links em texto plano, com teste diferencial contra o portão
+
+Task: Felixo AI Core/Terminal — trocar a regex do WebLinksAddon por uma própria com teste diferencial destacado ⇒ aprovado (Notion `3ea91f95-497e-81df-93af-f88d506b52b7`), aberta em 29/09 a partir da política única de URL. Agente: Resolver hotfix (Claude Code, Claude Opus 5.5), 12:52 em diante. Trilha A: a direção e os casos estavam na task.
+
+**Antes.**
+- O `WebLinksAddon` (0.12.0) usava a `strictUrlRegex` padrão. Ela cortava `…/wiki/Rust_(programming_language)` em `Rust_`, e o clique abria a página errada.
+- O esquema dela era `(https?|HTTPS?)`, então `Https://` não era destacado.
+- O provedor de URLs quebradas em várias linhas (`terminal-spanning-url-links.ts`) tinha uma terceira regra, só em minúsculas, com corte de pontuação à mão.
+
+**Medido.**
+- **Como o addon decide o link:** o `LinkComputer` usa `match[0]` inteiro como link, a única checagem é o `isUrl`, e as flags da regex passada são mantidas (mais `g`). Não há como pós-processar o trecho: a regex sozinha precisa produzir o link certo.
+- **IDN:** o `isUrl` compara o texto com o host em punycode, então um host IDN (`https://münchen.de`) nunca é destacado, com qualquer regex.
+- **O portão** (`isAllowedTerminalExternalLink`) recusa usuário na autoridade, invisível e controle. Destacar só o pedaço antes do caractere abriria outro host.
+- **Backtracking:** em linhas de 10 mil caracteres, os 11 padrões patológicos levaram de 0,0 a 1,2 ms; com 1 MB, no máximo 27 ms. É linear.
+
+**Feito.**
+- **`terminal-url-regex.ts`, com `TERMINAL_URL_REGEX`:**
+  - esquema sem diferenciar caixa;
+  - `( )` e `[ ]` só em par (um nível), o que cobre a Wikipedia e o IPv6;
+  - aspas ASCII e tipográficas (`\p{Pi}`/`\p{Pf}`), colchetes de qualquer escrita (`\p{Ps}`/`\p{Pe}`), crase, `<>`, `\`, `^` e `|` encerram a URL;
+  - a pontuação final (`.,:;!?*`, `…` e a de largura cheia) fica fora do link;
+  - dois lookaheads impedem o destaque de URL com usuário na autoridade ou com controle/invisível.
+- **Montagem:** a regex é montada a partir do `.source` de literais com `String.raw`, sem escapes `\u`/`\x`.
+- **Uso:** o store passa a regex ao `WebLinksAddon` (`urlRegex`), e o provedor de várias linhas usa a mesma, sem o corte de pontuação próprio.
+- **Docs:** ARQUITETURA (links no terminal) e o teste novo no inventário do bloco Terminal.
+
+**Validação.**
+- **`terminal-url-regex.test.ts`** roda o `WebLinksAddon` de verdade num terminal falso de uma linha (o provedor que ele registra roda o próprio laço, o `isUrl` e o mapeamento de posição):
+  - tabela com 24 casos (Wikipedia, `(…)`, `Https://`, Markdown, aspas, `<>`, `[]`, pontuação, IPv6, negrito, CJK, unicode no caminho, aspas tipográficas, largura cheia, `#!`, `@` no caminho, usuário, invisível, RTL e esquemas não web);
+  - o inverso: cada URL esperada é aprovada pelo portão;
+  - o diferencial com 3000 linhas geradas por semente fixa: mais de 1000 destaques, todos aprovados pelo portão e iguais ao que ele abriria;
+  - os 7 padrões patológicos com menos de 200 ms (medidos em cerca de 1 ms);
+  - a trava no teste do store (`_options.urlRegex`);
+  - um caso novo no provedor de várias linhas (`Https://` quebrado, usuário na autoridade).
+- **Antes da mudança:**
+  - com a regex padrão do addon, 14 dos 34 testes de tabela/diferencial falham;
+  - a trava do store falhou (`expected undefined`);
+  - o caso novo do provedor de várias linhas falhou com a versão antiga dele.
+- **Mutações**, uma por regra, todas pegas:
+  - sem a regra do usuário: 4 falhas;
+  - sem a do invisível: 2;
+  - sem parênteses no meio: 1;
+  - pontuação no fim: 8;
+  - esquema com caixa: 2.
+- **App de fonte** (`felixo devtools`, terminal "Nenhum (shell)"), com `echo` das URLs da task e mouse simulado sobre elas. O xterm sublinhou:
+  - `https://en.wikipedia.org/wiki/Rust_(programming_language)` inteira, sem o ponto;
+  - `Https://Example.com/A`, atravessando a quebra de linha;
+  - `https://x.com/b`, sem o `(` e o `).`.
+- **Gates:**
+  - `npm test`: 3376 testes, 3366 passam, 10 pulados, 0 falham;
+  - `vitest`: 3566 passam;
+  - `eslint .` e `tsc -b` limpos.
+
+**Não validado.**
+- **Host IDN:** continua sem destaque (limite do `isUrl` do addon, do lado seguro).
+- **Aspas dentro da query** (`?q='a'`): encerram a URL, por escolha. O destaque vai só até a aspa.
+- **Dica e menu do clique:** não foram conferidos no app, só o sublinhado. Eles não mudaram nesta task.
+
+Estado: concluído (deploy no adendo).
