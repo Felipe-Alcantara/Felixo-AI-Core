@@ -35,6 +35,7 @@ import {
   CATALOG_WITH_OPTIONAL_STEP,
   CATALOG_WITH_REQUIRES,
   CATALOG_WITH_TOUR_V2,
+  CURRENT_FEATURE_IDS,
   FIRST_BOOT,
   FIXED_NOW,
   INTERRUPTED_FIRST_BOOT,
@@ -269,7 +270,7 @@ describe('decideAutomaticOpening', () => {
     expect(announced.knownFeatures).toContain('feature.nova')
     expect(announced.tours['novidade-nova'].announcedAt).toBe(ISO)
     expect(announced.tours.inicial.status).toBe('concluido')
-    expect(announced.catalogRevision).toBe(2)
+    expect(announced.catalogRevision).toBe(CATALOG_WITH_NEW_FEATURE.revision)
 
     const afterRestart = reread(announced, catalog)
     expect(decide({ leitura: afterRestart, catalog })).toEqual({ tipo: 'nada', motivo: 'sem-novidade' })
@@ -344,8 +345,8 @@ describe('applyOnboardingEvent', () => {
       updatedAt: ISO,
       origin: 'primeiro-uso',
       appVersion: { first: '0.1.423-2-gabc1234-dev', last: '0.1.423-2-gabc1234-dev' },
-      catalogRevision: 1,
-      knownFeatures: ['feature.ajuda'],
+      catalogRevision: defaultOnboardingCatalog.revision,
+      knownFeatures: [...CURRENT_FEATURE_IDS],
     })
     expect(state?.tours.inicial).toMatchObject({
       status: 'ativo',
@@ -368,7 +369,7 @@ describe('applyOnboardingEvent', () => {
   it('recuperar é conservador: todo o catálogo conhecido, nenhum tour registrado', () => {
     const state = apply(null, [{ tipo: 'RECUPERAR' }], { catalog: CATALOG_WITH_CANVAS_TRIGGER })
     expect(state?.origin).toBe('recuperado')
-    expect(state?.knownFeatures).toEqual(['feature.ajuda', 'feature.imagem'])
+    expect(state?.knownFeatures).toEqual([...CURRENT_FEATURE_IDS, 'feature.imagem'])
     expect(state?.tours).toEqual({})
   })
 
@@ -473,11 +474,11 @@ describe('migração e downgrade', () => {
     expect(migrateRaw(v1, 1, 2, { 1: () => 'nao-objeto' })).toBeNull()
   })
 
-  it('downgrade: feature.futura e catalogRevision 5 lidos pelo catálogo 1 → nada abre e tudo é preservado', () => {
+  it('downgrade: feature.futura e catalogRevision 5 lidos pelo catálogo atual → nada abre e tudo é preservado', () => {
     const raw: Record<string, unknown> = {
       ...serializeOnboardingState(completedInitial()),
       catalogRevision: 5,
-      knownFeatures: ['feature.ajuda', 'feature.futura'],
+      knownFeatures: [...CURRENT_FEATURE_IDS, 'feature.futura'],
       campoDeBuildNovo: true,
     }
     ;(raw.tours as Record<string, unknown>)['novidade-futura'] = { status: 'disponivel', announcedAt: ISO }
@@ -492,7 +493,7 @@ describe('migração e downgrade', () => {
     if (!skipped) throw new Error('evento não aplicado')
     const serialized = serializeOnboardingState(skipped)
     expect(serialized.catalogRevision).toBe(5)
-    expect(serialized.knownFeatures).toEqual(['feature.ajuda', 'feature.futura'])
+    expect(serialized.knownFeatures).toEqual([...CURRENT_FEATURE_IDS, 'feature.futura'])
     expect(serialized.campoDeBuildNovo).toBe(true)
     expect((serialized.tours as Record<string, unknown>)['novidade-futura']).toEqual({ status: 'disponivel', announcedAt: ISO })
     // De volta ao build novo (que conhece feature.futura): nada redispara, e o

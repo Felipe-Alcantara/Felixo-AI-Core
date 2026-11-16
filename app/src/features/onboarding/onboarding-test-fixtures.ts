@@ -31,6 +31,12 @@ export const INTERRUPTED_FIRST_BOOT: OnboardingBootSignals = Object.freeze({
 
 export const available = () => 'disponivel' as const
 
+/** As features do catálogo deste build: o que o primeiro uso e a recuperação já dão por conhecido. */
+export const CURRENT_FEATURE_IDS: readonly string[] = defaultOnboardingCatalog.features.map((feature) => feature.id)
+
+/** Revisão seguinte à do catálogo deste build, para os catálogos de fixture. */
+export const NEXT_CATALOG_REVISION = defaultOnboardingCatalog.revision + 1
+
 function noveltyTour(id: string): TourDef {
   return {
     id,
@@ -57,14 +63,14 @@ function extend(revision: number, tours: TourDef[], features: FeatureDef[]): Onb
 
 /** Revisão N+1: uma capability nova sem condição. */
 export const CATALOG_WITH_NEW_FEATURE = extend(
-  2,
+  NEXT_CATALOG_REVISION,
   [noveltyTour('novidade-nova')],
   [{ id: 'feature.nova', tourId: 'novidade-nova', title: 'novidade.ajuda.titulo', trigger: { tipo: 'capability' } }],
 )
 
 /** Capability condicional (ex.: uma integração que pode não estar configurada). */
 export const CATALOG_WITH_REQUIRES = extend(
-  2,
+  NEXT_CATALOG_REVISION,
   [noveltyTour('novidade-condicional')],
   [
     {
@@ -78,7 +84,7 @@ export const CATALOG_WITH_REQUIRES = extend(
 
 /** Gatilho de canvas: o primeiro bloco de imagem ao vivo anuncia a novidade. */
 export const CATALOG_WITH_CANVAS_TRIGGER = extend(
-  2,
+  NEXT_CATALOG_REVISION,
   [noveltyTour('novidade-imagem')],
   [{ id: 'feature.imagem', tourId: 'novidade-imagem', title: 'novidade.ajuda.titulo', trigger: { tipo: 'canvas', nodeType: 'image' } }],
 )

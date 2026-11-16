@@ -1886,13 +1886,19 @@ function criarCenariosDoTutorial(deps) {
     log('SB4 update sem feature: ok (nada abriu, revisão e valor iguais byte a byte)')
   }
 
+  /**
+   * Semeia "só a Ajuda é novidade": as outras entradas do catálogo seguem
+   * conhecidas, para o cenário ver exatamente um aviso.
+   */
+  const soAjudaNova = (estado) => estado.knownFeatures.filter((id) => id !== 'feature.ajuda')
+
   /** SB5: update com feature: o aviso aparece uma vez, sem foco, e o concluído é preservado. */
   async function sb5() {
     const cenario = 'SB5'
     const atual = await lerEstado()
     const tours = { ...atual.value.tours }
     delete tours['novidade-ajuda']
-    const escrita = await gravarEstado(atual.revision, { ...atual.value, knownFeatures: [], tours })
+    const escrita = await gravarEstado(atual.revision, { ...atual.value, knownFeatures: soAjudaNova(atual.value), tours })
     exigir(escrita.ok && escrita.applied, cenario, 'não consegui semear o estado', escrita)
     await recarregar()
     await esperar(cenario, 'o aviso de novidade aparecer', (selector) => document.querySelector(selector) !== null, SEL.avisoPosto)
@@ -1924,7 +1930,7 @@ function criarCenariosDoTutorial(deps) {
     const atual = await lerEstado()
     const tours = { ...atual.value.tours, inicial: { ...atual.value.tours.inicial, status: 'ativo', completedAt: null } }
     delete tours['novidade-ajuda']
-    const escrita = await gravarEstado(atual.revision, { ...atual.value, knownFeatures: [], tours })
+    const escrita = await gravarEstado(atual.revision, { ...atual.value, knownFeatures: soAjudaNova(atual.value), tours })
     exigir(escrita.ok && escrita.applied, cenario, 'não consegui semear o estado', escrita)
     await page.evaluate(
       ({ key, value }) => window.sessionStorage.setItem(key, value),
@@ -1979,7 +1985,7 @@ function criarCenariosDoTutorial(deps) {
     exigir(JSON.stringify({ revision: atual.revision, value: atual.value }) === fotoFuturo, cenario, 'o estado futuro foi sobrescrito', atual)
 
     // Campo quebrado dentro de um v1: reparado, sem escrita no boot; a próxima ação grava a forma reparada.
-    const quebrado = { ...futuro, schemaVersion: 1, tours: 'x', createdAt: 'não é data', knownFeatures: ['feature.ajuda'] }
+    const quebrado = { ...futuro, schemaVersion: 1, tours: 'x', createdAt: 'não é data' }
     escrita = await gravarEstado(atual.revision, quebrado)
     exigir(escrita.ok && escrita.applied, cenario, 'não consegui gravar o estado quebrado', escrita)
     await recarregar()
