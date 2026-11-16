@@ -4,6 +4,7 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { injectRendererCsp, verifyRendererCsp } from './scripts/renderer-csp.cjs'
 import { listExcalidrawFonts, resolveDevFontRequest, stripExcalidrawCdnFallback } from './scripts/excalidraw-fonts.cjs'
+import { removeStaleOutput } from './scripts/build-output.cjs'
 
 // Identifies this project's dev server so the Electron launch script can
 // tell it apart from an unrelated dev server that happens to already be
@@ -123,6 +124,33 @@ function felixoExcalidrawFontsPlugin(): Plugin[] {
   ]
 }
 
+/**
+ * `dist` só com o que este build gravou (`scripts/build-output.cjs`).
+ *
+ * O `emptyOutDir` do Vite apaga com `fs.rmSync`, que no Node 25 volta sem erro
+ * e não apaga nada num caminho com acento ("Programação\…"): os chunks de todo
+ * build anterior ficavam em `dist/assets` e iam para o pacote local (9194
+ * arquivos medidos). Depois de gravar, este passo tira o que não é do bundle
+ * nem da `public`, pela lista exata do bundle; se algo resistir, o build falha.
+ */
+function felixoCleanBuildOutputPlugin(): Plugin {
+  let publicDir = ''
+  return {
+    name: 'felixo-clean-build-output',
+    apply: 'build',
+    configResolved(config) {
+      publicDir = config.publicDir
+    },
+    writeBundle(options, bundle) {
+      if (!options.dir) return
+      const removidos = removeStaleOutput({ outDir: options.dir, emitted: Object.keys(bundle), publicDir })
+      if (removidos.length > 0) {
+        this.info(`[build-output] ${removidos.length} arquivo(s) de builds anteriores removido(s) do dist.`)
+      }
+    },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   // O app empacotado carrega o renderer com `loadFile()`, isto é, por
@@ -133,7 +161,14 @@ export default defineConfig({
   base: './',
   // Tailwind 4 pelo plugin dedicado do Vite (recomendação do guia oficial de
   // upgrade no lugar do plugin PostCSS); a configuração vive em src/index.css.
-  plugins: [react(), tailwindcss(), felixoDevMarkerPlugin(), felixoExcalidrawFontsPlugin(), felixoRendererCspPlugin()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    felixoDevMarkerPlugin(),
+    felixoExcalidrawFontsPlugin(),
+    felixoRendererCspPlugin(),
+    felixoCleanBuildOutputPlugin(),
+  ],
   optimizeDeps: {
     include: [
       'highlight.js/lib/core',
