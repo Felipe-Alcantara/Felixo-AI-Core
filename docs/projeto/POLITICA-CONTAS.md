@@ -94,6 +94,31 @@ Regras do terminal:
   medição atual em US$ 0 ou menos, a conta fica fora da cadeia ("sem créditos
   pela medição atual"); medição velha, sem horário ou com erro não prova nada.
 
+Regras do chat e do orquestrador (origem "fluxo", 16/11/2026):
+
+- **O código decide primeiro.** O código estruturado que a CLI devolve junto do
+  erro vem antes do texto, e o texto fica como reserva. A tabela está em
+  `app/electron/services/accounts/cli-failure-codes.cjs`, e os códigos medidos
+  nas versões instaladas, em `app/electron/__fixtures__/cli-error-codes.json`:
+  - Claude: o `error` da mensagem e o `api_error_status` do resultado;
+  - Codex App Server: o `codexErrorInfo` e o `httpStatusCode`;
+  - Gemini ACP: o `code` do erro JSON-RPC, que é o status HTTP, ou `-32000` para
+    login.
+- **Código conhecido que não é da conta** (janela de contexto, pedido inválido,
+  política) vira "desconhecido" sem olhar o texto. Código ausente, desconhecido
+  ou "não sei" (`unknown` do Claude, `other` do Codex) devolve a decisão ao
+  texto.
+- **O escopo continua vindo do texto:** a frase do Codex ainda diz se o limite é
+  só de um modelo.
+- **O terminal não muda:** não há código no terminal, e ele continua só nas
+  frases.
+- **Divergência conhecida:** "You're out of extra usage · resets …" chega do
+  Claude com `rate_limit` e status 429. Pelo código, no chat, é limite (volta no
+  horário). Pelo texto, no terminal, continua cobrança. Ficou task para decidir
+  se o terminal acompanha.
+- **Erro com `willRetry` do Codex** (ele mesmo vai tentar de novo) não encerra o
+  pedido.
+
 ## Quem pode receber uma troca (elegibilidade)
 
 A primeira razão que bloqueia decide, nesta ordem. Toda razão tem texto na UI.
