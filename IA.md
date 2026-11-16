@@ -3225,3 +3225,7 @@ Task: Felixo AI Core/Navegador — mostrar a origem e limitar a quantidade dos p
 **Não validado.** O login real do Google (precisa de uma conta) e o comportamento no macOS. A task "conferir a faixa de permissão com sites reais" (`41a91f95-497e-813a-8503-d10794366b4a`) já cobre o popup de login real.
 
 Estado: concluído (deploy no adendo).
+
+**Adendo (2026-11-16, 06:36): CI e Release.**
+- **CI** de `f9c4c38` (run 43838467152): passou no Validate de Windows, macOS, Ubuntu e Ubuntu ARM e no smoke do canvas, sem nova tentativa.
+- **Release:** o gate (run 43839320271) e o Release (run 43839353801, concluído às 06:33) publicaram a `v0.1.561`.
