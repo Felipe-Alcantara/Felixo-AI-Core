@@ -3364,3 +3364,5 @@ Task: Felixo AI Core/Segurança — prender a imagem relativa do Markdown a uma 
 **Não validado.** O bloco de arquivo com imagens não foi conferido no app de fonte: o clique sintético em "Criar" não criou o bloco, e abrir um `.md` externo pede o seletor de arquivos nativo. A fiação até a imagem foi conferida no teste de componente; a do `FileNode`, pelo `tsc`.
 
 Estado: concluído (deploy no adendo).
+
+**Adendo de deploy (08:51).** v0.1.564 publicada a partir de `3f2b89b`: CI verde (08:33 → 08:39), Release gate verde (08:39), Release verde (08:39 → 08:49), 20 artefatos (Windows, macOS, Linux .deb e AppImage). O app instalado não foi aberto para conferir a prévia do Markdown.
