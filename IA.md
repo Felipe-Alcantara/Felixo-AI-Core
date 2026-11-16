@@ -3061,3 +3061,46 @@ Estado: concluído (deploy no adendo).
 **Adendo (2026-11-16, 04:11): CI e Release.**
 - **CI** de `56ed024` (run 43819857971): passou no Validate de Windows, macOS, Ubuntu e Ubuntu ARM e no smoke do canvas.
 - **Release:** o gate (run 43820830876) e o Release (run 43820853685, concluído às 04:09) publicaram a `v0.1.557`.
+
+## 2026-11-16 — Release: os 10,7 s do Ubuntu na v0.1.426 eram o runner, não a cadeia de contas
+
+Task: Felixo AI Core/Release — investigar a abertura do pacote no Ubuntu em 10,7 s na v0.1.426 (Notion `3e991f95-497e-81f0-b704-cc0a99cc8751`). Agente: Resolver hotfix (Claude Code, Claude Opus 5.5), 04:16 em diante. Trilha A (investigação com critério medível).
+
+**Suspeita da task.** Depois do PR #97, o `startupMs` do `release-smoke-ubuntu-latest.json` foi de 786 ms (v0.1.425) para 10.720 ms (v0.1.426), e a cadeia acrescentou ao início a migração 017, o runtime e o `recoverOnStartup`.
+
+**Medido.**
+- **O que a métrica cobre:**
+  - `startupMs` = `status.readyAt` − spawn (`scripts/release-smoke.cjs:606`);
+  - o `readyAt` é marcado em `electron/release-smoke.cjs` logo depois de conferir o `userData`;
+  - no modo de validação, o `main.cjs` roda o smoke e retorna no começo do `app.whenReady()`, antes de `createStorageDatabase`, das migrações e de `createAccountChainRuntime`/`recoverOnStartup` (v0.1.426: linhas 311–319 contra 352, 603 e 626);
+  - da cadeia, só o `require` do módulo no topo do `main.cjs` entra na medição.
+- **Série de 155 releases (v0.1.400 a v0.1.557, 154 com medição do Ubuntu),** lida pela API sem salvar os pacotes:
+
+  | Faixa | Ubuntu (p50 / p90 / máx.) | macOS (p50 / máx.) | Windows (p50 / máx.) |
+  | --- | --- | --- | --- |
+  | v0.1.400–425 (antes da cadeia) | 3,0 / 6,6 / 15,0 s | 1,5 / 2,8 s | 0,47 / 0,57 s |
+  | v0.1.426–450 | 3,8 / 7,7 / 15,4 s | 1,8 / 4,4 s | 0,50 / 0,57 s |
+  | v0.1.451–500 | 3,0 / 7,9 / 17,2 s | 1,7 / 3,8 s | 0,52 / 0,86 s |
+  | v0.1.501–530 | 1,5 / 3,2 / 5,0 s | 2,0 / 4,0 s | 0,38 / 0,59 s |
+  | v0.1.531–557 | 1,6 / 3,4 / 6,6 s | 1,8 / 4,1 s | 0,34 / 0,48 s |
+
+  Picos acima de 10 s já existiam antes da cadeia: v0.1.404 marcou 12,7 s e v0.1.405, 15,0 s. Todas as amostras do Ubuntu são AppImage.
+- **Custo da cadeia com o código real e SQLite real** (Windows, Node 25, 3 rodadas; script no scratchpad):
+  - `require` frio do runtime: 55–81 ms;
+  - migração 017 isolada: 11–19 ms; as 22 migrações num perfil novo: 246–281 ms;
+  - `createAccountChainRuntime`: cerca de 1–2 ms;
+  - `recoverOnStartup`: 1,6–2,7 ms num perfil novo e 34–49 ms num perfil com 2000 eventos (200 propostas vencidas, 1000 podados).
+- **Critério de aceite:** as três últimas releases ficaram abaixo de 4,2 s: v0.1.555 com 2,0 s, v0.1.556 com 1,5 s e v0.1.557 com 2,1 s.
+
+**Conclusão.** Não há regressão da cadeia no `startupMs`. A métrica não executa a cadeia, e os 10,7 s estão dentro da oscilação que o Ubuntu do runner já mostrava antes do PR #97. No início real do app, a cadeia custa dezenas de milissegundos, e não há o que adiar. A recuperação continua síncrona e fail-closed, como estava.
+
+**Feito.**
+- GUIA-DESENVOLVEDOR: o que o `startupMs` mede e a orientação de comparar a série, não um valor.
+- Comentário de uma linha no `readyAt` (`electron/release-smoke.cjs`).
+- O job antigo não foi rodado de novo: re-rodar o Release de uma versão publicada republica os artefatos, e as 127 medições do Ubuntu depois dela já dão a distribuição.
+
+**Validação.** `npm test`: 3329 testes, 3319 passam, 10 pulados, 0 falham. `eslint` do arquivo tocado limpo. Os 7 testes de `electron/release-smoke.test.cjs` passam.
+
+**Não validado.** Não medi o Electron subindo numa máquina Linux real, fora do runner. O checklist de prontidão (task `3fa91f95-497e-81d7-a265-c9ba906be39c`) já pede essa medição.
+
+Estado: concluído (deploy no adendo).
