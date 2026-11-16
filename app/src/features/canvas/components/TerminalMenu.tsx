@@ -11,6 +11,7 @@ import type {
 } from '../services/new-terminal-options'
 import { AgentConfigFields } from './AgentConfigFields'
 import { isFelixoPopoverTarget } from '../../shared/components/felixo-popover-target'
+import { restoreFocusIfLost } from '../services/restore-focus'
 
 export type { NewTerminalOptions } from '../services/new-terminal-options'
 
@@ -83,9 +84,8 @@ export function TerminalMenu({
     if (!open) {
       return
     }
-    const restoreFocus = () => {
-      window.requestAnimationFrame(() => triggerRef.current?.focus())
-    }
+    // Esc ou clique fora: só volta à seta se o foco se perdeu (ver restoreFocusIfLost).
+    const restoreFocus = () => restoreFocusIfLost(triggerRef)
     const onOutsideClick = (event: MouseEvent) => {
       if (containerRef.current?.contains(event.target as Node) || isFelixoPopoverTarget(event.target)) {
         return

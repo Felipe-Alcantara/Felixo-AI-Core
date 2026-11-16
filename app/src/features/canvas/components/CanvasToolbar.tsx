@@ -10,12 +10,11 @@ import {
   useRef,
   useState,
   type ChangeEvent,
-  type RefObject,
   type ReactNode,
   type Ref,
 } from 'react'
 import type { ResizableSidebarWidth } from '../hooks/useResizableSidebarWidth'
-import { focusWasLost } from '../services/keyboard-focus'
+import { restoreFocusIfLost } from '../services/restore-focus'
 import {
   Bell,
   ChevronDown,
@@ -736,18 +735,6 @@ type NamedCreateButtonProps = {
  * are). Enter (or "Criar") creates — with an empty field the default name is
  * used; Escape or clicking outside cancels.
  */
-/**
- * Devolve o foco ao botão do menu que fechou só se ele se perdeu (o elemento
- * focado sumiu com o menu). O foco volta um quadro depois, e nesse meio tempo a
- * pessoa (ou um atalho como o Ctrl+K) já pode ter ido para outro lugar: devolver
- * mesmo assim roubava o foco da Busca aberta logo em seguida.
- */
-function restoreFocusIfLost(trigger: RefObject<HTMLButtonElement | null>) {
-  window.requestAnimationFrame(() => {
-    if (focusWasLost(document.activeElement, document.body)) trigger.current?.focus()
-  })
-}
-
 function NamedCreateButton({
   icon,
   buttonLabel,
