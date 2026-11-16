@@ -3432,3 +3432,62 @@ Task: Felixo AI Core/Release — validar a CSP do renderer no artefato real dos 
 Estado: concluído (deploy no adendo).
 
 **Adendo de deploy (11:17).** v0.1.565 publicada a partir de `82ae421`: CI verde (10:19 → 10:25), Release gate verde, Release verde. A Release ficou 40 min na fila do GitHub (10:26 → 11:06, com um incidente aberto no status do GitHub) e terminou às 11:14. O smoke de cada SO trouxe `rendererCsp.ok: true`, as seis sondas ok, o controle positivo visto e zero violações: Windows em 1,3 s, Ubuntu em 2,0 s e macOS em 6,5 s. O `ReferenceError` do worker de fontes do Excalidraw apareceu nos três. São 20 artefatos.
+
+## 2026-11-16 — Canvas: as fontes do Excalidraw saem do build e a CSP fica sem host remoto
+
+Task: Felixo AI Core/Canvas — servir as fontes do Excalidraw pelo build e tirar https://esm.sh da CSP (Notion `3ea91f95-497e-8146-ad00-e32071c3366b`), aberta em 29/09 a partir da política única de URL. Agente: Resolver hotfix (Claude Code, Claude Opus 5.5), 11:43 em diante. Trilha híbrida: uma pergunta ao Felipe ("Todas, com a Xiaolai", em vez da recomendação de deixar a Xiaolai de fora), depois a implementação.
+
+**Antes.**
+- Sem `window.EXCALIDRAW_ASSET_PATH`, o Excalidraw buscava as fontes do desenho no esm.sh, e a CSP liberava `https://esm.sh` em `font-src`.
+- O `fetch` das mesmas fontes no export batia no `connect-src 'self'`, então o export não embutia a fonte.
+
+**Medido.**
+- **Tamanho das fontes (Excalidraw 0.18.1):** 13,1 MB em 234 `.woff2`. A Xiaolai (CJK) tem 12,7 MB; as outras oito famílias somam 0,4 MB. Os instaladores da v0.1.565 têm de 183 a 230 MB.
+- **URL das fontes:** o `createUrls` do Excalidraw resolve "/…" e "./…" contra `location.origin`, que sob `file://` é `"null"`. Daí a URL absoluta.
+- **Arquivo local sob a CSP:** no renderer do build, `FontFace` e `fetch` de uma fonte local por `file://` funcionam (`loaded`; 200, 2656 bytes).
+- **CDN como última URL:** mesmo com o caminho local, o Excalidraw põe o CDN no fim da lista de cada fonte. No app empacotado, a montagem do desenho gerava **230 violações `font-src`**: o Chromium checa a CSP de cada URL ao criar a `FontFace`. As fontes ainda carregavam da URL local, como a armadilha no construtor da `FontFace` e o `load()` mostraram.
+- **Export:** a redução da fonte (subset) usa WASM. Como o worker de subset quebra no build, o Excalidraw a faz na thread principal, e a CSP recusa o WASM (`script-src eval`, "Skipped glyph subsetting"). O export embute a face inteira: a Excalifont entrou com 24957 bytes, o arquivo da face tem 24956.
+
+**Feito.**
+- **`scripts/excalidraw-fonts.cjs` (novo, com tipos e teste):**
+  - lista as fontes do pacote;
+  - resolve o pedido de fonte no dev server, sem sair da pasta (`..`, codificado ou não, é recusado);
+  - tira do código do Excalidraw o `push` da URL do CDN (`stripExcalidrawCdnFallback`).
+- **Plugin `felixo-excalidraw-fonts` no `vite.config.ts`:**
+  - **no build:** emite as 234 fontes em `dist/excalidraw-assets/fonts/` e aplica o corte do CDN. O build falha se o trecho não sair exatamente uma vez, ou se não houver fontes;
+  - **em dev:** serve a mesma URL direto do `node_modules`.
+- **`src/excalidraw-asset-path.ts`:** o `main.tsx` define `window.EXCALIDRAW_ASSET_PATH` com a URL absoluta antes do render, e o chunk do Excalidraw é preguiçoso.
+- **CSP:** `font-src 'self' data:`. O teste agora exige que nenhuma diretiva libere origem de rede, inclusive host sem esquema.
+- **Smoke de release:** sonda `fonteExcalidraw`. O caminho dado ao Excalidraw precisa ser local e absoluto, e uma Excalifont do build carrega por `FontFace` e por `fetch`.
+- **Inventário:** sai a lacuna desta task e entra a do export sem subset, apontando para a task do worker de fontes. Também a ARQUITETURA.
+
+**Validação.**
+- **Testes:**
+  - 6 em `excalidraw-fonts.test.cjs`, incluindo um que confere que toda fonte pedida pelo código do pacote existe no build e um que roda o corte no código instalado;
+  - 4 em `excalidraw-asset-path.test.ts`;
+  - o teste da CSP falhou antes da mudança (`font-src libera origem de rede`);
+  - a sonda do smoke (12 testes).
+- **Prova contrária e mutações:**
+  - **padrão do CDN quebrado:** o `vite build` falha ("a URL do CDN saiu 0 vez(es) … esperava 1") e 2 testes falham;
+  - **`dist` sem as fontes:** a sonda reprova ("fonte não encontrada");
+  - **build sem a linha do `main.tsx`:** a sonda reprova ("caminho: undefined").
+- **Pacote real do Windows** (`electron-builder --dir`, saída no C:): o `app.asar` passou de 285,0 para 298,2 MB (+13,2 MB). O `rendererCsp` do smoke saiu `ok`, com `fonteExcalidraw: ok` e zero violações.
+- **App empacotado** (`felixo devtools --packaged`, perfil isolado, CSP do pacote):
+  - **montagem do desenho:** 232 `FontFace`, todas com a URL `file://…/app.asar/dist/excalidraw-assets/fonts/…`, nenhuma com CDN e zero violações;
+  - **texto "Olá mundo 你好":** carregou a Excalifont (faixa latina) e duas faixas da Xiaolai;
+  - **"Copy to clipboard as SVG":** SVG de 147 KB com 3 `@font-face` em `data:` (Xiaolai ×2, Excalifont), sem CDN e sem `file://`. Uma violação `script-src eval` veio do WASM do subset, como medido acima.
+- **Dev** (`felixo devtools`, servidor do Vite): a rota `/excalidraw-assets/fonts/…` responde 200 `font/woff2`, e 230 faces usam essa URL primeiro.
+- **Build:** ler as 234 fontes leva de 20 a 35 ms, e o tempo total do build oscilou de 1,8 a 4,0 s, com e sem a mudança.
+- **Gates:**
+  - `npm test`: 3375 testes, 3365 passam, 10 pulados, 0 falham;
+  - `vitest`: 3531 passam;
+  - `eslint .` e `tsc -b` limpos.
+
+**Não validado.**
+- **Rede desligada de verdade:** não desliguei a rede da máquina. O que vale como prova é a CSP sem host remoto mais as URLs locais medidas, além do smoke, que cancela todo request fora de `file:`.
+- **macOS e Linux:** ficam para o smoke da Release.
+- **Export PNG:** não foi conferido; só o SVG.
+
+**Ambiente.** O disco J: segue com cerca de 480 MB livres. O `emptyOutDir` do Vite não apaga nesse disco, então os `dist` anteriores foram movidos para o C:.
+
+Estado: concluído (deploy no adendo).
