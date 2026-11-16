@@ -2963,3 +2963,7 @@ Task: Felixo AI Core/Contas — trocar de conta de forma proativa por limiar de 
 - A rapidez da troca depende de quantas amostras chegam. O Claude atualiza a cada resposta pela statusline; os demais, pela coleta do painel. A captura por sessão (task `3fa91f95-497e-81ad-a876-ec56a37b3b53`) continua em Entrada.
 
 Estado: concluído (deploy no adendo).
+
+**Adendo (2026-11-16, 02:52): CI e Release.**
+- **CI** de `603d0c0` (run 43809743132): passou no Validate de Windows, macOS, Ubuntu e Ubuntu ARM e no smoke do canvas.
+- **Release:** o gate (run 43810573692) e o Release (run 43810595183, concluído às 02:39) publicaram a `v0.1.555`.
