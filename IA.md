@@ -2661,3 +2661,64 @@ Estado: concluído (deploy no adendo).
 - O CI de `896c146` (run 43765960119) passou no Validate de Windows, macOS, Ubuntu e Ubuntu ARM e no smoke do canvas. Os dois cenários do `managed-cli-npm.integration.test.cjs` passaram nos quatro.
 - O Release gate (run 43766515343) e o Release (run 43766532637, até 19:05) publicaram a `v0.1.550`.
 - O ciclo com o registry real (run 43765056611) passou nos 5 jobs. O Claude Code de verdade, no `ubuntu-latest` e no `macos-latest`, instalou e não reinstalou na segunda abertura nem no upgrade; com o binário apagado, reinstalou.
+
+## 2026-11-15 — Custo: gerar imagem e ditar pela nuvem só cobram depois de um "sim", com o preço na tela
+
+Task: Felixo AI Core/Custo — confirmar custo na geração de imagem e no ditado (Notion `3e991f95-497e-8172-b092-f3aa9f111ccc`), aberta em 28/09 na investigação da cadeia de contas (PR #97). Agente: Resolver hotfix (Claude Code, Claude Opus 5.5), 21:01 em diante.
+
+**Antes.**
+- **Gerar imagem:** o primeiro clique em "Gerar" já mandava o pedido ao Openia, que cobra dos créditos do OpenRouter. Havia só a frase "pode cobrar créditos", sem preço.
+- **Ditado pela nuvem:** gravava e transcrevia sem nenhum aviso de custo.
+- O inventário do canvas registrava as duas lacunas.
+
+**Medido.**
+- **Catálogo de imagem:** o `GET /api/v1/images/models` (público) não traz preço. O preço está em `GET /api/v1/images/models/<id>/endpoints`, por fornecedor, em `pricing[]` com `billable`, `unit` e `cost_usd`. Consultado em 15/11/2026:
+  - `black-forest-labs/flux-3-image`: por imagem, de US$ 0,041 (768) a 0,607 (4k);
+  - `openai/gpt-image-1-mini`: por token de imagem gerada, US$ 0,000008;
+  - `google/gemini-3.1-flash-image`: por token, US$ 0,00006 a 0,000066 conforme o fornecedor.
+- **Transcrição:** página de preços da OpenAI (developers.openai.com/api/docs/pricing), em 15/11/2026: `whisper-1` e `gpt-4o-transcribe` a US$ 0,006/min, `gpt-4o-mini-transcribe` a 0,003, `gpt-transcribe` a 0,0045. Uma gravação vai até 90 s, então custa no máximo US$ 0,009.
+
+**Feito.**
+- **Processo principal:** `openia:image-pricing` (`openia-image-service.cjs`) consulta o preço só de modelo do catálogo, com os mesmos limites do catálogo (sem chave, sem redirecionamento, 10 s, 2 MiB). `summarizeImagePricing` fica só com `output_image`:
+  - por imagem quando houver, com a faixa entre variantes e fornecedores;
+  - senão, por token;
+  - `cost_usd` nulo ou vazio não vira zero.
+  - O cache dura 10 min, e a falha não fica guardada.
+- **Imagem, renderer:** a `store` busca o preço ao trocar de modelo, e o atrasado de outro modelo não sobrescreve. O `generate()` só chama o Openia com `{ confirmed: true }` ou com o modelo em `localStorage felixo:cost-consent`; sem isso, devolve `field: 'cost'`.
+  - O popover mostra o preço (`describeImagePricing`). Gerar troca os botões por "Confirmar e gerar" e "Voltar", com o preço e "Não perguntar de novo para este modelo".
+  - "Voltar a perguntar" desfaz a escolha.
+- **Ditado:** fase nova `confirming` no `dictationReducer`. O `begin()` pergunta antes de abrir o microfone quando o motor é a nuvem e o endereço e o modelo não estão lembrados.
+  - O balão diz o destino, o modelo, o preço por minuto (tabela acima, só para api.openai.com) e o teto da gravação.
+  - Outro provedor recebe "confira o preço no painel do provedor", sem número inventado. O servidor local não pergunta.
+  - A seção Custo das configurações mostra a escolha e tem "Voltar a perguntar".
+- **Registro comum:** `usage-cost-consent.ts`, com a lista de destinos lembrados. Registro ilegível ou armazenamento bloqueado valem como "nada lembrado".
+
+**Decisões do agente.**
+- A trava fica na `store`, e não só no botão, para nenhum caminho gerar sem confirmação e para dar teste sem DOM.
+- "Não perguntar de novo" vale por modelo, ou por endereço e modelo, porque o preço muda com eles.
+- A confirmação do ditado vem antes de gravar, não depois: perguntar depois de a pessoa falar arriscaria perder a fala.
+- O preço por token é mostrado por milhão, porque não dá para saber o total antes de gerar.
+
+**Validação.**
+- **Testes novos:** 4 da `store` de imagem, 1 de `describeImagePricing`, 2 do serviço, 2 do ditado e 3 do registro.
+- **Mutações:**
+  - desligar a trava do custo derrubou 3 testes da `store`;
+  - trocar a guarda do preço ausente por `Number(raw)` derrubou o teste do resumo.
+- **Gates:**
+  - `npm test`: 3290 testes, 3280 passam, 10 pulados, 0 falham;
+  - `vitest run`: 3504 passam e 4 pulados;
+  - `eslint .` e `tsc -b` limpos.
+- **App de fonte com perfil isolado** (`devtools`):
+  - o FLUX 3 Image mostrou o preço real ("de US$ 0,04 a US$ 0,61 por imagem");
+  - Gerar abriu a confirmação, e o `ipcProbe` registrou só `openia:image-models` e `openia:image-pricing`, sem `openia:generate-image`;
+  - com uma chave falsa no perfil isolado, o microfone abriu o balão do ditado, sem `speech:microphone-status` nem `speech:transcribe`, e "Cancelar" voltou ao repouso;
+  - nas configurações, "Voltar a perguntar" esvaziou `felixo:cost-consent`.
+
+**Não validado.**
+- Os botões "Confirmar e gerar" e "Gravar" não foram clicados no app. O primeiro usaria a chave real do OpenRouter no Openia; o segundo mandaria áudio à API.
+- O caminho depois da confirmação é o mesmo de antes, e a confirmação está coberta na `store`.
+- Não há teste de interface do botão nem do balão; a lacuna antiga do ditado continua.
+- **Preço do ditado:** é uma tabela fixa e envelhece. Outro provedor não tem número.
+- **Preço da imagem por token:** mostra a tarifa, não o total.
+
+Estado: concluído (deploy no adendo).
