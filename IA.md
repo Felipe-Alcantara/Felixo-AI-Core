@@ -3631,3 +3631,51 @@ Task: Felixo AI Core/Arquitetura — avaliar um protocolo próprio (app://) no l
 Estado: concluído (deploy no adendo).
 
 **Adendo de deploy (14:51).** O CI de `e8da885` reprovou na primeira tentativa (14:28 → 14:39) só no teste nativo de PTY do Windows ("consulta o /status do Claude por PTY nativa e navega até Usage", a navegação não atravessou a PTY em 356 ms). Esse teste não é tocado por esta task; na segunda tentativa, só do job que falhou, ficou verde. Release gate verde e Release verde (14:39 → 14:48), publicando a **v0.1.568**. O smoke de cada SO, com o renderer aberto por `app://felixo`, saiu com `rendererCsp.ok: true`, as sete sondas ok e zero violações: Windows em 1,5 s, Ubuntu em 1,9 s e macOS em 4,3 s.
+
+## 2026-11-16 — Build: o dist local fica só com o que o build gravou (o rmSync do Node 25 não apagava em caminho com acento)
+
+Task: Felixo AI Core/Build — limpar os chunks órfãos de dist/assets antes de empacotar (Notion `3ea91f95-497e-8114-b945-e2f8d1d3e604`), aberta em 29/09 a partir da política única de URL. Agente: Resolver hotfix (Claude Code, Claude Opus 5.5), 15:13 em diante. Trilha A: a direção estava na task.
+
+**Causa medida.**
+- **O defeito:** no Node 25.3.0 (o desta máquina), `fs.rmSync`, em arquivo ou em pasta com `recursive` e `force`, volta **sem erro e não apaga** quando o caminho tem caractere fora do ASCII no Windows.
+- **Não é o disco J:** no C:, numa pasta `ação-…`, o `rmSync` também falhou; no J:, numa pasta só ASCII, ele apagou. A memória anterior ("rmSync não apaga em J:") apontava a causa errada e foi corrigida.
+- **O que funciona:** `unlinkSync`, `rmdirSync` de pasta vazia e `fs.promises.rm`.
+- **Quem não tem o defeito:** o Node do Electron 42 (24.19) e o do CI (22). O produto não é afetado, e o CI, com checkout limpo e caminho ASCII, nunca viu o problema.
+- **Consequências nesta máquina** (checkout em "Programação\…\Repositórios"):
+  - o `emptyOutDir` do Vite (que usa `rmSync`) nunca limpou o `dist`: hoje cedo `dist/assets` tinha 9194 arquivos, e o pacote local de 21/10 levava 1282 assets, com 7 `index-*.js` e 7 chunks do `ExcalidrawCanvas`;
+  - o `bundle-npm-runtime` não apagava o runtime anterior, e o `cpSync` por cima falhava com "The operation completed successfully". Foi isso que me fez afastar o `build/npm-runtime` à mão em todos os empacotamentos de hoje.
+
+**Feito.**
+- **`scripts/build-output.cjs` (novo, com tipos e teste):**
+  - `removeTreeSync` apaga arquivo ou árvore com `unlinkSync`/`rmdirSync`, sem seguir link, e **lança se algo ficou**;
+  - `findStaleOutputFiles` e `removeStaleOutput` apagam o que não está no bundle nem na `public` (pela lista exata do bundle, não por busca de nome) e podam as pastas vazias.
+- **Plugin `felixo-clean-build-output` no `vite.config.ts`:** no `writeBundle`, deixa no `dist` só o que este build gravou e o que veio da `public`, e informa quantas sobras tirou. Se uma sobra resistir, o build falha.
+- **`bundle-npm-runtime.cjs`:** usa `removeTreeSync` no lugar do `rmSync`.
+- **Docs:** GUIA-DESENVOLVEDOR (o porquê e a regra "não use `rmSync` em caminho do repositório") e ARQUITETURA (build).
+
+**Validação.**
+- **Teste que falhou antes:** `bundle-npm-runtime`, com o destino numa pasta acentuada e uma sobra do runtime anterior. Falhou exatamente com "The operation completed successfully" no `cpSync`; passa depois.
+- **`build-output.test.cjs`:** 5 testes, em caminho com acento:
+  - remoção de árvore;
+  - link apagado sem apagar o destino;
+  - `fs` mudo que não apaga e precisa fazer lançar;
+  - sobras achadas e removidas, com o emitido e a `public` mantidos e a pasta vazia podada;
+  - `dist` inexistente.
+- **Mutações**, restauradas por cópia: sem a conferência final, apagando a `public`, sem podar pastas e o runtime de volta ao `rmSync`. Cada uma faz 1 teste falhar.
+- **Dois builds seguidos, com sobras plantadas** (chunks com outro hash, uma fonte antiga e uma pasta):
+  - **sem o plugin**, com uma cópia do config: as 4 sobras ficaram (529 arquivos);
+  - **com o plugin:** "4 arquivo(s) de builds anteriores removido(s)" (525 arquivos);
+  - **segundo build:** nada a remover (525).
+- **Pacote local** (`electron-builder --dir`, sem afastar o `npm-runtime` à mão e com uma sobra plantada nele):
+  - o empacotamento passou, e a sobra sumiu do `build` e do pacote;
+  - o `app.asar` tem exatamente os 525 arquivos do `dist`, com um `index-*.js`, e mede 298 MB (o de 21/10 tinha 333 MB, sem as fontes do Excalidraw).
+- **Gates:**
+  - `npm test`: 3403 testes, 3393 passam, 10 pulados, 0 falham;
+  - `vitest`: 3569 passam;
+  - `eslint .` e `tsc -b` limpos.
+
+**Não validado / fora do escopo.**
+- **Outros scripts do repositório** usam `fs.rmSync` em pastas do repositório (por exemplo, a evidência do `canvas-smoke` e benchmarks) e também não apagam nesta máquina. Ficou uma task.
+- **`dist` antigo:** o que afastei de manhã (`app/release/dist-antigo-1116`, 435 MB) continua lá; é sobra de build, que pode ser apagada.
+
+Estado: concluído (deploy no adendo).
