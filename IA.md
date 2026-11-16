@@ -3320,3 +3320,7 @@ Task: Felixo AI Core/Navegador — tratar downloads do bloco Página Web com pol
 - **macOS e Linux:** o comportamento dos diálogos não foi conferido.
 
 Estado: concluído (deploy no adendo).
+
+**Adendo (2026-11-16, 07:46): CI e Release.**
+- **CI** de `4192384` (run 43849597367): passou no Validate de Windows, macOS, Ubuntu e Ubuntu ARM e no smoke do canvas, sem nova tentativa.
+- **Release:** o gate (run 43850467467) e o Release (run 43850517120, concluído às 07:44) publicaram a `v0.1.563`.
