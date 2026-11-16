@@ -430,6 +430,14 @@ artefato real do sistema e executa `npm run release:smoke`. O smoke:
   nativos em
   `release/release-smoke-<plataforma>.json`.
 
+O `startupMs` desse relatório vai do spawn do executável até o
+`app.whenReady()` com o `userData` gravável. O modo de validação sai antes do
+banco, das migrações, da cadeia de contas e da janela. Por isso ele mede o
+Electron subindo no runner, não o início completo do app. No Ubuntu do GitHub
+ele oscila muito: da v0.1.400 à v0.1.557 foi de 0,4 s a 17,2 s, com picos
+antes e depois de qualquer mudança. Uma amostra alta isolada não é regressão:
+compare a série, não um valor.
+
 No Windows, o instalador empacota o prebuild N-API que o próprio `node-pty`
 publica (`prebuilds/win32-x64/`): o build usa `-c.npmRebuild=false` e o smoke
 acima continua sendo o gate do PTY empacotado. Os smokes extras de `cmd.exe` e

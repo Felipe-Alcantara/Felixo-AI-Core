@@ -60,6 +60,7 @@ async function runPackagedReleaseSmoke({
     fs.mkdirSync(userData, { recursive: true })
     fs.accessSync(userData, fs.constants.W_OK)
     status.userDataWritable = true
+    // Só o Electron pronto: o modo de validação sai antes do banco, das migrações e da cadeia (main.cjs).
     status.readyAt = Date.now()
     writeStatus()
 
