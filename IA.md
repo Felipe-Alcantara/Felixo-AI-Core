@@ -3430,3 +3430,5 @@ Task: Felixo AI Core/Release — validar a CSP do renderer no artefato real dos 
 **Ambiente.** O disco J: chegou a 0 bytes livres durante o empacotamento, e o `electron-builder` saiu com código 0 deixando um pacote incompleto. Os empacotamentos foram para o C:.
 
 Estado: concluído (deploy no adendo).
+
+**Adendo de deploy (11:17).** v0.1.565 publicada a partir de `82ae421`: CI verde (10:19 → 10:25), Release gate verde, Release verde. A Release ficou 40 min na fila do GitHub (10:26 → 11:06, com um incidente aberto no status do GitHub) e terminou às 11:14. O smoke de cada SO trouxe `rendererCsp.ok: true`, as seis sondas ok, o controle positivo visto e zero violações: Windows em 1,3 s, Ubuntu em 2,0 s e macOS em 6,5 s. O `ReferenceError` do worker de fontes do Excalidraw apareceu nos três. São 20 artefatos.
