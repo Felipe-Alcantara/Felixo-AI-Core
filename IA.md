@@ -2910,3 +2910,56 @@ Estado: concluído (deploy no adendo).
 **Adendo (2026-11-16, 01:50): CI e Release.**
 - **CI** de `2e6eba8` (run 43804644766): passou no Validate de Windows, macOS, Ubuntu e Ubuntu ARM e no smoke do canvas.
 - **Release:** o gate (run 43805399003) e o Release (run 43805417670, concluído às 01:48) publicaram a `v0.1.554`.
+
+## 2026-11-16 — Contas: troca antecipada por limiar de uso, com confirmação
+
+Task: Felixo AI Core/Contas — trocar de conta de forma proativa por limiar de uso (Notion `3e991f95-497e-812a-aa9e-deb225922147`), aberta em 28/09 no PR #97. Agente: Resolver hotfix (Claude Code, Claude Opus 5.5), 02:02 em diante.
+
+**Antes.** A cadeia só propunha troca depois da falha (limite, login, crédito).
+- A política já tinha a medição atual (`isMeasurementCurrent`, até 15 min) e as janelas em % (`readPercentWindows`).
+- O fluxo de proposta já tratava um terminal de origem ainda ativo (`SOURCE_ACTIVE`, com `acknowledgeSourceActive`).
+- Faltavam o gatilho e a opção.
+
+**Decisões do Felipe** (`AskUserQuestion`):
+1. **Opção:** desligada por padrão; ao ligar, 90%.
+2. **Ao aceitar:** igual à troca por limite (bloco novo com o contexto; o antigo fica, com o aviso de que ainda trabalha).
+3. **Destino:** a conta acima do limiar fica por último.
+4. **Frequência:** uma vez por janela, e "Agora não" silencia até renovar.
+
+**Feito.**
+- **Migração 022:** `proactive_enabled` (0/1, padrão 0) e `proactive_threshold_percent` (50 a 99, padrão 90) em `account_chain_settings`. O repositório, o serviço, o IPC (`parseSettingsUpdate`) e a visão levam os dois campos.
+- **Política:** `findWindowOverThreshold` acha a janela mais usada de uma medição atual que passou do limiar. Reset já passado, janela de um modelo só e medição velha não contam.
+- **Serviço:**
+  - `onUsageMeasured({ accountId })` propõe para cada bloco vivo em cadeia daquela conta (`proposeAhead`);
+  - a proposta é `continuation` com classe `threshold`: não põe a conta em espera e tem motivo "Uso em N% na conta X (janela), acima do limiar de L%";
+  - a impressão digital é `limiar|conta|janela|reset`, então qualquer evento anterior da mesma janela no bloco silencia;
+  - `lastAboveThreshold` põe a conta acima do limiar no fim da fila de destinos.
+- **`main.cjs`:** o `saveSample` do repositório de uso avisa a cadeia depois de gravar. Ele roda fora do caminho da gravação (`setImmediate`), e a referência só existe depois de a cadeia nascer.
+- **Interface:**
+  - "Trocar antes do limite" e "Limiar de uso" na aba Cadeia; o limiar é salvo ao sair do campo, e fora da faixa volta ao gravado;
+  - classe `threshold` com o rótulo "uso acima do limiar", sem "Não era limite".
+
+**Validação.**
+- **Testes novos:**
+  - 4 do serviço: propõe sem espera; uma vez por janela e "Agora não"; opção desligada, abaixo do limiar, medição velha e bloco fixo; destino por último;
+  - 1 da política;
+  - 1 do repositório;
+  - 1 do IPC;
+  - 1 da faixa.
+- **Testes ajustados:** o padrão do repositório, o contrato do IPC e as fixtures do renderer ganham os campos.
+- **Mutações:** sem o gatilho, 3 testes falham; sem o "fica por último", 1.
+- **Gates:**
+  - `npm test`: 3329 testes, 3319 passam, 10 pulados, 0 falham;
+  - `vitest`: 3513 passam;
+  - `eslint .` e `tsc -b` limpos.
+- **App de fonte com perfil isolado:**
+  - a migração 022 roda num banco novo (desligada, 90%);
+  - ligar pela ponte grava;
+  - na aba Cadeia, o interruptor aparece ligado e o limiar mudou para 95% ao sair do campo, conferido no main;
+  - 120 voltou para 95.
+
+**Não validado.**
+- A proposta disparada por uma medição real com bloco vivo no app: precisa de contas e de uma medição acima do limiar. O gatilho está coberto no serviço com SQLite real.
+- A rapidez da troca depende de quantas amostras chegam. O Claude atualiza a cada resposta pela statusline; os demais, pela coleta do painel. A captura por sessão (task `3fa91f95-497e-81ad-a876-ec56a37b3b53`) continua em Entrada.
+
+Estado: concluído (deploy no adendo).
