@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_DICTATION_SHORTCUT,
   IDLE,
+  OPENAI_TRANSCRIPTION_USD_PER_MINUTE,
+  describeDictationCost,
   describeMicrophoneError,
   describeMicrophoneStatus,
   dictationReducer,
@@ -107,6 +109,34 @@ describe('dictationReducer', () => {
   it('cancelar volta ao repouso; dispensar fora de erro não faz nada', () => {
     expect(run(IDLE, { type: 'start' }, { type: 'cancel' })).toEqual(IDLE)
     expect(dictationReducer({ phase: 'recording' }, { type: 'dismiss' })).toEqual({ phase: 'recording' })
+  })
+  it('custo pela nuvem: pergunta antes de gravar; "Gravar" grava, dispensar volta ao repouso sem gravar', () => {
+    const perguntando = run(IDLE, { type: 'ask-cost', message: 'custa' })
+    expect(perguntando).toEqual({ phase: 'confirming', message: 'custa' })
+    expect(dictationReducer(perguntando, { type: 'start' })).toEqual({ phase: 'recording' })
+    expect(dictationReducer(perguntando, { type: 'dismiss' })).toEqual(IDLE)
+    // Parar ou transcrever não acontece sem ter gravado.
+    expect(dictationReducer(perguntando, { type: 'stop' })).toBe(perguntando)
+    // Durante a gravação não se pergunta de novo.
+    expect(dictationReducer({ phase: 'recording' }, { type: 'ask-cost', message: 'x' })).toEqual({ phase: 'recording' })
+  })
+})
+
+describe('describeDictationCost — o que a pessoa lê antes de gravar pela nuvem', () => {
+  it('na OpenAI, com o modelo na tabela, diz o preço por minuto e o teto de uma gravação', () => {
+    expect(describeDictationCost({ baseUrl: 'https://api.openai.com/v1', model: 'whisper-1' })).toBe(
+      'O ditado envia o áudio para api.openai.com (modelo whisper-1), que cobra US$ 0,0060 por minuto (tabela da OpenAI de 15/11/2026). Cada gravação vai até 1 min 30 s: no máximo US$ 0,0090.',
+    )
+    expect(describeDictationCost({ baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini-transcribe' })).toMatch(
+      /US\$ 0,0030 por minuto/,
+    )
+  })
+  it('outro provedor ou modelo fora da tabela não ganha preço inventado', () => {
+    const groq = describeDictationCost({ baseUrl: 'https://api.groq.com/openai/v1', model: 'whisper-large-v3' })
+    expect(groq).toMatch(/api\.groq\.com \(modelo whisper-large-v3\), que pode cobrar/)
+    expect(groq).not.toMatch(/US\$/)
+    expect(describeDictationCost({ baseUrl: 'https://api.openai.com/v1', model: 'modelo-novo' })).not.toMatch(/US\$/)
+    expect(OPENAI_TRANSCRIPTION_USD_PER_MINUTE['whisper-1']).toBe(0.006)
   })
 })
 

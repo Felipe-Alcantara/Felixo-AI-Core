@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, type PropsWithChildren, type RefObject } from 'react'
+import { useLayoutEffect, useRef, useState, type PropsWithChildren, type RefObject } from 'react'
 import { Loader2, Mic, MicOff, X } from 'lucide-react'
 import type { Dictation } from '../hooks/useDictation'
 import { formatElapsed } from '../services/dictation'
@@ -15,15 +15,18 @@ type Props = { dictation: Dictation; shortcutLabel: string }
  * tooltip) para a pessoa saber por que nada apareceu no terminal.
  */
 export function DictationButton({ dictation, shortcutLabel }: Props) {
-  const { state, elapsedMs, notice, toggle, cancel, dismiss } = dictation
+  const { state, elapsedMs, notice, toggle, confirmCost, cancel, dismiss } = dictation
   const recording = state.phase === 'recording'
   const transcribing = state.phase === 'transcribing'
   const failed = state.phase === 'error'
+  const confirming = state.phase === 'confirming'
+  const [rememberCost, setRememberCost] = useState(false)
 
   const containerRef = useRef<HTMLDivElement>(null)
   // O aviso flutuante some ao clicar fora, com Esc ou ao sair da janela, como
-  // os outros menus — antes só o "Fechar" o tirava da frente.
-  useDismissOnOutside(failed || Boolean(notice), containerRef, dismiss)
+  // os outros menus — antes só o "Fechar" o tirava da frente. No balão de
+  // custo, sair assim é "não gravar".
+  useDismissOnOutside(failed || confirming || Boolean(notice), containerRef, dismiss)
 
   const title = recording
     ? `Parar e transcrever (${shortcutLabel})`
@@ -70,6 +73,35 @@ export function DictationButton({ dictation, shortcutLabel }: Props) {
           <X size={12} aria-hidden />
         </button>
       )}
+      {confirming && (
+        <DictationNotice anchorRef={containerRef} role="alertdialog" label="Confirmar o custo do ditado">
+          <p>{state.message}</p>
+          <label className="mt-1.5 flex items-center gap-1.5 text-[10px] text-zinc-400">
+            <input type="checkbox" checked={rememberCost} onChange={(event) => setRememberCost(event.target.checked)} />
+            Não perguntar de novo para este endereço e modelo
+          </label>
+          <div className="mt-1.5 flex gap-1.5">
+            <button
+              type="button"
+              autoFocus
+              onClick={() => {
+                confirmCost(rememberCost)
+                setRememberCost(false)
+              }}
+              className="felixo-btn felixo-primary-action flex-1 px-2 py-1 text-[11px]"
+            >
+              Gravar
+            </button>
+            <button
+              type="button"
+              onClick={dismiss}
+              className="felixo-btn rounded-sm px-2 py-1 text-[11px] ring-1 ring-white/15 hover:bg-white/6"
+            >
+              Cancelar
+            </button>
+          </div>
+        </DictationNotice>
+      )}
       {(failed || notice) && (
         <DictationNotice anchorRef={containerRef} role={failed ? 'alert' : 'status'}>
           <p className={failed ? 'text-red-300' : undefined}>{failed ? state.message : notice}</p>
@@ -91,8 +123,9 @@ export function DictationButton({ dictation, shortcutLabel }: Props) {
 function DictationNotice({
   anchorRef,
   role,
+  label,
   children,
-}: PropsWithChildren<{ anchorRef: RefObject<HTMLElement | null>; role: 'alert' | 'status' }>) {
+}: PropsWithChildren<{ anchorRef: RefObject<HTMLElement | null>; role: 'alert' | 'status' | 'alertdialog'; label?: string }>) {
   const surfaceRef = useRef<HTMLDivElement>(null)
 
   // Posição escrita pela ref, sem re-render.
@@ -121,6 +154,7 @@ function DictationNotice({
     <FelixoPopoverSurface
       surfaceRef={surfaceRef}
       role={role}
+      ariaLabel={label}
       className="w-72 p-2 text-[11px] leading-relaxed text-(--f-core-white-soft)"
     >
       {children}

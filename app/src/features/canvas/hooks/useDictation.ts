@@ -2,11 +2,13 @@ import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import {
   IDLE,
   MAX_RECORDING_MS,
+  describeDictationCost,
   describeMicrophoneError,
   describeMicrophoneStatus,
   dictationReducer,
   sanitizeDictatedText,
 } from '../services/dictation'
+import { costConsent, dictationCostConsentKey } from '../services/usage-cost-consent'
 import { createVoiceRecorder } from '../services/voice-recorder'
 
 type Options = {
@@ -27,6 +29,7 @@ export function useDictation({ deliver }: Options) {
   const [notice, setNotice] = useState<string | null>(null)
   const recorderRef = useRef<ReturnType<typeof createVoiceRecorder> | null>(null)
   const startedAtRef = useRef(0)
+  const pendingCostKeyRef = useRef<string | null>(null)
   const deliverRef = useRef(deliver)
   const stateRef = useRef(state)
 
@@ -71,7 +74,8 @@ export function useDictation({ deliver }: Options) {
     }
   }, [getRecorder])
 
-  const begin = useCallback(async () => {
+  /** `confirmedCostKey`: o destino cujo custo a pessoa acabou de confirmar no balão. */
+  const begin = useCallback(async (confirmedCostKey: string | null = null) => {
     setNotice(null)
     const speech = window.felixo?.speech
     if (!speech) {
@@ -81,9 +85,19 @@ export function useDictation({ deliver }: Options) {
     // Sem chave não vale a pena gravar: a pessoa falaria para o nada.
     const config = await speech.getConfig()
     // Servidor local não exige chave (`keyRequired: false`); a nuvem exige.
-    if (!config.ok || (config.config?.keyRequired !== false && !config.config?.keyConfigured)) {
+    if (!config.ok || !config.config || (config.config.keyRequired !== false && !config.config.keyConfigured)) {
       dispatch({ type: 'fail', message: 'Cadastre a chave da API de transcrição em Configurações → Ditado por voz.' })
       return
+    }
+    // A nuvem cobra por minuto de áudio: sem um "sim" (agora ou lembrado) para
+    // este endereço e modelo, nem grava. O servidor local não cobra.
+    if (config.config.keyRequired !== false) {
+      const key = dictationCostConsentKey(config.config.baseUrl, config.config.model)
+      if (key !== confirmedCostKey && !costConsent.has(key)) {
+        pendingCostKeyRef.current = key
+        dispatch({ type: 'ask-cost', message: describeDictationCost(config.config) })
+        return
+      }
     }
     let status = (await speech.getMicrophoneStatus()).status
     if (status === 'not-determined') status = (await speech.requestMicrophone()).status
@@ -103,11 +117,25 @@ export function useDictation({ deliver }: Options) {
     dispatch({ type: 'start' })
   }, [getRecorder, platform])
 
+  // Com o balão de custo aberto, o atalho não decide por ninguém: só os botões dele.
   const toggle = useCallback(() => {
     const phase = stateRef.current.phase
     if (phase === 'recording') void finish()
     else if (phase === 'idle' || phase === 'error') void begin()
   }, [begin, finish])
+
+  /** "Gravar" no balão de custo; `remember` é o "não perguntar de novo". */
+  const confirmCost = useCallback(
+    (remember: boolean) => {
+      const key = pendingCostKeyRef.current
+      if (stateRef.current.phase !== 'confirming' || !key) return
+      // Um duplo clique em "Gravar" não abre o microfone duas vezes.
+      pendingCostKeyRef.current = null
+      if (remember) costConsent.remember(key)
+      void begin(key)
+    },
+    [begin],
+  )
 
   const cancel = useCallback(() => {
     getRecorder().cancel()
@@ -133,7 +161,7 @@ export function useDictation({ deliver }: Options) {
   // Fechar o app/painel no meio de uma gravação não pode deixar o microfone aceso.
   useEffect(() => () => recorderRef.current?.cancel(), [])
 
-  return { state, elapsedMs, notice, toggle, cancel, dismiss }
+  return { state, elapsedMs, notice, toggle, confirmCost, cancel, dismiss }
 }
 
 export type Dictation = ReturnType<typeof useDictation>

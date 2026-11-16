@@ -1,15 +1,17 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useReducer, useState } from 'react'
 import { Mic } from 'lucide-react'
 import { useDictationShortcut } from '../../hooks/useDictationShortcut'
 import {
   CLOUD_ENDPOINT_SUGGESTION,
   DEFAULT_DICTATION_SHORTCUT,
   LOCAL_SERVER_SUGGESTION,
+  describeDictationCost,
   describeMicrophoneStatus,
   formatShortcut,
   isLoopbackEndpoint,
   shortcutFromEvent,
 } from '../../services/dictation'
+import { costConsent, dictationCostConsentKey } from '../../services/usage-cost-consent'
 
 type Config = { baseUrl: string; model: string; language: string; keyConfigured: boolean; keyRequired: boolean }
 
@@ -31,6 +33,7 @@ export function DictationSettingsSection() {
   const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null)
   const [micStatus, setMicStatus] = useState<string | undefined>()
   const [capturing, setCapturing] = useState(false)
+  const [, redraw] = useReducer((count: number) => count + 1, 0)
 
   useEffect(() => {
     void speech?.getConfig().then((result) => {
@@ -99,6 +102,14 @@ export function DictationSettingsSection() {
   // O modo sai do endereço (mesma regra do processo principal): servidor local
   // é o que dispensa a chave e mantém o áudio nesta máquina.
   const local = isLoopbackEndpoint(config?.baseUrl)
+  const costKey = config ? dictationCostConsentKey(config.baseUrl, config.model) : ''
+  const costRemembered = Boolean(costKey) && costConsent.has(costKey)
+
+  function forgetCost() {
+    costConsent.forget(costKey)
+    // A escolha mora no costConsent, fora do estado do React: redesenha à mão.
+    redraw()
+  }
 
   function chooseEngine(nextLocal: boolean) {
     if (nextLocal === local) return
@@ -197,6 +208,25 @@ export function DictationSettingsSection() {
       <button type="button" onClick={() => void saveConfig()} className="felixo-btn felixo-secondary-action mb-3 rounded-sm px-2 py-1 text-[11px]">
         Salvar endereço, modelo e idioma
       </button>
+
+      {!local && config && (
+        <>
+          <p className={ROTULO}>Custo</p>
+          <p className="mb-3 text-[11px] leading-relaxed text-zinc-400" data-dictation-cost>
+            {describeDictationCost(config)}{' '}
+            {costRemembered ? (
+              <>
+                Sem confirmação antes de gravar.{' '}
+                <button type="button" onClick={forgetCost} className="text-zinc-300 underline decoration-dotted underline-offset-2 hover:text-zinc-100">
+                  Voltar a perguntar
+                </button>
+              </>
+            ) : (
+              'O ditado pede confirmação antes de gravar.'
+            )}
+          </p>
+        </>
+      )}
 
       <p className={ROTULO}>Atalho</p>
       <div className="mb-3 flex items-center gap-2">

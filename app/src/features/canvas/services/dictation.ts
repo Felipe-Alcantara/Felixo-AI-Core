@@ -5,6 +5,8 @@
  * revisão visual.
  */
 
+import { formatUsd } from './claude-api-conversation'
+
 // ── Texto ditado → terminal ────────────────────────────────────────────────
 
 const MAX_DICTATED_CHARS = 2000
@@ -111,11 +113,13 @@ export function describeMicrophoneStatus(status: string | undefined, platform: M
 
 export type DictationState =
   | { phase: 'idle' }
+  | { phase: 'confirming'; message: string }
   | { phase: 'recording' }
   | { phase: 'transcribing' }
   | { phase: 'error'; message: string }
 
 export type DictationAction =
+  | { type: 'ask-cost'; message: string }
   | { type: 'start' }
   | { type: 'stop' }
   | { type: 'cancel' }
@@ -132,8 +136,12 @@ export const IDLE: DictationState = { phase: 'idle' }
  */
 export function dictationReducer(state: DictationState, action: DictationAction): DictationState {
   switch (action.type) {
+    case 'ask-cost':
+      return state.phase === 'idle' || state.phase === 'error' ? { phase: 'confirming', message: action.message } : state
     case 'start':
-      return state.phase === 'idle' || state.phase === 'error' ? { phase: 'recording' } : state
+      return state.phase === 'idle' || state.phase === 'error' || state.phase === 'confirming'
+        ? { phase: 'recording' }
+        : state
     case 'stop':
       return state.phase === 'recording' ? { phase: 'transcribing' } : state
     case 'cancel':
@@ -143,8 +151,51 @@ export function dictationReducer(state: DictationState, action: DictationAction)
     case 'fail':
       return { phase: 'error', message: action.message }
     case 'dismiss':
-      return state.phase === 'error' ? IDLE : state
+      return state.phase === 'error' || state.phase === 'confirming' ? IDLE : state
   }
+}
+
+// ── Custo ──────────────────────────────────────────────────────────────────
+
+/**
+ * Preço da OpenAI por minuto de áudio, lido em
+ * https://developers.openai.com/api/docs/pricing em 15/11/2026. Outro provedor
+ * (ou modelo fora da lista) não ganha número inventado: o texto manda conferir.
+ */
+export const OPENAI_TRANSCRIPTION_USD_PER_MINUTE: Readonly<Record<string, number>> = Object.freeze({
+  'whisper-1': 0.006,
+  'gpt-4o-transcribe': 0.006,
+  'gpt-4o-mini-transcribe': 0.003,
+  'gpt-transcribe': 0.0045,
+  'gpt-4o-transcribe-diarize': 0.006,
+})
+export const OPENAI_PRICING_CHECKED_AT = '15/11/2026'
+
+function formatDuration(ms: number): string {
+  const total = Math.round(ms / 1000)
+  const minutes = Math.floor(total / 60)
+  const seconds = total % 60
+  return [minutes ? `${minutes} min` : '', seconds ? `${seconds} s` : ''].filter(Boolean).join(' ')
+}
+
+/**
+ * O que a pessoa lê antes de o ditado gravar pela nuvem: para onde o áudio vai,
+ * com qual modelo, e quanto custa (por minuto e no teto de uma gravação).
+ */
+export function describeDictationCost({ baseUrl, model }: { baseUrl: string; model: string }): string {
+  let host = baseUrl
+  try {
+    host = new URL(baseUrl).host
+  } catch {
+    // Endereço ilegível aparece como foi digitado.
+  }
+  const limit = formatDuration(MAX_RECORDING_MS)
+  const price = host === 'api.openai.com' ? OPENAI_TRANSCRIPTION_USD_PER_MINUTE[model] : undefined
+  if (price === undefined) {
+    return `O ditado envia o áudio para ${host} (modelo ${model}), que pode cobrar por minuto de áudio: confira o preço no painel do provedor. Cada gravação vai até ${limit}.`
+  }
+  const maxCost = (price * MAX_RECORDING_MS) / 60_000
+  return `O ditado envia o áudio para ${host} (modelo ${model}), que cobra ${formatUsd(price)} por minuto (tabela da OpenAI de ${OPENAI_PRICING_CHECKED_AT}). Cada gravação vai até ${limit}: no máximo ${formatUsd(maxCost)}.`
 }
 
 // ── Atalho ─────────────────────────────────────────────────────────────────

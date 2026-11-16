@@ -208,6 +208,12 @@ por "Conferir login" (decisão de 11/11/2026).
   nunca confirmadas não aparecem no registro de trocas nem ocupam a retenção
   (12/11/2026). A checagem de login da prévia segue a validade de 15 min: abrir
   o configurador de novo nesse prazo não roda a CLI outra vez.
+- Fora da cadeia, o mesmo princípio vale para o que cobra por uso (15/11/2026):
+  gerar imagem e ditar pela nuvem mostram o preço e só cobram depois de um "sim".
+  Quem usa muito pode marcar "não perguntar de novo", que vale por modelo de
+  imagem, ou por endereço e modelo de transcrição, porque cada um tem o seu
+  preço. A escolha se desfaz ao lado do preço. Os detalhes estão em
+  `OPENIA-IMAGEM-CONTRATO.md` e no guia do usuário.
 
 ## A sessão ativa e o terminal antigo
 
