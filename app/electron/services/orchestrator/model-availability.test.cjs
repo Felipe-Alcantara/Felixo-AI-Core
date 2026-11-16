@@ -373,3 +373,15 @@ test('a mensagem principal de limite do Claude ("You\'ve hit your …") vira lim
   assert.equal(issueFor("You've used 90% of your session limit · resets 4:40pm (America/Sao_Paulo)", 'claude'), null)
   assert.equal(issueFor("You've hit your fast limit", 'claude'), null)
 })
+
+test('o código estruturado chega à disponibilidade: janela de contexto não marca limite, rate_limit marca', () => {
+  const { detectAvailabilityIssue, describeCliFailure } = require('./model-availability.cjs')
+  const texto = 'Your input exceeds the usage limit of the context window.'
+  assert.equal(detectAvailabilityIssue({ message: texto, cliType: 'codex-app-server', code: 'contextWindowExceeded' }), null)
+  assert.equal(detectAvailabilityIssue({ message: texto, cliType: 'codex-app-server' }).status, 'limit_reached')
+  assert.equal(detectAvailabilityIssue({ message: '', cliType: 'claude', code: 'rate_limit' }).status, 'limit_reached')
+  assert.deepEqual(describeCliFailure({ message: 'falhou', cliType: 'gemini-acp', code: -32000 }), {
+    failureClass: 'auth',
+    availabilityStatus: 'no_login',
+  })
+})

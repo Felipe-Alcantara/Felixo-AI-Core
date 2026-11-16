@@ -145,6 +145,9 @@ function createOrchestrationIpcBridge({
         promise: runner.onAgentJobCompleted({
           threadId,
           error: cliEvent.message ?? 'Sub-agente retornou erro.',
+          // O código estruturado da CLI vai junto: ele decide a classe antes do texto.
+          errorCode: cliEvent.failureCode ?? null,
+          errorHttpStatus: cliEvent.httpStatus ?? null,
           partialOutput,
         }),
       }

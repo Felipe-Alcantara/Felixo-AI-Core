@@ -145,6 +145,8 @@ function parseLine(line) {
     return {
       type: 'error',
       message: extractClaudeAssistantText(payload) ?? 'Claude retornou um erro.',
+      // Código da API (`rate_limit`, `billing_error`, `authentication_failed`…): a taxonomia decide por ele.
+      ...(typeof payload.error === 'string' ? { failureCode: payload.error } : {}),
     }
   }
 
@@ -162,6 +164,8 @@ function parseLine(line) {
             : 'Claude retornou um erro.',
         providerSessionId:
           typeof payload.session_id === 'string' ? payload.session_id : undefined,
+        // Status HTTP do erro da API, quando o Claude informa.
+        ...(Number.isInteger(payload.api_error_status) ? { httpStatus: payload.api_error_status } : {}),
       }
     }
 

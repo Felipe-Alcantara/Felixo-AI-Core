@@ -1,0 +1,60 @@
+{
+  "medidoEm": "2026-11-16",
+  "comoMedir": "Sem rede nem conta. Claude: procurar 'api_error:' no binário instalado (bin/claude.exe). Codex: `codex app-server generate-json-schema --out <pasta>` e ler `definitions.CodexErrorInfo` do v2. Gemini: no bundle instalado, `new RequestError(status, …)` e `RequestError.authRequired` (-32000) do modo ACP.",
+  "claude": {
+    "versao": "2.1.323",
+    "fonte": "campo `error` da mensagem assistant do stream-json; lista api_error:* do binário",
+    "codigos": [
+      "authentication_failed",
+      "oauth_org_not_allowed",
+      "account_on_hold",
+      "verification_required",
+      "billing_error",
+      "rate_limit",
+      "overloaded",
+      "invalid_request",
+      "model_not_found",
+      "server_error",
+      "unknown",
+      "max_output_tokens",
+      "cloud_credential_error"
+    ],
+    "textoDecide": ["unknown"]
+  },
+  "codex": {
+    "versao": "0.171.0-alpha.7",
+    "fonte": "CodexErrorInfo do esquema do app-server (TurnError.codexErrorInfo)",
+    "codigos": [
+      "contextWindowExceeded",
+      "sessionBudgetExceeded",
+      "usageLimitExceeded",
+      "rateLimitExceeded",
+      "flexUnavailable",
+      "serverOverloaded",
+      "modelNotFound",
+      "policyCapacityUnavailable",
+      "cyberPolicy",
+      "misalignmentPolicyViolation",
+      "tooManyDenials",
+      "internalServerError",
+      "unauthorized",
+      "badRequest",
+      "threadRollbackFailed",
+      "sandboxError",
+      "other",
+      "inferenceHookDenied",
+      "httpConnectionFailed",
+      "responseStreamConnectionFailed",
+      "responseStreamDisconnected",
+      "responseTooManyFailedAttempts",
+      "activeTurnNotSteerable"
+    ],
+    "textoDecide": ["other"]
+  },
+  "gemini": {
+    "versao": "0.69.0-preview.0",
+    "fonte": "code do erro JSON-RPC do modo ACP: o status HTTP do pedido, ou -32000 (Authentication required)",
+    "codigos": [-32000, 401, 403, 429, 500, 503],
+    "textoDecide": []
+  }
+}

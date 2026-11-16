@@ -23,6 +23,10 @@
  * - `fluxo` (erro de execução one-shot): frases do provedor, códigos e frases
  *   genéricas.
  *
+ * Na origem `fluxo`, o código estruturado que a CLI devolve junto do erro
+ * (`code`, `httpStatus`; ver `cli-failure-codes.cjs`) decide primeiro, e o
+ * texto fica como reserva. O `pty` não tem código e continua só no texto.
+ *
  * Em qualquer origem, uma exclusão do provedor na mesma linha anula a linha
  * ("Usage limit reached · wrapping up" é tolerância, não limite).
  *
@@ -47,6 +51,7 @@ const {
   STATUS_CODES,
   STATUS_CODE_CONTEXT,
 } = require('./cli-failure-patterns.cjs')
+const { classifyStructuredFailure } = require('./cli-failure-codes.cjs')
 
 const FAILURE_PRECEDENCE = Object.freeze([
   'cancelled',
@@ -352,7 +357,9 @@ function hashEvidence(providerId, failureClass, evidence) {
  *   origin?: 'pty' | 'fluxo',
  *   providerId?: string | null,
  *   signal?: { stopped?: boolean, timedOut?: boolean } | null,
- * }} [input]
+ *   code?: string | number | null,
+ *   httpStatus?: number | null,
+ * }} [input] - `code`/`httpStatus`: o que a CLI devolveu estruturado (só na origem `fluxo`).
  * @returns {{
  *   failureClass: 'limit' | 'billing' | 'auth' | 'network' | 'provider' | 'timeout' | 'cancelled' | 'unknown',
  *   scope: 'account' | 'model',
@@ -363,9 +370,51 @@ function hashEvidence(providerId, failureClass, evidence) {
  *   notice: 'limit_reset' | null,
  *   origin: 'pty' | 'fluxo',
  *   providerId: 'claude' | 'codex' | 'gemini' | 'openia' | null,
+ *   source: 'codigo' | 'texto',
+ *   code: string | null,
  * }}
  */
 function classifyFailure(input = {}) {
+  const fromText = { ...classifyFailureFromText(input), source: 'texto', code: null }
+  if (fromText.origin !== 'fluxo' || fromText.failureClass === 'cancelled') {
+    return fromText
+  }
+
+  const structured = classifyStructuredFailure({
+    providerId: fromText.providerId,
+    code: input?.code,
+    httpStatus: input?.httpStatus,
+  })
+  if (!structured) {
+    return fromText
+  }
+
+  const sameClass = fromText.failureClass === structured.failureClass
+  const evidence = sameClass && fromText.evidence ? fromText.evidence : buildCodeEvidence(input?.text, structured.code)
+  return {
+    ...fromText,
+    failureClass: structured.failureClass,
+    // O código não traz escopo: a frase do Codex ainda diz se o limite é só do modelo.
+    scope: sameClass ? fromText.scope : 'account',
+    ambiguous: structured.ambiguous,
+    capacity: structured.capacity,
+    evidence,
+    evidenceHash: hashEvidence(fromText.providerId, structured.failureClass, evidence),
+    source: 'codigo',
+    code: structured.code,
+  }
+}
+
+/** Evidência de uma classificação por código: a primeira linha do erro, redigida, ou o próprio código. */
+function buildCodeEvidence(text, code) {
+  const [firstLine] = normalizeTerminalText(text).filter((line) => line.trim())
+  if (!firstLine) return `código ${code}`
+  const redacted = redactSecrets(firstLine.trim())
+  return redacted.length <= EVIDENCE_MAX_CHARS ? redacted : `${redacted.slice(0, EVIDENCE_MAX_CHARS - 1)}…`
+}
+
+/** A classificação só pelo texto (e pelo sinal), igual nas duas origens. */
+function classifyFailureFromText(input = {}) {
   const origin = input?.origin === 'pty' ? 'pty' : 'fluxo'
   const providerId = resolveFailureProviderId(input?.providerId)
   const base = {

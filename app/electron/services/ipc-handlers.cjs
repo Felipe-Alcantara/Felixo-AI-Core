@@ -1141,7 +1141,13 @@ function recordAccountFailure({ account, cliEvent, cliType, threadId }) {
   const chain = getAccountChainService()
   if (!providerId || !chain?.recordAccountFailure) return
   try {
-    const failure = classifyFailure({ text: cliEvent.message, origin: 'fluxo', providerId })
+    const failure = classifyFailure({
+      text: cliEvent.message,
+      origin: 'fluxo',
+      providerId,
+      code: cliEvent.failureCode,
+      httpStatus: cliEvent.httpStatus,
+    })
     chain.recordAccountFailure({
       accountId: account.accountId,
       providerId,
@@ -1228,7 +1234,15 @@ function withCliFailure(event, cliType) {
     return event
   }
 
-  return { ...event, failure: describeCliFailure({ message: event.message, cliType }) }
+  return {
+    ...event,
+    failure: describeCliFailure({
+      message: event.message,
+      cliType,
+      code: event.failureCode,
+      httpStatus: event.httpStatus,
+    }),
+  }
 }
 
 function getTargetWebContents(getMainWindow, fallbackWebContents) {

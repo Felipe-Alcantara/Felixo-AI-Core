@@ -568,6 +568,8 @@ class OrchestrationRunner {
           run,
           locatedJob,
           error: params.error,
+          errorCode: params.errorCode ?? null,
+          errorHttpStatus: params.errorHttpStatus ?? null,
           partialOutput: params.partialOutput ?? params.result ?? '',
         })
 
@@ -625,7 +627,7 @@ class OrchestrationRunner {
     return this.reinvokeOrchestrator(run.runId)
   }
 
-  async tryMidTaskFallback({ run, locatedJob, error, partialOutput }) {
+  async tryMidTaskFallback({ run, locatedJob, error, partialOutput, errorCode = null, errorHttpStatus = null }) {
     const errorMessage = stringifyAgentError(error)
     if (!errorMessage) {
       return null
@@ -645,6 +647,8 @@ class OrchestrationRunner {
     const issue = detectAvailabilityIssue({
       message: errorMessage,
       cliType: job.cliType,
+      code: errorCode,
+      httpStatus: errorHttpStatus,
     })
 
     if (!issue) {
@@ -665,6 +669,8 @@ class OrchestrationRunner {
       runContext.modelAvailabilityRegistry.recordError({
         message: errorMessage,
         cliType: job.cliType,
+        code: errorCode,
+        httpStatus: errorHttpStatus,
       })
     }
 

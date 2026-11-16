@@ -380,6 +380,7 @@ test('claude adapter parses assistant rate-limit payload as error', () => {
   assert.deepEqual(event, {
     type: 'error',
     message: "You're out of extra usage · resets 1:20pm (America/Sao_Paulo)",
+    failureCode: 'rate_limit',
   })
 })
 
@@ -399,5 +400,6 @@ test('claude adapter parses error result metadata as error', () => {
     type: 'error',
     message: "You're out of extra usage · resets 1:20pm (America/Sao_Paulo)",
     providerSessionId: '00000000-0000-4000-8000-000000000001',
+    httpStatus: 429,
   })
 })

@@ -40,6 +40,8 @@ function createModelAvailabilityRegistry(options = {}) {
         message: cliEvent.message,
         cliType: cliType ?? model?.cliType,
         model,
+        code: cliEvent.failureCode,
+        httpStatus: cliEvent.httpStatus,
       })
     }
 
@@ -50,11 +52,13 @@ function createModelAvailabilityRegistry(options = {}) {
     return null
   }
 
-  function recordError({ message, cliType, model } = {}) {
+  function recordError({ message, cliType, model, code = null, httpStatus = null } = {}) {
     const issue = detectAvailabilityIssue({
       message,
       cliType: cliType ?? model?.cliType,
       nowMs: getNowMs(now),
+      code,
+      httpStatus,
     })
 
     if (!issue) {
@@ -194,14 +198,16 @@ function createModelAvailabilityRegistry(options = {}) {
  * - servidor, rede, tempo, cancelado e desconhecido → `null`. Um "429"
  *   solto ("line 429") deixou de ser limite.
  */
-function detectAvailabilityIssue({ message, cliType, nowMs = Date.now() } = {}) {
+function detectAvailabilityIssue({ message, cliType, nowMs = Date.now(), code = null, httpStatus = null } = {}) {
   const text = String(message ?? '').trim()
+  const hasCode = (code !== null && code !== undefined && code !== '') || Number.isInteger(httpStatus)
 
-  if (!text) {
+  if (!text && !hasCode) {
     return null
   }
 
-  const failure = classifyFailure({ text, origin: 'fluxo', providerId: cliType })
+  // O código estruturado da CLI decide primeiro; o texto fica de reserva.
+  const failure = classifyFailure({ text, origin: 'fluxo', providerId: cliType, code, httpStatus })
   return availabilityFromFailure(failure, { text, cliType, nowMs })
 }
 
@@ -213,10 +219,10 @@ function detectAvailabilityIssue({ message, cliType, nowMs = Date.now() } = {}) 
  * @param {{ message?: unknown, cliType?: string, nowMs?: number }} [input]
  * @returns {{ failureClass: string, availabilityStatus: 'limit_reached' | 'no_login' | null }}
  */
-function describeCliFailure({ message, cliType, nowMs = Date.now() } = {}) {
+function describeCliFailure({ message, cliType, nowMs = Date.now(), code = null, httpStatus = null } = {}) {
   const text = String(message ?? '').trim()
-  const failure = classifyFailure({ text, origin: 'fluxo', providerId: cliType })
-  const issue = text ? availabilityFromFailure(failure, { text, cliType, nowMs }) : null
+  const failure = classifyFailure({ text, origin: 'fluxo', providerId: cliType, code, httpStatus })
+  const issue = text || failure.source === 'codigo' ? availabilityFromFailure(failure, { text, cliType, nowMs }) : null
 
   return {
     failureClass: failure.failureClass,

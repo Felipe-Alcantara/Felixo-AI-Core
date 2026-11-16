@@ -1723,3 +1723,24 @@ test('sem teto configurado, o gasto não segura nenhum sub-agente', async () => 
   assert.equal(calls.spawn.length, 2)
   assert.equal(runner.recordRunCost({ threadId: 'thread-desconhecida', cost: 1 }), null, 'resposta fora de execução não conta')
 })
+
+test('o código da CLI chega ao fallback do sub-agente: erro que não é da conta não troca de provedor', async () => {
+  const { runner, calls } = createSwitchHarness({
+    validateSpawnAgent: ({ event }) =>
+      /Tarefa original do sub-agente/.test(event.prompt)
+        ? choice(CODEX_MODEL, 'provider-fallback', { fallbackFromCliType: 'claude' })
+        : choice(CLAUDE_MODEL, 'best-available-model'),
+  })
+  await runner.handleOrchestrationEvent(createSpawnEvent(), createContext())
+
+  await runner.onAgentJobCompleted({
+    runId: 'run-1',
+    agentId: 'reviewer-1',
+    error: "You're out of extra usage · resets 4:40pm",
+    errorCode: 'max_output_tokens',
+  })
+
+  assert.equal(runner.listProviderSwitches().length, 0, 'sem pergunta de troca: o código diz que não é limite')
+  assert.equal(calls.spawn.length, 1)
+  assert.equal(runner.getRun('run-1').agentJobs[0].status, 'error')
+})

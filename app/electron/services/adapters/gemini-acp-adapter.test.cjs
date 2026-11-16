@@ -202,7 +202,7 @@ test('gemini-acp adapter parses error response', () => {
     error: { code: -32601, message: 'Method not found' },
   }))
 
-  assert.deepEqual(event, { type: 'error', message: 'Method not found' })
+  assert.deepEqual(event, { type: 'error', message: 'Method not found', failureCode: -32601 })
 })
 
 test('gemini-acp adapter returns null for non-json-rpc lines', () => {
@@ -245,4 +245,13 @@ test('ações sensíveis: o pedido do Gemini traz a ferramenta e a resposta de n
 
 test('ações sensíveis: com a opção, o Gemini ACP abre sem --yolo', () => {
   assert.deepEqual(adapter.getPersistentSpawnArgs({ confirmSensitiveActions: true }).args, ['--acp'])
+})
+
+test('erro do ACP do Gemini: o code (status HTTP do pedido) vai junto como código', () => {
+  const event = adapter.parseLine(JSON.stringify({
+    jsonrpc: '2.0',
+    id: 7,
+    error: { code: 429, message: 'Rate limit exceeded. Try again later.' },
+  }))
+  assert.deepEqual(event, { type: 'error', message: 'Rate limit exceeded. Try again later.', failureCode: 429 })
 })

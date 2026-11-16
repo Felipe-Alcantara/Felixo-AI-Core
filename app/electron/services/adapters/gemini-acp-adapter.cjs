@@ -104,6 +104,8 @@ function parseLine(line) {
     return {
       type: 'error',
       message: payload.error.message ?? 'Gemini ACP retornou um erro.',
+      // No ACP do Gemini, o `code` é o status HTTP do pedido (429, 401…) ou -32000 (login).
+      ...(Number.isInteger(payload.error.code) ? { failureCode: payload.error.code } : {}),
     }
   }
 
