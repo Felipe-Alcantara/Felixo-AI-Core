@@ -2967,3 +2967,48 @@ Estado: concluído (deploy no adendo).
 **Adendo (2026-11-16, 02:52): CI e Release.**
 - **CI** de `603d0c0` (run 43809743132): passou no Validate de Windows, macOS, Ubuntu e Ubuntu ARM e no smoke do canvas.
 - **Release:** o gate (run 43810573692) e o Release (run 43810595183, concluído às 02:39) publicaram a `v0.1.555`.
+
+## 2026-11-16 — Onboarding: a cadeia de contas entra no catálogo de novidades
+
+Task: Felixo AI Core/Onboarding — anunciar a cadeia de contas no catálogo de novidades (Notion `3e991f95-497e-817d-b6a4-c2c1825b3afc`), aberta em 28/09 no PR #97. Agente: Resolver hotfix (Claude Code, Claude Opus 5.5), 02:59 em diante. Trilha A: a direção estava na task.
+
+**Antes.** O catálogo (`onboarding-catalog.ts`, revisão 1) só tinha a novidade da Ajuda. A cadeia vem desligada, e nada avisava quem atualizava. O inventário do canvas registrava essa lacuna apontando para esta task.
+
+**Medido.**
+- **Quem recebe:** a linha de base dá como conhecidas, no primeiro uso, todas as novidades de capability. Quem já usava recebe as que têm `anunciarParaQuemJaUsa`, e quem já tem estado recebe toda entrada que falta em `knownFeatures`.
+- **Ordem:** depois de "Agora não" ou de concluir, as novidades são reavaliadas uma de cada vez (plano do tutorial, §"Depois de CONCLUIR, PULAR ou AVISO_DISPENSAR").
+- **Capability:** nenhum código chama `setCapability`. Um `requires` seguraria a novidade para sempre, então a entrada fica sem ele, como a da Ajuda.
+- **Âncora:** a cadeia mora em Limites e uso, que não tem âncora própria.
+
+**Feito.**
+- **Catálogo (revisão 2):**
+  - `feature.cadeia-contas` com `anunciarParaQuemJaUsa`;
+  - mini-tour `novidade-cadeia-contas` com um passo que aponta a seção Ferramentas (fechada; o tour não expande nada), com `rail-menu` de reserva e `citaFerramentas: ['agentUsage']`;
+  - textos: "quando uma conta bate o limite, a cadeia de contas propõe outra, sempre com a sua confirmação. Vem desligada; ligue em Ferramentas, Limites e uso, aba Cadeia."
+- **Testes:**
+  - as fixtures passam a usar `CURRENT_FEATURE_IDS` e `NEXT_CATALOG_REVISION`, em vez de "revisão 2" e `['feature.ajuda']` fixos;
+  - o teste de "uso anterior" da store cobre a fila: Ajuda, depois cadeia, cada uma uma vez, e nada no restart.
+- **Smoke:**
+  - SB5 e SB6 semeiam só a Ajuda como novidade (`soAjudaNova`);
+  - o SB7 deixa de reescrever `knownFeatures` no estado quebrado. Sem isso, a segunda novidade abriria no meio dos cenários.
+- **Docs:**
+  - GUIA-USUARIO (o aviso em "Como ligar");
+  - GUIA-DESENVOLVEDOR (função sem âncora própria; fila; testes que não fixam a lista);
+  - inventário (lacuna resolvida; "Agora não" traz a próxima novidade).
+
+**Validação.**
+- **Mutação:** sem a entrada no catálogo, o teste de "uso anterior" falha.
+- **Smoke da sessão B:** com o smoke antigo e o catálogo novo, falha nas três tentativas (SB6 espera o aviso sumir, e o da cadeia aparece). Com o ajuste, SB1 a SB8 passam (33,7 s).
+- **Gates:**
+  - `npm test`: 3329 testes, 3319 passam, 10 pulados, 0 falham;
+  - `vitest`: 3513 passam;
+  - `eslint .` e `tsc -b` limpos.
+- **App de fonte com perfil isolado e `FELIXO_DEVTOOLS_ONBOARDING=1`:**
+  - primeiro uso: as duas novidades entram como conhecidas e nada é avisado;
+  - estado de quem atualiza (sem `feature.cadeia-contas`): o aviso "Novidade: Cadeia de contas" aparece ao lado da Ajuda sem tirar o foco, e o leitor de tela ouve "Novidade em Ajuda: Cadeia de contas.";
+  - "Ver" abre o mini-tour no cabeçalho Ferramentas (fechado);
+  - "Concluir" e reload: nada volta.
+
+**Não validado.** O aviso não foi conferido no app instalado, atualizando de uma versão anterior com estado real. O smoke e o estado semeado cobrem o mesmo caminho.
+
+Estado: concluído (deploy no adendo).
