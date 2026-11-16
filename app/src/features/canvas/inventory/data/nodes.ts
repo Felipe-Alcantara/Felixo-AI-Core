@@ -476,11 +476,17 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
       normal: 'Webview na URL gravada (ou google.com), barra de endereço com a URL atual, título da página como rótulo enquanto a pessoa não renomeia.',
       loading: 'Antes do dom-ready o guest está em branco e Voltar/Avançar ficam desabilitados; não há indicador de carregamento.',
       error: 'did-fail-load (exceto -3, ABORTED): faixa vermelha com a descrição do erro.',
-      denied: 'Endereço recusado pela política de URL (explainUrlInput): faixa role="alert" "Endereço não aberto: …", aria-invalid na barra e o foco fica nela.',
+      denied: 'Endereço recusado pela política de URL (explainUrlInput): faixa role="alert" "Endereço não aberto: …", aria-invalid na barra e o foco fica nela. Popup negado por passar do limite (no máximo 2 janelas da página ao mesmo tempo, contando as que um popup abre): faixa role="status" "Esta página tentou abrir mais de 2 janelas ao mesmo tempo, e a extra não abriu…" até fechar o aviso ou navegar.',
       disabled: 'Voltar/Avançar sem histórico (canGoBack/canGoForward falsos).',
       pending: 'Pedido de permissão do site (ou de um popup que a página abriu) sem decisão lembrada: faixa role="region" "Pedido de permissão do site" com o site e o que ele quer, Permitir e Negar; sem foco automático; "(mais N na fila)" quando há outros pedidos do bloco.',
     },
     controls: [
+      {
+        locator: 'aria-label="Fechar o aviso de janelas"',
+        kind: 'button',
+        effect: 'Fecha a faixa do limite de popups (webview-popups:blocked). A janela extra já foi negada pelo main; fechar uma das janelas da página libera a vaga.',
+        failure: 'Sem falha própria; navegar o bloco também fecha o aviso.',
+      },
       {
         locator: 'onClick={() => void respondPermission(permissionRequest.id, true)}',
         kind: 'button',
@@ -527,7 +533,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
       'processo principal: cookies e logins na partição do perfil (persist:…)',
       'histórico de navegação: só na sessão do webview, nunca serializado',
     ],
-    ipc: ['canvas:save', 'canvas:delete', 'external-links:open-failed', 'webview-permissions:pending', 'webview-permissions:respond'],
+    ipc: ['canvas:save', 'canvas:delete', 'external-links:open-failed', 'webview-permissions:pending', 'webview-permissions:respond', 'webview-popups:blocked'],
     dependsOn: [
       'useReactFlow',
       'useWebviewSitePermissions / describeSitePermissionRequest (webview-site-permissions)',

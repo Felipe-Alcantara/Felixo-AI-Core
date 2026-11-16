@@ -988,6 +988,14 @@ Boa parte dos "erros" contados é só formatação, como "10 km" escrito "10 qui
 
 No Linux, o caminho inteiro foi conferido com um microfone virtual: gravação, texto no terminal, avisos, permissão negada, erros de endereço e de chave, e o microfone liberado ao parar, cancelar ou fechar o app. O ditado também foi conferido **sem internet**, no app instalado, com o servidor local. Microfone físico, Windows e macOS ainda não foram conferidos.
 
+### Janelas de login da Página Web
+
+Quando um site num bloco **Página Web** abre uma janela (o login do Google, da Microsoft ou da Apple, por exemplo), ela aparece como uma janela do sistema.
+
+- **Confira o endereço:** a barra de título mostra o site em que ela está, antes do título da página, por exemplo "accounts.google.com — Fazer login". A página não consegue trocar essa parte. Se aparecer "http://" na frente, a conexão não é segura.
+- **No máximo duas por bloco:** cada bloco abre até 2 janelas ao mesmo tempo, contando as que uma janela abre. Se o site tentar mais, a extra não abre e o bloco avisa. Fechar uma das janelas libera a vaga.
+- **Remover o bloco fecha as janelas dele.**
+
 ### Permissões dos sites na Página Web
 
 Um site aberto num bloco **Página Web** não usa nada sensível sem a sua resposta: microfone, câmera, localização, notificações, área de transferência (ler ou escrever), captura da tela, tela cheia e as demais permissões do navegador.

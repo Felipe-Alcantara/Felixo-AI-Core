@@ -30,7 +30,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 ## Números
 
 - **Elementos:** 102 (10 blocos, 16 ferramentas, 76 outras superfícies)
-- **Controles:** 393, dos quais 58 com teste específico
+- **Controles:** 394, dos quais 58 com teste específico
 - **Elementos sem nenhum teste:** 4
 - **Lacunas:** 253 (alto 7, médio 137, baixo 109), em 66 tasks
 
@@ -678,7 +678,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 - **ID:** `bloco-pagina-web` · **Dono:** `src/features/canvas/components/WebpageNode.tsx`
 - **Persistência:** canvas salvo (canvas_nodes.data_json: url persistível, label, profileId, frameColor); processo principal: cookies e logins na partição do perfil (persist:…); histórico de navegação: só na sessão do webview, nunca serializado
-- **IPC:** `canvas:save`, `canvas:delete`, `external-links:open-failed`, `webview-permissions:pending`, `webview-permissions:respond`
+- **IPC:** `canvas:save`, `canvas:delete`, `external-links:open-failed`, `webview-permissions:pending`, `webview-permissions:respond`, `webview-popups:blocked`
 - **Depende de:** `useReactFlow`, `useWebviewSitePermissions / describeSitePermissionRequest (webview-site-permissions)`, `partitionForWebviewProfile (webview-profile)`, `explainUrlInput / persistableNavigationUrl (url-utils)`, `resolveGuestSrc / shouldCreateGuest / staleGuests (webview-mount)`, `webviewLinkMenu (webview-context-menu)`, `openLinkChooser / runLinkChoice`, `WebviewProfileMenu`
 - **Sobreposição:** Bloco do React Flow, sem z próprio: fica abaixo de toda superfície fixa (topbar e statusbar 18, dock e painéis 20/30, sidebar 26, menus 50+). O cartão é overflow-hidden, então nada que nasce dentro dele passa das bordas. O <webview> composita por cima do DOM do cartão e engole o mousedown nas bordas: um véu (pointer-events-auto) só liga durante o resize. Cliques dentro do guest não chegam ao document, então menus que fecham por mousedown fora (perfil) ficam abertos.
 - **Testes:** `src/features/canvas/services/webview-site-permissions.test.ts`, `src/features/canvas/services/url-utils.test.ts`, `src/features/canvas/services/webview-mount.test.ts`, `src/features/canvas/services/webview-context-menu.test.ts`, `electron/services/webview-lifecycle.test.cjs`, `electron/services/webview-profile-partition.test.cjs`, `scripts/canvas-smoke-links.cjs` → `paginaWebBarraEBotao`, `scripts/canvas-smoke-links.cjs` → `paginaWebMenuDeLink`, `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`
@@ -690,10 +690,11 @@ Sem controle próprio: as ações vêm de outros elementos.
 | error | did-fail-load (exceto -3, ABORTED): faixa vermelha com a descrição do erro. |
 | pending | Pedido de permissão do site (ou de um popup que a página abriu) sem decisão lembrada: faixa role="region" "Pedido de permissão do site" com o site e o que ele quer, Permitir e Negar; sem foco automático; "(mais N na fila)" quando há outros pedidos do bloco. |
 | disabled | Voltar/Avançar sem histórico (canGoBack/canGoForward falsos). |
-| denied | Endereço recusado pela política de URL (explainUrlInput): faixa role="alert" "Endereço não aberto: …", aria-invalid na barra e o foco fica nela. |
+| denied | Endereço recusado pela política de URL (explainUrlInput): faixa role="alert" "Endereço não aberto: …", aria-invalid na barra e o foco fica nela. Popup negado por passar do limite (no máximo 2 janelas da página ao mesmo tempo, contando as que um popup abre): faixa role="status" "Esta página tentou abrir mais de 2 janelas ao mesmo tempo, e a extra não abriu…" até fechar o aviso ou navegar. |
 
 | Controle | Gatilho | Efeito | Falha conhecida | Teste |
 | --- | --- | --- | --- | --- |
+| `aria-label="Fechar o aviso de janelas"` (button) | clique | Fecha a faixa do limite de popups (webview-popups:blocked). A janela extra já foi negada pelo main; fechar uma das janelas da página libera a vaga. | Sem falha própria; navegar o bloco também fecha o aviso. | — |
 | `onClick={() => void respondPermission(permissionRequest.id, true)}` (button) | clique | Permitir: webview-permissions:respond com allow=true; o main grava "granted" para cada permissão do pedido (perfil + origem), responde ao site e resolve os outros pedidos do mesmo site e perfil. | Pedido que já sumiu (a página navegou ou o bloco fechou) devolve "Pedido de permissão não encontrado." e a faixa some pelo aviso de pendentes. | — |
 | `onClick={() => void respondPermission(permissionRequest.id, false)}` (button) | clique | Negar: webview-permissions:respond com allow=false; o main grava "denied" (lembrado até revogar) e responde ao site; sem resposta nenhuma o site também fica sem a permissão. | Mesmo caso do Permitir: pedido que sumiu não grava nada. | — |
 | `aria-label="Voltar"` (button) | clique | webview.goBack(); did-navigate atualiza a barra, o histórico e grava a URL persistível (data.url). (desabilitado: Sem histórico para trás.) | Sem try: antes do dom-ready do guest (ex.: logo após trocar de perfil, com canGoBack ainda do guest antigo) o Electron lança síncrono. | — |

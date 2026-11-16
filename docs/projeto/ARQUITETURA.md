@@ -1223,6 +1223,10 @@ Portões do processo principal:
 - `webview-lifecycle.cjs`: popup e `target=_blank` dentro do bloco só abrem
   página web. O `loadURL` feito pelo main não passa pelo filtro que o Chromium
   aplica à navegação do próprio site.
+  - **Limite:** no máximo 2 popups abertos ao mesmo tempo por bloco (`createPopupTracker`), contando os que um popup abre. O excedente é negado, e o bloco recebe `webview-popups:blocked`.
+  - **Órfãos:** o webview destruído fecha os popups dele.
+  - **Título:** o da janela do popup é o site atual (`popupWindowTitle`), e a página não o troca sozinha.
+  - **Sem `parent` nem `modal`:** o handshake de login (`postMessage` para quem abriu) segue igual.
 - `session-security.cjs`: o Chromium pede a permissão `openExternal` quando uma
   página navega para `vscode:`, `ms-msdt:` e afins. Em toda sessão, inclusive
   nas partições dos perfis, essa permissão passa pela mesma política. As outras
