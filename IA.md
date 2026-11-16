@@ -3109,3 +3109,68 @@ Estado: concluído (deploy no adendo).
 - **CI** de `917d568` (run 43823514099): passou no Validate de Windows, macOS, Ubuntu e Ubuntu ARM e no smoke do canvas.
 - **Release:** o gate (run 43824331947) e o Release (run 43824359989, concluído às 04:40) publicaram a `v0.1.558`, porque o comentário tocou um arquivo do app.
 - **Mais uma medição:** o release-smoke da v0.1.558 marcou `startupMs` de 2917 ms no Ubuntu (macOS 1809, Windows 389). É a quarta seguida abaixo de 4,2 s (2012, 1463, 2054 e 2917 ms).
+
+## 2026-11-16 — Segurança: sites na Página Web só usam permissões depois de perguntar à pessoa
+
+Task: Felixo AI Core/Segurança — decidir por permissão o que um site no bloco Página Web pode usar, perguntando à pessoa (Notion `3ea91f95-497e-812a-bc4b-ccfe144bd56c`), aberta em 29/09 a partir da política única de URL. Agente: Resolver hotfix (Claude Code, Claude Opus 5.5), 04:45 em diante.
+
+**Antes.** `decidePermissionRequest` concedia toda permissão que não fosse `openExternal`, em todas as sessões, inclusive nas partições dos perfis do navegador interno. Não havia `setPermissionCheckHandler`, então `navigator.permissions.query` dizia "concedido".
+
+**Decisões do Felipe** (`AskUserQuestion`):
+1. **Padrão:** perguntar tudo (toda permissão pede confirmação, inclusive tela cheia e escrita no clipboard).
+2. **Onde perguntar:** numa faixa no próprio bloco; sem resposta, conta como negado.
+3. **Memória:** por site e perfil, até revogar.
+4. **Revogar:** nos dois lugares, no menu do perfil do bloco e nas Configurações.
+
+**Medido no Electron 42.11.16** (janela escondida numa partição de teste, com página local em 127.0.0.1):
+- **Perfil da sessão:** o `storagePath` de uma partição é `<userData>/Partitions/felixo-webview[-<id>]` e o da sessão padrão é o `userData`. Daí sai o perfil da sessão, sem rastrear webviews.
+- **Verificação negada:** com o check handler devolvendo `false`, `permissions.query` e `Notification.permission` dizem `denied` (o Electron não tem "perguntar"). Mesmo assim, `Notification.requestPermission`, `getCurrentPosition`, `getUserMedia` (com `mediaTypes`), `clipboard.readText`, `clipboard.writeText` e `requestFullscreen` chegam ao handler de pedido.
+
+**Feito.**
+- **`webview-site-permissions.cjs`:** política pura e broker.
+  - Rótulo de cada permissão; `media` vira microfone e/ou câmera.
+  - Origem só de http(s).
+  - Negação lembrada nega o pedido inteiro; o que falta decidir vai para a faixa.
+  - Pedidos repetidos viram uma faixa só, com no máximo 4 pendentes por webContents.
+  - Navegar no quadro principal ou fechar nega o que estava pendente.
+  - Popup de um bloco pergunta no bloco que o abriu (`linkPopup`).
+  - Uma resposta resolve os outros pendentes do mesmo site e perfil.
+- **Migração 023 e repositório:** `webview_site_permissions` (perfil, origem, permissão, decisão, data). Excluir o perfil apaga as decisões dele (`onProfileDeleted`).
+- **`session-security.cjs`:**
+  - `classifySession` lê a sessão no pedido: perfil do navegador interno (pergunta pelo broker), sessão padrão do app (concede, como antes: ditado e clipboard) ou outra (nega);
+  - `openExternal` segue a política de URL em toda sessão;
+  - novo `setPermissionCheckHandler`, coerente com as decisões gravadas.
+- **IPC:** `webview-permissions:pending|respond|list|revoke`, com os avisos `webview-permissions:pending|changed`. O renderer só responde pedidos criados pelo main e só revoga.
+- **Interface:**
+  - faixa no bloco Página Web ("‹site› quer …", Permitir/Negar, sem foco automático);
+  - "Permissões dos sites neste perfil" no menu do perfil (Revogar por site);
+  - seção "Permissões dos sites (Página Web)" nas Configurações (revogar por permissão).
+- **Docs:** GUIA-USUARIO, ARQUITETURA e inventário do canvas. As travas de texto do `navigation-guard.test.cjs` passaram a procurar o prefixo das chamadas, que ganharam argumentos.
+
+**Validação.**
+- **Testes:**
+  - 8 do broker e da política, com SQLite real;
+  - 1 novo do `session-security` (o antigo "as outras permissões continuam com o padrão do Electron" saiu);
+  - 4 do renderer;
+  - os de exclusão de perfil cobrem o `onProfileDeleted`.
+- **Mutações:**
+  - site concedendo sem perguntar: 1 teste falha;
+  - verificação dizendo "concedido" sem decisão: 1;
+  - negação lembrada ignorada: 2.
+- **Gates:**
+  - `npm test`: 3337 testes, 3327 passam, 10 pulados, 0 falham;
+  - `vitest`: 3523 passam;
+  - `eslint .` e `tsc -b` limpos.
+- **App de fonte com perfil isolado e um bloco Página Web em http://127.0.0.1:8787:**
+  - a notificação mostrou a faixa sem tirar o foco; Permitir deu `granted` no site, na consulta e no `Notification.permission`, e a decisão ficou gravada;
+  - Negar a localização deu `erro:1`, e o segundo pedido foi negado sem faixa;
+  - Revogar no menu do perfil zerou as decisões, a consulta voltou a `denied` e o site perguntou de novo;
+  - o × das Configurações revogou;
+  - `getUserMedia` na sessão do app continuou concedido (ditado).
+
+**Não validado.**
+- **Site real:** não testei um site de verdade (vídeo-chamada, passkey/WebAuthn, o editor do n8n da task relacionada).
+- **Popup:** só coberto por teste.
+- **Leitura do clipboard:** num site sem foco, o Chromium recusa antes de perguntar.
+
+Estado: concluído (deploy no adendo).
