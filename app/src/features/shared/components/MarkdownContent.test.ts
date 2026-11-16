@@ -170,6 +170,25 @@ describe('MarkdownContent', () => {
     expect(html).not.toMatch(/onerror=/i)
   })
 
+  it('imagem relativa só carrega dentro da raiz autorizada; fora dela vira o texto alternativo', () => {
+    const conteudo = [
+      '![dentro](../assets/logo.png)',
+      '![fora](../../../../segredo.png)',
+      '![fora codificado](%2e%2e/%2e%2e/%2e%2e/segredo2.png)',
+    ].join('\n\n')
+    const noProjeto = renderToStaticMarkup(
+      createElement(MarkdownContent, { content: conteudo, baseDir: '/home/p/proj/docs', imageRoot: '/home/p/proj' }),
+    )
+    expect(noProjeto).toContain('src="file:///home/p/proj/assets/logo.png"')
+    expect(noProjeto).not.toMatch(/src="file:[^"]*segredo/)
+    expect(noProjeto).toContain('fora codificado')
+
+    // Sem projeto, a raiz é a pasta do arquivo: ../assets já fica de fora.
+    const semProjeto = renderMarkdown(conteudo, '/home/p/proj/docs')
+    expect(semProjeto).not.toContain('src="file:')
+    expect(semProjeto).toContain('dentro')
+  })
+
   it('preserva os elementos essenciais do GFM', () => {
     const html = renderMarkdown(`
 - [x] tarefa concluída

@@ -11,6 +11,8 @@ const MarkdownContent = lazy(() =>
 type DeferredMarkdownContentProps = {
   content: string
   baseDir?: string
+  /** Raiz que as imagens relativas não podem deixar (padrão: `baseDir`). */
+  imageRoot?: string
   resolveRelativeLink?: ResolveMarkdownRelativeLink
 }
 
@@ -22,6 +24,7 @@ type DeferredMarkdownContentProps = {
 export function DeferredMarkdownContent({
   content,
   baseDir,
+  imageRoot,
   resolveRelativeLink,
 }: DeferredMarkdownContentProps) {
   return (
@@ -35,6 +38,7 @@ export function DeferredMarkdownContent({
       <MarkdownContent
         content={content}
         baseDir={baseDir}
+        imageRoot={imageRoot}
         resolveRelativeLink={resolveRelativeLink}
       />
     </Suspense>

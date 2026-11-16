@@ -47,6 +47,8 @@ type MarkdownContentProps = {
    * sempre, correto para markdown sem arquivo por trás (ex.: chat).
    */
   baseDir?: string
+  /** Raiz que as imagens relativas não podem deixar (padrão: `baseDir`; ver `markdownImageRoot`). */
+  imageRoot?: string
   /**
    * Destino, dentro da tela, dos links relativos do documento (ex.: os guias
    * do System Design citando uns aos outros). Sem ele, link relativo vira
@@ -237,6 +239,7 @@ hljs.registerLanguage('xml', xmlLanguage)
  */
 function createMarkdownComponents(
   baseDir: string | undefined,
+  imageRoot: string | undefined,
   resolveRelativeLink: ResolveMarkdownRelativeLink | undefined,
 ): Components {
   return {
@@ -393,7 +396,7 @@ function createMarkdownComponents(
       )
     },
     img(props) {
-      return <MarkdownImage {...props} baseDir={baseDir} />
+      return <MarkdownImage {...props} baseDir={baseDir} imageRoot={imageRoot} />
     },
     input({ checked, disabled, type }) {
       return (
@@ -421,6 +424,7 @@ function createMarkdownComponents(
               nasceria sem saber a pasta do arquivo. */}
             <MarkdownContent
               baseDir={baseDir}
+              imageRoot={imageRoot}
               content={recoveredMarkdown.markdown}
               resolveRelativeLink={resolveRelativeLink}
             />
@@ -438,9 +442,10 @@ function MarkdownImage({
   src,
   title,
   baseDir,
-}: ComponentProps<'img'> & { baseDir: string | undefined }) {
+  imageRoot,
+}: ComponentProps<'img'> & { baseDir: string | undefined; imageRoot: string | undefined }) {
   const resolvedSrc =
-    typeof src === 'string' ? resolveMarkdownImageSrc(src, baseDir) : src
+    typeof src === 'string' ? resolveMarkdownImageSrc(src, baseDir, imageRoot ?? baseDir) : src
   const [hasError, setHasError] = useState(!resolvedSrc)
 
   if (hasError) {
@@ -518,11 +523,11 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
   )
 }
 
-export function MarkdownContent({ content, baseDir, resolveRelativeLink }: MarkdownContentProps) {
+export function MarkdownContent({ content, baseDir, imageRoot, resolveRelativeLink }: MarkdownContentProps) {
   const normalizedContent = normalizeMarkdownContent(content)
   const components = useMemo(
-    () => createMarkdownComponents(baseDir, resolveRelativeLink),
-    [baseDir, resolveRelativeLink],
+    () => createMarkdownComponents(baseDir, imageRoot, resolveRelativeLink),
+    [baseDir, imageRoot, resolveRelativeLink],
   )
 
   return (

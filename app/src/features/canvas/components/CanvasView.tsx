@@ -170,6 +170,7 @@ import {
 import { HandoffDialog } from './HandoffDialog'
 import { AccountSwitchDialog } from './AccountSwitchDialog'
 import { AccountChainActionsContext } from '../hooks/account-chain-actions-context'
+import { ProjectRootsContext } from '../hooks/project-roots-context'
 import { useAccountContinuation } from '../hooks/useAccountContinuation'
 import type { ContinuationReason } from '../services/account-switch-dialog'
 import { formatClockTime, ptySessionIdForNode } from '../services/account-chain-view'
@@ -354,6 +355,8 @@ function CanvasInner({
     Record<string, string[]>
   >({})
   const { projects, reloadProjects, addProjectFolder, removeProjectFolder } = useCanvasProjects()
+  // Raiz autorizada das imagens relativas do Markdown nos blocos de arquivo.
+  const projectRoots = useMemo(() => projects.map((project) => project.path), [projects])
   const [expandedTerminalId, setExpandedTerminalId] = useState<string | null>(null)
   const expandedTerminalIdRef = useRef<string | null>(null)
   const [terminalOpenRequest, setTerminalOpenRequest] = useState(0)
@@ -2404,6 +2407,7 @@ function CanvasInner({
       />
 
         <AccountChainActionsContext.Provider value={accountContinuation.actions}>
+        <ProjectRootsContext.Provider value={projectRoots}>
         <ReactFlow
           key={canvasRevision}
           nodes={orderedNodes}
@@ -2491,6 +2495,7 @@ function CanvasInner({
             />
           )}
         </ReactFlow>
+        </ProjectRootsContext.Provider>
         </AccountChainActionsContext.Provider>
         <AgentQuestionDialog />
         <AgentBrowserRequestCard />

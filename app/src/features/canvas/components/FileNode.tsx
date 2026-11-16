@@ -27,7 +27,8 @@ import {
 } from 'lucide-react'
 import { NodeHeader } from './NodeHeader'
 import { DeferredMarkdownContent } from '../../shared/components/DeferredMarkdownContent'
-import { dirnameOf } from '../../shared/components/markdown-image-src'
+import { dirnameOf, markdownImageRoot } from '../../shared/components/markdown-image-src'
+import { useProjectRoots } from '../hooks/project-roots-context'
 import { isSafeImagePreviewMimeType, resolvePreviewKind } from './file-node-preview'
 import { useFileNodeDocument } from '../hooks/useFileNodeDocument'
 import type {
@@ -90,6 +91,7 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
   const displayName = isExternal
     ? (nodeData.fileLabel ?? (filePath || 'imagem gerada'))
     : fileName
+  const projectRoots = useProjectRoots()
   const document = useFileNodeDocument({
     fileName: isExternal ? undefined : fileName,
     filePath: isImage ? undefined : isExternal ? filePath : undefined,
@@ -463,7 +465,11 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
       ) : content.trim() ? (
         previewKind === 'markdown' ? (
           <div className="nodrag nowheel nopan markdown-content min-h-0 flex-1 overflow-auto p-3 text-sm">
-            <DeferredMarkdownContent baseDir={dirnameOf(absolutePath)} content={content} />
+            <DeferredMarkdownContent
+              baseDir={dirnameOf(absolutePath)}
+              imageRoot={markdownImageRoot(absolutePath, projectRoots)}
+              content={content}
+            />
           </div>
         ) : (
           // Texto puro preserva indentação e quebra de linha — num arquivo de
