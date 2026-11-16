@@ -125,18 +125,15 @@ test("nenhuma diretiva libera 'unsafe-eval' e o script-src não tem 'unsafe-inli
   assert.ok(!mapa.has('script-src-attr'))
 })
 
-test('a única origem de rede é https://esm.sh, e só em font-src', () => {
+test('nenhuma diretiva libera origem de rede: as fontes do Excalidraw saem do build', () => {
   const mapa = diretivas(buildRendererCsp(INDEX_HTML).policy)
-  const rede = (value) => /^(?:https?|wss?):|\*/.test(value) || value.includes('esm.sh')
+  // Host sem esquema (`esm.sh`, `*.cdn.com`) também é origem de rede numa CSP.
+  const rede = (value) => /^(?:https?|wss?):|\*/.test(value) || /^[a-z0-9-]+(?:\.[a-z0-9-]+)+/i.test(value)
 
-  assert.deepEqual(mapa.get('font-src').filter(rede), ['https://esm.sh'])
-  for (const name of ['script-src', 'connect-src', 'default-src']) {
-    assert.ok(!mapa.get(name).some((value) => value.includes('esm.sh')), `${name} libera esm.sh`)
-  }
   for (const [name, values] of mapa) {
-    if (name === 'font-src') continue
     assert.deepEqual(values.filter(rede), [], `${name} libera origem de rede`)
   }
+  assert.deepEqual(mapa.get('font-src'), ["'self'", 'data:'])
 })
 
 test('a meta entra logo depois do charset, antes de qualquer script, estilo ou link', () => {

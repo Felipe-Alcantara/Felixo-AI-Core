@@ -28,8 +28,8 @@ const { createHash } = require('node:crypto')
  * - `'self'` sob `file://` casa com QUALQUER URL `file:`, inclusive fora de
  *   `dist/` (script, módulo e imagem de outra pasta carregaram). É o limite da
  *   origem `file://`, não desta política; o que a política garante é que nada
- *   inline sem hash e nada de `eval` roda, e que a única origem de rede é a
- *   das fontes do Excalidraw, só em `font-src` (ver abaixo).
+ *   inline sem hash e nada de `eval` roda, e que nenhuma diretiva libera
+ *   origem de rede.
  * - `frame-src` não controla `<webview>`: o bloco "Página Web" continua
  *   carregando com `frame-src 'none'`. O isolamento do webview é do processo
  *   principal (`will-attach-webview`), não desta política.
@@ -59,15 +59,14 @@ const RENDERER_CSP_DIRECTIVES = Object.freeze([
   // recusada no renderer, e a CSP é a segunda barreira contra request de
   // rastreio disparado por conteúdo.
   ['img-src', ["'self'", 'data:', 'blob:', 'file:']],
-  // https://esm.sh: sem `window.EXCALIDRAW_ASSET_PATH`, o Excalidraw registra
-  // as fontes do desenho (Excalifont, Xiaolai, …) apontando para o CDN dele.
-  // Liberado SÓ aqui, por três motivos: mantém o comportamento de hoje (o
-  // texto do desenho continua com a fonte certa), fonte não executa código, e
-  // servir essas fontes pelo próprio build (cerca de 14 MB a mais no pacote) é
-  // uma task de acompanhamento. `connect-src` continua fechado de propósito: o
-  // `fetch` das mesmas fontes no export do Excalidraw fica bloqueado, e o
-  // export cai no fallback dele.
-  ['font-src', ["'self'", 'data:', 'https://esm.sh']],
+  // As fontes do desenho do Excalidraw (Excalifont, Xiaolai, …) saem do
+  // próprio build (`dist/excalidraw-assets/fonts`, ver
+  // `scripts/excalidraw-fonts.cjs`), apontadas por `window.EXCALIDRAW_ASSET_PATH`.
+  // O Excalidraw ainda põe o CDN dele (esm.sh) como segunda URL de cada fonte:
+  // fora daqui, essa URL só seria tentada se a local falhasse, e aí vira
+  // violação que o smoke de release acusa. O `fetch` das mesmas fontes no
+  // export passa pelo `connect-src 'self'`.
+  ['font-src', ["'self'", 'data:']],
   // A única mídia do renderer é o som de notificação empacotado
   // (`new Audio('./sounds/notification.mp3')`); o microfone do ditado vem de
   // getUserMedia, que a CSP não governa.
