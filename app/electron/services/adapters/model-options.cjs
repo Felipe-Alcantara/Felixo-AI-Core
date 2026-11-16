@@ -52,7 +52,17 @@ function createCodexConfigOptionArgs(context = {}) {
   const providerModel = getProviderModel(context)
   const reasoningEffort = getReasoningEffort(context, CODEX_REASONING_EFFORTS)
 
-  if (isCodexFullAccessEnabled(context)) {
+  if (context.confirmSensitiveActions === true) {
+    // "Confirmar ações sensíveis": o Codex roda na pasta de trabalho e pede
+    // aprovação para sair dela (rede, outra pasta, permissão extra). O pedido
+    // vai ao chat em vez de ser aprovado sozinho.
+    args.push(
+      '--config',
+      createTomlStringConfig('sandbox_mode', 'workspace-write'),
+      '--config',
+      createTomlStringConfig('approval_policy', 'on-request'),
+    )
+  } else if (isCodexFullAccessEnabled(context)) {
     args.push(
       '--config',
       createTomlStringConfig('sandbox_mode', 'danger-full-access'),
@@ -81,6 +91,8 @@ function createModelOptionArgs(context = {}) {
 }
 
 function createGeminiFullAccessArgs(context = {}) {
+  // Sem `--yolo`, o Gemini ACP pede permissão a cada ferramenta que muda algo.
+  if (context.confirmSensitiveActions === true) return []
   return isGeminiFullAccessEnabled(context) ? ['--yolo'] : []
 }
 

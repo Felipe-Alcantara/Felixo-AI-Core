@@ -17,7 +17,9 @@
  * On process reuse the adapter skips handshake and sends turn/start directly.
  *
  * Server-initiated approval requests (item/commandExecution/requestApproval,
- * item/fileChange/requestApproval) are auto-approved in this first version.
+ * item/fileChange/requestApproval, item/permissions/requestApproval) carry the
+ * approve and deny answers; with "Confirmar ações sensíveis" the persistent
+ * session asks the person in the chat, otherwise it approves right away.
  */
 
 const {
@@ -160,10 +162,32 @@ function parseServerRequest(payload) {
     return {
       type: 'control',
       responseInput: formatApprovalResponse(payload.id),
+      permission: {
+        ...describeApprovalRequest(payload.method, payload.params ?? {}),
+        denyInput: formatApprovalResponse(payload.id, 'denied'),
+      },
     }
   }
 
   return null
+}
+
+/** O que a pessoa lê no card: o que o Codex quer fazer, e onde. */
+function describeApprovalRequest(method, params) {
+  const command = Array.isArray(params.command) ? params.command.join(' ') : params.command
+  const parts = [
+    typeof command === 'string' && command.trim() ? `Comando: ${command.trim()}` : null,
+    typeof params.cwd === 'string' && params.cwd ? `Pasta: ${params.cwd}` : null,
+    typeof params.grantRoot === 'string' && params.grantRoot ? `Pasta pedida: ${params.grantRoot}` : null,
+    typeof params.reason === 'string' && params.reason.trim() ? `Motivo: ${params.reason.trim()}` : null,
+  ].filter(Boolean)
+  const title =
+    method === 'item/commandExecution/requestApproval'
+      ? 'O Codex quer rodar um comando'
+      : method === 'item/fileChange/requestApproval'
+        ? 'O Codex quer alterar arquivos'
+        : 'O Codex pede mais permissão'
+  return { title, detail: parts.join('\n') || null }
 }
 
 function parseResponse(payload) {
@@ -248,11 +272,11 @@ function formatNotification(method, params) {
   return `${JSON.stringify({ jsonrpc: '2.0', method, params })}\n`
 }
 
-function formatApprovalResponse(requestId) {
+function formatApprovalResponse(requestId, decision = 'approved') {
   return `${JSON.stringify({
     jsonrpc: '2.0',
     id: requestId,
-    result: { decision: 'approved' },
+    result: { decision },
   })}\n`
 }
 

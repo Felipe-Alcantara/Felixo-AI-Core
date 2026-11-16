@@ -222,3 +222,27 @@ test('gemini-acp adapter provides one-shot fallback spawn args', () => {
   assert.ok(spawnArgs.args.includes('--prompt'))
   assert.ok(spawnArgs.args.includes('Oi'))
 })
+
+test('ações sensíveis: o pedido do Gemini traz a ferramenta e a resposta de negar uma vez', () => {
+  const pedido = (options) => adapter.parseLine(JSON.stringify({
+    jsonrpc: '2.0',
+    id: 6,
+    method: 'session/request_permission',
+    params: { sessionId: 's', toolCall: { title: 'Apagar build/', kind: 'delete' }, options },
+  }))
+  const comRecusa = pedido([
+    { id: 'sim', kind: 'allow_once' },
+    { id: 'nunca', kind: 'reject_always' },
+    { id: 'nao', kind: 'reject_once' },
+  ])
+  assert.equal(comRecusa.permission.title, 'O Gemini pede permissão: Apagar build/')
+  assert.equal(comRecusa.permission.detail, 'Tipo: delete')
+  assert.equal(JSON.parse(comRecusa.permission.denyInput).result.optionId, 'nao')
+
+  const semRecusa = pedido([{ id: 'sim', kind: 'allow_once' }])
+  assert.equal(JSON.parse(semRecusa.permission.denyInput).result.outcome, 'cancelled')
+})
+
+test('ações sensíveis: com a opção, o Gemini ACP abre sem --yolo', () => {
+  assert.deepEqual(adapter.getPersistentSpawnArgs({ confirmSensitiveActions: true }).args, ['--acp'])
+})

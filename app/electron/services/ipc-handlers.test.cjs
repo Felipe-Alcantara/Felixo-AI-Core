@@ -639,3 +639,31 @@ test('o registro de trocas de provedor não quebra sem banco e loga falha de gra
   assert.ok(failure, 'a falha de gravação vai para o log QA')
   assert.match(failure.message, /banco travado/)
 })
+
+test('pedido de permissão da CLI: a resposta vai para a sessão persistente, não para o runner, e entra na mesma lista', async () => {
+  const decisionId = '1a2b3c4d-1111-4222-8333-444455556666'
+  const runnerCalls = []
+  const runner = {
+    resolveProviderSwitch: async (params) => runnerCalls.push(params),
+    listProviderSwitches: () => [{ decisionId: 'troca', requestedAt: '2026-11-16T03:05:00.000Z' }],
+  }
+  const respostas = []
+  const sessions = {
+    hasPermissionRequest: (id) => id === decisionId,
+    respondPermission: (params) => {
+      respostas.push(params)
+      return { ok: true, decisionId: params.decisionId, outcome: params.allow ? 'accepted' : 'refused' }
+    },
+    listPermissionRequests: () => [{ decisionId, kind: 'permission', requestedAt: '2026-11-16T03:00:00.000Z' }],
+  }
+
+  const result = await respondToProviderSwitch(runner, { decisionId, accept: false }, sessions)
+
+  assert.deepEqual(result, { ok: true, decisionId, outcome: 'refused' })
+  assert.deepEqual(respostas, [{ decisionId, allow: false }])
+  assert.equal(runnerCalls.length, 0)
+  assert.deepEqual(
+    createProviderSwitchListResponse(runner, sessions).requests.map((item) => item.decisionId),
+    [decisionId, 'troca'],
+  )
+})

@@ -127,9 +127,22 @@ function parseServerRequest(payload) {
     const options = payload.params?.options ?? []
     const allowOption = options.find((o) => o.kind === 'allow_once') ?? options[0]
     const optionId = allowOption?.id ?? 'allow_once'
+    // ACP chama de `reject_once`; a fixture antiga do Gemini usa `deny`. Nunca `reject_always`.
+    const rejectOption = options.find((o) => o.kind === 'reject_once' || o.kind === 'deny')
+    const toolCall = payload.params?.toolCall ?? {}
     return {
       type: 'control',
       responseInput: formatResponse(payload.id, { outcome: 'selected', optionId }),
+      // Com "Confirmar ações sensíveis", a sessão persistente pergunta no chat.
+      permission: {
+        title: typeof toolCall.title === 'string' && toolCall.title.trim()
+          ? `O Gemini pede permissão: ${toolCall.title.trim()}`
+          : 'O Gemini pede permissão para usar uma ferramenta',
+        detail: typeof toolCall.kind === 'string' ? `Tipo: ${toolCall.kind}` : null,
+        denyInput: rejectOption
+          ? formatResponse(payload.id, { outcome: 'selected', optionId: rejectOption.id })
+          : formatResponse(payload.id, { outcome: 'cancelled' }),
+      },
     }
   }
 

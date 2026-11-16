@@ -300,3 +300,26 @@ test('codex-app-server adapter provides one-shot fallback spawn args', () => {
   assert.ok(spawnArgs.args.includes('exec'))
   assert.ok(spawnArgs.args.includes('Oi'))
 })
+
+test('ações sensíveis: o pedido de aprovação traz o que o Codex quer fazer e a resposta de negar', () => {
+  const event = adapter.parseLine(JSON.stringify({
+    jsonrpc: '2.0',
+    id: 12,
+    method: 'item/commandExecution/requestApproval',
+    params: { threadId: 't', turnId: 'u', itemId: 'i', command: ['git', 'push'], cwd: '/projeto', reason: 'publicar' },
+  }))
+
+  assert.equal(event.permission.title, 'O Codex quer rodar um comando')
+  assert.equal(event.permission.detail, 'Comando: git push\nPasta: /projeto\nMotivo: publicar')
+  assert.equal(JSON.parse(event.responseInput).result.decision, 'approved')
+  assert.equal(JSON.parse(event.permission.denyInput).result.decision, 'denied')
+  assert.equal(JSON.parse(event.permission.denyInput).id, 12)
+})
+
+test('ações sensíveis: com a opção, o Codex App Server abre na pasta de trabalho pedindo aprovação', () => {
+  const { args } = adapter.getPersistentSpawnArgs({ confirmSensitiveActions: true })
+  assert.ok(args.includes('sandbox_mode="workspace-write"'))
+  assert.ok(args.includes('approval_policy="on-request"'))
+  assert.equal(args.includes('approval_policy="never"'), false)
+  assert.equal(args.includes('sandbox_mode="danger-full-access"'), false)
+})

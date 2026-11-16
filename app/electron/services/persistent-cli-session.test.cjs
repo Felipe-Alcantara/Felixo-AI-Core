@@ -161,3 +161,139 @@ test('o processo persistente só é reaproveitado na mesma conta; trocar de cont
   assert.equal(spawns[2].env, null)
   manager.closePersistentSession('thread-1', { force: true })
 })
+
+// ── Ações sensíveis e custo por resposta (16/11/2026) ───────────────────────
+
+function permissionHarness(t) {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const { EventEmitter } = require('node:events')
+  const { PassThrough } = require('node:stream')
+  const { createPersistentCliSessionManager } = require('./persistent-cli-session.cjs')
+
+  const writes = []
+  const events = []
+  const children = []
+  const live = new Set()
+  let clock = Date.parse('2026-11-16T03:00:00.000Z')
+  let ids = 0
+  const cliManager = {
+    spawn(threadId) {
+      live.add(threadId)
+      const child = new EventEmitter()
+      child.stdout = new PassThrough()
+      child.stderr = new PassThrough()
+      children.push(child)
+      return child
+    },
+    has: (threadId) => live.has(threadId),
+    write(threadId, input) {
+      writes.push(input)
+      return live.has(threadId)
+    },
+    kill(threadId) {
+      live.delete(threadId)
+      return true
+    },
+  }
+  const manager = createPersistentCliSessionManager({
+    cliManager,
+    stoppedSessions: new Set(),
+    sendTerminalEvents: () => {},
+    sendCliEvent: (_target, event) => events.push(event),
+    recordModelAvailabilityEvent: () => null,
+    now: () => clock,
+    createDecisionId: () => `00000000-0000-4000-8000-00000000000${++ids}`,
+  })
+  // A CLI de mentira devolve o evento que a linha descreve (JSON).
+  const adapter = {
+    getPersistentSpawnArgs: () => ({ command: 'cli-falsa', args: [] }),
+    createPersistentInput: () => ({ input: 'prompt\n', didStartSession: true, didSendPrompt: true }),
+    parseLine: (line) => JSON.parse(line),
+  }
+  const send = (confirmSensitiveActions) =>
+    manager.sendPersistentCliRequest({
+      adapter,
+      targetWebContents: null,
+      streamSessionId: 's',
+      threadId: 'thread-1',
+      prompt: 'oi',
+      context: { isContinuation: false, confirmSensitiveActions },
+      threadSession: {},
+      cliType: 'codex-app-server',
+      model: { id: 'm', name: 'Modelo', cliType: 'codex-app-server' },
+      cwd: '/projeto',
+      orchestrationBridge: { handleCliEvent: () => ({ handled: false }) },
+      orchestrationContext: { parentThreadId: 'conversa-1' },
+    })
+  const emit = async (event) => {
+    children.at(-1).stdout.write(`${JSON.stringify(event)}\n`)
+    await new Promise((resolve) => setImmediate(resolve))
+  }
+  const permission = {
+    type: 'control',
+    responseInput: 'APROVA\n',
+    permission: { title: 'O Codex quer rodar um comando', detail: 'Comando: rm -rf build', denyInput: 'NEGA\n' },
+  }
+  return { manager, writes, events, send, emit, permission, advance: (ms) => (clock += ms) }
+}
+
+test('ações sensíveis: com a opção, o pedido da CLI espera o sim no chat; o não chega à CLI', async (t) => {
+  const h = permissionHarness(t)
+  assert.equal(h.send(true).ok, true)
+  await h.emit(h.permission)
+
+  assert.equal(h.writes.includes('APROVA\n'), false, 'nada é aprovado sozinho')
+  const [card] = h.manager.listPermissionRequests()
+  assert.equal(card.kind, 'permission')
+  assert.equal(card.reason, 'O Codex quer rodar um comando')
+  assert.equal(card.permissionDetail, 'Comando: rm -rf build')
+  assert.equal(card.parentThreadId, 'conversa-1')
+  assert.equal(card.approveInput, undefined, 'a resposta crua não sai do processo principal')
+  assert.equal(h.events.find((event) => event.type === 'provider_switch_request').threadId, 'conversa-1')
+
+  assert.deepEqual(h.manager.respondPermission({ decisionId: card.decisionId, allow: false }), {
+    ok: true,
+    decisionId: card.decisionId,
+    outcome: 'refused',
+  })
+  assert.equal(h.writes.at(-1), 'NEGA\n')
+  assert.equal(h.manager.respondPermission({ decisionId: card.decisionId, allow: true }).code, 'DECISION_NOT_PENDING')
+  assert.equal(h.writes.includes('APROVA\n'), false)
+})
+
+test('ações sensíveis: sem resposta em 10 minutos o pedido é negado; sem a opção, aprova como antes', async (t) => {
+  const h = permissionHarness(t)
+  h.send(true)
+  await h.emit(h.permission)
+  h.advance(9 * 60 * 1000)
+  h.manager.expirePermissionRequests()
+  assert.equal(h.manager.listPermissionRequests().length, 1)
+  h.advance(60 * 1000)
+  h.manager.expirePermissionRequests()
+  assert.equal(h.manager.listPermissionRequests().length, 0)
+  assert.equal(h.writes.at(-1), 'NEGA\n')
+  assert.equal(h.events.at(-1).outcome, 'expired')
+
+  // Ligar ou desligar a opção troca o processo: ele nasceu com ou sem acesso total.
+  assert.equal(h.manager.canReusePersistentSession('thread-1', { id: 'm', name: 'Modelo', cliType: 'codex-app-server' }, '/projeto', null, false), false)
+  h.manager.closePersistentSession('thread-1', { force: true })
+  h.send(false)
+  await h.emit(h.permission)
+  assert.equal(h.writes.at(-1), 'APROVA\n')
+  assert.equal(h.manager.listPermissionRequests().length, 0)
+})
+
+test('custo do processo persistente: o total acumulado do Claude vira o custo de cada resposta', async (t) => {
+  const h = permissionHarness(t)
+  h.send(false)
+  const custos = []
+  const original = h.events.push.bind(h.events)
+  h.events.push = (event) => {
+    if (event.type === 'done') custos.push(event.cost)
+    return original(event)
+  }
+  await h.emit({ type: 'done', cost: 0.05 })
+  h.send(false)
+  await h.emit({ type: 'done', cost: 0.12 })
+  assert.deepEqual(custos, [0.05, 0.07])
+})

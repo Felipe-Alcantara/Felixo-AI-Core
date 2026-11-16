@@ -7,6 +7,7 @@ const {
   choosePersistentPrompt,
   normalizePersistentInput,
 } = require('./orchestrator/cli-execution-planner.cjs')
+const { randomUUID } = require('node:crypto')
 const { createJsonlLineReader } = require('./jsonl-line-reader.cjs')
 const { createJsonlOutputGuard } = require('./jsonl-output-guard.cjs')
 const { logQaEvent } = require('./qa-logger.cjs')
@@ -41,14 +42,21 @@ const {
   shouldSuppressPersistentTrailingOutput,
 } = require('./cli-event-utils.cjs')
 
+/** Mesmo prazo das trocas do orquestrador: sem resposta, o pedido é negado. */
+const PERMISSION_TIMEOUT_MS = 10 * 60 * 1000
+
 function createPersistentCliSessionManager({
   cliManager,
   stoppedSessions,
   sendTerminalEvents,
   sendCliEvent,
   recordModelAvailabilityEvent,
+  now = () => Date.now(),
+  createDecisionId = () => randomUUID(),
 }) {
   const persistentCliSessions = new Map()
+  // Pedidos de permissão da CLI esperando a pessoa (`decisionId` → pedido).
+  const pendingPermissions = new Map()
 
   function sendPersistentCliRequest({
     adapter,
@@ -68,7 +76,8 @@ function createPersistentCliSessionManager({
     account = null,
   }) {
     const accountId = account?.accountId ?? null
-    const existingSession = getReusablePersistentSession(threadId, model, cwd, accountId)
+    const confirmSensitive = context?.confirmSensitiveActions === true
+    const existingSession = getReusablePersistentSession(threadId, model, cwd, accountId, confirmSensitive)
     const isReusingProcess = Boolean(existingSession)
     const spawnPrompt = choosePersistentPrompt({
       adapter,
@@ -258,6 +267,10 @@ function createPersistentCliSessionManager({
       modelKey: createModelSessionKey(model),
       // A conta faz parte da sessão: o processo nasceu com o ambiente dela.
       accountId: account?.accountId ?? null,
+      // Idem a confirmação de ações sensíveis: com ela, a CLI abriu sem acesso total.
+      confirmSensitive: context?.confirmSensitiveActions === true,
+      // O Claude informa o custo acumulado do processo; a resposta vale a diferença.
+      cumulativeCost: 0,
       modelName: model?.name,
       targetWebContents,
       threadId,
@@ -365,6 +378,10 @@ function createPersistentCliSessionManager({
       threadSession.providerSessionId = cliEvent.providerSessionId
     }
 
+    if (cliEvent.type === 'done' && typeof cliEvent.cost === 'number' && Number.isFinite(cliEvent.cost)) {
+      cliEvent.cost = takeResponseCost(persistentSession, cliEvent.cost)
+    }
+
     recordModelAvailabilityEvent({
       cliEvent,
       cliType: persistentSession.cliType,
@@ -386,7 +403,9 @@ function createPersistentCliSessionManager({
       )
     }
 
-    if (cliEvent.responseInput) {
+    if (cliEvent.permission && persistentSession.confirmSensitive) {
+      holdPermissionRequest(persistentSession, cliEvent)
+    } else if (cliEvent.responseInput) {
       cliManager.write(threadId, cliEvent.responseInput)
     }
 
@@ -757,18 +776,19 @@ function createPersistentCliSessionManager({
   }
 
   /** O processo vivo da thread serve a este pedido? Sem efeito colateral. */
-  function canReusePersistentSession(threadId, model, cwd, accountId = null) {
+  function canReusePersistentSession(threadId, model, cwd, accountId = null, confirmSensitive = false) {
     const persistentSession = persistentCliSessions.get(threadId)
     return Boolean(
       persistentSession &&
         cliManager.has(threadId) &&
         persistentSession.modelKey === createModelSessionKey(model) &&
         persistentSession.cwd === cwd &&
-        (persistentSession.accountId ?? null) === accountId,
+        (persistentSession.accountId ?? null) === accountId &&
+        (persistentSession.confirmSensitive === true) === confirmSensitive,
     )
   }
 
-  function getReusablePersistentSession(threadId, model, cwd, accountId = null) {
+  function getReusablePersistentSession(threadId, model, cwd, accountId = null, confirmSensitive = false) {
     const persistentSession = persistentCliSessions.get(threadId)
 
     if (!persistentSession) {
@@ -784,7 +804,8 @@ function createPersistentCliSessionManager({
     if (
       persistentSession.modelKey !== createModelSessionKey(model) ||
       persistentSession.cwd !== cwd ||
-      (persistentSession.accountId ?? null) !== accountId
+      (persistentSession.accountId ?? null) !== accountId ||
+      (persistentSession.confirmSensitive === true) !== confirmSensitive
     ) {
       closePersistentSession(threadId, { force: true })
       return null
@@ -838,6 +859,7 @@ function createPersistentCliSessionManager({
 
   function closePersistentSession(threadId, options = {}) {
     const persistentSession = persistentCliSessions.get(threadId)
+    dropPermissionRequests(threadId)
 
     if (persistentSession) {
       clearPersistentIdleTimer(persistentSession)
@@ -856,10 +878,157 @@ function createPersistentCliSessionManager({
     return persistentCliSessions.has(threadId)
   }
 
+  // ── Custo e pedidos de permissão ─────────────────────────────────────────
+
+  /** Custo desta resposta a partir do total acumulado; total menor que o anterior é processo novo. */
+  function takeResponseCost(persistentSession, total) {
+    const previous = persistentSession.cumulativeCost ?? 0
+    persistentSession.cumulativeCost = total
+    return total >= previous ? Math.round((total - previous) * 1e9) / 1e9 : total
+  }
+
+  /**
+   * "Confirmar ações sensíveis": o pedido da CLI fica parado até a pessoa
+   * responder no card do chat (mesmo card e mesmo IPC das trocas do
+   * orquestrador). Esperar a pessoa não é travamento: o prazo de "sem saída
+   * visível" sai, e vale o de 10 minutos, que nega.
+   */
+  function holdPermissionRequest(persistentSession, cliEvent) {
+    const { threadId } = persistentSession
+    const activeRun = persistentSession.activeRun
+    const orchestration = activeRun?.orchestrationContext ?? {}
+    const requestedAtMs = now()
+    const parentThreadId = orchestration.parentThreadId ?? threadId
+    const decision = {
+      decisionId: createDecisionId(),
+      kind: 'permission',
+      runId: orchestration.runId ?? '',
+      agentId: orchestration.agentId ?? 'conversa',
+      parentThreadId,
+      sessionId: activeRun?.streamSessionId ?? threadId,
+      fromCliType: persistentSession.cliType,
+      toCliType: persistentSession.cliType,
+      toModelId: null,
+      toModelName: persistentSession.modelName ?? null,
+      rule: 'cli-permission',
+      reason: cliEvent.permission.title,
+      permissionDetail: cliEvent.permission.detail ?? null,
+      requestedAt: new Date(requestedAtMs).toISOString(),
+      expiresAt: new Date(requestedAtMs + PERMISSION_TIMEOUT_MS).toISOString(),
+      expiresAtMs: requestedAtMs + PERMISSION_TIMEOUT_MS,
+      threadId,
+      approveInput: cliEvent.responseInput,
+      denyInput: cliEvent.permission.denyInput,
+      targetWebContents: persistentSession.targetWebContents,
+    }
+    pendingPermissions.set(decision.decisionId, decision)
+
+    if (activeRun) {
+      activeRun.didEmitVisibleOutput = true
+      clearTimeout(activeRun.firstVisibleOutputTimer)
+      activeRun.firstVisibleOutputTimer = null
+    }
+
+    sendTerminalEvents(decision.targetWebContents, threadId, [
+      {
+        source: 'system',
+        kind: 'lifecycle',
+        severity: 'warn',
+        title: 'Pedido de permissão',
+        chunk: [decision.reason, decision.permissionDetail].filter(Boolean).join('\n'),
+      },
+    ])
+    sendCliEvent(decision.targetWebContents, {
+      ...toPublicPermission(decision),
+      type: 'provider_switch_request',
+      threadId: parentThreadId,
+    })
+  }
+
+  function toPublicPermission(decision) {
+    const {
+      threadId: _threadId,
+      approveInput: _approveInput,
+      denyInput: _denyInput,
+      targetWebContents: _targetWebContents,
+      expiresAtMs: _expiresAtMs,
+      ...view
+    } = decision
+    return view
+  }
+
+  function hasPermissionRequest(decisionId) {
+    return pendingPermissions.has(decisionId)
+  }
+
+  function listPermissionRequests() {
+    return [...pendingPermissions.values()].map(toPublicPermission)
+  }
+
+  /** Resposta da pessoa (ou do prazo): escreve o "sim" ou o "não" no stdin da CLI. Idempotente. */
+  function respondPermission({ decisionId, allow, outcome = null }) {
+    const decision = pendingPermissions.get(decisionId)
+    if (!decision) {
+      return { ok: false, code: 'DECISION_NOT_PENDING', message: 'Esse pedido já foi respondido ou expirou.' }
+    }
+    pendingPermissions.delete(decisionId)
+    const finalOutcome = outcome ?? (allow ? 'accepted' : 'refused')
+    const answered = cliManager.write(decision.threadId, allow ? decision.approveInput : decision.denyInput)
+    const message =
+      finalOutcome === 'expired'
+        ? 'Sem resposta no prazo: a permissão foi negada.'
+        : allow
+          ? 'Permissão dada.'
+          : 'Permissão negada.'
+    sendCliEvent(decision.targetWebContents, {
+      type: 'provider_switch_resolved',
+      decisionId,
+      runId: decision.runId,
+      agentId: decision.agentId,
+      outcome: finalOutcome,
+      message,
+      sessionId: decision.sessionId,
+      threadId: decision.parentThreadId,
+    })
+    return answered
+      ? { ok: true, decisionId, outcome: finalOutcome }
+      : { ok: false, code: 'RUN_FINISHED', message: 'A CLI já não está esperando esta resposta.' }
+  }
+
+  /** Varredura de 60 s: pedido sem resposta em 10 minutos é negado. */
+  function expirePermissionRequests(nowMs = now()) {
+    for (const decision of [...pendingPermissions.values()]) {
+      if (decision.expiresAtMs <= nowMs) {
+        respondPermission({ decisionId: decision.decisionId, allow: false, outcome: 'expired' })
+      }
+    }
+  }
+
+  function dropPermissionRequests(threadId) {
+    for (const decision of [...pendingPermissions.values()]) {
+      if (decision.threadId !== threadId) continue
+      pendingPermissions.delete(decision.decisionId)
+      sendCliEvent(decision.targetWebContents, {
+        type: 'provider_switch_resolved',
+        decisionId: decision.decisionId,
+        runId: decision.runId,
+        agentId: decision.agentId,
+        outcome: 'run_finished',
+        message: 'A CLI parou antes da resposta.',
+        sessionId: decision.sessionId,
+        threadId: decision.parentThreadId,
+      })
+    }
+  }
+
   return {
     canReusePersistentSession,
     closePersistentSession,
+    expirePermissionRequests,
+    hasPermissionRequest,
     hasPersistentSession,
+    listPermissionRequests,
+    respondPermission,
     sendPersistentCliRequest,
   }
 }

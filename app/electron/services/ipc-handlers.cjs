@@ -98,6 +98,13 @@ const terminalSessionParents = new Map()
 const modelAvailabilityRegistry = createModelAvailabilityRegistry()
 // Conta em que cada thread do chat rodou por último (Login do sistema = sem entrada).
 const threadAccounts = new Map()
+// Só estas CLIs perguntam antes de agir; as de uma resposta (Claude -p, codex exec, gemini) seguem com acesso total.
+const PERMISSION_ASKING_CLI_TYPES = new Set(['codex-app-server', 'gemini-acp'])
+
+/** "Confirmar ações sensíveis" vale para este pedido? */
+function confirmsSensitiveActions(settings, cliType) {
+  return settings?.requireConfirmationForSensitiveActions === true && PERMISSION_ASKING_CLI_TYPES.has(cliType)
+}
 let chatAccountResolver = null
 let getAccountChainService = () => null
 let terminalLogStore = null
@@ -270,6 +277,10 @@ function registerCliIpcHandlers(getMainWindow, dependencies = {}) {
         params.model,
         cwd,
         account?.accountId ?? null,
+        confirmsSensitiveActions(
+          normalizeOrchestrationSettings(params?.orchestratorSettings ?? context.orchestratorSettings),
+          cliType,
+        ),
       )
       if (!reuses) {
         await openOnCodexTurn(codexLaunchGate, account.env, () => undefined)
@@ -388,6 +399,8 @@ function registerCliIpcHandlers(getMainWindow, dependencies = {}) {
       threadId,
       providerSessionId: threadSession.providerSessionId,
       isContinuation: threadSession.hasStarted,
+      // Com a opção ligada, Codex App Server e Gemini ACP abrem num modo que pergunta.
+      confirmSensitiveActions: confirmsSensitiveActions(orchestratorSettings, cliType),
     }
     const executionPlan = createCliExecutionPlan({
       adapter,
@@ -875,7 +888,7 @@ function registerCliIpcHandlers(getMainWindow, dependencies = {}) {
   )
 
   ipcMain.handle('cli:provider-switch:respond', (_event, params) =>
-    respondToProviderSwitch(orchestrationRunner, params),
+    respondToProviderSwitch(orchestrationRunner, params, persistentSessions),
   )
 
   ipcMain.handle('cli:stop', (event, params) => {
@@ -1024,7 +1037,11 @@ function registerCliIpcHandlers(getMainWindow, dependencies = {}) {
   // evento — e um run cujo sub-agente travou sem emitir `done` nem `error`
   // não gera evento nenhum, ficando preso em `waiting_agents` para sempre.
   const stopExpiredRunsSweeper = startExpiredRunsSweeper({
-    failExpiredRuns: () => orchestrationRunner.failExpiredRuns(),
+    failExpiredRuns: () => {
+      // Pedido de permissão sem resposta em 10 min é negado na mesma varredura.
+      persistentSessions.expirePermissionRequests()
+      return orchestrationRunner.failExpiredRuns()
+    },
     onError: (error) => {
       logQaEvent({
         level: 'warn',
@@ -1304,15 +1321,18 @@ async function spawnOrchestrationAgent({
 const DECISION_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-function createProviderSwitchListResponse(orchestrationRunner) {
-  return { ok: true, requests: orchestrationRunner.listProviderSwitches() }
+function createProviderSwitchListResponse(orchestrationRunner, sessions = persistentSessions) {
+  // Mesma lista do card: trocas e teto de custo do orquestrador, e pedidos de permissão das CLIs.
+  const requests = [...orchestrationRunner.listProviderSwitches(), ...sessions.listPermissionRequests()]
+  const order = (request) => String(request?.requestedAt ?? '')
+  return { ok: true, requests: requests.sort((left, right) => order(left).localeCompare(order(right))) }
 }
 
 /**
  * `cli:provider-switch:respond`: só valida o formato e repassa ao runner, que
  * decide (e é idempotente).
  */
-async function respondToProviderSwitch(orchestrationRunner, params) {
+async function respondToProviderSwitch(orchestrationRunner, params, sessions = persistentSessions) {
   const decisionId = typeof params?.decisionId === 'string' ? params.decisionId : ''
 
   if (!DECISION_ID_PATTERN.test(decisionId) || typeof params?.accept !== 'boolean') {
@@ -1321,6 +1341,11 @@ async function respondToProviderSwitch(orchestrationRunner, params) {
       code: 'INVALID_PARAMS',
       message: 'Resposta de troca de provedor inválida.',
     }
+  }
+
+  // Pedido de permissão de uma CLI: quem responde é a sessão persistente dela.
+  if (sessions.hasPermissionRequest(decisionId)) {
+    return sessions.respondPermission({ decisionId, allow: params.accept })
   }
 
   const result = {
