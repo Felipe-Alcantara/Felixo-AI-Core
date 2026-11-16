@@ -19,6 +19,7 @@ import {
   CLOUD_AGENT_VALUE,
   providerIdOf,
   readAgentLaunchPreferences,
+  rememberProviderAccount,
   saveAgentLaunchPreferences,
   SHELL_AGENT_VALUE,
   type AgentConfigValue,
@@ -98,15 +99,14 @@ export function useAgentConfig(
   // sistema, que continua sendo o padrão.
   const accountIdRef = useRef(inicial.accountId)
   const [accountId, setAccountIdState] = useState(inicial.accountId)
-  // A preferência é lida uma vez, na montagem: guardá-la em ref deixa o efeito
-  // com a lista de dependências certa sem reagir a uma leitura que não muda.
-  // O provedor vai junto: a conta salva de outro provedor não está "ausente",
-  // só não se aplica.
-  const contaSalvaRef = useRef({
-    providerId: inicial.agentValue === SHELL_AGENT_VALUE ? '' : inicial.agentValue,
-    accountId: inicial.accountId,
-    label: inicial.accountLabel ?? '',
-  })
+  // Conta lembrada de cada provedor, lida uma vez na montagem e atualizada a
+  // cada gravação: trocar de agente devolve a conta daquele provedor. Em ref
+  // para o efeito da lista não reagir a ela.
+  const contasSalvasRef = useRef(inicial.accountByProvider ?? {})
+  // Provedor cuja seleção de conta já foi decidida (pela lista ou pela pessoa).
+  // Até a lista do provedor novo chegar o campo fica vazio, e esse vazio não
+  // pode ser gravado como "Login do sistema" por cima da conta lembrada.
+  const contaDecididaRef = useRef('')
   const [accounts, setAccounts] = useState<CliAccount[]>([])
   // Conta que não pode abrir (lista ilegível ou conta salva que sumiu). Com
   // ele a abertura fica bloqueada até uma escolha explícita ou uma nova carga.
@@ -389,6 +389,7 @@ export function useAgentConfig(
       // funcional porque acompanha toda escrita no state.
       const proxima = typeof value === 'function' ? value(accountIdRef.current) : value
       accountIdRef.current = proxima
+      contaDecididaRef.current = providerIdRef.current
       setAccountIdState(proxima)
       setAccountSelectionIssue(
         resolveIssueAfterExplicitChoice(accountSelectionIssueRef.current, proxima),
@@ -408,14 +409,15 @@ export function useAgentConfig(
       if (listing.ok) {
         setAccounts([...listing.accounts])
       }
-      const salva = contaSalvaRef.current.providerId === provedor ? contaSalvaRef.current : null
+      const salva = contasSalvasRef.current[provedor]
       const selection = selectAccountFromList(listing, accountIdRef.current, salva?.accountId ?? '')
       accountIdRef.current = selection.accountId
+      contaDecididaRef.current = provedor
       setAccountIdState(selection.accountId)
       setAccountSelectionIssue(
         describeAccountSelectionIssue(
           selection,
-          salva && selection.accountId === salva.accountId ? salva.label : '',
+          salva && selection.accountId === salva.accountId ? (salva.accountLabel ?? '') : '',
         ),
       )
     },
@@ -676,6 +678,7 @@ export function useAgentConfig(
     openiaKeyStatusRequestRef.current += 1
     providerIdRef.current = providerIdOf(valor)
     accountIdRef.current = ''
+    contaDecididaRef.current = ''
     setAccounts([])
     setAccountIdState('')
     // O aviso era do provedor anterior; a lista do novo decide de novo.
@@ -914,11 +917,20 @@ export function useAgentConfig(
     // sem tarefa não teria o que abrir, então a nuvem fica de fora.
     if (agentValue === CLOUD_AGENT_VALUE) return
     const conta = accountIdRef.current
+    const provedor = providerIdOf(agentValue)
+    const salva = contasSalvasRef.current[provedor]
     // O nome acompanha o id para o aviso de conta ausente. Se a conta já não
     // está na lista, fica o nome guardado antes (nunca some junto com ela).
     const accountLabel =
       accounts.find((item) => item.id === conta)?.label ??
-      (conta && conta === contaSalvaRef.current.accountId ? contaSalvaRef.current.label : '')
+      (conta && conta === salva?.accountId ? (salva.accountLabel ?? '') : '')
+    contasSalvasRef.current = rememberProviderAccount({
+      saved: contasSalvasRef.current,
+      providerId: provedor,
+      decidedProviderId: contaDecididaRef.current,
+      accountId: conta,
+      accountLabel,
+    })
     saveAgentLaunchPreferences({
       agentValue,
       model,
@@ -931,6 +943,7 @@ export function useAgentConfig(
       openiaModel: openiaModelRef.current,
       accountId: conta,
       ...(accountLabel ? { accountLabel } : {}),
+      accountByProvider: contasSalvasRef.current,
     })
   }, [
     accounts,
