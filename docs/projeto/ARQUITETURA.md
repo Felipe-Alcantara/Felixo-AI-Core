@@ -1005,8 +1005,9 @@ que ainda não podem ser usados:
   sanitização e as regras de URL permanecem no módulo original; a divisão não
   altera a fronteira de segurança.
 
-O Vite usa `base: './'`, requisito para o Electron carregar `dist/index.html`
-por `file://`. O benchmark `npm run benchmark:bundle:check` abre o artefato
+O Vite usa `base: './'`: o app instalado abre o build por `app://felixo/` (ver
+"Protocolo app:// do renderer") e os benchmarks ainda por `file://`, e o
+caminho relativo funciona nos dois. O benchmark `npm run benchmark:bundle:check` abre o artefato
 real em novas janelas com `userData` temporário, mede startup/menu, registra
 bytes crus e gzip, confirma o `import()` do Fetch All e verifica todas as
 referências relativas de JS/CSS. O mesmo check roda depois do build no CI dos
@@ -1119,10 +1120,12 @@ links ficam em `http:`, `https:`, `mailto:` ou âncoras; imagens remotas são
 bloqueadas e viram texto alternativo; `data:` só aceita imagens raster base64
 de até 2 MiB.
 
-Uma referência relativa de imagem só é convertida em `file://` quando o
-componente recebeu o `baseDir` derivado de um arquivo já autorizado pelo
-processo principal. Caminhos absolutos e esquemas `file:`, `javascript:` ou
-desconhecidos são recusados. A suíte testa o renderer estaticamente; a
+Uma referência relativa de imagem só vira a rota `app://felixo/__imagem-local`
+quando o componente recebeu o `baseDir` derivado de um arquivo já autorizado. O
+processo principal só serve a imagem depois de conferir, pelo caminho real, que
+ela está num projeto registrado ou na pasta de um arquivo escolhido no seletor
+(`authorizeImageNear`). Caminhos absolutos e esquemas (`file:`, `app:`,
+`javascript:`, desconhecidos) escritos no Markdown são recusados. A suíte testa o renderer estaticamente; a
 validação de execução em Electron deve ser registrada separadamente quando
 houver uma sessão gráfica disponível.
 
@@ -1476,15 +1479,16 @@ bloqueado em silêncio.
 
 O dev server fica sem CSP. Ele usa scripts inline do React Refresh e o
 WebSocket do HMR, e uma política afrouxada para caber nele não provaria nada
-sobre o instalador. Sob `file://`, `'self'` casa com qualquer URL `file:`. Esse
-limite é da origem, não da política, e fechá-lo exigiria um protocolo próprio.
+sobre o instalador. Sob `app://felixo`, `'self'` é só o build, e a página não
+carrega `file://` nenhum. Antes, sob `file://`, um script de qualquer pasta do
+disco executava (ver "Protocolo app:// do renderer").
 `frame-src` não controla `<webview>`, então o isolamento do webview continua
 sendo do processo principal.
 
 A política é conferida no artefato de cada SO pelo smoke de release
 (`electron/release-smoke-renderer.cjs`). O pacote abre o próprio
-`dist/index.html` numa janela oculta, com o preload da janela principal, sem
-rede e sem navegação. As violações são ouvidas por `securitypolicyviolation`,
+`dist/index.html` por `app://felixo`, como a janela principal, numa janela
+oculta, com o preload dela, sem rede e sem navegação. As violações são ouvidas por `securitypolicyviolation`,
 instalado pelo CDP antes de qualquer script, e pelo `console-message`. No
 Electron 42, um `eval` recusado não chega pelo console, só pelo evento.
 
@@ -1494,6 +1498,71 @@ worker de fontes dele e uma fonte do desenho, servida pelo build. Um controle po
 precisa ser barrado e visto. Sem ele, uma `<meta>` que sumisse passaria como
 "zero violações". Qualquer violação ou sonda falha reprova a release daquele
 SO.
+
+### Protocolo app:// do renderer
+
+**Decisão (16/11/2026, Felipe): fazer.** O renderer empacotado carrega por
+`app://felixo/index.html` (`electron/core/app-protocol.cjs`), não por
+`file://`.
+
+**Prova de conceito medida antes da decisão** (Electron 42, renderer do
+build):
+
+| Medida | `file://` | `app://felixo` |
+|---|---|---|
+| `<script src="file:///…">` de outra pasta do disco | executou | bloqueado |
+| imagem e `fetch` de fora do build | carregaram | bloqueados |
+| *path traversal* pela página (`..%2f..%2f`) | — | 404 |
+| boot até o app pronto (mediana de 8) | 93 ms | 89 ms |
+| smoke de CSP (sete sondas, controle positivo) | ok | ok, zero violações |
+
+A brecha que existia exigia duas falhas, um arquivo malicioso no disco e a
+injeção de um `<script>`, que a CSP e a sanitização já barravam. O protocolo é
+uma camada a mais, sem custo de boot.
+
+**O que mudou.**
+- **Antes do `ready`:** o `main.cjs` registra o esquema `app` como privilegiado:
+  `standard` (dá origem e armazenamento), `secure`, `supportFetchAPI` (o
+  `fetch` das fontes no export), `stream` (o som).
+- **No começo do `whenReady`, antes do smoke de release:** o `main.cjs`
+  instala o handler. Ele serve só arquivos do `dist`, conferindo o caminho
+  resolvido contra a raiz, com teste em `path.posix` e `path.win32`.
+- **Rota da imagem relativa do Markdown:** `__imagem-local?caminho=…`. O main
+  autoriza pelo `text-file-access` (projeto registrado ou pasta de arquivo
+  escolhido, pelo caminho real) e exige imagem raster também no destino real.
+  Isso fecha o link simbólico (ou junção) para fora, que a checagem por texto
+  do renderer deixava passar.
+- **Demais pontos:**
+  - a `navigation-guard` reconhece `app://felixo/index.html` como o
+    documento do app, e as rotas internas não;
+  - a CSP perde o `file:` do `img-src`;
+  - o smoke de release abre o renderer por `app://`;
+  - as fontes do Excalidraw seguem pelo `document.baseURI`
+    (`app://felixo/excalidraw-assets/`).
+- **Janelas do início:** antes de a janela principal existir, fechar as janelas
+  ocultas da migração não encerra o app (`shouldQuitWhenAllWindowsClosed`). No
+  pacote, sem isso o app saía com código 0 logo depois de migrar.
+
+**Migração do armazenamento** (`renderer-origin-migration.cjs`). A origem
+`app://felixo` começa vazia, e cerca de 30 chaves de `localStorage` (tema,
+Modo Performance, notificações, onboarding, larguras de painel) ficariam para
+trás. Não há IndexedDB.
+
+- **Uma vez, antes da janela principal:** uma janela oculta lê tudo numa página
+  vazia `file://` (mesma origem de armazenamento do build). Outra grava na
+  página vazia `app://felixo/__migracao-origem`, sem sobrescrever o que já
+  existir.
+- **Marcador:** `origem-app-migrada.json` no `userData`, gravado só no fim.
+  Se algo falhar, o app sobe e tenta de novo no próximo início.
+- **A cópia em `file://` fica intacta** (decisão do Felipe): voltar a
+  `file://` não perde nada.
+- **Medido:** 3 chaves em 244 ms no Electron de desenvolvimento, e 157 a
+  201 ms no pacote com perfil vazio.
+- **`sessionStorage`:** não migra, porque zera a cada sessão.
+
+**Fora do protocolo:** os benchmarks (`bundle-load-benchmark`,
+`canvas-connection-performance`) e o dev (servidor do Vite) continuam como
+estavam.
 
 ### Sincronização segura do Felixo System Design
 

@@ -679,9 +679,10 @@ Links aceitam somente `http:`, `https:`, `mailto:` e âncoras locais; um
 link recusado continua aparecendo como texto, sem abrir nada. Imagens
 remotas viram texto alternativo e não geram request automático; uma imagem
 `data:` precisa ser rasterizada e ter no máximo 2 MiB. Imagens relativas só
-viram `file://` quando o bloco tem o `baseDir` de um arquivo já autorizado; sem
-essa origem, o preview mostra o texto alternativo em vez de tentar acessar o
-disco. A imagem relativa também não sai da raiz do arquivo: o projeto aberto
+aparecem quando o bloco tem o `baseDir` de um arquivo já autorizado; sem essa
+origem, o preview mostra o texto alternativo em vez de tentar acessar o disco.
+Quem entrega a imagem é o processo principal, que confere o caminho real: um
+atalho (link simbólico) dentro do projeto que aponte para fora não abre. A imagem relativa também não sai da raiz do arquivo: o projeto aberto
 que contém o arquivo ou, fora de projeto, a pasta do próprio arquivo. Assim,
 um documento em `docs/` mostra `../assets/logo.png` do mesmo repositório, mas
 `../../../../` (ou a mesma coisa codificada, como `%2e%2e/`) vira só o texto
