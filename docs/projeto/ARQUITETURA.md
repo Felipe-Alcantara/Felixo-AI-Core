@@ -683,6 +683,7 @@ manual de links, labels, prompts, retomada e remoção no Canvas real.
   opção do menu, leva também `terminalOutputs` (a cauda do arquivo de cada
   terminal, até 1 MB cada e 8 MB no total), que a importação devolve só ao
   arquivo em disco do bloco, nunca ao terminal.
+- A URL de um bloco Página Web sai redigida por `url-secret-redaction.cjs` (`redactUrlSecrets`), a mesma usada no rótulo que `canvas-agent-read.cjs` dá aos agentes. Saem usuário/senha, os parâmetros com nome sensível (os do `git-secret-redaction.cjs`, mais `code`, `key`, `otp`, `session`…), os prefixos `X-Amz-*`/`X-Goog-*` e os valores com cara de token. A query inofensiva e as âncoras ficam. O SQLite local guarda a URL completa (decisão de 16/11/2026).
 
 ### Retomada de conversa: plano com motivo
 

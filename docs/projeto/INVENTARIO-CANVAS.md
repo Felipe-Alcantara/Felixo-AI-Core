@@ -32,7 +32,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **Elementos:** 102 (10 blocos, 16 ferramentas, 76 outras superfícies)
 - **Controles:** 394, dos quais 58 com teste específico
 - **Elementos sem nenhum teste:** 4
-- **Lacunas:** 253 (alto 7, médio 137, baixo 109), em 66 tasks
+- **Lacunas:** 250 (alto 7, médio 134, baixo 109), em 63 tasks
 
 ## Moldura do canvas
 
@@ -707,10 +707,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Voltar e Avançar não são clicados por nenhum teste. | baixo | `3ec91f95-497e-8141-b6c1-d1833aac5664` |
 | Voltar, Avançar e Recarregar (WebpageNode.tsx:319, 329, 339) chamam o guest sem try, ao contrário de navigateTo e openInExternalBrowser: antes do dom-ready o Electron lança síncrono. Recarregar fica sempre habilitado e, depois de trocar de perfil, canGoBack/canGoForward continuam com o valor do guest antigo. | médio | `3ec91f95-497e-8176-bef0-dfde828936dc` |
 | Rótulo pelo título da página (WebpageNode.tsx:84 e 190-194): sem nome manual, o rótulo segue cada título durante a sessão, mas ao reabrir o app labelCustomizedRef nasce verdadeiro (há label gravado) e o rótulo trava no último título. O comentário diz "wins once". | baixo | `3ec91f95-497e-8103-b360-c1979d6992f4` |
-| A URL gravada (data.url) e o .fxcanvas levam tokens de query; a leitura por agentes também. | médio | `3ea91f95-497e-8126-88c8-c6a7ce21bee0` |
-| Permissões pedidas pelo site (câmera, notificação…) não perguntam à pessoa. | médio | `3ea91f95-497e-812a-bc4b-ccfe144bd56c` |
 | Downloads do bloco sem política de tipo, destino e registro. | médio | `3ea91f95-497e-8155-a6bc-ea704c00ef65` |
-| Popups de login (allowpopups) sem origem visível nem limite de quantidade. | médio | `3ea91f95-497e-8129-acde-f3b1049c09ed` |
 | Foco no bloco Página Web que nasce fora da tela sem cobertura no smoke. | baixo | `3ea91f95-497e-81c4-84ff-f279d9ba4683` |
 
 ### Bloco Tarefas Notion (contêiner)
@@ -2948,10 +2945,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3e991f95-497e-815c-845c-da8829970c0c` — 1 lacuna
 - `3e991f95-497e-81b4-ac92-d7db960c9ae0` — 1 lacuna
 - `3ea91f95-497e-8117-8506-d4abe67709ff` — 1 lacuna
-- `3ea91f95-497e-8126-88c8-c6a7ce21bee0` — 1 lacuna
-- `3ea91f95-497e-8129-acde-f3b1049c09ed` — 1 lacuna
 - `3ea91f95-497e-812a-8c6d-fcc953edc59b` — 2 lacunas
-- `3ea91f95-497e-812a-bc4b-ccfe144bd56c` — 1 lacuna
 - `3ea91f95-497e-812b-a108-fb89c94fa528` — 1 lacuna
 - `3ea91f95-497e-8146-ad00-e32071c3366b` — 1 lacuna
 - `3ea91f95-497e-8155-a6bc-ea704c00ef65` — 1 lacuna

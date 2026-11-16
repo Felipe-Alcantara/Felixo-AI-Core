@@ -572,24 +572,9 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
         task: '3ec91f95-497e-8103-b360-c1979d6992f4',
       },
       {
-        what: 'A URL gravada (data.url) e o .fxcanvas levam tokens de query; a leitura por agentes também.',
-        risk: 'médio',
-        task: '3ea91f95-497e-8126-88c8-c6a7ce21bee0',
-      },
-      {
-        what: 'Permissões pedidas pelo site (câmera, notificação…) não perguntam à pessoa.',
-        risk: 'médio',
-        task: '3ea91f95-497e-812a-bc4b-ccfe144bd56c',
-      },
-      {
         what: 'Downloads do bloco sem política de tipo, destino e registro.',
         risk: 'médio',
         task: '3ea91f95-497e-8155-a6bc-ea704c00ef65',
-      },
-      {
-        what: 'Popups de login (allowpopups) sem origem visível nem limite de quantidade.',
-        risk: 'médio',
-        task: '3ea91f95-497e-8129-acde-f3b1049c09ed',
       },
       {
         what: 'Foco no bloco Página Web que nasce fora da tela sem cobertura no smoke.',

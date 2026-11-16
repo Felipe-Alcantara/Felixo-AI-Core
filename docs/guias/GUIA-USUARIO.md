@@ -1191,6 +1191,8 @@ Caminhos de projeto, argumentos de terminal e comandos desconhecidos não são
 transportados, pois dependem da máquina de origem ou poderiam executar instruções não
 confiáveis.
 
+O endereço de um bloco **Página Web** sai sem os segredos que alguns links carregam: código de login, token de acesso, link de redefinição de senha, assinatura de link temporário (por exemplo, `code=`, `access_token=`, `token=`, `X-Amz-Signature=`). O resto do endereço fica: uma busca ou um documento reabre no mesmo lugar. No seu computador, o bloco continua guardando o endereço completo e reabre exatamente onde estava. Quando um agente lê o canvas, ele vê o endereço da página com a mesma limpeza.
+
 **Exportar com a saída dos terminais** (em **Ferramentas → Transferência**) leva também o
 fim do Histórico arquivado de cada terminal: até 1 MB por terminal e 8 MB no total. A
 saída vai como saiu, então pode carregar senha ou token que alguma ferramenta imprimiu:
