@@ -3268,3 +3268,7 @@ Task: Felixo AI Core/Segurança — redigir tokens de URL no bloco Página Web, 
 - **Exportar com a saída dos terminais:** leva a saída como saiu, e um token impresso no terminal viaja. Isso já está avisado no guia e fica fora desta task.
 
 Estado: concluído (deploy no adendo).
+
+**Adendo (2026-11-16, 07:14): CI e Release.**
+- **CI** de `ff76dcc` (run 43844198358): passou no Validate de Windows, macOS, Ubuntu e Ubuntu ARM e no smoke do canvas, sem nova tentativa.
+- **Release:** o gate (run 43845122474) e o Release (run 43845160452, concluído às 07:12) publicaram a `v0.1.562`.
