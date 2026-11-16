@@ -325,9 +325,11 @@ test('packaged app smoke uses the real-process status contract', async () => {
       },
       statusFile,
       PtyManager: FakePtyManager,
+      rendererSmoke: async () => ({ ok: true, violations: [] }),
     })
 
     assert.equal(status.appVersion, '0.1.999')
+    assert.equal(status.rendererCsp.ok, true)
     assert.equal(status.userDataWritable, true)
     assert.equal(status.pty.ok, true)
     assert.equal(status.contextDelivery.ok, true)

@@ -6,6 +6,8 @@
  * This module is loaded only when the packaged application receives
  * `--release-smoke`. It deliberately exercises the same PTY manager used by
  * the canvas instead of replacing node-pty with a child-process approximation.
+ * Antes do PTY, abre o renderer do pacote sob a CSP de verdade
+ * (`release-smoke-renderer.cjs`).
  */
 
 const fs = require('node:fs')
@@ -18,6 +20,7 @@ const { getAppPaths } = require('./core/app-paths.cjs')
 const { writeContextFile } = require('./services/context-files-ipc-handlers.cjs')
 const { instalarComandoDoAgente } = require('./services/agent-command-install.cjs')
 const { CONTEXT_FILE_PREFIX, CONTEXT_FILE_SUFFIX } = require('./core/context-file-contract.cjs')
+const { runRendererCspSmoke } = require('./release-smoke-renderer.cjs')
 
 const PTY_MARKER = 'FELIXO_RELEASE_PTY_OK'
 const PTY_TIMEOUT_MS = 20_000
@@ -31,12 +34,14 @@ const CONTEXT_SMOKE_TIMEOUT_MS = 20_000
  * @param {object} options.app - Electron app instance.
  * @param {string} [options.statusFile] - Cross-process status file.
  * @param {typeof PtyProcessManager} [options.PtyManager] - Test seam.
+ * @param {() => Promise<object>} [options.rendererSmoke] - Test seam.
  * @returns {Promise<object>}
  */
 async function runPackagedReleaseSmoke({
   app,
   statusFile = process.env.FELIXO_RELEASE_SMOKE_STATUS_FILE,
   PtyManager = PtyProcessManager,
+  rendererSmoke = runPackagedRendererCspSmoke,
 } = {}) {
   const status = {
     schemaVersion: 1,
@@ -46,6 +51,7 @@ async function runPackagedReleaseSmoke({
     userDataWritable: false,
     pty: null,
     contextDelivery: null,
+    rendererCsp: null,
     error: null,
   }
 
@@ -63,6 +69,13 @@ async function runPackagedReleaseSmoke({
     // Só o Electron pronto: o modo de validação sai antes do banco, das migrações e da cadeia (main.cjs).
     status.readyAt = Date.now()
     writeStatus()
+
+    // Primeiro: não depende do PTY e leva cerca de 1 s.
+    status.rendererCsp = await rendererSmoke()
+    writeStatus()
+    if (!status.rendererCsp?.ok) {
+      throw new Error('A CSP do renderer empacotado falhou; ver rendererCsp no relatório JSON.')
+    }
 
     const ptyCwd = createPtyWorkingDirectory()
     const manager = new PtyManager()
@@ -100,6 +113,14 @@ async function runPackagedReleaseSmoke({
     writeStatus()
     throw error
   }
+}
+
+/** O `dist/index.html` do pacote, com as opções da janela principal (preload incluído). */
+function runPackagedRendererCspSmoke() {
+  const { BrowserWindow } = require('electron')
+  const { mainWindowOptions } = require('./core/window-options.cjs')
+  const { rendererBuildPath } = require('./core/paths.cjs')
+  return runRendererCspSmoke({ BrowserWindow, windowOptions: mainWindowOptions, rendererPath: rendererBuildPath })
 }
 
 /**

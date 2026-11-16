@@ -192,6 +192,7 @@ test('runPackagedReleaseSmoke lança quando a entrega de contexto reporta ok:fal
       app: { isPackaged: true, getVersion: () => '0.1.999', getPath: () => userData },
       statusFile,
       PtyManager: FakePtyManager,
+      rendererSmoke: async () => ({ ok: true }),
     }),
     /entrega de catálogo empacotada falhou/,
   )
@@ -280,4 +281,28 @@ test('reconstitui o texto de verdade a partir de uma captura real do runner Wind
     'o erro de artefato ausente deveria sobreviver à normalização',
   )
   assert.ok(!normalizado.includes('\x1b'), 'nenhuma sequência de escape deveria sobrar')
+})
+test('runPackagedReleaseSmoke reprova pela CSP do renderer antes de abrir o PTY e deixa o resultado no status', async () => {
+  const root = pastaTemporaria()
+  const statusFile = path.join(root, 'status.json')
+  const userData = path.join(root, 'profile')
+  class PtyQueNaoPodeAbrir {
+    constructor() {
+      throw new Error('o PTY não devia abrir depois da CSP reprovar')
+    }
+  }
+
+  await assert.rejects(
+    () => require('./release-smoke.cjs').runPackagedReleaseSmoke({
+      app: { isPackaged: true, getVersion: () => '0.1.999', getPath: () => userData },
+      statusFile,
+      PtyManager: PtyQueNaoPodeAbrir,
+      rendererSmoke: async () => ({ ok: false, violations: ['script-src-elem inline'] }),
+    }),
+    /CSP do renderer empacotado falhou/,
+  )
+
+  const status = JSON.parse(fs.readFileSync(statusFile, 'utf8'))
+  assert.deepEqual(status.rendererCsp, { ok: false, violations: ['script-src-elem inline'] })
+  assert.equal(status.pty, null)
 })

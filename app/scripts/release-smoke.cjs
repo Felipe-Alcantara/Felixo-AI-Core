@@ -68,6 +68,7 @@ async function main(argv = process.argv.slice(2)) {
     report.startupMs = appResult.startupMs
     report.pty = appResult.status.pty
     report.contextDelivery = appResult.status.contextDelivery
+    report.rendererCsp = appResult.status.rendererCsp
     report.nativeErrors = appResult.nativeErrors
     report.appVersion = appResult.status.appVersion
 
@@ -103,6 +104,7 @@ async function main(argv = process.argv.slice(2)) {
     // publicado quando é justamente uma falha que precisamos investigar.
     if (error?.status?.pty) report.pty = error.status.pty
     if (error?.status?.contextDelivery) report.contextDelivery = error.status.contextDelivery
+    if (error?.status?.rendererCsp) report.rendererCsp = error.status.rendererCsp
     if (error?.status?.appVersion) report.appVersion = error.status.appVersion
     // Mesma razão: o veredito por cenário (quem sobrou, em quanto tempo) é o que
     // diz se o kill falhou ou se a árvore nem foi observada.
@@ -192,6 +194,7 @@ function createEmptyReport() {
     startupMs: null,
     pty: null,
     contextDelivery: null,
+    rendererCsp: null,
     npmRuntime: null,
     installerKill: null,
     nativeErrors: [],
@@ -593,9 +596,9 @@ async function runPackagedApp({ appRoot, executable, temporaryRoot, timeoutMs })
     )
   }
 
-  if (!status?.pty?.ok || !status.userDataWritable || !status?.contextDelivery?.ok) {
+  if (!status?.pty?.ok || !status.userDataWritable || !status?.contextDelivery?.ok || !status?.rendererCsp?.ok) {
     throw createSmokeError(
-      'O app empacotado encerrou sem validar PTY, userData e a entrega de contexto.',
+      'O app empacotado encerrou sem validar PTY, userData, a entrega de contexto e a CSP do renderer.',
       nativeErrors,
       status,
     )
