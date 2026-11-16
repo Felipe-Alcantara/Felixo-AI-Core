@@ -3491,3 +3491,5 @@ Task: Felixo AI Core/Canvas — servir as fontes do Excalidraw pelo build e tira
 **Ambiente.** O disco J: segue com cerca de 480 MB livres. O `emptyOutDir` do Vite não apaga nesse disco, então os `dist` anteriores foram movidos para o C:.
 
 Estado: concluído (deploy no adendo).
+
+**Adendo de deploy (12:41).** O primeiro CI (`183c301`, 12:12 → 12:19) reprovou no Validate do Ubuntu x64 e do macOS. O teste do dev server esperava que `..%5c..%5c` fosse recusado, mas no POSIX a barra invertida é nome de arquivo, e o resultado mudava conforme o SO. A correção `427f7e9` aceita só a forma `<Família>/<arquivo>.woff2` antes de qualquer operação de caminho e testa com `path.posix` e `path.win32`; o teste falhou antes da correção. Com ela, CI verde (12:22 → 12:28), Release gate verde e Release verde (12:29 → 12:39), publicando a **v0.1.566**. O smoke de cada SO saiu com `fonteExcalidraw: ok` e zero violações (Windows 1,3 s, Ubuntu 1,3 s, macOS 3,2 s). Instaladores contra a v0.1.565: exe +12,8 MB (+6,9%), dmg +12,6 MB (+5,8%), deb +12,5 MB (+6,8%), AppImage +12,5 MB (+5,4% e +5,5%).
