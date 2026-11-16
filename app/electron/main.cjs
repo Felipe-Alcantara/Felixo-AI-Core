@@ -1,6 +1,7 @@
 const {
   app,
   BrowserWindow,
+  dialog,
   Menu,
   ipcMain,
   powerMonitor,
@@ -172,6 +173,7 @@ const { runPackagedReleaseSmoke } = require('./release-smoke.cjs')
 const { registerGlobalErrorHandlers, wrapIpcHandleWithLogging } = require('./services/global-error-handlers.cjs')
 const { registerSessionSecurity } = require('./services/session-security.cjs')
 const { createSitePermissionBroker } = require('./services/webview-site-permissions.cjs')
+const { createDownloadDialogs, handleDownload } = require('./services/download-guard.cjs')
 const { createWebviewSitePermissionsRepository } = require('./services/storage/webview-site-permissions-repository.cjs')
 const { registerWebviewSitePermissionsIpcHandlers } = require('./services/webview-site-permissions-ipc-handlers.cjs')
 const { startPerformanceRecovery } = require('./services/performance-recovery.cjs')
@@ -189,7 +191,20 @@ wrapIpcHandleWithLogging(ipcMain, logQaEvent)
 // outras permissões de um site (bloco Página Web) perguntam à pessoa. O broker
 // nasce depois do banco; até lá, pedido de site é negado.
 let webviewSitePermissions = null
-registerSessionSecurity(app, session, console, { getSitePermissions: () => webviewSitePermissions })
+registerSessionSecurity(app, session, console, {
+  getSitePermissions: () => webviewSitePermissions,
+  // Todo download: diálogo de salvar em Downloads; programa ou script confirma
+  // antes, com a origem; o registro leva só host, nome, tamanho e resultado.
+  onDownload: (item) => {
+    void handleDownload({
+      item,
+      dialogs: createDownloadDialogs({ dialog, getParentWindow: () => mainWindow, env: process.env, devtoolsPort }),
+      downloadsDir: app.getPath('downloads'),
+      tempDir: path.join(app.getPath('temp'), 'felixo-downloads'),
+      log: (entry) => logQaEvent({ level: 'info', scope: 'download', message: entry.result, details: entry }),
+    })
+  },
+})
 // Popup de um bloco: a pergunta de permissão aparece no bloco que o abriu.
 const linkWebviewPopup = (child, parent) => webviewSitePermissions?.linkPopup(child, parent)
 

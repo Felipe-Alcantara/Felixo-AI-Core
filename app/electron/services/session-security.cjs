@@ -46,8 +46,12 @@ function classifySession(target, defaultSession) {
  * @param {import('electron').App} electronApp
  * @param {{ defaultSession: import('electron').Session }} electronSession
  * @param {{ warn: (message: string) => void }} [logger]
- * @param {{ getSitePermissions?: () => ReturnType<typeof import('./webview-site-permissions.cjs').createSitePermissionBroker> | null }} [options]
+ * @param {{
+ *   getSitePermissions?: () => ReturnType<typeof import('./webview-site-permissions.cjs').createSitePermissionBroker> | null,
+ *   onDownload?: (item: import('electron').DownloadItem, webContents: import('electron').WebContents) => void,
+ * }} [options]
  *   O broker nasce depois do banco; até lá, pedido de site é negado.
+ *   `onDownload` trata cada download da sessão (download-guard.cjs).
  */
 function registerSessionSecurity(electronApp, electronSession, logger = console, options = {}) {
   const hardened = new WeakSet()
@@ -72,6 +76,9 @@ function registerSessionSecurity(electronApp, electronSession, logger = console,
       if (!broker) return callback(false)
       return broker.request({ webContents, permission, details, profileId: owner.profileId, callback })
     })
+    if (options.onDownload) {
+      target.on?.('will-download', (_event, item, webContents) => options.onDownload(item, webContents))
+    }
     // Sem este handler o Electron responde "concedido" a toda consulta
     // (`navigator.permissions.query`, `Notification.permission`), e o site
     // usaria a API sem pedir. Sem decisão o estado é "negado": o Electron não

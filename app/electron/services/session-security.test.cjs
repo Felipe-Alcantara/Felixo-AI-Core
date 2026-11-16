@@ -33,6 +33,10 @@ function fakeSession(storagePath = null) {
     setPermissionCheckHandler(handler) {
       this.checkHandler = handler
     },
+    listeners: new Map(),
+    on(event, listener) {
+      this.listeners.set(event, listener)
+    },
   }
 }
 
@@ -123,4 +127,19 @@ test('a sessão do app concede como antes; a de um perfil do navegador pergunta 
   site.handler({ id: 5 }, 'openExternal', responder, { externalURL: 'mailto:pessoa@example.com' })
   assert.equal(answers.at(-1), true)
   assert.equal(pedidos.length, 1)
+})
+test('todo download de toda sessão endurecida passa pelo onDownload', async () => {
+  const app = fakeApp()
+  const defaultSession = fakeSession('/home/p/.config/felixo')
+  const site = fakeSession('/home/p/.config/felixo/Partitions/felixo-webview')
+  const recebidos = []
+  registerSessionSecurity(app, { defaultSession }, { warn: () => {} }, { onDownload: (item, contents) => recebidos.push([item, contents]) })
+  app.emit('session-created', site)
+  app.ready()
+  await new Promise((resolve) => setImmediate(resolve))
+  for (const target of [defaultSession, site]) {
+    assert.equal(typeof target.listeners.get('will-download'), 'function')
+    target.listeners.get('will-download')({}, 'item', 'contents')
+  }
+  assert.deepEqual(recebidos, [['item', 'contents'], ['item', 'contents']])
 })
