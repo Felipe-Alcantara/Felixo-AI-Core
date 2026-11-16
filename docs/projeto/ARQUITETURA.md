@@ -1347,6 +1347,24 @@ pedido. As regras de gesto e plataforma:
   coisa) e, na recusa, o motivo.
 - **Shift+F10.** Não abre o menu no terminal: o xterm entrega o F10 à CLI.
 
+O que vira link em texto plano é definido por `TERMINAL_URL_REGEX`
+(`terminal-url-regex.ts`), a mesma regra no `WebLinksAddon` (como `urlRegex`) e
+nas URLs que a TUI de um agente quebrou em várias linhas:
+
+- O esquema não diferencia caixa (`Https://`).
+- `( )` e `[ ]` entram só em par, um nível, então a URL da Wikipedia com
+  parênteses e um host IPv6 passam inteiros.
+- Aspas (ASCII e tipográficas), `<>` e colchetes de qualquer escrita encerram a
+  URL. A pontuação que fecha a frase fica fora do link.
+- Uma URL com usuário na autoridade, ou com caractere invisível ou de controle,
+  não é destacada. O portão a recusaria, e destacar o pedaço antes do
+  caractere abriria outro host.
+
+Um teste diferencial roda o addon de verdade sobre 3000 linhas geradas: todo
+destaque é aprovado pelo portão. Numa linha de 10 mil caracteres, os padrões
+de backtracking medem cerca de 1 ms. O `isUrl` do addon compara o texto com o
+host em punycode, então um host IDN não é destacado.
+
 Na "Página Web", o menu nasce do evento `context-menu` do `<webview>`. Os
 `params.x/y` já chegam no espaço da janela do app, em DIP: o Electron soma a
 posição do webview, o iframe e a escala do canvas. A âncora é o ponto

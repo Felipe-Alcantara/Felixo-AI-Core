@@ -1210,6 +1210,7 @@ export const terminalSurfaces: InventoryElement[] = [
       { file: 'src/features/canvas/terminal/terminal-flow-control.test.ts' },
       { file: 'electron/services/pty-data-batcher.test.cjs' },
       { file: 'src/features/canvas/terminal/terminal-session-store.test.ts' },
+      { file: 'src/features/canvas/terminal/terminal-url-regex.test.ts' },
       { file: 'src/features/canvas/terminal/pty-event-router.test.ts' },
       { file: 'src/features/canvas/terminal/terminal-output-coalescing.test.ts' },
       { file: 'src/features/canvas/terminal/terminal-screen-state.test.ts' },
