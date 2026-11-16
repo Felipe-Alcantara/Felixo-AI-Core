@@ -1433,9 +1433,23 @@ bloqueado em silêncio.
   passa por IPC.
 - `style-src` precisa de `'unsafe-inline'` por causa do xterm, do Excalidraw e
   do `<style>` do boot.
-- A única origem de rede é `https://esm.sh`, e só em `font-src`: são as fontes
-  dos desenhos do Excalidraw. Fonte não executa código, e servi-las pelo build
-  é uma task aberta.
+- Nenhuma diretiva libera origem de rede. As fontes do desenho do Excalidraw
+  saem do próprio build, em `dist/excalidraw-assets/fonts/`, emitidas pelo
+  plugin `felixo-excalidraw-fonts` (`scripts/excalidraw-fonts.cjs`). Entram
+  todas as famílias, inclusive a Xiaolai (CJK, 12,7 MB do total de 13,1 MB).
+  O `main.tsx` define `window.EXCALIDRAW_ASSET_PATH` com a URL absoluta:
+  um caminho relativo seria resolvido contra `location.origin`, que sob
+  `file://` é `"null"`. Em dev, o servidor do Vite serve as mesmas fontes
+  direto do `node_modules`.
+- O Excalidraw põe o CDN dele (esm.sh) como última URL de cada fonte. O
+  Chromium checa a CSP de cada URL ao criar a `FontFace` e reportava 230
+  violações por montagem do desenho, embora a fonte carregasse da URL local.
+  Por isso, no build, o plugin tira esse trecho do código do Excalidraw. O
+  build falha se ele não aparecer exatamente uma vez, para uma versão nova não
+  trazer o CDN de volta em silêncio.
+- O export do desenho embute a face inteira da fonte. A redução (subset) usa
+  WASM, que a política recusa na thread principal (`script-src`, "Skipped
+  glyph subsetting"), e o worker de subset quebra no build (task aberta).
 - `frame-src 'none'` também vale para os embeds do Excalidraw (YouTube,
   Figma…). Por isso o bloco de desenho passa `validateEmbeddable={false}`: o
   Excalidraw diz que o embed não é permitido, em vez de mostrar um frame
@@ -1457,8 +1471,8 @@ instalado pelo CDP antes de qualquer script, e pelo `console-message`. No
 Electron 42, um `eval` recusado não chega pelo console, só pelo evento.
 
 Sondas fazem os mesmos pedidos das funcionalidades: imagem `data:` e
-`blob:`, o som de notificação, worker `blob:`, o chunk do Excalidraw e o
-worker de fontes dele. Um controle positivo (`eval` e imagem `https:`)
+`blob:`, o som de notificação, worker `blob:`, o chunk do Excalidraw, o
+worker de fontes dele e uma fonte do desenho, servida pelo build. Um controle positivo (`eval` e imagem `https:`)
 precisa ser barrado e visto. Sem ele, uma `<meta>` que sumisse passaria como
 "zero violações". Qualquer violação ou sonda falha reprova a release daquele
 SO.

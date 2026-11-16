@@ -1506,7 +1506,7 @@ export const nodeSurfaces: InventoryElement[] = [
     persistence: ['nenhuma própria: o ExcalidrawDrawingNode grava data.scene'],
     ipc: [],
     dependsOn: ['@excalidraw/excalidraw (lazy)', 'onSceneChange (ExcalidrawDrawingNode)'],
-    tests: [unit('scripts/renderer-csp.test.cjs')],
+    tests: [unit('scripts/renderer-csp.test.cjs'), unit('scripts/excalidraw-fonts.test.cjs')],
     gaps: [
       {
         what: 'Decidir se os embeds do Excalidraw voltam, com frame-src restrito a hosts escolhidos.',
@@ -1514,9 +1514,9 @@ export const nodeSurfaces: InventoryElement[] = [
         task: '3ea91f95-497e-818f-a7ed-cb6a84c376d6',
       },
       {
-        what: 'As fontes do Excalidraw vêm de https://esm.sh pela CSP em vez do build.',
+        what: 'O export embute a face inteira da fonte: o worker de subset quebra no build (document is not defined) e, na thread principal, a CSP recusa o WASM do subset (script-src eval, "Skipped glyph subsetting").',
         risk: 'baixo',
-        task: '3ea91f95-497e-8146-ad00-e32071c3366b',
+        task: '41a91f95-497e-8182-b7f6-eeaf764195c5',
       },
       {
         what: 'Popovers e diálogos internos do Excalidraw ficam presos ao cartão overflow-hidden; num bloco pequeno são cortados e nenhum teste mede (a auditoria do smoke ignora .excalidraw).',

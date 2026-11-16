@@ -871,7 +871,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** nenhum
 - **Depende de:** `@excalidraw/excalidraw (lazy)`, `onSceneChange (ExcalidrawDrawingNode)`
 - **Sobreposição:** Dentro do bloco Excalidraw (nodrag nowheel nopan, h-full); os menus do editor não saem do cartão.
-- **Testes:** `scripts/renderer-csp.test.cjs`
+- **Testes:** `scripts/renderer-csp.test.cjs`, `scripts/excalidraw-fonts.test.cjs`
 
 | Estado | Quando |
 | --- | --- |
@@ -884,7 +884,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | Decidir se os embeds do Excalidraw voltam, com frame-src restrito a hosts escolhidos. | baixo | `3ea91f95-497e-818f-a7ed-cb6a84c376d6` |
-| As fontes do Excalidraw vêm de https://esm.sh pela CSP em vez do build. | baixo | `3ea91f95-497e-8146-ad00-e32071c3366b` |
+| O export embute a face inteira da fonte: o worker de subset quebra no build (document is not defined) e, na thread principal, a CSP recusa o WASM do subset (script-src eval, "Skipped glyph subsetting"). | baixo | `41a91f95-497e-8182-b7f6-eeaf764195c5` |
 | Popovers e diálogos internos do Excalidraw ficam presos ao cartão overflow-hidden; num bloco pequeno são cortados e nenhum teste mede (a auditoria do smoke ignora .excalidraw). | baixo | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
 
 ## Arestas e grupos
@@ -2946,7 +2946,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3ea91f95-497e-8117-8506-d4abe67709ff` — 1 lacuna
 - `3ea91f95-497e-812a-8c6d-fcc953edc59b` — 2 lacunas
 - `3ea91f95-497e-812b-a108-fb89c94fa528` — 1 lacuna
-- `3ea91f95-497e-8146-ad00-e32071c3366b` — 1 lacuna
 - `3ea91f95-497e-818f-a7ed-cb6a84c376d6` — 1 lacuna
 - `3ea91f95-497e-819a-bdd9-fbc178f27b3e` — 1 lacuna
 - `3ea91f95-497e-81c4-84ff-f279d9ba4683` — 2 lacunas
@@ -2982,3 +2981,4 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `41491f95-497e-81da-a20c-ce16ce0f3b5a` — 1 lacuna
 - `41591f95-497e-8166-84cb-cf8af3736c2b` — 1 lacuna
 - `41a91f95-497e-810d-af12-e81c33aa550a` — 1 lacuna
+- `41a91f95-497e-8182-b7f6-eeaf764195c5` — 1 lacuna
