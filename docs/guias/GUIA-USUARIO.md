@@ -388,6 +388,11 @@ terminal, chaves ou caminhos de perfil.
   abrir no login do sistema por engano." (com **Tentar de novo**) ou "A conta
   salva "‹nome›" não existe mais. Escolha outra conta ou o login do sistema.", e
   a abertura fica bloqueada até você escolher.
+- **Uma conta por agente.** O configurador lembra a última conta de cada agente
+  (Claude, Codex, Gemini…). Antes, ao trocar de agente, a escolha do outro se
+  perdia. Na primeira abertura depois da atualização, a conta que estava salva
+  passa a ser a do agente em que você estava. Se a conta lembrada de um agente
+  não existir mais, vale o mesmo aviso acima, e nada cai no Login do sistema.
 - **Retomada na mesma conta.** Uma conversa só é retomada na conta em que foi
   aberta. Se o bloco estiver em outra conta, o cartão mostra **A conversa é de
   outra conta** e você escolhe entre a lista da CLI e uma conversa nova (ver

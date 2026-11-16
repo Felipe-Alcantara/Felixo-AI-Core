@@ -518,7 +518,7 @@ export const terminalSurfaces: InventoryElement[] = [
       {
         locator: 'aria-label="Agente"',
         kind: 'select',
-        effect: 'changeAgent: troca a CLI e zera conta, modelo, esforço, fast e preset de outra CLI; lista as contas do novo provedor (cli-accounts:list).',
+        effect: 'changeAgent: troca a CLI e zera conta, modelo, esforço, fast e preset de outra CLI; lista as contas do novo provedor (cli-accounts:list) e volta à conta lembrada desse provedor (accountByProvider).',
         failure: 'Lista de contas ilegível vira accountSelectionIssue e bloqueia a abertura.',
         test: { file: SMOKE_CONTAS, check: 'criarSessaoDaCadeia' },
       },
@@ -558,7 +558,7 @@ export const terminalSurfaces: InventoryElement[] = [
       {
         locator: 'aria-label="Conta"',
         kind: 'select',
-        effect: 'setAccountId (Login do sistema, Automática (cadeia), perfil local) ou "Nova conta…" abre o cadastro inline.',
+        effect: 'setAccountId (Login do sistema, Automática (cadeia), perfil local) ou "Nova conta…" abre o cadastro inline. A escolha fica lembrada por provedor (accountByProvider em felixo:last-agent-launch-preferences, migrado da conta única antiga).',
         failure: 'Conta que não pode abrir marca o campo como inválido e mostra o motivo em role="alert".',
         test: { file: SMOKE_CONTAS, check: 'criarSessaoDaCadeia' },
       },
