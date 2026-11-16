@@ -88,6 +88,7 @@ import { useAutomations } from '../hooks/useAutomations'
 import { useNotes } from '../hooks/useNotes'
 import { useProjects } from '../hooks/useProjects'
 import { useProviderSwitchRequests } from '../hooks/useProviderSwitchRequests'
+import { useChatAccount } from '../hooks/useChatAccount'
 import { formatProviderSwitchWaitingStatus } from '../services/provider-switch'
 import { AutomationsModal } from './AutomationsModal'
 import { AgentUsageLimitsModal } from './AgentUsageLimitsModal'
@@ -214,6 +215,9 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
       null,
     [models, selectedModelId],
   )
+  // Conta do chat: trocável a qualquer momento; vale a partir da próxima mensagem.
+  const chatAccount = useChatAccount(selectedModel?.cliType)
+
 
   const [projectDocsIndexes, setProjectDocsIndexes] = useState<
     Record<string, { entries: DocsIndexEntry[]; docsPath: string }>
@@ -581,8 +585,11 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
         cwd: cliCwd,
         availableModels: models,
         orchestratorSettings,
+        account: chatAccount.selection,
       })
       .then((result) => {
+        // Ex.: nenhuma conta da cadeia estava apta e o pedido foi pelo Login do sistema.
+        chatAccount.setNotice(result.ok ? (result.accountNotice ?? null) : null)
         if (!result.ok) {
           markTerminalSessionStatus(threadId, 'error')
           completeAssistantMessage(
@@ -1395,6 +1402,7 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
                 onSubmit={sendMessage}
                 onStop={stopStreaming}
                 isStreaming={isStreaming}
+                chatAccount={chatAccount}
               />
             </>
           ) : (
@@ -1433,6 +1441,7 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
                   onSubmit={sendMessage}
                   onStop={stopStreaming}
                   isStreaming={isStreaming}
+                  chatAccount={chatAccount}
                 />
               </div>
             </section>

@@ -121,6 +121,12 @@ type AgentModelCatalog = Record<
 
 type CliStreamEvent = StreamEvent | OrchestrationStreamEvent
 
+/** Mesma forma de `src/features/chat/services/chat-account.ts`. */
+type ChatAccountSelection =
+  | { mode: 'system' }
+  | { mode: 'chain' }
+  | { mode: 'pinned'; accountId: string }
+
 type CliInvokeResult = {
   ok: boolean
   message?: string
@@ -487,7 +493,15 @@ declare global {
           cwd?: string
           availableModels?: Model[]
           orchestratorSettings?: OrchestratorSettings
-        }) => Promise<CliInvokeResult>
+          /** Conta do chat; o processo principal resolve a de cada pedido. Ausente = Login do sistema. */
+          account?: ChatAccountSelection
+        }) => Promise<
+          CliInvokeResult & {
+            account?: { accountId: string | null; label: string; mode: 'system' | 'pinned' | 'chain' }
+            /** Por que o pedido foi pelo Login do sistema (ex.: nenhuma conta da cadeia apta). */
+            accountNotice?: string
+          }
+        >
         stop: (params: {
           sessionId: string
           threadId?: string

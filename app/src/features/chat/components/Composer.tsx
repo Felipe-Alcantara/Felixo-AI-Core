@@ -28,6 +28,13 @@ const STARTER_ICONS: Record<string, typeof Code2> = {
 }
 
 import { FelixoSelect } from '../../shared/components/FelixoSelect'
+import type { ChatAccount } from '../hooks/useChatAccount'
+import {
+  CHAT_CHAIN_VALUE,
+  CHAT_SYSTEM_VALUE,
+  chatAccountFromValue,
+  chatAccountToValue,
+} from '../services/chat-account'
 import { CliMark } from '../../shared/brand/CliMark'
 import type {
   ContextAttachment,
@@ -152,6 +159,8 @@ type ComposerProps = {
   onRemoveAttachment: (attachmentId: string) => void
   onSubmit: () => void
   onStop?: () => void
+  /** Conta do chat (só no chat; o bloco Claude API do canvas não passa). */
+  chatAccount?: ChatAccount
 }
 
 export function Composer({
@@ -169,6 +178,7 @@ export function Composer({
   onRemoveAttachment,
   onSubmit,
   onStop,
+  chatAccount,
 }: ComposerProps) {
   const attachmentInputRef = useRef<HTMLInputElement>(null)
 
@@ -324,6 +334,11 @@ export function Composer({
             : 'mx-auto w-full max-w-[680px]'
         }
       >
+        {chatAccount?.notice && (
+          <p role="status" className="mb-2 text-xs leading-snug text-(--color-warning)" data-chat-account-notice>
+            {chatAccount.notice}
+          </p>
+        )}
         <div className="felixo-composer">
           <input
             ref={attachmentInputRef}
@@ -383,6 +398,36 @@ export function Composer({
                   icon: <CliMark cliType={model.cliType} size={15} />,
                 }))}
               />
+
+              {chatAccount?.providerId && (
+                // Fica ativo durante a resposta: a troca vale a partir da próxima mensagem.
+                <FelixoSelect
+                  value={chatAccountToValue(chatAccount.selection)}
+                  onChange={(value) => chatAccount.setSelection(chatAccountFromValue(value))}
+                  aria-label="Conta do chat"
+                  menuLabel="Conta em que o chat roda"
+                  className="felixo-composer-select"
+                  options={[
+                    { value: CHAT_SYSTEM_VALUE, label: 'Login do sistema', description: 'Sessão atual do computador' },
+                    ...(chatAccount.chainAvailable
+                      ? [
+                          {
+                            value: CHAT_CHAIN_VALUE,
+                            label: 'Automática (cadeia)',
+                            description: chatAccount.chainEnabled
+                              ? 'Cada pedido usa a conta apta da cadeia; sem conta apta, o Login do sistema'
+                              : 'A cadeia está desligada: os pedidos vão pelo Login do sistema',
+                          },
+                        ]
+                      : []),
+                    ...chatAccount.accounts.map((account) => ({
+                      value: account.id,
+                      label: account.label,
+                      description: 'Conta fixa',
+                    })),
+                  ]}
+                />
+              )}
 
               <FelixoSelect
                 value={selectedProviderModel}
