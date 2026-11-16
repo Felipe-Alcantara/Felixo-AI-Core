@@ -63,22 +63,30 @@ function listExcalidrawFonts(fontsRoot = EXCALIDRAW_FONTS_ROOT, fsImpl = fs) {
   return fonts.sort((left, right) => left.fileName.localeCompare(right.fileName))
 }
 
+/** `<Família>/<arquivo>.woff2`, o único formato de fonte do pacote. Família sem ponto, então nunca `..`. */
+const DEV_FONT_PATH = /^[A-Za-z0-9_-]+\/[A-Za-z0-9_.-]+\.woff2$/
+
 /**
- * Arquivo de fonte pedido ao dev server, ou `null` quando o pedido não é de
- * fonte ou sairia da pasta das fontes (`..`, codificado ou não).
+ * Arquivo de fonte pedido ao dev server, ou `null` quando o pedido não tem a
+ * forma de uma fonte do pacote. A forma é checada antes de qualquer operação
+ * de caminho: barra invertida é separador no Windows e nome no POSIX, e o
+ * resultado não pode depender do SO. `pathImpl` existe para o teste cobrir os
+ * dois.
  */
-function resolveDevFontRequest(requestUrl, fontsRoot = EXCALIDRAW_FONTS_ROOT) {
+function resolveDevFontRequest(requestUrl, fontsRoot = EXCALIDRAW_FONTS_ROOT, pathImpl = path) {
   let pathname
   try {
     pathname = decodeURIComponent(new URL(String(requestUrl ?? ''), 'http://felixo.invalid').pathname)
   } catch {
     return null
   }
-  if (!pathname.startsWith(DEV_PREFIX) || !pathname.endsWith('.woff2')) return null
+  if (!pathname.startsWith(DEV_PREFIX)) return null
+  const relative = pathname.slice(DEV_PREFIX.length)
+  if (!DEV_FONT_PATH.test(relative)) return null
 
-  const root = path.resolve(fontsRoot)
-  const absolute = path.resolve(root, pathname.slice(DEV_PREFIX.length))
-  return absolute.startsWith(`${root}${path.sep}`) ? absolute : null
+  const root = pathImpl.resolve(fontsRoot)
+  const absolute = pathImpl.resolve(root, ...relative.split('/'))
+  return absolute.startsWith(`${root}${pathImpl.sep}`) ? absolute : null
 }
 
 /**

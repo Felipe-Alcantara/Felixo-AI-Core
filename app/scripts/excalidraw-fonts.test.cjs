@@ -48,6 +48,11 @@ test('lista todas as fontes do pacote do Excalidraw, inclusive a Xiaolai, com o 
   }
   assert.ok(fonts.every((font) => font.fileName.startsWith(`${EXCALIDRAW_ASSETS_DIR}/fonts/`)))
   assert.ok(fonts.every((font) => font.fileName.endsWith('.woff2') && fs.existsSync(font.absolutePath)))
+  // Toda fonte do pacote passa pela forma que o dev server aceita.
+  assert.deepEqual(
+    fonts.filter((font) => resolveDevFontRequest(`/${font.fileName}`) !== path.resolve(font.absolutePath)).map((font) => font.fileName),
+    [],
+  )
 })
 
 test('o nome no build é o caminho que o Excalidraw pede ("./fonts/<Família>/<arquivo>")', () => {
@@ -78,22 +83,33 @@ test('ignora o que não é pasta de família nem .woff2', () => {
   )
 })
 
-test('o dev server só entrega fonte de dentro da pasta das fontes', () => {
-  const raiz = path.resolve('/pacote/fonts')
-  assert.equal(
-    resolveDevFontRequest('/excalidraw-assets/fonts/Excalifont/a.woff2?v=1', raiz),
-    path.join(raiz, 'Excalifont', 'a.woff2'),
-  )
-  for (const pedido of [
-    '/excalidraw-assets/fonts/../../segredo.woff2',
-    '/excalidraw-assets/fonts/%2e%2e/%2e%2e/segredo.woff2',
-    '/excalidraw-assets/fonts/Excalifont/..%2f..%2f..%2fsegredo.woff2',
-    '/excalidraw-assets/fonts/..%5c..%5csegredo.woff2',
-    '/excalidraw-assets/fonts/Excalifont/a.js',
-    '/assets/index.js',
-    '/excalidraw-assets/fonts/%E0%A4%A.woff2',
-    undefined,
-  ]) {
-    assert.equal(resolveDevFontRequest(pedido, raiz), null, String(pedido))
-  }
-})
+// Os dois sabores de caminho, em qualquer SO: no POSIX a barra invertida é
+// caractere de nome, no Windows é separador (o CI pegou a diferença).
+for (const [nome, pathImpl, raizBruta] of [
+  ['POSIX', path.posix, '/pacote/fonts'],
+  ['Windows', path.win32, 'C:\\pacote\\fonts'],
+]) {
+  test(`o dev server só entrega fonte de dentro da pasta das fontes (${nome})`, () => {
+    const raiz = pathImpl.resolve(raizBruta)
+    assert.equal(
+      resolveDevFontRequest('/excalidraw-assets/fonts/Excalifont/Excalifont-Regular-a1.woff2?v=1', raiz, pathImpl),
+      pathImpl.join(raiz, 'Excalifont', 'Excalifont-Regular-a1.woff2'),
+    )
+    for (const pedido of [
+      '/excalidraw-assets/fonts/../../segredo.woff2',
+      '/excalidraw-assets/fonts/%2e%2e/%2e%2e/segredo.woff2',
+      '/excalidraw-assets/fonts/Excalifont/..%2f..%2f..%2fsegredo.woff2',
+      '/excalidraw-assets/fonts/..%5c..%5csegredo.woff2',
+      '/excalidraw-assets/fonts/Excalifont/..%5c..%5csegredo.woff2',
+      '/excalidraw-assets/fonts/Excalifont/a%00.woff2',
+      '/excalidraw-assets/fonts/Excalifont/sub/a.woff2',
+      '/excalidraw-assets/fonts/a.woff2',
+      '/excalidraw-assets/fonts/Excalifont/a.js',
+      '/assets/index.js',
+      '/excalidraw-assets/fonts/%E0%A4%A.woff2',
+      undefined,
+    ]) {
+      assert.equal(resolveDevFontRequest(pedido, raiz, pathImpl), null, String(pedido))
+    }
+  })
+}
