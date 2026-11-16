@@ -7,6 +7,7 @@ const {
   EXPORT_MAX_BYTES_PER_TERMINAL,
   EXPORT_MAX_TOTAL_BYTES,
 } = require('./pty-output-archive.cjs')
+const { redactUrlSecrets } = require('./url-secret-redaction.cjs')
 
 const CANVAS_TRANSFER_FORMAT = 'felixo-canvas'
 const CANVAS_TRANSFER_VERSION = 1
@@ -131,6 +132,12 @@ function normalizeCanvasBundle(value) {
           ...(apiYolo === true ? { apiYolo } : {}),
         },
       }
+    }
+    if (node.type === 'webpage') {
+      // O banco local guarda a URL completa; o arquivo que sai do computador
+      // leva a URL sem tokens (code, access_token, X-Amz-*...). Decisão de 16/11/2026.
+      const data = node.data && typeof node.data === 'object' ? node.data : {}
+      if (typeof data.url === 'string') return { ...node, data: { ...data, url: redactUrlSecrets(data.url) } }
     }
     if (node.type === 'file') {
       // External paths are machine-specific and may point at private files.

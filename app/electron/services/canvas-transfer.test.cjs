@@ -326,3 +326,21 @@ test('a saída dos terminais do pacote precisa de bloco, texto e tamanho válido
   assert.throws(() => parse([{ nodeId: 'terminal-1', text: 42 }]), /Texto invalido/)
   assert.throws(() => parse([{ nodeId: 'terminal-1', text: 'x'.repeat(1024 * 1024 + 1) }]), /muito grande/)
 })
+test('o .fxcanvas exportado leva a URL do bloco Página Web sem tokens; a query inofensiva fica', () => {
+  const bundle = createCanvasBundle(
+    validSource({
+      nodes: [
+        { id: 'web-1', type: 'webpage', position: { x: 0, y: 0 }, data: { label: 'Login', url: 'https://x.com/cb?code=abc&lang=pt#access_token=def' } },
+        { id: 'web-2', type: 'webpage', position: { x: 0, y: 0 }, data: { url: 'https://www.google.com/search?q=felixo%20ai' } },
+      ],
+      edges: [],
+      files: [],
+    }),
+  )
+  const exported = JSON.stringify(bundle)
+  assert.doesNotMatch(exported, /abc/)
+  assert.doesNotMatch(exported, /def/)
+  assert.equal(bundle.nodes[0].data.url, 'https://x.com/cb?lang=pt')
+  assert.equal(bundle.nodes[0].data.label, 'Login')
+  assert.equal(bundle.nodes[1].data.url, 'https://www.google.com/search?q=felixo%20ai', 'busca reabre igual')
+})

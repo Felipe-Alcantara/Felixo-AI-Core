@@ -14,6 +14,7 @@
  */
 
 const path = require('node:path')
+const { redactUrlSecrets } = require('./url-secret-redaction.cjs')
 
 /** Tipos com leitura suportada nesta fatia. Os demais respondem `ok:false` com uma mensagem clara, não um erro. */
 const TIPOS_SUPORTADOS = new Set(['terminal', 'note', 'file'])
@@ -34,7 +35,8 @@ function descreverElemento(node) {
   if (label) return label
   if (node.type === 'note') return primeriaLinha(typeof data.text === 'string' ? data.text : '') || 'Nota sem título'
   if (node.type === 'file') return (typeof data.fileLabel === 'string' && data.fileLabel) || path.basename(String(data.filePath || data.fileName || '')) || 'Arquivo'
-  if (node.type === 'webpage') return typeof data.url === 'string' ? data.url : 'Página web'
+  // O que o agente lê pode seguir para o provedor: a URL sai sem tokens.
+  if (node.type === 'webpage') return typeof data.url === 'string' ? redactUrlSecrets(data.url) : 'Página web'
   return node.type
 }
 

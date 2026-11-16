@@ -196,3 +196,8 @@ test('lerElemento: tipo sem leitura suportada (ex.: webpage) devolve ok:false ex
   assert.equal(resultado.ok, false)
   assert.match(resultado.message, /ainda não tem leitura/)
 })
+test('o agente vê a origem e o caminho da página, sem o token da URL', () => {
+  const node = { id: '9', type: 'webpage', data: { url: 'https://x.com/cb?code=abc#access_token=def' } }
+  assert.equal(descreverElemento(node), 'https://x.com/cb')
+  assert.equal(listarElementos([node])[0].label, 'https://x.com/cb')
+})
