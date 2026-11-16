@@ -82,9 +82,17 @@ export const MAX_INLINE_MARKDOWN_IMAGE_BYTES = 2 * 1024 * 1024
 const SAFE_DATA_IMAGE =
   /^data:(image\/(?:apng|avif|gif|jpe?g|png|webp));base64,([a-z0-9+/]+={0,2})$/i
 
+/**
+ * `rootDir` é a raiz autorizada (o projeto aberto que contém o arquivo; sem
+ * projeto, a pasta do próprio arquivo): a imagem relativa não sai dela, nem
+ * com `../` sem fim, nem codificada (`%2e%2e/`, `..%2f`, `%5c`). Fora da
+ * raiz, a imagem vira só o texto alternativo. A checagem é pelo caminho; um
+ * symlink dentro da raiz que aponte para fora não é seguido aqui.
+ */
 export function resolveMarkdownImageSrc(
   src: string | undefined,
   baseDir: string | undefined,
+  rootDir: string | undefined = baseDir,
 ): string | undefined {
   if (!src) return src
 
@@ -96,9 +104,58 @@ export function resolveMarkdownImageSrc(
     return normalizedSrc
   }
 
-  if (!baseDir) return undefined
+  if (!baseDir || !rootDir) return undefined
 
-  return toFileUrl(joinAndNormalize(baseDir, decodeRelativePath(normalizedSrc)))
+  const relative = decodeRelativePath(normalizedSrc)
+  // Decodificado, um relativo não pode virar absoluto (`%2Fetc`, `C%3A%5C`, `%5C%5Cservidor`).
+  const unified = relative.replace(/\\/g, '/')
+  if (isPosixAbsolute(unified) || /^[a-zA-Z]:/.test(unified)) return undefined
+
+  const resolved = joinAndNormalize(baseDir, relative)
+  if (!isWithinDirectory(resolved, rootDir)) return undefined
+  return toFileUrl(resolved)
+}
+
+/**
+ * Raiz autorizada das imagens de um arquivo: o projeto aberto mais específico
+ * que contém o arquivo (uma doc em `docs/` alcança `../assets` do mesmo
+ * repositório) ou, fora de projeto, a pasta do próprio arquivo.
+ */
+export function markdownImageRoot(
+  absolutePath: string | undefined,
+  projectRoots: readonly string[],
+): string | undefined {
+  const fileDir = dirnameOf(absolutePath)
+  if (!fileDir) return undefined
+
+  let best: string | undefined
+  for (const root of projectRoots) {
+    if (typeof root !== 'string' || !root.trim()) continue
+    const normalizedRoot = trimDirectory(root)
+    if (isWithinDirectory(fileDir, normalizedRoot) && (!best || normalizedRoot.length > best.length)) {
+      best = normalizedRoot
+    }
+  }
+  return best ?? fileDir
+}
+
+/** Separadores em "/" e sem a barra do fim (a raiz POSIX continua "/"). */
+function trimDirectory(directory: string): string {
+  return directory.replace(/\\/g, '/').replace(/\/+$/, '') || '/'
+}
+
+/**
+ * `path` é `directory` ou está dentro dele, comparando pasta a pasta (um
+ * prefixo de nome não conta: `/home/pedro` não está em `/home/p`). Com letra
+ * de unidade (Windows), sem diferenciar maiúsculas.
+ */
+function isWithinDirectory(path: string, directory: string): boolean {
+  const target = trimDirectory(path)
+  const root = trimDirectory(directory)
+  const caseless = /^[a-zA-Z]:/.test(target) || /^[a-zA-Z]:/.test(root)
+  const a = caseless ? target.toLowerCase() : target
+  const b = caseless ? root.toLowerCase() : root
+  return a === b || a.startsWith(b === '/' ? '/' : `${b}/`)
 }
 
 /**

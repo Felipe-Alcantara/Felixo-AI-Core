@@ -3,6 +3,7 @@ import {
   MAX_INLINE_MARKDOWN_IMAGE_BYTES,
   dirnameOf,
   isRelativeMarkdownLink,
+  markdownImageRoot,
   resolveMarkdownImageSrc,
   sanitizeMarkdownUrl,
 } from './markdown-image-src'
@@ -29,9 +30,9 @@ describe('resolveMarkdownImageSrc', () => {
     ).toBe('file:///home/user/blog/src/content/posts/ola-mundo/foto.png')
   })
 
-  it('resolve subida de diretório (..) corretamente', () => {
+  it('resolve subida de diretório (..) quando o destino segue dentro da raiz', () => {
     expect(
-      resolveMarkdownImageSrc('../capa/foto.png', '/home/user/posts/ola-mundo'),
+      resolveMarkdownImageSrc('../capa/foto.png', '/home/user/posts/ola-mundo', '/home/user/posts'),
     ).toBe('file:///home/user/posts/capa/foto.png')
   })
 
@@ -148,5 +149,50 @@ describe('dirnameOf', () => {
   it('devolve undefined sem caminho, em vez de fingir saber a pasta', () => {
     expect(dirnameOf(undefined)).toBeUndefined()
     expect(dirnameOf('')).toBeUndefined()
+  })
+})
+
+describe('imagem relativa presa à raiz autorizada', () => {
+  // [src, pasta do arquivo, raiz] — tudo isto sai da raiz e não vira file://.
+  const FORA: Array<[string, string, string | undefined]> = [
+    ['../../../../x.png', '/home/p/proj/docs', '/home/p/proj'],
+    ['%2e%2e/%2e%2e/%2e%2e/x.png', '/home/p/proj/docs', '/home/p/proj'],
+    ['..%2f..%2f..%2fx.png', '/home/p/proj/docs', '/home/p/proj'],
+    ['%2E%2E%2F%2E%2E%2Fsegredo.png', '/home/p/proj/docs', '/home/p/proj'],
+    ['..\\..\\..\\x.png', 'C:\\Users\\p\\proj\\docs', 'C:\\Users\\p\\proj'],
+    ['..%5c..%5c..%5cWindows%5cx.png', 'C:/Users/p/proj/docs', 'C:/Users/p/proj'],
+    ['docs/../../../x.png', 'C:/Users/p/proj', 'C:/Users/p/proj'],
+    ['../foto.png', '/home/p/notas', undefined],
+    ['%2Fetc%2Fx.png', '/home/p/proj', '/home/p/proj'],
+    ['C%3A%5CWindows%5Cx.png', 'C:/Users/p/proj', 'C:/Users/p/proj'],
+    ['%5C%5Cservidor%5Cpasta%5Cx.png', 'C:/Users/p/proj', 'C:/Users/p/proj'],
+    ['../proj-irmao/x.png', '/home/p/proj', '/home/p/proj'],
+  ]
+
+  it('nada que sai da raiz gera file://, nem codificado, nem com barra invertida', () => {
+    for (const [src, baseDir, root] of FORA) {
+      expect(resolveMarkdownImageSrc(src, baseDir, root), `${src} em ${baseDir}`).toBeUndefined()
+    }
+  })
+
+  it('dentro da raiz continua aparecendo, inclusive ../assets de docs/', () => {
+    expect(resolveMarkdownImageSrc('../assets/logo.png', '/home/p/proj/docs', '/home/p/proj')).toBe(
+      'file:///home/p/proj/assets/logo.png',
+    )
+    expect(resolveMarkdownImageSrc('img/x.png', '/home/p/notas', undefined)).toBe('file:///home/p/notas/img/x.png')
+    // Windows: letra de unidade e pastas sem diferenciar maiúsculas.
+    expect(resolveMarkdownImageSrc('..\\assets\\logo.png', 'c:\\Users\\P\\Proj\\docs', 'C:\\Users\\p\\proj')).toBe(
+      'file:///c:/Users/P/Proj/assets/logo.png',
+    )
+  })
+
+  it('a raiz é o projeto aberto mais específico que contém o arquivo; fora de projeto, a pasta do arquivo', () => {
+    const projetos = ['/home/p', '/home/p/proj', 'C:/Users/P/Trabalho']
+    expect(markdownImageRoot('/home/p/proj/docs/GUIA.md', projetos)).toBe('/home/p/proj')
+    expect(markdownImageRoot('/home/p/outro/README.md', projetos)).toBe('/home/p')
+    expect(markdownImageRoot('/srv/notas/x.md', projetos)).toBe('/srv/notas')
+    expect(markdownImageRoot('c:\\users\\p\\trabalho\\a.md', projetos)).toBe('C:/Users/P/Trabalho')
+    expect(markdownImageRoot('/home/pedro/x.md', projetos), 'prefixo de nome não conta como pasta').toBe('/home/pedro')
+    expect(markdownImageRoot(undefined, projetos)).toBeUndefined()
   })
 })
