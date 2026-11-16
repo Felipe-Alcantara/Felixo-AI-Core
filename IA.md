@@ -3104,3 +3104,8 @@ Task: Felixo AI Core/Release — investigar a abertura do pacote no Ubuntu em 10
 **Não validado.** Não medi o Electron subindo numa máquina Linux real, fora do runner. O checklist de prontidão (task `3fa91f95-497e-81d7-a265-c9ba906be39c`) já pede essa medição.
 
 Estado: concluído (deploy no adendo).
+
+**Adendo (2026-11-16, 04:42): CI e Release.**
+- **CI** de `917d568` (run 43823514099): passou no Validate de Windows, macOS, Ubuntu e Ubuntu ARM e no smoke do canvas.
+- **Release:** o gate (run 43824331947) e o Release (run 43824359989, concluído às 04:40) publicaram a `v0.1.558`, porque o comentário tocou um arquivo do app.
+- **Mais uma medição:** o release-smoke da v0.1.558 marcou `startupMs` de 2917 ms no Ubuntu (macOS 1809, Windows 389). É a quarta seguida abaixo de 4,2 s (2012, 1463, 2054 e 2917 ms).
