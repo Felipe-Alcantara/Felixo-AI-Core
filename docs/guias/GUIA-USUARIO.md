@@ -389,15 +389,34 @@ terminal, chaves ou caminhos de perfil.
 precisaria trocar de família de provedor (de Claude para Codex, por exemplo), no
 fallback, no último recurso ou no meio de uma tarefa, a conversa mostra um card
 com de → para (provedor e modelo), o motivo, a regra, o prazo e o custo ("muda de
-provedor e de conta de cobrança; roda no login do sistema do destino"), com
+provedor e de conta de cobrança; o destino roda na conta escolhida no chat para
+ele, ou no Login do sistema"), com
 **Trocar para ‹provedor›** e **Não trocar**. Enquanto isso, a linha de status diz
 "Aguardando sua confirmação…". Sem resposta em 10 minutos, vale como recusa: a
 tarefa falha com uma mensagem clara e nenhum provedor é trocado. Clicar em
 **Parar** na conversa encerra a orquestração inteira: a pergunta sai cancelada,
 os sub-agentes que ainda rodam param e o orquestrador não volta sozinho depois; a
 próxima mensagem começa do zero. Trocas dentro da
-mesma família (outro modelo, ou Codex → Codex App Server) seguem sem pergunta. O
-orquestrador continua no Login do sistema e não usa as contas da cadeia.
+mesma família (outro modelo, ou Codex → Codex App Server) seguem sem pergunta.
+
+**Conta do chat.** Ao lado da CLI, no compositor do chat, o seletor **Conta** diz
+onde a conversa roda. A troca pode ser feita a qualquer momento e vale a partir da
+próxima mensagem:
+
+- **Login do sistema:** como antes, a sessão atual do computador.
+- **Uma conta fixa:** a conversa e os sub-agentes do mesmo provedor rodam nela; um
+  sub-agente de outro provedor roda no Login do sistema.
+- **Automática (cadeia):** cada pedido, inclusive cada sub-agente, usa a conta apta
+  do próprio provedor, pelas regras da cadeia. Se nenhuma conta estiver apta (cadeia
+  desligada, contas em espera ou sem login conferido), o pedido vai pelo Login do
+  sistema, e um aviso acima do compositor diz isso.
+
+Na cadeia, se um sub-agente bate o limite da conta no meio da tarefa, a conta entra
+em espera e o card pergunta **Trocar de conta?**, com a conta de origem, a próxima
+conta apta do mesmo provedor, o motivo e o prazo. Só troca com o seu sim; sem
+resposta em 10 minutos, vale como recusa. Sem outra conta apta, segue a pergunta
+de troca de provedor de sempre. O terminal do chat mostra em que conta cada pedido
+abriu.
 
 ## 4. Configuração dentro do app
 

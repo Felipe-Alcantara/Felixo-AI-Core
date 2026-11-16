@@ -898,6 +898,8 @@ Mapa declarativo `CREDENCIAIS_HERDADAS` em `cli-account-profiles.cjs`. Os nomes 
 ### 10.5 O que não muda
 
 - O orquestrador continua no Login do sistema e não escolhe conta da cadeia.
+  *(Superado em 15/11/2026: o chat e o orquestrador passaram a usar as contas;
+  ver `POLITICA-CONTAS.md`, seção "Orquestrador do chat".)*
 - `maxCostEstimate` e `requireConfirmationForSensitiveActions` continuam sendo só texto no prompt (`orchestrator-settings-storage.ts`), fora do escopo.
 
 ---

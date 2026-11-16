@@ -267,7 +267,28 @@ que vem da home real mesmo quando o perfil troca o HOME (Gemini).
   e nenhum provedor é trocado. Uma resposta que chega depois do prazo também
   conta como recusa.
 - Um reinício apaga a decisão pendente sem executar nada.
-- O orquestrador continua no Login do sistema e não usa contas da cadeia.
+- **Conta do chat e do orquestrador (decisões de 15/11/2026).** O seletor do
+  compositor vale para a conversa, para os turnos do orquestrador e para os
+  sub-agentes, e pode ser trocado a qualquer momento (vale na próxima mensagem):
+  - Login do sistema, como antes;
+  - conta fixa: vale para o provedor dela; um sub-agente de outro provedor roda no
+    Login do sistema;
+  - "Automática (cadeia)": cada pedido pega a conta apta do próprio provedor,
+    pelas regras da cadeia (`pickAccount`: estratégia, apta, checagem de login
+    preguiçosa), sem proposta nem ticket, porque o envio é a confirmação.
+- **Sem conta apta no chat:** o pedido cai no Login do sistema com aviso. É o
+  contrário do bloco "Automática (cadeia)", que recusa a abertura; o dono preferiu
+  não travar a conversa.
+- **Limite numa conta da cadeia no chat:** a conta entra em espera
+  (`recordAccountFailure`, sem proposta da cadeia). No meio de uma tarefa, o card
+  do chat pergunta pela próxima conta apta do mesmo provedor (`kind: 'account'`),
+  com as mesmas regras da troca de provedor: só com sim, 10 min e recusa, registro
+  em `account_switch_events`. Sem outra conta, segue o fallback de provedor.
+- **Na conta, o limite é dela:** a disponibilidade global de modelos (que
+  descreve o Login do sistema) não é marcada.
+- **Codex numa conta entra na vez de abertura do perfil**
+  (`codex-launch-gate`), como o terminal e o painel. No Login do sistema, o chat
+  segue fora da vez, como antes.
 
 ## Registro de trocas e privacidade
 
