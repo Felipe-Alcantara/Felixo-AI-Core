@@ -3,6 +3,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { ptySessionIdForNode } from './pty-session-id'
 import { findSpanningUrlLinks } from './terminal-spanning-url-links'
+import { TERMINAL_URL_REGEX } from './terminal-url-regex'
 import {
   describeTerminalLinkHover,
   isTerminalLinkDragGesture,
@@ -825,7 +826,12 @@ export class TerminalSessionStore {
       },
     })
     terminal.loadAddon(
-      new WebLinksAddon(linkEvents.activate, { hover: linkEvents.hover, leave: linkEvents.leave }),
+      new WebLinksAddon(linkEvents.activate, {
+        hover: linkEvents.hover,
+        leave: linkEvents.leave,
+        // A padrão do addon cortava `Rust_(…)` e ignorava `Https://`.
+        urlRegex: TERMINAL_URL_REGEX,
+      }),
     )
 
     const generation = (this.generations.get(id) ?? 0) + 1

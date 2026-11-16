@@ -8,6 +8,7 @@ import type { TerminalFixture } from './__fixtures__/terminal-output/replay-fixt
 import { closeLinkChooser, getLinkChooserState } from '../../shared/links/link-chooser-store'
 import { createCatalogPromptInsertion, createManualPromptInsertion } from '../../shared/types/prompt-insertion'
 import type { AgentResumeFailure, AgentSessionReference } from '../services/agent-session'
+import { TERMINAL_URL_REGEX } from './terminal-url-regex'
 
 /**
  * Entrega do texto inicial, exercitada contra a saída real de uma CLI.
@@ -2398,7 +2399,9 @@ describe('TerminalSessionStore: links do terminal', () => {
     harness = linkHarness()
     const terminal = linkSession(harness).terminal as unknown as {
       options: { linkHandler?: LinkHandler | null }
-      _addonManager: { _addons: Array<{ instance: { _handler?: unknown; _options?: { hover?: unknown; leave?: unknown } } }> }
+      _addonManager: {
+        _addons: Array<{ instance: { _handler?: unknown; _options?: { hover?: unknown; leave?: unknown; urlRegex?: unknown } } }>
+      }
     }
     // Campos internos do xterm e do addon: é o único jeito de ver, sem DOM, qual
     // função o WebLinksAddon chama. Sem esta trava, dar ao addon um callback
@@ -2413,6 +2416,8 @@ describe('TerminalSessionStore: links do terminal', () => {
     expect(webLinks?._handler).toBe(handler?.activate)
     expect(webLinks?._options?.hover).toBe(handler?.hover)
     expect(webLinks?._options?.leave).toBe(handler?.leave)
+    // E a regex própria: a padrão cortava `Rust_(…)` e ignorava `Https://`.
+    expect(webLinks?._options?.urlRegex).toBe(TERMINAL_URL_REGEX)
   })
 
   it('o hover guarda o link (e onde o ponteiro estava) para o menu, e o leave os esquece', () => {

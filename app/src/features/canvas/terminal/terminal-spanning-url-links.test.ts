@@ -67,6 +67,19 @@ describe('o que não deve virar link de várias linhas', () => {
     ])
   })
 
+  it('mesma regra do WebLinksAddon: Https:// quebrado é destacado, e com usuário na autoridade não', () => {
+    const cols = 30
+    const comCaixa = ['ver Https://Example.com/wiki/A', '  _b, certo?']
+    expect(comCaixa[0]).toHaveLength(cols)
+    expect(findSpanningUrlLinks(reader(comCaixa, cols), 1).map((link) => link.url)).toEqual([
+      'Https://Example.com/wiki/A_b',
+    ])
+
+    const comUsuario = ['ver https://google.com@evil.ex', '  ample/caminho']
+    expect(comUsuario[0]).toHaveLength(cols)
+    expect(findSpanningUrlLinks(reader(comUsuario, cols), 0)).toEqual([])
+  })
+
   it('só http/https: um esquema qualquer não é procurado', () => {
     const rows = ['file:///C:/Users/pessoa/'.padEnd(30, 'a'), '  b.txt']
     expect(findSpanningUrlLinks(reader(rows, 30), 0)).toEqual([])

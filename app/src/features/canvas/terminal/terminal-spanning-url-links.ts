@@ -22,6 +22,8 @@
  * endereço inteiro antes de abrir, então isso nunca abre nada às cegas.
  */
 
+import { TERMINAL_URL_REGEX } from './terminal-url-regex'
+
 export type TerminalRowText = {
   /** Texto da linha sem os espaços à direita (`translateToString(true)`). */
   text: string
@@ -43,7 +45,9 @@ export type SpanningUrlLink = {
 const MAX_CONTINUATION_INDENT = 8
 /** Teto de linhas juntadas, para uma tela cheia de texto não virar uma URL. */
 const MAX_JOINED_ROWS = 24
-const URL_PATTERN = /https?:\/\/[^\s<>"'`]+/g
+// A mesma definição de URL do `WebLinksAddon`: com ou sem quebra de linha, o
+// destaque tem os mesmos limites (parênteses em par, pontuação final fora).
+const URL_PATTERN = new RegExp(TERMINAL_URL_REGEX.source, 'giu')
 const URL_CHAR = /[^\s<>"'`]/
 
 /**
@@ -61,21 +65,6 @@ function continuesIntoNext(reader: TerminalRowReader, index: number): boolean {
   if (indent > MAX_CONTINUATION_INDENT) return false
   const first = next.text.charAt(indent)
   return first !== '' && URL_CHAR.test(first)
-}
-
-/**
- * Remove a pontuação que fecha uma frase, não a URL: `.` `,` `;` `:` `!` `?`
- * no fim, e `)` sem `(` correspondente dentro da própria URL.
- */
-function trimTrailingPunctuation(url: string): string {
-  let result = url.replace(/[.,;:!?]+$/, '')
-  while (result.endsWith(')')) {
-    const opens = (result.match(/\(/g) ?? []).length
-    const closes = (result.match(/\)/g) ?? []).length
-    if (closes <= opens) break
-    result = result.slice(0, -1).replace(/[.,;:!?]+$/, '')
-  }
-  return result
 }
 
 /**
@@ -111,7 +100,7 @@ export function findSpanningUrlLinks(reader: TerminalRowReader, bufferRow: numbe
 
   const links: SpanningUrlLink[] = []
   for (const match of joined.matchAll(URL_PATTERN)) {
-    const url = trimTrailingPunctuation(match[0])
+    const url = match[0]
     const startIndex = match.index ?? 0
     const endIndex = startIndex + url.length - 1
     const startCell = cells[startIndex]
