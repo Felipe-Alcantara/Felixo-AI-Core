@@ -1035,6 +1035,18 @@ declare global {
         ) => Promise<CliInvokeResult & { profile?: Record<string, unknown> }>
         delete: (profileId: string) => Promise<CliInvokeResult & { deleted?: boolean }>
       }
+      webviewPermissions?: {
+        pending: () => Promise<CliInvokeResult & { pending?: unknown[] }>
+        respond: (params: { id: string; allow: boolean }) => Promise<CliInvokeResult>
+        list: (params: { profileId?: string }) => Promise<CliInvokeResult & { decisions?: unknown[] }>
+        revoke: (params: {
+          profileId: string
+          origin: string
+          permission?: string
+        }) => Promise<CliInvokeResult & { removed?: number }>
+        onPending: (callback: (pending: unknown) => void) => () => void
+        onChanged: (callback: () => void) => () => void
+      }
       agentPresets?: {
         list: () => Promise<CliInvokeResult & { presets?: Record<string, unknown>[] }>
         save: (

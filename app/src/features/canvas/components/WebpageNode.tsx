@@ -13,6 +13,7 @@ import {
   ExternalLink,
   Globe,
   RotateCw,
+  ShieldAlert,
 } from 'lucide-react'
 import type { WebviewTag } from 'electron'
 import { NodeHeader } from './NodeHeader'
@@ -28,6 +29,8 @@ import {
 import { WebviewProfileMenu } from './WebviewProfileMenu'
 import { partitionForWebviewProfile } from '../services/webview-profile'
 import { webviewLinkMenu, type WebviewContextMenuParams } from '../services/webview-context-menu'
+import { useWebviewSitePermissions } from '../hooks/useWebviewSitePermissions'
+import { describeSitePermissionRequest } from '../services/webview-site-permissions'
 import type { WebpageNodeData } from '../types'
 
 /**
@@ -83,6 +86,12 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
   // page-title-updated never overwrites a name the user chose on purpose.
   const labelCustomizedRef = useRef(Boolean(nodeData.label))
   const { deleteElements } = useReactFlow()
+  // webContents do guest: é por ele que o pedido de permissão do site (e o
+  // dos popups que a página abriu) chega a este bloco, e não a outro.
+  const [guestId, setGuestId] = useState<number | null>(null)
+  const { pending: permissionRequests, respond: respondPermission } = useWebviewSitePermissions()
+  const requestsHere = guestId === null ? [] : permissionRequests.filter((item) => item.webContentsId === guestId)
+  const permissionRequest = requestsHere[0]
 
   // CanvasView recreates `data` (and this handler) whenever the node's own
   // data changes — e.g. every time this effect calls onDataChange itself —
@@ -165,7 +174,19 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
       setCanGoForward(webview.canGoForward())
     }
 
-    const onDomReady = () => syncHistoryState()
+    const readGuestId = () => {
+      try {
+        setGuestId(webview.getWebContentsId())
+      } catch {
+        // Antes do attach não há guest; o dom-ready tenta de novo.
+      }
+    }
+    readGuestId()
+
+    const onDomReady = () => {
+      readGuestId()
+      syncHistoryState()
+    }
 
     const onNavigate = () => {
       setLoadError(null)
@@ -231,6 +252,7 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
       webview.removeEventListener('page-title-updated', onTitleUpdated)
       webview.removeEventListener('did-fail-load', onFailLoad)
       webview.removeEventListener('context-menu', onContextMenu)
+      setGuestId(null)
     }
   }, [id, webview])
 
@@ -373,6 +395,37 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
           <ExternalLink size={13} />
         </button>
       </div>
+
+      {permissionRequest && (
+        // A pergunta não toma o foco nem trava o app: sem resposta, o site fica
+        // sem a permissão (navegar ou fechar o bloco nega).
+        <div
+          role="region"
+          aria-label="Pedido de permissão do site"
+          aria-live="polite"
+          className="nodrag flex items-center gap-2 border-b border-white/10 bg-[color-mix(in_srgb,var(--color-warning)_14%,transparent)] px-2 py-1 text-[11px] text-(--f-core-white)"
+        >
+          <ShieldAlert size={12} aria-hidden className="shrink-0 text-(--color-warning)" />
+          <span className="min-w-0 flex-1">
+            {describeSitePermissionRequest(permissionRequest)}
+            {requestsHere.length > 1 ? ` (mais ${requestsHere.length - 1} na fila)` : ''}
+          </span>
+          <button
+            type="button"
+            onClick={() => void respondPermission(permissionRequest.id, true)}
+            className="felixo-btn rounded-sm bg-white/10 px-2 py-0.5 text-[11px] hover:bg-white/20"
+          >
+            Permitir
+          </button>
+          <button
+            type="button"
+            onClick={() => void respondPermission(permissionRequest.id, false)}
+            className="felixo-btn rounded-sm px-2 py-0.5 text-[11px] hover:bg-white/10"
+          >
+            Negar
+          </button>
+        </div>
+      )}
 
       {addressError && (
         <div

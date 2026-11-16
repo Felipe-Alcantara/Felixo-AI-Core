@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Check, Plus, Trash2, UserRound } from 'lucide-react'
 import { useWebviewProfiles } from '../hooks/useWebviewProfiles'
+import { useWebviewSitePermissions } from '../hooks/useWebviewSitePermissions'
+import { displayOrigin, groupSitePermissions } from '../services/webview-site-permissions'
 import {
   DEFAULT_WEBVIEW_PROFILE,
   describeWebviewProfile,
@@ -23,6 +25,9 @@ type Props = {
  */
 export function WebviewProfileMenu({ profileId, onChange }: Props) {
   const { profiles, ready, create, remove } = useWebviewProfiles()
+  const { decisions, revoke } = useWebviewSitePermissions()
+  const currentProfileId = isCustomProfileId(profileId) ? profileId : 'default'
+  const sitesOfProfile = groupSitePermissions(decisions.filter((item) => item.profileId === currentProfileId))
   const current = describeWebviewProfile(profileId, profiles, ready)
   const [open, setOpen] = useState(false)
   const [newName, setNewName] = useState('')
@@ -148,6 +153,35 @@ export function WebviewProfileMenu({ profileId, onChange }: Props) {
                 </div>
               )
             })}
+
+            {sitesOfProfile.length > 0 && (
+              <div className="mt-1.5 border-t border-white/10 pt-1.5">
+                <p className="px-1 text-[10px] text-zinc-500">Permissões dos sites neste perfil</p>
+                <ul aria-label="Permissões dos sites neste perfil" className="mt-0.5 max-h-40 overflow-y-auto">
+                  {sitesOfProfile.map((site) => (
+                    <li key={site.origin} className="px-1 py-0.5">
+                      <div className="flex items-center gap-1">
+                        <span className="min-w-0 flex-1 truncate text-[11px]">{displayOrigin(site.origin)}</span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void revoke({ profileId: currentProfileId, origin: site.origin }).then((message) => setError(message))
+                          }
+                          aria-label={`Revogar as permissões de ${displayOrigin(site.origin)}`}
+                          title="Revogar (o site pergunta de novo)"
+                          className="rounded-sm px-1 py-0.5 text-[10px] text-zinc-400 hover:bg-white/10 hover:text-zinc-200"
+                        >
+                          Revogar
+                        </button>
+                      </div>
+                      <p className="text-[10px] leading-snug text-zinc-500">
+                        {site.items.map((item) => `${item.decision === 'granted' ? 'pode' : 'não pode'} ${item.label}`).join('; ')}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             <div className="mt-1.5 flex items-center gap-1 border-t border-white/10 pt-1.5">
               <input
