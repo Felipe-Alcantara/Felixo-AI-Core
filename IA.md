@@ -3057,3 +3057,7 @@ Task: Felixo AI Core/Contas — preferência de conta por provedor no configurad
 **Não validado.** O app instalado não foi aberto, atualizando de uma versão anterior com contas reais. A migração foi conferida no app de fonte com o formato antigo gravado à mão.
 
 Estado: concluído (deploy no adendo).
+
+**Adendo (2026-11-16, 04:11): CI e Release.**
+- **CI** de `56ed024` (run 43819857971): passou no Validate de Windows, macOS, Ubuntu e Ubuntu ARM e no smoke do canvas.
+- **Release:** o gate (run 43820830876) e o Release (run 43820853685, concluído às 04:09) publicaram a `v0.1.557`.
