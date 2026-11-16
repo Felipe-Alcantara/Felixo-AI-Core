@@ -3555,3 +3555,77 @@ Task: Felixo AI Core/Terminal — trocar a regex do WebLinksAddon por uma própr
 Estado: concluído (deploy no adendo).
 
 **Adendo de deploy (13:30).** v0.1.567 publicada a partir de `091a48b`: CI verde na primeira tentativa (13:11 → 13:17, os quatro Validate e o smoke do canvas), Release gate verde e Release verde (13:18 → 13:28) nos três SOs. A mudança é de comportamento no renderer: o smoke de release não exercita o destaque de links do terminal.
+
+## 2026-11-16 — Arquitetura: o renderer empacotado passa a carregar por app:// (decisão e implementação)
+
+Task: Felixo AI Core/Arquitetura — avaliar um protocolo próprio (app://) no lugar de file:// para o renderer (Notion `3ea91f95-497e-81e5-a47c-cdad5bfe38d2`), aberta em 29/09 a partir da política única de URL. Agente: Resolver hotfix (Claude Code, Claude Opus 5.5), 13:49 em diante. Trilha B: prova de conceito medida, depois três perguntas ao Felipe. As respostas foram:
+- "Fazer agora, nesta task" (a recomendação era uma task própria);
+- "Copiar uma vez e manter a antiga";
+- "Rota no processo principal".
+
+**Prova de conceito** (script no Electron 42, renderer do build):
+- **`file://`:** um `<script src="file:///…">` de outra pasta do disco **executou**, e imagem e `fetch` de fora do build carregaram.
+- **`app://felixo`:** os três foram bloqueados, e o *traversal* pela página deu 404.
+- **Boot até o app pronto:** 93 ms com `file://` e 89 ms com `app://` (mediana de 8); numa segunda rodada, 88 e 95 ms. Sem diferença.
+- **Smoke de CSP sob `app://`:** as sete sondas ok, o controle positivo visto e zero violações.
+- **Armazenamento:** a origem nova começa vazia (cerca de 30 chaves de `localStorage`, sem IndexedDB). A migração medida copiou 4 chaves em 146 ms e devolveu o tema.
+- **Imagem relativa do Markdown:** `file://` é bloqueado sob `app://`.
+
+**Feito.**
+- **`electron/core/app-protocol.cjs` (novo):**
+  - esquema `app` privilegiado (`standard`, `secure`, `supportFetchAPI`, `stream`), registrado antes do `ready`;
+  - handler que serve só o `dist`, conferindo o caminho resolvido contra a raiz;
+  - rota `__imagem-local?caminho=…`, autorizada pelo `text-file-access` e com imagem raster exigida também no destino real;
+  - página vazia `__migracao-origem`;
+  - arquivo ilegível vira 404.
+- **`text-file-access.authorizeImageNear`:** projeto registrado ou pasta (e subpastas) de um arquivo escolhido no seletor, pelo caminho real. É a mesma raiz que o renderer usa e fecha o symlink/junção para fora.
+- **`renderer-origin-migration.cjs` (novo):** copia o `localStorage` da origem `file://` para `app://felixo` uma vez, antes da janela principal, sem sobrescrever e mantendo a cópia antiga. O marcador `origem-app-migrada.json` só é gravado no fim; se falhar, o app tenta de novo no próximo início.
+- **`main.cjs`:** registro do esquema, handler no começo do `whenReady` (antes do smoke) e migração antes da janela principal.
+- **`main-window`:** `loadURL('app://felixo/index.html')`.
+- **`navigation-guard`:** reconhece o documento `app://` (as rotas internas não).
+- **CSP:** sem `file:` no `img-src`.
+- **Renderer:** a imagem relativa do Markdown monta a rota `__imagem-local` no lugar de `file://`.
+- **Smoke de release:** abre o renderer por `app://` (`rendererUrl`) e deixa `app:` passar no filtro de rede.
+- **Duas falhas que só o pacote mostrou, corrigidas:**
+  - o app saía com código 0 logo depois de migrar: as janelas ocultas fechavam antes da principal existir. Agora `shouldQuitWhenAllWindowsClosed` não encerra antes da janela principal;
+  - o `statSync` dentro do asar imprimia DEP0180 no stderr do smoke. Agora é `existsSync`, e um `fetch` que falha vira 404.
+- **Docs:** ARQUITETURA, com a seção "Protocolo app:// do renderer" (decisão, medições, o que mudou e a migração), mais a CSP e as imagens do Markdown; GUIA-USUARIO.
+
+**Validação.**
+- **Testes novos ou alterados:**
+  - **`app-protocol.test.cjs`:** 10 testes, com *traversal* em `path.posix` e `path.win32`, a autorização da imagem, a página de migração, o 404 de fetch e uma trava estática da ordem no `main.cjs`;
+  - **`text-file-access`:** 3 testes de imagem (projeto, pasta do arquivo escolhido, link para fora, raiz do disco);
+  - **`renderer-origin-migration`:** 4 testes, com o script de cópia rodando num `vm`;
+  - **`navigation-guard`:** 1 teste;
+  - **`app-lifecycle`:** 1 teste, que falhou antes;
+  - **CSP:** 1 teste, que falhou antes (`img-src libera file:`);
+  - **Markdown:** a rota e a recusa de `app://` escrito à mão;
+  - **smoke:** com `rendererUrl`.
+- **Mutações**, rodadas uma por vez com restauração por cópia:
+  - `dist` sem limite: 4 falhas;
+  - destino sem checar: 1;
+  - migração que sobrescreve: 1;
+  - pasta na raiz do disco: 0. É redundante, porque o `isPathInside` já recusa uma raiz, a mesma defesa do `authorize`.
+- **Integração no Electron real com os módulos reais:**
+  - migração de 3 chaves em 244 ms, e a segunda chamada responde "feita";
+  - app pronto por `app://felixo` com o tema migrado aplicado;
+  - imagem: dentro do projeto carrega; fora, junção para fora, `.md` e `file://` direto são recusados; depois de escolher o `.md` de fora, a imagem da pasta dele carrega.
+- **Pacote real do Windows** (`electron-builder --dir`):
+  - smoke com `rendererCsp.ok` sob `app://` (sete sondas, zero violações);
+  - o app abre por `app://felixo/index.html` e não sai depois da migração (157 a 201 ms com perfil vazio);
+  - a Página Web carrega `https://example.com` sem violações;
+  - registrar projeto pela página exige o seletor nativo, então no pacote só as recusas da rota foram vistas.
+- **Gates:**
+  - `npm test`: 3397 testes, 3387 passam, 10 pulados, 0 falham. Numa rodada intermediária, o teste do Openia falhou por tempo; isolado, passou 2 de 2;
+  - `vitest`: 3569 passam;
+  - `eslint .` e `tsc -b` limpos.
+
+**Erro de procedimento meu, corrigido.** Na primeira rodada de mutações, restaurei os arquivos com `git checkout --`. Em arquivo novo isso não faz nada, e num arquivo já versionado volta ao HEAD: o `authorizeImageNear` foi apagado, e duas mutações ficaram no código. Os três arquivos foram consertados e as mutações refeitas com cópia de segurança.
+
+**Não validado.**
+- **macOS e Linux:** ficam para o smoke da Release.
+- **Migração com o perfil real de uso:** feita com perfis de teste.
+- **Rota de imagem com um projeto de verdade dentro do pacote:** o seletor nativo não é automatizável.
+- **Volta a `file://`:** não exercitada, embora a cópia antiga seja mantida.
+
+Estado: concluído (deploy no adendo).
