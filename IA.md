@@ -3804,3 +3804,21 @@ Adendo à entrada "Windows: o atalho node.cmd lê o caminho acentuado do execut�
 ## 2026-11-17 — Canvas smoke: investigação da falha intermitente do F3 no Windows do Nightly
 
 Contexto: a task investigava o Nightly de 22/10 (sessão F, passo F3, "o xterm ficou menor que a gravação (100×50)", 65 colunas). Motivo da entrada: a falha não é do tema claro, é intermitente. Medido: o Nightly voltou a verde em 23/10 com o mesmo código, e a mesma falha se repetiu só em 09/11 (63 colunas, 3 de 3 tentativas), com o Nightly de 10/11 verde na mesma imagem do runner (20261103.629). Em 40 Nightlies o F3 do Windows falhou 2 vezes. Local (Windows, `FELIXO_SMOKE_SESSOES=F FELIXO_SMOKE_TENTATIVAS=1`) a sessão F passou 4 de 4 quando o Electron abriu, com 107 a 122 colunas após maximizar e gaveta de 864 px estável. O que mudou: o `tamanhoDoXterm` do smoke da Leitura devolve também `screenPx`, `charPx`, `drawerPx` e `innerWidth`, só como evidência de falha. Validação: eslint do arquivo limpo e sessão F verde.
+
+---
+
+## 2026-11-17 — System Design: fonte escolhida e reabrir o app provados por teste (migração v3)
+
+Task: Felixo AI Core/System Design — conferir a migração v3 numa instalação com fonte escolhida (André) e depois de reabrir o app (Notion `3f491f95-497e-8164-b757-d27353370893`). Continuação da entrada de 09/10 (commit `79768240`), que só viu a fonte padrão.
+
+**Motivo.** Uma migração que trocasse a fonte escolhida pelo padrão faria os agentes seguirem outro guia sem aviso. A instalação do André (fonte escolhida) e o reinício do app do Felipe só se conferem nas máquinas deles; daqui deu para provar o caminho de código.
+
+**Leitura do código.** `loadState` (`system-design-ipc-handlers.cjs`) só regrava a config quando `JSON.stringify(raw) !== JSON.stringify(config)`. `migrateStoredConfig` mantém `custom` quando há ao menos um guia válido em `customSources` e devolve a v3 na mesma forma que grava; logo uma v3 já gravada nunca é tocada e uma v1/v2 é gravada uma vez e depois fica estável.
+
+**Feito.** Teste novo em `system-design-ipc-handlers.test.cjs` (v2 e v3 com fonte escolhida, SQLite real): continua `custom`, `origin: custom`, URL dela, rótulo diferente do Felixo; "reabre o app" (novos handlers no mesmo banco) e relê duas vezes sem mudar `updated_at` (uma v3 com `2026-10-09T15:04:14Z` mantém exatamente esse valor).
+
+**Validação.** `node --test` do arquivo: 27 passam, 1 ignorado (link simbólico no Windows), 0 falham.
+
+**Não validado.** A instalação real do André e o reinício real do app do Felipe (passos humanos na task): ver `updated_at` da `system-design.config` e o selo "escolhida por você" em Configurações → System Design.
+
+Estado: concluído do lado do código; conferência nas máquinas fica manual.

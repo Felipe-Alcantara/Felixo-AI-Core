@@ -266,6 +266,42 @@ test('config v1 com fonte própria continua própria e sem reset', (t) => {
   assert.equal(config.guides[0].sha, LEGACY_SHA)
 })
 
+for (const [versao, rawConfig] of [
+  ['v2', { schemaVersion: 2, enabled: true, sourceMode: 'custom', customSource: { repoUrl: DOKTOR_URL, branch: 'main' } }],
+  ['v3', { schemaVersion: 3, enabled: true, sourceMode: 'custom', customSources: [{ repoUrl: DOKTOR_URL, branch: 'main' }] }],
+]) {
+  test(`fonte escolhida (${versao}) continua escolhida, não volta ao Felixo e reabrir o app não regrava`, (t) => {
+    const { readSetting, database, paths } = setupHandlers(t, { rawConfig })
+    const updatedAt = () =>
+      database.connection.prepare('SELECT updated_at FROM settings WHERE key = ?').get(SYSTEM_DESIGN_CONFIG_KEY).updated_at
+    database.connection.prepare('UPDATE settings SET updated_at = ? WHERE key = ?').run('2026-10-09T15:04:14Z', SYSTEM_DESIGN_CONFIG_KEY)
+
+    const check = () => {
+      const { config } = handlers.get('system-design:get-config')()
+      assert.equal(config.sourceMode, 'custom')
+      assert.equal(config.guides.length, 1)
+      assert.equal(config.guides[0].origin, 'custom')
+      assert.equal(config.guides[0].repoUrl, DOKTOR_URL)
+      assert.notEqual(config.guides[0].label, 'Felixo System Design')
+      assert.equal(readSetting(SYSTEM_DESIGN_CONFIG_KEY).sourceMode, 'custom')
+      assert.equal(readSetting(SYSTEM_DESIGN_CONFIG_KEY).customSources[0].repoUrl, DOKTOR_URL)
+    }
+
+    check()
+    const afterFirstRead = updatedAt()
+    // Reabrir o app: novos handlers sobre o mesmo banco.
+    registerSystemDesignIpcHandlers(paths, {
+      database,
+      ipcMain: { handle: (channel, handler) => handlers.set(channel, handler) },
+      syncSystemDesignRepository: async () => ({ headSha: 'b'.repeat(40), indexedCount: 0, removedCount: 0 }),
+    })
+    check()
+    check()
+    assert.equal(updatedAt(), afterFirstRead, 'reabrir e reler não regrava a config')
+    if (versao === 'v3') assert.equal(afterFirstRead, '2026-10-09T15:04:14Z', 'uma v3 já gravada nunca é tocada')
+  })
+}
+
 test('save-config recusa URL inválida sem gravar e ignora campos que só o app escreve', (t) => {
   const { readSetting } = setupHandlers(t, { rawConfig: legacyDefault() })
   handlers.get('system-design:get-config')()
