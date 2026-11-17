@@ -123,6 +123,20 @@ describe('AgentBrowserRequestCard (sonda do código)', () => {
     expect(source).toMatch(/\{destination\.url\}/)
   })
 
+  it('no chat, a Página Web vira "Ir para o canvas" e não decide o pedido', () => {
+    // Sem o canvas montado, ninguém ouve `agent-browser:open-webpage`: decidir
+    // "embutido" aceitaria o pedido sem abrir nada.
+    expect(source).toMatch(/onClick=\{onOpenCanvas \?\? onChoose\(\[request\], 'embutido'\)\}/)
+    expect(source).toContain('Ir para o canvas')
+  })
+
+  it('o App monta o cartão nas duas telas e só no chat passa o atalho ao canvas', () => {
+    const app = readFileSync(new URL('../../../App.tsx', import.meta.url), 'utf8')
+    expect(app).toMatch(/<AgentBrowserRequestCard onOpenCanvas=\{screen === 'chat' \? \(\) => setScreen\('canvas'\) : undefined\} \/>/)
+    const canvas = readFileSync(new URL('./CanvasView.tsx', import.meta.url), 'utf8')
+    expect(canvas).not.toContain('AgentBrowserRequestCard')
+  })
+
   it('não rouba o foco nem ouve teclas globais', () => {
     expect(source).not.toMatch(/autoFocus|\.focus\(|addEventListener\(|onKeyDown/)
   })
@@ -131,6 +145,7 @@ describe('AgentBrowserRequestCard (sonda do código)', () => {
     const buttons = source.match(/<button\b/g) ?? []
     expect(buttons).toHaveLength(4)
     expect(source.match(/disabled=\{actionsDisabled\}/g)).toHaveLength(4)
-    expect(source.match(/onClick=\{onChoose\(/g)).toHaveLength(4)
+    // O quarto é o da Página Web, que no chat vira "Ir para o canvas" (`onOpenCanvas ?? onChoose(...)`).
+    expect(source.match(/onClick=\{(?:onOpenCanvas \?\? )?onChoose\(/g)).toHaveLength(4)
   })
 })

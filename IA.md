@@ -4323,3 +4323,13 @@ Estado: concluído (commit `0ad0fce` na branch `orq/fix-inventario-claude-api`; 
 **Não validado.** Clique manual nos quatro passos novos com o app instalado; macOS e Linux; leitor de tela real. O texto dos passos novos não passou por revisão do Felipe.
 
 Estado: concluído (commit na branch; deploy pelo orquestrador).
+
+---
+
+## 2026-11-17 — Chat: pedido de agente para abrir página aparece também na tela do chat
+
+**Contexto.** Desde a decisão "Pedir confirmação" (29/09), `felixo browser open` deixa o pedido pendente e o `AgentBrowserRequestCard` só era montado dentro do `CanvasView`. Na tela do chat (o canvas é desmontado, `App.tsx`) o pedido esperava sem aviso até vencer em 1 hora.
+
+**Mudança.** O cartão passou a ser montado no `App`, nas duas telas (saiu do `CanvasView`). Na tela do chat recebe `onOpenCanvas`: o botão "Abrir como Página Web" vira "Ir para o canvas" e só troca de tela, sem decidir, porque o bloco Página Web precisa do canvas (decidir "embutido" sem o canvas montado aceitaria o pedido sem abrir nada). "Abrir no navegador" e "Recusar" valem iguais; as travas (600 ms, clique repetido, conteúdo `{id, destino, url, perfil}` conferido no main) são as do cartão e não mudaram. Inventário do canvas e `ARQUITETURA.md` atualizados.
+
+**Validação.** lint e typecheck limpos; `run-node-unit-tests` 3457 pass/0 fail; vitest 3640 pass, 1 falha (`canvas-inventory.test.ts`, `ClaudeApiNode.tsx: 6 no código, 5 no inventário`, que já falha na `main`). Dois testes novos no `agent-browser-request.test.ts`. Não abri o app real nem rodei o smoke.

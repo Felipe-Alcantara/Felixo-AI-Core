@@ -1235,7 +1235,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Estado | Quando |
 | --- | --- |
-| normal | Pedido mais antigo com origem, host e endereço inteiro (caixa com rolagem), sugestão do agente destacada e "+N na fila". |
+| normal | Pedido mais antigo com origem, host e endereço inteiro (caixa com rolagem), sugestão do agente destacada e "+N na fila". Montado no App: aparece no canvas e no chat. |
 | empty | Sem pedido pendente: não renderiza. |
 | error | Decisão recusada: role="alert" preso ao pedido que falhou. |
 | pending | busy ou nos 600 ms depois de trocar de pedido (BROWSER_REQUEST_ARM_MS): botões desabilitados. |
@@ -1244,7 +1244,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Controle | Gatilho | Efeito | Falha conhecida | Teste |
 | --- | --- | --- | --- | --- |
 | `Abrir no navegador` (button) | clique | agent-browser:decide (externo): o main abre o endereço no navegador do sistema, se o pedido gravado ainda for o mostrado. (desabilitado: busy, janela de 600 ms ou endereço recusado) | Recusa ou pedido mudado: role="alert"; o segundo clique de um duplo clique é ignorado. | — |
-| `Abrir como Página Web` (button) | clique | agent-browser:decide (embutido): o main emite agent-browser:open-webpage e o canvas cria o bloco Página Web; o pedido fica "aceito" com o modo escolhido. (desabilitado: busy, janela de 600 ms ou endereço recusado) | Recusa: role="alert". | `scripts/canvas-smoke-links.cjs` → `criarSessaoDeLinks` |
+| `Abrir como Página Web` (button) | clique | agent-browser:decide (embutido): o main emite agent-browser:open-webpage e o canvas cria o bloco Página Web; o pedido fica "aceito" com o modo escolhido. Na tela do chat (onOpenCanvas) o mesmo botão vira "Ir para o canvas": só troca de tela, sem decidir; o pedido espera lá. (desabilitado: busy, janela de 600 ms ou endereço recusado) | Recusa: role="alert". | `scripts/canvas-smoke-links.cjs` → `criarSessaoDeLinks` |
 | `onClick={onChoose([request], null)}` (button) | clique | Recusar: agent-browser:decide (null) marca o pedido como recusado e o cartão passa ao próximo. (desabilitado: busy ou janela de 600 ms) | Recusa: role="alert"; duplo clique decide só o pedido visto. | `scripts/canvas-smoke-links.cjs` → `criarSessaoDeLinks` |
 | `Recusar todos` (button) | clique | Recusa todos os pedidos em série (um agent-browser:decide por pedido). (desabilitado: busy, janela de 600 ms; só com fila) | Para no primeiro que falhar e mostra o erro dele. | — |
 

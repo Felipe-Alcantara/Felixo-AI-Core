@@ -1398,6 +1398,12 @@ fila `agent-requests`, e o cartão `AgentBrowserRequestCard` mostra à pessoa:
 - a sugestão do agente (`--embedded`, `--profile`);
 - três botões: navegador, Página Web ou recusar.
 
+O cartão é montado no `App`, não no canvas, e aparece também na tela do chat.
+Lá o bloco Página Web não tem onde nascer (o canvas está desmontado e ninguém
+ouve `agent-browser:open-webpage`), então "Abrir como Página Web" vira "Ir para
+o canvas": só troca de tela e não decide, o pedido continua pendente e o canvas
+mostra o mesmo cartão completo. Navegador e Recusar valem iguais nas duas telas.
+
 Pelo `felixo browser open`, um agente enganado por uma página que leu não abre
 nada sozinho: quem abre é a pessoa, no cartão. O cartão não é barreira contra o
 shell do agente. A CLI roda como a pessoa, no ambiente gráfico dela, e pode

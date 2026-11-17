@@ -1063,7 +1063,7 @@ export const terminalSurfaces: InventoryElement[] = [
     layer: 'terminal',
     owner: 'src/features/canvas/components/AgentBrowserRequestCard.tsx',
     states: {
-      normal: 'Pedido mais antigo com origem, host e endereço inteiro (caixa com rolagem), sugestão do agente destacada e "+N na fila".',
+      normal: 'Pedido mais antigo com origem, host e endereço inteiro (caixa com rolagem), sugestão do agente destacada e "+N na fila". Montado no App: aparece no canvas e no chat.',
       empty: 'Sem pedido pendente: não renderiza.',
       pending: 'busy ou nos 600 ms depois de trocar de pedido (BROWSER_REQUEST_ARM_MS): botões desabilitados.',
       error: 'Decisão recusada: role="alert" preso ao pedido que falhou.',
@@ -1080,7 +1080,7 @@ export const terminalSurfaces: InventoryElement[] = [
       {
         locator: 'Abrir como Página Web',
         kind: 'button',
-        effect: 'agent-browser:decide (embutido): o main emite agent-browser:open-webpage e o canvas cria o bloco Página Web; o pedido fica "aceito" com o modo escolhido.',
+        effect: 'agent-browser:decide (embutido): o main emite agent-browser:open-webpage e o canvas cria o bloco Página Web; o pedido fica "aceito" com o modo escolhido. Na tela do chat (onOpenCanvas) o mesmo botão vira "Ir para o canvas": só troca de tela, sem decidir; o pedido espera lá.',
         failure: 'Recusa: role="alert".',
         disabledWhen: 'busy, janela de 600 ms ou endereço recusado',
         test: { file: SMOKE_LINKS, check: 'criarSessaoDeLinks' },

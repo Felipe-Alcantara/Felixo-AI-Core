@@ -4,6 +4,7 @@ import { ThemeProvider } from './features/shared/theme/ThemeProvider'
 import { PerformanceModeProvider } from './features/shared/performance/PerformanceModeProvider'
 import { HardwareNotices } from './features/shared/hardware/HardwareNotices'
 import { SystemDesignLoginNotice } from './features/shared/system-design/SystemDesignLoginNotice'
+import { AgentBrowserRequestCard } from './features/canvas/components/AgentBrowserRequestCard'
 import { LinkChooserHost } from './features/shared/links/LinkChooserHost'
 
 type Screen = 'canvas' | 'chat'
@@ -76,6 +77,10 @@ function App() {
           {/* O menu "para onde abrir este link" também: terminal e Markdown
               existem no canvas e no chat. */}
           <LinkChooserHost />
+          {/* Pedido de agente para abrir uma página (`felixo browser open`):
+              espera a pessoa nas duas telas. No chat, o bloco Página Web não
+              existe, então o botão leva ao canvas. */}
+          <AgentBrowserRequestCard onOpenCanvas={screen === 'chat' ? () => setScreen('canvas') : undefined} />
         </div>
       </PerformanceModeProvider>
     </ThemeProvider>

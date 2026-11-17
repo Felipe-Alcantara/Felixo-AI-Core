@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
-import { ExternalLink, Globe, X } from 'lucide-react'
+import { ExternalLink, Globe, LayoutDashboard, X } from 'lucide-react'
 
 import { describeLinkDestination } from '../../shared/links/link-destination'
 import {
@@ -35,8 +35,13 @@ const OTHER_CLASS = 'border-white/10 bg-white/4 text-(--f-core-white-soft) hover
  * Pelo mesmo motivo, quando passa a mostrar outro pedido, os botões esperam
  * `BROWSER_REQUEST_ARM_MS` para valer, e o clique repetido de um duplo clique
  * não decide nada.
+ *
+ * Montado no `App`, e não no canvas, para valer também na tela do chat. Lá o
+ * bloco Página Web não tem onde nascer: com `onOpenCanvas`, esse botão vira
+ * "Ir para o canvas" e não decide nada (o pedido espera no canvas, que mostra
+ * o mesmo cartão com os três botões). Navegador e Recusar valem iguais.
  */
-export function AgentBrowserRequestCard() {
+export function AgentBrowserRequestCard({ onOpenCanvas }: { onOpenCanvas?: () => void } = {}) {
   const [requests, setRequests] = useState<CanvasAgentBrowserRequest[]>([])
   const [busy, setBusy] = useState(false)
   // O erro é do pedido que falhou: quando o cartão passa ao próximo, fica para trás.
@@ -183,10 +188,18 @@ export function AgentBrowserRequestCard() {
               <button
                 type="button"
                 disabled={actionsDisabled}
-                onClick={onChoose([request], 'embutido')}
+                onClick={onOpenCanvas ?? onChoose([request], 'embutido')}
                 className={`${BUTTON_CLASS} ${suggested === 'embutido' ? SUGGESTED_CLASS : OTHER_CLASS}`}
               >
-                <Globe size={12} aria-hidden /> Abrir como Página Web
+                {onOpenCanvas ? (
+                  <>
+                    <LayoutDashboard size={12} aria-hidden /> Ir para o canvas
+                  </>
+                ) : (
+                  <>
+                    <Globe size={12} aria-hidden /> Abrir como Página Web
+                  </>
+                )}
               </button>
             </>
           )}
