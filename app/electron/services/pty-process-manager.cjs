@@ -1511,7 +1511,7 @@ function createPtyLaunchSpec(command, args, env, adapter = platform, keepShellOp
     // is supplied as the command itself. `call` is CMD's built-in dispatcher:
     // with it, node-pty can continue passing the path and every argument as
     // individual argv values, while CMD correctly executes a `.cmd` shim such
-    // as `C:\\Users\\Felipe Martins\\...\\claude.cmd`. Do not use the common
+    // as `C:\\Users\\Pessoa Exemplo\\...\\claude.cmd`. Do not use the common
     // extra-outer-quotes form here: under ConPTY it becomes part of the command
     // name and produces "O caminho da rede nÃ£o foi encontrado".
     const usesCallDispatcher = /\s/.test(String(command))

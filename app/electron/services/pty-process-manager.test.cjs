@@ -315,7 +315,7 @@ test('Windows dispatches an absolute CLI path with spaces through cmd.exe call',
   }
 
   const launch = createPtyLaunchSpec(
-    'C:\\Users\\Felipe Martins\\AppData\\Roaming\\npm\\claude.cmd',
+    'C:\\Users\\Pessoa Exemplo\\AppData\\Roaming\\npm\\claude.cmd',
     ['--print'],
     {},
     adapter,
@@ -328,7 +328,7 @@ test('Windows dispatches an absolute CLI path with spaces through cmd.exe call',
       '/s',
       '/c',
       'call',
-      'C:\\Users\\Felipe Martins\\AppData\\Roaming\\npm\\claude.cmd',
+      'C:\\Users\\Pessoa Exemplo\\AppData\\Roaming\\npm\\claude.cmd',
       '--print',
     ],
   })
@@ -434,7 +434,7 @@ test('Windows retries a startup path error with the WinPTY backend before changi
   })
 
   first.fakePty.emitData('O sistema não pode encontrar o caminho especificado.\r\n')
-  second.fakePty.emitData('C:\\Users\\felipe>')
+  second.fakePty.emitData('C:\\Users\\pessoa>')
 
   assert.equal(spawnCalls.length, 2)
   assert.equal(spawnCalls[0].file, 'powershell.exe')
@@ -457,7 +457,7 @@ test('Windows retries a startup path error with the WinPTY backend before changi
   assert.deepEqual(received, [
     '\r\n[Felixo] Camada: diretório de trabalho. O caminho salvo não está disponível; usando a pasta do usuário.\r\n',
     '\r\n[Felixo] Camada: backend PTY do Windows. A camada de terminal reportou um erro de caminho; tentando o backend alternativo.\r\n',
-    'C:\\Users\\felipe>',
+    'C:\\Users\\pessoa>',
   ])
 })
 
@@ -519,9 +519,9 @@ test('Windows does not restart an explicit CLI when it prints a file-not-found m
 test('finds the Codex Windows shim in the npm user directory', () => {
   const env = {
     Path: 'C:\\Windows\\System32',
-    APPDATA: 'C:\\Users\\felipe\\AppData\\Roaming',
+    APPDATA: 'C:\\Users\\pessoa\\AppData\\Roaming',
   }
-  const expected = 'C:\\Users\\felipe\\AppData\\Roaming\\npm\\codex.cmd'
+  const expected = 'C:\\Users\\pessoa\\AppData\\Roaming\\npm\\codex.cmd'
 
   assert.equal(
     resolveWindowsCodexPath('codex', env, (candidate) => candidate === expected),
@@ -533,7 +533,7 @@ test('finds the Codex Windows shim in the npm user directory', () => {
 test('Windows resolves the Codex shim before the first PTY attempt', () => {
   const first = createFakePty()
   const spawnCalls = []
-  const resolvedPath = 'C:\\Users\\felipe\\AppData\\Roaming\\npm\\codex.cmd'
+  const resolvedPath = 'C:\\Users\\pessoa\\AppData\\Roaming\\npm\\codex.cmd'
   const spawnPty = (file, args, options) => {
     spawnCalls.push({ file, args, options })
     return first.spawnPty(file, args, options)
@@ -574,7 +574,7 @@ test('Windows keeps the terminal usable with a clean shell after every Codex fal
     spawnPty,
     platform: fakeWin32Platform,
     logger: { warn() {} },
-    resolveCodexPath: () => 'C:\\Users\\felipe\\AppData\\Roaming\\npm\\codex.cmd',
+    resolveCodexPath: () => 'C:\\Users\\pessoa\\AppData\\Roaming\\npm\\codex.cmd',
   })
 
   manager.spawn('term-codex-emergency-shell', {
