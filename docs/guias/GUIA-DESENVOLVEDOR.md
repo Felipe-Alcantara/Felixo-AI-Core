@@ -555,9 +555,10 @@ temporário real. O teste do `/status` do Codex
 cerca de 115 caracteres, então não aponte o `TEMP` do runner para um caminho comprido.
 
 No Git Bash, `SSH_ASKPASS` vem definido (`/ucrt64/bin/git-askpass.exe`) e `DISPLAY` vale
-`needs-to-be-defined`: `system-design-service.test.cjs` abre então uma janela de senha do
-Git e passa do limite de 45 s. No PowerShell passa. No Git Bash, rode com
-`SSH_ASKPASS= DISPLAY= npm test`.
+`needs-to-be-defined`. O Git sem clique do System Design (`gitEnvironment` em
+`electron/core/git-failure.cjs`) já esvazia `GIT_ASKPASS` e não abre mais a janela de senha:
+`system-design-service.test.cjs` passa em segundos também no Git Bash. Se outro teste ou
+ferramenta abrir um `git-askpass`, rode com `SSH_ASKPASS= DISPLAY= npm test`.
 
 Rodar a suíte num terminal do próprio Felixo, como faz um agente no canvas, não muda o
 resultado. Esse terminal traz variáveis que outro terminal não traz:

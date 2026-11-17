@@ -3891,3 +3891,11 @@ Estado: concluído; pendente o Felipe criar o secret e disparar o workflow uma v
 **Não validado.** Nenhum item foi executado em máquina real; só documentação, sem gate de código. O item das skills da Anthropic para Codex e Gemini não foi lido no código.
 
 Estado: concluído (commits na branch; pendências abertas como tasks pelo orquestrador).
+
+---
+
+## 2026-11-17 — System Design: guia do desenvolvedor sem o aviso do git-askpass
+
+- **Contexto:** a correção do ambiente do Git sem clique (`gitEnvironment` esvazia `GIT_ASKPASS`) já estava na main desde `d0fe333`, com testes em `git-failure.test.cjs` e `system-design-service.test.cjs`. O guia ainda mandava rodar `SSH_ASKPASS= DISPLAY= npm test` por causa desse teste.
+- **O que mudou:** só o texto de `docs/guias/GUIA-DESENVOLVEDOR.md`: o teste não abre mais a janela no Git Bash.
+- **Validação:** com `SSH_ASKPASS` e `GIT_ASKPASS` apontando para um `git-askpass`, `node --test` dos dois arquivos: 33 testes, 0 falhas, o teste de git real em 1,2 s, sem janela.
