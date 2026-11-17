@@ -129,6 +129,7 @@ const { registerOnboardingIpcHandlers } = require('./services/onboarding-ipc-han
 const { resolveOnboardingAutomation } = require('./core/onboarding-automation.cjs')
 const { installIpcInvokeProbe } = require('./core/ipc-invoke-probe.cjs')
 const { loadDevtoolsFakeCliPty } = require('./core/devtools-fake-cli-pty-guard.cjs')
+const { registerDevtoolsMainEval } = require('./core/devtools-main-eval.cjs')
 const { loadAutomationShellOpen } = require('./core/devtools-shell-open-guard.cjs')
 const { createAgentUsageService } = require('./services/agent-usage-service.cjs')
 const { queryClaudeUsage } = require('./services/claude-usage-query.cjs')
@@ -791,7 +792,9 @@ app.whenReady().then(async () => {
   // CDP alcança o renderer, não o processo main. A ponte abaixo só nasce na
   // instância DevTools, que usa userData isolado e porta local aleatória. Ela
   // fornece captura nativa (que funciona mesmo quando a janela não pinta pelo
-  // compositor Windows) e uma avaliação limitada, sem `require`/`process`.
+  // compositor Windows) e uma avaliação em contexto `vm` sem `require`/`process`, com `app`/`mainWindow`
+  // atrás de uma membrana (core/devtools-main-eval.cjs). Equivale a controle total
+  // de `app` e `mainWindow`: não é sandbox para código não confiável.
   // `ipcProbe` entra no contexto só com `snapshot()` (leitura dos contadores).
   if (Number.isInteger(devtoolsPort) && devtoolsPort > 0) {
     const probeView = ipcProbe ? Object.freeze({ snapshot: () => ipcProbe.snapshot() }) : null
@@ -800,15 +803,11 @@ app.whenReady().then(async () => {
       if (!target || target.isDestroyed()) throw new Error('Janela DevTools indisponível.')
       return (await target.webContents.capturePage()).toDataURL()
     })
-    ipcMain.handle('devtools:main-eval', (_event, expression) => {
-      if (typeof expression !== 'string' || expression.length > 20_000) {
-        throw new Error('Expressão DevTools inválida.')
-      }
-      return vm.runInNewContext(
-        expression,
-        { app, BrowserWindow, mainWindow, ipcProbe: probeView },
-        { timeout: 1_000 },
-      )
+    registerDevtoolsMainEval({
+      ipcMain,
+      devtoolsPort,
+      vm,
+      getScope: () => ({ app, BrowserWindow, mainWindow, ipcProbe: probeView }),
     })
   }
 

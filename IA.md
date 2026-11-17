@@ -4290,3 +4290,12 @@ Estado: concluído (commit `0ad0fce` na branch `orq/fix-inventario-claude-api`; 
 **Não fica release-relevante.** `release-relevant.sh` devolve `false` para os arquivos novos (workflow, script e teste), então não publicam instalador.
 
 **Validação.** `node --test` do teste novo e do do Windows: 8/8. Lint, typecheck e `run-node-unit-tests` (3456 pass, 0 fail) verdes. Vitest: 3636 pass, 3 falhas em onboarding/canvas-inventory sem relação com estes arquivos (uma persiste isolada em `canvas-inventory.test.ts`). O roteiro em si não rodou: precisa de macOS, e a primeira run do workflow é a validação (limites: não prova Gatekeeper/assinatura nem Intel).
+
+---
+
+## 2026-11-17 — Segurança: eval do processo principal da instância de devtools sem escape pelo `vm`
+
+- **Contexto:** `felixo devtools main "<expr>"` (canal `devtools:main-eval`) avaliava JS com `vm.runInNewContext` e objetos do host (`app`, `BrowserWindow`, `mainWindow`, `ipcProbe`). O comentário prometia "sem `require`/`process`", mas `app.constructor.constructor('return process')()` devolvia o `process` do main. O eval só existe com `FELIXO_DEVTOOLS_PORT` (perfil isolado); o app normal não o registra.
+- **O que mudou:** o eval saiu do `main.cjs` para `electron/core/devtools-main-eval.cjs`. Cada objeto do host entra por uma membrana (Proxy sobre casca vazia) que nega `constructor`/`__proto__`/`prototype`, devolve protótipo `null` e embrulha retornos, erros e argumentos de callbacks; o resultado é desembrulhado antes de voltar por IPC. O comentário do `main.cjs` agora diz a verdade: continua sendo controle total de `app`/`mainWindow`, não sandbox para código não confiável.
+- **Uso legítimo preservado:** `ipcProbe.snapshot()`, `mainWindow.webContents.send/setZoomLevel`, `app.getPath`, registrar handlers IPC com callback (fixture do smoke do Notion), arrays (`getAppMetrics`) e promises. Limite: `new` sobre objetos do host não é suportado.
+- **Validação:** `electron/core/devtools-main-eval.test.cjs` (4 testes): uso legítimo, 20 tentativas de escape (construtores, protótipos, erros, callbacks, `arguments.callee.caller`, `typeof process/require`) sem alcançar `process`/`Function` do host, validação da expressão e canal não registrado sem porta de depuração válida. Sem a membrana a mesma tentativa devolve `process` (medido).
