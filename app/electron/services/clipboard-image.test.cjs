@@ -8,22 +8,30 @@ const {
   readClipboardImage,
 } = require('./clipboard-image.cjs')
 
-/** Minimal stand-in for Electron's clipboard, so tests need no Electron. */
+/**
+ * Minimal stand-in for Electron 44+'s clipboard (async, W3C `ClipboardItem`s),
+ * so tests need no Electron. `formats` maps a MIME type to a string or Buffer;
+ * `image` is a PNG payload.
+ */
 function fakeClipboard({ image = null, formats = {}, text = '' } = {}) {
+  const payloads = { ...formats }
+  if (image) payloads['image/png'] = image
+  const types = Object.keys(payloads)
+
   return {
-    readImage: () => ({
-      isEmpty: () => !image,
-      toPNG: () => image ?? Buffer.alloc(0),
-    }),
-    read: (format) =>
-      typeof formats[format] === 'string' ? formats[format] : '',
-    readBuffer: (format) => {
-      if (Buffer.isBuffer(formats[format])) {
-        return formats[format]
-      }
-      throw new Error(`format not available: ${format}`)
-    },
-    readText: () => text,
+    read: async () =>
+      types.length === 0
+        ? []
+        : [
+            {
+              types,
+              getType: async (type) => {
+                if (!(type in payloads)) throw new Error(`format not available: ${type}`)
+                return new Blob([payloads[type]])
+              },
+            },
+          ],
+    readText: async () => text,
   }
 }
 
@@ -136,10 +144,32 @@ test('parseClipboardFilePath keeps only absolute paths and real file URIs', () =
   assert.equal(parseClipboardFilePath('https://exemplo.org/a.png'), '')
 })
 
-test('readClipboardFilePaths reports each path once, in clipboard order', () => {
+test('a non-PNG image type is handed over as it came', async () => {
+  const result = await readClipboardImage({
+    clipboard: fakeClipboard({ formats: { 'image/jpeg': Buffer.from('jpeg-bytes') } }),
+    readFile: () => assert.fail('should not read files when an image is present'),
+  })
+
+  assert.equal(result.type, 'image/jpeg')
+  assert.equal(result.name, 'clipboard-image.jpg')
+})
+
+test('a rejecting clipboard is handled as simply having no image', async () => {
+  const boom = async () => {
+    throw new Error('boom')
+  }
+  const result = await readClipboardImage({
+    clipboard: { read: boom, readText: boom },
+    readFile: async () => assert.fail('nothing to read'),
+  })
+
+  assert.equal(result.ok, false)
+})
+
+test('readClipboardFilePaths reports each path once, in clipboard order', async () => {
   const first = path.resolve('/tmp/um.png')
   const second = path.resolve('/tmp/dois.png')
-  const paths = readClipboardFilePaths(
+  const paths = await readClipboardFilePaths(
     fakeClipboard({
       formats: {
         'text/uri-list': [

@@ -119,7 +119,7 @@ O guia obrigatório é sincronizado pelo processo principal com `git`, sem shell
 
 | Camada | Tecnologia |
 |--------|-----------|
-| Desktop | Electron 41 |
+| Desktop | Electron 45 (macOS 13 ou mais novo) |
 | Frontend | React 19 + TypeScript 7 + Vite 8 |
 | Estilos | Tailwind CSS 4 (plugin `@tailwindcss/vite`) |
 | Ícones | lucide-react |
@@ -185,8 +185,8 @@ Onde pôr CSS novo no `index.css` (motivo e medição em
 - utility reaproveitável que precisa de variantes (`hover:`, `disabled:`):
   `@utility`.
 
-O Tailwind 4 exige Chromium 111+ (`color-mix()`, `@property`); o Electron 41 do
-projeto traz o Chromium 146.
+O Tailwind 4 exige Chromium 111+ (`color-mix()`, `@property`); o Electron 45 do
+projeto traz o Chromium 156.
 
 ---
 
@@ -406,6 +406,7 @@ Observações importantes:
 - Se a CLI não estiver no `PATH`, defina `FELIXO_CLI_PATHS` com os diretórios extras onde os comandos estão instalados.
 - No Linux, prefira o AppImage para auto-update dentro do app; pacote `.deb` é útil para instalação tradicional, mas não segue o mesmo fluxo de atualização automática.
 - **macOS: os artefatos não são assinados nem notarizados**, então o Gatekeeper bloqueia a primeira abertura — às vezes com uma mensagem confusa que sugere procurar um app na App Store. O usuário precisa liberar manualmente em **Ajustes do Sistema > Privacidade e Segurança**, ou rodar `xattr -dr com.apple.quarantine "/Applications/Felixo AI Core.app"`. Resolver isso de vez exige uma conta do Apple Developer Program (US$ 99/ano) e os secrets de assinatura no workflow de release.
+- **macOS 13 (Ventura) ou mais novo.** O Electron 44 em diante não abre no macOS 12 (Monterey); o app empacotado declara esse mínimo no `Info.plist` (`minimumSystemVersion`), então o macOS 12 recusa a abertura com um aviso claro.
 - No Windows, o SmartScreen pode alertar enquanto não houver assinatura, mas o app abre após confirmar.
 
 Detalhes de instalação por sistema operacional: [Guia do Usuário](./docs/guias/GUIA-USUARIO.md#2-instalação-por-sistema-operacional).

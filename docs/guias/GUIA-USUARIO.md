@@ -71,6 +71,8 @@ Instalação "para todos os usuários" pede administrador. Um usuário sem admin
 
 ### macOS
 
+**Requisito: macOS 13 (Ventura) ou mais novo.** O app usa o Electron 45, que não roda no macOS 12 (Monterey) nem em anteriores; nesses sistemas o macOS recusa abrir o app e mostra que a versão é antiga demais.
+
 Artefatos configurados:
 
 - `.dmg`.
