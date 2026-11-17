@@ -181,8 +181,8 @@ test('gemini-acp adapter auto-approves session/request_permission with allow_onc
       sessionId: 'sess-xyz',
       description: 'Run shell command',
       options: [
-        { id: 'opt-1', kind: 'allow_once', name: 'Allow once' },
-        { id: 'opt-2', kind: 'deny', name: 'Deny' },
+        { optionId: 'opt-1', kind: 'allow_once', name: 'Allow once' },
+        { optionId: 'opt-2', kind: 'reject_once', name: 'Deny' },
       ],
     },
   }))
@@ -191,8 +191,7 @@ test('gemini-acp adapter auto-approves session/request_permission with allow_onc
   assert.ok(event.responseInput, 'should have responseInput for auto-approval')
   const response = JSON.parse(event.responseInput.trim())
   assert.equal(response.id, 5)
-  assert.equal(response.result.outcome, 'selected')
-  assert.equal(response.result.optionId, 'opt-1')
+  assert.deepEqual(response.result, { outcome: { outcome: 'selected', optionId: 'opt-1' } })
 })
 
 test('gemini-acp adapter parses error response', () => {
@@ -231,16 +230,16 @@ test('ações sensíveis: o pedido do Gemini traz a ferramenta e a resposta de n
     params: { sessionId: 's', toolCall: { title: 'Apagar build/', kind: 'delete' }, options },
   }))
   const comRecusa = pedido([
-    { id: 'sim', kind: 'allow_once' },
-    { id: 'nunca', kind: 'reject_always' },
-    { id: 'nao', kind: 'reject_once' },
+    { optionId: 'sim', kind: 'allow_once' },
+    { optionId: 'nunca', kind: 'reject_always' },
+    { optionId: 'nao', kind: 'reject_once' },
   ])
   assert.equal(comRecusa.permission.title, 'O Gemini pede permissão: Apagar build/')
   assert.equal(comRecusa.permission.detail, 'Tipo: delete')
-  assert.equal(JSON.parse(comRecusa.permission.denyInput).result.optionId, 'nao')
+  assert.equal(JSON.parse(comRecusa.permission.denyInput).result.outcome.optionId, 'nao')
 
-  const semRecusa = pedido([{ id: 'sim', kind: 'allow_once' }])
-  assert.equal(JSON.parse(semRecusa.permission.denyInput).result.outcome, 'cancelled')
+  const semRecusa = pedido([{ optionId: 'sim', kind: 'allow_once' }])
+  assert.equal(JSON.parse(semRecusa.permission.denyInput).result.outcome.outcome, 'cancelled')
 })
 
 test('ações sensíveis: com a opção, o Gemini ACP abre sem --yolo', () => {

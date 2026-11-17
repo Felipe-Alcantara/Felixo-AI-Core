@@ -186,10 +186,10 @@ function parseServerRequest(payload) {
   if (isApprovalRequest(payload.method)) {
     return {
       type: 'control',
-      responseInput: formatApprovalResponse(payload.id),
+      responseInput: formatApprovalResponse(payload, true),
       permission: {
         ...describeApprovalRequest(payload.method, payload.params ?? {}),
-        denyInput: formatApprovalResponse(payload.id, 'denied'),
+        denyInput: formatApprovalResponse(payload, false),
       },
     }
   }
@@ -297,12 +297,16 @@ function formatNotification(method, params) {
   return `${JSON.stringify({ jsonrpc: '2.0', method, params })}\n`
 }
 
-function formatApprovalResponse(requestId, decision = 'approved') {
-  return `${JSON.stringify({
-    jsonrpc: '2.0',
-    id: requestId,
-    result: { decision },
-  })}\n`
+// Vocabulário do protocolo v2 (conferido com `codex app-server generate-json-schema`): comando e
+// arquivo respondem `accept`/`decline`; `approved`/`denied` é o v1 e o Codex não o entende.
+// Pedido de permissão extra responde com o perfil concedido ({} nega).
+function formatApprovalResponse(payload, allow) {
+  const result =
+    payload.method === 'item/permissions/requestApproval'
+      ? { permissions: allow ? (payload.params?.permissions ?? {}) : {}, scope: 'turn' }
+      : { decision: allow ? 'accept' : 'decline' }
+  return `${JSON.stringify({ jsonrpc: '2.0', id: payload.id, result })}
+`
 }
 
 function isApprovalRequest(method) {

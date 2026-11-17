@@ -250,7 +250,7 @@ test('codex-app-server adapter auto-approves command execution request', () => {
   assert.ok(event.responseInput, 'should have responseInput for auto-approval')
   const response = JSON.parse(event.responseInput.trim())
   assert.equal(response.id, 10)
-  assert.equal(response.result.decision, 'approved')
+  assert.equal(response.result.decision, 'accept')
 })
 
 test('codex-app-server adapter auto-approves file change request', () => {
@@ -270,7 +270,7 @@ test('codex-app-server adapter auto-approves file change request', () => {
   assert.ok(event.responseInput, 'should have responseInput for auto-approval')
   const response = JSON.parse(event.responseInput.trim())
   assert.equal(response.id, 11)
-  assert.equal(response.result.decision, 'approved')
+  assert.equal(response.result.decision, 'accept')
 })
 
 test('codex-app-server adapter ignores reasoning deltas', () => {
@@ -311,8 +311,8 @@ test('ações sensíveis: o pedido de aprovação traz o que o Codex quer fazer 
 
   assert.equal(event.permission.title, 'O Codex quer rodar um comando')
   assert.equal(event.permission.detail, 'Comando: git push\nPasta: /projeto\nMotivo: publicar')
-  assert.equal(JSON.parse(event.responseInput).result.decision, 'approved')
-  assert.equal(JSON.parse(event.permission.denyInput).result.decision, 'denied')
+  assert.equal(JSON.parse(event.responseInput).result.decision, 'accept')
+  assert.equal(JSON.parse(event.permission.denyInput).result.decision, 'decline')
   assert.equal(JSON.parse(event.permission.denyInput).id, 12)
 })
 
@@ -361,4 +361,16 @@ test('erro do app-server no protocolo atual: mensagem e código vêm de params.e
     params: { error: { message: 'Reconnecting… 1/5', codexErrorInfo: { responseStreamDisconnected: { httpStatusCode: null } } }, threadId: 't', turnId: 'u', willRetry: true },
   }))
   assert.equal(vaiTentar, null, 'o Codex tenta de novo sozinho; não é o fim do pedido')
+})
+
+test('pedido de permissão extra: permitir devolve o perfil pedido, negar devolve vazio (protocolo v2)', () => {
+  const event = adapter.parseLine(JSON.stringify({
+    jsonrpc: '2.0',
+    id: 13,
+    method: 'item/permissions/requestApproval',
+    params: { threadId: 't', turnId: 'u', itemId: 'i', cwd: '/p', permissions: { network: { enabled: true } } },
+  }))
+
+  assert.deepEqual(JSON.parse(event.responseInput).result, { permissions: { network: { enabled: true } }, scope: 'turn' })
+  assert.deepEqual(JSON.parse(event.permission.denyInput).result, { permissions: {}, scope: 'turn' })
 })
