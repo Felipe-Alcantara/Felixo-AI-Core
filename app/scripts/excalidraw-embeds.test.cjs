@@ -17,11 +17,14 @@ test('o script de um embed isolado não alcança window.parent nem a origem do a
   const env = { ...process.env }
   delete env.ELECTRON_RUN_AS_NODE
   // O Chromium sobe devagar (ou trava) em máquina ocupada: até 3 tentativas.
+  // No Linux do CI o helper SUID do sandbox do sistema não está configurado e o Electron aborta; só esta
+  // página de fixture roda sem ele. O isolamento provado é o do atributo `sandbox` do iframe, que não depende disso.
+  const sandboxArgs = process.platform === 'linux' ? ['--no-sandbox'] : []
   let run
   for (let attempt = 0; attempt < 3; attempt += 1) {
     run = spawnSync(
       require('electron'),
-      [path.join(__dirname, 'test-support', 'embed-isolation-electron.cjs')],
+      [...sandboxArgs, path.join(__dirname, 'test-support', 'embed-isolation-electron.cjs')],
       { encoding: 'utf8', timeout: 40000, env, windowsHide: true },
     )
     if (run.status === 0) break
