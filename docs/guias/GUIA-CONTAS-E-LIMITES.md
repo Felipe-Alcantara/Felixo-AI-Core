@@ -268,8 +268,11 @@ credencial órfã seria pior que refazer o login. A pasta já ausente (`ENOENT`)
 tratada como removida; se o sistema devolver qualquer outra falha, a conta e a
 credencial são preservadas, um diagnóstico seguro aparece na interface e a
 remoção pode ser tentada novamente. Terminais já abertos podem perder esse
-login; a ação é separada de **Remover do painel**, que aparece em **Limites e
-uso** e arquiva somente o histórico local de uso, sem apagar o perfil de login.
+login. Conta com login próprio só se remove aqui: em **Limites e uso** ela não
+tem o botão **Remover**, que existe apenas nas contas cadastradas à mão e
+arquiva somente o histórico local de uso (decisão do Felipe, 17/11/2026: o
+painel recria a conta a partir do perfil, então um Remover ali prometeria o que
+o app desfaz).
 
 Cada conta cadastrada também vira uma linha própria no painel **Limites e uso**,
 com a quota lida da pasta dela — é assim que duas contas do mesmo provedor

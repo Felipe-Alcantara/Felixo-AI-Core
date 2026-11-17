@@ -552,6 +552,15 @@ export type AgentUsageLoginTerminal = {
 }
 
 /**
+ * "Remover do painel" só existe nas contas cadastradas à mão. As de login
+ * próprio nascem e morrem em *Conta por terminal*: o painel as recria a partir
+ * do perfil, então a ação prometeria algo que o resto do app desfaz.
+ */
+export function canRemoveAgentUsageAccount(account: Pick<AgentUsageAccount, 'ownLogin'>): boolean {
+  return !account.ownLogin
+}
+
+/**
  * Terminal que faz o login de uma conta com sessão ausente, ou `null` quando a
  * razão é outra ou a CLI não tem subcomando de login. Compatível com as opções
  * de `addTerminalNode`; o login em si é feito pela pessoa, no terminal.

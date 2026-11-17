@@ -27,6 +27,7 @@ import {
   formatAgentUsageNumber,
   formatAgentUsageReset,
   formatAgentUsageStatus,
+  canRemoveAgentUsageAccount,
   describeDisplayedAgentUsage,
   getAccountStatus,
   getAgentUsageLoginTerminal,
@@ -722,16 +723,18 @@ function AccountRow({
         >
           {formatAgentUsageStatus(status)}
         </span>
-        <button
-          type="button"
-          onClick={onRemove}
-          title={`Remover "${account.label}" do painel`}
-          aria-label={`Remover a conta "${account.label}" do painel`}
-          className="felixo-btn flex shrink-0 items-center gap-1 rounded-sm px-1.5 py-0.5 text-[10px] text-zinc-500 hover:bg-theme-error/10 hover:text-theme-error"
-        >
-          <Trash2 size={12} aria-hidden="true" />
-          Remover
-        </button>
+        {canRemoveAgentUsageAccount(account) && (
+          <button
+            type="button"
+            onClick={onRemove}
+            title={`Remover "${account.label}" do painel`}
+            aria-label={`Remover a conta "${account.label}" do painel`}
+            className="felixo-btn flex shrink-0 items-center gap-1 rounded-sm px-1.5 py-0.5 text-[10px] text-zinc-500 hover:bg-theme-error/10 hover:text-theme-error"
+          >
+            <Trash2 size={12} aria-hidden="true" />
+            Remover
+          </button>
+        )}
       </div>
 
       {sample?.metrics.length ? (

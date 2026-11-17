@@ -1593,7 +1593,7 @@ function ensureDiscoveredAccounts({ catalog, repository, now, profiles = [] }) {
   // perfil: é esse id que liga a pasta de credencial à linha, sem depender de
   // adivinhar identidade.
   for (const perfil of profiles) {
-    // shortcut: conta de perfil removida fica escondida enquanto o perfil existir; a escolha final (A/B/C) está na task.
+    // shortcut: id arquivado não é recriado (o INSERT estouraria a chave primária). A interface não arquiva mais conta de perfil, mas mergeAccountIds ainda arquiva por id; se um dia o perfil precisar voltar, restaure a linha em vez de pular.
     if (accounts.some((account) => account.id === perfil.id) || repository.isAccountArchived(perfil.id)) {
       continue
     }

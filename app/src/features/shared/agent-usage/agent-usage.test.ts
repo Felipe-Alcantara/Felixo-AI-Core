@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  canRemoveAgentUsageAccount,
   getAgentUsageLastFailureNotice,
   AGENT_USAGE_FILTER_MIN_ACCOUNTS,
   AGENT_USAGE_OPEN_REUSE_MS,
@@ -640,6 +641,13 @@ describe('o que o card da conta mostra quando a rodada atual não trouxe número
       notice: null,
       failedAt: null,
     })
+  })
+})
+
+describe('canRemoveAgentUsageAccount', () => {
+  it('conta com login próprio não tem a ação Remover; a cadastrada à mão tem', () => {
+    expect(canRemoveAgentUsageAccount({ ...account('perfil-a', null), ownLogin: true })).toBe(false)
+    expect(canRemoveAgentUsageAccount({ ...account('manual-a', null), ownLogin: false })).toBe(true)
   })
 })
 

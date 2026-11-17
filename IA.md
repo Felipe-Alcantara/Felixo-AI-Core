@@ -3730,3 +3730,13 @@ Estado: concluído (deploy no adendo).
 **Validação.**
 - Testes novos com o `PtyProcessManager` real e id `canvas:<id>` (tela normal com ANSI e segredo, tela alternativa, PTY ausente): 2 falham com o código antigo (conteúdo vazio) e os 3 passam depois.
 - Não coberto: o passo no smoke do canvas (fica com o orquestrador) e a leitura do arquivo em disco além do buffer.
+
+---
+
+## 2026-11-17 — Limites: o Remover sai das contas com login próprio (decisão do Felipe)
+
+**Decisão.** Em 17/11/2026 o Felipe escolheu a opção "Tirar o botão" para a task do UNIQUE: o Remover não aparece em conta com login próprio (cadastrada em *Conta por terminal*, `ownLogin`), só em conta cadastrada à mão. O `window.confirm` ("o perfil de login dos terminais não será alterado") passa a valer só para estas.
+
+**Feito.** `canRemoveAgentUsageAccount` em `agent-usage.ts` (`!account.ownLogin`); o `AccountRow` só desenha o botão quando ela é verdadeira. O guarda do `ensureDiscoveredAccounts` (id arquivado não é recriado) fica para os caminhos que ainda arquivam por id (`mergeAccountIds`); o comentário `shortcut:` foi reescrito. `GUIA-CONTAS-E-LIMITES.md` atualizado. Teste novo em `agent-usage.test.ts`: conta de perfil sem a ação, conta manual com ela.
+
+**Validação.** lint e typecheck limpos; `run-node-unit-tests` 3392 passam, 0 falham; `vitest` 3570 passam. App real (`felixo devtools`) não aberto.
