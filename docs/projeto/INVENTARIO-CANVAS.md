@@ -32,7 +32,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **Elementos:** 102 (10 blocos, 16 ferramentas, 76 outras superfícies)
 - **Controles:** 398, dos quais 61 com teste específico
 - **Elementos sem nenhum teste:** 3
-- **Lacunas:** 229 (alto 4, médio 118, baixo 107), em 60 tasks
+- **Lacunas:** 229 (alto 4, médio 118, baixo 107), em 61 tasks
 
 ## Moldura do canvas
 
@@ -822,7 +822,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Fechar o bloco entrega a cena pendente ao canvas (ExcalidrawDrawingNode.tsx, cleanup), mas ao fechar o app ou trocar para o Chat o canvas inteiro desmonta junto e o setNodes que carrega a cena nunca roda: o último traço (até 600 ms + 400 ms) ainda se perde nesses dois casos, e nenhum teste monta o bloco. | baixo | `3ec91f95-497e-81a3-9be3-c0d354bf7621` |
+| Fechar o bloco entrega a cena pendente ao canvas (ExcalidrawDrawingNode.tsx, cleanup), mas ao fechar o app ou trocar para o Chat o canvas inteiro desmonta junto e o setNodes que carrega a cena nunca roda: o último traço (até 600 ms + 400 ms) ainda se perde nesses dois casos, e nenhum teste monta o bloco. | baixo | `41b91f95-497e-81c5-bc4d-c151f42dc82c` |
 | Sem error boundary em volta do lazy: falha do chunk ou cena que faz o Excalidraw lançar derruba o canvas inteiro. | médio | `3ec91f95-497e-8176-bef0-dfde828936dc` |
 | Desenhar, gravar e reabrir a cena não tem teste (o smoke só conecta no handle e a auditoria de acessibilidade ignora .excalidraw). | médio | `3ec91f95-497e-8141-b6c1-d1833aac5664` |
 
@@ -1978,7 +1978,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Nenhum dos 40 controles é clicado por teste (o smoke só vê o estado vazio, sem conexão); conexão real, sincronização e a matriz multi-SO não foram validadas no canvas. | médio | `3d591f95-497e-810c-9f26-ff8a3e6e53ce` |
 | Copiar link nunca foi validado no app real. | baixo | `3d691f95-497e-8105-b007-f7767fe10405` |
 | Isolamento entre conexões e DevTools do app empacotado só por checklist manual. | baixo | `3d791f95-497e-8139-8417-f90dd73f2777` |
-| Seleção que ainda não persiste: conexão, database e visualização do Painel já voltam do data do bloco (notion-tasks-selection), mas a sincronização automática (NotionTasksPanel.tsx:221) vive só em useState e volta a "ligada" ao reabrir o app ou remontar o bloco. | médio | `3ec91f95-497e-81a3-9be3-c0d354bf7621` |
+| Seleção que ainda não persiste: conexão, database e visualização do Painel já voltam do data do bloco (notion-tasks-selection), mas a sincronização automática (NotionTasksPanel.tsx:221) vive só em useState e volta a "ligada" ao reabrir o app ou remontar o bloco. | médio | `41b91f95-497e-81c7-88e6-c0660189bb80` |
 | O aviso role="status" nunca é limpo (NotionTasksPanel.tsx:189; não há setMessage(null)): "Exibindo o último snapshot salvo; a rede está indisponível." continua na tela depois que a rede volta e sincroniza, e "Tarefa criada…" fica até o próximo aviso. | baixo | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 | Editar e Excluir visualização (NotionTasksPanel.tsx:1050) ficam em "hidden group-hover:flex": display none fora do hover, então o teclado nunca chega neles. | baixo | `3ec91f95-497e-8197-a218-ef49c302013d` |
 
@@ -2949,7 +2949,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3ec91f95-497e-8176-bef0-dfde828936dc` — 6 lacunas
 - `3ec91f95-497e-818f-b9f2-f9710605c303` — 14 lacunas
 - `3ec91f95-497e-8197-a218-ef49c302013d` — 8 lacunas
-- `3ec91f95-497e-81a3-9be3-c0d354bf7621` — 2 lacunas
 - `3ec91f95-497e-81ca-8319-ee657b0b6492` — 28 lacunas
 - `3ec91f95-497e-81e8-8f18-e2a529b0568e` — 11 lacunas
 - `3ec91f95-497e-81f7-8b12-c5c252d020c7` — 5 lacunas
@@ -2961,3 +2960,5 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `41591f95-497e-8166-84cb-cf8af3736c2b` — 1 lacuna
 - `41a91f95-497e-810d-af12-e81c33aa550a` — 1 lacuna
 - `41a91f95-497e-8182-b7f6-eeaf764195c5` — 1 lacuna
+- `41b91f95-497e-81c5-bc4d-c151f42dc82c` — 1 lacuna
+- `41b91f95-497e-81c7-88e6-c0660189bb80` — 1 lacuna

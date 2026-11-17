@@ -4333,3 +4333,28 @@ Estado: concluído (commit na branch; deploy pelo orquestrador).
 **Mudança.** O cartão passou a ser montado no `App`, nas duas telas (saiu do `CanvasView`). Na tela do chat recebe `onOpenCanvas`: o botão "Abrir como Página Web" vira "Ir para o canvas" e só troca de tela, sem decidir, porque o bloco Página Web precisa do canvas (decidir "embutido" sem o canvas montado aceitaria o pedido sem abrir nada). "Abrir no navegador" e "Recusar" valem iguais; as travas (600 ms, clique repetido, conteúdo `{id, destino, url, perfil}` conferido no main) são as do cartão e não mudaram. Inventário do canvas e `ARQUITETURA.md` atualizados.
 
 **Validação.** lint e typecheck limpos; `run-node-unit-tests` 3457 pass/0 fail; vitest 3640 pass, 1 falha (`canvas-inventory.test.ts`, `ClaudeApiNode.tsx: 6 no código, 5 no inventário`, que já falha na `main`). Dois testes novos no `agent-browser-request.test.ts`. Não abri o app real nem rodei o smoke.
+
+---
+
+## 2026-11-17 — Canvas: parar de perder edição e estado em falhas de gravação e ao fechar painéis
+
+Task: Felixo AI Core/Canvas — parar de perder edição e estado em falhas de gravação e ao fechar painéis (Notion `3ec91f95-497e-81a3-9be3-c0d354bf7621`).
+
+**Contexto.** O inventário do canvas listou 13 lacunas em que a pessoa perde trabalho sem saber: o IPC responde `{ ok: false }` e ninguém olha, a leitura falha e vira "canvas vazio", e os debounces de painéis e do canvas eram cancelados ao fechar em vez de gravados.
+
+**O que mudou.**
+- `services/canvas-persistence-status.ts` (novo): registro das falhas de gravação por chave (`node:`, `edge:`, `file:`), que só saem quando a próxima gravação daquela chave dá certo. A `CanvasStatusBar` mostra a falha (`role="alert"`).
+- `canvas-storage.ts`: `saveCanvasNode`, `deleteCanvasNode`, `saveCanvasEdge` e `deleteCanvasEdge` conferem `ok` e exceção (antes: catch vazio). `loadCanvasNodes` passou a devolver `{ nodes, failed }` e `loadCanvasEdges` registra a falha: lista vazia de verdade e "não consegui ler" deixam de ser a mesma coisa. Com leitura falha o histórico de notificações não é podado (`useCanvasNotifications`/`CanvasView`).
+- `services/debounced-save-queue.ts` (novo): debounce por chave com `flush`. `useCanvasPersistence` grava o pendente ao desmontar e no `pagehide`; `NotesPanel` e `PromptsPanel` gravam ao fechar. `cancelPendingSaves` (Limpar/importar) continua descartando de propósito.
+- Bloco Arquivo: `useFileNodeDocument` confere o resultado de `canvas-file:write`/`text-file:write` (`services/file-node-write.ts`), mostra a falha numa faixa no bloco e na barra de status, e a leitura falha do `.md` do app também aparece. `addFileNode` só cria o bloco se o `.md` foi criado.
+- `ExcalidrawDrawingNode`: o timer não sobrevive ao bloco; fechar entrega a cena pendente ao canvas.
+- `GitPanel`: commit que falha mantém a mensagem digitada (`runAction` devolve se deu certo).
+- `OrchestratorPanel`: `saveOrchestratorSettings` devolve o valor gravado e a tela passa a mostrá-lo (0 ou decimal viram o padrão visível).
+- `CanvasPanel` ganhou `confirmClose`: Esc e Fechar no detalhe de prompt com rascunho não salvo perguntam antes (`PromptDetailPanel` avisa o estado sujo).
+- Inventário regenerado: 12 lacunas saíram, falhas/efeitos ajustados e os testes novos citados. Ficam duas lacunas desta task: a sincronização automática do Notion (a conexão/database/visualização do Painel já persistiam) e o Excalidraw ao desmontar o canvas inteiro.
+
+**Validação.** Testes novos (falham antes, passam depois): `canvas-storage.test.ts` 4 (4 falhas com o código antigo), `orchestrator-settings-storage.test.ts` 1 (falhava antes), `file-node-write.test.ts` 3 e `debounced-save-queue.test.ts` 3 (módulos novos). `npm run lint` e `typecheck` limpos; `vitest run` 3622 pass, 4 skipped, 0 falha; `run-node-unit-tests` 3444 pass, 0 falha.
+
+**Não validado.** Nenhum painel ou bloco foi montado (o vitest do projeto roda em node, sem renderizador): o flush de Notas/Prompts, o confirm do detalhe, a faixa do bloco e a barra de status não foram vistos rodando; o app não foi aberto.
+
+Estado: concluído com ressalvas (commit na branch; deploy pelo orquestrador).

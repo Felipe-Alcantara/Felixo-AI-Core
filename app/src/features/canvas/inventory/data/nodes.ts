@@ -841,7 +841,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
       {
         what: 'Fechar o bloco entrega a cena pendente ao canvas (ExcalidrawDrawingNode.tsx, cleanup), mas ao fechar o app ou trocar para o Chat o canvas inteiro desmonta junto e o setNodes que carrega a cena nunca roda: o último traço (até 600 ms + 400 ms) ainda se perde nesses dois casos, e nenhum teste monta o bloco.',
         risk: 'baixo',
-        task: '3ec91f95-497e-81a3-9be3-c0d354bf7621',
+        task: '41b91f95-497e-81c5-bc4d-c151f42dc82c',
       },
       {
         what: 'Sem error boundary em volta do lazy: falha do chunk ou cena que faz o Excalidraw lançar derruba o canvas inteiro.',
@@ -1213,7 +1213,7 @@ export const notionTasksTool: InventoryElement = {
     {
       what: 'Seleção que ainda não persiste: conexão, database e visualização do Painel já voltam do data do bloco (notion-tasks-selection), mas a sincronização automática (NotionTasksPanel.tsx:221) vive só em useState e volta a "ligada" ao reabrir o app ou remontar o bloco.',
       risk: 'médio',
-      task: '3ec91f95-497e-81a3-9be3-c0d354bf7621',
+      task: '41b91f95-497e-81c7-88e6-c0660189bb80',
     },
     {
       what: 'O aviso role="status" nunca é limpo (NotionTasksPanel.tsx:189; não há setMessage(null)): "Exibindo o último snapshot salvo; a rede está indisponível." continua na tela depois que a rede volta e sincroniza, e "Tarefa criada…" fica até o próximo aviso.',
