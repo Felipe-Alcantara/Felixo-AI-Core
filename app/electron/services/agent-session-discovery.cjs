@@ -310,6 +310,9 @@ function collectFiles(root, predicate) {
     } catch {
       continue
     }
+    // Nomes em ordem decrescente: as pastas AAAA/MM/DD e os rollouts mais
+    // recentes entram antes do teto, que só corta os mais antigos.
+    entries.sort((left, right) => (left.name < right.name ? 1 : left.name > right.name ? -1 : 0))
     for (const entry of entries) {
       const fullPath = path.join(directory, entry.name)
       if (entry.isDirectory()) queue.push(fullPath)

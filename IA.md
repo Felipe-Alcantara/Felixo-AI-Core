@@ -4500,3 +4500,12 @@ Task: Felixo AI Core/CI — investigar o canvas que não montou em 45 s na sess�
 - `GUIA-DESENVOLVEDOR.md`: a "causa conhecida" (runner lento) passou a "não confirmada".
 
 **Validação.** `node --test` dos 3 arquivos tocados: 37 de 37; `run-node-unit-tests.cjs`: 3474 passam, 0 falham, 12 pulados; eslint dos 5 arquivos: exit 0. Não rodei o smoke nem forcei uma falha, então o caminho de falha (o `evaluate` e a espera estendida) só foi checado por sintaxe e pelos testes das funções puras.
+
+---
+
+## 2026-11-17 — Sessões: a descoberta do Codex acha os rollouts recentes acima de 3000 arquivos
+
+- **Contexto:** `collectFiles` (`agent-session-discovery.cjs`) percorria `~/.codex/sessions/AAAA/MM/DD` na ordem do diretório e parava em `MAX_FILES = 3000`. Com mais de 3000 rollouts, o teto enchia com as pastas antigas e a descoberta devolvia `null`.
+- **O que mudou:** cada diretório lido agora ordena as entradas por nome decrescente antes de enfileirar; o teto corta só os mais antigos. O teto não foi ampliado.
+- **Validação:** teste novo (3100 rollouts vazios em 2025/01/01 + 1 de hoje) falha antes (13 pass, 1 fail) e passa depois (14 pass); `run-node-unit-tests.cjs`: 3487 testes, 3475 pass, 0 fail. O teste usa pasta temporária, não lê o `~/.codex` real.
+- **Não verificado:** custo síncrono da varredura no processo principal (não medido); varredura assíncrona ou intervalo crescente ficam fora.

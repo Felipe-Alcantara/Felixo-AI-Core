@@ -457,3 +457,22 @@ test('CODEX_HOME e CLAUDE_CONFIG_DIR herdados pelo processo não desviam a desco
     item.dispose()
   }
 })
+
+test('acha o rollout Codex de hoje mesmo com mais de 3000 rollouts antigos', () => {
+  const item = fixture()
+  try {
+    const antigos = path.join(item.root, '.codex', 'sessions', '2025', '01', '01')
+    fs.mkdirSync(antigos, { recursive: true })
+    for (let i = 0; i < 3100; i += 1) fs.writeFileSync(path.join(antigos, `rollout-${i}.jsonl`), '')
+    const hoje = path.join(item.root, '.codex', 'sessions', '2026', '08', '25', 'rollout-hoje.jsonl')
+    fs.mkdirSync(path.dirname(hoje), { recursive: true })
+    fs.writeFileSync(hoje, `${JSON.stringify({ type: 'session_meta', payload: { id: 'codex-de-hoje', cwd: item.cwd } })}
+`)
+
+    const result = discoverAgentSession({ command: 'codex', cwd: item.cwd, startedAt: Date.now(), homeDir: item.root, now: Date.now() })
+
+    assert.equal(result?.sessionId, 'codex-de-hoje')
+  } finally {
+    item.dispose()
+  }
+})
