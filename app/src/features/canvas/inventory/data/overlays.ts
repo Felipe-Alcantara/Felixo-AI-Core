@@ -557,7 +557,7 @@ export const overlaySurfaces: InventoryElement[] = [
     owner: 'src/features/shared/links/LinkChooserHost.tsx',
     states: {
       normal:
-        'Pedido no link-chooser-store (terminal, Markdown ou Página Web): menu no ponto do link com o resumo do destino ("Leva a"/"E-mail para", URL cortada em 600 caracteres) e os itens Abrir no navegador, Abrir como Página Web e Copiar link; foco no primeiro item.',
+        'Pedido no link-chooser-store (terminal, Markdown ou Página Web): menu no ponto do link com o resumo do destino ("Leva a"/"E-mail para", URL cortada em 600 caracteres) e os itens Abrir no navegador, Abrir como Página Web e Copiar link; foco no primeiro item. Pedido vindo de uma Página Web num perfil que não é o Padrão (webpageProfileName): o item vira "Abrir como Página Web (perfil NOME)", porque o bloco novo herda a sessão do perfil.',
       pending: 'Medido fora da tela (visibility hidden) até placeLinkChooser devolver a posição.',
       denied: 'Link recusado pela política: "Link recusado" com o motivo e só "Copiar link".',
       disabled: 'Sem canvas montado (tela do chat): getWebpageOpener é null e "Abrir como Página Web" não aparece.',
@@ -607,7 +607,7 @@ export const overlaySurfaces: InventoryElement[] = [
     ],
     gaps: [
       {
-        what: 'Erro engolido na cópia (LinkChooserHost.tsx:326-329 no menu e :164-170 no aviso de falha): clipboard recusado cai em () => undefined, sem aviso nem log; no menu ele já fechou, no aviso nada muda.',
+        what: 'Erro engolido na cópia (LinkChooserHost.tsx:330-333 no menu e :164-170 no aviso de falha): clipboard recusado cai em () => undefined, sem aviso nem log; no menu ele já fechou, no aviso nada muda.',
         risk: 'médio',
         task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
       },

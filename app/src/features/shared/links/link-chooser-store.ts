@@ -24,6 +24,12 @@ export type LinkChooserRequest = {
   anchor: LinkChooserAnchor
   /** Bloco do canvas de onde o link veio: a Página Web nasce ao lado dele. */
   sourceNodeId?: string
+  /**
+   * Nome do perfil do navegador interno da página de origem, quando não é o
+   * Padrão: a Página Web nova herda a sessão dele. Vem pronto de quem abre o
+   * menu (o menu não lê o canvas). Nome é dado da pessoa: não vai para log.
+   */
+  webpageProfileName?: string
   /** Para onde o foco volta quando o menu fecha sem abrir um bloco novo. */
   returnFocus?: FocusReturn | null
 }

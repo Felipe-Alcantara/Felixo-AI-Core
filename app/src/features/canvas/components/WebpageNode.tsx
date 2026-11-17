@@ -28,7 +28,8 @@ import {
   staleGuests,
 } from '../services/webview-mount'
 import { WebviewProfileMenu } from './WebviewProfileMenu'
-import { partitionForWebviewProfile } from '../services/webview-profile'
+import { describeWebviewProfile, partitionForWebviewProfile } from '../services/webview-profile'
+import { useWebviewProfiles } from '../hooks/useWebviewProfiles'
 import { webviewLinkMenu, type WebviewContextMenuParams } from '../services/webview-context-menu'
 import { useWebviewSitePermissions } from '../hooks/useWebviewSitePermissions'
 import { describeSitePermissionRequest } from '../services/webview-site-permissions'
@@ -70,6 +71,15 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
   // do id gravado no bloco, nunca da lista de perfis (que carrega depois): assim
   // um bloco de outro perfil nunca abre, nem por um instante, na sessão Padrão.
   const partition = partitionForWebviewProfile(nodeData.profileId)
+  // Nome do perfil para o menu de link dizer onde a Página Web nova vai abrir.
+  // Pela ref: o ouvinte do `context-menu` não se refaz a cada mudança da lista.
+  const { profiles: webviewProfiles, ready: webviewProfilesReady } = useWebviewProfiles()
+  const profileDisplay = describeWebviewProfile(nodeData.profileId, webviewProfiles, webviewProfilesReady)
+  const linkProfileNameRef = useRef<string | undefined>(undefined)
+  const linkProfileName = profileDisplay.state === 'custom' ? profileDisplay.name : undefined
+  useEffect(() => {
+    linkProfileNameRef.current = linkProfileName
+  }, [linkProfileName])
   const [initialUrl] = useState(() => nodeData.url || 'https://www.google.com')
   const [addressInput, setAddressInput] = useState(initialUrl)
   // Tracks where the page actually is, so a remount recreates the webview on
@@ -245,6 +255,7 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
         origin: 'pagina-web',
         anchor: link.anchor,
         sourceNodeId: id,
+        webpageProfileName: linkProfileNameRef.current,
         returnFocus: webview,
       })
     }

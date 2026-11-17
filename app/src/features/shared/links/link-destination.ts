@@ -226,7 +226,7 @@ export type LinkChoiceEntry = { choice: LinkChoice; label: string }
  */
 export function linkChoiceEntries(
   destination: LinkDestination,
-  options: { canOpenWebpage: boolean },
+  options: { canOpenWebpage: boolean; webpageProfileName?: string },
 ): LinkChoiceEntry[] {
   if (!destination.ok) return [{ choice: 'copiar-link', label: 'Copiar link' }]
 
@@ -240,7 +240,16 @@ export function linkChoiceEntries(
   return [
     { choice: 'abrir-no-navegador', label: 'Abrir no navegador' },
     ...(options.canOpenWebpage
-      ? [{ choice: 'abrir-como-pagina-web' as const, label: 'Abrir como Página Web' }]
+      ? [
+          {
+            choice: 'abrir-como-pagina-web' as const,
+            // Origem num perfil que não é o Padrão: a página nova herda a
+            // sessão dele, e a pessoa precisa saber antes de escolher.
+            label: options.webpageProfileName
+              ? `Abrir como Página Web (perfil ${options.webpageProfileName})`
+              : 'Abrir como Página Web',
+          },
+        ]
       : []),
     { choice: 'copiar-link', label: 'Copiar link' },
   ]

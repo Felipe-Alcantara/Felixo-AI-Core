@@ -198,6 +198,23 @@ describe('linkChoiceEntries', () => {
     ])
   })
 
+  it('origem num perfil: a opção da Página Web diz o perfil, as outras não mudam', () => {
+    const destination = describeLinkDestination('https://example.com/', 'pagina-web')
+    expect(
+      linkChoiceEntries(destination, { canOpenWebpage: true, webpageProfileName: 'Trabalho' }),
+    ).toEqual([
+      { choice: 'abrir-no-navegador', label: 'Abrir no navegador' },
+      { choice: 'abrir-como-pagina-web', label: 'Abrir como Página Web (perfil Trabalho)' },
+      { choice: 'copiar-link', label: 'Copiar link' },
+    ])
+  })
+
+  it('sem canvas o nome do perfil não aparece em lugar nenhum', () => {
+    const destination = describeLinkDestination('https://example.com/', 'pagina-web')
+    const entries = linkChoiceEntries(destination, { canOpenWebpage: false, webpageProfileName: 'Trabalho' })
+    expect(entries.some((entry) => entry.label.includes('Trabalho'))).toBe(false)
+  })
+
   it('sem canvas (tela do chat) não oferece a Página Web', () => {
     const destination = describeLinkDestination('https://example.com/', 'markdown')
     expect(linkChoiceEntries(destination, { canOpenWebpage: false }).map((entry) => entry.choice)).toEqual([

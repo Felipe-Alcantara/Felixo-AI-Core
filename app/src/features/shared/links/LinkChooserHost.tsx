@@ -234,8 +234,12 @@ function LinkChooserMenu({ request, onCopied }: MenuProps) {
   // Lido ao abrir: sem canvas montado (tela do chat), não há onde criar o bloco.
   const [webpageOpener] = useState(getWebpageOpener)
   const entries = useMemo(
-    () => linkChoiceEntries(destination, { canOpenWebpage: webpageOpener !== null }),
-    [destination, webpageOpener],
+    () =>
+      linkChoiceEntries(destination, {
+        canOpenWebpage: webpageOpener !== null,
+        webpageProfileName: request.webpageProfileName,
+      }),
+    [destination, webpageOpener, request.webpageProfileName],
   )
   const containerRef = useRef<HTMLDivElement>(null)
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([])

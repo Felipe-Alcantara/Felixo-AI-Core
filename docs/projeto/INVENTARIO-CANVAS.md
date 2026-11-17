@@ -2766,7 +2766,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Estado | Quando |
 | --- | --- |
-| normal | Pedido no link-chooser-store (terminal, Markdown ou Página Web): menu no ponto do link com o resumo do destino ("Leva a"/"E-mail para", URL cortada em 600 caracteres) e os itens Abrir no navegador, Abrir como Página Web e Copiar link; foco no primeiro item. |
+| normal | Pedido no link-chooser-store (terminal, Markdown ou Página Web): menu no ponto do link com o resumo do destino ("Leva a"/"E-mail para", URL cortada em 600 caracteres) e os itens Abrir no navegador, Abrir como Página Web e Copiar link; foco no primeiro item. Pedido vindo de uma Página Web num perfil que não é o Padrão (webpageProfileName): o item vira "Abrir como Página Web (perfil NOME)", porque o bloco novo herda a sessão do perfil. |
 | pending | Medido fora da tela (visibility hidden) até placeLinkChooser devolver a posição. |
 | success | Cópia feita: "Link copiado" flutuante por 1,4 s (z 70) e anúncio na região status. |
 | disabled | Sem canvas montado (tela do chat): getWebpageOpener é null e "Abrir como Página Web" não aparece. |
@@ -2779,7 +2779,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Erro engolido na cópia (LinkChooserHost.tsx:326-329 no menu e :164-170 no aviso de falha): clipboard recusado cai em () => undefined, sem aviso nem log; no menu ele já fechou, no aviso nada muda. | médio | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
+| Erro engolido na cópia (LinkChooserHost.tsx:330-333 no menu e :164-170 no aviso de falha): clipboard recusado cai em () => undefined, sem aviso nem log; no menu ele já fechou, no aviso nada muda. | médio | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 | Links enviados pelos agentes ainda não abrem no app real e a causa não foi achada. | alto | `3db91f95-497e-81a7-9554-c9cffa821c63` |
 | A abertura no navegador do sistema só roda no smoke com o shell falso (FELIXO_DEVTOOLS_SHELL_OPEN=falha); no app instalado do Windows e do macOS não foi conferida. | médio | `3ea91f95-497e-8117-8506-d4abe67709ff` |
 | Menu nunca usado com leitor de tela e tela sensível ao toque reais (o smoke simula toque e lê a árvore pelo CDP). | baixo | `3ea91f95-497e-812b-a108-fb89c94fa528` |

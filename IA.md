@@ -4446,3 +4446,25 @@ Estado: concluído (commit `266440ad` na branch; push e deploy pelo orquestrador
 **Validação.** `external-url-policy.test.ts`: 100 testes passam (eram 90); `node --test external-url-policy.test.cjs`: 90 passam; node unit completo: 3471 pass, 0 fail. No Node a decisão já era recusa, então a tabela não distingue antes/depois; `decodePunycode` e `hasInvalidPunycodeLabel` têm teste direto, mais 20 mil rótulos aleatórios (renderer nunca aprova o que o main recusa) e 5 mil IDNs legítimos (decisão igual ao main).
 
 **NÃO verificado.** Não rodou no Chromium: o Electron não abriu (nem `felixo devtools launch`) nesta sessão. Divergência conhecida e segura: em Punycode não canônico (`xn---sor.com`) o Node aceita e o renderer recusa.
+
+---
+
+## 2026-11-17 — Links: o menu de destino diz em que perfil a Página Web nova vai abrir
+
+Task: Felixo AI Core/Links — dizer no menu em que perfil a Página Web nova vai abrir (Notion `3ea91f95-497e-8128-b79e-e492f3bbd486`). Agente: subagente da Orquestração (Claude Sonnet 5.5, effort medium). Trilha A.
+
+**Contexto.** "Abrir como Página Web", a partir de uma Página Web num perfil do navegador interno, cria o bloco novo no mesmo perfil (`webpageProfileForLinkSource`), com a sessão e o login dele. O menu dizia só "Abrir como Página Web": a pessoa escolhia sem saber em que conta a página ia abrir.
+
+**O que mudou.**
+- `link-chooser-store.ts`: `LinkChooserRequest.webpageProfileName` (opcional), o nome do perfil da origem. O menu não lê o canvas; o nome vem pronto de quem abre o pedido.
+- `WebpageNode.tsx`: lê o perfil do bloco (`describeWebviewProfile` + `useWebviewProfiles`) e manda o nome no pedido só quando o perfil é próprio (`state === 'custom'`). No Padrão, perfil removido ou lista ainda carregando, não manda nada e o menu fica como antes.
+- `link-destination.ts`: `linkChoiceEntries` aceita `webpageProfileName` e rotula a opção "Abrir como Página Web (perfil NOME)". Sem canvas (tela do chat), a opção continua ausente e o nome não aparece em lugar nenhum.
+- `LinkChooserHost.tsx`: repassa o nome a `linkChoiceEntries`.
+- Inventário do canvas (`inventory/data/overlays.ts`) e `docs/projeto/INVENTARIO-CANVAS.md` regenerados: estado normal do menu e a linha citada da lacuna do clipboard (`LinkChooserHost.tsx:330-333`, deslocada em 4 linhas).
+- O nome do perfil é dado da pessoa: não vai para log.
+
+**Validação.** Testes novos em `link-destination.test.ts` (com perfil: rótulo com o nome; sem canvas: nome ausente); os de antes provam que sem perfil nada muda. O lint pegou uma escrita em ref durante o render (`react-hooks/refs`) e ela foi para um `useEffect`. Gate e números no relatório da task.
+
+**Não validado.** Menu aberto de verdade a partir de uma Página Web num perfil próprio (o passo de smoke que a task pedia não foi acrescentado: virou pendência). Perfil removido: o bloco novo herda a partição vazia e o menu não avisa.
+
+Estado: concluído (commit na branch `orq/links-dizer-menu-que-perfil`; push e deploy pelo orquestrador).
