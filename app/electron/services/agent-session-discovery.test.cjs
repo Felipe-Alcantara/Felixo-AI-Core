@@ -434,3 +434,26 @@ test('Gemini de conta própria procura dentro da HOME do perfil', () => {
     item.dispose()
   }
 })
+
+test('CODEX_HOME e CLAUDE_CONFIG_DIR herdados pelo processo não desviam a descoberta sem env', () => {
+  const item = fixture()
+  const anteriores = { CODEX_HOME: process.env.CODEX_HOME, CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR }
+  try {
+    const file = path.join(item.root, '.codex', 'sessions', '2026', '08', '25', 'rollout-herdado.jsonl')
+    fs.mkdirSync(path.dirname(file), { recursive: true })
+    fs.writeFileSync(file, `${JSON.stringify({ type: 'session_meta', payload: { id: 'codex-herdado', cwd: item.cwd } })}\n`)
+    // Pastas inexistentes: se a descoberta as lesse, não acharia a sessão da fixture.
+    process.env.CODEX_HOME = path.join(item.root, 'perfil-codex-inexistente')
+    process.env.CLAUDE_CONFIG_DIR = path.join(item.root, 'perfil-claude-inexistente')
+
+    const result = discoverAgentSession({ command: 'codex', cwd: item.cwd, startedAt: Date.now(), homeDir: item.root, now: Date.now() })
+
+    assert.equal(result?.sessionId, 'codex-herdado')
+  } finally {
+    for (const [chave, valor] of Object.entries(anteriores)) {
+      if (valor === undefined) delete process.env[chave]
+      else process.env[chave] = valor
+    }
+    item.dispose()
+  }
+})

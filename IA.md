@@ -4063,3 +4063,12 @@ Task: Felixo AI Core/Limites — capturar, por sessão e sem digitar no terminal
 **Validação.** `test:native`: o teste novo passa; `pty-write-queue` oscila por tempo sob carga (também na `main`). Testes novos: captura (5, incluindo o script real com caminho com espaço, lista branca sem caminho/título, atômico e a status line da pessoa), terminal (2), serviço (1), IPC (1). Gate: lint e typecheck limpos; `run-node-unit-tests` 3404 passam, 0 falham; vitest 3571 passam, 2 do `deferred-terminal-session-store` falham só sob carga e passam isolados.
 
 **Não validado.** Claude real com `--settings` num perfil de conta (não abri sessão que gasta uso); CPU com 10 agentes; macOS e Linux; o app rodando.
+
+---
+
+## 2026-11-17 — Testes: descoberta de sessão presa contra CODEX_HOME e CLAUDE_CONFIG_DIR herdados
+
+- **Contexto:** a task pedia isolar `agent-session-discovery` e o `CODEX_HOME` do perfil local, por três falhas vistas em 03/11. Ao reproduzir na `main` (9a92d2b), as três já passavam: o commit b0c831b trocou `env = process.env` por `env = {}` em `discoverAgentSession` e fez o teste do PTY comparar com `process.env.CODEX_HOME`.
+- **Motivo:** nada travava essa regra; voltar a ler o ambiente do processo só quebraria na máquina de quem tem `CODEX_HOME` definido, que o CI limpo não pega.
+- **O que mudou:** um teste novo em `agent-session-discovery.test.cjs` define `CODEX_HOME` e `CLAUDE_CONFIG_DIR` falsos no processo (restaura no `finally`) e confirma que a sessão da fixture, em `homeDir` temporário, continua sendo achada.
+- **Validação:** o teste novo falha com `env = process.env` e passa com `env = {}`. Suíte node inteira com HOME/USERPROFILE/CODEX_HOME/CLAUDE_CONFIG_DIR numa pasta temporária vazia: 3418 testes, 3405 aprovados, 12 ignorados, 1 falha, idêntica à rodada normal (benchmark de PTY sob carga, passa isolado 11/11). Vitest 3572 aprovados. A pasta temporária ficou sem nenhuma sessão criada.
