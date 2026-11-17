@@ -35,6 +35,7 @@ import {
 } from '../services/account-chain-client'
 import type { AccountChainProviderId } from '../../shared/types/account-chain'
 import { useAgentModelCatalog } from './useAgentModelCatalog'
+import { describeModelListStatus } from '../services/agent-model-overlay'
 import { useAgentPresets } from './useAgentPresets'
 import type { AgentPreset, AgentPresetAgentId } from '../services/agent-preset'
 import { canLaunch, createDraft } from '../services/cloud-session-state'
@@ -152,7 +153,7 @@ export function useAgentConfig(
 
   // Modelos que as CLIs oferecem agora; cai na lista fixa se a descoberta não
   // trouxer nada, para o formulário nunca aparecer sem opções.
-  const { agents, refreshing, refresh } = useAgentModelCatalog()
+  const { agents, refreshing, refresh, agentStatus, refreshError } = useAgentModelCatalog()
   const agent: AgentDefinition | undefined =
     agentValue === SHELL_AGENT_VALUE || agentValue === CLOUD_AGENT_VALUE
       ? undefined
@@ -1145,6 +1146,7 @@ export function useAgentConfig(
     setName,
     refreshing,
     refresh,
+    modelListNote: refreshError ?? describeModelListStatus(agentStatus[agentValue]),
     openiaInterfaceKey,
     setOpeniaInterfaceKey,
     openiaInterfaces,

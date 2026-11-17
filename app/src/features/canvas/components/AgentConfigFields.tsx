@@ -342,8 +342,11 @@ export function AgentConfigFields({
                 searchPlaceholder="Buscar modelo…"
                 menuLabel="Modelos disponíveis"
                 aria-label="Modelo"
-                className="mb-3"
+                className={config.modelListNote ? 'mb-1' : 'mb-3'}
               />
+              {config.modelListNote && (
+                <p className="mb-3 text-[11px] leading-relaxed text-zinc-500">{config.modelListNote}</p>
+              )}
 
               {config.effortLevels && (
                 <>

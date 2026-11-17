@@ -32,7 +32,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **Elementos:** 102 (10 blocos, 16 ferramentas, 76 outras superfícies)
 - **Controles:** 394, dos quais 58 com teste específico
 - **Elementos sem nenhum teste:** 4
-- **Lacunas:** 247 (alto 7, médio 131, baixo 109), em 61 tasks
+- **Lacunas:** 246 (alto 7, médio 131, baixo 108), em 61 tasks
 
 ## Moldura do canvas
 
@@ -1183,7 +1183,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `aria-label="Conta"` (select) | clique | setAccountId (Login do sistema, Automática (cadeia), perfil local) ou "Nova conta…" abre o cadastro inline. A escolha fica lembrada por provedor (accountByProvider em felixo:last-agent-launch-preferences, migrado da conta única antiga). | Conta que não pode abrir marca o campo como inválido e mostra o motivo em role="alert". | `scripts/canvas-smoke-contas.cjs` → `criarSessaoDaCadeia` |
 | `aria-label="Atualizar configuração do Openia"` (button) | clique | refreshOpenia: openia:list-interfaces, openia:list-models (refresh), cli-accounts:list e openia:key-status. (desabilitado: openiaLoading) | Falha vira openiaError em texto vermelho. | — |
 | `onClick={() => void config.saveOpeniaKey()}` (button) | clique | saveOpeniaKey: com conta escolhida, cli-accounts:set-secret (cifrada no perfil); no login do sistema, openia:set-key. Limpa o rascunho e marca a chave como configurada. (desabilitado: openiaSaving ou rascunho vazio) | Recusa ou exceção: openiaError com a mensagem. | — |
-| `aria-label="Atualizar lista de modelos"` (button) | clique | Catálogo de modelos: agent-models:refresh consulta as CLIs; um catálogo vazio mantém a lista atual. (desabilitado: refreshing) | erro engolido: promessa sem catch; só o ícone para de girar. | — |
+| `aria-label="Atualizar lista de modelos"` (button) | clique | Catálogo de modelos: agent-models:refresh consulta as CLIs (uma rodada por vez) e junta o resultado ao cache por agente; a linha sob o seletor diz se a lista é da CLI, do cache ou a fixa, e por quê. (desabilitado: refreshing) | Falha da rodada: refreshError aparece sob o seletor; falha de um agente mantém a lista dele no cache. | — |
 | `aria-label="Selecionar arquivo de planejamento"` (button) | clique | Abre o input de arquivo oculto; o caminho vem de getFilePath (webUtils) e vai para o campo. | Sem caminho, cai no nome do arquivo, que não é caminho absoluto. | — |
 | `Remover a conta "${contaAtual.label}"` (button) | clique | removeAccount: cli-accounts:remove sem confirmação devolve os terminais vivos; window.confirm nomeia cada um; confirmado, cli-accounts:remove { confirmed: true } apaga o perfil e o login. (desabilitado: removendo; some sem conta escolhida) | Falha em role="alert"; exceção vira "Não foi possível remover a conta.". | — |
 | `Tentar de novo` (button) | clique | retryAccountList: cli-accounts:list do provedor atual de novo. (desabilitado: só aparece com a lista ilegível) | Lista ainda ilegível mantém o aviso. | — |
@@ -1196,7 +1196,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Só Agente e Conta são exercitados (sessão C); Openia, modelo, esforço, arquivo de planejamento, projeto, remover, criar, tentar de novo e recalcular não têm teste de interface. | médio | `3ec91f95-497e-81e8-8f18-e2a529b0568e` |
 | criar() não tem catch: se cli-accounts:create, set-secret ou remove rejeitarem, "Criando…" fica preso até remontar (AgentConfigFields.tsx:448-464, useAgentConfig.ts:503-521). | baixo | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 | Cada prévia de "Automática (cadeia)" (inclusive Recalcular) cria uma proposta e uma checagem de login no main. | médio | `3e991f95-497e-81b4-ac92-d7db960c9ae0` |
-| Atualizar lista de modelos não avisa quando a consulta às CLIs falha (useAgentModelCatalog.ts, promessa sem catch). | baixo | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 
 ### Preset de agente no configurador
 
@@ -2958,7 +2957,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3eb91f95-497e-81b8-a70f-dfce2a446a3e` — 2 lacunas
 - `3eb91f95-497e-81bb-a374-eb2e336c73c6` — 1 lacuna
 - `3ec91f95-497e-8103-b360-c1979d6992f4` — 9 lacunas
-- `3ec91f95-497e-8110-b363-cfade2b68b7a` — 43 lacunas
+- `3ec91f95-497e-8110-b363-cfade2b68b7a` — 42 lacunas
 - `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` — 19 lacunas
 - `3ec91f95-497e-8113-afb0-eecb92e4eb23` — 1 lacuna
 - `3ec91f95-497e-8122-a08b-d26d4991acca` — 1 lacuna

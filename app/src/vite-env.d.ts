@@ -116,8 +116,14 @@ type AgentModelCatalog = Record<
     models?: string[]
     labels?: Record<string, string>
     effortLevels?: Record<string, string[]>
+    discoveredAt?: string
   }
 > & { discoveredAt?: string }
+type AgentModelStatus = {
+  origem: 'descoberta' | 'cache' | 'fixa'
+  motivo: string | null
+  discoveredAt: string | null
+}
 
 type CliStreamEvent = StreamEvent | OrchestrationStreamEvent
 
@@ -1059,7 +1065,12 @@ declare global {
       }
       agentModels?: {
         get: () => Promise<CliInvokeResult & { catalog?: AgentModelCatalog }>
-        refresh: () => Promise<CliInvokeResult & { catalog?: AgentModelCatalog }>
+        refresh: () => Promise<
+          CliInvokeResult & {
+            catalog?: AgentModelCatalog
+            agents?: Record<string, AgentModelStatus>
+          }
+        >
       }
       cliAccounts?: {
         list: (providerId?: string) => Promise<{

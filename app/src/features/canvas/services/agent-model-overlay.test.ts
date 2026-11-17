@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyDiscoveredCatalog } from './agent-model-overlay'
+import { applyDiscoveredCatalog, describeModelListStatus } from './agent-model-overlay'
 import type { AgentDefinition } from './agent-launch-options'
 
 const AGENTES: AgentDefinition[] = [
@@ -105,5 +105,37 @@ describe('applyDiscoveredCatalog', () => {
     })
 
     expect(agentes.map((agente) => agente.id)).toEqual(['claude', 'codex', 'gemini'])
+  })
+})
+
+describe('describeModelListStatus', () => {
+  const AGORA = Date.parse('2026-11-17T12:00:00.000Z')
+
+  it('não diz nada enquanto a primeira rodada não terminou', () => {
+    expect(describeModelListStatus(undefined, AGORA)).toBeNull()
+  })
+
+  it('lista da CLI diz há quanto tempo foi atualizada', () => {
+    expect(
+      describeModelListStatus({ origem: 'descoberta', motivo: null, discoveredAt: '2026-11-17T10:00:00.000Z' }, AGORA),
+    ).toBe('Lista da CLI, atualizada há 2 h.')
+  })
+
+  it('cache mostra a data da última consulta que deu certo e o motivo da falha', () => {
+    expect(
+      describeModelListStatus(
+        { origem: 'cache', motivo: 'claude não encontrado no PATH.', discoveredAt: '2026-11-16T12:00:00.000Z' },
+        AGORA,
+      ),
+    ).toBe('Lista guardada da última consulta há 1 d (claude não encontrado no PATH).')
+  })
+
+  it('lista fixa explica por que a CLI não a trocou', () => {
+    expect(
+      describeModelListStatus(
+        { origem: 'fixa', motivo: 'a CLI do Gemini não lista modelos fora do modo interativo', discoveredAt: null },
+        AGORA,
+      ),
+    ).toBe('Lista fixa do app (a CLI do Gemini não lista modelos fora do modo interativo).')
   })
 })

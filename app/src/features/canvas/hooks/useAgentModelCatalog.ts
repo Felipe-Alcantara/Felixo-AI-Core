@@ -7,6 +7,8 @@ import {
 import {
   applyDiscoveredCatalog,
   type AgentModelCatalog,
+  type AgentModelRefreshResult,
+  type AgentModelStatus,
 } from '../services/agent-model-overlay'
 
 /**
@@ -25,11 +27,17 @@ export function useAgentModelCatalog(): {
   refreshing: boolean
   refresh: () => void
   discoveredAt: string | null
+  /** Situação de cada agente na última rodada (vazio até a primeira terminar). */
+  agentStatus: Record<string, AgentModelStatus>
+  /** Mensagem quando a rodada inteira falhou; `null` quando deu certo. */
+  refreshError: string | null
 } {
   const [discovered, setDiscovered] = useState<AgentModelCatalog | null>(null)
   // Já nasce `true` quando há ponte: o efeito abaixo dispara a descoberta no
   // primeiro render, e ligar o estado lá dentro obrigaria a um render extra só
   // para refletir algo que se sabe desde o início.
+  const [agentStatus, setAgentStatus] = useState<Record<string, AgentModelStatus>>({})
+  const [refreshError, setRefreshError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(() => Boolean(window.felixo?.agentModels))
 
   const applyCatalog = useCallback((catalog: AgentModelCatalog | undefined) => {
@@ -40,6 +48,21 @@ export function useAgentModelCatalog(): {
     }
   }, [])
 
+  const applyRefresh = useCallback(
+    (result: AgentModelRefreshResult | undefined) => {
+      applyCatalog(result?.catalog)
+      if (result?.ok === false) {
+        setRefreshError(result.message ?? 'Não foi possível consultar as CLIs.')
+        return
+      }
+      setRefreshError(null)
+      if (result?.agents) {
+        setAgentStatus(result.agents)
+      }
+    },
+    [applyCatalog],
+  )
+
   const refresh = useCallback(() => {
     const bridge = window.felixo?.agentModels
     if (!bridge) {
@@ -49,9 +72,10 @@ export function useAgentModelCatalog(): {
     setRefreshing(true)
     void bridge
       .refresh()
-      .then((result) => applyCatalog(result?.catalog))
+      .then(applyRefresh)
+      .catch(() => setRefreshError('Não foi possível consultar as CLIs.'))
       .finally(() => setRefreshing(false))
-  }, [applyCatalog])
+  }, [applyRefresh])
 
   useEffect(() => {
     const bridge = window.felixo?.agentModels
@@ -75,7 +99,12 @@ export function useAgentModelCatalog(): {
       .refresh()
       .then((result) => {
         if (!cancelled) {
-          applyCatalog(result?.catalog)
+          applyRefresh(result)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setRefreshError('Não foi possível consultar as CLIs.')
         }
       })
       .finally(() => {
@@ -87,7 +116,7 @@ export function useAgentModelCatalog(): {
     return () => {
       cancelled = true
     }
-  }, [applyCatalog])
+  }, [applyCatalog, applyRefresh])
 
   const agents = useMemo(
     () => applyDiscoveredCatalog(AGENTS, discovered),
@@ -99,6 +128,8 @@ export function useAgentModelCatalog(): {
     refreshing,
     refresh,
     discoveredAt: typeof discovered?.discoveredAt === 'string' ? discovered.discoveredAt : null,
+    agentStatus,
+    refreshError,
   }
 }
 

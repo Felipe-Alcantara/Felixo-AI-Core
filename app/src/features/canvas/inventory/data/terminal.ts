@@ -579,8 +579,8 @@ export const terminalSurfaces: InventoryElement[] = [
       {
         locator: 'aria-label="Atualizar lista de modelos"',
         kind: 'button',
-        effect: 'Catálogo de modelos: agent-models:refresh consulta as CLIs; um catálogo vazio mantém a lista atual.',
-        failure: 'erro engolido: promessa sem catch; só o ícone para de girar.',
+        effect: 'Catálogo de modelos: agent-models:refresh consulta as CLIs (uma rodada por vez) e junta o resultado ao cache por agente; a linha sob o seletor diz se a lista é da CLI, do cache ou a fixa, e por quê.',
+        failure: 'Falha da rodada: refreshError aparece sob o seletor; falha de um agente mantém a lista dele no cache.',
         disabledWhen: 'refreshing',
       },
       {
@@ -678,11 +678,6 @@ export const terminalSurfaces: InventoryElement[] = [
         what: 'Cada prévia de "Automática (cadeia)" (inclusive Recalcular) cria uma proposta e uma checagem de login no main.',
         risk: 'médio',
         task: '3e991f95-497e-81b4-ac92-d7db960c9ae0',
-      },
-      {
-        what: 'Atualizar lista de modelos não avisa quando a consulta às CLIs falha (useAgentModelCatalog.ts, promessa sem catch).',
-        risk: 'baixo',
-        task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
       },
     ],
     overlap: 'Sem camada própria: vive no flyout do menu Agente (sidebar, z 26) e dentro do HandoffDialog (z 60). Os menus do FelixoSelect abrem em portal z 1000, acima de qualquer modal.',

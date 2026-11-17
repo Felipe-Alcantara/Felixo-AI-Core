@@ -1,71 +1,32 @@
 /**
  * @module agent-models/agent-model-catalog
- * Resolve qual lista de modelos cada agente oferece, entre três fontes.
+ * Junta o que a descoberta trouxe com o cache em disco, agente por agente.
  *
- * A ordem é decisão de produto: **cache primeiro**. Ele é a fonte principal —
- * o que faz o menu abrir instantâneo — e não um plano B. A descoberta roda em
- * background e assume assim que chega. A lista fixa do código é o último
- * recurso, existindo para que o menu nunca abra vazio: uma lista fixa que
- * envelhece é ruim, mas um agente sem nenhum modelo parece o app quebrado.
- *
- * A cadeia vale por agente, não para o catálogo inteiro. Isso importa: no
- * ambiente do dono do projeto o Gemini falha por elegibilidade da conta
- * enquanto Claude e Codex respondem, e um agente sem dados não pode arrastar
- * os outros de volta para a lista fixa.
+ * A escolha entre cache e lista fixa do código acontece no renderer
+ * (`agent-model-overlay.ts`): o que vale aqui é só não perder a lista boa de
+ * um agente porque a consulta dele falhou numa rodada.
  */
-
-const AGENT_IDS = ['claude', 'codex', 'gemini']
 
 /**
- * @param {object} params
- * @param {Record<string, { models: string[], effortLevels?: unknown }>} params.staticCatalog
- * @param {Record<string, { models: string[], effortLevels?: unknown }> | null} params.cached
- * @param {Record<string, { models: string[], effortLevels?: unknown }> | null} params.discovered
- * @returns {Record<string, { models: string[], effortLevels: unknown, source: 'discovered' | 'cache' | 'static' }>}
+ * Junta os resultados da descoberta ao cache anterior, por agente.
+ *
+ * Cada agente guarda o próprio `discoveredAt`: quem respondeu agora leva a
+ * data de agora; quem falhou mantém a entrada anterior, com a data da última
+ * descoberta que deu certo. Devolve `null` quando não há nada a guardar —
+ * distinto de `{}`, que sobrescreveria o cache.
+ *
+ * @param {Array<{ agentId: string, models: string[], labels?: unknown, effortLevels?: unknown }>} resultados
+ * @param {Record<string, unknown> | null} [anterior] Cache em disco.
+ * @param {string} [descobertoEm] ISO da rodada.
  */
-function resolveAgentCatalog({ staticCatalog = {}, cached = null, discovered = null } = {}) {
-  const catalogo = {}
+function mergeDiscovered(resultados, anterior = null, descobertoEm = new Date().toISOString()) {
+  const merged = {}
 
-  for (const agentId of AGENT_IDS) {
-    const estatico = staticCatalog[agentId]
-    if (!estatico) {
-      continue
-    }
-
-    // Lista vazia significa "não descobri", não "não há modelos" — uma CLI que
-    // respondeu com erro não pode zerar o menu.
-    const fonte =
-      pickWithModels(discovered?.[agentId], 'discovered') ??
-      pickWithModels(cached?.[agentId], 'cache') ?? {
-        entry: estatico,
-        source: 'static',
-      }
-
-    catalogo[agentId] = {
-      models: [...fonte.entry.models],
-      effortLevels: fonte.entry.effortLevels ?? estatico.effortLevels ?? null,
-      source: fonte.source,
+  for (const [agentId, entrada] of Object.entries(anterior ?? {})) {
+    if (entrada && typeof entrada === 'object' && Array.isArray(entrada.models) && entrada.models.length > 0) {
+      merged[agentId] = entrada
     }
   }
-
-  return catalogo
-}
-
-function pickWithModels(entry, source) {
-  return Array.isArray(entry?.models) && entry.models.length > 0 ? { entry, source } : null
-}
-
-/**
- * Junta os resultados da descoberta no formato que vai para o cache em disco.
- *
- * Devolve `null` quando nada foi descoberto — distinto de `{}`, porque um
- * objeto vazio sobrescreveria o cache anterior e o app "aprenderia" a lista
- * vazia de uma CLI que estava temporariamente fora do ar.
- *
- * @param {Array<{ agentId: string, models: string[], effortLevels?: unknown }>} resultados
- */
-function mergeDiscovered(resultados) {
-  const merged = {}
 
   for (const resultado of resultados ?? []) {
     if (!resultado?.agentId || !Array.isArray(resultado.models) || resultado.models.length === 0) {
@@ -74,7 +35,9 @@ function mergeDiscovered(resultados) {
 
     merged[resultado.agentId] = {
       models: [...resultado.models],
+      ...(resultado.labels && Object.keys(resultado.labels).length > 0 ? { labels: resultado.labels } : {}),
       ...(resultado.effortLevels ? { effortLevels: resultado.effortLevels } : {}),
+      discoveredAt: descobertoEm,
     }
   }
 
@@ -82,7 +45,5 @@ function mergeDiscovered(resultados) {
 }
 
 module.exports = {
-  AGENT_IDS,
   mergeDiscovered,
-  resolveAgentCatalog,
 }

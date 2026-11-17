@@ -4013,3 +4013,27 @@ Não feito (pendência). Perguntar por área na configuração de cada projeto (
 **Validação.** `failure-taxonomy.test.cjs` 27/27 (pty e fluxo, com e sem "resets"; espera vencida não solta a conta sem checagem); `account-chain-view.test.ts` com o texto novo; lint e typecheck limpos; `run-node-unit-tests` 3398/3410 passam, 0 falhas. Não rodei o app real.
 
 Estado: concluído; a "pergunta" é a confirmação por "Conferir login" na lista da cadeia, sem diálogo próprio (se o Felipe quiser uma faixa ou proposta explícita no bloco, é outra task).
+
+---
+
+## 2026-11-17 — Agentes: a descoberta de modelos roda no Windows e uma falha não apaga a lista do agente
+
+Task: Felixo AI Core/Agentes — fazer a descoberta de modelos rodar no Windows e parar de apagar a lista de um agente quando a consulta dele falha (Notion `3fa91f95-497e-81c3-b3f4-c3a7ce7217cb`). Agente: subagente da Orquestração (Claude Code, Claude Sonnet 5.5), 10:11 em diante. Trilha A:
+
+**Causa.** O `runCli` de `agent-models-ipc-handlers.cjs` chamava `execFile('claude', ...)` sem shell: no Windows o `claude` do npm é um atalho (`.cmd`/`.ps1`) e dava ENOENT, então só o Codex (arquivo local) era descoberto, nas 50 rodadas medidas pelo log de QA. Além disso, `store.save` regravava o arquivo só com o que a rodada achou (uma falha apagava a lista boa do agente), o `refresh()` do renderer não tinha `catch` e cada diálogo abria uma rodada nova.
+
+**Feito.**
+- **`agent-models/agent-model-runner.cjs` (novo):** resolve o executável como o resto do app. No Windows, o Claude vai ao `claude.exe` por trás do atalho (`resolveNativeClaude`, sem shell); os demais usam o caminho do `PATH` de `createCliEnv()`; `.cmd` roda pelo `cmd.exe` com o caminho entre aspas e a flag dentro da linha (como `detectCli`), recusando argumento fora de `[\w./=-]`; `.ps1` pelo PowerShell. Fora do Windows o caminho é o de antes.
+- **Gemini:** a descoberta não abre mais `gemini -p "/model"` (nunca devolve lista e consulta a cota); o motivo ("a CLI do Gemini não lista modelos fora do modo interativo") vai para a tela.
+- **`agent-model-catalog.cjs`:** `mergeDiscovered` junta ao cache anterior por agente, com `discoveredAt` e `labels` de cada um; `resolveAgentCatalog` (só os testes o usavam) foi apagado, a escolha cache/fixa é a do `agent-model-overlay.ts`.
+- **`agent-model-refresher.cjs` (novo):** uma rodada por vez (pedidos simultâneos esperam a mesma promessa), não regrava o cache sem descoberta nova e devolve `agents: { claude|codex|gemini: { origem: 'descoberta'|'cache'|'fixa', motivo, discoveredAt } }`.
+- **Renderer:** `useAgentModelCatalog` ganhou `catch` e devolve `agentStatus`/`refreshError`; `AgentConfigFields` mostra sob o seletor de modelo uma linha como "Lista da CLI, atualizada há 2 h." ou "Lista fixa do app (a CLI do Gemini não lista modelos fora do modo interativo)." (`describeModelListStatus`).
+- **Docs:** `INVENTARIO-CANVAS.md` (regenerado) e `inventory/data/terminal.ts`; o item "Atualizar lista de modelos não avisa a falha" saiu da lista de riscos.
+
+**Validação.**
+- **Antes/depois no Windows real:** `execFile('claude', ['--version'])` com o env do app dá `ENOENT`; o runner novo devolve `2.1.326 (Claude Code)` para o `claude` e `codex-cli 0.171.0-alpha.11` para o `codex`. Só `--version` foi executado, nenhuma sessão.
+- Testes novos: runner (7: `.exe` sem shell, `.cmd` com caminho com espaço entre aspas, argumento recusado, ENOENT, Linux inalterado, stderr, saída vazia), refresher (3: Claude falha na 2ª rodada e a lista continua, sem regravar, rodadas simultâneas viram uma), discovery (Gemini sem processo, motivo por agente), catalog (junção por agente) e overlay (texto da linha). Gate: ver relatório.
+
+**Não validado.** Abrir o app de verdade no Windows com o Claude respondendo ao `/model` (o `claude -p "/model"` não foi executado para não arriscar uso); o `.ps1` do Claude só tem teste de resolução por injeção, não execução real.
+
+Estado: concluído (commit na branch; deploy pelo orquestrador).

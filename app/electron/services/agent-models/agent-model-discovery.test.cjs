@@ -27,7 +27,7 @@ function createDeps(overrides = {}) {
   }
 }
 
-test('descobre os modelos das três CLIs', async () => {
+test('descobre os modelos do Claude e do Codex', async () => {
   const resultado = await discoverAgentModels(createDeps())
 
   assert.deepEqual(resultado.claude.models, ['sonnet', 'opus', 'haiku', 'fable'])
@@ -51,22 +51,41 @@ test('o Codex não gasta uma execução da CLI: lê o cache que ela mantém', as
   assert.ok(!comandos.includes('codex'), 'não deveria executar a CLI do codex')
 })
 
-test('a falha de uma CLI não impede as outras', async () => {
-  // Cenário real: o Gemini falha por elegibilidade da conta enquanto Claude
-  // e Codex respondem normalmente.
+test('a falha de uma CLI não impede as outras, e o motivo fica registrado', async () => {
+  // Claude falha (sem atalho no PATH, por exemplo) enquanto o Codex responde.
+  const motivos = {}
   const resultado = await discoverAgentModels(
     createDeps({
+      motivos,
+      runCli: async () => {
+        throw new Error('claude não encontrado no PATH.')
+      },
+    }),
+  )
+
+  assert.equal(resultado.claude, undefined, 'a CLI que falhou não entra no resultado')
+  assert.deepEqual(resultado.codex.models, ['gpt-5.6-sol'])
+  assert.equal(motivos.claude, 'claude não encontrado no PATH.')
+  assert.equal(motivos.codex, null)
+})
+
+test('o Gemini não abre processo e explica por que usa a lista fixa', async () => {
+  // `gemini -p "/model"` nunca devolve lista e ainda consulta a cota da conta.
+  const comandos = []
+  const motivos = {}
+  const resultado = await discoverAgentModels(
+    createDeps({
+      motivos,
       runCli: async (comando) => {
-        if (comando === 'gemini') {
-          throw new Error('IneligibleTierError')
-        }
+        comandos.push(comando)
         return SAIDA_CLAUDE
       },
     }),
   )
 
-  assert.deepEqual(resultado.claude.models, ['sonnet', 'opus', 'haiku', 'fable'])
-  assert.equal(resultado.gemini, undefined, 'a CLI que falhou não entra no resultado')
+  assert.deepEqual(comandos, ['claude'])
+  assert.equal(resultado.gemini, undefined)
+  assert.match(motivos.gemini, /não lista modelos fora do modo interativo/)
 })
 
 test('uma CLI travada não trava a descoberta inteira', async () => {
@@ -135,6 +154,13 @@ test('as CLIs são consultadas em paralelo', async () => {
         await new Promise((resolve) => setTimeout(resolve, 10))
         simultaneas -= 1
         return SAIDA_CLAUDE
+      },
+      readCodexCache: async () => {
+        simultaneas += 1
+        pico = Math.max(pico, simultaneas)
+        await new Promise((resolve) => setTimeout(resolve, 10))
+        simultaneas -= 1
+        return createCodexCacheFile()
       },
     }),
   )
