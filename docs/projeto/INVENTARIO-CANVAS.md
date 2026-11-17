@@ -32,7 +32,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **Elementos:** 103 (10 blocos, 16 ferramentas, 77 outras superfícies)
 - **Controles:** 402, dos quais 61 com teste específico
 - **Elementos sem nenhum teste:** 3
-- **Lacunas:** 231 (alto 4, médio 120, baixo 107), em 62 tasks
+- **Lacunas:** 231 (alto 4, médio 121, baixo 106), em 62 tasks
 
 ## Moldura do canvas
 
@@ -858,19 +858,19 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** nenhum
 - **Depende de:** `@excalidraw/excalidraw (lazy)`, `onSceneChange (ExcalidrawDrawingNode)`
 - **Sobreposição:** Dentro do bloco Excalidraw (nodrag nowheel nopan, h-full); os menus do editor não saem do cartão.
-- **Testes:** `scripts/renderer-csp.test.cjs`, `scripts/excalidraw-fonts.test.cjs`
+- **Testes:** `scripts/renderer-csp.test.cjs`, `scripts/excalidraw-embeds.test.cjs`, `src/features/canvas/services/excalidraw-embeds.test.ts`, `scripts/excalidraw-fonts.test.cjs`
 
 | Estado | Quando |
 | --- | --- |
 | normal | Editor Excalidraw com a cena inicial; cada onChange entrega elements + viewBackgroundColor ao bloco. |
 | empty | Cena inicial nula: elementos vazios e fundo #ffffff. |
-| denied | validateEmbeddable={false}: todo link de embed é recusado pelo próprio Excalidraw (a CSP do build tem frame-src 'none'). |
+| denied | Link fora dos 14 domínios do Excalidraw (ou http) é recusado pelo validateEmbeddable (isExcalidrawEmbedLink); o link aceito vira frame limitado pelo frame-src da CSP. X, Reddit e Gist montam em IsolatedEmbedFrame (sandbox sem allow-same-origin). |
 
 Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Decidir se os embeds do Excalidraw voltam, com frame-src restrito a hosts escolhidos. | baixo | `3ea91f95-497e-818f-a7ed-cb6a84c376d6` |
+| Os embeds do Excalidraw (14 domínios, decisão de 17/11) só foram validados por teste; falta ver cada host carregando no app, sem violação de frame-src. | médio | `41b91f95-497e-8109-9ae0-e01470ee50d4` |
 | O export embute a face inteira da fonte: o worker de subset quebra no build (document is not defined) e, na thread principal, a CSP recusa o WASM do subset (script-src eval, "Skipped glyph subsetting"). | baixo | `41a91f95-497e-8182-b7f6-eeaf764195c5` |
 | Popovers e diálogos internos do Excalidraw ficam presos ao cartão overflow-hidden; num bloco pequeno são cortados e nenhum teste mede (a auditoria do smoke ignora .excalidraw). | baixo | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
 
@@ -2955,7 +2955,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3e991f95-497e-81b4-ac92-d7db960c9ae0` — 1 lacuna
 - `3ea91f95-497e-8117-8506-d4abe67709ff` — 1 lacuna
 - `3ea91f95-497e-812b-a108-fb89c94fa528` — 1 lacuna
-- `3ea91f95-497e-818f-a7ed-cb6a84c376d6` — 1 lacuna
 - `3ea91f95-497e-819a-bdd9-fbc178f27b3e` — 1 lacuna
 - `3ea91f95-497e-81c4-84ff-f279d9ba4683` — 2 lacunas
 - `3ea91f95-497e-81d9-a3d8-ed3971b18a24` — 3 lacunas
@@ -2989,6 +2988,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `41591f95-497e-8166-84cb-cf8af3736c2b` — 1 lacuna
 - `41a91f95-497e-810d-af12-e81c33aa550a` — 1 lacuna
 - `41a91f95-497e-8182-b7f6-eeaf764195c5` — 1 lacuna
+- `41b91f95-497e-8109-9ae0-e01470ee50d4` — 1 lacuna
 - `41b91f95-497e-81c5-bc4d-c151f42dc82c` — 1 lacuna
 - `41b91f95-497e-81c7-88e6-c0660189bb80` — 1 lacuna
 - `41b91f95-497e-81c9-b12f-edb0b8ed0b2d` — 1 lacuna

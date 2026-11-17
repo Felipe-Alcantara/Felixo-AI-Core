@@ -6,6 +6,8 @@ import { Excalidraw } from '@excalidraw/excalidraw'
 import '@excalidraw/excalidraw/index.css'
 import type { AppState } from '@excalidraw/excalidraw/types'
 import type { OrderedExcalidrawElement } from '@excalidraw/excalidraw/element/types'
+import { isExcalidrawEmbedLink, isolatedEmbedSrc } from '../services/excalidraw-embeds'
+import { IsolatedEmbedFrame } from './IsolatedEmbedFrame'
 
 export type ExcalidrawScene = {
   elements: readonly OrderedExcalidrawElement[]
@@ -26,11 +28,16 @@ export default function ExcalidrawCanvas({ initialScene, onSceneChange }: Excali
   return (
     <div className="nodrag nowheel nopan h-full w-full">
       <Excalidraw
-        // A CSP do build tem `frame-src 'none'` (scripts/renderer-csp.cjs): um
-        // embed (YouTube, Figma…) viraria um frame quebrado sem aviso. Com
-        // `false`, o Excalidraw recusa todo link de embed e diz que não é
-        // permitido. Religar embeds exige decidir os hosts nos dois lugares.
-        validateEmbeddable={false}
+        // Os 14 domínios do Excalidraw voltam (17/11/2026); o `frame-src` da CSP
+        // do build (scripts/renderer-csp.cjs) tem os mesmos hosts. Função que
+        // responde sempre boolean: `undefined` cairia na lista embutida.
+        validateEmbeddable={isExcalidrawEmbedLink}
+        // X, Reddit e Gist trariam script de terceiro num `srcdoc` com a
+        // origem do app: vão para o frame isolado (excalidraw-embeds.ts).
+        renderEmbeddable={(element, appState) => {
+          const src = isolatedEmbedSrc(element.link, appState.theme)
+          return src ? <IsolatedEmbedFrame src={src} /> : null
+        }}
         initialData={{
           elements: initialScene?.elements ?? [],
           appState: {

@@ -6,6 +6,9 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { createHash } = require('node:crypto')
 const {
+  EXCALIDRAW_EMBED_FRAME_HOSTS,
+  EXCALIDRAW_EMBED_LINK_HOSTS,
+  ISOLATED_EMBED_SANDBOX,
   RENDERER_CSP_DIRECTIVES,
   buildRendererCsp,
   extractInlineScripts,
@@ -104,7 +107,6 @@ test('as diretivas perigosas estão fechadas', () => {
   assert.deepEqual(mapa.get('object-src'), ["'none'"])
   assert.deepEqual(mapa.get('base-uri'), ["'none'"])
   assert.deepEqual(mapa.get('form-action'), ["'none'"])
-  assert.deepEqual(mapa.get('frame-src'), ["'none'"])
   assert.deepEqual(mapa.get('default-src'), ["'self'"])
 })
 
@@ -133,15 +135,45 @@ test('nenhuma diretiva libera file:: o renderer é app://felixo, e a imagem loca
   assert.deepEqual(mapa.get('img-src'), ["'self'", 'data:', 'blob:'])
 })
 
-test('nenhuma diretiva libera origem de rede: as fontes do Excalidraw saem do build', () => {
+// Regra de 17/11/2026 (substitui a de 16/11, "nenhum host remoto"): a lista
+// inteira do Excalidraw volta, mas só como frame. Nenhuma outra diretiva
+// ganha host de rede, e o script-src do documento principal continua só 'self'.
+test('só o frame-src tem host de rede: os embeds do Excalidraw, e as fontes saem do build', () => {
   const mapa = diretivas(buildRendererCsp(INDEX_HTML).policy)
   // Host sem esquema (`esm.sh`, `*.cdn.com`) também é origem de rede numa CSP.
   const rede = (value) => /^(?:https?|wss?):|\*/.test(value) || /^[a-z0-9-]+(?:\.[a-z0-9-]+)+/i.test(value)
 
   for (const [name, values] of mapa) {
+    if (name === 'frame-src') continue
     assert.deepEqual(values.filter(rede), [], `${name} libera origem de rede`)
   }
   assert.deepEqual(mapa.get('font-src'), ["'self'", 'data:'])
+  assert.deepEqual(mapa.get('script-src').filter(rede), [])
+  assert.deepEqual(mapa.get('connect-src'), ["'self'"])
+})
+
+test('o frame-src tem exatamente os hosts dos 14 domínios do Excalidraw, só https', () => {
+  const frameSrc = diretivas(buildRendererCsp(INDEX_HTML).policy).get('frame-src')
+  assert.deepEqual(frameSrc, [...EXCALIDRAW_EMBED_FRAME_HOSTS])
+  assert.deepEqual(frameSrc, [
+    'https://www.youtube.com', // youtube.com, youtu.be
+    'https://player.vimeo.com', // vimeo.com, player.vimeo.com
+    'https://www.figma.com', // figma.com
+    'https://link.excalidraw.com',
+    'https://gist.github.com',
+    'https://platform.twitter.com', // twitter.com, x.com
+    'https://embed.reddit.com', // reddit.com
+    'https://*.simplepdf.eu',
+    'https://stackblitz.com',
+    'https://val.town',
+    'https://giphy.com',
+  ])
+  assert.equal(EXCALIDRAW_EMBED_LINK_HOSTS.length, 14)
+  for (const host of frameSrc) {
+    assert.match(host, /^https:\/\/(?:\*\.)?[a-z0-9.-]+$/, `${host} não é só host https`)
+  }
+  assert.ok(!frameSrc.includes("'none'"))
+  assert.ok(!frameSrc.includes('*'))
 })
 
 test('a meta entra logo depois do charset, antes de qualquer script, estilo ou link', () => {
@@ -186,14 +218,19 @@ test('o vite.config.ts liga o plugin da CSP no build', () => {
   assert.match(config, /verifyRendererCsp\(/)
 })
 
-// As duas decisões andam juntas: com frame-src 'none', um embed do Excalidraw
-// viraria frame quebrado sem aviso; o Excalidraw precisa recusar o link antes.
-test("com frame-src 'none', o Excalidraw recusa embeds", () => {
-  const frameSrc = new Map(RENDERER_CSP_DIRECTIVES).get('frame-src')
-  assert.deepEqual([...frameSrc], ["'none'"])
-  const canvas = fs.readFileSync(
-    path.join(__dirname, '..', 'src', 'features', 'canvas', 'components', 'ExcalidrawCanvas.tsx'),
-    'utf8',
-  )
-  assert.match(canvas, /validateEmbeddable=\{false\}/)
+// As barreiras andam juntas: o frame-src (hosts dos frames), o validador do
+// Excalidraw (o que ele aceita montar) e o frame isolado dos embeds com script.
+test('o Excalidraw aceita os 14 domínios, e X, Reddit e Gist vão por frame sem allow-same-origin', () => {
+  const dir = path.join(__dirname, '..', 'src', 'features', 'canvas')
+  const canvas = fs.readFileSync(path.join(dir, 'components', 'ExcalidrawCanvas.tsx'), 'utf8')
+  assert.match(canvas, /validateEmbeddable=\{isExcalidrawEmbedLink\}/)
+  assert.doesNotMatch(canvas, /validateEmbeddable=\{(?:false|true)\}/)
+  assert.match(canvas, /renderEmbeddable=/)
+
+  const embeds = fs.readFileSync(path.join(dir, 'services', 'excalidraw-embeds.ts'), 'utf8')
+  for (const host of EXCALIDRAW_EMBED_LINK_HOSTS) assert.ok(embeds.includes(`'${host}'`), host)
+
+  assert.ok(!ISOLATED_EMBED_SANDBOX.split(' ').includes('allow-same-origin'))
+  assert.ok(!ISOLATED_EMBED_SANDBOX.split(' ').includes('allow-top-navigation'))
+  assert.ok(ISOLATED_EMBED_SANDBOX.split(' ').includes('allow-scripts'))
 })

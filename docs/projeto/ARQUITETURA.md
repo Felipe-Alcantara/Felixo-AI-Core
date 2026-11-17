@@ -1478,12 +1478,14 @@ conferência, o botão "Recarregar interface" do fallback de boot seria
 bloqueado em silêncio.
 
 - `script-src 'self'` com hashes, sem `'unsafe-inline'` e sem `'unsafe-eval'`.
-- `object-src`, `base-uri`, `form-action` e `frame-src` como `'none'`.
+- `object-src`, `base-uri` e `form-action` como `'none'`.
+- `frame-src` com os hosts dos embeds do Excalidraw (abaixo); é a única
+  diretiva com host de rede.
 - `connect-src 'self'`: o renderer não fala com a rede, tudo que é remoto
   passa por IPC.
 - `style-src` precisa de `'unsafe-inline'` por causa do xterm, do Excalidraw e
   do `<style>` do boot.
-- Nenhuma diretiva libera origem de rede. As fontes do desenho do Excalidraw
+- Fora o `frame-src`, nenhuma diretiva libera origem de rede. As fontes do desenho do Excalidraw
   saem do próprio build, em `dist/excalidraw-assets/fonts/`, emitidas pelo
   plugin `felixo-excalidraw-fonts` (`scripts/excalidraw-fonts.cjs`). Entram
   todas as famílias, inclusive a Xiaolai (CJK, 12,7 MB do total de 13,1 MB).
@@ -1500,11 +1502,27 @@ bloqueado em silêncio.
 - O export do desenho embute a face inteira da fonte. A redução (subset) usa
   WASM, que a política recusa na thread principal (`script-src`, "Skipped
   glyph subsetting"), e o worker de subset quebra no build (task aberta).
-- `frame-src 'none'` também vale para os embeds do Excalidraw (YouTube,
-  Figma…). Por isso o bloco de desenho passa `validateEmbeddable={false}`: o
-  Excalidraw diz que o embed não é permitido, em vez de mostrar um frame
-  quebrado. Um teste trava as duas decisões juntas. Religar embeds exige
-  escolher os hosts no `frame-src` e no `validateEmbeddable`.
+- Os embeds do Excalidraw voltaram (decisão do Felipe em 17/11/2026: a lista
+  inteira dele, 14 domínios, inclusive X, Reddit e Gist; antes, desde 29/09, o
+  bloco recusava todo embed). O `frame-src` tem só os hosts dos frames
+  (www.youtube.com, player.vimeo.com, www.figma.com, link.excalidraw.com,
+  gist.github.com, platform.twitter.com, embed.reddit.com, *.simplepdf.eu,
+  stackblitz.com, val.town, giphy.com), todos https, e o `script-src` do
+  documento principal segue sem host remoto. O `validateEmbeddable` do
+  `ExcalidrawCanvas.tsx` é `isExcalidrawEmbedLink` (`excalidraw-embeds.ts`):
+  https e um dos 14 domínios, sempre boolean.
+- Script de terceiro nunca roda com a origem do app. O Excalidraw monta X,
+  Reddit e Gist como `srcdoc` com `<script src>` do site e, em X e Reddit, com
+  `allow-same-origin`. Por isso o `renderEmbeddable` manda esses três para
+  `IsolatedEmbedFrame`: iframe `src` na página de embed do próprio site
+  (outra origem), com `sandbox` sem `allow-same-origin` e sem
+  `allow-top-navigation`. YouTube, Vimeo, Figma e os demais seguem no iframe
+  simples do Excalidraw, de outra origem, limitado pelo `frame-src`.
+  `scripts/excalidraw-embeds.test.cjs` prova no Chromium do Electron que o
+  script de um frame assim não alcança `window.parent`, o storage do pai
+  nem a navegação da janela (com um controle `allow-same-origin` que alcança).
+  Não validado: o carregamento real de cada host no app (rede, X-Frame-Options,
+  login do Figma).
 
 O dev server fica sem CSP. Ele usa scripts inline do React Refresh e o
 WebSocket do HMR, e uma política afrouxada para caber nele não provaria nada

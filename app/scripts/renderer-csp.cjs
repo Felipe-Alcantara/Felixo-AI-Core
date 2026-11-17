@@ -28,15 +28,64 @@ const { createHash } = require('node:crypto')
  * - Sob `file://` (até a v0.1.567), `'self'` casava com QUALQUER URL `file:`:
  *   um script de outra pasta do disco executava. Sob `app://felixo`, `'self'`
  *   é só o build, e a página não busca `file://` nenhum (prova de conceito de
- *   16/11/2026). Nenhuma diretiva libera `file:` nem origem de rede, e nada
+ *   16/11/2026). Só o `frame-src` tem host de rede (os embeds do Excalidraw); nenhuma
+ *   diretiva libera `file:` e nada
  *   inline sem hash nem `eval` roda.
- * - `frame-src` não controla `<webview>`: o bloco "Página Web" continua
- *   carregando com `frame-src 'none'`. O isolamento do webview é do processo
+ * - `frame-src` não controla `<webview>`: o bloco "Página Web" carrega
+ *   qualquer site sem depender dele. O isolamento do webview é do processo
  *   principal (`will-attach-webview`), não desta política.
  *
  * `frame-ancestors`, `report-uri` e `sandbox` ficam de fora porque o navegador
  * os ignora quando a política vem por `<meta>`.
  */
+/**
+ * Origens que os frames de embed do Excalidraw 0.18 de fato carregam, uma por
+ * domínio da lista dele (14). `twitter.com` e `x.com` viram o frame de
+ * platform.twitter.com; `reddit.com`, o de embed.reddit.com; os links
+ * youtube.com/youtu.be viram www.youtube.com/embed, vimeo.com vira
+ * player.vimeo.com e figma.com vira www.figma.com/embed.
+ */
+const EXCALIDRAW_EMBED_FRAME_HOSTS = Object.freeze([
+  'https://www.youtube.com',
+  'https://player.vimeo.com',
+  'https://www.figma.com',
+  'https://link.excalidraw.com',
+  'https://gist.github.com',
+  'https://platform.twitter.com',
+  'https://embed.reddit.com',
+  'https://*.simplepdf.eu',
+  'https://stackblitz.com',
+  'https://val.town',
+  'https://giphy.com',
+])
+
+/** Os 14 domínios da lista do Excalidraw, aceitos como link de embed. */
+const EXCALIDRAW_EMBED_LINK_HOSTS = Object.freeze([
+  'youtube.com',
+  'youtu.be',
+  'vimeo.com',
+  'player.vimeo.com',
+  'figma.com',
+  'link.excalidraw.com',
+  'gist.github.com',
+  'twitter.com',
+  'x.com',
+  '*.simplepdf.eu',
+  'stackblitz.com',
+  'val.town',
+  'giphy.com',
+  'reddit.com',
+])
+
+/**
+ * `sandbox` do frame que o app monta para os embeds com script de terceiro
+ * (X, Reddit, Gist): sem `allow-same-origin` (origem opaca) e sem
+ * `allow-top-navigation`. Igual a `ISOLATED_EMBED_SANDBOX` de
+ * `excalidraw-embeds.ts`; um teste confere.
+ */
+const ISOLATED_EMBED_SANDBOX =
+  'allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-presentation allow-downloads'
+
 const RENDERER_CSP_DIRECTIVES = Object.freeze([
   // Base para tudo que não tem diretiva própria: só o próprio build.
   ['default-src', ["'self'"]],
@@ -83,7 +132,12 @@ const RENDERER_CSP_DIRECTIVES = Object.freeze([
   // Nenhum <form> do app navega; todos tratam o submit em JS. Um submit
   // "de verdade" recarregaria o renderer por cima dos terminais vivos.
   ['form-action', ["'none'"]],
-  ['frame-src', ["'none'"]],
+  // Embeds do Excalidraw (decisão de 17/11/2026: a lista inteira volta). Só
+  // frames: nenhuma outra diretiva, e em especial o `script-src`, ganha host.
+  // O frame de embed é de outra origem (host da lista) e, nos que precisam de
+  // script de terceiro (X, Reddit, Gist), o app o monta sem
+  // `allow-same-origin` (ver `excalidraw-embeds.ts`).
+  ['frame-src', EXCALIDRAW_EMBED_FRAME_HOSTS],
 ])
 
 const CSP_META_PATTERN = /<meta\b[^>]*http-equiv\s*=\s*["']?content-security-policy["']?[^>]*>/i
@@ -221,6 +275,9 @@ function verifyRendererCsp(html) {
 }
 
 module.exports = {
+  EXCALIDRAW_EMBED_FRAME_HOSTS,
+  EXCALIDRAW_EMBED_LINK_HOSTS,
+  ISOLATED_EMBED_SANDBOX,
   RENDERER_CSP_DIRECTIVES,
   buildRendererCsp,
   extractInlineScripts,

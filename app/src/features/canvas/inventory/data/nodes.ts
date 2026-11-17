@@ -1498,18 +1498,23 @@ export const nodeSurfaces: InventoryElement[] = [
     states: {
       normal: 'Editor Excalidraw com a cena inicial; cada onChange entrega elements + viewBackgroundColor ao bloco.',
       empty: 'Cena inicial nula: elementos vazios e fundo #ffffff.',
-      denied: 'validateEmbeddable={false}: todo link de embed é recusado pelo próprio Excalidraw (a CSP do build tem frame-src \'none\').',
+      denied: 'Link fora dos 14 domínios do Excalidraw (ou http) é recusado pelo validateEmbeddable (isExcalidrawEmbedLink); o link aceito vira frame limitado pelo frame-src da CSP. X, Reddit e Gist montam em IsolatedEmbedFrame (sandbox sem allow-same-origin).',
     },
     controls: [],
     persistence: ['nenhuma própria: o ExcalidrawDrawingNode grava data.scene'],
     ipc: [],
     dependsOn: ['@excalidraw/excalidraw (lazy)', 'onSceneChange (ExcalidrawDrawingNode)'],
-    tests: [unit('scripts/renderer-csp.test.cjs'), unit('scripts/excalidraw-fonts.test.cjs')],
+    tests: [
+      unit('scripts/renderer-csp.test.cjs'),
+      unit('scripts/excalidraw-embeds.test.cjs'),
+      unit('src/features/canvas/services/excalidraw-embeds.test.ts'),
+      unit('scripts/excalidraw-fonts.test.cjs'),
+    ],
     gaps: [
       {
-        what: 'Decidir se os embeds do Excalidraw voltam, com frame-src restrito a hosts escolhidos.',
-        risk: 'baixo',
-        task: '3ea91f95-497e-818f-a7ed-cb6a84c376d6',
+        what: 'Os embeds do Excalidraw (14 domínios, decisão de 17/11) só foram validados por teste; falta ver cada host carregando no app, sem violação de frame-src.',
+        risk: 'médio',
+        task: '41b91f95-497e-8109-9ae0-e01470ee50d4',
       },
       {
         what: 'O export embute a face inteira da fonte: o worker de subset quebra no build (document is not defined) e, na thread principal, a CSP recusa o WASM do subset (script-src eval, "Skipped glyph subsetting").',

@@ -4616,3 +4616,24 @@ Task: Felixo AI Core/Notion — enviar uma task do bloco Tarefas Notion para um 
 **Não validado.** App aberto (porta ocupada por outro agente), clique real no bloco, agente subindo com a CLI autenticada de ponta a ponta, máquina sem a CLI e instalação por `pipx` (só o aviso existe; a instalação automática ficou como pendência).
 
 Estado: concluído nesta fatia (commit na branch `orq/notion-enviar-uma-task-bloco`; push e deploy pelo orquestrador).
+
+---
+
+## 2026-11-17 — Canvas: os embeds do Excalidraw voltam (14 domínios), com script de terceiro isolado da origem do app
+
+Task: Felixo AI Core/Canvas — decidir se os embeds do Excalidraw voltam, com frame-src restrito a hosts escolhidos (Notion `3ea91f95-497e-818f-a7ed-cb6a84c376d6`). Agente: subagente da Orquestração (Claude Sonnet 5.5, effort medium). Decisão do Felipe em 17/11/2026: a lista inteira do Excalidraw volta, com os 14 domínios, inclusive X, Reddit e Gist, sabendo que é a opção de maior risco. Requisito do orquestrador: script de terceiro nunca roda com a origem do app.
+
+**Contexto.** Desde 29/09 o bloco Desenho recusava todo embed (`validateEmbeddable={false}` e CSP `frame-src 'none'`); em 16/11 a CSP ficou sem nenhum host remoto, travada por teste. Risco medido: o Excalidraw 0.18.1 monta X, Reddit e Gist como `srcdoc` com `<script src>` do site e, em X e Reddit, com `allow-same-origin`; um script assim herdaria a origem do app.
+
+**O que mudou.**
+- `scripts/renderer-csp.cjs`: `frame-src` com 11 hosts https (www.youtube.com, player.vimeo.com, www.figma.com, link.excalidraw.com, gist.github.com, platform.twitter.com, embed.reddit.com, *.simplepdf.eu, stackblitz.com, val.town, giphy.com), um por domínio da lista. Nenhuma outra diretiva ganhou host: `script-src` segue `'self'` com hashes. Exporta `EXCALIDRAW_EMBED_FRAME_HOSTS`, `EXCALIDRAW_EMBED_LINK_HOSTS` (14) e `ISOLATED_EMBED_SANDBOX`.
+- `src/features/canvas/services/excalidraw-embeds.ts` (novo): `isExcalidrawEmbedLink` (https + um dos 14 domínios, sempre boolean; `undefined` cairia na lista embutida do Excalidraw) e `isolatedEmbedSrc` (X, Reddit e Gist viram a página de embed do próprio site, usando as mesmas expressões, não ancoradas, que o Excalidraw usa para escolher o `srcdoc`).
+- `IsolatedEmbedFrame.tsx` (novo): iframe `src` com `sandbox` sem `allow-same-origin` e sem `allow-top-navigation`. `ExcalidrawCanvas.tsx` passa `validateEmbeddable={isExcalidrawEmbedLink}` e `renderEmbeddable`, que manda os três para esse frame. YouTube, Vimeo, Figma e os demais seguem no iframe do Excalidraw, de outra origem, limitado pelo `frame-src`.
+- Testes: `renderer-csp.test.cjs` (a regra de 16/11 "nenhuma origem de rede" virou "só o `frame-src` tem host", com os hosts exatos; o acoplamento "frame-src 'none' + validateEmbeddable=false" virou o acoplamento novo), `excalidraw-embeds.test.ts` (vitest: lista, validador, frame sem `allow-same-origin`) e `excalidraw-embeds.test.cjs` + `test-support/embed-isolation-electron.cjs` (prova no Chromium do Electron do projeto, fora do app).
+- Docs: `ARQUITETURA.md` (seção "CSP do renderer"); inventário do canvas (`nodes.ts` e `INVENTARIO-CANVAS.md` regenerado): estado `denied` e a lacuna de validar no app (task `41b91f95-497e-8109-9ae0-e01470ee50d4`).
+
+**Validação.** `excalidraw-embeds.test.cjs` sobe uma página com a CSP real do build e três frames com um script que tenta `parent.document`, `parent.location.origin`, `parent.localStorage` e `top.location`: no frame isolado (srcdoc sem `allow-same-origin`) e na página de outra origem os três acessos ao pai dão `SecurityError` e a janela não navega (0 requisições a `/hijacked`); o controle com `allow-same-origin` alcança o pai (`parentOrigin` igual à origem do app), então o teste enxerga a diferença. 3 execuções seguidas verdes, 2 a 9 s. Gate: lint e typecheck limpos; node 3482 de 3494 passam, 0 falha; vitest 3697 passam, 4 puladas.
+
+**Não validado.** O app não foi aberto (a porta 5173 estava ocupada por outro agente): nenhum host foi carregado de verdade no app. Em X, Reddit e Gist a URL da página de embed (`platform.twitter.com/embed/Tweet.html`, `embed.reddit.com/.../?embed=true`, `gist.github.com/<u>/<id>.pibb`) vem do conhecimento do formato público, não foi medida: pode recusar o frame (X-Frame-Options). Roteiro de conferência na task `41b91f95-497e-8109-9ae0-e01470ee50d4`.
+
+Estado: concluído em código e teste (commit na branch `orq/canvas-decidir-embeds-excalidraw-voltam`; push e deploy pelo orquestrador); validação no app pendente.
