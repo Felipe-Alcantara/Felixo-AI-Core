@@ -156,6 +156,8 @@
         "zip"
       ],
       "category": "public.app-category.developer-tools",
+      "entitlements": "installer/entitlements.mac.plist",
+      "entitlementsInherit": "installer/entitlements.mac.plist",
       "extendInfo": {
         "NSMicrophoneUsageDescription": "O Felixo AI Core usa o microfone para o ditado por voz: você fala e o texto aparece no terminal, sem ser enviado sozinho."
       },

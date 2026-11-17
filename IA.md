@@ -3831,3 +3831,15 @@ Estado: concluído do lado do código; conferência nas máquinas fica manual.
 - Decisões do Felipe: publicador pessoa física; Windows só se desse sem cadastro (não dá, todo caminho exige); smoke exigente só depois de assinar.
 - O que mudou: `docs/guias/GUIA-ASSINATURA-DE-RELEASE.md`, com o passo humano, os secrets com nome exato e o diff pronto do electron-builder e do `release.yml`. Nenhuma configuração ativa, porque `hardenedRuntime` sem certificado muda o app.
 - Validação: só documentação; nenhum teste rodado.
+
+---
+
+## 2026-11-17 — Ditado/macOS: entitlement de microfone para build assinada
+
+**Contexto:** a task de validação do ditado no macOS empacotado só fecha com um Mac. Conferido daqui: `NSMicrophoneUsageDescription` presente (`mac.extendInfo`), pedido de permissão correto (`speech:request-microphone` chama `askForMediaAccess('microphone')` só no darwin; `useDictation` pede quando `not-determined`).
+
+**Motivo:** `package.json` não tem `identity: null`; a build de release não é assinada por `CSC_IDENTITY_AUTO_DISCOVERY: false` (release.yml). Mas um `dist:mac` num Mac com certificado no chaveiro assina com hardened runtime (padrão do electron-builder) e o plist padrão dele não traz `com.apple.security.device.audio-input`: o macOS negaria o microfone sem mostrar o diálogo.
+
+**O que mudou:** `app/installer/entitlements.mac.plist` (padrão do electron-builder + audio-input), apontado por `mac.entitlements` e `mac.entitlementsInherit`; teste-guarda em `macos-microphone-packaging.test.cjs`; ARQUITETURA.md atualizada. Sem efeito nas builds atuais (não assinadas).
+
+**Validação:** teste novo falha sem as chaves no `package.json` e passa com elas (2/2); lint e typecheck limpos; node 3396 pass/0 fail; vitest 3572 pass. Diálogo do sistema e os oito itens do roteiro seguem sem conferência no macOS.

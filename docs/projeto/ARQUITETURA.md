@@ -505,10 +505,12 @@ Permissao: `speech:microphone-status` (macOS/Windows respondem; Linux devolve
 `unknown`) e `speech:request-microphone` (so o macOS pede pelo processo
 principal). Negado vira mensagem com o caminho das configuracoes de cada SO.
 No macOS empacotado o `NSMicrophoneUsageDescription` e obrigatorio e agora
-esta em `package.json` (`mac.extendInfo`, com teste-guarda). Ainda falta, SE as
-builds do macOS passarem a ser assinadas (hoje nao sao, ver release.yml), o
-entitlement `com.apple.security.device.audio-input` com hardened runtime — nao
-foi adicionado porque hoje seria letra morta e a pipeline nao e testavel aqui.
+esta em `package.json` (`mac.extendInfo`, com teste-guarda). O entitlement
+`com.apple.security.device.audio-input` fica em `app/installer/entitlements.mac.plist`
+(`mac.entitlements`/`entitlementsInherit`, tambem com teste-guarda): as builds de
+hoje nao sao assinadas (release.yml, `CSC_IDENTITY_AUTO_DISCOVERY: false`) e ele
+nao age, mas um `dist:mac` com certificado no chaveiro assina com hardened
+runtime (padrao) e sem ele o macOS negaria o microfone sem perguntar.
 
 ### Servidor local de transcricao (motor offline)
 
