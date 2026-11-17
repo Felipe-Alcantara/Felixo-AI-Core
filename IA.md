@@ -4093,3 +4093,23 @@ Task: Felixo AI Core/Limites — capturar, por sessão e sem digitar no terminal
 **Não validado.** O job nunca rodou num runner; a primeira execução pode pedir ajuste fino (nome do executável, FUSE no runner, AppArmor do 24.04). Não cobre: placa de vídeo real e `prime-run` (o ambiente é simulado por variáveis), entrega de um `.fxai` à janela aberta, `felixo-ai-core-autostart.log` do próximo boot, e o vazamento de `APPIMAGE_EXTRACT_AND_RUN` num terminal aberto pelo Felixo. Esses ficam para o Linux físico.
 
 Estado: concluído (commit na branch; deploy pelo orquestrador).
+
+---
+
+## 2026-11-17 — Canvas: remoções destrutivas pedem confirmação e a trava do canvas impede remover
+
+**Problema.** O cadeado da pílula de zoom só travava seleção e o Remover da barra de status: Delete/Backspace sobre a seleção feita antes de travar, o X do cabeçalho de todo bloco e o "Remover grupo" continuavam apagando. Além disso, "Remover grupo" levava em cascata os blocos filhos (terminais com processo vivo, imagens temporárias do disco) sem avisar, e o X do terminal matava o PTY direto (`store.remove`) antes mesmo de qualquer portão.
+
+**O que mudou.**
+- `services/canvas-removal-guard.ts` (`judgeCanvasRemoval`): função pura que, com a trava ligada, recusa a remoção; e, sem a trava, monta a confirmação quando a lista a remover inclui grupo com filhos, terminal com processo vivo ou imagem temporária, dizendo quantos blocos saem junto. Bloco comum e grupo vazio saem sem confirmação.
+- `CanvasView` liga o guarda ao `onBeforeDelete` do React Flow, o único portão por onde passam a tecla, o Remover da barra, o X do bloco e o "Remover grupo" (a lista já vem com os filhos em cascata).
+- `TerminalNode`: o X deixou de chamar `store.remove` antes do `deleteElements`; o PTY é encerrado no `onNodesChange` (`releaseRemovedCanvasNodes`), depois do portão.
+- Comentário de `onNodeDragStop` corrigido: não existe desagrupar (filho preso por `extent: "parent"`); o texto antigo prometia "drop it out to detach".
+- Fora do React Flow (revisão do orquestrador): "Limpar" da barra lateral, importar `.fxcanvas` (`useCanvasTransfer`) e "Remover temporário" da imagem (`useImageNodeActions`) apagavam blocos sem passar pelo `onBeforeDelete`. Agora `allowWholeCanvasReplace` faz o `clearAll` e o `importFile` recusarem com a trava ligada, o botão Limpar fica desabilitado com `title`/`aria-label` de canvas travado (`clearButtonState`), e o Remover temporário confere um `lockedRef`. Varredura: não há outro consumidor de `canvas:delete`/`canvas:clear` (só o renderer; nenhum caminho de agente/IPC do main).
+- Inventário (`INVENTARIO-CANVAS.md` regenerado): cinco lacunas desta task saíram, os efeitos/falhas dos controles foram ajustados e o novo teste entrou nos elementos afetados.
+
+**Validação.** `canvas-removal-guard.test.ts` 7/7 (arquivo novo: o teste não existia antes da correção). `npm run lint` e `typecheck` limpos; `vitest run` 3576 pass, 4 skipped e 3 falhas só sob carga (as 2 de `detachAll` conhecidas e `canvas-context-e2e`); os dois arquivos passam isolados, 9/9. `run-node-unit-tests` 3404 pass, 1 falha sob carga (`pty-output-path-benchmark`, 11/11 isolado); `canvas-inventory.test.ts` 9/9 com o `.md` regenerado.
+
+**Não validado.** Clique real no app (confirmação nativa, trava com Delete); o X e o "Remover grupo" com a trava ligada ficam sem efeito, mas continuam visíveis (não ficam desabilitados). Desagrupar continua inexistente.
+
+Estado: concluído (commit na branch; deploy pelo orquestrador).

@@ -428,6 +428,10 @@ function CanvasInner({
   // Trava de interação: mesmo comportamento do antigo botão do React Flow,
   // agora dentro da pílula de zoom.
   const [canvasLocked, setCanvasLocked] = useState(false)
+  const canvasLockedRef = useRef(canvasLocked)
+  useEffect(() => {
+    canvasLockedRef.current = canvasLocked
+  }, [canvasLocked])
   const [activeTool, setActiveTool] = useState<CanvasTool | null>(null)
   const [toolOpenRequest, setToolOpenRequest] = useState(0)
   // Todo pedido de ABRIR uma ferramenta passa por aqui (o alternar da barra
@@ -714,6 +718,7 @@ function CanvasInner({
     persistNode,
     setNodes,
     setEdges,
+    locked: canvasLocked,
     onReset: () => {
       setExpandedTerminalId(null)
       expandedTerminalIdRef.current = null
@@ -1144,6 +1149,7 @@ function CanvasInner({
     addImageNodeRef,
     edgesRef,
     nodesRef,
+    lockedRef: canvasLockedRef,
     removeNode,
     setEdges,
     setNodes,
@@ -2324,6 +2330,7 @@ function CanvasInner({
         onClear={() => void clearAll()}
         isBusy={isBusy}
         isClearing={isClearing}
+        locked={canvasLocked}
         onOpenChat={onOpenChat}
       />
       {/* Host do tutorial logo depois da sidebar: Tab vai sidebar → tour → canvas. */}
@@ -2457,8 +2464,11 @@ function CanvasInner({
           onlyRenderVisibleElements={!keepCanvasNodesMounted}
           proOptions={{ hideAttribution: true }}
           deleteKeyCode={['Delete', 'Backspace']}
-          // Único portão de toda remoção (tecla, Remover da barra, X do bloco e
-          // do grupo): respeita a trava e confirma o que perde processo ou arquivo.
+          // Portão das remoções feitas pelo React Flow (tecla, Remover da barra,
+          // X do bloco e do grupo): respeita a trava e confirma o que perde
+          // processo ou arquivo. Fora do React Flow, Limpar/importar
+          // (useCanvasTransfer) e o Remover temporário da imagem conferem a
+          // trava por conta própria.
           onBeforeDelete={handleBeforeDelete}
           // Select mode: drag on empty canvas draws a selection box (middle/right
           // mouse still pans). Pan mode: left-drag grabs and moves the canvas.

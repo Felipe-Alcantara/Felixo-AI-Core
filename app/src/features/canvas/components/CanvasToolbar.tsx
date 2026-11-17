@@ -1,6 +1,7 @@
 // Barra de ações do canvas: criar blocos (com nome opcional), alternar
 // seleção/pan e exportar/importar/limpar o canvas. Puramente presentacional —
 // as ações chegam por props do CanvasView.
+import { clearButtonState } from '../services/canvas-removal-guard'
 import {
   Suspense,
   lazy,
@@ -129,6 +130,8 @@ type CanvasToolbarProps = {
   onClear: () => void
   isBusy: boolean
   isClearing: boolean
+  /** Canvas travado: o Limpar fica desabilitado. */
+  locked?: boolean
   /** Switches to the chat screen. A toolbar button, not a floating overlay —
    * canvas content (terminals) can be panned under any fixed screen corner. */
   onOpenChat: () => void
@@ -174,6 +177,7 @@ export function CanvasToolbar({
   onClear,
   isBusy,
   isClearing,
+  locked = false,
   onOpenChat,
   sidebarCollapsed,
   onSidebarCollapsedChange,
@@ -427,9 +431,10 @@ export function CanvasToolbar({
             <button
               type="button"
               onClick={onClear}
-              disabled={isBusy}
+              disabled={clearButtonState(locked, isBusy).disabled}
               className="felixo-btn felixo-sidebar-danger"
-              title="Excluir todos os blocos, conexões e arquivos .md do canvas"
+              title={clearButtonState(locked, isBusy).title}
+              aria-label={locked ? 'Limpar (canvas travado)' : undefined}
             >
               <Trash2 size={13} />
               {isClearing ? 'Limpando…' : 'Limpar'}

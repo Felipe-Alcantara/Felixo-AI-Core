@@ -11,6 +11,8 @@ type ImageNodeActionsOptions = {
   >
   edgesRef: RefObject<Edge[]>
   nodesRef: RefObject<CanvasFlowNode[]>
+  /** Trava do canvas: o "Remover temporário" recusa, já que não passa pelo onBeforeDelete. */
+  lockedRef: RefObject<boolean>
   removeNode: (nodeId: string) => void
   setEdges: Dispatch<SetStateAction<Edge[]>>
   setNodes: Dispatch<SetStateAction<CanvasFlowNode[]>>
@@ -25,6 +27,7 @@ export function useImageNodeActions({
   addImageNodeRef,
   edgesRef,
   nodesRef,
+  lockedRef,
   removeNode,
   setEdges,
   setNodes,
@@ -94,6 +97,7 @@ export function useImageNodeActions({
 
   const removeTemporaryImageNode = useCallback(
     async (nodeId: string): Promise<boolean> => {
+      if (lockedRef.current) return false
       const node = nodesRef.current.find((item) => item.id === nodeId)
       const data = node?.data as { filePath?: string; image?: { temporary?: boolean } } | undefined
       const removeImage = window.felixo?.files?.removeGeneratedImage
@@ -115,7 +119,7 @@ export function useImageNodeActions({
       removeNode(nodeId)
       return true
     },
-    [edgesRef, nodesRef, removeNode, setEdges, setNodes],
+    [edgesRef, lockedRef, nodesRef, removeNode, setEdges, setNodes],
   )
 
   return { duplicateImageNode, removeTemporaryImageNode, repairImageNode }

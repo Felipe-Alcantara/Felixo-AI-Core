@@ -57,3 +57,22 @@ export function judgeCanvasRemoval(
     confirmMessage: `Remover ${count(nodes.length, 'bloco', 'blocos')}?\n\n${lines.join('\n')}\n\nNão dá para desfazer.`,
   }
 }
+
+/**
+ * Limpar e importar apagam todos os blocos fora do React Flow (IPC direto),
+ * então não passam pelo onBeforeDelete: a trava é conferida aqui.
+ */
+export const LOCKED_REPLACE_MESSAGE = 'O canvas está travado. Destrave o canvas para limpar ou importar.'
+
+/** Devolve true quando pode seguir; com a trava ligada avisa e recusa. */
+export function allowWholeCanvasReplace(locked: boolean, notify: (message: string) => void): boolean {
+  if (!locked) return true
+  notify(LOCKED_REPLACE_MESSAGE)
+  return false
+}
+
+/** Estado do botão Limpar da barra lateral. */
+export function clearButtonState(locked: boolean, busy: boolean): { disabled: boolean; title: string } {
+  if (locked) return { disabled: true, title: 'Canvas travado: destrave para limpar' }
+  return { disabled: busy, title: 'Excluir todos os blocos, conexões e arquivos .md do canvas' }
+}

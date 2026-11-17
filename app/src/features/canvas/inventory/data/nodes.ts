@@ -345,7 +345,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
       {
         locator: 'title="Remover o arquivo temporário e este bloco"',
         kind: 'button',
-        effect: '"Remover temporário": files:remove-generated-image apaga o arquivo do disco e, se der certo, tira o bloco, as arestas dele (canvas:delete-edge) e o registro (canvas:delete). Sem confirmação.',
+        effect: '"Remover temporário": files:remove-generated-image apaga o arquivo do disco e, se der certo, tira o bloco, as arestas dele (canvas:delete-edge) e o registro (canvas:delete). Sem confirmação; com o canvas travado recusa (lockedRef, fora do onBeforeDelete).',
         failure: '"Não foi possível remover o arquivo temporário." quando o processo principal recusa; rejeição fora do .catch interno não tem tratamento.',
         disabledWhen: 'Sem caminho; só aparece em imagem temporária.',
       },

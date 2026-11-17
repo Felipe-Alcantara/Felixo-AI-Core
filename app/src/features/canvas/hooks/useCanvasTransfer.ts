@@ -7,6 +7,7 @@ import {
   importCanvasBundle,
   validateCanvasBundle,
 } from '../services/canvas-storage'
+import { allowWholeCanvasReplace } from '../services/canvas-removal-guard'
 import type { PersistedCanvasEdge } from '../types'
 
 function toPersistedEdge(edge: Edge): PersistedCanvasEdge {
@@ -28,6 +29,8 @@ type UseCanvasTransferOptions = {
   setNodes: (updater: (current: Node[]) => Node[]) => void
   setEdges: (updater: (current: Edge[]) => Edge[]) => void
   onReset: () => void
+  /** Canvas travado: Limpar e importar recusam (apagam todos os blocos). */
+  locked?: boolean
 }
 
 /**
@@ -45,12 +48,14 @@ export function useCanvasTransfer({
   setNodes,
   setEdges,
   onReset,
+  locked = false,
 }: UseCanvasTransferOptions) {
   const [isClearing, setIsClearing] = useState(false)
   const [isTransferring, setIsTransferring] = useState(false)
   const [canvasRevision, setCanvasRevision] = useState(0)
 
   const clearAll = useCallback(async () => {
+    if (!allowWholeCanvasReplace(locked, (message) => window.alert(message))) return
     const confirmed = window.confirm(
       'Limpar todo o canvas? Todos os blocos, conexões e arquivos .md do canvas serão excluídos permanentemente.',
     )
@@ -72,7 +77,7 @@ export function useCanvasTransfer({
     onReset()
     setNodes(() => [])
     setEdges(() => [])
-  }, [cancelPendingSaves, onReset, setEdges, setNodes, store])
+  }, [cancelPendingSaves, locked, onReset, setEdges, setNodes, store])
 
   const exportAll = useCallback(async (options: { includeTerminalOutput?: boolean } = {}) => {
     setIsTransferring(true)
@@ -114,6 +119,7 @@ export function useCanvasTransfer({
       if (!file) {
         return
       }
+      if (!allowWholeCanvasReplace(locked, (message) => window.alert(message))) return
       if (file.size > 60 * 1024 * 1024) {
         window.alert('O arquivo .fxcanvas excede o limite de 60 MB.')
         return
@@ -158,7 +164,7 @@ export function useCanvasTransfer({
       setEdges(() => result.edges!.map(toFlowEdge))
       setCanvasRevision((revision) => revision + 1)
     },
-    [cancelPendingSaves, nodes, onReset, persistNode, setEdges, setNodes, store],
+    [cancelPendingSaves, locked, nodes, onReset, persistNode, setEdges, setNodes, store],
   )
 
   return {

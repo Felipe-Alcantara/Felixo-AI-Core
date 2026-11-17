@@ -250,7 +250,7 @@ export const chromeSurfaces: InventoryElement[] = [
     owner: TOOLBAR,
     states: {
       normal: 'Expandida (largura var(--felixo-sidebar-width), 240–560 px, padrão 288): marca, "Canvas / Meu canvas", seções Criar, Organizar e Ferramentas, e rodapé com versão, Limpar e status de atualização/CLIs.',
-      disabled: 'Recolhida (sidebarCollapsed): só o trilho; o conteúdo fica aria-hidden e inert. "Limpar" desabilitado com isBusy.',
+      disabled: 'Recolhida (sidebarCollapsed): só o trilho; o conteúdo fica aria-hidden e inert. "Limpar" desabilitado com isBusy e com o canvas travado (clearAll também recusa sozinho, e o importar idem).',
       pending: 'isClearing: o botão mostra "Limpando…".',
     },
     controls: [
@@ -262,7 +262,7 @@ export const chromeSurfaces: InventoryElement[] = [
         disabledWhen: 'some com a sidebar recolhida (conteúdo inert)',
       },
       {
-        locator: 'Excluir todos os blocos, conexões e arquivos .md do canvas',
+        locator: 'onClick={onClear}',
         kind: 'button',
         effect: 'Limpar: clearAll pede window.confirm, cancela saves pendentes e chama canvas:clear (apaga nós, arestas e os .md do canvas no processo principal); depois limpa o store de terminais, fecha gaveta e ferramenta e zera nós e arestas na tela.',
         failure: 'Recusa do processo principal vira window.alert com a mensagem ("Não foi possível limpar o canvas."); cancelar o confirm não muda nada.',
