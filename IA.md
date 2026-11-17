@@ -4637,3 +4637,19 @@ Task: Felixo AI Core/Canvas — decidir se os embeds do Excalidraw voltam, com f
 **Não validado.** O app não foi aberto (a porta 5173 estava ocupada por outro agente): nenhum host foi carregado de verdade no app. Em X, Reddit e Gist a URL da página de embed (`platform.twitter.com/embed/Tweet.html`, `embed.reddit.com/.../?embed=true`, `gist.github.com/<u>/<id>.pibb`) vem do conhecimento do formato público, não foi medida: pode recusar o frame (X-Frame-Options). Roteiro de conferência na task `41b91f95-497e-8109-9ae0-e01470ee50d4`.
 
 Estado: concluído em código e teste (commit na branch `orq/canvas-decidir-embeds-excalidraw-voltam`; push e deploy pelo orquestrador); validação no app pendente.
+
+---
+
+## 2026-11-17 — Release: empacotamento local com --dir e versão de Node no guia
+
+Task: Felixo AI Core/Release — empacotar localmente no Node 25 (fs.cpSync do bundle-npm-runtime) e documentar o contorno (Notion `3eb91f95-497e-8197-89ea-e8a7a876a357`). Agente: subagente da Orquestração (Claude Haiku 5.5, effort max).
+
+**Contexto.** A nota de 30/09 atribuía a quebra do `bundle-npm-runtime` no Node 25.3 ao `fs.cpSync` de `node-gyp-bin/node-gyp`. Medido em 17/11: o `cpSync` só falha ao sobrescrever um arquivo que já existe, em caminho com acento (o `unlink` interno devolve "The operation completed successfully"). `fs.rmSync` no mesmo caminho não apaga e não lança. A correção já estava na main (`8f3a26ac`, 16/11): `removeTreeSync` apaga a cópia anterior antes do `cpSync`.
+
+**O que mudou.** Só `docs/guias/GUIA-DESENVOLVEDOR.md`. Os requisitos apontam para `engines`, a CI (22.x) e o `.nvmrc` (25.9.0). A reprodução do checkout usa `--dir --publish never`, com `-c.npmRebuild=false` no Windows. O parágrafo do `removeTreeSync` explica o `cpSync`, e há uma seção nova, "Versão de Node". Nenhuma linha de código.
+
+**Validação.** Reprodução numa pasta com acento, nos Nodes 25.3.0 e 24.22.3 (Electron 45.3.3): cópia em destino novo passa nos dois; `cpSync` por cima de cópia pronta falha só no 25.3; `copyNpmRuntime` por cima de cópia pronta passa nos dois. `node --test app/scripts/bundle-npm-runtime.test.cjs`: 4/4 no 25.3 e 4/4 no 24.22. Com o `removeTreeSync` retirado (mutante, restaurado depois), o teste 4 falha no 25.3 com o mesmo erro. Gate: lint 0, typecheck 0, node 3480/3492 pass (0 fail, 12 skipped), vitest 3689/3694 com 1 falha de E2E sob carga (`canvas-context-e2e`), que passa isolado 6/6.
+
+**Não validado.** O empacotamento completo (`electron-builder --dir`) em nenhum dos Nodes, porque a máquina estava carregada. O smoke do artefato também não rodou. O contorno com o Node embutido do Electron saiu com código 1 em 02/10 (causa não investigada); o guia não o recomenda.
+
+Estado: documentação entregue na branch `orq/release-empacotar-localmente-node-cpsync` (commit `9509e2f8`); push e deploy pelo orquestrador. Pendências abertas: versão de Node do build (`.nvmrc` × CI), app empacotado com código 1, validação completa nos Nodes e o E2E instável sob carga.

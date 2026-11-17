@@ -16,7 +16,7 @@ e não deve receber novos fluxos de produto.
 
 ### Requisitos
 
-- Node.js ≥ 22.12.0 (definido em `.nvmrc`)
+- Node.js ≥ 22.12.0 (`engines` em `app/package.json`). O release roda em Node 22.x e o `.nvmrc` ainda diz 25.9.0: ver **Versão de Node** em *Smoke do artefato de release*.
 - npm ≥ 10.x
 - Git ≥ 2.30
 - Python 3.9+ (opcional, para `start_app.py`)
@@ -484,9 +484,14 @@ Para reproduzir no checkout, gere um artefato para o SO atual e rode:
 ```bash
 cd app
 npm run build
-npx electron-builder --publish never
+npx electron-builder --dir --publish never
 npm run release:smoke -- --release-dir release --keep-temp
 ```
+
+`--dir` empacota sem instalador e sem publicar: sai a pasta `release/win-unpacked`
+(ou a equivalente do SO), que o smoke usa sozinho quando não há instalador em
+`release/`. No Windows sem toolchain C++, acrescente `-c.npmRebuild=false`, como o
+`release.yml` faz (ver o parágrafo do prebuild do `node-pty` acima); no Linux e no macOS não.
 
 No Linux sem sessão gráfica, envolva o comando com `xvfb-run -a`. O workflow
 executa essa validação na matriz dos três sistemas antes de permitir que a
@@ -501,8 +506,18 @@ apaga nada num caminho com acento (um checkout em "Programação\…"): o
 `emptyOutDir` do Vite deixava os chunks de todos os builds anteriores, e um
 pacote local de 21/10/2026 levava 1282 assets, com 7 `index-*.js`. O
 `bundle-npm-runtime` usa a mesma remoção (`removeTreeSync`), que confere se
-apagou. Em script novo de build ou de empacotamento, não use `fs.rmSync` em
-caminho do repositório.
+apagou. Sem ela, o `cpSync` por cima de um arquivo que já existe falha no Node 25
+com caminho acentuado (`The operation completed successfully`), por isso o bundle
+apaga a cópia anterior antes de copiar. Em script novo de build ou de
+empacotamento, não use `fs.rmSync` em caminho do repositório.
+
+**Versão de Node.** O release é construído e validado em Node 22.x (`setup-node`
+na CI). Em 17/11/2026, no Windows com caminho acentuado, o passo
+`bundle-npm-runtime` passou no Node 25.3.0 e no Node 24.22.3 (Electron 45.3.3) com
+a remoção que confere (`8f3a26ac`). O empacotamento completo não foi rodado em
+Node 25. O contorno que empacota com o Node embutido do Electron
+(`ELECTRON_RUN_AS_NODE`, `noAsar`) não está validado: o pacote que ele gerou em
+02/10/2026 saiu com código 1.
 
 ### Benchmark operacional de gerenciadores
 
