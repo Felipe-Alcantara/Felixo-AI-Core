@@ -4677,3 +4677,22 @@ Task: Felixo AI Core/Contas — validar o Codex 0.159 com CODEX_HOME longo e atu
 **Não validado.** macOS e Linux (outro limite de socket, não medido); login real e o terminal aberto pelo app (exige cadastrar conta); `--no-daemon` com `resume` e com a retomada; o gate completo não rodou porque o commit só mexe em comentário e doc. A correção (`--no-daemon` nos terminais de conta, ou pasta de perfil curta) é código de produto e fica para o redespacho.
 
 Estado: parcial. Commit na branch `orq/contas-validar-codex-159-com`; correção pendente (PRECISA_SONNET).
+
+---
+
+## 2026-11-17 — Testes: o smoke do canvas cobre o foco no bloco Página Web que nasce fora da tela
+
+Task: Felixo AI Core/Testes — cobrir no smoke o foco no bloco Página Web que nasce fora da tela (Notion `3ea91f95-497e-81c4-84ff-f279d9ba4683`). Agente: subagente da Orquestração (Claude Haiku 5.5, effort max), 12:57–14:54. Trilha A.
+
+**Contexto.** O "Abrir como Página Web" já corrige o foco do bloco novo: espera a câmera (`afterCamera`) e foca com `preventScroll` (`focusWhenReady`), desde o PR #98. O smoke não criava o caso em que o bloco nasce fora da tela: `findFreeNodePositionNearNode` pega a primeira posição livre ao redor da nota, e com a nota centralizada o bloco ficava parcialmente na tela.
+
+**O que mudou.**
+- `scripts/canvas-smoke-links.cjs`: a nota da fixture sai de (0, 0) para (-600, -400), para o primeiro lugar livre ao lado dela ser o da direita. No L3, antes de escolher, a câmera é levada por um arrasto com o botão do meio até a nota encostar na borda direita. Pela câmera lida antes do clique e pela posição gravada no canvas, o smoke confere que o bloco nasceu fora da área do canvas. O passo só passa quando o foco está no bloco e ele já está na tela.
+- `inventory/data/overlays.ts` e `nodes.ts`: saem as duas lacunas que diziam que isso não era coberto. `docs/projeto/INVENTARIO-CANVAS.md` regenerado pelo snapshot (229 para 227 lacunas, 61 para 60 tasks).
+- Nenhum código de produto mudou.
+
+**Validação.** Sessão D do smoke com o código final: `L0–L13 ok`, 160,8 s, saída 0. Com o conserto revertido (foco imediato, sem esperar a câmera), o L3 falha com "o foco ir para o bloco novo, já na tela não aconteceu em 20000 ms". Lint, typecheck limpos; testes Node 3465 passando, 0 falhas; Vitest 3661 passando, 0 falhas. Teste de inventário 9/9.
+
+**Não validado.** Reversão por quadro (`requestAnimationFrame`) passa no L3 nesta janela: o foco chega ~400 ms depois, com o bloco já montado (pendência aberta). O toque no link do terminal (L9) é instável sob carga, também no código original (pendência aberta). macOS e Linux não rodados.
+
+Estado: concluído (commit `05adaef1` na branch, sem push; deploy e o smoke completo no CI pelo orquestrador).

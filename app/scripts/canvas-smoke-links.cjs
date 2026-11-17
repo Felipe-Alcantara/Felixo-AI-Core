@@ -216,6 +216,19 @@ function criarSessaoDeLinks(deps) {
     exigir(atual === esperado, passo, `${descricao}: esperado ${esperado} blocos Página Web gravados`, { atual })
   }
 
+  const idsPaginasWeb = () =>
+    page.evaluate(async () => {
+      const listed = await window.felixo.canvas.list()
+      return (listed?.nodes ?? []).filter((node) => node.type === 'webpage').map((node) => node.id)
+    })
+
+  /** Posição do bloco no canvas gravado: coordenadas do canvas, não de tela. */
+  const posicaoGravada = (id) =>
+    page.evaluate(async (alvo) => {
+      const listed = await window.felixo.canvas.list()
+      return (listed?.nodes ?? []).find((node) => node.id === alvo)?.position
+    }, id)
+
   // --- canvas --------------------------------------------------------------
 
   async function prepararCanvas(passo, paginaUrl) {
@@ -223,7 +236,9 @@ function criarSessaoDeLinks(deps) {
       {
         id: NOTE_ID,
         type: 'note',
-        position: { x: 0, y: 0 },
+        // Longe do terminal e da Página Web: o primeiro lugar livre ao lado da
+        // nota é o da direita, e é onde o L3 faz o bloco novo nascer.
+        position: { x: -600, y: -400 },
         width: 420,
         height: 220,
         data: {
@@ -318,6 +333,67 @@ function criarSessaoDeLinks(deps) {
     }, nota)
     exigir(ponto.ponto, passo, 'nenhum ponto livre do canvas perto da nota para o clique fora', { nota, vistos: ponto.vistos })
     return ponto.ponto
+  }
+
+  /** Distância que o React Flow põe entre um bloco novo e o vizinho (`NODE_PLACEMENT_GAP`). */
+  const FOLGA_DO_BLOCO_NOVO = 32
+
+  /** A câmera: o deslocamento do viewport e a escala, com a caixa do canvas em px de tela. */
+  const lerCamera = () =>
+    page.evaluate(() => {
+      const root = document.querySelector('.react-flow').getBoundingClientRect()
+      const transform = getComputedStyle(document.querySelector('.react-flow__viewport')).transform
+      const matriz = transform === 'none' ? new DOMMatrixReadOnly() : new DOMMatrixReadOnly(transform)
+      return { root: { left: root.left, right: root.right }, x: matriz.e, zoom: matriz.a }
+    })
+
+  /**
+   * Pan com o botão do meio: no modo Selecionar, o esquerdo faz seleção. A
+   * partida é um ponto do pano à esquerda da nota.
+   */
+  async function arrastarComBotaoDoMeio(dx, passo) {
+    const origem = await page.evaluate((id) => {
+      const nota = document.querySelector(`.react-flow__node[data-id="${id}"]`).getBoundingClientRect()
+      const root = document.querySelector('.react-flow').getBoundingClientRect()
+      const y = nota.top + nota.height / 2
+      for (let x = nota.left - 40; x > root.left; x -= 20) {
+        if (document.elementFromPoint(x, y)?.classList.contains('react-flow__pane')) return { x, y }
+      }
+      return null
+    }, NOTE_ID)
+    exigir(origem, passo, 'nenhum ponto livre do canvas à esquerda da nota para arrastar a câmera')
+    await page.mouse.move(origem.x, origem.y)
+    await page.mouse.down({ button: 'middle' })
+    await page.mouse.move(origem.x + dx, origem.y, { steps: 12 })
+    await page.mouse.up({ button: 'middle' })
+    // O React Flow aplica o novo transform no quadro seguinte; medir antes leria o antigo.
+    await pausa(150)
+  }
+
+  /**
+   * Leva a nota até a borda direita do canvas. O bloco novo nasce à direita
+   * dela (o primeiro lugar livre, `findFreeNodePositionNearNode`), então sai
+   * inteiro da tela; o link da nota continua dentro do canvas para o clique.
+   */
+  async function notaNaBordaDireita(passo) {
+    for (let arrasto = 0; ; arrasto += 1) {
+      const camera = await lerCamera()
+      const nota = await page.locator(`.react-flow__node[data-id="${NOTE_ID}"]`).boundingBox()
+      // A borda esquerda do bloco novo: com 1 px para fora dá para o teste. O
+      // arrasto mira 8 px, porque o pan anda em pixels inteiros.
+      const bordaDoNovo = nota.x + nota.width + FOLGA_DO_BLOCO_NOVO * camera.zoom
+      if (bordaDoNovo >= camera.root.right + 1) break
+      exigir(arrasto < 3, passo, 'a nota não chegou à borda direita depois de três arrastos', { bordaDoNovo, direita: camera.root.right })
+      await arrastarComBotaoDoMeio(Math.round(camera.root.right + 8 - bordaDoNovo), passo)
+    }
+    const camera = await lerCamera()
+    const link = await linkDaNota().boundingBox()
+    exigir(
+      link && link.x >= camera.root.left && link.x + link.width <= camera.root.right,
+      passo,
+      'o link da nota saiu do canvas com a câmera afastada',
+      { link, root: camera.root },
+    )
   }
 
   // --- passos: Markdown ----------------------------------------------------
@@ -500,14 +576,31 @@ function criarSessaoDeLinks(deps) {
     }
 
     const antes = await contarPaginasWeb()
+    const idsAntes = await idsPaginasWeb()
     await mostrarNotaRenderizadaSeFechada()
+    await notaNaBordaDireita(passo)
     await linkDaNota().click()
     await esperarMenu(passo, 'Página Web')
+    // A câmera de antes da escolha: é ela que vale no instante em que o bloco nasce.
+    const camera = await lerCamera()
     await escolher('abrir-como-pagina-web')
     await esperarMenuFechado(passo, 'Página Web')
     await esperarPaginasWeb(passo, 'o bloco Página Web do link', antes + 1)
-    await esperar(passo, 'o foco ir para o bloco novo', () =>
-      document.activeElement?.classList.contains('react-flow__node-webpage') === true)
+    const novo = (await idsPaginasWeb()).find((id) => !idsAntes.includes(id))
+    exigir(novo, passo, 'o bloco Página Web novo não está no canvas gravado')
+    const posicao = await posicaoGravada(novo)
+    exigir(posicao, passo, 'o bloco novo não tem posição gravada', { novo })
+    const borda = camera.root.left + camera.x + posicao.x * camera.zoom
+    exigir(borda >= camera.root.right, passo, 'o bloco novo nasceu dentro da área do canvas', { borda, camera, posicao })
+    // Fora da tela ele não tem elemento no DOM: o foco só pode estar nele depois
+    // que a câmera o traz de volta, com ele dentro do canvas.
+    await esperar(passo, 'o foco ir para o bloco novo, já na tela', (id) => {
+      const node = document.querySelector(`.react-flow__node[data-id="${CSS.escape(id)}"]`)
+      if (!node || document.activeElement !== node) return false
+      const root = document.querySelector('.react-flow').getBoundingClientRect()
+      const r = node.getBoundingClientRect()
+      return r.right > root.left && r.left < root.right && r.bottom > root.top && r.top < root.bottom
+    }, novo)
   }
 
   async function markdownRecusadoEEmail() {

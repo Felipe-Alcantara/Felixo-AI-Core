@@ -553,11 +553,6 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
         risk: 'baixo',
         task: '3ec91f95-497e-8103-b360-c1979d6992f4',
       },
-      {
-        what: 'Foco no bloco Página Web que nasce fora da tela sem cobertura no smoke.',
-        risk: 'baixo',
-        task: '3ea91f95-497e-81c4-84ff-f279d9ba4683',
-      },
     ],
     overlap: `${NODE_OVERLAP_BASE} O <webview> composita por cima do DOM do cartão e engole o mousedown nas bordas: um véu (pointer-events-auto) só liga durante o resize. Cliques dentro do guest não chegam ao document, então menus que fecham por mousedown fora (perfil) ficam abertos.`,
   },

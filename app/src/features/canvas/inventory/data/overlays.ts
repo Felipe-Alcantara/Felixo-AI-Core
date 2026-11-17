@@ -626,11 +626,6 @@ export const overlaySurfaces: InventoryElement[] = [
         risk: 'baixo',
         task: '3ea91f95-497e-812b-a108-fb89c94fa528',
       },
-      {
-        what: 'O foco no bloco Página Web que nasce fora da tela (focusCanvasNodeAfterCamera) não é conferido no smoke.',
-        risk: 'baixo',
-        task: '3ea91f95-497e-81c4-84ff-f279d9ba4683',
-      },
     ],
     overlap:
       'Portal no body, fixed, z 70, w-72, max-height da janela − 16 px: acima dos diálogos (60), do card do tour (55) e dos toasts (50), abaixo do menu Ajuda e FelixoSelect (1000). Camada flutuante (data-felixo-floating-layer): clicar nele não fecha a gaveta do terminal de onde o link veio.',

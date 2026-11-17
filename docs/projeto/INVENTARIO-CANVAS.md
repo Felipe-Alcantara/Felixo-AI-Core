@@ -32,7 +32,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **Elementos:** 103 (10 blocos, 16 ferramentas, 77 outras superfícies)
 - **Controles:** 402, dos quais 61 com teste específico
 - **Elementos sem nenhum teste:** 3
-- **Lacunas:** 231 (alto 4, médio 121, baixo 106), em 62 tasks
+- **Lacunas:** 229 (alto 4, médio 121, baixo 104), em 61 tasks
 
 ## Moldura do canvas
 
@@ -694,7 +694,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Voltar e Avançar não são clicados por nenhum teste. | baixo | `3ec91f95-497e-8141-b6c1-d1833aac5664` |
 | Voltar, Avançar e Recarregar (WebpageNode.tsx:319, 329, 339) chamam o guest sem try, ao contrário de navigateTo e openInExternalBrowser: antes do dom-ready o Electron lança síncrono. Recarregar fica sempre habilitado e, depois de trocar de perfil, canGoBack/canGoForward continuam com o valor do guest antigo. | médio | `3ec91f95-497e-8176-bef0-dfde828936dc` |
 | Rótulo pelo título da página (WebpageNode.tsx:84 e 190-194): sem nome manual, o rótulo segue cada título durante a sessão, mas ao reabrir o app labelCustomizedRef nasce verdadeiro (há label gravado) e o rótulo trava no último título. O comentário diz "wins once". | baixo | `3ec91f95-497e-8103-b360-c1979d6992f4` |
-| Foco no bloco Página Web que nasce fora da tela sem cobertura no smoke. | baixo | `3ea91f95-497e-81c4-84ff-f279d9ba4683` |
 
 ### Bloco Tarefas Notion (contêiner)
 
@@ -2811,7 +2810,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Links enviados pelos agentes ainda não abrem no app real e a causa não foi achada. | alto | `3db91f95-497e-81a7-9554-c9cffa821c63` |
 | A abertura no navegador do sistema só roda no smoke com o shell falso (FELIXO_DEVTOOLS_SHELL_OPEN=falha); no app instalado do Windows e do macOS não foi conferida. | médio | `3ea91f95-497e-8117-8506-d4abe67709ff` |
 | Menu nunca usado com leitor de tela e tela sensível ao toque reais (o smoke simula toque e lê a árvore pelo CDP). | baixo | `3ea91f95-497e-812b-a108-fb89c94fa528` |
-| O foco no bloco Página Web que nasce fora da tela (focusCanvasNodeAfterCamera) não é conferido no smoke. | baixo | `3ea91f95-497e-81c4-84ff-f279d9ba4683` |
 
 ### Aviso "o link não abriu"
 
@@ -2956,7 +2954,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3ea91f95-497e-8117-8506-d4abe67709ff` — 1 lacuna
 - `3ea91f95-497e-812b-a108-fb89c94fa528` — 1 lacuna
 - `3ea91f95-497e-819a-bdd9-fbc178f27b3e` — 1 lacuna
-- `3ea91f95-497e-81c4-84ff-f279d9ba4683` — 2 lacunas
 - `3ea91f95-497e-81d9-a3d8-ed3971b18a24` — 3 lacunas
 - `3eb91f95-497e-811b-8eb0-e620c6f37e21` — 6 lacunas
 - `3eb91f95-497e-8126-8750-d9834c65f306` — 3 lacunas
