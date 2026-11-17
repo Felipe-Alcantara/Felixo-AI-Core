@@ -31,7 +31,7 @@ const fs = require('node:fs')
 const platform = require('../core/platform/index.cjs')
 const { resolveCommandPath } = require('../core/cli-detector.cjs')
 const { createAccountCliEnv } = require('./cli-process-manager.cjs')
-const { discoverAgentSession, isSafeSessionId, selectDiscoveryContext } = require('./agent-session-discovery.cjs')
+const { discoverAgentSession, isSafeSessionId, listAgentSessions, selectDiscoveryContext } = require('./agent-session-discovery.cjs')
 const { normalizeCliVersion } = require('./agent-cli-versions.cjs')
 const { validatePtyAccountSelection, resolveProviderIdForCommand } = require('./pty-account-validation.cjs')
 const { ensureNodePtySpawnHelperExecutable } = require('./pty-native-assets.cjs')
@@ -202,6 +202,33 @@ class PtyProcessManager {
     const providerId = options.providerId ?? (isCodexCommand(options.command) ? 'codex' : null)
     if (providerId !== 'codex') return null
     return codexProfileKey(this.buildAccountEnv(options.accountId, 'codex'), this.platform.name)
+  }
+
+  /**
+   * Conversas da conta do bloco para a faixa de retomada escolher outra (ver
+   * `listAgentSessions`): só metadados. O ambiente da conta é o mesmo do
+   * spawn, então a lista é a da pasta de histórico que a CLI vai usar.
+   *
+   * @param {{ command?: string, cwd?: string, accountId?: string, providerId?: string }} options
+   */
+  listAgentSessions(options = {}) {
+    const accountValidation = validatePtyAccountSelection({
+      accountId: options.accountId,
+      providerId: options.providerId,
+      command: options.command,
+      validateAccount: this.validateAccount,
+    })
+    if (!accountValidation.ok) throw new Error(accountValidation.message)
+
+    const accountEnv = this.buildAccountEnv(options.accountId, accountValidation.providerId)
+    const env = createAccountCliEnv({ providerId: accountValidation.providerId, profileEnv: accountEnv }, this.platform.name)
+    const context = selectDiscoveryContext(env)
+    return listAgentSessions({
+      command: options.command,
+      cwd: options.cwd,
+      env: context.env,
+      ...(context.homeDir ? { homeDir: context.homeDir } : {}),
+    })
   }
 
   /**

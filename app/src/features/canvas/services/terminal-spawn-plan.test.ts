@@ -224,7 +224,7 @@ describe('Tabela 1: o que cada bloco recebe ao subir', () => {
     expect('initialText' in campos).toBe(true)
     expect(campos.initialText).toBeUndefined()
     expect(campos.resumeAgentSession).toBe(false)
-    expect(campos.resumeBanner?.actions.map((action) => action.id)).toEqual(['picker', 'new'])
+    expect(campos.resumeBanner?.actions.map((action) => action.id)).toEqual(['choose', 'picker', 'new'])
   })
 
   it('escolher "conversa nova" na faixa libera o bloco com o aviso de conversa nova', () => {

@@ -4572,3 +4572,25 @@ Task: Felixo AI Core/Prompts — reproduzir cenário de falha: permissão negada
 **Validação.** Medido no Windows, com perfil temporário: leitura normal sai com código 0; com ACL negado, o shim sai com código 2 e `EPERM` no stderr; restaurada a permissão, a mesma leitura sai com código 0. `node --test electron/cli/context-command.test.cjs`: 18 de 18 (eram 15). Mutação temporária em `ERROS_QUE_VALEM_NOVA_TENTATIVA` (incluindo `EPERM`) e no registro QA: o teste novo falha nas duas; o arquivo foi restaurado e conferido com `cmp`. `run-node-unit-tests.cjs` (depois do rebase na main): 3478 passam, 0 falham, 12 pulados, de 3490.
 
 **Não verificado.** App empacotado e bloco na tela (não rodados); o teste de ACL no CI do Windows (não rodado lá).
+
+---
+
+## 2026-11-17 — Retomada: a faixa lista as conversas da pasta e da conta para escolher outra
+
+Task: Felixo AI Core/Retomada — listar no app as conversas da pasta e da conta para escolher outra (Notion `3eb91f95-497e-81bb-a374-eb2e336c73c6`). Agente: subagente da Orquestração (Claude Sonnet 5.5, effort medium).
+
+**Contexto.** A faixa de retomada só oferecia o `/resume` da CLI, que filtra por pasta: no motivo "a conversa nasceu em outra pasta" a conversa certa não aparecia e a pessoa concluía que ela não existia. A descoberta já sabia onde cada provider e perfil de conta guardam o histórico.
+
+**Decisões.** (1) Só data e pasta na lista, sem título: o título pode ter dado sensível e o critério da task é não ler conteúdo além de metadados; vira lacuna declarada no inventário. (2) A lista só é oferecida onde a retomada por ID vale (`capability.method === 'exact-id'`, bloco com pasta), para não prometer o que o Gemini anterior à 0.57 não faz. (3) Escolher conversa de outra pasta muda o `cwd` do bloco, com `confirm`.
+
+**O que mudou.**
+- `agent-session-discovery.cjs`: `listAgentSessions` reaproveita os leitores de metadado, as pastas por provider e a regra de pasta (Gemini normalizado) da descoberta; devolve `{ folder, account }` com ID, pasta e `modifiedAt`, até 30 por grupo e 400 arquivos abertos. `readFirstLine` virou `readHead` + `firstLine` (sem mudança de comportamento).
+- `pty-process-manager.cjs` (`listAgentSessions`, com o ambiente da conta do bloco), `pty-ipc-handlers.cjs` (`pty:list-sessions`), `preload.cjs` e `vite-env.d.ts`.
+- Renderer: `agent-session-list.ts` (valida o que vem do main), `ResumeSessionPicker.tsx` (cartão e gaveta), ação `choose` e `chooser` na faixa, `chosenSessionPatch` (associa a conversa, guarda a anterior, troca a pasta, limpa falha e escolha) e `handleChooseResumeSession` no `CanvasView`.
+- Inventário do canvas atualizado e `INVENTARIO-CANVAS.md` regenerado; `GUIA-USUARIO.md` e `ARQUITETURA.md`.
+
+**Validação.** `agent-session-discovery.test.cjs` e `pty-ipc-handlers.test.cjs`: 55/55 (6 testes novos de lista com árvores sintéticas de Codex, Claude e Gemini, `CODEX_HOME` da conta, teto, subagente e nenhum texto de conversa na saída; 2 do IPC); `pty-process-manager.test.cjs`: lista lê a pasta da conta, não a do login; vitest `terminal-resume-banner` (51) e `agent-session-list` (3). Gate: lint e typecheck limpos; node 3487/3500 (a falha, `pty-output-path-benchmark` "variante ipc", passa isolada 11/11); vitest 3698 passaram, 4 ignorados.
+
+**Não validado.** O app não foi aberto (porta 5173 ocupada por outro agente): a lista no cartão e na gaveta, os `confirm` e a retomada real depois da escolha não foram vistos. Nenhum smoke cobre a lista.
+
+Estado: concluído na branch `orq/retomada-listar-app-conversas-pasta`; push e deploy pelo orquestrador.

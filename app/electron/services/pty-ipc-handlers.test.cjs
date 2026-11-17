@@ -727,3 +727,27 @@ test('fechado enquanto esperava a vez, o bloco não abre depois e o ticket da ca
   assert.deepEqual(spawns(), ['a'])
   assert.deepEqual(fim, [{ ticket: '11111111-2222-4333-8444-555555555555', sessionId: 'b', ok: false }])
 })
+
+test('pty:list-sessions entrega as conversas do gerenciador e confere os tipos dos parâmetros', async () => {
+  const sessions = { folder: [{ sessionId: 'codex-aaaaaaaa', cwd: '/repo', modifiedAt: 1 }], account: [] }
+  const { invoke, manager } = setup()
+  manager.listAgentSessions = (options) => {
+    manager.listed = options
+    return sessions
+  }
+
+  const result = await invoke('pty:list-sessions', { command: 'codex', cwd: '/repo', accountId: 42 })
+
+  assert.deepEqual(result, { ok: true, ...sessions })
+  assert.deepEqual(manager.listed, { command: 'codex', cwd: '/repo', accountId: undefined, providerId: undefined })
+})
+
+test('pty:list-sessions sem suporte do gerenciador responde vazio, e erro vira resultado de erro', async () => {
+  assert.deepEqual(await setup().invoke('pty:list-sessions', {}), { ok: true, folder: [], account: [] })
+
+  const { invoke, manager } = setup()
+  manager.listAgentSessions = () => {
+    throw new Error('conta inválida')
+  }
+  assert.deepEqual(await invoke('pty:list-sessions', { command: 'codex' }), { ok: false, message: 'conta inválida' })
+})

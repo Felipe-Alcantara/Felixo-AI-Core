@@ -652,6 +652,20 @@ declare global {
          */
         cliVersions?: () => Promise<CliInvokeResult & { versions?: Record<string, string | null> }>
         /**
+         * Conversas da pasta do bloco (`folder`) e das outras pastas da mesma
+         * conta (`account`), da mais recente para a mais antiga, só com ID,
+         * pasta e data (`modifiedAt`, ms). Nunca título nem texto da conversa.
+         */
+        listSessions?: (params: {
+          command?: string
+          cwd?: string
+          accountId?: string
+          providerId?: string
+        }) => Promise<CliInvokeResult & {
+          folder?: Array<{ sessionId: string; cwd: string; modifiedAt: number }>
+          account?: Array<{ sessionId: string; cwd: string; modifiedAt: number }>
+        }>
+        /**
          * Página do arquivo em disco da saída do PTY (14 dias), do fim para o
          * começo: a próxima página passa o `start` desta como `before`.
          * Offsets em bytes; `firstOffset` é o começo do que ainda está guardado.

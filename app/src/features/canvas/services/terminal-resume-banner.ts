@@ -16,15 +16,17 @@ import {
   type AgentResumeReason,
   type AgentSessionReference,
 } from './agent-session'
+import type { ListedAgentSession } from './agent-session-list'
 import { resolveTerminalInitialText } from './quality-standard-prompt'
 import type { PreviousAgentSession } from '../types'
 
 /**
  * `picker` e `new` resolvem a pendência; `retry` volta a tentar a mesma
  * conversa; `dismiss` tira o aviso de falha de um processo que segue de pé,
- * sem relançar nada.
+ * sem relançar nada; `choose` abre a lista de conversas da pasta e da conta
+ * (a escolha lá dentro é que relança, por `chosenSessionPatch`).
  */
-export type TerminalResumeActionId = AgentResumeChoice | 'retry' | 'dismiss'
+export type TerminalResumeActionId = AgentResumeChoice | 'retry' | 'dismiss' | 'choose'
 
 export type TerminalResumeAction = {
   id: TerminalResumeActionId
@@ -43,11 +45,24 @@ export type TerminalResumeBanner = {
   target?: string
   actions: TerminalResumeAction[]
   /**
+   * De onde sai a lista de "Escolher outra conversa…": o agente, a pasta e a
+   * conta do bloco. Ausente quando a CLI instalada não retoma pelo ID (a
+   * escolha não teria como valer) ou o bloco não tem pasta.
+   */
+  chooser?: TerminalResumeChooser
+  /**
    * A CLI já recusou esta conversa (inexistente ou login). É o único motivo
    * que fala do processo que está de pé — os outros só valem para o próximo
    * spawn (ver `shouldShowTerminalResumeBanner`).
    */
   failure: boolean
+}
+
+export type TerminalResumeChooser = {
+  command: string
+  cwd: string
+  accountId?: string
+  providerId?: string
 }
 
 const isFailureReason = (reason: AgentResumeReason) => reason === 'expired' || reason === 'auth'
@@ -58,6 +73,8 @@ const isFailureReason = (reason: AgentResumeReason) => reason === 'expired' || r
  * o bloco espera a pessoa.
  */
 export const TERMINAL_RESUME_PENDING_LABEL = 'aguardando escolha'
+
+const CHOOSE_ACTION: TerminalResumeAction = { id: 'choose', label: 'Escolher outra conversa…' }
 
 const CHOICE_ACTIONS: readonly TerminalResumeAction[] = [
   { id: 'picker', label: 'Escolher na lista (/resume)' },
@@ -85,6 +102,8 @@ export function buildTerminalResumeBanner(input: {
   reference?: AgentSessionReference
   cwd?: string
   command?: string
+  accountId?: string
+  providerId?: string
 }): TerminalResumeBanner | null {
   const { plan, reference, cwd, command } = input
   if (plan.outcome !== 'pending') return null
@@ -92,11 +111,19 @@ export function buildTerminalResumeBanner(input: {
   const { title, detail } = describeAgentResumeForPerson(plan, { reference, cwd, command })
   const failureOnly = plan.reasons.every(isFailureReason)
 
+  // A lista só serve a quem retoma pelo ID: sem isso, escolher uma conversa
+  // seria prometer uma retomada que a CLI instalada não faz.
+  const chooser = plan.capability.method === 'exact-id' && command && cwd
+    ? { command, cwd, ...(input.accountId ? { accountId: input.accountId } : {}), ...(input.providerId ? { providerId: input.providerId } : {}) }
+    : undefined
+  const choices = chooser ? [CHOOSE_ACTION, ...CHOICE_ACTIONS] : [...CHOICE_ACTIONS]
+
   return {
     title,
     detail,
     ...(isAgentSessionReference(reference) ? { target: describeAgentResumeTarget(reference) } : {}),
-    actions: failureOnly ? [...CHOICE_ACTIONS, RETRY_ACTION] : [...CHOICE_ACTIONS],
+    ...(chooser ? { chooser } : {}),
+    actions: failureOnly ? [...choices, RETRY_ACTION] : choices,
     failure: plan.reasons.some(isFailureReason),
   }
 }
@@ -152,7 +179,7 @@ export function visibleTerminalResumeBanner(input: {
 
 /** Se o botão da faixa relança o bloco (e pede a confirmação do Reiniciar). */
 export function terminalResumeActionRelaunches(action: TerminalResumeActionId): boolean {
-  return action !== 'dismiss'
+  return action !== 'dismiss' && action !== 'choose'
 }
 
 /**
@@ -197,6 +224,7 @@ export function terminalResumeActionPatch(action: TerminalResumeActionId): {
 } {
   if (action === 'retry') return { resumeFailure: undefined, resumeChoice: undefined }
   if (action === 'dismiss') return { resumeFailure: undefined }
+  if (action === 'choose') return {}
   return { resumeChoice: action }
 }
 
@@ -364,4 +392,39 @@ export function resumeFailurePatch(
     resumeFailure: { sessionId, reason, at: now },
     resumeChoice: undefined,
   }
+}
+
+/**
+ * O que gravar quando a pessoa escolhe uma conversa da lista: ela passa a ser
+ * a associada ao bloco (a anterior vira `previousAgentSession`, ver
+ * `agentSessionPatch`), a pasta do bloco passa a ser a dela — por isso a
+ * interface confirma antes quando difere — e a falha e a escolha da faixa
+ * saem, para o plano voltar a ser `exact` e o bloco subir retomando pelo ID.
+ * A conta é a do bloco: a lista só traz conversas dela.
+ */
+export function chosenSessionPatch(
+  current: { agentSession?: unknown },
+  input: {
+    provider: AgentSessionReference['provider']
+    session: ListedAgentSession
+    accountId?: string
+    cliVersion?: string
+  },
+  now: number,
+) {
+  const { provider, session, accountId, cliVersion } = input
+  const patch = agentSessionPatch(
+    current,
+    {
+      version: 1,
+      provider,
+      sessionId: session.sessionId,
+      cwd: session.cwd,
+      capturedAt: session.modifiedAt,
+      ...(accountId ? { accountId } : {}),
+      ...(cliVersion ? { cliVersion } : {}),
+    },
+    now,
+  )
+  return { ...patch, resumeFailure: undefined, resumeChoice: undefined }
 }

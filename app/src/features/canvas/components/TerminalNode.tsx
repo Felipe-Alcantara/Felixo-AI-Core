@@ -41,6 +41,8 @@ import {
   toPromptInsertionMetadata,
 } from '../../shared/types/prompt-insertion'
 import { TerminalReadingPreview } from './TerminalReadingPreview'
+import { ResumeSessionPicker } from './ResumeSessionPicker'
+import type { ListedAgentSession } from '../services/agent-session-list'
 import { readingProfileFor } from '../terminal/reading/reading-profiles'
 import { useAccountChain, useCliAccountLabel } from '../hooks/useAccountChain'
 import { useAccountChainActions } from '../hooks/account-chain-actions-context'
@@ -67,6 +69,8 @@ type TerminalNodeDataWithHandlers = TerminalNodeData & {
   ) => void
   /** Botão da faixa de retomada: o canvas grava a escolha e (re)sobe o bloco. */
   onResumeAction?: (nodeId: string, action: TerminalResumeActionId) => void
+  /** A pessoa escolheu uma conversa da lista da faixa: o canvas a associa e relança. */
+  onChooseResumeSession?: (nodeId: string, session: ListedAgentSession) => void
   /** Reinicia pelo plano de retomada do canvas (o mesmo da gaveta). */
   onRestart?: (nodeId: string) => void
   /**
@@ -104,6 +108,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
   // Geração do processo em que a pessoa pediu Reiniciar com a retomada
   // pendente (ver `shouldShowTerminalResumeBanner`).
   const [resumeRevealedGeneration, setResumeRevealedGeneration] = useState<number | null>(null)
+  const [resumePickerOpen, setResumePickerOpen] = useState(false)
 
   // Start (or adopt) the background session as soon as the card mounts.
   // ensure() is idempotent, so initialText only fires on the first creation.
@@ -282,6 +287,10 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   const runResumeAction = (action: TerminalResumeActionId) => {
+    if (action === 'choose') {
+      setResumePickerOpen(true)
+      return
+    }
     // Com processo de pé (a CLI esperando login, por exemplo), a escolha
     // reinicia o terminal: pede a mesma confirmação do Reiniciar. Dispensar
     // o aviso não reinicia nada, então não pergunta.
@@ -407,6 +416,18 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
                   </button>
                 ))}
               </div>
+              {resumePickerOpen && resumeBanner.chooser && (
+                <ResumeSessionPicker
+                  compact
+                  lookup={resumeBanner.chooser}
+                  onClose={() => setResumePickerOpen(false)}
+                  onChoose={(session) => {
+                    if (!confirmRestartOfLiveProcess()) return
+                    setResumePickerOpen(false)
+                    nodeData.onChooseResumeSession?.(id, session)
+                  }}
+                />
+              )}
             </div>
           )}
           {chainBanners.map((banner) => (

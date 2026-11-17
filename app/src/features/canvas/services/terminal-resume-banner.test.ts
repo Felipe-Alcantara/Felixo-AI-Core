@@ -10,6 +10,7 @@ import {
   TERMINAL_RESUME_PENDING_LABEL,
   agentSessionPatch,
   buildTerminalResumeBanner,
+  chosenSessionPatch,
   describeTerminalResumeStart,
   followsTerminalResumePlan,
   resolveTerminalRelaunch,
@@ -48,12 +49,15 @@ function scenario(overrides: Partial<PlanInput> = {}) {
       reference: input.reference,
       cwd: input.cwd,
       command: input.command,
+      accountId: input.accountId,
     }),
   }
 }
 
+// "Escolher outra conversa…" tem os próprios testes (describe abaixo); as demais
+// asserções tratam das saídas que já existiam.
 const actionIds = (banner: ReturnType<typeof buildTerminalResumeBanner>) =>
-  banner?.actions.map((action) => action.id)
+  banner?.actions.map((action) => action.id).filter((id) => id !== 'choose')
 
 describe('faixa de retomada do cartão', () => {
   it('não há faixa quando não há o que decidir', () => {
@@ -84,7 +88,7 @@ describe('faixa de retomada do cartão', () => {
     expect(banner?.title.length).toBeGreaterThan(0)
     expect(banner?.detail.length).toBeGreaterThan(0)
     expect(actionIds(banner)?.slice(0, 2)).toEqual(['picker', 'new'])
-    expect(banner?.actions.slice(0, 2).map((action) => action.label)).toEqual([
+    expect(banner?.actions.filter((action) => action.id !== 'choose').slice(0, 2).map((action) => action.label)).toEqual([
       'Escolher na lista (/resume)',
       'Abrir conversa nova',
     ])
@@ -105,7 +109,7 @@ describe('faixa de retomada do cartão', () => {
   it('"tentar de novo" só quando a CLI recusou e a falha é o único obstáculo', () => {
     expect(actionIds(scenario({ failure: expired }).banner)).toEqual(['picker', 'new', 'retry'])
     expect(actionIds(scenario({ failure: auth }).banner)).toEqual(['picker', 'new', 'retry'])
-    expect(scenario({ failure: auth }).banner?.actions[2].label).toBe('Tentar retomar de novo')
+    expect(scenario({ failure: auth }).banner?.actions.at(-1)?.label).toBe('Tentar retomar de novo')
     // Divergências que tentar de novo não resolve: o botão prometeria demais.
     for (const overrides of [{ cwd: '/outro' }, { accountId: undefined }, { command: 'claude' }]) {
       expect(actionIds(scenario(overrides).banner)).toEqual(['picker', 'new'])
@@ -390,5 +394,66 @@ describe('registro da conversa do bloco', () => {
         failure: patch?.resumeFailure,
       }).kind,
     ).toBe('spawn')
+  })
+})
+
+describe('escolher outra conversa da lista', () => {
+  it('a faixa oferece a lista primeiro e leva agente, pasta e conta do bloco', () => {
+    const { banner } = scenario({ cwd: '/outro' })
+    expect(banner?.actions.map((action) => action.id)).toEqual(['choose', 'picker', 'new'])
+    expect(banner?.actions[0].label).toBe('Escolher outra conversa…')
+    expect(banner?.chooser).toEqual({ command: 'codex', cwd: '/outro', accountId: ACCOUNT_ID })
+  })
+
+  it('a lista não é oferecida onde escolher não valeria: CLI que não retoma pelo ID ou bloco sem pasta', () => {
+    const gemini = scenario({ command: 'gemini', reference: { ...reference, provider: 'gemini' } }).banner
+    expect(gemini?.chooser).toBeUndefined()
+    expect(gemini?.actions.some((action) => action.id === 'choose')).toBe(false)
+    expect(scenario({ cwd: '' }).banner?.chooser).toBeUndefined()
+  })
+
+  it('abrir a lista não relança nem grava escolha; quem relança é a conversa escolhida', () => {
+    expect(terminalResumeActionRelaunches('choose')).toBe(false)
+    expect(terminalResumeActionPatch('choose')).toEqual({})
+  })
+
+  const listed = { sessionId: 'outra-conversa-987654321', cwd: '/outra-pasta', modifiedAt: 1234 }
+
+  it('a conversa escolhida vira a associada, a pasta do bloco é a dela e a faixa se resolve', () => {
+    const patch = chosenSessionPatch(
+      { agentSession: reference },
+      { provider: 'codex', session: listed, accountId: ACCOUNT_ID, cliVersion: '0.156.1' },
+      99,
+    )
+    expect(patch.agentSession).toMatchObject({
+      sessionId: listed.sessionId,
+      cwd: '/outra-pasta',
+      accountId: ACCOUNT_ID,
+      cliVersion: '0.156.1',
+      capturedAt: 1234,
+    })
+    expect(patch.cwd).toBe('/outra-pasta')
+    // A anterior não some: o registro explica de onde o bloco veio.
+    expect(patch.previousAgentSession).toEqual({ reference, replacedAt: 99 })
+    expect(patch.resumeFailure).toBeUndefined()
+    expect(patch.resumeChoice).toBeUndefined()
+    // Com o patch aplicado, o plano volta a ser a retomada exata pelo ID.
+    const plan = explainAgentResume({
+      command: 'codex',
+      cwd: patch.cwd,
+      reference: patch.agentSession,
+      accountId: ACCOUNT_ID,
+      failure: undefined,
+    })
+    expect(plan.outcome).toBe('exact')
+  })
+
+  it('escolher a conversa que o bloco já tem não cria conversa anterior', () => {
+    const patch = chosenSessionPatch(
+      { agentSession: reference },
+      { provider: 'codex', session: { ...listed, sessionId: SESSION_ID, cwd: '/repo' }, accountId: ACCOUNT_ID },
+      99,
+    )
+    expect(patch).not.toHaveProperty('previousAgentSession')
   })
 })

@@ -57,7 +57,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
       {
         locator: 'onClick={() => runResumeAction(action.id)}',
         kind: 'button',
-        effect: 'Botões da faixa de retomada ("Escolher na lista (/resume)", "Abrir conversa nova", "Tentar retomar de novo", "Dispensar aviso"). Os que relançam pedem confirm com processo vivo; onResumeAction → handleResumeAction grava resumeChoice (transitória, só no registro da execução) ou limpa resumeFailure (persistida) e relança pelo mesmo plano do Reiniciar. "Dispensar aviso" só limpa a falha, o agente de pé continua.',
+        effect: 'Botões da faixa de retomada ("Escolher outra conversa…" (abre a lista, não relança), "Escolher na lista (/resume)", "Abrir conversa nova", "Tentar retomar de novo", "Dispensar aviso"). Os que relançam pedem confirm com processo vivo; onResumeAction → handleResumeAction grava resumeChoice (transitória, só no registro da execução) ou limpa resumeFailure (persistida) e relança pelo mesmo plano do Reiniciar. "Dispensar aviso" só limpa a falha, o agente de pé continua.',
         failure: 'Cancelar o confirm não faz nada. Se a CLI recusar de novo, onResumeFailure grava a falha e a faixa volta com o motivo.',
         disabledWhen: 'Só existe com a faixa de retomada visível.',
       },

@@ -2311,3 +2311,29 @@ test('o perfil do Codex de uma abertura vem do ambiente da conta; outra CLI não
   assert.equal(manager.codexProfileFor({ command: 'claude', accountId: 'a', providerId: 'claude' }), null)
   assert.equal(manager.codexProfileFor({ command: 'bash' }), null)
 })
+
+test('a lista de conversas lê a pasta de histórico da conta do bloco, não a do login do sistema', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-lista-conta-'))
+  try {
+    const cwd = path.join(root, 'repo')
+    const gravar = (home, id) => {
+      const file = path.join(home, 'sessions', `rollout-${id}.jsonl`)
+      fs.mkdirSync(path.dirname(file), { recursive: true })
+      fs.writeFileSync(file, `${JSON.stringify({ payload: { id, cwd } })}\n`)
+    }
+    const perfil = path.join(root, 'perfil-trabalho')
+    gravar(perfil, 'codex-da-conta')
+    const manager = new PtyProcessManager({
+      spawnPty: createFakePty().spawnPty,
+      platform: fakePosixPlatform,
+      buildAccountEnv: (accountId) => (accountId === 'conta-trabalho' ? { CODEX_HOME: perfil } : {}),
+    })
+
+    const lista = manager.listAgentSessions({ command: 'codex', cwd, accountId: 'conta-trabalho' })
+
+    assert.deepEqual(lista.folder.map((item) => item.sessionId), ['codex-da-conta'])
+    assert.deepEqual(lista.account, [])
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})

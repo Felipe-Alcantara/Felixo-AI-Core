@@ -337,6 +337,23 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
     }
   })
 
+  // Conversas da pasta e da conta do bloco para "Escolher outra conversa":
+  // só ID, pasta e data. O ID vai ao renderer porque é o que a retomada usa,
+  // mas a interface nunca o mostra.
+  ipcMain.handle('pty:list-sessions', (_event, params = {}) => {
+    try {
+      const sessions = manager.listAgentSessions?.({
+        command: typeof params.command === 'string' ? params.command : undefined,
+        cwd: typeof params.cwd === 'string' ? params.cwd : undefined,
+        accountId: typeof params.accountId === 'string' ? params.accountId : undefined,
+        providerId: typeof params.providerId === 'string' ? params.providerId : undefined,
+      }) ?? { folder: [], account: [] }
+      return { ok: true, ...sessions }
+    } catch (error) {
+      return toErrorResult(error, 'Nao foi possivel listar as conversas.')
+    }
+  })
+
   // Versão instalada de cada CLI de agente, para o plano de retomada do
   // canvas (ver `agent-cli-versions.cjs`). Sem o serviço, nada se sabe: o
   // renderer trata toda versão como desconhecida.

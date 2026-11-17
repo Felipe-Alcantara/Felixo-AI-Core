@@ -789,6 +789,14 @@ lugar: o cartão do bloco mostra o motivo e você escolhe.
    existe), o agente **não é aberto**. O
    cartão mostra a conversa (o agente, a pasta, o dia e a hora da conversa, e se
    ela é de uma conta própria ou do login do sistema) e o motivo, com os botões:
+   - **Escolher outra conversa…**: abre, ali mesmo, a lista das conversas da pasta
+     do bloco e das outras pastas da mesma conta, da mais recente para a mais
+     antiga, só com a data (e a pasta, no segundo grupo). O botão só aparece
+     para o agente que retoma pelo ID; no Gemini antigo ele some. Escolher uma conversa de outra pasta pede confirmação, porque o
+     bloco passa a abrir nessa pasta. A conversa escolhida vira a do bloco, a
+     anterior fica guardada em **Detalhes do terminal → Retomada**, e o agente
+     abre retomando a escolhida. A lista nunca mostra título nem texto da
+     conversa;
    - **Escolher na lista (/resume)**: abre o agente e digita `/resume`, para você
      escolher a conversa na lista da CLI;
    - **Abrir conversa nova**: abre o agente numa conversa nova. O agente recebe,

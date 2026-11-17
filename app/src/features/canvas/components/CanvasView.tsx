@@ -112,8 +112,10 @@ import {
   type AgentSessionReference,
 } from '../services/agent-session'
 import { loadAgentCliVersions, type AgentCliVersions } from '../services/agent-cli-versions'
+import type { ListedAgentSession } from '../services/agent-session-list'
 import {
   agentSessionPatch,
+  chosenSessionPatch,
   resolveTerminalRelaunch,
   resumeFailurePatch,
   terminalResumeActionPatch,
@@ -1133,6 +1135,33 @@ function CanvasInner({
     [updateNodeData, relaunchTerminal],
   )
 
+  // Conversa escolhida na lista da faixa ("Escolher outra conversa…"): vira a
+  // associada ao bloco (a anterior fica em `previousAgentSession`), o bloco
+  // passa para a pasta dela e sobe retomando pelo ID. A pasta e a conta já
+  // foram conferidas pela lista; o plano de retomada confere de novo.
+  const handleChooseResumeSession = useCallback(
+    (nodeId: string, session: ListedAgentSession) => {
+      const rendered = renderedNodesRef.current.find((node) => node.id === nodeId)
+      if (!rendered || rendered.type !== 'terminal') return
+      const data = rendered.data as TerminalNodeData
+      const chooser = data.resumeBanner?.chooser
+      if (!chooser) return
+      const patch = chosenSessionPatch(
+        data,
+        {
+          provider: chooser.command as AgentSessionReference['provider'],
+          session,
+          accountId: data.accountId,
+          cliVersion: data.resumeCliVersion ?? undefined,
+        },
+        Date.now(),
+      )
+      updateNodeData(nodeId, patch)
+      relaunchTerminal(nodeId, patch)
+    },
+    [updateNodeData, relaunchTerminal],
+  )
+
   // Renaming a terminal in the canvas only relabels the block on our side —
   // the agent inside keeps calling itself by its old name unless told
   // otherwise. Fired once the rename is committed (blur/Enter), not per
@@ -1450,6 +1479,7 @@ function CanvasInner({
             onAgentSession: handleAgentSession,
             onResumeFailure: handleResumeFailure,
             onResumeAction: handleResumeAction,
+            onChooseResumeSession: handleChooseResumeSession,
             onRestart: relaunchTerminal,
             onSessionEnsured: markTerminalStarted,
             onClearAgentSession: forgetAgentSession,
@@ -1480,6 +1510,7 @@ function CanvasInner({
     generateDiagnosis,
     handleAgentSession,
     handleResumeAction,
+    handleChooseResumeSession,
     handleResumeFailure,
     linkAgentToFile,
     notifyTerminalRenamed,
@@ -2274,6 +2305,7 @@ function CanvasInner({
       onRestart: () => relaunchTerminal(paneId),
       resumeBanner: data?.resumeBanner ?? null,
       onResumeAction: (action) => handleResumeAction(paneId, action),
+      onChooseResumeSession: (session) => handleChooseResumeSession(paneId, session),
       onPassResponsibility: (transcript, screenOnly) =>
         setHandoff({ sourceId: paneId, transcript, screenOnly }),
       onOpenFilePreview: openTextFileNode,

@@ -29,10 +29,10 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 
 ## Números
 
-- **Elementos:** 102 (10 blocos, 16 ferramentas, 76 outras superfícies)
-- **Controles:** 398, dos quais 61 com teste específico
+- **Elementos:** 103 (10 blocos, 16 ferramentas, 77 outras superfícies)
+- **Controles:** 400, dos quais 61 com teste específico
 - **Elementos sem nenhum teste:** 3
-- **Lacunas:** 230 (alto 4, médio 119, baixo 107), em 62 tasks
+- **Lacunas:** 231 (alto 4, médio 120, baixo 107), em 62 tasks
 
 ## Moldura do canvas
 
@@ -556,7 +556,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `aria-label="Reiniciar terminal"` (button) | clique | Com retomada pendente não derruba nada: revela a faixa de retomada (mesmo guardada com o agente de pé) e foca o primeiro botão dela. Senão pede window.confirm se o processo está vivo e chama onRestart → relaunchTerminal: store.restart mata e sobe o PTY (pty:kill + pty:spawn) pelo plano de retomada e grava sessionStartedAt no bloco. | Cancelar o confirm não faz nada. Falha do spawn aparece no cartão (selo "erro", snapshot.message). Se o plano segura ("held", ex.: esperando a versão da CLI com a faixa ainda nula) ou o bloco sumiu ("missing"), nada acontece e nada avisa. | — |
 | `aria-label="Ver detalhes do terminal"` (button) | clique | onDetails → setDetailsTerminalId: abre o painel de detalhes (TerminalDetailsPanel) deste bloco. | Sem falha própria (estado local do canvas). | — |
 | `aria-label="Expandir terminal"` (button) | clique | onExpand → openTerminal: abre a gaveta TerminalDrawer com o xterm vivo deste bloco e foca o terminal (troca o painel em foco); com Ctrl/Cmd+clique abre ao lado dos agentes já na gaveta (até 4 painéis); ao fechar a gaveta o foco volta a este botão (data-terminal-expand-trigger). | Sem falha própria: o PTY segue no store com ou sem a gaveta. | `scripts/canvas-smoke.cjs` → `checarInteracoes` |
-| `onClick={() => runResumeAction(action.id)}` (button) | clique | Botões da faixa de retomada ("Escolher na lista (/resume)", "Abrir conversa nova", "Tentar retomar de novo", "Dispensar aviso"). Os que relançam pedem confirm com processo vivo; onResumeAction → handleResumeAction grava resumeChoice (transitória, só no registro da execução) ou limpa resumeFailure (persistida) e relança pelo mesmo plano do Reiniciar. "Dispensar aviso" só limpa a falha, o agente de pé continua. (desabilitado: Só existe com a faixa de retomada visível.) | Cancelar o confirm não faz nada. Se a CLI recusar de novo, onResumeFailure grava a falha e a faixa volta com o motivo. | — |
+| `onClick={() => runResumeAction(action.id)}` (button) | clique | Botões da faixa de retomada ("Escolher outra conversa…" (abre a lista, não relança), "Escolher na lista (/resume)", "Abrir conversa nova", "Tentar retomar de novo", "Dispensar aviso"). Os que relançam pedem confirm com processo vivo; onResumeAction → handleResumeAction grava resumeChoice (transitória, só no registro da execução) ou limpa resumeFailure (persistida) e relança pelo mesmo plano do Reiniciar. "Dispensar aviso" só limpa a falha, o agente de pé continua. (desabilitado: Só existe com a faixa de retomada visível.) | Cancelar o confirm não faz nada. Se a CLI recusar de novo, onResumeFailure grava a falha e a faixa volta com o motivo. | — |
 | `chainActions.onBannerAction({` (button) | clique | Ações das faixas da cadeia de contas (BANNER_ACTION_LABELS, via useAccountContinuation.onBannerAction): "Ver opções" abre o diálogo de troca de conta; "Não era limite" recusa a proposta ou solta a espera (account-chain:decline / release-cooldown); "Sim, tratar como limite" e "Ignorar" resolvem a detecção ambígua (account-chain:resolve-ambiguous); "Trocar de conta", na faixa do mesmo limite depois de "Agora não", pede a proposta (account-chain:request-switch, vale uma vez por aviso) e abre o diálogo dela; "Dispensar" tira a faixa e avisa o main (account-chain:dismiss-detection), que não a devolve depois de um reload; "Refazer login neste terminal" abre a gaveta; "Passar responsabilidade…" abre o Handoff; "Ir para o bloco novo" foca o sucessor. (desabilitado: Só existe com AccountChainActionsContext e uma faixa com ações.) | A mensagem de erro da ação aparece no cartão em role="alert" (chainActions.errorFor). Sem o contexto da cadeia os botões não aparecem. | `scripts/canvas-smoke-contas.cjs` → `confirmarTroca` |
 | `aria-label={`Abrir ${nodeData.label \|\| provider.label}`}` (button) | clique | A prévia inteira é um botão: onExpand abre a gaveta do terminal, como o Expandir (Ctrl/Cmd+clique abre ao lado). Mostra selo de atividade, último prompt, aviso de contexto (data-felixo-context-warning), aviso de scrollback cortado e as últimas linhas. | Sem falha própria. No bloco mínimo (200×120), faixas de retomada e da cadeia espremem a prévia até ela sumir. | — |
 
@@ -977,7 +977,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `Fixar terminal` (button) | clique | Alterna fixada e grava localStorage felixo:terminal-drawer-pinned; fixada, o mousedown fora não fecha a gaveta (shouldCloseOnOutsideClick). (desabilitado: some com a gaveta recolhida) | Sem falha própria; desafixada, clicar na sidebar ou num painel fecha a gaveta. | `scripts/canvas-smoke-prompts.cjs` → `criarSessaoDePrompts` |
 | `aria-label="Fechar terminal"` (button) | clique, Esc fora do xterm ou mousedown fora da gaveta não fixada e com um painel só (exceto camada flutuante); com 2 ou mais painéis o clique fora não fecha | Animação de saída (DRAWER_EXIT_MS) e closeExpandedTerminal: a gaveta (todos os painéis) desmonta, reporta largura 0 e o foco volta ao gatilho do bloco; o PTY segue vivo. | Sem falha própria: fechar nunca encerra o processo. | `scripts/canvas-smoke.cjs` → `checarInteracoes` |
 | `data-felixo-terminal-tab` (button) | clique, ou seta esquerda/direita na lista de abas | Abas Terminal \| Leitura (WAI-ARIA tabs): grava readingMode no nó (updateNodeData, persistido no canvas) e leva o foco junto — ao xterm no Terminal, ao painel na Leitura. Na Leitura o xterm fica por baixo, do mesmo tamanho, inert e aria-hidden; o PTY não é redimensionado. (desabilitado: some recolhida) | Sem falha própria: trocar de aba não toca o processo. Só aparece com onReadingModeChange e um perfil de leitura. | `scripts/canvas-smoke-leitura.cjs` → `copiarEAbas` |
-| `runResumeAction(action.id)` (button) | clique | Botão repetido da faixa (Escolher na lista (/resume), Abrir conversa nova, Tentar retomar de novo, Dispensar aviso): handleResumeAction grava terminalResumeActionPatch no nó (resumeChoice ou limpa resumeFailure), espelha a escolha no sessionStorage felixo:canvas-terminal-run e relança por relaunchTerminal; "Dispensar aviso" só limpa a falha. (desabilitado: some recolhida ou sem faixa visível) | As ações que relançam pedem o mesmo confirm do Reiniciar com processo vivo; cancelar não grava nada. | — |
+| `runResumeAction(action.id)` (button) | clique | Botão repetido da faixa (Escolher outra conversa…, Escolher na lista (/resume), Abrir conversa nova, Tentar retomar de novo, Dispensar aviso): handleResumeAction grava terminalResumeActionPatch no nó (resumeChoice ou limpa resumeFailure), espelha a escolha no sessionStorage felixo:canvas-terminal-run e relança por relaunchTerminal; "Dispensar aviso" só limpa a falha; "Escolher outra conversa…" só abre a lista (ResumeSessionPicker) abaixo da faixa, sem relançar. (desabilitado: some recolhida ou sem faixa visível) | As ações que relançam pedem o mesmo confirm do Reiniciar com processo vivo; cancelar não grava nada. | — |
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
@@ -1249,8 +1249,8 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 - **ID:** `terminal-resume-banner` · **Dono:** `src/features/canvas/services/terminal-resume-banner.ts`
 - **Persistência:** canvas salvo (dados do nó): agentSession, resumeFailure e previousAgentSession; sessionStorage felixo:canvas-terminal-run (resumeChoice desta execução, não vai ao disco)
-- **IPC:** `pty:cli-versions`, `pty:session`, `pty:spawn`
-- **Depende de:** `explainAgentResume`, `describeAgentResumeForPerson`, `resolveTerminalRelaunch`, `CanvasView.handleResumeAction`, `CanvasView.relaunchTerminal`, `terminal-run-registry`, `TerminalNode e TerminalDrawer (renderizam os botões)`
+- **IPC:** `pty:cli-versions`, `pty:list-sessions`, `pty:session`, `pty:spawn`
+- **Depende de:** `explainAgentResume`, `describeAgentResumeForPerson`, `chosenSessionPatch`, `CanvasView.handleChooseResumeSession`, `resolveTerminalRelaunch`, `CanvasView.handleResumeAction`, `CanvasView.relaunchTerminal`, `terminal-run-registry`, `TerminalNode e TerminalDrawer (renderizam os botões)`
 - **Sobreposição:** Sem camada própria: faixa amarela (role="status") no cartão do bloco e abaixo do cabeçalho da gaveta, no fluxo do conteúdo.
 - **Testes:** `src/features/canvas/services/terminal-resume-banner.test.ts`, `src/features/canvas/services/agent-session.test.ts`, `src/features/canvas/services/agent-resume-capability.test.ts`, `src/features/canvas/services/agent-cli-versions.test.ts`, `src/features/canvas/services/terminal-run-registry.test.ts`
 
@@ -1259,7 +1259,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | normal | Sem faixa: plano exato, lista automática sem conversa associada, conversa nova ou escolha já feita (buildTerminalResumeBanner devolve null). |
 | empty | Registro de conversa ilegível: a faixa sai sem o alvo (agente · pasta · quando · conta). |
 | error | A CLI recusou a conversa (expired ou auth): failure, aparece mesmo com o agente de pé; ganha Tentar retomar de novo quando a falha é o único obstáculo e Dispensar aviso com o processo vivo. |
-| pending | Plano "pending" (pasta, conta ou agente divergente; CLI sem retomada por ID, como o Gemini anterior à 0.57) com bloco sem processo, processo encerrado ou Reiniciar revelado: "aguardando escolha" e Escolher na lista (/resume) ou Abrir conversa nova. |
+| pending | Plano "pending" (pasta, conta ou agente divergente; CLI sem retomada por ID, como o Gemini anterior à 0.57) com bloco sem processo, processo encerrado ou Reiniciar revelado: "aguardando escolha" e Escolher outra conversa… (só com CLI que retoma pelo ID e bloco com pasta), Escolher na lista (/resume) ou Abrir conversa nova. |
 | success | Escolha gravada: a faixa some e o bloco (re)sobe com /resume, conversa nova ou a retomada exata. |
 
 Sem controle próprio: as ações vêm de outros elementos.
@@ -1268,7 +1268,33 @@ Sem controle próprio: as ações vêm de outros elementos.
 | --- | --- | --- |
 | Nenhum smoke mostra a faixa nem clica nos botões dela (cartão ou gaveta); o store falso não a reproduz. | médio | `3eb91f95-497e-811b-8eb0-e620c6f37e21` |
 | O relançamento automático do Codex (auto-update) não respeita a escolha feita na faixa. | médio | `3eb91f95-497e-8178-bc58-cd545a4f4cc8` |
-| A faixa só oferece a lista da CLI; as conversas da pasta e da conta não aparecem no app. | baixo | `3eb91f95-497e-81bb-a374-eb2e336c73c6` |
+
+### Lista de conversas da faixa de retomada
+
+- **ID:** `terminal-resume-picker` · **Dono:** `src/features/canvas/components/ResumeSessionPicker.tsx`
+- **Persistência:** canvas salvo (dados do nó): agentSession, cwd e previousAgentSession gravados pela conversa escolhida; a lista em si não é guardada: lida do disco a cada abertura e descartada ao fechar
+- **IPC:** `pty:list-sessions`
+- **Depende de:** `listAgentSessions (agent-session-discovery.cjs, os mesmos leitores e a mesma regra de pasta da descoberta)`, `PtyProcessManager.listAgentSessions (ambiente da conta do bloco)`, `loadAgentSessionList`, `chosenSessionPatch`, `CanvasView.handleChooseResumeSession`
+- **Sobreposição:** Sem camada própria: abre dentro da faixa de retomada, no fluxo do conteúdo do cartão ou da gaveta.
+- **Testes:** `src/features/canvas/services/terminal-resume-banner.test.ts`, `src/features/canvas/services/agent-session-list.test.ts`, `electron/services/agent-session-discovery.test.cjs`, `electron/services/pty-ipc-handlers.test.cjs`
+
+| Estado | Quando |
+| --- | --- |
+| normal | Aberta por "Escolher outra conversa…": grupo "Nesta pasta" (as conversas que a retomada exata aceita) e "Em outras pastas da conta" (a pasta aparece depois da data), até 8 por grupo, da mais recente para a mais antiga. Só data e pasta: nenhum ID, título ou texto de conversa. |
+| loading | "Procurando conversas…" enquanto o processo principal lê o disco (pty:list-sessions). |
+| empty | "Nenhuma outra conversa encontrada nesta conta." (a conta é a do bloco: o perfil dela, ou o login do sistema). |
+| error | "Não foi possível listar as conversas agora." (sem ponte, conta inválida ou erro de leitura); as outras saídas da faixa seguem valendo. |
+| success | Conversa escolhida: vira a associada ao bloco (a anterior fica em previousAgentSession), o bloco passa à pasta dela e sobe retomando pelo ID. |
+
+| Controle | Gatilho | Efeito | Falha conhecida | Teste |
+| --- | --- | --- | --- | --- |
+| `onClick={() => choose(session)}` (button) | clique | Escolhe a conversa: de outra pasta pede confirm ("O bloco passa a abrir nessa pasta"); com processo vivo pede o confirm do Reiniciar; depois onChooseResumeSession → handleChooseResumeSession grava chosenSessionPatch (agentSession, cwd, previousAgentSession; limpa resumeFailure e resumeChoice) e relança por relaunchTerminal. | Cancelar qualquer confirm não grava nada. Se a CLI recusar a conversa, onResumeFailure grava a falha e a faixa volta com o motivo. | — |
+| `Fechar lista` (button) | clique | Fecha a lista sem gravar nada; a faixa e o bloco seguem como estavam. | Sem falha própria. | — |
+
+| Lacuna | Risco | Task |
+| --- | --- | --- |
+| A lista não mostra título da conversa (só data e pasta), de propósito: o título pode ter dado sensível e a task pede nenhum conteúdo além de metadados. Duas conversas da mesma pasta no mesmo minuto não se distinguem. | baixo | `3eb91f95-497e-81bb-a374-eb2e336c73c6` |
+| Nenhum smoke abre a lista nem escolhe uma conversa (cartão ou gaveta); a conferência visual não foi feita. | médio | `3eb91f95-497e-811b-8eb0-e620c6f37e21` |
 
 ### Ciclo do processo PTY no renderer
 
@@ -2931,7 +2957,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3ea91f95-497e-819a-bdd9-fbc178f27b3e` — 1 lacuna
 - `3ea91f95-497e-81c4-84ff-f279d9ba4683` — 2 lacunas
 - `3ea91f95-497e-81d9-a3d8-ed3971b18a24` — 3 lacunas
-- `3eb91f95-497e-811b-8eb0-e620c6f37e21` — 5 lacunas
+- `3eb91f95-497e-811b-8eb0-e620c6f37e21` — 6 lacunas
 - `3eb91f95-497e-8126-8750-d9834c65f306` — 3 lacunas
 - `3eb91f95-497e-8131-9977-f8d21c950c68` — 1 lacuna
 - `3eb91f95-497e-813b-9b1e-e0710ab60372` — 1 lacuna

@@ -270,6 +270,8 @@ export function terminalSpawnData(data: CanvasNodeData, plan: TerminalSpawnPlan)
           reference: node.data.agentSession,
           cwd: node.data.cwd,
           command: node.data.command,
+          accountId: node.data.accountId,
+          providerId: node.data.providerId,
         })
       : null,
   }

@@ -3,7 +3,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
-const { discoverAgentSession, selectDiscoveryContext } = require('./agent-session-discovery.cjs')
+const { discoverAgentSession, listAgentSessions, selectDiscoveryContext } = require('./agent-session-discovery.cjs')
 
 function fixture() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-agent-session-'))
@@ -472,6 +472,119 @@ test('acha o rollout Codex de hoje mesmo com mais de 3000 rollouts antigos', () 
     const result = discoverAgentSession({ command: 'codex', cwd: item.cwd, startedAt: Date.now(), homeDir: item.root, now: Date.now() })
 
     assert.equal(result?.sessionId, 'codex-de-hoje')
+  } finally {
+    item.dispose()
+  }
+})
+
+function writeJsonl(file, lines, mtime) {
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  fs.writeFileSync(file, `${lines.map((line) => JSON.stringify(line)).join('\n')}\n`)
+  fs.utimesSync(file, new Date(mtime), new Date(mtime))
+}
+
+test('lista as conversas do Codex da pasta e das outras pastas da conta, só com metadados', () => {
+  const item = fixture()
+  try {
+    const sessions = path.join(item.root, '.codex', 'sessions', '2026', '11', '17')
+    const other = path.join(item.root, 'outra-pasta')
+    const segredo = 'texto da conversa que a lista nunca devolve'
+    writeJsonl(path.join(sessions, 'rollout-a.jsonl'), [{ payload: { id: 'codex-aaaaaaaa', cwd: item.cwd } }, { content: segredo }], 3000)
+    writeJsonl(path.join(sessions, 'rollout-b.jsonl'), [{ payload: { id: 'codex-bbbbbbbb', cwd: other } }], 5000)
+    writeJsonl(path.join(sessions, 'rollout-c.jsonl'), [{ payload: { id: 'codex-cccccccc', cwd: item.cwd } }], 4000)
+    writeJsonl(path.join(sessions, 'rollout-d.jsonl'), [{ payload: { id: 'curto', cwd: item.cwd } }], 6000)
+
+    const result = listAgentSessions({ command: 'codex', cwd: item.cwd, homeDir: item.root })
+
+    assert.deepEqual(result.folder, [
+      { sessionId: 'codex-cccccccc', cwd: item.cwd, modifiedAt: 4000 },
+      { sessionId: 'codex-aaaaaaaa', cwd: item.cwd, modifiedAt: 3000 },
+    ])
+    assert.deepEqual(result.account, [{ sessionId: 'codex-bbbbbbbb', cwd: other, modifiedAt: 5000 }])
+    assert.equal(JSON.stringify(result).includes(segredo), false)
+  } finally {
+    item.dispose()
+  }
+})
+
+test('a lista respeita o CODEX_HOME da conta e o teto por grupo', () => {
+  const item = fixture()
+  try {
+    const profile = path.join(item.root, 'perfil')
+    for (let index = 0; index < 5; index += 1) {
+      writeJsonl(
+        path.join(profile, 'sessions', `rollout-${index}.jsonl`),
+        [{ payload: { id: `codex-perfil-${index}`, cwd: item.cwd } }],
+        1000 + index,
+      )
+    }
+    writeJsonl(path.join(item.root, '.codex', 'sessions', 'rollout-login.jsonl'), [{ payload: { id: 'codex-do-login', cwd: item.cwd } }], 9000)
+
+    const result = listAgentSessions({
+      command: 'codex',
+      cwd: item.cwd,
+      homeDir: item.root,
+      env: { CODEX_HOME: profile },
+      limit: 3,
+    })
+
+    assert.deepEqual(result.folder.map((entry) => entry.sessionId), ['codex-perfil-4', 'codex-perfil-3', 'codex-perfil-2'])
+    assert.deepEqual(result.account, [])
+  } finally {
+    item.dispose()
+  }
+})
+
+test('lista as conversas do Claude: pasta pelo nome codificado, outras pastas pelo cwd gravado, sem subagente', () => {
+  const item = fixture()
+  try {
+    const projects = path.join(item.root, '.claude', 'projects')
+    const encoded = (value) => value.split(path.sep).join('-').replace(/[^A-Za-z0-9_-]/g, '-')
+    const other = path.join(item.root, 'outra-pasta')
+    writeJsonl(path.join(projects, encoded(item.cwd), 'a.jsonl'), [{ sessionId: 'claude-aaaaaaaa' }], 2000)
+    writeJsonl(path.join(projects, encoded(item.cwd), 'sub', 'agent-x.jsonl'), [{ isSidechain: true, sessionId: 'claude-aaaaaaaa' }], 9000)
+    // Sem `cwd` nas primeiras linhas, a pasta de fora do bloco não se conhece: fica de fora.
+    writeJsonl(path.join(projects, encoded(other), 'sem-cwd.jsonl'), [{ sessionId: 'claude-semcwd00' }], 4000)
+    writeJsonl(path.join(projects, encoded(other), 'c.jsonl'), [{ sessionId: 'claude-cccccccc' }, { cwd: other, message: 'segredo' }], 5000)
+
+    const result = listAgentSessions({ command: 'claude', cwd: item.cwd, homeDir: item.root })
+
+    assert.deepEqual(result.folder, [{ sessionId: 'claude-aaaaaaaa', cwd: item.cwd, modifiedAt: 2000 }])
+    assert.deepEqual(result.account, [{ sessionId: 'claude-cccccccc', cwd: other, modifiedAt: 5000 }])
+    assert.equal(JSON.stringify(result).includes('segredo'), false)
+  } finally {
+    item.dispose()
+  }
+})
+
+test('lista as conversas do Gemini pelo .project_root, comparando a pasta como o Gemini', () => {
+  const item = fixture()
+  try {
+    const tmp = path.join(item.root, '.gemini', 'tmp')
+    const other = path.join(item.root, 'outra-pasta')
+    fs.mkdirSync(path.join(tmp, 'p1'), { recursive: true })
+    fs.mkdirSync(path.join(tmp, 'p2'), { recursive: true })
+    fs.writeFileSync(path.join(tmp, 'p1', '.project_root'), item.cwd)
+    fs.writeFileSync(path.join(tmp, 'p2', '.project_root'), other)
+    writeJsonl(path.join(tmp, 'p1', 'chats', 'session-1.jsonl'), [{ sessionId: 'gemini-aaaaaaaa' }], 2000)
+    writeJsonl(path.join(tmp, 'p2', 'chats', 'session-2.jsonl'), [{ sessionId: 'gemini-bbbbbbbb' }], 3000)
+
+    const result = listAgentSessions({ command: 'gemini', cwd: item.cwd, homeDir: item.root })
+
+    assert.deepEqual(result.folder, [{ sessionId: 'gemini-aaaaaaaa', cwd: item.cwd, modifiedAt: 2000 }])
+    assert.deepEqual(result.account, [{ sessionId: 'gemini-bbbbbbbb', cwd: other, modifiedAt: 3000 }])
+  } finally {
+    item.dispose()
+  }
+})
+
+test('a lista sai vazia para agente desconhecido, sem pasta ou sem histórico', () => {
+  const item = fixture()
+  try {
+    const empty = { folder: [], account: [] }
+    assert.deepEqual(listAgentSessions({ command: 'openia', cwd: item.cwd, homeDir: item.root }), empty)
+    assert.deepEqual(listAgentSessions({ command: 'codex', cwd: '', homeDir: item.root }), empty)
+    assert.deepEqual(listAgentSessions({ command: 'codex', cwd: item.cwd, homeDir: item.root }), empty)
   } finally {
     item.dispose()
   }

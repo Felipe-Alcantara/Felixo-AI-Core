@@ -815,12 +815,27 @@ próximo spawn tenta a mesma conversa.
 
 **Spawn segurado.** Em `pending`, o bloco não abre PTY. A faixa mostra o alvo
 (`describeAgentResumeTarget`) e o motivo (`describeAgentResumeForPerson`), com
-"Escolher na lista (/resume)" e "Abrir conversa nova" e, com falha registrada,
-"Tentar retomar de novo". A escolha vira `resumeChoice`, que nunca vai para o
+"Escolher outra conversa…" (só quando `plan.capability.method` é `exact-id` e o
+bloco tem pasta), "Escolher na lista (/resume)" e "Abrir conversa nova" e, com
+falha registrada, "Tentar retomar de novo". A escolha vira `resumeChoice`, que nunca vai para o
 disco, e só então o spawn acontece. Sem escolha, o bloco fica parado e o resto
 do canvas não muda. Com a faixa de falha sobre um agente de pé (login feito no
 próprio terminal, por exemplo), "Dispensar aviso" limpa a `resumeFailure` sem
 reiniciar.
+
+**Escolher outra conversa.** "Escolher outra conversa…" não relança: abre o
+`ResumeSessionPicker` dentro da faixa (cartão e gaveta). Ele chama
+`pty:list-sessions` → `PtyProcessManager.listAgentSessions` → `listAgentSessions`
+(`agent-session-discovery.cjs`), que usa os mesmos leitores e a mesma regra de
+pasta da descoberta e o ambiente da conta do bloco (`selectDiscoveryContext`), e
+devolve `{ folder, account }` só com ID, pasta e data de modificação (até 30 por
+grupo, 400 arquivos abertos no máximo); título e texto de conversa nunca são lidos.
+`folder` são as conversas da pasta do bloco, as únicas que a retomada exata aceita;
+`account` são as de outras pastas da mesma conta, e escolhê-las pede confirmação
+porque `chosenSessionPatch` muda o `cwd` do bloco para o da conversa. O patch
+associa a conversa (`agentSessionPatch`: a anterior vai para `previousAgentSession`),
+limpa `resumeFailure` e `resumeChoice` e `handleChooseResumeSession` relança pelo
+mesmo `relaunchTerminal`; o plano volta a ser `exact` e confere pasta e conta de novo.
 
 Só o primeiro spawn de um bloco que veio do disco é segurado. O registro da
 execução (`terminal-run-registry.ts`, na chave `felixo:canvas-terminal-run` do

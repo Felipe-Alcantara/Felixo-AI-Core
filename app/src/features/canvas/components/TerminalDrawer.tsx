@@ -40,6 +40,8 @@ import {
   type TerminalResumeBanner,
 } from '../services/terminal-resume-banner'
 import { terminalScrollbackNotice } from '../terminal/terminal-scrollback'
+import { ResumeSessionPicker } from './ResumeSessionPicker'
+import type { ListedAgentSession } from '../services/agent-session-list'
 import { useCanvasSurfaces } from '../hooks/canvas-surfaces-context'
 import { DRAWER_MIN_WIDTH } from '../services/canvas-surfaces'
 import { attachTerminalFitLifecycle } from './terminal-fit-lifecycle'
@@ -105,6 +107,8 @@ export type TerminalDrawerPane = {
   resumeBanner?: TerminalResumeBanner | null
   /** Botão da faixa: o canvas grava a escolha e (re)sobe o bloco. */
   onResumeAction?: (action: TerminalResumeActionId) => void
+  /** A pessoa escolheu uma conversa da lista da faixa: o canvas a associa e relança. */
+  onChooseResumeSession?: (session: ListedAgentSession) => void
   /**
    * Abre a escolha do agente que vai assumir o trabalho, levando o histórico
    * completo da sessão. Sempre disponível: passar responsabilidade é uma
@@ -654,6 +658,7 @@ function TerminalPane({
     onRestart,
     resumeBanner: pendingResumeBanner = null,
     onResumeAction,
+    onChooseResumeSession,
     onPassResponsibility,
     onOpenFilePreview,
     readingMode = false,
@@ -671,6 +676,7 @@ function TerminalPane({
   // Geração do processo em que a pessoa pediu Reiniciar com a retomada
   // pendente: a faixa guardada aparece para ESTE processo (como no cartão).
   const [resumeRevealedGeneration, setResumeRevealedGeneration] = useState<number | null>(null)
+  const [resumePickerOpen, setResumePickerOpen] = useState(false)
   // Mesma faixa do cartão, com as mesmas ações ("Dispensar aviso" na falha
   // com o agente de pé).
   const resumeBanner = visibleTerminalResumeBanner({
@@ -699,6 +705,10 @@ function TerminalPane({
     store.restart(sessionId, restartOptions ?? {})
   }
   const runResumeAction = (action: TerminalResumeActionId) => {
+    if (action === 'choose') {
+      setResumePickerOpen(true)
+      return
+    }
     // Com processo de pé, a escolha reinicia o terminal: mesma confirmação.
     // Dispensar o aviso não reinicia nada, então não pergunta.
     if (terminalResumeActionRelaunches(action) && !confirmRestartOfLiveProcess()) return
@@ -1025,6 +1035,17 @@ function TerminalPane({
               </button>
             ))}
           </div>
+          {resumePickerOpen && resumeBanner.chooser && (
+            <ResumeSessionPicker
+              lookup={resumeBanner.chooser}
+              onClose={() => setResumePickerOpen(false)}
+              onChoose={(session) => {
+                if (!confirmRestartOfLiveProcess()) return
+                setResumePickerOpen(false)
+                onChooseResumeSession?.(session)
+              }}
+            />
+          )}
         </div>
       )}
       {!collapsed && snapshot?.contextWarning && (

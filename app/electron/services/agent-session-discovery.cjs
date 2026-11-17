@@ -15,6 +15,9 @@ const TIMESTAMP_TOLERANCE_MS = 2000
 const CREATED_AFTER_TOLERANCE_MS = 1000
 // Duas conversas mexidas a menos disto uma da outra não se separam por data.
 const AMBIGUITY_WINDOW_MS = 250
+// Lista de conversas para escolher: quantas por grupo e quantos arquivos se abrem.
+const LIST_LIMIT = 30
+const LIST_MAX_READS = 400
 
 /**
  * Variáveis do ambiente do terminal que mudam onde cada CLI grava o
@@ -128,6 +131,104 @@ function discoverAgentSession({
     capturedAt: now,
     source: 'cli-history',
   }
+}
+
+/**
+ * Conversas que a conta deste terminal tem no disco, só com metadados (ID,
+ * pasta e data de modificação): nunca título, pedido ou resposta. Reaproveita
+ * os mesmos leitores e as mesmas regras de pasta da descoberta, e devolve duas
+ * listas, da mais recente para a mais antiga: `folder` (a pasta do bloco, as
+ * únicas que a retomada exata aceita) e `account` (as outras pastas da mesma
+ * conta, que só valem se o bloco passar para a pasta da conversa).
+ *
+ * @returns {{ folder: Array<{ sessionId: string, cwd: string, modifiedAt: number }>, account: Array<{ sessionId: string, cwd: string, modifiedAt: number }> }}
+ */
+function listAgentSessions({
+  command,
+  cwd,
+  homeDir = os.homedir(),
+  env = {},
+  platform = process.platform,
+  limit = LIST_LIMIT,
+}) {
+  const empty = { folder: [], account: [] }
+  if (!cwd || !['codex', 'gemini', 'claude'].includes(command)) return empty
+
+  const request = { cwd, homeDir, env, platform }
+  const entries = command === 'codex'
+    ? listCodexEntries(request)
+    : command === 'gemini'
+      ? listGeminiEntries(request)
+      : listClaudeEntries(request)
+  entries.sort((left, right) => right.modifiedAt - left.modifiedAt)
+
+  const sameFolder = (other) => command === 'gemini'
+    ? normalizeGeminiProjectRoot(other, platform) === normalizeGeminiProjectRoot(cwd, platform)
+    : other === cwd
+  const result = { folder: [], account: [] }
+  const seen = new Set()
+  let reads = 0
+  for (const entry of entries) {
+    if ((result.folder.length >= limit && result.account.length >= limit) || reads >= LIST_MAX_READS) break
+    reads += 1
+    const metadata = entry.parse(readHead(entry.file))
+    const sessionCwd = metadata?.cwd || entry.cwd
+    if (!metadata || !sessionCwd || !isSafeSessionId(metadata.sessionId) || seen.has(metadata.sessionId)) continue
+    const target = sameFolder(sessionCwd) ? result.folder : result.account
+    if (target.length >= limit) continue
+    seen.add(metadata.sessionId)
+    target.push({ sessionId: metadata.sessionId, cwd: sessionCwd, modifiedAt: entry.modifiedAt })
+  }
+  return result
+}
+
+function toListEntries(files, parse, cwd) {
+  return files.flatMap((file) => {
+    try {
+      return [{ file, modifiedAt: fs.statSync(file).mtimeMs, parse, cwd }]
+    } catch {
+      return []
+    }
+  })
+}
+
+function listCodexEntries({ homeDir, env }) {
+  const root = env.CODEX_HOME || path.join(homeDir, '.codex')
+  const files = collectFiles(path.join(root, 'sessions'), (name) => /^rollout-.*\.jsonl$/.test(name))
+  return toListEntries(files, (head) => readCodexMetadata(firstLine(head)))
+}
+
+function listGeminiEntries({ homeDir, env }) {
+  const root = env.GEMINI_HOME || path.join(homeDir, '.gemini', 'tmp')
+  return collectDirectories(root).flatMap((directory) => {
+    const owner = readText(path.join(directory, '.project_root'))
+    if (!owner) return []
+    const files = collectFiles(path.join(directory, 'chats'), (name) => /^session-.*\.jsonl$/.test(name))
+    return toListEntries(files, (head) => readGeminiMetadata(firstLine(head)), owner)
+  })
+}
+
+function listClaudeEntries({ cwd, homeDir, env }) {
+  const projects = path.join(env.CLAUDE_CONFIG_DIR || path.join(homeDir, '.claude'), 'projects')
+  const encoded = cwd.split(path.sep).join('-').replace(/[^A-Za-z0-9_-]/g, '-')
+  // Fora da pasta do bloco o nome da pasta é uma codificação sem volta; a pasta
+  // real vem do campo `cwd` das primeiras linhas.
+  return collectDirectories(projects).flatMap((directory) => {
+    const own = path.basename(directory) === encoded
+    const files = collectFiles(directory, (name) => name.endsWith('.jsonl'))
+    return toListEntries(files, own ? (head) => readClaudeMetadata(firstLine(head)) : readClaudeMetadataWithCwd, own ? cwd : undefined)
+  })
+}
+
+function readClaudeMetadataWithCwd(head) {
+  const lines = head.split(/\r?\n/)
+  const metadata = readClaudeMetadata(lines[0])
+  if (!metadata) return null
+  for (const line of lines) {
+    const found = parseJson(line)?.cwd
+    if (typeof found === 'string' && found) return { ...metadata, cwd: found }
+  }
+  return null
 }
 
 function discoverCodexSessions({ bounds, homeDir, env }) {
@@ -323,16 +424,27 @@ function collectFiles(root, predicate) {
   return result
 }
 
-function readFirstLine(file) {
+function readHead(file) {
   try {
     const fd = fs.openSync(file, 'r')
-    const buffer = Buffer.alloc(64 * 1024)
-    const size = fs.readSync(fd, buffer, 0, buffer.length, 0)
-    fs.closeSync(fd)
-    return buffer.toString('utf8', 0, size).split(/\r?\n/, 1)[0]
+    try {
+      const buffer = Buffer.alloc(64 * 1024)
+      const size = fs.readSync(fd, buffer, 0, buffer.length, 0)
+      return buffer.toString('utf8', 0, size)
+    } finally {
+      fs.closeSync(fd)
+    }
   } catch {
     return ''
   }
+}
+
+function firstLine(head) {
+  return head.split(/\r?\n/, 1)[0]
+}
+
+function readFirstLine(file) {
+  return firstLine(readHead(file))
 }
 
 function readText(file) {
@@ -351,4 +463,4 @@ function parseJson(value) {
   }
 }
 
-module.exports = { DISCOVERY_ENV_KEYS, discoverAgentSession, isSafeSessionId, selectDiscoveryContext }
+module.exports = { DISCOVERY_ENV_KEYS, discoverAgentSession, isSafeSessionId, listAgentSessions, selectDiscoveryContext }

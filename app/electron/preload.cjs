@@ -193,6 +193,7 @@ contextBridge.exposeInMainWorld('felixo', {
       return () => ipcRenderer.removeListener('pty:session', handler)
     },
     cliVersions: () => ipcRenderer.invoke('pty:cli-versions'),
+    listSessions: (params) => ipcRenderer.invoke('pty:list-sessions', params),
     readArchive: (params) => ipcRenderer.invoke('pty:archive-read', params),
     flow: (params) => ipcRenderer.invoke('pty:flow', params),
   },
