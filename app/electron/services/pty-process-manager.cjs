@@ -33,7 +33,7 @@ const { resolveCommandPath } = require('../core/cli-detector.cjs')
 const { createAccountCliEnv } = require('./cli-process-manager.cjs')
 const { discoverAgentSession, isSafeSessionId, selectDiscoveryContext } = require('./agent-session-discovery.cjs')
 const { normalizeCliVersion } = require('./agent-cli-versions.cjs')
-const { validatePtyAccountSelection } = require('./pty-account-validation.cjs')
+const { validatePtyAccountSelection, resolveProviderIdForCommand } = require('./pty-account-validation.cjs')
 const { ensureNodePtySpawnHelperExecutable } = require('./pty-native-assets.cjs')
 const { createNodePtySpawn } = require('./node-pty-windows-kill.cjs')
 const { codexProfileKey } = require('./codex-launch-gate.cjs')
@@ -114,8 +114,10 @@ class PtyProcessManager {
    * @param {((detection: object) => void) | null} [dependencies.onOutputFailure] - Recebe cada detecção da vigia, com a sessão, a conta e o modo.
    * @param {(provider: string) => string | null} [dependencies.getCliVersion] - Última versão lida da CLI (`agent-cli-versions.cjs`), gravada junto de cada conversa.
    */
-  constructor({ spawnPty, now, platform: platformAdapter, logger, resolveCodexPath, isDebugSession, discoverAgentSession: discover = discoverAgentSession, buildAccountEnv, validateAccount, createOutputWatcher = null, onOutputFailure = null, getCliVersion = null, outputArchive = null, claudeSessionLaunch = null } = {}) {
+  constructor({ spawnPty, now, platform: platformAdapter, logger, resolveCodexPath, isDebugSession, discoverAgentSession: discover = discoverAgentSession, buildAccountEnv, validateAccount, createOutputWatcher = null, onOutputFailure = null, getCliVersion = null, outputArchive = null, claudeSessionLaunch = null, buildMcpInjection = null } = {}) {
     this.sessions = new Map()
+    // MCPs do registro central entram so no spawn (args, env, arquivo de sessao); nunca na config da CLI.
+    this.buildMcpInjection = buildMcpInjection
     this.injectedSpawnPty = spawnPty ?? null
     this.now = now ?? (() => Date.now())
     this.platform = platformAdapter ?? platform
@@ -231,6 +233,20 @@ class PtyProcessManager {
     return ['--settings', launch.settingsPath, ...args]
   }
 
+  /** Args/env dos MCPs do registro para este terminal (so Claude e Codex); null se nao ha o que injetar. */
+  injectMcp(sessionId, options, providerId, env) {
+    if (!this.buildMcpInjection || !options.command || !Array.isArray(options.mcpIds) || options.mcpIds.length === 0) {
+      return null
+    }
+    const injection = this.buildMcpInjection({
+      ids: options.mcpIds.filter((id) => typeof id === 'string'),
+      providerId: providerId ?? resolveProviderIdForCommand(options.command),
+      sessionId,
+    })
+    if (injection) Object.assign(env, injection.env)
+    return injection
+  }
+
   spawn(
     sessionId,
     options = {},
@@ -284,6 +300,7 @@ class PtyProcessManager {
     }
     const args = Array.isArray(options.args) ? options.args : []
     const launchArgs = this.withClaudeSessionCapture(sessionId, options, args, env)
+    const mcp = this.injectMcp(sessionId, options, accountValidation.providerId, env)
     const defaultShell = options.defaultShell || this.platform.getDefaultShell(env)
     const requestedCommand = options.command || defaultShell
     const command = resolvePtyCommand(
@@ -295,7 +312,7 @@ class PtyProcessManager {
     )
     const keepShellOpen = Boolean(options.keepShellOpen)
     const launch = options.command
-      ? createPtyLaunchSpec(command, launchArgs, env, this.platform, keepShellOpen)
+      ? createPtyLaunchSpec(command, [...(mcp?.args ?? []), ...launchArgs], env, this.platform, keepShellOpen)
       : { command, args: getDefaultPtyShellArgs(command, this.platform) }
     const cols = normalizeDimension(options.cols, DEFAULT_COLS)
     const rows = normalizeDimension(options.rows, DEFAULT_ROWS)
@@ -367,6 +384,7 @@ class PtyProcessManager {
         ...(useConpty === false ? { useConpty: false } : {}),
       })
     } catch (error) {
+      mcp?.dispose()
       if (isWindowsLongPathFailure(error, cwd, this.platform.name)) {
         // Medido ao vivo em 12/09/2026 (release-smoke, v0.1.311): o
         // WindowsPtyAgent nativo do node-pty recusa abrir sessão quando o
@@ -411,6 +429,7 @@ class PtyProcessManager {
       // poderia avisar "pode afetar algum terminal", que é aviso que ninguém lê.
       requestedCommand: options.command ? requestedCommand : null,
       args: [...args],
+      disposeMcp: mcp?.dispose,
       cwd,
       outputBuffer: createReplayBuffer(MAX_REPLAY_BUFFER_CHARS),
       // Tudo que o processo emitiu; passou do replay = o reanexo vem cortado.
@@ -652,6 +671,8 @@ class PtyProcessManager {
         entry.killTimer = null
       }
       entry.exitEvent = event
+      // O arquivo de sessao dos MCPs leva segredo: nao fica ate o bloco ser fechado.
+      entry.disposeMcp?.()
       // O que ainda estava na fila não tem mais para onde ir; escrever num
       // processo encerrado só produziria erro dentro do node-pty.
       entry.filaDeEscrita?.descartar()
@@ -947,6 +968,8 @@ class PtyProcessManager {
     if (!entry || entry.ptyProcess !== ptyProcess) {
       return
     }
+
+    entry.disposeMcp?.()
 
     if (entry.killTimer) {
       clearTimeout(entry.killTimer)

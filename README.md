@@ -41,7 +41,7 @@ O projeto agora segue uma arquitetura híbrida:
 
 - **Terminal Adapters** controlam CLIs autenticadas por assinatura.
 - **Orchestrator Core** decide modo de execução, continuidade e contexto.
-- **MCP Layer** padroniza ferramentas, Git, memória, prompts, skills e contexto.
+- **MCP Layer** (em construção): o registro central de servidores MCP do app já entrega os servidores cadastrados ao Claude e ao Codex ao abrir o terminal, sem gravar na configuração das CLIs. O catálogo de ferramentas do próprio app (Git, memória, contexto) ainda é só uma lista planejada, que nada consome.
 
 MCP não substitui as CLIs nem vira uma API universal de modelos. No Felixo AI Core, MCP é a camada de ferramentas; os modelos continuam entrando por adapters de terminal, APIs futuras ou modelos locais.
 
@@ -89,7 +89,7 @@ Base funcional entregue:
 - Perfis padrão para CLIs instaladas no sistema, sem depender dos scripts locais em `ai-clis/`
 - Registry de Terminal Adapters
 - Orchestrator Core inicial para decidir processo persistente, retomada nativa ou one-shot
-- Catálogo inicial de ferramentas MCP do Felixo
+- Registro central de MCPs com segredos no cofre e injeção por terminal (Claude e Codex); catálogo planejado de ferramentas do Felixo (ainda sem consumidor)
 - Empacotamento Electron Builder e base de auto-update via GitHub Releases
 - Append incremental de resposta com cursor de streaming
 - Botão de parar para interromper processo em andamento

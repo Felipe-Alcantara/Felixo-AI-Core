@@ -22,6 +22,8 @@ const {
 } = require('./services/official-cli-account-ipc-handlers.cjs')
 const { registerPtyIpcHandlers } = require('./services/pty-ipc-handlers.cjs')
 const { PtyProcessManager } = require('./services/pty-process-manager.cjs')
+const { createMcpRegistry } = require('./services/mcp/mcp-registry.cjs')
+const { createMcpInjection } = require('./services/mcp/mcp-injection.cjs')
 const { createCliAccountStore } = require('./services/cli-account-store.cjs')
 const { createAccountChainRepository } = require('./services/storage/account-chain-repository.cjs')
 const { createAgentUsageRepository } = require('./services/storage/agent-usage-repository.cjs')
@@ -920,6 +922,10 @@ app.whenReady().then(async () => {
         void accountChain.service.onOutputFailure(detection)
       },
       outputArchive: ptyOutputArchive,
+      buildMcpInjection: createMcpInjection({
+        registry: createMcpRegistry({ userData: appPaths.userData, safeStorage }),
+        userData: appPaths.userData,
+      }),
     }),
   })
   registerFileAttachmentIpcHandlers(appPaths, { getMainWindow })

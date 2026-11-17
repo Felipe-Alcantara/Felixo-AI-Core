@@ -22,7 +22,7 @@ Electron main
 ├── services/             IPC, PTY, adapters, contas, uso, Git e persistência
 ├── orchestration/        execuções multi-agente e continuidade
 ├── orchestrator/         planejamento, disponibilidade e políticas de spawn
-├── mcp/                  catálogo de ferramentas do Felixo
+├── mcp/                  registro central de MCPs (cofre safeStorage, injeção no spawn do Claude e do Codex) e catálogo planejado do Felixo
 └── windows/              janela principal e estado da janela
         │ preload tipado / contextIsolation
         ▼

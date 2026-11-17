@@ -235,6 +235,9 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
       // Só um booleano atravessa: o processo principal decide qual variável
       // isso vira, e só para o Claude Code (nunca ambiente arbitrário).
       classicScreen: params.classicScreen === true,
+      // Só ids do registro de MCP atravessam; comando, segredo e arquivo
+      // saem do processo principal (mcp-injection.cjs).
+      mcpIds: Array.isArray(params.mcpIds) ? params.mcpIds.filter((id) => typeof id === 'string') : undefined,
       // Conta escolhida no configurador do agente; ausente = login do
       // sistema, que é o comportamento de antes desta feature.
       accountId: typeof params.accountId === 'string' ? params.accountId : undefined,

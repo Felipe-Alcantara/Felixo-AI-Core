@@ -100,7 +100,7 @@ Felixo-AI-Core/
 │   │   ├── preload.cjs           # Bridge main↔renderer
 │   │   ├── services/             # Serviços do backend
 │   │   │   ├── adapters/         # Adapters de CLIs e sessões estruturadas
-│   │   │   ├── mcp/              # MCP Layer (catálogo de tools)
+│   │   │   ├── mcp/              # registro central de MCPs (mcp-registry, mcp-injection) + catálogo planejado de tools do app
 │   │   │   ├── orchestration/    # Orquestração multi-agente
 │   │   │   ├── orchestrator/     # Planner de execução
 │   │   │   ├── protocols/        # AgentEvent e protocolos
