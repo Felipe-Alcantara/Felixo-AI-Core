@@ -90,6 +90,7 @@ const {
 const {
   createPersistentCliSessionManager,
 } = require('./persistent-cli-session.cjs')
+const { checkChatThreadResume } = require('./chat-resume-plan.cjs')
 
 const cliManager = new CliProcessManager()
 const stoppedSessions = new Set()
@@ -287,10 +288,20 @@ function registerCliIpcHandlers(getMainWindow, dependencies = {}) {
       }
     }
 
+    // A conversa nativa da thread só continua na pasta e na conta em que nasceu.
+    const resume = request.ok
+      ? checkChatThreadResume(getCliThreadSession(request.threadId, params.model), {
+          cwd: request.projectCwd ?? resolveCliCwd(),
+          accountId: account?.accountId ?? null,
+        })
+      : null
+
     const result = startCliRequest(params, targetWebContents, { ...context, accountSelection }, account)
-    if (!account || result?.ok === false) return result
+    if (result?.ok === false) return result
+    const withResume = resume ? { ...result, resume } : result
+    if (!account) return withResume
     return {
-      ...result,
+      ...withResume,
       account: { accountId: account.accountId, label: account.label, mode: account.mode },
       ...(account.notice ? { accountNotice: account.notice } : {}),
     }

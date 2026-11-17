@@ -210,8 +210,9 @@ test('gemini-acp adapter returns null for non-json-rpc lines', () => {
   assert.equal(event, null)
 })
 
-test('gemini-acp adapter canResume returns false', () => {
+test('gemini-acp adapter canResume returns false e não monta --resume com o ID', () => {
   assert.equal(adapter.canResume(), false)
+  assert.equal(adapter.getResumeArgs, undefined)
 })
 
 test('gemini-acp adapter provides one-shot fallback spawn args', () => {

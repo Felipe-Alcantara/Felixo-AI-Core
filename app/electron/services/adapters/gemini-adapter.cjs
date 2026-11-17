@@ -22,27 +22,8 @@ function getSpawnArgs(prompt, context = {}) {
   }
 }
 
-function getResumeArgs(prompt, context = {}) {
-  if (!context.providerSessionId) {
-    return getSpawnArgs(prompt, context)
-  }
-
-  return {
-    command: 'gemini',
-    args: [
-      '--resume',
-      context.providerSessionId,
-      ...createModelOptionArgs(context),
-      '--prompt',
-      prompt,
-      '--output-format',
-      'stream-json',
-      '--skip-trust',
-      ...createGeminiFullAccessArgs(context),
-    ],
-  }
-}
-
+// O Gemini do chat nunca volta a uma conversa pelo ID: o `--resume <id>` do modo
+// `-p`/ACP não foi medido (só o terminal interativo, 0.57+). O histórico vai no pedido.
 function canResume() {
   return false
 }
@@ -245,7 +226,6 @@ module.exports = {
   classifyStderr,
   formatStderr,
   getSpawnArgs,
-  getResumeArgs,
   parseLine,
   shouldAbortOnStderr,
   shouldSuppressStderr,

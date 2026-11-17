@@ -508,6 +508,8 @@ declare global {
             account?: { accountId: string | null; label: string; mode: 'system' | 'pinned' | 'chain' }
             /** Por que o pedido foi pelo Login do sistema (ex.: nenhuma conta da cadeia apta). */
             accountNotice?: string
+            /** A thread recomeçou por pasta ou conta diferente da em que nasceu; sem ID da conversa. */
+            resume?: { reasons: Array<'cwd-mismatch' | 'account-mismatch'>; previousCwd: string }
           }
         >
         stop: (params: {

@@ -8,6 +8,7 @@ import {
   initialMessages,
 } from '../services/chat-service'
 import { applyOrchestratorTierOverride } from '../services/delegation-policy'
+import { describeChatResumeNotice } from '../services/chat-resume-notice'
 import {
   createCliPrompt,
   createOrchestrationPromptHint,
@@ -589,7 +590,13 @@ export function ChatWorkspace({ onBack }: ChatWorkspaceProps) {
       })
       .then((result) => {
         // Ex.: nenhuma conta da cadeia estava apta e o pedido foi pelo Login do sistema.
-        chatAccount.setNotice(result.ok ? (result.accountNotice ?? null) : null)
+        // O aviso de conta e o de retomada dividem o lugar do compositor.
+        const resumeNotice = result.ok
+          ? describeChatResumeNotice(result.resume, { command: effectiveModel.command, cwd: cliCwd })
+          : null
+        chatAccount.setNotice(
+          result.ok ? ([result.accountNotice, resumeNotice].filter(Boolean).join(' ') || null) : null,
+        )
         if (!result.ok) {
           markTerminalSessionStatus(threadId, 'error')
           completeAssistantMessage(

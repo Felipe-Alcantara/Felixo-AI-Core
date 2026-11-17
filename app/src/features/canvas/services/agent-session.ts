@@ -297,7 +297,13 @@ function unsupportedSentence(capability: AgentResumeCapability): string {
   return `O ${label} ${limit}; o app não adivinha.`
 }
 
-type ResumeTextContext = { reference?: AgentSessionReference; cwd?: string; command?: string }
+type ResumeTextContext = {
+  reference?: AgentSessionReference
+  cwd?: string
+  command?: string
+  /** Onde o texto aparece: o cartão do canvas (padrão) ou o chat. */
+  subject?: 'bloco' | 'chat'
+}
 
 /**
  * O que a pessoa lê sobre cada motivo. Nunca leva o ID da conversa nem o da
@@ -306,6 +312,7 @@ type ResumeTextContext = { reference?: AgentSessionReference; cwd?: string; comm
  */
 function reasonSentence(reason: AgentResumeReason, plan: AgentResumePlan, context: ResumeTextContext): string {
   const { reference, cwd, command } = context
+  const subject = context.subject ?? 'bloco'
   switch (reason) {
     case 'exact':
       return 'É a mesma conversa, na mesma pasta e na mesma conta.'
@@ -314,13 +321,13 @@ function reasonSentence(reason: AgentResumeReason, plan: AgentResumePlan, contex
     case 'unsupported':
       return unsupportedSentence(plan.capability)
     case 'cwd-mismatch':
-      return `A conversa foi aberta em ${reference?.cwd ?? 'outra pasta'}, e este bloco está em ${cwd ?? 'outra pasta'}. A lista da CLI filtra por pasta, então ela pode não aparecer aqui.`
+      return `A conversa foi aberta em ${reference?.cwd ?? 'outra pasta'}, e este ${subject} está em ${cwd ?? 'outra pasta'}. A lista da CLI filtra por pasta, então ela pode não aparecer aqui.`
     case 'missing-cwd':
-      return 'Este bloco não tem pasta de trabalho definida, então não dá para confirmar que é a mesma conversa.'
+      return `Este ${subject} não tem pasta de trabalho definida, então não dá para confirmar que é a mesma conversa.`
     case 'account-mismatch':
-      return 'A conversa é de outra conta: retomar aqui abriria o histórico de uma conta na cobrança de outra. Volte o bloco para a conta original para retomá-la.'
+      return `A conversa é de outra conta: retomar aqui abriria o histórico de uma conta na cobrança de outra. Volte o ${subject} para a conta original para retomá-la.`
     case 'provider-mismatch':
-      return `A conversa foi aberta no ${providerLabel(reference?.provider)}, e este bloco usa ${providerLabel(command)}.`
+      return `A conversa foi aberta no ${providerLabel(reference?.provider)}, e este ${subject} usa ${providerLabel(command)}.`
     case 'invalid-reference':
       return 'O registro salvo da conversa não está num formato que o app reconheça. Nada foi apagado.'
     case 'expired':

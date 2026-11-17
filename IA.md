@@ -4544,3 +4544,17 @@ Task: Felixo AI Core/Terminal — fazer o relançamento automático do Codex res
 **Não validado.** Auto-update real do Codex com a faixa aberta (só no harness do store).
 
 Estado: concluído (commit na branch `orq/terminal-fazer-relancamento-automatico-c`; push e deploy pelo orquestrador).
+
+---
+
+## 2026-11-17 — Chat: a retomada da conversa só vale na mesma pasta e conta, e o Gemini nunca vai por ID
+
+**Contexto.** O canvas decide a retomada por `explainAgentResume` (mesma pasta, mesma conta, Gemini só por versão provada). O chat guardava `providerSessionId` por thread em memória (`cliThreadSessions`) sem conferir nada: o Claude persistente subia com `--resume <id>` depois de a pasta ou a conta mudar (a cadeia automática troca de conta a cada pedido), abrindo o histórico de uma conta na cobrança de outra ou falhando com o erro cru da CLI.
+
+**O que mudou.**
+- `electron/services/chat-resume-plan.cjs` (novo): `checkChatThreadResume` carimba pasta e conta na thread e, quando mudam, zera `providerSessionId` e `hasStarted` (a thread recomeça com o histórico no pedido) e devolve os motivos com os mesmos códigos do canvas (`cwd-mismatch`, `account-mismatch`), sem ID. `ipc-handlers.cjs` chama antes do spawn e devolve `resume` no resultado de `cli:send`.
+- `src/features/chat/services/chat-resume-notice.ts` (novo): o aviso usa `describeAgentResumeForPerson` do canvas, que ganhou `subject: 'bloco' | 'chat'` (padrão `bloco`, o canvas não muda). O aviso aparece no compositor, no lugar do aviso de conta (`ChatWorkspace.tsx`).
+- Gemini: `getResumeArgs` (que montava `--resume <uuid>`) saiu dos adapters `gemini` e `gemini-acp`; `canResume()` já era `false`, agora com o porquê (o modo `-p`/ACP não foi medido).
+- Guia do usuário: parágrafo "E no chat?" em "Retomar conversas de agentes".
+
+**Validação.** `node --test` dos adapters Gemini e do plano: 45/45; vitest de `chat-resume-notice` (paridade entre o plano do chat e `explainAgentResume` em 4 casos) e `agent-session`: 44/44; suíte node 3478/3491 (a única falha, `pty-output-archive` "o lote sai sozinho", passa isolada 12/12); lint limpo.

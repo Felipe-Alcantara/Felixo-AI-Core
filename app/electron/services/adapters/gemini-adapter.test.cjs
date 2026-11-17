@@ -37,22 +37,9 @@ test('gemini adapter passes provider model when configured', () => {
   ])
 })
 
-test('gemini adapter builds resume args for an existing provider session', () => {
-  const spawnArgs = adapter.getResumeArgs('Continua', {
-    providerSessionId: '00000000-0000-4000-8000-000000000001',
-  })
-
-  assert.equal(spawnArgs.command, 'gemini')
-  assert.deepEqual(spawnArgs.args, [
-    '--resume',
-    '00000000-0000-4000-8000-000000000001',
-    '--prompt',
-    'Continua',
-    '--output-format',
-    'stream-json',
-    '--skip-trust',
-    '--yolo',
-  ])
+test('gemini adapter nunca manda o ID da conversa: a retomada pelo ID do chat não foi medida', () => {
+  assert.equal(adapter.canResume({ providerSessionId: '00000000-0000-4000-8000-000000000001' }), false)
+  assert.equal(adapter.getResumeArgs, undefined)
 })
 
 test('gemini adapter allows disabling yolo mode from environment', () => {

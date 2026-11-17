@@ -859,6 +859,16 @@ título mostra o primeiro e o texto explica todos. A ordem é: registro ilegíve
 outro agente, falha na última tentativa (conversa não encontrada ou login),
 versão do Gemini, pasta (sem pasta ou outra pasta) e, por último, conta.
 
+**E no chat?** O chat segue a mesma regra, com menos desfechos: a conversa
+nativa de uma conversa do chat só continua na mesma pasta e na mesma conta em
+que começou (a conta automática da cadeia conta como conta: ao trocar de conta,
+a conversa recomeça). Se a pasta ou a conta mudou, o chat não retoma, abre uma
+sessão nova da CLI, reenvia o histórico no próprio pedido e escreve o motivo
+(**A conversa é de outra conta**, **A conversa nasceu em outra pasta**) acima do
+campo de mensagem, com os mesmos textos do canvas e sem nenhum ID. O Gemini do
+chat nunca volta a uma conversa pelo ID (o `--resume <id>` fora do terminal
+interativo ainda não foi medido): ele sempre recebe o histórico no pedido.
+
 **Nada é apagado.**
 
 - O registro da conversa nunca é apagado para esconder um erro: nem uma falha,
