@@ -396,7 +396,7 @@ jobs:
             app/build/canvas-context-matrix-${{ matrix.os }}.json
           if-no-files-found: ignore
 
-  # 5. O smoke completo do canvas (sessões A–F) fora do Linux. No PR ele roda
+  # 5. O smoke completo do canvas (sessões A–G) fora do Linux. No PR ele roda
   #    só no Linux; o Release valida o app instalado em cada SO.
   canvas-smoke:
     name: Canvas smoke (${{ matrix.os }})

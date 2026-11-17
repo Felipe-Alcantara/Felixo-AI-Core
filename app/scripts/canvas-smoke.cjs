@@ -15,7 +15,9 @@
  * fallback, skill e área de transferência) em `canvas-smoke-prompts.cjs`
  * (sessão E, idem). A Leitura do terminal (Markdown da tela) fica em
  * `canvas-smoke-leitura.cjs` (sessão F, idem, com a CLI roteirizada tocando
- * as gravações reais de CLI).
+ * as gravações reais de CLI). O editor de visualização do painel "Tarefas
+ * Notion" fica em `canvas-smoke-notion.cjs` (sessão G, perfil novo com os
+ * handlers IPC do Notion trocados por falsos: sem rede e sem token).
  *
  * `FELIXO_SMOKE_SESSOES=D,E` roda só as sessões listadas, para quem estiver
  * mexendo numa delas; sem a variável, rodam todas (é o que a CI faz).
@@ -52,6 +54,7 @@ const { criarSessaoDaCadeia } = require('./canvas-smoke-contas.cjs')
 const { criarSessaoDeLinks } = require('./canvas-smoke-links.cjs')
 const { criarSessaoDePrompts } = require('./canvas-smoke-prompts.cjs')
 const { RECORDINGS_DIR, criarSessaoDaLeitura } = require('./canvas-smoke-leitura.cjs')
+const { criarSessaoDoNotion } = require('./canvas-smoke-notion.cjs')
 const {
   criarRelatorio,
   fecharRelatorio,
@@ -99,7 +102,7 @@ const PROMPTS_SESSION_ENV = CONTAS_SESSION_ENV
 // Sessão F: a mesma CLI roteirizada, tocando as gravações reais de CLI.
 const LEITURA_SESSION_ENV = { ...CONTAS_SESSION_ENV, FELIXO_DEVTOOLS_TERMINAL_RECORDINGS: RECORDINGS_DIR }
 const SESSOES = new Set(
-  (process.env.FELIXO_SMOKE_SESSOES || 'A,B,C,D,E,F').split(',').map((sessao) => sessao.trim().toUpperCase()),
+  (process.env.FELIXO_SMOKE_SESSOES || 'A,B,C,D,E,F,G').split(',').map((sessao) => sessao.trim().toUpperCase()),
 )
 const rodar = (sessao) => SESSOES.has(sessao)
 const DEVTOOLS_LAUNCH_TIMEOUT_MS = 60_000
@@ -1670,6 +1673,14 @@ const SESSIONS = [
     summary: 'Leitura do terminal (F0–F7)',
     env: LEITURA_SESSION_ENV,
     run: (page) => criarSessaoDaLeitura({ page, checarMontagem, timeoutMs: ONBOARDING_TIMEOUT_MS }).executar(),
+  },
+  {
+    // O editor de visualização do painel Tarefas Notion, com handlers IPC falsos.
+    letter: 'G',
+    failureName: 'canvas-smoke-failure-notion',
+    summary: 'painel Tarefas Notion (N1–N3)',
+    env: {},
+    run: (page) => criarSessaoDoNotion({ page, checarMontagem, timeoutMs: ONBOARDING_TIMEOUT_MS }).executar(),
   },
 ]
 

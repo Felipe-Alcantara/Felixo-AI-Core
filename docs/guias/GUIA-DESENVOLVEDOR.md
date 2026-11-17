@@ -184,7 +184,7 @@ caso), e o teste pode passar mesmo quebrado. Depois do diff, rode
 | `npm run release:smoke` | app/ | Valida o artefato instalado no SO atual |
 | `npm run publish:github` | app/ | Publica uma release pelo electron-builder; usar apenas no fluxo de release |
 | `npm run benchmark:terminal-output -- --check` | app/ | Compara retenção/renderização dos Logs da CLI no renderer Electron |
-| `npm run test:canvas-smoke` | app/ | Gate visual do canvas via CDP, com PTY fake: fixture, matriz visual e tutorial (sessões A e B), cadeia de contas (C), links (D), caminhos de prompt (E) e Leitura do terminal (F). `FELIXO_SMOKE_SESSOES=E` roda só as sessões listadas; ver [Gate visual do canvas](#gate-visual-do-canvas-smoke) |
+| `npm run test:canvas-smoke` | app/ | Gate visual do canvas via CDP, com PTY fake: fixture, matriz visual e tutorial (sessões A e B), cadeia de contas (C), links (D), caminhos de prompt (E), Leitura do terminal (F) e painel Tarefas Notion (G). `FELIXO_SMOKE_SESSOES=E` roda só as sessões listadas; ver [Gate visual do canvas](#gate-visual-do-canvas-smoke) |
 | `npm run benchmark:ui-render -- --onboarding` | app/ | Mede FPS e custo de estilo/paint com o tutorial aberto (manual, na máquina de referência) |
 | `npm run benchmark:many-agents -- --check` | app/ | Muitos agentes falsos, blocos, conexões, painéis e refresh no mesmo renderer: frame, long task, RSS, heap, DOM, listeners, timers e queda, contra as metas da política (manual; precisa de `npx vite build`) |
 
@@ -764,6 +764,7 @@ reais de CLI com `__felixo_smoke_gravacao_<nome>__`).
 | D | `canvas-smoke-links.cjs` | escolha de destino dos links |
 | E | `canvas-smoke-prompts.cjs` | caminhos de prompt |
 | F | `canvas-smoke-leitura.cjs` | Leitura do terminal |
+| G | `canvas-smoke-notion.cjs` | painel "Tarefas Notion" com handlers IPC falsos (sem rede e sem token): botão "Uma por repositório" (confirm, mensagem, repetição), chip "Sem <propriedade>" do editor de visualização e a aba criada com ele, concluídas escondidas até "Mostrar tarefas concluídas", e o botão ausente quando o Painel agrupa por uma ligação. Os dados ficam em `canvas-smoke-notion-fixture.cjs` |
 
 **O que reprova (regressão objetiva).** A comparação é estrutural, não pixel
 a pixel (decisão de 01/10/2026): fontes e renderização mudam de um sistema

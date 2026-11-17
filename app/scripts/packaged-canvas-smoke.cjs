@@ -1,7 +1,7 @@
 'use strict'
 
 /**
- * O smoke do canvas (`canvas-smoke.cjs`, sessões A–F) no app EMPACOTADO, do
+ * O smoke do canvas (`canvas-smoke.cjs`, sessões A–G) no app EMPACOTADO, do
  * jeito que a pessoa o recebe: o instalador desta release é preparado como no
  * smoke do artefato (`release-smoke.cjs` — AppImage extraído, DMG copiado,
  * NSIS instalado em pasta temporária) e o smoke dirige o executável dele pelo
