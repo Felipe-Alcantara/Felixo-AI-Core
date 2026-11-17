@@ -4558,3 +4558,17 @@ Estado: concluído (commit na branch `orq/terminal-fazer-relancamento-automatico
 - Guia do usuário: parágrafo "E no chat?" em "Retomar conversas de agentes".
 
 **Validação.** `node --test` dos adapters Gemini e do plano: 45/45; vitest de `chat-resume-notice` (paridade entre o plano do chat e `explainAgentResume` em 4 casos) e `agent-session`: 44/44; suíte node 3478/3491 (a única falha, `pty-output-archive` "o lote sai sozinho", passa isolada 12/12); lint limpo.
+
+---
+
+## 2026-11-17 — CLI do contexto: a leitura negada pelo Windows (EPERM) ganha teste de reprodução
+
+Task: Felixo AI Core/Prompts — reproduzir cenário de falha: permissão negada ao ler o arquivo de contexto (Notion `3d791f95-497e-818c-ad35-d87e2283c8a2`). Agente: subagente da Orquestração (Claude Haiku 5.5, effort max).
+
+**Contexto.** A task-mãe pede, para o cenário "permissão negada ao ler o arquivo de contexto", confirmar aviso visível e retry funcional. O teste de negação em `electron/cli/context-command.test.cjs` só cobria `EACCES`, o código do POSIX. Num ACL que nega a leitura de verdade, o Windows devolve `EPERM`.
+
+**O que mudou.** Três testes novos em `app/electron/cli/context-command.test.cjs`: `EPERM` não gera nova tentativa e grava `failed` no QA; depois da negação, a mesma leitura entrega o corpo e o QA guarda `failed` e `read`; no Windows, ACL real via `icacls` (pulado nos outros sistemas). Nenhum código de produto mudou. O aviso no bloco do terminal não existe e fica como decisão para o Felipe, no relatório da task.
+
+**Validação.** Medido no Windows, com perfil temporário: leitura normal sai com código 0; com ACL negado, o shim sai com código 2 e `EPERM` no stderr; restaurada a permissão, a mesma leitura sai com código 0. `node --test electron/cli/context-command.test.cjs`: 18 de 18 (eram 15). Mutação temporária em `ERROS_QUE_VALEM_NOVA_TENTATIVA` (incluindo `EPERM`) e no registro QA: o teste novo falha nas duas; o arquivo foi restaurado e conferido com `cmp`. `run-node-unit-tests.cjs` (depois do rebase na main): 3478 passam, 0 falham, 12 pulados, de 3490.
+
+**Não verificado.** App empacotado e bloco na tela (não rodados); o teste de ACL no CI do Windows (não rodado lá).

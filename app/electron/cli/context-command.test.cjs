@@ -1,10 +1,12 @@
 'use strict'
 
+const { execFile } = require('node:child_process')
 const test = require('node:test')
 const assert = require('node:assert/strict')
 const fsp = require('node:fs/promises')
 const os = require('node:os')
 const path = require('node:path')
+const { promisify } = require('node:util')
 
 const {
   executarContexto,
@@ -12,6 +14,15 @@ const {
   validarNomeDoArtefato,
 } = require('./context-command.cjs')
 const { CONTEXT_EXPIRED_DIRNAME } = require('../core/context-file-contract.cjs')
+
+const execFileAsync = promisify(execFile)
+
+/** Eventos QA que o CLI gravou em `directory`: o arquivo do dia, linha a linha. */
+async function eventosQa(directory) {
+  const arquivos = (await fsp.readdir(directory)).filter((nome) => /^qa-.*\.jsonl$/.test(nome)).sort()
+  const linhas = (await fsp.readFile(path.join(directory, arquivos.at(-1)), 'utf8')).trim().split('\n')
+  return linhas.map((linha) => JSON.parse(linha))
+}
 
 test('lê um artefato pelo nome no diretório do perfil ativo', async () => {
   const contextDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'felixo-context-cli-'))
@@ -294,6 +305,105 @@ test('erro que não é de arquivo ausente não vira nova tentativa nem leitura d
   assert.equal(leituras, 1)
   assert.deepEqual(esperas, [])
 })
+
+test('permissão negada pelo Windows (EPERM) não vira nova tentativa e a resposta leva o código do erro', async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'felixo-context-cli-eperm-'))
+  const deliveryLogDirectory = path.join(root, 'logs', 'qa')
+  const esperas = []
+  let leituras = 0
+  const readFile = async () => {
+    leituras += 1
+    throw Object.assign(new Error("EPERM: operation not permitted, open 'artefato'"), { code: 'EPERM' })
+  }
+
+  try {
+    const result = await executarContexto(['read', 'felixo-context-123-abc-catalog-prompt.txt'], {
+      getContextDir: () => path.join(root, 'context-deliveries'),
+      deliveryLogDirectory,
+      readFile,
+      esperar: async (ms) => esperas.push(ms),
+    })
+
+    assert.equal(result.codigo, 2)
+    assert.match(result.erro, /EPERM/)
+    assert.equal(leituras, 1)
+    assert.deepEqual(esperas, [])
+    const falha = (await eventosQa(deliveryLogDirectory)).at(-1)
+    assert.equal(falha.level, 'error')
+    assert.equal(falha.details.state, 'failed')
+    assert.match(falha.details.error, /EPERM/)
+  } finally {
+    await fsp.rm(root, { recursive: true, force: true })
+  }
+})
+
+test('depois da negação, a mesma leitura entrega o corpo quando o arquivo volta a abrir', async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'felixo-context-cli-retry-'))
+  const contextDir = path.join(root, 'context-deliveries')
+  const deliveryLogDirectory = path.join(root, 'logs', 'qa')
+  const name = 'felixo-context-123-retomada-catalog-prompt.txt'
+  const body = '# Revisão de PR\n\nRevise o diff com atenção a segurança.'
+
+  try {
+    await fsp.mkdir(contextDir, { recursive: true })
+    await fsp.writeFile(path.join(contextDir, name), body, 'utf8')
+
+    const negada = await executarContexto(['read', name], {
+      getContextDir: () => contextDir,
+      deliveryLogDirectory,
+      readFile: async () => {
+        throw Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' })
+      },
+    })
+    assert.equal(negada.codigo, 2)
+
+    // Mesma chamada, sem estado guardado da tentativa anterior: o arquivo abre de novo.
+    const liberada = await executarContexto(['read', name], { getContextDir: () => contextDir, deliveryLogDirectory })
+    assert.equal(liberada.codigo, 0)
+    assert.equal(liberada.saida, body)
+    assert.deepEqual((await eventosQa(deliveryLogDirectory)).map((evento) => evento.details.state), ['failed', 'read'])
+  } finally {
+    await fsp.rm(root, { recursive: true, force: true })
+  }
+})
+
+test(
+  'Windows: ACL que nega a leitura dá EPERM de verdade, e liberar o arquivo faz a mesma leitura voltar',
+  { skip: process.platform !== 'win32' && 'a negação pelo ACL só existe no Windows' },
+  async (t) => {
+    const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'felixo-context-cli-acl-'))
+    const contextDir = path.join(root, 'context-deliveries')
+    const deliveryLogDirectory = path.join(root, 'logs', 'qa')
+    const name = 'felixo-context-123-acl-catalog-prompt.txt'
+    const arquivo = path.join(contextDir, name)
+    const usuario = os.userInfo().username
+    const body = '# ACL\n\nconteúdo'
+    const liberarArquivo = () => execFileAsync('icacls', [arquivo, '/remove:d', usuario]).catch(() => {})
+
+    try {
+      await fsp.mkdir(contextDir, { recursive: true })
+      await fsp.writeFile(arquivo, body, 'utf8')
+      await execFileAsync('icacls', [arquivo, '/deny', `${usuario}:(R)`])
+      const codigoDireto = await fsp.readFile(arquivo, 'utf8').then(() => undefined, (error) => error.code)
+      if (codigoDireto === undefined) {
+        t.skip('o ACL negado não bloqueou a leitura neste ambiente')
+        return
+      }
+
+      const negada = await executarContexto(['read', name], { getContextDir: () => contextDir, deliveryLogDirectory })
+      assert.equal(negada.codigo, 2)
+      assert.match(negada.erro, /EPERM/)
+
+      await liberarArquivo()
+      const liberada = await executarContexto(['read', name], { getContextDir: () => contextDir, deliveryLogDirectory })
+      assert.equal(liberada.codigo, 0)
+      assert.equal(liberada.saida, body)
+    } finally {
+      await liberarArquivo()
+      await fsp.rm(root, { recursive: true, force: true })
+    }
+  },
+)
 
 test('a recuperação fica registrada no QA como leitura da cópia guardada', async () => {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'felixo-context-cli-recovered-'))
