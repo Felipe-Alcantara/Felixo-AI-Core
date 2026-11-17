@@ -3681,3 +3681,17 @@ Task: Felixo AI Core/Build — limpar os chunks órfãos de dist/assets antes de
 Estado: concluído (deploy no adendo).
 
 **Adendo de deploy (15:44).** v0.1.569 publicada a partir de `7dbf9a4`: CI verde na primeira tentativa (15:26 → 15:32), Release gate verde e Release verde nos três SOs (15:32 → 15:41). No checkout limpo do CI, o plugin não teve nada a remover (nenhuma mensagem `[build-output]`), e os instaladores ficaram do mesmo tamanho da v0.1.568: a mudança vale para o build local.
+
+---
+
+## 2026-11-17 — Release gate: a lista vazia da API do GitHub deixa de virar "publicar"
+
+**Contexto.** Em 22/10 o gate publicou duas vezes sem necessidade porque a listagem do Actions voltou vazia (exit 0, sem erro) e vazio vira "sem base: publica". Desde 05/11 o gate lê as releases publicadas (`gh release list`) e os `release.yml` em andamento, e as duas chamadas escondiam o erro com `2>/dev/null || true`.
+
+**O que mudou.**
+- **`release-base.sh`:** nova `release_listar <exigir> <comando...>`, com o `gh` injetável. Repete (5 tentativas, 5 s, ajustáveis por `GATE_TENTATIVAS`/`GATE_ESPERA`) até vir não vazia quando `exigir=1`, ou só até o comando não falhar quando `exigir=0`. Esgotadas, devolve o que veio e o gate publica na dúvida. O motivo de cada tentativa ruim vai para o log do gate. Não derruba o passo sob `set -e`.
+- **`release-gate.yml`:** as releases publicadas usam `exigir=1` (vazio nunca é legítimo: o repositório tem releases); as runs em andamento usam `exigir=0` (vazio é o normal, e repetir somaria 25 s a cada push).
+- **`release-base.test.sh`:** 6 casos com `gh` falso (vazio, vazio e depois a lista; vazio sempre; falha e depois sucesso; vazio aceito; limite de tentativas).
+- **GUIA-DESENVOLVEDOR:** a regra de repetição.
+
+**Validação.** `release-base.test.sh`: todos passam (antes, `release_listar` nem existia). Com `bash -e`, uma listagem que falha sempre não mata o shell. Workflow valida como YAML. Nenhum arquivo release-relevante foi tocado, então este commit não publica. Não validado em produção: depende do próximo push observar o log do gate.

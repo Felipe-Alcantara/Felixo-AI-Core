@@ -30,6 +30,34 @@ is_strict_ancestor() {
   [[ "$candidate" != "$head" ]] && git merge-base --is-ancestor "$candidate" "$head" 2>/dev/null
 }
 
+# Roda um comando de listagem (normalmente `gh ...`) e imprime a saída. A API
+# de runs/releases do GitHub devolve às vezes lista VAZIA com exit 0 e sem erro
+# (medido em 22/10/2026: 129, 67, 0, 129 linhas em chamadas seguidas), e lista
+# vazia vira "sem base: publica". Por isso repete até vir não vazia.
+#   $1: 1 quando vazio nunca é legítimo (releases publicadas) e deve ser
+#       repetido; 0 quando vazio é normal (nenhum Release rodando) e só a falha
+#       do comando é repetida.
+#   Resto: o comando. Tentativas e espera: GATE_TENTATIVAS (5) e GATE_ESPERA (5s).
+# Esgotadas as tentativas, imprime o que veio (possivelmente vazio) e retorna 0:
+# quem chama decide, e o gate publica na dúvida. O motivo de cada tentativa
+# ruim vai para stderr (o erro do próprio comando aparece no log do gate).
+release_listar() {
+  local exigir="$1" tentativas="${GATE_TENTATIVAS:-5}" espera="${GATE_ESPERA:-5}" t saida rc motivo
+  shift
+  for ((t = 1; t <= tentativas; t++)); do
+    rc=0; saida="$("$@")" || rc=$?  # || rc: o `set -e` do Actions não pode matar o passo
+    if (( rc == 0 )) && { [[ "$exigir" != 1 ]] || [[ -n "$saida" ]]; }; then
+      printf '%s' "$saida"
+      return 0
+    fi
+    if (( rc == 0 )); then motivo="veio vazia com exit 0"; else motivo="falhou com exit $rc"; fi
+    echo "listagem de ${*:1:3}: tentativa $t de $tentativas $motivo" >&2
+    (( t < tentativas )) && sleep "$espera"
+  done
+  printf '%s' "$saida"
+  return 0
+}
+
 # SHAs cobertos por um Release, um por linha.
 #   $1: títulos das runs do release.yml em andamento (um por linha). O SHA é o
 #       que o `run-name` do release.yml põe no título; título sem SHA é ignorado.

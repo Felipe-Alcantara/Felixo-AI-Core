@@ -65,9 +65,31 @@ confere_coberto "coberto: o commit já está na lista" sim "$B" "$C"$'\n'"$B"$'\
 confere_coberto "coberto: commit fora da lista não é coberto" nao "$D" "$C"$'\n'"$B"$'\n'
 confere_coberto "coberto: lista vazia não cobre nada" nao "$D" ""
 
+# release_listar: `gh` falso que devolve vazio (exit 0) nas primeiras chamadas.
+export GATE_ESPERA=0 GATE_TENTATIVAS=5
+CONTADOR="$(mktemp)"
+gh_falso() { # $1: quantas chamadas vêm vazias antes da lista; $2: exit das vazias
+  local n; n=$(( $(cat "$CONTADOR") + 1 )); echo "$n" > "$CONTADOR"
+  if (( n <= $1 )); then return "${2:-0}"; fi
+  printf 'v1
+v0
+'
+}
+listar() { echo 0 > "$CONTADOR"; release_listar "$1" gh_falso "$2" "${3:-0}" 2>/dev/null; }
+confere "listar: vazio, vazio, depois a lista" $'v1
+v0' "$(listar 1 2)"
+confere "listar: vazio o tempo todo devolve vazio (o gate publica)" "" "$(listar 1 99)"
+confere "listar: comando que falha e depois funciona" $'v1
+v0' "$(listar 1 2 1)"
+confere "listar: vazio é aceito quando não é exigido" "" "$(listar 0 99)"
+confere "listar: sem exigir, falha do comando ainda repete" $'v1
+v0' "$(listar 0 2 1)"
+echo 0 > "$CONTADOR"; release_listar 1 gh_falso 99 >/dev/null 2>&1
+confere "listar: respeita o limite de tentativas" 5 "$(cat "$CONTADOR")"
+
 # Cenários do gate, com arquivos de verdade.
 REPO2_DIR="$(mktemp -d)"
-trap 'rm -rf "$REPO_DIR" "$REPO2_DIR"' EXIT
+trap 'rm -rf "$REPO_DIR" "$REPO2_DIR" "$CONTADOR"' EXIT
 cd "$REPO2_DIR" || exit 1
 git init -q .
 arquivo() { mkdir -p "$(dirname "$1")" && printf '%s\n' "$2" > "$1"; }

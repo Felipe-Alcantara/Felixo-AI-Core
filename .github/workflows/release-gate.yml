@@ -54,9 +54,11 @@ jobs:
           # tag de uma release que saiu de pré-release) ou em andamento (o título
           # da run, `run-name` do release.yml, traz o SHA). Um Release que falhou
           # não cobre nada, então o commit de app dele volta ao diff do próximo
-          # gate. Falha ao listar vira lista vazia, ou seja, sem base: publica.
-          EM_ANDAMENTO="$(for estado in queued in_progress waiting requested pending; do gh run list --workflow release.yml --status "$estado" --json displayTitle --jq '.[].displayTitle' 2>/dev/null || true; done)"
-          PUBLICADOS="$(gh release list --exclude-drafts --exclude-pre-releases --limit 100 --json tagName --jq '.[].tagName' 2>/dev/null || true)"
+          # gate. A API às vezes devolve lista vazia sem erro: `release_listar` repete
+          # até vir não vazia (releases publicadas) ou sem falha (em andamento);
+          # esgotada a repetição, lista vazia, ou seja, sem base: publica.
+          EM_ANDAMENTO="$(for estado in queued in_progress waiting requested pending; do release_listar 0 gh run list --workflow release.yml --status "$estado" --json displayTitle --jq '.[].displayTitle'; echo; done)"
+          PUBLICADOS="$(release_listar 1 gh release list --exclude-drafts --exclude-pre-releases --limit 100 --json tagName --jq '.[].tagName')"
           COBERTOS="$(release_candidates "$EM_ANDAMENTO" "$PUBLICADOS")"
           BASE="$(printf '%s\n' "$COBERTOS" | release_base "$TARGET_SHA")"
           if release_covered "$TARGET_SHA" "$COBERTOS"; then
