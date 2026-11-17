@@ -75,13 +75,14 @@ describe('managed-cli-runtime', () => {
 
     assert.ok(shims.node.endsWith('node.cmd'))
     // As aspas sao o que faz o atalho sobreviver a "C:\Program Files".
-    assert.match(fileSystem.files.get(shims.node), /"C:\\Program Files\\Felixo\\felixo\.exe" %\*/)
+    assert.match(fileSystem.files.get(shims.node), /set "FELIXO_EXE0=C:\\Program Files\\Felixo\\felixo\.exe"/)
+    assert.match(fileSystem.files.get(shims.node), /"%FELIXO_EXE0%" %\*/)
     assert.equal(fileSystem.modes.size, 0)
   })
 
-  // O `.cmd` é lido na página OEM: sem o `chcp 65001` antes da linha do comando,
-  // um acento no caminho do executável quebra o atalho (node.cmd e npm.cmd).
-  it('puts chcp 65001 before the command line, restores the code page and keeps the exit code', () => {
+  // O `.cmd` é lido na página OEM: o caminho acentuado é decodificado sob
+  // `chcp 65001` e guardado em variável; a página volta ANTES de a CLI rodar.
+  it('decodes the path under chcp 65001, restores the code page before running and keeps the exit code', () => {
     const fileSystem = createFakeFileSystem()
 
     const shims = ensureManagedCliRuntime({
@@ -92,15 +93,19 @@ describe('managed-cli-runtime', () => {
       fileSystem,
     })
 
-    for (const shim of [shims.node, shims.npm]) {
+    for (const [shim, partes] of [[shims.node, 1], [shims.npm, 2]]) {
       const lines = fileSystem.files.get(shim).split('\r\n')
       const chcp = lines.indexOf('chcp 65001 >nul')
-      const command = lines.findIndex((line) => line.includes('João') && line.endsWith(' %*'))
+      const atribuicoes = lines.map((line, index) => (line.startsWith('set "FELIXO_EXE') && line.includes('João') ? index : -1)).filter((index) => index >= 0)
+      const volta = lines.indexOf('if defined FELIXO_CP chcp %FELIXO_CP% >nul')
+      const command = lines.findIndex((line) => line.endsWith(' %*'))
 
-      assert.ok(chcp > 0 && chcp < command, 'chcp 65001 precisa vir antes do caminho acentuado')
-      assert.ok(lines.includes('set "FELIXO_RC=%errorlevel%"'))
-      assert.ok(lines.indexOf('if defined FELIXO_CP chcp %FELIXO_CP% >nul') > command)
-      assert.equal(lines[lines.indexOf('exit /b %FELIXO_RC%') - 1].startsWith('if defined'), true)
+      assert.equal(atribuicoes.length, partes)
+      assert.ok(chcp > 0 && atribuicoes.every((index) => index > chcp && index < volta), 'o caminho é lido sob chcp 65001')
+      assert.ok(volta < command, 'a página volta antes de a CLI rodar')
+      assert.equal(lines[command].includes('João'), false, 'a linha que executa não carrega o caminho literal')
+      assert.equal(lines[command], Array.from({ length: partes }, (_, i) => `"%FELIXO_EXE${i}%"`).join(' ') + ' %*')
+      assert.equal(lines[command + 1], 'exit /b %errorlevel%')
     }
   })
 

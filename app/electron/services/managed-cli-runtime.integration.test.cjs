@@ -39,7 +39,7 @@ function montarInstalacao() {
   fs.copyFileSync(process.execPath, executavel)
 
   const sonda = path.join(raiz, 'sonda.cjs')
-  fs.writeFileSync(sonda, `console.log('sonda-ok'); process.exit(${CODIGO_DE_SAIDA_DA_SONDA})\n`)
+  fs.writeFileSync(sonda, `console.log('sonda-ok'); console.log('durante=' + (/(\\d+)\\s*$/.exec(require('node:child_process').execSync('chcp').toString()) || [])[1]); process.exit(${CODIGO_DE_SAIDA_DA_SONDA})\n`)
 
   // O driver só tem ASCII: ele fixa a página, chama o atalho e mostra a página que sobrou.
   const driver = path.join(raiz, 'driver.cmd')
@@ -69,6 +69,8 @@ for (const pagina of [850, 437]) {
       })
 
       assert.match(resultado.stdout, /sonda-ok/, `saída: ${JSON.stringify(resultado.stdout)} erro: ${JSON.stringify(resultado.stderr)}`)
+      // A CLI (e o que ela dispara) roda com a página de antes, não com 65001.
+      assert.match(resultado.stdout, new RegExp(`durante=${pagina}\\b`))
       assert.equal(resultado.status, CODIGO_DE_SAIDA_DA_SONDA)
       // A última linha é a do `chcp` do driver, depois do atalho: tem de ser a página de antes.
       assert.equal(Number(/(\d+)\s*$/.exec(resultado.stdout)?.[1]), pagina)

@@ -80,15 +80,18 @@ function createPosixShim(commandParts) {
 
 /**
  * O `.cmd` é gravado em UTF-8, mas o `cmd.exe` o lê na página de código OEM do
- * console (cp850/cp437): um acento no caminho do executável (`C:\Users\João`)
- * virava "O sistema não pode encontrar o caminho especificado". O `chcp 65001`
- * antes da linha do comando faz o `cmd.exe` ler o resto do arquivo em UTF-8; a
- * página anterior (última palavra da saída do `chcp`, em qualquer idioma) e o
- * código de saída da CLI são guardados para restaurar e repassar no fim. O
- * `setlocal` impede que as variáveis vazem para um `cmd.exe` interativo.
+ * console (cp850/cp437): um acento no caminho do executável (`C:SERSJOãO`)
+ * virava "O sistema não pode encontrar o caminho especificado". Só a LEITURA do
+ * caminho precisa de UTF-8: sob `chcp 65001` cada parte do comando vai para uma
+ * variável (o `cmd.exe` guarda UTF-16, então a expansão não depende mais da
+ * página) e a página anterior (última palavra da saída do `chcp`, em qualquer
+ * idioma) volta ANTES de a CLI rodar. Assim a CLI, o git e o PowerShell que ela
+ * dispara enxergam o console como estava. O `setlocal` impede que as variáveis
+ * vazem para um `cmd.exe` interativo.
  */
 function createWindowsShim(commandParts) {
-  const command = commandParts.map((part) => `"${part}"`).join(' ')
+  const assignments = commandParts.map((part, index) => `set "FELIXO_EXE${index}=${part}"`)
+  const command = commandParts.map((_, index) => `"%FELIXO_EXE${index}%"`).join(' ')
 
   return [
     '@echo off',
@@ -97,11 +100,11 @@ function createWindowsShim(commandParts) {
     'set "FELIXO_CP="',
     'for /f "tokens=*" %%a in (\'chcp\') do for %%b in (%%a) do set "FELIXO_CP=%%b"',
     'chcp 65001 >nul',
+    ...assignments,
+    'if defined FELIXO_CP chcp %FELIXO_CP% >nul',
     'set "ELECTRON_RUN_AS_NODE=1"',
     `${command} %*`,
-    'set "FELIXO_RC=%errorlevel%"',
-    'if defined FELIXO_CP chcp %FELIXO_CP% >nul',
-    'exit /b %FELIXO_RC%',
+    'exit /b %errorlevel%',
     '',
   ].join('\r\n')
 }

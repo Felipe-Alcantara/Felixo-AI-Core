@@ -3760,6 +3760,9 @@ Estado: concluído (deploy no adendo).
 ## 2026-11-17 — Canvas: adendo, a nota mantém o papel claro também quando selecionada
 
 A regra `.react-flow__node.selected .felixo-canvas-card` (especificidade 0,3,0, `index.css`) trocava o fundo para o painel escuro com a nota selecionada, justo quando se escreve. Acrescentei `.react-flow__node.selected .felixo-canvas-card-note { background: var(--note-paper) }` logo depois dela (mesma especificidade, vem depois; sem `!important`); a marca de seleção segue na borda e no brilho. Nenhuma outra regra de cartão troca `background` (hover só mexe na borda). Guarda: `note-paper-css.test.ts` lê o `index.css` e confere `--note-paper` nas regras normal e selecionada (jsdom não calcula a cascata); com a regra selecionada trocada por outra declaração, o teste falha. Gate: lint e typecheck limpos, testes Node exit 0.
+
+---
+
 ## 2026-11-17 — Windows: o atalho node.cmd lê o caminho acentuado do executável (chcp 65001)
 
 Task: Felixo AI Core/CLI no Windows — corrigir o atalho node.cmd que quebra com acento no caminho do executável (Notion `40091f95-497e-817f-bb30-f571eccd82e5`), achada em 21/10 no smoke do instalador. Agente: subagente da Orquestração (Claude Code, Claude Sonnet 5.5), 09:31 em diante. Trilha A: a direção (A, `chcp 65001`) estava na task.
@@ -3780,3 +3783,18 @@ Task: Felixo AI Core/CLI no Windows — corrigir o atalho node.cmd que quebra co
 **Não validado.** Conta de Windows com acento no nome de usuário (só pasta acentuada de laboratório); o app empacotado (o smoke empacotado usa o `app.asar` já construído, com o atalho antigo); a página realmente usada com `windowsHide` sem console (a simulação é por `chcp`); saída das CLIs com acento no terminal do app; o atalho morto no meio (`taskkill`) deixa o console em 65001.
 
 Estado: concluído (commit na branch; deploy pelo orquestrador).
+
+---
+
+## 2026-11-17 — CLI no Windows: adendo do node.cmd (a página de código volta antes de a CLI rodar)
+
+Adendo à entrada "Windows: o atalho node.cmd lê o caminho acentuado do executável (chcp 65001)", por revisão do orquestrador.
+
+**Problema da primeira forma.** O atalho deixava o console em 65001 durante toda a execução da CLI, e portanto também do git, do PowerShell 5.1 e de ferramentas que escrevem bytes OEM e que ela dispara. Era muito além do que a task pedia: só a **leitura** do caminho pelo `cmd.exe` precisava de UTF-8.
+
+**Agora.** O atalho decodifica o caminho sob `chcp 65001`, guarda cada parte do comando numa variável (`FELIXO_EXE0`, e `FELIXO_EXE1` no `npm.cmd`; o `cmd.exe` guarda UTF-16, então a expansão não depende mais da página), **devolve a página anterior antes de executar** e roda `"%FELIXO_EXE0%" ... %*`, saindo com `exit /b %errorlevel%`. A linha que executa não carrega o caminho literal.
+
+**Validação.**
+- A sonda do teste real (`managed-cli-runtime.integration.test.cjs`) imprime a página de código durante a execução. Com a forma anterior deu `durante=65001` e o teste reprovou (850 e 437); com a atual dá a página original. A página depois da chamada, a saída e o código de saída (7) continuam conferidos: 2/2 passam sob `chcp 850` e `chcp 437`.
+- O teste unitário passou a prender a forma nova: caminho lido sob `chcp 65001`, uma variável por parte (1 no `node.cmd`, 2 no `npm.cmd`), `chcp` de volta antes da linha que executa.
+- Cenário do instalador (`installer-kill-smoke.cjs --source`) com o executável numa pasta acentuada: `cancel` e `timeout` passam, zero sobreviventes. Pasta temporária apagada com `removeTreeSync` e conferida.
