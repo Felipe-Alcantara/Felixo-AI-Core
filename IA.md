@@ -4380,3 +4380,21 @@ Task: Felixo AI Core/Links — validar o menu de destino com leitor de tela e te
 **Não validado.** Leitor de tela real e toque com dedo em tela real. Se o NVDA não ler o destino ao cair no primeiro item (a descrição está só no menu), a correção é `aria-describedby` em cada escolha. No terminal, sem a tecla de menu e sem o hover não há caminho de teclado até o link: decisão pendente no Notion.
 
 Estado: MANUAL (roteiro no relatório e no corpo da task). Commit na branch `orq/links-validar-menu-destino-com`; push e deploy pelo orquestrador.
+
+---
+
+## 2026-11-17 — Prompts: teste que reproduz a falha do pty:write ao entregar a referência do catálogo
+
+Task: Felixo AI Core/Prompts — reproduzir cenário de falha: pty:write falho ao entregar a referência (Notion `3d791f95-497e-81cd-b05c-c9d6370c81a3`). Agente: subagente da Orquestração (Claude Haiku 5.5, effort max), 12:24 em diante. Trilha A.
+
+**Contexto.** O painel de Prompts digita a referência do catálogo no terminal aberto pelo `pty:write`. Quando a escrita falha, o painel precisa mostrar o aviso e deixar a nova tentativa funcionar. O harness de origens (`app/src/features/canvas/terminal/prompt-origins-e2e.test.ts`) simulava só o `pty:write` que responde `ok: false`; o caso em que a ponte lança (IPC caído) não passava pela cadeia do painel.
+
+**O que mudou.** O harness aceita um `Error` na fila de `pty.write` e o lança. Caso novo "PTY lança na primeira escrita": prova o aviso em erro (`describeSingleInsertFeedback`, `isError: true`), nada gravado como inserção, e a nova tentativa como única entrega confirmada, sem Enter. Nenhuma mudança de código de produto.
+
+**Validação.** `prompt-origins-e2e.test.ts`: 22/22 antes, 23/23 depois. Com o aviso em `isError: false`, ou a falha lida como `'sent'`, o caso novo falha (mutações temporárias, arquivo restaurado). Gate: lint sem avisos (exit 0), typecheck limpo (exit 0), testes Node 3457 passam e 0 falham, vitest 3639 passam e 1 falha que já existe na `main`: `canvas-inventory` declara 5 controles do `ClaudeApiNode.tsx` onde o código tem 6, desde d4b2913 (não relacionada a este commit).
+
+**Não validado.** Clique real no app empacotado (task irmã `3d791f95-497e-81bf-a6c7-efef573d87ae`). O JSX do painel não é renderizado pelo vitest (ambiente `node`).
+
+**Achados da mesma falha, não corrigidos.** Em `app/src/features/canvas/terminal/terminal-session-store.ts`: a mensagem do processo principal some (`erro` é lido, `message` é enviado: linhas 1749 e 1807); o aviso "usou o fallback inline" permanece depois de uma falha do PTY (linha 2795); `contextArtifactNames` marca como digitada uma referência recusada (linhas 2779 e 1755). Viraram pendências.
+
+Estado: concluído (commit `ea03bb9` na branch; deploy pelo orquestrador).

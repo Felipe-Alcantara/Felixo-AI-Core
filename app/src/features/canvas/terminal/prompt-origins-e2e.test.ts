@@ -15,7 +15,11 @@ import { composeSelectedPromptInsertion } from '../services/prompt-composition'
 import { buildSkillActivationPrompt } from '../services/skill-prompt'
 import { buildFileLinkPrompt, DEFAULT_FILE_LINK_PROMPT } from '../services/file-link-prompt'
 import type { ContextFileKind } from '../services/context-file-delivery'
-import { describeCombinedInsertFeedback, toActivationResult } from '../services/prompt-delivery-feedback'
+import {
+  describeCombinedInsertFeedback,
+  describeSingleInsertFeedback,
+  toActivationResult,
+} from '../services/prompt-delivery-feedback'
 import { toPersistedNode } from '../hooks/useCanvasPersistence'
 import type { AutomationDefinition } from '../../shared/types/automations'
 
@@ -45,8 +49,11 @@ type Harness = {
   contextWrites: ContextWrite[]
   /** `ok`: o arquivo de contexto é gravado; `falha`: a ponte recusa (fallback inline). */
   setContextFiles: (mode: 'ok' | 'falha') => void
-  /** Próximas respostas do `pty.write` (uma por escrita; depois volta a confirmar). */
-  queuePtyWriteResults: (...results: Array<{ ok: boolean; delivered?: boolean }>) => void
+  /**
+   * Próximas respostas do `pty.write` (uma por escrita; depois volta a confirmar).
+   * Um `Error` faz a ponte lançar, como um IPC caído.
+   */
+  queuePtyWriteResults: (...results: Array<{ ok: boolean; delivered?: boolean } | Error>) => void
   /** Teclas da pessoa, como o xterm as entrega ao `onData`. */
   type: (data: string) => void
 }
@@ -65,7 +72,7 @@ async function createHarness(): Promise<Harness> {
   const ptyWrites: string[] = []
   const contextWrites: ContextWrite[] = []
   let contextMode: 'ok' | 'falha' = 'ok'
-  const writeResults: Array<{ ok: boolean; delivered?: boolean }> = []
+  const writeResults: Array<{ ok: boolean; delivered?: boolean } | Error> = []
 
   ;(globalThis as { window?: unknown }).window = {
     navigator: { platform: 'Linux x86_64' },
@@ -77,7 +84,9 @@ async function createHarness(): Promise<Harness> {
         spawn: async () => ({ ok: true, reused: false }),
         write: async ({ data }: { data: string }) => {
           ptyWrites.push(data)
-          return writeResults.shift() ?? { ok: true, delivered: true }
+          const next = writeResults.shift() ?? { ok: true, delivered: true }
+          if (next instanceof Error) throw next
+          return next
         },
         resize: async () => ({ ok: true }),
         kill: async () => ({ ok: true }),
@@ -393,6 +402,31 @@ describe('repetição, cancelamento, nova tentativa e reinício', () => {
 
     const retried = await harness.store.sendText(ID, text, { kind: 'catalog-prompt', insertion })
     expect(retried).toEqual({ delivered: true })
+    expect(harness.ptyWrites.map(countSubmissions)).toEqual([0, 0])
+    expect(cardLabel(harness)).toBe('Revisão de PR')
+  })
+
+  it('PTY lança na primeira escrita: aviso de erro, nada registrado, e a nova tentativa é a única entrega confirmada', async () => {
+    harness = await createHarness()
+    const { text, insertion } = ORIGINS[0].build()
+    harness.queuePtyWriteResults(new Error('ponte indisponível'))
+
+    const failed = await harness.store.sendText(ID, text, { kind: 'catalog-prompt', insertion })
+    expect(failed).toEqual({ delivered: false, reason: 'error', message: 'ponte indisponível' })
+    // O que o painel mostra: aviso em erro, nunca "Digitado" nem "copiado".
+    expect(describeSingleInsertFeedback(toActivationResult(failed))).toEqual({
+      text: 'O terminal não confirmou o recebimento. Tente novamente.',
+      isError: true,
+    })
+    expect(describeCombinedInsertFeedback(toActivationResult(failed), 2).isError).toBe(true)
+    expect(harness.store.getSnapshot(ID)?.lastPromptInsertion).toBeUndefined()
+    expect(cardLabel(harness)).toBeUndefined()
+
+    // "Tentar de novo": a mesma entrega, agora confirmada pelo PTY.
+    const retried = await harness.store.sendText(ID, text, { kind: 'catalog-prompt', insertion })
+    expect(retried).toEqual({ delivered: true })
+    expect(describeSingleInsertFeedback(toActivationResult(retried)).isError).toBe(false)
+    expect(harness.ptyWrites).toHaveLength(2)
     expect(harness.ptyWrites.map(countSubmissions)).toEqual([0, 0])
     expect(cardLabel(harness)).toBe('Revisão de PR')
   })
