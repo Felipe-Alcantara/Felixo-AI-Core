@@ -3933,3 +3933,23 @@ Estado: concluído (commit na branch; deploy pelo orquestrador).
 **O que mudou.** `persistent-cli-session.cjs`: o pedido guarda `permission.recommendedAllow` (só `true` explícito conta) e a varredura de 10 minutos permite ou nega conforme isso; a mensagem diz qual foi aplicada. Hoje nenhum adaptador marca recomendada, então o comportamento real segue sendo negar. `OrchestratorPanel.tsx` e `FelixoSettingsModal.tsx`: com a confirmação desligada, aparece "Acesso total ativo".
 
 **Validação.** Teste novo em `persistent-cli-session.test.cjs` (recomendada aplica; o antigo cobre o negar). lint e typecheck limpos; `run-node-unit-tests` 3396 ok de 3408 (0 falhas); vitest de chat e ferramentas do canvas 269 ok.
+
+---
+
+## 2026-11-17 — Terminal: o estado e o assunto que a CLI anuncia (OSC 7501 e título) passam a mandar no cartão
+
+Task: Felixo AI Core/Terminal — ler o estado e o assunto que as CLIs já anunciam (Notion `3fa91f95-497e-81ee-a838-df766edb0832`). Agente: subagente da Orquestração (Claude Code, Claude Sonnet 5.5), 10:11 em diante. Trilha A.
+
+**Contexto.** O estado do cartão ("trabalhando", "aguardando", "aguardando aprovação") era adivinhado olhando a tela (`computeSignature`, `IDLE_AFTER_MS`, `looksLikeApprovalPrompt`), e já deu três bugs. O Claude Code 2.1.295+ anuncia o estado pelo Program Status Protocol (OSC 7501, rev. 0.4) e Claude e Codex mandam o assunto no título da janela (OSC 0).
+
+**Feito.**
+- **`program-status.ts` (novo, puro):** `parseProgramStatus` valida o relato como a especificação manda (chaves, `id` em árvore até 8 níveis, base64 de `title` e `msg` com 192 e 2048 bytes, sem controle, relato inteiro descartado se algo estoura), `subjectFromTitle` tira glifo de estado e o nome da CLI, `titleSaysWorking` reconhece o spinner (`◐◑` do Claude, braille do Codex).
+- **`terminal-session-store.ts`:** `watchProgramStatus` registra o OSC 7501 e o `onTitleChange`. Precedência OSC 7501 > título > tela: `working` = trabalhando; `blocked` = aguardando aprovação com `blockKind`; `done` = aguardando com aviso; `idle` = aguardando **sem** aviso (`silentIdle`); `error` = em repouso com aviso (o `error` da atividade significa "não subiu"); `clear` devolve à tela. Com relato ativo, `onOutput`, `markWorking` e o relógio de ociosidade não mexem no estado. Sem 7501, o spinner no título segura "trabalhando" com a tela parada.
+- **Sondagem:** respondida pelo caminho do xterm (`terminal.input(resposta, false)`, que sai pelo `onData` na ordem do parser, antes da resposta ao `CSI c`). Sondagem que chega antes de o `pty.spawn` responder é replay até prova em contrário: se o PTY é `reused`, não se responde; se é novo, responde depois.
+- **Snapshot:** `statusSource`, `blockKind`, `progress`, `subject`, `silentIdle`. O cartão mostra o assunto ao lado da pasta e uma barra fina de progresso; `isActionRequired` ignora o `idle` silencioso.
+- **Codex segue pela tela** (o 7501 dele só abre o chat, como antes); Gemini, Openia e shell não mudam.
+- **Docs:** `GUIA-USUARIO.md` (estado dos agentes).
+
+**Validação.** `program-status.test.ts`: 13 testes (relatos válidos, inválidos, limites, títulos reais das gravações de Claude e Codex). `terminal-session-store.test.ts`: 10 testes novos (sondagem uma vez e antes do DA1, não responde no reanexo, responde se chegou antes do spawn, estados e `kind`, tela parada 5 s não muda o estado anunciado, `clear`, filho e relato inválido ignorados, Codex fora, assunto, spinner no título). Gate: lint e typecheck limpos, vitest 234 arquivos / 3595 testes, testes Node 3395 passando.
+
+**Não validado.** Nenhuma sessão real do Claude Code (o repositório não tem gravação com 7501 do Claude, e a task proibia sessão real): o formato do 7501 do Claude foi lido da especificação, não de captura. Ver sondagem/`kind` no app real e gravar a fixture é a pendência.

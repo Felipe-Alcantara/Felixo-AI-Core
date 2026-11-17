@@ -76,6 +76,14 @@ import {
 import { createResumeOutcomeDetector, type ResumeOutcomeDetector } from './resume-outcome-detector'
 import type { SessionMetadata } from './session-metadata'
 import {
+  PROGRAM_STATUS_PROBE_REPLY,
+  parseProgramStatus,
+  subjectFromTitle,
+  titleSaysWorking,
+  type ProgramBlockKind,
+  type ProgramState,
+} from './program-status'
+import {
   computePreview,
   computeSignature,
   isAlternateScreen,
@@ -139,6 +147,8 @@ export type SessionActivity =
   | 'exited'
   | 'error'
 
+export type StatusSource = 'osc7501' | 'titulo' | 'tela'
+
 export type SessionSnapshot = {
   activity: SessionActivity
   /** Last lines of output, for the collapsed card preview. */
@@ -149,6 +159,16 @@ export type SessionSnapshot = {
   message?: string
   /** File delivery failed; the session used the old inline fallback. */
   contextWarning?: string
+  /** De onde veio o estado: o programa (OSC 7501), o título da janela ou a heurística da tela. */
+  statusSource?: StatusSource
+  /** Por que a CLI pede a pessoa (OSC 7501, `state=blocked`). */
+  blockKind?: ProgramBlockKind
+  /** 0 a 100, quando o programa informa (OSC 7501). */
+  progress?: number
+  /** Assunto atual da conversa, do título que a CLI manda; texto puro. */
+  subject?: string
+  /** `idle` anunciado pelo programa (ex.: a pessoa cancelou): em repouso, sem aviso de "terminou". */
+  silentIdle?: boolean
   /** The most recent prompt submitted to the session (typed or programmatic). */
   lastPrompt?: string
   /** Provenance of the most recent prompt; content never enters PTY options. */
@@ -533,6 +553,20 @@ type Session = {
   codexUpdateWindow: RollingText
   /** Abertura do Codex 0.158+, que desenha um compositor provisório; ver `isCodexStillStarting`. */
   codexStartup: CodexStartupState
+  /** Último relato do registro raiz do OSC 7501; `undefined` enquanto a CLI não fala o protocolo. */
+  programStatus?: { state: ProgramState; kind?: ProgramBlockKind; progress?: number; title?: string }
+  /** O `pty.spawn` já respondeu: antes disso não se sabe se a saída é replay de um PTY vivo. */
+  spawnSettled: boolean
+  /**
+   * Sondagens do OSC 7501 vistas antes de o spawn responder: se o PTY era um
+   * processo vivo (`reused`), elas são o replay do buffer e não se respondem.
+   * `Early` conta as que chegaram; `Deferred`, as que o xterm já leu e esperam
+   * a decisão; `ToSkip`, as que ainda serão lidas e devem ser ignoradas.
+   */
+  probesEarly: number
+  probesDeferred: number
+  probesToSkip: number
+  titleWorkingAt?: number
   claudeBypassHandled: boolean
   claudeTrustHandled: boolean
   /** Opções de lançamento originais, guardadas para relançar sozinho após um
@@ -588,6 +622,8 @@ type CodexStartupState = {
 
 /** Estado do programa que o Codex 0.163+ emite: `ESC ] 7501 ; state=idle:app=codex`. */
 const CODEX_PROGRAM_STATUS_OSC = 7501
+/** Começo da sondagem do OSC 7501, para contar as que chegam antes do spawn responder. */
+const PROGRAM_STATUS_PROBE = '\x1b]7501;?'
 
 /**
  * Conta quebras de linha sem alocar: roda em todo pedaço de saída de todo
@@ -944,6 +980,10 @@ export class TerminalSessionStore {
       codexTrustHandled: false,
       codexUpdateWindow: createRollingText(ACCEPT_SCREEN_BUFFER_LIMIT),
       codexStartup: { chatOpened: false, composerSeen: false },
+      spawnSettled: false,
+      probesEarly: 0,
+      probesDeferred: 0,
+      probesToSkip: 0,
       claudeBypassHandled: false,
       claudeTrustHandled: false,
       launchOptions: options,
@@ -961,6 +1001,7 @@ export class TerminalSessionStore {
       return
     }
 
+    this.watchProgramStatus(session)
     if (session.command === 'codex') {
       this.watchCodexStartup(session)
     }
@@ -968,6 +1009,9 @@ export class TerminalSessionStore {
     session.offData = this.routePtyData(pty, session.ptySessionId, (event) => {
       if (event.sessionId === session.ptySessionId) {
         session.receivedOutput ||= event.data.length > 0
+        if (!session.spawnSettled && event.data.includes(PROGRAM_STATUS_PROBE)) {
+          session.probesEarly += event.data.split(PROGRAM_STATUS_PROBE).length - 1
+        }
         session.outputLineCount += countLineFeeds(event.data)
         this.scanAcceptScreens(session, event.data)
         this.trackCodexUpdateBanner(session, event.data)
@@ -1138,6 +1182,15 @@ export class TerminalSessionStore {
         // promise resolver. No Windows o ConPTY ganha essa corrida quase
         // sempre, e o spawn bem-sucedido era marcado como erro, o que ainda
         // impedia `scheduleInitialText` de enviar o texto inicial.
+        session.spawnSettled = true
+        if (result?.ok && result.reused) {
+          // Reanexo: a sondagem que veio no replay já foi respondida há muito tempo.
+          session.probesToSkip = session.probesEarly - session.probesDeferred
+        } else if (session.probesDeferred > 0) {
+          this.answerProgramProbe(session)
+        }
+        session.probesEarly = 0
+        session.probesDeferred = 0
         if (result?.ok) {
           if (session.launchOptions.chainTicket) {
             session.launchOptions = { ...session.launchOptions, chainTicket: undefined }
@@ -2195,7 +2248,8 @@ export class TerminalSessionStore {
       session.lastSignature = signature
       session.lastMeaningfulAt = Date.now()
       session.paintedOutput = true
-      this.markWorking(session)
+      // Com o programa falando OSC 7501, a tela não decide mais o estado.
+      if (!session.programStatus) this.markWorking(session)
       this.trackCodexStartupScreen(session)
       this.trackReplRecognized(session)
       // A tela acabou de mudar: a próxima checagem não precisa esperar o
@@ -2208,7 +2262,7 @@ export class TerminalSessionStore {
     } else {
       // Only the animation moved — make sure an idle check is scheduled so we
       // eventually settle even though bytes keep arriving.
-      this.scheduleIdleCheck(session)
+      if (!session.programStatus) this.scheduleIdleCheck(session)
     }
   }
 
@@ -2469,6 +2523,7 @@ export class TerminalSessionStore {
   }
 
   private markWorking(session: Session): void {
+    if (session.programStatus) return
     // Only emit on the transition into 'working' to avoid a re-render per byte;
     // the preview is refreshed once the session goes idle.
     if (session.snapshot.activity !== 'working') {
@@ -2489,7 +2544,12 @@ export class TerminalSessionStore {
     }
     session.idleTimer = setTimeout(() => {
       session.idleTimer = null
-      if (session.disposed || session.snapshot.activity !== 'working') {
+      if (session.disposed || session.programStatus || session.snapshot.activity !== 'working') {
+        return
+      }
+      if (this.titleSaysWorkingNow(session)) {
+        // O título ainda gira (spinner): a tela parada não é fim de turno.
+        this.scheduleIdleCheck(session)
         return
       }
       const quietFor = Date.now() - session.lastMeaningfulAt
@@ -2508,6 +2568,7 @@ export class TerminalSessionStore {
         const activity = looksLikeApprovalPrompt(viewport) ? 'waiting_approval' : 'idle'
         this.update(session, {
           activity,
+          statusSource: 'tela',
           scrollback: readScrollbackStatus(session.terminal, session.outputLineCount, session.snapshot.scrollback),
         })
       } else {
@@ -2899,6 +2960,82 @@ export class TerminalSessionStore {
       clearTimeout(session.initialTextTimer)
       session.initialTextTimer = null
     }
+  }
+
+  /**
+   * Escuta o que a CLI anuncia sozinha: o estado do programa (OSC 7501) e o
+   * título da janela (OSC 0/2). Precedência: OSC 7501 > título > tela.
+   */
+  private watchProgramStatus(session: Session): void {
+    const { terminal } = session
+    terminal.parser.registerOscHandler(CODEX_PROGRAM_STATUS_OSC, (data) => {
+      const message = parseProgramStatus(data)
+      if (message?.type === 'probe') {
+        if (session.probesToSkip > 0) session.probesToSkip -= 1
+        else this.answerProgramProbe(session)
+      } else if (message?.type === 'clear') {
+        // Sem `id` apaga tudo; com `id` só mexe em filhos, que não mandam no selo.
+        if (!message.id) this.applyProgramStatus(session, undefined)
+      } else if (message && !message.id && session.command !== 'codex' && message.app !== 'codex') {
+        // O Codex segue pela tela, como antes: o 7501 dele só abre o chat (abaixo).
+        this.applyProgramStatus(session, message)
+      }
+      // `false`: o tratador do Codex (abertura do chat) também precisa ver o relato.
+      return false
+    })
+    terminal.onTitleChange((title) => {
+      session.titleWorkingAt = titleSaysWorking(title) ? Date.now() : undefined
+      const subject = subjectFromTitle(title)
+      if (!session.programStatus?.title && subject !== session.snapshot.subject) {
+        this.update(session, { subject })
+      }
+      // Sinal secundário, só para quem não fala OSC 7501.
+      if (session.titleWorkingAt && !session.programStatus && session.snapshot.activity === 'idle') {
+        this.update(session, { activity: 'working', statusSource: 'titulo', silentIdle: false })
+        this.scheduleIdleCheck(session)
+      }
+    })
+  }
+
+  private titleSaysWorkingNow(session: Session): boolean {
+    return session.titleWorkingAt !== undefined && Date.now() - session.titleWorkingAt < 2000
+  }
+
+  /** Responde à sondagem pelo caminho do próprio xterm: a resposta sai antes da do `CSI c`. */
+  private answerProgramProbe(session: Session): void {
+    if (session.disposed) return
+    if (!session.spawnSettled) {
+      // Pode ser replay de um PTY vivo: espera o spawn dizer se o processo é novo.
+      session.probesDeferred += 1
+      return
+    }
+    session.terminal.input(PROGRAM_STATUS_PROBE_REPLY, false)
+  }
+
+  private applyProgramStatus(session: Session, report: Session['programStatus']): void {
+    session.programStatus = report
+    const current = session.snapshot.activity
+    if (current === 'exited' || current === 'error') return
+    if (!report) {
+      // `clear`: a heurística volta a mandar.
+      this.update(session, { statusSource: 'tela', blockKind: undefined, progress: undefined, silentIdle: false })
+      this.markWorking(session)
+      return
+    }
+    // `error` do programa é falha da conversa (API, rede), não processo morto:
+    // o `error` da atividade significa "não subiu", então fica em repouso e avisa.
+    const activity: SessionActivity =
+      report.state === 'working' ? 'working' : report.state === 'blocked' ? 'waiting_approval' : 'idle'
+    this.clearIdleTimer(session)
+    this.update(session, {
+      activity,
+      statusSource: 'osc7501',
+      blockKind: report.state === 'blocked' ? report.kind : undefined,
+      progress: report.progress,
+      silentIdle: report.state === 'idle',
+      subject: report.title ?? session.snapshot.subject,
+      scrollback: readScrollbackStatus(session.terminal, session.outputLineCount, session.snapshot.scrollback),
+    })
   }
 
   /**

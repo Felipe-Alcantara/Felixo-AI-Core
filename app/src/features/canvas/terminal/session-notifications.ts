@@ -5,7 +5,8 @@ type NotificationNode = { id: string; type?: string }
 /** True when a terminal needs the user's attention in the notifications panel. */
 export function isActionRequired(snapshot: SessionSnapshot | undefined): boolean {
   return (
-    snapshot?.activity === 'idle' ||
+    // `idle` anunciado pelo programa (a pessoa cancelou) não é "terminou".
+    (snapshot?.activity === 'idle' && !snapshot.silentIdle) ||
     snapshot?.activity === 'exited' ||
     snapshot?.activity === 'waiting_approval'
   )

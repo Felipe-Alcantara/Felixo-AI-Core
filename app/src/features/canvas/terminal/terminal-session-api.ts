@@ -22,6 +22,12 @@ export type SessionSnapshot = {
   exitCode?: number
   message?: string
   contextWarning?: string
+  /** Origem do estado, motivo do bloqueio, progresso e assunto que a CLI anuncia (ver o store). */
+  statusSource?: 'osc7501' | 'titulo' | 'tela'
+  blockKind?: 'permission' | 'question' | 'auth'
+  progress?: number
+  subject?: string
+  silentIdle?: boolean
   lastPrompt?: string
   /** Provenance of the most recent programmatic or submitted prompt. */
   lastPromptInsertion?: PromptInsertion

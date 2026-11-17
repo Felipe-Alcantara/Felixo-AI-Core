@@ -1036,6 +1036,8 @@ Enquanto gera, o painel mostra o tempo decorrido, e **Cancelar** interrompe o pe
 
 ### Notificações dos agentes
 
+**Estado dos agentes.** O selo do cartão (trabalhando, aguardando, aguardando aprovação) vem, sempre que possível, do próprio agente: o Claude Code (2.1.295 ou mais novo) anuncia sozinho o que está fazendo, e o app só olha a tela quando ele não anuncia. Quando o agente cancela por você, o cartão volta a "aguardando" sem avisar "terminou". O assunto atual da conversa (o título que o Claude e o Codex mandam) aparece ao lado do nome da pasta no cartão, e uma barra fina mostra o progresso quando o agente informa. O Codex e o Gemini continuam com o estado lido da tela.
+
 O botão **Notificações** registra, enquanto o app estiver aberto, agentes que terminaram um trabalho, encerraram a sessão ou estão aguardando aprovação/resposta. Quando há itens, ele recebe borda vermelha e um contador externo, sem cobrir o ícone ou o texto. O painel abre ao lado do botão com animação; cada item mostra o agente e a última mensagem útil do terminal. Clique nele para abrir o terminal e remover o aviso. O histórico é limpo ao fechar o app.
 Quando uma nova notificação surgir, o app reproduz um alerta sonoro curto; notificações já existentes ao iniciar não repetem o som.
 

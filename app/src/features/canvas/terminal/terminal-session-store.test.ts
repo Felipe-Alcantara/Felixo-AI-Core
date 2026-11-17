@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Terminal } from '@xterm/xterm'
 import * as screenState from './terminal-screen-state'
 import { CODEX_RELAUNCH_NEW_CONVERSATION_NOTICE, TerminalSessionStore } from './terminal-session-store'
+import { isActionRequired } from './session-notifications'
 import type { TerminalFixture } from './__fixtures__/terminal-output/replay-fixture'
 import { closeLinkChooser, getLinkChooserState } from '../../shared/links/link-chooser-store'
 import { createCatalogPromptInsertion, createManualPromptInsertion } from '../../shared/types/prompt-insertion'
@@ -3146,5 +3147,152 @@ describe('TerminalSessionStore: cancelar a continuação automática do Claude',
 
     await expect(harness.store.cancelClaudeAutoContinue(SESSION_ID)).resolves.toBe('no-session')
     expect(harness.writes).toEqual([])
+  })
+})
+
+/**
+ * O Claude Code 2.1.295+ anuncia o estado (OSC 7501) e o assunto (título) em
+ * vez de a tela ser adivinhada, mas só depois de o terminal responder à
+ * sondagem `OSC 7501 ; ?` (seguida de `CSI c`).
+ */
+describe('TerminalSessionStore: estado que a CLI anuncia (OSC 7501 e título)', () => {
+  let harness: Harness | undefined
+  const PROBE = '\x1b]7501;?\x07\x1b[c'
+  const report = (pairs: string) => `\x1b]7501;${pairs}\x07`
+  const probeReplies = (h: Harness) => h.writes.filter((w) => w.startsWith('\x1b]7501;?'))
+
+  beforeEach(() => {
+    harness = undefined
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    harness?.store.clear()
+    vi.useRealTimers()
+  })
+
+  it('responde à sondagem uma vez, pelo xterm (antes da resposta ao CSI c)', async () => {
+    harness = createHarness('', 'claude')
+    await vi.advanceTimersByTimeAsync(0)
+    harness.feed(PROBE)
+    await vi.advanceTimersByTimeAsync(50)
+
+    expect(probeReplies(harness)).toHaveLength(1)
+    const replyAt = harness.writes.findIndex((w) => w.startsWith('\x1b]7501;?'))
+    const daAt = harness.writes.findIndex((w) => w.startsWith('\x1b[?'))
+    expect(replyAt).toBeGreaterThanOrEqual(0)
+    if (daAt >= 0) expect(replyAt).toBeLessThan(daAt)
+  })
+
+  it('não responde à sondagem que vem no replay de um PTY vivo (reanexo)', async () => {
+    harness = createHarness('', 'claude', true, true)
+    harness.setSpawnResult({ ok: true, reused: true })
+    harness.feed(PROBE)
+    harness.resolveSpawn()
+    await vi.advanceTimersByTimeAsync(50)
+
+    expect(probeReplies(harness)).toEqual([])
+  })
+
+  it('a sondagem que chega antes do spawn responder é respondida se o PTY for novo', async () => {
+    harness = createHarness('', 'claude', true, true)
+    harness.feed(PROBE)
+    expect(probeReplies(harness)).toEqual([])
+    harness.resolveSpawn()
+    await vi.advanceTimersByTimeAsync(50)
+
+    expect(probeReplies(harness)).toHaveLength(1)
+  })
+
+  it('o estado anunciado vence a tela: working, blocked com kind, done e idle', async () => {
+    harness = createHarness('', 'claude')
+    await vi.advanceTimersByTimeAsync(0)
+    const snap = () => harness!.store.getSnapshot(SESSION_ID)
+
+    harness.feed(report('state=working:progress=30'))
+    await vi.advanceTimersByTimeAsync(5_000) // bem além do IDLE_AFTER_MS: a tela parada não muda nada
+    expect(snap()).toMatchObject({ activity: 'working', statusSource: 'osc7501', progress: 30 })
+
+    harness.feed(report('state=blocked:kind=permission'))
+    await vi.advanceTimersByTimeAsync(10)
+    expect(snap()).toMatchObject({ activity: 'waiting_approval', blockKind: 'permission', silentIdle: false })
+
+    harness.feed(report('state=blocked:kind=question'))
+    await vi.advanceTimersByTimeAsync(10)
+    expect(snap()).toMatchObject({ blockKind: 'question' })
+
+    harness.feed(report('state=done'))
+    await vi.advanceTimersByTimeAsync(10)
+    expect(snap()).toMatchObject({ activity: 'idle', silentIdle: false, blockKind: undefined })
+
+    harness.feed(report('state=idle'))
+    await vi.advanceTimersByTimeAsync(10)
+    expect(snap()).toMatchObject({ activity: 'idle', silentIdle: true })
+  })
+
+  it('o idle anunciado não pede aviso; o done pede', async () => {
+    harness = createHarness('', 'claude')
+    await vi.advanceTimersByTimeAsync(0)
+    harness.feed(report('state=idle'))
+    await vi.advanceTimersByTimeAsync(10)
+    expect(isActionRequired(harness.store.getSnapshot(SESSION_ID))).toBe(false)
+    harness.feed(report('state=done'))
+    await vi.advanceTimersByTimeAsync(10)
+    expect(isActionRequired(harness.store.getSnapshot(SESSION_ID))).toBe(true)
+  })
+
+  it('clear devolve o controle à heurística da tela', async () => {
+    harness = createHarness('', 'claude')
+    await vi.advanceTimersByTimeAsync(0)
+    harness.feed(report('state=working'))
+    await vi.advanceTimersByTimeAsync(10)
+    harness.feed(report('state=clear'))
+    await vi.advanceTimersByTimeAsync(5_000)
+
+    expect(harness.store.getSnapshot(SESSION_ID)).toMatchObject({ activity: 'idle', statusSource: 'tela' })
+  })
+
+  it('relato inválido e registro filho não mexem no selo', async () => {
+    harness = createHarness('', 'claude')
+    await vi.advanceTimersByTimeAsync(0)
+    harness.feed(report('state=working'))
+    await vi.advanceTimersByTimeAsync(10)
+    harness.feed(report('state=idle:id=build/test'))
+    harness.feed(report('state=dancing'))
+    await vi.advanceTimersByTimeAsync(10)
+
+    expect(harness.store.getSnapshot(SESSION_ID)?.activity).toBe('working')
+  })
+
+  it('o Codex segue pela tela: o 7501 dele não decide o estado', async () => {
+    harness = createHarness('', 'codex')
+    await vi.advanceTimersByTimeAsync(0)
+    harness.feed('Codex')
+    harness.feed(report('state=idle:app=codex'))
+    await vi.advanceTimersByTimeAsync(10)
+
+    expect(harness.store.getSnapshot(SESSION_ID)?.statusSource).not.toBe('osc7501')
+  })
+
+  it('o assunto vem do título, sem glifo nem controle', async () => {
+    harness = createHarness('', 'claude')
+    await vi.advanceTimersByTimeAsync(0)
+    harness.feed('\x1b]0;✳ Resumo com blocos Markdown\x07')
+    await vi.advanceTimersByTimeAsync(10)
+
+    expect(harness.store.getSnapshot(SESSION_ID)?.subject).toBe('Resumo com blocos Markdown')
+  })
+
+  it('sem OSC 7501, o spinner no título mantém "trabalhando" com a tela parada', async () => {
+    harness = createHarness('', 'claude')
+    await vi.advanceTimersByTimeAsync(0)
+    harness.feed('olá')
+    await vi.advanceTimersByTimeAsync(2_000)
+    expect(harness.store.getSnapshot(SESSION_ID)?.activity).toBe('idle')
+
+    for (let i = 0; i < 4; i += 1) {
+      harness.feed(`\x1b]0;${i % 2 ? '◐' : '◑'} Pensando\x07`)
+      await vi.advanceTimersByTimeAsync(1_000)
+    }
+    expect(harness.store.getSnapshot(SESSION_ID)).toMatchObject({ activity: 'working', statusSource: 'titulo' })
   })
 })

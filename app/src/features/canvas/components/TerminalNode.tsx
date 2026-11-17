@@ -341,6 +341,11 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
       <div className="felixo-node-context" title={nodeData.cwd}>
         {typeof nodeData.terminalIndex === 'number' && <span className="felixo-node-index">#{nodeData.terminalIndex}</span>}
         <span className="felixo-node-context-name">{repository || provider.label}</span>
+        {snapshot?.subject && (
+          <span className="felixo-node-subject truncate text-(--f-core-white-soft)" data-terminal-subject title={snapshot.subject}>
+            {snapshot.subject}
+          </span>
+        )}
         {configuredModel && <span className="felixo-node-model" title={`Modelo configurado na criação: ${configuredModel}`}>{configuredModel}</span>}
         {accountChip && (
           <span className="felixo-node-account" title={accountChip.title}>
@@ -348,6 +353,12 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
           </span>
         )}
       </div>
+
+      {snapshot?.progress !== undefined && activity !== 'idle' && (
+        <div className="h-0.5 w-full shrink-0 bg-white/10" data-terminal-progress={snapshot.progress}>
+          <div className="h-full bg-(--f-core-active)" style={{ width: `${snapshot.progress}%` }} />
+        </div>
+      )}
 
       {(resumeBanner || keyRefusedBanner || chainBanners.length > 0 || chainError) && (
         <div className="nodrag nowheel nopan flex shrink-0 flex-col gap-1 px-2 pt-2">
