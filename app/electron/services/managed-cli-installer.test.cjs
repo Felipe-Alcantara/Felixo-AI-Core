@@ -1,5 +1,7 @@
 const { describe, it } = require('node:test')
 const assert = require('node:assert/strict')
+const fs = require('node:fs')
+const os = require('node:os')
 const path = require('node:path')
 const { EventEmitter } = require('node:events')
 
@@ -10,6 +12,7 @@ const {
   createNpmViewChannelsArgs,
   createNpmViewIntegrityArgs,
   installManagedPackage,
+  readInstalledPackageVersion,
   resolveLatestManagedPackage,
   verifyManagedPackageIntegrity,
 } = require('./managed-cli-installer.cjs')
@@ -464,10 +467,39 @@ describe('chooseNewestPublishedVersion', () => {
       nodeExecutable: '/opt/app/felixo',
       layout: LAYOUT,
       spawn,
+      readInstalledVersion: () => '0.58.0',
     })
 
     assert.equal(result.ok, true)
     assert.deepEqual(spawnCalls, ['view', 'install'])
+  })
+
+  it('recusa a instalação quando a versão que ficou no disco não é a pedida', async () => {
+    const result = await installManagedPackage({
+      npmPackage: '@google/gemini-cli@0.58.0',
+      expectedIntegrity: 'sha512-abc==',
+      npmCliPath: '/npm/bin/npm-cli.js',
+      nodeExecutable: '/opt/app/felixo',
+      layout: LAYOUT,
+      spawn: (command, args) =>
+        createFakeChild({ stdout: args[1] === 'view' ? 'sha512-abc==\n' : 'added 1 package' }),
+      readInstalledVersion: () => '0.59.0',
+    })
+
+    assert.equal(result.ok, false)
+    assert.match(result.message, /0\.59\.0.*0\.58\.0/)
+  })
+
+  it('lê a versão instalada do package.json da pasta gerenciada', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-installed-'))
+    try {
+      fs.mkdirSync(path.join(root, '@google', 'gemini-cli'), { recursive: true })
+      fs.writeFileSync(path.join(root, '@google', 'gemini-cli', 'package.json'), '{"version":"0.58.0"}')
+      assert.equal(readInstalledPackageVersion({ nodeModules: root }, '@google/gemini-cli'), '0.58.0')
+      assert.equal(readInstalledPackageVersion({ nodeModules: root }, 'ausente'), null)
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true })
+    }
   })
 
   it('skips the hash check for a package outside the manifest (no expectedIntegrity)', async () => {

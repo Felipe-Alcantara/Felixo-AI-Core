@@ -4210,3 +4210,15 @@ Estado: concluído (commit na branch; deploy pelo orquestrador).
 - Rodado de verdade (`devtools launch`, janela 1920×1080): 2 agentes lado a lado (592 px cada, gaveta maximizada), 4 em grade 2×2, 3 com o último cobrindo a linha, empilhado em 1304 px, zoom e volta, Alt+Shift+← moveu o foco do DOM, Fechar painel manteve os 4 cartões.
 
 **Não feito (fica para tasks).** Persistir o arranjo, atalho configurável, bancada de performance (20 terminais com 4 visíveis), cenário no `test:canvas-smoke`, Modo Performance limitando painéis, modo grade no canvas.
+
+---
+
+## 2026-11-17 — Arquitetura: versão do npm embutido registrada e versão instalada das CLIs conferida
+
+**Contexto.** O manifesto das CLIs (`managed-cli-manifest.cjs`) já fixava versão e hash de Codex, Claude e Gemini (hash conferido no registry antes do `npm install`), mas o npm embutido no instalador não deixava rastro de versão e, depois do install, ninguém conferia o que ficou no disco. Task de 12/09.
+
+**O que mudou.**
+- `scripts/bundle-npm-runtime.cjs`: `copyNpmRuntime` grava `build/npm-runtime/npm-runtime.json` (`{name, version}` lido do `package.json` do npm copiado), ao lado de `npm/`; no pacote vira `resources/npm-runtime/npm-runtime.json`.
+- `electron/services/managed-cli-installer.cjs`: depois de um `npm install` bem-sucedido de `pkg@versao` com hash esperado, `installManagedPackage` lê `package.json` em `layout.nodeModules` (`readInstalledPackageVersion`, injetável como `readInstalledVersion`) e recusa se a versão diverge ou não é legível.
+
+**Validação.** `node --test` nos arquivos da área: 143 testes, 143 passam (3 novos: arquivo irmão com a versão, recusa de versão divergente, leitura do `package.json`).

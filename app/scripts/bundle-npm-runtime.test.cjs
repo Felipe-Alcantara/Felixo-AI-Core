@@ -62,6 +62,7 @@ test('a política baseline conserva os diretórios não runtime para medir a com
 
   try {
     writeFile(path.join(source, 'bin', 'npm-cli.js'))
+    writeFile(path.join(source, 'package.json'), '{}')
     writeFile(path.join(source, 'node_modules', 'fixture', 'test', 'unit.js'))
     writeFile(path.join(source, 'node_modules', 'fixture', 'examples', 'demo.js'))
     writeFile(path.join(source, 'node_modules', 'fixture', 'fixtures', 'input.json'))
@@ -108,6 +109,7 @@ test('reempacotar troca o runtime inteiro, mesmo num caminho com acento (o rmSyn
 
   try {
     writeFile(path.join(source, 'bin', 'npm-cli.js'), '#!/usr/bin/env node\n')
+    writeFile(path.join(source, 'package.json'), '{"name":"npm","version":"11.21.2"}')
     writeFile(path.join(source, 'lib', 'novo.js'), 'module.exports = 2\n')
     // Sobra do empacotamento anterior: um arquivo que a versão nova não tem.
     writeFile(path.join(target, 'lib', 'velho.js'), 'module.exports = 1\n')
@@ -118,6 +120,10 @@ test('reempacotar troca o runtime inteiro, mesmo num caminho com acento (o rmSyn
     assert.equal(fs.existsSync(path.join(target, 'lib', 'velho.js')), false, 'sobrou arquivo do runtime anterior')
     assert.equal(fs.readFileSync(path.join(target, 'bin', 'npm-cli.js'), 'utf8'), '#!/usr/bin/env node\n')
     assert.ok(fs.existsSync(path.join(target, 'lib', 'novo.js')))
+    assert.deepEqual(
+      JSON.parse(fs.readFileSync(path.join(path.dirname(target), 'npm-runtime.json'), 'utf8')),
+      { name: 'npm', version: '11.21.2' },
+    )
   } finally {
     fs.rmSync(temporaryRoot, { recursive: true, force: true })
   }

@@ -11,6 +11,7 @@
  */
 
 const spawnChildProcess = require('cross-spawn')
+const fs = require('node:fs')
 const path = require('node:path')
 const platformAdapter = require('../core/platform/index.cjs')
 const { createNodeEnv } = require('../core/node-runtime.cjs')
@@ -427,6 +428,8 @@ async function verifyManagedPackageIntegrity({
  * @param {(line: string) => void} [options.onLog]
  * @param {AbortSignal} [options.signal] - Cancelamento externo (ex.: a pessoa fechou o diálogo de instalação).
  * @param {Function} [options.spawn] - Injetável nos testes.
+ * @param {(packageName: string) => string | null} [options.readInstalledVersion] - Lê a versão instalada
+ *   (injetável nos testes; o padrão lê o `package.json` em `layout.nodeModules`).
  * @param {number} [options.timeoutMs]
  * @param {string} [options.platformName]
  * @returns {Promise<{ ok: boolean, message: string, output: string, cancelled?: boolean, timedOut?: boolean, errorCode?: string }>}
@@ -442,6 +445,7 @@ async function installManagedPackage({
   onLog,
   signal,
   spawn = spawnChildProcess,
+  readInstalledVersion = (name) => readInstalledPackageVersion(layout, name),
   timeoutMs = INSTALL_TIMEOUT_MS,
   platformName = platformAdapter.name,
   killTree = killProcessTree,
@@ -477,7 +481,7 @@ async function installManagedPackage({
     preferOnline,
   })
 
-  return runCommand({
+  const installed = await runCommand({
     command: nodeExecutable,
     args,
     env,
@@ -491,6 +495,31 @@ async function installManagedPackage({
     successMessage: `${npmPackage} instalado.`,
     failureMessage: `Nao foi possivel instalar ${npmPackage}.`,
   })
+
+  // Dupla-checagem: o npm pode sair com 0 tendo resolvido outra versão que a pedida.
+  const at = npmPackage.lastIndexOf('@')
+  if (!installed.ok || !expectedIntegrity || at <= 0) return installed
+
+  const name = npmPackage.slice(0, at)
+  const expected = npmPackage.slice(at + 1)
+  const actual = readInstalledVersion(name)
+  if (actual === expected) return installed
+
+  return {
+    ...installed,
+    ok: false,
+    message: `Versão instalada de ${name} (${actual ?? 'não encontrada'}) diverge da pedida (${expected}) — instalacao recusada.`,
+  }
+}
+
+/** @returns {string | null} versão do `package.json` instalado, ou null se ilegível. */
+function readInstalledPackageVersion(layout, packageName) {
+  try {
+    const file = path.join(layout.nodeModules, ...packageName.split('/'), 'package.json')
+    return JSON.parse(fs.readFileSync(file, 'utf8')).version ?? null
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -629,6 +658,7 @@ module.exports = {
   createNpmViewChannelsArgs,
   createNpmViewIntegrityArgs,
   installManagedPackage,
+  readInstalledPackageVersion,
   resolveLatestManagedPackage,
   runCommand,
   verifyManagedPackageIntegrity,

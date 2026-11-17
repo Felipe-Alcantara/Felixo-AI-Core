@@ -86,6 +86,15 @@ function copyNpmRuntime({
     filter: (entry) => shouldCopy(entry, policy),
   })
 
+  // Rastreabilidade: "qual npm vai em cada release" se responde sem abrir o
+  // pacote. Fica ao lado de `npm/` (vira `resources/npm-runtime/npm-runtime.json`).
+  const { name, version } = JSON.parse(fs.readFileSync(path.join(source, 'package.json'), 'utf8'))
+  fs.writeFileSync(
+    path.join(path.dirname(target), 'npm-runtime.json'),
+    `${JSON.stringify({ name, version }, null, 2)}
+`,
+  )
+
   return target
 }
 
