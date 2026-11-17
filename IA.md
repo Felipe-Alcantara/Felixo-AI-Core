@@ -3695,7 +3695,9 @@ Estado: concluído (deploy no adendo).
 - **GUIA-DESENVOLVEDOR:** a regra de repetição.
 
 **Validação.** `release-base.test.sh`: todos passam (antes, `release_listar` nem existia). Com `bash -e`, uma listagem que falha sempre não mata o shell. Workflow valida como YAML. Nenhum arquivo release-relevante foi tocado, então este commit não publica. Não validado em produção: depende do próximo push observar o log do gate.
-## 2026-11-17 - Limites: remover conta com login próprio não derruba mais a lista
+
+---
+
 ## 2026-11-17 — Limites: remover conta com login próprio não derruba mais a lista
 
 **Contexto.** Achado na task do refresh por conta: "Remover" numa conta de perfil (login próprio) fazia o `removeAccount` lançar `UNIQUE constraint failed: agent_usage_accounts.id` e todo `list()` seguinte também, deixando o painel de Limites e o modal do chat sem carregar.
@@ -3710,6 +3712,9 @@ Estado: concluído (deploy no adendo).
 **Em aberto (decisão do Felipe).** O que o botão "Remover" faz numa conta de perfil: A) sair do botão nessas contas (recomendado), B) reativar com histórico zerado, C) dispensar com opção de desfazer. O texto do `window.confirm` e o `GUIA-CONTAS-E-LIMITES.md` só mudam depois da escolha.
 
 **Validação.** `node --test` da área 14/14; `run-node-unit-tests` 3392 passam, 0 falham; `vitest` 3569 passam; lint e typecheck limpos. Não reproduzido no app real.
+
+---
+
 ## 2026-11-17 — Canvas: `felixo canvas ler` passa a ler os terminais de agente
 
 **Contexto.** A leitura de um bloco de terminal respondia "Terminal sem saída registrada ainda." para qualquer terminal do canvas, inclusive com 40 minutos de saída na tela. Conferido de novo no app empacotado em 17/11/2026, em um bloco de agente aberto: mesma resposta.
