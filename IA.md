@@ -3843,3 +3843,13 @@ Estado: concluído do lado do código; conferência nas máquinas fica manual.
 **O que mudou:** `app/installer/entitlements.mac.plist` (padrão do electron-builder + audio-input), apontado por `mac.entitlements` e `mac.entitlementsInherit`; teste-guarda em `macos-microphone-packaging.test.cjs`; ARQUITETURA.md atualizada. Sem efeito nas builds atuais (não assinadas).
 
 **Validação:** teste novo falha sem as chaves no `package.json` e passa com elas (2/2); lint e typecheck limpos; node 3396 pass/0 fail; vitest 3572 pass. Diálogo do sistema e os oito itens do roteiro seguem sem conferência no macOS.
+
+---
+
+## 2026-11-17 — Performance: roteiro e coletor para validar o baseline no notebook físico
+
+**Contexto:** a comparação do Modo Performance com `b9e3555` passou os três limites, mas só em Microsoft Basic Render Driver (software) com CPU simulada. A validação no notebook físico de referência segue aberta e depende de hardware.
+
+**O que mudou:** `docs/performance/PERFORMANCE.md` ganhou o roteiro com os comandos exatos (worktree do baseline, `vite build`, os dois `ui-render-performance.cjs`, junção). Novo `app/scripts/ui-render-compare.cjs` junta os dois JSONs em `validacao.json` + `validacao.md` com hardware, driver, backend, medianas, rodadas e veredito (`aprovado`, `reprovado` ou `invalido`). É `invalido` com renderer de software, config diferente entre os builds ou toggles incompletos.
+
+**Validação:** `node --test scripts/ui-render-compare.test.cjs` 3/3 e `eslint` limpo. Nenhum benchmark foi rodado (máquina carregada e não é o notebook de referência). Status MANUAL: falta executar o roteiro no notebook.

@@ -299,6 +299,45 @@ pontilhada do React Flow; nós, conexões, seleção e arraste continuam
 disponíveis. A versão histórica usa o
 controle de toolbar equivalente porque ainda não tinha a sidebar atual.
 
+### Roteiro: validar o baseline no notebook físico de referência
+
+Pendente: a rodada acima foi por software e não vale como teste físico. No
+notebook, na tomada, com navegador, IDE e outros agentes fechados, plano de
+energia fixo e a janela do app visível (escondida, o `requestAnimationFrame`
+é estrangulado). Sem `--render=software`: o padrão usa a GPU. Em PowerShell:
+
+```powershell
+# 1. Preparar os dois builds (o baseline precisa de npm ci e vite build próprios)
+$baseline = Join-Path $env:TEMP 'felixo-perf-baseline-b9e3555'
+git worktree add --detach $baseline b9e3555
+Push-Location "$baseline\app"; npm ci; npx vite build; Pop-Location
+Push-Location app; npx vite build; Pop-Location   # a partir da raiz do checkout atual
+
+# 2. Medir (da pasta app/): mesmo cenário nos dois; 3 repetições do par, se o tempo deixar
+$out = Join-Path $env:TEMP 'felixo-validacao'; New-Item -ItemType Directory -Force $out | Out-Null
+$medida = '--rounds=5','--warmup=1','--duration-ms=3000','--nodes=48','--cpu-throttle=4'
+node scripts/ui-render-performance.cjs "--app-dir=$baseline\app" --legacy-baseline=b9e3555 @medida "--out=$out\baseline.json"
+node scripts/ui-render-performance.cjs @medida "--out=$out\atual.json"
+
+# 3. Juntar tudo num arquivo (hardware, GPU/driver, backend, rodadas, veredito)
+node scripts/ui-render-compare.cjs "--baseline=$out\baseline.json" "--current=$out\atual.json" "--out=$out\validacao.json"
+```
+
+O `ui-render-compare.cjs` grava `validacao.json` e `validacao.md` e sai com 0
+só se o veredito for `aprovado`. Ele marca `invalido` (e não compara) quando o
+renderer é de software ou sem GPU ativa, quando a configuração difere entre os
+dois JSONs ou quando falta o par de toggles. Critério: em pelo menos 3 rodadas
+Performance, FPS >= baseline, quadro p95 <= baseline e estilo por quadro <=
+baseline (mediana do baseline). Se o driver cair para software, repita os dois
+passos com `--render=software`, registre isso e mantenha a validação física
+aberta.
+
+Depois: anexe `baseline.json`, `atual.json`, `validacao.json` e `validacao.md`
+à task, preencha na `validacao.md` a alimentação e a carga de fundo (o script
+não as lê) e copie hardware, driver, backend e resultados para esta página e
+para a [Política de performance](../projeto/POLITICA-PERFORMANCE.md). Limpe com
+`git worktree remove --force $baseline`.
+
 Artefatos desta auditoria:
 
 - [baseline-canvas-dev.json](baseline-canvas-dev.json)
