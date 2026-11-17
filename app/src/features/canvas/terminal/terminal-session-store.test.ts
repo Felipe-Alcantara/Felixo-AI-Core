@@ -3300,7 +3300,26 @@ describe('TerminalSessionStore: estado que a CLI anuncia (OSC 7501 e título)', 
     const linhas = (spy: ReturnType<typeof vi.spyOn>) =>
       spy.mock.calls.map((c) => String(c[0])).filter((l) => l.startsWith('[felixo:selo]'))
 
+    const ligar = (valor: string | null) =>
+      vi.stubGlobal('localStorage', { getItem: (k: string) => (k === 'felixo:selo' ? valor : null) })
+    afterEach(() => vi.unstubAllGlobals())
+
+    it('desligado, não escreve nada', async () => {
+      ligar(null)
+      const info = vi.spyOn(console, 'info').mockImplementation(() => {})
+      harness = createHarness('', 'claude')
+      await vi.advanceTimersByTimeAsync(0)
+      harness.feed('olá')
+      harness.feed(']0;◐ Pensando')
+      harness.feed(report('state=working'))
+      await vi.advanceTimersByTimeAsync(10)
+
+      expect(linhas(info)).toHaveLength(0)
+      info.mockRestore()
+    })
+
     it('registra o relato 7501, o título e a assinatura, sem mudar o estado', async () => {
+      ligar('1')
       const info = vi.spyOn(console, 'info').mockImplementation(() => {})
       harness = createHarness('', 'claude')
       await vi.advanceTimersByTimeAsync(0)
@@ -3318,6 +3337,7 @@ describe('TerminalSessionStore: estado que a CLI anuncia (OSC 7501 e título)', 
     })
 
     it('limita a uma linha por 5 s quando o título segura o selo', async () => {
+      ligar('1')
       const info = vi.spyOn(console, 'info').mockImplementation(() => {})
       harness = createHarness('', 'claude')
       await vi.advanceTimersByTimeAsync(0)

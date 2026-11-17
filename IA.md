@@ -4468,3 +4468,19 @@ Task: Felixo AI Core/Links — dizer no menu em que perfil a Página Web nova va
 **Não validado.** Menu aberto de verdade a partir de uma Página Web num perfil próprio (o passo de smoke que a task pedia não foi acrescentado: virou pendência). Perfil removido: o bloco novo herda a partição vazia e o menu não avisa.
 
 Estado: concluído (commit na branch `orq/links-dizer-menu-que-perfil`; push e deploy pelo orquestrador).
+
+---
+
+## 2026-11-17 — Canvas: rastro `[felixo:selo]` para diagnosticar o selo "trabalhando" grudado
+
+Task: Felixo AI Core/Canvas — diagnosticar badge trabalhando grudado com terminal parado (Notion `3d791f95-497e-8190-84e0-df5328591a14`). Agente: subagente da Orquestração (Claude Sonnet 5.5, effort medium), sobre o diagnóstico de leitura de um Haiku. Trilha A.
+
+**Contexto.** O selo ficava aceso com o terminal parado. O log temporário `[felixo:signature]` saiu em `639c3571` (12/09) sem ter sido lido, e o `25b5f177` (OSC 7501 e título) tirou a tela da decisão para o Claude que responde à sondagem. Sobram dois caminhos sem prova: o relato `working` do Claude não tem prazo no app, e o título com spinner (repintado a cada 0,1 a 1,3 s nas gravações) segura o selo com a tela parada. Prazo ou mudança de precedência alteram o que o usuário vê, e sem reprodução seria chute.
+
+**O que mudou.** `terminal-session-store.ts` ganhou `traceSelo`, desligado por padrão: só liga com `localStorage.setItem('felixo:selo','1')` (lida uma vez por sessão do terminal, campo `seloTraceOn`; desliga com `removeItem`), porque as linhas trazem texto da tela e não devem rodar para todo usuário. Ligado, ele só observa e escreve uma linha `[felixo:selo] <ms> <session.id> <evento> <detalhe>` no console. Eventos: `assinatura` (a tela mudou de verdade, com o fim de antes e depois e o `programStatus`, no máximo 1 por segundo), `titulo` (cada OSC 0/2 e se o spinner gira), `7501` (cada relato aceito, `clear` incluso), `titulo-segura` e `tela-ocupada` (o selo foi mantido pelo spinner do título ou pela faixa de trabalho; no máximo 1 por 5 s por sessão). Nenhuma decisão mudou: `computeSignature`, `isBusyScreen` e a precedência 7501 > título > tela ficam como estavam. O comentário no método diz como remover (ao fechar esta task).
+
+**Validação.** `terminal-session-store.test.ts`: 148 antes, 151 depois (3 novos: desligado nada é escrito; ligado o rastro registra 7501, título e assinatura sem mudar o estado; a limitação de 5 s do `titulo-segura`). Gate: ver relatório.
+
+**Não validado.** Nenhuma sessão ao vivo com o Claude de hoje. O reproduzir é passo do Felipe (roteiro na task, status MANUAL). O rastro mostra até 120 caracteres do fim da tela: não cole as linhas em lugar público sem olhar.
+
+Estado: rastro entregue; task em MANUAL. Commit na branch `orq/canvas-diagnosticar-badge-trabalhando-gr`; push e deploy pelo orquestrador.

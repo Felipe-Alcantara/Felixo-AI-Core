@@ -238,6 +238,14 @@ export const CODEX_RELAUNCH_NEW_CONVERSATION_NOTICE =
  */
 const RESUME_FAILURE_WINDOW_MS = 30000
 
+function readSeloTraceFlag(): boolean {
+  try {
+    return globalThis.localStorage?.getItem('felixo:selo') === '1'
+  } catch {
+    return false
+  }
+}
+
 /** Ms of output silence after which a running session is considered idle. */
 const IDLE_AFTER_MS = 1500
 /** A configured agent should not terminate silently immediately after launch. */
@@ -570,6 +578,8 @@ type Session = {
   titleWorkingAt?: number
   /** Último rastro `[felixo:selo]` por evento limitado (ver `traceSelo`). */
   seloTraceAt?: Record<string, number>
+  /** `localStorage['felixo:selo'] === '1'`, lido uma vez por sessão. */
+  seloTraceOn?: boolean
   claudeBypassHandled: boolean
   claudeTrustHandled: boolean
   /** Opções de lançamento originais, guardadas para relançar sozinho após um
@@ -2555,11 +2565,14 @@ export class TerminalSessionStore {
 
   /**
    * Rastro de diagnóstico do selo "trabalhando" grudado com o terminal parado.
-   * Só observa, não decide nada. Com `everyMs`, no máximo uma linha por evento
+   * Só observa, não decide nada, e só liga com `localStorage['felixo:selo'] = '1'`. Com `everyMs`, no máximo uma linha por evento
    * e sessão nesse intervalo. Remover quando a task "diagnosticar badge
    * trabalhando grudado" for fechada (criado em 2026-11-17).
    */
   private traceSelo(session: Session, evento: string, detalhe: string, everyMs = 0): void {
+    // Texto de terminal pode ter segredo: só liga por escolha explícita da pessoa.
+    session.seloTraceOn ??= readSeloTraceFlag()
+    if (!session.seloTraceOn) return
     const now = Date.now()
     const last = session.seloTraceAt ?? (session.seloTraceAt = {})
     if (everyMs && last[evento] !== undefined && now - last[evento] < everyMs) return
