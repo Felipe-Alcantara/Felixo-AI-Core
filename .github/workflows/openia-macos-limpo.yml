@@ -1,0 +1,98 @@
+name: Openia em macOS limpo
+
+# Metade macOS da task "Agentes — validar Openia empacotado em macOS e Windows".
+# A validação de 21/09/2026 só rodou no Windows. Decisão do Felipe em
+# 17/11/2026: o runner `macos-latest` (macOS real e descartável, com o Python do
+# sistema, sem Felixo e sem Openia) substitui o Mac físico. Mesmo molde do
+# `openia-windows-limpo.yml`; o roteiro é `app/scripts/openia-macos-limpo.cjs`.
+#
+# Só manual (workflow_dispatch) e nunca publica: instala o pacote publicado no
+# runner e pode usar uma chave real de teste (secret OPENIA_TEST_KEY). Sem o
+# secret, roda com uma chave-sentinela fictícia — a varredura de vazamento
+# continua valendo e só o chat real fica de fora.
+#
+# Não prova Gatekeeper nem assinatura do .dmg (o download por `gh` não traz
+# quarentena) e roda só na arquitetura do runner (Apple Silicon).
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag da release a validar (vazio = a mais recente)'
+        required: false
+        default: ''
+      construir:
+        description: 'Construir o .dmg a partir deste commit em vez de baixar a release'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  validar:
+    name: Validar Openia empacotado (macos-latest)
+    runs-on: macos-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # O Felixo instala o Openia com `python3 -m pip install --user`. Sem
+      # setup-python de propósito: vale o Python que o runner traz (o do
+      # Homebrew costuma responder PEP 668), que é o caso que a task quer ver.
+      - name: Python do sistema
+        run: |
+          which python3
+          python3 --version
+          python3 -m pip --version
+
+      - name: Construir o .dmg deste commit
+        if: ${{ inputs.construir }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: |
+          npm run build
+          npx electron-builder --mac dmg --publish never
+          mkdir -p instalador
+          cp release/*-mac-$(node -p "process.arch").dmg instalador/
+          echo "dmg construído a partir de $GITHUB_SHA"
+          ls instalador
+
+      - name: Baixar o .dmg da release
+        if: ${{ !inputs.construir }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_PEDIDA: ${{ inputs.tag }}
+        run: |
+          tag="$TAG_PEDIDA"
+          if [ -z "$tag" ]; then tag="$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)"; fi
+          echo "Release validada: $tag"
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern "*-mac-$(node -p "process.arch").dmg" --dir instalador
+          ls instalador
+
+      - name: Validar o Openia no pacote instalado
+        env:
+          OPENIA_TEST_KEY: ${{ secrets.OPENIA_TEST_KEY }}
+        run: node scripts/openia-macos-limpo.cjs --installer "$(ls instalador/*.dmg | head -1)" --out relatorio
+
+      - name: Publicar o relatório
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openia-macos-limpo
+          path: app/relatorio/
+          if-no-files-found: warn

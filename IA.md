@@ -4275,3 +4275,18 @@ Estado: concluído (commit `0ad0fce` na branch `orq/fix-inventario-claude-api`; 
 **O que mudou.** `createCliEnv` (`electron/services/cli-process-manager.cjs`) define `DISABLE_AUTOUPDATER=1`. Todo ambiente de CLI parte dele (`createAccountCliEnv`): o PTY do canvas, as sessões sem terminal e os processos auxiliares (uso, status, modelos). O Codex ficou como está. Teste novo em `cli-process-manager.test.cjs` prova o valor no ambiente padrão, com `DISABLE_AUTOUPDATER=0` herdado e com conta própria.
 
 **Validação.** lint e typecheck limpos; `run-node-unit-tests` 3454 de 3466 passando (0 falhas, o resto são testes pulados); vitest 3613 passando e 2 falhas alheias: `canvas-inventory.test.ts` (ClaudeApiNode.tsx tem 6 controles e o inventário 5) e o E2E de contexto do canvas, que passou isolado.
+
+---
+
+## 2026-11-17 — Agentes: workflow manual `openia-macos-limpo.yml` para validar o Openia empacotado no macOS
+
+**Contexto.** A validação de 21/09/2026 do Openia empacotado só rodou no Windows. Nenhum CI do macOS tocava no Openia (Release, Nightly, `ciclo-instalacao-clis`, `official-cli-install` e `retomada-e2e-empacotado` não o instalam). Decisão do Felipe em 17/11/2026: o runner `macos-latest`, um macOS real e descartável, substitui o Mac físico, no molde do `openia-windows-limpo.yml`.
+
+**O que mudou.**
+- `.github/workflows/openia-macos-limpo.yml`: só `workflow_dispatch`, sem publicar. Baixa o `.dmg` da release (ou constrói do commit com `construir`), usa o Python do sistema (sem setup-python, para ver o PEP 668 do Homebrew) e sobe o relatório como artefato. Secret opcional `OPENIA_TEST_KEY`; sem ele usa chave-sentinela.
+- `app/scripts/openia-macos-limpo.cjs`: roteiro em Node, portado do de Windows e reaproveitando as funções de segredo dele. Etapas: linha de base (`pip list --user` fotografado), `.dmg` (hdiutil + ditto), instalação consentida (recusar, interromper o pip, repetir, retry `--break-system-packages` registrado, `openia` em `~/Library/Python/<x.y>/bin`), chave pelo campo do app, terminal Openia, exportação do canvas e varredura do perfil/logs atrás do valor, e desfazer (app removido, pip de volta à linha de base). Fora de propósito: NSIS, aliases `.cmd`/`.ps1`, usuário com espaço, launcher legado (só existem no Windows).
+- `openia-windows-limpo.cjs` passa a exportar `custoDaChave` e `higienizarSaida`; comportamento igual.
+
+**Não fica release-relevante.** `release-relevant.sh` devolve `false` para os arquivos novos (workflow, script e teste), então não publicam instalador.
+
+**Validação.** `node --test` do teste novo e do do Windows: 8/8. Lint, typecheck e `run-node-unit-tests` (3456 pass, 0 fail) verdes. Vitest: 3636 pass, 3 falhas em onboarding/canvas-inventory sem relação com estes arquivos (uma persiste isolada em `canvas-inventory.test.ts`). O roteiro em si não rodou: precisa de macOS, e a primeira run do workflow é a validação (limites: não prova Gatekeeper/assinatura nem Intel).

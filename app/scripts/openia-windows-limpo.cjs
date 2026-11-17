@@ -928,7 +928,9 @@ function finalizar(relatorio, falhas, opcoes, chave) {
 module.exports = {
   caminhoParaRelatorio,
   contemSegredo,
+  custoDaChave,
   extrairVersao,
+  higienizarSaida,
   redigirSegredo,
   varrerSegredo,
 }
