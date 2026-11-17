@@ -4222,3 +4222,24 @@ Estado: concluído (commit na branch; deploy pelo orquestrador).
 - `electron/services/managed-cli-installer.cjs`: depois de um `npm install` bem-sucedido de `pkg@versao` com hash esperado, `installManagedPackage` lê `package.json` em `layout.nodeModules` (`readInstalledPackageVersion`, injetável como `readInstalledVersion`) e recusa se a versão diverge ou não é legível.
 
 **Validação.** `node --test` nos arquivos da área: 143 testes, 143 passam (3 novos: arquivo irmão com a versão, recusa de versão divergente, leitura do `package.json`).
+
+---
+
+## 2026-11-17 — Dependências: Electron 42 para 45 (macOS 13+) e leitura da área de transferência na API nova
+
+**Contexto.** O Electron 42 saiu da janela de suporte (só 43, 44 e 45 recebem correção; a 45 estabilizou em 21/10). A task irmã "migrar da linha 41" já tinha sido cumprida pelo PR #132 (41 para 42); esta é a etapa que faltava. Decisão do Felipe: Electron 45 e exigir macOS 13 ou mais novo (a 44 removeu o macOS 12). A 43 foi descartada (suporte acaba com a 46, em cerca de 1 mês) e a 44 não ganha nada sobre a 45.
+
+**O que mudou.**
+- `app/package.json`: `electron` de `^42.11.16` para `^45.3.3` (instalado 45.3.3: Chromium 156, Node 24.22.3); `mac.minimumSystemVersion: "13.0"` no electron-builder (o `Info.plist` recusa o macOS 12 com aviso claro).
+- `app/package-lock.json`: só a entrada do `electron` e a do `node-abi` (4.29.0 para 4.40.0). Sem o `node-abi` novo o `@electron/rebuild` falha com "Could not detect abi for version 45.3.3". A faixa `^4.2.0` do `@electron/rebuild` já admite a 4.40.0. O `npm install` no Windows reescreve o lockfile inteiro (apaga `libc` e os `@emnapi` embutidos do oxide-wasm32-wasi, e o teste `lockfile-consistency` reprova); por isso as duas entradas foram editadas à mão sobre o lockfile da main.
+- `app/electron/services/clipboard-image.cjs` (+ teste): o Electron 44 reescreveu o `clipboard` do processo principal (assíncrono, itens W3C; `readImage`/`readBuffer` removidos, `readText` virou Promise). A leitura agora faz um `clipboard.read()`, pega a imagem por `ClipboardItem.getType` (PNG primeiro, depois qualquer tipo de imagem aceito) e resolve listas de arquivos (`text/uri-list`, GNOME direto e pelo formato `electron application/osclipboard`). Sem isso, colar print como anexo quebraria.
+- README (Stack: Electron 45, Chromium 156, requisito macOS 13+) e `docs/guias/GUIA-USUARIO.md` (seção macOS).
+
+**Medido / conferido.**
+- `node-pty@1.1.0` é N-API (`node-addon-api`): a troca de ABI 146 para 150 não exige recompilar. `npm run test:native` 15/15.
+- Quebras da 43 a 45 mapeadas no código: só o clipboard era quebra real. `setLoginItemSettings` só usa `openAtLogin`; o preload só importa `electron`; as janelas e o `<webview>` já são `sandbox: true`; `display-capture` já está no broker de permissões de sites.
+- Leitura real no Electron 45 (Windows, script temporário fora do repositório): `clipboard.write` de um PNG e `readClipboardImage()` devolveram `ok`, `image/png`; com só texto, `ok: false`.
+- `npx electron-builder --dir -c.npmRebuild=false` gerou `release/win-unpacked` com Electron 45.3.3 e `node-pty/prebuilds` (win32 e darwin) fora do asar. `npm run pack` direto falha no Windows sem toolchain C++ (node-gyp recompila o `node-pty`; é o mesmo motivo de o release usar `npmRebuild=false` no Windows), não por causa da 45.
+- Gate: eslint limpo; `tsc -b` limpo; `run-node-unit-tests` 3405/3419 com 2 falhas (a de `lockfile-consistency`, corrigida acima e 6/6 depois, e `pty-output-path-benchmark`, instável, 11/11 sozinho); `vitest` 233 arquivos / 3572 testes verdes; `test:native` 15/15.
+
+**Não validado / pendente.** Linux (`x-special/gnome-copied-files` e `osclipboard`) e macOS não foram exercitados; o app não foi aberto com `devtools launch` nem foi rodado o smoke do canvas/instalador (ficam para o orquestrador depois do merge); o `safeStorage` síncrono (Notion, ditado, contas) está deprecado na 45 e é removido na 46 (task própria); os diálogos de arquivo passam a abrir em Downloads (mudança da 43).
