@@ -366,7 +366,7 @@ export function CanvasToolbar({
             </button>
             {/* A imagem gerada chega sozinha ao canvas (evento `canvas:image-generated`,
                 escutado pelo CanvasView): o botão não precisa de callback do canvas. */}
-            <GenerateImageButton triggerClassName={TOOLBAR_BUTTON_CLASS} />
+            <GenerateImageButton triggerClassName={TOOLBAR_BUTTON_CLASS} tourAnchor="criar-imagem" />
             <NamedCreateButton
               icon={<Group size={16} />}
               buttonLabel="Grupo"
@@ -376,11 +376,12 @@ export function CanvasToolbar({
             <UrlCreateButton
               icon={<Globe size={16} />}
               buttonLabel="Página Web"
+              tourAnchor="criar-pagina-web"
               onCreate={onAddWebpage}
             />
           </SidebarSection>
 
-          <SidebarSection title="Organizar">
+          <SidebarSection title="Organizar" anchorId="secao-organizar">
             <OrganizeButton
               onOrganize={onOrganizeBlocks}
               arrangeableCount={arrangeableCount}
@@ -872,6 +873,7 @@ function NamedCreateButton({
 type UrlCreateButtonProps = {
   icon: ReactNode
   buttonLabel: string
+  tourAnchor?: AnchorId
   /**
    * Creates the block; `name` is undefined when the field is left empty and
    * `profileId` when the Padrão profile is chosen.
@@ -884,7 +886,7 @@ type UrlCreateButtonProps = {
  * name — the "Página Web" mini-browser block. The URL is required (blocked
  * client-side via explainUrlInput, which says why); the name stays optional.
  */
-function UrlCreateButton({ icon, buttonLabel, onCreate }: UrlCreateButtonProps) {
+function UrlCreateButton({ icon, buttonLabel, tourAnchor, onCreate }: UrlCreateButtonProps) {
   const [open, setOpen] = useState(false)
   const [url, setUrl] = useState('')
   const [name, setName] = useState('')
@@ -955,6 +957,7 @@ function UrlCreateButton({ icon, buttonLabel, onCreate }: UrlCreateButtonProps) 
         className={`${TOOLBAR_BUTTON_CLASS} w-full`}
         aria-expanded={open}
         aria-controls={popoverId}
+        data-felixo-tour-anchor={tourAnchor}
       >
         {icon}
         {buttonLabel}

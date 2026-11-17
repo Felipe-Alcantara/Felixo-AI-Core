@@ -93,21 +93,21 @@ describe('card do tutorial (por passo × locale)', () => {
 
   it('passo 1 de 6: contador, Voltar com aria-disabled e nunca fora do DOM', () => {
     const html = renderCard(tourAt(0))
-    expect(html).toContain('Passo 1 de 6')
+    expect(html).toContain('Passo 1 de 10')
     expect(html).toMatch(/aria-disabled="true"[^>]*data-felixo-onboarding-action="voltar"|data-felixo-onboarding-action="voltar"[^>]*aria-disabled="true"/)
     expect(html).toContain('Voltar')
   })
 
   it('passos do meio: Voltar habilitado e Próximo', () => {
     const html = renderCard(tourAt(2))
-    expect(html).toContain('Passo 3 de 6')
+    expect(html).toContain('Passo 3 de 10')
     expect(html).not.toContain('aria-disabled')
     expect(html).toContain('Próximo')
   })
 
   it('último passo: Concluir no mesmo botão', () => {
     const html = renderCard(tourAt(INITIAL_STEPS.length - 1))
-    expect(html).toContain('Passo 6 de 6')
+    expect(html).toContain('Passo 10 de 10')
     expect(html).toContain('Concluir')
     expect(html).not.toContain('Próximo')
   })
@@ -119,7 +119,7 @@ describe('card do tutorial (por passo × locale)', () => {
     // O `inert` fica na raiz do card: vale para ele e para os três botões.
     expect(cedido).toMatch(/^<div[^>]*\sinert=""/)
     expect(attribute(cedido, 'data-passo')).toBe(INITIAL_STEPS[2].id)
-    expect(cedido).toContain('Passo 3 de 6')
+    expect(cedido).toContain('Passo 3 de 10')
     const livre = renderToStaticMarkup(createElement(OnboardingTourCard, { model, inert: false }))
     expect(livre).not.toMatch(/\sinert/)
     expect(renderCard(tourAt(2))).not.toMatch(/\sinert/)
@@ -145,7 +145,7 @@ describe('card do tutorial (por passo × locale)', () => {
   it('idioma sem catálogo cai inteiro em pt-BR, e o lang não mente', () => {
     const html = renderCard(tourAt(0, 'en-US'))
     expect(attribute(html, 'lang')).toBe('pt-BR')
-    expect(html).toContain('Passo 1 de 6')
+    expect(html).toContain('Passo 1 de 10')
   })
 
   it('en-XA expande o texto e mantém o card inteiro no mesmo idioma', () => {
@@ -223,11 +223,11 @@ describe('ponto de espera do foco (diálogo modal por cima do tour)', () => {
 
 describe('anúncios da região live', () => {
   it('troca de passo, abertura sem foco, retomada, conclusão e fechamento', () => {
-    expect(describeTourAnnouncement('passo', tourAt(1))).toEqual({ texto: 'Passo 2 de 6: Agente', lang: 'pt-BR' })
+    expect(describeTourAnnouncement('passo', tourAt(1))).toEqual({ texto: 'Passo 2 de 10: Agente', lang: 'pt-BR' })
     expect(describeTourAnnouncement('aberto-sem-foco', tourAt(0)).texto).toBe(
-      'Tutorial do canvas aberto ao lado da barra lateral. Passo 1 de 6: Projeto.',
+      'Tutorial do canvas aberto ao lado da barra lateral. Passo 1 de 10: Projeto.',
     )
-    expect(describeTourAnnouncement('retomado', tourAt(2)).texto).toBe('Tutorial retomado no passo 3 de 6: Contexto.')
+    expect(describeTourAnnouncement('retomado', tourAt(2)).texto).toBe('Tutorial retomado no passo 3 de 10: Contexto.')
     expect(describeTourAnnouncement('concluido', tourAt(5)).texto).toBe('Tutorial concluído. Reabra em Ajuda.')
     expect(describeTourAnnouncement('fechado', tourAt(3)).texto).toBe('Tutorial fechado. Reabra em Ajuda.')
   })

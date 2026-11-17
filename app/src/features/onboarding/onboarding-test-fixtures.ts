@@ -94,7 +94,7 @@ export const CATALOG_WITH_TOUR_V2: OnboardingCatalog = {
   ...defaultOnboardingCatalog,
   tours: {
     ...defaultOnboardingCatalog.tours,
-    inicial: { ...defaultOnboardingCatalog.tours.inicial, version: 2 },
+    inicial: { ...defaultOnboardingCatalog.tours.inicial, version: defaultOnboardingCatalog.tours.inicial.version + 1 },
   },
 }
 

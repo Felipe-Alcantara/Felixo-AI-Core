@@ -355,7 +355,7 @@ describe('applyOnboardingEvent', () => {
       lastShownAt: ISO,
       timesShown: 1,
       trigger: 'primeiro-uso',
-      tourVersion: 1,
+      tourVersion: defaultOnboardingCatalog.tours.inicial.version,
     })
   })
 
@@ -403,7 +403,7 @@ describe('applyOnboardingEvent', () => {
       [{ tipo: 'LINHA_DE_BASE' }, { tipo: 'ABRIR', tourId: 'inicial', origem: 'ajuda' }, { tipo: 'CONCLUIR', tourId: 'inicial', stepId: 'ajuda' }],
       { catalog },
     )
-    expect(state?.tours.inicial).toMatchObject({ status: 'concluido', completedAt: ISO, tourVersion: 2, step: 'ajuda' })
+    expect(state?.tours.inicial).toMatchObject({ status: 'concluido', completedAt: ISO, tourVersion: catalog.tours.inicial.version, step: 'ajuda' })
   })
 
   it('abrir um tour concluído (Rever) preserva o concluido e conta a exibição', () => {
@@ -576,7 +576,7 @@ describe('describeHelpEntries (visto × disponível)', () => {
   it('sem estado: tutorial "Não visto" e nenhuma novidade', () => {
     const entries = describeHelpEntries(null, { live, availability: available })
     expect(entries).toEqual([
-      expect.objectContaining({ tourId: 'inicial', tipo: 'tutorial', status: 'nao-visto', totalPassos: 6 }),
+      expect.objectContaining({ tourId: 'inicial', tipo: 'tutorial', status: 'nao-visto', totalPassos: 10 }),
     ])
     expect(countNovelties(entries)).toBe(0)
   })
@@ -591,7 +591,7 @@ describe('describeHelpEntries (visto × disponível)', () => {
     const interrupted = apply(claimed, [{ tipo: 'ABRIR', tourId: 'inicial', origem: 'ajuda', stepId: 'terminal' }])
     expect(describeHelpEntries(interrupted, { live, availability: available })[0]).toMatchObject({
       status: 'interrompido',
-      passo: 4,
+      passo: 7,
       passoId: 'terminal',
     })
     const skipped = apply(claimed, [{ tipo: 'PULAR', tourId: 'inicial', via: 'botao', stepId: 'agente' }])
@@ -632,8 +632,8 @@ describe('describeHelpEntries (visto × disponível)', () => {
   it('passo com capability indisponível é omitido (T2.g)', () => {
     const tour = CATALOG_WITH_OPTIONAL_STEP.tours.inicial
     expect(visibleSteps(tour, () => 'indisponivel').map((step) => step.id)).not.toContain('ferramentas')
-    expect(visibleSteps(tour, () => 'desconhecido')).toHaveLength(5)
-    expect(visibleSteps(tour, () => 'disponivel')).toHaveLength(6)
+    expect(visibleSteps(tour, () => 'desconhecido')).toHaveLength(9)
+    expect(visibleSteps(tour, () => 'disponivel')).toHaveLength(10)
   })
 })
 

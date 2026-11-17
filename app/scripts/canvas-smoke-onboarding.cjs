@@ -80,13 +80,28 @@ const QUADROS_CURTOS = Object.freeze({ settleFrames: 2, sampleFrames: 3 })
  * código; aqui a conferência é contra a interface real, e uma divergência
  * reprova o smoke.
  */
-const PASSOS_INICIAL = Object.freeze(['projeto', 'agente', 'contexto', 'terminal', 'ferramentas', 'ajuda'])
+const PASSOS_INICIAL = Object.freeze([
+  'projeto',
+  'agente',
+  'contexto',
+  'pagina-web',
+  'gerar-imagem',
+  'organizar',
+  'terminal',
+  'ferramentas',
+  'tarefas-notion',
+  'ajuda',
+])
 const ALVO_PRIMARIO = Object.freeze({
   projeto: 'rail-projetos',
   agente: 'criar-agente',
   contexto: 'criar-bloco',
+  'pagina-web': 'criar-pagina-web',
+  'gerar-imagem': 'criar-imagem',
+  organizar: 'secao-organizar',
   terminal: 'inspector-elementos',
   ferramentas: 'secao-ferramentas',
+  'tarefas-notion': 'secao-ferramentas',
   ajuda: 'rail-ajuda',
 })
 const ROTULO_DA_ANCORA = Object.freeze({
@@ -96,6 +111,9 @@ const ROTULO_DA_ANCORA = Object.freeze({
   'secao-criar': 'Criar',
   'criar-agente': 'Agente',
   'criar-bloco': 'Novo bloco',
+  'criar-pagina-web': 'Página Web',
+  'criar-imagem': 'Gerar imagem',
+  'secao-organizar': 'Organizar',
   'secao-ferramentas': 'Ferramentas',
   'inspector-elementos': 'Elementos',
   'inspector-puck': 'elementos',
@@ -783,7 +801,7 @@ function criarCenariosDoTutorial(deps) {
     await conferirSondas(cenario, await sondas.fechar())
     const estado = await lerEstado()
     exigir(estado.value?.tours?.inicial?.status === 'concluido', cenario, 'concluir não gravou o tutorial como concluído', estado.value?.tours)
-    log('SA1 percurso pela Ajuda: ok (6 passos, alvos visíveis, sem cruzar alvo, avisos nem Chat)')
+    log(`SA1 percurso pela Ajuda: ok (${PASSOS_INICIAL.length} passos, alvos visíveis, sem cruzar alvo, avisos nem Chat)`)
   }
 
   /**
@@ -1344,7 +1362,7 @@ function criarCenariosDoTutorial(deps) {
       const descricao = dialogo?.description?.value ?? ''
       exigir(dialogo?.role?.value === 'dialog', cenario, 'o card não é um dialog na árvore de acessibilidade', dialogo?.role)
       exigir(contem(nome, 'Tutorial do canvas') && contem(nome, 'Projeto'), cenario, 'nome do dialog', nome)
-      exigir(contem(descricao, 'Passo 1 de 6') && contem(descricao, 'Projetos'), cenario, 'descrição do dialog', descricao)
+      exigir(contem(descricao, `Passo 1 de ${PASSOS_INICIAL.length}`) && contem(descricao, 'Projetos'), cenario, 'descrição do dialog', descricao)
       const { nodes: botoes } = await cdp.send('Accessibility.queryAXTree', { nodeId, role: 'button' })
       const nomes = botoes.map((botao) => botao.name?.value ?? '')
       for (const esperado of ['Pular tutorial', 'Voltar', 'Próximo']) {
@@ -1355,12 +1373,12 @@ function criarCenariosDoTutorial(deps) {
     }
     await clicarNoTour(cenario, 'proximo')
     await esperar(cenario, 'a região live anunciar o passo 2', () =>
-      (document.querySelector('[data-felixo-onboarding="anuncio"]')?.textContent ?? '').includes('Passo 2 de 6: Agente'),
+      (document.querySelector('[data-felixo-onboarding="anuncio"]')?.textContent ?? '').includes('Passo 2 de 10: Agente'),
     )
     const [card, regiao] = [await cartao(), await anuncio()]
     exigir(card.lang === 'pt-BR' && regiao.lang === 'pt-BR', cenario, 'lang do card ou da região live', { card: card.lang, regiao: regiao.lang })
     await fecharTourSeAberto(cenario)
-    log('SA4 leitor de tela: ok (dialog nomeado e descrito, botões nomeados, "Passo 2 de 6: Agente" anunciado)')
+    log('SA4 leitor de tela: ok (dialog nomeado e descrito, botões nomeados, "Passo 2 de 10: Agente" anunciado)')
   }
 
   /**
@@ -1408,7 +1426,7 @@ function criarCenariosDoTutorial(deps) {
     // Zoom alto na janela mínima: +3 em 720×500 dá ~416×289 CSS px (o caso compacto do
     // plano) e +2,5 em 800×500 dá ~507×317. Nenhuma borda cabe a folha sem cobrir o
     // rail ou a sidebar; a folha vai para a coluna ao lado do alvo. O percurso vai até o
-    // passo 6 no primeiro zoom e volta ao passo 1 no segundo (Voltar), com o foco parado
+    // último passo no primeiro zoom e volta ao passo 1 no segundo (Voltar), com o foco parado
     // no botão principal (clique pelo DOM).
     const zooms = [
       { janela: { width: 720, height: 500 }, nivel: 3, rotulo: 'zoom-3', passos: PASSOS_INICIAL.slice(1), botao: 'proximo' },
@@ -1580,6 +1598,10 @@ function criarCenariosDoTutorial(deps) {
       await clicarNoTour(cenario, 'proximo')
       await conferirVariante('contexto')
       await clicarNoTour(cenario, 'proximo')
+      for (const passo of ['pagina-web', 'gerar-imagem', 'organizar']) {
+        await conferirVariante(passo)
+        await clicarNoTour(cenario, 'proximo')
+      }
 
       // Inspector: a pessoa recolhe e o anel vai para o puck; abre e o anel volta.
       const recolherInspector = async (recolher) => {
@@ -1600,9 +1622,9 @@ function criarCenariosDoTutorial(deps) {
       if (!inspectorAberto) await recolherInspector(true)
       await clicarNoTour(cenario, 'proximo')
       await conferirVariante('ferramentas')
-      await ferramentasFechada('passo 5 com a sidebar recolhida')
+      await ferramentasFechada('passo ferramentas com a sidebar recolhida')
 
-      for (let index = 0; index < 3; index += 1) await clicarNoTour(cenario, 'voltar')
+      for (let index = 0; index < PASSOS_INICIAL.indexOf('ferramentas') - 1; index += 1) await clicarNoTour(cenario, 'voltar')
       await esperarPasso(cenario, 'agente', 'rail-menu')
       exigir((await lerSidebar()) === recolhidaPelaPessoa, cenario, `o tour mudou ${CHAVE_SIDEBAR}`, { antes: recolhidaPelaPessoa, depois: await lerSidebar() })
 
@@ -1722,7 +1744,7 @@ function criarCenariosDoTutorial(deps) {
     const focoRetomado = await foco()
     exigir(!focoRetomado.noCartao, cenario, 'a retomada puxou o foco', focoRetomado)
     await esperar(cenario, 'a região live anunciar a retomada', () =>
-      (document.querySelector('[data-felixo-onboarding="anuncio"]')?.textContent ?? '').includes('Tutorial retomado no passo 3 de 6'),
+      (document.querySelector('[data-felixo-onboarding="anuncio"]')?.textContent ?? '').includes('Tutorial retomado no passo 3 de 10'),
     )
 
     for (let passo = 2; passo < PASSOS_INICIAL.length - 1; passo += 1) await clicarNoTour(cenario, 'proximo')
@@ -1794,7 +1816,7 @@ function criarCenariosDoTutorial(deps) {
     await esperarPasso(cenario, 'projeto')
     const card = await cartao()
     const atual = await foco()
-    exigir(card.total === 1 && card.contador === 'Passo 1 de 6' && card.lang === 'pt-BR', cenario, 'card do primeiro uso', card)
+    exigir(card.total === 1 && card.contador === 'Passo 1 de 10' && card.lang === 'pt-BR', cenario, 'card do primeiro uso', card)
     exigir(atual.ehCartao || atual.noCartao, cenario, 'o primeiro uso não moveu o foco para o card', atual)
     exigir((await anuncio()).decisao === 'aberto', cenario, 'decisão do primeiro uso', await anuncio())
     const estado = await lerEstado()

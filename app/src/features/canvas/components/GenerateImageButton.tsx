@@ -14,9 +14,13 @@ import {
   type OpeniaUpdateState,
 } from '../services/openia-update'
 
+import type { AnchorId } from '../../onboarding/onboarding-catalog'
+
 type Props = {
   /** Mesma forma dos outros botões da sidebar (vem do CanvasToolbar). */
   triggerClassName: string
+  /** Âncora do tutorial do canvas, aplicada ao gatilho. */
+  tourAnchor?: AnchorId
 }
 
 type FieldError = { field: 'prompt' | 'model' | 'generation'; message: string }
@@ -29,7 +33,7 @@ const ERROR_TEXT = 'text-xs leading-snug text-theme-error'
  * "Gerando imagem…" e, se a geração falhar com o popover fechado, um alerta no
  * ícone avisa que há um motivo para ler.
  */
-export function GenerateImageButton({ triggerClassName }: Props) {
+export function GenerateImageButton({ triggerClassName, tourAnchor }: Props) {
   const image = useOpeniaImageGeneration()
   const { acknowledge, loadModels, loadPricing } = image
   const [open, setOpen] = useState(false)
@@ -156,6 +160,7 @@ export function GenerateImageButton({ triggerClassName }: Props) {
         type="button"
         onClick={toggle}
         className={`${triggerClassName} w-full`}
+        data-felixo-tour-anchor={tourAnchor}
         title={
           failed && !open
             ? 'A última geração de imagem falhou — abra para ver o motivo'

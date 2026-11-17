@@ -41,6 +41,20 @@ export const PT_BR = {
     'Novo bloco cria um arquivo .md no canvas. Ligue o bloco a um agente para ele ler e editar esse contexto.',
   'passo.contexto.corpo-secao': 'Abra a seção Criar para ver o botão Novo bloco.',
   'passo.contexto.corpo-menu': 'Abra o menu do canvas para ver Criar e o botão Novo bloco.',
+  'passo.pagina-web.titulo': 'Página Web',
+  'passo.pagina-web.corpo':
+    'Em Criar, Página Web abre um site num bloco do canvas, com um navegador de verdade. Você informa o endereço e, se quiser, o perfil. O tutorial não abre nenhum site.',
+  'passo.pagina-web.corpo-secao': 'Abra a seção Criar para ver o botão Página Web.',
+  'passo.pagina-web.corpo-menu': 'Abra o menu do canvas para ver Criar e o botão Página Web.',
+  'passo.gerar-imagem.titulo': 'Gerar imagem',
+  'passo.gerar-imagem.corpo':
+    'Em Criar, Gerar imagem pede uma imagem a uma IA pela sua descrição e a coloca no canvas. O tutorial não gera nada.',
+  'passo.gerar-imagem.corpo-secao': 'Abra a seção Criar para ver o botão Gerar imagem.',
+  'passo.gerar-imagem.corpo-menu': 'Abra o menu do canvas para ver Criar e o botão Gerar imagem.',
+  'passo.organizar.titulo': 'Organizar',
+  'passo.organizar.corpo':
+    'Em Organizar, o botão Organizar arruma os blocos do canvas em uma matriz, e Enquadrar mostra todos de uma vez. O tutorial não move nenhum bloco.',
+  'passo.organizar.corpo-menu': 'Abra o menu do canvas para ver Organizar, que arruma os blocos.',
   'passo.terminal.titulo': 'Terminais',
   'passo.terminal.corpo':
     'Cada agente é um terminal de verdade. Em Elementos você acompanha os terminais do canvas. Para um terminal comum, escolha Nenhum (shell) ao configurar o agente.',
@@ -51,6 +65,11 @@ export const PT_BR = {
     'Ferramentas reúne os painéis de apoio, como Notas e Prompts. Abra a seção quando precisar.',
   'passo.ferramentas.corpo-menu':
     'Abra o menu do canvas para ver Ferramentas, com painéis de apoio como Notas e Prompts.',
+  'passo.tarefas-notion.titulo': 'Tarefas Notion',
+  'passo.tarefas-notion.corpo':
+    'Em Ferramentas, Tarefas Notion mostra as suas tarefas do Notion dentro do canvas. Abra a seção quando precisar. O tutorial não abre nenhuma ferramenta.',
+  'passo.tarefas-notion.corpo-menu':
+    'Abra o menu do canvas para ver Ferramentas e, nela, Tarefas Notion.',
   'passo.ajuda.titulo': 'Onde rever',
   'passo.ajuda.corpo':
     'Pronto. Para rever este tutorial ou ver novidades, use Ajuda nesta barra. O tutorial não criou nada nem abriu agentes.',

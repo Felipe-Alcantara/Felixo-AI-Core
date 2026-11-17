@@ -108,7 +108,7 @@ describe('store do tutorial: primeiro boot', () => {
     const { fase, tour, decisao, persistencia } = h.snapshot()
     expect(fase).toBe('tour')
     expect(tour).toMatchObject({ tourId: 'inicial', stepIndex: 0, trigger: 'primeiro-uso', foco: 'mover', instancia: 1 })
-    expect(tour?.passos).toHaveLength(6)
+    expect(tour?.passos).toHaveLength(10)
     expect(decisao).toBe('aberto')
     expect(persistencia).toBe('ok')
     expect(h.disk.writes).toHaveLength(1)
@@ -522,7 +522,7 @@ describe('store do tutorial: ações da pessoa', () => {
     h.store.back()
     expect(h.snapshot().tour?.stepIndex).toBe(0)
     for (let index = 0; index < 10; index++) h.store.next()
-    expect(h.snapshot().tour?.stepIndex).toBe(5)
+    expect(h.snapshot().tour?.stepIndex).toBe(9)
     await h.store.settled()
     expect(h.disk.writes).toHaveLength(writes)
   })
@@ -575,7 +575,7 @@ describe('store do tutorial: ações da pessoa', () => {
     h.store.canvasReady(0)
     await h.store.settled()
     h.store.open('inicial', 'ajuda', { stepId: 'terminal' })
-    expect(h.snapshot().tour?.stepIndex).toBe(3)
+    expect(h.snapshot().tour?.stepIndex).toBe(6)
   })
 
   it('alvo alternativo fica registrado no próximo commit (anchorFallbacks)', async () => {

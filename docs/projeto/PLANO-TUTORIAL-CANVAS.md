@@ -181,7 +181,7 @@ As cinco decisões acima foram tomadas sem pergunta (pedido de 26/09: "não perg
 | d) i18n próprio em pt-BR, sem biblioteca | **Mantida** |
 | e) Roteiro de 5 passos mais "onde reabrir" | **Trocada: roteiro longo** (Organizar, Página Web, Gerar imagem, Tarefas Notion) |
 
-A troca de (e) ainda **não está implementada**: o roteiro no ar segue com seis telas. A objeção original a um roteiro longo ("rede e crédito") vale para passos que agem nos alvos; o Felipe escolheu o roteiro longo, não passos interativos, então a regra "o tour nunca clica nem cria" segue valendo até nova decisão. A implementação está numa task própria (ver o IA.md de 10/11/2026).
+A troca de (e) foi **implementada em 17/11/2026**: o tour `inicial` passou a ter dez passos (`version` 2), com Página Web, Gerar imagem, Organizar e Tarefas Notion no meio do percurso (ver "Roteiro `inicial` v2" em "UX do tutorial"). A objeção original a um roteiro longo ("rede e crédito") vale para passos que agem nos alvos; o Felipe escolheu o roteiro longo, não passos interativos, então a regra "o tour nunca clica nem cria" segue valendo até nova decisão.
 
 ### Decisões técnicas registradas (alternativas descartadas)
 
@@ -568,6 +568,19 @@ Os textos são rascunho, com orçamento de título até 32 e corpo até 240 cara
 | 5 | ferramentas | `secao-ferramentas` (cabeçalho; a seção continua fechada) → `rail-menu` | Ferramentas / menu do canvas | **Ferramentas.** "Ferramentas reúne os painéis de apoio, como {ferramentaA} e {ferramentaB}. Abra a seção quando precisar." Os nomes vêm de `TOOL_LABELS[citaFerramentas[i]]`. |
 | 6 | ajuda | `rail-ajuda` | Ajuda | **Onde rever.** "Pronto. Para rever este tutorial ou ver novidades, use Ajuda nesta barra. O tutorial não criou nada nem abriu agentes." Botão principal: Concluir. (O rascunho dizia "Nada foi criado e nenhum agente foi aberto", o que fica falso quando a pessoa cria um agente durante o tour, T1.d.) |
 
+### Roteiro `inicial` v2 (10 passos, decisão e de 10/11/2026)
+
+O percurso passou de seis para dez passos: `projeto`, `agente`, `contexto`, `pagina-web`, `gerar-imagem`, `organizar`, `terminal`, `ferramentas`, `tarefas-notion`, `ajuda`. Os quatro novos só destacam (nenhum abre o popover, move bloco, gera imagem ou abre painel). Cada um ganhou um passo próprio, e não um passo por grupo, porque o anel marca um alvo só.
+
+| Passo | Cadeia de alvos | Rótulo |
+|---|---|---|
+| `pagina-web` | `criar-pagina-web` → `secao-criar` → `rail-menu` | Página Web / Criar / menu do canvas |
+| `gerar-imagem` | `criar-imagem` → `secao-criar` → `rail-menu` | Gerar imagem / Criar / menu do canvas |
+| `organizar` | `secao-organizar` (cabeçalho da seção) → `rail-menu` | Organizar / menu do canvas |
+| `tarefas-notion` | `secao-ferramentas` → `rail-menu` | Ferramentas / menu do canvas, citando `notionTasks` |
+
+`criar-pagina-web` e `criar-imagem` marcam os gatilhos de `UrlCreateButton` e `GenerateImageButton`; `secao-organizar` é o cabeçalho da seção Organizar. Tarefas Notion mora em Ferramentas, sem âncora própria (a seção continua fechada): o texto dá o caminho e `citaFerramentas` confere o nome. O catálogo não ganhou id de tour nem de feature, então `ONBOARDING_CATALOG_REVISION` ficou em 2: só o `version` do tour subiu, e quem já concluiu vê "Atualizado" na Ajuda, sem reabrir nada.
+
 Mini-tour `novidade-ajuda`: um passo em `rail-ajuda`, com "Novidade: a Ajuda reúne o tutorial do canvas e as novidades. Reabra o tutorial quando quiser."
 
 Garantias:
@@ -581,7 +594,7 @@ Garantias:
 
 **Marcação.** `<div role="dialog" aria-modal="false">` com:
 - `aria-labelledby` = [título do tour "Tutorial do canvas", título do passo];
-- `aria-describedby` = [contador "Passo 2 de 6", corpo];
+- `aria-describedby` = [contador "Passo 2 de 10", corpo];
 - `lang` = locale resolvido e `tabIndex={-1}`;
 - classes `felixo-onboarding-card nokey` (`nokey`: o React Flow não apaga blocos com Delete ou Backspace);
 - `data-felixo-popover-surface="true"`, `data-felixo-onboarding="card"`, `data-passo`, `data-ancora`, `data-modo`, `data-lado` e `data-instancia`.
@@ -866,7 +879,7 @@ Comportamento:
   - `hasOpenModal`; `ancestorCreatesContainingBlock`.
 - **U-ui** (`OnboardingUi.test.ts`, `renderToStaticMarkup` com `createElement`, sem portal)
   - Card por passo × locale (pt-BR e en-XA): `role="dialog"`, `aria-modal="false"`, ids de labelledby e describedby existentes, `lang`, `nokey` e `data-felixo-popover-surface`.
-  - "Passo 1 de 6"; Voltar com `aria-disabled` no passo 1; Concluir no último.
+  - "Passo 1 de 10"; Voltar com `aria-disabled` no passo 1; Concluir no último.
   - Nenhum `style` com top, left ou transform: snapshots sem coordenadas.
   - Sem `truncate` nem `line-clamp`.
   - Aviso: sem `autoFocus`.
@@ -941,7 +954,7 @@ Regras gerais: asserts só relacionais, esperas por `esperarAte` e frames estáv
   - Fora da janela das sondas: clicar em "Agente" (PTY mock) com o tour aberto cria o terminal e o tour continua (T1.d).
 - **SA4 leitor de tela**
   - `Accessibility.getFullAXTree`: dialog com nome ("Tutorial do canvas" + título) e descrição (contador + corpo), botões nomeados.
-  - Depois de Próximo, a região live contém "Passo 2 de 6: Agente".
+  - Depois de Próximo, a região live contém "Passo 2 de 10: Agente".
   - `lang="pt-BR"` no card e na região.
 - **SA5 viewport, zoom e foco depois do resize**
   - 1280×800 → 375×667 → 320×720 e `mainEval('mainWindow.webContents.setZoomLevel(3)')`: modo folha, card dentro do viewport, botões visíveis e alcançáveis.
@@ -973,7 +986,7 @@ Regras gerais: asserts só relacionais, esperas por `esperarAte` e frames estáv
 **Sessão B** (nova `withDevtoolsSession` com `FELIXO_DEVTOOLS_ONBOARDING=1`, `FELIXO_DEVTOOLS_HARDWARE_NOTICES=1` e `FELIXO_DEVTOOLS_MOCK_PTY=1`, perfil novo, canvas vazio):
 
 - **SB1 primeiro uso real**
-  - Abre sozinho depois da hidratação, sem clique: exatamente um card, "Passo 1 de 6", foco dentro do card e `lang`.
+  - Abre sozinho depois da hidratação, sem clique: exatamente um card, "Passo 1 de 10", foco dentro do card e `lang`.
   - `read()` → `inicial` ativo, revisão 1; marcador removido.
   - Convivência:
     - com 4 CPUs lógicas ou menos: `NoticeToast` visível; card ∩ caixa do aviso = ∅; `elementFromPoint` no centro dos botões do aviso cai neles; o aviso responde a clique;

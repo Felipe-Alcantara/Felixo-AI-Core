@@ -903,6 +903,13 @@ da entrada, nunca pela versão do app. Para anunciar uma função:
    reserva) e dê o caminho no texto, com `citaFerramentas` para o teste conferir o
    nome da ferramenta.
 
+8. Passo novo no tour `inicial` (não é novidade): acrescente o passo em
+   `ONBOARDING_TOURS.inicial.steps` e suba o `version` do tour, sem mexer na
+   revisão do catálogo (nenhum id de tour ou feature nasce). O smoke tem o espelho
+   do roteiro em `PASSOS_INICIAL` e `ALVO_PRIMARIO`
+   (`scripts/canvas-smoke-onboarding.cjs`). Os testes e o smoke fixam o total
+   ("Passo N de M") e alguns índices (`stepIndex`) do roteiro: ajuste-os junto.
+
 Quem já usava o app recebe as novidades uma de cada vez: dispensar uma traz a
 próxima. Os testes não fixam a lista: as fixtures usam `CURRENT_FEATURE_IDS` e
 `NEXT_CATALOG_REVISION`. O smoke (SB5 a SB7) deixa só a Ajuda como novidade e as

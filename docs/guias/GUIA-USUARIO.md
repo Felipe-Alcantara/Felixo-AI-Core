@@ -1113,8 +1113,9 @@ usa um PTY fake para não executar comandos externos.
 
 Na primeira vez que o app abre num computador, com o canvas vazio, um tutorial
 curto aparece sozinho ao lado da barra lateral, depois que o canvas termina de
-carregar. São seis passos: **Projeto**, **Agente**, **Contexto**, **Terminais**,
-**Ferramentas** e **Onde rever**. Cada passo destaca um controle de verdade com um
+carregar. São dez passos: **Projeto**, **Agente**, **Contexto**, **Página Web**,
+**Gerar imagem**, **Organizar**, **Terminais**, **Ferramentas** (com Tarefas Notion)
+e **Onde rever**. Cada passo destaca um controle de verdade com um
 contorno e explica para que ele serve.
 
 - O tutorial só mostra. Ele não clica, não abre seção nem painel e não cria nada:

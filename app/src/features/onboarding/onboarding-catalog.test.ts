@@ -151,13 +151,17 @@ describe('catálogo do tutorial: textos', () => {
     expect(sources).toContain('data-felixo-region="canvas"')
   })
 
-  it('o roteiro inicial tem os 6 passos na ordem do plano', () => {
+  it('o roteiro inicial tem os 10 passos na ordem do plano (roteiro longo, decisão e)', () => {
     expect(ONBOARDING_TOURS.inicial.steps.map((step) => step.id)).toEqual([
       'projeto',
       'agente',
       'contexto',
+      'pagina-web',
+      'gerar-imagem',
+      'organizar',
       'terminal',
       'ferramentas',
+      'tarefas-notion',
       'ajuda',
     ])
   })

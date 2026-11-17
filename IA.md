@@ -4299,3 +4299,27 @@ Estado: concluído (commit `0ad0fce` na branch `orq/fix-inventario-claude-api`; 
 - **O que mudou:** o eval saiu do `main.cjs` para `electron/core/devtools-main-eval.cjs`. Cada objeto do host entra por uma membrana (Proxy sobre casca vazia) que nega `constructor`/`__proto__`/`prototype`, devolve protótipo `null` e embrulha retornos, erros e argumentos de callbacks; o resultado é desembrulhado antes de voltar por IPC. O comentário do `main.cjs` agora diz a verdade: continua sendo controle total de `app`/`mainWindow`, não sandbox para código não confiável.
 - **Uso legítimo preservado:** `ipcProbe.snapshot()`, `mainWindow.webContents.send/setZoomLevel`, `app.getPath`, registrar handlers IPC com callback (fixture do smoke do Notion), arrays (`getAppMetrics`) e promises. Limite: `new` sobre objetos do host não é suportado.
 - **Validação:** `electron/core/devtools-main-eval.test.cjs` (4 testes): uso legítimo, 20 tentativas de escape (construtores, protótipos, erros, callbacks, `arguments.callee.caller`, `typeof process/require`) sem alcançar `process`/`Function` do host, validação da expressão e canal não registrado sem porta de depuração válida. Sem a membrana a mesma tentativa devolve `process` (medido).
+
+---
+
+## 2026-11-17 — Onboarding: o tutorial `inicial` ganha o roteiro longo (Página Web, Gerar imagem, Organizar, Tarefas Notion)
+
+**Contexto.** Task "implementar o roteiro longo do tutorial decidido em 10/11" (`41491f95-497e-8198-9df0-e4676e329230`). Em 10/11 o Felipe trocou a decisão (e) do `PLANO-TUTORIAL-CANVAS.md`: em vez do roteiro curto, quer o roteiro longo, sem passos interativos (o tour continua só destacando). O tour `inicial` tinha 6 passos e nenhuma âncora para esses quatro controles.
+
+**Motivo.** O tutorial deve apresentar as ferramentas de criação e organização, não só o básico.
+
+**O que mudou.**
+- `onboarding-catalog.ts`: três âncoras novas (`criar-pagina-web`, `criar-imagem`, `secao-organizar`) e quatro passos novos no `inicial`, que passa a ter 10 (`projeto`, `agente`, `contexto`, `pagina-web`, `gerar-imagem`, `organizar`, `terminal`, `ferramentas`, `tarefas-notion`, `ajuda`) e `version` 2. Cada passo tem cadeia de alvos que termina em `rail-menu`. Tarefas Notion não tem âncora própria: aponta `secao-ferramentas` (fechada) e cita `notionTasks`. `ONBOARDING_CATALOG_REVISION` continua 2: nenhum id de tour ou feature nasceu, e quem já concluiu o tutorial vê "Atualizado" na Ajuda, sem reabrir nada.
+- `onboarding-messages.ts`: título e corpo (mais as variantes de seção e de menu) dos quatro passos, todos dizendo que o tutorial não abre, gera nem move nada.
+- `CanvasToolbar.tsx` e `GenerateImageButton.tsx`: `data-felixo-tour-anchor` nos gatilhos de Página Web e Gerar imagem (prop nova `tourAnchor`) e `anchorId` no cabeçalho da seção Organizar.
+- Testes: totais "Passo N de 10" e índices do roteiro em `OnboardingUi`, `onboarding-state`, `onboarding-store` e `onboarding-catalog`; as fixtures de versão do tour passaram a derivar da versão atual (`CATALOG_WITH_TOUR_V2`).
+- Smoke (`canvas-smoke-onboarding.cjs`): `PASSOS_INICIAL`, `ALVO_PRIMARIO`, `ROTULO_DA_ANCORA`, os totais "de 10" e o SA8 (variantes de menu recolhido nos passos novos, volta até o passo Agente).
+- Docs: `PLANO-TUTORIAL-CANVAS.md` (decisão e e roteiro v2), `GUIA-USUARIO.md` (dez passos) e `GUIA-DESENVOLVEDOR.md` (como acrescentar um passo ao `inicial`).
+
+**Decisão do agente.** Um passo por controle (quatro), e não os dois passos agrupados que a task recomendava: o anel marca um alvo só, e agrupar deixaria um dos dois controles sem destaque.
+
+**Validação.** `npm run lint` e `typecheck` limpos. Arquivos do tutorial: 759 testes passam (os testes que varrem o código estouravam 5 s sob carga e passam com `--testTimeout`). `vitest run` inteiro: 236 arquivos, 3619 testes passam, 4 pulados. `run-node-unit-tests.cjs`: 3443 testes, 3431 passam, 12 pulados, 0 falhas. Smoke do canvas, sessões A e B (`FELIXO_SMOKE_SESSOES=A,B`): SA0 a SA10 e SB1 a SB8 ok; o SA1 percorre os 10 passos com `onboarding:write` 2 e `devtools:main-eval` 1 de IPC (nenhuma ação nos alvos) e o SB3 confirma a revisão 2 inalterada. A sessão A só passou na 2ª tentativa: a 1ª caiu em `page.screenshot` com 30 s de timeout em `checarInteracoes`, antes dos cenários do tutorial (máquina carregada); antes disso, cinco rodadas falharam por infraestrutura, nenhuma num cenário do tutorial (sessão DevTools ocupada por outro agente, canvas sem montar em 45 s, Electron sem abrir o CDP, conexão CDP com timeout e o mesmo timeout de screenshot).
+
+**Não validado.** Clique manual nos quatro passos novos com o app instalado; macOS e Linux; leitor de tela real. O texto dos passos novos não passou por revisão do Felipe.
+
+Estado: concluído (commit na branch; deploy pelo orquestrador).

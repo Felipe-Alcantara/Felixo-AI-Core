@@ -32,6 +32,9 @@ export type AnchorId =
   | 'secao-criar'
   | 'criar-agente'
   | 'criar-bloco'
+  | 'criar-pagina-web'
+  | 'criar-imagem'
+  | 'secao-organizar'
   | 'secao-ferramentas'
   | 'inspector-elementos'
   | 'inspector-puck'
@@ -104,6 +107,9 @@ export const ONBOARDING_ANCHORS: Readonly<Record<AnchorId, string>> = Object.fre
   'secao-criar': anchor('secao-criar'),
   'criar-agente': anchor('criar-agente'),
   'criar-bloco': anchor('criar-bloco'),
+  'criar-pagina-web': anchor('criar-pagina-web'),
+  'criar-imagem': anchor('criar-imagem'),
+  'secao-organizar': anchor('secao-organizar'),
   'secao-ferramentas': anchor('secao-ferramentas'),
   'inspector-elementos': anchor('inspector-elementos'),
   'inspector-puck': anchor('inspector-puck'),
@@ -153,7 +159,7 @@ const PASSO_MENU_AGENTE = {
 export const ONBOARDING_TOURS = {
   inicial: {
     id: 'inicial',
-    version: 1,
+    version: 2,
     kind: 'primeiro-uso',
     title: 'tour.inicial.titulo',
     steps: [
@@ -182,6 +188,33 @@ export const ONBOARDING_TOURS = {
         ],
       },
       {
+        id: 'pagina-web',
+        title: 'passo.pagina-web.titulo',
+        targets: [
+          { anchor: 'criar-pagina-web', body: 'passo.pagina-web.corpo', label: 'Página Web', side: 'direita' },
+          { anchor: 'secao-criar', body: 'passo.pagina-web.corpo-secao', label: 'Criar', side: 'direita' },
+          { anchor: 'rail-menu', body: 'passo.pagina-web.corpo-menu', label: 'menu do canvas', side: 'direita' },
+        ],
+      },
+      {
+        id: 'gerar-imagem',
+        title: 'passo.gerar-imagem.titulo',
+        targets: [
+          { anchor: 'criar-imagem', body: 'passo.gerar-imagem.corpo', label: 'Gerar imagem', side: 'direita' },
+          { anchor: 'secao-criar', body: 'passo.gerar-imagem.corpo-secao', label: 'Criar', side: 'direita' },
+          { anchor: 'rail-menu', body: 'passo.gerar-imagem.corpo-menu', label: 'menu do canvas', side: 'direita' },
+        ],
+      },
+      {
+        id: 'organizar',
+        title: 'passo.organizar.titulo',
+        // O cabeçalho da seção (sempre à vista com a sidebar aberta); o tour não clica em Organizar.
+        targets: [
+          { anchor: 'secao-organizar', body: 'passo.organizar.corpo', label: 'Organizar', side: 'direita' },
+          { anchor: 'rail-menu', body: 'passo.organizar.corpo-menu', label: 'menu do canvas', side: 'direita' },
+        ],
+      },
+      {
         id: 'terminal',
         title: 'passo.terminal.titulo',
         targets: [
@@ -199,6 +232,15 @@ export const ONBOARDING_TOURS = {
           { anchor: 'rail-menu', body: 'passo.ferramentas.corpo-menu', label: 'menu do canvas', side: 'direita' },
         ],
         citaFerramentas: ['notes', 'prompts'],
+      },
+      {
+        id: 'tarefas-notion',
+        title: 'passo.tarefas-notion.titulo',
+        targets: [
+          { anchor: 'secao-ferramentas', body: 'passo.tarefas-notion.corpo', label: 'Ferramentas', side: 'direita' },
+          { anchor: 'rail-menu', body: 'passo.tarefas-notion.corpo-menu', label: 'menu do canvas', side: 'direita' },
+        ],
+        citaFerramentas: ['notionTasks'],
       },
       {
         id: 'ajuda',
