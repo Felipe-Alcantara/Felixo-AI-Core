@@ -4653,3 +4653,27 @@ Task: Felixo AI Core/Release — empacotar localmente no Node 25 (fs.cpSync do b
 **Não validado.** O empacotamento completo (`electron-builder --dir`) em nenhum dos Nodes, porque a máquina estava carregada. O smoke do artefato também não rodou. O contorno com o Node embutido do Electron saiu com código 1 em 02/10 (causa não investigada); o guia não o recomenda.
 
 Estado: documentação entregue na branch `orq/release-empacotar-localmente-node-cpsync` (commit `9509e2f8`); push e deploy pelo orquestrador. Pendências abertas: versão de Node do build (`.nvmrc` × CI), app empacotado com código 1, validação completa nos Nodes e o E2E instável sob carga.
+
+---
+
+## 2026-11-17 — Contas: o TUI do Codex 0.159.2 não sobe com CODEX_HOME acima de 64 caracteres; comentários de versão dos perfis atualizados
+
+Task: Felixo AI Core/Contas — validar o Codex 0.159 com CODEX_HOME longo e atualizar os comentários de versão dos perfis (Notion `3eb91f95-497e-8139-8008-ede2a7c8d531`). Agente: subagente da Orquestração (Claude Haiku 5.5, effort max).
+
+**Contexto.** A task vinha de 30/09: o Notion registrava `path must be shorter than SUN_LEN` com `CODEX_HOME` de 156 caracteres e pedia o limite exato no TUI. A pasta de perfil do app é `%APPDATA%\felixo-ai-core\cli-profiles\codex\<uuid>`, com 96 caracteres mais o nome do usuário.
+
+**O que mudou.**
+- `app/electron/services/cli-account-profiles.cjs`, só comentários: a linha do Codex passa a citar 0.159.2; a linha do Gemini deixa de dizer que `GEMINI_CLI_HOME` só afeta `settings.json` (no bundle 0.69.0-preview.0 ele muda o `~/.gemini`; login não testado); a lista dos nomes conferidos cita o Codex 0.159.2; o isolamento do Gemini ganha um `shortcut:` com o limite (HOME arrasta git, ssh e npm); `getProfileDir` ganha a nota do limite de 65 caracteres no Windows.
+- `docs/guias/GUIA-USUARIO.md`, parágrafo "No Codex 0.159": limite medido (até 64 abre, 65 falha) e a versão 0.171.0-alpha.11, que também falha.
+
+**Validação.** CLI direto, sem o app e sem login: `codex` 0.159.2 instalado numa pasta de teste, TUI num pseudo-console (ConPTY), `CODEX_HOME` de comprimento exato em pasta vazia.
+- 28 caracteres: tela "Welcome to Codex / Sign in with ChatGPT" em 19 s (segunda execução na mesma pasta; a primeira só clona e copia). 64 caracteres: a mesma tela em 97 s (primeira execução).
+- 65 caracteres: `Error: path must be shorter than SUN_LEN` em 114 s. O socket é `CODEX_HOME\app-server-control\app-server-control.sock`: sufixo de 43 caracteres; 107 bytes cabem, 108 não.
+- 156 caracteres: mesmo erro em 58 s. Com `--no-daemon`: tela de login em 3,4 s, sem daemon no diagnóstico.
+- 0.171.0-alpha.11 (npm global, o que o `PATH` resolve hoje): mesmo erro com 156 em 35 s.
+- `codex login status` (0.159.2): "Not logged in" com 28 e com 156, sem SUN_LEN.
+- `node --test electron/services/cli-account-profiles.test.cjs`: 19 de 19. `eslint` do arquivo: exit 0. O `git diff` do `.cjs` não tem nenhuma linha de código.
+
+**Não validado.** macOS e Linux (outro limite de socket, não medido); login real e o terminal aberto pelo app (exige cadastrar conta); `--no-daemon` com `resume` e com a retomada; o gate completo não rodou porque o commit só mexe em comentário e doc. A correção (`--no-daemon` nos terminais de conta, ou pasta de perfil curta) é código de produto e fica para o redespacho.
+
+Estado: parcial. Commit na branch `orq/contas-validar-codex-159-com`; correção pendente (PRECISA_SONNET).

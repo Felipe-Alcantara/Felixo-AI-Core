@@ -920,7 +920,10 @@ com `claude --version` ou `codex --version` no terminal.
 No Codex 0.159, uma pasta de conta (`CODEX_HOME`) com caminho longo impede a CLI
 de abrir: ela responde `path must be shorter than SUN_LEN` antes de qualquer
 retomada. Medido no app instalado com uma pasta de 156 caracteres; com 25, a CLI
-abriu normalmente.
+abriu normalmente. Medido de novo em 17/11/2026, com a CLI direto (sem o app), no
+Windows: abre com até 64 caracteres na pasta e falha a partir de 65. A versão
+0.171.0-alpha.11 também falha com 156. As pastas de conta do app passam desse
+limite.
 
 O Gemini CLI apaga sozinho, ao abrir, as conversas com mais de 30 dias e as que
 ele não consegue ler (a opção `general.sessionRetention` das configurações dele,

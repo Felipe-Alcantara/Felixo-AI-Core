@@ -15,11 +15,11 @@ const path = require('node:path')
  * | CLI    | Isolamento           | Como foi verificado                        |
  * |--------|----------------------|--------------------------------------------|
  * | codex  | `CODEX_HOME`         | `codex login status` responde "Not logged   |
- * |        |                      | in" com a pasta isolada                     |
+ * |        |                      | in" com a pasta isolada (Codex 0.159.2)     |
  * | claude | `CLAUDE_CONFIG_DIR`  | `claude auth status --json` devolve         |
  * |        |                      | `loggedIn: false` e cria estrutura própria  |
- * | gemini | `HOME`               | o bundle resolve a pasta por `os.homedir()`;|
- * |        |                      | `GEMINI_CLI_HOME` só afeta settings.json    |
+ * | gemini | `HOME`               | bundle 0.69.0-preview.0: `GEMINI_CLI_HOME`  |
+ * |        |                      | muda o `~/.gemini` (lido; login não testado)|
  * | openia | `OPENROUTER_API_KEY` | `load_api_key()` lê a env antes do store    |
  *
  * O segredo nunca é lido pelo app nos três primeiros: quem escreve na pasta do
@@ -33,8 +33,9 @@ const PROFILES_DIRNAME = 'cli-profiles'
 const ISOLATION = Object.freeze({
   codex: { kind: 'env-dir', variable: 'CODEX_HOME' },
   claude: { kind: 'env-dir', variable: 'CLAUDE_CONFIG_DIR' },
-  // O Gemini não tem variável própria: só a troca de HOME isola o login, e
-  // isso arrasta git, ssh e npm junto — por isso o espelho abaixo.
+  // shortcut: isola por HOME, o que arrasta git, ssh e npm (espelho abaixo);
+  // GEMINI_CLI_HOME também muda o ~/.gemini no 0.69.0-preview.0, trocar quando
+  // o login isolado por ela for testado.
   gemini: { kind: 'env-home', mirror: ['.gitconfig', '.ssh', '.npmrc'] },
   openia: { kind: 'env-secret', variable: 'OPENROUTER_API_KEY' },
 })
@@ -50,7 +51,7 @@ const ISOLATION = Object.freeze({
  * o ambiente da pessoa, como antes.
  *
  * Os nomes foram conferidos nos pacotes instalados (Claude Code 2.1.283,
- * Codex 0.156.1, Gemini CLI 0.57.0). O Openia não entra: o perfil dele já
+ * Codex 0.159.2, Gemini CLI 0.57.0). O Openia não entra: o perfil dele já
  * sobrescreve a própria chave (`OPENROUTER_API_KEY`).
  */
 const CREDENCIAIS_HERDADAS = Object.freeze({
@@ -115,6 +116,10 @@ function supportsProfiles(providerId) {
  * Pasta do perfil. O id entra no caminho, então precisa ser inerte: só o que
  * o app gera (uuid) passa, para nenhum nome de conta virar travessia de
  * diretório.
+ *
+ * No Windows, o TUI do Codex 0.159.2 falha com SUN_LEN a partir de 65 caracteres
+ * nesta pasta (o socket de controle soma 43; medido em 17/11/2026), e o caminho
+ * do perfil do app passa disso sempre.
  */
 function getProfileDir(userData, providerId, profileId) {
   if (!isSafeSegment(providerId) || !isSafeSegment(profileId)) {
