@@ -169,6 +169,22 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
   // lança em segundos, bem antes da rodada de instalação (STARTUP_DELAY_MS).
   reconcileCodexNativeLaunch('registro')
 
+  /**
+   * A cópia do app: `incomplete` = o pacote está instalado (o npm gravou a
+   * versão) mas falta o executável inteiro, como sobra de uma instalação
+   * interrompida. Sem pacote nenhum não é "incompleta": é "não instalada".
+   */
+  function inspectManaged(cli) {
+    const complete = hasManagedInstallation(layout, cli, { verifyInstallation, platformName, arch, fileSystem })
+    const installed = getManagedCliPackageVersion({ providerId: cli.id, layout, fileSystem }) !== null
+    return { complete, incomplete: installed && !complete }
+  }
+
+  function inspectManagedById(providerId) {
+    const cli = getAutoInstallableClis(listOfficialAiClis()).find((item) => item.id === providerId)
+    return cli ? inspectManaged(cli) : { complete: true, incomplete: false }
+  }
+
   function setStatus(next) {
     status = { ...status, ...next, updatedAt: new Date().toISOString() }
     sendStatus(getMainWindow, status)
@@ -247,14 +263,8 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
     const { pending, progress } = planAutoInstall({
       catalog,
       detections,
-      managedPresent: catalog.map((cli) =>
-        hasManagedInstallation(layout, cli, {
-          verifyInstallation,
-          platformName,
-          arch,
-          fileSystem,
-        }),
-      ),
+      managedPresent: catalog.map((cli) => inspectManaged(cli).complete),
+      managedIncomplete: catalog.map((cli) => inspectManaged(cli).incomplete),
       managedVersions,
       latestVersions: catalog.map(
         (cli) => latestPackages.find((item) => item.id === cli.id)?.version ?? null,
@@ -617,6 +627,8 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
   return {
     getStatus: () => status,
     run,
+    inspectManaged: inspectManagedById,
+    layout,
     stop: () => {
       clearTimeoutFn(startupTimer)
       clearTimeoutFn(retryTimer)

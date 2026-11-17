@@ -115,6 +115,31 @@ test('pty:spawn starts a session and streams data/exit to the window', () => {
   ])
 })
 
+test('pty:spawn com a CLI do app incompleta não abre o processo e devolve a mensagem do app', () => {
+  handlers.clear()
+  const manager = createFakeManager()
+  const gate = { check: () => ({ block: true, message: 'A instalação do Claude ficou incompleta; reinstalando.' }) }
+  registerPtyIpcHandlers(() => null, { manager, cliHealthGate: gate })
+
+  const result = handlers.get('pty:spawn')(null, { sessionId: 's', command: 'claude' })
+
+  assert.deepEqual(result, { ok: false, code: 'CLI_INCOMPLETE', message: 'A instalação do Claude ficou incompleta; reinstalando.' })
+  assert.equal(manager.calls.some((call) => call.method === 'spawn'), false)
+})
+
+test('pty:spawn com a CLI do sistema quebrada abre e escreve o aviso no terminal', async () => {
+  handlers.clear()
+  const sent = []
+  const window = { isDestroyed: () => false, webContents: { send: (channel, payload) => sent.push({ channel, payload }) } }
+  const manager = createFakeManager()
+  registerPtyIpcHandlers(() => window, { manager, cliHealthGate: { check: () => ({ warn: true, message: 'Claude do sistema incompleto.' }) } })
+
+  const result = handlers.get('pty:spawn')(null, { sessionId: 's', command: 'claude' })
+
+  assert.equal(result.ok, true)
+  assert.match(JSON.stringify(sent), /Claude do sistema incompleto/)
+})
+
 test('pty:spawn returns an error result for a missing sessionId', () => {
   const { manager, invoke } = setup()
 

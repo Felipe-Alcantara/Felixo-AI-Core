@@ -21,6 +21,7 @@ const {
   registerOfficialCliAccountIpcHandlers,
 } = require('./services/official-cli-account-ipc-handlers.cjs')
 const { registerPtyIpcHandlers } = require('./services/pty-ipc-handlers.cjs')
+const { createPtyCliHealthGate } = require('./services/pty-cli-health-gate.cjs')
 const { PtyProcessManager } = require('./services/pty-process-manager.cjs')
 const { createMcpRegistry } = require('./services/mcp/mcp-registry.cjs')
 const { createMcpInjection } = require('./services/mcp/mcp-injection.cjs')
@@ -908,6 +909,10 @@ app.whenReady().then(async () => {
       lineage: (request) => accountChain.service.lineageForSession(request),
     },
     cliVersions: agentCliVersions,
+    // Sem o fake do devtools: ali o comando é de mentira e nada instala.
+    cliHealthGate: fakeAuthCommandRunner || devtoolsFakeCliPty
+      ? null
+      : createPtyCliHealthGate({ getInstaller: () => cliAutoInstall, getEnv: () => createCliEnv() }),
     manager: new PtyProcessManager({
       spawnPty: devtoolsFakeCliPty?.createFakeCliPtyFactory(),
       claudeSessionLaunch: () => claudeStatusline.sessionLaunch(),

@@ -33,6 +33,8 @@ const { codexLaunchGate } = require('./codex-launch-gate.cjs')
 const CHAIN_TICKET_REFUSED = 'CHAIN_TICKET_REFUSED'
 /** Código do `pty:spawn` fechado (`pty:kill`) enquanto esperava a vez do Codex. */
 const PTY_SPAWN_CANCELLED = 'PTY_SPAWN_CANCELLED'
+/** Código do `pty:spawn` recusado porque a CLI do app está incompleta (o reparo já começou). */
+const CLI_INCOMPLETE = 'CLI_INCOMPLETE'
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /** Motivo pt-BR de cada recusa do serviço da cadeia (`beginTicketSpawn`). */
@@ -63,6 +65,7 @@ function refuseChainTicket(reason) {
  * @param {(sessionId: string) => void} [dependencies.onSessionExit] - Avisado quando o processo da sessão sai.
  * @param {{ begin: Function, finish: Function, lineage?: Function } | null} [dependencies.chainTickets] - `beginTicketSpawn`/`finishTicketSpawn`/`lineageForSession` do serviço da cadeia.
  * @param {{ snapshot: () => Promise<Record<string, string | null>> }} [dependencies.cliVersions] - Versão de cada CLI de agente (`agent-cli-versions.cjs`).
+ * @param {{ check: Function } | null} [dependencies.cliHealthGate] - `pty-cli-health-gate.cjs`.
  * @returns {{ manager: PtyProcessManager, dispose: () => void }}
  */
 function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
@@ -119,7 +122,19 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
         batcher.discard(sessionId)
       }
 
+      // CLI incompleta: o terminal não abre (o erro cru do sistema não ajuda) e
+      // o reparo começa; a do sistema só ganha um aviso no terminal.
+      const health = reused ? null : checkCliHealth(params, accountValidation)
+      if (health?.block) {
+        finishChainTicket(ticket, sessionId, false)
+        return { ok: false, code: CLI_INCOMPLETE, message: health.message }
+      }
+
       const open = () => {
+        // Antes do processo: a saída dele vem depois do aviso, nunca por cima.
+        if (health?.warn) {
+          batcher.push(sessionId, `\r\n\x1b[33m[Felixo] ${health.message}\x1b[0m\r\n`)
+        }
         try {
           spawnSession(sessionId, params, accountValidation, accountMode, ticket.lineageId)
         } catch (error) {
@@ -167,6 +182,16 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
       return spawnErrorResult(error)
     }
   })
+
+  function checkCliHealth(params, accountValidation) {
+    if (!params.command || !dependencies.cliHealthGate) return null
+    try {
+      return dependencies.cliHealthGate.check({ command: params.command, providerId: accountValidation.providerId })
+    } catch {
+      // A conferência é um aviso; nunca impede o terminal de abrir.
+      return null
+    }
+  }
 
   function spawnErrorResult(error) {
     const result = toErrorResult(error, 'Nao foi possivel iniciar o terminal.')
@@ -409,6 +434,7 @@ function requireSessionId(sessionId) {
 
 module.exports = {
   CHAIN_TICKET_REFUSED,
+  CLI_INCOMPLETE,
   PTY_SPAWN_CANCELLED,
   parseAccountMode,
   registerPtyIpcHandlers,

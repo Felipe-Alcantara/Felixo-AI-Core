@@ -4170,3 +4170,22 @@ Estado: parcial, concluído nesta fatia (commit na branch; deploy pelo orquestra
 **Não validado.** Clique real no app. Sem preço por modelo: o repositório não tem tabela, então o aviso mostra só o custo em dólar que o Claude Code informa a cada resposta (nada é estimado antes da primeira). Sem teto de gasto, por decisão do Felipe.
 
 Estado: concluído (commit na branch; deploy pelo orquestrador).
+
+---
+
+## 2026-11-17 — Terminal: avisar e reparar ao abrir um agente cuja CLI ficou incompleta
+
+Task: Felixo AI Core/Terminal — avisar e reparar ao abrir um agente cuja CLI ficou incompleta, em vez do erro do sistema (Notion `41991f95-497e-813c-8b50-e4cf377392b7`). Agente: subagente da Orquestração (Claude Code, Claude Sonnet 5.5), 11:29 em diante. Trilha A:
+
+**Causa.** Desde a v0.1.550 o app confere o executável da CLI ao abrir o app e depois de instalar, mas o `pty:spawn` não conferia nada: se a reinstalação falhasse ou a CLI quebrasse no meio da sessão, abrir um agente mostrava o erro cru do sistema. Além disso, o plano de instalação marcava a CLI como "presente" assim que existia uma do sistema, então uma cópia do app incompleta (caso medido hoje: Codex do app em 0.169.0-alpha.3 sem `codex.cmd` nem `codex.ps1`, sobra de um npm) nunca era reparada.
+
+**Feito.**
+- **`pty-cli-health-gate.cjs` (novo):** antes do spawn de Claude/Codex, resolve o comando pelo PATH das CLIs. Cópia do app incompleta: dispara `run('repair')` (no máximo uma vez a cada 10 min por CLI) e, se é a cópia que o terminal abriria, o `pty:spawn` devolve `{ ok: false, code: 'CLI_INCOMPLETE', message }` ("A instalação do Claude ficou incompleta; reinstalando…") sem abrir o processo; a mensagem aparece no cartão pela faixa de erro de sempre. CLI do sistema com `.exe` quebrado (placeholder, truncado): só um aviso amarelo escrito no terminal antes da saída do processo.
+- **`cli-auto-install.cjs` / `cli-auto-install-plan.cjs`:** `inspectManaged` (pacote instalado = versão no `package.json`, mas sem binário/executável inteiro = incompleta) e `managedIncomplete` no plano: entra na fila mesmo com a CLI do sistema detectada; motivo `repair` ignora o registro de falhas.
+- **`pty-ipc-handlers.cjs` / `main.cjs`:** `cliHealthGate` injetado (desligado com o fake do devtools).
+
+**Validação.** `pty-cli-health-gate.test.cjs` (5), 2 testes novos no handler e 1 no plano. Node 3438 testes, 3426 passam, 0 falham; vitest 3603 passam, 1 falha só sob carga (`canvas-context-e2e`) e passa isolado (6/6); lint e typecheck limpos.
+
+**Não validado.** Abrir o app real com a CLI quebrada; reparo de ponta a ponta com npm real (só por injeção).
+
+Estado: concluído (commit na branch; deploy pelo orquestrador).

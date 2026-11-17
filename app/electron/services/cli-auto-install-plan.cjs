@@ -48,28 +48,41 @@ function getAutoInstallableClis(catalog) {
  * @param {Array<{ id: string, name: string }>} options.catalog
  * @param {Array<{ detected: boolean }>} options.detections - Na ordem do catálogo.
  * @param {Array<boolean>} [options.managedPresent] - Na ordem do catálogo.
+ * @param {Array<boolean>} [options.managedIncomplete] - Pacote do app instalado, mas sem o executável inteiro.
  * @param {Array<string | null>} [options.managedVersions] - Versões dos pacotes gerenciados.
  * @param {Array<string | null>} [options.latestVersions] - Versões latest resolvidas no registry.
  * @param {Record<string, { version?: string, ok?: boolean }>} [options.previousState]
  * @param {string} options.appVersion
- * @param {'startup' | 'manual'} [options.reason]
+ * @param {'startup' | 'manual' | 'repair'} [options.reason]
  * @returns {{ pending: Array<object>, progress: Array<{ id: string, name: string, state: string, message: string }> }}
  */
 function planAutoInstall({
   catalog,
   detections,
   managedPresent = [],
+  managedIncomplete = [],
   managedVersions = [],
   latestVersions = [],
   previousState = {},
   appVersion,
   reason = 'startup',
 }) {
-  const forced = reason === 'manual'
+  // 'repair' é a abertura de um agente cuja cópia do app está incompleta: a pessoa espera.
+  const forced = reason === 'manual' || reason === 'repair'
   const pending = []
   const progress = catalog.map((cli, index) => {
     const latestVersion = latestVersions[index]
     const managedVersion = managedVersions[index]
+
+    // Pacote do app instalado mas sem o executável inteiro: a CLI do sistema
+    // (detectada abaixo) não o conserta, então ele entra na fila mesmo assim.
+    if (
+      managedIncomplete[index] === true &&
+      (forced || !hasFailedForVersion(previousState, cli.id, appVersion, latestVersion))
+    ) {
+      pending.push(cli)
+      return createCliProgress(cli, 'pending', 'A copia da CLI no app ficou incompleta; reinstalando.')
+    }
 
     if (
       isManagedCliOutdated({
