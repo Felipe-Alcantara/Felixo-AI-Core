@@ -1105,6 +1105,7 @@ function CanvasInner({
         // O store também confere a falha: nenhum relançamento automático dele
         // repete uma retomada que a CLI já recusou.
         resumeFailure: data.resumeFailure,
+        resumeChoice: data.resumeChoice,
         terminalCount: data.terminalCount,
         performanceMode: performanceModeRef.current,
         onAgentSession: (reference) => handleAgentSession(nodeId, reference),

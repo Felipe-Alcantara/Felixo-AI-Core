@@ -4525,3 +4525,22 @@ Agente: subagente da Orquestração (Claude Haiku 5.5, effort max). Conserto urg
 **Não validado.** `npm run lint` completo e a suíte inteira não rodaram nesta correção.
 
 Estado: concluído na branch `orq/fix-tipos-teste-selo`; push e deploy pelo orquestrador.
+
+---
+
+## 2026-11-17 — Terminal: o relançamento automático do Codex respeita a escolha da faixa de retomada
+
+Task: Felixo AI Core/Terminal — fazer o relançamento automático do Codex respeitar a escolha da faixa de retomada (Notion `3eb91f95-497e-8178-bc58-cd545a4f4cc8`). Agente: subagente da Orquestração (Claude Sonnet 5.5, effort medium).
+
+**Contexto.** Achado R5 da revisão do fluxo de retomada. Se a pessoa escolhia "Escolher na lista (/resume)" ou "Abrir conversa nova" e o Codex se atualizava e saía, o store relançava sem a escolha: não digitava `/resume`, não dava ao agente o aviso de conversa nova, e o cartão dizia que reiniciou numa conversa nova (passando por cima do que ela acabara de pedir).
+
+**O que mudou.**
+- `terminal-session-store.ts`: `SessionOptions.resumeChoice`. No relançamento pós-update, havendo escolha e retomada não exata, o texto vem de `resolveTerminalInitialText` (a fonte única do primeiro spawn) e o aviso "conversa nova" não é montado. Sem escolha, nada muda; passagem de responsabilidade continua nunca reenviada.
+- `TerminalNode.tsx` (`ensure`) e `CanvasView.tsx` (`relaunchTerminal`) passam `resumeChoice` do nó para a sessão.
+- `ARQUITETURA.md`: seção do relançamento automático do Codex.
+
+**Validação.** `terminal-session-store.test.ts`: 151 antes, 153 depois (2 novos: lista e conversa nova sobrevivem ao relançamento); os 2 falham sem a correção e passam com ela.
+
+**Não validado.** Auto-update real do Codex com a faixa aberta (só no harness do store).
+
+Estado: concluído (commit na branch `orq/terminal-fazer-relancamento-automatico-c`; push e deploy pelo orquestrador).

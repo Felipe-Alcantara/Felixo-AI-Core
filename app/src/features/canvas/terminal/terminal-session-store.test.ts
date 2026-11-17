@@ -8,7 +8,7 @@ import { isActionRequired } from './session-notifications'
 import type { TerminalFixture } from './__fixtures__/terminal-output/replay-fixture'
 import { closeLinkChooser, getLinkChooserState } from '../../shared/links/link-chooser-store'
 import { createCatalogPromptInsertion, createManualPromptInsertion } from '../../shared/types/prompt-insertion'
-import type { AgentResumeFailure, AgentSessionReference } from '../services/agent-session'
+import type { AgentResumeChoice, AgentResumeFailure, AgentSessionReference } from '../services/agent-session'
 import { TERMINAL_URL_REGEX } from './terminal-url-regex'
 
 /**
@@ -148,6 +148,7 @@ function createHarness(
     agentSession?: AgentSessionReference
     resumeAgentSession?: boolean
     resumeFailure?: AgentResumeFailure
+    resumeChoice?: AgentResumeChoice
     cliVersion?: string | null
     onResumeFailure?: (reason: AgentResumeFailure['reason'], reference: AgentSessionReference) => void
   } = {},
@@ -1399,6 +1400,45 @@ describe('TerminalSessionStore: relançamento automático do Codex depois do aut
 
     expect(harness.spawnArgs).toEqual(PLAIN_CODEX_ARGS)
     expect(harness.store.getSnapshot(SESSION_ID)?.contextWarning).toContain('pediu login')
+  })
+
+  const EXPIRED = { sessionId: 'codex-session-123', reason: 'expired' as const, at: 1 }
+
+  it('a escolha "Escolher na lista" sobrevive ao relançamento: digita /resume e não avisa conversa nova', async () => {
+    harness = createHarness('/resume', 'codex', true, false, 1, {
+      agentSession: CODEX_REFERENCE,
+      resumeFailure: EXPIRED,
+      resumeChoice: 'picker',
+    })
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(CODEX_READY_PROMPT)
+    await vi.advanceTimersByTimeAsync(400)
+    const resumeWrites = () => harness!.writes.filter((data) => data.includes('/resume')).length
+    expect(resumeWrites()).toBe(1)
+
+    await relaunchAfterUpdate(harness)
+
+    expect(harness.spawnArgs).toEqual(PLAIN_CODEX_ARGS)
+    expect(resumeWrites(), 'o /resume não foi digitado de novo no relançamento').toBe(2)
+    expect(harness.store.getSnapshot(SESSION_ID)?.contextWarning).toBeUndefined()
+  })
+
+  it('a escolha "Abrir conversa nova" sobrevive ao relançamento: o agente recebe o aviso de não presumir o histórico', async () => {
+    harness = createHarness('', 'codex', true, false, 1, {
+      agentSession: CODEX_REFERENCE,
+      resumeFailure: EXPIRED,
+      resumeChoice: 'new',
+    })
+    harness.feed(BOOT_ESCAPES)
+    harness.feed(CODEX_READY_PROMPT)
+    await vi.advanceTimersByTimeAsync(400)
+
+    await relaunchAfterUpdate(harness)
+
+    expect(harness.spawnArgs).toEqual(PLAIN_CODEX_ARGS)
+    expect(harness.contextBodies).toHaveLength(1)
+    expect(harness.contextBodies[0]).toContain('conversa')
+    expect(harness.store.getSnapshot(SESSION_ID)?.contextWarning).toBeUndefined()
   })
 
   it('também não retoma quando o nó já registrou a falha da conversa', async () => {

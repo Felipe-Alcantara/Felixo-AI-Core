@@ -65,9 +65,11 @@ import {
   explainAgentResume,
   isAgentResumeFailure,
   isAgentSessionReference,
+  type AgentResumeChoice,
   type AgentResumeFailure,
   type AgentSessionReference,
 } from '../services/agent-session'
+import { resolveTerminalInitialText } from '../services/quality-standard-prompt'
 import {
   codexRejectedRepeatedYolo,
   countCodexYoloFlags,
@@ -389,6 +391,12 @@ type SessionOptions = {
    * pedido pela interface, nem no relançamento automático do Codex.
    */
   resumeFailure?: AgentResumeFailure
+  /**
+   * A escolha da pessoa na faixa de retomada (`/resume` ou conversa nova).
+   * O relançamento automático a respeita em vez de reabrir pelo ID ou por uma
+   * conversa nova em silêncio.
+   */
+  resumeChoice?: AgentResumeChoice
   onAgentSession?: (reference: AgentSessionReference) => void
   /**
    * A CLI respondeu, logo no boot de um spawn que subiu com argumentos de
@@ -2374,8 +2382,27 @@ export class TerminalSessionStore {
       // segue nas opções para o nó não perdê-la. Segurar o spawn até a pessoa
       // escolher (o `pending` da restauração) deixaria um bloco que estava
       // vivo parado sem ninguém ter pedido.
+      // Escolha da pessoa (picker/new) vence: o texto vem da fonte única do
+      // primeiro spawn e não há aviso, porque a conversa nova foi pedida.
+      const resumeChoice = session.launchOptions.resumeChoice
+      const choiceText = resumeChoice
+        ? resolveTerminalInitialText({
+            isRestoredAgent: true,
+            hasCommand: true,
+            qualityStandardEnabled: false,
+            qualityStandardPrompt: '',
+            command: session.command,
+            cwd,
+            agentSession,
+            accountId,
+            resumeAgentSession,
+            resumeFailure,
+            resumeChoice,
+            cliVersion: session.launchOptions.cliVersion,
+          })
+        : undefined
       const withheldResume =
-        agentSession && !resumeAgentSession
+        agentSession && !resumeAgentSession && !resumeChoice
           ? explainAgentResume({
               command: session.command,
               cwd,
@@ -2399,8 +2426,11 @@ export class TerminalSessionStore {
         agentSession,
         resumeAgentSession,
         resumeFailure,
-        initialText:
-          agentSession || handoffWithheld ? undefined : session.launchOptions.initialText,
+        initialText: resumeChoice
+          ? choiceText
+          : agentSession || handoffWithheld
+            ? undefined
+            : session.launchOptions.initialText,
       })
       const relaunched = this.sessions.get(session.id)
       const warning = withheldResume

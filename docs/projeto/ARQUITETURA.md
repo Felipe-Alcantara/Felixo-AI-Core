@@ -839,6 +839,9 @@ que o próprio processo reportou (`liveAgentSession`). Se não puder retomar
 exato, relança numa conversa nova sem digitar nada e mostra o motivo no cartão
 (`contextWarning`, com o texto de `describeAgentResumeForPerson`). Não segura
 o bloco: ele estava rodando um instante antes, e ninguém pediu para pará-lo.
+Se a pessoa já tinha escolhido na faixa (`resumeChoice`: lista ou conversa nova), o
+relançamento a respeita: o texto vem de `resolveTerminalInitialText`, como no
+primeiro spawn, e não há aviso de "conversa nova" (foi o que ela pediu).
 
 **Retomada por ID já nasce com a referência.** Um PTY que sobe com
 `resume … <id>` (Codex) ou `--resume <id>` (Claude e Gemini) recebe a referência no

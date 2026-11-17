@@ -1,4 +1,4 @@
-import type { AgentResumeFailure, AgentSessionReference } from '../services/agent-session'
+import type { AgentResumeChoice, AgentResumeFailure, AgentSessionReference } from '../services/agent-session'
 import type { ContextFileKind } from '../services/context-file-delivery'
 import type { TerminalScrollbackStatus } from './terminal-scrollback'
 import type { SessionMetadata } from './session-metadata'
@@ -70,6 +70,8 @@ export type SessionOptions = {
   cliVersion?: string | null
   /** A última falha de retomada registrada no nó; o store nunca a repete. */
   resumeFailure?: AgentResumeFailure
+  /** A escolha da faixa de retomada; o relançamento automático a respeita. */
+  resumeChoice?: AgentResumeChoice
   onAgentSession?: (reference: AgentSessionReference) => void
   /**
    * A CLI respondeu, no boot de um spawn com argumentos de retomada, que a
