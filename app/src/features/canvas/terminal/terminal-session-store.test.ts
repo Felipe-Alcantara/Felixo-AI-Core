@@ -3297,7 +3297,7 @@ describe('TerminalSessionStore: estado que a CLI anuncia (OSC 7501 e título)', 
   })
 
   describe('rastro [felixo:selo]', () => {
-    const linhas = (spy: ReturnType<typeof vi.spyOn>) =>
+    const linhas = (spy: { mock: { calls: unknown[][] } }) =>
       spy.mock.calls.map((c) => String(c[0])).filter((l) => l.startsWith('[felixo:selo]'))
 
     const ligar = (valor: string | null) =>

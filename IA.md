@@ -4509,3 +4509,19 @@ Task: Felixo AI Core/CI — investigar o canvas que não montou em 45 s na sess�
 - **O que mudou:** cada diretório lido agora ordena as entradas por nome decrescente antes de enfileirar; o teto corta só os mais antigos. O teto não foi ampliado.
 - **Validação:** teste novo (3100 rollouts vazios em 2025/01/01 + 1 de hoje) falha antes (13 pass, 1 fail) e passa depois (14 pass); `run-node-unit-tests.cjs`: 3487 testes, 3475 pass, 0 fail. O teste usa pasta temporária, não lê o `~/.codex` real.
 - **Não verificado:** custo síncrono da varredura no processo principal (não medido); varredura assíncrona ou intervalo crescente ficam fora.
+
+---
+
+## 2026-11-17 — Canvas: tipos dos testes do rastro do selo (CI vermelho na main)
+
+Agente: subagente da Orquestração (Claude Haiku 5.5, effort max). Conserto urgente, sem task no Notion.
+
+**Contexto.** O CI de `42cface6` quebrou no passo Build renderer (typecheck) com seis `TS7006` em `app/src/features/canvas/terminal/terminal-session-store.test.ts`, nos testes do rastro `[felixo:selo]` que entraram hoje. O helper `linhas` tipava o spy como `ReturnType<typeof vi.spyOn>`, e os callbacks de `map`, `filter` e `some` saíam sem tipo.
+
+**O que mudou.** O parâmetro de `linhas` passa a `{ mock: { calls: unknown[][] } }`; os callbacks herdam o tipo, como no resto do arquivo. Uma linha, sem mudança de comportamento.
+
+**Validação.** Typecheck: os seis `TS7006` somem e nenhum erro novo aparece (listas de erro comparadas antes e depois). `vitest run` do arquivo: 151 de 151. `eslint` no arquivo: sem erros. Localmente o typecheck ainda acusa 105 `TS7016` do `lucide-react`, por pacote sem declarações na `node_modules` compartilhada; o CI não tem esses erros.
+
+**Não validado.** `npm run lint` completo e a suíte inteira não rodaram nesta correção.
+
+Estado: concluído na branch `orq/fix-tipos-teste-selo`; push e deploy pelo orquestrador.
