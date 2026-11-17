@@ -3695,3 +3695,17 @@ Estado: concluído (deploy no adendo).
 - **GUIA-DESENVOLVEDOR:** a regra de repetição.
 
 **Validação.** `release-base.test.sh`: todos passam (antes, `release_listar` nem existia). Com `bash -e`, uma listagem que falha sempre não mata o shell. Workflow valida como YAML. Nenhum arquivo release-relevante foi tocado, então este commit não publica. Não validado em produção: depende do próximo push observar o log do gate.
+## 2026-11-17 - Limites: remover conta com login próprio não derruba mais a lista
+
+**Contexto.** Achado na task do refresh por conta: "Remover" numa conta de perfil (login próprio) fazia o `removeAccount` lançar `UNIQUE constraint failed: agent_usage_accounts.id` e todo `list()` seguinte também, deixando o painel de Limites e o modal do chat sem carregar.
+
+**Causa.** `archiveAccount` só preenche `archived_at` (a linha fica com o mesmo id). `list()` roda `ensureDiscoveredAccounts`, que não vê o perfil entre as contas ativas e faz `INSERT` com o id do perfil, já ocupado pela linha arquivada.
+
+**Feito (só a parte técnica).**
+- `agent-usage-repository.cjs`: `isAccountArchived(id)`.
+- `agent-usage-service.cjs` (`ensureDiscoveredAccounts`): não recria conta de perfil cujo id está arquivado. Efeito: a conta removida fica escondida enquanto o perfil existir. Cobre também o caminho do `mergeAccountIds`, que arquiva do mesmo jeito.
+- Teste novo em `agent-usage-refresh-account.test.cjs`: remover conta de perfil e chamar `list()` duas vezes. Falhava com o UNIQUE antes; passa depois.
+
+**Em aberto (decisão do Felipe).** O que o botão "Remover" faz numa conta de perfil: A) sair do botão nessas contas (recomendado), B) reativar com histórico zerado, C) dispensar com opção de desfazer. O texto do `window.confirm` e o `GUIA-CONTAS-E-LIMITES.md` só mudam depois da escolha.
+
+**Validação.** `node --test` da área 14/14; `run-node-unit-tests` 3392 passam, 0 falham; `vitest` 3569 passam; lint e typecheck limpos. Não reproduzido no app real.

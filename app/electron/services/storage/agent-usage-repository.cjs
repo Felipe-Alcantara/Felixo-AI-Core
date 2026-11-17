@@ -410,6 +410,15 @@ function createAgentUsageRepository(database) {
       }
     },
 
+    /** A linha arquivada continua na tabela com o mesmo id: recriar um perfil removido estoura a chave primária. */
+    isAccountArchived(accountId) {
+      return Boolean(
+        connection
+          .prepare('SELECT 1 FROM agent_usage_accounts WHERE id = ? AND archived_at IS NOT NULL')
+          .get(accountId),
+      )
+    },
+
     archiveAccount(accountId) {
       const normalizedAccountId = requireString(
         accountId,

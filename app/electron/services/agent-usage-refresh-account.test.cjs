@@ -463,3 +463,22 @@ test(
     }
   },
 )
+
+test(
+  'remover uma conta com login próprio não derruba o list() (id arquivado não é inserido de novo)',
+  COM_SQLITE,
+  async () => {
+    const { service, limpar } = criarMundo()
+
+    try {
+      await service.list()
+      await service.removeAccount('codex-a')
+      await service.list()
+      const painel = await service.list()
+      assert.equal(painel.accounts.some((conta) => conta.id === 'codex-a'), false)
+      assert.equal(painel.accounts.some((conta) => conta.id === 'codex-b'), true)
+    } finally {
+      limpar()
+    }
+  },
+)

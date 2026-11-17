@@ -1593,7 +1593,8 @@ function ensureDiscoveredAccounts({ catalog, repository, now, profiles = [] }) {
   // perfil: é esse id que liga a pasta de credencial à linha, sem depender de
   // adivinhar identidade.
   for (const perfil of profiles) {
-    if (accounts.some((account) => account.id === perfil.id)) {
+    // shortcut: conta de perfil removida fica escondida enquanto o perfil existir; a escolha final (A/B/C) está na task.
+    if (accounts.some((account) => account.id === perfil.id) || repository.isAccountArchived(perfil.id)) {
       continue
     }
 
