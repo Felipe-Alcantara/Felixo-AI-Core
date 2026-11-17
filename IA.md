@@ -3899,3 +3899,25 @@ Estado: concluído (commits na branch; pendências abertas como tasks pelo orque
 - **Contexto:** a correção do ambiente do Git sem clique (`gitEnvironment` esvazia `GIT_ASKPASS`) já estava na main desde `d0fe333`, com testes em `git-failure.test.cjs` e `system-design-service.test.cjs`. O guia ainda mandava rodar `SSH_ASKPASS= DISPLAY= npm test` por causa desse teste.
 - **O que mudou:** só o texto de `docs/guias/GUIA-DESENVOLVEDOR.md`: o teste não abre mais a janela no Git Bash.
 - **Validação:** com `SSH_ASKPASS` e `GIT_ASKPASS` apontando para um `git-askpass`, `node --test` dos dois arquivos: 33 testes, 0 falhas, o teste de git real em 1,2 s, sem janela.
+
+---
+
+## 2026-11-17 — Canvas: o laço de canvas:save do SA1 era o Excalidraw ressuscitado; a task estava feita desde 05/11 e o inventário ainda a listava
+
+**Contexto.** Task `3ea91f95-497e-812a-8c6d-fcc953edc59b` ("achar o laço de canvas:save que reprova o SA1 do tutorial no Windows e no macOS"). Em setembro o SA1 reprovou no Windows e no macOS do CI com `{"canvas:save":2}` em 1,5 s durante os 30 s de espera, e a hipótese era um `ResizeObserver` ou `fit()` que não assenta.
+
+**Causa (medida).** Não era medida de layout: era o bloco Excalidraw regravando a si mesmo cerca de uma vez por segundo (corrigido em `d07b3a2`, 05/11, entrada "o bloco Excalidraw para de regravar a cena a cada segundo"). Em setembro o SA1 tentava contornar isso apagando o Excalidraw da fixture pelo IPC (`canvas:delete`) e recarregando; mas o bloco vivo na tela continuava com o `onChange` e o debounce armados, e o primeiro `canvas:save` depois do `delete` recriava a linha. O reload então carregava o bloco de volta, e ele seguia gravando para sempre. Era uma corrida entre o `delete` e a próxima volta do laço: perde em máquina lenta (runner do CI), ganha em máquina rápida.
+
+**Reprodução (app de fonte, Windows, Electron 42, harness descartável fora do repo: semeia o bloco da fixture, apaga pelo IPC, recarrega, mede 6 s).**
+- Com o `ExcalidrawDrawingNode.tsx` de antes de `d07b3a2`: o bloco voltou em 7 de 8 ciclos, com 8 a 23 `canvas:save` na janela (cerca de 1 por segundo).
+- Com o código atual: 4 de 4 ciclos sem o bloco voltar e 0 `canvas:save` na janela.
+
+**Frequência hoje.** Sessão A do smoke no Windows local: 3 de 3 passaram o SA1 na primeira amostra de 1,5 s (uma delas com o processo limitado a 2 núcleos), mais a das 09:54. No CI, nas 11 Nightlies desde 06/11, os 44 jobs de Windows e macOS (smoke completo e matriz visual) tiveram 0 ocorrências de "o app não parou de gravar" e 53 passagens do SA1.
+
+**O que mudou.** Só documentação viva: a lacuna "Laço de canvas:save que reprova o SA1" saiu do inventário do canvas (`inventory/data/chrome.ts` e `overlays.ts`) e o `INVENTARIO-CANVAS.md` foi regenerado (249 para 247 lacunas, 62 para 61 tasks). Nenhum código de produto mudou.
+
+**Validação.** `lint` e `typecheck` limpos; `run-node-unit-tests.cjs` 3395 passam, 0 falham (12 pulados); `vitest run` 233 arquivos passam e 3 pulados (3572 testes). O teste do inventário passa sem `-u`.
+
+**Não validado.** macOS físico (a evidência de lá é só o CI); o harness roda com um Vite próprio na porta 5199, não com o da CI.
+
+Estado: concluído (commit na branch; deploy pelo orquestrador).

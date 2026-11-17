@@ -1168,11 +1168,6 @@ export const chromeSurfaces: InventoryElement[] = [
         risk: 'médio',
         task: '3ec91f95-497e-81a3-9be3-c0d354bf7621',
       },
-      {
-        what: 'Laço de canvas:save que reprova o SA1 do tutorial no Windows e no macOS.',
-        risk: 'médio',
-        task: '3ea91f95-497e-812a-8c6d-fcc953edc59b',
-      },
     ],
     overlap: 'Sem superfície própria; o estado aparece na barra de status ("Carregando canvas…"/"Canvas pronto") e em data-felixo-hydrated na raiz do canvas.',
   },

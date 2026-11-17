@@ -32,7 +32,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **Elementos:** 102 (10 blocos, 16 ferramentas, 76 outras superfícies)
 - **Controles:** 394, dos quais 58 com teste específico
 - **Elementos sem nenhum teste:** 4
-- **Lacunas:** 249 (alto 7, médio 133, baixo 109), em 62 tasks
+- **Lacunas:** 247 (alto 7, médio 131, baixo 109), em 61 tasks
 
 ## Moldura do canvas
 
@@ -482,7 +482,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | erro engolido: falha de canvas:list (ok:false ou exceção) vira lista vazia (canvas-storage.ts:23-27, useCanvasPersistence.ts:30): o canvas abre vazio com "Canvas pronto", sem aviso, e a reconciliação do histórico de notificações apaga as notificações dos terminais "sumidos". | alto | `3ec91f95-497e-81a3-9be3-c0d354bf7621` |
 | erro engolido: deleteCanvasNode, saveCanvasEdge e deleteCanvasEdge ignoram o ok:false e caem em catch "Best effort" (canvas-storage.ts:61, 181, 195); saveCanvasNode só escreve no console. Bloco apagado volta e conexão criada some no próximo carregamento, sem aviso. | médio | `3ec91f95-497e-81a3-9be3-c0d354bf7621` |
 | Ao desmontar (trocar para o Chat, recarregar), o cleanup cancela os saves com debounce ainda pendentes em vez de gravá-los (useCanvasPersistence.ts:54): a última mudança de até 400 ms se perde. | médio | `3ec91f95-497e-81a3-9be3-c0d354bf7621` |
-| Laço de canvas:save que reprova o SA1 do tutorial no Windows e no macOS. | médio | `3ea91f95-497e-812a-8c6d-fcc953edc59b` |
 
 ### Indicador da instalação das CLIs no rodapé da sidebar
 
@@ -2714,7 +2713,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | --- | --- | --- |
 | Cancelar da confirmação de redefinir nunca é clicado: o SB8 só confere que o foco chega nele e segue para Confirmar. | baixo | `3ec91f95-497e-81f7-8b12-c5c252d020c7` |
 | Falha de render do menu (CanvasToolbar.tsx:276-281): o boundary devolve null mas help.open continua verdadeiro, então o botão Ajuda fica aria-expanded="true" sem menu e o clique fora não fecha (o ouvinte era do menu); só um segundo clique na Ajuda resolve. | baixo | `3ec91f95-497e-8197-a218-ef49c302013d` |
-| O SA1 (percurso manual pela Ajuda) reprova no Windows e no macOS por um laço de canvas:save, então o percurso não é conferido nesses sistemas. | médio | `3ea91f95-497e-812a-8c6d-fcc953edc59b` |
 
 ### Aviso flutuante da instalação das CLIs
 
@@ -2944,7 +2942,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3e991f95-497e-815c-845c-da8829970c0c` — 1 lacuna
 - `3e991f95-497e-81b4-ac92-d7db960c9ae0` — 1 lacuna
 - `3ea91f95-497e-8117-8506-d4abe67709ff` — 1 lacuna
-- `3ea91f95-497e-812a-8c6d-fcc953edc59b` — 2 lacunas
 - `3ea91f95-497e-812b-a108-fb89c94fa528` — 1 lacuna
 - `3ea91f95-497e-818f-a7ed-cb6a84c376d6` — 1 lacuna
 - `3ea91f95-497e-819a-bdd9-fbc178f27b3e` — 1 lacuna

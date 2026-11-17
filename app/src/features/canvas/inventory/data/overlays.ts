@@ -324,11 +324,6 @@ export const overlaySurfaces: InventoryElement[] = [
         risk: 'baixo',
         task: '3ec91f95-497e-8197-a218-ef49c302013d',
       },
-      {
-        what: 'O SA1 (percurso manual pela Ajuda) reprova no Windows e no macOS por um laço de canvas:save, então o percurso não é conferido nesses sistemas.',
-        risk: 'médio',
-        task: '3ea91f95-497e-812a-8c6d-fcc953edc59b',
-      },
     ],
     overlap:
       'Portal no fim do body com .felixo-popover-surface (z 1000), à direita do botão Ajuda e contido na janela (max-height = janela − 16 px). Fica acima de tudo, inclusive dos diálogos (60); Esc, Tab para fora e clique fora fecham.',
