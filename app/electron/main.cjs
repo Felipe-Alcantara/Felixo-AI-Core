@@ -1014,6 +1014,7 @@ app.whenReady().then(async () => {
     database: storageDatabase,
     appPaths,
     getTerminalLogStore: () => terminalLogStore,
+    getPtyManager: () => ptyHandlers?.manager ?? null,
   })
   agentCanvasWriteWatching = registerAgentCanvasWriteIpcHandlers({
     getMainWindow,

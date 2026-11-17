@@ -3710,3 +3710,18 @@ Estado: concluído (deploy no adendo).
 **Em aberto (decisão do Felipe).** O que o botão "Remover" faz numa conta de perfil: A) sair do botão nessas contas (recomendado), B) reativar com histórico zerado, C) dispensar com opção de desfazer. O texto do `window.confirm` e o `GUIA-CONTAS-E-LIMITES.md` só mudam depois da escolha.
 
 **Validação.** `node --test` da área 14/14; `run-node-unit-tests` 3392 passam, 0 falham; `vitest` 3569 passam; lint e typecheck limpos. Não reproduzido no app real.
+## 2026-11-17 — Canvas: `felixo canvas ler` passa a ler os terminais de agente
+
+**Contexto.** A leitura de um bloco de terminal respondia "Terminal sem saída registrada ainda." para qualquer terminal do canvas, inclusive com 40 minutos de saída na tela. Conferido de novo no app empacotado em 17/11/2026, em um bloco de agente aberto: mesma resposta.
+
+**Causa.** A leitura procurava a saída no log do chat legado (`terminalLogStore`), que o PTY do canvas nunca alimenta, e comparava com o id puro do bloco, enquanto o PTY usa `canvas:<id>`. O teste existente passava com um dublê (`sessionId: 't1'`) que o caminho real não produz.
+
+**O que mudou.**
+- `PtyProcessManager.readOutput(sessionId)`: devolve o buffer de replay (até 200.000 caracteres) e o tamanho do PTY.
+- `terminal-screen-text.cjs` (novo): renderiza essa saída no `@xterm/headless`, no tamanho real do PTY, e devolve o texto da tela, com a rolagem; em tela alternativa vale o que está visível. Sob demanda, nunca a cada pedaço de saída.
+- `canvas-agent-read.cjs`: o terminal é lido primeiro do PTY (`canvas:<id>`); o log do chat legado fica como alternativa. Limite de 200 linhas e redação de segredos como antes. Nota e arquivo não mudaram.
+- `main.cjs` passa o gerenciador de PTY ao handler; a skill `ler-elementos-do-canvas` documenta o limite (só o que está no buffer de replay).
+
+**Validação.**
+- Testes novos com o `PtyProcessManager` real e id `canvas:<id>` (tela normal com ANSI e segredo, tela alternativa, PTY ausente): 2 falham com o código antigo (conteúdo vazio) e os 3 passam depois.
+- Não coberto: o passo no smoke do canvas (fica com o orquestrador) e a leitura do arquivo em disco além do buffer.

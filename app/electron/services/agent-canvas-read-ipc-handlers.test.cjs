@@ -13,6 +13,7 @@ Module._load = function patchedLoad(request, parent, isMain) {
   return originalLoad.call(this, request, parent, isMain)
 }
 const { LER_ACTION, LISTAR_ACTION, registerAgentCanvasReadIpcHandlers } = require('./agent-canvas-read-ipc-handlers.cjs')
+const { PtyProcessManager } = require('./pty-process-manager.cjs')
 Module._load = originalLoad
 
 function appPaths() {
@@ -147,4 +148,73 @@ test('nao mistura pedido de leitura de canvas com outros pedidos da mesma fila (
     controller.pararDeObservarPedidos()
     fs.rmSync(paths.root, { recursive: true, force: true })
   }
+})
+
+// ESC e CRLF montados por código: o texto do teste é a saída crua de um PTY.
+const ESC = String.fromCharCode(27)
+const CRLF = String.fromCharCode(13, 10)
+
+function criarManagerComPty() {
+  let pty
+  const manager = new PtyProcessManager({
+    spawnPty: () => {
+      pty = { pid: 1, dataListeners: [], write() {}, resize() {}, kill() {}, onData(l) { this.dataListeners.push(l) }, onExit() {} }
+      return pty
+    },
+  })
+  // O PTY de um bloco do canvas usa canvas:<id>, nunca o id puro que o listar devolve.
+  manager.spawn('canvas:terminal-1', {})
+  return { manager, emitir: (texto) => pty.dataListeners.forEach((l) => l(texto)) }
+}
+
+async function lerTerminal1({ manager }) {
+  const paths = appPaths()
+  const controller = registerAgentCanvasReadIpcHandlers({
+    database: {},
+    appPaths: paths,
+    getTerminalLogStore: () => null,
+    getPtyManager: () => manager,
+    dependencies: {
+      canvasRepository: fakeCanvasRepository([{ id: 'terminal-1', type: 'terminal', data: {} }]),
+      redact: (texto) => texto.replace(/token=[^ ]+/, 'token=***'),
+    },
+  })
+  const pedido = controller.pedidos.registrar(LER_ACTION, { idDoElemento: 'terminal-1' })
+  try {
+    await controller.processPending()
+    return controller.pedidos.ler(pedido.id).resultado
+  } finally {
+    controller.pararDeObservarPedidos()
+    fs.rmSync(paths.root, { recursive: true, force: true })
+  }
+}
+
+test('canvas-ler: terminal do canvas em tela normal devolve as linhas sem ANSI e com segredo mascarado', async () => {
+  const pty = criarManagerComPty()
+  pty.emitir(ESC + '[32mprimeira' + ESC + '[0m' + CRLF + 'token=segredo123' + CRLF)
+
+  const resultado = await lerTerminal1(pty)
+
+  assert.equal(resultado.ok, true)
+  assert.equal(resultado.content, 'primeira' + String.fromCharCode(10) + 'token=***')
+})
+
+test('canvas-ler: terminal do canvas em tela alternativa devolve o que está visível', async () => {
+  const pty = criarManagerComPty()
+  pty.emitir('antes' + CRLF)
+  pty.emitir(ESC + '[?1049h' + ESC + '[2J' + ESC + '[1;1Htela cheia do agente' + ESC + '[3;1Hrodape')
+
+  const resultado = await lerTerminal1(pty)
+
+  assert.match(resultado.content, /tela cheia do agente/)
+  assert.match(resultado.content, /rodape/)
+  assert.ok(!resultado.content.includes(ESC))
+  assert.equal(resultado.message, undefined)
+})
+
+test('canvas-ler: terminal do canvas sem PTY vivo continua respondendo "sem saída"', async () => {
+  const resultado = await lerTerminal1({ manager: new PtyProcessManager({ spawnPty: () => ({}) }) })
+
+  assert.equal(resultado.ok, true)
+  assert.equal(resultado.message, 'Terminal sem saída registrada ainda.')
 })

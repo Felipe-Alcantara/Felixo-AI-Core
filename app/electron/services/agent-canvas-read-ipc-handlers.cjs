@@ -6,8 +6,11 @@ const { observeAgentRequests } = require('./agent-request-watcher.cjs')
 const { criarRepositorioDePedidos } = require('./fetch-all/agent-requests.cjs')
 const { createCanvasRepository } = require('./storage/canvas-repository.cjs')
 const { redactSensitiveText } = require('./git-secret-redaction.cjs')
+const { renderizarTextoDaTela } = require('./terminal-screen-text.cjs')
 const { lerElemento, listarElementos } = require('./canvas-agent-read.cjs')
 
+// Mesmo esquema do renderer (src/features/canvas/terminal/pty-session-id.ts).
+const ptySessionId = (id) => `canvas:${id}`
 const LISTAR_ACTION = 'canvas-listar'
 const LER_ACTION = 'canvas-ler'
 
@@ -25,11 +28,18 @@ const LER_ACTION = 'canvas-ler'
  * @param {{ database: unknown, appPaths: { agentRequests: string, canvasFiles: string }, getTerminalLogStore: () => { getSessions: () => Promise<unknown[]> } | null }} options
  * @returns {{ pedidos: object, processPending: () => Promise<void>, pararDeObservarPedidos: () => void }}
  */
-function registerAgentCanvasReadIpcHandlers({ database, appPaths, getTerminalLogStore, dependencies = {} }) {
+function registerAgentCanvasReadIpcHandlers({ database, appPaths, getTerminalLogStore, getPtyManager = () => null, dependencies = {} }) {
   const pedidos = (dependencies.createRequests ?? criarRepositorioDePedidos)({ pasta: appPaths.agentRequests })
   const canvasRepository = dependencies.canvasRepository ?? createCanvasRepository(database)
   const readFile = dependencies.readFile ?? ((filePath) => fsPromises.readFile(filePath, 'utf8'))
   const redact = dependencies.redact ?? redactSensitiveText
+
+  const renderizar = dependencies.renderizarTextoDaTela ?? renderizarTextoDaTela
+  async function lerTerminalDoPty(id) {
+    const lido = getPtyManager()?.readOutput?.(ptySessionId(id))
+    if (!lido?.output) return null
+    return renderizar(lido.output, { cols: lido.cols, rows: lido.rows })
+  }
 
   let processing = false
   let queued = false
@@ -74,6 +84,7 @@ function registerAgentCanvasReadIpcHandlers({ database, appPaths, getTerminalLog
         id: pedido.idDoElemento,
         nodes,
         terminalSessions: sessions,
+        lerTerminalDoPty,
         readFile,
         redact,
         canvasFilesDir: appPaths.canvasFiles,

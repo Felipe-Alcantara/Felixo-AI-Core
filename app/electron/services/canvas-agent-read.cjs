@@ -69,7 +69,10 @@ function listarElementos(nodes) {
  * @returns {string}
  */
 function ultimasLinhasDaSessao(session, maxLinhas) {
-  const textoCompleto = (session?.chunks ?? []).map((chunk) => chunk?.chunk ?? '').join('')
+  return ultimasLinhasDoTexto((session?.chunks ?? []).map((chunk) => chunk?.chunk ?? '').join(''), maxLinhas)
+}
+
+function ultimasLinhasDoTexto(textoCompleto, maxLinhas) {
   // Sem isso, um texto terminado em \n (o caso comum) split em N+1 "linhas"
   // — a última sempre vazia — e a linha de verdade mais antiga das N pedidas
   // seria descartada no lugar dela.
@@ -86,6 +89,7 @@ function ultimasLinhasDaSessao(session, maxLinhas) {
  *   id: string,
  *   nodes: Array<{ id: string, type: string, data?: Record<string, unknown> }>,
  *   terminalSessions: Array<{ sessionId: string, chunks?: Array<{ chunk?: string }> }>,
+ *   lerTerminalDoPty?: ((id: string) => Promise<string | null>) | null,
  *   readFile: (absolutePath: string) => Promise<string>,
  *   redact: (text: string) => string,
  *   canvasFilesDir: string,
@@ -93,7 +97,7 @@ function ultimasLinhasDaSessao(session, maxLinhas) {
  * }} options
  * @returns {Promise<{ ok: boolean, id: string, type?: string, label?: string, content?: string, message?: string }>}
  */
-async function lerElemento({ id, nodes, terminalSessions, readFile, redact, canvasFilesDir, maxLinhasTerminal = MAX_LINHAS_TERMINAL_PADRAO }) {
+async function lerElemento({ id, nodes, terminalSessions, lerTerminalDoPty = null, readFile, redact, canvasFilesDir, maxLinhasTerminal = MAX_LINHAS_TERMINAL_PADRAO }) {
   const node = nodes.find((item) => item.id === id)
   if (!node) {
     return { ok: false, id, message: `Nenhum elemento com id "${id}" neste canvas.` }
@@ -103,9 +107,12 @@ async function lerElemento({ id, nodes, terminalSessions, readFile, redact, canv
   const data = node.data && typeof node.data === 'object' ? node.data : {}
 
   if (node.type === 'terminal') {
-    // O id do próprio nó é o sessionId — não existe um campo separado
-    // guardando isso (ver comentário em TerminalNodeData); é assim que o
-    // resto do app (pty-ipc-handlers.cjs) já referencia a sessão.
+    // Terminal do canvas: a saída vive no PTY (`canvas:<id>`), já como texto de tela.
+    const tela = lerTerminalDoPty ? await lerTerminalDoPty(id) : null
+    if (tela) {
+      return { ok: true, id, type: node.type, label, content: redact(ultimasLinhasDoTexto(tela, maxLinhasTerminal)) }
+    }
+    // Alternativa: sessões do chat legado, cujo sessionId é o id do nó.
     const session = terminalSessions.find((item) => item.sessionId === id)
     if (!session) {
       return { ok: true, id, type: node.type, label, content: '', message: 'Terminal sem saída registrada ainda.' }

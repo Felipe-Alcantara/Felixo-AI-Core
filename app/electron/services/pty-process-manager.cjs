@@ -961,6 +961,19 @@ class PtyProcessManager {
   }
 
   /**
+   * Cauda crua da saída da sessão (o mesmo buffer do reanexo) e o tamanho do
+   * PTY, para quem precisa renderizar a tela sem anexar um renderer.
+   *
+   * @param {string} sessionId
+   * @returns {{ output: string, cols: number, rows: number } | null}
+   */
+  readOutput(sessionId) {
+    const entry = this.sessions.get(sessionId)
+    if (!entry) return null
+    return { output: entry.outputBuffer.toString(), cols: entry.cols, rows: entry.rows }
+  }
+
+  /**
    * O reanexo desta sessão devolve só a cauda do replay: o processo já emitiu
    * mais do que `MAX_REPLAY_BUFFER_CHARS`, e o começo está só no arquivo.
    *

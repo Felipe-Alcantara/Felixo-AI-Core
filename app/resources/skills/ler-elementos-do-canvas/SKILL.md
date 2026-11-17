@@ -29,8 +29,10 @@ felixo canvas ler <id>
 felixo canvas ler <id> --json
 ```
 
-Suportado nesta versão: `terminal` (últimas linhas de saída, com token/senha
-já mascarados), `note` (o Markdown do bloco) e `file` (o conteúdo do arquivo
+Suportado nesta versão: `terminal` (as últimas linhas da tela, como a pessoa
+as vê, sem códigos ANSI e com token/senha já mascarados; vale para terminais de
+agente e de shell, e lê só o que ainda está na memória de reanexo do terminal,
+as últimas 200.000 caracteres emitidos), `note` (o Markdown do bloco) e `file` (o conteúdo do arquivo
 que o bloco aponta). Outros tipos — página web, database do Notion, grupo —
 ainda não têm leitura; o comando diz isso explicitamente em vez de falhar
 sem explicação ou inventar um resultado.
