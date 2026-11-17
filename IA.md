@@ -3921,3 +3921,15 @@ Estado: concluído (commits na branch; pendências abertas como tasks pelo orque
 **Não validado.** macOS físico (a evidência de lá é só o CI); o harness roda com um Vite próprio na porta 5199, não com o da CI.
 
 Estado: concluído (commit na branch; deploy pelo orquestrador).
+
+---
+
+## 2026-11-17 — Segurança: confirmações nos modos sem terminal (prazo aplica a recomendada, aviso de acesso total)
+
+**Contexto.** A task pedia que o Gemini (ACP) e o Codex (app-server) deixassem de aprovar sozinhos e que os adaptadores não subissem com acesso total. A `main` já tinha o "Confirmar ações sensíveis" (6e3f38b), que serve também aos agentes do orquestrador, pois `startCliRequest` usa o mesmo `orchestratorSettings`.
+
+**Decisões do Felipe (17/11/2026).** (1) O padrão continua sendo acesso total, contra a recomendação do agente; nada muda para quem já usa. (2) Modo autônomo explícito e visível. (3) Sem resposta em 10 minutos, vale a opção recomendada do pedido; sem recomendada, a mais segura (negar).
+
+**O que mudou.** `persistent-cli-session.cjs`: o pedido guarda `permission.recommendedAllow` (só `true` explícito conta) e a varredura de 10 minutos permite ou nega conforme isso; a mensagem diz qual foi aplicada. Hoje nenhum adaptador marca recomendada, então o comportamento real segue sendo negar. `OrchestratorPanel.tsx` e `FelixoSettingsModal.tsx`: com a confirmação desligada, aparece "Acesso total ativo".
+
+**Validação.** Teste novo em `persistent-cli-session.test.cjs` (recomendada aplica; o antigo cobre o negar). lint e typecheck limpos; `run-node-unit-tests` 3396 ok de 3408 (0 falhas); vitest de chat e ferramentas do canvas 269 ok.

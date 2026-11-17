@@ -199,6 +199,11 @@ export function OrchestratorPanel({ onClose, toolsMenuOpen }: OrchestratorPanelP
                 Codex App Server e Gemini ACP pedem permissão no chat antes de sair da pasta de trabalho ou usar
                 ferramentas; Claude e Codex de uma resposta seguem com acesso total.
               </span>
+              {!draft.requireConfirmationForSensitiveActions && (
+                <span role="status" className="mt-1 block text-[10px] font-medium text-amber-400">
+                  Acesso total ativo: os agentes sem terminal agem sem pedir confirmação.
+                </span>
+              )}
             </span>
           </label>
 

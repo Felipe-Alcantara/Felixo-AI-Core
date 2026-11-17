@@ -259,6 +259,11 @@ function FelixoSettingsDialog({
                 label="Confirmar ações sensíveis"
               />
             </div>
+            {!settingsDraft.requireConfirmationForSensitiveActions && (
+              <p role="status" className="mt-1 px-1 text-[11px] font-medium text-amber-400">
+                Acesso total ativo: as CLIs sem terminal agem sem pedir confirmação.
+              </p>
+            )}
 
             <div className="mt-3 flex justify-end">
               <button

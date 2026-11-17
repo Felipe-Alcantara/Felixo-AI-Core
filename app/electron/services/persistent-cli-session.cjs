@@ -891,7 +891,7 @@ function createPersistentCliSessionManager({
    * "Confirmar ações sensíveis": o pedido da CLI fica parado até a pessoa
    * responder no card do chat (mesmo card e mesmo IPC das trocas do
    * orquestrador). Esperar a pessoa não é travamento: o prazo de "sem saída
-   * visível" sai, e vale o de 10 minutos, que nega.
+   * visível" sai, e vale o de 10 minutos, que aplica a recomendada (negar, se não houver).
    */
   function holdPermissionRequest(persistentSession, cliEvent) {
     const { threadId } = persistentSession
@@ -919,6 +919,7 @@ function createPersistentCliSessionManager({
       threadId,
       approveInput: cliEvent.responseInput,
       denyInput: cliEvent.permission.denyInput,
+      recommendedAllow: cliEvent.permission.recommendedAllow === true,
       targetWebContents: persistentSession.targetWebContents,
     }
     pendingPermissions.set(decision.decisionId, decision)
@@ -952,6 +953,7 @@ function createPersistentCliSessionManager({
       denyInput: _denyInput,
       targetWebContents: _targetWebContents,
       expiresAtMs: _expiresAtMs,
+      recommendedAllow: _recommendedAllow,
       ...view
     } = decision
     return view
@@ -976,7 +978,9 @@ function createPersistentCliSessionManager({
     const answered = cliManager.write(decision.threadId, allow ? decision.approveInput : decision.denyInput)
     const message =
       finalOutcome === 'expired'
-        ? 'Sem resposta no prazo: a permissão foi negada.'
+        ? allow
+          ? 'Sem resposta no prazo: aplicada a opção recomendada (permitir).'
+          : 'Sem resposta no prazo: a permissão foi negada.'
         : allow
           ? 'Permissão dada.'
           : 'Permissão negada.'
@@ -995,11 +999,19 @@ function createPersistentCliSessionManager({
       : { ok: false, code: 'RUN_FINISHED', message: 'A CLI já não está esperando esta resposta.' }
   }
 
-  /** Varredura de 60 s: pedido sem resposta em 10 minutos é negado. */
+  /**
+   * Varredura de 60 s: pedido sem resposta em 10 minutos aplica a opção
+   * recomendada do pedido. Sem `permission.recommendedAllow === true`, a
+   * recomendada é a mais segura: negar.
+   */
   function expirePermissionRequests(nowMs = now()) {
     for (const decision of [...pendingPermissions.values()]) {
       if (decision.expiresAtMs <= nowMs) {
-        respondPermission({ decisionId: decision.decisionId, allow: false, outcome: 'expired' })
+        respondPermission({
+          decisionId: decision.decisionId,
+          allow: decision.recommendedAllow === true,
+          outcome: 'expired',
+        })
       }
     }
   }

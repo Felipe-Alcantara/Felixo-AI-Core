@@ -283,6 +283,17 @@ test('ações sensíveis: sem resposta em 10 minutos o pedido é negado; sem a o
   assert.equal(h.manager.listPermissionRequests().length, 0)
 })
 
+test('ações sensíveis: no prazo de 10 minutos vale a recomendada do pedido; sem recomendada, nega', async (t) => {
+  const h = permissionHarness(t)
+  h.send(true)
+  await h.emit({ ...h.permission, permission: { ...h.permission.permission, recommendedAllow: true } })
+  h.advance(10 * 60 * 1000)
+  h.manager.expirePermissionRequests()
+  assert.equal(h.writes.at(-1), 'APROVA\n')
+  assert.equal(h.events.at(-1).outcome, 'expired')
+  assert.match(h.events.at(-1).message, /recomendada/)
+})
+
 test('custo do processo persistente: o total acumulado do Claude vira o custo de cada resposta', async (t) => {
   const h = permissionHarness(t)
   h.send(false)
