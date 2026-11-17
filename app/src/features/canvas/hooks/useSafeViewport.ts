@@ -1,6 +1,7 @@
 import { useCallback, type RefObject } from 'react'
 import type { Node } from '@xyflow/react'
 import {
+  fitZoomForSafeArea,
   flowCenterForSafeArea,
   getCanvasSafeArea,
   safeViewportOffset,
@@ -104,15 +105,19 @@ export function useSafeViewport({ flowContainerRef, flowInstanceRef, occupancy }
         return settledOrVoid(flowInstance.setCenter(nodeCenter.x, nodeCenter.y, { zoom, duration }))
       }
 
+      // O zoom recebido é o preferido: em tela pequena ele cai o bastante para o bloco caber.
+      const fittedZoom = fitZoomForSafeArea(size, safeArea, zoom)
       const target = flowCenterForSafeArea(
         nodeCenter,
         container.getBoundingClientRect(),
         safeArea,
-        zoom,
+        fittedZoom,
       )
       // A promessa resolve quando a câmera chega (o menu de link espera por
       // ela para focar o bloco novo; ver `OpenedWebpage`).
-      return settledOrVoid(flowInstance.setCenter(target.x, target.y, { zoom, duration }))
+      return settledOrVoid(
+        flowInstance.setCenter(target.x, target.y, { zoom: fittedZoom, duration }),
+      )
     },
     [flowContainerRef, flowInstanceRef, getSafeCanvasScreenRect],
   )

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   CANVAS_STATUSBAR_HEIGHT,
   CANVAS_TOPBAR_HEIGHT,
+  fitZoomForSafeArea,
   flowCenterForSafeArea,
   getCanvasSafeArea,
   safeViewportOffset,
@@ -129,5 +130,37 @@ describe('área útil de interação do Canvas', () => {
         { left: 300, top: 100, right: 420, bottom: 300 },
       ),
     ).toBe(true)
+  })
+})
+
+describe('fitZoomForSafeArea', () => {
+  const pagina = { width: 560, height: 420 }
+
+  it('em janela grande devolve o zoom preferido, sem mudar nada', () => {
+    expect(fitZoomForSafeArea(pagina, { width: 1280, height: 660 }, 1.2)).toBe(1.2)
+    expect(fitZoomForSafeArea(pagina, { width: 1280, height: 660 }, 0.9)).toBe(0.9)
+  })
+
+  it('na janela de 1008x655 com a lista Elementos aberta, reduz o zoom até o bloco caber', () => {
+    // ~432 px de largura livre e ~560 de altura: a largura manda.
+    const zoom = fitZoomForSafeArea(pagina, { width: 432, height: 560 }, 1.2)
+    expect(zoom).toBeLessThan(1.2)
+    expect(pagina.width * zoom).toBeLessThanOrEqual(432 - 2 * 24)
+    expect(pagina.height * zoom).toBeLessThanOrEqual(560 - 2 * 24)
+  })
+
+  it('nunca desce abaixo do mínimo legível, mesmo que o bloco não caiba', () => {
+    expect(fitZoomForSafeArea(pagina, { width: 200, height: 200 }, 1.2)).toBe(0.5)
+    expect(fitZoomForSafeArea(pagina, { width: 200, height: 200 }, 1.2, { minimum: 0.4 })).toBe(0.4)
+  })
+
+  it('o mínimo nunca empurra o zoom para cima do preferido', () => {
+    expect(fitZoomForSafeArea(pagina, { width: 200, height: 200 }, 0.3)).toBe(0.3)
+  })
+
+  it('com medida inválida (área ou bloco sem tamanho) mantém o preferido', () => {
+    expect(fitZoomForSafeArea(pagina, { width: 0, height: 0 }, 1.2)).toBe(1.2)
+    expect(fitZoomForSafeArea({ width: 0, height: 0 }, { width: 400, height: 400 }, 0.9)).toBe(0.9)
+    expect(fitZoomForSafeArea(pagina, { width: 30, height: 600 }, 1.2)).toBe(1.2)
   })
 })

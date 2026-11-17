@@ -118,6 +118,34 @@ export function flowCenterForSafeArea(
   }
 }
 
+/**
+ * Zoom para "ir até" um bloco: o preferido de hoje, reduzido só o bastante para o
+ * bloco caber inteiro na área útil (com margem), sem passar de um mínimo legível.
+ * Em janela grande devolve o preferido; em tela pequena a barra de endereço e os
+ * botões do bloco deixam de ficar sob a barra lateral.
+ */
+export function fitZoomForSafeArea(
+  size: { width: number; height: number },
+  safeArea: { width: number; height: number },
+  preferred: number,
+  { margin = 24, minimum = 0.5 }: { margin?: number; minimum?: number } = {},
+): number {
+  const availableWidth = safeArea.width - margin * 2
+  const availableHeight = safeArea.height - margin * 2
+  if (
+    !(preferred > 0) ||
+    !(size.width > 0) ||
+    !(size.height > 0) ||
+    !(availableWidth > 0) ||
+    !(availableHeight > 0)
+  ) {
+    return preferred
+  }
+  const fitting = Math.min(availableWidth / size.width, availableHeight / size.height)
+  // O mínimo nunca empurra o zoom para cima do preferido: o preferido já era menor.
+  return Math.min(preferred, Math.max(minimum, fitting))
+}
+
 /** Deslocamento em pixels para corrigir um fit feito no viewport inteiro. */
 export function safeViewportOffset(
   container: Pick<CanvasScreenRect, 'left' | 'top' | 'right' | 'bottom'>,
