@@ -3953,3 +3953,20 @@ Task: Felixo AI Core/Terminal — ler o estado e o assunto que as CLIs já anunc
 **Validação.** `program-status.test.ts`: 13 testes (relatos válidos, inválidos, limites, títulos reais das gravações de Claude e Codex). `terminal-session-store.test.ts`: 10 testes novos (sondagem uma vez e antes do DA1, não responde no reanexo, responde se chegou antes do spawn, estados e `kind`, tela parada 5 s não muda o estado anunciado, `clear`, filho e relato inválido ignorados, Codex fora, assunto, spinner no título). Gate: lint e typecheck limpos, vitest 234 arquivos / 3595 testes, testes Node 3395 passando.
 
 **Não validado.** Nenhuma sessão real do Claude Code (o repositório não tem gravação com 7501 do Claude, e a task proibia sessão real): o formato do 7501 do Claude foi lido da especificação, não de captura. Ver sondagem/`kind` no app real e gravar a fixture é a pendência.
+
+---
+
+## 2026-11-17 — System Design: fonte padrão decidida e sugestões por área (Felixo back-end, Doktor front-end)
+
+Contexto. A task pedia decidir entre Felixo System Design (https://github.com/Felipe-Alcantara/Felixo-System-Design, cc4aae7, 29/07/2026) e Doktor (https://github.com/AndreGustavoms/Doktor-SystemDesign, 7fc7f5e, 04/09/2026, 78 .md contra 32). Nenhum código do app usava o Doktor além de fixtures de teste.
+
+Decisão do Felipe. "Felixo focado para back, Doktor para front, mas é bom sempre perguntar": o app oferece as duas fontes por área e pergunta, sem impor. Decisão do agente: o desenho mais simples com o que já existe. O padrão do app (`DEFAULT_REPO_URL`) continua Felixo, então nenhuma instalação muda e `LEGACY_DEFAULT_SOURCES` não precisa de acréscimo; a pergunta vira um bloco "Sugestões por área" nas Configurações, e a seleção por lista já permite seguir as duas.
+
+O que mudou.
+- `system-design-suggestions.ts`: constante com Felixo (back-end) e Doktor (front-end), URL, branch e commit revisado, mais `isSuggestionInList` e `withSuggestion` (sem duplicar; tolera `.git`, barra final e caixa).
+- `SystemDesignSettingsSection.tsx`: botão "Adicionar Doktor" (e "Adicionar Felixo") com rótulo, área, branch e commit visíveis; vira "Já adicionado" quando a fonte está na lista.
+- `docs/guias/GUIA-SYSTEM-DESIGN.md`: decisão datada, links, política (offline e configuração antiga inalteradas; nunca copiar assinatura, identidade nem links).
+
+Validação. `vitest` da pasta system-design: 6 arquivos, 47 testes passando (4 novos). `typecheck` limpo.
+
+Não feito (pendência). Perguntar por área na configuração de cada projeto (`ProjectGuidesSection`) com as sugestões já marcadas.

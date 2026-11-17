@@ -28,6 +28,14 @@ do usuário) e `electron/core/system-design-project.cjs` (camada de projeto):
 - **Seus guias:** uma lista; dá para seguir dois padrões ao mesmo tempo (ex.: Felixo +
   Doktor). Só a escolha explícita é gravada, e uma lista escolhida nunca é trocada por
   um novo padrão do app. Cada guia tem cache, índice e estado próprios.
+- **Fonte padrão e sugestões (decisão de 17/11/2026):** o padrão do app continua sendo o
+  Felixo System Design (cc4aae7), sem trocar nada de quem não escolheu. Em Configurações,
+  "Sugestões por área" oferece Felixo (back-end) e Doktor (front-end, commit revisado
+  7fc7f5e) com um botão "Adicionar" cada, e a pessoa escolhe; o app pergunta, não impõe.
+  Fontes em https://github.com/Felipe-Alcantara/Felixo-System-Design e
+  https://github.com/AndreGustavoms/Doktor-SystemDesign. Nunca se copia automaticamente
+  assinatura pessoal, identidade nem links de um para o outro. A constante fica em
+  `src/features/shared/system-design/system-design-suggestions.ts`.
 - **Guias do projeto:** um projeto pode trazer os seus por três caminhos que somam: um
   arquivo versionado, uma pasta `Padrão de qualidade - <nome>/` na raiz do repositório
   ou uma escolha feita no app. Quando o projeto traz guias, eles valem nos terminais

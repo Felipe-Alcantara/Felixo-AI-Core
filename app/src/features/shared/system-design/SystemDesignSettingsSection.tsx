@@ -9,6 +9,11 @@ import {
   describeGuideStatus,
   type SystemDesignStatusTone,
 } from './system-design-presentation'
+import {
+  SYSTEM_DESIGN_SUGGESTIONS,
+  isSuggestionInList,
+  withSuggestion,
+} from './system-design-suggestions'
 import { SystemDesignDocumentIndex } from './SystemDesignDocumentIndex'
 import { useSystemDesignSettings } from './useSystemDesignSettings'
 import type { SystemDesignGuideInput } from './types'
@@ -139,6 +144,31 @@ export function SystemDesignSettingsSection({ projectDirectories = [] }: { proje
         submitLabel="Adicionar guia"
         onSubmit={(guide) => replaceGuides([...currentInputs, guide])}
       />
+
+      <h4 className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-zinc-300">Sugestões por área</h4>
+      <p className="mt-0.5 text-[11px] text-zinc-500">
+        O app não impõe uma fonte: escolha quais seguir. Dá para seguir as duas ao mesmo tempo.
+      </p>
+      <ul className="mt-1 space-y-1.5" data-felixo-system-design-suggestions>
+        {SYSTEM_DESIGN_SUGGESTIONS.map((suggestion) => {
+          const added = isSuggestionInList(suggestion, currentInputs)
+          return (
+            <li key={suggestion.id} className="flex items-center justify-between gap-2 rounded-md bg-white/5 px-2 py-1.5 text-[11px]">
+              <span className="min-w-0 truncate text-zinc-300">
+                {suggestion.label} · {suggestion.area} · {suggestion.branch} @ {suggestion.reviewedCommit}
+              </span>
+              <button
+                type="button"
+                onClick={() => void replaceGuides(withSuggestion(currentInputs, suggestion))}
+                disabled={added || syncing}
+                className="felixo-btn shrink-0 rounded-md border border-white/10 px-2 py-0.5 text-zinc-100 hover:bg-white/10 disabled:opacity-50"
+              >
+                {added ? 'Já adicionado' : `Adicionar ${suggestion.id === 'doktor' ? 'Doktor' : 'Felixo'}`}
+              </button>
+            </li>
+          )
+        })}
+      </ul>
 
       {error ? (
         <p className="mt-2 rounded-md border border-[color-mix(in_srgb,var(--color-error)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-error)_18%,transparent)] px-2 py-1 text-[11px] text-theme-error">
