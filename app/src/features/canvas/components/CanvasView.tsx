@@ -148,6 +148,7 @@ import {
 } from '../services/file-terminal-links'
 import { createCanvasConnectionIndex } from '../services/canvas-connection-index'
 import { releaseRemovedCanvasNodes } from '../services/canvas-node-removal'
+import { judgeCanvasRemoval } from '../services/canvas-removal-guard'
 import { CanvasProfilerBoundary } from '../services/canvas-performance-profiler.tsx'
 import { announceAgentCollaboration } from '../services/agent-collaboration-links'
 import { buildRedactedHandoffText } from '../services/account-continuation'
@@ -1632,6 +1633,21 @@ function CanvasInner({
     })
   }, [])
 
+  const handleBeforeDelete = useCallback(
+    async ({ nodes: doomed }: { nodes: Node[]; edges: Edge[] }) => {
+      const verdict = judgeCanvasRemoval(doomed, {
+        locked: canvasLocked,
+        isLiveTerminal: (nodeId) => {
+          const activity = store.getSnapshot(nodeId)?.activity
+          return activity !== undefined && activity !== 'exited' && activity !== 'error'
+        },
+      })
+      if (!verdict.allow) return false
+      return verdict.confirmMessage ? window.confirm(verdict.confirmMessage) : true
+    },
+    [canvasLocked, store],
+  )
+
   const onConnect = useCallback(
     (connection: Connection) => {
       setEdges((current) => {
@@ -2138,9 +2154,11 @@ function CanvasInner({
     [addNode],
   )
 
-  // Drop a node onto a group to make it a child; drop it out to detach. Uses
-  // absolute positions, so only top-level nodes (already absolute) are
-  // reparented — keeping the hit-test simple and predictable.
+  // Drop a node onto a group to make it a child. There is no way to detach:
+  // children are locked inside (extent 'parent') and this handler skips them,
+  // so a child only leaves the group by being removed. Uses absolute
+  // positions, so only top-level nodes (already absolute) are reparented —
+  // keeping the hit-test simple and predictable.
   const onNodeDragStop = useCallback(
     (_event: unknown, dragged: Node) => {
       if (dragged.type === 'group' || dragged.parentId) {
@@ -2439,6 +2457,9 @@ function CanvasInner({
           onlyRenderVisibleElements={!keepCanvasNodesMounted}
           proOptions={{ hideAttribution: true }}
           deleteKeyCode={['Delete', 'Backspace']}
+          // Único portão de toda remoção (tecla, Remover da barra, X do bloco e
+          // do grupo): respeita a trava e confirma o que perde processo ou arquivo.
+          onBeforeDelete={handleBeforeDelete}
           // Select mode: drag on empty canvas draws a selection box (middle/right
           // mouse still pans). Pan mode: left-drag grabs and moves the canvas.
           // Shift always adds to the selection.

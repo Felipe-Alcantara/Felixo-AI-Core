@@ -146,11 +146,6 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
         task: '3ec91f95-497e-8141-b6c1-d1833aac5664',
       },
       {
-        what: 'Remover o bloco (X do cabeçalho, TerminalNode.tsx:291-294) chama store.remove e mata o PTY sem confirmar, enquanto o Reiniciar pede confirm com o processo vivo.',
-        risk: 'médio',
-        task: '3ec91f95-497e-8143-a0b4-cceb0ace7599',
-      },
-      {
         what: 'No bloco mínimo (200×120) a faixa de retomada (até 4 linhas + botões) e as faixas da cadeia empurram a prévia para fora do cartão overflow-hidden; nenhum teste mede.',
         risk: 'baixo',
         task: '3ec91f95-497e-8112-82f9-fd1b86e3ec7d',
@@ -223,8 +218,8 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
       {
         locator: 'aria-label="Remover grupo"',
         kind: 'button',
-        effect: 'deleteElements do grupo: o React Flow leva junto todos os filhos (parentId) e as arestas deles; onNodesChange encerra o PTY dos terminais filhos (store.remove), apaga imagens temporárias (files:remove-generated-image) e chama canvas:delete de cada um.',
-        failure: 'Sem confirmação nem desfazer. Falha de canvas:delete é engolida (deleteCanvasNode com catch vazio) e o bloco reaparece no próximo início.',
+        effect: 'deleteElements do grupo, que antes passa pelo onBeforeDelete do canvas (canvas-removal-guard): trava ligada não remove; grupo com filhos pede confirmação dizendo quantos blocos saem junto. Confirmado, o React Flow leva junto todos os filhos (parentId) e as arestas deles; onNodesChange encerra o PTY dos terminais filhos (store.remove), apaga imagens temporárias (files:remove-generated-image) e chama canvas:delete de cada um.',
+        failure: 'Grupo vazio sai sem confirmação; não há desfazer. Falha de canvas:delete é engolida (deleteCanvasNode com catch vazio) e o bloco reaparece no próximo início.',
       },
     ],
     persistence: ['canvas salvo (canvas_nodes: label, posição, tamanho; os filhos guardam parent_id)'],
@@ -235,19 +230,10 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
       smoke('checarInteracoes'),
       smoke('checarOclusaoDoFixture'),
       smoke('checarZoomVisual'),
+      unit('src/features/canvas/services/canvas-removal-guard.test.ts'),
       unit('electron/services/storage/canvas-repository.test.cjs'),
     ],
     gaps: [
-      {
-        what: 'Remover grupo (GroupNode.tsx:60) apaga em cascata todos os blocos filhos, inclusive terminais com processo vivo e imagens temporárias no disco, sem confirmar e sem dizer quantos blocos vão junto (getElementsToRemove do @xyflow inclui quem tem parentId; CanvasView.tsx:2181-2199).',
-        risk: 'alto',
-        task: '3ec91f95-497e-8143-a0b4-cceb0ace7599',
-      },
-      {
-        what: 'Com o canvas travado (cadeado da pílula de zoom), o X dos blocos e o "Remover grupo" continuam removendo: só a seleção e o Remover da barra de status respeitam o cadeado (NodeHeader.tsx:61-72, GroupNode.tsx:57-64; CanvasView.tsx:3200-3202 e 3269).',
-        risk: 'médio',
-        task: '3ec91f95-497e-8143-a0b4-cceb0ace7599',
-      },
       {
         what: 'Remover grupo e renomear o grupo não são exercitados por nenhum teste (o smoke só seleciona e mede o grupo vazio).',
         risk: 'médio',
@@ -1305,21 +1291,21 @@ export const nodeSurfaces: InventoryElement[] = [
     states: {
       normal: 'Barra de arrasto (canvas-node-drag) com grip, ícone, nome editável ("Nome do bloco") ou título fixo, ações do bloco e o X.',
       empty: 'Nome vazio mostra o placeholder do tipo (Terminal, Nota, Desenho, Página Web…).',
-      disabled: 'Canvas travado: o grip não arrasta (nodesDraggable falso), mas o X continua removendo.',
+      disabled: 'Canvas travado: o grip não arrasta (nodesDraggable falso) e o X não remove (o onBeforeDelete do canvas recusa).',
     },
     controls: [
       {
         locator: 'aria-label="Remover no"',
         kind: 'button',
-        effect: 'onRemove do bloco: deleteElements → onNodesChange tira o bloco e as arestas dele, chama canvas:delete e canvas:delete-edge e apaga imagem temporária do disco; no terminal, store.remove mata o PTY antes.',
-        failure: 'Sem confirmação nem desfazer; deleteCanvasNode e deleteCanvasEdge engolem erro e o bloco pode voltar no próximo início.',
+        effect: 'onRemove do bloco: deleteElements → onNodesChange tira o bloco e as arestas dele, chama canvas:delete e canvas:delete-edge e apaga imagem temporária do disco; o PTY do terminal é encerrado nesse onNodesChange, depois do onBeforeDelete: com a trava ligada nada sai, e terminal com processo vivo ou imagem temporária pede confirmação.',
+        failure: 'Bloco comum sai sem confirmação e não há desfazer; deleteCanvasNode e deleteCanvasEdge engolem erro e o bloco pode voltar no próximo início.',
         disabledWhen: 'Some quando o bloco não passa onRemove.',
       },
     ],
     persistence: ['canvas salvo (data.label a cada tecla; posição gravada 400 ms depois do arrasto)'],
     ipc: ['canvas:save', 'canvas:delete', 'canvas:delete-edge', 'pty:kill', 'pty:write', 'files:remove-generated-image'],
     dependsOn: ['NODE_DRAG_HANDLE_CLASS (dragHandle do React Flow)', 'onTitleChange / onTitleCommit / onRemove de cada bloco', 'releaseRemovedCanvasNodes (canvas-node-removal)'],
-    tests: [smoke('checarInteracoes'), unit(`${SERVICES}/canvas-node-removal.test.ts`)],
+    tests: [smoke('checarInteracoes'), unit(`${SERVICES}/canvas-node-removal.test.ts`), unit(`${SERVICES}/canvas-removal-guard.test.ts`)],
     gaps: [
       {
         what: 'O X ("Remover no") e o nome editável não são exercitados por nenhum teste com asserção (só o script de heap clica no X, sem conferir o efeito).',
@@ -1330,11 +1316,6 @@ export const nodeSurfaces: InventoryElement[] = [
         what: 'Renomear um terminal (onTitleCommit) digita no agente "A partir de agora, seu nome neste canvas é …" já submetido com Enter.',
         risk: 'baixo',
         task: '3eb91f95-497e-8126-8750-d9834c65f306',
-      },
-      {
-        what: 'Com o canvas travado o X ainda remove (NodeHeader.tsx:61-72 ignora o cadeado; a barra de status desabilita o Remover).',
-        risk: 'médio',
-        task: '3ec91f95-497e-8143-a0b4-cceb0ace7599',
       },
       {
         what: 'A dock de terminais recolhidos intercepta cliques em grip, nome e X dos blocos embaixo dela em telas < 768 px, mesmo vazia.',
@@ -1608,7 +1589,7 @@ export const nodeSurfaces: InventoryElement[] = [
     states: {
       normal: 'Bloco solto cuja ponta superior esquerda cai dentro de um grupo ao fim do arrasto vira filho (parentId + extent "parent", posição relativa) e passa a se mover com o grupo.',
       empty: 'Grupo sem filhos.',
-      disabled: 'Filho não sai do grupo (extent "parent" e onNodeDragStop ignora quem tem parentId); grupo não entra em outro grupo; canvas travado não arrasta.',
+      disabled: 'Não há como desagrupar: o filho não sai do grupo (extent "parent" e onNodeDragStop ignora quem tem parentId), só some se for apagado; grupo não entra em outro grupo; canvas travado não arrasta.',
     },
     controls: [],
     persistence: ['SQLite canvas_nodes.parent_id do filho (toPersistedNode grava, toFlowNode restaura com extent "parent")'],
@@ -1616,11 +1597,6 @@ export const nodeSurfaces: InventoryElement[] = [
     dependsOn: ['onNodeDragStop (CanvasView)', 'isInside (node-geometry)', 'orderedNodes (grupos antes dos filhos)', 'toPersistedNode / toFlowNode (useCanvasPersistence)', 'getElementsToRemove do @xyflow/system (remoção em cascata)'],
     tests: [unit('electron/services/storage/canvas-repository.test.cjs'), smoke('checarOclusaoDoFixture')],
     gaps: [
-      {
-        what: 'Não há como desagrupar (CanvasView.tsx:2873-2880): o comentário promete "drop it out to detach", mas onNodeDragStop sai cedo para quem tem parentId e extent "parent" prende o filho; o bloco só sai do grupo se for apagado.',
-        risk: 'médio',
-        task: '3ec91f95-497e-8143-a0b4-cceb0ace7599',
-      },
       {
         what: 'Encaixar um bloco no grupo (isInside, sem teste unitário) e a persistência do parent_id depois do reload não têm teste na tela; o grupo do fixture não tem filhos.',
         risk: 'médio',

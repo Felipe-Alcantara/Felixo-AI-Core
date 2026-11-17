@@ -302,10 +302,9 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
         onTitleChange={(label) => nodeData.onDataChange?.(id, { label })}
         onTitleCommit={(label) => nodeData.onRenameCommit?.(id, label)}
         className="bg-white/4 text-(--f-core-white)"
-        onRemove={() => {
-          store.remove(id)
-          void deleteElements({ nodes: [{ id }] })
-        }}
+        // A sessão é encerrada pelo onNodesChange do canvas depois do onBeforeDelete
+        // (confirmação e trava); matar o PTY aqui antes disso burlaria os dois.
+        onRemove={() => void deleteElements({ nodes: [{ id }] })}
       >
         <CopyButton onCopy={() => store.copy(id)} />
         <button

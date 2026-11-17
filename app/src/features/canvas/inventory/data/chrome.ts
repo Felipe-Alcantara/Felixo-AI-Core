@@ -797,7 +797,7 @@ export const chromeSurfaces: InventoryElement[] = [
         locator: 'Travar o canvas',
         kind: 'button',
         effect: 'onLockedChange(!locked) → setCanvasLocked: desliga nodesDraggable, nodesConnectable, elementsSelectable e a seleção por arrasto; o Remover da statusbar fica desabilitado.',
-        failure: 'A trava não persiste e não impede Delete/Backspace de apagar a seleção feita antes de travar (ver lacuna na área do canvas).',
+        failure: 'A trava não persiste. Com ela ligada o onBeforeDelete do canvas recusa toda remoção (Delete/Backspace, Remover da barra, X do bloco e do grupo).',
       },
     ],
     persistence: ['nenhuma (zoom, pan e trava vivem só na sessão)'],
@@ -869,15 +869,11 @@ export const chromeSurfaces: InventoryElement[] = [
       { file: 'src/features/canvas/services/viewport-auto-fit.test.ts' },
       { file: 'src/features/canvas/services/canvas-selection.test.ts' },
       { file: 'src/features/canvas/services/canvas-node-removal.test.ts' },
+      { file: 'src/features/canvas/services/canvas-removal-guard.test.ts' },
       { file: 'src/features/canvas/services/keyboard-focus.test.ts' },
       { file: 'src/features/canvas/components/modal-dialogs-keys.test.ts' },
     ],
     gaps: [
-      {
-        what: 'Com o canvas travado, Delete/Backspace ainda apaga a seleção feita antes de travar: o deleteKeyCode do React Flow (CanvasView.tsx:3193) não olha a trava, enquanto o Remover da statusbar fica desabilitado ("Destrave o canvas para remover").',
-        risk: 'médio',
-        task: '3ec91f95-497e-8143-a0b4-cceb0ace7599',
-      },
       {
         what: 'focusNode centraliza pelo node.position (CanvasView.tsx:1753), que num filho de grupo é relativo ao grupo: o item do inspector "Elementos" e o das Notificações levam a câmera para o lugar errado quando o bloco está dentro de um grupo.',
         risk: 'médio',
