@@ -4414,3 +4414,23 @@ Task: Felixo AI Core/Terminal — fazer o toque achar o link na célula em que o
 - `terminal-mouse-selection.test.ts`: 2 testes novos do cálculo da célula vizinha.
 
 **Não validado.** O passo L9 do smoke não foi rodado (a regra do contrato reserva o `test:canvas-smoke` ao orquestrador); o toque real em tela sensível também não. Issue/PR no xterm.js (opção a da task) fica de fora.
+
+---
+
+## 2026-11-17 — Links: o link do terminal pelo teclado fica como limitação aceita
+
+Task: Felixo AI Core/Links — decidir se o link do terminal abre pelo teclado (Notion `41b91f95-497e-81c9-b12f-edb0b8ed0b2d`). Agente: subagente da Orquestração (Claude Haiku 5.5, effort max), 12:57–13:22. Trilha: decisão do Felipe (17/11) registrada como documentação.
+
+**Contexto.** A validação do menu de destino com leitor de tela (task `3ea91f95-497e-812b-a108-fb89c94fa528`) achou que, no terminal, quem usa só o teclado não tem caminho até um link: o menu só nasce com o mouse sobre o link. A task deixou a escolha para o Felipe: uma task própria para desenhar o caminho pelo teclado, ou aceitar a limitação.
+
+**Decisão.** Felipe, em 17/11/2026: abrir um link do terminal só pelo teclado fica como limitação aceita (opção 2 da task). A opção 1 não foi aberta.
+
+**O que mudou.**
+- `app/src/features/canvas/inventory/data/terminal.ts`: lacuna nova no elemento "Ciclo do processo PTY no renderer" (dono `terminal-session-store.ts`), com a decisão e as linhas medidas: Ctrl/Cmd+clique em `:765-776`; hover em `:779-781`; clique direito e tecla de menu em `:1283-1292`; o handler de teclas do xterm em `:1052` não abre link. Risco médio; a task da decisão é a referência.
+- `docs/projeto/INVENTARIO-CANVAS.md`: regenerado com `npx vitest run src/features/canvas/inventory -u`. Lacunas de 229 para 230 (médio de 118 para 119) e tasks de 61 para 62.
+
+**Validação.** `npx vitest run src/features/canvas/inventory --testTimeout=60000`: 9 de 9. Sem o flag, dois testes do inventário estouram 5 s neste P: (medido: 9,5 s e 2,5 s; a linha de base sem a mudança já tinha 2 timeouts). Gate: `npm run lint` exit 0 (277 s); `npm run typecheck` exit 0 (66 s); `scripts/run-node-unit-tests.cjs`: 3463 de 3477 passam, 2 falham, 12 pulados; `npx vitest run`: 3655 de 3666 passam, 7 falham, 4 pulados, e nenhuma das falhas importa o inventário. A mudança não tem efeito visível: o app não importa o inventário, então não abri o app.
+
+**Não validado.** Leitor de tela real e toque com dedo em tela real seguem na task de origem. As falhas fora desta mudança estão no relatório da task e viraram pendências no Notion: timeouts de leitura de arquivos e falhas que só aparecem na suíte inteira.
+
+Estado: concluído (commit `266440ad` na branch; push e deploy pelo orquestrador).

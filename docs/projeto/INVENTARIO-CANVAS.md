@@ -32,7 +32,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **Elementos:** 102 (10 blocos, 16 ferramentas, 76 outras superfícies)
 - **Controles:** 398, dos quais 61 com teste específico
 - **Elementos sem nenhum teste:** 3
-- **Lacunas:** 229 (alto 4, médio 118, baixo 107), em 61 tasks
+- **Lacunas:** 230 (alto 4, médio 119, baixo 107), em 62 tasks
 
 ## Moldura do canvas
 
@@ -1297,6 +1297,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Falha do pty:write do texto inicial é engolida (.catch vazio). | médio | `3d791f95-497e-81cd-b05c-c9d6370c81a3` |
 | O erro de spawn só diz para verificar instalação e autenticação; o diagnóstico da CLI não aparece na interface. | baixo | `3e291f95-497e-8109-8851-e4ff2193c4db` |
 | O scrollback do xterm encolhe o histórico; não há arquivo em disco nem "carregar mais". | baixo | `3e991f95-497e-810b-9f94-ed5201606718` |
+| Limitação aceita (decisão do Felipe, 17/11/2026): quem usa só o teclado não abre um link do terminal. O menu de destino só abre com o mouse: Ctrl/Cmd+clique sobre o link (linkEvents.activate, terminal-session-store.ts:765-776) ou clique direito e tecla de menu, que só agem com um link sob o ponteiro (hoveredLink, terminal-session-store.ts:779-781 e 1283-1292). O handler de teclas do xterm (:1052) não abre link. | médio | `41b91f95-497e-81c9-b12f-edb0b8ed0b2d` |
 
 ### Provedor e carregamento do runtime de terminal
 
@@ -2962,3 +2963,4 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `41a91f95-497e-8182-b7f6-eeaf764195c5` — 1 lacuna
 - `41b91f95-497e-81c5-bc4d-c151f42dc82c` — 1 lacuna
 - `41b91f95-497e-81c7-88e6-c0660189bb80` — 1 lacuna
+- `41b91f95-497e-81c9-b12f-edb0b8ed0b2d` — 1 lacuna

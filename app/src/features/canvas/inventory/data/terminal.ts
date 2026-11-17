@@ -1266,6 +1266,11 @@ export const terminalSurfaces: InventoryElement[] = [
         risk: 'baixo',
         task: '3e991f95-497e-810b-9f94-ed5201606718',
       },
+      {
+        what: 'Limitação aceita (decisão do Felipe, 17/11/2026): quem usa só o teclado não abre um link do terminal. O menu de destino só abre com o mouse: Ctrl/Cmd+clique sobre o link (linkEvents.activate, terminal-session-store.ts:765-776) ou clique direito e tecla de menu, que só agem com um link sob o ponteiro (hoveredLink, terminal-session-store.ts:779-781 e 1283-1292). O handler de teclas do xterm (:1052) não abre link.',
+        risk: 'médio',
+        task: '41b91f95-497e-81c9-b12f-edb0b8ed0b2d',
+      },
     ],
     overlap: 'Não renderiza superfície própria: o elemento xterm é anexado ao cartão ou à gaveta (attach limpa o container antes, para não empilhar terminais).',
   },
