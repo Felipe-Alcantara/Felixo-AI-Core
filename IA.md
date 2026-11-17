@@ -3740,3 +3740,14 @@ Estado: concluído (deploy no adendo).
 **Feito.** `canRemoveAgentUsageAccount` em `agent-usage.ts` (`!account.ownLogin`); o `AccountRow` só desenha o botão quando ela é verdadeira. O guarda do `ensureDiscoveredAccounts` (id arquivado não é recriado) fica para os caminhos que ainda arquivam por id (`mergeAccountIds`); o comentário `shortcut:` foi reescrito. `GUIA-CONTAS-E-LIMITES.md` atualizado. Teste novo em `agent-usage.test.ts`: conta de perfil sem a ação, conta manual com ela.
 
 **Validação.** lint e typecheck limpos; `run-node-unit-tests` 3392 passam, 0 falham; `vitest` 3570 passam. App real (`felixo devtools`) não aberto.
+## 2026-11-17 — Canvas: a nota volta a ser papel claro nos três temas
+
+**Contexto.** No tema escuro (o padrão) o texto da nota saía quase preto (`#151515`) sobre o fundo escuro do cartão (`rgb(12,12,14)`), contraste perto de 1:1.
+
+**Causa.** `.felixo-canvas-card` (`index.css`, fora de camada) define `background: var(--f-surface-panel)` e vence o `bg-[#...]` do Tailwind em `note-colors.ts`. O texto seguia o papel claro, o fundo não.
+
+**O que mudou.**
+- `note-colors.ts`: o papel vai na variável `--note-paper` (`[--note-paper:#ede9e0]`, etc.) em vez de `bg-[#...]`; placeholder de `black/35` para `black/60`; comentário corrigido. As chaves de `NoteColor` não mudaram.
+- `index.css`: `.felixo-canvas-card-note { background: var(--note-paper) }`, depois da regra do cartão; removido o ajuste de placeholder do tema claro, que deixou de ser necessário. O painel de preview Markdown continua com a superfície do tema.
+
+**Validação.** `eslint .` e `tsc -b` limpos; `vitest`: 3569 passam, 4 pulados; testes Node passam (uma execução falhou sob carga e passou na repetição). Contraste calculado à mão: texto `#151515` sobre o papel ~14:1; placeholder preto a 60% ~5,5:1. **Não medido com `getComputedStyle`:** o `felixo devtools launch` não abriu o CDP nesta máquina (2 tentativas).

@@ -2099,6 +2099,10 @@
   color: var(--f-core-white-soft);
 }
 
+.felixo-canvas-card-note {
+  background: var(--note-paper);
+}
+
 .felixo-canvas-card-note .markdown-content {
   border: 1px solid rgb(var(--f-ink-warm-rgb) / 0.08);
   background: var(--f-core-graphite);
@@ -5577,14 +5581,8 @@
   color: #838388;
 }
 
-/* A nota usa a superfície do cartão (a regra .felixo-canvas-card vence o
-   `bg-[#...]` de note-colors.ts), então no claro ela é cartão claro com o texto
-   escuro de note-colors. Só o placeholder (preto a 35%, que o preto mais fraco
-   do claro deixaria quase invisível) e o anel das cores precisam de ajuda. */
-:root[data-theme='light'] .felixo-canvas-card-note textarea::placeholder {
-  color: var(--control-placeholder);
-}
-
+/* A nota é papel claro nos três temas (--note-paper, em note-colors.ts); só o
+   anel das bolinhas de cor precisa de ajuda no claro. */
 :root[data-theme='light'] .felixo-note-swatch {
   --tw-ring-color: rgb(20 20 22 / 0.28);
 }
