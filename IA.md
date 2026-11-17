@@ -3696,6 +3696,7 @@ Estado: concluído (deploy no adendo).
 
 **Validação.** `release-base.test.sh`: todos passam (antes, `release_listar` nem existia). Com `bash -e`, uma listagem que falha sempre não mata o shell. Workflow valida como YAML. Nenhum arquivo release-relevante foi tocado, então este commit não publica. Não validado em produção: depende do próximo push observar o log do gate.
 ## 2026-11-17 - Limites: remover conta com login próprio não derruba mais a lista
+## 2026-11-17 — Limites: remover conta com login próprio não derruba mais a lista
 
 **Contexto.** Achado na task do refresh por conta: "Remover" numa conta de perfil (login próprio) fazia o `removeAccount` lançar `UNIQUE constraint failed: agent_usage_accounts.id` e todo `list()` seguinte também, deixando o painel de Limites e o modal do chat sem carregar.
 
