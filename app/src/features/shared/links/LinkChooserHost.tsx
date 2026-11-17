@@ -403,7 +403,8 @@ function LinkChooserMenu({ request, onCopied }: MenuProps) {
             data-link-choice={entry.choice}
             // `any-pointer`, não `pointer`: num notebook com tela sensível o
             // ponteiro principal é o touchpad, e o dedo ficaria com o alvo fino.
-            className="felixo-btn-flat flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left hover:bg-white/10 focus-visible:bg-white/10 any-pointer-coarse:py-2.5"
+            // 44 px no toque (WCAG 2.5.5): com o padding de 10 px, o texto de 16 px dava 36.
+            className="felixo-btn-flat flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left hover:bg-white/10 focus-visible:bg-white/10 any-pointer-coarse:min-h-11"
           >
             <ChoiceIcon choice={entry.choice} destination={destination} />
             {entry.label}

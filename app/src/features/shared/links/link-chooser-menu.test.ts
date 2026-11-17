@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
 
 import {
@@ -252,5 +254,13 @@ describe('afterCamera', () => {
     const done = vi.fn()
     await afterCamera(Promise.reject(new Error('sem viewport')), () => undefined).then(done)
     expect(done).toHaveBeenCalledTimes(1)
+  })
+})
+
+/** A suíte roda sem DOM: a altura de toque fica travada na marca do JSX, como em `floating-layer.test.ts`. */
+describe('alvo de toque do menu', () => {
+  it('a escolha tem 44 px de altura quando o ponteiro é de toque', () => {
+    const host = readFileSync(fileURLToPath(new URL('./LinkChooserHost.tsx', import.meta.url)), 'utf8')
+    expect(host).toContain('any-pointer-coarse:min-h-11')
   })
 })

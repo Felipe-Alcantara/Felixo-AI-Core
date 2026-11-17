@@ -4358,3 +4358,25 @@ Task: Felixo AI Core/Canvas — parar de perder edição e estado em falhas de g
 **Não validado.** Nenhum painel ou bloco foi montado (o vitest do projeto roda em node, sem renderizador): o flush de Notas/Prompts, o confirm do detalhe, a faixa do bloco e a barra de status não foram vistos rodando; o app não foi aberto.
 
 Estado: concluído com ressalvas (commit na branch; deploy pelo orquestrador).
+
+---
+
+## 2026-11-17 — Links: alvo de toque do menu de destino com 44 px; leitor e toque reais seguem pendentes
+
+Task: Felixo AI Core/Links — validar o menu de destino com leitor de tela e tela sensível ao toque reais (Notion `3ea91f95-497e-812b-a108-fb89c94fa528`). Agente: subagente da Orquestração (Claude Code, Claude Haiku 5.5, effort max), 12:24–12:45. Trilha manual; estado MANUAL.
+
+**Contexto.** O menu "para onde abrir" (navegador, Página Web ou copiar) serve o terminal, o Markdown e o bloco Página Web. Até aqui ele só foi testado por automação: sem NVDA, Orca ou VoiceOver e sem dedo numa tela de toque. Leitor e toque reais são passo humano; o que dá para provar daqui foi medido.
+
+**O que mudou.**
+- `LinkChooserHost.tsx`: a escolha do menu usa `any-pointer-coarse:min-h-11` no lugar de `any-pointer-coarse:py-2.5`. No toque, a escolha ia a 36 px (texto de 16 px e 10 px de padding em cima e embaixo); agora tem 44 px (WCAG 2.5.5). Com o mouse segue em 28 px.
+- `link-chooser-menu.test.ts`: trava de que o JSX mantém a altura de toque (a suíte roda sem DOM, como em `floating-layer.test.ts`).
+
+**Validação.**
+- App vivo (`devtools launch --timeout 120000`, perfil isolado, janela invisível, toque emulado pelo CDP): escolhas com 44 px no toque e 28 px no mouse; foco no primeiro item ao abrir (clique e Enter); setas e End andam; Esc fecha e devolve o foco ao link. `devtools quit` encerrou a sessão.
+- Réplica do menu com o CSS compilado do repo, no Chromium: 36 px antes, 44 px depois.
+- Árvore de acessibilidade do app: o `menu` "Abrir link" tem a descrição com o destino; os três `menuitem` não têm descrição.
+- `vitest src/features/shared/links`: 5 arquivos, 95 testes verdes. Lint e typecheck limpos. Testes Node: 3469, com 3457 passando e 0 falhando. Vitest inteiro: 3639 passam; 1 falha em `canvas-inventory.test.ts` (`ClaudeApiNode.tsx`: 6 controles no código e 5 no inventário, desde d4b2913). Fora desta mudança.
+
+**Não validado.** Leitor de tela real e toque com dedo em tela real. Se o NVDA não ler o destino ao cair no primeiro item (a descrição está só no menu), a correção é `aria-describedby` em cada escolha. No terminal, sem a tecla de menu e sem o hover não há caminho de teclado até o link: decisão pendente no Notion.
+
+Estado: MANUAL (roteiro no relatório e no corpo da task). Commit na branch `orq/links-validar-menu-destino-com`; push e deploy pelo orquestrador.
