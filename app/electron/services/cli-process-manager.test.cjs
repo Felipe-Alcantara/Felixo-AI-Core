@@ -8,6 +8,7 @@ const { getManagedCliLayout } = require('../core/managed-cli-paths.cjs')
 const {
   CLI_PATH_ORIGINS,
   CliProcessManager,
+  createAccountCliEnv,
   createCliEnv,
   describeCliPath,
 } = require('./cli-process-manager.cjs')
@@ -226,3 +227,10 @@ function onceCloseAny(childProcess) {
     childProcess.once('close', resolve)
   })
 }
+
+test('todo ambiente de CLI desliga a autoatualização do Claude, com ou sem conta', () => {
+  assert.equal(createCliEnv({ PATH: '/usr/bin' }).DISABLE_AUTOUPDATER, '1')
+  assert.equal(createCliEnv({ PATH: '/usr/bin', DISABLE_AUTOUPDATER: '0' }).DISABLE_AUTOUPDATER, '1')
+  assert.equal(createAccountCliEnv({ providerId: 'claude', profileEnv: { CLAUDE_CONFIG_DIR: '/x' } }).DISABLE_AUTOUPDATER, '1')
+  assert.equal(createAccountCliEnv({ providerId: 'claude' }).DISABLE_AUTOUPDATER, '1')
+})

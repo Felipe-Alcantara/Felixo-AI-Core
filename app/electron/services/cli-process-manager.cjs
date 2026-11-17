@@ -184,6 +184,12 @@ function createCliEnv(baseEnv = process.env) {
     nextEnv.PATH = nextPath
   }
 
+  // O Claude Code instala a versão nova sozinha (`npm install -g` em segundo
+  // plano, medido em 17/11/2026) e fechar o terminal no meio corta a
+  // instalação. Quem atualiza as CLIs é o app. `DISABLE_AUTOUPDATER` não barra
+  // o `claude update` manual, ao contrário de `DISABLE_UPDATES`.
+  nextEnv.DISABLE_AUTOUPDATER = '1'
+
   return nextEnv
 }
 

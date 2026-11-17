@@ -4261,3 +4261,17 @@ Task: conserto da main, CI vermelho nos três SOs desde d2d55a1 (sem task no Not
 **Não validado.** Clique real no app (mudança só de inventário, sem efeito visível). `npm run build`, que o CI roda, não foi executado localmente.
 
 Estado: concluído (commit `0ad0fce` na branch `orq/fix-inventario-claude-api`; push e deploy pelo orquestrador).
+
+---
+
+## 2026-11-17 — CLIs: o Claude aberto pelo app deixa de se atualizar sozinho
+
+**Contexto.** Duas instalações de CLI apareceram cortadas no meio da extração. A task pedia medir se o Claude e o Codex abertos no terminal do Felixo se atualizam sozinhos.
+
+**Medição (npm falso na frente do PATH, binário copiado, config isolada, nenhum prompt, nada gasto).** O Claude Code 2.1.311/2.1.326 roda, cerca de 10 s depois de abrir, `npm view ...@latest version` e `npm install -g ...@<versão>` com o primeiro `npm` do PATH, sem prefixo, na pasta pessoal. O destino é o prefixo global desse npm (a cópia do sistema), não a pasta gerenciada; fechar o terminal no meio corta a instalação. `DISABLE_AUTOUPDATER=1` e `DISABLE_UPDATES=1` impedem até o `npm view`. O Codex não instala sozinho: só pergunta ("Update now") e instala se a pessoa escolher.
+
+**Decisão do Felipe.** Desligar em todos os terminais do Felixo. Usei só `DISABLE_AUTOUPDATER`, porque `DISABLE_UPDATES` também barraria o `claude update` manual.
+
+**O que mudou.** `createCliEnv` (`electron/services/cli-process-manager.cjs`) define `DISABLE_AUTOUPDATER=1`. Todo ambiente de CLI parte dele (`createAccountCliEnv`): o PTY do canvas, as sessões sem terminal e os processos auxiliares (uso, status, modelos). O Codex ficou como está. Teste novo em `cli-process-manager.test.cjs` prova o valor no ambiente padrão, com `DISABLE_AUTOUPDATER=0` herdado e com conta própria.
+
+**Validação.** lint e typecheck limpos; `run-node-unit-tests` 3454 de 3466 passando (0 falhas, o resto são testes pulados); vitest 3613 passando e 2 falhas alheias: `canvas-inventory.test.ts` (ClaudeApiNode.tsx tem 6 controles e o inventário 5) e o E2E de contexto do canvas, que passou isolado.
