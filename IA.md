@@ -4135,3 +4135,11 @@ Task: Felixo AI Core/MCP — instalar um MCP uma vez no app e entregá-lo a todo
 **Não feito / não validado.** Sem interface nem IPC para cadastrar; `mcpIds` no `AgentPreset` e seletor; entrega ao Gemini (pasta-sombra por `GEMINI_CLI_HOME`, medição pendente); importação do que já existe; "usar também fora do AI Core"; política de ferramentas que agem fora em yolo; OAuth remoto; `felixo mcp executar` (hoje os dois levam o segredo no ambiente do terminal). Precedência do `--mcp-config` do Claude e do `-c` do Codex sobre nome já existente e o quoting do `-c` sob o PowerShell do Windows não foram medidos.
 
 Estado: parcial, concluído nesta fatia (commit na branch; deploy pelo orquestrador).
+
+---
+
+## 2026-11-17 — Limites: a rodada completa não abre a consulta do login do sistema quando nenhuma conta a recebe
+
+- **Contexto:** com só contas de perfil (login próprio), `refreshInternal` abria, além das consultas dos perfis, uma consulta do login do sistema por provider. `saveSnapshot` descarta a amostra do sistema quando todas as contas do provider são de perfil, então era uma CLI aberta (no Claude, um PTY de `/status`) sem efeito.
+- **O que mudou:** `providerIds` em `agent-usage-service.cjs` só inclui providers com pelo menos uma conta que não é de perfil ("Conta desta máquina" ou cadastrada à mão). O catálogo vem de `readCatalog` (antes de `providerIds`), não da consulta do sistema; `refreshLocal` não muda.
+- **Validação:** `agent-usage-refresh-account.test.cjs` 15/15 (só perfis: 3 consultas; com a conta da máquina: 3 + `sistema`); trocar o filtro por `() => true` derruba 2 testes. Node 3432 pass/0 fail; vitest 3611 pass; lint e typecheck limpos.

@@ -286,11 +286,18 @@ function createAgentUsageService({
       now,
       profiles: listProfiles(),
     })
+    const perfis = listProfiles()
+    const idsDePerfil = new Set(perfis.map((perfil) => perfil.id))
+    // A consulta do login do sistema só existe para quem recebe a amostra: uma
+    // conta que não é de perfil. Só com perfis, ela abriria uma CLI sem destino.
     const providerIds = [
-      ...new Set(accounts.map((account) => account.providerId)),
+      ...new Set(
+        accounts
+          .filter((account) => !idsDePerfil.has(account.id))
+          .map((account) => account.providerId),
+      ),
     ]
 
-    const perfis = listProfiles()
     const consultas = [
       ...providerIds.map((providerId) => ({ providerId })),
       // A conta com login próprio não precisa de adivinhação de identidade: a

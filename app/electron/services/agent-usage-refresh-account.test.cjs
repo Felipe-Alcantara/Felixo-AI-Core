@@ -100,8 +100,8 @@ test(
 
     try {
       const cheio = await service.refresh()
-      // Três perfis mais a consulta do login do sistema, que a rodada completa abre por provider.
-      assert.deepEqual([...chamadas.consulta].sort(), ['codex-a', 'codex-b', 'codex-c', 'sistema'])
+      // Só perfis: ninguém recebe a leitura do login do sistema, então a rodada completa não a abre.
+      assert.deepEqual([...chamadas.consulta].sort(), ['codex-a', 'codex-b', 'codex-c'])
       const antes = idsDeAmostra(cheio, ['codex-a', 'codex-b', 'codex-c'])
 
       zerar()
@@ -183,6 +183,21 @@ test(
       assert.equal(b.latestSample.id, antes['codex-b'], 'a vizinha boa continua com a leitura que tinha')
       assert.equal(c.latestSample.id, antes['codex-c'], 'a deslogada continua deslogada: ninguém tentou entrar por ela')
       assert.equal(c.availability.state, 'auth-required')
+    } finally {
+      limpar()
+    }
+  },
+)
+
+test(
+  'a rodada completa com a conta desta máquina abre a consulta do login do sistema além das dos perfis',
+  COM_SQLITE,
+  async () => {
+    const { service, chamadas, limpar } = criarMundo({ comMaquina: true })
+
+    try {
+      await service.refresh()
+      assert.deepEqual([...chamadas.consulta].sort(), ['codex-a', 'codex-b', 'codex-c', 'sistema'])
     } finally {
       limpar()
     }
@@ -301,12 +316,12 @@ test(
       await service.list()
       const cheia = service.refresh()
       const individual = service.refreshAccount('codex-a')
-      await aguardar(() => chamadas.consulta.length >= 4, 'a rodada completa nunca abriu as consultas (3 perfis e o login do sistema)')
+      await aguardar(() => chamadas.consulta.length >= 3, 'a rodada completa nunca abriu as consultas (3 perfis)')
 
       segura.liberar()
       await Promise.all([cheia, individual])
 
-      assert.equal(chamadas.consulta.length, 4, 'a rodada completa já lia a conta: nenhuma consulta a mais')
+      assert.equal(chamadas.consulta.length, 3, 'a rodada completa já lia a conta: nenhuma consulta a mais')
     } finally {
       limpar()
     }
