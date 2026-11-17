@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { NodeResizer, useReactFlow, type NodeProps } from '@xyflow/react'
 import { KeyRound, Loader2, Send, ShieldAlert, Square, Wrench, X } from 'lucide-react'
+import { claudeApiCostNotice } from '../services/claude-api-cost-notice'
 import { NODE_MIN_SIZE } from '../services/node-geometry'
 import { claudeApiConversations } from '../services/claude-api-conversation-store'
 import {
@@ -338,6 +339,10 @@ function ClaudeApiNodeComponent({ id, data, selected }: NodeProps) {
   }, [])
 
   const busy = conversation.status !== 'idle'
+  const [noticeVersion, setNoticeVersion] = useState(0)
+  const [rememberCost, setRememberCost] = useState(false)
+  const accountForNotice = nodeData.apiAccountId ?? ''
+  const showCostNotice = Boolean(accountForNotice) && noticeVersion >= 0 && claudeApiCostNotice.needed(id, accountForNotice)
   const ready = Boolean(nodeData.apiAccountId) && Boolean(nodeData.apiCwd)
 
   const submit = (text: string, images: ClaudeApiAttachment[] = []) => {
@@ -496,9 +501,31 @@ function ClaudeApiNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
 
+      {showCostNotice && (
+        <div role="alert" className="nodrag flex flex-col gap-1.5 border-t border-amber-500/60 p-2 text-[11px]">
+          <p>
+            Esta conta usa chave de API e é cobrada por token a cada mensagem. O gasto da conversa aparece no topo
+            do bloco, atualizado a cada resposta. Não há teto: acompanhe o valor.
+          </p>
+          <label className="flex items-center gap-1.5">
+            <input type="checkbox" checked={rememberCost} onChange={(event) => setRememberCost(event.target.checked)} />
+            Não perguntar de novo para esta conta
+          </label>
+          <button
+            type="button"
+            className={`${BUTTON} felixo-primary-action self-start`}
+            onClick={() => {
+              claudeApiCostNotice.acknowledge(id, accountForNotice, rememberCost)
+              setNoticeVersion((value) => value + 1)
+            }}
+          >
+            Entendi, continuar
+          </button>
+        </div>
+      )}
       <Composer
         busy={busy}
-        ready={ready}
+        ready={ready && !showCostNotice}
         hasAccount={Boolean(nodeData.apiAccountId)}
         onSubmit={submitRef}
         onInterrupt={interruptRef}

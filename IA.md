@@ -4152,3 +4152,21 @@ Estado: parcial, concluído nesta fatia (commit na branch; deploy pelo orquestra
 - **Motivo:** os dois adaptadores respondiam em formato que a CLI real não aceita. Codex: `{decision:'approved'|'denied'}` é o vocabulário v1 (`ExecCommandApproval`); os pedidos `item/commandExecution|fileChange/requestApproval` esperam `accept`/`decline`, e `item/permissions/requestApproval` espera `{permissions, scope}`. Gemini: a opção do ACP traz `optionId` (o adaptador lia `id`) e a resposta é `{outcome:{outcome:'selected', optionId}}` (o adaptador mandava `outcome` plano). Com a confirmação ligada, "Permitir" e "Negar" não funcionariam de verdade; testes com adaptador falso não pegavam porque as fixtures repetiam o formato errado.
 - **O que mudou:** `codex-app-server-adapter.cjs` responde `accept`/`decline` (comando e arquivo) e, na permissão extra, devolve o perfil pedido (permitir) ou `{}` (negar), `scope: 'turn'`. `gemini-acp-adapter.cjs` lê `optionId` (com `id` de reserva, padrão `proceed_once`) e aninha o `outcome`. Fixtures e testes passaram ao formato real; teste novo para a permissão extra do Codex.
 - **Validação:** testes dos dois adaptadores e dos agentes falsos passam (38 e 25). Nenhuma CLI real rodou; o roteiro de conferência real (custo esperado) está no relatório da task.
+
+---
+
+## 2026-11-17 — Custo: o bloco Claude API avisa que a conta por chave cobra por token, uma vez ao abrir
+
+**Problema.** O bloco Claude API roda com uma conta por chave, cobrada por token a cada mensagem, e só mostrava o custo depois de cada resposta. Imagem e ditado já pediam um "sim" antes de cobrar; este bloco não.
+
+**Decisão do Felipe.** Aviso ao abrir o bloco, uma vez por conta, com "não perguntar de novo"; gasto da conversa sempre visível; sem teto por conversa (confirmação por mensagem foi descartada pelo atrito).
+
+**O que mudou.**
+- `services/claude-api-cost-notice.ts` (`createClaudeApiCostNotice`): decide se o aviso é necessário. Ler o aviso vale enquanto o bloco está aberto; "não perguntar de novo" usa o registro comum `felixo:cost-consent` com a chave `claude-api:<conta>` (`claudeApiCostConsentKey` em `usage-cost-consent.ts`), por conta, em qualquer bloco.
+- `ClaudeApiNode`: faixa de aviso acima do campo de mensagem, com caixa "Não perguntar de novo para esta conta" e botão "Entendi, continuar"; enquanto o aviso está aberto o envio fica desabilitado. O gasto da conversa (`formatUsd(totalCostUsd)`) já ficava sempre no cabeçalho, mesmo zerado.
+
+**Validação.** `claude-api-cost-notice.test.ts` (4 testes: aviso na primeira abertura por conta, ler vale por bloco, "não perguntar de novo" gravado e valendo após reabrir só para aquela conta, gasto sempre exibido) e `usage-cost-consent.test.ts`: 7/7. Gate completo no relatório.
+
+**Não validado.** Clique real no app. Sem preço por modelo: o repositório não tem tabela, então o aviso mostra só o custo em dólar que o Claude Code informa a cada resposta (nada é estimado antes da primeira). Sem teto de gasto, por decisão do Felipe.
+
+Estado: concluído (commit na branch; deploy pelo orquestrador).

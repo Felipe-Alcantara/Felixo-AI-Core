@@ -54,3 +54,6 @@ export function createCostConsent(storage: () => KeyValueStorage | undefined): C
 }
 
 export const costConsent = createCostConsent(() => (typeof window === 'undefined' ? undefined : window.localStorage))
+
+/** Claude API: a conta por chave é cobrada por token; o aviso vale por conta. */
+export const claudeApiCostConsentKey = (accountId: string) => `claude-api:${accountId}`
