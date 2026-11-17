@@ -45,6 +45,41 @@ test('serviço Notion devolve cache quando a sincronização falha e sinaliza st
   assert.equal(cache.error, 'Sem internet')
 })
 
+test('reabrir sem rede: lista as databases com snapshot (só da conexão) e abre a tarefa salva', () =>
+  withRealCache(async (cache) => {
+    let offline = false
+    const tarefa = { id: 'page-1', title: 'Salva', completed: false, fields: {} }
+    const service = createNotionService({
+      connectionStore: fakeStore(),
+      cacheRepository: cache,
+      clientFactory: () => ({
+        resolveDataSource: async () => {
+          if (offline) throw new Error('proxy morto')
+          return { id: 'source-1', title: [{ plain_text: 'Tarefas HOME' }], properties: {} }
+        },
+        queryTasks: async () => ({ tasks: [tarefa], nextCursor: null }),
+        listAccessibleDataSources: async () => { throw new Error('proxy morto') },
+      }),
+      now: () => '2026-09-10T12:00:00.000Z',
+    })
+    // Snapshot de outra conexão não pode aparecer.
+    cache.replaceSnapshot({ connectionId: 'outra', dataSourceId: 'source-x', tasks: [tarefa], fetchedAt: '2026-09-10T11:00:00.000Z' })
+
+    await assert.rejects(service.listDatabases({ connectionId: 'connection-1' }), /proxy morto/)
+
+    await service.listTasks({ connectionId: 'connection-1', dataSourceId: 'source-1' })
+    offline = true
+
+    const dbs = await service.listDatabases({ connectionId: 'connection-1' })
+    assert.equal(dbs.stale, true)
+    assert.deepEqual(dbs.databases.map((d) => [d.id, d.name, d.fetchedAt]), [['source-1', 'Tarefas HOME', '2026-09-10T12:00:00.000Z']])
+    assert.equal((await service.listDatabases({ connectionId: 'connection-1', query: 'zzz' })).databases.length, 0)
+
+    const lista = await service.listTasks({ connectionId: 'connection-1', dataSourceId: 'source-1' })
+    assert.equal(lista.stale, true)
+    assert.deepEqual(lista.tasks, [tarefa])
+  }))
+
 test('listTasks sinaliza syncStatus:success quando a rede responde', async () => {
   const cache = fakeCache({ tasks: [], schema: {}, fetchedAt: null })
   const service = createNotionService({

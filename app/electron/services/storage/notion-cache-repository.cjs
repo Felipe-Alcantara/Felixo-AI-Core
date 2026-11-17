@@ -92,6 +92,31 @@ function createNotionCacheRepository(database) {
     return readSnapshot(key)
   }
 
+  // Guarda o nome da database ao lado do snapshot (upsertState não mexe nele).
+  function setName({ connectionId, dataSourceId, name }) {
+    const key = normalizeKey(connectionId, dataSourceId)
+    if (typeof name !== 'string' || !name.trim()) return
+    connection
+      .prepare('UPDATE notion_sync_state SET name = ? WHERE connection_id = ? AND data_source_id = ?')
+      .run(name.trim().slice(0, 200), key.connectionId, key.dataSourceId)
+  }
+
+  // Databases com snapshot desta conexão (nunca mistura conexões), da mais recente à mais antiga.
+  function listSnapshots({ connectionId }) {
+    const id = normalizeId(connectionId, 'connection')
+    return connection
+      .prepare(
+        `SELECT s.data_source_id, s.name, s.fetched_at
+           FROM notion_sync_state s
+          WHERE s.connection_id = ?
+            AND EXISTS (SELECT 1 FROM notion_task_cache t
+                         WHERE t.connection_id = s.connection_id AND t.data_source_id = s.data_source_id)
+          ORDER BY s.fetched_at DESC`,
+      )
+      .all(id)
+      .map((row) => ({ dataSourceId: row.data_source_id, name: row.name || null, fetchedAt: row.fetched_at || null }))
+  }
+
   function upsertTask({ connectionId, dataSourceId, task, schema = {}, fetchedAt }) {
     const key = normalizeKey(connectionId, dataSourceId)
     if (!task || typeof task.id !== 'string' || !task.id.trim()) {
@@ -192,9 +217,11 @@ function createNotionCacheRepository(database) {
     clear,
     clearConnection,
     deleteTask,
+    listSnapshots,
     markSyncError,
     readSnapshot,
     replaceSnapshot,
+    setName,
     upsertTask,
   }
 }

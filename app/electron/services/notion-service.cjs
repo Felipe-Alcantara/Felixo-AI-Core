@@ -60,9 +60,37 @@ function createNotionService({
   }
 
   async function listDatabases({ connectionId, query = '' } = {}) {
-    const items = await clientFor(connectionId).listAccessibleDataSources(query)
-    return {
-      databases: items.filter(Boolean),
+    const client = clientFor(connectionId)
+    try {
+      const items = await client.listAccessibleDataSources(query)
+      return {
+        databases: items.filter(Boolean),
+      }
+    } catch (error) {
+      // Sem rede: oferece as databases desta conexão que já têm snapshot salvo.
+      const needle = String(query || '').trim().toLocaleLowerCase()
+      let snapshots = []
+      try {
+        snapshots = cacheRepository.listSnapshots({ connectionId })
+      } catch {
+        // Cache indisponível não esconde o erro útil do Notion.
+      }
+      const databases = snapshots
+        .map((item) => ({
+          id: item.dataSourceId,
+          name: item.name || 'Database sincronizada',
+          databaseId: null,
+          url: null,
+          lastEditedAt: null,
+          fetchedAt: item.fetchedAt,
+        }))
+        .filter((item) => !needle || item.name.toLocaleLowerCase().includes(needle))
+      if (snapshots.length === 0) throw error
+      return {
+        databases,
+        stale: true,
+        message: 'Sem conexão com o Notion: mostrando as databases com snapshot salvo.',
+      }
     }
   }
 
@@ -127,6 +155,15 @@ function createNotionService({
         tasks: result.tasks,
         fetchedAt,
       })
+      try {
+        cacheRepository.setName({
+          connectionId,
+          dataSourceId: source.id || sourceId,
+          name: readTitle(source.title || source.name),
+        })
+      } catch {
+        // O nome só enfeita a lista offline; não derruba a sincronização.
+      }
 
       return {
         tasks: filterTasks(result.tasks, { search, status }),

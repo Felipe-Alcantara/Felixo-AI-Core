@@ -391,6 +391,7 @@ export function NotionTasksPanel({
     const nextDatabases = result.databases || []
     setDatabases(nextDatabases)
     setDataSourceId((current) => keepIfListed(current, nextDatabases))
+    if (result.stale && result.message) setMessage(result.message)
   }, [api, connectionId, databaseQuery])
 
   useEffect(() => {
@@ -973,7 +974,7 @@ export function NotionTasksPanel({
                 <FelixoSelect
                   className="min-w-0 max-w-136 flex-1"
                   value={dataSourceId}
-                  options={databases.map((database) => ({ value: database.id, label: database.name }))}
+                  options={databases.map((database) => ({ value: database.id, label: database.fetchedAt ? `${database.name} · sincronizada ${formatDate(database.fetchedAt)}` : database.name }))}
                   onChange={setDataSourceId}
                   placeholder="Selecione uma database"
                   searchable={databases.length > 8}

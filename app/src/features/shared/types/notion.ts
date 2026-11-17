@@ -14,6 +14,8 @@ export type NotionDatabase = {
   databaseId: string | null
   url: string | null
   lastEditedAt: string | null
+  /** Só na lista offline: quando o snapshot local foi sincronizado. */
+  fetchedAt?: string | null
 }
 
 export type NotionSchemaProperty = {
@@ -49,6 +51,8 @@ export type NotionDatabaseResult = {
   ok: boolean
   message?: string
   databases?: NotionDatabase[]
+  /** Lista vinda do cache local, porque o Notion não respondeu. */
+  stale?: boolean
 }
 
 /**
