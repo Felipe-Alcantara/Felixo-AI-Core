@@ -4037,3 +4037,29 @@ Task: Felixo AI Core/Agentes — fazer a descoberta de modelos rodar no Windows 
 **Não validado.** Abrir o app de verdade no Windows com o Claude respondendo ao `/model` (o `claude -p "/model"` não foi executado para não arriscar uso); o `.ps1` do Claude só tem teste de resolução por injeção, não execução real.
 
 Estado: concluído (commit na branch; deploy pelo orquestrador).
+
+---
+
+## 2026-11-17 — Limites: captura do consumo de cada terminal do Claude, por sessão e sem digitar no terminal (1ª parte)
+
+Task: Felixo AI Core/Limites — capturar, por sessão e sem digitar no terminal, o consumo de cada agente aberto e a janela da conta dele (Notion `3fa91f95-497e-81ad-a876-ec56a37b3b53`). Entrega a primeira parte coesa (Claude); Codex, Gemini e o cabeçalho ficam como pendências.
+
+**Problema.** A status line do app só rodava se a pessoa a instalasse no `~/.claude/settings.json`, gravava um arquivo único sem sessão nem conta, e com duas contas do Claude (`pickLocalTarget`) a leitura era jogada fora. Perfil com `CLAUDE_CONFIG_DIR` nunca era capturado, e nada guardava o consumo por terminal.
+
+**Feito.**
+- **Lançamento:** `PtyProcessManager.withClaudeSessionCapture` acrescenta `--settings <userData>/claude-statusline/session-settings.json` (antes dos argumentos, fora de `entry.args`) e `FELIXO_PTY_SESSION_ID` ao ambiente de todo terminal do Claude. Não age se a pessoa já passou `--settings`, se o ID não cabe em nome de arquivo ou se o preparo falha.
+- **Script (`claude-statusline-script.cjs`):** com o ID no ambiente grava `sessions/<id>.json` (temporário + renomear) só com lista branca; chama a status line da pessoa (`CLAUDE_CONFIG_DIR` ou `~/.claude`) e mostra a saída dela. Sem o ID, comportamento antigo. Script de terminal próprio (`felixo-session-statusline.cjs`), para desligar a coleta global não apagar o de terminais vivos.
+- **`agent-usage-session-capture.cjs` (novo):** `stat` por segundo por terminal vivo do Claude, leitura só quando o `mtime`/tamanho muda, validação dos campos, mapa em memória por ID do terminal, lote `{ changed, removed }` e limpeza do arquivo ao fechar (e das sobras na partida).
+- **Conta:** `refreshLocal(providerId, { reading, accountId })` grava a janela na conta do terminal (sem adivinhar identidade) e ignora leitura mais velha que a última medição da conta. Terminal sem conta segue a regra antiga (conta única).
+- **IPC:** `agent-usage:sessions` e `agent-usage:session-changed`; `window.felixo.agentUsage.listSessions` e `onSessionsChanged`; tipo `AgentUsageSessionReading`.
+- **Docs:** `GUIA-CONTAS-E-LIMITES.md`, `INVENTARIO-CANVAS.md`.
+
+**Revisão: o argumento chega inteiro no Windows.** Teste nativo novo (`pty-claude-settings-launch.integration.test.cjs`, no `test:native`): ConPTY real, `claude.cmd` falso numa pasta com espaço e acento, `settingsPath` também com espaço e acento, lançado pelo `PtyProcessManager`. O falso grava o `argv`: `['--settings', <caminho exato>, '--model', 'opus', 'com espaço', 'ação']` e o ID do terminal no ambiente. Passa sem mexer nas aspas. Na primeira rodada o `claude` do PATH (o real) foi o que abriu e recusou só porque o arquivo não existia, citando o caminho acentuado inteiro: o argumento chegou íntegro ao Claude de verdade também.
+
+**Custo da status line por atualização** (script real, 20 rodadas, Windows): `node` vazio 62 ms (p50); script do app sozinho 66 ms (p90 98); script do app chamando a status line da pessoa (outro `node` por um shell) 231 ms (p90 400). O Claude roda a status line depois de cada mensagem do assistente (debounce de 300 ms), não por token; com 10 terminais respondendo são dezenas de execuções curtas por minuto, em processo separado, fora do processo principal do app.
+
+**Decisão do agente.** Status line da pessoa: o script do app chama a dela (a opção recomendada pela task).
+
+**Validação.** `test:native`: o teste novo passa; `pty-write-queue` oscila por tempo sob carga (também na `main`). Testes novos: captura (5, incluindo o script real com caminho com espaço, lista branca sem caminho/título, atômico e a status line da pessoa), terminal (2), serviço (1), IPC (1). Gate: lint e typecheck limpos; `run-node-unit-tests` 3404 passam, 0 falham; vitest 3571 passam, 2 do `deferred-terminal-session-store` falham só sob carga e passam isolados.
+
+**Não validado.** Claude real com `--settings` num perfil de conta (não abri sessão que gasta uso); CPU com 10 agentes; macOS e Linux; o app rodando.

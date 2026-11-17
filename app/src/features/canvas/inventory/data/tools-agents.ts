@@ -261,7 +261,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
     ],
     persistence: [
       'processo principal: SQLite agent_usage_accounts e agent_usage_samples (contas extras e amostras de uso; até 200 amostras por conta e sempre a última com métrica, podadas a cada gravação e no boot)',
-      '~/.claude/settings.json: statusLine do app ao ligar a coleta, com backup da anterior; script e captura em userData/claude-statusline',
+      '~/.claude/settings.json: statusLine do app ao ligar a coleta, com backup da anterior; script e captura em userData/claude-statusline (captura por terminal em sessions/<id>.json, apagada quando o terminal fecha)',
       'nenhuma preferência salva: timer e backoff vivem em memória no processo principal; aba e filtro são estado do componente (o filtro volta vazio ao reabrir)',
     ],
     ipc: [
@@ -276,6 +276,8 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
       'agent-usage:disable-claude-statusline',
       'agent-usage:changed',
       'agent-usage:account-changed',
+      'agent-usage:sessions',
+      'agent-usage:session-changed',
       'agent-usage:scheduler-state',
     ],
     dependsOn: [
