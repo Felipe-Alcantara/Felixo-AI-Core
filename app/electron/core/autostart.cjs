@@ -30,7 +30,7 @@ const LINUX_DESKTOP_FILE_APP_ID = 'felixo-ai-core'
  * essa cópia e o "iniciar com o sistema" gravou o caminho dela. `%TEMP%` é
  * esvaziado pelo Sensor de Armazenamento sem aviso — app e item de login
  * sumiriam juntos. Os dois lados passam por `realpathSync.native` porque o
- * Windows devolve `os.tmpdir()` com nome curto 8.3 (`FELIPE~1`) e o exe com
+ * Windows devolve `os.tmpdir()` com nome curto 8.3 (`PESSOA~1`) e o exe com
  * o nome longo: comparar texto cru nunca casaria.
  *
  * @param {string} execPath

@@ -36,7 +36,7 @@ function detectOnWindows({ resolved = {}, execute }) {
 
 describe('detectCli — registro de tentativas e motivo', () => {
   it('shim .cmd em caminho com espaço roda via shell e fica registrado', async () => {
-    const shim = 'C:\\Users\\Felipe Martins\\AppData\\Roaming\\npm\\claude.cmd'
+    const shim = 'C:\\Users\\Pessoa Exemplo\\AppData\\Roaming\\npm\\claude.cmd'
     const result = await detectOnWindows({
       resolved: { 'claude.cmd': shim },
       execute: async (command) => {
@@ -303,7 +303,7 @@ describe('buildCliDiagnosis', () => {
       detection: failed(FAILURE_REASONS.PERMISSION, [
         { command: 'claude', resolvedPath: '/home/carlos/.npm-global/bin/claude', viaShell: false, outcome: 'failed', reason: FAILURE_REASONS.PERMISSION },
       ]),
-      context: { platformName: 'linux', arch: 'x64', appVersion: '0.1.400', homeDir: '/home/felipe' },
+      context: { platformName: 'linux', arch: 'x64', appVersion: '0.1.400', homeDir: '/home/pessoa' },
     })
 
     assert.equal(JSON.stringify(diagnosis).includes('carlos'), false)
@@ -327,11 +327,11 @@ describe('redactDiagnosticText / minimizePaths', () => {
   })
 
   it('troca o home por ~ com espaço no nome e barras mistas', () => {
-    const text = minimizePaths('C:/Users/Felipe Martins/AppData e C:\\Users\\Felipe Martins\\x', {
-      homeDir: 'C:\\Users\\Felipe Martins',
+    const text = minimizePaths('C:/Users/Pessoa Exemplo/AppData e C:\\Users\\Pessoa Exemplo\\x', {
+      homeDir: 'C:\\Users\\Pessoa Exemplo',
     })
 
-    assert.equal(text.includes('Felipe Martins'), false)
+    assert.equal(text.includes('Pessoa Exemplo'), false)
     assert.equal(text, '~/AppData e ~\\x')
   })
 

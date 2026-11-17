@@ -11,10 +11,10 @@ function file(name: string): File {
 
 describe('arquivos arrastados para o terminal', () => {
   it('resolve arquivos comuns e diretórios pela ponte sem ler conteúdo', () => {
-    const resolver = vi.fn((item: File) => `/home/felipe/${item.name}`)
+    const resolver = vi.fn((item: File) => `/home/pessoa/${item.name}`)
 
     expect(resolveDroppedFilePaths([file('foto.png'), file('projeto')], resolver)).toEqual({
-      paths: ['/home/felipe/foto.png', '/home/felipe/projeto'],
+      paths: ['/home/pessoa/foto.png', '/home/pessoa/projeto'],
       missingCount: 0,
     })
     expect(resolver).toHaveBeenCalledTimes(2)

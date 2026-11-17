@@ -14,8 +14,8 @@ describe('findLastEditedFile', () => {
       '--- conteúdo do arquivo aqui ---',
     ].join('\n')
 
-    expect(findLastEditedFile(transcript, '/home/felipe/blog')).toEqual({
-      path: '/home/felipe/blog/ola-mundo.md',
+    expect(findLastEditedFile(transcript, '/home/pessoa/blog')).toEqual({
+      path: '/home/pessoa/blog/ola-mundo.md',
       name: 'ola-mundo.md',
     })
   })
@@ -60,8 +60,8 @@ describe('findLastEditedFile', () => {
       '--- conteúdo do arquivo ---',
     ].join('\n')
 
-    expect(findLastEditedFile(transcript, '/home/felipe/blog')).toEqual({
-      path: '/home/felipe/blog/ola-mundo.md',
+    expect(findLastEditedFile(transcript, '/home/pessoa/blog')).toEqual({
+      path: '/home/pessoa/blog/ola-mundo.md',
       name: 'ola-mundo.md',
     })
   })
@@ -69,7 +69,7 @@ describe('findLastEditedFile', () => {
   it('acha o editor mesmo encadeado com outro comando na mesma linha', () => {
     // A função não interpreta o `cd` do encadeamento — o caminho relativo
     // continua resolvido pelo cwd real da sessão, como em qualquer comando.
-    const transcript = '$ cd /home/felipe/blog && nano ola-mundo.md'
+    const transcript = '$ cd /home/pessoa/blog && nano ola-mundo.md'
     expect(findLastEditedFile(transcript, '/x')).toEqual({
       path: '/x/ola-mundo.md',
       name: 'ola-mundo.md',
@@ -81,8 +81,8 @@ describe('findLaunchedEditorFile', () => {
   it('lê o arquivo da opção de lançamento do bloco', () => {
     // Como ProjectsPanel monta: [...editor.args, entry.name].
     expect(
-      findLaunchedEditorFile('nano', ['ola-mundo.md'], '/home/felipe/blog'),
-    ).toEqual({ path: '/home/felipe/blog/ola-mundo.md', name: 'ola-mundo.md' })
+      findLaunchedEditorFile('nano', ['ola-mundo.md'], '/home/pessoa/blog'),
+    ).toEqual({ path: '/home/pessoa/blog/ola-mundo.md', name: 'ola-mundo.md' })
   })
 
   it('aceita editor resolvido por caminho completo', () => {
@@ -126,11 +126,11 @@ describe('resolveOpenEditorFile', () => {
       resolveOpenEditorFile({
         command: 'bash',
         args: [],
-        cwd: '/home/felipe/blog',
+        cwd: '/home/pessoa/blog',
         shellHistory: '$ nano digitado-a-mao.md',
       }),
     ).toEqual({
-      path: '/home/felipe/blog/digitado-a-mao.md',
+      path: '/home/pessoa/blog/digitado-a-mao.md',
       name: 'digitado-a-mao.md',
     })
   })

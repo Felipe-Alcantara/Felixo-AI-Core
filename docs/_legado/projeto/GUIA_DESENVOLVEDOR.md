@@ -57,7 +57,7 @@ A estrutura padrão do projeto segue:
 Ao criar uma nova feature que interage com o sistema (arquivos, terminal, processos), é necessário testar em todos os SOs suportados.
 
 - **Linux:** Validar permissões, paths com barra normal `/` e uso do shell padrão (Bash).
-- **Windows:** Validar paths com contra-barra `\`, espaços nos nomes de usuário (ex: `C:\Users\Felipe Alcantara`) e comandos no PowerShell/CMD.
+- **Windows:** Validar paths com contra-barra `\`, espaços nos nomes de usuário (ex: `C:\Users\Pessoa Exemplo`) e comandos no PowerShell/CMD.
 - **macOS:** Validar comportamento do App Sandbox, permissões e paths no Apple Silicon vs Intel.
 
 > **Dica:** Se você usar apenas um SO, utilize instâncias de Máquinas Virtuais (VMs) ou as Actions do GitHub (CI) para validar o build nos demais sistemas.

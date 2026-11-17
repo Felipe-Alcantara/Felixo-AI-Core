@@ -26,7 +26,7 @@ const TEMPO_LIMITE_MS = 20_000
 const COMANDO = 'felixo-sonda-ps1'
 
 test('comando que só existe como .ps1 abre pelo PowerShell com os argumentos intactos', { skip: process.platform !== 'win32' }, async () => {
-  // Espaço no nome da pasta, como no perfil "C:\Users\Felipe Martins".
+  // Espaço no nome da pasta, como no perfil "C:\Users\Pessoa Exemplo".
   const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo sonda ps1 '))
   const destino = path.join(pasta, 'recebido.txt')
   fs.writeFileSync(

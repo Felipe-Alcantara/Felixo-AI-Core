@@ -810,7 +810,7 @@ async function main(argv = process.argv.slice(2)) {
 
 /**
  * Instala o pacote e o Openia como um usuário local "Felixo Teste" — nome com
- * espaço, como "Felipe Martins" — e roda a detecção do app instalado no modo
+ * espaço, como "Pessoa Exemplo" — e roda a detecção do app instalado no modo
  * Node do próprio Electron, com o perfil real desse usuário.
  */
 function validarUsuarioComEspaco(opcoes) {

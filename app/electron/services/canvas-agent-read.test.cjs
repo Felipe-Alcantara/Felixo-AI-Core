@@ -28,7 +28,7 @@ test('descreverElemento de nota vazia devolve um rótulo padrão', () => {
 
 test('descreverElemento de arquivo usa fileLabel, senão o basename do caminho', () => {
   assert.equal(descreverElemento({ id: '1', type: 'file', data: { fileLabel: 'README' } }), 'README')
-  assert.equal(descreverElemento({ id: '1', type: 'file', data: { filePath: '/home/felipe/projeto/README.md' } }), 'README.md')
+  assert.equal(descreverElemento({ id: '1', type: 'file', data: { filePath: '/home/pessoa/projeto/README.md' } }), 'README.md')
 })
 
 test('descreverElemento de página usa a URL', () => {

@@ -95,7 +95,7 @@ function minimizePaths(text, { homeDir, userName } = {}) {
     output = output.replace(pattern, '~')
   }
 
-  // Nome de usuário pode ter espaço ("Felipe Martins"): para no próximo
+  // Nome de usuário pode ter espaço ("Pessoa Exemplo"): para no próximo
   // separador, não no primeiro espaço.
   output = output.replace(/([A-Za-z]:[\\/]+Users[\\/]+)[^\\/\r\n"']+/gi, '$1<usuario>')
   output = output.replace(/(\/(?:home|Users)\/)[^/\r\n"']+/g, '$1<usuario>')

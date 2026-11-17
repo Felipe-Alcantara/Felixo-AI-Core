@@ -205,7 +205,7 @@ async function detectCli(cliInfo, env, options = {}) {
       useShell = adapter.name === 'win32' && /\.(?:cmd|bat)$/i.test(executable)
       // `execFile` com `shell: true` no Windows concatena o comando cru para o
       // `cmd.exe /c` em vez de citá-lo — sem aspas, um caminho com espaço (ex.:
-      // "C:\Users\Felipe Martins\...") quebra ao meio e cmd.exe tenta rodar só
+      // "C:\Users\Pessoa Exemplo\...") quebra ao meio e cmd.exe tenta rodar só
       // o pedaço antes do espaço. Medido ao vivo: `claude`/`codex` instaladas
       // via npm reportavam "não instalada" só numa conta cujo nome de usuário
       // do Windows tem espaço.

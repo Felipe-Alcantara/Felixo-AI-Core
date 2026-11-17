@@ -188,12 +188,12 @@ describe('cli-detector', () => {
   // Bug real, medido ao vivo nesta máquina: `execFile` com `shell: true` no
   // Windows concatena comando e argumentos crus para o `cmd.exe /c` em vez de
   // citá-los. Sem aspas, um caminho de perfil com espaço no nome de usuário —
-  // como o desta máquina, "Felipe Martins" — quebra ao meio, e o `cmd.exe`
+  // como o de um perfil com espaço, "Pessoa Exemplo" — quebra ao meio, e o `cmd.exe`
   // tenta rodar só o pedaço antes do espaço. É exatamente o caso que fazia
   // Claude/Codex/Gemini aparecerem como "não instalada" nesta máquina, mesmo
   // instaladas, enquanto funcionava numa conta sem espaço no nome.
   it('cita o caminho antes de rodar via shell, para sobreviver a espaço no perfil do usuário', async () => {
-    const caminhoComEspaco = 'C:\\Users\\Felipe Martins\\AppData\\Roaming\\npm\\claude.cmd'
+    const caminhoComEspaco = 'C:\\Users\\Pessoa Exemplo\\AppData\\Roaming\\npm\\claude.cmd'
 
     // Simula o `cmd.exe /c` real: sem aspas, ele só vê o pedaço do comando até
     // o primeiro espaço — o resto vira argumento solto, e o comando não bate
@@ -206,7 +206,7 @@ describe('cli-detector', () => {
     }
 
     const result = await detectCli(SUPPORTED_CLIS.find((cli) => cli.command === 'claude'), {
-      PATH: 'C:\\Users\\Felipe Martins\\AppData\\Roaming\\npm',
+      PATH: 'C:\\Users\\Pessoa Exemplo\\AppData\\Roaming\\npm',
     }, {
       platformName: 'win32',
       resolvePath: () => caminhoComEspaco,

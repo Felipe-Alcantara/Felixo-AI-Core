@@ -49,7 +49,7 @@ $NomeDoApp = 'Felixo AI Core'
 $ItemDeLogin = 'electron.app.Felixo AI Core'
 
 function Resolver-Caminho([string]$caminho) {
-  # O Windows mistura nome curto 8.3 (FELIPE~1) e nome longo; comparar texto
+  # O Windows mistura nome curto 8.3 (PESSOA~1) e nome longo; comparar texto
   # cru falharia. GetFullPath + Get-Item devolvem a forma longa quando existe.
   if (-not $caminho) { return $null }
   $limpo = $caminho.Trim('"')

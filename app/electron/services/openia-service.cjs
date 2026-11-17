@@ -195,7 +195,7 @@ function sanitizeString(value, maxLength) {
  * - `.exe`: direto.
  * - `.cmd`/`.bat`: também direto, SEM `shell: true`. O `cross-spawn` já embrulha
  *   o shim no `cmd.exe` citando o caminho; com `shell: true` ele repassava a
- *   linha crua e um caminho com espaço ("C:\Users\Felipe Martins\…\openia.cmd",
+ *   linha crua e um caminho com espaço ("C:\Users\Pessoa Exemplo\…\openia.cmd",
  *   o launcher legado) quebrava ao meio — medido em 07/10/2026: `list --json`
  *   falhava só na pasta com espaço.
  * - `.ps1`: pelo PowerShell (`-File`), que é quem executa script no Windows.

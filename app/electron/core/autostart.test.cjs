@@ -176,10 +176,10 @@ test('Linux: erro de I/O (ex.: permissão) não derruba o app, devolve mensagem'
 const { isInsideTemporaryDirectory } = require('./autostart.cjs')
 // Caso real do Windows: os.tmpdir() vem com nome curto 8.3 e o exe com o
 // nome longo. O realpath falso faz o papel do realpathSync.native.
-const realpath = (value) => value.replace('FELIPE~1', 'Felipe Martins')
-const temporaryDirs = [String.raw`C:\Users\FELIPE~1\AppData\Local\Temp`]
-const smokeExe = String.raw`C:\Users\Felipe Martins\AppData\Local\Temp\felixo-release-smoke-4pap4S\installed\Felixo AI Core\Felixo AI Core.exe`
-const installedExe = String.raw`C:\Users\Felipe Martins\AppData\Local\Programs\Felixo AI Core\Felixo AI Core.exe`
+const realpath = (value) => value.replace('PESSOA~1', 'Pessoa Exemplo')
+const temporaryDirs = [String.raw`C:\Users\PESSOA~1\AppData\Local\Temp`]
+const smokeExe = String.raw`C:\Users\Pessoa Exemplo\AppData\Local\Temp\felixo-release-smoke-4pap4S\installed\Felixo AI Core\Felixo AI Core.exe`
+const installedExe = String.raw`C:\Users\Pessoa Exemplo\AppData\Local\Programs\Felixo AI Core\Felixo AI Core.exe`
 const win = { platformName: 'win32', temporaryDirs, realpath }
 
 test('pasta temporária: reconhece a cópia de smoke em %TEMP% mesmo com nome curto 8.3 e caixa diferente', () => {
@@ -190,7 +190,7 @@ test('pasta temporária: reconhece a cópia de smoke em %TEMP% mesmo com nome cu
 
 test('pasta temporária: não confunde uma pasta irmã que só começa com o mesmo nome', () => {
   assert.equal(
-    isInsideTemporaryDirectory(String.raw`C:\Users\Felipe Martins\AppData\Local\TempoReal\app.exe`, win),
+    isInsideTemporaryDirectory(String.raw`C:\Users\Pessoa Exemplo\AppData\Local\TempoReal\app.exe`, win),
     false,
   )
 })

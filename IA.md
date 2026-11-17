@@ -4696,3 +4696,22 @@ Task: Felixo AI Core/Testes — cobrir no smoke o foco no bloco Página Web que 
 **Não validado.** Reversão por quadro (`requestAnimationFrame`) passa no L3 nesta janela: o foco chega ~400 ms depois, com o bloco já montado (pendência aberta). O toque no link do terminal (L9) é instável sob carga, também no código original (pendência aberta). macOS e Linux não rodados.
 
 Estado: concluído (commit `05adaef1` na branch, sem push; deploy e o smoke completo no CI pelo orquestrador).
+
+---
+
+## 2026-11-17 — Higiene: tira o caminho de usuário real de comentários, testes e um exemplo de doc
+
+Agente: subagente da Orquestração (Claude Haiku 5.5, effort max). Task: Felixo AI Core/Higiene — tirar o caminho de usuário real do pty-process-manager e do teste dele (Notion `3eb91f95-497e-810c-a8a5-e1aa25a7d569`).
+
+**Contexto.** O pty-process-manager e o teste dele citavam o perfil de usuário real do Windows, em comentário e em dados de teste. O mesmo perfil aparecia em outros comentários e fixtures, na forma longa, na forma curta 8.3 e como pasta `/home` com o primeiro nome do dono. Caminho pessoal versionado não fica no repositório.
+
+**O que mudou.**
+- `app/electron/services/pty-process-manager.cjs` (comentário) e `pty-process-manager.test.cjs` (dados de teste): o perfil vira "Pessoa Exemplo". O espaço fica porque o despacho com `call` só liga quando o caminho tem espaço (`usesCallDispatcher`).
+- Comentários e fixtures em outros 16 arquivos de `app/electron`, `app/scripts` e testes de `app/src`, e o exemplo de caminho de `docs/_legado/projeto/GUIA_DESENVOLVEDOR.md`. Só texto: nenhum valor esperado mudou.
+- Registros de histórico ficam como estão: este IA.md (entradas antigas), `docs/ia-archive/` e os registros de `docs/_legado/`. O item 13 do `docs/validation/RELEASE_CHECKLIST.md` continua aberto por isso.
+
+**Validação.** `git grep` pelo perfil real: 29 arquivos e 70 linhas no `main` (1d9618ad); 11 arquivos e 22 linhas depois, todos histórico, registro ou autoria. Os 7 arquivos de teste Node alterados têm a mesma contagem antes e depois (17, 25, 4, 21, 39, 4 e 85 testes passando). Os 2 arquivos de teste de front: 19 de 19, antes e depois. `npm run test:native`: 16 de 16. Gate: lint e typecheck sem erro; suíte Node 3480 de 3492 (0 falhas, 12 pulados); vitest inteiro 3689 de 3694, com 1 timeout de 20 s em `SystemDesignDocumentIndex.test.ts` que passa isolado (6 de 6, 15 s).
+
+**Não validado.** O app não foi aberto: não há mudança visível.
+
+Estado: concluído na branch `orq/higiene-tirar-caminho-usuario-real`, com 2 commits (`b090a9aa`, `2d3e15d3`); push e deploy pelo orquestrador.

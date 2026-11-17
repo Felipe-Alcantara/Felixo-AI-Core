@@ -10,7 +10,7 @@ const {
 test('resolve o provedor de comandos conhecidos, inclusive caminhos Windows', () => {
   assert.equal(resolveProviderIdForCommand('claude'), 'claude')
   assert.equal(
-    resolveProviderIdForCommand('C:\\Users\\Felipe Martins\\AppData\\Roaming\\npm\\codex.cmd'),
+    resolveProviderIdForCommand('C:\\Users\\Pessoa Exemplo\\AppData\\Roaming\\npm\\codex.cmd'),
     'codex',
   )
   assert.equal(resolveProviderIdForCommand('python3'), null)

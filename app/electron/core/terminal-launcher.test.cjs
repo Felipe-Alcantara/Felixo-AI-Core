@@ -10,7 +10,7 @@ describe('terminal-launcher', () => {
     const plan = createTerminalLaunchPlan({
       command: 'codex',
       args: [],
-      cwd: '/home/felipe',
+      cwd: '/home/pessoa',
       env: { PATH: '/usr/bin' },
       platform: 'linux',
       exists: (candidate) => candidate === '/usr/bin/konsole',
@@ -21,7 +21,7 @@ describe('terminal-launcher', () => {
     assert.deepEqual(plan.args, [
       '--hold',
       '--workdir',
-      '/home/felipe',
+      '/home/pessoa',
       '-e',
       'codex',
     ])
@@ -30,7 +30,7 @@ describe('terminal-launcher', () => {
   it('returns a manual fallback when no Linux terminal is found', () => {
     const plan = createTerminalLaunchPlan({
       command: 'gemini',
-      cwd: '/home/felipe',
+      cwd: '/home/pessoa',
       env: { PATH: '/usr/bin' },
       platform: 'linux',
       exists: () => false,
@@ -43,7 +43,7 @@ describe('terminal-launcher', () => {
   it('creates a macOS Terminal plan with a shell command line', () => {
     const plan = createTerminalLaunchPlan({
       command: 'claude',
-      cwd: '/Users/felipe/My Project',
+      cwd: '/Users/pessoa/My Project',
       platform: 'darwin',
     })
 
@@ -57,7 +57,7 @@ describe('terminal-launcher', () => {
     const plan = createTerminalLaunchPlan({
       command: 'codex.cmd',
       args: ['login', 'status'],
-      cwd: 'C:\\Users\\felipe',
+      cwd: 'C:\\Users\\pessoa',
       platform: 'win32',
     })
 
