@@ -568,6 +568,8 @@ type Session = {
   probesDeferred: number
   probesToSkip: number
   titleWorkingAt?: number
+  /** Último rastro `[felixo:selo]` por evento limitado (ver `traceSelo`). */
+  seloTraceAt?: Record<string, number>
   claudeBypassHandled: boolean
   claudeTrustHandled: boolean
   /** Opções de lançamento originais, guardadas para relançar sozinho após um
@@ -2272,9 +2274,11 @@ export class TerminalSessionStore {
     // in-place animation; otherwise a waiting agent would look busy forever.
     const signature = computeSignature(session.terminal)
     if (signature !== session.lastSignature) {
+      const previous = session.lastSignature
       session.lastSignature = signature
       session.lastMeaningfulAt = Date.now()
       session.paintedOutput = true
+      this.traceSelo(session, 'assinatura', `programStatus=${session.programStatus?.state ?? '-'} antes=${JSON.stringify(previous.slice(-120))} depois=${JSON.stringify(signature.slice(-120))}`, 1000)
       // Com o programa falando OSC 7501, a tela não decide mais o estado.
       if (!session.programStatus) this.markWorking(session)
       this.trackCodexStartupScreen(session)
@@ -2549,6 +2553,20 @@ export class TerminalSessionStore {
     }
   }
 
+  /**
+   * Rastro de diagnóstico do selo "trabalhando" grudado com o terminal parado.
+   * Só observa, não decide nada. Com `everyMs`, no máximo uma linha por evento
+   * e sessão nesse intervalo. Remover quando a task "diagnosticar badge
+   * trabalhando grudado" for fechada (criado em 2026-11-17).
+   */
+  private traceSelo(session: Session, evento: string, detalhe: string, everyMs = 0): void {
+    const now = Date.now()
+    const last = session.seloTraceAt ?? (session.seloTraceAt = {})
+    if (everyMs && last[evento] !== undefined && now - last[evento] < everyMs) return
+    last[evento] = now
+    console.info(`[felixo:selo] ${now} ${session.id} ${evento} ${detalhe}`)
+  }
+
   private markWorking(session: Session): void {
     if (session.programStatus) return
     // Only emit on the transition into 'working' to avoid a re-render per byte;
@@ -2576,6 +2594,7 @@ export class TerminalSessionStore {
       }
       if (this.titleSaysWorkingNow(session)) {
         // O título ainda gira (spinner): a tela parada não é fim de turno.
+        this.traceSelo(session, 'titulo-segura', 'tela parada, selo mantido pelo spinner do título', 5000)
         this.scheduleIdleCheck(session)
         return
       }
@@ -2586,6 +2605,7 @@ export class TerminalSessionStore {
           // The CLI is still showing its "working" banner — only its elapsed-time
           // counter is ticking, which the signature check normalizes away. Stay
           // 'working' instead of settling to idle/green while it's still busy.
+          this.traceSelo(session, 'tela-ocupada', `selo mantido pela faixa de trabalho: ${JSON.stringify(viewport.slice(-160))}`, 5000)
           this.scheduleIdleCheck(session)
           return
         }
@@ -2997,6 +3017,9 @@ export class TerminalSessionStore {
     const { terminal } = session
     terminal.parser.registerOscHandler(CODEX_PROGRAM_STATUS_OSC, (data) => {
       const message = parseProgramStatus(data)
+      if (message && message.type !== 'probe') {
+        this.traceSelo(session, '7501', JSON.stringify(message))
+      }
       if (message?.type === 'probe') {
         if (session.probesToSkip > 0) session.probesToSkip -= 1
         else this.answerProgramProbe(session)
@@ -3012,6 +3035,7 @@ export class TerminalSessionStore {
     })
     terminal.onTitleChange((title) => {
       session.titleWorkingAt = titleSaysWorking(title) ? Date.now() : undefined
+      this.traceSelo(session, 'titulo', `${JSON.stringify(title.slice(0, 80))} gira=${session.titleWorkingAt !== undefined}`)
       const subject = subjectFromTitle(title)
       if (!session.programStatus?.title && subject !== session.snapshot.subject) {
         this.update(session, { subject })

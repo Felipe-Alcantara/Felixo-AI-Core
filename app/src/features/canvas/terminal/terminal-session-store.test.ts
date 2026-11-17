@@ -3295,4 +3295,40 @@ describe('TerminalSessionStore: estado que a CLI anuncia (OSC 7501 e título)', 
     }
     expect(harness.store.getSnapshot(SESSION_ID)).toMatchObject({ activity: 'working', statusSource: 'titulo' })
   })
+
+  describe('rastro [felixo:selo]', () => {
+    const linhas = (spy: ReturnType<typeof vi.spyOn>) =>
+      spy.mock.calls.map((c) => String(c[0])).filter((l) => l.startsWith('[felixo:selo]'))
+
+    it('registra o relato 7501, o título e a assinatura, sem mudar o estado', async () => {
+      const info = vi.spyOn(console, 'info').mockImplementation(() => {})
+      harness = createHarness('', 'claude')
+      await vi.advanceTimersByTimeAsync(0)
+      harness.feed('olá')
+      harness.feed(']0;◐ Pensando')
+      harness.feed(report('state=working'))
+      await vi.advanceTimersByTimeAsync(10)
+
+      const out = linhas(info)
+      expect(out.some((l) => l.includes(`${SESSION_ID} assinatura`))).toBe(true)
+      expect(out.some((l) => l.includes(' titulo ') && l.includes('gira=true'))).toBe(true)
+      expect(out.some((l) => l.includes(' 7501 ') && l.includes('"state":"working"'))).toBe(true)
+      expect(harness.store.getSnapshot(SESSION_ID)).toMatchObject({ activity: 'working', statusSource: 'osc7501' })
+      info.mockRestore()
+    })
+
+    it('limita a uma linha por 5 s quando o título segura o selo', async () => {
+      const info = vi.spyOn(console, 'info').mockImplementation(() => {})
+      harness = createHarness('', 'claude')
+      await vi.advanceTimersByTimeAsync(0)
+      harness.feed('olá')
+      for (let i = 0; i < 8; i += 1) {
+        harness.feed(`]0;${i % 2 ? '◐' : '◑'} Pensando`)
+        await vi.advanceTimersByTimeAsync(1_000)
+      }
+
+      expect(linhas(info).filter((l) => l.includes(' titulo-segura '))).toHaveLength(2)
+      info.mockRestore()
+    })
+  })
 })
