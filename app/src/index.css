@@ -3691,6 +3691,12 @@
   box-shadow: var(--f-core-selection-glow) !important;
 }
 
+/* A seleção troca o fundo do cartão (especificidade 0,3,0); a nota mantém o
+   papel, e a marca de seleção fica na borda e no brilho acima. */
+.react-flow__node.selected .felixo-canvas-card-note {
+  background: var(--note-paper);
+}
+
 .react-flow__node.selected .felixo-node-header,
 .react-flow__node.selected .felixo-canvas-group .canvas-node-drag {
   border-bottom-color: rgb(var(--f-ink-rgb) / 0.16);
