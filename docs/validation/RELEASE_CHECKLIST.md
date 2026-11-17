@@ -174,3 +174,42 @@ executado:
 - [ ] Sem segredo (`.env`, token, chave, cookie) versionado
 - [ ] Relatório final diz explicitamente **READY** ou **NOT READY**, e o que
       não foi executado
+
+## 11. Lançamento público
+
+Portão da divulgação em grupos, fóruns e página de download. Estado lido em
+17/11/2026 sobre o `main` em `430dff5` e a release v0.1.569; cada linha traz a
+evidência que a sustenta e a task do Notion. Classes: **Bloqueia** (resolver
+antes de postar), **Decisão** (o Felipe decide), **Depois**, **Resolvido**.
+A divulgação só começa sem "Bloqueia" aberto ou com aceite escrito do Felipe
+para o risco de cada item. Nada aqui é PASS por inferência: "Resolvido" diz o
+que foi lido, e o que não foi executado em máquina real está marcado.
+
+| # | Item | Classe | Estado e evidência |
+| --- | --- | --- | --- |
+| 1 | Titular do LICENSE: `LICENSE:3` diz "Felipe Martin", `app/package.json:8,76` diz "Felipe Alcantara"; o commit `408995a` (Vitis Souls) nunca entrou no `main` | Decisão, depois Bloqueia | Aberto. O GitHub mostra MIT sem titular conferido. Task 3c391f95 está concluída sem valer para o AI Core |
+| 2 | Perda silenciosa de edição: a gravação de arquivo ignora o retorno (`useFileNodeDocument.ts:162,164`) e a falha de `canvas:list` abre o canvas vazio sem aviso (`canvas-storage.ts:20-28`) | Bloqueia | Aberto. `docs/projeto/INVENTARIO-CANVAS.md` (lacunas altas); task 3ec91f95 em "Em breve" |
+| 3 | Laço de `canvas:save` que reprovava o SA1 do tutorial | Resolvido (CI) | `d07b3a2` e `2b46bc2` (zero escritas provadas); CI e Release gate verdes em `d0b6836` (16/11). Task 3ea91f95-812a ainda aberta no Notion, falta fechar |
+| 4 | Agentes não abriam no Windows com o app aberto pelo login ("File not found:") | Bloqueia até conferir | Correção `41e72a7` com teste; falta conferir no PC de quem relatou. Task 3fa91f95-8192 em andamento |
+| 5 | npm embutido com `brace-expansion`, `undici`, `http-cache-semantics`, `ip-address` | Resolvido | `npm audit --omit=dev` em `app/`: 0 vulnerabilidades; npm embutido 11.21.2 (`54521f0`). Task 3eb91f95-81fa fechável |
+| 6 | macOS sem assinatura nem notarização | Bloqueia só o público de Mac | v0.1.569: notas da release dizem "não é assinada nem notarizada"; `release.yml:122` (`CSC_IDENTITY_AUTO_DISCOVERY: false`). Task 3fa91f95-8129 |
+| 7 | Windows sem assinatura (SmartScreen) | Decisão (custo) | `GUIA-USUARIO.md:62`; mesma task do item 6 |
+| 8 | As CLIs sobem para a versão publicada mais nova, pré-lançamento incluso, e tocam o npm global sem perguntar | Decisão | `managed-cli-installer.cjs:105-140` (`chooseNewestPublishedVersion`); só `FELIXO_AUTO_INSTALL_CLIS=0` desliga (`cli-auto-install-plan.cjs:21`). Task 3f991f95-815e |
+| 9 | Canal de atualização do app: 569 releases até 16/11, a mesma que todos recebem | Decisão | `auto-updater.cjs:80-86` aceita `FELIXO_UPDATE_CHANNEL`/`FELIXO_UPDATE_PRERELEASE`; v0.1.569 sem pré-release |
+| 10 | Mac Intel e Windows arm64 fora da distribuição | Decisão | `app/package.json:153-170`; assets da v0.1.569: mac só `arm64` |
+| 11 | Interface só em pt-BR | Decisão | `app/index.html:2`; seção 9 deste checklist ("Tradução real") |
+| 12 | Texto público sobre permissões contradiz o app: `README.md:312` diz que as CLIs rodam "por padrão" com acesso total, mas o Yolo do canvas nasce desligado (`agent-launch-preferences.ts:88`) | Bloqueia o texto da landing e do FAQ | Aberto; corrigir o README antes de copiar para a página |
+| 13 | Dados pessoais em docs públicos: e-mail pessoal em `docs/ia-archive/IA-ARCHIVE-2026-08.md:2764` e caminhos `/home/felipe` em `docs/ia-archive/` e `docs/_legado/` | Bloqueia (revisão rápida) | Aberto (`git grep`). Reescrever o histórico do git é decisão à parte |
+| 14 | Instância única do app | Resolvido | `app/electron/core/single-instance.cjs:27`; task 3e691f95-8100 concluída |
+| 15 | Abertura do pacote no Ubuntu lenta na v0.1.426 | Resolvido no Notion | Task 3e991f95-81f0 concluída em 16/11 |
+| 16 | Escape do `vm` no eval da instância de devtools | Depois | Só na instância de automação; task 3ea91f95-8102 |
+| 17 | `source-map-js` vulnerável | Resolvido | `app/package-lock.json` em 1.2.2; task 3f291f95-8142 fechável |
+| 18 | Notas de release com "Build em publicação; será promovida…" e repositório sem homepage nem topics | Depois | Corpo da v0.1.569 e `gh repo view` (homepage vazia, sem topics) |
+| 19 | Mensagens sem acento ("Nao foi possivel verificar atualizacoes") | Depois | `auto-updater.cjs:50`, `canvas-storage.ts:78,82`, `ChatWorkspace.tsx:821` |
+| 20 | `GUIA-USUARIO.md:54` diz que o `.deb` não segue a atualização do app | Depois (corrigir a doc) | O electron-builder lista DEB como alvo atualizável; medir antes de afirmar |
+| 21 | Skills de documentos da Anthropic oferecidas também ao Codex e ao Gemini (licença restrita) | Bloqueia se o produto as distribuir | Task 3fa91f95-816c em "Entrada"; não verificado no código nesta rodada |
+| 22 | Rodada em máquina limpa nos três sistemas (Windows 11 sem Node, Python e Git; macOS Apple Silicon; Ubuntu LTS) | Bloqueia | NOT TESTED: runner de CI não vale (já tem Node, Git e Python). Existe `openia-windows-limpo.yml`, que cobre só o Openia |
+
+Fora do critério: o workflow "Instalação real das CLIs oficiais" falhou no
+último `main` lido (`d0b6836`, 16/11), enquanto CI, Release gate e Ciclo de
+instalação passaram. Conferir se é falha da rede/CLI ou do app antes de postar.
