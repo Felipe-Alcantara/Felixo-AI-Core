@@ -13,7 +13,13 @@ const test = require('node:test')
  * controle: com `allow-same-origin` (o que o Excalidraw faz em X e Reddit) o
  * mesmo script alcança o pai, então o teste enxerga a diferença.
  */
-test('o script de um embed isolado não alcança window.parent nem a origem do app', { timeout: 150000 }, () => {
+test('o script de um embed isolado não alcança window.parent nem a origem do app', { timeout: 150000 }, (t) => {
+  // O Electron precisa de servidor gráfico; o job de testes do Linux não tem (só o do smoke usa xvfb).
+  // A prova roda no Windows e no macOS do CI e em qualquer Linux com $DISPLAY.
+  if (process.platform === 'linux' && !process.env.DISPLAY) {
+    t.skip('sem servidor gráfico ($DISPLAY) neste Linux')
+    return
+  }
   const env = { ...process.env }
   delete env.ELECTRON_RUN_AS_NODE
   // O Chromium sobe devagar (ou trava) em máquina ocupada: até 3 tentativas.
