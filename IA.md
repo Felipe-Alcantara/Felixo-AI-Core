@@ -3870,3 +3870,24 @@ Estado: concluído do lado do código; conferência nas máquinas fica manual.
 **Validação.** YAML carregado (só `workflow_dispatch`); teste do script 4/4; `release-relevant.test.sh` verde; eslint limpo nos arquivos novos; `run-node-unit-tests` 3398/3411 com uma falha instável de benchmark (`pty-output-path-benchmark`, eco não medido sob carga) fora da área. O E2E em si não foi executado: exige o secret e os runners.
 
 Estado: concluído; pendente o Felipe criar o secret e disparar o workflow uma vez.
+
+---
+
+## 2026-11-17 — Lançamento: checklist de prontidão fechado, decisões do Felipe e titular único do LICENSE
+
+**Contexto.** A task de prontidão (aberta em 15/10) listava 20 itens candidatos a bloquear a divulgação. Em 17/11 vários já tinham mudado (`main` 1.600 commits adiante, release v0.1.569), então cada item foi reconferido.
+
+**Decisões do Felipe.** (1) Divulgar sem assinar, nos três sistemas (não era a recomendação do agente); a página de download precisa ensinar a liberar o app no Mac (Gatekeeper) e explicar o SmartScreen. (2) Titular único "Felipe Martin". (3) Canal estável para o público, diário só para a equipe e CLIs em pré-lançamento como opção que pergunta antes de mexer no npm global (não implementado: vira task com plano). (4) Escopo: Brasil, Windows, Linux e Mac Apple Silicon. Premissa do agente: oferta open source e gratuita.
+
+**O que mudou.**
+- `LICENSE:3` passa a "Felipe Martin", igual a `app/package.json:8,76`. O nome do perfil no GitHub e o `user.name` do git local são "Felipe Martin"; fica o aviso para conferir.
+- `docs/validation/RELEASE_CHECKLIST.md` ganhou a seção 11, com 22 itens, classe, evidência e task, e o registro das decisões acima.
+
+**Medido.**
+- Resolvidos: instância única (`single-instance.cjs:27`), `npm audit --omit=dev` com 0 vulnerabilidades, `source-map-js` 1.2.2, laço do `canvas:save` (`d07b3a2`, `2b46bc2`), npm embutido 11.21.2.
+- Abertos: perda silenciosa de edição (duas lacunas altas ainda no código), texto de permissões do README (`README.md:312`), e-mail pessoal e caminhos em `docs/ia-archive`, nenhuma rodada em máquina limpa.
+- README e GUIA-USUARIO já trazem as instruções de liberação no Mac e no Windows; a página de download ainda não existe.
+
+**Não validado.** Nenhum item foi executado em máquina real; só documentação, sem gate de código. O item das skills da Anthropic para Codex e Gemini não foi lido no código.
+
+Estado: concluído (commits na branch; pendências abertas como tasks pelo orquestrador).

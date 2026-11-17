@@ -5,7 +5,7 @@
   "version": "0.1.0",
   "type": "module",
   "main": "electron/main.cjs",
-  "author": "Felipe Alcantara",
+  "author": "Felipe Martin",
   "repository": {
     "type": "git",
     "url": "https://github.com/Felipe-Alcantara/Felixo-AI-Core.git"
@@ -73,7 +73,7 @@
   "build": {
     "appId": "com.felixoverse.felixo-ai-core",
     "productName": "Felixo AI Core",
-    "copyright": "Copyright © 2026 Felipe Alcantara",
+    "copyright": "Copyright © 2026 Felipe Martin",
     "icon": "public/brand/logos/png/felixo-cyber-cat-4096.png",
     "directories": {
       "output": "release"
@@ -147,7 +147,7 @@
         }
       ],
       "category": "Development",
-      "maintainer": "Felipe Alcantara",
+      "maintainer": "Felipe Martin",
       "artifactName": "Felixo-AI-Core-${version}-${os}-${arch}.${ext}"
     },
     "mac": {
