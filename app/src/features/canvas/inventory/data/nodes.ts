@@ -50,7 +50,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
       {
         locator: 'aria-label="Expandir terminal"',
         kind: 'button',
-        effect: 'onExpand → openTerminal: abre a gaveta TerminalDrawer com o xterm vivo deste bloco e foca o terminal; ao fechar a gaveta o foco volta a este botão (data-terminal-expand-trigger).',
+        effect: 'onExpand → openTerminal: abre a gaveta TerminalDrawer com o xterm vivo deste bloco e foca o terminal (troca o painel em foco); com Ctrl/Cmd+clique abre ao lado dos agentes já na gaveta (até 4 painéis); ao fechar a gaveta o foco volta a este botão (data-terminal-expand-trigger).',
         failure: 'Sem falha própria: o PTY segue no store com ou sem a gaveta.',
         test: smoke('checarInteracoes'),
       },
@@ -72,7 +72,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
       {
         locator: 'aria-label={`Abrir ${nodeData.label || provider.label}`}',
         kind: 'button',
-        effect: 'A prévia inteira é um botão: onExpand abre a gaveta do terminal, como o Expandir. Mostra selo de atividade, último prompt, aviso de contexto (data-felixo-context-warning), aviso de scrollback cortado e as últimas linhas.',
+        effect: 'A prévia inteira é um botão: onExpand abre a gaveta do terminal, como o Expandir (Ctrl/Cmd+clique abre ao lado). Mostra selo de atividade, último prompt, aviso de contexto (data-felixo-context-warning), aviso de scrollback cortado e as últimas linhas.',
         failure: 'Sem falha própria. No bloco mínimo (200×120), faixas de retomada e da cadeia espremem a prévia até ela sumir.',
       },
     ],

@@ -64,7 +64,7 @@ type TerminalsPanelProps = {
   /** Centers/zooms the canvas on a block and selects it. */
   onFocusNode: (nodeId: string) => void
   /** Opens the terminal's side drawer, ready to type. No-op for other block types. */
-  onExpandNode: (nodeId: string) => void
+  onExpandNode: (nodeId: string, options?: { sideBySide?: boolean }) => void
   /** Moves `nodeId` so it lands immediately before/after `targetId` in the
    * canvas node order. Ids, not indices: the dock renders a filtered view of
    * `nodes`, so its row indices are not guaranteed to be node array indices. */
@@ -244,10 +244,11 @@ export function TerminalsPanel({
     }
   }
 
-  const activateNode = (node: Node<CanvasNodeData>) => {
+  // Ctrl/Cmd+clique abre o agente ao lado dos que já estão na gaveta.
+  const activateNode = (node: Node<CanvasNodeData>, sideBySide = false) => {
     onFocusNode(node.id)
     if (node.type === 'terminal') {
-      onExpandNode(node.id)
+      onExpandNode(node.id, { sideBySide })
     }
   }
 
@@ -622,9 +623,9 @@ export function TerminalsPanel({
                   draft={drafts[node.id] ?? ''}
                   onDraftChange={(text) => setDraft(node.id, text)}
                   onSend={() => sendDraft(node.id)}
-                  onSelect={() => {
+                  onSelect={(sideBySide) => {
                     setActiveIndex(index)
-                    activateNode(node)
+                    activateNode(node, sideBySide)
                   }}
                   onGrabPointerDown={(event) => startDrag(rowIndex, event)}
                   onGrabPointerMove={updateDrag}
@@ -693,7 +694,7 @@ function ElementRow({
   draft: string
   onDraftChange: (text: string) => void
   onSend: () => void
-  onSelect: () => void
+  onSelect: (sideBySide: boolean) => void
   onGrabPointerDown: (event: ReactPointerEvent<HTMLElement>) => void
   onGrabPointerMove: (event: ReactPointerEvent<HTMLElement>) => void
   onGrabPointerUp: () => void
@@ -731,7 +732,7 @@ function ElementRow({
         </span>
         <button
           type="button"
-          onClick={onSelect}
+          onClick={(event) => onSelect(event.ctrlKey || event.metaKey)}
           title={elementTitle(node)}
           className={`felixo-btn flex w-full items-start gap-2 rounded-sm px-2 py-1.5 text-left hover:bg-white/5 ${
             active ? 'felixo-inspector-row-active bg-white/10' : ''

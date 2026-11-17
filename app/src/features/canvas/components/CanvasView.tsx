@@ -45,7 +45,12 @@ import { CloudSessionNode } from './CloudSessionNode'
 import { ClaudeApiNode } from './ClaudeApiNode'
 import { claudeApiConversations } from '../services/claude-api-conversation-store'
 import { createDraft as createCloudSessionDraft } from '../services/cloud-session-state'
-import { TerminalDrawer } from './TerminalDrawer'
+import { TerminalDrawer, type TerminalDrawerPane } from './TerminalDrawer'
+import {
+  reduceDrawerPanes,
+  type DrawerPanes,
+  type DrawerPanesAction,
+} from './terminal-drawer-panes'
 import { readingProfileFor } from '../terminal/reading/reading-profiles'
 import { TerminalDetailsPanel } from './TerminalDetailsPanel'
 import { NODE_DRAG_HANDLE_CLASS } from './NodeHeader'
@@ -358,8 +363,19 @@ function CanvasInner({
   const { projects, reloadProjects, addProjectFolder, removeProjectFolder } = useCanvasProjects()
   // Raiz autorizada das imagens relativas do Markdown nos blocos de arquivo.
   const projectRoots = useMemo(() => projects.map((project) => project.path), [projects])
-  const [expandedTerminalId, setExpandedTerminalId] = useState<string | null>(null)
+  // A gaveta mostra de 1 a 4 agentes vivos. O painel em foco é o "terminal
+  // aberto" do resto do canvas (Prompts, Skills, ditado, dock, notificações).
+  const [drawerPanes, setDrawerPanes] = useState<DrawerPanes | null>(null)
+  const drawerPanesRef = useRef<DrawerPanes | null>(null)
+  const expandedTerminalId = drawerPanes?.focused ?? null
   const expandedTerminalIdRef = useRef<string | null>(null)
+  const commitDrawerPanes = useCallback((action: DrawerPanesAction | 'clear') => {
+    const next = action === 'clear' ? null : reduceDrawerPanes(drawerPanesRef.current, action)
+    if (next === drawerPanesRef.current) return
+    drawerPanesRef.current = next
+    expandedTerminalIdRef.current = next?.focused ?? null
+    setDrawerPanes(next)
+  }, [])
   const [terminalOpenRequest, setTerminalOpenRequest] = useState(0)
   const terminalFocusReturnRef = useRef<HTMLElement | null>(null)
   // While a drawer is open — and until focus has returned to the card's trigger
@@ -476,7 +492,7 @@ function CanvasInner({
   // aqui, então visitar o agente limpa a marca na hora em vez de deixar uma
   // notificação fantasma que só o painel sabia apagar.
   const openTerminal = useCallback(
-    (nodeId: string) => {
+    (nodeId: string, options?: { sideBySide?: boolean }) => {
       const active = document.activeElement
       const trigger = Array.from(
         document.querySelectorAll<HTMLElement>('[data-terminal-expand-trigger]'),
@@ -494,16 +510,15 @@ function CanvasInner({
       ) {
         terminalFocusReturnRef.current = active
       }
-      expandedTerminalIdRef.current = nodeId
       dispatchNodeMountLatch({ type: 'drawer-opened' })
-      setExpandedTerminalId(nodeId)
+      commitDrawerPanes({ type: 'open', id: nodeId, sideBySide: options?.sideBySide })
       setTerminalOpenRequest((current) => current + 1)
       acknowledgeNodeNotifications(nodeId)
       setNotificationHistory((current) =>
         markCanvasNotificationsReadForNode(current, nodeId),
       )
     },
-    [acknowledgeNodeNotifications, setNotificationHistory],
+    [acknowledgeNodeNotifications, commitDrawerPanes, setNotificationHistory],
   )
 
   const closeExpandedTerminal = useCallback(() => {
@@ -512,8 +527,7 @@ function CanvasInner({
     const focusWasInside =
       active instanceof HTMLElement &&
       Boolean(active.closest('[data-canvas-terminal-drawer]'))
-    setExpandedTerminalId(null)
-    expandedTerminalIdRef.current = null
+    commitDrawerPanes('clear')
     drawerCloseGenerationRef.current += 1
     const generation = drawerCloseGenerationRef.current
     dispatchNodeMountLatch({ type: 'drawer-closed', generation })
@@ -590,7 +604,7 @@ function CanvasInner({
       settleAfterLayout()
     }
     window.requestAnimationFrame(() => restoreFocus(0))
-  }, [expandedTerminalId])
+  }, [commitDrawerPanes, expandedTerminalId])
 
   const closeHandoff = useCallback(() => {
     setHandoff(null)
@@ -720,8 +734,7 @@ function CanvasInner({
     setEdges,
     locked: canvasLocked,
     onReset: () => {
-      setExpandedTerminalId(null)
-      expandedTerminalIdRef.current = null
+      commitDrawerPanes('clear')
       // Limpar/importar descarta os blocos: não há gatilho para devolver foco
       // nem cartão na faixa da gaveta para preservar — solta na hora.
       drawerCloseGenerationRef.current += 1
@@ -2013,13 +2026,12 @@ function CanvasInner({
         newEdges.forEach((edge) => void saveCanvasEdge(edge))
       }
 
-      expandedTerminalIdRef.current = newId
       dispatchNodeMountLatch({ type: 'drawer-opened' })
-      setExpandedTerminalId(newId)
+      commitDrawerPanes({ type: 'open', id: newId })
       setTerminalOpenRequest((current) => current + 1)
       return newId
     },
-    [addNode, buildTerminalNodeData, setEdges],
+    [addNode, buildTerminalNodeData, commitDrawerPanes, setEdges],
   )
 
   /**
@@ -2224,11 +2236,25 @@ function CanvasInner({
   // a faixa de retomada e o texto de largada resolvido. Antes ela relançava
   // com o `initialText` cru do bloco, e o cartão não — os dois Reiniciar
   // agora passam por `relaunchTerminal`.
-  const expandedNode = expandedTerminalId
-    ? renderedNodes.find((node) => node.id === expandedTerminalId)
-    : undefined
-  const expandedNodeData = expandedNode?.data as TerminalNodeData | undefined
-  const expandedTitle = expandedNodeData?.label ?? 'Terminal'
+  const drawerPaneProps: TerminalDrawerPane[] = (drawerPanes?.panes ?? []).map((paneId) => {
+    const data = renderedNodes.find((node) => node.id === paneId)?.data as TerminalNodeData | undefined
+    return {
+      sessionId: paneId,
+      title: data?.label ?? 'Terminal',
+      // Só o que a prévia do arquivo aberto (nano/vim) precisa: o
+      // relançamento sai de `onRestart`, pelo mesmo plano do cartão.
+      restartOptions: { command: data?.command, args: data?.args, cwd: data?.cwd },
+      onRestart: () => relaunchTerminal(paneId),
+      resumeBanner: data?.resumeBanner ?? null,
+      onResumeAction: (action) => handleResumeAction(paneId, action),
+      onPassResponsibility: (transcript, screenOnly) =>
+        setHandoff({ sourceId: paneId, transcript, screenOnly }),
+      onOpenFilePreview: openTextFileNode,
+      readingMode: data?.readingMode === true,
+      onReadingModeChange: (on) => updateNodeData(paneId, { readingMode: on }),
+      readingProfile: readingProfileFor(data?.providerId, data?.command),
+    }
+  })
   const arrangeableCount = countArrangeableNodes(nodes)
   // Tipos de bloco presentes, só quando o catálogo do tutorial tem gatilho de
   // canvas (o v1 não tem): sem isso, arrastar um bloco nem monta a chave.
@@ -2552,27 +2578,16 @@ function CanvasInner({
         />
       </div>
 
-      {expandedTerminalId && (
+      {drawerPanes && (
         <TerminalDrawer
-          sessionId={expandedTerminalId}
-          title={expandedTitle}
-          // Só o que a prévia do arquivo aberto (nano/vim) precisa: o
-          // relançamento sai de `onRestart`, pelo mesmo plano do cartão.
-          restartOptions={{
-            command: expandedNodeData?.command,
-            args: expandedNodeData?.args,
-            cwd: expandedNodeData?.cwd,
-          }}
-          onRestart={() => relaunchTerminal(expandedTerminalId)}
-          resumeBanner={expandedNodeData?.resumeBanner ?? null}
-          onResumeAction={(action) => handleResumeAction(expandedTerminalId, action)}
-          onPassResponsibility={(transcript, screenOnly) =>
-            setHandoff({ sourceId: expandedTerminalId, transcript, screenOnly })
-          }
-          onOpenFilePreview={openTextFileNode}
-          readingMode={expandedNodeData?.readingMode === true}
-          onReadingModeChange={(on) => updateNodeData(expandedTerminalId, { readingMode: on })}
-          readingProfile={readingProfileFor(expandedNodeData?.providerId, expandedNodeData?.command)}
+          panes={drawerPaneProps}
+          focusedId={drawerPanes.focused}
+          layout={drawerPanes.layout}
+          zoomed={drawerPanes.zoomed}
+          onFocusPane={(id) => commitDrawerPanes({ type: 'focus', id })}
+          onClosePane={(id) => commitDrawerPanes({ type: 'close-pane', id })}
+          onLayoutChange={(layout) => commitDrawerPanes({ type: 'set-layout', layout })}
+          onToggleZoom={() => commitDrawerPanes({ type: 'toggle-zoom' })}
           openRequest={terminalOpenRequest}
           onClose={closeExpandedTerminal}
         />

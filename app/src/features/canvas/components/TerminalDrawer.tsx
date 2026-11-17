@@ -1,16 +1,21 @@
-import { lazy, Suspense, useCallback, useEffect, useId, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import {
   ArrowRightLeft,
   ChevronLeft,
   ChevronRight,
+  Columns2,
   Eye,
+  Grid2x2,
   History,
   Maximize2,
   Minimize2,
   Pin,
   PinOff,
   RotateCcw,
+  Rows2,
   X,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react'
 import {
   useSessionSnapshot,
@@ -39,6 +44,12 @@ import { useCanvasSurfaces } from '../hooks/canvas-surfaces-context'
 import { DRAWER_MIN_WIDTH } from '../services/canvas-surfaces'
 import { attachTerminalFitLifecycle } from './terminal-fit-lifecycle'
 import {
+  drawerPaneShortcut,
+  neighborPane,
+  resolveDrawerGeometry,
+  type DrawerLayoutChoice,
+} from './terminal-drawer-panes'
+import {
   clampDrawerWidth,
   COLLAPSED_WIDTH,
   getDefaultDrawerWidth,
@@ -52,7 +63,8 @@ import {
   writeWidthPreference,
 } from './terminal-drawer-pin'
 
-type TerminalDrawerProps = {
+/** O que cada painel da gaveta precisa saber sobre o seu agente. */
+export type TerminalDrawerPane = {
   sessionId: string
   title: string
   /**
@@ -115,6 +127,21 @@ type TerminalDrawerProps = {
   onReadingModeChange?: (on: boolean) => void
   /** Como ler a tela deste bloco: o perfil da CLI que roda nele. */
   readingProfile?: ReadingProfile
+}
+
+type TerminalDrawerProps = {
+  /** De 1 a 4 agentes vivos; um só é a gaveta de sempre. */
+  panes: TerminalDrawerPane[]
+  /** O painel que recebe o teclado e o destino de Prompts, Skills e ditado. */
+  focusedId: string
+  layout: DrawerLayoutChoice
+  /** O painel em foco ocupa a gaveta inteira; os outros seguem vivos, só não desenham. */
+  zoomed: boolean
+  onFocusPane: (sessionId: string) => void
+  /** Fecha só o painel: o PTY do agente segue e o cartão continua com a prévia. */
+  onClosePane: (sessionId: string) => void
+  onLayoutChange: (layout: DrawerLayoutChoice) => void
+  onToggleZoom: () => void
   /**
    * Muda a cada pedido de abrir um terminal, inclusive o que já está aberto.
    * O clique que pede a abertura costuma ser também um mousedown fora da
@@ -127,8 +154,8 @@ type TerminalDrawerProps = {
 const MIN_WIDTH = DRAWER_MIN_WIDTH
 
 /**
- * Right-side drawer that hosts the live, interactive terminal for the expanded
- * node. It attaches the session's already-running xterm element (the PTY never
+ * Right-side drawer that hosts the live, interactive terminals. Each pane
+ * attaches its session's already-running xterm element (the PTY never
  * stopped), so expanding just reveals ongoing work.
  */
 // Sob demanda: o painel traz o próprio xterm, que fica fora do carregamento inicial.
@@ -136,79 +163,29 @@ const TerminalArchivePanel = lazy(() =>
   import('./TerminalArchivePanel').then((module) => ({ default: module.TerminalArchivePanel })),
 )
 
+const LAYOUT_BUTTONS: { choice: DrawerLayoutChoice; label: string; icon: ReactNode }[] = [
+  { choice: 'colunas', label: 'Painéis em colunas', icon: <Columns2 size={16} /> },
+  { choice: 'linhas', label: 'Painéis em linhas', icon: <Rows2 size={16} /> },
+  { choice: 'grade', label: 'Painéis em grade 2×2', icon: <Grid2x2 size={16} /> },
+]
+
 export function TerminalDrawer({
-  sessionId,
-  title,
-  restartOptions,
-  onRestart,
-  resumeBanner: pendingResumeBanner = null,
-  onResumeAction,
-  onPassResponsibility,
-  onOpenFilePreview,
-  readingMode = false,
-  onReadingModeChange,
-  readingProfile,
+  panes,
+  focusedId,
+  layout,
+  zoomed,
+  onFocusPane,
+  onClosePane,
+  onLayoutChange,
+  onToggleZoom,
   openRequest = 0,
   onClose,
 }: TerminalDrawerProps) {
-  const store = useTerminalSessions()
-  const snapshot = useSessionSnapshot(sessionId)
-  const scrollbackNotice = terminalScrollbackNotice(snapshot?.scrollback)
-  const scrollRail = useClaudeScrollRail(sessionId, snapshot?.generation, snapshot?.activity)
-  const isLive = snapshot?.activity !== 'exited' && snapshot?.activity !== 'error'
-  // Sem snapshot não há processo: nada a confirmar antes de (re)subir.
-  const hasLiveProcess = snapshot !== undefined && isLive
-  const resumeBannerRef = useRef<HTMLDivElement>(null)
-  // Geração do processo em que a pessoa pediu Reiniciar com a retomada
-  // pendente: a faixa guardada aparece para ESTE processo (como no cartão).
-  const [resumeRevealedGeneration, setResumeRevealedGeneration] = useState<number | null>(null)
-  // Mesma faixa do cartão, com as mesmas ações ("Dispensar aviso" na falha
-  // com o agente de pé).
-  const resumeBanner = visibleTerminalResumeBanner({
-    banner: pendingResumeBanner,
-    hasProcess: snapshot !== undefined,
-    processLive: isLive,
-    revealed: snapshot !== undefined && resumeRevealedGeneration === (snapshot.generation ?? 0),
-  })
-  const awaitingResumeChoice = resumeBanner !== null && snapshot === undefined
-  const confirmRestartOfLiveProcess = () =>
-    !hasLiveProcess ||
-    window.confirm('O processo deste terminal ainda está rodando. Reiniciar mesmo assim?')
-  const restart = () => {
-    if (pendingResumeBanner) {
-      // Retomada pendente: nada sobe sem a escolha, e o processo atual não é
-      // derrubado. A faixa aparece e recebe o foco, como no cartão.
-      if (snapshot) setResumeRevealedGeneration(snapshot.generation ?? 0)
-      requestAnimationFrame(() => resumeBannerRef.current?.querySelector('button')?.focus())
-      return
-    }
-    if (!confirmRestartOfLiveProcess()) return
-    if (onRestart) {
-      onRestart()
-      return
-    }
-    store.restart(sessionId, restartOptions ?? {})
-  }
-  const runResumeAction = (action: TerminalResumeActionId) => {
-    // Com processo de pé, a escolha reinicia o terminal: mesma confirmação.
-    // Dispensar o aviso não reinicia nada, então não pergunta.
-    if (terminalResumeActionRelaunches(action) && !confirmRestartOfLiveProcess()) return
-    onResumeAction?.(action)
-  }
-  const mountRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const collapsedTriggerRef = useRef<HTMLButtonElement>(null)
   const titleId = useId()
-  const terminalTabId = useId()
-  const readingTabId = useId()
-  const readingPanelId = useId()
-  const readingPanelRef = useRef<HTMLDivElement | null>(null)
-  const hasReading = Boolean(onReadingModeChange && readingProfile)
-  const readingActive = hasReading && readingMode
-  // Aberto para ESTE bloco: trocar de terminal na gaveta fecha sem efeito extra.
-  const [archiveFor, setArchiveFor] = useState<string | null>(null)
-  const archiveOpen = archiveFor === sessionId
-  const scrollRailPlacement = claudeScrollRailPlacement({ visible: scrollRail.visible, readingActive })
+  const focusedPane = panes.find((pane) => pane.sessionId === focusedId) ?? panes[0]
+  const solo = panes.length === 1
   const [width, setWidth] = useState(() => {
     const maxWidth = getDrawerMaxWidth(window.innerWidth)
     return readWidthPreference(
@@ -232,9 +209,6 @@ export function TerminalDrawer({
   const [collapsed, setCollapsed] = useState(() => readCollapsedPreference(localStorage))
   const { occupancy, reportDrawerWidth } = useCanvasSurfaces()
   const [maximized, setMaximized] = useState(false)
-  const [handoffError, setHandoffError] = useState<string | undefined>()
-  const [previewError, setPreviewError] = useState<string | undefined>()
-  const focusTerminalOnExpandRef = useRef(true)
 
   const togglePinned = useCallback(() => {
     setPinned((prev) => {
@@ -259,53 +233,6 @@ export function TerminalDrawer({
     writeCollapsedPreference(localStorage, false)
   }, [])
 
-  // Lê o histórico e entrega a escolha do agente para quem sabe criar nós no
-  // canvas. O único motivo para o botão falhar aqui é não haver histórico —
-  // uma sessão que acabou de subir e ainda não escreveu nada.
-  const startResponsibilityHandoff = useCallback(() => {
-    if (!onPassResponsibility) {
-      return
-    }
-
-    const { text: transcript, screenOnly } = store.getTranscript(sessionId)
-    if (!transcript.trim()) {
-      setHandoffError('Este terminal ainda não tem histórico para transferir.')
-      return
-    }
-
-    setHandoffError(undefined)
-    onPassResponsibility(transcript, screenOnly === true)
-  }, [onPassResponsibility, sessionId, store])
-
-  // Abre o arquivo que está sendo editado aqui como um bloco "arquivo" (que
-  // já sabe renderizar markdown, código e imagem), sem pedir o caminho de
-  // novo. A opção de lançamento do bloco responde quando foi o app que abriu
-  // o editor; o histórico do shell cobre quem digitou `nano` à mão.
-  const openRenderedPreview = useCallback(() => {
-    if (!onOpenFilePreview) return
-
-    const found = resolveOpenEditorFile({
-      command: restartOptions?.command,
-      args: restartOptions?.args,
-      cwd: restartOptions?.cwd,
-      shellHistory: store.getShellHistory(sessionId).text,
-    })
-    if (!found) {
-      setPreviewError('Não achei nenhum arquivo aberto com nano/vim neste terminal.')
-      return
-    }
-
-    setPreviewError(undefined)
-    onOpenFilePreview(found.path, found.name)
-  }, [
-    onOpenFilePreview,
-    restartOptions?.args,
-    restartOptions?.command,
-    restartOptions?.cwd,
-    sessionId,
-    store,
-  ])
-
   // O que a gaveta QUER — inclusive recolhida (44px, uma escolha explícita,
   // não uma superfície espremida) e maximizada. `CanvasSurfacesProvider`
   // decide a largura final junto com o painel da esquerda numa passada só
@@ -327,71 +254,28 @@ export function TerminalDrawer({
   // da esquerda — nunca `desiredWidth` direto.
   const effectiveWidth = occupancy.drawer
 
-  // Click outside the drawer closes it, unless pinned.
+  // Click outside the drawer closes it, unless pinned. Com vários agentes
+  // vivos a gaveta não fecha no clique fora: eles são um arranjo montado de
+  // propósito, e o clique no canvas costuma ser para escolher o próximo.
+  const keepOpenOnOutsideClick = pinned || !solo
   useEffect(() => {
     const onPointerDown = (event: MouseEvent) => {
-      if (shouldCloseOnOutsideClick(pinned, containerRef.current, event.target as Node)) {
+      if (shouldCloseOnOutsideClick(keepOpenOnOutsideClick, containerRef.current, event.target as Node)) {
         close()
       }
     }
     document.addEventListener('mousedown', onPointerDown)
     return () => document.removeEventListener('mousedown', onPointerDown)
-  }, [pinned, close])
+  }, [keepOpenOnOutsideClick, close])
 
-  // Attach the live terminal element into the drawer. Focus is handled below
-  // only while the drawer is expanded, so a collapsed rail never leaves focus
-  // inside an invisible xterm.
-  //
-  // `restart()` swaps in a brand-new xterm.Terminal under the same sessionId,
-  // so `snapshot.generation` is in the deps too — without it this effect
-  // wouldn't re-run after a restart, and the drawer would keep showing the
-  // disposed terminal's (now-empty) container until it was closed and
-  // reopened.
   useEffect(() => {
-    const container = mountRef.current
-    if (!container) {
-      return
-    }
-
-    return attachTerminalFitLifecycle(container, store, sessionId)
-  }, [store, sessionId, snapshot?.generation])
-
-  // Keep the terminal fitted as the drawer width changes. Expanding also
-  // returns focus to the terminal so the user can type right away — or to the
-  // Leitura, when it is the tab showing (the terminal is inert behind it).
-  useEffect(() => {
-    if (collapsed) {
-      focusTerminalOnExpandRef.current = true
-      return
-    }
-    store.fit(sessionId)
-    const activeElement = document.activeElement
+    const active = document.activeElement
     if (
-      focusTerminalOnExpandRef.current ||
-      !containerRef.current?.contains(activeElement) ||
-      mountRef.current?.contains(activeElement)
+      collapsed &&
+      active instanceof HTMLElement &&
+      active.closest('[data-felixo-terminal-mount]') &&
+      containerRef.current?.contains(active)
     ) {
-      if (readingActive) readingPanelRef.current?.focus()
-      else store.focus(sessionId)
-      focusTerminalOnExpandRef.current = false
-    }
-  }, [store, sessionId, effectiveWidth, collapsed, readingActive])
-
-  // Trocar de aba leva o foco junto: no Terminal, para digitar; na Leitura,
-  // para rolar com o teclado.
-  const selectReadingTab = useCallback(
-    (on: boolean) => {
-      onReadingModeChange?.(on)
-      requestAnimationFrame(() => {
-        if (on) readingPanelRef.current?.focus()
-        else store.focus(sessionId)
-      })
-    },
-    [onReadingModeChange, sessionId, store],
-  )
-
-  useEffect(() => {
-    if (collapsed && mountRef.current?.contains(document.activeElement)) {
       collapsedTriggerRef.current?.focus()
     }
   }, [collapsed])
@@ -507,16 +391,96 @@ export function TerminalDrawer({
     updateDrawerWidth(effectiveWidth + direction * (event.shiftKey ? 80 : 24))
   }
 
+  const geometry = resolveDrawerGeometry({ layout, zoomed, count: panes.length }, effectiveWidth)
+  const visiblePanes = zoomed && !solo ? panes.filter((pane) => pane.sessionId === focusedPane.sessionId) : panes
+
+  const onShortcut = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (solo || collapsed) return
+    const shortcut = drawerPaneShortcut(event)
+    if (!shortcut) return
+    event.preventDefault()
+    // Antes do xterm: ele trataria Alt+Shift+seta como entrada da CLI.
+    event.stopPropagation()
+    if (shortcut.type === 'zoom') {
+      onToggleZoom()
+      return
+    }
+    const cols = resolveDrawerGeometry({ layout, zoomed: false, count: panes.length }, effectiveWidth).cols
+    onFocusPane(
+      neighborPane(
+        panes.map((pane) => pane.sessionId),
+        cols,
+        focusedPane.sessionId,
+        shortcut.direction,
+      ),
+    )
+  }
+
+  // Controles da gaveta em si. Com um painel só, moram no cabeçalho dele (a
+  // gaveta de sempre); com vários, numa barra própria acima dos painéis.
+  const collapseButton = (
+    <button
+      ref={collapsedTriggerRef}
+      type="button"
+      onClick={toggleCollapsed}
+      aria-label={collapsed ? 'Expandir terminal' : 'Recolher terminal'}
+      aria-expanded={!collapsed}
+      aria-controls="canvas-terminal-output"
+      title={collapsed ? 'Expandir terminal' : 'Recolher terminal'}
+      className="felixo-btn-icon shrink-0 rounded-sm p-1 text-zinc-400 transition-transform duration-150 hover:bg-white/10 hover:text-zinc-100"
+    >
+      {collapsed ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+    </button>
+  )
+  const maximizeButton = collapsed ? null : (
+    <button
+      type="button"
+      onClick={toggleMaximized}
+      className="felixo-btn-icon rounded-sm p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+      aria-label={maximized ? 'Restaurar largura' : 'Maximizar terminal'}
+      aria-pressed={maximized}
+      title={maximized ? 'Restaurar largura' : 'Maximizar terminal'}
+    >
+      {maximized ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+    </button>
+  )
+  const pinButton = collapsed ? null : (
+    <button
+      type="button"
+      onClick={togglePinned}
+      className={`felixo-btn-icon rounded-sm p-1 hover:bg-white/10 ${
+        pinned ? 'text-(--f-core-white-soft) hover:text-(--f-core-white-soft)' : 'text-zinc-400 hover:text-zinc-100'
+      }`}
+      aria-label={pinned ? 'Desafixar terminal' : 'Fixar terminal'}
+      title={pinned ? 'Desafixar (fecha ao clicar fora)' : 'Fixar (mantém aberto ao clicar fora)'}
+    >
+      {pinned ? <Pin size={16} /> : <PinOff size={16} />}
+    </button>
+  )
+  const closeButton = (
+    <button
+      type="button"
+      onClick={close}
+      className="felixo-btn-icon rounded-sm p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+      aria-label="Fechar terminal"
+      title={solo ? 'Fechar terminal' : 'Fechar a gaveta (os agentes seguem rodando)'}
+    >
+      <X size={16} />
+    </button>
+  )
+
   return (
     <div
       ref={containerRef}
       role="region"
       aria-labelledby={titleId}
       data-canvas-terminal-drawer
+      data-felixo-drawer-panes={panes.length}
+      onKeyDownCapture={onShortcut}
       onKeyDown={(event) => {
         if (
           event.key === 'Escape' &&
-          !mountRef.current?.contains(event.target as Node)
+          !(event.target as HTMLElement).closest?.('[data-felixo-terminal-mount]')
         ) {
           event.preventDefault()
           close()
@@ -543,7 +507,7 @@ export function TerminalDrawer({
           onDoubleClick={resetDrawerWidth}
           onKeyDown={onResizeKeyDown}
           role="separator"
-          aria-label={`Redimensionar terminal ${title}`}
+          aria-label={`Redimensionar terminal ${focusedPane.title}`}
           aria-orientation="vertical"
           aria-valuenow={effectiveWidth}
           aria-valuemin={Math.min(MIN_WIDTH, getDrawerMaxWidth(window.innerWidth))}
@@ -555,24 +519,335 @@ export function TerminalDrawer({
           className={`felixo-resize-handle felixo-resize-handle--left ${resizing ? 'is-resizing' : ''}`}
         />
       )}
+      {!solo && (
+        <div
+          data-felixo-drawer-toolbar
+          className={`felixo-terminal-drawer-header flex items-center border-b border-white/10 py-2 text-sm text-zinc-200 ${
+            collapsed ? 'flex-col gap-2 px-1' : 'gap-2 px-3'
+          }`}
+        >
+          {collapseButton}
+          {collapsed ? (
+            <h2
+              id={titleId}
+              className="min-h-0 flex-1 select-none truncate text-xs text-zinc-500"
+              style={{ writingMode: 'vertical-rl' }}
+              title={focusedPane.title}
+            >
+              {panes.length} agentes · {focusedPane.title}
+            </h2>
+          ) : (
+            <>
+              <h2 id={titleId} className="mr-auto ml-2 truncate font-medium">
+                {panes.length} agentes
+              </h2>
+              {geometry.stacked && (
+                <span
+                  className="text-[11px] text-zinc-500"
+                  title="A largura da gaveta não comporta os painéis lado a lado (mínimo de 440 px cada). Maximize a gaveta."
+                >
+                  empilhados: maximize para lado a lado
+                </span>
+              )}
+              <div className="flex items-center gap-1" role="group" aria-label="Divisão dos painéis">
+                {LAYOUT_BUTTONS.map((item) => (
+                  <button
+                    key={item.choice}
+                    type="button"
+                    onClick={() => onLayoutChange(item.choice)}
+                    aria-label={item.label}
+                    aria-pressed={layout === item.choice}
+                    title={item.label}
+                    data-felixo-drawer-layout={item.choice}
+                    className={`felixo-btn-icon rounded-sm p-1 hover:bg-white/10 hover:text-zinc-100 ${
+                      layout === item.choice ? 'bg-white/10 text-zinc-100' : 'text-zinc-400'
+                    }`}
+                  >
+                    {item.icon}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+          <div className={`flex items-center gap-2 ${collapsed ? 'flex-col' : ''}`}>
+            {maximizeButton}
+            {pinButton}
+            {closeButton}
+          </div>
+        </div>
+      )}
+      {/* Os xterms ficam montados mesmo recolhida (o PTY e o scrollback têm de
+          sobreviver); só a caixa some. Com zoom, só o painel em foco desenha:
+          os outros desmontam a tela, mas o agente segue vivo. */}
+      <div
+        className={`grid min-h-0 flex-1 ${collapsed && !solo ? 'invisible w-0' : ''}`}
+        style={{
+          gridTemplateColumns: `repeat(${geometry.cols}, minmax(0, 1fr))`,
+          gridTemplateRows: `repeat(${geometry.rows}, minmax(0, 1fr))`,
+        }}
+      >
+        {visiblePanes.map((pane, index) => (
+          <TerminalPane
+            key={pane.sessionId}
+            pane={pane}
+            solo={solo}
+            focused={pane.sessionId === focusedPane.sessionId}
+            collapsed={collapsed}
+            effectiveWidth={effectiveWidth}
+            zoomed={zoomed}
+            // Grade com número ímpar: o último painel ocupa a linha inteira.
+            spansRow={geometry.cols === 2 && index === visiblePanes.length - 1 && visiblePanes.length % 2 === 1 && visiblePanes.length > 1}
+            soloHeading={{ id: titleId, leading: collapseButton, maximize: maximizeButton, pin: pinButton, close: closeButton }}
+            onFocus={() => onFocusPane(pane.sessionId)}
+            onClosePane={() => onClosePane(pane.sessionId)}
+            onToggleZoom={onToggleZoom}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+type TerminalPaneProps = {
+  pane: TerminalDrawerPane
+  solo: boolean
+  focused: boolean
+  collapsed: boolean
+  effectiveWidth: number
+  zoomed: boolean
+  spansRow: boolean
+  /** Os controles da gaveta, que o único painel leva no próprio cabeçalho. */
+  soloHeading: {
+    id: string
+    leading: ReactNode
+    maximize: ReactNode
+    pin: ReactNode
+    close: ReactNode
+  }
+  onFocus: () => void
+  onClosePane: () => void
+  onToggleZoom: () => void
+}
+
+/**
+ * Um agente vivo na gaveta: cabeçalho, faixas de aviso, abas Terminal/Leitura e
+ * o xterm. Cada painel tem o próprio encaixe de tamanho (um ResizeObserver por
+ * contêiner), então dois painéis não brigam pelo `fit()`.
+ */
+function TerminalPane({
+  pane,
+  solo,
+  focused,
+  collapsed,
+  effectiveWidth,
+  zoomed,
+  spansRow,
+  soloHeading,
+  onFocus,
+  onClosePane,
+  onToggleZoom,
+}: TerminalPaneProps) {
+  const {
+    sessionId,
+    title,
+    restartOptions,
+    onRestart,
+    resumeBanner: pendingResumeBanner = null,
+    onResumeAction,
+    onPassResponsibility,
+    onOpenFilePreview,
+    readingMode = false,
+    onReadingModeChange,
+    readingProfile,
+  } = pane
+  const store = useTerminalSessions()
+  const snapshot = useSessionSnapshot(sessionId)
+  const scrollbackNotice = terminalScrollbackNotice(snapshot?.scrollback)
+  const scrollRail = useClaudeScrollRail(sessionId, snapshot?.generation, snapshot?.activity)
+  const isLive = snapshot?.activity !== 'exited' && snapshot?.activity !== 'error'
+  // Sem snapshot não há processo: nada a confirmar antes de (re)subir.
+  const hasLiveProcess = snapshot !== undefined && isLive
+  const resumeBannerRef = useRef<HTMLDivElement>(null)
+  // Geração do processo em que a pessoa pediu Reiniciar com a retomada
+  // pendente: a faixa guardada aparece para ESTE processo (como no cartão).
+  const [resumeRevealedGeneration, setResumeRevealedGeneration] = useState<number | null>(null)
+  // Mesma faixa do cartão, com as mesmas ações ("Dispensar aviso" na falha
+  // com o agente de pé).
+  const resumeBanner = visibleTerminalResumeBanner({
+    banner: pendingResumeBanner,
+    hasProcess: snapshot !== undefined,
+    processLive: isLive,
+    revealed: snapshot !== undefined && resumeRevealedGeneration === (snapshot.generation ?? 0),
+  })
+  const awaitingResumeChoice = resumeBanner !== null && snapshot === undefined
+  const confirmRestartOfLiveProcess = () =>
+    !hasLiveProcess ||
+    window.confirm('O processo deste terminal ainda está rodando. Reiniciar mesmo assim?')
+  const restart = () => {
+    if (pendingResumeBanner) {
+      // Retomada pendente: nada sobe sem a escolha, e o processo atual não é
+      // derrubado. A faixa aparece e recebe o foco, como no cartão.
+      if (snapshot) setResumeRevealedGeneration(snapshot.generation ?? 0)
+      requestAnimationFrame(() => resumeBannerRef.current?.querySelector('button')?.focus())
+      return
+    }
+    if (!confirmRestartOfLiveProcess()) return
+    if (onRestart) {
+      onRestart()
+      return
+    }
+    store.restart(sessionId, restartOptions ?? {})
+  }
+  const runResumeAction = (action: TerminalResumeActionId) => {
+    // Com processo de pé, a escolha reinicia o terminal: mesma confirmação.
+    // Dispensar o aviso não reinicia nada, então não pergunta.
+    if (terminalResumeActionRelaunches(action) && !confirmRestartOfLiveProcess()) return
+    onResumeAction?.(action)
+  }
+  const mountRef = useRef<HTMLDivElement>(null)
+  const paneRef = useRef<HTMLDivElement>(null)
+  const ownTitleId = useId()
+  const titleId = solo ? soloHeading.id : ownTitleId
+  const terminalTabId = useId()
+  const readingTabId = useId()
+  const readingPanelId = useId()
+  const ownMountId = useId()
+  // Só o painel em foco leva o id estável (os testes e o `aria-controls` da
+  // gaveta apontam para "o terminal"); ids repetidos seriam inválidos.
+  const mountId = focused ? 'canvas-terminal-output' : ownMountId
+  const readingPanelRef = useRef<HTMLDivElement | null>(null)
+  const hasReading = Boolean(onReadingModeChange && readingProfile)
+  const readingActive = hasReading && readingMode
+  // Aberto para ESTE bloco: trocar de terminal na gaveta fecha sem efeito extra.
+  const [archiveFor, setArchiveFor] = useState<string | null>(null)
+  const archiveOpen = archiveFor === sessionId
+  const scrollRailPlacement = claudeScrollRailPlacement({ visible: scrollRail.visible, readingActive })
+  const [handoffError, setHandoffError] = useState<string | undefined>()
+  const [previewError, setPreviewError] = useState<string | undefined>()
+  const focusTerminalOnExpandRef = useRef(true)
+
+  // Lê o histórico e entrega a escolha do agente para quem sabe criar nós no
+  // canvas. O único motivo para o botão falhar aqui é não haver histórico —
+  // uma sessão que acabou de subir e ainda não escreveu nada.
+  const startResponsibilityHandoff = useCallback(() => {
+    if (!onPassResponsibility) {
+      return
+    }
+
+    const { text: transcript, screenOnly } = store.getTranscript(sessionId)
+    if (!transcript.trim()) {
+      setHandoffError('Este terminal ainda não tem histórico para transferir.')
+      return
+    }
+
+    setHandoffError(undefined)
+    onPassResponsibility(transcript, screenOnly === true)
+  }, [onPassResponsibility, sessionId, store])
+
+  // Abre o arquivo que está sendo editado aqui como um bloco "arquivo" (que
+  // já sabe renderizar markdown, código e imagem), sem pedir o caminho de
+  // novo. A opção de lançamento do bloco responde quando foi o app que abriu
+  // o editor; o histórico do shell cobre quem digitou `nano` à mão.
+  const openRenderedPreview = useCallback(() => {
+    if (!onOpenFilePreview) return
+
+    const found = resolveOpenEditorFile({
+      command: restartOptions?.command,
+      args: restartOptions?.args,
+      cwd: restartOptions?.cwd,
+      shellHistory: store.getShellHistory(sessionId).text,
+    })
+    if (!found) {
+      setPreviewError('Não achei nenhum arquivo aberto com nano/vim neste terminal.')
+      return
+    }
+
+    setPreviewError(undefined)
+    onOpenFilePreview(found.path, found.name)
+  }, [
+    onOpenFilePreview,
+    restartOptions?.args,
+    restartOptions?.command,
+    restartOptions?.cwd,
+    sessionId,
+    store,
+  ])
+
+  // Attach the live terminal element into the pane. Focus is handled below
+  // only while the drawer is expanded, so a collapsed rail never leaves focus
+  // inside an invisible xterm.
+  //
+  // `restart()` swaps in a brand-new xterm.Terminal under the same sessionId,
+  // so `snapshot.generation` is in the deps too — without it this effect
+  // wouldn't re-run after a restart, and the drawer would keep showing the
+  // disposed terminal's (now-empty) container until it was closed and
+  // reopened.
+  useEffect(() => {
+    const container = mountRef.current
+    if (!container) {
+      return
+    }
+
+    return attachTerminalFitLifecycle(container, store, sessionId)
+  }, [store, sessionId, snapshot?.generation])
+
+  // Keep the terminal fitted as the drawer width changes. Expanding also
+  // returns focus to the terminal so the user can type right away — or to the
+  // Leitura, when it is the tab showing (the terminal is inert behind it).
+  // Só o painel em foco puxa o foco: os outros só refazem o encaixe.
+  useEffect(() => {
+    if (collapsed) {
+      focusTerminalOnExpandRef.current = true
+      return
+    }
+    store.fit(sessionId)
+    if (!focused) return
+    const activeElement = document.activeElement
+    if (
+      focusTerminalOnExpandRef.current ||
+      !paneRef.current?.contains(activeElement) ||
+      mountRef.current?.contains(activeElement)
+    ) {
+      if (readingActive) readingPanelRef.current?.focus()
+      else store.focus(sessionId)
+      focusTerminalOnExpandRef.current = false
+    }
+  }, [store, sessionId, effectiveWidth, collapsed, readingActive, focused])
+
+  // Trocar de aba leva o foco junto: no Terminal, para digitar; na Leitura,
+  // para rolar com o teclado.
+  const selectReadingTab = useCallback(
+    (on: boolean) => {
+      onReadingModeChange?.(on)
+      requestAnimationFrame(() => {
+        if (on) readingPanelRef.current?.focus()
+        else store.focus(sessionId)
+      })
+    },
+    [onReadingModeChange, sessionId, store],
+  )
+
+  return (
+    <div
+      ref={paneRef}
+      role={solo ? undefined : 'group'}
+      aria-label={solo ? undefined : `Agente ${title}`}
+      data-felixo-terminal-pane={sessionId}
+      data-felixo-pane-focused={focused ? 'true' : 'false'}
+      // Clicar ou tabular para dentro do painel o põe em foco.
+      onMouseDownCapture={solo ? undefined : onFocus}
+      onFocusCapture={solo ? undefined : onFocus}
+      className={`flex min-h-0 min-w-0 flex-col ${solo ? '' : 'border-white/10 [&:not(:first-child)]:border-t'} ${
+        !solo && focused ? 'ring-1 ring-inset ring-(--f-core-active)' : ''
+      } ${spansRow ? 'col-span-2' : ''}`}
+    >
       <div
         className={`felixo-terminal-drawer-header flex items-center border-b border-white/10 py-2 text-sm text-zinc-200 ${
-          collapsed ? 'flex-col gap-2 px-1' : 'justify-between px-3'
+          solo && collapsed ? 'flex-col gap-2 px-1' : 'justify-between px-3'
         }`}
       >
-        <button
-          ref={collapsedTriggerRef}
-          type="button"
-          onClick={toggleCollapsed}
-          aria-label={collapsed ? 'Expandir terminal' : 'Recolher terminal'}
-          aria-expanded={!collapsed}
-          aria-controls="canvas-terminal-output"
-          title={collapsed ? 'Expandir terminal' : 'Recolher terminal'}
-          className="felixo-btn-icon shrink-0 rounded-sm p-1 text-zinc-400 transition-transform duration-150 hover:bg-white/10 hover:text-zinc-100"
-        >
-          {collapsed ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
-        </button>
-        {collapsed ? (
+        {solo && soloHeading.leading}
+        {solo && collapsed ? (
           // Vertical title strip, so the rail still says which agent it is.
           <h2
             id={titleId}
@@ -583,11 +858,15 @@ export function TerminalDrawer({
             {title}
           </h2>
         ) : (
-          <h2 id={titleId} className="felixo-anim-sequential-panel mr-auto ml-2 truncate font-medium">
+          <h2
+            id={titleId}
+            className={`felixo-anim-sequential-panel mr-auto truncate font-medium ${solo ? 'ml-2' : ''}`}
+            title={title}
+          >
             {title}
           </h2>
         )}
-        <div className={`flex items-center gap-2 ${collapsed ? 'flex-col' : ''}`}>
+        <div className={`flex items-center gap-2 ${solo && collapsed ? 'flex-col' : ''}`}>
           {!collapsed && (
             <span className="text-xs text-zinc-500" aria-live="polite">
               {awaitingResumeChoice
@@ -601,7 +880,7 @@ export function TerminalDrawer({
                       : ''}
             </span>
           )}
-          {!collapsed && (
+          {!collapsed && solo && (
             <span
               className="hidden text-[11px] text-zinc-600 sm:inline"
               title="Ctrl+clique (Windows/Linux), Cmd+clique (macOS) ou clique direito sobre um link: escolher entre navegador, Página Web ou copiar"
@@ -625,18 +904,7 @@ export function TerminalDrawer({
             />
           )}
           {!collapsed && <CopyButton onCopy={() => store.copy(sessionId)} />}
-          {!collapsed && (
-            <button
-              type="button"
-              onClick={toggleMaximized}
-              className="felixo-btn-icon rounded-sm p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
-              aria-label={maximized ? 'Restaurar largura' : 'Maximizar terminal'}
-              aria-pressed={maximized}
-              title={maximized ? 'Restaurar largura' : 'Maximizar terminal'}
-            >
-              {maximized ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-            </button>
-          )}
+          {solo && soloHeading.maximize}
           {!collapsed && (
             <button
               type="button"
@@ -692,26 +960,37 @@ export function TerminalDrawer({
               <ArrowRightLeft size={16} />
             </button>
           )}
-          {!collapsed && <button
-            type="button"
-            onClick={togglePinned}
-            className={`felixo-btn-icon rounded-sm p-1 hover:bg-white/10 ${
-              pinned ? 'text-(--f-core-white-soft) hover:text-(--f-core-white-soft)' : 'text-zinc-400 hover:text-zinc-100'
-            }`}
-            aria-label={pinned ? 'Desafixar terminal' : 'Fixar terminal'}
-            title={pinned ? 'Desafixar (fecha ao clicar fora)' : 'Fixar (mantém aberto ao clicar fora)'}
-          >
-            {pinned ? <Pin size={16} /> : <PinOff size={16} />}
-          </button>}
-          <button
-            type="button"
-            onClick={close}
-            className="felixo-btn-icon rounded-sm p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
-            aria-label="Fechar terminal"
-            title="Fechar terminal"
-          >
-            <X size={16} />
-          </button>
+          {solo && soloHeading.pin}
+          {!solo && (
+            <>
+              <button
+                type="button"
+                onClick={onToggleZoom}
+                className={`felixo-btn-icon rounded-sm p-1 hover:bg-white/10 hover:text-zinc-100 ${
+                  zoomed ? 'bg-white/10 text-zinc-100' : 'text-zinc-400'
+                }`}
+                aria-label={zoomed ? 'Voltar do zoom do painel' : 'Zoom do painel'}
+                aria-pressed={zoomed}
+                title={
+                  zoomed
+                    ? 'Voltar ao arranjo (Alt+Shift+Z)'
+                    : 'Este painel ocupa a gaveta inteira; os outros seguem rodando (Alt+Shift+Z)'
+                }
+              >
+                {zoomed ? <ZoomOut size={16} /> : <ZoomIn size={16} />}
+              </button>
+              <button
+                type="button"
+                onClick={onClosePane}
+                className="felixo-btn-icon rounded-sm p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+                aria-label="Fechar painel"
+                title="Fechar este painel: o agente continua rodando e o cartão segue no canvas"
+              >
+                <X size={16} />
+              </button>
+            </>
+          )}
+          {solo && soloHeading.close}
         </div>
       </div>
       {!collapsed && snapshot?.message && (
@@ -780,7 +1059,7 @@ export function TerminalDrawer({
           }}
         >
           {[
-            { id: terminalTabId, on: false, label: 'Terminal', controls: 'canvas-terminal-output' },
+            { id: terminalTabId, on: false, label: 'Terminal', controls: mountId },
             { id: readingTabId, on: true, label: 'Leitura', controls: readingPanelId },
           ].map((tab) => {
             const selected = readingActive === tab.on
@@ -820,7 +1099,8 @@ export function TerminalDrawer({
       <div className={`felixo-paleta-escura relative flex min-h-0 flex-1 bg-(--f-core-black-surface) ${collapsed ? 'invisible w-0' : ''}`}>
         <div
           ref={mountRef}
-          id="canvas-terminal-output"
+          id={mountId}
+          data-felixo-terminal-mount
           role={hasReading ? 'tabpanel' : undefined}
           aria-labelledby={hasReading ? terminalTabId : undefined}
           aria-hidden={collapsed || readingActive || archiveOpen}

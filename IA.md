@@ -4189,3 +4189,24 @@ Task: Felixo AI Core/Terminal — avisar e reparar ao abrir um agente cuja CLI f
 **Não validado.** Abrir o app real com a CLI quebrada; reparo de ponta a ponta com npm real (só por injeção).
 
 Estado: concluído (commit na branch; deploy pelo orquestrador).
+
+---
+
+## 2026-11-17 — Terminal: a gaveta abre de 2 a 4 agentes vivos lado a lado (primeira parte da task)
+
+**Contexto.** Só um xterm vivia por vez, na gaveta da direita (`expandedTerminalId`); os cartões do canvas são só prévia, e o xterm dentro do cartão errou o mouse com o zoom do React Flow, então a divisão mora na gaveta, fora do canvas transformado.
+
+**O que mudou.**
+- **Arranjo puro** em `terminal-drawer-panes.ts`: painéis (1 a 4), foco, divisão (`auto`, colunas, linhas, grade) e zoom, num redutor com testes. `expandedTerminalId` virou o painel em foco, então Prompts, Skills, ditado, dock e notificações seguem como estavam.
+- **`TerminalDrawer`** virou a casca (largura, recolher, maximizar, fixar, fechar) mais um `TerminalPane` por agente, cada um com o próprio `attachTerminalFitLifecycle`. Com um painel só, a tela é a de antes (os controles da gaveta ficam no cabeçalho do painel).
+- **Abrir ao lado:** Ctrl/Cmd+clique no cartão, no Expandir e na linha do painel Elementos. O clique comum troca só o painel em foco. No 5º pedido, sai o painel sem foco usado há mais tempo.
+- **Divisão:** botões colunas, linhas e grade 2×2 na barra da gaveta (com 2 ou mais painéis); abaixo de 440 px por painel os painéis empilham e a barra avisa.
+- **Foco e teclado:** clique ou Alt+Shift+setas movem o foco; Alt+Shift+Z e o botão dão zoom no painel (os outros param de desenhar, o agente segue vivo). Alt+Shift para não colidir com o Alt+↑/↓ do diff do Claude Code.
+- **Fechar painel** nunca encerra o agente. Com 2 ou mais painéis o clique fora não fecha a gaveta.
+- Inventário do canvas regenerado, `GUIA-USUARIO.md` atualizado.
+
+**Validação.**
+- 24 testes novos do redutor, da geometria, da vizinhança e do atalho; vitest inteiro: no primeiro passe 3.595 passaram e 1 falhou (teste do guia, sob carga), no segundo tudo verde; testes Node: 3.407, 3.395 passaram, 0 falhas; lint e typecheck limpos.
+- Rodado de verdade (`devtools launch`, janela 1920×1080): 2 agentes lado a lado (592 px cada, gaveta maximizada), 4 em grade 2×2, 3 com o último cobrindo a linha, empilhado em 1304 px, zoom e volta, Alt+Shift+← moveu o foco do DOM, Fechar painel manteve os 4 cartões.
+
+**Não feito (fica para tasks).** Persistir o arranjo, atalho configurável, bancada de performance (20 terminais com 4 visíveis), cenário no `test:canvas-smoke`, Modo Performance limitando painéis, modo grade no canvas.

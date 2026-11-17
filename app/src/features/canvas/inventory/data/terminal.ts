@@ -18,7 +18,7 @@ export const terminalSurfaces: InventoryElement[] = [
     layer: 'terminal',
     owner: 'src/features/canvas/components/TerminalDrawer.tsx',
     states: {
-      normal: 'Bloco expandido: o xterm vivo da sessão é anexado (attach + fit) e o PTY segue de pé; o cabeçalho mostra "trabalhando" (working), "aguardando" (idle) ou "encerrado" (exited).',
+      normal: 'De 1 a 4 painéis, cada um com o xterm vivo de um agente (attach + fit por contêiner) e o PTY de pé; com 2 ou mais, uma barra da gaveta traz a divisão (colunas, linhas, grade 2×2), e o painel em foco leva destaque e recebe o teclado, Prompts, Skills e ditado. Lado a lado só com 440 px ou mais por painel (MIN_PANE_WIDTH); abaixo disso empilham e a barra avisa "empilhados: maximize para lado a lado". Cada cabeçalho mostra "trabalhando" (working), "aguardando" (idle) ou "encerrado" (exited).',
       loading: 'Sem snapshot ou com activity "starting": rótulo vazio no cabeçalho e ponto amarelo no trilho recolhido.',
       pending: 'Retomada pendente sem processo (awaitingResumeChoice): rótulo "aguardando escolha" e a faixa de retomada com as saídas.',
       error: 'snapshot.message (spawn recusado, "encerrou sem produzir saída", ponte PTY ausente) em faixa vermelha; contextWarning e aviso de scrollback em faixa amarela (inclusive o corte da retomada: o reanexo trouxe só a cauda do replay e o começo está no Histórico arquivado).',
@@ -31,6 +31,30 @@ export const terminalSurfaces: InventoryElement[] = [
         kind: 'button',
         effect: 'Alterna recolhida (trilho de 44 px) e expandida, grava localStorage felixo:terminal-drawer-collapsed ("1"/"0") e sai do maximizado; ao expandir refaz o fit (pty:resize) e devolve o foco ao xterm.',
         failure: 'Sem falha própria: o PTY não é tocado. setItem sem try/catch: storage bloqueado lançaria dentro do updater do estado.',
+      },
+      {
+        locator: 'data-felixo-drawer-layout',
+        kind: 'button',
+        trigger: 'clique; só com 2 ou mais painéis',
+        effect: 'Escolhe a divisão (colunas, linhas ou grade 2×2) via onLayoutChange → set-layout do arranjo (terminal-drawer-panes). Sem escolha, 2 painéis ficam em colunas e 3 ou 4 em grade. Abaixo de 440 px por painel a grade empilha. Não é persistido.',
+        failure: 'Sem falha própria: só muda o CSS grid; cada painel refaz o fit e o PTY é redimensionado.',
+        test: { file: 'src/features/canvas/components/terminal-drawer-panes.test.ts' },
+      },
+      {
+        locator: 'aria-label={zoomed ?',
+        kind: 'button',
+        trigger: 'clique ou Alt+Shift+Z; só com 2 ou mais painéis',
+        effect: 'Zoom do painel: o painel em foco ocupa a gaveta inteira e os outros desmontam a tela (o agente segue vivo e o PTY não é redimensionado). Voltar restaura o mesmo arranjo.',
+        failure: 'Sem falha própria. Abrir outro agente durante o zoom leva o zoom para o painel que ficou em foco.',
+        test: { file: 'src/features/canvas/components/terminal-drawer-panes.test.ts' },
+      },
+      {
+        locator: 'aria-label="Fechar painel"',
+        kind: 'button',
+        trigger: 'clique; só com 2 ou mais painéis',
+        effect: 'Tira só este painel do arranjo (close-pane): o foco vai ao painel usado mais recentemente. Nunca encerra o agente: o PTY segue e o cartão continua com a prévia.',
+        failure: 'Sem falha própria.',
+        test: { file: 'src/features/canvas/components/terminal-drawer-panes.test.ts' },
       },
       {
         locator: 'Maximizar terminal',
@@ -79,8 +103,8 @@ export const terminalSurfaces: InventoryElement[] = [
       {
         locator: 'aria-label="Fechar terminal"',
         kind: 'button',
-        trigger: 'clique, Esc fora do xterm ou mousedown fora da gaveta não fixada (exceto camada flutuante)',
-        effect: 'Animação de saída (DRAWER_EXIT_MS) e closeExpandedTerminal: a gaveta desmonta, reporta largura 0 e o foco volta ao gatilho do bloco; o PTY segue vivo.',
+        trigger: 'clique, Esc fora do xterm ou mousedown fora da gaveta não fixada e com um painel só (exceto camada flutuante); com 2 ou mais painéis o clique fora não fecha',
+        effect: 'Animação de saída (DRAWER_EXIT_MS) e closeExpandedTerminal: a gaveta (todos os painéis) desmonta, reporta largura 0 e o foco volta ao gatilho do bloco; o PTY segue vivo.',
         failure: 'Sem falha própria: fechar nunca encerra o processo.',
         test: { file: SMOKE, check: 'checarInteracoes' },
       },
@@ -127,6 +151,7 @@ export const terminalSurfaces: InventoryElement[] = [
     ],
     tests: [
       { file: 'src/features/canvas/components/terminal-drawer-pin.test.ts' },
+      { file: 'src/features/canvas/components/terminal-drawer-panes.test.ts' },
       { file: 'src/features/canvas/components/terminal-fit-lifecycle.test.ts' },
       { file: 'src/features/canvas/components/terminal-open-file.test.ts' },
       { file: 'src/features/canvas/services/canvas-surfaces.test.ts' },

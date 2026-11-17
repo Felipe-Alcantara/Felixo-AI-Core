@@ -975,9 +975,9 @@ export const chromeSurfaces: InventoryElement[] = [
         disabledWhen: 'nenhum rascunho pendente',
       },
       {
-        locator: 'onClick={onSelect}',
+        locator: 'onSelect(event.ctrlKey || event.metaKey)',
         kind: 'button',
-        effect: 'Linha do bloco: marca a linha ativa, focusNode centraliza e seleciona o bloco e, se for terminal, openTerminal abre a gaveta e marca as notificações dele como lidas. Shift+↑/↓ faz o mesmo de qualquer lugar; Alt+↑/↓ e o grip reordenam dentro da pasta (orderIndex salvo).',
+        effect: 'Linha do bloco: marca a linha ativa, focusNode centraliza e seleciona o bloco e, se for terminal, openTerminal abre a gaveta (Ctrl/Cmd+clique abre ao lado dos agentes já abertos) e marca as notificações dele como lidas. Shift+↑/↓ faz o mesmo de qualquer lugar; Alt+↑/↓ e o grip reordenam dentro da pasta (orderIndex salvo).',
         failure: 'Bloco dentro de grupo é centralizado no lugar errado (ver lacuna de foco na área do canvas).',
         test: { file: 'scripts/canvas-smoke-links.cjs', check: 'focar' },
       },

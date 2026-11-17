@@ -54,7 +54,8 @@ import {
 import { TerminalChainAnnouncer } from './TerminalChainAnnouncer'
 
 type TerminalNodeDataWithHandlers = TerminalNodeData & {
-  onExpand?: (nodeId: string) => void
+  /** `sideBySide` (Ctrl/Cmd+clique): abre ao lado dos agentes já na gaveta. */
+  onExpand?: (nodeId: string, options?: { sideBySide?: boolean }) => void
   onDetails?: (nodeId: string) => void
   onSessionStarted?: (nodeId: string, startedAt: number) => void
   onAgentSession?: (nodeId: string, reference: AgentSessionReference) => void
@@ -328,10 +329,10 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
         <button
           type="button"
           className="felixo-btn-icon nodrag rounded-sm p-0.5 opacity-70 hover:bg-black/20 hover:opacity-100"
-          onClick={() => nodeData.onExpand?.(id)}
+          onClick={(event) => nodeData.onExpand?.(id, { sideBySide: event.ctrlKey || event.metaKey })}
           data-terminal-expand-trigger={id}
           aria-label="Expandir terminal"
-          title="Expandir"
+          title="Expandir (Ctrl/Cmd+clique abre ao lado dos outros)"
         >
           <Maximize2 size={13} />
         </button>
@@ -450,8 +451,9 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
 
       <button
         type="button"
-        onClick={() => nodeData.onExpand?.(id)}
+        onClick={(event) => nodeData.onExpand?.(id, { sideBySide: event.ctrlKey || event.metaKey })}
         data-terminal-expand-trigger={id}
+        title="Ctrl/Cmd+clique abre ao lado dos outros agentes"
         className="felixo-node-preview felixo-paleta-escura nodrag nowheel nopan flex min-h-0 flex-1 flex-col gap-1 p-2 text-left"
         aria-label={`Abrir ${nodeData.label || provider.label}`}
       >
