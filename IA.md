@@ -3822,3 +3822,12 @@ Task: Felixo AI Core/System Design — conferir a migração v3 numa instalaçã
 **Não validado.** A instalação real do André e o reinício real do app do Felipe (passos humanos na task): ver `updated_at` da `system-design.config` e o selo "escolhida por você" em Configurações → System Design.
 
 Estado: concluído do lado do código; conferência nas máquinas fica manual.
+
+---
+
+## 2026-11-17 — Release: guia de assinatura e notarização (nada ligado)
+
+- Contexto: o app do macOS sai com assinatura ad-hoc (o Gatekeeper rejeita) e o instalador do Windows sem assinatura. Assinar exige conta Apple (US$ 99/ano) e SignPath ou certificado de CA.
+- Decisões do Felipe: publicador pessoa física; Windows só se desse sem cadastro (não dá, todo caminho exige); smoke exigente só depois de assinar.
+- O que mudou: `docs/guias/GUIA-ASSINATURA-DE-RELEASE.md`, com o passo humano, os secrets com nome exato e o diff pronto do electron-builder e do `release.yml`. Nenhuma configuração ativa, porque `hardenedRuntime` sem certificado muda o app.
+- Validação: só documentação; nenhum teste rodado.
