@@ -4434,3 +4434,15 @@ Task: Felixo AI Core/Links — decidir se o link do terminal abre pelo teclado (
 **Não validado.** Leitor de tela real e toque com dedo em tela real seguem na task de origem. As falhas fora desta mudança estão no relatório da task e viraram pendências no Notion: timeouts de leitura de arquivos e falhas que só aparecem na suíte inteira.
 
 Estado: concluído (commit `266440ad` na branch; push e deploy pelo orquestrador).
+
+---
+
+## 2026-11-17 — Segurança: o renderer recusa os rótulos xn-- que o main recusa
+
+**Contexto.** A revisão da política única de URL externa mostrou que o Chromium aprova hosts como `https://xn--a.com/`, `xn--ab--c.com`, `xn---a.com` e `XN--A-ECP.ru`, que o Node (ada) recusa no parse. O terminal mostrava a dica de clique e o Markdown renderizava `<a>`, mas o main reclassificava como `malformada` e nada abria. Falhava fechado, sem bypass, mas era link morto.
+
+**O que mudou.** `app/src/features/shared/external-url-policy.ts` ganhou `decodePunycode` (RFC 3492, sem dependência, recusa caractere fora do alfabeto, estouro de inteiro, acima de U+10FFFF e surrogate) e `hasInvalidPunycodeLabel`: para esquemas web, depois do `new URL`, recusa como `malformada` o rótulo `xn--` cujo decode falha, não gera caractere não-ASCII, ou cuja recodificação (`new URL('https://' + decodificado + '/')`) difere do rótulo. A tabela `external-url-policy.cases.json` ganhou 6 casos (5 recusas e o IDN legítimo `xn--e1afmkfd.xn--p1ai`).
+
+**Validação.** `external-url-policy.test.ts`: 100 testes passam (eram 90); `node --test external-url-policy.test.cjs`: 90 passam; node unit completo: 3471 pass, 0 fail. No Node a decisão já era recusa, então a tabela não distingue antes/depois; `decodePunycode` e `hasInvalidPunycodeLabel` têm teste direto, mais 20 mil rótulos aleatórios (renderer nunca aprova o que o main recusa) e 5 mil IDNs legítimos (decisão igual ao main).
+
+**NÃO verificado.** Não rodou no Chromium: o Electron não abriu (nem `felixo devtools launch`) nesta sessão. Divergência conhecida e segura: em Punycode não canônico (`xn---sor.com`) o Node aceita e o renderer recusa.

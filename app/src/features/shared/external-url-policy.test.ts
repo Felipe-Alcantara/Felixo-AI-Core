@@ -8,6 +8,8 @@ import {
   EXTERNAL_OPENER_SCHEMES,
   EXTERNAL_WEB_SCHEMES,
   classifyExternalUrl,
+  decodePunycode,
+  hasInvalidPunycodeLabel,
   describeExternalUrlForLog,
   hasHiddenUrlCharacters,
   revealHiddenUrlCharacters,
@@ -160,6 +162,89 @@ describe('revealHiddenUrlCharacters', { timeout: PROPERTY_TIMEOUT_MS }, () => {
     for (let index = 0; index < SAMPLES; index += 1) {
       const value = randomUrlLike(random)
       expect(hasHiddenUrlCharacters(revealHiddenUrlCharacters(value)), JSON.stringify(value)).toBe(false)
+    }
+  })
+})
+
+describe('decodePunycode', () => {
+  it('decodifica rótulos legítimos', () => {
+    expect(decodePunycode('xample-2of')).toBe('еxample')
+    expect(decodePunycode('e1afmkfd')).toBe('пример')
+    expect(decodePunycode('bcher-kva')).toBe('bücher')
+  })
+
+  it('devolve null para entrada inválida, sem lançar', () => {
+    // vazio de dígitos, delimitador sozinho, caractere fora do alfabeto, não-ASCII no trecho básico
+    for (const bad of ['-a', 'a-', 'ab--c', '!', 'a-é', 'a-zzzzzzzzzzzzzzzzzzzz']) {
+      expect(() => decodePunycode(bad), bad).not.toThrow()
+    }
+    expect(decodePunycode('-a')).toBeNull()
+    expect(decodePunycode('!')).toBeNull()
+    expect(decodePunycode('a-é')).toBeNull()
+    // estouro de inteiro
+    expect(decodePunycode('zzzzzzzzzzzzzzzzzzzz')).toBeNull()
+  })
+
+  it('recusa ponto de código acima de U+10FFFF e surrogate', () => {
+    // U+110000 (en32g) é inválido, U+10FFFF (dn32g) é o último válido
+    expect(decodePunycode('en32g')).toBeNull()
+    expect(decodePunycode('dn32g')).toBe(String.fromCodePoint(0x10ffff))
+    // U+D800 (ib9b), gerado com um codificador de referência
+    expect(decodePunycode('ib9b')).toBeNull()
+  })
+})
+
+describe('política de URL externa: rótulos xn--', { timeout: PROPERTY_TIMEOUT_MS }, () => {
+  // O Chromium aprova rótulos que o Node recusa; no Node só dá para provar que o
+  // renderer nunca aprova o que o main recusa. O inverso pode acontecer em
+  // Punycode não canônico (`xn---sor`: o Node aceita, recodificar não devolve o
+  // rótulo): o renderer recusa e falha fechado, sem link clicável que o main
+  // aceitaria.
+  it('rótulos xn-- aleatórios: o renderer nunca aprova o que o main recusa', () => {
+    const random = seededRandom(0x5eed_0006)
+    const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789--'
+    for (let index = 0; index < SAMPLES; index += 1) {
+      let label = 'xn--'
+      for (let n = 1 + Math.floor(random() * 10); n > 0; n -= 1) {
+        label += alphabet[Math.floor(random() * alphabet.length)]
+      }
+      const value = `https://${random() < 0.2 ? label.toUpperCase() : label}.com/`
+      if (classifyExternalUrl(value).ok) expect(mainPolicy.classifyExternalUrl(value).ok, value).toBe(true)
+    }
+  })
+
+  it('IDN legítimo, em Unicode ou em punycode, continua aprovado', () => {
+    const random = seededRandom(0x5eed_0007)
+    const alphabet = ['а', 'б', 'в', 'ü', 'é', 'ñ', '中', '文', 'ж', 'a', 'b', '1', '-']
+    let approved = 0
+    for (let index = 0; index < 5_000; index += 1) {
+      let label = ''
+      for (let n = 1 + Math.floor(random() * 8); n > 0; n -= 1) {
+        label += alphabet[Math.floor(random() * alphabet.length)]
+      }
+      for (const host of [label, new URL(`https://${label}/`).hostname]) {
+        const value = `https://${host}.example/`
+        const decision = classifyExternalUrl(value)
+        expect(decision, value).toEqual(mainPolicy.classifyExternalUrl(value))
+        if (decision.ok) approved += 1
+      }
+    }
+    expect(approved).toBeGreaterThan(1_000)
+  })
+})
+
+describe('hasInvalidPunycodeLabel', () => {
+  // Chamada direto porque, no Node, `new URL` já recusa estes hosts antes da
+  // política; o Chromium os aprova e é ali que esta checagem decide.
+  it('recusa os rótulos que o Chromium aprova e o Node recusa', () => {
+    for (const host of ['xn--a.com', 'xn--ab--c.com', 'xn---a.com', 'xn--a-ecp.ru', 'www.xn--a.com', 'xn--']) {
+      expect(hasInvalidPunycodeLabel(host), host).toBe(true)
+    }
+  })
+
+  it('aceita IDN legítimo e host sem punycode', () => {
+    for (const host of ['xn--xample-2of.com', 'xn--e1afmkfd.xn--p1ai', 'xn--bcher-kva.example', 'example.com', '127.0.0.1']) {
+      expect(hasInvalidPunycodeLabel(host), host).toBe(false)
     }
   })
 })

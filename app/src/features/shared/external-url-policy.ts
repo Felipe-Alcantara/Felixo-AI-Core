@@ -99,6 +99,12 @@ export function classifyExternalUrl(
   // renderer mostraria e o main não abriria.
   if (parsed.hostname.includes('%')) return { ok: false, reason: 'malformada', scheme }
 
+  // O Chromium aprova rótulos `xn--` que o Node recusa (`xn--a.com`,
+  // `xn--ab--c.com`); sem isto o link apareceria e o main não o abriria.
+  if (scheme !== 'mailto:' && hasInvalidPunycodeLabel(parsed.hostname)) {
+    return { ok: false, reason: 'malformada', scheme }
+  }
+
   const hasDestination = scheme === 'mailto:' ? Boolean(parsed.pathname) : Boolean(parsed.hostname)
   if (!hasDestination) return { ok: false, reason: 'sem-destino', scheme }
   // Fragmento num mailto: não existe na RFC 6068 (um `#` do endereço vem como
@@ -160,6 +166,85 @@ function hasEncodedHiddenInAuthority(value: string): boolean {
     // `%` malformado: o parser recusa o host logo adiante.
     return false
   }
+}
+
+/**
+ * Decodifica Punycode (RFC 3492). Devolve `null` quando o texto é inválido:
+ * caractere fora do alfabeto, estouro de inteiro, ponto de código acima de
+ * U+10FFFF ou surrogate.
+ */
+export function decodePunycode(input: string): string | null {
+  const BASE = 36
+  const T_MIN = 1
+  const T_MAX = 26
+  const MAX_INT = 0x7fffffff
+
+  const delimiter = input.lastIndexOf('-')
+  const output: number[] = []
+  for (let index = 0; index < Math.max(delimiter, 0); index += 1) {
+    const code = input.charCodeAt(index)
+    if (code >= 0x80) return null
+    output.push(code)
+  }
+
+  let n = 128
+  let i = 0
+  let bias = 72
+  for (let pos = delimiter > 0 ? delimiter + 1 : 0; pos < input.length; ) {
+    const oldI = i
+    for (let w = 1, k = BASE; ; k += BASE) {
+      if (pos >= input.length) return null
+      const code = input.charCodeAt(pos++)
+      const digit =
+        code >= 0x30 && code <= 0x39 ? code - 0x16
+        : code >= 0x41 && code <= 0x5a ? code - 0x41
+        : code >= 0x61 && code <= 0x7a ? code - 0x61
+        : BASE
+      if (digit >= BASE || digit > Math.floor((MAX_INT - i) / w)) return null
+      i += digit * w
+      const t = k <= bias ? T_MIN : k >= bias + T_MAX ? T_MAX : k - bias
+      if (digit < t) break
+      if (w > Math.floor(MAX_INT / (BASE - t))) return null
+      w *= BASE - t
+    }
+
+    const count = output.length + 1
+    let delta = oldI === 0 ? Math.floor((i - oldI) / 700) : Math.floor((i - oldI) / 2)
+    delta += Math.floor(delta / count)
+    let k = 0
+    while (delta > ((BASE - T_MIN) * T_MAX) >> 1) {
+      delta = Math.floor(delta / (BASE - T_MIN))
+      k += BASE
+    }
+    bias = k + Math.floor(((BASE - T_MIN + 1) * delta) / (delta + 38))
+
+    if (Math.floor(i / count) > MAX_INT - n) return null
+    n += Math.floor(i / count)
+    i %= count
+    if (n > 0x10ffff || (n >= 0xd800 && n <= 0xdfff)) return null
+    output.splice(i++, 0, n)
+  }
+
+  return String.fromCodePoint(...output)
+}
+
+/**
+ * Algum rótulo `xn--` do host que o Node (ada) recusa e o Chromium aprova?
+ * Recusa quando o Punycode não decodifica, quando o decodificado é só ASCII
+ * ou quando recodificá-lo não devolve o mesmo rótulo.
+ */
+export function hasInvalidPunycodeLabel(hostname: string): boolean {
+  return hostname.split('.').some((label) => {
+    if (!label.startsWith('xn--')) return false
+    const decoded = decodePunycode(label.slice(4))
+    // eslint-disable-next-line no-control-regex -- procura qualquer caractere fora do ASCII.
+    if (!decoded || !/[^\u0000-\u007f]/.test(decoded)) return true
+    try {
+      return new URL(`https://${decoded}/`).hostname !== label
+    } catch {
+      return true
+    }
+  })
 }
 
 function hasUnknownMailtoField(parsed: URL): boolean {
