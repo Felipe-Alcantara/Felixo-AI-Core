@@ -70,6 +70,19 @@
           "note": "Não é falha: é o sinal de que o terminal antigo pode retomar na conta antiga."
         },
         {
+          "id": "claude.limit.out-of-extra-usage-resets",
+          "kind": "include",
+          "failureClass": "limit",
+          "scope": "account",
+          "terminal": true,
+          "literals": [
+            "You're out of extra usage"
+          ],
+          "example": "You're out of extra usage · resets 4:40pm (America/Sao_Paulo)",
+          "inPackage": true,
+          "note": "Com horário de volta (\"resets …\") a cota extra volta sozinha: a CLI devolve rate_limit/429 e o chat já trata como limite. Sem horário é cobrança."
+        },
+        {
           "id": "claude.billing.out-of-extra-usage",
           "kind": "include",
           "failureClass": "billing",
@@ -78,7 +91,7 @@
           "literals": [
             "You're out of extra usage"
           ],
-          "example": "You're out of extra usage · resets 4:40pm (America/Sao_Paulo)",
+          "example": "You're out of extra usage",
           "inPackage": true
         },
         {

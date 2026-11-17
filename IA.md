@@ -3996,3 +3996,20 @@ Não feito (pendência). Perguntar por área na configuração de cada projeto (
 **Validação.** Teste novo com cache SQLite real e cliente que falha como proxy morto: sem snapshot o erro continua; depois de um sync a lista offline traz só a database da conexão (a de outra conexão não aparece), com nome e data, e `listTasks` devolve a tarefa salva com `stale`. Testes novos: 401 com snapshot devolve o erro, 503 mostra o snapshot, tabela de `isOfflineError`. `notion-service.test.cjs` e `notion-cache-repository.test.cjs`: 26 de 26.
 
 **Não validado.** Reabrir o app real sem rede (não rodei o app); não há teste de componente do painel. Snapshots criados antes desta versão não têm nome e aparecem como "Database sincronizada" até a próxima sincronização.
+
+---
+
+## 2026-11-17 — Contas: "out of extra usage · resets …" é limite no terminal, e a espera vencida pede confirmação
+
+**Contexto.** Desde a v0.1.554 o chat classifica pelo código da CLI, e a fixture real do Claude Code 2.1.323 traz "You're out of extra usage · resets 1:20pm" com `rate_limit`/429. No terminal e no texto sem código a mesma frase continuava `billing`, então os caminhos divergiam.
+
+**Decisão do Felipe.** "Sempre usar o limite normal; se houver reset, perguntar se pode usar": a frase com horário é limite; a conta não volta sozinha a gastar uso extra; sem horário continua como antes (cobrança).
+
+**O que mudou.**
+- `cli-failure-patterns.cjs`: a frase "You're out of extra usage" vira `limit` com "resets" na linha e segue `billing` sem ele (regra nova `unless`, ao lado de `alsoRequires`; vale no terminal e no fluxo, e na lista genérica). `failure-taxonomy.cjs` compila e aplica o `unless`.
+- Decisão do agente: a pergunta no reset reaproveita a regra 5 da política (`cooldownBlocks`): a espera de limite vencida só libera com checagem de login posterior, então a conta nunca volta sozinha; a pessoa confere pelo "Conferir login" da lista da cadeia. Só o texto muda: `formatCooldown` mostra "espera vencida · confira o login para liberar o uso extra" quando a evidência é de extra usage. Nenhuma tela, tabela ou fluxo novo; o comportamento do bloco com conta fixa não foi tocado.
+- Fixture `cli-failure-vocabulary.json`: a entrada de cobrança passa a ter o exemplo sem horário, e a nova `claude.limit.out-of-extra-usage-resets` cobre o caso com "resets". `model-availability.test.cjs`: com horário, o orquestrador registra "Limite detectado pela CLI", não "Sem crédito".
+
+**Validação.** `failure-taxonomy.test.cjs` 27/27 (pty e fluxo, com e sem "resets"; espera vencida não solta a conta sem checagem); `account-chain-view.test.ts` com o texto novo; lint e typecheck limpos; `run-node-unit-tests` 3398/3410 passam, 0 falhas. Não rodei o app real.
+
+Estado: concluído; a "pergunta" é a confirmação por "Conferir login" na lista da cadeia, sem diálogo próprio (se o Felipe quiser uma faixa ou proposta explícita no bloco, é outra task).

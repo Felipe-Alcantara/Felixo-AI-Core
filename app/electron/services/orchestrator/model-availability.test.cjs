@@ -280,13 +280,20 @@ test('cobrança vira limit_reached da CLI inteira com motivo de crédito', () =>
   for (const message of [
     'You exceeded your current quota, please check your plan and billing details.',
     'Credit balance is too low',
-    "You're out of extra usage · resets 4:40pm (America/Sao_Paulo)",
+    "You're out of extra usage",
   ]) {
     const issue = issueFor(message, 'claude')
     assert.equal(issue.status, 'limit_reached', message)
     assert.equal(issue.scope, 'cli', message)
     assert.match(issue.reason, /^Sem crédito: /, message)
   }
+})
+
+test('"out of extra usage" com horário de volta é limite da CLI inteira, não falta de crédito', () => {
+  const issue = issueFor("You're out of extra usage · resets 4:40pm (America/Sao_Paulo)", 'claude')
+  assert.equal(issue.status, 'limit_reached')
+  assert.equal(issue.scope, 'cli')
+  assert.match(issue.reason, /^Limite detectado pela CLI: /)
 })
 
 test('perda de login vira no_login com prazo, e o registro a libera sozinho', () => {

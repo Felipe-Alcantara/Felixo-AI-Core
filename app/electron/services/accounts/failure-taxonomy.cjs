@@ -221,6 +221,7 @@ function compileRule(rule, linePrefixes) {
     regex,
     terminalRegex: compileTerminalRegex(rule, linePrefixes, regex),
     alsoRequiresRegex: rule.alsoRequires ? compilePhrase(rule.alsoRequires) : null,
+    unlessRegex: rule.unless ? compilePhrase(rule.unless) : null,
     terminal: rule.terminal !== false,
   }
 }
@@ -283,6 +284,7 @@ function collectCandidates(matchLine, rules, origin, lineIndex, line) {
     const regex = ruleRegexFor(rule, origin)
     if (!regex.test(matchLine)) continue
     if (rule.alsoRequiresRegex && !rule.alsoRequiresRegex.test(matchLine)) continue
+    if (rule.unlessRegex?.test(matchLine)) continue
     candidates.push({
       failureClass: rule.failureClass,
       scope: rule.scope ?? 'account',

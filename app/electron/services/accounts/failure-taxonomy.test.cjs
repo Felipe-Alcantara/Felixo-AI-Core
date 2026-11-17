@@ -373,3 +373,40 @@ test('no terminal, a frase citada pelo agente num diff, teste ou código não é
     'limit',
   )
 })
+
+test('"out of extra usage" com "resets" é limite no terminal e no fluxo; sem horário continua cobrança', () => {
+  for (const origin of ['pty', 'fluxo']) {
+    const withReset = classifyFailure({
+      text: "⎿ You're out of extra usage · resets 1:20pm (America/Sao_Paulo)",
+      origin,
+      providerId: 'claude',
+    })
+    assert.equal(withReset.failureClass, 'limit', origin)
+    assert.match(withReset.evidence, /resets 1:20pm/, origin)
+
+    const withoutReset = classifyFailure({ text: "You're out of extra usage", origin, providerId: 'claude' })
+    assert.equal(withoutReset.failureClass, 'billing', origin)
+  }
+  // Sem provedor (texto genérico do fluxo) a frase segue o mesmo caminho.
+  assert.equal(classifyFailure({ text: "You're out of extra usage · resets 4:40pm" }).failureClass, 'limit')
+})
+
+test('a espera de "extra usage" vence no horário do reset mas a conta só volta com checagem de login depois dele', () => {
+  const { cooldownBlocks } = require('./account-chain-policy.cjs')
+  const detected = classifyFailure({
+    text: "You're out of extra usage · resets 1:20pm (America/Sao_Paulo)",
+    origin: 'pty',
+    providerId: 'claude',
+  })
+  assert.equal(detected.failureClass, 'limit')
+
+  const untilAt = '2026-11-17T16:20:00.000Z'
+  const cooldown = { failureClass: detected.failureClass, detectedAt: '2026-11-17T14:00:00.000Z', untilAt, releasedAt: null, releasedBy: null }
+  const reset = Date.parse(untilAt)
+  assert.equal(cooldownBlocks(cooldown, null, reset - 60_000), true, 'antes do reset, em espera')
+  assert.equal(cooldownBlocks(cooldown, null, reset + 60_000), true, 'no reset não volta sozinha')
+  const swept = { ...cooldown, releasedAt: untilAt, releasedBy: 'vencimento' }
+  assert.equal(cooldownBlocks(swept, null, reset + 60_000), true, 'a varredura não a solta')
+  const checked = { status: 'logged_in', checkedAt: '2026-11-17T16:25:00.000Z' }
+  assert.equal(cooldownBlocks(swept, checked, reset + 10 * 60_000), false, 'a pessoa confere e a conta volta')
+})

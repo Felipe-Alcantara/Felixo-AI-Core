@@ -193,7 +193,10 @@ export function cooldownAction(
 export function formatCooldown(cooldown: AccountCooldown | null, options: TimeOptions = {}): string {
   if (!cooldown) return ''
   if (cooldown.needsCheck) {
-    return 'espera vencida · precisa conferir o login antes de voltar'
+    // "Extra usage" vencido: o uso extra é pago, então a conta só volta quando a pessoa confere.
+    return /extra usage/i.test(cooldown.evidence ?? '')
+      ? 'espera vencida · confira o login para liberar o uso extra'
+      : 'espera vencida · precisa conferir o login antes de voltar'
   }
   if (!cooldown.untilAt) {
     return cooldown.failureClass === 'billing'

@@ -20,6 +20,8 @@
  * - `anchor: 'line'` — frase curta demais para valer no meio de uma linha: só
  *   conta como a linha inteira (fora símbolos e pontuação nas pontas).
  * - `alsoRequires` — outro trecho que precisa estar na mesma linha.
+ * - `unless` — trecho que, na mesma linha, tira a frase desta regra (a mesma frase com
+ *   horário de volta é de outra classe).
  * - `capacity: true` — falta de capacidade do servidor, não da conta: o
  *   orquestrador ainda tenta outro modelo, e a conta nunca entra em espera.
  * - `ambiguous: true` — pode ser login ou permissão; a pessoa escolhe.
@@ -57,7 +59,10 @@ const PROVIDER_PATTERNS = Object.freeze({
       { phrase: "You've hit your team's shared budget", failureClass: 'billing', scope: 'account' },
       { phrase: "You're out of usage credits", failureClass: 'billing', scope: 'account' },
       { phrase: 'Your org is out of usage', failureClass: 'billing', scope: 'account' },
-      { phrase: "You're out of extra usage", failureClass: 'billing', scope: 'account' },
+      // Com "resets <hora>" a cota extra volta sozinha (a CLI devolve rate_limit/429): é limite, igual
+      // ao chat. Sem horário continua cobrança. Vencida, a espera não libera a conta sozinha (cooldownBlocks).
+      { phrase: "You're out of extra usage", alsoRequires: 'resets', failureClass: 'limit', scope: 'account' },
+      { phrase: "You're out of extra usage", unless: 'resets', failureClass: 'billing', scope: 'account' },
       { phrase: 'Credit balance is too low', failureClass: 'billing', scope: 'account' },
       { phrase: "Your seat type doesn't include usage credits", failureClass: 'billing', scope: 'account' },
       { phrase: "Your seat type doesn't include extra usage", failureClass: 'billing', scope: 'account' },
@@ -161,7 +166,8 @@ const GENERIC_PATTERNS = Object.freeze([
   { phrase: 'exceeded your current quota', failureClass: 'billing' },
   { phrase: 'insufficient_quota', failureClass: 'billing' },
   { phrase: 'credit balance', failureClass: 'billing' },
-  { phrase: 'out of extra usage', failureClass: 'billing' },
+  { phrase: 'out of extra usage', alsoRequires: 'resets', failureClass: 'limit' },
+  { phrase: 'out of extra usage', unless: 'resets', failureClass: 'billing' },
   { phrase: 'out of credits', failureClass: 'billing' },
   { phrase: 'payment required', failureClass: 'billing' },
   { phrase: 'not logged in', failureClass: 'auth' },

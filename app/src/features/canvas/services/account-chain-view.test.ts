@@ -113,6 +113,12 @@ describe('formatCooldown', () => {
     expect(formatCooldown({ ...base, needsCheck: true })).toMatch(/precisa conferir o login/)
   })
 
+  it('espera vencida de "extra usage" pede a confirmação da pessoa antes de liberar o uso extra', () => {
+    const extra = { ...base, needsCheck: true, evidence: "You're out of extra usage · resets 1:20pm" }
+    expect(formatCooldown(extra)).toMatch(/liberar o uso extra/)
+    expect(cooldownAction(extra)).toBe('check-login')
+  })
+
   it('sem espera, nada', () => {
     expect(formatCooldown(null)).toBe('')
   })
