@@ -423,6 +423,12 @@ Workflow `.github/workflows/retomada-e2e-empacotado.yml`, **só manual** (`workf
 
 Sem o secret, o job `secret` falha em segundos com "O secret CLAUDE_CODE_OAUTH_TOKEN não está configurado" e o E2E nem começa. Escolheu-se o token OAuth (e não `ANTHROPIC_API_KEY`) porque o Claude Code o lê da variável sem terminal e sem passar pelo onboarding de chave, e porque é a conta que a retomada de verdade usa. O app só repassa essa variável a cartões sem conta própria (`cli-account-profiles.cjs` a remove dos cartões de conta), e o E2E usa cartões sem conta.
 
+### E2E do Linux instalado (instância única, GPU do AppImage, .desktop, launcher)
+
+Workflow `.github/workflows/linux-instalado-e2e.yml`, **só manual** (`workflow_dispatch`, sem secret, sem publicar), em `ubuntu-24.04` com `libfuse2t64` e `xvfb`. Empacota AppImage e `.deb` x64 com `electron-builder --publish never` e roda `app/scripts/linux-instalado-e2e.cjs` com `XDG_CONFIG_HOME` isolado. Confere: o `.desktop` do `.deb` e o do AppImage com cada MimeType uma vez só; a segunda abertura do AppImage saindo com código 0 e deixando um processo principal só; e o relançamento de GPU (preferência Integrada com `DRI_PRIME` e `__NV_PRIME_RENDER_OFFLOAD` no ambiente): o processo novo nasce, fica sozinho, sobe sem essas variáveis e com `FELIXO_GPU_ENV_SANITIZED=1`, e apaga o `pendingRelaunch` do `gpu-preference.json`. Uma segunda passada abre o AppImage com `--appimage-extract-and-run` (sem FUSE) e confere `APPIMAGE_EXTRACT_AND_RUN` com a marca no processo novo. Antes, um passo confere que o launcher (`get_missing_node_dependencies` e `node_modules_is_current`) não acusa nada depois do `npm ci`. Relatório e log saem no artefato `linux-instalado-e2e`.
+
+O que o runner **não** prova: a placa de vídeo de verdade (não há GPU nem `prime-run`; o ambiente do `prime-run` é simulado por variáveis), a entrega de um `.fxai` à janela aberta (só o encaminhamento de argv é coberto por teste de unidade), o autostart do próximo boot (`~/.cache/felixo-ai-core-autostart.log`) e o vazamento de `APPIMAGE_EXTRACT_AND_RUN` num terminal aberto pelo Felixo. Esses seguem na máquina Linux física.
+
 ### Smoke do artefato de release
 
 Depois de `electron-builder --publish never`, o workflow instala ou extrai o

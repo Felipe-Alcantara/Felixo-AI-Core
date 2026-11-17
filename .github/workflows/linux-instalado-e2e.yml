@@ -1,0 +1,93 @@
+# Valida no Linux, com os instaladores reais (.deb e AppImage), a instância única, o relançamento de
+# GPU do AppImage, o .desktop e o launcher. É o que a task "validar no Linux a instância única" pedia
+# a uma máquina física; o ci.yml e o release.yml só provam isso com ambiente falso (testes de
+# unidade) e abrem o AppImage extraído no release smoke.
+#
+# Só manual (`workflow_dispatch`). Não publica nada: `electron-builder --publish never`, sem GH_TOKEN.
+# Roteiro e limites: docs/guias/GUIA-DESENVOLVEDOR.md, "E2E do Linux instalado".
+name: Linux instalado E2E
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-instalado-e2e
+  cancel-in-progress: false
+
+jobs:
+  e2e:
+    name: Linux instalado E2E
+    # 24.04 fixo: o ubuntu-latest já mudou de versão uma vez e o libfuse2t64 é nome do 24.04.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: app
+        shell: bash
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      # O runtime do AppImage monta o próprio arquivo por FUSE (libfuse.so.2). É esse caminho,
+      # com a montagem em /tmp/.mount_*, que o relançamento de GPU existe para contornar.
+      - name: Instalar FUSE e o dpkg-deb
+        run: sudo apt-get update && sudo apt-get install -y libfuse2t64 dpkg
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Launcher: com as dependências já instaladas, não deve acusar nada faltando nem pedir
+      # `npm install` (os três falsos positivos do Excalidraw, task de 04/11/2026).
+      - name: Launcher não reinstala dependências
+        working-directory: .
+        run: |
+          python3 - <<'PY'
+          import os
+          from felixo_launcher.node_deps import get_missing_node_dependencies, node_modules_is_current
+          faltando = get_missing_node_dependencies(dict(os.environ))
+          atual = node_modules_is_current()
+          print(f"faltando={faltando} node_modules_atual={atual}")
+          raise SystemExit(1 if faltando or not atual else 0)
+          PY
+
+      - name: Build renderer
+        run: npx vite build
+
+      - name: Empacotar AppImage e .deb sem publicar
+        run: npx electron-builder --linux AppImage deb --x64 --publish never
+
+      - name: .desktop, duas aberturas e relançamento de GPU (AppImage montado por FUSE)
+        run: xvfb-run -a --server-args="-screen 0 1280x720x24" node scripts/linux-instalado-e2e.cjs --release-dir release --out "$RUNNER_TEMP/linux-e2e-fuse"
+
+      # Sem FUSE: o relançado recebe APPIMAGE_EXTRACT_AND_RUN com a marca do relançamento.
+      - name: Duas aberturas e relançamento de GPU (AppImage extraído)
+        if: ${{ !cancelled() }}
+        run: xvfb-run -a --server-args="-screen 0 1280x720x24" node scripts/linux-instalado-e2e.cjs --release-dir release --out "$RUNNER_TEMP/linux-e2e-extraido" --extract-and-run
+
+      - name: Publicar relatórios e logs
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: linux-instalado-e2e
+          path: |
+            ${{ runner.temp }}/linux-e2e-fuse
+            ${{ runner.temp }}/linux-e2e-extraido
+          if-no-files-found: warn

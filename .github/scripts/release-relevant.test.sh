@@ -47,6 +47,11 @@ esperar false "workflow do E2E da retomada empacotada" $'.github/workflows/retom
 esperar false "script do E2E da retomada empacotada" $'app/scripts/retomada-e2e-empacotado.cjs
 app/scripts/retomada-e2e-empacotado.test.cjs
 '
+esperar false "workflow do E2E do Linux instalado" $'.github/workflows/linux-instalado-e2e.yml
+'
+esperar false "script do E2E do Linux instalado" $'app/scripts/linux-instalado-e2e.cjs
+app/scripts/linux-instalado-e2e.test.cjs
+'
 esperar false "README na raiz" $'README.md\n'
 esperar false "teste dentro de app/electron" $'app/electron/foo.test.cjs\n'
 esperar false "teste dentro de app/src" $'app/src/features/canvas/x.test.tsx\n'

@@ -4072,3 +4072,24 @@ Task: Felixo AI Core/Limites — capturar, por sessão e sem digitar no terminal
 - **Motivo:** nada travava essa regra; voltar a ler o ambiente do processo só quebraria na máquina de quem tem `CODEX_HOME` definido, que o CI limpo não pega.
 - **O que mudou:** um teste novo em `agent-session-discovery.test.cjs` define `CODEX_HOME` e `CLAUDE_CONFIG_DIR` falsos no processo (restaura no `finally`) e confirma que a sessão da fixture, em `homeDir` temporário, continua sendo achada.
 - **Validação:** o teste novo falha com `env = process.env` e passa com `env = {}`. Suíte node inteira com HOME/USERPROFILE/CODEX_HOME/CLAUDE_CONFIG_DIR numa pasta temporária vazia: 3418 testes, 3405 aprovados, 12 ignorados, 1 falha, idêntica à rodada normal (benchmark de PTY sob carga, passa isolado 11/11). Vitest 3572 aprovados. A pasta temporária ficou sem nenhuma sessão criada.
+
+---
+
+## 2026-11-17 — Inicialização: job manual que valida no Linux a instância única, o relançamento de GPU do AppImage, o .desktop e o launcher
+
+**Contexto.** Task "validar no Linux a instância única (inclusive o relançamento de GPU do AppImage), o .desktop e o launcher" (`40e91f95-497e-8184-b156-c84b95b8f0da`). Os commits `02f245b` (trava de instância única), `0682ba7` (launcher sem falso positivo do Excalidraw) e `d438c85` (`.desktop` sem MimeType repetido) só foram provados no Windows. O CI e o Release já rodavam no Ubuntu, mas só com ambiente falso: testes de unidade do `single-instance`, do `gpu-launch` e do gerador do `.desktop`, o `unittest` do launcher em Ubuntu 24.04 (Python 3.9) e Ubuntu 26.04 (3.13), e o release smoke do AppImage extraído (PTY, userData, contexto, CSP). Nenhum abria duas instâncias do AppImage, nenhum exercitava o relançamento de GPU real (que só existe no AppImage), nenhum lia o `.desktop` do `.deb` ou do AppImage gerados.
+
+**Motivo.** O Linux físico é a máquina do relato de 25/09, mas quase tudo o que a task pede pode ser visto num runner Ubuntu com `xvfb`: o que depende de placa de vídeo real, do gerenciador de arquivos, do menu de aplicativos e de um boot não pode, e ficou declarado.
+
+**O que mudou.**
+- `.github/workflows/linux-instalado-e2e.yml` (só `workflow_dispatch`, `ubuntu-24.04`, sem secret, sem publicar): instala `libfuse2t64`, faz `npm ci`, confere o launcher, empacota AppImage e `.deb` x64 com `electron-builder --publish never` e roda o script duas vezes, com o AppImage montado por FUSE e com `--appimage-extract-and-run`.
+- `app/scripts/linux-instalado-e2e.cjs`: (1) lê o `.desktop` do `.deb` (`dpkg-deb -x`) e o do AppImage (`--appimage-extract '*.desktop'`) e exige uma linha `MimeType` com os três tipos uma vez cada; (2) abre o AppImage com `XDG_CONFIG_HOME` isolado, abre de novo e exige código 0 na segunda e um processo principal só (lido em `/proc`, sem os filhos `--type=`); (3) grava Integrada no `gpu-preference.json`, abre com `DRI_PRIME=1` e `__NV_PRIME_RENDER_OFFLOAD=1` e exige: lançador sai com 0, o processo novo nasce com pid diferente, fica sozinho depois de 8 s, o `/proc/<pid>/environ` dele não tem as variáveis e tem `FELIXO_GPU_ENV_SANITIZED=1`, e o `pendingRelaunch` e o `fallback` do arquivo ficam vazios (o relançado apaga o pedido só se chegar ao `main.cjs` com a trava). Na passada sem FUSE confere também `APPIMAGE_EXTRACT_AND_RUN=1` com a marca `FELIXO_APPIMAGE_EXTRACT_AND_RUN_ADDED`.
+- Passo do launcher no mesmo job: `get_missing_node_dependencies` vazio e `node_modules_is_current` verdadeiro depois do `npm ci`.
+- `app/scripts/linux-instalado-e2e.test.cjs`: 2 testes de unidade da análise do `.desktop` (6 tipos repetidos são acusados) e da leitura de `/proc` (só o processo principal conta; sem zygote, crashpad nem `AppRun`; ambiente lido de `environ`), com um `/proc` falso.
+- `release-relevant.test.sh` fixa os arquivos novos como não relevantes para publicar; `GUIA-DESENVOLVEDOR.md` documenta o job e o que o runner não prova.
+
+**Validação.** `lint` e `typecheck` limpos; `run-node-unit-tests.cjs` com 3419 testes, 3406 passam, 12 pulados e 1 falha em `pty-output-path-benchmark.test.cjs` sob a carga da suíte inteira, que passa isolado (11 de 11); `vitest run` 232 arquivos passam e 1 falha (`canvas-context-e2e.test.ts`, 3 de 3 execuções, também isolado; nenhum arquivo de `app/src` foi alterado aqui); `bash .github/scripts/release-relevant.test.sh` passa. O job não foi disparado: esta máquina é Windows e o script só roda no Linux.
+
+**Não validado.** O job nunca rodou num runner; a primeira execução pode pedir ajuste fino (nome do executável, FUSE no runner, AppArmor do 24.04). Não cobre: placa de vídeo real e `prime-run` (o ambiente é simulado por variáveis), entrega de um `.fxai` à janela aberta, `felixo-ai-core-autostart.log` do próximo boot, e o vazamento de `APPIMAGE_EXTRACT_AND_RUN` num terminal aberto pelo Felixo. Esses ficam para o Linux físico.
+
+Estado: concluído (commit na branch; deploy pelo orquestrador).
