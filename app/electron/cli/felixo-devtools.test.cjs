@@ -364,6 +364,23 @@ test('sem FELIXO_DEVTOOLS_DEBUG_LOG o Electron continua silencioso (stdio ignore
   assert.equal(stdio, 'ignore')
 })
 
+test('FELIXO_DEVTOOLS_VITE_LOG manda a saída do Vite para o arquivo; sem ele o Vite fica silencioso', async () => {
+  for (const comLog of [true, false]) {
+    const env = setup()
+    const stdios = []
+    await executarDevtools(['launch', '--port', '9333'], launchDeps(env, {
+      env: comLog ? { FELIXO_DEVTOOLS_VITE_LOG: path.join(env.root, 'vite.log') } : {},
+      probeVite: async () => ({ status: 'down' }),
+      waitForVite: async () => {},
+      spawn: (_c, _a, options) => { stdios.push(options.stdio); return { pid: 4321, unref() {}, once() {} } },
+      waitForCdp: async () => {},
+    }))
+    // 1ª chamada = Vite, 2ª = Electron (sem log de Electron neste teste).
+    assert.equal(Array.isArray(stdios[0]), comLog)
+    assert.equal(stdios[1], 'ignore')
+  }
+})
+
 test('com FELIXO_DEVTOOLS_DEBUG_LOG a saída do Electron vai para o arquivo e aparece no erro do launch', async () => {
   const env = setup()
   const log = path.join(env.root, 'electron.log')

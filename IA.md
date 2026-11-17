@@ -4484,3 +4484,19 @@ Task: Felixo AI Core/Canvas — diagnosticar badge trabalhando grudado com termi
 **Não validado.** Nenhuma sessão ao vivo com o Claude de hoje. O reproduzir é passo do Felipe (roteiro na task, status MANUAL). O rastro mostra até 120 caracteres do fim da tela: não cole as linhas em lugar público sem olhar.
 
 Estado: rastro entregue; task em MANUAL. Commit na branch `orq/canvas-diagnosticar-badge-trabalhando-gr`; push e deploy pelo orquestrador.
+
+---
+
+## 2026-11-17 — CI: o smoke grava o diagnóstico do "APP NÃO MONTOU" e sobe o log do Vite
+
+Task: Felixo AI Core/CI — investigar o canvas que não montou em 45 s na sessão A do smoke no Windows (Notion `3ea91f95-497e-813a-a18c-c844403fb7b3`). Agente: subagente da Orquestração (Claude Sonnet 5.5, effort medium), continuando a coleta de um Haiku (133 execuções do CI, 79 do Nightly).
+
+**Contexto.** Cinco travamentos de 45 s no CI do Windows (29/09 a 07/10), nenhum no Nightly; nenhuma montagem caiu entre 30 e 45 s, então são travamentos, não lentidão. A causa não saía dos logs: o smoke só dizia "APP NÃO MONTOU". O log do Electron já ia no artefato (o smoke o liga sozinho), mas o do Vite não existia.
+
+**O que mudou.**
+- `canvas-smoke.cjs` (`checarMontagem`): na falha grava `felixoAppReady`, `[data-felixo-app-shell]`, `readyState`, texto do `role="status"`, as entradas de `performance` da `CanvasView` (saiu? status? terminou?) e erros de console/`pageerror`. No CI continua esperando até 135 s além do teto (`FELIXO_SMOKE_POS_MONTAGEM_MS`; 0 fora do CI) e loga se a `CanvasView` apareceu (lentidão) ou não (travou). O teto de 45 s não mudou.
+- `canvas-smoke-diagnostics.cjs`: `descreverEstadoDoShell` e `descreverDesfecho` (puras, com teste).
+- `felixo-devtools.cjs` (`ensureVite`): `FELIXO_DEVTOOLS_VITE_LOG` manda a saída do Vite para um arquivo; o smoke liga por padrão e o copia limpo para `canvas-smoke-evidencia` (artefato que ci.yml e nightly.yml já sobem). Sem a variável o Vite segue silencioso.
+- `GUIA-DESENVOLVEDOR.md`: a "causa conhecida" (runner lento) passou a "não confirmada".
+
+**Validação.** `node --test` dos 3 arquivos tocados: 37 de 37; `run-node-unit-tests.cjs`: 3474 passam, 0 falham, 12 pulados; eslint dos 5 arquivos: exit 0. Não rodei o smoke nem forcei uma falha, então o caminho de falha (o `evaluate` e a espera estendida) só foi checado por sintaxe e pelos testes das funções puras.

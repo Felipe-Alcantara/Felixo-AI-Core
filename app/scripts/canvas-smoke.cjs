@@ -30,7 +30,7 @@ const path = require('node:path')
 const fs = require('node:fs')
 const { execFileSync } = require('node:child_process')
 const { connect, readState } = require('../electron/cli/felixo-devtools.cjs')
-const { diagnosticarMontagem } = require('./canvas-smoke-diagnostics.cjs')
+const { diagnosticarMontagem, descreverEstadoDoShell, descreverDesfecho } = require('./canvas-smoke-diagnostics.cjs')
 const { esperarAte, waitForViewport: esperarViewport } = require('./canvas-smoke-wait.cjs')
 const {
   DEFAULT_JITTER_THRESHOLD,
@@ -328,14 +328,21 @@ async function withDevtoolsSession(action, { env = {} } = {}) {
   }
 }
 
+// Depois do teto de 45 s, em falha, continua esperando em modo diagnóstico para dizer se a
+// CanvasView era lenta ou travou. Só no CI por padrão (local, falhar rápido vale mais).
+const POS_MONTAGEM_MS = Number(process.env.FELIXO_SMOKE_POS_MONTAGEM_MS ?? (process.env.CI ? 135_000 : 0))
+
 async function checarMontagem(page) {
   const started = Date.now()
+  const erros = []
+  const onConsole = (msg) => { if (msg.type() === 'error') erros.push(`console: ${msg.text().slice(0, 200)}`) }
+  const onPageError = (error) => erros.push(`pageerror: ${String(error.message ?? error).slice(0, 200)}`)
+  page.on('console', onConsole)
+  page.on('pageerror', onPageError)
+  const canvasPronto = (timeout) =>
+    page.waitForFunction(() => document.querySelector('[data-felixo-hydrated="true"]') !== null, null, { timeout })
   try {
-    await page.waitForFunction(
-      () => document.querySelector('[data-felixo-hydrated="true"]') !== null,
-      null,
-      { timeout: HYDRATION_TIMEOUT_MS },
-    )
+    await canvasPronto(HYDRATION_TIMEOUT_MS)
   } catch (error) {
     const info = await page
       .evaluate(() => {
@@ -344,10 +351,28 @@ async function checarMontagem(page) {
           rootPresent: root !== null,
           hydrated: root?.getAttribute('data-felixo-hydrated') ?? null,
           status: (document.querySelector('footer, [data-felixo-region="statusbar"]')?.textContent ?? '').trim().slice(0, 80),
+          appReady: document.documentElement.dataset.felixoAppReady,
+          shell: document.querySelector('[data-felixo-app-shell]') !== null,
+          loadingText: (document.querySelector('[role="status"]')?.textContent ?? '').trim().slice(0, 80),
+          readyState: document.readyState,
+          recursos: performance
+            .getEntriesByType('resource')
+            .filter((r) => r.name.includes('CanvasView'))
+            .map((r) => ({ status: r.responseStatus, duration: Math.round(r.duration), responseEnd: Math.round(r.responseEnd) })),
         }
       })
-      .catch(() => ({ rootPresent: false, hydrated: null, status: '(página indisponível)' }))
+      .catch(() => ({ rootPresent: false, hydrated: null, status: '(página indisponível)', readyState: '(página indisponível)' }))
+    console.error(descreverEstadoDoShell({ ...info, erros }))
+    let apareceuEm = null
+    if (POS_MONTAGEM_MS > 0) {
+      const extraStart = Date.now()
+      apareceuEm = await canvasPronto(POS_MONTAGEM_MS).then(() => Date.now() - extraStart, () => null)
+    }
+    console.error(descreverDesfecho(apareceuEm, POS_MONTAGEM_MS, HYDRATION_TIMEOUT_MS + POS_MONTAGEM_MS))
     throw new Error(`${diagnosticarMontagem(info, HYDRATION_TIMEOUT_MS)} Causa original: ${error.message.split('\n')[0]}`)
+  } finally {
+    page.off('console', onConsole)
+    page.off('pageerror', onPageError)
   }
   console.log(`[canvas-smoke] canvas pronto em ${Date.now() - started} ms (teto ${HYDRATION_TIMEOUT_MS} ms)`)
 }
@@ -1746,6 +1771,7 @@ async function main(evidence) {
 // O log do Electron (stdout+stderr de cada lançamento) vai para o artefato,
 // limpo de segredo e de pasta pessoal; quem roda à mão pode apontar outro.
 process.env.FELIXO_DEVTOOLS_DEBUG_LOG ||= path.join(APP_DIR, 'build', `electron-devtools-${process.platform}.log`)
+process.env.FELIXO_DEVTOOLS_VITE_LOG ||= path.join(APP_DIR, 'build', `vite-devtools-${process.platform}.log`)
 fs.mkdirSync(path.dirname(process.env.FELIXO_DEVTOOLS_DEBUG_LOG), { recursive: true })
 fs.rmSync(EVIDENCE_DIR, { recursive: true, force: true })
 
@@ -1763,7 +1789,7 @@ function writeEvidence(error = null) {
   fecharRelatorio(evidence, error)
   const file = gravarEvidencia(evidence, {
     pasta: EVIDENCE_DIR,
-    logs: [process.env.FELIXO_DEVTOOLS_DEBUG_LOG],
+    logs: [process.env.FELIXO_DEVTOOLS_DEBUG_LOG, process.env.FELIXO_DEVTOOLS_VITE_LOG],
     titulo: `Smoke do canvas (${evidence.app.origem})`,
     limpeza: { trocas: [[APP_DIR, '<app>']] },
   })

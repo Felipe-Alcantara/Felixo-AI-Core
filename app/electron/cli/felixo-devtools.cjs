@@ -177,9 +177,11 @@ async function ensureVite(deps = {}) {
   const current = await probe()
   if (current.status === 'felixo') return { pid: null, reused: true }
   if (current.status === 'foreign') throw new Error('A porta do Vite está ocupada por outro processo; o DevTools não vai encerrá-lo.')
+  // FELIXO_DEVTOOLS_VITE_LOG: arquivo que recebe a saída do Vite (sem ele, silencioso).
+  const debugLog = (deps.env ?? process.env).FELIXO_DEVTOOLS_VITE_LOG || ''
   const child = deps.spawnVite
     ? deps.spawnVite()
-    : createDetached(process.execPath, [path.join(APP_DIR, 'node_modules', 'vite', 'bin', 'vite.js'), '--host', '127.0.0.1'], { cwd: APP_DIR, env: process.env }, deps)
+    : createDetached(process.execPath, [path.join(APP_DIR, 'node_modules', 'vite', 'bin', 'vite.js'), '--host', '127.0.0.1'], { cwd: APP_DIR, env: process.env, debugLog }, deps)
   await (deps.waitForVite ?? waitForFelixoVite)({ probe })
   return { pid: child.pid ?? null, reused: false }
 }

@@ -829,7 +829,7 @@ Instabilidades conhecidas da CI, para a triagem:
 
 | Sintoma | Onde | Causa conhecida | O que fazer |
 | --- | --- | --- | --- |
-| "APP NÃO MONTOU" na primeira carga | smoke, sessões A/B, Windows | runner lento; o Vite compila sob demanda na primeira carga | a repetição cobre; nas 3 tentativas, é real |
+| "APP NÃO MONTOU" na primeira carga | smoke, sessões A/B, Windows | **não confirmada** (5 travamentos em 133 execuções, nenhuma montagem entre 30 e 45 s; a lentidão do runner não os explica sozinha) | a repetição cobre; nas 3 tentativas, é real. Na falha o smoke grava o estado do shell e da requisição da `CanvasView` e, no CI, espera até 180 s para dizer se era lentidão ou travamento (`FELIXO_SMOKE_POS_MONTAGEM_MS`, 0 desliga); os logs do Electron e do Vite (`FELIXO_DEVTOOLS_VITE_LOG`) vão no artefato de evidência |
 | `package.json` com bytes zero dentro do `app.asar` | `package-inventory.test.cjs`, Windows | corrida de disco logo depois do empacotamento | reexecutar o job |
 | `adaptive count=10: resume regrediu mais de 25%` | job `Benchmarks e repetições` do `Nightly` (`--check`) | o resume oscila até 46% com o mesmo commit | reexecutar o job; reprovar 3 runs seguidos é regressão. O `count=1` não reprova mais: o `--check` só compara a partir do limite adaptativo, e o gate entre commits saiu do CI |
 
