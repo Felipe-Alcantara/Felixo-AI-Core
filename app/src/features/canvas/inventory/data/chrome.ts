@@ -172,7 +172,7 @@ export const chromeSurfaces: InventoryElement[] = [
         locator: 'label="Chat"',
         kind: 'rail',
         effect: 'onOpenChat → App troca a tela para o chat (setScreen("chat")); o CanvasView inteiro desmonta.',
-        failure: 'Ao desmontar, saves com debounce ainda pendentes são descartados e o store de terminais fica órfão (ver lacunas).',
+        failure: 'Ao desmontar, os saves com debounce pendentes são gravados na hora (e no pagehide); o store de terminais ainda fica órfão (ver lacunas).',
         test: { file: 'scripts/canvas-smoke-contas.cjs', check: 'checarCardDoOrquestrador' },
       },
       {
@@ -335,7 +335,7 @@ export const chromeSurfaces: InventoryElement[] = [
         locator: 'onCreate(name.trim() || undefined)',
         kind: 'button',
         effect: 'Criar (ou Enter no campo): "Novo bloco" chama addFileNode (cria nome-<timestamp>.md por canvas-file:write e um bloco de arquivo); "Grupo" chama addNode("group") com o nome ou "Grupo". O bloco nasce numa posição livre da área visível, entra no fim do dock (orderIndex) e é salvo por canvas:save.',
-        failure: 'erro engolido: a criação do .md (canvas-file:write) é void e não é conferida (CanvasView.tsx:2426); o bloco nasce mesmo se o arquivo falhar. Falha do canvas:save só vai para o console.',
+        failure: 'Se a criação do .md (canvas-file:write) falhar, o bloco não nasce e a barra de status mostra a falha; falha do canvas:save aparece na barra de status e no console.',
       },
       {
         locator: '{secondaryLabel}',
@@ -386,11 +386,6 @@ export const chromeSurfaces: InventoryElement[] = [
         what: 'Os seletores engolem o erro: "Abrir imagem" ignora o ok:false de files:pick-image ("Selecione um arquivo de imagem suportado e menor que 25 MB.", CanvasView.tsx:2483) e "Abrir arquivo existente…" ignora o de text-file:pick (CanvasView.tsx:2512). A pessoa escolhe o arquivo e nada acontece.',
         risk: 'médio',
         task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
-      },
-      {
-        what: 'addFileNode dispara canvas-file:write sem esperar nem conferir (CanvasView.tsx:2426): o bloco aponta para um .md que pode não ter sido criado.',
-        risk: 'baixo',
-        task: '3ec91f95-497e-81a3-9be3-c0d354bf7621',
       },
       {
         what: 'Fechar os popovers por clique fora devolve o foco ao gatilho mesmo quando a pessoa clicou em outro controle.',
@@ -1135,8 +1130,8 @@ export const chromeSurfaces: InventoryElement[] = [
     owner: 'src/features/canvas/hooks/useCanvasPersistence.ts',
     states: {
       loading: 'Antes de canvas:list responder: hydrated falso, nós vazios.',
-      normal: 'Carregado: nós ordenados por data.orderIndex (a ordem carregada é carimbada e regravada uma vez); cada mudança de posição, tamanho ou dados salva com debounce de 400 ms por nó; escrita confirmada de agente (canvas:agent-node-updated) cancela o save pendente daquele nó.',
-      empty: 'canvas:list devolve lista vazia — ou falha (ver lacuna): os dois casos ficam iguais na tela.',
+      normal: 'Carregado: nós ordenados por data.orderIndex (a ordem carregada é carimbada e regravada uma vez); cada mudança de posição, tamanho ou dados salva com debounce de 400 ms por nó (ao desmontar ou no pagehide o pendente é gravado na hora; save ou delete que falha aparece na barra de status até a próxima gravação daquele bloco dar certo); escrita confirmada de agente (canvas:agent-node-updated) cancela o save pendente daquele nó.',
+      empty: 'canvas:list devolve lista vazia. Falha de leitura (ok:false ou exceção) é outro caso: a barra de status mostra o aviso e o histórico de notificações não é podado contra a lista vazia.',
     },
     controls: [],
     persistence: ['processo principal: SQLite do canvas (canvas-repository), nós por canvas:save/canvas:delete e conexões por canvas:save-edge/canvas:delete-edge'],
@@ -1144,26 +1139,13 @@ export const chromeSurfaces: InventoryElement[] = [
     dependsOn: ['canvas-storage', 'sortByOrderIndex', 'withOrderIndex', 'toPersistedNode', 'toFlowNode'],
     tests: [
       { file: 'src/features/canvas/hooks/useCanvasPersistence.test.ts' },
+      { file: 'src/features/canvas/services/canvas-storage.test.ts' },
+      { file: 'src/features/canvas/services/debounced-save-queue.test.ts' },
       { file: 'electron/services/canvas-ipc-handlers.test.cjs' },
       { file: 'scripts/canvas-smoke.cjs', check: 'checarInteracoes' },
       { file: 'scripts/canvas-smoke.cjs', check: 'checarReloadSemDuplicacao' },
     ],
     gaps: [
-      {
-        what: 'erro engolido: falha de canvas:list (ok:false ou exceção) vira lista vazia (canvas-storage.ts:23-27, useCanvasPersistence.ts:30): o canvas abre vazio com "Canvas pronto", sem aviso, e a reconciliação do histórico de notificações apaga as notificações dos terminais "sumidos".',
-        risk: 'alto',
-        task: '3ec91f95-497e-81a3-9be3-c0d354bf7621',
-      },
-      {
-        what: 'erro engolido: deleteCanvasNode, saveCanvasEdge e deleteCanvasEdge ignoram o ok:false e caem em catch "Best effort" (canvas-storage.ts:61, 181, 195); saveCanvasNode só escreve no console. Bloco apagado volta e conexão criada some no próximo carregamento, sem aviso.',
-        risk: 'médio',
-        task: '3ec91f95-497e-81a3-9be3-c0d354bf7621',
-      },
-      {
-        what: 'Ao desmontar (trocar para o Chat, recarregar), o cleanup cancela os saves com debounce ainda pendentes em vez de gravá-los (useCanvasPersistence.ts:54): a última mudança de até 400 ms se perde.',
-        risk: 'médio',
-        task: '3ec91f95-497e-81a3-9be3-c0d354bf7621',
-      },
     ],
     overlap: 'Sem superfície própria; o estado aparece na barra de status ("Carregando canvas…"/"Canvas pronto") e em data-felixo-hydrated na raiz do canvas.',
   },

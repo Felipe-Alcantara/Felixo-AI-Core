@@ -219,7 +219,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
         locator: 'aria-label="Remover grupo"',
         kind: 'button',
         effect: 'deleteElements do grupo, que antes passa pelo onBeforeDelete do canvas (canvas-removal-guard): trava ligada não remove; grupo com filhos pede confirmação dizendo quantos blocos saem junto. Confirmado, o React Flow leva junto todos os filhos (parentId) e as arestas deles; onNodesChange encerra o PTY dos terminais filhos (store.remove), apaga imagens temporárias (files:remove-generated-image) e chama canvas:delete de cada um.',
-        failure: 'Grupo vazio sai sem confirmação; não há desfazer. Falha de canvas:delete é engolida (deleteCanvasNode com catch vazio) e o bloco reaparece no próximo início.',
+        failure: 'Grupo vazio sai sem confirmação; não há desfazer. Falha de canvas:delete aparece na barra de status (o bloco pode reaparecer no próximo início).',
       },
     ],
     persistence: ['canvas salvo (canvas_nodes: label, posição, tamanho; os filhos guardam parent_id)'],
@@ -268,8 +268,8 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
       {
         locator: 'onClick={() => setEditing((value) => !value)}',
         kind: 'button',
-        effect: 'Alterna edição ↔ visualização ("Editar" / "Visualizar como markdown" / "Visualizar texto"); editando, cada tecla chama useFileNodeDocument.save, que grava no disco (canvas-file:write ou text-file:write) 300 ms depois e na saída do bloco.',
-        failure: 'Erro engolido: o resultado de canvas-file:write/text-file:write não é conferido; a tela mostra o texto e o disco pode não ter recebido.',
+        effect: 'Alterna edição ↔ visualização ("Editar" / "Visualizar como markdown" / "Visualizar texto"); editando, cada tecla chama useFileNodeDocument.save, que grava no disco (canvas-file:write ou text-file:write) 300 ms depois e na saída do bloco, conferindo o resultado.',
+        failure: 'Gravação recusada (ok:false ou exceção): faixa vermelha role="alert" no bloco e aviso na barra de status até a próxima gravação dar certo; falha ao ler o .md do app também aparece na faixa.',
         disabledWhen: 'Some em bloco de imagem.',
       },
       {
@@ -353,7 +353,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
         locator: 'aria-label={`Desligar ${agent.label}`}',
         kind: 'button',
         effect: 'Um por agente ligado: unlinkAgentFromFile remove todas as arestas entre o arquivo e o terminal (estado e canvas:delete-edge); o agente some de "Agentes ligados". O agente não é avisado.',
-        failure: 'Erro engolido: deleteCanvasEdge tem catch vazio e a aresta pode voltar no próximo início.',
+        failure: 'Falha de canvas:delete-edge aparece na barra de status (a aresta pode voltar no próximo início).',
         disabledWhen: 'Some sem onUnlinkAgent; fica invisível (opacity-0) até o hover, inclusive com foco de teclado.',
       },
       {
@@ -367,7 +367,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
         locator: 'onClick={() => onLink(agent.id)}',
         kind: 'button',
         effect: 'Um por terminal disponível: linkAgentToFile cria a aresta (canvas:save-edge) se faltar e digita no agente o aviso do arquivo com Enter (announceFileNodeToTerminalNode → pty:write); fecha o menu.',
-        failure: 'Erro engolido: saveCanvasEdge tem catch vazio; arquivo externo (sem fileName) ou resolve falho não avisam o agente e nada diz isso.',
+        failure: 'Falha de canvas:save-edge aparece na barra de status; arquivo externo (sem fileName) ou resolve falho não avisam o agente e nada diz isso.',
       },
     ],
     persistence: [
@@ -411,6 +411,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
     ],
     tests: [
       unit(`${COMPONENTS}/file-node-preview.test.ts`),
+      unit(`${SERVICES}/file-node-write.test.ts`),
       unit(`${SERVICES}/canvas-connection-index.test.ts`),
       unit('src/features/canvas/terminal/prompt-origins-e2e.test.ts'),
       unit('electron/services/canvas-files-ipc-handlers.test.cjs'),
@@ -423,11 +424,6 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
         what: 'Nenhum dos 16 controles do bloco é clicado por teste: modos, diagnóstico, ações de imagem, zoom e ligar/desligar agente são efeito lido no código.',
         risk: 'médio',
         task: '3ec91f95-497e-8141-b6c1-d1833aac5664',
-      },
-      {
-        what: 'Gravação do arquivo sem retorno (useFileNodeDocument.ts, função write do save): o resultado de text-file:write/canvas-file:write é ignorado e a leitura do .md do app ignora falha; a pessoa edita, a tela mostra o texto e o disco pode não ter recebido nada.',
-        risk: 'alto',
-        task: '3ec91f95-497e-81a3-9be3-c0d354bf7621',
       },
       {
         what: 'Promessas sem catch em FileNode.tsx:239-309: copyPath, openImageInSystem, saveImageCopy e removeTemporaryImage não tratam rejeição; generateDiagnosis, duplicateImage e repairImage usam try/finally sem catch. A rejeição vira unhandledrejection e o bloco não diz nada; copyPath mostra ✓ mesmo sem navigator.clipboard.',
@@ -831,7 +827,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
     layer: 'node',
     owner: `${COMPONENTS}/ExcalidrawDrawingNode.tsx`,
     states: {
-      normal: 'Excalidraw completo com a cena gravada; cada mudança agenda a gravação da cena 600 ms depois.',
+      normal: 'Excalidraw completo com a cena gravada; cada mudança agenda a gravação da cena 600 ms depois, e fechar o bloco antes disso entrega a cena pendente ao canvas na hora.',
       loading: 'Suspense do módulo lazy (~47 MB descompactado): spinner "Carregando Excalidraw…".',
       empty: 'Cena sem elementos: grava scene vazio e reabre em branco (#ffffff).',
       error: 'data.scene inválido ou sem "elements" vira cena vazia sem aviso (parseScene devolve null).',
@@ -843,7 +839,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
     tests: [...FIXTURE_TESTS, smoke('checarInteracoes'), unit(`${COMPONENTS}/excalidraw-scene.test.ts`)],
     gaps: [
       {
-        what: 'Debounce de 600 ms sem flush (ExcalidrawDrawingNode.tsx:52-63): fechar ou recarregar o app logo depois de desenhar perde a última edição, e o timer sobrevive à desmontagem; useFileNodeDocument faz o flush que falta aqui.',
+        what: 'Fechar o bloco entrega a cena pendente ao canvas (ExcalidrawDrawingNode.tsx, cleanup), mas ao fechar o app ou trocar para o Chat o canvas inteiro desmonta junto e o setNodes que carrega a cena nunca roda: o último traço (até 600 ms + 400 ms) ainda se perde nesses dois casos, e nenhum teste monta o bloco.',
         risk: 'baixo',
         task: '3ec91f95-497e-81a3-9be3-c0d354bf7621',
       },
@@ -1215,7 +1211,7 @@ export const notionTasksTool: InventoryElement = {
       task: '3d791f95-497e-8139-8417-f90dd73f2777',
     },
     {
-      what: 'Seleção que não persiste (NotionTasksPanel.tsx:142, 150, 164 e 176): conexão, database, visualização ativa (fora o Painel) e sincronização automática vivem só em useState; ao reabrir o app (ou remontar o bloco) a lista volta à primeira conexão e à primeira database, embora o bloco seja "persistente".',
+      what: 'Seleção que ainda não persiste: conexão, database e visualização do Painel já voltam do data do bloco (notion-tasks-selection), mas a sincronização automática (NotionTasksPanel.tsx:221) vive só em useState e volta a "ligada" ao reabrir o app ou remontar o bloco.',
       risk: 'médio',
       task: '3ec91f95-497e-81a3-9be3-c0d354bf7621',
     },
@@ -1305,7 +1301,7 @@ export const nodeSurfaces: InventoryElement[] = [
         locator: 'aria-label="Remover no"',
         kind: 'button',
         effect: 'onRemove do bloco: deleteElements → onNodesChange tira o bloco e as arestas dele, chama canvas:delete e canvas:delete-edge e apaga imagem temporária do disco; o PTY do terminal é encerrado nesse onNodesChange, depois do onBeforeDelete: com a trava ligada nada sai, e terminal com processo vivo ou imagem temporária pede confirmação.',
-        failure: 'Bloco comum sai sem confirmação e não há desfazer; deleteCanvasNode e deleteCanvasEdge engolem erro e o bloco pode voltar no próximo início.',
+        failure: 'Bloco comum sai sem confirmação e não há desfazer; falha de canvas:delete ou canvas:delete-edge aparece na barra de status (o bloco pode voltar no próximo início).',
         disabledWhen: 'Some quando o bloco não passa onRemove.',
       },
     ],
@@ -1533,17 +1529,13 @@ export const nodeSurfaces: InventoryElement[] = [
     tests: [
       unit(`${SERVICES}/edge-handle-routing.test.ts`),
       unit(`${SERVICES}/canvas-selection.test.ts`),
+      unit(`${SERVICES}/canvas-storage.test.ts`),
       unit('electron/services/storage/canvas-repository.test.cjs'),
       unit('electron/services/canvas-ipc-handlers.test.cjs'),
       smoke('checarInteracoes'),
       ...FIXTURE_TESTS,
     ],
     gaps: [
-      {
-        what: 'Erros engolidos em services/canvas-storage.ts:54-66 e 173-198: saveCanvasEdge, deleteCanvasEdge e deleteCanvasNode têm catch vazio e não conferem ok; uma aresta criada some (ou uma removida volta) no próximo início sem aviso nem log.',
-        risk: 'médio',
-        task: '3ec91f95-497e-81a3-9be3-c0d354bf7621',
-      },
       {
         what: 'Remover aresta (selecionar + Delete/Backspace ou Remover da barra de status) não tem teste; o smoke só cria por arrasto e confere a persistência.',
         risk: 'baixo',

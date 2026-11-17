@@ -63,18 +63,47 @@ function ExcalidrawDrawingNodeComponent({ id, data, selected }: NodeProps) {
     savedSceneRef.current = nodeData.scene
   }, [nodeData.scene])
 
+  /** Cena que ainda espera o debounce; sai pelo timer ou, no desmonte, na hora. */
+  const pendingSceneRef = useRef<ExcalidrawScene | null>(null)
+  const onDataChangeRef = useRef(onDataChange)
+  useEffect(() => {
+    onDataChangeRef.current = onDataChange
+  }, [onDataChange])
+
+  const commitScene = useCallback(
+    (scene: ExcalidrawScene) => {
+      const next = sceneToPersist(scene, savedSceneRef.current)
+      if (next === null) return
+      // Antes de o estado voltar do canvas: um segundo `onChange` na espera não regrava.
+      savedSceneRef.current = next
+      onDataChangeRef.current?.(id, { scene: next })
+    },
+    [id],
+  )
+
   const handleSceneChange = useCallback(
     (scene: ExcalidrawScene) => {
       if (saveTimer.current) window.clearTimeout(saveTimer.current)
+      pendingSceneRef.current = scene
       saveTimer.current = window.setTimeout(() => {
-        const next = sceneToPersist(scene, savedSceneRef.current)
-        if (next === null) return
-        // Antes de o estado voltar do canvas: um segundo `onChange` na espera não regrava.
-        savedSceneRef.current = next
-        onDataChange?.(id, { scene: next })
+        saveTimer.current = undefined
+        pendingSceneRef.current = null
+        commitScene(scene)
       }, SCENE_SAVE_DEBOUNCE_MS)
     },
-    [id, onDataChange],
+    [commitScene],
+  )
+
+  // Fechar o bloco não pode deixar o timer vivo nem levar o último traço junto.
+  useEffect(
+    () => () => {
+      if (saveTimer.current) window.clearTimeout(saveTimer.current)
+      saveTimer.current = undefined
+      const pending = pendingSceneRef.current
+      pendingSceneRef.current = null
+      if (pending) commitScene(pending)
+    },
+    [commitScene],
   )
 
   return (

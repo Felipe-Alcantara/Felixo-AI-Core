@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { Node } from '@xyflow/react'
 import { Notebook, Pencil, PenTool, Plus, StickyNote, Trash2 } from 'lucide-react'
 import { CanvasPanel } from './CanvasPanel'
+import { createDebouncedSaveQueue } from '../../services/debounced-save-queue'
 import type { CanvasNodeData } from '../../types'
 
 type CanvasNote = {
@@ -48,7 +49,13 @@ export function NotesPanel({
   toolsMenuOpen,
 }: NotesPanelProps) {
   const [notes, setNotes] = useState<CanvasNote[]>([])
-  const saveTimers = useRef(new Map<string, number>())
+  const [saveQueue] = useState(() =>
+    createDebouncedSaveQueue<CanvasNote>(
+      (_id, note) =>
+        void window.felixo?.notes?.save({ ...note, updatedAt: new Date().toISOString() }),
+      SAVE_DEBOUNCE_MS,
+    ),
+  )
 
   const canvasNotes = nodes.filter((node) => node.type === 'note')
   const canvasDrawings = nodes.filter((node) => node.type === 'drawing')
@@ -61,17 +68,12 @@ export function NotesPanel({
         setNotes(result.notes as CanvasNote[])
       }
     })
-    const timers = saveTimers.current
     return () => {
       cancelled = true
-      timers.forEach((timer) => window.clearTimeout(timer))
-      timers.clear()
+      // Fechar o painel não pode levar a última edição junto.
+      saveQueue.flush()
     }
-  }, [])
-
-  const persistNote = useCallback((note: CanvasNote) => {
-    void window.felixo?.notes?.save({ ...note, updatedAt: new Date().toISOString() })
-  }, [])
+  }, [saveQueue])
 
   /** Updates the note in local state and schedules a debounced save. */
   const editNote = useCallback(
@@ -81,23 +83,11 @@ export function NotesPanel({
           note.id === noteId ? { ...note, ...patch } : note,
         )
         const edited = next.find((note) => note.id === noteId)
-        if (edited) {
-          const pending = saveTimers.current.get(noteId)
-          if (pending) {
-            window.clearTimeout(pending)
-          }
-          saveTimers.current.set(
-            noteId,
-            window.setTimeout(() => {
-              saveTimers.current.delete(noteId)
-              persistNote(edited)
-            }, SAVE_DEBOUNCE_MS),
-          )
-        }
+        if (edited) saveQueue.schedule(noteId, edited)
         return next
       })
     },
-    [persistNote],
+    [saveQueue],
   )
 
   const addSavedNote = useCallback(async () => {
@@ -115,14 +105,10 @@ export function NotesPanel({
   }, [])
 
   const removeSavedNote = useCallback(async (noteId: string) => {
-    const pending = saveTimers.current.get(noteId)
-    if (pending) {
-      window.clearTimeout(pending)
-      saveTimers.current.delete(noteId)
-    }
+    saveQueue.cancel(noteId)
     await window.felixo?.notes?.delete(noteId)
     setNotes((current) => current.filter((note) => note.id !== noteId))
-  }, [])
+  }, [saveQueue])
 
   return (
     <CanvasPanel

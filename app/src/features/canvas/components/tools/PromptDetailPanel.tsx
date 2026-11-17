@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ArrowLeft, Check, RotateCcw, SendHorizontal } from 'lucide-react'
 import {
   AUTOMATION_SCOPE_LABELS,
@@ -6,6 +6,7 @@ import {
 } from '../../../shared/types/automations'
 import type { AutomationDefinition, AutomationScope } from '../../../shared/types/automations'
 import { FelixoSelect, type FelixoSelectOption } from '../../../shared/components/FelixoSelect'
+import { DISCARD_PROMPT_EDITS_MESSAGE } from '../../services/prompt-overrides'
 
 type PromptDetailPanelProps = {
   prompt: AutomationDefinition
@@ -18,6 +19,8 @@ type PromptDetailPanelProps = {
   /** Discards the override and restores the built-in preset text. */
   onReset: () => void
   onInsert: () => void
+  /** Avisa quem fecha o painel por fora (Esc, Fechar) se há rascunho não salvo. */
+  onDirtyChange?: (dirty: boolean) => void
 }
 
 const SCOPE_OPTIONS: FelixoSelectOption[] = AUTOMATION_SCOPES.map((scope) => ({
@@ -44,6 +47,7 @@ export function PromptDetailPanel({
   onSave,
   onReset,
   onInsert,
+  onDirtyChange,
 }: PromptDetailPanelProps) {
   const [name, setName] = useState(prompt.name)
   const [description, setDescription] = useState(prompt.description)
@@ -56,6 +60,11 @@ export function PromptDetailPanel({
     description !== prompt.description ||
     scope !== prompt.scope ||
     text !== prompt.prompt
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty)
+    return () => onDirtyChange?.(false)
+  }, [isDirty, onDirtyChange])
 
   const cancelDraft = () => {
     setName(prompt.name)
@@ -71,7 +80,7 @@ export function PromptDetailPanel({
   }
 
   const back = () => {
-    if (isDirty && !window.confirm('Descartar as edições não salvas deste prompt?')) {
+    if (isDirty && !window.confirm(DISCARD_PROMPT_EDITS_MESSAGE)) {
       return
     }
     onBack()

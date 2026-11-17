@@ -97,7 +97,9 @@ export function OrchestratorPanel({ onClose, toolsMenuOpen }: OrchestratorPanelP
   )
 
   const save = useCallback(async () => {
-    await saveOrchestratorSettings(draft)
+    // A tela passa a mostrar o que foi gravado: 0 ou decimal em um limite vira
+    // o padrão ao salvar, e o campo não pode continuar dizendo o contrário.
+    setDraft(await saveOrchestratorSettings(draft))
     setSaved(true)
     window.setTimeout(() => setSaved(false), 2000)
   }, [draft])

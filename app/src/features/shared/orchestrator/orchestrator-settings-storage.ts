@@ -93,17 +93,19 @@ export async function loadOrchestratorSettings(): Promise<OrchestratorSettings> 
   return defaultOrchestratorSettings
 }
 
+/** Grava e devolve o que de fato ficou gravado (valores inválidos viram o padrão). */
 export async function saveOrchestratorSettings(
   settings: OrchestratorSettings,
-) {
+): Promise<OrchestratorSettings> {
   const normalizedSettings = normalizeOrchestratorSettings(settings)
 
   if (await saveElectronOrchestratorSettings(normalizedSettings)) {
     clearLegacyOrchestratorSettings()
-    return
+    return normalizedSettings
   }
 
   saveLegacyOrchestratorSettings(normalizedSettings)
+  return normalizedSettings
 }
 
 function loadLegacyOrchestratorSettings(): OrchestratorSettings | null {

@@ -126,6 +126,12 @@ import type { CanvasTool } from './tools/CanvasToolsMenu'
 import type { SkillActivationResult } from './tools/SkillsPanel'
 import { toActivationResult } from '../services/prompt-delivery-feedback'
 import { useCanvasPersistence } from '../hooks/useCanvasPersistence'
+import {
+  clearPersistenceFailure,
+  describeFailure,
+  reportPersistenceFailure,
+  usePersistenceFailures,
+} from '../services/canvas-persistence-status'
 import { useCanvasProjects } from '../hooks/useCanvasProjects'
 import { useCanvasTransfer } from '../hooks/useCanvasTransfer'
 import {
@@ -327,11 +333,13 @@ function CanvasInner({
     nodes,
     setNodes,
     hydrated,
+    loadFailed,
     persistNode,
     removeNode,
     cancelPendingSaves,
   } = useCanvasPersistence()
   const updates = useUpdateStatus()
+  const persistenceFailures = usePersistenceFailures()
   // Declarado (e sincronizado) aqui, antes de qualquer efeito que o consuma:
   // o compilador do React proíbe modificar um ref que um efeito anterior já
   // leu, e a poda horária de notificações lá embaixo lê justamente este.
@@ -484,7 +492,7 @@ function CanvasInner({
     setNotificationHistory,
     setNotificationSoundEnabled,
     setNotificationVolume,
-  } = useCanvasNotifications({ hydrated, nodes, store })
+  } = useCanvasNotifications({ hydrated, loadFailed, nodes, store })
 
   // Abrir o terminal É ler a notificação dele. Todo caminho de abertura
   // (clique no bloco do canvas, dock de terminais, item do painel) passa por
@@ -620,7 +628,8 @@ function CanvasInner({
   // `nodesRef` em vez de `nodes` nas dependências: recriar o intervalo a cada
   // mudança de node reiniciaria a hora de espera sem parar.
   useEffect(() => {
-    if (!hydrated) return
+    // Sem leitura do canvas não há como saber quais terminais existem.
+    if (!hydrated || loadFailed) return
 
     const prune = () =>
       setNotificationHistory((current) => {
@@ -638,7 +647,7 @@ function CanvasInner({
     prune()
     const timer = setInterval(prune, 60 * 60 * 1000)
     return () => clearInterval(timer)
-  }, [hydrated, setNotificationHistory])
+  }, [hydrated, loadFailed, setNotificationHistory])
 
   // Só os terminais existentes contam — a mesma regra que o painel usa para
   // montar a lista. Sem isso o badge somava notificações de blocos já
@@ -1810,13 +1819,31 @@ function CanvasInner({
   useWebpageOpeners({ addNode, centerNodeInSafeArea, nodes, setNodes, visibleCanvasBounds })
 
   const addFileNode = useCallback(
-    (name?: string) => {
+    async (name?: string) => {
       // The on-disk name stays unique via timestamp; the human name goes in the
       // label (header + search) and prefixes the slug so agents see it in paths.
       const slug = name ? slugifyFileName(name) : ''
       const fileName = `${slug || 'nota'}-${Date.now()}.md`
-      // Create the file on disk so it exists for agents and the watcher.
-      void window.felixo?.canvasFiles?.write({ name: fileName, content: '' })
+      // Create the file on disk so it exists for agents and the watcher. Sem
+      // o arquivo o bloco apontaria para um .md que não existe: só cria o bloco
+      // se a gravação foi confirmada, e mostra a falha na barra de status.
+      const failureKey = `file:create:${fileName}`
+      if (window.felixo?.canvasFiles) {
+        let created: { ok?: boolean; message?: string } | undefined
+        try {
+          created = await window.felixo.canvasFiles.write({ name: fileName, content: '' })
+        } catch (error) {
+          created = { ok: false, message: describeFailure(error, '') }
+        }
+        if (!created?.ok) {
+          reportPersistenceFailure(
+            failureKey,
+            `Não foi possível criar o arquivo do bloco${created?.message ? `: ${created.message}` : '.'}`,
+          )
+          return
+        }
+        clearPersistenceFailure(failureKey)
+      }
       addNode('file', { fileName, label: name?.trim() || fileName })
     },
     [addNode],
@@ -2573,6 +2600,7 @@ function CanvasInner({
           selectionLabel={selection.label}
           onRemoveSelection={removeSelection}
           removeDisabled={canvasLocked}
+          persistenceFailures={persistenceFailures}
         />
       </div>
 

@@ -4,6 +4,11 @@ import type {
   PersistedCanvasEdge,
   PersistedCanvasNode,
 } from '../types'
+import {
+  clearPersistenceFailure,
+  describeFailure,
+  reportPersistenceFailure,
+} from './canvas-persistence-status'
 
 /**
  * Thin wrapper over the `window.felixo.canvas` bridge. Each call degrades
@@ -11,20 +16,55 @@ import type {
  * still works in-memory without a backend.
  */
 
-export async function loadCanvasNodes(): Promise<PersistedCanvasNode[]> {
+export type LoadedCanvasNodes = {
+  nodes: PersistedCanvasNode[]
+  /** A leitura falhou: `nodes` vazio quer dizer "não consegui ler", não "canvas vazio". */
+  failed: boolean
+}
+
+export async function loadCanvasNodes(): Promise<LoadedCanvasNodes> {
   const bridge = window.felixo?.canvas
 
   if (!bridge) {
-    return []
+    return { nodes: [], failed: false }
   }
 
   try {
     const result = await bridge.list()
-    return result.ok && Array.isArray(result.nodes)
-      ? (result.nodes as PersistedCanvasNode[])
-      : []
-  } catch {
-    return []
+    if (result.ok && Array.isArray(result.nodes)) {
+      clearPersistenceFailure('load:nodes')
+      return { nodes: result.nodes as PersistedCanvasNode[], failed: false }
+    }
+    reportPersistenceFailure(
+      'load:nodes',
+      describeFailure(result, 'Não foi possível ler o canvas salvo.'),
+    )
+  } catch (error) {
+    reportPersistenceFailure(
+      'load:nodes',
+      describeFailure(error, 'Não foi possível ler o canvas salvo.'),
+    )
+  }
+  return { nodes: [], failed: true }
+}
+
+/** Confere a resposta de uma gravação e a registra para a barra de status. */
+function trackWrite(key: string, what: string, outcome: { result?: unknown; error?: unknown }) {
+  const result = outcome.result as { ok?: boolean; message?: string } | undefined
+  if (!outcome.error && result?.ok) {
+    clearPersistenceFailure(key)
+    return
+  }
+  const detail = describeFailure(outcome.error ?? result, 'falha desconhecida')
+  console.error(`[canvas] ${what}`, key, detail)
+  reportPersistenceFailure(key, `${what}: ${detail}`)
+}
+
+async function attempt<T>(run: () => Promise<T>): Promise<{ result?: T; error?: unknown }> {
+  try {
+    return { result: await run() }
+  } catch (error) {
+    return { error }
   }
 }
 
@@ -35,19 +75,16 @@ export async function saveCanvasNode(node: PersistedCanvasNode): Promise<void> {
     return
   }
 
-  try {
-    const result = await bridge.save(node)
-    // A rejected write (e.g. a node type the stored schema doesn't accept
-    // yet) must not vanish silently: the block would keep working for this
-    // session and disappear on the next launch, with nothing in the console
-    // to explain why. Persistence stays best-effort — the canvas remains
-    // usable in-memory — but the failure is now visible for debugging.
-    if (!result?.ok) {
-      console.error('[canvas] Falha ao salvar o nó', node.id, node.type, result?.message)
-    }
-  } catch (error) {
-    console.error('[canvas] Falha ao salvar o nó', node.id, node.type, error)
-  }
+  // A rejected write (e.g. a node type the stored schema doesn't accept
+  // yet) must not vanish silently: the block would keep working for this
+  // session and disappear on the next launch. Persistence stays best-effort —
+  // the canvas remains usable in-memory — but the failure is shown in the
+  // status bar and logged.
+  trackWrite(
+    `node:${node.id}`,
+    'Não foi possível gravar um bloco; ele pode não voltar ao reabrir',
+    await attempt(() => bridge.save(node)),
+  )
 }
 
 export async function deleteCanvasNode(nodeId: string): Promise<void> {
@@ -57,11 +94,11 @@ export async function deleteCanvasNode(nodeId: string): Promise<void> {
     return
   }
 
-  try {
-    await bridge.delete(nodeId)
-  } catch {
-    // Best effort.
-  }
+  trackWrite(
+    `node:${nodeId}`,
+    'Não foi possível remover um bloco; ele pode voltar ao reabrir',
+    await attempt(() => bridge.delete(nodeId)),
+  )
 }
 
 export async function clearCanvas(): Promise<{ ok: boolean; message?: string }> {
@@ -163,16 +200,25 @@ export async function loadCanvasEdges(): Promise<Edge[]> {
 
   try {
     const result = await bridge.listEdges()
-    return result.ok && Array.isArray(result.edges)
-      ? result.edges.map((edge) => ({
-          id: edge.id,
-          source: edge.source,
-          target: edge.target,
-        }))
-      : []
-  } catch {
-    return []
+    if (result.ok && Array.isArray(result.edges)) {
+      clearPersistenceFailure('load:edges')
+      return result.edges.map((edge) => ({
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+      }))
+    }
+    reportPersistenceFailure(
+      'load:edges',
+      describeFailure(result, 'Não foi possível ler as conexões salvas.'),
+    )
+  } catch (error) {
+    reportPersistenceFailure(
+      'load:edges',
+      describeFailure(error, 'Não foi possível ler as conexões salvas.'),
+    )
   }
+  return []
 }
 
 export async function saveCanvasEdge(edge: Edge): Promise<void> {
@@ -182,11 +228,13 @@ export async function saveCanvasEdge(edge: Edge): Promise<void> {
     return
   }
 
-  try {
-    await bridge.saveEdge({ id: edge.id, source: edge.source, target: edge.target })
-  } catch {
-    // Best effort.
-  }
+  trackWrite(
+    `edge:${edge.id}`,
+    'Não foi possível gravar uma conexão; ela pode sumir ao reabrir',
+    await attempt(() =>
+      bridge.saveEdge({ id: edge.id, source: edge.source, target: edge.target }),
+    ),
+  )
 }
 
 export async function deleteCanvasEdge(edgeId: string): Promise<void> {
@@ -196,9 +244,9 @@ export async function deleteCanvasEdge(edgeId: string): Promise<void> {
     return
   }
 
-  try {
-    await bridge.deleteEdge(edgeId)
-  } catch {
-    // Best effort.
-  }
+  trackWrite(
+    `edge:${edgeId}`,
+    'Não foi possível remover uma conexão; ela pode voltar ao reabrir',
+    await attempt(() => bridge.deleteEdge(edgeId)),
+  )
 }

@@ -424,9 +424,12 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       )}
 
-      {!isImage && document.error && (
-        <div className="nodrag border-b border-[color-mix(in_srgb,var(--color-error)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-error)_14%,transparent)] px-2 py-1 text-[11px] text-theme-error">
-          {document.error}
+      {!isImage && (document.error || document.saveError) && (
+        <div
+          role="alert"
+          className="nodrag border-b border-[color-mix(in_srgb,var(--color-error)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-error)_14%,transparent)] px-2 py-1 text-[11px] text-theme-error"
+        >
+          {document.error || document.saveError}
         </div>
       )}
 

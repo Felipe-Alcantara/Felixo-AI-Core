@@ -28,6 +28,11 @@ import type { CanvasNodeData } from '../types'
 type CanvasNotificationsOptions = {
   /** O canvas já leu os blocos do disco. */
   hydrated: boolean
+  /**
+   * A leitura dos blocos falhou: a lista vazia não diz quais terminais existem,
+   * então o histórico não pode ser podado contra ela.
+   */
+  loadFailed?: boolean
   nodes: Node<CanvasNodeData>[]
   store: ReturnType<typeof useTerminalSessions>
 }
@@ -37,7 +42,12 @@ type CanvasNotificationsOptions = {
  * regra de quando um agente que ficou aguardando vira notificação nova —
  * sem repetir o mesmo pedido depois que a pessoa já o consumiu.
  */
-export function useCanvasNotifications({ hydrated, nodes, store }: CanvasNotificationsOptions) {
+export function useCanvasNotifications({
+  hydrated,
+  loadFailed = false,
+  nodes,
+  store,
+}: CanvasNotificationsOptions) {
   // Só o conjunto de blocos que pedem ação re-renderiza o CanvasView; o resto
   // dos snapshots é lido do store na hora em que o efeito precisa.
   const selectActionable = useCallback(
@@ -98,7 +108,7 @@ export function useCanvasNotifications({ hydrated, nodes, store }: CanvasNotific
   // node isn't a live terminal.
   const historyReconciledRef = useRef(false)
   useEffect(() => {
-    if (!hydrated || historyReconciledRef.current) return
+    if (!hydrated || loadFailed || historyReconciledRef.current) return
     historyReconciledRef.current = true
 
     const liveTerminalIds = new Set(
@@ -107,7 +117,7 @@ export function useCanvasNotifications({ hydrated, nodes, store }: CanvasNotific
     setNotificationHistory((current) =>
       current.filter((notification) => liveTerminalIds.has(notification.nodeId)),
     )
-  }, [hydrated, nodes])
+  }, [hydrated, loadFailed, nodes])
 
   useEffect(() => {
     if (!hydrated) return

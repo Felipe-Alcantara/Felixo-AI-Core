@@ -22,7 +22,6 @@ const TASK_PROMPT_EMPACOTADO = '3d791f95-497e-81bf-a6c7-efef573d87ae'
 const NOVA_SMOKE = '3ec91f95-497e-81ca-8319-ee657b0b6492'
 const NOVA_SOBREPOSICAO = '3ec91f95-497e-8112-82f9-fd1b86e3ec7d'
 const NOVA_IPC_ENGOLIDO = '3ec91f95-497e-8110-b363-cfade2b68b7a'
-const NOVA_AUTOSAVE = '3ec91f95-497e-81a3-9be3-c0d354bf7621'
 const NOVA_GIT_VAZIO = '3ec91f95-497e-8110-b363-cfade2b68b7a'
 
 /** Sobreposição comum a todo painel flutuante comum (moldura `CanvasPanel`). */
@@ -295,17 +294,12 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
     ],
     ipc: ['notes:list', 'notes:save', 'notes:delete'],
     dependsOn: ['CanvasPanel', 'addNode (CanvasView)', 'focusNode (CanvasView)'],
-    tests: [],
+    tests: [{ file: 'src/features/canvas/services/debounced-save-queue.test.ts' }],
     gaps: [
       {
         what: 'nenhum teste (unitário ou smoke) cobre o painel Notas: criar blocos, centralizar, criar/editar/remover nota salva',
         risk: 'médio',
         task: NOVA_SMOKE,
-      },
-      {
-        what: 'NotesPanel.tsx:64-68: ao desmontar (Fechar, Esc, trocar de ferramenta) os timers de 500 ms são cancelados sem gravar — a última edição feita a menos de ~340 ms do fechamento (500 ms − 160 ms de saída; trocar de ferramenta desmonta na hora) se perde',
-        risk: 'médio',
-        task: NOVA_AUTOSAVE,
       },
       {
         what: 'erro engolido: NotesPanel.tsx:72-74, 113 e 123 chamam notes:save/notes:delete sem ler o resultado nem tratar rejeição; notes:list falho vira "Nenhuma nota salva ainda."',
@@ -444,7 +438,7 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
         locator: 'value={prompt.scope}',
         kind: 'select',
         effect: 'muda o escopo de um prompt personalizado; grava com debounce de 500 ms (automations:save) e o prompt muda de grupo',
-        failure: '"Não foi possível salvar este prompt. Tente novamente." por 2,5 s no item; fechar antes de 500 ms descarta a gravação',
+        failure: '"Não foi possível salvar este prompt. Tente novamente." por 2,5 s no item; fechar antes de 500 ms grava o pendente na hora',
       },
     ],
     persistence: [
@@ -499,11 +493,6 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
         what: 'Novo prompt/Criar, edição com autosave, troca de escopo e Remover não têm teste de interface (só as funções puras)',
         risk: 'médio',
         task: NOVA_SMOKE,
-      },
-      {
-        what: 'PromptsPanel.tsx:95-99: ao desmontar, os timers de 500 ms (edição de prompt personalizado e Salvar do detalhe) são cancelados sem gravar — fechar ou trocar de ferramenta logo depois de editar perde a edição',
-        risk: 'médio',
-        task: NOVA_AUTOSAVE,
       },
       {
         what: 'erro engolido: PromptsPanel.tsx:138-146 e 168-177 não tratam a rejeição de navigator.clipboard.writeText (CanvasView.tsx:1826), e sem navigator.clipboard o retorno diz "copiado" sem copiar; automations:delete sem leitura do resultado (PromptsPanel.tsx:311)',
@@ -734,7 +723,7 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
         effect:
           'git:commit com a mensagem aparada e relê status, árvore, histórico e branches; limpa o leitor e a mensagem',
         failure:
-          'recusa: mensagem do git ou "Falha ao criar o commit." em vermelho — e a mensagem digitada é apagada mesmo assim (ver lacuna)',
+          'recusa: mensagem do git ou "Falha ao criar o commit." em vermelho — e a mensagem digitada é mantida para tentar de novo',
         disabledWhen: 'busy, mensagem vazia ou nada no stage',
       },
     ],
@@ -777,11 +766,6 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
         what: 'nenhum teste de interface do Source Control: escolher repositório, trocar branch, pull/push, commit e as abas (só o serviço do processo principal e as funções puras)',
         risk: 'alto',
         task: NOVA_SMOKE,
-      },
-      {
-        what: 'GitPanel.tsx:323-334: commit() chama setMessage("") depois de runAction mesmo quando o commit falhou — a mensagem digitada some junto com o erro',
-        risk: 'médio',
-        task: '3ec91f95-497e-81a3-9be3-c0d354bf7621',
       },
       {
         what: 'GitPanel.tsx:119, 137 e 148: falha de git:list-files, git:list-branches e git:get-log vira lista vazia sem erro — o explorador diz "Nenhum arquivo corresponde ao filtro." e o histórico "Nenhum commit ainda."',
@@ -875,12 +859,12 @@ export const workspaceToolSurfaces: InventoryElement[] = [
         failure: 'sem falha própria; o estado não persiste (reabrir volta expandido)',
       },
       {
-        locator: 'onClick={close}',
+        locator: 'onClick={requestClose}',
         kind: 'button',
         effect:
-          'close(): toca a animação de saída (160 ms) e chama onClose — o hospedeiro limpa activeTool e devolve o foco ao gatilho; Esc dentro do painel faz o mesmo quando ninguém deu preventDefault (o FelixoSelect aberto dá)',
+          'requestClose(): consulta confirmClose (o detalhe de prompt com rascunho pergunta) e, se seguir, toca a animação de saída (160 ms) e chama onClose — o hospedeiro limpa activeTool e devolve o foco ao gatilho; Esc dentro do painel faz o mesmo quando ninguém deu preventDefault (o FelixoSelect aberto dá)',
         failure:
-          'sem falha própria; edições com debounce pendente em Notas e Prompts se perdem ao desmontar, e o rascunho do detalhe de prompt some sem confirmação (ver lacunas desses elementos)',
+          'sem falha própria; edições com debounce pendente em Notas e Prompts são gravadas ao desmontar, e Esc ou Fechar com rascunho não salvo no detalhe de prompt pedem confirmação',
       },
     ],
     persistence: [
@@ -1027,7 +1011,7 @@ export const workspaceToolSurfaces: InventoryElement[] = [
         effect:
           'onSave → editPreset: grava o rascunho inteiro como override do preset (upsertPresetOverride) com debounce de 500 ms (automations:save); o item ganha o selo "editado"',
         failure:
-          'falha de gravação vira aviso no item da lista, invisível no detalhe e apagado em 2,5 s; fechar o painel antes de 500 ms descarta a gravação',
+          'falha de gravação vira aviso no item da lista, invisível no detalhe e apagado em 2,5 s; fechar o painel antes de 500 ms grava o pendente na hora',
         disabledWhen: 'só aparece com rascunho pendente',
       },
       {
@@ -1047,7 +1031,7 @@ export const workspaceToolSurfaces: InventoryElement[] = [
     ],
     persistence: [
       'processo principal: override do preset (automations:save / automations:delete)',
-      'nenhuma para o rascunho (Esc ou Fechar o descartam sem perguntar)',
+      'nenhuma para o rascunho (Esc, Fechar e Voltar perguntam antes de descartá-lo)',
       'localStorage felixo:canvas-panel-width:prompt-detail e felixo:canvas-panel-height:prompt-detail (gravados ao redimensionar, mas a moldura não os relê ao entrar no detalhe)',
     ],
     ipc: ['automations:save', 'automations:delete', 'context-file:write', 'pty:write'],
@@ -1063,11 +1047,6 @@ export const workspaceToolSurfaces: InventoryElement[] = [
         what: 'PromptsPanel.tsx:315-339 com PromptDetailPanel.tsx:67-71 e 170-192: Inserir no detalhe não mostra Enviando/Feito/erro nem trava duplo clique; o "Salvo" some na primeira gravação porque a key muda de preset para override e remonta o detalhe (PromptsPanel.tsx:326); falha de automations:save fica invisível',
         risk: 'médio',
         task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
-      },
-      {
-        what: 'CanvasPanel.tsx:133-138: Esc e o botão Fechar desmontam o detalhe sem passar pelo confirm de back() (PromptDetailPanel.tsx:73-78) — o rascunho não salvo some sem pergunta',
-        risk: 'médio',
-        task: '3ec91f95-497e-81a3-9be3-c0d354bf7621',
       },
     ],
     overlap:

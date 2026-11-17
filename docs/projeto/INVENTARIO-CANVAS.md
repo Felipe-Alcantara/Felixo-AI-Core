@@ -31,8 +31,8 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 
 - **Elementos:** 102 (10 blocos, 16 ferramentas, 76 outras superfícies)
 - **Controles:** 398, dos quais 61 com teste específico
-- **Elementos sem nenhum teste:** 4
-- **Lacunas:** 240 (alto 6, médio 126, baixo 108), em 60 tasks
+- **Elementos sem nenhum teste:** 3
+- **Lacunas:** 229 (alto 4, médio 118, baixo 107), em 60 tasks
 
 ## Moldura do canvas
 
@@ -55,7 +55,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 | --- | --- | --- | --- | --- |
 | `felixo-btn-icon felixo-activity-rail-button relative` (button) | clique | Base de todos os ícones do trilho (ActivityRailButton): aria-label e title iguais ao rótulo, aria-expanded só nos que alternam, data-notifications-trigger, data-felixo-help-trigger, data-canvas-tool-trigger e data-felixo-tour-anchor conforme as props; o clique executa o onClick de cada uso. | Sem falha própria; o resultado é o de cada uso abaixo. | — |
 | `Abrir menu do canvas` (rail) | clique | toggleSidebar → changeSidebarCollapsed: abre ou recolhe a coluna da sidebar, grava felixo:canvas-sidebar-collapsed ("1"/"0") e muda o toolbarWidth do provider (painéis, topbar, statusbar e pílula de zoom acompanham). | Sem localStorage a escolha vale só nesta sessão (catch documentado). | `scripts/canvas-smoke-onboarding.cjs` → `alternarSidebar` |
-| `label="Chat"` (rail) | clique | onOpenChat → App troca a tela para o chat (setScreen("chat")); o CanvasView inteiro desmonta. | Ao desmontar, saves com debounce ainda pendentes são descartados e o store de terminais fica órfão (ver lacunas). | `scripts/canvas-smoke-contas.cjs` → `checarCardDoOrquestrador` |
+| `label="Chat"` (rail) | clique | onOpenChat → App troca a tela para o chat (setScreen("chat")); o CanvasView inteiro desmonta. | Ao desmontar, os saves com debounce pendentes são gravados na hora (e no pagehide); o store de terminais ainda fica órfão (ver lacunas). | `scripts/canvas-smoke-contas.cjs` → `checarCardDoOrquestrador` |
 | `label="Buscar"` (rail) | clique | onSelectTool("search"): abre o painel Buscar com o foco no campo, ou fecha se já estava aberto (setActiveTool alterna). | Sem falha própria; o painel tem o próprio tratamento de erro. | `scripts/canvas-smoke.cjs` → `checarFocoAoAbrirFerramenta` |
 | `label="Projetos"` (rail) | clique | onSelectTool("projects"): abre ou fecha o painel Projetos. | Sem falha própria; o painel tem o próprio tratamento de erro. | — |
 | `highlight={notificationCount > 0}` (rail) | clique | onSelectTool("notifications"): abre ou fecha o painel Notificações; ao fechar pelo painel o foco volta a este botão (data-notifications-trigger). Mostra o badge com agentes aguardando + atualização pendente. | Sem falha própria. | `scripts/canvas-smoke.cjs` → `checarInteracoes` |
@@ -113,7 +113,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 | --- | --- | --- | --- | --- |
 | `Abrir uma imagem autorizada no bloco do canvas` (button) | clique | onOpenImage → pickAndOpenImageFile: seletor nativo (files:pick-image); a imagem escolhida vira um bloco de arquivo de imagem (fileKind "image"), selecionado e centralizado na área útil, e é salvo (canvas:save). | erro engolido: imagem não suportada ou maior que 25 MB volta ok:false com mensagem, e o renderer ignora (CanvasView.tsx:2483); cancelar o seletor não faz nada. | — |
 | `data-felixo-tour-anchor={tourAnchor}` (button) | clique | Gatilho de NamedCreateButton (usado por "Novo bloco" e "Grupo"): abre ou fecha o popover com o campo de nome (aria-expanded); Esc ou clique fora fecha e devolve o foco ao gatilho. | Sem falha própria. Clique fora puxa o foco de volta ao botão mesmo quando a pessoa clicou em outro lugar (ver lacuna). | — |
-| `onCreate(name.trim() \|\| undefined)` (button) | clique | Criar (ou Enter no campo): "Novo bloco" chama addFileNode (cria nome-<timestamp>.md por canvas-file:write e um bloco de arquivo); "Grupo" chama addNode("group") com o nome ou "Grupo". O bloco nasce numa posição livre da área visível, entra no fim do dock (orderIndex) e é salvo por canvas:save. | erro engolido: a criação do .md (canvas-file:write) é void e não é conferida (CanvasView.tsx:2426); o bloco nasce mesmo se o arquivo falhar. Falha do canvas:save só vai para o console. | — |
+| `onCreate(name.trim() \|\| undefined)` (button) | clique | Criar (ou Enter no campo): "Novo bloco" chama addFileNode (cria nome-<timestamp>.md por canvas-file:write e um bloco de arquivo); "Grupo" chama addNode("group") com o nome ou "Grupo". O bloco nasce numa posição livre da área visível, entra no fim do dock (orderIndex) e é salvo por canvas:save. | Se a criação do .md (canvas-file:write) falhar, o bloco não nasce e a barra de status mostra a falha; falha do canvas:save aparece na barra de status e no console. | — |
 | `{secondaryLabel}` (button) | clique | "Abrir arquivo existente…" (só em Novo bloco): fecha o popover e chama pickAndOpenTextFile (text-file:pick); o arquivo escolhido vira um bloco de arquivo apontando para ele. (desabilitado: só existe no popover de "Novo bloco") | erro engolido: falha do seletor volta ok:false com mensagem e o renderer ignora (CanvasView.tsx:2512). | — |
 | `buttonLabel="Página Web"` (button) | clique | Gatilho de UrlCreateButton: abre ou fecha o popover com endereço, nome e perfil; Esc ou clique fora fecha e devolve o foco. | Sem falha própria. | `scripts/canvas-smoke.cjs` → `checarInteracoes` |
 | `menuLabel="Perfil do navegador"` (select) | clique | Escolhe o perfil do navegador interno do bloco novo ("Perfil: Padrão" = sem perfil); vai como profileId no data do bloco. (desabilitado: some quando useWebviewProfiles não devolve perfis) | Sem falha própria; sem perfis cadastrados o seletor nem aparece. | — |
@@ -123,7 +123,6 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 | --- | --- | --- |
 | Novo bloco, Grupo, Abrir imagem, "Abrir arquivo existente…" e uma Página Web válida não são criados por nenhum teste de interface; o smoke só confere a recusa de javascript:. | médio | `3ec91f95-497e-818f-b9f2-f9710605c303` |
 | Os seletores engolem o erro: "Abrir imagem" ignora o ok:false de files:pick-image ("Selecione um arquivo de imagem suportado e menor que 25 MB.", CanvasView.tsx:2483) e "Abrir arquivo existente…" ignora o de text-file:pick (CanvasView.tsx:2512). A pessoa escolhe o arquivo e nada acontece. | médio | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
-| addFileNode dispara canvas-file:write sem esperar nem conferir (CanvasView.tsx:2426): o bloco aponta para um .md que pode não ter sido criado. | baixo | `3ec91f95-497e-81a3-9be3-c0d354bf7621` |
 | Fechar os popovers por clique fora devolve o foco ao gatilho mesmo quando a pessoa clicou em outro controle. | baixo | `3ea91f95-497e-81d9-a3d8-ed3971b18a24` |
 
 ### Seção Organizar da sidebar
@@ -466,21 +465,15 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `canvas:list`, `canvas:save`, `canvas:delete`, `canvas:agent-node-updated`, `canvas:list-edges`, `canvas:save-edge`, `canvas:delete-edge`
 - **Depende de:** `canvas-storage`, `sortByOrderIndex`, `withOrderIndex`, `toPersistedNode`, `toFlowNode`
 - **Sobreposição:** Sem superfície própria; o estado aparece na barra de status ("Carregando canvas…"/"Canvas pronto") e em data-felixo-hydrated na raiz do canvas.
-- **Testes:** `src/features/canvas/hooks/useCanvasPersistence.test.ts`, `electron/services/canvas-ipc-handlers.test.cjs`, `scripts/canvas-smoke.cjs` → `checarInteracoes`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`
+- **Testes:** `src/features/canvas/hooks/useCanvasPersistence.test.ts`, `src/features/canvas/services/canvas-storage.test.ts`, `src/features/canvas/services/debounced-save-queue.test.ts`, `electron/services/canvas-ipc-handlers.test.cjs`, `scripts/canvas-smoke.cjs` → `checarInteracoes`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`
 
 | Estado | Quando |
 | --- | --- |
-| normal | Carregado: nós ordenados por data.orderIndex (a ordem carregada é carimbada e regravada uma vez); cada mudança de posição, tamanho ou dados salva com debounce de 400 ms por nó; escrita confirmada de agente (canvas:agent-node-updated) cancela o save pendente daquele nó. |
+| normal | Carregado: nós ordenados por data.orderIndex (a ordem carregada é carimbada e regravada uma vez); cada mudança de posição, tamanho ou dados salva com debounce de 400 ms por nó (ao desmontar ou no pagehide o pendente é gravado na hora; save ou delete que falha aparece na barra de status até a próxima gravação daquele bloco dar certo); escrita confirmada de agente (canvas:agent-node-updated) cancela o save pendente daquele nó. |
 | loading | Antes de canvas:list responder: hydrated falso, nós vazios. |
-| empty | canvas:list devolve lista vazia — ou falha (ver lacuna): os dois casos ficam iguais na tela. |
+| empty | canvas:list devolve lista vazia. Falha de leitura (ok:false ou exceção) é outro caso: a barra de status mostra o aviso e o histórico de notificações não é podado contra a lista vazia. |
 
 Sem controle próprio: as ações vêm de outros elementos.
-
-| Lacuna | Risco | Task |
-| --- | --- | --- |
-| erro engolido: falha de canvas:list (ok:false ou exceção) vira lista vazia (canvas-storage.ts:23-27, useCanvasPersistence.ts:30): o canvas abre vazio com "Canvas pronto", sem aviso, e a reconciliação do histórico de notificações apaga as notificações dos terminais "sumidos". | alto | `3ec91f95-497e-81a3-9be3-c0d354bf7621` |
-| erro engolido: deleteCanvasNode, saveCanvasEdge e deleteCanvasEdge ignoram o ok:false e caem em catch "Best effort" (canvas-storage.ts:61, 181, 195); saveCanvasNode só escreve no console. Bloco apagado volta e conexão criada some no próximo carregamento, sem aviso. | médio | `3ec91f95-497e-81a3-9be3-c0d354bf7621` |
-| Ao desmontar (trocar para o Chat, recarregar), o cleanup cancela os saves com debounce ainda pendentes em vez de gravá-los (useCanvasPersistence.ts:54): a última mudança de até 400 ms se perde. | médio | `3ec91f95-497e-81a3-9be3-c0d354bf7621` |
 
 ### Indicador da instalação das CLIs no rodapé da sidebar
 
@@ -615,7 +608,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Controle | Gatilho | Efeito | Falha conhecida | Teste |
 | --- | --- | --- | --- | --- |
-| `aria-label="Remover grupo"` (button) | clique | deleteElements do grupo, que antes passa pelo onBeforeDelete do canvas (canvas-removal-guard): trava ligada não remove; grupo com filhos pede confirmação dizendo quantos blocos saem junto. Confirmado, o React Flow leva junto todos os filhos (parentId) e as arestas deles; onNodesChange encerra o PTY dos terminais filhos (store.remove), apaga imagens temporárias (files:remove-generated-image) e chama canvas:delete de cada um. | Grupo vazio sai sem confirmação; não há desfazer. Falha de canvas:delete é engolida (deleteCanvasNode com catch vazio) e o bloco reaparece no próximo início. | — |
+| `aria-label="Remover grupo"` (button) | clique | deleteElements do grupo, que antes passa pelo onBeforeDelete do canvas (canvas-removal-guard): trava ligada não remove; grupo com filhos pede confirmação dizendo quantos blocos saem junto. Confirmado, o React Flow leva junto todos os filhos (parentId) e as arestas deles; onNodesChange encerra o PTY dos terminais filhos (store.remove), apaga imagens temporárias (files:remove-generated-image) e chama canvas:delete de cada um. | Grupo vazio sai sem confirmação; não há desfazer. Falha de canvas:delete aparece na barra de status (o bloco pode reaparecer no próximo início). | — |
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
@@ -628,7 +621,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `canvas-file:read`, `canvas-file:write`, `canvas-file:resolve`, `canvas-file:watch`, `canvas-file:unwatch`, `canvas-file:changed`, `text-file:read`, `text-file:write`, `text-file:watch`, `text-file:unwatch`, `text-file:changed`, `files:read-image-attachment`, `files:open-image`, `files:save-image-copy`, `files:duplicate-image`, `files:pick-image`, `files:remove-generated-image`, `canvas:save`, `canvas:delete`, `canvas:save-edge`, `canvas:delete-edge`, `pty:write`
 - **Depende de:** `useFileNodeDocument`, `useReactFlow`, `isSafeImagePreviewMimeType / resolvePreviewKind (file-node-preview)`, `DeferredMarkdownContent`, `createCanvasConnectionIndex (connectedAgents / availableAgents)`, `requestRepoDiagnosis / announceFileNodeToTerminalNode (file-terminal-links)`, `duplicateImageNode, repairImageNode, removeTemporaryImageNode, linkAgentToFile, unlinkAgentFromFile (CanvasView)`
 - **Sobreposição:** Bloco do React Flow, sem z próprio: fica abaixo de toda superfície fixa (topbar e statusbar 18, dock e painéis 20/30, sidebar 26, menus 50+). O cartão é overflow-hidden, então nada que nasce dentro dele passa das bordas. Quatro pares de handles (source + target sobrepostos em cada lado). O menu "Ligar agente" é z-10 dentro do próprio cartão e é cortado pelas bordas dele (não usa portal, ao contrário do menu de perfil da Página Web).
-- **Testes:** `src/features/canvas/components/file-node-preview.test.ts`, `src/features/canvas/services/canvas-connection-index.test.ts`, `src/features/canvas/terminal/prompt-origins-e2e.test.ts`, `electron/services/canvas-files-ipc-handlers.test.cjs`, `electron/services/text-file-access.test.cjs`, `electron/services/file-attachments-ipc-handlers.test.cjs`, `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`
+- **Testes:** `src/features/canvas/components/file-node-preview.test.ts`, `src/features/canvas/services/file-node-write.test.ts`, `src/features/canvas/services/canvas-connection-index.test.ts`, `src/features/canvas/terminal/prompt-origins-e2e.test.ts`, `electron/services/canvas-files-ipc-handlers.test.cjs`, `electron/services/text-file-access.test.cjs`, `electron/services/file-attachments-ipc-handlers.test.cjs`, `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`
 
 | Estado | Quando |
 | --- | --- |
@@ -644,7 +637,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Controle | Gatilho | Efeito | Falha conhecida | Teste |
 | --- | --- | --- | --- | --- |
 | `aria-label="Copiar caminho"` (button) | clique | Copia o caminho absoluto do arquivo (canvas-file:resolve ou filePath) com navigator.clipboard e mostra ✓ por 1,5 s. | Erro engolido: sem caminho não faz nada; sem navigator.clipboard mostra ✓ sem copiar; writeText rejeitado vira unhandledrejection (void copyPath()), sem aviso. | — |
-| `onClick={() => setEditing((value) => !value)}` (button) | clique | Alterna edição ↔ visualização ("Editar" / "Visualizar como markdown" / "Visualizar texto"); editando, cada tecla chama useFileNodeDocument.save, que grava no disco (canvas-file:write ou text-file:write) 300 ms depois e na saída do bloco. (desabilitado: Some em bloco de imagem.) | Erro engolido: o resultado de canvas-file:write/text-file:write não é conferido; a tela mostra o texto e o disco pode não ter recebido. | — |
+| `onClick={() => setEditing((value) => !value)}` (button) | clique | Alterna edição ↔ visualização ("Editar" / "Visualizar como markdown" / "Visualizar texto"); editando, cada tecla chama useFileNodeDocument.save, que grava no disco (canvas-file:write ou text-file:write) 300 ms depois e na saída do bloco, conferindo o resultado. (desabilitado: Some em bloco de imagem.) | Gravação recusada (ok:false ou exceção): faixa vermelha role="alert" no bloco e aviso na barra de status até a próxima gravação dar certo; falha ao ler o .md do app também aparece na faixa. | — |
 | `onClick={() => setMode('scratchpad')}` (button) | clique | Grava data.mode = "scratchpad" (onDataChange → canvas:save), limpa o feedback de diagnóstico e esconde "Gerar diagnóstico". (desabilitado: Some em arquivo externo e em imagem.) | Falha de canvas:save só vai ao console. | — |
 | `onClick={() => setMode('plan')}` (button) | clique | Grava data.mode = "plan" e mostra o botão "Gerar diagnóstico". (desabilitado: Some em arquivo externo e em imagem.) | Falha de canvas:save só vai ao console. | — |
 | `onClick={() => void generateDiagnosis()}` (button) | clique | requestRepoDiagnosis: acha o primeiro terminal ligado, resolve o caminho do .md (canvas-file:resolve) e digita no agente o prompt de diagnóstico com Enter (pty:write); mostra o feedback do status (ok, no-terminal, no-file, resolve-failed). (desabilitado: Enquanto solicita; só existe no modo Plano.) | try/finally sem catch: rejeição do resolve vira unhandledrejection e nenhum feedback aparece. "ok" sai sem esperar a entrega ao PTY. | — |
@@ -656,14 +649,13 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `title="Salvar uma cópia da imagem"` (button) | clique | "Salvar cópia": files:save-image-copy abre o diálogo de salvar; feedback "Cópia salva." ou a mensagem de erro; cancelar não mostra nada. (desabilitado: Sem caminho.) | Sem a API não faz nada; rejeição do IPC não é tratada. | — |
 | `title="Criar uma cópia interna deste artefato"` (button) | clique | "Duplicar": files:duplicate-image copia o arquivo e cria um bloco de imagem novo 32 px à direita deste; feedback "Imagem duplicada no canvas.". (desabilitado: Sem caminho ou duplicando.) | "Não foi possível duplicar a imagem." (duplicateImageNode tem .catch e devolve false). | — |
 | `title="Remover o arquivo temporário e este bloco"` (button) | clique | "Remover temporário": files:remove-generated-image apaga o arquivo do disco e, se der certo, tira o bloco, as arestas dele (canvas:delete-edge) e o registro (canvas:delete). Sem confirmação; com o canvas travado recusa (lockedRef, fora do onBeforeDelete). (desabilitado: Sem caminho; só aparece em imagem temporária.) | "Não foi possível remover o arquivo temporário." quando o processo principal recusa; rejeição fora do .catch interno não tem tratamento. | — |
-| `aria-label={`Desligar ${agent.label}`}` (button) | clique | Um por agente ligado: unlinkAgentFromFile remove todas as arestas entre o arquivo e o terminal (estado e canvas:delete-edge); o agente some de "Agentes ligados". O agente não é avisado. (desabilitado: Some sem onUnlinkAgent; fica invisível (opacity-0) até o hover, inclusive com foco de teclado.) | Erro engolido: deleteCanvasEdge tem catch vazio e a aresta pode voltar no próximo início. | — |
+| `aria-label={`Desligar ${agent.label}`}` (button) | clique | Um por agente ligado: unlinkAgentFromFile remove todas as arestas entre o arquivo e o terminal (estado e canvas:delete-edge); o agente some de "Agentes ligados". O agente não é avisado. (desabilitado: Some sem onUnlinkAgent; fica invisível (opacity-0) até o hover, inclusive com foco de teclado.) | Falha de canvas:delete-edge aparece na barra de status (a aresta pode voltar no próximo início). | — |
 | `title="Ligar este arquivo a um agente do canvas"` (button) | clique | "Ligar agente": abre/fecha o menu com os terminais ainda não ligados; clique fora fecha. (desabilitado: Some sem onLinkAgent e em imagem.) | Sem falha própria. O menu abre para cima dentro do cartão overflow-hidden e pode ser cortado num bloco baixo. | — |
-| `onClick={() => onLink(agent.id)}` (button) | clique | Um por terminal disponível: linkAgentToFile cria a aresta (canvas:save-edge) se faltar e digita no agente o aviso do arquivo com Enter (announceFileNodeToTerminalNode → pty:write); fecha o menu. | Erro engolido: saveCanvasEdge tem catch vazio; arquivo externo (sem fileName) ou resolve falho não avisam o agente e nada diz isso. | — |
+| `onClick={() => onLink(agent.id)}` (button) | clique | Um por terminal disponível: linkAgentToFile cria a aresta (canvas:save-edge) se faltar e digita no agente o aviso do arquivo com Enter (announceFileNodeToTerminalNode → pty:write); fecha o menu. | Falha de canvas:save-edge aparece na barra de status; arquivo externo (sem fileName) ou resolve falho não avisam o agente e nada diz isso. | — |
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | Nenhum dos 16 controles do bloco é clicado por teste: modos, diagnóstico, ações de imagem, zoom e ligar/desligar agente são efeito lido no código. | médio | `3ec91f95-497e-8141-b6c1-d1833aac5664` |
-| Gravação do arquivo sem retorno (useFileNodeDocument.ts, função write do save): o resultado de text-file:write/canvas-file:write é ignorado e a leitura do .md do app ignora falha; a pessoa edita, a tela mostra o texto e o disco pode não ter recebido nada. | alto | `3ec91f95-497e-81a3-9be3-c0d354bf7621` |
 | Promessas sem catch em FileNode.tsx:239-309: copyPath, openImageInSystem, saveImageCopy e removeTemporaryImage não tratam rejeição; generateDiagnosis, duplicateImage e repairImage usam try/finally sem catch. A rejeição vira unhandledrejection e o bloco não diz nada; copyPath mostra ✓ mesmo sem navigator.clipboard. | médio | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 | requestRepoDiagnosis (services/file-terminal-links.ts:125-135) devolve "ok" sem esperar o resultado de store.sendText: "Diagnóstico solicitado ao terminal conectado." aparece mesmo se o pty:write falhar. | médio | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 | Botão "Desligar <agente>" (FileNode.tsx:816) é opacity-0 até o hover e não tem focus-visible: com teclado ele recebe foco invisível. | baixo | `3ec91f95-497e-8197-a218-ef49c302013d` |
@@ -821,7 +813,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Estado | Quando |
 | --- | --- |
-| normal | Excalidraw completo com a cena gravada; cada mudança agenda a gravação da cena 600 ms depois. |
+| normal | Excalidraw completo com a cena gravada; cada mudança agenda a gravação da cena 600 ms depois, e fechar o bloco antes disso entrega a cena pendente ao canvas na hora. |
 | loading | Suspense do módulo lazy (~47 MB descompactado): spinner "Carregando Excalidraw…". |
 | empty | Cena sem elementos: grava scene vazio e reabre em branco (#ffffff). |
 | error | data.scene inválido ou sem "elements" vira cena vazia sem aviso (parseScene devolve null). |
@@ -830,7 +822,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Debounce de 600 ms sem flush (ExcalidrawDrawingNode.tsx:52-63): fechar ou recarregar o app logo depois de desenhar perde a última edição, e o timer sobrevive à desmontagem; useFileNodeDocument faz o flush que falta aqui. | baixo | `3ec91f95-497e-81a3-9be3-c0d354bf7621` |
+| Fechar o bloco entrega a cena pendente ao canvas (ExcalidrawDrawingNode.tsx, cleanup), mas ao fechar o app ou trocar para o Chat o canvas inteiro desmonta junto e o setNodes que carrega a cena nunca roda: o último traço (até 600 ms + 400 ms) ainda se perde nesses dois casos, e nenhum teste monta o bloco. | baixo | `3ec91f95-497e-81a3-9be3-c0d354bf7621` |
 | Sem error boundary em volta do lazy: falha do chunk ou cena que faz o Excalidraw lançar derruba o canvas inteiro. | médio | `3ec91f95-497e-8176-bef0-dfde828936dc` |
 | Desenhar, gravar e reabrir a cena não tem teste (o smoke só conecta no handle e a auditoria de acessibilidade ignora .excalidraw). | médio | `3ec91f95-497e-8141-b6c1-d1833aac5664` |
 
@@ -851,7 +843,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Controle | Gatilho | Efeito | Falha conhecida | Teste |
 | --- | --- | --- | --- | --- |
-| `aria-label="Remover no"` (button) | clique | onRemove do bloco: deleteElements → onNodesChange tira o bloco e as arestas dele, chama canvas:delete e canvas:delete-edge e apaga imagem temporária do disco; o PTY do terminal é encerrado nesse onNodesChange, depois do onBeforeDelete: com a trava ligada nada sai, e terminal com processo vivo ou imagem temporária pede confirmação. (desabilitado: Some quando o bloco não passa onRemove.) | Bloco comum sai sem confirmação e não há desfazer; deleteCanvasNode e deleteCanvasEdge engolem erro e o bloco pode voltar no próximo início. | — |
+| `aria-label="Remover no"` (button) | clique | onRemove do bloco: deleteElements → onNodesChange tira o bloco e as arestas dele, chama canvas:delete e canvas:delete-edge e apaga imagem temporária do disco; o PTY do terminal é encerrado nesse onNodesChange, depois do onBeforeDelete: com a trava ligada nada sai, e terminal com processo vivo ou imagem temporária pede confirmação. (desabilitado: Some quando o bloco não passa onRemove.) | Bloco comum sai sem confirmação e não há desfazer; falha de canvas:delete ou canvas:delete-edge aparece na barra de status (o bloco pode voltar no próximo início). | — |
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
@@ -891,7 +883,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `canvas:list-edges`, `canvas:save-edge`, `canvas:delete-edge`
 - **Depende de:** `useEdgesState`, `edgeHandlesBetween / nearestSides (node-geometry)`, `onConnect / onEdgesChange / edgesWithHandles (CanvasView)`, `saveCanvasEdge / deleteCanvasEdge (canvas-storage)`
 - **Sobreposição:** SVG de arestas do React Flow, abaixo dos blocos; sem z próprio. Terminal e arquivo têm source e target sobrepostos em cada lado; os outros blocos, um handle de entrada à esquerda e um de saída à direita.
-- **Testes:** `src/features/canvas/services/edge-handle-routing.test.ts`, `src/features/canvas/services/canvas-selection.test.ts`, `electron/services/storage/canvas-repository.test.cjs`, `electron/services/canvas-ipc-handlers.test.cjs`, `scripts/canvas-smoke.cjs` → `checarInteracoes`, `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`
+- **Testes:** `src/features/canvas/services/edge-handle-routing.test.ts`, `src/features/canvas/services/canvas-selection.test.ts`, `src/features/canvas/services/canvas-storage.test.ts`, `electron/services/storage/canvas-repository.test.cjs`, `electron/services/canvas-ipc-handlers.test.cjs`, `scripts/canvas-smoke.cjs` → `checarInteracoes`, `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`
 
 | Estado | Quando |
 | --- | --- |
@@ -905,7 +897,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Erros engolidos em services/canvas-storage.ts:54-66 e 173-198: saveCanvasEdge, deleteCanvasEdge e deleteCanvasNode têm catch vazio e não conferem ok; uma aresta criada some (ou uma removida volta) no próximo início sem aviso nem log. | médio | `3ec91f95-497e-81a3-9be3-c0d354bf7621` |
 | Remover aresta (selecionar + Delete/Backspace ou Remover da barra de status) não tem teste; o smoke só cria por arrasto e confere a persistência. | baixo | `3ec91f95-497e-8141-b6c1-d1833aac5664` |
 
 ### Ligação arquivo ↔ terminal (contexto do agente)
@@ -1487,7 +1478,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `notes:list`, `notes:save`, `notes:delete`
 - **Depende de:** `CanvasPanel`, `addNode (CanvasView)`, `focusNode (CanvasView)`
 - **Sobreposição:** CanvasPanel absolute z-20 (z-30 com foco dentro), top-16, left = 1rem + largura viva da sidebar; abaixo da sidebar (26), dos toasts/overlay isBusy (50), dos diálogos (60) e do FelixoSelect (1000); mesmo z da lista Elementos (z-20, direita). Porte sm; o conteúdo rola por dentro (overflow-auto)
-- **Testes:** nenhum
+- **Testes:** `src/features/canvas/services/debounced-save-queue.test.ts`
 
 | Estado | Quando |
 | --- | --- |
@@ -1509,7 +1500,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | nenhum teste (unitário ou smoke) cobre o painel Notas: criar blocos, centralizar, criar/editar/remover nota salva | médio | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
-| NotesPanel.tsx:64-68: ao desmontar (Fechar, Esc, trocar de ferramenta) os timers de 500 ms são cancelados sem gravar — a última edição feita a menos de ~340 ms do fechamento (500 ms − 160 ms de saída; trocar de ferramenta desmonta na hora) se perde | médio | `3ec91f95-497e-81a3-9be3-c0d354bf7621` |
 | erro engolido: NotesPanel.tsx:72-74, 113 e 123 chamam notes:save/notes:delete sem ler o resultado nem tratar rejeição; notes:list falho vira "Nenhuma nota salva ainda." | médio | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 
 ### Modelos configurados
@@ -1563,7 +1553,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `onClick={() => setDetailId(prompt.id)}` (button) | clique | troca a lista pelo detalhe do preset (PromptDetailPanel, panelId prompt-detail) na mesma moldura (desabilitado: só aparece em presets) | sem falha própria (estado local) | — |
 | `data-felixo-prompt-insert` (button) | clique | digita o prompt no terminal expandido sem Enter (autoSubmit false): grava o arquivo de contexto (context-file:write) e escreve a referência no PTY (pty:write); o cartão do bloco mostra o nome (data-felixo-last-prompt) e o canvas grava só a metadata (lastPromptInsertion); sem terminal expandido, copia o texto (desabilitado: aquele prompt está enviando) | PTY sem confirmação: "Tentar de novo" com aviso em vermelho; pasta de contexto indisponível: entrega inline (sent-inline) com aviso no bloco; erro engolido se o clipboard rejeitar; sem navigator.clipboard o painel diz "copiado" sem copiar | `scripts/canvas-smoke-prompts.cjs` → `catalogo` |
 | `aria-label="Remover prompt"` (button) | clique | cancela o salvamento pendente, chama automations:delete e tira o prompt da lista, sem confirmação (desabilitado: só aparece em prompts personalizados) | erro engolido: resultado do delete ignorado; o prompt volta ao reabrir se não foi apagado | — |
-| `value={prompt.scope}` (select) | clique | muda o escopo de um prompt personalizado; grava com debounce de 500 ms (automations:save) e o prompt muda de grupo | "Não foi possível salvar este prompt. Tente novamente." por 2,5 s no item; fechar antes de 500 ms descarta a gravação | — |
+| `value={prompt.scope}` (select) | clique | muda o escopo de um prompt personalizado; grava com debounce de 500 ms (automations:save) e o prompt muda de grupo | "Não foi possível salvar este prompt. Tente novamente." por 2,5 s no item; fechar antes de 500 ms grava o pendente na hora | — |
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
@@ -1571,7 +1561,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | o retorno failed ("Tentar de novo") nunca é exercitado: o smoke cobre sent, sent-inline e copied | médio | `3d791f95-497e-81cd-b05c-c9d6370c81a3` |
 | Inserir e Enviar conjunto só foram clicados com a CLI roteirizada do smoke, não no app empacotado com CLI real | médio | `3d791f95-497e-81bf-a6c7-efef573d87ae` |
 | Novo prompt/Criar, edição com autosave, troca de escopo e Remover não têm teste de interface (só as funções puras) | médio | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
-| PromptsPanel.tsx:95-99: ao desmontar, os timers de 500 ms (edição de prompt personalizado e Salvar do detalhe) são cancelados sem gravar — fechar ou trocar de ferramenta logo depois de editar perde a edição | médio | `3ec91f95-497e-81a3-9be3-c0d354bf7621` |
 | erro engolido: PromptsPanel.tsx:138-146 e 168-177 não tratam a rejeição de navigator.clipboard.writeText (CanvasView.tsx:1826), e sem navigator.clipboard o retorno diz "copiado" sem copiar; automations:delete sem leitura do resultado (PromptsPanel.tsx:311) | médio | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 
 ### Skills (biblioteca e skills próprias)
@@ -1638,12 +1627,11 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `onClick={() => void refreshAll()}` (button) | clique | relê summary, árvore, branches e histórico em paralelo (desabilitado: busy) | summary recusado vira mensagem em vermelho; os outros três caem em lista vazia sem aviso | — |
 | `onClick={() => setView('changes')}` (button) | clique | coluna do meio mostra mensagem de commit, Commit e os grupos Stage/Alterações | sem falha própria (estado local) | — |
 | `onClick={() => setView('history')}` (button) | clique | coluna do meio mostra o histórico (GitHistory), com os commits não enviados marcados | sem falha própria (estado local) | — |
-| `onClick={() => void commit()}` (button) | clique | git:commit com a mensagem aparada e relê status, árvore, histórico e branches; limpa o leitor e a mensagem (desabilitado: busy, mensagem vazia ou nada no stage) | recusa: mensagem do git ou "Falha ao criar o commit." em vermelho — e a mensagem digitada é apagada mesmo assim (ver lacuna) | — |
+| `onClick={() => void commit()}` (button) | clique | git:commit com a mensagem aparada e relê status, árvore, histórico e branches; limpa o leitor e a mensagem (desabilitado: busy, mensagem vazia ou nada no stage) | recusa: mensagem do git ou "Falha ao criar o commit." em vermelho — e a mensagem digitada é mantida para tentar de novo | — |
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | nenhum teste de interface do Source Control: escolher repositório, trocar branch, pull/push, commit e as abas (só o serviço do processo principal e as funções puras) | alto | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
-| GitPanel.tsx:323-334: commit() chama setMessage("") depois de runAction mesmo quando o commit falhou — a mensagem digitada some junto com o erro | médio | `3ec91f95-497e-81a3-9be3-c0d354bf7621` |
 | GitPanel.tsx:119, 137 e 148: falha de git:list-files, git:list-branches e git:get-log vira lista vazia sem erro — o explorador diz "Nenhum arquivo corresponde ao filtro." e o histórico "Nenhum commit ainda." | médio | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 | erro engolido: GitPanel.tsx:192-212 (selectProject) e 284-321 (runAction) não têm catch — uma rejeição de IPC escapa sem mensagem | baixo | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 | a variante workspace com a gaveta do terminal aberta nunca foi medida: painel, gaveta e inspector disputam a largura e o painel pode cair no piso de 260 px | médio | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
@@ -1733,7 +1721,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `settings:load-orchestrator`, `settings:save-orchestrator`, `models:list`, `cli:terminal-output`
 - **Depende de:** `useOrchestrationDashboard`, `loadOrchestratorSettings`, `saveOrchestratorSettings`, `normalizeOrchestratorSettings`, `window.felixo.models`, `FelixoSelect`, `CanvasPanel`
 - **Sobreposição:** CanvasPanel: absolute z-20 (z-30 com foco dentro), top-16, à direita da barra lateral e deslocado quando o menu de ferramentas abre (toolsMenuOpen); largura limitada a viewport − barra − inspector Elementos (288 px) e altura a viewport − 112. Os menus do FelixoSelect abrem em portal z-1000 por cima; toasts (z 50) e AgentQuestionDialog/HandoffDialog (z 60) cobrem o painel. Em janela <768 px o painel passa da viewport (PANEL_MIN_WIDTH 260, task 3e691f95-497e-815c-a129-f4d2d6405cbc). Tamanho md; a lista de modelos e as duas áreas de texto crescem o painel até o teto e rolam por dentro
-- **Testes:** `electron/services/orchestrator-settings-store.test.cjs`, `electron/services/cli-request-policy.test.cjs`, `electron/services/orchestration/orchestration-store.test.cjs`
+- **Testes:** `electron/services/orchestrator-settings-store.test.cjs`, `src/features/shared/orchestrator/orchestrator-settings-storage.test.ts`, `electron/services/cli-request-policy.test.cjs`, `electron/services/orchestration/orchestration-store.test.cjs`
 
 | Estado | Quando |
 | --- | --- |
@@ -1746,12 +1734,11 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Controle | Gatilho | Efeito | Falha conhecida | Teste |
 | --- | --- | --- | --- | --- |
 | `Modo do orquestrador` (select) | clique | Troca draft.mode (Manual, Semiautomático, Automático, Somente leitura, Experimental); só vale depois de Salvar | sem falha própria; fechar o painel sem salvar descarta a escolha | — |
-| `onClick={() => void save()}` (button) | clique | saveOrchestratorSettings normaliza o rascunho e grava por settings:save-orchestrator (orchestrator-settings.json); o processo principal aplica agentes por rodada, rodadas, total e minutos em cada execução (cli-request-policy/orchestration-store); mostra "Salvo" por 2 s | IPC que falha cai no localStorage legado e mostra "Salvo" do mesmo jeito; 0 ou decimal nos limites inteiros vira o padrão sem aviso (ver lacuna); se o localStorage também lançar, a promessa rejeita sem aviso | — |
+| `onClick={() => void save()}` (button) | clique | saveOrchestratorSettings normaliza o rascunho e grava por settings:save-orchestrator (orchestrator-settings.json); o processo principal aplica agentes por rodada, rodadas, total e minutos em cada execução (cli-request-policy/orchestration-store); mostra "Salvo" por 2 s | IPC que falha cai no localStorage legado e mostra "Salvo" do mesmo jeito; 0 ou decimal nos limites inteiros vira o padrão e a tela passa a mostrar o valor gravado; se o localStorage também lançar, a promessa rejeita sem aviso | — |
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | Painel sem teste de interface (modo, limites, preferidos/bloqueados, Salvar) e sem teste da camada orchestrator-settings-storage do renderer | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
-| OrchestratorPanel.tsx:101-107 aceita 0 e decimais em Agentes por rodada, Rodadas, Agentes no total e Minutos; normalizePositiveInteger (orchestrator-settings-storage.ts:497) troca esses valores pelo padrão (3, 5, 10, 20) ao salvar, mas a tela continua mostrando o número digitado com "Salvo" | médio | `3ec91f95-497e-81a3-9be3-c0d354bf7621` |
 | Tokens de contexto só entra no texto do prompt: nenhum código do processo principal lê maxContextTokens (o teto de custo e a confirmação de ações sensíveis valem em código desde 16/11/2026) | médio | `41a91f95-497e-810d-af12-e81c33aa550a` |
 | A execução ao vivo só mostra orquestrações disparadas pela tela de chat; o canvas ainda não orquestra sub-agentes | baixo | `3eb91f95-497e-8131-9977-f8d21c950c68` |
 
@@ -1991,7 +1978,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Nenhum dos 40 controles é clicado por teste (o smoke só vê o estado vazio, sem conexão); conexão real, sincronização e a matriz multi-SO não foram validadas no canvas. | médio | `3d591f95-497e-810c-9f26-ff8a3e6e53ce` |
 | Copiar link nunca foi validado no app real. | baixo | `3d691f95-497e-8105-b007-f7767fe10405` |
 | Isolamento entre conexões e DevTools do app empacotado só por checklist manual. | baixo | `3d791f95-497e-8139-8417-f90dd73f2777` |
-| Seleção que não persiste (NotionTasksPanel.tsx:142, 150, 164 e 176): conexão, database, visualização ativa (fora o Painel) e sincronização automática vivem só em useState; ao reabrir o app (ou remontar o bloco) a lista volta à primeira conexão e à primeira database, embora o bloco seja "persistente". | médio | `3ec91f95-497e-81a3-9be3-c0d354bf7621` |
+| Seleção que ainda não persiste: conexão, database e visualização do Painel já voltam do data do bloco (notion-tasks-selection), mas a sincronização automática (NotionTasksPanel.tsx:221) vive só em useState e volta a "ligada" ao reabrir o app ou remontar o bloco. | médio | `3ec91f95-497e-81a3-9be3-c0d354bf7621` |
 | O aviso role="status" nunca é limpo (NotionTasksPanel.tsx:189; não há setMessage(null)): "Exibindo o último snapshot salvo; a rede está indisponível." continua na tela depois que a rede volta e sincroniza, e "Tarefa criada…" fica até o próximo aviso. | baixo | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 | Editar e Excluir visualização (NotionTasksPanel.tsx:1050) ficam em "hidden group-hover:flex": display none fora do hover, então o teclado nunca chega neles. | baixo | `3ec91f95-497e-8197-a218-ef49c302013d` |
 
@@ -2064,7 +2051,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Controle | Gatilho | Efeito | Falha conhecida | Teste |
 | --- | --- | --- | --- | --- |
 | `onClick={() => setCollapsed((current) => !current)}` (button) | clique | alterna collapsed: recolhido vira coluna de 44 px (COLLAPSED_SURFACE_WIDTH), esconde conteúdo e alças e reporta 44 px ao coordenador, devolvendo largura ao canvas | sem falha própria; o estado não persiste (reabrir volta expandido) | — |
-| `onClick={close}` (button) | clique | close(): toca a animação de saída (160 ms) e chama onClose — o hospedeiro limpa activeTool e devolve o foco ao gatilho; Esc dentro do painel faz o mesmo quando ninguém deu preventDefault (o FelixoSelect aberto dá) | sem falha própria; edições com debounce pendente em Notas e Prompts se perdem ao desmontar, e o rascunho do detalhe de prompt some sem confirmação (ver lacunas desses elementos) | — |
+| `onClick={requestClose}` (button) | clique | requestClose(): consulta confirmClose (o detalhe de prompt com rascunho pergunta) e, se seguir, toca a animação de saída (160 ms) e chama onClose — o hospedeiro limpa activeTool e devolve o foco ao gatilho; Esc dentro do painel faz o mesmo quando ninguém deu preventDefault (o FelixoSelect aberto dá) | sem falha própria; edições com debounce pendente em Notas e Prompts são gravadas ao desmontar, e Esc ou Fechar com rascunho não salvo no detalhe de prompt pedem confirmação | — |
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
@@ -2099,7 +2086,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 ### Detalhe de preset de prompt
 
 - **ID:** `tool-prompt-detail` · **Dono:** `src/features/canvas/components/tools/PromptDetailPanel.tsx`
-- **Persistência:** processo principal: override do preset (automations:save / automations:delete); nenhuma para o rascunho (Esc ou Fechar o descartam sem perguntar); localStorage felixo:canvas-panel-width:prompt-detail e felixo:canvas-panel-height:prompt-detail (gravados ao redimensionar, mas a moldura não os relê ao entrar no detalhe)
+- **Persistência:** processo principal: override do preset (automations:save / automations:delete); nenhuma para o rascunho (Esc, Fechar e Voltar perguntam antes de descartá-lo); localStorage felixo:canvas-panel-width:prompt-detail e felixo:canvas-panel-height:prompt-detail (gravados ao redimensionar, mas a moldura não os relê ao entrar no detalhe)
 - **IPC:** `automations:save`, `automations:delete`, `context-file:write`, `pty:write`
 - **Depende de:** `PromptsPanel (editPreset, removeCustomAutomation, insertPrompt)`, `FelixoSelect`, `prompt-overrides`
 - **Sobreposição:** dentro da moldura do PromptsPanel (porte xl, z-20/z-30); rodapé de ações colado à borda inferior (-mb-3); a textarea (min-h-80) rola dentro do painel
@@ -2117,7 +2104,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `Voltar à lista` (button) | clique | com rascunho pendente pede window.confirm("Descartar as edições não salvas deste prompt?"); confirmado ou sem rascunho, volta à lista (detailId = null) | cancelar o confirm mantém o detalhe | — |
 | `value={scope}` (select) | clique | muda o escopo no rascunho local; só grava em Salvar | sem falha própria (estado local) | — |
 | `onClick={cancelDraft}` (button) | clique | volta todos os campos ao texto salvo, sem gravar (desabilitado: só aparece com rascunho pendente) | sem falha própria (estado local) | — |
-| `onClick={saveDraft}` (button) | clique | onSave → editPreset: grava o rascunho inteiro como override do preset (upsertPresetOverride) com debounce de 500 ms (automations:save); o item ganha o selo "editado" (desabilitado: só aparece com rascunho pendente) | falha de gravação vira aviso no item da lista, invisível no detalhe e apagado em 2,5 s; fechar o painel antes de 500 ms descarta a gravação | — |
+| `onClick={saveDraft}` (button) | clique | onSave → editPreset: grava o rascunho inteiro como override do preset (upsertPresetOverride) com debounce de 500 ms (automations:save); o item ganha o selo "editado" (desabilitado: só aparece com rascunho pendente) | falha de gravação vira aviso no item da lista, invisível no detalhe e apagado em 2,5 s; fechar o painel antes de 500 ms grava o pendente na hora | — |
 | `onClick={onReset}` (button) | clique | Restaurar padrão: apaga o override (automations:delete) e o texto padrão do preset volta, sem confirmação (desabilitado: sem edição salva) | erro engolido: resultado do delete ignorado; o override volta ao reabrir se não foi apagado | — |
 | `onClick={onInsert}` (button) | clique | insertPrompt do PromptsPanel: digita o prompt no terminal expandido sem Enter, ou copia (desabilitado: rascunho pendente) | nenhum retorno no detalhe: Enviando, Feito e Tentar de novo só aparecem na lista; sem trava contra duplo clique | — |
 
@@ -2125,7 +2112,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | --- | --- | --- |
 | nenhum teste abre o detalhe (Ver), edita, salva, restaura ou insere por ele | médio | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
 | PromptsPanel.tsx:315-339 com PromptDetailPanel.tsx:67-71 e 170-192: Inserir no detalhe não mostra Enviando/Feito/erro nem trava duplo clique; o "Salvo" some na primeira gravação porque a key muda de preset para override e remonta o detalhe (PromptsPanel.tsx:326); falha de automations:save fica invisível | médio | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
-| CanvasPanel.tsx:133-138: Esc e o botão Fechar desmontam o detalhe sem passar pelo confirm de back() (PromptDetailPanel.tsx:73-78) — o rascunho não salvo some sem pergunta | médio | `3ec91f95-497e-81a3-9be3-c0d354bf7621` |
 
 ### Grupos Stage e Alterações (Source Control)
 
@@ -2963,7 +2949,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3ec91f95-497e-8176-bef0-dfde828936dc` — 6 lacunas
 - `3ec91f95-497e-818f-b9f2-f9710605c303` — 14 lacunas
 - `3ec91f95-497e-8197-a218-ef49c302013d` — 8 lacunas
-- `3ec91f95-497e-81a3-9be3-c0d354bf7621` — 13 lacunas
+- `3ec91f95-497e-81a3-9be3-c0d354bf7621` — 2 lacunas
 - `3ec91f95-497e-81ca-8319-ee657b0b6492` — 28 lacunas
 - `3ec91f95-497e-81e8-8f18-e2a529b0568e` — 11 lacunas
 - `3ec91f95-497e-81f7-8b12-c5c252d020c7` — 5 lacunas

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Check, CircleAlert, Eye, ListFilter, Plus, SendHorizontal, Sparkles, Trash2 } from 'lucide-react'
 import { CanvasPanel } from './CanvasPanel'
+import { createDebouncedSaveQueue } from '../../services/debounced-save-queue'
 import { FelixoSelect, type FelixoSelectOption } from '../../../shared/components/FelixoSelect'
 import { PromptDetailPanel } from './PromptDetailPanel'
 import { defaultAutomations } from '../../../shared/data/automations'
@@ -8,6 +9,7 @@ import {
   buildOverridesById,
   buildPresetIds,
   resolveVisiblePrompts,
+  DISCARD_PROMPT_EDITS_MESSAGE,
   upsertPresetOverride,
 } from '../../services/prompt-overrides'
 import { AUTOMATION_SCOPE_LABELS, AUTOMATION_SCOPES } from '../../../shared/types/automations'
@@ -83,7 +85,16 @@ export function PromptsPanel({
   const [detailId, setDetailId] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [query, setQuery] = useState('')
-  const saveTimers = useRef(new Map<string, number>())
+  // Há rascunho não salvo no detalhe? Esc e Fechar perguntam antes de sair.
+  const detailDirtyRef = useRef(false)
+  const setDetailDirty = useCallback((dirty: boolean) => {
+    detailDirtyRef.current = dirty
+  }, [])
+  // O salvamento real (com o aviso de falha) é ligado à fila logo abaixo de
+  // `persistAutomation`; assim a saída do painel também grava o pendente.
+  const [saveQueue] = useState(() =>
+    createDebouncedSaveQueue<AutomationDefinition>(() => undefined, SAVE_DEBOUNCE_MS),
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -92,13 +103,12 @@ export function PromptsPanel({
         setCustom(result.automations)
       }
     })
-    const timers = saveTimers.current
     return () => {
       cancelled = true
-      timers.forEach((timer) => window.clearTimeout(timer))
-      timers.clear()
+      // Fechar o painel ou trocar de ferramenta não pode levar a edição junto.
+      saveQueue.flush()
     }
-  }, [])
+  }, [saveQueue])
 
   // `isPreset` (via presetIds) tracks a prompt's built-in origin regardless
   // of whether it's been overridden, so the list still routes it through the
@@ -208,21 +218,14 @@ export function PromptsPanel({
     )
   }, [])
 
+  useEffect(() => {
+    saveQueue.setSave((_id, automation) => void persistAutomation(automation))
+  }, [persistAutomation, saveQueue])
+
   const schedulePersist = useCallback(
-    (automationId: string, automation: AutomationDefinition) => {
-      const pending = saveTimers.current.get(automationId)
-      if (pending) {
-        window.clearTimeout(pending)
-      }
-      saveTimers.current.set(
-        automationId,
-        window.setTimeout(() => {
-          saveTimers.current.delete(automationId)
-          persistAutomation(automation)
-        }, SAVE_DEBOUNCE_MS),
-      )
-    },
-    [persistAutomation],
+    (automationId: string, automation: AutomationDefinition) =>
+      saveQueue.schedule(automationId, automation),
+    [saveQueue],
   )
 
   const editCustomAutomation = useCallback(
@@ -303,14 +306,10 @@ export function PromptsPanel({
   }, [])
 
   const removeCustomAutomation = useCallback(async (automationId: string) => {
-    const pending = saveTimers.current.get(automationId)
-    if (pending) {
-      window.clearTimeout(pending)
-      saveTimers.current.delete(automationId)
-    }
+    saveQueue.cancel(automationId)
     await window.felixo?.automations?.delete(automationId)
     setCustom((current) => current.filter((automation) => automation.id !== automationId))
-  }, [])
+  }, [saveQueue])
 
   if (detailPrompt) {
     return (
@@ -318,6 +317,7 @@ export function PromptsPanel({
         title={detailPrompt.name}
         icon={<Sparkles size={15} />}
         onClose={onClose}
+        confirmClose={() => !detailDirtyRef.current || window.confirm(DISCARD_PROMPT_EDITS_MESSAGE)}
         panelId="prompt-detail"
         size="xl"
         toolsMenuOpen={toolsMenuOpen}
@@ -327,6 +327,7 @@ export function PromptsPanel({
           prompt={detailPrompt}
           canResetToPreset={Boolean(detailPresetFallback) && overridesById.has(detailPrompt.id)}
           onBack={() => setDetailId(null)}
+          onDirtyChange={setDetailDirty}
           onSave={(patch) => editPreset(detailPrompt, patch)}
           onReset={() => {
             if (detailPresetFallback) {

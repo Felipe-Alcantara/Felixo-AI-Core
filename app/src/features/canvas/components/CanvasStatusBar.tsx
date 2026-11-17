@@ -1,4 +1,4 @@
-import { CheckCircle2, GitFork, Layers3, MousePointer2, Trash2 } from 'lucide-react'
+import { CheckCircle2, CircleAlert, GitFork, Layers3, MousePointer2, Trash2 } from 'lucide-react'
 
 type CanvasStatusBarProps = {
   nodeCount: number
@@ -10,6 +10,8 @@ type CanvasStatusBarProps = {
   onRemoveSelection: () => void
   /** Canvas travado: a seleção continua visível, mas não se edita. */
   removeDisabled: boolean
+  /** Gravações do canvas que falharam e ainda não deram certo (ver canvas-persistence-status). */
+  persistenceFailures?: readonly string[]
 }
 
 /**
@@ -29,6 +31,7 @@ export function CanvasStatusBar({
   selectionLabel,
   onRemoveSelection,
   removeDisabled,
+  persistenceFailures = [],
 }: CanvasStatusBarProps) {
   return (
     <footer className="felixo-canvas-statusbar" aria-live="polite">
@@ -77,6 +80,21 @@ export function CanvasStatusBar({
         )}
       </div>
       <div className="felixo-statusbar-group">
+        {persistenceFailures.length > 0 && (
+          <span
+            className="felixo-statusbar-save is-failed"
+            role="alert"
+            title={persistenceFailures.join(' | ')}
+            data-testid="canvas-persistence-failure"
+          >
+            <CircleAlert size={13} aria-hidden />
+            <span>
+              {persistenceFailures.length === 1
+                ? persistenceFailures[0]
+                : `${persistenceFailures.length} falhas ao gravar o canvas`}
+            </span>
+          </span>
+        )}
         <span className={`felixo-statusbar-save ${hydrated ? 'is-ready' : ''}`}>
           <CheckCircle2 size={13} aria-hidden />
           <span data-corte="1">{hydrated ? 'Canvas pronto' : 'Carregando canvas…'}</span>

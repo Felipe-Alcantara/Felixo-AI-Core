@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { clearPersistenceFailure, reportPersistenceFailure } from '../services/canvas-persistence-status'
+import { writeFileNodeContent } from '../services/file-node-write'
 
 /**
  * O conteúdo por trás de um bloco de arquivo, venha ele de onde vier.
@@ -23,6 +25,8 @@ export type FileNodeDocument = {
   absolutePath: string
   /** Mensagem quando o arquivo não pôde ser lido (sumiu, grande demais, sem permissão). */
   error: string
+  /** Mensagem quando a última gravação não chegou ao disco; vazia se tudo gravou. */
+  saveError: string
   /** Registra o texto novo na hora e agenda a gravação. */
   save: (next: string) => void
 }
@@ -52,6 +56,7 @@ export function useFileNodeDocument({ fileName, filePath }: Binding): FileNodeDo
    */
   const [error, setError] = useState<{ source: string; message: string } | null>(null)
   const source = filePath || fileName || ''
+  const [saveError, setSaveError] = useState<{ source: string; message: string } | null>(null)
 
   /**
    * O que este bloco gravou por último.
@@ -123,7 +128,18 @@ export function useFileNodeDocument({ fileName, filePath }: Binding): FileNodeDo
     if (fileName && canvasFiles) {
       const load = () => {
         void canvasFiles.read({ name: fileName }).then((result) => {
-          if (!cancelled && result?.ok) applyContent(result.content ?? '')
+          if (cancelled) return
+          if (result?.ok) {
+            applyContent(result.content ?? '')
+            setError(null)
+          } else {
+            // Arquivo que ainda não existe volta ok com texto vazio; aqui é
+            // falha de verdade (sem permissão, caminho inválido).
+            setError({
+              source: fileName,
+              message: result?.message ?? 'Não foi possível ler o arquivo.',
+            })
+          }
         })
       }
 
@@ -158,11 +174,25 @@ export function useFileNodeDocument({ fileName, filePath }: Binding): FileNodeDo
 
       const write = () => {
         lastWrittenRef.current = next
-        if (filePath) {
-          void window.felixo?.textFiles?.write({ path: filePath, content: next })
-        } else if (fileName) {
-          void window.felixo?.canvasFiles?.write({ name: fileName, content: next })
-        }
+        const target = filePath || fileName
+        if (!target) return
+        const key = `file:${target}`
+        // Nunca dizer que gravou sem conferir: a falha fica ao lado do bloco e,
+        // como o bloco pode fechar antes da resposta, também na barra de status.
+        void writeFileNodeContent(window.felixo, { filePath, fileName }, next).then((outcome) => {
+          if (outcome.ok) {
+            clearPersistenceFailure(key)
+            setSaveError(null)
+            return
+          }
+          // O texto não chegou ao disco: um eco futuro não pode ser confundido com ele.
+          if (lastWrittenRef.current === next) lastWrittenRef.current = null
+          setSaveError({ source: target, message: `Não foi possível salvar: ${outcome.message}` })
+          reportPersistenceFailure(
+            key,
+            `Não foi possível salvar o arquivo do bloco: ${outcome.message}`,
+          )
+        })
       }
 
       // Agrupar as teclas evita gravar (e acordar o observador) a cada letra —
@@ -183,6 +213,7 @@ export function useFileNodeDocument({ fileName, filePath }: Binding): FileNodeDo
     absolutePath: filePath || resolvedCanvasPath,
     // Um erro de outro arquivo não fala sobre este.
     error: error && error.source === source ? error.message : '',
+    saveError: saveError && saveError.source === source ? saveError.message : '',
     save,
   }
 }

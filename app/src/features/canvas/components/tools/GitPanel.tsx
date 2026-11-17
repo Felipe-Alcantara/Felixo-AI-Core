@@ -279,7 +279,7 @@ export function GitPanel({ onClose, toolsMenuOpen }: GitPanelProps) {
   /**
    * Envolve uma ação de git: trava a interface, recarrega o status e, se havia
    * um arquivo aberto, relê o leitor — senão ele continuaria mostrando o
-   * estado anterior ao que a pessoa acabou de fazer.
+   * estado anterior ao que a pessoa acabou de fazer. Devolve se a ação deu certo.
    */
   const runAction = useCallback(
     async (
@@ -290,15 +290,15 @@ export function GitPanel({ onClose, toolsMenuOpen }: GitPanelProps) {
         reloadLog?: boolean
         keepSelection?: boolean
       } = {},
-    ) => {
-      if (!projectPath) return
+    ): Promise<boolean> => {
+      if (!projectPath) return false
       setBusy(true)
       setNotice(null)
       try {
         const result = await action()
         if (!result?.ok) {
           setError(result?.message ?? fallback)
-          return
+          return false
         }
         setError(null)
         if (result.output) setNotice(result.output)
@@ -313,6 +313,7 @@ export function GitPanel({ onClose, toolsMenuOpen }: GitPanelProps) {
         } else {
           await loadReader(selected, projectPath)
         }
+        return true
       } finally {
         setBusy(false)
       }
@@ -323,14 +324,15 @@ export function GitPanel({ onClose, toolsMenuOpen }: GitPanelProps) {
   const commit = useCallback(async () => {
     if (!message.trim()) return
     const text = message.trim()
-    await runAction(
+    const committed = await runAction(
       () => window.felixo?.git?.commit({ projectPath, message: text }),
       'Falha ao criar o commit.',
       // Um commit muda o que existe no repositório, não só o que está sujo:
       // arquivo novo deixa de ser novo e arquivo apagado some da árvore.
       { reloadTree: true, reloadLog: true, keepSelection: false },
     )
-    setMessage('')
+    // Commit que falhou mantém o texto digitado: só o erro aparece.
+    if (committed) setMessage('')
   }, [message, projectPath, runAction])
 
   const discard = useCallback(

@@ -17,6 +17,11 @@ type CanvasPanelProps = {
   title: string
   icon?: ReactNode
   onClose: () => void
+  /**
+   * Chamado antes de Esc e do botão Fechar. `false` mantém o painel aberto
+   * (ex.: confirmação de rascunho não salvo, negada pela pessoa).
+   */
+  confirmClose?: () => boolean
   children: ReactNode
   /** Id fixo do elemento raiz, para quem precisa apontar pra ele de fora
    *  (ex.: `canvas-smoke.cjs` verificando onde o foco aterrissa ao abrir). */
@@ -58,6 +63,7 @@ export function CanvasPanel({
   title,
   icon,
   onClose,
+  confirmClose,
   children,
   panelId,
   id,
@@ -65,6 +71,10 @@ export function CanvasPanel({
   variant = 'panel',
 }: CanvasPanelProps) {
   const { closing, close, cancelClose } = useExitAnimation(PANEL_EXIT_MS, onClose)
+  const requestClose = () => {
+    if (confirmClose && !confirmClose()) return
+    close()
+  }
   const openRequest = usePanelOpenRequest()
   useEffect(() => {
     cancelClose()
@@ -146,7 +156,7 @@ export function CanvasPanel({
         if (event.key === 'Escape' && !event.defaultPrevented) {
           event.preventDefault()
           event.stopPropagation()
-          close()
+          requestClose()
         }
       }}
       style={{
@@ -205,7 +215,7 @@ export function CanvasPanel({
         </h2>
         <button
           type="button"
-          onClick={close}
+          onClick={requestClose}
           className="felixo-btn-icon rounded-sm p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
           aria-label={`Fechar painel ${title}`}
         >

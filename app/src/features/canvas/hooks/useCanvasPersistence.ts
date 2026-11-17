@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { Node } from '@xyflow/react'
 import {
   deleteCanvasNode,
   loadCanvasNodes,
   saveCanvasNode,
 } from '../services/canvas-storage'
+import { createDebouncedSaveQueue } from '../services/debounced-save-queue'
 import { normalizeLoaded } from '../services/cloud-session-state'
 import type { CanvasNodeData, CanvasNodeType, PersistedCanvasNode } from '../types'
 
@@ -22,16 +23,23 @@ const SAVE_DEBOUNCE_MS = 400
 export function useCanvasPersistence() {
   const [nodes, setNodes] = useState<CanvasFlowNode[]>([])
   const [hydrated, setHydrated] = useState(false)
-  const saveTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
+  /** A leitura do disco falhou: o canvas vazio não significa "sem blocos salvos". */
+  const [loadFailed, setLoadFailed] = useState(false)
+  const [saveQueue] = useState(() =>
+    createDebouncedSaveQueue<CanvasFlowNode>(
+      (_id, node) => void saveCanvasNode(toPersistedNode(node)),
+      SAVE_DEBOUNCE_MS,
+    ),
+  )
 
   useEffect(() => {
     let cancelled = false
-    const timers = saveTimers.current
 
-    void loadCanvasNodes().then((persisted) => {
+    void loadCanvasNodes().then(({ nodes: persisted, failed }) => {
       if (cancelled) {
         return
       }
+      setLoadFailed(failed)
 
       // A ordem carregada vira índice explícito antes de qualquer outra coisa.
       // Sem isso, um canvas que nunca foi reordenado volta na ordem de
@@ -50,12 +58,17 @@ export function useCanvasPersistence() {
       setHydrated(true)
     })
 
+    // Sair da tela (trocar para o Chat, recarregar, fechar o app) grava o que
+    // ainda esperava o debounce em vez de descartar a última mudança.
+    const flush = () => saveQueue.flush()
+    window.addEventListener('pagehide', flush)
+
     return () => {
       cancelled = true
-      timers.forEach((timer) => clearTimeout(timer))
-      timers.clear()
+      window.removeEventListener('pagehide', flush)
+      saveQueue.flush()
     }
-  }, [])
+  }, [saveQueue])
 
   // Um pedido de escrita confirmado já foi persistido pelo processo principal
   // quando este evento chega — só falta o nó vivo (React) saber. Qualquer
@@ -64,54 +77,33 @@ export function useCanvasPersistence() {
   // depois e sobrescreveria a escrita com o texto velho.
   useEffect(() => {
     return window.felixo?.canvas?.onNodeUpdated(({ id, data }) => {
-      const timer = saveTimers.current.get(id)
-      if (timer) {
-        clearTimeout(timer)
-        saveTimers.current.delete(id)
-      }
+      saveQueue.cancel(id)
       setNodes((current) =>
         current.map((node) => (node.id === id ? { ...node, data: { ...node.data, ...data } } : node)),
       )
     })
-  }, [])
+  }, [saveQueue])
 
-  const persistNode = useCallback((node: CanvasFlowNode) => {
-    const timers = saveTimers.current
-    const existing = timers.get(node.id)
+  const persistNode = useCallback(
+    (node: CanvasFlowNode) => saveQueue.schedule(node.id, node),
+    [saveQueue],
+  )
 
-    if (existing) {
-      clearTimeout(existing)
-    }
+  const removeNode = useCallback(
+    (nodeId: string) => {
+      saveQueue.cancel(nodeId)
+      void deleteCanvasNode(nodeId)
+    },
+    [saveQueue],
+  )
 
-    timers.set(
-      node.id,
-      setTimeout(() => {
-        timers.delete(node.id)
-        void saveCanvasNode(toPersistedNode(node))
-      }, SAVE_DEBOUNCE_MS),
-    )
-  }, [])
-
-  const removeNode = useCallback((nodeId: string) => {
-    const timer = saveTimers.current.get(nodeId)
-
-    if (timer) {
-      clearTimeout(timer)
-      saveTimers.current.delete(nodeId)
-    }
-
-    void deleteCanvasNode(nodeId)
-  }, [])
-
-  const cancelPendingSaves = useCallback(() => {
-    saveTimers.current.forEach((timer) => clearTimeout(timer))
-    saveTimers.current.clear()
-  }, [])
+  const cancelPendingSaves = useCallback(() => saveQueue.cancelAll(), [saveQueue])
 
   return {
     nodes,
     setNodes,
     hydrated,
+    loadFailed,
     persistNode,
     removeNode,
     cancelPendingSaves,

@@ -361,7 +361,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
         locator: 'onClick={() => void save()}',
         kind: 'button',
         effect: 'saveOrchestratorSettings normaliza o rascunho e grava por settings:save-orchestrator (orchestrator-settings.json); o processo principal aplica agentes por rodada, rodadas, total e minutos em cada execução (cli-request-policy/orchestration-store); mostra "Salvo" por 2 s',
-        failure: 'IPC que falha cai no localStorage legado e mostra "Salvo" do mesmo jeito; 0 ou decimal nos limites inteiros vira o padrão sem aviso (ver lacuna); se o localStorage também lançar, a promessa rejeita sem aviso',
+        failure: 'IPC que falha cai no localStorage legado e mostra "Salvo" do mesmo jeito; 0 ou decimal nos limites inteiros vira o padrão e a tela passa a mostrar o valor gravado; se o localStorage também lançar, a promessa rejeita sem aviso',
       },
     ],
     persistence: [
@@ -381,6 +381,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
     ],
     tests: [
       { file: 'electron/services/orchestrator-settings-store.test.cjs' },
+      { file: 'src/features/shared/orchestrator/orchestrator-settings-storage.test.ts' },
       { file: 'electron/services/cli-request-policy.test.cjs' },
       { file: 'electron/services/orchestration/orchestration-store.test.cjs' },
     ],
@@ -389,11 +390,6 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
         what: 'Painel sem teste de interface (modo, limites, preferidos/bloqueados, Salvar) e sem teste da camada orchestrator-settings-storage do renderer',
         risk: 'baixo',
         task: '3ec91f95-497e-81ca-8319-ee657b0b6492',
-      },
-      {
-        what: 'OrchestratorPanel.tsx:101-107 aceita 0 e decimais em Agentes por rodada, Rodadas, Agentes no total e Minutos; normalizePositiveInteger (orchestrator-settings-storage.ts:497) troca esses valores pelo padrão (3, 5, 10, 20) ao salvar, mas a tela continua mostrando o número digitado com "Salvo"',
-        risk: 'médio',
-        task: '3ec91f95-497e-81a3-9be3-c0d354bf7621',
       },
       {
         what: 'Tokens de contexto só entra no texto do prompt: nenhum código do processo principal lê maxContextTokens (o teto de custo e a confirmação de ações sensíveis valem em código desde 16/11/2026)',

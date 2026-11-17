@@ -61,3 +61,6 @@ export function upsertPresetOverride(
 
   return [...custom, edited]
 }
+
+/** Pergunta de quando se sai do detalhe de um prompt com edições não salvas. */
+export const DISCARD_PROMPT_EDITS_MESSAGE = 'Descartar as edições não salvas deste prompt?'

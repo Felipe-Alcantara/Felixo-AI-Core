@@ -3773,6 +3773,19 @@
   color: var(--f-core-muted);
 }
 
+/* Gravação do canvas que falhou: fica visível até a próxima dar certo. */
+.felixo-statusbar-save.is-failed {
+  color: var(--color-warning);
+  max-width: 24rem;
+  min-width: 0;
+}
+
+.felixo-statusbar-save.is-failed > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ===========================================================================
    CHAT — superfícies e composer
    O chat é a conversa; tudo que é técnico existe como camada secundária.
