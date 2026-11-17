@@ -1517,6 +1517,68 @@ test(
   },
 )
 
+test(
+  'leitura por terminal grava na conta do terminal, mesmo com duas contas do Claude, e ignora leitura mais velha',
+  { skip: hasNodeSqlite() ? false : 'node:sqlite indisponível neste runtime' },
+  async () => {
+    const databaseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-agent-usage-terminal-'))
+    const database = createStorageDatabase({ databaseDir })
+    const repository = createAgentUsageRepository(database)
+    const catalog = listAgentUsageSources().map((source) => ({
+      id: source.id,
+      name: source.name,
+      provider: source.provider,
+      command: source.command,
+      detected: true,
+      version: 'test',
+    }))
+    repository.createAccount({ id: 'claude-a', providerId: 'claude', label: 'A' })
+    repository.createAccount({ id: 'claude-b', providerId: 'claude', label: 'B' })
+    const metric = (used) => ({
+      key: 'five_hour',
+      label: 'Janela de 5 horas',
+      used,
+      limit: 100,
+      remaining: 100 - used,
+      unit: '%',
+      precision: 'percentage',
+      resetAt: null,
+    })
+    const reading = (used, collectedAt) => ({ ok: true, metrics: [metric(used)], identity: null, collectedAt })
+    const service = createAgentUsageService({
+      repository,
+      probe: () => null,
+      now: () => Date.parse('2026-11-17T12:10:00.000Z'),
+      listCatalog: async () => catalog,
+      runCommand: async () => ({ ok: false, stdout: '', stderr: '' }),
+    })
+
+    try {
+      assert.deepEqual(
+        await service.refreshLocal('claude', { accountId: 'claude-b', reading: reading(30, '2026-11-17T12:00:00.000Z') }),
+        { ok: true, kind: 'sample', accountId: 'claude-b' },
+      )
+      assert.equal(repository.getLatestSample('claude-a'), null)
+      assert.equal(repository.getLatestSample('claude-b').metrics[0].used, 30)
+
+      // Terminal parado que acorda com medição mais velha não regrava a conta.
+      assert.equal(
+        await service.refreshLocal('claude', { accountId: 'claude-b', reading: reading(10, '2026-11-17T11:00:00.000Z') }),
+        null,
+      )
+      assert.equal(repository.getLatestSample('claude-b').metrics[0].used, 30)
+
+      // Conta de outro provider ou desconhecida não recebe a leitura.
+      assert.equal(await service.refreshLocal('claude', { accountId: 'nao-existe', reading: reading(5, '2026-11-17T12:05:00.000Z') }), null)
+      // Sem conta no terminal (login do sistema) e com duas contas: sem dono, como antes.
+      assert.equal(await service.refreshLocal('claude', { accountId: null, reading: reading(5, '2026-11-17T12:05:00.000Z') }), null)
+    } finally {
+      database.close()
+      fs.rmSync(databaseDir, { recursive: true, force: true })
+    }
+  },
+)
+
 test('o login da Antigravity usa o prazo da própria fonte; as outras CLIs seguem com 30 s', async () => {
   // Medido em 13/11/2026: `agy models` passou dos 30 s com o painel consultando
   // as outras CLIs ao mesmo tempo, e a amostra virou erro de tempo esgotado.

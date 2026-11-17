@@ -56,6 +56,8 @@ import type { HardwareProfile } from './features/shared/performance/performance-
 import type { PromptInsertionMetadata } from './features/shared/types/prompt-insertion'
 import type {
   AgentUsageAccount,
+  AgentUsageSessionBatch,
+  AgentUsageSessionReading,
   AgentUsageDashboard,
   ClaudeStatuslineState,
   AgentUsageMutationResult,
@@ -1133,6 +1135,10 @@ declare global {
         ) => () => void
         onAccountChanged: (
           callback: (account: AgentUsageAccount) => void,
+        ) => () => void
+        listSessions: () => Promise<AgentUsageSessionReading[]>
+        onSessionsChanged: (
+          callback: (batch: AgentUsageSessionBatch) => void,
         ) => () => void
       }
       systemDesign?: {

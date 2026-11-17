@@ -114,7 +114,7 @@ class PtyProcessManager {
    * @param {((detection: object) => void) | null} [dependencies.onOutputFailure] - Recebe cada detecção da vigia, com a sessão, a conta e o modo.
    * @param {(provider: string) => string | null} [dependencies.getCliVersion] - Última versão lida da CLI (`agent-cli-versions.cjs`), gravada junto de cada conversa.
    */
-  constructor({ spawnPty, now, platform: platformAdapter, logger, resolveCodexPath, isDebugSession, discoverAgentSession: discover = discoverAgentSession, buildAccountEnv, validateAccount, createOutputWatcher = null, onOutputFailure = null, getCliVersion = null, outputArchive = null } = {}) {
+  constructor({ spawnPty, now, platform: platformAdapter, logger, resolveCodexPath, isDebugSession, discoverAgentSession: discover = discoverAgentSession, buildAccountEnv, validateAccount, createOutputWatcher = null, onOutputFailure = null, getCliVersion = null, outputArchive = null, claudeSessionLaunch = null } = {}) {
     this.sessions = new Map()
     this.injectedSpawnPty = spawnPty ?? null
     this.now = now ?? (() => Date.now())
@@ -135,6 +135,8 @@ class PtyProcessManager {
     // Arquivo em disco da saída (`pty-output-archive.cjs`). Sem ele (testes
     // antigos, bancada `atual`) a saída vive só no replay, como antes.
     this.outputArchive = outputArchive && typeof outputArchive.append === 'function' ? outputArchive : null
+    // Captura de consumo por terminal do Claude (`--settings` + ID do terminal no ambiente).
+    this.claudeSessionLaunch = typeof claudeSessionLaunch === 'function' ? claudeSessionLaunch : null
   }
 
   /**
@@ -200,6 +202,35 @@ class PtyProcessManager {
     return codexProfileKey(this.buildAccountEnv(options.accountId, 'codex'), this.platform.name)
   }
 
+  /**
+   * Liga a status line do app só neste processo do Claude: `--settings <arquivo>` e o ID do
+   * terminal no ambiente (o script grava `sessions/<id>.json`). Fica fora de `args`, que é o
+   * que o renderer pediu e o que a retomada lê. Sem suporte, com `--settings` do usuário ou
+   * fora do Claude, devolve os argumentos como vieram.
+   *
+   * @returns {string[]}
+   */
+  withClaudeSessionCapture(sessionId, options, args, env) {
+    if (
+      !this.claudeSessionLaunch ||
+      !options.command ||
+      !isClaudeCommandName(options.command) ||
+      !/^[A-Za-z0-9_-]{1,100}$/.test(sessionId) ||
+      args.some((arg) => arg === '--settings' || String(arg).startsWith('--settings='))
+    ) {
+      return args
+    }
+    let launch = null
+    try {
+      launch = this.claudeSessionLaunch()
+    } catch {
+      launch = null
+    }
+    if (!launch?.settingsPath) return args
+    env.FELIXO_PTY_SESSION_ID = sessionId
+    return ['--settings', launch.settingsPath, ...args]
+  }
+
   spawn(
     sessionId,
     options = {},
@@ -252,6 +283,7 @@ class PtyProcessManager {
       env.CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN = '1'
     }
     const args = Array.isArray(options.args) ? options.args : []
+    const launchArgs = this.withClaudeSessionCapture(sessionId, options, args, env)
     const defaultShell = options.defaultShell || this.platform.getDefaultShell(env)
     const requestedCommand = options.command || defaultShell
     const command = resolvePtyCommand(
@@ -263,7 +295,7 @@ class PtyProcessManager {
     )
     const keepShellOpen = Boolean(options.keepShellOpen)
     const launch = options.command
-      ? createPtyLaunchSpec(command, args, env, this.platform, keepShellOpen)
+      ? createPtyLaunchSpec(command, launchArgs, env, this.platform, keepShellOpen)
       : { command, args: getDefaultPtyShellArgs(command, this.platform) }
     const cols = normalizeDimension(options.cols, DEFAULT_COLS)
     const rows = normalizeDimension(options.rows, DEFAULT_ROWS)

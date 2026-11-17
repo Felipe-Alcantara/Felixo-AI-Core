@@ -23,6 +23,9 @@ const {
 
 const SCRIPT_NAME = 'felixo-statusline.cjs'
 const CAPTURE_NAME = 'rate-limits.json'
+const SESSION_SCRIPT_NAME = 'felixo-session-statusline.cjs'
+const SESSION_SETTINGS_NAME = 'session-settings.json'
+const SESSIONS_DIR_NAME = 'sessions'
 const BACKUP_KEY = 'felixoPreviousStatusLine'
 const OWNER_KEY = 'felixoManaged'
 
@@ -34,6 +37,9 @@ function createClaudeStatuslineService({
   const settingsPath = path.join(homeDir, '.claude', 'settings.json')
   const scriptPath = path.join(baseDir, SCRIPT_NAME)
   const capturePath = path.join(baseDir, CAPTURE_NAME)
+  const sessionsDir = path.join(baseDir, SESSIONS_DIR_NAME)
+  const sessionScriptPath = path.join(baseDir, SESSION_SCRIPT_NAME)
+  const sessionSettingsPath = path.join(baseDir, SESSION_SETTINGS_NAME)
 
   function readSettings() {
     try {
@@ -219,8 +225,37 @@ function createClaudeStatuslineService({
     }
   }
 
+  /**
+   * Prepara a captura por terminal: o app lança o Claude com `--settings <este arquivo>`, que
+   * liga a status line só naquele processo (vale também para perfil com CLAUDE_CONFIG_DIR) e
+   * não toca o `settings.json` da pessoa. Script próprio, para o "desligar" da coleta global
+   * não apagar o script de terminais vivos. Devolve `null` se não deu para gravar.
+   */
+  function sessionLaunch() {
+    try {
+      fileSystem.mkdirSync(baseDir, { recursive: true })
+      fileSystem.writeFileSync(
+        sessionScriptPath,
+        createClaudeStatuslineScript(capturePath, { sessionsDir }),
+        'utf8',
+      )
+      fileSystem.writeFileSync(
+        sessionSettingsPath,
+        JSON.stringify({
+          statusLine: { type: 'command', command: `node ${JSON.stringify(sessionScriptPath)}` },
+        }),
+        'utf8',
+      )
+      return { settingsPath: sessionSettingsPath, sessionsDir }
+    } catch {
+      return null
+    }
+  }
+
   return {
     capturePath,
+    sessionsDir,
+    sessionLaunch,
     install,
     readCapture,
     scriptPath,

@@ -22,6 +22,9 @@ Module._load = function patchedLoad(request, parent, isMain) {
 const { registerAgentUsageIpcHandlers } = require('./agent-usage-ipc-handlers.cjs')
 Module._load = originalLoad
 
+// Os testes de IPC não tocam a pasta de captura do app de verdade.
+const semCaptura = () => ({ start() {}, stop() {}, list: () => [] })
+
 test('agent usage IPC validates input and forwards only normalized parameters', async () => {
   const calls = []
   const service = {
@@ -131,6 +134,7 @@ test('agent usage IPC liga visibilidade, política de energia e refresh manual a
     removeListener: (event) => powerListeners.delete(event),
   }
   const watching = registerAgentUsageIpcHandlers({
+    createSessionCapture: semCaptura,
     service,
     getMainWindow: () => window,
     powerMonitor,
@@ -194,6 +198,7 @@ test('agent usage IPC não devolve ao renderer segredo que veio dentro da mensag
     throw new Error('spawn falhou: OPENAI_API_KEY=CANARIOipc0a1b2c e https://u:CANARIOipcurl9z@proxy.example.com')
   }
   registerAgentUsageIpcHandlers({
+    createSessionCapture: semCaptura,
     service: { list: falha, refresh: falha, refreshAccount: falha, reconnect: falha, addAccount: falha, removeAccount: falha, consumeResetCredit: falha },
   })
 
@@ -231,6 +236,7 @@ test('a status line avisa a tela de uma conta só, e uma confirmação só com o
     removeListener() {},
   }
   const watching = registerAgentUsageIpcHandlers({
+    createSessionCapture: semCaptura,
     service,
     getMainWindow: () => window,
     createWatcher: ({ onChange }) => {
@@ -262,6 +268,66 @@ test('a status line avisa a tela de uma conta só, e uma confirmação só com o
 
     assert.deepEqual(sent.map(([channel]) => channel), ['agent-usage:account-changed', 'agent-usage:account-changed'])
     assert.deepEqual(sent[0][1], { id: 'claude-account', latestSample: { status: 'current' } })
+  } finally {
+    watching.stopWatching?.()
+  }
+})
+
+test('a captura por terminal entrega a janela à conta do terminal e manda o lote de sessões ao renderer', async () => {
+  const sent = []
+  let capturaOpcoes
+  const chamadas = []
+  const service = {
+    refreshLocal: async (providerId, opcoes) => {
+      chamadas.push([providerId, opcoes])
+      return { ok: true, kind: 'sample', accountId: opcoes.accountId }
+    },
+    describeAccount: async (accountId) => ({ id: accountId }),
+  }
+  const window = {
+    isDestroyed: () => false,
+    isVisible: () => true,
+    webContents: { id: 7, send: (channel, payload) => sent.push([channel, payload]) },
+    on() {},
+    removeListener() {},
+  }
+  const watching = registerAgentUsageIpcHandlers({
+    service,
+    getMainWindow: () => window,
+    createWatcher: () => ({ start() {}, stop() {} }),
+    createSessionCapture: (opcoes) => {
+      capturaOpcoes = opcoes
+      return { start() {}, stop() {}, list: () => [{ ptySessionId: 'canvas-a' }] }
+    },
+    createScheduler: () => ({
+      isConsumerVisible: () => false,
+      setConsumerState() {},
+      refreshPowerPolicy() {},
+      setWindowVisible() {},
+      setSuspended() {},
+      stop() {},
+    }),
+  })
+
+  try {
+    await capturaOpcoes.recordWindows({
+      providerId: 'claude',
+      accountId: 'conta-b',
+      measuredAt: '2026-11-17T12:00:00.000Z',
+      accountWindows: [{ key: 'five_hour' }],
+    })
+    assert.deepEqual(chamadas[0], [
+      'claude',
+      {
+        accountId: 'conta-b',
+        reading: { ok: true, collectedAt: '2026-11-17T12:00:00.000Z', metrics: [{ key: 'five_hour' }], identity: null },
+      },
+    ])
+    assert.deepEqual(sent, [['agent-usage:account-changed', { id: 'conta-b' }]])
+
+    capturaOpcoes.onChanged({ changed: [{ ptySessionId: 'canvas-a' }], removed: [] })
+    assert.equal(sent.at(-1)[0], 'agent-usage:session-changed')
+    assert.deepEqual(await handlers.get('agent-usage:sessions')({}), [{ ptySessionId: 'canvas-a' }])
   } finally {
     watching.stopWatching?.()
   }

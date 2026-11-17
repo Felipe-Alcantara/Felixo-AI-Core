@@ -678,6 +678,48 @@ test('reuseExisting reattaches without spawning or replaying the initial process
   assert.deepEqual(fakePty.kills, [])
 })
 
+test('terminal do Claude nasce com a status line do app só nele: --settings antes dos argumentos e o ID no ambiente', () => {
+  const { spawnPty, calls } = createFakePty()
+  const manager = new PtyProcessManager({
+    spawnPty,
+    platform: fakePosixPlatform,
+    claudeSessionLaunch: () => ({ settingsPath: '/dados/session-settings.json' }),
+  })
+
+  try {
+    manager.spawn('canvas-claude', { command: 'claude', args: ['--model', 'opus'] })
+    manager.spawn('canvas-com-settings', { command: 'claude', args: ['--settings', '/meu.json'] })
+    manager.spawn('canvas-codex', { command: 'codex', args: ['--model', 'x'] })
+    manager.spawn('canvas:id-fora-do-padrao', { command: 'claude', args: [] })
+
+    assert.deepEqual(calls[0].args, ['--settings', '/dados/session-settings.json', '--model', 'opus'])
+    assert.equal(calls[0].options.env.FELIXO_PTY_SESSION_ID, 'canvas-claude')
+    // A retomada e a lista de sessões continuam vendo só o que o renderer pediu.
+    assert.deepEqual(manager.listarSessoesVivas().find((s) => s.sessionId === 'canvas-claude').args, ['--model', 'opus'])
+    // Quem já passou --settings, outro provider e ID que não cabe em nome de arquivo ficam como estavam.
+    assert.deepEqual(calls[1].args, ['--settings', '/meu.json'])
+    assert.equal(calls[1].options.env.FELIXO_PTY_SESSION_ID, undefined)
+    assert.deepEqual(calls[2].args, ['--model', 'x'])
+    assert.equal(calls[2].options.env.FELIXO_PTY_SESSION_ID, undefined)
+    assert.deepEqual(calls[3].args, [])
+  } finally {
+    for (const sessao of manager.listarSessoesVivas()) manager.kill(sessao.sessionId, { force: true })
+  }
+})
+
+test('sem preparo da status line (arquivo não gravou), o Claude abre como sempre', () => {
+  const { spawnPty, calls } = createFakePty()
+  const manager = new PtyProcessManager({ spawnPty, platform: fakePosixPlatform, claudeSessionLaunch: () => null })
+
+  try {
+    manager.spawn('canvas-claude', { command: 'claude', args: ['--model', 'opus'] })
+    assert.deepEqual(calls[0].args, ['--model', 'opus'])
+    assert.equal(calls[0].options.env.FELIXO_PTY_SESSION_ID, undefined)
+  } finally {
+    manager.kill('canvas-claude', { force: true })
+  }
+})
+
 test('a sessão guarda conta, provedor e modo, e a lista de sessões vivas os expõe', () => {
   const { fakePty, spawnPty } = createFakePty()
   const manager = new PtyProcessManager({ spawnPty, platform: fakePosixPlatform })

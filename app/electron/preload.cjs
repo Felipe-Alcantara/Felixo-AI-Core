@@ -472,6 +472,14 @@ contextBridge.exposeInMainWorld('felixo', {
       ipcRenderer.on('agent-usage:account-changed', handler)
       return () => ipcRenderer.removeListener('agent-usage:account-changed', handler)
     },
+    // Consumo de cada terminal de agente vivo (Claude): lista inicial e lotes de mudança
+    // `{ changed: SessionReading[], removed: string[] }`.
+    listSessions: () => ipcRenderer.invoke('agent-usage:sessions'),
+    onSessionsChanged: (callback) => {
+      const handler = (_event, batch) => callback(batch)
+      ipcRenderer.on('agent-usage:session-changed', handler)
+      return () => ipcRenderer.removeListener('agent-usage:session-changed', handler)
+    },
   },
   // Agente na nuvem: o main cria a sessão e valida cada pedido; o renderer só
   // entrega o que a pessoa confirmou no cartão.

@@ -138,6 +138,9 @@ const {
   registerAgentUsageIpcHandlers,
 } = require('./services/agent-usage-ipc-handlers.cjs')
 const {
+  createClaudeStatuslineService,
+} = require('./services/claude-statusline-service.cjs')
+const {
   createCloudSessionService,
   describeCloudSessionEvent,
 } = require('./services/cloud-session/cloud-session-service.cjs')
@@ -888,6 +891,10 @@ app.whenReady().then(async () => {
       ? async () => null
       : (provider) => detectAgentCliVersion(provider, createCliEnv()),
   })
+  // Um só serviço da status line do Claude: o lançamento dos terminais (`--settings` por
+  // terminal) e o painel de limites usam a mesma pasta de captura.
+  const claudeStatuslineDir = path.join(appPaths.userData, 'claude-statusline')
+  const claudeStatusline = createClaudeStatuslineService({ baseDir: claudeStatuslineDir })
   ptyHandlers = registerPtyIpcHandlers(getMainWindow, {
     validateAccount: validatePtyAccount,
     onSessionExit: (sessionId) => accountChain.service.onSessionExit(sessionId),
@@ -901,6 +908,7 @@ app.whenReady().then(async () => {
     cliVersions: agentCliVersions,
     manager: new PtyProcessManager({
       spawnPty: devtoolsFakeCliPty?.createFakeCliPtyFactory(),
+      claudeSessionLaunch: () => claudeStatusline.sessionLaunch(),
       getCliVersion: (provider) => agentCliVersions.peek(provider),
       validateAccount: validatePtyAccount,
       buildAccountEnv: (accountId, providerId) =>
@@ -1039,6 +1047,8 @@ app.whenReady().then(async () => {
   })
   agentUsageWatching = registerAgentUsageIpcHandlers({
     service: agentUsageService,
+    statuslineDir: claudeStatuslineDir,
+    statusline: claudeStatusline,
     getMainWindow,
     getActiveSessions: () => ptyHandlers?.manager?.listarSessoesVivas?.() ?? [],
     powerMonitor,

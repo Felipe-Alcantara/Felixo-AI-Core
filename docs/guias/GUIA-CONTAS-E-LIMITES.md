@@ -196,6 +196,18 @@ O que cada CLI publica hoje:
 | Gemini | — | sem endpoint não interativo seguro: a quota só existe no `/stats model` interativo e fica explicitamente indisponível, nunca 0% nem barra. Desde 18/06/2026 a Gemini CLI deixou de atender contas individuais (gratuita, AI Pro e Ultra) e a Antigravity CLI a substituiu, segundo o anúncio da Google. O app não abre terminal escondido para extrair esse dado |
 | Antigravity | `agy models` (só o login) | a CLI 1.5.8 não publica quota por comando não interativo: o painel confere o login, que leva de 3 a 5 s e não gasta cota, e a amostra fica indisponível com o motivo |
 
+**Consumo por terminal (Claude).** Todo terminal do canvas que abre o Claude Code nasce com
+`--settings <userData>/claude-statusline/session-settings.json` e com o ID do terminal em
+`FELIXO_PTY_SESSION_ID`: a status line do app liga só naquele processo (vale também para perfil
+com `CLAUDE_CONFIG_DIR`) e não mexe no `settings.json` da pessoa. A cada resposta o script grava
+`sessions/<id do terminal>.json` com uma lista branca (modelo, esforço, custo equivalente, contexto,
+tokens de entrada e saída, janelas da conta; nunca pasta, caminho da transcrição, título nem texto).
+O processo principal faz um `stat` por segundo por terminal vivo, manda ao renderer o lote
+`agent-usage:session-changed` (`window.felixo.agentUsage.onSessionsChanged`; lista inicial em
+`listSessions`) e grava a janela na conta daquele terminal, sem adivinhar identidade. Se a pessoa já
+tem uma status line própria, o script do app a chama e mostra a saída dela. Terminal fechado some da
+memória e o arquivo é apagado. Codex e Gemini ainda não têm esta captura por terminal.
+
 A coleta de status line do Claude Code continua **opcional e explícita** e serve
 como fallback local: pelo botão do painel, o app registra um script no arquivo
 de configuração do Claude Code, preserva uma status line que já exista (recusa

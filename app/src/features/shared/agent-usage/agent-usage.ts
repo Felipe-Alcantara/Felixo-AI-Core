@@ -14,6 +14,41 @@ export type AgentUsageMetric = {
   scope?: 'account' | 'model'
 }
 
+/**
+ * Consumo de um terminal de agente vivo, lido do que a CLI grava (hoje só o Claude). A janela da
+ * conta (`accountWindows`) é a da conta do terminal; o resto é só da sessão.
+ */
+export type AgentUsageSessionReading = {
+  ptySessionId: string
+  providerId: string
+  accountId: string | null
+  agentSessionId: string | null
+  source: 'claude-statusline'
+  measuredAt: string
+  session: {
+    tokens: {
+      input: number | null
+      output: number | null
+      cacheRead: number | null
+      cacheWrite: number | null
+      reasoning: number | null
+      total: number | null
+    } | null
+    contextUsedPercent: number | null
+    contextWindowTokens: number | null
+    costUsdEquivalent: number | null
+    model: string | null
+    effort: string | null
+    fastMode: boolean
+  }
+  accountWindows: AgentUsageMetric[]
+}
+
+export type AgentUsageSessionBatch = {
+  changed: AgentUsageSessionReading[]
+  removed: string[]
+}
+
 export type AgentUsageStatusDetailValue =
   | string
   | number

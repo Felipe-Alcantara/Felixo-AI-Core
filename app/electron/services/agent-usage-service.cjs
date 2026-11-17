@@ -630,15 +630,19 @@ function createAgentUsageService({
    * 'confirmed'`): avança o `measuredAt` da última amostra em vez de gravar
    * outra igual. Números novos gravam amostra (`kind: 'sample'`). Quem chama
    * monta a conta para a tela com `describeAccount`, só se for avisar.
+   *
+   * `reading` + `accountId` (captura por terminal): a leitura já vem pronta e o dono é a conta
+   * do terminal, sem adivinhar identidade. Conta que não é deste provider devolve `null`, e uma
+   * leitura mais velha que a última medição da conta (terminal parado que acordou) não regrava.
    */
-  async function refreshLocal(providerId) {
+  async function refreshLocal(providerId, { reading = null, accountId = null } = {}) {
     const source = getAgentUsageSource(providerId)
 
     if (!source?.localProbe) {
       return null
     }
 
-    const local = probe(source.localProbe)
+    const local = reading ?? probe(source.localProbe)
 
     if (!local?.metrics?.length) {
       return null
@@ -647,13 +651,19 @@ function createAgentUsageService({
     const accounts = repository
       .listAccounts()
       .filter((account) => account.providerId === providerId)
-    const target = pickLocalTarget(accounts, providerId, local.identity)
+    const target = accountId
+      ? accounts.find((account) => account.id === accountId)
+      : pickLocalTarget(accounts, providerId, local.identity)
 
     if (!target) {
       return null
     }
 
     const previous = repository.getLatestSample(target.id)
+
+    if (reading && isOlderThanLastMeasurement(previous, local.collectedAt)) {
+      return null
+    }
     const localSource = getLocalUsageSource(providerId, source)
 
     if (isSameLocalReading(previous, local, { sourceKind: localSource.kind, identityKey: target.identityKey })) {
@@ -791,6 +801,12 @@ function pickLocalTarget(accounts, providerId, identity) {
   }
 
   return accounts.length === 1 ? accounts[0] : null
+}
+
+function isOlderThanLastMeasurement(previous, collectedAt) {
+  const last = Date.parse(previous?.metadata?.measuredAt ?? '')
+  const incoming = Date.parse(collectedAt ?? '')
+  return Number.isFinite(last) && Number.isFinite(incoming) && incoming < last
 }
 
 /**

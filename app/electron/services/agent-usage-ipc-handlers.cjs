@@ -13,6 +13,9 @@ const {
   createClaudeStatuslineService,
 } = require('./claude-statusline-service.cjs')
 const { createAgentUsageWatcher } = require('./agent-usage-watcher.cjs')
+const {
+  createAgentUsageSessionCapture,
+} = require('./agent-usage-session-capture.cjs')
 
 /**
  * Erro devolvido ao renderer. A mensagem de uma exceção pode trazer texto de CLI
@@ -34,6 +37,7 @@ function registerAgentUsageIpcHandlers({
   statusline = createClaudeStatuslineService({ baseDir: statuslineDir }),
   getMainWindow = () => null,
   createWatcher = createAgentUsageWatcher,
+  createSessionCapture = createAgentUsageSessionCapture,
   createScheduler = createAgentUsageRefreshScheduler,
   getActiveSessions = () => [],
   powerMonitor = null,
@@ -217,6 +221,22 @@ function registerAgentUsageIpcHandlers({
     }
   })
 
+  // Número novo vai sempre; leitura repetida (só o `measuredAt` avança) vai só com o painel ou o
+  // modal visível, para a hora da medição e o selo de desatualizado seguirem certos. Ao abrir, o
+  // painel relê o banco, que já tem a confirmação.
+  async function notifyAccountChanged(result) {
+    if (!result || (result.kind === 'confirmed' && !scheduler.isConsumerVisible())) {
+      return
+    }
+
+    const account = await service.describeAccount(result.accountId)
+    const window = getMainWindow()
+    if (!account || !window || window.isDestroyed?.()) {
+      return
+    }
+    window.webContents?.send('agent-usage:account-changed', account)
+  }
+
   // Mantém o fallback local atualizado assim que o arquivo muda, em vez de
   // esperar a interface perguntar. A atualização ao vivo principal continua
   // no refresh explícito do painel, que consulta o `/status` por conta/perfil.
@@ -224,21 +244,7 @@ function registerAgentUsageIpcHandlers({
     claudeStatuslineDir: statuslineDir,
     onChange: async (providerId) => {
       try {
-        const result = await service.refreshLocal(providerId)
-
-        // Número novo vai sempre; leitura repetida (só o `measuredAt` avança) vai só com o
-        // painel ou o modal visível, para a hora da medição e o selo de desatualizado
-        // seguirem certos. Ao abrir, o painel relê o banco, que já tem a confirmação.
-        if (!result || (result.kind === 'confirmed' && !scheduler.isConsumerVisible())) {
-          return
-        }
-
-        const account = await service.describeAccount(result.accountId)
-        const window = getMainWindow()
-        if (!account || !window || window.isDestroyed?.()) {
-          return
-        }
-        window.webContents?.send('agent-usage:account-changed', account)
+        await notifyAccountChanged(await service.refreshLocal(providerId))
       } catch {
         // Uma leitura que falhou não derruba o observador: o arquivo seguinte
         // volta a tentar.
@@ -246,10 +252,39 @@ function registerAgentUsageIpcHandlers({
     },
   })
 
+  // Consumo por terminal (Claude): a janela da conta vai para a conta do terminal; o consumo da
+  // sessão fica em memória e sai ao renderer em lote (no máximo um por segundo, o passo do poll).
+  const sessionCapture = createSessionCapture({
+    sessionsDir: statusline.sessionsDir ?? path.join(statuslineDir, 'sessions'),
+    listSessions: getActiveSessions,
+    recordWindows: async (reading) => {
+      await notifyAccountChanged(
+        await service.refreshLocal(reading.providerId, {
+          accountId: reading.accountId,
+          reading: {
+            ok: true,
+            collectedAt: reading.measuredAt,
+            metrics: reading.accountWindows,
+            identity: null,
+          },
+        }),
+      )
+    },
+    onChanged: (batch) => {
+      const window = getMainWindow()
+      if (!window || window.isDestroyed?.()) return
+      window.webContents?.send('agent-usage:session-changed', batch)
+    },
+  })
+
+  ipcMain.handle('agent-usage:sessions', () => sessionCapture.list())
+
   watcher.start()
+  sessionCapture.start()
 
   function stopWatching() {
     watcher.stop()
+    sessionCapture.stop()
     scheduler.stop()
     ipcMain.removeListener?.('agent-usage:scheduler-state', onSchedulerState)
     window?.removeListener?.('hide', onWindowHide)
