@@ -147,6 +147,11 @@ function criarSessaoDaLeitura(deps) {
       return {
         rows: rows.length,
         cols: screen && charWidth ? Math.floor(screen.getBoundingClientRect().width / charWidth) : 0,
+        // Só evidência de falha: no Nightly do Windows o F3 mediu 63 colunas sem mostrar de onde vinham.
+        screenPx: screen ? Math.round(screen.getBoundingClientRect().width) : 0,
+        charPx: Math.round(charWidth * 100) / 100,
+        drawerPx: Math.round(document.querySelector('[data-canvas-terminal-drawer]')?.getBoundingClientRect().width ?? 0),
+        innerWidth: window.innerWidth,
       }
     })
   }

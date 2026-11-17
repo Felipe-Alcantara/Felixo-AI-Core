@@ -3798,3 +3798,9 @@ Adendo à entrada "Windows: o atalho node.cmd lê o caminho acentuado do execut�
 - A sonda do teste real (`managed-cli-runtime.integration.test.cjs`) imprime a página de código durante a execução. Com a forma anterior deu `durante=65001` e o teste reprovou (850 e 437); com a atual dá a página original. A página depois da chamada, a saída e o código de saída (7) continuam conferidos: 2/2 passam sob `chcp 850` e `chcp 437`.
 - O teste unitário passou a prender a forma nova: caminho lido sob `chcp 65001`, uma variável por parte (1 no `node.cmd`, 2 no `npm.cmd`), `chcp` de volta antes da linha que executa.
 - Cenário do instalador (`installer-kill-smoke.cjs --source`) com o executável numa pasta acentuada: `cancel` e `timeout` passam, zero sobreviventes. Pasta temporária apagada com `removeTreeSync` e conferida.
+
+---
+
+## 2026-11-17 — Canvas smoke: investigação da falha intermitente do F3 no Windows do Nightly
+
+Contexto: a task investigava o Nightly de 22/10 (sessão F, passo F3, "o xterm ficou menor que a gravação (100×50)", 65 colunas). Motivo da entrada: a falha não é do tema claro, é intermitente. Medido: o Nightly voltou a verde em 23/10 com o mesmo código, e a mesma falha se repetiu só em 09/11 (63 colunas, 3 de 3 tentativas), com o Nightly de 10/11 verde na mesma imagem do runner (20261103.629). Em 40 Nightlies o F3 do Windows falhou 2 vezes. Local (Windows, `FELIXO_SMOKE_SESSOES=F FELIXO_SMOKE_TENTATIVAS=1`) a sessão F passou 4 de 4 quando o Electron abriu, com 107 a 122 colunas após maximizar e gaveta de 864 px estável. O que mudou: o `tamanhoDoXterm` do smoke da Leitura devolve também `screenPx`, `charPx`, `drawerPx` e `innerWidth`, só como evidência de falha. Validação: eslint do arquivo limpo e sessão F verde.
