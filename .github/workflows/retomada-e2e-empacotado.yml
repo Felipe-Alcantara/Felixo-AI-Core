@@ -1,0 +1,123 @@
+# E2E da retomada de conversa no app EMPACOTADO, com o Claude Code real, nos três SOs.
+#
+# Só manual (`workflow_dispatch`): cada run usa a conta do Claude cadastrada no secret
+# CLAUDE_CODE_OAUTH_TOKEN e gasta uso dela. Não publica nada: empacota com
+# `electron-builder --dir --publish never` (sem instalador, sem release, sem GH_TOKEN).
+#
+# Passo humano, uma vez (veja docs/guias/GUIA-DESENVOLVEDOR.md, "E2E da retomada empacotado"):
+#   1. `claude setup-token` num terminal com a conta de teste; copie o token impresso (sk-ant-oat...).
+#   2. GitHub > Settings > Secrets and variables > Actions > New repository secret:
+#      nome CLAUDE_CODE_OAUTH_TOKEN, valor o token.
+#
+# O Claude Code valida o ID de `--resume` antes de qualquer chamada ao modelo, então o desfecho
+# "conversa ausente" não gasta nada; só "conversa no disco" chega a abrir a sessão autenticada.
+name: Retomada E2E empacotado
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: retomada-e2e-empacotado
+  cancel-in-progress: false
+
+jobs:
+  secret:
+    name: Conferir o secret
+    runs-on: ubuntu-latest
+    steps:
+      - name: Falhar cedo sem o secret
+        env:
+          TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::error title=Secret não configurado::O secret CLAUDE_CODE_OAUTH_TOKEN não está configurado. Gere com 'claude setup-token' e cadastre em Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+  e2e:
+    name: Retomada E2E ${{ matrix.os }}
+    needs: secret
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+    defaults:
+      run:
+        working-directory: app
+        shell: bash
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build renderer
+        run: npm run build
+
+      # Sem publicar: `--dir` gera só a pasta do app. No Windows o rebuild nativo é dispensado,
+      # como no release.yml (node-pty N-API traz prebuilds).
+      - name: Empacotar sem publicar
+        run: |
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            npx electron-builder --dir --publish never -c.npmRebuild=false
+          else
+            npx electron-builder --dir --publish never
+          fi
+
+      - name: Instalar o Claude Code numa pasta isolada
+        run: |
+          prefixo="$RUNNER_TEMP/claude-cli"
+          mkdir -p "$prefixo"
+          npm install --prefix "$prefixo" --no-audit --no-fund @anthropic-ai/claude-code
+          echo "$prefixo/node_modules/.bin" >> "$GITHUB_PATH"
+
+      - name: Localizar o executável empacotado
+        id: exe
+        run: |
+          case "$RUNNER_OS" in
+            Windows) exe="$PWD/release/win-unpacked/Felixo AI Core.exe" ;;
+            macOS) app="$(find release -maxdepth 2 -name '*.app' -type d | head -n 1)"; exe="$PWD/$app/Contents/MacOS/Felixo AI Core" ;;
+            *) exe="$PWD/release/linux-unpacked/felixo-ai-core"; [ -f "$exe" ] || exe="$PWD/release/linux-unpacked/Felixo AI Core" ;;
+          esac
+          [ -f "$exe" ] || { echo "::error::Executável empacotado não encontrado: $exe"; exit 1; }
+          echo "exe=$exe" >> "$GITHUB_OUTPUT"
+
+      - name: Rodar o E2E da retomada
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          CLAUDE_CONFIG_DIR: ${{ runner.temp }}/claude-config
+          EXE: ${{ steps.exe.outputs.exe }}
+        run: |
+          run=(node scripts/retomada-e2e-empacotado.cjs --exe "$EXE" --config-dir "$CLAUDE_CONFIG_DIR" --out "$RUNNER_TEMP/retomada-e2e")
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            xvfb-run -a "${run[@]}"
+          else
+            "${run[@]}"
+          fi
+
+      - name: Publicar capturas e cartões
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: retomada-e2e-${{ matrix.os }}
+          path: ${{ runner.temp }}/retomada-e2e
+          if-no-files-found: warn

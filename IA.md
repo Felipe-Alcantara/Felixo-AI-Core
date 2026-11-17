@@ -3853,3 +3853,20 @@ Estado: concluído do lado do código; conferência nas máquinas fica manual.
 **O que mudou:** `docs/performance/PERFORMANCE.md` ganhou o roteiro com os comandos exatos (worktree do baseline, `vite build`, os dois `ui-render-performance.cjs`, junção). Novo `app/scripts/ui-render-compare.cjs` junta os dois JSONs em `validacao.json` + `validacao.md` com hardware, driver, backend, medianas, rodadas e veredito (`aprovado`, `reprovado` ou `invalido`). É `invalido` com renderer de software, config diferente entre os builds ou toggles incompletos.
 
 **Validação:** `node --test scripts/ui-render-compare.test.cjs` 3/3 e `eslint` limpo. Nenhum benchmark foi rodado (máquina carregada e não é o notebook de referência). Status MANUAL: falta executar o roteiro no notebook.
+
+---
+
+## 2026-11-17 — Retomada: job de CI manual que empacota sem publicar e roda o E2E com o Claude real nos três SOs
+
+**Contexto.** O E2E da retomada no app empacotado só tinha sido feito à mão no Windows (30/09). O único job que empacota nos três SOs é o `release.yml`, que publica. Decisão do Felipe: usar a credencial da conta, só disparo manual.
+
+**O que mudou.**
+- `.github/workflows/retomada-e2e-empacotado.yml`: só `workflow_dispatch`, `permissions: contents: read`. O job `secret` falha em segundos se `CLAUDE_CODE_OAUTH_TOKEN` estiver vazio. A matriz ubuntu/macos/windows empacota com `electron-builder --dir --publish never`, instala o Claude Code em pasta isolada (`CLAUDE_CONFIG_DIR` próprio), roda o E2E (no Linux sob `xvfb-run`) e publica capturas e `cartoes.json`.
+- `app/scripts/retomada-e2e-empacotado.cjs` (+ teste): marca onboarding e confiança da pasta no `.claude.json`, grava duas conversas datadas de 3 e 1 dia atrás, semeia cinco cartões (ausente, no disco, projeto movido, conta removida, Gemini) e confere os desfechos por `felixo devtools --packaged`.
+- Secret: token OAuth (`claude setup-token`), não chave de API. O app tira a variável só de cartões com conta própria; o E2E usa cartões sem conta.
+- `release-relevant.test.sh`: o workflow e o script novos não publicam versão (casos fixados). Nenhuma regra mudou.
+- `GUIA-DESENVOLVEDOR.md`: seção com o passo de cadastrar o secret.
+
+**Validação.** YAML carregado (só `workflow_dispatch`); teste do script 4/4; `release-relevant.test.sh` verde; eslint limpo nos arquivos novos; `run-node-unit-tests` 3398/3411 com uma falha instável de benchmark (`pty-output-path-benchmark`, eco não medido sob carga) fora da área. O E2E em si não foi executado: exige o secret e os runners.
+
+Estado: concluído; pendente o Felipe criar o secret e disparar o workflow uma vez.

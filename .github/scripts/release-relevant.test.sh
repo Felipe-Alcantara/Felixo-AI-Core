@@ -42,6 +42,11 @@ esperar false "launcher Python (não vai no instalador)" $'start_app.py\n'
 esperar false "launcher Python, pacote" $'felixo_launcher/cli.py\n'
 esperar false "workflow de instalação das CLIs oficiais" $'.github/workflows/official-cli-install.yml\n'
 esperar false "workflow nightly" $'.github/workflows/nightly.yml\n'
+esperar false "workflow do E2E da retomada empacotada" $'.github/workflows/retomada-e2e-empacotado.yml
+'
+esperar false "script do E2E da retomada empacotada" $'app/scripts/retomada-e2e-empacotado.cjs
+app/scripts/retomada-e2e-empacotado.test.cjs
+'
 esperar false "README na raiz" $'README.md\n'
 esperar false "teste dentro de app/electron" $'app/electron/foo.test.cjs\n'
 esperar false "teste dentro de app/src" $'app/src/features/canvas/x.test.tsx\n'

@@ -413,6 +413,16 @@ entra sozinho como ponte quando alguma alternativa é pedida. Os que ficam de
 fora aparecem no JSON com `status: "not-selected"`. Um id desconhecido encerra
 a bancada com a lista dos válidos.
 
+### E2E da retomada no app empacotado (Claude real)
+
+Workflow `.github/workflows/retomada-e2e-empacotado.yml`, **só manual** (`workflow_dispatch`). Empacota com `electron-builder --dir --publish never` em Linux, macOS e Windows (sem instalador, sem release), instala o Claude Code numa pasta isolada, semeia o canvas e dirige o binário com `felixo devtools launch --packaged` (`app/scripts/retomada-e2e-empacotado.cjs`). Confere: conversa ausente (faixa e `resumeFailure=expired` persistida), conversa no disco com uma vizinha mais nova (mesmo ID, sem falha, sem conversa nova), projeto movido, conta removida e Gemini (faixas, ID inalterado) e o desfecho depois do reload. Capturas e `cartoes.json` saem como artefato `retomada-e2e-<so>`. Cada run usa a conta cujo token está no secret.
+
+**Secret `CLAUDE_CODE_OAUTH_TOKEN` (passo humano, uma vez):**
+1. Num terminal com a conta de teste do Claude, rode `claude setup-token` e copie o token impresso (`sk-ant-oat...`).
+2. No GitHub: Settings > Secrets and variables > Actions > New repository secret. Nome `CLAUDE_CODE_OAUTH_TOKEN`, valor o token.
+
+Sem o secret, o job `secret` falha em segundos com "O secret CLAUDE_CODE_OAUTH_TOKEN não está configurado" e o E2E nem começa. Escolheu-se o token OAuth (e não `ANTHROPIC_API_KEY`) porque o Claude Code o lê da variável sem terminal e sem passar pelo onboarding de chave, e porque é a conta que a retomada de verdade usa. O app só repassa essa variável a cartões sem conta própria (`cli-account-profiles.cjs` a remove dos cartões de conta), e o E2E usa cartões sem conta.
+
 ### Smoke do artefato de release
 
 Depois de `electron-builder --publish never`, o workflow instala ou extrai o
