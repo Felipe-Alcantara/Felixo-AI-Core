@@ -14,21 +14,32 @@ const BARE_KEY = /^[A-Za-z0-9_-]+$/
  * `geminiSettings`).
  */
 
-/** Claude Code: `--mcp-config <arquivo>`. O arquivo de sessao leva os segredos (0600, apagado ao fechar). */
+/**
+ * Claude Code: `--mcp-config <arquivo de sessao>`. Medido na 2.1.326: o Claude
+ * expande `${VAR}` no `command`, `args`, `env`, `url` e `headers` do
+ * `--mcp-config`, entao o arquivo leva so `${FELIXO_MCP_<ID>_<NOME>}` e o valor
+ * vai pelo ambiente do terminal: o segredo nunca chega ao disco nem ao argv.
+ */
 function claudeInjection(servers, file) {
   const mcpServers = {}
+  const env = {}
   for (const server of servers) {
+    const secrets = {}
+    for (const [name, value] of Object.entries(server.secretValues)) {
+      const variable = secretVariable(server, name)
+      env[variable] = value
+      secrets[name] = `\${${variable}}`
+    }
     mcpServers[server.id] =
       server.transporte === 'stdio'
-        ? {
-            type: 'stdio',
-            command: server.comando,
-            args: server.args,
-            env: { ...server.env, ...server.secretValues },
-          }
-        : { type: 'http', url: server.url, headers: { ...server.cabecalhos, ...server.secretValues } }
+        ? { type: 'stdio', command: server.comando, args: server.args, env: { ...server.env, ...secrets } }
+        : { type: 'http', url: server.url, headers: { ...server.cabecalhos, ...secrets } }
   }
-  return { args: ['--mcp-config', file], env: {}, files: [{ path: file, content: JSON.stringify({ mcpServers }, null, 2) }] }
+  return { args: ['--mcp-config', file], env, files: [{ path: file, content: JSON.stringify({ mcpServers }, null, 2) }] }
+}
+
+function secretVariable(server, name) {
+  return `FELIXO_MCP_${server.id.toUpperCase().replace(/-/g, '_')}_${name.toUpperCase().replace(/-/g, '_')}`
 }
 
 /**
@@ -61,7 +72,7 @@ function codexInjection(servers) {
       if (Object.keys(server.cabecalhos).length > 0) set(server.id, 'http_headers', toml(server.cabecalhos))
       const viaEnv = {}
       for (const name of secretNames) {
-        const variable = `FELIXO_MCP_${server.id.toUpperCase().replace(/-/g, '_')}_${name.toUpperCase().replace(/-/g, '_')}`
+        const variable = secretVariable(server, name)
         viaEnv[name] = variable
         env[variable] = server.secretValues[name]
       }
@@ -95,6 +106,13 @@ function toml(value) {
 
 function createMcpInjection({ registry, userData, fileSystem = fs } = {}) {
   const sessionsDir = path.join(userData, 'mcp', 'sessions')
+
+  // Sobra de app que caiu ou foi morto: o arquivo de sessao nao pode viver mais que o app.
+  try {
+    for (const name of fileSystem.readdirSync(sessionsDir)) fileSystem.unlinkSync(path.join(sessionsDir, name))
+  } catch {
+    // Pasta ainda nao existe (primeira abertura).
+  }
 
   /** @returns {{ args: string[], env: Record<string,string>, dispose: () => void } | null} */
   return function build({ ids, providerId, sessionId }) {

@@ -29,16 +29,29 @@ function fixture(run) {
   }
 }
 
-test('Claude: --mcp-config com arquivo de sessao que leva o segredo; argv limpo; dispose apaga', () => {
+test('Claude: --mcp-config so com ${VAR}, segredo no ambiente (nunca no disco nem em argv); dispose apaga', () => {
   fixture(({ build }) => {
     const injection = build({ ids: ['obs', 'whats-app'], providerId: 'claude', sessionId: 'canvas:1' })
     assert.equal(injection.args[0], '--mcp-config')
     assert.equal(injection.args.join(' ').includes('SEGREDO'), false)
-    const config = JSON.parse(fs.readFileSync(injection.args[1], 'utf8')).mcpServers
-    assert.deepEqual(config.obs, { type: 'stdio', command: OBS.comando, args: OBS.args, env: { OBS_HOST: 'localhost', OBS_PASSWORD: 'SEGREDO-OBS' } })
-    assert.deepEqual(config['whats-app'], { type: 'http', url: ZAP.url, headers: { 'X-Token': 'SEGREDO-ZAP' } })
+    const texto = fs.readFileSync(injection.args[1], 'utf8')
+    assert.equal(texto.includes('SEGREDO'), false)
+    const config = JSON.parse(texto).mcpServers
+    assert.deepEqual(config.obs, { type: 'stdio', command: OBS.comando, args: OBS.args, env: { OBS_HOST: 'localhost', OBS_PASSWORD: '${FELIXO_MCP_OBS_OBS_PASSWORD}' } })
+    assert.deepEqual(config['whats-app'], { type: 'http', url: ZAP.url, headers: { 'X-Token': '${FELIXO_MCP_WHATS_APP_X_TOKEN}' } })
+    assert.deepEqual(injection.env, { FELIXO_MCP_OBS_OBS_PASSWORD: 'SEGREDO-OBS', FELIXO_MCP_WHATS_APP_X_TOKEN: 'SEGREDO-ZAP' })
     injection.dispose()
     assert.equal(fs.existsSync(injection.args[1]), false)
+  })
+})
+
+test('ao criar a injecao, arquivo de sessao deixado por um app que caiu e apagado', () => {
+  fixture(({ registry, userData }) => {
+    const velho = path.join(userData, 'mcp', 'sessions', 'canvas_velho.claude.json')
+    fs.mkdirSync(path.dirname(velho), { recursive: true })
+    fs.writeFileSync(velho, '{}')
+    createMcpInjection({ registry, userData })
+    assert.equal(fs.existsSync(velho), false)
   })
 })
 
@@ -111,6 +124,7 @@ test('spawn: so quem tem mcpIds recebe os MCPs; args originais ficam intactos e 
 
       manager.spawn('canvas:codex', { command: 'codex', args: ['resume', 'abc-123-abc-123'], cwd: process.cwd(), mcpIds: ['obs'] })
       assert.equal(calls[2].options.env.OBS_PASSWORD, 'SEGREDO-OBS')
+      assert.equal(calls[0].options.env.FELIXO_MCP_OBS_OBS_PASSWORD, 'SEGREDO-OBS')
       assert.deepEqual(calls[2].args.slice(-2), ['resume', 'abc-123-abc-123'])
     } finally {
       manager.killAll({ force: true })
