@@ -131,3 +131,28 @@ test('spawn: so quem tem mcpIds recebe os MCPs; args originais ficam intactos e 
     }
   })
 })
+
+test('Claude lancado com a captura de consumo (--settings) e com os MCPs (--mcp-config) leva os dois', () => {
+  fixture(({ build }) => {
+    const calls = []
+    const pty = { pid: 1, write() {}, resize() {}, kill() {}, onData() {}, onExit() {} }
+    const manager = new PtyProcessManager({
+      spawnPty: (file, args, options) => (calls.push({ file, args, options }), pty),
+      platform: { name: 'linux', getDefaultShell: () => '/bin/bash' },
+      claudeSessionLaunch: () => ({ settingsPath: '/tmp/statusline-settings.json' }),
+      buildMcpInjection: build,
+    })
+    try {
+      manager.spawn('canvas-dois', { command: 'claude', args: ['--model', 'opus'], cwd: process.cwd(), mcpIds: ['obs'] })
+      const [{ args, options }] = calls
+      assert.equal(args[args.indexOf('--settings') + 1], '/tmp/statusline-settings.json')
+      assert.equal(path.basename(args[args.indexOf('--mcp-config') + 1]), 'canvas-dois.claude.json')
+      assert.deepEqual(args.slice(-2), ['--model', 'opus'])
+      assert.equal(options.env.FELIXO_PTY_SESSION_ID, 'canvas-dois')
+      assert.equal(options.env.FELIXO_MCP_OBS_OBS_PASSWORD, 'SEGREDO-OBS')
+      assert.deepEqual(manager.sessions.get('canvas-dois').args, ['--model', 'opus'])
+    } finally {
+      manager.killAll({ force: true })
+    }
+  })
+})

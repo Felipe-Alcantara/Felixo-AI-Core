@@ -4113,3 +4113,25 @@ Estado: concluído (commit na branch; deploy pelo orquestrador).
 **Não validado.** Clique real no app (confirmação nativa, trava com Delete); o X e o "Remover grupo" com a trava ligada ficam sem efeito, mas continuam visíveis (não ficam desabilitados). Desagrupar continua inexistente.
 
 Estado: concluído (commit na branch; deploy pelo orquestrador).
+
+---
+
+## 2026-11-17 — MCP: registro central com segredo no cofre e injeção no terminal (Claude e Codex)
+
+Task: Felixo AI Core/MCP — instalar um MCP uma vez no app e entregá-lo a todo agente e toda conta (Notion `3fa91f95-497e-81c9-b7bc-e3abb5893986`). Entrega **parcial** (primeira parte que se sustenta sozinha); o resto está em "Não feito".
+
+**Contexto.** `app/electron/services/mcp/` só tinha um catálogo estático de ferramentas planejadas que nada consumia. Cada MCP era registrado à mão por CLI e por conta, com o segredo em texto no arquivo da CLI.
+
+**Feito.**
+- **`mcp-registry.cjs`:** definições sem segredo em `userData/mcp/servers.json`; valores secretos (env do stdio, cabeçalho do HTTP listados em `segredos`) cifrados por `safeStorage` em `secrets.bin`, que recusa o backend `basic`. `list` devolve só os nomes dos segredos guardados; `resolve(ids)` (só no principal) devolve os valores. Id removido depois de o agente ser configurado é ignorado.
+- **`mcp-injection.cjs`:** Claude por `--mcp-config <arquivo de sessão>` com só `${FELIXO_MCP_<ID>_<NOME>}` e o valor no ambiente do terminal (medido, ver abaixo); Codex por `-c mcp_servers.<id>.*` com o segredo só no ambiente (`env_vars` no stdio, `env_http_headers` apontando para `FELIXO_MCP_<ID>_<NOME>` no HTTP), nunca em argv. Dois servidores com o mesmo nome de segredo e valores diferentes: o Codex recusa (um ambiente só). O conteúdo do `settings.json` do Gemini (`url` + `type: "http"`) está pronto, sem entrega.
+- **`pty-process-manager.cjs` / `pty-ipc-handlers.cjs` / `main.cjs`:** opção `mcpIds` no spawn (só ids atravessam do renderer). Os args do MCP vão à frente dos originais; `args` guardados, retomada por ID e fallback de argumentos seguem como eram. O arquivo de sessão (sem segredo) sai na saída do processo, no `cleanup`, se o spawn falhar, e ao criar a injeção na abertura do app (sobra de app que caiu). Nada é gravado em `~/.claude.json`, `config.toml` nem `settings.json`.
+- **Docs:** README, ARQUITETURA e GUIA-DESENVOLVEDOR deixam de apresentar a "MCP Layer" como entregue.
+
+**Medição (Claude Code 2.1.326, `claude -p` com chave inválida e `CLAUDE_CONFIG_DIR` temporário, sem gastar uso).** O `--mcp-config` expande `${VAR}` em `args`, `env`, `url` e `headers`: um servidor stdio gravou `Y=valor-do-ambiente ARG=valor-do-ambiente` e um servidor HTTP local recebeu o cabeçalho `X-Token: tok-ok` na rota `/mpath-ok`. Por isso o segredo do Claude não vai mais ao disco. `claude mcp list` não aceita `--mcp-config`. Efeito colateral: as variáveis `FELIXO_MCP_*` ficam no ambiente do terminal, visíveis a quem o agente executar, como já no Codex.
+
+**Validação.** 16 testes novos (registro, adaptadores, spawn com PTY falso): segredo ausente de `servers.json`, `secrets.bin`, argv e do arquivo de sessão do Claude; arquivo velho some ao criar a injeção; `pty-process-manager.test.cjs` 83/83. Gate: lint e typecheck limpos, `run-node-unit-tests` 3406 pass / 0 fail, vitest 3572 pass. Nenhuma CLI real foi aberta e nenhuma config real foi tocada.
+
+**Não feito / não validado.** Sem interface nem IPC para cadastrar; `mcpIds` no `AgentPreset` e seletor; entrega ao Gemini (pasta-sombra por `GEMINI_CLI_HOME`, medição pendente); importação do que já existe; "usar também fora do AI Core"; política de ferramentas que agem fora em yolo; OAuth remoto; `felixo mcp executar` (hoje os dois levam o segredo no ambiente do terminal). Precedência do `--mcp-config` do Claude e do `-c` do Codex sobre nome já existente e o quoting do `-c` sob o PowerShell do Windows não foram medidos.
+
+Estado: parcial, concluído nesta fatia (commit na branch; deploy pelo orquestrador).
