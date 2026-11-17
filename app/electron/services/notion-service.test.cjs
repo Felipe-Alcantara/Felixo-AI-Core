@@ -4,7 +4,7 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 
-const { createNotionService, filterTasks, normalizeSchema } = require('./notion-service.cjs')
+const { createNotionService, filterTasks, isOfflineError, normalizeSchema } = require('./notion-service.cjs')
 const { createStorageDatabase } = require('./storage/sqlite-database.cjs')
 const { createNotionCacheRepository } = require('./storage/notion-cache-repository.cjs')
 
@@ -58,14 +58,14 @@ test('reabrir sem rede: lista as databases com snapshot (só da conexão) e abre
           return { id: 'source-1', title: [{ plain_text: 'Tarefas HOME' }], properties: {} }
         },
         queryTasks: async () => ({ tasks: [tarefa], nextCursor: null }),
-        listAccessibleDataSources: async () => { throw new Error('proxy morto') },
+        listAccessibleDataSources: async () => { throw Object.assign(new Error('Não foi possível conectar ao Notion.'), { code: 'network_error', status: null }) },
       }),
       now: () => '2026-09-10T12:00:00.000Z',
     })
     // Snapshot de outra conexão não pode aparecer.
     cache.replaceSnapshot({ connectionId: 'outra', dataSourceId: 'source-x', tasks: [tarefa], fetchedAt: '2026-09-10T11:00:00.000Z' })
 
-    await assert.rejects(service.listDatabases({ connectionId: 'connection-1' }), /proxy morto/)
+    await assert.rejects(service.listDatabases({ connectionId: 'connection-1' }), /conectar ao Notion/)
 
     await service.listTasks({ connectionId: 'connection-1', dataSourceId: 'source-1' })
     offline = true
@@ -79,6 +79,30 @@ test('reabrir sem rede: lista as databases com snapshot (só da conexão) e abre
     assert.equal(lista.stale, true)
     assert.deepEqual(lista.tasks, [tarefa])
   }))
+
+test('listDatabases: 401 com snapshot salvo devolve o erro; 503 mostra o snapshot', () =>
+  withRealCache(async (cache) => {
+    cache.replaceSnapshot({ connectionId: 'connection-1', dataSourceId: 'source-1', tasks: [{ id: 'p', title: 'a', completed: false, fields: {} }], fetchedAt: '2026-09-10T12:00:00.000Z' })
+    let falha = Object.assign(new Error('Token inválido'), { status: 401, code: 'unauthorized' })
+    const service = createNotionService({
+      connectionStore: fakeStore(),
+      cacheRepository: cache,
+      clientFactory: () => ({ listAccessibleDataSources: async () => { throw falha } }),
+    })
+    await assert.rejects(service.listDatabases({ connectionId: 'connection-1' }), /Token inválido/)
+    falha = Object.assign(new Error('Indisponível'), { status: 503, code: 'service_unavailable' })
+    const dbs = await service.listDatabases({ connectionId: 'connection-1' })
+    assert.equal(dbs.stale, true)
+    assert.equal(dbs.databases.length, 1)
+  }))
+
+test('isOfflineError: transporte e 5xx sim; 4xx não', () => {
+  for (const e of [{ code: 'timeout', status: null }, { code: 'network_error' }, { name: 'AbortError' }, { message: 'fetch failed' }, { cause: { code: 'ECONNRESET' } }, { code: 'ENOTFOUND' }, { status: 500 }, { status: 503 }]) {
+    assert.equal(isOfflineError(e), true, JSON.stringify(e))
+  }
+  for (const status of [400, 401, 403, 404, 429]) assert.equal(isOfflineError({ status, code: 'network_error' }), false, String(status))
+  assert.equal(isOfflineError(new Error('outro')), false)
+})
 
 test('listTasks sinaliza syncStatus:success quando a rede responde', async () => {
   const cache = fakeCache({ tasks: [], schema: {}, fetchedAt: null })

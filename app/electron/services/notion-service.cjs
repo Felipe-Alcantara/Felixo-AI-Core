@@ -67,6 +67,8 @@ function createNotionService({
         databases: items.filter(Boolean),
       }
     } catch (error) {
+      // Só falta de rede/5xx cai no cache; 401/403/400/429 sobem para a pessoa ver.
+      if (!isOfflineError(error)) throw error
       // Sem rede: oferece as databases desta conexão que já têm snapshot salvo.
       const needle = String(query || '').trim().toLocaleLowerCase()
       let snapshots = []
@@ -347,6 +349,21 @@ function filterTasks(tasks, { search = '', status = 'all' } = {}) {
   })
 }
 
+const TRANSPORT_CODES = new Set(['timeout', 'network_error', 'ENOTFOUND', 'ECONNREFUSED', 'ETIMEDOUT', 'ECONNRESET', 'EAI_AGAIN'])
+
+/** Erro de transporte (sem resposta HTTP) ou 5xx do Notion; 4xx nunca é "offline". */
+function isOfflineError(error) {
+  if (!error) return false
+  if (typeof error.status === 'number') return error.status >= 500
+  const cause = error.cause
+  return (
+    TRANSPORT_CODES.has(error.code) ||
+    TRANSPORT_CODES.has(cause?.code) ||
+    error.name === 'AbortError' ||
+    /fetch failed/i.test(String(error.message))
+  )
+}
+
 function readTitle(value) {
   if (Array.isArray(value)) {
     return value.map((item) => item?.plain_text || item?.text?.content || '').join('')
@@ -364,5 +381,6 @@ function requireSourceId(value) {
 module.exports = {
   createNotionService,
   filterTasks,
+  isOfflineError,
   normalizeSchema,
 }

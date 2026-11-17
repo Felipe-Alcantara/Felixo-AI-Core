@@ -3980,3 +3980,19 @@ Não feito (pendência). Perguntar por área na configuração de cada projeto (
 - **Achado:** o script da conferência manual dava aos campos `select`/`status`/`multi_select` o formato `{ name }`, mas o `notion-client.cjs` entrega texto (`''` para vazio) e lista de textos. Com o formato errado todas as tarefas caíam em "sem repositório". A fixture usa o formato real. Outro achado: as concluídas ficam escondidas em todas as abas (inclusive nas de "Todos os estados") até o ícone do olho; o smoke trava esse comportamento.
 - **Validação:** `FELIXO_SMOKE_SESSOES=G node scripts/canvas-smoke.cjs` passou (75 s no Windows local, app de fonte, máquina dividida). Mutação: com o item "Sem <propriedade>" removido de `filterValueChoices`, a sessão reprova em N2 com `os chips não são "Sem Repositório" seguido dos valores`; código restaurado. Teste novo `canvas-smoke-notion-fixture.test.cjs` (2 testes). Resultados do gate no relatório da task.
 - **Não validado:** Linux/Xvfb e macOS (só a CI); a primeira carga de um Vite frio nesta máquina carregada passou de 30 s no `page.reload` (a sessão G dá 60 s ao reload; as sessões C a F não foram alteradas).
+
+---
+
+## 2026-11-17 — Notion: reabrir o bloco sem rede lista as databases com snapshot e abre a última lista
+
+**Contexto.** Na release v0.1.433, reabrir o bloco Tarefas Notion sem rede mostrava o aviso de rede, mas a lista de databases ficava vazia (só vinha da API) e o nome/data do snapshot não apareciam. A persistência da conexão e da database no bloco já existia (commit cc0b793), e `getCachedTasks`/`listTasks` já devolvem o snapshot com `stale`; faltava a lista offline.
+
+**Feito.**
+- **Migração 024:** coluna `name` em `notion_sync_state`, para rotular o snapshot.
+- **`notion-cache-repository.cjs`:** `setName` e `listSnapshots({ connectionId })` (só as databases dessa conexão que têm tarefas em cache, da mais recente à mais antiga; nunca mistura conexões).
+- **`notion-service.cjs`:** `listTasks` grava o nome ao sincronizar; `listDatabases`, quando a rede falha (erro de transporte: `timeout`, `network_error`, `ENOTFOUND`/`ECONNREFUSED`/`ETIMEDOUT`/`ECONNRESET`, `AbortError`, `fetch failed`) ou o Notion responde 5xx, e há snapshot, devolve essas databases com `stale: true`, `fetchedAt` e mensagem; sem snapshot, relança o erro como antes. Os 4xx (401, 403, 404, 400, 429) nunca viram modo offline: sobem, para a pessoa ver que a conexão quebrou. A regra é `isOfflineError`, exportada e testada.
+- **`NotionTasksPanel.tsx`:** mostra a mensagem da lista offline e o rótulo "nome · sincronizada <data>" no seletor.
+
+**Validação.** Teste novo com cache SQLite real e cliente que falha como proxy morto: sem snapshot o erro continua; depois de um sync a lista offline traz só a database da conexão (a de outra conexão não aparece), com nome e data, e `listTasks` devolve a tarefa salva com `stale`. Testes novos: 401 com snapshot devolve o erro, 503 mostra o snapshot, tabela de `isOfflineError`. `notion-service.test.cjs` e `notion-cache-repository.test.cjs`: 26 de 26.
+
+**Não validado.** Reabrir o app real sem rede (não rodei o app); não há teste de componente do painel. Snapshots criados antes desta versão não têm nome e aparecem como "Database sincronizada" até a próxima sincronização.
