@@ -6,6 +6,7 @@ import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent } f
 import { ChevronDown, CircleAlert, LoaderCircle, RotateCw, WandSparkles } from 'lucide-react'
 import { FelixoSelect, type FelixoSelectOption } from '../../shared/components/FelixoSelect'
 import { useOpeniaImageGeneration } from '../hooks/useOpeniaImageGeneration'
+import { restoreFocusIfLost } from '../services/restore-focus'
 import { IMAGE_PROMPT_MAX_CHARS, describeImagePricing, type ImageGenerationState } from '../services/openia-image-store'
 import {
   OPENIA_UPDATE_MESSAGES,
@@ -54,14 +55,24 @@ export function GenerateImageButton({ triggerClassName, tourAnchor }: Props) {
   const pending = generation.status === 'pending'
   const failed = generation.status === 'error'
 
-  const close = useCallback(() => {
+  const reset = useCallback(() => {
     setOpen(false)
     setFieldError(null)
     setConfirmingCost(false)
     // Quem fechou já viu o desfecho; um pedido em andamento continua.
     acknowledge()
-    window.requestAnimationFrame(() => triggerRef.current?.focus())
   }, [acknowledge])
+
+  const close = useCallback(() => {
+    reset()
+    window.requestAnimationFrame(() => triggerRef.current?.focus())
+  }, [reset])
+
+  // Clique fora: o foco só volta ao botão se se perdeu (ver restoreFocusIfLost).
+  const closeOutside = useCallback(() => {
+    reset()
+    restoreFocusIfLost(triggerRef)
+  }, [reset])
 
   useEffect(() => {
     if (!open) return
@@ -80,7 +91,7 @@ export function GenerateImageButton({ triggerClassName, tourAnchor }: Props) {
       close()
     }
     const onOutsideClick = (event: MouseEvent) => {
-      if (!containerRef.current?.contains(event.target as Node)) close()
+      if (!containerRef.current?.contains(event.target as Node)) closeOutside()
     }
     document.addEventListener('keydown', onKeyDown)
     document.addEventListener('mousedown', onOutsideClick)
@@ -88,7 +99,7 @@ export function GenerateImageButton({ triggerClassName, tourAnchor }: Props) {
       document.removeEventListener('keydown', onKeyDown)
       document.removeEventListener('mousedown', onOutsideClick)
     }
-  }, [open, close])
+  }, [open, close, closeOutside])
 
   const toggle = () => {
     if (open) {

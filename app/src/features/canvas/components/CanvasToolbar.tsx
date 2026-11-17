@@ -610,8 +610,11 @@ function OrganizeButton({
       event.stopPropagation()
       closeAndReturn()
     }
+    // Clique fora: só volta à seta se o foco se perdeu (ver restoreFocusIfLost).
     const onOutsideClick = (event: MouseEvent) => {
-      if (!containerRef.current?.contains(event.target as Node)) closeAndReturn()
+      if (containerRef.current?.contains(event.target as Node)) return
+      setOpen(false)
+      restoreFocusIfLost(toggleRef)
     }
     document.addEventListener('keydown', onKeyDown)
     document.addEventListener('mousedown', onOutsideClick)
