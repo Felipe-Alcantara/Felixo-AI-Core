@@ -4243,3 +4243,21 @@ Estado: concluído (commit na branch; deploy pelo orquestrador).
 - Gate: eslint limpo; `tsc -b` limpo; `run-node-unit-tests` 3405/3419 com 2 falhas (a de `lockfile-consistency`, corrigida acima e 6/6 depois, e `pty-output-path-benchmark`, instável, 11/11 sozinho); `vitest` 233 arquivos / 3572 testes verdes; `test:native` 15/15.
 
 **Não validado / pendente.** Linux (`x-special/gnome-copied-files` e `osclipboard`) e macOS não foram exercitados; o app não foi aberto com `devtools launch` nem foi rodado o smoke do canvas/instalador (ficam para o orquestrador depois do merge); o `safeStorage` síncrono (Notion, ditado, contas) está deprecado na 45 e é removido na 46 (task própria); os diálogos de arquivo passam a abrir em Downloads (mudança da 43).
+
+---
+
+## 2026-11-17 — Canvas: o inventário declara o controle do aviso de custo do bloco Claude API
+
+Task: conserto da main, CI vermelho nos três SOs desde d2d55a1 (sem task no Notion). Agente: subagente da Orquestração (Claude Code, Claude Haiku 5.5), 12:28 em diante. Trilha A:
+
+**Causa.** O commit d4b2913 pôs o botão "Entendi, continuar" no aviso de custo do bloco Claude API (`app/src/features/canvas/components/ClaudeApiNode.tsx:514`) e não atualizou o inventário do canvas. O teste "declara exatamente os controles que cada arquivo dono tem" compara a contagem de `<button`, roles, select, toggle e rail do arquivo dono com a soma declarada: 6 no código, 5 no inventário.
+
+**Feito.**
+- `app/src/features/canvas/inventory/data/nodes.ts`: controle `Entendi, continuar` (tipo `button`) no bloco `claude-api`, com efeito, falha conhecida e `disabledWhen`, no formato dos vizinhos. A caixa "Não perguntar de novo para esta conta" não entra na contagem, porque o padrão do teste não conta checkbox; o efeito dela está descrito no botão.
+- `docs/projeto/INVENTARIO-CANVAS.md` regenerado com `npx vitest run src/features/canvas/inventory -u`: controles de 397 para 398, e a linha nova na tabela.
+
+**Validação.** Antes: `canvas-inventory.test.ts` com 1 falha em 9 ("ClaudeApiNode.tsx: 6 no código, 5 no inventário"). Depois: 9 em 9. Gate: `lint` e `typecheck` sem erro; `node scripts/run-node-unit-tests.cjs` com 3457 passando, 0 falhas e 12 pulados; `vitest run` inteiro com 3639 passando e 4 pulados, em 238 arquivos.
+
+**Não validado.** Clique real no app (mudança só de inventário, sem efeito visível). `npm run build`, que o CI roda, não foi executado localmente.
+
+Estado: concluído (commit `0ad0fce` na branch `orq/fix-inventario-claude-api`; push e deploy pelo orquestrador).

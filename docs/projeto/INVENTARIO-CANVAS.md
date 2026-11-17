@@ -30,7 +30,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 ## Números
 
 - **Elementos:** 102 (10 blocos, 16 ferramentas, 76 outras superfícies)
-- **Controles:** 397, dos quais 61 com teste específico
+- **Controles:** 398, dos quais 61 com teste específico
 - **Elementos sem nenhum teste:** 4
 - **Lacunas:** 240 (alto 6, médio 126, baixo 108), em 60 tasks
 
@@ -780,6 +780,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `title="Interromper"` (button) | clique | Parar: manda o pedido de interrupção (claude-api:interrupt); o turno termina com "Interrompido.". (desabilitado: Só aparece com turno em andamento.) | Sem processo vivo não faz nada. | — |
 | `Permitir` (button) | clique | Responde ao pedido de permissão com allow e a entrada original (claude-api:respond-permission). (desabilitado: Só existe com pedido de permissão aberto.) | Pedido que já não está aberto vira aviso na conversa. | — |
 | `Negar` (button) | clique | Responde deny; a ferramenta aparece riscada como "negado" e o Claude segue sem ela. (desabilitado: Só existe com pedido de permissão aberto.) | Pedido que já não está aberto vira aviso na conversa. | — |
+| `Entendi, continuar` (button) | clique | Marca o aviso deste bloco como lido: ele some e o campo de mensagem volta a ficar pronto (se a conta e o projeto estiverem definidos). Com "Não perguntar de novo para esta conta" marcado, grava a conta no registro de consentimento (felixo:cost-consent) e o aviso não volta em nenhum bloco dessa conta. A caixa muda só o que este botão grava. (desabilitado: Só existe enquanto o aviso é devido: conta escolhida, sem confirmação neste bloco e sem "Não perguntar de novo" gravado.) | Sem armazenamento local, ou com o registro ilegível, a escolha de não perguntar não fica gravada e nada aparece na tela: o aviso volta em outro bloco da conta e, depois de reabrir o app, no próprio bloco. | — |
 
 ### Bloco Desenho leve (SVG)
 

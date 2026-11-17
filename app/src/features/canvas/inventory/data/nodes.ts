@@ -740,6 +740,13 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
         failure: 'Pedido que já não está aberto vira aviso na conversa.',
         disabledWhen: 'Só existe com pedido de permissão aberto.',
       },
+      {
+        locator: 'Entendi, continuar',
+        kind: 'button',
+        effect: 'Marca o aviso deste bloco como lido: ele some e o campo de mensagem volta a ficar pronto (se a conta e o projeto estiverem definidos). Com "Não perguntar de novo para esta conta" marcado, grava a conta no registro de consentimento (felixo:cost-consent) e o aviso não volta em nenhum bloco dessa conta. A caixa muda só o que este botão grava.',
+        failure: 'Sem armazenamento local, ou com o registro ilegível, a escolha de não perguntar não fica gravada e nada aparece na tela: o aviso volta em outro bloco da conta e, depois de reabrir o app, no próprio bloco.',
+        disabledWhen: 'Só existe enquanto o aviso é devido: conta escolhida, sem confirmação neste bloco e sem "Não perguntar de novo" gravado.',
+      },
     ],
     persistence: [
       'canvas salvo (canvas_nodes tipo claude-api, migração 020: apiAccountId, apiAccountLabel, apiCwd, apiModel, apiEffort, apiYolo, apiInitialText, apiContextSent, apiConversation com mensagens, id da sessão do Claude e gasto)',
