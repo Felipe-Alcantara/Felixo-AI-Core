@@ -3760,3 +3760,23 @@ Estado: concluído (deploy no adendo).
 ## 2026-11-17 — Canvas: adendo, a nota mantém o papel claro também quando selecionada
 
 A regra `.react-flow__node.selected .felixo-canvas-card` (especificidade 0,3,0, `index.css`) trocava o fundo para o painel escuro com a nota selecionada, justo quando se escreve. Acrescentei `.react-flow__node.selected .felixo-canvas-card-note { background: var(--note-paper) }` logo depois dela (mesma especificidade, vem depois; sem `!important`); a marca de seleção segue na borda e no brilho. Nenhuma outra regra de cartão troca `background` (hover só mexe na borda). Guarda: `note-paper-css.test.ts` lê o `index.css` e confere `--note-paper` nas regras normal e selecionada (jsdom não calcula a cascata); com a regra selecionada trocada por outra declaração, o teste falha. Gate: lint e typecheck limpos, testes Node exit 0.
+## 2026-11-17 — Windows: o atalho node.cmd lê o caminho acentuado do executável (chcp 65001)
+
+Task: Felixo AI Core/CLI no Windows — corrigir o atalho node.cmd que quebra com acento no caminho do executável (Notion `40091f95-497e-817f-bb30-f571eccd82e5`), achada em 21/10 no smoke do instalador. Agente: subagente da Orquestração (Claude Code, Claude Sonnet 5.5), 09:31 em diante. Trilha A: a direção (A, `chcp 65001`) estava na task.
+
+**Causa.** `createWindowsShim` grava o `.cmd` em UTF-8 e o `cmd.exe` o lê na página de código OEM do console (cp850/cp437). Um acento no caminho do executável (`C:UsersJoão...`) virava "O sistema não pode encontrar o caminho especificado". Vale para `node.cmd` e `npm.cmd`, que saem da mesma função.
+
+**Feito.**
+- **`managed-cli-runtime.cjs`:** o atalho agora guarda a página atual (última palavra da saída do `chcp`, em qualquer idioma), roda `chcp 65001` antes da linha do comando, e no fim restaura a página e sai com o código da CLI. `setlocal` evita vazar variáveis para um `cmd.exe` interativo.
+- **`installer-kill-smoke.cjs`:** removida a trava `assertShimSafeExecutable` (e o teste dela).
+- **Teste real:** `managed-cli-runtime.integration.test.cjs` (no `test:native`) copia o Node para uma pasta com acento, gera o atalho e o chama sob `chcp 850` e `chcp 437`, conferindo saída, código de saída (7) e a página depois da chamada. Teste unitário do texto do atalho em `managed-cli-runtime.test.cjs`.
+- **Docs:** CHECKLIST-INSTALADOR-ARVORE-DE-PROCESSOS.
+
+**Validação.**
+- **Falhou antes:** com o atalho antigo, os dois testes reais falham com "O sistema não pode encontrar o caminho especificado" (850 e 437); passam depois (2,1 s e 1,3 s).
+- **Cenário do instalador em `--source` com o executável numa pasta acentuada** (cópia do node.exe): `cancel` e `timeout` passam, zero sobreviventes. O mesmo cenário em pasta sem acento também passa.
+- Pasta temporária acentuada apagada com `removeTreeSync` e conferida (o `rmSync` do Node 25 não apaga).
+
+**Não validado.** Conta de Windows com acento no nome de usuário (só pasta acentuada de laboratório); o app empacotado (o smoke empacotado usa o `app.asar` já construído, com o atalho antigo); a página realmente usada com `windowsHide` sem console (a simulação é por `chcp`); saída das CLIs com acento no terminal do app; o atalho morto no meio (`taskkill`) deixa o console em 65001.
+
+Estado: concluído (commit na branch; deploy pelo orquestrador).

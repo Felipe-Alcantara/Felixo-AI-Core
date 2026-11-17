@@ -119,12 +119,11 @@ sem pip).
 
 ## Pontos de atenção
 
-- **Caminho com acento no Windows.** O atalho `node.cmd` que o app gera grava o caminho do
-  executável em UTF-8, e o `cmd.exe` lê na página de código OEM do console (cp850/cp437
-  quando não há console visível, como na instalação). Com acento no caminho o `node` não é
-  encontrado ("O sistema não pode encontrar o caminho especificado"). O cenário recusa esse
-  caso logo no começo; rode a partir de uma pasta sem acento, como no CI. Isso é um defeito
-  do produto, medido em 21/10/2026 e aberto como task própria.
+- **Caminho com acento no Windows.** O atalho `node.cmd` que o app gera começa com
+  `chcp 65001` (e devolve a página de código e o código de saída da CLI no fim), então o
+  `cmd.exe` o lê em UTF-8 mesmo na página OEM do console (cp850/cp437). O cenário roda a
+  partir de uma pasta com acento; antes ele recusava esse caso. A prova do
+  atalho é `electron/services/managed-cli-runtime.integration.test.cjs` (`test:native`).
 - **Job object do Windows.** O libuv põe os filhos de um processo Node num job object que
   mata tudo quando o pai morre. Por isso, só um neto que escapou do job (ou a árvore real
   do npm, que passa pelo `cmd.exe`) deixa órfão no Windows; o controle do passo 2 mostra

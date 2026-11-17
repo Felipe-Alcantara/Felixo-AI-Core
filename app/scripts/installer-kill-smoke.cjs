@@ -182,22 +182,6 @@ function delay(ms) {
 }
 
 /**
- * O atalho `node.cmd` que o app gera grava o caminho do executável em UTF-8 e o
- * `cmd.exe` o lê na página de código OEM do console. Sem console visível (a
- * instalação roda com `windowsHide`) isso é cp850/cp437, e um caminho com acento
- * vira "O sistema não pode encontrar o caminho especificado" (medido em
- * 21/10/2026). Falhar aqui, com a causa, poupa um smoke que ia demorar minutos
- * para mostrar um erro de npm que não tem relação com o que se quer provar.
- */
-function assertShimSafeExecutable(executable, platformName = process.platform) {
-  if (platformName === 'win32' && /[^\x00-\x7F]/.test(String(executable))) {
-    throw new Error(
-      'O caminho do executavel empacotado tem caracteres fora do ASCII, e o atalho node.cmd que o app gera nao e lido pelo cmd.exe nesse caso. Rode o smoke a partir de uma pasta sem acento, como no CI.',
-    )
-  }
-}
-
-/**
  * Espera a árvore fotografada sumir. Devolve quem ainda estiver lá quando o prazo
  * acabar (lista vazia = nenhum órfão).
  */
@@ -627,7 +611,6 @@ async function runInstallerKillSmoke({
   control = false,
   scenarios = SCENARIOS,
 }) {
-  assertShimSafeExecutable(executable)
   const workRoot = fs.mkdtempSync(path.join(temporaryRoot, 'installer-kill-'))
   const results = []
   let installTimeoutMs = MIN_TIMEOUT_SCENARIO_MS
@@ -798,7 +781,6 @@ async function main(argv = process.argv.slice(2)) {
 }
 
 module.exports = {
-  assertShimSafeExecutable,
   DRIVER_FLAG,
   HOLD_ENV_KEY,
   SCENARIOS,

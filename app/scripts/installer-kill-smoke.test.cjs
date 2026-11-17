@@ -11,7 +11,6 @@ const { test } = require('node:test')
 const { killProcessTree } = require('../electron/core/process-tree.cjs')
 const {
   HOLD_ENV_KEY,
-  assertShimSafeExecutable,
   classifyOutcome,
   computeTimeoutScenarioMs,
   descendantsOf,
@@ -229,16 +228,6 @@ test('parseArgs --only escolhe cenários e recusa nome que não existe', () => {
   assert.deepEqual(parseArgs(['--only', 'timeout']).only, ['timeout'])
   assert.deepEqual(parseArgs(['--only', 'cancel,timeout']).only, ['cancel', 'timeout'])
   assert.throws(() => parseArgs(['--only', 'explodir']), /cenario desconhecido \(explodir\)/)
-})
-
-test('assertShimSafeExecutable recusa caminho com acento no Windows, onde o atalho node.cmd quebra, e deixa o resto passar', () => {
-  assert.throws(
-    () => assertShimSafeExecutable('J:\\Programação\\Felixo AI Core.exe', 'win32'),
-    /fora do ASCII.*node\.cmd/,
-  )
-  assert.doesNotThrow(() => assertShimSafeExecutable('C:\\Users\\Felipe Martins\\AppData\\Local\\Temp\\app\\Felixo AI Core.exe', 'win32'))
-  // O shell POSIX lê UTF-8: acento no caminho não é problema fora do Windows.
-  assert.doesNotThrow(() => assertShimSafeExecutable('/Users/joão/Felixo AI Core.app/Contents/MacOS/Felixo AI Core', 'darwin'))
 })
 
 test('findPackagedElectronDir usa o app.asar quando existe e a pasta app quando o pacote não tem asar', () => {

@@ -78,14 +78,30 @@ function createPosixShim(commandParts) {
   return ['#!/bin/sh', `# ${SHIM_HEADER}`, 'ELECTRON_RUN_AS_NODE=1', 'export ELECTRON_RUN_AS_NODE', `exec ${command} "$@"`, ''].join('\n')
 }
 
+/**
+ * O `.cmd` é gravado em UTF-8, mas o `cmd.exe` o lê na página de código OEM do
+ * console (cp850/cp437): um acento no caminho do executável (`C:\Users\João`)
+ * virava "O sistema não pode encontrar o caminho especificado". O `chcp 65001`
+ * antes da linha do comando faz o `cmd.exe` ler o resto do arquivo em UTF-8; a
+ * página anterior (última palavra da saída do `chcp`, em qualquer idioma) e o
+ * código de saída da CLI são guardados para restaurar e repassar no fim. O
+ * `setlocal` impede que as variáveis vazem para um `cmd.exe` interativo.
+ */
 function createWindowsShim(commandParts) {
   const command = commandParts.map((part) => `"${part}"`).join(' ')
 
   return [
     '@echo off',
     `rem ${SHIM_HEADER}`,
+    'setlocal',
+    'set "FELIXO_CP="',
+    'for /f "tokens=*" %%a in (\'chcp\') do for %%b in (%%a) do set "FELIXO_CP=%%b"',
+    'chcp 65001 >nul',
     'set "ELECTRON_RUN_AS_NODE=1"',
     `${command} %*`,
+    'set "FELIXO_RC=%errorlevel%"',
+    'if defined FELIXO_CP chcp %FELIXO_CP% >nul',
+    'exit /b %FELIXO_RC%',
     '',
   ].join('\r\n')
 }
