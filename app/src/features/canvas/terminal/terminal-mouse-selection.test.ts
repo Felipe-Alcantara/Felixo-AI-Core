@@ -5,6 +5,7 @@ import {
   DRAG_THRESHOLD_PX,
   exceedsDragThreshold,
   isMacPlatform,
+  neighborCellClientX,
   shouldDeferMouseDown,
   xtermAlreadyForcesSelection,
 } from './terminal-mouse-selection'
@@ -192,5 +193,19 @@ describe('buildReplayEventInit', () => {
 
     expect(init.sourceCapabilities).toBe(toque)
     expect(buildReplayEventInit(mouseEvent({ sourceCapabilities: null })).sourceCapabilities).toBeNull()
+  })
+})
+
+describe('neighborCellClientX', () => {
+  const screen = { left: 100, width: 800 } // 80 colunas de 10 px
+
+  it('vai para a célula da direita', () => {
+    expect(neighborCellClientX(155, screen, 80)).toBe(165)
+  })
+
+  it('na última coluna, vai para a esquerda e continua dentro da tela', () => {
+    const x = neighborCellClientX(895, screen, 80)
+    expect(x).toBe(885)
+    expect(x).toBeGreaterThanOrEqual(screen.left)
   })
 })

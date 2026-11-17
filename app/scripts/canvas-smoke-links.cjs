@@ -572,12 +572,13 @@ function criarSessaoDeLinks(deps) {
   /**
    * Toque de um dedo, pelo CDP: o Chromium sintetiza o clique a partir dele.
    * O mouse de mentira sai de cima do terminal antes, para não se misturar ao
-   * toque. No terminal, o toque vai numa linha que o mouse ainda não visitou:
-   * o Linkifier do xterm só procura link quando o ponteiro muda de célula do
-   * buffer, e o `mouseleave` não esquece a última célula — voltar a ela não
-   * conta como movimento (comportamento do xterm, não do app).
+   * toque. Com `visitado`, ele passa primeiro pelo próprio ponto do toque: o
+   * Linkifier do xterm só procura link quando o ponteiro muda de célula e o
+   * `mouseleave` não esquece a última, então o app precisa forçar a consulta
+   * (`pointerdown` em `bindMouseSelection`) — é o que este caso exercita.
    */
-  async function tocar(x, y) {
+  async function tocar(x, y, { visitado = false } = {}) {
+    if (visitado) await page.mouse.move(x, y)
     await page.mouse.move(2, 2)
     const cdp = await page.context().newCDPSession(page)
     try {
@@ -855,7 +856,7 @@ function criarSessaoDeLinks(deps) {
     const passo = 'L9 terminal: toque'
     await digitar(xterm, TERMINAL_URL)
     let ponto = await esperarNoTerminal(passo, TERMINAL_URL, { ultima: true })
-    await tocar(ponto.x, ponto.y)
+    await tocar(ponto.x, ponto.y, { visitado: true })
     let menu = await esperarMenu(passo, 'toque no link do terminal')
     exigir(menu.summary.includes(TERMINAL_URL), passo, 'o toque abriu o menu de outro link', menu)
     await page.keyboard.press('Escape')
@@ -869,7 +870,7 @@ function criarSessaoDeLinks(deps) {
     // Linha nova, que nem o mouse nem o toque anterior visitaram.
     await digitar(xterm, TERMINAL_URL)
     ponto = await esperarNoTerminal(passo, TERMINAL_URL, { ultima: true })
-    await tocar(ponto.x, ponto.y)
+    await tocar(ponto.x, ponto.y, { visitado: true })
     menu = await esperarMenu(passo, 'toque no link com o mouse tracking ligado')
     exigir(menu.summary.includes(TERMINAL_URL), passo, 'com o mouse tracking, o toque abriu o menu de outro link', menu)
     await page.keyboard.press('Escape')

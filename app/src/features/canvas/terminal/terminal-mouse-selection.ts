@@ -210,3 +210,22 @@ export function buildForcedSelectionEventInit(
     altKey: isMac ? true : event.altKey,
   }
 }
+
+/**
+ * Um x dentro da tela do terminal, mas numa célula vizinha à do toque.
+ *
+ * O Linkifier do xterm só procura link quando o ponteiro muda de célula, e o
+ * `mouseleave` não esquece a última (`_lastBufferCell`). Um toque na célula em
+ * que o mouse parou por último não contaria como movimento e o link não
+ * apareceria. Mover "o mouse" para a vizinha antes do toque força a nova
+ * consulta — sem tocar em campo privado do xterm. Vai para a direita; na
+ * última coluna, para a esquerda.
+ */
+export function neighborCellClientX(
+  clientX: number,
+  screen: { left: number; width: number },
+  cols: number,
+): number {
+  const cellWidth = screen.width / Math.max(cols, 1)
+  return clientX + cellWidth < screen.left + screen.width ? clientX + cellWidth : clientX - cellWidth
+}

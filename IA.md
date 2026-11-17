@@ -4398,3 +4398,19 @@ Task: Felixo AI Core/Prompts — reproduzir cenário de falha: pty:write falho a
 **Achados da mesma falha, não corrigidos.** Em `app/src/features/canvas/terminal/terminal-session-store.ts`: a mensagem do processo principal some (`erro` é lido, `message` é enviado: linhas 1749 e 1807); o aviso "usou o fallback inline" permanece depois de uma falha do PTY (linha 2795); `contextArtifactNames` marca como digitada uma referência recusada (linhas 2779 e 1755). Viraram pendências.
 
 Estado: concluído (commit `ea03bb9` na branch; deploy pelo orquestrador).
+
+---
+
+## 2026-11-17 — Terminal: o toque acha o link na célula em que o mouse parou por último
+
+Task: Felixo AI Core/Terminal — fazer o toque achar o link na célula em que o mouse esteve por último (Notion `3ea91f95-497e-81f7-87db-e708280f2710`). Agente: subagente da Orquestração (Claude Sonnet 5.5, effort medium). Trilha A.
+
+**Contexto.** O Linkifier do `@xterm/xterm` 6.0.0 só consulta os provedores de link quando o ponteiro muda de célula do buffer (`_lastBufferCell`, `Linkifier.ts:83`), e o `mouseleave` não esquece essa célula. Passar o mouse num link, tirá-lo do terminal e tocar no mesmo link gerava um `mousemove` na mesma célula: sem link corrente, o toque não abria o menu de destino.
+
+**O que mudou.**
+- `terminal-mouse-selection.ts`: `neighborCellClientX` devolve um x na célula vizinha (direita; na última coluna, esquerda).
+- `terminal-session-store.ts` (`bindMouseSelection`): ouvinte de `pointerdown` em captura. Para toque e caneta, dispara um `mousemove` sintético na célula vizinha antes do `mousemove` real que o Chromium sintetiza; o real então muda de célula e o Linkifier consulta os links. Sem campo privado do xterm; mouse comum não passa por aqui, então seleção por arrasto e clique com mouse tracking (que dependem do `mousedown`) ficam intactos.
+- `canvas-smoke-links.cjs`: `tocar(x, y, { visitado: true })` passa o mouse pelo próprio ponto antes de tirá-lo; os dois toques do terminal (L9) usam isso.
+- `terminal-mouse-selection.test.ts`: 2 testes novos do cálculo da célula vizinha.
+
+**Não validado.** O passo L9 do smoke não foi rodado (a regra do contrato reserva o `test:canvas-smoke` ao orquestrador); o toque real em tela sensível também não. Issue/PR no xterm.js (opção a da task) fica de fora.

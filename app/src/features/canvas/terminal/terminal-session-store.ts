@@ -19,6 +19,7 @@ import {
   buildReplayEventInit,
   exceedsDragThreshold,
   isMacPlatform,
+  neighborCellClientX,
   shouldDeferMouseDown,
   xtermAlreadyForcesSelection,
   type PointerPosition,
@@ -1476,6 +1477,32 @@ export class TerminalSessionStore {
         target.dispatchEvent(new MouseEvent(type, init))
       }
     }
+
+    // Toque ou caneta: antes do `mousemove` que o Chromium sintetiza, move o
+    // "mouse" para a célula vizinha, para o Linkifier do xterm consultar os
+    // links na célula tocada mesmo que o mouse tenha parado nela por último
+    // (ver `neighborCellClientX`). Capturado em `pointerdown`, que vem antes
+    // dos eventos de mouse compatíveis.
+    element.addEventListener(
+      'pointerdown',
+      (event) => {
+        const pointer = event as PointerEvent
+        const target = pointer.target
+        if (pointer.pointerType === 'mouse' || !(target instanceof Element) || target.closest('.xterm-hover')) {
+          return
+        }
+        const screen = (element.querySelector('.xterm-screen') ?? element).getBoundingClientRect()
+        if (screen.width === 0) return
+        target.dispatchEvent(
+          new MouseEvent('mousemove', {
+            bubbles: true,
+            clientX: neighborCellClientX(pointer.clientX, screen, session.terminal.cols),
+            clientY: pointer.clientY,
+          }),
+        )
+      },
+      { capture: true },
+    )
 
     element.addEventListener(
       'mousedown',
