@@ -2337,3 +2337,31 @@ test('a lista de conversas lê a pasta de histórico da conta do bloco, não a d
     fs.rmSync(root, { recursive: true, force: true })
   }
 })
+
+test('a conexão Notion do app entrega NOTION_TOKEN só ao terminal que a pediu', () => {
+  const { spawnPty, calls } = createFakePty()
+  const pedidos = []
+  const manager = new PtyProcessManager({
+    spawnPty,
+    platform: fakePosixPlatform,
+    buildNotionEnv: (id) => {
+      pedidos.push(id)
+      return id === 'conn-1' ? { NOTION_TOKEN: 'ntn_do_cofre' } : null
+    },
+  })
+
+  try {
+    manager.spawn('canvas:com', { command: 'codex', cwd: process.cwd(), notionConnectionId: 'conn-1' })
+    manager.spawn('canvas:sem', { command: 'codex', cwd: process.cwd() })
+    manager.spawn('canvas:outra', { command: 'codex', cwd: process.cwd(), notionConnectionId: 'inexistente' })
+
+    assert.equal(calls[0].options.env.NOTION_TOKEN, 'ntn_do_cofre')
+    assert.equal('NOTION_TOKEN' in calls[1].options.env, false)
+    assert.equal('NOTION_TOKEN' in calls[2].options.env, false)
+    assert.deepEqual(pedidos, ['conn-1', 'inexistente'])
+    // O segredo vai pelo ambiente, nunca pelos argumentos.
+    assert.ok(!JSON.stringify(calls[0].args).includes('ntn_do_cofre'))
+  } finally {
+    manager.killAll({ force: true })
+  }
+})

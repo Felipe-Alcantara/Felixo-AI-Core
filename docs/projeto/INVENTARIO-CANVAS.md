@@ -30,7 +30,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 ## Números
 
 - **Elementos:** 103 (10 blocos, 16 ferramentas, 77 outras superfícies)
-- **Controles:** 400, dos quais 61 com teste específico
+- **Controles:** 402, dos quais 61 com teste específico
 - **Elementos sem nenhum teste:** 3
 - **Lacunas:** 231 (alto 4, médio 120, baixo 107), em 62 tasks
 
@@ -1994,6 +1994,8 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `{editingId ? 'Salvar alterações' : 'Criar tarefa'}` (button) | clique | Submit: notion:tasks:create, ou notion:tasks:update com expectedUpdatedAt; fecha o formulário, avisa e recarrega a lista. (desabilitado: busy.) | role="alert" "Não foi possível salvar a tarefa."; conflito recusa a escrita, avisa e recarrega; título vazio não envia. | — |
 | `onClick={() => void toggleTask(task)}` (button) | clique | Um por linha ("Concluir …"/"Reabrir …"): notion:tasks:update com completed invertido e expectedUpdatedAt; recarrega a lista. (desabilitado: Enquanto a própria linha está ocupada; só no modo tarefa (hasTaskRoles).) | role="alert" "Não foi possível alterar o estado da tarefa."; conflito avisa e recarrega. | — |
 | `onClick={() => toggleTaskDetails(task)}` (button) | clique | Um por linha: expande/recolhe o detalhe (propriedades fora das colunas + conteúdo da página por notion:tasks:content, uma vez por tarefa). | Erro do conteúdo mostra a mensagem com "Tentar novamente"; o texto da tarefa fica como fallback. | — |
+| `aria-label={`Enviar ${task.title} para um agente`}` (button) | clique | Um por linha (e "Enviar para agente" no detalhe), só quando o bloco recebe onSendToAgent: confere a CLI notion-tasks (notion:cli:status), lê o corpo (notion:tasks:content) e abre um terminal do preset "Tasks do Notion" com a task no contexto inicial (arquivo) e a conexão do app; o main põe o token da conexão em NOTION_TOKEN só no ambiente desse terminal (cofre safeStorage). (desabilitado: Enquanto a linha está ocupada.) | role="alert": "A CLI notion-tasks não está instalada neste computador. Instale com "pipx install notion-automacoes" e envie de novo."; com perfil ativo na CLI, o aviso diz que ele vence a conexão do app. | — |
+| `<Bot size={12} /> Enviar para agente` (button) | clique | No detalhe expandido da tarefa: o mesmo envio do botão da linha (CLI conferida, corpo lido, terminal do preset "Tasks do Notion" com a conexão do app). (desabilitado: Enquanto a linha está ocupada.) | Mesmas mensagens do botão da linha. | — |
 | `aria-label={`Editar ${task.title}`}` (button) | clique | Um por linha: abre o formulário preenchido e guarda o updatedAt para a checagem de conflito. (desabilitado: Enquanto a linha está ocupada.) | Sem falha própria. | — |
 | `aria-label={`Excluir ${task.title}`}` (button) | clique | Um por linha: pede confirm e manda a tarefa para a lixeira do Notion (notion:tasks:archive); recarrega. (desabilitado: Enquanto a linha está ocupada.) | role="alert" "Não foi possível arquivar a tarefa."; cancelar o confirm não faz nada. | — |
 | `onClick={() => void loadTaskContent(task)}>Tentar novamente` (button) | clique | No detalhe com erro: refaz notion:tasks:content. (desabilitado: Só aparece com erro no conteúdo.) | Mantém o erro com a nova mensagem. | — |

@@ -2,6 +2,7 @@
 
 const { ipcMain, safeStorage } = require('electron')
 const { createNotionConnectionStore } = require('./notion-connection-store.cjs')
+const { checkNotionCli } = require('./notion-agent-env.cjs')
 const { createNotionService } = require('./notion-service.cjs')
 const { createNotionCacheRepository } = require('./storage/notion-cache-repository.cjs')
 
@@ -55,6 +56,9 @@ function registerNotionIpcHandlers({
   ipc.handle('notion:tasks:archive', (_event, input) =>
     guard(() => service.archiveTask(input || {})),
   )
+
+  // Diagnostico da CLI `notion-tasks` para o botao "Enviar para agente" (sem token).
+  ipc.handle('notion:cli:status', () => guard(async () => ({ cli: await checkNotionCli() })))
 
   return { cacheRepository, connectionStore, service }
 }

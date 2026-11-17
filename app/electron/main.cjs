@@ -926,6 +926,8 @@ app.whenReady().then(async () => {
         void accountChain.service.onOutputFailure(detection)
       },
       outputArchive: ptyOutputArchive,
+      // O token da conexão Notion do app só entra no ambiente do terminal; `notionHandlers` nasce depois.
+      buildNotionEnv: createNotionAgentEnv({ getConnectionStore: () => notionHandlers?.connectionStore }),
       buildMcpInjection: createMcpInjection({
         registry: createMcpRegistry({ userData: appPaths.userData, safeStorage }),
         userData: appPaths.userData,

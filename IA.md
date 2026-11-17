@@ -4594,3 +4594,25 @@ Task: Felixo AI Core/Retomada — listar no app as conversas da pasta e da conta
 **Não validado.** O app não foi aberto (porta 5173 ocupada por outro agente): a lista no cartão e na gaveta, os `confirm` e a retomada real depois da escolha não foram vistos. Nenhum smoke cobre a lista.
 
 Estado: concluído na branch `orq/retomada-listar-app-conversas-pasta`; push e deploy pelo orquestrador.
+
+---
+
+## 2026-11-17 — Notion: "Enviar para agente" no bloco Tarefas Notion, com a CLI já autenticada
+
+Task: Felixo AI Core/Notion — enviar uma task do bloco Tarefas Notion para um agente com a CLI do Notion pronta e autenticada (Notion `3eb91f95-497e-81a5-8c4d-d2d9561a0bc8`). Agente: subagente da Orquestração (Claude Sonnet 5.5, effort medium).
+
+**Contexto.** O bloco listava, editava e concluía tasks, mas não havia como levar uma delas a um agente; e o app não entregava credencial ao terminal, então o agente dependia de a CLI `notion-tasks` estar instalada e logada na máquina. O registro central de MCPs (hoje) guarda segredo no cofre e injeta no terminal, mas prefixa as variáveis (`FELIXO_MCP_<ID>_<NOME>`) e tem cópia própria dos segredos; a CLI lê `NOTION_TOKEN` literal e a conexão do Notion já tem cofre (`notion-connection-store.cjs`). Por isso o caminho é o mesmo padrão (cofre `safeStorage` mais ambiente do terminal, id pelo IPC, valor só no main), sem duplicar o token no registro de MCPs.
+
+**O que mudou.**
+- `electron/services/notion-agent-env.cjs` (novo): `createNotionAgentEnv` (id da conexão para `{ NOTION_TOKEN }`, lido do cofre; ausente/sem token = `null`) e `checkNotionCli` (roda `notion-tasks --json perfis listar` sem token no ambiente; devolve `installed` e `activeProfile`, nunca a saída).
+- `pty-process-manager.cjs`: `injectNotionToken` depois do `injectMcp`, só com `notionConnectionId` e comando; `pty-ipc-handlers.cjs` repassa só o id; `main.cjs` liga ao cofre de `notionHandlers` (lazy). IPC `notion:cli:status` e `window.felixo.notion.cliStatus`.
+- Renderer: `notion-task-agent.ts` monta o terminal do preset "Tasks do Notion" (Codex) com link, propriedades e corpo no contexto inicial (por arquivo) e `notionConnectionId`; o id viaja por `NewTerminalOptions`, dados do bloco, `TerminalNode`, `terminal-session-store` e o spawn. `NotionTasksPanel`: botão "Enviar para agente" na linha e no detalhe; confere a CLI antes e avisa o `pipx install notion-automacoes` se faltar; `CanvasView` entrega `onSendToAgent` pela ponte estável de abrir terminal.
+- Inventário do canvas: 2 controles novos, documento regenerado (398 para 400). README atualizado.
+
+**Decisão sobre o token.** Direção do Felipe: reaproveitar cofre e ambiente do terminal. O token fica no ambiente do processo do agente (e dos filhos dele), como no registro de MCPs; nunca em argv, log, arquivo de contexto, renderer, commit ou Notion. Limite medido: a CLI aplica o perfil ativo dela depois do ambiente, então um perfil ativo vence o `NOTION_TOKEN` do app; o painel avisa o nome do perfil.
+
+**Validação.** `vitest` de `notion-task-agent` (3), `node --test` de `notion-agent-env` (3) e do `pty-process-manager` (teste novo do token só no terminal que pediu); diagnóstico real contra a CLI instalada (`installed: true`, perfil ativo lido, token nunca na saída).
+
+**Não validado.** App aberto (porta ocupada por outro agente), clique real no bloco, agente subindo com a CLI autenticada de ponta a ponta, máquina sem a CLI e instalação por `pipx` (só o aviso existe; a instalação automática ficou como pendência).
+
+Estado: concluído nesta fatia (commit na branch `orq/notion-enviar-uma-task-bloco`; push e deploy pelo orquestrador).

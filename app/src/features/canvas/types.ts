@@ -173,6 +173,8 @@ export type TerminalNodeData = {
    * conta é pior do que abrir o seletor.
    */
   accountId?: string
+  /** Conexão Notion do app (só o id) cujo token o main entrega em NOTION_TOKEN neste terminal. */
+  notionConnectionId?: string
   /** Provedor da CLI que criou este terminal; usado para validar a conta no PTY. */
   providerId?: string
   /**

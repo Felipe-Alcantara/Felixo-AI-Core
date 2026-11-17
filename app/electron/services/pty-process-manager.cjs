@@ -114,10 +114,11 @@ class PtyProcessManager {
    * @param {((detection: object) => void) | null} [dependencies.onOutputFailure] - Recebe cada detecção da vigia, com a sessão, a conta e o modo.
    * @param {(provider: string) => string | null} [dependencies.getCliVersion] - Última versão lida da CLI (`agent-cli-versions.cjs`), gravada junto de cada conversa.
    */
-  constructor({ spawnPty, now, platform: platformAdapter, logger, resolveCodexPath, isDebugSession, discoverAgentSession: discover = discoverAgentSession, buildAccountEnv, validateAccount, createOutputWatcher = null, onOutputFailure = null, getCliVersion = null, outputArchive = null, claudeSessionLaunch = null, buildMcpInjection = null } = {}) {
+  constructor({ spawnPty, now, platform: platformAdapter, logger, resolveCodexPath, isDebugSession, discoverAgentSession: discover = discoverAgentSession, buildAccountEnv, validateAccount, createOutputWatcher = null, onOutputFailure = null, getCliVersion = null, outputArchive = null, claudeSessionLaunch = null, buildMcpInjection = null, buildNotionEnv = null } = {}) {
     this.sessions = new Map()
     // MCPs do registro central entram so no spawn (args, env, arquivo de sessao); nunca na config da CLI.
     this.buildMcpInjection = buildMcpInjection
+    this.buildNotionEnv = buildNotionEnv
     this.injectedSpawnPty = spawnPty ?? null
     this.now = now ?? (() => Date.now())
     this.platform = platformAdapter ?? platform
@@ -274,6 +275,12 @@ class PtyProcessManager {
     return injection
   }
 
+  /** `NOTION_TOKEN` da conexao do app, so no ambiente deste terminal (ver notion-agent-env.cjs). */
+  injectNotionToken(options, env) {
+    if (!this.buildNotionEnv || !options.command || !options.notionConnectionId) return
+    Object.assign(env, this.buildNotionEnv(options.notionConnectionId))
+  }
+
   spawn(
     sessionId,
     options = {},
@@ -328,6 +335,7 @@ class PtyProcessManager {
     const args = Array.isArray(options.args) ? options.args : []
     const launchArgs = this.withClaudeSessionCapture(sessionId, options, args, env)
     const mcp = this.injectMcp(sessionId, options, accountValidation.providerId, env)
+    this.injectNotionToken(options, env)
     const defaultShell = options.defaultShell || this.platform.getDefaultShell(env)
     const requestedCommand = options.command || defaultShell
     const command = resolvePtyCommand(

@@ -10,11 +10,14 @@ import {
 import { ListTodo } from 'lucide-react'
 import { NodeHeader } from './NodeHeader'
 import { readNotionTasksSelection, type NotionTasksSelectionPatch } from '../services/notion-tasks-selection'
+import type { NewTerminalOptions } from '../services/new-terminal-options'
 import type { NotionTasksNodeData } from '../types'
 
 /** `onDataChange` vem do CanvasView, como no bloco de página web. */
 type NotionTasksNodeDataWithHandler = NotionTasksNodeData & {
   onDataChange?: (nodeId: string, patch: Partial<NotionTasksNodeData>) => void
+  /** Abre um agente já com a task (ponte do CanvasView); ausente = sem o botão. */
+  onSendToAgent?: (options: NewTerminalOptions) => void
 }
 
 const LazyNotionTasksPanel = lazy(() =>
@@ -60,7 +63,7 @@ export function NotionTasksNode({ id, data, selected }: NodeProps) {
             </div>
           }
         >
-          <LazyNotionTasksPanel savedSelection={savedSelection} onSelectionChange={saveSelection} />
+          <LazyNotionTasksPanel savedSelection={savedSelection} onSelectionChange={saveSelection} onSendToAgent={nodeData.onSendToAgent} />
         </Suspense>
       </div>
       <Handle type="source" position={Position.Right} />

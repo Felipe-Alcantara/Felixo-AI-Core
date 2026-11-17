@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
+  Bot,
   Check,
   ArrowDown,
   ArrowUp,
@@ -31,6 +32,8 @@ import {
 import { DeferredMarkdownContent } from '../../../shared/components/DeferredMarkdownContent'
 import { FelixoSelect, type FelixoSelectOption } from '../../../shared/components/FelixoSelect'
 import { useDismissOnOutside } from '../../../shared/focus/useDismissOnOutside'
+import { buildNotionTaskAgentOptions } from '../../services/notion-task-agent'
+import type { NewTerminalOptions } from '../../services/new-terminal-options'
 import type {
   NotionConnection,
   NotionDatabase,
@@ -164,9 +167,12 @@ function SortableHeader({ column, label, sort, onSort }: SortableHeaderProps) {
 export function NotionTasksPanel({
   savedSelection,
   onSelectionChange,
+  onSendToAgent,
 }: {
   savedSelection?: NotionTasksSelection
   onSelectionChange?: (patch: NotionTasksSelectionPatch) => void
+  /** Abre um agente com a task (vem do bloco no canvas); ausente = sem o botão. */
+  onSendToAgent?: (options: NewTerminalOptions) => void
 } = {}) {
   const api = window.felixo?.notion
   const [connections, setConnections] = useState<NotionConnection[]>([])
@@ -939,6 +945,38 @@ export function NotionTasksPanel({
     }))
   }, [api, connectionId])
 
+  /**
+   * Confere a CLI (sem token), lê o corpo atual e abre o agente do preset
+   * "Tasks do Notion" com a conexão do app: o token nunca passa por aqui.
+   */
+  async function sendTaskToAgent(task: NotionTask) {
+    if (!api || !onSendToAgent || !connectionId) return
+    setError(null)
+    setBusyTaskId(task.id)
+    try {
+      const status = await api.cliStatus()
+      const cli = status.ok ? status.cli : undefined
+      if (cli?.installed === false) {
+        setError(`A CLI notion-tasks não está instalada neste computador. Instale com "${cli.installHint}" e envie de novo.`)
+        return
+      }
+      const content = await api.getTaskContent({ connectionId, pageId: task.id })
+      const options = buildNotionTaskAgentOptions({ task, body: content.ok ? content.content : undefined, connectionId })
+      if (!options) {
+        setError('O preset "Tasks do Notion" não está disponível.')
+        return
+      }
+      onSendToAgent(options)
+      setMessage(
+        cli?.activeProfile
+          ? `Agente aberto com a task. Atenção: o perfil "${cli.activeProfile}" da CLI vence a conexão do app; confira que é o mesmo workspace.`
+          : 'Agente aberto com a task e a conexão do app.',
+      )
+    } finally {
+      setBusyTaskId(null)
+    }
+  }
+
   async function copyTaskLink(task: NotionTask) {
     if (!task.url) return
     try {
@@ -1369,9 +1407,9 @@ export function NotionTasksPanel({
                               const cell = formatPropertyValue(task.fields?.[name], schema[name]?.type)
                               return <td key={name} className="px-3 py-2.5"><span className="block truncate text-[11px] text-zinc-400" title={cell}>{cell || '—'}</span></td>
                             })}
-                            <td className="px-3 py-2.5"><div className="flex justify-end gap-0.5 opacity-50 transition-opacity group-hover:opacity-100"><button type="button" className="felixo-btn-icon rounded-sm p-1 text-zinc-400 hover:bg-white/10 hover:text-(--f-core-white-soft) disabled:opacity-50" onClick={() => editTask(task)} disabled={busyTaskId === task.id} aria-label={`Editar ${task.title}`} title="Editar"><Pencil size={13} /></button><button type="button" className="felixo-btn-icon rounded-sm p-1 text-zinc-400 hover:bg-white/10 hover:text-theme-error disabled:opacity-50" onClick={() => void archiveTask(task)} disabled={busyTaskId === task.id} aria-label={`Excluir ${task.title}`} title="Enviar para a lixeira"><Trash2 size={13} /></button></div></td>
+                            <td className="px-3 py-2.5"><div className="flex justify-end gap-0.5 opacity-50 transition-opacity group-hover:opacity-100">{onSendToAgent && <button type="button" className="felixo-btn-icon rounded-sm p-1 text-zinc-400 hover:bg-white/10 hover:text-(--f-core-white-soft) disabled:opacity-50" onClick={() => void sendTaskToAgent(task)} disabled={busyTaskId === task.id} aria-label={`Enviar ${task.title} para um agente`} title="Enviar para agente"><Bot size={13} /></button>}<button type="button" className="felixo-btn-icon rounded-sm p-1 text-zinc-400 hover:bg-white/10 hover:text-(--f-core-white-soft) disabled:opacity-50" onClick={() => editTask(task)} disabled={busyTaskId === task.id} aria-label={`Editar ${task.title}`} title="Editar"><Pencil size={13} /></button><button type="button" className="felixo-btn-icon rounded-sm p-1 text-zinc-400 hover:bg-white/10 hover:text-theme-error disabled:opacity-50" onClick={() => void archiveTask(task)} disabled={busyTaskId === task.id} aria-label={`Excluir ${task.title}`} title="Enviar para a lixeira"><Trash2 size={13} /></button></div></td>
                           </tr>
-                          {isExpanded && <tr className="border-b border-white/[0.07] bg-white/2"><td colSpan={fixedColumnCount + visibleColumns.length} className="px-12 pb-3 pt-1"><div className="max-w-4xl space-y-3 text-[11px] leading-5 text-zinc-400">{properties.length > 0 && <section className="rounded-md border border-white/8 bg-black/10 p-2.5" aria-label={`Propriedades de ${task.title}`}><p className="mb-2 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-500">Propriedades</p><div className="grid gap-x-4 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">{properties.map((property) => <div key={property.name} className="min-w-0"><p className="truncate text-[10px] uppercase tracking-wide text-zinc-600" title={property.name}>{property.name}</p><p className="wrap-break-word text-zinc-300" title={property.value}>{property.value}</p></div>)}</div></section>}{taskContent?.status === 'loading' && <p className="text-zinc-500">Carregando conteúdo da página…</p>}{detailText ? <div className="min-w-0 rounded-md border border-white/8 bg-black/10 p-3"><DeferredMarkdownContent content={detailText} /></div> : taskContent?.status !== 'loading' && <p className="text-zinc-500">Sem conteúdo nesta página.</p>}{taskContent?.status === 'error' && <div className="flex flex-wrap items-center gap-2 text-(--color-warning)"><span>{taskContent.message}</span><button type="button" className="text-(--f-core-white-soft) underline hover:text-(--f-core-white)" onClick={() => void loadTaskContent(task)}>Tentar novamente</button></div>}{task.url && <div className="flex flex-wrap items-center gap-3"><a className="flex w-fit items-center gap-1 text-(--f-core-white-soft) hover:text-(--f-core-white)" href={task.url} target="_blank" rel="noreferrer"><ExternalLink size={12} /> Abrir página no Notion</a><button type="button" className="flex w-fit items-center gap-1 text-zinc-400 hover:text-zinc-200" onClick={() => void copyTaskLink(task)}>{copiedTaskId === task.id ? <><Check size={12} className="text-(--f-core-white-soft)" /> Link copiado</> : <><Copy size={12} /> Copiar link</>}</button></div>}</div></td></tr>}
+                          {isExpanded && <tr className="border-b border-white/[0.07] bg-white/2"><td colSpan={fixedColumnCount + visibleColumns.length} className="px-12 pb-3 pt-1"><div className="max-w-4xl space-y-3 text-[11px] leading-5 text-zinc-400">{properties.length > 0 && <section className="rounded-md border border-white/8 bg-black/10 p-2.5" aria-label={`Propriedades de ${task.title}`}><p className="mb-2 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-500">Propriedades</p><div className="grid gap-x-4 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">{properties.map((property) => <div key={property.name} className="min-w-0"><p className="truncate text-[10px] uppercase tracking-wide text-zinc-600" title={property.name}>{property.name}</p><p className="wrap-break-word text-zinc-300" title={property.value}>{property.value}</p></div>)}</div></section>}{taskContent?.status === 'loading' && <p className="text-zinc-500">Carregando conteúdo da página…</p>}{detailText ? <div className="min-w-0 rounded-md border border-white/8 bg-black/10 p-3"><DeferredMarkdownContent content={detailText} /></div> : taskContent?.status !== 'loading' && <p className="text-zinc-500">Sem conteúdo nesta página.</p>}{taskContent?.status === 'error' && <div className="flex flex-wrap items-center gap-2 text-(--color-warning)"><span>{taskContent.message}</span><button type="button" className="text-(--f-core-white-soft) underline hover:text-(--f-core-white)" onClick={() => void loadTaskContent(task)}>Tentar novamente</button></div>}{onSendToAgent && <button type="button" className="flex w-fit items-center gap-1 text-(--f-core-white-soft) hover:text-(--f-core-white) disabled:opacity-50" onClick={() => void sendTaskToAgent(task)} disabled={busyTaskId === task.id}><Bot size={12} /> Enviar para agente</button>}{task.url && <div className="flex flex-wrap items-center gap-3"><a className="flex w-fit items-center gap-1 text-(--f-core-white-soft) hover:text-(--f-core-white)" href={task.url} target="_blank" rel="noreferrer"><ExternalLink size={12} /> Abrir página no Notion</a><button type="button" className="flex w-fit items-center gap-1 text-zinc-400 hover:text-zinc-200" onClick={() => void copyTaskLink(task)}>{copiedTaskId === task.id ? <><Check size={12} className="text-(--f-core-white-soft)" /> Link copiado</> : <><Copy size={12} /> Copiar link</>}</button></div>}</div></td></tr>}
                         </Fragment>
                       )
                     })}

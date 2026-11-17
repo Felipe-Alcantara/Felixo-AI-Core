@@ -1108,6 +1108,20 @@ export const notionTasksTool: InventoryElement = {
       failure: 'Erro do conteúdo mostra a mensagem com "Tentar novamente"; o texto da tarefa fica como fallback.',
     },
     {
+      locator: 'aria-label={`Enviar ${task.title} para um agente`}',
+      kind: 'button',
+      effect: 'Um por linha (e "Enviar para agente" no detalhe), só quando o bloco recebe onSendToAgent: confere a CLI notion-tasks (notion:cli:status), lê o corpo (notion:tasks:content) e abre um terminal do preset "Tasks do Notion" com a task no contexto inicial (arquivo) e a conexão do app; o main põe o token da conexão em NOTION_TOKEN só no ambiente desse terminal (cofre safeStorage).',
+      failure: `role="alert": "A CLI notion-tasks não está instalada neste computador. Instale com "pipx install notion-automacoes" e envie de novo."; com perfil ativo na CLI, o aviso diz que ele vence a conexão do app.`,
+      disabledWhen: 'Enquanto a linha está ocupada.',
+    },
+    {
+      locator: '<Bot size={12} /> Enviar para agente',
+      kind: 'button',
+      effect: 'No detalhe expandido da tarefa: o mesmo envio do botão da linha (CLI conferida, corpo lido, terminal do preset "Tasks do Notion" com a conexão do app).',
+      failure: 'Mesmas mensagens do botão da linha.',
+      disabledWhen: 'Enquanto a linha está ocupada.',
+    },
+    {
       locator: 'aria-label={`Editar ${task.title}`}',
       kind: 'button',
       effect: 'Um por linha: abre o formulário preenchido e guarda o updatedAt para a checagem de conflito.',

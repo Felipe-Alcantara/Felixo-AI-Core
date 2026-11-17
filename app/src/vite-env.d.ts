@@ -587,6 +587,8 @@ declare global {
           /** Claude Code: mantém a saída no buffer normal (rolagem), sem o alternate screen. */
           classicScreen?: boolean
           accountId?: string
+          /** Id da conexão Notion do app: o main põe o token dela em NOTION_TOKEN só neste terminal. */
+          notionConnectionId?: string
           /** Provider of the CLI; validated against the account in the main process. */
           providerId?: string
           /** Fixa (padrão) ou da cadeia de contas; `chain` exige conta. */
@@ -790,6 +792,12 @@ declare global {
           databaseId?: string
           dataSourceId?: string
         }) => Promise<CliInvokeResult & { id?: string; archived?: boolean; dataSourceId?: string }>
+        /** Diagnóstico da CLI `notion-tasks` (sem token): instalada? perfil ativo vence o token do app. */
+        cliStatus: () => Promise<
+          CliInvokeResult & {
+            cli?: { installed: boolean | null; activeProfile: string | null; installHint: string }
+          }
+        >
       }
       canvas?: {
         list: () => Promise<CliInvokeResult & { nodes?: PersistedCanvasNode[] }>

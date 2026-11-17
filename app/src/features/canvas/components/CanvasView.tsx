@@ -1436,11 +1436,19 @@ function CanvasInner({
         }))
       }
 
+      // "Enviar para agente": abre o terminal pela mesma ponte estável do cartão da nuvem.
+      if (node.type === 'notionTasks') {
+        return reuseData(node.id, [node.data], () => ({
+          ...node.data,
+          onDataChange: updateNodeData,
+          onSendToAgent: openCloudTerminal,
+        }))
+      }
+
       if (
         node.type === 'note' ||
         node.type === 'group' ||
         node.type === 'webpage' ||
-        node.type === 'notionTasks' ||
         node.type === 'drawing' ||
         node.type === 'excalidrawDrawing' ||
         node.type === 'claude-api'

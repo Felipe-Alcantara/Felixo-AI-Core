@@ -364,6 +364,8 @@ type SessionOptions = {
    * sistema, que é o comportamento de sempre.
    */
   accountId?: string
+  /** Conexão Notion do app: o main entrega o token dela só no ambiente deste terminal. */
+  notionConnectionId?: string
   /** Provedor da CLI, para impedir ambiente de outra conta no boundary do PTY. */
   providerId?: string
   /** Fixa (padrão) ou da cadeia de contas; o main confere e lista por sessão. */
@@ -1188,6 +1190,7 @@ export class TerminalSessionStore {
         keepShellOpen: options.keepShellOpen,
         classicScreen: shouldUseClassicScreen(options.command, loadClaudeTerminalScroll()),
         accountId: options.accountId,
+        ...(options.notionConnectionId ? { notionConnectionId: options.notionConnectionId } : {}),
         providerId: options.providerId,
         ...(options.accountMode ? { accountMode: options.accountMode } : {}),
         ...(options.chainTicket ? { chainTicket: options.chainTicket } : {}),

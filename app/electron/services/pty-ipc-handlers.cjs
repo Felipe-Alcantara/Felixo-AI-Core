@@ -263,6 +263,8 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
       // Só ids do registro de MCP atravessam; comando, segredo e arquivo
       // saem do processo principal (mcp-injection.cjs).
       mcpIds: Array.isArray(params.mcpIds) ? params.mcpIds.filter((id) => typeof id === 'string') : undefined,
+      // Id (nao segredo) da conexao Notion do app; o token sai do cofre no main.
+      notionConnectionId: typeof params.notionConnectionId === 'string' ? params.notionConnectionId : undefined,
       // Conta escolhida no configurador do agente; ausente = login do
       // sistema, que é o comportamento de antes desta feature.
       accountId: typeof params.accountId === 'string' ? params.accountId : undefined,

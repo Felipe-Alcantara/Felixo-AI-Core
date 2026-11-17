@@ -230,6 +230,7 @@ contextBridge.exposeInMainWorld('felixo', {
     createTask: (input) => ipcRenderer.invoke('notion:tasks:create', input),
     updateTask: (input) => ipcRenderer.invoke('notion:tasks:update', input),
     archiveTask: (input) => ipcRenderer.invoke('notion:tasks:archive', input),
+    cliStatus: () => ipcRenderer.invoke('notion:cli:status'),
   },
   canvas: {
     list: () => ipcRenderer.invoke('canvas:list'),
