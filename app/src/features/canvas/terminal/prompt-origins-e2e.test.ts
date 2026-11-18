@@ -56,6 +56,14 @@ type Harness = {
   queuePtyWriteResults: (...results: Array<{ ok: boolean; delivered?: boolean } | Error>) => void
   /** Teclas da pessoa, como o xterm as entrega ao `onData`. */
   type: (data: string) => void
+  /** A CLI sai: o `onExit` do store dispara e as próximas escritas voltam `delivered: false`, como depois do `exitEvent` do processo principal. */
+  encerrar: () => void
+  /** Saída da CLI antes do fim; sem ela o encerramento cai no ramo "encerrou sem produzir saída". */
+  emitirSaida: (data: string) => void
+  /** Ids passados a `contextFiles.release`: o fim da sessão tira os arquivos dela da pasta viva. */
+  liberacoes: string[]
+  /** Nomes passados a `contextFiles.markPathTyped`, na ordem. */
+  marcacoes: string[][]
 }
 
 let harness: Harness | undefined
@@ -73,16 +81,32 @@ async function createHarness(): Promise<Harness> {
   const contextWrites: ContextWrite[] = []
   let contextMode: 'ok' | 'falha' = 'ok'
   const writeResults: Array<{ ok: boolean; delivered?: boolean } | Error> = []
+  const liberacoes: string[] = []
+  const marcacoes: string[][] = []
+  const saidas: Array<(event: { sessionId: string; exitCode: number }) => void> = []
+  const dados: Array<(event: { sessionId: string; data: string }) => void> = []
+  let sessaoId = ''
+  let encerrada = false
 
   ;(globalThis as { window?: unknown }).window = {
     navigator: { platform: 'Linux x86_64' },
     felixo: {
       pty: {
-        onData: () => () => {},
-        onExit: () => () => {},
+        onData: (listener: (event: { sessionId: string; data: string }) => void) => {
+          dados.push(listener)
+          return () => {}
+        },
+        onExit: (listener: (event: { sessionId: string; exitCode: number }) => void) => {
+          saidas.push(listener)
+          return () => {}
+        },
         onSession: () => () => {},
-        spawn: async () => ({ ok: true, reused: false }),
+        spawn: async ({ sessionId }: { sessionId: string }) => {
+          sessaoId = sessionId
+          return { ok: true, reused: false }
+        },
         write: async ({ data }: { data: string }) => {
+          if (encerrada) return { ok: true, delivered: false }
           ptyWrites.push(data)
           const next = writeResults.shift() ?? { ok: true, delivered: true }
           if (next instanceof Error) throw next
@@ -97,8 +121,14 @@ async function createHarness(): Promise<Harness> {
           contextWrites.push({ kind: params.kind, insertion: params.insertion, content: params.content })
           return { ok: true, name: `felixo-context-${contextWrites.length}-${params.kind}.txt`, commandPath: COMMAND_PATH }
         },
-        release: async () => ({ ok: true }),
-        markPathTyped: async () => ({ ok: true }),
+        release: async ({ sessionId }: { sessionId: string }) => {
+          liberacoes.push(sessionId)
+          return { ok: true }
+        },
+        markPathTyped: async ({ names }: { names: string[] }) => {
+          marcacoes.push(names)
+          return { ok: true }
+        },
       },
       qaLogger: { log: async () => ({ ok: true }) },
     },
@@ -122,6 +152,15 @@ async function createHarness(): Promise<Harness> {
     },
     queuePtyWriteResults: (...results) => writeResults.push(...results),
     type: (data) => terminalOf().input(data, true),
+    encerrar: () => {
+      encerrada = true
+      for (const listener of saidas) listener({ sessionId: sessaoId, exitCode: 0 })
+    },
+    emitirSaida: (data) => {
+      for (const listener of dados) listener({ sessionId: sessaoId, data })
+    },
+    liberacoes,
+    marcacoes,
   }
 }
 
@@ -511,6 +550,69 @@ describe('painéis só digitam: quem envia é a pessoa', () => {
 
     expect(harness.store.getSnapshot(ID)?.lastPromptInsertion).toMatchObject({ source: 'manual' })
     expect(cardLabel(harness)).toBe('outra coisa')
+  })
+})
+
+describe('sessão encerrada antes da leitura do contexto', () => {
+  it('entrega depois do fim: sai recusada, com aviso de erro, e não é gravada como digitada', async () => {
+    harness = await createHarness()
+    const { text, insertion } = ORIGINS[0].build()
+    harness.emitirSaida('Claude Code pronto\r\n> \r\n')
+    await flush()
+    expect(await harness.store.sendText(ID, text, { kind: 'catalog-prompt', insertion })).toEqual({ delivered: true })
+    const marcadasAntes = harness.marcacoes.length
+
+    harness.encerrar()
+    await flush()
+    const depois = await harness.store.sendText(ID, text, { kind: 'catalog-prompt', insertion })
+
+    expect(depois).toEqual({ delivered: false, reason: 'rejected' })
+    expect(describeSingleInsertFeedback(toActivationResult(depois))).toEqual({
+      text: 'O terminal não confirmou o recebimento. Tente novamente.',
+      isError: true,
+    })
+    // Depois do fim nada novo chega ao PTY nem é marcado como digitado.
+    expect(harness.ptyWrites).toHaveLength(1)
+    expect(harness.marcacoes).toHaveLength(marcadasAntes)
+    expect(cardLabel(harness)).toBe('Revisão de PR')
+  })
+
+  it('o fim da sessão tira os arquivos dela da pasta viva; a referência já digitada fica só como digitada', async () => {
+    harness = await createHarness()
+    const { text, insertion } = ORIGINS[0].build()
+    harness.emitirSaida('Claude Code pronto\r\n> \r\n')
+    await flush()
+    await harness.store.sendText(ID, text, { kind: 'catalog-prompt', insertion })
+    expect(harness.marcacoes).toEqual([['felixo-context-1-catalog-prompt.txt']])
+    expect(harness.liberacoes).toEqual([])
+
+    harness.encerrar()
+    await flush()
+
+    expect(harness.liberacoes).toHaveLength(1)
+    expect(harness.store.getSnapshot(ID)?.activity).toBe('exited')
+    expect(harness.marcacoes).toHaveLength(1)
+  })
+
+  it('contexto inicial com a CLI ainda subindo: se a sessão acaba antes, nada é digitado no PTY', async () => {
+    harness = await createHarness()
+    harness.store.ensure('contexto-inicial', {
+      command: 'claude',
+      args: [],
+      cwd: '/tmp/projeto',
+      initialText: 'Contexto inicial do canvas. '.repeat(40),
+    })
+    await flush()
+    await flush()
+    await flush()
+    expect(harness.contextWrites.map((write) => write.kind)).toEqual(['initial-context'])
+
+    harness.emitirSaida('Claude Code iniciando...\r\n')
+    harness.encerrar()
+    await flush()
+
+    expect(harness.ptyWrites).toEqual([])
+    expect(harness.liberacoes).toHaveLength(1)
   })
 })
 

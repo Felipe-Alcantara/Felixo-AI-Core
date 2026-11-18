@@ -4773,3 +4773,19 @@ Agente: subagente da Orquestração (Claude Sonnet 5.5, effort medium). Task: Fe
 **Não validado / fica para depois.** Tela de totais e botão de exportar, identidade do prompt (`PromptInsertion`) por interação, `user_id` real (grava `local`), leitura de modelo/esforço dos logs da CLI, alinhamento com a captura de consumo por sessão.
 
 Estado: concluído como primeira fatia na branch `orq/registros-gravar-cada-sessao-agente`; push e deploy pelo orquestrador.
+
+---
+
+## 2026-11-18 — Prompts: teste que reproduz o encerramento da sessão antes da leitura do contexto
+
+Task: Felixo AI Core/Prompts — reproduzir cenário de falha: sessão de terminal encerrada antes da leitura do contexto (Notion `3d791f95-497e-818e-a70e-f9c451c63ef0`). Agente: subagente da Orquestração (Claude Haiku 5.5, effort max), 02:09 em diante. Trilha híbrida: teste aqui, decisão pendente.
+
+**Contexto.** O harness de origens de prompt (`app/src/features/canvas/terminal/prompt-origins-e2e.test.ts`) cobria a entrega com a sessão viva e com o `pty:write` recusado, mas não o caso em que a CLI sai depois de a referência ser digitada, ou antes de o contexto inicial ser digitado. Pelo código, o fim do processo chama `contextFiles.release` (os arquivos saem da pasta viva, `terminal-session-store.ts:2334`), e `pty:write` numa sessão encerrada devolve `delivered: false` (`pty-process-manager.cjs:876-878`).
+
+**O que mudou.** Só o teste. O harness ganhou `encerrar()` (dispara o `onExit` do store e faz as escritas seguintes voltarem `delivered: false`), `emitirSaida()` (sem saída antes do fim, o encerramento cai no ramo "encerrou sem produzir saída") e os registros de `release` e `markPathTyped`. Três casos novos, todos passando: entrega depois do fim sai `rejected` com aviso de erro e não é marcada como digitada; o fim libera os arquivos da sessão e a referência fica como digitada; contexto inicial que a CLI não chegou a receber não vai ao PTY. Nenhum código de produto mudou.
+
+**Validação.** `prompt-origins-e2e.test.ts`: 22 antes da irmã pty, 23 com ela, 26 agora. Mutação A (`terminal-session-store.ts:1795`, ignorar `delivered === false`): 1 falha, no caso da entrega depois do fim. Mutação B (sem `release` em `finishExit`, `:2334`): 2 falhas, na liberação e no contexto inicial. As duas restauradas por cópia, conferidas com `cmp`. Sonda temporária, removida antes do commit: o `pty:write` real (`pty-ipc-handlers.cjs`) com a fila real (`pty-write-queue.cjs`), sessão encerrada no meio de um envio de 4000 caracteres, responde `{"ok":true,"delivered":true}` com 512 caracteres saídos (`pty-write-queue.cjs:201-205`, `pty-ipc-handlers.cjs:301-308`). Gate: lint exit 0 (71 s); typecheck exit 0 (12 s); vitest completo 247 arquivos e 3720 testes passando, 4 pulados (122 s); node 3496 passam e 1 falha de temporização em `pty-output-archive.test.cjs:60`, que passa isolado (12/12 em duas rodadas).
+
+**Não validado.** O aviso visível no bloco quando a sessão encerra antes da leitura não existe: `contextWarning` fica indefinido e a sessão vira `encerrado (0)`. A decisão sobre isso já está aberta em `41b91f95-497e-81e3-8662-d09d38c4ffce`. A reprodução no app empacotado não foi rodada (regra desta rodada: a porta 5173 é compartilhada com outros agentes).
+
+Estado: teste entregue na branch `orq/prompts-reproduzir-cenario-falha-sessao`, sem push. Decisão pendente com o Felipe; falso "enviado" na fila descartada vira pendência para Sonnet; deploy pelo orquestrador.
