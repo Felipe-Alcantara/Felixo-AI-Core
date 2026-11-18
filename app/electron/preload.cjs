@@ -316,6 +316,8 @@ contextBridge.exposeInMainWorld('felixo', {
     // Pedidos de um coordenador para abrir um agente por task: esperam a pessoa aceitar.
     listAgentLaunches: () => ipcRenderer.invoke('canvas:list-agent-launches'),
     decideAgentLaunch: (params) => ipcRenderer.invoke('canvas:decide-agent-launch', params),
+    // Lote escrito pela própria pessoa no painel Orquestrador: o main só aplica os tetos à quantidade.
+    planAgentLaunch: (params) => ipcRenderer.invoke('canvas:plan-agent-launch', params),
     onAgentLaunches: (callback) => {
       const handler = (_event, data) => callback(data)
       ipcRenderer.on('canvas:agent-launches', handler)

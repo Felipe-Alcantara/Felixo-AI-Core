@@ -3,7 +3,7 @@
 const { ipcMain } = require('electron')
 
 const { observeAgentRequests } = require('./agent-request-watcher.cjs')
-const { criarRepositorioDePedidos, pedidoAindaVale } = require('./fetch-all/agent-requests.cjs')
+const { AGENTES_LOTE_MAX, criarRepositorioDePedidos, pedidoAindaVale } = require('./fetch-all/agent-requests.cjs')
 const { DEFAULT_LIMITS } = require('./orchestration/orchestration-store.cjs')
 const { createOrchestratorSettingsStore } = require('./orchestrator-settings-store.cjs')
 
@@ -135,6 +135,22 @@ function registerAgentLaunchIpcHandlers({ getMainWindow, appPaths, database, dep
       } finally {
         emAndamento.delete(id)
       }
+    }),
+  )
+
+  // Lote que a própria pessoa escreveu no painel Orquestrador: o clique dela já é o aceite, mas os
+  // tetos valem do mesmo jeito e somam no mesmo contador do pedido de um coordenador. Só quantidade:
+  // o texto das tasks nunca passa por aqui.
+  ipc.handle('canvas:plan-agent-launch', (_event, params) =>
+    guard('Falha ao planejar a abertura dos agentes.', async () => {
+      const count = Number(params?.count)
+      if (!Number.isInteger(count) || count < 1 || count > AGENTES_LOTE_MAX) {
+        return { abrir: 0, message: 'Quantidade de tasks inválida.' }
+      }
+      const settings = await loadSettings().catch(() => null)
+      const plano = planLaunch(Array.from({ length: count }, () => ({ titulo: '' })), settings, abertos)
+      abertos += plano.abrir
+      return { abrir: plano.abrir, ...(plano.recusadas[0] ? { message: plano.recusadas[0].motivo } : {}) }
     }),
   )
 

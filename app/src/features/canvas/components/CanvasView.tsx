@@ -170,6 +170,13 @@ import { announceAgentCollaboration } from '../services/agent-collaboration-link
 import { buildTeamEdges, type TeamLaunch } from '../services/agent-team-template'
 import { readAgentLaunchPreferences } from '../services/agent-launch-preferences'
 import { buildOrchestratedAgentOptions } from '../services/orchestrated-agents'
+import {
+  MAX_BATCH_TASKS,
+  createOrchestration,
+  layoutOrchestrationGroup,
+  parseBatchText,
+  patchOrchestrationTask as patchTask,
+} from '../services/orchestration-batch'
 import { buildRedactedHandoffText } from '../services/account-continuation'
 import { getAccountChainBridge } from '../services/account-chain-client'
 import type {
@@ -208,6 +215,8 @@ import { useWebpageOpeners } from '../hooks/useWebpageOpeners'
 import type {
   CanvasAgentLaunchTask,
   CanvasImageArtifact,
+  GroupNodeData,
+  OrchestrationTask,
   CanvasNodeData,
   CanvasNodeType,
   CanvasSkill,
@@ -2224,11 +2233,103 @@ function CanvasInner({
 
   // Pedido de um coordenador (`felixo canvas abrir-agentes`) aceito na fila de aprovações:
   // um terminal por task, com as escolhas do launcher Agente e na pasta do coordenador.
+  // O lote vira um grupo do canvas com um terminal por task DENTRO dele (agrupados de verdade) e o
+  // progresso de cada task gravado no `data` do grupo, que sobrevive a fechar o painel e a reiniciar.
+  // `openCount` é o que os tetos deixaram abrir; as demais tasks do lote ficam "esperando".
+  const addOrchestrationGroup = useCallback(
+    async (tasks: CanvasAgentLaunchTask[], openCount: number, cwd: string | undefined, waitingNote?: string) => {
+      const options = buildOrchestratedAgentOptions(tasks.slice(0, openCount), readAgentLaunchPreferences(), cwd)
+      if (options.length === 0) return
+      await ensureProjectGuides(options.map((option) => option.cwd))
+      // Depois da espera: outro bloco pode ter entrado nesse meio-tempo.
+      const current = nodesRef.current
+      const terminalSize = getDefaultNodeSize('terminal', window.innerWidth)
+      const layout = layoutOrchestrationGroup(options.length, terminalSize)
+      const [position] = findFreeNodePositions(current, 1, layout.groupSize, visibleCanvasBounds())
+      const newId = () => crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`
+      const groupId = `group-${newId()}`
+      const terminals = options.map(
+        (option, index): Node => ({
+          id: `terminal-${newId()}`,
+          type: 'terminal',
+          parentId: groupId,
+          extent: 'parent',
+          position: layout.childPositions[index],
+          width: terminalSize.width,
+          height: terminalSize.height,
+          data: { ...buildTerminalNodeData(option), orderIndex: current.length + 1 + index },
+        }),
+      )
+      const group: Node = {
+        id: groupId,
+        type: 'group',
+        position,
+        width: layout.groupSize.width,
+        height: layout.groupSize.height,
+        data: {
+          label: `Orquestração · ${tasks.length} ${tasks.length === 1 ? 'task' : 'tasks'}`,
+          orchestration: createOrchestration({
+            tasks,
+            terminalIds: terminals.map((node) => node.id),
+            waitingNote,
+            cwd,
+            now: new Date(),
+            newId,
+          }),
+          orderIndex: current.length,
+        },
+      }
+      // O grupo vem antes dos filhos: o React Flow só resolve o pai de quem vem depois dele.
+      setNodes((existing) => [...existing, group, ...terminals])
+      persistNode(group)
+      terminals.forEach((node) => persistNode(node))
+    },
+    [buildTerminalNodeData, ensureProjectGuides, persistNode, setNodes, visibleCanvasBounds],
+  )
+
+  // Pedido de um coordenador aceito: o main já cortou a lista pelos tetos, então abre tudo o que veio.
   const openOrchestratedAgents = useCallback(
     async (tasks: CanvasAgentLaunchTask[], cwd: string) => {
-      await addTerminalNodes(buildOrchestratedAgentOptions(tasks, readAgentLaunchPreferences(), cwd))
+      await addOrchestrationGroup(tasks, tasks.length, cwd || undefined)
     },
-    [addTerminalNodes],
+    [addOrchestrationGroup],
+  )
+
+  // Lote que a própria pessoa escreveu no painel Orquestrador: o main aplica os tetos à quantidade.
+  const startOrchestrationBatch = useCallback(
+    async (text: string, cwd: string): Promise<{ ok: boolean; message: string }> => {
+      const { tasks, ignored } = parseBatchText(text)
+      if (tasks.length === 0) return { ok: false, message: 'Escreva ao menos uma task (uma por linha).' }
+      const plan = await window.felixo?.canvas?.planAgentLaunch?.({ count: tasks.length })
+      if (!plan?.ok) return { ok: false, message: plan?.message ?? 'Não foi possível planejar a abertura dos agentes.' }
+      const open = plan.abrir ?? 0
+      if (open === 0) return { ok: false, message: plan.message ?? 'Nenhum agente pôde ser aberto.' }
+      await addOrchestrationGroup(tasks, open, cwd.trim() || undefined, plan.message)
+      const waiting = tasks.length - open
+      return {
+        ok: true,
+        message: [
+          `${open} ${open === 1 ? 'agente aberto' : 'agentes abertos'}.`,
+          waiting > 0 ? `${waiting} ${waiting === 1 ? 'task ficou esperando' : 'tasks ficaram esperando'}: ${plan.message}` : '',
+          ignored > 0 ? `${ignored} passaram do máximo de ${MAX_BATCH_TASKS} e foram ignoradas.` : '',
+        ]
+          .filter(Boolean)
+          .join(' '),
+      }
+    },
+    [addOrchestrationGroup],
+  )
+
+  // Progresso de uma task do lote (estado, "já trabalhou", marcada à mão): sai do `data` ATUAL do grupo.
+  const patchOrchestrationTask = useCallback(
+    (groupId: string, taskId: string, patch: Partial<Omit<OrchestrationTask, 'id'>>) => {
+      updateNodeDataFrom(groupId, (data) => {
+        const orchestration = (data as GroupNodeData).orchestration
+        const next = orchestration ? patchTask(orchestration, taskId, patch) : null
+        return next ? { orchestration: next } : null
+      })
+    },
+    [updateNodeDataFrom],
   )
 
   // Template de time: os quatro agentes nascem juntos e já ligados pelo handoff.
@@ -2540,6 +2641,8 @@ function CanvasInner({
           bootstrapPromptRef.current = prompt
         }}
         onQualityStandardSaved={applySavedQualityStandard}
+        onStartOrchestrationBatch={startOrchestrationBatch}
+        onPatchOrchestrationTask={patchOrchestrationTask}
       />
 
       {detailsTerminalId && (() => {

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Check, Network, Save } from 'lucide-react'
+import type { Node } from '@xyflow/react'
 import { useOrchestrationDashboard } from '../../../shared/orchestrator/useOrchestrationDashboard'
 import { CanvasPanel } from './CanvasPanel'
+import { OrchestrationBatchSection, type OrchestrationBatchSectionProps } from './OrchestrationBatchSection'
 import { FelixoSelect } from '../../../shared/components/FelixoSelect'
 import {
   defaultOrchestratorSettings,
@@ -18,6 +20,11 @@ type OrchestratorPanelProps = {
   onClose: () => void
   /** Widens the toolbar column; the panel slides over to clear it. */
   toolsMenuOpen?: boolean
+  /** Os blocos do canvas: os grupos com lote mostram o progresso de cada task. */
+  nodes: readonly Node[]
+  onFocusNode: OrchestrationBatchSectionProps['onFocusNode']
+  onStartBatch: OrchestrationBatchSectionProps['onStartBatch']
+  onPatchTask: OrchestrationBatchSectionProps['onPatchTask']
 }
 
 const MODE_OPTIONS: Array<{ value: OrchestratorMode; label: string }> = [
@@ -64,7 +71,14 @@ const LIMIT_FIELDS: Array<{
  * limite configurado e limite batido são a mesma pergunta, feita antes e
  * durante a execução.
  */
-export function OrchestratorPanel({ onClose, toolsMenuOpen }: OrchestratorPanelProps) {
+export function OrchestratorPanel({
+  onClose,
+  toolsMenuOpen,
+  nodes,
+  onFocusNode,
+  onStartBatch,
+  onPatchTask,
+}: OrchestratorPanelProps) {
   const [draft, setDraft] = useState<OrchestratorSettings>(defaultOrchestratorSettings)
   const [models, setModels] = useState<Model[]>([])
   const [saved, setSaved] = useState(false)
@@ -142,6 +156,13 @@ export function OrchestratorPanel({ onClose, toolsMenuOpen }: OrchestratorPanelP
       toolsMenuOpen={toolsMenuOpen}
     >
       <LiveRuns />
+
+      <OrchestrationBatchSection
+        nodes={nodes}
+        onFocusNode={onFocusNode}
+        onStartBatch={onStartBatch}
+        onPatchTask={onPatchTask}
+      />
 
       {loading ? (
         <p className="text-xs text-zinc-500">Carregando configurações…</p>

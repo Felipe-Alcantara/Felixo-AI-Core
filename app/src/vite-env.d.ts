@@ -980,6 +980,9 @@ declare global {
             recusadas?: { titulo: string; motivo: string }[]
           }
         >
+        planAgentLaunch: (params: {
+          count: number
+        }) => Promise<CliInvokeResult & { abrir?: number }>
         onAgentLaunches: (
           callback: (data: { requests: CanvasAgentLaunchRequest[] }) => void,
         ) => () => void

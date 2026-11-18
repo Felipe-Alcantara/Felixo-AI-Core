@@ -29,10 +29,10 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 
 ## Números
 
-- **Elementos:** 113 (10 blocos, 17 ferramentas, 86 outras superfícies)
-- **Controles:** 433, dos quais 90 com teste específico
+- **Elementos:** 114 (10 blocos, 18 ferramentas, 86 outras superfícies)
+- **Controles:** 438, dos quais 91 com teste específico
 - **Elementos sem nenhum teste:** 3
-- **Lacunas:** 226 (alto 4, médio 121, baixo 101), em 72 tasks
+- **Lacunas:** 231 (alto 4, médio 125, baixo 102), em 76 tasks
 
 ## Moldura do canvas
 
@@ -1796,7 +1796,41 @@ Sem controle próprio: as ações vêm de outros elementos.
 | --- | --- | --- |
 | Painel sem teste de interface (modo, limites, preferidos/bloqueados, Salvar) e sem teste da camada orchestrator-settings-storage do renderer | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
 | Tokens de contexto só entra no texto do prompt: nenhum código do processo principal lê maxContextTokens (o teto de custo e a confirmação de ações sensíveis valem em código desde 16/11/2026) | médio | `41a91f95-497e-810d-af12-e81c33aa550a` |
-| A execução ao vivo só mostra orquestrações disparadas pela tela de chat; o canvas ainda não orquestra sub-agentes | baixo | `3eb91f95-497e-8131-9977-f8d21c950c68` |
+| A execução ao vivo no topo só mostra orquestrações disparadas pela tela de chat; o lote do canvas tem a própria lista de progresso (seção "Lote de tasks"), e os dois ainda não aparecem juntos | baixo | `3eb91f95-497e-8131-9977-f8d21c950c68` |
+
+### Orquestrador: lote de tasks
+
+- **ID:** `tool-orchestration-batch` · **Dono:** `src/features/canvas/components/tools/OrchestrationBatchSection.tsx`
+- **Persistência:** canvas salvo: data.orchestration do grupo (createdAt, pasta e, por task, id, título, terminal, estado, worked, manual, nota), regravado a cada mudança de estado; processo principal: contador de agentes abertos por pedido ou lote, só em memória (zera ao reiniciar o app)
+- **IPC:** `canvas:plan-agent-launch`
+- **Depende de:** `orchestration-batch (parseBatchText, deriveTaskState, listOrchestrationBatches, summarizeOrchestration)`, `orchestrated-agents (buildOrchestratedAgentOptions)`, `useSessionSnapshotsSelector`, `window.felixo.canvas.planAgentLaunch`, `OrchestratorPanel`, `CanvasView (addOrchestrationGroup, patchOrchestrationTask)`
+- **Sobreposição:** CanvasPanel: absolute z-20 (z-30 com foco dentro), top-16, à direita da barra lateral e deslocado quando o menu de ferramentas abre (toolsMenuOpen); largura limitada a viewport − barra − inspector Elementos (288 px) e altura a viewport − 112. Os menus do FelixoSelect abrem em portal z-1000 por cima; toasts (z 50) e AgentQuestionDialog/HandoffDialog (z 60) cobrem o painel. Em janela <768 px o painel passa da viewport (PANEL_MIN_WIDTH 260, task 3e691f95-497e-815c-a129-f4d2d6405cbc). Seção dentro do painel Orquestrador (tamanho md); a lista de lotes cresce o painel até o teto e rola por dentro
+- **Testes:** `src/features/canvas/services/orchestration-batch.test.ts`, `src/features/canvas/services/orchestrated-agents.test.ts`, `electron/services/agent-launch-ipc-handlers.test.cjs`
+
+| Estado | Quando |
+| --- | --- |
+| normal | Seção "Lote de tasks" no alto do painel Orquestrador: campo de tasks (uma por linha, "título :: contexto" opcional), campo de pasta do projeto, "Abrir agentes" e, abaixo, um bloco por lote (do mais novo ao mais antigo) com o nome do grupo, o resumo ("N de M concluídas · rodando · falharam · esperando") e uma linha por task com o estado (Esperando, Rodando, Concluída, Falhou) |
+| empty | Sem lote ainda: só o formulário e a dica; sem task escrita, "Abrir agentes" fica aria-disabled |
+| error | Faixa âmbar em role="status": lote vazio, teto de agentes esgotado, Somente leitura, ou falha do IPC |
+| pending | "Abrindo…" no botão enquanto o main planeja a abertura e o canvas cria o grupo; um segundo clique é ignorado |
+| success | "N agentes abertos." (e "M tasks ficaram esperando: <teto atingido>" quando o teto cortou o lote) em role="status" |
+| disabled | "Ir ao terminal" fica aria-disabled quando o terminal da task foi fechado |
+
+| Controle | Gatilho | Efeito | Falha conhecida | Teste |
+| --- | --- | --- | --- | --- |
+| `onClick={() => void start()}` (button) | clique | onStartBatch lê o texto (parseBatchText, até 20 tasks), pede ao main canvas:plan-agent-launch { count } (tetos "Agentes por rodada" e "Agentes no total" somados no mesmo contador do pedido de um coordenador; "Somente leitura" não abre nada) e o CanvasView cria um GRUPO com um terminal por task dentro dele (buildOrchestratedAgentOptions: CLI, modelo, esforço, modo e conta do último lançamento do launcher Agente; pasta digitada), gravando o lote e o progresso no data do grupo; as tasks acima do teto ficam esperando (desabilitado: texto vazio ou busy (aria-disabled)) | Sem task escrita nada acontece; teto esgotado ou Somente leitura mostram o motivo e não abrem nada; exceção do IPC vira "Não foi possível abrir os agentes." | `electron/services/agent-launch-ipc-handlers.test.cjs` |
+| `onClick={() => onFocusNode(batch.groupId)}` (button) | clique | Centraliza o canvas no grupo do lote e o seleciona (focusNode do CanvasView) | Grupo apagado do canvas: focusNode não acha o bloco e não faz nada | — |
+| `Pedir as que esperam de novo` (button) | clique | Preenche o campo de tasks com os títulos das que esperam, para a pessoa enviar de novo quando houver vaga; não abre nada sozinho | Sem falha própria (estado local); substitui o que estava escrito no campo | — |
+| `onClick={() => onFocus(task.terminalId as string)}` (button) | clique | Centraliza o canvas no terminal da task e o seleciona (desabilitado: terminal da task já não existe no canvas (aria-disabled)) | Terminal fechado: o botão fica aria-disabled e o clique não encontra o bloco | — |
+| `{task.manual && task.state === 'done' ? 'Reabrir' : 'Marcar concluída'}` (button) | clique | Grava no grupo a task como concluída à mão (manual: true, vale mais que a atividade do terminal) ou a reabre (volta a seguir a atividade); sobrevive a fechar o painel e reiniciar o app | Grupo apagado entre o render e o clique: o patch não acha o grupo e não grava nada | — |
+
+| Lacuna | Risco | Task |
+| --- | --- | --- |
+| As tasks que passam do teto só esperam: nada as abre quando um agente do lote conclui; a pessoa envia de novo pelo botão "Pedir as que esperam de novo" | médio | `41c91f95-497e-81c1-b8b1-da9cf0c46fcb` |
+| O lote só vem de texto digitado: a seleção no bloco Tarefas Notion (com a CLI do Notion pronta em cada terminal) ainda não existe | baixo | `41c91f95-497e-81b8-b6ad-e08e93b6e7eb` |
+| "Concluída" de um agente de CLI é inferência (voltou a esperar depois de trabalhar, ou saiu com código 0): não há sinal do próprio agente de que a task acabou; o botão "Marcar concluída" cobre o desencontro | médio | `41c91f95-497e-81c1-b8b1-da9cf0c46fcb` |
+| O teto de custo do painel não vale para os terminais abertos por esta via (o app não mede o custo de um terminal PTY); "Agentes no total" soma por sessão do app | médio | `41c91f95-497e-81de-8abd-db0dae1455d6` |
+| Sem teste de interface do smoke (clicar em "Abrir agentes" e conferir grupo, terminais e progresso) e sem E2E no app empacotado | médio | `41c91f95-497e-819e-960e-da118f40bc49` |
 
 ### QA Logger
 
@@ -3223,8 +3257,12 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `41c91f95-497e-816b-b515-c14adaee1c30` — 1 lacuna
 - `41c91f95-497e-817e-bb8c-ca6fe5e302a1` — 1 lacuna
 - `41c91f95-497e-8195-9b3b-e40145bef07e` — 1 lacuna
+- `41c91f95-497e-819e-960e-da118f40bc49` — 1 lacuna
+- `41c91f95-497e-81b8-b6ad-e08e93b6e7eb` — 1 lacuna
 - `41c91f95-497e-81c1-99d2-d7d725313276` — 1 lacuna
+- `41c91f95-497e-81c1-b8b1-da9cf0c46fcb` — 2 lacunas
 - `41c91f95-497e-81c9-bb3a-da2b0c144512` — 1 lacuna
 - `41c91f95-497e-81c9-bc07-e565a7dd49a3` — 1 lacuna
 - `41c91f95-497e-81d3-83ab-fc42cd2e80f4` — 1 lacuna
+- `41c91f95-497e-81de-8abd-db0dae1455d6` — 1 lacuna
 - `41c91f95-497e-81f9-9edf-eb89e07ee070` — 1 lacuna

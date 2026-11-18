@@ -23,8 +23,39 @@ export type CanvasNodeType =
   | 'cloud-session'
   | 'claude-api'
 
+/** Onde uma task de um lote do orquestrador está. */
+export type OrchestrationTaskState = 'waiting' | 'running' | 'done' | 'failed'
+
+/**
+ * Uma task de um lote do orquestrador. O estado fica gravado porque a
+ * atividade do terminal só existe com o app aberto: depois de reiniciar, o
+ * último estado conhecido é o que a pessoa vê.
+ */
+export type OrchestrationTask = {
+  id: string
+  titulo: string
+  /** Terminal que executa a task; ausente enquanto ela espera por causa de um teto. */
+  terminalId?: string
+  state: OrchestrationTaskState
+  /** O agente já trabalhou nela: separa "ocioso, ainda não começou" de "voltou a esperar". */
+  worked?: boolean
+  /** A pessoa marcou a task como concluída; a atividade do terminal não a desfaz. */
+  manual?: boolean
+  /** Por que ela espera (teto atingido) ou por que falhou. */
+  note?: string
+}
+
+/** O lote de tasks que um grupo do canvas orquestra (ver `orchestration-batch.ts`). */
+export type GroupOrchestration = {
+  createdAt: string
+  cwd?: string
+  tasks: OrchestrationTask[]
+}
+
 export type GroupNodeData = {
   label?: string
+  /** Presente nos grupos criados pelo painel Orquestrador: o lote e o progresso de cada task. */
+  orchestration?: GroupOrchestration
 }
 
 /**

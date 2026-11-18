@@ -167,3 +167,52 @@ test('pedido vencido é recusado como expirado, mesmo com a pessoa aceitando', a
     cleanup()
   }
 })
+
+test('lote da pessoa: o plano respeita os tetos e soma no mesmo contador do pedido do coordenador', async () => {
+  const { pedir, decidir, cleanup } = setup({ settings: { maxAgentsPerTurn: 3, maxTotalAgents: 4 } })
+  try {
+    const planejar = (count) => handlers.get('canvas:plan-agent-launch')(null, { count })
+
+    const primeiro = await planejar(5)
+    assert.equal(primeiro.ok, true)
+    assert.equal(primeiro.abrir, 3)
+    assert.match(primeiro.message, /Agentes por rodada/)
+
+    // O coordenador pede depois: o que a pessoa já abriu conta no total.
+    const coordenador = await decidir({ id: pedir(3).id, aceitar: true })
+    assert.equal(coordenador.abrir.length, 1)
+
+    const esgotado = await planejar(2)
+    assert.equal(esgotado.abrir, 0)
+    assert.match(esgotado.message, /Agentes no total/)
+  } finally {
+    cleanup()
+  }
+})
+
+test('lote da pessoa: quantidade inválida não abre nada nem gasta o contador', async () => {
+  const { cleanup } = setup({ settings: { maxAgentsPerTurn: 3, maxTotalAgents: 3 } })
+  try {
+    const planejar = (params) => handlers.get('canvas:plan-agent-launch')(null, params)
+
+    for (const count of [0, -1, 1.5, 21, '3x', undefined]) {
+      const resultado = await planejar({ count })
+      assert.equal(resultado.abrir, 0)
+      assert.match(resultado.message, /inválida/)
+    }
+    assert.equal((await planejar({ count: 3 })).abrir, 3)
+  } finally {
+    cleanup()
+  }
+})
+
+test('lote da pessoa em "Somente leitura" não abre nada', async () => {
+  const { cleanup } = setup({ settings: { mode: 'read_only' } })
+  try {
+    const resultado = await handlers.get('canvas:plan-agent-launch')(null, { count: 2 })
+    assert.equal(resultado.abrir, 0)
+    assert.match(resultado.message, /Somente leitura/)
+  } finally {
+    cleanup()
+  }
+})

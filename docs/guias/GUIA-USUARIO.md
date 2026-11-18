@@ -531,9 +531,22 @@ clicar em **Abrir N agentes**, o app cria um terminal por task, na pasta do coor
 CLI, o modelo, o esforço e a conta do último lançamento do launcher **Agente** e com a task como
 contexto inicial. Valem os tetos do painel Orquestrador: o que passar de **Agentes por rodada**
 (ou de **Agentes no total**, somado nesta sessão do app) fica de fora, e o coordenador lê quais
-foram recusadas e por quê; em **Somente leitura** nada abre. Por enquanto os terminais nascem
-juntos, com o rótulo **Orquestração 1/N · …** e a mesma moldura, mas fora de um bloco de grupo, e
-não há o painel de progresso por task (esperando, rodando, concluída, falhou).
+foram recusadas e por quê; em **Somente leitura** nada abre. Os terminais nascem juntos **dentro de
+um grupo** do canvas ("Orquestração · N tasks"), com o rótulo **Orquestração 1/N · …** e a mesma
+moldura violeta.
+
+**Lote de tasks no painel Orquestrador.** Você também pode escrever o lote à mão: no painel
+**Orquestrador** (menu Ferramentas, grupo Operação), a seção **Lote de tasks** recebe uma task por
+linha (até 20; `título :: contexto` dá mais detalhe ao agente) e uma pasta de projeto opcional.
+**Abrir agentes** cria o mesmo grupo, com um terminal por task, dentro dos mesmos tetos; o que
+passar do teto fica **Esperando**, com o motivo, e **Pedir as que esperam de novo** devolve esses
+títulos ao campo. Cada lote mostra o resumo ("3 de 4 concluídas · 1 esperando") e uma linha por
+task com o estado e dois botões: **Ir ao terminal** e **Marcar concluída** (ou **Reabrir**).
+Os estados são **Esperando**, **Rodando**, **Concluída** e **Falhou**. Um agente de CLI não sai
+quando termina, então "Concluída" significa que o agente voltou a esperar depois de trabalhar (ou
+saiu com código 0); se o desencontro acontecer, marque à mão. O progresso fica gravado no grupo:
+sobrevive a fechar o painel, recarregar o canvas e reiniciar o app. Ainda não abrem sozinhas as
+tasks que esperam quando um agente conclui, e o lote não vem da seleção no bloco Tarefas Notion.
 
 ### Felixo
 

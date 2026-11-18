@@ -360,10 +360,20 @@ abriu, e `mode: read_only` recusa tudo); o renderer so confirma e abre o que o m
 (`buildOrchestratedAgentOptions` + `addTerminalNodes`, com as preferencias do launcher Agente e a
 pasta do coordenador). O orquestrador nunca executa: so propoe, e a pessoa aceita. A skill
 `abrir-agentes-por-task` (catalogo builtin) ensina o coordenador a pedir, ler o desfecho com
-`ver-pedido` e repedir so as recusadas; ela precisa estar ligada no terminal dele. Limites
-conhecidos: o total e por sessao do app, nao por execucao; os terminais nao ficam dentro de um bloco
-de grupo e nao ha progresso por task (rodada 3, bloco Orquestrador); o teto de custo vale na
-execucao do chat e ainda nao mede o custo de terminais abertos por esta via.
+`ver-pedido` e repedir so as recusadas; ela precisa estar ligada no terminal dele. Rodada 3: o lote vira um GRUPO do canvas com os terminais como
+filhos (`CanvasView.addOrchestrationGroup`: grupo antes dos filhos, posicoes relativas e
+`extent: 'parent'`, layout em `layoutOrchestrationGroup`) e o progresso mora no `data.orchestration`
+do grupo (`GroupOrchestration`, persistido pelo `persistNode` como qualquer dado do bloco, sem
+migracao: o tipo do no continua `group`). A secao "Lote de tasks" do painel Orquestrador
+(`OrchestrationBatchSection`) tambem aceita o lote escrito pela pessoa: `parseBatchText` (uma task
+por linha, `titulo :: contexto`) e `canvas:plan-agent-launch { count }`, que aplica os mesmos tetos e
+soma no mesmo contador de `abrir-agentes`. O estado de cada task sai de `deriveTaskState` sobre a
+atividade do terminal (`useSessionSnapshotsSelector`): como uma CLI de agente nao sai ao terminar,
+"concluida" e inferida (ocioso depois de trabalhar, ou saida com codigo 0), com o botao "Marcar
+concluida" como saida e o estado final gravado para valer depois de reiniciar. Limites
+conhecidos: o total e por sessao do app, nao por execucao; o teto de custo vale na execucao do chat
+e ainda nao mede o custo de terminais abertos por esta via; o que passa do teto so espera (nada o
+abre quando um agente conclui); o lote nao vem do bloco Tarefas Notion; sem E2E no app empacotado.
 
 ## Perguntas com opcoes de um agente (felixo perguntar)
 

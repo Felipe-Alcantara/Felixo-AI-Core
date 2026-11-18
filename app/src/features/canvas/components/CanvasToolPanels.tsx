@@ -27,7 +27,7 @@ import {
   LazySkillsPanel,
 } from './canvas-tool-loaders'
 import type { SkillActivationResult } from './tools/SkillsPanel'
-import type { CanvasSkill } from '../types'
+import type { CanvasSkill, OrchestrationTask } from '../types'
 import type { PromptInsertion } from '../../shared/types/prompt-insertion'
 import type { NewTerminalOptions } from '../services/new-terminal-options'
 import type { RunFileOptions } from '../services/run-file-command'
@@ -64,6 +64,10 @@ type CanvasToolPanelsProps = {
   onPromptSaved: (prompt: string) => void
   onBootstrapSaved: (prompt: string) => void
   onQualityStandardSaved: (value: { prompt: string; enabled: boolean; workflowEnabled?: boolean }) => void
+  /** Abre um grupo com um terminal por task do lote escrito no painel Orquestrador, dentro dos tetos. */
+  onStartOrchestrationBatch: (text: string, cwd: string) => Promise<{ ok: boolean; message: string }>
+  /** Grava o progresso de uma task do lote no grupo que a orquestra. */
+  onPatchOrchestrationTask: (groupId: string, taskId: string, patch: Partial<Omit<OrchestrationTask, 'id'>>) => void
 }
 
 type ToolPanelFallbackProps = {
@@ -183,6 +187,8 @@ export function CanvasToolPanels({
   onPromptSaved,
   onBootstrapSaved,
   onQualityStandardSaved,
+  onStartOrchestrationBatch,
+  onPatchOrchestrationTask,
 }: CanvasToolPanelsProps) {
   // Pastas dos terminais: a seção do System Design mostra os guias de cada projeto.
   const terminalDirectories = useMemo(
@@ -290,7 +296,16 @@ export function CanvasToolPanels({
           />
         )
       case 'orchestrator':
-        return <LazyOrchestratorPanel onClose={closeActiveTool} toolsMenuOpen={toolsMenuOpen} />
+        return (
+          <LazyOrchestratorPanel
+            onClose={closeActiveTool}
+            toolsMenuOpen={toolsMenuOpen}
+            nodes={nodes}
+            onFocusNode={onFocusNode}
+            onStartBatch={onStartOrchestrationBatch}
+            onPatchTask={onPatchOrchestrationTask}
+          />
+        )
       case 'qaLogger':
         return <LazyQaLoggerPanel onClose={closeActiveTool} toolsMenuOpen={toolsMenuOpen} />
       case 'agentPresets':
