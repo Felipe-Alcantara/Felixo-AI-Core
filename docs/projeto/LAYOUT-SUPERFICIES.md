@@ -146,7 +146,7 @@ Torná-lo variável faria dele um terceiro disputante em `splitHorizontalSpace`
 reserva 0). O ganho não paga o risco. Se a pessoa precisar de mais espaço, recolhe.
 
 **Barra de status: de borda a borda, com o inspector acima dela, e cortes por largura**
-(05/11/2026, task `3e791f95-497e-81bd-8e8c-de6f9e16cec5`). A barra parava na borda
+(05/11/2026, acompanhado no gestor de tarefas interno). A barra parava na borda
 esquerda do inspector (`right: 18rem`), então a gaveta do terminal aberta a deixava com
 **160 px em 1320 px de janela e 32 px em 768 px**: o texto quebrava e o Remover ficava
 fora da caixa, por baixo do inspector. Das três saídas da task (nowrap com
@@ -164,7 +164,7 @@ meio ("1 bl…"), pior do que tirar a palavra inteira. **Reverte** o comentário
 `TerminalsPanel` (o inspector ia até a borda de baixo para não sobrar uma faixa vazia de
 canvas sob ele): agora a faixa é a própria barra. **Limite:** abaixo de ~740 px de janela
 com a gaveta aberta, ou com a gaveta maximizada, a área do canvas some e a barra fica sob
-a sidebar; isso é a sobreposição já conhecida de 320 px (task `3ed91f95-497e-8114-a246-f72c73ae50c4`),
+a sidebar; isso é a sobreposição já conhecida de 320 px (acompanhado no gestor de tarefas interno),
 não um defeito da barra.
 
 **Tarefas Notion: mínimo 480 × 320** (era 760 × 460). O conteúdo do bloco rola por dentro

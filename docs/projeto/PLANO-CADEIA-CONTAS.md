@@ -2,11 +2,11 @@ Status: em implementação na branch `feat/cadeia-contas`. A política resultant
 
 # Cadeia de contas: plano final de implementação
 
-- **Task:** "Felixo AI Core/Contas — definir política de cadeia, elegibilidade e ordem de fallback" (3ce91f95-497e-81c2). O plano cobre também as irmãs:
-  - failover no PTY (3e691f95-497e-8194);
-  - isolamento por conta (3ce91f95-497e-818a);
-  - falhas injetadas (3ce91f95-497e-81ac);
-  - retomada (3ce91f95-497e-812c).
+- **Task:** "Felixo AI Core/Contas — definir política de cadeia, elegibilidade e ordem de fallback" (acompanhado no gestor de tarefas interno). O plano cobre também as irmãs:
+  - failover no PTY (acompanhado no gestor de tarefas interno);
+  - isolamento por conta (acompanhado no gestor de tarefas interno);
+  - falhas injetadas (acompanhado no gestor de tarefas interno);
+  - retomada (acompanhado no gestor de tarefas interno).
 - **Base conferida:** `origin/main` **116f0569** (`116f056942c929cdeec0018c9d73042c5bae1d72`). A branch `feat/cadeia-contas` nasce desse commit, e este plano é o primeiro commit dela. Todo `arquivo:linha` é relativo à raiz do repositório e foi aberto nesta síntese, nesse commit; os commits seguintes da branch deslocam as linhas.
 - **Marcadores:**
   - **[INFERIDO]**: dedução não provada em execução.
@@ -673,7 +673,7 @@ Se CLI e declaração divergirem, vale a CLI e a UI mostra "você declarou N, a 
 
 **Ressalva registrada na política:** o multiplicador é relativo ao plano-base de cada provedor, então comparar entre provedores é heurística. O diálogo mostra os números e a fonte, e a pessoa decide.
 
-**"Mais quota" na prática.** Não existe atualização por conta: o refresh atual é global (`agent-usage-ipc-handlers.cjs:32`), e a medição por conta é da task 3e691f95-497e-812e. Por isso a estratégia usa só as medições atuais que existirem. O diálogo tem **"Medir agora"**, que chama o `agentUsage.refresh` já existente e recalcula a proposta. Não há medição automática em segundo plano.
+**"Mais quota" na prática.** Não existe atualização por conta: o refresh atual é global (`agent-usage-ipc-handlers.cjs:32`), e a medição por conta é acompanhada no gestor de tarefas interno. Por isso a estratégia usa só as medições atuais que existirem. O diálogo tem **"Medir agora"**, que chama o `agentUsage.refresh` já existente e recalcula a proposta. Não há medição automática em segundo plano.
 
 ### 7.4 Classe de cobrança (`classifyBilling`, sempre com fonte)
 
@@ -1169,7 +1169,7 @@ O `validateReport` (`:258-266`) ganha os limites do §15.1. Roda no CI nos 4 SOs
 
 ### 13.7 Verificação manual real (Linux, máquina do dono)
 
-- Duas contas Codex reais, já provadas simultâneas (Notion 3d091f95-497e-8168):
+- Duas contas Codex reais, já provadas simultâneas (acompanhado no gestor de tarefas interno):
   - checagem de login real;
   - selo;
   - "Automática (cadeia)";
@@ -1292,17 +1292,17 @@ Depois do push, acompanhar o CI até o estado final nos 4 SOs e anotar o SHA de 
 13. **Novidade da cadeia no catálogo de onboarding.**
 
 **Tasks existentes relacionadas (relacionar, não duplicar):**
-- **Medição de uso por conta sob demanda** (3e691f95-497e-812e): destrava "Mais quota" com medição automática, limitada, dos candidatos no momento da proposta.
-- **Validação com contas reais no macOS e no Windows** (3da91f95-497e-815e).
+- **Medição de uso por conta sob demanda** (acompanhado no gestor de tarefas interno): destrava "Mais quota" com medição automática, limitada, dos candidatos no momento da proposta.
+- **Validação com contas reais no macOS e no Windows** (acompanhado no gestor de tarefas interno).
 - **Pendência do `allowScripts` do Electron** (registrada à parte durante a investigação), sem relação com a cadeia. Resolvida
-  em 13/11/2026 (3e991f95-497e-8108). O Electron 42 não tem mais script de instalação, e a entrada saiu. O fsevents, que só é
+  em 13/11/2026 (acompanhado no gestor de tarefas interno). O Electron 42 não tem mais script de instalação, e a entrada saiu. O fsevents, que só é
   instalado no macOS, entrou. O teste `scripts/allow-scripts-policy.test.cjs` mantém o `allowScripts` alinhado ao lockfile.
 
 **Irmãs cobertas por este plano:** ao concluir, marcar como concluídas com a evidência dos commits:
-- 3e691f95-497e-8194 (failover no PTY);
-- 3ce91f95-497e-818a (isolamento);
-- 3ce91f95-497e-81ac (falhas injetadas);
-- 3ce91f95-497e-812c (retomada).
+- failover no PTY (acompanhado no gestor de tarefas interno);
+- isolamento (acompanhado no gestor de tarefas interno);
+- falhas injetadas (acompanhado no gestor de tarefas interno);
+- retomada (acompanhado no gestor de tarefas interno).
 
 A diferença registrada na 8194: por decisão do dono, o processo antigo fica parado e intacto, em vez de pausar ou terminar.
 

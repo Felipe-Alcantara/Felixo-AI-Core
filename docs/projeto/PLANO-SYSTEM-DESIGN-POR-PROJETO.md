@@ -1,7 +1,7 @@
 # Plano — System Design por projeto (lista de guias por camada)
 
 Task: Felixo AI Core/System Design — camada por projeto na precedência da fonte
-(https://app.notion.com/p/3e291f95497e812984c8c17c2970e5bd). Base: commit `f3fcfc3`
+(acompanhado no gestor de tarefas interno). Base: commit `f3fcfc3`
 (fonte configurável, contrato em `app/electron/core/system-design-source.cjs`).
 
 ## Decisões do Felipe (08/10/2026)

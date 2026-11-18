@@ -430,7 +430,7 @@ O próximo passo escolhido é desenhar um piloto opt-in que avalie contagens
 agregadas de exibição e resposta por faixa de carga. A amostra será voluntária
 e não deve ser tratada como representativa de toda a base. Este direcionamento
 cobre o desenho do piloto, não autoriza implementar coleta ou infraestrutura.
-[Task de desenho do piloto](https://app.notion.com/p/Felixo-AI-Core-Performance-desenhar-piloto-opt-in-para-calibrar-recomenda-es-por-carga-40d91f95497e813f85b4dc6b5ef11d93).
+Task de desenho do piloto (acompanhado no gestor de tarefas interno).
 
 ## Aceite desta política — status
 
@@ -453,4 +453,4 @@ cobre o desenho do piloto, não autoriza implementar coleta ou infraestrutura.
    adaptativo é automático; o resto da decoração exige toggle manual).
 3. Safe Mode pós-crash implementado; ver a seção correspondente acima.
 4. Desenhar o piloto telemetry opt-in de uso do Performance Mode para calibrar
-   recomendações por carga ([task](https://app.notion.com/p/Felixo-AI-Core-Performance-desenhar-piloto-opt-in-para-calibrar-recomenda-es-por-carga-40d91f95497e813f85b4dc6b5ef11d93)).
+   recomendações por carga (acompanhado no gestor de tarefas interno).
