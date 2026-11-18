@@ -286,13 +286,27 @@ test('ações sensíveis: sem resposta em 10 minutos o pedido é negado; sem a o
 test('ações sensíveis: no prazo de 10 minutos vale a recomendada do pedido; sem recomendada, nega', async (t) => {
   const h = permissionHarness(t)
   h.send(true)
-  await h.emit({ ...h.permission, permission: { ...h.permission.permission, recommendedAllow: true } })
+  await h.emit({ ...h.permission, permission: { ...h.permission.permission, recommendedAllow: true, kind: 'read' } })
+  assert.equal(h.events.find((e) => e.type === 'provider_switch_request').onTimeout, 'allow')
   h.advance(10 * 60 * 1000)
   h.manager.expirePermissionRequests()
   assert.equal(h.writes.at(-1), 'APROVA\n')
   assert.equal(h.events.at(-1).outcome, 'expired')
-  assert.match(h.events.at(-1).message, /recomendada/)
+  assert.match(h.events.at(-1).message, /Aplicada por falta de resposta/)
 })
+
+for (const kind of ['delete', 'move', 'execute', 'edit', 'fetch', 'other', undefined]) {
+  test(`ações sensíveis: recomendada do tipo ${kind} continua negada no prazo`, async (t) => {
+    const h = permissionHarness(t)
+    h.send(true)
+    await h.emit({ ...h.permission, permission: { ...h.permission.permission, recommendedAllow: true, kind } })
+    assert.equal(h.events.find((e) => e.type === 'provider_switch_request').onTimeout, 'deny', String(kind))
+    h.advance(10 * 60 * 1000)
+    h.manager.expirePermissionRequests()
+    assert.equal(h.writes.at(-1), 'NEGA\n', String(kind))
+    assert.match(h.events.at(-1).message, /destrutiva/)
+  })
+}
 
 test('custo do processo persistente: o total acumulado do Claude vira o custo de cada resposta', async (t) => {
   const h = permissionHarness(t)

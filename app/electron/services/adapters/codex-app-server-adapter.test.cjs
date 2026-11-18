@@ -310,6 +310,7 @@ test('ações sensíveis: o pedido de aprovação traz o que o Codex quer fazer 
   }))
 
   assert.equal(event.permission.title, 'O Codex quer rodar um comando')
+  assert.equal(event.permission.kind, 'execute')
   assert.equal(event.permission.detail, 'Comando: git push\nPasta: /projeto\nMotivo: publicar')
   assert.equal(JSON.parse(event.responseInput).result.decision, 'accept')
   assert.equal(JSON.parse(event.permission.denyInput).result.decision, 'decline')

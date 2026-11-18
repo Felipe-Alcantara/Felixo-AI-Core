@@ -197,6 +197,8 @@ export type ProviderSwitchRequest = {
   unknownCostCount?: number | null
   /** Só no pedido de permissão: o que a CLI quer fazer (comando, pasta, motivo). */
   permissionDetail?: string | null
+  /** Só na permissão: o que o prazo de 10 min faz (aplica a recomendada segura, senão nega). */
+  onTimeout?: 'allow' | 'deny'
   rule: string | null
   reason: string | null
   requestedAt: string

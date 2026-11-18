@@ -487,14 +487,18 @@ Quando o gasto chega ao teto, nenhum sub-agente novo abre, e o chat pergunta **C
 
 - **Continuar** libera mais um teto inteiro: se o teto é US$ 1, a pergunta volta em US$ 2.
 - **Parar** encerra os sub-agentes que esperavam, e nenhum outro abre nessa execução.
-- Sem resposta em 10 minutos, vale **Parar**.
+- Sem resposta em 10 minutos, vale **Parar**. Gasto e troca de conta de cobrança nunca são aplicados sozinhos, mesmo que um deles seja o recomendado.
 - Com o teto em 0, não há teto.
 
 **Ações sensíveis.** Com **Confirmar ações sensíveis** ligado, o Codex App Server roda na
 pasta de trabalho e pede aprovação para sair dela (rede, outra pasta, permissão extra), e o
 Gemini ACP pede permissão a cada ferramenta que muda algo. Cada pedido vira o card
 **Permitir?** no chat, com o comando ou a ferramenta, e só segue com **Permitir**. Sem
-resposta em 10 minutos, a permissão é negada. O Claude e o Codex de uma resposta só não
+resposta em 10 minutos, vale a opção recomendada do pedido, mas só se ela for de leitura ou
+busca; em qualquer outro caso (apagar, mover, enviar, rodar comando, editar, ou pedido sem
+opção recomendada) a permissão é negada. O card e o log registram "aplicada por falta de
+resposta" quando o prazo permitiu. Hoje nenhuma CLI marca uma opção recomendada, então o
+prazo continua negando. O Claude e o Codex de uma resposta só não
 conseguem perguntar no meio do trabalho e seguem com acesso total.
 
 **Painel de aprovações.** Quando algum agente espera por você (permissão, teto de custo,

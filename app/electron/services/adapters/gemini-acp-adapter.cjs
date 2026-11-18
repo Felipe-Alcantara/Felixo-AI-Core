@@ -142,6 +142,7 @@ function parseServerRequest(payload) {
           ? `O Gemini pede permissão: ${toolCall.title.trim()}`
           : 'O Gemini pede permissão para usar uma ferramenta',
         detail: typeof toolCall.kind === 'string' ? `Tipo: ${toolCall.kind}` : null,
+        kind: typeof toolCall.kind === 'string' ? toolCall.kind : null,
         denyInput: rejectOption
           ? formatResponse(payload.id, { outcome: { outcome: 'selected', optionId: rejectOption.optionId ?? rejectOption.id } })
           : formatResponse(payload.id, { outcome: { outcome: 'cancelled' } }),

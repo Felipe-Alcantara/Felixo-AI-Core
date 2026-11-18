@@ -215,6 +215,7 @@ describe('teto de custo e pedido de permissão no card', () => {
     expect(formatProviderSwitchDetails(permission)).toEqual(['Comando: git push', 'Pasta: /projeto'])
     expect(formatProviderSwitchStage(permission)).toBe('A conversa está parada esperando a resposta.')
     expect(formatProviderSwitchTimeoutNote(permission)).toMatch(/a permissão é negada/)
+    expect(formatProviderSwitchTimeoutNote({ ...permission, onTimeout: 'allow' })).toMatch(/vale a opção recomendada: permitir/)
     // A troca de provedor segue com os rótulos de sempre.
     expect(formatProviderSwitchActions(request())).toEqual({ accept: 'Trocar para Codex', refuse: 'Não trocar' })
   })

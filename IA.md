@@ -4955,3 +4955,17 @@ Agente: subagente da Orquestração (Claude, effort medium). Pedido direto do Fe
 **Não validado.** A busca online de verdade só funciona depois do merge na `main`. Uso de Codex e Gemini não entra na comparação (o app não lê o histórico deles). A comparação é só de preço, não dos limites de uso dos planos.
 
 Estado: concluído na branch `orq/precos-modelos-assinaturas-apis`, sem push.
+
+---
+
+## 2026-11-18 — Segurança: sem resposta em 10 min aplica a recomendada, exceto ação destrutiva
+
+**Contexto:** decisão do Felipe (17/11, confirmada 18/11): pedido de permissão sem resposta em 10 min aplica a opção recomendada; sem recomendada, nega. O mecanismo (`recommendedAllow`) já existia em `persistent-cli-session.cjs`, mas valia para qualquer tipo de ação e o card/guia ainda diziam "negada".
+
+**O que mudou:**
+- `persistent-cli-session.cjs`: o prazo só permite sozinho se `recommendedAllow === true` **e** o `kind` da ação (vocabulário do ACP) está em `read`/`search`/`think`. Qualquer outro tipo (delete, move, execute, edit, fetch, other) ou sem tipo continua negando. A mensagem do evento diz "Aplicada por falta de resposta" ou explica que a recomendada era destrutiva e foi negada; o desfecho vai também ao log (`cli:permission-expired`).
+- Adaptadores Codex (`execute`/`edit`/`other`) e Gemini ACP (`toolCall.kind`) passam o `kind`. Nenhum adaptador marca ainda `recommendedAllow`, então hoje o prazo segue negando na prática.
+- O pedido público leva `onTimeout: 'allow' | 'deny'`; o card do chat e o painel de aprovações dizem o que vai acontecer.
+- Teto de custo e troca de provedor/conta seguem recusando sem resposta (gasto e cobrança nunca são aplicados sozinhos). `GUIA-USUARIO.md` atualizado.
+
+**Validação:** lint e typecheck limpos; node 3594 testes, 0 falhas; vitest da área verde; testes novos cobrem recomendada segura aplicada e 7 tipos que continuam negados.

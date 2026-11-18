@@ -44,6 +44,10 @@ const {
 
 /** Mesmo prazo das trocas do orquestrador: sem resposta, o pedido é negado. */
 const PERMISSION_TIMEOUT_MS = 10 * 60 * 1000
+// Tipos de ferramenta (campo `kind` do ACP; o Codex manda `execute`/`edit`) que o prazo
+// pode permitir sozinho mesmo sendo a recomendada. Qualquer outro tipo, ou sem tipo,
+// pode apagar, mover, enviar ou rodar algo irreversível: o prazo nega.
+const SAFE_AUTO_ALLOW_KINDS = new Set(['read', 'search', 'think'])
 
 function createPersistentCliSessionManager({
   cliManager,
@@ -891,7 +895,7 @@ function createPersistentCliSessionManager({
    * "Confirmar ações sensíveis": o pedido da CLI fica parado até a pessoa
    * responder no card do chat (mesmo card e mesmo IPC das trocas do
    * orquestrador). Esperar a pessoa não é travamento: o prazo de "sem saída
-   * visível" sai, e vale o de 10 minutos, que aplica a recomendada (negar, se não houver).
+   * visível" sai, e vale o de 10 minutos, que aplica a recomendada (e nega se não houver, ou se for destrutiva).
    */
   function holdPermissionRequest(persistentSession, cliEvent) {
     const { threadId } = persistentSession
@@ -920,6 +924,8 @@ function createPersistentCliSessionManager({
       approveInput: cliEvent.responseInput,
       denyInput: cliEvent.permission.denyInput,
       recommendedAllow: cliEvent.permission.recommendedAllow === true,
+      permissionKind: cliEvent.permission.kind ?? null,
+      onTimeout: willAllowOnTimeout(cliEvent.permission) ? 'allow' : 'deny',
       targetWebContents: persistentSession.targetWebContents,
     }
     pendingPermissions.set(decision.decisionId, decision)
@@ -946,6 +952,11 @@ function createPersistentCliSessionManager({
     })
   }
 
+  /** Só a recomendada de uma ação sem risco de dano vale sozinha no prazo. */
+  function willAllowOnTimeout(permission) {
+    return permission.recommendedAllow === true && SAFE_AUTO_ALLOW_KINDS.has(permission.kind)
+  }
+
   function toPublicPermission(decision) {
     const {
       threadId: _threadId,
@@ -954,6 +965,7 @@ function createPersistentCliSessionManager({
       targetWebContents: _targetWebContents,
       expiresAtMs: _expiresAtMs,
       recommendedAllow: _recommendedAllow,
+      permissionKind: _permissionKind,
       ...view
     } = decision
     return view
@@ -979,11 +991,21 @@ function createPersistentCliSessionManager({
     const message =
       finalOutcome === 'expired'
         ? allow
-          ? 'Sem resposta no prazo: aplicada a opção recomendada (permitir).'
-          : 'Sem resposta no prazo: a permissão foi negada.'
+          ? 'Aplicada por falta de resposta: a opção recomendada (permitir).'
+          : decision.recommendedAllow
+            ? 'Sem resposta no prazo: a recomendada era permitir, mas a ação pode ser destrutiva ou irreversível; foi negada.'
+            : 'Sem resposta no prazo: a permissão foi negada (não havia opção recomendada).'
         : allow
           ? 'Permissão dada.'
           : 'Permissão negada.'
+    if (finalOutcome === 'expired') {
+      logQaEvent({
+        level: 'info',
+        scope: 'cli:permission-expired',
+        sessionId: decision.threadId,
+        message: `${message} (${decision.reason})`,
+      })
+    }
     sendCliEvent(decision.targetWebContents, {
       type: 'provider_switch_resolved',
       decisionId,
@@ -1001,15 +1023,15 @@ function createPersistentCliSessionManager({
 
   /**
    * Varredura de 60 s: pedido sem resposta em 10 minutos aplica a opção
-   * recomendada do pedido. Sem `permission.recommendedAllow === true`, a
-   * recomendada é a mais segura: negar.
+   * recomendada do pedido, se for de um tipo sem risco de dano (`SAFE_AUTO_ALLOW_KINDS`).
+   * Sem `permission.recommendedAllow === true`, ou com ação destrutiva, nega.
    */
   function expirePermissionRequests(nowMs = now()) {
     for (const decision of [...pendingPermissions.values()]) {
       if (decision.expiresAtMs <= nowMs) {
         respondPermission({
           decisionId: decision.decisionId,
-          allow: decision.recommendedAllow === true,
+          allow: decision.onTimeout === 'allow',
           outcome: 'expired',
         })
       }

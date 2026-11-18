@@ -50,7 +50,11 @@ export function formatProviderSwitchActions(request: ProviderSwitchRequest) {
 /** O que acontece sem resposta no prazo. */
 export function formatProviderSwitchTimeoutNote(request: ProviderSwitchRequest) {
   if (request.kind === 'cost') return 'sem resposta, a execução para no teto.'
-  if (request.kind === 'permission') return 'sem resposta, a permissão é negada.'
+  if (request.kind === 'permission') {
+    return request.onTimeout === 'allow'
+      ? 'sem resposta, vale a opção recomendada: permitir.'
+      : 'sem resposta, a permissão é negada.'
+  }
   return 'sem resposta, conta como recusa e nada é trocado.'
 }
 
@@ -243,6 +247,7 @@ function toProviderSwitchRequest(event: ProviderSwitchRequestStreamEvent): Provi
     capUsd: event.capUsd ?? null,
     unknownCostCount: event.unknownCostCount ?? null,
     permissionDetail: event.permissionDetail ?? null,
+    onTimeout: event.onTimeout,
     rule: event.rule,
     reason: event.reason,
     requestedAt: event.requestedAt,

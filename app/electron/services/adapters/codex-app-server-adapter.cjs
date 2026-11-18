@@ -212,7 +212,14 @@ function describeApprovalRequest(method, params) {
       : method === 'item/fileChange/requestApproval'
         ? 'O Codex quer alterar arquivos'
         : 'O Codex pede mais permissão'
-  return { title, detail: parts.join('\n') || null }
+  // `kind` no vocabulário do ACP: comando e escrita nunca valem sozinhos no prazo.
+  const kind =
+    method === 'item/commandExecution/requestApproval'
+      ? 'execute'
+      : method === 'item/fileChange/requestApproval'
+        ? 'edit'
+        : 'other'
+  return { title, detail: parts.join('\n') || null, kind }
 }
 
 function parseResponse(payload) {
