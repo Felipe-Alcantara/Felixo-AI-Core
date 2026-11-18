@@ -90,6 +90,11 @@ export const loadSettingsPanel = () =>
     markToolLoaded('settings')
     return { default: SettingsPanel }
   })
+export const loadCliPluginsPanel = () =>
+  import('./tools/CliPluginsPanel').then(({ CliPluginsPanel }) => {
+    markToolLoaded('cliPlugins')
+    return { default: CliPluginsPanel }
+  })
 export const loadAgentPresetsPanel = () =>
   import('./tools/AgentPresetsPanel').then(({ AgentPresetsPanel }) => {
     markToolLoaded('agentPresets')

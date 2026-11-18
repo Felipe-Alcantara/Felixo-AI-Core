@@ -51,6 +51,7 @@ import type {
 import type { AccountChainBridge } from './features/shared/types/account-chain'
 import type { CloudSessionBridge } from './features/shared/types/cloud-session'
 import type { ClaudeApiBridge } from './features/shared/types/claude-api'
+import type { CliPluginsBridge } from './features/shared/types/cli-plugins'
 import type { ExternalOpenFailure } from './features/shared/links/link-open-failure'
 import type { GpuPreference, GpuPreferenceStatus } from './features/shared/graphics/gpu-preference'
 import type { HardwareProfile } from './features/shared/performance/performance-suggestion'
@@ -1158,6 +1159,8 @@ declare global {
           change: ClaudeTerminalDefaultsChange,
         ) => Promise<({ ok: true } & ClaudeTerminalDefaultsState) | { ok: false; message: string }>
       }
+      /** Plugins e extensões das CLIs por conta; ausente numa versão sem o serviço. */
+      cliPlugins?: CliPluginsBridge
       agentUsage?: {
         list: () => Promise<AgentUsageDashboard>
         refresh: () => Promise<AgentUsageDashboard>

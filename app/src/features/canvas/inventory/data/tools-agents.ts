@@ -3,7 +3,7 @@ import type { InventoryElement } from '../canvas-inventory-types'
 
 type AgentTool = Extract<
   CanvasTool,
-  'fetchAll' | 'agentUsage' | 'orchestrator' | 'qaLogger' | 'agentCanvasWrite' | 'agentPresets' | 'settings'
+  'fetchAll' | 'agentUsage' | 'orchestrator' | 'qaLogger' | 'agentCanvasWrite' | 'agentPresets' | 'cliPlugins' | 'settings'
 >
 
 const TOOLS = 'src/features/canvas/components/tools'
@@ -531,6 +531,89 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
     overlap: `${PAINEL}. Tamanho md; a prévia do conteúdo tem max-h-40 e rola por dentro`,
   },
 
+  cliPlugins: {
+    id: 'tool-cli-plugins',
+    name: 'Plugins das CLIs',
+    layer: 'panel',
+    owner: `${TOOLS}/CliPluginsPanel.tsx`,
+    states: {
+      normal: 'Seletores de agente (Claude Code, Codex, Gemini CLI) e de conta, abas Instalados, Disponíveis e Marketplaces (as duas últimas só onde a CLI tem catálogo: o Gemini só tem Instalados), busca nos disponíveis e uma linha por plugin com versão, marketplace, origem e as ações que aquela CLI oferece',
+      loading: '"Consultando a CLI da conta…" na primeira leitura; o ícone de atualizar gira enquanto qualquer leitura roda',
+      empty: '"Nada instalado nesta conta."; "Nenhum plugin disponível com esse filtro…"; "Nenhum marketplace configurado nesta conta."',
+      error: 'Faixa vermelha com a mensagem da CLI quando ela falha, não responde ou responde num formato desconhecido (a lista nunca vira vazia por engano); faixa de resultado vermelha quando a alteração falha',
+      pending: 'Cartão âmbar de confirmação (role=alertdialog) com título, conta, origem e o aviso de que plugin executa código de terceiros; nada muda até Confirmar',
+      success: 'Faixa verde com a mensagem da própria CLI depois de instalar, ligar, desligar, atualizar ou remover; a lista é relida',
+      disabled: 'Ações ficam desabilitadas durante uma alteração ou com a confirmação aberta; plugin de escopo project/local não tem ações (só o escopo user é alterado); Codex não liga, não desliga e não atualiza; "Instalar por endereço" exige URL https',
+      denied: 'Cancelar a confirmação descarta o pedido sem chamar a CLI',
+    },
+    controls: [
+      {
+        locator: 'id="cli-plugins-provider"',
+        kind: 'select',
+        effect: 'Troca o agente: relê a lista da CLI dele, zera a conta (Login do sistema), a aba e a confirmação aberta',
+        failure: 'CLI ausente ou sem o subcomando de plugins: faixa vermelha com a mensagem da CLI',
+      },
+      {
+        locator: 'id="cli-plugins-account"',
+        kind: 'select',
+        effect: 'Escolhe a conta (pasta de login da CLI); a lista e todas as alterações passam a valer só para ela. Contas do Claude por chave de API não aparecem',
+        failure: 'Conta removida entre a escolha e a leitura: faixa vermelha "A conta selecionada não existe mais."',
+      },
+      {
+        locator: 'role="tab"',
+        kind: 'role',
+        effect: 'Alterna Instalados, Disponíveis e Marketplaces; Disponíveis pede à CLI o catálogo dos marketplaces da conta',
+        failure: 'Sem rede o catálogo pode falhar: faixa vermelha com a mensagem da CLI',
+      },
+      {
+        locator: 'Atualizar a lista de plugins',
+        kind: 'button',
+        effect: 'Relê a lista da CLI da conta',
+        failure: 'Mesmas falhas da leitura (faixa vermelha)',
+        disabledWhen: 'durante a leitura ou uma alteração',
+      },
+      {
+        locator: 'void confirm()',
+        kind: 'button',
+        effect: 'Envia a alteração com confirmed: true (cli-plugins:install, remove, set-enabled ou update); o main roda o comando da CLI no ambiente da conta, sem -y, no escopo user, e a lista é relida',
+        failure: 'A CLI recusa (plugin que exige confirmar comando do marketplace, id inexistente, rede): faixa vermelha com a mensagem dela; alteração simultânea na mesma conta: "Já há uma alteração de plugin em andamento nesta conta."',
+        disabledWhen: 'durante a alteração',
+      },
+      {
+        locator: 'onClick={() => setPending(null)}',
+        kind: 'button',
+        effect: 'Cancela a confirmação sem chamar a CLI',
+        failure: 'sem falha própria',
+        disabledWhen: 'durante a alteração',
+      },
+      {
+        locator: 'Instalar por endereço',
+        kind: 'button',
+        effect: 'Gemini: abre a confirmação para instalar a extensão do repositório https digitado',
+        failure: 'Endereço que não é https: o botão fica desabilitado; o main também recusa o que não for https sem usuário e senha',
+        disabledWhen: 'endereço vazio ou fora de https://, ou durante uma alteração',
+      },
+      {
+        locator: 'ask({ action, target: entry.name',
+        kind: 'button',
+        effect: 'Abre a confirmação da ação da linha (Instalar, Ligar, Desligar, Atualizar ou Remover); nada roda antes de Confirmar',
+        failure: 'sem falha própria (a falha vem no Confirmar)',
+        disabledWhen: 'durante uma alteração ou com outra confirmação aberta; não aparece em plugin fora do escopo user',
+      },
+    ],
+    persistence: [
+      'pastas da própria CLI na conta escolhida (CLAUDE_CONFIG_DIR, CODEX_HOME, HOME do Gemini): o app não guarda lista nem cache',
+      'estado da tela (aba, busca, confirmação) só em memória',
+    ],
+    ipc: ['cli-accounts:list', 'cli-plugins:list', 'cli-plugins:install', 'cli-plugins:remove', 'cli-plugins:set-enabled', 'cli-plugins:update'],
+    dependsOn: ['cli-plugins-view (filterPlugins, describeConfirmation, canChangeEntry)', 'FelixoSelect', 'CanvasPanel'],
+    tests: [
+      { file: 'src/features/canvas/services/cli-plugins-view.test.ts' },
+      { file: 'electron/services/cli-plugins-service.test.cjs' },
+    ],
+    gaps: [],
+    overlap: `${PAINEL}. Tamanho md; a lista rola por dentro e mostra no máximo 100 linhas (a busca afunila); a confirmação é um cartão dentro do painel, não um diálogo nativo`,
+  },
   agentPresets: {
     id: 'tool-agent-presets',
     name: 'Presets de agente',

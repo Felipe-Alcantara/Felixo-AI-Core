@@ -29,8 +29,8 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 
 ## Números
 
-- **Elementos:** 105 (10 blocos, 16 ferramentas, 79 outras superfícies)
-- **Controles:** 406, dos quais 61 com teste específico
+- **Elementos:** 106 (10 blocos, 17 ferramentas, 79 outras superfícies)
+- **Controles:** 414, dos quais 61 com teste específico
 - **Elementos sem nenhum teste:** 3
 - **Lacunas:** 230 (alto 4, médio 122, baixo 104), em 62 tasks
 
@@ -1848,6 +1848,37 @@ Sem controle próprio: as ações vêm de outros elementos.
 | --- | --- | --- |
 | É a porta de confirmação de escrita por agente (risco de prompt injection) e não tem E2E: aceitar/recusar pelo painel e o bloco mudando por canvas:agent-node-updated só são cobertos no handler do main e nas funções puras | médio | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
 | Pedido de escrita que chega com o painel fechado não avisa ninguém: só este painel escuta canvas:agent-write-requests, então o agente fica esperando sem a pessoa saber | médio | `3eb91f95-497e-81b8-a70f-dfce2a446a3e` |
+
+### Plugins das CLIs
+
+- **ID:** `tool-cli-plugins` · **Dono:** `src/features/canvas/components/tools/CliPluginsPanel.tsx`
+- **Persistência:** pastas da própria CLI na conta escolhida (CLAUDE_CONFIG_DIR, CODEX_HOME, HOME do Gemini): o app não guarda lista nem cache; estado da tela (aba, busca, confirmação) só em memória
+- **IPC:** `cli-accounts:list`, `cli-plugins:list`, `cli-plugins:install`, `cli-plugins:remove`, `cli-plugins:set-enabled`, `cli-plugins:update`
+- **Depende de:** `cli-plugins-view (filterPlugins, describeConfirmation, canChangeEntry)`, `FelixoSelect`, `CanvasPanel`
+- **Sobreposição:** CanvasPanel: absolute z-20 (z-30 com foco dentro), top-16, à direita da barra lateral e deslocado quando o menu de ferramentas abre (toolsMenuOpen); largura limitada a viewport − barra − inspector Elementos (288 px) e altura a viewport − 112. Os menus do FelixoSelect abrem em portal z-1000 por cima; toasts (z 50) e AgentQuestionDialog/HandoffDialog (z 60) cobrem o painel. Em janela <768 px o painel passa da viewport (PANEL_MIN_WIDTH 260, task 3e691f95-497e-815c-a129-f4d2d6405cbc). Tamanho md; a lista rola por dentro e mostra no máximo 100 linhas (a busca afunila); a confirmação é um cartão dentro do painel, não um diálogo nativo
+- **Testes:** `src/features/canvas/services/cli-plugins-view.test.ts`, `electron/services/cli-plugins-service.test.cjs`
+
+| Estado | Quando |
+| --- | --- |
+| normal | Seletores de agente (Claude Code, Codex, Gemini CLI) e de conta, abas Instalados, Disponíveis e Marketplaces (as duas últimas só onde a CLI tem catálogo: o Gemini só tem Instalados), busca nos disponíveis e uma linha por plugin com versão, marketplace, origem e as ações que aquela CLI oferece |
+| loading | "Consultando a CLI da conta…" na primeira leitura; o ícone de atualizar gira enquanto qualquer leitura roda |
+| empty | "Nada instalado nesta conta."; "Nenhum plugin disponível com esse filtro…"; "Nenhum marketplace configurado nesta conta." |
+| error | Faixa vermelha com a mensagem da CLI quando ela falha, não responde ou responde num formato desconhecido (a lista nunca vira vazia por engano); faixa de resultado vermelha quando a alteração falha |
+| pending | Cartão âmbar de confirmação (role=alertdialog) com título, conta, origem e o aviso de que plugin executa código de terceiros; nada muda até Confirmar |
+| success | Faixa verde com a mensagem da própria CLI depois de instalar, ligar, desligar, atualizar ou remover; a lista é relida |
+| disabled | Ações ficam desabilitadas durante uma alteração ou com a confirmação aberta; plugin de escopo project/local não tem ações (só o escopo user é alterado); Codex não liga, não desliga e não atualiza; "Instalar por endereço" exige URL https |
+| denied | Cancelar a confirmação descarta o pedido sem chamar a CLI |
+
+| Controle | Gatilho | Efeito | Falha conhecida | Teste |
+| --- | --- | --- | --- | --- |
+| `id="cli-plugins-provider"` (select) | clique | Troca o agente: relê a lista da CLI dele, zera a conta (Login do sistema), a aba e a confirmação aberta | CLI ausente ou sem o subcomando de plugins: faixa vermelha com a mensagem da CLI | — |
+| `id="cli-plugins-account"` (select) | clique | Escolhe a conta (pasta de login da CLI); a lista e todas as alterações passam a valer só para ela. Contas do Claude por chave de API não aparecem | Conta removida entre a escolha e a leitura: faixa vermelha "A conta selecionada não existe mais." | — |
+| `role="tab"` (role) | clique | Alterna Instalados, Disponíveis e Marketplaces; Disponíveis pede à CLI o catálogo dos marketplaces da conta | Sem rede o catálogo pode falhar: faixa vermelha com a mensagem da CLI | — |
+| `Atualizar a lista de plugins` (button) | clique | Relê a lista da CLI da conta (desabilitado: durante a leitura ou uma alteração) | Mesmas falhas da leitura (faixa vermelha) | — |
+| `void confirm()` (button) | clique | Envia a alteração com confirmed: true (cli-plugins:install, remove, set-enabled ou update); o main roda o comando da CLI no ambiente da conta, sem -y, no escopo user, e a lista é relida (desabilitado: durante a alteração) | A CLI recusa (plugin que exige confirmar comando do marketplace, id inexistente, rede): faixa vermelha com a mensagem dela; alteração simultânea na mesma conta: "Já há uma alteração de plugin em andamento nesta conta." | — |
+| `onClick={() => setPending(null)}` (button) | clique | Cancela a confirmação sem chamar a CLI (desabilitado: durante a alteração) | sem falha própria | — |
+| `Instalar por endereço` (button) | clique | Gemini: abre a confirmação para instalar a extensão do repositório https digitado (desabilitado: endereço vazio ou fora de https://, ou durante uma alteração) | Endereço que não é https: o botão fica desabilitado; o main também recusa o que não for https sem usuário e senha | — |
+| `ask({ action, target: entry.name` (button) | clique | Abre a confirmação da ação da linha (Instalar, Ligar, Desligar, Atualizar ou Remover); nada roda antes de Confirmar (desabilitado: durante uma alteração ou com outra confirmação aberta; não aparece em plugin fora do escopo user) | sem falha própria (a falha vem no Confirmar) | — |
 
 ### Presets de agente
 

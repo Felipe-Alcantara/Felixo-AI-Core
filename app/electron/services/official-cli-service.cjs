@@ -526,6 +526,8 @@ function runBufferedCommand({
   cwd = os.homedir(),
   env = process.env,
   timeoutMs = INSTALL_TIMEOUT_MS,
+  // Listas em JSON de marketplace passam de 2 MB; cortar o começo quebraria o JSON.
+  outputLimit = OUTPUT_LIMIT,
   signal,
   platformName = platform.name,
   spawn = spawnChildProcess,
@@ -598,12 +600,12 @@ function runBufferedCommand({
 
     childProcess.stdout.setEncoding('utf8')
     childProcess.stdout.on('data', (chunk) => {
-      stdout = appendLimited(stdout, chunk)
+      stdout = appendLimited(stdout, chunk, outputLimit)
     })
 
     childProcess.stderr.setEncoding('utf8')
     childProcess.stderr.on('data', (chunk) => {
-      stderr = appendLimited(stderr, chunk)
+      stderr = appendLimited(stderr, chunk, outputLimit)
     })
 
     childProcess.on('error', (error) => {
@@ -633,8 +635,8 @@ function runBufferedCommand({
   })
 }
 
-function appendLimited(current, chunk) {
-  return `${current}${chunk}`.slice(-OUTPUT_LIMIT)
+function appendLimited(current, chunk, limit = OUTPUT_LIMIT) {
+  return `${current}${chunk}`.slice(-limit)
 }
 
 function createInstallErrorMessage(command, code, signal, stderr) {

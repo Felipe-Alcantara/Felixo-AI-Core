@@ -4894,3 +4894,23 @@ Task: Felixo AI Core/Relatórios — gerar automaticamente o relatório de uma s
 **Não validado / fica para depois.** O botão na tela (o registro ainda não tem tela nem para exportar), a conferência contra a sessão real de 25 a 27/09 (o registro só existe desde 17/11) e a atividade do agente que trabalha sozinho (só texto digitado e abertura de sessão contam).
 
 Estado: concluído na branch `orq/relatorios-gerar-automaticamente-relator`, sem push; deploy pelo orquestrador.
+
+---
+
+## 2026-11-18 — Agentes: plugins e extensões das CLIs (Claude, Codex e Gemini) listados e instalados pela interface, por conta
+
+Agente: subagente da Orquestração (Claude Sonnet 5.5, effort medium). Task: Felixo AI Core/Agentes — listar e instalar plugins das CLIs pela interface, por conta (Notion `3eb91f95-497e-8173-b355-c6a5c5e25a63`).
+
+**Contexto.** O app não gerenciava plugins; cada instalação era manual, por terminal e por conta, e a pessoa não via o que cada agente tinha. Plugin é código de terceiros, então nada instala sem escolha e confirmação na tela.
+
+**O que mudou.**
+- `electron/services/cli-plugins-service.cjs` (+ `cli-plugins-ipc-handlers.cjs`, canais `cli-plugins:*`, preload `cliPlugins`): roda `claude plugin ...`, `codex plugin ...` e `gemini extensions ...` por `cross-spawn` (sem shell), no ambiente da conta (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `HOME`). Lê JSON (`plugin list --json [--available]`, `extensions list -o json`) com parsing defensivo e cai no texto do Gemini; formato desconhecido vira erro, nunca lista vazia. Toda alteração exige `confirmed === true`; id validado antes de virar argumento; Claude só no escopo `user` e sem `-y`/`--accept-command`; Gemini só por URL https; chave de API da conta tirada do ambiente; uma alteração por vez por conta.
+- `runBufferedCommand` ganhou `outputLimit`: a lista do marketplace oficial do Claude tem 2,2 MB e o corte padrão de 12 KB quebraria o JSON.
+- Painel `Plugins` (Ferramentas > Operação, `CliPluginsPanel.tsx`): agente e conta, abas Instalados/Disponíveis/Marketplaces, busca (a tela mostra 100 linhas de ~3.700), confirmação em cartão com origem e aviso de código de terceiros.
+- Inventário do canvas e `INVENTARIO-CANVAS.md` atualizados; README e `GUIA-CONTAS-E-LIMITES.md` ganham a seção.
+
+**Decisões tomadas pelo agente (Felipe dormindo, opção mais segura).** Painel em Ferramentas; só escopo `user`; sem aceitar plugin que instala por comando do marketplace; sem "adicionar marketplace" nesta fatia; Codex sem ligar/desligar/atualizar (a CLI não tem); Gemini sem catálogo (instala por URL https).
+
+**Validação.** Medido com pastas temporárias (nunca os perfis reais): Claude 2.1.327 lista 3.732 disponíveis em ~4 s, instala/desliga/liga/remove um plugin de marketplace local; Codex 0.171 idem com `add`/`remove`. `cli-plugins-service.test.cjs` (12 testes, CLI falsa), `cli-plugins-view.test.ts` (3), inventário. `node scripts/run-node-unit-tests.cjs`: 3514 passando, 0 falhas. `npx vitest run`: 3723 passando, 0 falhas. Lint e typecheck limpos. O app não foi aberto.
+
+**Não validado.** Gemini: o `extensions install` não terminou na máquina (rede ou prompt) e a saída de `extensions list -o json` com extensão instalada não foi vista; o parser é defensivo e testado só com formas supostas. Interface sem teste de render (o repositório não tem testing-library).

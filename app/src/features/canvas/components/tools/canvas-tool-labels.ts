@@ -21,5 +21,6 @@ export const TOOL_LABELS: Record<CanvasTool, string> = {
   qaLogger: 'QA Logger',
   agentCanvasWrite: 'Pedidos de escrita',
   agentPresets: 'Presets de agente',
+  cliPlugins: 'Plugins',
   settings: 'Configurações',
 }

@@ -342,6 +342,7 @@ export const CANVAS_TOOL_FEATURES = {
   qaLogger: 'base',
   agentCanvasWrite: 'base',
   agentPresets: 'base',
+  cliPlugins: 'base',
   settings: 'base',
 } as const satisfies Record<CanvasTool, 'base' | FeatureId>
 

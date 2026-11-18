@@ -12,6 +12,7 @@ import { PanelOpenRequestContext } from '../hooks/panel-open-request-context'
 import {
   LazyAgentCanvasWriteRequestsPanel,
   LazyAgentPresetsPanel,
+  LazyCliPluginsPanel,
   LazyAgentUsagePanel,
   LazyFetchAllPanel,
   LazyGitPanel,
@@ -294,6 +295,8 @@ export function CanvasToolPanels({
         return <LazyQaLoggerPanel onClose={closeActiveTool} toolsMenuOpen={toolsMenuOpen} />
       case 'agentPresets':
         return <LazyAgentPresetsPanel onClose={onClose} toolsMenuOpen={toolsMenuOpen} />
+      case 'cliPlugins':
+        return <LazyCliPluginsPanel onClose={closeActiveTool} toolsMenuOpen={toolsMenuOpen} />
       case 'agentCanvasWrite':
         return (
           <LazyAgentCanvasWriteRequestsPanel

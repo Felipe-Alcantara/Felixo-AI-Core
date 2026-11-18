@@ -433,6 +433,14 @@ contextBridge.exposeInMainWorld('felixo', {
       ipcRenderer.invoke('cli-accounts:remove', accountId, options),
     setSecret: (params) => ipcRenderer.invoke('cli-accounts:set-secret', params),
   },
+  // Plugins e extensões das CLIs na pasta da conta. Alterar exige `confirmed: true`.
+  cliPlugins: {
+    list: (params) => ipcRenderer.invoke('cli-plugins:list', params),
+    install: (params) => ipcRenderer.invoke('cli-plugins:install', params),
+    remove: (params) => ipcRenderer.invoke('cli-plugins:remove', params),
+    setEnabled: (params) => ipcRenderer.invoke('cli-plugins:set-enabled', params),
+    update: (params) => ipcRenderer.invoke('cli-plugins:update', params),
+  },
   // Cadeia de contas: o main decide tudo (elegibilidade, ordem, espera,
   // proposta, ticket); a interface só lê, confirma e recusa.
   accountChain: {

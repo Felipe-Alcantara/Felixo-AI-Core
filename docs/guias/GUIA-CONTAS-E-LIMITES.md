@@ -409,3 +409,20 @@ demanda para "Mais quota" comparar mais contas.
 ---
 
 Voltar ao [README](../../README.md).
+
+## Plugins por conta
+
+**Ferramentas > Plugins** mostra os plugins do Claude Code e do Codex e as
+extensões do Gemini da conta escolhida no topo do painel; o que você instala ali
+vale só para aquela conta. A lista vem da própria CLI (o app não guarda cópia).
+
+- **Instalar, ligar, desligar, atualizar e remover** abrem sempre uma confirmação
+  com a conta e a origem do código. Plugin executa código de terceiros na sua
+  máquina e pode ler os projetos abertos e registrar servidores MCP e hooks.
+- O app age só no escopo `user` da conta e nunca aceita sozinho um plugin que se
+  instala rodando um comando do marketplace: a CLI recusa e a mensagem dela
+  aparece na tela (instale esse pelo terminal, lendo o comando).
+- O Codex só instala e remove (a CLI dele não liga, desliga nem atualiza). O
+  Gemini não tem catálogo: a extensão entra por endereço `https` do repositório.
+  Marketplaces novos ainda se adicionam pelo terminal.
+- Contas do Claude por chave de API não aparecem (não têm pasta de plugins).

@@ -10,6 +10,7 @@ import {
   type LucideIcon,
   Notebook,
   PenLine,
+  Puzzle,
   RefreshCw,
   ScrollText,
   Sparkles,
@@ -44,6 +45,7 @@ export type CanvasTool =
   | 'qaLogger'
   | 'agentCanvasWrite'
   | 'agentPresets'
+  | 'cliPlugins'
   | 'settings'
 
 type ToolEntry = { tool: CanvasTool; label: string; icon: LucideIcon }
@@ -70,6 +72,7 @@ const TOOL_GROUPS: Array<{ label: string; tools: ToolEntry[] }> = [
       { tool: 'qaLogger', label: 'QA Logger', icon: Terminal },
       { tool: 'agentCanvasWrite', label: 'Pedidos de escrita', icon: PenLine },
       { tool: 'agentPresets', label: 'Presets de agente', icon: UserCog },
+      { tool: 'cliPlugins', label: 'Plugins', icon: Puzzle },
     ],
   },
 ]

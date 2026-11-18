@@ -2,6 +2,7 @@ import type { CanvasTool } from './tools/CanvasToolsMenu'
 import {
   loadAgentCanvasWriteRequestsPanel,
   loadAgentPresetsPanel,
+  loadCliPluginsPanel,
   loadAgentUsagePanel,
   loadFetchAllPanel,
   loadGitPanel,
@@ -37,6 +38,7 @@ const PRELOADERS: Record<CanvasTool, () => Promise<unknown>> = {
   settings: loadSettingsPanel,
   agentCanvasWrite: loadAgentCanvasWriteRequestsPanel,
   agentPresets: loadAgentPresetsPanel,
+  cliPlugins: loadCliPluginsPanel,
 }
 
 /**

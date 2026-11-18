@@ -48,6 +48,9 @@ const {
   registerCliAccountIpcHandlers,
 } = require('./services/cli-account-ipc-handlers.cjs')
 const { registerOpeniaIpcHandlers } = require('./services/openia-service.cjs')
+const { createCliPluginsService } = require('./services/cli-plugins-service.cjs')
+const { registerCliPluginsIpcHandlers } = require('./services/cli-plugins-ipc-handlers.cjs')
+const { runBufferedCommand } = require('./services/official-cli-service.cjs')
 const {
   createOpeniaImageService,
   registerOpeniaImageIpcHandlers,
@@ -877,6 +880,25 @@ app.whenReady().then(async () => {
   })
   registerOpeniaIpcHandlers()
   registerCliAccountIpcHandlers({ store: cliAccounts })
+  // Plugins e extensões das CLIs, na pasta de login da conta escolhida.
+  registerCliPluginsIpcHandlers({
+    service: createCliPluginsService({
+      runCommand: runBufferedCommand,
+      resolveAccountEnv: (providerId, accountId) => {
+        if (accountId) {
+          const valid = cliAccounts.validateAccount(accountId, providerId)
+          if (!valid.ok) return valid
+        }
+        return {
+          ok: true,
+          env: createAccountCliEnv({
+            providerId,
+            profileEnv: accountId ? cliAccounts.buildEnv(accountId, providerId) : {},
+          }),
+        }
+      },
+    }),
+  })
   // Cadeia de contas: nasce desligada (sem linha no banco). O serviço lê os
   // terminais vivos do PTY, que é montado logo abaixo, por isso o acesso é
   // preguiçoso; os pushes passam pelos canais registrados em seguida.
