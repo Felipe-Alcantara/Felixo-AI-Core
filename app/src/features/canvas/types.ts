@@ -561,6 +561,25 @@ export type CanvasAgentWebpageInspectRequest = {
   pedidoEm: string
 }
 
+export type CanvasAgentWebpageActRequest = {
+  id: string
+  idDoElemento: string
+  tipo: 'clicar' | 'digitar'
+  x?: number
+  y?: number
+  /** Só quantos caracteres: o texto nunca chega ao cartão. */
+  caracteres?: number
+  campoSensivel?: 'senha' | 'pagamento' | 'quadro'
+  origem: string
+  pedidoEm: string
+}
+
+export type CanvasAgentWebpageActSession = {
+  idDoElemento: string
+  /** Instante (ms) em que a sessão acaba. */
+  expiraEm: number
+}
+
 export type FetchAllActionResult = {
   status: FetchAllRepoStatus
   action: 'pull' | 'push' | 'commit'

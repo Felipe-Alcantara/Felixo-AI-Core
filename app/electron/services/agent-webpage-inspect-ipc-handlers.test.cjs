@@ -6,6 +6,7 @@ const path = require('node:path')
 
 const { criarRepositorioDePedidos } = require('./fetch-all/agent-requests.cjs')
 const { registerAgentWebpageInspectIpcHandlers } = require('./agent-webpage-inspect-ipc-handlers.cjs')
+const { classificarCampo } = require('./agent-webpage-field.cjs')
 const { guestValido, redigirDom, lerDomNaPagina, inspecionarPagina } = require('./agent-webpage-inspect.cjs')
 
 const JANELA = { webContents: { id: 1, send() {} }, isDestroyed: () => false }
@@ -146,7 +147,7 @@ test('lerDomNaPagina não lê valor de campo e marca senha como sensível sem no
     'document',
     'getComputedStyle',
     'window',
-    `return (${lerDomNaPagina.toString()})({ elementos: 200, nome: 120, texto: 8000 })`,
+    `return (${lerDomNaPagina.toString()})({ elementos: 200, nome: 120, texto: 8000 }, ${classificarCampo.toString()})`,
   )
   const dom = rodar(documento, estilo, janela)
   assert.equal(dom.elementos.length, 2)

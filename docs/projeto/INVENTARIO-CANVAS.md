@@ -29,8 +29,8 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 
 ## Números
 
-- **Elementos:** 110 (10 blocos, 17 ferramentas, 83 outras superfícies)
-- **Controles:** 421, dos quais 62 com teste específico
+- **Elementos:** 111 (10 blocos, 17 ferramentas, 84 outras superfícies)
+- **Controles:** 424, dos quais 62 com teste específico
 - **Elementos sem nenhum teste:** 3
 - **Lacunas:** 234 (alto 4, médio 125, baixo 105), em 66 tasks
 
@@ -665,7 +665,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 - **ID:** `bloco-pagina-web` · **Dono:** `src/features/canvas/components/WebpageNode.tsx`
 - **Persistência:** canvas salvo (canvas_nodes.data_json: url persistível, label, profileId, frameColor); processo principal: cookies e logins na partição do perfil (persist:…); histórico de navegação: só na sessão do webview, nunca serializado
-- **IPC:** `canvas:save`, `canvas:delete`, `external-links:open-failed`, `webview-permissions:pending`, `webview-permissions:respond`, `webview-popups:blocked`
+- **IPC:** `canvas:save`, `canvas:delete`, `external-links:open-failed`, `webview-permissions:pending`, `webview-permissions:respond`, `webview-popups:blocked`, `agent-webpage-act:list-sessions`, `agent-webpage-act:sessions`, `agent-webpage-act:end-session`
 - **Depende de:** `useReactFlow`, `useWebviewSitePermissions / describeSitePermissionRequest (webview-site-permissions)`, `partitionForWebviewProfile (webview-profile)`, `explainUrlInput / persistableNavigationUrl (url-utils)`, `resolveGuestSrc / shouldCreateGuest / staleGuests (webview-mount)`, `webviewLinkMenu (webview-context-menu)`, `openLinkChooser / runLinkChoice`, `WebviewProfileMenu`
 - **Sobreposição:** Bloco do React Flow, sem z próprio: fica abaixo de toda superfície fixa (topbar e statusbar 18, dock e painéis 20/30, sidebar 26, menus 50+). O cartão é overflow-hidden, então nada que nasce dentro dele passa das bordas. O <webview> composita por cima do DOM do cartão e engole o mousedown nas bordas: um véu (pointer-events-auto) só liga durante o resize. Cliques dentro do guest não chegam ao document, então menus que fecham por mousedown fora (perfil) ficam abertos.
 - **Testes:** `src/features/canvas/services/webview-site-permissions.test.ts`, `src/features/canvas/services/url-utils.test.ts`, `src/features/canvas/services/webview-mount.test.ts`, `src/features/canvas/services/webview-context-menu.test.ts`, `electron/services/webview-lifecycle.test.cjs`, `electron/services/webview-profile-partition.test.cjs`, `scripts/canvas-smoke-links.cjs` → `paginaWebBarraEBotao`, `scripts/canvas-smoke-links.cjs` → `paginaWebMenuDeLink`, `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`
@@ -675,7 +675,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | normal | Webview na URL gravada (ou google.com), barra de endereço com a URL atual, título da página como rótulo enquanto a pessoa não renomeia. |
 | loading | Antes do dom-ready o guest está em branco e Voltar/Avançar ficam desabilitados; não há indicador de carregamento. |
 | error | did-fail-load (exceto -3, ABORTED): faixa vermelha com a descrição do erro. |
-| pending | Pedido de permissão do site (ou de um popup que a página abriu) sem decisão lembrada: faixa role="region" "Pedido de permissão do site" com o site e o que ele quer, Permitir e Negar; sem foco automático; "(mais N na fila)" quando há outros pedidos do bloco. |
+| pending | Sessão curta de agente ativa (role="status"): faixa "Um agente pode clicar e digitar aqui por m:ss" com Encerrar agora; some sozinha no prazo. Pedido de permissão do site (ou de um popup que a página abriu) sem decisão lembrada: faixa role="region" "Pedido de permissão do site" com o site e o que ele quer, Permitir e Negar; sem foco automático; "(mais N na fila)" quando há outros pedidos do bloco. |
 | disabled | Voltar/Avançar sem histórico (canGoBack/canGoForward falsos). |
 | denied | Endereço recusado pela política de URL (explainUrlInput): faixa role="alert" "Endereço não aberto: …", aria-invalid na barra e o foco fica nela. Popup negado por passar do limite (no máximo 2 janelas da página ao mesmo tempo, contando as que um popup abre): faixa role="status" "Esta página tentou abrir mais de 2 janelas ao mesmo tempo, e a extra não abriu…" até fechar o aviso ou navegar. |
 
@@ -684,6 +684,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `aria-label="Fechar o aviso de janelas"` (button) | clique | Fecha a faixa do limite de popups (webview-popups:blocked). A janela extra já foi negada pelo main; fechar uma das janelas da página libera a vaga. | Sem falha própria; navegar o bloco também fecha o aviso. | — |
 | `onClick={() => void respondPermission(permissionRequest.id, true)}` (button) | clique | Permitir: webview-permissions:respond com allow=true; o main grava "granted" para cada permissão do pedido (perfil + origem), responde ao site e resolve os outros pedidos do mesmo site e perfil. | Pedido que já sumiu (a página navegou ou o bloco fechou) devolve "Pedido de permissão não encontrado." e a faixa some pelo aviso de pendentes. | — |
 | `onClick={() => void respondPermission(permissionRequest.id, false)}` (button) | clique | Negar: webview-permissions:respond com allow=false; o main grava "denied" (lembrado até revogar) e responde ao site; sem resposta nenhuma o site também fica sem a permissão. | Mesmo caso do Permitir: pedido que sumiu não grava nada. | — |
+| `onClick={actSession.end}` (button) | clique | Encerrar agora: agent-webpage-act:end-session apaga a sessão curta do bloco no main; o agente volta a precisar do cartão para clicar e digitar. | Sem sessão (já acabou) não faz nada; a faixa some pelo aviso de sessões. | — |
 | `aria-label="Voltar"` (button) | clique | webview.goBack(); did-navigate atualiza a barra, o histórico e grava a URL persistível (data.url). (desabilitado: Sem histórico para trás.) | Sem try: antes do dom-ready do guest (ex.: logo após trocar de perfil, com canGoBack ainda do guest antigo) o Electron lança síncrono. | — |
 | `aria-label="Avançar"` (button) | clique | webview.goForward(); mesma atualização da barra e da URL gravada. (desabilitado: Sem histórico para frente.) | Mesmo risco do Voltar: lança antes do dom-ready. | — |
 | `aria-label="Recarregar"` (button) | clique | webview.reload(); a navegação troca o texto da barra pela URL real e apaga o aviso de endereço recusado. | Sem try e sempre habilitado: clicado antes do dom-ready (página inicial carregando, guest recriado pela troca de perfil) lança síncrono. | `scripts/canvas-smoke-links.cjs` → `paginaWebBarraEBotao` |
@@ -1265,6 +1266,28 @@ Sem controle próprio: as ações vêm de outros elementos.
 | --- | --- | --- | --- | --- |
 | `onClick={onClick(true)}` (button) | clique | Permitir: agent-webpage:decide (aprovar) com o webContentsId do bloco; o main confere que é um webview da janela e grava a captura ou o DOM no pedido, uma vez. (desabilitado: busy ou janela de 600 ms; some quando o bloco não está aberto) | Recusa, pedido mudado ou guest inválido: role="alert"; o segundo clique de um duplo clique é ignorado. | — |
 | `onClick={onClick(false)}` (button) | clique | Recusar: agent-webpage:decide (aprovar false) marca o pedido como recusado pela pessoa. (desabilitado: busy ou janela de 600 ms) | Recusa: role="alert". | — |
+
+### Pedido de agente para clicar e digitar numa Página Web
+
+- **ID:** `agent-webpage-act-card` · **Dono:** `src/features/canvas/components/AgentWebpageActCard.tsx`
+- **Persistência:** processo principal: fila de pedidos (pasta agent-requests; o texto digitado é apagado no desfecho); a sessão curta só na memória do app
+- **IPC:** `agent-webpage-act:list-requests`, `agent-webpage-act:decide`, `agent-webpage-act:requests`
+- **Depende de:** `agent-browser-request`, `webpage-guest-registry`, `floating-layer`, `window.felixo.canvas`
+- **Sobreposição:** fixed inset-x-0 bottom-28 z-50, centralizado (max-w-md), pointer-events só no cartão; acima do cartão de olhar (bottom-4). data-felixo-floating-layer. Não rouba o foco.
+- **Testes:** `electron/services/agent-webpage-act-ipc-handlers.test.cjs`
+
+| Estado | Quando |
+| --- | --- |
+| normal | Pedido mais antigo com origem, endereço da página (sem query nem hash), perfil do bloco, o que o agente quer (clicar em x,y ou digitar N caracteres, nunca o texto) e "+N na fila". Montado no App. |
+| empty | Sem pedido que precise da pessoa: não renderiza. Dentro da sessão curta o main atende sozinho e o cartão não aparece. |
+| error | Decisão recusada, confirmação faltando ou webContents que não é webview da janela: role="alert" preso ao pedido. |
+| pending | busy ou nos 600 ms depois de trocar de pedido ou de estado do campo: botões desabilitados. |
+| denied | Bloco que não está aberto no canvas: só Recusar. Campo de senha, de pagamento ou quadro interno: o cartão pede "Confirmar neste campo" a cada digitação, mesmo na sessão. |
+
+| Controle | Gatilho | Efeito | Falha conhecida | Teste |
+| --- | --- | --- | --- | --- |
+| `onClick={onClick(true)}` (button) | clique | Permitir por 5 min (ou Confirmar neste campo): agent-webpage-act:decide abre a sessão curta do bloco e atende o pedido; num campo sensível só digita com confirmarCampo. (desabilitado: busy ou janela de 600 ms; some quando o bloco não está aberto) | Recusa, pedido mudado, confirmação faltando ou guest inválido: role="alert"; o segundo clique de um duplo clique é ignorado. | — |
+| `onClick={onClick(false)}` (button) | clique | Recusar: agent-webpage-act:decide (aprovar false) marca o pedido como recusado pela pessoa e não abre sessão. (desabilitado: busy ou janela de 600 ms) | Recusa: role="alert". | — |
 
 ### Faixa de retomada do terminal
 

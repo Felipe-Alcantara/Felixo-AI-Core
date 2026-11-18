@@ -5,6 +5,7 @@ import { PerformanceModeProvider } from './features/shared/performance/Performan
 import { HardwareNotices } from './features/shared/hardware/HardwareNotices'
 import { SystemDesignLoginNotice } from './features/shared/system-design/SystemDesignLoginNotice'
 import { AgentBrowserRequestCard } from './features/canvas/components/AgentBrowserRequestCard'
+import { AgentWebpageActCard } from './features/canvas/components/AgentWebpageActCard'
 import { AgentWebpageInspectCard } from './features/canvas/components/AgentWebpageInspectCard'
 import { LinkChooserHost } from './features/shared/links/LinkChooserHost'
 
@@ -85,6 +86,8 @@ function App() {
           {/* Pedido para olhar um bloco Página Web (`felixo browser capture`/`read`):
               a pessoa permite uma vez. No chat não há bloco aberto: só recusa. */}
           <AgentWebpageInspectCard />
+          {/* Clicar e digitar (`felixo browser click`/`type`): a pessoa abre uma sessão curta por bloco. */}
+          <AgentWebpageActCard />
         </div>
       </PerformanceModeProvider>
     </ThemeProvider>

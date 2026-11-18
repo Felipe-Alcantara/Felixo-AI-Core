@@ -31,6 +31,7 @@ const ACOES_ACEITAS = [
   'canvas-escrever',
   'perguntar',
   'pagina-inspecionar',
+  'pagina-agir',
 ]
 
 /** Limites de uma pergunta com opções (o diálogo precisa caber numa tela). */
@@ -51,6 +52,11 @@ const MODOS_ABERTURA_PAGINA = ['externo', 'embutido']
 /** O que um agente pode pedir de um bloco Página Web: só olhar, nunca agir. */
 const TIPOS_INSPECAO_PAGINA = ['captura', 'dom']
 const ID_ELEMENTO_MAX = 200
+
+/** O que um agente pode fazer num bloco Página Web depois da sessão curta: clicar e digitar. */
+const TIPOS_ACAO_PAGINA = ['clicar', 'digitar']
+const TEXTO_DIGITAR_MAX = 2000
+const COORDENADA_MAX = 20000
 
 /** Estados possíveis de um pedido. */
 const ESTADOS = {
@@ -130,6 +136,42 @@ function normalizarPedido(acao, opcoes = {}) {
       throw new Error(`Tipo de inspeção não reconhecido: "${tipo}". Aceitos: ${TIPOS_INSPECAO_PAGINA.join(', ')}.`)
     }
     return { acao: nome, comCommit: false, idDoElemento, tipo }
+  }
+
+  // Agir num bloco Página Web (clicar, digitar). Pendente até a pessoa abrir
+  // uma sessão curta no cartão; dentro dela o app atende sozinho (ver
+  // agent-webpage-act-ipc-handlers.cjs). O texto digitado só mora neste
+  // arquivo enquanto o pedido está pendente: `resolver` o apaga.
+  if (nome === 'pagina-agir') {
+    const idDoElemento = typeof opcoes?.idDoElemento === 'string' ? opcoes.idDoElemento.trim() : ''
+    const tipo = typeof opcoes?.tipo === 'string' ? opcoes.tipo.trim() : ''
+    if (!idDoElemento) {
+      throw new Error('Informe o id do bloco Página Web (veja "felixo canvas listar").')
+    }
+    if (idDoElemento.length > ID_ELEMENTO_MAX) {
+      throw new Error(`Id do bloco muito grande (máximo ${ID_ELEMENTO_MAX} caracteres).`)
+    }
+    if (!TIPOS_ACAO_PAGINA.includes(tipo)) {
+      throw new Error(`Ação na página não reconhecida: "${tipo}". Aceitas: ${TIPOS_ACAO_PAGINA.join(', ')}.`)
+    }
+    if (tipo === 'clicar') {
+      const coordenada = (valor) =>
+        (typeof valor === 'number' || (typeof valor === 'string' && valor.trim() !== '')) && Number.isFinite(Number(valor))
+          ? Math.round(Number(valor))
+          : NaN
+      const x = coordenada(opcoes?.x)
+      const y = coordenada(opcoes?.y)
+      if (!(x >= 0 && x <= COORDENADA_MAX && y >= 0 && y <= COORDENADA_MAX)) {
+        throw new Error(`Informe x e y do clique em pixels CSS da página (0 a ${COORDENADA_MAX}).`)
+      }
+      return { acao: nome, comCommit: false, idDoElemento, tipo, x, y }
+    }
+    const texto = typeof opcoes?.texto === 'string' ? opcoes.texto : ''
+    if (!texto) throw new Error('Informe o texto a digitar.')
+    if (texto.length > TEXTO_DIGITAR_MAX) {
+      throw new Error(`Texto muito grande (máximo ${TEXTO_DIGITAR_MAX} caracteres).`)
+    }
+    return { acao: nome, comCommit: false, idDoElemento, tipo, texto }
   }
 
   // Leitura: nada aqui decide SE o elemento existe (isso é responsabilidade
@@ -335,6 +377,8 @@ function criarRepositorioDePedidos(opcoes) {
       resolvidoEm: new Date(agora()).toISOString(),
       resultado: desfecho?.resultado ?? null,
     }
+    // O que o agente digitou (pode ser senha) não fica no disco depois do desfecho.
+    delete atualizado.texto
 
     sistemaDeArquivos.writeFileSync(
       arquivoDoPedido(pedido.id),
@@ -414,6 +458,7 @@ module.exports = {
   OPCOES_MIN,
   ESTADOS,
   MODOS_ABERTURA_PAGINA,
+  TIPOS_ACAO_PAGINA,
   TIPOS_INSPECAO_PAGINA,
   VALIDADE_MS,
   criarRepositorioDePedidos,

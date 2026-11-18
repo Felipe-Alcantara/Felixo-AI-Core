@@ -112,6 +112,9 @@ const VERBOS_BROWSER_STATUS = ['status', 'ver-pedido']
 // Olhar um bloco Página Web: só leitura, mas sempre com a permissão da pessoa.
 const VERBOS_BROWSER_CAPTURA = ['capture', 'captura', 'capturar']
 const VERBOS_BROWSER_DOM = ['read', 'ler']
+// Agir num bloco Página Web: só dentro de uma sessão curta que a pessoa abre no app.
+const VERBOS_BROWSER_CLICAR = ['click', 'clicar']
+const VERBOS_BROWSER_DIGITAR = ['type', 'digitar']
 const VERBOS_CANVAS_LISTAR = ['listar']
 const VERBOS_CANVAS_LER = ['ler']
 const FERRAMENTAS_PERGUNTAR = ['perguntar']
@@ -211,18 +214,26 @@ async function executar(argumentos, dependencias = {}) {
     }
 
     const tipoDeInspecao = VERBOS_BROWSER_CAPTURA.includes(verbo) ? 'captura' : VERBOS_BROWSER_DOM.includes(verbo) ? 'dom' : null
-    if (tipoDeInspecao) {
+    const tipoDeAcao = VERBOS_BROWSER_CLICAR.includes(verbo) ? 'clicar' : VERBOS_BROWSER_DIGITAR.includes(verbo) ? 'digitar' : null
+    if (tipoDeInspecao || tipoDeAcao) {
       const { esperar = esperarPadrao, esperaMaximaMs = PERGUNTAR_ESPERA_MAXIMA_MS } = dependencias
       if (!argumento) {
         return { saida: '', erro: 'Informe o id do bloco Página Web (veja "felixo canvas listar").', codigo: 2 }
       }
       let pedido
       try {
-        pedido = criarPedidos().registrar('pagina-inspecionar', {
-          idDoElemento: argumento,
-          tipo: tipoDeInspecao,
-          origem: diretorioAtual(),
-        })
+        pedido = tipoDeAcao
+          ? criarPedidos().registrar('pagina-agir', {
+              idDoElemento: argumento,
+              tipo: tipoDeAcao,
+              ...(tipoDeAcao === 'clicar' ? { x: argumento2, y: restantes[2] } : { texto: argumento2 }),
+              origem: diretorioAtual(),
+            })
+          : criarPedidos().registrar('pagina-inspecionar', {
+              idDoElemento: argumento,
+              tipo: tipoDeInspecao,
+              origem: diretorioAtual(),
+            })
       } catch (error) {
         return { saida: '', erro: error instanceof Error ? error.message : 'Não foi possível registrar o pedido.', codigo: 2 }
       }
@@ -250,7 +261,11 @@ async function executar(argumentos, dependencias = {}) {
         }
       }
       return {
-        saida: opcoes.json ? JSON.stringify(resolvido.resultado, null, 2) : formatarInspecaoDePagina(resolvido.resultado),
+        saida: opcoes.json
+          ? JSON.stringify(resolvido.resultado, null, 2)
+          : tipoDeAcao
+            ? formatarAcaoNaPagina(resolvido.resultado)
+            : formatarInspecaoDePagina(resolvido.resultado),
         codigo: 0,
       }
     }
@@ -574,6 +589,14 @@ async function aguardarResolucao(pedidos, id, esperar, { maximoMs = CANVAS_ESPER
  * @param {string} comandoStatus
  * @returns {{ saida: string, codigo: number }}
  */
+function formatarAcaoNaPagina(resultado) {
+  const feito =
+    resultado.tipo === 'clicar'
+      ? `Clique em (${resultado.x},${resultado.y})`
+      : `${resultado.caracteres} caractere(s) digitado(s)${resultado.campoSensivel ? ` (campo ${resultado.campoSensivel}, confirmado pela pessoa)` : ''}`
+  return [`${feito} na página ${resultado.url}.`, 'Confira o resultado com "felixo browser capture" ou "read".'].join('\n')
+}
+
 function formatarInspecaoDePagina(resultado) {
   if (resultado.tipo === 'captura') {
     return [

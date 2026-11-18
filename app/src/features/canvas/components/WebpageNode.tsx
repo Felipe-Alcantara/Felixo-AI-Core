@@ -29,6 +29,7 @@ import {
 } from '../services/webview-mount'
 import { WebviewProfileMenu } from './WebviewProfileMenu'
 import { registerWebpageGuest } from '../services/webpage-guest-registry'
+import { formatSessionTime, useWebpageActSession } from '../hooks/useWebpageActSession'
 import { describeWebviewProfile, partitionForWebviewProfile } from '../services/webview-profile'
 import { useWebviewProfiles } from '../hooks/useWebviewProfiles'
 import { webviewLinkMenu, type WebviewContextMenuParams } from '../services/webview-context-menu'
@@ -110,6 +111,7 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
   // O cartão de "um agente quer olhar esta página" precisa saber qual guest é
   // este bloco (ver `webpage-guest-registry`).
   const profileName = profileDisplay.name
+  const actSession = useWebpageActSession(id)
   useEffect(() => {
     if (guestId === null || !webview) return undefined
     return registerWebpageGuest(id, {
@@ -484,6 +486,26 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
             className="felixo-btn-icon rounded-sm p-0.5 hover:bg-white/10"
           >
             <X size={12} aria-hidden />
+          </button>
+        </div>
+      )}
+
+      {actSession.secondsLeft !== null && (
+        <div
+          role="status"
+          data-felixo-agent-act-session
+          className="nodrag flex items-center gap-2 border-b border-white/10 bg-[color-mix(in_srgb,var(--color-warning)_14%,transparent)] px-2 py-1 text-[11px] text-(--color-warning)"
+        >
+          <ShieldAlert size={12} aria-hidden className="shrink-0" />
+          <span className="min-w-0 flex-1 truncate">
+            Um agente pode clicar e digitar aqui por {formatSessionTime(actSession.secondsLeft)}
+          </span>
+          <button
+            type="button"
+            onClick={actSession.end}
+            className="felixo-btn shrink-0 rounded-sm border border-current px-1.5 py-0.5 hover:bg-white/10"
+          >
+            Encerrar agora
           </button>
         </div>
       )}

@@ -18,6 +18,7 @@ const path = require('node:path')
 
 const { redactSensitiveText } = require('./git-secret-redaction.cjs')
 const { redactUrlSecrets } = require('./url-secret-redaction.cjs')
+const { classificarCampo } = require('./agent-webpage-field.cjs')
 
 const ELEMENTOS_MAX = 200
 const TEXTO_MAX = 8000
@@ -48,7 +49,7 @@ function enderecoSemSegredo(url) {
 }
 
 /** Roda no mundo isolado da página. Retorna só dados simples (serializável). */
-function lerDomNaPagina(limites) {
+function lerDomNaPagina(limites, classificar) {
   const visivel = (el, r) => {
     if (r.width <= 0 || r.height <= 0) return false
     const css = getComputedStyle(el)
@@ -74,7 +75,17 @@ function lerDomNaPagina(limites) {
     const tag = el.tagName.toLowerCase()
     const tipo = (el.getAttribute('type') || '').toLowerCase()
     if (tag === 'input' && tipo === 'hidden') continue
-    const sensivel = tag === 'input' && tipo === 'password'
+    const sensivel = Boolean(
+      classificar({
+        tag,
+        type: tipo,
+        autocomplete: el.getAttribute('autocomplete'),
+        name: el.getAttribute('name'),
+        id: el.id,
+        placeholder: el.getAttribute('placeholder'),
+        ariaLabel: el.getAttribute('aria-label'),
+      }),
+    )
     elementos.push({
       tag,
       ...(tipo ? { tipo } : {}),
@@ -146,7 +157,7 @@ async function inspecionarPagina({ guest, tipo, pastaCapturas, idDoPedido, redac
   }
   const bruto = await guest.executeJavaScriptInIsolatedWorld(MUNDO_ISOLADO, [
     {
-      code: `(${lerDomNaPagina.toString()})(${JSON.stringify({ elementos: ELEMENTOS_MAX, nome: NOME_MAX, texto: TEXTO_MAX })})`,
+      code: `(${lerDomNaPagina.toString()})(${JSON.stringify({ elementos: ELEMENTOS_MAX, nome: NOME_MAX, texto: TEXTO_MAX })}, ${classificarCampo.toString()})`,
     },
   ])
   return { ok: true, tipo, url, ...redigirDom(bruto, redact) }

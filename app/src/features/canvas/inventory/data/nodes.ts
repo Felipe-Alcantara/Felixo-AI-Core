@@ -460,7 +460,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
       error: 'did-fail-load (exceto -3, ABORTED): faixa vermelha com a descrição do erro.',
       denied: 'Endereço recusado pela política de URL (explainUrlInput): faixa role="alert" "Endereço não aberto: …", aria-invalid na barra e o foco fica nela. Popup negado por passar do limite (no máximo 2 janelas da página ao mesmo tempo, contando as que um popup abre): faixa role="status" "Esta página tentou abrir mais de 2 janelas ao mesmo tempo, e a extra não abriu…" até fechar o aviso ou navegar.',
       disabled: 'Voltar/Avançar sem histórico (canGoBack/canGoForward falsos).',
-      pending: 'Pedido de permissão do site (ou de um popup que a página abriu) sem decisão lembrada: faixa role="region" "Pedido de permissão do site" com o site e o que ele quer, Permitir e Negar; sem foco automático; "(mais N na fila)" quando há outros pedidos do bloco.',
+      pending: 'Sessão curta de agente ativa (role="status"): faixa "Um agente pode clicar e digitar aqui por m:ss" com Encerrar agora; some sozinha no prazo. Pedido de permissão do site (ou de um popup que a página abriu) sem decisão lembrada: faixa role="region" "Pedido de permissão do site" com o site e o que ele quer, Permitir e Negar; sem foco automático; "(mais N na fila)" quando há outros pedidos do bloco.',
     },
     controls: [
       {
@@ -480,6 +480,12 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
         kind: 'button',
         effect: 'Negar: webview-permissions:respond com allow=false; o main grava "denied" (lembrado até revogar) e responde ao site; sem resposta nenhuma o site também fica sem a permissão.',
         failure: 'Mesmo caso do Permitir: pedido que sumiu não grava nada.',
+      },
+      {
+        locator: 'onClick={actSession.end}',
+        kind: 'button',
+        effect: 'Encerrar agora: agent-webpage-act:end-session apaga a sessão curta do bloco no main; o agente volta a precisar do cartão para clicar e digitar.',
+        failure: 'Sem sessão (já acabou) não faz nada; a faixa some pelo aviso de sessões.',
       },
       {
         locator: 'aria-label="Voltar"',
@@ -515,7 +521,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
       'processo principal: cookies e logins na partição do perfil (persist:…)',
       'histórico de navegação: só na sessão do webview, nunca serializado',
     ],
-    ipc: ['canvas:save', 'canvas:delete', 'external-links:open-failed', 'webview-permissions:pending', 'webview-permissions:respond', 'webview-popups:blocked'],
+    ipc: ['canvas:save', 'canvas:delete', 'external-links:open-failed', 'webview-permissions:pending', 'webview-permissions:respond', 'webview-popups:blocked', 'agent-webpage-act:list-sessions', 'agent-webpage-act:sessions', 'agent-webpage-act:end-session'],
     dependsOn: [
       'useReactFlow',
       'useWebviewSitePermissions / describeSitePermissionRequest (webview-site-permissions)',

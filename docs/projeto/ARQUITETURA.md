@@ -1452,6 +1452,30 @@ até a pessoa decidir. Nada olha a página sem o clique em **Permitir** no
 - O arquivo do pedido em `agent-requests` guarda quem pediu (`origem`), o
   quê, quando e o resultado: é o registro de auditoria desta fatia.
 
+#### Clicar e digitar num bloco Página Web (sessão curta)
+
+`felixo browser click <id> <x> <y>` e `felixo browser type <id> "<texto>"`
+registram `pagina-agir` (`tipo` = `clicar` ou `digitar`, lista fechada). O
+`agent-webpage-act-ipc-handlers.cjs` mantém uma **sessão por bloco, só em
+memória**, de 5 minutos: o cartão `AgentWebpageActCard` abre (Permitir por 5
+min), o main atende sozinho os pedidos seguintes do bloco e a faixa do
+`WebpageNode` (`useWebpageActSession`) mostra o tempo e encerra na hora
+(`agent-webpage-act:end-session`). Sessão acabada, guest recarregado ou fechado
+volta o pedido ao cartão. Capturar e ler continuam com permissão por pedido.
+
+- Clique: `sendInputEvent` (mouseMove/Down/Up) no webContents validado por
+  `guestValido`. Digitação: `insertText` no campo em foco, lido no mundo
+  isolado.
+- `classificarCampo` (`agent-webpage-field.cjs`) reconhece `input[type=password]`,
+  `autocomplete` `cc-*`/`*-password`, nomes comuns de cartão e senha; frame
+  interno conta como sensível (não dá para olhar dentro). Campo sensível não
+  entra na sessão: o pedido fica pendente com `campoSensivel` e só digita com
+  `confirmarCampo`, a cada vez. A leitura do DOM usa o mesmo classificador
+  para marcar `sensivel`.
+- O texto digitado nunca vai ao cartão (só `caracteres`), ao resultado nem a
+  log; `resolver` apaga `texto` do arquivo do pedido no desfecho. Enquanto o
+  pedido está pendente o texto está nesse arquivo.
+
 #### Pedido de agente para abrir página
 
 `felixo browser open` não abre nada sozinho. O pedido válido fica pendente na

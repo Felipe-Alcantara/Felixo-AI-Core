@@ -707,3 +707,31 @@ test('browser capture: sem resposta a tempo devolve o id e código 1; sem id é 
   const semId = await executar(['browser', 'capture'], deps)
   assert.equal(semId.codigo, 2)
 })
+
+test('browser click/type: registram o pedido de ação, esperam o desfecho e nunca imprimem o texto digitado', async () => {
+  const { pasta, deps } = dependencias()
+  const responder = (resultado) => async () => {
+    const repositorio = criarRepositorioDePedidos({ pasta })
+    const [pedido] = repositorio.listarPendentes({ acao: 'pagina-agir' })
+    if (pedido) repositorio.resolver(pedido.id, { aceito: true, resultado })
+  }
+  const clique = await executar(['browser', 'click', 'w1', '10', '20'], {
+    ...deps,
+    esperar: responder({ ok: true, tipo: 'clicar', x: 10, y: 20, url: 'https://example.com/' }),
+  })
+  assert.equal(clique.codigo, 0)
+  assert.match(clique.saida, /Clique em \(10,20\)/)
+
+  const digitado = await executar(['navegador', 'digitar', 'w1', 'minha-senha'], {
+    ...deps,
+    esperar: responder({ ok: true, tipo: 'digitar', caracteres: 11, campoSensivel: 'senha', url: 'https://example.com/' }),
+  })
+  assert.equal(digitado.codigo, 0)
+  assert.match(digitado.saida, /11 caractere\(s\) digitado\(s\) \(campo senha/)
+  assert.doesNotMatch(digitado.saida, /minha-senha/)
+
+  const ruim = await executar(['browser', 'click', 'w1', 'abc', '2'], deps)
+  assert.equal(ruim.codigo, 2)
+  const semTexto = await executar(['browser', 'type', 'w1'], deps)
+  assert.equal(semTexto.codigo, 2)
+})

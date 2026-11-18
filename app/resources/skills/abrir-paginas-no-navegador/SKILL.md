@@ -81,7 +81,8 @@ com o Fetch All.
 
 Com um bloco Página Web já aberto no canvas (o id sai de `felixo canvas
 listar`), você pode pedir para **olhar** a página. Só olhar: não existe
-clicar, digitar, ler cookie, senha nem valor de campo.
+ler cookie, senha nem valor de campo. Clicar e digitar existem à parte, na
+seção "Clicar e digitar" abaixo.
 
 ```bash
 felixo browser capture <id-do-bloco>   # PNG da página; imprime o caminho, o tamanho e o devicePixelRatio
@@ -99,3 +100,21 @@ felixo browser read <id-do-bloco>      # elementos interativos (papel, nome, ret
   query nem hash.
 - Código 1 = ninguém respondeu a tempo (o id fica na saída: `felixo browser
   status <id> --json` mostra o desfecho depois).
+
+## Clicar e digitar num bloco Página Web
+
+```bash
+felixo browser click <id-do-bloco> <x> <y>    # x,y em pixels CSS da página (os retângulos do read)
+felixo browser type <id-do-bloco> "<texto>"   # digita no campo em foco: clique nele antes
+```
+
+- A pessoa libera o bloco por uma **sessão curta de 5 minutos** no cartão do
+  app. Sem sessão o comando bloqueia até ela permitir (código 3 se recusar: não
+  repita); com sessão age na hora. O bloco mostra uma faixa com o tempo e um
+  botão para encerrar. Acabou o tempo, peça de novo.
+- Campo de senha, de pagamento (`autocomplete` `cc-*`, nomes como `cardnumber`,
+  `cvv`) ou quadro interno: **cada digitação** pede a confirmação da pessoa,
+  mesmo dentro da sessão. Peça só quando for necessário.
+- O texto digitado nunca volta na saída nem fica registrado; o resultado diz só
+  quantos caracteres foram. Confira o efeito com `capture` ou `read`.
+- Não há rolagem, teclas especiais nem log de rede ainda.

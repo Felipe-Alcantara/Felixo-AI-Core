@@ -171,6 +171,16 @@ const AJUDA = `felixo fetch-all — varre os repositórios git da máquina e rep
       traz o motivo — URL, perfil, formato — e não é resposta dela. "expirou"
       = ninguém respondeu em 1 h.
 
+  felixo browser click <id-do-bloco> <x> <y> [--json]
+  felixo browser type <id-do-bloco> "<texto>" [--json]
+      Agem num bloco Página Web, só dentro de uma SESSÃO CURTA (5 min) que a
+      pessoa abre no cartão do app. Sem sessão, o comando BLOQUEIA até ela
+      permitir (5 min); com sessão, age na hora. click usa x,y em pixels CSS
+      da página (os retângulos de "read"); type digita no campo em foco, então
+      clique nele antes. Campo de senha ou de pagamento pede uma confirmação
+      da pessoa a cada digitação, mesmo na sessão. O texto digitado nunca
+      volta nem fica registrado. Recusa da pessoa dá código 3: não repita.
+
   felixo browser capture <id-do-bloco> [--json]
   felixo browser read <id-do-bloco> [--json]
       Olham um bloco Página Web (o id vem de "felixo canvas listar"): capture

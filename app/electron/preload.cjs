@@ -280,6 +280,21 @@ contextBridge.exposeInMainWorld('felixo', {
       ipcRenderer.on('agent-webpage:requests', handler)
       return () => ipcRenderer.removeListener('agent-webpage:requests', handler)
     },
+    // Pedidos de agente para clicar e digitar num bloco Página Web, e a sessão curta que a pessoa abre.
+    listWebpageActRequests: () => ipcRenderer.invoke('agent-webpage-act:list-requests'),
+    decideWebpageActRequest: (params) => ipcRenderer.invoke('agent-webpage-act:decide', params),
+    onWebpageActRequests: (callback) => {
+      const handler = (_event, data) => callback(data)
+      ipcRenderer.on('agent-webpage-act:requests', handler)
+      return () => ipcRenderer.removeListener('agent-webpage-act:requests', handler)
+    },
+    listWebpageActSessions: () => ipcRenderer.invoke('agent-webpage-act:list-sessions'),
+    endWebpageActSession: (params) => ipcRenderer.invoke('agent-webpage-act:end-session', params),
+    onWebpageActSessions: (callback) => {
+      const handler = (_event, data) => callback(data)
+      ipcRenderer.on('agent-webpage-act:sessions', handler)
+      return () => ipcRenderer.removeListener('agent-webpage-act:sessions', handler)
+    },
     listWriteRequests: () => ipcRenderer.invoke('canvas:list-write-requests'),
     resolveWriteRequest: (params) => ipcRenderer.invoke('canvas:resolve-write-request', params),
     onWriteRequests: (callback) => {

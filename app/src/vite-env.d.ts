@@ -32,6 +32,8 @@ import type {
 import type { PromptInsertionMetadata } from './features/shared/types/prompt-insertion'
 import type {
   CanvasAgentBrowserRequest,
+  CanvasAgentWebpageActRequest,
+  CanvasAgentWebpageActSession,
   CanvasAgentWebpageInspectRequest,
   CanvasAgentQuestion,
   CanvasImageArtifact,
@@ -913,6 +915,28 @@ declare global {
         }) => Promise<CliInvokeResult & { resolved?: { estado: string } | null }>
         onWebpageInspectRequests: (
           callback: (data: { requests: CanvasAgentWebpageInspectRequest[] }) => void,
+        ) => () => void
+        listWebpageActRequests: () => Promise<
+          CliInvokeResult & { requests?: CanvasAgentWebpageActRequest[] }
+        >
+        /** Aprovar abre a sessão curta do bloco; `confirmarCampo` vale só para o campo sensível do pedido. */
+        decideWebpageActRequest: (params: {
+          id: string
+          aprovar: boolean
+          idDoElemento: string
+          tipo: 'clicar' | 'digitar'
+          webContentsId?: number
+          confirmarCampo?: boolean
+        }) => Promise<CliInvokeResult & { resolved?: { estado: string } | null }>
+        onWebpageActRequests: (
+          callback: (data: { requests: CanvasAgentWebpageActRequest[] }) => void,
+        ) => () => void
+        listWebpageActSessions: () => Promise<
+          CliInvokeResult & { sessions?: CanvasAgentWebpageActSession[] }
+        >
+        endWebpageActSession: (params: { idDoElemento: string }) => Promise<CliInvokeResult>
+        onWebpageActSessions: (
+          callback: (data: { sessions: CanvasAgentWebpageActSession[] }) => void,
         ) => () => void
         listWriteRequests: () => Promise<
           CliInvokeResult & { requests?: CanvasWriteAgentRequest[] }
