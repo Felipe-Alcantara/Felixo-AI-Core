@@ -29,8 +29,8 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 
 ## Números
 
-- **Elementos:** 104 (10 blocos, 16 ferramentas, 78 outras superfícies)
-- **Controles:** 404, dos quais 61 com teste específico
+- **Elementos:** 105 (10 blocos, 16 ferramentas, 79 outras superfícies)
+- **Controles:** 406, dos quais 61 com teste específico
 - **Elementos sem nenhum teste:** 3
 - **Lacunas:** 230 (alto 4, médio 122, baixo 104), em 62 tasks
 
