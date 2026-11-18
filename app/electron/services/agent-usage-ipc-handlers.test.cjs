@@ -332,3 +332,29 @@ test('a captura por terminal entrega a janela à conta do terminal e manda o lot
     watching.stopWatching?.()
   }
 })
+
+test('claude-cost-history lê as pastas informadas, limita o período e devolve erro sem vazar', async () => {
+  const fs = require('node:fs')
+  const os = require('node:os')
+  const path = require('node:path')
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-cost-ipc-'))
+  fs.mkdirSync(path.join(root, 'projects', 'p'), { recursive: true })
+  const now = new Date().toISOString()
+  const line = (id, timestamp) =>
+    JSON.stringify({ type: 'assistant', cwd: '/a/projeto-x', timestamp, requestId: id, message: { id, model: 'm', usage: { input_tokens: 7, output_tokens: 1 } } })
+  fs.writeFileSync(path.join(root, 'projects', 'p', 'a.jsonl'), [line('1', now), line('2', '2020-01-01T00:00:00.000Z')].join('\n'))
+  try {
+    registerAgentUsageIpcHandlers({
+      service: { list: async () => ({}), refresh: async () => ({}), refreshAccount: async () => ({}), refreshLocal: async () => ({}) },
+      createSessionCapture: semCaptura,
+      getClaudeRoots: () => [root],
+      claudePricingFile: path.join(root, 'nao-existe.json'),
+    })
+    const result = await handlers.get('agent-usage:claude-cost-history')({}, { days: 5 })
+    assert.equal(result.ok, true)
+    assert.equal(result.pricing, null)
+    assert.deepEqual(result.rows.map((row) => [row.project, row.input]), [['projeto-x', 7]])
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})

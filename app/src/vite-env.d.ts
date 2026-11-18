@@ -56,6 +56,7 @@ import type { ExternalOpenFailure } from './features/shared/links/link-open-fail
 import type { GpuPreference, GpuPreferenceStatus } from './features/shared/graphics/gpu-preference'
 import type { HardwareProfile } from './features/shared/performance/performance-suggestion'
 import type { PromptInsertionMetadata } from './features/shared/types/prompt-insertion'
+import type { ClaudeCostHistoryResult } from './features/shared/agent-usage/claude-cost'
 import type {
   ClaudeConfigOption,
   ClaudeTerminalDefaultsChange,
@@ -1189,6 +1190,8 @@ declare global {
         claudeStatuslineStatus: () => Promise<ClaudeStatuslineState>
         enableClaudeStatusline: () => Promise<ClaudeStatuslineState>
         disableClaudeStatusline: () => Promise<ClaudeStatuslineState>
+        /** Custo equivalente por dia, projeto e modelo, lido das conversas locais. */
+        claudeCostHistory: (params?: { days?: number }) => Promise<ClaudeCostHistoryResult>
         onChanged: (
           callback: (dashboard: AgentUsageDashboard) => void,
         ) => () => void

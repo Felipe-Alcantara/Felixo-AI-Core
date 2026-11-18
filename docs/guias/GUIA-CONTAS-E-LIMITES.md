@@ -208,6 +208,16 @@ O processo principal faz um `stat` por segundo por terminal vivo, manda ao rende
 tem uma status line própria, o script do app a chama e mostra a saída dela. Terminal fechado some da
 memória e o arquivo é apagado. Codex e Gemini ainda não têm esta captura por terminal.
 
+**Custo por projeto e por modelo (aba Custo).** O painel soma, das conversas locais do Claude
+(`projects/**/*.jsonl` do login do sistema e da pasta de cada perfil de conta), os tokens de cada
+resposta por dia, projeto (só o nome da pasta) e modelo, sem repetir respostas copiadas por conversa
+retomada. Nunca sai texto, título nem caminho. O **preço não está no código**: o custo equivalente só
+aparece para o modelo que estiver em `claude-pricing.json`, na pasta de dados do app, no formato
+`{ "source": "<origem>", "asOf": "AAAA-MM-DD", "currency": "USD", "models": { "<prefixo do modelo>":
+{ "input": 0, "output": 0, "cacheRead": 0, "cacheWrite5m": 0, "cacheWrite1h": 0 } } }` (dólar por milhão de
+tokens; `source` e `asOf` são obrigatórios, senão o arquivo é ignorado). Sem arquivo, ou para modelo sem preço,
+a aba mostra os tokens e "sem preço", nunca zero. Dia em UTC. IPC: `agent-usage:claude-cost-history`.
+
 A coleta de status line do Claude Code continua **opcional e explícita** e serve
 como fallback local: pelo botão do painel, o app registra um script no arquivo
 de configuração do Claude Code, preserva uma status line que já exista (recusa

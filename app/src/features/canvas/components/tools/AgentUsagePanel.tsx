@@ -3,6 +3,7 @@ import { ChevronRight, ExternalLink, Gauge, PlugZap, Plus, RefreshCw, Trash2 } f
 import { CanvasPanel } from './CanvasPanel'
 import { AccountChainSection } from './AccountChainSection'
 import { AccountSwitchHistory } from './AccountSwitchHistory'
+import { ClaudeCostTab } from './ClaudeCostTab'
 import { CodexSessionFieldsNotice, ProviderSummaryTable } from './AgentUsageProviderSummary'
 import { rovingIndex } from '../../services/keyboard-focus'
 import {
@@ -68,6 +69,7 @@ const USAGE_TABS: ReadonlyArray<{ id: UsageTab; label: string }> = [
   { id: 'uso', label: 'Uso agora' },
   { id: 'cadeia', label: 'Cadeia' },
   { id: 'trocas', label: 'Trocas' },
+  { id: 'custo', label: 'Custo' },
 ]
 
 /**
@@ -399,6 +401,12 @@ export function AgentUsagePanel({
       {tab === 'trocas' && (
         <div role="tabpanel" id={`${tabsId}-panel-trocas`} aria-labelledby={`${tabsId}-tab-trocas`}>
           <AccountSwitchHistory onFocusNode={onFocusNode} existingNodeIds={existingNodeIds} />
+        </div>
+      )}
+
+      {tab === 'custo' && (
+        <div role="tabpanel" id={`${tabsId}-panel-custo`} aria-labelledby={`${tabsId}-tab-custo`}>
+          <ClaudeCostTab />
         </div>
       )}
 

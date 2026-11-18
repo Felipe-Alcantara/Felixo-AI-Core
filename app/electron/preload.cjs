@@ -501,6 +501,7 @@ contextBridge.exposeInMainWorld('felixo', {
       ipcRenderer.invoke('agent-usage:enable-claude-statusline'),
     disableClaudeStatusline: () =>
       ipcRenderer.invoke('agent-usage:disable-claude-statusline'),
+    claudeCostHistory: (params) => ipcRenderer.invoke('agent-usage:claude-cost-history', params),
     // Empurrado pelo processo principal: o painel inteiro depois de uma rodada agendada.
     onChanged: (callback) => {
       const handler = (_event, dashboard) => callback(dashboard)

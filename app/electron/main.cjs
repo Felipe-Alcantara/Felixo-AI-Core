@@ -1177,6 +1177,20 @@ app.whenReady().then(async () => {
     statuslineDir: claudeStatuslineDir,
     statusline: claudeStatusline,
     getMainWindow,
+    // Conversas do Claude ficam no login do sistema e na pasta de cada perfil de conta.
+    getClaudeRoots: () => {
+      const roots = new Set([path.join(require('node:os').homedir(), '.claude')])
+      for (const conta of cliAccounts.list()) {
+        if (conta.providerId !== 'claude') continue
+        try {
+          const dir = cliAccounts.buildEnv(conta.id, 'claude').CLAUDE_CONFIG_DIR
+          if (dir) roots.add(dir)
+        } catch {
+          // conta removida no meio da leitura
+        }
+      }
+      return [...roots]
+    },
     getActiveSessions: () => ptyHandlers?.manager?.listarSessoesVivas?.() ?? [],
     powerMonitor,
     onSchedulerMetrics: (event) => logQaEvent(event),

@@ -16,6 +16,7 @@ const { createAgentUsageWatcher } = require('./agent-usage-watcher.cjs')
 const {
   createAgentUsageSessionCapture,
 } = require('./agent-usage-session-capture.cjs')
+const { scanClaudeUsage, loadPricing } = require('./claude-usage-history.cjs')
 
 /**
  * Erro devolvido ao renderer. A mensagem de uma exceção pode trazer texto de CLI
@@ -42,6 +43,8 @@ function registerAgentUsageIpcHandlers({
   getActiveSessions = () => [],
   powerMonitor = null,
   onSchedulerMetrics = () => {},
+  getClaudeRoots = () => [],
+  claudePricingFile = path.join(getAppPaths().userData, 'claude-pricing.json'),
 } = {}) {
   const sendDashboard = (dashboard) => {
     const window = getMainWindow()
@@ -278,6 +281,22 @@ function registerAgentUsageIpcHandlers({
   })
 
   ipcMain.handle('agent-usage:sessions', () => sessionCapture.list())
+
+  // Custo equivalente por dia, projeto e modelo, lido das conversas locais; o preço vem do arquivo do usuário.
+  ipcMain.handle('agent-usage:claude-cost-history', async (_event, params = {}) => {
+    try {
+      const days = Number.isFinite(params?.days) ? Math.min(Math.max(Math.trunc(params.days), 1), 400) : 30
+      const sinceMs = Date.now() - days * 86400000
+      const history = await scanClaudeUsage({
+        roots: getClaudeRoots(),
+        pricing: loadPricing(claudePricingFile),
+        sinceMs,
+      })
+      return { ok: true, ...history }
+    } catch (error) {
+      return usageErrorResult(error, 'Não foi possível ler o histórico de custo do Claude.')
+    }
+  })
 
   watcher.start()
   sessionCapture.start()

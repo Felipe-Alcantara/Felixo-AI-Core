@@ -29,8 +29,8 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 
 ## Números
 
-- **Elementos:** 107 (10 blocos, 17 ferramentas, 80 outras superfícies)
-- **Controles:** 416, dos quais 62 com teste específico
+- **Elementos:** 108 (10 blocos, 17 ferramentas, 81 outras superfícies)
+- **Controles:** 419, dos quais 62 com teste específico
 - **Elementos sem nenhum teste:** 3
 - **Lacunas:** 233 (alto 4, médio 124, baixo 105), em 65 tasks
 
@@ -1730,7 +1730,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 - **ID:** `tool-agent-usage` · **Dono:** `src/features/canvas/components/tools/AgentUsagePanel.tsx`
 - **Persistência:** processo principal: SQLite agent_usage_accounts e agent_usage_samples (contas extras e amostras de uso; até 200 amostras por conta e sempre a última com métrica, podadas a cada gravação e no boot); ~/.claude/settings.json: statusLine do app ao ligar a coleta, com backup da anterior; script e captura em userData/claude-statusline (captura por terminal em sessions/<id>.json, apagada quando o terminal fecha); nenhuma preferência salva: timer e backoff vivem em memória no processo principal; aba e filtro são estado do componente (o filtro volta vazio ao reabrir)
-- **IPC:** `agent-usage:list`, `agent-usage:refresh`, `agent-usage:refresh-account`, `agent-usage:add-account`, `agent-usage:remove-account`, `agent-usage:consume-reset-credit`, `agent-usage:claude-statusline-status`, `agent-usage:enable-claude-statusline`, `agent-usage:disable-claude-statusline`, `agent-usage:changed`, `agent-usage:account-changed`, `agent-usage:sessions`, `agent-usage:session-changed`, `agent-usage:scheduler-state`
+- **IPC:** `agent-usage:list`, `agent-usage:refresh`, `agent-usage:refresh-account`, `agent-usage:add-account`, `agent-usage:remove-account`, `agent-usage:consume-reset-credit`, `agent-usage:claude-statusline-status`, `agent-usage:enable-claude-statusline`, `agent-usage:disable-claude-statusline`, `agent-usage:claude-cost-history`, `agent-usage:changed`, `agent-usage:account-changed`, `agent-usage:sessions`, `agent-usage:session-changed`, `agent-usage:scheduler-state`
 - **Depende de:** `window.felixo.agentUsage`, `CanvasPanel`, `consumeRequestedAgentUsageTab`, `rovingIndex`, `FelixoSelect`, `shouldRefreshAgentUsageOnOpen`, `useAgentUsageRefreshScheduler`, `agent-usage-refresh-scheduler.cjs`, `getAccountStatus`, `AgentUsageResetCreditsView`, `AgentUsageStatusDetailsView`, `ProviderSummaryTable`, `summarizeProviderAccounts`, `describeDisplayedAgentUsage`, `getAgentUsageLoginTerminal`, `filterAgentUsageGroups`, `AgentUsageFilterBar`, `AgentUsageRefreshAccountButton`, `useAgentUsageAccountRefresh`, `AccountChainSection`, `AccountSwitchHistory`
 - **Sobreposição:** CanvasPanel: absolute z-20 (z-30 com foco dentro), top-16, à direita da barra lateral e deslocado quando o menu de ferramentas abre (toolsMenuOpen); largura limitada a viewport − barra − inspector Elementos (288 px) e altura a viewport − 112. Os menus do FelixoSelect abrem em portal z-1000 por cima; toasts (z 50) e AgentQuestionDialog/HandoffDialog (z 60) cobrem o painel. Em janela <768 px o painel passa da viewport (PANEL_MIN_WIDTH 260, task 3e691f95-497e-815c-a129-f4d2d6405cbc). Tamanho lg (o mais largo desta parte); o window.confirm do Remover é diálogo nativo, fora da escala de z
 - **Testes:** `src/features/shared/agent-usage/agent-usage.test.ts`, `src/features/shared/agent-usage/useAgentUsageAccountRefresh.test.ts`, `src/features/canvas/components/tools/AgentUsageProviderSummary.test.ts`, `electron/services/agent-usage-ipc-handlers.test.cjs`, `electron/services/agent-usage-service.test.cjs`, `electron/services/agent-usage-availability.test.cjs`, `electron/services/agent-usage-refresh-account.test.cjs`, `electron/services/agent-usage-refresh-scheduler.test.cjs`, `src/features/shared/agent-usage/useAgentUsageRefreshScheduler.test.ts`, `electron/services/claude-statusline-service.test.cjs`, `electron/services/codex-status-query.test.cjs`, `electron/services/codex-status-screen.test.cjs`, `scripts/canvas-smoke-contas.cjs` → `abrirLimitesEUso`
@@ -2397,6 +2397,29 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | Atualizar e "Ir para o bloco" não são clicados em teste; a variante compacta do painel de detalhes do terminal não é exercitada | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
+
+### Custo equivalente do Claude (aba Custo)
+
+- **ID:** `agent-usage-custo` · **Dono:** `src/features/canvas/components/tools/ClaudeCostTab.tsx`
+- **Persistência:** nenhuma: lê as conversas locais do Claude a cada abertura; preço em userData/claude-pricing.json (arquivo do usuário, com fonte e data)
+- **IPC:** `agent-usage:claude-cost-history`
+- **Depende de:** `window.felixo.agentUsage.claudeCostHistory`, `groupClaudeCost`, `formatCostUsd`, `AgentUsagePanel`
+- **Sobreposição:** Dentro do painel Limites e uso (z-20/30); sem camada própria
+- **Testes:** `src/features/shared/agent-usage/claude-cost.test.ts`, `electron/services/claude-usage-history.test.cjs`
+
+| Estado | Quando |
+| --- | --- |
+| normal | Tabela Item / Respostas / Tokens / Custo equivalente agrupada por projeto, modelo ou dia, com o total e a origem e data dos preços; custo parcial leva "(parcial)" |
+| loading | O ícone do Atualizar gira; a tabela anterior continua na tela |
+| empty | "Nenhuma conversa do Claude no período." |
+| error | Mensagem role=alert: falha do main, "Disponível só no app instalado." sem ponte ou aviso de leitura truncada |
+| disabled | Atualizar desabilitado durante a leitura |
+
+| Controle | Gatilho | Efeito | Falha conhecida | Teste |
+| --- | --- | --- | --- | --- |
+| `dias` (button) | clique | Muda o período lido (aria-pressed) e relê as conversas | sem falha própria; o erro da leitura aparece como mensagem | — |
+| `Por projeto` (button) | clique | Troca o agrupamento da tabela (aria-pressed), sem nova leitura | sem falha própria | — |
+| `Atualizar` (button) | clique | agent-usage:claude-cost-history com o período e redesenha a tabela (desabilitado: leitura em andamento) | Recusa ou exceção viram mensagem role=alert | — |
 
 ### Ditado por voz (Configurações)
 
