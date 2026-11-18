@@ -829,6 +829,60 @@ export const terminalSurfaces: InventoryElement[] = [
     overlap: 'fixed inset-0 z-60 com fundo bg-black/50, montado no CanvasView; cobre canvas, gaveta e painéis; o card do tutorial fica inert por baixo. Pega o foco no painel (tabIndex -1), prende o Tab, é nokey e camada flutuante (clicar nele não fecha a gaveta solta). Não redimensiona (bloqueante, max-w-md).',
   },
   {
+    id: 'approval-panel',
+    name: 'Painel de aprovações pendentes',
+    layer: 'overlay',
+    owner: 'src/features/canvas/components/ApprovalPanel.tsx',
+    states: {
+      normal: 'Pílula "N aprovações pendentes" com o lembrete das 12h e 18h; aberta, lista do pedido mais antigo ao mais novo (buildApprovalQueue) com origem, título, detalhes, botões e o que acontece sem resposta. Junta decisões do orquestrador e das CLIs (permissão, teto de custo, troca de provedor e de conta) e perguntas de agente.',
+      empty: 'Sem pedido pendente: não renderiza nada.',
+      pending: 'busyKey enquanto responde: os botões de todos os pedidos ficam com aria-disabled (o clique é ignorado).',
+      error: 'Resposta recusada (pedido que o main já não tem, CLI que parou, pergunta inválida): mensagem em vermelho (role="alert") presa ao pedido que falhou.',
+    },
+    controls: [
+      {
+        locator: 'onClick={onToggle}',
+        kind: 'button',
+        trigger: 'clique; abre sozinho quando uma janela de aprovação (12h ou 18h, fuso do sistema) vence com pedido pendente (approvals:window)',
+        effect: 'Abre e recolhe a lista de pedidos (aria-expanded).',
+        failure: 'sem falha própria (estado local)',
+      },
+      {
+        locator: 'onClick={() => onAct(item, action.id)}',
+        kind: 'button',
+        effect: 'Botão repetido por ação do pedido: decisão (Permitir/Negar, Continuar/Parar, Trocar/Não trocar) chama cli:provider-switch:respond { decisionId, accept }; pergunta chama canvas:answer-question { id, indice } (índice nulo em Dispensar). O pedido sai da fila quando o main avisa a resolução.',
+        failure: 'Recusa do main: mensagem em vermelho no pedido; pedido que o main já não tem (DECISION_NOT_PENDING, RUN_FINISHED) é tirado da fila. Rejeição de IPC vira "Não foi possível responder.".',
+        disabledWhen: 'busyKey (aria-disabled)',
+        test: { file: 'src/features/canvas/services/approval-queue.test.ts' },
+      },
+    ],
+    persistence: ['nenhuma no renderer; os pedidos vivem no processo principal (sessões persistentes e fila de pedidos de agente)'],
+    ipc: ['cli:provider-switch:list', 'cli:provider-switch:respond', 'canvas:list-questions', 'canvas:answer-question', 'canvas:agent-questions', 'approvals:window'],
+    dependsOn: ['approval-queue (buildApprovalQueue, runApprovalAction)', 'useApprovalQueue', 'useProviderSwitchRequests (chat)', 'window.felixo.cli', 'window.felixo.canvas', 'window.felixo.approvalWindows'],
+    tests: [
+      { file: 'src/features/canvas/services/approval-queue.test.ts' },
+      { file: 'electron/services/approval-window-reminder.test.cjs' },
+    ],
+    gaps: [
+      {
+        what: 'Recusar não leva motivo: os IPCs só carregam aceitar/recusar e o índice da opção.',
+        risk: 'baixo',
+        task: '41c91f95-497e-8120-9fbf-d6db17ae781b',
+      },
+      {
+        what: 'Posição (bottom-12, z 40) e foco nunca foram vistos na tela: validado só por teste e renderização estática.',
+        risk: 'médio',
+        task: '41c91f95-497e-8165-8cc0-ce2bd685c1a1',
+      },
+      {
+        what: 'Não lista permissão pedida dentro do terminal PTY (depende do OSC 7501) nem os avisos do agendador (o renderer ainda não consome agent-schedule:due).',
+        risk: 'médio',
+        task: '41c91f95-497e-817e-bb8c-ca6fe5e302a1',
+      },
+    ],
+    overlap: 'fixed inset-x-0 bottom-12 z-40, centralizado (max-w-md, max-h 50vh com rolagem), montado no CanvasView; abaixo dos diálogos modais (60) e do cartão de pedido de página (50), acima do dock e dos painéis (20/30). Não é modal e não prende o foco; camada flutuante (clicar nele não fecha a gaveta do terminal).',
+  },
+  {
     id: 'handoff-dialog',
     name: 'Passar responsabilidade',
     layer: 'modal',

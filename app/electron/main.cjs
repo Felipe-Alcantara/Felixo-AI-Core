@@ -90,6 +90,7 @@ const {
 const {
   registerAgentScheduleIpcHandlers,
 } = require('./services/agent-schedule-ipc-handlers.cjs')
+const { createApprovalWindowReminder } = require('./services/approval-window-reminder.cjs')
 const {
   registerModelsIpcHandlers,
 } = require('./services/models-ipc-handlers.cjs')
@@ -248,6 +249,7 @@ let textFileHandlers = null
 let storageDatabase = null
 let settingsRepository = null
 let agentScheduleService = null
+let approvalWindowReminder = null
 let terminalLogStore = null
 let ptyOutputArchive = null
 let cliAutoInstall = null
@@ -1100,6 +1102,14 @@ app.whenReady().then(async () => {
   })
   registerAgentScheduleIpcHandlers({ getService: () => agentScheduleService })
   agentScheduleService.start()
+  // Janelas fixas de aprovação (12h e 18h): só lembra o painel de aprovações.
+  approvalWindowReminder = createApprovalWindowReminder({
+    notify: (channel, payload) => {
+      const target = getMainWindow()
+      if (target && !target.isDestroyed()) target.webContents.send(channel, payload)
+    },
+  })
+  approvalWindowReminder.start()
   registerModelsIpcHandlers({ database: storageDatabase })
   registerAgentPresetsIpcHandlers({ database: storageDatabase })
   registerSpeechIpcHandlers({ userData: appPaths.userData })
@@ -1300,6 +1310,7 @@ app.on('before-quit', () => {
     // O registro nunca impede o app de fechar.
   }
   agentScheduleService?.stop()
+  approvalWindowReminder?.stop()
   // Interrompe gerações de imagem em andamento (mata o filho do Openia e a pasta temporária).
   openiaImageService?.shutdown()
   // Encerra os PTY descartáveis de um disparo em andamento.

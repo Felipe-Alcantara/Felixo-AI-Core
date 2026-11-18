@@ -4914,3 +4914,23 @@ Agente: subagente da Orquestração (Claude Sonnet 5.5, effort medium). Task: Fe
 **Validação.** Medido com pastas temporárias (nunca os perfis reais): Claude 2.1.327 lista 3.732 disponíveis em ~4 s, instala/desliga/liga/remove um plugin de marketplace local; Codex 0.171 idem com `add`/`remove`. `cli-plugins-service.test.cjs` (12 testes, CLI falsa), `cli-plugins-view.test.ts` (3), inventário. `node scripts/run-node-unit-tests.cjs`: 3514 passando, 0 falhas. `npx vitest run`: 3723 passando, 0 falhas. Lint e typecheck limpos. O app não foi aberto.
 
 **Não validado.** Gemini: o `extensions install` não terminou na máquina (rede ou prompt) e a saída de `extensions list -o json` com extensão instalada não foi vista; o parser é defensivo e testado só com formas supostas. Interface sem teste de render (o repositório não tem testing-library).
+
+---
+
+## 2026-11-18 — Aprovação: painel único das aprovações pendentes dos agentes, com lembrete nas janelas de 12h e 18h
+
+**Contexto.** Task "Aprovação — painel de aprovações pendentes de todos os agentes do canvas, com janelas fixas (12h e 18h)" (Notion `3eb91f95-497e-81b8-a70f-dfce2a446a3e`). Hoje o que espera a pessoa vive em três lugares: o card "Permitir?"/teto de custo/troca de provedor no chat (`useProviderSwitchRequests`), o `AgentQuestionDialog` (modal, uma pergunta por vez) e, sem tela ainda, os avisos do agendador. Com vários agentes pedindo ao mesmo tempo, não havia uma visão só.
+
+**Motivo.** Reaproveitar o que já existe em vez de criar um caminho novo de aprovação: o painel só consome as mesmas fontes e responde pelos mesmos IPCs, então o main continua sendo quem decide (o renderer manda `accept` ou o índice da opção, nunca texto que vire resposta).
+
+**O que mudou.**
+- `app/src/features/canvas/services/approval-queue.ts` (novo): `buildApprovalQueue` junta decisões (`ProviderSwitchRequest`, com permissão, teto de custo e troca de provedor/conta) e perguntas pendentes numa fila ordenada do mais antigo ao mais novo, reaproveitando os formatadores do chat; `runApprovalAction` encaminha o clique a `cli:provider-switch:respond` ou `canvas:answer-question` e sinaliza pedido que o main já não tem (`stale`).
+- `app/src/features/canvas/hooks/useApprovalQueue.ts` e `components/ApprovalPanel.tsx` (novos): pílula "N aprovações pendentes" embaixo do canvas, lista aberta com os botões de cada pedido; só aparece com algo pendente; montada no `CanvasView` ao lado do `AgentQuestionDialog`.
+- `app/electron/services/approval-window-reminder.cjs` (novo), ligado em `main.cjs`, `preload.cjs` (`approvalWindows.onWindow`) e `vite-env.d.ts`: às 12h e 18h (fuso do sistema) emite `approvals:window`, reaproveitando `nextRunAt` do agendador; o painel abre sozinho se há pedido pendente.
+- Inventário do canvas (`inventory/data/terminal.ts`, elemento `approval-panel`, 2 controles, 3 lacunas com task) e `docs/projeto/INVENTARIO-CANVAS.md` regenerado; guia do usuário e `ARQUITETURA.md` com a seção nova.
+
+**Decisões tomadas pelo agente.** Painel não modal (o modal de pergunta continua para o caso bloqueante); posição `bottom-12`, z 40, por ser a faixa livre pelo inventário; janelas fixas e não configuráveis; com o app fechado a janela passa em branco (a fila aparece ao abrir), igual ao agendador. Divergência conhecida e não resolvida: o código nega a permissão sem resposta em 10 min (ou aplica a recomendada, `recommendedAllow`), enquanto uma decisão do Felipe de 17/11 manda aplicar a opção recomendada; o painel mostra o prazo de cada fonte, sem mudar o comportamento.
+
+**Validação.** `approval-queue.test.ts` (6 testes: dois pedidos simultâneos de agentes diferentes aparecem e um resolvido tira só ele da fila, índice da opção, ação inexistente, pedido stale, render do painel aberto/fechado/vazio), `approval-window-reminder.test.cjs` (3 testes: 12h e 18h, re-conferência horária sem aviso, stop). Gate: lint e typecheck limpos; suíte Node 3517 passando, 0 falhas, 12 pulados; Vitest 3729 passando, 4 pulados, 248 arquivos. O app não foi aberto (regra da rodada).
+
+**Não validado / pendente.** Posição e foco do painel na tela; motivo da recusa (nenhum IPC leva texto ao agente); permissão pedida dentro do terminal PTY (depende do OSC 7501) e avisos do agendador (renderer ainda não consome `agent-schedule:due`).

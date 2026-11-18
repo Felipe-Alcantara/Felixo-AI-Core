@@ -497,6 +497,14 @@ Gemini ACP pede permissão a cada ferramenta que muda algo. Cada pedido vira o c
 resposta em 10 minutos, a permissão é negada. O Claude e o Codex de uma resposta só não
 conseguem perguntar no meio do trabalho e seguem com acesso total.
 
+**Painel de aprovações.** Quando algum agente espera por você (permissão, teto de custo,
+troca de provedor ou de conta, ou uma pergunta com opções), aparece embaixo do canvas a
+pílula **N aprovações pendentes**. Clique para ver todos juntos, do mais antigo ao mais novo,
+e responda ali mesmo; o pedido some da lista quando o agente recebe a resposta. Às **12h e
+às 18h** (fuso do computador), se houver pedido esperando, o painel abre sozinho para lembrar.
+Com o app fechado a janela passa em branco: ao abrir, a fila continua lá. O painel ainda
+não leva o motivo da recusa e não lista permissões pedidas dentro do terminal.
+
 ### Felixo
 
 Abra **Configurações** (a engrenagem no pé da faixa de ícones do canvas) para ajustar:

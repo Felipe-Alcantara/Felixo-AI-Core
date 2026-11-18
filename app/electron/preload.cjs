@@ -364,6 +364,13 @@ contextBridge.exposeInMainWorld('felixo', {
       return () => ipcRenderer.removeListener('agent-schedule:due', handler)
     },
   },
+  approvalWindows: {
+    onWindow: (callback) => {
+      const handler = (_event, window) => callback(window)
+      ipcRenderer.on('approvals:window', handler)
+      return () => ipcRenderer.removeListener('approvals:window', handler)
+    },
+  },
   models: {
     list: () => ipcRenderer.invoke('models:list'),
     save: (model) => ipcRenderer.invoke('models:save', model),

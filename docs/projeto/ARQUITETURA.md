@@ -331,6 +331,22 @@ listar/ler, este comando NAO espera resposta — o pedido pode ficar minutos
 esperando um clique — so registra e devolve na hora, apontando pra
 `felixo canvas ver-pedido <id>`.
 
+## Painel de aprovacoes pendentes (ApprovalPanel)
+
+Fila unica do que espera a pessoa, montada no CanvasView ao lado do
+`AgentQuestionDialog`. Nao cria fonte nova: `useApprovalQueue` reaproveita
+`useProviderSwitchRequests` (decisoes do orquestrador e das CLIs: permissao,
+teto de custo, troca de provedor e de conta; `cli:provider-switch:*`) e as
+perguntas de agente (`canvas:list-questions`), e `buildApprovalQueue` ordena do
+mais antigo ao mais novo. Aprovar e recusar usam os mesmos IPCs do chat e do
+dialogo de pergunta (`runApprovalAction`): o main continua sendo quem decide, o
+renderer so manda `accept` ou o INDICE da opcao. As janelas fixas (12h e 18h, fuso
+do sistema) vem de `approval-window-reminder.cjs`, que reaproveita `nextRunAt` do
+agendador de agentes e so emite `approvals:window`; o painel abre sozinho se ha
+pedido pendente. Limites: sem motivo de recusa, sem permissao pedida dentro do
+terminal PTY (depende do OSC 7501) e sem os avisos do agendador. O prazo de 10 min
+continua sendo o de cada fonte (`persistent-cli-session.cjs`).
+
 ## Perguntas com opcoes de um agente (felixo perguntar)
 
 Decisao registrada (task "perguntas interativas com opcoes para o Codex").

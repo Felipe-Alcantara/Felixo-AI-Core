@@ -26,6 +26,7 @@ import { Bell } from 'lucide-react'
 import { TerminalNode } from './TerminalNode'
 import { NoteNode } from './NoteNode'
 import { AgentQuestionDialog } from './AgentQuestionDialog'
+import { ApprovalPanel } from './ApprovalPanel'
 import { DictationButton } from './DictationButton'
 import { useDictation } from '../hooks/useDictation'
 import { useDictationShortcut } from '../hooks/useDictationShortcut'
@@ -2622,6 +2623,7 @@ function CanvasInner({
         </ProjectRootsContext.Provider>
         </AccountChainActionsContext.Provider>
         <AgentQuestionDialog />
+        <ApprovalPanel />
         {colorMenu && (
           <NodeColorMenu
             x={colorMenu.x}

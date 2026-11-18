@@ -1042,6 +1042,10 @@ declare global {
           automationId: string,
         ) => Promise<CliInvokeResult & { deleted?: boolean }>
       }
+      /** Janelas fixas de aprovação (12h e 18h): o main avisa quando uma abre. */
+      approvalWindows?: {
+        onWindow: (callback: (window: { slotAt: number }) => void) => () => void
+      }
       models?: {
         list: () => Promise<CliInvokeResult & { models?: Model[] }>
         save: (model: Model) => Promise<CliInvokeResult & { model?: Model }>

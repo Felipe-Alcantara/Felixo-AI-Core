@@ -29,10 +29,10 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 
 ## Números
 
-- **Elementos:** 106 (10 blocos, 17 ferramentas, 79 outras superfícies)
-- **Controles:** 414, dos quais 61 com teste específico
+- **Elementos:** 107 (10 blocos, 17 ferramentas, 80 outras superfícies)
+- **Controles:** 416, dos quais 62 com teste específico
 - **Elementos sem nenhum teste:** 3
-- **Lacunas:** 230 (alto 4, médio 122, baixo 104), em 62 tasks
+- **Lacunas:** 233 (alto 4, médio 124, baixo 105), em 65 tasks
 
 ## Moldura do canvas
 
@@ -2677,6 +2677,33 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Falha ao listar perfis é silenciosa (services/webview-profiles-store.ts:38-45): ok falso deixa ready falso para sempre ("Perfil…" no botão) e uma rejeição nunca é tentada de novo (loaded já é verdadeiro). | baixo | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 | O menu (z-70) fica acima dos diálogos modais (60) e não acompanha pan/zoom do canvas (posição calculada só ao abrir); clique dentro do webview não fecha. Nenhum teste mede. | baixo | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
 
+### Painel de aprovações pendentes
+
+- **ID:** `approval-panel` · **Dono:** `src/features/canvas/components/ApprovalPanel.tsx`
+- **Persistência:** nenhuma no renderer; os pedidos vivem no processo principal (sessões persistentes e fila de pedidos de agente)
+- **IPC:** `cli:provider-switch:list`, `cli:provider-switch:respond`, `canvas:list-questions`, `canvas:answer-question`, `canvas:agent-questions`, `approvals:window`
+- **Depende de:** `approval-queue (buildApprovalQueue, runApprovalAction)`, `useApprovalQueue`, `useProviderSwitchRequests (chat)`, `window.felixo.cli`, `window.felixo.canvas`, `window.felixo.approvalWindows`
+- **Sobreposição:** fixed inset-x-0 bottom-12 z-40, centralizado (max-w-md, max-h 50vh com rolagem), montado no CanvasView; abaixo dos diálogos modais (60) e do cartão de pedido de página (50), acima do dock e dos painéis (20/30). Não é modal e não prende o foco; camada flutuante (clicar nele não fecha a gaveta do terminal).
+- **Testes:** `src/features/canvas/services/approval-queue.test.ts`, `electron/services/approval-window-reminder.test.cjs`
+
+| Estado | Quando |
+| --- | --- |
+| normal | Pílula "N aprovações pendentes" com o lembrete das 12h e 18h; aberta, lista do pedido mais antigo ao mais novo (buildApprovalQueue) com origem, título, detalhes, botões e o que acontece sem resposta. Junta decisões do orquestrador e das CLIs (permissão, teto de custo, troca de provedor e de conta) e perguntas de agente. |
+| empty | Sem pedido pendente: não renderiza nada. |
+| error | Resposta recusada (pedido que o main já não tem, CLI que parou, pergunta inválida): mensagem em vermelho (role="alert") presa ao pedido que falhou. |
+| pending | busyKey enquanto responde: os botões de todos os pedidos ficam com aria-disabled (o clique é ignorado). |
+
+| Controle | Gatilho | Efeito | Falha conhecida | Teste |
+| --- | --- | --- | --- | --- |
+| `onClick={onToggle}` (button) | clique; abre sozinho quando uma janela de aprovação (12h ou 18h, fuso do sistema) vence com pedido pendente (approvals:window) | Abre e recolhe a lista de pedidos (aria-expanded). | sem falha própria (estado local) | — |
+| `onClick={() => onAct(item, action.id)}` (button) | clique | Botão repetido por ação do pedido: decisão (Permitir/Negar, Continuar/Parar, Trocar/Não trocar) chama cli:provider-switch:respond { decisionId, accept }; pergunta chama canvas:answer-question { id, indice } (índice nulo em Dispensar). O pedido sai da fila quando o main avisa a resolução. (desabilitado: busyKey (aria-disabled)) | Recusa do main: mensagem em vermelho no pedido; pedido que o main já não tem (DECISION_NOT_PENDING, RUN_FINISHED) é tirado da fila. Rejeição de IPC vira "Não foi possível responder.". | `src/features/canvas/services/approval-queue.test.ts` |
+
+| Lacuna | Risco | Task |
+| --- | --- | --- |
+| Recusar não leva motivo: os IPCs só carregam aceitar/recusar e o índice da opção. | baixo | `41c91f95-497e-8120-9fbf-d6db17ae781b` |
+| Posição (bottom-12, z 40) e foco nunca foram vistos na tela: validado só por teste e renderização estática. | médio | `41c91f95-497e-8165-8cc0-ce2bd685c1a1` |
+| Não lista permissão pedida dentro do terminal PTY (depende do OSC 7501) nem os avisos do agendador (o renderer ainda não consome agent-schedule:due). | médio | `41c91f95-497e-817e-bb8c-ca6fe5e302a1` |
+
 ### Tutorial do canvas: montagem, decisão automática e região live
 
 - **ID:** `onboarding-montagem` · **Dono:** `src/features/onboarding/OnboardingMount.tsx`
@@ -3067,3 +3094,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `41b91f95-497e-81c5-bc4d-c151f42dc82c` — 1 lacuna
 - `41b91f95-497e-81c7-88e6-c0660189bb80` — 1 lacuna
 - `41b91f95-497e-81c9-b12f-edb0b8ed0b2d` — 1 lacuna
+- `41c91f95-497e-8120-9fbf-d6db17ae781b` — 1 lacuna
+- `41c91f95-497e-8165-8cc0-ce2bd685c1a1` — 1 lacuna
+- `41c91f95-497e-817e-bb8c-ca6fe5e302a1` — 1 lacuna
