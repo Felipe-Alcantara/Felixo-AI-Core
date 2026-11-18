@@ -79,3 +79,17 @@ test('rejeita arquivo que não é .md e id fora do formato', async () => {
   assert.equal((await produtor(['enviar', txt])).codigo, 4)
   assert.equal(revisoes.ler('../../etc'), null)
 })
+
+test('recusas no mesmo milissegundo continuam contando as rodadas em ordem', () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-revisao-'))
+  const arquivo = path.join(base, 'resultado.md')
+  fs.writeFileSync(arquivo, '# resultado')
+  // Relógio parado: o CI rápido cria revisões no mesmo milissegundo e só a sequência desempata.
+  const revisoes = criarRepositorioDeRevisoes({ pasta: path.join(base, 'revisoes'), agora: () => new Date(0) })
+  for (let rodada = 1; rodada <= 3; rodada += 1) {
+    const enviada = revisoes.enviar({ arquivo, produtor: 'p' })
+    assert.equal(enviada.ok, true)
+    assert.equal(enviada.revisao.rodada, rodada)
+    revisoes.recusar(enviada.revisao.id, 'ruim')
+  }
+})

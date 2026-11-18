@@ -53,7 +53,8 @@ function criarRepositorioDeRevisoes({ pasta, agora = () => new Date() }) {
     return nomes
       .map(ler)
       .filter(Boolean)
-      .sort((a, b) => a.criadaEm.localeCompare(b.criadaEm))
+      // `sequencia` desempata revisões criadas no mesmo milissegundo (o CI rápido faz isso); as antigas não a têm.
+      .sort((a, b) => a.criadaEm.localeCompare(b.criadaEm) || (a.sequencia ?? 0) - (b.sequencia ?? 0))
   }
 
   const pendentes = () => listar().filter((revisao) => revisao.estado === 'pendente')
@@ -106,6 +107,7 @@ function criarRepositorioDeRevisoes({ pasta, agora = () => new Date() }) {
     }
 
     const rodada = anterior?.estado === 'recusada' ? anterior.rodada + 1 : 1
+    const sequencia = Math.max(0, ...listar().map((revisao) => revisao.sequencia ?? 0)) + 1
     const id = `rev-${crypto.randomUUID().replace(/-/g, '').slice(0, 10)}`
     fs.mkdirSync(pastaDe(id), { recursive: true })
     fs.copyFileSync(absoluto, path.join(pastaDe(id), 'entrega.md'))
@@ -116,6 +118,7 @@ function criarRepositorioDeRevisoes({ pasta, agora = () => new Date() }) {
       estado: 'pendente',
       rodada,
       criadaEm: agora().toISOString(),
+      sequencia,
       historico: [{ em: agora().toISOString(), evento: 'enviada' }],
     }
     salvar(revisao)
