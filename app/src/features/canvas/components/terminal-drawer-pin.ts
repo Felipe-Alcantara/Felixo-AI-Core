@@ -121,3 +121,23 @@ function isInsideFloatingLayer(target: Node | null): boolean {
     : (target?.parentElement ?? null)
   return typeof element?.closest === 'function' && element.closest(FLOATING_LAYER_SELECTOR) !== null
 }
+
+/** Janela entre o clique que fechou a gaveta e o clique que abre a ferramenta. */
+const PIN_HINT_WINDOW_MS = 1500
+
+/**
+ * A gaveta fecha no mousedown e a ferramenta abre no click seguinte: se Prompts
+ * ou Skills abriram logo depois de a gaveta fechar por clique fora, a pessoa
+ * perdeu o terminal sem saber que o Fixar existe.
+ */
+export function shouldShowPinHint(
+  tool: string,
+  drawerClosedByOutsideClickAt: number | null,
+  now: number,
+): boolean {
+  return (
+    (tool === 'prompts' || tool === 'skills') &&
+    drawerClosedByOutsideClickAt !== null &&
+    now - drawerClosedByOutsideClickAt <= PIN_HINT_WINDOW_MS
+  )
+}

@@ -8,6 +8,7 @@ import {
   readPinnedPreference,
   readWidthPreference,
   shouldCloseOnOutsideClick,
+  shouldShowPinHint,
   writeCollapsedPreference,
   writePinnedPreference,
   writeWidthPreference,
@@ -146,5 +147,15 @@ describe('shouldCloseOnOutsideClick', () => {
     const containerNode = { contains: () => false } as unknown as Node
     const elsewhere = { closest: () => null } as unknown as Node
     expect(shouldCloseOnOutsideClick(false, containerNode, elsewhere)).toBe(true)
+  })
+})
+
+describe('shouldShowPinHint', () => {
+  it('só ensina o Fixar para Prompts/Skills abertos logo depois do fechamento por clique fora', () => {
+    expect(shouldShowPinHint('prompts', 1000, 1400)).toBe(true)
+    expect(shouldShowPinHint('skills', 1000, 2500)).toBe(true)
+    expect(shouldShowPinHint('skills', 1000, 2501)).toBe(false)
+    expect(shouldShowPinHint('notes', 1000, 1100)).toBe(false)
+    expect(shouldShowPinHint('prompts', null, 1100)).toBe(false)
   })
 })

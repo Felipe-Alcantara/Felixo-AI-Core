@@ -153,6 +153,8 @@ type TerminalDrawerProps = {
    */
   openRequest?: number
   onClose: () => void
+  /** Avisa que a gaveta começou a fechar por um clique fora dela (não fixada). */
+  onOutsideClickClose?: () => void
 }
 
 const MIN_WIDTH = DRAWER_MIN_WIDTH
@@ -184,6 +186,7 @@ export function TerminalDrawer({
   onToggleZoom,
   openRequest = 0,
   onClose,
+  onOutsideClickClose,
 }: TerminalDrawerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const collapsedTriggerRef = useRef<HTMLButtonElement>(null)
@@ -265,12 +268,13 @@ export function TerminalDrawer({
   useEffect(() => {
     const onPointerDown = (event: MouseEvent) => {
       if (shouldCloseOnOutsideClick(keepOpenOnOutsideClick, containerRef.current, event.target as Node)) {
+        onOutsideClickClose?.()
         close()
       }
     }
     document.addEventListener('mousedown', onPointerDown)
     return () => document.removeEventListener('mousedown', onPointerDown)
-  }, [keepOpenOnOutsideClick, close])
+  }, [keepOpenOnOutsideClick, close, onOutsideClickClose])
 
   useEffect(() => {
     const active = document.activeElement

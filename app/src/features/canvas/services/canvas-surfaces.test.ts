@@ -147,17 +147,24 @@ describe('divisão de uma vez só entre painel e gaveta (splitHorizontalSpace)',
     })
   })
 
-  it('nem os dois pisos juntos cabem: sobreposição intencional, cada um no próprio piso', () => {
-    // O cenário real medido ao vivo: painel `xl` (quer ~360px) + gaveta numa
-    // janela de 900px. A gaveta nunca relata abaixo do próprio piso (440) —
-    // `clampDrawerWidth` já garante isso antes do relato, mesmo quando a
-    // fração de 45% da tela (405px aqui) ficaria menor. Piso do painel (260)
-    // + piso da gaveta (440) = 700, e só sobram 564px (900-176-160) — nem os
-    // pisos cabem os dois juntos.
-    expect(splitHorizontalSpace(900, 176, 360, 260, 440, 440)).toEqual({
-      panel: 260,
-      drawer: 440,
-    })
+  it('nem os pisos cabem: o painel fica no piso e a gaveta encolhe abaixo de 440 até caber', () => {
+    // Painel `xl` + gaveta em 900px: sobram 564px (900-176-160); o painel fica
+    // em 260 e a gaveta leva o resto (304), mas nunca menos que o piso de 320
+    // — a faixa de canvas é que cede os 16px.
+    expect(splitHorizontalSpace(900, 176, 360, 260, 440, 440)).toEqual({ panel: 260, drawer: 320 })
+    // Com folga acima do piso, a gaveta pega exatamente o que sobra: nada se sobrepõe.
+    const r = splitHorizontalSpace(1000, 176, 360, 260, 440, 440)
+    expect(r).toEqual({ panel: 260, drawer: 404 })
+    expect(176 + r.panel + r.drawer + 160).toBe(1000)
+  })
+
+  it('com Elementos aberto, painel + gaveta + inspector cabem sem sobrepor quando o piso de 320 permite', () => {
+    // 1008px, barra recolhida (52), Elementos (288): 1008-52-288-160 = 508.
+    const r = splitHorizontalSpace(1008, 52, 360, 260, 440, 440, undefined, 288)
+    expect(r.drawer).toBe(320)
+    expect(52 + r.panel + r.drawer + 288).toBeLessThanOrEqual(1008)
+    // Barra expandida (288): nem o piso cabe; a gaveta fica no piso (sobreposição declarada).
+    expect(splitHorizontalSpace(1008, 288, 360, 260, 440, 440, undefined, 288).drawer).toBe(320)
   })
 
   it('pisos cabem mas os dois inteiros não: divide o extra proporcionalmente ao que cada um pediu', () => {

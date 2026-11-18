@@ -10,7 +10,7 @@ import {
   detectLiveLayoutClamp,
   isWorstCaseLayoutSafe,
 } from './layout-invariants'
-import { canvasSurfaceLayoutWarning, freeCanvasArea, miniMapSize, splitHorizontalSpace } from './canvas-surfaces'
+import { DRAWER_SHRINK_FLOOR_WIDTH, canvasSurfaceLayoutWarning, freeCanvasArea, miniMapSize, splitHorizontalSpace } from './canvas-surfaces'
 
 // Bateria de breakpoints a partir de COMBINED_FLOOR_WIDTH (barra 176 + piso
 // do painel 260 + piso da gaveta 440 = 876px — corrigido em 12/09/2026: o
@@ -99,7 +99,7 @@ describe('zoom de página: o mesmo layout em um viewport menor ou maior', () => 
         const contexto = `${janela.label}, zoom ${nivel} → ${viewport.width}×${viewport.height}`
 
         expect(panel, contexto).toBeGreaterThanOrEqual(PANEL_MIN_WIDTH)
-        expect(drawer, contexto).toBeGreaterThanOrEqual(DRAWER_MIN_WIDTH)
+        expect(drawer, contexto).toBeGreaterThanOrEqual(DRAWER_SHRINK_FLOOR_WIDTH)
         expect(Number.isFinite(livre.width), contexto).toBe(true)
         expect(livre.width, contexto).toBeGreaterThanOrEqual(0)
         if (minimapa) expect(minimapa.width, contexto).toBeLessThanOrEqual(livre.width)
@@ -148,7 +148,7 @@ describe('zoom de página: o mesmo layout em um viewport menor ou maior', () => 
     )
 
     expect(viewport).toEqual({ width: 417, height: 289 })
-    expect({ panel, drawer }).toEqual({ panel: PANEL_MIN_WIDTH, drawer: DRAWER_MIN_WIDTH })
+    expect({ panel, drawer }).toEqual({ panel: PANEL_MIN_WIDTH, drawer: DRAWER_SHRINK_FLOOR_WIDTH })
     expect(canvasSurfaceLayoutWarning(viewport, { toolbar: TOOLBAR_WIDTH, panel, drawer, inspector: INSPECTOR_RESERVED_WIDTH })).toMatch(
       /Pouco espa/,
     )

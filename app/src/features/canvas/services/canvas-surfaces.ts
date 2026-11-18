@@ -20,6 +20,13 @@ export const COLLAPSED_SURFACE_WIDTH = 44
 /** Pisos compartilhados por painel, gaveta e os cálculos de ocupação. */
 export const PANEL_MIN_WIDTH = 260
 export const DRAWER_MIN_WIDTH = 440
+/**
+ * Até onde a gaveta pode ser espremida quando painel + Elementos + gaveta não
+ * cabem juntos (o painel fica no piso dele). 320 px dá ~38 colunas de
+ * terminal: dá para ler o prompt e a saída de uma CLI; abaixo disso as linhas
+ * quebram a cada palavra e o terminal deixa de servir.
+ */
+export const DRAWER_SHRINK_FLOOR_WIDTH = 320
 // Nomes antigos continuam exportados para consumidores/testes que ainda usam
 // a nomenclatura anterior; há uma única fonte numérica acima.
 export const MIN_PANEL_WIDTH = PANEL_MIN_WIDTH
@@ -170,12 +177,15 @@ export function splitHorizontalSpace(
     }
   }
 
-  // Nem os dois pisos juntos cabem: sobreposição intencional, cada um no
-  // próprio piso — a mesma filosofia que `availableWidth` já documentava
-  // pra um lado só, aplicada aos dois de uma vez em vez de descoberta aos
-  // poucos por rodadas de relato.
+  // Os dois pisos juntos não cabem: o painel fica no piso e a gaveta cede,
+  // abaixo dos 440 px, até o necessário para nada se sobrepor (a faixa de
+  // canvas é a primeira a ceder, depois a gaveta chega ao piso de encolhimento).
+  // Só se nem assim couber sobra a sobreposição declarada, com a gaveta no piso.
   if (minPanel + minDrawer > available) {
-    return { panel: minPanel, drawer: minDrawer }
+    return {
+      panel: minPanel,
+      drawer: Math.min(minDrawer, Math.max(DRAWER_SHRINK_FLOOR_WIDTH, available - minPanel)),
+    }
   }
 
   const extraAvailable = available - minPanel - minDrawer

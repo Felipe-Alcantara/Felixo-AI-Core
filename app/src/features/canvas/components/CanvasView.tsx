@@ -83,6 +83,8 @@ import { canvasSurfaceLayoutWarning, freeCanvasArea } from '../services/canvas-s
 import { usePerformanceMode } from '../../shared/performance/performance-mode-context'
 import { useReducedMotionPreference, shouldReduceMotion } from '../../shared/accessibility/reduced-motion-preference'
 import { CanvasPerformanceSuggestion } from './CanvasPerformanceSuggestion'
+import { DrawerPinHint } from './DrawerPinHint'
+import { shouldShowPinHint } from './terminal-drawer-pin'
 import { toolbarColumnOffset } from './toolbar-flyout'
 import { CliSetupToast } from '../../setup/CliSetupNotice'
 import { useUpdateStatus } from '../../updates/useUpdateStatus'
@@ -460,6 +462,10 @@ function CanvasInner({
     canvasLockedRef.current = canvasLocked
   }, [canvasLocked])
   const [activeTool, setActiveTool] = useState<CanvasTool | null>(null)
+  // Prompts e Skills digitam no terminal da gaveta, mas o clique na barra lateral
+  // fecha a gaveta não fixada: guarda quando isso aconteceu para ensinar o Fixar.
+  const drawerOutsideCloseAtRef = useRef<number | null>(null)
+  const [pinHint, setPinHint] = useState(false)
   const [toolOpenRequest, setToolOpenRequest] = useState(0)
   // Todo pedido de ABRIR uma ferramenta passa por aqui (o alternar da barra
   // não: ele troca o painel ou fecha). O contador faz o painel que já está
@@ -2370,6 +2376,7 @@ function CanvasInner({
         tabIndex={0}
       >
       {isBusy && <div className="absolute inset-0 z-50 cursor-wait" aria-hidden="true" />}
+      {pinHint && <DrawerPinHint onDismiss={() => setPinHint(false)} />}
       <CanvasPerformanceSuggestion nodeCount={nodes.length} hydrated={hydrated} />
       <CanvasTopbar
         onOpenSearch={() => openTool('search')}
@@ -2404,6 +2411,7 @@ function CanvasInner({
             openNotionTasksNode()
             return
           }
+          if (shouldShowPinHint(tool, drawerOutsideCloseAtRef.current, Date.now())) setPinHint(true)
           setActiveTool((current) => (current === tool ? null : tool))
         }}
         sidebarCollapsed={sidebarCollapsed}
@@ -2679,6 +2687,9 @@ function CanvasInner({
           onToggleZoom={() => commitDrawerPanes({ type: 'toggle-zoom' })}
           openRequest={terminalOpenRequest}
           onClose={closeExpandedTerminal}
+          onOutsideClickClose={() => {
+            drawerOutsideCloseAtRef.current = Date.now()
+          }}
         />
       )}
 
