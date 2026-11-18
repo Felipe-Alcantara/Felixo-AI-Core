@@ -541,6 +541,9 @@ contextBridge.exposeInMainWorld('felixo', {
     saveClipboardImage: () => ipcRenderer.invoke('files:save-clipboard-image'),
     saveTextFile: (params) => ipcRenderer.invoke('files:save-text', params),
   },
+  agentSessionLog: {
+    export: (params) => ipcRenderer.invoke('agent-session-log:export', params),
+  },
   settings: {
     loadOrchestrator: () => ipcRenderer.invoke('settings:load-orchestrator'),
     saveOrchestrator: (settings) =>

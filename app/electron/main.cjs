@@ -29,6 +29,7 @@ const { createNotionAgentEnv } = require('./services/notion-agent-env.cjs')
 const { createCliAccountStore } = require('./services/cli-account-store.cjs')
 const { createAccountChainRepository } = require('./services/storage/account-chain-repository.cjs')
 const { createAgentUsageRepository } = require('./services/storage/agent-usage-repository.cjs')
+const { createAgentSessionLogRepository } = require('./services/storage/agent-session-log-repository.cjs')
 const { listPresentInheritedCredentialNames } = require('./services/cli-account-profiles.cjs')
 const {
   createClaudeApiSessionManager,
@@ -223,6 +224,7 @@ const linkWebviewPopup = (child, parent) => webviewSitePermissions?.linkPopup(ch
 
 let mainWindow = null
 let ptyHandlers = null
+let agentSessionLog = null
 let openiaImageService = null
 let canvasFilesHandlers = null
 let contextFilesHandlers = null
@@ -498,6 +500,23 @@ app.whenReady().then(async () => {
   // Remover uma conta também a tira da cadeia (membro, espera e checagem).
   const accountChainRepository = createAccountChainRepository(storageDatabase)
   const agentUsageRepository = createAgentUsageRepository(storageDatabase)
+  // Registro de uso por sessão de agente: só metadados, nunca o texto digitado. O que ficou
+  // aberto da última execução (app fechado ou caído) é fechado como `app_closed`.
+  agentSessionLog = createAgentSessionLogRepository(storageDatabase)
+  try {
+    agentSessionLog.closeOpen('app_closed')
+  } catch (error) {
+    console.error('[felixo] falha ao fechar o registro de sessões anterior:', error)
+  }
+  ipcMain.handle('agent-session-log:export', (_event, params = {}) => {
+    try {
+      const format = params.format === 'csv' ? 'csv' : 'json'
+      const content = agentSessionLog.exportPeriod({ from: params.from, to: params.to, format })
+      return { ok: true, content, format }
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : 'Falha ao exportar o registro.' }
+    }
+  })
   // Troca antecipada por limiar: cada medição gravada avisa a cadeia, que nasce mais abaixo
   // (até lá, a referência é nula e nada é avisado). Fora do caminho da gravação: nunca a atrasa.
   let accountChainForUsage = null
@@ -899,6 +918,7 @@ app.whenReady().then(async () => {
   const claudeStatuslineDir = path.join(appPaths.userData, 'claude-statusline')
   const claudeStatusline = createClaudeStatuslineService({ baseDir: claudeStatuslineDir })
   ptyHandlers = registerPtyIpcHandlers(getMainWindow, {
+    sessionLog: agentSessionLog,
     validateAccount: validatePtyAccount,
     onSessionExit: (sessionId) => accountChain.service.onSessionExit(sessionId),
     // A troca só abre o bloco novo com o ticket confirmado, uma vez, na conta
@@ -1189,6 +1209,12 @@ app.whenReady().then(async () => {
 })
 
 app.on('before-quit', () => {
+  // Sessões ainda abertas ao fechar o app ficam marcadas como encerradas com ele.
+  try {
+    agentSessionLog?.closeOpen('app_closed')
+  } catch {
+    // O registro nunca impede o app de fechar.
+  }
   // Interrompe gerações de imagem em andamento (mata o filho do Openia e a pasta temporária).
   openiaImageService?.shutdown()
   // Encerra os PTY descartáveis de um disparo em andamento.

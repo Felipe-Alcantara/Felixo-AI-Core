@@ -751,3 +751,37 @@ test('pty:list-sessions sem suporte do gerenciador responde vazio, e erro vira r
   }
   assert.deepEqual(await invoke('pty:list-sessions', { command: 'codex' }), { ok: false, message: 'conta inválida' })
 })
+
+test('registro de sessoes: spawn, Enter, kill e saida chegam so como metadados', async () => {
+  handlers.clear()
+  const log = []
+  const manager = createFakeManager()
+  let exit
+  manager.spawn = (sessionId, options) => {
+    exit = options.onExit
+  }
+  const window = { isDestroyed: () => false, webContents: { send() {} } }
+  registerPtyIpcHandlers(() => window, {
+    manager: { ...manager, has: () => true },
+    sessionLog: {
+      start: (info) => log.push(['start', info.sessionId, info.args]),
+      interaction: (id, chars) => log.push(['interaction', id, chars]),
+      end: (id, reason) => log.push(['end', id, reason]),
+      setCliSession: () => {},
+    },
+  })
+  const invoke = (channel, params) => handlers.get(channel)(null, params)
+
+  await invoke('pty:spawn', { sessionId: 's1', command: 'claude', args: ['--model', 'opus'] })
+  await invoke('pty:write', { sessionId: 's1', data: 'senha-secreta' }) // sem Enter: nada
+  await invoke('pty:write', { sessionId: 's1', data: '\r' })
+  await invoke('pty:write', { sessionId: 's1', data: '\x1b[200~linha\r\x1b[201~' }) // colagem: não envia
+  await invoke('pty:kill', { sessionId: 's1' })
+  exit({ exitCode: 0 })
+
+  assert.deepEqual(log, [
+    ['start', 's1', ['--model', 'opus']],
+    ['interaction', 's1', 1],
+    ['end', 's1', 'killed'],
+  ])
+})

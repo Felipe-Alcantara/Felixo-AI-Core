@@ -24,6 +24,7 @@ const {
   PTY_ACCOUNT_MODES,
   PTY_SESSION_ACCOUNT_MISMATCH,
   PtyProcessManager,
+  scanSubmittedInput,
 } = require('./pty-process-manager.cjs')
 const { validatePtyAccountSelection } = require('./pty-account-validation.cjs')
 const { createPtyDataBatcher } = require('./pty-data-batcher.cjs')
@@ -84,6 +85,17 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
   const launchGate = dependencies.codexLaunchGate === undefined ? codexLaunchGate : dependencies.codexLaunchGate
   /** Aberturas do Codex esperando a vez; o `pty:kill` e o `dispose` as cancelam. */
   const waitingSpawns = new Map()
+  // Registro de sessões (opcional): nunca pode atrapalhar o terminal.
+  const sessionSubmitPaste = new Map()
+  const closing = new Set()
+  const sessionLog = (fn) => {
+    if (!dependencies.sessionLog) return
+    try {
+      fn()
+    } catch (error) {
+      console.error('[felixo] falha ao gravar o registro de sessões:', error instanceof Error ? error.message : error)
+    }
+  }
 
   ipcMain.handle('pty:spawn', (_event, params = {}) => {
     try {
@@ -137,6 +149,16 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
         }
         try {
           spawnSession(sessionId, params, accountValidation, accountMode, ticket.lineageId)
+          if (!reused) {
+            sessionLog(() => dependencies.sessionLog.start({
+              sessionId,
+              command: params.command,
+              args: params.args,
+              cwd: params.cwd,
+              accountId: params.accountId,
+              providerId: accountValidation.providerId,
+            }))
+          }
         } catch (error) {
           finishChainTicket(ticket, sessionId, false)
           throw error
@@ -280,6 +302,8 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
           exitCode: event.exitCode,
           signal: event.signal,
         })
+        sessionSubmitPaste.delete(sessionId)
+        sessionLog(() => dependencies.sessionLog.end(sessionId, closing.delete(sessionId) ? 'killed' : 'exit'))
         // A cadeia de contas vence as propostas abertas desta sessão.
         try {
           dependencies.onSessionExit?.(sessionId)
@@ -287,7 +311,10 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
           // Diagnóstico da cadeia não pode atrapalhar o fim do terminal.
         }
       },
-      onSession: (reference) => send('pty:session', { ptySessionId: sessionId, ...reference }),
+      onSession: (reference) => {
+        sessionLog(() => dependencies.sessionLog.setCliSession(sessionId, reference?.sessionId))
+        send('pty:session', { ptySessionId: sessionId, ...reference })
+      },
       // Linhagem da cadeia: só o bloco nascido de um ticket confirmado a tem.
       ...(lineageId ? { lineageId } : {}),
     })
@@ -303,6 +330,13 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
       // fatiado, e quem escreve precisa distinguir "aceito" de "entregue" —
       // senão confere a tela cedo demais e reescreve o que ainda estava saindo.
       if (delivered) {
+        if (dependencies.sessionLog) {
+          const data = String(params.data ?? '')
+          const scan = scanSubmittedInput(data, sessionSubmitPaste.get(sessionId))
+          sessionSubmitPaste.set(sessionId, scan.inPaste)
+          // Só o tamanho do que foi digitado; o texto nunca chega ao registro.
+          if (scan.submitted) sessionLog(() => dependencies.sessionLog.interaction(sessionId, data.length))
+        }
         await manager.aguardarEscritas?.(sessionId)
       }
       return { ok: true, delivered }
@@ -332,6 +366,7 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
       }
       batcher.flush(sessionId)
       batcher.forget(sessionId)
+      if (manager.has?.(sessionId)) closing.add(sessionId)
       const killed = manager.kill(sessionId, { force: Boolean(params.force) })
       return { ok: true, killed }
     } catch (error) {

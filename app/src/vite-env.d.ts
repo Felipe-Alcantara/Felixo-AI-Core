@@ -1246,6 +1246,14 @@ declare global {
           filters?: Array<{ name: string; extensions: string[] }>
         }) => Promise<CliInvokeResult & { canceled?: boolean; filePath?: string }>
       }
+      agentSessionLog?: {
+        /** CSV ou JSON das sessões de agente do período (ISO), sem texto de prompt. */
+        export: (params: {
+          from?: string
+          to?: string
+          format?: 'csv' | 'json'
+        }) => Promise<CliInvokeResult & { content?: string; format?: 'csv' | 'json' }>
+      }
       settings?: {
         loadOrchestrator: () => Promise<
           CliInvokeResult & { settings?: unknown | null }

@@ -1875,6 +1875,7 @@ module.exports = {
   PTY_ACCOUNT_MODES,
   PTY_SESSION_ACCOUNT_MISMATCH,
   isClaudeCommandName,
+  scanSubmittedInput,
   DEFAULT_COLS,
   DEFAULT_ROWS,
   WIN32_MAX_PATH,

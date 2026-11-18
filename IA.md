@@ -4753,3 +4753,23 @@ Agente: subagente da Orquestração (Claude Sonnet 5.5, effort medium). Task: Fe
 **Não validado.** Gemini não está instalado aqui: as duas frases dele estão marcadas `inPackage: true` pelas medições de `agent-resume-versions.json` (0.57.0 e 0.62.0), não por varredura de binário. O extrator não roda no CI (não há CLI instalada lá): o aviso vem quando alguém atualiza uma CLI e roda o extrator, ou pelo teste do detector se a lista dele andar sozinha. O app não foi aberto (sem mudança visível).
 
 Estado: concluído (commit `d7728b67` na branch, sem push).
+
+---
+
+## 2026-11-18 — Registros: cada sessão de agente passa a ser gravada (primeira fatia, sem tela)
+
+Agente: subagente da Orquestração (Claude Sonnet 5.5, effort medium). Task: Felixo AI Core/Registros — gravar cada sessão de agente e exportar por período (Notion `3eb91f95-497e-81a5-a379-ec8df52dcae2`).
+
+**Contexto.** Nenhuma tabela guardava sessões de agente do canvas (`agent_usage_*` guarda amostras de cota por conta). Faltava base para saber quanto cada agente, modelo e esforço é usado.
+
+**O que mudou.**
+- Migração `025_agent_session_log.sql`: `agent_sessions` (agente, modelo, esforço, fast, conta, projeto = só o nome da pasta, referência da sessão da CLI, `user_id`, início, fim, motivo do fim) e `agent_interactions` (horário, tipo, tamanho em caracteres). Não existe coluna para texto.
+- `storage/agent-session-log-repository.cjs`: `start`/`interaction`/`setCliSession`/`end`/`closeOpen`, `listSessions` (duração de relógio e tempo ativo, lacunas de até 5 min), `aggregate` (hora, dia, semana, mês, ano) e `exportPeriod` (CSV com proteção contra fórmula de planilha, ou JSON com totais). Retenção de 2 anos.
+- `pty-ipc-handlers.cjs` (dependência opcional `sessionLog`, falha do registro nunca atrapalha o terminal): spawn novo abre a linha, Enter fora de colagem conta uma interação (só o tamanho), `onSession` grava a referência da CLI, saída/kill fecha com `exit`/`killed`. `scanSubmittedInput` passou a ser exportada pelo gerenciador.
+- `main.cjs`: cria o repositório, fecha no início o que ficou aberto como `app_closed` (queda ou fechamento), fecha de novo no `before-quit` e expõe `agent-session-log:export` (preload `agentSessionLog.export`, tipos em `vite-env.d.ts`). A gravação do arquivo reaproveita `files.saveTextFile`.
+
+**Validação.** `agent-session-log-repository.test.cjs` (3 testes: parser de argumentos, ciclo completo com totais por dia, fim com o app, ausência de texto/caminho na exportação, retenção) e um teste novo em `pty-ipc-handlers.test.cjs` (texto digitado sem Enter e colagem não contam; kill vira `killed`); 37 testes do arquivo de handlers passam. O app não foi aberto.
+
+**Não validado / fica para depois.** Tela de totais e botão de exportar, identidade do prompt (`PromptInsertion`) por interação, `user_id` real (grava `local`), leitura de modelo/esforço dos logs da CLI, alinhamento com a captura de consumo por sessão.
+
+Estado: concluído como primeira fatia na branch `orq/registros-gravar-cada-sessao-agente`; push e deploy pelo orquestrador.
