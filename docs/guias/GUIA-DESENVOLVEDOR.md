@@ -724,7 +724,7 @@ o perfil aparentar já estar em uso. O CLI expõe `buttons`, `text`, `click`,
 `type`, `press`, `eval` e `main` em chamadas curtas; `screenshot` usa a captura
 nativa do Electron para funcionar também quando a janela oculta não pinta pelo
 GPU no Windows. Em CI Linux sem display, Xvfb continua sendo o fallback do
-ambiente. A skill [`.claude/skills/rodar-app/`](../../.claude/skills/rodar-app/SKILL.md)
+ambiente. A skill `rodar-app`, que cada pessoa mantém na própria máquina (fora do repositório),
 aponta para esse fluxo e preserva o driver legado somente para casos de teclado
 ou clipboard físico que CDP não representa.
 

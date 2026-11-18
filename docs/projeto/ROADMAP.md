@@ -5,7 +5,7 @@ Status: em desenvolvimento.
 
 > Este arquivo descreve direção de produto e ideias de contribuição. O estado
 > entregue deve ser conferido no [`README.md`](../../README.md) e nos registros
-> do [`IA.md`](IA.md); uma ideia aqui não significa que a funcionalidade já
+> do `IA.md` da raiz (fora do repositório); uma ideia aqui não significa que a funcionalidade já
 > existe ou que há prazo de entrega.
 
 ## Direção do produto

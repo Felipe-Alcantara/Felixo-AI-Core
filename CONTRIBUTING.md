@@ -38,14 +38,10 @@ Durante o trabalho, rode só os arquivos da área que você mexeu (`npx vitest r
 
 ## Arquivos para agentes de IA
 
-O Felixo AI Core também é desenvolvido por agentes de IA (Claude Code, Codex e outros), e alguns arquivos existem só para eles. Quem contribui à mão pode ignorá-los:
+O Felixo AI Core também é desenvolvido com agentes de IA (Claude Code, Codex e outros). As instruções e a configuração desses agentes não fazem parte do repositório: `CLAUDE.md`, `AGENTS.md`, `IA.md`, `.claude/`, `.agents/`, `.codex`, `.gemini/`, `.cursor/`, `GEMINI.md`, `.ai-memory.toml` e similares ficam na máquina de quem desenvolve, fora do controle de versão. O `.gitignore` já os deixa de fora.
 
-| Arquivo | O que é |
-| --- | --- |
-| `CLAUDE.md`, `AGENTS.md` | Instruções do projeto para os agentes. O conteúdo é o mesmo nos dois; cada ferramenta lê o seu. |
-| `.claude/skills/`, `.agents/skills/` | Skills dos agentes: a memória de longo prazo (ai-memory) e a `rodar-app`, que abre o app sem interromper a área de trabalho. As do ai-memory são idênticas nas duas pastas. |
-| `IA.md`, `docs/projeto/IA.md` | Linha do tempo de decisões e mudanças, para um agente retomar o contexto. O guia manda acrescentar uma entrada datada e nunca reescrever as antigas. |
-| `docs/ia-archive/` | Registros antigos dos `IA.md`, movidos para lá sem edição. |
-| `docs/_legado/`, `docs/overnight/` | Documentação da fase anterior do projeto e de uma sessão noturna autônoma. São histórico; não descrevem o produto atual. |
+Cada contribuidor usa as próprias instruções de agente, localmente. Se o seu agente pede um arquivo de regras, crie-o no seu checkout: ele não entra em commit, e nenhum teste nem o build dependem dele. A exceção é `docs/projeto/IA.md`, que continua versionado porque o CI confere que ele existe.
 
-A configuração pessoal da sua ferramenta (permissões, contas, memória e sessões, como `.claude/settings.local.json`, `.cursor/` e `.gemini/`) fica fora do repositório, e o `.gitignore` já cobre os casos comuns. Confira o `git status` antes do `git add`.
+`docs/_legado/` (documentação da fase anterior do projeto) e `docs/overnight/` (relatório de uma sessão noturna) são histórico: não descrevem o produto atual.
+
+Antes de cada `git add`, confira o `git status`. A configuração pessoal da sua ferramenta (permissões, contas, memória e sessões, como `.claude/settings.local.json`) é só da sua máquina.

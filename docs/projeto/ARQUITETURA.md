@@ -260,7 +260,7 @@ isolado, fixture do `canvas-smoke`) em 19 estados — canvas nos dois temas,
 13 painéis, menu, gaveta, modal e chat — com `:hover` e `:focus-visible`
 forçados via CDP em cada elemento interativo, no v3 (`main`) e no v4, e
 comparados elemento a elemento. As diferenças que sobram são os padrões novos
-do v4 listados no registro de 25/09/2026 do [IA.md](IA.md).
+do v4 listados no registro de 25/09/2026 do `IA.md` da raiz (fora do repositório).
 
 O v4 exige Chromium 111+ (`color-mix()`, `@property`); o Electron 41 traz o
 Chromium 146.
@@ -2423,7 +2423,7 @@ produção e tem cobertura própria de unidade.
 ## Documentos relacionados
 
 - [`README.md`](../../README.md): entrada pública e capacidades observáveis.
-- [`IA.md`](IA.md): decisões e evolução operacional, em ordem cronológica.
+- `IA.md` da raiz (fora do repositório): decisões e evolução operacional, em ordem cronológica.
 - [`ROADMAP.md`](ROADMAP.md): direção e ideias de contribuição.
 - [`RODAR-VIA-CODIGO-FONTE.md`](RODAR-VIA-CODIGO-FONTE.md): execução local e
   atualização do checkout.

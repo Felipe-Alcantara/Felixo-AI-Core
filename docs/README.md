@@ -39,7 +39,6 @@ compatibilidade com histórico legado.
 | [guias/GUIA-CONTAS-E-LIMITES.md](guias/GUIA-CONTAS-E-LIMITES.md) | Conta da CLI oficial, diagnóstico das CLIs, limites e uso por conta, conta por terminal e cadeia de contas. |
 | [guias/GUIA-SYSTEM-DESIGN.md](guias/GUIA-SYSTEM-DESIGN.md) | Sincronização segura do Felixo System Design e quando o Git pode pedir login. |
 | [guias/GUIA-DEPENDENCIAS-E-SBOM.md](guias/GUIA-DEPENDENCIAS-E-SBOM.md) | Auditoria de dependências, SBOM e como repetir o que o CI faz. |
-| [ia-archive/](ia-archive/) | Arquivo dos registros antigos dos `IA.md`, movidos sem edição (ver `app/scripts/archive-ia-md.cjs`). |
 | [AUDITORIA-2026-08-08.md](AUDITORIA-2026-08-08.md) | Auditoria histórica de código e segurança; os achados refletem a fotografia daquela data. |
 
 ## Qual arquivo consultar
@@ -48,11 +47,8 @@ compatibilidade com histórico legado.
   capacidades atuais.
 - [`projeto/IA.md`](projeto/IA.md) mantém o contexto operacional versionado e
   seu histórico; acrescente entradas datadas, sem reescrever o passado.
-- [`../IA.md`](../IA.md) é o ledger operacional mais recente da raiz, usado para
-  registrar sessões e correções recentes.
-- Os registros de julho a setembro de 2026 dos dois `IA.md` foram movidos, sem
-  edição, para [`ia-archive/`](ia-archive/); cada `IA.md` tem uma seção
-  **Registros arquivados** com o ponteiro para o arquivo de cada mês.
+- O `IA.md` da raiz é o ledger operacional mais recente, usado para registrar sessões e correções recentes; fica na máquina de quem desenvolve, fora do repositório.
+- Os registros antigos dos dois `IA.md` foram movidos, sem edição, para arquivos mensais; cada `IA.md` tem uma seção **Registros arquivados** com o ponteiro para o arquivo de cada mês. Esses arquivos ficam fora do repositório.
 - Os guias explicam procedimentos observáveis; o roadmap descreve direção e
   ideias de contribuição, não funcionalidades prometidas.
 
