@@ -832,7 +832,7 @@ de produto; cada uma tinha causa própria, achada por reprodução e não por su
 
 **Organização e portabilidade.**
 
-- `ai-clis/*.sh` fixavam `/home/felipe/...` e a versão do Node de quem os escreveu. Agora resolvem a
+- `ai-clis/*.sh` fixavam `/home/pessoa/...` e a versão do Node de quem os escreveu. Agora resolvem a
   CLI pelo PATH, com `FELIXO_CLI_PATHS` (o mesmo ajuste do app) e `$HOME/.npm-global/bin` na frente
   (`ed29ea6`). A linha 2 de cada arquivo ficou igual: o chat legado a usa para inferir o nome do
   modelo. Continuam exclusivos de Linux/KDE por usarem o Konsole, e isso agora está dito no arquivo.
@@ -3213,7 +3213,7 @@ Estado: concluído e publicado (v0.1.491).
 
 **Validação.** Openia: `python -m pytest -q` 127 passaram (eram 122; 5 novos), `ruff check .` limpo. Felixo: `openia-image-service.test.cjs` 35 testes, 2 reprovavam sem a mudança e passam com ela; `npm test` 3040 testes, 3031 passando, 0 falhas, 9 pulados; `eslint` 0. CI `40325866896` verde (macOS, Ubuntu, Ubuntu ARM, Windows e o smoke do canvas). O Release `40326796712` foi cancelado pelo `concurrency: release-main` do próprio workflow, porque o outro agente empurrou `9dfffff` em seguida (os meus commits são ancestrais dele); o Release `40327861748` publicou a v0.1.493 nos três sistemas. O Openia não tem pipeline (0 workflows, 0 execuções).
 
-**Não validado.** Uma chave real com o limite esgotado (o corpo dos testes é um double no formato de erro do OpenRouter, o mesmo do teste de `usage.py`); a mensagem na tela do app real, que depende do pino novo; e o macOS e o Windows além do que o CI cobre. **Achado fora do escopo:** o `openia` do PATH desta máquina está quebrado (`cannot import name 'app' from 'openia.cli'`): o `cli.py` do clone em `E:\Programação\Github\Openia` está com 0 bytes desde 15/10, com o disco E: em 0,07 GB livres. Complementei a task do disco E: já aberta; não mexi nesse clone.
+**Não validado.** Uma chave real com o limite esgotado (o corpo dos testes é um double no formato de erro do OpenRouter, o mesmo do teste de `usage.py`); a mensagem na tela do app real, que depende do pino novo; e o macOS e o Windows além do que o CI cobre. **Achado fora do escopo:** o `openia` do PATH desta máquina está quebrado (`cannot import name 'app' from 'openia.cli'`): o `cli.py` do clone em `E:\<pasta>\Openia` está com 0 bytes desde 15/10, com o disco E: em 0,07 GB livres. Complementei a task do disco E: já aberta; não mexi nesse clone.
 
 Estado: concluído e publicado (v0.1.493).
 

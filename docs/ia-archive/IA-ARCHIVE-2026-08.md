@@ -1702,7 +1702,7 @@ Confirmado lendo `useAgentConfig.ts`, `pty-process-manager.cjs` e
 esses nodes) — e reproduzido no app real: um Codex aberto sem projeto, com um
 turno real submetido (`diga apenas oi e pare`, bateu no limite de uso da conta,
 mas isso não impede a criação do rollout do Codex) gerou um
-`rollout-*.jsonl` real com `cwd: "/home/felipe"`, enquanto o painel de detalhes do
+`rollout-*.jsonl` real com `cwd: "/home/pessoa"`, enquanto o painel de detalhes do
 node mostrava "Pasta de trabalho: não informado" e "Sessão do agente: não
 associada: retomada genérica".
 
@@ -1717,7 +1717,7 @@ certo.
 ### O que foi medido
 
 - `discoverAgentSession()` chamado diretamente (fora da suíte, script isolado)
-  contra o rollout real criado nesta investigação: devolveu `cwd: '/home/felipe'`
+  contra o rollout real criado nesta investigação: devolveu `cwd: '/home/pessoa'`
   e o `sessionId` certo — confirma que o mecanismo de descoberta em si funciona
   quando a janela de tempo bate.
 - Teste novo em `agent-session.test.ts`: `canResumeAgentSession` recusa com
@@ -1775,12 +1775,12 @@ achar o arquivo a tempo.
 
 | CLI | Sessão usada | Resultado |
 | --- | --- | --- |
-| Codex 0.150.1 | 26/08, `cwd=/home/felipe` | **Retomou direto** — `<EXTERNAL SESSION IMPORTED>`, sem seletor. |
+| Codex 0.150.1 | 26/08, `cwd=/home/pessoa` | **Retomou direto** — `<EXTERNAL SESSION IMPORTED>`, sem seletor. |
 | Claude Code | 10/08 (18 dias), repo Automações do Notion | **Retomou direto** — abriu exatamente a conversa antiga (tabela de tasks, "Baked for 7m 48s · done segunda-feira, 10 de ago."), sem seletor. |
 | Gemini CLI 0.57.0 | 17/08 (11 dias), `app/` | **Falhou** — `Error resuming session: No previous sessions found for this project.` (a CLI encerrou, código 42). |
 
 **Teste negativo** (proteção contra conta/diretório errado): forcei `node.data.cwd`
-(`/tmp`) divergente de `agentSession.cwd` (`/home/felipe`) — o app **não** tentou
+(`/tmp`) divergente de `agentSession.cwd` (`/home/pessoa`) — o app **não** tentou
 resumir; abriu um Codex novo em `/tmp` com o prompt de confiança de diretório
 normal, sem nenhum sinal de "importando sessão". A proteção segura o que deveria.
 
@@ -2761,7 +2761,7 @@ de agente segue sem arrastar a conta do agente anterior.
 Conferido no app: conta escolhida, agente aberto, janela recarregada, e o campo
 voltou marcado em "trabalho". Também confirmado com credencial real que o
 login por conta funciona ponta a ponta: o perfil ficou com
-`felipethefeh@gmail.com` e o sistema com outra conta, ambos `plus`, sem logout
+`<e-mail pessoal>` e o sistema com outra conta, ambos `plus`, sem logout
 entre eles.
 
 ## [2026-08-30] Remoção de perfis ficou explícita na interface

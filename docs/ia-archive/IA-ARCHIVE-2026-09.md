@@ -547,7 +547,7 @@ mão):
 2. Mesmo corrigindo (1) e resolvendo o `.cmd` certo, `execFile` com
    `shell: true` no Windows concatena comando e argumentos crus para o
    `cmd.exe /c` **sem citar** o caminho. Um perfil de usuário do Windows com
-   espaço no nome — como "Felipe Martins", nesta máquina — quebra o comando
+   espaço no nome — como "Pessoa Exemplo", nesta máquina — quebra o comando
    ao meio: o `cmd.exe` só reconhece o pedaço antes do espaço. Numa conta
    sem espaço no nome o mesmo código passa batido, o que explica o painel
    funcionar numa outra máquina do usuário e não nesta.
@@ -571,11 +571,11 @@ rebaseado e enviado a `origin/main`.
 Na mesma sessão, investigando um relato anterior do usuário ("Uma linha por
 pasta" empilhando dois blocos do mesmo repositório em vez de lado a lado),
 achei e corrigi dado obsoleto no banco local: um clone duplicado em
-`C:\Users\Felipe Martins\Felixo-AI-Core-task` (git limpo, sem commit
+`C:\Users\Pessoa Exemplo\Felixo-AI-Core-task` (git limpo, sem commit
 próprio, apagado com segurança) e sete registros (`projects` e
-`canvas_nodes`) ainda apontando para `E:\Programação\Github\Felixo-AI-Core`,
+`canvas_nodes`) ainda apontando para `E:\<pasta antiga>\Felixo-AI-Core`,
 caminho que não existe mais desde que o repositório foi reorganizado para
-`P:\...\Repositórios\Meus repositórios\Felixo-AI-Core`. Corrigido com
+`<pasta nova>\Felixo-AI-Core`. Corrigido com
 backup prévio do `felixo.sqlite` (dois arquivos `.bak-*` na pasta
 `database/` do userData) e sem fechar o app — o app aceita escrita no banco
 com ele aberto, o que evitou o risco de a correção matar esta própria sessão
@@ -2084,7 +2084,7 @@ AGENTE/REPOSITÓRIO: Tasks do Felixo AI Core (Claude Sonnet 5) / Felixo-AI-Core.
 
 ### Sessão real (perfil descartável, 10 terminais shell, 3 webviews locais, 30 minutos de carga)
 
-`/home/felipe/.claude/jobs/225a9b8c/tmp/heap-sessions/30min-10term-3web/report.md`
+`/home/pessoa/.claude/jobs/225a9b8c/tmp/heap-sessions/30min-10term-3web/report.md`
 (local, sanitizado — sem conteúdo de terminal nem caminho pessoal além do já
 presente no próprio código-fonte).
 
@@ -2130,7 +2130,7 @@ AGENTE/REPOSITÓRIO: Tasks do Felixo AI Core (Claude Sonnet 5) / Felixo-AI-Core.
 
 ### Sessão real (perfil descartável, 15 terminais shell, 3 webviews locais, 60 minutos de carga, drawer sempre fechado a cada rajada — PR #39)
 
-`/home/felipe/.claude/jobs/225a9b8c/tmp/heap-sessions/60min-15term-3web-v2/report.md` (local, sanitizado).
+`/home/pessoa/.claude/jobs/225a9b8c/tmp/heap-sessions/60min-15term-3web-v2/report.md` (local, sanitizado).
 
 | Checkpoint | Heap JS | Nós DOM | Listeners | Processos |
 | --- | ---: | ---: | ---: | ---: |
@@ -3398,7 +3398,7 @@ uma optionalDependency de plataforma não foi baixada"). Confirmado, não invest
   (`resolveNpmCliPath` cai para `node_modules/npm` fora do pacote), mas não é o binário instalado.
 - **Ausência de rede**: não simulada (exigiria bloquear DNS/proxy para o processo, não feito).
 - **`.cmd`, aliases, npm global do usuário, caminho com espaço**: o `PATH` real desta máquina já
-  tinha `claude`/`codex` globais com espaço no perfil (`C:\Users\Felipe Martins\...`) e isso não
+  tinha `claude`/`codex` globais com espaço no perfil (`C:\Users\Pessoa Exemplo\...`) e isso não
   quebrou a detecção nas tasks anteriores, mas não foi testado especificamente NESTA reprodução
   (que isola o HOME de propósito).
 - **CI Windows automatizado**: o runner funciona manualmente (rede real, minutos de duração); não

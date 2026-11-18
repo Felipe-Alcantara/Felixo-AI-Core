@@ -97,7 +97,7 @@ Cada adapter transforma o formato especifico do CLI neste formato unico.
 - `kill(sessionId)` — SIGTERM, SIGKILL apos 5s
 - `Map<sessionId, ChildProcess>` para rastrear processos
 - Cleanup em `app.before-quit`
-- ENV com PATH: `/home/felipe/.nvm/versions/node/v25.9.0/bin:/home/felipe/.npm-global/bin`
+- ENV com PATH: `/home/pessoa/.nvm/versions/node/v25.9.0/bin:/home/pessoa/.npm-global/bin`
 
 ### 1.2 Adapters (um por CLI)
 
@@ -248,7 +248,7 @@ contextBridge.exposeInMainWorld('felixo', {
 
 ❯ /plan                                                                                            
   ⎿  Current Plan
-     /home/felipe/.claude/plans/polished-sprouting-volcano.md
+     /home/pessoa/.claude/plans/polished-sprouting-volcano.md
 
      Plano: Integrar CLIs de IA como backend do Felixo AI Core
 
@@ -352,7 +352,7 @@ contextBridge.exposeInMainWorld('felixo', {
      - Map<sessionId, ChildProcess> para rastrear processos
      - Cleanup em app.before-quit
      - ENV com PATH:
-     /home/felipe/.nvm/versions/node/v25.9.0/bin:/home/felipe/.npm-global/bin
+     /home/pessoa/.nvm/versions/node/v25.9.0/bin:/home/pessoa/.npm-global/bin
 
      1.2 Adapters (um por CLI)
 

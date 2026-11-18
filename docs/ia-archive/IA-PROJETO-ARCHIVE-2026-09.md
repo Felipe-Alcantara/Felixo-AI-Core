@@ -909,7 +909,7 @@ a CLI globalmente no Windows:
    nativo do Windows e falhava.
 2. Mesmo resolvendo o `.cmd` certo, `execFile` com `shell: true` no Windows
    concatena comando e argumentos crus para o `cmd.exe /c` sem citar o
-   caminho. Um perfil de usuário com espaço no nome — "Felipe Martins" nesta
+   caminho. Um perfil de usuário com espaço no nome — "Pessoa Exemplo" nesta
    máquina — quebra o comando ao meio: o `cmd.exe` só reconhece o pedaço antes
    do espaço. Numa conta sem espaço no nome o mesmo código passava batido, o
    que explica o app funcionar noutra máquina e não nesta ("neste PC" no

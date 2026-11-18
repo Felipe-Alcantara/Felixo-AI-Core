@@ -66,7 +66,7 @@ Correções:
   numa máquina descartável. O CI segue instalando como antes.
 - `autostart.cjs`: `isInsideTemporaryDirectory()` compara o exe com as
   pastas temporárias depois de `realpathSync.native` — no Windows
-  `os.tmpdir()` vem em nome curto 8.3 (`FELIPE~1`) e o exe em nome longo, e
+  `os.tmpdir()` vem em nome curto 8.3 (`PESSOA~1`) e o exe em nome longo, e
   texto cru nunca casaria. Ligar o autostart a partir de %TEMP% é recusado;
   desligar continua permitido; o status traz `warning`, mostrado em
   Configurações.
@@ -497,7 +497,7 @@ Task: [Felixo AI Core/Agentes — validar Openia empacotado em Windows limpo (NS
 Medido nesta máquina com pastas temporárias, e depois no app instalado da v0.1.438 no runner limpo:
 
 - `.ps1`: nunca detectado (o `execFile` não roda script); o serviço do Openia não chamava `list`/`models`/`key`; o terminal abria com "não é reconhecido" — o `cmd.exe` não executa `.ps1` (o PATHEXT padrão não tem `.PS1`, ao contrário do que dizia o comentário em `createPtyLaunchSpec`). Nenhum instalador do Openia cria `openia.ps1`: o instalador PowerShell grava uma *função* no `$PROFILE`, que os terminais (`-NoProfile`) nem carregam.
-- `.cmd` numa pasta com espaço: detectado, mas `list --json` falhava — `resolveOpeniaSpawn` passava `shell: true` ao `cross-spawn`, que então repassa o caminho sem aspas. É o caso do launcher legado desta máquina (`C:\Users\Felipe Martins\AppData\Local\openia\openia.cmd`).
+- `.cmd` numa pasta com espaço: detectado, mas `list --json` falhava — `resolveOpeniaSpawn` passava `shell: true` ao `cross-spawn`, que então repassa o caminho sem aspas. É o caso do launcher legado desta máquina (`C:\Users\Pessoa Exemplo\AppData\Local\openia\openia.cmd`).
 
 Uma regra para as três camadas (commit `44fde46`): `resolveCommandPath` no Windows procura primeiro o que o `cmd.exe` executa (`.exe`/`.cmd`/`.bat`) em todo o PATH, depois `.ps1` e por último o arquivo sem extensão — o `.ps1` só entra quando nada mais existe, então nada que já funcionava muda. O adaptador win32 ganhou `createPowerShellScriptLaunch` (`-NoLogo -NoProfile -ExecutionPolicy Bypass [-NonInteractive] -File`), usado pelo detector, pelo serviço do Openia (via o `prefixArgs` que o serviço de imagens já aceitava) e pelo terminal (interativo, `-NoExit` na sessão de rodar arquivo). O serviço deixou de usar `shell: true`. O diagnóstico marca `[powershell]`.
 
@@ -662,7 +662,7 @@ Com uma chave do OpenRouter inválida, `openia run claudecode --provider` ficava
 
 - O bloco com a faixa não foi aberto no app real com uma chave recusada. A faixa foi provada pela função pura, e a passagem do código 3 pelo PTY pelos testes do gerenciador.
 - O pino novo só chega a quem instala ou atualiza o Openia pelo Felixo depois do próximo Release. Instalações antigas continuam na 0.1.0 até alguém clicar em atualizar.
-- O disco E: deste PC está cheio (0 GB livres; o pytest nem gravava o cache). O trabalho foi feito num clone temporário. O clone local em `E:\Programação\Github\Openia`, que o launcher legado do PATH usa, ficou em `ed1e85c`, sem os commits novos.
+- O disco E: deste PC está cheio (0 GB livres; o pytest nem gravava o cache). O trabalho foi feito num clone temporário. O clone local em `E:\<pasta>\Openia`, que o launcher legado do PATH usa, ficou em `ed1e85c`, sem os commits novos.
 
 ### Validação no app, depois do push (08/10/2026, 05:45–05:55)
 
