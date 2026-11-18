@@ -273,7 +273,7 @@ describe('telas reais do Claude Code (capturadas da CLI 2.1.227)', () => {
   const READY_PROMPT = [
     ' ▐▛███▜▌   Claude Code v2.1.227',
     '▝▜█████▛▘  Opus 5 with high effort · Claude Pro',
-    '  ▘▘ ▝▝    ~/Programação/Github/Repositórios/Felixo-AI-Core',
+    '  ▘▘ ▝▝    ~/projetos/Felixo-AI-Core',
     '─'.repeat(60),
     '❯ Try "how does ChatWorkspace.tsx work?"',
     '─'.repeat(60),

@@ -114,11 +114,11 @@ test('a mesma conta continua com o mesmo fingerprint, ainda que escrita diferent
 test('contas diferentes no mesmo domínio ficam distinguíveis na tela', () => {
   const uma = parseAgentAuth(
     'claude',
-    JSON.stringify({ loggedIn: true, email: 'felipe.pessoal@gmail.com' }),
+    JSON.stringify({ loggedIn: true, email: 'pessoa.pessoal@example.com' }),
   )
   const outra = parseAgentAuth(
     'claude',
-    JSON.stringify({ loggedIn: true, email: 'felipe.trabalho@gmail.com' }),
+    JSON.stringify({ loggedIn: true, email: 'pessoa.trabalho@example.com' }),
   )
 
   assert.notEqual(uma.identityDisplay, outra.identityDisplay)

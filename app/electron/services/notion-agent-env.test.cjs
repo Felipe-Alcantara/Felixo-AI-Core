@@ -19,7 +19,7 @@ test('o diagnóstico lê o perfil ativo sem repassar token nem o ambiente do app
   let visto
   const run = async (command, args, env) => {
     visto = { command, args, env }
-    return JSON.stringify({ ok: true, dados: { ativo: 'felipe', perfis: [{ alias: 'felipe', token: 'ntn_39...z4rk' }] } })
+    return JSON.stringify({ ok: true, dados: { ativo: 'felipe', perfis: [{ alias: 'felipe', token: 'ntn_00...abcd' }] } })
   }
   const status = await checkNotionCli({ run, env: { PATH: 'x', NOTION_TOKEN: 'ntn_do_app' } })
 

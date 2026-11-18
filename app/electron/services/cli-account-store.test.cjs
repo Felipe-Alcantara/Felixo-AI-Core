@@ -362,12 +362,12 @@ test('não permite duas contas do mesmo provedor com rótulos equivalentes', () 
   try {
     const primeira = env.store.create({
       providerId: 'codex',
-      label: '  FelixoBackup@gmail.com  ',
+      label: '  ContaBackup@example.com  ',
     })
     const profileRoot = path.join(env.userData, 'cli-profiles', 'codex')
 
     assert.throws(
-      () => env.store.create({ providerId: 'codex', label: 'felixobackup@gmail.com' }),
+      () => env.store.create({ providerId: 'codex', label: 'contabackup@example.com' }),
       (error) => {
         assert.equal(error.code, 'CLI_ACCOUNT_DUPLICATE')
         assert.match(error.message, /Já existe uma conta/)
@@ -379,7 +379,7 @@ test('não permite duas contas do mesmo provedor com rótulos equivalentes', () 
     assert.deepEqual(fs.readdirSync(profileRoot), [primeira.id])
 
     assert.doesNotThrow(() =>
-      env.store.create({ providerId: 'claude', label: 'felixobackup@gmail.com' }),
+      env.store.create({ providerId: 'claude', label: 'contabackup@example.com' }),
     )
   } finally {
     env.cleanup()
@@ -392,14 +392,14 @@ test('na atualização, deduplica contas legadas, preserva o perfil e mantém id
   try {
     const canonical = env.store.create({
       providerId: 'codex',
-      label: 'FelixoBackup@gmail.com',
+      label: 'ContaBackup@example.com',
     })
     const duplicate = env.store.create({ providerId: 'codex', label: 'outra conta' })
     const duplicateDir = path.join(env.userData, 'cli-profiles', 'codex', duplicate.id)
     fs.writeFileSync(path.join(duplicateDir, 'auth.json'), '{"token":"preservar"}', 'utf8')
 
     const stored = JSON.parse(fs.readFileSync(env.store.storePath, 'utf8'))
-    stored.accounts.find((account) => account.id === duplicate.id).label = ' felixobackup@gmail.com '
+    stored.accounts.find((account) => account.id === duplicate.id).label = ' contabackup@example.com '
     fs.writeFileSync(env.store.storePath, `${JSON.stringify(stored)}\n`, 'utf8')
 
     const migrated = createCliAccountStore({

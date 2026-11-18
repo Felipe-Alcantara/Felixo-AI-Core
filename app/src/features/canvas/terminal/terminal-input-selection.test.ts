@@ -27,7 +27,7 @@ describe('findTypedInputRange', () => {
   })
 
   it('encontra o texto digitado num shell', () => {
-    const linha = 'felipe@maquina:~$ npm run build'
+    const linha = 'pessoa@maquina:~$ npm run build'
     expect(findTypedInputRange(linha, linha.length)).toEqual({ start: 18, length: 13 })
   })
 
@@ -38,7 +38,7 @@ describe('findTypedInputRange', () => {
 
   it('devolve null com a entrada vazia, para o Ctrl+A seguir ao PTY', () => {
     expect(findTypedInputRange('❯ ', 2)).toBeNull()
-    expect(findTypedInputRange('felipe@maquina:~$ ', 18)).toBeNull()
+    expect(findTypedInputRange('pessoa@maquina:~$ ', 18)).toBeNull()
   })
 
   it('devolve null quando a linha não tem marcador de prompt', () => {
@@ -64,7 +64,7 @@ describe('findTypedInputRange', () => {
   })
 
   it('não confunde uma variável de ambiente com o prompt do shell', () => {
-    const linha = 'felipe@maquina:~$ echo $HOME'
+    const linha = 'pessoa@maquina:~$ echo $HOME'
     expect(findTypedInputRange(linha, linha.length)).toEqual({ start: 18, length: 10 })
   })
 })
