@@ -18,6 +18,8 @@ export type SessionActivity =
 export type SessionSnapshot = {
   activity: SessionActivity
   previewLines: string[]
+  /** Gemini CLI: a tela de login mostra a recusa da conta pessoal pelo Google (ver o store). */
+  accountRefused?: boolean
   scrollback?: TerminalScrollbackStatus
   exitCode?: number
   message?: string

@@ -46,6 +46,7 @@ import type { ListedAgentSession } from '../services/agent-session-list'
 import { readingProfileFor } from '../terminal/reading/reading-profiles'
 import { useAccountChain, useCliAccountLabel } from '../hooks/useAccountChain'
 import { useAccountChainActions } from '../hooks/account-chain-actions-context'
+import { geminiAccountRefusedBanner } from '../services/gemini-account-refused-banner'
 import { openiaKeyRefusedBanner } from '../services/openia-key-refused-banner'
 import {
   BANNER_ACTION_LABELS,
@@ -248,6 +249,9 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
     exitCode: snapshot?.exitCode,
     accountLabel,
   })
+  // O Google recusou a conta pessoal na tela de login do Gemini CLI: a faixa traduz a
+  // recusa e aponta a Antigravity, que a tela só cita em inglês.
+  const accountRefusedBanner = geminiAccountRefusedBanner({ providerId: provider.id, accountRefused: snapshot?.accountRefused })
   const preview = snapshot?.previewLines ?? []
   const scrollbackNotice = terminalScrollbackNotice(snapshot?.scrollback)
   const isLive = activity !== 'exited' && activity !== 'error'
@@ -375,7 +379,7 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       )}
 
-      {(resumeBanner || keyRefusedBanner || chainBanners.length > 0 || chainError) && (
+      {(resumeBanner || keyRefusedBanner || accountRefusedBanner || chainBanners.length > 0 || chainError) && (
         <div className="nodrag nowheel nopan flex shrink-0 flex-col gap-1 px-2 pt-2">
           {keyRefusedBanner && (
             <div
@@ -386,6 +390,18 @@ function TerminalNodeComponent({ id, data, selected }: NodeProps) {
               <p className="font-semibold">{keyRefusedBanner.title}</p>
               <p className="mt-0.5 line-clamp-4 text-(--f-core-white-soft)" title={keyRefusedBanner.detail}>
                 {keyRefusedBanner.detail}
+              </p>
+            </div>
+          )}
+          {accountRefusedBanner && (
+            <div
+              role="status"
+              data-terminal-account-refused-banner
+              className="rounded-sm border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-1.5 py-1 text-[10px] leading-snug text-(--color-warning)"
+            >
+              <p className="font-semibold">{accountRefusedBanner.title}</p>
+              <p className="mt-0.5 line-clamp-4 text-(--f-core-white-soft)" title={accountRefusedBanner.detail}>
+                {accountRefusedBanner.detail}
               </p>
             </div>
           )}

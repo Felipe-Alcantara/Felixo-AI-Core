@@ -1063,6 +1063,29 @@ describe('TerminalSessionStore: abertura do Codex com compositor provisório', (
     expect(AFTER_TRUST).toMatch(PROGRAM_STATUS)
   })
 
+  it('Gemini: a tela de login com a conta pessoal recusada marca accountRefused; o Claude com a mesma saída, não', async () => {
+    const login = JSON.parse(
+      readFileSync(join(__dirname, '__fixtures__/terminal-output/gemini-erro.json'), 'utf8'),
+    ) as TerminalFixture
+    const loginScreen = login.chunks.map((chunk) => chunk.data).join('')
+    const resizeToRecording = (created: Harness) =>
+      (created.store as unknown as { sessions: Map<string, { terminal: { resize: (cols: number, rows: number) => void } }> })
+        .sessions.get(SESSION_ID)?.terminal.resize(login.cols, login.rows)
+
+    harness = createHarness('', 'gemini')
+    resizeToRecording(harness)
+    harness.feed(loginScreen)
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(harness.store.getSnapshot(SESSION_ID)?.accountRefused).toBe(true)
+    harness.store.clear()
+
+    harness = createHarness('', 'claude')
+    resizeToRecording(harness)
+    harness.feed(loginScreen)
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(harness.store.getSnapshot(SESSION_ID)?.accountRefused).toBeUndefined()
+  })
+
   it('não digita o contexto no compositor provisório: o Codex ainda vai perguntar se confia na pasta', async () => {
     harness = codexHarness()
     harness.feed(PROVISIONAL)

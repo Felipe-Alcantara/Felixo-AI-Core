@@ -48,6 +48,8 @@ import {
   promptInsertionSourceForContextKind,
 } from '../services/context-file-delivery'
 import { containsControlChars } from '../services/dictation'
+import { showsGeminiAccountRefusal } from '../services/gemini-account-refused-banner'
+import { providerIdentity } from '../../shared/brand/provider-identity'
 import type { ContextFileKind } from '../services/context-file-delivery'
 import {
   createManualPromptInsertion,
@@ -156,6 +158,8 @@ export type SessionSnapshot = {
   activity: SessionActivity
   /** Last lines of output, for the collapsed card preview. */
   previewLines: string[]
+  /** Gemini CLI: a tela de login mostra que o Google recusou a conta pessoal (ver `gemini-account-refused-banner.ts`). */
+  accountRefused?: boolean
   /** The actual visual-buffer limit and rollover state for this session. */
   scrollback?: TerminalScrollbackStatus
   exitCode?: number
@@ -3528,6 +3532,10 @@ export class TerminalSessionStore {
       ...session.snapshot,
       ...patch,
       previewLines: computePreview(session.terminal),
+      // A frase do Google fica fora das últimas linhas da prévia: lê a tela inteira, só no Gemini.
+      ...(providerIdentity(session.command).id === 'gemini'
+        ? { accountRefused: showsGeminiAccountRefusal(readViewport(session.terminal)) }
+        : {}),
     }
     this.snapshots = { ...this.snapshots, [session.id]: session.snapshot }
     for (const listener of session.listeners) {
