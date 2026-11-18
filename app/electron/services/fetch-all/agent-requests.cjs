@@ -30,6 +30,7 @@ const ACOES_ACEITAS = [
   'canvas-ler',
   'canvas-escrever',
   'perguntar',
+  'pagina-inspecionar',
 ]
 
 /** Limites de uma pergunta com opções (o diálogo precisa caber numa tela). */
@@ -46,6 +47,10 @@ const PERFIL_NOME_MAX = 40
 const CONTEUDO_ESCRITA_MAX = 20000
 
 const MODOS_ABERTURA_PAGINA = ['externo', 'embutido']
+
+/** O que um agente pode pedir de um bloco Página Web: só olhar, nunca agir. */
+const TIPOS_INSPECAO_PAGINA = ['captura', 'dom']
+const ID_ELEMENTO_MAX = 200
 
 /** Estados possíveis de um pedido. */
 const ESTADOS = {
@@ -107,6 +112,24 @@ function normalizarPedido(acao, opcoes = {}) {
     }
 
     return { acao: nome, comCommit: false, url, modo, ...(perfil ? { perfil } : {}) }
+  }
+
+  // Olhar um bloco Página Web (captura de tela ou DOM). Sempre pendente até a
+  // pessoa permitir no cartão: a página pode estar logada como ela. Nada aqui
+  // clica, digita ou lê cookie — só "olhar", e só estes dois jeitos.
+  if (nome === 'pagina-inspecionar') {
+    const idDoElemento = typeof opcoes?.idDoElemento === 'string' ? opcoes.idDoElemento.trim() : ''
+    const tipo = typeof opcoes?.tipo === 'string' ? opcoes.tipo.trim() : ''
+    if (!idDoElemento) {
+      throw new Error('Informe o id do bloco Página Web (veja "felixo canvas listar").')
+    }
+    if (idDoElemento.length > ID_ELEMENTO_MAX) {
+      throw new Error(`Id do bloco muito grande (máximo ${ID_ELEMENTO_MAX} caracteres).`)
+    }
+    if (!TIPOS_INSPECAO_PAGINA.includes(tipo)) {
+      throw new Error(`Tipo de inspeção não reconhecido: "${tipo}". Aceitos: ${TIPOS_INSPECAO_PAGINA.join(', ')}.`)
+    }
+    return { acao: nome, comCommit: false, idDoElemento, tipo }
   }
 
   // Leitura: nada aqui decide SE o elemento existe (isso é responsabilidade
@@ -391,6 +414,7 @@ module.exports = {
   OPCOES_MIN,
   ESTADOS,
   MODOS_ABERTURA_PAGINA,
+  TIPOS_INSPECAO_PAGINA,
   VALIDADE_MS,
   criarRepositorioDePedidos,
   normalizarUrlWeb,

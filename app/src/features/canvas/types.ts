@@ -547,6 +547,18 @@ export type CanvasAgentBrowserRequest = {
   pedidoEm: string
 }
 
+/**
+ * Pedido de um agente para olhar um bloco Página Web (`felixo browser capture`
+ * ou `read`), à espera da pessoa. Só olhar: nada que clique, digite ou leia login.
+ */
+export type CanvasAgentWebpageInspectRequest = {
+  id: string
+  idDoElemento: string
+  tipo: 'captura' | 'dom'
+  origem: string
+  pedidoEm: string
+}
+
 export type FetchAllActionResult = {
   status: FetchAllRepoStatus
   action: 'pull' | 'push' | 'commit'

@@ -28,6 +28,7 @@ import {
   staleGuests,
 } from '../services/webview-mount'
 import { WebviewProfileMenu } from './WebviewProfileMenu'
+import { registerWebpageGuest } from '../services/webpage-guest-registry'
 import { describeWebviewProfile, partitionForWebviewProfile } from '../services/webview-profile'
 import { useWebviewProfiles } from '../hooks/useWebviewProfiles'
 import { webviewLinkMenu, type WebviewContextMenuParams } from '../services/webview-context-menu'
@@ -105,6 +106,24 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
   const permissionRequest = requestsHere[0]
   // Limite de popups do bloco quando o main negou um: o aviso fica até fechar ou navegar.
   const [popupLimit, setPopupLimit] = useState<number | null>(null)
+
+  // O cartão de "um agente quer olhar esta página" precisa saber qual guest é
+  // este bloco (ver `webpage-guest-registry`).
+  const profileName = profileDisplay.name
+  useEffect(() => {
+    if (guestId === null || !webview) return undefined
+    return registerWebpageGuest(id, {
+      guestId,
+      getUrl: () => {
+        try {
+          return webview.getURL()
+        } catch {
+          return ''
+        }
+      },
+      profileName,
+    })
+  }, [guestId, id, profileName, webview])
 
   useEffect(() => {
     if (guestId === null) return undefined

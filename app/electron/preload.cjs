@@ -272,6 +272,14 @@ contextBridge.exposeInMainWorld('felixo', {
       ipcRenderer.on('agent-browser:requests', handler)
       return () => ipcRenderer.removeListener('agent-browser:requests', handler)
     },
+    // Pedidos de agente para olhar (captura ou DOM) um bloco Página Web.
+    listWebpageInspectRequests: () => ipcRenderer.invoke('agent-webpage:list-requests'),
+    decideWebpageInspectRequest: (params) => ipcRenderer.invoke('agent-webpage:decide', params),
+    onWebpageInspectRequests: (callback) => {
+      const handler = (_event, data) => callback(data)
+      ipcRenderer.on('agent-webpage:requests', handler)
+      return () => ipcRenderer.removeListener('agent-webpage:requests', handler)
+    },
     listWriteRequests: () => ipcRenderer.invoke('canvas:list-write-requests'),
     resolveWriteRequest: (params) => ipcRenderer.invoke('canvas:resolve-write-request', params),
     onWriteRequests: (callback) => {

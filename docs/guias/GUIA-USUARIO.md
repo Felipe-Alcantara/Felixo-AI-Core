@@ -987,6 +987,8 @@ Você escolhe **Abrir no navegador**, **Abrir como Página Web** ou **Recusar**,
 - Ele aparece no canvas. Com a tela do chat aberta, o pedido fica esperando até você voltar.
 - Um pedido sem resposta por uma hora expira e sai do cartão, e o agente vê que ele expirou.
 
+Quando um agente pede para **olhar** uma Página Web já aberta (`felixo browser capture` para uma captura de tela, `felixo browser read` para o texto visível e a lista de botões e links), outro cartão aparece na parte de baixo da tela. Ele mostra o endereço da página (sem o que vem depois do `?`), o perfil do bloco e o que o agente vai receber. Você escolhe **Permitir** ou **Recusar**, e a permissão vale para esse pedido só. O agente não clica, não digita e não recebe cookies, senhas nem o que você digitou nos campos. Se o bloco não está aberto no canvas, só dá para recusar. A captura fica numa pasta do app e some depois de um dia.
+
 O cartão cobre o pedido feito pelo app. Um agente que roda comandos no terminal continua podendo abrir o navegador por conta própria, com os comandos do sistema, como qualquer programa que você roda.
 
 ### Colar imagens em um agente

@@ -31,6 +31,7 @@ import type {
 import type { PromptInsertionMetadata } from './features/shared/types/prompt-insertion'
 import type {
   CanvasAgentBrowserRequest,
+  CanvasAgentWebpageInspectRequest,
   CanvasAgentQuestion,
   CanvasImageArtifact,
   CanvasNodeData,
@@ -894,6 +895,20 @@ declare global {
         }) => Promise<CliInvokeResult & { resolved?: { estado: string } | null }>
         onBrowserRequests: (
           callback: (data: { requests: CanvasAgentBrowserRequest[] }) => void,
+        ) => () => void
+        listWebpageInspectRequests: () => Promise<
+          CliInvokeResult & { requests?: CanvasAgentWebpageInspectRequest[] }
+        >
+        /** `aprovar: false` recusa. O main só olha se for um <webview> da janela. */
+        decideWebpageInspectRequest: (params: {
+          id: string
+          aprovar: boolean
+          idDoElemento: string
+          tipo: 'captura' | 'dom'
+          webContentsId?: number
+        }) => Promise<CliInvokeResult & { resolved?: { estado: string } | null }>
+        onWebpageInspectRequests: (
+          callback: (data: { requests: CanvasAgentWebpageInspectRequest[] }) => void,
         ) => () => void
         listWriteRequests: () => Promise<
           CliInvokeResult & { requests?: CanvasWriteAgentRequest[] }

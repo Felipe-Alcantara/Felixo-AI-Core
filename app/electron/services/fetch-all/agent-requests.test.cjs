@@ -312,3 +312,20 @@ test('abrir-pagina aceita perfil só junto do bloco embutido', () => {
   assert.throws(() => normalizarPedido('abrir-pagina', { url: 'https://example.com', perfil: 'X' }), /--embedded/)
   assert.throws(() => normalizarPedido('abrir-pagina', { url: 'https://example.com', modo: 'embutido', perfil: 'x'.repeat(41) }), /muito grande/)
 })
+
+test('pagina-inspecionar só aceita captura ou dom de um bloco, e nada que aja na página', () => {
+  assert.deepEqual(normalizarPedido('pagina-inspecionar', { idDoElemento: ' n1 ', tipo: 'dom' }), {
+    acao: 'pagina-inspecionar',
+    comCommit: false,
+    idDoElemento: 'n1',
+    tipo: 'dom',
+  })
+  assert.throws(() => normalizarPedido('pagina-inspecionar', { tipo: 'dom' }), /id do bloco/)
+  for (const tipo of ['clicar', 'cookies', 'eval', '', undefined]) {
+    assert.throws(() => normalizarPedido('pagina-inspecionar', { idDoElemento: 'n1', tipo }), /não reconhecido/)
+  }
+  assert.throws(
+    () => normalizarPedido('pagina-inspecionar', { idDoElemento: 'x'.repeat(201), tipo: 'captura' }),
+    /muito grande/,
+  )
+})

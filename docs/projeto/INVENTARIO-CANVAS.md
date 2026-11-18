@@ -1244,6 +1244,28 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Cartão fixed top-4 z-50 pode cobrir a topbar e o topo da gaveta ou do painel em janela estreita; sem teste de sobreposição. | baixo | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
 | decide e load não tratam IPC rejeitado (try/finally sem catch), sem aviso (AgentBrowserRequestCard.tsx:54-101). | baixo | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 
+### Pedido de agente para olhar uma Página Web
+
+- **ID:** `agent-webpage-inspect-card` · **Dono:** `src/features/canvas/components/AgentWebpageInspectCard.tsx`
+- **Persistência:** processo principal: fila de pedidos de agente (pasta agent-requests); capturas em agent-captures por 24 h
+- **IPC:** `agent-webpage:list-requests`, `agent-webpage:decide`, `agent-webpage:requests`
+- **Depende de:** `agent-browser-request`, `webpage-guest-registry`, `floating-layer`, `window.felixo.canvas`
+- **Sobreposição:** fixed inset-x-0 bottom-4 z-50, centralizado (max-w-md), pointer-events só no cartão; embaixo para não cobrir o cartão de abertura (top-4). data-felixo-floating-layer. Não rouba o foco.
+- **Testes:** `electron/services/agent-webpage-inspect-ipc-handlers.test.cjs`, `src/features/canvas/services/webpage-guest-registry.test.ts`
+
+| Estado | Quando |
+| --- | --- |
+| normal | Pedido mais antigo com origem, endereço da página (sem query nem hash), perfil do bloco, o que o agente recebe e "+N na fila". Montado no App. |
+| empty | Sem pedido pendente: não renderiza. |
+| error | Decisão recusada ou webContents que não é webview da janela: role="alert" preso ao pedido que falhou. |
+| pending | busy ou nos 600 ms depois de trocar de pedido (BROWSER_REQUEST_ARM_MS): botões desabilitados. |
+| denied | Bloco que não está aberto no canvas (sem guest no registro): só Recusar. |
+
+| Controle | Gatilho | Efeito | Falha conhecida | Teste |
+| --- | --- | --- | --- | --- |
+| `onClick={onClick(true)}` (button) | clique | Permitir: agent-webpage:decide (aprovar) com o webContentsId do bloco; o main confere que é um webview da janela e grava a captura ou o DOM no pedido, uma vez. (desabilitado: busy ou janela de 600 ms; some quando o bloco não está aberto) | Recusa, pedido mudado ou guest inválido: role="alert"; o segundo clique de um duplo clique é ignorado. | — |
+| `onClick={onClick(false)}` (button) | clique | Recusar: agent-webpage:decide (aprovar false) marca o pedido como recusado pela pessoa. (desabilitado: busy ou janela de 600 ms) | Recusa: role="alert". | — |
+
 ### Faixa de retomada do terminal
 
 - **ID:** `terminal-resume-banner` · **Dono:** `src/features/canvas/services/terminal-resume-banner.ts`

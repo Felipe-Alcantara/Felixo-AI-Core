@@ -76,3 +76,26 @@ felixo browser status <id> --json
 Não crie outro servidor, socket ou mecanismo de IPC para abrir páginas. A
 integração deve continuar usando a fila `userData/agent-requests`, compartilhada
 com o Fetch All.
+
+## Olhar um bloco Página Web (captura e DOM)
+
+Com um bloco Página Web já aberto no canvas (o id sai de `felixo canvas
+listar`), você pode pedir para **olhar** a página. Só olhar: não existe
+clicar, digitar, ler cookie, senha nem valor de campo.
+
+```bash
+felixo browser capture <id-do-bloco>   # PNG da página; imprime o caminho, o tamanho e o devicePixelRatio
+felixo browser read <id-do-bloco>      # elementos interativos (papel, nome, retângulo) e o texto visível
+```
+
+- O comando **bloqueia** até a pessoa clicar em **Permitir** no cartão do app
+  (até 5 min). Cada permissão vale para um pedido; para outro, peça de novo.
+- A página pode estar logada como a pessoa: peça só o que a tarefa precisa e
+  não repita o pedido depois de uma recusa dela (código de saída 3).
+- Os retângulos do `read` estão em pixels CSS da página (o espaço do
+  `getBoundingClientRect`), não do canvas. Na captura, divida os pixels da
+  imagem pelo `devicePixelRatio` para voltar a esse espaço.
+- Tokens no texto e nos endereços saem redigidos, e os endereços vêm sem
+  query nem hash.
+- Código 1 = ninguém respondeu a tempo (o id fica na saída: `felixo browser
+  status <id> --json` mostra o desfecho depois).

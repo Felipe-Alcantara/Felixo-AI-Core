@@ -5,6 +5,7 @@ import { PerformanceModeProvider } from './features/shared/performance/Performan
 import { HardwareNotices } from './features/shared/hardware/HardwareNotices'
 import { SystemDesignLoginNotice } from './features/shared/system-design/SystemDesignLoginNotice'
 import { AgentBrowserRequestCard } from './features/canvas/components/AgentBrowserRequestCard'
+import { AgentWebpageInspectCard } from './features/canvas/components/AgentWebpageInspectCard'
 import { LinkChooserHost } from './features/shared/links/LinkChooserHost'
 
 type Screen = 'canvas' | 'chat'
@@ -81,6 +82,9 @@ function App() {
               espera a pessoa nas duas telas. No chat, o bloco Página Web não
               existe, então o botão leva ao canvas. */}
           <AgentBrowserRequestCard onOpenCanvas={screen === 'chat' ? () => setScreen('canvas') : undefined} />
+          {/* Pedido para olhar um bloco Página Web (`felixo browser capture`/`read`):
+              a pessoa permite uma vez. No chat não há bloco aberto: só recusa. */}
+          <AgentWebpageInspectCard />
         </div>
       </PerformanceModeProvider>
     </ThemeProvider>

@@ -115,6 +115,9 @@ const {
   registerAgentBrowserIpcHandlers,
 } = require('./services/agent-browser-ipc-handlers.cjs')
 const {
+  registerAgentWebpageInspectIpcHandlers,
+} = require('./services/agent-webpage-inspect-ipc-handlers.cjs')
+const {
   registerAgentCanvasReadIpcHandlers,
 } = require('./services/agent-canvas-read-ipc-handlers.cjs')
 const {
@@ -250,6 +253,7 @@ let cloudSessionService = null
 let claudeApiSessions = null
 let notionHandlers = null
 let agentBrowserWatching = null
+let agentWebpageInspectWatching = null
 let agentCanvasReadWatching = null
 let agentCanvasWriteWatching = null
 let agentQuestionWatching = null
@@ -1099,6 +1103,7 @@ app.whenReady().then(async () => {
     shell: automationShell ?? undefined,
     findProfileByName: (name) => webviewProfiles.repository.findByName(name),
   })
+  agentWebpageInspectWatching = registerAgentWebpageInspectIpcHandlers({ getMainWindow, appPaths })
   agentCanvasReadWatching = registerAgentCanvasReadIpcHandlers({
     database: storageDatabase,
     appPaths,
@@ -1276,6 +1281,15 @@ app.on('before-quit', () => {
       // Best effort during app shutdown.
     }
     agentBrowserWatching = null
+  }
+
+  if (agentWebpageInspectWatching) {
+    try {
+      agentWebpageInspectWatching.pararDeObservarPedidos()
+    } catch {
+      // Best effort during app shutdown.
+    }
+    agentWebpageInspectWatching = null
   }
 
   if (agentCanvasReadWatching) {

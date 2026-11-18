@@ -109,6 +109,9 @@ const FERRAMENTAS_CONTEXT = ['context', 'contexto']
 const FERRAMENTAS_CANVAS = ['canvas']
 const VERBOS_BROWSER_ABRIR = ['open', 'abrir']
 const VERBOS_BROWSER_STATUS = ['status', 'ver-pedido']
+// Olhar um bloco Página Web: só leitura, mas sempre com a permissão da pessoa.
+const VERBOS_BROWSER_CAPTURA = ['capture', 'captura', 'capturar']
+const VERBOS_BROWSER_DOM = ['read', 'ler']
 const VERBOS_CANVAS_LISTAR = ['listar']
 const VERBOS_CANVAS_LER = ['ler']
 const FERRAMENTAS_PERGUNTAR = ['perguntar']
@@ -204,6 +207,51 @@ async function executar(argumentos, dependencias = {}) {
           erro: error instanceof Error ? error.message : 'Nao foi possivel registrar o pedido.',
           codigo: 2,
         }
+      }
+    }
+
+    const tipoDeInspecao = VERBOS_BROWSER_CAPTURA.includes(verbo) ? 'captura' : VERBOS_BROWSER_DOM.includes(verbo) ? 'dom' : null
+    if (tipoDeInspecao) {
+      const { esperar = esperarPadrao, esperaMaximaMs = PERGUNTAR_ESPERA_MAXIMA_MS } = dependencias
+      if (!argumento) {
+        return { saida: '', erro: 'Informe o id do bloco Página Web (veja "felixo canvas listar").', codigo: 2 }
+      }
+      let pedido
+      try {
+        pedido = criarPedidos().registrar('pagina-inspecionar', {
+          idDoElemento: argumento,
+          tipo: tipoDeInspecao,
+          origem: diretorioAtual(),
+        })
+      } catch (error) {
+        return { saida: '', erro: error instanceof Error ? error.message : 'Não foi possível registrar o pedido.', codigo: 2 }
+      }
+
+      // Bloqueia até a pessoa decidir (como `perguntar`): o agente precisa do
+      // resultado no stdout, e nada acontece na página sem o clique dela.
+      const resolvido = await aguardarResolucao(criarPedidos(), pedido.id, esperar, {
+        maximoMs: esperaMaximaMs,
+        intervaloMs: PERGUNTAR_ESPERA_INTERVALO_MS,
+      })
+      if (!resolvido) {
+        return {
+          saida: [
+            `Pedido registrado (${pedido.id}), mas a pessoa não respondeu a tempo.`,
+            `Para conferir depois: felixo browser status ${pedido.id} --json`,
+          ].join('\n'),
+          codigo: 1,
+        }
+      }
+      if (resolvido.estado !== 'aceito' || !resolvido.resultado?.ok) {
+        const motivo = resolvido.resultado?.recusadoPor === 'pessoa' ? 'A pessoa recusou. Não repita o pedido sem ela pedir.' : (resolvido.resultado?.message ?? 'Pedido recusado.')
+        return {
+          saida: opcoes.json ? JSON.stringify({ ok: false, pedido: resolvido.id, estado: resolvido.estado, ...resolvido.resultado }, null, 2) : motivo,
+          codigo: 3,
+        }
+      }
+      return {
+        saida: opcoes.json ? JSON.stringify(resolvido.resultado, null, 2) : formatarInspecaoDePagina(resolvido.resultado),
+        codigo: 0,
       }
     }
 
@@ -526,6 +574,35 @@ async function aguardarResolucao(pedidos, id, esperar, { maximoMs = CANVAS_ESPER
  * @param {string} comandoStatus
  * @returns {{ saida: string, codigo: number }}
  */
+function formatarInspecaoDePagina(resultado) {
+  if (resultado.tipo === 'captura') {
+    return [
+      `Captura: ${resultado.arquivo}`,
+      `Página: ${resultado.url}`,
+      `Imagem: ${resultado.imagem.largura}x${resultado.imagem.altura} px`,
+      `Viewport: ${resultado.viewport.largura}x${resultado.viewport.altura} (devicePixelRatio ${resultado.viewport.devicePixelRatio})`,
+    ].join('\n')
+  }
+  const { viewport } = resultado
+  return [
+    `Página: ${resultado.url}`,
+    `Título: ${resultado.titulo}`,
+    `Viewport: ${viewport.largura}x${viewport.altura} (devicePixelRatio ${viewport.devicePixelRatio}, rolagem ${viewport.rolagemX},${viewport.rolagemY})`,
+    '',
+    'Elementos interativos (x,y,largura,altura em pixels CSS da página):',
+    ...resultado.elementos.map((item) => {
+      const { x, y, largura, altura } = item.retangulo
+      const rotulo = [item.papel || item.tag, item.tipo, item.sensivel ? 'campo sensível' : '', item.desativado ? 'desativado' : '']
+        .filter(Boolean)
+        .join(' ')
+      return `  [${x},${y},${largura},${altura}] ${rotulo}${item.nome ? ` "${item.nome}"` : ''}${item.href ? ` -> ${item.href}` : ''}`
+    }),
+    '',
+    'Texto visível:',
+    resultado.texto,
+  ].join('\n')
+}
+
 function respostaPedidoNaoAtendido(pedido, comandoStatus) {
   return {
     saida: [

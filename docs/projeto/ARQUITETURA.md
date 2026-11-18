@@ -1414,6 +1414,28 @@ não fazia nada, e o formulário só dizia "endereço inválido". Na recusa, o f
 fica na barra, para um Backspace apagar texto e não o bloco selecionado
 (`deleteKeyCode` do React Flow). O aviso some quando a página navega.
 
+#### Pedido de agente para olhar uma Página Web (captura e DOM)
+
+`felixo browser capture|read <id-do-bloco>` registra `pagina-inspecionar`
+(`tipo` = `captura` ou `dom`, lista fechada em `normalizarPedido`) e bloqueia
+até a pessoa decidir. Nada olha a página sem o clique em **Permitir** no
+`AgentWebpageInspectCard`, uma permissão por pedido.
+
+- O renderer é o único que liga bloco a guest (`webpage-guest-registry`,
+  preenchido pelo `WebpageNode`) e manda `{ id, aprovar, idDoElemento, tipo,
+  webContentsId }` (`agent-webpage:decide`). O main relê o pedido, confere que
+  `idDoElemento` e `tipo` são os que o cartão mostrou e que o webContents é um
+  `webview` cujo `hostWebContents` é a janela principal (`guestValido`).
+- Captura por `webContents.capturePage()` (PNG em `userData/agent-captures`,
+  varrido depois de 24 h). DOM lido por `executeJavaScriptInIsolatedWorld`:
+  a página não enxerga o script. Nunca lê `value`; `input[type=password]` entra
+  como "sensível", sem nome. Texto, nomes e endereços passam pela redação de
+  segredos, e o endereço sai sem query nem hash.
+- Não há porta de depuração, cookie, storage nem ação de entrada (clique,
+  digitação, rolagem): essas ficam para a task de controle por coordenadas.
+- O arquivo do pedido em `agent-requests` guarda quem pediu (`origem`), o
+  quê, quando e o resultado: é o registro de auditoria desta fatia.
+
 #### Pedido de agente para abrir página
 
 `felixo browser open` não abre nada sozinho. O pedido válido fica pendente na

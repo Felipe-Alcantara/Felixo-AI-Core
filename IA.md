@@ -4828,3 +4828,25 @@ Task: Felixo AI Core/Claude Code — trazer a aba Config do /status para a inter
 **Não validado.** App não aberto e Claude não executado com o padrão (nem com fast, que gastaria crédito). A lista de opções vem da documentação, não da aba Config de um Claude real; a versão instalada pode ter opção a mais.
 
 Estado: concluído na branch `orq/claude-code-trazer-aba-config`, sem push.
+
+---
+
+## 2026-11-18 — Navegador: o agente pode pedir captura de tela e leitura do DOM de um bloco Página Web (primeira fatia, só olhar)
+
+Agente: subagente da Orquestração (Claude Sonnet 5.5, effort medium). Task: Felixo AI Core/Navegador — dar ao agente controle do bloco Página Web por coordenadas, com captura de tela, DOM e logs (Notion `3eb91f95-497e-8133-a3a1-fdfce04a4f8d`).
+
+**Contexto.** O agente só conseguia abrir uma página (`felixo browser open`, com cartão de confirmação). Não via a tela, o DOM nem o que acontecia no bloco. Dar controle (clicar, digitar) a uma página que pode estar logada como a pessoa é sensível, então esta fatia entrega só o que é leitura e só com permissão por pedido. Clique por coordenada, rolar, digitar e logs ficam pendentes de decisão de produto.
+
+**O que mudou.**
+- `fetch-all/agent-requests.cjs`: ação `pagina-inspecionar` com `idDoElemento` e `tipo` em lista fechada (`captura` ou `dom`); qualquer outro tipo (clicar, cookies, eval) é recusado na entrada.
+- CLI: `felixo browser capture|read <id-do-bloco>` (aliases `captura`/`ler`) registra o pedido e bloqueia até a pessoa decidir (5 min, como `perguntar`); código 3 = recusado, 1 = sem resposta.
+- `agent-webpage-inspect.cjs` (novo): `guestValido` (só `webview` cujo `hostWebContents` é a janela principal), captura por `capturePage()` com tamanho e `devicePixelRatio`, DOM lido em mundo isolado (`executeJavaScriptInIsolatedWorld`) com elementos interativos (papel, nome, retângulo em pixels CSS), texto visível, sem nunca ler `value`; senha vira "sensível" sem nome; texto, nomes e endereços passam pela redação de segredos e o endereço sai sem query nem hash.
+- `agent-webpage-inspect-ipc-handlers.cjs` (novo): lista pendentes, confere que o cartão mostrou o que está gravado, validade de 1 h, recusa como "da pessoa", guest inválido não resolve o pedido; PNG em `userData/agent-captures`, varrido após 24 h. O arquivo do pedido guarda origem, tipo, momento e resultado (auditoria).
+- Renderer: `webpage-guest-registry.ts` (bloco ↔ guest, preenchido pelo `WebpageNode`) e `AgentWebpageInspectCard` (montado no `App`, embaixo; endereço, perfil, o que o agente recebe; Permitir/Recusar; só Recusar se o bloco não está aberto; mesmas travas de 600 ms e duplo clique do cartão de abertura). Preload, tipos, inventário do canvas e catálogo de skills atualizados.
+- Docs: skill `abrir-paginas-no-navegador`, `GUIA-USUARIO.md`, `ARQUITETURA.md`, `INVENTARIO-CANVAS.md`.
+
+**Validação.** `agent-webpage-inspect-ipc-handlers.test.cjs` (11 testes: pendente até permitir, recusa, webContents que não é webview rejeitado e pedido continua pendente, cartão ≠ gravado, vencido, resolvido não repete, DOM sem valor de campo nem senha, redação, captura com PNG), 4 testes novos na CLI, 1 em `agent-requests`, 2 no registro do renderer. Gate: lint e typecheck limpos; `run-node-unit-tests` 3511/3524 pass (1 falha em `pty-output-path-benchmark`, que falha igual na `main`; 12 skipped); vitest sem falha após atualizar o snapshot do inventário.
+
+**Não validado.** O app não foi aberto (regra da rodada): `capturePage` e `executeJavaScriptInIsolatedWorld` num guest real, o cartão na tela e o PNG no disco só foram exercitados com fakes. Fica para o E2E do orquestrador.
+
+Estado: primeira fatia concluída na branch `orq/navegador-dar-agente-controle-bloco` (sem push); o restante depende de decisão do Felipe (status PRECISA_DECISAO).

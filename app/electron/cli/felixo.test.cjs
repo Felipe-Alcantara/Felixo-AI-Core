@@ -639,3 +639,71 @@ test('flags booleanas de sempre continuam booleanas (--json, --cache)', () => {
   assert.equal(opcoes.json, true)
   assert.equal(opcoes.profile, 'X')
 })
+
+function responderInspecao(pasta, resposta) {
+  return async () => {
+    const repositorio = criarRepositorioDePedidos({ pasta })
+    const [pedido] = repositorio.listarPendentes({ acao: 'pagina-inspecionar' })
+    if (pedido) repositorio.resolver(pedido.id, resposta(pedido))
+  }
+}
+
+test('browser capture/read: registram o pedido, bloqueiam até a pessoa e imprimem o resultado', async () => {
+  const { pasta, deps } = dependencias()
+  const captura = await executar(['browser', 'capture', 'w1'], {
+    ...deps,
+    esperar: responderInspecao(pasta, () => ({
+      aceito: true,
+      resultado: {
+        ok: true,
+        tipo: 'captura',
+        url: 'https://example.com/',
+        arquivo: '/c/1.png',
+        imagem: { largura: 1600, altura: 1000 },
+        viewport: { largura: 800, altura: 500, devicePixelRatio: 2 },
+      },
+    })),
+  })
+  assert.equal(captura.codigo, 0)
+  assert.match(captura.saida, /Captura: \/c\/1\.png/)
+  assert.match(captura.saida, /devicePixelRatio 2/)
+
+  const dom = await executar(['navegador', 'ler', 'w1'], {
+    ...deps,
+    esperar: responderInspecao(pasta, () => ({
+      aceito: true,
+      resultado: {
+        ok: true,
+        tipo: 'dom',
+        url: 'https://example.com/',
+        titulo: 'Exemplo',
+        viewport: { largura: 800, altura: 500, devicePixelRatio: 1, rolagemX: 0, rolagemY: 0 },
+        elementos: [{ tag: 'button', papel: '', nome: 'Salvar', retangulo: { x: 10, y: 20, largura: 80, altura: 30 } }],
+        texto: 'Olá',
+      },
+    })),
+  })
+  assert.equal(dom.codigo, 0)
+  assert.match(dom.saida, /\[10,20,80,30\] button "Salvar"/)
+})
+
+test('browser capture: recusa da pessoa dá código 3, sem repetir o pedido', async () => {
+  const { pasta, deps } = dependencias()
+  const resultado = await executar(['browser', 'capture', 'w1'], {
+    ...deps,
+    esperar: responderInspecao(pasta, () => ({ aceito: false, resultado: { ok: false, recusadoPor: 'pessoa' } })),
+  })
+  assert.equal(resultado.codigo, 3)
+  assert.match(resultado.saida, /A pessoa recusou/)
+  assert.equal(criarRepositorioDePedidos({ pasta }).listarPendentes({ acao: 'pagina-inspecionar' }).length, 0)
+})
+
+test('browser capture: sem resposta a tempo devolve o id e código 1; sem id é erro de uso', async () => {
+  const { deps } = dependencias()
+  const semResposta = await executar(['browser', 'read', 'w1'], { ...deps, esperar: async () => {}, esperaMaximaMs: 0 })
+  assert.equal(semResposta.codigo, 1)
+  assert.match(semResposta.saida, /browser status/)
+
+  const semId = await executar(['browser', 'capture'], deps)
+  assert.equal(semId.codigo, 2)
+})
