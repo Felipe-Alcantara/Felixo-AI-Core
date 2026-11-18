@@ -1311,6 +1311,12 @@ declare global {
           content: string
           filters?: Array<{ name: string; extensions: string[] }>
         }) => Promise<CliInvokeResult & { canceled?: boolean; filePath?: string }>
+        /** Grava vários arquivos de texto numa pasta escolhida; nunca sobrescreve (nome ocupado vira `nome-2.ext`). */
+        saveTextFolder: (params: {
+          files: Array<{ name: string; content: string }>
+        }) => Promise<
+          CliInvokeResult & { canceled?: boolean; folderPath?: string; fileNames?: string[] }
+        >
       }
       agentSessionLog?: {
         /** CSV ou JSON das sessões de agente do período (ISO), sem texto de prompt. */

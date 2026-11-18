@@ -130,6 +130,11 @@ os nomes na ordem enviada, inclusive nomes repetidos, e mantém os headings que
 já faziam parte do payload. Texto digitado manualmente tem origem `manual`,
 `combinedNames` vazio e nenhum nome presumido.
 
+O ID do catálogo sobrevive à exportação para `.md`: o cabeçalho do arquivo leva
+o `id`, e importar o arquivo (mesmo editado) atualiza o prompt de mesmo `id` em
+vez de criar outro, então o histórico de inserções não perde a referência.
+"Manter os dois" é a única escolha que gera um `id` novo.
+
 O snapshot da sessão guarda o registro completo para a interface. Ao salvar o
 node do canvas, `content` é removido; a persistência, os cabeçalhos dos artefatos
 e o log QA carregam somente a identidade, origem, composição, intenção de

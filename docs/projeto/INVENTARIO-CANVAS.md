@@ -29,8 +29,8 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 
 ## Números
 
-- **Elementos:** 111 (10 blocos, 17 ferramentas, 84 outras superfícies)
-- **Controles:** 428, dos quais 63 com teste específico
+- **Elementos:** 112 (10 blocos, 17 ferramentas, 85 outras superfícies)
+- **Controles:** 432, dos quais 63 com teste específico
 - **Elementos sem nenhum teste:** 3
 - **Lacunas:** 234 (alto 4, médio 125, baixo 105), em 66 tasks
 
@@ -1600,11 +1600,11 @@ Sem controle próprio: as ações vêm de outros elementos.
 ### Prompts (catálogo de automações)
 
 - **ID:** `tool-prompts` · **Dono:** `src/features/canvas/components/tools/PromptsPanel.tsx`
-- **Persistência:** processo principal: prompts personalizados e edições de preset (automations:save / automations:delete); canvas salvo: lastPromptInsertion do bloco de terminal (nome e origem, sem o corpo); arquivo temporário de contexto em <userData>/context-deliveries (context-file:write); localStorage felixo:canvas-panel-width:prompts e felixo:canvas-panel-height:prompts; nenhuma para filtro, seleção e rascunho
-- **IPC:** `automations:list`, `automations:save`, `automations:delete`, `context-file:write`, `pty:write`
-- **Depende de:** `CanvasPanel`, `insertPrompt (CanvasView)`, `terminal-session-store.sendText`, `prompt-overrides`, `prompt-composition`, `prompt-delivery-feedback`, `custom-automation-creation`, `defaultAutomations`, `FelixoSelect`
+- **Persistência:** processo principal: prompts personalizados e edições de preset (automations:save / automations:delete); arquivos .md que a pessoa exporta ficam onde ela escolher; importar grava pelos mesmos automations:save; canvas salvo: lastPromptInsertion do bloco de terminal (nome e origem, sem o corpo); arquivo temporário de contexto em <userData>/context-deliveries (context-file:write); localStorage felixo:canvas-panel-width:prompts e felixo:canvas-panel-height:prompts; nenhuma para filtro, seleção e rascunho
+- **IPC:** `automations:list`, `automations:save`, `automations:delete`, `context-file:write`, `pty:write`, `files:save-text`, `files:save-text-folder`
+- **Depende de:** `CanvasPanel`, `insertPrompt (CanvasView)`, `terminal-session-store.sendText`, `prompt-overrides`, `prompt-composition`, `prompt-delivery-feedback`, `custom-automation-creation`, `prompt-markdown`, `PromptImportPreview`, `defaultAutomations`, `FelixoSelect`
 - **Sobreposição:** CanvasPanel absolute z-20 (z-30 com foco dentro), top-16, left = 1rem + largura viva da sidebar; abaixo da sidebar (26), dos toasts/overlay isBusy (50), dos diálogos (60) e do FelixoSelect (1000); mesmo z da lista Elementos (z-20, direita). Porte xl (o mais largo); disputa largura com a gaveta fixada e fica sob a lista Elementos em janela pequena
-- **Testes:** `scripts/canvas-smoke-prompts.cjs` → `catalogo`, `scripts/canvas-smoke-prompts.cjs` → `combinacao`, `scripts/canvas-smoke-prompts.cjs` → `fallback`, `scripts/canvas-smoke-prompts.cjs` → `semTerminalAberto`, `src/features/canvas/terminal/prompt-origins-e2e.test.ts`, `src/features/canvas/services/prompt-composition.test.ts`, `src/features/canvas/services/prompt-delivery-feedback.test.ts`, `src/features/canvas/services/prompt-overrides.test.ts`, `src/features/canvas/services/custom-automation-creation.test.ts`, `src/features/shared/data/automations.test.ts`, `src/features/shared/types/prompt-insertion.test.ts`
+- **Testes:** `scripts/canvas-smoke-prompts.cjs` → `catalogo`, `scripts/canvas-smoke-prompts.cjs` → `combinacao`, `scripts/canvas-smoke-prompts.cjs` → `fallback`, `scripts/canvas-smoke-prompts.cjs` → `semTerminalAberto`, `src/features/canvas/terminal/prompt-origins-e2e.test.ts`, `src/features/canvas/services/prompt-composition.test.ts`, `src/features/canvas/services/prompt-delivery-feedback.test.ts`, `src/features/canvas/services/prompt-overrides.test.ts`, `src/features/canvas/services/custom-automation-creation.test.ts`, `src/features/canvas/services/prompt-markdown.test.ts`, `electron/services/file-export-ipc-handlers.test.cjs`, `src/features/shared/data/automations.test.ts`, `src/features/shared/types/prompt-insertion.test.ts`
 
 | Estado | Quando |
 | --- | --- |
@@ -1623,6 +1623,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `onClick={() => void createDraftAutomation()}` (button) | clique | createCustomAutomation recusa texto vazio ("Preencha o texto do prompt para criá-lo."); senão automations:save e, com ok, o prompt entra na lista e o rascunho fecha (desabilitado: criação em andamento (isCreatingDraft)) | IPC recusado ou rejeitado: "Não foi possível criar este prompt. Tente novamente." abaixo do rascunho, que continua aberto | — |
 | `onClick={() => void insertSelected()}` (button) | clique | composeSelectedPromptInsertion junta os marcados na ordem do catálogo e insertPrompt digita no terminal expandido, sem Enter, pelo arquivo de contexto (context-file:write) + pty:write; o cartão do bloco mostra os nomes combinados; sem terminal expandido, copia (desabilitado: nenhum prompt marcado ou envio em andamento) | PTY sem confirmação: "Tentar de novo" + aviso em vermelho; erro engolido: sem terminal aberto, uma rejeição de navigator.clipboard.writeText escapa do try/finally e nenhum retorno aparece | `scripts/canvas-smoke-prompts.cjs` → `combinacao` |
 | `onClick={() => setDetailId(prompt.id)}` (button) | clique | troca a lista pelo detalhe do preset (PromptDetailPanel, panelId prompt-detail) na mesma moldura (desabilitado: só aparece em presets) | sem falha própria (estado local) | — |
+| `onClick={() => void exportPrompts()}` (button) | clique | salva como .md (cabeçalho YAML com id, name, scope, description, updatedAt, origem + o texto intacto) os prompts marcados, ou o catálogo inteiro se nenhum estiver marcado: um prompt abre "Salvar como" (files:save-text); vários pedem uma pasta (files:save-text-folder) e nunca sobrescrevem arquivo existente | recusa ou erro do processo principal: a mensagem aparece em vermelho (role=status) acima da lista; cancelar o diálogo não mostra nada | — |
 | `data-felixo-prompt-insert` (button) | clique | digita o prompt no terminal expandido sem Enter (autoSubmit false): grava o arquivo de contexto (context-file:write) e escreve a referência no PTY (pty:write); o cartão do bloco mostra o nome (data-felixo-last-prompt) e o canvas grava só a metadata (lastPromptInsertion); sem terminal expandido, copia o texto (desabilitado: aquele prompt está enviando) | PTY sem confirmação: "Tentar de novo" com aviso em vermelho; pasta de contexto indisponível: entrega inline (sent-inline) com aviso no bloco; erro engolido se o clipboard rejeitar; sem navigator.clipboard o painel diz "copiado" sem copiar | `scripts/canvas-smoke-prompts.cjs` → `catalogo` |
 | `aria-label="Remover prompt"` (button) | clique | cancela o salvamento pendente, chama automations:delete e tira o prompt da lista, sem confirmação (desabilitado: só aparece em prompts personalizados) | erro engolido: resultado do delete ignorado; o prompt volta ao reabrir se não foi apagado | — |
 | `value={prompt.scope}` (select) | clique | muda o escopo de um prompt personalizado; grava com debounce de 500 ms (automations:save) e o prompt muda de grupo | "Não foi possível salvar este prompt. Tente novamente." por 2,5 s no item; fechar antes de 500 ms grava o pendente na hora | — |
@@ -2114,6 +2115,30 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | Os 4 controles do Painel não são clicados por teste automático (o smoke só vê o bloco sem conexão); a tela foi conferida com dados de fixture fora do app, não no app real com conexão Notion. | médio | `3f291f95-497e-81fe-8670-fe2fc871318d` |
+
+### Prompts — prévia da importação de .md
+
+- **ID:** `tool-prompts-import` · **Dono:** `src/features/canvas/components/tools/PromptImportPreview.tsx`
+- **Persistência:** processo principal: automations:save (o mesmo dos prompts personalizados); nenhuma para a prévia e as ações escolhidas
+- **IPC:** `automations:save`
+- **Depende de:** `prompt-markdown`, `FelixoSelect`, `PromptsPanel`
+- **Sobreposição:** Dentro do painel Prompts (porte xl), acima da lista
+- **Testes:** `src/features/canvas/services/prompt-markdown.test.ts`
+
+| Estado | Quando |
+| --- | --- |
+| normal | aparece no topo do painel Prompts depois de "Importar .md" (arquivos, o seletor aceita vários) ou "Importar pasta" (todos os .md da pasta, o resto é ignorado): uma linha por arquivo com nome, tópico, situação (novo, já existe com mudanças, já existe igual, não pode ser importado) e a ação; nada é gravado antes de confirmar |
+| empty | sem .md na escolha, mais de 200 arquivos ou todos acima de 1 MB: a prévia nem abre e um aviso em vermelho aparece no painel |
+| error | arquivo inválido (tópico inexistente, corpo vazio, cabeçalho aberto, id repetido na mesma importação) fica na prévia com o motivo e só pode ser pulado; falha ao gravar: "N importados; M não puderam ser salvos." |
+| pending | confirmação gravando um a um (automations:save): "Importando…" e os botões travados |
+| success | aviso no painel: "N prompts importados."; os prompts entram ou se atualizam na lista |
+| disabled | Importar com nada a gravar (tudo em Pular); os dois botões enquanto importa |
+
+| Controle | Gatilho | Efeito | Falha conhecida | Teste |
+| --- | --- | --- | --- | --- |
+| `aria-label={`O que fazer com` (select) | clique | escolhe a ação do arquivo: novo cria ou pula; já existe com mudanças sobrescreve (mantém o id, então o histórico de inserções não perde a referência), mantém os dois (cria outro id, nome com "(importado)") ou pula; igual pula por padrão (desabilitado: só aparece em arquivo válido) | sem falha própria (estado local) | — |
+| `onClick={onCancel}` (button) | clique | fecha a prévia sem gravar nada (desabilitado: importação em andamento) | sem falha própria (estado local) | — |
+| `data-felixo-prompt-import-confirm` (button) | clique | grava cada arquivo não pulado por automations:save (id do arquivo mantido ao criar e ao sobrescrever; sem id, gera um) e atualiza a lista (desabilitado: nada a gravar (tudo em Pular) ou importando) | IPC recusado ou rejeitado em um arquivo: os demais seguem e o aviso conta quantos falharam | — |
 
 ### Hospedeiro dos painéis de ferramenta
 

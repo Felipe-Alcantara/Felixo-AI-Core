@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Check, CircleAlert, Eye, ListFilter, Plus, SendHorizontal, Sparkles, Trash2 } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
+import { Check, CircleAlert, Download, Eye, FolderUp, ListFilter, Plus, SendHorizontal, Sparkles, Trash2, Upload } from 'lucide-react'
 import { CanvasPanel } from './CanvasPanel'
 import { createDebouncedSaveQueue } from '../../services/debounced-save-queue'
 import { FelixoSelect, type FelixoSelectOption } from '../../../shared/components/FelixoSelect'
 import { PromptDetailPanel } from './PromptDetailPanel'
+import { PromptImportPreview } from './PromptImportPreview'
 import { defaultAutomations } from '../../../shared/data/automations'
 import {
   buildOverridesById,
@@ -30,6 +31,18 @@ import {
   createCustomAutomation,
   CUSTOM_AUTOMATION_TEXT_REQUIRED,
 } from '../../services/custom-automation-creation'
+import {
+  buildImportedPrompt,
+  defaultImportAction,
+  planPromptImport,
+  promptFileName,
+  PROMPT_FILE_EXTENSION,
+  serializePromptMarkdown,
+  uniquePromptFileNames,
+  type PromptImportAction,
+  type PromptImportRow,
+  type PromptOrigin,
+} from '../../services/prompt-markdown'
 
 type PromptsPanelProps = {
   onClose: () => void
@@ -40,6 +53,10 @@ type PromptsPanelProps = {
 }
 
 const SAVE_DEBOUNCE_MS = 500
+
+/** Um .md de prompt tem poucos KB; acima disso não é prompt (e travaria a prévia). */
+const IMPORT_FILE_MAX_BYTES = 1024 * 1024
+const IMPORT_MAX_FILES = 200
 
 const SCOPES = AUTOMATION_SCOPES
 
@@ -85,6 +102,10 @@ export function PromptsPanel({
   const [detailId, setDetailId] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [query, setQuery] = useState('')
+  const [transfer, setTransfer] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null)
+  const [importRows, setImportRows] = useState<PromptImportRow[] | null>(null)
+  const [importActions, setImportActions] = useState<PromptImportAction[]>([])
+  const [isImporting, setIsImporting] = useState(false)
   // Há rascunho não salvo no detalhe? Esc e Fechar perguntam antes de sair.
   const detailDirtyRef = useRef(false)
   const setDetailDirty = useCallback((dirty: boolean) => {
@@ -194,6 +215,127 @@ export function PromptsPanel({
     if (result !== 'failed') {
       window.setTimeout(() => setFeedbackId((id) => (id === 'combined' ? null : id)), 2500)
     }
+  }
+
+  const originOf = (prompt: AutomationDefinition): PromptOrigin =>
+    !presetIds.has(prompt.id)
+      ? 'personalizado'
+      : overridesById.has(prompt.id)
+        ? 'catalogo-editado'
+        : 'catalogo'
+
+  // Exportar é sempre ação explícita: os marcados, ou o catálogo todo se nada estiver marcado.
+  const exportPrompts = async () => {
+    const list = selectedPrompts.length > 0 ? selectedPrompts : prompts
+    const toFile = (prompt: AutomationDefinition) => serializePromptMarkdown(prompt, originOf(prompt))
+    try {
+      if (list.length === 1) {
+        const result = await window.felixo?.files?.saveTextFile({
+          defaultPath: promptFileName(list[0]),
+          content: toFile(list[0]),
+          filters: [{ name: 'Prompt em Markdown', extensions: [PROMPT_FILE_EXTENSION] }],
+        })
+        if (result?.ok) {
+          setTransfer({ tone: 'ok', text: `Prompt "${list[0].name}" exportado.` })
+        } else if (result && !result.canceled) {
+          setTransfer({ tone: 'error', text: result.message ?? 'Não foi possível salvar o arquivo.' })
+        }
+        return
+      }
+      const names = uniquePromptFileNames(list)
+      const result = await window.felixo?.files?.saveTextFolder({
+        files: list.map((prompt, index) => ({ name: names[index], content: toFile(prompt) })),
+      })
+      if (result?.ok) {
+        setTransfer({ tone: 'ok', text: `${list.length} prompts exportados para a pasta escolhida.` })
+      } else if (result && !result.canceled) {
+        setTransfer({ tone: 'error', text: result.message ?? 'Não foi possível salvar os arquivos.' })
+      }
+    } catch (error) {
+      setTransfer({
+        tone: 'error',
+        text: error instanceof Error ? error.message : 'Não foi possível exportar.',
+      })
+    }
+  }
+
+  const readImportFiles = async (event: ChangeEvent<HTMLInputElement>) => {
+    // A pasta escolhida traz tudo o que há dentro; só os .md entram.
+    const files = Array.from(event.target.files ?? []).filter((file) =>
+      /\.(md|markdown)$/i.test(file.name),
+    )
+    event.target.value = ''
+    if (files.length === 0) {
+      setTransfer({ tone: 'error', text: 'Nenhum arquivo .md encontrado na escolha.' })
+      return
+    }
+    if (files.length > IMPORT_MAX_FILES) {
+      setTransfer({ tone: 'error', text: `São ${files.length} arquivos; importe até ${IMPORT_MAX_FILES} por vez.` })
+      return
+    }
+    const usable = files.filter((file) => file.size <= IMPORT_FILE_MAX_BYTES)
+    if (usable.length === 0) {
+      setTransfer({ tone: 'error', text: 'Os arquivos são grandes demais para serem prompts (limite de 1 MB).' })
+      return
+    }
+    try {
+      const read = await Promise.all(
+        usable.map(async (file) => ({ name: file.name, content: await file.text() })),
+      )
+      const rows = planPromptImport(read, prompts)
+      const skipped = files.length - usable.length
+      setTransfer(
+        skipped > 0
+          ? { tone: 'error', text: `${skipped} arquivo(s) acima de 1 MB ficaram de fora.` }
+          : null,
+      )
+      setImportRows(rows)
+      setImportActions(rows.map(defaultImportAction))
+    } catch {
+      setTransfer({ tone: 'error', text: 'Não foi possível ler os arquivos escolhidos.' })
+    }
+  }
+
+  const confirmImport = async () => {
+    if (!importRows || isImporting) return
+    setIsImporting(true)
+    const now = new Date().toISOString()
+    const saved: AutomationDefinition[] = []
+    let failed = 0
+    try {
+      for (const [index, row] of importRows.entries()) {
+        const item = buildImportedPrompt(row, importActions[index], createAutomationId, now)
+        if (!item) continue
+        // Uma edição pendente do mesmo prompt gravaria por cima do que acabou de chegar.
+        saveQueue.cancel(item.id)
+        try {
+          const result = await window.felixo?.automations?.save(item)
+          if (result?.ok) saved.push(result.automation ?? item)
+          else failed += 1
+        } catch {
+          failed += 1
+        }
+      }
+    } finally {
+      setIsImporting(false)
+    }
+    setCustom((current) => {
+      const next = [...current]
+      for (const item of saved) {
+        const at = next.findIndex((automation) => automation.id === item.id)
+        if (at >= 0) next[at] = item
+        else next.push(item)
+      }
+      return next
+    })
+    setImportRows(null)
+    setTransfer({
+      tone: failed > 0 ? 'error' : 'ok',
+      text:
+        failed > 0
+          ? `${saved.length} importados; ${failed} não puderam ser salvos.`
+          : `${saved.length} ${saved.length === 1 ? 'prompt importado' : 'prompts importados'}.`,
+    })
   }
 
   const persistAutomation = useCallback(async (automation: AutomationDefinition) => {
@@ -369,7 +511,69 @@ export function PromptsPanel({
           <Plus size={13} />
           Novo prompt
         </button>
+        <button
+          type="button"
+          onClick={() => void exportPrompts()}
+          className="felixo-btn flex items-center gap-1 rounded-sm px-2 py-1.5 text-xs text-zinc-300 hover:bg-white/10"
+          title="Salva como .md os prompts marcados; sem nenhum marcado, o catálogo inteiro"
+        >
+          <Download size={13} />
+          {selectedPrompts.length > 0 ? `Exportar ${selectedPrompts.length}` : 'Exportar todos'}
+        </button>
+        <label
+          className="felixo-btn flex cursor-pointer items-center gap-1 rounded-sm px-2 py-1.5 text-xs text-zinc-300 hover:bg-white/10"
+          title="Escolher arquivos .md exportados (ou escritos à mão) para trazer ao catálogo"
+        >
+          <Upload size={13} />
+          Importar .md
+          <input
+            type="file"
+            accept=".md,.markdown"
+            multiple
+            className="sr-only"
+            aria-label="Importar prompts de arquivos .md"
+            onChange={(event) => void readImportFiles(event)}
+          />
+        </label>
+        <label
+          className="felixo-btn flex cursor-pointer items-center gap-1 rounded-sm px-2 py-1.5 text-xs text-zinc-300 hover:bg-white/10"
+          title="Escolher uma pasta e ler todos os .md dela"
+        >
+          <FolderUp size={13} />
+          Importar pasta
+          <input
+            type="file"
+            // @ts-expect-error webkitdirectory é do Chromium e não está nos tipos do React.
+            webkitdirectory=""
+            className="sr-only"
+            aria-label="Importar prompts de uma pasta"
+            onChange={(event) => void readImportFiles(event)}
+          />
+        </label>
       </div>
+
+      {transfer && (
+        <p
+          role="status"
+          className={`mb-3 flex items-center gap-1 rounded-sm p-2 text-xs ${transfer.tone === 'error' ? 'text-theme-error' : 'text-(--f-core-white-soft)'}`}
+        >
+          {transfer.tone === 'error' ? <CircleAlert size={12} /> : <Check size={12} />}
+          {transfer.text}
+        </p>
+      )}
+
+      {importRows && (
+        <PromptImportPreview
+          rows={importRows}
+          actions={importActions}
+          busy={isImporting}
+          onActionChange={(index, action) =>
+            setImportActions((current) => current.map((item, i) => (i === index ? action : item)))
+          }
+          onConfirm={() => void confirmImport()}
+          onCancel={() => setImportRows(null)}
+        />
+      )}
 
       {draft && (
         <section className="mb-3 rounded-sm border border-white/10 bg-[color-mix(in_srgb,var(--f-core-white)_6%,transparent)] p-2.5">

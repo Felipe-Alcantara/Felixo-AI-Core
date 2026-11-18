@@ -597,6 +597,7 @@ contextBridge.exposeInMainWorld('felixo', {
     saveAttachment: (params) => ipcRenderer.invoke('files:save-attachment', params),
     saveClipboardImage: () => ipcRenderer.invoke('files:save-clipboard-image'),
     saveTextFile: (params) => ipcRenderer.invoke('files:save-text', params),
+    saveTextFolder: (params) => ipcRenderer.invoke('files:save-text-folder', params),
   },
   agentSessionLog: {
     export: (params) => ipcRenderer.invoke('agent-session-log:export', params),

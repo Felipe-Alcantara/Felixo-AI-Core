@@ -418,6 +418,14 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
         disabledWhen: 'só aparece em presets',
       },
       {
+        locator: 'onClick={() => void exportPrompts()}',
+        kind: 'button',
+        effect:
+          'salva como .md (cabeçalho YAML com id, name, scope, description, updatedAt, origem + o texto intacto) os prompts marcados, ou o catálogo inteiro se nenhum estiver marcado: um prompt abre "Salvar como" (files:save-text); vários pedem uma pasta (files:save-text-folder) e nunca sobrescrevem arquivo existente',
+        failure:
+          'recusa ou erro do processo principal: a mensagem aparece em vermelho (role=status) acima da lista; cancelar o diálogo não mostra nada',
+      },
+      {
         locator: 'data-felixo-prompt-insert',
         kind: 'button',
         effect:
@@ -443,12 +451,13 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
     ],
     persistence: [
       'processo principal: prompts personalizados e edições de preset (automations:save / automations:delete)',
+      'arquivos .md que a pessoa exporta ficam onde ela escolher; importar grava pelos mesmos automations:save',
       'canvas salvo: lastPromptInsertion do bloco de terminal (nome e origem, sem o corpo)',
       'arquivo temporário de contexto em <userData>/context-deliveries (context-file:write)',
       'localStorage felixo:canvas-panel-width:prompts e felixo:canvas-panel-height:prompts',
       'nenhuma para filtro, seleção e rascunho',
     ],
-    ipc: ['automations:list', 'automations:save', 'automations:delete', 'context-file:write', 'pty:write'],
+    ipc: ['automations:list', 'automations:save', 'automations:delete', 'context-file:write', 'pty:write', 'files:save-text', 'files:save-text-folder'],
     dependsOn: [
       'CanvasPanel',
       'insertPrompt (CanvasView)',
@@ -457,6 +466,8 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
       'prompt-composition',
       'prompt-delivery-feedback',
       'custom-automation-creation',
+      'prompt-markdown',
+      'PromptImportPreview',
       'defaultAutomations',
       'FelixoSelect',
     ],
@@ -470,6 +481,8 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
       { file: 'src/features/canvas/services/prompt-delivery-feedback.test.ts' },
       { file: 'src/features/canvas/services/prompt-overrides.test.ts' },
       { file: 'src/features/canvas/services/custom-automation-creation.test.ts' },
+      { file: 'src/features/canvas/services/prompt-markdown.test.ts' },
+      { file: 'electron/services/file-export-ipc-handlers.test.cjs' },
       { file: 'src/features/shared/data/automations.test.ts' },
       { file: 'src/features/shared/types/prompt-insertion.test.ts' },
     ],
@@ -789,6 +802,52 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
 }
 
 export const workspaceToolSurfaces: InventoryElement[] = [
+  {
+    id: 'tool-prompts-import',
+    name: 'Prompts — prévia da importação de .md',
+    layer: 'panel',
+    owner: `${TOOLS}/PromptImportPreview.tsx`,
+    states: {
+      normal:
+        'aparece no topo do painel Prompts depois de "Importar .md" (arquivos, o seletor aceita vários) ou "Importar pasta" (todos os .md da pasta, o resto é ignorado): uma linha por arquivo com nome, tópico, situação (novo, já existe com mudanças, já existe igual, não pode ser importado) e a ação; nada é gravado antes de confirmar',
+      empty: 'sem .md na escolha, mais de 200 arquivos ou todos acima de 1 MB: a prévia nem abre e um aviso em vermelho aparece no painel',
+      pending: 'confirmação gravando um a um (automations:save): "Importando…" e os botões travados',
+      success: 'aviso no painel: "N prompts importados."; os prompts entram ou se atualizam na lista',
+      error: 'arquivo inválido (tópico inexistente, corpo vazio, cabeçalho aberto, id repetido na mesma importação) fica na prévia com o motivo e só pode ser pulado; falha ao gravar: "N importados; M não puderam ser salvos."',
+      disabled: 'Importar com nada a gravar (tudo em Pular); os dois botões enquanto importa',
+    },
+    controls: [
+      {
+        locator: 'aria-label={`O que fazer com',
+        kind: 'select',
+        effect:
+          'escolhe a ação do arquivo: novo cria ou pula; já existe com mudanças sobrescreve (mantém o id, então o histórico de inserções não perde a referência), mantém os dois (cria outro id, nome com "(importado)") ou pula; igual pula por padrão',
+        failure: 'sem falha própria (estado local)',
+        disabledWhen: 'só aparece em arquivo válido',
+      },
+      {
+        locator: 'onClick={onCancel}',
+        kind: 'button',
+        effect: 'fecha a prévia sem gravar nada',
+        failure: 'sem falha própria (estado local)',
+        disabledWhen: 'importação em andamento',
+      },
+      {
+        locator: 'data-felixo-prompt-import-confirm',
+        kind: 'button',
+        effect: 'grava cada arquivo não pulado por automations:save (id do arquivo mantido ao criar e ao sobrescrever; sem id, gera um) e atualiza a lista',
+        failure: 'IPC recusado ou rejeitado em um arquivo: os demais seguem e o aviso conta quantos falharam',
+        disabledWhen: 'nada a gravar (tudo em Pular) ou importando',
+      },
+    ],
+    persistence: ['processo principal: automations:save (o mesmo dos prompts personalizados)', 'nenhuma para a prévia e as ações escolhidas'],
+    ipc: ['automations:save'],
+    dependsOn: ['prompt-markdown', 'FelixoSelect', 'PromptsPanel'],
+    tests: [{ file: 'src/features/canvas/services/prompt-markdown.test.ts' }],
+    gaps: [],
+    overlap: `Dentro do painel Prompts (porte xl), acima da lista`,
+  },
+
   {
     id: 'tool-panel-host',
     name: 'Hospedeiro dos painéis de ferramenta',
