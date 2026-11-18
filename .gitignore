@@ -3,6 +3,24 @@
 # absolutos, versoes de node) e nao valem para mais ninguem. As skills do
 # projeto, em .claude/skills/, sao versionadas normalmente.
 .claude/settings.local.json
+.claude/projects/
+.claude/worktrees/
+CLAUDE.local.md
+
+# Configuração, memória e sessões pessoais de outras ferramentas de IA. Cada
+# pessoa tem a sua (contas, permissões, caminhos da máquina): não vão para o
+# repositório nem para um PR. Os arquivos de regras do projeto (CLAUDE.md,
+# AGENTS.md) e as skills versionadas continuam fora desta lista.
+.cursor/
+.windsurf/
+.aider*
+.continue/
+.gemini/
+.ai-memory/
+
+# Capturas e arquivos temporários de quem roda o app (ex.: a skill rodar-app
+# grava prints em ../tmp/ a partir de app/).
+/tmp/
 __pycache__/
 *.pyc
 Padrão de qualidade - Felixo System Design/
