@@ -2,6 +2,7 @@
 
 const path = require('node:path')
 const { randomUUID } = require('node:crypto')
+const { buildSessionReport, formatSessionReportMarkdown } = require('./agent-session-report.cjs')
 
 // Retenção: o registro serve a análise de uso, não a memória eterna; 2 anos cobrem o "por ano".
 const RETENTION_DAYS = 730
@@ -146,6 +147,20 @@ function createAgentSessionLogRepository(database, { now = () => new Date(), use
         )
         .all(from ?? '0000', to ?? '9999')
         .map((row) => ({ ...row }))
+    },
+    /** Relatório da sessão do período: horas ativas, pausas e tempo por frente (projeto), de todos os agentes. */
+    sessionReport({ from, to, pauseMs, timeZone } = {}) {
+      const range = [from ?? '0000', to ?? '9999']
+      // Início de sessão e texto enviado são atividade; o fim da sessão não é.
+      const rows = connection
+        .prepare(
+          `SELECT i.at AS at, s.project AS project FROM agent_interactions i JOIN agent_sessions s ON s.id = i.session_id
+           WHERE i.at >= ? AND i.at < ?
+           UNION ALL SELECT started_at, project FROM agent_sessions WHERE started_at >= ? AND started_at < ?`,
+        )
+        .all(...range, ...range)
+      const report = buildSessionReport(rows.map((row) => ({ at: Date.parse(row.at), project: row.project })), { pauseMs })
+      return { report, markdown: formatSessionReportMarkdown(report, { timeZone }) }
     },
     /** Conteúdo exportável; nunca inclui texto de prompt (a tabela nem o guarda). */
     exportPeriod({ from, to, format = 'json' } = {}) {

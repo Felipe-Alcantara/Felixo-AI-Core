@@ -107,3 +107,36 @@ test(
     }
   },
 )
+
+test(
+  'relatorio da sessao: junta agentes, desconta pausas e divide por projeto',
+  { skip: hasNodeSqlite() ? false : 'node:sqlite indisponível neste runtime' },
+  () => {
+    const databaseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-session-log-'))
+    const database = createStorageDatabase({ databaseDir })
+    let clock = Date.parse('2026-11-17T10:00:00.000Z')
+    const repo = createAgentSessionLogRepository(database, { now: () => new Date(clock) })
+    const tick = (min) => { clock += min * 60_000 }
+    try {
+      repo.start({ sessionId: 'a', command: 'claude', cwd: path.join(os.tmpdir(), 'onboarding'), providerId: 'claude' })
+      tick(10)
+      repo.interaction('a', 5)
+      repo.start({ sessionId: 'b', command: 'codex', cwd: path.join(os.tmpdir(), 'site'), providerId: 'codex' })
+      tick(10)
+      repo.interaction('b', 5)
+      tick(90) // pausa
+      repo.interaction('a', 5)
+      repo.end('a')
+      const { report, markdown } = repo.sessionReport({ from: '2026-11-17', to: '2026-11-18', timeZone: 'UTC' })
+      assert.equal(report.wallMs, 110 * 60_000)
+      assert.equal(report.pauses.length, 1)
+      assert.equal(report.activeMs, 20 * 60_000)
+      assert.deepEqual(report.fronts.map((f) => [f.project, f.ms / 60_000]), [['onboarding', 10], ['site', 10]])
+      assert.match(markdown, /Horas ativas: 0h20/)
+      assert.equal(repo.sessionReport({ from: '2030-01-01', to: '2030-01-02' }).report, null)
+    } finally {
+      database.close?.()
+      fs.rmSync(databaseDir, { recursive: true, force: true })
+    }
+  },
+)

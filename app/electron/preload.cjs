@@ -568,6 +568,7 @@ contextBridge.exposeInMainWorld('felixo', {
   },
   agentSessionLog: {
     export: (params) => ipcRenderer.invoke('agent-session-log:export', params),
+    report: (params) => ipcRenderer.invoke('agent-session-log:report', params),
   },
   settings: {
     loadOrchestrator: () => ipcRenderer.invoke('settings:load-orchestrator'),

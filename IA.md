@@ -4873,3 +4873,24 @@ Task: Felixo AI Core/Repositório — preparar o repositório público para cont
 **Validação.** `npm run lint` e `npm run typecheck` limpos (31 s e 2 s). Suíte Node: 3526 testes, 3514 passam, 12 pulados, 0 falhas (34 s). Vitest: 250 arquivos, 3723 testes passam, 4 pulados (100 s). Os 5 arquivos de teste editados passam isolados. Verificador de links relativos em todo `*.md` versionado: 156 verificados, 0 quebrados. O app não foi aberto: não há mudança de código.
 
 Estado: 6 commits na branch `orq/repositorio-publico-higiene`, sem push; integração e deploy pelo orquestrador.
+
+---
+
+## 2026-11-18 — Relatórios: relatório automático de uma sessão longa (horas ativas, pausas e frentes)
+
+Task: Felixo AI Core/Relatórios — gerar automaticamente o relatório de uma sessão longa (Notion `3eb91f95-497e-817d-b618-da103cc2d6a7`). Agente: subagente da Orquestração (Claude Sonnet 5.5, effort medium).
+
+**Contexto.** O relatório da sessão de cerca de 37h30 (25 a 27/09) foi montado à mão. A fonte agora existe: o registro de sessões de agente (`agent_sessions` e `agent_interactions`, sem texto de conversa).
+
+**Motivo.** A conta precisa ser a mesma para qualquer período e reaproveitável pelo resumo diário, então ficou em funções puras fora do banco.
+
+**O que mudou.**
+- `app/electron/services/storage/agent-session-report.cjs` (novo): `buildSessionReport(events)` junta a atividade de todos os agentes, define pausa como mais de 30 min sem atividade (configurável), horas ativas = duração total menos as pausas, e credita cada intervalo ativo à frente (projeto) do evento que o encerra, de modo que a soma das frentes é exatamente o tempo ativo. `formatSessionReportMarkdown` devolve o texto em português (`37h30`, datas no fuso pedido).
+- `agent-session-log-repository.cjs`: `sessionReport({ from, to, pauseMs, timeZone })` lê interações e inícios de sessão do período.
+- IPC `agent-session-log:report` (`main.cjs`), `preload.cjs` e tipo em `vite-env.d.ts`: `window.felixo.agentSessionLog.report({ from, to, timeZone })` devolve `{ markdown, report }`. Nada sai do app.
+
+**Validação.** 5 testes novos da calculadora (pausa em 30 min exatos e 30 min + 1 ms, soma das frentes = tempo ativo, formato 37h30 e fuso) e 1 do repositório com banco real. Lint limpo, typecheck limpo, suíte Node 3532 testes (3520 passam, 12 pulados, 0 falhas), vitest 3723 passam. O app não foi aberto.
+
+**Não validado / fica para depois.** O botão na tela (o registro ainda não tem tela nem para exportar), a conferência contra a sessão real de 25 a 27/09 (o registro só existe desde 17/11) e a atividade do agente que trabalha sozinho (só texto digitado e abertura de sessão contam).
+
+Estado: concluído na branch `orq/relatorios-gerar-automaticamente-relator`, sem push; deploy pelo orquestrador.

@@ -1281,6 +1281,12 @@ declare global {
           to?: string
           format?: 'csv' | 'json'
         }) => Promise<CliInvokeResult & { content?: string; format?: 'csv' | 'json' }>
+        /** Relatório da sessão do período (ISO): horas ativas, pausas de mais de 30 min e tempo por frente. */
+        report: (params: {
+          from?: string
+          to?: string
+          timeZone?: string
+        }) => Promise<CliInvokeResult & { markdown?: string; report?: unknown }>
       }
       settings?: {
         loadOrchestrator: () => Promise<

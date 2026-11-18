@@ -532,6 +532,15 @@ app.whenReady().then(async () => {
       return { ok: false, message: error instanceof Error ? error.message : 'Falha ao exportar o registro.' }
     }
   })
+  ipcMain.handle('agent-session-log:report', (_event, params = {}) => {
+    try {
+      const timeZone = typeof params.timeZone === 'string' ? params.timeZone : undefined
+      const { report, markdown } = agentSessionLog.sessionReport({ from: params.from, to: params.to, timeZone })
+      return { ok: true, report, markdown }
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : 'Falha ao gerar o relatório da sessão.' }
+    }
+  })
   // Troca antecipada por limiar: cada medição gravada avisa a cadeia, que nasce mais abaixo
   // (até lá, a referência é nula e nada é avisado). Fora do caminho da gravação: nunca a atrasa.
   let accountChainForUsage = null
