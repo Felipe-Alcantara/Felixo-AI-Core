@@ -18,6 +18,7 @@ const {
   isWindowsLongPathFailure,
   resolveWorkingDirectory,
   resolveWindowsCodexPath,
+  codexNoDaemonArgs,
 } = require('./pty-process-manager.cjs')
 const { createCliAccountStore } = require('./cli-account-store.cjs')
 const { createAccountOutputWatcher } = require('./accounts/account-output-watcher.cjs')
@@ -2411,6 +2412,40 @@ test('a conexão Notion do app entrega NOTION_TOKEN só ao terminal que a pediu'
     assert.deepEqual(pedidos, ['conn-1', 'inexistente'])
     // O segredo vai pelo ambiente, nunca pelos argumentos.
     assert.ok(!JSON.stringify(calls[0].args).includes('ntn_do_cofre'))
+  } finally {
+    manager.killAll({ force: true })
+  }
+})
+
+test('Codex com pasta de perfil longa sobe com --no-daemon; pasta curta e outras CLIs ficam como estavam', () => {
+  // Medido no Windows (Codex 0.171.0-alpha.12): 64 caracteres abrem o TUI, 65 falham com SUN_LEN.
+  const longa = '/perfis/' + 'x'.repeat(80)
+  assert.deepEqual(codexNoDaemonArgs('codex', { CODEX_HOME: longa }, []), ['--no-daemon'])
+  assert.deepEqual(codexNoDaemonArgs('codex', { CODEX_HOME: longa }, ['--no-daemon']), [])
+  assert.deepEqual(codexNoDaemonArgs('codex', { CODEX_HOME: 'x'.repeat(60) }, []), [])
+  assert.deepEqual(codexNoDaemonArgs('codex', undefined, []), [])
+  assert.deepEqual(codexNoDaemonArgs('claude', { CODEX_HOME: longa }, []), [])
+})
+
+test('o spawn do Codex com conta de pasta longa põe --no-daemon antes do resume', () => {
+  const { spawnPty, calls } = createFakePty()
+  const longa = '/perfis/codex/' + 'x'.repeat(100)
+  const manager = new PtyProcessManager({
+    spawnPty,
+    buildAccountEnv: (accountId) => (accountId === 'conta-longa' ? { CODEX_HOME: longa } : {}),
+  })
+
+  try {
+    manager.spawn('sessao-longa', {
+      command: 'codex',
+      args: ['resume', '11111111-2222-4333-8444-555555555555'],
+      accountId: 'conta-longa',
+    })
+    manager.spawn('sessao-sem-conta', { command: 'codex', args: ['resume', '11111111-2222-4333-8444-555555555555'] })
+
+    const argsLonga = calls[0].args.join(' ')
+    assert.match(argsLonga, /--no-daemon.*resume 11111111/)
+    assert.doesNotMatch(calls[1].args.join(' '), /--no-daemon/)
   } finally {
     manager.killAll({ force: true })
   }

@@ -947,8 +947,10 @@ de abrir: ela responde `path must be shorter than SUN_LEN` antes de qualquer
 retomada. Medido no app instalado com uma pasta de 156 caracteres; com 25, a CLI
 abriu normalmente. Medido de novo em 17/11/2026, com a CLI direto (sem o app), no
 Windows: abre com até 64 caracteres na pasta e falha a partir de 65. A versão
-0.171.0-alpha.11 também falha com 156. As pastas de conta do app passam desse
-limite.
+0.171.0-alpha.11 também falha com 156, e a 0.171.0-alpha.12 falha a partir de 65 (medido em
+18/11/2026). As pastas de conta do app passam desse limite, então o app acrescenta
+`--no-daemon` ao Codex quando a pasta de conta é longa: com a flag, o terminal abre
+e retoma normalmente (medido com 156 caracteres, também antes do `resume`).
 
 O Gemini CLI apaga sozinho, ao abrir, as conversas com mais de 30 dias e as que
 ele não consegue ler (a opção `general.sessionRetention` das configurações dele,

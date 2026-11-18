@@ -117,9 +117,12 @@ function supportsProfiles(providerId) {
  * o app gera (uuid) passa, para nenhum nome de conta virar travessia de
  * diretório.
  *
- * No Windows, o TUI do Codex 0.159.2 falha com SUN_LEN a partir de 65 caracteres
- * nesta pasta (o socket de controle soma 43; medido em 17/11/2026), e o caminho
- * do perfil do app passa disso sempre.
+ * No Windows, o TUI do Codex falha com SUN_LEN a partir de 65 caracteres nesta
+ * pasta (o socket de controle soma 43; medido em 17/11/2026 no 0.159.2 e em
+ * 18/11/2026 no 0.171.0-alpha.12), e o caminho do perfil do app passa disso
+ * sempre. O PtyProcessManager contorna acrescentando `--no-daemon` ao Codex
+ * quando a pasta é longa (`codexNoDaemonArgs`); a pasta não encurta porque as
+ * contas já cadastradas guardam o login nela.
  */
 function getProfileDir(userData, providerId, profileId) {
   if (!isSafeSegment(providerId) || !isSafeSegment(profileId)) {

@@ -354,7 +354,13 @@ class PtyProcessManager {
     )
     const keepShellOpen = Boolean(options.keepShellOpen)
     const launch = options.command
-      ? createPtyLaunchSpec(command, [...(mcp?.args ?? []), ...launchArgs], env, this.platform, keepShellOpen)
+      ? createPtyLaunchSpec(
+          command,
+          [...codexNoDaemonArgs(requestedCommand, accountEnv, launchArgs), ...(mcp?.args ?? []), ...launchArgs],
+          env,
+          this.platform,
+          keepShellOpen,
+        )
       : { command, args: getDefaultPtyShellArgs(command, this.platform) }
     const cols = normalizeDimension(options.cols, DEFAULT_COLS)
     const rows = normalizeDimension(options.rows, DEFAULT_ROWS)
@@ -1742,6 +1748,32 @@ function resolveWindowsCodexPath(command, env, exists = fs.existsSync) {
   return null
 }
 
+/**
+ * O TUI do Codex sobe um daemon com socket em `<CODEX_HOME>/app-server-control/
+ * app-server-control.sock` (43 caracteres além da pasta). O caminho de um socket
+ * AF_UNIX cabe em 107 bytes no Windows e no Linux e em 103 no macOS; a pasta de
+ * perfil de uma conta do app passa disso, e o bloco nem abre ("path must be
+ * shorter than SUN_LEN"). Medido no Windows com o Codex 0.171.0-alpha.12:
+ * 64 caracteres abrem, 65 falham; com `--no-daemon` abrem com 156. Só entra a
+ * flag quando a pasta passa do limite, porque CLIs sem daemon não a conhecem.
+ * shortcut: o limite do macOS (61 de pasta) vem do tamanho de sockaddr_un, não foi medido.
+ */
+const CODEX_DAEMON_SOCKET_SUFFIX = 43
+const CODEX_MIN_SOCKET_PATH_LIMIT = 103
+
+/**
+ * @param {string} command
+ * @param {Record<string, string> | undefined} accountEnv - Ambiente da conta (só ele traz o CODEX_HOME do perfil).
+ * @param {string[]} args
+ * @returns {string[]}
+ */
+function codexNoDaemonArgs(command, accountEnv, args) {
+  const home = accountEnv?.CODEX_HOME
+  if (!isCodexCommand(command) || typeof home !== 'string') return []
+  if (home.length + CODEX_DAEMON_SOCKET_SUFFIX <= CODEX_MIN_SOCKET_PATH_LIMIT) return []
+  return args.includes('--no-daemon') ? [] : ['--no-daemon']
+}
+
 function isCodexCommand(command) {
   return path.win32
     .basename(String(command ?? ''))
@@ -1886,6 +1918,7 @@ module.exports = {
   DEFAULT_COLS,
   DEFAULT_ROWS,
   WIN32_MAX_PATH,
+  codexNoDaemonArgs,
   createPtyLaunchSpec,
   getDefaultPtyShellArgs,
   isWindowsLongPathFailure,
