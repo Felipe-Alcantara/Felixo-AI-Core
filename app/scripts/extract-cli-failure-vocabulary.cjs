@@ -39,7 +39,8 @@ const FIXTURE_PATH = path.join(__dirname, '..', 'electron', '__fixtures__', 'cli
 const DEFAULT_CHUNK_BYTES = 16 * 1024 * 1024
 const SCHEMA_VERSION = 1
 
-const KINDS = new Set(['include', 'exclude', 'notice', 'observed'])
+const KINDS = new Set(['include', 'exclude', 'notice', 'observed', 'resume'])
+const RESUME_REASONS = new Set(['expired'])
 const FAILURE_CLASSES = new Set(['limit', 'billing', 'auth', 'network', 'provider'])
 const SCOPES = new Set(['account', 'model'])
 const NOTICES = new Set(['limit_reset'])
@@ -470,6 +471,10 @@ function validateVocabulary(vocabulary) {
         if (!SCOPES.has(phrase.scope)) problems.push(`${label}: scope inválido`)
       } else if (phrase.failureClass !== undefined || phrase.scope !== undefined) {
         problems.push(`${label}: só inclusão tem failureClass e scope`)
+      }
+      if (phrase.kind === 'resume') {
+        if (!RESUME_REASONS.has(phrase.reason)) problems.push(`${label}: reason de retomada inválido`)
+        if (phrase.exitCode !== undefined && !Number.isInteger(phrase.exitCode)) problems.push(`${label}: exitCode deve ser inteiro`)
       }
       if (phrase.kind === 'notice' && !NOTICES.has(phrase.notice)) {
         problems.push(`${label}: notice inválido`)

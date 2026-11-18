@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import failureVocabulary from '../../../../electron/__fixtures__/cli-failure-vocabulary.json'
 import resumeFixtures from '../../../../electron/__fixtures__/agent-resume-versions.json'
 import {
   RESUME_FAILURE_PHRASES,
@@ -305,5 +306,42 @@ describe('recusas do Gemini: só com a saída 42', () => {
   it('o detector do Gemini não usa as frases de login do Claude e do Codex', () => {
     const detector = createResumeOutcomeDetector({ sessionId: ATTEMPTED_ID, provider: 'gemini' })
     expect(detector.feed(`Not logged in ${MIDDLE_DOT} Please run /login${CRLF}`)).toBeNull()
+  })
+})
+
+describe('frases de recusa x vocabulário extraído das CLIs', () => {
+  type VocabularyPhrase = {
+    kind: string
+    literals: string[]
+    reason?: string
+    exitCode?: number
+    withoutId?: boolean
+    inPackage: boolean
+  }
+  const resumeEntries = Object.entries(failureVocabulary.providers).flatMap(([provider, data]) =>
+    (data.phrases as VocabularyPhrase[]).filter((entry) => entry.kind === 'resume').map((entry) => ({ provider, entry })),
+  )
+  const expired = RESUME_FAILURE_PHRASES.filter((phrase) => phrase.reason === 'expired')
+
+  it('cada frase expired do detector está no vocabulário, com o mesmo código de saída e conferida no pacote', () => {
+    for (const phrase of expired) {
+      const matches = resumeEntries.filter(
+        ({ provider, entry }) => phrase.providers.includes(provider) && entry.literals.includes(phrase.phrase),
+      )
+      expect(matches, phrase.phrase).toHaveLength(phrase.providers.length)
+      for (const { entry } of matches) {
+        expect(entry.reason).toBe('expired')
+        expect(entry.exitCode).toBe(phrase.exitCode)
+        expect(Boolean(entry.withoutId)).toBe(Boolean(phrase.withoutId))
+        expect(entry.inPackage).toBe(true)
+      }
+    }
+  })
+
+  it('o vocabulário não tem frase de retomada que o detector ignore', () => {
+    for (const { provider, entry } of resumeEntries) {
+      const known = expired.some((phrase) => phrase.providers.includes(provider) && entry.literals.includes(phrase.phrase))
+      expect(known, `${provider}: ${entry.literals.join(' | ')}`).toBe(true)
+    }
   })
 })

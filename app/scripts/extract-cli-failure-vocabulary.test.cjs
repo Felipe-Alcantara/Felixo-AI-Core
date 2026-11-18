@@ -232,6 +232,18 @@ test('a fixture versionada é válida, sem segredo e cobre os quatro provedores'
   }
 })
 
+test('a validação confere o motivo e o código de saída das frases de retomada', () => {
+  const local = tinyVocabulary()
+  local.providers.claude.phrases.push({
+    id: 'claude.resume.x', kind: 'resume', reason: 'expired', exitCode: 'um', terminal: true,
+    literals: ['No conversation found'], example: 'No conversation found with session ID: <id>', inPackage: true,
+  })
+  assert.match(extractor.validateVocabulary(local).join(), /exitCode deve ser inteiro/)
+  local.providers.claude.phrases.at(-1).exitCode = 1
+  local.providers.claude.phrases.at(-1).reason = 'outra'
+  assert.match(extractor.validateVocabulary(local).join(), /reason de retomada inválido/)
+})
+
 test('os argumentos são só --write, --npm-root e --openia-dir', () => {
   assert.deepEqual(extractor.parseArgs([]), { write: false, npmRoot: null, openiaDir: null })
   assert.deepEqual(extractor.parseArgs(['--write', '--npm-root=/x', '--openia-dir=/y']), {

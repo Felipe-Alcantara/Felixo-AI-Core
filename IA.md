@@ -4733,3 +4733,23 @@ Task: Felixo AI Core/Agentes — oferecer modo fast e busca de modelo e esforço
 **Não mudou de propósito.** `buildAgentArgs` não emite nada de fast para o Claude: o app já injeta `--settings <arquivo>` para a captura da status line (`pty-process-manager.cjs:249`) e pula a injeção quando há `--settings` do usuário, então um `--settings` de fast desligaria a captura de uso do Claude. Além disso, fast gasta crédito pago.
 
 **Validação.** Ver o relatório da task (números do gate).
+
+---
+
+## 2026-11-18 — Retomada: as frases de recusa entram no vocabulário de falhas das CLIs
+
+Agente: subagente da Orquestração (Claude Sonnet 5.5, effort medium). Task: Felixo AI Core/Retomada — levar as frases de retomada recusada ao vocabulário de falhas extraído das CLIs (Notion `3eb91f95-497e-8175-ac71-d0cf6e878ecd`).
+
+**Contexto.** As frases com que Claude, Codex e Gemini recusam um `--resume`/`resume <id>` ("No conversation found with session ID", "No saved session found with ID", "Invalid session identifier", "No previous sessions found for this project") viviam só em `resume-outcome-detector.ts`. Se uma CLI nova mudasse o texto, nada seria detectado e o Reiniciar voltaria a tentar a mesma conversa, sem teste avisando.
+
+**O que mudou.**
+- `app/electron/__fixtures__/cli-failure-vocabulary.json`: quatro entradas `kind: "resume"` (`reason: "expired"`, `exitCode` 42 e `withoutId` nas do Gemini), uma por frase e CLI, com `literals` e `example`.
+- `app/scripts/extract-cli-failure-vocabulary.cjs`: aceita o `kind` `resume` e valida `reason` e `exitCode`; o resto (varredura do binário, `inPackage`, divergência) já servia.
+- `resume-outcome-detector.test.ts`: dois testes exigem que as frases `expired` do detector e as `resume` do vocabulário sejam as mesmas (motivo, código de saída, `withoutId`, `inPackage`).
+- `docs/projeto/ARQUITETURA.md`: um parágrafo na seção "Retomada de conversa: plano com motivo".
+
+**Validação.** Extrator contra os binários instalados (Claude 2.1.327, Codex 0.171): as duas frases de Claude e Codex estão presentes; trocar um literal na fixture faz o extrator apontar "registrada como presente, ausente no pacote". Vitest do detector: 40 passando. `node scripts/run-node-unit-tests.cjs`: 3510 testes, 3498 passando, 0 falhas. `npx vitest run`: 3718 passando e 1 falha em `canvas-context-e2e.test.ts` (tempo esgotado sob carga; isolado, 6 de 6 em 86 s). Lint e typecheck limpos.
+
+**Não validado.** Gemini não está instalado aqui: as duas frases dele estão marcadas `inPackage: true` pelas medições de `agent-resume-versions.json` (0.57.0 e 0.62.0), não por varredura de binário. O extrator não roda no CI (não há CLI instalada lá): o aviso vem quando alguém atualiza uma CLI e roda o extrator, ou pelo teste do detector se a lista dele andar sozinha. O app não foi aberto (sem mudança visível).
+
+Estado: concluído (commit `d7728b67` na branch, sem push).

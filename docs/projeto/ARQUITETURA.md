@@ -761,6 +761,14 @@ as saídas medidas em `electron/__fixtures__/agent-resume-versions.json`
 (`--version`, recusas e código de saída), que os testes dos dois processos
 percorrem. Ao medir uma versão nova, acrescenta-se uma linha ali.
 
+As frases de recusa (`expired`) do detector de saída vivem também no vocabulário de
+falhas das CLIs (`electron/__fixtures__/cli-failure-vocabulary.json`, frases de
+`kind: "resume"`), que `scripts/extract-cli-failure-vocabulary.cjs` confere no
+pacote instalado depois de cada atualização de CLI. Um teste do detector
+(`resume-outcome-detector.test.ts`) exige que as duas listas sejam as mesmas;
+se a CLI mudar a frase, o extrator aponta "ausente no pacote" e a lista que
+ficou para trás deixa o teste vermelho.
+
 A versão vem do processo principal: `agent-cli-versions.cjs` reaproveita a
 detecção da abertura (`detectAllClis`, que já roda `<cli> --version` com
 tempo-limite) e responde ao canal `pty:cli-versions`. Uma leitura com versão

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "description": "Vocabulário de falha das CLIs de agente, conferido nos pacotes instalados só por leitura de arquivo (nenhuma CLI é executada). É o oráculo dos testes da taxonomia de falhas (accounts/failure-taxonomy.cjs). Depois de atualizar uma CLI, confira com `node scripts/extract-cli-failure-vocabulary.cjs` e grave com `--write`. Campos: `literals` são os trechos procurados no pacote; `example` é uma linha como a CLI a imprime; `terminal` diz se a frase vale no terminal interativo (origem pty) ou só na saída de erro one-shot (origem fluxo); `sourceLiterals` são trechos do código do pacote que montam uma frase composta (o molde `You've hit your ${…}` e a entrada da tabela de nomes de limite), procurados no pacote mas ausentes da linha impressa; `inPackage` e `version` são gravados pelo script.",
+  "description": "Vocabulário de falha das CLIs de agente, conferido nos pacotes instalados só por leitura de arquivo (nenhuma CLI é executada). É o oráculo dos testes da taxonomia de falhas (accounts/failure-taxonomy.cjs). Depois de atualizar uma CLI, confira com `node scripts/extract-cli-failure-vocabulary.cjs` e grave com `--write`. Campos: `literals` são os trechos procurados no pacote; `example` é uma linha como a CLI a imprime; `terminal` diz se a frase vale no terminal interativo (origem pty) ou só na saída de erro one-shot (origem fluxo); `sourceLiterals` são trechos do código do pacote que montam uma frase composta (o molde `You've hit your ${…}` e a entrada da tabela de nomes de limite), procurados no pacote mas ausentes da linha impressa; `inPackage` e `version` são gravados pelo script. Frases de kind `resume` são as recusas de retomada (`reason`: `expired`, `exitCode` quando a CLI sai com código próprio, `withoutId` quando a linha não traz o ID); `src/features/canvas/terminal/resume-outcome-detector.ts` precisa listar exatamente elas (teste no detector).",
   "providers": {
     "claude": {
       "package": "@anthropic-ai/claude-code",
@@ -627,6 +627,18 @@
           "example": "Usage limit reached",
           "inPackage": true,
           "note": "Rótulo sozinho do estado 'stopped' da tolerância de uso. Sem a captura dos bytes reais da TUI não dá para separá-lo do agente escrevendo a frase; fica fora da detecção (fail-closed) até essa captura."
+        },
+        {
+          "id": "claude.resume.no-conversation-found",
+          "kind": "resume",
+          "reason": "expired",
+          "terminal": true,
+          "literals": [
+            "No conversation found with session ID"
+          ],
+          "example": "No conversation found with session ID: <id>",
+          "inPackage": true,
+          "note": "Recusa do --resume <id> (sai com 1). O detector de retomada (resume-outcome-detector.ts) só conta com o ID na mesma linha."
         }
       ]
     },
@@ -996,6 +1008,18 @@
           "example": "  • Auth: Not logged in",
           "inPackage": true,
           "note": "Linha da listagem de servidores MCP (/mcp): fala do servidor MCP, não da conta do Codex."
+        },
+        {
+          "id": "codex.resume.no-saved-session",
+          "kind": "resume",
+          "reason": "expired",
+          "terminal": true,
+          "literals": [
+            "No saved session found with ID"
+          ],
+          "example": "No saved session found with ID <id>. Run `codex resume` without an ID to choose from existing sessions.",
+          "inPackage": true,
+          "note": "Recusa do resume <id>. O detector de retomada só conta com o ID na mesma linha."
         }
       ]
     },
@@ -1146,6 +1170,33 @@
           ],
           "example": "│ Usage limit reached for gemini-3.5-flash-lite.                                                   │",
           "inPackage": true
+        },
+        {
+          "id": "gemini.resume.invalid-session-identifier",
+          "kind": "resume",
+          "reason": "expired",
+          "terminal": true,
+          "literals": [
+            "Invalid session identifier"
+          ],
+          "example": "Error resuming session: Invalid session identifier \"<id>\".",
+          "inPackage": true,
+          "exitCode": 42,
+          "note": "Recusa do --resume <id> antes da interface; só vale com a saída 42 (medida em 0.57.0 e 0.62.0, agent-resume-versions.json)."
+        },
+        {
+          "id": "gemini.resume.no-previous-sessions",
+          "kind": "resume",
+          "reason": "expired",
+          "terminal": true,
+          "literals": [
+            "No previous sessions found for this project"
+          ],
+          "example": "Error resuming session: No previous sessions found for this project.",
+          "inPackage": true,
+          "exitCode": 42,
+          "withoutId": true,
+          "note": "Sem ID na linha: só vale com a saída 42."
         }
       ]
     },
