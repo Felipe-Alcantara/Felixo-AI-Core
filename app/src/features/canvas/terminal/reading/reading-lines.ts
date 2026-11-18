@@ -63,6 +63,8 @@ export type ReadingSegment = ReadingStyle & { text: string }
 export type ReadingLine = {
   text: string
   segments: ReadingSegment[]
+  /** Colunas que o terminal tinha para esta linha (menos o que `sliceLine` cortou); falta nas linhas de teste. */
+  cols?: number
 }
 
 /** Quantas linhas lógicas a Leitura guarda; as mais antigas ficam só no terminal. */
@@ -96,7 +98,7 @@ function styleOf(cell: ReadingCell): ReadingStyle {
   }
 }
 
-function sameStyle(a: ReadingStyle, b: ReadingStyle): boolean {
+export function sameStyle(a: ReadingStyle, b: ReadingStyle): boolean {
   return (
     a.bold === b.bold &&
     a.italic === b.italic &&
@@ -193,7 +195,7 @@ export function createTerminalLineReader(maxLines = MAX_READING_LINES): Terminal
           appendRow(current, row.segments)
           continue
         }
-        current = { text: '', segments: [] }
+        current = { text: '', segments: [], cols }
         appendRow(current, row.segments)
         lines.push(current)
       }

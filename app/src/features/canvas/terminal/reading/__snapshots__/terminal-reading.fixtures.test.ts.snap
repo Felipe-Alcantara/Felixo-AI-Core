@@ -350,7 +350,7 @@ exports[`Leitura das gravações reais > codex-cancelamento: snapshot do Markdow
 exports[`Leitura das gravações reais > codex-erro: snapshot do Markdown e do HTML > html 1`] = `
 [
   "<div class="markdown-content space-y-2 overflow-hidden text-[13px] leading-relaxed text-zinc-100"><p class="whitespace-pre-wrap text-zinc-100">Diga oi.</p></div>",
-  "<div class="markdown-content space-y-2 overflow-hidden text-[13px] leading-relaxed text-zinc-100"><p class="whitespace-pre-wrap text-zinc-100">{&quot;type&quot;:&quot;error&quot;,&quot;status&quot;:400,&quot;error&quot;:{&quot;type&quot;:&quot;invalid_request_error&quot;,&quot;message&quot;:&quot;The &#x27;modelo-que- nao-existe&#x27; model is not supported when using Codex with a ChatGPT account.&quot;}}</p></div>",
+  "<div class="markdown-content space-y-2 overflow-hidden text-[13px] leading-relaxed text-zinc-100"><p class="whitespace-pre-wrap text-zinc-100">{&quot;type&quot;:&quot;error&quot;,&quot;status&quot;:400,&quot;error&quot;:{&quot;type&quot;:&quot;invalid_request_error&quot;,&quot;message&quot;:&quot;The &#x27;modelo-que-nao-existe&#x27; model is not supported when using Codex with a ChatGPT account.&quot;}}</p></div>",
 ]
 `;
 
@@ -362,7 +362,7 @@ exports[`Leitura das gravações reais > codex-erro: snapshot do Markdown e do H
     "role": "pessoa",
   },
   {
-    "markdown": "\\{\\"type\\"\\:\\"error\\"\\,\\"status\\"\\:400\\,\\"error\\"\\:\\{\\"type\\"\\:\\"invalid\\_request\\_error\\"\\,\\"message\\"\\:\\"The \\'modelo\\-que\\- nao\\-existe\\' model is not supported when using Codex with a ChatGPT account\\.\\"\\}\\}",
+    "markdown": "\\{\\"type\\"\\:\\"error\\"\\,\\"status\\"\\:400\\,\\"error\\"\\:\\{\\"type\\"\\:\\"invalid\\_request\\_error\\"\\,\\"message\\"\\:\\"The \\'modelo\\-que\\-nao\\-existe\\' model is not supported when using Codex with a ChatGPT account\\.\\"\\}\\}",
     "raw": false,
     "role": "aviso",
   },

@@ -1337,7 +1337,11 @@ Se estiver reportando um problema, inclua a versão do app, sistema operacional,
 - No painel **Logs da CLI** do chat, a tela mostra uma janela limitada para permanecer navegável. A exportação **Markdown para análise** conserva o histórico completo da execução enquanto o app estiver aberto; limpar os logs ou encerrar o app remove esse arquivo temporário. Uma linha que a CLI imprime fora do formato esperado aparece ali como **Linha não reconhecida**, do jeito que veio, e a resposta continua.
 - **Leitura do terminal:**
   - só o Claude Code e o Codex têm leitura formatada. As regras vêm de gravações
-    das versões 2.1.286 e 0.156.1; uma versão nova pode desenhar diferente. O
+    das versões 2.1.286 e 0.156.1; uma versão nova pode desenhar diferente
+    (`node scripts/check-reading-fixtures.cjs`, dentro de `app`, lista as
+    gravações de versão diferente da instalada). Código numa linguagem sem cor
+    é reconhecido só quando tem recuo e forma de código; comando solto, sem
+    recuo, aparece como parágrafo. O
     Gemini não pôde ser gravado (a conta pessoal do Google não entra mais no
     Gemini CLI 0.62) e, como os outros programas, aparece como texto puro;
   - a Leitura vê o que o terminal tem na tela e no histórico, até 2000 linhas.

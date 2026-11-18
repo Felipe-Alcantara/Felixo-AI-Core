@@ -84,6 +84,8 @@ describe('Leitura das gravações reais', { timeout: REPLAY_TIMEOUT_MS }, () => 
     expect(claude.turns.at(-1)!.markdown).not.toContain('```')
     expect(renderedText(renderMarkdown(claude.turns.at(-1)!.markdown))).toContain("There's an issue with the selected model")
     expect(codex.turns.at(-1)).toMatchObject({ role: 'aviso', raw: false })
+    // A CLI quebra a linha no hífen de `modelo-que-nao-existe`: a Leitura junta sem espaço.
+    expect(renderedText(renderMarkdown(codex.turns.at(-1)!.markdown))).toContain("'modelo-que-nao-existe'")
   })
 
   it.each(['gemini-erro', 'openia-lista', 'openia-ajuda', 'openia-erro'] as const)(

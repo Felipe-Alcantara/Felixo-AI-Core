@@ -8,14 +8,14 @@
  * mostra. A Leitura nunca é a única cópia do conteúdo — o terminal continua lá.
  */
 import {
+  addProseLine,
   buildReadingBlocks,
   sameReadingContent,
   splitReadingTurns,
-  trimSegments,
   type ReadingBlock,
   type ReadingRole,
 } from './reading-blocks'
-import type { ReadingLine } from './reading-lines'
+import type { ReadingLine, ReadingSegment } from './reading-lines'
 import { blocksMarkdown, paragraphMarkdown, rawMarkdown } from './reading-markdown'
 import type { ReadingProfile, ReadingProfileId } from './reading-profiles'
 
@@ -51,7 +51,8 @@ export function readTurn(role: ReadingRole, lines: ReadingLine[]): ReadingTurnVi
   try {
     if (role === 'saida') return rawTurn(role, lines)
     if (role !== 'agente') {
-      const paragraph = lines.map((line) => trimSegments(line.segments))
+      const paragraph: ReadingSegment[][] = []
+      lines.forEach((line, index) => addProseLine(paragraph, lines[index - 1], line))
       return {
         role,
         text: turnText(lines),
@@ -83,7 +84,7 @@ export function createReadingTurnCache(): ReadingTurnCache {
 function turnKey(role: ReadingRole, lines: ReadingLine[]): string {
   let key = role
   for (const line of lines) {
-    key += '\u0002'
+    key += `\u0002${line.cols ?? ''}`
     for (const segment of line.segments) {
       const flags = (segment.bold ? 1 : 0) | (segment.italic ? 2 : 0) | (segment.dim ? 4 : 0) | (segment.underline ? 8 : 0)
       key += `\u0001${flags}${segment.fg ?? ''}\u0001${segment.text}`

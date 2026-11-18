@@ -8,7 +8,7 @@
  * erra, o texto continua inteiro (vira parágrafo ou código), e a checagem de
  * `sameReadingContent` devolve a fala ao texto puro se algum trecho sumir.
  */
-import type { ReadingLine, ReadingSegment } from './reading-lines'
+import { sameStyle, type ReadingLine, type ReadingSegment } from './reading-lines'
 import type { ReadingProfile } from './reading-profiles'
 
 export type ReadingRole = 'pessoa' | 'agente' | 'aviso' | 'saida'
@@ -90,7 +90,7 @@ export function sliceLine(line: ReadingLine, count: number): ReadingLine {
     segments.push({ ...segment, text: segment.text.slice(remaining) })
     remaining = 0
   }
-  return { text: line.text.slice(count), segments }
+  return { text: line.text.slice(count), segments, cols: line.cols === undefined ? undefined : line.cols - count }
 }
 
 /**
@@ -168,6 +168,39 @@ function isSyntaxSegment(segment: ReadingSegment): boolean {
 }
 
 /**
+ * Uma só cor de destaque e frase em volta (`npm test` roda os testes): código
+ * inline num parágrafo. Código com realce usa mais de uma cor, e o que sobra
+ * sem cor nele são nomes e pontuação, não duas palavras seguidas.
+ */
+function isProseWithInlineCode(line: ReadingLine): boolean {
+  const visible = line.segments.filter((segment) => segment.text.trim() !== '')
+  const colored = new Set(visible.filter((segment) => segment.fg !== null).map((segment) => segment.fg))
+  return colored.size === 1 && visible.some((segment) => segment.fg === null && /\p{L}{2,}\s+\p{L}{2,}/u.test(segment.text))
+}
+
+/** A forma de uma linha de código: fecha com `;`, `{`, `}` ou `:`, chama função, usa `=>`/`=` ou abre com palavra de linguagem. */
+const CODE_SHAPE = /[{};:]\s*$|=>|\w\(.*\)|\s=\s|^\s*(?:def|class|function|const|let|var|import|from|return|if|else|elif|for|while)\b/
+
+/**
+ * Código que a CLI não realçou (linguagem sem cor): sem cor para guiar, vale o
+ * recuo e a forma. Um trecho sem linha em branco, com alguma linha recuada
+ * pelo menos 2 colunas além da primeira e alguma linha com forma de código.
+ * Parágrafo quebrado pela CLI tem o mesmo recuo em todas as linhas.
+ * shortcut: código sem recuo nenhum (comandos soltos) segue como parágrafo.
+ */
+function startsLikePlainCode(lines: ReadingLine[], index: number): boolean {
+  const startIndent = leadingSpaces(lines[index].text)
+  let end = index
+  while (end < lines.length && !isBlank(lines[end])) end += 1
+  const run = lines.slice(index, end)
+  return (
+    run.length >= 2 &&
+    run.some((line) => leadingSpaces(line.text) >= startIndent + 2) &&
+    run.some((line) => CODE_SHAPE.test(line.text))
+  )
+}
+
+/**
  * A linha começa com um token colorido e mistura cores: o jeito das CLIs
  * desenharem código. Uma linha inteira numa cor só (o erro em vermelho do
  * Claude) é aviso, não código.
@@ -179,6 +212,7 @@ function startsLikeCode(line: ReadingLine): boolean {
     visible.length > 0 &&
     isSyntaxSegment(visible[0]) &&
     colors.size > 1 &&
+    !isProseWithInlineCode(line) &&
     !LIST_MARKER.test(line.text) &&
     !QUOTE_MARKER.test(line.text) &&
     !NOTE_CONNECTOR.test(line.text)
@@ -240,6 +274,40 @@ function parseHeading(lines: ReadingLine[], index: number): BlockParse | null {
   return null
 }
 
+/**
+ * A CLI partiu uma palavra entre as duas linhas? Ela quebra num hífen ou parte
+ * a palavra que não cabe numa linha (uma URL); no espaço, o espaço some e a
+ * Leitura repõe um. Só vale com a largura conhecida e a linha anterior cheia.
+ */
+function continuesWord(previous: ReadingLine, line: ReadingLine): boolean {
+  const { cols } = previous
+  const after = line.text.trimStart()
+  if (cols === undefined || previous.text === '' || /\s$/.test(previous.text) || after === '') return false
+  // Folga de 3 colunas: as CLIs deixam uma margem à direita (o Claude quebra em cols - 2).
+  const room = cols - 3
+  if (/[\p{L}\p{N}]-$/u.test(previous.text) && /^[\p{L}\p{N}]/u.test(after)) {
+    return previous.text.length + /^[^\s-]*-?/.exec(after)![0].length > room
+  }
+  const word = /\S+$/.exec(previous.text)![0].length + /^\S+/.exec(after)![0].length
+  return previous.text.length >= room && word > room
+}
+
+/** A linha como continuação do texto: junto da anterior se a palavra foi partida, senão linha nova. */
+export function addProseLine(target: ReadingSegment[][], previous: ReadingLine, line: ReadingLine) {
+  const segments = trimSegments(line.segments)
+  const last = target.at(-1)
+  if (!last || !continuesWord(previous, line)) {
+    target.push(segments)
+    return
+  }
+  // Mesmo estilo dos dois lados da quebra: um trecho só (uma URL partida segue autolink inteiro).
+  const [head, ...rest] = segments
+  const tail = last.at(-1)
+  if (head && tail && sameStyle(tail, head)) tail.text += head.text
+  else if (head) last.push(head)
+  last.push(...rest)
+}
+
 function parseNote(lines: ReadingLine[], index: number): BlockParse | null {
   const connector = NOTE_CONNECTOR.exec(lines[index].text)
   if (!connector) return null
@@ -247,7 +315,7 @@ function parseNote(lines: ReadingLine[], index: number): BlockParse | null {
   let next = index + 1
   // O resultado continua nas linhas recuadas até a coluna do texto do conector.
   while (next < lines.length && !isBlank(lines[next]) && leadingSpaces(lines[next].text) >= connector[0].length) {
-    note.push(trimSegments(lines[next].segments))
+    addProseLine(note, lines[next - 1], lines[next])
     next += 1
   }
   return { block: { kind: 'nota', lines: note }, next }
@@ -289,7 +357,7 @@ function parseList(lines: ReadingLine[], index: number): BlockParse | null {
     // Continuação: recuada além da marca, sem linha em branco no meio.
     const current = items.at(-1)
     if (current && !isBlank(line) && leadingSpaces(line.text) > baseIndent && !startsLikeCode(line)) {
-      current.lines.push(trimSegments(line.segments))
+      addProseLine(current.lines, lines[next - 1], line)
       next += 1
       continue
     }
@@ -308,22 +376,29 @@ function parseList(lines: ReadingLine[], index: number): BlockParse | null {
   return { block: { kind: 'lista', items }, next }
 }
 
+/** Sem cor, o código só acaba na linha em branco que não é seguida de linha mais recuada. */
+function blankKeepsCode(lines: ReadingLine[], index: number, startIndent: number): boolean {
+  const following = lines.slice(index).find((candidate) => !isBlank(candidate))
+  return following !== undefined && leadingSpaces(following.text) > startIndent
+}
+
 function parseCode(lines: ReadingLine[], index: number): BlockParse | null {
-  if (!startsLikeCode(lines[index])) return null
+  const colored = startsLikeCode(lines[index])
+  if (!colored && !startsLikePlainCode(lines, index)) return null
   const startIndent = leadingSpaces(lines[index].text)
   let next = index + 1
   while (next < lines.length) {
     const line = lines[next]
-    const continues =
-      !isBlank(line) &&
-      (line.segments.some(isSyntaxSegment) || leadingSpaces(line.text) > startIndent) &&
-      !RULE_LINE.test(line.text) &&
-      !BOX_TABLE_TOP.test(line.text)
+    const continues = isBlank(line)
+      ? !colored && blankKeepsCode(lines, next, startIndent)
+      : (!colored || line.segments.some(isSyntaxSegment) || leadingSpaces(line.text) > startIndent) &&
+        !RULE_LINE.test(line.text) &&
+        !BOX_TABLE_TOP.test(line.text)
     if (!continues) break
     next += 1
   }
   const block = lines.slice(index, next).map((line) => line.text)
-  const indent = Math.min(...block.map(leadingSpaces))
+  const indent = Math.min(...block.filter((text) => text.trim() !== '').map(leadingSpaces))
   return { block: { kind: 'codigo', lines: block.map((text) => text.slice(indent)) }, next }
 }
 
@@ -388,7 +463,7 @@ function parseParagraph(lines: ReadingLine[], index: number): BlockParse {
   const paragraph: ReadingSegment[][] = [trimSegments(lines[index].segments)]
   let next = index + 1
   while (next < lines.length && !isBlank(lines[next]) && !opensOtherBlock(lines, next)) {
-    paragraph.push(trimSegments(lines[next].segments))
+    addProseLine(paragraph, lines[next - 1], lines[next])
     next += 1
   }
   return { block: { kind: 'paragrafo', lines: paragraph }, next }
