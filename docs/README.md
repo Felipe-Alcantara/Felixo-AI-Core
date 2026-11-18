@@ -25,6 +25,7 @@ compatibilidade com histórico legado.
 | [validation/CHECKLIST-AGENTE-NUVEM.md](validation/CHECKLIST-AGENTE-NUVEM.md) | Roteiro manual do Agente na nuvem. Não roda no CI porque cria sessão real e gasta crédito. |
 | [validation/CHECKLIST-INSTALADOR-ARVORE-DE-PROCESSOS.md](validation/CHECKLIST-INSTALADOR-ARVORE-DE-PROCESSOS.md) | Roteiro para ver, numa máquina real, o app empacotado cancelar e expirar a instalação de uma CLI sem deixar processo órfão, nas rotas npm, Python (pip) e script. O mesmo cenário roda no CI dentro do `release-smoke` (npm) e em `install-routes-process-tree.test.cjs` (as três rotas). |
 | [validation/CICLO-INSTALACAO-CLIS.md](validation/CICLO-INSTALACAO-CLIS.md) | O runner que prova, com o npm de verdade, que a instalação automática das CLIs instala, não reinstala na 2ª abertura nem no upgrade e reinstala sem o binário, e o workflow do Windows que o roda no CI. Explica o veredito (regressão × infra × falha de instalação), o controle negativo e como rodar à mão. |
+| [validation/RELEASE_CHECKLIST.md](validation/RELEASE_CHECKLIST.md) | Checklist de release nos três sistemas: pipeline, terminal, CLIs, empacotamento e o que conferir antes de publicar. |
 | [projeto/POLITICA-VERSIONAMENTO.md](projeto/POLITICA-VERSIONAMENTO.md) | Política de branches e commits do projeto. |
 | [projeto/RODAR-VIA-CODIGO-FONTE.md](projeto/RODAR-VIA-CODIGO-FONTE.md) | Como rodar o app a partir do código-fonte. |
 | [design/BRAND-SYSTEM.md](design/BRAND-SYSTEM.md) | Tokens e princípios visuais do Felixo AI Core. |
@@ -58,6 +59,8 @@ compatibilidade com histórico legado.
 ## Histórico arquivado
 
 A pasta [`_legado/`](_legado/) preserva a documentação da fase anterior do projeto (chat mascarado / orquestração multi-agente, de abril–maio de 2026), antes do pivô para o canvas. É mantida como **trilha histórica** — não descreve o produto atual, mas registra decisões, planos e relatórios daquela etapa. O modo de chat que ainda existe no app não deve ser confundido com essa documentação histórica: ele é apenas uma superfície de compatibilidade.
+
+A pasta [`overnight/`](overnight/) guarda os relatórios de uma sessão autônoma noturna de setembro de 2026 (baseline, correções, validação e pendências daquela noite). Também é histórico: o estado atual do produto está nos guias e na [arquitetura](projeto/ARQUITETURA.md).
 
 ## Padrões de qualidade
 

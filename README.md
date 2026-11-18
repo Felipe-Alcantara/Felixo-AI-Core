@@ -68,7 +68,11 @@ Felixo-AI-Core/
 ├── scripts/             utilitários do repositório (relatório diário de commits)
 ├── ai-clis/             atalhos de shell que abrem as CLIs de IA no Konsole (Linux/KDE, uso legado)
 ├── .github/             workflows de CI e Release, e os scripts que eles usam
-├── IA.md                contexto operacional: linha do tempo de decisões, para retomada por IA
+├── CLAUDE.md, AGENTS.md instruções do projeto para os agentes de IA que o desenvolvem (mesmo conteúdo)
+├── .claude/, .agents/   skills desses agentes (ai-memory e rodar-app); quem contribui à mão pode ignorar
+├── IA.md                linha do tempo de decisões, para um agente retomar o contexto
+├── CONTRIBUTING.md      como rodar, testar e enviar uma contribuição
+├── SECURITY.md          como relatar uma falha de segurança
 └── LICENSE              MIT
 ```
 
@@ -529,7 +533,7 @@ Ver [ROADMAP.md](./docs/projeto/ROADMAP.md) para fases, checklists, metas e back
 
 Distribuído sob a licença MIT; o texto completo está em [LICENSE](./LICENSE).
 
-Contribuições são bem-vindas. O fluxo de branches e commits (direto na `main` por padrão, branch só nas exceções) está na [política de branch do Guia para Desenvolvedores](./docs/guias/GUIA-DESENVOLVEDOR.md#política-de-branch), e o [Roadmap](./docs/projeto/ROADMAP.md) lista a direção do projeto e as ideias abertas para quem quiser ajudar.
+Contribuições são bem-vindas. Comece pelo [CONTRIBUTING.md](./CONTRIBUTING.md): como rodar, como testar e as regras de commit. Falhas de segurança não vão em issue pública: veja o [SECURITY.md](./SECURITY.md). O fluxo de branches e commits (direto na `main` por padrão, branch só nas exceções) está na [política de branch do Guia para Desenvolvedores](./docs/guias/GUIA-DESENVOLVEDOR.md#política-de-branch), e o [Roadmap](./docs/projeto/ROADMAP.md) lista a direção do projeto e as ideias abertas para quem quiser ajudar.
 
 ### Autor
 
