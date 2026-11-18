@@ -259,6 +259,40 @@ describe('createResumeOutcomeDetector', () => {
   })
 })
 
+describe('telas medidas antes da retomada (sem conta e sem configuração)', () => {
+  // Saída real do Codex 0.171.0-alpha.12 com CODEX_HOME vazio: a tela de login vem antes de resolver o ID.
+  const CODEX_LOGIN_SCREEN =
+    `${ESC}[?25l${ESC}[1;3HWelcome${ESC}[1Cto${ESC}[1m${ESC}[1CCodex${ESC}[22m,${ESC}[1COpenAI's${ESC}[1Ccommand-line${ESC}[1Ccoding${ESC}[1Cagent` +
+    `${ESC}[3;3HChoose how you${ESC}[1Cwant${ESC}[1Cto${ESC}[1Cuse${ESC}[1CCodex.${CRLF}> 1. Sign in with ChatGPT${CRLF}`
+  // Saída real do Claude Code 2.1.327 com CLAUDE_CONFIG_DIR novo: o tema vem antes do --resume.
+  const CLAUDE_ONBOARDING_SCREEN =
+    `${ESC}[18;2HLet's${ESC}[1Cget${ESC}[1Cstarted.${ESC}[20;2HChoose${ESC}[1Cthe${ESC}[1Ctext${ESC}[1Cstyle${ESC}[1Cthat${ESC}[1Clooks${ESC}[1Cbest${ESC}[1Cwith${ESC}[1Cyour${ESC}[1Cterminal${CRLF}`
+
+  it('a tela de login do Codex é `auth`, mesmo com os escapes de cursor da TUI', () => {
+    const detector = createResumeOutcomeDetector({ sessionId: ATTEMPTED_ID, provider: 'codex' })
+    expect(detector.feed(CODEX_LOGIN_SCREEN)).toBe('auth')
+  })
+
+  it('a frase de boas-vindas do Codex na conversa redesenhada ou citada não é login', () => {
+    const detector = createResumeOutcomeDetector({ sessionId: ATTEMPTED_ID, provider: 'codex' })
+    expect(detector.feed(`${String.fromCharCode(0x23fa)} Welcome to Codex, OpenAI's command-line coding agent${CRLF}`)).toBeNull()
+    expect(detector.feed(`> "Welcome to Codex, OpenAI's command-line coding agent"${CRLF}`)).toBeNull()
+    expect(createResumeOutcomeDetector({ sessionId: ATTEMPTED_ID, provider: 'claude' }).feed(CODEX_LOGIN_SCREEN)).toBeNull()
+  })
+
+  it('o onboarding do Claude é reconhecido, só no Claude, e não é falha', () => {
+    const detector = createResumeOutcomeDetector({ sessionId: ATTEMPTED_ID, provider: 'claude' })
+    expect(detector.onboarding()).toBe(false)
+    expect(detector.feed(CLAUDE_ONBOARDING_SCREEN)).toBeNull()
+    expect(detector.onboarding()).toBe(true)
+    const codex = createResumeOutcomeDetector({ sessionId: ATTEMPTED_ID, provider: 'codex' })
+    codex.feed(CLAUDE_ONBOARDING_SCREEN)
+    expect(codex.onboarding()).toBe(false)
+    // Depois do onboarding a conversa ausente ainda é reconhecida.
+    expect(detector.feed(`No conversation found with session ID: ${ATTEMPTED_ID}${CRLF}`)).toBe('expired')
+  })
+})
+
 describe('recusas do Gemini: só com a saída 42', () => {
   const geminiRefusals = resumeFixtures.versions.find((fixture) => fixture.provider === 'gemini' && fixture.refusals.length > 0)!
     .refusals

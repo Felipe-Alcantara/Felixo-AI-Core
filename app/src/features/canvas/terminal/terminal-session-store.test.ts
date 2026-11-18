@@ -1732,6 +1732,21 @@ describe('TerminalSessionStore: resposta da CLI a uma retomada', () => {
     expect(onResumeFailure).not.toHaveBeenCalled()
   })
 
+  it('depois do onboarding do Claude, responder a ele não fecha a janela e a conversa ausente é reconhecida', async () => {
+    const onResumeFailure = vi.fn()
+    harness = resumeHarness(onResumeFailure)
+    await vi.advanceTimersByTimeAsync(0)
+
+    harness.feed(`${BOOT_ESCAPES}${ESC}[18;2HLet's${ESC}[1Cget${ESC}[1Cstarted.${ESC}[20;2HChoose${ESC}[1Cthe${ESC}[1Ctext${ESC}[1Cstyle${ESC}[1Cthat${ESC}[1Clooks${ESC}[1Cbest${ESC}[1Cwith${ESC}[1Cyour${ESC}[1Cterminal${CRLF}`)
+    await vi.advanceTimersByTimeAsync(40_000)
+    await harness.store.typeText(SESSION_ID, 'x')
+    harness.feed(NOT_FOUND)
+    await vi.advanceTimersByTimeAsync(50)
+
+    expect(onResumeFailure).toHaveBeenCalledTimes(1)
+    expect(onResumeFailure).toHaveBeenCalledWith('expired', CLAUDE_REFERENCE)
+  })
+
   it('para de ler quando a janela do boot acaba', async () => {
     const onResumeFailure = vi.fn()
     harness = resumeHarness(onResumeFailure)

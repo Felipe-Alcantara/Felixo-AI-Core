@@ -83,6 +83,10 @@ export type ResumeFailurePhrase = {
  * key · Fix external API key" e "Authentication required · Sign in again to
  * continue" do Claude; "Not logged in", "Your access token could not be
  * refreshed" e "Your authentication session could not be refreshed" do Codex.
+ * A tela de login do Codex sem conta ("Welcome to Codex, OpenAI's command-line
+ * coding agent") também é `auth`. Ela fica só aqui, e não em
+ * `cli-failure-patterns.cjs`: lá, a frase passaria a mexer na vigia de contas
+ * (fora do escopo da retomada) e não está no vocabulário extraído dos pacotes.
  * As duas listas precisam andar juntas: se a vigia de contas aprender uma
  * frase de login nova, ela entra aqui também.
  *
@@ -132,7 +136,30 @@ export const RESUME_FAILURE_PHRASES: readonly ResumeFailurePhrase[] = Object.fre
     providers: ['codex'],
     measuredIn: 'Codex',
   },
+  {
+    // Sem conta, o Codex abre nesta tela ANTES de resolver o ID: "Welcome to
+    // Codex, OpenAI's command-line coding agent" e, embaixo, "Sign in with
+    // ChatGPT". A frase de abertura é a que vem inteira numa linha só.
+    phrase: "Welcome to Codex, OpenAI's command-line coding agent",
+    reason: 'auth',
+    providers: ['codex'],
+    measuredIn: 'Codex 0.171.0-alpha.12, `resume <id>` com CODEX_HOME vazio (tela de login, sem sair)',
+  },
 ])
+
+/**
+ * Telas de configuração inicial que uma CLI mostra ANTES de retomar. Não são
+ * falha: só avisam que a pessoa vai responder a elas, e que responder não é
+ * a primeira mensagem da conversa retomada (ver `ResumeOutcomeDetector.onboarding`).
+ */
+export const RESUME_ONBOARDING_PHRASES: readonly { phrase: string; providers: readonly string[]; measuredIn: string }[] =
+  Object.freeze([
+    {
+      phrase: 'Choose the text style that looks best with your terminal',
+      providers: ['claude'],
+      measuredIn: 'Claude Code 2.1.327, `--resume <id>` com CLAUDE_CONFIG_DIR novo (escolha do tema, primeira tela)',
+    },
+  ])
 
 /**
  * Quanto de uma linha ainda aberta o detector guarda entre dois pedaços.
@@ -317,6 +344,12 @@ export type ResumeOutcomeDetector = {
    * desfecho já foi devolvido.
    */
   exit: (exitCode: number) => ResumeFailureReason | null
+  /**
+   * A CLI mostrou uma tela de configuração inicial (`RESUME_ONBOARDING_PHRASES`)
+   * antes de retomar: o que a pessoa digitar nela responde à tela, não à
+   * conversa, e a janela da vigia não pode fechar por causa disso.
+   */
+  onboarding: () => boolean
 }
 
 export type ResumeOutcomeDetectorOptions = {
@@ -349,7 +382,15 @@ export function createResumeOutcomeDetector({ sessionId, provider }: ResumeOutco
     if (rule?.exitCode !== undefined) awaitingExit ??= { reason: rule.reason, exitCode: rule.exitCode }
   }
 
+  const onboardingPhrases = RESUME_ONBOARDING_PHRASES.filter((item) => !provider || item.providers.includes(provider))
+  const onboardingRegex =
+    onboardingPhrases.length > 0
+      ? new RegExp(`^${LINE_LEAD}(?:${onboardingPhrases.map((item) => phraseBody(item.phrase)).join('|')})`, 'i')
+      : null
+  let sawOnboarding = false
+
   return {
+    onboarding: () => sawOnboarding,
     exit(exitCode) {
       if (recognized) return null
       // A última linha pode ter chegado sem quebra antes da saída.
@@ -373,6 +414,7 @@ export function createResumeOutcomeDetector({ sessionId, provider }: ResumeOutco
         if (index === 0 && openLineLostStart) continue
         const line = lines[index]
         const role = conversationRole(line, insideConversation)
+        if (role === 'top' && onboardingRegex?.test(line)) sawOnboarding = true
         const rule = role === 'top' ? classifyLine(rules, line) : null
         if (rule && rule.exitCode === undefined) {
           recognized = true

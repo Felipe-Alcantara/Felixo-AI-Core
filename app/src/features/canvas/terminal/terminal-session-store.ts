@@ -240,6 +240,13 @@ export const CODEX_RELAUNCH_NEW_CONVERSATION_NOTICE =
  */
 const RESUME_FAILURE_WINDOW_MS = 30000
 
+/**
+ * A janela quando a CLI abriu numa tela de configuração inicial (o tema do
+ * Claude numa pasta de configuração nova): a retomada só começa depois de a
+ * pessoa responder, então o relógio de 30 s e a "primeira tecla" não valem.
+ */
+const RESUME_ONBOARDING_WINDOW_MS = 5 * 60 * 1000
+
 function readSeloTraceFlag(): boolean {
   try {
     return globalThis.localStorage?.getItem('felixo:selo') === '1'
@@ -3340,10 +3347,11 @@ export class TerminalSessionStore {
    *   digitando, um envio do canvas). Dali em diante o que aparece responde a ela, não à
    *   retomada — um "faça login" depois da primeira mensagem é problema da
    *   conta, que a vigia de contas já trata, e a conversa foi, sim, retomada.
-   *   O custo conhecido: num bloco fora do modo yolo, uma pasta que a CLI não
-   *   conhece pede confiança antes de retomar, e a resposta da pessoa fecha a
-   *   janela. Não acontece numa retomada exata, que exige a mesma pasta e a
-   *   mesma conta em que a conversa nasceu — ou seja, uma pasta já confiada.
+   *   Exceção: se a CLI abriu numa tela de configuração inicial (o tema do
+   *   Claude numa pasta de configuração nova), responder a ela não é a primeira
+   *   mensagem; a janela segue aberta por `RESUME_ONBOARDING_WINDOW_MS`, e a
+   *   ausência da conversa é reconhecida depois do onboarding. A tela de
+   *   confiança na pasta, sozinha, ainda fecha a janela (não foi medida).
    * - o reconhecimento: avisa uma vez só.
    */
   private watchResumeOutcome(session: Session, data: string): void {
@@ -3352,7 +3360,9 @@ export class TerminalSessionStore {
       return
     }
 
-    if (session.inputTouched || Date.now() - watch.startedAt > RESUME_FAILURE_WINDOW_MS) {
+    const onboarding = watch.detector.onboarding()
+    const windowMs = onboarding ? RESUME_ONBOARDING_WINDOW_MS : RESUME_FAILURE_WINDOW_MS
+    if ((session.inputTouched && !onboarding) || Date.now() - watch.startedAt > windowMs) {
       // Ainda sem resposta do spawn, a vigia fica para `confirmResumeWatch`
       // descartá-la; confirmado, ela já pode sair.
       if (watch.confirmed) session.resumeWatch = undefined
