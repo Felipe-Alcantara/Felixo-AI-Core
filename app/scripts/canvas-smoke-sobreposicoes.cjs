@@ -50,6 +50,11 @@ const DEFEITOS_CONHECIDOS = [
   { risco: 'detalhes-e-ferramenta', tipo: 'detalhes-e-ferramenta-no-mesmo-lugar', task: TASK_SOBREPOSICOES },
   { risco: 'menu-perfil-acompanha-zoom', tipo: 'menu-nao-acompanha-o-zoom', task: TASK_SOBREPOSICOES },
   { risco: 'pergunta-sob-dialogos', tipo: 'pergunta-coberta-pelo-dialogo', task: TASK_SOBREPOSICOES },
+  // Medido só no CI Linux (18/11/2026, 768x900 e 1280x800): o painel de ferramenta cobre de 5 a 32 px da pílula de
+  // zoom e a área muda a cada rodada. No Windows (medição local) e no macOS do CI não colide. Falta reproduzir no Linux
+  // para saber se é defeito do app ou da altura máxima do painel sob xvfb: ver a pendência aberta no Notion.
+  { risco: 'painel-sobre-pilula-de-zoom', tipo: 'painel-cobre-a-pilula', task: TASK_SOBREPOSICOES, when: () => process.platform === 'linux' },
+  { risco: 'painel-sobre-pilula-de-zoom', tipo: 'botao-de-zoom-coberto-pelo-painel', task: TASK_SOBREPOSICOES, when: () => process.platform === 'linux' },
 ]
 
 /** Fixture dos cenários: um grupo grande, um arquivo baixo, agentes e uma Página Web. */
