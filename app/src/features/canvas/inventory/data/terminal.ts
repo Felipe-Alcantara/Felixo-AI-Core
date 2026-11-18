@@ -481,6 +481,14 @@ export const terminalSurfaces: InventoryElement[] = [
         disabledWhen: 'launching ou accountSelectionIssue',
       },
       {
+        locator: 'Abrir como time (4 agentes)',
+        kind: 'button',
+        effect: 'openTeam: prepareForLaunch, buildOptions e savePreferences, depois onAddTeam(buildTeamLaunch) cria 4 terminais (Coordenador, Produtor 1, Produtor 2, Checador) com a CLI, o modelo, a pasta e a conta escolhidos e um contexto por papel, e liga por arestas gravadas o coordenador aos produtores e os produtores ao checador. Fecha o flyout.',
+        failure: 'Configuração inválida mantém o flyout com o erro. Não aparece com agente na nuvem ou conta por chave de API.',
+        disabledWhen: 'launching, accountSelectionIssue ou conta "Automática (cadeia)" (o ticket é de uso único)',
+        test: { file: 'src/features/canvas/services/agent-team-template.test.ts' },
+      },
+      {
         locator: 'aria-label="Esvaziar fila de terminais"',
         kind: 'button',
         effect: 'Esvazia a fila de uma vez, sem confirmação; as propostas dos itens "Automática (cadeia)" são descartadas no main (account-chain:discard-preview).',

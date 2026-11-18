@@ -12,6 +12,7 @@ import type {
 import { AgentConfigFields } from './AgentConfigFields'
 import { isFelixoPopoverTarget } from '../../shared/components/felixo-popover-target'
 import { restoreFocusIfLost } from '../services/restore-focus'
+import { buildTeamLaunch, type TeamLaunch } from '../services/agent-team-template'
 
 export type { NewTerminalOptions } from '../services/new-terminal-options'
 
@@ -22,6 +23,8 @@ type TerminalMenuProps = {
   onAdd: (options: NewTerminalOptions) => void
   /** Starts every queued config at once — see the "Fila" section below. */
   onAddMany: (optionsList: NewTerminalOptions[]) => void
+  /** Cria o time (coordenador, dois produtores e checador) já ligado pelo handoff. */
+  onAddTeam: (team: TeamLaunch) => void
   /** Cria o cartão "Agente na nuvem" já configurado; nada é disparado aqui. */
   onAddCloud: (options: NewCloudSessionOptions) => void
   /** Conta do Claude por chave de API: cria o bloco de conversa. */
@@ -44,6 +47,7 @@ export function TerminalMenu({
   openRequest = 0,
   onAdd,
   onAddMany,
+  onAddTeam,
   onAddCloud,
   onAddClaudeApi,
   onAddFolder,
@@ -147,6 +151,23 @@ export function TerminalMenu({
         config.savePreferences()
         onAdd(options)
       }
+      config.setName('')
+      closeSettings()
+      window.requestAnimationFrame(() => triggerRef.current?.focus())
+    } finally {
+      setLaunching(false)
+    }
+  }
+
+  // Os quatro agentes usam a configuração atual (CLI, modelo, pasta, conta).
+  const openTeam = async () => {
+    if (launching) return
+    setLaunching(true)
+    try {
+      if (!(await config.prepareForLaunch())) return
+      const options = config.buildOptions()
+      config.savePreferences()
+      onAddTeam(buildTeamLaunch(options))
       config.setName('')
       closeSettings()
       window.requestAnimationFrame(() => triggerRef.current?.focus())
@@ -317,6 +338,26 @@ export function TerminalMenu({
               </button>
             )}
           </div>
+
+          {!isCloud && !config.isClaudeApi && (
+            <button
+              type="button"
+              onClick={() => void openTeam()}
+              disabled={
+                launching ||
+                Boolean(config.accountSelectionIssue) ||
+                config.accountId === CHAIN_ACCOUNT_VALUE
+              }
+              title={
+                config.accountId === CHAIN_ACCOUNT_VALUE
+                  ? 'A conta automática (cadeia) não vale para o time: escolha uma conta fixa'
+                  : 'Abre 4 agentes já ligados: coordenador, dois produtores e checador'
+              }
+              className="felixo-btn mt-1.5 w-full rounded-sm bg-zinc-700 px-3 py-1.5 text-sm text-zinc-100 hover:bg-zinc-600 disabled:opacity-50"
+            >
+              Abrir como time (4 agentes)
+            </button>
+          )}
 
           {queue.length > 0 && (
             <div className="mt-3 border-t border-white/10 pt-3">

@@ -16,6 +16,7 @@ import {
 } from 'react'
 import type { ResizableSidebarWidth } from '../hooks/useResizableSidebarWidth'
 import { restoreFocusIfLost } from '../services/restore-focus'
+import type { TeamLaunch } from '../services/agent-team-template'
 import {
   Bell,
   ChevronDown,
@@ -109,6 +110,7 @@ type CanvasToolbarProps = {
   agentMenuRequest?: number
   /** Starts several terminal configs at once — a whole agent setup in one click. */
   onAddTerminals: (optionsList: NewTerminalOptions[]) => void
+  onAddTeam: (team: TeamLaunch) => void
   /** Cria o cartão "Agente na nuvem" já configurado no menu Agente; nada é disparado. */
   onAddCloudSession: (options: NewCloudSessionOptions) => void
   onAddClaudeApi: (options: NewClaudeApiOptions) => void
@@ -159,6 +161,7 @@ export function CanvasToolbar({
   onAddTerminal,
   agentMenuRequest = 0,
   onAddTerminals,
+  onAddTeam,
   onAddCloudSession,
   onAddClaudeApi,
   onOrganizeBlocks,
@@ -340,6 +343,7 @@ export function CanvasToolbar({
               openRequest={agentMenuRequest}
               onAdd={onAddTerminal}
               onAddMany={onAddTerminals}
+              onAddTeam={onAddTeam}
               onAddCloud={onAddCloudSession}
               onAddClaudeApi={onAddClaudeApi}
               onAddFolder={onAddFolder}

@@ -164,6 +164,7 @@ import { releaseRemovedCanvasNodes } from '../services/canvas-node-removal'
 import { judgeCanvasRemoval } from '../services/canvas-removal-guard'
 import { CanvasProfilerBoundary } from '../services/canvas-performance-profiler.tsx'
 import { announceAgentCollaboration } from '../services/agent-collaboration-links'
+import { buildTeamEdges, type TeamLaunch } from '../services/agent-team-template'
 import { buildRedactedHandoffText } from '../services/account-continuation'
 import { getAccountChainBridge } from '../services/account-chain-client'
 import type {
@@ -2178,9 +2179,9 @@ function CanvasInner({
   // near-square matrix before everything lands in one `setNodes` + one
   // `persistNode` per node.
   const addTerminalNodes = useCallback(
-    async (optionsList: NewTerminalOptions[]) => {
+    async (optionsList: NewTerminalOptions[]): Promise<string[]> => {
       if (optionsList.length === 0) {
-        return
+        return []
       }
 
       await ensureProjectGuides(optionsList.map((options) => options.cwd))
@@ -2206,8 +2207,24 @@ function CanvasInner({
 
       setNodes((current) => [...current, ...newNodes])
       newNodes.forEach((node) => persistNode(node))
+      return newNodes.map((node) => node.id)
     },
     [setNodes, persistNode, buildTerminalNodeData, visibleCanvasBounds, ensureProjectGuides],
+  )
+
+  // Template de time: os quatro agentes nascem juntos e já ligados pelo handoff.
+  const addTeamNodes = useCallback(
+    async (team: TeamLaunch) => {
+      const ids = await addTerminalNodes(team.options)
+      const created = buildTeamEdges(
+        ids,
+        team.links,
+        () => `edge-${crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`}`,
+      )
+      setEdges((current) => [...current, ...created])
+      created.forEach((edge) => void saveCanvasEdge(edge))
+    },
+    [addTerminalNodes, setEdges],
   )
 
   const organizeCanvasBlocks = useMatrixArrange({
@@ -2399,6 +2416,7 @@ function CanvasInner({
         projects={projects}
         onAddTerminal={addTerminalNode}
         onAddTerminals={addTerminalNodes}
+        onAddTeam={addTeamNodes}
         onAddCloudSession={addCloudSessionNode}
         onAddClaudeApi={addClaudeApiNode}
         onOrganizeBlocks={organizeCanvasBlocks}
