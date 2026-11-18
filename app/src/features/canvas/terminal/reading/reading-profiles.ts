@@ -3,23 +3,28 @@
  *
  * Só ganha perfil a CLI cuja tela foi gravada e virou fixture
  * (`__fixtures__/terminal-output`): as marcas e o rodapé abaixo vêm dessas
- * gravações, não de suposição. Qualquer outro programa — inclusive o Gemini,
- * que não respondeu na gravação (o Google recusou a conta pessoal no Gemini
- * CLI 0.62.0) — usa o perfil `texto`: a Leitura mostra a saída como veio, sem
- * reconstruir Markdown.
+ * gravações, não de suposição. As do Gemini são sintéticas (servidor falso: o
+ * Google recusa a conta pessoal no Gemini CLI). Qualquer outro programa —
+ * inclusive a Antigravity (`agy`), que pede login real para ser gravada — usa
+ * o perfil `texto`: a Leitura mostra a saída como veio, sem reconstruir
+ * Markdown.
  */
 import type { ReadingLine } from './reading-lines'
 
-export type ReadingProfileId = 'claude' | 'codex' | 'texto'
+export type ReadingProfileId = 'claude' | 'codex' | 'gemini' | 'texto'
 
 export type ReadingProfile = {
   id: ReadingProfileId
-  /** Glifos, na coluna 0, que abrem a fala da pessoa. */
+  /** Marcas, no começo da linha, que abrem a fala da pessoa (o Gemini usa ` >`, com um espaço antes). */
   userMarkers: readonly string[]
   /** Glifos, na coluna 0, que abrem uma fala do agente (texto ou ferramenta). */
   agentMarkers: readonly string[]
   /** Glifos, na coluna 0, de um aviso da CLI (erro, interrupção). */
   noticeMarkers: readonly string[]
+  /** A CLI desenha avisos e perguntas numa caixa (`╭──╮ … ╰──╯`): ela vira um aviso, sem as bordas. */
+  boxedNotices?: boolean
+  /** Cor com que a CLI pinta o texto comum em vez de usar a padrão; a Leitura a trata como sem cor. */
+  plainColor?: string
   /** Linha de status que a CLI redesenha (spinner, tempo, tokens): não é conversa. */
   isStatusLine(line: ReadingLine): boolean
 }
@@ -50,6 +55,12 @@ const CLAUDE_SPINNER = /^[✻✶✳✢✽·*] \S/
 /** Contador do Codex enquanto trabalha: "• Working (11s • esc to interrupt)". */
 const CODEX_WORKING = /\(\d+[hms][^)]*esc to interrupt\)/
 
+/** Contador do Gemini enquanto trabalha: "⠸ Thinking... (esc to cancel, 0s)". */
+const GEMINI_WORKING = /\(esc to cancel[^)]*\)/
+
+/** Dicas do rodapé que o Gemini redesenha sob a resposta. */
+const GEMINI_FOOTER_HINT = /^\s*(?:\? for shortcuts|Shift\+Tab to accept edits)\s*$/
+
 export const READING_PROFILES: Record<ReadingProfileId, ReadingProfile> = {
   claude: {
     id: 'claude',
@@ -66,6 +77,15 @@ export const READING_PROFILES: Record<ReadingProfileId, ReadingProfile> = {
     agentMarkers: ['•'],
     noticeMarkers: ['■'],
     isStatusLine: (line) => CODEX_WORKING.test(line.text) || (CODEX_TIMESTAMP.test(line.text) && isMutedTextLine(line)),
+  },
+  gemini: {
+    id: 'gemini',
+    userMarkers: [' >'],
+    agentMarkers: ['✦'],
+    noticeMarkers: ['ℹ'],
+    boxedNotices: true,
+    plainColor: '#ffffff',
+    isStatusLine: (line) => GEMINI_WORKING.test(line.text) || GEMINI_FOOTER_HINT.test(line.text),
   },
   texto: {
     id: 'texto',
@@ -84,5 +104,6 @@ export function readingProfileFor(providerId: string | undefined, command: strin
   const program = (providerId || command?.split(/[\\/]/).pop()?.replace(/\.(?:cmd|exe|ps1)$/i, '') || '').toLowerCase()
   if (program === 'claude') return READING_PROFILES.claude
   if (program === 'codex') return READING_PROFILES.codex
+  if (program === 'gemini') return READING_PROFILES.gemini
   return READING_PROFILES.texto
 }

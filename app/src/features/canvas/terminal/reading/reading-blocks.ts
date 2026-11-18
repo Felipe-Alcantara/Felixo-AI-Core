@@ -64,17 +64,18 @@ function isBlank(line: ReadingLine): boolean {
   return line.text.trim() === ''
 }
 
-/** A marca da coluna 0 que abre uma fala, e o papel dela. */
-function turnMarkerOf(line: ReadingLine, profile: ReadingProfile): ReadingRole | null {
-  // As marcas são todas do plano básico (uma unidade UTF-16): `charAt` basta,
-  // sem espalhar a linha inteira num array a cada leitura.
-  const first = line.text.charAt(0)
-  const second = line.text.charAt(1)
-  // Espaço comum ou rígido: a caixa de digitação do Claude usa `❯` + U+00A0.
-  if (second !== '' && !/\s/.test(second)) return null
-  if (profile.userMarkers.includes(first)) return 'pessoa'
-  if (profile.agentMarkers.includes(first)) return 'agente'
-  if (profile.noticeMarkers.includes(first)) return 'aviso'
+/** A marca que abre uma fala no começo da linha: o papel dela e quantas colunas ocupa com o espaço depois. */
+function turnMarkerOf(line: ReadingLine, profile: ReadingProfile): { role: ReadingRole; width: number } | null {
+  const { text } = line
+  // Espaço comum ou rígido depois da marca: a caixa de digitação do Claude usa `❯` + U+00A0.
+  const find = (markers: readonly string[]) =>
+    markers.find((marker) => text.startsWith(marker) && (text.length === marker.length || /\s/.test(text.charAt(marker.length))))
+  const user = find(profile.userMarkers)
+  if (user !== undefined) return { role: 'pessoa', width: user.length + 1 }
+  const agent = find(profile.agentMarkers)
+  if (agent !== undefined) return { role: 'agente', width: agent.length + 1 }
+  const notice = find(profile.noticeMarkers)
+  if (notice !== undefined) return { role: 'aviso', width: notice.length + 1 }
   return null
 }
 
@@ -93,6 +94,27 @@ export function sliceLine(line: ReadingLine, count: number): ReadingLine {
   return { text: line.text.slice(count), segments, cols: line.cols === undefined ? undefined : line.cols - count }
 }
 
+/** Topo e base da caixa de aviso do Gemini (`╭──╮`, `╰──╯`). */
+const BOX_NOTICE_TOP = /^\s*╭[─╌]+╮\s*$/
+const BOX_NOTICE_BOTTOM = /^\s*╰[─╌]+╯\s*$/
+
+/** A linha de dentro da caixa sem as bordas `│` nem o espaço de preenchimento; sem `cols`, pois a largura já não é a da tela. */
+function unboxLine(line: ReadingLine): ReadingLine {
+  const left = line.text.startsWith('│') ? 1 : 0
+  const right = line.text.length - (line.text.endsWith('│') ? 1 : 0)
+  let start = left
+  let end = right
+  const segments: ReadingSegment[] = []
+  for (const segment of line.segments) {
+    const from = Math.max(0, start)
+    const to = Math.min(segment.text.length, end)
+    start -= segment.text.length
+    end -= segment.text.length
+    if (to > from) segments.push({ ...segment, text: segment.text.slice(from, to) })
+  }
+  return { text: line.text.slice(left, right), segments }
+}
+
 /**
  * Onde começa a caixa de digitação: a última marca da pessoa perto do fim da
  * tela, com só rodapé depois dela. Ela e o rodapé não são conversa. Se uma
@@ -105,9 +127,9 @@ function inputAreaStart(lines: ReadingLine[], profile: ReadingProfile): number {
   for (let index = lines.length - 1; index >= 0 && seen < INPUT_AREA_MAX_LINES; index -= 1) {
     if (isBlank(lines[index])) continue
     seen += 1
-    const role = turnMarkerOf(lines[index], profile)
+    const role = turnMarkerOf(lines[index], profile)?.role
     if (role === 'pessoa') return index
-    if (role !== null) return lines.length
+    if (role !== undefined) return lines.length
   }
   return lines.length
 }
@@ -143,19 +165,39 @@ export function splitReadingTurns(lines: ReadingLine[], profile: ReadingProfile)
   const end = inputAreaStart(lines, profile)
 
   const turns: ReadingTurn[] = []
+  let inBox = false
   for (const line of lines.slice(first, Math.max(first, end))) {
     if (profile.isStatusLine(line)) continue
-    const role = turnMarkerOf(line, profile)
-    if (role) {
-      turns.push({ role, lines: [sliceLine(line, Math.min(TURN_INDENT, line.text.length))] })
+    if (profile.boxedNotices) {
+      if (!inBox && BOX_NOTICE_TOP.test(line.text)) {
+        turns.push({ role: 'aviso', lines: [] })
+        inBox = true
+        continue
+      }
+      if (inBox) {
+        if (BOX_NOTICE_BOTTOM.test(line.text)) inBox = false
+        else turns.at(-1)?.lines.push(unboxLine(line))
+        continue
+      }
+    }
+    const marker = turnMarkerOf(line, profile)
+    if (marker) {
+      turns.push({ role: marker.role, lines: [sliceLine(line, Math.min(marker.width, line.text.length))] })
       continue
     }
     const current = turns.at(-1)
     if (current) current.lines.push(sliceLine(line, Math.min(TURN_INDENT, leadingSpaces(line.text))))
   }
 
+  // O Gemini pinta o texto comum de branco em vez de usar a cor padrão: sem isso, toda linha parece colorida (código).
+  const { plainColor } = profile
+  const plain = (line: ReadingLine): ReadingLine =>
+    plainColor === undefined
+      ? line
+      : { ...line, segments: line.segments.map((segment) => (segment.fg === plainColor ? { ...segment, fg: null } : segment)) }
+
   return turns
-    .map((turn) => ({ ...turn, lines: trimBlankEdges(turn.lines) }))
+    .map((turn) => ({ ...turn, lines: trimBlankEdges(turn.lines).map(plain) }))
     .filter((turn) => turn.lines.length > 0)
 }
 
@@ -402,11 +444,15 @@ function parseCode(lines: ReadingLine[], index: number): BlockParse | null {
   return { block: { kind: 'codigo', lines: block.map((text) => text.slice(indent)) }, next }
 }
 
-/** Tabela desenhada com caixa (Claude): `┌─┬─┐`, `│ a │ b │`, `├─┼─┤`, `└─┴─┘`. */
+/**
+ * Tabela desenhada com caixa: `┌─┬─┐`, `│ a │ b │`, `├─┼─┤`, `└─┴─┘`. O Claude separa
+ * cada linha da tabela com `├`; o Gemini só o cabeçalho do corpo.
+ */
 function parseBoxTable(lines: ReadingLine[], index: number): BlockParse | null {
   if (!BOX_TABLE_TOP.test(lines[index].text)) return null
-  const rows: string[][] = []
-  let pending: string[] | null = null
+  // Cada grupo são as linhas `│` entre dois `├`: uma linha da tabela, ou o cabeçalho.
+  const groups: string[][][] = []
+  let group: string[][] = []
   let next = index + 1
 
   for (; next < lines.length; next += 1) {
@@ -416,20 +462,27 @@ function parseBoxTable(lines: ReadingLine[], index: number): BlockParse | null {
       break
     }
     if (text.startsWith('├')) {
-      if (pending) rows.push(pending)
-      pending = null
+      if (group.length > 0) groups.push(group)
+      group = []
       continue
     }
     if (!text.startsWith('│')) break
-    const cells = text.split('│').slice(1, -1).map((cell) => cell.trim())
-    // Duas linhas `│` seguidas sem `├` entre elas: a célula quebrou de linha.
-    pending = pending ? pending.map((cell, column) => [cell, cells[column] ?? ''].filter(Boolean).join(' ')) : cells
+    group.push(text.split('│').slice(1, -1).map((cell) => cell.trim()))
   }
-  if (pending) rows.push(pending)
-  if (rows.length === 0) return null
+  if (group.length > 0) groups.push(group)
+  if (groups.length === 0) return null
 
-  const [header, ...body] = rows
-  return { block: { kind: 'tabela', header, rows: body }, next }
+  // Duas linhas `│` seguidas sem `├` entre elas: a célula quebrou de linha.
+  const joined = (cellLines: string[][]) =>
+    cellLines.reduce((row, cells) => row.map((cell, column) => [cell, cells[column] ?? ''].filter(Boolean).join(' ')))
+  const [headerGroup, ...bodyGroups] = groups
+  // Um só grupo de corpo cujas linhas todas abrem com a primeira célula preenchida: o Gemini, uma linha por linha.
+  // shortcut: uma tabela do Claude com uma só linha cuja 1ª coluna quebra de linha vira várias linhas; sem como distinguir.
+  const rows =
+    bodyGroups.length === 1 && bodyGroups[0].length > 1 && bodyGroups[0].every((cells) => cells[0])
+      ? bodyGroups[0]
+      : bodyGroups.map(joined)
+  return { block: { kind: 'tabela', header: joined(headerGroup), rows }, next }
 }
 
 /** Tabela do Codex: cabeçalho, traços em colunas por baixo, linhas separadas por `─`. */

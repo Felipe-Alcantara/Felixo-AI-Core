@@ -2,7 +2,7 @@
 
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { driftedFixtures, fixtureVersions, parseVersion } = require('./check-reading-fixtures.cjs')
+const { PROVIDERS, driftedFixtures, fixtureVersions, parseVersion } = require('./check-reading-fixtures.cjs')
 
 test('lê a versão do que as CLIs imprimem em --version', () => {
   assert.equal(parseVersion('2.1.327 (Claude Code)'), '2.1.327')
@@ -20,9 +20,16 @@ test('aponta só as gravações de outra versão; sem CLI instalada, nada', () =
 })
 
 test('as gravações do repositório de cada provedor têm versão', () => {
-  for (const provider of ['claude', 'codex']) {
-    const fixtures = fixtureVersions(provider)
+  for (const { provider, ignore } of PROVIDERS) {
+    const fixtures = fixtureVersions(provider, undefined, ignore)
     assert.ok(fixtures.length > 0, provider)
     for (const fixture of fixtures) assert.match(fixture.version, /^\d+\.\d+/, fixture.name)
   }
+})
+
+test('o Gemini confere as gravações sintéticas e deixa de fora a recusa real da 0.62.0', () => {
+  assert.ok(PROVIDERS.some((item) => item.provider === 'gemini'))
+  const names = fixtureVersions('gemini', undefined, ['gemini-erro']).map((fixture) => fixture.name)
+  assert.ok(!names.includes('gemini-erro'))
+  assert.ok(names.includes('gemini-resposta'))
 })

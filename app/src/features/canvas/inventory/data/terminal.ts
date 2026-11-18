@@ -292,7 +292,7 @@ export const terminalSurfaces: InventoryElement[] = [
       normal: 'Aba Leitura da gaveta: a conversa da tela em falas (Você, Agente, Aviso da CLI, Saída), cada uma com o Markdown reconstruído da tela do xterm (título, listas, código, tabela, citação, link). Relida no máximo a cada 250 ms durante o stream; acompanha o fim só se a pessoa já estava no fim.',
       empty: 'Sem fala reconhecida (CLI abrindo, só logotipo): "Nada para ler ainda."',
       error: 'Fala cuja estrutura não confere com a tela (ou que lança erro): sai como texto puro, com "mostrado como texto: a formatação não conferiu".',
-      disabled: 'CLI sem perfil gravado (Gemini, Openia, shell): a saída aparece como veio, num bloco de texto, com o aviso de que não há leitura formatada.',
+      disabled: 'CLI sem perfil gravado (Antigravity, Openia, shell): a saída aparece como veio, num bloco de texto, com o aviso de que não há leitura formatada.',
       loading: 'Runtime do terminal ainda carregando: getReadingSource devolve undefined e o painel fica vazio até o primeiro aviso de saída.',
     },
     controls: [],
@@ -316,9 +316,9 @@ export const terminalSurfaces: InventoryElement[] = [
     ],
     gaps: [
       {
-        what: 'O Gemini não tem perfil: a conta pessoal foi recusada pelo Gemini CLI 0.62 e não houve resposta para gravar; ele aparece como texto puro.',
+        what: 'A Antigravity (agy) não tem perfil: só responde com login real no cofre do sistema, que não dá para simular com servidor falso; aparece como texto puro até haver uma gravação com a conta.',
         risk: 'médio',
-        task: '3ec91f95-497e-8113-afb0-eecb92e4eb23',
+        task: '41c91f95-497e-81c9-bb3a-da2b0c144512',
       },
       {
         what: 'Palavra partida pela largura da CLI vira espaço; código sem cor sai como parágrafo; versão nova das CLIs pode desenhar diferente sem teste que avise.',

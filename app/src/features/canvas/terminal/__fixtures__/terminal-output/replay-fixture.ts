@@ -16,6 +16,8 @@ export type TerminalFixture = {
   platform: string
   recordedAt: string
   anonymized: boolean
+  /** Gravada contra um servidor falso, sem conta real (`--synthetic` do gravador). */
+  synthetic?: boolean
   marks: { t: number; label: string }[]
   chunks: { t: number; data: string }[]
 }
@@ -31,6 +33,10 @@ export const FIXTURE_NAMES = [
   'codex-erro',
   'codex-retomada',
   'gemini-erro',
+  'gemini-resposta',
+  'gemini-cancelamento',
+  'gemini-erro-modelo',
+  'gemini-retomada',
   'openia-lista',
   'openia-ajuda',
   'openia-erro',

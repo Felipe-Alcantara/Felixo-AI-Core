@@ -9,10 +9,12 @@ import { comparableText, expectInertHtml, readFixture, renderMarkdown, renderedT
 const REPLAY_TIMEOUT_MS = 30_000
 
 /**
- * A Leitura de cada gravação real (`scripts/record-terminal-fixture.cjs`):
- * Claude Code e Codex em resposta, cancelamento, erro e retomada; o Gemini só
- * no erro de login (a conta pessoal foi recusada na gravação); o Openia em
- * lista, ajuda e erro. Os snapshots guardam o Markdown e o HTML de cada fala.
+ * A Leitura de cada gravação (`scripts/record-terminal-fixture.cjs`): Claude
+ * Code e Codex em resposta, cancelamento, erro e retomada; o Gemini no erro de
+ * login (a recusa real da conta pessoal) e, sem conta, em resposta,
+ * cancelamento, erro de modelo e retomada gravados com um servidor falso
+ * (`synthetic: true`); o Openia em lista, ajuda e erro. Os snapshots guardam o
+ * Markdown e o HTML de cada fala.
  */
 describe('Leitura das gravações reais', { timeout: REPLAY_TIMEOUT_MS }, () => {
   it.each(FIXTURE_NAMES)('%s: snapshot do Markdown e do HTML', async (name) => {
@@ -42,7 +44,15 @@ describe('Leitura das gravações reais', { timeout: REPLAY_TIMEOUT_MS }, () => 
     }
   })
 
-  it.each(['claude-resposta', 'claude-telacheia', 'codex-resposta', 'claude-retomada', 'codex-retomada'] as const)(
+  it.each([
+    'claude-resposta',
+    'claude-telacheia',
+    'codex-resposta',
+    'claude-retomada',
+    'codex-retomada',
+    'gemini-resposta',
+    'gemini-retomada',
+  ] as const)(
     '%s: título, listas, código, tabela, citação e link viram estrutura',
     async (name) => {
       const reading = await readFixture(name)
@@ -88,7 +98,7 @@ describe('Leitura das gravações reais', { timeout: REPLAY_TIMEOUT_MS }, () => 
     expect(renderedText(renderMarkdown(codex.turns.at(-1)!.markdown))).toContain("'modelo-que-nao-existe'")
   })
 
-  it.each(['gemini-erro', 'openia-lista', 'openia-ajuda', 'openia-erro'] as const)(
+  it.each(['openia-lista', 'openia-ajuda', 'openia-erro'] as const)(
     '%s: CLI sem perfil de leitura mostra a saída como veio',
     async (name) => {
       const reading = await readFixture(name)
@@ -99,6 +109,58 @@ describe('Leitura das gravações reais', { timeout: REPLAY_TIMEOUT_MS }, () => 
       expect(reading.turns[0].markdown.startsWith('```text\n')).toBe(true)
     },
   )
+
+  describe('Gemini (gravações sintéticas, exceto o login recusado)', () => {
+    it('resposta: só a conversa, sem logotipo, dicas, status nem caixa de digitação', async () => {
+      for (const name of ['gemini-resposta', 'gemini-retomada'] as const) {
+        const reading = await readFixture(name)
+        const html = renderMarkdown(reading.turns.map((turn) => turn.markdown).join('\n\n'))
+
+        expect(reading.profile).toBe('gemini')
+        expect(reading.turns.map((turn) => turn.role)).toEqual(['pessoa', 'agente'])
+        expect(html).not.toMatch(/Gemini CLI v|Tips for getting started|Shift\+Tab|for shortcuts|Type your message|no sandbox/)
+        // A tabela do Gemini só separa o cabeçalho: cada linha `│` é uma linha da tabela.
+        expect(html.match(/<tr>/g)).toHaveLength(3)
+        expect(html).toMatch(/<td[^>]*>beta<\/td><td[^>]*>2<\/td>/)
+      }
+    })
+
+    it('cancelamento: a resposta parcial e o aviso de interrupção ficam', async () => {
+      const reading = await readFixture('gemini-cancelamento')
+
+      expect(reading.turns.map((turn) => turn.role)).toEqual(['pessoa', 'agente', 'aviso'])
+      expect(reading.turns[1].markdown).toMatch(/^5\. \S/m)
+      expect(reading.turns[2].text).toContain('Request cancelled')
+      expect(JSON.stringify(reading.turns)).not.toMatch(/esc to cancel|Thinking/)
+    })
+
+    it('erro de modelo: a caixa de pergunta da CLI vira um aviso, sem as bordas', async () => {
+      const reading = await readFixture('gemini-erro-modelo')
+      const notice = reading.turns.at(-1)!
+
+      expect(reading.turns.map((turn) => turn.role)).toEqual(['pessoa', 'aviso'])
+      expect(notice.raw).toBe(false)
+      expect(notice.text).toContain('Model "modelo-que-nao-existe" was not found or is invalid.')
+      expect(notice.text).toContain('Keep trying')
+      expect(notice.text).not.toMatch(/[│╭╮╰╯]/)
+    })
+
+    it('login recusado: a tela de login não é conversa e a Leitura fica vazia', async () => {
+      const reading = await readFixture('gemini-erro')
+
+      expect(reading.profile).toBe('gemini')
+      expect(reading.turns).toEqual([])
+    })
+
+    it('só as gravações sem conta real estão marcadas como sintéticas', () => {
+      for (const name of ['gemini-resposta', 'gemini-cancelamento', 'gemini-erro-modelo', 'gemini-retomada'] as const) {
+        expect(loadFixture(name).synthetic, name).toBe(true)
+      }
+      for (const name of FIXTURE_NAMES.filter((item) => !item.startsWith('gemini-') || item === 'gemini-erro')) {
+        expect(loadFixture(name).synthetic, name).toBeUndefined()
+      }
+    })
+  })
 
   it.each(FIXTURE_NAMES)('%s: a gravação está anonimizada, no texto cru e nas duas telas desenhadas', async (name) => {
     const fixture = loadFixture(name)

@@ -1051,13 +1051,13 @@ Sem controle próprio: as ações vêm de outros elementos.
 | loading | Runtime do terminal ainda carregando: getReadingSource devolve undefined e o painel fica vazio até o primeiro aviso de saída. |
 | empty | Sem fala reconhecida (CLI abrindo, só logotipo): "Nada para ler ainda." |
 | error | Fala cuja estrutura não confere com a tela (ou que lança erro): sai como texto puro, com "mostrado como texto: a formatação não conferiu". |
-| disabled | CLI sem perfil gravado (Gemini, Openia, shell): a saída aparece como veio, num bloco de texto, com o aviso de que não há leitura formatada. |
+| disabled | CLI sem perfil gravado (Antigravity, Openia, shell): a saída aparece como veio, num bloco de texto, com o aviso de que não há leitura formatada. |
 
 Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| O Gemini não tem perfil: a conta pessoal foi recusada pelo Gemini CLI 0.62 e não houve resposta para gravar; ele aparece como texto puro. | médio | `3ec91f95-497e-8113-afb0-eecb92e4eb23` |
+| A Antigravity (agy) não tem perfil: só responde com login real no cofre do sistema, que não dá para simular com servidor falso; aparece como texto puro até haver uma gravação com a conta. | médio | `41c91f95-497e-81c9-bb3a-da2b0c144512` |
 | Palavra partida pela largura da CLI vira espaço; código sem cor sai como parágrafo; versão nova das CLIs pode desenhar diferente sem teste que avise. | baixo | `3ec91f95-497e-8122-a08b-d26d4991acca` |
 
 ### Botão Copiar do terminal
@@ -3214,7 +3214,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3ec91f95-497e-8103-b360-c1979d6992f4` — 9 lacunas
 - `3ec91f95-497e-8110-b363-cfade2b68b7a` — 42 lacunas
 - `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` — 19 lacunas
-- `3ec91f95-497e-8113-afb0-eecb92e4eb23` — 1 lacuna
 - `3ec91f95-497e-8122-a08b-d26d4991acca` — 1 lacuna
 - `3ec91f95-497e-8141-b6c1-d1833aac5664` — 13 lacunas
 - `3ec91f95-497e-8176-bef0-dfde828936dc` — 6 lacunas
@@ -3238,4 +3237,5 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `41c91f95-497e-8120-9fbf-d6db17ae781b` — 1 lacuna
 - `41c91f95-497e-8165-8cc0-ce2bd685c1a1` — 1 lacuna
 - `41c91f95-497e-817e-bb8c-ca6fe5e302a1` — 1 lacuna
+- `41c91f95-497e-81c9-bb3a-da2b0c144512` — 1 lacuna
 - `41c91f95-497e-81f9-9edf-eb89e07ee070` — 1 lacuna

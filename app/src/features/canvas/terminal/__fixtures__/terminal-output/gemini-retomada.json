@@ -1,0 +1,55 @@
+{
+ "provider": "gemini",
+ "version": "0.69.0-preview.0",
+ "scenario": "retomada",
+ "cols": 100,
+ "rows": 50,
+ "platform": "win32",
+ "recordedAt": "2026-11-18",
+ "anonymized": true,
+ "synthetic": true,
+ "marks": [
+  {
+   "t": 95,
+   "label": "espera a conversa ser redesenhada"
+  }
+ ],
+ "chunks": [
+  {
+   "t": 113,
+   "data": "\u001b[?9001h\u001b[?1004h\u001b[?25l\u001b[2J\u001b[m\u001b[H\u001b]0;C:\\WINDOWS\\system32\\cmd.exe \u0007\u001b[?25h"
+  },
+  {
+   "t": 3023,
+   "data": "\u001b[?u\u001b[>q\u001b[K"
+  },
+  {
+   "t": 6686,
+   "data": "\u001b]0;◇  Ready (gemini)                                                               \u0007"
+  },
+  {
+   "t": 6869,
+   "data": "\u001b[?25l\u001b[?1006l\u001b[?1002l\u001b[3;1H\u001b[84X\u001b[38;2;175;175;175m\u001b[84C? for shortcuts\u001b[38;2;135;135;135m\u001b[2m\r\n────────────────────────────────────────────────────────────────────────────────────────────────────\u001b[m\r\n \u001b[38;2;175;175;175mShift+Tab to accept edits\u001b[38;2;95;95;95m\r\n▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄\u001b[39m\u001b[48;2;95;95;95m\r\n \u001b[38;2;215;175;255m> \u001b[39m\u001b[7m \u001b[38;2;175;175;175m\u001b[27m Type your message or @path/to/file\u001b[K\u001b[38;2;95;95;95m\u001b[49m\r\n▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀\u001b[m\r\n \u001b[38;2;175;175;175mworkspace (/directory)                                                       sandbox        /model\u001b[m\r\n \u001b[38;2;255;255;255m/tmp/maquina-fixture      \u001b[38;2;255;135;175mno sandbox       \u001b[38;2;255;255;255mAuto"
+  },
+  {
+   "t": 6913,
+   "data": "\u001b[?1004h\u001b[m\u001b[?2004h"
+  },
+  {
+   "t": 7071,
+   "data": "\u001b[H\u001b[K\r\n\u001b[K\r\n\u001b[84X\u001b[38;2;175;175;175m\u001b[84C? for shortcuts \u001b[38;2;135;135;135m\u001b[2m\r\n────────────────────────────────────────────────────────────────────────────────────────────────────\u001b[m\r\n \u001b[38;2;175;175;175mShift+Tab to accept edits\u001b[K\u001b[38;2;95;95;95m\r\n▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄\u001b[39m\u001b[48;2;95;95;95m\r\n \u001b[38;2;215;175;255m>   \u001b[38;2;175;175;175mType your message or @path/to/file\u001b[K\u001b[38;2;95;95;95m\u001b[49m\r\n▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀\u001b[m\r\n \u001b[38;2;175;175;175mworkspace (/directory)                                                       sandbox        /model \u001b[m\r\n \u001b[38;2;255;255;255m/tmp/maquina-fixture      \u001b[38;2;255;135;175mno sandbox       \u001b[38;2;255;255;255mAuto \u001b[m\r\n\u001b[K\u001b[100C"
+  },
+  {
+   "t": 7271,
+   "data": "\u001b[H\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\u001b[100C\u001b[2;1H \u001b[38;2;71;150;228m▝\u001b[38;2;102;136;217m▜\u001b[38;2;132;122;206m▄     \u001b[38;2;255;255;255m\u001b[1mGemini CLI\u001b[38;2;175;175;175m\u001b[22m v0.69.0-preview.0\u001b[m\r\n   \u001b[38;2;132;122;206m▝\u001b[38;2;164;113;167m▜\u001b[38;2;195;103;127m▄\u001b[m\r\n  \u001b[38;2;102;136;217m▗\u001b[38;2;132;122;206m▟\u001b[38;2;164;113;167m▀    \u001b[38;2;255;255;255mAuthenticated with gemini-api-key \u001b[38;2;175;175;175m/auth\u001b[m\r\n \u001b[38;2;71;150;228m▝\u001b[38;2;102;136;217m▀    \u001b[38;2;255;255;255m\u001b[8;1HTips for getting started:\r\n1. Create \u001b[1mGEMINI.md\u001b[22m files to customize your interactions\r\n2. \u001b[38;2;175;175;175m/help \u001b[38;2;255;255;255mfor more information\r\n3. Ask coding questions, edit code or run commands\r\n4. Be specific for the best results\u001b[m\u001b[15;1H\u001b[84X\u001b[38;2;175;175;175m\u001b[84C? for shortcuts\u001b[38;2;135;135;135m\u001b[2m\r\n────────────────────────────────────────────────────────────────────────────────────────────────────\u001b[m\r\n \u001b[38;2;175;175;175mShift+Tab to accept edits\u001b[38;2;95;95;95m\r\n▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄\u001b[39m\u001b[48;2;95;95;95m\r\n \u001b[38;2;215;175;255m>   \u001b[38;2;175;175;175mType your message or @path/to/file\u001b[K\u001b[38;2;95;95;95m\u001b[49m\r\n▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀\u001b[m\r\n \u001b[38;2;175;175;175mworkspace (/directory)                                                       sandbox        /model\u001b[m\r\n \u001b[38;2;255;255;255m/tmp/maquina-fixture      \u001b[38;2;255;135;175mno sandbox       \u001b[38;2;255;255;255mAuto"
+  },
+  {
+   "t": 7377,
+   "data": "\u001b[?2026h\u001b[m\u001b[H\u001b[K\r\n \u001b[38;2;71;150;228m▝\u001b[38;2;102;136;217m▜\u001b[38;2;132;122;206m▄     \u001b[38;2;255;255;255m\u001b[1mGemini CLI\u001b[38;2;175;175;175m\u001b[22m v0.69.0-preview.0\u001b[K\u001b[m\r\n   \u001b[38;2;132;122;206m▝\u001b[38;2;164;113;167m▜\u001b[38;2;195;103;127m▄\u001b[K\u001b[m\r\n  \u001b[38;2;102;136;217m▗\u001b[38;2;132;122;206m▟\u001b[38;2;164;113;167m▀    \u001b[38;2;255;255;255mAuthenticated with gemini-api-key \u001b[38;2;175;175;175m/auth\u001b[K\u001b[m\r\n \u001b[38;2;71;150;228m▝\u001b[38;2;102;136;217m▀\u001b[K\u001b[m\r\n\u001b[K\r\n\u001b[K\u001b[38;2;255;255;255m\r\nTips for getting started:\u001b[K\r\n1. Create \u001b[1mGEMINI.md\u001b[22m files to customize your interactions\u001b[K\r\n2. \u001b[38;2;175;175;175m/help \u001b[38;2;255;255;255mfor more information\u001b[K\r\n3. Ask coding questions, edit code or run commands\u001b[K\r\n4. Be specific for the best results\u001b[K\u001b[38;2;95;95;95m\r\n▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄\u001b[39m\u001b[48;2;95;95;95m\r\n \u001b[38;2;215;175;255m> \u001b[38;2;255;255;255mResponda só com texto, sem usar ferramentas e sem ler nem criar arquivos. Use exatamente estes   \u001b[39m\r\n   \u001b[38;2;255;255;255mblocos em Markdown, nesta ordem: um título de nível 2 \"Resumo\"; um parágrafo curto com uma       \u001b[39m\r\n   \u001b[38;2;255;255;255mpalavra em negrito e outra em itálico; uma lista com três itens; uma lista numerada com dois     \u001b[39m\r\n   \u001b[38;2;255;255;255mitens; um bloco de código python com uma função soma; uma tabela com as colunas Nome e Valor e   \u001b[39m\r\n   \u001b[38;2;255;255;255mduas linhas; uma citação curta; e um link para https://example.com/docs.\u001b[K\u001b[38;2;95;95;95m\u001b[49m\r\n▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀\u001b[38;2;215;175;255m\r\n✦ \u001b[38;2;135;175;255m\u001b[1mResumo\u001b[m\u001b[K\r\n\u001b[K\r\n  \u001b[38;2;255;255;255mEste texto tem uma palavra em \u001b[1mnegrito\u001b[22m e outra em \u001b[3mitálico\u001b[23m, só para a gravação.\u001b[K\u001b[m\r\n\u001b[K\r\n   \u001b[38;2;255;255;255m- primeiro item\u001b[K\u001b[m\r\n   \u001b[38;2;255;255;255m- segundo item\u001b[K\u001b[m\r\n   \u001b[38;2;255;255;255m- terceiro item\u001b[K\u001b[m\r\n\u001b[K\r\n   \u001b[38;2;255;255;255m1. passo um\u001b[K\u001b[m\r\n   \u001b[38;2;255;255;255m2. passo dois\u001b[K\u001b[m\r\n\u001b[K\r\n   \u001b[38;2;175;175;175m1 \u001b[38;2;135;175;255mdef \u001b[38;2;255;255;255msoma(a, b):\u001b[K\u001b[m\r\n   \u001b[38;2;175;175;175m2     \u001b[38;2;135;175;255mreturn \u001b[38;2;255;255;255ma + b\u001b[K\u001b[m\r\n\u001b[K\r\n  \u001b[38;2;135;135;135m┌──────┬───────┐\u001b[K\u001b[m\r\n  \u001b[38;2;135;135;135m│ \u001b[38;2;135;175;255m\u001b[1mNome\u001b[m \u001b[38;2;135;135;135m│ \u001b[38;2;135;175;255m\u001b[1mValor\u001b[m \u001b[38;2;135;135;135m│\u001b[K\u001b[m\r\n  \u001b[38;2;135;135;135m├──────┼───────┤\u001b[K\u001b[m\r\n  \u001b[38;2;135;135;135m│ \u001b[38;2;255;255;255malfa \u001b[38;2;135;135;135m│ \u001b[38;2;255;255;255m1     \u001b[38;2;135;135;135m│\u001b[K\u001b[m\r\n  \u001b[38;2;135;135;135m│ \u001b[38;2;255;255;255mbeta \u001b[38;2;135;135;135m│ \u001b[38;2;255;255;255m2     \u001b[38;2;135;135;135m│\u001b[K\u001b[m\r\n  \u001b[38;2;135;135;135m└──────┴───────┘\u001b[K\u001b[m\r\n  \u001b[38;2;255;255;255m> Uma citação curta.\u001b[K\u001b[m\r\n\u001b[K\r\n  \u001b[38;2;255;255;255mVeja a documentação (\u001b[38;2;135;175;255mhttps://example.com/docs\u001b[38;2;255;255;255m).\u001b[K\u001b[m\r\n\u001b[K\r\n\u001b[K\u001b[38;2;215;175;255m\r\n⠋ \u001b[38;2;255;255;255mResuming session...\u001b[K\u001b[m\r\n\u001b[K\r\n\u001b[84X\u001b[38;2;175;175;175m\u001b[84C? for shortcuts \u001b[38;2;135;135;135m\u001b[2m\r\n────────────────────────────────────────────────────────────────────────────────────────────────────\u001b[m\r\n \u001b[38;2;175;175;175mShift+Tab to accept edits\u001b[K\u001b[m\r\n \u001b[38;2;175;175;175mworkspace (/directory)                                                       sandbox        /model \u001b[m\r\n \u001b[38;2;255;255;255m/tmp/maquina-fixture      \u001b[38;2;255;135;175mno sandbox       \u001b[38;2;255;255;255mAuto \u001b[?2026l\u001b[m\r\n\u001b[100C"
+  },
+  {
+   "t": 7437,
+   "data": "\u001b[41;1H\u001b[K\r\n\u001b[K\u001b[38;2;211;175;255m\r\n⠋ \u001b[38;2;255;255;255mResuming session...\u001b[K\u001b[m\r\n\u001b[K\r\n\u001b[84X\u001b[38;2;175;175;175m\u001b[84C? for shortcuts \u001b[38;2;135;135;135m\u001b[2m\r\n────────────────────────────────────────────────────────────────────────────────────────────────────\u001b[m\r\n \u001b[38;2;175;175;175mShift+Tab to accept edits\u001b[K\u001b[m\r\n \u001b[38;2;175;175;175mworkspace (/directory)                                                       sandbox        /model \u001b[m\r\n \u001b[38;2;255;255;255m/tmp/maquina-fixture      \u001b[38;2;255;135;175mno sandbox       \u001b[38;2;255;255;255mAuto \u001b[m\r\n\u001b[K\u001b[100C\u001b[41;1H\u001b[K\r\n\u001b[K\r\n\u001b[84X\u001b[38;2;175;175;175m\u001b[84C? for shortcuts \u001b[38;2;135;135;135m\u001b[2m\r\n────────────────────────────────────────────────────────────────────────────────────────────────────\u001b[m\r\n \u001b[38;2;175;175;175mShift+Tab to accept edits\u001b[K\u001b[38;2;95;95;95m\r\n▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄\u001b[39m\u001b[48;2;95;95;95m\r\n \u001b[38;2;215;175;255m>   \u001b[38;2;175;175;175mType your message or @path/to/file\u001b[K\u001b[38;2;95;95;95m\u001b[49m\r\n▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀\u001b[m\r\n \u001b[38;2;175;175;175mworkspace (/directory)                                                       sandbox        /model \u001b[m\r\n \u001b[38;2;255;255;255m/tmp/maquina-fixture      \u001b[38;2;255;135;175mno sandbox       \u001b[38;2;255;255;255mAuto \u001b[m\r\n\u001b[100C"
+  }
+ ]
+}

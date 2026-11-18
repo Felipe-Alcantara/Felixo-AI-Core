@@ -2,7 +2,7 @@
 
 /**
  * Confere se as gravações da Leitura do terminal ainda são da versão que o
- * Claude Code e o Codex têm instalada. As regras da Leitura vêm dessas
+ * Claude Code, o Codex e o Gemini CLI têm instalada. As regras da Leitura vêm dessas
  * gravações: com uma CLI mais nova, o desenho pode mudar sem que nenhum teste
  * avise, porque os testes só reproduzem a gravação antiga.
  *
@@ -22,6 +22,9 @@ const FIXTURES_DIR = path.join(__dirname, '..', 'src', 'features', 'canvas', 'te
 const PROVIDERS = [
   { provider: 'claude', command: 'claude' },
   { provider: 'codex', command: 'codex' },
+  // `gemini-erro` é a recusa real da 0.62.0 (o Google não aceita mais a conta pessoal ali): não dá para regravar.
+  // As outras gravações do Gemini são sintéticas (servidor falso) e se regravam com `--synthetic`.
+  { provider: 'gemini', command: 'gemini', ignore: ['gemini-erro'] },
 ]
 
 /** A versão que `--version` imprime (`2.1.327 (Claude Code)`, `codex-cli 0.171.0-alpha.12`). */
@@ -30,10 +33,10 @@ function parseVersion(output) {
 }
 
 /** As gravações do provedor com a versão em que foram feitas. */
-function fixtureVersions(provider, dir = FIXTURES_DIR) {
+function fixtureVersions(provider, dir = FIXTURES_DIR, ignore = []) {
   return fs
     .readdirSync(dir)
-    .filter((file) => file.startsWith(`${provider}-`) && file.endsWith('.json'))
+    .filter((file) => file.startsWith(`${provider}-`) && file.endsWith('.json') && !ignore.includes(file.replace(/\.json$/, '')))
     .map((file) => ({ name: file.replace(/\.json$/, ''), version: JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8')).version }))
 }
 
@@ -52,9 +55,9 @@ function installedVersion(command) {
 
 function main() {
   let drift = false
-  for (const { provider, command } of PROVIDERS) {
+  for (const { provider, command, ignore } of PROVIDERS) {
     const installed = installedVersion(command)
-    const drifted = driftedFixtures(installed, fixtureVersions(provider))
+    const drifted = driftedFixtures(installed, fixtureVersions(provider, FIXTURES_DIR, ignore))
     if (!installed) console.log(`${provider}: CLI não encontrada no PATH, nada a conferir.`)
     else if (drifted.length === 0) console.log(`${provider}: gravações na versão instalada (${installed}).`)
     else {
@@ -66,6 +69,6 @@ function main() {
   process.exitCode = drift ? 1 : 0
 }
 
-module.exports = { driftedFixtures, fixtureVersions, parseVersion }
+module.exports = { driftedFixtures, fixtureVersions, parseVersion, PROVIDERS }
 
 if (require.main === module) main()

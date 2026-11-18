@@ -533,75 +533,230 @@ Documentação \\(<https://example.com/docs>\\)",
 ]
 `;
 
-exports[`Leitura das gravações reais > gemini-erro: snapshot do Markdown e do HTML > html 1`] = `
+exports[`Leitura das gravações reais > gemini-cancelamento: snapshot do Markdown e do HTML > html 1`] = `
 [
-  "<div class="markdown-content space-y-2 overflow-hidden text-[13px] leading-relaxed text-zinc-100"><div class="max-w-full overflow-hidden rounded-xl border border-white/8 bg-black/25"><div class="flex h-7 items-center justify-between border-b border-white/6 px-3 font-mono text-[10px] uppercase text-zinc-500"><span>text</span><button type="button" title="Copiar código" class="felixo-btn flex items-center gap-1 hover:text-zinc-300"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-copy" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg><span class="normal-case">copiar</span></button></div><pre class="max-h-80 overflow-auto p-3 font-mono text-[12px] leading-relaxed text-zinc-200"><code> ▝▜▄      ▗█▀▀▜▙▝█▛▀▀▌▜██▖▟██▘▜█▘▜██▖▝█▛▝█▛
-   ▝▜▄    █▌     █▙▟  ▐█▝█▛▐█ ▐█ ▐█▝█▖█▌ █▌
-  ▗▟▀     ▜▙ ▝█▛ █▌▝ ▖▐█   ▐█ ▐█ ▐█ ▝██▌ █▌
- ▝▀        ▀▀▀▀▘▝▀▀▀▀▘▀▀▘  ▀▀▘▀▀▘▀▀▘ ▝▀▀▝▀▀
-
- Gemini CLI v0.62.0
-
-
-
-╭──────────────────────────────────────────────────────────────────────────────────────────────────╮
-│                                                                                                  │
-│ ? Get started                                                                                    │
-│                                                                                                  │
-│   How would you like to authenticate for this project?                                           │
-│                                                                                                  │
-│   ● 1. Sign in with Google                                                                       │
-│     2. Use Gemini API Key                                                                        │
-│     3. Vertex AI                                                                                 │
-│                                                                                                  │
-│   Failed to sign in. Message: This client is no longer supported for Gemini Code Assist for      │
-│   individuals. To continue using Gemini, please migrate to the Antigravity suite of products:    │
-│   https://antigravity.google                                                                     │
-│                                                                                                  │
-│   (Use Enter to select)                                                                          │
-│                                                                                                  │
-│   Terms of Services and Privacy Notice for Gemini CLI                                            │
-│                                                                                                  │
-│   https://geminicli.com/docs/resources/tos-privacy/                                              │
-</code></pre></div></div>",
+  "<div class="markdown-content space-y-2 overflow-hidden text-[13px] leading-relaxed text-zinc-100"><p class="whitespace-pre-wrap text-zinc-100">Responda só com texto, sem ferramentas: escreva uma lista numerada com 40 curiosidades curtas sobre terminais de computador, uma por linha.</p></div>",
+  "<div class="markdown-content space-y-2 overflow-hidden text-[13px] leading-relaxed text-zinc-100"><ol class="list-decimal space-y-1 pl-4 text-zinc-100 marker:text-zinc-500">
+<li class="pl-1">Curiosidade número 1 sobre terminais de computador.</li>
+<li class="pl-1">Curiosidade número 2 sobre terminais de computador.</li>
+<li class="pl-1">Curiosidade número 3 sobre terminais de computador.</li>
+<li class="pl-1">Curiosidade número 4 sobre terminais de computador.</li>
+<li class="pl-1">Curiosidade número 5 sobre terminais de computador.</li>
+</ol></div>",
+  "<div class="markdown-content space-y-2 overflow-hidden text-[13px] leading-relaxed text-zinc-100"><p class="whitespace-pre-wrap text-zinc-100">Request cancelled.</p></div>",
 ]
 `;
 
-exports[`Leitura das gravações reais > gemini-erro: snapshot do Markdown e do HTML > markdown 1`] = `
+exports[`Leitura das gravações reais > gemini-cancelamento: snapshot do Markdown e do HTML > markdown 1`] = `
 [
   {
-    "markdown": "\`\`\`text
- ▝▜▄      ▗█▀▀▜▙▝█▛▀▀▌▜██▖▟██▘▜█▘▜██▖▝█▛▝█▛
-   ▝▜▄    █▌     █▙▟  ▐█▝█▛▐█ ▐█ ▐█▝█▖█▌ █▌
-  ▗▟▀     ▜▙ ▝█▛ █▌▝ ▖▐█   ▐█ ▐█ ▐█ ▝██▌ █▌
- ▝▀        ▀▀▀▀▘▝▀▀▀▀▘▀▀▘  ▀▀▘▀▀▘▀▀▘ ▝▀▀▝▀▀
+    "markdown": "Responda só com texto\\, sem ferramentas\\: escreva uma lista numerada com 40 curiosidades curtas sobre terminais de computador\\, uma por linha\\.",
+    "raw": false,
+    "role": "pessoa",
+  },
+  {
+    "markdown": "1. Curiosidade número 1 sobre terminais de computador\\.
+2. Curiosidade número 2 sobre terminais de computador\\.
+3. Curiosidade número 3 sobre terminais de computador\\.
+4. Curiosidade número 4 sobre terminais de computador\\.
+5. Curiosidade número 5 sobre terminais de computador\\.",
+    "raw": false,
+    "role": "agente",
+  },
+  {
+    "markdown": "Request cancelled\\.",
+    "raw": false,
+    "role": "aviso",
+  },
+]
+`;
 
- Gemini CLI v0.62.0
+exports[`Leitura das gravações reais > gemini-erro: snapshot do Markdown e do HTML > html 1`] = `[]`;
+
+exports[`Leitura das gravações reais > gemini-erro: snapshot do Markdown e do HTML > markdown 1`] = `[]`;
+
+exports[`Leitura das gravações reais > gemini-erro-modelo: snapshot do Markdown e do HTML > html 1`] = `
+[
+  "<div class="markdown-content space-y-2 overflow-hidden text-[13px] leading-relaxed text-zinc-100"><p class="whitespace-pre-wrap text-zinc-100">Diga oi.</p></div>",
+  "<div class="markdown-content space-y-2 overflow-hidden text-[13px] leading-relaxed text-zinc-100"><p class="whitespace-pre-wrap text-zinc-100">Model &quot;modelo-que-nao-existe&quot; was not found or is invalid. <strong class="font-semibold text-zinc-50">/model</strong> to switch models. ● 1. Keep trying 2. Stop</p></div>",
+]
+`;
+
+exports[`Leitura das gravações reais > gemini-erro-modelo: snapshot do Markdown e do HTML > markdown 1`] = `
+[
+  {
+    "markdown": "Diga oi\\.",
+    "raw": false,
+    "role": "pessoa",
+  },
+  {
+    "markdown": "Model \\"modelo\\-que\\-nao\\-existe\\" was not found or is invalid\\. **\\/model** to switch models\\. ● 1\\. Keep trying 2\\. Stop",
+    "raw": false,
+    "role": "aviso",
+  },
+]
+`;
+
+exports[`Leitura das gravações reais > gemini-resposta: snapshot do Markdown e do HTML > html 1`] = `
+[
+  "<div class="markdown-content space-y-2 overflow-hidden text-[13px] leading-relaxed text-zinc-100"><p class="whitespace-pre-wrap text-zinc-100">Responda só com texto, sem usar ferramentas e sem ler nem criar arquivos. Use exatamente estes blocos em Markdown, nesta ordem: um título de nível 2 &quot;Resumo&quot;; um parágrafo curto com uma palavra em negrito e outra em itálico; uma lista com três itens; uma lista numerada com dois itens; um bloco de código python com uma função soma; uma tabela com as colunas Nome e Valor e duas linhas; uma citação curta; e um link para <a class="font-medium text-(--f-core-white) underline decoration-white/30 underline-offset-4 hover:text-(--f-core-white)" href="https://example.com/docs" rel="noreferrer" title="https://example.com/docs
+Clique para escolher onde abrir">https://example.com/docs</a>.</p></div>",
+  "<div class="markdown-content space-y-2 overflow-hidden text-[13px] leading-relaxed text-zinc-100"><h3 class="text-[13px] font-semibold text-zinc-100" data-markdown-anchor="resumo">Resumo</h3>
+<p class="whitespace-pre-wrap text-zinc-100">Este texto tem uma palavra em <strong class="font-semibold text-zinc-50">negrito</strong> e outra em <em class="italic text-zinc-100">itálico</em>, só para a gravação.</p>
+<ul class="list-disc space-y-1 pl-4 text-zinc-100 marker:text-zinc-500">
+<li class="pl-1">primeiro item</li>
+<li class="pl-1">segundo item</li>
+<li class="pl-1">terceiro item</li>
+</ul>
+<ol class="list-decimal space-y-1 pl-4 text-zinc-100 marker:text-zinc-500">
+<li class="pl-1">passo um</li>
+<li class="pl-1">passo dois</li>
+</ol>
+<div class="max-w-full overflow-hidden rounded-xl border border-white/8 bg-black/25"><div class="flex h-7 items-center justify-between border-b border-white/6 px-3 font-mono text-[10px] uppercase text-zinc-500"><span>código</span><button type="button" title="Copiar código" class="felixo-btn flex items-center gap-1 hover:text-zinc-300"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-copy" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg><span class="normal-case">copiar</span></button></div><pre class="max-h-80 overflow-auto p-3 font-mono text-[12px] leading-relaxed text-zinc-200"><code>1 def soma(a, b):
+2     return a + b
+</code></pre></div>
 
 
 
-╭──────────────────────────────────────────────────────────────────────────────────────────────────╮
-│                                                                                                  │
-│ ? Get started                                                                                    │
-│                                                                                                  │
-│   How would you like to authenticate for this project?                                           │
-│                                                                                                  │
-│   ● 1. Sign in with Google                                                                       │
-│     2. Use Gemini API Key                                                                        │
-│     3. Vertex AI                                                                                 │
-│                                                                                                  │
-│   Failed to sign in. Message: This client is no longer supported for Gemini Code Assist for      │
-│   individuals. To continue using Gemini, please migrate to the Antigravity suite of products:    │
-│   https://antigravity.google                                                                     │
-│                                                                                                  │
-│   (Use Enter to select)                                                                          │
-│                                                                                                  │
-│   Terms of Services and Privacy Notice for Gemini CLI                                            │
-│                                                                                                  │
-│   https://geminicli.com/docs/resources/tos-privacy/                                              │
-\`\`\`",
-    "raw": true,
-    "role": "saida",
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="max-w-full overflow-x-auto rounded-lg border border-white/8"><table class="w-full min-w-max border-collapse text-left text-[12px]"><thead class="bg-white/5 text-zinc-200"><tr><th class="border-r border-white/6 px-3 py-2 font-semibold last:border-r-0">Nome</th><th class="border-r border-white/6 px-3 py-2 font-semibold last:border-r-0">Valor</th></tr></thead><tbody class="divide-y divide-white/6"><tr><td class="border-r border-white/6 px-3 py-2 text-zinc-300 last:border-r-0">alfa</td><td class="border-r border-white/6 px-3 py-2 text-zinc-300 last:border-r-0">1</td></tr><tr><td class="border-r border-white/6 px-3 py-2 text-zinc-300 last:border-r-0">beta</td><td class="border-r border-white/6 px-3 py-2 text-zinc-300 last:border-r-0">2</td></tr></tbody></table></div>
+<blockquote class="border-l-2 border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] pl-3 text-zinc-300">
+<p class="whitespace-pre-wrap text-zinc-100">Uma citação curta.</p>
+</blockquote>
+<p class="whitespace-pre-wrap text-zinc-100">Veja a documentação (<a class="font-medium text-(--f-core-white) underline decoration-white/30 underline-offset-4 hover:text-(--f-core-white)" href="https://example.com/docs" rel="noreferrer" title="https://example.com/docs
+Clique para escolher onde abrir">https://example.com/docs</a>).</p></div>",
+]
+`;
+
+exports[`Leitura das gravações reais > gemini-resposta: snapshot do Markdown e do HTML > markdown 1`] = `
+[
+  {
+    "markdown": "Responda só com texto\\, sem usar ferramentas e sem ler nem criar arquivos\\. Use exatamente estes blocos em Markdown\\, nesta ordem\\: um título de nível 2 \\"Resumo\\"\\; um parágrafo curto com uma palavra em negrito e outra em itálico\\; uma lista com três itens\\; uma lista numerada com dois itens\\; um bloco de código python com uma função soma\\; uma tabela com as colunas Nome e Valor e duas linhas\\; uma citação curta\\; e um link para <https://example.com/docs>\\.",
+    "raw": false,
+    "role": "pessoa",
+  },
+  {
+    "markdown": "### Resumo
+
+Este texto tem uma palavra em **negrito** e outra em *itálico*\\, só para a gravação\\.
+
+- primeiro item
+- segundo item
+- terceiro item
+
+1. passo um
+2. passo dois
+
+\`\`\`
+1 def soma(a, b):
+2     return a + b
+\`\`\`
+
+| Nome | Valor |
+| --- | --- |
+| alfa | 1 |
+| beta | 2 |
+
+> Uma citação curta\\.
+
+Veja a documentação \\(<https://example.com/docs>\\)\\.",
+    "raw": false,
+    "role": "agente",
+  },
+]
+`;
+
+exports[`Leitura das gravações reais > gemini-retomada: snapshot do Markdown e do HTML > html 1`] = `
+[
+  "<div class="markdown-content space-y-2 overflow-hidden text-[13px] leading-relaxed text-zinc-100"><p class="whitespace-pre-wrap text-zinc-100">Responda só com texto, sem usar ferramentas e sem ler nem criar arquivos. Use exatamente estes blocos em Markdown, nesta ordem: um título de nível 2 &quot;Resumo&quot;; um parágrafo curto com uma palavra em negrito e outra em itálico; uma lista com três itens; uma lista numerada com dois itens; um bloco de código python com uma função soma; uma tabela com as colunas Nome e Valor e duas linhas; uma citação curta; e um link para <a class="font-medium text-(--f-core-white) underline decoration-white/30 underline-offset-4 hover:text-(--f-core-white)" href="https://example.com/docs" rel="noreferrer" title="https://example.com/docs
+Clique para escolher onde abrir">https://example.com/docs</a>.</p></div>",
+  "<div class="markdown-content space-y-2 overflow-hidden text-[13px] leading-relaxed text-zinc-100"><h3 class="text-[13px] font-semibold text-zinc-100" data-markdown-anchor="resumo">Resumo</h3>
+<p class="whitespace-pre-wrap text-zinc-100">Este texto tem uma palavra em <strong class="font-semibold text-zinc-50">negrito</strong> e outra em <em class="italic text-zinc-100">itálico</em>, só para a gravação.</p>
+<ul class="list-disc space-y-1 pl-4 text-zinc-100 marker:text-zinc-500">
+<li class="pl-1">primeiro item</li>
+<li class="pl-1">segundo item</li>
+<li class="pl-1">terceiro item</li>
+</ul>
+<ol class="list-decimal space-y-1 pl-4 text-zinc-100 marker:text-zinc-500">
+<li class="pl-1">passo um</li>
+<li class="pl-1">passo dois</li>
+</ol>
+<div class="max-w-full overflow-hidden rounded-xl border border-white/8 bg-black/25"><div class="flex h-7 items-center justify-between border-b border-white/6 px-3 font-mono text-[10px] uppercase text-zinc-500"><span>código</span><button type="button" title="Copiar código" class="felixo-btn flex items-center gap-1 hover:text-zinc-300"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-copy" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg><span class="normal-case">copiar</span></button></div><pre class="max-h-80 overflow-auto p-3 font-mono text-[12px] leading-relaxed text-zinc-200"><code>1 def soma(a, b):
+2     return a + b
+</code></pre></div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="max-w-full overflow-x-auto rounded-lg border border-white/8"><table class="w-full min-w-max border-collapse text-left text-[12px]"><thead class="bg-white/5 text-zinc-200"><tr><th class="border-r border-white/6 px-3 py-2 font-semibold last:border-r-0">Nome</th><th class="border-r border-white/6 px-3 py-2 font-semibold last:border-r-0">Valor</th></tr></thead><tbody class="divide-y divide-white/6"><tr><td class="border-r border-white/6 px-3 py-2 text-zinc-300 last:border-r-0">alfa</td><td class="border-r border-white/6 px-3 py-2 text-zinc-300 last:border-r-0">1</td></tr><tr><td class="border-r border-white/6 px-3 py-2 text-zinc-300 last:border-r-0">beta</td><td class="border-r border-white/6 px-3 py-2 text-zinc-300 last:border-r-0">2</td></tr></tbody></table></div>
+<blockquote class="border-l-2 border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] pl-3 text-zinc-300">
+<p class="whitespace-pre-wrap text-zinc-100">Uma citação curta.</p>
+</blockquote>
+<p class="whitespace-pre-wrap text-zinc-100">Veja a documentação (<a class="font-medium text-(--f-core-white) underline decoration-white/30 underline-offset-4 hover:text-(--f-core-white)" href="https://example.com/docs" rel="noreferrer" title="https://example.com/docs
+Clique para escolher onde abrir">https://example.com/docs</a>).</p></div>",
+]
+`;
+
+exports[`Leitura das gravações reais > gemini-retomada: snapshot do Markdown e do HTML > markdown 1`] = `
+[
+  {
+    "markdown": "Responda só com texto\\, sem usar ferramentas e sem ler nem criar arquivos\\. Use exatamente estes blocos em Markdown\\, nesta ordem\\: um título de nível 2 \\"Resumo\\"\\; um parágrafo curto com uma palavra em negrito e outra em itálico\\; uma lista com três itens\\; uma lista numerada com dois itens\\; um bloco de código python com uma função soma\\; uma tabela com as colunas Nome e Valor e duas linhas\\; uma citação curta\\; e um link para <https://example.com/docs>\\.",
+    "raw": false,
+    "role": "pessoa",
+  },
+  {
+    "markdown": "### Resumo
+
+Este texto tem uma palavra em **negrito** e outra em *itálico*\\, só para a gravação\\.
+
+- primeiro item
+- segundo item
+- terceiro item
+
+1. passo um
+2. passo dois
+
+\`\`\`
+1 def soma(a, b):
+2     return a + b
+\`\`\`
+
+| Nome | Valor |
+| --- | --- |
+| alfa | 1 |
+| beta | 2 |
+
+> Uma citação curta\\.
+
+Veja a documentação \\(<https://example.com/docs>\\)\\.",
+    "raw": false,
+    "role": "agente",
   },
 ]
 `;

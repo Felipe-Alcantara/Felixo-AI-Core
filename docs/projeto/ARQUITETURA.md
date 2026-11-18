@@ -947,7 +947,9 @@ Módulos, em `src/features/canvas/terminal/reading/`:
   linhas (`droppedLines` diz quantas ficaram só no terminal).
 - `reading-profiles.ts`: como cada CLI marca as falas e o status. Só ganha
   perfil a CLI gravada em `__fixtures__/terminal-output` (Claude Code 2.1.286,
-  nas telas clássica e cheia, e Codex 0.156.1); o resto usa o perfil `texto`.
+  nas telas clássica e cheia, e Codex 0.156.1) ou, no Gemini CLI 0.69, com um
+  servidor falso (`synthetic: true`, `scripts/fake-gemini-backend.cjs`); o resto
+  (Antigravity, Openia, shell) usa o perfil `texto`.
 - `reading-blocks.ts`: divide a tela em falas (pessoa, agente, aviso; o que vem
   antes da primeira marca e a caixa de digitação ficam de fora) e a fala do
   agente em blocos. `sameReadingContent` confere se os blocos têm o mesmo texto

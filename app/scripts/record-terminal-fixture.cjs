@@ -15,6 +15,7 @@
  *   node scripts/record-terminal-fixture.cjs --provider codex --scenario status
  *   node scripts/record-terminal-fixture.cjs --provider codex --scenario status-conta --cols 160 --rows 60
  *   node scripts/record-terminal-fixture.cjs --reanonymize src/.../codex-status.json
+ *   node scripts/record-terminal-fixture.cjs --provider gemini --synthetic --scenario resposta
  *
  * - `--explore` só abre a CLI, espera a tela parar e imprime o que ela mostra.
  *   Serve para ver diálogos novos (confiança na pasta, login) antes de
@@ -29,6 +30,12 @@
  * - A fixture sai anonimizada (pasta pessoal, usuário, máquina, e-mails,
  *   IDs e o plano da conta trocados por marcadores) e o script se recusa a
  *   gravar se ainda achar algo com cara de chave ou token.
+ * - `--synthetic` (só Gemini) grava sem conta: a CLI real roda com uma chave
+ *   falsa contra um servidor local (`fake-gemini-backend.cjs`), numa pasta
+ *   pessoal própria. A tela é a da CLI; só o texto do modelo é inventado. A
+ *   fixture sai com `synthetic: true` e deve ser regravada com conta real
+ *   quando houver uma que responda (o Google recusa a conta pessoal no Gemini
+ *   CLI). Cenários: resposta, cancelamento, erro-modelo, retomada.
  * - `--reanonymize <fixture>` reaplica as regras atuais a uma fixture já
  *   gravada, sem abrir a CLI — para quando uma regra nova de anonimização
  *   chega depois da gravação.
@@ -70,6 +77,7 @@ function parseArgs(argv) {
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index]
     if (arg === '--explore') args.explore = true
+    else if (arg === '--synthetic') args.synthetic = true
     else if (arg === '--reanonymize') args.reanonymize = argv[++index]
     else if (arg === '--provider') args.provider = argv[++index]
     else if (arg === '--scenario') args.scenario = argv[++index]
@@ -77,20 +85,28 @@ function parseArgs(argv) {
     else if (arg === '--rows') args.rows = Number(argv[++index])
     else throw new Error(`Argumento desconhecido: ${arg}`)
   }
-  if (!args.provider && !args.reanonymize) throw new Error('Informe --provider (claude, codex, gemini ou openia).')
+  if (!args.provider && !args.reanonymize) throw new Error('Informe --provider (claude, codex, gemini, antigravity ou openia).')
+  if (args.synthetic && args.provider !== 'gemini') throw new Error('--synthetic é só do Gemini (o servidor falso é o da API dele).')
   return args
 }
 
 /** Ambiente da CLI: o da pessoa (contas incluídas), sem as variáveis desta sessão de agente. */
-function createEnv(provider, workdir) {
+function createEnv(provider, workdir, fakeBackendUrl) {
   const env = {}
   for (const [key, value] of Object.entries(process.env)) {
     if (/^(CLAUDECODE|CLAUDE_CODE_|CLAUDE_PID|CLAUDE_EFFORT|FELIXO_)/.test(key)) continue
+    // Sintética: nada de conta nem de chave da pessoa chega à CLI.
+    if (fakeBackendUrl && /^(GEMINI|GOOGLE)/i.test(key)) continue
     env[key] = value
   }
   env.TERM = 'xterm-256color'
   env.COLORTERM = 'truecolor'
-  if (provider === 'gemini') {
+  if (fakeBackendUrl) {
+    env.GEMINI_CLI_HOME = prepareSyntheticGeminiHome(workdir)
+    env.GEMINI_CLI_TRUST_WORKSPACE = 'true'
+    env.GEMINI_API_KEY = 'chave-falsa-da-gravacao'
+    env.GOOGLE_GEMINI_BASE_URL = fakeBackendUrl
+  } else if (provider === 'gemini') {
     env.GEMINI_CLI_HOME = prepareGeminiHome(workdir)
     env.GEMINI_CLI_TRUST_WORKSPACE = 'true'
   }
@@ -121,9 +137,24 @@ function prepareGeminiHome(workdir) {
   return home
 }
 
+/**
+ * Pasta pessoal do Gemini sem conta, para a gravação sintética: entra por
+ * chave de API (falsa) e a atualização automática fica desligada. É fixa, ao
+ * lado da pasta de gravação, para a retomada achar a conversa gravada antes.
+ */
+function prepareSyntheticGeminiHome(workdir) {
+  const home = path.join(workdir, '..', 'gemini-sintetico-home')
+  fs.mkdirSync(path.join(home, '.gemini'), { recursive: true })
+  fs.writeFileSync(path.join(home, '.gemini', 'settings.json'), JSON.stringify({
+    security: { auth: { selectedType: 'gemini-api-key' } },
+    general: { enableAutoUpdate: false, enableAutoUpdateNotification: false, disableAutoUpdate: true },
+  }, null, 2))
+  return home
+}
+
 function cliVersion(command) {
   try {
-    const output = execFileSync(command, ['--version'], { encoding: 'utf8', timeout: 30_000 })
+    const output = execFileSync(command, ['--version'], { encoding: 'utf8', timeout: 30_000, shell: process.platform === 'win32' })
     return (output.match(/\d+\.\d+(?:\.\d+)?(?:-[\w.]+)?/) ?? [''])[0]
   } catch {
     return 'desconhecida'
@@ -159,7 +190,8 @@ function createScreen(cols, rows) {
   }
 }
 
-const COMMANDS = { claude: 'claude', codex: 'codex', gemini: 'gemini', openia: 'openia' }
+// `antigravity` (agy) só abre com login real no cofre do sistema: grave com a própria conta, começando por `--explore`.
+const COMMANDS = { claude: 'claude', codex: 'codex', gemini: 'gemini', antigravity: 'agy', openia: 'openia' }
 /**
  * O Codex pergunta se quer se atualizar ao abrir (e Enter atualiza); a gravação
  * desliga a pergunta. O Claude grava sem as configurações do usuário: ao abrir,
@@ -296,13 +328,14 @@ function scenarioFor(provider, scenario) {
           ...finish,
         ],
       }
-    case 'erro': {
+    case 'erro':
+    case 'erro-modelo': {
       const modelFlag = provider === 'codex' ? ['-m', 'modelo-que-nao-existe'] : ['--model', 'modelo-que-nao-existe']
       return { command, args: [...base, ...modelFlag], steps: [...ask('Diga oi.'), ...finish] }
     }
     case 'retomada': {
       // Retoma a última conversa da pasta de gravação (a do cenário "resposta").
-      const resume = provider === 'codex' ? ['resume', '--last'] : ['--continue']
+      const resume = provider === 'codex' ? ['resume', '--last'] : provider === 'gemini' ? ['--resume', 'latest'] : ['--continue']
       return {
         command,
         args: [...base, ...resume],
@@ -310,7 +343,7 @@ function scenarioFor(provider, scenario) {
       }
     }
     default:
-      throw new Error('Cenários: resposta, telacheia (só Claude), status, status-conta (só Codex), cancelamento, erro, retomada.')
+      throw new Error('Cenários: resposta, telacheia (só Claude), status, status-conta (só Codex), cancelamento, erro, erro-modelo (só Gemini sintético), retomada.')
   }
 }
 
@@ -327,6 +360,9 @@ function anonymize(text, workdir) {
   ]) {
     result = result.split(from).join(to)
   }
+  // O Gemini encurta o caminho longo no rodapé do Windows (disco, "Users", reticências no lugar do usuário e o
+  // resto): o usuário já vem omitido, mas a pasta de gravação continua sendo da máquina.
+  result = result.replace(/[A-Za-z]:\x5cUsers\x5c\.\.\.\x5c[^\s\x1b]*fixture-recordings\x5c[\w-]+/g, '/tmp/felixo-fixture')
   result = result
     // O Claude separa as palavras com espaço ou com um salto de cursor (`CSI 48 G`).
     .replace(/(Claude(?:\s|\u001b\[[0-9;?]*[A-Za-z])+)(Pro|Max|Team|Enterprise)\b/g, '$1Plano')
@@ -420,6 +456,7 @@ async function run() {
     return
   }
   const pty = require('node-pty')
+  const fakeBackend = args.synthetic ? await require('./fake-gemini-backend.cjs').startFakeGemini() : null
   const workdir = path.join(RECORDINGS_ROOT, args.provider)
   fs.mkdirSync(workdir, { recursive: true })
   const plan = args.explore
@@ -434,12 +471,15 @@ async function run() {
   let lastScreen = ''
   let exited = null
 
-  const child = pty.spawn(plan.command, plan.args, {
+  // No Windows as CLIs do npm são `.cmd`, que o PTY só abre pelo cmd.
+  const spawnFile = process.platform === 'win32' ? 'cmd.exe' : plan.command
+  const spawnArgs = process.platform === 'win32' ? ['/d', '/s', '/c', plan.command, ...plan.args] : plan.args
+  const child = pty.spawn(spawnFile, spawnArgs, {
     name: 'xterm-256color',
     cols: args.cols,
     rows: args.rows,
     cwd: workdir,
-    env: createEnv(args.provider, workdir),
+    env: createEnv(args.provider, workdir, fakeBackend?.url),
   })
   child.onData((data) => {
     if (recording) chunks.push({ t: Date.now() - started, data })
@@ -490,6 +530,8 @@ async function run() {
   if (!exited) child.kill()
   for (let waited = 0; !exited && waited < 3000; waited += 250) await sleep(250)
   if (!exited) child.kill('SIGKILL')
+  await fakeBackend?.close()
+  if (fakeBackend) process.stderr.write(`[gravar] servidor falso: ${fakeBackend.requests.map((request) => `${request.method} ${request.url.split('?')[0]}`).join(' | ')}\n`)
 
   if (args.explore) {
     process.stdout.write(`${anonymize(screen.viewport(), workdir)}\n`)
@@ -512,6 +554,8 @@ async function run() {
     platform: process.platform,
     recordedAt: new Date().toISOString().slice(0, 10),
     anonymized: true,
+    // Servidor falso, não conta real: ver `fake-gemini-backend.cjs`.
+    ...(args.synthetic ? { synthetic: true } : {}),
     marks,
     chunks: anonymized,
   }

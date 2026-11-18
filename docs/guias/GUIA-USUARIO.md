@@ -129,7 +129,7 @@ Perfis padrão atuais:
 - `Claude Code CLI` com comando `claude`.
 - `Gemini CLI` com comando `gemini`.
 - `Codex App Server` com comando `codex app-server`.
-- `Gemini ACP` com comando `gemini --experimental-acp`.
+- `Gemini ACP` com comando `gemini --experimental-acp`. Se o Google recusar a conta pessoal na tela de login do Gemini CLI, o bloco mostra uma faixa com o motivo e o caminho: abrir um agente Antigravity no lugar.
 - `Openia` como launcher das interfaces compatíveis com OpenRouter.
 - `Antigravity CLI` com comando `agy`: a substituta da Gemini CLI para contas
   individuais do Google desde 18/06/2026. O instalador é um script oficial do
@@ -994,7 +994,7 @@ As CLIs de agente desenham a resposta no terminal: título em negrito, código c
 - Com a Leitura ligada, o cartão do bloco no canvas também mostra o fim da última resposta já formatado.
 - Os links da Leitura seguem a mesma regra de todo o app (ver [Links: escolher onde abrir](#links-escolher-onde-abrir)).
 
-A Leitura reconhece o Claude Code e o Codex. Para outros programas (Gemini, Openia, o terminal comum), ela mostra o texto como veio, sem formatação nova, e avisa isso no topo. Os limites estão em [Limitações conhecidas](#6-limitações-conhecidas).
+A Leitura reconhece o Claude Code, o Codex e o Gemini CLI. Para outros programas (Antigravity, Openia, o terminal comum), ela mostra o texto como veio, sem formatação nova, e avisa isso no topo. Os limites estão em [Limitações conhecidas](#6-limitações-conhecidas).
 
 ### Links: escolher onde abrir
 
@@ -1363,14 +1363,20 @@ Se estiver reportando um problema, inclua a versão do app, sistema operacional,
 - O modo de chat está depreciado: pode ser usado para compatibilidade, exportação de histórico e exclusão de conversas antigas, mas não recebe novos fluxos de produto; use o canvas para trabalho novo.
 - No painel **Logs da CLI** do chat, a tela mostra uma janela limitada para permanecer navegável. A exportação **Markdown para análise** conserva o histórico completo da execução enquanto o app estiver aberto; limpar os logs ou encerrar o app remove esse arquivo temporário. Uma linha que a CLI imprime fora do formato esperado aparece ali como **Linha não reconhecida**, do jeito que veio, e a resposta continua.
 - **Leitura do terminal:**
-  - só o Claude Code e o Codex têm leitura formatada. As regras vêm de gravações
-    das versões 2.1.286 e 0.156.1; uma versão nova pode desenhar diferente
+  - só o Claude Code, o Codex e o Gemini CLI têm leitura formatada. As regras
+    vêm de gravações das versões 2.1.286 e 0.156.1 (Claude e Codex) e 0.69.0
+    (Gemini); uma versão nova pode desenhar diferente
     (`node scripts/check-reading-fixtures.cjs`, dentro de `app`, lista as
     gravações de versão diferente da instalada). Código numa linguagem sem cor
     é reconhecido só quando tem recuo e forma de código; comando solto, sem
-    recuo, aparece como parágrafo. O
-    Gemini não pôde ser gravado (a conta pessoal do Google não entra mais no
-    Gemini CLI 0.62) e, como os outros programas, aparece como texto puro;
+    recuo, aparece como parágrafo. As gravações do Gemini são sintéticas: o
+    Google recusa a conta pessoal no Gemini CLI, então a CLI de verdade rodou
+    com uma chave falsa contra um servidor local
+    (`scripts/record-terminal-fixture.cjs --provider gemini --synthetic`); a tela
+    é a da CLI e só o texto do modelo é inventado. No código, o Gemini mostra o
+    número de cada linha e a Leitura o mantém. A Antigravity (`agy`) ainda
+    aparece como texto puro: ela só responde com login real, que não dá para
+    simular, e fica para quando houver uma gravação dela;
   - a Leitura vê o que o terminal tem na tela e no histórico, até 2000 linhas.
     Por padrão, o Claude desenha a conversa numa tela sem histórico: o que já
     rolou para fora da tela do Claude não aparece na Leitura. Com a opção
