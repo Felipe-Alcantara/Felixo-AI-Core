@@ -746,6 +746,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
       'SystemDesignSettingsSection',
       'DictationSettingsSection',
       'ClaudeTerminalScrollSection',
+      'ClaudeConfigDefaultsSection',
     ],
     tests: [
       { file: 'src/features/canvas/services/quality-standard-prompt.test.ts' },
@@ -1122,6 +1123,49 @@ export const agentToolSurfaces: InventoryElement[] = [
       },
     ],
     overlap: 'Seção dentro do painel Configurações (z-20/30), sem camada própria',
+  },
+  {
+    id: 'settings-config-claude',
+    name: 'Configurações do Claude Code nos terminais (Configurações)',
+    layer: 'panel',
+    owner: `${TOOLS}/ClaudeConfigDefaultsSection.tsx`,
+    states: {
+      normal: 'Seletor de escopo (padrão do app ou exceção de uma conta do Claude) e uma linha por opção da aba Config do /status, com a origem do valor ("Padrão do app", "Exceção desta conta" ou "Padrão do Claude") e o padrão do próprio Claude; opções do .claude.json sem flag nem variável na CLI aparecem numa lista "Só leitura" com a frase "vale para todo o Claude desta máquina; mude no próprio Claude"',
+      empty: 'Sem nenhuma escolha salva, todas as linhas mostram "Padrão do Claude" e os terminais abrem como sempre',
+      error: 'role="alert" com a recusa do processo principal (opção desconhecida, valor que o app não consegue aplicar, falha ao gravar o arquivo do app)',
+    },
+    controls: [
+      {
+        locator: 'aria-label="Escopo do padrão: app inteiro ou exceção de uma conta"',
+        kind: 'select',
+        effect: 'Troca entre o padrão do app (todas as contas) e a exceção de uma conta do Claude; só muda o que as linhas mostram e gravam',
+        failure: 'sem falha própria; sem contas cadastradas só existe o padrão do app',
+      },
+      {
+        locator: 'aria-label={option.label}',
+        kind: 'select',
+        effect: 'claude-terminal-defaults:set grava a opção no escopo escolhido (valor, "Padrão do Claude" ou "Seguir o padrão do app"); os terminais NOVOS do Claude levam o valor em --settings (chaves do settings.json), em flag (--chrome/--no-chrome) ou em variável (CLAUDE_CODE_AUTO_CONNECT_IDE, CLAUDE_CODE_IDE_SKIP_AUTO_INSTALL) da CLI; o settings.json e o .claude.json da pessoa nunca são lidos nem gravados. Modo fast (fastMode, só no Opus): mostra o aviso de crédito de uso pago e, a cada terminal Claude novo que o padrão mandar ligar, o processo principal abre um diálogo (pty-ipc-handlers.cjs, confirmFastMode); sem "Ligar o modo fast" o terminal abre sem ele, e com "sim" o fastMode entra no mesmo --settings que leva a status line da captura de uso',
+        failure: 'recusa do main aparece em role="alert" e a linha volta ao valor salvo; terminais já abertos não mudam; terminal aberto com --settings próprio ignora o padrão do app',
+      },
+    ],
+    persistence: ['userData/claude-terminal-defaults/terminal-defaults.json (padrão global e exceções por conta; opção ausente = padrão do Claude); userData/claude-statusline/session-settings*.json (o --settings de cada terminal)'],
+    ipc: ['claude-terminal-defaults:get', 'claude-terminal-defaults:set', 'cli-accounts:list'],
+    dependsOn: ['claudeTerminalDefaults', 'claude-config-catalog', 'claude-terminal-defaults-view', 'FelixoSelect'],
+    tests: [
+      { file: 'electron/services/claude-terminal-defaults.test.cjs' },
+      { file: 'electron/services/claude-terminal-defaults-ipc-handlers.test.cjs' },
+      { file: 'electron/services/pty-ipc-handlers.test.cjs' },
+      { file: 'electron/services/pty-process-manager.test.cjs' },
+      { file: 'src/features/canvas/services/claude-terminal-defaults-view.test.ts' },
+    ],
+    gaps: [
+      {
+        what: 'A lista de opções vem da referência de configurações do Claude Code 2.1.327 e não foi capturada da aba Config de um Claude real (a captura exigiria ler o ~/.claude da pessoa); uma versão nova pode ter opção a mais. O catálogo está em electron/services/claude-config-catalog.cjs. Nada foi conferido num terminal real aberto pelo app',
+        risk: 'médio',
+        task: '3eb91f95-497e-812e-8dd4-d146f3a07485',
+      },
+    ],
+    overlap: 'Seção dentro do painel Configurações (z-20/30), sem camada própria; os seletores abrem popover próprio do FelixoSelect',
   },
   {
     id: 'settings-permissoes-dos-sites',

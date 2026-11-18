@@ -55,6 +55,11 @@ import type { GpuPreference, GpuPreferenceStatus } from './features/shared/graph
 import type { HardwareProfile } from './features/shared/performance/performance-suggestion'
 import type { PromptInsertionMetadata } from './features/shared/types/prompt-insertion'
 import type {
+  ClaudeConfigOption,
+  ClaudeTerminalDefaultsChange,
+  ClaudeTerminalDefaultsState,
+} from './features/shared/types/claude-terminal-defaults'
+import type {
   AgentUsageAccount,
   AgentUsageSessionBatch,
   AgentUsageSessionReading,
@@ -1130,6 +1135,14 @@ declare global {
        */
       cloudSession?: CloudSessionBridge
       claudeApi?: ClaudeApiBridge
+      claudeTerminalDefaults?: {
+        get: () => Promise<
+          { ok: true; options: ClaudeConfigOption[] } & ClaudeTerminalDefaultsState | { ok: false; message: string }
+        >
+        set: (
+          change: ClaudeTerminalDefaultsChange,
+        ) => Promise<({ ok: true } & ClaudeTerminalDefaultsState) | { ok: false; message: string }>
+      }
       agentUsage?: {
         list: () => Promise<AgentUsageDashboard>
         refresh: () => Promise<AgentUsageDashboard>

@@ -56,7 +56,7 @@ function createFakeManager() {
   }
 }
 
-function setup({ validateAccount, cliVersions } = {}) {
+function setup({ validateAccount, cliVersions, extra } = {}) {
   handlers.clear()
   const sent = []
   const window = {
@@ -66,7 +66,7 @@ function setup({ validateAccount, cliVersions } = {}) {
     },
   }
   const manager = createFakeManager()
-  const api = registerPtyIpcHandlers(() => window, { manager, validateAccount, cliVersions })
+  const api = registerPtyIpcHandlers(() => window, { manager, validateAccount, cliVersions, ...extra })
   const invoke = (channel, params) => handlers.get(channel)(null, params)
 
   return { manager, sent, api, invoke }
@@ -113,6 +113,39 @@ test('pty:spawn starts a session and streams data/exit to the window', () => {
       payload: { sessionId: 'term-1', exitCode: 0, signal: undefined },
     },
   ])
+})
+
+test('pty:spawn com modo fast pedido: pergunta a cada terminal Claude e só liga com "sim"', async () => {
+  const perguntas = []
+  let resposta = true
+  const { manager, invoke } = setup({
+    extra: {
+      fastModeRequested: ({ command }) => command === 'claude',
+      confirmFastMode: async (pedido) => {
+        perguntas.push(pedido)
+        return resposta
+      },
+    },
+  })
+  const confirmados = () => manager.calls.filter((call) => call.method === 'spawn').map((call) => call.options.fastModeConfirmed)
+
+  assert.equal((await invoke('pty:spawn', { sessionId: 't1', command: 'claude' })).ok, true)
+  resposta = false
+  assert.equal((await invoke('pty:spawn', { sessionId: 't2', command: 'claude', accountId: 'conta-b' })).ok, true)
+  // Outra CLI não pergunta; o parâmetro vindo do renderer nunca vale como confirmação.
+  invoke('pty:spawn', { sessionId: 't3', command: 'codex', fastModeConfirmed: true })
+  await invoke('pty:spawn', { sessionId: 't4', command: 'claude', fastModeConfirmed: true })
+
+  assert.deepEqual(confirmados(), [true, false, false, false])
+  assert.equal(perguntas.length, 3)
+})
+
+test('pty:spawn: se a pergunta do modo fast falha, o terminal abre sem o fast', async () => {
+  const { manager, invoke } = setup({
+    extra: { fastModeRequested: () => true, confirmFastMode: async () => { throw new Error('sem janela') } },
+  })
+  assert.equal((await invoke('pty:spawn', { sessionId: 't1', command: 'claude' })).ok, true)
+  assert.equal(manager.calls.find((call) => call.method === 'spawn').options.fastModeConfirmed, false)
 })
 
 test('pty:spawn com a CLI do app incompleta não abre o processo e devolve a mensagem do app', () => {

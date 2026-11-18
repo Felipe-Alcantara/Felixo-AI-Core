@@ -66,6 +66,8 @@ function refuseChainTicket(reason) {
  * @param {(sessionId: string) => void} [dependencies.onSessionExit] - Avisado quando o processo da sessão sai.
  * @param {{ begin: Function, finish: Function, lineage?: Function } | null} [dependencies.chainTickets] - `beginTicketSpawn`/`finishTicketSpawn`/`lineageForSession` do serviço da cadeia.
  * @param {{ snapshot: () => Promise<Record<string, string | null>> }} [dependencies.cliVersions] - Versão de cada CLI de agente (`agent-cli-versions.cjs`).
+ * @param {(request: { command: string, accountId: string | null }) => boolean} [dependencies.fastModeRequested] - O padrão do app pede o modo fast neste terminal?
+ * @param {(request: { accountId?: string }) => Promise<boolean>} [dependencies.confirmFastMode] - Pergunta ao usuário (aviso de crédito pago).
  * @param {{ check: Function } | null} [dependencies.cliHealthGate] - `pty-cli-health-gate.cjs`.
  * @returns {{ manager: PtyProcessManager, dispose: () => void }}
  */
@@ -98,6 +100,21 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
   }
 
   ipcMain.handle('pty:spawn', (_event, params = {}) => {
+    // Modo fast cobra crédito pago: pergunta a cada terminal Claude novo que o padrão do app manda ligar.
+    // Sem pergunta possível ou sem "sim", o terminal abre sem o fast.
+    const reattach = Boolean(params.reuseExisting && manager.has?.(params.sessionId))
+    const wantsFast = !reattach && typeof params.command === 'string' && dependencies.fastModeRequested?.({
+      command: params.command,
+      accountId: typeof params.accountId === 'string' ? params.accountId : null,
+    }) === true
+    if (!wantsFast) return spawnTerminal(params, false)
+    return Promise.resolve()
+      .then(() => dependencies.confirmFastMode?.({ accountId: params.accountId }))
+      .then((confirmed) => confirmed === true, () => false)
+      .then((confirmed) => spawnTerminal(params, confirmed))
+  })
+
+  function spawnTerminal(params, fastModeConfirmed) {
     try {
       const sessionId = requireSessionId(params.sessionId)
       const accountValidation = validatePtyAccountSelection({
@@ -148,7 +165,7 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
           batcher.push(sessionId, `\r\n\x1b[33m[Felixo] ${health.message}\x1b[0m\r\n`)
         }
         try {
-          spawnSession(sessionId, params, accountValidation, accountMode, ticket.lineageId)
+          spawnSession(sessionId, params, accountValidation, accountMode, ticket.lineageId, fastModeConfirmed)
           if (!reused) {
             sessionLog(() => dependencies.sessionLog.start({
               sessionId,
@@ -203,7 +220,7 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
     } catch (error) {
       return spawnErrorResult(error)
     }
-  })
+  }
 
   function checkCliHealth(params, accountValidation) {
     if (!params.command || !dependencies.cliHealthGate) return null
@@ -269,7 +286,7 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
     }
   }
 
-  function spawnSession(sessionId, params, accountValidation, accountMode, lineageId) {
+  function spawnSession(sessionId, params, accountValidation, accountMode, lineageId, fastModeConfirmed = false) {
     manager.spawn(sessionId, {
       command: params.command,
       args: params.args,
@@ -282,6 +299,8 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
       // Só um booleano atravessa: o processo principal decide qual variável
       // isso vira, e só para o Claude Code (nunca ambiente arbitrário).
       classicScreen: params.classicScreen === true,
+      // Vem só da confirmação do usuário no main, nunca dos parâmetros do renderer.
+      fastModeConfirmed,
       // Só ids do registro de MCP atravessam; comando, segredo e arquivo
       // saem do processo principal (mcp-injection.cjs).
       mcpIds: Array.isArray(params.mcpIds) ? params.mcpIds.filter((id) => typeof id === 'string') : undefined,

@@ -29,10 +29,10 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 
 ## Números
 
-- **Elementos:** 103 (10 blocos, 16 ferramentas, 77 outras superfícies)
-- **Controles:** 402, dos quais 61 com teste específico
+- **Elementos:** 104 (10 blocos, 16 ferramentas, 78 outras superfícies)
+- **Controles:** 404, dos quais 61 com teste específico
 - **Elementos sem nenhum teste:** 3
-- **Lacunas:** 229 (alto 4, médio 121, baixo 104), em 61 tasks
+- **Lacunas:** 230 (alto 4, médio 122, baixo 104), em 62 tasks
 
 ## Moldura do canvas
 
@@ -1872,7 +1872,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **ID:** `tool-settings` · **Dono:** `src/features/canvas/components/tools/SettingsPanel.tsx`
 - **Persistência:** localStorage felixo-ai-core.theme; processo principal: settings do SQLite canvas.file-link-prompt e canvas.file-bootstrap-prompt; processo principal: settings do SQLite canvas.quality-standard-prompt e canvas.quality-standard-enabled; seções embutidas (Modo Performance, placa de vídeo, inicialização automática, System Design, ditado, rolagem do Claude) persistem por conta própria
 - **IPC:** `canvas:get-file-link-prompt`, `canvas:set-file-link-prompt`, `canvas:get-file-bootstrap-prompt`, `canvas:set-file-bootstrap-prompt`, `canvas:get-quality-standard`, `canvas:set-quality-standard`, `system-design:get-config`
-- **Depende de:** `useAppTheme`, `useReducedMotionPreference`, `subscribeSystemDesignConfig`, `buildDefaultQualityStandardPrompt`, `window.felixo.canvas`, `window.felixo.systemDesign`, `FelixoSelect`, `FelixoToggle`, `PerformanceModeSection`, `GraphicsRecoverySection`, `AutoStartSection`, `SystemDesignSettingsSection`, `DictationSettingsSection`, `ClaudeTerminalScrollSection`
+- **Depende de:** `useAppTheme`, `useReducedMotionPreference`, `subscribeSystemDesignConfig`, `buildDefaultQualityStandardPrompt`, `window.felixo.canvas`, `window.felixo.systemDesign`, `FelixoSelect`, `FelixoToggle`, `PerformanceModeSection`, `GraphicsRecoverySection`, `AutoStartSection`, `SystemDesignSettingsSection`, `DictationSettingsSection`, `ClaudeTerminalScrollSection`, `ClaudeConfigDefaultsSection`
 - **Sobreposição:** CanvasPanel: absolute z-20 (z-30 com foco dentro), top-16, à direita da barra lateral e deslocado quando o menu de ferramentas abre (toolsMenuOpen); largura limitada a viewport − barra − inspector Elementos (288 px) e altura a viewport − 112. Os menus do FelixoSelect abrem em portal z-1000 por cima; toasts (z 50) e AgentQuestionDialog/HandoffDialog (z 60) cobrem o painel. Em janela <768 px o painel passa da viewport (PANEL_MIN_WIDTH 260, task 3e691f95-497e-815c-a129-f4d2d6405cbc). Tamanho padrão; é o painel mais comprido desta parte e rola por dentro
 - **Testes:** `src/features/canvas/services/quality-standard-prompt.test.ts`, `src/features/canvas/services/quality-standard-source.test.ts`, `src/features/shared/accessibility/reduced-motion-preference.test.ts`, `scripts/hardware-check.cjs` → `openGpuOption`
 
@@ -2399,6 +2399,30 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | Medido em 23/10/2026 com o Claude Code 2.1.309 que a tela clássica não liga o mouse tracking e a padrão liga (?1049 e ?1000/1002/1003/1006); o redesenho e os menus do modo clássico numa janela do app não foram conferidos, e nenhum teste do repositório liga o interruptor e abre um Claude | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
+
+### Configurações do Claude Code nos terminais (Configurações)
+
+- **ID:** `settings-config-claude` · **Dono:** `src/features/canvas/components/tools/ClaudeConfigDefaultsSection.tsx`
+- **Persistência:** userData/claude-terminal-defaults/terminal-defaults.json (padrão global e exceções por conta; opção ausente = padrão do Claude); userData/claude-statusline/session-settings*.json (o --settings de cada terminal)
+- **IPC:** `claude-terminal-defaults:get`, `claude-terminal-defaults:set`, `cli-accounts:list`
+- **Depende de:** `claudeTerminalDefaults`, `claude-config-catalog`, `claude-terminal-defaults-view`, `FelixoSelect`
+- **Sobreposição:** Seção dentro do painel Configurações (z-20/30), sem camada própria; os seletores abrem popover próprio do FelixoSelect
+- **Testes:** `electron/services/claude-terminal-defaults.test.cjs`, `electron/services/claude-terminal-defaults-ipc-handlers.test.cjs`, `electron/services/pty-ipc-handlers.test.cjs`, `electron/services/pty-process-manager.test.cjs`, `src/features/canvas/services/claude-terminal-defaults-view.test.ts`
+
+| Estado | Quando |
+| --- | --- |
+| normal | Seletor de escopo (padrão do app ou exceção de uma conta do Claude) e uma linha por opção da aba Config do /status, com a origem do valor ("Padrão do app", "Exceção desta conta" ou "Padrão do Claude") e o padrão do próprio Claude; opções do .claude.json sem flag nem variável na CLI aparecem numa lista "Só leitura" com a frase "vale para todo o Claude desta máquina; mude no próprio Claude" |
+| empty | Sem nenhuma escolha salva, todas as linhas mostram "Padrão do Claude" e os terminais abrem como sempre |
+| error | role="alert" com a recusa do processo principal (opção desconhecida, valor que o app não consegue aplicar, falha ao gravar o arquivo do app) |
+
+| Controle | Gatilho | Efeito | Falha conhecida | Teste |
+| --- | --- | --- | --- | --- |
+| `aria-label="Escopo do padrão: app inteiro ou exceção de uma conta"` (select) | clique | Troca entre o padrão do app (todas as contas) e a exceção de uma conta do Claude; só muda o que as linhas mostram e gravam | sem falha própria; sem contas cadastradas só existe o padrão do app | — |
+| `aria-label={option.label}` (select) | clique | claude-terminal-defaults:set grava a opção no escopo escolhido (valor, "Padrão do Claude" ou "Seguir o padrão do app"); os terminais NOVOS do Claude levam o valor em --settings (chaves do settings.json), em flag (--chrome/--no-chrome) ou em variável (CLAUDE_CODE_AUTO_CONNECT_IDE, CLAUDE_CODE_IDE_SKIP_AUTO_INSTALL) da CLI; o settings.json e o .claude.json da pessoa nunca são lidos nem gravados. Modo fast (fastMode, só no Opus): mostra o aviso de crédito de uso pago e, a cada terminal Claude novo que o padrão mandar ligar, o processo principal abre um diálogo (pty-ipc-handlers.cjs, confirmFastMode); sem "Ligar o modo fast" o terminal abre sem ele, e com "sim" o fastMode entra no mesmo --settings que leva a status line da captura de uso | recusa do main aparece em role="alert" e a linha volta ao valor salvo; terminais já abertos não mudam; terminal aberto com --settings próprio ignora o padrão do app | — |
+
+| Lacuna | Risco | Task |
+| --- | --- | --- |
+| A lista de opções vem da referência de configurações do Claude Code 2.1.327 e não foi capturada da aba Config de um Claude real (a captura exigiria ler o ~/.claude da pessoa); uma versão nova pode ter opção a mais. O catálogo está em electron/services/claude-config-catalog.cjs. Nada foi conferido num terminal real aberto pelo app | médio | `3eb91f95-497e-812e-8dd4-d146f3a07485` |
 
 ### Permissões dos sites (Configurações)
 
@@ -2957,6 +2981,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3ea91f95-497e-81d9-a3d8-ed3971b18a24` — 3 lacunas
 - `3eb91f95-497e-811b-8eb0-e620c6f37e21` — 6 lacunas
 - `3eb91f95-497e-8126-8750-d9834c65f306` — 3 lacunas
+- `3eb91f95-497e-812e-8dd4-d146f3a07485` — 1 lacuna
 - `3eb91f95-497e-8131-9977-f8d21c950c68` — 1 lacuna
 - `3eb91f95-497e-813b-9b1e-e0710ab60372` — 1 lacuna
 - `3eb91f95-497e-814a-8b2c-e471e09f6ff3` — 5 lacunas

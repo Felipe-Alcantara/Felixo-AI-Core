@@ -1,5 +1,6 @@
 'use strict'
 
+const crypto = require('node:crypto')
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
@@ -33,6 +34,7 @@ function createClaudeStatuslineService({
   homeDir = os.homedir(),
   baseDir,
   fileSystem = fs,
+  terminalDefaults = null,
 } = {}) {
   const settingsPath = path.join(homeDir, '.claude', 'settings.json')
   const scriptPath = path.join(baseDir, SCRIPT_NAME)
@@ -230,8 +232,18 @@ function createClaudeStatuslineService({
    * liga a status line só naquele processo (vale também para perfil com CLAUDE_CONFIG_DIR) e
    * não toca o `settings.json` da pessoa. Script próprio, para o "desligar" da coleta global
    * não apagar o script de terminais vivos. Devolve `null` se não deu para gravar.
+   *
+   * O mesmo arquivo carrega o padrão da aba Config (`terminalDefaults`: global e exceção da conta).
+   * Com padrão, o arquivo leva o hash do conteúdo no nome, para dois terminais de contas diferentes
+   * não trocarem o arquivo um do outro; as opções do `.claude.json` voltam em `args` e `env`.
    */
-  function sessionLaunch() {
+  function sessionLaunch({ accountId = null, fastModeConfirmed = false } = {}) {
+    let defaults = { settings: {}, args: [], env: {} }
+    try {
+      defaults = terminalDefaults?.resolve(accountId, { fastModeConfirmed }) ?? defaults
+    } catch {
+      // Padrão ilegível não pode derrubar a abertura do terminal: segue sem ele.
+    }
     try {
       fileSystem.mkdirSync(baseDir, { recursive: true })
       fileSystem.writeFileSync(
@@ -239,14 +251,16 @@ function createClaudeStatuslineService({
         createClaudeStatuslineScript(capturePath, { sessionsDir }),
         'utf8',
       )
-      fileSystem.writeFileSync(
-        sessionSettingsPath,
-        JSON.stringify({
-          statusLine: { type: 'command', command: `node ${JSON.stringify(sessionScriptPath)}` },
-        }),
-        'utf8',
-      )
-      return { settingsPath: sessionSettingsPath, sessionsDir }
+      const content = JSON.stringify({
+        ...defaults.settings,
+        statusLine: { type: 'command', command: `node ${JSON.stringify(sessionScriptPath)}` },
+      })
+      const hasDefaults = Object.keys(defaults.settings).length > 0
+      const launchSettingsPath = hasDefaults
+        ? path.join(baseDir, `session-settings-${crypto.createHash('sha256').update(content).digest('hex').slice(0, 12)}.json`)
+        : sessionSettingsPath
+      fileSystem.writeFileSync(launchSettingsPath, content, 'utf8')
+      return { settingsPath: launchSettingsPath, sessionsDir, args: defaults.args, env: defaults.env }
     } catch {
       return null
     }

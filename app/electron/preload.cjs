@@ -412,6 +412,10 @@ contextBridge.exposeInMainWorld('felixo', {
     refresh: () => ipcRenderer.invoke('agent-models:refresh'),
   },
   // Contas por terminal: cada uma tem o próprio login, sem logout entre elas.
+  claudeTerminalDefaults: {
+    get: () => ipcRenderer.invoke('claude-terminal-defaults:get'),
+    set: (change) => ipcRenderer.invoke('claude-terminal-defaults:set', change),
+  },
   cliAccounts: {
     list: (providerId) => ipcRenderer.invoke('cli-accounts:list', providerId),
     create: (params) => ipcRenderer.invoke('cli-accounts:create', params),

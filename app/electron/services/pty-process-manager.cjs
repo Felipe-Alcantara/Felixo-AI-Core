@@ -252,13 +252,20 @@ class PtyProcessManager {
     }
     let launch = null
     try {
-      launch = this.claudeSessionLaunch()
+      launch = this.claudeSessionLaunch({
+        accountId: normalizeSessionAccountId(options.accountId),
+        fastModeConfirmed: options.fastModeConfirmed === true,
+      })
     } catch {
       launch = null
     }
     if (!launch?.settingsPath) return args
     env.FELIXO_PTY_SESSION_ID = sessionId
-    return ['--settings', launch.settingsPath, ...args]
+    // Padrão da aba Config que só tem flag ou variável da CLI (o `.claude.json` não passa pelo
+    // `--settings`). O que a pessoa já pediu no próprio comando vale mais que o padrão do app.
+    for (const [name, value] of Object.entries(launch.env ?? {})) env[name] ??= value
+    const extra = (launch.args ?? []).filter((flag) => !args.includes(flag) && !args.includes(flag.startsWith('--no-') ? `--${flag.slice(5)}` : `--no-${flag.slice(2)}`))
+    return ['--settings', launch.settingsPath, ...extra, ...args]
   }
 
   /** Args/env dos MCPs do registro para este terminal (so Claude e Codex); null se nao ha o que injetar. */

@@ -22,7 +22,7 @@ const {
 } = require('./services/official-cli-account-ipc-handlers.cjs')
 const { registerPtyIpcHandlers } = require('./services/pty-ipc-handlers.cjs')
 const { createPtyCliHealthGate } = require('./services/pty-cli-health-gate.cjs')
-const { PtyProcessManager } = require('./services/pty-process-manager.cjs')
+const { PtyProcessManager, isClaudeCommandName } = require('./services/pty-process-manager.cjs')
 const { createMcpRegistry } = require('./services/mcp/mcp-registry.cjs')
 const { createMcpInjection } = require('./services/mcp/mcp-injection.cjs')
 const { createNotionAgentEnv } = require('./services/notion-agent-env.cjs')
@@ -152,6 +152,10 @@ const {
 const {
   createClaudeStatuslineService,
 } = require('./services/claude-statusline-service.cjs')
+const { createClaudeTerminalDefaults } = require('./services/claude-terminal-defaults.cjs')
+const {
+  registerClaudeTerminalDefaultsIpcHandlers,
+} = require('./services/claude-terminal-defaults-ipc-handlers.cjs')
 const {
   createCloudSessionService,
   describeCloudSessionEvent,
@@ -923,7 +927,15 @@ app.whenReady().then(async () => {
   // Um só serviço da status line do Claude: o lançamento dos terminais (`--settings` por
   // terminal) e o painel de limites usam a mesma pasta de captura.
   const claudeStatuslineDir = path.join(appPaths.userData, 'claude-statusline')
-  const claudeStatusline = createClaudeStatuslineService({ baseDir: claudeStatuslineDir })
+  // Padrão da aba Config do /status para os terminais do Claude (global + exceção por conta).
+  const claudeTerminalDefaults = createClaudeTerminalDefaults({
+    baseDir: path.join(appPaths.userData, 'claude-terminal-defaults'),
+  })
+  registerClaudeTerminalDefaultsIpcHandlers({ terminalDefaults: claudeTerminalDefaults })
+  const claudeStatusline = createClaudeStatuslineService({
+    baseDir: claudeStatuslineDir,
+    terminalDefaults: claudeTerminalDefaults,
+  })
   ptyHandlers = registerPtyIpcHandlers(getMainWindow, {
     sessionLog: agentSessionLog,
     validateAccount: validatePtyAccount,
@@ -937,12 +949,31 @@ app.whenReady().then(async () => {
     },
     cliVersions: agentCliVersions,
     // Sem o fake do devtools: ali o comando é de mentira e nada instala.
+    // Modo fast do Claude cobra crédito pago: o padrão do app só o liga com "sim" a cada terminal.
+    fastModeRequested: ({ command, accountId }) =>
+      isClaudeCommandName(command) && claudeTerminalDefaults.resolve(accountId).fastModeRequested,
+    confirmFastMode: async () => {
+      const options = {
+        type: 'warning',
+        title: 'Modo fast do Claude',
+        message: 'Ligar o modo fast neste terminal?',
+        detail:
+          'O modo fast (só no Opus) cobra crédito de uso pago, fora do limite da sua assinatura. Você escolheu ligá-lo como padrão; confirme para este terminal. Sem confirmar, ele abre sem o modo fast.',
+        buttons: ['Abrir sem o modo fast', 'Ligar o modo fast'],
+        defaultId: 0,
+        cancelId: 0,
+        noLink: true,
+      }
+      const parent = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null
+      const { response } = parent ? await dialog.showMessageBox(parent, options) : await dialog.showMessageBox(options)
+      return response === 1
+    },
     cliHealthGate: fakeAuthCommandRunner || devtoolsFakeCliPty
       ? null
       : createPtyCliHealthGate({ getInstaller: () => cliAutoInstall, getEnv: () => createCliEnv() }),
     manager: new PtyProcessManager({
       spawnPty: devtoolsFakeCliPty?.createFakeCliPtyFactory(),
-      claudeSessionLaunch: () => claudeStatusline.sessionLaunch(),
+      claudeSessionLaunch: (context) => claudeStatusline.sessionLaunch(context),
       getCliVersion: (provider) => agentCliVersions.peek(provider),
       validateAccount: validatePtyAccount,
       buildAccountEnv: (accountId, providerId) =>

@@ -707,6 +707,56 @@ test('terminal do Claude nasce com a status line do app só nele: --settings ant
   }
 })
 
+test('padrão da aba Config: o app pede a conta do terminal e põe flag e variável da CLI sem passar por cima do que a pessoa pediu', () => {
+  const { spawnPty, calls } = createFakePty()
+  const pedidos = []
+  const manager = new PtyProcessManager({
+    spawnPty,
+    platform: fakePosixPlatform,
+    claudeSessionLaunch: (contexto) => {
+      pedidos.push(contexto)
+      return { settingsPath: '/dados/s.json', args: ['--chrome'], env: { CLAUDE_CODE_AUTO_CONNECT_IDE: '0' } }
+    },
+  })
+
+  try {
+    manager.spawn('canvas-a', { command: 'claude', args: ['--model', 'opus'], accountId: ' conta-a ' })
+    manager.spawn('canvas-b', { command: 'claude', args: ['--no-chrome'] })
+
+    assert.deepEqual(pedidos, [
+      { accountId: 'conta-a', fastModeConfirmed: false },
+      { accountId: null, fastModeConfirmed: false },
+    ])
+    assert.deepEqual(calls[0].args, ['--settings', '/dados/s.json', '--chrome', '--model', 'opus'])
+    assert.equal(calls[0].options.env.CLAUDE_CODE_AUTO_CONNECT_IDE, '0')
+    // `--no-chrome` do próprio comando vence o `--chrome` do padrão.
+    assert.deepEqual(calls[1].args, ['--settings', '/dados/s.json', '--no-chrome'])
+  } finally {
+    for (const sessao of manager.listarSessoesVivas()) manager.kill(sessao.sessionId, { force: true })
+  }
+})
+
+test('só a confirmação do main chega ao preparo do Claude como fastModeConfirmed', () => {
+  const { spawnPty } = createFakePty()
+  const pedidos = []
+  const manager = new PtyProcessManager({
+    spawnPty,
+    platform: fakePosixPlatform,
+    claudeSessionLaunch: (contexto) => {
+      pedidos.push(contexto.fastModeConfirmed)
+      return { settingsPath: '/dados/s.json' }
+    },
+  })
+  try {
+    manager.spawn('canvas-a', { command: 'claude', args: [], fastModeConfirmed: true })
+    manager.spawn('canvas-b', { command: 'claude', args: [], fastModeConfirmed: 'sim' })
+    manager.spawn('canvas-c', { command: 'claude', args: [] })
+    assert.deepEqual(pedidos, [true, false, false])
+  } finally {
+    for (const sessao of manager.listarSessoesVivas()) manager.kill(sessao.sessionId, { force: true })
+  }
+})
+
 test('sem preparo da status line (arquivo não gravou), o Claude abre como sempre', () => {
   const { spawnPty, calls } = createFakePty()
   const manager = new PtyProcessManager({ spawnPty, platform: fakePosixPlatform, claudeSessionLaunch: () => null })

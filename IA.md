@@ -4807,3 +4807,24 @@ Estado: teste entregue na branch `orq/prompts-reproduzir-cenario-falha-sessao`, 
 **Validação.** `node --test` do arquivo novo: 7 de 7. ESLint nos dois arquivos: limpo. Suíte Node inteira: 3516 testes; na primeira rodada 2 falhas sob carga da máquina (outros agentes rodando), na segunda 3504 passando, 0 falhas, 12 pulados. Fatia 2: 5 de 5 testes; suíte Node 3508 de 3521 com 1 falha de tempo em `pty-output-path-benchmark.test.cjs` que passa isolada (11 de 11). O app não foi aberto.
 
 **Pendente.** Decisões do Felipe (app fechado, confirmação, escopo de agentes, execução perdida) e, depois delas, o disparo, o registro de execuções e a tela de configuração.
+
+---
+
+## 2026-11-18 — Claude Code: a aba Config do /status vira padrão dos terminais do app (global, com exceção por conta)
+
+Task: Felixo AI Core/Claude Code — trazer a aba Config do /status para a interface e aplicá-la como padrão dos terminais (Notion `3eb91f95-497e-812e-8dd4-d146f3a07485`). Agente: subagente da Orquestração (Claude Sonnet 5.5, effort medium).
+
+**Contexto.** As opções úteis do Claude Code ficam escondidas em `/status` → Config. O Felipe decidiu: expor todas as opções da aba, padrão global com exceção por conta, aplicado só nos terminais do app, sem gravar arquivo do Claude. Acréscimo: modo fast (Opus), que cobra crédito pago, com confirmação a cada terminal.
+
+**O que mudou.**
+- `electron/services/claude-config-catalog.cjs`: catálogo das opções (referência de configurações do Claude Code 2.1.327). `settings` vai no `--settings`; as do `~/.claude.json` só entram se a CLI tem caminho de sessão (`--chrome`/`--no-chrome`, `CLAUDE_CODE_AUTO_CONNECT_IDE`, `CLAUDE_CODE_IDE_SKIP_AUTO_INSTALL`), senão ficam só leitura com a frase "vale para todo o Claude desta máquina; mude no próprio Claude".
+- `claude-terminal-defaults.cjs` (+ IPC `claude-terminal-defaults:get/set`): padrão salvo em `userData/claude-terminal-defaults/terminal-defaults.json`, validado pelo catálogo; na conta, `null` é "padrão do Claude" e ausência segue o global. O `settings.json` e o `.claude.json` da pessoa não são lidos nem gravados.
+- `claude-statusline-service.cjs`: `sessionLaunch({ accountId, fastModeConfirmed })` compõe no MESMO arquivo `--settings` o `statusLine` da captura de uso e o padrão; com padrão, o nome leva o hash do conteúdo (contas diferentes não trocam o arquivo uma da outra). `pty-process-manager.cjs` põe flags e variáveis (a flag ou o ambiente que a pessoa já pediu vencem).
+- Modo fast: o `pty:spawn` pergunta num diálogo do main a cada terminal Claude novo que o padrão mandar ligar (aviso de crédito pago); sem "sim" o terminal abre sem fast. Só o main define `fastModeConfirmed`; o renderer não consegue confirmar.
+- Interface: seção "Configurações do Claude Code nos terminais do app" em Configurações (seletor de escopo; uma linha por opção com a origem do valor). Inventário do canvas e README atualizados.
+
+**Validação.** `npm run lint` e `npm run typecheck` limpos; testes Node 3522 (um falhou por contrato do preload, corrigido e repassado: 8/8); vitest 3720 passaram, 1 falha instável (`canvas-context-e2e`, passa isolado em 86 s). Testes novos em pasta temporária, sem tocar o `~/.claude`: 8 em `claude-terminal-defaults.test.cjs`, 1 do IPC, 3 no `pty-process-manager.test.cjs` e 2 no `pty-ipc-handlers.test.cjs`, mais 4 de vitest da visão.
+
+**Não validado.** App não aberto e Claude não executado com o padrão (nem com fast, que gastaria crédito). A lista de opções vem da documentação, não da aba Config de um Claude real; a versão instalada pode ter opção a mais.
+
+Estado: concluído na branch `orq/claude-code-trazer-aba-config`, sem push.

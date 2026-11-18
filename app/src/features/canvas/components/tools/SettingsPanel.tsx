@@ -18,6 +18,7 @@ import { GraphicsRecoverySection } from '../../../shared/graphics/GraphicsRecove
 import { PerformanceModeSection } from '../../../shared/performance/PerformanceModeSection'
 import { DictationSettingsSection } from './DictationSettingsSection'
 import { ClaudeTerminalScrollSection } from './ClaudeTerminalScrollSection'
+import { ClaudeConfigDefaultsSection } from './ClaudeConfigDefaultsSection'
 import { WebviewSitePermissionsSection } from './WebviewSitePermissionsSection'
 import { SystemDesignSettingsSection } from '../../../shared/system-design/SystemDesignSettingsSection'
 import { FelixoSelect } from '../../../shared/components/FelixoSelect'
@@ -87,6 +88,7 @@ export function SettingsPanel({
       <div className="my-3 border-t border-white/10" />
 
       <ClaudeTerminalScrollSection />
+      <ClaudeConfigDefaultsSection />
 
       <div className="my-3 border-t border-white/10" />
 
