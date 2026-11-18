@@ -418,6 +418,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
       unit('electron/services/text-file-access.test.cjs'),
       unit('electron/services/file-attachments-ipc-handlers.test.cjs'),
       ...FIXTURE_TESTS,
+      { file: 'scripts/canvas-smoke-sobreposicoes.cjs', check: 'checarMenuLigarAgenteDentroDoCartao' },
     ],
     gaps: [
       {
@@ -441,7 +442,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
         task: '3ec91f95-497e-8197-a218-ef49c302013d',
       },
       {
-        what: 'O menu "Ligar agente" (absolute bottom-full, max-h-44) abre para cima dentro do cartão overflow-hidden: num bloco baixo ou com muitos agentes ligados ele é cortado na borda de cima. Nenhum teste mede.',
+        what: 'O menu "Ligar agente" (absolute bottom-full, max-h-44) abre para cima dentro do cartão overflow-hidden: medido com bloco de 150 px de altura e seis agentes sem ligar, em 1280 px, o menu passa 15 px da borda de cima (canvas-smoke-sobreposicoes.cjs → checarMenuLigarAgenteDentroDoCartao). Defeito conhecido: a correção fica para a task.',
         risk: 'médio',
         task: '3ec91f95-497e-8112-82f9-fd1b86e3ec7d',
       },
@@ -1377,7 +1378,7 @@ export const nodeSurfaces: InventoryElement[] = [
     persistence: ['canvas salvo (data.frameColor do bloco)'],
     ipc: ['canvas:save'],
     dependsOn: ['readFrameColor / FRAME_COLORS / FRAME_COLOR_SWATCHES (frame-colors)', 'colorMenu e updateNodeData (CanvasView)', 'frameClassName (orderedNodes)'],
-    tests: [unit(`${COMPONENTS}/frame-colors.test.ts`), smoke('checarElementosAbertosEmViewportsCriticos')],
+    tests: [unit(`${COMPONENTS}/frame-colors.test.ts`), smoke('checarElementosAbertosEmViewportsCriticos'), { file: 'scripts/canvas-smoke-sobreposicoes.cjs', check: 'checarMenuDeCorDentroDaJanela' }],
     gaps: [
       {
         what: 'Escolher uma cor ou "Sem cor" não é exercitado: o smoke só abre o menu por clique direito no grupo e fecha com Esc, em 1280×800.',
@@ -1385,7 +1386,7 @@ export const nodeSurfaces: InventoryElement[] = [
         task: '3ec91f95-497e-8141-b6c1-d1833aac5664',
       },
       {
-        what: 'Menu fixed no clientX/clientY sem limite à janela (NodeColorMenu.tsx:39-40): perto da borda direita ou de baixo sai da tela; em 320 px o smoke não abre o menu.',
+        what: 'Menu fixed no clientX/clientY sem limite à janela (NodeColorMenu.tsx:39-40): medido com o clique a 4 px das bordas direita e de baixo, o menu passa 172 px pela direita e 129 px por baixo, em 320, 768 e 1280 px (canvas-smoke-sobreposicoes.cjs → checarMenuDeCorDentroDaJanela). Defeito conhecido: o limite à janela fica para a task.',
         risk: 'médio',
         task: '3ec91f95-497e-8112-82f9-fd1b86e3ec7d',
       },
@@ -1471,6 +1472,7 @@ export const nodeSurfaces: InventoryElement[] = [
       unit('electron/services/webview-profiles-ipc-handlers.test.cjs'),
       unit('electron/services/storage/webview-profiles-repository.test.cjs'),
       unit('electron/services/webview-profile-partition.test.cjs'),
+      { file: 'scripts/canvas-smoke-sobreposicoes.cjs', check: 'checarMenuDoPerfilAcompanhaOZoom' },
     ],
     gaps: [
       {
@@ -1484,7 +1486,7 @@ export const nodeSurfaces: InventoryElement[] = [
         task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
       },
       {
-        what: 'O menu (z-70) fica acima dos diálogos modais (60) e não acompanha pan/zoom do canvas (posição calculada só ao abrir); clique dentro do webview não fecha. Nenhum teste mede.',
+        what: 'O menu (z-70) fica acima dos diálogos modais (60) e não acompanha pan/zoom do canvas (posição calculada só ao abrir): medido, o zoom desloca o botão em 111 px e o menu fica no lugar (canvas-smoke-sobreposicoes.cjs → checarMenuDoPerfilAcompanhaOZoom). Defeito conhecido. O clique dentro do webview não fecha: não medido.',
         risk: 'baixo',
         task: '3ec91f95-497e-8112-82f9-fd1b86e3ec7d',
       },

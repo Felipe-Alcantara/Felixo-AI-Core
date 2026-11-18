@@ -283,6 +283,7 @@ export const chromeSurfaces: InventoryElement[] = [
       { file: 'src/features/canvas/components/toolbar-flyout.test.ts' },
       { file: 'src/features/canvas/components/toolbar-status.test.ts' },
       { file: 'electron/services/canvas-ipc-handlers.test.cjs' },
+      { file: 'scripts/canvas-smoke-sobreposicoes.cjs', check: 'checarSidebarExpandidaEmJanelaEstreita' },
     ],
     gaps: [
       {
@@ -301,7 +302,7 @@ export const chromeSurfaces: InventoryElement[] = [
         task: '3ec91f95-497e-8197-a218-ef49c302013d',
       },
       {
-        what: 'A sidebar expandida não recolhe sozinha em janelas estreitas: em 320 px ela cobre o canvas e empurra a barra superior; o smoke recolhe à mão antes de medir.',
+        what: 'A sidebar expandida não recolhe sozinha em janelas estreitas: medido em 320 px, ela deixa 32 px de canvas (faixa mínima de 160 px), e a barra superior segue dentro da janela (canvas-smoke-sobreposicoes.cjs → checarSidebarExpandidaEmJanelaEstreita). Defeito conhecido: recolher sozinha é decisão do Felipe.',
         risk: 'médio',
         task: '3ec91f95-497e-8112-82f9-fd1b86e3ec7d',
       },
@@ -801,6 +802,7 @@ export const chromeSurfaces: InventoryElement[] = [
     tests: [
       { file: 'scripts/canvas-smoke.cjs', check: 'checarZoomVisual' },
       { file: 'scripts/canvas-smoke.cjs', check: 'checarElementosAbertosEmViewportsCriticos' },
+      { file: 'scripts/canvas-smoke-sobreposicoes.cjs', check: 'checarPainelDeFerramentaSobPilulaDeZoom' },
     ],
     gaps: [
       {
@@ -812,11 +814,6 @@ export const chromeSurfaces: InventoryElement[] = [
         what: 'Aumentar zoom e o cadeado não são exercitados por teste.',
         risk: 'baixo',
         task: '3ec91f95-497e-818f-b9f2-f9710605c303',
-      },
-      {
-        what: 'Um painel de ferramenta alto (z-20, até viewport − 112 px, a partir da mesma borda esquerda) cobre a pílula, que está dentro do React Flow (z 0); não há teste dessa combinação.',
-        risk: 'médio',
-        task: '3ec91f95-497e-8112-82f9-fd1b86e3ec7d',
       },
     ],
     overlap: 'Panel do React Flow (bottom-left), margem esquerda var(--felixo-sidebar-width) + 1,25rem (4,5rem recolhida) e inferior statusbar + 0,5rem. Mora dentro do wrapper do React Flow, que tem z-index 0: fica abaixo de toda a moldura (statusbar 18, dock e painéis 20/30, sidebar 26).',

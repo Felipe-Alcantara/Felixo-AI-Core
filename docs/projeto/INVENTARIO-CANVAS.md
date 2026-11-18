@@ -32,7 +32,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **Elementos:** 113 (10 blocos, 17 ferramentas, 86 outras superfícies)
 - **Controles:** 433, dos quais 63 com teste específico
 - **Elementos sem nenhum teste:** 3
-- **Lacunas:** 234 (alto 4, médio 125, baixo 105), em 66 tasks
+- **Lacunas:** 232 (alto 4, médio 124, baixo 104), em 66 tasks
 
 ## Moldura do canvas
 
@@ -74,7 +74,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **IPC:** `canvas:clear`
 - **Depende de:** `useResizableSidebarWidth`, `useCanvasTransfer`, `useAppVersion`, `deveMostrarRodapeDeStatus`, `SidebarSection`
 - **Sobreposição:** aside absolute (top 0, bottom 0, left 0) z-26, por cima da topbar (18, largura total) e da statusbar (18); abaixo do overlay isBusy (50), dos diálogos (60) e dos menus em portal (1000). A alça (felixo-resize-handle, z-2) ocupa 6 px na borda direita. Os popovers de Criar e Organizar são inline (rolam dentro da coluna), não flutuam.
-- **Testes:** `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos`, `scripts/canvas-smoke.cjs` → `checarAuditoriaDeAcessibilidade`, `scripts/canvas-smoke-onboarding.cjs` → `sa2`, `src/features/canvas/components/toolbar-flyout.test.ts`, `src/features/canvas/components/toolbar-status.test.ts`, `electron/services/canvas-ipc-handlers.test.cjs`
+- **Testes:** `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos`, `scripts/canvas-smoke.cjs` → `checarAuditoriaDeAcessibilidade`, `scripts/canvas-smoke-onboarding.cjs` → `sa2`, `src/features/canvas/components/toolbar-flyout.test.ts`, `src/features/canvas/components/toolbar-status.test.ts`, `electron/services/canvas-ipc-handlers.test.cjs`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarSidebarExpandidaEmJanelaEstreita`
 
 | Estado | Quando |
 | --- | --- |
@@ -92,7 +92,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 | "Limpar" (destrutivo, com confirm e alert nativos) não tem teste de interface; o smoke só garante que o Tab do tutorial não passa por ele. | médio | `3ec91f95-497e-818f-b9f2-f9710605c303` |
 | A alça de largura da sidebar (arrasto, setas, Shift+setas, Home e duplo clique; role="separator") não é exercitada por teste. | baixo | `3ec91f95-497e-818f-b9f2-f9710605c303` |
 | Com a sidebar expandida há dois botões chamados "Recolher sidebar" (marca e trilho), o que deixa o nome ambíguo para leitor de tela (o smoke precisa escopar pelo trilho). | baixo | `3ec91f95-497e-8197-a218-ef49c302013d` |
-| A sidebar expandida não recolhe sozinha em janelas estreitas: em 320 px ela cobre o canvas e empurra a barra superior; o smoke recolhe à mão antes de medir. | médio | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
+| A sidebar expandida não recolhe sozinha em janelas estreitas: medido em 320 px, ela deixa 32 px de canvas (faixa mínima de 160 px), e a barra superior segue dentro da janela (canvas-smoke-sobreposicoes.cjs → checarSidebarExpandidaEmJanelaEstreita). Defeito conhecido: recolher sozinha é decisão do Felipe. | médio | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
 
 ### Seção Criar da sidebar
 
@@ -279,7 +279,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **IPC:** nenhum
 - **Depende de:** `useReactFlow`, `Panel (@xyflow/react)`, `handleCanvasMove (CanvasView)`
 - **Sobreposição:** Panel do React Flow (bottom-left), margem esquerda var(--felixo-sidebar-width) + 1,25rem (4,5rem recolhida) e inferior statusbar + 0,5rem. Mora dentro do wrapper do React Flow, que tem z-index 0: fica abaixo de toda a moldura (statusbar 18, dock e painéis 20/30, sidebar 26).
-- **Testes:** `scripts/canvas-smoke.cjs` → `checarZoomVisual`, `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos`
+- **Testes:** `scripts/canvas-smoke.cjs` → `checarZoomVisual`, `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarPainelDeFerramentaSobPilulaDeZoom`
 
 | Estado | Quando |
 | --- | --- |
@@ -297,7 +297,6 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 | --- | --- | --- |
 | Enquadrar da pílula usa fitView direto (CanvasZoomPill.tsx:54), sem a área útil que o Enquadrar da sidebar usa (fitCanvasViewSafely, CanvasView.tsx:1196): o smoke de links registra que ele deixa blocos sob a barra lateral em 1280×800. | médio | `3ec91f95-497e-8103-b360-c1979d6992f4` |
 | Aumentar zoom e o cadeado não são exercitados por teste. | baixo | `3ec91f95-497e-818f-b9f2-f9710605c303` |
-| Um painel de ferramenta alto (z-20, até viewport − 112 px, a partir da mesma borda esquerda) cobre a pílula, que está dentro do React Flow (z 0); não há teste dessa combinação. | médio | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
 
 ### Área do canvas (React Flow)
 
@@ -621,7 +620,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `canvas-file:read`, `canvas-file:write`, `canvas-file:resolve`, `canvas-file:watch`, `canvas-file:unwatch`, `canvas-file:changed`, `text-file:read`, `text-file:write`, `text-file:watch`, `text-file:unwatch`, `text-file:changed`, `files:read-image-attachment`, `files:open-image`, `files:save-image-copy`, `files:duplicate-image`, `files:pick-image`, `files:remove-generated-image`, `canvas:save`, `canvas:delete`, `canvas:save-edge`, `canvas:delete-edge`, `pty:write`
 - **Depende de:** `useFileNodeDocument`, `useReactFlow`, `isSafeImagePreviewMimeType / resolvePreviewKind (file-node-preview)`, `DeferredMarkdownContent`, `createCanvasConnectionIndex (connectedAgents / availableAgents)`, `requestRepoDiagnosis / announceFileNodeToTerminalNode (file-terminal-links)`, `duplicateImageNode, repairImageNode, removeTemporaryImageNode, linkAgentToFile, unlinkAgentFromFile (CanvasView)`
 - **Sobreposição:** Bloco do React Flow, sem z próprio: fica abaixo de toda superfície fixa (topbar e statusbar 18, dock e painéis 20/30, sidebar 26, menus 50+). O cartão é overflow-hidden, então nada que nasce dentro dele passa das bordas. Quatro pares de handles (source + target sobrepostos em cada lado). O menu "Ligar agente" é z-10 dentro do próprio cartão e é cortado pelas bordas dele (não usa portal, ao contrário do menu de perfil da Página Web).
-- **Testes:** `src/features/canvas/components/file-node-preview.test.ts`, `src/features/canvas/services/file-node-write.test.ts`, `src/features/canvas/services/canvas-connection-index.test.ts`, `src/features/canvas/terminal/prompt-origins-e2e.test.ts`, `electron/services/canvas-files-ipc-handlers.test.cjs`, `electron/services/text-file-access.test.cjs`, `electron/services/file-attachments-ipc-handlers.test.cjs`, `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`
+- **Testes:** `src/features/canvas/components/file-node-preview.test.ts`, `src/features/canvas/services/file-node-write.test.ts`, `src/features/canvas/services/canvas-connection-index.test.ts`, `src/features/canvas/terminal/prompt-origins-e2e.test.ts`, `electron/services/canvas-files-ipc-handlers.test.cjs`, `electron/services/text-file-access.test.cjs`, `electron/services/file-attachments-ipc-handlers.test.cjs`, `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarMenuLigarAgenteDentroDoCartao`
 
 | Estado | Quando |
 | --- | --- |
@@ -659,7 +658,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Promessas sem catch em FileNode.tsx:239-309: copyPath, openImageInSystem, saveImageCopy e removeTemporaryImage não tratam rejeição; generateDiagnosis, duplicateImage e repairImage usam try/finally sem catch. A rejeição vira unhandledrejection e o bloco não diz nada; copyPath mostra ✓ mesmo sem navigator.clipboard. | médio | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 | requestRepoDiagnosis (services/file-terminal-links.ts:125-135) devolve "ok" sem esperar o resultado de store.sendText: "Diagnóstico solicitado ao terminal conectado." aparece mesmo se o pty:write falhar. | médio | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 | Botão "Desligar <agente>" (FileNode.tsx:816) é opacity-0 até o hover e não tem focus-visible: com teclado ele recebe foco invisível. | baixo | `3ec91f95-497e-8197-a218-ef49c302013d` |
-| O menu "Ligar agente" (absolute bottom-full, max-h-44) abre para cima dentro do cartão overflow-hidden: num bloco baixo ou com muitos agentes ligados ele é cortado na borda de cima. Nenhum teste mede. | médio | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
+| O menu "Ligar agente" (absolute bottom-full, max-h-44) abre para cima dentro do cartão overflow-hidden: medido com bloco de 150 px de altura e seis agentes sem ligar, em 1280 px, o menu passa 15 px da borda de cima (canvas-smoke-sobreposicoes.cjs → checarMenuLigarAgenteDentroDoCartao). Defeito conhecido: a correção fica para a task. | médio | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
 
 ### Bloco Página Web (webview)
 
@@ -1090,7 +1089,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `account-chain:set-session-mode`, `pty:cli-versions`
 - **Depende de:** `CanvasPanel`, `useSessionMetadata`, `useAccountChain`, `useCliAccountLabel`, `changeSessionAccountMode`, `explainAgentResume`, `AccountSwitchHistory`, `CanvasView.forgetAgentSession`, `terminal-run-registry`
 - **Sobreposição:** CanvasPanel absolute top-16 z-20 (focus-within z-30), à direita da sidebar; disputa a largura pelo coordenador de superfícies, mas não a posição com o painel de ferramenta aberto ao mesmo tempo.
-- **Testes:** `src/features/canvas/services/account-chain-client.test.ts`, `src/features/canvas/services/account-chain-view.test.ts`, `src/features/canvas/terminal/session-metadata.test.ts`, `src/features/canvas/services/agent-session.test.ts`, `src/features/canvas/services/terminal-run-registry.test.ts`
+- **Testes:** `src/features/canvas/services/account-chain-client.test.ts`, `src/features/canvas/services/account-chain-view.test.ts`, `src/features/canvas/terminal/session-metadata.test.ts`, `src/features/canvas/services/agent-session.test.ts`, `src/features/canvas/services/terminal-run-registry.test.ts`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarDetalhesDoTerminalComFerramenta`
 
 | Estado | Quando |
 | --- | --- |
@@ -1109,7 +1108,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | --- | --- | --- |
 | Nenhum smoke abre o painel: Esquecer associação, Copiar e a troca de modo da conta só têm teste das funções puras. | médio | `3ec91f95-497e-81e8-8f18-e2a529b0568e` |
 | Copiar ${label} não diz se copiou e engole a falha do clipboard (TerminalDetailsPanel.tsx:173). | baixo | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
-| O painel é um CanvasPanel (absolute top-16) aberto fora de activeTool: com uma ferramenta aberta, os dois ocupam o mesmo lugar e só o focus-within z-30 decide quem fica por cima. | médio | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
+| O painel é um CanvasPanel (absolute top-16) aberto fora de activeTool: com uma ferramenta aberta, os dois ocupam o mesmo lugar e só o focus-within z-30 decide quem fica por cima. Medido com Buscar em 768 e 1280 px: a sobreposição é de 239 × 109 px e de 282 × 109 px (canvas-smoke-sobreposicoes.cjs → checarDetalhesDoTerminalComFerramenta). Defeito conhecido: qual fica por cima, ou se os detalhes fecham, é decisão do Felipe. | médio | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
 
 ### Menu Agente (novo terminal)
 
@@ -2627,7 +2626,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `canvas:list-questions`, `canvas:answer-question`, `canvas:agent-questions`
 - **Depende de:** `agent-question-dialog (pickPendingQuestion, optionIndexForKey, questionKeyAction, questionFocusReturnTarget)`, `keyboard-focus (getFocusableElements, tabTrapTarget)`, `window.felixo.canvas`
 - **Sobreposição:** fixed inset-0 z-60 com fundo bg-black/50, montado no CanvasView; cobre canvas, gaveta e painéis; o card do tutorial fica inert por baixo. Pega o foco no painel (tabIndex -1), prende o Tab, é nokey e camada flutuante (clicar nele não fecha a gaveta solta). Não redimensiona (bloqueante, max-w-md).
-- **Testes:** `src/features/canvas/components/agent-question-dialog.test.ts`, `electron/services/agent-question-ipc-handlers.test.cjs`, `scripts/canvas-smoke-onboarding.cjs` → `criarCenariosDoTutorial`, `scripts/canvas-smoke-onboarding.cjs` → `conferirPerguntaPrendeOFoco`
+- **Testes:** `src/features/canvas/components/agent-question-dialog.test.ts`, `electron/services/agent-question-ipc-handlers.test.cjs`, `scripts/canvas-smoke-onboarding.cjs` → `criarCenariosDoTutorial`, `scripts/canvas-smoke-onboarding.cjs` → `conferirPerguntaPrendeOFoco`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarPerguntaDoAgenteSobDialogos`
 
 | Estado | Quando |
 | --- | --- |
@@ -2643,7 +2642,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Mesma camada z 60 do HandoffDialog e do AccountSwitchDialog; pela ordem do DOM a pergunta fica por baixo deles, e as teclas 1–4 continuam valendo. Sem teste dos dois abertos. | médio | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
+| Mesma camada z 60 do HandoffDialog e do AccountSwitchDialog; pela ordem do DOM a pergunta fica por baixo deles. Medido em 1280 px: com o diálogo de passagem aberto, a pergunta do agente fica coberta pelo "Passar responsabilidade" (canvas-smoke-sobreposicoes.cjs → checarPerguntaDoAgenteSobDialogos). Defeito conhecido. O AccountSwitchDialog e as teclas 1–4 por baixo dos diálogos: não medidos. | médio | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
 | O smoke responde pelo teclado; o clique nas opções e em Dispensar não é exercitado. | baixo | `3ec91f95-497e-81e8-8f18-e2a529b0568e` |
 | answer e load não tratam IPC rejeitado: nenhum aviso (AgentQuestionDialog.tsx:28-56). | baixo | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 
@@ -2721,7 +2720,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** nenhum
 - **Depende de:** `useResizableDialog`, `readDialogSize`, `writeDialogSize`, `clearDialogSize`, `clampDialogSize`, `resizeCentered`, `swallowNextClick`
 - **Sobreposição:** absolute z 10 dentro da moldura do modal (z 60): borda direita (w-2, top-6 bottom-6), inferior (h-2, left-6 right-6) e canto (20 px). swallowNextClick engole o clique de soltar fora da moldura, que fecharia o modal.
-- **Testes:** `src/features/shared/dialog/dialog-sizing.test.ts`
+- **Testes:** `src/features/shared/dialog/dialog-sizing.test.ts`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarAlcasDoDialogoSobBotoes`
 
 | Estado | Quando |
 | --- | --- |
@@ -2736,7 +2735,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | --- | --- | --- |
 | Nenhum smoke arrasta ou usa o teclado nas alças do HandoffDialog; a matemática é testada, a interação não. | baixo | `3ec91f95-497e-81f7-8b12-c5c252d020c7` |
 | useResizableDialog.ts:43, :76, :106 e :112 leem window.localStorage fora de try: o getter pode lançar (SecurityError com storage bloqueado) e derrubar o modal no useState inicial. Só os métodos estão protegidos em dialog-sizing.ts. | baixo | `3ec91f95-497e-8176-bef0-dfde828936dc` |
-| A alça do canto (20×20, z 10, bottom-0 right-0) fica sobre o canto inferior direito da moldura, onde costumam estar os botões do rodapé; não foi medido se cobre algum. | baixo | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
 
 ## Overlays e avisos
 
@@ -2747,7 +2745,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `canvas:save`
 - **Depende de:** `readFrameColor / FRAME_COLORS / FRAME_COLOR_SWATCHES (frame-colors)`, `colorMenu e updateNodeData (CanvasView)`, `frameClassName (orderedNodes)`
 - **Sobreposição:** fixed z-50 (mesmo nível de toasts e overlay isBusy): acima de topbar/statusbar (18), dock e painéis (20/30) e sidebar (26); abaixo do anel e do card do tutorial (54/55), dos diálogos (60), do menu de perfil (70) e dos FelixoSelect (1000).
-- **Testes:** `src/features/canvas/components/frame-colors.test.ts`, `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos`
+- **Testes:** `src/features/canvas/components/frame-colors.test.ts`, `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarMenuDeCorDentroDaJanela`
 
 | Estado | Quando |
 | --- | --- |
@@ -2763,7 +2761,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | Escolher uma cor ou "Sem cor" não é exercitado: o smoke só abre o menu por clique direito no grupo e fecha com Esc, em 1280×800. | baixo | `3ec91f95-497e-8141-b6c1-d1833aac5664` |
-| Menu fixed no clientX/clientY sem limite à janela (NodeColorMenu.tsx:39-40): perto da borda direita ou de baixo sai da tela; em 320 px o smoke não abre o menu. | médio | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
+| Menu fixed no clientX/clientY sem limite à janela (NodeColorMenu.tsx:39-40): medido com o clique a 4 px das bordas direita e de baixo, o menu passa 172 px pela direita e 129 px por baixo, em 320, 768 e 1280 px (canvas-smoke-sobreposicoes.cjs → checarMenuDeCorDentroDaJanela). Defeito conhecido: o limite à janela fica para a task. | médio | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
 | Sem foco nem teclado (NodeColorMenu.tsx:35-72; CanvasView.tsx:3174-3178): o foco não entra no role="menu", não há setas, e o menu só fecha por Esc, clique no fundo ou escolha — clicar noutro bloco, rolar ou dar zoom o deixam aberto no lugar antigo. | baixo | `3ec91f95-497e-8197-a218-ef49c302013d` |
 | O realce de notificação não lida é declarado depois da moldura no CSS e vence a cor escolhida; ainda não conferido numa janela real nem no smoke. | baixo | `3e191f95-497e-81fd-b657-d7a63b5d17f0` |
 
@@ -2774,7 +2772,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `webview-profiles:list`, `webview-profiles:save`, `webview-profiles:delete`, `canvas:save`, `webview-permissions:list`, `webview-permissions:revoke`
 - **Depende de:** `useWebviewProfiles (webviewProfilesStore, useSyncExternalStore)`, `useWebviewSitePermissions / groupSitePermissions (webview-site-permissions)`, `describeWebviewProfile / isCustomProfileId (webview-profile)`, `FRAME_COLOR_SWATCHES`, `createPortal`
 - **Sobreposição:** Portal fixed z-70, w-52, clampado à largura da janela (left ≥ 8): acima de menu de cor (50), anel/card do tutorial (54/55) e diálogos (60); abaixo só dos FelixoSelect (1000). Não reposiciona quando o canvas se move.
-- **Testes:** `src/features/canvas/services/webview-site-permissions.test.ts`, `electron/services/webview-site-permissions.test.cjs`, `src/features/canvas/services/webview-profile.test.ts`, `src/features/canvas/services/webview-profiles-store.test.ts`, `electron/services/webview-profiles-ipc-handlers.test.cjs`, `electron/services/storage/webview-profiles-repository.test.cjs`, `electron/services/webview-profile-partition.test.cjs`
+- **Testes:** `src/features/canvas/services/webview-site-permissions.test.ts`, `electron/services/webview-site-permissions.test.cjs`, `src/features/canvas/services/webview-profile.test.ts`, `src/features/canvas/services/webview-profiles-store.test.ts`, `electron/services/webview-profiles-ipc-handlers.test.cjs`, `electron/services/storage/webview-profiles-repository.test.cjs`, `electron/services/webview-profile-partition.test.cjs`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarMenuDoPerfilAcompanhaOZoom`
 
 | Estado | Quando |
 | --- | --- |
@@ -2797,7 +2795,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | --- | --- | --- |
 | Nenhum dos 4 controles é exercitado na tela: trocar, criar e excluir perfil (que apaga logins) só têm teste de store e de IPC. | médio | `3ec91f95-497e-8141-b6c1-d1833aac5664` |
 | Falha ao listar perfis é silenciosa (services/webview-profiles-store.ts:38-45): ok falso deixa ready falso para sempre ("Perfil…" no botão) e uma rejeição nunca é tentada de novo (loaded já é verdadeiro). | baixo | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
-| O menu (z-70) fica acima dos diálogos modais (60) e não acompanha pan/zoom do canvas (posição calculada só ao abrir); clique dentro do webview não fecha. Nenhum teste mede. | baixo | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
+| O menu (z-70) fica acima dos diálogos modais (60) e não acompanha pan/zoom do canvas (posição calculada só ao abrir): medido, o zoom desloca o botão em 111 px e o menu fica no lugar (canvas-smoke-sobreposicoes.cjs → checarMenuDoPerfilAcompanhaOZoom). Defeito conhecido. O clique dentro do webview não fecha: não medido. | baixo | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
 
 ### Painel de aprovações pendentes
 
@@ -3213,7 +3211,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3eb91f95-497e-81bb-a374-eb2e336c73c6` — 1 lacuna
 - `3ec91f95-497e-8103-b360-c1979d6992f4` — 9 lacunas
 - `3ec91f95-497e-8110-b363-cfade2b68b7a` — 42 lacunas
-- `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` — 19 lacunas
+- `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` — 17 lacunas
 - `3ec91f95-497e-8122-a08b-d26d4991acca` — 1 lacuna
 - `3ec91f95-497e-8141-b6c1-d1833aac5664` — 13 lacunas
 - `3ec91f95-497e-8176-bef0-dfde828936dc` — 6 lacunas

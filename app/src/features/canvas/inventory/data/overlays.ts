@@ -852,7 +852,7 @@ export const overlaySurfaces: InventoryElement[] = [
     persistence: ['localStorage felixo:dialog-size:<id> (no canvas, felixo:dialog-size:handoff)'],
     ipc: [],
     dependsOn: ['useResizableDialog', 'readDialogSize', 'writeDialogSize', 'clearDialogSize', 'clampDialogSize', 'resizeCentered', 'swallowNextClick'],
-    tests: [{ file: 'src/features/shared/dialog/dialog-sizing.test.ts' }],
+    tests: [{ file: 'src/features/shared/dialog/dialog-sizing.test.ts' }, { file: 'scripts/canvas-smoke-sobreposicoes.cjs', check: 'checarAlcasDoDialogoSobBotoes' }],
     gaps: [
       {
         what: 'Nenhum smoke arrasta ou usa o teclado nas alças do HandoffDialog; a matemática é testada, a interação não.',
@@ -863,11 +863,6 @@ export const overlaySurfaces: InventoryElement[] = [
         what: 'useResizableDialog.ts:43, :76, :106 e :112 leem window.localStorage fora de try: o getter pode lançar (SecurityError com storage bloqueado) e derrubar o modal no useState inicial. Só os métodos estão protegidos em dialog-sizing.ts.',
         risk: 'baixo',
         task: '3ec91f95-497e-8176-bef0-dfde828936dc',
-      },
-      {
-        what: 'A alça do canto (20×20, z 10, bottom-0 right-0) fica sobre o canto inferior direito da moldura, onde costumam estar os botões do rodapé; não foi medido se cobre algum.',
-        risk: 'baixo',
-        task: '3ec91f95-497e-8112-82f9-fd1b86e3ec7d',
       },
     ],
     overlap:

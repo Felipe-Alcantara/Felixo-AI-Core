@@ -417,6 +417,7 @@ export const terminalSurfaces: InventoryElement[] = [
       { file: 'src/features/canvas/terminal/session-metadata.test.ts' },
       { file: 'src/features/canvas/services/agent-session.test.ts' },
       { file: 'src/features/canvas/services/terminal-run-registry.test.ts' },
+      { file: 'scripts/canvas-smoke-sobreposicoes.cjs', check: 'checarDetalhesDoTerminalComFerramenta' },
     ],
     gaps: [
       {
@@ -430,7 +431,7 @@ export const terminalSurfaces: InventoryElement[] = [
         task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
       },
       {
-        what: 'O painel é um CanvasPanel (absolute top-16) aberto fora de activeTool: com uma ferramenta aberta, os dois ocupam o mesmo lugar e só o focus-within z-30 decide quem fica por cima.',
+        what: 'O painel é um CanvasPanel (absolute top-16) aberto fora de activeTool: com uma ferramenta aberta, os dois ocupam o mesmo lugar e só o focus-within z-30 decide quem fica por cima. Medido com Buscar em 768 e 1280 px: a sobreposição é de 239 × 109 px e de 282 × 109 px (canvas-smoke-sobreposicoes.cjs → checarDetalhesDoTerminalComFerramenta). Defeito conhecido: qual fica por cima, ou se os detalhes fecham, é decisão do Felipe.',
         risk: 'médio',
         task: '3ec91f95-497e-8112-82f9-fd1b86e3ec7d',
       },
@@ -816,10 +817,11 @@ export const terminalSurfaces: InventoryElement[] = [
       { file: 'electron/services/agent-question-ipc-handlers.test.cjs' },
       { file: SMOKE_TUTORIAL, check: 'criarCenariosDoTutorial' },
       { file: SMOKE_TUTORIAL, check: 'conferirPerguntaPrendeOFoco' },
+      { file: 'scripts/canvas-smoke-sobreposicoes.cjs', check: 'checarPerguntaDoAgenteSobDialogos' },
     ],
     gaps: [
       {
-        what: 'Mesma camada z 60 do HandoffDialog e do AccountSwitchDialog; pela ordem do DOM a pergunta fica por baixo deles, e as teclas 1–4 continuam valendo. Sem teste dos dois abertos.',
+        what: 'Mesma camada z 60 do HandoffDialog e do AccountSwitchDialog; pela ordem do DOM a pergunta fica por baixo deles. Medido em 1280 px: com o diálogo de passagem aberto, a pergunta do agente fica coberta pelo "Passar responsabilidade" (canvas-smoke-sobreposicoes.cjs → checarPerguntaDoAgenteSobDialogos). Defeito conhecido. O AccountSwitchDialog e as teclas 1–4 por baixo dos diálogos: não medidos.',
         risk: 'médio',
         task: '3ec91f95-497e-8112-82f9-fd1b86e3ec7d',
       },
