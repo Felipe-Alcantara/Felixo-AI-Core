@@ -30,6 +30,7 @@
 
 const path = require('node:path')
 const fs = require('node:fs')
+const http = require('node:http')
 const { execFileSync } = require('node:child_process')
 const { connect, readState } = require('../electron/cli/felixo-devtools.cjs')
 const { diagnosticarMontagem, descreverEstadoDoShell, descreverDesfecho } = require('./canvas-smoke-diagnostics.cjs')
@@ -830,6 +831,368 @@ const VIEWPORTS_DO_PAINEL = [
 ]
 
 // Espelha `getPanelMaxHeight` (panel-sizing.ts): topo 64 + rodapé 48, piso 240.
+/** Bloco como o canvas o guardou (canvas:list); `null` quando sumiu. */
+async function lerBlocoSalvo(page, id) {
+  return page.evaluate(async (nodeId) => (await window.felixo.canvas.list()).nodes?.find((node) => node.id === nodeId) ?? null, id)
+}
+
+async function lerArestasSalvas(page) {
+  return page.evaluate(async () => (await window.felixo.canvas.listEdges()).edges || [])
+}
+
+/** Espera o canvas gravar o bloco como `predicado` pede; o teto é o de interação. */
+async function esperarBlocoSalvo(page, id, predicado, descricao) {
+  const gravou = await esperarAte(async () => predicado(await lerBlocoSalvo(page, id)), { timeoutMs: INTERACTION_TIMEOUT_MS })
+  if (!gravou) throw new Error(`[canvas-smoke] ${id}: ${descricao} não foi gravado: ${JSON.stringify(await lerBlocoSalvo(page, id))}`)
+}
+
+async function esperarArestasSalvas(page, predicado, descricao) {
+  const gravou = await esperarAte(async () => predicado(await lerArestasSalvas(page)), { timeoutMs: INTERACTION_TIMEOUT_MS })
+  if (!gravou) throw new Error(`[canvas-smoke] conexões: ${descricao} não foi gravada: ${JSON.stringify(await lerArestasSalvas(page))}`)
+}
+
+async function recarregarCanvas(page) {
+  await page.reload()
+  await checarMontagem(page)
+  await page.waitForFunction(() => document.querySelector('[data-felixo-canvas-ready]'), null, { timeout: HYDRATION_TIMEOUT_MS })
+}
+
+/** Traços do desenho leve, como gravados em `data.strokes` (JSON). */
+function tracosGravados(bloco) {
+  try {
+    return JSON.parse(bloco?.data?.strokes || '[]')
+  } catch {
+    return []
+  }
+}
+
+/** Elementos da cena do Excalidraw, como gravados em `data.scene` (JSON). */
+function elementosDaCena(bloco) {
+  try {
+    return JSON.parse(bloco?.data?.scene || '{}').elements || []
+  } catch {
+    return []
+  }
+}
+
+/** Bolinha de cor da nota: grava data.color e fica marcada (aria-pressed). */
+async function checarCorDaNota(page) {
+  const bolinha = page.locator('[data-id="fixture-note"]').getByRole('button', { name: 'Cor emerald' })
+  await bolinha.click()
+  await esperarBlocoSalvo(page, 'fixture-note', (bloco) => bloco?.data?.color === 'emerald', 'a cor emerald')
+  if ((await bolinha.getAttribute('aria-pressed')) !== 'true') {
+    throw new Error('[canvas-smoke] a bolinha Cor emerald não ficou marcada depois do clique')
+  }
+}
+
+/** Cores e espessuras do desenho leve, traço com ponteiro, Desfazer e Limpar. */
+async function checarDesenhoLeve(page) {
+  const desenho = page.locator('[data-id="fixture-drawing"]')
+  const area = desenho.locator('svg:has(path[data-preview])')
+  const traco = async (fracaoY) => {
+    const caixa = await area.boundingBox()
+    if (!caixa) throw new Error('[canvas-smoke] a área do desenho não tem caixa')
+    await page.mouse.move(caixa.x + caixa.width * 0.2, caixa.y + caixa.height * fracaoY)
+    await page.mouse.down()
+    await page.mouse.move(caixa.x + caixa.width * 0.8, caixa.y + caixa.height * fracaoY + 12, { steps: 8 })
+    await page.mouse.up()
+  }
+  await desenho.getByRole('button', { name: 'Cor #38bdf8' }).click()
+  await desenho.getByRole('button', { name: 'Espessura 8px' }).click()
+  await traco(0.3)
+  await esperarBlocoSalvo(page, 'fixture-drawing', (bloco) => tracosGravados(bloco).length === 1, 'o primeiro traço')
+  const [primeiro] = tracosGravados(await lerBlocoSalvo(page, 'fixture-drawing'))
+  if (primeiro.color !== '#38bdf8' || primeiro.width !== 8) {
+    throw new Error(`[canvas-smoke] traço com cor/espessura erradas: ${JSON.stringify(primeiro)}`)
+  }
+  await traco(0.7)
+  await esperarBlocoSalvo(page, 'fixture-drawing', (bloco) => tracosGravados(bloco).length === 2, 'o segundo traço')
+  await desenho.getByRole('button', { name: 'Desfazer último traço' }).click()
+  await esperarBlocoSalvo(page, 'fixture-drawing', (bloco) => tracosGravados(bloco).length === 1, 'o desfazer')
+  await desenho.getByRole('button', { name: 'Limpar desenho' }).click()
+  await esperarBlocoSalvo(page, 'fixture-drawing', (bloco) => tracosGravados(bloco).length === 0, 'a limpeza')
+  if (!(await desenho.getByRole('button', { name: 'Limpar desenho' }).isDisabled())) {
+    throw new Error('[canvas-smoke] Limpar desenho continuou habilitado sem traços')
+  }
+}
+
+/** Excalidraw: desenha um retângulo, espera a cena gravar e confere que ela volta depois do reload. */
+async function checarDesenhoExcalidraw(page) {
+  const bloco = page.locator('[data-id="fixture-excalidraw"]')
+  const tela = bloco.locator('canvas.interactive').first()
+  await tela.waitFor({ state: 'visible', timeout: HYDRATION_TIMEOUT_MS })
+  const caixa = await tela.boundingBox()
+  if (!caixa) throw new Error('[canvas-smoke] a tela do Excalidraw não tem caixa')
+  await tela.click({ position: { x: caixa.width * 0.9, y: caixa.height * 0.9 } })
+  await page.keyboard.press('r')
+  await page.mouse.move(caixa.x + caixa.width * 0.3, caixa.y + caixa.height * 0.3)
+  await page.mouse.down()
+  await page.mouse.move(caixa.x + caixa.width * 0.45, caixa.y + caixa.height * 0.45, { steps: 10 })
+  await page.mouse.up()
+  const temRetangulo = (bloco) => elementosDaCena(bloco).some((elemento) => elemento.type === 'rectangle' && !elemento.isDeleted)
+  await esperarBlocoSalvo(page, 'fixture-excalidraw', temRetangulo, 'o retângulo desenhado')
+  await recarregarCanvas(page)
+  await esperarBlocoSalvo(page, 'fixture-excalidraw', temRetangulo, 'o retângulo depois de reabrir')
+  await page.locator('[data-id="fixture-excalidraw"] canvas.interactive').first().waitFor({ state: 'visible', timeout: HYDRATION_TIMEOUT_MS })
+}
+
+/** Nome editável e X do cabeçalho: renomeia, depois remove o bloco pelo X. */
+async function checarNomeERemoverNoCabecalho(page) {
+  const bloco = page.locator('[data-id="fixture-note-2"]')
+  const nome = bloco.getByRole('textbox', { name: 'Nome do bloco' })
+  await nome.fill('Segunda nota renomeada')
+  await nome.press('Enter')
+  await esperarBlocoSalvo(page, 'fixture-note-2', (salvo) => salvo?.data?.label === 'Segunda nota renomeada', 'o novo nome')
+  await bloco.getByRole('button', { name: 'Remover no' }).click()
+  await page.waitForFunction(() => !document.querySelector('[data-id="fixture-note-2"]'), null, { timeout: INTERACTION_TIMEOUT_MS })
+  await esperarBlocoSalvo(page, 'fixture-note-2', (salvo) => salvo === null, 'a remoção do bloco')
+}
+
+/** Cor da moldura pelo clique direito: escolhe uma cor, depois "Sem cor". */
+async function checarCorDaMoldura(page) {
+  const bloco = page.locator('[data-id="fixture-note"]')
+  const menu = page.getByRole('menu', { name: 'Cor da moldura' })
+  const abrir = async () => {
+    await bloco.locator('.felixo-node-grip').first().click({ button: 'right' })
+    await menu.waitFor({ state: 'visible', timeout: INTERACTION_TIMEOUT_MS })
+  }
+  await abrir()
+  await menu.getByRole('menuitemradio', { name: 'Verde' }).click()
+  await esperarBlocoSalvo(page, 'fixture-note', (salvo) => salvo?.data?.frameColor === 'emerald', 'a moldura verde')
+  const classe = await bloco.evaluate((elemento) => elemento.className)
+  if (!classe.includes('felixo-frame-emerald')) throw new Error('[canvas-smoke] a moldura verde não aparece no bloco: ' + classe)
+  await abrir()
+  await menu.getByRole('menuitem', { name: 'Sem cor' }).click()
+  await esperarBlocoSalvo(page, 'fixture-note', (salvo) => !salvo?.data?.frameColor, 'a remoção da moldura')
+}
+
+/**
+ * Aresta: seleciona pelo meio do caminho e apaga com Delete. Usa uma aresta
+ * própria e longa (drawing → notion): a do fixture tem uns 40 px no mundo e,
+ * com o canvas em 31%, o clique cai fora dela. Antes do Delete confere que a
+ * aresta ficou selecionada, para um clique errado não apagar um bloco.
+ */
+async function checarRemoverAresta(page) {
+  const id = 'controles-aresta-longa'
+  const salva = await page.evaluate(async (aresta) => (await window.felixo.canvas.saveEdge(aresta))?.ok === true, {
+    id,
+    source: 'fixture-drawing',
+    target: 'fixture-notion',
+  })
+  if (!salva) throw new Error('[canvas-smoke] não foi possível gravar a conexão de teste')
+  await recarregarCanvas(page)
+  const seletor = `.react-flow__edge[data-id="${id}"]`
+  await page.waitForFunction((s) => document.querySelector(s), seletor, { timeout: INTERACTION_TIMEOUT_MS })
+  const ponto = await page.evaluate((s) => {
+    const caminho = document.querySelector(`${s} .react-flow__edge-interaction`)
+    if (!caminho) return null
+    const meio = caminho.getPointAtLength(caminho.getTotalLength() / 2)
+    const tela = new DOMPoint(meio.x, meio.y).matrixTransform(caminho.getScreenCTM())
+    return { x: tela.x, y: tela.y }
+  }, seletor)
+  if (!ponto) throw new Error('[canvas-smoke] a conexão de teste não tem caminho clicável')
+  await page.mouse.click(ponto.x, ponto.y)
+  const selecionada = await esperarAte(
+    () => page.evaluate((s) => document.querySelector(s)?.classList.contains('selected') === true, seletor),
+    { timeoutMs: INTERACTION_TIMEOUT_MS },
+  )
+  if (!selecionada) throw new Error('[canvas-smoke] clicar no meio da conexão não a selecionou')
+  await page.keyboard.press('Delete')
+  await esperarArestasSalvas(page, (arestas) => !arestas.some((aresta) => aresta.id === id), 'a remoção da conexão')
+  await page.waitForFunction((s) => !document.querySelector(s), seletor, { timeout: INTERACTION_TIMEOUT_MS })
+}
+
+/** Encaixe: arrasta a nota para dentro do grupo e confere o parentId depois do reload. */
+async function checarEncaixeNoGrupo(page) {
+  const bloco = page.locator('[data-id="fixture-note"]')
+  const grupo = page.locator('[data-id="fixture-group"]')
+  const grip = bloco.locator('.felixo-node-grip').first()
+  const [caixaGrip, caixaBloco, caixaGrupo] = await Promise.all([grip.boundingBox(), bloco.boundingBox(), grupo.boundingBox()])
+  if (!caixaGrip || !caixaBloco || !caixaGrupo) throw new Error('[canvas-smoke] grupo, nota ou grip sem caixa para o encaixe')
+  const x = caixaGrip.x + caixaGrip.width / 2
+  const y = caixaGrip.y + caixaGrip.height / 2
+  // A ponta superior esquerda da nota cai 40 px dentro do grupo: é o critério de encaixe.
+  const dx = caixaGrupo.x + 40 - caixaBloco.x
+  const dy = caixaGrupo.y + 60 - caixaBloco.y
+  await page.mouse.move(x, y)
+  await page.mouse.down()
+  await page.mouse.move(x + dx, y + dy, { steps: 12 })
+  await page.mouse.up()
+  await esperarBlocoSalvo(page, 'fixture-note', (salvo) => salvo?.parentId === 'fixture-group', 'o encaixe no grupo')
+  await recarregarCanvas(page)
+  await esperarBlocoSalvo(page, 'fixture-note', (salvo) => salvo?.parentId === 'fixture-group', 'o grupo pai depois do reload')
+}
+
+/** Grupo: renomeia; com filho, cancelar a confirmação mantém tudo e confirmar leva o filho junto. */
+async function checarRenomearERemoverGrupo(page) {
+  const grupo = page.locator('[data-id="fixture-group"]')
+  const nome = grupo.getByRole('textbox', { name: 'Nome do grupo' })
+  await nome.fill('Grupo renomeado')
+  await esperarBlocoSalvo(page, 'fixture-group', (salvo) => salvo?.data?.label === 'Grupo renomeado', 'o novo nome do grupo')
+  const remover = grupo.getByRole('button', { name: 'Remover grupo' })
+  let mensagem = null
+  page.once('dialog', (dialog) => {
+    mensagem = dialog.message()
+    void dialog.dismiss()
+  })
+  await remover.click()
+  const perguntou = await esperarAte(async () => mensagem !== null, { timeoutMs: INTERACTION_TIMEOUT_MS })
+  if (!perguntou) throw new Error('[canvas-smoke] remover um grupo com filho não pediu confirmação')
+  if (!mensagem.includes('1 grupo com 1 bloco dentro: tudo sai junto.')) {
+    throw new Error(`[canvas-smoke] a confirmação não diz que o filho sai junto: "${mensagem}"`)
+  }
+  await esperarBlocoSalvo(page, 'fixture-note', (salvo) => salvo?.parentId === 'fixture-group', 'o filho depois de cancelar')
+  page.once('dialog', (dialog) => void dialog.accept())
+  await remover.click()
+  await page.waitForFunction(() => !document.querySelector('[data-id="fixture-group"]'), null, { timeout: INTERACTION_TIMEOUT_MS })
+  await esperarBlocoSalvo(page, 'fixture-group', (salvo) => salvo === null, 'a remoção do grupo')
+  await esperarBlocoSalvo(page, 'fixture-note', (salvo) => salvo === null, 'a remoção do filho junto')
+}
+
+/**
+ * Páginas locais para a Página Web: uma origem serve /a e /b. Quem chama fecha
+ * depois de tudo que pode recarregar o webview (o perfil recria o webview e
+ * recarrega a última URL; com o servidor fechado isso vira erro de conexão).
+ */
+async function subirPaginasLocais() {
+  const servidor = http.createServer((request, response) => {
+    response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
+    response.end(`<!doctype html><meta charset="utf-8"><title>${request.url}</title><p>${request.url}</p>`)
+  })
+  await new Promise((resolve) => servidor.listen(0, '127.0.0.1', resolve))
+  return {
+    base: `http://127.0.0.1:${servidor.address().port}`,
+    fechar: () => {
+      servidor.close()
+      servidor.closeAllConnections()
+    },
+  }
+}
+
+/** Voltar e Avançar da Página Web, com as duas páginas locais e a URL gravada conferida. */
+async function checarVoltarEAvancarNaPaginaWeb(page, base) {
+  const pagina = page.locator('[data-id="fixture-webpage"]')
+  const barra = pagina.getByRole('textbox', { name: 'Endereço da página' })
+  const urlDoGuest = () => page.evaluate(() => document.querySelector('[data-id="fixture-webpage"] webview')?.getURL() ?? '')
+  const esperarPagina = async (caminho) => {
+    const chegou = await esperarAte(async () => (await urlDoGuest()) === base + caminho, { timeoutMs: INTERACTION_TIMEOUT_MS })
+    if (!chegou) throw new Error(`[canvas-smoke] a página Web não chegou a ${caminho}: ${await urlDoGuest()}`)
+  }
+  for (const caminho of ['/a', '/b']) {
+    await barra.fill(base + caminho)
+    await barra.press('Enter')
+    await esperarPagina(caminho)
+  }
+  await pagina.getByRole('button', { name: 'Voltar' }).click()
+  await esperarPagina('/a')
+  await pagina.getByRole('button', { name: 'Avançar' }).click()
+  await esperarPagina('/b')
+  await esperarBlocoSalvo(page, 'fixture-webpage', (salvo) => salvo?.data?.url === base + '/b', 'a URL atual depois do Avançar')
+}
+
+/** Menu de perfil: cria e usa um perfil, volta ao Padrão, troca de volta e exclui (com confirmação). */
+async function checarPerfilDoNavegador(page) {
+  const pagina = page.locator('[data-id="fixture-webpage"]')
+  const botao = pagina.locator('[aria-haspopup="menu"]').first()
+  const menu = page.getByRole('menu', { name: 'Perfil do navegador' })
+  const abrir = async () => {
+    await botao.click()
+    await menu.waitFor({ state: 'visible', timeout: INTERACTION_TIMEOUT_MS })
+  }
+  await abrir()
+  await page.getByRole('textbox', { name: 'Nome do novo perfil' }).fill('Perfil do smoke')
+  await page.getByRole('button', { name: 'Criar perfil' }).click()
+  await menu.waitFor({ state: 'hidden', timeout: INTERACTION_TIMEOUT_MS })
+  await esperarBlocoSalvo(page, 'fixture-webpage', (salvo) => Boolean(salvo?.data?.profileId), 'o perfil criado no bloco')
+  await abrir()
+  await menu.getByRole('menuitemradio', { name: 'Padrão' }).click()
+  await esperarBlocoSalvo(page, 'fixture-webpage', (salvo) => !salvo?.data?.profileId, 'a volta ao Padrão')
+  await abrir()
+  await menu.getByRole('menuitemradio', { name: 'Perfil do smoke' }).click()
+  await esperarBlocoSalvo(page, 'fixture-webpage', (salvo) => Boolean(salvo?.data?.profileId), 'a troca para o perfil')
+  await abrir()
+  page.once('dialog', (dialog) => void dialog.accept())
+  await menu.getByRole('button', { name: 'Excluir o perfil Perfil do smoke' }).click()
+  // O menu continua aberto depois da exclusão (não fecha sozinho): basta contar os itens.
+  const sumiu = await esperarAte(async () => (await menu.getByRole('menuitemradio', { name: 'Perfil do smoke' }).count()) === 0, { timeoutMs: INTERACTION_TIMEOUT_MS })
+  const alerta = menu.locator('[role="alert"]')
+  const erro = (await alerta.count()) ? await alerta.first().textContent() : null
+  if (!sumiu) throw new Error(`[canvas-smoke] o perfil excluído continuou na lista (alerta do menu: ${erro})`)
+  await page.keyboard.press('Escape')
+  const mostrou = await esperarAte(async () => ((await botao.textContent()) ?? '').includes('Perfil removido'), { timeoutMs: INTERACTION_TIMEOUT_MS })
+  if (!mostrou) {
+    throw new Error(`[canvas-smoke] o bloco não mostrou "Perfil removido": botão="${await botao.textContent()}" bloco=${JSON.stringify(await lerBlocoSalvo(page, 'fixture-webpage'))}`)
+  }
+}
+
+/** Botões do cartão de terminal: Ver detalhes, Abrir (prévia) e Reiniciar com confirmação. */
+async function checarBotoesDoTerminal(page) {
+  const terminal = page.locator('[data-id="fixture-terminal"]')
+  await terminal.getByRole('button', { name: 'Ver detalhes do terminal' }).click()
+  await page.getByText('Detalhes do terminal', { exact: true }).first().waitFor({ state: 'visible', timeout: INTERACTION_TIMEOUT_MS })
+  await page.getByRole('button', { name: 'Fechar painel Detalhes do terminal' }).click()
+  await page.getByText('Detalhes do terminal', { exact: true }).first().waitFor({ state: 'hidden', timeout: INTERACTION_TIMEOUT_MS })
+  await terminal.getByRole('button', { name: 'Abrir Agente fixture' }).click()
+  await page.locator('[data-canvas-terminal-drawer]').waitFor({ state: 'visible', timeout: INTERACTION_TIMEOUT_MS })
+  await page.getByRole('button', { name: 'Fechar terminal' }).click()
+  await page.waitForFunction(() => !document.querySelector('[data-canvas-terminal-drawer]'), null, { timeout: INTERACTION_TIMEOUT_MS })
+  // Reiniciar com o processo de pé pergunta antes; cancelar não reinicia.
+  let pergunta = null
+  page.once('dialog', (dialog) => {
+    pergunta = dialog.message()
+    void dialog.dismiss()
+  })
+  await terminal.getByRole('button', { name: 'Reiniciar terminal' }).click()
+  const perguntou = await esperarAte(async () => pergunta !== null, { timeoutMs: INTERACTION_TIMEOUT_MS })
+  if (!perguntou || !pergunta.includes('ainda está rodando')) {
+    throw new Error(`[canvas-smoke] Reiniciar não pediu a confirmação do processo vivo: ${pergunta}`)
+  }
+}
+
+/** Bloco Arquivo (texto): modo Plano, diagnóstico sem terminal, ligar e desligar agente, editar e copiar. */
+async function checarControlesDoArquivo(page) {
+  const arquivo = page.locator('[data-id="fixture-file"]')
+  await arquivo.locator('button[title^="Modo plano"]').click()
+  await esperarBlocoSalvo(page, 'fixture-file', (salvo) => salvo?.data?.mode === 'plan', 'o modo Plano')
+  await arquivo.locator('button[title^="Pedir ao terminal conectado"]').click()
+  await arquivo.getByText('Ligue este arquivo a um terminal com agente primeiro.').waitFor({ state: 'visible', timeout: INTERACTION_TIMEOUT_MS })
+  await arquivo.locator('button[title^="Ligar este arquivo"]').click()
+  await arquivo.getByRole('button', { name: 'Agente fixture' }).click()
+  await esperarArestasSalvas(page, (arestas) => arestas.some((aresta) => [aresta.source, aresta.target].sort().join() === 'fixture-file,fixture-terminal'), 'a ligação ao agente')
+  await arquivo.getByRole('button', { name: 'Desligar Agente fixture' }).click()
+  await esperarArestasSalvas(page, (arestas) => !arestas.some((aresta) => [aresta.source, aresta.target].sort().join() === 'fixture-file,fixture-terminal'), 'a desligação do agente')
+  await arquivo.locator('button[title^="Modo scratchpad"]').click()
+  await esperarBlocoSalvo(page, 'fixture-file', (salvo) => salvo?.data?.mode === 'scratchpad', 'o modo scratchpad')
+  await arquivo.getByRole('button', { name: 'Editar', exact: true }).click()
+  // O rótulo muda pelo tipo do arquivo: "Visualizar como markdown" no .md, "Visualizar texto" no resto.
+  await arquivo.getByRole('button', { name: /^Visualizar/ }).click()
+  await arquivo.getByRole('button', { name: 'Copiar caminho' }).click()
+  await arquivo.getByRole('button', { name: 'Copiar caminho' }).locator('svg.lucide-check').waitFor({ state: 'attached', timeout: INTERACTION_TIMEOUT_MS })
+}
+
+/** Controles dos blocos que o inventário listava sem teste. Cada passo confere o efeito no canvas salvo, não só na tela. */
+async function checarControlesDosBlocos(page) {
+  await prepararFixture(page)
+  await checarCorDaNota(page)
+  await checarDesenhoLeve(page)
+  await checarDesenhoExcalidraw(page)
+  await checarNomeERemoverNoCabecalho(page)
+  await checarCorDaMoldura(page)
+  await checarRemoverAresta(page)
+  await checarEncaixeNoGrupo(page)
+  await checarRenomearERemoverGrupo(page)
+  const paginas = await subirPaginasLocais()
+  try {
+    await checarVoltarEAvancarNaPaginaWeb(page, paginas.base)
+    await checarPerfilDoNavegador(page)
+  } finally {
+    paginas.fechar()
+  }
+  await checarBotoesDoTerminal(page)
+  await checarControlesDoArquivo(page)
+  await prepararFixture(page)
+}
+
 function alturaMaximaEsperada(viewportHeight) {
   return Math.max(240, viewportHeight - 64 - 48)
 }
@@ -1733,6 +2096,7 @@ const SESSIONS = [
       await checarAuditoriaDeAcessibilidade(page)
       await checarInteracoes(page)
       await checarReloadSemDuplicacao(page)
+      await checarControlesDosBlocos(page)
       await checarPainelNosDoisEixos(page)
       await checarViewportMinimo(page)
       await checarZoomVisual(page)

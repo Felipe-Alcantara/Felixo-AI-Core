@@ -30,9 +30,9 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 ## Números
 
 - **Elementos:** 113 (10 blocos, 17 ferramentas, 86 outras superfícies)
-- **Controles:** 433, dos quais 63 com teste específico
+- **Controles:** 433, dos quais 90 com teste específico
 - **Elementos sem nenhum teste:** 3
-- **Lacunas:** 234 (alto 4, médio 126, baixo 104), em 68 tasks
+- **Lacunas:** 226 (alto 4, médio 121, baixo 101), em 72 tasks
 
 ## Moldura do canvas
 
@@ -538,7 +538,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `pty:spawn`, `pty:kill`, `pty:write`, `pty:data`, `pty:exit`, `pty:session`, `account-chain:get-state`, `account-chain:changed`, `account-chain:decline`, `account-chain:resolve-ambiguous`, `account-chain:request-switch`, `account-chain:release-cooldown`, `canvas:save`, `canvas:delete`
 - **Depende de:** `useTerminalSessions`, `useSessionSnapshot`, `useSessionMetadata`, `usePerformanceMode`, `useReactFlow`, `useCliAccountLabel`, `useAccountChain`, `useAccountChainActions (AccountChainActionsContext)`, `visibleTerminalResumeBanner (terminal-resume-banner)`, `buildTerminalChainBanners (account-chain-view)`, `relaunchTerminal / handleResumeAction (CanvasView)`
 - **Sobreposição:** Bloco do React Flow, sem z próprio: fica abaixo de toda superfície fixa (topbar e statusbar 18, dock e painéis 20/30, sidebar 26, menus 50+). O cartão é overflow-hidden, então nada que nasce dentro dele passa das bordas. Faixas de retomada e da cadeia vivem dentro do cartão (nodrag nowheel nopan). A gaveta do terminal (coluna à direita) e a dock de terminais recolhidos cobrem o bloco quando ele cai embaixo delas.
-- **Testes:** `src/features/canvas/services/terminal-resume-banner.test.ts`, `src/features/canvas/services/account-chain-view.test.ts`, `src/features/canvas/services/terminal-run-registry.test.ts`, `src/features/canvas/services/repository-grouping.test.ts`, `src/features/canvas/terminal/terminal-session-store.test.ts`, `src/features/canvas/terminal/terminal-scrollback.test.ts`, `src/features/canvas/terminal/prompt-origins-e2e.test.ts`, `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`, `scripts/canvas-smoke.cjs` → `checarInteracoes`, `scripts/canvas-smoke.cjs` → `checarVariosAgentes`, `scripts/canvas-smoke-contas.cjs` → `abrirBlocoDaCadeia`, `scripts/canvas-smoke-prompts.cjs` → `esperarCartao`
+- **Testes:** `src/features/canvas/services/terminal-resume-banner.test.ts`, `src/features/canvas/services/account-chain-view.test.ts`, `src/features/canvas/services/terminal-run-registry.test.ts`, `src/features/canvas/services/repository-grouping.test.ts`, `src/features/canvas/terminal/terminal-session-store.test.ts`, `src/features/canvas/terminal/terminal-scrollback.test.ts`, `src/features/canvas/terminal/prompt-origins-e2e.test.ts`, `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`, `scripts/canvas-smoke.cjs` → `checarInteracoes`, `scripts/canvas-smoke.cjs` → `checarVariosAgentes`, `scripts/canvas-smoke-contas.cjs` → `abrirBlocoDaCadeia`, `scripts/canvas-smoke-prompts.cjs` → `esperarCartao`, `scripts/canvas-smoke.cjs` → `checarBotoesDoTerminal`
 
 | Estado | Quando |
 | --- | --- |
@@ -552,19 +552,19 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Controle | Gatilho | Efeito | Falha conhecida | Teste |
 | --- | --- | --- | --- | --- |
-| `aria-label="Reiniciar terminal"` (button) | clique | Com retomada pendente não derruba nada: revela a faixa de retomada (mesmo guardada com o agente de pé) e foca o primeiro botão dela. Senão pede window.confirm se o processo está vivo e chama onRestart → relaunchTerminal: store.restart mata e sobe o PTY (pty:kill + pty:spawn) pelo plano de retomada e grava sessionStartedAt no bloco. | Cancelar o confirm não faz nada. Falha do spawn aparece no cartão (selo "erro", snapshot.message). Se o plano segura ("held", ex.: esperando a versão da CLI com a faixa ainda nula) ou o bloco sumiu ("missing"), nada acontece e nada avisa. | — |
-| `aria-label="Ver detalhes do terminal"` (button) | clique | onDetails → setDetailsTerminalId: abre o painel de detalhes (TerminalDetailsPanel) deste bloco. | Sem falha própria (estado local do canvas). | — |
+| `aria-label="Reiniciar terminal"` (button) | clique | Com retomada pendente não derruba nada: revela a faixa de retomada (mesmo guardada com o agente de pé) e foca o primeiro botão dela. Senão pede window.confirm se o processo está vivo e chama onRestart → relaunchTerminal: store.restart mata e sobe o PTY (pty:kill + pty:spawn) pelo plano de retomada e grava sessionStartedAt no bloco. | Cancelar o confirm não faz nada. Falha do spawn aparece no cartão (selo "erro", snapshot.message). Se o plano segura ("held", ex.: esperando a versão da CLI com a faixa ainda nula) ou o bloco sumiu ("missing"), nada acontece e nada avisa. | `scripts/canvas-smoke.cjs` → `checarBotoesDoTerminal` |
+| `aria-label="Ver detalhes do terminal"` (button) | clique | onDetails → setDetailsTerminalId: abre o painel de detalhes (TerminalDetailsPanel) deste bloco. | Sem falha própria (estado local do canvas). | `scripts/canvas-smoke.cjs` → `checarBotoesDoTerminal` |
 | `aria-label="Expandir terminal"` (button) | clique | onExpand → openTerminal: abre a gaveta TerminalDrawer com o xterm vivo deste bloco e foca o terminal (troca o painel em foco); com Ctrl/Cmd+clique abre ao lado dos agentes já na gaveta (até 4 painéis); ao fechar a gaveta o foco volta a este botão (data-terminal-expand-trigger). | Sem falha própria: o PTY segue no store com ou sem a gaveta. | `scripts/canvas-smoke.cjs` → `checarInteracoes` |
 | `onClick={() => runResumeAction(action.id)}` (button) | clique | Botões da faixa de retomada ("Escolher outra conversa…" (abre a lista, não relança), "Escolher na lista (/resume)", "Abrir conversa nova", "Tentar retomar de novo", "Dispensar aviso"). Os que relançam pedem confirm com processo vivo; onResumeAction → handleResumeAction grava resumeChoice (transitória, só no registro da execução) ou limpa resumeFailure (persistida) e relança pelo mesmo plano do Reiniciar. "Dispensar aviso" só limpa a falha, o agente de pé continua. (desabilitado: Só existe com a faixa de retomada visível.) | Cancelar o confirm não faz nada. Se a CLI recusar de novo, onResumeFailure grava a falha e a faixa volta com o motivo. | — |
 | `chainActions.onBannerAction({` (button) | clique | Ações das faixas da cadeia de contas (BANNER_ACTION_LABELS, via useAccountContinuation.onBannerAction): "Ver opções" abre o diálogo de troca de conta; "Não era limite" recusa a proposta ou solta a espera (account-chain:decline / release-cooldown); "Sim, tratar como limite" e "Ignorar" resolvem a detecção ambígua (account-chain:resolve-ambiguous); "Trocar de conta", na faixa do mesmo limite depois de "Agora não", pede a proposta (account-chain:request-switch, vale uma vez por aviso) e abre o diálogo dela; "Dispensar" tira a faixa e avisa o main (account-chain:dismiss-detection), que não a devolve depois de um reload; "Refazer login neste terminal" abre a gaveta; "Passar responsabilidade…" abre o Handoff; "Ir para o bloco novo" foca o sucessor. (desabilitado: Só existe com AccountChainActionsContext e uma faixa com ações.) | A mensagem de erro da ação aparece no cartão em role="alert" (chainActions.errorFor). Sem o contexto da cadeia os botões não aparecem. | `scripts/canvas-smoke-contas.cjs` → `confirmarTroca` |
-| `aria-label={`Abrir ${nodeData.label \|\| provider.label}`}` (button) | clique | A prévia inteira é um botão: onExpand abre a gaveta do terminal, como o Expandir (Ctrl/Cmd+clique abre ao lado). Mostra selo de atividade, último prompt, aviso de contexto (data-felixo-context-warning), aviso de scrollback cortado e as últimas linhas. | Sem falha própria. No bloco mínimo (200×120), faixas de retomada e da cadeia espremem a prévia até ela sumir. | — |
+| `aria-label={`Abrir ${nodeData.label \|\| provider.label}`}` (button) | clique | A prévia inteira é um botão: onExpand abre a gaveta do terminal, como o Expandir (Ctrl/Cmd+clique abre ao lado). Mostra selo de atividade, último prompt, aviso de contexto (data-felixo-context-warning), aviso de scrollback cortado e as últimas linhas. | Sem falha própria. No bloco mínimo (200×120), faixas de retomada e da cadeia espremem a prévia até ela sumir. | `scripts/canvas-smoke.cjs` → `checarBotoesDoTerminal` |
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | A faixa de retomada (data-terminal-resume-banner) e os botões dela só têm teste da lógica (terminal-resume-banner.test.ts); nenhum smoke clica neles. | médio | `3eb91f95-497e-811b-8eb0-e620c6f37e21` |
 | O relançamento automático do Codex não respeita a escolha feita na faixa de retomada. | médio | `3eb91f95-497e-8178-bc58-cd545a4f4cc8` |
 | Selo "trabalhando" grudado com o terminal parado (ActivityBadge lê snapshot.activity). | médio | `3d791f95-497e-8190-84e0-df5328591a14` |
-| Reiniciar terminal, Ver detalhes e a prévia ("Abrir …") não são clicados por nenhum teste; o confirm do processo vivo e o caminho "held" silencioso não têm cobertura. | médio | `3ec91f95-497e-8141-b6c1-d1833aac5664` |
+| Caminho "held" silencioso (o plano de retomada segura enquanto espera a versão da CLI, ou o bloco some) sem teste: o fixture não reproduz plano segurado. Reiniciar, Ver detalhes, Abrir e a confirmação do processo vivo agora são cobertos por checarBotoesDoTerminal. | médio | `41c91f95-497e-816b-b515-c14adaee1c30` |
 | No bloco mínimo (200×120) a faixa de retomada (até 4 linhas + botões) e as faixas da cadeia empurram a prévia para fora do cartão overflow-hidden; nenhum teste mede. | baixo | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
 
 ### Bloco Nota (markdown)
@@ -574,7 +574,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `canvas:save`, `canvas:delete`, `canvas:agent-node-updated`
 - **Depende de:** `useReactFlow`, `resolveNoteTheme / NOTE_COLORS (note-colors)`, `DeferredMarkdownContent`, `onDataChange (updateNodeData, CanvasView)`, `onNodeUpdated (useCanvasPersistence) para a escrita aprovada de um agente`
 - **Sobreposição:** Bloco do React Flow, sem z próprio: fica abaixo de toda superfície fixa (topbar e statusbar 18, dock e painéis 20/30, sidebar 26, menus 50+). O cartão é overflow-hidden, então nada que nasce dentro dele passa das bordas. Um handle de entrada à esquerda e um de saída à direita, sem id. As bolinhas de cor dividem o cabeçalho com o título editável: num bloco estreito (mín. 180) o título encolhe.
-- **Testes:** `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`, `scripts/canvas-smoke.cjs` → `checarInteracoes`, `scripts/canvas-smoke-links.cjs` → `mostrarNotaRenderizada`, `scripts/canvas-smoke-links.cjs` → `markdownComMouse`, `electron/services/canvas-agent-write.test.cjs`
+- **Testes:** `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`, `scripts/canvas-smoke.cjs` → `checarInteracoes`, `scripts/canvas-smoke-links.cjs` → `mostrarNotaRenderizada`, `scripts/canvas-smoke-links.cjs` → `markdownComMouse`, `scripts/canvas-smoke.cjs` → `checarCorDaNota`, `electron/services/canvas-agent-write.test.cjs`
 
 | Estado | Quando |
 | --- | --- |
@@ -584,12 +584,12 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Controle | Gatilho | Efeito | Falha conhecida | Teste |
 | --- | --- | --- | --- | --- |
-| `aria-label={`Cor ${color}`}` (button) | clique | Cada bolinha (amber, emerald, sky, rose, zinc) grava data.color via onDataChange → updateNodeData → canvas:save; o tema do cartão, do cabeçalho e do texto muda na hora. | Falha de canvas:save só vai ao console ("[canvas] Falha ao salvar o nó"): a cor some no próximo início. | — |
+| `aria-label={`Cor ${color}`}` (button) | clique | Cada bolinha (amber, emerald, sky, rose, zinc) grava data.color via onDataChange → updateNodeData → canvas:save; o tema do cartão, do cabeçalho e do texto muda na hora. | Falha de canvas:save só vai ao console ("[canvas] Falha ao salvar o nó"): a cor some no próximo início. | `scripts/canvas-smoke.cjs` → `checarCorDaNota` |
 | `onClick={() => setPreview((current) => !current)}` (button) | clique | Alterna edição ↔ visualização (aria-label "Visualizar nota" / "Editar nota"); na visualização o markdown é renderizado e os links abrem o menu de destino de link. | Sem falha própria (estado local, não persiste: a nota reabre em edição). | `scripts/canvas-smoke-links.cjs` → `mostrarNotaRenderizada` |
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Trocar a cor da nota não tem teste; a ressincronização do texto escrito por um agente (lastSyncedTextRef, NoteNode.tsx:45-51) só é testada no processo principal, nunca na tela: uma regressão faria a próxima tecla apagar a escrita aprovada. | médio | `3ec91f95-497e-8141-b6c1-d1833aac5664` |
+| A ressincronização do texto escrito por um agente (lastSyncedTextRef, NoteNode.tsx:45-51) só é testada no processo principal, nunca na tela: uma regressão faria a próxima tecla apagar a escrita aprovada. Pendência: o smoke não abre um pedido de escrita de agente (canvas:resolve-write-request só aceita pedido aberto por um agente). A cor da nota agora é coberta por checarCorDaNota. | médio | `41c91f95-497e-81c1-99d2-d7d725313276` |
 
 ### Bloco Grupo (moldura)
 
@@ -598,7 +598,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `canvas:save`, `canvas:delete`, `canvas:delete-edge`, `pty:kill`, `files:remove-generated-image`
 - **Depende de:** `useReactFlow`, `NODE_DRAG_HANDLE_CLASS (NodeHeader)`, `onDataChange (updateNodeData, CanvasView)`
 - **Sobreposição:** Grupos renderizam antes dos outros blocos (orderedNodes) e ficam por baixo deles; sem z próprio. O smoke confere que o grupo do fixture não fica sob topbar, sidebar, statusbar, inspector e minimapa (checarOclusaoDoFixture).
-- **Testes:** `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`, `scripts/canvas-smoke.cjs` → `checarInteracoes`, `scripts/canvas-smoke.cjs` → `checarOclusaoDoFixture`, `scripts/canvas-smoke.cjs` → `checarZoomVisual`, `src/features/canvas/services/canvas-removal-guard.test.ts`, `electron/services/storage/canvas-repository.test.cjs`
+- **Testes:** `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`, `scripts/canvas-smoke.cjs` → `checarInteracoes`, `scripts/canvas-smoke.cjs` → `checarOclusaoDoFixture`, `scripts/canvas-smoke.cjs` → `checarZoomVisual`, `scripts/canvas-smoke.cjs` → `checarRenomearERemoverGrupo`, `src/features/canvas/services/canvas-removal-guard.test.ts`, `electron/services/storage/canvas-repository.test.cjs`
 
 | Estado | Quando |
 | --- | --- |
@@ -607,11 +607,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Controle | Gatilho | Efeito | Falha conhecida | Teste |
 | --- | --- | --- | --- | --- |
-| `aria-label="Remover grupo"` (button) | clique | deleteElements do grupo, que antes passa pelo onBeforeDelete do canvas (canvas-removal-guard): trava ligada não remove; grupo com filhos pede confirmação dizendo quantos blocos saem junto. Confirmado, o React Flow leva junto todos os filhos (parentId) e as arestas deles; onNodesChange encerra o PTY dos terminais filhos (store.remove), apaga imagens temporárias (files:remove-generated-image) e chama canvas:delete de cada um. | Grupo vazio sai sem confirmação; não há desfazer. Falha de canvas:delete aparece na barra de status (o bloco pode reaparecer no próximo início). | — |
-
-| Lacuna | Risco | Task |
-| --- | --- | --- |
-| Remover grupo e renomear o grupo não são exercitados por nenhum teste (o smoke só seleciona e mede o grupo vazio). | médio | `3ec91f95-497e-8141-b6c1-d1833aac5664` |
+| `aria-label="Remover grupo"` (button) | clique | deleteElements do grupo, que antes passa pelo onBeforeDelete do canvas (canvas-removal-guard): trava ligada não remove; grupo com filhos pede confirmação dizendo quantos blocos saem junto. Confirmado, o React Flow leva junto todos os filhos (parentId) e as arestas deles; onNodesChange encerra o PTY dos terminais filhos (store.remove), apaga imagens temporárias (files:remove-generated-image) e chama canvas:delete de cada um. | Grupo vazio sai sem confirmação; não há desfazer. Falha de canvas:delete aparece na barra de status (o bloco pode reaparecer no próximo início). | `scripts/canvas-smoke.cjs` → `checarRenomearERemoverGrupo` |
 
 ### Bloco Arquivo (.md do app, arquivo externo ou imagem)
 
@@ -620,7 +616,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `canvas-file:read`, `canvas-file:write`, `canvas-file:resolve`, `canvas-file:watch`, `canvas-file:unwatch`, `canvas-file:changed`, `text-file:read`, `text-file:write`, `text-file:watch`, `text-file:unwatch`, `text-file:changed`, `files:read-image-attachment`, `files:open-image`, `files:save-image-copy`, `files:duplicate-image`, `files:pick-image`, `files:remove-generated-image`, `canvas:save`, `canvas:delete`, `canvas:save-edge`, `canvas:delete-edge`, `pty:write`
 - **Depende de:** `useFileNodeDocument`, `useReactFlow`, `isSafeImagePreviewMimeType / resolvePreviewKind (file-node-preview)`, `DeferredMarkdownContent`, `createCanvasConnectionIndex (connectedAgents / availableAgents)`, `requestRepoDiagnosis / announceFileNodeToTerminalNode (file-terminal-links)`, `duplicateImageNode, repairImageNode, removeTemporaryImageNode, linkAgentToFile, unlinkAgentFromFile (CanvasView)`
 - **Sobreposição:** Bloco do React Flow, sem z próprio: fica abaixo de toda superfície fixa (topbar e statusbar 18, dock e painéis 20/30, sidebar 26, menus 50+). O cartão é overflow-hidden, então nada que nasce dentro dele passa das bordas. Quatro pares de handles (source + target sobrepostos em cada lado). O menu "Ligar agente" é z-10 dentro do próprio cartão e é cortado pelas bordas dele (não usa portal, ao contrário do menu de perfil da Página Web).
-- **Testes:** `src/features/canvas/components/file-node-preview.test.ts`, `src/features/canvas/services/file-node-write.test.ts`, `src/features/canvas/services/canvas-connection-index.test.ts`, `src/features/canvas/terminal/prompt-origins-e2e.test.ts`, `electron/services/canvas-files-ipc-handlers.test.cjs`, `electron/services/text-file-access.test.cjs`, `electron/services/file-attachments-ipc-handlers.test.cjs`, `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarMenuLigarAgenteDentroDoCartao`
+- **Testes:** `src/features/canvas/components/file-node-preview.test.ts`, `src/features/canvas/services/file-node-write.test.ts`, `src/features/canvas/services/canvas-connection-index.test.ts`, `src/features/canvas/terminal/prompt-origins-e2e.test.ts`, `electron/services/canvas-files-ipc-handlers.test.cjs`, `electron/services/text-file-access.test.cjs`, `electron/services/file-attachments-ipc-handlers.test.cjs`, `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarMenuLigarAgenteDentroDoCartao`, `scripts/canvas-smoke.cjs` → `checarControlesDoArquivo`
 
 | Estado | Quando |
 | --- | --- |
@@ -635,11 +631,11 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Controle | Gatilho | Efeito | Falha conhecida | Teste |
 | --- | --- | --- | --- | --- |
-| `aria-label="Copiar caminho"` (button) | clique | Copia o caminho absoluto do arquivo (canvas-file:resolve ou filePath) com navigator.clipboard e mostra ✓ por 1,5 s. | Erro engolido: sem caminho não faz nada; sem navigator.clipboard mostra ✓ sem copiar; writeText rejeitado vira unhandledrejection (void copyPath()), sem aviso. | — |
-| `onClick={() => setEditing((value) => !value)}` (button) | clique | Alterna edição ↔ visualização ("Editar" / "Visualizar como markdown" / "Visualizar texto"); editando, cada tecla chama useFileNodeDocument.save, que grava no disco (canvas-file:write ou text-file:write) 300 ms depois e na saída do bloco, conferindo o resultado. (desabilitado: Some em bloco de imagem.) | Gravação recusada (ok:false ou exceção): faixa vermelha role="alert" no bloco e aviso na barra de status até a próxima gravação dar certo; falha ao ler o .md do app também aparece na faixa. | — |
-| `onClick={() => setMode('scratchpad')}` (button) | clique | Grava data.mode = "scratchpad" (onDataChange → canvas:save), limpa o feedback de diagnóstico e esconde "Gerar diagnóstico". (desabilitado: Some em arquivo externo e em imagem.) | Falha de canvas:save só vai ao console. | — |
-| `onClick={() => setMode('plan')}` (button) | clique | Grava data.mode = "plan" e mostra o botão "Gerar diagnóstico". (desabilitado: Some em arquivo externo e em imagem.) | Falha de canvas:save só vai ao console. | — |
-| `onClick={() => void generateDiagnosis()}` (button) | clique | requestRepoDiagnosis: acha o primeiro terminal ligado, resolve o caminho do .md (canvas-file:resolve) e digita no agente o prompt de diagnóstico com Enter (pty:write); mostra o feedback do status (ok, no-terminal, no-file, resolve-failed). (desabilitado: Enquanto solicita; só existe no modo Plano.) | try/finally sem catch: rejeição do resolve vira unhandledrejection e nenhum feedback aparece. "ok" sai sem esperar a entrega ao PTY. | — |
+| `aria-label="Copiar caminho"` (button) | clique | Copia o caminho absoluto do arquivo (canvas-file:resolve ou filePath) com navigator.clipboard e mostra ✓ por 1,5 s. | Erro engolido: sem caminho não faz nada; sem navigator.clipboard mostra ✓ sem copiar; writeText rejeitado vira unhandledrejection (void copyPath()), sem aviso. | `scripts/canvas-smoke.cjs` → `checarControlesDoArquivo` |
+| `onClick={() => setEditing((value) => !value)}` (button) | clique | Alterna edição ↔ visualização ("Editar" / "Visualizar como markdown" / "Visualizar texto"); editando, cada tecla chama useFileNodeDocument.save, que grava no disco (canvas-file:write ou text-file:write) 300 ms depois e na saída do bloco, conferindo o resultado. (desabilitado: Some em bloco de imagem.) | Gravação recusada (ok:false ou exceção): faixa vermelha role="alert" no bloco e aviso na barra de status até a próxima gravação dar certo; falha ao ler o .md do app também aparece na faixa. | `scripts/canvas-smoke.cjs` → `checarControlesDoArquivo` |
+| `onClick={() => setMode('scratchpad')}` (button) | clique | Grava data.mode = "scratchpad" (onDataChange → canvas:save), limpa o feedback de diagnóstico e esconde "Gerar diagnóstico". (desabilitado: Some em arquivo externo e em imagem.) | Falha de canvas:save só vai ao console. | `scripts/canvas-smoke.cjs` → `checarControlesDoArquivo` |
+| `onClick={() => setMode('plan')}` (button) | clique | Grava data.mode = "plan" e mostra o botão "Gerar diagnóstico". (desabilitado: Some em arquivo externo e em imagem.) | Falha de canvas:save só vai ao console. | `scripts/canvas-smoke.cjs` → `checarControlesDoArquivo` |
+| `onClick={() => void generateDiagnosis()}` (button) | clique | requestRepoDiagnosis: acha o primeiro terminal ligado, resolve o caminho do .md (canvas-file:resolve) e digita no agente o prompt de diagnóstico com Enter (pty:write); mostra o feedback do status (ok, no-terminal, no-file, resolve-failed). (desabilitado: Enquanto solicita; só existe no modo Plano.) | try/finally sem catch: rejeição do resolve vira unhandledrejection e nenhum feedback aparece. "ok" sai sem esperar a entrega ao PTY. | `scripts/canvas-smoke.cjs` → `checarControlesDoArquivo` |
 | `title="Escolher novamente o arquivo de imagem"` (button) | clique | "Reparar referência": abre o seletor de imagem (files:pick-image) e grava filePath, fileLabel, fileKind e image (local-image, não temporária) no bloco; o preview recarrega. (desabilitado: Enquanto repara; só aparece quando não há preview.) | Cancelar ou falha: "A imagem não foi reparada." (repairImageNode devolve false; o IPC tem .catch). | — |
 | `aria-label="Diminuir zoom"` (button) | clique | Zoom do preview −25% (mínimo 50%), estado local; atalho "-" com o preview focado. (desabilitado: Sem preview ou em 50%.) | Sem falha própria. | — |
 | `aria-label="Aumentar zoom"` (button) | clique | Zoom do preview +25% (máximo 300%), estado local; atalhos "+"/"=". (desabilitado: Sem preview ou em 300%.) | Sem falha própria. | — |
@@ -648,13 +644,13 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `title="Salvar uma cópia da imagem"` (button) | clique | "Salvar cópia": files:save-image-copy abre o diálogo de salvar; feedback "Cópia salva." ou a mensagem de erro; cancelar não mostra nada. (desabilitado: Sem caminho.) | Sem a API não faz nada; rejeição do IPC não é tratada. | — |
 | `title="Criar uma cópia interna deste artefato"` (button) | clique | "Duplicar": files:duplicate-image copia o arquivo e cria um bloco de imagem novo 32 px à direita deste; feedback "Imagem duplicada no canvas.". (desabilitado: Sem caminho ou duplicando.) | "Não foi possível duplicar a imagem." (duplicateImageNode tem .catch e devolve false). | — |
 | `title="Remover o arquivo temporário e este bloco"` (button) | clique | "Remover temporário": files:remove-generated-image apaga o arquivo do disco e, se der certo, tira o bloco, as arestas dele (canvas:delete-edge) e o registro (canvas:delete). Sem confirmação; com o canvas travado recusa (lockedRef, fora do onBeforeDelete). (desabilitado: Sem caminho; só aparece em imagem temporária.) | "Não foi possível remover o arquivo temporário." quando o processo principal recusa; rejeição fora do .catch interno não tem tratamento. | — |
-| `aria-label={`Desligar ${agent.label}`}` (button) | clique | Um por agente ligado: unlinkAgentFromFile remove todas as arestas entre o arquivo e o terminal (estado e canvas:delete-edge); o agente some de "Agentes ligados". O agente não é avisado. (desabilitado: Some sem onUnlinkAgent; fica invisível (opacity-0) até o hover, inclusive com foco de teclado.) | Falha de canvas:delete-edge aparece na barra de status (a aresta pode voltar no próximo início). | — |
-| `title="Ligar este arquivo a um agente do canvas"` (button) | clique | "Ligar agente": abre/fecha o menu com os terminais ainda não ligados; clique fora fecha. (desabilitado: Some sem onLinkAgent e em imagem.) | Sem falha própria. O menu abre para cima dentro do cartão overflow-hidden e pode ser cortado num bloco baixo. | — |
-| `onClick={() => onLink(agent.id)}` (button) | clique | Um por terminal disponível: linkAgentToFile cria a aresta (canvas:save-edge) se faltar e digita no agente o aviso do arquivo com Enter (announceFileNodeToTerminalNode → pty:write); fecha o menu. | Falha de canvas:save-edge aparece na barra de status; arquivo externo (sem fileName) ou resolve falho não avisam o agente e nada diz isso. | — |
+| `aria-label={`Desligar ${agent.label}`}` (button) | clique | Um por agente ligado: unlinkAgentFromFile remove todas as arestas entre o arquivo e o terminal (estado e canvas:delete-edge); o agente some de "Agentes ligados". O agente não é avisado. (desabilitado: Some sem onUnlinkAgent; fica invisível (opacity-0) até o hover, inclusive com foco de teclado.) | Falha de canvas:delete-edge aparece na barra de status (a aresta pode voltar no próximo início). | `scripts/canvas-smoke.cjs` → `checarControlesDoArquivo` |
+| `title="Ligar este arquivo a um agente do canvas"` (button) | clique | "Ligar agente": abre/fecha o menu com os terminais ainda não ligados; clique fora fecha. (desabilitado: Some sem onLinkAgent e em imagem.) | Sem falha própria. O menu abre para cima dentro do cartão overflow-hidden e pode ser cortado num bloco baixo. | `scripts/canvas-smoke.cjs` → `checarControlesDoArquivo` |
+| `onClick={() => onLink(agent.id)}` (button) | clique | Um por terminal disponível: linkAgentToFile cria a aresta (canvas:save-edge) se faltar e digita no agente o aviso do arquivo com Enter (announceFileNodeToTerminalNode → pty:write); fecha o menu. | Falha de canvas:save-edge aparece na barra de status; arquivo externo (sem fileName) ou resolve falho não avisam o agente e nada diz isso. | `scripts/canvas-smoke.cjs` → `checarControlesDoArquivo` |
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Nenhum dos 16 controles do bloco é clicado por teste: modos, diagnóstico, ações de imagem, zoom e ligar/desligar agente são efeito lido no código. | médio | `3ec91f95-497e-8141-b6c1-d1833aac5664` |
+| Oito dos 16 controles do bloco (imagem: Reparar referência, zoom −, +, redefinir, Abrir no sistema, Salvar cópia, Duplicar e Remover temporário) não são clicados por teste: falta um bloco de imagem no fixture. Reparar, Abrir e Salvar também abrem diálogo ou app do sistema. Os outros oito agora são cobertos por checarControlesDoArquivo. | médio | `41c91f95-497e-81c9-bc07-e565a7dd49a3` |
 | Promessas sem catch em FileNode.tsx:239-309: copyPath, openImageInSystem, saveImageCopy e removeTemporaryImage não tratam rejeição; generateDiagnosis, duplicateImage e repairImage usam try/finally sem catch. A rejeição vira unhandledrejection e o bloco não diz nada; copyPath mostra ✓ mesmo sem navigator.clipboard. | médio | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 | requestRepoDiagnosis (services/file-terminal-links.ts:125-135) devolve "ok" sem esperar o resultado de store.sendText: "Diagnóstico solicitado ao terminal conectado." aparece mesmo se o pty:write falhar. | médio | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 | Botão "Desligar <agente>" (FileNode.tsx:816) é opacity-0 até o hover e não tem focus-visible: com teclado ele recebe foco invisível. | baixo | `3ec91f95-497e-8197-a218-ef49c302013d` |
@@ -667,7 +663,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `canvas:save`, `canvas:delete`, `external-links:open-failed`, `webview-permissions:pending`, `webview-permissions:respond`, `webview-popups:blocked`, `agent-webpage-act:list-sessions`, `agent-webpage-act:sessions`, `agent-webpage-act:end-session`
 - **Depende de:** `useReactFlow`, `useWebviewSitePermissions / describeSitePermissionRequest (webview-site-permissions)`, `partitionForWebviewProfile (webview-profile)`, `explainUrlInput / persistableNavigationUrl (url-utils)`, `resolveGuestSrc / shouldCreateGuest / staleGuests (webview-mount)`, `webviewLinkMenu (webview-context-menu)`, `openLinkChooser / runLinkChoice`, `WebviewProfileMenu`
 - **Sobreposição:** Bloco do React Flow, sem z próprio: fica abaixo de toda superfície fixa (topbar e statusbar 18, dock e painéis 20/30, sidebar 26, menus 50+). O cartão é overflow-hidden, então nada que nasce dentro dele passa das bordas. O <webview> composita por cima do DOM do cartão e engole o mousedown nas bordas: um véu (pointer-events-auto) só liga durante o resize. Cliques dentro do guest não chegam ao document, então menus que fecham por mousedown fora (perfil) ficam abertos.
-- **Testes:** `src/features/canvas/services/webview-site-permissions.test.ts`, `src/features/canvas/services/url-utils.test.ts`, `src/features/canvas/services/webview-mount.test.ts`, `src/features/canvas/services/webview-context-menu.test.ts`, `electron/services/webview-lifecycle.test.cjs`, `electron/services/webview-profile-partition.test.cjs`, `scripts/canvas-smoke-links.cjs` → `paginaWebBarraEBotao`, `scripts/canvas-smoke-links.cjs` → `paginaWebMenuDeLink`, `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`
+- **Testes:** `src/features/canvas/services/webview-site-permissions.test.ts`, `src/features/canvas/services/url-utils.test.ts`, `src/features/canvas/services/webview-mount.test.ts`, `src/features/canvas/services/webview-context-menu.test.ts`, `electron/services/webview-lifecycle.test.cjs`, `electron/services/webview-profile-partition.test.cjs`, `scripts/canvas-smoke-links.cjs` → `paginaWebBarraEBotao`, `scripts/canvas-smoke-links.cjs` → `paginaWebMenuDeLink`, `scripts/canvas-smoke.cjs` → `checarVoltarEAvancarNaPaginaWeb`, `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`
 
 | Estado | Quando |
 | --- | --- |
@@ -684,14 +680,13 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `onClick={() => void respondPermission(permissionRequest.id, true)}` (button) | clique | Permitir: webview-permissions:respond com allow=true; o main grava "granted" para cada permissão do pedido (perfil + origem), responde ao site e resolve os outros pedidos do mesmo site e perfil. | Pedido que já sumiu (a página navegou ou o bloco fechou) devolve "Pedido de permissão não encontrado." e a faixa some pelo aviso de pendentes. | — |
 | `onClick={() => void respondPermission(permissionRequest.id, false)}` (button) | clique | Negar: webview-permissions:respond com allow=false; o main grava "denied" (lembrado até revogar) e responde ao site; sem resposta nenhuma o site também fica sem a permissão. | Mesmo caso do Permitir: pedido que sumiu não grava nada. | — |
 | `onClick={actSession.end}` (button) | clique | Encerrar agora: agent-webpage-act:end-session apaga a sessão curta do bloco no main; o agente volta a precisar do cartão para clicar e digitar. | Sem sessão (já acabou) não faz nada; a faixa some pelo aviso de sessões. | — |
-| `aria-label="Voltar"` (button) | clique | webview.goBack(); did-navigate atualiza a barra, o histórico e grava a URL persistível (data.url). (desabilitado: Sem histórico para trás.) | Sem try: antes do dom-ready do guest (ex.: logo após trocar de perfil, com canGoBack ainda do guest antigo) o Electron lança síncrono. | — |
-| `aria-label="Avançar"` (button) | clique | webview.goForward(); mesma atualização da barra e da URL gravada. (desabilitado: Sem histórico para frente.) | Mesmo risco do Voltar: lança antes do dom-ready. | — |
+| `aria-label="Voltar"` (button) | clique | webview.goBack(); did-navigate atualiza a barra, o histórico e grava a URL persistível (data.url). (desabilitado: Sem histórico para trás.) | Sem try: antes do dom-ready do guest (ex.: logo após trocar de perfil, com canGoBack ainda do guest antigo) o Electron lança síncrono. | `scripts/canvas-smoke.cjs` → `checarVoltarEAvancarNaPaginaWeb` |
+| `aria-label="Avançar"` (button) | clique | webview.goForward(); mesma atualização da barra e da URL gravada. (desabilitado: Sem histórico para frente.) | Mesmo risco do Voltar: lança antes do dom-ready. | `scripts/canvas-smoke.cjs` → `checarVoltarEAvancarNaPaginaWeb` |
 | `aria-label="Recarregar"` (button) | clique | webview.reload(); a navegação troca o texto da barra pela URL real e apaga o aviso de endereço recusado. | Sem try e sempre habilitado: clicado antes do dom-ready (página inicial carregando, guest recriado pela troca de perfil) lança síncrono. | `scripts/canvas-smoke-links.cjs` → `paginaWebBarraEBotao` |
 | `aria-label="Abrir esta página no navegador"` (button) | clique | runLinkChoice("abrir-no-navegador") com a URL atual do guest (ou a última boa): window.open → o processo principal entrega ao navegador do sistema sob a política única de URL. | Recusa ou falha do sistema volta por external-links:open-failed e o LinkChooserHost avisa; URL fora da política não faz nada. | `scripts/canvas-smoke-links.cjs` → `paginaWebBarraEBotao` |
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Voltar e Avançar não são clicados por nenhum teste. | baixo | `3ec91f95-497e-8141-b6c1-d1833aac5664` |
 | Voltar, Avançar e Recarregar (WebpageNode.tsx:319, 329, 339) chamam o guest sem try, ao contrário de navigateTo e openInExternalBrowser: antes do dom-ready o Electron lança síncrono. Recarregar fica sempre habilitado e, depois de trocar de perfil, canGoBack/canGoForward continuam com o valor do guest antigo. | médio | `3ec91f95-497e-8176-bef0-dfde828936dc` |
 | Rótulo pelo título da página (WebpageNode.tsx:84 e 190-194): sem nome manual, o rótulo segue cada título durante a sessão, mas ao reabrir o app labelCustomizedRef nasce verdadeiro (há label gravado) e o rótulo trava no último título. O comentário diz "wins once". | baixo | `3ec91f95-497e-8103-b360-c1979d6992f4` |
 
@@ -780,7 +775,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `canvas:save`, `canvas:delete`
 - **Depende de:** `useReactFlow`, `onDataChange (updateNodeData, CanvasView)`
 - **Sobreposição:** Bloco do React Flow, sem z próprio: fica abaixo de toda superfície fixa (topbar e statusbar 18, dock e painéis 20/30, sidebar 26, menus 50+). O cartão é overflow-hidden, então nada que nasce dentro dele passa das bordas. O SVG ocupa o corpo (nodrag nowheel nopan, touch-none); cinco cores + três espessuras + dois botões dividem o cabeçalho com o título num bloco de mínimo 220 px.
-- **Testes:** `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`, `scripts/canvas-smoke.cjs` → `checarInteracoes`
+- **Testes:** `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`, `scripts/canvas-smoke.cjs` → `checarInteracoes`, `scripts/canvas-smoke.cjs` → `checarDesenhoLeve`
 
 | Estado | Quando |
 | --- | --- |
@@ -791,15 +786,14 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Controle | Gatilho | Efeito | Falha conhecida | Teste |
 | --- | --- | --- | --- | --- |
-| `aria-label={`Cor ${swatch}`}` (button) | clique | Uma bolinha por cor (5): troca a cor do próximo traço. Estado local, volta ao branco ao remontar. | Sem falha própria. | — |
-| `aria-label={`Espessura ${width}px`}` (button) | clique | Uma por espessura (2, 4, 8 px): troca a espessura do próximo traço. Estado local. | Sem falha própria. | — |
-| `aria-label="Desfazer último traço"` (button) | clique | Remove o último traço e grava data.strokes (onDataChange → canvas:save). (desabilitado: Sem traços.) | O traço desfeito continua visível no path de prévia até o próximo traço (bug suspeito); falha de canvas:save só no console. | — |
-| `aria-label="Limpar desenho"` (button) | clique | Apaga todos os traços e grava strokes vazio. Sem confirmação e sem como desfazer. (desabilitado: Sem traços.) | O último traço desenhado continua visível no path de prévia (bug suspeito); falha de canvas:save só no console. | — |
+| `aria-label={`Cor ${swatch}`}` (button) | clique | Uma bolinha por cor (5): troca a cor do próximo traço. Estado local, volta ao branco ao remontar. | Sem falha própria. | `scripts/canvas-smoke.cjs` → `checarDesenhoLeve` |
+| `aria-label={`Espessura ${width}px`}` (button) | clique | Uma por espessura (2, 4, 8 px): troca a espessura do próximo traço. Estado local. | Sem falha própria. | `scripts/canvas-smoke.cjs` → `checarDesenhoLeve` |
+| `aria-label="Desfazer último traço"` (button) | clique | Remove o último traço e grava data.strokes (onDataChange → canvas:save). (desabilitado: Sem traços.) | O traço desfeito continua visível no path de prévia até o próximo traço (bug suspeito); falha de canvas:save só no console. | `scripts/canvas-smoke.cjs` → `checarDesenhoLeve` |
+| `aria-label="Limpar desenho"` (button) | clique | Apaga todos os traços e grava strokes vazio. Sem confirmação e sem como desfazer. (desabilitado: Sem traços.) | O último traço desenhado continua visível no path de prévia (bug suspeito); falha de canvas:save só no console. | `scripts/canvas-smoke.cjs` → `checarDesenhoLeve` |
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | Traço fantasma (DrawingNode.tsx:90-119 e 208): handlePointerMove escreve o "d" do path de prévia direto no DOM e finishStroke nunca o limpa; o React não controla esse atributo. Depois de Desfazer ou Limpar, o último traço desenhado continua na tela (na cor/espessura atuais) até o próximo traço ou um reload. | médio | `3ec91f95-497e-8103-b360-c1979d6992f4` |
-| Nenhum controle do desenho é exercitado: cor, espessura, desfazer, limpar e o próprio traço por ponteiro não têm teste (o smoke só usa o handle do bloco para conectar). | médio | `3ec91f95-497e-8141-b6c1-d1833aac5664` |
 
 ### Bloco Desenho Excalidraw
 
@@ -808,7 +802,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `canvas:save`, `canvas:delete`
 - **Depende de:** `useReactFlow`, `React.lazy(ExcalidrawCanvas)`, `onDataChange (updateNodeData, CanvasView)`
 - **Sobreposição:** Bloco do React Flow, sem z próprio: fica abaixo de toda superfície fixa (topbar e statusbar 18, dock e painéis 20/30, sidebar 26, menus 50+). O cartão é overflow-hidden, então nada que nasce dentro dele passa das bordas. Os menus e diálogos internos do Excalidraw ficam presos ao cartão: num bloco de mínimo 360×280 a barra de ferramentas e os popovers podem ser cortados.
-- **Testes:** `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`, `scripts/canvas-smoke.cjs` → `checarInteracoes`, `src/features/canvas/components/excalidraw-scene.test.ts`
+- **Testes:** `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`, `scripts/canvas-smoke.cjs` → `checarInteracoes`, `scripts/canvas-smoke.cjs` → `checarDesenhoExcalidraw`, `src/features/canvas/components/excalidraw-scene.test.ts`
 
 | Estado | Quando |
 | --- | --- |
@@ -823,7 +817,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | --- | --- | --- |
 | Fechar o bloco entrega a cena pendente ao canvas (ExcalidrawDrawingNode.tsx, cleanup), mas ao fechar o app ou trocar para o Chat o canvas inteiro desmonta junto e o setNodes que carrega a cena nunca roda: o último traço (até 600 ms + 400 ms) ainda se perde nesses dois casos, e nenhum teste monta o bloco. | baixo | `41b91f95-497e-81c5-bc4d-c151f42dc82c` |
 | Sem error boundary em volta do lazy: falha do chunk ou cena que faz o Excalidraw lançar derruba o canvas inteiro. | médio | `3ec91f95-497e-8176-bef0-dfde828936dc` |
-| Desenhar, gravar e reabrir a cena não tem teste (o smoke só conecta no handle e a auditoria de acessibilidade ignora .excalidraw). | médio | `3ec91f95-497e-8141-b6c1-d1833aac5664` |
 
 ### Cabeçalho do bloco (arrasto, nome e remover)
 
@@ -832,7 +825,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `canvas:save`, `canvas:delete`, `canvas:delete-edge`, `pty:kill`, `pty:write`, `files:remove-generated-image`
 - **Depende de:** `NODE_DRAG_HANDLE_CLASS (dragHandle do React Flow)`, `onTitleChange / onTitleCommit / onRemove de cada bloco`, `releaseRemovedCanvasNodes (canvas-node-removal)`
 - **Sobreposição:** Dentro do cartão de cada bloco, sem z próprio. A área de ações é nodrag; o nome é um input nodrag. Pode ficar sob a dock de terminais e sob a sidebar/rail quando o bloco encosta nelas.
-- **Testes:** `scripts/canvas-smoke.cjs` → `checarInteracoes`, `src/features/canvas/services/canvas-node-removal.test.ts`, `src/features/canvas/services/canvas-removal-guard.test.ts`
+- **Testes:** `scripts/canvas-smoke.cjs` → `checarInteracoes`, `scripts/canvas-smoke.cjs` → `checarNomeERemoverNoCabecalho`, `src/features/canvas/services/canvas-node-removal.test.ts`, `src/features/canvas/services/canvas-removal-guard.test.ts`
 
 | Estado | Quando |
 | --- | --- |
@@ -842,11 +835,10 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Controle | Gatilho | Efeito | Falha conhecida | Teste |
 | --- | --- | --- | --- | --- |
-| `aria-label="Remover no"` (button) | clique | onRemove do bloco: deleteElements → onNodesChange tira o bloco e as arestas dele, chama canvas:delete e canvas:delete-edge e apaga imagem temporária do disco; o PTY do terminal é encerrado nesse onNodesChange, depois do onBeforeDelete: com a trava ligada nada sai, e terminal com processo vivo ou imagem temporária pede confirmação. (desabilitado: Some quando o bloco não passa onRemove.) | Bloco comum sai sem confirmação e não há desfazer; falha de canvas:delete ou canvas:delete-edge aparece na barra de status (o bloco pode voltar no próximo início). | — |
+| `aria-label="Remover no"` (button) | clique | onRemove do bloco: deleteElements → onNodesChange tira o bloco e as arestas dele, chama canvas:delete e canvas:delete-edge e apaga imagem temporária do disco; o PTY do terminal é encerrado nesse onNodesChange, depois do onBeforeDelete: com a trava ligada nada sai, e terminal com processo vivo ou imagem temporária pede confirmação. (desabilitado: Some quando o bloco não passa onRemove.) | Bloco comum sai sem confirmação e não há desfazer; falha de canvas:delete ou canvas:delete-edge aparece na barra de status (o bloco pode voltar no próximo início). | `scripts/canvas-smoke.cjs` → `checarNomeERemoverNoCabecalho` |
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| O X ("Remover no") e o nome editável não são exercitados por nenhum teste com asserção (só o script de heap clica no X, sem conferir o efeito). | médio | `3ec91f95-497e-8141-b6c1-d1833aac5664` |
 | Renomear um terminal (onTitleCommit) digita no agente "A partir de agora, seu nome neste canvas é …" já submetido com Enter. | baixo | `3eb91f95-497e-8126-8750-d9834c65f306` |
 | A dock de terminais recolhidos intercepta cliques em grip, nome e X dos blocos embaixo dela em telas < 768 px, mesmo vazia. | médio | `3e691f95-497e-810e-a39b-f26d90a38c8e` |
 
@@ -882,7 +874,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `canvas:list-edges`, `canvas:save-edge`, `canvas:delete-edge`
 - **Depende de:** `useEdgesState`, `edgeHandlesBetween / nearestSides (node-geometry)`, `onConnect / onEdgesChange / edgesWithHandles (CanvasView)`, `saveCanvasEdge / deleteCanvasEdge (canvas-storage)`
 - **Sobreposição:** SVG de arestas do React Flow, abaixo dos blocos; sem z próprio. Terminal e arquivo têm source e target sobrepostos em cada lado; os outros blocos, um handle de entrada à esquerda e um de saída à direita.
-- **Testes:** `src/features/canvas/services/edge-handle-routing.test.ts`, `src/features/canvas/services/canvas-selection.test.ts`, `src/features/canvas/services/canvas-storage.test.ts`, `electron/services/storage/canvas-repository.test.cjs`, `electron/services/canvas-ipc-handlers.test.cjs`, `scripts/canvas-smoke.cjs` → `checarInteracoes`, `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`
+- **Testes:** `src/features/canvas/services/edge-handle-routing.test.ts`, `src/features/canvas/services/canvas-selection.test.ts`, `src/features/canvas/services/canvas-storage.test.ts`, `electron/services/storage/canvas-repository.test.cjs`, `electron/services/canvas-ipc-handlers.test.cjs`, `scripts/canvas-smoke.cjs` → `checarInteracoes`, `scripts/canvas-smoke.cjs` → `checarRemoverAresta`, `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`
 
 | Estado | Quando |
 | --- | --- |
@@ -893,10 +885,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | disabled | Canvas travado: nodesConnectable falso, arrastar de um handle não conecta. |
 
 Sem controle próprio: as ações vêm de outros elementos.
-
-| Lacuna | Risco | Task |
-| --- | --- | --- |
-| Remover aresta (selecionar + Delete/Backspace ou Remover da barra de status) não tem teste; o smoke só cria por arrasto e confere a persistência. | baixo | `3ec91f95-497e-8141-b6c1-d1833aac5664` |
 
 ### Ligação arquivo ↔ terminal (contexto do agente)
 
@@ -928,7 +916,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `canvas:save`, `canvas:delete`
 - **Depende de:** `onNodeDragStop (CanvasView)`, `isInside (node-geometry)`, `orderedNodes (grupos antes dos filhos)`, `toPersistedNode / toFlowNode (useCanvasPersistence)`, `getElementsToRemove do @xyflow/system (remoção em cascata)`
 - **Sobreposição:** Grupos renderizam primeiro e ficam sob os filhos. Só a ponta superior esquerda conta no encaixe: um bloco maior que o grupo vira filho e fica preso aos limites dele.
-- **Testes:** `electron/services/storage/canvas-repository.test.cjs`, `scripts/canvas-smoke.cjs` → `checarOclusaoDoFixture`
+- **Testes:** `electron/services/storage/canvas-repository.test.cjs`, `scripts/canvas-smoke.cjs` → `checarOclusaoDoFixture`, `scripts/canvas-smoke.cjs` → `checarEncaixeNoGrupo`
 
 | Estado | Quando |
 | --- | --- |
@@ -937,10 +925,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | disabled | Não há como desagrupar: o filho não sai do grupo (extent "parent" e onNodeDragStop ignora quem tem parentId), só some se for apagado; grupo não entra em outro grupo; canvas travado não arrasta. |
 
 Sem controle próprio: as ações vêm de outros elementos.
-
-| Lacuna | Risco | Task |
-| --- | --- | --- |
-| Encaixar um bloco no grupo (isInside, sem teste unitário) e a persistência do parent_id depois do reload não têm teste na tela; o grupo do fixture não tem filhos. | médio | `3ec91f95-497e-8141-b6c1-d1833aac5664` |
 
 ## Terminal e processo
 
@@ -2745,7 +2729,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `canvas:save`
 - **Depende de:** `readFrameColor / FRAME_COLORS / FRAME_COLOR_SWATCHES (frame-colors)`, `colorMenu e updateNodeData (CanvasView)`, `frameClassName (orderedNodes)`
 - **Sobreposição:** fixed z-50 (mesmo nível de toasts e overlay isBusy): acima de topbar/statusbar (18), dock e painéis (20/30) e sidebar (26); abaixo do anel e do card do tutorial (54/55), dos diálogos (60), do menu de perfil (70) e dos FelixoSelect (1000).
-- **Testes:** `src/features/canvas/components/frame-colors.test.ts`, `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarMenuDeCorDentroDaJanela`
+- **Testes:** `src/features/canvas/components/frame-colors.test.ts`, `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarMenuDeCorDentroDaJanela`, `scripts/canvas-smoke.cjs` → `checarCorDaMoldura`
 
 | Estado | Quando |
 | --- | --- |
@@ -2754,13 +2738,12 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Controle | Gatilho | Efeito | Falha conhecida | Teste |
 | --- | --- | --- | --- | --- |
-| `onClick={() => onSelect(color)}` (button) | clique | Uma por cor: updateNodeData(nodeId, { frameColor }) → canvas:save; o wrapper do bloco ganha felixo-frame felixo-frame-<cor> e a borda muda; o menu fecha. | Falha de canvas:save só no console (a cor some no próximo início). | — |
-| `onClick={() => onSelect(undefined)}` (button) | clique | "Sem cor": grava frameColor indefinido, a classe de moldura sai e o menu fecha. (desabilitado: Sem cor ativa.) | Falha de canvas:save só no console. | — |
-| `role="menuitem"` (role) | clique | O mesmo "Sem cor" exposto como item de menu (contado à parte pelo padrão role="menuitem"): mesmo efeito do botão. (desabilitado: Sem cor ativa.) | Sem falha própria além da do botão. | — |
+| `onClick={() => onSelect(color)}` (button) | clique | Uma por cor: updateNodeData(nodeId, { frameColor }) → canvas:save; o wrapper do bloco ganha felixo-frame felixo-frame-<cor> e a borda muda; o menu fecha. | Falha de canvas:save só no console (a cor some no próximo início). | `scripts/canvas-smoke.cjs` → `checarCorDaMoldura` |
+| `onClick={() => onSelect(undefined)}` (button) | clique | "Sem cor": grava frameColor indefinido, a classe de moldura sai e o menu fecha. (desabilitado: Sem cor ativa.) | Falha de canvas:save só no console. | `scripts/canvas-smoke.cjs` → `checarCorDaMoldura` |
+| `role="menuitem"` (role) | clique | O mesmo "Sem cor" exposto como item de menu (contado à parte pelo padrão role="menuitem"): mesmo efeito do botão. (desabilitado: Sem cor ativa.) | Sem falha própria além da do botão. | `scripts/canvas-smoke.cjs` → `checarCorDaMoldura` |
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Escolher uma cor ou "Sem cor" não é exercitado: o smoke só abre o menu por clique direito no grupo e fecha com Esc, em 1280×800. | baixo | `3ec91f95-497e-8141-b6c1-d1833aac5664` |
 | Menu fixed no clientX/clientY sem limite à janela (NodeColorMenu.tsx:39-40): medido com o clique a 4 px das bordas direita e de baixo, o menu passa 172 px pela direita e 129 px por baixo, em 320, 768 e 1280 px (canvas-smoke-sobreposicoes.cjs → checarMenuDeCorDentroDaJanela). Defeito conhecido: o limite à janela fica para a task. | médio | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
 | Sem foco nem teclado (NodeColorMenu.tsx:35-72; CanvasView.tsx:3174-3178): o foco não entra no role="menu", não há setas, e o menu só fecha por Esc, clique no fundo ou escolha — clicar noutro bloco, rolar ou dar zoom o deixam aberto no lugar antigo. | baixo | `3ec91f95-497e-8197-a218-ef49c302013d` |
 | O realce de notificação não lida é declarado depois da moldura no CSS e vence a cor escolhida; ainda não conferido numa janela real nem no smoke. | baixo | `3e191f95-497e-81fd-b657-d7a63b5d17f0` |
@@ -2772,7 +2755,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `webview-profiles:list`, `webview-profiles:save`, `webview-profiles:delete`, `canvas:save`, `webview-permissions:list`, `webview-permissions:revoke`
 - **Depende de:** `useWebviewProfiles (webviewProfilesStore, useSyncExternalStore)`, `useWebviewSitePermissions / groupSitePermissions (webview-site-permissions)`, `describeWebviewProfile / isCustomProfileId (webview-profile)`, `FRAME_COLOR_SWATCHES`, `createPortal`
 - **Sobreposição:** Portal fixed z-70, w-52, clampado à largura da janela (left ≥ 8): acima de menu de cor (50), anel/card do tutorial (54/55) e diálogos (60); abaixo só dos FelixoSelect (1000). Não reposiciona quando o canvas se move.
-- **Testes:** `src/features/canvas/services/webview-site-permissions.test.ts`, `electron/services/webview-site-permissions.test.cjs`, `src/features/canvas/services/webview-profile.test.ts`, `src/features/canvas/services/webview-profiles-store.test.ts`, `electron/services/webview-profiles-ipc-handlers.test.cjs`, `electron/services/storage/webview-profiles-repository.test.cjs`, `electron/services/webview-profile-partition.test.cjs`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarMenuDoPerfilAcompanhaOZoom`
+- **Testes:** `src/features/canvas/services/webview-site-permissions.test.ts`, `electron/services/webview-site-permissions.test.cjs`, `src/features/canvas/services/webview-profile.test.ts`, `src/features/canvas/services/webview-profiles-store.test.ts`, `electron/services/webview-profiles-ipc-handlers.test.cjs`, `electron/services/storage/webview-profiles-repository.test.cjs`, `scripts/canvas-smoke.cjs` → `checarPerfilDoNavegador`, `electron/services/webview-profile-partition.test.cjs`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarMenuDoPerfilAcompanhaOZoom`
 
 | Estado | Quando |
 | --- | --- |
@@ -2785,15 +2768,15 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Controle | Gatilho | Efeito | Falha conhecida | Teste |
 | --- | --- | --- | --- | --- |
-| `aria-haspopup="menu"` (button) | clique | Abre/fecha o menu em portal (document.body), posicionado sob o botão e contido na largura da janela; Esc e mousedown fora fecham. | Sem falha própria. | — |
-| `onChange(item.id)` (button) | clique | Um por perfil (role="menuitemradio"): grava data.profileId no bloco (canvas:save); a partição muda e o webview é recriado na mesma página com os logins do outro perfil; o menu fecha. | Falha de canvas:save só no console; o guest recriado ainda não tem dom-ready e Voltar/Recarregar podem lançar (ver bloco Página Web). | — |
-| `aria-label={`Excluir o perfil ${item.name}`}` (button) | clique | Um por perfil próprio: confirm e webview-profiles:delete (o processo principal apaga cookies e logins da partição e tira o perfil); some da lista em todos os blocos. (desabilitado: Não existe no Padrão.) | role="alert" com a mensagem; cancelar o confirm não faz nada; blocos que usavam o perfil passam a "Perfil removido". | — |
-| `aria-label="Criar perfil"` (button) | clique | Valida o nome (validateWebviewProfileName), grava em webview-profiles:save, aplica o perfil novo ao bloco e fecha o menu (Enter no campo faz o mesmo). (desabilitado: Nome vazio.) | role="alert" com o motivo da recusa ou "Não foi possível criar o perfil.". | — |
+| `aria-haspopup="menu"` (button) | clique | Abre/fecha o menu em portal (document.body), posicionado sob o botão e contido na largura da janela; Esc e mousedown fora fecham. | Sem falha própria. | `scripts/canvas-smoke.cjs` → `checarPerfilDoNavegador` |
+| `onChange(item.id)` (button) | clique | Um por perfil (role="menuitemradio"): grava data.profileId no bloco (canvas:save); a partição muda e o webview é recriado na mesma página com os logins do outro perfil; o menu fecha. | Falha de canvas:save só no console; o guest recriado ainda não tem dom-ready e Voltar/Recarregar podem lançar (ver bloco Página Web). | `scripts/canvas-smoke.cjs` → `checarPerfilDoNavegador` |
+| `aria-label={`Excluir o perfil ${item.name}`}` (button) | clique | Um por perfil próprio: confirm e webview-profiles:delete (o processo principal apaga cookies e logins da partição e tira o perfil); some da lista em todos os blocos. (desabilitado: Não existe no Padrão.) | role="alert" com a mensagem; cancelar o confirm não faz nada; blocos que usavam o perfil passam a "Perfil removido". | `scripts/canvas-smoke.cjs` → `checarPerfilDoNavegador` |
+| `aria-label="Criar perfil"` (button) | clique | Valida o nome (validateWebviewProfileName), grava em webview-profiles:save, aplica o perfil novo ao bloco e fecha o menu (Enter no campo faz o mesmo). (desabilitado: Nome vazio.) | role="alert" com o motivo da recusa ou "Não foi possível criar o perfil.". | `scripts/canvas-smoke.cjs` → `checarPerfilDoNavegador` |
 | `aria-label={`Revogar as permissões de ${displayOrigin(site.origin)}`}` (button) | clique | Um por site com permissão respondida neste perfil ("Permissões dos sites neste perfil", com o que cada um pode e não pode): webview-permissions:revoke do site inteiro; o site volta a perguntar. (desabilitado: A seção só aparece com alguma permissão respondida no perfil.) | role="alert" com a mensagem da recusa; a lista se atualiza pelo aviso webview-permissions:changed. | — |
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Nenhum dos 4 controles é exercitado na tela: trocar, criar e excluir perfil (que apaga logins) só têm teste de store e de IPC. | médio | `3ec91f95-497e-8141-b6c1-d1833aac5664` |
+| Revogar as permissões de um site no perfil não é clicado por teste: o smoke não cria um pedido de permissão de site para responder antes. Pendência. Trocar, criar e excluir perfil agora são cobertos por checarPerfilDoNavegador. | médio | `41c91f95-497e-8195-9b3b-e40145bef07e` |
 | Falha ao listar perfis é silenciosa (services/webview-profiles-store.ts:38-45): ok falso deixa ready falso para sempre ("Perfil…" no botão) e uma rejeição nunca é tentada de novo (loaded já é verdadeiro). | baixo | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 | O menu (z-70) fica acima dos diálogos modais (60) e não acompanha pan/zoom do canvas (posição calculada só ao abrir): medido, o zoom desloca o botão em 111 px e o menu fica no lugar (canvas-smoke-sobreposicoes.cjs → checarMenuDoPerfilAcompanhaOZoom). Defeito conhecido. O clique dentro do webview não fecha: não medido. | baixo | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
 
@@ -3147,7 +3130,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Nenhum smoke abre o aviso nem clica "Fazer login e sincronizar": a única passada pela tela foi a validação manual de 09/10/2026 (app isolado, servidor local que exige senha). | baixo | `3ec91f95-497e-8141-b6c1-d1833aac5664` |
+| Nenhum smoke abre o aviso nem clica "Fazer login e sincronizar": a única passada pela tela foi a validação manual de 09/10/2026 (app isolado, servidor local que exige senha). Fora de alcance do smoke nesta rodada: o aviso sai do sync real do System Design, e o smoke não tem como trocar esse sync por um falso sem mudar o processo principal. | baixo | `41c91f95-497e-8128-855f-dd80e25e4d7a` |
 
 ### Tela "A interface não conseguiu carregar"
 
@@ -3215,7 +3198,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3ec91f95-497e-8110-b363-cfade2b68b7a` — 42 lacunas
 - `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` — 17 lacunas
 - `3ec91f95-497e-8122-a08b-d26d4991acca` — 1 lacuna
-- `3ec91f95-497e-8141-b6c1-d1833aac5664` — 13 lacunas
 - `3ec91f95-497e-8176-bef0-dfde828936dc` — 6 lacunas
 - `3ec91f95-497e-818f-b9f2-f9710605c303` — 14 lacunas
 - `3ec91f95-497e-8197-a218-ef49c302013d` — 8 lacunas
@@ -3236,8 +3218,13 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `41b91f95-497e-81c9-b12f-edb0b8ed0b2d` — 1 lacuna
 - `41c91f95-497e-8120-9fbf-d6db17ae781b` — 1 lacuna
 - `41c91f95-497e-8121-a191-d493fb08519b` — 1 lacuna
+- `41c91f95-497e-8128-855f-dd80e25e4d7a` — 1 lacuna
 - `41c91f95-497e-8165-8cc0-ce2bd685c1a1` — 1 lacuna
+- `41c91f95-497e-816b-b515-c14adaee1c30` — 1 lacuna
 - `41c91f95-497e-817e-bb8c-ca6fe5e302a1` — 1 lacuna
+- `41c91f95-497e-8195-9b3b-e40145bef07e` — 1 lacuna
+- `41c91f95-497e-81c1-99d2-d7d725313276` — 1 lacuna
 - `41c91f95-497e-81c9-bb3a-da2b0c144512` — 1 lacuna
+- `41c91f95-497e-81c9-bc07-e565a7dd49a3` — 1 lacuna
 - `41c91f95-497e-81d3-83ab-fc42cd2e80f4` — 1 lacuna
 - `41c91f95-497e-81f9-9edf-eb89e07ee070` — 1 lacuna

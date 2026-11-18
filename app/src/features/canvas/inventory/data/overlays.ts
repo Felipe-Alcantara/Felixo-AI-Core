@@ -828,9 +828,9 @@ export const overlaySurfaces: InventoryElement[] = [
     ],
     gaps: [
       {
-        what: 'Nenhum smoke abre o aviso nem clica "Fazer login e sincronizar": a única passada pela tela foi a validação manual de 09/10/2026 (app isolado, servidor local que exige senha).',
+        what: 'Nenhum smoke abre o aviso nem clica "Fazer login e sincronizar": a única passada pela tela foi a validação manual de 09/10/2026 (app isolado, servidor local que exige senha). Fora de alcance do smoke nesta rodada: o aviso sai do sync real do System Design, e o smoke não tem como trocar esse sync por um falso sem mudar o processo principal.',
         risk: 'baixo',
-        task: '3ec91f95-497e-8141-b6c1-d1833aac5664',
+        task: '41c91f95-497e-8128-855f-dd80e25e4d7a',
       },
     ],
     overlap:

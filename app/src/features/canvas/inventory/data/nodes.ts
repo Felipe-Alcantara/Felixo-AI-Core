@@ -37,12 +37,14 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
     controls: [
       {
         locator: 'aria-label="Reiniciar terminal"',
+        test: smoke('checarBotoesDoTerminal'),
         kind: 'button',
         effect: 'Com retomada pendente não derruba nada: revela a faixa de retomada (mesmo guardada com o agente de pé) e foca o primeiro botão dela. Senão pede window.confirm se o processo está vivo e chama onRestart → relaunchTerminal: store.restart mata e sobe o PTY (pty:kill + pty:spawn) pelo plano de retomada e grava sessionStartedAt no bloco.',
         failure: 'Cancelar o confirm não faz nada. Falha do spawn aparece no cartão (selo "erro", snapshot.message). Se o plano segura ("held", ex.: esperando a versão da CLI com a faixa ainda nula) ou o bloco sumiu ("missing"), nada acontece e nada avisa.',
       },
       {
         locator: 'aria-label="Ver detalhes do terminal"',
+        test: smoke('checarBotoesDoTerminal'),
         kind: 'button',
         effect: 'onDetails → setDetailsTerminalId: abre o painel de detalhes (TerminalDetailsPanel) deste bloco.',
         failure: 'Sem falha própria (estado local do canvas).',
@@ -71,6 +73,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
       },
       {
         locator: 'aria-label={`Abrir ${nodeData.label || provider.label}`}',
+        test: smoke('checarBotoesDoTerminal'),
         kind: 'button',
         effect: 'A prévia inteira é um botão: onExpand abre a gaveta do terminal, como o Expandir (Ctrl/Cmd+clique abre ao lado). Mostra selo de atividade, último prompt, aviso de contexto (data-felixo-context-warning), aviso de scrollback cortado e as últimas linhas.',
         failure: 'Sem falha própria. No bloco mínimo (200×120), faixas de retomada e da cadeia espremem a prévia até ela sumir.',
@@ -123,6 +126,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
       smoke('checarVariosAgentes'),
       { file: SMOKE_CONTAS, check: 'abrirBlocoDaCadeia' },
       { file: SMOKE_PROMPTS, check: 'esperarCartao' },
+      smoke('checarBotoesDoTerminal'),
     ],
     gaps: [
       {
@@ -141,9 +145,9 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
         task: '3d791f95-497e-8190-84e0-df5328591a14',
       },
       {
-        what: 'Reiniciar terminal, Ver detalhes e a prévia ("Abrir …") não são clicados por nenhum teste; o confirm do processo vivo e o caminho "held" silencioso não têm cobertura.',
+        what: 'Caminho "held" silencioso (o plano de retomada segura enquanto espera a versão da CLI, ou o bloco some) sem teste: o fixture não reproduz plano segurado. Reiniciar, Ver detalhes, Abrir e a confirmação do processo vivo agora são cobertos por checarBotoesDoTerminal.',
         risk: 'médio',
-        task: '3ec91f95-497e-8141-b6c1-d1833aac5664',
+        task: '41c91f95-497e-816b-b515-c14adaee1c30',
       },
       {
         what: 'No bloco mínimo (200×120) a faixa de retomada (até 4 linhas + botões) e as faixas da cadeia empurram a prévia para fora do cartão overflow-hidden; nenhum teste mede.',
@@ -167,6 +171,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
     controls: [
       {
         locator: 'aria-label={`Cor ${color}`}',
+        test: smoke('checarCorDaNota'),
         kind: 'button',
         effect: 'Cada bolinha (amber, emerald, sky, rose, zinc) grava data.color via onDataChange → updateNodeData → canvas:save; o tema do cartão, do cabeçalho e do texto muda na hora.',
         failure: 'Falha de canvas:save só vai ao console ("[canvas] Falha ao salvar o nó"): a cor some no próximo início.',
@@ -193,13 +198,14 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
       smoke('checarInteracoes'),
       { file: SMOKE_LINKS, check: 'mostrarNotaRenderizada' },
       { file: SMOKE_LINKS, check: 'markdownComMouse' },
+      smoke('checarCorDaNota'),
       unit('electron/services/canvas-agent-write.test.cjs'),
     ],
     gaps: [
       {
-        what: 'Trocar a cor da nota não tem teste; a ressincronização do texto escrito por um agente (lastSyncedTextRef, NoteNode.tsx:45-51) só é testada no processo principal, nunca na tela: uma regressão faria a próxima tecla apagar a escrita aprovada.',
+        what: 'A ressincronização do texto escrito por um agente (lastSyncedTextRef, NoteNode.tsx:45-51) só é testada no processo principal, nunca na tela: uma regressão faria a próxima tecla apagar a escrita aprovada. Pendência: o smoke não abre um pedido de escrita de agente (canvas:resolve-write-request só aceita pedido aberto por um agente). A cor da nota agora é coberta por checarCorDaNota.',
         risk: 'médio',
-        task: '3ec91f95-497e-8141-b6c1-d1833aac5664',
+        task: '41c91f95-497e-81c1-99d2-d7d725313276',
       },
     ],
     overlap: `${NODE_OVERLAP_BASE} Um handle de entrada à esquerda e um de saída à direita, sem id. As bolinhas de cor dividem o cabeçalho com o título editável: num bloco estreito (mín. 180) o título encolhe.`,
@@ -217,6 +223,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
     controls: [
       {
         locator: 'aria-label="Remover grupo"',
+        test: smoke('checarRenomearERemoverGrupo'),
         kind: 'button',
         effect: 'deleteElements do grupo, que antes passa pelo onBeforeDelete do canvas (canvas-removal-guard): trava ligada não remove; grupo com filhos pede confirmação dizendo quantos blocos saem junto. Confirmado, o React Flow leva junto todos os filhos (parentId) e as arestas deles; onNodesChange encerra o PTY dos terminais filhos (store.remove), apaga imagens temporárias (files:remove-generated-image) e chama canvas:delete de cada um.',
         failure: 'Grupo vazio sai sem confirmação; não há desfazer. Falha de canvas:delete aparece na barra de status (o bloco pode reaparecer no próximo início).',
@@ -230,16 +237,11 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
       smoke('checarInteracoes'),
       smoke('checarOclusaoDoFixture'),
       smoke('checarZoomVisual'),
+      smoke('checarRenomearERemoverGrupo'),
       unit('src/features/canvas/services/canvas-removal-guard.test.ts'),
       unit('electron/services/storage/canvas-repository.test.cjs'),
     ],
-    gaps: [
-      {
-        what: 'Remover grupo e renomear o grupo não são exercitados por nenhum teste (o smoke só seleciona e mede o grupo vazio).',
-        risk: 'médio',
-        task: '3ec91f95-497e-8141-b6c1-d1833aac5664',
-      },
-    ],
+    gaps: [],
     overlap: 'Grupos renderizam antes dos outros blocos (orderedNodes) e ficam por baixo deles; sem z próprio. O smoke confere que o grupo do fixture não fica sob topbar, sidebar, statusbar, inspector e minimapa (checarOclusaoDoFixture).',
   },
 
@@ -261,12 +263,14 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
     controls: [
       {
         locator: 'aria-label="Copiar caminho"',
+        test: smoke('checarControlesDoArquivo'),
         kind: 'button',
         effect: 'Copia o caminho absoluto do arquivo (canvas-file:resolve ou filePath) com navigator.clipboard e mostra ✓ por 1,5 s.',
         failure: 'Erro engolido: sem caminho não faz nada; sem navigator.clipboard mostra ✓ sem copiar; writeText rejeitado vira unhandledrejection (void copyPath()), sem aviso.',
       },
       {
         locator: 'onClick={() => setEditing((value) => !value)}',
+        test: smoke('checarControlesDoArquivo'),
         kind: 'button',
         effect: 'Alterna edição ↔ visualização ("Editar" / "Visualizar como markdown" / "Visualizar texto"); editando, cada tecla chama useFileNodeDocument.save, que grava no disco (canvas-file:write ou text-file:write) 300 ms depois e na saída do bloco, conferindo o resultado.',
         failure: 'Gravação recusada (ok:false ou exceção): faixa vermelha role="alert" no bloco e aviso na barra de status até a próxima gravação dar certo; falha ao ler o .md do app também aparece na faixa.',
@@ -274,6 +278,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
       },
       {
         locator: "onClick={() => setMode('scratchpad')}",
+        test: smoke('checarControlesDoArquivo'),
         kind: 'button',
         effect: 'Grava data.mode = "scratchpad" (onDataChange → canvas:save), limpa o feedback de diagnóstico e esconde "Gerar diagnóstico".',
         failure: 'Falha de canvas:save só vai ao console.',
@@ -281,6 +286,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
       },
       {
         locator: "onClick={() => setMode('plan')}",
+        test: smoke('checarControlesDoArquivo'),
         kind: 'button',
         effect: 'Grava data.mode = "plan" e mostra o botão "Gerar diagnóstico".',
         failure: 'Falha de canvas:save só vai ao console.',
@@ -288,6 +294,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
       },
       {
         locator: 'onClick={() => void generateDiagnosis()}',
+        test: smoke('checarControlesDoArquivo'),
         kind: 'button',
         effect: 'requestRepoDiagnosis: acha o primeiro terminal ligado, resolve o caminho do .md (canvas-file:resolve) e digita no agente o prompt de diagnóstico com Enter (pty:write); mostra o feedback do status (ok, no-terminal, no-file, resolve-failed).',
         failure: 'try/finally sem catch: rejeição do resolve vira unhandledrejection e nenhum feedback aparece. "ok" sai sem esperar a entrega ao PTY.',
@@ -351,6 +358,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
       },
       {
         locator: 'aria-label={`Desligar ${agent.label}`}',
+        test: smoke('checarControlesDoArquivo'),
         kind: 'button',
         effect: 'Um por agente ligado: unlinkAgentFromFile remove todas as arestas entre o arquivo e o terminal (estado e canvas:delete-edge); o agente some de "Agentes ligados". O agente não é avisado.',
         failure: 'Falha de canvas:delete-edge aparece na barra de status (a aresta pode voltar no próximo início).',
@@ -358,6 +366,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
       },
       {
         locator: 'title="Ligar este arquivo a um agente do canvas"',
+        test: smoke('checarControlesDoArquivo'),
         kind: 'button',
         effect: '"Ligar agente": abre/fecha o menu com os terminais ainda não ligados; clique fora fecha.',
         failure: 'Sem falha própria. O menu abre para cima dentro do cartão overflow-hidden e pode ser cortado num bloco baixo.',
@@ -365,6 +374,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
       },
       {
         locator: 'onClick={() => onLink(agent.id)}',
+        test: smoke('checarControlesDoArquivo'),
         kind: 'button',
         effect: 'Um por terminal disponível: linkAgentToFile cria a aresta (canvas:save-edge) se faltar e digita no agente o aviso do arquivo com Enter (announceFileNodeToTerminalNode → pty:write); fecha o menu.',
         failure: 'Falha de canvas:save-edge aparece na barra de status; arquivo externo (sem fileName) ou resolve falho não avisam o agente e nada diz isso.',
@@ -419,12 +429,13 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
       unit('electron/services/file-attachments-ipc-handlers.test.cjs'),
       ...FIXTURE_TESTS,
       { file: 'scripts/canvas-smoke-sobreposicoes.cjs', check: 'checarMenuLigarAgenteDentroDoCartao' },
+      smoke('checarControlesDoArquivo'),
     ],
     gaps: [
       {
-        what: 'Nenhum dos 16 controles do bloco é clicado por teste: modos, diagnóstico, ações de imagem, zoom e ligar/desligar agente são efeito lido no código.',
+        what: 'Oito dos 16 controles do bloco (imagem: Reparar referência, zoom −, +, redefinir, Abrir no sistema, Salvar cópia, Duplicar e Remover temporário) não são clicados por teste: falta um bloco de imagem no fixture. Reparar, Abrir e Salvar também abrem diálogo ou app do sistema. Os outros oito agora são cobertos por checarControlesDoArquivo.',
         risk: 'médio',
-        task: '3ec91f95-497e-8141-b6c1-d1833aac5664',
+        task: '41c91f95-497e-81c9-bc07-e565a7dd49a3',
       },
       {
         what: 'Promessas sem catch em FileNode.tsx:239-309: copyPath, openImageInSystem, saveImageCopy e removeTemporaryImage não tratam rejeição; generateDiagnosis, duplicateImage e repairImage usam try/finally sem catch. A rejeição vira unhandledrejection e o bloco não diz nada; copyPath mostra ✓ mesmo sem navigator.clipboard.',
@@ -490,6 +501,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
       },
       {
         locator: 'aria-label="Voltar"',
+        test: smoke('checarVoltarEAvancarNaPaginaWeb'),
         kind: 'button',
         effect: 'webview.goBack(); did-navigate atualiza a barra, o histórico e grava a URL persistível (data.url).',
         failure: 'Sem try: antes do dom-ready do guest (ex.: logo após trocar de perfil, com canGoBack ainda do guest antigo) o Electron lança síncrono.',
@@ -497,6 +509,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
       },
       {
         locator: 'aria-label="Avançar"',
+        test: smoke('checarVoltarEAvancarNaPaginaWeb'),
         kind: 'button',
         effect: 'webview.goForward(); mesma atualização da barra e da URL gravada.',
         failure: 'Mesmo risco do Voltar: lança antes do dom-ready.',
@@ -542,14 +555,10 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
       unit('electron/services/webview-profile-partition.test.cjs'),
       { file: SMOKE_LINKS, check: 'paginaWebBarraEBotao' },
       { file: SMOKE_LINKS, check: 'paginaWebMenuDeLink' },
+      smoke('checarVoltarEAvancarNaPaginaWeb'),
       ...FIXTURE_TESTS,
     ],
     gaps: [
-      {
-        what: 'Voltar e Avançar não são clicados por nenhum teste.',
-        risk: 'baixo',
-        task: '3ec91f95-497e-8141-b6c1-d1833aac5664',
-      },
       {
         what: 'Voltar, Avançar e Recarregar (WebpageNode.tsx:319, 329, 339) chamam o guest sem try, ao contrário de navigateTo e openInExternalBrowser: antes do dom-ready o Electron lança síncrono. Recarregar fica sempre habilitado e, depois de trocar de perfil, canGoBack/canGoForward continuam com o valor do guest antigo.',
         risk: 'médio',
@@ -779,18 +788,21 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
     controls: [
       {
         locator: 'aria-label={`Cor ${swatch}`}',
+        test: smoke('checarDesenhoLeve'),
         kind: 'button',
         effect: 'Uma bolinha por cor (5): troca a cor do próximo traço. Estado local, volta ao branco ao remontar.',
         failure: 'Sem falha própria.',
       },
       {
         locator: 'aria-label={`Espessura ${width}px`}',
+        test: smoke('checarDesenhoLeve'),
         kind: 'button',
         effect: 'Uma por espessura (2, 4, 8 px): troca a espessura do próximo traço. Estado local.',
         failure: 'Sem falha própria.',
       },
       {
         locator: 'aria-label="Desfazer último traço"',
+        test: smoke('checarDesenhoLeve'),
         kind: 'button',
         effect: 'Remove o último traço e grava data.strokes (onDataChange → canvas:save).',
         failure: 'O traço desfeito continua visível no path de prévia até o próximo traço (bug suspeito); falha de canvas:save só no console.',
@@ -798,6 +810,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
       },
       {
         locator: 'aria-label="Limpar desenho"',
+        test: smoke('checarDesenhoLeve'),
         kind: 'button',
         effect: 'Apaga todos os traços e grava strokes vazio. Sem confirmação e sem como desfazer.',
         failure: 'O último traço desenhado continua visível no path de prévia (bug suspeito); falha de canvas:save só no console.',
@@ -807,17 +820,12 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
     persistence: ['canvas salvo (canvas_nodes.data_json: strokes em JSON, label, frameColor)', 'cor e espessura da caneta: nenhuma'],
     ipc: ['canvas:save', 'canvas:delete'],
     dependsOn: ['useReactFlow', 'onDataChange (updateNodeData, CanvasView)'],
-    tests: [...FIXTURE_TESTS, smoke('checarInteracoes')],
+    tests: [...FIXTURE_TESTS, smoke('checarInteracoes'), smoke('checarDesenhoLeve')],
     gaps: [
       {
         what: 'Traço fantasma (DrawingNode.tsx:90-119 e 208): handlePointerMove escreve o "d" do path de prévia direto no DOM e finishStroke nunca o limpa; o React não controla esse atributo. Depois de Desfazer ou Limpar, o último traço desenhado continua na tela (na cor/espessura atuais) até o próximo traço ou um reload.',
         risk: 'médio',
         task: '3ec91f95-497e-8103-b360-c1979d6992f4',
-      },
-      {
-        what: 'Nenhum controle do desenho é exercitado: cor, espessura, desfazer, limpar e o próprio traço por ponteiro não têm teste (o smoke só usa o handle do bloco para conectar).',
-        risk: 'médio',
-        task: '3ec91f95-497e-8141-b6c1-d1833aac5664',
       },
     ],
     overlap: `${NODE_OVERLAP_BASE} O SVG ocupa o corpo (nodrag nowheel nopan, touch-none); cinco cores + três espessuras + dois botões dividem o cabeçalho com o título num bloco de mínimo 220 px.`,
@@ -838,7 +846,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
     persistence: ['canvas salvo (canvas_nodes.data_json: scene em JSON com elements e viewBackgroundColor, label, frameColor), só quando a cena muda de fato (sceneToPersist)'],
     ipc: ['canvas:save', 'canvas:delete'],
     dependsOn: ['useReactFlow', 'React.lazy(ExcalidrawCanvas)', 'onDataChange (updateNodeData, CanvasView)'],
-    tests: [...FIXTURE_TESTS, smoke('checarInteracoes'), unit(`${COMPONENTS}/excalidraw-scene.test.ts`)],
+    tests: [...FIXTURE_TESTS, smoke('checarInteracoes'), smoke('checarDesenhoExcalidraw'), unit(`${COMPONENTS}/excalidraw-scene.test.ts`)],
     gaps: [
       {
         what: 'Fechar o bloco entrega a cena pendente ao canvas (ExcalidrawDrawingNode.tsx, cleanup), mas ao fechar o app ou trocar para o Chat o canvas inteiro desmonta junto e o setNodes que carrega a cena nunca roda: o último traço (até 600 ms + 400 ms) ainda se perde nesses dois casos, e nenhum teste monta o bloco.',
@@ -849,11 +857,6 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
         what: 'Sem error boundary em volta do lazy: falha do chunk ou cena que faz o Excalidraw lançar derruba o canvas inteiro.',
         risk: 'médio',
         task: '3ec91f95-497e-8176-bef0-dfde828936dc',
-      },
-      {
-        what: 'Desenhar, gravar e reabrir a cena não tem teste (o smoke só conecta no handle e a auditoria de acessibilidade ignora .excalidraw).',
-        risk: 'médio',
-        task: '3ec91f95-497e-8141-b6c1-d1833aac5664',
       },
     ],
     overlap: `${NODE_OVERLAP_BASE} Os menus e diálogos internos do Excalidraw ficam presos ao cartão: num bloco de mínimo 360×280 a barra de ferramentas e os popovers podem ser cortados.`,
@@ -1315,6 +1318,7 @@ export const nodeSurfaces: InventoryElement[] = [
     controls: [
       {
         locator: 'aria-label="Remover no"',
+        test: smoke('checarNomeERemoverNoCabecalho'),
         kind: 'button',
         effect: 'onRemove do bloco: deleteElements → onNodesChange tira o bloco e as arestas dele, chama canvas:delete e canvas:delete-edge e apaga imagem temporária do disco; o PTY do terminal é encerrado nesse onNodesChange, depois do onBeforeDelete: com a trava ligada nada sai, e terminal com processo vivo ou imagem temporária pede confirmação.',
         failure: 'Bloco comum sai sem confirmação e não há desfazer; falha de canvas:delete ou canvas:delete-edge aparece na barra de status (o bloco pode voltar no próximo início).',
@@ -1324,13 +1328,13 @@ export const nodeSurfaces: InventoryElement[] = [
     persistence: ['canvas salvo (data.label a cada tecla; posição gravada 400 ms depois do arrasto)'],
     ipc: ['canvas:save', 'canvas:delete', 'canvas:delete-edge', 'pty:kill', 'pty:write', 'files:remove-generated-image'],
     dependsOn: ['NODE_DRAG_HANDLE_CLASS (dragHandle do React Flow)', 'onTitleChange / onTitleCommit / onRemove de cada bloco', 'releaseRemovedCanvasNodes (canvas-node-removal)'],
-    tests: [smoke('checarInteracoes'), unit(`${SERVICES}/canvas-node-removal.test.ts`), unit(`${SERVICES}/canvas-removal-guard.test.ts`)],
+    tests: [
+      smoke('checarInteracoes'),
+      smoke('checarNomeERemoverNoCabecalho'),
+      unit(`${SERVICES}/canvas-node-removal.test.ts`),
+      unit(`${SERVICES}/canvas-removal-guard.test.ts`),
+    ],
     gaps: [
-      {
-        what: 'O X ("Remover no") e o nome editável não são exercitados por nenhum teste com asserção (só o script de heap clica no X, sem conferir o efeito).',
-        risk: 'médio',
-        task: '3ec91f95-497e-8141-b6c1-d1833aac5664',
-      },
       {
         what: 'Renomear um terminal (onTitleCommit) digita no agente "A partir de agora, seu nome neste canvas é …" já submetido com Enter.',
         risk: 'baixo',
@@ -1356,12 +1360,14 @@ export const nodeSurfaces: InventoryElement[] = [
     controls: [
       {
         locator: 'onClick={() => onSelect(color)}',
+        test: smoke('checarCorDaMoldura'),
         kind: 'button',
         effect: 'Uma por cor: updateNodeData(nodeId, { frameColor }) → canvas:save; o wrapper do bloco ganha felixo-frame felixo-frame-<cor> e a borda muda; o menu fecha.',
         failure: 'Falha de canvas:save só no console (a cor some no próximo início).',
       },
       {
         locator: 'onClick={() => onSelect(undefined)}',
+        test: smoke('checarCorDaMoldura'),
         kind: 'button',
         effect: '"Sem cor": grava frameColor indefinido, a classe de moldura sai e o menu fecha.',
         failure: 'Falha de canvas:save só no console.',
@@ -1369,6 +1375,7 @@ export const nodeSurfaces: InventoryElement[] = [
       },
       {
         locator: 'role="menuitem"',
+        test: smoke('checarCorDaMoldura'),
         kind: 'role',
         effect: 'O mesmo "Sem cor" exposto como item de menu (contado à parte pelo padrão role="menuitem"): mesmo efeito do botão.',
         failure: 'Sem falha própria além da do botão.',
@@ -1378,13 +1385,8 @@ export const nodeSurfaces: InventoryElement[] = [
     persistence: ['canvas salvo (data.frameColor do bloco)'],
     ipc: ['canvas:save'],
     dependsOn: ['readFrameColor / FRAME_COLORS / FRAME_COLOR_SWATCHES (frame-colors)', 'colorMenu e updateNodeData (CanvasView)', 'frameClassName (orderedNodes)'],
-    tests: [unit(`${COMPONENTS}/frame-colors.test.ts`), smoke('checarElementosAbertosEmViewportsCriticos'), { file: 'scripts/canvas-smoke-sobreposicoes.cjs', check: 'checarMenuDeCorDentroDaJanela' }],
+    tests: [unit(`${COMPONENTS}/frame-colors.test.ts`), smoke('checarElementosAbertosEmViewportsCriticos'), { file: 'scripts/canvas-smoke-sobreposicoes.cjs', check: 'checarMenuDeCorDentroDaJanela' }, smoke('checarCorDaMoldura')],
     gaps: [
-      {
-        what: 'Escolher uma cor ou "Sem cor" não é exercitado: o smoke só abre o menu por clique direito no grupo e fecha com Esc, em 1280×800.',
-        risk: 'baixo',
-        task: '3ec91f95-497e-8141-b6c1-d1833aac5664',
-      },
       {
         what: 'Menu fixed no clientX/clientY sem limite à janela (NodeColorMenu.tsx:39-40): medido com o clique a 4 px das bordas direita e de baixo, o menu passa 172 px pela direita e 129 px por baixo, em 320, 768 e 1280 px (canvas-smoke-sobreposicoes.cjs → checarMenuDeCorDentroDaJanela). Defeito conhecido: o limite à janela fica para a task.',
         risk: 'médio',
@@ -1419,18 +1421,21 @@ export const nodeSurfaces: InventoryElement[] = [
     controls: [
       {
         locator: 'aria-haspopup="menu"',
+        test: smoke('checarPerfilDoNavegador'),
         kind: 'button',
         effect: 'Abre/fecha o menu em portal (document.body), posicionado sob o botão e contido na largura da janela; Esc e mousedown fora fecham.',
         failure: 'Sem falha própria.',
       },
       {
         locator: 'onChange(item.id)',
+        test: smoke('checarPerfilDoNavegador'),
         kind: 'button',
         effect: 'Um por perfil (role="menuitemradio"): grava data.profileId no bloco (canvas:save); a partição muda e o webview é recriado na mesma página com os logins do outro perfil; o menu fecha.',
         failure: 'Falha de canvas:save só no console; o guest recriado ainda não tem dom-ready e Voltar/Recarregar podem lançar (ver bloco Página Web).',
       },
       {
         locator: 'aria-label={`Excluir o perfil ${item.name}`}',
+        test: smoke('checarPerfilDoNavegador'),
         kind: 'button',
         effect: 'Um por perfil próprio: confirm e webview-profiles:delete (o processo principal apaga cookies e logins da partição e tira o perfil); some da lista em todos os blocos.',
         failure: 'role="alert" com a mensagem; cancelar o confirm não faz nada; blocos que usavam o perfil passam a "Perfil removido".',
@@ -1438,6 +1443,7 @@ export const nodeSurfaces: InventoryElement[] = [
       },
       {
         locator: 'aria-label="Criar perfil"',
+        test: smoke('checarPerfilDoNavegador'),
         kind: 'button',
         effect: 'Valida o nome (validateWebviewProfileName), grava em webview-profiles:save, aplica o perfil novo ao bloco e fecha o menu (Enter no campo faz o mesmo).',
         failure: 'role="alert" com o motivo da recusa ou "Não foi possível criar o perfil.".',
@@ -1471,14 +1477,15 @@ export const nodeSurfaces: InventoryElement[] = [
       unit(`${SERVICES}/webview-profiles-store.test.ts`),
       unit('electron/services/webview-profiles-ipc-handlers.test.cjs'),
       unit('electron/services/storage/webview-profiles-repository.test.cjs'),
+      smoke('checarPerfilDoNavegador'),
       unit('electron/services/webview-profile-partition.test.cjs'),
       { file: 'scripts/canvas-smoke-sobreposicoes.cjs', check: 'checarMenuDoPerfilAcompanhaOZoom' },
     ],
     gaps: [
       {
-        what: 'Nenhum dos 4 controles é exercitado na tela: trocar, criar e excluir perfil (que apaga logins) só têm teste de store e de IPC.',
+        what: 'Revogar as permissões de um site no perfil não é clicado por teste: o smoke não cria um pedido de permissão de site para responder antes. Pendência. Trocar, criar e excluir perfil agora são cobertos por checarPerfilDoNavegador.',
         risk: 'médio',
-        task: '3ec91f95-497e-8141-b6c1-d1833aac5664',
+        task: '41c91f95-497e-8195-9b3b-e40145bef07e',
       },
       {
         what: 'Falha ao listar perfis é silenciosa (services/webview-profiles-store.ts:38-45): ok falso deixa ready falso para sempre ("Perfil…" no botão) e uma rejeição nunca é tentada de novo (loaded já é verdadeiro).',
@@ -1555,15 +1562,10 @@ export const nodeSurfaces: InventoryElement[] = [
       unit('electron/services/storage/canvas-repository.test.cjs'),
       unit('electron/services/canvas-ipc-handlers.test.cjs'),
       smoke('checarInteracoes'),
+      smoke('checarRemoverAresta'),
       ...FIXTURE_TESTS,
     ],
-    gaps: [
-      {
-        what: 'Remover aresta (selecionar + Delete/Backspace ou Remover da barra de status) não tem teste; o smoke só cria por arrasto e confere a persistência.',
-        risk: 'baixo',
-        task: '3ec91f95-497e-8141-b6c1-d1833aac5664',
-      },
-    ],
+    gaps: [],
     overlap: 'SVG de arestas do React Flow, abaixo dos blocos; sem z próprio. Terminal e arquivo têm source e target sobrepostos em cada lado; os outros blocos, um handle de entrada à esquerda e um de saída à direita.',
   },
   {
@@ -1616,14 +1618,8 @@ export const nodeSurfaces: InventoryElement[] = [
     persistence: ['SQLite canvas_nodes.parent_id do filho (toPersistedNode grava, toFlowNode restaura com extent "parent")'],
     ipc: ['canvas:save', 'canvas:delete'],
     dependsOn: ['onNodeDragStop (CanvasView)', 'isInside (node-geometry)', 'orderedNodes (grupos antes dos filhos)', 'toPersistedNode / toFlowNode (useCanvasPersistence)', 'getElementsToRemove do @xyflow/system (remoção em cascata)'],
-    tests: [unit('electron/services/storage/canvas-repository.test.cjs'), smoke('checarOclusaoDoFixture')],
-    gaps: [
-      {
-        what: 'Encaixar um bloco no grupo (isInside, sem teste unitário) e a persistência do parent_id depois do reload não têm teste na tela; o grupo do fixture não tem filhos.',
-        risk: 'médio',
-        task: '3ec91f95-497e-8141-b6c1-d1833aac5664',
-      },
-    ],
+    tests: [unit('electron/services/storage/canvas-repository.test.cjs'), smoke('checarOclusaoDoFixture'), smoke('checarEncaixeNoGrupo')],
+    gaps: [],
     overlap: 'Grupos renderizam primeiro e ficam sob os filhos. Só a ponta superior esquerda conta no encaixe: um bloco maior que o grupo vira filho e fica preso aos limites dele.',
   },
 ]
