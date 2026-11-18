@@ -197,7 +197,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
         locator: 'role="tab"',
         kind: 'button',
         trigger: 'clique ou setas/Home/End no tablist (rovingIndex)',
-        effect: 'Troca a aba entre Uso agora, Cadeia e Trocas (só o tabpanel ativo monta); a aba inicial pode vir pedida por consumeRequestedAgentUsageTab',
+        effect: 'Troca a aba entre Uso agora, Cadeia, Trocas, Custo, Preços e Resumo (só o tabpanel ativo monta); a aba inicial pode vir pedida por consumeRequestedAgentUsageTab',
         failure: 'sem falha própria',
         test: { file: SMOKE_CONTAS, check: 'irParaAba' },
       },
@@ -1151,6 +1151,48 @@ export const agentToolSurfaces: InventoryElement[] = [
       { file: 'electron/services/ai-pricing.test.cjs' },
     ],
     gaps: [],
+    overlap: 'Dentro do painel Limites e uso (z-20/30); sem camada própria',
+  },
+  {
+    id: 'resumo-diario-agentes',
+    name: 'Resumo do dia por pessoa (aba Resumo)',
+    layer: 'panel',
+    owner: `${TOOLS}/AgentDailySummary.tsx`,
+    states: {
+      normal: 'Seletor de dia (padrão hoje) e, por pessoa responsável, sessões, interações, tempo ativo, o que cada agente/modelo fez e uma linha "Atenção" (abertas, interrompidas pelo fechamento do app, sem interação); quem não tem responsável fica no fim como "Sem responsável"',
+      loading: '"Carregando o resumo…" até a primeira resposta; o ícone do Atualizar gira',
+      empty: '"Nenhuma sessão de agente registrada neste dia."',
+      error: 'Mensagem role=alert: data inválida, "Este resumo só funciona no app desktop.", recusa do main ou "Não foi possível falar com o processo principal."',
+      disabled: 'Atualizar desabilitado durante loading',
+    },
+    controls: [
+      {
+        locator: 'Atualizar',
+        kind: 'button',
+        effect: 'agent-session-log:daily-summary com os limites do dia local escolhido; abrir a aba e trocar a data fazem a mesma leitura',
+        failure: 'Recusa ou exceção viram a mensagem role=alert; o resumo anterior continua na tela',
+        disabledWhen: 'loading',
+      },
+    ],
+    persistence: ['processo principal: SQLite agent_sessions (coluna responsible, migração 026); a aba só lê e não guarda nada'],
+    ipc: ['agent-session-log:daily-summary'],
+    dependsOn: [
+      'window.felixo.agentSessionLog.dailySummary',
+      'agent-session-log-repository.cjs (summarizeSessions)',
+      'agent-daily-summary.ts (localDayBounds, formatActiveTime, personAlerts)',
+      'AgentUsagePanel (aba Resumo)',
+    ],
+    tests: [
+      { file: 'src/features/canvas/services/agent-daily-summary.test.ts' },
+      { file: 'electron/services/storage/agent-session-log-repository.test.cjs' },
+    ],
+    gaps: [
+      {
+        what: 'O registro só guarda metadados: resultado das tarefas, problemas de conteúdo e aprovações pendentes não aparecem no resumo; o botão Atualizar não é clicado em teste e a aba não foi aberta no app',
+        risk: 'médio',
+        task: '41c91f95-497e-81f9-9edf-eb89e07ee070',
+      },
+    ],
     overlap: 'Dentro do painel Limites e uso (z-20/30); sem camada própria',
   },
   {

@@ -16,7 +16,7 @@ const BUCKETS = {
   year: '%Y',
 }
 const CSV_COLUMNS = [
-  'id', 'agent', 'model', 'effort', 'fast', 'account_id', 'project', 'user_id',
+  'id', 'agent', 'model', 'effort', 'fast', 'account_id', 'project', 'user_id', 'responsible',
   'started_at', 'ended_at', 'ended_reason', 'wall_ms', 'active_ms', 'interactions',
 ]
 
@@ -33,6 +33,47 @@ function parseLaunchArgs(args) {
     effort: after('--effort') ?? (codexEffort ? codexEffort.split('=')[1].replace(/["']/g, '') : null),
     fast: list.includes('service_tier=priority'),
   }
+}
+
+/** Nome livre do responsável: texto curto sem quebra de linha; vazio vira nulo. */
+function cleanResponsible(value) {
+  const text = typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, 60) : ''
+  return text || null
+}
+
+const NO_RESPONSIBLE = 'Sem responsável'
+
+/**
+ * Resumo do período por pessoa, só com o que o registro guarda: sessões, interações, tempo ativo
+ * e como cada sessão terminou. Resultado de tarefa e aprovação pendente não são registrados.
+ */
+function summarizeSessions(sessions) {
+  const people = new Map()
+  for (const s of sessions) {
+    const name = s.responsible ?? NO_RESPONSIBLE
+    let person = people.get(name)
+    if (!person) {
+      person = { responsible: name, sessions: 0, interactions: 0, active_ms: 0, wall_ms: 0, open: 0, interrupted: 0, idle: 0, agents: new Map() }
+      people.set(name, person)
+    }
+    person.sessions += 1
+    person.interactions += s.interactions
+    person.active_ms += s.active_ms
+    person.wall_ms += s.wall_ms
+    if (!s.ended_at) person.open += 1
+    // app_closed: o app fechou ou caiu com a sessão aberta, ou seja, ela não terminou por conta própria.
+    if (s.ended_reason === 'app_closed') person.interrupted += 1
+    if (s.interactions === 0) person.idle += 1
+    const key = `${s.agent ?? '?'}|${s.model ?? ''}`
+    const agent = person.agents.get(key) ?? { agent: s.agent, model: s.model, sessions: 0, interactions: 0, active_ms: 0 }
+    agent.sessions += 1
+    agent.interactions += s.interactions
+    agent.active_ms += s.active_ms
+    person.agents.set(key, agent)
+  }
+  return [...people.values()]
+    .map((p) => ({ ...p, agents: [...p.agents.values()].sort((a, b) => b.sessions - a.sessions) }))
+    .sort((a, b) => (a.responsible === NO_RESPONSIBLE) - (b.responsible === NO_RESPONSIBLE) || a.responsible.localeCompare(b.responsible, 'pt-BR'))
 }
 
 function agentFromCommand(command, providerId) {
@@ -65,19 +106,20 @@ function createAgentSessionLogRepository(database, { now = () => new Date(), use
 
   return {
     /** Abre o registro; reabrir o mesmo PTY fecha o anterior (kill + re-spawn). */
-    start({ sessionId, command, args, cwd, accountId, providerId }) {
+    start({ sessionId, command, args, cwd, accountId, providerId, responsible }) {
       if (open.has(sessionId)) endRow(open.get(sessionId), 'exit')
       const id = randomUUID()
       const launch = parseLaunchArgs(args)
       connection
         .prepare(
           `INSERT INTO agent_sessions
-             (id, pty_session_id, agent, provider_id, model, effort, fast, account_id, project, user_id, started_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             (id, pty_session_id, agent, provider_id, model, effort, fast, account_id, project, user_id, started_at, responsible)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           id, sessionId, agentFromCommand(command, providerId), providerId ?? null, launch.model, launch.effort,
           launch.fast ? 1 : 0, accountId ?? null, cwd ? path.basename(String(cwd)) : null, userId, iso(),
+          cleanResponsible(responsible),
         )
       open.set(sessionId, id)
       return id
@@ -126,7 +168,7 @@ function createAgentSessionLogRepository(database, { now = () => new Date(), use
         const end = row.ended_at ? Date.parse(row.ended_at) : now().getTime()
         return {
           id: row.id, agent: row.agent, model: row.model, effort: row.effort, fast: row.fast,
-          account_id: row.account_id, project: row.project, user_id: row.user_id,
+          account_id: row.account_id, project: row.project, user_id: row.user_id, responsible: row.responsible ?? null,
           started_at: row.started_at, ended_at: row.ended_at, ended_reason: row.ended_reason,
           wall_ms: Math.max(0, end - Date.parse(row.started_at)), active_ms: active, interactions: times.length,
         }
@@ -162,6 +204,11 @@ function createAgentSessionLogRepository(database, { now = () => new Date(), use
       const report = buildSessionReport(rows.map((row) => ({ at: Date.parse(row.at), project: row.project })), { pauseMs })
       return { report, markdown: formatSessionReportMarkdown(report, { timeZone }) }
     },
+    /** Resumo do período (o dia, no painel) por pessoa responsável; lê só o registro, nada sai do app. */
+    dailySummary({ from, to } = {}) {
+      const sessions = this.listSessions({ from, to })
+      return { generatedAt: iso(), from: from ?? null, to: to ?? null, sessions: sessions.length, people: summarizeSessions(sessions) }
+    },
     /** Conteúdo exportável; nunca inclui texto de prompt (a tabela nem o guarda). */
     exportPeriod({ from, to, format = 'json' } = {}) {
       const sessions = this.listSessions({ from, to })
@@ -177,4 +224,4 @@ function createAgentSessionLogRepository(database, { now = () => new Date(), use
   }
 }
 
-module.exports = { createAgentSessionLogRepository, parseLaunchArgs, ACTIVE_GAP_MS }
+module.exports = { createAgentSessionLogRepository, parseLaunchArgs, summarizeSessions, ACTIVE_GAP_MS }

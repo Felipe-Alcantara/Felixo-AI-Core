@@ -58,6 +58,7 @@ export type SessionOptions = {
   fallbackCommand?: string
   keepShellOpen?: boolean
   accountId?: string
+  responsible?: string
   notionConnectionId?: string
   providerId?: string
   /** Fixa (padrão) ou da cadeia de contas. */

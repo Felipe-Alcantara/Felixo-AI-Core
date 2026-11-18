@@ -36,6 +36,8 @@ export type NewTerminalOptions = {
    * própria pasta de credencial, então duas convivem sem logout.
    */
   accountId?: string
+  /** Pessoa que responde por este agente; entra no registro de sessões e no resumo do dia. */
+  responsible?: string
   /** Conexão Notion do app (só o id): o terminal recebe o token dela em NOTION_TOKEN, no main. */
   notionConnectionId?: string
   /** Provedor da CLI; acompanha a conta até o boundary principal para validação. */

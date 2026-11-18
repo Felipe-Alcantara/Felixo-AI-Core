@@ -127,6 +127,8 @@ export function useAgentConfig(
   const [projectId, setProjectId] = useState(inicial.projectId)
   const [planningFile, setPlanningFile] = useState(inicial.planningFile)
   const [name, setName] = useState('')
+  // Quem responde por este agente no resumo do dia; vazio = sem responsável.
+  const [responsible, setResponsible] = useState('')
   const [openiaInterfaceKey, setOpeniaInterfaceKeyState] = useState(inicial.openiaInterface)
   const [openiaModel, setOpeniaModelState] = useState(inicial.openiaModel)
   const [openiaInterfaces, setOpeniaInterfaces] = useState<OpeniaInterfaceDefinition[]>([])
@@ -995,9 +997,10 @@ export function useAgentConfig(
     const project = projects.find((item) => item.id === projectId)
     const place = project ? project.name : 'local'
     const customName = name.trim()
+    const responsibleField = responsible.trim() ? { responsible: responsible.trim() } : {}
 
     if (!agent) {
-      return { cwd: project?.path, label: customName || `Shell · ${place}` }
+      return { cwd: project?.path, label: customName || `Shell · ${place}`, ...responsibleField }
     }
 
     // A conta escolhida acompanha o terminal desde o nascimento: é ela que
@@ -1044,6 +1047,7 @@ export function useAgentConfig(
           customName ||
           `${agent.label} · ${selectedInterface?.name ?? openiaInterfaceRef.current}${modelLabel} · ${place}`,
         launchMode: 'launcher',
+        ...responsibleField,
       }
     }
     // Contexto/skills/cor do preset acompanham o terminal desde o nascimento.
@@ -1071,6 +1075,7 @@ export function useAgentConfig(
         (activePreset ? `${activePreset.name} · ${place}` : `${describeLaunch(choices)} · ${place}`),
       planningFile: planningFile.trim() || undefined,
       ...(preset ? { preset } : {}),
+      ...responsibleField,
     }
   }, [
     activePreset,
@@ -1085,6 +1090,7 @@ export function useAgentConfig(
     planningFile,
     projectId,
     projects,
+    responsible,
     yolo,
   ])
 
@@ -1144,6 +1150,8 @@ export function useAgentConfig(
     setPlanningFile,
     name,
     setName,
+    responsible,
+    setResponsible,
     refreshing,
     refresh,
     modelListNote: refreshError ?? describeModelListStatus(agentStatus[agentValue]),

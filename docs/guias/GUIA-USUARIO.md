@@ -349,6 +349,19 @@ pergunta: **Tratar como limite?**
 estado, e o botão **Ir para o bloco**. O registro nunca guarda o histórico do
 terminal, chaves ou caminhos de perfil.
 
+**Resumo do dia por pessoa.** A aba **Resumo** do mesmo painel mostra, para o dia
+escolhido (hoje por padrão), o que cada pessoa fez com os agentes: sessões,
+interações, tempo ativo, agente e modelo, e um aviso para o que merece atenção
+(sessão ainda aberta, interrompida porque o app fechou, ou sem nenhuma
+interação). A pessoa é o campo **Responsável** do bloco do agente: quem cria o
+bloco escolhe (campo opcional no menu de criação) e dá para mudar nos detalhes
+do bloco, valendo a partir do próximo reinício dele. Blocos sem responsável
+aparecem no fim, como "Sem responsável". O resumo só lê o registro de sessões,
+que guarda metadados (nunca o que foi digitado), só é montado quando você abre a
+aba, troca a data ou clica em **Atualizar**, e nada dele sai do app. O resultado
+das tarefas e as aprovações pendentes ainda não são registrados, então não
+aparecem.
+
 **O que o app nunca faz sozinho.**
 
 - Trocar de conta sem a sua confirmação.

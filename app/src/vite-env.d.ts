@@ -1,5 +1,6 @@
 /// <reference types="vite/client" />
 
+import type { AgentDailySummaryData } from './features/canvas/services/agent-daily-summary'
 import type {
   AutomationDefinition,
   GitCommit,
@@ -1300,6 +1301,10 @@ declare global {
           to?: string
           timeZone?: string
         }) => Promise<CliInvokeResult & { markdown?: string; report?: unknown }>
+        /** Resumo do período (ISO) por pessoa responsável, lido do registro de sessões. */
+        dailySummary: (params: { from?: string; to?: string }) => Promise<
+          CliInvokeResult & { summary?: AgentDailySummaryData }
+        >
       }
       settings?: {
         loadOrchestrator: () => Promise<

@@ -35,6 +35,7 @@ export function TerminalDetailsPanel({
   toolsMenuOpen,
   onClearAgentSession,
   onAccountModeChange,
+  onResponsibleChange,
   onFocusNode,
 }: {
   nodeId: string
@@ -46,6 +47,8 @@ export function TerminalDetailsPanel({
   onClearAgentSession: () => void
   /** Grava o modo da conta no bloco (persistido). */
   onAccountModeChange: (mode: 'pinned' | 'chain') => void
+  /** Grava o responsável no bloco; vale a partir do próximo reinício do bloco. */
+  onResponsibleChange: (responsible: string) => void
   onFocusNode: (nodeId: string) => void
 }) {
   const metadata = useSessionMetadata(nodeId)
@@ -118,6 +121,19 @@ export function TerminalDetailsPanel({
         <Detail label="ID do elemento" value={nodeId} copy={nodeId} mono />
         <Detail label="ID da sessão PTY" value={value(metadata?.ptySessionId)} copy={metadata?.ptySessionId} mono />
         <Detail label="Agente" value={value(data.command, 'Shell padrão')} />
+        <div className="space-y-1">
+          <label htmlFor={`${nodeId}-responsible`} className="text-[10px] uppercase tracking-wide text-zinc-500">
+            Responsável (vale a partir do próximo reinício)
+          </label>
+          <input
+            id={`${nodeId}-responsible`}
+            value={data.responsible ?? ''}
+            maxLength={60}
+            onChange={(event) => onResponsibleChange(event.target.value)}
+            placeholder="Sem responsável"
+            className="w-full rounded-sm border border-white/5 bg-black/20 px-2 py-1.5 text-xs text-zinc-200"
+          />
+        </div>
         <Detail
           label="Sessão do agente"
           value={

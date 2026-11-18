@@ -172,6 +172,17 @@ export function AgentConfigFields({
             placeholder="Ex.: Agente de testes"
             className={`${CAMPO} mb-3`}
           />
+          <label htmlFor={`${prefixo}-responsible`} className={ROTULO}>
+            Responsável (opcional)
+          </label>
+          <input
+            id={`${prefixo}-responsible`}
+            value={config.responsible}
+            onChange={(event) => config.setResponsible(event.target.value)}
+            placeholder="Ex.: Felipe"
+            maxLength={60}
+            className={`${CAMPO} mb-3`}
+          />
         </>
       )}
 

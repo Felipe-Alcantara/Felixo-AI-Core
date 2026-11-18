@@ -88,6 +88,7 @@ export function buildTerminalNodeData(
     ...(options.args && options.args.length ? { args: options.args } : {}),
     ...(options.cwd ? { cwd: options.cwd } : {}),
     ...(options.accountId ? { accountId: options.accountId } : {}),
+    ...(options.responsible ? { responsible: options.responsible } : {}),
     ...(options.notionConnectionId ? { notionConnectionId: options.notionConnectionId } : {}),
     ...(options.providerId ? { providerId: options.providerId } : {}),
     // Só a cadeia marca `chain`; ausente o bloco é fixo (decisão 5).

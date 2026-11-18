@@ -29,10 +29,10 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 
 ## Números
 
-- **Elementos:** 109 (10 blocos, 17 ferramentas, 82 outras superfícies)
-- **Controles:** 420, dos quais 62 com teste específico
+- **Elementos:** 110 (10 blocos, 17 ferramentas, 83 outras superfícies)
+- **Controles:** 421, dos quais 62 com teste específico
 - **Elementos sem nenhum teste:** 3
-- **Lacunas:** 233 (alto 4, médio 124, baixo 105), em 65 tasks
+- **Lacunas:** 234 (alto 4, médio 125, baixo 105), em 66 tasks
 
 ## Moldura do canvas
 
@@ -1085,7 +1085,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 ### Detalhes do terminal
 
 - **ID:** `terminal-details-panel` · **Dono:** `src/features/canvas/components/TerminalDetailsPanel.tsx`
-- **Persistência:** canvas salvo (dados do nó): agentSession, resumeFailure e accountMode; sessionStorage felixo:canvas-terminal-run (conversas esquecidas); processo principal: modo da sessão na cadeia de contas
+- **Persistência:** canvas salvo (dados do nó): agentSession, resumeFailure, accountMode e responsible (campo "Responsável", editável aqui; vale a partir do próximo reinício do bloco); sessionStorage felixo:canvas-terminal-run (conversas esquecidas); processo principal: modo da sessão na cadeia de contas
 - **IPC:** `account-chain:set-session-mode`, `pty:cli-versions`
 - **Depende de:** `CanvasPanel`, `useSessionMetadata`, `useAccountChain`, `useCliAccountLabel`, `changeSessionAccountMode`, `explainAgentResume`, `AccountSwitchHistory`, `CanvasView.forgetAgentSession`, `terminal-run-registry`
 - **Sobreposição:** CanvasPanel absolute top-16 z-20 (focus-within z-30), à direita da sidebar; disputa a largura pelo coordenador de superfícies, mas não a posição com o painel de ferramenta aberto ao mesmo tempo.
@@ -1153,7 +1153,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Estado | Quando |
 | --- | --- |
-| normal | Nome, preset, agente, conta, modelo, esforço, yolo, fast, arquivo de planejamento e projeto; com o Openia, interface, modelo e chave. |
+| normal | Nome, responsável (opcional; vai para o registro de sessões e o resumo do dia), preset, agente, conta, modelo, esforço, yolo, fast, arquivo de planejamento e projeto; com o Openia, interface, modelo e chave. |
 | loading | openiaLoading: selects do Openia com "Carregando interfaces…"; refreshing: ícone de atualizar girando. |
 | empty | Openia sem interfaces: "Openia não disponível"; sem contas: só Login do sistema e Nova conta… |
 | error | accountSelectionIssue em role="alert" (lista ilegível, conta salva ausente), openiaError, chainLaunchError, erroRemocao e erro do cadastro em vermelho. |
@@ -1746,7 +1746,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Controle | Gatilho | Efeito | Falha conhecida | Teste |
 | --- | --- | --- | --- | --- |
-| `role="tab"` (button) | clique ou setas/Home/End no tablist (rovingIndex) | Troca a aba entre Uso agora, Cadeia e Trocas (só o tabpanel ativo monta); a aba inicial pode vir pedida por consumeRequestedAgentUsageTab | sem falha própria | `scripts/canvas-smoke-contas.cjs` → `irParaAba` |
+| `role="tab"` (button) | clique ou setas/Home/End no tablist (rovingIndex) | Troca a aba entre Uso agora, Cadeia, Trocas, Custo, Preços e Resumo (só o tabpanel ativo monta); a aba inicial pode vir pedida por consumeRequestedAgentUsageTab | sem falha própria | `scripts/canvas-smoke-contas.cjs` → `irParaAba` |
 | `Atualizar` (button) | clique | agent-usage:refresh: atualização manual consulta por conta e perfil, abre uma sessão PTY descartável de /status para Claude e Codex e também lê o app-server do Codex; regrava as amostras e acende "ao vivo". Em paralelo, o processo principal agenda Codex app-server e Openia statusline com base de 30 s no modo Normal e 5 min no Modo Performance, recebe Claude statusline pelo watcher e ignora Gemini interativo; prioriza sessões ativas e leituras antigas e limita concorrência a quatro (duas em ociosidade prolongada ou na bateria) (desabilitado: loading) | ok: false ou exceção viram statusMessage âmbar; o painel continua com o último valor conhecido, esmaecido e com a etiqueta de idade e motivo; a rodada manual tem teto (REFRESH_DEADLINE_MS, 90 s); consultas agendadas são canceladas ao ocultar a janela ou suspender; o Modo Performance espaça a cadência para 5 min sem cancelar um refresh ativo, e o botão manual continua disponível; falhas usam backoff exponencial, 429 respeita Retry-After com mínimo de 5 min e autenticação ausente espera 15 min | `electron/services/agent-usage-refresh-scheduler.test.cjs` |
 | `Reconectar` (button) | clique | agent-usage:reconnect: abandona a rodada em andamento (aborta as consultas dela, que encerram o PTY do Claude e o app-server do Codex) e refaz do zero; só a resposta do pedido mais recente é aplicada no painel | ok: false ou exceção viram statusMessage âmbar, como no Atualizar; nunca desabilitado — é durante uma coleta presa que ele serve | `electron/services/agent-usage-service.test.cjs` |
 | `Abrir terminal da conta` (button) | clique | Abre no canvas um terminal que roda `claude auth login` ou `codex login` (getAgentUsageLoginTerminal), com launchMode "launcher" para o contexto do canvas não ser digitado dentro do login; conta com pasta de login própria leva o accountId, a "Conta desta máquina" usa o login do sistema; o login é feito pela pessoa, o app não o automatiza (desabilitado: só aparece na conta sem sessão, e só se o painel recebeu onAddTerminal) | a recusa do processo principal (pty:spawn) aparece no próprio terminal; só existe para Claude e Codex com availability.state "auth-required" | `src/features/shared/agent-usage/agent-usage.test.ts` |
@@ -2441,6 +2441,31 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Controle | Gatilho | Efeito | Falha conhecida | Teste |
 | --- | --- | --- | --- | --- |
 | `Atualizar` (button) | clique | agent-usage:ai-pricing com force: baixa de novo a tabela e a cotação, ignorando o cache de 1 hora (desabilitado: busca em andamento) | Rede fora: fica a tabela embutida e só US$ | — |
+
+### Resumo do dia por pessoa (aba Resumo)
+
+- **ID:** `resumo-diario-agentes` · **Dono:** `src/features/canvas/components/tools/AgentDailySummary.tsx`
+- **Persistência:** processo principal: SQLite agent_sessions (coluna responsible, migração 026); a aba só lê e não guarda nada
+- **IPC:** `agent-session-log:daily-summary`
+- **Depende de:** `window.felixo.agentSessionLog.dailySummary`, `agent-session-log-repository.cjs (summarizeSessions)`, `agent-daily-summary.ts (localDayBounds, formatActiveTime, personAlerts)`, `AgentUsagePanel (aba Resumo)`
+- **Sobreposição:** Dentro do painel Limites e uso (z-20/30); sem camada própria
+- **Testes:** `src/features/canvas/services/agent-daily-summary.test.ts`, `electron/services/storage/agent-session-log-repository.test.cjs`
+
+| Estado | Quando |
+| --- | --- |
+| normal | Seletor de dia (padrão hoje) e, por pessoa responsável, sessões, interações, tempo ativo, o que cada agente/modelo fez e uma linha "Atenção" (abertas, interrompidas pelo fechamento do app, sem interação); quem não tem responsável fica no fim como "Sem responsável" |
+| loading | "Carregando o resumo…" até a primeira resposta; o ícone do Atualizar gira |
+| empty | "Nenhuma sessão de agente registrada neste dia." |
+| error | Mensagem role=alert: data inválida, "Este resumo só funciona no app desktop.", recusa do main ou "Não foi possível falar com o processo principal." |
+| disabled | Atualizar desabilitado durante loading |
+
+| Controle | Gatilho | Efeito | Falha conhecida | Teste |
+| --- | --- | --- | --- | --- |
+| `Atualizar` (button) | clique | agent-session-log:daily-summary com os limites do dia local escolhido; abrir a aba e trocar a data fazem a mesma leitura (desabilitado: loading) | Recusa ou exceção viram a mensagem role=alert; o resumo anterior continua na tela | — |
+
+| Lacuna | Risco | Task |
+| --- | --- | --- |
+| O registro só guarda metadados: resultado das tarefas, problemas de conteúdo e aprovações pendentes não aparecem no resumo; o botão Atualizar não é clicado em teste e a aba não foi aberta no app | médio | `41c91f95-497e-81f9-9edf-eb89e07ee070` |
 
 ### Ditado por voz (Configurações)
 
@@ -3141,3 +3166,4 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `41c91f95-497e-8120-9fbf-d6db17ae781b` — 1 lacuna
 - `41c91f95-497e-8165-8cc0-ce2bd685c1a1` — 1 lacuna
 - `41c91f95-497e-817e-bb8c-ca6fe5e302a1` — 1 lacuna
+- `41c91f95-497e-81f9-9edf-eb89e07ee070` — 1 lacuna

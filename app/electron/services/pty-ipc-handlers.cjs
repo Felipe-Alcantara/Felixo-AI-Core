@@ -174,6 +174,7 @@ function registerPtyIpcHandlers(getMainWindow, dependencies = {}) {
               cwd: params.cwd,
               accountId: params.accountId,
               providerId: accountValidation.providerId,
+              responsible: params.responsible,
             }))
           }
         } catch (error) {

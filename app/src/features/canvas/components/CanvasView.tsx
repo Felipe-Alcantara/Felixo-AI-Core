@@ -1099,6 +1099,7 @@ function CanvasInner({
         fallbackCommand: data.fallbackCommand,
         keepShellOpen: data.keepShellOpen,
         accountId: data.accountId,
+        responsible: data.responsible,
         providerId: data.providerId,
         // Reiniciar é spawn comum na mesma conta: nunca leva ticket da cadeia.
         accountMode: data.accountMode,
@@ -2512,6 +2513,7 @@ function CanvasInner({
             toolsMenuOpen={sidebarCollapsed}
             onClearAgentSession={() => forgetAgentSession(detailsNode.id)}
             onAccountModeChange={(accountMode) => updateNodeData(detailsNode.id, { accountMode })}
+            onResponsibleChange={(text) => updateNodeData(detailsNode.id, { responsible: text.trim() ? text : undefined })}
             onFocusNode={focusNode}
           />
         ) : null

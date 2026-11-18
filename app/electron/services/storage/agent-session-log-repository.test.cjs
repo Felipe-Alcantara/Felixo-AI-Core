@@ -140,3 +140,44 @@ test(
     }
   },
 )
+
+test(
+  'resumo do dia: agrupa por responsavel, deixa quem nao tem para o fim e sinaliza o que pede atencao',
+  { skip: hasNodeSqlite() ? false : 'node:sqlite indisponível neste runtime' },
+  () => {
+    const databaseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-session-log-'))
+    const database = createStorageDatabase({ databaseDir })
+    let clock = Date.parse('2026-11-17T10:00:00.000Z')
+    const repo = createAgentSessionLogRepository(database, { now: () => new Date(clock) })
+    const tick = (ms) => { clock += ms }
+    try {
+      repo.start({ sessionId: 'a', command: 'claude', args: ['--model', 'opus'], responsible: '  Felipe \n Martins ' })
+      repo.interaction('a', 5)
+      tick(60_000)
+      repo.interaction('a', 5)
+      repo.end('a')
+      repo.start({ sessionId: 'b', command: 'codex', responsible: 'Ana' })
+      repo.end('b')
+      repo.start({ sessionId: 'c', command: 'claude', responsible: 'x'.repeat(200) })
+      repo.start({ sessionId: 'd', command: 'claude' })
+      repo.interaction('d', 1)
+      repo.closeOpen('app_closed')
+
+      const summary = repo.dailySummary({ from: '2026-11-17', to: '2026-11-18' })
+      assert.equal(summary.sessions, 4)
+      assert.deepEqual(summary.people.map((p) => p.responsible), ['Ana', 'Felipe Martins', 'x'.repeat(60), 'Sem responsável'])
+      const felipe = summary.people[1]
+      assert.equal(felipe.interactions, 2)
+      assert.equal(felipe.active_ms, 60_000)
+      assert.equal(felipe.agents[0].model, 'opus')
+      assert.equal(summary.people[0].idle, 1)
+      assert.equal(summary.people[2].interrupted, 1)
+      assert.equal(summary.people[3].interrupted, 1)
+      assert.equal(repo.listSessions()[0].responsible, 'Felipe Martins')
+      assert.equal(repo.dailySummary({ from: '2026-11-18', to: '2026-11-19' }).people.length, 0)
+    } finally {
+      database.close?.()
+      fs.rmSync(databaseDir, { recursive: true, force: true })
+    }
+  },
+)

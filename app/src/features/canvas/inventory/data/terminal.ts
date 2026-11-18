@@ -395,7 +395,7 @@ export const terminalSurfaces: InventoryElement[] = [
       },
     ],
     persistence: [
-      'canvas salvo (dados do nó): agentSession, resumeFailure e accountMode',
+      'canvas salvo (dados do nó): agentSession, resumeFailure, accountMode e responsible (campo "Responsável", editável aqui; vale a partir do próximo reinício do bloco)',
       'sessionStorage felixo:canvas-terminal-run (conversas esquecidas)',
       'processo principal: modo da sessão na cadeia de contas',
     ],
@@ -532,7 +532,7 @@ export const terminalSurfaces: InventoryElement[] = [
     layer: 'terminal',
     owner: 'src/features/canvas/components/AgentConfigFields.tsx',
     states: {
-      normal: 'Nome, preset, agente, conta, modelo, esforço, yolo, fast, arquivo de planejamento e projeto; com o Openia, interface, modelo e chave.',
+      normal: 'Nome, responsável (opcional; vai para o registro de sessões e o resumo do dia), preset, agente, conta, modelo, esforço, yolo, fast, arquivo de planejamento e projeto; com o Openia, interface, modelo e chave.',
       loading: 'openiaLoading: selects do Openia com "Carregando interfaces…"; refreshing: ícone de atualizar girando.',
       pending: '"A cadeia está escolhendo a conta…" (aria-busy) até a prévia; "Salvando…", "Criando…" e "Removendo…" nos botões.',
       error: 'accountSelectionIssue em role="alert" (lista ilegível, conta salva ausente), openiaError, chainLaunchError, erroRemocao e erro do cadastro em vermelho.',

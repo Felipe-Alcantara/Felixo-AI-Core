@@ -4969,3 +4969,24 @@ Estado: concluído na branch `orq/precos-modelos-assinaturas-apis`, sem push.
 - Teto de custo e troca de provedor/conta seguem recusando sem resposta (gasto e cobrança nunca são aplicados sozinhos). `GUIA-USUARIO.md` atualizado.
 
 **Validação:** lint e typecheck limpos; node 3594 testes, 0 falhas; vitest da área verde; testes novos cobrem recomendada segura aplicada e 7 tipos que continuam negados.
+
+---
+
+## 2026-11-18 — Resumo: aba "Resumo" no painel Limites e uso mostra o dia de cada agente, por pessoa responsável
+
+Agente: subagente da Orquestração (Claude Sonnet 5.5, effort medium). Task: Felixo AI Core/Resumo — gerar o resumo diário do que cada agente do canvas fez, por pessoa responsável.
+
+**Contexto.** O registro de sessões (migração 025) já gravava cada sessão de agente, mas sem noção de pessoa. Decisões do Felipe (18/11): o responsável é um campo do bloco do agente (quem cria escolhe), o resumo aparece num painel do app sob demanda e lê o registro de sessões; nada sai do app (sem e-mail ou chat).
+
+**O que mudou.**
+- Campo `responsible` no bloco do terminal (`TerminalNodeData`, `NewTerminalOptions`, `useAgentConfig`): input "Responsável (opcional)" no menu de criação (`AgentConfigFields`) e editável no painel de detalhes do bloco (`TerminalDetailsPanel`). Viaja pelo `pty:spawn` até o main.
+- Migração `026_agent_session_responsible.sql`: coluna `agent_sessions.responsible`. `agent-session-log-repository.cjs` grava o nome (espaços normalizados, máximo 60 caracteres), devolve `responsible` em `listSessions` e no CSV/JSON da exportação e ganha `dailySummary({from, to})` (função pura `summarizeSessions`): por pessoa, sessões, interações, tempo ativo, abertas, interrompidas pelo fechamento do app, sem interação e o detalhe por agente/modelo; quem não tem responsável vai no fim como "Sem responsável".
+- IPC `agent-session-log:daily-summary` (`main.cjs`, `preload.cjs`: `window.felixo.agentSessionLog.dailySummary`).
+- Aba **Resumo** em `AgentUsagePanel` (`AgentDailySummary.tsx`, `agent-daily-summary.ts`): seletor de dia (padrão hoje, limites do dia local), lê só ao abrir, trocar a data ou clicar em Atualizar.
+- Docs: `GUIA-USUARIO.md` e `INVENTARIO-CANVAS.md` (regenerado).
+
+**Validação.** Teste do repositório com `node:sqlite` real (4/4: agrupamento, ordem, "Sem responsável", truncamento a 60, interrompida/sem interação, dia vazio); `pty-ipc-handlers.test.cjs` 37/37 (responsável chega ao `start`); `agent-daily-summary.test.ts` 3/3. `npm run lint` e `npm run typecheck` limpos; testes Node 3515 (3503 passaram, 12 pulados, 0 falhas); vitest 3723 passaram, 4 pulados, 0 falhas.
+
+**Não validado.** O app não foi aberto (regra da rodada): a aba Resumo e os dois campos de Responsável só foram exercitados por tipos, lint e teste de dados. O resultado das tarefas e as aprovações pendentes não existem no registro (só metadados), então o resumo não os mostra; a primeira ficou como task, a segunda já tem task própria (painel de aprovações). Mudar o responsável nos detalhes não altera o relançamento automático da CLI (usa o valor de quando o bloco abriu); o reinício manual e o próximo spawn usam o novo.
+
+Estado: concluído na branch `orq/resumo-gerar-resumo-diario-que`, sem push.

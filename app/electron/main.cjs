@@ -546,6 +546,13 @@ app.whenReady().then(async () => {
       return { ok: false, message: error instanceof Error ? error.message : 'Falha ao gerar o relatório da sessão.' }
     }
   })
+  ipcMain.handle('agent-session-log:daily-summary', (_event, params = {}) => {
+    try {
+      return { ok: true, summary: agentSessionLog.dailySummary({ from: params.from, to: params.to }) }
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : 'Falha ao montar o resumo.' }
+    }
+  })
   // Troca antecipada por limiar: cada medição gravada avisa a cadeia, que nasce mais abaixo
   // (até lá, a referência é nula e nada é avisado). Fora do caminho da gravação: nunca a atrasa.
   let accountChainForUsage = null

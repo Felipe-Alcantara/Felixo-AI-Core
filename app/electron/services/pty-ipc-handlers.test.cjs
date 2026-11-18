@@ -797,7 +797,7 @@ test('registro de sessoes: spawn, Enter, kill e saida chegam so como metadados',
   registerPtyIpcHandlers(() => window, {
     manager: { ...manager, has: () => true },
     sessionLog: {
-      start: (info) => log.push(['start', info.sessionId, info.args]),
+      start: (info) => log.push(['start', info.sessionId, info.args, info.responsible]),
       interaction: (id, chars) => log.push(['interaction', id, chars]),
       end: (id, reason) => log.push(['end', id, reason]),
       setCliSession: () => {},
@@ -805,7 +805,7 @@ test('registro de sessoes: spawn, Enter, kill e saida chegam so como metadados',
   })
   const invoke = (channel, params) => handlers.get(channel)(null, params)
 
-  await invoke('pty:spawn', { sessionId: 's1', command: 'claude', args: ['--model', 'opus'] })
+  await invoke('pty:spawn', { sessionId: 's1', command: 'claude', args: ['--model', 'opus'], responsible: 'Ana' })
   await invoke('pty:write', { sessionId: 's1', data: 'senha-secreta' }) // sem Enter: nada
   await invoke('pty:write', { sessionId: 's1', data: '\r' })
   await invoke('pty:write', { sessionId: 's1', data: '\x1b[200~linha\r\x1b[201~' }) // colagem: não envia
@@ -813,7 +813,7 @@ test('registro de sessoes: spawn, Enter, kill e saida chegam so como metadados',
   exit({ exitCode: 0 })
 
   assert.deepEqual(log, [
-    ['start', 's1', ['--model', 'opus']],
+    ['start', 's1', ['--model', 'opus'], 'Ana'],
     ['interaction', 's1', 1],
     ['end', 's1', 'killed'],
   ])
