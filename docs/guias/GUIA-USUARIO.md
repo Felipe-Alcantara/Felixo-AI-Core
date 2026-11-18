@@ -522,6 +522,18 @@ e responda ali mesmo; o pedido some da lista quando o agente recebe a resposta. 
 Com o app fechado a janela passa em branco: ao abrir, a fila continua lá. O painel ainda
 não leva o motivo da recusa e não lista permissões pedidas dentro do terminal.
 
+**Agente coordenador abrindo outros agentes.** Um agente que coordena o trabalho pode pedir um
+agente por task com `felixo canvas abrir-agentes "<task 1>" "<task 2>" ...` (até 20 por pedido; a
+primeira linha de cada task é o título e o resto é o contexto). O pedido aparece no painel de
+aprovações como **Um coordenador pede N agentes**, com a lista das tasks; nada abre sozinho. Ao
+clicar em **Abrir N agentes**, o app cria um terminal por task, na pasta do coordenador, com a
+CLI, o modelo, o esforço e a conta do último lançamento do launcher **Agente** e com a task como
+contexto inicial. Valem os tetos do painel Orquestrador: o que passar de **Agentes por rodada**
+(ou de **Agentes no total**, somado nesta sessão do app) fica de fora, e o coordenador lê quais
+foram recusadas e por quê; em **Somente leitura** nada abre. Por enquanto os terminais nascem
+juntos, com o rótulo **Orquestração 1/N · …** e a mesma moldura, mas fora de um bloco de grupo, e
+não há o painel de progresso por task (esperando, rodando, concluída, falhou).
+
 ### Felixo
 
 Abra **Configurações** (a engrenagem no pé da faixa de ícones do canvas) para ajustar:

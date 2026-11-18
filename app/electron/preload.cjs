@@ -313,6 +313,14 @@ contextBridge.exposeInMainWorld('felixo', {
       ipcRenderer.on('canvas:agent-questions', handler)
       return () => ipcRenderer.removeListener('canvas:agent-questions', handler)
     },
+    // Pedidos de um coordenador para abrir um agente por task: esperam a pessoa aceitar.
+    listAgentLaunches: () => ipcRenderer.invoke('canvas:list-agent-launches'),
+    decideAgentLaunch: (params) => ipcRenderer.invoke('canvas:decide-agent-launch', params),
+    onAgentLaunches: (callback) => {
+      const handler = (_event, data) => callback(data)
+      ipcRenderer.on('canvas:agent-launches', handler)
+      return () => ipcRenderer.removeListener('canvas:agent-launches', handler)
+    },
     onNodeUpdated: (callback) => {
       const handler = (_event, data) => callback(data)
       ipcRenderer.on('canvas:agent-node-updated', handler)

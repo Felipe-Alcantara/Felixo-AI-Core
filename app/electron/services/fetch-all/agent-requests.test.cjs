@@ -9,6 +9,7 @@ const {
   VALIDADE_MS,
   criarRepositorioDePedidos,
   normalizarPedido,
+  AGENTES_LOTE_MAX,
 } = require('./agent-requests.cjs')
 
 function pastaTemporaria() {
@@ -327,5 +328,27 @@ test('pagina-inspecionar só aceita captura ou dom de um bloco, e nada que aja n
   assert.throws(
     () => normalizarPedido('pagina-inspecionar', { idDoElemento: 'x'.repeat(201), tipo: 'captura' }),
     /muito grande/,
+  )
+})
+
+test('abrir-agentes aceita de 1 a 20 tasks, com título e contexto opcional', () => {
+  const ok = normalizarPedido('abrir-agentes', {
+    tarefas: ['  Task A  ', { titulo: 'Task B', contexto: ' detalhe ' }, 'Task C\nlinha 2\nlinha 3'],
+  })
+  assert.deepEqual(ok, {
+    acao: 'abrir-agentes',
+    comCommit: false,
+    tarefas: [
+      { titulo: 'Task A' },
+      { titulo: 'Task B', contexto: 'detalhe' },
+      { titulo: 'Task C', contexto: 'linha 2\nlinha 3' },
+    ],
+  })
+  assert.throws(() => normalizarPedido('abrir-agentes', {}), /ao menos uma task/)
+  assert.throws(() => normalizarPedido('abrir-agentes', { tarefas: ['a', '  '] }), /título/)
+  assert.throws(() => normalizarPedido('abrir-agentes', { tarefas: ['x'.repeat(121)] }), /Título de task muito grande/)
+  assert.throws(
+    () => normalizarPedido('abrir-agentes', { tarefas: Array.from({ length: AGENTES_LOTE_MAX + 1 }, (_, i) => `t${i}`) }),
+    /Lote grande demais/,
   )
 })

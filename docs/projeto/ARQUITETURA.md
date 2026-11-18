@@ -347,6 +347,22 @@ pedido pendente. Limites: sem motivo de recusa, sem permissao pedida dentro do
 terminal PTY (depende do OSC 7501) e sem os avisos do agendador. O prazo de 10 min
 continua sendo o de cada fonte (`persistent-cli-session.cjs`).
 
+### Pedido de agentes de um coordenador (felixo canvas abrir-agentes)
+
+Terceira fonte da fila (`launch`), rodada 2 do plano de orquestracao no canvas (decisao do Felipe
+em 18/11/2026: orquestrador de verdade no canvas, em rodadas). O coordenador registra o pedido
+`abrir-agentes` na mesma pasta de pedidos (`felixo canvas abrir-agentes`, ate 20 tasks, titulo e
+contexto limitados em `normalizarPedido`). `agent-launch-ipc-handlers.cjs` lista os pendentes
+(`canvas:list-agent-launches`, aviso `canvas:agent-launches`) e decide (`canvas:decide-agent-launch`
+`{ id, aceitar }`): as tasks que viram terminal sao relidas do pedido gravado e cortadas aqui por
+`planLaunch` com as configuracoes salvas (`maxAgentsPerTurn`, `maxTotalAgents` somado desde que o app
+abriu, e `mode: read_only` recusa tudo); o renderer so confirma e abre o que o main devolveu
+(`buildOrchestratedAgentOptions` + `addTerminalNodes`, com as preferencias do launcher Agente e a
+pasta do coordenador). O orquestrador nunca executa: so propoe, e a pessoa aceita. Limites
+conhecidos: o total e por sessao do app, nao por execucao; os terminais nao ficam dentro de um bloco
+de grupo e nao ha progresso por task (rodada 3, bloco Orquestrador); o teto de custo vale na
+execucao do chat e ainda nao mede o custo de terminais abertos por esta via.
+
 ## Perguntas com opcoes de um agente (felixo perguntar)
 
 Decisao registrada (task "perguntas interativas com opcoes para o Codex").

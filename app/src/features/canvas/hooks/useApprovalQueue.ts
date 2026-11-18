@@ -9,7 +9,7 @@ import {
   type ApprovalItem,
   type ApprovalTransport,
 } from '../services/approval-queue'
-import type { CanvasAgentQuestion } from '../types'
+import type { CanvasAgentLaunchRequest, CanvasAgentLaunchTask, CanvasAgentQuestion } from '../types'
 
 const transport: ApprovalTransport = {
   respondDecision: (params) =>
@@ -23,6 +23,11 @@ const transport: ApprovalTransport = {
       ok: false,
       message: 'A resposta de pergunta não está disponível nesta janela.',
     },
+  decideLaunch: async (params) =>
+    (await window.felixo?.canvas?.decideAgentLaunch?.(params)) ?? {
+      ok: false,
+      message: 'O pedido de agentes não está disponível nesta janela.',
+    },
 }
 
 /**
@@ -31,9 +36,15 @@ const transport: ApprovalTransport = {
  * consome as mesmas fontes do chat e do diálogo de pergunta; quem decide é o
  * processo principal.
  */
-export function useApprovalQueue() {
+export function useApprovalQueue({
+  onOpenAgents,
+}: {
+  /** Abre os terminais de um pedido de agentes aceito (o canvas é quem cria os blocos). */
+  onOpenAgents?: (tasks: CanvasAgentLaunchTask[], cwd: string) => Promise<void>
+} = {}) {
   const switches = useProviderSwitchRequests()
   const [questions, setQuestions] = useState<CanvasAgentQuestion[]>([])
+  const [launches, setLaunches] = useState<CanvasAgentLaunchRequest[]>([])
   const mountedRef = useRef(true)
 
   const loadQuestions = useCallback(async () => {
@@ -41,19 +52,27 @@ export function useApprovalQueue() {
     if (mountedRef.current && result?.ok) setQuestions(result.requests ?? [])
   }, [])
 
+  const loadLaunches = useCallback(async () => {
+    const result = await window.felixo?.canvas?.listAgentLaunches?.()
+    if (mountedRef.current && result?.ok) setLaunches(result.requests ?? [])
+  }, [])
+
   useEffect(() => {
     mountedRef.current = true
     void loadQuestions().catch(() => {})
+    void loadLaunches().catch(() => {})
     const unsubscribe = window.felixo?.canvas?.onQuestions?.((data) => setQuestions(data.requests ?? []))
+    const unsubscribeLaunches = window.felixo?.canvas?.onAgentLaunches?.((data) => setLaunches(data.requests ?? []))
     return () => {
       mountedRef.current = false
       unsubscribe?.()
+      unsubscribeLaunches?.()
     }
-  }, [loadQuestions])
+  }, [loadQuestions, loadLaunches])
 
   const items = useMemo(
-    () => buildApprovalQueue({ decisions: switches.requests, questions }),
-    [switches.requests, questions],
+    () => buildApprovalQueue({ decisions: switches.requests, questions, launches }),
+    [switches.requests, questions, launches],
   )
 
   const { dismiss } = switches
@@ -64,10 +83,19 @@ export function useApprovalQueue() {
         message: 'Não foi possível responder.',
       }))
       if (item.source === 'question') void loadQuestions().catch(() => {})
+      else if (item.source === 'launch') void loadLaunches().catch(() => {})
       else if (result.stale) dismiss(item.requestId)
+      if (result.opened && onOpenAgents) {
+        // O main já resolveu o pedido: se os terminais não nascerem, a pessoa precisa saber.
+        try {
+          await onOpenAgents(result.opened.tasks, result.opened.cwd)
+        } catch {
+          return { ok: false, message: 'O pedido foi aceito, mas não foi possível abrir os terminais. Peça ao coordenador para pedir de novo.' }
+        }
+      }
       return result
     },
-    [dismiss, loadQuestions],
+    [dismiss, loadQuestions, loadLaunches, onOpenAgents],
   )
 
   return { items, act }

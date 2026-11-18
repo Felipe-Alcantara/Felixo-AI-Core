@@ -132,6 +132,9 @@ const {
   registerAgentQuestionIpcHandlers,
 } = require('./services/agent-question-ipc-handlers.cjs')
 const {
+  registerAgentLaunchIpcHandlers,
+} = require('./services/agent-launch-ipc-handlers.cjs')
+const {
   instalarComandoDoAgente: installAgentCommand,
 } = require('./services/agent-command-install.cjs')
 const { registerAutoUpdateHandlers } = require('./services/auto-updater.cjs')
@@ -264,6 +267,7 @@ let agentWebpageActWatching = null
 let agentCanvasReadWatching = null
 let agentCanvasWriteWatching = null
 let agentQuestionWatching = null
+let agentLaunchWatching = null
 let stopAccountChainSweeper = null
 
 const SUPPORTED_EXTENSIONS = new Set(['.fxai', '.fxchat', '.fxworkflow'])
@@ -1167,6 +1171,7 @@ app.whenReady().then(async () => {
     appPaths,
   })
   agentQuestionWatching = registerAgentQuestionIpcHandlers({ getMainWindow, appPaths })
+  agentLaunchWatching = registerAgentLaunchIpcHandlers({ getMainWindow, appPaths, database: storageDatabase })
   registerAutoUpdateHandlers(getMainWindow)
   cliAutoInstall = registerCliAutoInstallHandlers(getMainWindow, {
     appPaths,
@@ -1392,6 +1397,15 @@ app.on('before-quit', () => {
       // Best effort during app shutdown.
     }
     agentQuestionWatching = null
+  }
+
+  if (agentLaunchWatching) {
+    try {
+      agentLaunchWatching.pararDeObservarPedidos()
+    } catch {
+      // Best effort during app shutdown.
+    }
+    agentLaunchWatching = null
   }
 
   if (agentUsageWatching) {

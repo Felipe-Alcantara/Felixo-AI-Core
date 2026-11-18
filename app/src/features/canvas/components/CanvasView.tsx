@@ -168,6 +168,8 @@ import { judgeCanvasRemoval } from '../services/canvas-removal-guard'
 import { CanvasProfilerBoundary } from '../services/canvas-performance-profiler.tsx'
 import { announceAgentCollaboration } from '../services/agent-collaboration-links'
 import { buildTeamEdges, type TeamLaunch } from '../services/agent-team-template'
+import { readAgentLaunchPreferences } from '../services/agent-launch-preferences'
+import { buildOrchestratedAgentOptions } from '../services/orchestrated-agents'
 import { buildRedactedHandoffText } from '../services/account-continuation'
 import { getAccountChainBridge } from '../services/account-chain-client'
 import type {
@@ -204,6 +206,7 @@ import { useRouteHighlight } from '../hooks/useRouteHighlight'
 import { useSafeViewport, type FlowPositionMapper } from '../hooks/useSafeViewport'
 import { useWebpageOpeners } from '../hooks/useWebpageOpeners'
 import type {
+  CanvasAgentLaunchTask,
   CanvasImageArtifact,
   CanvasNodeData,
   CanvasNodeType,
@@ -2219,6 +2222,15 @@ function CanvasInner({
     [setNodes, persistNode, buildTerminalNodeData, visibleCanvasBounds, ensureProjectGuides],
   )
 
+  // Pedido de um coordenador (`felixo canvas abrir-agentes`) aceito na fila de aprovações:
+  // um terminal por task, com as escolhas do launcher Agente e na pasta do coordenador.
+  const openOrchestratedAgents = useCallback(
+    async (tasks: CanvasAgentLaunchTask[], cwd: string) => {
+      await addTerminalNodes(buildOrchestratedAgentOptions(tasks, readAgentLaunchPreferences(), cwd))
+    },
+    [addTerminalNodes],
+  )
+
   // Template de time: os quatro agentes nascem juntos e já ligados pelo handoff.
   const addTeamNodes = useCallback(
     async (team: TeamLaunch) => {
@@ -2653,7 +2665,7 @@ function CanvasInner({
         </ProjectRootsContext.Provider>
         </AccountChainActionsContext.Provider>
         <AgentQuestionDialog />
-        <ApprovalPanel />
+        <ApprovalPanel onOpenAgents={openOrchestratedAgents} />
         {colorMenu && (
           <NodeColorMenu
             x={colorMenu.x}

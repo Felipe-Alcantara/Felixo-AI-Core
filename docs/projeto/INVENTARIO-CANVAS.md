@@ -32,7 +32,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **Elementos:** 113 (10 blocos, 17 ferramentas, 86 outras superfícies)
 - **Controles:** 433, dos quais 63 com teste específico
 - **Elementos sem nenhum teste:** 3
-- **Lacunas:** 232 (alto 4, médio 124, baixo 104), em 66 tasks
+- **Lacunas:** 234 (alto 4, médio 126, baixo 104), em 68 tasks
 
 ## Moldura do canvas
 
@@ -2801,14 +2801,14 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 - **ID:** `approval-panel` · **Dono:** `src/features/canvas/components/ApprovalPanel.tsx`
 - **Persistência:** nenhuma no renderer; os pedidos vivem no processo principal (sessões persistentes e fila de pedidos de agente)
-- **IPC:** `cli:provider-switch:list`, `cli:provider-switch:respond`, `canvas:list-questions`, `canvas:answer-question`, `canvas:agent-questions`, `approvals:window`
-- **Depende de:** `approval-queue (buildApprovalQueue, runApprovalAction)`, `useApprovalQueue`, `useProviderSwitchRequests (chat)`, `window.felixo.cli`, `window.felixo.canvas`, `window.felixo.approvalWindows`
+- **IPC:** `cli:provider-switch:list`, `cli:provider-switch:respond`, `canvas:list-questions`, `canvas:answer-question`, `canvas:agent-questions`, `canvas:list-agent-launches`, `canvas:decide-agent-launch`, `canvas:agent-launches`, `approvals:window`
+- **Depende de:** `approval-queue (buildApprovalQueue, runApprovalAction)`, `orchestrated-agents (buildOrchestratedAgentOptions)`, `useApprovalQueue`, `useProviderSwitchRequests (chat)`, `window.felixo.cli`, `window.felixo.canvas`, `window.felixo.approvalWindows`
 - **Sobreposição:** fixed inset-x-0 bottom-12 z-40, centralizado (max-w-md, max-h 50vh com rolagem), montado no CanvasView; abaixo dos diálogos modais (60) e do cartão de pedido de página (50), acima do dock e dos painéis (20/30). Não é modal e não prende o foco; camada flutuante (clicar nele não fecha a gaveta do terminal).
-- **Testes:** `src/features/canvas/services/approval-queue.test.ts`, `electron/services/approval-window-reminder.test.cjs`
+- **Testes:** `src/features/canvas/services/approval-queue.test.ts`, `electron/services/approval-window-reminder.test.cjs`, `electron/services/agent-launch-ipc-handlers.test.cjs`, `src/features/canvas/services/orchestrated-agents.test.ts`
 
 | Estado | Quando |
 | --- | --- |
-| normal | Pílula "N aprovações pendentes" com o lembrete das 12h e 18h; aberta, lista do pedido mais antigo ao mais novo (buildApprovalQueue) com origem, título, detalhes, botões e o que acontece sem resposta. Junta decisões do orquestrador e das CLIs (permissão, teto de custo, troca de provedor e de conta) e perguntas de agente. |
+| normal | Pílula "N aprovações pendentes" com o lembrete das 12h e 18h; aberta, lista do pedido mais antigo ao mais novo (buildApprovalQueue) com origem, título, detalhes, botões e o que acontece sem resposta. Junta decisões do orquestrador e das CLIs (permissão, teto de custo, troca de provedor e de conta), perguntas de agente e pedidos de um coordenador para abrir um agente por task (felixo canvas abrir-agentes). |
 | empty | Sem pedido pendente: não renderiza nada. |
 | error | Resposta recusada (pedido que o main já não tem, CLI que parou, pergunta inválida): mensagem em vermelho (role="alert") presa ao pedido que falhou. |
 | pending | busyKey enquanto responde: os botões de todos os pedidos ficam com aria-disabled (o clique é ignorado). |
@@ -2816,10 +2816,12 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Controle | Gatilho | Efeito | Falha conhecida | Teste |
 | --- | --- | --- | --- | --- |
 | `onClick={onToggle}` (button) | clique; abre sozinho quando uma janela de aprovação (12h ou 18h, fuso do sistema) vence com pedido pendente (approvals:window) | Abre e recolhe a lista de pedidos (aria-expanded). | sem falha própria (estado local) | — |
-| `onClick={() => onAct(item, action.id)}` (button) | clique | Botão repetido por ação do pedido: decisão (Permitir/Negar, Continuar/Parar, Trocar/Não trocar) chama cli:provider-switch:respond { decisionId, accept }; pergunta chama canvas:answer-question { id, indice } (índice nulo em Dispensar). O pedido sai da fila quando o main avisa a resolução. (desabilitado: busyKey (aria-disabled)) | Recusa do main: mensagem em vermelho no pedido; pedido que o main já não tem (DECISION_NOT_PENDING, RUN_FINISHED) é tirado da fila. Rejeição de IPC vira "Não foi possível responder.". | `src/features/canvas/services/approval-queue.test.ts` |
+| `onClick={() => onAct(item, action.id)}` (button) | clique | Botão repetido por ação do pedido: decisão (Permitir/Negar, Continuar/Parar, Trocar/Não trocar) chama cli:provider-switch:respond { decisionId, accept }; pergunta chama canvas:answer-question { id, indice } (índice nulo em Dispensar); pedido de agentes chama canvas:decide-agent-launch { id, aceitar } e, no aceite, o canvas abre um terminal por task que o main autorizou (buildOrchestratedAgentOptions + addTerminalNodes, com as escolhas do launcher Agente e a pasta do coordenador). O pedido sai da fila quando o main avisa a resolução. (desabilitado: busyKey (aria-disabled)) | Recusa do main: mensagem em vermelho no pedido; pedido que o main já não tem (DECISION_NOT_PENDING, RUN_FINISHED) é tirado da fila. Rejeição de IPC vira "Não foi possível responder.". | `src/features/canvas/services/approval-queue.test.ts` |
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
+| Os terminais de um pedido de agentes nascem juntos (matriz livre, rótulo "Orquestração i/n" e a mesma moldura), mas não dentro de um bloco de grupo, e o progresso por task (esperando, rodando, concluída, falhou) não aparece: é a rodada 3 (bloco Orquestrador). | médio | `41c91f95-497e-8121-a191-d493fb08519b` |
+| O aceite de um pedido de agentes nunca foi visto no app aberto: validado por teste do main, do serviço e da fila, sem abrir o app com um coordenador real. | médio | `41c91f95-497e-81d3-83ab-fc42cd2e80f4` |
 | Recusar não leva motivo: os IPCs só carregam aceitar/recusar e o índice da opção. | baixo | `41c91f95-497e-8120-9fbf-d6db17ae781b` |
 | Posição (bottom-12, z 40) e foco nunca foram vistos na tela: validado só por teste e renderização estática. | médio | `41c91f95-497e-8165-8cc0-ce2bd685c1a1` |
 | Não lista permissão pedida dentro do terminal PTY (depende do OSC 7501) nem os avisos do agendador (o renderer ainda não consome agent-schedule:due). | médio | `41c91f95-497e-817e-bb8c-ca6fe5e302a1` |
@@ -3233,7 +3235,9 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `41b91f95-497e-81c7-88e6-c0660189bb80` — 1 lacuna
 - `41b91f95-497e-81c9-b12f-edb0b8ed0b2d` — 1 lacuna
 - `41c91f95-497e-8120-9fbf-d6db17ae781b` — 1 lacuna
+- `41c91f95-497e-8121-a191-d493fb08519b` — 1 lacuna
 - `41c91f95-497e-8165-8cc0-ce2bd685c1a1` — 1 lacuna
 - `41c91f95-497e-817e-bb8c-ca6fe5e302a1` — 1 lacuna
 - `41c91f95-497e-81c9-bb3a-da2b0c144512` — 1 lacuna
+- `41c91f95-497e-81d3-83ab-fc42cd2e80f4` — 1 lacuna
 - `41c91f95-497e-81f9-9edf-eb89e07ee070` — 1 lacuna

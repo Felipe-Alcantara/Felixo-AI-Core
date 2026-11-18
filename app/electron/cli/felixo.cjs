@@ -125,6 +125,7 @@ const PERGUNTAR_ESPERA_MAXIMA_MS = 5 * 60 * 1000
 const PERGUNTAR_ESPERA_INTERVALO_MS = 500
 const VERBOS_CANVAS_ESCREVER = ['escrever']
 const VERBOS_CANVAS_STATUS = ['ver-pedido']
+const VERBOS_CANVAS_ABRIR_AGENTES = ['abrir-agentes']
 // Leitura é auto-resolvida pelo app (sem confirmação humana — ver
 // agent-canvas-read-ipc-handlers.cjs), então uma espera curta aqui poupa o
 // agente de ter que rodar "ver-pedido" ele mesmo no caso comum (app aberto).
@@ -406,6 +407,47 @@ async function executar(argumentos, dependencias = {}) {
       }
     }
 
+    // Coordenador pede um agente por task. Não abre nada: o pedido espera a
+    // pessoa aceitar no painel de aprovações, e o app aplica os tetos do
+    // orquestrador. Devolve na hora, com o id para acompanhar, como a escrita.
+    if (VERBOS_CANVAS_ABRIR_AGENTES.includes(verbo)) {
+      if (restantes.length === 0) {
+        return {
+          saida: '',
+          erro: 'Informe as tasks: felixo canvas abrir-agentes "<task 1>" "<task 2>" ... (a primeira linha de cada uma é o título).',
+          codigo: 2,
+        }
+      }
+
+      try {
+        const pedido = criarPedidos().registrar('abrir-agentes', { tarefas: restantes, origem: diretorioAtual() })
+
+        if (opcoes.json === true) {
+          return { saida: JSON.stringify({ ok: true, pedido }, null, 2), codigo: 0 }
+        }
+
+        return {
+          saida: [
+            `Pedido registrado: ${pedido.id}`,
+            `Tasks: ${pedido.tarefas.length}`,
+            ...pedido.tarefas.map((tarefa, indice) => `  ${indice + 1}. ${tarefa.titulo}`),
+            '',
+            'Nada abre sozinho: a pessoa aceita ou recusa no painel de aprovações do canvas,',
+            'e o app respeita "Agentes por rodada" e "Agentes no total" do orquestrador.',
+            'Você coordena; não execute nenhuma dessas tasks.',
+            `Para acompanhar: felixo canvas ver-pedido ${pedido.id}`,
+          ].join('\n'),
+          codigo: 0,
+        }
+      } catch (error) {
+        return {
+          saida: '',
+          erro: error instanceof Error ? error.message : 'Não foi possível registrar o pedido.',
+          codigo: 2,
+        }
+      }
+    }
+
     if (VERBOS_CANVAS_STATUS.includes(verbo)) {
       const pedido = argumento ? criarPedidos().ler(argumento) : null
 
@@ -660,6 +702,7 @@ async function lerEstadoPadrao() {
  * @returns {string}
  */
 function descreverPedido(pedido, agora = Date.now()) {
+  if (pedido.acao === 'abrir-agentes') return descreverPedidoDeAgentes(pedido, agora)
   const pagina = pedido.acao === 'abrir-pagina'
   const estados = pagina
     ? {
@@ -686,6 +729,40 @@ function descreverPedido(pedido, agora = Date.now()) {
     `  estado: ${pedido.estado} (${desfecho})`,
     pagina && pedido.estado === 'aceito' ? `  aberto em: ${abertoEm}` : null,
     recusaSemAutor && pedido.resultado?.message ? `  motivo: ${pedido.resultado.message}` : null,
+    `  pedido em: ${pedido.pedidoEm}`,
+    pedido.resolvidoEm ? `  resolvido em: ${pedido.resolvidoEm}` : null,
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
+/**
+ * Pedido de agentes: o coordenador precisa saber quantos abriram, quais o app
+ * recusou pelos tetos (para pedir de novo na rodada seguinte) e se a pessoa
+ * recusou (então não repete o pedido sem ela pedir).
+ *
+ * @param {object} pedido
+ * @param {number} agora
+ * @returns {string}
+ */
+function descreverPedidoDeAgentes(pedido, agora) {
+  const resultado = pedido.resultado ?? {}
+  const vencido = pedido.estado === 'pendente' && !pedidoAindaVale(pedido, agora)
+  let desfecho = 'esperando a pessoa aceitar no painel de aprovações do canvas'
+  if (vencido) desfecho = `expirou: ninguém respondeu em ${VALIDADE_TEXTO}; o app não mostra mais esse pedido`
+  else if (pedido.estado === 'aceito') desfecho = `aceito: ${resultado.abertas ?? 0} agente(s) aberto(s) no canvas`
+  else if (pedido.estado === 'recusado') {
+    desfecho = resultado.recusadoPor === 'pessoa' ? 'recusado pela pessoa' : 'recusado pelo app'
+  }
+  const recusadas = Array.isArray(resultado.recusadas) ? resultado.recusadas : []
+
+  return [
+    `Pedido ${pedido.id}`,
+    '  ação: abrir-agentes',
+    `  tasks: ${(pedido.tarefas ?? []).map((tarefa) => tarefa.titulo).join(' | ')}`,
+    `  estado: ${pedido.estado} (${desfecho})`,
+    pedido.estado === 'recusado' && resultado.message ? `  motivo: ${resultado.message}` : null,
+    ...recusadas.map((item) => `  recusada: ${item.titulo} — ${item.motivo}`),
     `  pedido em: ${pedido.pedidoEm}`,
     pedido.resolvidoEm ? `  resolvido em: ${pedido.resolvidoEm}` : null,
   ]

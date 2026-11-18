@@ -224,8 +224,17 @@ const AJUDA = `felixo fetch-all — varre os repositórios git da máquina e rep
       5 minutos (o id do pedido fica no texto, para conferir depois com
       "felixo canvas ver-pedido <id>"). Quem responde é sempre uma pessoa.
 
+  felixo canvas abrir-agentes "<task 1>" "<task 2>" ... [--json]
+      Coordenador: pede um agente por task (a primeira linha de cada task é o
+      título; o resto é o contexto). Máximo de 20 tasks por pedido. NUNCA abre
+      sozinho: fica pendente até a pessoa aceitar no painel de aprovações do
+      canvas, e o app respeita "Agentes por rodada" e "Agentes no total" do
+      orquestrador; o excedente é recusado e o desfecho diz quais, para você
+      pedir de novo na rodada seguinte. O comando só registra e devolve na
+      hora. Você coordena: não execute nenhuma dessas tasks.
+
   felixo canvas ver-pedido <id> [--json]
-      Confere o desfecho de um pedido de canvas (leitura ou escrita).
+      Confere o desfecho de um pedido de canvas (leitura, escrita ou agentes).
 
   Também são aceitos os equivalentes em português: navegador abrir,
   navegador ver-pedido e --embutido.

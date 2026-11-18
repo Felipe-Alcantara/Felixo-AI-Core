@@ -844,7 +844,7 @@ export const terminalSurfaces: InventoryElement[] = [
     layer: 'overlay',
     owner: 'src/features/canvas/components/ApprovalPanel.tsx',
     states: {
-      normal: 'Pílula "N aprovações pendentes" com o lembrete das 12h e 18h; aberta, lista do pedido mais antigo ao mais novo (buildApprovalQueue) com origem, título, detalhes, botões e o que acontece sem resposta. Junta decisões do orquestrador e das CLIs (permissão, teto de custo, troca de provedor e de conta) e perguntas de agente.',
+      normal: 'Pílula "N aprovações pendentes" com o lembrete das 12h e 18h; aberta, lista do pedido mais antigo ao mais novo (buildApprovalQueue) com origem, título, detalhes, botões e o que acontece sem resposta. Junta decisões do orquestrador e das CLIs (permissão, teto de custo, troca de provedor e de conta), perguntas de agente e pedidos de um coordenador para abrir um agente por task (felixo canvas abrir-agentes).',
       empty: 'Sem pedido pendente: não renderiza nada.',
       pending: 'busyKey enquanto responde: os botões de todos os pedidos ficam com aria-disabled (o clique é ignorado).',
       error: 'Resposta recusada (pedido que o main já não tem, CLI que parou, pergunta inválida): mensagem em vermelho (role="alert") presa ao pedido que falhou.',
@@ -860,20 +860,32 @@ export const terminalSurfaces: InventoryElement[] = [
       {
         locator: 'onClick={() => onAct(item, action.id)}',
         kind: 'button',
-        effect: 'Botão repetido por ação do pedido: decisão (Permitir/Negar, Continuar/Parar, Trocar/Não trocar) chama cli:provider-switch:respond { decisionId, accept }; pergunta chama canvas:answer-question { id, indice } (índice nulo em Dispensar). O pedido sai da fila quando o main avisa a resolução.',
+        effect: 'Botão repetido por ação do pedido: decisão (Permitir/Negar, Continuar/Parar, Trocar/Não trocar) chama cli:provider-switch:respond { decisionId, accept }; pergunta chama canvas:answer-question { id, indice } (índice nulo em Dispensar); pedido de agentes chama canvas:decide-agent-launch { id, aceitar } e, no aceite, o canvas abre um terminal por task que o main autorizou (buildOrchestratedAgentOptions + addTerminalNodes, com as escolhas do launcher Agente e a pasta do coordenador). O pedido sai da fila quando o main avisa a resolução.',
         failure: 'Recusa do main: mensagem em vermelho no pedido; pedido que o main já não tem (DECISION_NOT_PENDING, RUN_FINISHED) é tirado da fila. Rejeição de IPC vira "Não foi possível responder.".',
         disabledWhen: 'busyKey (aria-disabled)',
         test: { file: 'src/features/canvas/services/approval-queue.test.ts' },
       },
     ],
     persistence: ['nenhuma no renderer; os pedidos vivem no processo principal (sessões persistentes e fila de pedidos de agente)'],
-    ipc: ['cli:provider-switch:list', 'cli:provider-switch:respond', 'canvas:list-questions', 'canvas:answer-question', 'canvas:agent-questions', 'approvals:window'],
-    dependsOn: ['approval-queue (buildApprovalQueue, runApprovalAction)', 'useApprovalQueue', 'useProviderSwitchRequests (chat)', 'window.felixo.cli', 'window.felixo.canvas', 'window.felixo.approvalWindows'],
+    ipc: ['cli:provider-switch:list', 'cli:provider-switch:respond', 'canvas:list-questions', 'canvas:answer-question', 'canvas:agent-questions', 'canvas:list-agent-launches', 'canvas:decide-agent-launch', 'canvas:agent-launches', 'approvals:window'],
+    dependsOn: ['approval-queue (buildApprovalQueue, runApprovalAction)', 'orchestrated-agents (buildOrchestratedAgentOptions)', 'useApprovalQueue', 'useProviderSwitchRequests (chat)', 'window.felixo.cli', 'window.felixo.canvas', 'window.felixo.approvalWindows'],
     tests: [
       { file: 'src/features/canvas/services/approval-queue.test.ts' },
       { file: 'electron/services/approval-window-reminder.test.cjs' },
+      { file: 'electron/services/agent-launch-ipc-handlers.test.cjs' },
+      { file: 'src/features/canvas/services/orchestrated-agents.test.ts' },
     ],
     gaps: [
+      {
+        what: 'Os terminais de um pedido de agentes nascem juntos (matriz livre, rótulo "Orquestração i/n" e a mesma moldura), mas não dentro de um bloco de grupo, e o progresso por task (esperando, rodando, concluída, falhou) não aparece: é a rodada 3 (bloco Orquestrador).',
+        risk: 'médio',
+        task: '41c91f95-497e-8121-a191-d493fb08519b',
+      },
+      {
+        what: 'O aceite de um pedido de agentes nunca foi visto no app aberto: validado por teste do main, do serviço e da fila, sem abrir o app com um coordenador real.',
+        risk: 'médio',
+        task: '41c91f95-497e-81d3-83ab-fc42cd2e80f4',
+      },
       {
         what: 'Recusar não leva motivo: os IPCs só carregam aceitar/recusar e o índice da opção.',
         risk: 'baixo',

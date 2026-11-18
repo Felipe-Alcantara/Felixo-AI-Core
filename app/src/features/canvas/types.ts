@@ -539,6 +539,24 @@ export type CanvasAgentQuestion = {
   resolvidoEm?: string
 }
 
+/** Uma task que um coordenador pede para abrir como agente. */
+export type CanvasAgentLaunchTask = { titulo: string; contexto?: string }
+
+/**
+ * Pedido de um coordenador para abrir um agente por task
+ * (`felixo canvas abrir-agentes`), à espera da pessoa. O app abre os
+ * terminais só depois do aceite e dentro dos tetos do orquestrador.
+ */
+export type CanvasAgentLaunchRequest = {
+  id: string
+  acao: 'abrir-agentes'
+  tarefas: CanvasAgentLaunchTask[]
+  estado: 'pendente' | 'aceito' | 'recusado'
+  pedidoEm: string
+  origem: string
+  resolvidoEm?: string
+}
+
 /**
  * Pedido de um agente para abrir uma página (`felixo browser open`), à
  * espera da pessoa. `modo` é o destino que o agente sugeriu; quem decide é o

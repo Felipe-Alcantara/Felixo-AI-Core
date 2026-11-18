@@ -32,7 +32,13 @@ const ACOES_ACEITAS = [
   'perguntar',
   'pagina-inspecionar',
   'pagina-agir',
+  'abrir-agentes',
 ]
+
+/** Limites de um lote de agentes pedido por um coordenador (`felixo canvas abrir-agentes`). */
+const AGENTES_LOTE_MAX = 20
+const AGENTE_TITULO_MAX = 120
+const AGENTE_CONTEXTO_MAX = 20000
 
 /** Limites de uma pergunta com opções (o diálogo precisa caber numa tela). */
 const PERGUNTA_MAX = 500
@@ -236,6 +242,32 @@ function normalizarPedido(acao, opcoes = {}) {
       throw new Error(`Informe de ${OPCOES_MIN} a ${OPCOES_MAX} opções.`)
     }
     return { acao: nome, comCommit: false, pergunta, opcoes: lista }
+  }
+
+  // Lote de agentes: o coordenador só propõe as tasks. Quem abre os terminais
+  // é o app, depois da pessoa aceitar, e dentro dos tetos do orquestrador.
+  if (nome === 'abrir-agentes') {
+    const bruto = Array.isArray(opcoes?.tarefas) ? opcoes.tarefas : []
+    if (bruto.length === 0) throw new Error('Informe ao menos uma task para abrir um agente.')
+    if (bruto.length > AGENTES_LOTE_MAX) {
+      throw new Error(`Lote grande demais (máximo ${AGENTES_LOTE_MAX} tasks por pedido).`)
+    }
+    const tarefas = bruto.map((item) => {
+      // Texto solto: a primeira linha é o título e o resto é o contexto.
+      const linhas = typeof item === 'string' ? item.split(/\r?\n/) : []
+      const objeto = typeof item === 'object' && item !== null
+      const titulo = (objeto ? String(item.titulo ?? '') : (linhas[0] ?? '')).trim()
+      const contexto = (objeto ? String(item.contexto ?? '') : linhas.slice(1).join('\n')).trim()
+      if (!titulo) throw new Error('Toda task precisa de um título.')
+      if (titulo.length > AGENTE_TITULO_MAX) {
+        throw new Error(`Título de task muito grande (máximo ${AGENTE_TITULO_MAX} caracteres).`)
+      }
+      if (contexto.length > AGENTE_CONTEXTO_MAX) {
+        throw new Error(`Contexto de task muito grande (máximo ${AGENTE_CONTEXTO_MAX} caracteres).`)
+      }
+      return contexto ? { titulo, contexto } : { titulo }
+    })
+    return { acao: nome, comCommit: false, tarefas }
   }
 
   return { acao: nome, comCommit: opcoes?.comCommit === true }
@@ -456,6 +488,7 @@ module.exports = {
   CONTEUDO_ESCRITA_MAX,
   OPCOES_MAX,
   OPCOES_MIN,
+  AGENTES_LOTE_MAX,
   ESTADOS,
   MODOS_ABERTURA_PAGINA,
   TIPOS_ACAO_PAGINA,

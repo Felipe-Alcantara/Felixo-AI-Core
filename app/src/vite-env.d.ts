@@ -36,6 +36,8 @@ import type {
   CanvasAgentWebpageActSession,
   CanvasAgentWebpageInspectRequest,
   CanvasAgentQuestion,
+  CanvasAgentLaunchRequest,
+  CanvasAgentLaunchTask,
   CanvasImageArtifact,
   CanvasNodeData,
   CanvasWriteAgentRequest,
@@ -966,6 +968,20 @@ declare global {
         >
         onQuestions: (
           callback: (data: { requests: CanvasAgentQuestion[] }) => void,
+        ) => () => void
+        listAgentLaunches: () => Promise<CliInvokeResult & { requests?: CanvasAgentLaunchRequest[] }>
+        decideAgentLaunch: (params: {
+          id: string
+          aceitar: boolean
+        }) => Promise<
+          CliInvokeResult & {
+            resolved?: CanvasAgentLaunchRequest | null
+            abrir?: CanvasAgentLaunchTask[]
+            recusadas?: { titulo: string; motivo: string }[]
+          }
+        >
+        onAgentLaunches: (
+          callback: (data: { requests: CanvasAgentLaunchRequest[] }) => void,
         ) => () => void
         onNodeUpdated: (
           callback: (data: { id: string; data: CanvasNodeData }) => void,

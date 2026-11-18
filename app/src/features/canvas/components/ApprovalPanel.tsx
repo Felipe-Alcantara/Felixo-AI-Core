@@ -3,6 +3,7 @@ import { ClipboardCheck } from 'lucide-react'
 
 import { useApprovalQueue } from '../hooks/useApprovalQueue'
 import type { ApprovalItem } from '../services/approval-queue'
+import type { CanvasAgentLaunchTask } from '../types'
 
 const TONE_CLASS = {
   accept: 'border-emerald-400/40 bg-emerald-400/10 hover:bg-emerald-400/20',
@@ -93,8 +94,13 @@ export function ApprovalPanelView({ items, open, busyKey, error, onToggle, onAct
  * lembrar. Aprovar e recusar usam os mesmos IPCs do chat e do diálogo de
  * pergunta: o main continua sendo quem decide.
  */
-export function ApprovalPanel() {
-  const { items, act } = useApprovalQueue()
+export function ApprovalPanel({
+  onOpenAgents,
+}: {
+  /** Abre um terminal por task quando a pessoa aceita um pedido de agentes de um coordenador. */
+  onOpenAgents?: (tasks: CanvasAgentLaunchTask[], cwd: string) => Promise<void>
+} = {}) {
+  const { items, act } = useApprovalQueue({ onOpenAgents })
   const [open, setOpen] = useState(false)
   const [busyKey, setBusyKey] = useState<string | null>(null)
   const [error, setError] = useState<{ key: string; message: string } | null>(null)

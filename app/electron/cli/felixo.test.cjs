@@ -735,3 +735,62 @@ test('browser click/type: registram o pedido de ação, esperam o desfecho e nun
   const semTexto = await executar(['browser', 'type', 'w1'], deps)
   assert.equal(semTexto.codigo, 2)
 })
+
+test('canvas abrir-agentes: sem tasks é erro e nada é registrado', async () => {
+  const { pasta, deps } = dependencias()
+  const resultado = await executar(['canvas', 'abrir-agentes'], deps)
+
+  assert.equal(resultado.codigo, 2)
+  assert.match(resultado.erro, /Informe as tasks/)
+  assert.deepEqual(criarRepositorioDePedidos({ pasta }).listarPendentes({ acao: 'abrir-agentes' }), [])
+})
+
+test('canvas abrir-agentes: registra o lote pendente e devolve na hora, sem abrir nada', async () => {
+  const { pasta, deps } = dependencias()
+  const resultado = await executar(['canvas', 'abrir-agentes', 'Task A', 'Task B\ncontexto da B', 'Task C'], deps)
+
+  assert.equal(resultado.codigo, 0)
+  assert.match(resultado.saida, /Pedido registrado/)
+  assert.match(resultado.saida, /Tasks: 3/)
+  assert.match(resultado.saida, /Nada abre sozinho/)
+  assert.match(resultado.saida, /canvas ver-pedido/)
+
+  const [pedido] = criarRepositorioDePedidos({ pasta }).listarPendentes({ acao: 'abrir-agentes' })
+  assert.equal(pedido.estado, 'pendente')
+  assert.deepEqual(pedido.tarefas, [
+    { titulo: 'Task A' },
+    { titulo: 'Task B', contexto: 'contexto da B' },
+    { titulo: 'Task C' },
+  ])
+})
+
+test('canvas abrir-agentes: lote acima do máximo é recusado com a mensagem do repositório', async () => {
+  const { deps } = dependencias()
+  const tasks = Array.from({ length: 21 }, (_, indice) => `t${indice}`)
+  const resultado = await executar(['canvas', 'abrir-agentes', ...tasks], deps)
+
+  assert.equal(resultado.codigo, 2)
+  assert.match(resultado.erro, /Lote grande demais/)
+})
+
+test('canvas ver-pedido de agentes diz quantos abriram e quais o app recusou pelos tetos', async () => {
+  const { pasta, deps } = dependencias()
+  await executar(['canvas', 'abrir-agentes', 'Task A', 'Task B', 'Task C', 'Task D'], deps)
+  const repositorio = criarRepositorioDePedidos({ pasta })
+  const [pedido] = repositorio.listarPendentes({ acao: 'abrir-agentes' })
+
+  assert.match((await executar(['canvas', 'ver-pedido', pedido.id], deps)).saida, /esperando a pessoa aceitar/)
+
+  repositorio.resolver(pedido.id, {
+    aceito: true,
+    resultado: {
+      ok: true,
+      abertas: 3,
+      recusadas: [{ titulo: 'Task D', motivo: 'Teto "Agentes por rodada" (3) atingido.' }],
+    },
+  })
+  const saida = (await executar(['canvas', 'ver-pedido', pedido.id], deps)).saida
+
+  assert.match(saida, /aceito: 3 agente\(s\) aberto\(s\)/)
+  assert.match(saida, /recusada: Task D — Teto "Agentes por rodada" \(3\) atingido\./)
+})

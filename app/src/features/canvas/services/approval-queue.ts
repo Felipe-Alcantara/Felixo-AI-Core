@@ -11,7 +11,7 @@ import {
   formatProviderSwitchTitle,
 } from '../../chat/services/provider-switch'
 import type { ProviderSwitchRequest, ProviderSwitchRespondResult } from '../../chat/types'
-import type { CanvasAgentQuestion } from '../types'
+import type { CanvasAgentLaunchRequest, CanvasAgentLaunchTask, CanvasAgentQuestion } from '../types'
 
 export type ApprovalAction = {
   /** `accept`/`refuse` (decisão) ou `option:<índice>`/`dismiss` (pergunta). */
@@ -24,9 +24,11 @@ export type ApprovalAction = {
 
 export type ApprovalItem = {
   key: string
-  source: 'decision' | 'question'
+  source: 'decision' | 'question' | 'launch'
   /** Id do pedido no processo principal (decisionId ou id do arquivo de pedido). */
   requestId: string
+  /** Só em `launch`: as tasks do pedido e a pasta do coordenador (onde os agentes abrem). */
+  launch?: { tasks: CanvasAgentLaunchTask[]; cwd: string }
   title: string
   details: string[]
   origin: string
@@ -86,14 +88,36 @@ function fromQuestion(question: CanvasAgentQuestion): ApprovalItem {
   }
 }
 
+function fromLaunch(request: CanvasAgentLaunchRequest): ApprovalItem {
+  const count = request.tarefas.length
+  const plural = count === 1 ? 'agente' : 'agentes'
+  return {
+    key: `launch:${request.id}`,
+    source: 'launch',
+    requestId: request.id,
+    launch: { tasks: request.tarefas, cwd: request.origem },
+    title: `Um coordenador pede ${count} ${plural}, um por task`,
+    details: request.tarefas.map((tarefa, indice) => `${indice + 1}. ${tarefa.titulo}`),
+    origin: request.origem ? `Coordenador em ${request.origem}` : 'Coordenador',
+    requestedAt: toMs(request.pedidoEm),
+    timeoutNote: 'sem resposta, nada abre e o coordenador continua esperando.',
+    actions: [
+      { id: 'accept', label: `Abrir ${count} ${plural}`, tone: 'accept', hint: 'Respeita "Agentes por rodada" e "Agentes no total" do orquestrador.' },
+      { id: 'refuse', label: 'Recusar', tone: 'refuse' },
+    ],
+  }
+}
+
 /** Tudo o que espera a pessoa, do pedido mais antigo ao mais novo. */
 export function buildApprovalQueue(input: {
   decisions?: ProviderSwitchRequest[] | null
   questions?: CanvasAgentQuestion[] | null
+  launches?: CanvasAgentLaunchRequest[] | null
 }): ApprovalItem[] {
   const items = [
     ...(input.decisions ?? []).map(fromDecision),
     ...(input.questions ?? []).filter((question) => question.estado === 'pendente').map(fromQuestion),
+    ...(input.launches ?? []).filter((launch) => launch.estado === 'pendente').map(fromLaunch),
   ]
   return items.sort((left, right) => left.requestedAt - right.requestedAt)
 }
@@ -101,9 +125,20 @@ export function buildApprovalQueue(input: {
 export type ApprovalTransport = {
   respondDecision: (params: { decisionId: string; accept: boolean }) => Promise<ProviderSwitchRespondResult>
   answerQuestion: (params: { id: string; indice: number | null }) => Promise<{ ok: boolean; message?: string }>
+  decideLaunch: (params: { id: string; aceitar: boolean }) => Promise<{
+    ok: boolean
+    message?: string
+    abrir?: CanvasAgentLaunchTask[]
+  }>
 }
 
-export type ApprovalActionResult = { ok: boolean; message?: string; stale?: boolean }
+export type ApprovalActionResult = {
+  ok: boolean
+  message?: string
+  stale?: boolean
+  /** `launch` aceito: as tasks que o main autorizou abrir (já cortadas pelos tetos). */
+  opened?: { tasks: CanvasAgentLaunchTask[]; cwd: string }
+}
 
 /** Encaminha o clique ao mesmo IPC que o chat e o diálogo de pergunta já usam. */
 export async function runApprovalAction(
@@ -121,6 +156,17 @@ export async function runApprovalAction(
     // O main já não tem o pedido: só resta tirá-lo da fila.
     const stale = result.code === 'DECISION_NOT_PENDING' || result.code === 'RUN_FINISHED'
     return { ok: false, message: describeProviderSwitchError(result), stale }
+  }
+
+  if (item.source === 'launch') {
+    const result = await transport.decideLaunch({ id: item.requestId, aceitar: actionId === 'accept' })
+    if (!result.ok) return { ok: false, message: result.message ?? 'Não foi possível decidir o pedido.' }
+    const tasks = result.abrir ?? []
+    if (actionId === 'accept' && tasks.length === 0) {
+      // Teto, modo ou pedido vencido: o main recusou e o motivo explica.
+      return { ok: false, message: result.message ?? 'Nenhum agente pôde ser aberto.' }
+    }
+    return { ok: true, ...(tasks.length > 0 ? { opened: { tasks, cwd: item.launch?.cwd ?? '' } } : {}) }
   }
 
   const indice = actionId === 'dismiss' ? null : Number(actionId.slice('option:'.length))
