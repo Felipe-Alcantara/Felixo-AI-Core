@@ -421,6 +421,8 @@ Workflow `.github/workflows/retomada-e2e-empacotado.yml`, **só manual** (`workf
 1. Num terminal com a conta de teste do Claude, rode `claude setup-token` e copie o token impresso (`sk-ant-oat...`).
 2. No GitHub: Settings > Secrets and variables > Actions > New repository secret. Nome `CLAUDE_CODE_OAUTH_TOKEN`, valor o token.
 
+**Decisão de 18/11/2026 (Felipe):** por ora **não há conta de teste nem secret**, para Claude, Codex ou Gemini. O E2E com o modelo real fica manual e fora do aceite automático; o que se prova sem credencial é a tela de login e os desfechos sem login. Nenhuma conta pessoal serve, nem em teste local. O Codex só ganha credencial depois de existir cenário Codex no script. Se um dia houver secret, o dono é o Felipe, que cria o environment `retomada-e2e` (revisor: Felipe; branch restrita a `main`) e cadastra o secret **nele**, não no nível do repositório, porque quem tem push poderia rodar uma branch que lê o valor; o job passa a declarar esse environment antes do primeiro uso.
+
 Sem o secret, o job `secret` falha em segundos com "O secret CLAUDE_CODE_OAUTH_TOKEN não está configurado" e o E2E nem começa. Escolheu-se o token OAuth (e não `ANTHROPIC_API_KEY`) porque o Claude Code o lê da variável sem terminal e sem passar pelo onboarding de chave, e porque é a conta que a retomada de verdade usa. O app só repassa essa variável a cartões sem conta própria (`cli-account-profiles.cjs` a remove dos cartões de conta), e o E2E usa cartões sem conta.
 
 ### E2E do Linux instalado (instância única, GPU do AppImage, .desktop, launcher)

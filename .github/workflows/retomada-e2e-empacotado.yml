@@ -4,6 +4,10 @@
 # CLAUDE_CODE_OAUTH_TOKEN e gasta uso dela. Não publica nada: empacota com
 # `electron-builder --dir --publish never` (sem instalador, sem release, sem GH_TOKEN).
 #
+# Decisão de 18/11/2026: por ora não há conta de teste nem secret; este job fica sem uso. Se um dia houver,
+# o secret vai num environment `retomada-e2e` (revisor: Felipe, branch main), não no nível do repositório, e o
+# job passa a declarar esse environment antes de rodar (detalhes no guia abaixo).
+#
 # Passo humano, uma vez (veja docs/guias/GUIA-DESENVOLVEDOR.md, "E2E da retomada empacotado"):
 #   1. `claude setup-token` num terminal com a conta de teste; copie o token impresso (sk-ant-oat...).
 #   2. GitHub > Settings > Secrets and variables > Actions > New repository secret:
