@@ -358,7 +358,9 @@ contexto limitados em `normalizarPedido`). `agent-launch-ipc-handlers.cjs` lista
 `planLaunch` com as configuracoes salvas (`maxAgentsPerTurn`, `maxTotalAgents` somado desde que o app
 abriu, e `mode: read_only` recusa tudo); o renderer so confirma e abre o que o main devolveu
 (`buildOrchestratedAgentOptions` + `addTerminalNodes`, com as preferencias do launcher Agente e a
-pasta do coordenador). O orquestrador nunca executa: so propoe, e a pessoa aceita. Limites
+pasta do coordenador). O orquestrador nunca executa: so propoe, e a pessoa aceita. A skill
+`abrir-agentes-por-task` (catalogo builtin) ensina o coordenador a pedir, ler o desfecho com
+`ver-pedido` e repedir so as recusadas; ela precisa estar ligada no terminal dele. Limites
 conhecidos: o total e por sessao do app, nao por execucao; os terminais nao ficam dentro de um bloco
 de grupo e nao ha progresso por task (rodada 3, bloco Orquestrador); o teto de custo vale na
 execucao do chat e ainda nao mede o custo de terminais abertos por esta via.

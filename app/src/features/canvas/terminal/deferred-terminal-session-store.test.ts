@@ -6,6 +6,9 @@ const waitForMicrotasks = async () => {
   await new Promise<void>((resolve) => queueMicrotask(resolve))
 }
 
+/** O runtime do terminal carrega por import dinâmico: a frio ou sob carga passa do 1 s padrão do waitFor. */
+const CARGA_DO_RUNTIME = { timeout: 10_000 }
+
 describe('DeferredTerminalSessionStore', () => {
   const previousWindow = (globalThis as { window?: unknown }).window
 
@@ -100,8 +103,8 @@ describe('DeferredTerminalSessionStore', () => {
 
     // A remontagem do StrictMode chama ensure de novo no mesmo store: essa vale.
     store.ensure('terminal-strict', { command: 'sh', cwd: '/tmp' })
-    await vi.waitFor(() => expect(store.getSnapshot('terminal-strict')).toBeDefined())
-    expect(ponte.spawns).toHaveLength(1)
+    await vi.waitFor(() => expect(store.getSnapshot('terminal-strict')).toBeDefined(), CARGA_DO_RUNTIME)
+    await vi.waitFor(() => expect(ponte.spawns).toHaveLength(1), CARGA_DO_RUNTIME)
     store.clear()
   })
 
@@ -109,8 +112,9 @@ describe('DeferredTerminalSessionStore', () => {
     const ponte = instalarPonte()
     const store = new DeferredTerminalSessionStore()
     store.ensure('terminal-vivo', { command: 'sh', cwd: '/tmp' })
-    await vi.waitFor(() => expect(store.getSnapshot('terminal-vivo')).toBeDefined())
-    expect(ponte.ativos()).toBe(3)
+    await vi.waitFor(() => expect(store.getSnapshot('terminal-vivo')).toBeDefined(), CARGA_DO_RUNTIME)
+    // Os três ouvintes da ponte entram quando o runtime termina de carregar, depois do snapshot: espera, não supõe.
+    await vi.waitFor(() => expect(ponte.ativos()).toBe(3), CARGA_DO_RUNTIME)
 
     store.detachAll()
 

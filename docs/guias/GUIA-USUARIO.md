@@ -522,8 +522,9 @@ e responda ali mesmo; o pedido some da lista quando o agente recebe a resposta. 
 Com o app fechado a janela passa em branco: ao abrir, a fila continua lá. O painel ainda
 não leva o motivo da recusa e não lista permissões pedidas dentro do terminal.
 
-**Agente coordenador abrindo outros agentes.** Um agente que coordena o trabalho pode pedir um
-agente por task com `felixo canvas abrir-agentes "<task 1>" "<task 2>" ...` (até 20 por pedido; a
+**Agente coordenador abrindo outros agentes.** Para o coordenador saber usar o comando, ligue no
+terminal dele a skill **Abrir um agente por task (coordenador)**. Um agente que coordena o trabalho
+pode pedir um agente por task com `felixo canvas abrir-agentes "<task 1>" "<task 2>" ...` (até 20 por pedido; a
 primeira linha de cada task é o título e o resto é o contexto). O pedido aparece no painel de
 aprovações como **Um coordenador pede N agentes**, com a lista das tasks; nada abre sozinho. Ao
 clicar em **Abrir N agentes**, o app cria um terminal por task, na pasta do coordenador, com a

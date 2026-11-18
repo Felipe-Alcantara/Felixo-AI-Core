@@ -49,6 +49,12 @@ const BUILTIN_SKILLS = [
       'Fazer uma pergunta com 2 a 4 opções à pessoa com `felixo perguntar` e receber a escolha no stdout — para agentes sem ferramenta nativa de perguntas (Codex); só uma pessoa responde, clicando.',
   },
   {
+    slug: 'abrir-agentes-por-task',
+    name: 'Abrir um agente por task (coordenador)',
+    description:
+      'Coordenar um lote de tasks pedindo ao app um agente por task com `felixo canvas abrir-agentes`: a pessoa aceita no painel de aprovações, o app respeita os tetos do orquestrador e o coordenador lê o desfecho com `felixo canvas ver-pedido`, sem executar nenhuma task.',
+  },
+  {
     slug: 'notion-operacoes',
     name: 'Operar o Notion sem estragar nada',
     description:
