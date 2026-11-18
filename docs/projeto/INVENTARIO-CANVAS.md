@@ -29,7 +29,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 
 ## Números
 
-- **Elementos:** 112 (10 blocos, 17 ferramentas, 85 outras superfícies)
+- **Elementos:** 113 (10 blocos, 17 ferramentas, 86 outras superfícies)
 - **Controles:** 432, dos quais 63 com teste específico
 - **Elementos sem nenhum teste:** 3
 - **Lacunas:** 234 (alto 4, médio 125, baixo 105), em 66 tasks
@@ -3074,6 +3074,25 @@ Sem controle próprio: as ações vêm de outros elementos.
 | normal | Canvas hidratado com menos de 10 sessões ativas e 300 blocos: sem aviso. |
 | pending | A partir de 10 sessões ativas ou 300 blocos, sugere ligar o modo; Ligar salva e ativa, Agora não e × apenas salvam a resposta. |
 | disabled | Modo ligado, canvas não hidratado ou resposta já salva: sem aviso. |
+
+Sem controle próprio: as ações vêm de outros elementos.
+
+### Aviso de workflow interrompido (retomar agentes depois de uma queda)
+
+- **ID:** `workflow-interrompido-aviso` · **Dono:** `src/features/canvas/components/WorkflowRecoveryNotice.tsx`
+- **Persistência:** data.workMark do bloco de terminal (SQLite do canvas); não viaja no pacote exportado
+- **IPC:** nenhum
+- **Depende de:** `useWorkflowRecovery`, `workflow-recovery`, `terminalRunRegistry`, `NoticeToast`
+- **Sobreposição:** NoticeToast fixo no canto inferior esquerdo, o mesmo lugar da sugestão do Modo Performance.
+- **Testes:** `src/features/canvas/services/workflow-recovery.test.ts`
+
+| Estado | Quando |
+| --- | --- |
+| normal | Nenhum agente tinha ponto de salvamento (workMark) quando o app fechou, ou voltou do chat com os processos vivos: sem aviso. |
+| loading | Retomando: mostra quantos já receberam o pedido; Ocultar só esconde o andamento. |
+| error | Agente que não ficou pronto em 90 s ou cuja entrega falhou fica de fora e o aviso volta só com ele, mantendo o ponto de salvamento. |
+| pending | Agentes restaurados do disco com workMark e conversa associada: "Workflow interrompido" lista os nomes; Retomar workflow manda cada um continuar, 4 por vez, na ordem das ligações; Agora não apaga os pontos. |
+| disabled | Canvas ou ligações ainda não hidratados, ou retomada dos restaurados ainda não capturada: sem aviso. |
 
 Sem controle próprio: as ações vêm de outros elementos.
 

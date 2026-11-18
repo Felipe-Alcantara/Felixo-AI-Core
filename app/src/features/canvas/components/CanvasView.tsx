@@ -85,6 +85,7 @@ import { useReducedMotionPreference, shouldReduceMotion } from '../../shared/acc
 import { CanvasPerformanceSuggestion } from './CanvasPerformanceSuggestion'
 import { DrawerPinHint } from './DrawerPinHint'
 import { shouldShowPinHint } from './terminal-drawer-pin'
+import { WorkflowRecoveryNotice } from './WorkflowRecoveryNotice'
 import { toolbarColumnOffset } from './toolbar-flyout'
 import { CliSetupToast } from '../../setup/CliSetupNotice'
 import { useUpdateStatus } from '../../updates/useUpdateStatus'
@@ -2378,6 +2379,7 @@ function CanvasInner({
       {isBusy && <div className="absolute inset-0 z-50 cursor-wait" aria-hidden="true" />}
       {pinHint && <DrawerPinHint onDismiss={() => setPinHint(false)} />}
       <CanvasPerformanceSuggestion nodeCount={nodes.length} hydrated={hydrated} />
+      <WorkflowRecoveryNotice ready={hydrated && edgesHydrated && restoredAgentTerminals.captured} holdable={restoredAgentTerminals.holdable} nodesRef={nodesRef} edgesRef={edgesRef} updateNodeData={updateNodeData} />
       <CanvasTopbar
         onOpenSearch={() => openTool('search')}
         trailing={

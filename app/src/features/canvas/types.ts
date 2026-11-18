@@ -6,6 +6,7 @@ import type {
   AgentSessionReference,
 } from './services/agent-session'
 import type { TerminalResumeBanner } from './services/terminal-resume-banner'
+import type { WorkMark } from './services/workflow-recovery'
 import type { PromptInsertionMetadata } from '../shared/types/prompt-insertion'
 import type { CloudSessionErrorCode, CloudSessionInfo } from '../shared/types/cloud-session'
 import type { PersistedClaudeApiConversation } from './services/claude-api-conversation'
@@ -215,6 +216,12 @@ export type TerminalNodeData = {
    * decidir em silêncio com a escolha de ontem.
    */
   resumeChoice?: AgentResumeChoice
+  /**
+   * Ponto de salvamento do workflow: o agente estava no meio de um turno (ou esperando uma
+   * decisão) na última vez que o app o viu. Persistido; só o `idle` o apaga (ver
+   * `workflow-recovery.ts`).
+   */
+  workMark?: WorkMark
   /** Conversa anterior à atual, quando o ID mudou; persistida (ver o tipo). */
   previousAgentSession?: PreviousAgentSession
   /** Render-time (nunca persistido): o plano de retomada do bloco, quando ele segue um. */

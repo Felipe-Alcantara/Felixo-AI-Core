@@ -39,6 +39,7 @@ function validSource(overrides = {}) {
             replacedAt: 2,
           },
           resumeFailure: { sessionId: 'private-session-123', reason: 'expired', at: 3 },
+          workMark: { state: 'working', at: 4 },
         },
       },
       {
@@ -68,6 +69,7 @@ test('canvas transfer creates a portable versioned bundle', () => {
   // A retomada carrega ID de conversa, pasta e conta: nada disso viaja no pacote.
   assert.equal(bundle.nodes[0].data.previousAgentSession, undefined)
   assert.equal(bundle.nodes[0].data.resumeFailure, undefined)
+  assert.equal(bundle.nodes[0].data.workMark, undefined)
   assert.deepEqual(bundle.files, source.files)
   assert.deepEqual(parseCanvasBundle(JSON.stringify(bundle)), bundle)
 })

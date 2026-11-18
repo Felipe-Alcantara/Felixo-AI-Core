@@ -957,6 +957,31 @@ encontrou a conversa**. O Gemini CLI também se atualiza sozinho ao abrir
 (`general.enableAutoUpdate`, ligada por padrão): a versão pode mudar de um dia
 para o outro, e o app acompanha pela leitura da versão.
 
+### Retomar um workflow depois de uma queda
+
+Se o app (ou o PC) fechar com vários agentes no meio do trabalho, a retomada
+das conversas, acima, só devolve cada agente à sua conversa: ele fica parado,
+esperando você. Para o workflow andar de novo, o bloco de cada agente guarda um
+**ponto de salvamento**: a última vez que o Felixo o viu trabalhando ou
+esperando uma decisão. Terminar o turno apaga o ponto; fechar o app não.
+
+Ao reabrir, se algum agente com conversa associada estava no meio do trabalho,
+aparece no canto inferior esquerdo o aviso **Workflow interrompido**, com os
+nomes deles.
+
+- **Retomar workflow** manda a cada agente um pedido para reler o plano
+  compartilhado, conferir no disco e no git o que já está pronto e continuar
+  de onde parou, sem refazer o concluído. Os pedidos saem na ordem das ligações
+  do canvas (quem entrega antes de quem recebe) e com no máximo 4 agentes
+  trabalhando ao mesmo tempo. Um agente que não ficar pronto em 90 segundos, ou
+  cuja entrega falhar, fica de fora e o aviso volta só com ele.
+- **Agora não** apaga os pontos de salvamento: as conversas continuam retomadas,
+  mas ninguém recebe o pedido.
+
+Nada é enviado sem o seu clique. Voltar do chat para o canvas, com os
+terminais ainda de pé, não é queda e não mostra o aviso. O ponto de
+salvamento não viaja no pacote de exportação do canvas.
+
 ### Leitura: a resposta do agente como texto formatado
 
 As CLIs de agente desenham a resposta no terminal: título em negrito, código colorido, tabela com traços. A aba **Leitura** da gaveta do terminal mostra essa mesma resposta como texto formatado, com títulos, listas, blocos de código, tabelas, citações e links de verdade.

@@ -84,6 +84,8 @@ function normalizeCanvasBundle(value) {
         agentSession: _agentSession,
         previousAgentSession: _previousAgentSession,
         resumeFailure: _resumeFailure,
+        // O ponto de salvamento do workflow também é desta máquina e desta execução.
+        workMark: _workMark,
         command,
         ...portableData
       } = node.data
