@@ -343,6 +343,19 @@ contextBridge.exposeInMainWorld('felixo', {
     delete: (automationId) =>
       ipcRenderer.invoke('automations:delete', automationId),
   },
+  agentSchedule: {
+    list: () => ipcRenderer.invoke('agent-schedule:list'),
+    save: (input) => ipcRenderer.invoke('agent-schedule:save', input),
+    remove: (nodeId) => ipcRenderer.invoke('agent-schedule:remove', nodeId),
+    pending: () => ipcRenderer.invoke('agent-schedule:pending'),
+    confirm: (noticeId) => ipcRenderer.invoke('agent-schedule:confirm', noticeId),
+    dismiss: (noticeId) => ipcRenderer.invoke('agent-schedule:dismiss', noticeId),
+    onDue: (callback) => {
+      const handler = (_event, notice) => callback(notice)
+      ipcRenderer.on('agent-schedule:due', handler)
+      return () => ipcRenderer.removeListener('agent-schedule:due', handler)
+    },
+  },
   models: {
     list: () => ipcRenderer.invoke('models:list'),
     save: (model) => ipcRenderer.invoke('models:save', model),

@@ -4789,3 +4789,21 @@ Task: Felixo AI Core/Prompts — reproduzir cenário de falha: sessão de termin
 **Não validado.** O aviso visível no bloco quando a sessão encerra antes da leitura não existe: `contextWarning` fica indefinido e a sessão vira `encerrado (0)`. A decisão sobre isso já está aberta em `41b91f95-497e-81e3-8662-d09d38c4ffce`. A reprodução no app empacotado não foi rodada (regra desta rodada: a porta 5173 é compartilhada com outros agentes).
 
 Estado: teste entregue na branch `orq/prompts-reproduzir-cenario-falha-sessao`, sem push. Decisão pendente com o Felipe; falso "enviado" na fila descartada vira pendência para Sonnet; deploy pelo orquestrador.
+
+---
+
+## 2026-11-18 — Agendamento: calculadora pura de horários fixos para agentes do canvas
+
+**Contexto.** A task "Agendamento — rodar agentes do canvas em horários fixos (6h, 7h, 12h e 18h)" pede que um agente do canvas rode sozinho em horário marcado, com registro de cada execução. Rodar agente sem a pessoa olhando gasta limite e dinheiro, e há decisões do Felipe que valem aqui: uso extra de limite sempre pergunta antes, e o agente roda visível num terminal do canvas, retomável. Como a task também depende de escolhas de produto ainda não tomadas (app fechado, quais agentes, confirmação por execução, execução perdida), só a parte segura foi feita.
+
+**Motivo.** Qualquer desenho escolhido depois (agendador interno, n8n ou rotina do sistema) precisa responder "quando é a próxima execução" com fuso e dias da semana. Isso é matemática pura, testável sem abrir o app.
+
+**O que mudou.**
+- `app/electron/services/agent-schedule.cjs` (novo): `normalizeSchedule` valida horários HH:MM, fuso IANA e dias da semana; `nextRunAt(schedule, afterMs)` devolve o próximo instante depois de um instante dado; `dueSlots(schedule, sinceMs, nowMs)` lista os horários vencidos (teto de 50). Usa só `Intl.DateTimeFormat`, sem dependência. No horário de verão, hora inexistente vira o instante logo após a virada e hora repetida vale a primeira.
+- `app/electron/services/agent-schedule.test.cjs` (novo): 7 testes (ordem dos horários, virada de dia, dia local do fuso e não o UTC, dias úteis, horário de verão em Nova York, teto do `dueSlots`, validação).
+- `app/electron/services/agent-schedule-service.cjs`, `agent-schedule-ipc-handlers.cjs` e `agent-schedule-service.test.cjs` (5 testes): agendador no processo principal que só avisa. Agente marcado = nodeId + prompt fixo (até 8000 caracteres) + horários + fuso + dias; guardado em `settings` (`agentSchedules`). No horário, ou ao abrir o app para o que venceu com ele fechado (só o último horário, marcado `missed`), levanta o aviso `agent-schedule:due`; o prompt só sai por `confirm` (clique). Um aviso por agente. `main.cjs` cria o serviço e chama `start()`/`stop()`; `preload.cjs` expõe `window.electron.agentSchedule`. Decisões do Felipe pela regra "opção recomendada" (18/11): só com o app aberto, confirmação a cada execução, só agente marcado com prompt fixo, oferecer só o último perdido.
+- Sem tela no canvas ainda (inventário do canvas não mudou). Nada dispara, nada é ligado ao canvas, ao IPC ou à UI. O módulo não é importado por ninguém ainda.
+
+**Validação.** `node --test` do arquivo novo: 7 de 7. ESLint nos dois arquivos: limpo. Suíte Node inteira: 3516 testes; na primeira rodada 2 falhas sob carga da máquina (outros agentes rodando), na segunda 3504 passando, 0 falhas, 12 pulados. Fatia 2: 5 de 5 testes; suíte Node 3508 de 3521 com 1 falha de tempo em `pty-output-path-benchmark.test.cjs` que passa isolada (11 de 11). O app não foi aberto.
+
+**Pendente.** Decisões do Felipe (app fechado, confirmação, escopo de agentes, execução perdida) e, depois delas, o disparo, o registro de execuções e a tela de configuração.

@@ -82,6 +82,12 @@ const {
   registerAutomationsIpcHandlers,
 } = require('./services/automations-ipc-handlers.cjs')
 const {
+  createAgentScheduleService,
+} = require('./services/agent-schedule-service.cjs')
+const {
+  registerAgentScheduleIpcHandlers,
+} = require('./services/agent-schedule-ipc-handlers.cjs')
+const {
   registerModelsIpcHandlers,
 } = require('./services/models-ipc-handlers.cjs')
 const {
@@ -231,6 +237,7 @@ let contextFilesHandlers = null
 let textFileHandlers = null
 let storageDatabase = null
 let settingsRepository = null
+let agentScheduleService = null
 let terminalLogStore = null
 let ptyOutputArchive = null
 let cliAutoInstall = null
@@ -1017,6 +1024,16 @@ app.whenReady().then(async () => {
     revokeTextFiles: () => textFileHandlers?.revokeAll(),
   })
   registerAutomationsIpcHandlers({ database: storageDatabase })
+  // Agendamento de agentes: so avisa no canvas e espera o clique (nada roda sozinho).
+  agentScheduleService = createAgentScheduleService({
+    settings: settingsRepository,
+    notify: (channel, payload) => {
+      const target = getMainWindow()
+      if (target && !target.isDestroyed()) target.webContents.send(channel, payload)
+    },
+  })
+  registerAgentScheduleIpcHandlers({ getService: () => agentScheduleService })
+  agentScheduleService.start()
   registerModelsIpcHandlers({ database: storageDatabase })
   registerAgentPresetsIpcHandlers({ database: storageDatabase })
   registerSpeechIpcHandlers({ userData: appPaths.userData })
@@ -1215,6 +1232,7 @@ app.on('before-quit', () => {
   } catch {
     // O registro nunca impede o app de fechar.
   }
+  agentScheduleService?.stop()
   // Interrompe gerações de imagem em andamento (mata o filho do Openia e a pasta temporária).
   openiaImageService?.shutdown()
   // Encerra os PTY descartáveis de um disparo em andamento.
