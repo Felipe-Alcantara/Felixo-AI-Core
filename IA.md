@@ -4715,3 +4715,21 @@ Agente: subagente da Orquestração (Claude Haiku 5.5, effort max). Task: Felixo
 **Não validado.** O app não foi aberto: não há mudança visível.
 
 Estado: concluído na branch `orq/higiene-tirar-caminho-usuario-real`, com 2 commits (`b090a9aa`, `2d3e15d3`); push e deploy pelo orquestrador.
+
+---
+
+## 2026-11-18 — Agentes: busca sempre ligada em modelo e esforço nos menus; aviso de que o Gemini não tem modo fast
+
+Task: Felixo AI Core/Agentes — oferecer modo fast e busca de modelo e esforço para todos os agentes nos menus (Notion `3eb91f95-497e-81bd-b699-f242e6f46024`). Agente: subagente da Orquestração (Claude Sonnet 5.5, effort medium). Parcial: o modo fast do Claude ficou para decisão do Felipe.
+
+**Contexto.** O seletor de modelo só ligava a busca com mais de 8 modelos (`AgentConfigFields.tsx`), e cada agente lista 3; o esforço não tinha busca. O modo fast existe só no Codex. O contrato do Claude Code foi lido na documentação oficial (Fast mode, lida em 18/11/2026): `/fast` ou `"fastMode": true` nas configurações; no `-p`/lançamento só por `--settings '{"fastMode": true}'`; só em modelos Opus (e Fable 5.2 só pelo `/fast`); cobrado em créditos de uso, fora do limite da assinatura. O `gemini --help` (0.69.0-preview.0) não tem flag, tier nem velocidade.
+
+**O que mudou.**
+- `AgentConfigFields.tsx` (usado pelo criar agente, reiniciar/trocar no `TerminalMenu` e pela passagem de responsabilidade do `HandoffDialog`): busca sempre ligada nos seletores de modelo (nativos e Openia) e de esforço.
+- `AgentPresetsPanel.tsx`: busca em modelo e esforço do preset.
+- `agent-launch-options.ts`: `fastModeUnavailableNote`, que dá a frase "O Gemini CLI não tem modo fast." mostrada nos dois formulários. Claude e Antigravity ficam sem frase (Claude aguarda decisão; o `agy` não está instalado nesta máquina, não medido).
+- Inventário do canvas (`terminal.ts`, `tools-agents.ts`) atualizado com "o menu tem busca"; `INVENTARIO-CANVAS.md` regenerado.
+
+**Não mudou de propósito.** `buildAgentArgs` não emite nada de fast para o Claude: o app já injeta `--settings <arquivo>` para a captura da status line (`pty-process-manager.cjs:249`) e pula a injeção quando há `--settings` do usuário, então um `--settings` de fast desligaria a captura de uso do Claude. Além disso, fast gasta crédito pago.
+
+**Validação.** Ver o relatório da task (números do gate).

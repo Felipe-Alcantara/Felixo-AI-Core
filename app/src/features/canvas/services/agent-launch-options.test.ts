@@ -10,6 +10,7 @@ import {
   isDirectOpeniaLaunch,
   isKnownAgentCommand,
   supportsFastMode,
+  fastModeUnavailableNote,
   withoutCodexYoloFlags,
 } from './agent-launch-options'
 
@@ -212,5 +213,15 @@ describe('recusa do Codex à flag de yolo repetida', () => {
     const args = [LONGA, '--', LONGA]
     expect(withoutCodexYoloFlags('codex', args)).toEqual(['--', LONGA])
     expect(args).toEqual([LONGA, '--', LONGA])
+  })
+})
+
+describe('aviso de agente sem modo fast', () => {
+  it('só o Gemini diz que não tem; Codex, Claude e Antigravity ficam sem frase', () => {
+    expect(fastModeUnavailableNote(getAgent('gemini'))).toMatch(/não tem modo fast/)
+    expect(fastModeUnavailableNote(getAgent('codex'))).toBeNull()
+    expect(fastModeUnavailableNote(getAgent('claude'))).toBeNull()
+    expect(fastModeUnavailableNote(getAgent('antigravity'))).toBeNull()
+    expect(fastModeUnavailableNote(undefined)).toBeNull()
   })
 })

@@ -557,20 +557,20 @@ export const terminalSurfaces: InventoryElement[] = [
       {
         locator: 'aria-label="Modelo Openia"',
         kind: 'select',
-        effect: 'Escolhe o modelo do OpenRouter (ou o padrão da interface) aplicado antes da interface abrir.',
+        effect: 'Escolhe o modelo do OpenRouter (ou o padrão da interface) aplicado antes da interface abrir; o menu sempre tem busca.',
         failure: 'Modelo que sumiu da lista volta ao padrão no preparo.',
         disabledWhen: 'openiaLoading ou sem modelos',
       },
       {
         locator: 'aria-label="Modelo"',
         kind: 'select',
-        effect: 'changeModel: grava o modelo e limpa esforço e fast que o modelo novo não aceita.',
+        effect: 'changeModel: grava o modelo e limpa esforço e fast que o modelo novo não aceita; o menu sempre tem busca.',
         failure: 'Sem falha própria.',
       },
       {
         locator: 'aria-label="Esforço de raciocínio"',
         kind: 'select',
-        effect: 'Grava o nível de esforço passado à CLI.',
+        effect: 'Grava o nível de esforço passado à CLI; o menu tem busca.',
         failure: 'Sem falha própria.',
         disabledWhen: 'some quando o modelo não tem níveis',
       },

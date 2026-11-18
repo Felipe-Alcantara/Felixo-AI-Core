@@ -7,6 +7,7 @@ import {
   getAgent,
   getEffortLevels,
   supportsFastMode,
+  fastModeUnavailableNote,
 } from '../../services/agent-launch-options'
 import {
   PRESET_CONTEXT_MAX,
@@ -120,6 +121,7 @@ export function AgentPresetsPanel({ onClose, toolsMenuOpen }: Props) {
   }
 
   const agent = draft ? getAgent(draft.agentId) : undefined
+  const fastNote = fastModeUnavailableNote(agent)
   const effortLevels = draft && agent ? getEffortLevels(agent, draft.model) : null
   const missing = draft ? findMissingSkillIds(draft, catalogIds) : []
 
@@ -225,6 +227,8 @@ export function AgentPresetsPanel({ onClose, toolsMenuOpen }: Props) {
               value={draft.model}
               onChange={(value) => setDraft(changePresetModel(draft, value))}
               options={[{ value: '', label: 'Padrão da CLI' }, ...(agent?.models ?? []).map((model) => ({ value: model, label: model }))]}
+              searchable
+              searchPlaceholder="Buscar modelo…"
               menuLabel="Modelos"
               aria-label="Modelo do preset"
             />
@@ -237,6 +241,8 @@ export function AgentPresetsPanel({ onClose, toolsMenuOpen }: Props) {
                 value={draft.effort}
                 onChange={(value) => setDraft({ ...draft, effort: value })}
                 options={[{ value: '', label: 'Padrão' }, ...effortLevels.map((level) => ({ value: level, label: level }))]}
+                searchable
+                searchPlaceholder="Buscar esforço…"
                 menuLabel="Esforço de raciocínio"
                 aria-label="Esforço do preset"
               />
@@ -257,6 +263,7 @@ export function AgentPresetsPanel({ onClose, toolsMenuOpen }: Props) {
               </span>
             </label>
           )}
+          {fastNote && <p className="text-[11px] leading-relaxed text-zinc-500">{fastNote}</p>}
           <label className="felixo-checkbox-field">
             <input
               type="checkbox"

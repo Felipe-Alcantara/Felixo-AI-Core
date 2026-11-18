@@ -1,3 +1,4 @@
+import { fastModeUnavailableNote } from '../services/agent-launch-options'
 import { useId, useRef, useState } from 'react'
 import {
   Cloud,
@@ -154,6 +155,8 @@ export function AgentConfigFields({
     config.setProjectId(addedIds[0] ?? '')
   }
 
+  const fastNote = fastModeUnavailableNote(config.agent)
+
   return (
     <>
       {showName && (
@@ -260,7 +263,7 @@ export function AgentConfigFields({
                     searchText: `${item.name} ${item.id} ${vendor}`,
                   }))),
                 ]}
-                searchable={config.openiaModels.length > 8}
+                searchable
                 searchPlaceholder="Buscar modelo…"
                 menuLabel="Modelos disponíveis"
                 aria-label="Modelo Openia"
@@ -338,7 +341,7 @@ export function AgentConfigFields({
                   { value: '', label: 'Padrão', description: 'Configuração recomendada da CLI' },
                   ...config.agent.models.map((m) => ({ value: m, label: m })),
                 ]}
-                searchable={config.agent.models.length > 8}
+                searchable
                 searchPlaceholder="Buscar modelo…"
                 menuLabel="Modelos disponíveis"
                 aria-label="Modelo"
@@ -365,6 +368,8 @@ export function AgentConfigFields({
                         description: EFFORT_DESCRIPTION[level],
                       })),
                     ]}
+                    searchable
+                    searchPlaceholder="Buscar esforço…"
                     menuLabel="Esforço de raciocínio"
                     aria-label="Esforço de raciocínio"
                     className="mb-3"
@@ -399,6 +404,7 @@ export function AgentConfigFields({
                   </span>
                 </label>
               )}
+              {fastNote && <p className="mb-3 text-[11px] leading-relaxed text-zinc-500">{fastNote}</p>}
 
               <label htmlFor={`${prefixo}-planning-file`} className={ROTULO}>
                 Arquivo de planejamento

@@ -566,13 +566,13 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
       {
         locator: 'Modelo do preset',
         kind: 'select',
-        effect: 'changePresetModel troca o modelo ("Padrão da CLI" = vazio) e revalida esforço e fast',
+        effect: 'changePresetModel troca o modelo ("Padrão da CLI" = vazio) e revalida esforço e fast; o menu tem busca',
         failure: 'sem falha própria',
       },
       {
         locator: 'Esforço do preset',
         kind: 'select',
-        effect: 'Grava o nível de raciocínio no rascunho ("Padrão" = vazio)',
+        effect: 'Grava o nível de raciocínio no rascunho ("Padrão" = vazio); o menu tem busca',
         failure: 'sem falha própria',
         disabledWhen: 'some quando getEffortLevels não devolve níveis para o modelo',
       },

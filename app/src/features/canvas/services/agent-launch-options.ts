@@ -133,6 +133,15 @@ export function supportsFastMode(agent: AgentDefinition | undefined, model: stri
   return !model || agent.fastModels.includes(model)
 }
 
+/**
+ * Frase para os menus dos agentes que o app sabe que NÃO têm modo fast (o
+ * `gemini --help` 0.69 não traz flag, tier nem velocidade). Claude e
+ * Antigravity ficam sem frase: o contrato deles ainda não foi decidido/medido.
+ */
+export function fastModeUnavailableNote(agent: AgentDefinition | undefined): string | null {
+  return agent?.id === 'gemini' ? 'O Gemini CLI não tem modo fast.' : null
+}
+
 /** True when `effort` is a valid choice for `agent` + `model` (empty effort is always valid — it means "default"). */
 export function isEffortValidForModel(
   agent: AgentDefinition,
