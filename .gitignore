@@ -1,22 +1,28 @@
 /felixo-standards
-# Permissoes locais do Claude Code: sao da maquina de quem edita (caminhos
-# absolutos, versoes de node) e nao valem para mais ninguem. As skills do
-# projeto, em .claude/skills/, sao versionadas normalmente.
-.claude/settings.local.json
-.claude/projects/
-.claude/worktrees/
+# Instruções e configuração de agentes de IA (CLAUDE.md, AGENTS.md, IA.md,
+# .claude/, .agents/, .codex e similares): cada pessoa que contribui tem as
+# suas, na própria máquina, e elas não vão para o repositório. Exceção:
+# docs/projeto/IA.md continua versionado, porque o CI confere que ele existe.
+# Ver CONTRIBUTING.md, "Arquivos para agentes de IA".
+CLAUDE.md
 CLAUDE.local.md
-
-# Configuração, memória e sessões pessoais de outras ferramentas de IA. Cada
-# pessoa tem a sua (contas, permissões, caminhos da máquina): não vão para o
-# repositório nem para um PR. Os arquivos de regras do projeto (CLAUDE.md,
-# AGENTS.md) e as skills versionadas continuam fora desta lista.
+AGENTS.md
+GEMINI.md
+IA.md
+.claude/
+.agents/
+.codex
+.gemini/
 .cursor/
 .windsurf/
 .aider*
 .continue/
-.gemini/
 .ai-memory/
+.ai-memory.toml
+.cursorrules
+.windsurfrules
+.mcp.json
+docs/ia-archive/
 
 # Capturas e arquivos temporários de quem roda o app (ex.: a skill rodar-app
 # grava prints em ../tmp/ a partir de app/).
