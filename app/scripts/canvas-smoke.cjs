@@ -1305,6 +1305,92 @@ async function checarVariosAgentes(page) {
 }
 
 /**
+ * Faixa de retomada de um bloco segurado (restaurado com a conversa de outra
+ * pasta): o store falso do renderer precisa se comportar como o real. Sem
+ * sessão ele não emite snapshot (nada de "iniciando…" nem de PTY criado ao
+ * abrir a gaveta), e a faixa fica de pé até a pessoa escolher. Antes disto,
+ * um placeholder do falso escondia a faixa e uma regressão nela passava verde.
+ */
+async function checarFaixaDeRetomada(page) {
+  const id = 'fixture-agente-retomada'
+  const banner = `.react-flow__node[data-id="${id}"] [data-terminal-resume-banner]`
+  const node = {
+    id,
+    type: 'terminal',
+    position: { x: 0, y: 2600 },
+    width: 520,
+    height: 360,
+    data: {
+      label: 'Agente retomada',
+      command: 'codex',
+      args: [],
+      cwd: '/smoke/pasta-atual',
+      launchMode: 'agent',
+      // A conversa registrada é de OUTRA pasta: o canvas calcula o plano "pendente",
+      // monta a faixa e segura o bloco (nenhum processo sobe até a escolha).
+      agentSession: {
+        version: 1,
+        provider: 'codex',
+        sessionId: 'conversa-de-outra-pasta-0123456789',
+        cwd: '/smoke/outra-pasta',
+        capturedAt: Date.UTC(2026, 10, 1, 12, 0),
+      },
+    },
+  }
+  await page.evaluate(async (item) => {
+    const saved = await window.felixo.canvas.save(item)
+    if (!saved?.ok) throw new Error(saved?.message || `persistencia falhou: ${item.id}`)
+  }, node)
+  await page.reload()
+  await checarMontagem(page)
+
+  const estado = () => page.evaluate(({ nodeId, faixa }) => {
+    const card = document.querySelector(`.react-flow__node[data-id="${nodeId}"]`)
+    return {
+      faixa: Boolean(document.querySelector(faixa)),
+      pendente: card?.querySelector('[data-resume-pending="true"]') !== null,
+      botoes: [...document.querySelectorAll(`${faixa} button`)].map((button) => button.textContent?.trim()),
+      aguardando: (card?.textContent ?? '').includes('aguardando escolha'),
+      iniciando: /iniciando/i.test(card?.textContent ?? ''),
+    }
+  }, { nodeId: id, faixa: banner })
+
+  const apareceu = await esperarAte(async () => (await estado()).faixa, { timeoutMs: INTERACTION_TIMEOUT_MS })
+  if (!apareceu) throw new Error(`[canvas-smoke] faixa de retomada: não apareceu no bloco segurado: ${JSON.stringify(await estado())}`)
+  const antes = await estado()
+  const esperados = ['Escolher na lista (/resume)', 'Abrir conversa nova']
+  if (!esperados.every((botao) => antes.botoes.includes(botao)) || !antes.pendente || !antes.aguardando || antes.iniciando) {
+    throw new Error(`[canvas-smoke] faixa de retomada: botões, "aguardando escolha" ou "iniciando…" fora do esperado: ${JSON.stringify(antes)}`)
+  }
+
+  // Abrir a gaveta de um bloco segurado não pode criar sessão: com PTY a faixa sumiria.
+  await page.locator(`[data-terminal-expand-trigger="${id}"]`).first().focus()
+  await page.keyboard.press('Enter')
+  await page.locator('[data-canvas-terminal-drawer]').waitFor({ state: 'visible', timeout: INTERACTION_TIMEOUT_MS })
+  await page.waitForTimeout(400)
+  const comGaveta = await estado()
+  if (!comGaveta.faixa || !comGaveta.aguardando) {
+    throw new Error(`[canvas-smoke] faixa de retomada: abrir a gaveta do bloco segurado criou um processo: ${JSON.stringify(comGaveta)}`)
+  }
+  await page.getByRole('button', { name: 'Fechar terminal' }).click()
+  await page.locator('[data-canvas-terminal-drawer]').waitFor({ state: 'detached', timeout: INTERACTION_TIMEOUT_MS })
+
+  // "Abrir conversa nova" sobe o bloco: a faixa sai e o cartão deixa de aguardar.
+  await page.locator(banner).getByRole('button', { name: 'Abrir conversa nova' }).click()
+  const subiu = await esperarAte(async () => {
+    const atual = await estado()
+    return !atual.faixa && !atual.aguardando
+  }, { timeoutMs: INTERACTION_TIMEOUT_MS })
+  if (!subiu) throw new Error(`[canvas-smoke] faixa de retomada: "Abrir conversa nova" não subiu o bloco: ${JSON.stringify(await estado())}`)
+
+  await page.evaluate(async (nodeId) => {
+    await window.felixo.canvas.delete(nodeId)
+  }, id)
+  await page.reload()
+  await checarMontagem(page)
+}
+
+/**
  * A matriz de tema×viewport×DPR (checarMatrizVisual) só fotografa o layout
  * base — nenhum painel, menu ou dialog aberto. Isso deixava sem evidência
  * justamente os elementos que mais mudam de forma com o espaço disponível:
@@ -1650,6 +1736,7 @@ const SESSIONS = [
       await checarTravaDeMontagemSolta(page)
       await checarMatrizVisual(page)
       await checarVariosAgentes(page)
+      await checarFaixaDeRetomada(page)
       await checarElementosAbertosEmViewportsCriticos(page)
       await checarDimensoesDeAcessibilidadeAdicionais(page)
       await selectVisualTheme(page, 'dark')

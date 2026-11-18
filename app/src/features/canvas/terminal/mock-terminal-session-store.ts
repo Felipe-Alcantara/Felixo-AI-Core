@@ -93,9 +93,12 @@ export class MockTerminalSessionStore implements TerminalSessionStoreApi {
   }
 
   attach(id: string, container: HTMLElement): void {
-    this.ensure(id)
     const session = this.sessions.get(id)
-    if (!session) return
+    if (!session) {
+      // Igual ao store real: bloco sem sessão (segurado, "aguardando escolha") não cria PTY ao abrir a gaveta.
+      container.replaceChildren()
+      return
+    }
 
     const textarea = document.createElement('textarea')
     textarea.className = 'xterm nodrag nowheel nopan h-full w-full resize-none bg-transparent p-2 font-mono text-xs text-zinc-300 outline-hidden'
@@ -243,7 +246,7 @@ export class MockTerminalSessionStore implements TerminalSessionStoreApi {
   subscribe(id: string, listener: SessionListener): () => void {
     const session = this.sessions.get(id)
     if (!session) {
-      listener({ activity: 'starting', previewLines: [] })
+      // Igual ao store real: sem sessão não há snapshot, e o bloco mostra a faixa de retomada em vez de "iniciando…".
       const pending = this.pendingListeners.get(id) ?? new Set<SessionListener>()
       pending.add(listener)
       this.pendingListeners.set(id, pending)
