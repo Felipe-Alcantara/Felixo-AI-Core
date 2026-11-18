@@ -34,19 +34,19 @@ export const TEAM_ROLES: readonly TeamRole[] = [
     name: 'Produtor 1',
     color: 'sky',
     handsOffTo: [3],
-    prompt: `${SHARED_RULES}\n\nPapel: PRODUTOR 1. Receba a sua parte do Coordenador e produza o entregável combinado. Ao terminar, registre o que fez no plano compartilhado e entregue ao Checador. Se a parte não estiver clara, pergunte ao Coordenador em vez de supor.`,
+    prompt: `${SHARED_RULES}\n\nPapel: PRODUTOR 1. Receba a sua parte do Coordenador e produza o entregável combinado. Ao terminar, registre o que fez no plano compartilhado e envie o resultado (um arquivo .md) pelo comando \`felixo revisao enviar <arquivo.md>\`: ele espera o Checador e só imprime o caminho liberado depois da aprovação. Não entregue o resultado a ninguém antes disso. Se vier RECUSADO, corrija pelo motivo e envie de novo; depois de 3 recusas seguidas, pare e avise a pessoa. Se a parte não estiver clara, pergunte ao Coordenador em vez de supor.`,
   },
   {
     name: 'Produtor 2',
     color: 'emerald',
     handsOffTo: [3],
-    prompt: `${SHARED_RULES}\n\nPapel: PRODUTOR 2. Receba a sua parte do Coordenador e produza o entregável combinado. Ao terminar, registre o que fez no plano compartilhado e entregue ao Checador. Se a parte não estiver clara, pergunte ao Coordenador em vez de supor.`,
+    prompt: `${SHARED_RULES}\n\nPapel: PRODUTOR 2. Receba a sua parte do Coordenador e produza o entregável combinado. Ao terminar, registre o que fez no plano compartilhado e envie o resultado (um arquivo .md) pelo comando \`felixo revisao enviar <arquivo.md>\`: ele espera o Checador e só imprime o caminho liberado depois da aprovação. Não entregue o resultado a ninguém antes disso. Se vier RECUSADO, corrija pelo motivo e envie de novo; depois de 3 recusas seguidas, pare e avise a pessoa. Se a parte não estiver clara, pergunte ao Coordenador em vez de supor.`,
   },
   {
     name: 'Checador',
     color: 'amber',
     handsOffTo: [],
-    prompt: `${SHARED_RULES}\n\nPapel: CHECADOR. Confira o trabalho dos dois Produtores contra o critério de aceite do Coordenador, sem refazer o entregável. Aponte cada problema com a evidência e devolva ao Produtor responsável; quando estiver certo, diga ao Coordenador que pode fechar.`,
+    prompt: `${SHARED_RULES}\n\nPapel: CHECADOR. Confira o trabalho dos dois Produtores contra o critério de aceite do Coordenador, sem refazer o entregável. Liste o que espera revisão com \`felixo revisao pendentes\` e leia com \`felixo revisao ler <id>\`. Quando estiver certo, rode \`felixo revisao aprovar <id>\`; se houver problema, rode \`felixo revisao recusar <id> --motivo "<problema e evidência>"\` (o motivo fica registrado e volta ao Produtor). Depois de aprovar, diga ao Coordenador que pode fechar.`,
   },
 ]
 

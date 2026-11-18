@@ -483,7 +483,7 @@ export const terminalSurfaces: InventoryElement[] = [
       {
         locator: 'Abrir como time (4 agentes)',
         kind: 'button',
-        effect: 'openTeam: prepareForLaunch, buildOptions e savePreferences, depois onAddTeam(buildTeamLaunch) cria 4 terminais (Coordenador, Produtor 1, Produtor 2, Checador) com a CLI, o modelo, a pasta e a conta escolhidos e um contexto por papel, e liga por arestas gravadas o coordenador aos produtores e os produtores ao checador. Fecha o flyout.',
+        effect: 'openTeam: prepareForLaunch, buildOptions e savePreferences, depois onAddTeam(buildTeamLaunch) cria 4 terminais (Coordenador, Produtor 1, Produtor 2, Checador) com a CLI, o modelo, a pasta e a conta escolhidos e um contexto por papel, e liga por arestas gravadas o coordenador aos produtores e os produtores ao checador. Os contextos de Produtor e Checador ensinam o pareamento por felixo revisao (enviar, aprovar, recusar): o resultado fica retido até a aprovação; a recusa grava o motivo em recusas.md; 3 recusas seguidas do mesmo arquivo param o laço e chamam a pessoa. Fecha o flyout.',
         failure: 'Configuração inválida mantém o flyout com o erro. Não aparece com agente na nuvem ou conta por chave de API.',
         disabledWhen: 'launching, accountSelectionIssue ou conta "Automática (cadeia)" (o ticket é de uso único)',
         test: { file: 'src/features/canvas/services/agent-team-template.test.ts' },

@@ -197,6 +197,10 @@ const AJUDA = `felixo fetch-all — varre os repositórios git da máquina e rep
       Lê um artefato temporário pelo nome portátil. Também aceito:
       felixo contexto ler <nome-do-artefato>.
 
+  felixo revisao enviar|pendentes|ler|aprovar|recusar|status
+      Pareamento produtor x checador: o resultado do produtor só sai depois de o
+      checador aprovar; a recusa grava o motivo. Detalhes: felixo revisao.
+
   felixo canvas listar [--json]
       Lista os elementos do canvas desta instância (terminais, notas,
       arquivos, páginas...), com o id que "canvas ler" usa. Só leitura; não

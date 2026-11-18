@@ -22,6 +22,8 @@ describe('agent-team-template', () => {
     expect(options[3].preset?.contextPrompt).toContain('CHECADOR')
     expect(options[3].preset?.contextPrompt).toContain('Extra.')
     expect(options[1].preset?.skillIds).toEqual(['s'])
+    expect(options[1].preset?.contextPrompt).toContain('felixo revisao enviar')
+    expect(options[3].preset?.contextPrompt).toContain('felixo revisao recusar')
   })
 
   it('liga coordenador aos produtores e os produtores ao checador', () => {

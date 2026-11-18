@@ -58,6 +58,7 @@ function tryLoadElectronApp() {
  *   canvasFiles: string,
  *   contextFiles: string,
  *   agentRequests: string,
+ *   agentReviews: string,
  *   bin: string,
  *   skills: string,
  *   assets: string,
@@ -120,6 +121,8 @@ function getAppPaths(options = {}) {
   // agente só precisa PEDIR; quem escreve no disco continua sendo o app, com
   // um clique humano no meio.
   const agentRequests = platformPath.join(userData, 'agent-requests')
+  // Revisões produtor × checador (`felixo revisao`): resultado retido até a aprovação.
+  const agentReviews = platformPath.join(userData, 'agent-reviews')
   // Onde mora o comando `felixo` exposto no PATH dos terminais do canvas.
   const bin = platformPath.join(userData, 'bin')
 
@@ -142,6 +145,7 @@ function getAppPaths(options = {}) {
     contextFiles,
     skills,
     agentRequests,
+    agentReviews,
     bin,
     assets,
     appRoot,

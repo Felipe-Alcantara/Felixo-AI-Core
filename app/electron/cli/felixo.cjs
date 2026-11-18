@@ -30,6 +30,7 @@ const {
 const { loadAgentScanState, saveAgentScanState } = require('./agent-scan-state.cjs')
 const { AJUDA, formatarElementos, formatarLeitura, formatarPlano } = require('./agent-command-output.cjs')
 const { executarContexto } = require('./context-command.cjs')
+const { executarRevisao } = require('./review-command.cjs')
 
 /**
  * O DevTools usa scripts de desenvolvimento que não existem no app empacotado.
@@ -155,6 +156,9 @@ async function executar(argumentos, dependencias = {}) {
   }
   if (FERRAMENTAS_CONTEXT.includes(argumentos[0])) {
     return executarContexto(argumentos.slice(1), dependencias.contexto)
+  }
+  if (argumentos[0] === 'revisao') {
+    return executarRevisao(argumentos.slice(1), dependencias.revisao)
   }
   const {
     criarServico = () => criarServicoPadrao(),
