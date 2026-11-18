@@ -1,12 +1,14 @@
 import { isSubmittedTerminalText, toSubmittedTerminalText } from '../terminal/terminal-input'
 import type { PromptInsertionSource } from '../../shared/types/prompt-insertion'
 import { quotePromptPath } from './prompt-paths'
+import { WORKFLOW_PROMPT_MARKER } from './workflow-prompt'
 
 export type ContextFileKind =
   | 'initial-context'
   | 'canvas-context'
   | 'agent-identity'
   | 'skills-manifest'
+  | 'workflow'
   | 'handoff'
   | 'catalog-prompt'
   | 'skill-prompt'
@@ -38,6 +40,7 @@ export function promptInsertionSourceForContextKind(
     case 'canvas-context':
     case 'agent-identity':
     case 'skills-manifest':
+    case 'workflow':
       return 'system'
     default:
       return 'unknown'
@@ -88,6 +91,7 @@ export function splitInitialContext(text: string): ContextFilePart[] {
       kind: 'scratchpad-link',
     },
     { marker: 'Skills disponíveis neste sistema', kind: 'skills-manifest' },
+    { marker: WORKFLOW_PROMPT_MARKER, kind: 'workflow' },
   ]
   const positions = headings
     .map((heading) => ({ ...heading, index: text.indexOf(heading.marker) }))

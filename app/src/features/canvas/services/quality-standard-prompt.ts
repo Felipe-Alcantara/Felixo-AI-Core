@@ -15,6 +15,7 @@ import {
   type AgentSessionReference,
 } from './agent-session'
 import { quotePromptPath } from './prompt-paths'
+import { WORKFLOW_PROMPT, WORKFLOW_PROMPT_MARKER } from './workflow-prompt'
 
 /**
  * Standing instruction typed into a terminal that opens WITH an agent
@@ -451,6 +452,8 @@ export function resolveTerminalInitialText(params: {
   isRestoredAgent: boolean
   qualityStandardEnabled: boolean
   qualityStandardPrompt: string
+  /** "Incluir o Workflow no contexto inicial": nasce desligado. */
+  workflowEnabled?: boolean
   hasCommand: boolean
   command?: string
   existingInitialText?: string
@@ -509,6 +512,8 @@ export function resolveTerminalInitialText(params: {
       params.existingInitialText,
       params.canvasFilePaths,
       params.identity,
+      [],
+      params.workflowEnabled,
     )
   }
   return params.existingInitialText
@@ -531,6 +536,7 @@ export function buildCanvasTerminalInitialText(
   canvasFilePaths: string[] = [],
   identity?: AgentIdentity,
   skills: CanvasSkill[] = [],
+  workflowEnabled = false,
 ): string {
   const basePrompt = (existingPrompt?.trim() || buildQualityStandardMessage(qualityPrompt)).trimEnd()
   const uniquePaths = [...new Set(canvasFilePaths.map((path) => path.trim()).filter(Boolean))]
@@ -575,6 +581,12 @@ export function buildCanvasTerminalInitialText(
   const skillsPrompt = buildSkillsManifestPrompt(skills)
   if (skillsPrompt && !basePrompt.includes('Skills disponíveis neste sistema')) {
     sections.push(skillsPrompt)
+  }
+
+  // Depois das skills: o Workflow é referência longa (vai para arquivo próprio
+  // na entrega) e não compete com a tarefa nem com a identidade.
+  if (workflowEnabled && !basePrompt.includes(WORKFLOW_PROMPT_MARKER)) {
+    sections.push(WORKFLOW_PROMPT)
   }
 
   const combined = sections.join('\n\n')

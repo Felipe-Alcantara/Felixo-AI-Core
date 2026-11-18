@@ -32,6 +32,7 @@ const FILE_BOOTSTRAP_PROMPT_KEY = 'canvas.file-bootstrap-prompt'
 /** Settings for the standing "follow the quality standard" instruction. */
 const QUALITY_STANDARD_PROMPT_KEY = 'canvas.quality-standard-prompt'
 const QUALITY_STANDARD_ENABLED_KEY = 'canvas.quality-standard-enabled'
+const WORKFLOW_ENABLED_KEY = 'canvas.workflow-enabled'
 /** Settings key for the canvas skill library (array of {id,name,description,path}). */
 const SKILLS_KEY = 'canvas.skills'
 // Skills de terceiros vem LIGADAS: elas cobrem trabalho que a biblioteca
@@ -263,6 +264,8 @@ function registerCanvasIpcHandlers(options = {}) {
         prompt: typeof prompt === 'string' ? prompt : null,
         // Default ON when never set.
         enabled: enabled === null || enabled === undefined ? true : enabled === true,
+        // Default OFF when never set: o Workflow só entra no contexto por escolha.
+        workflowEnabled: settings.get(WORKFLOW_ENABLED_KEY) === true,
       }
     } catch (error) {
       return toErrorResult(error, 'Nao foi possivel carregar a configuracao.')
@@ -276,6 +279,9 @@ function registerCanvasIpcHandlers(options = {}) {
       }
       if (typeof params.enabled === 'boolean') {
         settings.set(QUALITY_STANDARD_ENABLED_KEY, params.enabled)
+      }
+      if (typeof params.workflowEnabled === 'boolean') {
+        settings.set(WORKFLOW_ENABLED_KEY, params.workflowEnabled)
       }
       return { ok: true }
     } catch (error) {

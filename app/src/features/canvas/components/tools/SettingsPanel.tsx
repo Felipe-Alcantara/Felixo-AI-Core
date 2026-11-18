@@ -36,7 +36,7 @@ type SettingsPanelProps = {
   /** Lets the canvas pick up the new bootstrap prompt without a reload. */
   onBootstrapSaved?: (prompt: string) => void
   /** Lets the canvas pick up the quality-standard text/toggle without a reload. */
-  onQualityStandardSaved?: (value: { prompt: string; enabled: boolean }) => void
+  onQualityStandardSaved?: (value: { prompt: string; enabled: boolean; workflowEnabled?: boolean }) => void
   /** Widens the toolbar column; the panel slides over to clear it. */
   toolsMenuOpen?: boolean
 }
@@ -103,6 +103,8 @@ export function SettingsPanel({
       <div className="my-3 border-t border-white/10" />
 
       <QualityStandardField onSaved={onQualityStandardSaved} />
+
+      <WorkflowField onSaved={onQualityStandardSaved} />
 
       <div className="my-3 border-t border-white/10" />
 
@@ -292,6 +294,56 @@ function PromptField({
           Padrão
         </button>
       </div>
+    </div>
+  )
+}
+
+/** Liga e desliga o Workflow no contexto inicial. Grava ao alternar; nasce desligado. */
+function WorkflowField({
+  onSaved,
+}: {
+  onSaved?: (value: { prompt: string; enabled: boolean; workflowEnabled?: boolean }) => void
+}) {
+  const [enabled, setEnabled] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    void window.felixo?.canvas?.getQualityStandard?.().then((quality) => {
+      if (!cancelled && quality?.ok) setEnabled(quality.workflowEnabled === true)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const toggle = async (next: boolean) => {
+    setEnabled(next)
+    await window.felixo?.canvas?.setQualityStandard?.({ workflowEnabled: next })
+    const current = await window.felixo?.canvas?.getQualityStandard?.()
+    if (current?.ok) {
+      onSaved?.({
+        prompt: current.prompt ?? '',
+        enabled: current.enabled !== false,
+        workflowEnabled: next,
+      })
+    }
+  }
+
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between gap-3 text-xs font-medium text-zinc-400">
+        Incluir o Workflow no contexto inicial
+        <FelixoToggle
+          checked={enabled}
+          onChange={(next) => void toggle(next)}
+          label="Incluir o Workflow no contexto inicial"
+        />
+      </div>
+      <p className="text-xs text-zinc-500">
+        Entrega aos agentes novos, como arquivo de leitura, o contrato de execução de onze etapas
+        (WORKFLOW 3.0). Fica desligado até você ligar; só vale para o contexto inicial do padrão de
+        qualidade, quando ele está ligado.
+      </p>
     </div>
   )
 }

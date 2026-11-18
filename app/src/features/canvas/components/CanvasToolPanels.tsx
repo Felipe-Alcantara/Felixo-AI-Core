@@ -63,7 +63,7 @@ type CanvasToolPanelsProps = {
   onInsertPrompt: (prompt: PromptInsertion | string) => Promise<SkillActivationResult>
   onPromptSaved: (prompt: string) => void
   onBootstrapSaved: (prompt: string) => void
-  onQualityStandardSaved: (value: { prompt: string; enabled: boolean }) => void
+  onQualityStandardSaved: (value: { prompt: string; enabled: boolean; workflowEnabled?: boolean }) => void
 }
 
 type ToolPanelFallbackProps = {

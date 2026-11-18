@@ -18,7 +18,7 @@ export type TerminalNodeDataOptions = NewTerminalOptions & {
 
 type TerminalNodeDataContext = {
   /** O lembrete do padrão de qualidade e se ele está ligado. */
-  quality: { prompt: string; enabled: boolean }
+  quality: { prompt: string; enabled: boolean; workflowEnabled?: boolean }
   /** O texto do lembrete que vale na pasta deste terminal (guias do projeto ou da pessoa). */
   qualityPrompt: string
   availableSkills: CanvasSkill[]
@@ -75,6 +75,7 @@ export function buildTerminalNodeData(
               [],
               { agentName: options.label, cwd: options.cwd },
               availableSkills,
+              quality.workflowEnabled,
             )
           : undefined,
         presetInstruction,

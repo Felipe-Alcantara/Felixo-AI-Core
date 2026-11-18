@@ -28,7 +28,7 @@ export type RestoredAgentTerminals = {
 export type TerminalSpawnContext = {
   nodeId: string
   /** O lembrete do padrão de qualidade da pessoa e se ele está ligado. */
-  qualityStandard: { prompt: string; enabled: boolean }
+  qualityStandard: { prompt: string; enabled: boolean; workflowEnabled?: boolean }
   /** As entradas do lembrete, para montá-lo com os guias do projeto do terminal. */
   qualityInputs: {
     stored: string | null
@@ -142,6 +142,7 @@ export function resolveTerminalSpawnPlan(data: CanvasNodeData, context: Terminal
     command: node.data.command,
     qualityStandardEnabled: quality.enabled,
     qualityStandardPrompt: qualityPrompt,
+    workflowEnabled: quality.workflowEnabled,
     hasCommand: hasAgentCommand,
     // `handoffText` é transitório e carrega um pedido de verdade, então
     // pode sair submetido; `initialText` é persistido e é sempre

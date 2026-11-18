@@ -858,11 +858,12 @@ declare global {
         >
         setFileBootstrapPrompt: (prompt: string) => Promise<CliInvokeResult>
         getQualityStandard: () => Promise<
-          CliInvokeResult & { prompt?: string | null; enabled?: boolean }
+          CliInvokeResult & { prompt?: string | null; enabled?: boolean; workflowEnabled?: boolean }
         >
         setQualityStandard: (params: {
           prompt?: string
           enabled?: boolean
+          workflowEnabled?: boolean
         }) => Promise<CliInvokeResult>
         getSkills: () => Promise<CliInvokeResult & { skills?: CanvasSkill[] }>
         setSkills: (

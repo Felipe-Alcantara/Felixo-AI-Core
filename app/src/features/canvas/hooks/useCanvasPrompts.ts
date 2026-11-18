@@ -33,6 +33,7 @@ export function useCanvasPrompts(nodes: Node<CanvasNodeData>[]) {
   const [qualityStandard, setQualityStandard] = useState({
     prompt: DEFAULT_QUALITY_STANDARD_PROMPT,
     enabled: true,
+    workflowEnabled: false,
   })
   const qualityStandardRef = useRef(qualityStandard)
   // Catálogo de skills disponíveis (biblioteca do app + terceiros + as da
@@ -51,7 +52,7 @@ export function useCanvasPrompts(nodes: Node<CanvasNodeData>[]) {
     }
   }, [])
   const applyQualityStandard = useCallback(
-    (value: { prompt: string; enabled: boolean }) => {
+    (value: { prompt: string; enabled: boolean; workflowEnabled: boolean }) => {
       qualityStandardRef.current = value
       setQualityStandard(value)
     },
@@ -64,6 +65,7 @@ export function useCanvasPrompts(nodes: Node<CanvasNodeData>[]) {
   // `qualityStandard` acima), então a fonte citada não pode divergir entre elas.
   const qualityStoredPromptRef = useRef<string | null>(null)
   const qualityEnabledRef = useRef(true)
+  const workflowEnabledRef = useRef(false)
   // Camada do usuário (lista de guias); a do projeto entra por `qualityPromptFor`.
   const qualitySourceRef = useRef<QualityStandardSource | QualityStandardGuides | null>(null)
   // As mesmas entradas, como ESTADO, para o render montar o lembrete de cada
@@ -79,13 +81,15 @@ export function useCanvasPrompts(nodes: Node<CanvasNodeData>[]) {
         source: qualitySourceRef.current,
       }),
       enabled: qualityEnabledRef.current,
+      workflowEnabled: workflowEnabledRef.current,
     })
     setQualityInputs({ stored: qualityStoredPromptRef.current, source: qualitySourceRef.current })
   }, [applyQualityStandard])
   const applySavedQualityStandard = useCallback(
-    (value: { prompt: string; enabled: boolean }) => {
+    (value: { prompt: string; enabled: boolean; workflowEnabled?: boolean }) => {
       qualityStoredPromptRef.current = value.prompt
       qualityEnabledRef.current = value.enabled
+      if (value.workflowEnabled !== undefined) workflowEnabledRef.current = value.workflowEnabled
       refreshQualityStandard()
     },
     [refreshQualityStandard],
@@ -135,6 +139,7 @@ export function useCanvasPrompts(nodes: Node<CanvasNodeData>[]) {
       if (quality?.ok) {
         qualityStoredPromptRef.current = typeof quality.prompt === 'string' ? quality.prompt : null
         qualityEnabledRef.current = quality.enabled !== false
+        workflowEnabledRef.current = quality.workflowEnabled === true
         refreshQualityStandard()
       }
     })
