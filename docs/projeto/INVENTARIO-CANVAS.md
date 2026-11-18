@@ -30,7 +30,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 ## Números
 
 - **Elementos:** 113 (10 blocos, 17 ferramentas, 86 outras superfícies)
-- **Controles:** 432, dos quais 63 com teste específico
+- **Controles:** 433, dos quais 63 com teste específico
 - **Elementos sem nenhum teste:** 3
 - **Lacunas:** 234 (alto 4, médio 125, baixo 105), em 66 tasks
 
@@ -1966,13 +1966,14 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `await persist(value)` (button) | clique | Salvar de cada instrução de arquivo: grava canvas:set-file-link-prompt ou canvas:set-file-bootstrap-prompt, avisa o canvas sem recarregar (onPromptSaved/onBootstrapSaved) e mostra "Salvo" | erro engolido: o retorno do IPC não é lido — "Salvo" aparece mesmo com ok: false, e uma rejeição não mostra nada (SettingsPanel.tsx:251-255) | — |
 | `onClick={() => setValue(defaultValue)}` (button) | clique | Padrão: volta o texto da instrução a DEFAULT_FILE_LINK_PROMPT/DEFAULT_FILE_BOOTSTRAP_PROMPT só na tela; vale depois de Salvar | sem falha própria | — |
 | `label="Sempre lembrar o agente do padrão de qualidade"` (toggle) | clique | Liga/desliga o lembrete no rascunho e habilita/desabilita o texto; só é gravado ao clicar em Salvar | sem falha própria; fechar o painel sem salvar perde a mudança | — |
-| `await window.felixo?.canvas?.setQualityStandard` (button) | clique | Salvar do padrão de qualidade: canvas:set-quality-standard com o texto personalizado (vazio = segue o padrão da fonte de System Design) e o liga/desliga, avisa o canvas (onQualityStandardSaved) e mostra "Salvo" | erro engolido: "Salvo" aparece sem conferir ok (SettingsPanel.tsx:338-343) | — |
+| `await window.felixo?.canvas?.setQualityStandard` (button) | clique | Salvar do padrão de qualidade: canvas:set-quality-standard com o texto personalizado (vazio = segue o padrão da fonte de System Design) e o liga/desliga, avisa o canvas (onQualityStandardSaved) e mostra "Salvo" | erro engolido: "Salvo" aparece sem conferir ok (SettingsPanel.tsx:395-400) | — |
+| `label="Incluir o Workflow no contexto inicial"` (toggle) | clique | Liga/desliga o WORKFLOW 3.0 no contexto inicial dos agentes novos (nasce desligado): grava na hora canvas:set-quality-standard com workflowEnabled e avisa o canvas (onQualityStandardSaved); o texto vai como arquivo de leitura próprio | erro engolido: o retorno do IPC não é lido, e o interruptor muda na tela mesmo com ok: false | — |
 | `onClick={() => setCustomText(null)}` (button) | clique | Padrão: descarta a personalização e volta ao texto da fonte atual (buildDefaultQualityStandardPrompt); vale depois de Salvar | sem falha própria | — |
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | Sem teste de interface do tema, das instruções de arquivo e do padrão de qualidade (hardware-check só abre o painel para a placa de vídeo); canvas:set-file-link-prompt, set-file-bootstrap-prompt e set-quality-standard não aparecem em canvas-ipc-handlers.test.cjs | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
-| SettingsPanel.tsx:251-255 (PromptField) e :338-343 (QualityStandardField) mostram "Salvo" sem olhar o { ok } devolvido; falha do settings do SQLite passa como sucesso e a instrução antiga continua valendo | médio | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
+| SettingsPanel.tsx:251-255 (PromptField) e :395-400 (QualityStandardField) mostram "Salvo" sem olhar o { ok } devolvido; falha do settings do SQLite passa como sucesso e a instrução antiga continua valendo | médio | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 
 ### Notificações
 

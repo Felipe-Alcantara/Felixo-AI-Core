@@ -791,7 +791,13 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
         locator: 'await window.felixo?.canvas?.setQualityStandard',
         kind: 'button',
         effect: 'Salvar do padrão de qualidade: canvas:set-quality-standard com o texto personalizado (vazio = segue o padrão da fonte de System Design) e o liga/desliga, avisa o canvas (onQualityStandardSaved) e mostra "Salvo"',
-        failure: 'erro engolido: "Salvo" aparece sem conferir ok (SettingsPanel.tsx:338-343)',
+        failure: 'erro engolido: "Salvo" aparece sem conferir ok (SettingsPanel.tsx:395-400)',
+      },
+      {
+        locator: 'label="Incluir o Workflow no contexto inicial"',
+        kind: 'toggle',
+        effect: 'Liga/desliga o WORKFLOW 3.0 no contexto inicial dos agentes novos (nasce desligado): grava na hora canvas:set-quality-standard com workflowEnabled e avisa o canvas (onQualityStandardSaved); o texto vai como arquivo de leitura próprio',
+        failure: 'erro engolido: o retorno do IPC não é lido, e o interruptor muda na tela mesmo com ok: false',
       },
       {
         locator: 'onClick={() => setCustomText(null)}',
@@ -845,7 +851,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
         task: '3ec91f95-497e-81ca-8319-ee657b0b6492',
       },
       {
-        what: 'SettingsPanel.tsx:251-255 (PromptField) e :338-343 (QualityStandardField) mostram "Salvo" sem olhar o { ok } devolvido; falha do settings do SQLite passa como sucesso e a instrução antiga continua valendo',
+        what: 'SettingsPanel.tsx:251-255 (PromptField) e :395-400 (QualityStandardField) mostram "Salvo" sem olhar o { ok } devolvido; falha do settings do SQLite passa como sucesso e a instrução antiga continua valendo',
         risk: 'médio',
         task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
       },
