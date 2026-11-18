@@ -136,8 +136,11 @@ function criarFixtureClaude(diretorio) {
     '    process.stdout.write(STATUS_OUTPUT)',
     // A consulta e descartável: encerrar a fixture depois de publicar a tela
     // evita que o teardown precise matar um ConPTY já desacoplado do runner.
-    '    setTimeout(() => process.exit(0), 100)',
+    // Só sai depois das duas setas: com prazo fixo, um runner lento (ConPTY)
+    // encerrava a fixture antes de as setas chegarem e o teste via só "/status".
+    '    setTimeout(() => process.exit(0), 5000)',
     '  }',
+    "  if ((entrada.match(/\\u001b\\[C/g) || []).length >= 2) setTimeout(() => process.exit(0), 100)",
     '})',
     'process.stdin.resume()',
   ].join('\n')
