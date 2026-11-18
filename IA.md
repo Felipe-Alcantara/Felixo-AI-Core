@@ -4850,3 +4850,26 @@ Agente: subagente da Orquestração (Claude Sonnet 5.5, effort medium). Task: Fe
 **Não validado.** O app não foi aberto (regra da rodada): `capturePage` e `executeJavaScriptInIsolatedWorld` num guest real, o cartão na tela e o PNG no disco só foram exercitados com fakes. Fica para o E2E do orquestrador.
 
 Estado: primeira fatia concluída na branch `orq/navegador-dar-agente-controle-bloco` (sem push); o restante depende de decisão do Felipe (status PRECISA_DECISAO).
+
+---
+
+## 2026-11-18 — Repositório: higiene do repositório público (caminhos pessoais, e-mails de fixture, .gitignore e docs de entrada)
+
+Task: Felixo AI Core/Repositório — preparar o repositório público para contribuições (configs pessoais, caminhos, dados sensíveis). Agente: subagente da Orquestração (Claude Sonnet 5.5), 02:19 em diante. Trilha híbrida: a parte mecânica foi feita; o que depende do Felipe ficou como decisão.
+
+**Contexto.** Um amigo abriu o repositório público e achou "arquivos de IA com configurações do PC". Antes de mudar qualquer coisa, a rodada inventariou o que está versionado: 1.774 arquivos, nenhum segredo real na árvore nem no histórico (buscas por prefixos de token e chave privada em todos os commits só acharam sentinelas de teste), nenhum arquivo de configuração pessoal de ferramenta de IA rastreado (o `settings.local.json` já era ignorado e nunca entrou no histórico). O que vazava era texto: a pasta pessoal de quem desenvolve em registros antigos, um e-mail pessoal e alguns dados de fixture que pareciam de conta real.
+
+**Motivo.** O repositório é público e a divulgação depende do item 13 do checklist de release ("dados pessoais em docs públicos"). A troca por exemplos neutros resolve sem reescrever commits: os SHAs citados nos registros continuam valendo.
+
+**O que mudou.**
+- `docs/ia-archive/` e `docs/_legado/`: caminhos de usuário (`/home/<nome>`, perfil do Windows com nome e sobrenome, nome 8.3, pastas de clones antigos) e um e-mail pessoal viraram exemplos neutros (`/home/pessoa`, "Pessoa Exemplo", `<e-mail pessoal>`). 8 arquivos, 23 linhas, por script com contagem esperada por regra (para sem gravar se divergir).
+- 5 testes (`agent-usage-report`, `cli-account-store`, `notion-agent-env`, `terminal-input-selection`, `terminal-screen-state`): e-mails de Gmail, usuário do shell, pasta pessoal num banner e a máscara de um token do Notion viraram valores fictícios. Só dado de fixture, asserções iguais.
+- `.gitignore`: configuração e sessões pessoais de outras ferramentas de IA (`.claude/projects`, `.claude/worktrees`, `CLAUDE.local.md`, `.cursor/`, `.windsurf/`, `.aider*`, `.continue/`, `.gemini/`, `.ai-memory/`) e `/tmp/`. `git ls-files -ci` não acha arquivo rastreado que passe a ser ignorado.
+- `CONTRIBUTING.md`: como rodar, como testar e uma tabela dos arquivos que existem só para agentes de IA. `README.md` e `docs/README.md`: apontam o CONTRIBUTING e o SECURITY, listam os arquivos de agentes e explicam `docs/overnight/`.
+- `docs/validation/RELEASE_CHECKLIST.md`: item 13 atualizado (resolvido nos dois diretórios; falta o `IA.md`).
+
+**Fica para o Felipe (decisões abertas).** O que fazer com os arquivos de agente versionados (`CLAUDE.md`, `AGENTS.md`, `.claude/skills/`, `.agents/skills/`, `.codex`); se reescreve o histórico do git; e se a seção 11 do checklist de release e os links e IDs de tasks do Notion continuam num repositório público. O `IA.md` não foi editado (append-only): restam nele 13 linhas antigas com o caminho do checkout e um nome de perfil, trocadas só na integração.
+
+**Validação.** `npm run lint` e `npm run typecheck` limpos (31 s e 2 s). Suíte Node: 3526 testes, 3514 passam, 12 pulados, 0 falhas (34 s). Vitest: 250 arquivos, 3723 testes passam, 4 pulados (100 s). Os 5 arquivos de teste editados passam isolados. Verificador de links relativos em todo `*.md` versionado: 156 verificados, 0 quebrados. O app não foi aberto: não há mudança de código.
+
+Estado: 6 commits na branch `orq/repositorio-publico-higiene`, sem push; integração e deploy pelo orquestrador.
