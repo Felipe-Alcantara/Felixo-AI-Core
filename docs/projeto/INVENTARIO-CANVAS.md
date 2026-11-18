@@ -30,7 +30,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 ## Números
 
 - **Elementos:** 111 (10 blocos, 17 ferramentas, 84 outras superfícies)
-- **Controles:** 424, dos quais 62 com teste específico
+- **Controles:** 427, dos quais 62 com teste específico
 - **Elementos sem nenhum teste:** 3
 - **Lacunas:** 234 (alto 4, médio 125, baixo 105), em 66 tasks
 
@@ -2447,23 +2447,26 @@ Sem controle próprio: as ações vêm de outros elementos.
 ### Preços de modelos e assinaturas (aba Preços)
 
 - **ID:** `agent-usage-precos` · **Dono:** `src/features/canvas/components/tools/AiPricingTab.tsx`
-- **Persistência:** nenhuma: cache em memória do processo principal por 1 hora; tabela embutida em electron/services/ai-pricing.json
+- **Persistência:** cache em memória do processo principal por 1 hora; última cotação ao vivo em userData/ai-pricing-rate.json; tabela embutida (com cotação de reserva) em electron/services/ai-pricing.json
 - **IPC:** `agent-usage:ai-pricing`, `agent-usage:claude-cost-history`
-- **Depende de:** `window.felixo.agentUsage.aiPricing`, `createAiPricingCatalog`, `compareWithSubscriptions`, `formatUsdBrl`, `AgentUsagePanel`
+- **Depende de:** `window.felixo.agentUsage.aiPricing`, `createAiPricingCatalog`, `parseOpenRouterModels`, `compareWithSubscriptions`, `filterPricing`, `formatUsdBrl`, `FelixoSelect`, `AgentUsagePanel`
 - **Sobreposição:** Dentro do painel Limites e uso (z-20/30); sem camada própria
 - **Testes:** `src/features/shared/agent-usage/ai-pricing.test.ts`, `electron/services/ai-pricing.test.cjs`
 
 | Estado | Quando |
 | --- | --- |
-| normal | Origem e data da tabela e cotação do dólar; "Assinatura ou API?" com o custo do uso do Claude em 30 dias contra cada plano individual; tabela de assinaturas (preço, modelos, observação, fonte) e de modelos por API (entrada, saída, cache, assinaturas com acesso), em US$ e R$ |
+| normal | Origem e data da tabela, cotação do dólar e do yuan (ao vivo, última salva ou reserva, com data) e origem dos modelos do OpenRouter; "Assinatura ou API?" com o custo do uso do Claude em 30 dias contra cada plano do Claude e, recolhidos, os planos de código de outros fornecedores; busca, região (EUA, China, agregadores) e fornecedor filtram assinaturas e modelos, agrupados por fornecedor em blocos recolhíveis; preço em US$ e R$, e em ¥ quando o oficial é em yuan |
 | loading | O ícone do Atualizar gira; "Somando o seu uso do Claude…" até a soma chegar |
 | empty | "Sem tabela de preços." se a tabela online e a embutida falharem; preço ausente aparece como "sem preço", nunca zero |
-| error | Mensagem role=alert (falha do main ou "Disponível só no app instalado."); sem cotação, "valores só em US$"; tabela online inválida ou fora do ar cai na embutida e diz o motivo |
+| error | Mensagem role=alert (falha do main ou "Disponível só no app instalado."); sem cotação ao vivo usa a última salva ou a de reserva da tabela, e diz qual; tabela online ou API do OpenRouter inválida ou fora do ar cai na embutida e diz o motivo; filtro sem resultado mostra "Nenhum plano/modelo com esse filtro." |
 | disabled | Atualizar desabilitado durante a busca |
 
 | Controle | Gatilho | Efeito | Falha conhecida | Teste |
 | --- | --- | --- | --- | --- |
-| `Atualizar` (button) | clique | agent-usage:ai-pricing com force: baixa de novo a tabela e a cotação, ignorando o cache de 1 hora (desabilitado: busca em andamento) | Rede fora: fica a tabela embutida e só US$ | — |
+| `Atualizar` (button) | clique | agent-usage:ai-pricing com force: baixa de novo a tabela, a cotação e a lista do OpenRouter, ignorando o cache de 1 hora | Rede fora: fica a tabela embutida, a lista embutida do OpenRouter e a última cotação salva (ou a de reserva) | — |
+| `Região` (select) | clique | Filtra assinaturas e modelos por região (EUA, China, agregadores e ferramentas) e limpa o fornecedor escolhido | Região sem item: "Nenhum plano/modelo com esse filtro." | — |
+| `Fornecedor` (select) | clique | Filtra por um fornecedor (com busca na lista); os blocos de modelos abrem sozinhos | Fornecedor sem modelo: "Nenhum modelo com esse filtro." | — |
+| `Limpar filtro` (button) | clique | Zera busca, região e fornecedor; só aparece com filtro ativo (desabilitado: busca em andamento) | Nenhuma conhecida | — |
 
 ### Resumo do dia por pessoa (aba Resumo)
 

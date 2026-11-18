@@ -46,7 +46,7 @@ function registerAgentUsageIpcHandlers({
   onSchedulerMetrics = () => {},
   getClaudeRoots = () => [],
   claudePricingFile = path.join(getAppPaths().userData, 'claude-pricing.json'),
-  aiPricing = createAiPricingCatalog(),
+  aiPricing = createAiPricingCatalog({ rateCacheFile: path.join(getAppPaths().userData, 'ai-pricing-rate.json') }),
 } = {}) {
   const sendDashboard = (dashboard) => {
     const window = getMainWindow()
@@ -302,7 +302,7 @@ function registerAgentUsageIpcHandlers({
     }
   })
 
-  // Tabela de preços de modelos e assinaturas, com a cotação do dólar; `force` ignora o cache de 1 hora.
+  // Tabela de preços de modelos e assinaturas, com a cotação do dólar e do yuan; `force` ignora o cache de 1 hora.
   ipcMain.handle('agent-usage:ai-pricing', async (_event, params = {}) => {
     try {
       return { ok: true, ...(await aiPricing.get({ force: params?.force === true })) }

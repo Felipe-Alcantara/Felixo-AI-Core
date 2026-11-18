@@ -218,19 +218,30 @@ retomada. Nunca sai texto, título nem caminho. O preço vem da **tabela de pre�
 tokens; `source` e `asOf` são obrigatórios, senão o arquivo é ignorado). Para modelo fora da tabela, a aba mostra
 os tokens e "sem preço", nunca zero. Dia em UTC. IPC: `agent-usage:claude-cost-history`.
 
-**Preços de modelos e assinaturas (aba Preços).** Lista o preço por API de cada modelo (US$ por milhão
-de tokens de entrada, saída e cache), as assinaturas que dão acesso a ele, e o preço de cada assinatura
-(Claude, ChatGPT/Codex, Google AI para Gemini e Antigravity, GitHub Copilot e Cursor), em dólar e em real.
-Cada item leva a URL oficial e a data em que foi conferido. A tabela é o arquivo
-`app/electron/services/ai-pricing.json`: o processo principal baixa a versão da branch `main` pelo GitHub
-(raw) ao abrir a aba e no botão Atualizar, com prazo de 8 s e cache de 1 hora, valida o JSON (item sem
-fonte https ou sem data é descartado; preço inválido vira "sem preço") e, se a rede falhar ou a cópia
-online for mais velha, usa a cópia embutida no app. A cotação USD→BRL vem do Frankfurter (taxa de
-referência do Banco Central Europeu, sem chave), com a data; sem ela, só US$. "Assinatura ou API?" soma
-o custo do uso do Claude nos últimos 30 dias (todas as contas) e compara com cada plano individual;
-compara só preço, não os limites de uso dos planos. Codex e Gemini ainda não entram nessa soma. Para
-atualizar preços, edite o JSON (troque também o `asOf` do item e o do topo) e integre na `main`: todos os
-apps passam a ver na próxima busca. IPC: `agent-usage:ai-pricing`.
+**Preços de modelos e assinaturas (aba Preços).** Lista o preço por API de cada modelo (por milhão
+de tokens de entrada, saída e cache), as assinaturas que dão acesso a ele, e o preço de cada assinatura,
+sempre em dólar e em real (e em yuan quando o preço oficial é em yuan). Cobre os fornecedores dos EUA
+(Claude, ChatGPT/Codex, Google AI para Gemini e Antigravity, GitHub Copilot e Cursor), os chineses
+(DeepSeek, Alibaba/Qwen, Moonshot/Kimi, Zhipu/Z.ai GLM, MiniMax, ByteDance Seed/Doubao/Trae, Baidu ERNIE,
+Tencent Hy, StepFun, iFlytek Spark e 01.AI, cuja API foi encerrada) e os agregadores e ferramentas
+(OpenRouter, OpenCode Zen/Go e OpenClaw, que é gratuito). Planos pré-pagos sem mensalidade aparecem
+"por uso", com a taxa na observação. Uma busca e os filtros de região e fornecedor valem para as duas
+listas, agrupadas por fornecedor em blocos recolhíveis. Cada item leva a URL oficial e a data em que foi
+conferido. A tabela é o arquivo `app/electron/services/ai-pricing.json` (versão 2 do formato; cada item
+tem `currency`, `USD` ou `CNY`): o processo principal baixa a versão da branch `main` pelo GitHub (raw)
+ao abrir a aba e no botão Atualizar, com prazo de 8 s e cache de 1 hora, valida o JSON (item sem fonte
+https ou sem data é descartado; preço inválido vira "sem preço") e, se a rede falhar ou a cópia online
+for mais velha, usa a cópia embutida no app. Os modelos do OpenRouter vêm ao vivo da API pública dele
+(`openrouter.ai/api/v1/models`, sem chave, validada, até 4 MB); os do JSON são só reserva. A cotação
+(real e yuan por dólar) segue esta ordem: ao vivo do Frankfurter (taxa de referência do Banco Central
+Europeu, sem chave), depois a última ao vivo salva em `ai-pricing-rate.json` na pasta de dados do app,
+depois a de reserva gravada no JSON (`exchangeRates`). A aba diz de qual veio e a data dela.
+"Assinatura ou API?" soma o custo do uso do Claude nos últimos 30 dias (todas as contas) e compara com
+cada plano individual do Claude e, num bloco recolhido, com os planos de código dos outros fornecedores
+(marcados `codingPlan` no JSON); compara só preço, não os limites de uso nem a qualidade dos modelos.
+Codex e Gemini ainda não entram nessa soma. Para atualizar preços, edite o JSON (troque também o `asOf`
+do item e o do topo) e integre na `main`: todos os apps passam a ver na próxima busca. Apps antigos (que
+leem só a versão 1) recusam a tabela online nova e ficam com a embutida deles. IPC: `agent-usage:ai-pricing`.
 
 A coleta de status line do Claude Code continua **opcional e explícita** e serve
 como fallback local: pelo botão do painel, o app registra um script no arquivo
