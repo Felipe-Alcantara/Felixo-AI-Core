@@ -57,6 +57,7 @@ import type { GpuPreference, GpuPreferenceStatus } from './features/shared/graph
 import type { HardwareProfile } from './features/shared/performance/performance-suggestion'
 import type { PromptInsertionMetadata } from './features/shared/types/prompt-insertion'
 import type { ClaudeCostHistoryResult } from './features/shared/agent-usage/claude-cost'
+import type { AiPricingResult } from './features/shared/agent-usage/ai-pricing'
 import type {
   ClaudeConfigOption,
   ClaudeTerminalDefaultsChange,
@@ -1192,6 +1193,8 @@ declare global {
         disableClaudeStatusline: () => Promise<ClaudeStatuslineState>
         /** Custo equivalente por dia, projeto e modelo, lido das conversas locais. */
         claudeCostHistory: (params?: { days?: number }) => Promise<ClaudeCostHistoryResult>
+        /** Preços de modelos e assinaturas (online ou a tabela embutida) e a cotação do dólar. */
+        aiPricing: (params?: { force?: boolean }) => Promise<AiPricingResult>
         onChanged: (
           callback: (dashboard: AgentUsageDashboard) => void,
         ) => () => void

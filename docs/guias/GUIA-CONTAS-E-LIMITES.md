@@ -211,12 +211,26 @@ memória e o arquivo é apagado. Codex e Gemini ainda não têm esta captura por
 **Custo por projeto e por modelo (aba Custo).** O painel soma, das conversas locais do Claude
 (`projects/**/*.jsonl` do login do sistema e da pasta de cada perfil de conta), os tokens de cada
 resposta por dia, projeto (só o nome da pasta) e modelo, sem repetir respostas copiadas por conversa
-retomada. Nunca sai texto, título nem caminho. O **preço não está no código**: o custo equivalente só
-aparece para o modelo que estiver em `claude-pricing.json`, na pasta de dados do app, no formato
+retomada. Nunca sai texto, título nem caminho. O preço vem da **tabela de preços** (aba Preços, abaixo); um
+`claude-pricing.json` na pasta de dados do app, se existir, tem prioridade sobre ela, no formato
 `{ "source": "<origem>", "asOf": "AAAA-MM-DD", "currency": "USD", "models": { "<prefixo do modelo>":
 { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite5m": 0, "cacheWrite1h": 0 } } }` (dólar por milhão de
-tokens; `source` e `asOf` são obrigatórios, senão o arquivo é ignorado). Sem arquivo, ou para modelo sem preço,
-a aba mostra os tokens e "sem preço", nunca zero. Dia em UTC. IPC: `agent-usage:claude-cost-history`.
+tokens; `source` e `asOf` são obrigatórios, senão o arquivo é ignorado). Para modelo fora da tabela, a aba mostra
+os tokens e "sem preço", nunca zero. Dia em UTC. IPC: `agent-usage:claude-cost-history`.
+
+**Preços de modelos e assinaturas (aba Preços).** Lista o preço por API de cada modelo (US$ por milhão
+de tokens de entrada, saída e cache), as assinaturas que dão acesso a ele, e o preço de cada assinatura
+(Claude, ChatGPT/Codex, Google AI para Gemini e Antigravity, GitHub Copilot e Cursor), em dólar e em real.
+Cada item leva a URL oficial e a data em que foi conferido. A tabela é o arquivo
+`app/electron/services/ai-pricing.json`: o processo principal baixa a versão da branch `main` pelo GitHub
+(raw) ao abrir a aba e no botão Atualizar, com prazo de 8 s e cache de 1 hora, valida o JSON (item sem
+fonte https ou sem data é descartado; preço inválido vira "sem preço") e, se a rede falhar ou a cópia
+online for mais velha, usa a cópia embutida no app. A cotação USD→BRL vem do Frankfurter (taxa de
+referência do Banco Central Europeu, sem chave), com a data; sem ela, só US$. "Assinatura ou API?" soma
+o custo do uso do Claude nos últimos 30 dias (todas as contas) e compara com cada plano individual;
+compara só preço, não os limites de uso dos planos. Codex e Gemini ainda não entram nessa soma. Para
+atualizar preços, edite o JSON (troque também o `asOf` do item e o do topo) e integre na `main`: todos os
+apps passam a ver na próxima busca. IPC: `agent-usage:ai-pricing`.
 
 A coleta de status line do Claude Code continua **opcional e explícita** e serve
 como fallback local: pelo botão do painel, o app registra um script no arquivo

@@ -46,7 +46,7 @@ function GroupTable({ groups }: { groups: ClaudeCostGroup[] }) {
 
 /**
  * Aba "Custo": custo equivalente do Claude por projeto, modelo e dia, lido das conversas locais.
- * O preço vem de um arquivo do usuário (com fonte e data); sem ele só os tokens aparecem.
+ * O preço vem da tabela de preços (online ou embutida) ou de um claude-pricing.json do usuário.
  */
 export function ClaudeCostTab() {
   const [days, setDays] = useState<number>(30)
@@ -123,11 +123,11 @@ export function ClaudeCostTab() {
           <p className="text-xs text-zinc-400">
             {result.pricing
               ? `Total no período: ${formatCostUsd(total)} · preços: ${result.pricing.source}, em ${result.pricing.asOf}.`
-              : 'Preços não configurados: só os tokens aparecem. Crie claude-pricing.json na pasta de dados do app (fonte, data e US$ por milhão de tokens de cada modelo).'}
+              : 'Sem tabela de preços: só os tokens aparecem.'}
           </p>
           {result.pricing && result.unpricedModels.length > 0 && (
             <p className="text-xs text-amber-300">
-              Sem preço no arquivo: {result.unpricedModels.join(', ')}. O total não inclui esses modelos.
+              Sem preço na tabela: {result.unpricedModels.join(', ')}. O total não inclui esses modelos.
             </p>
           )}
           {result.truncated && (

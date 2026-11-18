@@ -29,8 +29,8 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 
 ## Números
 
-- **Elementos:** 108 (10 blocos, 17 ferramentas, 81 outras superfícies)
-- **Controles:** 419, dos quais 62 com teste específico
+- **Elementos:** 109 (10 blocos, 17 ferramentas, 82 outras superfícies)
+- **Controles:** 420, dos quais 62 com teste específico
 - **Elementos sem nenhum teste:** 3
 - **Lacunas:** 233 (alto 4, médio 124, baixo 105), em 65 tasks
 
@@ -2401,11 +2401,11 @@ Sem controle próprio: as ações vêm de outros elementos.
 ### Custo equivalente do Claude (aba Custo)
 
 - **ID:** `agent-usage-custo` · **Dono:** `src/features/canvas/components/tools/ClaudeCostTab.tsx`
-- **Persistência:** nenhuma: lê as conversas locais do Claude a cada abertura; preço em userData/claude-pricing.json (arquivo do usuário, com fonte e data)
+- **Persistência:** nenhuma: lê as conversas locais do Claude a cada abertura; preço de userData/claude-pricing.json (arquivo do usuário, com fonte e data) ou, sem ele, da tabela de preços (online ou embutida)
 - **IPC:** `agent-usage:claude-cost-history`
-- **Depende de:** `window.felixo.agentUsage.claudeCostHistory`, `groupClaudeCost`, `formatCostUsd`, `AgentUsagePanel`
+- **Depende de:** `window.felixo.agentUsage.claudeCostHistory`, `groupClaudeCost`, `formatCostUsd`, `AgentUsagePanel`, `createAiPricingCatalog`
 - **Sobreposição:** Dentro do painel Limites e uso (z-20/30); sem camada própria
-- **Testes:** `src/features/shared/agent-usage/claude-cost.test.ts`, `electron/services/claude-usage-history.test.cjs`
+- **Testes:** `src/features/shared/agent-usage/claude-cost.test.ts`, `electron/services/claude-usage-history.test.cjs`, `electron/services/agent-usage-ipc-handlers.test.cjs`
 
 | Estado | Quando |
 | --- | --- |
@@ -2420,6 +2420,27 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `dias` (button) | clique | Muda o período lido (aria-pressed) e relê as conversas | sem falha própria; o erro da leitura aparece como mensagem | — |
 | `Por projeto` (button) | clique | Troca o agrupamento da tabela (aria-pressed), sem nova leitura | sem falha própria | — |
 | `Atualizar` (button) | clique | agent-usage:claude-cost-history com o período e redesenha a tabela (desabilitado: leitura em andamento) | Recusa ou exceção viram mensagem role=alert | — |
+
+### Preços de modelos e assinaturas (aba Preços)
+
+- **ID:** `agent-usage-precos` · **Dono:** `src/features/canvas/components/tools/AiPricingTab.tsx`
+- **Persistência:** nenhuma: cache em memória do processo principal por 1 hora; tabela embutida em electron/services/ai-pricing.json
+- **IPC:** `agent-usage:ai-pricing`, `agent-usage:claude-cost-history`
+- **Depende de:** `window.felixo.agentUsage.aiPricing`, `createAiPricingCatalog`, `compareWithSubscriptions`, `formatUsdBrl`, `AgentUsagePanel`
+- **Sobreposição:** Dentro do painel Limites e uso (z-20/30); sem camada própria
+- **Testes:** `src/features/shared/agent-usage/ai-pricing.test.ts`, `electron/services/ai-pricing.test.cjs`
+
+| Estado | Quando |
+| --- | --- |
+| normal | Origem e data da tabela e cotação do dólar; "Assinatura ou API?" com o custo do uso do Claude em 30 dias contra cada plano individual; tabela de assinaturas (preço, modelos, observação, fonte) e de modelos por API (entrada, saída, cache, assinaturas com acesso), em US$ e R$ |
+| loading | O ícone do Atualizar gira; "Somando o seu uso do Claude…" até a soma chegar |
+| empty | "Sem tabela de preços." se a tabela online e a embutida falharem; preço ausente aparece como "sem preço", nunca zero |
+| error | Mensagem role=alert (falha do main ou "Disponível só no app instalado."); sem cotação, "valores só em US$"; tabela online inválida ou fora do ar cai na embutida e diz o motivo |
+| disabled | Atualizar desabilitado durante a busca |
+
+| Controle | Gatilho | Efeito | Falha conhecida | Teste |
+| --- | --- | --- | --- | --- |
+| `Atualizar` (button) | clique | agent-usage:ai-pricing com force: baixa de novo a tabela e a cotação, ignorando o cache de 1 hora (desabilitado: busca em andamento) | Rede fora: fica a tabela embutida e só US$ | — |
 
 ### Ditado por voz (Configurações)
 

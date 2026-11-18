@@ -4,6 +4,7 @@ import { CanvasPanel } from './CanvasPanel'
 import { AccountChainSection } from './AccountChainSection'
 import { AccountSwitchHistory } from './AccountSwitchHistory'
 import { ClaudeCostTab } from './ClaudeCostTab'
+import { AiPricingTab } from './AiPricingTab'
 import { CodexSessionFieldsNotice, ProviderSummaryTable } from './AgentUsageProviderSummary'
 import { rovingIndex } from '../../services/keyboard-focus'
 import {
@@ -70,6 +71,7 @@ const USAGE_TABS: ReadonlyArray<{ id: UsageTab; label: string }> = [
   { id: 'cadeia', label: 'Cadeia' },
   { id: 'trocas', label: 'Trocas' },
   { id: 'custo', label: 'Custo' },
+  { id: 'precos', label: 'Preços' },
 ]
 
 /**
@@ -407,6 +409,12 @@ export function AgentUsagePanel({
       {tab === 'custo' && (
         <div role="tabpanel" id={`${tabsId}-panel-custo`} aria-labelledby={`${tabsId}-tab-custo`}>
           <ClaudeCostTab />
+        </div>
+      )}
+
+      {tab === 'precos' && (
+        <div role="tabpanel" id={`${tabsId}-panel-precos`} aria-labelledby={`${tabsId}-tab-precos`}>
+          <AiPricingTab />
         </div>
       )}
 

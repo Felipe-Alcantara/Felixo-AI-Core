@@ -349,11 +349,18 @@ test('claude-cost-history lê as pastas informadas, limita o período e devolve 
       createSessionCapture: semCaptura,
       getClaudeRoots: () => [root],
       claudePricingFile: path.join(root, 'nao-existe.json'),
+      // Sem arquivo do usuário, o preço vem da tabela; 'm' não está nela, então fica "sem preço".
+      aiPricing: { get: async () => ({ origin: 'reserva', table: { asOf: '2026-11-18', currency: 'USD', models: [{ id: 'outro', input: 1, output: 2, cacheRead: null, cacheWrite5m: null, cacheWrite1h: null }], subscriptions: [] } }) },
     })
     const result = await handlers.get('agent-usage:claude-cost-history')({}, { days: 5 })
     assert.equal(result.ok, true)
-    assert.equal(result.pricing, null)
-    assert.deepEqual(result.rows.map((row) => [row.project, row.input]), [['projeto-x', 7]])
+    assert.equal(result.pricing.asOf, '2026-11-18')
+    assert.deepEqual(result.unpricedModels, ['m'])
+    assert.deepEqual(result.rows.map((row) => [row.project, row.input, row.costUsd]), [['projeto-x', 7, null]])
+
+    const pricing = await handlers.get('agent-usage:ai-pricing')({}, { force: true })
+    assert.equal(pricing.ok, true)
+    assert.equal(pricing.origin, 'reserva')
   } finally {
     fs.rmSync(root, { recursive: true, force: true })
   }

@@ -16,7 +16,8 @@ const { createAgentUsageWatcher } = require('./agent-usage-watcher.cjs')
 const {
   createAgentUsageSessionCapture,
 } = require('./agent-usage-session-capture.cjs')
-const { scanClaudeUsage, loadPricing } = require('./claude-usage-history.cjs')
+const { scanClaudeUsage, loadPricing, parsePricing } = require('./claude-usage-history.cjs')
+const { createAiPricingCatalog, toCostPricing } = require('./ai-pricing.cjs')
 
 /**
  * Erro devolvido ao renderer. A mensagem de uma exceção pode trazer texto de CLI
@@ -45,6 +46,7 @@ function registerAgentUsageIpcHandlers({
   onSchedulerMetrics = () => {},
   getClaudeRoots = () => [],
   claudePricingFile = path.join(getAppPaths().userData, 'claude-pricing.json'),
+  aiPricing = createAiPricingCatalog(),
 } = {}) {
   const sendDashboard = (dashboard) => {
     const window = getMainWindow()
@@ -282,19 +284,30 @@ function registerAgentUsageIpcHandlers({
 
   ipcMain.handle('agent-usage:sessions', () => sessionCapture.list())
 
-  // Custo equivalente por dia, projeto e modelo, lido das conversas locais; o preço vem do arquivo do usuário.
+  // Custo equivalente por dia, projeto e modelo, lido das conversas locais. Preço: o arquivo do
+  // usuário, se existir, manda; senão a tabela de preços (online ou a embutida).
   ipcMain.handle('agent-usage:claude-cost-history', async (_event, params = {}) => {
     try {
       const days = Number.isFinite(params?.days) ? Math.min(Math.max(Math.trunc(params.days), 1), 400) : 30
       const sinceMs = Date.now() - days * 86400000
-      const history = await scanClaudeUsage({
-        roots: getClaudeRoots(),
-        pricing: loadPricing(claudePricingFile),
-        sinceMs,
-      })
+      let pricing = loadPricing(claudePricingFile)
+      if (!pricing) {
+        const { table, origin } = await aiPricing.get()
+        pricing = table ? parsePricing(toCostPricing(table, origin)) : null
+      }
+      const history = await scanClaudeUsage({ roots: getClaudeRoots(), pricing, sinceMs })
       return { ok: true, ...history }
     } catch (error) {
       return usageErrorResult(error, 'Não foi possível ler o histórico de custo do Claude.')
+    }
+  })
+
+  // Tabela de preços de modelos e assinaturas, com a cotação do dólar; `force` ignora o cache de 1 hora.
+  ipcMain.handle('agent-usage:ai-pricing', async (_event, params = {}) => {
+    try {
+      return { ok: true, ...(await aiPricing.get({ force: params?.force === true })) }
+    } catch (error) {
+      return usageErrorResult(error, 'Não foi possível ler a tabela de preços.')
     }
   })
 

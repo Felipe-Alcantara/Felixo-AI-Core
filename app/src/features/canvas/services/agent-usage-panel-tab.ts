@@ -7,7 +7,7 @@
  * montado), que troca de aba e põe o foco nela: antes ele esperava a próxima
  * montagem, a aba não mudava e o foco caía no `body`.
  */
-export type AgentUsagePanelTab = 'uso' | 'cadeia' | 'trocas' | 'custo'
+export type AgentUsagePanelTab = 'uso' | 'cadeia' | 'trocas' | 'custo' | 'precos'
 
 let requestedTab: AgentUsagePanelTab | null = null
 const listeners = new Set<(tab: AgentUsagePanelTab) => void>()

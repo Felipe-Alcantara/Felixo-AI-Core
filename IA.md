@@ -4934,3 +4934,24 @@ Agente: subagente da Orquestração (Claude Sonnet 5.5, effort medium). Task: Fe
 **Validação.** `approval-queue.test.ts` (6 testes: dois pedidos simultâneos de agentes diferentes aparecem e um resolvido tira só ele da fila, índice da opção, ação inexistente, pedido stale, render do painel aberto/fechado/vazio), `approval-window-reminder.test.cjs` (3 testes: 12h e 18h, re-conferência horária sem aviso, stop). Gate: lint e typecheck limpos; suíte Node 3517 passando, 0 falhas, 12 pulados; Vitest 3729 passando, 4 pulados, 248 arquivos. O app não foi aberto (regra da rodada).
 
 **Não validado / pendente.** Posição e foco do painel na tela; motivo da recusa (nenhum IPC leva texto ao agente); permissão pedida dentro do terminal PTY (depende do OSC 7501) e avisos do agendador (renderer ainda não consome `agent-schedule:due`).
+
+---
+
+## 2026-11-18 — Preços: aba Preços com modelos, assinaturas e assinatura × API, em dólar e real
+
+Agente: subagente da Orquestração (Claude, effort medium). Pedido direto do Felipe (sem task no Notion): listar o preço de todos os modelos por API e das assinaturas, quais assinaturas dão acesso a cada modelo, e comparar o uso dele em API com o preço das assinaturas.
+
+**Contexto.** A aba Custo (branch `orq/custos-mostrar-custo-equivalente-por`, base desta) só tinha preço se o usuário criasse `claude-pricing.json` à mão. O Felipe decidiu: tabela de preços buscada online com reserva fixa no app, sempre com fonte e data; preço ausente é "sem preço", nunca zero; valores em US$ e R$ com cotação online e data, só US$ se a cotação falhar.
+
+**O que mudou.**
+- `electron/services/ai-pricing.json` (novo): 55 modelos (Anthropic, OpenAI, Google; entrada, saída, cache por milhão de tokens) e 29 assinaturas (Claude, ChatGPT/Codex, Google AI, GitHub Copilot, Cursor), cada item com URL oficial e `asOf` 2026-11-18. Preços conferidos nas páginas oficiais nesse dia.
+- `electron/services/ai-pricing.cjs` (novo): baixa o mesmo JSON da `main` pelo GitHub raw (prazo 8 s, limite 512 KB, cache 1 h, `force` no Atualizar), valida (item sem id, fonte https ou data é descartado; preço inválido vira `null`), usa a online só se for válida e não mais velha que a embutida; cotação USD→BRL do Frankfurter (BCE, sem chave) validada (base USD, BRL entre 0,5 e 100, com data).
+- IPC `agent-usage:ai-pricing` (preload `agentUsage.aiPricing`); `agent-usage:claude-cost-history` passa a usar a tabela quando não há `claude-pricing.json` (que continua tendo prioridade).
+- Renderer: `AiPricingTab.tsx` (aba Preços: origem e data da tabela, cotação, "Assinatura ou API?" com o uso do Claude em 30 dias contra os planos individuais, tabela de assinaturas e de modelos com as assinaturas que dão acesso); `shared/agent-usage/ai-pricing.ts` (tipos, `formatUsd`/`formatBrl`/`formatUsdBrl`, `subscriptionsByModel`, `compareWithSubscriptions`).
+- Docs: `GUIA-CONTAS-E-LIMITES.md`, inventário do canvas (`agent-usage-precos`).
+
+**Validação.** `ai-pricing.test.cjs` (7: tabela embutida válida inteira, validação descarta item ruim e preço inválido vira null, cotação, online x reserva x mais velha x inválida x offline, cache 1 h e force, conversão para a aba Custo); `ai-pricing.test.ts` (3); IPC de custo atualizado. Gate: lint e typecheck limpos; `run-node-unit-tests` 3566 testes, 3554 passaram, 0 falhas, 12 pulados (35 s); vitest 251 arquivos, 3735 passaram, 4 pulados (100 s). App aberto pelo `felixo devtools` (perfil isolado): `aiPricing` devolveu a reserva (a URL raw dá 404 até integrar na main) e a cotação R$ 5,7821 de 2026-11-17; a comparação somou US$ 2.216,93 de uso do Claude em 30 dias (373 arquivos, 7,3 s, nenhum modelo sem preço).
+
+**Não validado.** A busca online de verdade só funciona depois do merge na `main`. Uso de Codex e Gemini não entra na comparação (o app não lê o histórico deles). A comparação é só de preço, não dos limites de uso dos planos.
+
+Estado: concluído na branch `orq/precos-modelos-assinaturas-apis`, sem push.
