@@ -4,8 +4,8 @@
 ;
 ; Por que existe: a instalação silenciosa (`/S`) por cima de uma instalação cuja
 ; pasta está gravada com nome curto 8.3 (`C:\Users\RUNNER~1\...`), com o app
-; aberto, travava para sempre. Medido em runner Windows (task
-; 3e291f95497e81058292f38d63a3034c, run 37591182111, cenário I):
+; aberto, travava para sempre. Medido em runner Windows (
+; acompanhado no gestor de tarefas interno, run 37591182111, cenário I):
 ;
 ; 1. A checagem padrão procura o app com `Win32_Process.Path.StartsWith($INSTDIR)`.
 ;    O Windows devolve o caminho LONGO do processo, que nunca começa com o curto:

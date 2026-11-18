@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
   Reproduz o instalador NSIS silencioso que não avança com o Felixo aberto e
-  deixa processo elevado (task 3e291f95497e81058292f38d63a3034c).
+  deixa processo elevado (acompanhado no gestor de tarefas interno).
 
 .DESCRIPTION
   Só roda em runner descartável (GITHUB_ACTIONS/CI): cada cenário instala o

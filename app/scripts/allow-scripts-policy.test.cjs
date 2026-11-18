@@ -7,7 +7,7 @@
  * Origem: o Electron passou de 41 para 42, que não tem mais script de instalação (baixa o binário na
  * primeira execução), e a entrada `electron@41.3.0` ficou sem pacote. Já o fsevents, instalado só no
  * macOS, nunca foi revisado: o npm 11 do projeto avisava no CI do macOS e pularia o script se passasse
- * a bloquear (task 3e991f95-497e-8108-bf74-f5ec9466cb07).
+ * a bloquear (acompanhado no gestor de tarefas interno).
  *
  * Lê só os dois JSONs, então vale em todas as plataformas (o fsevents não é instalado no Windows nem no
  * Linux). A regra de casamento é a do npm do projeto (`script-allowed.js` do arborist), não uma cópia:

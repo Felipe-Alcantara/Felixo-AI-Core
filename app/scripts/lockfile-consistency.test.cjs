@@ -7,8 +7,8 @@
  * Origem: o Tailwind 4 fixa o lightningcss 1.32.0 e o Vite 8 traz o 1.33; se o
  * lock resolve um binário opcional (ex.: `lightningcss-linux-x64-musl`) para a
  * versão do outro, o `npm ls --all` sai com `invalid`. O lock de hoje já aninha
- * os dois grupos; estes testes impedem a volta (task
- * 3e791f95-497e-81bc-a366-c4f58fc01463).
+ * os dois grupos; estes testes impedem a volta (
+ * acompanhado no gestor de tarefas interno).
  *
  * `npm ls --package-lock-only` lê só o `package.json` e o `package-lock.json`,
  * então vale para todas as plataformas e não precisa de rede nem de

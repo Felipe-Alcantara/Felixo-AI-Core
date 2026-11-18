@@ -186,8 +186,8 @@ function describeCase({ theme, viewport, performance }) {
  * a gaveta seleciona o terminal): a gaveta tira a largura do canvas, e a barra
  * media 160 px em 1320 e 32 px em 768, quebrando linha e deixando o Remover para
  * fora da caixa. Nesses dois viewports ela não pode quebrar nem estourar, e o
- * Remover tem de estar na barra, na janela e receber o clique (task
- * 3e791f95-497e-81bd-8e8c-de6f9e16cec5).
+ * Remover tem de estar na barra, na janela e receber o clique (
+ * acompanhado no gestor de tarefas interno).
  */
 const STATUSBAR_DRAWER_VIEWPORTS = [
   { width: 1320, height: 800 },

@@ -567,7 +567,7 @@ async function checarAuditoriaDeAcessibilidade(page) {
  * Com a gaveta do terminal aberta (o terminal fica selecionado) a barra de
  * status não pode quebrar linha nem estourar, e o Remover tem de ficar na
  * barra, na janela e receber o clique, em 1320 e em 768 px (critério de aceite
- * da task 3e791f95-497e-81bd-8e8c-de6f9e16cec5). Mede de novo até assentar: a
+ * acompanhado no gestor de tarefas interno). Mede de novo até assentar: a
  * barra anima o `left` por 180 ms depois de cada resize. Devolve a janela ao
  * tamanho de antes, com a gaveta ainda aberta.
  */
@@ -604,8 +604,8 @@ async function checarBarraComGaveta(page) {
 }
 
 /**
- * Abrir a gaveta do terminal não pode rolar o shell do app de lado (task
- * 3e891f95-497e-819b-a75f-e5cec04e3173). O foco que entra na gaveta enquanto ela
+ * Abrir a gaveta do terminal não pode rolar o shell do app de lado (
+ * acompanhado no gestor de tarefas interno). O foco que entra na gaveta enquanto ela
  * ainda tem largura quase zero, com o conteúdo transbordando para a direita,
  * fazia o navegador rolar o shell (`overflow: hidden` ainda é um contêiner
  * rolável) em ~434 px: a moldura inteira pulava de lado e voltava. Com
@@ -1235,8 +1235,8 @@ function readAgentCards(page) {
  *
  * Não confere a cobertura pela pílula do zoom e pelo minimapa: o Enquadrar da
  * pílula não desconta a área útil e, abaixo de 768 px, o dock de terminais
- * intercepta o clique nela — lacunas já registradas no inventário (tasks
- * 3ec91f95-497e-8103 e 3e691f95-497e-810e).
+ * intercepta o clique nela — lacunas já registradas no inventário (
+ * acompanhado no gestor de tarefas interno).
  */
 async function checarVariosAgentes(page) {
   await page.evaluate(async (nodes) => {

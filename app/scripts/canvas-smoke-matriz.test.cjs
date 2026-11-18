@@ -119,7 +119,7 @@ test('toda permissão de superfície fora da janela nomeia superfície medida, m
   }
 })
 
-// Barra de status com a gaveta aberta e um bloco selecionado (task 3e791f95).
+// Barra de status com a gaveta aberta e um bloco selecionado (acompanhado no gestor de tarefas interno).
 const barra = (over = {}) => ({
   bar: rect(240, 870, 726, 900),
   button: rect(565, 875, 643, 897),
