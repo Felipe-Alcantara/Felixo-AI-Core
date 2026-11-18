@@ -17,7 +17,9 @@
  * `canvas-smoke-leitura.cjs` (sessão F, idem, com a CLI roteirizada tocando
  * as gravações reais de CLI). O editor de visualização do painel "Tarefas
  * Notion" fica em `canvas-smoke-notion.cjs` (sessão G, perfil novo com os
- * handlers IPC do Notion trocados por falsos: sem rede e sem token).
+ * handlers IPC do Notion trocados por falsos: sem rede e sem token). Os riscos
+ * de sobreposição do inventário do canvas (sessão H, avisos de hardware ligados)
+ * ficam em `canvas-smoke-sobreposicoes.cjs`.
  *
  * `FELIXO_SMOKE_SESSOES=D,E` roda só as sessões listadas, para quem estiver
  * mexendo numa delas; sem a variável, rodam todas (é o que a CI faz).
@@ -55,6 +57,7 @@ const { criarSessaoDeLinks } = require('./canvas-smoke-links.cjs')
 const { criarSessaoDePrompts } = require('./canvas-smoke-prompts.cjs')
 const { RECORDINGS_DIR, criarSessaoDaLeitura } = require('./canvas-smoke-leitura.cjs')
 const { criarSessaoDoNotion } = require('./canvas-smoke-notion.cjs')
+const { checarSobreposicoesDoInventario } = require('./canvas-smoke-sobreposicoes.cjs')
 const {
   criarRelatorio,
   fecharRelatorio,
@@ -102,7 +105,7 @@ const PROMPTS_SESSION_ENV = CONTAS_SESSION_ENV
 // Sessão F: a mesma CLI roteirizada, tocando as gravações reais de CLI.
 const LEITURA_SESSION_ENV = { ...CONTAS_SESSION_ENV, FELIXO_DEVTOOLS_TERMINAL_RECORDINGS: RECORDINGS_DIR }
 const SESSOES = new Set(
-  (process.env.FELIXO_SMOKE_SESSOES || 'A,B,C,D,E,F,G').split(',').map((sessao) => sessao.trim().toUpperCase()),
+  (process.env.FELIXO_SMOKE_SESSOES || 'A,B,C,D,E,F,G,H').split(',').map((sessao) => sessao.trim().toUpperCase()),
 )
 const rodar = (sessao) => SESSOES.has(sessao)
 const DEVTOOLS_LAUNCH_TIMEOUT_MS = 60_000
@@ -1793,6 +1796,15 @@ const SESSIONS = [
     summary: 'painel Tarefas Notion (N1–N3)',
     env: {},
     run: (page) => criarSessaoDoNotion({ page, checarMontagem, timeoutMs: ONBOARDING_TIMEOUT_MS }).executar(),
+  },
+  {
+    // Os riscos de sobreposição do inventário do canvas (task 3ec91f95): cenários e defeitos conhecidos em
+    // canvas-smoke-sobreposicoes.cjs. Perfil novo, sem variável extra.
+    letter: 'H',
+    failureName: 'canvas-smoke-failure-sobreposicoes',
+    summary: 'sobreposições do inventário (menus, painéis, diálogos e alças)',
+    env: {},
+    run: (page) => checarSobreposicoesDoInventario(page),
   },
 ]
 
