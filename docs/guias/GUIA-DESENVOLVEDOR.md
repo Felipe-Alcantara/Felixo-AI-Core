@@ -1071,14 +1071,16 @@ Toda feature deve ser documentada em `/docs/`:
 2. **Depois de implementar:** atualizar docs com comportamento real no mesmo
    commit coeso quando a mudança de comportamento exigir documentação.
 3. **Formato:** Markdown com `Status:` no topo (`concluido.`, `em desenvolvimento.`, `planejado.`).
-4. **Histórico operacional:** acrescentar uma entrada datada ao `IA.md`; não
+4. **Histórico operacional:** acrescentar uma entrada datada ao `IA.md` da raiz
+   (local, fora do repositório; o `docs/projeto/IA.md` não recebe entradas novas); não
    reescrever registros antigos nem deixar trabalho encerrado como "em andamento".
 5. **Produto atual:** novas telas, fluxos e exemplos devem tratar o canvas como
    caminho principal; o chat só deve aparecer em documentação de compatibilidade.
 
 ### Compactar o IA.md sem perder histórico
 
-O `IA.md` da raiz e o `docs/projeto/IA.md` crescem a cada sessão. Quando a
+O `IA.md` da raiz cresce a cada sessão (o `docs/projeto/IA.md` ficou parado em
+03/11/2026, então só precisa de compactação se voltar a crescer). Quando a
 leitura de um deles ficar lenta (como regra prática, acima de umas 1000 linhas),
 os registros antigos são **movidos**, nunca apagados, para `docs/ia-archive/`,
 por um arquivo por mês, e o `IA.md` guarda um ponteiro datado na seção

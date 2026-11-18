@@ -12,7 +12,7 @@ compatibilidade com histórico legado.
 
 | Documento | O que é |
 |-----------|---------|
-| [projeto/IA.md](projeto/IA.md) | **Contexto operacional versionado** — objetivo, stack, decisões, testes e histórico de evolução para retomada por IA (segue o template de contexto do padrão de qualidade). |
+| [projeto/IA.md](projeto/IA.md) | **Contexto operacional versionado (histórico até 03/11/2026, sem entradas novas)** — objetivo, stack, decisões, testes e histórico de evolução para retomada por IA (segue o template de contexto do padrão de qualidade). |
 | [projeto/ARQUITETURA.md](projeto/ARQUITETURA.md) | Arquitetura vigente do canvas, terminais, providers, persistência e fronteiras do modo legado. |
 | [projeto/INVENTARIO-CANVAS.md](projeto/INVENTARIO-CANVAS.md) | **Inventário operacional do canvas** (gerado e travado por teste): cada elemento com dono, estados, controles com efeito e falha conhecida, persistência, IPC, testes e lacunas com task. Contrato visual/E2E da superfície principal. |
 | [projeto/LAYOUT-SUPERFICIES.md](projeto/LAYOUT-SUPERFICIES.md) | Inventário de layout: quais superfícies redimensionam, em que eixo, mínimos e escala de z. |
@@ -45,9 +45,8 @@ compatibilidade com histórico legado.
 
 - [`../README.md`](../README.md) é a entrada pública: instalação, uso básico e
   capacidades atuais.
-- [`projeto/IA.md`](projeto/IA.md) mantém o contexto operacional versionado e
-  seu histórico; acrescente entradas datadas, sem reescrever o passado.
-- O `IA.md` da raiz é o ledger operacional mais recente, usado para registrar sessões e correções recentes; fica na máquina de quem desenvolve, fora do repositório.
+- O `IA.md` da raiz é o **único** que recebe entradas novas: o ledger operacional de sessões e correções recentes. Fica na máquina de quem desenvolve, fora do repositório; acrescente entradas datadas, sem reescrever o passado.
+- [`projeto/IA.md`](projeto/IA.md) é o histórico versionado até 03/11/2026 (objetivo, stack, decisões e fases). Não recebe entradas novas; o aviso no topo do arquivo diz isso. Continua no repositório porque o CI confere que ele existe.
 - Os registros antigos dos dois `IA.md` foram movidos, sem edição, para arquivos mensais; cada `IA.md` tem uma seção **Registros arquivados** com o ponteiro para o arquivo de cada mês. Esses arquivos ficam fora do repositório.
 - Os guias explicam procedimentos observáveis; o roadmap descreve direção e
   ideias de contribuição, não funcionalidades prometidas.

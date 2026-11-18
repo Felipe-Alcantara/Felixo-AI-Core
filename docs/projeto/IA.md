@@ -4,7 +4,9 @@ Status: em evolução ativa — canvas estilo n8n como produto principal; chat l
 
 > Este arquivo segue o template de contexto do padrão de qualidade (`TEMPLATE-CONTEXTO-IA`). O "Histórico de Evolução" mantém a trilha cronológica densa das fases; as seções fixas acima consolidam o estado atual.
 
-Estado atual (resumo vivo): ver a seção [Estado atual](../../IA.md#estado-atual-resumo-vivo) do `IA.md` da raiz.
+> **Este arquivo não recebe mais entradas novas.** Ele guarda o histórico versionado até 03/11/2026 e continua no repositório porque o CI confere que ele existe. As entradas novas vão para o `IA.md` da raiz, que cada pessoa mantém na própria máquina, fora do repositório (decisão de 18/11/2026; veja `docs/README.md`).
+
+Estado atual (resumo vivo): consulte a seção "Estado atual" do `IA.md` da raiz, na máquina de quem desenvolve.
 
 ## Registros arquivados
 
