@@ -11,7 +11,7 @@ import {
   formatProviderSwitchTitle,
 } from '../../chat/services/provider-switch'
 import type { ProviderSwitchRequest, ProviderSwitchRespondResult } from '../../chat/types'
-import type { CanvasAgentLaunchRequest, CanvasAgentLaunchTask, CanvasAgentQuestion } from '../types'
+import type { CanvasAgentLaunchRequest, CanvasAgentLaunchTask, CanvasAgentQuestion, CanvasAgentScriptRequest } from '../types'
 
 export type ApprovalAction = {
   /** `accept`/`refuse` (decisão) ou `option:<índice>`/`dismiss` (pergunta). */
@@ -24,7 +24,7 @@ export type ApprovalAction = {
 
 export type ApprovalItem = {
   key: string
-  source: 'decision' | 'question' | 'launch'
+  source: 'decision' | 'question' | 'launch' | 'script'
   /** Id do pedido no processo principal (decisionId ou id do arquivo de pedido). */
   requestId: string
   /** Só em `launch`: as tasks do pedido e a pasta do coordenador (onde os agentes abrem). */
@@ -88,6 +88,39 @@ function fromQuestion(question: CanvasAgentQuestion): ApprovalItem {
   }
 }
 
+const SCRIPT_LINHAS_VISIVEIS = 24
+
+/** O alcance dito com todas as letras: quem aceita precisa saber onde o script vai rodar. */
+function describeScriptScope(match: string[]): string {
+  return match.some((padrao) => /^(\*|https?):\/\/\*\/\*$/.test(padrao)) ? 'TODAS as páginas web' : match.join(', ')
+}
+
+function fromScript(request: CanvasAgentScriptRequest): ApprovalItem {
+  const linhas = request.codigo.split(/\r?\n/)
+  return {
+    key: `script:${request.id}`,
+    source: 'script',
+    requestId: request.id,
+    title: `Um agente quer instalar o script "${request.nome}" nas páginas web`,
+    details: [
+      `Roda em: ${describeScriptScope(request.match)}`,
+      request.mundo === 'pagina'
+        ? 'Roda DENTRO da página (pode ler e mudar tudo o que ela faz, inclusive o que estiver logado).'
+        : 'Roda isolado da página (mexe no que se vê, não nas variáveis dela).',
+      `Código (${linhas.length} linha(s)):`,
+      ...linhas.slice(0, SCRIPT_LINHAS_VISIVEIS),
+      ...(linhas.length > SCRIPT_LINHAS_VISIVEIS ? [`… mais ${linhas.length - SCRIPT_LINHAS_VISIVEIS} linha(s)`] : []),
+    ],
+    origin: request.origem ? `Agente em ${request.origem}` : 'Agente',
+    requestedAt: toMs(request.pedidoEm),
+    timeoutNote: 'sem resposta, nada é instalado e o agente continua esperando.',
+    actions: [
+      { id: 'accept', label: 'Instalar o script', tone: 'accept', hint: 'Fica instalado até você removê-lo e roda em toda página que casar com o alcance acima.' },
+      { id: 'refuse', label: 'Recusar', tone: 'refuse' },
+    ],
+  }
+}
+
 function fromLaunch(request: CanvasAgentLaunchRequest): ApprovalItem {
   const count = request.tarefas.length
   const plural = count === 1 ? 'agente' : 'agentes'
@@ -113,11 +146,13 @@ export function buildApprovalQueue(input: {
   decisions?: ProviderSwitchRequest[] | null
   questions?: CanvasAgentQuestion[] | null
   launches?: CanvasAgentLaunchRequest[] | null
+  scripts?: CanvasAgentScriptRequest[] | null
 }): ApprovalItem[] {
   const items = [
     ...(input.decisions ?? []).map(fromDecision),
     ...(input.questions ?? []).filter((question) => question.estado === 'pendente').map(fromQuestion),
     ...(input.launches ?? []).filter((launch) => launch.estado === 'pendente').map(fromLaunch),
+    ...(input.scripts ?? []).filter((script) => script.estado === 'pendente').map(fromScript),
   ]
   return items.sort((left, right) => left.requestedAt - right.requestedAt)
 }
@@ -125,6 +160,7 @@ export function buildApprovalQueue(input: {
 export type ApprovalTransport = {
   respondDecision: (params: { decisionId: string; accept: boolean }) => Promise<ProviderSwitchRespondResult>
   answerQuestion: (params: { id: string; indice: number | null }) => Promise<{ ok: boolean; message?: string }>
+  decideScript: (params: { id: string; aceitar: boolean }) => Promise<{ ok: boolean; message?: string }>
   decideLaunch: (params: { id: string; aceitar: boolean }) => Promise<{
     ok: boolean
     message?: string
@@ -156,6 +192,11 @@ export async function runApprovalAction(
     // O main já não tem o pedido: só resta tirá-lo da fila.
     const stale = result.code === 'DECISION_NOT_PENDING' || result.code === 'RUN_FINISHED'
     return { ok: false, message: describeProviderSwitchError(result), stale }
+  }
+
+  if (item.source === 'script') {
+    const result = await transport.decideScript({ id: item.requestId, aceitar: actionId === 'accept' })
+    return result.ok ? { ok: true } : { ok: false, message: result.message ?? 'Não foi possível decidir o pedido.' }
   }
 
   if (item.source === 'launch') {

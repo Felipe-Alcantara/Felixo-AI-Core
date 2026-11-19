@@ -132,11 +132,36 @@ function redigirDom(dom, redact = redactSensitiveText) {
 }
 
 /**
- * @param {{ guest: any, tipo: 'captura' | 'dom' | 'logs', pastaCapturas: string, idDoPedido: string, redact?: Function }} params
+ * @param {{ guest: any, tipo: 'captura' | 'dom' | 'logs' | 'estrutura', pastaCapturas: string, idDoPedido: string, redact?: Function }} params
  * @returns {Promise<object>} resultado para o pedido (`ok: true` ou `ok: false` com `message`)
  */
-async function inspecionarPagina({ guest, tipo, pastaCapturas, idDoPedido, redact }) {
+async function inspecionarPagina({ guest, tipo, pastaCapturas, idDoPedido, redact, seletor, profundidade }) {
   const url = enderecoSemSegredo(guest.getURL?.())
+  if (tipo === 'estrutura') {
+    // Carregado aqui para não fechar um ciclo: a estrutura usa `enderecoSemSegredo` deste módulo.
+    const estrutura = require('./agent-webpage-structure.cjs')
+    const limites = { nos: estrutura.NOS_MAX, profundidade: profundidade ?? estrutura.PROFUNDIDADE_PADRAO, seletor: seletor ?? '' }
+    if (limites.seletor && !estrutura.seletorValido(limites.seletor)) return { ok: false, message: 'Seletor inválido.' }
+    const bruto = await guest.executeJavaScriptInIsolatedWorld(MUNDO_ISOLADO, [{ code: estrutura.CODIGO_ESTRUTURA(limites) }])
+    if (bruto?.erro) return { ok: false, message: bruto.erro }
+    const dom = estrutura.redigirEstrutura(bruto, redact)
+    fs.mkdirSync(pastaCapturas, { recursive: true })
+    const arquivo = path.join(pastaCapturas, `${idDoPedido}-dom.json`)
+    fs.writeFileSync(arquivo, JSON.stringify(dom, null, 1))
+    return {
+      ok: true,
+      tipo,
+      url,
+      arquivo,
+      titulo: dom.titulo,
+      idioma: dom.idioma,
+      viewport: dom.viewport,
+      total: dom.nos.length,
+      truncado: dom.truncado,
+      recursos: { estilos: dom.recursos.estilos.length, scripts: dom.recursos.scripts.length, iframes: dom.recursos.iframes.length },
+      arvore: estrutura.resumoEmArvore(dom.nos),
+    }
+  }
   if (tipo === 'logs') return { ok: true, tipo, url, ...lerLogs(guest, redact) }
   if (tipo === 'captura') {
     const imagem = await guest.capturePage()

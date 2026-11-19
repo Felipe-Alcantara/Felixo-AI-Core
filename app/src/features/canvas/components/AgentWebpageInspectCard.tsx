@@ -81,7 +81,11 @@ export function AgentWebpageInspectCard() {
   // Lido a cada render do cartão: o endereço de agora, não o de quando o bloco abriu.
   const guest = findWebpageGuest(request.idDoElemento)
   const what =
-    request.tipo === 'captura' ? 'tirar uma captura de tela de' : request.tipo === 'logs' ? 'ler as mensagens do console e as navegações de' : 'ler o conteúdo de'
+    request.tipo === 'captura' ? 'tirar uma captura de tela de' : request.tipo === 'logs'
+      ? 'ler as mensagens do console e as navegações de'
+      : request.tipo === 'estrutura'
+        ? 'ler a estrutura completa (todos os elementos) de'
+        : 'ler o conteúdo de'
   const disabled = busy || armedId !== request.id
   const shownError = error?.requestId === request.id ? error.message : null
 
@@ -133,9 +137,11 @@ export function AgentWebpageInspectCard() {
         <p className="mt-1.5 text-[11px] text-(--f-core-secondary)">
           {request.tipo === 'captura'
             ? 'O agente recebe uma imagem do que está na tela, inclusive o que estiver logado nesse perfil.'
-            : request.tipo === 'logs'
-              ? 'O agente recebe as últimas mensagens do console, as navegações e as falhas de carga da página, com segredos redigidos. Não recebe rede, cookies nem senhas.'
-              : 'O agente recebe o texto visível e a lista de botões e links. Não recebe cookies, senhas nem valores digitados.'}
+            : request.tipo === 'estrutura'
+              ? 'O agente recebe a árvore de todos os elementos (tags, classes, atributos, textos, posições e estilos) e a lista de scripts e folhas de estilo. Não recebe valores de campos, cookies nem o código dos scripts.'
+              : request.tipo === 'logs'
+                ? 'O agente recebe as últimas mensagens do console, as requisições de rede (sem corpo nem cabeçalhos), as navegações e as falhas de carga, com segredos redigidos. Não recebe cookies nem senhas.'
+                : 'O agente recebe o texto visível e a lista de botões e links. Não recebe cookies, senhas nem valores digitados.'}
           {' Ele não clica nem digita. Vale só para este pedido.'}
         </p>
 

@@ -134,7 +134,9 @@ const {
 const {
   registerAgentLaunchIpcHandlers,
 } = require('./services/agent-launch-ipc-handlers.cjs')
-const { observarPagina: observarPaginaWeb } = require('./services/agent-webpage-log.cjs')
+const { anotarScript, observarPagina: observarPaginaWeb } = require('./services/agent-webpage-log.cjs')
+const { observarScripts } = require('./services/agent-userscripts.cjs')
+const { registerAgentScriptIpcHandlers } = require('./services/agent-script-ipc-handlers.cjs')
 const {
   instalarComandoDoAgente: installAgentCommand,
 } = require('./services/agent-command-install.cjs')
@@ -269,6 +271,7 @@ let agentCanvasReadWatching = null
 let agentCanvasWriteWatching = null
 let agentQuestionWatching = null
 let agentLaunchWatching = null
+let agentScriptWatching = null
 let stopAccountChainSweeper = null
 
 const SUPPORTED_EXTENSIONS = new Set(['.fxai', '.fxchat', '.fxworkflow'])
@@ -457,7 +460,11 @@ function resolveRuntimeAppVersion() {
 
 // Cada bloco Página Web (webview) ganha o registro de console e navegação que o agente lê, com permissão, por `felixo browser logs`.
 app.on('web-contents-created', (_event, contents) => {
-  if (contents.getType() === 'webview') observarPaginaWeb(contents)
+  if (contents.getType() === 'webview') {
+    observarPaginaWeb(contents)
+    // "Tampermonkey nativo": os scripts que a pessoa aprovou rodam em toda página que casa com o @match.
+    observarScripts(contents, anotarScript)
+  }
 })
 
 app.whenReady().then(async () => {
@@ -1178,6 +1185,7 @@ app.whenReady().then(async () => {
   })
   agentQuestionWatching = registerAgentQuestionIpcHandlers({ getMainWindow, appPaths })
   agentLaunchWatching = registerAgentLaunchIpcHandlers({ getMainWindow, appPaths, database: storageDatabase })
+  agentScriptWatching = registerAgentScriptIpcHandlers({ getMainWindow, appPaths })
   registerAutoUpdateHandlers(getMainWindow)
   cliAutoInstall = registerCliAutoInstallHandlers(getMainWindow, {
     appPaths,
@@ -1412,6 +1420,15 @@ app.on('before-quit', () => {
       // Best effort during app shutdown.
     }
     agentLaunchWatching = null
+  }
+
+  if (agentScriptWatching) {
+    try {
+      agentScriptWatching.pararDeObservarPedidos()
+    } catch {
+      // Best effort during app shutdown.
+    }
+    agentScriptWatching = null
   }
 
   if (agentUsageWatching) {

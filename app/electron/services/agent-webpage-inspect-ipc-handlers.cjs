@@ -102,7 +102,7 @@ function registerAgentWebpageInspectIpcHandlers({ getMainWindow, appPaths, depen
 
     let resultado
     try {
-      resultado = await inspecionar({ guest, tipo: pedido.tipo, pastaCapturas, idDoPedido: pedido.id })
+      resultado = await inspecionar({ guest, tipo: pedido.tipo, pastaCapturas, idDoPedido: pedido.id, seletor: pedido.seletor, profundidade: pedido.profundidade })
     } catch (error) {
       return { ok: false, message: error instanceof Error && error.message ? error.message : 'Não foi possível olhar a página.' }
     }

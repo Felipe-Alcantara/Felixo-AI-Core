@@ -1462,7 +1462,7 @@ fica na barra, para um Backspace apagar texto e não o bloco selecionado
 
 #### Pedido de agente para olhar uma Página Web (captura e DOM)
 
-`felixo browser capture|read|logs <id-do-bloco>` (`logs` = `agent-webpage-log.cjs`: console, navegacao e falha de carga por webview, em memoria, ultimas 200, redigidas; rede por `webContents.debugger` (Network do CDP, sem porta; o `webRequest` da sessao e ouvinte unico); `scroll` e `key` sao acoes `pagina-agir` na mesma sessao curta, com lista fechada de teclas e confirmacao de Enter em campo sensivel) registra `pagina-inspecionar`
+`felixo browser capture|read|logs|dom <id-do-bloco>` (`dom` = `agent-webpage-structure.cjs`: ate 2000 nos com atributos, classes, estilos e retangulos, JSON em arquivo e arvore resumida; campo sensivel marcado sem nome) (`logs` = `agent-webpage-log.cjs`: console, navegacao e falha de carga por webview, em memoria, ultimas 200, redigidas; rede por `webContents.debugger` (Network do CDP, sem porta; o `webRequest` da sessao e ouvinte unico); `scroll` e `key` sao acoes `pagina-agir` na mesma sessao curta, com lista fechada de teclas e confirmacao de Enter em campo sensivel) registra `pagina-inspecionar`
 (`tipo` = `captura` ou `dom`, lista fechada em `normalizarPedido`) e bloqueia
 até a pessoa decidir. Nada olha a página sem o clique em **Permitir** no
 `AgentWebpageInspectCard`, uma permissão por pedido.
@@ -2501,3 +2501,17 @@ para espalhar na moldura; um objeto com `ref` nomeado disparava `react-hooks/ref
 `classicScreen` (booleano) e `PtyProcessManager` o traduz em
 `CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1` só para o executável `claude` (`isClaudeCommandName`).
 O renderer não escolhe nome nem valor de variável de ambiente.
+
+## Scripts de usuario nas paginas (Tampermonkey nativo)
+
+O Tampermonkey de loja depende da API `userScripts` do Chrome (MV3), que o Electron nao tem; por isso o app
+tem o proprio gerenciador, `agent-userscripts.cjs`: `@match` ao estilo do Tampermonkey (`compilarPadrao`,
+`casaUrl`; so http e https), armazenamento em `userscripts.json` na pasta de configuracao (ate 50 scripts,
+100 mil caracteres) e injecao em cada webview no `dom-ready` (`web-contents-created` no `main.cjs`), no
+mundo da pagina (`executeJavaScript`) ou no isolado 1158. O agente propoe (`felixo browser script add`, acao
+`pagina-script`, `operacao: registrar`); `agent-script-ipc-handlers.cjs` guarda o pedido pendente e a fonte
+`script` da fila de aprovacoes mostra codigo, mundo e alcance; so o aceite grava e roda (tambem nas paginas ja
+abertas que casam). O codigo instalado e o do pedido gravado, nunca o que o renderer manda. `remover`,
+`ativar` e `desativar` so reduzem o que roda e o app atende sozinho. O nome do script entra no codigo
+injetado apenas como literal JSON. Limites: sem `GM_xmlhttpRequest`/`GM_getValue`/`@require`, sem tela de
+gerenciamento (so CLI), `document-start` nao existe (roda no `dom-ready`).

@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { ApprovalPanelView } from '../components/ApprovalPanel'
 import { applyProviderSwitchEvent } from '../../chat/services/provider-switch'
 import type { ProviderSwitchRequest } from '../../chat/types'
-import type { CanvasAgentLaunchRequest, CanvasAgentQuestion } from '../types'
+import type { CanvasAgentLaunchRequest, CanvasAgentQuestion, CanvasAgentScriptRequest } from '../types'
 import { buildApprovalQueue, runApprovalAction, type ApprovalTransport } from './approval-queue'
 
 function decision(overrides: Partial<ProviderSwitchRequest>): ProviderSwitchRequest {
@@ -46,7 +46,24 @@ const transport = (): ApprovalTransport => ({
   respondDecision: vi.fn().mockResolvedValue({ ok: true }),
   answerQuestion: vi.fn().mockResolvedValue({ ok: true }),
   decideLaunch: vi.fn().mockResolvedValue({ ok: true, abrir: [] }),
+  decideScript: vi.fn().mockResolvedValue({ ok: true }),
 })
+
+function script(overrides: Partial<CanvasAgentScriptRequest> = {}): CanvasAgentScriptRequest {
+  return {
+    id: 's1',
+    acao: 'pagina-script',
+    operacao: 'registrar',
+    nome: 'Esconder banner',
+    match: ['https://*.exemplo.com/*'],
+    mundo: 'pagina',
+    codigo: "GM_addStyle('.banner{display:none}')\ndocument.title = 'x'",
+    estado: 'pendente',
+    pedidoEm: '2026-11-18T14:20:00.000Z',
+    origem: 'P:/projeto',
+    ...overrides,
+  }
+}
 
 function launch(overrides: Partial<CanvasAgentLaunchRequest> = {}): CanvasAgentLaunchRequest {
   return {
@@ -189,5 +206,44 @@ describe('fila de aprovações pendentes', () => {
 
     vi.mocked(t.decideLaunch).mockResolvedValue({ ok: false, message: 'Esse pedido não está mais pendente.' })
     expect(await runApprovalAction(pedido, 'accept', t)).toMatchObject({ ok: false, message: 'Esse pedido não está mais pendente.' })
+  })
+
+  it('script proposto entra na fila com o alcance, o mundo e o código para a pessoa ler', () => {
+    const [pedido] = buildApprovalQueue({ scripts: [script(), script({ id: 's0', estado: 'aceito' })] })
+
+    expect(pedido.key).toBe('script:s1')
+    expect(pedido.title).toContain('Esconder banner')
+    expect(pedido.details[0]).toBe('Roda em: https://*.exemplo.com/*')
+    expect(pedido.details[1]).toContain('DENTRO da página')
+    expect(pedido.details).toContain("GM_addStyle('.banner{display:none}')")
+    expect(pedido.actions.map((acao) => acao.label)).toEqual(['Instalar o script', 'Recusar'])
+  })
+
+  it('o alcance de todas as páginas é dito com todas as letras, o mundo isolado também', () => {
+    const [pedido] = buildApprovalQueue({ scripts: [script({ match: ['*://*/*'], mundo: 'isolado' })] })
+
+    expect(pedido.details[0]).toBe('Roda em: TODAS as páginas web')
+    expect(pedido.details[1]).toContain('isolado da página')
+  })
+
+  it('código longo é cortado na tela com o aviso de quantas linhas ficaram de fora', () => {
+    const codigo = Array.from({ length: 40 }, (_, i) => `linha${i}`).join('\n')
+    const [pedido] = buildApprovalQueue({ scripts: [script({ codigo })] })
+
+    expect(pedido.details).toContain('Código (40 linha(s)):')
+    expect(pedido.details.at(-1)).toBe('… mais 16 linha(s)')
+  })
+
+  it('aceitar ou recusar o script chama o IPC com o id e a escolha', async () => {
+    const t = transport()
+    const [pedido] = buildApprovalQueue({ scripts: [script()] })
+
+    expect(await runApprovalAction(pedido, 'accept', t)).toEqual({ ok: true })
+    expect(t.decideScript).toHaveBeenLastCalledWith({ id: 's1', aceitar: true })
+    await runApprovalAction(pedido, 'refuse', t)
+    expect(t.decideScript).toHaveBeenLastCalledWith({ id: 's1', aceitar: false })
+
+    vi.mocked(t.decideScript).mockResolvedValue({ ok: false, message: 'Limite de 50 scripts instalados: remova algum antes.' })
+    expect(await runApprovalAction(pedido, 'accept', t)).toEqual({ ok: false, message: 'Limite de 50 scripts instalados: remova algum antes.' })
   })
 })

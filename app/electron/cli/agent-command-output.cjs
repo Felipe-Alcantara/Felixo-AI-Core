@@ -189,6 +189,18 @@ const AJUDA = `felixo fetch-all — varre os repositórios git da máquina e rep
   felixo browser capture <id-do-bloco> [--json]
   felixo browser read <id-do-bloco> [--json]
   felixo browser logs <id-do-bloco> [--json]
+  felixo browser script add "<nome>" --match=<padrão>[,<padrão>] --arquivo=<script.js> [--mundo=pagina|isolado]
+  felixo browser script list [--json]
+  felixo browser script remove|enable|disable <id-do-script>
+      "Tampermonkey nativo": scripts de usuário que o app injeta em TODA página aberta num
+      bloco Página Web cujo endereço case com o --match (esquema://host/caminho, * curinga;
+      ex.: "https://*.exemplo.com/*"), quando o DOM fica pronto. Escreva o script num arquivo
+      e passe com --arquivo. "add" NUNCA instala sozinho: a pessoa lê o código e o alcance
+      no painel de aprovações e aceita (acompanhe com "felixo browser status <id>"). O
+      script roda dentro da página, com a sessão que ela tiver; --mundo=isolado limita a
+      mexer no que se vê. Disponíveis: GM_addStyle(css) e GM_log(...). Erros e execuções
+      aparecem em "felixo browser logs". remove/enable/disable o app atende sozinho.
+  felixo browser dom <id-do-bloco> [--seletor=<css>] [--profundidade=N] [--json]
       Olham um bloco Página Web (o id vem de "felixo canvas listar"): capture
       salva um PNG da página e diz o caminho, o tamanho e o devicePixelRatio;
       read lista os elementos interativos (papel, nome e retângulo em pixels
@@ -198,6 +210,11 @@ const AJUDA = `felixo fetch-all — varre os repositórios git da máquina e rep
       não digitam, não leem cookies, senhas nem valores de campos, e tokens
       saem redigidos. Código 3 = recusado (se foi a pessoa, não repita sem ela
       pedir); código 1 = ninguém respondeu a tempo.
+      dom devolve a estrutura COMPLETA da página para estudar o front: até 2000 elementos
+      com tag, id, classes, atributos, texto próprio, retângulo e estilos calculados, mais
+      folhas de estilo, scripts e iframes. Salva o JSON inteiro em arquivo e imprime a
+      árvore resumida; --seletor foca num trecho e --profundidade (1 a 40) limita a descida.
+      Não lê valor de campo, conteúdo de script nem atributos de campo de senha ou pagamento.
       logs devolve as últimas 200 entradas de console, navegação e falha de carga
       do bloco (segredos redigidos; sem rede, cookies nem senhas). Passo a passo:
       skill "Controlar uma página web do canvas".

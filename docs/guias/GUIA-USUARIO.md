@@ -1079,6 +1079,22 @@ nem senhas). `felixo browser scroll <id> <dy>` rola a página e `felixo browser 
 Tab, Escape, Backspace, setas, PageUp/PageDown, Home ou End, dentro da mesma sessão curta de 5 minutos;
 Enter com o foco num campo de senha ou pagamento pede a sua confirmação.
 
+**Estrutura completa da página.** `felixo browser dom <id-do-bloco>` devolve todos os elementos da página
+(tag, classes, atributos, texto, posição e estilos calculados, mais folhas de estilo e scripts) para o agente
+estudar o front; guarda o JSON num arquivo e passa pelo mesmo cartão de permissão do `read`. Não traz valores
+de campos, o código dos scripts da página nem atributos de campos de senha ou pagamento.
+
+**Scripts de usuário nas páginas (Tampermonkey nativo).** O Tampermonkey de loja não roda dentro do app
+(depende de uma API do Chrome que o Electron não tem), então o app tem o seu próprio gerenciador: todo bloco
+Página Web recebe, quando o DOM fica pronto, os scripts instalados cujo `@match` case com o endereço. Um
+agente propõe com `felixo browser script add "<nome>" --match=<padrão> --arquivo=<script.js>`; o pedido
+aparece no painel de aprovações com o **código completo, o alcance e o mundo** (da página ou isolado), e só
+instala se você aceitar. Fica instalado até ser removido (`felixo browser script list|remove|enable|disable`),
+inclusive depois de reiniciar o app, e roda com a sessão que a página tiver, por isso o cartão diz "TODAS as
+páginas web" quando o alcance é total. Dentro do script há `GM_addStyle` e `GM_log`; erros aparecem em
+`felixo browser logs`. Limites: 50 scripts e 100 mil caracteres cada; sem `GM_xmlhttpRequest`, `GM_getValue`
+nem `@require`; não há ainda tela para gerenciar scripts além da CLI.
+
 O cartão cobre o pedido feito pelo app. Um agente que roda comandos no terminal continua podendo abrir o navegador por conta própria, com os comandos do sistema, como qualquer programa que você roda.
 
 ### Colar imagens em um agente

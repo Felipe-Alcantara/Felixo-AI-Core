@@ -318,6 +318,14 @@ contextBridge.exposeInMainWorld('felixo', {
     decideAgentLaunch: (params) => ipcRenderer.invoke('canvas:decide-agent-launch', params),
     // Lote escrito pela própria pessoa no painel Orquestrador: o main só aplica os tetos à quantidade.
     planAgentLaunch: (params) => ipcRenderer.invoke('canvas:plan-agent-launch', params),
+    // Scripts de usuário (Tampermonkey nativo) que um agente propõe: esperam a pessoa ler o código e aceitar.
+    listAgentScripts: () => ipcRenderer.invoke('canvas:list-agent-scripts'),
+    decideAgentScript: (params) => ipcRenderer.invoke('canvas:decide-agent-script', params),
+    onAgentScripts: (callback) => {
+      const handler = (_event, data) => callback(data)
+      ipcRenderer.on('canvas:agent-scripts', handler)
+      return () => ipcRenderer.removeListener('canvas:agent-scripts', handler)
+    },
     onAgentLaunches: (callback) => {
       const handler = (_event, data) => callback(data)
       ipcRenderer.on('canvas:agent-launches', handler)

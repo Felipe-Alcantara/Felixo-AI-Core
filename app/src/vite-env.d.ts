@@ -37,6 +37,7 @@ import type {
   CanvasAgentWebpageInspectRequest,
   CanvasAgentQuestion,
   CanvasAgentLaunchRequest,
+  CanvasAgentScriptRequest,
   CanvasAgentLaunchTask,
   CanvasImageArtifact,
   CanvasNodeData,
@@ -913,7 +914,7 @@ declare global {
           id: string
           aprovar: boolean
           idDoElemento: string
-          tipo: 'captura' | 'dom' | 'logs'
+          tipo: 'captura' | 'dom' | 'logs' | 'estrutura'
           webContentsId?: number
         }) => Promise<CliInvokeResult & { resolved?: { estado: string } | null }>
         onWebpageInspectRequests: (
@@ -980,6 +981,9 @@ declare global {
             recusadas?: { titulo: string; motivo: string }[]
           }
         >
+        listAgentScripts: () => Promise<CliInvokeResult & { requests?: CanvasAgentScriptRequest[] }>
+        decideAgentScript: (params: { id: string; aceitar: boolean }) => Promise<CliInvokeResult & { resolved?: CanvasAgentScriptRequest | null }>
+        onAgentScripts: (callback: (data: { requests: CanvasAgentScriptRequest[] }) => void) => () => void
         planAgentLaunch: (params: {
           count: number
         }) => Promise<CliInvokeResult & { abrir?: number }>

@@ -40,6 +40,11 @@ function anotar(wc, entrada) {
   if (registro.entradas.length > LIMITE) registro.entradas.shift()
 }
 
+/** Anota que um script de usuário rodou (ou falhou ao injetar) nesta página; aparece em `browser logs`. */
+function anotarScript(wc, script, erro) {
+  anotar(wc, erro ? { tipo: 'script', nivel: 'error', texto: `script "${script.nome}" não rodou: ${erro instanceof Error ? erro.message : String(erro)}` } : { tipo: 'script', nivel: 'info', texto: `script "${script.nome}" rodou` })
+}
+
 /** Liga os ouvintes num webContents de bloco Página Web (chamado uma vez, na criação). */
 function observarPagina(wc) {
   if (!wc || typeof wc.on !== 'function' || registros.has(wc)) return
@@ -106,4 +111,4 @@ function lerLogs(wc, redact) {
   return { entradas: redigirLogs(registro.entradas, redact), total: registro.total, limite: LIMITE }
 }
 
-module.exports = { LIMITE, lerLogs, observarPagina, redigirLogs }
+module.exports = { LIMITE, anotarScript, lerLogs, observarPagina, redigirLogs }

@@ -18,6 +18,7 @@
  */
 
 const fs = require('node:fs')
+const { normalizarScript } = require('../agent-userscripts.cjs')
 const path = require('node:path')
 
 const { EXTERNAL_WEB_SCHEMES, classifyExternalUrl } = require('../external-url-policy.cjs')
@@ -33,6 +34,7 @@ const ACOES_ACEITAS = [
   'pagina-inspecionar',
   'pagina-agir',
   'abrir-agentes',
+  'pagina-script',
 ]
 
 /** Limites de um lote de agentes pedido por um coordenador (`felixo canvas abrir-agentes`). */
@@ -56,7 +58,7 @@ const CONTEUDO_ESCRITA_MAX = 20000
 const MODOS_ABERTURA_PAGINA = ['externo', 'embutido']
 
 /** O que um agente pode pedir de um bloco Página Web: só olhar, nunca agir. */
-const TIPOS_INSPECAO_PAGINA = ['captura', 'dom', 'logs']
+const TIPOS_INSPECAO_PAGINA = ['captura', 'dom', 'logs', 'estrutura']
 const ID_ELEMENTO_MAX = 200
 
 /** O que um agente pode fazer num bloco Página Web depois da sessão curta: clicar e digitar. */
@@ -143,6 +145,18 @@ function normalizarPedido(acao, opcoes = {}) {
     }
     if (!TIPOS_INSPECAO_PAGINA.includes(tipo)) {
       throw new Error(`Tipo de inspeção não reconhecido: "${tipo}". Aceitos: ${TIPOS_INSPECAO_PAGINA.join(', ')}.`)
+    }
+    if (tipo === 'estrutura') {
+      const seletor = typeof opcoes?.seletor === 'string' ? opcoes.seletor.trim() : ''
+      if (seletor && (seletor.length > 200 || /[\u0000-\u001f]/.test(seletor))) {
+        throw new Error('Seletor inválido (até 200 caracteres, sem caractere de controle).')
+      }
+      const bruta = opcoes?.profundidade
+      const profundidade = bruta === undefined || bruta === true || bruta === '' ? undefined : Number(bruta)
+      if (profundidade !== undefined && !(Number.isInteger(profundidade) && profundidade >= 1 && profundidade <= 40)) {
+        throw new Error('Profundidade inválida (inteiro de 1 a 40).')
+      }
+      return { acao: nome, comCommit: false, idDoElemento, tipo, ...(seletor ? { seletor } : {}), ...(profundidade ? { profundidade } : {}) }
     }
     return { acao: nome, comCommit: false, idDoElemento, tipo }
   }
@@ -259,6 +273,21 @@ function normalizarPedido(acao, opcoes = {}) {
       throw new Error(`Informe de ${OPCOES_MIN} a ${OPCOES_MAX} opções.`)
     }
     return { acao: nome, comCommit: false, pergunta, opcoes: lista }
+  }
+
+  // Script de usuário (Tampermonkey nativo). `registrar` fica pendente até a pessoa ler o código e
+  // aceitar; `remover`, `ativar` e `desativar` só reduzem o que roda e o app atende sozinho.
+  if (nome === 'pagina-script') {
+    const operacao = typeof opcoes?.operacao === 'string' ? opcoes.operacao.trim() : ''
+    if (!['registrar', 'remover', 'ativar', 'desativar'].includes(operacao)) {
+      throw new Error(`Operação de script não reconhecida: "${operacao}". Aceitas: registrar, remover, ativar, desativar.`)
+    }
+    if (operacao === 'registrar') {
+      return { acao: nome, comCommit: false, operacao, ...normalizarScript(opcoes) }
+    }
+    const scriptId = typeof opcoes?.scriptId === 'string' ? opcoes.scriptId.trim() : ''
+    if (!/^us-[a-z0-9]{1,16}$/.test(scriptId)) throw new Error('Informe o id do script (veja "felixo browser script list").')
+    return { acao: nome, comCommit: false, operacao, scriptId }
   }
 
   // Lote de agentes: o coordenador só propõe as tasks. Quem abre os terminais

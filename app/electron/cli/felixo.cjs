@@ -20,7 +20,10 @@
  * está no caminho que o agente alcança.
  */
 
+const nodeFs = require('node:fs')
+const nodePath = require('node:path')
 const { getAppPaths } = require('../core/app-paths.cjs')
+const { CODIGO_MAX } = require('../services/agent-userscripts.cjs')
 const { createFetchAllService } = require('../services/fetch-all-service.cjs')
 const {
   VALIDADE_MS,
@@ -114,6 +117,7 @@ const VERBOS_BROWSER_STATUS = ['status', 'ver-pedido']
 const VERBOS_BROWSER_CAPTURA = ['capture', 'captura', 'capturar']
 const VERBOS_BROWSER_DOM = ['read', 'ler']
 const VERBOS_BROWSER_LOGS = ['logs', 'log']
+const VERBOS_BROWSER_ESTRUTURA = ['dom', 'estrutura']
 // Agir num bloco Página Web: só dentro de uma sessão curta que a pessoa abre no app.
 const VERBOS_BROWSER_CLICAR = ['click', 'clicar']
 const VERBOS_BROWSER_DIGITAR = ['type', 'digitar']
@@ -221,7 +225,7 @@ async function executar(argumentos, dependencias = {}) {
       }
     }
 
-    const tipoDeInspecao = VERBOS_BROWSER_CAPTURA.includes(verbo) ? 'captura' : VERBOS_BROWSER_DOM.includes(verbo) ? 'dom' : VERBOS_BROWSER_LOGS.includes(verbo) ? 'logs' : null
+    const tipoDeInspecao = VERBOS_BROWSER_CAPTURA.includes(verbo) ? 'captura' : VERBOS_BROWSER_DOM.includes(verbo) ? 'dom' : VERBOS_BROWSER_LOGS.includes(verbo) ? 'logs' : VERBOS_BROWSER_ESTRUTURA.includes(verbo) ? 'estrutura' : null
     const tipoDeAcao = VERBOS_BROWSER_CLICAR.includes(verbo) ? 'clicar' : VERBOS_BROWSER_DIGITAR.includes(verbo) ? 'digitar' : VERBOS_BROWSER_ROLAR.includes(verbo) ? 'rolar' : VERBOS_BROWSER_TECLA.includes(verbo) ? 'tecla' : null
     if (tipoDeInspecao || tipoDeAcao) {
       const { esperar = esperarPadrao, esperaMaximaMs = PERGUNTAR_ESPERA_MAXIMA_MS } = dependencias
@@ -246,6 +250,7 @@ async function executar(argumentos, dependencias = {}) {
           : criarPedidos().registrar('pagina-inspecionar', {
               idDoElemento: argumento,
               tipo: tipoDeInspecao,
+              ...(tipoDeInspecao === 'estrutura' ? { seletor: opcoes.seletor === true ? '' : opcoes.seletor, profundidade: opcoes.profundidade } : {}),
               origem: diretorioAtual(),
             })
       } catch (error) {
@@ -281,6 +286,64 @@ async function executar(argumentos, dependencias = {}) {
             ? formatarAcaoNaPagina(resolvido.resultado)
             : formatarInspecaoDePagina(resolvido.resultado),
         codigo: 0,
+      }
+    }
+
+    // Tampermonkey nativo: o agente propõe, a pessoa aceita no painel de aprovações. `list` só lê o
+    // arquivo que o app mantém; remove/enable/disable o app atende sozinho (só reduzem o que roda).
+    if (verbo === 'script') {
+      const sub = argumento
+      if (sub === 'list') {
+        let scripts = []
+        try {
+          scripts = JSON.parse(nodeFs.readFileSync(nodePath.join(getAppPaths().config, 'userscripts.json'), 'utf8')).scripts ?? []
+        } catch {
+          scripts = []
+        }
+        if (opcoes.json === true) return { saida: JSON.stringify({ scripts }, null, 2), codigo: 0 }
+        if (scripts.length === 0) return { saida: 'Nenhum script instalado.', codigo: 0 }
+        return {
+          saida: scripts
+            .map((s) => `${s.id}  ${s.ativo ? 'ativo  ' : 'inativo'}  ${s.mundo}  ${s.nome}  @match ${s.match.join(', ')}`)
+            .join('\n'),
+          codigo: 0,
+        }
+      }
+      try {
+        let dados
+        if (sub === 'add') {
+          if (!argumento2) return { saida: '', erro: 'Informe o nome: felixo browser script add "<nome>" --match=<padrão> --arquivo=<script.js> [--mundo=pagina|isolado]', codigo: 2 }
+          if (typeof opcoes.match !== 'string' || typeof opcoes.arquivo !== 'string') {
+            return { saida: '', erro: 'Informe --match=<padrão>[,<padrão>] e --arquivo=<script.js> (ex.: --match="https://*.exemplo.com/*").', codigo: 2 }
+          }
+          let codigo
+          try {
+            const estatistica = nodeFs.statSync(opcoes.arquivo)
+            if (estatistica.size > CODIGO_MAX * 4) return { saida: '', erro: `Arquivo grande demais (máximo ${CODIGO_MAX} caracteres).`, codigo: 2 }
+            codigo = nodeFs.readFileSync(opcoes.arquivo, 'utf8')
+          } catch {
+            return { saida: '', erro: `Não consegui ler o arquivo: ${opcoes.arquivo}`, codigo: 2 }
+          }
+          dados = { operacao: 'registrar', nome: argumento2, match: opcoes.match.split(',').map((m) => m.trim()).filter(Boolean), codigo, ...(typeof opcoes.mundo === 'string' ? { mundo: opcoes.mundo } : {}) }
+        } else if (['remove', 'enable', 'disable'].includes(sub)) {
+          dados = { operacao: { remove: 'remover', enable: 'ativar', disable: 'desativar' }[sub], scriptId: argumento2 }
+        } else {
+          return { saida: '', erro: 'Use: felixo browser script add|list|remove|enable|disable (veja a ajuda).', codigo: 2 }
+        }
+        const pedido = criarPedidos().registrar('pagina-script', { ...dados, origem: diretorioAtual() })
+        if (opcoes.json === true) return { saida: JSON.stringify({ ok: true, pedido: { id: pedido.id, operacao: pedido.operacao } }, null, 2), codigo: 0 }
+        return {
+          saida: [
+            `Pedido registrado: ${pedido.id}`,
+            pedido.operacao === 'registrar'
+              ? 'Nada foi instalado: a pessoa lê o código e aceita no painel de aprovações do canvas.'
+              : 'O app atende esta operação sozinho.',
+            `Para acompanhar: felixo browser status ${pedido.id}`,
+          ].join('\n'),
+          codigo: 0,
+        }
+      } catch (error) {
+        return { saida: '', erro: error instanceof Error ? error.message : 'Não foi possível registrar o pedido.', codigo: 2 }
       }
     }
 
@@ -657,6 +720,17 @@ function formatarAcaoNaPagina(resultado) {
 }
 
 function formatarInspecaoDePagina(resultado) {
+  if (resultado.tipo === 'estrutura') {
+    return [
+      `Página: ${resultado.url}`,
+      `Título: ${resultado.titulo}${resultado.idioma ? ` (${resultado.idioma})` : ''}`,
+      `Elementos: ${resultado.total}${resultado.truncado ? ' (cortado no limite; use --seletor ou --profundidade para focar)' : ''} · folhas de estilo ${resultado.recursos.estilos}, scripts ${resultado.recursos.scripts}, iframes ${resultado.recursos.iframes}`,
+      `Arquivo completo (JSON: atributos, classes, estilos, retângulos, recursos): ${resultado.arquivo}`,
+      '',
+      `Árvore (primeiras ${resultado.arvore.length} linhas; tag#id.classes "texto" x,y largura×altura):`,
+      ...resultado.arvore,
+    ].join('\n')
+  }
   if (resultado.tipo === 'logs') {
     return [
       `Página: ${resultado.url}`,
@@ -726,6 +800,16 @@ async function lerEstadoPadrao() {
  * @returns {string}
  */
 function descreverPedido(pedido, agora = Date.now()) {
+  if (pedido.acao === 'pagina-script') {
+    const resultado = pedido.resultado ?? {}
+    const desfecho =
+      pedido.estado === 'pendente'
+        ? pedido.operacao === 'registrar' ? 'esperando a pessoa ler o código e aceitar no painel de aprovações' : 'esperando o app'
+        : pedido.estado === 'aceito'
+          ? pedido.operacao === 'registrar' ? `instalado (id ${resultado.scriptId}; rodou em ${resultado.aplicadoEmPaginasAbertas ?? 0} página(s) já abertas)` : 'feito'
+          : resultado.recusadoPor === 'pessoa' ? 'recusado pela pessoa — não repita sem ela pedir' : `recusado: ${resultado.message ?? 'sem motivo'}`
+    return [`Pedido ${pedido.id}`, '  ação: pagina-script', `  operação: ${pedido.operacao}${pedido.nome ? ` "${pedido.nome}"` : ''}`, `  estado: ${pedido.estado} (${desfecho})`].join('\n')
+  }
   if (pedido.acao === 'abrir-agentes') return descreverPedidoDeAgentes(pedido, agora)
   const pagina = pedido.acao === 'abrir-pagina'
   const estados = pagina

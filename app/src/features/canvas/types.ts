@@ -570,6 +570,24 @@ export type CanvasAgentQuestion = {
   resolvidoEm?: string
 }
 
+/**
+ * Script de usuário (Tampermonkey nativo) que um agente propõe instalar
+ * (`felixo browser script add`), à espera da pessoa: ela lê o código e o
+ * alcance antes de aceitar.
+ */
+export type CanvasAgentScriptRequest = {
+  id: string
+  acao: 'pagina-script'
+  operacao: 'registrar'
+  nome: string
+  match: string[]
+  mundo: 'pagina' | 'isolado'
+  codigo: string
+  estado: 'pendente' | 'aceito' | 'recusado'
+  pedidoEm: string
+  origem: string
+}
+
 /** Uma task que um coordenador pede para abrir como agente. */
 export type CanvasAgentLaunchTask = { titulo: string; contexto?: string }
 
@@ -612,7 +630,7 @@ export type CanvasAgentBrowserRequest = {
 export type CanvasAgentWebpageInspectRequest = {
   id: string
   idDoElemento: string
-  tipo: 'captura' | 'dom' | 'logs'
+  tipo: 'captura' | 'dom' | 'logs' | 'estrutura'
   origem: string
   pedidoEm: string
 }
