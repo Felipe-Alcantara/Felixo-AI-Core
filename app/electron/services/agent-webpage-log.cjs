@@ -8,8 +8,10 @@
  * as últimas `LIMITE` entradas: nada vai a disco e nada sai daqui sem passar
  * pela redação de `redigirLogs`.
  *
- * Não grava requisições de rede: o `webRequest` da sessão é um ouvinte único
- * que o app já usa para outras coisas, e trocá-lo mexeria nelas.
+ * Rede: método, endereço (query redigida), status e tipo, sem corpo nem
+ * cabeçalhos. Vem do `webContents.debugger` (domínio `Network` do CDP), anexado
+ * só ao webview e sem porta aberta, e não do `webRequest` da sessão, que é
+ * ouvinte único e o app já usa.
  */
 
 const { redactSensitiveText } = require('./git-secret-redaction.cjs')
@@ -48,9 +50,44 @@ function observarPagina(wc) {
     const level = typeof dados.level === 'number' ? (NIVEIS[dados.level] ?? 'info') : String(dados.level ?? 'info')
     anotar(wc, { tipo: 'console', nivel: level, texto: String(dados.message ?? ''), origem: String(dados.sourceId ?? ''), linha: dados.lineNumber })
   })
+  observarRede(wc)
   wc.on('did-navigate', (_event, url) => anotar(wc, { tipo: 'navegacao', url: String(url ?? '') }))
   wc.on('did-navigate-in-page', (_event, url) => anotar(wc, { tipo: 'navegacao', url: String(url ?? '') }))
   wc.on('did-fail-load', (_event, codigo, descricao, url) => anotar(wc, { tipo: 'erro-de-carga', codigo, texto: String(descricao ?? ''), url: String(url ?? '') }))
+}
+
+/**
+ * Requisições do bloco pelo CDP. `attach` falha se outro debugger já estiver ligado (o DevTools do
+ * próprio bloco, por exemplo): então o bloco só fica sem log de rede, o resto continua.
+ */
+function observarRede(wc) {
+  const dbg = wc.debugger
+  if (!dbg || typeof dbg.attach !== 'function') return
+  /** @type {Map<string, { metodo: string, url: string, recurso: string }>} */
+  const pendentes = new Map()
+  try {
+    dbg.attach('1.3')
+    void Promise.resolve(dbg.sendCommand('Network.enable')).catch(() => {})
+  } catch {
+    return
+  }
+  dbg.on('message', (_event, metodo, params) => {
+    if (metodo === 'Network.requestWillBeSent') {
+      pendentes.set(params.requestId, { metodo: params.request?.method ?? 'GET', url: String(params.request?.url ?? ''), recurso: String(params.type ?? '') })
+    } else if (metodo === 'Network.responseReceived') {
+      const base = pendentes.get(params.requestId)
+      if (base) {
+        pendentes.delete(params.requestId)
+        anotar(wc, { tipo: 'rede', metodo: base.metodo, url: base.url, status: params.response?.status, recurso: base.recurso })
+      }
+    } else if (metodo === 'Network.loadingFailed') {
+      const base = pendentes.get(params.requestId)
+      pendentes.delete(params.requestId)
+      // Sem a requisição de origem (cancelada antes de sair) não há o que contar.
+      if (base) anotar(wc, { tipo: 'rede', metodo: base.metodo, url: base.url, status: 0, recurso: base.recurso, texto: String(params.errorText ?? 'falhou') })
+    }
+    if (pendentes.size > LIMITE) pendentes.delete(pendentes.keys().next().value)
+  })
 }
 
 /** Redação antes de entregar: segredo em texto e em endereço, texto cortado. */

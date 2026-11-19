@@ -927,7 +927,7 @@ declare global {
           id: string
           aprovar: boolean
           idDoElemento: string
-          tipo: 'clicar' | 'digitar'
+          tipo: 'clicar' | 'digitar' | 'rolar' | 'tecla'
           webContentsId?: number
           confirmarCampo?: boolean
         }) => Promise<CliInvokeResult & { resolved?: { estado: string } | null }>

@@ -117,6 +117,8 @@ const VERBOS_BROWSER_LOGS = ['logs', 'log']
 // Agir num bloco Página Web: só dentro de uma sessão curta que a pessoa abre no app.
 const VERBOS_BROWSER_CLICAR = ['click', 'clicar']
 const VERBOS_BROWSER_DIGITAR = ['type', 'digitar']
+const VERBOS_BROWSER_ROLAR = ['scroll', 'rolar']
+const VERBOS_BROWSER_TECLA = ['key', 'tecla']
 const VERBOS_CANVAS_LISTAR = ['listar']
 const VERBOS_CANVAS_LER = ['ler']
 const FERRAMENTAS_PERGUNTAR = ['perguntar']
@@ -220,7 +222,7 @@ async function executar(argumentos, dependencias = {}) {
     }
 
     const tipoDeInspecao = VERBOS_BROWSER_CAPTURA.includes(verbo) ? 'captura' : VERBOS_BROWSER_DOM.includes(verbo) ? 'dom' : VERBOS_BROWSER_LOGS.includes(verbo) ? 'logs' : null
-    const tipoDeAcao = VERBOS_BROWSER_CLICAR.includes(verbo) ? 'clicar' : VERBOS_BROWSER_DIGITAR.includes(verbo) ? 'digitar' : null
+    const tipoDeAcao = VERBOS_BROWSER_CLICAR.includes(verbo) ? 'clicar' : VERBOS_BROWSER_DIGITAR.includes(verbo) ? 'digitar' : VERBOS_BROWSER_ROLAR.includes(verbo) ? 'rolar' : VERBOS_BROWSER_TECLA.includes(verbo) ? 'tecla' : null
     if (tipoDeInspecao || tipoDeAcao) {
       const { esperar = esperarPadrao, esperaMaximaMs = PERGUNTAR_ESPERA_MAXIMA_MS } = dependencias
       if (!argumento) {
@@ -232,7 +234,13 @@ async function executar(argumentos, dependencias = {}) {
           ? criarPedidos().registrar('pagina-agir', {
               idDoElemento: argumento,
               tipo: tipoDeAcao,
-              ...(tipoDeAcao === 'clicar' ? { x: argumento2, y: restantes[2] } : { texto: argumento2 }),
+              ...(tipoDeAcao === 'clicar'
+                ? { x: argumento2, y: restantes[2] }
+                : tipoDeAcao === 'rolar'
+                  ? { dy: argumento2 }
+                  : tipoDeAcao === 'tecla'
+                    ? { tecla: argumento2 }
+                    : { texto: argumento2 }),
               origem: diretorioAtual(),
             })
           : criarPedidos().registrar('pagina-inspecionar', {
@@ -640,7 +648,11 @@ function formatarAcaoNaPagina(resultado) {
   const feito =
     resultado.tipo === 'clicar'
       ? `Clique em (${resultado.x},${resultado.y})`
-      : `${resultado.caracteres} caractere(s) digitado(s)${resultado.campoSensivel ? ` (campo ${resultado.campoSensivel}, confirmado pela pessoa)` : ''}`
+      : resultado.tipo === 'rolar'
+        ? `Rolagem de ${resultado.dy}px (posição agora ${resultado.rolagem?.x},${resultado.rolagem?.y})`
+        : resultado.tipo === 'tecla'
+          ? `Tecla ${resultado.tecla}${resultado.campoSensivel ? ` (campo ${resultado.campoSensivel}, confirmado pela pessoa)` : ''}`
+          : `${resultado.caracteres} caractere(s) digitado(s)${resultado.campoSensivel ? ` (campo ${resultado.campoSensivel}, confirmado pela pessoa)` : ''}`
   return [`${feito} na página ${resultado.url}.`, 'Confira o resultado com "felixo browser capture" ou "read".'].join('\n')
 }
 
@@ -650,7 +662,7 @@ function formatarInspecaoDePagina(resultado) {
       `Página: ${resultado.url}`,
       `Entradas: ${resultado.entradas.length} (de ${resultado.total} desde que o bloco abriu; guarda as últimas ${resultado.limite})`,
       ...resultado.entradas.map((entrada) =>
-        [entrada.em, entrada.tipo, entrada.nivel, entrada.texto ?? entrada.url, entrada.tipo === 'console' && entrada.origem ? `(${entrada.origem}:${entrada.linha})` : '']
+        [entrada.em, entrada.tipo, entrada.nivel ?? (entrada.tipo === 'rede' ? `${entrada.metodo} ${entrada.status}` : ''), entrada.tipo === 'rede' ? entrada.url : (entrada.texto ?? entrada.url), entrada.tipo === 'console' && entrada.origem ? `(${entrada.origem}:${entrada.linha})` : '']
           .filter(Boolean)
           .join(' '),
       ),

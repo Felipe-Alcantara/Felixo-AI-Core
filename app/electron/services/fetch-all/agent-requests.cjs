@@ -60,7 +60,10 @@ const TIPOS_INSPECAO_PAGINA = ['captura', 'dom', 'logs']
 const ID_ELEMENTO_MAX = 200
 
 /** O que um agente pode fazer num bloco Página Web depois da sessão curta: clicar e digitar. */
-const TIPOS_ACAO_PAGINA = ['clicar', 'digitar']
+const TIPOS_ACAO_PAGINA = ['clicar', 'digitar', 'rolar', 'tecla']
+/** Teclas que um agente pode apertar na página (nomes do CLI). Lista fechada: nada de atalhos do sistema. */
+const TECLAS_PAGINA = ['Enter', 'Tab', 'Escape', 'Backspace', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End']
+const ROLAGEM_MAX = 20000
 const TEXTO_DIGITAR_MAX = 2000
 const COORDENADA_MAX = 20000
 
@@ -171,6 +174,20 @@ function normalizarPedido(acao, opcoes = {}) {
         throw new Error(`Informe x e y do clique em pixels CSS da página (0 a ${COORDENADA_MAX}).`)
       }
       return { acao: nome, comCommit: false, idDoElemento, tipo, x, y }
+    }
+    if (tipo === 'rolar') {
+      const dy = Number(opcoes?.dy)
+      if (!Number.isFinite(dy) || Math.round(dy) === 0 || Math.abs(dy) > ROLAGEM_MAX) {
+        throw new Error(`Informe dy, quantos pixels rolar na vertical (positivo desce, negativo sobe; 1 a ${ROLAGEM_MAX}).`)
+      }
+      return { acao: nome, comCommit: false, idDoElemento, tipo, dy: Math.round(dy) }
+    }
+    if (tipo === 'tecla') {
+      const tecla = typeof opcoes?.tecla === 'string' ? opcoes.tecla.trim() : ''
+      if (!TECLAS_PAGINA.includes(tecla)) {
+        throw new Error(`Tecla não permitida: "${tecla}". Aceitas: ${TECLAS_PAGINA.join(', ')}.`)
+      }
+      return { acao: nome, comCommit: false, idDoElemento, tipo, tecla }
     }
     const texto = typeof opcoes?.texto === 'string' ? opcoes.texto : ''
     if (!texto) throw new Error('Informe o texto a digitar.')
@@ -491,6 +508,7 @@ module.exports = {
   AGENTES_LOTE_MAX,
   ESTADOS,
   MODOS_ABERTURA_PAGINA,
+  TECLAS_PAGINA,
   TIPOS_ACAO_PAGINA,
   TIPOS_INSPECAO_PAGINA,
   VALIDADE_MS,

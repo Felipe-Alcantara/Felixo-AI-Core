@@ -18,8 +18,10 @@ felixo browser capture <id>                            # 3. salva um PNG e diz o
 felixo browser read <id>                               # 4. elementos clicáveis com retângulo (x,y,largura,altura) e o texto visível
 felixo browser click <id> <x> <y>                      # 5. clica na coordenada (pixels CSS da página)
 felixo browser type <id> "texto"                       # 6. digita no campo em foco (clique nele antes)
-felixo browser logs <id>                               # 7. console, navegações e falhas de carga
-felixo browser read <id>                               # 8. confira o resultado de novo
+felixo browser key <id> Enter                          # 7. aperta uma tecla (Enter, Tab, Escape, setas, PageUp/Down, Home/End, Backspace)
+felixo browser scroll <id> 800                         # 8. rola 800 px para baixo (negativo sobe); depois rode read de novo
+felixo browser logs <id>                               # 9. console, rede, navegações e falhas de carga
+felixo browser read <id>                               # 10. confira o resultado de novo
 ```
 
 Abra a imagem da captura com a sua ferramenta de ler arquivos (se o seu modelo vê imagens) ou
@@ -39,7 +41,8 @@ use `read`, que descreve a página em texto: funciona com modelos que não veem 
 - `capture`, `read` e `logs` **bloqueiam até a pessoa permitir** no cartão do app (5 min); cada
   pedido vale uma vez. `click` e `type` pedem uma **sessão curta de 5 min** por bloco; dentro
   dela agem na hora.
-- Campo de senha ou de pagamento pede confirmação a cada digitação. O texto digitado não volta
+- Campo de senha ou de pagamento pede confirmação a cada digitação, e também a cada `key` com o
+  foco nele (Enter ali envia o formulário). O texto digitado não volta
   nem fica registrado. Não digite senha, chave ou cartão por conta própria: peça à pessoa.
 - Código de saída `3` = recusado. Se foi a pessoa, **não repita o pedido** sem ela pedir; `1` =
   ninguém respondeu a tempo (use `felixo browser status <id-do-pedido>`).
@@ -48,8 +51,9 @@ use `read`, que descreve a página em texto: funciona com modelos que não veem 
 
 ## O que `logs` mostra
 
-Até 200 entradas, as mais novas: `console` (nível e texto), `navegacao` (endereço) e
-`erro-de-carga`. Tokens e segredos saem redigidos. Não há log de rede, cookie nem storage.
+Até 200 entradas, as mais novas: `console` (nível e texto), `rede` (método, endereço sem a
+query secreta e status, sem corpo nem cabeçalhos), `navegacao` (endereço) e `erro-de-carga`.
+Tokens e segredos saem redigidos. Não há cookie nem storage.
 O registro começa quando o bloco abre; pedir `logs` logo após uma ação mostra o que ela causou.
 
 ## Não faça

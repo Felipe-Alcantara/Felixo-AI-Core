@@ -173,6 +173,11 @@ const AJUDA = `felixo fetch-all — varre os repositórios git da máquina e rep
 
   felixo browser click <id-do-bloco> <x> <y> [--json]
   felixo browser type <id-do-bloco> "<texto>" [--json]
+  felixo browser scroll <id-do-bloco> <dy> [--json]
+  felixo browser key <id-do-bloco> <Enter|Tab|Escape|Backspace|ArrowUp|ArrowDown|ArrowLeft|ArrowRight|PageUp|PageDown|Home|End> [--json]
+      scroll rola dy pixels na vertical (positivo desce); key aperta uma tecla da lista
+      fechada. Mesma sessão curta; Enter ou outra tecla com foco em campo de senha ou
+      pagamento pede confirmação da pessoa. Depois de rolar, rode "read" de novo.
       Agem num bloco Página Web, só dentro de uma SESSÃO CURTA (5 min) que a
       pessoa abre no cartão do app. Sem sessão, o comando BLOQUEIA até ela
       permitir (5 min); com sessão, age na hora. click usa x,y em pixels CSS

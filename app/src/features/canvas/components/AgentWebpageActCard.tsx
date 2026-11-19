@@ -87,7 +87,11 @@ export function AgentWebpageActCard() {
   const what =
     request.tipo === 'clicar'
       ? `clicar em (${request.x}, ${request.y}) de`
-      : `digitar ${request.caracteres} caractere(s) em ${sensivel ? CAMPO[sensivel] : 'um campo de'}`
+      : request.tipo === 'rolar'
+        ? `rolar ${request.dy}px em`
+        : request.tipo === 'tecla'
+          ? `apertar a tecla ${request.tecla} em`
+          : `digitar ${request.caracteres} caractere(s) em ${sensivel ? CAMPO[sensivel] : 'um campo de'}`
   const disabled = busy || armedId !== armKey
   const shownError = error?.requestId === request.id ? error.message : null
 

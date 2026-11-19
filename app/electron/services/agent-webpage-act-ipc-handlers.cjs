@@ -5,7 +5,7 @@ const electron = require('electron')
 const { observeAgentRequests } = require('./agent-request-watcher.cjs')
 const { agirNaPagina } = require('./agent-webpage-act.cjs')
 const { NAO_E_BLOCO, guestValido } = require('./agent-webpage-inspect.cjs')
-const { criarRepositorioDePedidos, pedidoAindaVale } = require('./fetch-all/agent-requests.cjs')
+const { TECLAS_PAGINA, criarRepositorioDePedidos, pedidoAindaVale } = require('./fetch-all/agent-requests.cjs')
 
 const AGIR_ACTION = 'pagina-agir'
 /** Avisa a interface que a fila de pedidos de ação mudou. */
@@ -139,6 +139,8 @@ function registerAgentWebpageActIpcHandlers({ getMainWindow, appPaths, dependenc
         x: pedido.x,
         y: pedido.y,
         texto: pedido.texto,
+        dy: pedido.dy,
+        tecla: pedido.tecla,
         confirmouCampoSensivel,
       })
     } catch (error) {
@@ -237,7 +239,9 @@ function formatoBom(pedido) {
     pedido.idDoElemento !== '' &&
     typeof pedido.pedidoEm === 'string' &&
     ((pedido.tipo === 'clicar' && Number.isFinite(pedido.x) && Number.isFinite(pedido.y)) ||
-      (pedido.tipo === 'digitar' && typeof pedido.texto === 'string' && pedido.texto !== ''))
+      (pedido.tipo === 'digitar' && typeof pedido.texto === 'string' && pedido.texto !== '') ||
+      (pedido.tipo === 'rolar' && Number.isFinite(pedido.dy) && pedido.dy !== 0) ||
+      (pedido.tipo === 'tecla' && TECLAS_PAGINA.includes(pedido.tecla)))
   )
 }
 
@@ -247,7 +251,13 @@ function paraOCartao(pedido, campoSensivel) {
     id: pedido.id,
     idDoElemento: pedido.idDoElemento,
     tipo: pedido.tipo,
-    ...(pedido.tipo === 'clicar' ? { x: pedido.x, y: pedido.y } : { caracteres: pedido.texto.length }),
+    ...(pedido.tipo === 'clicar'
+      ? { x: pedido.x, y: pedido.y }
+      : pedido.tipo === 'rolar'
+        ? { dy: pedido.dy }
+        : pedido.tipo === 'tecla'
+          ? { tecla: pedido.tecla }
+          : { caracteres: pedido.texto.length }),
     ...(campoSensivel ? { campoSensivel } : {}),
     origem: typeof pedido.origem === 'string' ? pedido.origem : '',
     pedidoEm: pedido.pedidoEm,

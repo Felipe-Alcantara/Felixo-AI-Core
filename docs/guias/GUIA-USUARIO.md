@@ -1073,8 +1073,11 @@ Quando um agente pede para **clicar ou digitar** (`felixo browser click` e `feli
 funcionam com Claude, Codex, Gemini ou qualquer agente que rode comandos, sem MCP nem extensão. Ligue no
 terminal do agente a skill **Controlar uma página web do canvas**: ela ensina o ciclo abrir, capturar, ler
 (com os retângulos para achar a coordenada), clicar, digitar e conferir. `felixo browser logs <id-do-bloco>`
-devolve as últimas 200 mensagens do console, navegações e falhas de carga do bloco (segredos redigidos, mesmo
-cartão de permissão do `read`; sem log de rede, cookies nem senhas).
+devolve as últimas 200 entradas de console, rede (método, endereço e status, sem corpo nem cabeçalhos),
+navegações e falhas de carga do bloco (segredos redigidos, mesmo cartão de permissão do `read`; sem cookies
+nem senhas). `felixo browser scroll <id> <dy>` rola a página e `felixo browser key <id> <tecla>` aperta Enter,
+Tab, Escape, Backspace, setas, PageUp/PageDown, Home ou End, dentro da mesma sessão curta de 5 minutos;
+Enter com o foco num campo de senha ou pagamento pede a sua confirmação.
 
 O cartão cobre o pedido feito pelo app. Um agente que roda comandos no terminal continua podendo abrir o navegador por conta própria, com os comandos do sistema, como qualquer programa que você roda.
 

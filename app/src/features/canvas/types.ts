@@ -620,9 +620,11 @@ export type CanvasAgentWebpageInspectRequest = {
 export type CanvasAgentWebpageActRequest = {
   id: string
   idDoElemento: string
-  tipo: 'clicar' | 'digitar'
+  tipo: 'clicar' | 'digitar' | 'rolar' | 'tecla'
   x?: number
   y?: number
+  dy?: number
+  tecla?: string
   /** Só quantos caracteres: o texto nunca chega ao cartão. */
   caracteres?: number
   campoSensivel?: 'senha' | 'pagamento' | 'quadro'

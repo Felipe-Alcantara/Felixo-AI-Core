@@ -40,14 +40,46 @@ function lerCampoFocado(classificar) {
   }
 }
 
+/** Nome da tecla no CLI -> código do `sendInputEvent` do Electron. */
+const CODIGO_DA_TECLA = {
+  Enter: 'Enter',
+  Tab: 'Tab',
+  Escape: 'Escape',
+  Backspace: 'Backspace',
+  ArrowUp: 'Up',
+  ArrowDown: 'Down',
+  ArrowLeft: 'Left',
+  ArrowRight: 'Right',
+  PageUp: 'PageUp',
+  PageDown: 'PageDown',
+  Home: 'Home',
+  End: 'End',
+}
+
 const CODIGO_CAMPO_FOCADO = `(${lerCampoFocado.toString()})(${classificarCampo.toString()})`
 
 /**
- * @param {{ guest: any, tipo: 'clicar' | 'digitar', x?: number, y?: number, texto?: string, confirmouCampoSensivel?: boolean }} params
+ * @param {{ guest: any, tipo: 'clicar' | 'digitar' | 'rolar' | 'tecla', x?: number, y?: number, texto?: string, dy?: number, tecla?: string, confirmouCampoSensivel?: boolean }} params
  * @returns {Promise<object>} `ok: true`; `ok: false` com `message`; ou `precisaConfirmar` ('senha' | 'pagamento' | 'quadro').
  */
-async function agirNaPagina({ guest, tipo, x, y, texto, confirmouCampoSensivel }) {
+async function agirNaPagina({ guest, tipo, x, y, texto, dy, tecla, confirmouCampoSensivel }) {
   const url = enderecoSemSegredo(guest.getURL?.())
+  if (tipo === 'rolar') {
+    const posicao = await guest.executeJavaScriptInIsolatedWorld(MUNDO_ISOLADO, [
+      { code: `window.scrollBy(0, ${Number(dy)}); ({ x: Math.round(window.scrollX), y: Math.round(window.scrollY) })` },
+    ])
+    return { ok: true, tipo, url, dy, rolagem: posicao }
+  }
+  if (tipo === 'tecla') {
+    // Enter num campo de senha ou de pagamento envia o formulário: pede a mesma confirmação de digitar nele.
+    const focado = await guest.executeJavaScriptInIsolatedWorld(MUNDO_ISOLADO, [{ code: CODIGO_CAMPO_FOCADO }])
+    if (focado?.sensivel && confirmouCampoSensivel !== true) return { ok: false, precisaConfirmar: focado.sensivel }
+    const codigo = CODIGO_DA_TECLA[tecla]
+    guest.sendInputEvent({ type: 'keyDown', keyCode: codigo })
+    if (tecla === 'Enter') guest.sendInputEvent({ type: 'char', keyCode: '\r' })
+    guest.sendInputEvent({ type: 'keyUp', keyCode: codigo })
+    return { ok: true, tipo, url, tecla, ...(focado?.sensivel ? { campoSensivel: focado.sensivel } : {}) }
+  }
   if (tipo === 'clicar') {
     guest.sendInputEvent({ type: 'mouseMove', x, y })
     guest.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 })
