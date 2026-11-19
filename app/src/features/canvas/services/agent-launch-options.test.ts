@@ -91,6 +91,13 @@ describe('modo fast do Codex', () => {
     expect(describeLaunch({ agentId: 'codex', model: 'gpt-5.6-sol' })).toBe('Codex gpt-5.6-sol')
     expect(describeLaunch({ agentId: 'claude', model: 'opus', fast: true })).toBe('Claude opus')
   })
+
+  it('o rótulo do terminal mostra o esforço escolhido, depois do modelo', () => {
+    expect(describeLaunch({ agentId: 'claude', model: 'opus', effort: 'high' })).toBe('Claude opus high')
+    expect(describeLaunch({ agentId: 'codex', model: 'gpt-5.6-sol', effort: 'xhigh', fast: true, yolo: true })).toBe(
+      'Codex gpt-5.6-sol xhigh ⚡ fast yolo',
+    )
+  })
 })
 
 describe('Antigravity CLI (agy)', () => {

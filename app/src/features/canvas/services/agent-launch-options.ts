@@ -341,12 +341,16 @@ export function codexRejectedRepeatedYolo(output: string): boolean {
   return CODEX_REPEATED_YOLO_ERROR.test(output.replace(/\s+/g, ''))
 }
 
-/** Short human label for the block, e.g. "Claude opus" or "Codex sol ⚡". */
+/** Short human label for the block, e.g. "Claude opus high" or "Codex sol high ⚡ fast". */
 export function describeLaunch(choices: AgentLaunchChoices): string {
   const agent = getAgent(choices.agentId)
   const parts = [agent?.label ?? choices.agentId]
   if (choices.model) {
     parts.push(choices.model)
+  }
+  // O esforço também decide custo e velocidade: aparece depois do modelo.
+  if (choices.effort) {
+    parts.push(choices.effort)
   }
   // Aparece no cabeçalho do terminal: fast gasta mais limite, a pessoa precisa ver.
   if (choices.fast && supportsFastMode(agent, choices.model ?? '')) {
