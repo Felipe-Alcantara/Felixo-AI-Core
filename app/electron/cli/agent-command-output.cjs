@@ -183,6 +183,7 @@ const AJUDA = `felixo fetch-all — varre os repositórios git da máquina e rep
 
   felixo browser capture <id-do-bloco> [--json]
   felixo browser read <id-do-bloco> [--json]
+  felixo browser logs <id-do-bloco> [--json]
       Olham um bloco Página Web (o id vem de "felixo canvas listar"): capture
       salva um PNG da página e diz o caminho, o tamanho e o devicePixelRatio;
       read lista os elementos interativos (papel, nome e retângulo em pixels
@@ -192,6 +193,9 @@ const AJUDA = `felixo fetch-all — varre os repositórios git da máquina e rep
       não digitam, não leem cookies, senhas nem valores de campos, e tokens
       saem redigidos. Código 3 = recusado (se foi a pessoa, não repita sem ela
       pedir); código 1 = ninguém respondeu a tempo.
+      logs devolve as últimas 200 entradas de console, navegação e falha de carga
+      do bloco (segredos redigidos; sem rede, cookies nem senhas). Passo a passo:
+      skill "Controlar uma página web do canvas".
 
   felixo context read <nome-do-artefato>
       Lê um artefato temporário pelo nome portátil. Também aceito:

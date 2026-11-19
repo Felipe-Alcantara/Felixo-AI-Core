@@ -6,7 +6,7 @@ const path = require('node:path')
 
 const { observeAgentRequests } = require('./agent-request-watcher.cjs')
 const { NAO_E_BLOCO, guestValido, inspecionarPagina } = require('./agent-webpage-inspect.cjs')
-const { criarRepositorioDePedidos, pedidoAindaVale } = require('./fetch-all/agent-requests.cjs')
+const { TIPOS_INSPECAO_PAGINA, criarRepositorioDePedidos, pedidoAindaVale } = require('./fetch-all/agent-requests.cjs')
 
 const INSPECIONAR_ACTION = 'pagina-inspecionar'
 /** Avisa a interface que a fila de pedidos de inspeção mudou. */
@@ -139,7 +139,7 @@ function formatoBom(pedido) {
   return (
     typeof pedido.idDoElemento === 'string' &&
     pedido.idDoElemento !== '' &&
-    (pedido.tipo === 'captura' || pedido.tipo === 'dom') &&
+    TIPOS_INSPECAO_PAGINA.includes(pedido.tipo) &&
     typeof pedido.pedidoEm === 'string'
   )
 }

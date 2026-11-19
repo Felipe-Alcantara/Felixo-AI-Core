@@ -913,7 +913,7 @@ declare global {
           id: string
           aprovar: boolean
           idDoElemento: string
-          tipo: 'captura' | 'dom'
+          tipo: 'captura' | 'dom' | 'logs'
           webContentsId?: number
         }) => Promise<CliInvokeResult & { resolved?: { estado: string } | null }>
         onWebpageInspectRequests: (

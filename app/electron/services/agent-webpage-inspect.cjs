@@ -19,6 +19,7 @@ const path = require('node:path')
 const { redactSensitiveText } = require('./git-secret-redaction.cjs')
 const { redactUrlSecrets } = require('./url-secret-redaction.cjs')
 const { classificarCampo } = require('./agent-webpage-field.cjs')
+const { lerLogs } = require('./agent-webpage-log.cjs')
 
 const ELEMENTOS_MAX = 200
 const TEXTO_MAX = 8000
@@ -131,11 +132,12 @@ function redigirDom(dom, redact = redactSensitiveText) {
 }
 
 /**
- * @param {{ guest: any, tipo: 'captura' | 'dom', pastaCapturas: string, idDoPedido: string, redact?: Function }} params
+ * @param {{ guest: any, tipo: 'captura' | 'dom' | 'logs', pastaCapturas: string, idDoPedido: string, redact?: Function }} params
  * @returns {Promise<object>} resultado para o pedido (`ok: true` ou `ok: false` com `message`)
  */
 async function inspecionarPagina({ guest, tipo, pastaCapturas, idDoPedido, redact }) {
   const url = enderecoSemSegredo(guest.getURL?.())
+  if (tipo === 'logs') return { ok: true, tipo, url, ...lerLogs(guest, redact) }
   if (tipo === 'captura') {
     const imagem = await guest.capturePage()
     const { width, height } = imagem.getSize()

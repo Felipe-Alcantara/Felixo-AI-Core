@@ -1069,6 +1069,13 @@ Quando um agente pede para **olhar** uma Página Web já aberta (`felixo browser
 
 Quando um agente pede para **clicar ou digitar** (`felixo browser click` e `felixo browser type`), o cartão oferece **Permitir por 5 min**. Isso abre uma sessão curta só naquele bloco: durante ela o agente age sem perguntar de novo, e o bloco mostra uma faixa "Um agente pode clicar e digitar aqui por 4:30" com o botão **Encerrar agora**. Passados os 5 minutos, ele precisa pedir outra vez. Campos de senha e de pagamento (cartão, CVV e parecidos) nunca entram na sessão: a cada digitação neles o cartão pergunta de novo, e o texto digitado não aparece no cartão nem fica registrado. Um site em que você está logado segue a mesma regra de qualquer outro.
 
+**Qualquer modelo controla o navegador interno.** Os comandos `felixo browser` são texto de terminal, então
+funcionam com Claude, Codex, Gemini ou qualquer agente que rode comandos, sem MCP nem extensão. Ligue no
+terminal do agente a skill **Controlar uma página web do canvas**: ela ensina o ciclo abrir, capturar, ler
+(com os retângulos para achar a coordenada), clicar, digitar e conferir. `felixo browser logs <id-do-bloco>`
+devolve as últimas 200 mensagens do console, navegações e falhas de carga do bloco (segredos redigidos, mesmo
+cartão de permissão do `read`; sem log de rede, cookies nem senhas).
+
 O cartão cobre o pedido feito pelo app. Um agente que roda comandos no terminal continua podendo abrir o navegador por conta própria, com os comandos do sistema, como qualquer programa que você roda.
 
 ### Colar imagens em um agente

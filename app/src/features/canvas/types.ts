@@ -612,7 +612,7 @@ export type CanvasAgentBrowserRequest = {
 export type CanvasAgentWebpageInspectRequest = {
   id: string
   idDoElemento: string
-  tipo: 'captura' | 'dom'
+  tipo: 'captura' | 'dom' | 'logs'
   origem: string
   pedidoEm: string
 }

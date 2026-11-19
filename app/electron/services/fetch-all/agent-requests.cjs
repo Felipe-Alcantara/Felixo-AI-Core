@@ -56,7 +56,7 @@ const CONTEUDO_ESCRITA_MAX = 20000
 const MODOS_ABERTURA_PAGINA = ['externo', 'embutido']
 
 /** O que um agente pode pedir de um bloco Página Web: só olhar, nunca agir. */
-const TIPOS_INSPECAO_PAGINA = ['captura', 'dom']
+const TIPOS_INSPECAO_PAGINA = ['captura', 'dom', 'logs']
 const ID_ELEMENTO_MAX = 200
 
 /** O que um agente pode fazer num bloco Página Web depois da sessão curta: clicar e digitar. */

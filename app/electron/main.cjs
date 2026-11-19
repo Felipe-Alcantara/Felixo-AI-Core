@@ -134,6 +134,7 @@ const {
 const {
   registerAgentLaunchIpcHandlers,
 } = require('./services/agent-launch-ipc-handlers.cjs')
+const { observarPagina: observarPaginaWeb } = require('./services/agent-webpage-log.cjs')
 const {
   instalarComandoDoAgente: installAgentCommand,
 } = require('./services/agent-command-install.cjs')
@@ -453,6 +454,11 @@ function resolveRuntimeAppVersion() {
   const developmentVersion = process.env.FELIXO_APP_VERSION?.trim()
   return !app.isPackaged && developmentVersion ? developmentVersion : app.getVersion()
 }
+
+// Cada bloco Página Web (webview) ganha o registro de console e navegação que o agente lê, com permissão, por `felixo browser logs`.
+app.on('web-contents-created', (_event, contents) => {
+  if (contents.getType() === 'webview') observarPaginaWeb(contents)
+})
 
 app.whenReady().then(async () => {
   // Antes do smoke: ele também abre o renderer por app://. A imagem local do

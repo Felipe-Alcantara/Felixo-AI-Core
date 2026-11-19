@@ -1462,7 +1462,7 @@ fica na barra, para um Backspace apagar texto e não o bloco selecionado
 
 #### Pedido de agente para olhar uma Página Web (captura e DOM)
 
-`felixo browser capture|read <id-do-bloco>` registra `pagina-inspecionar`
+`felixo browser capture|read|logs <id-do-bloco>` (`logs` = `agent-webpage-log.cjs`: console, navegacao e falha de carga por webview, em memoria, ultimas 200, redigidas; sem rede porque o `webRequest` da sessao e ouvinte unico) registra `pagina-inspecionar`
 (`tipo` = `captura` ou `dom`, lista fechada em `normalizarPedido`) e bloqueia
 até a pessoa decidir. Nada olha a página sem o clique em **Permitir** no
 `AgentWebpageInspectCard`, uma permissão por pedido.

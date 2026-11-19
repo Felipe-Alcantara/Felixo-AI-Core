@@ -113,6 +113,7 @@ const VERBOS_BROWSER_STATUS = ['status', 'ver-pedido']
 // Olhar um bloco Página Web: só leitura, mas sempre com a permissão da pessoa.
 const VERBOS_BROWSER_CAPTURA = ['capture', 'captura', 'capturar']
 const VERBOS_BROWSER_DOM = ['read', 'ler']
+const VERBOS_BROWSER_LOGS = ['logs', 'log']
 // Agir num bloco Página Web: só dentro de uma sessão curta que a pessoa abre no app.
 const VERBOS_BROWSER_CLICAR = ['click', 'clicar']
 const VERBOS_BROWSER_DIGITAR = ['type', 'digitar']
@@ -218,7 +219,7 @@ async function executar(argumentos, dependencias = {}) {
       }
     }
 
-    const tipoDeInspecao = VERBOS_BROWSER_CAPTURA.includes(verbo) ? 'captura' : VERBOS_BROWSER_DOM.includes(verbo) ? 'dom' : null
+    const tipoDeInspecao = VERBOS_BROWSER_CAPTURA.includes(verbo) ? 'captura' : VERBOS_BROWSER_DOM.includes(verbo) ? 'dom' : VERBOS_BROWSER_LOGS.includes(verbo) ? 'logs' : null
     const tipoDeAcao = VERBOS_BROWSER_CLICAR.includes(verbo) ? 'clicar' : VERBOS_BROWSER_DIGITAR.includes(verbo) ? 'digitar' : null
     if (tipoDeInspecao || tipoDeAcao) {
       const { esperar = esperarPadrao, esperaMaximaMs = PERGUNTAR_ESPERA_MAXIMA_MS } = dependencias
@@ -644,6 +645,17 @@ function formatarAcaoNaPagina(resultado) {
 }
 
 function formatarInspecaoDePagina(resultado) {
+  if (resultado.tipo === 'logs') {
+    return [
+      `Página: ${resultado.url}`,
+      `Entradas: ${resultado.entradas.length} (de ${resultado.total} desde que o bloco abriu; guarda as últimas ${resultado.limite})`,
+      ...resultado.entradas.map((entrada) =>
+        [entrada.em, entrada.tipo, entrada.nivel, entrada.texto ?? entrada.url, entrada.tipo === 'console' && entrada.origem ? `(${entrada.origem}:${entrada.linha})` : '']
+          .filter(Boolean)
+          .join(' '),
+      ),
+    ].join('\n')
+  }
   if (resultado.tipo === 'captura') {
     return [
       `Captura: ${resultado.arquivo}`,

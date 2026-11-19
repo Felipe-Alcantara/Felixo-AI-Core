@@ -49,6 +49,12 @@ const BUILTIN_SKILLS = [
       'Fazer uma pergunta com 2 a 4 opções à pessoa com `felixo perguntar` e receber a escolha no stdout — para agentes sem ferramenta nativa de perguntas (Codex); só uma pessoa responde, clicando.',
   },
   {
+    slug: 'controlar-pagina-web',
+    name: 'Controlar uma página web do canvas',
+    description:
+      'Usar o navegador interno (bloco Página Web) com qualquer modelo, por `felixo browser`: abrir, capturar a tela, ler o DOM com retângulos, clicar e digitar por coordenada e ler os logs, sempre com a permissão da pessoa.',
+  },
+  {
     slug: 'abrir-agentes-por-task',
     name: 'Abrir um agente por task (coordenador)',
     description:
