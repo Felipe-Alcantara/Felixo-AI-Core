@@ -108,6 +108,8 @@ export function HardwareNotices() {
   const { performanceMode, setPerformanceMode, recoveryNotice, dismissRecoveryNotice } = usePerformanceMode()
   const [profile, setProfile] = useState<HardwareProfile | null>(null)
   const [answered, setAnswered] = useState(() => loadSuggestionAnswered())
+  // A IPC que dispensa o aviso da placa de vídeo rejeitou: o aviso continua e diz por quê (volta na próxima abertura).
+  const [gpuAckFailed, setGpuAckFailed] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -142,9 +144,12 @@ export function HardwareNotices() {
       <NoticeToast
         icon={<AlertTriangle size={18} className="text-(--color-warning)" />}
         title="Placa de vídeo voltou para Automático"
-        description={`${describeGpuFallback(gpu.fallback)} Dá para escolher de novo em Configurações.`}
+        description={`${describeGpuFallback(gpu.fallback)} Dá para escolher de novo em Configurações.${gpuAckFailed ? ' Não foi possível dispensar este aviso agora: ele volta na próxima abertura.' : ''}`}
         secondaryLabel="Entendi"
-        onSecondary={() => void acknowledgeGpuFallback()}
+        onSecondary={() => {
+          setGpuAckFailed(false)
+          acknowledgeGpuFallback().catch(() => setGpuAckFailed(true))
+        }}
         dismissLabel="Dispensar aviso da placa de vídeo"
       />
     )

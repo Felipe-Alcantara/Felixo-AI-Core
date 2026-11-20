@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
+import { reportActionFailure } from '../../services/canvas-persistence-status'
+import { resultadoDeIpc } from '../../../shared/ipc/ipc-result'
 import { Check, CircleAlert, Download, Eye, FolderUp, ListFilter, Plus, SendHorizontal, Sparkles, Trash2, Upload } from 'lucide-react'
 import { CanvasPanel } from './CanvasPanel'
 import { createDebouncedSaveQueue } from '../../services/debounced-save-queue'
@@ -172,6 +174,9 @@ export function PromptsPanel({
     try {
       // Só digita, sem Enter: a pessoa revisa e envia.
       result = await onInsertPrompt(createCatalogPromptInsertion(prompt, prompt.prompt, { autoSubmit: false }))
+    } catch {
+      // Rejeição (IPC, clipboard): é falha, com o aviso em vermelho, e não uma promessa solta.
+      result = 'failed'
     } finally {
       setPendingId((id) => (id === prompt.id ? null : id))
     }
@@ -449,7 +454,12 @@ export function PromptsPanel({
 
   const removeCustomAutomation = useCallback(async (automationId: string) => {
     saveQueue.cancel(automationId)
-    await window.felixo?.automations?.delete(automationId)
+    const removed = await resultadoDeIpc(() => window.felixo?.automations?.delete(automationId), 'Não foi possível apagar a automação.')
+    if (!removed.ok) {
+      // Continua na lista: não foi apagada (e voltaria ao reabrir o painel).
+      reportActionFailure('apagar-automacao', removed.message)
+      return
+    }
     setCustom((current) => current.filter((automation) => automation.id !== automationId))
   }, [saveQueue])
 

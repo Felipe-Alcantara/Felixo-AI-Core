@@ -117,6 +117,7 @@ import { createPtyEventRouter, type PtyEventRouter } from './pty-event-router'
 import { createFlowControl, type FlowControl } from './terminal-flow-control'
 import { createRollingText, type RollingText } from './rolling-text'
 import { isClaudeCommand, loadClaudeTerminalScroll, shouldUseClassicScreen } from '../services/terminal-scroll-preference'
+import { copiarTexto } from '../../shared/ipc/copy-text'
 import {
   CLAUDE_SCROLL_KEYS,
   HIDDEN_CLAUDE_SCROLL_RAIL,
@@ -2038,7 +2039,8 @@ export class TerminalSessionStore {
     if (!text) {
       return
     }
-    await navigator.clipboard?.writeText(text)
+    // Copiar falhou: a seleção fica, para a pessoa tentar de novo (limpar agora perderia a seleção sem ter copiado).
+    if (!(await copiarTexto(text)).ok) return
     session.terminal.clearSelection()
     session.selectedInput = undefined
   }
@@ -2046,7 +2048,8 @@ export class TerminalSessionStore {
   /**
    * Copies the current mouse selection to the clipboard. Falls back to the
    * visible viewport text when nothing is selected, so the button is never a
-   * no-op. Returns the copied text (empty string if there was nothing).
+   * no-op. Returns the copied text (empty string if there was nothing). REJEITA quando a área de transferência
+   * recusa ou não existe: o botão mostra a falha em vez de um ✓ que não aconteceu.
    */
   async copy(id: string): Promise<string> {
     const session = this.sessions.get(id)
@@ -2057,7 +2060,8 @@ export class TerminalSessionStore {
     const selection = session.terminal.getSelection()
     const text = selection || readViewport(session.terminal)
     if (text) {
-      await navigator.clipboard?.writeText(text)
+      const copy = await copiarTexto(text)
+      if (!copy.ok) throw new Error(copy.message)
     }
     return text
   }

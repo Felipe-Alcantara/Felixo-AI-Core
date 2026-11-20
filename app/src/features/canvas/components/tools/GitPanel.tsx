@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { mensagemDeFalha, resultadoDeIpc } from '../../../shared/ipc/ipc-result'
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
@@ -115,7 +116,10 @@ export function GitPanel({ onClose, toolsMenuOpen }: GitPanelProps) {
     }
     setTreeLoading(true)
     try {
-      const result = await window.felixo?.git?.listFiles({ projectPath: path })
+      const outcome = await resultadoDeIpc(() => window.felixo?.git?.listFiles({ projectPath: path }), 'Não foi possível listar os arquivos do repositório.')
+      const result = outcome.ok ? outcome.value : undefined
+      // Falha de listar NÃO é "nenhum arquivo corresponde ao filtro": o painel diz que não leu o repositório.
+      if (!outcome.ok) setError(outcome.message)
       const next = result?.ok && result.tree ? result.tree.files : []
       setFiles(next)
       setTreeTotal(result?.tree?.total ?? next.length)
@@ -131,9 +135,9 @@ export function GitPanel({ onClose, toolsMenuOpen }: GitPanelProps) {
       setBranches([])
       return
     }
-    const result = await window.felixo?.git?.listBranches({
-      projectPath: path,
-    })
+    const outcome = await resultadoDeIpc(() => window.felixo?.git?.listBranches({ projectPath: path }), 'Não foi possível listar as branches.')
+    if (!outcome.ok) setError(outcome.message)
+    const result = outcome.ok ? outcome.value : undefined
     setBranches(result?.ok && result.branches ? result.branches : [])
   }, [])
 
@@ -144,7 +148,10 @@ export function GitPanel({ onClose, toolsMenuOpen }: GitPanelProps) {
     }
     setHistoryLoading(true)
     try {
-      const result = await window.felixo?.git?.getLog({ projectPath: path })
+      const outcome = await resultadoDeIpc(() => window.felixo?.git?.getLog({ projectPath: path }), 'Não foi possível ler o histórico de commits.')
+      // O histórico que falhou NÃO é "Nenhum commit ainda": o erro aparece no painel.
+      if (!outcome.ok) setError(outcome.message)
+      const result = outcome.ok ? outcome.value : undefined
       setCommits(result?.ok && result.commits ? result.commits : [])
       setHistoryReadAt(Date.now())
     } finally {
@@ -197,16 +204,20 @@ export function GitPanel({ onClose, toolsMenuOpen }: GitPanelProps) {
       setFileContent(null)
       setNotice(null)
       setQuery('')
-      const [next, repoFiles] = await Promise.all([
-        refresh(path),
-        loadTree(path),
-        loadBranches(path),
-        loadLog(path),
-      ])
-      // O repositório abre já aberto onde há mudança: fechado na raiz, uma
-      // árvore grande esconde exatamente o que trouxe a pessoa até aqui.
-      const tree = buildRepoTree(repoFiles, parseStatusEntries(next?.statusLines ?? []))
-      setExpanded(new Set(dirsWithChanges(tree)))
+      try {
+        const [next, repoFiles] = await Promise.all([
+          refresh(path),
+          loadTree(path),
+          loadBranches(path),
+          loadLog(path),
+        ])
+        // O repositório abre já aberto onde há mudança: fechado na raiz, uma
+        // árvore grande esconde exatamente o que trouxe a pessoa até aqui.
+        const tree = buildRepoTree(repoFiles, parseStatusEntries(next?.statusLines ?? []))
+        setExpanded(new Set(dirsWithChanges(tree)))
+      } catch (error) {
+        setError(mensagemDeFalha(error, 'Não foi possível abrir o repositório.'))
+      }
     },
     [loadBranches, loadLog, loadTree, refresh],
   )
@@ -314,6 +325,10 @@ export function GitPanel({ onClose, toolsMenuOpen }: GitPanelProps) {
           await loadReader(selected, projectPath)
         }
         return true
+      } catch (error) {
+        // IPC rejeitado: sem isto a rejeição escapava sem mensagem e a ação parecia não ter acontecido.
+        setError(mensagemDeFalha(error, fallback))
+        return false
       } finally {
         setBusy(false)
       }

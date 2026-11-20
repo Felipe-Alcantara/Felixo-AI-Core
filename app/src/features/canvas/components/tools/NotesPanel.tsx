@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { resultadoDeIpc } from '../../../shared/ipc/ipc-result'
 import type { Node } from '@xyflow/react'
 import { Notebook, Pencil, PenTool, Plus, StickyNote, Trash2 } from 'lucide-react'
 import { CanvasPanel } from './CanvasPanel'
@@ -49,10 +50,16 @@ export function NotesPanel({
   toolsMenuOpen,
 }: NotesPanelProps) {
   const [notes, setNotes] = useState<CanvasNote[]>([])
+  // Falha de gravar/apagar (ou de listar) aparece no painel: antes a nota parecia salva e voltava diferente ao reabrir.
+  const [error, setError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [saveQueue] = useState(() =>
     createDebouncedSaveQueue<CanvasNote>(
       (_id, note) =>
-        void window.felixo?.notes?.save({ ...note, updatedAt: new Date().toISOString() }),
+        void resultadoDeIpc(
+          () => window.felixo?.notes?.save({ ...note, updatedAt: new Date().toISOString() }),
+          'Não foi possível salvar a nota.',
+        ).then((result) => setError(result.ok ? null : result.message)),
       SAVE_DEBOUNCE_MS,
     ),
   )
@@ -63,9 +70,14 @@ export function NotesPanel({
 
   useEffect(() => {
     let cancelled = false
-    void window.felixo?.notes?.list().then((result) => {
-      if (!cancelled && result?.ok && Array.isArray(result.notes)) {
-        setNotes(result.notes as CanvasNote[])
+    void resultadoDeIpc(() => window.felixo?.notes?.list(), 'Não foi possível carregar as notas salvas.').then((outcome) => {
+      if (cancelled) return
+      if (outcome.ok && Array.isArray(outcome.value.notes)) {
+        setNotes(outcome.value.notes as CanvasNote[])
+        setLoadError(null)
+      } else {
+        // Lista que falhou NÃO é lista vazia: o painel diz que não carregou.
+        setLoadError(outcome.ok ? 'Não foi possível carregar as notas salvas.' : outcome.message)
       }
     })
     return () => {
@@ -100,13 +112,24 @@ export function NotesPanel({
       createdAt: now,
       updatedAt: now,
     }
-    await window.felixo?.notes?.save(note)
+    const saved = await resultadoDeIpc(() => window.felixo?.notes?.save(note), 'Não foi possível criar a nota.')
+    if (!saved.ok) {
+      setError(saved.message)
+      return
+    }
+    setError(null)
     setNotes((current) => [...current, note])
   }, [])
 
   const removeSavedNote = useCallback(async (noteId: string) => {
     saveQueue.cancel(noteId)
-    await window.felixo?.notes?.delete(noteId)
+    const removed = await resultadoDeIpc(() => window.felixo?.notes?.delete(noteId), 'Não foi possível apagar a nota.')
+    if (!removed.ok) {
+      // A nota continua na lista: ela não foi apagada.
+      setError(removed.message)
+      return
+    }
+    setError(null)
     setNotes((current) => current.filter((note) => note.id !== noteId))
   }, [saveQueue])
 
@@ -264,7 +287,17 @@ export function NotesPanel({
         </button>
       </div>
 
-      {notes.length === 0 ? (
+      {error && (
+        <p role="alert" className="mb-2 text-xs text-theme-error">
+          {error}
+        </p>
+      )}
+
+      {loadError ? (
+        <p role="alert" className="text-sm text-theme-error">
+          {loadError}
+        </p>
+      ) : notes.length === 0 ? (
         <p className="text-sm text-zinc-500">Nenhuma nota salva ainda.</p>
       ) : (
         <ul className="felixo-anim-stagger-list flex flex-col gap-2">

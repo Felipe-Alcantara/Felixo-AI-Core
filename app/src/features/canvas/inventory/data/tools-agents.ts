@@ -152,6 +152,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
       'fetch-all-roots (addPickedRoots, removeScanRoot)',
     ],
     tests: [
+      { file: 'src/features/shared/ipc/ipc-failures.test.ts' },
       { file: `${TOOLS}/fetch-all-plan.test.ts` },
       { file: `${TOOLS}/fetch-all-agent-requests.test.ts` },
       { file: `${TOOLS}/fetch-all-roots.test.ts` },
@@ -164,11 +165,6 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
         what: 'Nenhum teste de interface abre o Fetch All: varrer, confirmar o escopo amplo, executar com confirmação, ignorar/reincluir pasta e responder pedido de agente só têm cobertura no main e nas funções puras',
         risk: 'médio',
         task: '3ec91f95-497e-81ca-8319-ee657b0b6492',
-      },
-      {
-        what: 'Erros engolidos: falha de fetch-all:get-settings (FetchAllPanel.tsx:89-94) deixa settings nulo sem aviso — raízes desabilitadas e "Pastas ignoradas (0)" —, e falha de fetch-all:unignore-path (FetchAllPanel.tsx:280-285) não mostra nada',
-        risk: 'médio',
-        task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
       },
       {
         what: 'Pedido de agente que chega com o painel fechado não acende nada no canvas: só FetchAllPanel escuta fetch-all:agent-requests, e a pessoa só vê o pedido se abrir a ferramenta',
@@ -305,6 +301,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
       'AccountSwitchHistory',
     ],
     tests: [
+      { file: 'src/features/shared/ipc/ipc-failures.test.ts' },
       { file: 'src/features/shared/agent-usage/agent-usage.test.ts' },
       { file: 'src/features/shared/agent-usage/useAgentUsageAccountRefresh.test.ts' },
       { file: 'src/features/canvas/components/tools/AgentUsageProviderSummary.test.ts' },
@@ -324,11 +321,6 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
         what: 'Atualizar, Reconsultar, Remover, Adicionar conta e Ligar coleta não têm teste de interface (o smoke de contas só abre o painel e troca de aba), nem digitar na busca, ligar o atalho "Precisa de atenção" e acionar o "Atualizar a conta" (a estrutura sai testada por renderização estática, a regra do filtro e a chamada do botão são funções puras testadas, mas o clique e a digitação só foram vistos no app real); enable/disable da statusLine também não aparece em agent-usage-ipc-handlers.test.cjs',
         risk: 'médio',
         task: '3ec91f95-497e-81ca-8319-ee657b0b6492',
-      },
-      {
-        what: 'AgentUsagePanel.tsx:213-227 e 650-703: a resposta de agent-usage:enable/disable-claude-statusline substitui o estado sem olhar ok; a mensagem de falha (ex.: "Não foi possível gravar o script da status line.") nunca é exibida, e um erro lançado no handler vira estado sem settingsReadable, escondendo o botão atrás de "Não foi possível ler ~/.claude/settings.json"',
-        risk: 'médio',
-        task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
       },
       {
         what: 'O refresh manual abre um PTY de /status por conta. Medido em 15/10/2026 com 9 contas Codex e o Claude: a consulta do Codex por conta caiu de 25,2 s para ~11 s (p50) com a leitura do /status sem moldura (Codex 0.159+), mas a coleta inteira segue em ~31 a 36 s porque o /status do Claude 2.1.300 nunca devolve os limites (0 de 47): falha em 4 a 8 s ou estoura os 30 s (15 de 47). O scheduler não usa esses PTYs: atualiza Codex pelo app-server, Openia por statusline e recebe a statusline local do Claude pelo watcher.',
@@ -724,6 +716,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
       'CanvasPanel',
     ],
     tests: [
+      { file: 'src/features/shared/ipc/ipc-failures.test.ts' },
       { file: 'src/features/canvas/components/focus-keyboard-a11y.test.ts' },
       { file: 'scripts/canvas-smoke-teclado.cjs', check: 'checarFocoAoFecharPresetsDeAgente' },
       { file: 'src/features/canvas/services/agent-preset.test.ts' },
@@ -735,11 +728,6 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
         what: 'Sem teste de interface: criar, editar, duplicar, importar, exportar e excluir preset pelo painel',
         risk: 'baixo',
         task: '3ec91f95-497e-81ca-8319-ee657b0b6492',
-      },
-      {
-        what: 'Erro do hook gruda: useAgentPresets só limpa error em save/remove bem-sucedidos (useAgentPresets.ts:68 e :100) e AgentPresetsPanel.tsx:135-145 mostra error antes de message, então uma exportação certa depois de uma falha continua exibindo a falha antiga; falha de agent-presets:list (useAgentPresets.ts:27-37) é engolida e só os nativos aparecem',
-        risk: 'baixo',
-        task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
       },
     ],
     overlap: `${PAINEL}. Tamanho md; a lista de skills tem max-h-44 e rola por dentro; o window.confirm do Excluir e o diálogo de salvar são nativos`,
@@ -763,10 +751,10 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
         failure: 'Sem localStorage o tema vale só para a sessão (theme-storage engole o erro de propósito) e o boot segue no escuro',
       },
       {
-        locator: 'await persist(value)',
+        locator: 'resultadoDeIpc(() => persist(value)',
         kind: 'button',
         effect: 'Salvar de cada instrução de arquivo: grava canvas:set-file-link-prompt ou canvas:set-file-bootstrap-prompt, avisa o canvas sem recarregar (onPromptSaved/onBootstrapSaved) e mostra "Salvo"',
-        failure: 'erro engolido: o retorno do IPC não é lido — "Salvo" aparece mesmo com ok: false, e uma rejeição não mostra nada (SettingsPanel.tsx:251-255)',
+        failure: 'Com { ok: false } ou rejeição do IPC o botão não vira "Salvo": a mensagem aparece em vermelho e a instrução anterior continua valendo.',
       },
       {
         locator: 'onClick={() => setValue(defaultValue)}',
@@ -784,7 +772,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
         locator: 'await window.felixo?.canvas?.setQualityStandard',
         kind: 'button',
         effect: 'Salvar do padrão de qualidade: canvas:set-quality-standard com o texto personalizado (vazio = segue o padrão da fonte de System Design) e o liga/desliga, avisa o canvas (onQualityStandardSaved) e mostra "Salvo"',
-        failure: 'erro engolido: "Salvo" aparece sem conferir ok (SettingsPanel.tsx:395-400)',
+        failure: 'Com { ok: false } ou rejeição do IPC o botão não vira "Salvo": a mensagem aparece em vermelho e o padrão anterior continua valendo.',
       },
       {
         locator: 'label="Incluir o Workflow no contexto inicial"',
@@ -832,6 +820,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
       'ClaudeConfigDefaultsSection',
     ],
     tests: [
+      { file: 'src/features/shared/ipc/ipc-failures.test.ts' },
       { file: 'src/features/canvas/services/quality-standard-prompt.test.ts' },
       { file: 'src/features/canvas/services/quality-standard-source.test.ts' },
       { file: 'src/features/shared/accessibility/reduced-motion-preference.test.ts' },
@@ -842,11 +831,6 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
         what: 'Sem teste de interface do tema, das instruções de arquivo e do padrão de qualidade (hardware-check só abre o painel para a placa de vídeo); canvas:set-file-link-prompt, set-file-bootstrap-prompt e set-quality-standard não aparecem em canvas-ipc-handlers.test.cjs',
         risk: 'baixo',
         task: '3ec91f95-497e-81ca-8319-ee657b0b6492',
-      },
-      {
-        what: 'SettingsPanel.tsx:251-255 (PromptField) e :395-400 (QualityStandardField) mostram "Salvo" sem olhar o { ok } devolvido; falha do settings do SQLite passa como sucesso e a instrução antiga continua valendo',
-        risk: 'médio',
-        task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
       },
     ],
     overlap: `${PAINEL}. Tamanho padrão; é o painel mais comprido desta parte e rola por dentro`,

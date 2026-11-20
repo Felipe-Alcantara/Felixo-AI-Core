@@ -137,6 +137,8 @@ export type DiagnosisRequestStatus =
   | 'no-terminal'
   | 'no-file'
   | 'resolve-failed'
+  /** O texto não chegou ao terminal (sessão ausente, escrita recusada). */
+  | 'send-failed'
 
 /** Origem de um bloco criado por uma troca confirmada da cadeia de contas. */
 export type TerminalChainOrigin = {

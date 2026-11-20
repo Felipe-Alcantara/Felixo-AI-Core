@@ -421,6 +421,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
       'duplicateImageNode, repairImageNode, removeTemporaryImageNode, linkAgentToFile, unlinkAgentFromFile (CanvasView)',
     ],
     tests: [
+      { file: 'src/features/shared/ipc/ipc-failures.test.ts' },
       { file: 'src/features/canvas/components/focus-keyboard-a11y.test.ts' },
       unit(`${COMPONENTS}/file-node-preview.test.ts`),
       unit(`${SERVICES}/file-node-write.test.ts`),
@@ -438,16 +439,6 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
         what: 'Oito dos 16 controles do bloco (imagem: Reparar referência, zoom −, +, redefinir, Abrir no sistema, Salvar cópia, Duplicar e Remover temporário) não são clicados por teste: falta um bloco de imagem no fixture. Reparar, Abrir e Salvar também abrem diálogo ou app do sistema. Os outros oito agora são cobertos por checarControlesDoArquivo.',
         risk: 'médio',
         task: '41c91f95-497e-81c9-bc07-e565a7dd49a3',
-      },
-      {
-        what: 'Promessas sem catch em FileNode.tsx:239-309: copyPath, openImageInSystem, saveImageCopy e removeTemporaryImage não tratam rejeição; generateDiagnosis, duplicateImage e repairImage usam try/finally sem catch. A rejeição vira unhandledrejection e o bloco não diz nada; copyPath mostra ✓ mesmo sem navigator.clipboard.',
-        risk: 'médio',
-        task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
-      },
-      {
-        what: 'requestRepoDiagnosis (services/file-terminal-links.ts:125-135) devolve "ok" sem esperar o resultado de store.sendText: "Diagnóstico solicitado ao terminal conectado." aparece mesmo se o pty:write falhar.',
-        risk: 'médio',
-        task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
       },
       {
         what: 'O menu "Ligar agente" (absolute bottom-full, max-h-44) abre para cima dentro do cartão overflow-hidden: medido com bloco de 150 px de altura e seis agentes sem ligar, em 1280 px, o menu passa 15 px da borda de cima (canvas-smoke-sobreposicoes.cjs → checarMenuLigarAgenteDentroDoCartao). Defeito conhecido: a correção fica para a task.',
@@ -1558,6 +1549,7 @@ export const nodeSurfaces: InventoryElement[] = [
     ipc: ['canvas-file:resolve', 'pty:write'],
     dependsOn: ['createCanvasConnectionIndex', 'announceFileToTerminal / announceFileNodeToTerminalNode / requestRepoDiagnosis (file-terminal-links)', 'announceAgentCollaboration', 'isTerminalInitialTextReady'],
     tests: [
+      { file: 'src/features/shared/ipc/ipc-failures.test.ts' },
       unit(`${SERVICES}/canvas-connection-index.test.ts`),
       unit(`${SERVICES}/canvas-connection-performance.test.ts`),
       unit(`${SERVICES}/agent-collaboration-links.test.ts`),
@@ -1565,11 +1557,6 @@ export const nodeSurfaces: InventoryElement[] = [
       unit('src/features/canvas/terminal/canvas-context-e2e.test.ts'),
     ],
     gaps: [
-      {
-        what: 'Ligar um arquivo externo (filePath, sem fileName) a um agente (services/file-terminal-links.ts:75-83; canvas-connection-index.ts só indexa fileName): a aresta aparece e o agente entra em "Agentes ligados", mas nenhum aviso é digitado e o caminho não entra no texto inicial; canvas-file:resolve falho também retorna calado.',
-        risk: 'médio',
-        task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
-      },
       {
         what: 'O aviso de ligação de .md sai submetido (autoSubmit: true), enquanto os painéis de prompt só digitam.',
         risk: 'baixo',

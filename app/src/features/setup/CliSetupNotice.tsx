@@ -72,7 +72,7 @@ export function CliSetupIndicator() {
  * quando o resultado chega, porque aí a notícia é outra.
  */
 export function CliSetupToast() {
-  const { presentation, noticeKey, dismissed, dismiss, retry } = useCliSetupStatus()
+  const { presentation, noticeKey, dismissed, dismiss, retry, retryError } = useCliSetupStatus()
 
   if (!presentation.showToast || dismissed) {
     return null
@@ -101,6 +101,11 @@ export function CliSetupToast() {
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium text-slate-100">{presentation.toastTitle}</p>
           <p className="mt-1 text-xs text-slate-400">{presentation.toastDescription}</p>
+          {retryError && (
+            <p role="alert" className="mt-1 text-xs text-theme-error">
+              {retryError}
+            </p>
+          )}
 
           {presentation.progress !== null && !presentation.canRetry && (
             <div

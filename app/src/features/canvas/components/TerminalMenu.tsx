@@ -12,6 +12,8 @@ import type {
 import { AgentConfigFields } from './AgentConfigFields'
 import { isFelixoPopoverTarget } from '../../shared/components/felixo-popover-target'
 import { restoreFocusIfLost } from '../services/restore-focus'
+import { reportActionFailure } from '../services/canvas-persistence-status'
+import { mensagemDeFalha } from '../../shared/ipc/ipc-result'
 import { buildTeamLaunch, type TeamLaunch } from '../services/agent-team-template'
 
 export type { NewTerminalOptions } from '../services/new-terminal-options'
@@ -154,6 +156,9 @@ export function TerminalMenu({
       config.setName('')
       closeSettings()
       window.requestAnimationFrame(() => triggerRef.current?.focus())
+    } catch (error) {
+      // IPC rejeitado no preparo (contas, chaves): sem isto virava rejeição não tratada e o clique não dizia nada.
+      reportActionFailure('abrir-agente', mensagemDeFalha(error, 'Não foi possível preparar o agente.'))
     } finally {
       setLaunching(false)
     }
@@ -171,6 +176,9 @@ export function TerminalMenu({
       config.setName('')
       closeSettings()
       window.requestAnimationFrame(() => triggerRef.current?.focus())
+    } catch (error) {
+      // IPC rejeitado no preparo (contas, chaves): sem isto virava rejeição não tratada e o clique não dizia nada.
+      reportActionFailure('abrir-agente', mensagemDeFalha(error, 'Não foi possível preparar o agente.'))
     } finally {
       setLaunching(false)
     }
@@ -200,6 +208,9 @@ export function TerminalMenu({
       // prévia fica com o item, e o configurador pede outra.
       if (preview) config.refreshChainPreview({ keepCurrent: preview.status === 'ready' })
       config.setName('')
+    } catch (error) {
+      // IPC rejeitado no preparo (contas, chaves): sem isto virava rejeição não tratada e o clique não dizia nada.
+      reportActionFailure('abrir-agente', mensagemDeFalha(error, 'Não foi possível preparar o agente.'))
     } finally {
       setLaunching(false)
     }
@@ -223,6 +234,9 @@ export function TerminalMenu({
         closeSettings()
         window.requestAnimationFrame(() => triggerRef.current?.focus())
       }
+    } catch (error) {
+      // IPC rejeitado no preparo (contas, chaves): sem isto virava rejeição não tratada e o clique não dizia nada.
+      reportActionFailure('abrir-agente', mensagemDeFalha(error, 'Não foi possível preparar o agente.'))
     } finally {
       setLaunching(false)
     }

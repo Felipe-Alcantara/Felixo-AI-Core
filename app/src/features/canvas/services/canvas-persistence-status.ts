@@ -24,6 +24,27 @@ export function reportPersistenceFailure(key: string, message: string): void {
   publish()
 }
 
+const actionTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
+/**
+ * Falha de uma ação da pessoa que não tem lugar próprio na tela (ligar um arquivo a um agente, escolher um arquivo,
+ * cancelar uma imagem): aparece na barra de status e some sozinha depois de `ttlMs`, ou quando a mesma ação dá certo.
+ * Antes o erro era engolido e a pessoa achava que a ação tinha funcionado.
+ */
+export function reportActionFailure(key: string, message: string, ttlMs = 8000): void {
+  const timerKey = `acao:${key}`
+  const previous = actionTimers.get(timerKey)
+  if (previous) clearTimeout(previous)
+  reportPersistenceFailure(timerKey, message)
+  actionTimers.set(
+    timerKey,
+    setTimeout(() => {
+      actionTimers.delete(timerKey)
+      clearPersistenceFailure(timerKey)
+    }, ttlMs),
+  )
+}
+
 export function clearPersistenceFailure(key: string): void {
   if (failures.delete(key)) publish()
 }
@@ -33,6 +54,8 @@ export function getPersistenceFailures(): readonly string[] {
 }
 
 export function resetPersistenceFailuresForTests(): void {
+  for (const timer of actionTimers.values()) clearTimeout(timer)
+  actionTimers.clear()
   failures.clear()
   publish()
 }

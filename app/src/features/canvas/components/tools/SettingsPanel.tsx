@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { resultadoDeIpc } from '../../../shared/ipc/ipc-result'
 import { CircleAlert, Palette, RotateCcw, Save, Settings } from 'lucide-react'
 import { CanvasPanel } from './CanvasPanel'
 import { useReducedMotionPreference } from '../../../shared/accessibility/reduced-motion-preference'
@@ -236,6 +237,8 @@ function PromptField({
 }: PromptFieldProps) {
   const [value, setValue] = useState(defaultValue)
   const [saved, flashSaved] = useSavedFlash()
+  // O { ok } do IPC decide o "Salvo": falha do settings do SQLite deixa a instrução antiga valendo, e a tela diz isso.
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -257,7 +260,12 @@ function PromptField({
   }, [])
 
   const save = async () => {
-    await persist(value)
+    const result = await resultadoDeIpc(() => persist(value), 'Não foi possível salvar. A instrução anterior continua valendo.')
+    if (!result.ok) {
+      setSaveError(result.message)
+      return
+    }
+    setSaveError(null)
     onSaved?.(value)
     flashSaved()
   }
@@ -275,6 +283,11 @@ function PromptField({
         rows={10}
         className="mb-2 w-full resize-y rounded-sm bg-zinc-800/60 p-2 font-mono text-xs text-zinc-200 outline-hidden"
       />
+      {saveError && (
+        <p role="alert" className="mb-2 text-xs text-theme-error">
+          {saveError}
+        </p>
+      )}
       <div className="flex gap-2">
         <button
           type="button"
@@ -361,6 +374,8 @@ function QualityStandardField({
   const [source, setSource] = useState<QualityStandardSource | null>(null)
   const [enabled, setEnabled] = useState(true)
   const [saved, flashSaved] = useSavedFlash()
+  // O { ok } do IPC decide o "Salvo": falha do settings do SQLite deixa a instrução antiga valendo, e a tela diz isso.
+  const [saveError, setSaveError] = useState<string | null>(null)
   const defaultPrompt = buildDefaultQualityStandardPrompt(source)
   const prompt = customText ?? defaultPrompt
 
@@ -395,7 +410,15 @@ function QualityStandardField({
 
   const save = async () => {
     const toStore = customText ?? ''
-    await window.felixo?.canvas?.setQualityStandard?.({ prompt: toStore, enabled })
+    const result = await resultadoDeIpc(
+      () => window.felixo?.canvas?.setQualityStandard?.({ prompt: toStore, enabled }),
+      'Não foi possível salvar. O padrão anterior continua valendo.',
+    )
+    if (!result.ok) {
+      setSaveError(result.message)
+      return
+    }
+    setSaveError(null)
     onSaved?.({ prompt: toStore, enabled })
     flashSaved()
   }
@@ -425,6 +448,11 @@ function QualityStandardField({
         disabled={!enabled}
         className="mb-2 w-full resize-y rounded-sm bg-zinc-800/60 p-2 font-mono text-xs text-zinc-200 outline-hidden disabled:opacity-50"
       />
+      {saveError && (
+        <p role="alert" className="mb-2 text-xs text-theme-error">
+          {saveError}
+        </p>
+      )}
       <div className="flex gap-2">
         <button
           type="button"

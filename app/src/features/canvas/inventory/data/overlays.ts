@@ -417,6 +417,7 @@ export const overlaySurfaces: InventoryElement[] = [
     ipc: ['clis:get-setup-status', 'clis:setup-status', 'clis:retry-setup', 'clis:diagnose'],
     dependsOn: ['useCliSetupStatus', 'useCliDiagnosis', 'presentCliSetupStatus', 'cliSetupNoticeKey', 'CliDiagnosisList', 'CliDiagnosisFooter'],
     tests: [
+      { file: 'src/features/shared/ipc/ipc-failures.test.ts' },
       { file: 'scripts/canvas-smoke-sobreposicoes.cjs', check: 'checarGitEAvisoDeClisComGavetaAberta' },
       { file: 'scripts/canvas-smoke-sobreposicoes.cjs', check: 'checarAvisosFlutuantesJuntos' },
       { file: 'src/features/setup/cli-setup-presentation.test.ts' },
@@ -430,16 +431,6 @@ export const overlaySurfaces: InventoryElement[] = [
         what: 'Aviso, retry e diagnóstico nunca vistos rodando: só aparecem no app empacotado (FELIXO_AUTO_INSTALL_CLIS ou isPackaged) e nenhum teste renderiza ou clica o aviso.',
         risk: 'médio',
         task: '3e691f95-497e-81c8-ba05-c3074dc036f0',
-      },
-      {
-        what: 'Dispensar o andamento esconde o andamento da nova tentativa: a chave de "installing"/"checking" é sempre "em-andamento" (cli-setup-presentation.ts:154) e dismissed compara só a chave (useCliSetupStatus.ts:92). Quem dispensou a primeira instalação e clica "Tentar de novo" vê o aviso sumir sem progresso.',
-        risk: 'médio',
-        task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
-      },
-      {
-        what: 'Erro engolido no retry (useCliSetupStatus.ts:88-90) e no getStatus inicial sem catch (useCliSetupStatus.ts:45-49): { ok: false } é descartado e a rejeição vira unhandledrejection só no QA Logger; a pessoa não sabe que a nova tentativa não começou.',
-        risk: 'baixo',
-        task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
       },
       {
         what: 'Medido em 20/11/2026 com os três avisos de baixo juntos (canvas-smoke-sobreposicoes.cjs → checarAvisosFlutuantesJuntos): em 320 px o aviso saía 16 px da janela à esquerda (corrigido: largura min(20rem, 100vw − 2rem)); ele cobre a sugestão do Modo Performance em 320 px (288×122) e em 768 px (128×122), e em 1280 px não colide. Defeito conhecido: cada aviso é fixed por conta própria, sem pilha comum.',
@@ -531,6 +522,7 @@ export const overlaySurfaces: InventoryElement[] = [
     ipc: ['updates:get-status', 'updates:status', 'updates:check', 'updates:install', 'app:get-version'],
     dependsOn: ['useUpdateStatus (CanvasView)', 'useAppVersion (CanvasToolbar)', 'presentUpdateStatus', 'deveMostrarRodapeDeStatus'],
     tests: [
+      { file: 'src/features/shared/ipc/ipc-failures.test.ts' },
       { file: 'src/features/updates/update-presentation.test.ts' },
       { file: 'src/features/canvas/components/toolbar-status.test.ts' },
     ],
@@ -539,11 +531,6 @@ export const overlaySurfaces: InventoryElement[] = [
         what: 'Nenhum teste renderiza ou clica o indicador e electron/services/auto-updater.cjs não tem teste; o ciclo verificar → baixar → reiniciar só é visto no app publicado.',
         risk: 'médio',
         task: '3ec91f95-497e-81f7-8b12-c5c252d020c7',
-      },
-      {
-        what: 'Erro engolido em useUpdateStatus.ts:68 (install sem tratar { ok: false } nem a rejeição) e :41 (getStatus inicial sem catch): a pessoa clica "Versão X pronta" e, se o main recusar, nada acontece na tela.',
-        risk: 'baixo',
-        task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
       },
     ],
     overlap: 'No rodapé da sidebar (z 26), coluna de 288 px; rótulo truncado, nada sobre o canvas. O aviso flutuante de atualização foi para as notificações do canvas (CanvasView).',
@@ -593,6 +580,7 @@ export const overlaySurfaces: InventoryElement[] = [
       'linkChooserKeyAction',
     ],
     tests: [
+      { file: 'src/features/shared/ipc/ipc-failures.test.ts' },
       { file: 'src/features/shared/links/link-destination.test.ts' },
       { file: 'src/features/shared/links/link-chooser-menu.test.ts' },
       { file: 'src/features/shared/links/link-chooser-store.test.ts' },
@@ -604,11 +592,6 @@ export const overlaySurfaces: InventoryElement[] = [
       { file: SMOKE_LINKS, check: 'paginaWebMenuDeLink' },
     ],
     gaps: [
-      {
-        what: 'Erro engolido na cópia (LinkChooserHost.tsx:330-333 no menu e :164-170 no aviso de falha): clipboard recusado cai em () => undefined, sem aviso nem log; no menu ele já fechou, no aviso nada muda.',
-        risk: 'médio',
-        task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
-      },
       {
         what: 'Links enviados pelos agentes ainda não abrem no app real e a causa não foi achada.',
         risk: 'alto',
@@ -768,6 +751,7 @@ export const overlaySurfaces: InventoryElement[] = [
       'NoticeToast',
     ],
     tests: [
+      { file: 'src/features/shared/ipc/ipc-failures.test.ts' },
       { file: 'scripts/canvas-smoke-sobreposicoes.cjs', check: 'checarAvisosFlutuantesJuntos' },
       { file: 'src/features/shared/performance/performance-suggestion.test.ts' },
       { file: 'src/features/shared/graphics/gpu-status-store.test.ts' },
@@ -785,11 +769,6 @@ export const overlaySurfaces: InventoryElement[] = [
         what: 'O aviso da placa de vídeo nunca foi visto rodando: depende de uma volta automática de GPU real.',
         risk: 'médio',
         task: '3d591f95-497e-8192-b911-cdb759933401',
-      },
-      {
-        what: 'HardwareNotices.tsx:124 chama void acknowledgeGpuFallback(), que rejeita quando a IPC falha (o teste do gpu-status-store confirma): unhandledrejection no QA Logger e o aviso volta na próxima abertura sem a pessoa saber por quê.',
-        risk: 'baixo',
-        task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
       },
       {
         what: 'Medido: a sugestão do Modo Performance (22rem, embaixo no centro, z 50) convive com o card do tour (SB1) e foi medida contra o aviso de CLIs e o de link (checarAvisosFlutuantesJuntos: os dois a cobrem em janelas estreitas). Cobria 14 px da barra de status nas três larguras; corrigido subindo os avisos de baixo para bottom-10. A dock (20) no centro de baixo segue sem medida, e a volta da placa de vídeo depende de estado de máquina.',

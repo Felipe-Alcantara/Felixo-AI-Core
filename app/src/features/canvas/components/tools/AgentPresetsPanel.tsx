@@ -46,7 +46,7 @@ const NATIVE_AGENTS = AGENTS.filter((agent) => !agent.isLauncher)
  * importar `.fxpreset`). Preset nativo não se edita — duplica-se.
  */
 export function AgentPresetsPanel({ onClose, toolsMenuOpen }: Props) {
-  const { presets, save, duplicate, remove, importFromText, error } = useAgentPresets()
+  const { presets, save, duplicate, remove, importFromText, error, clearError } = useAgentPresets()
   const [draft, setDraft] = useState<AgentPreset | null>(null)
   const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null)
   const [skills, setSkills] = useState<CanvasSkill[]>([])
@@ -60,7 +60,14 @@ export function AgentPresetsPanel({ onClose, toolsMenuOpen }: Props) {
 
   const catalogIds = useMemo(() => new Set(skills.map((skill) => skill.id)), [skills])
 
-  const flash = useCallback((tone: 'ok' | 'error', text: string) => setMessage({ tone, text }), [])
+  const flash = useCallback(
+    (tone: 'ok' | 'error', text: string) => {
+      // Uma exportação certa depois de uma falha não pode continuar mostrando a falha antiga.
+      clearError()
+      setMessage({ tone, text })
+    },
+    [clearError],
+  )
 
   const startNew = () => {
     setMessage(null)

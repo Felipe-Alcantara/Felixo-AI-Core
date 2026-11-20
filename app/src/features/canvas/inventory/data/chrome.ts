@@ -689,6 +689,7 @@ export const chromeSurfaces: InventoryElement[] = [
     ipc: ['speech:get-config', 'speech:microphone-status', 'speech:request-microphone', 'speech:transcribe', 'pty:write'],
     dependsOn: ['useDictation', 'useDictationShortcut', 'createVoiceRecorder', 'useTerminalSessions (typeText)'],
     tests: [
+      { file: 'src/features/shared/ipc/ipc-failures.test.ts' },
       { file: 'src/features/canvas/services/dictation.test.ts' },
       { file: 'src/features/canvas/services/voice-recorder.test.ts' },
       { file: 'electron/services/speech/speech-ipc-handlers.test.cjs' },
@@ -698,11 +699,6 @@ export const chromeSurfaces: InventoryElement[] = [
         what: 'O balão de erro e de aviso do ditado (absolute top-full, DictationButton.tsx:66) fica abaixo da barra superior, que tem overflow: hidden (index.css:3216): a mensagem é recortada e não aparece. A pessoa não vê por que o ditado falhou (sem chave, microfone negado).',
         risk: 'alto',
         task: '3ec91f95-497e-8103-b360-c1979d6992f4',
-      },
-      {
-        what: 'Quando typeText falha, o aviso diz "Não consegui digitar no terminal. O texto foi copiado." mas nada é copiado (CanvasView.tsx:1839): o texto ditado se perde.',
-        risk: 'médio',
-        task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
       },
       {
         what: 'Nenhum teste de interface do ditado (gravar, transcrever, descartar, fechar o aviso, atalho global).',

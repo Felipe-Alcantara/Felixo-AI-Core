@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { resultadoDeIpc } from '../../../shared/ipc/ipc-result'
 import { ChevronRight, ExternalLink, Gauge, PlugZap, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { CanvasPanel } from './CanvasPanel'
 import { AccountChainSection } from './AccountChainSection'
@@ -222,17 +223,18 @@ export function AgentUsagePanel({
   }, [])
 
   const toggleStatusline = useCallback(
-    async (enable: boolean) => {
+    async (enable: boolean): Promise<string | null> => {
       const api = window.felixo?.agentUsage
-      const state = enable
-        ? await api?.enableClaudeStatusline()
-        : await api?.disableClaudeStatusline()
-
-      if (state) {
-        setStatusline(state)
-      }
+      // `{ ok: false, message }` e rejeição são a mesma falha. O estado anterior fica: o resultado de erro não traz
+      // `settingsReadable`, e trocá-lo escondia o botão atrás de "Não foi possível ler ~/.claude/settings.json".
+      const outcome = await resultadoDeIpc(
+        () => (enable ? api?.enableClaudeStatusline() : api?.disableClaudeStatusline()),
+        'Não foi possível alterar a coleta do rate limit.',
+      )
+      if (outcome.ok) setStatusline(outcome.value)
 
       await load(true)
+      return outcome.ok ? null : outcome.message
     },
     [load],
   )
@@ -552,7 +554,7 @@ function ProviderCard({
   onAddTerminal?: (options: NewTerminalOptions) => void
   /** Só o Claude tem coleta por status line; nos demais vem nulo. */
   statusline: ClaudeStatuslineState | null
-  onToggleStatusline: (enable: boolean) => Promise<void>
+  onToggleStatusline: (enable: boolean) => Promise<string | null>
 }) {
   // Sem memo: o status de cada conta envelhece pelo relógio (o tick de 30 s
   // do painel), não só quando o dashboard muda.
@@ -651,14 +653,16 @@ function ClaudeStatuslineControl({
   onToggle,
 }: {
   state: ClaudeStatuslineState
-  onToggle: (enable: boolean) => Promise<void>
+  onToggle: (enable: boolean) => Promise<string | null>
 }) {
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   async function toggle(enable: boolean) {
     setBusy(true)
+    setError(null)
     try {
-      await onToggle(enable)
+      setError(await onToggle(enable))
     } finally {
       setBusy(false)
     }
@@ -683,7 +687,12 @@ function ClaudeStatuslineControl({
   }
 
   return (
-    <div className="mt-2 flex items-center gap-2">
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      {error && (
+        <p role="alert" className="w-full text-[10px] leading-snug text-theme-error">
+          {error}
+        </p>
+      )}
       <button
         type="button"
         disabled={busy}

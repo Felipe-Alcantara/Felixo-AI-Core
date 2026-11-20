@@ -1,4 +1,6 @@
 import { useId, useState } from 'react'
+import { reportActionFailure } from '../services/canvas-persistence-status'
+import { mensagemDeFalha } from '../../shared/ipc/ipc-result'
 import { Copy, Trash2 } from 'lucide-react'
 import type { AgentConfig } from '../hooks/useAgentConfig'
 import { PRESET_CONTEXT_MAX, PRESET_NAME_MAX } from '../services/agent-preset'
@@ -39,6 +41,8 @@ export function AgentPresetFields({ config }: Props) {
     try {
       const saved = await config.saveAsPreset(name)
       if (saved) setNewName('')
+    } catch (error) {
+      reportActionFailure('salvar-preset', mensagemDeFalha(error, 'Não foi possível salvar o preset.'))
     } finally {
       setSaving(false)
     }

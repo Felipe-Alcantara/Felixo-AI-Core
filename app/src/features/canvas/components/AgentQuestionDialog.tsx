@@ -16,6 +16,7 @@ import {
   questionKeyAction,
 } from './agent-question-dialog'
 import { focusWasLost, getFocusableElements, tabTrapTarget } from '../services/keyboard-focus'
+import { resultadoDeIpc } from '../../shared/ipc/ipc-result'
 import type { CanvasAgentQuestion } from '../types'
 
 /** A região do canvas: para onde o foco vai se quem o tinha antes da pergunta saiu da página. */
@@ -58,7 +59,8 @@ export function AgentQuestionDialog() {
   }, [])
 
   const load = useCallback(async () => {
-    const result = await window.felixo?.canvas?.listQuestions?.()
+    // Sem a lista o diálogo só não aparece agora; o evento `onQuestions` traz a próxima. A rejeição não pode escapar.
+    const result = await window.felixo?.canvas?.listQuestions?.().catch(() => undefined)
     if (mountedRef.current && result?.ok) setRequests(result.requests ?? [])
   }, [])
 
@@ -75,10 +77,11 @@ export function AgentQuestionDialog() {
       setBusy(true)
       setError(null)
       try {
-        const result = await window.felixo?.canvas?.answerQuestion?.({ id: question.id, indice })
-        if (mountedRef.current && !result?.ok) {
-          setError(result?.message ?? 'Não foi possível responder.')
-        }
+        const result = await resultadoDeIpc(
+          () => window.felixo?.canvas?.answerQuestion?.({ id: question.id, indice }),
+          'Não foi possível responder.',
+        )
+        if (mountedRef.current && !result.ok) setError(result.message)
       } finally {
         if (mountedRef.current) setBusy(false)
         void load()

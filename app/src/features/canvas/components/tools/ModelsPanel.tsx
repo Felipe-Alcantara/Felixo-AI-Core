@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { resultadoDeIpc } from '../../../shared/ipc/ipc-result'
 import { LayoutList, Trash2 } from 'lucide-react'
 import { CanvasPanel } from './CanvasPanel'
 
@@ -23,12 +24,17 @@ type ModelsPanelProps = {
  */
 export function ModelsPanel({ onClose, toolsMenuOpen }: ModelsPanelProps) {
   const [models, setModels] = useState<CanvasModel[]>([])
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
-    void window.felixo?.models?.list().then((result) => {
-      if (!cancelled && result?.ok && Array.isArray(result.models)) {
-        setModels(result.models as CanvasModel[])
+    void resultadoDeIpc(() => window.felixo?.models?.list(), 'Não foi possível carregar os modelos.').then((outcome) => {
+      if (cancelled) return
+      if (outcome.ok && Array.isArray(outcome.value.models)) {
+        setModels(outcome.value.models as CanvasModel[])
+      } else {
+        // Falha ao listar não é "nenhum modelo configurado".
+        setError(outcome.ok ? 'Não foi possível carregar os modelos.' : outcome.message)
       }
     })
     return () => {
@@ -37,10 +43,17 @@ export function ModelsPanel({ onClose, toolsMenuOpen }: ModelsPanelProps) {
   }, [])
 
   const removeModel = useCallback(async (modelId: string) => {
-    await window.felixo?.models?.delete(modelId)
-    const result = await window.felixo?.models?.list()
-    if (result?.ok && Array.isArray(result.models)) {
-      setModels(result.models as CanvasModel[])
+    const removed = await resultadoDeIpc(() => window.felixo?.models?.delete(modelId), 'Não foi possível remover o modelo.')
+    if (!removed.ok) {
+      setError(removed.message)
+      return
+    }
+    const listed = await resultadoDeIpc(() => window.felixo?.models?.list(), 'O modelo foi removido, mas a lista não recarregou.')
+    if (listed.ok && Array.isArray(listed.value.models)) {
+      setModels(listed.value.models as CanvasModel[])
+      setError(null)
+    } else {
+      setError(listed.ok ? 'O modelo foi removido, mas a lista não recarregou.' : listed.message)
     }
   }, [])
 
@@ -52,8 +65,13 @@ export function ModelsPanel({ onClose, toolsMenuOpen }: ModelsPanelProps) {
       onClose={onClose}
       toolsMenuOpen={toolsMenuOpen}
     >
+      {error && (
+        <p role="alert" className="mb-2 text-xs text-theme-error">
+          {error}
+        </p>
+      )}
       {models.length === 0 ? (
-        <p className="text-sm text-zinc-500">Nenhum modelo configurado.</p>
+        <p className="text-sm text-zinc-500">{error ? 'Lista de modelos indisponível.' : 'Nenhum modelo configurado.'}</p>
       ) : (
         <ul className="felixo-anim-stagger-list flex flex-col gap-1">
           {models.map((model) => (

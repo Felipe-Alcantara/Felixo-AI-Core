@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { Copy, Info, Terminal as TerminalIcon } from 'lucide-react'
+import { Check, Copy, Info, Terminal as TerminalIcon, TriangleAlert } from 'lucide-react'
+import { copiarTexto } from '../../shared/ipc/copy-text'
 import { CanvasPanel } from './tools/CanvasPanel'
 import { AccountSwitchHistory } from './tools/AccountSwitchHistory'
 import { useSessionMetadata } from '../terminal/terminal-session-context'
@@ -180,13 +181,39 @@ export function TerminalDetailsPanel({
   )
 }
 
+/** Copiar um detalhe: o ✓ só depois de copiar; a falha aparece (ícone de alerta com o motivo), em vez de silêncio. */
+function CopyDetailButton({ label, text }: { label: string; text: string }) {
+  const [estado, setEstado] = useState<'ocioso' | 'copiado' | 'falhou'>('ocioso')
+  const [motivo, setMotivo] = useState('')
+  return (
+    <button
+      type="button"
+      className="shrink-0 text-zinc-500 hover:text-zinc-100"
+      aria-label={estado === 'falhou' ? `Copiar ${label}: ${motivo}` : `Copiar ${label}`}
+      title={estado === 'falhou' ? motivo : undefined}
+      onClick={async () => {
+        const copia = await copiarTexto(text)
+        if (copia.ok) {
+          setEstado('copiado')
+        } else {
+          setMotivo(copia.message)
+          setEstado('falhou')
+        }
+        window.setTimeout(() => setEstado('ocioso'), copia.ok ? 1500 : 4000)
+      }}
+    >
+      {estado === 'copiado' ? <Check size={12} /> : estado === 'falhou' ? <TriangleAlert size={12} className="text-theme-error" /> : <Copy size={12} />}
+    </button>
+  )
+}
+
 function Detail({ label, value, copy, mono = false }: { label: string; value: string; copy?: string; mono?: boolean }) {
   return (
     <div className="space-y-1">
       <div className="text-[10px] uppercase tracking-wide text-zinc-500">{label}</div>
       <div className="flex items-start gap-1 rounded-sm border border-white/5 bg-black/20 px-2 py-1.5">
         <span className={`min-w-0 flex-1 wrap-break-word ${mono ? 'font-mono text-[11px]' : ''}`}>{value}</span>
-        {copy && <button type="button" className="shrink-0 text-zinc-500 hover:text-zinc-100" aria-label={`Copiar ${label}`} onClick={() => void navigator.clipboard?.writeText(copy)}><Copy size={12} /></button>}
+        {copy && <CopyDetailButton label={label} text={copy} />}
       </div>
     </div>
   )

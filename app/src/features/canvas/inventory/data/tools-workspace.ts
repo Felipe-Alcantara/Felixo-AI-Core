@@ -21,8 +21,6 @@ const TASK_PROMPT_EMPACOTADO = '3d791f95-497e-81bf-a6c7-efef573d87ae'
 
 const NOVA_SMOKE = '3ec91f95-497e-81ca-8319-ee657b0b6492'
 const NOVA_SOBREPOSICAO = '3ec91f95-497e-8112-82f9-fd1b86e3ec7d'
-const NOVA_IPC_ENGOLIDO = '3ec91f95-497e-8110-b363-cfade2b68b7a'
-const NOVA_GIT_VAZIO = '3ec91f95-497e-8110-b363-cfade2b68b7a'
 
 /** Sobreposição comum a todo painel flutuante comum (moldura `CanvasPanel`). */
 const PANEL_OVERLAP =
@@ -186,6 +184,7 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
       'CanvasPanel',
     ],
     tests: [
+      { file: 'src/features/shared/ipc/ipc-failures.test.ts' },
       { file: `${TOOLS}/projects-panel-order.test.ts` },
       { file: 'src/features/canvas/services/project-file-action.test.ts' },
       { file: 'src/features/canvas/services/run-file-command.test.ts' },
@@ -204,16 +203,6 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
         what: 'ProjectsPanel.tsx:133: sem repositório na pasta escolhida, o nome sai de folder.split("/"); no Windows o caminho (realpath) usa "\\" e o projeto é registrado com o caminho inteiro como nome',
         risk: 'baixo',
         task: '3ec91f95-497e-8103-b360-c1979d6992f4',
-      },
-      {
-        what: 'ProjectsPanel.tsx:188-199: goUp não limpa loadError — o erro de abrir arquivo/editor continua na tela depois de subir de pasta, sobre uma listagem que carregou bem',
-        risk: 'baixo',
-        task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
-      },
-      {
-        what: 'erro engolido: ProjectsPanel.tsx:116-154 e 158-166 ignoram o resultado de projects:save e de onRemoveFolder; pickFolder/detectRepos/save/listDirectory sem catch (listDirectory rejeitado prende o "Carregando…")',
-        risk: 'baixo',
-        task: NOVA_IPC_ENGOLIDO,
       },
     ],
     overlap: `${PANEL_OVERLAP}. Porte md; lista e navegador dividem a mesma moldura (trocar de vista não reanima nem refaz o foco). Rodar e Abrir no canvas ficam com opacity 0 até hover/foco`,
@@ -294,17 +283,12 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
     ],
     ipc: ['notes:list', 'notes:save', 'notes:delete'],
     dependsOn: ['CanvasPanel', 'addNode (CanvasView)', 'focusNode (CanvasView)'],
-    tests: [{ file: 'src/features/canvas/services/debounced-save-queue.test.ts' }],
+    tests: [{ file: 'src/features/shared/ipc/ipc-failures.test.ts' }, { file: 'src/features/canvas/services/debounced-save-queue.test.ts' }],
     gaps: [
       {
         what: 'nenhum teste (unitário ou smoke) cobre o painel Notas: criar blocos, centralizar, criar/editar/remover nota salva',
         risk: 'médio',
         task: NOVA_SMOKE,
-      },
-      {
-        what: 'erro engolido: NotesPanel.tsx:72-74, 113 e 123 chamam notes:save/notes:delete sem ler o resultado nem tratar rejeição; notes:list falho vira "Nenhuma nota salva ainda."',
-        risk: 'médio',
-        task: NOVA_IPC_ENGOLIDO,
       },
     ],
     overlap: `${PANEL_OVERLAP}. Porte sm; o conteúdo rola por dentro (overflow-auto)`,
@@ -336,17 +320,12 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
     ],
     ipc: ['models:list', 'models:delete'],
     dependsOn: ['CanvasPanel'],
-    tests: [],
+    tests: [{ file: 'src/features/shared/ipc/ipc-failures.test.ts' }, ],
     gaps: [
       {
         what: 'nenhum teste cobre o painel Modelos (listar e remover)',
         risk: 'baixo',
         task: NOVA_SMOKE,
-      },
-      {
-        what: 'erro engolido: ModelsPanel.tsx:29 (list sem catch: falha vira lista vazia) e 39-45 (remoção sem confirmação, sem leitura do resultado e sem retorno)',
-        risk: 'baixo',
-        task: NOVA_IPC_ENGOLIDO,
       },
     ],
     overlap: `${PANEL_OVERLAP}. Porte sm`,
@@ -472,6 +451,7 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
       'FelixoSelect',
     ],
     tests: [
+      { file: 'src/features/shared/ipc/ipc-failures.test.ts' },
       { file: SMOKE_PROMPTS, check: 'catalogo' },
       { file: SMOKE_PROMPTS, check: 'combinacao' },
       { file: SMOKE_PROMPTS, check: 'fallback' },
@@ -506,11 +486,6 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
         what: 'Novo prompt/Criar, edição com autosave, troca de escopo e Remover não têm teste de interface (só as funções puras)',
         risk: 'médio',
         task: NOVA_SMOKE,
-      },
-      {
-        what: 'erro engolido: PromptsPanel.tsx:138-146 e 168-177 não tratam a rejeição de navigator.clipboard.writeText (CanvasView.tsx:1826), e sem navigator.clipboard o retorno diz "copiado" sem copiar; automations:delete sem leitura do resultado (PromptsPanel.tsx:311)',
-        risk: 'médio',
-        task: NOVA_IPC_ENGOLIDO,
       },
     ],
     overlap: `${PANEL_OVERLAP}. Porte xl (o mais largo); disputa largura com a gaveta fixada e fica sob a lista Elementos em janela pequena`,
@@ -627,6 +602,7 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
       'terminal-session-store.sendText',
     ],
     tests: [
+      { file: 'src/features/shared/ipc/ipc-failures.test.ts' },
       { file: SMOKE_PROMPTS, check: 'skill' },
       { file: SMOKE_PROMPTS, check: 'gravado' },
       { file: `${TOOLS}/skills-panel-catalog.test.ts` },
@@ -644,11 +620,6 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
         what: 'só o Ativar da biblioteca é exercitado (P4); Ativar de skill própria, criar/editar/remover, ocultar/restaurar e o checkbox de terceiros não têm teste de interface',
         risk: 'médio',
         task: NOVA_SMOKE,
-      },
-      {
-        what: 'erro engolido: SkillsPanel.tsx:168-172 (persist ignora o resultado de canvas:set-skills e mostra a lista nova mesmo sem gravar) e 209-218 (activate sem try: rejeição do clipboard em CanvasView.tsx:1801 sem retorno)',
-        risk: 'médio',
-        task: NOVA_IPC_ENGOLIDO,
       },
     ],
     overlap: `${PANEL_OVERLAP}. Porte sm; a lista do sistema tem max-h-40 com rolagem interna e respiro para o anel de foco`,
@@ -768,6 +739,7 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
       'GitDiffView',
     ],
     tests: [
+      { file: 'src/features/shared/ipc/ipc-failures.test.ts' },
       { file: 'scripts/canvas-smoke-sobreposicoes.cjs', check: 'checarGitEAvisoDeClisComGavetaAberta' },
       { file: `${TOOLS}/git-status.test.ts` },
       { file: `${TOOLS}/repo-tree.test.ts` },
@@ -780,16 +752,6 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
         what: 'nenhum teste de interface do Source Control: escolher repositório, trocar branch, pull/push, commit e as abas (só o serviço do processo principal e as funções puras)',
         risk: 'alto',
         task: NOVA_SMOKE,
-      },
-      {
-        what: 'GitPanel.tsx:119, 137 e 148: falha de git:list-files, git:list-branches e git:get-log vira lista vazia sem erro — o explorador diz "Nenhum arquivo corresponde ao filtro." e o histórico "Nenhum commit ainda."',
-        risk: 'médio',
-        task: NOVA_GIT_VAZIO,
-      },
-      {
-        what: 'erro engolido: GitPanel.tsx:192-212 (selectProject) e 284-321 (runAction) não têm catch — uma rejeição de IPC escapa sem mensagem',
-        risk: 'baixo',
-        task: NOVA_IPC_ENGOLIDO,
       },
       {
         what: 'Medido (checarGitEAvisoDeClisComGavetaAberta): sem gaveta o painel mede 239 px em 768 px e 515 px em 1280 px; com a gaveta aberta em 1280 px ele encolhe para 239 px (abaixo do piso de 260 px) e em 768 px a gaveta (440 px) cobre 145×725 px do painel. Defeito conhecido.',
@@ -1232,13 +1194,8 @@ export const workspaceToolSurfaces: InventoryElement[] = [
     persistence: ['nenhuma (relido a cada abertura e ação via git:get-log)'],
     ipc: ['git:get-log'],
     dependsOn: ['GitPanel (commits, historyLoading, ahead, historyReadAt)', 'formatRelativeTime'],
-    tests: [{ file: 'electron/services/git-service.test.cjs' }],
+    tests: [{ file: 'src/features/shared/ipc/ipc-failures.test.ts' }, { file: 'electron/services/git-service.test.cjs' }],
     gaps: [
-      {
-        what: 'GitPanel.tsx:148: falha de git:get-log zera os commits sem erro e a aba diz "Nenhum commit ainda."',
-        risk: 'médio',
-        task: NOVA_GIT_VAZIO,
-      },
       {
         what: 'sem teste de interface da aba Histórico (marca "não enviado", tempo relativo)',
         risk: 'baixo',

@@ -27,6 +27,8 @@ import {
 } from 'lucide-react'
 import { NodeHeader } from './NodeHeader'
 import { DeferredMarkdownContent } from '../../shared/components/DeferredMarkdownContent'
+import { copiarTexto } from '../../shared/ipc/copy-text'
+import { mensagemDeFalha, resultadoDeIpc } from '../../shared/ipc/ipc-result'
 import { dirnameOf, markdownImageRoot } from '../../shared/components/markdown-image-src'
 import { useProjectRoots } from '../hooks/project-roots-context'
 import { isSafeImagePreviewMimeType, resolvePreviewKind } from './file-node-preview'
@@ -63,6 +65,7 @@ const DIAGNOSIS_FEEDBACK: Record<DiagnosisRequestStatus, string> = {
   'no-terminal': 'Ligue este arquivo a um terminal com agente primeiro.',
   'no-file': 'Arquivo do bloco indisponível.',
   'resolve-failed': 'Não foi possível resolver o caminho do arquivo.',
+  'send-failed': 'O pedido não chegou ao terminal do agente.',
 }
 
 /**
@@ -113,6 +116,7 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
   const [repairing, setRepairing] = useState(false)
   const [diagnosing, setDiagnosing] = useState(false)
   const [diagnosisFeedback, setDiagnosisFeedback] = useState('')
+  const [copyError, setCopyError] = useState('')
   const [linkMenuOpen, setLinkMenuOpen] = useState(false)
   const linkMenuRef = useRef<HTMLDivElement>(null)
   // Timer do "copiado!" — guardado numa ref e limpo no unmount, senão copiar
@@ -245,6 +249,8 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
     try {
       const status = await nodeData.onGenerateDiagnosis(id)
       setDiagnosisFeedback(DIAGNOSIS_FEEDBACK[status])
+    } catch (error) {
+      setDiagnosisFeedback(mensagemDeFalha(error, 'Não foi possível pedir o diagnóstico.'))
     } finally {
       setDiagnosing(false)
     }
@@ -252,7 +258,15 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
 
   const copyPath = async () => {
     if (!absolutePath) return
-    await navigator.clipboard?.writeText(absolutePath)
+    const copy = await copiarTexto(absolutePath)
+    if (!copy.ok) {
+      // Sem ✓: o caminho não foi para a área de transferência.
+      setCopied(false)
+      if (isImage) setImageActionFeedback(copy.message)
+      else setCopyError(copy.message)
+      return
+    }
+    setCopyError('')
     if (copiedTimeoutRef.current !== null) window.clearTimeout(copiedTimeoutRef.current)
     setCopied(true)
     copiedTimeoutRef.current = window.setTimeout(() => {
@@ -263,19 +277,15 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
 
   const openImageInSystem = async () => {
     if (!isImage || !absolutePath || !window.felixo?.files?.openImage) return
-    const result = await window.felixo.files.openImage({ path: absolutePath })
-    setImageActionFeedback(
-      result?.ok ? 'Imagem aberta no sistema.' : result?.message ?? 'Não foi possível abrir a imagem.',
-    )
+    const opened = await resultadoDeIpc(() => window.felixo?.files?.openImage({ path: absolutePath }), 'Não foi possível abrir a imagem.')
+    setImageActionFeedback(opened.ok ? 'Imagem aberta no sistema.' : opened.message)
   }
 
   const saveImageCopy = async () => {
     if (!isImage || !absolutePath || !window.felixo?.files?.saveImageCopy) return
-    const result = await window.felixo.files.saveImageCopy({ path: absolutePath })
-    if (result?.canceled) return
-    setImageActionFeedback(
-      result?.ok ? 'Cópia salva.' : result?.message ?? 'Não foi possível salvar a cópia.',
-    )
+    const saved = await resultadoDeIpc(() => window.felixo?.files?.saveImageCopy({ path: absolutePath }), 'Não foi possível salvar a cópia.')
+    if (saved.ok && saved.value.canceled) return
+    setImageActionFeedback(saved.ok ? 'Cópia salva.' : saved.message)
   }
 
   const duplicateImage = async () => {
@@ -285,6 +295,8 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
     try {
       const ok = await nodeData.onDuplicateImage(id)
       setImageActionFeedback(ok ? 'Imagem duplicada no canvas.' : 'Não foi possível duplicar a imagem.')
+    } catch (error) {
+      setImageActionFeedback(mensagemDeFalha(error, 'Não foi possível duplicar a imagem.'))
     } finally {
       setDuplicating(false)
     }
@@ -297,6 +309,8 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
     try {
       const ok = await nodeData.onRepairImage(id)
       setImageActionFeedback(ok ? 'Referência da imagem reparada.' : 'A imagem não foi reparada.')
+    } catch (error) {
+      setImageActionFeedback(mensagemDeFalha(error, 'A imagem não foi reparada.'))
     } finally {
       setRepairing(false)
     }
@@ -304,9 +318,9 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
 
   const removeTemporaryImage = async () => {
     if (!nodeData.onRemoveTemporaryImage) return
-    const ok = await nodeData.onRemoveTemporaryImage(id)
-    if (!ok) {
-      setImageActionFeedback('Não foi possível remover o arquivo temporário.')
+    const removed = await resultadoDeIpc(() => nodeData.onRemoveTemporaryImage?.(id), 'Não foi possível remover o arquivo temporário.')
+    if (!removed.ok) {
+      setImageActionFeedback(removed.message)
     }
   }
 
@@ -430,6 +444,12 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
           className="nodrag border-b border-[color-mix(in_srgb,var(--color-error)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-error)_14%,transparent)] px-2 py-1 text-[11px] text-theme-error"
         >
           {document.error || document.saveError}
+        </div>
+      )}
+
+      {!isImage && copyError && (
+        <div role="alert" className="nodrag border-b border-white/10 bg-white/4 px-2 py-1 text-[11px] text-theme-error">
+          {copyError}
         </div>
       )}
 

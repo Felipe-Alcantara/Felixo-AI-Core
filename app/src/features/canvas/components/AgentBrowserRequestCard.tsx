@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import { resultadoDeIpc } from '../../shared/ipc/ipc-result'
 import { ExternalLink, Globe, LayoutDashboard, X } from 'lucide-react'
 
 import { describeLinkDestination } from '../../shared/links/link-destination'
@@ -57,7 +58,7 @@ export function AgentBrowserRequestCard({ onOpenCanvas }: { onOpenCanvas?: () =>
   }, [])
 
   const load = useCallback(async () => {
-    const result = await window.felixo?.canvas?.listBrowserRequests?.()
+    const result = await window.felixo?.canvas?.listBrowserRequests?.().catch(() => undefined)
     if (mountedRef.current && result?.ok) setRequests(result.requests ?? [])
   }, [])
 
@@ -88,9 +89,12 @@ export function AgentBrowserRequestCard({ onOpenCanvas }: { onOpenCanvas?: () =>
       setError(null)
       try {
         for (const target of targets) {
-          const result = await window.felixo?.canvas?.decideBrowserRequest?.(
-            browserDecisionParams(target, destino),
+          // Rejeição do IPC vira a mesma falha de `ok: false`: o cartão mostra o motivo.
+          const outcome = await resultadoDeIpc(
+            () => window.felixo?.canvas?.decideBrowserRequest?.(browserDecisionParams(target, destino)),
+            'Não foi possível decidir o pedido.',
           )
+          const result = outcome.ok ? outcome.value : { ok: false as const, message: outcome.message }
           const failure = browserDecisionError(result)
           if (failure) {
             if (mountedRef.current) setError({ requestId: target.id, message: failure })

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { dispensaDoAndamentoCaiu, tentarInstalarDeNovo } from './cli-setup-actions'
 import {
   cliSetupNoticeKey,
   presentCliSetupStatus,
@@ -27,9 +28,12 @@ export function useCliSetupStatus(): {
   dismissed: boolean
   dismiss: () => void
   retry: () => void
+  /** A nova tentativa foi recusada ou falhou: o aviso diz que ela não começou. */
+  retryError: string | null
 } {
   const [status, setStatus] = useState<CliSetupStatus | null>(null)
   const [dismissedKey, setDismissedKey] = useState<string | null>(null)
+  const [retryError, setRetryError] = useState<string | null>(null)
 
   useEffect(() => {
     const bridge = window.felixo?.cliSetup
@@ -42,16 +46,24 @@ export function useCliSetupStatus(): {
     // aplicado pelo evento e a interface "regredia" visualmente.
     let receivedPush = false
 
-    void bridge.getStatus().then((result) => {
-      if (!cancelled && !receivedPush && result?.status) {
-        setStatus(result.status)
-      }
-    })
+    // Sem a leitura inicial não há o que mostrar ainda: o próximo evento `onStatus` traz o estado. A rejeição não
+    // pode virar unhandledrejection só no QA Logger.
+    void bridge
+      .getStatus()
+      .then((result) => {
+        if (!cancelled && !receivedPush && result?.status) {
+          setStatus(result.status)
+        }
+      })
+      .catch(() => {})
 
     const unsubscribe = bridge.onStatus((next) => {
       if (cancelled) return
       receivedPush = true
       setStatus(next)
+      setRetryError(null)
+      // Acabou a rodada que a pessoa dispensou: o andamento da próxima não nasce escondido.
+      setDismissedKey((current) => (dispensaDoAndamentoCaiu(current, next.state) ? null : current))
     })
 
     return () => {
@@ -86,10 +98,15 @@ export function useCliSetupStatus(): {
    * resto do ciclo.
    */
   const retry = useCallback(() => {
-    void window.felixo?.cliSetup?.retry()
+    setRetryError(null)
+    // Quem dispensou o andamento anterior quer ver o desta tentativa.
+    setDismissedKey((current) => (current === 'em-andamento' ? null : current))
+    void tentarInstalarDeNovo(window.felixo?.cliSetup).then((result) => {
+      if (!result.ok) setRetryError(result.message)
+    })
   }, [])
 
   const dismissed = dismissedKey !== null && dismissedKey === noticeKey
 
-  return { presentation, noticeKey, dismissed, dismiss, retry }
+  return { presentation, noticeKey, dismissed, dismiss, retry, retryError }
 }

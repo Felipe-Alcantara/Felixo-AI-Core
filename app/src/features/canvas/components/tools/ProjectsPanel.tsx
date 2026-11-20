@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { reportActionFailure } from '../../services/canvas-persistence-status'
+import { mensagemDeFalha, resultadoDeIpc } from '../../../shared/ipc/ipc-result'
 import {
   ChevronRight,
   File as FileIcon,
@@ -108,6 +110,10 @@ export function ProjectsPanel({
           setLoadError(result?.message ?? 'Não foi possível listar a pasta.')
         }
       })
+      // Rejeição do IPC: sem isto o "Carregando…" ficava preso e a rejeição escapava.
+      .catch((error) => {
+        if (!cancelled) setLoadError(mensagemDeFalha(error, 'Não foi possível listar a pasta.'))
+      })
     return () => {
       cancelled = true
     }
@@ -139,15 +145,22 @@ export function ProjectsPanel({
         if (existingPaths.has(repo.path)) {
           continue
         }
-        await bridge.save({
-          id: crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
-          name: repo.name,
-          path: repo.path,
-        })
+        const saved = await resultadoDeIpc(
+          () =>
+            bridge.save({
+              id: crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
+              name: repo.name,
+              path: repo.path,
+            }),
+          `Não foi possível salvar o projeto ${repo.name}.`,
+        )
+        if (!saved.ok) reportActionFailure('adicionar-projeto', saved.message)
       }
 
       await reload()
       onProjectsChanged?.()
+    } catch (error) {
+      reportActionFailure('adicionar-projeto', mensagemDeFalha(error, 'Não foi possível adicionar o projeto.'))
     } finally {
       setBusy(false)
     }
@@ -158,7 +171,11 @@ export function ProjectsPanel({
   const removeProject = useCallback(
     async (projectId: string) => {
       setPendingRemovalId(null)
-      await onRemoveFolder(projectId)
+      try {
+        await onRemoveFolder(projectId)
+      } catch (error) {
+        reportActionFailure('remover-projeto', mensagemDeFalha(error, 'Não foi possível remover o projeto.'))
+      }
       await reload()
       onProjectsChanged?.()
     },
@@ -187,6 +204,8 @@ export function ProjectsPanel({
 
   const goUp = () => {
     if (!browsing) return
+    // O erro de abrir arquivo/editor era da pasta anterior: não fica sobre a listagem que carregou bem.
+    setLoadError(null)
     if (!browsing.relativePath) {
       setBrowsing(null)
       setEntries(null)

@@ -26,7 +26,12 @@ export function useAgentPresets() {
 
   const load = useCallback(() => {
     void window.felixo?.agentPresets?.list().then((result) => {
-      if (!mountedRef.current || !result?.ok) return
+      if (!mountedRef.current) return
+      if (!result?.ok) {
+        // Sem a lista só os nativos aparecem: a tela diz isso em vez de parecer que não há presets da pessoa.
+        setError(result?.message ?? 'Não foi possível carregar os seus presets: só os nativos aparecem.')
+        return
+      }
       // Uma linha que a versão atual não consegue reconstruir some da lista,
       // em vez de derrubar o formulário.
       setCustom(
@@ -34,6 +39,8 @@ export function useAgentPresets() {
           .map((item) => normalizePreset(item))
           .filter((item): item is AgentPreset => item !== null && !item.native),
       )
+    }, (error) => {
+      if (mountedRef.current) setError(error instanceof Error && error.message ? error.message : 'Não foi possível carregar os seus presets: só os nativos aparecem.')
     })
   }, [])
 
@@ -123,7 +130,10 @@ export function useAgentPresets() {
     [presets, save],
   )
 
-  return { presets, create, save, duplicate, remove, importFromText, error }
+  /** O erro é de uma ação anterior: a próxima ação (exportar, importar…) começa sem ele, em vez de herdá-lo. */
+  const clearError = useCallback(() => setError(null), [])
+
+  return { presets, create, save, duplicate, remove, importFromText, error, clearError }
 }
 
 export type AgentPresets = ReturnType<typeof useAgentPresets>

@@ -1,5 +1,6 @@
 import { memo, useCallback, useLayoutEffect, useRef, type RefObject } from 'react'
 
+import { copiarTexto } from '../../shared/ipc/copy-text'
 import { DeferredMarkdownContent } from '../../shared/components/DeferredMarkdownContent'
 import { useTerminalReading } from '../hooks/useTerminalReading'
 import type { ReadingRole } from '../terminal/reading/reading-blocks'
@@ -39,7 +40,10 @@ async function copyReading(panel: HTMLElement | null, reading: TerminalReading |
   const selection = window.getSelection()
   const selected = panel && selection && panel.contains(selection.anchorNode) ? selection.toString() : ''
   const text = selected || readingPlainText(reading)
-  if (text) await navigator.clipboard?.writeText(text)
+  if (text) {
+    const copy = await copiarTexto(text)
+    if (!copy.ok) throw new Error(copy.message)
+  }
   return text
 }
 

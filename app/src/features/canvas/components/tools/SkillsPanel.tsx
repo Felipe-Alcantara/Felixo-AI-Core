@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { reportActionFailure } from '../../services/canvas-persistence-status'
+import { resultadoDeIpc } from '../../../shared/ipc/ipc-result'
 import {
   BrainCircuit,
   Check,
@@ -166,8 +168,15 @@ export function SkillsPanel({
   }
 
   const persist = async (next: CanvasSkill[]) => {
+    const previous = skills
     setSkills(next)
-    await window.felixo?.canvas?.setSkills?.(next)
+    const saved = await resultadoDeIpc(() => window.felixo?.canvas?.setSkills?.(next), 'Não foi possível salvar as skills.')
+    if (!saved.ok) {
+      // A lista nova só fica na tela se foi gravada: do contrário a skill "sumia" e voltava ao reabrir o painel.
+      setSkills(previous)
+      reportActionFailure('salvar-skills', saved.message)
+      return
+    }
     await recarregarCatalogo()
   }
 
@@ -207,7 +216,12 @@ export function SkillsPanel({
   }
 
   const activate = async (skill: CanvasSkill) => {
-    const result = await onActivateSkill(skill)
+    let result: SkillActivationResult
+    try {
+      result = await onActivateSkill(skill)
+    } catch {
+      result = 'failed'
+    }
     setFeedbackId(skill.id)
     setFeedbackResult(result)
     setFeedbackText(describeSkillActivationFeedback(result).text)

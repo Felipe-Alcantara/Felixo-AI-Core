@@ -10,6 +10,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
 import { createPortal } from 'react-dom'
+import { copiarTexto } from '../ipc/copy-text'
 import { Copy, ExternalLink, Globe, Mail, ShieldAlert, X } from 'lucide-react'
 
 import { revealHiddenUrlCharacters } from '../external-url-policy'
@@ -68,6 +69,14 @@ export function LinkChooserHost() {
   // o leitor de tela não anuncia de novo. A contagem troca o nó do aviso a
   // cada cópia, e nó novo é anunciado.
   const [copies, setCopies] = useState(0)
+  // A área de transferência recusou: "Link copiado" não pode aparecer; este aviso diz o motivo.
+  const [copyFailure, setCopyFailure] = useState<string | null>(null)
+  const onCopyFailed = useCallback((message: string) => setCopyFailure(message), [])
+  useEffect(() => {
+    if (!copyFailure) return
+    const timer = window.setTimeout(() => setCopyFailure(null), 4000)
+    return () => window.clearTimeout(timer)
+  }, [copyFailure])
   const onCopied = useCallback((at: Point) => {
     setCopiedAt(at)
     setCopies((count) => count + 1)
@@ -97,7 +106,7 @@ export function LinkChooserHost() {
     <>
       {request &&
         createPortal(
-          <LinkChooserMenu key={version} request={request} onCopied={onCopied} />,
+          <LinkChooserMenu key={version} request={request} onCopied={onCopied} onCopyFailed={onCopyFailed} />,
           document.body,
         )}
       {copiedAt &&
@@ -118,7 +127,18 @@ export function LinkChooserHost() {
             notice={failure.notice}
             onClose={closeFailure}
             onCopied={onCopied}
+            onCopyFailed={onCopyFailed}
           />,
+          document.body,
+        )}
+      {copyFailure &&
+        createPortal(
+          <div
+            role="alert"
+            className="pointer-events-none fixed bottom-24 left-1/2 z-70 -translate-x-1/2 rounded-md border border-white/10 bg-(--f-surface-panel) px-2 py-1 text-xs text-theme-error shadow-xl"
+          >
+            {copyFailure}
+          </div>,
           document.body,
         )}
       <div role="status" aria-live="polite" className="sr-only">
@@ -132,6 +152,7 @@ type FailureAlertProps = {
   notice: LinkOpenFailureNotice
   onClose: () => void
   onCopied: (at: Point) => void
+  onCopyFailed: (message: string) => void
 }
 
 /**
@@ -145,7 +166,7 @@ type FailureAlertProps = {
  * isso, ele caía no `body`, o terminal parava de receber teclas e um
  * Backspace apagava o bloco selecionado no canvas.
  */
-function LinkOpenFailureAlert({ notice, onClose, onCopied }: FailureAlertProps) {
+function LinkOpenFailureAlert({ notice, onClose, onCopied, onCopyFailed }: FailureAlertProps) {
   const boxRef = useRef<HTMLDivElement>(null)
   const [returnFocus] = useState(() => {
     const active = document.activeElement
@@ -161,13 +182,15 @@ function LinkOpenFailureAlert({ notice, onClose, onCopied }: FailureAlertProps) 
 
   const copy = () => {
     const rect = boxRef.current?.getBoundingClientRect()
-    void globalThis.navigator?.clipboard?.writeText(notice.copyText).then(
-      () => {
-        onCopied(rect ? { left: rect.left, top: Math.max(8, rect.top - 32) } : { left: 16, top: 16 })
-        close()
-      },
-      () => undefined,
-    )
+    void copiarTexto(notice.copyText).then((copy) => {
+      if (!copy.ok) {
+        // O aviso fica aberto com o motivo: fechar diria "copiado" sem ter copiado.
+        onCopyFailed(copy.message)
+        return
+      }
+      onCopied(rect ? { left: rect.left, top: Math.max(8, rect.top - 32) } : { left: 16, top: 16 })
+      close()
+    })
   }
 
   return (
@@ -224,9 +247,10 @@ function LinkOpenFailureAlert({ notice, onClose, onCopied }: FailureAlertProps) 
 type MenuProps = {
   request: LinkChooserRequest
   onCopied: (at: Point) => void
+  onCopyFailed: (message: string) => void
 }
 
-function LinkChooserMenu({ request, onCopied }: MenuProps) {
+function LinkChooserMenu({ request, onCopied, onCopyFailed }: MenuProps) {
   const destination = useMemo(
     () => describeLinkDestination(request.url, request.origin),
     [request.url, request.origin],
@@ -327,10 +351,10 @@ function LinkChooserMenu({ request, onCopied }: MenuProps) {
         : undefined,
       copy: (text) => {
         const at = position ?? { left: request.anchor.x, top: request.anchor.y }
-        void globalThis.navigator?.clipboard?.writeText(text).then(
-          () => onCopied(at),
-          () => undefined,
-        )
+        void copiarTexto(text).then((copy) => {
+          if (copy.ok) onCopied(at)
+          else onCopyFailed(copy.message)
+        })
       },
     })
     closeLinkChooser()

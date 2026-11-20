@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { reportActionFailure } from '../canvas/services/canvas-persistence-status'
+import { instalarAtualizacao, verificarAtualizacao } from './update-actions'
 import {
   presentUpdateStatus,
   updateNoticeKey,
@@ -38,11 +40,15 @@ export function useUpdateStatus(): {
     // aplicado pelo evento e a interface "regredia" visualmente.
     let receivedPush = false
 
-    void bridge.getStatus().then((result) => {
-      if (!cancelled && !receivedPush && result?.status) {
-        setStatus(result.status)
-      }
-    })
+    // Sem a leitura inicial o próximo evento `onStatus` traz o estado; a rejeição não vira unhandledrejection.
+    void bridge
+      .getStatus()
+      .then((result) => {
+        if (!cancelled && !receivedPush && result?.status) {
+          setStatus(result.status)
+        }
+      })
+      .catch(() => {})
 
     const unsubscribe = bridge.onStatus((next) => {
       if (cancelled) return
@@ -65,7 +71,9 @@ export function useUpdateStatus(): {
   }, [noticeKey])
 
   const install = useCallback(() => {
-    void window.felixo?.updates?.install()
+    void instalarAtualizacao(window.felixo?.updates).then((result) => {
+      if (!result.ok) reportActionFailure('atualizacao:instalar', result.message)
+    })
   }, [])
 
   /**
@@ -76,7 +84,9 @@ export function useUpdateStatus(): {
    * reage ao fluxo, como no resto do ciclo.
    */
   const check = useCallback(() => {
-    void window.felixo?.updates?.check()
+    void verificarAtualizacao(window.felixo?.updates).then((result) => {
+      if (!result.ok) reportActionFailure('atualizacao:verificar', result.message)
+    })
   }, [])
 
   const dismissed = dismissedKey !== null && dismissedKey === noticeKey

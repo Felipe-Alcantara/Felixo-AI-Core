@@ -32,6 +32,7 @@ import { useDictation } from '../hooks/useDictation'
 import { useDictationShortcut } from '../hooks/useDictationShortcut'
 import { formatShortcut, matchesShortcut } from '../services/dictation'
 import { NodeColorMenu } from './NodeColorMenu'
+import { copiarTexto } from '../../shared/ipc/copy-text'
 import { frameClassName } from './frame-colors'
 import { notificationClassName, unreadCategoryByNode } from '../terminal/notification-category'
 import { initialAutoFitState, markAutoFitExecuted, planAutoFit, registerViewportMove } from '../services/viewport-auto-fit'
@@ -137,6 +138,7 @@ import {
   describeFailure,
   reportPersistenceFailure,
   usePersistenceFailures,
+  reportActionFailure,
 } from '../services/canvas-persistence-status'
 import { useCanvasProjects } from '../hooks/useCanvasProjects'
 import { useCanvasTransfer } from '../hooks/useCanvasTransfer'
@@ -158,6 +160,7 @@ import { summarizeCanvasSelection } from '../services/canvas-selection'
 import {
   agentLabelOf,
   announceFileNodeToTerminalNode,
+  ANNOUNCE_FAILURE_MESSAGE,
   announceFileToTerminal,
   getLinkedFileNodeIds,
   requestRepoDiagnosis,
@@ -1262,7 +1265,9 @@ function CanvasInner({
           terminalNode,
           store,
           fileLinkPromptRef.current,
-        )
+        ).then((status) => {
+          if (status !== 'sent') reportActionFailure(`ligar-arquivo:${fileNodeId}:${agentId}`, ANNOUNCE_FAILURE_MESSAGE[status])
+        })
       }
     },
     [fileLinkPromptRef, setEdges, store],
@@ -1343,8 +1348,8 @@ function CanvasInner({
         })
         return toActivationResult(result)
       }
-      await navigator.clipboard?.writeText(insertion.content)
-      return 'copied'
+      // Sem copiar de verdade (sem clipboard ou recusado) a ativação FALHOU: dizer "copiado" perderia a skill.
+      return (await copiarTexto(insertion.content)).ok ? 'copied' : 'failed'
     },
     [expandedTerminalId, store],
   )
@@ -1368,8 +1373,7 @@ function CanvasInner({
         })
         return toActivationResult(result)
       }
-      await navigator.clipboard?.writeText(insertion.content)
-      return 'copied'
+      return (await copiarTexto(insertion.content)).ok ? 'copied' : 'failed'
     },
     [expandedTerminalId, store],
   )
@@ -1381,10 +1385,15 @@ function CanvasInner({
     deliver: async (text) => {
       if (expandedTerminalId) {
         const result = await store.typeText(expandedTerminalId, text)
-        return result.delivered ? null : 'Não consegui digitar no terminal. O texto foi copiado.'
+        if (result.delivered) return null
+        // O aviso só promete a cópia se ela aconteceu: o texto ditado não pode se perder calado.
+        return (await copiarTexto(text)).ok
+          ? 'Não consegui digitar no terminal. O texto foi copiado.'
+          : 'Não consegui digitar no terminal nem copiar o texto. Ele foi: ' + text
       }
-      await navigator.clipboard?.writeText(text)
-      return 'Nenhum terminal aberto: copiei o texto ditado. Cole onde quiser.'
+      return (await copiarTexto(text)).ok
+        ? 'Nenhum terminal aberto: copiei o texto ditado. Cole onde quiser.'
+        : 'Nenhum terminal aberto e não consegui copiar. O texto ditado foi: ' + text
     },
   })
   const { shortcut: dictationShortcut } = useDictationShortcut()
@@ -1775,7 +1784,9 @@ function CanvasInner({
           return delivery
         },
       }
-      void announceFileToTerminal(connection, nodes, routeSink, fileLinkPromptRef.current)
+      void announceFileToTerminal(connection, nodes, routeSink, fileLinkPromptRef.current).then((status) => {
+        if (status && status !== 'sent') reportActionFailure(`ligar-arquivo:${connection.source}:${connection.target}`, ANNOUNCE_FAILURE_MESSAGE[status])
+      })
       announceAgentCollaboration(connection, nodes, routeSink)
     },
     [fileLinkPromptRef, markRouteDelivered, setEdges, nodes, store],

@@ -349,13 +349,8 @@ export const terminalSurfaces: InventoryElement[] = [
     persistence: ['nenhuma'],
     ipc: [],
     dependsOn: ['useTerminalSessions', 'terminal-session-store.copy'],
-    tests: [],
+    tests: [{ file: 'src/features/shared/ipc/ipc-failures.test.ts' }, ],
     gaps: [
-      {
-        what: 'Falha do clipboard é engolida e, sem navigator.clipboard, o ✓ aparece sem copiar (terminal-session-store.ts:1716-1728, TerminalCopyButton.tsx:22-28); store.copy não tem teste.',
-        risk: 'baixo',
-        task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
-      },
     ],
     overlap: 'Mora no cabeçalho da gaveta (z-20/30) e no cabeçalho do cartão (nodrag); herda a camada de quem o contém, sem risco próprio.',
   },
@@ -412,6 +407,7 @@ export const terminalSurfaces: InventoryElement[] = [
       'terminal-run-registry',
     ],
     tests: [
+      { file: 'src/features/shared/ipc/ipc-failures.test.ts' },
       { file: 'src/features/canvas/services/account-chain-client.test.ts' },
       { file: 'src/features/canvas/services/account-chain-view.test.ts' },
       { file: 'src/features/canvas/terminal/session-metadata.test.ts' },
@@ -424,11 +420,6 @@ export const terminalSurfaces: InventoryElement[] = [
         what: 'Nenhum smoke abre o painel: Esquecer associação, Copiar e a troca de modo da conta só têm teste das funções puras.',
         risk: 'médio',
         task: '3ec91f95-497e-81e8-8f18-e2a529b0568e',
-      },
-      {
-        what: 'Copiar ${label} não diz se copiou e engole a falha do clipboard (TerminalDetailsPanel.tsx:173).',
-        risk: 'baixo',
-        task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
       },
       {
         what: 'O painel é um CanvasPanel (absolute top-16) aberto fora de activeTool: com uma ferramenta aberta, os dois ocupam o mesmo lugar e só o focus-within z-30 decide quem fica por cima. Medido com Buscar em 768 e 1280 px: a sobreposição é de 239 × 109 px e de 282 × 109 px (canvas-smoke-sobreposicoes.cjs → checarDetalhesDoTerminalComFerramenta). Defeito conhecido: qual fica por cima, ou se os detalhes fecham, é decisão do Felipe.',
@@ -517,6 +508,7 @@ export const terminalSurfaces: InventoryElement[] = [
     ipc: ['account-chain:preview-launch', 'account-chain:discard-preview', 'account-chain:confirm', 'cli-accounts:list', 'pty:spawn'],
     dependsOn: ['useAgentConfig', 'AgentConfigFields', 'isFelixoPopoverTarget', 'CanvasToolbar (onAdd, onAddMany, onAddFolder)'],
     tests: [
+      { file: 'src/features/shared/ipc/ipc-failures.test.ts' },
       { file: 'src/features/canvas/services/agent-launch-preferences.test.ts' },
       { file: SMOKE_CONTAS, check: 'criarSessaoDaCadeia' },
       { file: SMOKE_TUTORIAL, check: 'criarCenariosDoTutorial' },
@@ -526,11 +518,6 @@ export const terminalSurfaces: InventoryElement[] = [
         what: 'A fila (adicionar, remover, esvaziar, iniciar N) não é exercitada por nenhum teste.',
         risk: 'médio',
         task: '3ec91f95-497e-81e8-8f18-e2a529b0568e',
-      },
-      {
-        what: 'openTerminal e queueCurrent usam try/finally sem catch: IPC rejeitado no preparo vira rejeição não tratada, sem aviso (TerminalMenu.tsx:99-136).',
-        risk: 'baixo',
-        task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
       },
     ],
     overlap: 'Dentro da sidebar (z 26); o flyout é inline (empurra a seção Criar, não flutua). Os menus do FelixoSelect abrem em portal z 1000.',
@@ -763,17 +750,12 @@ export const terminalSurfaces: InventoryElement[] = [
     ],
     ipc: ['agent-presets:list', 'agent-presets:save', 'agent-presets:delete'],
     dependsOn: ['useAgentConfig', 'useAgentPresets', 'FelixoSelect', 'agent-preset'],
-    tests: [{ file: 'src/features/canvas/services/agent-preset.test.ts' }],
+    tests: [{ file: 'src/features/shared/ipc/ipc-failures.test.ts' }, { file: 'src/features/canvas/services/agent-preset.test.ts' }],
     gaps: [
       {
         what: 'Aplicar, salvar, duplicar e excluir preset não têm teste de interface; Excluir apaga do SQLite sem confirmação.',
         risk: 'baixo',
         task: '3ec91f95-497e-81e8-8f18-e2a529b0568e',
-      },
-      {
-        what: 'handleSave usa try/finally sem catch: IPC rejeitado não mostra erro (AgentPresetFields.tsx:35-45).',
-        risk: 'baixo',
-        task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
       },
     ],
     overlap: 'Sem camada própria: dentro dos campos do agente (sidebar ou HandoffDialog); o select abre em portal z 1000.',
@@ -813,6 +795,7 @@ export const terminalSurfaces: InventoryElement[] = [
     ipc: ['canvas:list-questions', 'canvas:answer-question', 'canvas:agent-questions'],
     dependsOn: ['agent-question-dialog (pickPendingQuestion, optionIndexForKey, questionKeyAction, questionFocusReturnTarget)', 'keyboard-focus (getFocusableElements, tabTrapTarget)', 'window.felixo.canvas'],
     tests: [
+      { file: 'src/features/shared/ipc/ipc-failures.test.ts' },
       { file: 'src/features/canvas/components/agent-question-dialog.test.ts' },
       { file: 'electron/services/agent-question-ipc-handlers.test.cjs' },
       { file: SMOKE_TUTORIAL, check: 'criarCenariosDoTutorial' },
@@ -829,11 +812,6 @@ export const terminalSurfaces: InventoryElement[] = [
         what: 'O smoke responde pelo teclado; o clique nas opções e em Dispensar não é exercitado.',
         risk: 'baixo',
         task: '3ec91f95-497e-81e8-8f18-e2a529b0568e',
-      },
-      {
-        what: 'answer e load não tratam IPC rejeitado: nenhum aviso (AgentQuestionDialog.tsx:28-56).',
-        risk: 'baixo',
-        task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
       },
     ],
     overlap: 'fixed inset-0 z-60 com fundo bg-black/50, montado no CanvasView; cobre canvas, gaveta e painéis; o card do tutorial fica inert por baixo. Pega o foco no painel (tabIndex -1), prende o Tab, é nokey e camada flutuante (clicar nele não fecha a gaveta solta). Não redimensiona (bloqueante, max-w-md).',
@@ -956,6 +934,7 @@ export const terminalSurfaces: InventoryElement[] = [
       'getAccountChainBridge',
     ],
     tests: [
+      { file: 'src/features/shared/ipc/ipc-failures.test.ts' },
       { file: 'src/features/canvas/components/modal-dialogs-keys.test.ts' },
       { file: 'src/features/canvas/services/terminal-handoff.test.ts' },
       { file: 'src/features/canvas/services/account-continuation.test.ts' },
@@ -974,11 +953,6 @@ export const terminalSurfaces: InventoryElement[] = [
         what: 'Com o Claude na tela alternativa só a tela vai como contexto (avisado ao usuário e ao agente); a conversa inteira exige ler o arquivo da sessão do Claude (.jsonl) em vez do terminal.',
         risk: 'médio',
         task: '41491f95-497e-81da-a20c-ce16ce0f3b5a',
-      },
-      {
-        what: 'Falha do account-chain:record-manual some sem aviso: a passagem pode faltar no registro de trocas (HandoffDialog.tsx:127-136, intencional).',
-        risk: 'baixo',
-        task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
       },
     ],
     overlap: 'fixed inset-0 z-60 (nokey), fundo bg-black/60; prende o Tab e fica por cima do tour (verificado no smoke). Redimensionável (max-w-md, max-h 100dvh − 2rem). Divide a camada z 60 com a pergunta de agente: pela ordem do DOM, fica por cima dela.',
@@ -1181,6 +1155,7 @@ export const terminalSurfaces: InventoryElement[] = [
     ipc: ['agent-browser:list-requests', 'agent-browser:decide', 'agent-browser:requests', 'agent-browser:open-webpage'],
     dependsOn: ['agent-browser-request', 'describeLinkDestination', 'floating-layer', 'window.felixo.canvas'],
     tests: [
+      { file: 'src/features/shared/ipc/ipc-failures.test.ts' },
       { file: 'scripts/canvas-smoke-sobreposicoes.cjs', check: 'checarPedidoDeNavegadorDoAgente' },
       { file: 'src/features/canvas/components/agent-browser-request.test.ts' },
       { file: 'electron/services/agent-browser-ipc-handlers.test.cjs' },
@@ -1192,11 +1167,6 @@ export const terminalSurfaces: InventoryElement[] = [
         what: 'Abrir no navegador e Recusar todos não são clicados no smoke (o caminho externo só é testado no handler do main).',
         risk: 'baixo',
         task: '3ec91f95-497e-81e8-8f18-e2a529b0568e',
-      },
-      {
-        what: 'decide e load não tratam IPC rejeitado (try/finally sem catch), sem aviso (AgentBrowserRequestCard.tsx:54-101).',
-        risk: 'baixo',
-        task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
       },
     ],
     overlap: 'fixed inset-x-0 top-4 z-50, centralizado (max-w-md), pointer-events só no cartão; acima da topbar (18), da gaveta (20/30) e dos painéis, abaixo dos modais (60). data-felixo-floating-layer: clicar nele não fecha a gaveta. Não rouba o foco.',

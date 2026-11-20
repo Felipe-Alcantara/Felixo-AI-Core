@@ -8,10 +8,29 @@ import {
 } from './file-link-prompt'
 import type { DiagnosisRequestStatus } from '../types'
 import { createFilePromptInsertion } from '../../shared/types/prompt-insertion'
-import type { SendTextInput } from '../terminal/terminal-session-api'
+import type { SendTextInput, SendTextResult } from '../terminal/terminal-session-api'
 
 type TerminalTextSink = {
-  sendText: (id: string, text: string, options?: SendTextInput) => void
+  /** O store real devolve o desfecho da entrega; um sink antigo que devolve `void` conta como entregue. */
+  sendText: (id: string, text: string, options?: SendTextInput) => Promise<SendTextResult> | void
+}
+
+/** Desfecho de anunciar um arquivo ao agente ligado: a interface mostra o motivo em vez de calar. */
+export type AnnounceStatus = 'sent' | 'no-file-name' | 'resolve-failed' | 'send-failed'
+
+async function entregue(sending: Promise<SendTextResult> | void): Promise<boolean> {
+  if (!sending) return true
+  try {
+    return (await sending).delivered
+  } catch {
+    return false
+  }
+}
+
+export const ANNOUNCE_FAILURE_MESSAGE: Record<Exclude<AnnounceStatus, 'sent'>, string> = {
+  'no-file-name': 'Este arquivo está fora do canvas: o agente foi ligado, mas o caminho não foi avisado a ele.',
+  'resolve-failed': 'Não foi possível resolver o caminho do arquivo: o agente foi ligado, mas não foi avisado.',
+  'send-failed': 'O aviso do arquivo não chegou ao terminal do agente.',
 }
 
 /** The file + terminal a connection links, in either direction (or null). */
@@ -52,13 +71,13 @@ export async function announceFileToTerminal(
   nodes: Node[],
   store: TerminalTextSink,
   template: string,
-): Promise<void> {
+): Promise<AnnounceStatus | null> {
   const pair = filePairFromConnection(connection, nodes)
   if (!pair) {
-    return
+    return null
   }
 
-  await announceFileNodeToTerminalNode(pair.fileNode, pair.terminalNode, store, template)
+  return announceFileNodeToTerminalNode(pair.fileNode, pair.terminalNode, store, template)
 }
 
 /**
@@ -71,22 +90,31 @@ export async function announceFileNodeToTerminalNode(
   terminalNode: Node,
   store: TerminalTextSink,
   template: string,
-): Promise<void> {
+): Promise<AnnounceStatus> {
   const fileName = (fileNode.data as { fileName?: string } | undefined)?.fileName
   if (!fileName) {
-    return
+    // Arquivo externo (só filePath): o canvas só indexa fileName, então nenhum aviso é digitado.
+    return 'no-file-name'
   }
 
-  const resolved = await window.felixo?.canvasFiles?.resolve({ name: fileName })
+  let resolved
+  try {
+    resolved = await window.felixo?.canvasFiles?.resolve({ name: fileName })
+  } catch {
+    return 'resolve-failed'
+  }
   if (!resolved?.ok || !resolved.path) {
-    return
+    return 'resolve-failed'
   }
 
   const prompt = buildFileLinkPrompt(template, resolved.path, agentNameOf(terminalNode))
-  store.sendText(terminalNode.id, prompt, {
-    kind: 'scratchpad-link',
-    insertion: createFilePromptInsertion(fileName, prompt, { autoSubmit: true }),
-  })
+  const delivered = await entregue(
+    store.sendText(terminalNode.id, prompt, {
+      kind: 'scratchpad-link',
+      insertion: createFilePromptInsertion(fileName, prompt, { autoSubmit: true }),
+    }),
+  )
+  return delivered ? 'sent' : 'send-failed'
 }
 
 /**
@@ -122,17 +150,25 @@ export async function requestRepoDiagnosis(
     return 'no-terminal'
   }
 
-  const resolved = await window.felixo?.canvasFiles?.resolve({ name: fileName })
+  let resolved
+  try {
+    resolved = await window.felixo?.canvasFiles?.resolve({ name: fileName })
+  } catch {
+    return 'resolve-failed'
+  }
   if (!resolved?.ok || !resolved.path) {
     return 'resolve-failed'
   }
 
   const prompt = buildBootstrapPrompt(bootstrapTemplate, resolved.path, agentNameOf(terminalNode))
-  store.sendText(terminalNode.id, prompt, {
-    kind: 'scratchpad-link',
-    insertion: createFilePromptInsertion(fileName, prompt, { autoSubmit: true }),
-  })
-  return 'ok'
+  // "Diagnóstico solicitado" só depois de o terminal receber o texto: antes a resposta vinha sem esperar o pty:write.
+  const delivered = await entregue(
+    store.sendText(terminalNode.id, prompt, {
+      kind: 'scratchpad-link',
+      insertion: createFilePromptInsertion(fileName, prompt, { autoSubmit: true }),
+    }),
+  )
+  return delivered ? 'ok' : 'send-failed'
 }
 
 /** Ids of terminals linked to a file block, in any edge direction. */

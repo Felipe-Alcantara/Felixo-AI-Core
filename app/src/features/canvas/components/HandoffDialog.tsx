@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
+import { reportActionFailure } from '../services/canvas-persistence-status'
 import { ArrowRightLeft, X } from 'lucide-react'
 import { useAgentConfig, type AgentConfigProject } from '../hooks/useAgentConfig'
 import type { NewTerminalOptions } from '../services/new-terminal-options'
@@ -136,7 +137,10 @@ export function HandoffDialog({
             toProviderId: opcoes.providerId as AccountChainProviderId,
             reasonClass: reason.failureClass,
           })
-          .catch(() => undefined)
+          .catch(() =>
+            // O bloco já foi criado: o aviso diz só que o registro de trocas ficou sem esta passagem.
+            reportActionFailure('registrar-passagem', 'A passagem foi feita, mas não entrou no registro de trocas de conta.'),
+          )
       }
       config.savePreferences()
       onClose()

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { resultadoDeIpc } from '../../../shared/ipc/ipc-result'
 import {
   AlertTriangle,
   ArrowDownToLine,
@@ -87,9 +88,13 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
   }, [])
 
   const loadSettings = useCallback(async () => {
-    const result = await window.felixo?.fetchAll?.getSettings()
-    if (mountedRef.current && result?.ok && result.settings) {
-      setSettings(result.settings)
+    const outcome = await resultadoDeIpc(() => window.felixo?.fetchAll?.getSettings(), 'Não foi possível ler as configurações do Fetch All.')
+    if (!mountedRef.current) return
+    if (outcome.ok && outcome.value.settings) {
+      setSettings(outcome.value.settings)
+    } else {
+      // Sem a configuração lida o painel mostraria raízes desabilitadas e "Pastas ignoradas (0)" como se fosse o estado real.
+      setError(outcome.ok ? 'Não foi possível ler as configurações do Fetch All.' : outcome.message)
     }
   }, [])
 
@@ -278,9 +283,12 @@ export function FetchAllPanel({ onClose, toolsMenuOpen }: FetchAllPanelProps) {
   }, [])
 
   const unignorePath = useCallback(async (targetPath: string) => {
-    const result = await window.felixo?.fetchAll?.unignorePath({ path: targetPath })
-    if (mountedRef.current && result?.ok && result.settings) {
-      setSettings(result.settings)
+    const outcome = await resultadoDeIpc(() => window.felixo?.fetchAll?.unignorePath({ path: targetPath }), 'Não foi possível voltar a considerar a pasta.')
+    if (!mountedRef.current) return
+    if (outcome.ok && outcome.value.settings) {
+      setSettings(outcome.value.settings)
+    } else {
+      setError(outcome.ok ? 'Não foi possível voltar a considerar a pasta.' : outcome.message)
     }
   }, [])
 
