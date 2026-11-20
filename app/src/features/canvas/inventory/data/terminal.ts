@@ -1427,6 +1427,7 @@ export const terminalSurfaces: InventoryElement[] = [
       'xterm (FitAddon, WebLinksAddon)',
     ],
     tests: [
+      { file: 'src/features/canvas/terminal/terminal-session-store.test.ts' },
       { file: 'src/features/canvas/terminal/terminal-flow-control.test.ts' },
       { file: 'electron/services/pty-data-batcher.test.cjs' },
       { file: 'src/features/canvas/terminal/terminal-session-store.test.ts' },
@@ -1441,11 +1442,6 @@ export const terminalSurfaces: InventoryElement[] = [
       { file: SMOKE_CONTAS, check: 'criarSessaoDaCadeia' },
     ],
     gaps: [
-      {
-        what: 'pty.spawn(...).then sem catch: se o invoke rejeitar, a sessão fica em "starting" para sempre, sem mensagem (terminal-session-store.ts:965-1036).',
-        risk: 'baixo',
-        task: '3ec91f95-497e-8176-bef0-dfde828936dc',
-      },
       {
         what: 'A saída silenciosa ("encerrou sem produzir saída"), a ponte ausente e store.copy não têm teste no store.',
         risk: 'médio',
@@ -1490,14 +1486,10 @@ export const terminalSurfaces: InventoryElement[] = [
     dependsOn: ['TerminalSessionContext', 'DeferredTerminalSessionStore', 'MockTerminalSessionStore', 'useTerminalSessions'],
     tests: [
       { file: 'src/features/canvas/terminal/deferred-terminal-session-store.test.ts' },
+      { file: 'src/features/canvas/terminal/deferred-terminal-session-store.test.ts' },
       { file: SMOKE, check: 'checarReloadSemDuplicacao' },
     ],
     gaps: [
-      {
-        what: 'Falha ao importar o runtime do terminal fica só no console: o bloco não mostra erro nem sai de "iniciando" (deferred-terminal-session-store.ts:78-85).',
-        risk: 'médio',
-        task: '3ec91f95-497e-8176-bef0-dfde828936dc',
-      },
       {
         what: 'O store falso do smoke A diverge do real (sem faixa, sem retomada).',
         risk: 'médio',

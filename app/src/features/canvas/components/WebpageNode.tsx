@@ -198,6 +198,10 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
     container.prepend(element)
     webviewRef.current = element
     setWebview(element)
+    // O guest novo (troca de perfil) começa sem histórico: não herda o do antigo até o dom-ready sincronizar.
+    setCanGoBack(false)
+    setCanGoForward(false)
+    setGuestId(null)
     // A identidade só muda quando o perfil (partição) muda: o React chama o
     // callback antigo com null (remove o guest) e o novo com o container, que
     // recria o webview na MESMA página (`currentUrlRef`) com a outra sessão.
@@ -211,8 +215,14 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
     if (!webview) return
 
     const syncHistoryState = () => {
-      setCanGoBack(webview.canGoBack())
-      setCanGoForward(webview.canGoForward())
+      try {
+        setCanGoBack(webview.canGoBack())
+        setCanGoForward(webview.canGoForward())
+      } catch {
+        // Guest ainda sem dom-ready: o Electron lança síncrono. Sem histórico a mostrar, o dom-ready sincroniza de novo.
+        setCanGoBack(false)
+        setCanGoForward(false)
+      }
     }
 
     const readGuestId = () => {
@@ -299,6 +309,19 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
     }
   }, [id, webview])
 
+  /**
+   * Voltar, Avançar e Recarregar chamam o guest, que antes do dom-ready lança síncrono (o mesmo caso do `navigateTo`).
+   * Sem guest pronto não há o que fazer agora; o botão não pode derrubar o bloco.
+   */
+  const guestAction = (action: (guest: WebviewTag) => void) => {
+    try {
+      const guest = webviewRef.current
+      if (guest) action(guest)
+    } catch {
+      // Nenhuma mensagem: a do Electron carrega a URL inteira.
+    }
+  }
+
   /** Leva o bloco ao endereço digitado; `false` quando a política o recusou. */
   const navigateTo = (raw: string): boolean => {
     const result = explainUrlInput(raw)
@@ -381,7 +404,7 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
       <div className="nodrag nowheel nopan flex items-center gap-1 border-b border-white/10 bg-white/4 px-2 py-1">
         <button
           type="button"
-          onClick={() => webviewRef.current?.goBack()}
+          onClick={() => guestAction((guest) => guest.goBack())}
           disabled={!canGoBack}
           className="felixo-btn-icon rounded-sm p-1 text-(--f-core-white-soft) hover:bg-white/10 hover:text-(--f-core-white) disabled:cursor-not-allowed disabled:opacity-30"
           title="Voltar"
@@ -391,7 +414,7 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
         </button>
         <button
           type="button"
-          onClick={() => webviewRef.current?.goForward()}
+          onClick={() => guestAction((guest) => guest.goForward())}
           disabled={!canGoForward}
           className="felixo-btn-icon rounded-sm p-1 text-(--f-core-white-soft) hover:bg-white/10 hover:text-(--f-core-white) disabled:cursor-not-allowed disabled:opacity-30"
           title="Avançar"
@@ -401,8 +424,9 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
         </button>
         <button
           type="button"
-          onClick={() => webviewRef.current?.reload()}
-          className="felixo-btn-icon rounded-sm p-1 text-(--f-core-white-soft) hover:bg-white/10 hover:text-(--f-core-white)"
+          onClick={() => guestAction((guest) => guest.reload())}
+          disabled={guestId === null}
+          className="felixo-btn-icon rounded-sm p-1 text-(--f-core-white-soft) hover:bg-white/10 hover:text-(--f-core-white) disabled:cursor-not-allowed disabled:opacity-30"
           title="Recarregar"
           aria-label="Recarregar"
         >

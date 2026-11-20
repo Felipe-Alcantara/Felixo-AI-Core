@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { Suspense } from 'react'
 import { NODE_MIN_SIZE } from '../services/node-geometry'
 import {
   Handle,
@@ -9,6 +9,8 @@ import {
 } from '@xyflow/react'
 import { ListTodo } from 'lucide-react'
 import { NodeHeader } from './NodeHeader'
+import { BlockErrorBoundary } from './BlockErrorBoundary'
+import { lazyRecarregavel } from './lazy-recarregavel'
 import { readNotionTasksSelection, type NotionTasksSelectionPatch } from '../services/notion-tasks-selection'
 import type { NewTerminalOptions } from '../services/new-terminal-options'
 import type { NotionTasksNodeData } from '../types'
@@ -20,7 +22,7 @@ type NotionTasksNodeDataWithHandler = NotionTasksNodeData & {
   onSendToAgent?: (options: NewTerminalOptions) => void
 }
 
-const LazyNotionTasksPanel = lazy(() =>
+const notionTasksPanel = lazyRecarregavel(() =>
   import('./tools/NotionTasksPanel').then(({ NotionTasksPanel }) => ({
     default: NotionTasksPanel,
   })),
@@ -56,15 +58,22 @@ export function NotionTasksNode({ id, data, selected }: NodeProps) {
         onRemove={() => void deleteElements({ nodes: [{ id }] })}
       />
       <div className="nodrag nowheel nopan min-h-0 flex-1 overflow-auto bg-zinc-900 p-3">
-        <Suspense
-          fallback={
-            <div className="flex min-h-40 items-center justify-center text-xs text-zinc-500">
-              Carregando tarefas do Notion…
-            </div>
-          }
-        >
-          <LazyNotionTasksPanel savedSelection={savedSelection} onSelectionChange={saveSelection} onSendToAgent={nodeData.onSendToAgent} />
-        </Suspense>
+        <BlockErrorBoundary rotulo="as tarefas do Notion" aoTentarDeNovo={notionTasksPanel.renovar}>
+          {() => {
+            const Panel = notionTasksPanel.atual()
+            return (
+              <Suspense
+                fallback={
+                  <div className="flex min-h-40 items-center justify-center text-xs text-zinc-500">
+                    Carregando tarefas do Notion…
+                  </div>
+                }
+              >
+                <Panel savedSelection={savedSelection} onSelectionChange={saveSelection} onSendToAgent={nodeData.onSendToAgent} />
+              </Suspense>
+            )
+          }}
+        </BlockErrorBoundary>
       </div>
       <Handle type="source" position={Position.Right} />
     </div>

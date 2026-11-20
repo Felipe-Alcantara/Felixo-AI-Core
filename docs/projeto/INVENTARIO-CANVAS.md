@@ -29,10 +29,10 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 
 ## Números
 
-- **Elementos:** 114 (10 blocos, 17 ferramentas, 87 outras superfícies)
-- **Controles:** 438, dos quais 91 com teste específico
+- **Elementos:** 115 (10 blocos, 17 ferramentas, 88 outras superfícies)
+- **Controles:** 439, dos quais 92 com teste específico
 - **Elementos sem nenhum teste:** 2
-- **Lacunas:** 229 (alto 4, médio 125, baixo 100), em 76 tasks
+- **Lacunas:** 223 (alto 4, médio 121, baixo 98), em 75 tasks
 
 ## Moldura do canvas
 
@@ -663,7 +663,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `canvas:save`, `canvas:delete`, `external-links:open-failed`, `webview-permissions:pending`, `webview-permissions:respond`, `webview-popups:blocked`, `agent-webpage-act:list-sessions`, `agent-webpage-act:sessions`, `agent-webpage-act:end-session`
 - **Depende de:** `useReactFlow`, `useWebviewSitePermissions / describeSitePermissionRequest (webview-site-permissions)`, `partitionForWebviewProfile (webview-profile)`, `explainUrlInput / persistableNavigationUrl (url-utils)`, `resolveGuestSrc / shouldCreateGuest / staleGuests (webview-mount)`, `webviewLinkMenu (webview-context-menu)`, `openLinkChooser / runLinkChoice`, `WebviewProfileMenu`
 - **Sobreposição:** Bloco do React Flow, sem z próprio: fica abaixo de toda superfície fixa (topbar e statusbar 18, dock e painéis 20/30, sidebar 26, menus 50+). O cartão é overflow-hidden, então nada que nasce dentro dele passa das bordas. O <webview> composita por cima do DOM do cartão e engole o mousedown nas bordas: um véu (pointer-events-auto) só liga durante o resize. Cliques dentro do guest não chegam ao document, então menus que fecham por mousedown fora (perfil) ficam abertos.
-- **Testes:** `src/features/canvas/services/webview-site-permissions.test.ts`, `src/features/canvas/services/url-utils.test.ts`, `src/features/canvas/services/webview-mount.test.ts`, `src/features/canvas/services/webview-context-menu.test.ts`, `electron/services/webview-lifecycle.test.cjs`, `electron/services/webview-profile-partition.test.cjs`, `scripts/canvas-smoke-links.cjs` → `paginaWebBarraEBotao`, `scripts/canvas-smoke-links.cjs` → `paginaWebMenuDeLink`, `scripts/canvas-smoke.cjs` → `checarVoltarEAvancarNaPaginaWeb`, `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`
+- **Testes:** `src/features/canvas/components/block-load-failures.test.ts`, `src/features/canvas/services/webview-site-permissions.test.ts`, `src/features/canvas/services/url-utils.test.ts`, `src/features/canvas/services/webview-mount.test.ts`, `src/features/canvas/services/webview-context-menu.test.ts`, `electron/services/webview-lifecycle.test.cjs`, `electron/services/webview-profile-partition.test.cjs`, `scripts/canvas-smoke-links.cjs` → `paginaWebBarraEBotao`, `scripts/canvas-smoke-links.cjs` → `paginaWebMenuDeLink`, `scripts/canvas-smoke.cjs` → `checarVoltarEAvancarNaPaginaWeb`, `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`
 
 | Estado | Quando |
 | --- | --- |
@@ -687,7 +687,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Voltar, Avançar e Recarregar (WebpageNode.tsx:319, 329, 339) chamam o guest sem try, ao contrário de navigateTo e openInExternalBrowser: antes do dom-ready o Electron lança síncrono. Recarregar fica sempre habilitado e, depois de trocar de perfil, canGoBack/canGoForward continuam com o valor do guest antigo. | médio | `3ec91f95-497e-8176-bef0-dfde828936dc` |
 | Rótulo pelo título da página (WebpageNode.tsx:84 e 190-194): sem nome manual, o rótulo segue cada título durante a sessão, mas ao reabrir o app labelCustomizedRef nasce verdadeiro (há label gravado) e o rótulo trava no último título. O comentário diz "wins once". | baixo | `3ec91f95-497e-8103-b360-c1979d6992f4` |
 
 ### Bloco Tarefas Notion (contêiner)
@@ -697,7 +696,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `canvas:save`, `canvas:delete`
 - **Depende de:** `useReactFlow`, `React.lazy(NotionTasksPanel)`, `openNotionTasksNode (CanvasView)`
 - **Sobreposição:** Bloco do React Flow, sem z próprio: fica abaixo de toda superfície fixa (topbar e statusbar 18, dock e painéis 20/30, sidebar 26, menus 50+). O cartão é overflow-hidden, então nada que nasce dentro dele passa das bordas. Bloco grande (padrão 1040×680, mínimo 480×320). Os FelixoSelect do painel abrem em portal z 1000, acima de tudo; o seletor de colunas é absolute z-10 dentro do overflow-auto do bloco.
-- **Testes:** `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`, `scripts/canvas-smoke.cjs` → `checarAuditoriaDeAcessibilidade`
+- **Testes:** `src/features/canvas/components/block-load-failures.test.ts`, `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`, `scripts/canvas-smoke.cjs` → `checarAuditoriaDeAcessibilidade`
 
 | Estado | Quando |
 | --- | --- |
@@ -705,10 +704,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | loading | Suspense do painel lazy: "Carregando tarefas do Notion…". |
 
 Sem controle próprio: as ações vêm de outros elementos.
-
-| Lacuna | Risco | Task |
-| --- | --- | --- |
-| Blocos lazy sem error boundary (NotionTasksNode.tsx:45-53, ExcalidrawDrawingNode.tsx:82-91): falha ao baixar o chunk ou erro de render do painel sobe até a raiz e derruba o canvas inteiro; os painéis de ferramenta têm ToolPanelErrorBoundary, os blocos não. | médio | `3ec91f95-497e-8176-bef0-dfde828936dc` |
 
 ### Bloco Agente na nuvem (cartão de sessão)
 
@@ -802,21 +797,20 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `canvas:save`, `canvas:delete`
 - **Depende de:** `useReactFlow`, `React.lazy(ExcalidrawCanvas)`, `onDataChange (updateNodeData, CanvasView)`
 - **Sobreposição:** Bloco do React Flow, sem z próprio: fica abaixo de toda superfície fixa (topbar e statusbar 18, dock e painéis 20/30, sidebar 26, menus 50+). O cartão é overflow-hidden, então nada que nasce dentro dele passa das bordas. Os menus e diálogos internos do Excalidraw ficam presos ao cartão: num bloco de mínimo 360×280 a barra de ferramentas e os popovers podem ser cortados.
-- **Testes:** `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`, `scripts/canvas-smoke.cjs` → `checarInteracoes`, `scripts/canvas-smoke.cjs` → `checarDesenhoExcalidraw`, `src/features/canvas/components/excalidraw-scene.test.ts`
+- **Testes:** `src/features/canvas/components/block-load-failures.test.ts`, `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`, `scripts/canvas-smoke.cjs` → `checarInteracoes`, `scripts/canvas-smoke.cjs` → `checarDesenhoExcalidraw`, `src/features/canvas/components/excalidraw-scene.test.ts`
 
 | Estado | Quando |
 | --- | --- |
 | normal | Excalidraw completo com a cena gravada; cada mudança agenda a gravação da cena 600 ms depois, e fechar o bloco antes disso entrega a cena pendente ao canvas na hora. |
 | loading | Suspense do módulo lazy (~47 MB descompactado): spinner "Carregando Excalidraw…". |
 | empty | Cena sem elementos: grava scene vazio e reabre em branco (#ffffff). |
-| error | data.scene inválido ou sem "elements" vira cena vazia sem aviso (parseScene devolve null). |
+| error | data.scene inválido ou sem "elements" vira cena vazia sem aviso (parseScene devolve null). Falha do chunk ou erro de render do Excalidraw fica dentro do bloco (BlockErrorBoundary: "Não foi possível carregar o Excalidraw." e Tentar de novo); o resto do canvas segue. |
 
 Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | Fechar o bloco entrega a cena pendente ao canvas (ExcalidrawDrawingNode.tsx, cleanup), mas ao fechar o app ou trocar para o Chat o canvas inteiro desmonta junto e o setNodes que carrega a cena nunca roda: o último traço (até 600 ms + 400 ms) ainda se perde nesses dois casos, e nenhum teste monta o bloco. | baixo | `41b91f95-497e-81c5-bc4d-c151f42dc82c` |
-| Sem error boundary em volta do lazy: falha do chunk ou cena que faz o Excalidraw lançar derruba o canvas inteiro. | médio | `3ec91f95-497e-8176-bef0-dfde828936dc` |
 
 ### Cabeçalho do bloco (arrasto, nome e remover)
 
@@ -864,6 +858,24 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Os embeds do Excalidraw (14 domínios, decisão de 17/11) só foram validados por teste; falta ver cada host carregando no app, sem violação de frame-src. | médio | `41b91f95-497e-8109-9ae0-e01470ee50d4` |
 | O export embute a face inteira da fonte: o worker de subset quebra no build (document is not defined) e, na thread principal, a CSP recusa o WASM do subset (script-src eval, "Skipped glyph subsetting"). | baixo | `41a91f95-497e-8182-b7f6-eeaf764195c5` |
 | Medido (checarPopoverDoExcalidrawEmBlocoPequeno, bloco 360×280): o menu "More tools" sai 43 px à esquerda e à direita e 36 px embaixo do cartão e é cortado (o ponto fora do cartão não o alcança); o próprio botão do menu fica 39 px fora da borda direita. Defeito conhecido. | baixo | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
+
+### Aviso de falha de carregamento do bloco (Tarefas Notion e Excalidraw)
+
+- **ID:** `bloco-erro-de-carregamento` · **Dono:** `src/features/canvas/components/BlockErrorBoundary.tsx`
+- **Persistência:** nenhuma
+- **IPC:** nenhum
+- **Depende de:** `lazyRecarregavel (lazy-recarregavel.ts)`, `React error boundary (getDerivedStateFromError)`
+- **Sobreposição:** Ocupa o corpo do bloco (h-full, nodrag nowheel nopan); o cabeçalho com remover e o redimensionar seguem fora do aviso.
+- **Testes:** `src/features/canvas/components/block-load-failures.test.ts`
+
+| Estado | Quando |
+| --- | --- |
+| normal | Sem falha, entrega o conteúdo do bloco sem desenhar nada próprio. |
+| error | O chunk preguiçoso falhou ao baixar ou o render lançou: o bloco mostra "Não foi possível carregar <o bloco>." e "O resto do canvas segue funcionando.", com o botão Tentar de novo. O console recebe só o nome do bloco e o tipo do erro. |
+
+| Controle | Gatilho | Efeito | Falha conhecida | Teste |
+| --- | --- | --- | --- | --- |
+| `onClick={this.tentarDeNovo}` (button) | clique | Renova o React.lazy do bloco (lazyRecarregavel: o lazy guarda a rejeição para sempre, então o mesmo componente lançaria de novo), limpa o erro e renderiza o filho outra vez, que importa o chunk de novo. | Se o chunk continua indisponível o aviso volta; nada derruba o canvas. | `src/features/canvas/components/block-load-failures.test.ts` |
 
 ## Arestas e grupos
 
@@ -1330,7 +1342,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `pty:spawn`, `pty:write`, `pty:resize`, `pty:kill`, `pty:data`, `pty:flow`, `pty:exit`, `pty:session`, `context-file:write`, `context-file:path-typed`, `context-file:release`, `files:save-attachment`, `files:save-clipboard-image`
 - **Depende de:** `TerminalSessionProvider`, `pty-event-router`, `resume-outcome-detector`, `terminal-input`, `terminal-screen-state`, `terminal-scrollback`, `context-file-delivery`, `xterm (FitAddon, WebLinksAddon)`
 - **Sobreposição:** Não renderiza superfície própria: o elemento xterm é anexado ao cartão ou à gaveta (attach limpa o container antes, para não empilhar terminais).
-- **Testes:** `src/features/canvas/terminal/terminal-flow-control.test.ts`, `electron/services/pty-data-batcher.test.cjs`, `src/features/canvas/terminal/terminal-session-store.test.ts`, `src/features/canvas/terminal/terminal-url-regex.test.ts`, `src/features/canvas/terminal/pty-event-router.test.ts`, `src/features/canvas/terminal/terminal-output-coalescing.test.ts`, `src/features/canvas/terminal/terminal-screen-state.test.ts`, `src/features/canvas/terminal/terminal-scrollback.test.ts`, `src/features/canvas/terminal/canvas-context-e2e.test.ts`, `electron/services/pty-ipc-handlers.test.cjs`, `electron/services/pty-process-manager.test.cjs`, `scripts/canvas-smoke-contas.cjs` → `criarSessaoDaCadeia`
+- **Testes:** `src/features/canvas/terminal/terminal-session-store.test.ts`, `src/features/canvas/terminal/terminal-flow-control.test.ts`, `electron/services/pty-data-batcher.test.cjs`, `src/features/canvas/terminal/terminal-session-store.test.ts`, `src/features/canvas/terminal/terminal-url-regex.test.ts`, `src/features/canvas/terminal/pty-event-router.test.ts`, `src/features/canvas/terminal/terminal-output-coalescing.test.ts`, `src/features/canvas/terminal/terminal-screen-state.test.ts`, `src/features/canvas/terminal/terminal-scrollback.test.ts`, `src/features/canvas/terminal/canvas-context-e2e.test.ts`, `electron/services/pty-ipc-handlers.test.cjs`, `electron/services/pty-process-manager.test.cjs`, `scripts/canvas-smoke-contas.cjs` → `criarSessaoDaCadeia`
 
 | Estado | Quando |
 | --- | --- |
@@ -1345,7 +1357,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| pty.spawn(...).then sem catch: se o invoke rejeitar, a sessão fica em "starting" para sempre, sem mensagem (terminal-session-store.ts:965-1036). | baixo | `3ec91f95-497e-8176-bef0-dfde828936dc` |
 | A saída silenciosa ("encerrou sem produzir saída"), a ponte ausente e store.copy não têm teste no store. | médio | `3ec91f95-497e-81e8-8f18-e2a529b0568e` |
 | Falha do pty:write do texto inicial é engolida (.catch vazio). | médio | `3d791f95-497e-81cd-b05c-c9d6370c81a3` |
 | O erro de spawn só diz para verificar instalação e autenticação; o diagnóstico da CLI não aparece na interface. | baixo | `3e291f95-497e-8109-8851-e4ff2193c4db` |
@@ -1359,7 +1370,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** nenhum
 - **Depende de:** `TerminalSessionContext`, `DeferredTerminalSessionStore`, `MockTerminalSessionStore`, `useTerminalSessions`
 - **Sobreposição:** Não renderiza superfície: só fornece o contexto do store aos blocos, à gaveta e aos painéis.
-- **Testes:** `src/features/canvas/terminal/deferred-terminal-session-store.test.ts`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`
+- **Testes:** `src/features/canvas/terminal/deferred-terminal-session-store.test.ts`, `src/features/canvas/terminal/deferred-terminal-session-store.test.ts`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`
 
 | Estado | Quando |
 | --- | --- |
@@ -1371,7 +1382,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Falha ao importar o runtime do terminal fica só no console: o bloco não mostra erro nem sai de "iniciando" (deferred-terminal-session-store.ts:78-85). | médio | `3ec91f95-497e-8176-bef0-dfde828936dc` |
 | O store falso do smoke A diverge do real (sem faixa, sem retomada). | médio | `3eb91f95-497e-811b-8eb0-e620c6f37e21` |
 
 ### Vigia da retomada recusada
@@ -2736,7 +2746,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** nenhum
 - **Depende de:** `useResizableDialog`, `readDialogSize`, `writeDialogSize`, `clearDialogSize`, `clampDialogSize`, `resizeCentered`, `swallowNextClick`
 - **Sobreposição:** absolute z 10 dentro da moldura do modal (z 60): borda direita (w-2, top-6 bottom-6), inferior (h-2, left-6 right-6) e canto (20 px). swallowNextClick engole o clique de soltar fora da moldura, que fecharia o modal.
-- **Testes:** `src/features/shared/dialog/dialog-sizing.test.ts`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarAlcasDoDialogoSobBotoes`
+- **Testes:** `src/features/canvas/components/block-load-failures.test.ts`, `src/features/shared/dialog/dialog-sizing.test.ts`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarAlcasDoDialogoSobBotoes`
 
 | Estado | Quando |
 | --- | --- |
@@ -2750,7 +2760,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | Nenhum smoke arrasta ou usa o teclado nas alças do HandoffDialog; a matemática é testada, a interação não. | baixo | `3ec91f95-497e-81f7-8b12-c5c252d020c7` |
-| useResizableDialog.ts:43, :76, :106 e :112 leem window.localStorage fora de try: o getter pode lançar (SecurityError com storage bloqueado) e derrubar o modal no useState inicial. Só os métodos estão protegidos em dialog-sizing.ts. | baixo | `3ec91f95-497e-8176-bef0-dfde828936dc` |
 
 ## Overlays e avisos
 
@@ -3230,7 +3239,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3ec91f95-497e-8110-b363-cfade2b68b7a` — 42 lacunas
 - `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` — 15 lacunas
 - `3ec91f95-497e-8122-a08b-d26d4991acca` — 1 lacuna
-- `3ec91f95-497e-8176-bef0-dfde828936dc` — 6 lacunas
 - `3ec91f95-497e-818f-b9f2-f9710605c303` — 14 lacunas
 - `3ec91f95-497e-8197-a218-ef49c302013d` — 8 lacunas
 - `3ec91f95-497e-81ca-8319-ee657b0b6492` — 28 lacunas

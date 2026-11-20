@@ -548,6 +548,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
       'WebviewProfileMenu',
     ],
     tests: [
+      { file: 'src/features/canvas/components/block-load-failures.test.ts' },
       unit(`${SERVICES}/webview-site-permissions.test.ts`),
       unit(`${SERVICES}/url-utils.test.ts`),
       unit(`${SERVICES}/webview-mount.test.ts`),
@@ -560,11 +561,6 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
       ...FIXTURE_TESTS,
     ],
     gaps: [
-      {
-        what: 'Voltar, Avançar e Recarregar (WebpageNode.tsx:319, 329, 339) chamam o guest sem try, ao contrário de navigateTo e openInExternalBrowser: antes do dom-ready o Electron lança síncrono. Recarregar fica sempre habilitado e, depois de trocar de perfil, canGoBack/canGoForward continuam com o valor do guest antigo.',
-        risk: 'médio',
-        task: '3ec91f95-497e-8176-bef0-dfde828936dc',
-      },
       {
         what: 'Rótulo pelo título da página (WebpageNode.tsx:84 e 190-194): sem nome manual, o rótulo segue cada título durante a sessão, mas ao reabrir o app labelCustomizedRef nasce verdadeiro (há label gravado) e o rótulo trava no último título. O comentário diz "wins once".',
         risk: 'baixo',
@@ -587,13 +583,8 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
     persistence: ['canvas salvo (canvas_nodes: posição, tamanho, label "Tarefas Notion"); um por canvas: a ferramenta foca o existente'],
     ipc: ['canvas:save', 'canvas:delete'],
     dependsOn: ['useReactFlow', 'React.lazy(NotionTasksPanel)', 'openNotionTasksNode (CanvasView)'],
-    tests: [...FIXTURE_TESTS, smoke('checarAuditoriaDeAcessibilidade')],
+    tests: [{ file: 'src/features/canvas/components/block-load-failures.test.ts' }, ...FIXTURE_TESTS, smoke('checarAuditoriaDeAcessibilidade')],
     gaps: [
-      {
-        what: 'Blocos lazy sem error boundary (NotionTasksNode.tsx:45-53, ExcalidrawDrawingNode.tsx:82-91): falha ao baixar o chunk ou erro de render do painel sobe até a raiz e derruba o canvas inteiro; os painéis de ferramenta têm ToolPanelErrorBoundary, os blocos não.',
-        risk: 'médio',
-        task: '3ec91f95-497e-8176-bef0-dfde828936dc',
-      },
     ],
     overlap: `${NODE_OVERLAP_BASE} Bloco grande (padrão 1040×680, mínimo 480×320). Os FelixoSelect do painel abrem em portal z 1000, acima de tudo; o seletor de colunas é absolute z-10 dentro do overflow-auto do bloco.`,
   },
@@ -841,23 +832,18 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
       normal: 'Excalidraw completo com a cena gravada; cada mudança agenda a gravação da cena 600 ms depois, e fechar o bloco antes disso entrega a cena pendente ao canvas na hora.',
       loading: 'Suspense do módulo lazy (~47 MB descompactado): spinner "Carregando Excalidraw…".',
       empty: 'Cena sem elementos: grava scene vazio e reabre em branco (#ffffff).',
-      error: 'data.scene inválido ou sem "elements" vira cena vazia sem aviso (parseScene devolve null).',
+      error: 'data.scene inválido ou sem "elements" vira cena vazia sem aviso (parseScene devolve null). Falha do chunk ou erro de render do Excalidraw fica dentro do bloco (BlockErrorBoundary: "Não foi possível carregar o Excalidraw." e Tentar de novo); o resto do canvas segue.',
     },
     controls: [],
     persistence: ['canvas salvo (canvas_nodes.data_json: scene em JSON com elements e viewBackgroundColor, label, frameColor), só quando a cena muda de fato (sceneToPersist)'],
     ipc: ['canvas:save', 'canvas:delete'],
     dependsOn: ['useReactFlow', 'React.lazy(ExcalidrawCanvas)', 'onDataChange (updateNodeData, CanvasView)'],
-    tests: [...FIXTURE_TESTS, smoke('checarInteracoes'), smoke('checarDesenhoExcalidraw'), unit(`${COMPONENTS}/excalidraw-scene.test.ts`)],
+    tests: [{ file: 'src/features/canvas/components/block-load-failures.test.ts' }, ...FIXTURE_TESTS, smoke('checarInteracoes'), smoke('checarDesenhoExcalidraw'), unit(`${COMPONENTS}/excalidraw-scene.test.ts`)],
     gaps: [
       {
         what: 'Fechar o bloco entrega a cena pendente ao canvas (ExcalidrawDrawingNode.tsx, cleanup), mas ao fechar o app ou trocar para o Chat o canvas inteiro desmonta junto e o setNodes que carrega a cena nunca roda: o último traço (até 600 ms + 400 ms) ainda se perde nesses dois casos, e nenhum teste monta o bloco.',
         risk: 'baixo',
         task: '41b91f95-497e-81c5-bc4d-c151f42dc82c',
-      },
-      {
-        what: 'Sem error boundary em volta do lazy: falha do chunk ou cena que faz o Excalidraw lançar derruba o canvas inteiro.',
-        risk: 'médio',
-        task: '3ec91f95-497e-8176-bef0-dfde828936dc',
       },
     ],
     overlap: `${NODE_OVERLAP_BASE} Os menus e diálogos internos do Excalidraw ficam presos ao cartão: num bloco de mínimo 360×280 a barra de ferramentas e os popovers podem ser cortados.`,
@@ -1605,6 +1591,31 @@ export const nodeSurfaces: InventoryElement[] = [
       },
     ],
     overlap: 'Sem superfície própria: aparece como aresta (ver Conexões entre blocos) e como a lista "Agentes ligados" do bloco Arquivo.',
+  },
+  {
+    id: 'bloco-erro-de-carregamento',
+    name: 'Aviso de falha de carregamento do bloco (Tarefas Notion e Excalidraw)',
+    layer: 'node',
+    owner: `${COMPONENTS}/BlockErrorBoundary.tsx`,
+    states: {
+      normal: 'Sem falha, entrega o conteúdo do bloco sem desenhar nada próprio.',
+      error: 'O chunk preguiçoso falhou ao baixar ou o render lançou: o bloco mostra "Não foi possível carregar <o bloco>." e "O resto do canvas segue funcionando.", com o botão Tentar de novo. O console recebe só o nome do bloco e o tipo do erro.',
+    },
+    controls: [
+      {
+        locator: 'onClick={this.tentarDeNovo}',
+        test: { file: 'src/features/canvas/components/block-load-failures.test.ts' },
+        kind: 'button',
+        effect: 'Renova o React.lazy do bloco (lazyRecarregavel: o lazy guarda a rejeição para sempre, então o mesmo componente lançaria de novo), limpa o erro e renderiza o filho outra vez, que importa o chunk de novo.',
+        failure: 'Se o chunk continua indisponível o aviso volta; nada derruba o canvas.',
+      },
+    ],
+    persistence: ['nenhuma'],
+    ipc: [],
+    dependsOn: ['lazyRecarregavel (lazy-recarregavel.ts)', 'React error boundary (getDerivedStateFromError)'],
+    tests: [{ file: 'src/features/canvas/components/block-load-failures.test.ts' }],
+    gaps: [],
+    overlap: 'Ocupa o corpo do bloco (h-full, nodrag nowheel nopan); o cabeçalho com remover e o redimensionar seguem fora do aviso.',
   },
   {
     id: 'grupo-blocos-filhos',

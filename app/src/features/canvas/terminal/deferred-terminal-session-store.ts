@@ -55,6 +55,13 @@ export class DeferredTerminalSessionStore implements TerminalSessionStoreApi {
   private pendingSessionListeners = new Map<string, Set<PendingSessionListener>>()
   private pendingOutputListeners = new Map<string, Set<PendingListener>>()
 
+  /**
+   * A falha de importar o runtime vira estado no bloco (`error` + mensagem), em vez de ficar só no console com o
+   * bloco em "iniciando" para sempre. O objeto é um só (o `useSyncExternalStore` compara por referência). A
+   * tentativa seguinte (Reiniciar, ou outro `ensure`) importa de novo e, se der certo, apaga a falha.
+   */
+  private loadFailure: SessionSnapshot | null = null
+
   private load(): Promise<TerminalSessionStoreApi> {
     if (this.realStore) return Promise.resolve(this.realStore)
     if (this.loading) return this.loading
@@ -63,6 +70,7 @@ export class DeferredTerminalSessionStore implements TerminalSessionStoreApi {
       .then(({ TerminalSessionStore }) => {
         const store = new TerminalSessionStore()
         this.realStore = store
+        this.loadFailure = null
 
         for (const pending of this.pendingAllListeners) {
           if (!pending.active) continue
@@ -100,7 +108,25 @@ export class DeferredTerminalSessionStore implements TerminalSessionStoreApi {
         '[felixo] não foi possível carregar o runtime do terminal:',
         error,
       )
+      this.reportLoadFailure()
     })
+  }
+
+  private reportLoadFailure(): void {
+    if (this.realStore || this.loadFailure) return
+    const failure: SessionSnapshot = {
+      activity: 'error',
+      previewLines: [],
+      message: 'Não foi possível carregar o terminal. Use Reiniciar para tentar de novo.',
+    }
+    this.loadFailure = failure
+    for (const pending of this.pendingAllListeners) if (pending.active) pending.listener()
+    for (const listeners of this.pendingSessionListeners.values()) {
+      for (const pending of listeners) if (pending.active) pending.listener(failure)
+    }
+    for (const listeners of this.pendingOutputListeners.values()) {
+      for (const pending of listeners) if (pending.active) pending.listener()
+    }
   }
 
   restart(id: string, options: SessionOptions = {}): void {
@@ -175,7 +201,7 @@ export class DeferredTerminalSessionStore implements TerminalSessionStoreApi {
   }
 
   getSnapshot(id: string): SessionSnapshot | undefined {
-    return this.realStore?.getSnapshot(id)
+    return this.realStore ? this.realStore.getSnapshot(id) : (this.loadFailure ?? undefined)
   }
 
   getSessionMetadata(id: string): SessionMetadata | undefined {

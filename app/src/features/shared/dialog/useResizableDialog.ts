@@ -26,6 +26,19 @@ export type ResizableDialog<T extends HTMLElement = HTMLElement> = {
 const viewport = () => ({ width: window.innerWidth, height: window.innerHeight })
 
 /**
+ * `window.localStorage` lança SecurityError (getter) com o armazenamento bloqueado: ler fora de try derrubava o modal no
+ * `useState` inicial. Sem storage o modal só não lembra o tamanho; `dialog-sizing` já protege os métodos.
+ */
+const SEM_STORAGE: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> = { getItem: () => null, setItem: () => {}, removeItem: () => {} }
+export function safeStorage(): Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> {
+  try {
+    return window.localStorage ?? SEM_STORAGE
+  } catch {
+    return SEM_STORAGE
+  }
+}
+
+/**
  * Tamanho do modal, ajustável nos dois eixos e lembrado por `dialogId`.
  *
  * Chamar ANTES de qualquer `return null` antecipado do componente. Sem ajuste
@@ -40,7 +53,7 @@ export function useResizableDialog<T extends HTMLElement = HTMLElement>(dialogId
   const bindFrame = useCallback((node: T | null) => {
     frameNode.current = node
   }, [])
-  const [size, setSize] = useState<DialogSize | null>(() => readDialogSize(window.localStorage, dialogId, viewport()))
+  const [size, setSize] = useState<DialogSize | null>(() => readDialogSize(safeStorage(), dialogId, viewport()))
   const [resizing, setResizing] = useState(false)
   const sizeRef = useRef(size)
   useEffect(() => {
@@ -73,7 +86,7 @@ export function useResizableDialog<T extends HTMLElement = HTMLElement>(dialogId
       stopDragging()
       // O clique que sucede o soltar do mouse chegaria ao fundo e fecharia o modal.
       swallowNextClick(window)
-      if (sizeRef.current) writeDialogSize(window.localStorage, dialogId, sizeRef.current)
+      if (sizeRef.current) writeDialogSize(safeStorage(), dialogId, sizeRef.current)
     }
     document.addEventListener('mousemove', onMouseMove)
     document.addEventListener('mouseup', onMouseUp)
@@ -103,13 +116,13 @@ export function useResizableDialog<T extends HTMLElement = HTMLElement>(dialogId
     (delta: { dx: number; dy: number }, axes: DialogAxes) => {
       const next = resizeCentered(measure(), delta, axes, viewport())
       setSize(next)
-      writeDialogSize(window.localStorage, dialogId, next)
+      writeDialogSize(safeStorage(), dialogId, next)
     },
     [measure, dialogId],
   )
 
   const reset = useCallback(() => {
-    clearDialogSize(window.localStorage, dialogId)
+    clearDialogSize(safeStorage(), dialogId)
     setSize(null)
   }, [dialogId])
 

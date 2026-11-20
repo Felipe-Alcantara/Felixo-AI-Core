@@ -1280,6 +1280,19 @@ export class TerminalSessionStore {
           }
         }
       })
+      .catch((error: unknown) => {
+        // O invoke rejeitou (IPC caído, handler que lançou): sem isto a sessão ficava em "starting" para sempre,
+        // sem mensagem. Mesma regra do ramo de falha: não sobrescreve um estado mais recente.
+        if (session.disposed) return
+        session.spawnSettled = true
+        session.resumeWatch = undefined
+        if (session.snapshot.activity === 'starting') {
+          this.update(session, {
+            activity: 'error',
+            message: error instanceof Error && error.message ? error.message : 'Falha ao iniciar o terminal.',
+          })
+        }
+      })
   }
 
   /** Mounts the session's terminal element into a container. */

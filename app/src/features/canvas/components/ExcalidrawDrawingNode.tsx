@@ -1,4 +1,4 @@
-import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef } from 'react'
+import { memo, Suspense, useCallback, useEffect, useMemo, useRef } from 'react'
 import { NODE_MIN_SIZE } from '../services/node-geometry'
 import {
   Handle,
@@ -9,6 +9,8 @@ import {
 } from '@xyflow/react'
 import { Loader2 } from 'lucide-react'
 import { NodeHeader } from './NodeHeader'
+import { BlockErrorBoundary } from './BlockErrorBoundary'
+import { lazyRecarregavel } from './lazy-recarregavel'
 import type { ExcalidrawDrawingNodeData } from '../types'
 import type { ExcalidrawScene } from './ExcalidrawCanvas'
 import { sceneToPersist } from './excalidraw-scene'
@@ -24,7 +26,7 @@ type ExcalidrawDrawingNodeDataWithHandler = ExcalidrawDrawingNodeData & {
 // Só baixa/executa `@excalidraw/excalidraw` quando este node é montado de
 // verdade — o mesmo padrão de code-splitting de `canvas-tool-loaders.tsx`,
 // aplicado a um node do canvas em vez de um painel lateral.
-const LazyExcalidrawCanvas = lazy(() => import('./ExcalidrawCanvas'))
+const excalidrawCanvas = lazyRecarregavel(() => import('./ExcalidrawCanvas'))
 
 const SCENE_SAVE_DEBOUNCE_MS = 600
 
@@ -123,16 +125,23 @@ function ExcalidrawDrawingNodeComponent({ id, data, selected }: NodeProps) {
       />
 
       <div className="min-h-0 flex-1">
-        <Suspense
-          fallback={
-            <div className="flex h-full w-full items-center justify-center gap-2 bg-zinc-900 text-sm text-zinc-400">
-              <Loader2 size={16} className="animate-spin" />
-              Carregando Excalidraw…
-            </div>
-          }
-        >
-          <LazyExcalidrawCanvas initialScene={initialScene} onSceneChange={handleSceneChange} />
-        </Suspense>
+        <BlockErrorBoundary rotulo="o Excalidraw" aoTentarDeNovo={excalidrawCanvas.renovar}>
+          {() => {
+            const Canvas = excalidrawCanvas.atual()
+            return (
+              <Suspense
+                fallback={
+                  <div className="flex h-full w-full items-center justify-center gap-2 bg-zinc-900 text-sm text-zinc-400">
+                    <Loader2 size={16} className="animate-spin" />
+                    Carregando Excalidraw…
+                  </div>
+                }
+              >
+                <Canvas initialScene={initialScene} onSceneChange={handleSceneChange} />
+              </Suspense>
+            )
+          }}
+        </BlockErrorBoundary>
       </div>
       <Handle type="source" position={Position.Right} />
     </div>

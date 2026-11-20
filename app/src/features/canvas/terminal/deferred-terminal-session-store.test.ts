@@ -124,3 +124,40 @@ describe('DeferredTerminalSessionStore', () => {
     expect(ponte.spawns.every((spawn) => spawn.reuseExisting === true)).toBe(true)
   })
 })
+
+describe('DeferredTerminalSessionStore: o runtime que não carrega', () => {
+  const previousWindow = (globalThis as { window?: unknown }).window
+
+  afterEach(() => {
+    ;(globalThis as { window?: unknown }).window = previousWindow
+    vi.doUnmock('./terminal-session-store')
+    vi.resetModules()
+  })
+
+  it('a falha do import vira erro no bloco e avisa quem já estava ouvindo, em vez de ficar em "iniciando"', async () => {
+    ;(globalThis as { window?: unknown }).window = { felixo: {} }
+    vi.resetModules()
+    vi.doMock('./terminal-session-store', () => {
+      throw new Error('chunk do terminal não baixou')
+    })
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { DeferredTerminalSessionStore: Fresh } = await import('./deferred-terminal-session-store')
+    const store = new Fresh()
+    const avisos: unknown[] = []
+    store.subscribe('terminal-sem-runtime', (snapshot) => avisos.push(snapshot))
+    expect(store.getSnapshot('terminal-sem-runtime')).toBeUndefined()
+
+    store.ensure('terminal-sem-runtime', { command: 'sh', cwd: '/tmp' })
+
+    await vi.waitFor(() => expect(store.getSnapshot('terminal-sem-runtime')).toBeDefined(), CARGA_DO_RUNTIME)
+    expect(store.getSnapshot('terminal-sem-runtime')).toMatchObject({
+      activity: 'error',
+      message: expect.stringContaining('Reiniciar'),
+    })
+    // Referência estável: o useSyncExternalStore compara por ela.
+    expect(store.getSnapshot('terminal-sem-runtime')).toBe(store.getSnapshot('terminal-sem-runtime'))
+    expect(avisos).toHaveLength(1)
+    expect(consoleError).toHaveBeenCalled()
+    consoleError.mockRestore()
+  })
+})

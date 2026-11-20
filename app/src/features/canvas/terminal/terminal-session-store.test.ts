@@ -110,7 +110,8 @@ type Harness = {
   /** Pasta pedida em cada spawn, na ordem (à parte de `spawnRequests`, que só fala de conta). */
   spawnCwds: Array<string | undefined>
   /** Troca a resposta dos próximos `pty:spawn` (ex.: um reanexo, `reused: true`). */
-  setSpawnResult: (result: { ok: boolean; reused?: boolean; message?: string }) => void
+  /** Um `Error` faz o `pty:spawn` REJEITAR (IPC caído, handler que lançou) em vez de responder `{ ok: false }`. */
+  setSpawnResult: (result: { ok: boolean; reused?: boolean; message?: string } | Error) => void
   /** Nomes dos arquivos de contexto "criados" pela ponte, na ordem de escrita. */
   contextFileNames: string[]
   /** sessionId de cada chamada a `contextFiles.release`, na ordem em que ocorreram. */
@@ -169,7 +170,7 @@ function createHarness(
   // soltá-la, reproduzindo a ordem que o ConPTY impõe no Windows: a CLI pinta
   // a primeira tela antes de a promise do IPC voltar ao renderer.
   let releaseSpawn = () => {}
-  let spawnResult: { ok: boolean; reused?: boolean; message?: string } = { ok: true, reused: false }
+  let spawnResult: { ok: boolean; reused?: boolean; message?: string } | Error = { ok: true, reused: false }
   const spawnGate = deferSpawn
     ? new Promise<void>((resolve) => {
         releaseSpawn = resolve
@@ -206,6 +207,7 @@ function createHarness(
           spawnRequests.push({ accountId, providerId, accountMode, chainTicket })
           spawnCwds.push(cwd)
           await spawnGate
+          if (spawnResult instanceof Error) throw spawnResult
           return spawnResult
         },
         write: async ({ data }: { data: string }) => {
@@ -3428,5 +3430,44 @@ describe('TerminalSessionStore: estado que a CLI anuncia (OSC 7501 e título)', 
       expect(linhas(info).filter((l) => l.includes(' titulo-segura '))).toHaveLength(2)
       info.mockRestore()
     })
+  })
+})
+
+describe('TerminalSessionStore: o spawn que rejeita', () => {
+  let harness: Harness | undefined
+
+  beforeEach(() => {
+    harness = undefined
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    harness?.store.clear()
+    vi.useRealTimers()
+  })
+
+  it('um invoke rejeitado vira erro no bloco, e não "iniciando" para sempre', async () => {
+    harness = createHarness('', 'claude', true, true)
+    expect(harness.store.getSnapshot(SESSION_ID)?.activity).toBe('starting')
+
+    harness.setSpawnResult(new Error('IPC indisponível'))
+    harness.resolveSpawn()
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(harness.store.getSnapshot(SESSION_ID)).toMatchObject({ activity: 'error', message: 'IPC indisponível' })
+  })
+
+  it('a rejeição não sobrescreve um estado mais recente (a CLI já pintou a tela)', async () => {
+    harness = createHarness('', 'claude', true, true)
+    harness.feed('saída da CLI\r\n')
+    await vi.advanceTimersByTimeAsync(0)
+    const antes = harness.store.getSnapshot(SESSION_ID)?.activity
+    expect(antes).not.toBe('starting')
+
+    harness.setSpawnResult(new Error('tarde demais'))
+    harness.resolveSpawn()
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(harness.store.getSnapshot(SESSION_ID)?.activity).toBe(antes)
   })
 })
