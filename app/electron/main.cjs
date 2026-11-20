@@ -153,6 +153,7 @@ const { installIpcInvokeProbe } = require('./core/ipc-invoke-probe.cjs')
 const { loadDevtoolsFakeCliPty } = require('./core/devtools-fake-cli-pty-guard.cjs')
 const { registerDevtoolsMainEval } = require('./core/devtools-main-eval.cjs')
 const { loadAutomationShellOpen } = require('./core/devtools-shell-open-guard.cjs')
+const { loadAutomationProjectDialog } = require('./core/devtools-project-folder-guard.cjs')
 const { createAgentUsageService } = require('./services/agent-usage-service.cjs')
 const { queryClaudeUsage } = require('./services/claude-usage-query.cjs')
 const {
@@ -305,6 +306,10 @@ const devtoolsFakeCliPty = loadDevtoolsFakeCliPty({ env: process.env, devtoolsPo
 // possível abrir no navegador" sem abrir navegador nenhum. O app normal
 // recebe null e usa o shell do Electron.
 const automationShell = loadAutomationShellOpen({ env: process.env, devtoolsPort })
+
+// Seletor de pasta dos projetos que "escolhe" a pasta combinada (FELIXO_DEVTOOLS_PROJECT_FOLDER), só na instância de
+// automação que pediu: o smoke dos painéis precisa de um projeto real e o seletor nativo não é acionável por teste.
+const automationProjectDialog = loadAutomationProjectDialog({ env: process.env, devtoolsPort })
 
 // O Chromium só aceita a porta de depuração antes de ficar pronto. A flag é
 // exclusiva da instância que o `felixo devtools` criou; o app normal não abre
@@ -1070,6 +1075,7 @@ app.whenReady().then(async () => {
   registerFileExportIpcHandlers(getMainWindow)
   const projectsHandlers = registerProjectsIpcHandlers(getMainWindow, {
     database: storageDatabase,
+    ...(automationProjectDialog ? { dialog: automationProjectDialog } : {}),
   })
   registerNotesIpcHandlers({ database: storageDatabase })
   canvasFilesHandlers = registerCanvasFilesIpcHandlers(getMainWindow, appPaths)

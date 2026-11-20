@@ -433,6 +433,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
     ipc: ['qa-logger:get', 'qa-logger:clear', 'qa-logger:entry', 'qa-logger:cleared', 'qa-logger:build-report'],
     dependsOn: ['window.felixo.qaLogger', 'CanvasPanel'],
     tests: [
+      { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarQaLogger' },
       { file: 'src/features/shared/ipc/ipc-failures-2.test.ts' },
       { file: 'scripts/canvas-smoke-sobreposicoes.cjs', check: 'checarQaLoggerEmJanelaPequena' },
       { file: 'electron/services/qa-logger.test.cjs' },
@@ -441,7 +442,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
     ],
     gaps: [
       {
-        what: 'Sem teste de interface do painel; os handlers qa-logger:build-report e qa-logger:clear também não são exercitados em qa-logger.test.cjs',
+        what: 'Limpar (painel, memória e disco) e Reportar problema são exercitados (checarQaLogger); o handler qa-logger:build-report não é exercitado em qa-logger.test.cjs.',
         risk: 'baixo',
         task: '3ec91f95-497e-81ca-8319-ee657b0b6492',
       },
@@ -497,16 +498,12 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
       'nodes do CanvasView (rótulo da nota alvo)',
     ],
     tests: [
+      { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarPedidosDeEscrita' },
       { file: `${TOOLS}/canvas-write-agent-requests.test.ts` },
       { file: 'electron/services/agent-canvas-write-ipc-handlers.test.cjs' },
       { file: 'electron/services/fetch-all/agent-requests.test.cjs' },
     ],
     gaps: [
-      {
-        what: 'É a porta de confirmação de escrita por agente (risco de prompt injection) e não tem E2E: aceitar/recusar pelo painel e o bloco mudando por canvas:agent-node-updated só são cobertos no handler do main e nas funções puras',
-        risk: 'médio',
-        task: '3ec91f95-497e-81ca-8319-ee657b0b6492',
-      },
       {
         what: 'Pedido de escrita que chega com o painel fechado não avisa ninguém: só este painel escuta canvas:agent-write-requests, então o agente fica esperando sem a pessoa saber',
         risk: 'médio',
@@ -712,6 +709,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
       'CanvasPanel',
     ],
     tests: [
+      { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarPresetsDeAgente' },
       { file: 'src/features/shared/ipc/ipc-failures.test.ts' },
       { file: 'src/features/canvas/components/focus-keyboard-a11y.test.ts' },
       { file: 'scripts/canvas-smoke-teclado.cjs', check: 'checarFocoAoFecharPresetsDeAgente' },
@@ -721,7 +719,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
     ],
     gaps: [
       {
-        what: 'Sem teste de interface: criar, editar, duplicar, importar, exportar e excluir preset pelo painel',
+        what: 'Criar, duplicar e excluir preset são exercitados (checarPresetsDeAgente); editar, importar e exportar (arquivo) seguem sem teste de interface.',
         risk: 'baixo',
         task: '3ec91f95-497e-81ca-8319-ee657b0b6492',
       },
@@ -816,6 +814,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
       'ClaudeConfigDefaultsSection',
     ],
     tests: [
+      { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarConfiguracoes' },
       { file: 'src/features/shared/ipc/ipc-failures.test.ts' },
       { file: 'src/features/canvas/services/quality-standard-prompt.test.ts' },
       { file: 'src/features/canvas/services/quality-standard-source.test.ts' },
@@ -824,7 +823,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
     ],
     gaps: [
       {
-        what: 'Sem teste de interface do tema, das instruções de arquivo e do padrão de qualidade (hardware-check só abre o painel para a placa de vídeo); canvas:set-file-link-prompt, set-file-bootstrap-prompt e set-quality-standard não aparecem em canvas-ipc-handlers.test.cjs',
+        what: 'A instrução de arquivo (salvar e persistir) é exercitada (checarConfiguracoes); o tema e o padrão de qualidade seguem sem teste de interface (hardware-check só abre o painel para a placa de vídeo); canvas:set-file-link-prompt, set-file-bootstrap-prompt e set-quality-standard não aparecem em canvas-ipc-handlers.test.cjs.',
         risk: 'baixo',
         task: '3ec91f95-497e-81ca-8319-ee657b0b6492',
       },

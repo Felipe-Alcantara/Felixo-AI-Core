@@ -32,7 +32,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **Elementos:** 115 (10 blocos, 17 ferramentas, 88 outras superfícies)
 - **Controles:** 439, dos quais 92 com teste específico
 - **Elementos sem nenhum teste:** 0
-- **Lacunas:** 161 (alto 4, médio 95, baixo 62), em 73 tasks
+- **Lacunas:** 153 (alto 2, médio 91, baixo 60), em 73 tasks
 
 ## Moldura do canvas
 
@@ -1443,7 +1443,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** nenhum
 - **Depende de:** `useSearchQuery`, `useSearchInputFocus`, `CanvasPanel`, `focusNode (CanvasView)`
 - **Sobreposição:** CanvasPanel absolute z-20 (z-30 com foco dentro), top-16, left = 1rem + largura viva da sidebar; abaixo da sidebar (26), dos toasts/overlay isBusy (50), dos diálogos (60) e do FelixoSelect (1000); mesmo z da lista Elementos (z-20, direita). Porte sm; a largura visual é limitada à viewport em telas estreitas.
-- **Testes:** `scripts/canvas-smoke.cjs` → `checarFocoAoAbrirFerramenta`, `scripts/canvas-smoke.cjs` → `checarPainelNosDoisEixos`, `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos`, `scripts/canvas-smoke-onboarding.cjs` → `sb6`
+- **Testes:** `scripts/canvas-smoke-paineis.cjs` → `checarBuscaDeBlocos`, `scripts/canvas-smoke.cjs` → `checarFocoAoAbrirFerramenta`, `scripts/canvas-smoke.cjs` → `checarPainelNosDoisEixos`, `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos`, `scripts/canvas-smoke-onboarding.cjs` → `sb6`
 
 | Estado | Quando |
 | --- | --- |
@@ -1454,10 +1454,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | --- | --- | --- | --- | --- |
 | `onClick={() => onFocusNode(hit.id)}` (button) | clique | focusNode do CanvasView: centraliza o bloco na área livre com zoom 1,2 e marca só ele como selecionado; o painel continua aberto | bloco removido entre a busca e o clique: focusNode não acha o nó e não faz nada (sem aviso) | — |
 
-| Lacuna | Risco | Task |
-| --- | --- | --- |
-| nenhum teste clica num resultado e confere que o bloco foi centralizado e selecionado (o smoke só abre, foca, mede e fecha) | médio | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
-
 ### Projetos (lista e navegador de pastas)
 
 - **ID:** `tool-projects` · **Dono:** `src/features/canvas/components/tools/ProjectsPanel.tsx`
@@ -1465,7 +1461,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `projects:list`, `projects:pick-folder`, `projects:detect-repos`, `projects:save`, `projects:delete`, `projects:list-directory`, `text-file:open-in-project`, `text-file:resolve-editor`
 - **Depende de:** `useCanvasProjects (removeProjectFolder, reloadProjects)`, `sortProjectsByName`, `buildRunCommand`, `canRunProjectFile`, `resolveProjectFileClick`, `runFileInTerminal / openTextFileNode (CanvasView)`, `CanvasPanel`
 - **Sobreposição:** CanvasPanel absolute z-20 (z-30 com foco dentro), top-16, left = 1rem + largura viva da sidebar; abaixo da sidebar (26), dos toasts/overlay isBusy (50), dos diálogos (60) e do FelixoSelect (1000); mesmo z da lista Elementos (z-20, direita). Porte md; lista e navegador dividem a mesma moldura (trocar de vista não reanima nem refaz o foco). Rodar e Abrir no canvas ficam com opacity 0 até hover/foco
-- **Testes:** `src/features/shared/ipc/ipc-failures.test.ts`, `src/features/canvas/components/tools/projects-panel-order.test.ts`, `src/features/canvas/services/project-file-action.test.ts`, `src/features/canvas/services/run-file-command.test.ts`, `src/features/canvas/components/terminal-open-file.test.ts`, `src/features/canvas/hooks/useCanvasProjects.test.ts`, `electron/services/projects-ipc-handlers.test.cjs`, `electron/services/projects-path-security.test.cjs`
+- **Testes:** `scripts/canvas-smoke-paineis.cjs` → `checarProjetos`, `scripts/canvas-smoke-paineis.cjs` → `checarNotas`, `src/features/shared/ipc/ipc-failures.test.ts`, `src/features/canvas/components/tools/projects-panel-order.test.ts`, `src/features/canvas/services/project-file-action.test.ts`, `src/features/canvas/services/run-file-command.test.ts`, `src/features/canvas/components/terminal-open-file.test.ts`, `src/features/canvas/hooks/useCanvasProjects.test.ts`, `electron/services/projects-ipc-handlers.test.cjs`, `electron/services/projects-path-security.test.cjs`
 
 | Estado | Quando |
 | --- | --- |
@@ -1490,7 +1486,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| nenhum smoke abre o painel Projetos: adicionar pasta, remover em dois toques, navegar e rodar/abrir arquivo só têm teste das funções puras e dos handlers | médio | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
+| Adicionar pasta (pelo seletor trocado na automação) e remover em dois toques são exercitados (checarProjetos); navegar pelas pastas e rodar/abrir arquivo só têm teste das funções puras e dos handlers. | médio | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
 | ProjectsPanel.tsx:133: sem repositório na pasta escolhida, o nome sai de folder.split("/"); no Windows o caminho (realpath) usa "\" e o projeto é registrado com o caminho inteiro como nome | baixo | `3ec91f95-497e-8103-b360-c1979d6992f4` |
 
 ### Notas (blocos do canvas e notas salvas)
@@ -1518,10 +1514,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `<PenTool size={14}` (button) | clique | focusNode: centraliza o bloco Excalidraw e seleciona só ele | bloco removido entre o render e o clique: nada acontece | — |
 | `onClick={() => void addSavedNote()}` (button) | clique | grava "Nova nota" com notes:save e só então a acrescenta à lista de notas salvas | falha de notes:save aparece no painel e a nota só entra na lista se foi gravada | — |
 | `aria-label="Remover nota"` (button) | clique | cancela o salvamento pendente da nota, chama notes:delete e tira a nota da lista, sem confirmação | falha de notes:delete aparece no painel e a nota continua na lista | — |
-
-| Lacuna | Risco | Task |
-| --- | --- | --- |
-| nenhum teste (unitário ou smoke) cobre o painel Notas: criar blocos, centralizar, criar/editar/remover nota salva | médio | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
 
 ### Modelos configurados
 
@@ -1552,7 +1544,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `automations:list`, `automations:save`, `automations:delete`, `context-file:write`, `pty:write`, `files:save-text`, `files:save-text-folder`
 - **Depende de:** `CanvasPanel`, `insertPrompt (CanvasView)`, `terminal-session-store.sendText`, `prompt-overrides`, `prompt-composition`, `prompt-delivery-feedback`, `custom-automation-creation`, `prompt-markdown`, `PromptImportPreview`, `defaultAutomations`, `FelixoSelect`
 - **Sobreposição:** CanvasPanel absolute z-20 (z-30 com foco dentro), top-16, left = 1rem + largura viva da sidebar; abaixo da sidebar (26), dos toasts/overlay isBusy (50), dos diálogos (60) e do FelixoSelect (1000); mesmo z da lista Elementos (z-20, direita). Porte xl (o mais largo); disputa largura com a gaveta fixada e fica sob a lista Elementos em janela pequena
-- **Testes:** `src/features/shared/ipc/ipc-failures.test.ts`, `scripts/canvas-smoke-prompts.cjs` → `catalogo`, `scripts/canvas-smoke-prompts.cjs` → `combinacao`, `scripts/canvas-smoke-prompts.cjs` → `fallback`, `scripts/canvas-smoke-prompts.cjs` → `semTerminalAberto`, `src/features/canvas/terminal/prompt-origins-e2e.test.ts`, `src/features/canvas/services/prompt-composition.test.ts`, `src/features/canvas/services/prompt-delivery-feedback.test.ts`, `src/features/canvas/services/prompt-overrides.test.ts`, `src/features/canvas/services/custom-automation-creation.test.ts`, `src/features/canvas/services/prompt-markdown.test.ts`, `electron/services/file-export-ipc-handlers.test.cjs`, `src/features/shared/data/automations.test.ts`, `src/features/shared/types/prompt-insertion.test.ts`
+- **Testes:** `scripts/canvas-smoke-paineis.cjs` → `checarPrompts`, `src/features/shared/ipc/ipc-failures.test.ts`, `scripts/canvas-smoke-prompts.cjs` → `catalogo`, `scripts/canvas-smoke-prompts.cjs` → `combinacao`, `scripts/canvas-smoke-prompts.cjs` → `fallback`, `scripts/canvas-smoke-prompts.cjs` → `semTerminalAberto`, `src/features/canvas/terminal/prompt-origins-e2e.test.ts`, `src/features/canvas/services/prompt-composition.test.ts`, `src/features/canvas/services/prompt-delivery-feedback.test.ts`, `src/features/canvas/services/prompt-overrides.test.ts`, `src/features/canvas/services/custom-automation-creation.test.ts`, `src/features/canvas/services/prompt-markdown.test.ts`, `electron/services/file-export-ipc-handlers.test.cjs`, `src/features/shared/data/automations.test.ts`, `src/features/shared/types/prompt-insertion.test.ts`
 
 | Estado | Quando |
 | --- | --- |
@@ -1581,7 +1573,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | com a gaveta aberta, clicar na sidebar a fecha (o smoke precisa fixá-la) e, na janela de 1008×655, a lista Elementos cobre parte do painel (o smoke aciona pelo teclado) | médio | `3eb91f95-497e-814a-8b2c-e471e09f6ff3` |
 | o retorno failed ("Tentar de novo") nunca é exercitado: o smoke cobre sent, sent-inline e copied | médio | `3d791f95-497e-81cd-b05c-c9d6370c81a3` |
 | Inserir e Enviar conjunto só foram clicados com a CLI roteirizada do smoke, não no app empacotado com CLI real | médio | `3d791f95-497e-81bf-a6c7-efef573d87ae` |
-| Novo prompt/Criar, edição com autosave, troca de escopo e Remover não têm teste de interface (só as funções puras) | médio | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
+| Novo prompt/Criar (gravado) e o filtro são exercitados (checarPrompts); edição inline com autosave, troca de escopo e Remover pela linha só têm teste das funções puras. | médio | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
 
 ### Skills (biblioteca e skills próprias)
 
@@ -1590,7 +1582,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `canvas:get-skills`, `canvas:set-skills`, `canvas:list-available-skills`, `canvas:set-skills-settings`, `context-file:write`, `pty:write`
 - **Depende de:** `CanvasPanel`, `activateSkill (CanvasView)`, `skills-panel-catalog (readSkillsCatalog, hideSkillId, restoreSkillId)`, `describeSkillActivationFeedback`, `terminal-session-store.sendText`
 - **Sobreposição:** CanvasPanel absolute z-20 (z-30 com foco dentro), top-16, left = 1rem + largura viva da sidebar; abaixo da sidebar (26), dos toasts/overlay isBusy (50), dos diálogos (60) e do FelixoSelect (1000); mesmo z da lista Elementos (z-20, direita). Porte sm; a lista do sistema tem max-h-40 com rolagem interna e respiro para o anel de foco
-- **Testes:** `src/features/shared/ipc/ipc-failures.test.ts`, `scripts/canvas-smoke-prompts.cjs` → `skill`, `scripts/canvas-smoke-prompts.cjs` → `gravado`, `src/features/canvas/components/tools/skills-panel-catalog.test.ts`, `electron/services/canvas-ipc-handlers.test.cjs`, `src/features/canvas/services/prompt-delivery-feedback.test.ts`, `src/features/canvas/terminal/prompt-origins-e2e.test.ts`
+- **Testes:** `scripts/canvas-smoke-paineis.cjs` → `checarSkills`, `src/features/shared/ipc/ipc-failures.test.ts`, `scripts/canvas-smoke-prompts.cjs` → `skill`, `scripts/canvas-smoke-prompts.cjs` → `gravado`, `src/features/canvas/components/tools/skills-panel-catalog.test.ts`, `electron/services/canvas-ipc-handlers.test.cjs`, `src/features/canvas/services/prompt-delivery-feedback.test.ts`, `src/features/canvas/terminal/prompt-origins-e2e.test.ts`
 
 | Estado | Quando |
 | --- | --- |
@@ -1616,7 +1608,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | mesma disputa do Prompts: com a gaveta aberta e sem fixá-la, clicar na sidebar fecha a gaveta; a lista Elementos cobre parte do painel em janela pequena | médio | `3eb91f95-497e-814a-8b2c-e471e09f6ff3` |
-| só o Ativar da biblioteca é exercitado (P4); Ativar de skill própria, criar/editar/remover, ocultar/restaurar e o checkbox de terceiros não têm teste de interface | médio | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
+| Criar skill própria (gravada), ocultar/restaurar da biblioteca e remover a própria são exercitados (checarSkills); Ativar de skill própria, editar e o checkbox de terceiros seguem sem teste de interface. | médio | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
 
 ### Source Control (Git)
 
@@ -1625,7 +1617,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `projects:list`, `git:get-summary`, `git:list-files`, `git:list-branches`, `git:switch-branch`, `git:get-log`, `git:pull`, `git:push`, `git:commit`
 - **Depende de:** `CanvasPanel (variant workspace)`, `useCanvasSurfaces (reportPanelWidth)`, `parseStatusEntries`, `repo-tree (buildRepoTree, dirsWithChanges, ancestorPaths)`, `FelixoSelect`, `GitExplorer`, `GitChangesList`, `GitHistory`, `GitDiffView`
 - **Sobreposição:** variante workspace: absolute z-20 (z-30 com foco), top-4, left = 1rem + sidebar, right = inspector + 16 px, altura toda (maxHeight); reporta a largura ao coordenador (reportPanelWidth) e deixa a faixa mínima de canvas (MIN_CANVAS_STRIP 160 px); recolhido vira coluna de 44 px
-- **Testes:** `src/features/shared/ipc/ipc-failures.test.ts`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarGitEAvisoDeClisComGavetaAberta`, `src/features/canvas/components/tools/git-status.test.ts`, `src/features/canvas/components/tools/repo-tree.test.ts`, `src/features/canvas/components/tools/git-diff.test.ts`, `electron/services/git-service.test.cjs`, `electron/services/git-secret-redaction.test.cjs`
+- **Testes:** `scripts/canvas-smoke-paineis.cjs` → `checarSourceControl`, `src/features/shared/ipc/ipc-failures.test.ts`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarGitEAvisoDeClisComGavetaAberta`, `src/features/canvas/components/tools/git-status.test.ts`, `src/features/canvas/components/tools/repo-tree.test.ts`, `src/features/canvas/components/tools/git-diff.test.ts`, `electron/services/git-service.test.cjs`, `electron/services/git-secret-redaction.test.cjs`
 
 | Estado | Quando |
 | --- | --- |
@@ -1650,7 +1642,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| nenhum teste de interface do Source Control: escolher repositório, trocar branch, pull/push, commit e as abas (só o serviço do processo principal e as funções puras) | alto | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
 | Medido (checarGitEAvisoDeClisComGavetaAberta): sem gaveta o painel mede 239 px em 768 px e 515 px em 1280 px; com a gaveta aberta em 1280 px ele encolhe para 239 px (abaixo do piso de 260 px) e em 768 px a gaveta (440 px) cobre 145×725 px do painel. Defeito conhecido. | médio | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
 
 ### Fetch All
@@ -1764,7 +1755,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `qa-logger:get`, `qa-logger:clear`, `qa-logger:entry`, `qa-logger:cleared`, `qa-logger:build-report`
 - **Depende de:** `window.felixo.qaLogger`, `CanvasPanel`
 - **Sobreposição:** CanvasPanel: absolute z-20 (z-30 com foco dentro), top-16, à direita da barra lateral e deslocado quando o menu de ferramentas abre (toolsMenuOpen); largura limitada a viewport − barra − inspector Elementos (288 px) e altura a viewport − 112. Os menus do FelixoSelect abrem em portal z-1000 por cima; toasts (z 50) e AgentQuestionDialog/HandoffDialog (z 60) cobrem o painel. Em janela <768 px o painel passa da viewport (PANEL_MIN_WIDTH 260, task 3e691f95-497e-815c-a129-f4d2d6405cbc). Tamanho lg; a lista cresce até 400 entradas e rola dentro do painel (scrollIntoView no fim)
-- **Testes:** `src/features/shared/ipc/ipc-failures-2.test.ts`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarQaLoggerEmJanelaPequena`, `electron/services/qa-logger.test.cjs`, `electron/services/qa-report-builder.test.cjs`, `electron/services/qa-log-disk-store.test.cjs`
+- **Testes:** `scripts/canvas-smoke-paineis.cjs` → `checarQaLogger`, `src/features/shared/ipc/ipc-failures-2.test.ts`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarQaLoggerEmJanelaPequena`, `electron/services/qa-logger.test.cjs`, `electron/services/qa-report-builder.test.cjs`, `electron/services/qa-log-disk-store.test.cjs`
 
 | Estado | Quando |
 | --- | --- |
@@ -1782,7 +1773,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Sem teste de interface do painel; os handlers qa-logger:build-report e qa-logger:clear também não são exercitados em qa-logger.test.cjs | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
+| Limpar (painel, memória e disco) e Reportar problema são exercitados (checarQaLogger); o handler qa-logger:build-report não é exercitado em qa-logger.test.cjs. | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
 
 ### Pedidos de escrita
 
@@ -1791,7 +1782,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `canvas:list-write-requests`, `canvas:resolve-write-request`, `canvas:agent-write-requests`, `canvas:agent-node-updated`
 - **Depende de:** `window.felixo.canvas (listWriteRequests, resolveWriteRequest, onWriteRequests)`, `canvas-write-agent-requests (pickPendingWriteRequest, applyWriteRequestResult)`, `CanvasPanel`, `nodes do CanvasView (rótulo da nota alvo)`
 - **Sobreposição:** CanvasPanel: absolute z-20 (z-30 com foco dentro), top-16, à direita da barra lateral e deslocado quando o menu de ferramentas abre (toolsMenuOpen); largura limitada a viewport − barra − inspector Elementos (288 px) e altura a viewport − 112. Os menus do FelixoSelect abrem em portal z-1000 por cima; toasts (z 50) e AgentQuestionDialog/HandoffDialog (z 60) cobrem o painel. Em janela <768 px o painel passa da viewport (PANEL_MIN_WIDTH 260, task 3e691f95-497e-815c-a129-f4d2d6405cbc). Tamanho md; a prévia do conteúdo tem max-h-40 e rola por dentro
-- **Testes:** `src/features/canvas/components/tools/canvas-write-agent-requests.test.ts`, `electron/services/agent-canvas-write-ipc-handlers.test.cjs`, `electron/services/fetch-all/agent-requests.test.cjs`
+- **Testes:** `scripts/canvas-smoke-paineis.cjs` → `checarPedidosDeEscrita`, `src/features/canvas/components/tools/canvas-write-agent-requests.test.ts`, `electron/services/agent-canvas-write-ipc-handlers.test.cjs`, `electron/services/fetch-all/agent-requests.test.cjs`
 
 | Estado | Quando |
 | --- | --- |
@@ -1811,7 +1802,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| É a porta de confirmação de escrita por agente (risco de prompt injection) e não tem E2E: aceitar/recusar pelo painel e o bloco mudando por canvas:agent-node-updated só são cobertos no handler do main e nas funções puras | médio | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
 | Pedido de escrita que chega com o painel fechado não avisa ninguém: só este painel escuta canvas:agent-write-requests, então o agente fica esperando sem a pessoa saber | médio | `3eb91f95-497e-81b8-a70f-dfce2a446a3e` |
 
 ### Plugins das CLIs
@@ -1852,7 +1842,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `agent-presets:list`, `agent-presets:save`, `agent-presets:delete`, `files:save-text`, `canvas:list-available-skills`
 - **Depende de:** `useAgentPresets`, `agent-preset-editor (checkPresetDraft, changePresetAgent, togglePresetSkill)`, `agent-launch-options (getEffortLevels, supportsFastMode)`, `serializePreset`, `FelixoSelect`, `CanvasPanel`
 - **Sobreposição:** CanvasPanel: absolute z-20 (z-30 com foco dentro), top-16, à direita da barra lateral e deslocado quando o menu de ferramentas abre (toolsMenuOpen); largura limitada a viewport − barra − inspector Elementos (288 px) e altura a viewport − 112. Os menus do FelixoSelect abrem em portal z-1000 por cima; toasts (z 50) e AgentQuestionDialog/HandoffDialog (z 60) cobrem o painel. Em janela <768 px o painel passa da viewport (PANEL_MIN_WIDTH 260, task 3e691f95-497e-815c-a129-f4d2d6405cbc). Tamanho md; a lista de skills tem max-h-44 e rola por dentro; o window.confirm do Excluir e o diálogo de salvar são nativos
-- **Testes:** `src/features/shared/ipc/ipc-failures.test.ts`, `src/features/canvas/components/focus-keyboard-a11y.test.ts`, `scripts/canvas-smoke-teclado.cjs` → `checarFocoAoFecharPresetsDeAgente`, `src/features/canvas/services/agent-preset.test.ts`, `src/features/canvas/services/agent-preset-editor.test.ts`, `electron/services/storage/agent-presets-repository.test.cjs`
+- **Testes:** `scripts/canvas-smoke-paineis.cjs` → `checarPresetsDeAgente`, `src/features/shared/ipc/ipc-failures.test.ts`, `src/features/canvas/components/focus-keyboard-a11y.test.ts`, `scripts/canvas-smoke-teclado.cjs` → `checarFocoAoFecharPresetsDeAgente`, `src/features/canvas/services/agent-preset.test.ts`, `src/features/canvas/services/agent-preset-editor.test.ts`, `electron/services/storage/agent-presets-repository.test.cjs`
 
 | Estado | Quando |
 | --- | --- |
@@ -1881,7 +1871,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Sem teste de interface: criar, editar, duplicar, importar, exportar e excluir preset pelo painel | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
+| Criar, duplicar e excluir preset são exercitados (checarPresetsDeAgente); editar, importar e exportar (arquivo) seguem sem teste de interface. | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
 
 ### Configurações
 
@@ -1890,7 +1880,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `canvas:get-file-link-prompt`, `canvas:set-file-link-prompt`, `canvas:get-file-bootstrap-prompt`, `canvas:set-file-bootstrap-prompt`, `canvas:get-quality-standard`, `canvas:set-quality-standard`, `system-design:get-config`
 - **Depende de:** `useAppTheme`, `useReducedMotionPreference`, `subscribeSystemDesignConfig`, `buildDefaultQualityStandardPrompt`, `window.felixo.canvas`, `window.felixo.systemDesign`, `FelixoSelect`, `FelixoToggle`, `PerformanceModeSection`, `GraphicsRecoverySection`, `AutoStartSection`, `SystemDesignSettingsSection`, `DictationSettingsSection`, `ClaudeTerminalScrollSection`, `ClaudeConfigDefaultsSection`
 - **Sobreposição:** CanvasPanel: absolute z-20 (z-30 com foco dentro), top-16, à direita da barra lateral e deslocado quando o menu de ferramentas abre (toolsMenuOpen); largura limitada a viewport − barra − inspector Elementos (288 px) e altura a viewport − 112. Os menus do FelixoSelect abrem em portal z-1000 por cima; toasts (z 50) e AgentQuestionDialog/HandoffDialog (z 60) cobrem o painel. Em janela <768 px o painel passa da viewport (PANEL_MIN_WIDTH 260, task 3e691f95-497e-815c-a129-f4d2d6405cbc). Tamanho padrão; é o painel mais comprido desta parte e rola por dentro
-- **Testes:** `src/features/shared/ipc/ipc-failures.test.ts`, `src/features/canvas/services/quality-standard-prompt.test.ts`, `src/features/canvas/services/quality-standard-source.test.ts`, `src/features/shared/accessibility/reduced-motion-preference.test.ts`, `scripts/hardware-check.cjs` → `openGpuOption`
+- **Testes:** `scripts/canvas-smoke-paineis.cjs` → `checarConfiguracoes`, `src/features/shared/ipc/ipc-failures.test.ts`, `src/features/canvas/services/quality-standard-prompt.test.ts`, `src/features/canvas/services/quality-standard-source.test.ts`, `src/features/shared/accessibility/reduced-motion-preference.test.ts`, `scripts/hardware-check.cjs` → `openGpuOption`
 
 | Estado | Quando |
 | --- | --- |
@@ -1910,7 +1900,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Sem teste de interface do tema, das instruções de arquivo e do padrão de qualidade (hardware-check só abre o painel para a placa de vídeo); canvas:set-file-link-prompt, set-file-bootstrap-prompt e set-quality-standard não aparecem em canvas-ipc-handlers.test.cjs | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
+| A instrução de arquivo (salvar e persistir) é exercitada (checarConfiguracoes); o tema e o padrão de qualidade seguem sem teste de interface (hardware-check só abre o painel para a placa de vídeo); canvas:set-file-link-prompt, set-file-bootstrap-prompt e set-quality-standard não aparecem em canvas-ipc-handlers.test.cjs. | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
 
 ### Notificações
 
@@ -2104,7 +2094,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** nenhum
 - **Depende de:** `useExitAnimation`, `usePanelOpenRequest (PanelOpenRequestContext, provido pelo CanvasToolPanels)`, `useResizablePanelWidth`, `useResizablePanelHeight`, `useCanvasSurfaces (occupancy, reportPanelWidth, viewport)`, `getPanelMaxHeight`
 - **Sobreposição:** absolute z-20, z-30 com foco dentro (focus-within); top-16 (workspace: top-4), left = 1rem + largura viva da sidebar; maxWidth = viewport − sidebar − inspector − 32 px. Abaixo da sidebar (26), do overlay isBusy/toasts (50), dos diálogos (60) e do FelixoSelect (1000); mesmo z da lista Elementos
-- **Testes:** `scripts/canvas-smoke.cjs` → `checarPainelNosDoisEixos`, `scripts/canvas-smoke.cjs` → `checarFocoAoAbrirFerramenta`, `scripts/canvas-smoke.cjs` → `checarReaberturaDuranteSaidaDoPainel`, `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos`, `scripts/canvas-smoke-onboarding.cjs` → `sb6`, `src/features/canvas/services/panel-sizing.test.ts`, `src/features/canvas/services/canvas-surfaces.test.ts`, `src/features/canvas/hooks/exit-animation-controller.test.ts`
+- **Testes:** `scripts/canvas-smoke-paineis.cjs` → `checarMolduraDosPaineis`, `scripts/canvas-smoke.cjs` → `checarPainelNosDoisEixos`, `scripts/canvas-smoke.cjs` → `checarFocoAoAbrirFerramenta`, `scripts/canvas-smoke.cjs` → `checarReaberturaDuranteSaidaDoPainel`, `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos`, `scripts/canvas-smoke-onboarding.cjs` → `sb6`, `src/features/canvas/services/panel-sizing.test.ts`, `src/features/canvas/services/canvas-surfaces.test.ts`, `src/features/canvas/hooks/exit-animation-controller.test.ts`
 
 | Estado | Quando |
 | --- | --- |
@@ -2120,7 +2110,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | --- | --- | --- |
 | mesmo z da lista Elementos (TerminalsPanel absolute right-0 z-20): sem foco dentro do painel, a ordem do DOM decide quem cobre quem; coberto em janela pequena com a gaveta fixada | médio | `3eb91f95-497e-814a-8b2c-e471e09f6ff3` |
 | só o painel Buscar tem evidência visual nos viewports críticos; os outros painéis (portes md/xl e workspace) nunca foram medidos | médio | `3ce91f95-497e-81c9-8c3b-def9ed09d58c` |
-| Recolher/Expandir e o botão Fechar não são clicados por nenhum teste (o smoke fecha a Busca pelo botão do rail e por Esc); a alça de largura não é exercitada no smoke, só a de altura | médio | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
 | useResizablePanelWidth.ts:55-60 e useResizablePanelHeight.ts:42-44 leem o localStorage só ao montar; ProjectsPanel (projects → project-browser) e PromptsPanel (prompts → prompt-detail) trocam o panelId sem remontar a moldura — a largura de uma vista vaza para a outra e a gravada da segunda nunca é lida | baixo | `3ec91f95-497e-8103-b360-c1979d6992f4` |
 
 ### Menu de ferramentas da sidebar
@@ -2182,7 +2171,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `git:stage-all`, `git:unstage-all`, `git:stage-file`, `git:unstage-file`, `git:discard-file`, `git:get-file-diff`
 - **Depende de:** `GitPanel (runAction, openFile, discard)`, `git-status (splitPath, statusDescriptor)`
 - **Sobreposição:** coluna do meio do Source Control, dentro da moldura workspace; sem camada própria
-- **Testes:** `src/features/canvas/components/tools/git-status.test.ts`, `electron/services/git-service.test.cjs`
+- **Testes:** `scripts/canvas-smoke-paineis.cjs` → `checarSourceControl`, `src/features/canvas/components/tools/git-status.test.ts`, `electron/services/git-service.test.cjs`
 
 | Estado | Quando |
 | --- | --- |
@@ -2197,10 +2186,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `onClick={() => onDiscard(entry)}` (button) | clique | só no grupo Alterações: window.confirm (arquivo novo: "Apagar o arquivo novo …"; demais: "Descartar as alterações de … e voltar ao último commit?") e git:discard-file; relê status e árvore; se era o arquivo aberto, limpa o leitor (desabilitado: busy; não renderiza no grupo Stage) | cancelar não faz nada; recusa vira "Falha ao descartar as alterações." em vermelho | — |
 | `onClick={() => onFileAction(entry)}` (button) | clique | Stage: git:unstage-file; Alterações: git:stage-file; relê o status e o leitor (desabilitado: busy) | "Falha ao tirar do stage." / "Falha ao adicionar ao stage." ou a mensagem do git em vermelho | — |
 
-| Lacuna | Risco | Task |
-| --- | --- | --- |
-| stage/unstage por arquivo e em massa e descartar (destrutivo) sem teste de interface | alto | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
-
 ### Explorador do repositório (Source Control)
 
 - **ID:** `tool-git-explorer` · **Dono:** `src/features/canvas/components/tools/GitExplorer.tsx`
@@ -2208,7 +2193,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `git:list-files`, `git:read-file`, `git:get-file-diff`
 - **Depende de:** `GitPanel (expanded, query, changedOnly, openPath)`, `repo-tree (filterRepoTree)`, `statusDescriptor`
 - **Sobreposição:** primeira coluna do Source Control (some com o botão do explorador); sem camada própria
-- **Testes:** `src/features/canvas/components/focus-keyboard-a11y.test.ts`, `src/features/canvas/components/tools/repo-tree.test.ts`, `src/features/canvas/components/tools/git-status.test.ts`
+- **Testes:** `scripts/canvas-smoke-paineis.cjs` → `checarSourceControl`, `scripts/canvas-smoke-paineis.cjs` → `checarSourceControl`, `src/features/canvas/components/focus-keyboard-a11y.test.ts`, `src/features/canvas/components/tools/repo-tree.test.ts`, `src/features/canvas/components/tools/git-status.test.ts`
 
 | Estado | Quando |
 | --- | --- |
@@ -2221,10 +2206,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `onClick={() => onChangedOnlyChange(!changedOnly)}` (button) | clique | alterna mostrar só arquivos alterados (aria-pressed); com filtro ativo todas as pastas abrem | sem falha própria (estado do GitPanel, não persiste) | — |
 | `onClick={() => onToggleDir(node.path)}` (button) | clique | abre/fecha a pasta (toggleDir em expanded) | sem falha própria (estado local) | — |
 | `onClick={() => onOpenFile(node.path)}` (button) | clique | openPath: arquivo alterado abre o diff do lado ainda mexível; arquivo limpo abre o conteúdo (git:read-file) | leitura recusada: mensagem em vermelho e "Não foi possível ler este arquivo."; acima de 1 MB: "Arquivo grande demais para abrir aqui"; binário: aviso de binário | — |
-
-| Lacuna | Risco | Task |
-| --- | --- | --- |
-| sem teste de interface: abrir pasta, filtrar, "só o que mudou" e abrir arquivo limpo | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
 
 ### Histórico da branch (Source Control)
 
@@ -2243,10 +2224,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 Sem controle próprio: as ações vêm de outros elementos.
 
-| Lacuna | Risco | Task |
-| --- | --- | --- |
-| sem teste de interface da aba Histórico (marca "não enviado", tempo relativo) | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
-
 ### Leitor de diff e conteúdo (Source Control)
 
 - **ID:** `tool-git-diff-view` · **Dono:** `src/features/canvas/components/tools/GitDiffView.tsx`
@@ -2254,7 +2231,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `git:get-file-diff`, `git:read-file`
 - **Depende de:** `GitPanel (selected, diff, fileContent, readerLoading)`, `parseDiff (git-diff)`
 - **Sobreposição:** terceira coluna do Source Control; rola por dentro (felixo-scm-diff-body); sem camada própria
-- **Testes:** `src/features/canvas/components/tools/git-diff.test.ts`
+- **Testes:** `scripts/canvas-smoke-paineis.cjs` → `checarSourceControl`, `src/features/canvas/components/tools/git-diff.test.ts`
 
 | Estado | Quando |
 | --- | --- |
@@ -2267,7 +2244,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| sem teste de renderização; um diff grande (até 1 MB, GIT_COMMAND_MAX_BUFFER) vira uma tabela inteira sem virtualização | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
+| O diff de um arquivo alterado e o conteúdo de um arquivo limpo são exibidos e conferidos (checarSourceControl); um diff grande (até 1 MB, GIT_COMMAND_MAX_BUFFER) segue virando uma tabela inteira sem virtualização e sem teste de desempenho. | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
 
 ### Carregamento sob demanda dos painéis
 
@@ -3165,7 +3142,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` — 15 lacunas
 - `3ec91f95-497e-8122-a08b-d26d4991acca` — 1 lacuna
 - `3ec91f95-497e-818f-b9f2-f9710605c303` — 2 lacunas
-- `3ec91f95-497e-81ca-8319-ee657b0b6492` — 28 lacunas
+- `3ec91f95-497e-81ca-8319-ee657b0b6492` — 20 lacunas
 - `3ec91f95-497e-81e8-8f18-e2a529b0568e` — 11 lacunas
 - `3ec91f95-497e-81f7-8b12-c5c252d020c7` — 5 lacunas
 - `3ed91f95-497e-8114-a246-f72c73ae50c4` — 1 lacuna

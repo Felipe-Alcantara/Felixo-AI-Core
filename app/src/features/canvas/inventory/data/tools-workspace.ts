@@ -55,17 +55,13 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
     ipc: [],
     dependsOn: ['useSearchQuery', 'useSearchInputFocus', 'CanvasPanel', 'focusNode (CanvasView)'],
     tests: [
+      { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarBuscaDeBlocos' },
       { file: SMOKE, check: 'checarFocoAoAbrirFerramenta' },
       { file: SMOKE, check: 'checarPainelNosDoisEixos' },
       { file: SMOKE, check: 'checarElementosAbertosEmViewportsCriticos' },
       { file: SMOKE_ONBOARDING, check: 'sb6' },
     ],
     gaps: [
-      {
-        what: 'nenhum teste clica num resultado e confere que o bloco foi centralizado e selecionado (o smoke só abre, foca, mede e fecha)',
-        risk: 'médio',
-        task: NOVA_SMOKE,
-      },
     ],
     overlap: `${PANEL_OVERLAP}. Porte sm; a largura visual é limitada à viewport em telas estreitas.`,
   },
@@ -184,6 +180,8 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
       'CanvasPanel',
     ],
     tests: [
+      { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarProjetos' },
+      { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarNotas' },
       { file: 'src/features/shared/ipc/ipc-failures.test.ts' },
       { file: `${TOOLS}/projects-panel-order.test.ts` },
       { file: 'src/features/canvas/services/project-file-action.test.ts' },
@@ -195,7 +193,7 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
     ],
     gaps: [
       {
-        what: 'nenhum smoke abre o painel Projetos: adicionar pasta, remover em dois toques, navegar e rodar/abrir arquivo só têm teste das funções puras e dos handlers',
+        what: 'Adicionar pasta (pelo seletor trocado na automação) e remover em dois toques são exercitados (checarProjetos); navegar pelas pastas e rodar/abrir arquivo só têm teste das funções puras e dos handlers.',
         risk: 'médio',
         task: NOVA_SMOKE,
       },
@@ -285,11 +283,6 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
     dependsOn: ['CanvasPanel', 'addNode (CanvasView)', 'focusNode (CanvasView)'],
     tests: [{ file: 'src/features/shared/ipc/ipc-failures.test.ts' }, { file: 'src/features/canvas/services/debounced-save-queue.test.ts' }],
     gaps: [
-      {
-        what: 'nenhum teste (unitário ou smoke) cobre o painel Notas: criar blocos, centralizar, criar/editar/remover nota salva',
-        risk: 'médio',
-        task: NOVA_SMOKE,
-      },
     ],
     overlap: `${PANEL_OVERLAP}. Porte sm; o conteúdo rola por dentro (overflow-auto)`,
   },
@@ -451,6 +444,7 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
       'FelixoSelect',
     ],
     tests: [
+      { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarPrompts' },
       { file: 'src/features/shared/ipc/ipc-failures.test.ts' },
       { file: SMOKE_PROMPTS, check: 'catalogo' },
       { file: SMOKE_PROMPTS, check: 'combinacao' },
@@ -483,7 +477,7 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
         task: TASK_PROMPT_EMPACOTADO,
       },
       {
-        what: 'Novo prompt/Criar, edição com autosave, troca de escopo e Remover não têm teste de interface (só as funções puras)',
+        what: 'Novo prompt/Criar (gravado) e o filtro são exercitados (checarPrompts); edição inline com autosave, troca de escopo e Remover pela linha só têm teste das funções puras.',
         risk: 'médio',
         task: NOVA_SMOKE,
       },
@@ -602,6 +596,7 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
       'terminal-session-store.sendText',
     ],
     tests: [
+      { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarSkills' },
       { file: 'src/features/shared/ipc/ipc-failures.test.ts' },
       { file: SMOKE_PROMPTS, check: 'skill' },
       { file: SMOKE_PROMPTS, check: 'gravado' },
@@ -617,7 +612,7 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
         task: TASK_GAVETA_PROMPTS,
       },
       {
-        what: 'só o Ativar da biblioteca é exercitado (P4); Ativar de skill própria, criar/editar/remover, ocultar/restaurar e o checkbox de terceiros não têm teste de interface',
+        what: 'Criar skill própria (gravada), ocultar/restaurar da biblioteca e remover a própria são exercitados (checarSkills); Ativar de skill própria, editar e o checkbox de terceiros seguem sem teste de interface.',
         risk: 'médio',
         task: NOVA_SMOKE,
       },
@@ -739,6 +734,7 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
       'GitDiffView',
     ],
     tests: [
+      { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarSourceControl' },
       { file: 'src/features/shared/ipc/ipc-failures.test.ts' },
       { file: 'scripts/canvas-smoke-sobreposicoes.cjs', check: 'checarGitEAvisoDeClisComGavetaAberta' },
       { file: `${TOOLS}/git-status.test.ts` },
@@ -748,11 +744,6 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
       { file: 'electron/services/git-secret-redaction.test.cjs' },
     ],
     gaps: [
-      {
-        what: 'nenhum teste de interface do Source Control: escolher repositório, trocar branch, pull/push, commit e as abas (só o serviço do processo principal e as funções puras)',
-        risk: 'alto',
-        task: NOVA_SMOKE,
-      },
       {
         what: 'Medido (checarGitEAvisoDeClisComGavetaAberta): sem gaveta o painel mede 239 px em 768 px e 515 px em 1280 px; com a gaveta aberta em 1280 px ele encolhe para 239 px (abaixo do piso de 260 px) e em 768 px a gaveta (440 px) cobre 145×725 px do painel. Defeito conhecido.',
         risk: 'médio',
@@ -901,6 +892,7 @@ export const workspaceToolSurfaces: InventoryElement[] = [
       'getPanelMaxHeight',
     ],
     tests: [
+      { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarMolduraDosPaineis' },
       { file: SMOKE, check: 'checarPainelNosDoisEixos' },
       { file: SMOKE, check: 'checarFocoAoAbrirFerramenta' },
       { file: SMOKE, check: 'checarReaberturaDuranteSaidaDoPainel' },
@@ -920,11 +912,6 @@ export const workspaceToolSurfaces: InventoryElement[] = [
         what: 'só o painel Buscar tem evidência visual nos viewports críticos; os outros painéis (portes md/xl e workspace) nunca foram medidos',
         risk: 'médio',
         task: TASK_MATRIZ_VISUAL,
-      },
-      {
-        what: 'Recolher/Expandir e o botão Fechar não são clicados por nenhum teste (o smoke fecha a Busca pelo botão do rail e por Esc); a alça de largura não é exercitada no smoke, só a de altura',
-        risk: 'médio',
-        task: NOVA_SMOKE,
       },
       {
         what: 'useResizablePanelWidth.ts:55-60 e useResizablePanelHeight.ts:42-44 leem o localStorage só ao montar; ProjectsPanel (projects → project-browser) e PromptsPanel (prompts → prompt-detail) trocam o panelId sem remontar a moldura — a largura de uma vista vaza para a outra e a gravada da segunda nunca é lida',
@@ -1112,15 +1099,11 @@ export const workspaceToolSurfaces: InventoryElement[] = [
     ipc: ['git:stage-all', 'git:unstage-all', 'git:stage-file', 'git:unstage-file', 'git:discard-file', 'git:get-file-diff'],
     dependsOn: ['GitPanel (runAction, openFile, discard)', 'git-status (splitPath, statusDescriptor)'],
     tests: [
+      { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarSourceControl' },
       { file: `${TOOLS}/git-status.test.ts` },
       { file: 'electron/services/git-service.test.cjs' },
     ],
     gaps: [
-      {
-        what: 'stage/unstage por arquivo e em massa e descartar (destrutivo) sem teste de interface',
-        risk: 'alto',
-        task: NOVA_SMOKE,
-      },
     ],
     overlap: 'coluna do meio do Source Control, dentro da moldura workspace; sem camada própria',
   },
@@ -1161,16 +1144,13 @@ export const workspaceToolSurfaces: InventoryElement[] = [
     ipc: ['git:list-files', 'git:read-file', 'git:get-file-diff'],
     dependsOn: ['GitPanel (expanded, query, changedOnly, openPath)', 'repo-tree (filterRepoTree)', 'statusDescriptor'],
     tests: [
+      { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarSourceControl' },
+      { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarSourceControl' },
       { file: 'src/features/canvas/components/focus-keyboard-a11y.test.ts' },
       { file: `${TOOLS}/repo-tree.test.ts` },
       { file: `${TOOLS}/git-status.test.ts` },
     ],
     gaps: [
-      {
-        what: 'sem teste de interface: abrir pasta, filtrar, "só o que mudou" e abrir arquivo limpo',
-        risk: 'baixo',
-        task: NOVA_SMOKE,
-      },
     ],
     overlap: 'primeira coluna do Source Control (some com o botão do explorador); sem camada própria',
   },
@@ -1191,11 +1171,6 @@ export const workspaceToolSurfaces: InventoryElement[] = [
     dependsOn: ['GitPanel (commits, historyLoading, ahead, historyReadAt)', 'formatRelativeTime'],
     tests: [{ file: 'src/features/shared/ipc/ipc-failures.test.ts' }, { file: 'electron/services/git-service.test.cjs' }],
     gaps: [
-      {
-        what: 'sem teste de interface da aba Histórico (marca "não enviado", tempo relativo)',
-        risk: 'baixo',
-        task: NOVA_SMOKE,
-      },
     ],
     overlap: 'coluna do meio, aba Histórico; sem camada própria',
   },
@@ -1217,10 +1192,10 @@ export const workspaceToolSurfaces: InventoryElement[] = [
     persistence: ['nenhuma'],
     ipc: ['git:get-file-diff', 'git:read-file'],
     dependsOn: ['GitPanel (selected, diff, fileContent, readerLoading)', 'parseDiff (git-diff)'],
-    tests: [{ file: `${TOOLS}/git-diff.test.ts` }],
+    tests: [{ file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarSourceControl' }, { file: `${TOOLS}/git-diff.test.ts` }],
     gaps: [
       {
-        what: 'sem teste de renderização; um diff grande (até 1 MB, GIT_COMMAND_MAX_BUFFER) vira uma tabela inteira sem virtualização',
+        what: 'O diff de um arquivo alterado e o conteúdo de um arquivo limpo são exibidos e conferidos (checarSourceControl); um diff grande (até 1 MB, GIT_COMMAND_MAX_BUFFER) segue virando uma tabela inteira sem virtualização e sem teste de desempenho.',
         risk: 'baixo',
         task: NOVA_SMOKE,
       },

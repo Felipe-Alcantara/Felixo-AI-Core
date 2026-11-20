@@ -60,6 +60,7 @@ const { RECORDINGS_DIR, criarSessaoDaLeitura } = require('./canvas-smoke-leitura
 const { criarSessaoDoNotion } = require('./canvas-smoke-notion.cjs')
 const { checarSobreposicoesDoInventario } = require('./canvas-smoke-sobreposicoes.cjs')
 const { executarChecksDaMoldura } = require('./canvas-smoke-moldura.cjs')
+const { ambienteDosPaineis, executarChecksDosPaineis } = require('./canvas-smoke-paineis.cjs')
 const { checarFocoAoFecharPresetsDeAgente, checarNomesAcessiveisDaSidebar, checarTecladoDoMenuDeCor } = require('./canvas-smoke-teclado.cjs')
 const {
   criarRelatorio,
@@ -108,7 +109,7 @@ const PROMPTS_SESSION_ENV = CONTAS_SESSION_ENV
 // Sessão F: a mesma CLI roteirizada, tocando as gravações reais de CLI.
 const LEITURA_SESSION_ENV = { ...CONTAS_SESSION_ENV, FELIXO_DEVTOOLS_TERMINAL_RECORDINGS: RECORDINGS_DIR }
 const SESSOES = new Set(
-  (process.env.FELIXO_SMOKE_SESSOES || 'A,B,C,D,E,F,G,H').split(',').map((sessao) => sessao.trim().toUpperCase()),
+  (process.env.FELIXO_SMOKE_SESSOES || 'A,B,C,D,E,F,G,H,I,J').split(',').map((sessao) => sessao.trim().toUpperCase()),
 )
 const rodar = (sessao) => SESSOES.has(sessao)
 const DEVTOOLS_LAUNCH_TIMEOUT_MS = 60_000
@@ -2183,6 +2184,18 @@ const SESSIONS = [
     summary: 'controles da moldura: notificações, Limpar, Criar, Organizar, atalhos, zoom, Mini Map, alça, topbar, ditado, barra de status e inspector Elementos',
     env: {},
     run: (page) => executarChecksDaMoldura(page),
+  },
+  {
+    // Os painéis de ferramenta sem teste de interface (task 3ec91f95-497e-81ca-8319-ee657b0b6492): Source Control num repositório de
+    // fixture, pedidos de escrita, Notas, Prompts, Skills, Presets, QA Logger, Busca, Projetos e Configurações, em
+    // canvas-smoke-paineis.cjs. O ambiente aponta o seletor de pasta dos projetos para a fixture.
+    letter: 'J',
+    failureName: 'canvas-smoke-failure-paineis',
+    summary: 'painéis de ferramenta: Source Control, pedidos de escrita, Notas, Prompts, Skills, Presets, QA Logger, Busca, Projetos, Configurações e a moldura comum',
+    get env() {
+      return ambienteDosPaineis()
+    },
+    run: (page) => executarChecksDosPaineis(page),
   },
 ]
 
