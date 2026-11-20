@@ -15,7 +15,8 @@ const path = require('node:path')
 const { execFileSync } = require('node:child_process')
 const { prepararCanvas, garantirSidebarAberta, abrirSecaoFerramentas } = require('./canvas-smoke-sobreposicoes.cjs')
 
-const TIMEOUT_MS = process.platform === 'win32' ? 20_000 : 8_000
+// O CI (Linux sob xvfb, macOS) é mais lento que a máquina local: o mesmo prazo largo em todo lugar.
+const TIMEOUT_MS = 20_000
 const POLLING_MS = 100
 
 function falhar(mensagem, detalhe) {
@@ -105,7 +106,9 @@ async function exigirClique(page, raiz, padrao, o_que) {
     }
     await page.waitForTimeout(POLLING_MS)
   }
-  falhar(`controle não encontrado (ou desabilitado): ${o_que}`, { raiz, padrao: padrao.source })
+  // O texto do painel na hora da falha vai na mensagem: no CI não há como olhar a tela.
+  const visivel = await page.evaluate((sel) => (document.querySelector(sel)?.innerText ?? '').replace(/s+/g, ' ').slice(0, 320), raiz).catch(() => '')
+  falhar(`controle não encontrado (ou desabilitado): ${o_que}`, { raiz, padrao: padrao.source, visivel })
 }
 
 async function esperar(page, condicao, argumento, mensagem) {
