@@ -1,4 +1,5 @@
 import { useEffect, useReducer, useState } from 'react'
+import { resultadoDeIpc } from '../../../shared/ipc/ipc-result'
 import { Mic } from 'lucide-react'
 import { useDictationShortcut } from '../../hooks/useDictationShortcut'
 import {
@@ -36,8 +37,10 @@ export function DictationSettingsSection() {
   const [, redraw] = useReducer((count: number) => count + 1, 0)
 
   useEffect(() => {
-    void speech?.getConfig().then((result) => {
-      if (result?.ok && result.config) setConfig(result.config)
+    void resultadoDeIpc(() => speech?.getConfig(), 'Não foi possível ler as configurações do ditado.').then((outcome) => {
+      if (outcome.ok && outcome.value.config) setConfig(outcome.value.config)
+      // Sem a configuração os campos não aceitam digitação e "Salvar" não faria nada: a tela diz por quê.
+      else setMessage({ tone: 'error', text: outcome.ok ? 'Não foi possível ler as configurações do ditado.' : outcome.message })
     })
     void speech?.getMicrophoneStatus().then((result) => {
       if (result?.ok) setMicStatus(result.status)
@@ -88,14 +91,17 @@ export function DictationSettingsSection() {
   }
 
   async function clearKey() {
-    await speech!.clearKey()
+    const cleared = await resultadoDeIpc(() => speech?.clearKey(), 'Não foi possível remover a chave guardada.')
+    // "Chave removida" só se o main confirmou: a chave continuava guardada e a tela dizia o contrário.
+    if (!cleared.ok) return setMessage({ tone: 'error', text: cleared.message })
     setConfig((current) => (current ? { ...current, keyConfigured: false } : current))
     setMessage({ tone: 'ok', text: 'Chave removida.' })
   }
 
   async function allowMic() {
-    const result = await speech!.requestMicrophone()
-    if (result?.ok) setMicStatus(result.status)
+    const asked = await resultadoDeIpc(() => speech?.requestMicrophone(), 'Não foi possível pedir acesso ao microfone.')
+    if (asked.ok) setMicStatus(asked.value.status)
+    else setMessage({ tone: 'error', text: asked.message })
   }
 
   const blocked = describeMicrophoneStatus(micStatus, platform)

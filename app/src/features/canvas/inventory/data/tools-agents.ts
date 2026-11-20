@@ -1085,6 +1085,7 @@ export const agentToolSurfaces: InventoryElement[] = [
       'FelixoSelect',
     ],
     tests: [
+      { file: 'src/features/shared/ipc/ipc-failures-2.test.ts' },
       { file: 'src/features/canvas/services/account-chain-view.test.ts' },
       { file: 'src/features/canvas/services/account-chain-client.test.ts' },
       { file: 'electron/services/account-chain-ipc-handlers.test.cjs' },
@@ -1098,11 +1099,6 @@ export const agentToolSurfaces: InventoryElement[] = [
         what: 'Botões ↑/↓, Estratégia (o smoke só lê o valor), Cobrança, multiplicador, Conferir agora, Não era limite e Já recarreguei não são acionados em teste de interface; a reordenação só é exercitada por Alt+↓ na linha',
         risk: 'baixo',
         task: '3ec91f95-497e-81ca-8319-ee657b0b6492',
-      },
-      {
-        what: 'Falha de Conferir agora, Não era limite e Já recarreguei é engolida: account-chain-client.ts:252-278 devolve { ok: false, message } sem gravar snapshot.message e AccountChainSection.tsx:191-194 descarta o retorno com void',
-        risk: 'médio',
-        task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
       },
     ],
     overlap: 'Dentro do painel Limites e uso (CanvasPanel z-20/30, tamanho lg); os FelixoSelect de estratégia e cobrança abrem em portal z-1000; Alt+↑/↓ só é tratado quando o alvo é a própria linha, sem disputar teclas com os campos',
@@ -1373,6 +1369,7 @@ export const agentToolSurfaces: InventoryElement[] = [
       'dictation (shortcutFromEvent, describeMicrophoneStatus, isLoopbackEndpoint)',
     ],
     tests: [
+      { file: 'src/features/shared/ipc/ipc-failures-2.test.ts' },
       { file: 'src/features/canvas/services/dictation.test.ts' },
       { file: 'electron/services/speech/speech-ipc-handlers.test.cjs' },
       { file: 'electron/services/speech/speech-settings-store.test.cjs' },
@@ -1382,11 +1379,6 @@ export const agentToolSurfaces: InventoryElement[] = [
         what: 'Sem teste de interface da seção (motor, chave, endereço, atalho, microfone). O caminho com servidor local foi conferido de ponta a ponta no Linux em 05/10/2026 (faster-whisper e microfone virtual, scripts/validar-ditado-linux.cjs), mas só por roteiro manual',
         risk: 'baixo',
         task: '3ec91f95-497e-81ca-8319-ee657b0b6492',
-      },
-      {
-        what: 'Falhas engolidas: DictationSettingsSection.tsx:87-91 mostra "Chave removida." sem ler o retorno e speech:clear-key não tem try no main (speech-ipc-handlers.cjs:63-66); se speech:get-config falhar (DictationSettingsSection.tsx:35-38), config fica nula, os campos de endereço/modelo/idioma não aceitam digitação e "Salvar endereço, modelo e idioma" não faz nada, sem aviso',
-        risk: 'médio',
-        task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
       },
     ],
     overlap: 'Seção dentro do painel Configurações (z-20/30); a captura do atalho escuta keydown da janela inteira em fase de captura e para no blur, para não roubar teclas de menus do mesmo painel',

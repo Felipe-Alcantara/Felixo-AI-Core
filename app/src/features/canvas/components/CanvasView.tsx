@@ -33,6 +33,7 @@ import { useDictationShortcut } from '../hooks/useDictationShortcut'
 import { formatShortcut, matchesShortcut } from '../services/dictation'
 import { NodeColorMenu } from './NodeColorMenu'
 import { copiarTexto } from '../../shared/ipc/copy-text'
+import { resultadoDeIpc } from '../../shared/ipc/ipc-result'
 import { frameClassName } from './frame-colors'
 import { notificationClassName, unreadCategoryByNode } from '../terminal/notification-category'
 import { initialAutoFitState, markAutoFitExecuted, planAutoFit, registerViewportMove } from '../services/viewport-auto-fit'
@@ -1980,7 +1981,13 @@ function CanvasInner({
   }, [addImageNodeFromArtifact])
 
   const pickAndOpenImageFile = useCallback(async () => {
-    const result = await window.felixo?.files?.pickImage?.()
+    const picked = await resultadoDeIpc(() => window.felixo?.files?.pickImage?.(), 'Não foi possível abrir a imagem.')
+    if (!picked.ok) {
+      // Imagem não suportada, maior que 25 MB ou IPC caído: antes a pessoa escolhia o arquivo e nada acontecia.
+      reportActionFailure('abrir-imagem', picked.message)
+      return
+    }
+    const result = picked.value
     const mimeType = result?.type ?? result?.mimeType
     if (result?.ok && !result.canceled && result.path && result.name && mimeType) {
       addImageNodeFromArtifact({
@@ -2009,7 +2016,12 @@ function CanvasInner({
   )
 
   const pickAndOpenTextFile = useCallback(async () => {
-    const result = await window.felixo?.textFiles?.pick()
+    const picked = await resultadoDeIpc(() => window.felixo?.textFiles?.pick(), 'Não foi possível abrir o arquivo.')
+    if (!picked.ok) {
+      reportActionFailure('abrir-arquivo', picked.message)
+      return
+    }
+    const result = picked.value
     if (result?.ok && !result.canceled && result.path) {
       openTextFileNode(result.path, result.name ?? result.path)
     }

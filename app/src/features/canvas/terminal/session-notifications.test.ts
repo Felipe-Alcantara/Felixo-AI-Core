@@ -12,16 +12,17 @@ function snapshot(activity: SessionSnapshot['activity']): SessionSnapshot {
 }
 
 describe('isActionRequired', () => {
-  it('signals agents that finished work, wait for approval, or exited', () => {
+  it('signals agents that finished work, wait for approval, exited or failed to start', () => {
     expect(isActionRequired(snapshot('idle'))).toBe(true)
     expect(isActionRequired(snapshot('waiting_approval'))).toBe(true)
     expect(isActionRequired(snapshot('exited'))).toBe(true)
+    // Spawn recusado / saída silenciosa: entra no histórico como "Falhou" (a categoria existia, mas nunca chegava).
+    expect(isActionRequired(snapshot('error'))).toBe(true)
   })
 
-  it('does not signal running, idle, or failed start states', () => {
+  it('does not signal running or starting states', () => {
     expect(isActionRequired(snapshot('starting'))).toBe(false)
     expect(isActionRequired(snapshot('working'))).toBe(false)
-    expect(isActionRequired(snapshot('error'))).toBe(false)
     expect(isActionRequired(undefined)).toBe(false)
   })
 })

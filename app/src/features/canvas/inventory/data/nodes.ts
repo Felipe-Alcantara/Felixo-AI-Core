@@ -1171,6 +1171,7 @@ export const notionTasksTool: InventoryElement = {
     'DeferredMarkdownContent',
   ],
   tests: [
+    { file: 'src/features/shared/ipc/ipc-failures-2.test.ts' },
     unit(`${SERVICES}/notion-refresh-coordinator.test.ts`),
     unit(`${SERVICES}/notion-sync-backoff.test.ts`),
     unit(`${SERVICES}/notion-sync-status.test.ts`),
@@ -1207,11 +1208,6 @@ export const notionTasksTool: InventoryElement = {
       what: 'Seleção que ainda não persiste: conexão, database e visualização do Painel já voltam do data do bloco (notion-tasks-selection), mas a sincronização automática (NotionTasksPanel.tsx:221) vive só em useState e volta a "ligada" ao reabrir o app ou remontar o bloco.',
       risk: 'médio',
       task: '41b91f95-497e-81c7-88e6-c0660189bb80',
-    },
-    {
-      what: 'O aviso role="status" nunca é limpo (NotionTasksPanel.tsx:189; não há setMessage(null)): "Exibindo o último snapshot salvo; a rede está indisponível." continua na tela depois que a rede volta e sincroniza, e "Tarefa criada…" fica até o próximo aviso.',
-      risk: 'baixo',
-      task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
     },
   ],
   overlap: 'Mora dentro do bloco Tarefas Notion (overflow-auto). FelixoSelect em portal z 1000 fica acima de tudo, inclusive de diálogos; o seletor de colunas (absolute z-10) é cortado pela rolagem do bloco e só aparece rolando. Colunas sticky (z-10) ficam sob o seletor.',
@@ -1435,6 +1431,7 @@ export const nodeSurfaces: InventoryElement[] = [
       'createPortal',
     ],
     tests: [
+      { file: 'src/features/shared/ipc/ipc-failures-2.test.ts' },
       unit(`${SERVICES}/webview-site-permissions.test.ts`),
       unit('electron/services/webview-site-permissions.test.cjs'),
       unit(`${SERVICES}/webview-profile.test.ts`),
@@ -1450,11 +1447,6 @@ export const nodeSurfaces: InventoryElement[] = [
         what: 'Revogar as permissões de um site no perfil não é clicado por teste: o smoke não cria um pedido de permissão de site para responder antes. Pendência. Trocar, criar e excluir perfil agora são cobertos por checarPerfilDoNavegador.',
         risk: 'médio',
         task: '41c91f95-497e-8195-9b3b-e40145bef07e',
-      },
-      {
-        what: 'Falha ao listar perfis é silenciosa (services/webview-profiles-store.ts:38-45): ok falso deixa ready falso para sempre ("Perfil…" no botão) e uma rejeição nunca é tentada de novo (loaded já é verdadeiro).',
-        risk: 'baixo',
-        task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
       },
       {
         what: 'O menu (z-70) fica acima dos diálogos modais (60) e não acompanha pan/zoom do canvas (posição calculada só ao abrir): medido, o zoom desloca o botão em 111 px e o menu fica no lugar (canvas-smoke-sobreposicoes.cjs → checarMenuDoPerfilAcompanhaOZoom). Defeito conhecido. O clique dentro do webview não fecha: não medido.',

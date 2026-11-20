@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { reportActionFailure } from '../services/canvas-persistence-status'
 import type { Node } from '@xyflow/react'
 import { useSessionSnapshotsSelector, type useTerminalSessions } from '../terminal/terminal-session-context'
 import type { SessionSnapshot } from '../terminal/terminal-session-api'
@@ -162,7 +163,8 @@ export function useCanvasNotifications({
     if (!audio || !notificationSoundEnabled) return
     audio.currentTime = 0
     void audio.play().catch(() => {
-      // Browsers may block playback until the user has interacted with the app.
+      // O Chromium bloqueia o áudio até a pessoa interagir com o app: sem aviso ela liga o som e não sabe por que não toca.
+      reportActionFailure('som-notificacao', 'O som da notificação foi bloqueado pelo sistema. Clique no app e tente de novo.')
     })
   }, [actionableNotificationIds, hydrated, notificationSoundEnabled, store])
 

@@ -114,6 +114,7 @@ export const notificationsTool: InventoryElement = {
     'notification-category',
   ],
   tests: [
+    { file: 'src/features/shared/ipc/ipc-failures-2.test.ts' },
     { file: 'scripts/canvas-smoke.cjs', check: 'checarInteracoes' },
     { file: 'scripts/canvas-smoke-contas.cjs', check: 'checarPropostaENotificacao' },
     { file: 'scripts/canvas-smoke-contas.cjs', check: 'checarRedeSemItem' },
@@ -133,11 +134,6 @@ export const notificationsTool: InventoryElement = {
       what: 'O realce do bloco com notificação não lida (notificationClassName em orderedNodes, CanvasView) não é conferido numa janela real nem no smoke.',
       risk: 'baixo',
       task: '3e191f95-497e-81fd-b657-d7a63b5d17f0',
-    },
-    {
-      what: 'erro engolido: o som da notificação falha em silêncio quando o Chromium bloqueia o áudio (audio.play().catch vazio, CanvasView.tsx:670); a pessoa liga o som e não sabe por que não toca.',
-      risk: 'baixo',
-      task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
     },
   ],
   overlap: 'CanvasPanel absolute z-20 (z-30 com foco dentro), top-16, left = sidebar + 1rem; a lista rola por dentro (max-h 38vh). Fica abaixo da sidebar (26) e acima de topbar e statusbar (18) e do aviso de layout (z-10, no mesmo canto: cobre o aviso). Disputa largura com gaveta e inspector por reportPanelWidth (splitHorizontalSpace). Marcar e remover do item só aparecem no hover ou com foco (opacity-0).',
@@ -368,6 +364,7 @@ export const chromeSurfaces: InventoryElement[] = [
     ipc: ['files:pick-image', 'text-file:pick', 'canvas-file:write', 'canvas:save'],
     dependsOn: ['NamedCreateButton', 'UrlCreateButton', 'useWebviewProfiles', 'explainUrlInput', 'addNode (CanvasView)', 'findFreeNodePosition'],
     tests: [
+      { file: 'src/features/shared/ipc/ipc-failures-2.test.ts' },
       { file: 'scripts/canvas-smoke.cjs', check: 'checarInteracoes' },
       { file: 'src/features/canvas/services/url-utils.test.ts' },
       { file: 'src/features/canvas/services/node-geometry.test.ts' },
@@ -379,11 +376,6 @@ export const chromeSurfaces: InventoryElement[] = [
         what: 'Novo bloco, Grupo, Abrir imagem, "Abrir arquivo existente…" e uma Página Web válida não são criados por nenhum teste de interface; o smoke só confere a recusa de javascript:.',
         risk: 'médio',
         task: '3ec91f95-497e-818f-b9f2-f9710605c303',
-      },
-      {
-        what: 'Os seletores engolem o erro: "Abrir imagem" ignora o ok:false de files:pick-image ("Selecione um arquivo de imagem suportado e menor que 25 MB.", CanvasView.tsx:2483) e "Abrir arquivo existente…" ignora o de text-file:pick (CanvasView.tsx:2512). A pessoa escolhe o arquivo e nada acontece.',
-        risk: 'médio',
-        task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
       },
       {
         what: 'Fechar os popovers por clique fora devolve o foco ao gatilho mesmo quando a pessoa clicou em outro controle.',
@@ -573,6 +565,7 @@ export const chromeSurfaces: InventoryElement[] = [
     ipc: ['openia:image-models', 'openia:image-pricing', 'openia:generate-image', 'openia:cancel-image', 'openia:image-status', 'canvas:image-generated', 'cli:install-official'],
     dependsOn: ['useOpeniaImageGeneration', 'openiaImageStore', 'FelixoSelect', 'addImageNodeFromArtifact (CanvasView)', 'updateOpenia (openia-update)'],
     tests: [
+      { file: 'src/features/shared/ipc/ipc-failures-2.test.ts' },
       { file: 'src/features/canvas/services/openia-image-store.test.ts' },
       { file: 'src/features/canvas/services/openia-update.test.ts' },
       { file: 'electron/services/openia-image-service.test.cjs' },
@@ -582,11 +575,6 @@ export const chromeSurfaces: InventoryElement[] = [
         what: 'O popover não tem teste de interface na CI (abrir, escolher modelo, Gerar, Cancelar, Tentar de novo, alerta no gatilho, Atualizar o Openia); só a store, o serviço do processo principal e a lógica de atualização são testados. A geração real pela tela foi vista em 09/10/2026, num roteiro fora do repositório.',
         risk: 'médio',
         task: '3f491f95-497e-8126-b0ec-fab2a600214a',
-      },
-      {
-        what: 'erro engolido: falha de openia:cancel-image não aparece (catch vazio em openia-image-store.ts:337); a pessoa vê "Cancelando…" e a imagem pode sair mesmo assim.',
-        risk: 'baixo',
-        task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
       },
       {
         what: 'Fechar o popover por clique fora devolve o foco ao gatilho mesmo quando a pessoa clicou em outro controle.',
@@ -982,6 +970,7 @@ export const chromeSurfaces: InventoryElement[] = [
     ipc: ['pty:write', 'canvas:save'],
     dependsOn: ['useCanvasSurfaces (reportInspectorWidth)', 'useTerminalSessions', 'useSessionSnapshot', 'terminals-panel-groups', 'terminals-panel-reorder', 'terminals-panel-navigation', 'terminals-panel-drafts', 'terminals-panel-collapse'],
     tests: [
+      { file: 'src/features/shared/ipc/ipc-failures-2.test.ts' },
       { file: 'scripts/canvas-smoke.cjs', check: 'checarDockRecolhidaSemBloqueio' },
       { file: 'scripts/canvas-smoke-onboarding.cjs', check: 'recolherInspector' },
       { file: 'scripts/canvas-smoke-links.cjs', check: 'focar' },
@@ -999,11 +988,6 @@ export const chromeSurfaces: InventoryElement[] = [
         what: 'Com a gaveta aberta, a lista "Elementos" cobre os painéis Prompts e Skills.',
         risk: 'médio',
         task: '3eb91f95-497e-814a-8b2c-e471e09f6ff3',
-      },
-      {
-        what: 'Envio em massa e envio por linha apagam o rascunho sem olhar o resultado de store.sendText (TerminalsPanel.tsx:193): mensagem que não chegou ao PTY se perde sem aviso.',
-        risk: 'médio',
-        task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
       },
       {
         what: 'Modo de envio em massa, reordenar pelo grip ou Alt+↑/↓ e Shift+↑/↓ global não são exercitados por teste de interface (só as funções puras).',

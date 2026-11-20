@@ -61,8 +61,13 @@ function registerSpeechIpcHandlers({ userData, dependencies = {} }) {
   })
 
   ipcMain.handle('speech:clear-key', () => {
-    store.clearKey()
-    return { ok: true }
+    // Falha ao apagar o cofre vira { ok: false } com mensagem, em vez de rejeitar: a tela só dizia "Chave removida.".
+    try {
+      store.clearKey()
+      return { ok: true }
+    } catch {
+      return { ok: false, message: 'Não foi possível remover a chave guardada.' }
+    }
   })
 
   ipcMain.handle('speech:transcribe', async (_event, params) => {

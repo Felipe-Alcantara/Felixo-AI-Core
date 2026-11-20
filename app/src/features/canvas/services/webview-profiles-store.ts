@@ -4,6 +4,7 @@ import {
   validateWebviewProfileName,
   type WebviewProfile,
 } from './webview-profile'
+import { reportActionFailure } from './canvas-persistence-status'
 import type { FrameColor } from '../types'
 
 type Bridge = NonNullable<NonNullable<Window['felixo']>['webviewProfiles']>
@@ -36,8 +37,19 @@ export function createWebviewProfilesStore(getBridge: () => Bridge | undefined) 
   }
 
   async function refresh(): Promise<void> {
-    const result = await getBridge()?.list()
+    let result: Awaited<ReturnType<NonNullable<ReturnType<typeof getBridge>>['list']>> | undefined
+    try {
+      result = await getBridge()?.list()
+    } catch {
+      result = undefined
+    }
     loaded = true
+    if (!result?.ok) {
+      // A lista falhou (ok:false ou rejeição): `ready` fica falso, mas a próxima assinatura tenta de novo em vez de
+      // deixar "Perfil…" no botão para sempre, e a pessoa fica sabendo.
+      loaded = false
+      reportActionFailure('perfis-do-navegador', 'Não foi possível carregar os perfis do navegador. Vai tentar de novo ao reabrir o menu.')
+    }
     if (result?.ok) {
       ready = true
       set((result.profiles ?? []).map(normalizeWebviewProfile).filter((p): p is WebviewProfile => p !== null))

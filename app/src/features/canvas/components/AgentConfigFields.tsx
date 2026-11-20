@@ -1,4 +1,5 @@
 import { fastModeUnavailableNote } from '../services/agent-launch-options'
+import { mensagemDeFalha } from '../../shared/ipc/ipc-result'
 import { useId, useRef, useState } from 'react'
 import {
   Cloud,
@@ -520,11 +521,19 @@ function CampoConta({
     setSalvando(true)
     setErro(null)
 
-    const resultado = await config.createAccount(
-      nome,
-      pedeChave ? chave : undefined,
-      criandoApi && ofereceContaApi ? 'api-key' : undefined,
-    )
+    let resultado: Awaited<ReturnType<typeof config.createAccount>>
+    try {
+      resultado = await config.createAccount(
+        nome,
+        pedeChave ? chave : undefined,
+        criandoApi && ofereceContaApi ? 'api-key' : undefined,
+      )
+    } catch (error) {
+      // IPC rejeitado (criar, guardar a chave, desfazer): "Criando…" não pode ficar preso até remontar.
+      setSalvando(false)
+      setErro(mensagemDeFalha(error, 'Não foi possível criar a conta.'))
+      return
+    }
 
     setSalvando(false)
 

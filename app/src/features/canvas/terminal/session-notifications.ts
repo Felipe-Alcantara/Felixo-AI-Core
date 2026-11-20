@@ -8,6 +8,8 @@ export function isActionRequired(snapshot: SessionSnapshot | undefined): boolean
     // `idle` anunciado pelo programa (a pessoa cancelou) não é "terminou".
     (snapshot?.activity === 'idle' && !snapshot.silentIdle) ||
     snapshot?.activity === 'exited' ||
+    // Spawn recusado ou saída silenciosa: a categoria "Falhou" nunca chegava ao histórico porque `error` era excluído.
+    snapshot?.activity === 'error' ||
     snapshot?.activity === 'waiting_approval'
   )
 }

@@ -32,7 +32,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **Elementos:** 115 (10 blocos, 17 ferramentas, 88 outras superfícies)
 - **Controles:** 439, dos quais 92 com teste específico
 - **Elementos sem nenhum teste:** 0
-- **Lacunas:** 186 (alto 4, médio 105, baixo 77), em 74 tasks
+- **Lacunas:** 175 (alto 4, médio 100, baixo 71), em 74 tasks
 
 ## Moldura do canvas
 
@@ -100,7 +100,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **IPC:** `files:pick-image`, `text-file:pick`, `canvas-file:write`, `canvas:save`
 - **Depende de:** `NamedCreateButton`, `UrlCreateButton`, `useWebviewProfiles`, `explainUrlInput`, `addNode (CanvasView)`, `findFreeNodePosition`
 - **Sobreposição:** Dentro da sidebar (z-26); os popovers são inline (felixo-sidebar-inline-panel) e empurram a seção para baixo em vez de cobrir o canvas. O menu de perfis (FelixoSelect) abre em portal (z 1000).
-- **Testes:** `scripts/canvas-smoke.cjs` → `checarInteracoes`, `src/features/canvas/services/url-utils.test.ts`, `src/features/canvas/services/node-geometry.test.ts`, `electron/services/file-attachments-ipc-handlers.test.cjs`, `electron/services/canvas-files-ipc-handlers.test.cjs`
+- **Testes:** `src/features/shared/ipc/ipc-failures-2.test.ts`, `scripts/canvas-smoke.cjs` → `checarInteracoes`, `src/features/canvas/services/url-utils.test.ts`, `src/features/canvas/services/node-geometry.test.ts`, `electron/services/file-attachments-ipc-handlers.test.cjs`, `electron/services/canvas-files-ipc-handlers.test.cjs`
 
 | Estado | Quando |
 | --- | --- |
@@ -121,7 +121,6 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | Novo bloco, Grupo, Abrir imagem, "Abrir arquivo existente…" e uma Página Web válida não são criados por nenhum teste de interface; o smoke só confere a recusa de javascript:. | médio | `3ec91f95-497e-818f-b9f2-f9710605c303` |
-| Os seletores engolem o erro: "Abrir imagem" ignora o ok:false de files:pick-image ("Selecione um arquivo de imagem suportado e menor que 25 MB.", CanvasView.tsx:2483) e "Abrir arquivo existente…" ignora o de text-file:pick (CanvasView.tsx:2512). A pessoa escolhe o arquivo e nada acontece. | médio | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 | Fechar os popovers por clique fora devolve o foco ao gatilho mesmo quando a pessoa clicou em outro controle. | baixo | `3ea91f95-497e-81d9-a3d8-ed3971b18a24` |
 
 ### Seção Organizar da sidebar
@@ -161,7 +160,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **IPC:** `openia:image-models`, `openia:image-pricing`, `openia:generate-image`, `openia:cancel-image`, `openia:image-status`, `canvas:image-generated`, `cli:install-official`
 - **Depende de:** `useOpeniaImageGeneration`, `openiaImageStore`, `FelixoSelect`, `addImageNodeFromArtifact (CanvasView)`, `updateOpenia (openia-update)`
 - **Sobreposição:** Popover inline dentro da sidebar (z-26), não flutua sobre o canvas; o menu de modelos (FelixoSelect) abre em portal (z 1000). O Esc que fecha o menu de modelos não fecha o popover junto (defaultPrevented).
-- **Testes:** `src/features/canvas/services/openia-image-store.test.ts`, `src/features/canvas/services/openia-update.test.ts`, `electron/services/openia-image-service.test.cjs`
+- **Testes:** `src/features/shared/ipc/ipc-failures-2.test.ts`, `src/features/canvas/services/openia-image-store.test.ts`, `src/features/canvas/services/openia-update.test.ts`, `electron/services/openia-image-service.test.cjs`
 
 | Estado | Quando |
 | --- | --- |
@@ -190,7 +189,6 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | O popover não tem teste de interface na CI (abrir, escolher modelo, Gerar, Cancelar, Tentar de novo, alerta no gatilho, Atualizar o Openia); só a store, o serviço do processo principal e a lógica de atualização são testados. A geração real pela tela foi vista em 09/10/2026, num roteiro fora do repositório. | médio | `3f491f95-497e-8126-b0ec-fab2a600214a` |
-| erro engolido: falha de openia:cancel-image não aparece (catch vazio em openia-image-store.ts:337); a pessoa vê "Cancelando…" e a imagem pode sair mesmo assim. | baixo | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 | Fechar o popover por clique fora devolve o foco ao gatilho mesmo quando a pessoa clicou em outro controle. | baixo | `3ea91f95-497e-81d9-a3d8-ed3971b18a24` |
 
 ### Barra superior
@@ -351,7 +349,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `pty:write`, `canvas:save`
 - **Depende de:** `useCanvasSurfaces (reportInspectorWidth)`, `useTerminalSessions`, `useSessionSnapshot`, `terminals-panel-groups`, `terminals-panel-reorder`, `terminals-panel-navigation`, `terminals-panel-drafts`, `terminals-panel-collapse`
 - **Sobreposição:** Wrapper data-terminals-dock absolute (top-12, bottom = altura da statusbar, right-0) z-20, pointer-events-none; o inspector (w-72) e o puck (bottom-2.5 right-3, o mesmo lugar de antes na tela) religam os cliques. Abaixo da topbar (começa em 48 px) e até o topo da statusbar, que passa por baixo dele de ponta a ponta (right: 0); topbar e Mini Map reservam 18rem (1rem com o puck) via :has(). Publica a largura em reportInspectorWidth, que encolhe painel e gaveta.
-- **Testes:** `scripts/canvas-smoke.cjs` → `checarDockRecolhidaSemBloqueio`, `scripts/canvas-smoke-onboarding.cjs` → `recolherInspector`, `scripts/canvas-smoke-links.cjs` → `focar`, `scripts/canvas-smoke-prompts.cjs` → `abrirTerminal`, `scripts/canvas-smoke.cjs` → `checarOclusaoDoFixture`, `src/features/canvas/components/tools/terminals-panel-collapse.test.ts`, `src/features/canvas/components/tools/terminals-panel-drafts.test.ts`, `src/features/canvas/components/tools/terminals-panel-groups.test.ts`, `src/features/canvas/components/tools/terminals-panel-navigation.test.ts`, `src/features/canvas/components/tools/terminals-panel-reorder.test.ts`, `src/features/canvas/services/canvas-surfaces.test.ts`
+- **Testes:** `src/features/shared/ipc/ipc-failures-2.test.ts`, `scripts/canvas-smoke.cjs` → `checarDockRecolhidaSemBloqueio`, `scripts/canvas-smoke-onboarding.cjs` → `recolherInspector`, `scripts/canvas-smoke-links.cjs` → `focar`, `scripts/canvas-smoke-prompts.cjs` → `abrirTerminal`, `scripts/canvas-smoke.cjs` → `checarOclusaoDoFixture`, `src/features/canvas/components/tools/terminals-panel-collapse.test.ts`, `src/features/canvas/components/tools/terminals-panel-drafts.test.ts`, `src/features/canvas/components/tools/terminals-panel-groups.test.ts`, `src/features/canvas/components/tools/terminals-panel-navigation.test.ts`, `src/features/canvas/components/tools/terminals-panel-reorder.test.ts`, `src/features/canvas/services/canvas-surfaces.test.ts`
 
 | Estado | Quando |
 | --- | --- |
@@ -374,7 +372,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | Com a gaveta aberta, a lista "Elementos" cobre os painéis Prompts e Skills. | médio | `3eb91f95-497e-814a-8b2c-e471e09f6ff3` |
-| Envio em massa e envio por linha apagam o rascunho sem olhar o resultado de store.sendText (TerminalsPanel.tsx:193): mensagem que não chegou ao PTY se perde sem aviso. | médio | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 | Modo de envio em massa, reordenar pelo grip ou Alt+↑/↓ e Shift+↑/↓ global não são exercitados por teste de interface (só as funções puras). | baixo | `3ec91f95-497e-818f-b9f2-f9710605c303` |
 
 ### Camada de atmosfera do canvas
@@ -1133,7 +1130,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `cli-accounts:list`, `cli-accounts:create`, `cli-accounts:remove`, `cli-accounts:set-secret`, `openia:list-interfaces`, `openia:list-models`, `openia:key-status`, `openia:set-key`, `agent-models:get`, `agent-models:refresh`, `account-chain:preview-launch`, `projects:pick-folder`, `projects:detect-repos`
 - **Depende de:** `useAgentConfig`, `useAgentModelCatalog`, `useAgentPresets`, `useAccountChain`, `FelixoSelect`, `AgentPresetFields`, `agent-launch-preferences`, `useCanvasProjects`
 - **Sobreposição:** Sem camada própria: vive no flyout do menu Agente (sidebar, z 26) e dentro do HandoffDialog (z 60). Os menus do FelixoSelect abrem em portal z 1000, acima de qualquer modal.
-- **Testes:** `src/features/canvas/services/agent-launch-preferences.test.ts`, `src/features/canvas/services/agent-account-selection.test.ts`, `src/features/canvas/services/account-removal.test.ts`, `src/features/canvas/services/agent-model-overlay.test.ts`, `src/features/canvas/services/agent-launch-options.test.ts`, `src/features/canvas/services/openia-launch-config.test.ts`, `scripts/canvas-smoke-contas.cjs` → `criarSessaoDaCadeia`
+- **Testes:** `src/features/shared/ipc/ipc-failures-2.test.ts`, `src/features/canvas/services/agent-launch-preferences.test.ts`, `src/features/canvas/services/agent-account-selection.test.ts`, `src/features/canvas/services/account-removal.test.ts`, `src/features/canvas/services/agent-model-overlay.test.ts`, `src/features/canvas/services/agent-launch-options.test.ts`, `src/features/canvas/services/openia-launch-config.test.ts`, `scripts/canvas-smoke-contas.cjs` → `criarSessaoDaCadeia`
 
 | Estado | Quando |
 | --- | --- |
@@ -1166,7 +1163,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | Só Agente e Conta são exercitados (sessão C); Openia, modelo, esforço, arquivo de planejamento, projeto, remover, criar, tentar de novo e recalcular não têm teste de interface. | médio | `3ec91f95-497e-81e8-8f18-e2a529b0568e` |
-| criar() não tem catch: se cli-accounts:create, set-secret ou remove rejeitarem, "Criando…" fica preso até remontar (AgentConfigFields.tsx:448-464, useAgentConfig.ts:503-521). | baixo | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 | Cada prévia de "Automática (cadeia)" (inclusive Recalcular) cria uma proposta e uma checagem de login no main. | médio | `3e991f95-497e-81b4-ac92-d7db960c9ae0` |
 
 ### Preset de agente no configurador
@@ -1442,7 +1438,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** nenhum
 - **Depende de:** `useSessionSnapshots`, `session-notifications (getActionRequiredNodeIds)`, `canvas-notifications`, `notification-history-storage`, `notification-preferences`, `CanvasView (histórico e borda)`, `NotificationsPanel`
 - **Sobreposição:** Sem superfície própria: a borda é classe no wrapper do nó (felixo-notify-<categoria>) e a lista mora no painel de notificações.
-- **Testes:** `src/features/canvas/terminal/notification-category.test.ts`, `src/features/canvas/terminal/session-notifications.test.ts`, `src/features/canvas/terminal/canvas-notifications.test.ts`, `src/features/canvas/services/notification-history-storage.test.ts`, `src/features/canvas/services/notification-preferences.test.ts`
+- **Testes:** `src/features/shared/ipc/ipc-failures-2.test.ts`, `src/features/canvas/terminal/notification-category.test.ts`, `src/features/canvas/terminal/session-notifications.test.ts`, `src/features/canvas/terminal/canvas-notifications.test.ts`, `src/features/canvas/services/notification-history-storage.test.ts`, `src/features/canvas/services/notification-preferences.test.ts`
 
 | Estado | Quando |
 | --- | --- |
@@ -1455,7 +1451,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| activity "error" (spawn recusado, saída silenciosa) nunca gera notificação: isActionRequired a exclui (e o teste fixa isso), então a categoria "Falhou" de error em notification-category nunca chega ao histórico (session-notifications.ts:6-12, notification-category.ts:30-35). | baixo | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 | Badge "trabalhando" grudado com o terminal parado. | médio | `3d791f95-497e-8190-84e0-df5328591a14` |
 | A borda de notificação no nó não foi conferida numa janela real nem no smoke. | baixo | `3e191f95-497e-81fd-b657-d7a63b5d17f0` |
 
@@ -1945,7 +1940,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `updates:install`
 - **Depende de:** `CanvasPanel`, `useUpdateStatus`, `useAccountContinuation`, `acknowledgeNodeNotifications (CanvasView)`, `canvas-notifications`, `notification-history-storage`, `notification-preferences`, `notification-category`
 - **Sobreposição:** CanvasPanel absolute z-20 (z-30 com foco dentro), top-16, left = sidebar + 1rem; a lista rola por dentro (max-h 38vh). Fica abaixo da sidebar (26) e acima de topbar e statusbar (18) e do aviso de layout (z-10, no mesmo canto: cobre o aviso). Disputa largura com gaveta e inspector por reportPanelWidth (splitHorizontalSpace). Marcar e remover do item só aparecem no hover ou com foco (opacity-0).
-- **Testes:** `scripts/canvas-smoke.cjs` → `checarInteracoes`, `scripts/canvas-smoke-contas.cjs` → `checarPropostaENotificacao`, `scripts/canvas-smoke-contas.cjs` → `checarRedeSemItem`, `src/features/canvas/terminal/canvas-notifications.test.ts`, `src/features/canvas/terminal/notification-category.test.ts`, `src/features/canvas/services/notification-history-storage.test.ts`, `src/features/canvas/services/notification-preferences.test.ts`, `src/features/canvas/components/notification-time.test.ts`
+- **Testes:** `src/features/shared/ipc/ipc-failures-2.test.ts`, `scripts/canvas-smoke.cjs` → `checarInteracoes`, `scripts/canvas-smoke-contas.cjs` → `checarPropostaENotificacao`, `scripts/canvas-smoke-contas.cjs` → `checarRedeSemItem`, `src/features/canvas/terminal/canvas-notifications.test.ts`, `src/features/canvas/terminal/notification-category.test.ts`, `src/features/canvas/services/notification-history-storage.test.ts`, `src/features/canvas/services/notification-preferences.test.ts`, `src/features/canvas/components/notification-time.test.ts`
 
 | Estado | Quando |
 | --- | --- |
@@ -1975,7 +1970,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | --- | --- | --- |
 | Nenhum botão interno do painel (marcar lida, remover, marcar todas, filtros, busca, limpar lidas, mudo, Reiniciar agora, Depois, Ver opções) é clicado por teste; o smoke só abre pelo sino, fecha com Esc e confere que o item da cadeia aparece. | médio | `3ec91f95-497e-818f-b9f2-f9710605c303` |
 | O realce do bloco com notificação não lida (notificationClassName em orderedNodes, CanvasView) não é conferido numa janela real nem no smoke. | baixo | `3e191f95-497e-81fd-b657-d7a63b5d17f0` |
-| erro engolido: o som da notificação falha em silêncio quando o Chromium bloqueia o áudio (audio.play().catch vazio, CanvasView.tsx:670); a pessoa liga o som e não sabe por que não toca. | baixo | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 
 ### Tarefas Notion (ferramenta e conteúdo do bloco)
 
@@ -1984,7 +1978,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `notion:connections:list`, `notion:connections:save`, `notion:connections:remove`, `notion:connections:test`, `notion:databases:list`, `notion:tasks:list`, `notion:tasks:cached`, `notion:tasks:content`, `notion:tasks:create`, `notion:tasks:update`, `notion:tasks:archive`
 - **Depende de:** `window.felixo.notion`, `FelixoSelect`, `createRefreshCoordinator / targetChanged (notion-refresh-coordinator)`, `nextAutoSyncDelayMs (notion-sync-backoff)`, `decideSyncStatusAfterNetwork (notion-sync-status)`, `notion-task-views / notion-task-scope / notion-task-sort / notion-table-columns / notion-table-view`, `notion-repo-board / useNotionDetailsSource / NotionRepoBoard`, `DeferredMarkdownContent`
 - **Sobreposição:** Mora dentro do bloco Tarefas Notion (overflow-auto). FelixoSelect em portal z 1000 fica acima de tudo, inclusive de diálogos; o seletor de colunas (absolute z-10) é cortado pela rolagem do bloco e só aparece rolando. Colunas sticky (z-10) ficam sob o seletor.
-- **Testes:** `src/features/canvas/services/notion-refresh-coordinator.test.ts`, `src/features/canvas/services/notion-sync-backoff.test.ts`, `src/features/canvas/services/notion-sync-status.test.ts`, `src/features/canvas/services/notion-table-columns.test.ts`, `src/features/canvas/services/notion-table-view.test.ts`, `src/features/canvas/services/notion-task-scope.test.ts`, `src/features/canvas/services/notion-task-sort.test.ts`, `src/features/canvas/services/notion-task-views.test.ts`, `src/features/canvas/services/notion-repo-board.test.ts`, `electron/services/notion-ipc-handlers.test.cjs`, `electron/services/notion-service.test.cjs`, `electron/services/notion-connection-store.test.cjs`, `electron/services/notion-client.test.cjs`, `electron/services/storage/notion-cache-repository.test.cjs`, `scripts/canvas-smoke.cjs` → `checarAuditoriaDeAcessibilidade`
+- **Testes:** `src/features/shared/ipc/ipc-failures-2.test.ts`, `src/features/canvas/services/notion-refresh-coordinator.test.ts`, `src/features/canvas/services/notion-sync-backoff.test.ts`, `src/features/canvas/services/notion-sync-status.test.ts`, `src/features/canvas/services/notion-table-columns.test.ts`, `src/features/canvas/services/notion-table-view.test.ts`, `src/features/canvas/services/notion-task-scope.test.ts`, `src/features/canvas/services/notion-task-sort.test.ts`, `src/features/canvas/services/notion-task-views.test.ts`, `src/features/canvas/services/notion-repo-board.test.ts`, `electron/services/notion-ipc-handlers.test.cjs`, `electron/services/notion-service.test.cjs`, `electron/services/notion-connection-store.test.cjs`, `electron/services/notion-client.test.cjs`, `electron/services/storage/notion-cache-repository.test.cjs`, `scripts/canvas-smoke.cjs` → `checarAuditoriaDeAcessibilidade`
 
 | Estado | Quando |
 | --- | --- |
@@ -2049,7 +2043,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Copiar link nunca foi validado no app real. | baixo | `3d691f95-497e-8105-b007-f7767fe10405` |
 | Isolamento entre conexões e DevTools do app empacotado só por checklist manual. | baixo | `3d791f95-497e-8139-8417-f90dd73f2777` |
 | Seleção que ainda não persiste: conexão, database e visualização do Painel já voltam do data do bloco (notion-tasks-selection), mas a sincronização automática (NotionTasksPanel.tsx:221) vive só em useState e volta a "ligada" ao reabrir o app ou remontar o bloco. | médio | `41b91f95-497e-81c7-88e6-c0660189bb80` |
-| O aviso role="status" nunca é limpo (NotionTasksPanel.tsx:189; não há setMessage(null)): "Exibindo o último snapshot salvo; a rede está indisponível." continua na tela depois que a rede volta e sincroniza, e "Tarefa criada…" fica até o próximo aviso. | baixo | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 
 ### Painel de repositórios (aba Painel do bloco Tarefas Notion)
 
@@ -2386,7 +2379,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `account-chain:get-state`, `account-chain:update-settings`, `account-chain:update-members`, `account-chain:check-login`, `account-chain:release-cooldown`, `account-chain:changed`, `account-chain:proposal`, `account-chain:detection`
 - **Depende de:** `useAccountChain`, `useClockTick`, `getSharedAccountChainStore`, `account-chain-view (moveChainMember, rowMoveDelta, parseMultiplierInput, summarizeChain)`, `focusWasLost`, `FelixoToggle`, `FelixoSelect`
 - **Sobreposição:** Dentro do painel Limites e uso (CanvasPanel z-20/30, tamanho lg); os FelixoSelect de estratégia e cobrança abrem em portal z-1000; Alt+↑/↓ só é tratado quando o alvo é a própria linha, sem disputar teclas com os campos
-- **Testes:** `src/features/canvas/services/account-chain-view.test.ts`, `src/features/canvas/services/account-chain-client.test.ts`, `electron/services/account-chain-ipc-handlers.test.cjs`, `electron/services/accounts/account-chain-service.test.cjs`, `electron/services/storage/account-chain-repository.test.cjs`, `scripts/canvas-smoke-contas.cjs` → `ligarEOrdenarCadeia`, `scripts/canvas-smoke-contas.cjs` → `checarNomesAcessiveis`
+- **Testes:** `src/features/shared/ipc/ipc-failures-2.test.ts`, `src/features/canvas/services/account-chain-view.test.ts`, `src/features/canvas/services/account-chain-client.test.ts`, `electron/services/account-chain-ipc-handlers.test.cjs`, `electron/services/accounts/account-chain-service.test.cjs`, `electron/services/storage/account-chain-repository.test.cjs`, `scripts/canvas-smoke-contas.cjs` → `ligarEOrdenarCadeia`, `scripts/canvas-smoke-contas.cjs` → `checarNomesAcessiveis`
 
 | Estado | Quando |
 | --- | --- |
@@ -2413,7 +2406,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | Botões ↑/↓, Estratégia (o smoke só lê o valor), Cobrança, multiplicador, Conferir agora, Não era limite e Já recarreguei não são acionados em teste de interface; a reordenação só é exercitada por Alt+↓ na linha | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
-| Falha de Conferir agora, Não era limite e Já recarreguei é engolida: account-chain-client.ts:252-278 devolve { ok: false, message } sem gravar snapshot.message e AccountChainSection.tsx:191-194 descarta o retorno com void | médio | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 
 ### Registro de trocas de conta (aba Trocas)
 
@@ -2520,7 +2512,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `speech:get-config`, `speech:save-config`, `speech:set-key`, `speech:clear-key`, `speech:microphone-status`, `speech:request-microphone`
 - **Depende de:** `useDictationShortcut`, `window.felixo.speech`, `dictation (shortcutFromEvent, describeMicrophoneStatus, isLoopbackEndpoint)`
 - **Sobreposição:** Seção dentro do painel Configurações (z-20/30); a captura do atalho escuta keydown da janela inteira em fase de captura e para no blur, para não roubar teclas de menus do mesmo painel
-- **Testes:** `src/features/canvas/services/dictation.test.ts`, `electron/services/speech/speech-ipc-handlers.test.cjs`, `electron/services/speech/speech-settings-store.test.cjs`
+- **Testes:** `src/features/shared/ipc/ipc-failures-2.test.ts`, `src/features/canvas/services/dictation.test.ts`, `electron/services/speech/speech-ipc-handlers.test.cjs`, `electron/services/speech/speech-settings-store.test.cjs`
 
 | Estado | Quando |
 | --- | --- |
@@ -2544,7 +2536,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | Sem teste de interface da seção (motor, chave, endereço, atalho, microfone). O caminho com servidor local foi conferido de ponta a ponta no Linux em 05/10/2026 (faster-whisper e microfone virtual, scripts/validar-ditado-linux.cjs), mas só por roteiro manual | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
-| Falhas engolidas: DictationSettingsSection.tsx:87-91 mostra "Chave removida." sem ler o retorno e speech:clear-key não tem try no main (speech-ipc-handlers.cjs:63-66); se speech:get-config falhar (DictationSettingsSection.tsx:35-38), config fica nula, os campos de endereço/modelo/idioma não aceitam digitação e "Salvar endereço, modelo e idioma" não faz nada, sem aviso | médio | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 
 ### Rolagem no terminal do Claude Code (Configurações)
 
@@ -2673,7 +2664,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `account-chain:redact-transcript`, `account-chain:confirm`, `account-chain:decline`, `account-chain:set-session-mode`, `account-chain:check-login`, `account-chain:get-state`, `agent-usage:refresh`, `pty:spawn`
 - **Depende de:** `useAccountContinuation`, `useAccountChain`, `useClockTick`, `account-switch-dialog (buildAccountSwitchDialogModel)`, `performContinuation`, `keyboard-focus (tabTrapTarget)`
 - **Sobreposição:** fixed inset-0 z-60 (nokey), max-w-lg, não redimensiona; prende o Tab e devolve o foco a quem abriu. Viewport 375×667 coberto pela sessão C (C12). Divide a camada z 60 com a pergunta de agente, que pela ordem do DOM fica por baixo.
-- **Testes:** `src/features/canvas/components/modal-dialogs-keys.test.ts`, `src/features/canvas/services/account-switch-dialog.test.ts`, `src/features/canvas/services/account-continuation.test.ts`, `src/features/canvas/terminal/terminal-session-store.test.ts`, `src/features/canvas/terminal/terminal-screen-state.test.ts`, `electron/services/account-chain-ipc-handlers.test.cjs`, `scripts/canvas-smoke-contas.cjs` → `criarSessaoDaCadeia`
+- **Testes:** `src/features/shared/ipc/ipc-failures-2.test.ts`, `src/features/canvas/components/modal-dialogs-keys.test.ts`, `src/features/canvas/services/account-switch-dialog.test.ts`, `src/features/canvas/services/account-continuation.test.ts`, `src/features/canvas/terminal/terminal-session-store.test.ts`, `src/features/canvas/terminal/terminal-screen-state.test.ts`, `electron/services/account-chain-ipc-handlers.test.cjs`, `scripts/canvas-smoke-contas.cjs` → `criarSessaoDaCadeia`
 
 | Estado | Quando |
 | --- | --- |
@@ -2701,7 +2692,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | Conferir login, Configurar cadeia, Fechar, Medir agora, Ir para o terminal antigo, Cancelar a continuação automática, Fixar e Não era limite não são clicados em nenhum teste (a sessão C confirma e usa Esc). A caixa "Yolo no bloco novo" só aparece com destino em outro provedor, que a sessão C (só contas Codex) não tem: ela é coberta pelo HTML renderizado e pelo modelo, não por clique. | médio | `3ec91f95-497e-81e8-8f18-e2a529b0568e` |
-| onLater e onNotALimit fecham antes da resposta e descartam a mensagem de erro do decline; onCheckLogin descarta o resultado (useAccountContinuation.ts:367-376 e 392). | médio | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 | Não bloqueantes de acessibilidade da interface da cadeia. | baixo | `3e991f95-497e-815c-845c-da8829970c0c` |
 | O aviso de continuação automática do Claude no terminal antigo não oferece cancelar. | médio | `3e991f95-497e-812d-b877-e7bb0162a60f` |
 
@@ -2761,7 +2751,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `webview-profiles:list`, `webview-profiles:save`, `webview-profiles:delete`, `canvas:save`, `webview-permissions:list`, `webview-permissions:revoke`
 - **Depende de:** `useWebviewProfiles (webviewProfilesStore, useSyncExternalStore)`, `useWebviewSitePermissions / groupSitePermissions (webview-site-permissions)`, `describeWebviewProfile / isCustomProfileId (webview-profile)`, `FRAME_COLOR_SWATCHES`, `createPortal`
 - **Sobreposição:** Portal fixed z-70, w-52, clampado à largura da janela (left ≥ 8): acima de menu de cor (50), anel/card do tutorial (54/55) e diálogos (60); abaixo só dos FelixoSelect (1000). Não reposiciona quando o canvas se move.
-- **Testes:** `src/features/canvas/services/webview-site-permissions.test.ts`, `electron/services/webview-site-permissions.test.cjs`, `src/features/canvas/services/webview-profile.test.ts`, `src/features/canvas/services/webview-profiles-store.test.ts`, `electron/services/webview-profiles-ipc-handlers.test.cjs`, `electron/services/storage/webview-profiles-repository.test.cjs`, `scripts/canvas-smoke.cjs` → `checarPerfilDoNavegador`, `electron/services/webview-profile-partition.test.cjs`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarMenuDoPerfilAcompanhaOZoom`
+- **Testes:** `src/features/shared/ipc/ipc-failures-2.test.ts`, `src/features/canvas/services/webview-site-permissions.test.ts`, `electron/services/webview-site-permissions.test.cjs`, `src/features/canvas/services/webview-profile.test.ts`, `src/features/canvas/services/webview-profiles-store.test.ts`, `electron/services/webview-profiles-ipc-handlers.test.cjs`, `electron/services/storage/webview-profiles-repository.test.cjs`, `scripts/canvas-smoke.cjs` → `checarPerfilDoNavegador`, `electron/services/webview-profile-partition.test.cjs`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarMenuDoPerfilAcompanhaOZoom`
 
 | Estado | Quando |
 | --- | --- |
@@ -2783,7 +2773,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | Revogar as permissões de um site no perfil não é clicado por teste: o smoke não cria um pedido de permissão de site para responder antes. Pendência. Trocar, criar e excluir perfil agora são cobertos por checarPerfilDoNavegador. | médio | `41c91f95-497e-8195-9b3b-e40145bef07e` |
-| Falha ao listar perfis é silenciosa (services/webview-profiles-store.ts:38-45): ok falso deixa ready falso para sempre ("Perfil…" no botão) e uma rejeição nunca é tentada de novo (loaded já é verdadeiro). | baixo | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 | O menu (z-70) fica acima dos diálogos modais (60) e não acompanha pan/zoom do canvas (posição calculada só ao abrir): medido, o zoom desloca o botão em 111 px e o menu fica no lugar (canvas-smoke-sobreposicoes.cjs → checarMenuDoPerfilAcompanhaOZoom). Defeito conhecido. O clique dentro do webview não fecha: não medido. | baixo | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
 
 ### Painel de aprovações pendentes
@@ -3196,7 +3185,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3eb91f95-497e-81b8-a70f-dfce2a446a3e` — 2 lacunas
 - `3eb91f95-497e-81bb-a374-eb2e336c73c6` — 1 lacuna
 - `3ec91f95-497e-8103-b360-c1979d6992f4` — 9 lacunas
-- `3ec91f95-497e-8110-b363-cfade2b68b7a` — 13 lacunas
+- `3ec91f95-497e-8110-b363-cfade2b68b7a` — 2 lacunas
 - `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` — 15 lacunas
 - `3ec91f95-497e-8122-a08b-d26d4991acca` — 1 lacuna
 - `3ec91f95-497e-818f-b9f2-f9710605c303` — 14 lacunas

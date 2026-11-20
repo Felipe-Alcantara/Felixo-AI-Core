@@ -6,6 +6,7 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
+import { reportActionFailure } from '../../services/canvas-persistence-status'
 import type { Node } from '@xyflow/react'
 import {
   ChevronDown,
@@ -203,18 +204,26 @@ export function TerminalsPanel({
     setDrafts((current) => ({ ...current, [nodeId]: text }))
   }
 
-  const sendDraft = (nodeId: string) => {
+  const sendDraft = async (nodeId: string) => {
     const trimmed = drafts[nodeId]?.trim()
     if (!trimmed) {
       return
     }
-    store.sendText(nodeId, toSubmittedTerminalText(trimmed), { kind: 'manual-prompt' })
-    setDrafts((current) => ({ ...current, [nodeId]: '' }))
+    const delivered = await store
+      .sendText(nodeId, toSubmittedTerminalText(trimmed), { kind: 'manual-prompt' })
+      .then((result) => result.delivered, () => false)
+    if (!delivered) {
+      // A mensagem não chegou ao PTY: o rascunho fica (apagá-lo perderia o texto sem aviso) e a barra de status diz.
+      reportActionFailure(`enviar-rascunho:${nodeId}`, 'A mensagem não chegou ao terminal: o rascunho foi mantido.')
+      return
+    }
+    // Só limpa se a pessoa não digitou mais nada enquanto a entrega esperava.
+    setDrafts((current) => (current[nodeId]?.trim() === trimmed ? { ...current, [nodeId]: '' } : current))
   }
 
   const pendingIds = pendingDraftNodeIds(drafts)
   const sendAllDrafts = () => {
-    pendingIds.forEach(sendDraft)
+    pendingIds.forEach((nodeId) => void sendDraft(nodeId))
   }
 
   // Clamped at read-time (not synced via effect) so a block closing never

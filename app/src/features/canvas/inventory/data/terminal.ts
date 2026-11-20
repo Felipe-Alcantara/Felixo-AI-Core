@@ -676,6 +676,7 @@ export const terminalSurfaces: InventoryElement[] = [
       'useCanvasProjects',
     ],
     tests: [
+      { file: 'src/features/shared/ipc/ipc-failures-2.test.ts' },
       { file: 'src/features/canvas/services/agent-launch-preferences.test.ts' },
       { file: 'src/features/canvas/services/agent-account-selection.test.ts' },
       { file: 'src/features/canvas/services/account-removal.test.ts' },
@@ -689,11 +690,6 @@ export const terminalSurfaces: InventoryElement[] = [
         what: 'Só Agente e Conta são exercitados (sessão C); Openia, modelo, esforço, arquivo de planejamento, projeto, remover, criar, tentar de novo e recalcular não têm teste de interface.',
         risk: 'médio',
         task: '3ec91f95-497e-81e8-8f18-e2a529b0568e',
-      },
-      {
-        what: 'criar() não tem catch: se cli-accounts:create, set-secret ou remove rejeitarem, "Criando…" fica preso até remontar (AgentConfigFields.tsx:448-464, useAgentConfig.ts:503-521).',
-        risk: 'baixo',
-        task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
       },
       {
         what: 'Cada prévia de "Automática (cadeia)" (inclusive Recalcular) cria uma proposta e uma checagem de login no main.',
@@ -1075,6 +1071,7 @@ export const terminalSurfaces: InventoryElement[] = [
       'keyboard-focus (tabTrapTarget)',
     ],
     tests: [
+      { file: 'src/features/shared/ipc/ipc-failures-2.test.ts' },
       { file: 'src/features/canvas/components/modal-dialogs-keys.test.ts' },
       { file: 'src/features/canvas/services/account-switch-dialog.test.ts' },
       { file: 'src/features/canvas/services/account-continuation.test.ts' },
@@ -1088,11 +1085,6 @@ export const terminalSurfaces: InventoryElement[] = [
         what: 'Conferir login, Configurar cadeia, Fechar, Medir agora, Ir para o terminal antigo, Cancelar a continuação automática, Fixar e Não era limite não são clicados em nenhum teste (a sessão C confirma e usa Esc). A caixa "Yolo no bloco novo" só aparece com destino em outro provedor, que a sessão C (só contas Codex) não tem: ela é coberta pelo HTML renderizado e pelo modelo, não por clique.',
         risk: 'médio',
         task: '3ec91f95-497e-81e8-8f18-e2a529b0568e',
-      },
-      {
-        what: 'onLater e onNotALimit fecham antes da resposta e descartam a mensagem de erro do decline; onCheckLogin descarta o resultado (useAccountContinuation.ts:367-376 e 392).',
-        risk: 'médio',
-        task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
       },
       {
         what: 'Não bloqueantes de acessibilidade da interface da cadeia.',
@@ -1590,6 +1582,7 @@ export const terminalSurfaces: InventoryElement[] = [
       'NotificationsPanel',
     ],
     tests: [
+      { file: 'src/features/shared/ipc/ipc-failures-2.test.ts' },
       { file: 'src/features/canvas/terminal/notification-category.test.ts' },
       { file: 'src/features/canvas/terminal/session-notifications.test.ts' },
       { file: 'src/features/canvas/terminal/canvas-notifications.test.ts' },
@@ -1597,11 +1590,6 @@ export const terminalSurfaces: InventoryElement[] = [
       { file: 'src/features/canvas/services/notification-preferences.test.ts' },
     ],
     gaps: [
-      {
-        what: 'activity "error" (spawn recusado, saída silenciosa) nunca gera notificação: isActionRequired a exclui (e o teste fixa isso), então a categoria "Falhou" de error em notification-category nunca chega ao histórico (session-notifications.ts:6-12, notification-category.ts:30-35).',
-        risk: 'baixo',
-        task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
-      },
       {
         what: 'Badge "trabalhando" grudado com o terminal parado.',
         risk: 'médio',

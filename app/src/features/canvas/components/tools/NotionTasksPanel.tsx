@@ -238,6 +238,8 @@ export function NotionTasksPanel({
   const [copiedTaskId, setCopiedTaskId] = useState<string | null>(null)
   const [draft, setDraft] = useState<TaskDraft>(emptyDraft())
   const [message, setMessage] = useState<string | null>(null)
+  // O texto do último aviso de "snapshot salvo, rede indisponível": uma sincronização que dá certo o apaga (o aviso nunca era limpo).
+  const staleNoticeRef = useRef<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const selectedDatabase = databases.find((database) => database.id === dataSourceId) || null
@@ -523,7 +525,14 @@ export function NotionTasksPanel({
       setFetchedAt(result.fetchedAt || null)
       setHasMoreTasks(Boolean(result.hasMore))
       if (result.stale && !silent) {
-        setMessage(result.message || 'Exibindo o último snapshot salvo; a rede está indisponível.')
+        const notice = result.message || 'Exibindo o último snapshot salvo; a rede está indisponível.'
+        staleNoticeRef.current = notice
+        setMessage(notice)
+      } else if (!result.stale && staleNoticeRef.current) {
+        const antigo = staleNoticeRef.current
+        staleNoticeRef.current = null
+        // Só apaga o aviso de rede; um "Tarefa criada…" posterior fica.
+        setMessage((current) => (current === antigo ? null : current))
       }
       return finalStatus
     })

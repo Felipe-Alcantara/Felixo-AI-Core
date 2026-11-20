@@ -283,10 +283,13 @@ export function createAccountChainStore(bridge: AccountChainBridge | null) {
       try {
         const result = await bridge.checkLogin({ accountIds: accountIds.slice(0, 5) })
         await refresh()
-        return result.ok
-          ? { ok: true }
-          : { ok: false, message: result.message ?? 'Não foi possível conferir o login.' }
+        if (result.ok) return { ok: true }
+        // A mensagem também vai ao estado: a tela mostra a falha (o `void run(...)` da seção descartava o retorno).
+        const message = result.message ?? 'Não foi possível conferir o login.'
+        set({ message })
+        return { ok: false, message }
       } catch {
+        set({ message: MAIN_UNREACHABLE_MESSAGE })
         return { ok: false, message: MAIN_UNREACHABLE_MESSAGE }
       }
     },
@@ -299,10 +302,12 @@ export function createAccountChainStore(bridge: AccountChainBridge | null) {
       try {
         const result = await bridge.releaseCooldown({ accountId, reason })
         await refresh()
-        return result.ok
-          ? { ok: true, requiresCheck: result.requiresCheck }
-          : { ok: false, message: result.message ?? 'Não foi possível liberar a espera.' }
+        if (result.ok) return { ok: true, requiresCheck: result.requiresCheck }
+        const message = result.message ?? 'Não foi possível liberar a espera.'
+        set({ message })
+        return { ok: false, message }
       } catch {
+        set({ message: MAIN_UNREACHABLE_MESSAGE })
         return { ok: false, message: MAIN_UNREACHABLE_MESSAGE }
       }
     },

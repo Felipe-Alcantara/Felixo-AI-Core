@@ -15,6 +15,8 @@
  * pedido fica no `sessionStorage` e o desfecho é reconsultado por `imageStatus`.
  */
 
+import { reportActionFailure } from './canvas-persistence-status'
+import { resultadoDeIpc } from '../../shared/ipc/ipc-result'
 import { formatUsd } from './claude-api-conversation'
 import { createCostConsent, imageCostConsentKey, type CostConsent } from './usage-cost-consent'
 
@@ -331,10 +333,15 @@ export function createOpeniaImageStore(getBridge: () => Bridge | undefined, deps
     const generation = snapshot.generation
     if (generation.status !== 'pending' || generation.cancelling) return
     update({ generation: { ...generation, cancelling: true } })
-    try {
-      await getBridge()?.cancelImage({ requestId: generation.requestId })
-    } catch {
-      // O desfecho chega pela resposta do pedido (ou pela consulta de estado); aqui não há o que mostrar.
+    const outcome = await resultadoDeIpc(
+      () => getBridge()?.cancelImage({ requestId: generation.requestId }),
+      'Não foi possível cancelar a geração da imagem: ela pode sair mesmo assim.',
+    )
+    if (!outcome.ok) {
+      // "Cancelando…" não pode ficar para sempre: o pedido segue vivo e o botão volta.
+      const atual = snapshot.generation
+      if (atual.status === 'pending' && atual.requestId === generation.requestId) update({ generation: { ...atual, cancelling: false } })
+      reportActionFailure('cancelar-imagem', outcome.message)
     }
   }
 

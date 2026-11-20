@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import { reportActionFailure } from '../services/canvas-persistence-status'
 import type { AccountSwitchProposal } from '../../shared/types/account-chain'
 import type { CanvasFlowNode } from './useCanvasPersistence'
 import type { TerminalNodeData } from '../types'
@@ -421,12 +422,19 @@ export function useAccountContinuation({
           canPin: Boolean(dialogProposal.from.accountId),
           onConfirm: (params) => void confirm(params),
           onLater: () => {
-            const settled = decline(dialog.proposalId, 'later')
+            const sourceNodeId = dialog.sourceNodeId
+            // A recusa que o main não registrou aparece na faixa do bloco: o diálogo já fechou e a mensagem se perdia.
+            const settled = decline(dialog.proposalId, 'later').then((message) => {
+              if (message) setBannerError(sourceNodeId, message)
+            })
             store.clearDetection(ptySessionIdForNode(dialog.sourceNodeId))
             closeDialog('source', dialog.sourceNodeId, settled)
           },
           onNotALimit: () => {
-            const settled = decline(dialog.proposalId, 'not-a-limit')
+            const sourceNodeId = dialog.sourceNodeId
+            const settled = decline(dialog.proposalId, 'not-a-limit').then((message) => {
+              if (message) setBannerError(sourceNodeId, message)
+            })
             store.clearDetection(ptySessionIdForNode(dialog.sourceNodeId))
             closeDialog('source', dialog.sourceNodeId, settled)
           },
@@ -445,7 +453,10 @@ export function useAccountContinuation({
               .catch(() => undefined)
               .then(() => store.refresh())
           },
-          onCheckLogin: (accountIds) => void store.checkLogin(accountIds),
+          onCheckLogin: (accountIds) =>
+            void store.checkLogin(accountIds).then((result) => {
+              if (!result.ok) reportActionFailure('conferir-login', result.message)
+            }),
           onOpenChainSettings: () => {
             closeDialog(false)
             openChainSettings()
