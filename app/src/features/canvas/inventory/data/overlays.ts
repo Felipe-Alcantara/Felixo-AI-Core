@@ -307,6 +307,7 @@ export const overlaySurfaces: InventoryElement[] = [
     ipc: ['onboarding:write'],
     dependsOn: ['useOnboardingSnapshot', 'describeHelpMenu', 'helpMenuKeyAction', 'FelixoPopoverSurface', 'useHelpMenu (CanvasToolbar)'],
     tests: [
+      { file: 'src/features/canvas/components/focus-keyboard-a11y.test.ts' },
       { file: 'src/features/onboarding/OnboardingUi.test.ts' },
       { file: 'src/features/onboarding/onboarding-store.test.ts' },
       { file: SMOKE_TUTORIAL, check: 'sa1' },
@@ -318,11 +319,6 @@ export const overlaySurfaces: InventoryElement[] = [
         what: 'Cancelar da confirmação de redefinir nunca é clicado: o SB8 só confere que o foco chega nele e segue para Confirmar.',
         risk: 'baixo',
         task: '3ec91f95-497e-81f7-8b12-c5c252d020c7',
-      },
-      {
-        what: 'Falha de render do menu (CanvasToolbar.tsx:276-281): o boundary devolve null mas help.open continua verdadeiro, então o botão Ajuda fica aria-expanded="true" sem menu e o clique fora não fecha (o ouvinte era do menu); só um segundo clique na Ajuda resolve.',
-        risk: 'baixo',
-        task: '3ec91f95-497e-8197-a218-ef49c302013d',
       },
     ],
     overlap:

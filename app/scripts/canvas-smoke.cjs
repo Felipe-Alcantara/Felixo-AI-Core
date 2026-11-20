@@ -59,6 +59,7 @@ const { criarSessaoDePrompts } = require('./canvas-smoke-prompts.cjs')
 const { RECORDINGS_DIR, criarSessaoDaLeitura } = require('./canvas-smoke-leitura.cjs')
 const { criarSessaoDoNotion } = require('./canvas-smoke-notion.cjs')
 const { checarSobreposicoesDoInventario } = require('./canvas-smoke-sobreposicoes.cjs')
+const { checarFocoAoFecharPresetsDeAgente, checarNomesAcessiveisDaSidebar, checarTecladoDoMenuDeCor } = require('./canvas-smoke-teclado.cjs')
 const {
   criarRelatorio,
   fecharRelatorio,
@@ -2094,6 +2095,9 @@ const SESSIONS = [
       await prepararFixture(page)
       await checarOclusaoDoFixture(page)
       await checarAuditoriaDeAcessibilidade(page)
+      await checarNomesAcessiveisDaSidebar(page)
+      await checarTecladoDoMenuDeCor(page)
+      await checarFocoAoFecharPresetsDeAgente(page)
       await checarInteracoes(page)
       await checarReloadSemDuplicacao(page)
       await checarControlesDosBlocos(page)

@@ -291,7 +291,7 @@ export function CanvasToolbar({
           {help.novidades > 0 && <span className="felixo-onboarding-help-dot" aria-hidden="true" />}
         </ActivityRailButton>
         {help.open && (
-          <OnboardingErrorBoundary store={onboardingStore} resetKey={help.session}>
+          <OnboardingErrorBoundary store={onboardingStore} resetKey={help.session} onFailure={() => help.close('fora')}>
             <Suspense fallback={null}>
               <LazyOnboardingHelpMenu id={help.menuId} triggerRef={help.triggerRef} onClose={help.close} />
             </Suspense>
@@ -323,8 +323,8 @@ export function CanvasToolbar({
             type="button"
             className="felixo-btn-icon felixo-sidebar-collapse-button"
             onClick={toggleSidebar}
-            title="Recolher sidebar"
-            aria-label="Recolher sidebar"
+            title="Recolher coluna do canvas"
+            aria-label="Recolher coluna do canvas"
           >
             <PanelLeftClose size={16} />
           </button>

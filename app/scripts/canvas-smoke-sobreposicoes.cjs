@@ -1193,6 +1193,8 @@ module.exports = {
   checarPerguntaDoAgenteSobDialogos,
   checarSidebarExpandidaEmJanelaEstreita,
   checarSobreposicoesDoInventario,
+  abrirSecaoFerramentas,
+  garantirSidebarAberta,
   cortesDaJanela,
   cortesDoMenuPorCima,
   medirSobreposicoes,

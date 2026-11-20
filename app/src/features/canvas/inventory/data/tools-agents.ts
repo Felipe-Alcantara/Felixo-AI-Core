@@ -724,6 +724,8 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
       'CanvasPanel',
     ],
     tests: [
+      { file: 'src/features/canvas/components/focus-keyboard-a11y.test.ts' },
+      { file: 'scripts/canvas-smoke-teclado.cjs', check: 'checarFocoAoFecharPresetsDeAgente' },
       { file: 'src/features/canvas/services/agent-preset.test.ts' },
       { file: 'src/features/canvas/services/agent-preset-editor.test.ts' },
       { file: 'electron/services/storage/agent-presets-repository.test.cjs' },
@@ -733,11 +735,6 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
         what: 'Sem teste de interface: criar, editar, duplicar, importar, exportar e excluir preset pelo painel',
         risk: 'baixo',
         task: '3ec91f95-497e-81ca-8319-ee657b0b6492',
-      },
-      {
-        what: 'CanvasToolPanels.tsx:274 passa onClose cru em vez de closeActiveTool: fechar Presets de agente não devolve o foco ao gatilho do menu; o foco cai no body, onde o React Flow trata Delete/Backspace como teclas do canvas',
-        risk: 'médio',
-        task: '3ec91f95-497e-8197-a218-ef49c302013d',
       },
       {
         what: 'Erro do hook gruda: useAgentPresets só limpa error em save/remove bem-sucedidos (useAgentPresets.ts:68 e :100) e AgentPresetsPanel.tsx:135-145 mostra error antes de message, então uma exportação certa depois de uma falha continua exibindo a falha antiga; falha de agent-presets:list (useAgentPresets.ts:27-37) é engolida e só os nativos aparecem',

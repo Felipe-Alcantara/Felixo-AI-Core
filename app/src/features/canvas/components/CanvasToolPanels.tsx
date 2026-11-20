@@ -309,7 +309,7 @@ export function CanvasToolPanels({
       case 'qaLogger':
         return <LazyQaLoggerPanel onClose={closeActiveTool} toolsMenuOpen={toolsMenuOpen} />
       case 'agentPresets':
-        return <LazyAgentPresetsPanel onClose={onClose} toolsMenuOpen={toolsMenuOpen} />
+        return <LazyAgentPresetsPanel onClose={closeActiveTool} toolsMenuOpen={toolsMenuOpen} />
       case 'cliPlugins':
         return <LazyCliPluginsPanel onClose={closeActiveTool} toolsMenuOpen={toolsMenuOpen} />
       case 'agentCanvasWrite':

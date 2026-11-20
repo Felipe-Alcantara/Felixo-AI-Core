@@ -277,6 +277,8 @@ export const chromeSurfaces: InventoryElement[] = [
     ipc: ['canvas:clear'],
     dependsOn: ['useResizableSidebarWidth', 'useCanvasTransfer', 'useAppVersion', 'deveMostrarRodapeDeStatus', 'SidebarSection'],
     tests: [
+      { file: 'src/features/canvas/components/focus-keyboard-a11y.test.ts' },
+      { file: 'scripts/canvas-smoke-teclado.cjs', check: 'checarNomesAcessiveisDaSidebar' },
       { file: 'scripts/canvas-smoke.cjs', check: 'checarElementosAbertosEmViewportsCriticos' },
       { file: 'scripts/canvas-smoke.cjs', check: 'checarAuditoriaDeAcessibilidade' },
       { file: 'scripts/canvas-smoke-onboarding.cjs', check: 'sa2' },
@@ -295,11 +297,6 @@ export const chromeSurfaces: InventoryElement[] = [
         what: 'A alça de largura da sidebar (arrasto, setas, Shift+setas, Home e duplo clique; role="separator") não é exercitada por teste.',
         risk: 'baixo',
         task: '3ec91f95-497e-818f-b9f2-f9710605c303',
-      },
-      {
-        what: 'Com a sidebar expandida há dois botões chamados "Recolher sidebar" (marca e trilho), o que deixa o nome ambíguo para leitor de tela (o smoke precisa escopar pelo trilho).',
-        risk: 'baixo',
-        task: '3ec91f95-497e-8197-a218-ef49c302013d',
       },
       {
         what: 'A sidebar expandida não recolhe sozinha em janelas estreitas: medido em 320 px, ela deixa 32 px de canvas (faixa mínima de 160 px), e a barra superior segue dentro da janela (canvas-smoke-sobreposicoes.cjs → checarSidebarExpandidaEmJanelaEstreita). Defeito conhecido: recolher sozinha é decisão do Felipe.',

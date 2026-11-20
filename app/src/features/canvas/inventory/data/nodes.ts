@@ -421,6 +421,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
       'duplicateImageNode, repairImageNode, removeTemporaryImageNode, linkAgentToFile, unlinkAgentFromFile (CanvasView)',
     ],
     tests: [
+      { file: 'src/features/canvas/components/focus-keyboard-a11y.test.ts' },
       unit(`${COMPONENTS}/file-node-preview.test.ts`),
       unit(`${SERVICES}/file-node-write.test.ts`),
       unit(`${SERVICES}/canvas-connection-index.test.ts`),
@@ -447,11 +448,6 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
         what: 'requestRepoDiagnosis (services/file-terminal-links.ts:125-135) devolve "ok" sem esperar o resultado de store.sendText: "Diagnóstico solicitado ao terminal conectado." aparece mesmo se o pty:write falhar.',
         risk: 'médio',
         task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
-      },
-      {
-        what: 'Botão "Desligar <agente>" (FileNode.tsx:816) é opacity-0 até o hover e não tem focus-visible: com teclado ele recebe foco invisível.',
-        risk: 'baixo',
-        task: '3ec91f95-497e-8197-a218-ef49c302013d',
       },
       {
         what: 'O menu "Ligar agente" (absolute bottom-full, max-h-44) abre para cima dentro do cartão overflow-hidden: medido com bloco de 150 px de altura e seis agentes sem ligar, em 1280 px, o menu passa 15 px da borda de cima (canvas-smoke-sobreposicoes.cjs → checarMenuLigarAgenteDentroDoCartao). Defeito conhecido: a correção fica para a task.',
@@ -838,7 +834,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
     persistence: ['canvas salvo (canvas_nodes.data_json: scene em JSON com elements e viewBackgroundColor, label, frameColor), só quando a cena muda de fato (sceneToPersist)'],
     ipc: ['canvas:save', 'canvas:delete'],
     dependsOn: ['useReactFlow', 'React.lazy(ExcalidrawCanvas)', 'onDataChange (updateNodeData, CanvasView)'],
-    tests: [{ file: 'src/features/canvas/components/block-load-failures.test.ts' }, ...FIXTURE_TESTS, smoke('checarInteracoes'), smoke('checarDesenhoExcalidraw'), unit(`${COMPONENTS}/excalidraw-scene.test.ts`)],
+    tests: [{ file: 'src/features/canvas/components/focus-keyboard-a11y.test.ts' }, { file: 'src/features/canvas/components/block-load-failures.test.ts' }, ...FIXTURE_TESTS, smoke('checarInteracoes'), smoke('checarDesenhoExcalidraw'), unit(`${COMPONENTS}/excalidraw-scene.test.ts`)],
     gaps: [
       {
         what: 'Fechar o bloco entrega a cena pendente ao canvas (ExcalidrawDrawingNode.tsx, cleanup), mas ao fechar o app ou trocar para o Chat o canvas inteiro desmonta junto e o setNodes que carrega a cena nunca roda: o último traço (até 600 ms + 400 ms) ainda se perde nesses dois casos, e nenhum teste monta o bloco.',
@@ -1226,11 +1222,6 @@ export const notionTasksTool: InventoryElement = {
       risk: 'baixo',
       task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
     },
-    {
-      what: 'Editar e Excluir visualização (NotionTasksPanel.tsx:1050) ficam em "hidden group-hover:flex": display none fora do hover, então o teclado nunca chega neles.',
-      risk: 'baixo',
-      task: '3ec91f95-497e-8197-a218-ef49c302013d',
-    },
   ],
   overlap: 'Mora dentro do bloco Tarefas Notion (overflow-auto). FelixoSelect em portal z 1000 fica acima de tudo, inclusive de diálogos; o seletor de colunas (absolute z-10) é cortado pela rolagem do bloco e só aparece rolando. Colunas sticky (z-10) ficam sob o seletor.',
 }
@@ -1372,17 +1363,12 @@ export const nodeSurfaces: InventoryElement[] = [
     persistence: ['canvas salvo (data.frameColor do bloco)'],
     ipc: ['canvas:save'],
     dependsOn: ['readFrameColor / FRAME_COLORS / FRAME_COLOR_SWATCHES (frame-colors)', 'colorMenu e updateNodeData (CanvasView)', 'frameClassName (orderedNodes)'],
-    tests: [unit(`${COMPONENTS}/frame-colors.test.ts`), smoke('checarElementosAbertosEmViewportsCriticos'), { file: 'scripts/canvas-smoke-sobreposicoes.cjs', check: 'checarMenuDeCorDentroDaJanela' }, smoke('checarCorDaMoldura')],
+    tests: [{ file: 'src/features/canvas/components/focus-keyboard-a11y.test.ts' }, { file: 'scripts/canvas-smoke-teclado.cjs', check: 'checarTecladoDoMenuDeCor' }, unit(`${COMPONENTS}/frame-colors.test.ts`), smoke('checarElementosAbertosEmViewportsCriticos'), { file: 'scripts/canvas-smoke-sobreposicoes.cjs', check: 'checarMenuDeCorDentroDaJanela' }, smoke('checarCorDaMoldura')],
     gaps: [
       {
         what: 'Menu fixed no clientX/clientY sem limite à janela (NodeColorMenu.tsx:39-40): medido com o clique a 4 px das bordas direita e de baixo, o menu passa 172 px pela direita e 129 px por baixo, em 320, 768 e 1280 px (canvas-smoke-sobreposicoes.cjs → checarMenuDeCorDentroDaJanela). Defeito conhecido: o limite à janela fica para a task.',
         risk: 'médio',
         task: '3ec91f95-497e-8112-82f9-fd1b86e3ec7d',
-      },
-      {
-        what: 'Sem foco nem teclado (NodeColorMenu.tsx:35-72; CanvasView.tsx:3174-3178): o foco não entra no role="menu", não há setas, e o menu só fecha por Esc, clique no fundo ou escolha — clicar noutro bloco, rolar ou dar zoom o deixam aberto no lugar antigo.',
-        risk: 'baixo',
-        task: '3ec91f95-497e-8197-a218-ef49c302013d',
       },
       {
         what: 'O realce de notificação não lida é declarado depois da moldura no CSS e vence a cor escolhida; ainda não conferido numa janela real nem no smoke.',

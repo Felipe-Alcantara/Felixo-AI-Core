@@ -822,7 +822,7 @@ function LinkedAgentsPanel({
                 <button
                   type="button"
                   onClick={() => onUnlink(agent.id)}
-                  className="felixo-btn-icon rounded-sm p-0.5 text-(--f-core-secondary) opacity-0 hover:bg-black/20 hover:text-theme-error group-hover:opacity-100"
+                  className="felixo-btn-icon rounded-sm p-0.5 text-(--f-core-secondary) opacity-0 hover:bg-black/20 hover:text-theme-error focus-visible:opacity-100 focus-visible:ring-1 focus-visible:ring-white/40 group-hover:opacity-100"
                   title="Desligar este agente"
                   aria-label={`Desligar ${agent.label}`}
                 >

@@ -5,6 +5,8 @@ type Props = {
   store: Pick<OnboardingStore, 'reportFailure'>
   /** Uma abertura nova (Ajuda) tenta de novo: o boundary volta a renderizar os filhos. */
   resetKey: number | string
+  /** Depois da falha: quem abriu o menu o fecha, para o botão não ficar `aria-expanded` sem menu e o clique fora voltar a valer. */
+  onFailure?: () => void
   children: ReactNode
 }
 
@@ -25,6 +27,7 @@ export class OnboardingErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: unknown, info: ErrorInfo) {
     this.props.store.reportFailure(error, info.componentStack ?? null)
+    this.props.onFailure?.()
   }
 
   componentDidUpdate(previous: Props) {

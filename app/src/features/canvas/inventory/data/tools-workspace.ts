@@ -880,6 +880,8 @@ export const workspaceToolSurfaces: InventoryElement[] = [
       'CanvasPanel',
     ],
     tests: [
+      { file: 'src/features/canvas/components/focus-keyboard-a11y.test.ts' },
+      { file: 'scripts/canvas-smoke-teclado.cjs', check: 'checarFocoAoFecharPresetsDeAgente' },
       { file: SMOKE, check: 'checarFocoAoAbrirFerramenta' },
       { file: SMOKE_PROMPTS, check: 'abrirPainel' },
       { file: 'src/features/onboarding/onboarding-catalog.test.ts' },
@@ -889,11 +891,6 @@ export const workspaceToolSurfaces: InventoryElement[] = [
         what: 'os estados Carregando e erro do chunk não têm teste: nenhum smoke simula chunk ausente e o botão Recarregar app nunca é clicado',
         risk: 'baixo',
         task: NOVA_SMOKE,
-      },
-      {
-        what: 'CanvasToolPanels.tsx:274: Presets de agente recebe onClose em vez de closeActiveTool — fechar não devolve o foco ao menu/rail e ele cai no body, onde o React Flow trata Delete/Backspace como teclas do canvas',
-        risk: 'médio',
-        task: '3ec91f95-497e-8197-a218-ef49c302013d',
       },
     ],
     overlap:
@@ -1207,6 +1204,7 @@ export const workspaceToolSurfaces: InventoryElement[] = [
     ipc: ['git:list-files', 'git:read-file', 'git:get-file-diff'],
     dependsOn: ['GitPanel (expanded, query, changedOnly, openPath)', 'repo-tree (filterRepoTree)', 'statusDescriptor'],
     tests: [
+      { file: 'src/features/canvas/components/focus-keyboard-a11y.test.ts' },
       { file: `${TOOLS}/repo-tree.test.ts` },
       { file: `${TOOLS}/git-status.test.ts` },
     ],
@@ -1215,11 +1213,6 @@ export const workspaceToolSurfaces: InventoryElement[] = [
         what: 'sem teste de interface: abrir pasta, filtrar, "só o que mudou" e abrir arquivo limpo',
         risk: 'baixo',
         task: NOVA_SMOKE,
-      },
-      {
-        what: 'GitExplorer.tsx:93: role="tree" com filhos button sem role="treeitem" nem aria-level — o leitor de tela anuncia uma árvore sem itens',
-        risk: 'baixo',
-        task: '3ec91f95-497e-8197-a218-ef49c302013d',
       },
     ],
     overlap: 'primeira coluna do Source Control (some com o botão do explorador); sem camada própria',

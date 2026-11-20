@@ -32,7 +32,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **Elementos:** 115 (10 blocos, 17 ferramentas, 88 outras superfícies)
 - **Controles:** 439, dos quais 92 com teste específico
 - **Elementos sem nenhum teste:** 2
-- **Lacunas:** 223 (alto 4, médio 121, baixo 98), em 75 tasks
+- **Lacunas:** 215 (alto 4, médio 119, baixo 92), em 74 tasks
 
 ## Moldura do canvas
 
@@ -74,7 +74,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **IPC:** `canvas:clear`
 - **Depende de:** `useResizableSidebarWidth`, `useCanvasTransfer`, `useAppVersion`, `deveMostrarRodapeDeStatus`, `SidebarSection`
 - **Sobreposição:** aside absolute (top 0, bottom 0, left 0) z-26, por cima da topbar (18, largura total) e da statusbar (18); abaixo do overlay isBusy (50), dos diálogos (60) e dos menus em portal (1000). A alça (felixo-resize-handle, z-2) ocupa 6 px na borda direita. Os popovers de Criar e Organizar são inline (rolam dentro da coluna), não flutuam.
-- **Testes:** `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos`, `scripts/canvas-smoke.cjs` → `checarAuditoriaDeAcessibilidade`, `scripts/canvas-smoke-onboarding.cjs` → `sa2`, `src/features/canvas/components/toolbar-flyout.test.ts`, `src/features/canvas/components/toolbar-status.test.ts`, `electron/services/canvas-ipc-handlers.test.cjs`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarSidebarExpandidaEmJanelaEstreita`
+- **Testes:** `src/features/canvas/components/focus-keyboard-a11y.test.ts`, `scripts/canvas-smoke-teclado.cjs` → `checarNomesAcessiveisDaSidebar`, `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos`, `scripts/canvas-smoke.cjs` → `checarAuditoriaDeAcessibilidade`, `scripts/canvas-smoke-onboarding.cjs` → `sa2`, `src/features/canvas/components/toolbar-flyout.test.ts`, `src/features/canvas/components/toolbar-status.test.ts`, `electron/services/canvas-ipc-handlers.test.cjs`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarSidebarExpandidaEmJanelaEstreita`
 
 | Estado | Quando |
 | --- | --- |
@@ -91,7 +91,6 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 | --- | --- | --- |
 | "Limpar" (destrutivo, com confirm e alert nativos) não tem teste de interface; o smoke só garante que o Tab do tutorial não passa por ele. | médio | `3ec91f95-497e-818f-b9f2-f9710605c303` |
 | A alça de largura da sidebar (arrasto, setas, Shift+setas, Home e duplo clique; role="separator") não é exercitada por teste. | baixo | `3ec91f95-497e-818f-b9f2-f9710605c303` |
-| Com a sidebar expandida há dois botões chamados "Recolher sidebar" (marca e trilho), o que deixa o nome ambíguo para leitor de tela (o smoke precisa escopar pelo trilho). | baixo | `3ec91f95-497e-8197-a218-ef49c302013d` |
 | A sidebar expandida não recolhe sozinha em janelas estreitas: medido em 320 px, ela deixa 32 px de canvas (faixa mínima de 160 px), e a barra superior segue dentro da janela (canvas-smoke-sobreposicoes.cjs → checarSidebarExpandidaEmJanelaEstreita). Defeito conhecido: recolher sozinha é decisão do Felipe. | médio | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
 
 ### Seção Criar da sidebar
@@ -616,7 +615,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `canvas-file:read`, `canvas-file:write`, `canvas-file:resolve`, `canvas-file:watch`, `canvas-file:unwatch`, `canvas-file:changed`, `text-file:read`, `text-file:write`, `text-file:watch`, `text-file:unwatch`, `text-file:changed`, `files:read-image-attachment`, `files:open-image`, `files:save-image-copy`, `files:duplicate-image`, `files:pick-image`, `files:remove-generated-image`, `canvas:save`, `canvas:delete`, `canvas:save-edge`, `canvas:delete-edge`, `pty:write`
 - **Depende de:** `useFileNodeDocument`, `useReactFlow`, `isSafeImagePreviewMimeType / resolvePreviewKind (file-node-preview)`, `DeferredMarkdownContent`, `createCanvasConnectionIndex (connectedAgents / availableAgents)`, `requestRepoDiagnosis / announceFileNodeToTerminalNode (file-terminal-links)`, `duplicateImageNode, repairImageNode, removeTemporaryImageNode, linkAgentToFile, unlinkAgentFromFile (CanvasView)`
 - **Sobreposição:** Bloco do React Flow, sem z próprio: fica abaixo de toda superfície fixa (topbar e statusbar 18, dock e painéis 20/30, sidebar 26, menus 50+). O cartão é overflow-hidden, então nada que nasce dentro dele passa das bordas. Quatro pares de handles (source + target sobrepostos em cada lado). O menu "Ligar agente" é z-10 dentro do próprio cartão e é cortado pelas bordas dele (não usa portal, ao contrário do menu de perfil da Página Web).
-- **Testes:** `src/features/canvas/components/file-node-preview.test.ts`, `src/features/canvas/services/file-node-write.test.ts`, `src/features/canvas/services/canvas-connection-index.test.ts`, `src/features/canvas/terminal/prompt-origins-e2e.test.ts`, `electron/services/canvas-files-ipc-handlers.test.cjs`, `electron/services/text-file-access.test.cjs`, `electron/services/file-attachments-ipc-handlers.test.cjs`, `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarMenuLigarAgenteDentroDoCartao`, `scripts/canvas-smoke.cjs` → `checarControlesDoArquivo`
+- **Testes:** `src/features/canvas/components/focus-keyboard-a11y.test.ts`, `src/features/canvas/components/file-node-preview.test.ts`, `src/features/canvas/services/file-node-write.test.ts`, `src/features/canvas/services/canvas-connection-index.test.ts`, `src/features/canvas/terminal/prompt-origins-e2e.test.ts`, `electron/services/canvas-files-ipc-handlers.test.cjs`, `electron/services/text-file-access.test.cjs`, `electron/services/file-attachments-ipc-handlers.test.cjs`, `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarMenuLigarAgenteDentroDoCartao`, `scripts/canvas-smoke.cjs` → `checarControlesDoArquivo`
 
 | Estado | Quando |
 | --- | --- |
@@ -653,7 +652,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Oito dos 16 controles do bloco (imagem: Reparar referência, zoom −, +, redefinir, Abrir no sistema, Salvar cópia, Duplicar e Remover temporário) não são clicados por teste: falta um bloco de imagem no fixture. Reparar, Abrir e Salvar também abrem diálogo ou app do sistema. Os outros oito agora são cobertos por checarControlesDoArquivo. | médio | `41c91f95-497e-81c9-bc07-e565a7dd49a3` |
 | Promessas sem catch em FileNode.tsx:239-309: copyPath, openImageInSystem, saveImageCopy e removeTemporaryImage não tratam rejeição; generateDiagnosis, duplicateImage e repairImage usam try/finally sem catch. A rejeição vira unhandledrejection e o bloco não diz nada; copyPath mostra ✓ mesmo sem navigator.clipboard. | médio | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 | requestRepoDiagnosis (services/file-terminal-links.ts:125-135) devolve "ok" sem esperar o resultado de store.sendText: "Diagnóstico solicitado ao terminal conectado." aparece mesmo se o pty:write falhar. | médio | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
-| Botão "Desligar <agente>" (FileNode.tsx:816) é opacity-0 até o hover e não tem focus-visible: com teclado ele recebe foco invisível. | baixo | `3ec91f95-497e-8197-a218-ef49c302013d` |
 | O menu "Ligar agente" (absolute bottom-full, max-h-44) abre para cima dentro do cartão overflow-hidden: medido com bloco de 150 px de altura e seis agentes sem ligar, em 1280 px, o menu passa 15 px da borda de cima (canvas-smoke-sobreposicoes.cjs → checarMenuLigarAgenteDentroDoCartao). Defeito conhecido: a correção fica para a task. | médio | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
 
 ### Bloco Página Web (webview)
@@ -797,7 +795,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `canvas:save`, `canvas:delete`
 - **Depende de:** `useReactFlow`, `React.lazy(ExcalidrawCanvas)`, `onDataChange (updateNodeData, CanvasView)`
 - **Sobreposição:** Bloco do React Flow, sem z próprio: fica abaixo de toda superfície fixa (topbar e statusbar 18, dock e painéis 20/30, sidebar 26, menus 50+). O cartão é overflow-hidden, então nada que nasce dentro dele passa das bordas. Os menus e diálogos internos do Excalidraw ficam presos ao cartão: num bloco de mínimo 360×280 a barra de ferramentas e os popovers podem ser cortados.
-- **Testes:** `src/features/canvas/components/block-load-failures.test.ts`, `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`, `scripts/canvas-smoke.cjs` → `checarInteracoes`, `scripts/canvas-smoke.cjs` → `checarDesenhoExcalidraw`, `src/features/canvas/components/excalidraw-scene.test.ts`
+- **Testes:** `src/features/canvas/components/focus-keyboard-a11y.test.ts`, `src/features/canvas/components/block-load-failures.test.ts`, `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`, `scripts/canvas-smoke.cjs` → `checarInteracoes`, `scripts/canvas-smoke.cjs` → `checarDesenhoExcalidraw`, `src/features/canvas/components/excalidraw-scene.test.ts`
 
 | Estado | Quando |
 | --- | --- |
@@ -1903,7 +1901,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `agent-presets:list`, `agent-presets:save`, `agent-presets:delete`, `files:save-text`, `canvas:list-available-skills`
 - **Depende de:** `useAgentPresets`, `agent-preset-editor (checkPresetDraft, changePresetAgent, togglePresetSkill)`, `agent-launch-options (getEffortLevels, supportsFastMode)`, `serializePreset`, `FelixoSelect`, `CanvasPanel`
 - **Sobreposição:** CanvasPanel: absolute z-20 (z-30 com foco dentro), top-16, à direita da barra lateral e deslocado quando o menu de ferramentas abre (toolsMenuOpen); largura limitada a viewport − barra − inspector Elementos (288 px) e altura a viewport − 112. Os menus do FelixoSelect abrem em portal z-1000 por cima; toasts (z 50) e AgentQuestionDialog/HandoffDialog (z 60) cobrem o painel. Em janela <768 px o painel passa da viewport (PANEL_MIN_WIDTH 260, task 3e691f95-497e-815c-a129-f4d2d6405cbc). Tamanho md; a lista de skills tem max-h-44 e rola por dentro; o window.confirm do Excluir e o diálogo de salvar são nativos
-- **Testes:** `src/features/canvas/services/agent-preset.test.ts`, `src/features/canvas/services/agent-preset-editor.test.ts`, `electron/services/storage/agent-presets-repository.test.cjs`
+- **Testes:** `src/features/canvas/components/focus-keyboard-a11y.test.ts`, `scripts/canvas-smoke-teclado.cjs` → `checarFocoAoFecharPresetsDeAgente`, `src/features/canvas/services/agent-preset.test.ts`, `src/features/canvas/services/agent-preset-editor.test.ts`, `electron/services/storage/agent-presets-repository.test.cjs`
 
 | Estado | Quando |
 | --- | --- |
@@ -1933,7 +1931,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | Sem teste de interface: criar, editar, duplicar, importar, exportar e excluir preset pelo painel | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
-| CanvasToolPanels.tsx:274 passa onClose cru em vez de closeActiveTool: fechar Presets de agente não devolve o foco ao gatilho do menu; o foco cai no body, onde o React Flow trata Delete/Backspace como teclas do canvas | médio | `3ec91f95-497e-8197-a218-ef49c302013d` |
 | Erro do hook gruda: useAgentPresets só limpa error em save/remove bem-sucedidos (useAgentPresets.ts:68 e :100) e AgentPresetsPanel.tsx:135-145 mostra error antes de message, então uma exportação certa depois de uma falha continua exibindo a falha antiga; falha de agent-presets:list (useAgentPresets.ts:27-37) é engolida e só os nativos aparecem | baixo | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 
 ### Configurações
@@ -2078,7 +2075,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Isolamento entre conexões e DevTools do app empacotado só por checklist manual. | baixo | `3d791f95-497e-8139-8417-f90dd73f2777` |
 | Seleção que ainda não persiste: conexão, database e visualização do Painel já voltam do data do bloco (notion-tasks-selection), mas a sincronização automática (NotionTasksPanel.tsx:221) vive só em useState e volta a "ligada" ao reabrir o app ou remontar o bloco. | médio | `41b91f95-497e-81c7-88e6-c0660189bb80` |
 | O aviso role="status" nunca é limpo (NotionTasksPanel.tsx:189; não há setMessage(null)): "Exibindo o último snapshot salvo; a rede está indisponível." continua na tela depois que a rede volta e sincroniza, e "Tarefa criada…" fica até o próximo aviso. | baixo | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
-| Editar e Excluir visualização (NotionTasksPanel.tsx:1050) ficam em "hidden group-hover:flex": display none fora do hover, então o teclado nunca chega neles. | baixo | `3ec91f95-497e-8197-a218-ef49c302013d` |
 
 ### Painel de repositórios (aba Painel do bloco Tarefas Notion)
 
@@ -2139,7 +2135,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** nenhum
 - **Depende de:** `CanvasView (activeTool, setActiveTool, openTool, toolOpenRequest)`, `canvas-tool-loaders (Lazy*)`, `TOOL_LABELS`, `CanvasPanel`
 - **Sobreposição:** sem superfície própria além dos fallbacks, que usam a moldura CanvasPanel (porte sm, z-20/z-30). Fechar devolve o foco no próximo quadro: Busca → [data-canvas-tool-trigger="search"]; demais → menu de ferramentas ou botão do rail que não esteja aria-hidden/inert. Trocar de ferramenta desmonta o painel anterior na hora, sem animação de saída
-- **Testes:** `scripts/canvas-smoke.cjs` → `checarFocoAoAbrirFerramenta`, `scripts/canvas-smoke-prompts.cjs` → `abrirPainel`, `src/features/onboarding/onboarding-catalog.test.ts`
+- **Testes:** `src/features/canvas/components/focus-keyboard-a11y.test.ts`, `scripts/canvas-smoke-teclado.cjs` → `checarFocoAoFecharPresetsDeAgente`, `scripts/canvas-smoke.cjs` → `checarFocoAoAbrirFerramenta`, `scripts/canvas-smoke-prompts.cjs` → `abrirPainel`, `src/features/onboarding/onboarding-catalog.test.ts`
 
 | Estado | Quando |
 | --- | --- |
@@ -2154,7 +2150,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | os estados Carregando e erro do chunk não têm teste: nenhum smoke simula chunk ausente e o botão Recarregar app nunca é clicado | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
-| CanvasToolPanels.tsx:274: Presets de agente recebe onClose em vez de closeActiveTool — fechar não devolve o foco ao menu/rail e ele cai no body, onde o React Flow trata Delete/Backspace como teclas do canvas | médio | `3ec91f95-497e-8197-a218-ef49c302013d` |
 
 ### Moldura comum dos painéis (CanvasPanel)
 
@@ -2268,7 +2263,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `git:list-files`, `git:read-file`, `git:get-file-diff`
 - **Depende de:** `GitPanel (expanded, query, changedOnly, openPath)`, `repo-tree (filterRepoTree)`, `statusDescriptor`
 - **Sobreposição:** primeira coluna do Source Control (some com o botão do explorador); sem camada própria
-- **Testes:** `src/features/canvas/components/tools/repo-tree.test.ts`, `src/features/canvas/components/tools/git-status.test.ts`
+- **Testes:** `src/features/canvas/components/focus-keyboard-a11y.test.ts`, `src/features/canvas/components/tools/repo-tree.test.ts`, `src/features/canvas/components/tools/git-status.test.ts`
 
 | Estado | Quando |
 | --- | --- |
@@ -2285,7 +2280,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | sem teste de interface: abrir pasta, filtrar, "só o que mudou" e abrir arquivo limpo | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
-| GitExplorer.tsx:93: role="tree" com filhos button sem role="treeitem" nem aria-level — o leitor de tela anuncia uma árvore sem itens | baixo | `3ec91f95-497e-8197-a218-ef49c302013d` |
 
 ### Histórico da branch (Source Control)
 
@@ -2770,7 +2764,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `canvas:save`
 - **Depende de:** `readFrameColor / FRAME_COLORS / FRAME_COLOR_SWATCHES (frame-colors)`, `colorMenu e updateNodeData (CanvasView)`, `frameClassName (orderedNodes)`
 - **Sobreposição:** fixed z-50 (mesmo nível de toasts e overlay isBusy): acima de topbar/statusbar (18), dock e painéis (20/30) e sidebar (26); abaixo do anel e do card do tutorial (54/55), dos diálogos (60), do menu de perfil (70) e dos FelixoSelect (1000).
-- **Testes:** `src/features/canvas/components/frame-colors.test.ts`, `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarMenuDeCorDentroDaJanela`, `scripts/canvas-smoke.cjs` → `checarCorDaMoldura`
+- **Testes:** `src/features/canvas/components/focus-keyboard-a11y.test.ts`, `scripts/canvas-smoke-teclado.cjs` → `checarTecladoDoMenuDeCor`, `src/features/canvas/components/frame-colors.test.ts`, `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarMenuDeCorDentroDaJanela`, `scripts/canvas-smoke.cjs` → `checarCorDaMoldura`
 
 | Estado | Quando |
 | --- | --- |
@@ -2786,7 +2780,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | Menu fixed no clientX/clientY sem limite à janela (NodeColorMenu.tsx:39-40): medido com o clique a 4 px das bordas direita e de baixo, o menu passa 172 px pela direita e 129 px por baixo, em 320, 768 e 1280 px (canvas-smoke-sobreposicoes.cjs → checarMenuDeCorDentroDaJanela). Defeito conhecido: o limite à janela fica para a task. | médio | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
-| Sem foco nem teclado (NodeColorMenu.tsx:35-72; CanvasView.tsx:3174-3178): o foco não entra no role="menu", não há setas, e o menu só fecha por Esc, clique no fundo ou escolha — clicar noutro bloco, rolar ou dar zoom o deixam aberto no lugar antigo. | baixo | `3ec91f95-497e-8197-a218-ef49c302013d` |
 | O realce de notificação não lida é declarado depois da moldura no CSS e vence a cor escolhida; ainda não conferido numa janela real nem no smoke. | baixo | `3e191f95-497e-81fd-b657-d7a63b5d17f0` |
 
 ### Menu de perfil do navegador (Página Web)
@@ -2952,7 +2945,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `onboarding:write`
 - **Depende de:** `useOnboardingSnapshot`, `describeHelpMenu`, `helpMenuKeyAction`, `FelixoPopoverSurface`, `useHelpMenu (CanvasToolbar)`
 - **Sobreposição:** Portal no fim do body com .felixo-popover-surface (z 1000), à direita do botão Ajuda e contido na janela (max-height = janela − 16 px). Fica acima de tudo, inclusive dos diálogos (60); Esc, Tab para fora e clique fora fecham.
-- **Testes:** `src/features/onboarding/OnboardingUi.test.ts`, `src/features/onboarding/onboarding-store.test.ts`, `scripts/canvas-smoke-onboarding.cjs` → `sa1`, `scripts/canvas-smoke-onboarding.cjs` → `conferirTecladoDoMenuAjuda`, `scripts/canvas-smoke-onboarding.cjs` → `sb8`
+- **Testes:** `src/features/canvas/components/focus-keyboard-a11y.test.ts`, `src/features/onboarding/OnboardingUi.test.ts`, `src/features/onboarding/onboarding-store.test.ts`, `scripts/canvas-smoke-onboarding.cjs` → `sa1`, `scripts/canvas-smoke-onboarding.cjs` → `conferirTecladoDoMenuAjuda`, `scripts/canvas-smoke-onboarding.cjs` → `sb8`
 
 | Estado | Quando |
 | --- | --- |
@@ -2973,7 +2966,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | Cancelar da confirmação de redefinir nunca é clicado: o SB8 só confere que o foco chega nele e segue para Confirmar. | baixo | `3ec91f95-497e-81f7-8b12-c5c252d020c7` |
-| Falha de render do menu (CanvasToolbar.tsx:276-281): o boundary devolve null mas help.open continua verdadeiro, então o botão Ajuda fica aria-expanded="true" sem menu e o clique fora não fecha (o ouvinte era do menu); só um segundo clique na Ajuda resolve. | baixo | `3ec91f95-497e-8197-a218-ef49c302013d` |
 
 ### Aviso flutuante da instalação das CLIs
 
@@ -3240,7 +3232,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` — 15 lacunas
 - `3ec91f95-497e-8122-a08b-d26d4991acca` — 1 lacuna
 - `3ec91f95-497e-818f-b9f2-f9710605c303` — 14 lacunas
-- `3ec91f95-497e-8197-a218-ef49c302013d` — 8 lacunas
 - `3ec91f95-497e-81ca-8319-ee657b0b6492` — 28 lacunas
 - `3ec91f95-497e-81e8-8f18-e2a529b0568e` — 11 lacunas
 - `3ec91f95-497e-81f7-8b12-c5c252d020c7` — 5 lacunas

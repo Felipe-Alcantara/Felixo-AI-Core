@@ -156,6 +156,8 @@ function TreeRow({
           className="felixo-scm-tree-row is-dir"
           style={indent}
           title={node.path}
+          role="treeitem"
+          aria-level={depth + 1}
           aria-expanded={open}
         >
           {open ? (
@@ -209,6 +211,9 @@ function TreeRow({
       }`}
       style={indent}
       title={node.path}
+      role="treeitem"
+      aria-level={depth + 1}
+      aria-selected={selectedPath === node.path}
     >
       <span className="felixo-scm-tree-chevron" aria-hidden />
       <File size={13} className="felixo-scm-tree-icon" aria-hidden />
