@@ -32,7 +32,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **Elementos:** 115 (10 blocos, 17 ferramentas, 88 outras superfícies)
 - **Controles:** 439, dos quais 92 com teste específico
 - **Elementos sem nenhum teste:** 0
-- **Lacunas:** 173 (alto 4, médio 99, baixo 70), em 73 tasks
+- **Lacunas:** 161 (alto 4, médio 95, baixo 62), em 73 tasks
 
 ## Moldura do canvas
 
@@ -43,7 +43,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **IPC:** nenhum
 - **Depende de:** `useHelpMenu`, `useOnboardingNovelties`, `onboardingStore`, `loadOnboardingUi`, `OnboardingErrorBoundary`, `setActiveTool (CanvasView)`, `changeSidebarCollapsed (CanvasView)`
 - **Sobreposição:** nav.felixo-activity-rail dentro da aside da sidebar (z-26), coluna fixa de 52 px na borda esquerda, acima da topbar e da statusbar (18). Ajuda é o sexto botão do grupo de cima (≈ 271 de ≈ 289 px na altura mínima): um botão novo acima dela recorta o alvo. O menu Ajuda abre em portal (z 1000).
-- **Testes:** `scripts/canvas-smoke-onboarding.cjs` → `alternarSidebar`, `scripts/canvas-smoke-onboarding.cjs` → `conferirTecladoDoMenuAjuda`, `scripts/canvas-smoke.cjs` → `checarAuditoriaDeAcessibilidade`, `scripts/canvas-smoke.cjs` → `checarLandmarksVisiveis`, `src/features/onboarding/onboarding-boundaries.test.ts`
+- **Testes:** `scripts/canvas-smoke-moldura.cjs` → `checarTrilhoProjetosEConfiguracoes`, `scripts/canvas-smoke-onboarding.cjs` → `alternarSidebar`, `scripts/canvas-smoke-onboarding.cjs` → `conferirTecladoDoMenuAjuda`, `scripts/canvas-smoke.cjs` → `checarAuditoriaDeAcessibilidade`, `scripts/canvas-smoke.cjs` → `checarLandmarksVisiveis`, `src/features/onboarding/onboarding-boundaries.test.ts`
 
 | Estado | Quando |
 | --- | --- |
@@ -63,10 +63,6 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 | `label="Configurações"` (rail) | clique | onSelectTool("settings"): abre ou fecha o painel Configurações. | Sem falha própria; o painel tem o próprio tratamento de erro. | — |
 | `Expandir sidebar` (rail) | clique | O mesmo toggleSidebar do menu do canvas, no grupo de baixo, com rótulo "Recolher sidebar"/"Expandir sidebar" e o ícone do painel. | Sem localStorage a escolha vale só nesta sessão. | `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos` |
 
-| Lacuna | Risco | Task |
-| --- | --- | --- |
-| Projetos e Configurações do trilho não são clicados por nenhum teste (Projetos só é medido como âncora do tutorial). | baixo | `3ec91f95-497e-818f-b9f2-f9710605c303` |
-
 ### Coluna da sidebar (marca, alça e rodapé)
 
 - **ID:** `chrome-sidebar-frame` · **Dono:** `src/features/canvas/components/CanvasToolbar.tsx`
@@ -74,7 +70,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **IPC:** `canvas:clear`
 - **Depende de:** `useResizableSidebarWidth`, `useCanvasTransfer`, `useAppVersion`, `deveMostrarRodapeDeStatus`, `SidebarSection`
 - **Sobreposição:** aside absolute (top 0, bottom 0, left 0) z-26, por cima da topbar (18, largura total) e da statusbar (18); abaixo do overlay isBusy (50), dos diálogos (60) e dos menus em portal (1000). A alça (felixo-resize-handle, z-2) ocupa 6 px na borda direita. Os popovers de Criar e Organizar são inline (rolam dentro da coluna), não flutuam.
-- **Testes:** `src/features/canvas/components/focus-keyboard-a11y.test.ts`, `scripts/canvas-smoke-teclado.cjs` → `checarNomesAcessiveisDaSidebar`, `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos`, `scripts/canvas-smoke.cjs` → `checarAuditoriaDeAcessibilidade`, `scripts/canvas-smoke-onboarding.cjs` → `sa2`, `src/features/canvas/components/toolbar-flyout.test.ts`, `src/features/canvas/components/toolbar-status.test.ts`, `electron/services/canvas-ipc-handlers.test.cjs`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarSidebarExpandidaEmJanelaEstreita`
+- **Testes:** `scripts/canvas-smoke-moldura.cjs` → `checarAlcaDaSidebar`, `scripts/canvas-smoke-moldura.cjs` → `checarLimparComOverlay`, `src/features/canvas/components/focus-keyboard-a11y.test.ts`, `scripts/canvas-smoke-teclado.cjs` → `checarNomesAcessiveisDaSidebar`, `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos`, `scripts/canvas-smoke.cjs` → `checarAuditoriaDeAcessibilidade`, `scripts/canvas-smoke-onboarding.cjs` → `sa2`, `src/features/canvas/components/toolbar-flyout.test.ts`, `src/features/canvas/components/toolbar-status.test.ts`, `electron/services/canvas-ipc-handlers.test.cjs`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarSidebarExpandidaEmJanelaEstreita`
 
 | Estado | Quando |
 | --- | --- |
@@ -89,8 +85,6 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| "Limpar" (destrutivo, com confirm e alert nativos) não tem teste de interface; o smoke só garante que o Tab do tutorial não passa por ele. | médio | `3ec91f95-497e-818f-b9f2-f9710605c303` |
-| A alça de largura da sidebar (arrasto, setas, Shift+setas, Home e duplo clique; role="separator") não é exercitada por teste. | baixo | `3ec91f95-497e-818f-b9f2-f9710605c303` |
 | A sidebar expandida não recolhe sozinha em janelas estreitas: medido em 320 px, ela deixa 32 px de canvas (faixa mínima de 160 px), e a barra superior segue dentro da janela (canvas-smoke-sobreposicoes.cjs → checarSidebarExpandidaEmJanelaEstreita). Defeito conhecido: recolher sozinha é decisão do Felipe. | médio | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
 
 ### Seção Criar da sidebar
@@ -100,7 +94,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **IPC:** `files:pick-image`, `text-file:pick`, `canvas-file:write`, `canvas:save`
 - **Depende de:** `NamedCreateButton`, `UrlCreateButton`, `useWebviewProfiles`, `explainUrlInput`, `addNode (CanvasView)`, `findFreeNodePosition`
 - **Sobreposição:** Dentro da sidebar (z-26); os popovers são inline (felixo-sidebar-inline-panel) e empurram a seção para baixo em vez de cobrir o canvas. O menu de perfis (FelixoSelect) abre em portal (z 1000).
-- **Testes:** `src/features/shared/ipc/ipc-failures-2.test.ts`, `scripts/canvas-smoke.cjs` → `checarInteracoes`, `src/features/canvas/services/url-utils.test.ts`, `src/features/canvas/services/node-geometry.test.ts`, `electron/services/file-attachments-ipc-handlers.test.cjs`, `electron/services/canvas-files-ipc-handlers.test.cjs`
+- **Testes:** `scripts/canvas-smoke-moldura.cjs` → `checarCriarBlocos`, `src/features/shared/ipc/ipc-failures-2.test.ts`, `scripts/canvas-smoke.cjs` → `checarInteracoes`, `src/features/canvas/services/url-utils.test.ts`, `src/features/canvas/services/node-geometry.test.ts`, `electron/services/file-attachments-ipc-handlers.test.cjs`, `electron/services/canvas-files-ipc-handlers.test.cjs`
 
 | Estado | Quando |
 | --- | --- |
@@ -120,7 +114,6 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Novo bloco, Grupo, Abrir imagem, "Abrir arquivo existente…" e uma Página Web válida não são criados por nenhum teste de interface; o smoke só confere a recusa de javascript:. | médio | `3ec91f95-497e-818f-b9f2-f9710605c303` |
 | Fechar os popovers por clique fora devolve o foco ao gatilho mesmo quando a pessoa clicou em outro controle. | baixo | `3ea91f95-497e-81d9-a3d8-ed3971b18a24` |
 
 ### Seção Organizar da sidebar
@@ -130,7 +123,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **IPC:** `canvas:save`
 - **Depende de:** `OrganizeButton`, `arrangeNodesAsMatrix`, `fitCanvasViewSafely (CanvasView)`, `fitBoundsSafely (CanvasView)`, `usePerformanceMode`
 - **Sobreposição:** Dentro da sidebar (z-26); o grupo de modos é inline (felixo-sidebar-inline-panel) e não cobre o canvas. Organizar continua ativo com o canvas travado (a trava só desliga arrastar, conectar e selecionar).
-- **Testes:** `src/features/canvas/services/canvas-matrix-layout.test.ts`, `src/features/canvas/services/canvas-interaction-geometry.test.ts`, `scripts/canvas-smoke-onboarding.cjs` → `conferirTeclasDoCanvasSobAPergunta`, `scripts/canvas-smoke.cjs` → `checarDimensoesDeAcessibilidadeAdicionais`
+- **Testes:** `scripts/canvas-smoke-moldura.cjs` → `checarOrganizarEEnquadrar`, `src/features/canvas/services/canvas-matrix-layout.test.ts`, `src/features/canvas/services/canvas-interaction-geometry.test.ts`, `scripts/canvas-smoke-onboarding.cjs` → `conferirTeclasDoCanvasSobAPergunta`, `scripts/canvas-smoke.cjs` → `checarDimensoesDeAcessibilidadeAdicionais`
 
 | Estado | Quando |
 | --- | --- |
@@ -150,7 +143,6 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Organizar (os três modos), Selecionar/Mover e o Enquadrar da sidebar não são clicados por nenhum teste; só o algoritmo da matriz e a geometria da área útil têm teste unitário. | médio | `3ec91f95-497e-818f-b9f2-f9710605c303` |
 | Fechar o grupo de modos por clique fora devolve o foco ao botão mesmo quando a pessoa clicou em outro controle. | baixo | `3ea91f95-497e-81d9-a3d8-ed3971b18a24` |
 
 ### Gerar imagem (Openia)
@@ -198,7 +190,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **IPC:** nenhum
 - **Depende de:** `setActiveTool (CanvasView)`
 - **Sobreposição:** header absolute top 0, largura total (left/right 0 !important), z-18 e overflow: hidden (index.css:3216): fica sob a sidebar (26) à esquerda e recorta tudo que tentar sair dela para baixo (ver o aviso do ditado). pointer-events só nos filhos.
-- **Testes:** `scripts/canvas-smoke.cjs` → `checarLandmarksVisiveis`, `scripts/canvas-smoke.cjs` → `checarOclusaoDoFixture`, `scripts/canvas-smoke.cjs` → `checarMatrizVisual`, `scripts/canvas-smoke-onboarding.cjs` → `sa3`
+- **Testes:** `scripts/canvas-smoke-moldura.cjs` → `checarCampoDeComandoDaTopbar`, `scripts/canvas-smoke.cjs` → `checarLandmarksVisiveis`, `scripts/canvas-smoke.cjs` → `checarOclusaoDoFixture`, `scripts/canvas-smoke.cjs` → `checarMatrizVisual`, `scripts/canvas-smoke-onboarding.cjs` → `sa3`
 
 | Estado | Quando |
 | --- | --- |
@@ -208,10 +200,6 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 | --- | --- | --- | --- | --- |
 | `Pesquisar no canvas ou executar comando` (button) | clique | onOpenSearch → setActiveTool("search"): abre o painel Buscar (não alterna: com o painel aberto continua aberto). Mesmo efeito de Ctrl/Cmd+K. | Sem falha própria. | — |
 
-| Lacuna | Risco | Task |
-| --- | --- | --- |
-| O clique no campo de comando da barra não é exercitado (o smoke abre Buscar pelo trilho e por Ctrl+K). | baixo | `3ec91f95-497e-818f-b9f2-f9710605c303` |
-
 ### Ditado por voz
 
 - **ID:** `chrome-dictation` · **Dono:** `src/features/canvas/components/DictationButton.tsx`
@@ -219,7 +207,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **IPC:** `speech:get-config`, `speech:microphone-status`, `speech:request-microphone`, `speech:transcribe`, `pty:write`
 - **Depende de:** `useDictation`, `useDictationShortcut`, `createVoiceRecorder`, `useTerminalSessions (typeText)`
 - **Sobreposição:** Dentro da barra superior (z-18, overflow hidden). O balão usa z-50, mas o z vale só dentro da barra e a área dele fica fora do recorte (some). Se o recorte sair, o balão (w-72, à direita) cai sobre o inspector "Elementos" (z-20, fora do contexto da barra) e ficaria por baixo dele.
-- **Testes:** `src/features/shared/ipc/ipc-failures.test.ts`, `src/features/canvas/services/dictation.test.ts`, `src/features/canvas/services/voice-recorder.test.ts`, `electron/services/speech/speech-ipc-handlers.test.cjs`
+- **Testes:** `scripts/canvas-smoke-moldura.cjs` → `checarBotaoDeDitado`, `src/features/shared/ipc/ipc-failures.test.ts`, `src/features/canvas/services/dictation.test.ts`, `src/features/canvas/services/voice-recorder.test.ts`, `electron/services/speech/speech-ipc-handlers.test.cjs`
 
 | Estado | Quando |
 | --- | --- |
@@ -242,7 +230,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | O balão de erro e de aviso do ditado (absolute top-full, DictationButton.tsx:66) fica abaixo da barra superior, que tem overflow: hidden (index.css:3216): a mensagem é recortada e não aparece. A pessoa não vê por que o ditado falhou (sem chave, microfone negado). | alto | `3ec91f95-497e-8103-b360-c1979d6992f4` |
-| Nenhum teste de interface do ditado (gravar, transcrever, descartar, fechar o aviso, atalho global). | baixo | `3ec91f95-497e-818f-b9f2-f9710605c303` |
+| O clique no botão é exercitado (checarBotaoDeDitado: o estado muda na tela); gravar, transcrever, descartar e o atalho global dependem de microfone e de chave de transcrição, que o smoke não tem: seguem sem teste de interface. | baixo | `3ec91f95-497e-818f-b9f2-f9710605c303` |
 
 ### Barra de status
 
@@ -251,7 +239,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **IPC:** `canvas:delete`, `canvas:delete-edge`
 - **Depende de:** `summarizeCanvasSelection`, `removeSelection (CanvasView)`
 - **Sobreposição:** footer absolute bottom 0, left var(--felixo-sidebar-width) (3.25rem recolhida), right 0, z-18, pointer-events só no botão, overflow hidden e container felixo-statusbar (cortes por largura em index.css). O inspector termina no topo dela (não há sobreposição); fica sob sidebar (26); a pílula de zoom fica logo acima (margem statusbar + 0,5rem).
-- **Testes:** `src/features/canvas/components/CanvasStatusBar.test.ts`, `src/features/canvas/services/canvas-selection.test.ts`, `scripts/canvas-smoke.cjs` → `checarMontagem`, `scripts/canvas-smoke.cjs` → `checarMatrizVisual`, `scripts/canvas-smoke.cjs` → `checarBarraComGaveta`
+- **Testes:** `scripts/canvas-smoke-moldura.cjs` → `checarRemoverDaBarraDeStatus`, `src/features/canvas/components/CanvasStatusBar.test.ts`, `src/features/canvas/services/canvas-selection.test.ts`, `scripts/canvas-smoke.cjs` → `checarMontagem`, `scripts/canvas-smoke.cjs` → `checarMatrizVisual`, `scripts/canvas-smoke.cjs` → `checarBarraComGaveta`
 
 | Estado | Quando |
 | --- | --- |
@@ -266,7 +254,6 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | Abaixo de ~740 px de janela com a gaveta aberta, ou com a gaveta maximizada, a área do canvas some e a barra fica sob a sidebar (a sobreposição de 320 px já conhecida). | baixo | `3ed91f95-497e-8114-a246-f72c73ae50c4` |
-| O clique em Remover não é exercitado: o teste só renderiza o botão (rótulo, atalho e desabilitado). | baixo | `3ec91f95-497e-818f-b9f2-f9710605c303` |
 
 ### Pílula de zoom
 
@@ -275,7 +262,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **IPC:** nenhum
 - **Depende de:** `useReactFlow`, `Panel (@xyflow/react)`, `handleCanvasMove (CanvasView)`
 - **Sobreposição:** Panel do React Flow (bottom-left), margem esquerda var(--felixo-sidebar-width) + 1,25rem (4,5rem recolhida) e inferior statusbar + 0,5rem. Mora dentro do wrapper do React Flow, que tem z-index 0: fica abaixo de toda a moldura (statusbar 18, dock e painéis 20/30, sidebar 26).
-- **Testes:** `scripts/canvas-smoke.cjs` → `checarZoomVisual`, `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarPainelDeFerramentaSobPilulaDeZoom`
+- **Testes:** `scripts/canvas-smoke-moldura.cjs` → `checarPilulaDeZoom`, `scripts/canvas-smoke.cjs` → `checarZoomVisual`, `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarPainelDeFerramentaSobPilulaDeZoom`
 
 | Estado | Quando |
 | --- | --- |
@@ -292,7 +279,6 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | Enquadrar da pílula usa fitView direto (CanvasZoomPill.tsx:54), sem a área útil que o Enquadrar da sidebar usa (fitCanvasViewSafely, CanvasView.tsx:1196): o smoke de links registra que ele deixa blocos sob a barra lateral em 1280×800. | médio | `3ec91f95-497e-8103-b360-c1979d6992f4` |
-| Aumentar zoom e o cadeado não são exercitados por teste. | baixo | `3ec91f95-497e-818f-b9f2-f9710605c303` |
 
 ### Área do canvas (React Flow)
 
@@ -301,7 +287,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **IPC:** `canvas:save`, `canvas:delete`, `canvas:list-edges`, `canvas:save-edge`, `canvas:delete-edge`, `canvas:image-generated`, `files:remove-generated-image`
 - **Depende de:** `ReactFlow (@xyflow/react)`, `useCanvasPersistence`, `useCanvasSurfaces`, `useCanvasTransfer`, `useTerminalSessions`, `usePerformanceMode`, `getCanvasSafeArea`, `planAutoFit (viewport-auto-fit)`, `releaseRemovedCanvasNodes`
 - **Sobreposição:** Região relativa (flex-1, role="region" "Área de trabalho do canvas") que contém sidebar (26), topbar e statusbar (18), dock e painéis (20/30), aviso de layout (10) e overlay isBusy (50). O wrapper do React Flow tem z-index 0: blocos, pílula de zoom e Mini Map ficam abaixo de toda a moldura, e um bloco sob ela recebe o clique da moldura. A área útil (getCanvasSafeArea) desconta topbar, statusbar, sidebar, painel e inspector; a gaveta é irmã flex fora do container. Clique direito num bloco abre o NodeColorMenu (z 50) no ponto do clique; clique no fundo fecha.
-- **Testes:** `scripts/canvas-smoke.cjs` → `checarMontagem`, `scripts/canvas-smoke.cjs` → `checarNavegacaoPorTab`, `scripts/canvas-smoke.cjs` → `checarOclusaoDoFixture`, `scripts/canvas-smoke.cjs` → `checarInteracoes`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`, `scripts/canvas-smoke.cjs` → `checarViewportMinimo`, `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos`, `scripts/canvas-smoke-onboarding.cjs` → `conferirTeclasDoCanvasSobAPergunta`, `scripts/canvas-smoke-onboarding.cjs` → `sa3`, `src/features/canvas/services/canvas-interaction-geometry.test.ts`, `src/features/canvas/services/viewport-auto-fit.test.ts`, `src/features/canvas/services/canvas-selection.test.ts`, `src/features/canvas/services/canvas-node-removal.test.ts`, `src/features/canvas/services/canvas-removal-guard.test.ts`, `src/features/canvas/services/keyboard-focus.test.ts`, `src/features/canvas/components/modal-dialogs-keys.test.ts`
+- **Testes:** `scripts/canvas-smoke-moldura.cjs` → `checarAtalhosDoCanvas`, `scripts/canvas-smoke.cjs` → `checarMontagem`, `scripts/canvas-smoke.cjs` → `checarNavegacaoPorTab`, `scripts/canvas-smoke.cjs` → `checarOclusaoDoFixture`, `scripts/canvas-smoke.cjs` → `checarInteracoes`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`, `scripts/canvas-smoke.cjs` → `checarViewportMinimo`, `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos`, `scripts/canvas-smoke-onboarding.cjs` → `conferirTeclasDoCanvasSobAPergunta`, `scripts/canvas-smoke-onboarding.cjs` → `sa3`, `src/features/canvas/services/canvas-interaction-geometry.test.ts`, `src/features/canvas/services/viewport-auto-fit.test.ts`, `src/features/canvas/services/canvas-selection.test.ts`, `src/features/canvas/services/canvas-node-removal.test.ts`, `src/features/canvas/services/canvas-removal-guard.test.ts`, `src/features/canvas/services/keyboard-focus.test.ts`, `src/features/canvas/components/modal-dialogs-keys.test.ts`
 
 | Estado | Quando |
 | --- | --- |
@@ -316,7 +302,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | focusNode centraliza pelo node.position (CanvasView.tsx:1753), que num filho de grupo é relativo ao grupo: o item do inspector "Elementos" e o das Notificações levam a câmera para o lugar errado quando o bloco está dentro de um grupo. | médio | `3ec91f95-497e-8103-b360-c1979d6992f4` |
-| Os atalhos do canvas só têm teste negativo (Delete, Backspace e Q não agem sob um diálogo): apagar com Delete/Backspace, alternar com Q, Shift para somar à seleção e soltar um bloco num grupo não são exercitados. | médio | `3ec91f95-497e-818f-b9f2-f9710605c303` |
+| Delete, Backspace, Q e Shift+clique são exercitados (checarAtalhosDoCanvas); soltar um bloco num grupo (arrasto de um bloco para dentro dele) segue sem teste de interface: o encaixe só tem teste unitário. | médio | `3ec91f95-497e-818f-b9f2-f9710605c303` |
 | O CanvasView e o minimapa ainda re-renderizam a cada quadro de arrasto: ~35–45 ms por commit com 300 blocos no build de desenvolvimento (os blocos parados não re-renderizam mais desde 11/11/2026). | médio | `41591f95-497e-8166-84cb-cf8af3736c2b` |
 | Centralizar um bloco com zoom que caiba na área livre em telas pequenas (focusNode usa zoom fixo 1,2). | médio | `3ea91f95-497e-819a-bdd9-fbc178f27b3e` |
 | A visão que não reseta mais ao abrir e fechar gaveta ou painel (planAutoFit) ainda não foi conferida no app real. | baixo | `3e291f95-497e-815a-9863-d4b9f8f15e8f` |
@@ -328,7 +314,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** nenhum
 - **Depende de:** `MiniMap (@xyflow/react)`, `useCanvasSurfaces (minimap)`, `shouldReduceMotion`, `useReducedMotionPreference`, `miniMapNode (CanvasView)`
 - **Sobreposição:** Panel do React Flow (bottom-right, mb-10), margem direita 19rem para não ficar sob o inspector (1rem com o puck, via :has()), opacidade 0,45 até hover/foco. Dentro do wrapper do React Flow (z 0): o dock (20) cobre o mapa se a margem falhar; o mapa cobre blocos no canto inferior direito.
-- **Testes:** `src/features/canvas/services/canvas-surfaces.test.ts`, `scripts/canvas-connection-performance.cjs`, `scripts/ui-render-performance.cjs`, `scripts/canvas-smoke.cjs` → `checarOclusaoDoFixture`, `scripts/canvas-smoke.cjs` → `checarMatrizVisual`
+- **Testes:** `scripts/canvas-smoke-moldura.cjs` → `checarMiniMap`, `src/features/canvas/services/canvas-surfaces.test.ts`, `scripts/canvas-connection-performance.cjs`, `scripts/ui-render-performance.cjs`, `scripts/canvas-smoke.cjs` → `checarOclusaoDoFixture`, `scripts/canvas-smoke.cjs` → `checarMatrizVisual`
 
 | Estado | Quando |
 | --- | --- |
@@ -338,10 +324,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 Sem controle próprio: as ações vêm de outros elementos.
 
-| Lacuna | Risco | Task |
-| --- | --- | --- |
-| Arrastar e dar zoom pelo Mini Map (pannable, zoomable) não é exercitado; o smoke só mede o retângulo. | baixo | `3ec91f95-497e-818f-b9f2-f9710605c303` |
-
 ### Inspector "Elementos"
 
 - **ID:** `chrome-elements-inspector` · **Dono:** `src/features/canvas/components/tools/TerminalsPanel.tsx`
@@ -349,7 +331,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `pty:write`, `canvas:save`
 - **Depende de:** `useCanvasSurfaces (reportInspectorWidth)`, `useTerminalSessions`, `useSessionSnapshot`, `terminals-panel-groups`, `terminals-panel-reorder`, `terminals-panel-navigation`, `terminals-panel-drafts`, `terminals-panel-collapse`
 - **Sobreposição:** Wrapper data-terminals-dock absolute (top-12, bottom = altura da statusbar, right-0) z-20, pointer-events-none; o inspector (w-72) e o puck (bottom-2.5 right-3, o mesmo lugar de antes na tela) religam os cliques. Abaixo da topbar (começa em 48 px) e até o topo da statusbar, que passa por baixo dele de ponta a ponta (right: 0); topbar e Mini Map reservam 18rem (1rem com o puck) via :has(). Publica a largura em reportInspectorWidth, que encolhe painel e gaveta.
-- **Testes:** `src/features/shared/ipc/ipc-failures-2.test.ts`, `scripts/canvas-smoke.cjs` → `checarDockRecolhidaSemBloqueio`, `scripts/canvas-smoke-onboarding.cjs` → `recolherInspector`, `scripts/canvas-smoke-links.cjs` → `focar`, `scripts/canvas-smoke-prompts.cjs` → `abrirTerminal`, `scripts/canvas-smoke.cjs` → `checarOclusaoDoFixture`, `src/features/canvas/components/tools/terminals-panel-collapse.test.ts`, `src/features/canvas/components/tools/terminals-panel-drafts.test.ts`, `src/features/canvas/components/tools/terminals-panel-groups.test.ts`, `src/features/canvas/components/tools/terminals-panel-navigation.test.ts`, `src/features/canvas/components/tools/terminals-panel-reorder.test.ts`, `src/features/canvas/services/canvas-surfaces.test.ts`
+- **Testes:** `scripts/canvas-smoke-moldura.cjs` → `checarInspectorElementos`, `src/features/shared/ipc/ipc-failures-2.test.ts`, `scripts/canvas-smoke.cjs` → `checarDockRecolhidaSemBloqueio`, `scripts/canvas-smoke-onboarding.cjs` → `recolherInspector`, `scripts/canvas-smoke-links.cjs` → `focar`, `scripts/canvas-smoke-prompts.cjs` → `abrirTerminal`, `scripts/canvas-smoke.cjs` → `checarOclusaoDoFixture`, `src/features/canvas/components/tools/terminals-panel-collapse.test.ts`, `src/features/canvas/components/tools/terminals-panel-drafts.test.ts`, `src/features/canvas/components/tools/terminals-panel-groups.test.ts`, `src/features/canvas/components/tools/terminals-panel-navigation.test.ts`, `src/features/canvas/components/tools/terminals-panel-reorder.test.ts`, `src/features/canvas/services/canvas-surfaces.test.ts`
 
 | Estado | Quando |
 | --- | --- |
@@ -372,7 +354,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | Com a gaveta aberta, a lista "Elementos" cobre os painéis Prompts e Skills. | médio | `3eb91f95-497e-814a-8b2c-e471e09f6ff3` |
-| Modo de envio em massa, reordenar pelo grip ou Alt+↑/↓ e Shift+↑/↓ global não são exercitados por teste de interface (só as funções puras). | baixo | `3ec91f95-497e-818f-b9f2-f9710605c303` |
 
 ### Camada de atmosfera do canvas
 
@@ -418,7 +399,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** nenhum
 - **Depende de:** `canvasSurfaceLayoutWarning`, `useCanvasSurfaces`
 - **Sobreposição:** pointer-events-none, absolute top-16, z-10, largura até a área livre − 32. Abaixo de painéis (20/30), sidebar (26) e topbar (18); o card do tutorial desvia dele ([data-canvas-layout-warning]).
-- **Testes:** `src/features/canvas/services/canvas-surfaces.test.ts`
+- **Testes:** `scripts/canvas-smoke-moldura.cjs` → `checarLimparComOverlay`, `src/features/canvas/services/canvas-surfaces.test.ts`
 
 | Estado | Quando |
 | --- | --- |
@@ -449,7 +430,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| O overlay não tem teste: nada confere que ele aparece em limpar, exportar ou importar nem que some ao terminar. | baixo | `3ec91f95-497e-818f-b9f2-f9710605c303` |
 | Medido (canvas-smoke-sobreposicoes.cjs → checarTecladoDuranteOperacaoEmAndamento): durante limpar ou importar o overlay só bloqueia o ponteiro e Ctrl/Cmd+K abria a Busca; corrigido com a guarda isBusy no atalho. Delete e Q não foram medidos (Q só vale com o canvas focado) e a gaveta do terminal segue fora do overlay. | baixo | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
 
 ### Persistência do canvas
@@ -1939,7 +1919,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `updates:install`
 - **Depende de:** `CanvasPanel`, `useUpdateStatus`, `useAccountContinuation`, `acknowledgeNodeNotifications (CanvasView)`, `canvas-notifications`, `notification-history-storage`, `notification-preferences`, `notification-category`
 - **Sobreposição:** CanvasPanel absolute z-20 (z-30 com foco dentro), top-16, left = sidebar + 1rem; a lista rola por dentro (max-h 38vh). Fica abaixo da sidebar (26) e acima de topbar e statusbar (18) e do aviso de layout (z-10, no mesmo canto: cobre o aviso). Disputa largura com gaveta e inspector por reportPanelWidth (splitHorizontalSpace). Marcar e remover do item só aparecem no hover ou com foco (opacity-0).
-- **Testes:** `src/features/shared/ipc/ipc-failures-2.test.ts`, `scripts/canvas-smoke.cjs` → `checarInteracoes`, `scripts/canvas-smoke-contas.cjs` → `checarPropostaENotificacao`, `scripts/canvas-smoke-contas.cjs` → `checarRedeSemItem`, `src/features/canvas/terminal/canvas-notifications.test.ts`, `src/features/canvas/terminal/notification-category.test.ts`, `src/features/canvas/services/notification-history-storage.test.ts`, `src/features/canvas/services/notification-preferences.test.ts`, `src/features/canvas/components/notification-time.test.ts`
+- **Testes:** `scripts/canvas-smoke-moldura.cjs` → `checarPainelDeNotificacoes`, `src/features/shared/ipc/ipc-failures-2.test.ts`, `scripts/canvas-smoke.cjs` → `checarInteracoes`, `scripts/canvas-smoke-contas.cjs` → `checarPropostaENotificacao`, `scripts/canvas-smoke-contas.cjs` → `checarRedeSemItem`, `src/features/canvas/terminal/canvas-notifications.test.ts`, `src/features/canvas/terminal/notification-category.test.ts`, `src/features/canvas/services/notification-history-storage.test.ts`, `src/features/canvas/services/notification-preferences.test.ts`, `src/features/canvas/components/notification-time.test.ts`
 
 | Estado | Quando |
 | --- | --- |
@@ -1967,7 +1947,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Nenhum botão interno do painel (marcar lida, remover, marcar todas, filtros, busca, limpar lidas, mudo, Reiniciar agora, Depois, Ver opções) é clicado por teste; o smoke só abre pelo sino, fecha com Esc e confere que o item da cadeia aparece. | médio | `3ec91f95-497e-818f-b9f2-f9710605c303` |
 | O realce do bloco com notificação não lida (notificationClassName em orderedNodes, CanvasView) não é conferido numa janela real nem no smoke. | baixo | `3e191f95-497e-81fd-b657-d7a63b5d17f0` |
 
 ### Tarefas Notion (ferramenta e conteúdo do bloco)
@@ -3185,7 +3164,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3ec91f95-497e-8103-b360-c1979d6992f4` — 9 lacunas
 - `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` — 15 lacunas
 - `3ec91f95-497e-8122-a08b-d26d4991acca` — 1 lacuna
-- `3ec91f95-497e-818f-b9f2-f9710605c303` — 14 lacunas
+- `3ec91f95-497e-818f-b9f2-f9710605c303` — 2 lacunas
 - `3ec91f95-497e-81ca-8319-ee657b0b6492` — 28 lacunas
 - `3ec91f95-497e-81e8-8f18-e2a529b0568e` — 11 lacunas
 - `3ec91f95-497e-81f7-8b12-c5c252d020c7` — 5 lacunas

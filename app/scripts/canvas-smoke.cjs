@@ -59,6 +59,7 @@ const { criarSessaoDePrompts } = require('./canvas-smoke-prompts.cjs')
 const { RECORDINGS_DIR, criarSessaoDaLeitura } = require('./canvas-smoke-leitura.cjs')
 const { criarSessaoDoNotion } = require('./canvas-smoke-notion.cjs')
 const { checarSobreposicoesDoInventario } = require('./canvas-smoke-sobreposicoes.cjs')
+const { executarChecksDaMoldura } = require('./canvas-smoke-moldura.cjs')
 const { checarFocoAoFecharPresetsDeAgente, checarNomesAcessiveisDaSidebar, checarTecladoDoMenuDeCor } = require('./canvas-smoke-teclado.cjs')
 const {
   criarRelatorio,
@@ -2173,6 +2174,15 @@ const SESSIONS = [
     summary: 'sobreposições do inventário (menus, painéis, diálogos e alças)',
     env: {},
     run: (page) => checarSobreposicoesDoInventario(page),
+  },
+  {
+    // Os controles da moldura do canvas que não tinham teste (task 3ec91f95-497e-818f-b9f2-f9710605c303): cada um é acionado e o
+    // efeito conferido em canvas-smoke-moldura.cjs. Perfil novo, sem variável extra.
+    letter: 'I',
+    failureName: 'canvas-smoke-failure-moldura',
+    summary: 'controles da moldura: notificações, Limpar, Criar, Organizar, atalhos, zoom, Mini Map, alça, topbar, ditado, barra de status e inspector Elementos',
+    env: {},
+    run: (page) => executarChecksDaMoldura(page),
   },
 ]
 

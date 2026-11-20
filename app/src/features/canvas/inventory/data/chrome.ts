@@ -114,6 +114,7 @@ export const notificationsTool: InventoryElement = {
     'notification-category',
   ],
   tests: [
+    { file: 'scripts/canvas-smoke-moldura.cjs', check: 'checarPainelDeNotificacoes' },
     { file: 'src/features/shared/ipc/ipc-failures-2.test.ts' },
     { file: 'scripts/canvas-smoke.cjs', check: 'checarInteracoes' },
     { file: 'scripts/canvas-smoke-contas.cjs', check: 'checarPropostaENotificacao' },
@@ -125,11 +126,6 @@ export const notificationsTool: InventoryElement = {
     { file: 'src/features/canvas/components/notification-time.test.ts' },
   ],
   gaps: [
-    {
-      what: 'Nenhum botão interno do painel (marcar lida, remover, marcar todas, filtros, busca, limpar lidas, mudo, Reiniciar agora, Depois, Ver opções) é clicado por teste; o smoke só abre pelo sino, fecha com Esc e confere que o item da cadeia aparece.',
-      risk: 'médio',
-      task: '3ec91f95-497e-818f-b9f2-f9710605c303',
-    },
     {
       what: 'O realce do bloco com notificação não lida (notificationClassName em orderedNodes, CanvasView) não é conferido numa janela real nem no smoke.',
       risk: 'baixo',
@@ -224,6 +220,7 @@ export const chromeSurfaces: InventoryElement[] = [
       'changeSidebarCollapsed (CanvasView)',
     ],
     tests: [
+      { file: 'scripts/canvas-smoke-moldura.cjs', check: 'checarTrilhoProjetosEConfiguracoes' },
       { file: 'scripts/canvas-smoke-onboarding.cjs', check: 'alternarSidebar' },
       { file: 'scripts/canvas-smoke-onboarding.cjs', check: 'conferirTecladoDoMenuAjuda' },
       { file: 'scripts/canvas-smoke.cjs', check: 'checarAuditoriaDeAcessibilidade' },
@@ -231,11 +228,6 @@ export const chromeSurfaces: InventoryElement[] = [
       { file: 'src/features/onboarding/onboarding-boundaries.test.ts' },
     ],
     gaps: [
-      {
-        what: 'Projetos e Configurações do trilho não são clicados por nenhum teste (Projetos só é medido como âncora do tutorial).',
-        risk: 'baixo',
-        task: '3ec91f95-497e-818f-b9f2-f9710605c303',
-      },
     ],
     overlap: 'nav.felixo-activity-rail dentro da aside da sidebar (z-26), coluna fixa de 52 px na borda esquerda, acima da topbar e da statusbar (18). Ajuda é o sexto botão do grupo de cima (≈ 271 de ≈ 289 px na altura mínima): um botão novo acima dela recorta o alvo. O menu Ajuda abre em portal (z 1000).',
   },
@@ -273,6 +265,8 @@ export const chromeSurfaces: InventoryElement[] = [
     ipc: ['canvas:clear'],
     dependsOn: ['useResizableSidebarWidth', 'useCanvasTransfer', 'useAppVersion', 'deveMostrarRodapeDeStatus', 'SidebarSection'],
     tests: [
+      { file: 'scripts/canvas-smoke-moldura.cjs', check: 'checarAlcaDaSidebar' },
+      { file: 'scripts/canvas-smoke-moldura.cjs', check: 'checarLimparComOverlay' },
       { file: 'src/features/canvas/components/focus-keyboard-a11y.test.ts' },
       { file: 'scripts/canvas-smoke-teclado.cjs', check: 'checarNomesAcessiveisDaSidebar' },
       { file: 'scripts/canvas-smoke.cjs', check: 'checarElementosAbertosEmViewportsCriticos' },
@@ -284,16 +278,6 @@ export const chromeSurfaces: InventoryElement[] = [
       { file: 'scripts/canvas-smoke-sobreposicoes.cjs', check: 'checarSidebarExpandidaEmJanelaEstreita' },
     ],
     gaps: [
-      {
-        what: '"Limpar" (destrutivo, com confirm e alert nativos) não tem teste de interface; o smoke só garante que o Tab do tutorial não passa por ele.',
-        risk: 'médio',
-        task: '3ec91f95-497e-818f-b9f2-f9710605c303',
-      },
-      {
-        what: 'A alça de largura da sidebar (arrasto, setas, Shift+setas, Home e duplo clique; role="separator") não é exercitada por teste.',
-        risk: 'baixo',
-        task: '3ec91f95-497e-818f-b9f2-f9710605c303',
-      },
       {
         what: 'A sidebar expandida não recolhe sozinha em janelas estreitas: medido em 320 px, ela deixa 32 px de canvas (faixa mínima de 160 px), e a barra superior segue dentro da janela (canvas-smoke-sobreposicoes.cjs → checarSidebarExpandidaEmJanelaEstreita). Defeito conhecido: recolher sozinha é decisão do Felipe.',
         risk: 'médio',
@@ -364,6 +348,7 @@ export const chromeSurfaces: InventoryElement[] = [
     ipc: ['files:pick-image', 'text-file:pick', 'canvas-file:write', 'canvas:save'],
     dependsOn: ['NamedCreateButton', 'UrlCreateButton', 'useWebviewProfiles', 'explainUrlInput', 'addNode (CanvasView)', 'findFreeNodePosition'],
     tests: [
+      { file: 'scripts/canvas-smoke-moldura.cjs', check: 'checarCriarBlocos' },
       { file: 'src/features/shared/ipc/ipc-failures-2.test.ts' },
       { file: 'scripts/canvas-smoke.cjs', check: 'checarInteracoes' },
       { file: 'src/features/canvas/services/url-utils.test.ts' },
@@ -372,11 +357,6 @@ export const chromeSurfaces: InventoryElement[] = [
       { file: 'electron/services/canvas-files-ipc-handlers.test.cjs' },
     ],
     gaps: [
-      {
-        what: 'Novo bloco, Grupo, Abrir imagem, "Abrir arquivo existente…" e uma Página Web válida não são criados por nenhum teste de interface; o smoke só confere a recusa de javascript:.',
-        risk: 'médio',
-        task: '3ec91f95-497e-818f-b9f2-f9710605c303',
-      },
       {
         what: 'Fechar os popovers por clique fora devolve o foco ao gatilho mesmo quando a pessoa clicou em outro controle.',
         risk: 'baixo',
@@ -445,17 +425,13 @@ export const chromeSurfaces: InventoryElement[] = [
     ipc: ['canvas:save'],
     dependsOn: ['OrganizeButton', 'arrangeNodesAsMatrix', 'fitCanvasViewSafely (CanvasView)', 'fitBoundsSafely (CanvasView)', 'usePerformanceMode'],
     tests: [
+      { file: 'scripts/canvas-smoke-moldura.cjs', check: 'checarOrganizarEEnquadrar' },
       { file: 'src/features/canvas/services/canvas-matrix-layout.test.ts' },
       { file: 'src/features/canvas/services/canvas-interaction-geometry.test.ts' },
       { file: 'scripts/canvas-smoke-onboarding.cjs', check: 'conferirTeclasDoCanvasSobAPergunta' },
       { file: 'scripts/canvas-smoke.cjs', check: 'checarDimensoesDeAcessibilidadeAdicionais' },
     ],
     gaps: [
-      {
-        what: 'Organizar (os três modos), Selecionar/Mover e o Enquadrar da sidebar não são clicados por nenhum teste; só o algoritmo da matriz e a geometria da área útil têm teste unitário.',
-        risk: 'médio',
-        task: '3ec91f95-497e-818f-b9f2-f9710605c303',
-      },
       {
         what: 'Fechar o grupo de modos por clique fora devolve o foco ao botão mesmo quando a pessoa clicou em outro controle.',
         risk: 'baixo',
@@ -604,17 +580,13 @@ export const chromeSurfaces: InventoryElement[] = [
     ipc: [],
     dependsOn: ['setActiveTool (CanvasView)'],
     tests: [
+      { file: 'scripts/canvas-smoke-moldura.cjs', check: 'checarCampoDeComandoDaTopbar' },
       { file: 'scripts/canvas-smoke.cjs', check: 'checarLandmarksVisiveis' },
       { file: 'scripts/canvas-smoke.cjs', check: 'checarOclusaoDoFixture' },
       { file: 'scripts/canvas-smoke.cjs', check: 'checarMatrizVisual' },
       { file: 'scripts/canvas-smoke-onboarding.cjs', check: 'sa3' },
     ],
     gaps: [
-      {
-        what: 'O clique no campo de comando da barra não é exercitado (o smoke abre Buscar pelo trilho e por Ctrl+K).',
-        risk: 'baixo',
-        task: '3ec91f95-497e-818f-b9f2-f9710605c303',
-      },
     ],
     overlap: 'header absolute top 0, largura total (left/right 0 !important), z-18 e overflow: hidden (index.css:3216): fica sob a sidebar (26) à esquerda e recorta tudo que tentar sair dela para baixo (ver o aviso do ditado). pointer-events só nos filhos.',
   },
@@ -677,6 +649,7 @@ export const chromeSurfaces: InventoryElement[] = [
     ipc: ['speech:get-config', 'speech:microphone-status', 'speech:request-microphone', 'speech:transcribe', 'pty:write'],
     dependsOn: ['useDictation', 'useDictationShortcut', 'createVoiceRecorder', 'useTerminalSessions (typeText)'],
     tests: [
+      { file: 'scripts/canvas-smoke-moldura.cjs', check: 'checarBotaoDeDitado' },
       { file: 'src/features/shared/ipc/ipc-failures.test.ts' },
       { file: 'src/features/canvas/services/dictation.test.ts' },
       { file: 'src/features/canvas/services/voice-recorder.test.ts' },
@@ -689,7 +662,7 @@ export const chromeSurfaces: InventoryElement[] = [
         task: '3ec91f95-497e-8103-b360-c1979d6992f4',
       },
       {
-        what: 'Nenhum teste de interface do ditado (gravar, transcrever, descartar, fechar o aviso, atalho global).',
+        what: 'O clique no botão é exercitado (checarBotaoDeDitado: o estado muda na tela); gravar, transcrever, descartar e o atalho global dependem de microfone e de chave de transcrição, que o smoke não tem: seguem sem teste de interface.',
         risk: 'baixo',
         task: '3ec91f95-497e-818f-b9f2-f9710605c303',
       },
@@ -720,6 +693,7 @@ export const chromeSurfaces: InventoryElement[] = [
     ipc: ['canvas:delete', 'canvas:delete-edge'],
     dependsOn: ['summarizeCanvasSelection', 'removeSelection (CanvasView)'],
     tests: [
+      { file: 'scripts/canvas-smoke-moldura.cjs', check: 'checarRemoverDaBarraDeStatus' },
       { file: 'src/features/canvas/components/CanvasStatusBar.test.ts' },
       { file: 'src/features/canvas/services/canvas-selection.test.ts' },
       { file: 'scripts/canvas-smoke.cjs', check: 'checarMontagem' },
@@ -731,11 +705,6 @@ export const chromeSurfaces: InventoryElement[] = [
         what: 'Abaixo de ~740 px de janela com a gaveta aberta, ou com a gaveta maximizada, a área do canvas some e a barra fica sob a sidebar (a sobreposição de 320 px já conhecida).',
         risk: 'baixo',
         task: '3ed91f95-497e-8114-a246-f72c73ae50c4',
-      },
-      {
-        what: 'O clique em Remover não é exercitado: o teste só renderiza o botão (rótulo, atalho e desabilitado).',
-        risk: 'baixo',
-        task: '3ec91f95-497e-818f-b9f2-f9710605c303',
       },
     ],
     overlap: 'footer absolute bottom 0, left var(--felixo-sidebar-width) (3.25rem recolhida), right 0, z-18, pointer-events só no botão, overflow hidden e container felixo-statusbar (cortes por largura em index.css). O inspector termina no topo dela (não há sobreposição); fica sob sidebar (26); a pílula de zoom fica logo acima (margem statusbar + 0,5rem).',
@@ -781,6 +750,7 @@ export const chromeSurfaces: InventoryElement[] = [
     ipc: [],
     dependsOn: ['useReactFlow', 'Panel (@xyflow/react)', 'handleCanvasMove (CanvasView)'],
     tests: [
+      { file: 'scripts/canvas-smoke-moldura.cjs', check: 'checarPilulaDeZoom' },
       { file: 'scripts/canvas-smoke.cjs', check: 'checarZoomVisual' },
       { file: 'scripts/canvas-smoke.cjs', check: 'checarElementosAbertosEmViewportsCriticos' },
       { file: 'scripts/canvas-smoke-sobreposicoes.cjs', check: 'checarPainelDeFerramentaSobPilulaDeZoom' },
@@ -790,11 +760,6 @@ export const chromeSurfaces: InventoryElement[] = [
         what: 'Enquadrar da pílula usa fitView direto (CanvasZoomPill.tsx:54), sem a área útil que o Enquadrar da sidebar usa (fitCanvasViewSafely, CanvasView.tsx:1196): o smoke de links registra que ele deixa blocos sob a barra lateral em 1280×800.',
         risk: 'médio',
         task: '3ec91f95-497e-8103-b360-c1979d6992f4',
-      },
-      {
-        what: 'Aumentar zoom e o cadeado não são exercitados por teste.',
-        risk: 'baixo',
-        task: '3ec91f95-497e-818f-b9f2-f9710605c303',
       },
     ],
     overlap: 'Panel do React Flow (bottom-left), margem esquerda var(--felixo-sidebar-width) + 1,25rem (4,5rem recolhida) e inferior statusbar + 0,5rem. Mora dentro do wrapper do React Flow, que tem z-index 0: fica abaixo de toda a moldura (statusbar 18, dock e painéis 20/30, sidebar 26).',
@@ -829,6 +794,7 @@ export const chromeSurfaces: InventoryElement[] = [
       'releaseRemovedCanvasNodes',
     ],
     tests: [
+      { file: 'scripts/canvas-smoke-moldura.cjs', check: 'checarAtalhosDoCanvas' },
       { file: 'scripts/canvas-smoke.cjs', check: 'checarMontagem' },
       { file: 'scripts/canvas-smoke.cjs', check: 'checarNavegacaoPorTab' },
       { file: 'scripts/canvas-smoke.cjs', check: 'checarOclusaoDoFixture' },
@@ -853,7 +819,7 @@ export const chromeSurfaces: InventoryElement[] = [
         task: '3ec91f95-497e-8103-b360-c1979d6992f4',
       },
       {
-        what: 'Os atalhos do canvas só têm teste negativo (Delete, Backspace e Q não agem sob um diálogo): apagar com Delete/Backspace, alternar com Q, Shift para somar à seleção e soltar um bloco num grupo não são exercitados.',
+        what: 'Delete, Backspace, Q e Shift+clique são exercitados (checarAtalhosDoCanvas); soltar um bloco num grupo (arrasto de um bloco para dentro dele) segue sem teste de interface: o encaixe só tem teste unitário.',
         risk: 'médio',
         task: '3ec91f95-497e-818f-b9f2-f9710605c303',
       },
@@ -890,6 +856,7 @@ export const chromeSurfaces: InventoryElement[] = [
     ipc: [],
     dependsOn: ['MiniMap (@xyflow/react)', 'useCanvasSurfaces (minimap)', 'shouldReduceMotion', 'useReducedMotionPreference', 'miniMapNode (CanvasView)'],
     tests: [
+      { file: 'scripts/canvas-smoke-moldura.cjs', check: 'checarMiniMap' },
       { file: 'src/features/canvas/services/canvas-surfaces.test.ts' },
       { file: 'scripts/canvas-connection-performance.cjs' },
       { file: 'scripts/ui-render-performance.cjs' },
@@ -897,11 +864,6 @@ export const chromeSurfaces: InventoryElement[] = [
       { file: 'scripts/canvas-smoke.cjs', check: 'checarMatrizVisual' },
     ],
     gaps: [
-      {
-        what: 'Arrastar e dar zoom pelo Mini Map (pannable, zoomable) não é exercitado; o smoke só mede o retângulo.',
-        risk: 'baixo',
-        task: '3ec91f95-497e-818f-b9f2-f9710605c303',
-      },
     ],
     overlap: 'Panel do React Flow (bottom-right, mb-10), margem direita 19rem para não ficar sob o inspector (1rem com o puck, via :has()), opacidade 0,45 até hover/foco. Dentro do wrapper do React Flow (z 0): o dock (20) cobre o mapa se a margem falhar; o mapa cobre blocos no canto inferior direito.',
   },
@@ -970,6 +932,7 @@ export const chromeSurfaces: InventoryElement[] = [
     ipc: ['pty:write', 'canvas:save'],
     dependsOn: ['useCanvasSurfaces (reportInspectorWidth)', 'useTerminalSessions', 'useSessionSnapshot', 'terminals-panel-groups', 'terminals-panel-reorder', 'terminals-panel-navigation', 'terminals-panel-drafts', 'terminals-panel-collapse'],
     tests: [
+      { file: 'scripts/canvas-smoke-moldura.cjs', check: 'checarInspectorElementos' },
       { file: 'src/features/shared/ipc/ipc-failures-2.test.ts' },
       { file: 'scripts/canvas-smoke.cjs', check: 'checarDockRecolhidaSemBloqueio' },
       { file: 'scripts/canvas-smoke-onboarding.cjs', check: 'recolherInspector' },
@@ -988,11 +951,6 @@ export const chromeSurfaces: InventoryElement[] = [
         what: 'Com a gaveta aberta, a lista "Elementos" cobre os painéis Prompts e Skills.',
         risk: 'médio',
         task: '3eb91f95-497e-814a-8b2c-e471e09f6ff3',
-      },
-      {
-        what: 'Modo de envio em massa, reordenar pelo grip ou Alt+↑/↓ e Shift+↑/↓ global não são exercitados por teste de interface (só as funções puras).',
-        risk: 'baixo',
-        task: '3ec91f95-497e-818f-b9f2-f9710605c303',
       },
     ],
     overlap: 'Wrapper data-terminals-dock absolute (top-12, bottom = altura da statusbar, right-0) z-20, pointer-events-none; o inspector (w-72) e o puck (bottom-2.5 right-3, o mesmo lugar de antes na tela) religam os cliques. Abaixo da topbar (começa em 48 px) e até o topo da statusbar, que passa por baixo dele de ponta a ponta (right: 0); topbar e Mini Map reservam 18rem (1rem com o puck) via :has(). Publica a largura em reportInspectorWidth, que encolhe painel e gaveta.',
@@ -1059,7 +1017,7 @@ export const chromeSurfaces: InventoryElement[] = [
     persistence: ['nenhuma'],
     ipc: [],
     dependsOn: ['canvasSurfaceLayoutWarning', 'useCanvasSurfaces'],
-    tests: [{ file: 'src/features/canvas/services/canvas-surfaces.test.ts' }],
+    tests: [{ file: 'scripts/canvas-smoke-moldura.cjs', check: 'checarLimparComOverlay' }, { file: 'src/features/canvas/services/canvas-surfaces.test.ts' }],
     gaps: [
       {
         what: 'O aviso (z-10, top-16, left = sidebar + 16, CanvasView.tsx:2982) nasce exatamente sob o painel de ferramenta (z-20, top-16, left = sidebar + 1rem, CanvasPanel.tsx:165); com o painel expandido, a causa mais comum do aviso, ele fica coberto e não é visto.',
@@ -1084,11 +1042,6 @@ export const chromeSurfaces: InventoryElement[] = [
     dependsOn: ['useCanvasTransfer'],
     tests: [{ file: 'scripts/canvas-smoke-sobreposicoes.cjs', check: 'checarTecladoDuranteOperacaoEmAndamento' }, ],
     gaps: [
-      {
-        what: 'O overlay não tem teste: nada confere que ele aparece em limpar, exportar ou importar nem que some ao terminar.',
-        risk: 'baixo',
-        task: '3ec91f95-497e-818f-b9f2-f9710605c303',
-      },
       {
         what: 'Medido (canvas-smoke-sobreposicoes.cjs → checarTecladoDuranteOperacaoEmAndamento): durante limpar ou importar o overlay só bloqueia o ponteiro e Ctrl/Cmd+K abria a Busca; corrigido com a guarda isBusy no atalho. Delete e Q não foram medidos (Q só vale com o canvas focado) e a gaveta do terminal segue fora do overlay.',
         risk: 'baixo',
