@@ -491,11 +491,14 @@ function CanvasInner({
   // Atalho de editor para a busca global do canvas. Captura antes do xterm:
   // o terminal pode parar eventos no próprio textarea, mas Ctrl/Cmd+K deve
   // abrir a busca independentemente de onde o foco esteja no workspace.
+  // Durante limpar/importar o overlay só bloqueia o ponteiro: o atalho também espera (ref, porque `isBusy` vem depois).
+  const isBusyRef = useRef(false)
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'k') {
         return
       }
+      if (isBusyRef.current) return
       event.preventDefault()
       event.stopPropagation()
       openTool('search')
@@ -775,6 +778,9 @@ function CanvasInner({
       setActiveTool(null)
     },
   })
+  useEffect(() => {
+    isBusyRef.current = isBusy
+  }, [isBusy])
   const {
     applySavedQualityStandard,
     availableSkillsRef,

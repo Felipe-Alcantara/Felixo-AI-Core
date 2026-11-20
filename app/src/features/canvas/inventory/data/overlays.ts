@@ -421,6 +421,7 @@ export const overlaySurfaces: InventoryElement[] = [
     ipc: ['clis:get-setup-status', 'clis:setup-status', 'clis:retry-setup', 'clis:diagnose'],
     dependsOn: ['useCliSetupStatus', 'useCliDiagnosis', 'presentCliSetupStatus', 'cliSetupNoticeKey', 'CliDiagnosisList', 'CliDiagnosisFooter'],
     tests: [
+      { file: 'scripts/canvas-smoke-sobreposicoes.cjs', check: 'checarGitEAvisoDeClisComGavetaAberta' },
       { file: 'scripts/canvas-smoke-sobreposicoes.cjs', check: 'checarAvisosFlutuantesJuntos' },
       { file: 'src/features/setup/cli-setup-presentation.test.ts' },
       { file: 'src/features/setup/cli-diagnosis.test.ts' },
@@ -450,7 +451,7 @@ export const overlaySurfaces: InventoryElement[] = [
         task: '3ec91f95-497e-8112-82f9-fd1b86e3ec7d',
       },
       {
-        what: 'Medido: em 768 e 1280 px o aviso cobre 32×98 px do Mini Map (checarAvisosFlutuantesJuntos). A gaveta do terminal aberta junto do aviso não foi medida.',
+        what: 'Medido: em 768 e 1280 px o aviso cobre 32×98 px do Mini Map (checarAvisosFlutuantesJuntos) e, com a gaveta do terminal aberta, cobre 320×122 px do canto inferior direito dela (checarGitEAvisoDeClisComGavetaAberta); o botão de dispensar segue alcançável. Defeito conhecido.',
         risk: 'médio',
         task: '3ec91f95-497e-8112-82f9-fd1b86e3ec7d',
       },
@@ -795,7 +796,7 @@ export const overlaySurfaces: InventoryElement[] = [
         task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
       },
       {
-        what: 'Medido: a sugestão do Modo Performance (22rem, embaixo no centro, z 50) convive com o card do tour (SB1) e foi medida contra o aviso de CLIs e o de link (checarAvisosFlutuantesJuntos: os dois a cobrem em janelas estreitas). A barra de status (18) e a dock (20) no centro de baixo seguem sem medida; a volta da placa de vídeo depende de estado de máquina.',
+        what: 'Medido: a sugestão do Modo Performance (22rem, embaixo no centro, z 50) convive com o card do tour (SB1) e foi medida contra o aviso de CLIs e o de link (checarAvisosFlutuantesJuntos: os dois a cobrem em janelas estreitas). Cobria 14 px da barra de status nas três larguras; corrigido subindo os avisos de baixo para bottom-10. A dock (20) no centro de baixo segue sem medida, e a volta da placa de vídeo depende de estado de máquina.',
         risk: 'baixo',
         task: '3ec91f95-497e-8112-82f9-fd1b86e3ec7d',
       },

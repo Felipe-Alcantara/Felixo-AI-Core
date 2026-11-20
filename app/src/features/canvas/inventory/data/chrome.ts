@@ -1105,7 +1105,7 @@ export const chromeSurfaces: InventoryElement[] = [
     persistence: ['nenhuma'],
     ipc: [],
     dependsOn: ['useCanvasTransfer'],
-    tests: [],
+    tests: [{ file: 'scripts/canvas-smoke-sobreposicoes.cjs', check: 'checarTecladoDuranteOperacaoEmAndamento' }, ],
     gaps: [
       {
         what: 'O overlay não tem teste: nada confere que ele aparece em limpar, exportar ou importar nem que some ao terminar.',
@@ -1113,7 +1113,7 @@ export const chromeSurfaces: InventoryElement[] = [
         task: '3ec91f95-497e-818f-b9f2-f9710605c303',
       },
       {
-        what: 'O overlay só bloqueia o ponteiro: o teclado continua chegando ao canvas (Delete, Ctrl/Cmd+K, Q) durante limpar ou importar, e a gaveta do terminal fica fora dele.',
+        what: 'Medido (canvas-smoke-sobreposicoes.cjs → checarTecladoDuranteOperacaoEmAndamento): durante limpar ou importar o overlay só bloqueia o ponteiro e Ctrl/Cmd+K abria a Busca; corrigido com a guarda isBusy no atalho. Delete e Q não foram medidos (Q só vale com o canvas focado) e a gaveta do terminal segue fora do overlay.',
         risk: 'baixo',
         task: '3ec91f95-497e-8112-82f9-fd1b86e3ec7d',
       },

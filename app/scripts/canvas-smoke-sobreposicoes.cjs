@@ -13,11 +13,10 @@
  * Os cliques são `dispatchEvent`: a janela escondida (sem RAF) faz a checagem de
  * estabilidade do Playwright expirar. O que se mede é a superfície aberta, não o clique.
  *
- * Fora daqui, como lacuna no inventário: os avisos de hardware e o card de instalação das CLIs
- * (só aparecem com estado de máquina que esta sessão não tem: Modo Performance sugerido com CPU
- * fraca, recuperação de GPU, instalação em curso ou falha); o aviso "link não abriu" junto do tour
- * e do NoticeToast; Git com a gaveta do terminal; o QA Logger; as teclas durante a sobreposição de
- * operação; o pedido de navegador do agente; o bloco de terminal mínimo; e o popover do Excalidraw.
+ * Os avisos de hardware, de instalação das CLIs e de link usam estado forjado pelo processo principal
+ * (`devtools:main-eval`: perfil de hardware, `clis:setup-status`, `external-links:open-failed`). Fora daqui,
+ * como lacuna no inventário: a volta automática da placa de vídeo (estado de máquina), o card do tutorial
+ * junto do aviso de link, e a barra de status e a dock sob a sugestão do Modo Performance.
  */
 
 const { SUBPIXEL, intersects } = require('./canvas-smoke-onboarding-geometry.cjs')
@@ -55,6 +54,16 @@ const DEFEITOS_CONHECIDOS = [
   { risco: 'avisos-flutuantes-juntos', tipo: 'avisos-se-cobrem', task: TASK_SOBREPOSICOES },
   { risco: 'avisos-flutuantes-juntos', tipo: 'botao-de-aviso-coberto', task: TASK_SOBREPOSICOES },
   { risco: 'avisos-flutuantes-juntos', tipo: 'aviso-de-clis-cobre-o-minimapa', task: TASK_SOBREPOSICOES },
+  // Medido em 20/11/2026 (320 a 1280 px, janela escondida): o bloco de terminal mínimo corta a prévia e as ações da retomada, o menu do
+  // Excalidraw sai do cartão de 360x280, o Git perde largura com a gaveta aberta (e cai abaixo do piso de 260 px) e o aviso de CLIs cobre a gaveta.
+  { risco: 'terminal-minimo-com-retomada', tipo: 'previa-sem-altura', task: TASK_SOBREPOSICOES },
+  { risco: 'terminal-minimo-com-retomada', tipo: 'acoes-cortadas-pela-borda-do-cartao', task: TASK_SOBREPOSICOES },
+  { risco: 'excalidraw-popover-em-bloco-pequeno', tipo: 'popover-cortado-pelo-cartao', task: TASK_SOBREPOSICOES },
+  { risco: 'excalidraw-popover-em-bloco-pequeno', tipo: 'botao-do-editor-fora-do-cartao', task: TASK_SOBREPOSICOES },
+  { risco: 'git-com-gaveta-do-terminal', tipo: 'git-e-gaveta-se-cobrem', task: TASK_SOBREPOSICOES },
+  { risco: 'git-com-gaveta-do-terminal', tipo: 'git-abaixo-do-piso-de-largura', task: TASK_SOBREPOSICOES },
+  { risco: 'git-com-gaveta-do-terminal', tipo: 'git-encolhe-com-a-gaveta', task: TASK_SOBREPOSICOES },
+  { risco: 'aviso-de-clis-com-gaveta', tipo: 'aviso-de-clis-cobre-a-gaveta', task: TASK_SOBREPOSICOES },
   // Medido só no CI Linux (18/11/2026, 768x900 e 1280x800): o painel de ferramenta cobre de 5 a 32 px da pílula de
   // zoom e a área muda a cada rodada. No Windows (medição local) e no macOS do CI não colide. Falta reproduzir no Linux
   // para saber se é defeito do app ou da altura máxima do painel sob xvfb: ver a pendência aberta no Notion.
@@ -731,7 +740,10 @@ async function checarAvisosFlutuantesJuntos(page) {
         },
         [SELETOR_AVISO_FIXO, SELETOR_AVISO_DE_LINK],
       )
+      medidas.barraDeStatus = (await lerCaixas(page, { barra: '.felixo-canvas-statusbar' })).barra
       const problemas = []
+      const sobBarra = sobreposicao(medidas.performance, medidas.barraDeStatus)
+      if (sobBarra) problemas.push({ tipo: 'aviso-cobre-a-barra-de-status', area: sobBarra })
       for (const nome of ['performance', 'clis', 'link']) {
         for (const corte of cortesDaJanela(medidas[nome], caso)) problemas.push({ ...corte, aviso: nome })
       }
@@ -792,6 +804,298 @@ async function checarPedidoDeNavegadorDoAgente(page) {
   return resultados
 }
 
+
+/** Abre uma ferramenta pelo rótulo no menu "Ferramentas" da sidebar (precisa de 768 px ou mais). */
+async function abrirFerramentaPorRotulo(page, rotulo) {
+  await garantirSidebarAberta(page)
+  await abrirSecaoFerramentas(page)
+  const botao = page.locator('[aria-label="Ferramentas auxiliares"] button').filter({ hasText: rotulo }).first()
+  await botao.dispatchEvent('click')
+}
+
+/** Grava um bloco temporário (fora da fixture), recarrega e devolve a função que o apaga. */
+async function adicionarBlocoTemporario(page, no) {
+  const salvo = await page.evaluate((n) => window.felixo.canvas.save(n), no)
+  if (!salvo?.ok) throw new Error(salvo?.message || `persistencia falhou: ${no.id}`)
+  await page.reload()
+  await page.waitForSelector('.felixo-zoom-pill', { timeout: HYDRATION_TIMEOUT_MS })
+  await page.waitForSelector(`[data-id="${no.id}"]`, { timeout: HYDRATION_TIMEOUT_MS })
+  return () => page.evaluate((id) => window.felixo.canvas.delete(id), no.id).catch(() => {})
+}
+
+function naoMedido(risco, caso, motivo) {
+  return { risco, caso, rotulo: `${caso.width}x${caso.height}`, medido: false, medidas: {}, problemas: [], motivo }
+}
+
+/**
+ * Risco: `terminal.ts` → no bloco de terminal mínimo (200×120) a faixa de retomada, as ações e a faixa de atividade
+ * empurram a prévia para fora do cartão `overflow-hidden`. Grava um bloco com a retomada pendente no tamanho mínimo
+ * (o registro da conversa é ilegível de propósito: o app mostra a faixa e segura o bloco sem processo) e mede a
+ * altura que sobra à prévia e o que passa da borda de baixo.
+ */
+async function checarTerminalMinimoComRetomada(page) {
+  const caso = { width: 1280, height: 800 }
+  await definirJanela(page, caso)
+  const no = {
+    id: 'sob-terminal-min',
+    type: 'terminal',
+    position: { x: 0, y: -500 },
+    width: 200,
+    height: 120,
+    data: {
+      label: 'Agente mínimo',
+      command: 'claude',
+      args: [],
+      cwd: 'C:\\temp',
+      launchMode: 'agent',
+      resumeAgentSession: true,
+      initialTextReady: false,
+      agentSession: { provider: 'claude', sessionId: '11111111-1111-4111-8111-111111111111', cwd: 'C:\\temp', command: 'claude' },
+    },
+  }
+  const apagar = await adicionarBlocoTemporario(page, no)
+  try {
+    const apareceu = await page
+      .waitForFunction(() => /Abrir conversa nova/.test(document.querySelector('[data-id="sob-terminal-min"]')?.innerText ?? ''), null, { timeout: INTERACTION_TIMEOUT_MS * 2, polling: POLLING_MS })
+      .then(() => true, () => false)
+    if (!apareceu) return [naoMedido('terminal-minimo-com-retomada', caso, 'a faixa de retomada não apareceu no bloco mínimo')]
+    const medidas = await page.evaluate(() => {
+      const bloco = document.querySelector('[data-id="sob-terminal-min"]')
+      const nr = bloco.getBoundingClientRect()
+      const saida = bloco.querySelector('.felixo-node-preview .font-mono')
+      const rel = (r) => ({ top: Math.round(r.top - nr.top), bottom: Math.round(r.bottom - nr.top) })
+      const cortados = [...bloco.querySelectorAll('button')]
+        .map((botao) => ({ rotulo: (botao.textContent ?? '').trim().slice(0, 30), r: botao.getBoundingClientRect() }))
+        .filter((item) => item.rotulo && item.r.width > 0 && item.r.bottom > nr.bottom + 1)
+        .map((item) => ({ rotulo: item.rotulo, ...rel(item.r) }))
+      return { bloco: { altura: Math.round(nr.height), largura: Math.round(nr.width) }, saida: saida ? { altura: Math.round(saida.getBoundingClientRect().height) } : null, cortados }
+    })
+    const problemas = []
+    if (!medidas.saida || medidas.saida.altura < 12) problemas.push({ tipo: 'previa-sem-altura', altura: medidas.saida?.altura ?? null })
+    if (medidas.cortados.length) problemas.push({ tipo: 'acoes-cortadas-pela-borda-do-cartao', rotulos: medidas.cortados.map((item) => item.rotulo) })
+    return [resultado('terminal-minimo-com-retomada', caso, medidas, problemas)]
+  } finally {
+    await apagar()
+  }
+}
+
+/**
+ * Risco: `nodes.ts` → popovers e menus do Excalidraw ficam presos ao cartão `overflow-hidden`: num bloco pequeno
+ * (360×280, o mínimo) são cortados. Abre o menu "More tools" e mede o que fica fora do cartão e se o ponto
+ * fora do cartão ainda alcança o menu.
+ */
+async function checarPopoverDoExcalidrawEmBlocoPequeno(page) {
+  const caso = { width: 1280, height: 800 }
+  await definirJanela(page, caso)
+  const no = { id: 'sob-excalidraw-min', type: 'excalidrawDrawing', position: { x: 0, y: -700 }, width: 360, height: 280, data: { label: 'Excalidraw mínimo' } }
+  const apagar = await adicionarBlocoTemporario(page, no)
+  try {
+    const medidas = await page.evaluate(async () => {
+      const bloco = document.querySelector('[data-id="sob-excalidraw-min"]')
+      const esperar = async (cond) => {
+        for (let i = 0; i < 100; i += 1) {
+          const valor = cond()
+          if (valor) return valor
+          await new Promise((resolve) => setTimeout(resolve, 100))
+        }
+        return null
+      }
+      const gatilho = await esperar(() => [...bloco.querySelectorAll('button')].find((b) => /More tools/i.test(b.getAttribute('aria-label') || b.title || '')))
+      if (!gatilho) return null
+      gatilho.click()
+      const menu = await esperar(() => bloco.querySelector('.dropdown-menu-container'))
+      if (!menu) return { semMenu: true }
+      const caixa = (r) => ({ left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height })
+      const nr = bloco.getBoundingClientRect()
+      const mr = menu.getBoundingClientRect()
+      const gr = gatilho.getBoundingClientRect()
+      // Um ponto do menu que está fora do cartão: se o clique o alcança, o menu aparece; se não, foi cortado.
+      const fora = mr.bottom > nr.bottom + 8 ? { x: (mr.left + mr.right) / 2, y: nr.bottom + 6 } : mr.right > nr.right + 8 ? { x: nr.right + 6, y: (mr.top + mr.bottom) / 2 } : null
+      const hit = fora ? document.elementFromPoint(fora.x, fora.y) : null
+      return { bloco: caixa(nr), menu: caixa(mr), gatilho: caixa(gr), pontoForaAlcancaOMenu: fora ? Boolean(hit) && menu.contains(hit) : null }
+    })
+    if (!medidas) return [naoMedido('excalidraw-popover-em-bloco-pequeno', caso, 'o botão "More tools" do Excalidraw não apareceu')]
+    if (medidas.semMenu) return [naoMedido('excalidraw-popover-em-bloco-pequeno', caso, 'o menu "More tools" não abriu')]
+    const problemas = []
+    const relativo = (rect) => ({ left: rect.left - medidas.bloco.left, top: rect.top - medidas.bloco.top, right: rect.right - medidas.bloco.left, bottom: rect.bottom - medidas.bloco.top })
+    const area = { width: medidas.bloco.width, height: medidas.bloco.height }
+    for (const corte of cortesDaJanela(relativo(medidas.menu), area)) {
+      if (medidas.pontoForaAlcancaOMenu === false) problemas.push({ ...corte, tipo: 'popover-cortado-pelo-cartao' })
+    }
+    for (const corte of cortesDaJanela(relativo(medidas.gatilho), area)) problemas.push({ ...corte, tipo: 'botao-do-editor-fora-do-cartao' })
+    return [resultado('excalidraw-popover-em-bloco-pequeno', caso, medidas, problemas)]
+  } finally {
+    await apagar()
+  }
+}
+
+/**
+ * Risco: `tools-agents.ts` → o QA Logger chama `scrollIntoView({ block: "end" })` a cada entrada, que rola todos os
+ * ancestrais roláveis: com o painel passando da janela pequena pode deslocar a moldura do canvas. Abre o painel,
+ * grava 60 entradas e mede se a barra superior e a página mudaram de lugar.
+ */
+async function checarQaLoggerEmJanelaPequena(page) {
+  const resultados = []
+  for (const caso of [{ width: 768, height: 420 }, { width: 1280, height: 400 }]) {
+    await page.reload()
+    await page.waitForSelector('.felixo-zoom-pill', { timeout: HYDRATION_TIMEOUT_MS })
+    await definirJanela(page, caso)
+    await abrirFerramentaPorRotulo(page, 'QA Logger')
+    const painel = '[data-felixo-canvas-panel="qa-logger"], [data-felixo-canvas-panel="qaLogger"]'
+    const abriu = await page.locator(painel).first().waitFor({ state: 'visible', timeout: INTERACTION_TIMEOUT_MS }).then(() => true, () => false)
+    if (!abriu) {
+      resultados.push(naoMedido('qa-logger-rolagem', caso, 'o painel do QA Logger não abriu'))
+      continue
+    }
+    const antes = await lerCaixas(page, { topbar: '[data-felixo-region="topbar"]', canvas: '[data-felixo-region="canvas"]' })
+    await page.evaluate(async () => {
+      for (let i = 0; i < 60; i += 1) {
+        await window.felixo.qaLogger.log({ level: 'info', scope: 'sobreposicao', message: `entrada ${i} ${'texto '.repeat(8)}`, details: null })
+      }
+    })
+    await page.waitForTimeout(600)
+    const depois = await lerCaixas(page, { topbar: '[data-felixo-region="topbar"]', canvas: '[data-felixo-region="canvas"]', painel })
+    const chegaram = await page.evaluate((sel) => (document.querySelector(sel)?.textContent ?? '').includes('entrada 59'), painel)
+    if (!chegaram) {
+      resultados.push(naoMedido('qa-logger-rolagem', caso, 'as 60 entradas não chegaram ao painel do QA Logger'))
+      continue
+    }
+    const rolagem = await page.evaluate(() => {
+      const deslocados = []
+      for (const el of [document.documentElement, document.body, ...document.querySelectorAll('[data-felixo-region], #root, #root > *')]) {
+        if (el.scrollTop || el.scrollLeft) deslocados.push({ elemento: (el.getAttribute?.('data-felixo-region') || el.id || el.tagName).toString(), top: Math.round(el.scrollTop), left: Math.round(el.scrollLeft) })
+      }
+      return deslocados
+    })
+    const problemas = [...cortesDaJanela(depois.painel, caso)]
+    for (const nome of ['topbar', 'canvas']) {
+      if (antes[nome] && depois[nome] && (Math.abs(antes[nome].top - depois[nome].top) > SUBPIXEL || Math.abs(antes[nome].left - depois[nome].left) > SUBPIXEL)) problemas.push({ tipo: 'moldura-deslocada-pelo-scroll', regiao: nome, de: Math.round(antes[nome].top), para: Math.round(depois[nome].top) })
+    }
+    if (rolagem.length) problemas.push({ tipo: 'ancestral-rolado-pelo-painel', ancestrais: rolagem })
+    resultados.push(resultado('qa-logger-rolagem', caso, { antes, depois, rolagem }, problemas))
+  }
+  return resultados
+}
+
+/**
+ * Risco: `chrome.ts` → o overlay de operação (limpar, importar) só bloqueia o ponteiro: o teclado continua chegando ao
+ * canvas. Troca o `canvas:clear` por um que só responde quando o smoke manda (o contexto do main-eval não tem timers), aciona "Limpar" (o `confirm` é aceito) e, com o overlay de
+ * pé, dispara Ctrl+K: se a Busca abre, o atalho vale durante a operação.
+ */
+async function checarTecladoDuranteOperacaoEmAndamento(page) {
+  const caso = { width: 1280, height: 800 }
+  await definirJanela(page, caso)
+  await enquadrarTodos(page)
+  await mainEval(
+    page,
+    `(() => { const ipc = mainWindow.webContents.ipc; ipc.removeHandler('canvas:clear'); ipc.handle('canvas:clear', () => new Promise((resolve) => { globalThis.__liberarClear = resolve })); return true })()`,
+  )
+  const aceitar = (dialogo) => void dialogo.accept().catch(() => {})
+  page.on('dialog', aceitar)
+  try {
+    await garantirSidebarAberta(page)
+    await page.locator('.felixo-sidebar-danger').first().dispatchEvent('click')
+    const overlay = '[data-felixo-region="canvas"] div.cursor-wait[aria-hidden="true"]'
+    const ocupado = await page.locator(overlay).first().waitFor({ state: 'attached', timeout: INTERACTION_TIMEOUT_MS }).then(() => true, () => false)
+    if (!ocupado) return [naoMedido('teclado-durante-operacao', caso, 'o overlay de operação não apareceu')]
+    const medidas = await page.evaluate(async (sobre) => {
+      const tecla = (key, extras = {}) => window.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...extras }))
+      tecla('k', { ctrlKey: true })
+      await new Promise((resolve) => setTimeout(resolve, 600))
+      const buscaAbriu = Boolean(document.querySelector('[data-felixo-canvas-panel="search"]'))
+      const ov = document.querySelector(sobre)
+      const r = ov?.getBoundingClientRect()
+      return { overlayAtivo: Boolean(ov), overlay: r ? { width: Math.round(r.width), height: Math.round(r.height) } : null, buscaAbriu }
+    }, overlay)
+    const problemas = medidas.buscaAbriu ? [{ tipo: 'atalho-vale-durante-a-operacao', atalho: 'Ctrl+K' }] : []
+    return [resultado('teclado-durante-operacao', caso, medidas, problemas)]
+  } finally {
+    page.off('dialog', aceitar)
+    await mainEval(page, `(() => { if (globalThis.__liberarClear) globalThis.__liberarClear({ ok: true }); mainWindow.webContents.ipc.removeHandler('canvas:clear'); return true })()`).catch(() => {})
+    await page.waitForTimeout(800)
+  }
+}
+
+/** Abre a gaveta do terminal pelo botão "Expandir terminal" do bloco de agente da fixture. */
+async function abrirGavetaDoTerminal(page) {
+  await page.locator('[data-id="sob-terminal"] [aria-label="Expandir terminal"]').first().dispatchEvent('click')
+  // A gaveta abre por transição de largura: na janela escondida leva ~2 s, e medir antes pega 1 px.
+  return page
+    .waitForFunction(() => (document.querySelector('[data-canvas-terminal-drawer]')?.getBoundingClientRect().width ?? 0) > 200, null, { timeout: INTERACTION_TIMEOUT_MS * 3, polling: POLLING_MS })
+    .then(() => true, () => false)
+}
+
+/**
+ * Riscos: `tools-workspace.ts` (Git, variante workspace) e `overlays.ts` (aviso de instalação das CLIs) com a gaveta do
+ * terminal aberta. Mede o painel de Git contra a gaveta (largura do piso de 260 px incluída) e o aviso de CLIs
+ * contra a gaveta e o alcance dos botões dele.
+ */
+async function checarGitEAvisoDeClisComGavetaAberta(page) {
+  const resultados = []
+  for (const caso of [{ width: 768, height: 900 }, { width: 1280, height: 800 }]) {
+    await page.reload()
+    await page.waitForSelector('.felixo-zoom-pill', { timeout: HYDRATION_TIMEOUT_MS })
+    await definirJanela(page, caso)
+    await enquadrarTodos(page)
+    await abrirFerramentaPorRotulo(page, 'Source Control')
+    const painelGit = '[data-felixo-canvas-panel="git"]'
+    const larguraSemGaveta = await page
+      .locator(painelGit).first().waitFor({ state: 'visible', timeout: INTERACTION_TIMEOUT_MS * 2 })
+      .then(async () => (await lerCaixas(page, { painel: painelGit })).painel?.width ?? null, () => null)
+    await page.locator(`${painelGit} button[aria-label^="Fechar painel"]`).first().dispatchEvent('click').catch(() => {})
+    await page.locator(painelGit).waitFor({ state: 'hidden', timeout: INTERACTION_TIMEOUT_MS }).catch(() => {})
+    if (!(await abrirGavetaDoTerminal(page))) {
+      resultados.push(naoMedido('git-com-gaveta-do-terminal', caso, 'a gaveta do terminal não abriu'))
+      continue
+    }
+    await page.waitForTimeout(500)
+    await abrirFerramentaPorRotulo(page, 'Source Control')
+    const abriu = await page.locator(painelGit).first().waitFor({ state: 'visible', timeout: INTERACTION_TIMEOUT_MS * 2 }).then(() => true, () => false)
+    if (!abriu) {
+      resultados.push(naoMedido('git-com-gaveta-do-terminal', caso, 'o painel de Git não abriu com a gaveta aberta'))
+    } else {
+      const medidas = await lerCaixas(page, { painel: painelGit, gaveta: '[data-canvas-terminal-drawer]', topbar: '[data-felixo-region="topbar"]' })
+      const problemas = [...cortesDaJanela(medidas.painel, caso)]
+      const cobre = sobreposicao(medidas.painel, medidas.gaveta)
+      if (cobre) problemas.push({ tipo: 'git-e-gaveta-se-cobrem', area: cobre })
+      if (medidas.painel && medidas.painel.width < 260 - SUBPIXEL) problemas.push({ tipo: 'git-abaixo-do-piso-de-largura', largura: Math.round(medidas.painel.width) })
+      if (larguraSemGaveta && medidas.painel && medidas.painel.width < larguraSemGaveta - SUBPIXEL) problemas.push({ tipo: 'git-encolhe-com-a-gaveta', de: Math.round(larguraSemGaveta), para: Math.round(medidas.painel.width) })
+      resultados.push(resultado('git-com-gaveta-do-terminal', caso, { ...medidas, larguraSemGaveta }, problemas))
+    }
+    await mainEval(
+      page,
+      `mainWindow.webContents.send('clis:setup-status', { state: 'installing', message: 'Instalando as CLIs', updatedAt: new Date().toISOString(), clis: [{ id: 'claude', name: 'Claude Code', state: 'installing' }] })`,
+    )
+    const clis = await page
+      .waitForFunction((sel) => [...document.querySelectorAll(sel)].some((el) => !(el.textContent ?? '').includes('Modo Performance')), SELETOR_AVISO_FIXO, { timeout: INTERACTION_TIMEOUT_MS, polling: POLLING_MS })
+      .then(() => true, () => false)
+    if (!clis) {
+      resultados.push(naoMedido('aviso-de-clis-com-gaveta', caso, 'o aviso de instalação das CLIs não apareceu'))
+      continue
+    }
+    const sobre = await page.evaluate((sel) => {
+      const aviso = [...document.querySelectorAll(sel)].find((el) => !(el.textContent ?? '').includes('Modo Performance'))
+      const gaveta = document.querySelector('[data-canvas-terminal-drawer]')
+      const caixa = (el) => {
+        const r = el.getBoundingClientRect()
+        return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height }
+      }
+      const botoes = [...aviso.querySelectorAll('button')].map((botao) => {
+        const r = botao.getBoundingClientRect()
+        const hit = document.elementFromPoint((r.left + r.right) / 2, (r.top + r.bottom) / 2)
+        return { rotulo: (botao.getAttribute('aria-label') || botao.textContent || '').trim().slice(0, 30), alcancavel: Boolean(hit) && aviso.contains(hit) }
+      })
+      return { aviso: caixa(aviso), gaveta: gaveta ? caixa(gaveta) : null, botoes }
+    }, SELETOR_AVISO_FIXO)
+    const problemas = [...cortesDaJanela(sobre.aviso, caso)]
+    const cobreGaveta = sobreposicao(sobre.aviso, sobre.gaveta)
+    if (cobreGaveta) problemas.push({ tipo: 'aviso-de-clis-cobre-a-gaveta', area: cobreGaveta })
+    for (const botao of sobre.botoes.filter((item) => !item.alcancavel)) problemas.push({ tipo: 'botao-do-aviso-de-clis-coberto', rotulo: botao.rotulo })
+    resultados.push(resultado('aviso-de-clis-com-gaveta', caso, sobre, problemas))
+  }
+  return resultados
+}
+
 // ---------------------------------------------------------------------------
 // Entrada usada pelo smoke (canvas-smoke.cjs) e pelo runner de desenvolvimento
 // ---------------------------------------------------------------------------
@@ -806,6 +1110,11 @@ const CENARIOS = [
   { risco: 'menu-perfil-acompanha-zoom', inventario: 'nodes.ts (Menu de perfil da Página Web)', medir: checarMenuDoPerfilAcompanhaOZoom },
   { risco: 'avisos-flutuantes-juntos', inventario: 'overlays.ts (avisos de baixo)', medir: checarAvisosFlutuantesJuntos },
   { risco: 'pedido-de-navegador-do-agente', inventario: 'terminal.ts (Pedido de agente para abrir página)', medir: checarPedidoDeNavegadorDoAgente },
+  { risco: 'terminal-minimo-com-retomada', inventario: 'terminal.ts (Bloco Terminal)', medir: checarTerminalMinimoComRetomada },
+  { risco: 'excalidraw-popover-em-bloco-pequeno', inventario: 'nodes.ts (Excalidraw)', medir: checarPopoverDoExcalidrawEmBlocoPequeno },
+  { risco: 'qa-logger-rolagem', inventario: 'tools-agents.ts (QA Logger)', medir: checarQaLoggerEmJanelaPequena },
+  { risco: 'git-com-gaveta-do-terminal', riscos: ['git-com-gaveta-do-terminal', 'aviso-de-clis-com-gaveta'], inventario: 'tools-workspace.ts (Git) e overlays.ts (aviso de CLIs)', medir: checarGitEAvisoDeClisComGavetaAberta },
+  { risco: 'teclado-durante-operacao', inventario: 'chrome.ts (overlay de operação)', medir: checarTecladoDuranteOperacaoEmAndamento },
   // Por último: deixa uma pergunta pendente no perfil isolado (a sessão é descartada ao sair).
   { risco: 'pergunta-sob-dialogos', inventario: 'terminal.ts (Pergunta de agente)', medir: checarPerguntaDoAgenteSobDialogos },
 ]
@@ -871,6 +1180,11 @@ module.exports = {
   checarAlcasDoDialogoSobBotoes,
   checarAvisosFlutuantesJuntos,
   checarDetalhesDoTerminalComFerramenta,
+  checarGitEAvisoDeClisComGavetaAberta,
+  checarPopoverDoExcalidrawEmBlocoPequeno,
+  checarQaLoggerEmJanelaPequena,
+  checarTecladoDuranteOperacaoEmAndamento,
+  checarTerminalMinimoComRetomada,
   checarMenuDeCorDentroDaJanela,
   checarMenuDoPerfilAcompanhaOZoom,
   checarMenuLigarAgenteDentroDoCartao,

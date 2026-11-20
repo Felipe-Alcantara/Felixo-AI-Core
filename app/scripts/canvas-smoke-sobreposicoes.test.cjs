@@ -100,7 +100,8 @@ test('separarDefeitos: outro risco ou outro tipo de problema continua novo', () 
 
 test('DEFEITOS_CONHECIDOS: cada entrada aponta a task de sobreposições e um risco de CENARIOS', () => {
   assert.ok(Array.isArray(DEFEITOS_CONHECIDOS))
-  const riscos = new Set(CENARIOS.map((cenario) => cenario.risco))
+  // Um cenário pode medir mais de um risco (`riscos`): o do Git com a gaveta também mede o aviso de CLIs.
+  const riscos = new Set(CENARIOS.flatMap((cenario) => cenario.riscos ?? [cenario.risco]))
   for (const entrada of DEFEITOS_CONHECIDOS) {
     assert.equal(entrada.task, TASK_SOBREPOSICOES)
     assert.ok(riscos.has(entrada.risco), `risco sem cenário: ${entrada.risco}`)

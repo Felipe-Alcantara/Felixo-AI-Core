@@ -768,6 +768,7 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
       'GitDiffView',
     ],
     tests: [
+      { file: 'scripts/canvas-smoke-sobreposicoes.cjs', check: 'checarGitEAvisoDeClisComGavetaAberta' },
       { file: `${TOOLS}/git-status.test.ts` },
       { file: `${TOOLS}/repo-tree.test.ts` },
       { file: `${TOOLS}/git-diff.test.ts` },
@@ -791,7 +792,7 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
         task: NOVA_IPC_ENGOLIDO,
       },
       {
-        what: 'a variante workspace com a gaveta do terminal aberta nunca foi medida: painel, gaveta e inspector disputam a largura e o painel pode cair no piso de 260 px',
+        what: 'Medido (checarGitEAvisoDeClisComGavetaAberta): sem gaveta o painel mede 239 px em 768 px e 515 px em 1280 px; com a gaveta aberta em 1280 px ele encolhe para 239 px (abaixo do piso de 260 px) e em 768 px a gaveta (440 px) cobre 145×725 px do painel. Defeito conhecido.',
         risk: 'médio',
         task: NOVA_SOBREPOSICAO,
       },

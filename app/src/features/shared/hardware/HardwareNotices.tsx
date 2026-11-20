@@ -46,7 +46,7 @@ export function NoticeToast({
 }: NoticeToastProps) {
   return (
     <div
-      className={`pointer-events-none fixed inset-x-0 bottom-4 z-50 flex px-4 ${
+      className={`pointer-events-none fixed inset-x-0 bottom-10 z-50 flex px-4 ${
         placement === 'left' ? 'justify-start' : 'justify-center'
       }`}
     >

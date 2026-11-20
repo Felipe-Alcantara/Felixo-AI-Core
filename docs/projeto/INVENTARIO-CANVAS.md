@@ -31,8 +31,8 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 
 - **Elementos:** 114 (10 blocos, 17 ferramentas, 87 outras superfícies)
 - **Controles:** 438, dos quais 91 com teste específico
-- **Elementos sem nenhum teste:** 3
-- **Lacunas:** 230 (alto 4, médio 125, baixo 101), em 76 tasks
+- **Elementos sem nenhum teste:** 2
+- **Lacunas:** 229 (alto 4, médio 125, baixo 100), em 76 tasks
 
 ## Moldura do canvas
 
@@ -443,7 +443,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** nenhum
 - **Depende de:** `useCanvasTransfer`
 - **Sobreposição:** z-50 dentro da região do canvas: cobre sidebar (26), topbar e statusbar (18), dock e painéis (20/30); não cobre a gaveta do terminal (irmã fora do container) nem diálogos (60).
-- **Testes:** nenhum
+- **Testes:** `scripts/canvas-smoke-sobreposicoes.cjs` → `checarTecladoDuranteOperacaoEmAndamento`
 
 | Estado | Quando |
 | --- | --- |
@@ -455,7 +455,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | O overlay não tem teste: nada confere que ele aparece em limpar, exportar ou importar nem que some ao terminar. | baixo | `3ec91f95-497e-818f-b9f2-f9710605c303` |
-| O overlay só bloqueia o ponteiro: o teclado continua chegando ao canvas (Delete, Ctrl/Cmd+K, Q) durante limpar ou importar, e a gaveta do terminal fica fora dele. | baixo | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
+| Medido (canvas-smoke-sobreposicoes.cjs → checarTecladoDuranteOperacaoEmAndamento): durante limpar ou importar o overlay só bloqueia o ponteiro e Ctrl/Cmd+K abria a Busca; corrigido com a guarda isBusy no atalho. Delete e Q não foram medidos (Q só vale com o canvas focado) e a gaveta do terminal segue fora do overlay. | baixo | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
 
 ### Persistência do canvas
 
@@ -538,7 +538,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `pty:spawn`, `pty:kill`, `pty:write`, `pty:data`, `pty:exit`, `pty:session`, `account-chain:get-state`, `account-chain:changed`, `account-chain:decline`, `account-chain:resolve-ambiguous`, `account-chain:request-switch`, `account-chain:release-cooldown`, `canvas:save`, `canvas:delete`
 - **Depende de:** `useTerminalSessions`, `useSessionSnapshot`, `useSessionMetadata`, `usePerformanceMode`, `useReactFlow`, `useCliAccountLabel`, `useAccountChain`, `useAccountChainActions (AccountChainActionsContext)`, `visibleTerminalResumeBanner (terminal-resume-banner)`, `buildTerminalChainBanners (account-chain-view)`, `relaunchTerminal / handleResumeAction (CanvasView)`
 - **Sobreposição:** Bloco do React Flow, sem z próprio: fica abaixo de toda superfície fixa (topbar e statusbar 18, dock e painéis 20/30, sidebar 26, menus 50+). O cartão é overflow-hidden, então nada que nasce dentro dele passa das bordas. Faixas de retomada e da cadeia vivem dentro do cartão (nodrag nowheel nopan). A gaveta do terminal (coluna à direita) e a dock de terminais recolhidos cobrem o bloco quando ele cai embaixo delas.
-- **Testes:** `src/features/canvas/services/terminal-resume-banner.test.ts`, `src/features/canvas/services/account-chain-view.test.ts`, `src/features/canvas/services/terminal-run-registry.test.ts`, `src/features/canvas/services/repository-grouping.test.ts`, `src/features/canvas/terminal/terminal-session-store.test.ts`, `src/features/canvas/terminal/terminal-scrollback.test.ts`, `src/features/canvas/terminal/prompt-origins-e2e.test.ts`, `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`, `scripts/canvas-smoke.cjs` → `checarInteracoes`, `scripts/canvas-smoke.cjs` → `checarVariosAgentes`, `scripts/canvas-smoke-contas.cjs` → `abrirBlocoDaCadeia`, `scripts/canvas-smoke-prompts.cjs` → `esperarCartao`, `scripts/canvas-smoke.cjs` → `checarBotoesDoTerminal`
+- **Testes:** `scripts/canvas-smoke-sobreposicoes.cjs` → `checarTerminalMinimoComRetomada`, `src/features/canvas/services/terminal-resume-banner.test.ts`, `src/features/canvas/services/account-chain-view.test.ts`, `src/features/canvas/services/terminal-run-registry.test.ts`, `src/features/canvas/services/repository-grouping.test.ts`, `src/features/canvas/terminal/terminal-session-store.test.ts`, `src/features/canvas/terminal/terminal-scrollback.test.ts`, `src/features/canvas/terminal/prompt-origins-e2e.test.ts`, `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`, `scripts/canvas-smoke.cjs` → `checarInteracoes`, `scripts/canvas-smoke.cjs` → `checarVariosAgentes`, `scripts/canvas-smoke-contas.cjs` → `abrirBlocoDaCadeia`, `scripts/canvas-smoke-prompts.cjs` → `esperarCartao`, `scripts/canvas-smoke.cjs` → `checarBotoesDoTerminal`
 
 | Estado | Quando |
 | --- | --- |
@@ -565,7 +565,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | O relançamento automático do Codex não respeita a escolha feita na faixa de retomada. | médio | `3eb91f95-497e-8178-bc58-cd545a4f4cc8` |
 | Selo "trabalhando" grudado com o terminal parado (ActivityBadge lê snapshot.activity). | médio | `3d791f95-497e-8190-84e0-df5328591a14` |
 | Caminho "held" silencioso (o plano de retomada segura enquanto espera a versão da CLI, ou o bloco some) sem teste: o fixture não reproduz plano segurado. Reiniciar, Ver detalhes, Abrir e a confirmação do processo vivo agora são cobertos por checarBotoesDoTerminal. | médio | `41c91f95-497e-816b-b515-c14adaee1c30` |
-| No bloco mínimo (200×120) a faixa de retomada (até 4 linhas + botões) e as faixas da cadeia empurram a prévia para fora do cartão overflow-hidden; nenhum teste mede. | baixo | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
+| Medido (checarTerminalMinimoComRetomada, 200×120 com a retomada pendente): a prévia fica com altura 0 e as quatro ações da faixa passam da borda de baixo do cartão overflow-hidden (131 a 213 px num cartão de 120). Defeito conhecido. | baixo | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
 
 ### Bloco Nota (markdown)
 
@@ -849,7 +849,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** nenhum
 - **Depende de:** `@excalidraw/excalidraw (lazy)`, `onSceneChange (ExcalidrawDrawingNode)`
 - **Sobreposição:** Dentro do bloco Excalidraw (nodrag nowheel nopan, h-full); os menus do editor não saem do cartão.
-- **Testes:** `scripts/renderer-csp.test.cjs`, `scripts/excalidraw-embeds.test.cjs`, `src/features/canvas/services/excalidraw-embeds.test.ts`, `scripts/excalidraw-fonts.test.cjs`
+- **Testes:** `scripts/canvas-smoke-sobreposicoes.cjs` → `checarPopoverDoExcalidrawEmBlocoPequeno`, `scripts/renderer-csp.test.cjs`, `scripts/excalidraw-embeds.test.cjs`, `src/features/canvas/services/excalidraw-embeds.test.ts`, `scripts/excalidraw-fonts.test.cjs`
 
 | Estado | Quando |
 | --- | --- |
@@ -863,7 +863,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | --- | --- | --- |
 | Os embeds do Excalidraw (14 domínios, decisão de 17/11) só foram validados por teste; falta ver cada host carregando no app, sem violação de frame-src. | médio | `41b91f95-497e-8109-9ae0-e01470ee50d4` |
 | O export embute a face inteira da fonte: o worker de subset quebra no build (document is not defined) e, na thread principal, a CSP recusa o WASM do subset (script-src eval, "Skipped glyph subsetting"). | baixo | `41a91f95-497e-8182-b7f6-eeaf764195c5` |
-| Popovers e diálogos internos do Excalidraw ficam presos ao cartão overflow-hidden; num bloco pequeno são cortados e nenhum teste mede (a auditoria do smoke ignora .excalidraw). | baixo | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
+| Medido (checarPopoverDoExcalidrawEmBlocoPequeno, bloco 360×280): o menu "More tools" sai 43 px à esquerda e à direita e 36 px embaixo do cartão e é cortado (o ponto fora do cartão não o alcança); o próprio botão do menu fica 39 px fora da borda direita. Defeito conhecido. | baixo | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
 
 ## Arestas e grupos
 
@@ -1661,7 +1661,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `projects:list`, `git:get-summary`, `git:list-files`, `git:list-branches`, `git:switch-branch`, `git:get-log`, `git:pull`, `git:push`, `git:commit`
 - **Depende de:** `CanvasPanel (variant workspace)`, `useCanvasSurfaces (reportPanelWidth)`, `parseStatusEntries`, `repo-tree (buildRepoTree, dirsWithChanges, ancestorPaths)`, `FelixoSelect`, `GitExplorer`, `GitChangesList`, `GitHistory`, `GitDiffView`
 - **Sobreposição:** variante workspace: absolute z-20 (z-30 com foco), top-4, left = 1rem + sidebar, right = inspector + 16 px, altura toda (maxHeight); reporta a largura ao coordenador (reportPanelWidth) e deixa a faixa mínima de canvas (MIN_CANVAS_STRIP 160 px); recolhido vira coluna de 44 px
-- **Testes:** `src/features/canvas/components/tools/git-status.test.ts`, `src/features/canvas/components/tools/repo-tree.test.ts`, `src/features/canvas/components/tools/git-diff.test.ts`, `electron/services/git-service.test.cjs`, `electron/services/git-secret-redaction.test.cjs`
+- **Testes:** `scripts/canvas-smoke-sobreposicoes.cjs` → `checarGitEAvisoDeClisComGavetaAberta`, `src/features/canvas/components/tools/git-status.test.ts`, `src/features/canvas/components/tools/repo-tree.test.ts`, `src/features/canvas/components/tools/git-diff.test.ts`, `electron/services/git-service.test.cjs`, `electron/services/git-secret-redaction.test.cjs`
 
 | Estado | Quando |
 | --- | --- |
@@ -1689,7 +1689,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | nenhum teste de interface do Source Control: escolher repositório, trocar branch, pull/push, commit e as abas (só o serviço do processo principal e as funções puras) | alto | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
 | GitPanel.tsx:119, 137 e 148: falha de git:list-files, git:list-branches e git:get-log vira lista vazia sem erro — o explorador diz "Nenhum arquivo corresponde ao filtro." e o histórico "Nenhum commit ainda." | médio | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 | erro engolido: GitPanel.tsx:192-212 (selectProject) e 284-321 (runAction) não têm catch — uma rejeição de IPC escapa sem mensagem | baixo | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
-| a variante workspace com a gaveta do terminal aberta nunca foi medida: painel, gaveta e inspector disputam a largura e o painel pode cair no piso de 260 px | médio | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
+| Medido (checarGitEAvisoDeClisComGavetaAberta): sem gaveta o painel mede 239 px em 768 px e 515 px em 1280 px; com a gaveta aberta em 1280 px ele encolhe para 239 px (abaixo do piso de 260 px) e em 768 px a gaveta (440 px) cobre 145×725 px do painel. Defeito conhecido. | médio | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
 
 ### Fetch All
 
@@ -1804,7 +1804,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `qa-logger:get`, `qa-logger:clear`, `qa-logger:entry`, `qa-logger:cleared`, `qa-logger:build-report`
 - **Depende de:** `window.felixo.qaLogger`, `CanvasPanel`
 - **Sobreposição:** CanvasPanel: absolute z-20 (z-30 com foco dentro), top-16, à direita da barra lateral e deslocado quando o menu de ferramentas abre (toolsMenuOpen); largura limitada a viewport − barra − inspector Elementos (288 px) e altura a viewport − 112. Os menus do FelixoSelect abrem em portal z-1000 por cima; toasts (z 50) e AgentQuestionDialog/HandoffDialog (z 60) cobrem o painel. Em janela <768 px o painel passa da viewport (PANEL_MIN_WIDTH 260, task 3e691f95-497e-815c-a129-f4d2d6405cbc). Tamanho lg; a lista cresce até 400 entradas e rola dentro do painel (scrollIntoView no fim)
-- **Testes:** `electron/services/qa-logger.test.cjs`, `electron/services/qa-report-builder.test.cjs`, `electron/services/qa-log-disk-store.test.cjs`
+- **Testes:** `scripts/canvas-smoke-sobreposicoes.cjs` → `checarQaLoggerEmJanelaPequena`, `electron/services/qa-logger.test.cjs`, `electron/services/qa-report-builder.test.cjs`, `electron/services/qa-log-disk-store.test.cjs`
 
 | Estado | Quando |
 | --- | --- |
@@ -1824,7 +1824,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | --- | --- | --- |
 | Sem teste de interface do painel; os handlers qa-logger:build-report e qa-logger:clear também não são exercitados em qa-logger.test.cjs | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
 | Suspeito: "Limpar" só esvazia a memória (qa-logger.cjs:43-47); initQaDiskStore (qa-logger.cjs:19-22) hidrata de novo do disco no boot e as entradas limpas voltam depois de reiniciar | baixo | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
-| scrollIntoView({ block: "end" }) a cada entrada rola todos os ancestrais roláveis; com o painel passando da viewport (janela pequena) pode deslocar a moldura do canvas, e nenhum teste confere | baixo | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
 
 ### Pedidos de escrita
 
@@ -2974,7 +2973,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `clis:get-setup-status`, `clis:setup-status`, `clis:retry-setup`, `clis:diagnose`
 - **Depende de:** `useCliSetupStatus`, `useCliDiagnosis`, `presentCliSetupStatus`, `cliSetupNoticeKey`, `CliDiagnosisList`, `CliDiagnosisFooter`
 - **Sobreposição:** fixed bottom-4 right-4, z 50, w-80, cresce para cima com o diagnóstico; marcado [data-felixo-tour-avoid] (o card do tour desvia). Acima da dock, painéis e gaveta (20/30) e da sidebar (26); abaixo do anel/card (54/55), diálogos (60), menu e aviso de link (70) e menu Ajuda (1000).
-- **Testes:** `scripts/canvas-smoke-sobreposicoes.cjs` → `checarAvisosFlutuantesJuntos`, `src/features/setup/cli-setup-presentation.test.ts`, `src/features/setup/cli-diagnosis.test.ts`, `src/features/setup/setup-tailwind-classes.test.ts`, `electron/services/cli-auto-install.test.cjs`, `src/features/onboarding/onboarding-layout.test.ts`
+- **Testes:** `scripts/canvas-smoke-sobreposicoes.cjs` → `checarGitEAvisoDeClisComGavetaAberta`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarAvisosFlutuantesJuntos`, `src/features/setup/cli-setup-presentation.test.ts`, `src/features/setup/cli-diagnosis.test.ts`, `src/features/setup/setup-tailwind-classes.test.ts`, `electron/services/cli-auto-install.test.cjs`, `src/features/onboarding/onboarding-layout.test.ts`
 
 | Estado | Quando |
 | --- | --- |
@@ -2998,7 +2997,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Dispensar o andamento esconde o andamento da nova tentativa: a chave de "installing"/"checking" é sempre "em-andamento" (cli-setup-presentation.ts:154) e dismissed compara só a chave (useCliSetupStatus.ts:92). Quem dispensou a primeira instalação e clica "Tentar de novo" vê o aviso sumir sem progresso. | médio | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 | Erro engolido no retry (useCliSetupStatus.ts:88-90) e no getStatus inicial sem catch (useCliSetupStatus.ts:45-49): { ok: false } é descartado e a rejeição vira unhandledrejection só no QA Logger; a pessoa não sabe que a nova tentativa não começou. | baixo | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 | Medido em 20/11/2026 com os três avisos de baixo juntos (canvas-smoke-sobreposicoes.cjs → checarAvisosFlutuantesJuntos): em 320 px o aviso saía 16 px da janela à esquerda (corrigido: largura min(20rem, 100vw − 2rem)); ele cobre a sugestão do Modo Performance em 320 px (288×122) e em 768 px (128×122), e em 1280 px não colide. Defeito conhecido: cada aviso é fixed por conta própria, sem pilha comum. | médio | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
-| Medido: em 768 e 1280 px o aviso cobre 32×98 px do Mini Map (checarAvisosFlutuantesJuntos). A gaveta do terminal aberta junto do aviso não foi medida. | médio | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
+| Medido: em 768 e 1280 px o aviso cobre 32×98 px do Mini Map (checarAvisosFlutuantesJuntos) e, com a gaveta do terminal aberta, cobre 320×122 px do canto inferior direito dela (checarGitEAvisoDeClisComGavetaAberta); o botão de dispensar segue alcançável. Defeito conhecido. | médio | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
 
 ### Diagnóstico das CLIs dentro do aviso de falha
 
@@ -3141,7 +3140,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | O SB1/SB2 só mostram e clicam o aviso quando a máquina do CI recebe a sugestão (poucas CPUs); "Ligar Modo Performance" e o × nunca são clicados em teste. | médio | `3ec91f95-497e-81f7-8b12-c5c252d020c7` |
 | O aviso da placa de vídeo nunca foi visto rodando: depende de uma volta automática de GPU real. | médio | `3d591f95-497e-8192-b911-cdb759933401` |
 | HardwareNotices.tsx:124 chama void acknowledgeGpuFallback(), que rejeita quando a IPC falha (o teste do gpu-status-store confirma): unhandledrejection no QA Logger e o aviso volta na próxima abertura sem a pessoa saber por quê. | baixo | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
-| Medido: a sugestão do Modo Performance (22rem, embaixo no centro, z 50) convive com o card do tour (SB1) e foi medida contra o aviso de CLIs e o de link (checarAvisosFlutuantesJuntos: os dois a cobrem em janelas estreitas). A barra de status (18) e a dock (20) no centro de baixo seguem sem medida; a volta da placa de vídeo depende de estado de máquina. | baixo | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
+| Medido: a sugestão do Modo Performance (22rem, embaixo no centro, z 50) convive com o card do tour (SB1) e foi medida contra o aviso de CLIs e o de link (checarAvisosFlutuantesJuntos: os dois a cobrem em janelas estreitas). Cobria 14 px da barra de status nas três larguras; corrigido subindo os avisos de baixo para bottom-10. A dock (20) no centro de baixo segue sem medida, e a volta da placa de vídeo depende de estado de máquina. | baixo | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
 
 ### Aviso de guia do System Design que pede login
 
@@ -3229,7 +3228,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3eb91f95-497e-81bb-a374-eb2e336c73c6` — 1 lacuna
 - `3ec91f95-497e-8103-b360-c1979d6992f4` — 9 lacunas
 - `3ec91f95-497e-8110-b363-cfade2b68b7a` — 42 lacunas
-- `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` — 16 lacunas
+- `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` — 15 lacunas
 - `3ec91f95-497e-8122-a08b-d26d4991acca` — 1 lacuna
 - `3ec91f95-497e-8176-bef0-dfde828936dc` — 6 lacunas
 - `3ec91f95-497e-818f-b9f2-f9710605c303` — 14 lacunas

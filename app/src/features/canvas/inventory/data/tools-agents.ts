@@ -441,6 +441,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
     ipc: ['qa-logger:get', 'qa-logger:clear', 'qa-logger:entry', 'qa-logger:cleared', 'qa-logger:build-report'],
     dependsOn: ['window.felixo.qaLogger', 'CanvasPanel'],
     tests: [
+      { file: 'scripts/canvas-smoke-sobreposicoes.cjs', check: 'checarQaLoggerEmJanelaPequena' },
       { file: 'electron/services/qa-logger.test.cjs' },
       { file: 'electron/services/qa-report-builder.test.cjs' },
       { file: 'electron/services/qa-log-disk-store.test.cjs' },
@@ -455,11 +456,6 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
         what: 'Suspeito: "Limpar" só esvazia a memória (qa-logger.cjs:43-47); initQaDiskStore (qa-logger.cjs:19-22) hidrata de novo do disco no boot e as entradas limpas voltam depois de reiniciar',
         risk: 'baixo',
         task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
-      },
-      {
-        what: 'scrollIntoView({ block: "end" }) a cada entrada rola todos os ancestrais roláveis; com o painel passando da viewport (janela pequena) pode deslocar a moldura do canvas, e nenhum teste confere',
-        risk: 'baixo',
-        task: '3ec91f95-497e-8112-82f9-fd1b86e3ec7d',
       },
     ],
     overlap: `${PAINEL}. Tamanho lg; a lista cresce até 400 entradas e rola dentro do painel (scrollIntoView no fim)`,

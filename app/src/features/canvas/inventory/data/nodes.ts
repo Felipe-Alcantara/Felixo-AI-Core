@@ -114,6 +114,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
       'relaunchTerminal / handleResumeAction (CanvasView)',
     ],
     tests: [
+      { file: 'scripts/canvas-smoke-sobreposicoes.cjs', check: 'checarTerminalMinimoComRetomada' },
       unit(`${SERVICES}/terminal-resume-banner.test.ts`),
       unit(`${SERVICES}/account-chain-view.test.ts`),
       unit(`${SERVICES}/terminal-run-registry.test.ts`),
@@ -150,7 +151,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
         task: '41c91f95-497e-816b-b515-c14adaee1c30',
       },
       {
-        what: 'No bloco mínimo (200×120) a faixa de retomada (até 4 linhas + botões) e as faixas da cadeia empurram a prévia para fora do cartão overflow-hidden; nenhum teste mede.',
+        what: 'Medido (checarTerminalMinimoComRetomada, 200×120 com a retomada pendente): a prévia fica com altura 0 e as quatro ações da faixa passam da borda de baixo do cartão overflow-hidden (131 a 213 px num cartão de 120). Defeito conhecido.',
         risk: 'baixo',
         task: '3ec91f95-497e-8112-82f9-fd1b86e3ec7d',
       },
@@ -1515,6 +1516,7 @@ export const nodeSurfaces: InventoryElement[] = [
     ipc: [],
     dependsOn: ['@excalidraw/excalidraw (lazy)', 'onSceneChange (ExcalidrawDrawingNode)'],
     tests: [
+      { file: 'scripts/canvas-smoke-sobreposicoes.cjs', check: 'checarPopoverDoExcalidrawEmBlocoPequeno' },
       unit('scripts/renderer-csp.test.cjs'),
       unit('scripts/excalidraw-embeds.test.cjs'),
       unit('src/features/canvas/services/excalidraw-embeds.test.ts'),
@@ -1532,7 +1534,7 @@ export const nodeSurfaces: InventoryElement[] = [
         task: '41a91f95-497e-8182-b7f6-eeaf764195c5',
       },
       {
-        what: 'Popovers e diálogos internos do Excalidraw ficam presos ao cartão overflow-hidden; num bloco pequeno são cortados e nenhum teste mede (a auditoria do smoke ignora .excalidraw).',
+        what: 'Medido (checarPopoverDoExcalidrawEmBlocoPequeno, bloco 360×280): o menu "More tools" sai 43 px à esquerda e à direita e 36 px embaixo do cartão e é cortado (o ponto fora do cartão não o alcança); o próprio botão do menu fica 39 px fora da borda direita. Defeito conhecido.',
         risk: 'baixo',
         task: '3ec91f95-497e-8112-82f9-fd1b86e3ec7d',
       },
