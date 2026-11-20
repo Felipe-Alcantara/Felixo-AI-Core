@@ -345,7 +345,7 @@ export const overlaySurfaces: InventoryElement[] = [
         effect:
           'retry() → window.felixo.cliSetup.retry() → clis:retry-setup: o processo principal roda run("manual") e o novo status chega por clis:setup-status (indicador e aviso passam a "installing").',
         failure:
-          'Erro engolido: o retorno é descartado (void). Com a instalação automática desligada o main devolve { ok: false } sem emitir status e o clique não muda nada; exceção vira unhandledrejection só no QA Logger. Lacuna registrada no aviso das CLIs.',
+          'com a instalação automática desligada o main devolve { ok: false } e a nova tentativa mostra "não começou" no aviso; rejeição vira a mesma mensagem.',
         disabledWhen: 'só é botão no estado "error" (canRetry)',
       },
     ],
@@ -399,7 +399,7 @@ export const overlaySurfaces: InventoryElement[] = [
         kind: 'button',
         effect: 'Mesmo retry() do indicador: clis:retry-setup e o aviso passa a "installing" quando o status chega por clis:setup-status.',
         failure:
-          'Erro engolido: retorno descartado (void); { ok: false } com a instalação desligada não muda a tela e exceção vira unhandledrejection só no QA Logger.',
+          '{ ok: false } ou rejeição mostra a mensagem no aviso (retryError).',
         disabledWhen: 'só no estado "error"',
       },
       {
@@ -505,7 +505,7 @@ export const overlaySurfaces: InventoryElement[] = [
         effect:
           '"downloaded": onInstall → updates.install() → updates:install → autoUpdater.quitAndInstall(false, true): o app fecha e reabre na versão nova. "error": onRetry → updates.check() → updates:check → status "checking" por updates:status.',
         failure:
-          'Erro engolido na instalação: retorno descartado (void); fora de "downloaded" o main devolve { ok: false } sem mudar a tela e uma exceção de quitAndInstall vira unhandledrejection só no QA Logger. Na verificação, a falha volta como status "error" (visível).',
+          'instalar a atualização recusada ({ ok: false }) ou rejeitada aparece na barra de status; a verificação também avisa quando falha.',
         disabledWhen: 'só é botão com canInstall ou canRetry',
       },
       {
@@ -555,7 +555,7 @@ export const overlaySurfaces: InventoryElement[] = [
         effect:
           'runLinkChoice reclassifica e executa: Abrir no navegador → window.open(url, "_blank") e o main aplica a política e entrega ao sistema; Abrir como Página Web → cria o bloco perto do bloco de origem, a câmera voa e o foco vai ao bloco; Copiar → clipboard + "Link copiado". O menu fecha e o foco volta a quem abriu.',
         failure:
-          'Abertura recusada ou sem navegador: o main emite external-links:open-failed e aparece o aviso "link não abriu". Erro engolido na cópia: clipboard recusado cai em () => undefined, o menu já fechou e nada avisa.',
+          'Abertura recusada ou sem navegador: o main emite external-links:open-failed e aparece o aviso "link não abriu". Clipboard recusado na cópia mostra "Não foi possível copiar para a área de transferência." em vez de "Link copiado".',
         test: { file: SMOKE_LINKS, check: 'markdownEscolhas' },
       },
       {
@@ -635,7 +635,7 @@ export const overlaySurfaces: InventoryElement[] = [
         locator: 'onClick={copy}',
         kind: 'button',
         effect: 'clipboard.writeText(notice.copyText): "Link copiado" acima do aviso, o aviso fecha e o foco volta a quem o tinha.',
-        failure: 'Erro engolido: clipboard recusado cai em () => undefined e o aviso continua aberto sem dizer que a cópia falhou (lacuna no menu de links).',
+        failure: 'clipboard recusado mostra o motivo e o aviso continua aberto, sem dizer que copiou.',
         test: { file: SMOKE_LINKS, check: 'markdownEscolhas' },
       },
     ],
@@ -726,7 +726,7 @@ export const overlaySurfaces: InventoryElement[] = [
         effect:
           'Placa de vídeo, "Entendi": acknowledgeGpuFallback → graphics:acknowledge-gpu-fallback zera o fallback em userData/gpu-preference.json e o aviso some de todas as telas (Configurações inclusive). Sugestão, "Agora não": só grava a resposta; o modo continua desligado.',
         failure:
-          'Erro engolido na placa de vídeo: se a IPC falhar, o finally some com o aviso mesmo assim, a rejeição de void acknowledgeGpuFallback() vira unhandledrejection só no QA Logger, o fallback continua gravado e o aviso volta na próxima abertura.',
+          'se a IPC que dispensa o aviso falhar, o aviso continua e diz que volta na próxima abertura (sem unhandledrejection).',
         test: { file: SMOKE_TUTORIAL, check: 'sb2' },
       },
       {

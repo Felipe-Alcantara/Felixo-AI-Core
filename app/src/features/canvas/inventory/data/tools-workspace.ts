@@ -101,7 +101,7 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
         effect:
           'pasta: abre a subpasta (projects:list-directory); arquivo executável (resolveProjectFileClick = run): cria um bloco de terminal que roda o arquivo na pasta atual e fecha o painel; outro arquivo: pede o editor de terminal (text-file:resolve-editor) e abre um terminal com o editor e o arquivo, fechando o painel',
         failure:
-          'sem editor: loadError "Nenhum editor de terminal disponível." (ou a mensagem do processo principal); listagem com ok=false vira loadError; erro engolido: listagem rejeitada deixa "Carregando…" para sempre',
+          'sem editor: loadError "Nenhum editor de terminal disponível." (ou a mensagem do processo principal); listagem com ok=false ou rejeitada vira loadError',
       },
       {
         locator: 'onClick={() => runFile(entry)}',
@@ -126,7 +126,7 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
         effect:
           'projects:pick-folder abre o seletor do sistema; projects:detect-repos registra a pasta (ou cada repositório filho de primeiro nível) com projects:save, pulando caminhos já registrados; relê a lista (projects:list) e avisa o canvas (onProjectsChanged → menu de terminais)',
         failure:
-          'cancelar o seletor não faz nada; erro engolido: o resultado de projects:save não é lido e uma rejeição de IPC escapa do try/finally sem aviso (só o botão volta ao normal)',
+          'cancelar o seletor não faz nada; falha de projects:save ou rejeição de IPC aparece na barra de status',
         disabledWhen: 'busy (adição em andamento)',
       },
       {
@@ -135,7 +135,7 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
         effect:
           'onRemoveFolder → useCanvasProjects.removeProjectFolder: tira o projeto da lista (projects:delete; nada sai do disco), relê a lista e avisa o canvas',
         failure:
-          'erro engolido: o boolean devolvido não é lido; se o delete falhou, a releitura mostra o projeto de volta sem mensagem',
+          'remoção que falha avisa na barra de status em vez de a releitura mostrar o projeto de volta sem mensagem',
       },
       {
         locator: 'onClick={() => setPendingRemovalId(null)}',
@@ -148,7 +148,7 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
         kind: 'button',
         effect:
           'abre o navegador de pastas na raiz do projeto: limpa entradas, erro e remoção pendente e chama projects:list-directory',
-        failure: 'ok=false vira loadError; erro engolido: rejeição deixa "Carregando…" sem aviso',
+        failure: 'ok=false ou rejeição vira loadError',
       },
       {
         locator: 'onClick={() => setPendingRemovalId(project.id)}',
@@ -265,7 +265,7 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
         kind: 'button',
         effect: 'grava "Nova nota" com notes:save e só então a acrescenta à lista de notas salvas',
         failure:
-          'erro engolido: o resultado de notes:save não é lido — a nota aparece na lista mesmo sem ter sido gravada; rejeição escapa sem aviso',
+          'falha de notes:save aparece no painel e a nota só entra na lista se foi gravada',
       },
       {
         locator: 'aria-label="Remover nota"',
@@ -273,7 +273,7 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
         effect:
           'cancela o salvamento pendente da nota, chama notes:delete e tira a nota da lista, sem confirmação',
         failure:
-          'erro engolido: o resultado de notes:delete não é lido; a nota some e volta ao reabrir o painel se o delete falhou',
+          'falha de notes:delete aparece no painel e a nota continua na lista',
       },
     ],
     persistence: [
@@ -311,7 +311,7 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
         kind: 'button',
         effect: 'models:delete sem confirmação e relê a lista (models:list): o modelo some',
         failure:
-          'erro engolido: o resultado do delete não é lido; se falhou, a releitura mantém o modelo sem mensagem; rejeição escapa sem aviso',
+          'falha ao remover ou ao recarregar a lista aparece no painel',
       },
     ],
     persistence: [
@@ -385,7 +385,7 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
         effect:
           'composeSelectedPromptInsertion junta os marcados na ordem do catálogo e insertPrompt digita no terminal expandido, sem Enter, pelo arquivo de contexto (context-file:write) + pty:write; o cartão do bloco mostra os nomes combinados; sem terminal expandido, copia',
         failure:
-          'PTY sem confirmação: "Tentar de novo" + aviso em vermelho; erro engolido: sem terminal aberto, uma rejeição de navigator.clipboard.writeText escapa do try/finally e nenhum retorno aparece',
+          'PTY sem confirmação: "Tentar de novo" + aviso em vermelho; sem terminal aberto, clipboard que rejeita ou não existe vira o aviso em vermelho (\'failed\')',
         disabledWhen: 'nenhum prompt marcado ou envio em andamento',
         test: { file: SMOKE_PROMPTS, check: 'combinacao' },
       },
@@ -410,7 +410,7 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
         effect:
           'digita o prompt no terminal expandido sem Enter (autoSubmit false): grava o arquivo de contexto (context-file:write) e escreve a referência no PTY (pty:write); o cartão do bloco mostra o nome (data-felixo-last-prompt) e o canvas grava só a metadata (lastPromptInsertion); sem terminal expandido, copia o texto',
         failure:
-          'PTY sem confirmação: "Tentar de novo" com aviso em vermelho; pasta de contexto indisponível: entrega inline (sent-inline) com aviso no bloco; erro engolido se o clipboard rejeitar; sem navigator.clipboard o painel diz "copiado" sem copiar',
+          'PTY sem confirmação: "Tentar de novo" com aviso em vermelho; pasta de contexto indisponível: entrega inline (sent-inline) com aviso no bloco; clipboard que rejeita ou não existe vira o aviso em vermelho (nunca "copiado" sem copiar)',
         disabledWhen: 'aquele prompt está enviando',
         test: { file: SMOKE_PROMPTS, check: 'catalogo' },
       },
@@ -418,7 +418,7 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
         locator: 'aria-label="Remover prompt"',
         kind: 'button',
         effect: 'cancela o salvamento pendente, chama automations:delete e tira o prompt da lista, sem confirmação',
-        failure: 'erro engolido: resultado do delete ignorado; o prompt volta ao reabrir se não foi apagado',
+        failure: 'falha ao apagar a automação avisa na barra de status e ela continua na lista',
         disabledWhen: 'só aparece em prompts personalizados',
       },
       {
@@ -520,7 +520,7 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
         effect:
           'nova: acrescenta a skill; edição: substitui; grava a lista com canvas:set-skills, relê o catálogo (canvas:list-available-skills) e avisa o CanvasView (onCatalogChange → availableSkillsRef) para o próximo agente já nascer com ela',
         failure:
-          'erro engolido: o resultado de canvas:set-skills não é lido — a lista local já mostra a skill (setSkills otimista) mesmo sem gravar; o caminho não é validado',
+          'a lista local só muda depois de canvas:set-skills gravar; falha restaura a lista e avisa na barra de status',
         disabledWhen: 'nome ou caminho vazio',
       },
       {
@@ -535,7 +535,7 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
         effect:
           'buildSkillActivationPrompt: digita no terminal expandido, sem Enter, a instrução de ler o arquivo da skill (context-file:write + pty:write); o cartão do bloco mostra o nome e o canvas grava lastPromptInsertion com source skill; sem terminal, copia',
         failure:
-          'PTY sem confirmação: aviso em vermelho até nova tentativa; erro engolido: activate não tem try, e a rejeição do clipboard (CanvasView.tsx:1801) não mostra retorno; sem estado "enviando" nem trava de duplo clique',
+          'PTY sem confirmação: aviso em vermelho até nova tentativa; rejeição e clipboard recusado viram o aviso em vermelho; sem estado "enviando" nem trava de duplo clique',
         test: { file: SMOKE_PROMPTS, check: 'skill' },
       },
       {
@@ -565,7 +565,7 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
         effect:
           'mesma ativação da biblioteca para uma skill própria: digita a instrução no terminal expandido sem Enter, ou copia',
         failure:
-          'PTY sem confirmação: aviso em vermelho na linha; erro engolido na rejeição do clipboard; sem trava de duplo clique',
+          'PTY sem confirmação: aviso em vermelho na linha; rejeição do clipboard vira o aviso em vermelho; sem trava de duplo clique',
       },
       {
         locator: 'onClick={() => startEdit(skill)}',
@@ -577,7 +577,7 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
         locator: 'onClick={() => void removeSkill(skill.id)}',
         kind: 'button',
         effect: 'tira a skill da lista e grava com canvas:set-skills, sem confirmação; relê o catálogo',
-        failure: 'erro engolido: resultado de canvas:set-skills ignorado; a skill some da tela mesmo se a gravação falhou',
+        failure: 'falha de canvas:set-skills restaura a lista e avisa na barra de status',
       },
     ],
     persistence: [
@@ -1025,7 +1025,7 @@ export const workspaceToolSurfaces: InventoryElement[] = [
         disabledWhen: 'só aparece com rascunho pendente',
       },
       {
-        locator: 'onClick={saveDraft}',
+        locator: 'onClick={() => void saveDraft()}',
         kind: 'button',
         effect:
           'onSave → editPreset: grava o rascunho inteiro como override do preset (upsertPresetOverride) com debounce de 500 ms (automations:save); o item ganha o selo "editado"',
@@ -1037,7 +1037,7 @@ export const workspaceToolSurfaces: InventoryElement[] = [
         locator: 'onClick={onReset}',
         kind: 'button',
         effect: 'Restaurar padrão: apaga o override (automations:delete) e o texto padrão do preset volta, sem confirmação',
-        failure: 'erro engolido: resultado do delete ignorado; o override volta ao reabrir se não foi apagado',
+        failure: 'falha ao restaurar o padrão avisa na barra de status e o override continua',
         disabledWhen: 'sem edição salva',
       },
       {
@@ -1055,17 +1055,12 @@ export const workspaceToolSurfaces: InventoryElement[] = [
     ],
     ipc: ['automations:save', 'automations:delete', 'context-file:write', 'pty:write'],
     dependsOn: ['PromptsPanel (editPreset, removeCustomAutomation, insertPrompt)', 'FelixoSelect', 'prompt-overrides'],
-    tests: [{ file: 'src/features/canvas/services/prompt-overrides.test.ts' }],
+    tests: [{ file: 'src/features/shared/ipc/ipc-failures-2.test.ts' }, { file: 'src/features/canvas/services/prompt-overrides.test.ts' }],
     gaps: [
       {
         what: 'nenhum teste abre o detalhe (Ver), edita, salva, restaura ou insere por ele',
         risk: 'médio',
         task: NOVA_SMOKE,
-      },
-      {
-        what: 'PromptsPanel.tsx:315-339 com PromptDetailPanel.tsx:67-71 e 170-192: Inserir no detalhe não mostra Enviando/Feito/erro nem trava duplo clique; o "Salvo" some na primeira gravação porque a key muda de preset para override e remonta o detalhe (PromptsPanel.tsx:326); falha de automations:save fica invisível',
-        risk: 'médio',
-        task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
       },
     ],
     overlap:

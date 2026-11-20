@@ -343,7 +343,7 @@ export const terminalSurfaces: InventoryElement[] = [
         locator: "label = 'Copiar do terminal'",
         kind: 'button',
         effect: 'store.copy(sessionId): copia a seleção do xterm ou, sem seleção, a tela visível (readViewport) com navigator.clipboard.writeText e mostra ✓.',
-        failure: 'erro engolido: a rejeição do clipboard vira promessa sem tratamento, sem aviso; sem navigator.clipboard o ✓ aparece sem ter copiado nada.',
+        failure: 'a recusa do clipboard mostra o ícone de alerta com o motivo, sem ✓ e sem limpar a seleção.',
       },
     ],
     persistence: ['nenhuma'],
@@ -377,7 +377,7 @@ export const terminalSurfaces: InventoryElement[] = [
         locator: 'Copiar ${label}',
         kind: 'button',
         effect: 'Botão repetido em cada detalhe copiável (pasta, ID do elemento, ID da sessão PTY, ID da conversa): navigator.clipboard.writeText do valor.',
-        failure: 'erro engolido: promessa com void, sem retorno visual de sucesso nem de erro.',
+        failure: 'a recusa do clipboard mostra o ícone de alerta com o motivo; o ✓ só aparece depois de copiar.',
         disabledWhen: 'some quando o detalhe não tem valor copiável',
       },
       {
@@ -979,7 +979,7 @@ export const terminalSurfaces: InventoryElement[] = [
         locator: 'Conferir login de novo',
         kind: 'button',
         effect: 'store.checkLogin das contas excluídas (até 5) → account-chain:check-login e account-chain:get-state; o diálogo atualiza pela proposta ao vivo.',
-        failure: 'erro engolido: o resultado (e a mensagem de falha) é descartado com void.',
+        failure: 'a falha do Conferir agora aparece na barra de status.',
         disabledWhen: 'só no estado vazio',
       },
       {

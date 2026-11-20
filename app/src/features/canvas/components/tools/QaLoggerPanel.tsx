@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { resultadoDeIpc } from '../../../shared/ipc/ipc-result'
 import { FileWarning, Terminal, Trash2 } from 'lucide-react'
 import { CanvasPanel } from './CanvasPanel'
 import type { QaLogEntry } from '../../../shared/types/qa-log'
@@ -21,6 +22,7 @@ const MAX_ENTRIES = 400
  */
 export function QaLoggerPanel({ onClose, toolsMenuOpen }: QaLoggerPanelProps) {
   const [entries, setEntries] = useState<QaLogEntry[]>([])
+  const [clearError, setClearError] = useState<string | null>(null)
   const [reportState, setReportState] = useState<
     { status: 'idle' } | { status: 'building' } | { status: 'done'; filePath: string } | { status: 'error'; message: string }
   >({ status: 'idle' })
@@ -92,7 +94,12 @@ export function QaLoggerPanel({ onClose, toolsMenuOpen }: QaLoggerPanelProps) {
         </button>
         <button
           type="button"
-          onClick={() => window.felixo?.qaLogger?.clear()}
+          onClick={() => {
+            setClearError(null)
+            void resultadoDeIpc(() => window.felixo?.qaLogger?.clear(), 'Não foi possível limpar o log.').then((outcome) => {
+              if (!outcome.ok) setClearError(outcome.message)
+            })
+          }}
           className="felixo-btn flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-zinc-400 hover:bg-white/6 hover:text-zinc-200"
         >
           <Trash2 size={12} />
@@ -108,6 +115,12 @@ export function QaLoggerPanel({ onClose, toolsMenuOpen }: QaLoggerPanelProps) {
       {reportState.status === 'error' && (
         <p className="mb-2 rounded-md border border-(--color-warning)/30 bg-(--color-warning)/10 px-2 py-1.5 text-[11px] text-(--color-warning)">
           Não foi possível gerar o relatório: {reportState.message}
+        </p>
+      )}
+
+      {clearError && (
+        <p role="alert" className="mb-2 text-xs text-theme-error">
+          {clearError}
         </p>
       )}
 

@@ -28,7 +28,7 @@ export const notificationsTool: InventoryElement = {
       locator: 'Mutar notificações',
       kind: 'button',
       effect: 'Alterna o som (setNotificationSoundEnabled), grava felixo:notification-preferences e liga ou desliga o som que toca quando um agente novo pede ação; aria-pressed indica mudo e o rótulo vira "Ativar som das notificações".',
-      failure: 'erro engolido: se o Chromium bloquear o áudio, audio.play().catch vazio (CanvasView.tsx:670) não avisa nada; sem localStorage a escolha vale só nesta sessão.',
+      failure: 'se o Chromium bloquear o áudio, a barra de status avisa "O som da notificação foi bloqueado pelo sistema" (reportActionFailure); sem localStorage a escolha vale só nesta sessão.',
     },
     {
       locator: 'Limpar busca',
@@ -317,7 +317,7 @@ export const chromeSurfaces: InventoryElement[] = [
         locator: 'Abrir uma imagem autorizada no bloco do canvas',
         kind: 'button',
         effect: 'onOpenImage → pickAndOpenImageFile: seletor nativo (files:pick-image); a imagem escolhida vira um bloco de arquivo de imagem (fileKind "image"), selecionado e centralizado na área útil, e é salvo (canvas:save).',
-        failure: 'erro engolido: imagem não suportada ou maior que 25 MB volta ok:false com mensagem, e o renderer ignora (CanvasView.tsx:2483); cancelar o seletor não faz nada.',
+        failure: 'imagem não suportada, maior que 25 MB ou IPC caído aparece na barra de status (reportActionFailure "abrir-imagem"); cancelar o seletor não faz nada.',
       },
       {
         locator: 'data-felixo-tour-anchor={tourAnchor}',
@@ -335,7 +335,7 @@ export const chromeSurfaces: InventoryElement[] = [
         locator: '{secondaryLabel}',
         kind: 'button',
         effect: '"Abrir arquivo existente…" (só em Novo bloco): fecha o popover e chama pickAndOpenTextFile (text-file:pick); o arquivo escolhido vira um bloco de arquivo apontando para ele.',
-        failure: 'erro engolido: falha do seletor volta ok:false com mensagem e o renderer ignora (CanvasView.tsx:2512).',
+        failure: 'falha do seletor ou IPC caído aparece na barra de status (reportActionFailure "abrir-arquivo").',
         disabledWhen: 'só existe no popover de "Novo bloco"',
       },
       {
@@ -531,7 +531,7 @@ export const chromeSurfaces: InventoryElement[] = [
         locator: 'Interromper a geração em andamento',
         kind: 'button',
         effect: 'Cancelar: marca cancelling e chama openia:cancel-image; o desfecho "A geração de imagem foi cancelada." chega pela resposta do pedido.',
-        failure: 'erro engolido: falha de openia:cancel-image cai num catch vazio (openia-image-store.ts:337); o botão fica em "Cancelando…" até o pedido terminar, e a geração pode concluir (e cobrar).',
+        failure: 'falha de openia:cancel-image volta o botão de "Cancelando…" e avisa na barra de status que a imagem pode sair mesmo assim.',
         disabledWhen: 'aria-disabled sem geração em andamento ou já cancelando',
       },
       {
@@ -944,7 +944,7 @@ export const chromeSurfaces: InventoryElement[] = [
         locator: 'onClick={sendAllDrafts}',
         kind: 'button',
         effect: 'Enviar para todos: para cada rascunho não vazio, store.sendText com Enter (prompt manual) no PTY do terminal (pty:write) e limpa o rascunho.',
-        failure: 'erro engolido: o resultado de sendText é ignorado e o rascunho é apagado mesmo se a entrega falhar (TerminalsPanel.tsx:193).',
+        failure: 'só apaga o rascunho se o terminal recebeu; senão o rascunho fica e a barra de status avisa.',
         disabledWhen: 'nenhum rascunho pendente',
       },
       {
@@ -958,7 +958,7 @@ export const chromeSurfaces: InventoryElement[] = [
         locator: 'Enviar mensagem para',
         kind: 'button',
         effect: 'Envio de uma linha (ou Enter no campo): store.sendText com Enter só para aquele terminal e limpa o rascunho.',
-        failure: 'erro engolido: o resultado de sendText é ignorado; o rascunho some mesmo se não chegou ao PTY.',
+        failure: 'só apaga o rascunho se o terminal recebeu; senão o rascunho fica e a barra de status avisa.',
         disabledWhen: 'campo vazio; só existe no modo de envio em massa',
       },
     ],

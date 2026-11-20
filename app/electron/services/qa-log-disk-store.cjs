@@ -156,7 +156,23 @@ function createQaLogDiskStore(options = {}) {
     }
   }
 
-  return { append, flush, loadRecent, prune, getDirectory: () => directory }
+  /**
+   * "Limpar" do QA Logger: apaga os arquivos de log do disco (só os que este store escreve). Sem isto o painel esvaziava a
+   * memória e `loadRecent` trazia tudo de volta no próximo boot. Entra na fila das escritas, para uma linha em voo não
+   * recriar o arquivo logo depois.
+   */
+  async function clear() {
+    const task = writeQueue.then(async () => {
+      for (const file of listLogFiles(directory, fileSystem)) {
+        await fileSystemPromises.rm(path.join(directory, file), { force: true })
+      }
+      current = null
+    })
+    writeQueue = task.catch(() => {})
+    return task
+  }
+
+  return { append, clear, flush, loadRecent, prune, getDirectory: () => directory }
 }
 
 function listLogFiles(directory, fileSystem) {

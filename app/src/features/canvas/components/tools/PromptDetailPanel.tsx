@@ -14,11 +14,20 @@ type PromptDetailPanelProps = {
   canResetToPreset: boolean
   /** Back to the prompt list. Confirms first if there's an unsaved draft. */
   onBack: () => void
-  /** Persists the full edited draft as an override. Only called on "Salvar". */
-  onSave: (patch: Partial<AutomationDefinition>) => void
+  /**
+   * Persists the full edited draft as an override. Only called on "Salvar". Resolve com a mensagem de falha, ou `null` quando
+   * gravou de verdade: o "Salvo" só aparece depois disso.
+   */
+  onSave: (patch: Partial<AutomationDefinition>) => Promise<string | null>
   /** Discards the override and restores the built-in preset text. */
   onReset: () => void
   onInsert: () => void
+  /** O pedido de inserir está esperando a resposta do terminal: o botão trava (sem duplo clique) e diz "Enviando…". */
+  inserting?: boolean
+  /** Desfecho da última inserção deste prompt (Feito ou o erro), vindo de quem entrega ao terminal. */
+  insertFeedback?: { text: string; isError: boolean } | null
+  /** "Salvo" vive em quem grava: a primeira gravação troca a `key` do detalhe (preset → override) e remonta este painel. */
+  justSaved?: boolean
   /** Avisa quem fecha o painel por fora (Esc, Fechar) se há rascunho não salvo. */
   onDirtyChange?: (dirty: boolean) => void
 }
@@ -47,13 +56,17 @@ export function PromptDetailPanel({
   onSave,
   onReset,
   onInsert,
+  inserting = false,
+  insertFeedback = null,
+  justSaved = false,
   onDirtyChange,
 }: PromptDetailPanelProps) {
   const [name, setName] = useState(prompt.name)
   const [description, setDescription] = useState(prompt.description)
   const [scope, setScope] = useState(prompt.scope)
   const [text, setText] = useState(prompt.prompt)
-  const [justSaved, setJustSaved] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   const isDirty =
     name !== prompt.name ||
@@ -73,10 +86,18 @@ export function PromptDetailPanel({
     setText(prompt.prompt)
   }
 
-  const saveDraft = () => {
-    onSave({ name, description, scope, prompt: text })
-    setJustSaved(true)
-    window.setTimeout(() => setJustSaved(false), 1500)
+  const saveDraft = async () => {
+    if (saving) return
+    setSaving(true)
+    setSaveError(null)
+    try {
+      const failure = await onSave({ name, description, scope, prompt: text })
+      if (failure) setSaveError(failure)
+    } catch {
+      setSaveError('Não foi possível salvar este prompt. Tente novamente.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const back = () => {
@@ -156,13 +177,25 @@ export function PromptDetailPanel({
           </button>
           <button
             type="button"
-            onClick={saveDraft}
-            className="felixo-btn flex items-center gap-1 rounded-sm felixo-primary-action px-2.5 py-1.5 text-xs font-medium text-white hover:bg-white/16"
+            onClick={() => void saveDraft()}
+            disabled={saving}
+            className="felixo-btn flex items-center gap-1 rounded-sm felixo-primary-action px-2.5 py-1.5 text-xs font-medium text-white hover:bg-white/16 disabled:opacity-50"
           >
             <Check size={13} />
-            Salvar
+            {saving ? 'Salvando…' : 'Salvar'}
           </button>
         </div>
+      )}
+
+      {saveError && (
+        <p role="alert" className="text-xs text-theme-error">
+          {saveError}
+        </p>
+      )}
+      {insertFeedback && (
+        <p role={insertFeedback.isError ? 'alert' : 'status'} className={`text-xs ${insertFeedback.isError ? 'text-theme-error' : 'text-(--f-core-white-soft)'}`}>
+          {insertFeedback.text}
+        </p>
       )}
 
       <div className="-mx-3 -mb-3 flex items-center justify-between gap-2 border-t border-white/10 px-3 py-2">
@@ -179,7 +212,7 @@ export function PromptDetailPanel({
         <button
           type="button"
           onClick={onInsert}
-          disabled={isDirty}
+          disabled={isDirty || inserting}
           title={
             isDirty
               ? 'Salve ou cancele as edições pendentes antes de inserir'
@@ -195,7 +228,7 @@ export function PromptDetailPanel({
           ) : (
             <>
               <SendHorizontal size={13} />
-              Inserir
+              {inserting ? 'Enviando…' : 'Inserir'}
             </>
           )}
         </button>

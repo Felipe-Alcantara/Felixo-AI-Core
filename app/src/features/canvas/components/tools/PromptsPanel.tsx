@@ -102,6 +102,8 @@ export function PromptsPanel({
   // real confirmation — never assumed "sent" before the PTY actually replied.
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [detailId, setDetailId] = useState<string | null>(null)
+  // "Salvo" do detalhe: aqui, porque a primeira gravação troca a `key` do detalhe e o remonta.
+  const [detailSaved, setDetailSaved] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [query, setQuery] = useState('')
   const [transfer, setTransfer] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null)
@@ -394,18 +396,24 @@ export function PromptsPanel({
   // Editing a preset (default automation) upserts it into `custom` under the
   // same id, so it overrides the built-in text without mutating
   // defaultAutomations. See prompt-overrides.ts for the merge/upsert rules.
+  // Grava na hora (sem o debounce da edição inline) e só mostra o override depois de gravar: o detalhe diz "Salvo" ou a falha.
   const editPreset = useCallback(
-    (preset: AutomationDefinition, patch: Partial<AutomationDefinition>) => {
-      setCustom((current) => {
-        const next = upsertPresetOverride(current, preset, patch)
-        const edited = next.find((automation) => automation.id === preset.id)
-        if (edited) {
-          schedulePersist(preset.id, edited)
-        }
-        return next
-      })
+    async (preset: AutomationDefinition, patch: Partial<AutomationDefinition>): Promise<string | null> => {
+      const next = upsertPresetOverride(custom, preset, patch)
+      const edited = next.find((automation) => automation.id === preset.id)
+      if (!edited) return 'Não foi possível salvar este prompt. Tente novamente.'
+      saveQueue.cancel(preset.id)
+      const saved = await resultadoDeIpc(
+        () => window.felixo?.automations?.save({ ...edited, updatedAt: new Date().toISOString() }),
+        'Não foi possível salvar este prompt. Tente novamente.',
+      )
+      if (!saved.ok) return saved.message
+      setCustom(next)
+      setDetailSaved(true)
+      window.setTimeout(() => setDetailSaved(false), 1500)
+      return null
     },
-    [schedulePersist],
+    [custom, saveQueue],
   )
 
   const startCustomAutomation = useCallback(() => {
@@ -481,6 +489,9 @@ export function PromptsPanel({
           onBack={() => setDetailId(null)}
           onDirtyChange={setDetailDirty}
           onSave={(patch) => editPreset(detailPrompt, patch)}
+          justSaved={detailSaved}
+          inserting={pendingId === detailPrompt.id}
+          insertFeedback={feedbackId === detailPrompt.id ? { text: feedbackText, isError: feedbackIsError } : null}
           onReset={() => {
             if (detailPresetFallback) {
               void removeCustomAutomation(detailPrompt.id)

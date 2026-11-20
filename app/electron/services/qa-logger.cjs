@@ -42,9 +42,15 @@ function registerQaLoggerIpcHandlers(getWindow, options = {}) {
   getMainWindow = getWindow
 
   ipcMain.handle('qa-logger:get', () => qaLogStore.getEntries())
-  ipcMain.handle('qa-logger:clear', () => {
+  ipcMain.handle('qa-logger:clear', async () => {
     qaLogStore.clear()
     sendQaLoggerEvent('qa-logger:cleared', null)
+    // O histórico em disco também: do contrário as entradas limpas voltavam depois de reiniciar o app.
+    try {
+      await diskStore?.clear?.()
+    } catch {
+      return { ok: false, message: 'O painel foi limpo, mas o histórico em disco não pôde ser apagado: as entradas voltam ao reiniciar.' }
+    }
     return { ok: true }
   })
   // O renderer nunca tinha como escrever no log — só ler (getEntries/onEntry).

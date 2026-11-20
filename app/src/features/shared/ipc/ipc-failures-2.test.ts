@@ -27,3 +27,30 @@ describe('falhas de IPC (parte 2): o que a pessoa vê quando o IPC falha', () =>
     expect(code).toMatch(/speech:clear-key[\s\S]{0,260}catch[\s\S]{0,120}ok: false/)
   })
 })
+
+describe('QA Logger e detalhe do preset de prompt', () => {
+  it('Limpar apaga o disco e o painel mostra a falha', () => {
+    expect(main('services/qa-log-disk-store.cjs')).toContain('async function clear()')
+    const handler = main('services/qa-logger.cjs')
+    expect(handler).toContain('await diskStore?.clear?.()')
+    expect(handler).toContain('as entradas voltam ao reiniciar')
+    const painel = source('canvas/components/tools/QaLoggerPanel.tsx')
+    expect(painel).toContain("'Não foi possível limpar o log.'")
+    expect(painel).toContain('setClearError(outcome.message)')
+  })
+
+  it('o detalhe grava na hora e só mostra "Salvo" depois de gravar, com o "Salvo" vivendo em quem grava', () => {
+    const lista = source('canvas/components/tools/PromptsPanel.tsx')
+    expect(lista).toContain('saveQueue.cancel(preset.id)')
+    expect(lista).toContain('if (!saved.ok) return saved.message')
+    expect(lista).toContain('setDetailSaved(true)')
+    expect(lista).toContain('justSaved={detailSaved}')
+    expect(lista).toContain('inserting={pendingId === detailPrompt.id}')
+    const detalhe = source('canvas/components/tools/PromptDetailPanel.tsx')
+    expect(detalhe).toContain('Promise<string | null>')
+    expect(detalhe).toContain("{inserting ? 'Enviando…' : 'Inserir'}")
+    expect(detalhe).toContain('disabled={isDirty || inserting}')
+    expect(detalhe).toContain('setSaveError(failure)')
+    expect(detalhe).toContain("{saving ? 'Salvando…' : 'Salvar'}")
+  })
+})

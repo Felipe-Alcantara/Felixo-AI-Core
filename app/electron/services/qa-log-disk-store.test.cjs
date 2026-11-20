@@ -214,3 +214,31 @@ test('virar o dia durante a execução apaga o que passou de maxDays sem esperar
 
   assert.deepEqual(fs.readdirSync(directory), ['qa-2026-09-20.jsonl'])
 })
+
+test('clear apaga os arquivos de log do disco e o histórico não volta no próximo boot', async () => {
+  const directory = tempDir()
+  const now = () => new Date('2026-09-14T10:00:00.000Z')
+  const store = createQaLogDiskStore({ directory, now })
+  await store.append({ id: 1, level: 'info', scope: 'test', message: 'a' })
+  await store.append({ id: 2, level: 'info', scope: 'test', message: 'b' })
+
+  await store.clear()
+
+  assert.deepEqual(fs.readdirSync(directory).filter((name) => QA_LOG_FILE_PATTERN.test(name)), [])
+  // Outro processo (o próximo boot) lê o disco: nada para hidratar.
+  const reaberto = createQaLogDiskStore({ directory, now })
+  assert.deepEqual(await reaberto.loadRecent(100), [])
+  // Escrever depois de limpar volta a funcionar (a parte em uso foi esquecida).
+  await store.append({ id: 3, level: 'info', scope: 'test', message: 'c' })
+  await store.flush()
+  assert.equal((await reaberto.loadRecent(100)).length, 1)
+})
+
+test('clear espera a escrita em voo, para ela não recriar o arquivo depois de limpar', async () => {
+  const directory = tempDir()
+  const store = createQaLogDiskStore({ directory, now: () => new Date('2026-09-14T10:00:00.000Z') })
+  const escrevendo = store.append({ id: 1, level: 'info', scope: 'test', message: 'em voo' })
+  await store.clear()
+  await escrevendo
+  assert.deepEqual(fs.readdirSync(directory).filter((name) => QA_LOG_FILE_PATTERN.test(name)), [])
+})

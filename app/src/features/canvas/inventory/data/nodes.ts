@@ -267,7 +267,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
         test: smoke('checarControlesDoArquivo'),
         kind: 'button',
         effect: 'Copia o caminho absoluto do arquivo (canvas-file:resolve ou filePath) com navigator.clipboard e mostra ✓ por 1,5 s.',
-        failure: 'Erro engolido: sem caminho não faz nada; sem navigator.clipboard mostra ✓ sem copiar; writeText rejeitado vira unhandledrejection (void copyPath()), sem aviso.',
+        failure: 'sem caminho não faz nada; sem navigator.clipboard ou com recusa não mostra ✓: a mensagem aparece no bloco.',
       },
       {
         locator: 'onClick={() => setEditing((value) => !value)}',
