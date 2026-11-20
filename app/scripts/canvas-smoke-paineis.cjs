@@ -238,7 +238,7 @@ async function checarSourceControl(page) {
     // Commit: a mensagem habilita o botão e o Histórico mostra o commit com a marca "não enviado".
     await preencher(page, `${painel} textarea[aria-label="Mensagem do commit"], ${painel} input[aria-label="Mensagem do commit"]`, 'commit do smoke')
     await exigirClique(page, painel, /^Criar commit/, 'Criar commit')
-    await exigirClique(page, painel, /^Histórico$/, 'aba Histórico')
+    await exigirClique(page, painel, /^Histórico/, 'aba Histórico')
     await esperar(page, (sel) => /commit do smoke/.test(document.querySelector(sel)?.innerText ?? ''), painel, 'o commit novo não apareceu no Histórico')
     const historico = await textoDoPainel(page, painel)
     if (!/inicial/.test(historico)) falhar('o Histórico não trouxe o commit anterior', historico.slice(0, 300))
