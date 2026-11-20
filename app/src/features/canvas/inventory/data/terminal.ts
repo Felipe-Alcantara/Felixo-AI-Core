@@ -1181,6 +1181,7 @@ export const terminalSurfaces: InventoryElement[] = [
     ipc: ['agent-browser:list-requests', 'agent-browser:decide', 'agent-browser:requests', 'agent-browser:open-webpage'],
     dependsOn: ['agent-browser-request', 'describeLinkDestination', 'floating-layer', 'window.felixo.canvas'],
     tests: [
+      { file: 'scripts/canvas-smoke-sobreposicoes.cjs', check: 'checarPedidoDeNavegadorDoAgente' },
       { file: 'src/features/canvas/components/agent-browser-request.test.ts' },
       { file: 'electron/services/agent-browser-ipc-handlers.test.cjs' },
       { file: 'src/features/shared/focus/floating-layer.test.ts' },
@@ -1191,11 +1192,6 @@ export const terminalSurfaces: InventoryElement[] = [
         what: 'Abrir no navegador e Recusar todos não são clicados no smoke (o caminho externo só é testado no handler do main).',
         risk: 'baixo',
         task: '3ec91f95-497e-81e8-8f18-e2a529b0568e',
-      },
-      {
-        what: 'Cartão fixed top-4 z-50 pode cobrir a topbar e o topo da gaveta ou do painel em janela estreita; sem teste de sobreposição.',
-        risk: 'baixo',
-        task: '3ec91f95-497e-8112-82f9-fd1b86e3ec7d',
       },
       {
         what: 'decide e load não tratam IPC rejeitado (try/finally sem catch), sem aviso (AgentBrowserRequestCard.tsx:54-101).',

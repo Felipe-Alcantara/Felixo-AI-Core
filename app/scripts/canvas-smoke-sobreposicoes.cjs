@@ -50,6 +50,11 @@ const DEFEITOS_CONHECIDOS = [
   { risco: 'detalhes-e-ferramenta', tipo: 'detalhes-e-ferramenta-no-mesmo-lugar', task: TASK_SOBREPOSICOES },
   { risco: 'menu-perfil-acompanha-zoom', tipo: 'menu-nao-acompanha-o-zoom', task: TASK_SOBREPOSICOES },
   { risco: 'pergunta-sob-dialogos', tipo: 'pergunta-coberta-pelo-dialogo', task: TASK_SOBREPOSICOES },
+  // Medido em 20/11/2026 com os três avisos de baixo juntos (sugestão do Modo Performance, instalação das CLIs, link que não abriu):
+  // cada um é fixed por conta própria, sem pilha comum. Falta uma pilha única de avisos; ver a task de bug aberta no Notion.
+  { risco: 'avisos-flutuantes-juntos', tipo: 'avisos-se-cobrem', task: TASK_SOBREPOSICOES },
+  { risco: 'avisos-flutuantes-juntos', tipo: 'botao-de-aviso-coberto', task: TASK_SOBREPOSICOES },
+  { risco: 'avisos-flutuantes-juntos', tipo: 'aviso-de-clis-cobre-o-minimapa', task: TASK_SOBREPOSICOES },
   // Medido só no CI Linux (18/11/2026, 768x900 e 1280x800): o painel de ferramenta cobre de 5 a 32 px da pílula de
   // zoom e a área muda a cada rodada. No Windows (medição local) e no macOS do CI não colide. Falta reproduzir no Linux
   // para saber se é defeito do app ou da altura máxima do painel sob xvfb: ver a pendência aberta no Notion.
@@ -644,6 +649,149 @@ async function checarPerguntaDoAgenteSobDialogos(page) {
   return [resultado('pergunta-sob-dialogos', caso, medidas, problemas)]
 }
 
+
+/**
+ * Riscos: `overlays.ts`/`setup` → os avisos fixos de baixo se cobrem. Monta os três ao mesmo tempo, como
+ * na primeira abertura: a sugestão do Modo Performance (NoticeToast, centro, z 50; o perfil de hardware é
+ * trocado por um de CPU fraca no processo principal), o aviso da instalação das CLIs (canto direito, z 50;
+ * o estado é enviado pelo canal que o app usa) e o aviso "o link não abriu" (centro, z 70). Mede cada um
+ * contra a janela, os pares entre si, o botão de cada um (quem o clique alcança) e o minimapa.
+ * Não cobre a gaveta do terminal nem o card do tutorial junto do aviso de link: ficam como lacuna.
+ */
+const SELETOR_AVISO_FIXO = '[data-felixo-tour-avoid][role="status"]'
+const SELETOR_AVISO_DE_LINK = '[data-felixo-link-open-failure]'
+
+async function mainEval(page, expressao) {
+  return page.evaluate((fonte) => window.felixo.devtools.mainEval(fonte), expressao)
+}
+
+async function checarAvisosFlutuantesJuntos(page) {
+  const resultados = []
+  // O perfil é lido ao montar: troca o handler e recarrega. O handler de webContents vence o do ipcMain.
+  await mainEval(
+    page,
+    `(() => { const ipc = mainWindow.webContents.ipc; ipc.removeHandler('hardware:get-profile'); ipc.handle('hardware:get-profile', () => ({ logicalCpuCount: 2, lowCpu: true, lowCpuThreshold: 4, suggestPerformanceMode: true })); return true })()`,
+  )
+  try {
+    for (const caso of VIEWPORTS_DOS_RISCOS) {
+      await page.evaluate(() => {
+        try { localStorage.removeItem('felixo-ai-core.performance-suggestion') } catch { /* sem storage */ }
+      })
+      await page.reload()
+      await page.waitForSelector('.felixo-zoom-pill', { timeout: HYDRATION_TIMEOUT_MS })
+      await definirJanela(page, caso)
+      await enquadrarTodos(page)
+      await mainEval(
+        page,
+        `mainWindow.webContents.send('clis:setup-status', { state: 'installing', message: 'Instalando as CLIs', updatedAt: new Date().toISOString(), clis: [{ id: 'claude', name: 'Claude Code', state: 'installing' }] })`,
+      )
+      await mainEval(page, `mainWindow.webContents.send('external-links:open-failed', { url: 'https://exemplo.com/', kind: 'falhou' })`)
+      const apareceram = await page
+        .waitForFunction(
+          ([aviso, link]) => {
+            const textos = [...document.querySelectorAll(aviso)].map((el) => el.textContent ?? '')
+            return textos.some((t) => t.includes('Modo Performance')) && textos.some((t) => !t.includes('Modo Performance')) && Boolean(document.querySelector(link))
+          },
+          [SELETOR_AVISO_FIXO, SELETOR_AVISO_DE_LINK],
+          { timeout: INTERACTION_TIMEOUT_MS * 2, polling: POLLING_MS },
+        )
+        .then(() => true, () => false)
+      if (!apareceram) {
+        resultados.push({ risco: 'avisos-flutuantes-juntos', caso, rotulo: `${caso.width}x${caso.height}`, medido: false, medidas: {}, problemas: [], motivo: 'os três avisos não apareceram juntos (Modo Performance, instalação das CLIs e link)' })
+        continue
+      }
+      const medidas = await page.evaluate(
+        ([aviso, link]) => {
+          const caixa = (el) => {
+            const r = el.getBoundingClientRect()
+            return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height }
+          }
+          const avisos = [...document.querySelectorAll(aviso)]
+          const linkEl = document.querySelector(link)
+          const todos = { performance: avisos.find((el) => (el.textContent ?? '').includes('Modo Performance')) ?? null, clis: avisos.find((el) => !(el.textContent ?? '').includes('Modo Performance')) ?? null, link: linkEl }
+          const botoes = []
+          for (const [nome, el] of Object.entries(todos)) {
+            if (!el) continue
+            for (const botao of el.querySelectorAll('button')) {
+              const r = botao.getBoundingClientRect()
+              if (r.width <= 0 || r.height <= 0) continue
+              const hit = document.elementFromPoint((r.left + r.right) / 2, (r.top + r.bottom) / 2)
+              const dono = hit ? Object.entries(todos).find(([, outro]) => outro && outro.contains(hit))?.[0] ?? 'outro' : 'nenhum'
+              botoes.push({ aviso: nome, rotulo: (botao.getAttribute('aria-label') || botao.textContent || '').trim().slice(0, 30), alcancadoPor: dono })
+            }
+          }
+          const minimapa = document.querySelector('.react-flow__minimap')
+          return {
+            performance: todos.performance ? caixa(todos.performance) : null,
+            clis: todos.clis ? caixa(todos.clis) : null,
+            link: todos.link ? caixa(todos.link) : null,
+            minimapa: minimapa ? caixa(minimapa) : null,
+            botoes,
+          }
+        },
+        [SELETOR_AVISO_FIXO, SELETOR_AVISO_DE_LINK],
+      )
+      const problemas = []
+      for (const nome of ['performance', 'clis', 'link']) {
+        for (const corte of cortesDaJanela(medidas[nome], caso)) problemas.push({ ...corte, aviso: nome })
+      }
+      for (const [a, b] of [['clis', 'performance'], ['link', 'performance'], ['link', 'clis']]) {
+        const area = sobreposicao(medidas[a], medidas[b])
+        if (area) problemas.push({ tipo: 'avisos-se-cobrem', avisos: [a, b], area })
+      }
+      const sobMinimapa = sobreposicao(medidas.clis, medidas.minimapa)
+      if (sobMinimapa) problemas.push({ tipo: 'aviso-de-clis-cobre-o-minimapa', area: sobMinimapa })
+      for (const botao of medidas.botoes) {
+        if (botao.alcancadoPor !== botao.aviso) problemas.push({ tipo: 'botao-de-aviso-coberto', ...botao })
+      }
+      resultados.push(resultado('avisos-flutuantes-juntos', caso, medidas, problemas))
+    }
+  } finally {
+    await mainEval(page, `mainWindow.webContents.ipc.removeHandler('hardware:get-profile')`).catch(() => {})
+  }
+  return resultados
+}
+
+/**
+ * Risco: `terminal.ts`/`overlays.ts` → o cartão "um agente quer abrir uma página" (fixed top-4, z 50) cobre a barra
+ * superior ou sai da janela estreita. Grava um pedido `abrir-pagina` no perfil isolado e mede o cartão contra
+ * a janela e a barra superior.
+ */
+async function checarPedidoDeNavegadorDoAgente(page) {
+  const resultados = []
+  const { criarRepositorioDePedidos } = require('../electron/services/fetch-all/agent-requests.cjs')
+  const estado = readState()
+  if (!estado?.userData || estado.realProfile) throw new Error('[canvas-smoke:sobreposicoes] gravar pedido de navegador só é permitido num perfil isolado do felixo devtools.')
+  const pedidos = criarRepositorioDePedidos({ pasta: require('node:path').join(estado.userData, 'agent-requests') })
+  const pedido = pedidos.registrar('abrir-pagina', { url: 'https://exemplo.com/sobreposicao', modo: 'embutido', origem: 'canvas-smoke' })
+  // O app mostra um pedido por vez: se sobrou outro pendente de uma rodada anterior, é ele que aparece. O que se mede é o cartão.
+  void pedido
+  const seletor = '[data-felixo-agent-browser-request]'
+  for (const caso of VIEWPORTS_DOS_RISCOS) {
+    await definirJanela(page, caso)
+    const apareceu = await page.locator(seletor).waitFor({ state: 'visible', timeout: HYDRATION_TIMEOUT_MS }).then(() => true, () => false)
+    if (!apareceu) {
+      resultados.push({ risco: 'pedido-de-navegador-do-agente', caso, rotulo: `${caso.width}x${caso.height}`, medido: false, medidas: {}, problemas: [], motivo: 'o cartão do pedido de navegador não apareceu' })
+      continue
+    }
+    const medidas = await lerCaixas(page, { cartao: seletor, topbar: '[data-felixo-region="topbar"]' })
+    const problemas = [...cortesDaJanela(medidas.cartao, caso)]
+    const cobre = sobreposicao(medidas.cartao, medidas.topbar)
+    if (cobre) problemas.push({ tipo: 'cartao-cobre-a-barra-superior', area: cobre })
+    const botoes = await page.evaluate((sel) => {
+      const cartao = document.querySelector(sel)
+      return [...cartao.querySelectorAll('button')].map((botao) => {
+        const r = botao.getBoundingClientRect()
+        const hit = document.elementFromPoint((r.left + r.right) / 2, (r.top + r.bottom) / 2)
+        return { rotulo: (botao.textContent || '').trim().slice(0, 30), alcancavel: Boolean(hit) && cartao.contains(hit), visivel: r.width > 0 && r.height > 0 }
+      })
+    }, seletor)
+    for (const botao of botoes.filter((item) => item.visivel && !item.alcancavel)) problemas.push({ tipo: 'botao-do-cartao-coberto', rotulo: botao.rotulo })
+    resultados.push(resultado('pedido-de-navegador-do-agente', caso, { ...medidas, botoes: botoes.length }, problemas))
+  }
+  return resultados
+}
+
 // ---------------------------------------------------------------------------
 // Entrada usada pelo smoke (canvas-smoke.cjs) e pelo runner de desenvolvimento
 // ---------------------------------------------------------------------------
@@ -656,6 +804,8 @@ const CENARIOS = [
   { risco: 'detalhes-e-ferramenta', inventario: 'terminal.ts (Detalhes do terminal)', medir: checarDetalhesDoTerminalComFerramenta },
   { risco: 'alcas-sobre-botoes', inventario: 'overlays.ts (Alças de redimensionar)', medir: checarAlcasDoDialogoSobBotoes },
   { risco: 'menu-perfil-acompanha-zoom', inventario: 'nodes.ts (Menu de perfil da Página Web)', medir: checarMenuDoPerfilAcompanhaOZoom },
+  { risco: 'avisos-flutuantes-juntos', inventario: 'overlays.ts (avisos de baixo)', medir: checarAvisosFlutuantesJuntos },
+  { risco: 'pedido-de-navegador-do-agente', inventario: 'terminal.ts (Pedido de agente para abrir página)', medir: checarPedidoDeNavegadorDoAgente },
   // Por último: deixa uma pergunta pendente no perfil isolado (a sessão é descartada ao sair).
   { risco: 'pergunta-sob-dialogos', inventario: 'terminal.ts (Pergunta de agente)', medir: checarPerguntaDoAgenteSobDialogos },
 ]
@@ -719,11 +869,13 @@ module.exports = {
   TASK_SOBREPOSICOES,
   VIEWPORTS_DOS_RISCOS,
   checarAlcasDoDialogoSobBotoes,
+  checarAvisosFlutuantesJuntos,
   checarDetalhesDoTerminalComFerramenta,
   checarMenuDeCorDentroDaJanela,
   checarMenuDoPerfilAcompanhaOZoom,
   checarMenuLigarAgenteDentroDoCartao,
   checarPainelDeFerramentaSobPilulaDeZoom,
+  checarPedidoDeNavegadorDoAgente,
   checarPerguntaDoAgenteSobDialogos,
   checarSidebarExpandidaEmJanelaEstreita,
   checarSobreposicoesDoInventario,

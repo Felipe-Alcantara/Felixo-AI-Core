@@ -121,7 +121,8 @@ export function AgentBrowserRequestCard({ onOpenCanvas }: { onOpenCanvas?: () =>
     }
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-4 z-50 flex justify-center px-4">
+    // top-14: abaixo da barra superior (48 px); em top-4 o cartão cobria os 32 px de cima dela em todas as larguras.
+    <div className="pointer-events-none fixed inset-x-0 top-14 z-50 flex justify-center px-4">
       <section
         aria-labelledby="agent-browser-request-title"
         className="pointer-events-auto w-full max-w-md rounded-xl border border-white/10 bg-(--f-surface-panel) p-3 text-(--f-core-white-soft) shadow-2xl"

@@ -197,7 +197,7 @@ export const overlaySurfaces: InventoryElement[] = [
         task: '3e891f95-497e-8148-b00e-f27e78767664',
       },
       {
-        what: 'O aviso "link não abriu" (LinkChooserHost, z 70, embaixo no centro) não é [data-felixo-tour-avoid]: em viewport compacto o card vira folha na borda de baixo e o aviso cobre o rodapé com Pular/Voltar/Próximo. Nenhum teste junta os dois.',
+        what: 'O aviso "link não abriu" (LinkChooserHost, z 70, embaixo no centro) não é [data-felixo-tour-avoid]: em viewport compacto o card vira folha na borda de baixo e o aviso cobre o rodapé com Pular/Voltar/Próximo. O aviso de link foi medido junto da sugestão do Modo Performance e do aviso de CLIs (canvas-smoke-sobreposicoes.cjs → checarAvisosFlutuantesJuntos); o card do tutorial aberto junto dele continua sem teste.',
         risk: 'médio',
         task: '3ec91f95-497e-8112-82f9-fd1b86e3ec7d',
       },
@@ -421,6 +421,7 @@ export const overlaySurfaces: InventoryElement[] = [
     ipc: ['clis:get-setup-status', 'clis:setup-status', 'clis:retry-setup', 'clis:diagnose'],
     dependsOn: ['useCliSetupStatus', 'useCliDiagnosis', 'presentCliSetupStatus', 'cliSetupNoticeKey', 'CliDiagnosisList', 'CliDiagnosisFooter'],
     tests: [
+      { file: 'scripts/canvas-smoke-sobreposicoes.cjs', check: 'checarAvisosFlutuantesJuntos' },
       { file: 'src/features/setup/cli-setup-presentation.test.ts' },
       { file: 'src/features/setup/cli-diagnosis.test.ts' },
       { file: 'src/features/setup/setup-tailwind-classes.test.ts' },
@@ -444,12 +445,12 @@ export const overlaySurfaces: InventoryElement[] = [
         task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
       },
       {
-        what: 'Em janelas com menos de 1024 px de largura o aviso (w-80, canto direito) e o NoticeToast (22rem, centro) se sobrepõem; os dois são z 50 e o NoticeToast, montado depois no App, cobre os botões deste. Os dois podem aparecer juntos na primeira abertura e nenhum teste junta os dois na tela.',
+        what: 'Medido em 20/11/2026 com os três avisos de baixo juntos (canvas-smoke-sobreposicoes.cjs → checarAvisosFlutuantesJuntos): em 320 px o aviso saía 16 px da janela à esquerda (corrigido: largura min(20rem, 100vw − 2rem)); ele cobre a sugestão do Modo Performance em 320 px (288×122) e em 768 px (128×122), e em 1280 px não colide. Defeito conhecido: cada aviso é fixed por conta própria, sem pilha comum.',
         risk: 'médio',
         task: '3ec91f95-497e-8112-82f9-fd1b86e3ec7d',
       },
       {
-        what: 'Durante a instalação (minutos) o aviso cobre o canto inferior direito da gaveta do terminal e do Mini Map (z 50 sobre 20/30); não há medição disso.',
+        what: 'Medido: em 768 e 1280 px o aviso cobre 32×98 px do Mini Map (checarAvisosFlutuantesJuntos). A gaveta do terminal aberta junto do aviso não foi medida.',
         risk: 'médio',
         task: '3ec91f95-497e-8112-82f9-fd1b86e3ec7d',
       },
@@ -662,13 +663,14 @@ export const overlaySurfaces: InventoryElement[] = [
     ipc: ['external-links:open-failed'],
     dependsOn: ['parseLinkOpenFailure', 'describeLinkOpenFailure', 'revealHiddenUrlCharacters'],
     tests: [
+      { file: 'scripts/canvas-smoke-sobreposicoes.cjs', check: 'checarAvisosFlutuantesJuntos' },
       { file: 'src/features/shared/links/link-open-failure.test.ts' },
       { file: 'electron/services/external-links.test.cjs' },
       { file: SMOKE_LINKS, check: 'markdownEscolhas' },
     ],
     gaps: [
       {
-        what: 'Fixed bottom-6 no centro, z 70, sem [data-felixo-tour-avoid]: cobre o NoticeToast (z 50, também embaixo no centro) e os botões dele, e o card do tour não desvia dele. Nenhum teste põe o aviso junto com o NoticeToast ou com o card.',
+        what: 'Medido (checarAvisosFlutuantesJuntos): fixed bottom-6 no centro, z 70, o aviso cobre a sugestão do Modo Performance em 320, 768 e 1280 px (352×133 em 768 e 1280) e deixa "Ligar Modo Performance" e "Agora não" inalcançáveis: o clique cai no aviso de link. Em 320 px cobre também o aviso de CLIs (botão de dispensar). Defeito conhecido; o card do tour com o aviso de link não foi medido.',
         risk: 'médio',
         task: '3ec91f95-497e-8112-82f9-fd1b86e3ec7d',
       },
@@ -769,6 +771,7 @@ export const overlaySurfaces: InventoryElement[] = [
       'NoticeToast',
     ],
     tests: [
+      { file: 'scripts/canvas-smoke-sobreposicoes.cjs', check: 'checarAvisosFlutuantesJuntos' },
       { file: 'src/features/shared/performance/performance-suggestion.test.ts' },
       { file: 'src/features/shared/graphics/gpu-status-store.test.ts' },
       { file: 'electron/core/hardware-profile.test.cjs' },
@@ -792,7 +795,7 @@ export const overlaySurfaces: InventoryElement[] = [
         task: '3ec91f95-497e-8110-b363-cfade2b68b7a',
       },
       {
-        what: 'A caixa (22rem, embaixo no centro, z 50) cobre a barra de status (18) e a dock (20) no centro de baixo; só a convivência com o card do tour é medida (SB1).',
+        what: 'Medido: a sugestão do Modo Performance (22rem, embaixo no centro, z 50) convive com o card do tour (SB1) e foi medida contra o aviso de CLIs e o de link (checarAvisosFlutuantesJuntos: os dois a cobrem em janelas estreitas). A barra de status (18) e a dock (20) no centro de baixo seguem sem medida; a volta da placa de vídeo depende de estado de máquina.',
         risk: 'baixo',
         task: '3ec91f95-497e-8112-82f9-fd1b86e3ec7d',
       },

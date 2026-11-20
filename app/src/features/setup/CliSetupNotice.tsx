@@ -90,7 +90,7 @@ export function CliSetupToast() {
       aria-live="polite"
       // Obstáculo do tutorial do canvas: o card do tour desvia deste aviso.
       data-felixo-tour-avoid
-      className="pointer-events-auto fixed bottom-4 right-4 z-50 w-80 rounded-xl border border-white/10 bg-slate-900/95 p-4 shadow-xl backdrop-blur-sm"
+      className="pointer-events-auto fixed bottom-4 right-4 z-50 w-[min(20rem,calc(100vw-2rem))] rounded-xl border border-white/10 bg-slate-900/95 p-4 shadow-xl backdrop-blur-sm"
     >
       <div className="flex items-start gap-3">
         <Icon

@@ -32,7 +32,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **Elementos:** 114 (10 blocos, 17 ferramentas, 87 outras superfícies)
 - **Controles:** 438, dos quais 91 com teste específico
 - **Elementos sem nenhum teste:** 3
-- **Lacunas:** 231 (alto 4, médio 125, baixo 102), em 76 tasks
+- **Lacunas:** 230 (alto 4, médio 125, baixo 101), em 76 tasks
 
 ## Moldura do canvas
 
@@ -1206,7 +1206,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `agent-browser:list-requests`, `agent-browser:decide`, `agent-browser:requests`, `agent-browser:open-webpage`
 - **Depende de:** `agent-browser-request`, `describeLinkDestination`, `floating-layer`, `window.felixo.canvas`
 - **Sobreposição:** fixed inset-x-0 top-4 z-50, centralizado (max-w-md), pointer-events só no cartão; acima da topbar (18), da gaveta (20/30) e dos painéis, abaixo dos modais (60). data-felixo-floating-layer: clicar nele não fecha a gaveta. Não rouba o foco.
-- **Testes:** `src/features/canvas/components/agent-browser-request.test.ts`, `electron/services/agent-browser-ipc-handlers.test.cjs`, `src/features/shared/focus/floating-layer.test.ts`, `scripts/canvas-smoke-links.cjs` → `criarSessaoDeLinks`
+- **Testes:** `scripts/canvas-smoke-sobreposicoes.cjs` → `checarPedidoDeNavegadorDoAgente`, `src/features/canvas/components/agent-browser-request.test.ts`, `electron/services/agent-browser-ipc-handlers.test.cjs`, `src/features/shared/focus/floating-layer.test.ts`, `scripts/canvas-smoke-links.cjs` → `criarSessaoDeLinks`
 
 | Estado | Quando |
 | --- | --- |
@@ -1226,7 +1226,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | Abrir no navegador e Recusar todos não são clicados no smoke (o caminho externo só é testado no handler do main). | baixo | `3ec91f95-497e-81e8-8f18-e2a529b0568e` |
-| Cartão fixed top-4 z-50 pode cobrir a topbar e o topo da gaveta ou do painel em janela estreita; sem teste de sobreposição. | baixo | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
 | decide e load não tratam IPC rejeitado (try/finally sem catch), sem aviso (AgentBrowserRequestCard.tsx:54-101). | baixo | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 
 ### Pedido de agente para olhar uma Página Web
@@ -2916,7 +2915,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | Leitor de tela e toque reais nunca foram usados no card: a árvore de acessibilidade é lida pelo CDP no SA4, não por NVDA/VoiceOver. | baixo | `3e891f95-497e-8148-b00e-f27e78767664` |
-| O aviso "link não abriu" (LinkChooserHost, z 70, embaixo no centro) não é [data-felixo-tour-avoid]: em viewport compacto o card vira folha na borda de baixo e o aviso cobre o rodapé com Pular/Voltar/Próximo. Nenhum teste junta os dois. | médio | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
+| O aviso "link não abriu" (LinkChooserHost, z 70, embaixo no centro) não é [data-felixo-tour-avoid]: em viewport compacto o card vira folha na borda de baixo e o aviso cobre o rodapé com Pular/Voltar/Próximo. O aviso de link foi medido junto da sugestão do Modo Performance e do aviso de CLIs (canvas-smoke-sobreposicoes.cjs → checarAvisosFlutuantesJuntos); o card do tutorial aberto junto dele continua sem teste. | médio | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
 
 ### Aviso de novidade do tutorial (Ver, Agora não)
 
@@ -2975,7 +2974,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `clis:get-setup-status`, `clis:setup-status`, `clis:retry-setup`, `clis:diagnose`
 - **Depende de:** `useCliSetupStatus`, `useCliDiagnosis`, `presentCliSetupStatus`, `cliSetupNoticeKey`, `CliDiagnosisList`, `CliDiagnosisFooter`
 - **Sobreposição:** fixed bottom-4 right-4, z 50, w-80, cresce para cima com o diagnóstico; marcado [data-felixo-tour-avoid] (o card do tour desvia). Acima da dock, painéis e gaveta (20/30) e da sidebar (26); abaixo do anel/card (54/55), diálogos (60), menu e aviso de link (70) e menu Ajuda (1000).
-- **Testes:** `src/features/setup/cli-setup-presentation.test.ts`, `src/features/setup/cli-diagnosis.test.ts`, `src/features/setup/setup-tailwind-classes.test.ts`, `electron/services/cli-auto-install.test.cjs`, `src/features/onboarding/onboarding-layout.test.ts`
+- **Testes:** `scripts/canvas-smoke-sobreposicoes.cjs` → `checarAvisosFlutuantesJuntos`, `src/features/setup/cli-setup-presentation.test.ts`, `src/features/setup/cli-diagnosis.test.ts`, `src/features/setup/setup-tailwind-classes.test.ts`, `electron/services/cli-auto-install.test.cjs`, `src/features/onboarding/onboarding-layout.test.ts`
 
 | Estado | Quando |
 | --- | --- |
@@ -2998,8 +2997,8 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Aviso, retry e diagnóstico nunca vistos rodando: só aparecem no app empacotado (FELIXO_AUTO_INSTALL_CLIS ou isPackaged) e nenhum teste renderiza ou clica o aviso. | médio | `3e691f95-497e-81c8-ba05-c3074dc036f0` |
 | Dispensar o andamento esconde o andamento da nova tentativa: a chave de "installing"/"checking" é sempre "em-andamento" (cli-setup-presentation.ts:154) e dismissed compara só a chave (useCliSetupStatus.ts:92). Quem dispensou a primeira instalação e clica "Tentar de novo" vê o aviso sumir sem progresso. | médio | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
 | Erro engolido no retry (useCliSetupStatus.ts:88-90) e no getStatus inicial sem catch (useCliSetupStatus.ts:45-49): { ok: false } é descartado e a rejeição vira unhandledrejection só no QA Logger; a pessoa não sabe que a nova tentativa não começou. | baixo | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
-| Em janelas com menos de 1024 px de largura o aviso (w-80, canto direito) e o NoticeToast (22rem, centro) se sobrepõem; os dois são z 50 e o NoticeToast, montado depois no App, cobre os botões deste. Os dois podem aparecer juntos na primeira abertura e nenhum teste junta os dois na tela. | médio | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
-| Durante a instalação (minutos) o aviso cobre o canto inferior direito da gaveta do terminal e do Mini Map (z 50 sobre 20/30); não há medição disso. | médio | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
+| Medido em 20/11/2026 com os três avisos de baixo juntos (canvas-smoke-sobreposicoes.cjs → checarAvisosFlutuantesJuntos): em 320 px o aviso saía 16 px da janela à esquerda (corrigido: largura min(20rem, 100vw − 2rem)); ele cobre a sugestão do Modo Performance em 320 px (288×122) e em 768 px (128×122), e em 1280 px não colide. Defeito conhecido: cada aviso é fixed por conta própria, sem pilha comum. | médio | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
+| Medido: em 768 e 1280 px o aviso cobre 32×98 px do Mini Map (checarAvisosFlutuantesJuntos). A gaveta do terminal aberta junto do aviso não foi medida. | médio | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
 
 ### Diagnóstico das CLIs dentro do aviso de falha
 
@@ -3061,7 +3060,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `external-links:open-failed`
 - **Depende de:** `parseLinkOpenFailure`, `describeLinkOpenFailure`, `revealHiddenUrlCharacters`
 - **Sobreposição:** Portal no body, fixed bottom-6 left-1/2, z 70, min(22rem, 100vw − 2rem). data-felixo-floating-layer e data-felixo-focus-transient: clicar nele não é "clicar fora" da gaveta e o foco nele não substitui o anterior.
-- **Testes:** `src/features/shared/links/link-open-failure.test.ts`, `electron/services/external-links.test.cjs`, `scripts/canvas-smoke-links.cjs` → `markdownEscolhas`
+- **Testes:** `scripts/canvas-smoke-sobreposicoes.cjs` → `checarAvisosFlutuantesJuntos`, `src/features/shared/links/link-open-failure.test.ts`, `electron/services/external-links.test.cjs`, `scripts/canvas-smoke-links.cjs` → `markdownEscolhas`
 
 | Estado | Quando |
 | --- | --- |
@@ -3076,7 +3075,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Fixed bottom-6 no centro, z 70, sem [data-felixo-tour-avoid]: cobre o NoticeToast (z 50, também embaixo no centro) e os botões dele, e o card do tour não desvia dele. Nenhum teste põe o aviso junto com o NoticeToast ou com o card. | médio | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
+| Medido (checarAvisosFlutuantesJuntos): fixed bottom-6 no centro, z 70, o aviso cobre a sugestão do Modo Performance em 320, 768 e 1280 px (352×133 em 768 e 1280) e deixa "Ligar Modo Performance" e "Agora não" inalcançáveis: o clique cai no aviso de link. Em 320 px cobre também o aviso de CLIs (botão de dispensar). Defeito conhecido; o card do tour com o aviso de link não foi medido. | médio | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
 
 ### Sugestão do Modo Performance por carga
 
@@ -3121,7 +3120,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `hardware:get-profile`, `graphics:get-config`, `graphics:gpu-preference-changed`, `graphics:acknowledge-gpu-fallback`
 - **Depende de:** `useGpuStatus (gpu-status-store)`, `usePerformanceMode (PerformanceModeContext)`, `shouldSuggestPerformanceMode`, `loadSuggestionAnswered`, `saveSuggestionAnswered`, `NoticeToast`
 - **Sobreposição:** Wrapper fixed inset-x-0 bottom-4 z 50 com pointer-events none; a caixa (w-[22rem], pointer-events auto) é [data-felixo-tour-avoid] e o card desvia dela (SB1 confere que os botões continuam clicáveis). Montado no App: vale no canvas e no chat.
-- **Testes:** `src/features/shared/performance/performance-suggestion.test.ts`, `src/features/shared/graphics/gpu-status-store.test.ts`, `electron/core/hardware-profile.test.cjs`, `electron/core/gpu-preference.test.cjs`, `scripts/canvas-smoke-onboarding.cjs` → `sb1`
+- **Testes:** `scripts/canvas-smoke-sobreposicoes.cjs` → `checarAvisosFlutuantesJuntos`, `src/features/shared/performance/performance-suggestion.test.ts`, `src/features/shared/graphics/gpu-status-store.test.ts`, `electron/core/hardware-profile.test.cjs`, `electron/core/gpu-preference.test.cjs`, `scripts/canvas-smoke-onboarding.cjs` → `sb1`
 
 | Estado | Quando |
 | --- | --- |
@@ -3142,7 +3141,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | O SB1/SB2 só mostram e clicam o aviso quando a máquina do CI recebe a sugestão (poucas CPUs); "Ligar Modo Performance" e o × nunca são clicados em teste. | médio | `3ec91f95-497e-81f7-8b12-c5c252d020c7` |
 | O aviso da placa de vídeo nunca foi visto rodando: depende de uma volta automática de GPU real. | médio | `3d591f95-497e-8192-b911-cdb759933401` |
 | HardwareNotices.tsx:124 chama void acknowledgeGpuFallback(), que rejeita quando a IPC falha (o teste do gpu-status-store confirma): unhandledrejection no QA Logger e o aviso volta na próxima abertura sem a pessoa saber por quê. | baixo | `3ec91f95-497e-8110-b363-cfade2b68b7a` |
-| A caixa (22rem, embaixo no centro, z 50) cobre a barra de status (18) e a dock (20) no centro de baixo; só a convivência com o card do tour é medida (SB1). | baixo | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
+| Medido: a sugestão do Modo Performance (22rem, embaixo no centro, z 50) convive com o card do tour (SB1) e foi medida contra o aviso de CLIs e o de link (checarAvisosFlutuantesJuntos: os dois a cobrem em janelas estreitas). A barra de status (18) e a dock (20) no centro de baixo seguem sem medida; a volta da placa de vídeo depende de estado de máquina. | baixo | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
 
 ### Aviso de guia do System Design que pede login
 
@@ -3230,7 +3229,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3eb91f95-497e-81bb-a374-eb2e336c73c6` — 1 lacuna
 - `3ec91f95-497e-8103-b360-c1979d6992f4` — 9 lacunas
 - `3ec91f95-497e-8110-b363-cfade2b68b7a` — 42 lacunas
-- `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` — 17 lacunas
+- `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` — 16 lacunas
 - `3ec91f95-497e-8122-a08b-d26d4991acca` — 1 lacuna
 - `3ec91f95-497e-8176-bef0-dfde828936dc` — 6 lacunas
 - `3ec91f95-497e-818f-b9f2-f9710605c303` — 14 lacunas
