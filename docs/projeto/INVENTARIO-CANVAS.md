@@ -1647,7 +1647,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `fetch-all:get-state`, `fetch-all:get-settings`, `fetch-all:save-settings`, `fetch-all:pick-roots`, `fetch-all:get-scope`, `fetch-all:scan`, `fetch-all:execute`, `fetch-all:cancel`, `fetch-all:ignore-path`, `fetch-all:unignore-path`, `fetch-all:progress`, `fetch-all:list-requests`, `fetch-all:resolve-request`, `fetch-all:agent-requests`
 - **Depende de:** `window.felixo.fetchAll`, `CanvasPanel`, `FetchAllScanRoots`, `fetch-all-plan (buildPlanSections, planHasSafeActions, summarizeResults)`, `fetch-all-agent-requests (pickPendingRequest, applyAgentRequestResult)`, `fetch-all-roots (addPickedRoots, removeScanRoot)`
 - **Sobreposição:** CanvasPanel: absolute z-20 (z-30 com foco dentro), top-16, à direita da barra lateral e deslocado quando o menu de ferramentas abre (toolsMenuOpen); largura limitada a viewport − barra − inspector Elementos (288 px) e altura a viewport − 112. Os menus do FelixoSelect abrem em portal z-1000 por cima; toasts (z 50) e AgentQuestionDialog/HandoffDialog (z 60) cobrem o painel. Em janela <768 px o painel passa da viewport (PANEL_MIN_WIDTH 260, task 3e691f95-497e-815c-a129-f4d2d6405cbc). Tamanho md; a lista de discos (max-h-20), as seções (max-h-40) e os resultados rolam por dentro
-- **Testes:** `src/features/shared/ipc/ipc-failures.test.ts`, `src/features/canvas/components/tools/fetch-all-plan.test.ts`, `src/features/canvas/components/tools/fetch-all-agent-requests.test.ts`, `src/features/canvas/components/tools/fetch-all-roots.test.ts`, `electron/services/fetch-all-ipc-handlers.test.cjs`, `electron/services/fetch-all-service.test.cjs`, `electron/services/fetch-all/agent-requests.test.cjs`
+- **Testes:** `scripts/canvas-smoke-paineis.cjs` → `checarFetchAll`, `src/features/shared/ipc/ipc-failures.test.ts`, `src/features/canvas/components/tools/fetch-all-plan.test.ts`, `src/features/canvas/components/tools/fetch-all-agent-requests.test.ts`, `src/features/canvas/components/tools/fetch-all-roots.test.ts`, `electron/services/fetch-all-ipc-handlers.test.cjs`, `electron/services/fetch-all-service.test.cjs`, `electron/services/fetch-all/agent-requests.test.cjs`
 
 | Estado | Quando |
 | --- | --- |
@@ -1678,7 +1678,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Nenhum teste de interface abre o Fetch All: varrer, confirmar o escopo amplo, executar com confirmação, ignorar/reincluir pasta e responder pedido de agente só têm cobertura no main e nas funções puras | médio | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
+| Varrer uma raiz configurada, ignorar uma pasta, executar com confirmação (pull --ff-only conferido no git) e voltar a varrer são exercitados (checarFetchAll); o escopo amplo (todos os discos), o push, o commit automático e a resposta a pedido de agente seguem sem teste de interface | médio | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
 | Pedido de agente que chega com o painel fechado não acende nada no canvas: só FetchAllPanel escuta fetch-all:agent-requests, e a pessoa só vê o pedido se abrir a ferramenta | médio | `3eb91f95-497e-81b8-a70f-dfce2a446a3e` |
 
 ### Limites e uso

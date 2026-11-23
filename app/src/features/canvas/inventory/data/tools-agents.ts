@@ -152,6 +152,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
       'fetch-all-roots (addPickedRoots, removeScanRoot)',
     ],
     tests: [
+      { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarFetchAll' },
       { file: 'src/features/shared/ipc/ipc-failures.test.ts' },
       { file: `${TOOLS}/fetch-all-plan.test.ts` },
       { file: `${TOOLS}/fetch-all-agent-requests.test.ts` },
@@ -162,7 +163,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
     ],
     gaps: [
       {
-        what: 'Nenhum teste de interface abre o Fetch All: varrer, confirmar o escopo amplo, executar com confirmação, ignorar/reincluir pasta e responder pedido de agente só têm cobertura no main e nas funções puras',
+        what: 'Varrer uma raiz configurada, ignorar uma pasta, executar com confirmação (pull --ff-only conferido no git) e voltar a varrer são exercitados (checarFetchAll); o escopo amplo (todos os discos), o push, o commit automático e a resposta a pedido de agente seguem sem teste de interface',
         risk: 'médio',
         task: '3ec91f95-497e-81ca-8319-ee657b0b6492',
       },

@@ -107,7 +107,7 @@ async function exigirClique(page, raiz, padrao, o_que) {
     await page.waitForTimeout(POLLING_MS)
   }
   // O texto do painel na hora da falha vai na mensagem: no CI não há como olhar a tela.
-  const visivel = await page.evaluate((sel) => (document.querySelector(sel)?.innerText ?? '').replace(/s+/g, ' ').slice(0, 320), raiz).catch(() => '')
+  const visivel = await page.evaluate((sel) => (document.querySelector(sel)?.innerText ?? '').replace(/\s+/g, ' ').slice(0, 900), raiz).catch(() => '')
   falhar(`controle não encontrado (ou desabilitado): ${o_que}`, { raiz, padrao: padrao.source, visivel })
 }
 
@@ -450,6 +450,86 @@ async function checarOrquestrador(page) {
   }
 }
 
+/**
+ * Fetch All: varre uma raiz de fixture com dois clones atrasados em relação ao remoto, ignora um deles, executa o plano com a
+ * confirmação (só o clone considerado avança, conferido com git) e volta a considerar a pasta ignorada. As raízes e as pastas
+ * ignoradas originais voltam ao fim.
+ */
+async function checarFetchAll(page) {
+  await prepararJanela(page)
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-fetchall-'))
+  const raiz = path.join(base, 'raiz')
+  const git = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
+  const configurar = (dir) => {
+    git(dir, 'config', 'user.email', 'smoke@felixo.test')
+    git(dir, 'config', 'user.name', 'Smoke')
+    git(dir, 'config', 'core.autocrlf', 'false')
+  }
+  // O remoto e o clone que o empurra ficam fora da raiz varrida; dentro dela só os dois clones que ficam para trás.
+  const remoto = path.join(base, 'remoto.git')
+  const semente = path.join(base, 'semente')
+  fs.mkdirSync(remoto)
+  git(remoto, 'init', '-q', '--bare', '-b', 'main')
+  git(base, '-c', 'core.autocrlf=false', 'clone', '-q', remoto, semente)
+  configurar(semente)
+  git(semente, 'checkout', '-q', '-B', 'main')
+  fs.writeFileSync(path.join(semente, 'a.txt'), 'um\n')
+  git(semente, 'add', '.')
+  git(semente, 'commit', '-qm', 'inicial')
+  git(semente, 'push', '-q', '-u', 'origin', 'main')
+  fs.mkdirSync(raiz)
+  const considerado = path.join(raiz, 'repo-considerado')
+  const ignorado = path.join(raiz, 'repo-ignorado')
+  for (const destino of [considerado, ignorado]) {
+    git(raiz, '-c', 'core.autocrlf=false', 'clone', '-q', remoto, destino)
+    configurar(destino)
+  }
+  fs.writeFileSync(path.join(semente, 'a.txt'), 'um\ndois\n')
+  git(semente, 'commit', '-qam', 'segundo')
+  git(semente, 'push', '-q')
+  const contagem = (dir) => Number(git(dir, 'rev-list', '--count', 'HEAD'))
+
+  const lerConfiguracao = () => page.evaluate(async () => { const r = await window.felixo.fetchAll.getSettings(); return r?.settings ?? r })
+  const original = await lerConfiguracao()
+  const painel = '[data-felixo-canvas-panel="fetch-all"]'
+  const textoDoFetchAll = () => textoDoPainel(page, painel)
+  try {
+    await page.evaluate((c) => window.felixo.fetchAll.saveSettings(c), { ...original, scanRoots: [raiz], ignoredPaths: [] })
+    await abrirFerramenta(page, 'Fetch All', 'fetch-all')
+    await exigirClique(page, painel, /^Varredura completa$/, 'Varredura completa')
+    await esperar(page, (sel) => /repo-considerado/.test(document.querySelector(sel)?.innerText ?? '') && /repo-ignorado/.test(document.querySelector(sel)?.innerText ?? ''), painel, 'a varredura não listou os dois clones da raiz')
+    if (contagem(considerado) !== 1) falhar('a varredura não deveria alterar os repositórios (só o plano é montado)')
+
+    // Ignorar pela linha do repositório: ele sai do plano e passa a constar em "Pastas ignoradas".
+    const clicouNaLinha = await page.evaluate((sel) => {
+      const linha = [...document.querySelectorAll(`${sel} li`)].find((li) => /repo-ignorado/.test(li.textContent ?? '') && li.querySelector('button[title^="Ignorar"]'))
+      linha?.querySelector('button[title^="Ignorar"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }))
+      return Boolean(linha)
+    }, painel)
+    if (!clicouNaLinha) falhar('a linha do repositório a ignorar não tem o botão de ignorar', await textoDoFetchAll())
+    await esperar(page, (sel) => !/repo-ignorado/.test([...document.querySelectorAll(`${sel} li`)].map((li) => li.textContent).join(' ')) && /Pastas ignoradas \(1\)/.test(document.querySelector(sel)?.innerText ?? ''), painel, 'ignorar não tirou o repositório do plano')
+
+    // Executar o plano pede confirmação; só então o clone considerado avança (pull --ff-only).
+    const depoisDeIgnorar = (await textoDoFetchAll()).replace(/\s+/g, ' ')
+    if (!/Executar plano/.test(depoisDeIgnorar)) falhar('sem o botão Executar plano depois de ignorar', depoisDeIgnorar.slice(300, 1400))
+    await exigirClique(page, painel, /^Executar plano$/, 'Executar plano')
+    await exigirClique(page, painel, /^Confirmar execução$/, 'Confirmar execução')
+    for (let k = 0; k < 60 && contagem(considerado) !== 2; k += 1) await page.waitForTimeout(150)
+    if (contagem(considerado) !== 2) falhar('Executar plano não atualizou o repositório considerado', await textoDoFetchAll())
+    if (contagem(ignorado) !== 1) falhar('Executar plano mexeu no repositório ignorado')
+
+    // Voltar a varrer a pasta ignorada.
+    await exigirClique(page, painel, /^Pastas ignoradas/, 'Pastas ignoradas (abrir)')
+    await exigirClique(page, painel, /^Voltar a varrer esta pasta$/, 'Voltar a varrer esta pasta')
+    await esperar(page, (sel) => /Pastas ignoradas \(0\)/.test(document.querySelector(sel)?.innerText ?? ''), painel, 'Voltar a varrer não tirou a pasta da lista de ignoradas')
+    const gravada = await lerConfiguracao()
+    if ((gravada?.ignoredPaths ?? []).length !== 0) falhar('a pasta continua ignorada no main', gravada)
+  } finally {
+    await page.evaluate((c) => window.felixo.fetchAll.saveSettings(c), original).catch(() => {})
+    fs.rmSync(base, { recursive: true, force: true })
+  }
+}
+
 /** Notas: criar blocos (nota e desenho), criar, editar e remover uma nota salva. */
 async function checarNotas(page) {
   await prepararJanela(page)
@@ -766,6 +846,7 @@ const CHECKS_DOS_PAINEIS = [
   checarSkills,
   checarPresetsDeAgente,
   checarQaLogger,
+  checarFetchAll,
   checarConfiguracoes,
   checarModelos,
   checarOrquestrador,
@@ -785,6 +866,7 @@ module.exports = {
   checarBuscaDeBlocos,
   checarConfiguracoes,
   checarDetalheDoPrompt,
+  checarFetchAll,
   checarModelos,
   checarMolduraDosPaineis,
   checarNotas,
