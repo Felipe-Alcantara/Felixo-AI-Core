@@ -721,6 +721,91 @@ async function checarCadeiaDeContas(page) {
   }
 }
 
+/**
+ * Configurações: a rolagem do Claude Code (interruptor que grava a preferência local) e o ditado por voz (motor local/nuvem,
+ * endereço, modelo e idioma gravados no main). O que depende de microfone e de chave de transcrição segue de fora. As duas
+ * preferências voltam ao original no fim.
+ */
+async function checarRolagemEDitado(page) {
+  await prepararJanela(page)
+  await exigirClique(page, 'nav.felixo-activity-rail', /^Configurações$/, 'Configurações (trilho)')
+  const painel = '[data-felixo-canvas-panel="settings"]'
+  await page.locator(painel).waitFor({ state: 'visible', timeout: TIMEOUT_MS })
+  const chave = 'felixo-ai-core.claude-terminal-scroll.v2'
+  const lerRolagem = () => page.evaluate((k) => window.localStorage.getItem(k), chave)
+  const lerDitado = () => page.evaluate(async () => (await window.felixo.speech.getConfig())?.config ?? null)
+  const originalRolagem = await lerRolagem()
+  const originalDitado = await lerDitado()
+  try {
+    // Rolagem do Claude: o interruptor grava a preferência e mostra o aviso; desligar volta.
+    const interruptor = '[role="switch"][aria-label="Rolagem no terminal do Claude Code"]'
+    await esperar(page, (sel) => document.querySelector(sel) !== null, interruptor, 'o interruptor da rolagem do Claude não apareceu')
+    const estavaLigado = (await lerRolagem()) === 'on'
+    await clicarSeletor(page, interruptor, 'ligar/desligar a rolagem do Claude')
+    for (let k = 0; k < 30 && ((await lerRolagem()) === 'on') === estavaLigado; k += 1) await page.waitForTimeout(100)
+    if (((await lerRolagem()) === 'on') === estavaLigado) falhar('o interruptor da rolagem não gravou a preferência', await lerRolagem())
+    await clicarSeletor(page, interruptor, 'devolver a rolagem do Claude')
+    for (let k = 0; k < 30 && ((await lerRolagem()) === 'on') !== estavaLigado; k += 1) await page.waitForTimeout(100)
+    if (((await lerRolagem()) === 'on') !== estavaLigado) falhar('o segundo clique não devolveu a preferência da rolagem')
+
+    // Ditado: modelo e idioma digitados e salvos ficam no main.
+    if (!originalDitado) {
+      console.log('[canvas-smoke:paineis] checarRolagemEDitado: configuração do ditado indisponível neste ambiente, campos do ditado não verificados')
+      return
+    }
+    await esperar(page, (sel) => document.querySelector(`${sel} #dictation-model`) !== null, painel, 'a seção do ditado não carregou')
+    await preencher(page, `${painel} #dictation-model`, 'modelo-do-smoke')
+    await preencher(page, `${painel} #dictation-lang`, 'xx')
+    await exigirClique(page, painel, /^Salvar endereço, modelo e idioma$/, 'Salvar endereço, modelo e idioma')
+    await esperar(page, (sel) => /Configuração salva/.test(document.querySelector(sel)?.innerText ?? ''), painel, 'o ditado não confirmou "Configuração salva"')
+    const gravado = await lerDitado()
+    if (gravado?.model !== 'modelo-do-smoke' || gravado?.language !== 'xx') falhar('o modelo e o idioma do ditado não ficaram gravados no main', gravado)
+  } finally {
+    await page.evaluate(([k, v]) => { try { v === null ? window.localStorage.removeItem(k) : window.localStorage.setItem(k, v) } catch { /* sem armazenamento */ } }, [chave, originalRolagem]).catch(() => {})
+    if (originalDitado) await page.evaluate((c) => window.felixo.speech.saveConfig({ baseUrl: c.baseUrl, model: c.model, language: c.language }), originalDitado).catch(() => {})
+  }
+}
+
+/**
+ * Carregamento dos painéis (hospedeiro e chunks): com o módulo do painel Modelos atrasado, o painel mostra "Carregando Modelos…" e
+ * depois abre; com o módulo recusado, mostra "Não foi possível carregar este painel." e "Recarregar app" recarrega a janela, que
+ * volta com o painel carregando normalmente. As rotas são desfeitas ao fim.
+ */
+async function checarCarregamentoDosPaineis(page) {
+  await prepararJanela(page)
+  const modulo = /ModelsPanel/
+  const abrirModelosPeloMenu = async () => {
+    await garantirSidebarAberta(page)
+    await abrirSecaoFerramentas(page)
+    await exigirClique(page, '[aria-label="Ferramentas auxiliares"]', /^Modelos$/, 'Modelos')
+  }
+  try {
+    // 1. Módulo lento: o painel de carregamento aparece e é trocado pelo painel de verdade.
+    await page.route(modulo, async (rota) => {
+      await new Promise((resolve) => setTimeout(resolve, 2500))
+      await rota.continue().catch(() => {})
+    })
+    await abrirModelosPeloMenu()
+    await esperar(page, () => /Carregando Modelos/.test(document.querySelector('[data-felixo-canvas-panel="loading-models"]')?.innerText ?? ''), null, 'o painel não mostrou "Carregando Modelos…" enquanto o módulo demorava')
+    await page.locator('[data-felixo-canvas-panel="models"]').waitFor({ state: 'visible', timeout: TIMEOUT_MS })
+    await page.unroute(modulo)
+
+    // 2. Módulo recusado (numa janela recarregada, sem o módulo em memória): mensagem de erro e botão para recarregar.
+    await prepararJanela(page)
+    await page.route(modulo, (rota) => rota.abort())
+    await abrirModelosPeloMenu()
+    await esperar(page, () => /Não foi possível carregar este painel/.test(document.querySelector('[data-felixo-canvas-panel="error-models"]')?.innerText ?? ''), null, 'o painel não mostrou o erro de carregamento com o módulo recusado')
+    await page.unroute(modulo)
+    // Recarregar app: a janela recarrega (o painel de erro some) e o painel carrega normalmente.
+    await Promise.all([page.waitForEvent('load', { timeout: TIMEOUT_MS }), exigirClique(page, '[data-felixo-canvas-panel="error-models"]', /^Recarregar app$/, 'Recarregar app')])
+    await page.waitForSelector('.felixo-zoom-pill', { timeout: TIMEOUT_MS })
+    await garantirSidebarAberta(page)
+    await abrirFerramenta(page, 'Modelos', 'models')
+  } finally {
+    await page.unroute(modulo).catch(() => {})
+  }
+}
+
 /** Notas: criar blocos (nota e desenho), criar, editar e remover uma nota salva. */
 async function checarNotas(page) {
   await prepararJanela(page)
@@ -1042,6 +1127,8 @@ const CHECKS_DOS_PAINEIS = [
   checarLimitesEUso,
   checarCadeiaDeContas,
   checarConfiguracoes,
+  checarRolagemEDitado,
+  checarCarregamentoDosPaineis,
   checarModelos,
   checarOrquestrador,
 ]
@@ -1060,6 +1147,7 @@ module.exports = {
   checarBuscaDeBlocos,
   checarConfiguracoes,
   checarCadeiaDeContas,
+  checarCarregamentoDosPaineis,
   checarDetalheDoPrompt,
   checarExportarEImportarCanvas,
   checarFetchAll,
@@ -1074,6 +1162,7 @@ module.exports = {
   checarPrompts,
   checarSkills,
   checarQaLogger,
+  checarRolagemEDitado,
   checarSourceControl,
   criarRepositorioDeFixture,
 }

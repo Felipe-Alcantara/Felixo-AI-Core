@@ -830,6 +830,7 @@ export const workspaceToolSurfaces: InventoryElement[] = [
       'CanvasPanel',
     ],
     tests: [
+      { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarCarregamentoDosPaineis' },
       { file: 'src/features/canvas/components/focus-keyboard-a11y.test.ts' },
       { file: 'scripts/canvas-smoke-teclado.cjs', check: 'checarFocoAoFecharPresetsDeAgente' },
       { file: SMOKE, check: 'checarFocoAoAbrirFerramenta' },
@@ -838,7 +839,7 @@ export const workspaceToolSurfaces: InventoryElement[] = [
     ],
     gaps: [
       {
-        what: 'os estados Carregando e erro do chunk não têm teste: nenhum smoke simula chunk ausente e o botão Recarregar app nunca é clicado',
+        what: 'Carregando (módulo lento), o erro (módulo recusado) e Recarregar app são exercitados com o painel Modelos (checarCarregamentoDosPaineis); os demais painéis usam o mesmo hospedeiro e não são repetidos',
         risk: 'baixo',
         task: NOVA_SMOKE,
       },
@@ -1226,12 +1227,13 @@ export const workspaceToolSurfaces: InventoryElement[] = [
       'CanvasToolPanels (Suspense e ToolPanelErrorBoundary)',
     ],
     tests: [
+      { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarCarregamentoDosPaineis' },
       { file: 'scripts/bundle-load-benchmark.cjs', check: 'readFetchAllChunkMarks' },
       { file: 'scripts/bundle-load-benchmark.test.cjs' },
     ],
     gaps: [
       {
-        what: 'só o chunk do Fetch All é observado (bundle-load-benchmark); nenhum teste força a falha de um chunk para ver o estado de erro',
+        what: 'só o chunk do Fetch All é observado (bundle-load-benchmark); a falha de um chunk é forçada só no painel Modelos (checarCarregamentoDosPaineis), não em cada um dos demais',
         risk: 'baixo',
         task: NOVA_SMOKE,
       },

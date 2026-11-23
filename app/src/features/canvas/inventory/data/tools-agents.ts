@@ -1369,6 +1369,7 @@ export const agentToolSurfaces: InventoryElement[] = [
       'dictation (shortcutFromEvent, describeMicrophoneStatus, isLoopbackEndpoint)',
     ],
     tests: [
+      { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarRolagemEDitado' },
       { file: 'src/features/shared/ipc/ipc-failures-2.test.ts' },
       { file: 'src/features/canvas/services/dictation.test.ts' },
       { file: 'electron/services/speech/speech-ipc-handlers.test.cjs' },
@@ -1376,7 +1377,7 @@ export const agentToolSurfaces: InventoryElement[] = [
     ],
     gaps: [
       {
-        what: 'Sem teste de interface da seção (motor, chave, endereço, atalho, microfone). O caminho com servidor local foi conferido de ponta a ponta no Linux em 05/10/2026 (faster-whisper e microfone virtual, scripts/validar-ditado-linux.cjs), mas só por roteiro manual',
+        what: 'Modelo e idioma digitados, salvos e gravados no main são exercitados (checarRolagemEDitado); motor, chave, atalho e microfone seguem sem teste de interface (a chave exige o cofre do sistema e o microfone, hardware). O caminho com servidor local foi conferido de ponta a ponta no Linux em 05/10/2026 (faster-whisper e microfone virtual, scripts/validar-ditado-linux.cjs), mas só por roteiro manual',
         risk: 'baixo',
         task: '3ec91f95-497e-81ca-8319-ee657b0b6492',
       },
@@ -1403,10 +1404,11 @@ export const agentToolSurfaces: InventoryElement[] = [
     persistence: ['localStorage felixo-ai-core.claude-terminal-scroll.v2 (on/off; o valor da chave sem .v2, de antes de 23/10/2026, é ignorado)'],
     ipc: [],
     dependsOn: ['loadClaudeTerminalScroll', 'saveClaudeTerminalScroll', 'shouldUseClassicScreen', 'FelixoToggle'],
-    tests: [{ file: 'src/features/canvas/services/terminal-scroll-preference.test.ts' }],
+    tests: [
+      { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarRolagemEDitado' },{ file: 'src/features/canvas/services/terminal-scroll-preference.test.ts' }],
     gaps: [
       {
-        what: 'Medido em 23/10/2026 com o Claude Code 2.1.309 que a tela clássica não liga o mouse tracking e a padrão liga (?1049 e ?1000/1002/1003/1006); o redesenho e os menus do modo clássico numa janela do app não foram conferidos, e nenhum teste do repositório liga o interruptor e abre um Claude',
+        what: 'Medido em 23/10/2026 com o Claude Code 2.1.309 que a tela clássica não liga o mouse tracking e a padrão liga (?1049 e ?1000/1002/1003/1006); o interruptor e a preferência gravada são exercitados (checarRolagemEDitado); o redesenho e os menus do modo clássico numa janela do app não foram conferidos, e nenhum teste abre um Claude depois de ligar',
         risk: 'baixo',
         task: '3ec91f95-497e-81ca-8319-ee657b0b6492',
       },

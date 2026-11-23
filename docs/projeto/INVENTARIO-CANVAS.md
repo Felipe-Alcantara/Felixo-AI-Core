@@ -2067,7 +2067,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** nenhum
 - **Depende de:** `CanvasView (activeTool, setActiveTool, openTool, toolOpenRequest)`, `canvas-tool-loaders (Lazy*)`, `TOOL_LABELS`, `CanvasPanel`
 - **Sobreposição:** sem superfície própria além dos fallbacks, que usam a moldura CanvasPanel (porte sm, z-20/z-30). Fechar devolve o foco no próximo quadro: Busca → [data-canvas-tool-trigger="search"]; demais → menu de ferramentas ou botão do rail que não esteja aria-hidden/inert. Trocar de ferramenta desmonta o painel anterior na hora, sem animação de saída
-- **Testes:** `src/features/canvas/components/focus-keyboard-a11y.test.ts`, `scripts/canvas-smoke-teclado.cjs` → `checarFocoAoFecharPresetsDeAgente`, `scripts/canvas-smoke.cjs` → `checarFocoAoAbrirFerramenta`, `scripts/canvas-smoke-prompts.cjs` → `abrirPainel`, `src/features/onboarding/onboarding-catalog.test.ts`
+- **Testes:** `scripts/canvas-smoke-paineis.cjs` → `checarCarregamentoDosPaineis`, `src/features/canvas/components/focus-keyboard-a11y.test.ts`, `scripts/canvas-smoke-teclado.cjs` → `checarFocoAoFecharPresetsDeAgente`, `scripts/canvas-smoke.cjs` → `checarFocoAoAbrirFerramenta`, `scripts/canvas-smoke-prompts.cjs` → `abrirPainel`, `src/features/onboarding/onboarding-catalog.test.ts`
 
 | Estado | Quando |
 | --- | --- |
@@ -2081,7 +2081,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| os estados Carregando e erro do chunk não têm teste: nenhum smoke simula chunk ausente e o botão Recarregar app nunca é clicado | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
+| Carregando (módulo lento), o erro (módulo recusado) e Recarregar app são exercitados com o painel Modelos (checarCarregamentoDosPaineis); os demais painéis usam o mesmo hospedeiro e não são repetidos | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
 
 ### Moldura comum dos painéis (CanvasPanel)
 
@@ -2249,7 +2249,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** nenhum
 - **Depende de:** `React.lazy (canvas-tool-loaders.tsx)`, `preloadCanvasTool (canvas-tool-preloaders.ts)`, `CanvasToolPanels (Suspense e ToolPanelErrorBoundary)`
 - **Sobreposição:** sem superfície própria: os estados aparecem na moldura CanvasPanel do hospedeiro
-- **Testes:** `scripts/bundle-load-benchmark.cjs` → `readFetchAllChunkMarks`, `scripts/bundle-load-benchmark.test.cjs`
+- **Testes:** `scripts/canvas-smoke-paineis.cjs` → `checarCarregamentoDosPaineis`, `scripts/bundle-load-benchmark.cjs` → `readFetchAllChunkMarks`, `scripts/bundle-load-benchmark.test.cjs`
 
 | Estado | Quando |
 | --- | --- |
@@ -2261,7 +2261,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| só o chunk do Fetch All é observado (bundle-load-benchmark); nenhum teste força a falha de um chunk para ver o estado de erro | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
+| só o chunk do Fetch All é observado (bundle-load-benchmark); a falha de um chunk é forçada só no painel Modelos (checarCarregamentoDosPaineis), não em cada um dos demais | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
 
 ### Orquestrador: lote de tasks
 
@@ -2462,7 +2462,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `speech:get-config`, `speech:save-config`, `speech:set-key`, `speech:clear-key`, `speech:microphone-status`, `speech:request-microphone`
 - **Depende de:** `useDictationShortcut`, `window.felixo.speech`, `dictation (shortcutFromEvent, describeMicrophoneStatus, isLoopbackEndpoint)`
 - **Sobreposição:** Seção dentro do painel Configurações (z-20/30); a captura do atalho escuta keydown da janela inteira em fase de captura e para no blur, para não roubar teclas de menus do mesmo painel
-- **Testes:** `src/features/shared/ipc/ipc-failures-2.test.ts`, `src/features/canvas/services/dictation.test.ts`, `electron/services/speech/speech-ipc-handlers.test.cjs`, `electron/services/speech/speech-settings-store.test.cjs`
+- **Testes:** `scripts/canvas-smoke-paineis.cjs` → `checarRolagemEDitado`, `src/features/shared/ipc/ipc-failures-2.test.ts`, `src/features/canvas/services/dictation.test.ts`, `electron/services/speech/speech-ipc-handlers.test.cjs`, `electron/services/speech/speech-settings-store.test.cjs`
 
 | Estado | Quando |
 | --- | --- |
@@ -2485,7 +2485,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Sem teste de interface da seção (motor, chave, endereço, atalho, microfone). O caminho com servidor local foi conferido de ponta a ponta no Linux em 05/10/2026 (faster-whisper e microfone virtual, scripts/validar-ditado-linux.cjs), mas só por roteiro manual | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
+| Modelo e idioma digitados, salvos e gravados no main são exercitados (checarRolagemEDitado); motor, chave, atalho e microfone seguem sem teste de interface (a chave exige o cofre do sistema e o microfone, hardware). O caminho com servidor local foi conferido de ponta a ponta no Linux em 05/10/2026 (faster-whisper e microfone virtual, scripts/validar-ditado-linux.cjs), mas só por roteiro manual | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
 
 ### Rolagem no terminal do Claude Code (Configurações)
 
@@ -2494,7 +2494,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** nenhum
 - **Depende de:** `loadClaudeTerminalScroll`, `saveClaudeTerminalScroll`, `shouldUseClassicScreen`, `FelixoToggle`
 - **Sobreposição:** Seção dentro do painel Configurações (z-20/30), sem camada própria
-- **Testes:** `src/features/canvas/services/terminal-scroll-preference.test.ts`
+- **Testes:** `scripts/canvas-smoke-paineis.cjs` → `checarRolagemEDitado`, `src/features/canvas/services/terminal-scroll-preference.test.ts`
 
 | Estado | Quando |
 | --- | --- |
@@ -2507,7 +2507,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Medido em 23/10/2026 com o Claude Code 2.1.309 que a tela clássica não liga o mouse tracking e a padrão liga (?1049 e ?1000/1002/1003/1006); o redesenho e os menus do modo clássico numa janela do app não foram conferidos, e nenhum teste do repositório liga o interruptor e abre um Claude | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
+| Medido em 23/10/2026 com o Claude Code 2.1.309 que a tela clássica não liga o mouse tracking e a padrão liga (?1049 e ?1000/1002/1003/1006); o interruptor e a preferência gravada são exercitados (checarRolagemEDitado); o redesenho e os menus do modo clássico numa janela do app não foram conferidos, e nenhum teste abre um Claude depois de ligar | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
 
 ### Configurações do Claude Code nos terminais (Configurações)
 
