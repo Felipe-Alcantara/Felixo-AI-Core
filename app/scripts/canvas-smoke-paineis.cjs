@@ -538,6 +538,20 @@ async function checarFetchAll(page) {
   }
 }
 
+/** Lê um JSON que o app acabou de gravar: o arquivo pode existir antes de a escrita terminar, então repete por um instante. */
+async function lerJsonQuandoPronto(page, arquivo) {
+  let ultimo
+  for (let k = 0; k < 30; k += 1) {
+    try {
+      return JSON.parse(fs.readFileSync(arquivo, 'utf8'))
+    } catch (erro) {
+      ultimo = erro
+      await page.waitForTimeout(100)
+    }
+  }
+  return falhar('o arquivo gravado não é um JSON válido', String(ultimo))
+}
+
 /**
  * Exportar e importar o canvas: "Exportar canvas" grava o .fxcanvas (o "Salvar como" nativo da instância de automação aponta o
  * arquivo combinado) com os blocos à vista; com um bloco a mais criado depois, "Importar canvas" (o campo de arquivo, com a
@@ -552,7 +566,7 @@ async function checarExportarEImportarCanvas(page) {
   await exigirClique(page, '[aria-label="Ferramentas auxiliares"]', /^Exportar canvas$/, 'Exportar canvas')
   for (let k = 0; k < 80 && !fs.existsSync(arquivo); k += 1) await page.waitForTimeout(100)
   if (!fs.existsSync(arquivo)) falhar('Exportar canvas não gravou o arquivo .fxcanvas', arquivo)
-  const pacote = JSON.parse(fs.readFileSync(arquivo, 'utf8'))
+  const pacote = await lerJsonQuandoPronto(page, arquivo)
   if (!Array.isArray(pacote.nodes) || pacote.nodes.length !== antes) falhar('o arquivo exportado não tem os blocos do canvas', { blocos: antes, exportados: pacote.nodes?.length })
 
   // Um bloco a mais, e a importação (com a confirmação aceita) devolve o canvas ao exportado.
@@ -589,7 +603,7 @@ async function checarExportarEImportarCanvas(page) {
   await exigirClique(page, '[aria-label="Ferramentas auxiliares"]', /^Exportar com a saída dos terminais$/, 'Exportar com a saída dos terminais')
   for (let k = 0; k < 80 && !fs.existsSync(arquivo); k += 1) await page.waitForTimeout(100)
   if (!fs.existsSync(arquivo)) falhar('Exportar com a saída dos terminais não gravou o arquivo', arquivo)
-  const completo = JSON.parse(fs.readFileSync(arquivo, 'utf8'))
+  const completo = await lerJsonQuandoPronto(page, arquivo)
   if (!Array.isArray(completo.nodes) || completo.nodes.length !== antes + 1) falhar('o pacote com a saída dos terminais não tem os blocos do canvas', { esperado: antes + 1, exportados: completo.nodes?.length })
 }
 
@@ -1033,7 +1047,9 @@ async function checarPresetsEditarExportarImportar(page) {
     if (!(await acaoDaLinha(editado, 'Exportar'))) falhar('a linha do preset não tem o botão Exportar')
     for (let k = 0; k < 80 && !fs.existsSync(arquivo); k += 1) await page.waitForTimeout(100)
     if (!fs.existsSync(arquivo)) falhar('Exportar não gravou o arquivo do preset', arquivo)
-    if (!fs.readFileSync(arquivo, 'utf8').includes(editado)) falhar('o arquivo exportado não traz o preset editado')
+    // O arquivo pode existir antes de a escrita terminar: lê de novo por um instante.
+    for (let k = 0; k < 30 && !fs.readFileSync(arquivo, 'utf8').includes(editado); k += 1) await page.waitForTimeout(100)
+    if (!fs.readFileSync(arquivo, 'utf8').includes(editado)) falhar('o arquivo exportado não traz o preset editado', fs.readFileSync(arquivo, 'utf8').slice(0, 200))
 
     // Importar: com o original excluído, o arquivo recria o preset.
     if (!(await acaoDaLinha(editado, 'Excluir|Remover'))) falhar('a linha do preset não tem o botão Excluir')
@@ -1265,8 +1281,8 @@ async function checarMotorEChaveDoDitado(page) {
     const desfecho = await page.waitForFunction((sel) => {
       const texto = document.querySelector(sel)?.innerText ?? ''
       if (/Chave guardada com criptografia do sistema/.test(texto)) return 'guardada'
-      const alerta = document.querySelector(`${sel} [role="alert"]`)
-      return alerta ? 'falhou' : false
+      // A falha usa o mesmo parágrafo de status, só que na cor de erro.
+      return document.querySelector(`${sel} p[role="status"].text-red-400`) ? 'falhou' : false
     }, painel, { timeout: TIMEOUT_MS, polling: POLLING_MS }).then((h) => h.jsonValue(), () => null)
     if (!desfecho) falhar('guardar a chave não terminou nem com a confirmação nem com um aviso', (await textoDoPainel(page, painel)).replace(/\s+/g, ' ').slice(0, 300))
     if (desfecho === 'guardada') {
