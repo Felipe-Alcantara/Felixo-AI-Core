@@ -962,12 +962,14 @@ export const workspaceToolSurfaces: InventoryElement[] = [
     tests: [
       { file: SMOKE_PROMPTS, check: 'abrirPainel' },
       { file: SMOKE_CONTAS, check: 'abrirLimitesEUso' },
+      { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarExportarEImportarCanvas' },
+      { file: 'electron/core/devtools-save-file-guard.test.cjs' },
       { file: 'electron/services/canvas-transfer.test.cjs' },
       { file: 'src/features/onboarding/onboarding-catalog.test.ts' },
     ],
     gaps: [
       {
-        what: 'Exportar canvas e Importar canvas não são clicados por nenhum teste de interface (só o processo principal tem teste, canvas-transfer.test.cjs)',
+        what: 'Exportar canvas (arquivo gravado com os blocos) e Importar canvas (confirmação aceita, canvas devolvido ao exportado) são exercitados (checarExportarEImportarCanvas); "Exportar com a saída dos terminais", a recusa da confirmação e o canvas travado seguem sem teste de interface',
         risk: 'médio',
         task: NOVA_SMOKE,
       },

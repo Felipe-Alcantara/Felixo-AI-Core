@@ -2,7 +2,11 @@ const { BrowserWindow, dialog, ipcMain } = require('electron')
 const fs = require('fs/promises')
 const path = require('path')
 
-function registerFileExportIpcHandlers(getMainWindow) {
+/**
+ * @param {Function|object} getMainWindow
+ * @param {{ saveDialog?: Pick<import('electron').Dialog, 'showSaveDialog'> }} [options] - só a automação troca o diálogo nativo
+ */
+function registerFileExportIpcHandlers(getMainWindow, { saveDialog = dialog } = {}) {
   ipcMain.handle('files:save-text', async (_event, params) => {
     const content = typeof params?.content === 'string' ? params.content : null
     const defaultPath =
@@ -23,8 +27,8 @@ function registerFileExportIpcHandlers(getMainWindow) {
       filters,
     }
     const result = win && !win.isDestroyed()
-      ? await dialog.showSaveDialog(win, dialogOptions)
-      : await dialog.showSaveDialog(dialogOptions)
+      ? await saveDialog.showSaveDialog(win, dialogOptions)
+      : await saveDialog.showSaveDialog(dialogOptions)
 
     if (result.canceled || !result.filePath) {
       return { ok: false, canceled: true }

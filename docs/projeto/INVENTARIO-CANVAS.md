@@ -2115,7 +2115,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `canvas:export`, `canvas:validate-import`, `canvas:import`, `files:save-text`
 - **Depende de:** `preloadCanvasTool`, `CanvasToolbar (SidebarSection Ferramentas, importInputRef)`, `useCanvasTransfer (exportAll, importFile, isBusy)`
 - **Sobreposição:** dentro da sidebar (z-26), na seção recolhível "Ferramentas"; com a sidebar recolhida (trilho de 52 px) o menu não aparece. Não cobre nada: os painéis que abre nascem à direita da sidebar
-- **Testes:** `scripts/canvas-smoke-prompts.cjs` → `abrirPainel`, `scripts/canvas-smoke-contas.cjs` → `abrirLimitesEUso`, `electron/services/canvas-transfer.test.cjs`, `src/features/onboarding/onboarding-catalog.test.ts`
+- **Testes:** `scripts/canvas-smoke-prompts.cjs` → `abrirPainel`, `scripts/canvas-smoke-contas.cjs` → `abrirLimitesEUso`, `scripts/canvas-smoke-paineis.cjs` → `checarExportarEImportarCanvas`, `electron/core/devtools-save-file-guard.test.cjs`, `electron/services/canvas-transfer.test.cjs`, `src/features/onboarding/onboarding-catalog.test.ts`
 
 | Estado | Quando |
 | --- | --- |
@@ -2129,7 +2129,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Exportar canvas e Importar canvas não são clicados por nenhum teste de interface (só o processo principal tem teste, canvas-transfer.test.cjs) | médio | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
+| Exportar canvas (arquivo gravado com os blocos) e Importar canvas (confirmação aceita, canvas devolvido ao exportado) são exercitados (checarExportarEImportarCanvas); "Exportar com a saída dos terminais", a recusa da confirmação e o canvas travado seguem sem teste de interface | médio | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
 
 ### Detalhe de preset de prompt
 

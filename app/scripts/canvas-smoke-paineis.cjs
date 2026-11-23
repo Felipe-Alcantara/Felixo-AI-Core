@@ -70,8 +70,16 @@ function restaurarFixture(dir) {
   fs.writeFileSync(path.join(dir, 'novo.txt'), 'novo\n')
 }
 
+let exportacao = null
+
+/** O arquivo onde o "Salvar como" da automação grava o canvas exportado (a pasta é criada uma vez). */
+function arquivoDeExportacao() {
+  if (!exportacao) exportacao = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-export-')), 'canvas-do-smoke.fxcanvas')
+  return exportacao
+}
+
 function ambienteDosPaineis() {
-  return { FELIXO_DEVTOOLS_PROJECT_FOLDER: criarRepositorioDeFixture() }
+  return { FELIXO_DEVTOOLS_PROJECT_FOLDER: criarRepositorioDeFixture(), FELIXO_DEVTOOLS_SAVE_FILE: arquivoDeExportacao() }
 }
 
 // ---------------------------------------------------------------------------
@@ -530,6 +538,37 @@ async function checarFetchAll(page) {
   }
 }
 
+/**
+ * Exportar e importar o canvas: "Exportar canvas" grava o .fxcanvas (o "Salvar como" nativo da instância de automação aponta o
+ * arquivo combinado) com os blocos à vista; com um bloco a mais criado depois, "Importar canvas" (o campo de arquivo, com a
+ * confirmação aceita) devolve o canvas ao que foi exportado.
+ */
+async function checarExportarEImportarCanvas(page) {
+  await prepararJanela(page)
+  const arquivo = arquivoDeExportacao()
+  fs.rmSync(arquivo, { force: true })
+  const antes = await totalDeBlocos(page)
+  await abrirSecaoFerramentas(page)
+  await exigirClique(page, '[aria-label="Ferramentas auxiliares"]', /^Exportar canvas$/, 'Exportar canvas')
+  for (let k = 0; k < 80 && !fs.existsSync(arquivo); k += 1) await page.waitForTimeout(100)
+  if (!fs.existsSync(arquivo)) falhar('Exportar canvas não gravou o arquivo .fxcanvas', arquivo)
+  const pacote = JSON.parse(fs.readFileSync(arquivo, 'utf8'))
+  if (!Array.isArray(pacote.nodes) || pacote.nodes.length !== antes) falhar('o arquivo exportado não tem os blocos do canvas', { blocos: antes, exportados: pacote.nodes?.length })
+
+  // Um bloco a mais, e a importação (com a confirmação aceita) devolve o canvas ao exportado.
+  await abrirFerramenta(page, 'Notas', 'notes')
+  await exigirClique(page, '[data-felixo-canvas-panel="notes"]', /^Nova nota$/, 'Nova nota (bloco)')
+  await esperar(page, (n) => Number(/(\d+)\D*bloco/.exec(document.querySelector('.felixo-canvas-statusbar')?.textContent ?? '')?.[1]) === n + 1, antes, 'Nova nota não criou o bloco')
+  const aceitar = (dialogo) => void dialogo.accept().catch(() => {})
+  page.on('dialog', aceitar)
+  try {
+    await page.locator('input[type="file"][accept*="fxcanvas"]').setInputFiles(arquivo)
+    await esperar(page, (n) => Number(/(\d+)\D*bloco/.exec(document.querySelector('.felixo-canvas-statusbar')?.textContent ?? '')?.[1]) === n, antes, 'Importar canvas não devolveu o canvas ao exportado')
+  } finally {
+    page.off('dialog', aceitar)
+  }
+}
+
 /** Notas: criar blocos (nota e desenho), criar, editar e remover uma nota salva. */
 async function checarNotas(page) {
   await prepararJanela(page)
@@ -847,6 +886,7 @@ const CHECKS_DOS_PAINEIS = [
   checarPresetsDeAgente,
   checarQaLogger,
   checarFetchAll,
+  checarExportarEImportarCanvas,
   checarConfiguracoes,
   checarModelos,
   checarOrquestrador,
@@ -866,6 +906,7 @@ module.exports = {
   checarBuscaDeBlocos,
   checarConfiguracoes,
   checarDetalheDoPrompt,
+  checarExportarEImportarCanvas,
   checarFetchAll,
   checarModelos,
   checarMolduraDosPaineis,

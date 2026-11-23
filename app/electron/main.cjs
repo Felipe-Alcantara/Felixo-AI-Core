@@ -154,6 +154,7 @@ const { loadDevtoolsFakeCliPty } = require('./core/devtools-fake-cli-pty-guard.c
 const { registerDevtoolsMainEval } = require('./core/devtools-main-eval.cjs')
 const { loadAutomationShellOpen } = require('./core/devtools-shell-open-guard.cjs')
 const { loadAutomationProjectDialog } = require('./core/devtools-project-folder-guard.cjs')
+const { loadAutomationSaveDialog } = require('./core/devtools-save-file-guard.cjs')
 const { createAgentUsageService } = require('./services/agent-usage-service.cjs')
 const { queryClaudeUsage } = require('./services/claude-usage-query.cjs')
 const {
@@ -310,6 +311,8 @@ const automationShell = loadAutomationShellOpen({ env: process.env, devtoolsPort
 // Seletor de pasta dos projetos que "escolhe" a pasta combinada (FELIXO_DEVTOOLS_PROJECT_FOLDER), só na instância de
 // automação que pediu: o smoke dos painéis precisa de um projeto real e o seletor nativo não é acionável por teste.
 const automationProjectDialog = loadAutomationProjectDialog({ env: process.env, devtoolsPort })
+// "Salvar como" do export do canvas que grava no arquivo combinado (FELIXO_DEVTOOLS_SAVE_FILE), só na automação que pediu.
+const automationSaveDialog = loadAutomationSaveDialog({ env: process.env, devtoolsPort })
 
 // O Chromium só aceita a porta de depuração antes de ficar pronto. A flag é
 // exclusiva da instância que o `felixo devtools` criou; o app normal não abre
@@ -1072,7 +1075,7 @@ app.whenReady().then(async () => {
   })
   registerOpeniaImageIpcHandlers({ service: openiaImageService })
   void openiaImageService.sweepOrphans()
-  registerFileExportIpcHandlers(getMainWindow)
+  registerFileExportIpcHandlers(getMainWindow, automationSaveDialog ? { saveDialog: automationSaveDialog } : {})
   const projectsHandlers = registerProjectsIpcHandlers(getMainWindow, {
     database: storageDatabase,
     ...(automationProjectDialog ? { dialog: automationProjectDialog } : {}),
