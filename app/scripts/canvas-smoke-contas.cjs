@@ -99,7 +99,9 @@ function criarSessaoDaCadeia(deps) {
   /** Espera o bloco com o selo `texto`; na falha, lista os selos que existem. */
   async function esperarBloco(passo, texto) {
     // Abrir um bloco dá zoom nele; os outros podem sair da tela (e do DOM).
-    await page.getByRole('button', { name: 'Enquadrar todos os blocos' }).click()
+    // dispatchEvent: com a gaveta e o inspector abertos a faixa livre é estreita e o painel Elementos cobre o botão da pílula (um
+    // clique por coordenada nunca o alcança); o evento chega ao botão mesmo assim, como nos outros checks.
+    await page.getByRole('button', { name: 'Enquadrar todos os blocos' }).dispatchEvent('click')
     const node = nodeDaConta(texto).first()
     try {
       await node.waitFor({ state: 'attached', timeout })
