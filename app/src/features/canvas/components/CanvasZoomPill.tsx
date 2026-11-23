@@ -7,6 +7,8 @@ type CanvasZoomPillProps = {
   /** Trava/destrava arrastar e conectar — o antigo botão de interatividade. */
   locked: boolean
   onLockedChange: (locked: boolean) => void
+  /** Enquadra todos os blocos dentro da área útil (descontando sidebar, painéis e inspector). */
+  onFit: () => void
 }
 
 /**
@@ -18,8 +20,8 @@ type CanvasZoomPillProps = {
  * desenha o zoom, mas remover as outras duas ações seria perder função para
  * ganhar semelhança — o controle nativo que isto substitui tinha as quatro.
  */
-export function CanvasZoomPill({ zoomPercent, locked, onLockedChange }: CanvasZoomPillProps) {
-  const { zoomIn, zoomOut, fitView } = useReactFlow()
+export function CanvasZoomPill({ zoomPercent, locked, onLockedChange, onFit }: CanvasZoomPillProps) {
+  const { zoomIn, zoomOut } = useReactFlow()
 
   return (
     <Panel position="bottom-left" className="felixo-zoom-pill-panel">
@@ -51,7 +53,7 @@ export function CanvasZoomPill({ zoomPercent, locked, onLockedChange }: CanvasZo
         <button
           type="button"
           className="felixo-btn-icon felixo-zoom-pill-button"
-          onClick={() => fitView({ padding: 0.15, duration: 240 })}
+          onClick={onFit}
           title="Enquadrar todos os blocos"
           aria-label="Enquadrar todos os blocos"
         >

@@ -867,6 +867,7 @@ export const workspaceToolSurfaces: InventoryElement[] = [
     ],
     tests: [
       { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarMolduraDosPaineis' },
+      { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarLarguraPorVistaDoPainel' },
       { file: SMOKE, check: 'checarPainelNosDoisEixos' },
       { file: SMOKE, check: 'checarFocoAoAbrirFerramenta' },
       { file: SMOKE, check: 'checarReaberturaDuranteSaidaDoPainel' },
@@ -886,11 +887,6 @@ export const workspaceToolSurfaces: InventoryElement[] = [
         what: 'só o painel Buscar tem evidência visual nos viewports críticos; os outros painéis (portes md/xl e workspace) nunca foram medidos',
         risk: 'médio',
         task: TASK_MATRIZ_VISUAL,
-      },
-      {
-        what: 'useResizablePanelWidth.ts:55-60 e useResizablePanelHeight.ts:42-44 leem o localStorage só ao montar; ProjectsPanel (projects → project-browser) e PromptsPanel (prompts → prompt-detail) trocam o panelId sem remontar a moldura — a largura de uma vista vaza para a outra e a gravada da segunda nunca é lida',
-        risk: 'baixo',
-        task: '3ec91f95-497e-8103-b360-c1979d6992f4',
       },
     ],
     overlap:

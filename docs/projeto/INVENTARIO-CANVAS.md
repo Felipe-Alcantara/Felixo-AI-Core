@@ -32,7 +32,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **Elementos:** 115 (10 blocos, 17 ferramentas, 88 outras superfícies)
 - **Controles:** 439, dos quais 92 com teste específico
 - **Elementos sem nenhum teste:** 0
-- **Lacunas:** 135 (alto 1, médio 85, baixo 49), em 73 tasks
+- **Lacunas:** 131 (alto 1, médio 83, baixo 47), em 72 tasks
 
 ## Moldura do canvas
 
@@ -261,7 +261,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **IPC:** nenhum
 - **Depende de:** `useReactFlow`, `Panel (@xyflow/react)`, `handleCanvasMove (CanvasView)`
 - **Sobreposição:** Panel do React Flow (bottom-left), margem esquerda var(--felixo-sidebar-width) + 1,25rem (4,5rem recolhida) e inferior statusbar + 0,5rem. Mora dentro do wrapper do React Flow, que tem z-index 0: fica abaixo de toda a moldura (statusbar 18, dock e painéis 20/30, sidebar 26).
-- **Testes:** `scripts/canvas-smoke-moldura.cjs` → `checarPilulaDeZoom`, `scripts/canvas-smoke.cjs` → `checarZoomVisual`, `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarPainelDeFerramentaSobPilulaDeZoom`
+- **Testes:** `scripts/canvas-smoke-moldura.cjs` → `checarPilulaDeZoom`, `src/features/canvas/components/canvas-layout-warning-z.test.ts`, `scripts/canvas-smoke.cjs` → `checarZoomVisual`, `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarPainelDeFerramentaSobPilulaDeZoom`
 
 | Estado | Quando |
 | --- | --- |
@@ -272,12 +272,8 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 | --- | --- | --- | --- | --- |
 | `Reduzir zoom` (button) | clique | zoomOut({ duration: 180 }) do React Flow; o número da pílula cai (até o mínimo 5%). | Sem falha própria; no mínimo não muda. | `scripts/canvas-smoke.cjs` → `checarZoomVisual` |
 | `Aumentar zoom` (button) | clique | zoomIn({ duration: 180 }) do React Flow; o número da pílula sobe. | Sem falha própria; no máximo não muda. | — |
-| `Enquadrar todos os blocos` (button) | clique | fitView({ padding: 0.15, duration: 240 }) do React Flow: enquadra todos os blocos no container inteiro. | Não desconta a área útil: blocos podem ficar sob a sidebar, a topbar ou o inspector (ver lacuna). | `scripts/canvas-smoke.cjs` → `checarZoomVisual` |
+| `Enquadrar todos os blocos` (button) | clique | fitCanvasViewSafely(240), o mesmo Enquadrar da sidebar: enquadra todos os blocos dentro da área útil (sem sidebar, painéis e inspector). | Sem instância do React Flow não faz nada (herdado de fitCanvasViewSafely). | `scripts/canvas-smoke.cjs` → `checarZoomVisual` |
 | `Travar o canvas` (button) | clique | onLockedChange(!locked) → setCanvasLocked: desliga nodesDraggable, nodesConnectable, elementsSelectable e a seleção por arrasto; o Remover da statusbar fica desabilitado. | A trava não persiste. Com ela ligada o onBeforeDelete do canvas recusa toda remoção (Delete/Backspace, Remover da barra, X do bloco e do grupo). | — |
-
-| Lacuna | Risco | Task |
-| --- | --- | --- |
-| Enquadrar da pílula usa fitView direto (CanvasZoomPill.tsx:54), sem a área útil que o Enquadrar da sidebar usa (fitCanvasViewSafely, CanvasView.tsx:1196): o smoke de links registra que ele deixa blocos sob a barra lateral em 1280×800. | médio | `3ec91f95-497e-8103-b360-c1979d6992f4` |
 
 ### Área do canvas (React Flow)
 
@@ -396,8 +392,8 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **Persistência:** nenhuma
 - **IPC:** nenhum
 - **Depende de:** `canvasSurfaceLayoutWarning`, `useCanvasSurfaces`
-- **Sobreposição:** pointer-events-none, absolute top-16, z-10, largura até a área livre − 32. Abaixo de painéis (20/30), sidebar (26) e topbar (18); o card do tutorial desvia dele ([data-canvas-layout-warning]).
-- **Testes:** `scripts/canvas-smoke-moldura.cjs` → `checarLimparComOverlay`, `src/features/canvas/services/canvas-surfaces.test.ts`
+- **Sobreposição:** pointer-events-none, absolute top-16, z-40, largura até a área livre − 32. Acima dos painéis (20/30), da sidebar (26) e da topbar (18); o card do tutorial desvia dele ([data-canvas-layout-warning]).
+- **Testes:** `src/features/canvas/components/canvas-layout-warning-z.test.ts`, `scripts/canvas-smoke-moldura.cjs` → `checarLimparComOverlay`, `src/features/canvas/services/canvas-surfaces.test.ts`
 
 | Estado | Quando |
 | --- | --- |
@@ -405,10 +401,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | error | canvasSurfaceLayoutWarning devolve texto: "Pouco espaço horizontal: recolha o painel ou o terminal…" ou "Pouco espaço vertical: role o conteúdo do painel…" (role="status", aria-live polite). |
 
 Sem controle próprio: as ações vêm de outros elementos.
-
-| Lacuna | Risco | Task |
-| --- | --- | --- |
-| O aviso (z-10, top-16, left = sidebar + 16, CanvasView.tsx:2982) nasce exatamente sob o painel de ferramenta (z-20, top-16, left = sidebar + 1rem, CanvasPanel.tsx:165); com o painel expandido, a causa mais comum do aviso, ele fica coberto e não é visto. | médio | `3ec91f95-497e-8103-b360-c1979d6992f4` |
 
 ### Overlay de operação em andamento
 
@@ -632,7 +624,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `canvas:save`, `canvas:delete`, `external-links:open-failed`, `webview-permissions:pending`, `webview-permissions:respond`, `webview-popups:blocked`, `agent-webpage-act:list-sessions`, `agent-webpage-act:sessions`, `agent-webpage-act:end-session`
 - **Depende de:** `useReactFlow`, `useWebviewSitePermissions / describeSitePermissionRequest (webview-site-permissions)`, `partitionForWebviewProfile (webview-profile)`, `explainUrlInput / persistableNavigationUrl (url-utils)`, `resolveGuestSrc / shouldCreateGuest / staleGuests (webview-mount)`, `webviewLinkMenu (webview-context-menu)`, `openLinkChooser / runLinkChoice`, `WebviewProfileMenu`
 - **Sobreposição:** Bloco do React Flow, sem z próprio: fica abaixo de toda superfície fixa (topbar e statusbar 18, dock e painéis 20/30, sidebar 26, menus 50+). O cartão é overflow-hidden, então nada que nasce dentro dele passa das bordas. O <webview> composita por cima do DOM do cartão e engole o mousedown nas bordas: um véu (pointer-events-auto) só liga durante o resize. Cliques dentro do guest não chegam ao document, então menus que fecham por mousedown fora (perfil) ficam abertos.
-- **Testes:** `src/features/canvas/components/block-load-failures.test.ts`, `src/features/canvas/services/webview-site-permissions.test.ts`, `src/features/canvas/services/url-utils.test.ts`, `src/features/canvas/services/webview-mount.test.ts`, `src/features/canvas/services/webview-context-menu.test.ts`, `electron/services/webview-lifecycle.test.cjs`, `electron/services/webview-profile-partition.test.cjs`, `scripts/canvas-smoke-links.cjs` → `paginaWebBarraEBotao`, `scripts/canvas-smoke-links.cjs` → `paginaWebMenuDeLink`, `scripts/canvas-smoke.cjs` → `checarVoltarEAvancarNaPaginaWeb`, `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`
+- **Testes:** `src/features/canvas/components/block-load-failures.test.ts`, `src/features/canvas/services/webview-site-permissions.test.ts`, `src/features/canvas/services/url-utils.test.ts`, `src/features/canvas/services/webview-mount.test.ts`, `src/features/canvas/services/webview-context-menu.test.ts`, `electron/services/webview-lifecycle.test.cjs`, `electron/services/webview-profile-partition.test.cjs`, `scripts/canvas-smoke-links.cjs` → `paginaWebBarraEBotao`, `scripts/canvas-smoke-links.cjs` → `paginaWebMenuDeLink`, `scripts/canvas-smoke.cjs` → `checarVoltarEAvancarNaPaginaWeb`, `scripts/canvas-smoke.cjs` → `prepararFixture`, `scripts/canvas-smoke.cjs` → `checarReloadSemDuplicacao`, `src/features/canvas/services/webpage-label.test.ts`
 
 | Estado | Quando |
 | --- | --- |
@@ -653,10 +645,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `aria-label="Avançar"` (button) | clique | webview.goForward(); mesma atualização da barra e da URL gravada. (desabilitado: Sem histórico para frente.) | Mesmo risco do Voltar: lança antes do dom-ready. | `scripts/canvas-smoke.cjs` → `checarVoltarEAvancarNaPaginaWeb` |
 | `aria-label="Recarregar"` (button) | clique | webview.reload(); a navegação troca o texto da barra pela URL real e apaga o aviso de endereço recusado. | Sem try e sempre habilitado: clicado antes do dom-ready (página inicial carregando, guest recriado pela troca de perfil) lança síncrono. | `scripts/canvas-smoke-links.cjs` → `paginaWebBarraEBotao` |
 | `aria-label="Abrir esta página no navegador"` (button) | clique | runLinkChoice("abrir-no-navegador") com a URL atual do guest (ou a última boa): window.open → o processo principal entrega ao navegador do sistema sob a política única de URL. | Recusa ou falha do sistema volta por external-links:open-failed e o LinkChooserHost avisa; URL fora da política não faz nada. | `scripts/canvas-smoke-links.cjs` → `paginaWebBarraEBotao` |
-
-| Lacuna | Risco | Task |
-| --- | --- | --- |
-| Rótulo pelo título da página (WebpageNode.tsx:84 e 190-194): sem nome manual, o rótulo segue cada título durante a sessão, mas ao reabrir o app labelCustomizedRef nasce verdadeiro (há label gravado) e o rótulo trava no último título. O comentário diz "wins once". | baixo | `3ec91f95-497e-8103-b360-c1979d6992f4` |
 
 ### Bloco Tarefas Notion (contêiner)
 
@@ -2059,7 +2047,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** nenhum
 - **Depende de:** `useExitAnimation`, `usePanelOpenRequest (PanelOpenRequestContext, provido pelo CanvasToolPanels)`, `useResizablePanelWidth`, `useResizablePanelHeight`, `useCanvasSurfaces (occupancy, reportPanelWidth, viewport)`, `getPanelMaxHeight`
 - **Sobreposição:** absolute z-20, z-30 com foco dentro (focus-within); top-16 (workspace: top-4), left = 1rem + largura viva da sidebar; maxWidth = viewport − sidebar − inspector − 32 px. Abaixo da sidebar (26), do overlay isBusy/toasts (50), dos diálogos (60) e do FelixoSelect (1000); mesmo z da lista Elementos
-- **Testes:** `scripts/canvas-smoke-paineis.cjs` → `checarMolduraDosPaineis`, `scripts/canvas-smoke.cjs` → `checarPainelNosDoisEixos`, `scripts/canvas-smoke.cjs` → `checarFocoAoAbrirFerramenta`, `scripts/canvas-smoke.cjs` → `checarReaberturaDuranteSaidaDoPainel`, `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos`, `scripts/canvas-smoke-onboarding.cjs` → `sb6`, `src/features/canvas/services/panel-sizing.test.ts`, `src/features/canvas/services/canvas-surfaces.test.ts`, `src/features/canvas/hooks/exit-animation-controller.test.ts`
+- **Testes:** `scripts/canvas-smoke-paineis.cjs` → `checarMolduraDosPaineis`, `scripts/canvas-smoke-paineis.cjs` → `checarLarguraPorVistaDoPainel`, `scripts/canvas-smoke.cjs` → `checarPainelNosDoisEixos`, `scripts/canvas-smoke.cjs` → `checarFocoAoAbrirFerramenta`, `scripts/canvas-smoke.cjs` → `checarReaberturaDuranteSaidaDoPainel`, `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos`, `scripts/canvas-smoke-onboarding.cjs` → `sb6`, `src/features/canvas/services/panel-sizing.test.ts`, `src/features/canvas/services/canvas-surfaces.test.ts`, `src/features/canvas/hooks/exit-animation-controller.test.ts`
 
 | Estado | Quando |
 | --- | --- |
@@ -2075,7 +2063,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | --- | --- | --- |
 | mesmo z da lista Elementos (TerminalsPanel absolute right-0 z-20): sem foco dentro do painel, a ordem do DOM decide quem cobre quem; coberto em janela pequena com a gaveta fixada | médio | `3eb91f95-497e-814a-8b2c-e471e09f6ff3` |
 | só o painel Buscar tem evidência visual nos viewports críticos; os outros painéis (portes md/xl e workspace) nunca foram medidos | médio | `3ce91f95-497e-81c9-8c3b-def9ed09d58c` |
-| useResizablePanelWidth.ts:55-60 e useResizablePanelHeight.ts:42-44 leem o localStorage só ao montar; ProjectsPanel (projects → project-browser) e PromptsPanel (prompts → prompt-detail) trocam o panelId sem remontar a moldura — a largura de uma vista vaza para a outra e a gravada da segunda nunca é lida | baixo | `3ec91f95-497e-8103-b360-c1979d6992f4` |
 
 ### Menu de ferramentas da sidebar
 
@@ -3087,7 +3074,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3eb91f95-497e-817d-baf1-fbf8f400f399` — 1 lacuna
 - `3eb91f95-497e-81b8-a70f-dfce2a446a3e` — 2 lacunas
 - `3eb91f95-497e-81bb-a374-eb2e336c73c6` — 1 lacuna
-- `3ec91f95-497e-8103-b360-c1979d6992f4` — 4 lacunas
 - `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` — 15 lacunas
 - `3ec91f95-497e-8122-a08b-d26d4991acca` — 1 lacuna
 - `3ec91f95-497e-818f-b9f2-f9710605c303` — 2 lacunas

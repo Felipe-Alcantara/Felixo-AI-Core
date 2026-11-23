@@ -2532,13 +2532,15 @@ function CanvasInner({
           />
         }
       />
+      {/* z-40: acima do painel de ferramenta (z-20, z-30 com foco), que nasce no
+          mesmo canto; abaixo dele o aviso do painel expandido ficava coberto. */}
       {layoutWarning && (
         <div
           role="status"
           aria-live="polite"
           aria-atomic="true"
           data-canvas-layout-warning
-          className="pointer-events-none absolute top-16 z-10 rounded-md border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-3 py-2 text-xs text-(--color-warning) shadow-lg"
+          className="pointer-events-none absolute top-16 z-40 rounded-md border border-[color-mix(in_srgb,var(--color-warning)_38%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-3 py-2 text-xs text-(--color-warning) shadow-lg"
           style={{
             left: occupancy.toolbar + 16,
             maxWidth: Math.max(180, freeArea.width - 32),
@@ -2767,6 +2769,7 @@ function CanvasInner({
             zoomPercent={zoomPercent}
             locked={canvasLocked}
             onLockedChange={setCanvasLocked}
+            onFit={() => fitCanvasViewSafely(240)}
           />
           {/* O mapa é a única superfície que pode encolher até sumir: ele
               ancora na direita da área livre, então é o primeiro a ser

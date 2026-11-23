@@ -458,6 +458,30 @@ async function checarOrquestrador(page) {
   }
 }
 
+/** Moldura comum: lista → detalhe do Prompts troca o panelId sem remontar; cada vista tem de usar a própria largura gravada. */
+async function checarLarguraPorVistaDoPainel(page) {
+  await prepararJanela(page)
+  const chaves = ['felixo:canvas-panel-width:prompts', 'felixo:canvas-panel-width:prompt-detail']
+  await page.evaluate(([lista, detalhe]) => {
+    window.localStorage.setItem(lista, '420')
+    window.localStorage.setItem(detalhe, '540')
+  }, chaves)
+  try {
+    await abrirFerramenta(page, 'Prompts', 'prompts')
+    const largura = (painel) => page.evaluate((sel) => document.querySelector(sel)?.getBoundingClientRect().width ?? 0, `[data-felixo-canvas-panel="${painel}"]`)
+    const lista = Math.round(await largura('prompts'))
+    if (Math.abs(lista - 420) > 2) falhar('a lista de Prompts não usou a largura gravada', lista)
+    await esperar(page, () => [...document.querySelectorAll('[data-felixo-canvas-panel="prompts"] button')].some((b) => /^Ver$/.test((b.textContent ?? '').trim())), null, 'não há prompt com o botão Ver')
+    await exigirClique(page, '[data-felixo-canvas-panel="prompts"]', /^Ver$/, 'Ver o detalhe do prompt')
+    await page.locator('[data-felixo-canvas-panel="prompt-detail"]').waitFor({ state: 'visible', timeout: TIMEOUT_MS })
+    await page.waitForTimeout(500)
+    const detalhe = Math.round(await largura('prompt-detail'))
+    if (Math.abs(detalhe - 540) > 2) falhar('o detalhe do prompt herdou a largura da lista em vez da própria', { lista, detalhe })
+  } finally {
+    await page.evaluate((ks) => ks.forEach((k) => window.localStorage.removeItem(k)), chaves).catch(() => {})
+  }
+}
+
 /**
  * Fetch All: varre uma raiz de fixture com dois clones atrasados em relação ao remoto, ignora um deles, executa o plano com a
  * confirmação (só o clone considerado avança, conferido com git) e volta a considerar a pasta ignorada. As raízes e as pastas
@@ -1736,6 +1760,7 @@ linha do smoke`
 /** Os checks na ordem da sessão J: cada um recomeça da fixture (`prepararJanela`), então a ordem só importa para o Git (depois de Projetos). */
 const CHECKS_DOS_PAINEIS = [
   checarMolduraDosPaineis,
+  checarLarguraPorVistaDoPainel,
   checarBuscaDeBlocos,
   checarProjetos,
   checarSourceControl,
@@ -1787,6 +1812,7 @@ module.exports = {
   checarExportarEImportarCanvas,
   checarFetchAll,
   checarFetchAllPedidosPushECommit,
+  checarLarguraPorVistaDoPainel,
   checarLimitesEUso,
   checarFiltroDasContas,
   checarModelos,

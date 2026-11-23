@@ -35,6 +35,7 @@ import { useWebviewProfiles } from '../hooks/useWebviewProfiles'
 import { webviewLinkMenu, type WebviewContextMenuParams } from '../services/webview-context-menu'
 import { useWebviewSitePermissions } from '../hooks/useWebviewSitePermissions'
 import { describeSitePermissionRequest } from '../services/webview-site-permissions'
+import { labelIsCustomized } from '../services/webpage-label'
 import type { WebpageNodeData } from '../types'
 
 /**
@@ -95,9 +96,10 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
   const [addressError, setAddressError] = useState<string | null>(null)
   const addressErrorId = useId()
   const [isResizing, setIsResizing] = useState(false)
-  // The page's own title wins once, then a manual rename "locks" the label so
-  // page-title-updated never overwrites a name the user chose on purpose.
-  const labelCustomizedRef = useRef(Boolean(nodeData.label))
+  // Sem nome manual o rótulo acompanha o título da página, também depois de reabrir
+  // o app (ver `labelIsCustomized`); um nome manual trava o rótulo, e o
+  // page-title-updated nunca sobrescreve um nome escolhido de propósito.
+  const labelCustomizedRef = useRef(labelIsCustomized(nodeData))
   const { deleteElements } = useReactFlow()
   // webContents do guest: é por ele que o pedido de permissão do site (e o
   // dos popups que a página abriu) chega a este bloco, e não a outro.
@@ -262,7 +264,7 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
 
     const onTitleUpdated = (event: { title: string }) => {
       if (!labelCustomizedRef.current) {
-        onDataChangeRef.current?.(id, { label: event.title })
+        onDataChangeRef.current?.(id, { label: event.title, labelFromPage: true })
       }
     }
 
@@ -374,7 +376,7 @@ function WebpageNodeComponent({ id, data, selected }: NodeProps) {
 
   const handleLabelChange = (label: string) => {
     labelCustomizedRef.current = true
-    nodeData.onDataChange?.(id, { label })
+    nodeData.onDataChange?.(id, { label, labelFromPage: false })
   }
 
   return (

@@ -227,8 +227,7 @@ export const chromeSurfaces: InventoryElement[] = [
       { file: 'scripts/canvas-smoke.cjs', check: 'checarLandmarksVisiveis' },
       { file: 'src/features/onboarding/onboarding-boundaries.test.ts' },
     ],
-    gaps: [
-    ],
+    gaps: [],
     overlap: 'nav.felixo-activity-rail dentro da aside da sidebar (z-26), coluna fixa de 52 px na borda esquerda, acima da topbar e da statusbar (18). Ajuda é o sexto botão do grupo de cima (≈ 271 de ≈ 289 px na altura mínima): um botão novo acima dela recorta o alvo. O menu Ajuda abre em portal (z 1000).',
   },
   {
@@ -586,8 +585,7 @@ export const chromeSurfaces: InventoryElement[] = [
       { file: 'scripts/canvas-smoke.cjs', check: 'checarMatrizVisual' },
       { file: 'scripts/canvas-smoke-onboarding.cjs', check: 'sa3' },
     ],
-    gaps: [
-    ],
+    gaps: [],
     overlap: 'header absolute top 0, largura total (left/right 0 !important), z-18 e overflow: hidden (index.css:3216): fica sob a sidebar (26) à esquerda e recorta tudo que tentar sair dela para baixo (ver o aviso do ditado). pointer-events só nos filhos.',
   },
   {
@@ -730,8 +728,8 @@ export const chromeSurfaces: InventoryElement[] = [
       {
         locator: 'Enquadrar todos os blocos',
         kind: 'button',
-        effect: 'fitView({ padding: 0.15, duration: 240 }) do React Flow: enquadra todos os blocos no container inteiro.',
-        failure: 'Não desconta a área útil: blocos podem ficar sob a sidebar, a topbar ou o inspector (ver lacuna).',
+        effect: 'fitCanvasViewSafely(240), o mesmo Enquadrar da sidebar: enquadra todos os blocos dentro da área útil (sem sidebar, painéis e inspector).',
+        failure: 'Sem instância do React Flow não faz nada (herdado de fitCanvasViewSafely).',
         test: { file: 'scripts/canvas-smoke.cjs', check: 'checarZoomVisual' },
       },
       {
@@ -746,17 +744,12 @@ export const chromeSurfaces: InventoryElement[] = [
     dependsOn: ['useReactFlow', 'Panel (@xyflow/react)', 'handleCanvasMove (CanvasView)'],
     tests: [
       { file: 'scripts/canvas-smoke-moldura.cjs', check: 'checarPilulaDeZoom' },
+      { file: 'src/features/canvas/components/canvas-layout-warning-z.test.ts' },
       { file: 'scripts/canvas-smoke.cjs', check: 'checarZoomVisual' },
       { file: 'scripts/canvas-smoke.cjs', check: 'checarElementosAbertosEmViewportsCriticos' },
       { file: 'scripts/canvas-smoke-sobreposicoes.cjs', check: 'checarPainelDeFerramentaSobPilulaDeZoom' },
     ],
-    gaps: [
-      {
-        what: 'Enquadrar da pílula usa fitView direto (CanvasZoomPill.tsx:54), sem a área útil que o Enquadrar da sidebar usa (fitCanvasViewSafely, CanvasView.tsx:1196): o smoke de links registra que ele deixa blocos sob a barra lateral em 1280×800.',
-        risk: 'médio',
-        task: '3ec91f95-497e-8103-b360-c1979d6992f4',
-      },
-    ],
+    gaps: [],
     overlap: 'Panel do React Flow (bottom-left), margem esquerda var(--felixo-sidebar-width) + 1,25rem (4,5rem recolhida) e inferior statusbar + 0,5rem. Mora dentro do wrapper do React Flow, que tem z-index 0: fica abaixo de toda a moldura (statusbar 18, dock e painéis 20/30, sidebar 26).',
   },
   {
@@ -853,8 +846,7 @@ export const chromeSurfaces: InventoryElement[] = [
       { file: 'scripts/canvas-smoke.cjs', check: 'checarOclusaoDoFixture' },
       { file: 'scripts/canvas-smoke.cjs', check: 'checarMatrizVisual' },
     ],
-    gaps: [
-    ],
+    gaps: [],
     overlap: 'Panel do React Flow (bottom-right, mb-10), margem direita 19rem para não ficar sob o inspector (1rem com o puck, via :has()), opacidade 0,45 até hover/foco. Dentro do wrapper do React Flow (z 0): o dock (20) cobre o mapa se a margem falhar; o mapa cobre blocos no canto inferior direito.',
   },
   {
@@ -1007,15 +999,9 @@ export const chromeSurfaces: InventoryElement[] = [
     persistence: ['nenhuma'],
     ipc: [],
     dependsOn: ['canvasSurfaceLayoutWarning', 'useCanvasSurfaces'],
-    tests: [{ file: 'scripts/canvas-smoke-moldura.cjs', check: 'checarLimparComOverlay' }, { file: 'src/features/canvas/services/canvas-surfaces.test.ts' }],
-    gaps: [
-      {
-        what: 'O aviso (z-10, top-16, left = sidebar + 16, CanvasView.tsx:2982) nasce exatamente sob o painel de ferramenta (z-20, top-16, left = sidebar + 1rem, CanvasPanel.tsx:165); com o painel expandido, a causa mais comum do aviso, ele fica coberto e não é visto.',
-        risk: 'médio',
-        task: '3ec91f95-497e-8103-b360-c1979d6992f4',
-      },
-    ],
-    overlap: 'pointer-events-none, absolute top-16, z-10, largura até a área livre − 32. Abaixo de painéis (20/30), sidebar (26) e topbar (18); o card do tutorial desvia dele ([data-canvas-layout-warning]).',
+    tests: [{ file: 'src/features/canvas/components/canvas-layout-warning-z.test.ts' }, { file: 'scripts/canvas-smoke-moldura.cjs', check: 'checarLimparComOverlay' }, { file: 'src/features/canvas/services/canvas-surfaces.test.ts' }],
+    gaps: [],
+    overlap: 'pointer-events-none, absolute top-16, z-40, largura até a área livre − 32. Acima dos painéis (20/30), da sidebar (26) e da topbar (18); o card do tutorial desvia dele ([data-canvas-layout-warning]).',
   },
   {
     id: 'chrome-busy-overlay',
@@ -1062,8 +1048,7 @@ export const chromeSurfaces: InventoryElement[] = [
       { file: 'scripts/canvas-smoke.cjs', check: 'checarInteracoes' },
       { file: 'scripts/canvas-smoke.cjs', check: 'checarReloadSemDuplicacao' },
     ],
-    gaps: [
-    ],
+    gaps: [],
     overlap: 'Sem superfície própria; o estado aparece na barra de status ("Carregando canvas…"/"Canvas pronto") e em data-felixo-hydrated na raiz do canvas.',
   },
 ]

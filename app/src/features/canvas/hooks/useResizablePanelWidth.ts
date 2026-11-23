@@ -66,6 +66,17 @@ export function useResizablePanelWidth(
 
   const limit = panelWidthLimit(viewport.width, occupancy, PANEL_MIN)
 
+  // Painéis como Projetos e Prompts trocam o `panelId` (lista → detalhe) sem
+  // remontar a moldura: sem reler a memória, a largura de uma vista vazava para
+  // a outra e a gravada da segunda nunca era lida.
+  const loadedPanelId = useRef(panelId)
+  useEffect(() => {
+    if (loadedPanelId.current === panelId) return
+    loadedPanelId.current = panelId
+    customized.current = hasPanelWidth(window.localStorage, panelId)
+    setWidth(readPanelWidth(window.localStorage, panelId, window.innerWidth, size))
+  }, [panelId, size])
+
   useEffect(() => {
     reportPanelWidth(collapsed ? COLLAPSED_SURFACE_WIDTH : width)
     return () => reportPanelWidth(0)

@@ -50,6 +50,15 @@ export function useResizablePanelHeight(
   const latestClientY = useRef<number | null>(null)
   const frame = useRef<number | null>(null)
 
+  // O `panelId` pode trocar sem remontar a moldura (Projetos: lista → pasta;
+  // Prompts: lista → detalhe): cada vista lembra a própria altura.
+  const loadedPanelId = useRef(panelId)
+  useEffect(() => {
+    if (loadedPanelId.current === panelId) return
+    loadedPanelId.current = panelId
+    setHeight(readPanelHeight(window.localStorage, panelId, window.innerHeight))
+  }, [panelId])
+
   // A janela mudou de tamanho: a altura escolhida volta para dentro da faixa.
   useEffect(() => {
     function onViewportResize() {

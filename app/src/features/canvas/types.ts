@@ -290,6 +290,8 @@ export type WebpageNodeData = {
   url?: string
   /** Human label shown on the node header (searchable). */
   label?: string
+  /** O `label` veio do título da página (e não de um nome escolhido): ele segue o título ao reabrir. */
+  labelFromPage?: boolean
   /**
    * Perfil do navegador interno (uma partição por perfil). Ausente = o perfil
    * Padrão, que é a partição que já existia — blocos antigos não mudam.

@@ -546,14 +546,9 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
       { file: SMOKE_LINKS, check: 'paginaWebMenuDeLink' },
       smoke('checarVoltarEAvancarNaPaginaWeb'),
       ...FIXTURE_TESTS,
+      { file: 'src/features/canvas/services/webpage-label.test.ts' },
     ],
-    gaps: [
-      {
-        what: 'Rótulo pelo título da página (WebpageNode.tsx:84 e 190-194): sem nome manual, o rótulo segue cada título durante a sessão, mas ao reabrir o app labelCustomizedRef nasce verdadeiro (há label gravado) e o rótulo trava no último título. O comentário diz "wins once".',
-        risk: 'baixo',
-        task: '3ec91f95-497e-8103-b360-c1979d6992f4',
-      },
-    ],
+    gaps: [],
     overlap: `${NODE_OVERLAP_BASE} O <webview> composita por cima do DOM do cartão e engole o mousedown nas bordas: um véu (pointer-events-auto) só liga durante o resize. Cliques dentro do guest não chegam ao document, então menus que fecham por mousedown fora (perfil) ficam abertos.`,
   },
 
