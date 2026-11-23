@@ -806,6 +806,284 @@ async function checarCarregamentoDosPaineis(page) {
   }
 }
 
+/** Registra um pedido de agente de uma ação qualquer no perfil isolado (o que a CLI `felixo` faz) e devolve o repositório e o pedido. */
+function registrarPedidoDeAgente(acao, detalhes) {
+  const { readState } = require('../electron/cli/felixo-devtools.cjs')
+  const { criarRepositorioDePedidos } = require('../electron/services/fetch-all/agent-requests.cjs')
+  const estado = readState()
+  if (!estado?.userData || estado.realProfile) falhar('gravar pedidos só é permitido num perfil isolado do felixo devtools')
+  const pedidos = criarRepositorioDePedidos({ pasta: path.join(estado.userData, 'agent-requests') })
+  return { pedidos, pedido: pedidos.registrar(acao, { origem: 'canvas-smoke', ...detalhes }) }
+}
+
+/**
+ * Fetch All, o que a primeira rodada não alcança: pedidos de agente (Recusar e "Aplicar o plano revisado" depois de varrer),
+ * o push de um repositório à frente, o commit automático de um repositório só com alteração e remover uma raiz. Tudo num
+ * remoto local; as raízes e as pastas ignoradas originais voltam ao fim.
+ */
+async function checarFetchAllPedidosPushECommit(page) {
+  await prepararJanela(page)
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-fetchall2-'))
+  const raiz = path.join(base, 'raiz')
+  const git = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
+  const configurar = (dir) => {
+    git(dir, 'config', 'user.email', 'smoke@felixo.test')
+    git(dir, 'config', 'user.name', 'Smoke')
+    git(dir, 'config', 'core.autocrlf', 'false')
+  }
+  const remoto = path.join(base, 'remoto.git')
+  const semente = path.join(base, 'semente')
+  fs.mkdirSync(remoto)
+  git(remoto, 'init', '-q', '--bare', '-b', 'main')
+  git(base, '-c', 'core.autocrlf=false', 'clone', '-q', remoto, semente)
+  configurar(semente)
+  git(semente, 'checkout', '-q', '-B', 'main')
+  fs.writeFileSync(path.join(semente, 'a.txt'), 'um\n')
+  git(semente, 'add', '.')
+  git(semente, 'commit', '-qm', 'inicial')
+  git(semente, 'push', '-q', '-u', 'origin', 'main')
+  fs.mkdirSync(raiz)
+  const adiante = path.join(raiz, 'repo-adiante')
+  const sujo = path.join(raiz, 'repo-sujo')
+  for (const destino of [adiante, sujo]) {
+    git(raiz, '-c', 'core.autocrlf=false', 'clone', '-q', remoto, destino)
+    configurar(destino)
+  }
+  // Um à frente do remoto (push) e outro só com uma alteração rastreada (commit automático).
+  fs.writeFileSync(path.join(adiante, 'a.txt'), 'um\nlocal\n')
+  git(adiante, 'commit', '-qam', 'local')
+  fs.writeFileSync(path.join(sujo, 'a.txt'), 'um\nalterado\n')
+  const noRemoto = () => Number(git(remoto, 'rev-list', '--count', 'main'))
+
+  const lerConfiguracao = () => page.evaluate(async () => { const r = await window.felixo.fetchAll.getSettings(); return r?.settings ?? r })
+  const original = await lerConfiguracao()
+  const painel = '[data-felixo-canvas-panel="fetch-all"]'
+  try {
+    await page.evaluate((c) => window.felixo.fetchAll.saveSettings(c), { ...original, scanRoots: [raiz], ignoredPaths: [] })
+    // O primeiro pedido é recusado pela pessoa; o segundo é aplicado depois de varrer.
+    const primeiro = registrarPedidoDeAgente('executar-plano', {})
+    await abrirFerramenta(page, 'Fetch All', 'fetch-all')
+    await esperar(page, (sel) => /Um agente pediu para aplicar o plano/.test(document.querySelector(sel)?.innerText ?? ''), painel, 'o pedido do agente não apareceu no painel')
+    await exigirClique(page, painel, /^Recusar$/, 'Recusar o pedido do agente')
+    await esperarPedido(primeiro.pedidos, primeiro.pedido.id, 'recusado')
+    if (noRemoto() !== 1) falhar('recusar o pedido não deveria enviar nada ao remoto')
+
+    const segundo = registrarPedidoDeAgente('executar-plano', {})
+    await esperar(page, (sel) => /Um agente pediu para aplicar o plano/.test(document.querySelector(sel)?.innerText ?? ''), painel, 'o segundo pedido do agente não apareceu')
+    await exigirClique(page, painel, /^Varrer para revisar$/, 'Varrer para revisar')
+    await exigirClique(page, painel, /^Aplicar o plano revisado$/, 'Aplicar o plano revisado')
+    await esperarPedido(segundo.pedidos, segundo.pedido.id, 'aceito')
+    for (let k = 0; k < 60 && noRemoto() !== 2; k += 1) await page.waitForTimeout(150)
+    if (noRemoto() !== 2) falhar('aplicar o plano não enviou o commit do repositório à frente (push)', await textoDoPainel(page, painel))
+    if (git(sujo, 'rev-list', '--count', 'HEAD') !== '1') falhar('aplicar o plano sem o commit automático não deveria commitar o repositório alterado')
+
+    // Commit automático: só entra quem tem a alteração e não está atrás do remoto (o `repo-sujo` ficou atrás depois do push);
+    // um clone novo, já no remoto atual e alterado, é o candidato.
+    const sujo2 = path.join(raiz, 'repo-sujo-novo')
+    git(raiz, '-c', 'core.autocrlf=false', 'clone', '-q', remoto, sujo2)
+    configurar(sujo2)
+    fs.writeFileSync(path.join(sujo2, 'a.txt'), 'um\nlocal\nnovo\n')
+    await exigirClique(page, painel, /^Varredura completa$/, 'Varredura completa (2ª)')
+    await esperar(page, (sel) => /Commitar automaticamente/.test(document.querySelector(sel)?.innerText ?? ''), painel, 'a caixa do commit automático não apareceu para o repositório alterado')
+    await page.evaluate((sel) => document.querySelector(`${sel} input[type="checkbox"]`)?.click(), painel)
+    await exigirClique(page, painel, /^Executar plano$/, 'Executar plano (commit automático)')
+    await exigirClique(page, painel, /^Confirmar execução$/, 'Confirmar execução (commit automático)')
+    for (let k = 0; k < 80 && noRemoto() !== 3; k += 1) await page.waitForTimeout(150)
+    if (noRemoto() !== 3) falhar('o commit automático não chegou ao remoto', await textoDoPainel(page, painel))
+    if (git(sujo2, 'status', '--porcelain') !== '') falhar('o repositório alterado ficou com pendência depois do commit automático')
+
+    // Adicionar pasta: o seletor da automação "escolhe" a pasta combinada e ela entra nas raízes; remover tira as duas.
+    const pastaEscolhida = criarRepositorioDeFixture()
+    await exigirClique(page, painel, /^Adicionar pasta$/, 'Adicionar pasta (raiz)')
+    for (let k = 0; k < 40 && !((await lerConfiguracao())?.scanRoots ?? []).some((r) => path.resolve(r) === path.resolve(pastaEscolhida)); k += 1) await page.waitForTimeout(100)
+    if (!((await lerConfiguracao())?.scanRoots ?? []).some((r) => path.resolve(r) === path.resolve(pastaEscolhida))) falhar('Adicionar pasta não gravou a pasta escolhida nas raízes', await lerConfiguracao())
+    for (let rodada = 0; rodada < 2; rodada += 1) {
+      await exigirClique(page, painel, /^Deixar de varrer /, 'Deixar de varrer a raiz')
+      await page.waitForTimeout(400)
+    }
+    for (let k = 0; k < 40 && ((await lerConfiguracao())?.scanRoots ?? []).length !== 0; k += 1) await page.waitForTimeout(100)
+    if (((await lerConfiguracao())?.scanRoots ?? []).length !== 0) falhar('remover as raízes não gravou a lista vazia', await lerConfiguracao())
+  } finally {
+    await page.evaluate((c) => window.felixo.fetchAll.saveSettings(c), original).catch(() => {})
+    fs.rmSync(base, { recursive: true, force: true })
+  }
+}
+
+/**
+ * Orquestrador, o que o check anterior não alcança: o Modo (menu), a confirmação de ações sensíveis, um modelo marcado como
+ * bloqueado (que desmarca o preferido, pois os dois se excluem) e os textos de contexto fixo e memórias. Salvar grava tudo no
+ * main; a configuração original volta ao fim.
+ */
+async function checarOrquestradorModoBloqueioETextos(page) {
+  await prepararJanela(page)
+  const id = `smoke-orq2-${Date.now() % 100000}`
+  const nome = `Modelo orquestrador ${id}`
+  const lerGravado = () => page.evaluate(async () => { const r = await window.felixo.settings.loadOrchestrator(); return r?.settings ?? r })
+  const original = await lerGravado()
+  const salvo = await page.evaluate((m) => window.felixo.models.save(m), { id, name: nome, command: 'smoke-cli', source: 'smoke', cliType: 'claude' })
+  if (!salvo?.ok) falhar('não foi possível gravar o modelo de fixture', salvo)
+  try {
+    await abrirFerramenta(page, 'Orquestrador', 'orchestrator')
+    const painel = '[data-felixo-canvas-panel="orchestrator"]'
+    await esperar(page, ([sel, n]) => (document.querySelector(sel)?.innerText ?? '').includes(n), [painel, nome], 'o formulário do orquestrador não carregou o modelo')
+    await page.waitForTimeout(500) // o rascunho preenche depois da leitura do main
+
+    // Modo: o menu troca para "Somente leitura".
+    await escolherNoSeletor(page, 'Modo do orquestrador', /^Somente leitura/)
+
+    // Confirmação de ações sensíveis: o primeiro caixa do painel (antes da lista de modelos) inverte o valor.
+    // Sem nada gravado ainda, o padrão do app é pedir confirmação.
+    const confirmacaoAntes = original?.requireConfirmationForSensitiveActions ?? true
+    await page.evaluate((sel) => document.querySelector(`${sel} input[type="checkbox"]`)?.click(), painel)
+
+    // Modelo: "Preferido" e depois "Bloqueado" no mesmo cartão (o segundo desmarca o primeiro).
+    const marcar = (rotulo) => page.evaluate(([sel, n, r]) => {
+      const cartao = [...document.querySelectorAll(`${sel} div`)].filter((el) => (el.textContent ?? '').includes(n) && el.querySelector('input[type="checkbox"]')).pop()
+      const campo = [...(cartao?.querySelectorAll('label') ?? [])].find((l) => new RegExp(r).test(l.textContent ?? ''))?.querySelector('input')
+      campo?.click()
+      return Boolean(campo)
+    }, [painel, nome, rotulo])
+    if (!(await marcar('Preferido'))) falhar('o cartão do modelo não tem a caixa Preferido')
+    if (!(await marcar('Bloqueado'))) falhar('o cartão do modelo não tem a caixa Bloqueado')
+
+    await preencher(page, `${painel} textarea[placeholder^="Instruções enviadas"]`, 'contexto fixo do smoke')
+    await preencher(page, `${painel} textarea[placeholder^="O que o orquestrador deve lembrar"]`, 'memória do smoke')
+    await exigirClique(page, painel, /^Salvar$/, 'Salvar o orquestrador')
+    await esperar(page, (sel) => /Salvo/.test(document.querySelector(sel)?.innerText ?? ''), painel, 'o painel não mostrou "Salvo"')
+    let gravado = await lerGravado()
+    for (let k = 0; k < 30 && gravado?.customContext !== 'contexto fixo do smoke'; k += 1) {
+      await page.waitForTimeout(100)
+      gravado = await lerGravado()
+    }
+    if (gravado?.mode !== 'read_only') falhar('o modo escolhido não foi gravado', gravado?.mode)
+    if (gravado?.requireConfirmationForSensitiveActions === confirmacaoAntes) falhar('a confirmação de ações sensíveis não foi invertida no main', gravado)
+    if (!(gravado?.blockedModelIds ?? []).includes(id)) falhar('o modelo bloqueado não foi gravado', gravado)
+    if ((gravado?.preferredModelIds ?? []).includes(id)) falhar('bloquear o modelo não o tirou dos preferidos', gravado)
+    if (gravado?.customContext !== 'contexto fixo do smoke' || gravado?.globalMemories !== 'memória do smoke') falhar('os textos de contexto e memórias não foram gravados', gravado)
+  } finally {
+    await page.evaluate((o) => window.felixo.settings.saveOrchestrator(o), original).catch(() => {})
+    await page.evaluate((modeloId) => window.felixo.models.delete(modeloId), id).catch(() => {})
+  }
+}
+
+/**
+ * Presets de agente, o que o check de criar/duplicar/excluir não alcança: Editar (o nome novo é gravado), Exportar (o arquivo
+ * .fxpreset sai no caminho combinado da automação) e Importar (o arquivo exportado, depois de excluir o original, recria o preset).
+ * Os presets do teste são removidos no fim.
+ */
+async function checarPresetsEditarExportarImportar(page) {
+  await prepararJanela(page)
+  await abrirFerramenta(page, 'Presets de agente', 'agent-presets')
+  const painel = '[data-felixo-canvas-panel="agent-presets"]'
+  const base = `Preset editável ${Date.now() % 100000}`
+  const editado = `${base} editado`
+  const gravados = () => page.evaluate(async (n) => ((await window.felixo.agentPresets.list()).presets ?? []).filter((p) => p.name.startsWith(n)), base)
+  const arquivo = arquivoDeExportacao()
+  const aceitar = (dialogo) => void dialogo.accept().catch(() => {})
+  page.on('dialog', aceitar)
+  const acaoDaLinha = (nome, rotulo) => page.evaluate(([sel, n, r]) => {
+    const linha = [...document.querySelectorAll(`${sel} li, ${sel} [role="listitem"]`)].find((el) => (el.textContent ?? '').includes(n))
+    const botao = [...(linha?.querySelectorAll('button') ?? [])].find((b) => new RegExp(r).test((b.getAttribute('aria-label') || b.title || b.textContent || '').trim()))
+    botao?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }))
+    return Boolean(botao)
+  }, [painel, nome, rotulo])
+  try {
+    await exigirClique(page, painel, /^Novo preset$/, 'Novo preset')
+    await preencher(page, await marcarCampoPorRotulo(page, painel, 'Nome'), base)
+    await exigirClique(page, painel, /^Salvar$/, 'Salvar preset')
+    for (let k = 0; k < 30 && (await gravados()).length === 0; k += 1) await page.waitForTimeout(150)
+    if ((await gravados()).length !== 1) falhar('o preset de partida não foi gravado', await gravados())
+
+    // Editar: o nome novo substitui o antigo (a mesma linha gravada, sem criar outra).
+    await esperar(page, ([sel, n]) => (document.querySelector(sel)?.innerText ?? '').includes(n), [painel, base], 'o preset não entrou na lista')
+    if (!(await acaoDaLinha(base, '^Editar')) ) falhar('a linha do preset não tem o botão Editar')
+    await preencher(page, await marcarCampoPorRotulo(page, painel, 'Nome'), editado)
+    await exigirClique(page, painel, /^Salvar$/, 'Salvar a edição')
+    for (let k = 0; k < 30 && !(await gravados()).some((p) => p.name === editado); k += 1) await page.waitForTimeout(150)
+    const aposEdicao = await gravados()
+    if (aposEdicao.length !== 1 || aposEdicao[0].name !== editado) falhar('Editar não trocou o nome do preset gravado', aposEdicao.map((p) => p.name))
+
+    // Exportar: o arquivo sai no caminho combinado, com o preset editado dentro.
+    fs.rmSync(arquivo, { force: true })
+    await esperar(page, ([sel, n]) => (document.querySelector(sel)?.innerText ?? '').includes(n), [painel, editado], 'o preset editado não apareceu na lista')
+    if (!(await acaoDaLinha(editado, 'Exportar'))) falhar('a linha do preset não tem o botão Exportar')
+    for (let k = 0; k < 80 && !fs.existsSync(arquivo); k += 1) await page.waitForTimeout(100)
+    if (!fs.existsSync(arquivo)) falhar('Exportar não gravou o arquivo do preset', arquivo)
+    if (!fs.readFileSync(arquivo, 'utf8').includes(editado)) falhar('o arquivo exportado não traz o preset editado')
+
+    // Importar: com o original excluído, o arquivo recria o preset.
+    if (!(await acaoDaLinha(editado, 'Excluir|Remover'))) falhar('a linha do preset não tem o botão Excluir')
+    for (let k = 0; k < 30 && (await gravados()).length !== 0; k += 1) await page.waitForTimeout(150)
+    if ((await gravados()).length !== 0) falhar('Excluir não apagou o preset antes da importação')
+    await page.locator('input[aria-label="Importar preset de agente"]').setInputFiles(arquivo)
+    for (let k = 0; k < 40 && (await gravados()).length === 0; k += 1) await page.waitForTimeout(150)
+    if ((await gravados()).length !== 1) falhar('Importar não recriou o preset exportado', await gravados())
+  } finally {
+    page.off('dialog', aceitar)
+    await page.evaluate(async (n) => {
+      for (const p of ((await window.felixo.agentPresets.list()).presets ?? []).filter((x) => x.name.startsWith(n))) await window.felixo.agentPresets.delete(p.id)
+    }, base).catch(() => {})
+  }
+}
+
+/**
+ * Configurações, o que o check das instruções de arquivo não alcança: o Tema (menu que grava a preferência local) e o padrão de
+ * qualidade (interruptor "Sempre lembrar o agente…" e o texto editado, salvo e gravado no main). O tema e o padrão originais voltam
+ * ao fim.
+ */
+async function checarTemaEPadraoDeQualidade(page) {
+  await prepararJanela(page)
+  await exigirClique(page, 'nav.felixo-activity-rail', /^Configurações$/, 'Configurações (trilho)')
+  const painel = '[data-felixo-canvas-panel="settings"]'
+  await page.locator(painel).waitFor({ state: 'visible', timeout: TIMEOUT_MS })
+  const chaveDoTema = 'felixo-ai-core.theme'
+  const lerTema = () => page.evaluate((k) => window.localStorage.getItem(k), chaveDoTema)
+  const lerPadrao = () => page.evaluate(async () => (await window.felixo.canvas.getQualityStandard()) ?? null)
+  const temaOriginal = await lerTema()
+  const padraoOriginal = await lerPadrao()
+  try {
+    // Tema: "Claro" grava a preferência e o documento passa a usá-la.
+    await escolherNoSeletor(page, 'Tema', /^Claro/)
+    for (let k = 0; k < 30 && (await lerTema()) !== 'light'; k += 1) await page.waitForTimeout(100)
+    if ((await lerTema()) !== 'light') falhar('o tema Claro não ficou gravado', await lerTema())
+
+    // Padrão de qualidade: o interruptor e o texto editados são gravados juntos pelo Salvar.
+    const interruptor = '[role="switch"][aria-label="Sempre lembrar o agente do padrão de qualidade"]'
+    await esperar(page, (sel) => document.querySelector(sel) !== null, interruptor, 'o interruptor do padrão de qualidade não apareceu')
+    await page.waitForTimeout(600) // os campos preenchem depois da leitura do main
+    const enabledAntes = Boolean(padraoOriginal?.enabled)
+    await clicarSeletor(page, interruptor, 'interruptor do padrão de qualidade')
+    let padrao
+    const texto = 'padrão de qualidade do smoke'
+    const alvo = await page.evaluate(([sel]) => {
+      const trilho = document.querySelector(sel)
+      let no = trilho
+      while (no && !no.querySelector('textarea')) no = no.parentElement
+      const caixa = no?.querySelector('textarea')
+      if (!caixa) return false
+      caixa.setAttribute('data-smoke-qualidade', '1')
+      return true
+    }, [interruptor])
+    if (!alvo) falhar('o campo de texto do padrão de qualidade não foi encontrado')
+    await preencher(page, `${painel} textarea[data-smoke-qualidade="1"]`, texto)
+    await page.evaluate(([sel]) => {
+      let no = document.querySelector(sel)
+      while (no && ![...no.querySelectorAll('button')].some((b) => /^Salvar$/.test((b.textContent ?? '').trim()))) no = no.parentElement
+      ;[...(no?.querySelectorAll('button') ?? [])].find((b) => /^Salvar$/.test((b.textContent ?? '').trim()))?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }))
+    }, [interruptor])
+    padrao = await lerPadrao()
+    for (let k = 0; k < 30 && !String(padrao?.prompt ?? '').includes(texto); k += 1) {
+      await page.waitForTimeout(100)
+      padrao = await lerPadrao()
+    }
+    if (!String(padrao?.prompt ?? '').includes(texto)) falhar('o texto do padrão de qualidade não ficou gravado no main', padrao)
+    if (Boolean(padrao?.enabled) === enabledAntes) falhar('o interruptor do padrão de qualidade não mudou o valor gravado pelo Salvar', padrao)
+  } finally {
+    await page.evaluate(([k, v]) => { try { v === null ? window.localStorage.removeItem(k) : window.localStorage.setItem(k, v) } catch { /* sem armazenamento */ } }, [chaveDoTema, temaOriginal]).catch(() => {})
+    if (padraoOriginal) await page.evaluate((p) => window.felixo.canvas.setQualityStandard({ prompt: p.prompt ?? '', enabled: Boolean(p.enabled) }), padraoOriginal).catch(() => {})
+  }
+}
+
 /** Notas: criar blocos (nota e desenho), criar, editar e remover uma nota salva. */
 async function checarNotas(page) {
   await prepararJanela(page)
@@ -1123,6 +1401,7 @@ const CHECKS_DOS_PAINEIS = [
   checarPresetsDeAgente,
   checarQaLogger,
   checarFetchAll,
+  checarFetchAllPedidosPushECommit,
   checarExportarEImportarCanvas,
   checarLimitesEUso,
   checarCadeiaDeContas,
@@ -1131,6 +1410,9 @@ const CHECKS_DOS_PAINEIS = [
   checarCarregamentoDosPaineis,
   checarModelos,
   checarOrquestrador,
+  checarOrquestradorModoBloqueioETextos,
+  checarPresetsEditarExportarImportar,
+  checarTemaEPadraoDeQualidade,
 ]
 
 async function executarChecksDosPaineis(page) {
@@ -1151,16 +1433,20 @@ module.exports = {
   checarDetalheDoPrompt,
   checarExportarEImportarCanvas,
   checarFetchAll,
+  checarFetchAllPedidosPushECommit,
   checarLimitesEUso,
   checarModelos,
   checarMolduraDosPaineis,
   checarNotas,
   checarOrquestrador,
+  checarOrquestradorModoBloqueioETextos,
   checarPedidosDeEscrita,
   checarPresetsDeAgente,
+  checarPresetsEditarExportarImportar,
   checarProjetos,
   checarPrompts,
   checarSkills,
+  checarTemaEPadraoDeQualidade,
   checarQaLogger,
   checarRolagemEDitado,
   checarSourceControl,

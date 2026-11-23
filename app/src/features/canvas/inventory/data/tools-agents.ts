@@ -152,6 +152,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
       'fetch-all-roots (addPickedRoots, removeScanRoot)',
     ],
     tests: [
+      { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarFetchAllPedidosPushECommit' },
       { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarFetchAll' },
       { file: 'src/features/shared/ipc/ipc-failures.test.ts' },
       { file: `${TOOLS}/fetch-all-plan.test.ts` },
@@ -163,7 +164,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
     ],
     gaps: [
       {
-        what: 'Varrer uma raiz configurada, ignorar uma pasta, executar com confirmação (pull --ff-only conferido no git) e voltar a varrer são exercitados (checarFetchAll); o escopo amplo (todos os discos), o push, o commit automático e a resposta a pedido de agente seguem sem teste de interface',
+        what: 'Varrer uma raiz configurada, ignorar uma pasta, executar com confirmação (pull --ff-only conferido no git) e voltar a varrer são exercitados (checarFetchAll); pedido de agente (recusar e aplicar o plano revisado), push, commit automático e remover/adicionar raiz são exercitados (checarFetchAllPedidosPushECommit); só o escopo amplo (todos os discos) segue sem teste de interface',
         risk: 'médio',
         task: '3ec91f95-497e-81ca-8319-ee657b0b6492',
       },
@@ -375,6 +376,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
       'CanvasPanel',
     ],
     tests: [
+      { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarOrquestradorModoBloqueioETextos' },
       { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarOrquestrador' },
       { file: 'electron/services/orchestrator-settings-store.test.cjs' },
       { file: 'src/features/shared/orchestrator/orchestrator-settings-storage.test.ts' },
@@ -383,7 +385,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
     ],
     gaps: [
       {
-        what: 'O smoke cobre um limite, o modelo preferido e o Salvar; faltam o Modo (FelixoSelect), os bloqueados, a confirmação de ações sensíveis e os campos de contexto fixo e memórias, e a camada orchestrator-settings-storage do renderer não tem teste próprio',
+        what: 'O smoke cobre limite, modelo preferido, Modo, bloqueados, confirmação de ações sensíveis, contexto fixo e memórias; falta só a camada orchestrator-settings-storage do renderer não tem teste próprio',
         risk: 'baixo',
         task: '3ec91f95-497e-81ca-8319-ee657b0b6492',
       },
@@ -436,6 +438,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
     ipc: ['qa-logger:get', 'qa-logger:clear', 'qa-logger:entry', 'qa-logger:cleared', 'qa-logger:build-report'],
     dependsOn: ['window.felixo.qaLogger', 'CanvasPanel'],
     tests: [
+      { file: 'electron/services/qa-logger-ipc.test.cjs' },
       { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarQaLogger' },
       { file: 'src/features/shared/ipc/ipc-failures-2.test.ts' },
       { file: 'scripts/canvas-smoke-sobreposicoes.cjs', check: 'checarQaLoggerEmJanelaPequena' },
@@ -445,7 +448,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
     ],
     gaps: [
       {
-        what: 'Limpar (painel, memória e disco) e Reportar problema são exercitados (checarQaLogger); o handler qa-logger:build-report não é exercitado em qa-logger.test.cjs.',
+        what: 'Limpar (painel, memória e disco) e Reportar problema são exercitados (checarQaLogger); o handler qa-logger:build-report é testado em qa-logger-ipc.test.cjs.',
         risk: 'baixo',
         task: '3ec91f95-497e-81ca-8319-ee657b0b6492',
       },
@@ -712,6 +715,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
       'CanvasPanel',
     ],
     tests: [
+      { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarPresetsEditarExportarImportar' },
       { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarPresetsDeAgente' },
       { file: 'src/features/shared/ipc/ipc-failures.test.ts' },
       { file: 'src/features/canvas/components/focus-keyboard-a11y.test.ts' },
@@ -722,7 +726,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
     ],
     gaps: [
       {
-        what: 'Criar, duplicar e excluir preset são exercitados (checarPresetsDeAgente); editar, importar e exportar (arquivo) seguem sem teste de interface.',
+        what: 'Criar, duplicar e excluir preset são exercitados (checarPresetsDeAgente); editar, exportar e importar (arquivo) também (checarPresetsEditarExportarImportar).',
         risk: 'baixo',
         task: '3ec91f95-497e-81ca-8319-ee657b0b6492',
       },
@@ -817,6 +821,8 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
       'ClaudeConfigDefaultsSection',
     ],
     tests: [
+      { file: 'electron/services/canvas-ipc-handlers.test.cjs' },
+      { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarTemaEPadraoDeQualidade' },
       { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarConfiguracoes' },
       { file: 'src/features/shared/ipc/ipc-failures.test.ts' },
       { file: 'src/features/canvas/services/quality-standard-prompt.test.ts' },
@@ -826,7 +832,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
     ],
     gaps: [
       {
-        what: 'A instrução de arquivo (salvar e persistir) é exercitada (checarConfiguracoes); o tema e o padrão de qualidade seguem sem teste de interface (hardware-check só abre o painel para a placa de vídeo); canvas:set-file-link-prompt, set-file-bootstrap-prompt e set-quality-standard não aparecem em canvas-ipc-handlers.test.cjs.',
+        what: 'A instrução de arquivo (salvar e persistir) é exercitada (checarConfiguracoes); o tema e o padrão de qualidade também (checarTemaEPadraoDeQualidade) e os handlers de instruções e padrão estão em canvas-ipc-handlers.test.cjs; o hardware-check só abre o painel para a placa de vídeo.',
         risk: 'baixo',
         task: '3ec91f95-497e-81ca-8319-ee657b0b6492',
       },
@@ -961,10 +967,11 @@ export const agentToolSurfaces: InventoryElement[] = [
     persistence: ['processo principal: scanRoots em userData/config/fetch-all-settings.json'],
     ipc: ['fetch-all:pick-roots', 'fetch-all:save-settings', 'fetch-all:get-scope'],
     dependsOn: ['scanRootName', 'FetchAllPanel (editScanRoots, addPickedRoots, removeScanRoot)'],
-    tests: [{ file: `${TOOLS}/FetchAllScanRoots.test.ts` }, { file: `${TOOLS}/fetch-all-roots.test.ts` }],
+    tests: [
+      { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarFetchAllPedidosPushECommit' },{ file: `${TOOLS}/FetchAllScanRoots.test.ts` }, { file: `${TOOLS}/fetch-all-roots.test.ts` }],
     gaps: [
       {
-        what: 'O render estático é testado, mas adicionar (seletor nativo) e remover raiz nunca são clicados num teste',
+        what: 'Adicionar (seletor da automação) e remover raiz são exercitados (checarFetchAllPedidosPushECommit)',
         risk: 'baixo',
         task: '3ec91f95-497e-81ca-8319-ee657b0b6492',
       },

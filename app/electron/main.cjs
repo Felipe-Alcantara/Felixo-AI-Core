@@ -1155,7 +1155,8 @@ app.whenReady().then(async () => {
   })
   registerChatHistoryIpcHandlers({ database: storageDatabase })
   registerGitIpcHandlers()
-  registerFetchAllIpcHandlers(getMainWindow, appPaths)
+  // Na automação que pediu, o seletor de pastas das raízes "escolhe" a pasta combinada (a mesma dos projetos).
+  registerFetchAllIpcHandlers(getMainWindow, appPaths, automationProjectDialog ? { dialog: automationProjectDialog } : {})
   notionHandlers = registerNotionIpcHandlers({
     appPaths,
     database: storageDatabase,

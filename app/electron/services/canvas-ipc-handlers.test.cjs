@@ -201,3 +201,31 @@ test('canvas IPC exporta a saída dos terminais só com a opção e a devolve ao
     database.close()
   }
 })
+
+test('canvas IPC grava e devolve as instruções de arquivo e o padrão de qualidade (padrões e valores parciais)', async () => {
+  const databaseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-canvas-prompts-'))
+  const database = createStorageDatabase({ databaseDir })
+
+  try {
+    registerCanvasIpcHandlers({ database })
+
+    // Nada gravado: as instruções vêm nulas e o padrão de qualidade liga sozinho, com o Workflow desligado.
+    assert.deepEqual(handlers.get('canvas:get-file-link-prompt')(null), { ok: true, prompt: null })
+    assert.deepEqual(handlers.get('canvas:get-file-bootstrap-prompt')(null), { ok: true, prompt: null })
+    assert.deepEqual(handlers.get('canvas:get-quality-standard')(null), { ok: true, prompt: null, enabled: true, workflowEnabled: false })
+
+    // As duas instruções de arquivo são gravadas como texto (valor ausente vira vazio).
+    assert.deepEqual(handlers.get('canvas:set-file-link-prompt')(null, 'ligar o arquivo'), { ok: true })
+    assert.deepEqual(handlers.get('canvas:set-file-bootstrap-prompt')(null, undefined), { ok: true })
+    assert.deepEqual(handlers.get('canvas:get-file-link-prompt')(null), { ok: true, prompt: 'ligar o arquivo' })
+    assert.deepEqual(handlers.get('canvas:get-file-bootstrap-prompt')(null), { ok: true, prompt: '' })
+
+    // O padrão de qualidade grava só o que veio com o tipo certo: o resto fica como estava.
+    assert.deepEqual(handlers.get('canvas:set-quality-standard')(null, { prompt: 'meu padrão', enabled: false }), { ok: true })
+    assert.deepEqual(handlers.get('canvas:set-quality-standard')(null, { prompt: 42, enabled: 'sim', workflowEnabled: true }), { ok: true })
+    assert.deepEqual(handlers.get('canvas:get-quality-standard')(null), { ok: true, prompt: 'meu padrão', enabled: false, workflowEnabled: true })
+  } finally {
+    database.close()
+    fs.rmSync(databaseDir, { recursive: true, force: true })
+  }
+})

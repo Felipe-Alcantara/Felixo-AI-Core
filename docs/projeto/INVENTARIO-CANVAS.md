@@ -1647,7 +1647,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `fetch-all:get-state`, `fetch-all:get-settings`, `fetch-all:save-settings`, `fetch-all:pick-roots`, `fetch-all:get-scope`, `fetch-all:scan`, `fetch-all:execute`, `fetch-all:cancel`, `fetch-all:ignore-path`, `fetch-all:unignore-path`, `fetch-all:progress`, `fetch-all:list-requests`, `fetch-all:resolve-request`, `fetch-all:agent-requests`
 - **Depende de:** `window.felixo.fetchAll`, `CanvasPanel`, `FetchAllScanRoots`, `fetch-all-plan (buildPlanSections, planHasSafeActions, summarizeResults)`, `fetch-all-agent-requests (pickPendingRequest, applyAgentRequestResult)`, `fetch-all-roots (addPickedRoots, removeScanRoot)`
 - **Sobreposição:** CanvasPanel: absolute z-20 (z-30 com foco dentro), top-16, à direita da barra lateral e deslocado quando o menu de ferramentas abre (toolsMenuOpen); largura limitada a viewport − barra − inspector Elementos (288 px) e altura a viewport − 112. Os menus do FelixoSelect abrem em portal z-1000 por cima; toasts (z 50) e AgentQuestionDialog/HandoffDialog (z 60) cobrem o painel. Em janela <768 px o painel passa da viewport (PANEL_MIN_WIDTH 260, task 3e691f95-497e-815c-a129-f4d2d6405cbc). Tamanho md; a lista de discos (max-h-20), as seções (max-h-40) e os resultados rolam por dentro
-- **Testes:** `scripts/canvas-smoke-paineis.cjs` → `checarFetchAll`, `src/features/shared/ipc/ipc-failures.test.ts`, `src/features/canvas/components/tools/fetch-all-plan.test.ts`, `src/features/canvas/components/tools/fetch-all-agent-requests.test.ts`, `src/features/canvas/components/tools/fetch-all-roots.test.ts`, `electron/services/fetch-all-ipc-handlers.test.cjs`, `electron/services/fetch-all-service.test.cjs`, `electron/services/fetch-all/agent-requests.test.cjs`
+- **Testes:** `scripts/canvas-smoke-paineis.cjs` → `checarFetchAllPedidosPushECommit`, `scripts/canvas-smoke-paineis.cjs` → `checarFetchAll`, `src/features/shared/ipc/ipc-failures.test.ts`, `src/features/canvas/components/tools/fetch-all-plan.test.ts`, `src/features/canvas/components/tools/fetch-all-agent-requests.test.ts`, `src/features/canvas/components/tools/fetch-all-roots.test.ts`, `electron/services/fetch-all-ipc-handlers.test.cjs`, `electron/services/fetch-all-service.test.cjs`, `electron/services/fetch-all/agent-requests.test.cjs`
 
 | Estado | Quando |
 | --- | --- |
@@ -1678,7 +1678,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Varrer uma raiz configurada, ignorar uma pasta, executar com confirmação (pull --ff-only conferido no git) e voltar a varrer são exercitados (checarFetchAll); o escopo amplo (todos os discos), o push, o commit automático e a resposta a pedido de agente seguem sem teste de interface | médio | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
+| Varrer uma raiz configurada, ignorar uma pasta, executar com confirmação (pull --ff-only conferido no git) e voltar a varrer são exercitados (checarFetchAll); pedido de agente (recusar e aplicar o plano revisado), push, commit automático e remover/adicionar raiz são exercitados (checarFetchAllPedidosPushECommit); só o escopo amplo (todos os discos) segue sem teste de interface | médio | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
 | Pedido de agente que chega com o painel fechado não acende nada no canvas: só FetchAllPanel escuta fetch-all:agent-requests, e a pessoa só vê o pedido se abrir a ferramenta | médio | `3eb91f95-497e-81b8-a70f-dfce2a446a3e` |
 
 ### Limites e uso
@@ -1723,7 +1723,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `settings:load-orchestrator`, `settings:save-orchestrator`, `models:list`, `cli:terminal-output`
 - **Depende de:** `useOrchestrationDashboard`, `loadOrchestratorSettings`, `saveOrchestratorSettings`, `normalizeOrchestratorSettings`, `window.felixo.models`, `FelixoSelect`, `CanvasPanel`
 - **Sobreposição:** CanvasPanel: absolute z-20 (z-30 com foco dentro), top-16, à direita da barra lateral e deslocado quando o menu de ferramentas abre (toolsMenuOpen); largura limitada a viewport − barra − inspector Elementos (288 px) e altura a viewport − 112. Os menus do FelixoSelect abrem em portal z-1000 por cima; toasts (z 50) e AgentQuestionDialog/HandoffDialog (z 60) cobrem o painel. Em janela <768 px o painel passa da viewport (PANEL_MIN_WIDTH 260, task 3e691f95-497e-815c-a129-f4d2d6405cbc). Tamanho md; a lista de modelos e as duas áreas de texto crescem o painel até o teto e rolam por dentro
-- **Testes:** `scripts/canvas-smoke-paineis.cjs` → `checarOrquestrador`, `electron/services/orchestrator-settings-store.test.cjs`, `src/features/shared/orchestrator/orchestrator-settings-storage.test.ts`, `electron/services/cli-request-policy.test.cjs`, `electron/services/orchestration/orchestration-store.test.cjs`
+- **Testes:** `scripts/canvas-smoke-paineis.cjs` → `checarOrquestradorModoBloqueioETextos`, `scripts/canvas-smoke-paineis.cjs` → `checarOrquestrador`, `electron/services/orchestrator-settings-store.test.cjs`, `src/features/shared/orchestrator/orchestrator-settings-storage.test.ts`, `electron/services/cli-request-policy.test.cjs`, `electron/services/orchestration/orchestration-store.test.cjs`
 
 | Estado | Quando |
 | --- | --- |
@@ -1740,7 +1740,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| O smoke cobre um limite, o modelo preferido e o Salvar; faltam o Modo (FelixoSelect), os bloqueados, a confirmação de ações sensíveis e os campos de contexto fixo e memórias, e a camada orchestrator-settings-storage do renderer não tem teste próprio | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
+| O smoke cobre limite, modelo preferido, Modo, bloqueados, confirmação de ações sensíveis, contexto fixo e memórias; falta só a camada orchestrator-settings-storage do renderer não tem teste próprio | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
 | Tokens de contexto só entra no texto do prompt: nenhum código do processo principal lê maxContextTokens (o teto de custo e a confirmação de ações sensíveis valem em código desde 16/11/2026) | médio | `41a91f95-497e-810d-af12-e81c33aa550a` |
 | A execução ao vivo no topo só mostra orquestrações disparadas pela tela de chat; o lote do canvas tem a própria lista de progresso (seção "Lote de tasks"), e os dois ainda não aparecem juntos | baixo | `3eb91f95-497e-8131-9977-f8d21c950c68` |
 
@@ -1751,7 +1751,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `qa-logger:get`, `qa-logger:clear`, `qa-logger:entry`, `qa-logger:cleared`, `qa-logger:build-report`
 - **Depende de:** `window.felixo.qaLogger`, `CanvasPanel`
 - **Sobreposição:** CanvasPanel: absolute z-20 (z-30 com foco dentro), top-16, à direita da barra lateral e deslocado quando o menu de ferramentas abre (toolsMenuOpen); largura limitada a viewport − barra − inspector Elementos (288 px) e altura a viewport − 112. Os menus do FelixoSelect abrem em portal z-1000 por cima; toasts (z 50) e AgentQuestionDialog/HandoffDialog (z 60) cobrem o painel. Em janela <768 px o painel passa da viewport (PANEL_MIN_WIDTH 260, task 3e691f95-497e-815c-a129-f4d2d6405cbc). Tamanho lg; a lista cresce até 400 entradas e rola dentro do painel (scrollIntoView no fim)
-- **Testes:** `scripts/canvas-smoke-paineis.cjs` → `checarQaLogger`, `src/features/shared/ipc/ipc-failures-2.test.ts`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarQaLoggerEmJanelaPequena`, `electron/services/qa-logger.test.cjs`, `electron/services/qa-report-builder.test.cjs`, `electron/services/qa-log-disk-store.test.cjs`
+- **Testes:** `electron/services/qa-logger-ipc.test.cjs`, `scripts/canvas-smoke-paineis.cjs` → `checarQaLogger`, `src/features/shared/ipc/ipc-failures-2.test.ts`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarQaLoggerEmJanelaPequena`, `electron/services/qa-logger.test.cjs`, `electron/services/qa-report-builder.test.cjs`, `electron/services/qa-log-disk-store.test.cjs`
 
 | Estado | Quando |
 | --- | --- |
@@ -1769,7 +1769,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Limpar (painel, memória e disco) e Reportar problema são exercitados (checarQaLogger); o handler qa-logger:build-report não é exercitado em qa-logger.test.cjs. | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
+| Limpar (painel, memória e disco) e Reportar problema são exercitados (checarQaLogger); o handler qa-logger:build-report é testado em qa-logger-ipc.test.cjs. | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
 
 ### Pedidos de escrita
 
@@ -1838,7 +1838,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `agent-presets:list`, `agent-presets:save`, `agent-presets:delete`, `files:save-text`, `canvas:list-available-skills`
 - **Depende de:** `useAgentPresets`, `agent-preset-editor (checkPresetDraft, changePresetAgent, togglePresetSkill)`, `agent-launch-options (getEffortLevels, supportsFastMode)`, `serializePreset`, `FelixoSelect`, `CanvasPanel`
 - **Sobreposição:** CanvasPanel: absolute z-20 (z-30 com foco dentro), top-16, à direita da barra lateral e deslocado quando o menu de ferramentas abre (toolsMenuOpen); largura limitada a viewport − barra − inspector Elementos (288 px) e altura a viewport − 112. Os menus do FelixoSelect abrem em portal z-1000 por cima; toasts (z 50) e AgentQuestionDialog/HandoffDialog (z 60) cobrem o painel. Em janela <768 px o painel passa da viewport (PANEL_MIN_WIDTH 260, task 3e691f95-497e-815c-a129-f4d2d6405cbc). Tamanho md; a lista de skills tem max-h-44 e rola por dentro; o window.confirm do Excluir e o diálogo de salvar são nativos
-- **Testes:** `scripts/canvas-smoke-paineis.cjs` → `checarPresetsDeAgente`, `src/features/shared/ipc/ipc-failures.test.ts`, `src/features/canvas/components/focus-keyboard-a11y.test.ts`, `scripts/canvas-smoke-teclado.cjs` → `checarFocoAoFecharPresetsDeAgente`, `src/features/canvas/services/agent-preset.test.ts`, `src/features/canvas/services/agent-preset-editor.test.ts`, `electron/services/storage/agent-presets-repository.test.cjs`
+- **Testes:** `scripts/canvas-smoke-paineis.cjs` → `checarPresetsEditarExportarImportar`, `scripts/canvas-smoke-paineis.cjs` → `checarPresetsDeAgente`, `src/features/shared/ipc/ipc-failures.test.ts`, `src/features/canvas/components/focus-keyboard-a11y.test.ts`, `scripts/canvas-smoke-teclado.cjs` → `checarFocoAoFecharPresetsDeAgente`, `src/features/canvas/services/agent-preset.test.ts`, `src/features/canvas/services/agent-preset-editor.test.ts`, `electron/services/storage/agent-presets-repository.test.cjs`
 
 | Estado | Quando |
 | --- | --- |
@@ -1867,7 +1867,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Criar, duplicar e excluir preset são exercitados (checarPresetsDeAgente); editar, importar e exportar (arquivo) seguem sem teste de interface. | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
+| Criar, duplicar e excluir preset são exercitados (checarPresetsDeAgente); editar, exportar e importar (arquivo) também (checarPresetsEditarExportarImportar). | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
 
 ### Configurações
 
@@ -1876,7 +1876,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `canvas:get-file-link-prompt`, `canvas:set-file-link-prompt`, `canvas:get-file-bootstrap-prompt`, `canvas:set-file-bootstrap-prompt`, `canvas:get-quality-standard`, `canvas:set-quality-standard`, `system-design:get-config`
 - **Depende de:** `useAppTheme`, `useReducedMotionPreference`, `subscribeSystemDesignConfig`, `buildDefaultQualityStandardPrompt`, `window.felixo.canvas`, `window.felixo.systemDesign`, `FelixoSelect`, `FelixoToggle`, `PerformanceModeSection`, `GraphicsRecoverySection`, `AutoStartSection`, `SystemDesignSettingsSection`, `DictationSettingsSection`, `ClaudeTerminalScrollSection`, `ClaudeConfigDefaultsSection`
 - **Sobreposição:** CanvasPanel: absolute z-20 (z-30 com foco dentro), top-16, à direita da barra lateral e deslocado quando o menu de ferramentas abre (toolsMenuOpen); largura limitada a viewport − barra − inspector Elementos (288 px) e altura a viewport − 112. Os menus do FelixoSelect abrem em portal z-1000 por cima; toasts (z 50) e AgentQuestionDialog/HandoffDialog (z 60) cobrem o painel. Em janela <768 px o painel passa da viewport (PANEL_MIN_WIDTH 260, task 3e691f95-497e-815c-a129-f4d2d6405cbc). Tamanho padrão; é o painel mais comprido desta parte e rola por dentro
-- **Testes:** `scripts/canvas-smoke-paineis.cjs` → `checarConfiguracoes`, `src/features/shared/ipc/ipc-failures.test.ts`, `src/features/canvas/services/quality-standard-prompt.test.ts`, `src/features/canvas/services/quality-standard-source.test.ts`, `src/features/shared/accessibility/reduced-motion-preference.test.ts`, `scripts/hardware-check.cjs` → `openGpuOption`
+- **Testes:** `electron/services/canvas-ipc-handlers.test.cjs`, `scripts/canvas-smoke-paineis.cjs` → `checarTemaEPadraoDeQualidade`, `scripts/canvas-smoke-paineis.cjs` → `checarConfiguracoes`, `src/features/shared/ipc/ipc-failures.test.ts`, `src/features/canvas/services/quality-standard-prompt.test.ts`, `src/features/canvas/services/quality-standard-source.test.ts`, `src/features/shared/accessibility/reduced-motion-preference.test.ts`, `scripts/hardware-check.cjs` → `openGpuOption`
 
 | Estado | Quando |
 | --- | --- |
@@ -1896,7 +1896,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| A instrução de arquivo (salvar e persistir) é exercitada (checarConfiguracoes); o tema e o padrão de qualidade seguem sem teste de interface (hardware-check só abre o painel para a placa de vídeo); canvas:set-file-link-prompt, set-file-bootstrap-prompt e set-quality-standard não aparecem em canvas-ipc-handlers.test.cjs. | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
+| A instrução de arquivo (salvar e persistir) é exercitada (checarConfiguracoes); o tema e o padrão de qualidade também (checarTemaEPadraoDeQualidade) e os handlers de instruções e padrão estão em canvas-ipc-handlers.test.cjs; o hardware-check só abre o painel para a placa de vídeo. | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
 
 ### Notificações
 
@@ -2304,7 +2304,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `fetch-all:pick-roots`, `fetch-all:save-settings`, `fetch-all:get-scope`
 - **Depende de:** `scanRootName`, `FetchAllPanel (editScanRoots, addPickedRoots, removeScanRoot)`
 - **Sobreposição:** Dentro do cartão de escopo do Fetch All (camada do CanvasPanel); a lista de raízes tem max-h-24 e rola por dentro; o seletor de pastas é diálogo nativo do sistema
-- **Testes:** `src/features/canvas/components/tools/FetchAllScanRoots.test.ts`, `src/features/canvas/components/tools/fetch-all-roots.test.ts`
+- **Testes:** `scripts/canvas-smoke-paineis.cjs` → `checarFetchAllPedidosPushECommit`, `src/features/canvas/components/tools/FetchAllScanRoots.test.ts`, `src/features/canvas/components/tools/fetch-all-roots.test.ts`
 
 | Estado | Quando |
 | --- | --- |
@@ -2320,7 +2320,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| O render estático é testado, mas adicionar (seletor nativo) e remover raiz nunca são clicados num teste | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
+| Adicionar (seletor da automação) e remover raiz são exercitados (checarFetchAllPedidosPushECommit) | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
 
 ### Cadeia de contas (aba Cadeia de Limites e uso)
 
