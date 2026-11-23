@@ -656,6 +656,61 @@ async function checarLimitesEUso(page) {
   }
 }
 
+/**
+ * Limites e uso, filtro das contas: com seis contas a barra de busca aparece; digitar o nome de uma deixa só ela ("1 de N contas"),
+ * "Limpar filtro" traz as outras de volta, o atalho "Precisa de atenção" liga e desliga (aria-pressed) e "Atualizar a conta" gira
+ * (aria-busy) e termina. As contas de fixture são locais (provider codex, sem sessão) e saem no fim, mesmo se um passo falhar.
+ */
+async function checarFiltroDasContas(page) {
+  await prepararJanela(page)
+  const marca = `Filtro${Date.now() % 100000}`
+  const rotulos = Array.from({ length: 6 }, (_, i) => `${marca}x${i + 1}`)
+  const remover = () => page.evaluate(async (m) => {
+    const r = await window.felixo.agentUsage.list()
+    const grupos = r?.dashboard?.providers ?? r?.providers ?? []
+    for (const g of grupos) for (const c of g.accounts ?? []) if ((c.label ?? '').startsWith(m)) await window.felixo.agentUsage.removeAccount(c.id)
+  }, marca).catch(() => {})
+  try {
+    const criadas = await page.evaluate(async (nomes) => {
+      let ok = 0
+      for (const label of nomes) {
+        const r = await window.felixo.agentUsage.addAccount({ providerId: 'codex', label })
+        if (r?.account || r?.ok !== false) ok += 1
+      }
+      return ok
+    }, rotulos)
+    if (criadas !== rotulos.length) falhar('não foi possível cadastrar as contas de fixture do filtro', { criadas })
+    await abrirFerramenta(page, 'Limites e uso', 'agent-usage')
+    const painel = '[data-felixo-canvas-panel="agent-usage"]'
+    const barra = `${painel} [data-felixo-agent-usage-filter]`
+    const barraApareceu = await page.waitForFunction((sel) => document.querySelector(sel) !== null, barra, { timeout: 90_000, polling: POLLING_MS }).then(() => true, () => false)
+    if (!barraApareceu) {
+      console.log('[canvas-smoke:paineis] checarFiltroDasContas: o painel não listou as contas de fixture neste ambiente, filtro não verificado')
+      return
+    }
+    // Busca digitada: só a conta procurada sobra e o contador diz isso.
+    await preencher(page, `${barra} input[type="search"]`, rotulos[2])
+    await esperar(page, ([sel, n]) => /^1 de \d+ contas?$/.test((document.querySelector(`${sel} [role="status"]`)?.textContent ?? '').trim()) && (document.querySelector(sel)?.parentElement?.innerText ?? '').includes(n), [barra, rotulos[2]], 'digitar o nome da conta não deixou só ela na lista')
+    // Atualizar a conta: o botão da conta filtrada gira e a leitura termina (o botão volta a ficar livre).
+    const botao = `${painel} [data-felixo-agent-usage-refresh-account]`
+    await exigirClique(page, painel, new RegExp(`^Atualizar a conta "${rotulos[2]}"$`), 'Atualizar a conta')
+    const terminou = await page.waitForFunction((sel) => { const b = document.querySelector(sel); return b !== null && b.getAttribute('aria-busy') !== 'true' && !b.disabled }, botao, { timeout: 90_000, polling: POLLING_MS }).then(() => true, () => false)
+    if (!terminou) falhar('Atualizar a conta não terminou', (await textoDoPainel(page, painel)).replace(/\s+/g, ' ').slice(0, 400))
+    // Limpar filtro: as outras contas voltam e o contador some.
+    await exigirClique(page, barra, /^Limpar filtro$/, 'Limpar filtro')
+    await esperar(page, ([sel, n]) => (document.querySelector(sel)?.parentElement?.innerText ?? '').includes(n) && document.querySelector(`${sel} [role="status"]`) === null, [barra, rotulos[5]], 'Limpar filtro não trouxe as outras contas de volta')
+    // Atalho "Precisa de atenção": liga e desliga.
+    const atalho = (sel) => page.evaluate((s) => [...document.querySelectorAll(`${s} button`)].find((b) => /^Precisa de atenção/.test((b.textContent ?? '').trim()))?.getAttribute('aria-pressed'), sel)
+    await exigirClique(page, barra, /^Precisa de atenção/, 'Precisa de atenção (ligar)')
+    await esperar(page, (sel) => [...document.querySelectorAll(`${sel} button`)].some((b) => /^Precisa de atenção/.test((b.textContent ?? '').trim()) && b.getAttribute('aria-pressed') === 'true'), barra, 'o atalho "Precisa de atenção" não ficou ligado')
+    await exigirClique(page, barra, /^Precisa de atenção/, 'Precisa de atenção (desligar)')
+    await esperar(page, (sel) => [...document.querySelectorAll(`${sel} button`)].some((b) => /^Precisa de atenção/.test((b.textContent ?? '').trim()) && b.getAttribute('aria-pressed') === 'false'), barra, 'o atalho "Precisa de atenção" não desligou')
+    if ((await atalho(barra)) !== 'false') falhar('o atalho ficou ligado depois de desligar')
+  } finally {
+    await remover()
+  }
+}
+
 /** Clica o elemento achado pelo seletor CSS completo (switch, combobox e demais controles sem nome de botão). */
 async function clicarSeletor(page, seletor, o_que) {
   const limite = Date.now() + TIMEOUT_MS
@@ -1696,6 +1751,7 @@ const CHECKS_DOS_PAINEIS = [
   checarFetchAllPedidosPushECommit,
   checarExportarEImportarCanvas,
   checarLimitesEUso,
+  checarFiltroDasContas,
   checarCadeiaDeContas,
   checarConfiguracoes,
   checarRolagemEDitado,
@@ -1732,6 +1788,7 @@ module.exports = {
   checarFetchAll,
   checarFetchAllPedidosPushECommit,
   checarLimitesEUso,
+  checarFiltroDasContas,
   checarModelos,
   checarMolduraDosPaineis,
   checarMotorEChaveDoDitado,

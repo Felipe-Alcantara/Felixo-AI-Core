@@ -306,6 +306,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
     tests: [
       { file: 'electron/services/agent-usage-ipc-handlers.test.cjs' },
       { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarLimitesEUso' },
+      { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarFiltroDasContas' },
       { file: 'src/features/shared/ipc/ipc-failures.test.ts' },
       { file: 'src/features/shared/agent-usage/agent-usage.test.ts' },
       { file: 'src/features/shared/agent-usage/useAgentUsageAccountRefresh.test.ts' },
@@ -323,7 +324,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
     ],
     gaps: [
       {
-        what: 'Atualizar, Reconectar, Adicionar outra conta e Remover são exercitados (checarLimitesEUso; sem CLI detectada o runner só confere Atualizar e Reconectar); Ligar e desligar a coleta têm teste do handler (agent-usage-ipc-handlers.test.cjs), mas o clique não: ele escreve na status line do Claude do usuário. Digitar na busca, ligar o atalho "Precisa de atenção" e acionar o "Atualizar a conta" (a estrutura sai testada por renderização estática, a regra do filtro e a chamada do botão são funções puras testadas, mas o clique e a digitação só foram vistos no app real); enable/disable da statusLine também não aparece em agent-usage-ipc-handlers.test.cjs',
+        what: 'Atualizar, Reconectar, Adicionar outra conta e Remover são exercitados (checarLimitesEUso; sem CLI detectada o runner só confere Atualizar e Reconectar); Ligar e desligar a coleta têm teste do handler (agent-usage-ipc-handlers.test.cjs), mas o clique não: ele escreve na status line do Claude do usuário. Digitar na busca, o atalho "Precisa de atenção", "Limpar filtro" e "Atualizar a conta" são exercitados com seis contas locais (checarFiltroDasContas); o clique de Ligar coleta segue sem teste',
         risk: 'médio',
         task: '3ec91f95-497e-81ca-8319-ee657b0b6492',
       },
