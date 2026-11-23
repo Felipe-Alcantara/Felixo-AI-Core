@@ -293,6 +293,8 @@ async function checarPedidosDeEscrita(page) {
   const painel = '[data-felixo-canvas-panel="agent-canvas-write-requests"]'
   // O painel mostra o mais antigo primeiro: o primeiro registrado é o que será recusado.
   const recusado = registrarPedidoDeEscrita({ idDoElemento: 'smk-nota', conteudo: 'texto recusado do agente', limparAntigos: true })
+  // A fila ordena por `pedidoEm` (precisão de milissegundo): dois pedidos no mesmo instante ficam sem ordem definida.
+  await new Promise((resolve) => setTimeout(resolve, 20))
   const aceito = registrarPedidoDeEscrita({ idDoElemento: 'smk-nota', conteudo: 'texto aceito do agente' })
   await abrirFerramenta(page, 'Pedidos de escrita', 'agent-canvas-write-requests')
   await esperar(page, (sel) => /texto aceito do agente|aceito do agente/.test(document.querySelector(sel)?.innerText ?? '') || document.querySelectorAll(`${sel} button`).length > 2, painel, 'os pedidos pendentes não apareceram no painel')

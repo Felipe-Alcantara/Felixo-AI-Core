@@ -405,3 +405,7 @@ VALIDAÇÃO: os dois checks passaram na sessão J local (Windows). A sessão J i
 [2026-11-23] CONTEXTO: A task de testes dos painéis de ferramenta (3ec91f95) ainda tinha o detalhe do preset de prompt (PromptDetailPanel) sem teste de interface.
 DECISÃO: `checarDetalheDoPrompt` na sessão J do smoke: Ver abre o preset "Revisar codigo", Cancelar descarta o rascunho sem gravar, Salvar grava a versão personalizada no main, Restaurar padrão a remove e Voltar à lista devolve a lista. O detalhe tem o próprio panelId (`prompt-detail`), e `Ver` só existe em presets (prompt criado à mão edita na linha).
 VALIDAÇÃO: sessão J completa passou local no Windows; teste do smoke (4) e inventário (9) verdes, tsc e eslint limpos. Linux e macOS ficam para o CI. Um commit paralelo (6d017876) já cobria Modelos e Orquestrador; o meu check equivalente do Orquestrador foi descartado por ser redundante.
+
+[2026-11-23] CONTEXTO: O CI do Linux falhou duas vezes em `checarPedidosDeEscrita` ("pedido deveria estar recusado: pendente") no commit do detalhe do preset, que roda depois dele.
+DECISÃO: a fila de pedidos de agente ordena por `pedidoEm` com precisão de milissegundo (`agent-requests.cjs`, `chaveDeOrdem`); o check registrava os dois pedidos em sequência e, no mesmo ms, o "primeiro" a recusar podia ser o outro. O check agora espera 20 ms entre os registros. Nenhuma mudança no app: a ordem só importa porque o teste assume qual é o primeiro.
+VALIDAÇÃO: sessão J passou local no Windows; o CI do Linux é a prova final.
