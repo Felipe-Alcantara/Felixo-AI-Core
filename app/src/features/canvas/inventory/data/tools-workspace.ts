@@ -1039,10 +1039,14 @@ export const workspaceToolSurfaces: InventoryElement[] = [
     ],
     ipc: ['automations:save', 'automations:delete', 'context-file:write', 'pty:write'],
     dependsOn: ['PromptsPanel (editPreset, removeCustomAutomation, insertPrompt)', 'FelixoSelect', 'prompt-overrides'],
-    tests: [{ file: 'src/features/shared/ipc/ipc-failures-2.test.ts' }, { file: 'src/features/canvas/services/prompt-overrides.test.ts' }],
+    tests: [
+      { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarDetalheDoPrompt' },
+      { file: 'src/features/shared/ipc/ipc-failures-2.test.ts' },
+      { file: 'src/features/canvas/services/prompt-overrides.test.ts' },
+    ],
     gaps: [
       {
-        what: 'nenhum teste abre o detalhe (Ver), edita, salva, restaura ou insere por ele',
+        what: 'Ver, editar, Cancelar, Salvar e Restaurar padrão são exercitados (checarDetalheDoPrompt); inserir no terminal pelo detalhe e a troca de escopo seguem sem teste de interface',
         risk: 'médio',
         task: NOVA_SMOKE,
       },

@@ -530,6 +530,57 @@ async function checarPrompts(page) {
   }, nome)
 }
 
+/**
+ * Detalhe do preset de prompt: "Ver" abre o texto completo, a edição vira rascunho (Cancelar/Salvar só aparecem sujos), Salvar grava
+ * uma versão personalizada no main, "Restaurar padrão" a descarta e "Voltar à lista" devolve a lista. A edição criada é removida no fim.
+ */
+async function checarDetalheDoPrompt(page) {
+  await prepararJanela(page)
+  await abrirFerramenta(page, 'Prompts', 'prompts')
+  const painelLista = '[data-felixo-canvas-panel="prompts"]'
+  const painel = '[data-felixo-canvas-panel="prompt-detail"]'
+  const preset = 'Revisar codigo'
+  const gravados = () => page.evaluate(async (alvo) => ((await window.felixo.automations.list()).automations ?? []).filter((a) => a.name === alvo), preset)
+  const limpar = () =>
+    page.evaluate(async (alvo) => {
+      for (const a of ((await window.felixo.automations.list()).automations ?? []).filter((x) => x.name === alvo)) await window.felixo.automations.delete(a.id)
+    }, preset)
+  const textoDoDetalhe = () => page.evaluate((sel) => document.querySelector(`${sel} textarea`)?.value ?? null, painel)
+  const temBotao = (rotulo) => page.evaluate(([sel, r]) => [...document.querySelectorAll(`${sel} button`)].some((b) => new RegExp(r).test((b.textContent ?? '').trim())), [painel, rotulo])
+  await limpar()
+  try {
+    await preencher(page, `${painelLista} input[placeholder^="Filtrar"]`, preset)
+    await exigirClique(page, painelLista, /^Ver$/, 'Ver (detalhe do preset)')
+    const abriu = await page.waitForFunction((sel) => (document.querySelector(`${sel} textarea`)?.value ?? '').length > 0, painel, { timeout: TIMEOUT_MS, polling: POLLING_MS }).then(() => true, () => false)
+    if (!abriu) falhar('o detalhe não mostrou o texto do preset', (await textoDoPainel(page, painel)).replace(/\s+/g, ' ').slice(0, 400))
+    const original = await textoDoDetalhe()
+    if ((await temBotao('^(Salvar|Cancelar)$'))) falhar('Salvar/Cancelar apareceram sem edição')
+    // Cancelar descarta o rascunho e nada é gravado.
+    await preencher(page, `${painel} textarea`, 'rascunho descartado')
+    await esperar(page, (sel) => [...document.querySelectorAll(`${sel} button`)].some((b) => /^Cancelar$/.test((b.textContent ?? '').trim())), painel, 'a edição não mostrou Cancelar')
+    await exigirClique(page, painel, /^Cancelar$/, 'Cancelar (rascunho)')
+    await esperar(page, ([sel, t]) => document.querySelector(`${sel} textarea`)?.value === t, [painel, original], 'Cancelar não devolveu o texto original')
+    if ((await gravados()).length !== 0) falhar('Cancelar gravou o rascunho')
+    // Salvar grava a versão personalizada.
+    await preencher(page, `${painel} textarea`, 'texto salvo pelo detalhe')
+    await exigirClique(page, painel, /^Salvar$/, 'Salvar (detalhe do preset)')
+    let lista = await gravados()
+    for (let k = 0; k < 40 && lista[0]?.prompt !== 'texto salvo pelo detalhe'; k += 1) {
+      await page.waitForTimeout(150)
+      lista = await gravados()
+    }
+    if (lista[0]?.prompt !== 'texto salvo pelo detalhe') falhar('Salvar não gravou o texto editado no main', lista)
+    // Restaurar padrão descarta a versão personalizada e volta ao texto do preset.
+    await exigirClique(page, painel, /Restaurar padrão/, 'Restaurar padrão')
+    for (let k = 0; k < 40 && (await gravados()).length !== 0; k += 1) await page.waitForTimeout(150)
+    if ((await gravados()).length !== 0) falhar('Restaurar padrão não removeu a versão personalizada do main')
+    await exigirClique(page, painel, /Voltar à lista/, 'Voltar à lista')
+    await esperar(page, (sel) => document.querySelector(sel) !== null, painelLista, 'Voltar à lista não trouxe a lista de volta')
+  } finally {
+    await limpar()
+  }
+}
+
 /** Skills: criar uma skill própria (gravada), ocultar e restaurar uma da biblioteca, e remover a própria. */
 async function checarSkills(page) {
   await prepararJanela(page)
@@ -709,6 +760,7 @@ const CHECKS_DOS_PAINEIS = [
   checarPedidosDeEscrita,
   checarNotas,
   checarPrompts,
+  checarDetalheDoPrompt,
   checarSkills,
   checarPresetsDeAgente,
   checarQaLogger,
@@ -730,6 +782,7 @@ module.exports = {
   executarChecksDosPaineis,
   checarBuscaDeBlocos,
   checarConfiguracoes,
+  checarDetalheDoPrompt,
   checarModelos,
   checarMolduraDosPaineis,
   checarNotas,

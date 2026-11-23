@@ -2138,7 +2138,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `automations:save`, `automations:delete`, `context-file:write`, `pty:write`
 - **Depende de:** `PromptsPanel (editPreset, removeCustomAutomation, insertPrompt)`, `FelixoSelect`, `prompt-overrides`
 - **Sobreposição:** dentro da moldura do PromptsPanel (porte xl, z-20/z-30); rodapé de ações colado à borda inferior (-mb-3); a textarea (min-h-80) rola dentro do painel
-- **Testes:** `src/features/shared/ipc/ipc-failures-2.test.ts`, `src/features/canvas/services/prompt-overrides.test.ts`
+- **Testes:** `scripts/canvas-smoke-paineis.cjs` → `checarDetalheDoPrompt`, `src/features/shared/ipc/ipc-failures-2.test.ts`, `src/features/canvas/services/prompt-overrides.test.ts`
 
 | Estado | Quando |
 | --- | --- |
@@ -2158,7 +2158,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| nenhum teste abre o detalhe (Ver), edita, salva, restaura ou insere por ele | médio | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
+| Ver, editar, Cancelar, Salvar e Restaurar padrão são exercitados (checarDetalheDoPrompt); inserir no terminal pelo detalhe e a troca de escopo seguem sem teste de interface | médio | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
 
 ### Grupos Stage e Alterações (Source Control)
 
