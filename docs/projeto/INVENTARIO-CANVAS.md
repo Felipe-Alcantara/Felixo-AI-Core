@@ -1688,7 +1688,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `agent-usage:list`, `agent-usage:refresh`, `agent-usage:refresh-account`, `agent-usage:add-account`, `agent-usage:remove-account`, `agent-usage:consume-reset-credit`, `agent-usage:claude-statusline-status`, `agent-usage:enable-claude-statusline`, `agent-usage:disable-claude-statusline`, `agent-usage:claude-cost-history`, `agent-usage:changed`, `agent-usage:account-changed`, `agent-usage:sessions`, `agent-usage:session-changed`, `agent-usage:scheduler-state`
 - **Depende de:** `window.felixo.agentUsage`, `CanvasPanel`, `consumeRequestedAgentUsageTab`, `rovingIndex`, `FelixoSelect`, `shouldRefreshAgentUsageOnOpen`, `useAgentUsageRefreshScheduler`, `agent-usage-refresh-scheduler.cjs`, `getAccountStatus`, `AgentUsageResetCreditsView`, `AgentUsageStatusDetailsView`, `ProviderSummaryTable`, `summarizeProviderAccounts`, `describeDisplayedAgentUsage`, `getAgentUsageLoginTerminal`, `filterAgentUsageGroups`, `AgentUsageFilterBar`, `AgentUsageRefreshAccountButton`, `useAgentUsageAccountRefresh`, `AccountChainSection`, `AccountSwitchHistory`
 - **Sobreposição:** CanvasPanel: absolute z-20 (z-30 com foco dentro), top-16, à direita da barra lateral e deslocado quando o menu de ferramentas abre (toolsMenuOpen); largura limitada a viewport − barra − inspector Elementos (288 px) e altura a viewport − 112. Os menus do FelixoSelect abrem em portal z-1000 por cima; toasts (z 50) e AgentQuestionDialog/HandoffDialog (z 60) cobrem o painel. Em janela <768 px o painel passa da viewport (PANEL_MIN_WIDTH 260, task 3e691f95-497e-815c-a129-f4d2d6405cbc). Tamanho lg (o mais largo desta parte); o window.confirm do Remover é diálogo nativo, fora da escala de z
-- **Testes:** `src/features/shared/ipc/ipc-failures.test.ts`, `src/features/shared/agent-usage/agent-usage.test.ts`, `src/features/shared/agent-usage/useAgentUsageAccountRefresh.test.ts`, `src/features/canvas/components/tools/AgentUsageProviderSummary.test.ts`, `electron/services/agent-usage-ipc-handlers.test.cjs`, `electron/services/agent-usage-service.test.cjs`, `electron/services/agent-usage-availability.test.cjs`, `electron/services/agent-usage-refresh-account.test.cjs`, `electron/services/agent-usage-refresh-scheduler.test.cjs`, `src/features/shared/agent-usage/useAgentUsageRefreshScheduler.test.ts`, `electron/services/claude-statusline-service.test.cjs`, `electron/services/codex-status-query.test.cjs`, `electron/services/codex-status-screen.test.cjs`, `scripts/canvas-smoke-contas.cjs` → `abrirLimitesEUso`
+- **Testes:** `scripts/canvas-smoke-paineis.cjs` → `checarLimitesEUso`, `src/features/shared/ipc/ipc-failures.test.ts`, `src/features/shared/agent-usage/agent-usage.test.ts`, `src/features/shared/agent-usage/useAgentUsageAccountRefresh.test.ts`, `src/features/canvas/components/tools/AgentUsageProviderSummary.test.ts`, `electron/services/agent-usage-ipc-handlers.test.cjs`, `electron/services/agent-usage-service.test.cjs`, `electron/services/agent-usage-availability.test.cjs`, `electron/services/agent-usage-refresh-account.test.cjs`, `electron/services/agent-usage-refresh-scheduler.test.cjs`, `src/features/shared/agent-usage/useAgentUsageRefreshScheduler.test.ts`, `electron/services/claude-statusline-service.test.cjs`, `electron/services/codex-status-query.test.cjs`, `electron/services/codex-status-screen.test.cjs`, `scripts/canvas-smoke-contas.cjs` → `abrirLimitesEUso`
 
 | Estado | Quando |
 | --- | --- |
@@ -1713,7 +1713,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Atualizar, Reconsultar, Remover, Adicionar conta e Ligar coleta não têm teste de interface (o smoke de contas só abre o painel e troca de aba), nem digitar na busca, ligar o atalho "Precisa de atenção" e acionar o "Atualizar a conta" (a estrutura sai testada por renderização estática, a regra do filtro e a chamada do botão são funções puras testadas, mas o clique e a digitação só foram vistos no app real); enable/disable da statusLine também não aparece em agent-usage-ipc-handlers.test.cjs | médio | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
+| Atualizar, Reconectar, Adicionar outra conta e Remover são exercitados (checarLimitesEUso; sem CLI detectada o runner só confere Atualizar e Reconectar); Ligar coleta (escreve na status line do Claude do usuário) segue sem teste de interface, assim como digitar na busca, ligar o atalho "Precisa de atenção" e acionar o "Atualizar a conta" (a estrutura sai testada por renderização estática, a regra do filtro e a chamada do botão são funções puras testadas, mas o clique e a digitação só foram vistos no app real); enable/disable da statusLine também não aparece em agent-usage-ipc-handlers.test.cjs | médio | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
 | O refresh manual abre um PTY de /status por conta. Medido em 15/10/2026 com 9 contas Codex e o Claude: a consulta do Codex por conta caiu de 25,2 s para ~11 s (p50) com a leitura do /status sem moldura (Codex 0.159+), mas a coleta inteira segue em ~31 a 36 s porque o /status do Claude 2.1.300 nunca devolve os limites (0 de 47): falha em 4 a 8 s ou estoura os 30 s (15 de 47). O scheduler não usa esses PTYs: atualiza Codex pelo app-server, Openia por statusline e recebe a statusline local do Claude pelo watcher. | médio | `3fa91f95-497e-81fc-b87c-e65a5bdce2a5` |
 
 ### Orquestrador
@@ -2329,7 +2329,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `account-chain:get-state`, `account-chain:update-settings`, `account-chain:update-members`, `account-chain:check-login`, `account-chain:release-cooldown`, `account-chain:changed`, `account-chain:proposal`, `account-chain:detection`
 - **Depende de:** `useAccountChain`, `useClockTick`, `getSharedAccountChainStore`, `account-chain-view (moveChainMember, rowMoveDelta, parseMultiplierInput, summarizeChain)`, `focusWasLost`, `FelixoToggle`, `FelixoSelect`
 - **Sobreposição:** Dentro do painel Limites e uso (CanvasPanel z-20/30, tamanho lg); os FelixoSelect de estratégia e cobrança abrem em portal z-1000; Alt+↑/↓ só é tratado quando o alvo é a própria linha, sem disputar teclas com os campos
-- **Testes:** `src/features/shared/ipc/ipc-failures-2.test.ts`, `src/features/canvas/services/account-chain-view.test.ts`, `src/features/canvas/services/account-chain-client.test.ts`, `electron/services/account-chain-ipc-handlers.test.cjs`, `electron/services/accounts/account-chain-service.test.cjs`, `electron/services/storage/account-chain-repository.test.cjs`, `scripts/canvas-smoke-contas.cjs` → `ligarEOrdenarCadeia`, `scripts/canvas-smoke-contas.cjs` → `checarNomesAcessiveis`
+- **Testes:** `scripts/canvas-smoke-paineis.cjs` → `checarCadeiaDeContas`, `src/features/shared/ipc/ipc-failures-2.test.ts`, `src/features/canvas/services/account-chain-view.test.ts`, `src/features/canvas/services/account-chain-client.test.ts`, `electron/services/account-chain-ipc-handlers.test.cjs`, `electron/services/accounts/account-chain-service.test.cjs`, `electron/services/storage/account-chain-repository.test.cjs`, `scripts/canvas-smoke-contas.cjs` → `ligarEOrdenarCadeia`, `scripts/canvas-smoke-contas.cjs` → `checarNomesAcessiveis`
 
 | Estado | Quando |
 | --- | --- |
@@ -2355,7 +2355,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Botões ↑/↓, Estratégia (o smoke só lê o valor), Cobrança, multiplicador, Conferir agora, Não era limite e Já recarreguei não são acionados em teste de interface; a reordenação só é exercitada por Alt+↓ na linha | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
+| Ligar a cadeia, Estratégia, botões ↑/↓, Cobrança declarada, multiplicador e Conferir agora são exercitados (checarCadeiaDeContas); Não era limite e Já recarreguei seguem sem teste de interface (precisam de um cooldown de conta real) | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
 
 ### Registro de trocas de conta (aba Trocas)
 
@@ -2364,7 +2364,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `account-chain:history`
 - **Depende de:** `getAccountChainBridge`, `toHistoryRow`, `useClockTick`, `AgentUsagePanel (onFocusNode, existingNodeIds)`, `TerminalDetailsPanel (sessionFilter, compact)`
 - **Sobreposição:** Dentro do painel Limites e uso (z-20/30) ou do painel de detalhes do terminal; sem camada própria
-- **Testes:** `src/features/canvas/services/account-chain-view.test.ts`, `scripts/canvas-smoke-contas.cjs` → `checarAbaTrocas`
+- **Testes:** `scripts/canvas-smoke-paineis.cjs` → `checarCadeiaDeContas`, `src/features/canvas/services/account-chain-view.test.ts`, `scripts/canvas-smoke-contas.cjs` → `checarAbaTrocas`
 
 | Estado | Quando |
 | --- | --- |
@@ -2381,7 +2381,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Atualizar e "Ir para o bloco" não são clicados em teste; a variante compacta do painel de detalhes do terminal não é exercitada | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
+| Atualizar é exercitado (checarCadeiaDeContas); "Ir para o bloco" segue sem teste (recordManual exige um terminal vivo registrado na cadeia, e a sessão C não roda localmente no Windows); a variante compacta do painel de detalhes do terminal não é exercitada | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
 
 ### Custo equivalente do Claude (aba Custo)
 

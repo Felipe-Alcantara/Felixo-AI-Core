@@ -302,6 +302,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
       'AccountSwitchHistory',
     ],
     tests: [
+      { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarLimitesEUso' },
       { file: 'src/features/shared/ipc/ipc-failures.test.ts' },
       { file: 'src/features/shared/agent-usage/agent-usage.test.ts' },
       { file: 'src/features/shared/agent-usage/useAgentUsageAccountRefresh.test.ts' },
@@ -319,7 +320,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
     ],
     gaps: [
       {
-        what: 'Atualizar, Reconsultar, Remover, Adicionar conta e Ligar coleta não têm teste de interface (o smoke de contas só abre o painel e troca de aba), nem digitar na busca, ligar o atalho "Precisa de atenção" e acionar o "Atualizar a conta" (a estrutura sai testada por renderização estática, a regra do filtro e a chamada do botão são funções puras testadas, mas o clique e a digitação só foram vistos no app real); enable/disable da statusLine também não aparece em agent-usage-ipc-handlers.test.cjs',
+        what: 'Atualizar, Reconectar, Adicionar outra conta e Remover são exercitados (checarLimitesEUso; sem CLI detectada o runner só confere Atualizar e Reconectar); Ligar coleta (escreve na status line do Claude do usuário) segue sem teste de interface, assim como digitar na busca, ligar o atalho "Precisa de atenção" e acionar o "Atualizar a conta" (a estrutura sai testada por renderização estática, a regra do filtro e a chamada do botão são funções puras testadas, mas o clique e a digitação só foram vistos no app real); enable/disable da statusLine também não aparece em agent-usage-ipc-handlers.test.cjs',
         risk: 'médio',
         task: '3ec91f95-497e-81ca-8319-ee657b0b6492',
       },
@@ -1082,6 +1083,7 @@ export const agentToolSurfaces: InventoryElement[] = [
       'FelixoSelect',
     ],
     tests: [
+      { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarCadeiaDeContas' },
       { file: 'src/features/shared/ipc/ipc-failures-2.test.ts' },
       { file: 'src/features/canvas/services/account-chain-view.test.ts' },
       { file: 'src/features/canvas/services/account-chain-client.test.ts' },
@@ -1093,7 +1095,7 @@ export const agentToolSurfaces: InventoryElement[] = [
     ],
     gaps: [
       {
-        what: 'Botões ↑/↓, Estratégia (o smoke só lê o valor), Cobrança, multiplicador, Conferir agora, Não era limite e Já recarreguei não são acionados em teste de interface; a reordenação só é exercitada por Alt+↓ na linha',
+        what: 'Ligar a cadeia, Estratégia, botões ↑/↓, Cobrança declarada, multiplicador e Conferir agora são exercitados (checarCadeiaDeContas); Não era limite e Já recarreguei seguem sem teste de interface (precisam de um cooldown de conta real)',
         risk: 'baixo',
         task: '3ec91f95-497e-81ca-8319-ee657b0b6492',
       },
@@ -1137,12 +1139,13 @@ export const agentToolSurfaces: InventoryElement[] = [
       'TerminalDetailsPanel (sessionFilter, compact)',
     ],
     tests: [
+      { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarCadeiaDeContas' },
       { file: 'src/features/canvas/services/account-chain-view.test.ts' },
       { file: SMOKE_CONTAS, check: 'checarAbaTrocas' },
     ],
     gaps: [
       {
-        what: 'Atualizar e "Ir para o bloco" não são clicados em teste; a variante compacta do painel de detalhes do terminal não é exercitada',
+        what: 'Atualizar é exercitado (checarCadeiaDeContas); "Ir para o bloco" segue sem teste (recordManual exige um terminal vivo registrado na cadeia, e a sessão C não roda localmente no Windows); a variante compacta do painel de detalhes do terminal não é exercitada',
         risk: 'baixo',
         task: '3ec91f95-497e-81ca-8319-ee657b0b6492',
       },

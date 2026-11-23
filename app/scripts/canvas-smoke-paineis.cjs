@@ -569,6 +569,158 @@ async function checarExportarEImportarCanvas(page) {
   }
 }
 
+/**
+ * Limites e uso (aba Uso): Atualizar e Reconectar terminam a rodada sem erro, "Adicionar outra conta" cadastra uma conta local
+ * (conferida no main) e Remover (com a confirmação aceita) a apaga. A conta de fixture é removida no fim mesmo se um passo falhar.
+ */
+async function checarLimitesEUso(page) {
+  await prepararJanela(page)
+  await abrirFerramenta(page, 'Limites e uso', 'agent-usage')
+  const painel = '[data-felixo-canvas-panel="agent-usage"]'
+  const rotulo = `Conta do smoke ${Date.now() % 100000}`
+  const contasDoMain = () => page.evaluate(async () => { const r = await window.felixo.agentUsage.list(); return JSON.stringify(r?.dashboard ?? r) })
+  const aceitar = (dialogo) => void dialogo.accept().catch(() => {})
+  page.on('dialog', aceitar)
+  try {
+    const carregou = await page.waitForFunction((sel) => !/Consultando as CLIs/.test(document.querySelector(sel)?.innerText ?? '') && document.querySelector(`${sel} [role="tabpanel"] button`) !== null, painel, { timeout: TIMEOUT_MS, polling: POLLING_MS }).then(() => true, () => false)
+    if (!carregou) falhar('a aba Uso não terminou de carregar', (await textoDoPainel(page, painel)).replace(/\s+/g, ' ').slice(0, 500))
+    // Atualizar e Reconectar: o botão volta a ficar habilitado (a rodada terminou) e o painel segue com conteúdo.
+    // A rodada consulta as CLIs de verdade (lenta em máquina com CLIs instaladas): o prazo é largo e o que se confere é que ela termina.
+    const atualizarHabilitado = () => page.evaluate((sel) => [...document.querySelectorAll(`${sel} button`)].some((b) => /^Atualizar$/.test((b.textContent ?? '').trim()) && !b.disabled), painel)
+    // A rodada inicial (aberta junto com o painel) também precisa terminar antes do primeiro clique.
+    await page.waitForFunction((sel) => [...document.querySelectorAll(`${sel} button`)].some((b) => /^Atualizar$/.test((b.textContent ?? '').trim()) && !b.disabled), painel, { timeout: 90_000, polling: POLLING_MS }).catch(() => {})
+    for (const [padrao, nome] of [[/^Atualizar$/, 'Atualizar'], [/^Reconectar$/, 'Reconectar']]) {
+      await exigirClique(page, painel, padrao, nome)
+      const terminou = await page.waitForFunction((sel) => [...document.querySelectorAll(`${sel} button`)].some((b) => /^Atualizar$/.test((b.textContent ?? '').trim()) && !b.disabled), painel, { timeout: 90_000, polling: POLLING_MS }).then(() => true, () => false)
+      if (!terminou || !(await atualizarHabilitado())) falhar(`${nome}: a rodada de consulta não terminou`, (await textoDoPainel(page, painel)).replace(/\s+/g, ' ').slice(0, 400))
+    }
+    if (/Nenhuma CLI foi detectada/.test(await textoDoPainel(page, painel))) {
+      // Runner sem CLI instalada: não há provider para receber a conta; Atualizar e Reconectar já foram conferidos.
+      console.log('[canvas-smoke:paineis] checarLimitesEUso: nenhuma CLI detectada neste ambiente, Adicionar/Remover conta não verificados')
+      return
+    }
+    if (!/Adicionar outra conta/.test(await textoDoPainel(page, painel))) falhar('o painel não oferece "Adicionar outra conta" (nenhum provider listado)', (await textoDoPainel(page, painel)).replace(/\s+/g, ' ').slice(0, 500))
+    await exigirClique(page, painel, /Adicionar outra conta/, 'Adicionar outra conta')
+    await preencher(page, `${painel} input[placeholder^="Nome local"]`, rotulo)
+    await exigirClique(page, painel, /^Adicionar ao painel$/, 'Adicionar ao painel')
+    await esperar(page, ([sel, n]) => (document.querySelector(sel)?.innerText ?? '').includes(n), [painel, rotulo], 'a conta adicionada não apareceu no painel')
+    if (!(await contasDoMain()).includes(rotulo)) falhar('a conta adicionada não está no main')
+    await exigirClique(page, painel, new RegExp(`^Remover a conta "${rotulo}" do painel$`), 'Remover a conta')
+    await esperar(page, ([sel, n]) => !(document.querySelector(sel)?.innerText ?? '').includes(n), [painel, rotulo], 'Remover não tirou a conta do painel')
+    if ((await contasDoMain()).includes(rotulo)) falhar('Remover não apagou a conta no main')
+  } finally {
+    page.off('dialog', aceitar)
+    await page.evaluate(async (n) => {
+      const r = await window.felixo.agentUsage.list()
+      const grupos = r?.dashboard?.providers ?? r?.providers ?? []
+      for (const g of grupos) for (const c of g.accounts ?? []) if (c.label === n) await window.felixo.agentUsage.removeAccount(c.id)
+    }, rotulo).catch(() => {})
+  }
+}
+
+/** Clica o elemento achado pelo seletor CSS completo (switch, combobox e demais controles sem nome de botão). */
+async function clicarSeletor(page, seletor, o_que) {
+  const limite = Date.now() + TIMEOUT_MS
+  while (Date.now() < limite) {
+    const ok = await page.evaluate((sel) => {
+      const alvo = document.querySelector(sel)
+      if (!alvo || alvo.disabled || alvo.getAttribute('aria-disabled') === 'true') return false
+      alvo.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }))
+      return true
+    }, seletor)
+    if (ok) {
+      await page.waitForTimeout(250)
+      return
+    }
+    await page.waitForTimeout(POLLING_MS)
+  }
+  falhar(`controle não encontrado (ou desabilitado): ${o_que}`, seletor)
+}
+
+/** Escolhe a opção (menu em portal) de um seletor FelixoSelect pelo nome do combobox. */
+async function escolherNoSeletor(page, nomeDoSeletor, opcao) {
+  await clicarSeletor(page, `[role="combobox"][aria-label="${nomeDoSeletor}"]`, nomeDoSeletor)
+  await exigirClique(page, 'body', opcao, `${nomeDoSeletor}: ${opcao.source}`)
+}
+
+/**
+ * Cadeia de contas (aba Cadeia): liga a cadeia, troca a estratégia, reordena duas contas pelos botões ↑/↓, declara a cobrança e o
+ * multiplicador e confere cada efeito no main. Duas contas locais são criadas para o teste; o estado original da cadeia e as
+ * contas voltam ao fim.
+ */
+async function checarCadeiaDeContas(page) {
+  await prepararJanela(page)
+  const estado = () => page.evaluate(async () => { const r = await window.felixo.accountChain.getState(); return r?.state ?? r })
+  const original = await estado()
+  const sufixo = Date.now() % 100000
+  const rotulos = [`Cadeia A ${sufixo}`, `Cadeia B ${sufixo}`]
+  const criadas = []
+  try {
+    for (const label of rotulos) {
+      const r = await page.evaluate((p) => window.felixo.cliAccounts.create(p), { providerId: 'codex', label })
+      if (!r?.ok) falhar('não foi possível criar a conta de fixture', r)
+      criadas.push(r.account.id)
+    }
+    await abrirFerramenta(page, 'Limites e uso', 'agent-usage')
+    const painel = '[data-felixo-canvas-panel="agent-usage"]'
+    await exigirClique(page, painel, /^Cadeia$/, 'aba Cadeia')
+    await esperar(page, () => document.querySelector('[role="switch"][aria-label="Cadeia de contas"]') !== null, null, 'a aba Cadeia não carregou o interruptor')
+    if ((await estado()).settings.enabled) await clicarSeletor(page, '[role="switch"][aria-label="Cadeia de contas"]', 'desligar a cadeia (partida)')
+    await clicarSeletor(page, '[role="switch"][aria-label="Cadeia de contas"]', 'ligar a cadeia')
+    for (let k = 0; k < 40 && !(await estado()).settings.enabled; k += 1) await page.waitForTimeout(100)
+    if (!(await estado()).settings.enabled) falhar('o interruptor não ligou a cadeia no main')
+
+    // Estratégia: o menu troca o valor gravado.
+    const antesDaEstrategia = (await estado()).settings.strategy
+    const textoDaOpcao = await page.evaluate(async () => document.querySelector('[role="combobox"][aria-label="Estratégia da cadeia"]')?.textContent ?? '')
+    await clicarSeletor(page, '[role="combobox"][aria-label="Estratégia da cadeia"]', 'Estratégia da cadeia')
+    const opcoes = await page.evaluate(() => [...document.querySelectorAll('[role="option"]')].map((o) => (o.textContent ?? '').trim()))
+    const outra = opcoes.find((t) => t.startsWith('Rodízio'))
+    if (!outra) falhar('o menu de estratégia não ofereceu outra opção', { opcoes, textoDaOpcao })
+    await page.evaluate((t) => [...document.querySelectorAll('[role="option"]')].find((o) => (o.textContent ?? '').trim() === t)?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window })), outra)
+    for (let k = 0; k < 40 && (await estado()).settings.strategy === antesDaEstrategia; k += 1) await page.waitForTimeout(100)
+    if ((await estado()).settings.strategy === antesDaEstrategia) falhar('a estratégia escolhida não foi gravada', { antesDaEstrategia, opcoes })
+
+    // Reordenar pelos botões: Mover para baixo/cima troca a posição das duas contas criadas.
+    const ordemDe = async () => (await estado()).members.map((m) => m.label ?? m.accountId ?? m.id)
+    const antes = await ordemDe()
+    const alvo = rotulos[0]
+    await exigirClique(page, painel, new RegExp(`^Mover ${alvo} para baixo$`), `Mover ${alvo} para baixo`)
+    for (let k = 0; k < 40 && JSON.stringify(await ordemDe()) === JSON.stringify(antes); k += 1) await page.waitForTimeout(100)
+    const depois = await ordemDe()
+    if (JSON.stringify(depois) === JSON.stringify(antes)) falhar('Mover para baixo não mudou a ordem gravada', { antes })
+    await exigirClique(page, painel, new RegExp(`^Mover ${alvo} para cima$`), `Mover ${alvo} para cima`)
+    for (let k = 0; k < 40 && JSON.stringify(await ordemDe()) === JSON.stringify(depois); k += 1) await page.waitForTimeout(100)
+    if (JSON.stringify(await ordemDe()) !== JSON.stringify(antes)) falhar('Mover para cima não devolveu a ordem', { antes, agora: await ordemDe() })
+
+    // Cobrança declarada: o menu da conta grava a escolha.
+    await clicarSeletor(page, `[role="combobox"][aria-label="Cobrança declarada de ${alvo}"]`, 'Cobrança declarada')
+    await exigirClique(page, 'body', /^Assinatura/, 'Cobrança: Assinatura')
+    for (let k = 0; k < 40 && !(await estado()).members.some((m) => m.billingDeclared === 'assinatura'); k += 1) await page.waitForTimeout(100)
+    if (!(await estado()).members.some((m) => m.billingDeclared === 'assinatura')) falhar('a cobrança declarada não foi gravada', (await estado()).members.map((m) => m.billingDeclared))
+
+    // Conferir agora: dispara a conferência do login da conta e o botão volta a ficar habilitado.
+    await exigirClique(page, painel, new RegExp(`^Conferir agora o login de ${alvo}$`), 'Conferir agora o login')
+    await esperar(page, ([sel, n]) => [...document.querySelectorAll(`${sel} button`)].some((b) => b.getAttribute('aria-label') === `Conferir agora o login de ${n}` && !b.disabled), [painel, alvo], 'Conferir agora não terminou')
+
+    // Multiplicador declarado: valor válido grava, Enter confirma.
+    const campo = `${painel} li input[inputmode="decimal"]`
+    await preencher(page, campo, '3')
+    await page.evaluate((sel) => document.querySelector(sel)?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })), campo)
+    for (let k = 0; k < 40 && !(await estado()).members.some((m) => m.multiplierDeclared === 3); k += 1) await page.waitForTimeout(100)
+    if (!(await estado()).members.some((m) => m.multiplierDeclared === 3)) falhar('o multiplicador declarado não foi gravado', (await estado()).members.map((m) => m.multiplierDeclared))
+
+    // Aba Trocas: Atualizar recarrega o registro sem erro (sem terminal vivo a lista pode estar vazia).
+    await exigirClique(page, painel, /^Trocas$/, 'aba Trocas')
+    await esperar(page, (sel) => [...document.querySelectorAll(`${sel} button`)].some((b) => /^Atualizar$/.test((b.textContent ?? '').trim())), painel, 'a aba Trocas não carregou')
+    await exigirClique(page, painel, /^Atualizar$/, 'Atualizar (trocas)')
+    await esperar(page, (sel) => [...document.querySelectorAll(`${sel} button`)].some((b) => /^Atualizar$/.test((b.textContent ?? '').trim()) && !b.disabled) && !/Não foi possível/.test(document.querySelector(sel)?.innerText ?? ''), painel, 'Atualizar (trocas) não terminou sem erro')
+  } finally {
+    if (original?.settings) await page.evaluate((c) => window.felixo.accountChain.updateSettings(c), { enabled: original.settings.enabled, strategy: original.settings.strategy }).catch(() => {})
+    await page.evaluate(async (ids) => { for (const id of ids) await window.felixo.cliAccounts.remove(id, { confirmed: true }) }, criadas).catch(() => {})
+  }
+}
+
 /** Notas: criar blocos (nota e desenho), criar, editar e remover uma nota salva. */
 async function checarNotas(page) {
   await prepararJanela(page)
@@ -887,6 +1039,8 @@ const CHECKS_DOS_PAINEIS = [
   checarQaLogger,
   checarFetchAll,
   checarExportarEImportarCanvas,
+  checarLimitesEUso,
+  checarCadeiaDeContas,
   checarConfiguracoes,
   checarModelos,
   checarOrquestrador,
@@ -905,9 +1059,11 @@ module.exports = {
   executarChecksDosPaineis,
   checarBuscaDeBlocos,
   checarConfiguracoes,
+  checarCadeiaDeContas,
   checarDetalheDoPrompt,
   checarExportarEImportarCanvas,
   checarFetchAll,
+  checarLimitesEUso,
   checarModelos,
   checarMolduraDosPaineis,
   checarNotas,
