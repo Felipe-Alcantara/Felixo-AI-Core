@@ -192,11 +192,6 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
       { file: 'electron/services/projects-path-security.test.cjs' },
     ],
     gaps: [
-      {
-        what: 'ProjectsPanel.tsx:133: sem repositório na pasta escolhida, o nome sai de folder.split("/"); no Windows o caminho (realpath) usa "\\" e o projeto é registrado com o caminho inteiro como nome',
-        risk: 'baixo',
-        task: '3ec91f95-497e-8103-b360-c1979d6992f4',
-      },
     ],
     overlap: `${PANEL_OVERLAP}. Porte md; lista e navegador dividem a mesma moldura (trocar de vista não reanima nem refaz o foco). Rodar e Abrir no canvas ficam com opacity 0 até hover/foco`,
   },

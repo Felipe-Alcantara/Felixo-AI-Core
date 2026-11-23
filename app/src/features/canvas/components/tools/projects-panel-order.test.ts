@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { sortProjectsByName } from './projects-panel-order'
+import { folderDisplayName, sortProjectsByName } from './projects-panel-order'
 
 const project = (name: string, path = `/home/user/${name}`) => ({ name, path })
 
@@ -79,5 +79,16 @@ describe('sortProjectsByName', () => {
       { id: '1', name: 'Alfa', path: '/a' },
       { id: '2', name: 'Beta', path: '/b' },
     ])
+  })
+})
+
+describe('folderDisplayName', () => {
+  it('usa o último trecho em caminho POSIX e em caminho do Windows', () => {
+    expect(folderDisplayName('/home/ana/projetos/app')).toBe('app')
+    expect(folderDisplayName('C:\\Users\\ana\\app\\')).toBe('app')
+  })
+
+  it('devolve o próprio caminho quando não há trecho', () => {
+    expect(folderDisplayName('/')).toBe('/')
   })
 })

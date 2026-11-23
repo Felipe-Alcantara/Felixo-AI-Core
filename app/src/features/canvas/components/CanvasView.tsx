@@ -152,6 +152,7 @@ import {
   getDefaultNodeSize,
   findFreeNodePosition,
   findFreeNodePositions,
+  getAbsoluteNodePosition,
   getNodeSize,
   isInside,
   type CanvasBounds,
@@ -1301,7 +1302,7 @@ function CanvasInner({
         return
       }
       const size = getNodeSize(node)
-      centerNodeInSafeArea(node.position, size, 1.2, 240)
+      centerNodeInSafeArea(getAbsoluteNodePosition(node, nodes), size, 1.2, 240)
       setNodes((current) =>
         current.map((item) => ({ ...item, selected: item.id === nodeId })),
       )

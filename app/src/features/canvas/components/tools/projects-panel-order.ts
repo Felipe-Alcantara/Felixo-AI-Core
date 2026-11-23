@@ -37,3 +37,11 @@ export function sortProjectsByName<T extends Orderable>(projects: readonly T[]):
     (a, b) => collator.compare(a.name, b.name) || collator.compare(a.path, b.path),
   )
 }
+
+/**
+ * Nome de exibição de uma pasta sem repositório: o último trecho do caminho.
+ * O caminho vem do realpath do sistema, então no Windows a barra é `\`.
+ */
+export function folderDisplayName(folder: string): string {
+  return folder.split(/[\\/]/).filter(Boolean).pop() ?? folder
+}

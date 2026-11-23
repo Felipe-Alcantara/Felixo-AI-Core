@@ -784,7 +784,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
         test: smoke('checarDesenhoLeve'),
         kind: 'button',
         effect: 'Remove o último traço e grava data.strokes (onDataChange → canvas:save).',
-        failure: 'O traço desfeito continua visível no path de prévia até o próximo traço (bug suspeito); falha de canvas:save só no console.',
+        failure: 'falha de canvas:save só no console.',
         disabledWhen: 'Sem traços.',
       },
       {
@@ -792,7 +792,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
         test: smoke('checarDesenhoLeve'),
         kind: 'button',
         effect: 'Apaga todos os traços e grava strokes vazio. Sem confirmação e sem como desfazer.',
-        failure: 'O último traço desenhado continua visível no path de prévia (bug suspeito); falha de canvas:save só no console.',
+        failure: 'falha de canvas:save só no console.',
         disabledWhen: 'Sem traços.',
       },
     ],
@@ -801,11 +801,6 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
     dependsOn: ['useReactFlow', 'onDataChange (updateNodeData, CanvasView)'],
     tests: [...FIXTURE_TESTS, smoke('checarInteracoes'), smoke('checarDesenhoLeve')],
     gaps: [
-      {
-        what: 'Traço fantasma (DrawingNode.tsx:90-119 e 208): handlePointerMove escreve o "d" do path de prévia direto no DOM e finishStroke nunca o limpa; o React não controla esse atributo. Depois de Desfazer ou Limpar, o último traço desenhado continua na tela (na cor/espessura atuais) até o próximo traço ou um reload.',
-        risk: 'médio',
-        task: '3ec91f95-497e-8103-b360-c1979d6992f4',
-      },
     ],
     overlap: `${NODE_OVERLAP_BASE} O SVG ocupa o corpo (nodrag nowheel nopan, touch-none); cinco cores + três espessuras + dois botões dividem o cabeçalho com o título num bloco de mínimo 220 px.`,
   },

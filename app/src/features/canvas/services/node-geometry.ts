@@ -265,6 +265,25 @@ function isPositionFree(
   })
 }
 
+/**
+ * Posição do bloco no canvas inteiro. Filho de grupo guarda `position` relativa
+ * ao pai; somar a cadeia de pais dá o ponto onde ele realmente está na tela.
+ * A cadeia é limitada para um `parentId` circular (dado corrompido) não travar.
+ */
+export function getAbsoluteNodePosition(node: Node, nodes: readonly Node[]): { x: number; y: number } {
+  let x = node.position.x
+  let y = node.position.y
+  let parentId = node.parentId
+  for (let depth = 0; parentId && depth < 16; depth += 1) {
+    const parent = nodes.find((item) => item.id === parentId)
+    if (!parent) break
+    x += parent.position.x
+    y += parent.position.y
+    parentId = parent.parentId
+  }
+  return { x, y }
+}
+
 export function getNodeSize(node: Node): { width: number; height: number } {
   const fallback = DEFAULT_SIZE[node.type as CanvasNodeType] ?? DEFAULT_SIZE.note
   return {

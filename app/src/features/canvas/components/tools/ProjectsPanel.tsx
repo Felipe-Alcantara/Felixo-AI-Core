@@ -14,7 +14,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { CanvasPanel } from './CanvasPanel'
-import { sortProjectsByName } from './projects-panel-order'
+import { folderDisplayName, sortProjectsByName } from './projects-panel-order'
 import { buildRunCommand, type RunFileOptions } from '../../services/run-file-command'
 import {
   canRunProjectFile,
@@ -136,7 +136,7 @@ export function ProjectsPanel({
       const picked =
         repos.length > 0
           ? repos
-          : [{ name: folder.split('/').filter(Boolean).pop() ?? folder, path: folder }]
+          : [{ name: folderDisplayName(folder), path: folder }]
 
       // Skip repos already registered (same path) so re-adding a parent folder
       // doesn't create duplicates.

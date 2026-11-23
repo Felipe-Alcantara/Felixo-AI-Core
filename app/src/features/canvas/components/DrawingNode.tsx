@@ -104,6 +104,9 @@ function DrawingNodeComponent({ id, data, selected }: NodeProps) {
   const finishStroke = useCallback(() => {
     const current = drawingRef.current
     drawingRef.current = null
+    // A prévia é escrita direto no DOM; sem limpar, o traço já gravado (ou
+    // desfeito/limpo depois) continuaria desenhado por cima.
+    svgRef.current?.querySelector('[data-preview]')?.setAttribute('d', '')
     if (!current || current.points.length < 2) return
     commitStrokes([...strokes, { d: current.points.join(' '), color, width: penWidth }])
   }, [color, penWidth, strokes, commitStrokes])

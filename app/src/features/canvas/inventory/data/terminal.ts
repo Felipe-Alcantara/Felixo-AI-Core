@@ -174,11 +174,6 @@ export const terminalSurfaces: InventoryElement[] = [
         task: '3eb91f95-497e-811b-8eb0-e620c6f37e21',
       },
       {
-        what: 'O cabeçalho não nomeia "waiting_approval", "starting" nem "error": o rótulo fica vazio justo quando o agente pede aprovação (TerminalDrawer.tsx:533-541; o cartão e a notificação dizem "Precisa de resposta").',
-        risk: 'baixo',
-        task: '3ec91f95-497e-8103-b360-c1979d6992f4',
-      },
-      {
         what: 'Desafixada, clicar num painel da sidebar (Prompts, Skills) fecha a gaveta antes de o texto chegar ao terminal.',
         risk: 'médio',
         task: '3eb91f95-497e-814a-8b2c-e471e09f6ff3',

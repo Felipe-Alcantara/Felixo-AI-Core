@@ -32,7 +32,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **Elementos:** 115 (10 blocos, 17 ferramentas, 88 outras superfícies)
 - **Controles:** 439, dos quais 92 com teste específico
 - **Elementos sem nenhum teste:** 0
-- **Lacunas:** 140 (alto 2, médio 87, baixo 51), em 73 tasks
+- **Lacunas:** 135 (alto 1, médio 85, baixo 49), em 73 tasks
 
 ## Moldura do canvas
 
@@ -229,7 +229,6 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| O balão de erro e de aviso do ditado (absolute top-full, DictationButton.tsx:66) fica abaixo da barra superior, que tem overflow: hidden (index.css:3216): a mensagem é recortada e não aparece. A pessoa não vê por que o ditado falhou (sem chave, microfone negado). | alto | `3ec91f95-497e-8103-b360-c1979d6992f4` |
 | O clique no botão é exercitado (checarBotaoDeDitado: o estado muda na tela); gravar, transcrever, descartar e o atalho global dependem de microfone e de chave de transcrição, que o smoke não tem: seguem sem teste de interface. | baixo | `3ec91f95-497e-818f-b9f2-f9710605c303` |
 
 ### Barra de status
@@ -301,7 +300,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| focusNode centraliza pelo node.position (CanvasView.tsx:1753), que num filho de grupo é relativo ao grupo: o item do inspector "Elementos" e o das Notificações levam a câmera para o lugar errado quando o bloco está dentro de um grupo. | médio | `3ec91f95-497e-8103-b360-c1979d6992f4` |
 | Delete, Backspace, Q e Shift+clique são exercitados (checarAtalhosDoCanvas); soltar um bloco num grupo (arrasto de um bloco para dentro dele) segue sem teste de interface: o encaixe só tem teste unitário. | médio | `3ec91f95-497e-818f-b9f2-f9710605c303` |
 | O CanvasView e o minimapa ainda re-renderizam a cada quadro de arrasto: ~35–45 ms por commit com 300 blocos no build de desenvolvimento (os blocos parados não re-renderizam mais desde 11/11/2026). | médio | `41591f95-497e-8166-84cb-cf8af3736c2b` |
 | Centralizar um bloco com zoom que caiba na área livre em telas pequenas (focusNode usa zoom fixo 1,2). | médio | `3ea91f95-497e-819a-bdd9-fbc178f27b3e` |
@@ -754,12 +752,8 @@ Sem controle próprio: as ações vêm de outros elementos.
 | --- | --- | --- | --- | --- |
 | `aria-label={`Cor ${swatch}`}` (button) | clique | Uma bolinha por cor (5): troca a cor do próximo traço. Estado local, volta ao branco ao remontar. | Sem falha própria. | `scripts/canvas-smoke.cjs` → `checarDesenhoLeve` |
 | `aria-label={`Espessura ${width}px`}` (button) | clique | Uma por espessura (2, 4, 8 px): troca a espessura do próximo traço. Estado local. | Sem falha própria. | `scripts/canvas-smoke.cjs` → `checarDesenhoLeve` |
-| `aria-label="Desfazer último traço"` (button) | clique | Remove o último traço e grava data.strokes (onDataChange → canvas:save). (desabilitado: Sem traços.) | O traço desfeito continua visível no path de prévia até o próximo traço (bug suspeito); falha de canvas:save só no console. | `scripts/canvas-smoke.cjs` → `checarDesenhoLeve` |
-| `aria-label="Limpar desenho"` (button) | clique | Apaga todos os traços e grava strokes vazio. Sem confirmação e sem como desfazer. (desabilitado: Sem traços.) | O último traço desenhado continua visível no path de prévia (bug suspeito); falha de canvas:save só no console. | `scripts/canvas-smoke.cjs` → `checarDesenhoLeve` |
-
-| Lacuna | Risco | Task |
-| --- | --- | --- |
-| Traço fantasma (DrawingNode.tsx:90-119 e 208): handlePointerMove escreve o "d" do path de prévia direto no DOM e finishStroke nunca o limpa; o React não controla esse atributo. Depois de Desfazer ou Limpar, o último traço desenhado continua na tela (na cor/espessura atuais) até o próximo traço ou um reload. | médio | `3ec91f95-497e-8103-b360-c1979d6992f4` |
+| `aria-label="Desfazer último traço"` (button) | clique | Remove o último traço e grava data.strokes (onDataChange → canvas:save). (desabilitado: Sem traços.) | falha de canvas:save só no console. | `scripts/canvas-smoke.cjs` → `checarDesenhoLeve` |
+| `aria-label="Limpar desenho"` (button) | clique | Apaga todos os traços e grava strokes vazio. Sem confirmação e sem como desfazer. (desabilitado: Sem traços.) | falha de canvas:save só no console. | `scripts/canvas-smoke.cjs` → `checarDesenhoLeve` |
 
 ### Bloco Desenho Excalidraw
 
@@ -948,7 +942,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | --- | --- | --- |
 | Recolher, Maximizar, Histórico arquivado e Ver arquivo em modo renderizado não são clicados em nenhum teste (o smoke só abre, fixa, passa responsabilidade e fecha). | médio | `3ec91f95-497e-81e8-8f18-e2a529b0568e` |
 | Reiniciar e os botões da faixa de retomada na gaveta não têm teste de clique; o store falso do smoke A não reproduz a faixa. | médio | `3eb91f95-497e-811b-8eb0-e620c6f37e21` |
-| O cabeçalho não nomeia "waiting_approval", "starting" nem "error": o rótulo fica vazio justo quando o agente pede aprovação (TerminalDrawer.tsx:533-541; o cartão e a notificação dizem "Precisa de resposta"). | baixo | `3ec91f95-497e-8103-b360-c1979d6992f4` |
 | Desafixada, clicar num painel da sidebar (Prompts, Skills) fecha a gaveta antes de o texto chegar ao terminal. | médio | `3eb91f95-497e-814a-8b2c-e471e09f6ff3` |
 | Com a gaveta aberta, a barra de status encolhe até 160 px e quebra. | médio | `3e791f95-497e-81bd-8e8c-de6f9e16cec5` |
 
@@ -1483,10 +1476,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `onClick={() => setPendingRemovalId(null)}` (button) | clique | desiste da remoção: a linha volta ao normal (pendingRemovalId = null) | sem falha própria (estado local) | — |
 | `onClick={() => openProject(project)}` (button) | clique | abre o navegador de pastas na raiz do projeto: limpa entradas, erro e remoção pendente e chama projects:list-directory | ok=false ou rejeição vira loadError | — |
 | `onClick={() => setPendingRemovalId(project.id)}` (button) | clique | pede confirmação na própria linha (pendingRemovalId = id), sem window.confirm (desabilitado: transparente até hover/foco (invisível em toque)) | sem falha própria (estado local) | — |
-
-| Lacuna | Risco | Task |
-| --- | --- | --- |
-| ProjectsPanel.tsx:133: sem repositório na pasta escolhida, o nome sai de folder.split("/"); no Windows o caminho (realpath) usa "\" e o projeto é registrado com o caminho inteiro como nome | baixo | `3ec91f95-497e-8103-b360-c1979d6992f4` |
 
 ### Notas (blocos do canvas e notas salvas)
 
@@ -3098,7 +3087,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3eb91f95-497e-817d-baf1-fbf8f400f399` — 1 lacuna
 - `3eb91f95-497e-81b8-a70f-dfce2a446a3e` — 2 lacunas
 - `3eb91f95-497e-81bb-a374-eb2e336c73c6` — 1 lacuna
-- `3ec91f95-497e-8103-b360-c1979d6992f4` — 9 lacunas
+- `3ec91f95-497e-8103-b360-c1979d6992f4` — 4 lacunas
 - `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` — 15 lacunas
 - `3ec91f95-497e-8122-a08b-d26d4991acca` — 1 lacuna
 - `3ec91f95-497e-818f-b9f2-f9710605c303` — 2 lacunas

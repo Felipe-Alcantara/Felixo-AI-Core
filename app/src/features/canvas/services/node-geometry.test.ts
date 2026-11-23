@@ -7,6 +7,7 @@ import {
   findFreeNodePosition,
   findFreeNodePositionNearNode,
   findFreeNodePositions,
+  getAbsoluteNodePosition,
   getDefaultNodeSize,
 } from './node-geometry'
 
@@ -158,5 +159,25 @@ describe('cloud-session (cartão Agente na nuvem)', () => {
       expect(size.width).toBeGreaterThanOrEqual(minimo.width)
       expect(size.height).toBeGreaterThanOrEqual(minimo.height)
     }
+  })
+})
+
+describe('getAbsoluteNodePosition', () => {
+  const grupo = { id: 'g', type: 'group', position: { x: 500, y: 300 }, data: {} } as Node
+  const filho = { id: 'f', type: 'note', parentId: 'g', position: { x: 20, y: 30 }, data: {} } as Node
+
+  it('soma a posição do grupo à do filho', () => {
+    expect(getAbsoluteNodePosition(filho, [grupo, filho])).toEqual({ x: 520, y: 330 })
+  })
+
+  it('bloco sem pai mantém a própria posição', () => {
+    expect(getAbsoluteNodePosition(grupo, [grupo, filho])).toEqual({ x: 500, y: 300 })
+  })
+
+  it('pai ausente ou ciclo não travam', () => {
+    expect(getAbsoluteNodePosition(filho, [filho])).toEqual({ x: 20, y: 30 })
+    const a = { id: 'a', type: 'group', parentId: 'b', position: { x: 1, y: 1 }, data: {} } as Node
+    const b = { id: 'b', type: 'group', parentId: 'a', position: { x: 1, y: 1 }, data: {} } as Node
+    expect(Number.isFinite(getAbsoluteNodePosition(a, [a, b]).x)).toBe(true)
   })
 })

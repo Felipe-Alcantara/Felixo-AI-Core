@@ -657,11 +657,6 @@ export const chromeSurfaces: InventoryElement[] = [
     ],
     gaps: [
       {
-        what: 'O balão de erro e de aviso do ditado (absolute top-full, DictationButton.tsx:66) fica abaixo da barra superior, que tem overflow: hidden (index.css:3216): a mensagem é recortada e não aparece. A pessoa não vê por que o ditado falhou (sem chave, microfone negado).',
-        risk: 'alto',
-        task: '3ec91f95-497e-8103-b360-c1979d6992f4',
-      },
-      {
         what: 'O clique no botão é exercitado (checarBotaoDeDitado: o estado muda na tela); gravar, transcrever, descartar e o atalho global dependem de microfone e de chave de transcrição, que o smoke não tem: seguem sem teste de interface.',
         risk: 'baixo',
         task: '3ec91f95-497e-818f-b9f2-f9710605c303',
@@ -813,11 +808,6 @@ export const chromeSurfaces: InventoryElement[] = [
       { file: 'src/features/canvas/components/modal-dialogs-keys.test.ts' },
     ],
     gaps: [
-      {
-        what: 'focusNode centraliza pelo node.position (CanvasView.tsx:1753), que num filho de grupo é relativo ao grupo: o item do inspector "Elementos" e o das Notificações levam a câmera para o lugar errado quando o bloco está dentro de um grupo.',
-        risk: 'médio',
-        task: '3ec91f95-497e-8103-b360-c1979d6992f4',
-      },
       {
         what: 'Delete, Backspace, Q e Shift+clique são exercitados (checarAtalhosDoCanvas); soltar um bloco num grupo (arrasto de um bloco para dentro dele) segue sem teste de interface: o encaixe só tem teste unitário.',
         risk: 'médio',
