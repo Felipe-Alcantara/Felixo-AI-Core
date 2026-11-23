@@ -313,14 +313,11 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
     ],
     ipc: ['models:list', 'models:delete'],
     dependsOn: ['CanvasPanel'],
-    tests: [{ file: 'src/features/shared/ipc/ipc-failures.test.ts' }, ],
-    gaps: [
-      {
-        what: 'nenhum teste cobre o painel Modelos (listar e remover)',
-        risk: 'baixo',
-        task: NOVA_SMOKE,
-      },
+    tests: [
+      { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarModelos' },
+      { file: 'src/features/shared/ipc/ipc-failures.test.ts' },
     ],
+    gaps: [],
     overlap: `${PANEL_OVERLAP}. Porte sm`,
   },
 

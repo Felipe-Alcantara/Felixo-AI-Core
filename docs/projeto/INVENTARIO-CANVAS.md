@@ -32,7 +32,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **Elementos:** 115 (10 blocos, 17 ferramentas, 88 outras superfícies)
 - **Controles:** 439, dos quais 92 com teste específico
 - **Elementos sem nenhum teste:** 0
-- **Lacunas:** 153 (alto 2, médio 91, baixo 60), em 73 tasks
+- **Lacunas:** 152 (alto 2, médio 91, baixo 59), em 73 tasks
 
 ## Moldura do canvas
 
@@ -1522,7 +1522,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `models:list`, `models:delete`
 - **Depende de:** `CanvasPanel`
 - **Sobreposição:** CanvasPanel absolute z-20 (z-30 com foco dentro), top-16, left = 1rem + largura viva da sidebar; abaixo da sidebar (26), dos toasts/overlay isBusy (50), dos diálogos (60) e do FelixoSelect (1000); mesmo z da lista Elementos (z-20, direita). Porte sm
-- **Testes:** `src/features/shared/ipc/ipc-failures.test.ts`
+- **Testes:** `scripts/canvas-smoke-paineis.cjs` → `checarModelos`, `src/features/shared/ipc/ipc-failures.test.ts`
 
 | Estado | Quando |
 | --- | --- |
@@ -1532,10 +1532,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Controle | Gatilho | Efeito | Falha conhecida | Teste |
 | --- | --- | --- | --- | --- |
 | `onClick={() => void removeModel(model.id)}` (button) | clique | models:delete sem confirmação e relê a lista (models:list): o modelo some | falha ao remover ou ao recarregar a lista aparece no painel | — |
-
-| Lacuna | Risco | Task |
-| --- | --- | --- |
-| nenhum teste cobre o painel Modelos (listar e remover) | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
 
 ### Prompts (catálogo de automações)
 
@@ -1727,7 +1723,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `settings:load-orchestrator`, `settings:save-orchestrator`, `models:list`, `cli:terminal-output`
 - **Depende de:** `useOrchestrationDashboard`, `loadOrchestratorSettings`, `saveOrchestratorSettings`, `normalizeOrchestratorSettings`, `window.felixo.models`, `FelixoSelect`, `CanvasPanel`
 - **Sobreposição:** CanvasPanel: absolute z-20 (z-30 com foco dentro), top-16, à direita da barra lateral e deslocado quando o menu de ferramentas abre (toolsMenuOpen); largura limitada a viewport − barra − inspector Elementos (288 px) e altura a viewport − 112. Os menus do FelixoSelect abrem em portal z-1000 por cima; toasts (z 50) e AgentQuestionDialog/HandoffDialog (z 60) cobrem o painel. Em janela <768 px o painel passa da viewport (PANEL_MIN_WIDTH 260, task 3e691f95-497e-815c-a129-f4d2d6405cbc). Tamanho md; a lista de modelos e as duas áreas de texto crescem o painel até o teto e rolam por dentro
-- **Testes:** `electron/services/orchestrator-settings-store.test.cjs`, `src/features/shared/orchestrator/orchestrator-settings-storage.test.ts`, `electron/services/cli-request-policy.test.cjs`, `electron/services/orchestration/orchestration-store.test.cjs`
+- **Testes:** `scripts/canvas-smoke-paineis.cjs` → `checarOrquestrador`, `electron/services/orchestrator-settings-store.test.cjs`, `src/features/shared/orchestrator/orchestrator-settings-storage.test.ts`, `electron/services/cli-request-policy.test.cjs`, `electron/services/orchestration/orchestration-store.test.cjs`
 
 | Estado | Quando |
 | --- | --- |
@@ -1744,7 +1740,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Painel sem teste de interface (modo, limites, preferidos/bloqueados, Salvar) e sem teste da camada orchestrator-settings-storage do renderer | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
+| O smoke cobre um limite, o modelo preferido e o Salvar; faltam o Modo (FelixoSelect), os bloqueados, a confirmação de ações sensíveis e os campos de contexto fixo e memórias, e a camada orchestrator-settings-storage do renderer não tem teste próprio | baixo | `3ec91f95-497e-81ca-8319-ee657b0b6492` |
 | Tokens de contexto só entra no texto do prompt: nenhum código do processo principal lê maxContextTokens (o teto de custo e a confirmação de ações sensíveis valem em código desde 16/11/2026) | médio | `41a91f95-497e-810d-af12-e81c33aa550a` |
 | A execução ao vivo no topo só mostra orquestrações disparadas pela tela de chat; o lote do canvas tem a própria lista de progresso (seção "Lote de tasks"), e os dois ainda não aparecem juntos | baixo | `3eb91f95-497e-8131-9977-f8d21c950c68` |
 
@@ -3142,7 +3138,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` — 15 lacunas
 - `3ec91f95-497e-8122-a08b-d26d4991acca` — 1 lacuna
 - `3ec91f95-497e-818f-b9f2-f9710605c303` — 2 lacunas
-- `3ec91f95-497e-81ca-8319-ee657b0b6492` — 20 lacunas
+- `3ec91f95-497e-81ca-8319-ee657b0b6492` — 19 lacunas
 - `3ec91f95-497e-81e8-8f18-e2a529b0568e` — 11 lacunas
 - `3ec91f95-497e-81f7-8b12-c5c252d020c7` — 5 lacunas
 - `3ed91f95-497e-8114-a246-f72c73ae50c4` — 1 lacuna

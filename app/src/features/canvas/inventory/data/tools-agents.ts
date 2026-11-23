@@ -373,6 +373,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
       'CanvasPanel',
     ],
     tests: [
+      { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarOrquestrador' },
       { file: 'electron/services/orchestrator-settings-store.test.cjs' },
       { file: 'src/features/shared/orchestrator/orchestrator-settings-storage.test.ts' },
       { file: 'electron/services/cli-request-policy.test.cjs' },
@@ -380,7 +381,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
     ],
     gaps: [
       {
-        what: 'Painel sem teste de interface (modo, limites, preferidos/bloqueados, Salvar) e sem teste da camada orchestrator-settings-storage do renderer',
+        what: 'O smoke cobre um limite, o modelo preferido e o Salvar; faltam o Modo (FelixoSelect), os bloqueados, a confirmação de ações sensíveis e os campos de contexto fixo e memórias, e a camada orchestrator-settings-storage do renderer não tem teste próprio',
         risk: 'baixo',
         task: '3ec91f95-497e-81ca-8319-ee657b0b6492',
       },

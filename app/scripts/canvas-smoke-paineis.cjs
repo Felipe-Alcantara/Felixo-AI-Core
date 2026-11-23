@@ -397,6 +397,57 @@ async function checarQaLogger(page) {
   await esperar(page, (sel) => document.querySelector(sel) !== null && !/Gerando…/.test(document.querySelector(sel)?.innerText ?? ''), painel, 'o relatório de QA ficou "Gerando…"')
 }
 
+/** Modelos: um modelo gravado aparece na lista e Remover o apaga (conferido no main, que é a fonte). */
+async function checarModelos(page) {
+  await prepararJanela(page)
+  const id = `smoke-modelo-${Date.now() % 100000}`
+  const nome = `Modelo do smoke ${id}`
+  const existe = () => page.evaluate(async (modeloId) => ((await window.felixo.models.list()).models ?? []).some((m) => m.id === modeloId), id)
+  const salvo = await page.evaluate((m) => window.felixo.models.save(m), { id, name: nome, command: 'smoke-cli', source: 'smoke', cliType: 'claude' })
+  if (!salvo?.ok) falhar('não foi possível gravar o modelo de fixture', salvo)
+  try {
+    await abrirFerramenta(page, 'Modelos', 'models')
+    const painel = '[data-felixo-canvas-panel="models"]'
+    await esperar(page, ([sel, n]) => (document.querySelector(sel)?.innerText ?? '').includes(n), [painel, nome], 'o modelo gravado não apareceu na lista do painel')
+    await exigirClique(page, painel, new RegExp(`^Remover ${nome}$`), 'Remover o modelo')
+    await esperar(page, ([sel, n]) => !(document.querySelector(sel)?.innerText ?? '').includes(n), [painel, nome], 'Remover não tirou o modelo da lista')
+    if (await existe()) falhar('Remover não apagou o modelo no processo principal', id)
+  } finally {
+    await page.evaluate((modeloId) => window.felixo.models.delete(modeloId), id).catch(() => {})
+  }
+}
+
+/** Orquestrador: alterar um limite e marcar o modelo como preferido, Salvar, e conferir o que o main gravou (as configurações voltam ao original no fim). */
+async function checarOrquestrador(page) {
+  await prepararJanela(page)
+  const id = `smoke-orq-${Date.now() % 100000}`
+  const nome = `Modelo orquestrador ${id}`
+  const original = await page.evaluate(() => window.felixo.settings.loadOrchestrator())
+  const salvo = await page.evaluate((m) => window.felixo.models.save(m), { id, name: nome, command: 'smoke-cli', source: 'smoke', cliType: 'claude' })
+  if (!salvo?.ok) falhar('não foi possível gravar o modelo de fixture', salvo)
+  try {
+    await abrirFerramenta(page, 'Orquestrador', 'orchestrator')
+    const painel = '[data-felixo-canvas-panel="orchestrator"]'
+    await esperar(page, ([sel, n]) => (document.querySelector(sel)?.innerText ?? '').includes(n), [painel, nome], 'o formulário do orquestrador não carregou o modelo')
+    const campo = await marcarCampoPorRotulo(page, painel, 'Agentes por rodada')
+    await preencher(page, campo, '7')
+    await page.evaluate(([sel, n]) => {
+      const cartao = [...document.querySelectorAll(`${sel} div`)].filter((el) => (el.textContent ?? '').includes(n) && el.querySelector('input[type="checkbox"]')).pop()
+      const preferido = [...(cartao?.querySelectorAll('label') ?? [])].find((l) => /Preferido/.test(l.textContent ?? ''))
+      preferido?.querySelector('input')?.click()
+    }, [painel, nome])
+    await exigirClique(page, painel, /^Salvar$/, 'Salvar o orquestrador')
+    await esperar(page, (sel) => /Salvo/.test(document.querySelector(sel)?.innerText ?? ''), painel, 'o painel não mostrou "Salvo"')
+    const gravado = await page.evaluate(() => window.felixo.settings.loadOrchestrator())
+    const dados = gravado?.settings ?? gravado
+    if (dados?.maxAgentsPerTurn !== 7) falhar('o limite de agentes por rodada não foi gravado', dados)
+    if (!(dados?.preferredModelIds ?? []).includes(id)) falhar('o modelo preferido não foi gravado', dados)
+  } finally {
+    await page.evaluate((o) => window.felixo.settings.saveOrchestrator(o?.settings ?? o), original).catch(() => {})
+    await page.evaluate((modeloId) => window.felixo.models.delete(modeloId), id).catch(() => {})
+  }
+}
+
 /** Notas: criar blocos (nota e desenho), criar, editar e remover uma nota salva. */
 async function checarNotas(page) {
   await prepararJanela(page)
@@ -662,6 +713,8 @@ const CHECKS_DOS_PAINEIS = [
   checarPresetsDeAgente,
   checarQaLogger,
   checarConfiguracoes,
+  checarModelos,
+  checarOrquestrador,
 ]
 
 async function executarChecksDosPaineis(page) {
@@ -677,8 +730,10 @@ module.exports = {
   executarChecksDosPaineis,
   checarBuscaDeBlocos,
   checarConfiguracoes,
+  checarModelos,
   checarMolduraDosPaineis,
   checarNotas,
+  checarOrquestrador,
   checarPedidosDeEscrita,
   checarPresetsDeAgente,
   checarProjetos,
