@@ -152,6 +152,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
       'fetch-all-roots (addPickedRoots, removeScanRoot)',
     ],
     tests: [
+      { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarEscopoAmploDoFetchAll' },
       { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarFetchAllPedidosPushECommit' },
       { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarFetchAll' },
       { file: 'src/features/shared/ipc/ipc-failures.test.ts' },
@@ -164,7 +165,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
     ],
     gaps: [
       {
-        what: 'Varrer uma raiz configurada, ignorar uma pasta, executar com confirmação (pull --ff-only conferido no git) e voltar a varrer são exercitados (checarFetchAll); pedido de agente (recusar e aplicar o plano revisado), push, commit automático e remover/adicionar raiz são exercitados (checarFetchAllPedidosPushECommit); só o escopo amplo (todos os discos) segue sem teste de interface',
+        what: 'Varrer uma raiz configurada, ignorar uma pasta, executar com confirmação (pull --ff-only conferido no git) e voltar a varrer são exercitados (checarFetchAll); pedido de agente (recusar e aplicar o plano revisado), push, commit automático e remover/adicionar raiz são exercitados (checarFetchAllPedidosPushECommit) e a confirmação do escopo amplo também (checarEscopoAmploDoFetchAll); a varredura de todos os discos não roda no teste porque varreria a máquina de quem o executa',
         risk: 'médio',
         task: '3ec91f95-497e-81ca-8319-ee657b0b6492',
       },
@@ -303,6 +304,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
       'AccountSwitchHistory',
     ],
     tests: [
+      { file: 'electron/services/agent-usage-ipc-handlers.test.cjs' },
       { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarLimitesEUso' },
       { file: 'src/features/shared/ipc/ipc-failures.test.ts' },
       { file: 'src/features/shared/agent-usage/agent-usage.test.ts' },
@@ -321,7 +323,7 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
     ],
     gaps: [
       {
-        what: 'Atualizar, Reconectar, Adicionar outra conta e Remover são exercitados (checarLimitesEUso; sem CLI detectada o runner só confere Atualizar e Reconectar); Ligar coleta (escreve na status line do Claude do usuário) segue sem teste de interface, assim como digitar na busca, ligar o atalho "Precisa de atenção" e acionar o "Atualizar a conta" (a estrutura sai testada por renderização estática, a regra do filtro e a chamada do botão são funções puras testadas, mas o clique e a digitação só foram vistos no app real); enable/disable da statusLine também não aparece em agent-usage-ipc-handlers.test.cjs',
+        what: 'Atualizar, Reconectar, Adicionar outra conta e Remover são exercitados (checarLimitesEUso; sem CLI detectada o runner só confere Atualizar e Reconectar); Ligar e desligar a coleta têm teste do handler (agent-usage-ipc-handlers.test.cjs), mas o clique não: ele escreve na status line do Claude do usuário. Digitar na busca, ligar o atalho "Precisa de atenção" e acionar o "Atualizar a conta" (a estrutura sai testada por renderização estática, a regra do filtro e a chamada do botão são funções puras testadas, mas o clique e a digitação só foram vistos no app real); enable/disable da statusLine também não aparece em agent-usage-ipc-handlers.test.cjs',
         risk: 'médio',
         task: '3ec91f95-497e-81ca-8319-ee657b0b6492',
       },
@@ -385,11 +387,6 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
     ],
     gaps: [
       {
-        what: 'O smoke cobre limite, modelo preferido, Modo, bloqueados, confirmação de ações sensíveis, contexto fixo e memórias; falta só a camada orchestrator-settings-storage do renderer não tem teste próprio',
-        risk: 'baixo',
-        task: '3ec91f95-497e-81ca-8319-ee657b0b6492',
-      },
-      {
         what: 'Tokens de contexto só entra no texto do prompt: nenhum código do processo principal lê maxContextTokens (o teto de custo e a confirmação de ações sensíveis valem em código desde 16/11/2026)',
         risk: 'médio',
         task: '41a91f95-497e-810d-af12-e81c33aa550a',
@@ -447,11 +444,6 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
       { file: 'electron/services/qa-log-disk-store.test.cjs' },
     ],
     gaps: [
-      {
-        what: 'Limpar (painel, memória e disco) e Reportar problema são exercitados (checarQaLogger); o handler qa-logger:build-report é testado em qa-logger-ipc.test.cjs.',
-        risk: 'baixo',
-        task: '3ec91f95-497e-81ca-8319-ee657b0b6492',
-      },
     ],
     overlap: `${PAINEL}. Tamanho lg; a lista cresce até 400 entradas e rola dentro do painel (scrollIntoView no fim)`,
   },
@@ -725,11 +717,6 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
       { file: 'electron/services/storage/agent-presets-repository.test.cjs' },
     ],
     gaps: [
-      {
-        what: 'Criar, duplicar e excluir preset são exercitados (checarPresetsDeAgente); editar, exportar e importar (arquivo) também (checarPresetsEditarExportarImportar).',
-        risk: 'baixo',
-        task: '3ec91f95-497e-81ca-8319-ee657b0b6492',
-      },
     ],
     overlap: `${PAINEL}. Tamanho md; a lista de skills tem max-h-44 e rola por dentro; o window.confirm do Excluir e o diálogo de salvar são nativos`,
   },
@@ -831,11 +818,6 @@ export const agentTools: Record<AgentTool, InventoryElement> = {
       { file: 'scripts/hardware-check.cjs', check: 'openGpuOption' },
     ],
     gaps: [
-      {
-        what: 'A instrução de arquivo (salvar e persistir) é exercitada (checarConfiguracoes); o tema e o padrão de qualidade também (checarTemaEPadraoDeQualidade) e os handlers de instruções e padrão estão em canvas-ipc-handlers.test.cjs; o hardware-check só abre o painel para a placa de vídeo.',
-        risk: 'baixo',
-        task: '3ec91f95-497e-81ca-8319-ee657b0b6492',
-      },
     ],
     overlap: `${PAINEL}. Tamanho padrão; é o painel mais comprido desta parte e rola por dentro`,
   },
@@ -970,11 +952,6 @@ export const agentToolSurfaces: InventoryElement[] = [
     tests: [
       { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarFetchAllPedidosPushECommit' },{ file: `${TOOLS}/FetchAllScanRoots.test.ts` }, { file: `${TOOLS}/fetch-all-roots.test.ts` }],
     gaps: [
-      {
-        what: 'Adicionar (seletor da automação) e remover raiz são exercitados (checarFetchAllPedidosPushECommit)',
-        risk: 'baixo',
-        task: '3ec91f95-497e-81ca-8319-ee657b0b6492',
-      },
     ],
     overlap: 'Dentro do cartão de escopo do Fetch All (camada do CanvasPanel); a lista de raízes tem max-h-24 e rola por dentro; o seletor de pastas é diálogo nativo do sistema',
   },
@@ -1376,6 +1353,7 @@ export const agentToolSurfaces: InventoryElement[] = [
       'dictation (shortcutFromEvent, describeMicrophoneStatus, isLoopbackEndpoint)',
     ],
     tests: [
+      { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarMotorEChaveDoDitado' },
       { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarRolagemEDitado' },
       { file: 'src/features/shared/ipc/ipc-failures-2.test.ts' },
       { file: 'src/features/canvas/services/dictation.test.ts' },
@@ -1384,7 +1362,7 @@ export const agentToolSurfaces: InventoryElement[] = [
     ],
     gaps: [
       {
-        what: 'Modelo e idioma digitados, salvos e gravados no main são exercitados (checarRolagemEDitado); motor, chave, atalho e microfone seguem sem teste de interface (a chave exige o cofre do sistema e o microfone, hardware). O caminho com servidor local foi conferido de ponta a ponta no Linux em 05/10/2026 (faster-whisper e microfone virtual, scripts/validar-ditado-linux.cjs), mas só por roteiro manual',
+        what: 'Modelo e idioma digitados, salvos e gravados no main são exercitados (checarRolagemEDitado); motor (local/nuvem) e guardar/remover chave são exercitados (checarMotorEChaveDoDitado; sem cofre do sistema o check aceita o aviso); atalho, microfone e gravação seguem sem teste de interface (o botão do microfone abre o pedido de permissão do sistema no macOS). O caminho com servidor local foi conferido de ponta a ponta no Linux em 05/10/2026 (faster-whisper e microfone virtual, scripts/validar-ditado-linux.cjs), mas só por roteiro manual',
         risk: 'baixo',
         task: '3ec91f95-497e-81ca-8319-ee657b0b6492',
       },

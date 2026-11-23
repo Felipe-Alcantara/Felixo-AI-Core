@@ -567,6 +567,30 @@ async function checarExportarEImportarCanvas(page) {
   } finally {
     page.off('dialog', aceitar)
   }
+
+  // Recusar a confirmação da importação deixa o canvas como estava (um bloco a mais criado de novo continua lá).
+  await abrirFerramenta(page, 'Notas', 'notes')
+  await exigirClique(page, '[data-felixo-canvas-panel="notes"]', /^Nova nota$/, 'Nova nota (bloco)')
+  await esperar(page, (n) => Number(/(\d+)\D*bloco/.exec(document.querySelector('.felixo-canvas-statusbar')?.textContent ?? '')?.[1]) === n + 1, antes, 'a segunda Nova nota não criou o bloco')
+  const recusar = (dialogo) => void dialogo.dismiss().catch(() => {})
+  page.on('dialog', recusar)
+  try {
+    await page.locator('input[type="file"][accept*="fxcanvas"]').setInputFiles(arquivo)
+    await page.waitForTimeout(1500)
+    const depois = await totalDeBlocos(page)
+    if (depois !== antes + 1) falhar('recusar a confirmação da importação mudou o canvas', { esperado: antes + 1, atual: depois })
+  } finally {
+    page.off('dialog', recusar)
+  }
+
+  // Exportar com a saída dos terminais: grava um pacote válido no mesmo caminho.
+  fs.rmSync(arquivo, { force: true })
+  await abrirSecaoFerramentas(page)
+  await exigirClique(page, '[aria-label="Ferramentas auxiliares"]', /^Exportar com a saída dos terminais$/, 'Exportar com a saída dos terminais')
+  for (let k = 0; k < 80 && !fs.existsSync(arquivo); k += 1) await page.waitForTimeout(100)
+  if (!fs.existsSync(arquivo)) falhar('Exportar com a saída dos terminais não gravou o arquivo', arquivo)
+  const completo = JSON.parse(fs.readFileSync(arquivo, 'utf8'))
+  if (!Array.isArray(completo.nodes) || completo.nodes.length !== antes + 1) falhar('o pacote com a saída dos terminais não tem os blocos do canvas', { esperado: antes + 1, exportados: completo.nodes?.length })
 }
 
 /**
@@ -1084,6 +1108,179 @@ async function checarTemaEPadraoDeQualidade(page) {
   }
 }
 
+/**
+ * Prompt criado à mão, editado pela linha: o texto digitado é gravado sozinho (autosave), a troca de escopo é gravada e o botão
+ * Remover da linha apaga o prompt no main. O prompt é criado pelo painel e removido no fim.
+ */
+async function checarPromptEditadoNaLinha(page) {
+  await prepararJanela(page)
+  await abrirFerramenta(page, 'Prompts', 'prompts')
+  const painel = '[data-felixo-canvas-panel="prompts"]'
+  const nome = `Prompt da linha ${Date.now() % 100000}`
+  const gravados = () => page.evaluate(async (alvo) => ((await window.felixo.automations.list()).automations ?? []).filter((a) => a.name === alvo), nome)
+  const esperarGravado = async (predicado, mensagem) => {
+    let lista = []
+    for (let k = 0; k < 40; k += 1) {
+      lista = await gravados()
+      if (predicado(lista)) return lista
+      await page.waitForTimeout(150)
+    }
+    return falhar(mensagem, lista)
+  }
+  const aceitar = (dialogo) => void dialogo.accept().catch(() => {})
+  page.on('dialog', aceitar)
+  try {
+    await exigirClique(page, painel, /^Novo prompt$/, 'Novo prompt')
+    await preencher(page, `${painel} input[placeholder="Nome do prompt"]`, nome)
+    await preencher(page, `${painel} textarea[placeholder="Texto do prompt…"]`, 'texto inicial da linha')
+    await exigirClique(page, painel, /^Criar prompt$/, 'Criar prompt')
+    await esperarGravado((l) => l.length === 1, 'o prompt criado não foi gravado')
+
+    // Edição inline: o texto da linha é gravado sozinho.
+    await preencher(page, `${painel} input[placeholder^="Filtrar"]`, nome)
+    await esperar(page, (sel) => document.querySelector(`${sel} li textarea[placeholder="Texto do prompt…"]`) !== null, painel, 'a linha do prompt não mostrou o texto editável')
+    await preencher(page, `${painel} li textarea[placeholder="Texto do prompt…"]`, 'texto editado na linha')
+    await esperarGravado((l) => l[0]?.prompt === 'texto editado na linha', 'a edição inline não foi gravada (autosave)')
+
+    // Troca de escopo: escolhe um escopo diferente do atual.
+    const escopoAntes = (await gravados())[0].scope
+    const seletor = '[role="combobox"][aria-label="Escopo do prompt"]'
+    await clicarSeletor(page, `${painel} li ${seletor}`, 'Escopo do prompt (linha)')
+    const opcoes = await page.evaluate(() => [...document.querySelectorAll('[role="option"]')].map((o) => (o.textContent ?? '').trim()))
+    const outra = await page.evaluate((atual) => {
+      const opcao = [...document.querySelectorAll('[role="option"]')].find((o) => o.getAttribute('aria-selected') !== 'true')
+      const texto = (opcao?.textContent ?? '').trim()
+      opcao?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }))
+      return texto
+    }, escopoAntes)
+    if (!outra) falhar('o menu de escopo não ofereceu outra opção', opcoes)
+    await esperarGravado((l) => l[0]?.scope !== escopoAntes, 'a troca de escopo não foi gravada')
+
+    // Remover pela linha.
+    await exigirClique(page, painel, /^Remover prompt$/, 'Remover prompt (linha)')
+    await esperarGravado((l) => l.length === 0, 'Remover pela linha não apagou o prompt no main')
+  } finally {
+    page.off('dialog', aceitar)
+    await page.evaluate(async (n) => {
+      for (const a of ((await window.felixo.automations.list()).automations ?? []).filter((x) => x.name === n)) await window.felixo.automations.delete(a.id)
+    }, nome).catch(() => {})
+  }
+}
+
+/**
+ * Escopo amplo do Fetch All: sem raízes configuradas, o painel oferece varrer todos os discos locais só depois de uma confirmação;
+ * "Confirmar escopo amplo" registra a confirmação nesta sessão. A varredura em si não roda (varreria os discos da máquina). As raízes
+ * originais voltam ao fim.
+ */
+async function checarEscopoAmploDoFetchAll(page) {
+  await prepararJanela(page)
+  const lerConfiguracao = () => page.evaluate(async () => { const r = await window.felixo.fetchAll.getSettings(); return r?.settings ?? r })
+  const original = await lerConfiguracao()
+  const painel = '[data-felixo-canvas-panel="fetch-all"]'
+  try {
+    await page.evaluate((c) => window.felixo.fetchAll.saveSettings(c), { ...original, scanRoots: [] })
+    await abrirFerramenta(page, 'Fetch All', 'fetch-all')
+    await esperar(page, (sel) => /Confirmar escopo amplo e habilitar varredura/.test(document.querySelector(sel)?.innerText ?? ''), painel, 'sem raízes, o painel não ofereceu o escopo amplo')
+    if (/Escopo amplo confirmado nesta sessão/.test(await textoDoPainel(page, painel))) falhar('o escopo amplo já aparecia confirmado antes do clique')
+    await exigirClique(page, painel, /^Confirmar escopo amplo e habilitar varredura$/, 'Confirmar escopo amplo')
+    await esperar(page, (sel) => /Escopo amplo confirmado nesta sessão/.test(document.querySelector(sel)?.innerText ?? ''), painel, 'a confirmação do escopo amplo não foi registrada')
+  } finally {
+    await page.evaluate((c) => window.felixo.fetchAll.saveSettings(c), original).catch(() => {})
+  }
+}
+
+/**
+ * Source Control, diff grande: um arquivo com milhares de linhas alteradas abre no leitor de diff sem travar a janela. O leitor
+ * não virtualiza (uma tabela inteira, até 1 MB): o teste mede que a última linha aparece dentro do prazo e que o painel segue
+ * respondendo (Fechar o diff). O repositório volta ao estado de partida no fim.
+ */
+async function checarDiffGrandeDoGit(page) {
+  const dir = criarRepositorioDeFixture()
+  const nome = path.basename(dir)
+  restaurarFixture(dir)
+  const linhas = Array.from({ length: 6000 }, (_, i) => `linha numero ${i + 1} do arquivo grande do smoke`)
+  fs.writeFileSync(path.join(dir, 'b.txt'), `${linhas.join('\n')}\n`)
+  try {
+    await prepararJanela(page)
+    await garantirProjetoDeFixture(page)
+    await abrirFerramenta(page, 'Source Control', 'git')
+    const painel = '[data-felixo-canvas-panel="git"]'
+    await exigirClique(page, painel, /^Repositório$/, 'seletor de repositório')
+    await exigirClique(page, 'body', new RegExp(nome), 'opção do repositório')
+    await esperar(page, ([sel, n]) => (document.querySelector(sel)?.innerText ?? '').includes(n) && /Alterações/i.test(document.querySelector(sel)?.innerText ?? ''), [painel, nome], 'o painel não carregou o repositório escolhido')
+    await esperar(page, (sel) => /b\.txt/.test(document.querySelector(`${sel} [role="tree"]`)?.innerText ?? ''), painel, 'o arquivo grande não apareceu no explorador')
+    const inicio = Date.now()
+    await exigirClique(page, `${painel} [role="tree"]`, /^b\.txt/, 'abrir o arquivo grande')
+    const abriu = await page.waitForFunction((sel) => (document.querySelector(sel)?.innerText ?? '').includes('linha numero 6000 do arquivo grande do smoke'), painel, { timeout: 60_000, polling: POLLING_MS }).then(() => true, () => false)
+    const gasto = Date.now() - inicio
+    if (!abriu) falhar('o diff grande não mostrou a última linha em 60 s', (await textoDoPainel(page, painel)).replace(/\s+/g, ' ').slice(0, 300))
+    console.log(`[canvas-smoke:paineis] checarDiffGrandeDoGit: 6000 linhas renderizadas em ${gasto} ms`)
+    if (gasto > 30_000) falhar('o diff grande demorou demais para renderizar', { gastoMs: gasto })
+    // A janela segue respondendo: um clique simples no painel é atendido.
+    await exigirClique(page, painel, /^Alterações/, 'aba Alterações depois do diff grande')
+  } finally {
+    restaurarFixture(dir)
+  }
+}
+
+/**
+ * Ditado, motor e chave: escolher "Servidor local" troca o endereço sugerido e esconde o campo da chave; voltar para "Nuvem" traz o
+ * campo de volta. Guardar uma chave de mentira termina com a confirmação (ou com o aviso de que o sistema não tem cofre, como num
+ * runner Linux sem chaveiro) e, quando guardou, Remover a apaga (conferido no main). O botão do microfone não é clicado: no macOS ele
+ * abre o pedido de permissão do sistema.
+ */
+async function checarMotorEChaveDoDitado(page) {
+  await prepararJanela(page)
+  await exigirClique(page, 'nav.felixo-activity-rail', /^Configurações$/, 'Configurações (trilho)')
+  const painel = '[data-felixo-canvas-panel="settings"]'
+  await page.locator(painel).waitFor({ state: 'visible', timeout: TIMEOUT_MS })
+  const lerDitado = () => page.evaluate(async () => (await window.felixo.speech.getConfig())?.config ?? null)
+  const original = await lerDitado()
+  if (!original) {
+    console.log('[canvas-smoke:paineis] checarMotorEChaveDoDitado: configuração do ditado indisponível neste ambiente, motor e chave não verificados')
+    return
+  }
+  const clicarMotor = (local) => page.evaluate(([sel, quer]) => {
+    const radios = [...document.querySelectorAll(`${sel} input[type="radio"][name="dictation-engine"]`)]
+    const alvo = radios[quer ? 1 : 0]
+    alvo?.click()
+    return Boolean(alvo)
+  }, [painel, local])
+  try {
+    await esperar(page, (sel) => document.querySelector(`${sel} #dictation-url`) !== null, painel, 'a seção do ditado não carregou')
+    await page.waitForTimeout(500)
+    // Motor: servidor local esconde a chave e põe o endereço desta máquina; nuvem devolve o campo.
+    if (!(await clicarMotor(true))) falhar('o botão do servidor local não foi encontrado')
+    await esperar(page, (sel) => document.querySelector(`${sel} #dictation-key`) === null && /(localhost|127\.0\.0\.1)/.test(document.querySelector(`${sel} #dictation-url`)?.value ?? ''), painel, 'escolher o servidor local não escondeu a chave nem trouxe o endereço desta máquina')
+    if (!(await clicarMotor(false))) falhar('o botão da nuvem não foi encontrado')
+    await esperar(page, (sel) => document.querySelector(`${sel} #dictation-key`) !== null, painel, 'voltar para a nuvem não trouxe o campo da chave de volta')
+
+    // Chave: guardar uma chave de mentira e removê-la (só se não havia chave de verdade).
+    if (original.keyConfigured) {
+      console.log('[canvas-smoke:paineis] checarMotorEChaveDoDitado: já há chave configurada neste perfil, guardar/remover não verificado')
+      return
+    }
+    await preencher(page, `${painel} #dictation-key`, 'sk-chave-de-mentira-do-smoke')
+    await exigirClique(page, painel, /^Guardar$/, 'Guardar a chave')
+    const desfecho = await page.waitForFunction((sel) => {
+      const texto = document.querySelector(sel)?.innerText ?? ''
+      if (/Chave guardada com criptografia do sistema/.test(texto)) return 'guardada'
+      const alerta = document.querySelector(`${sel} [role="alert"]`)
+      return alerta ? 'falhou' : false
+    }, painel, { timeout: TIMEOUT_MS, polling: POLLING_MS }).then((h) => h.jsonValue(), () => null)
+    if (!desfecho) falhar('guardar a chave não terminou nem com a confirmação nem com um aviso', (await textoDoPainel(page, painel)).replace(/\s+/g, ' ').slice(0, 300))
+    if (desfecho === 'guardada') {
+      if (!(await lerDitado())?.keyConfigured) falhar('a tela confirmou a chave, mas o main diz que ela não está configurada')
+      await exigirClique(page, painel, /^Remover$/, 'Remover a chave')
+      for (let k = 0; k < 30 && (await lerDitado())?.keyConfigured; k += 1) await page.waitForTimeout(100)
+      if ((await lerDitado())?.keyConfigured) falhar('Remover não apagou a chave no main')
+    }
+  } finally {
+    await page.evaluate(() => window.felixo.speech.clearKey()).catch(() => {})
+    await page.evaluate((c) => window.felixo.speech.saveConfig({ baseUrl: c.baseUrl, model: c.model, language: c.language }), original).catch(() => {})
+  }
+}
+
 /** Notas: criar blocos (nota e desenho), criar, editar e remover uma nota salva. */
 async function checarNotas(page) {
   await prepararJanela(page)
@@ -1199,6 +1396,15 @@ async function checarDetalheDoPrompt(page) {
     if ((await gravados()).length !== 0) falhar('Cancelar gravou o rascunho')
     // Salvar grava a versão personalizada.
     await preencher(page, `${painel} textarea`, 'texto salvo pelo detalhe')
+    // Escopo: escolhe um escopo diferente do atual, e a versão salva o leva junto.
+    const escopoAntes = (await page.evaluate((sel) => document.querySelector(`${sel} [role="combobox"][aria-label="Escopo"]`)?.textContent ?? '', painel)).trim()
+    await clicarSeletor(page, `${painel} [role="combobox"][aria-label="Escopo"]`, 'Escopo (detalhe)')
+    const escolhido = await page.evaluate(() => {
+      const opcao = [...document.querySelectorAll('[role="option"]')].find((o) => o.getAttribute('aria-selected') !== 'true')
+      opcao?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }))
+      return (opcao?.textContent ?? '').trim()
+    })
+    if (!escolhido) falhar('o menu de escopo do detalhe não ofereceu outra opção')
     await exigirClique(page, painel, /^Salvar$/, 'Salvar (detalhe do preset)')
     let lista = await gravados()
     for (let k = 0; k < 40 && lista[0]?.prompt !== 'texto salvo pelo detalhe'; k += 1) {
@@ -1206,6 +1412,11 @@ async function checarDetalheDoPrompt(page) {
       lista = await gravados()
     }
     if (lista[0]?.prompt !== 'texto salvo pelo detalhe') falhar('Salvar não gravou o texto editado no main', lista)
+    if (escolhido === escopoAntes || lista[0]?.scope === undefined) falhar('o escopo escolhido não difere do original ou não foi gravado', { escopoAntes, escolhido, gravado: lista[0]?.scope })
+    // Inserir: sem terminal aberto o painel responde na própria tela (copiado ou aviso), depois que o "Salvo" some.
+    await esperar(page, (sel) => [...document.querySelectorAll(`${sel} button`)].some((b) => /^Inserir$/.test((b.textContent ?? '').trim()) && !b.disabled), painel, 'o botão Inserir não voltou depois de salvar')
+    await exigirClique(page, painel, /^Inserir$/, 'Inserir (detalhe)')
+    await esperar(page, (sel) => [...document.querySelectorAll(`${sel} [role="status"], ${sel} [role="alert"]`)].some((p) => (p.textContent ?? '').trim().length > 0), painel, 'Inserir não mostrou o desfecho na tela')
     // Restaurar padrão descarta a versão personalizada e volta ao texto do preset.
     await exigirClique(page, painel, /Restaurar padrão/, 'Restaurar padrão')
     for (let k = 0; k < 40 && (await gravados()).length !== 0; k += 1) await page.waitForTimeout(150)
@@ -1254,6 +1465,37 @@ async function checarSkills(page) {
   await exigirClique(page, painel, /^Ocultas \(/, 'abrir as ocultas')
   await exigirClique(page, painel, /^(Restaurar|Voltar a enviar)/, 'restaurar a skill oculta')
   await esperar(page, ([sel, n]) => Number(/Ocultas \((\d+)\)/.exec(document.querySelector(sel)?.innerText ?? '')?.[1] ?? 0) === n, [painel, antes], 'restaurar não devolveu a skill')
+
+  // Ativar a skill própria: o painel mostra o desfecho (enviada, copiada ou falha) na linha dela.
+  const clicarNaLinha = (rotulo) =>
+    page.evaluate(([sel, n, r]) => {
+      const linha = [...document.querySelectorAll(`${sel} li`)].find((el) => (el.textContent ?? '').includes(n))
+      const botao = linha && [...linha.querySelectorAll('button')].find((b) => new RegExp(r).test((b.getAttribute('aria-label') || b.title || b.textContent || '').trim()))
+      botao?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }))
+      return Boolean(botao)
+    }, [painel, nome, rotulo])
+  if (!(await clicarNaLinha('^Ativar'))) falhar('o botão Ativar da skill própria não foi encontrado')
+  await esperar(page, (sel) => document.querySelector(`${sel} [data-felixo-delivery-feedback]`) !== null, painel, 'Ativar não mostrou o desfecho da ativação na linha da skill')
+
+  // Editar: a descrição nova é gravada na mesma skill.
+  if (!(await clicarNaLinha('^Editar'))) falhar('o botão Editar da skill própria não foi encontrado')
+  await preencher(page, `${painel} [placeholder="Descrição (opcional)"]`, 'descrição editada pelo smoke')
+  await exigirClique(page, painel, /^Salvar$/, 'Salvar a edição da skill')
+  for (let k = 0; k < 30 && (await proprias())[0]?.description !== 'descrição editada pelo smoke'; k += 1) await page.waitForTimeout(150)
+  const editadas = await proprias()
+  if (editadas.length !== 1 || editadas[0].description !== 'descrição editada pelo smoke') falhar('Editar não gravou a descrição nova na mesma skill', editadas)
+
+  // Skills de terceiros: o caixa inverte a configuração gravada e é devolvido ao fim.
+  const terceiros = () => page.evaluate(async () => { const r = await window.felixo.canvas.listAvailableSkills(); return (r?.communityEnabled ?? r?.catalog?.communityEnabled) })
+  const terceirosAntes = await terceiros()
+  const caixa = (sel) => `${sel} label input[type="checkbox"]`
+  try {
+    await page.evaluate((sel) => document.querySelector(sel)?.click(), caixa(painel))
+    for (let k = 0; k < 30 && (await terceiros()) === terceirosAntes; k += 1) await page.waitForTimeout(150)
+    if ((await terceiros()) === terceirosAntes) falhar('o caixa de skills de terceiros não mudou a configuração gravada', { antes: terceirosAntes, agora: await terceiros() })
+  } finally {
+    await page.evaluate((v) => window.felixo.canvas.setSkillsSettings({ communityEnabled: v }), terceirosAntes !== false).catch(() => {})
+  }
 
   // Remover a skill própria.
   const removida = await page.evaluate(([sel, n]) => {
@@ -1328,6 +1570,39 @@ async function checarProjetos(page) {
     await esperar(page, ([sel, n]) => (document.querySelector(sel)?.innerText ?? '').includes(n), [painel, nome], 'a pasta adicionada não entrou na lista')
   }
 
+  // Navegar: abrir o projeto lista a pasta, entrar numa subpasta e voltar; "Abrir ... no canvas" cria um bloco de arquivo.
+  const navegador = '[data-felixo-canvas-panel="project-browser"]'
+  const textoDosProjetos = async () => (await page.evaluate((sel) => document.querySelector(sel)?.innerText ?? '', navegador)).replace(/\s+/g, ' ')
+  const arquivoParaRodar = path.join(dir, 'rodar.js')
+  fs.writeFileSync(arquivoParaRodar, 'console.log("smoke")\n')
+  await exigirClique(page, painel, /^Abrir a pasta e rodar arquivos dela/, 'abrir o projeto')
+  const listou = await page.waitForFunction((sel) => /b\.txt/.test(document.querySelector(sel)?.innerText ?? '') && /src/.test(document.querySelector(sel)?.innerText ?? ''), navegador, { timeout: TIMEOUT_MS, polling: POLLING_MS }).then(() => true, () => false)
+  if (!listou) falhar('abrir o projeto não listou o conteúdo da pasta', (await textoDosProjetos()).slice(0, 500))
+  // Rodar um arquivo executável: o painel fecha e um terminal novo nasce no canvas (o arquivo de apoio sai no fim).
+  try {
+    await esperar(page, (sel) => /rodar\.js/.test(document.querySelector(sel)?.innerText ?? ''), navegador, 'o arquivo para rodar não apareceu na pasta')
+    const antesDoTerminal = await totalDeBlocos(page)
+    await exigirClique(page, navegador, /^Rodar rodar\.js$/, 'Rodar rodar.js')
+    await esperar(page, (n) => Number(/(\d+)\D*bloco/.exec(document.querySelector('.felixo-canvas-statusbar')?.textContent ?? '')?.[1]) === n + 1, antesDoTerminal, 'Rodar não criou o terminal no canvas')
+  } finally {
+    fs.rmSync(arquivoParaRodar, { force: true })
+  }
+  await exigirClique(page, 'nav.felixo-activity-rail', /^Projetos$/, 'Projetos (voltar à lista)')
+  await exigirClique(page, painel, /^Abrir a pasta e rodar arquivos dela/, 'abrir o projeto (navegar)')
+  await esperar(page, (sel) => /src/.test(document.querySelector(sel)?.innerText ?? ''), navegador, 'a pasta não listou a subpasta depois de rodar')
+  const blocosAntes2 = await totalDeBlocos(page)
+  await exigirClique(page, navegador, /^src/, 'entrar na subpasta src')
+  await esperar(page, (sel) => /a\.txt/.test(document.querySelector(sel)?.innerText ?? '') && !/b\.txt/.test(document.querySelector(sel)?.innerText ?? ''), navegador, 'entrar na subpasta não mostrou o conteúdo dela')
+  await exigirClique(page, navegador, /^Voltar para a pasta anterior$/, 'voltar para a pasta anterior')
+  await esperar(page, (sel) => /b\.txt/.test(document.querySelector(sel)?.innerText ?? ''), navegador, 'Voltar não devolveu a pasta do projeto')
+  await exigirClique(page, navegador, /^Abrir b\.txt no canvas$/, 'abrir b.txt no canvas')
+  await esperar(page, (n) => Number(/(\d+)\D*bloco/.exec(document.querySelector('.felixo-canvas-statusbar')?.textContent ?? '')?.[1]) === n + 1, blocosAntes2, `abrir o arquivo no canvas não criou o bloco: ${await textoDosProjetos()}`.slice(0, 300))
+  // Abrir o arquivo no canvas fecha o navegador de pastas: a lista de projetos volta pelo trilho.
+  await esperar(page, (sel) => document.querySelector(sel) === null, navegador, 'o navegador de pastas seguiu aberto depois de abrir o arquivo no canvas')
+  await exigirClique(page, 'nav.felixo-activity-rail', /^Projetos$/, 'Projetos (trilho)')
+  await page.locator(painel).waitFor({ state: 'visible', timeout: TIMEOUT_MS })
+  await esperar(page, ([sel, n]) => /Adicionar pasta/.test(document.querySelector(sel)?.innerText ?? '') && (document.querySelector(sel)?.innerText ?? '').includes(n), [painel, nome], 'a lista de projetos não voltou')
+
   // Remover em dois toques: o primeiro não remove (pede confirmação), o segundo remove.
   await exigirClique(page, painel, new RegExp(`^Remover ${nome}`), 'Remover (primeiro toque)')
   if (!(await listados())) falhar('o primeiro toque em Remover já removeu o projeto', await botoes())
@@ -1393,6 +1668,7 @@ const CHECKS_DOS_PAINEIS = [
   checarBuscaDeBlocos,
   checarProjetos,
   checarSourceControl,
+  checarDiffGrandeDoGit,
   checarPedidosDeEscrita,
   checarNotas,
   checarPrompts,
@@ -1407,12 +1683,15 @@ const CHECKS_DOS_PAINEIS = [
   checarCadeiaDeContas,
   checarConfiguracoes,
   checarRolagemEDitado,
+  checarMotorEChaveDoDitado,
   checarCarregamentoDosPaineis,
   checarModelos,
   checarOrquestrador,
   checarOrquestradorModoBloqueioETextos,
   checarPresetsEditarExportarImportar,
   checarTemaEPadraoDeQualidade,
+  checarPromptEditadoNaLinha,
+  checarEscopoAmploDoFetchAll,
 ]
 
 async function executarChecksDosPaineis(page) {
@@ -1431,12 +1710,15 @@ module.exports = {
   checarCadeiaDeContas,
   checarCarregamentoDosPaineis,
   checarDetalheDoPrompt,
+  checarDiffGrandeDoGit,
+  checarEscopoAmploDoFetchAll,
   checarExportarEImportarCanvas,
   checarFetchAll,
   checarFetchAllPedidosPushECommit,
   checarLimitesEUso,
   checarModelos,
   checarMolduraDosPaineis,
+  checarMotorEChaveDoDitado,
   checarNotas,
   checarOrquestrador,
   checarOrquestradorModoBloqueioETextos,
@@ -1444,6 +1726,7 @@ module.exports = {
   checarPresetsDeAgente,
   checarPresetsEditarExportarImportar,
   checarProjetos,
+  checarPromptEditadoNaLinha,
   checarPrompts,
   checarSkills,
   checarTemaEPadraoDeQualidade,

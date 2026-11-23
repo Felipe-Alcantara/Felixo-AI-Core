@@ -193,11 +193,6 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
     ],
     gaps: [
       {
-        what: 'Adicionar pasta (pelo seletor trocado na automação) e remover em dois toques são exercitados (checarProjetos); navegar pelas pastas e rodar/abrir arquivo só têm teste das funções puras e dos handlers.',
-        risk: 'médio',
-        task: NOVA_SMOKE,
-      },
-      {
         what: 'ProjectsPanel.tsx:133: sem repositório na pasta escolhida, o nome sai de folder.split("/"); no Windows o caminho (realpath) usa "\\" e o projeto é registrado com o caminho inteiro como nome',
         risk: 'baixo',
         task: '3ec91f95-497e-8103-b360-c1979d6992f4',
@@ -441,6 +436,7 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
       'FelixoSelect',
     ],
     tests: [
+      { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarPromptEditadoNaLinha' },
       { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarPrompts' },
       { file: 'src/features/shared/ipc/ipc-failures.test.ts' },
       { file: SMOKE_PROMPTS, check: 'catalogo' },
@@ -472,11 +468,6 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
         what: 'Inserir e Enviar conjunto só foram clicados com a CLI roteirizada do smoke, não no app empacotado com CLI real',
         risk: 'médio',
         task: TASK_PROMPT_EMPACOTADO,
-      },
-      {
-        what: 'Novo prompt/Criar (gravado) e o filtro são exercitados (checarPrompts); edição inline com autosave, troca de escopo e Remover pela linha só têm teste das funções puras.',
-        risk: 'médio',
-        task: NOVA_SMOKE,
       },
     ],
     overlap: `${PANEL_OVERLAP}. Porte xl (o mais largo); disputa largura com a gaveta fixada e fica sob a lista Elementos em janela pequena`,
@@ -607,11 +598,6 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
         what: 'mesma disputa do Prompts: com a gaveta aberta e sem fixá-la, clicar na sidebar fecha a gaveta; a lista Elementos cobre parte do painel em janela pequena',
         risk: 'médio',
         task: TASK_GAVETA_PROMPTS,
-      },
-      {
-        what: 'Criar skill própria (gravada), ocultar/restaurar da biblioteca e remover a própria são exercitados (checarSkills); Ativar de skill própria, editar e o checkbox de terceiros seguem sem teste de interface.',
-        risk: 'médio',
-        task: NOVA_SMOKE,
       },
     ],
     overlap: `${PANEL_OVERLAP}. Porte sm; a lista do sistema tem max-h-40 com rolagem interna e respiro para o anel de foco`,
@@ -838,11 +824,6 @@ export const workspaceToolSurfaces: InventoryElement[] = [
       { file: 'src/features/onboarding/onboarding-catalog.test.ts' },
     ],
     gaps: [
-      {
-        what: 'Carregando (módulo lento), o erro (módulo recusado) e Recarregar app são exercitados com o painel Modelos (checarCarregamentoDosPaineis); os demais painéis usam o mesmo hospedeiro e não são repetidos',
-        risk: 'baixo',
-        task: NOVA_SMOKE,
-      },
     ],
     overlap:
       'sem superfície própria além dos fallbacks, que usam a moldura CanvasPanel (porte sm, z-20/z-30). Fechar devolve o foco no próximo quadro: Busca → [data-canvas-tool-trigger="search"]; demais → menu de ferramentas ou botão do rail que não esteja aria-hidden/inert. Trocar de ferramenta desmonta o painel anterior na hora, sem animação de saída',
@@ -970,7 +951,7 @@ export const workspaceToolSurfaces: InventoryElement[] = [
     ],
     gaps: [
       {
-        what: 'Exportar canvas (arquivo gravado com os blocos) e Importar canvas (confirmação aceita, canvas devolvido ao exportado) são exercitados (checarExportarEImportarCanvas); "Exportar com a saída dos terminais", a recusa da confirmação e o canvas travado seguem sem teste de interface',
+        what: 'Exportar canvas (arquivo gravado com os blocos) e Importar canvas (confirmação aceita, canvas devolvido ao exportado) são exercitados (checarExportarEImportarCanvas); "Exportar com a saída dos terminais" e a recusa da confirmação também; só o canvas travado segue sem teste de interface',
         risk: 'médio',
         task: NOVA_SMOKE,
       },
@@ -1048,11 +1029,6 @@ export const workspaceToolSurfaces: InventoryElement[] = [
       { file: 'src/features/canvas/services/prompt-overrides.test.ts' },
     ],
     gaps: [
-      {
-        what: 'Ver, editar, Cancelar, Salvar e Restaurar padrão são exercitados (checarDetalheDoPrompt); inserir no terminal pelo detalhe e a troca de escopo seguem sem teste de interface',
-        risk: 'médio',
-        task: NOVA_SMOKE,
-      },
     ],
     overlap:
       'dentro da moldura do PromptsPanel (porte xl, z-20/z-30); rodapé de ações colado à borda inferior (-mb-3); a textarea (min-h-80) rola dentro do painel',
@@ -1196,13 +1172,9 @@ export const workspaceToolSurfaces: InventoryElement[] = [
     persistence: ['nenhuma'],
     ipc: ['git:get-file-diff', 'git:read-file'],
     dependsOn: ['GitPanel (selected, diff, fileContent, readerLoading)', 'parseDiff (git-diff)'],
-    tests: [{ file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarSourceControl' }, { file: `${TOOLS}/git-diff.test.ts` }],
+    tests: [
+      { file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarDiffGrandeDoGit' },{ file: 'scripts/canvas-smoke-paineis.cjs', check: 'checarSourceControl' }, { file: `${TOOLS}/git-diff.test.ts` }],
     gaps: [
-      {
-        what: 'O diff de um arquivo alterado e o conteúdo de um arquivo limpo são exibidos e conferidos (checarSourceControl); um diff grande (até 1 MB, GIT_COMMAND_MAX_BUFFER) segue virando uma tabela inteira sem virtualização e sem teste de desempenho.',
-        risk: 'baixo',
-        task: NOVA_SMOKE,
-      },
     ],
     overlap: 'terceira coluna do Source Control; rola por dentro (felixo-scm-diff-body); sem camada própria',
   },
@@ -1232,11 +1204,6 @@ export const workspaceToolSurfaces: InventoryElement[] = [
       { file: 'scripts/bundle-load-benchmark.test.cjs' },
     ],
     gaps: [
-      {
-        what: 'só o chunk do Fetch All é observado (bundle-load-benchmark); a falha de um chunk é forçada só no painel Modelos (checarCarregamentoDosPaineis), não em cada um dos demais',
-        risk: 'baixo',
-        task: NOVA_SMOKE,
-      },
     ],
     overlap: 'sem superfície própria: os estados aparecem na moldura CanvasPanel do hospedeiro',
   },

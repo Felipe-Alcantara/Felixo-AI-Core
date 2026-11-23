@@ -570,7 +570,7 @@ jobs:
         run: npm ci
 
       - name: Test Canvas PR smoke (interações + oclusão + acessibilidade)
-        timeout-minutes: 15
+        timeout-minutes: 25
         run: xvfb-run -a npm run test:canvas-smoke
 
       # Sempre: relatório (versão, commit, sistema, tentativas por sessão e o

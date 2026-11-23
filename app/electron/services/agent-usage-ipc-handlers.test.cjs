@@ -365,3 +365,40 @@ test('claude-cost-history lê as pastas informadas, limita o período e devolve 
     fs.rmSync(root, { recursive: true, force: true })
   }
 })
+
+test('ligar e desligar a coleta do Claude chama a status line injetada, devolve o estado novo e traduz a falha sem vazar detalhe', async () => {
+  const calls = []
+  let ligada = false
+  const statusline = {
+    status: () => ({ installed: ligada }),
+    install: () => {
+      calls.push('install')
+      ligada = true
+      return { ok: true }
+    },
+    uninstall: () => {
+      calls.push('uninstall')
+      ligada = false
+      return { ok: true }
+    },
+  }
+  const vazio = async () => ({ ok: true, providers: [], accounts: [] })
+  registerAgentUsageIpcHandlers({
+    service: { list: vazio, refresh: vazio, refreshAccount: vazio, addAccount: vazio, removeAccount: vazio, consumeResetCredit: vazio },
+    statusline,
+    createSessionCapture: semCaptura,
+  })
+
+  assert.deepEqual(await handlers.get('agent-usage:claude-statusline-status')(null), { ok: true, installed: false })
+  assert.deepEqual(await handlers.get('agent-usage:enable-claude-statusline')(null), { ok: true, installed: true })
+  assert.deepEqual(await handlers.get('agent-usage:disable-claude-statusline')(null), { ok: true, installed: false })
+  assert.deepEqual(calls, ['install', 'uninstall'])
+
+  // Uma falha do serviço vira resposta de erro, não exceção para o renderer.
+  statusline.install = () => {
+    throw new Error('sem permissão em /caminho/privado')
+  }
+  const falha = await handlers.get('agent-usage:enable-claude-statusline')(null)
+  assert.equal(falha.ok, false)
+  assert.equal(typeof falha.message, 'string')
+})
