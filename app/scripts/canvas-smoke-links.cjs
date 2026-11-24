@@ -978,6 +978,21 @@ function criarSessaoDeLinks(deps) {
 
   const blocoWeb = () => page.locator(`.react-flow__node[data-id="${WEBPAGE_ID}"]`)
 
+  /** Espera a caixa do elemento parar de mudar (a mesma medida em três leituras, 120 ms entre elas). */
+  async function esperarCaixaParada(passo, locator) {
+    const inicio = Date.now()
+    let anterior = null
+    let iguais = 0
+    while (Date.now() - inicio < timeout) {
+      const atual = JSON.stringify(await locator.boundingBox())
+      iguais = atual === anterior ? iguais + 1 : 0
+      if (iguais >= 2) return
+      anterior = atual
+      await pausa(120)
+    }
+    falhar(passo, `a caixa do elemento não parou de mudar em ${timeout} ms`)
+  }
+
   async function paginaWebMenuDeLink(paginaUrl) {
     const passo = 'L10 Página Web: link dentro da página'
     await focar(WEBPAGE_TITLE)
@@ -989,6 +1004,18 @@ function criarSessaoDeLinks(deps) {
         return false
       }
     }, { id: WEBPAGE_ID, url: paginaUrl })
+    // `getURL()` só responde depois do `dom-ready`; o clique direito precisa da página inteira montada (os links
+    // existem e o documento terminou de carregar). Sob carga a janela entre os dois já foi vista (L10 no pacote, 01/10/2026).
+    await esperar(passo, 'o documento da página terminar de carregar', async (params) => {
+      const webview = document.querySelector(`.react-flow__node[data-id="${params.id}"] webview`)
+      try {
+        return (await webview?.executeJavaScript?.("document.readyState === 'complete' && document.querySelectorAll('a[href]').length >= 3")) === true
+      } catch {
+        return false
+      }
+    }, { id: WEBPAGE_ID })
+    // A câmera anda em 240 ms (mais sob carga): medir o webview no meio da animação aponta o clique para fora do link.
+    await esperarCaixaParada(passo, blocoWeb().locator('webview'))
 
     const box = await blocoWeb().locator('webview').boundingBox()
     // Cada link da página ocupa uma faixa da largura toda. O ponto é um da
