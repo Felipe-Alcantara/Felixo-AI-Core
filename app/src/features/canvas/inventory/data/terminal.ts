@@ -161,13 +161,9 @@ export const terminalSurfaces: InventoryElement[] = [
       { file: SMOKE_PROMPTS, check: 'criarSessaoDePrompts' },
       { file: SMOKE_LINKS, check: 'criarSessaoDeLinks' },
       { file: SMOKE_CONTAS, check: 'criarSessaoDaCadeia' },
+      { file: 'src/features/canvas/components/TerminalDrawer.test.tsx' },
     ],
     gaps: [
-      {
-        what: 'Recolher, Maximizar, Histórico arquivado e Ver arquivo em modo renderizado não são clicados em nenhum teste (o smoke só abre, fixa, passa responsabilidade e fecha).',
-        risk: 'médio',
-        task: '3ec91f95-497e-81e8-8f18-e2a529b0568e',
-      },
       {
         what: 'Reiniciar e os botões da faixa de retomada na gaveta não têm teste de clique; o store falso do smoke A não reproduz a faixa.',
         risk: 'médio',
@@ -227,12 +223,13 @@ export const terminalSurfaces: InventoryElement[] = [
       { file: 'src/features/canvas/terminal/terminal-output-archive.test.ts' },
       { file: 'electron/services/pty-output-archive.test.cjs' },
       { file: 'electron/services/pty-ipc-handlers.test.cjs' },
+      { file: 'src/features/canvas/components/TerminalArchivePanel.test.tsx' },
     ],
     gaps: [
       {
-        what: 'Nenhum smoke abre o painel, clica em Carregar mais nem confere o xterm de leitura; a interface foi conferida só no app isolado (devtools).',
-        risk: 'médio',
-        task: '3ec91f95-497e-81e8-8f18-e2a529b0568e',
+        what: 'O painel é testado com o xterm e a ponte simulados (abrir pela cauda, Carregar mais até o começo, falha de leitura, Voltar ao terminal) e a gaveta o monta e o fecha; o xterm de verdade renderizando uma saída acima de 256 KB num PTY real só foi visto no app isolado (devtools).',
+        risk: 'baixo',
+        task: '42291f95-497e-81b6-b811-f52c43831eb6',
       },
     ],
     overlap: 'Absoluto (inset-0, z-10) dentro da área do terminal na gaveta, por cima do xterm, do trilho do Claude e da Leitura; o xterm vivo fica por baixo, inert e do mesmo tamanho (a CLI não redesenha).',
@@ -409,13 +406,9 @@ export const terminalSurfaces: InventoryElement[] = [
       { file: 'src/features/canvas/services/agent-session.test.ts' },
       { file: 'src/features/canvas/services/terminal-run-registry.test.ts' },
       { file: 'scripts/canvas-smoke-sobreposicoes.cjs', check: 'checarDetalhesDoTerminalComFerramenta' },
+      { file: 'src/features/canvas/components/TerminalDetailsPanel.test.tsx' },
     ],
     gaps: [
-      {
-        what: 'Nenhum smoke abre o painel: Esquecer associação, Copiar e a troca de modo da conta só têm teste das funções puras.',
-        risk: 'médio',
-        task: '3ec91f95-497e-81e8-8f18-e2a529b0568e',
-      },
       {
         what: 'O painel é um CanvasPanel (absolute top-16) aberto fora de activeTool: com uma ferramenta aberta, os dois ocupam o mesmo lugar e só o focus-within z-30 decide quem fica por cima. Medido com Buscar em 768 e 1280 px: a sobreposição é de 239 × 109 px e de 282 × 109 px (canvas-smoke-sobreposicoes.cjs → checarDetalhesDoTerminalComFerramenta). Defeito conhecido: qual fica por cima, ou se os detalhes fecham, é decisão do Felipe.',
         risk: 'médio',
@@ -507,12 +500,13 @@ export const terminalSurfaces: InventoryElement[] = [
       { file: 'src/features/canvas/services/agent-launch-preferences.test.ts' },
       { file: SMOKE_CONTAS, check: 'criarSessaoDaCadeia' },
       { file: SMOKE_TUTORIAL, check: 'criarCenariosDoTutorial' },
+      { file: 'src/features/canvas/components/TerminalMenu.test.tsx' },
     ],
     gaps: [
       {
-        what: 'A fila (adicionar, remover, esvaziar, iniciar N) não é exercitada por nenhum teste.',
-        risk: 'médio',
-        task: '3ec91f95-497e-81e8-8f18-e2a529b0568e',
+        what: 'A fila (adicionar, renomear, remover, esvaziar, iniciar N) é exercitada; o descarte das propostas da cadeia dos itens que saem da fila (Remover, Esvaziar) e o Iniciar com itens "Automática (cadeia)" não têm teste.',
+        risk: 'baixo',
+        task: '42291f95-497e-81b6-b811-f52c43831eb6',
       },
     ],
     overlap: 'Dentro da sidebar (z 26); o flyout é inline (empurra a seção Criar, não flutua). Os menus do FelixoSelect abrem em portal z 1000.',
@@ -679,13 +673,10 @@ export const terminalSurfaces: InventoryElement[] = [
       { file: 'src/features/canvas/services/agent-launch-options.test.ts' },
       { file: 'src/features/canvas/services/openia-launch-config.test.ts' },
       { file: SMOKE_CONTAS, check: 'criarSessaoDaCadeia' },
+      { file: 'src/features/canvas/components/AgentConfigFields.test.tsx' },
+      { file: 'src/features/canvas/components/AgentConfigFields.cadeia.test.tsx' },
     ],
     gaps: [
-      {
-        what: 'Só Agente e Conta são exercitados (sessão C); Openia, modelo, esforço, arquivo de planejamento, projeto, remover, criar, tentar de novo e recalcular não têm teste de interface.',
-        risk: 'médio',
-        task: '3ec91f95-497e-81e8-8f18-e2a529b0568e',
-      },
       {
         what: 'Cada prévia de "Automática (cadeia)" (inclusive Recalcular) cria uma proposta e uma checagem de login no main.',
         risk: 'médio',
@@ -741,13 +732,8 @@ export const terminalSurfaces: InventoryElement[] = [
     ],
     ipc: ['agent-presets:list', 'agent-presets:save', 'agent-presets:delete'],
     dependsOn: ['useAgentConfig', 'useAgentPresets', 'FelixoSelect', 'agent-preset'],
-    tests: [{ file: 'src/features/shared/ipc/ipc-failures.test.ts' }, { file: 'src/features/canvas/services/agent-preset.test.ts' }],
+    tests: [{ file: 'src/features/shared/ipc/ipc-failures.test.ts' }, { file: 'src/features/canvas/services/agent-preset.test.ts' }, { file: 'src/features/canvas/components/AgentPresetFields.test.tsx' } ],
     gaps: [
-      {
-        what: 'Aplicar, salvar, duplicar e excluir preset não têm teste de interface; Excluir apaga do SQLite sem confirmação.',
-        risk: 'baixo',
-        task: '3ec91f95-497e-81e8-8f18-e2a529b0568e',
-      },
     ],
     overlap: 'Sem camada própria: dentro dos campos do agente (sidebar ou HandoffDialog); o select abre em portal z 1000.',
   },
@@ -792,17 +778,13 @@ export const terminalSurfaces: InventoryElement[] = [
       { file: SMOKE_TUTORIAL, check: 'criarCenariosDoTutorial' },
       { file: SMOKE_TUTORIAL, check: 'conferirPerguntaPrendeOFoco' },
       { file: 'scripts/canvas-smoke-sobreposicoes.cjs', check: 'checarPerguntaDoAgenteSobDialogos' },
+      { file: 'src/features/canvas/components/AgentQuestionDialog.test.tsx' },
     ],
     gaps: [
       {
         what: 'Mesma camada z 60 do HandoffDialog e do AccountSwitchDialog; pela ordem do DOM a pergunta fica por baixo deles. Medido em 1280 px: com o diálogo de passagem aberto, a pergunta do agente fica coberta pelo "Passar responsabilidade" (canvas-smoke-sobreposicoes.cjs → checarPerguntaDoAgenteSobDialogos). Defeito conhecido. O AccountSwitchDialog e as teclas 1–4 por baixo dos diálogos: não medidos.',
         risk: 'médio',
         task: '3ec91f95-497e-8112-82f9-fd1b86e3ec7d',
-      },
-      {
-        what: 'O smoke responde pelo teclado; o clique nas opções e em Dispensar não é exercitado.',
-        risk: 'baixo',
-        task: '3ec91f95-497e-81e8-8f18-e2a529b0568e',
       },
     ],
     overlap: 'fixed inset-0 z-60 com fundo bg-black/50, montado no CanvasView; cobre canvas, gaveta e painéis; o card do tutorial fica inert por baixo. Pega o foco no painel (tabIndex -1), prende o Tab, é nokey e camada flutuante (clicar nele não fecha a gaveta solta). Não redimensiona (bloqueante, max-w-md).',
@@ -933,12 +915,13 @@ export const terminalSurfaces: InventoryElement[] = [
       { file: 'src/features/shared/dialog/dialog-sizing.test.ts' },
       { file: SMOKE, check: 'checarElementosAbertosEmViewportsCriticos' },
       { file: SMOKE_TUTORIAL, check: 'criarCenariosDoTutorial' },
+      { file: 'src/features/canvas/components/HandoffDialog.test.tsx' },
     ],
     gaps: [
       {
-        what: 'Os smokes só abrem o diálogo e fecham com Esc: confirmar a passagem (bloco novo + PTY) nunca é exercitado ponta a ponta.',
-        risk: 'médio',
-        task: '3ec91f95-497e-81e8-8f18-e2a529b0568e',
+        what: 'Confirmar, Cancelar, o ×, Esc, o erro de criação e o registro da troca por motivo detectado são testados; o bloco novo e o PTY nascendo ponta a ponta (a criação é um callback no teste) só aparecem num app rodando.',
+        risk: 'baixo',
+        task: '42291f95-497e-81b6-b811-f52c43831eb6',
       },
       {
         what: 'Com o Claude na tela alternativa só a tela vai como contexto (avisado ao usuário e ao agente); a conversa inteira exige ler o arquivo da sessão do Claude (.jsonl) em vez do terminal.',
@@ -1074,12 +1057,13 @@ export const terminalSurfaces: InventoryElement[] = [
       { file: 'src/features/canvas/terminal/terminal-screen-state.test.ts' },
       { file: 'electron/services/account-chain-ipc-handlers.test.cjs' },
       { file: SMOKE_CONTAS, check: 'criarSessaoDaCadeia' },
+      { file: 'src/features/canvas/components/AccountSwitchDialog.test.tsx' },
     ],
     gaps: [
       {
-        what: 'Conferir login, Configurar cadeia, Fechar, Medir agora, Ir para o terminal antigo, Cancelar a continuação automática, Fixar e Não era limite não são clicados em nenhum teste (a sessão C confirma e usa Esc). A caixa "Yolo no bloco novo" só aparece com destino em outro provedor, que a sessão C (só contas Codex) não tem: ela é coberta pelo HTML renderizado e pelo modelo, não por clique.',
+        what: 'Todos os botões, a caixa "Yolo no bloco novo" (destino de outro provedor), o reconhecimento da origem ativa e "Cancelar a continuação automática" são clicados em teste; ficam sem teste a faixa "Possível limite… Tratar como limite?" (TerminalNode), "Configurar cadeia" com o painel Limites e uso já aberto (trocar para a aba Cadeia e levar o foco) e o segundo horário da espera.',
         risk: 'médio',
-        task: '3ec91f95-497e-81e8-8f18-e2a529b0568e',
+        task: '42291f95-497e-81b6-b811-f52c43831eb6',
       },
       {
         what: 'Não bloqueantes de acessibilidade da interface da cadeia.',
@@ -1148,13 +1132,9 @@ export const terminalSurfaces: InventoryElement[] = [
       { file: 'electron/services/agent-browser-ipc-handlers.test.cjs' },
       { file: 'src/features/shared/focus/floating-layer.test.ts' },
       { file: SMOKE_LINKS, check: 'criarSessaoDeLinks' },
+      { file: 'src/features/canvas/components/AgentBrowserRequestCard.test.tsx' },
     ],
     gaps: [
-      {
-        what: 'Abrir no navegador e Recusar todos não são clicados no smoke (o caminho externo só é testado no handler do main).',
-        risk: 'baixo',
-        task: '3ec91f95-497e-81e8-8f18-e2a529b0568e',
-      },
     ],
     overlap: 'fixed inset-x-0 top-4 z-50, centralizado (max-w-md), pointer-events só no cartão; acima da topbar (18), da gaveta (20/30) e dos painéis, abaixo dos modais (60). data-felixo-floating-layer: clicar nele não fecha a gaveta. Não rouba o foco.',
   },
@@ -1399,11 +1379,6 @@ export const terminalSurfaces: InventoryElement[] = [
       { file: SMOKE_CONTAS, check: 'criarSessaoDaCadeia' },
     ],
     gaps: [
-      {
-        what: 'A saída silenciosa ("encerrou sem produzir saída"), a ponte ausente e store.copy não têm teste no store.',
-        risk: 'médio',
-        task: '3ec91f95-497e-81e8-8f18-e2a529b0568e',
-      },
       {
         what: 'Falha do pty:write do texto inicial é engolida (.catch vazio).',
         risk: 'médio',

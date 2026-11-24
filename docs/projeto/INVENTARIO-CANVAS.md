@@ -32,7 +32,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **Elementos:** 115 (10 blocos, 17 ferramentas, 88 outras superfícies)
 - **Controles:** 439, dos quais 92 com teste específico
 - **Elementos sem nenhum teste:** 0
-- **Lacunas:** 130 (alto 1, médio 80, baixo 49), em 72 tasks
+- **Lacunas:** 123 (alto 1, médio 73, baixo 49), em 72 tasks
 
 ## Moldura do canvas
 
@@ -899,7 +899,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `pty:spawn`, `pty:kill`, `pty:resize`, `pty:archive-read`
 - **Depende de:** `TerminalSessionProvider`, `useTerminalSessions`, `useSessionSnapshot`, `useCanvasSurfaces`, `useExitAnimation`, `terminal-drawer-pin`, `attachTerminalFitLifecycle`, `visibleTerminalResumeBanner`, `resolveOpenEditorFile`, `CanvasView.relaunchTerminal`, `CanvasView.handleResumeAction`, `TerminalArchivePanel (lazy)`
 - **Sobreposição:** Coluna encostada à direita, relative z-20 (focus-within z-30), altura total; a largura (mínimo 440, recolhida 44) é negociada com o painel e o inspector por splitHorizontalSpace, então empurra o canvas em vez de cobri-lo. Fica abaixo do cartão de pedido de página e dos toasts (z 50) e dos modais (z 60); clicar numa camada flutuante (data-felixo-floating-layer) não conta como clique fora.
-- **Testes:** `src/features/canvas/components/terminal-drawer-pin.test.ts`, `src/features/canvas/components/terminal-drawer-panes.test.ts`, `src/features/canvas/components/terminal-fit-lifecycle.test.ts`, `src/features/canvas/components/terminal-open-file.test.ts`, `src/features/canvas/services/canvas-surfaces.test.ts`, `src/features/shared/focus/floating-layer.test.ts`, `scripts/canvas-smoke.cjs` → `checarInteracoes`, `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos`, `scripts/canvas-smoke-prompts.cjs` → `criarSessaoDePrompts`, `scripts/canvas-smoke-links.cjs` → `criarSessaoDeLinks`, `scripts/canvas-smoke-contas.cjs` → `criarSessaoDaCadeia`
+- **Testes:** `src/features/canvas/components/terminal-drawer-pin.test.ts`, `src/features/canvas/components/terminal-drawer-panes.test.ts`, `src/features/canvas/components/terminal-fit-lifecycle.test.ts`, `src/features/canvas/components/terminal-open-file.test.ts`, `src/features/canvas/services/canvas-surfaces.test.ts`, `src/features/shared/focus/floating-layer.test.ts`, `scripts/canvas-smoke.cjs` → `checarInteracoes`, `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos`, `scripts/canvas-smoke-prompts.cjs` → `criarSessaoDePrompts`, `scripts/canvas-smoke-links.cjs` → `criarSessaoDeLinks`, `scripts/canvas-smoke-contas.cjs` → `criarSessaoDaCadeia`, `src/features/canvas/components/TerminalDrawer.test.tsx`
 
 | Estado | Quando |
 | --- | --- |
@@ -928,7 +928,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Recolher, Maximizar, Histórico arquivado e Ver arquivo em modo renderizado não são clicados em nenhum teste (o smoke só abre, fixa, passa responsabilidade e fecha). | médio | `3ec91f95-497e-81e8-8f18-e2a529b0568e` |
 | Reiniciar e os botões da faixa de retomada na gaveta não têm teste de clique; o store falso do smoke A não reproduz a faixa. | médio | `3eb91f95-497e-811b-8eb0-e620c6f37e21` |
 | Desafixada, clicar num painel da sidebar (Prompts, Skills) fecha a gaveta antes de o texto chegar ao terminal. | médio | `3eb91f95-497e-814a-8b2c-e471e09f6ff3` |
 | Com a gaveta aberta, a barra de status encolhe até 160 px e quebra. | médio | `3e791f95-497e-81bd-8e8c-de6f9e16cec5` |
@@ -940,7 +939,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `pty:archive-read`
 - **Depende de:** `terminal-output-archive (páginas e janela)`, `pty-session-id (canvas:<id>)`, `TerminalDrawer (abre e fecha)`
 - **Sobreposição:** Absoluto (inset-0, z-10) dentro da área do terminal na gaveta, por cima do xterm, do trilho do Claude e da Leitura; o xterm vivo fica por baixo, inert e do mesmo tamanho (a CLI não redesenha).
-- **Testes:** `src/features/canvas/terminal/terminal-output-archive.test.ts`, `electron/services/pty-output-archive.test.cjs`, `electron/services/pty-ipc-handlers.test.cjs`
+- **Testes:** `src/features/canvas/terminal/terminal-output-archive.test.ts`, `electron/services/pty-output-archive.test.cjs`, `electron/services/pty-ipc-handlers.test.cjs`, `src/features/canvas/components/TerminalArchivePanel.test.tsx`
 
 | Estado | Quando |
 | --- | --- |
@@ -957,7 +956,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Nenhum smoke abre o painel, clica em Carregar mais nem confere o xterm de leitura; a interface foi conferida só no app isolado (devtools). | médio | `3ec91f95-497e-81e8-8f18-e2a529b0568e` |
+| O painel é testado com o xterm e a ponte simulados (abrir pela cauda, Carregar mais até o começo, falha de leitura, Voltar ao terminal) e a gaveta o monta e o fecha; o xterm de verdade renderizando uma saída acima de 256 KB num PTY real só foi visto no app isolado (devtools). | baixo | `42291f95-497e-81b6-b811-f52c43831eb6` |
 
 ### Trilho de rolagem do Claude Code
 
@@ -1032,7 +1031,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `account-chain:set-session-mode`, `pty:cli-versions`
 - **Depende de:** `CanvasPanel`, `useSessionMetadata`, `useAccountChain`, `useCliAccountLabel`, `changeSessionAccountMode`, `explainAgentResume`, `AccountSwitchHistory`, `CanvasView.forgetAgentSession`, `terminal-run-registry`
 - **Sobreposição:** CanvasPanel absolute top-16 z-20 (focus-within z-30), à direita da sidebar; disputa a largura pelo coordenador de superfícies, mas não a posição com o painel de ferramenta aberto ao mesmo tempo.
-- **Testes:** `src/features/shared/ipc/ipc-failures.test.ts`, `src/features/canvas/services/account-chain-client.test.ts`, `src/features/canvas/services/account-chain-view.test.ts`, `src/features/canvas/terminal/session-metadata.test.ts`, `src/features/canvas/services/agent-session.test.ts`, `src/features/canvas/services/terminal-run-registry.test.ts`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarDetalhesDoTerminalComFerramenta`
+- **Testes:** `src/features/shared/ipc/ipc-failures.test.ts`, `src/features/canvas/services/account-chain-client.test.ts`, `src/features/canvas/services/account-chain-view.test.ts`, `src/features/canvas/terminal/session-metadata.test.ts`, `src/features/canvas/services/agent-session.test.ts`, `src/features/canvas/services/terminal-run-registry.test.ts`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarDetalhesDoTerminalComFerramenta`, `src/features/canvas/components/TerminalDetailsPanel.test.tsx`
 
 | Estado | Quando |
 | --- | --- |
@@ -1049,7 +1048,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Nenhum smoke abre o painel: Esquecer associação, Copiar e a troca de modo da conta só têm teste das funções puras. | médio | `3ec91f95-497e-81e8-8f18-e2a529b0568e` |
 | O painel é um CanvasPanel (absolute top-16) aberto fora de activeTool: com uma ferramenta aberta, os dois ocupam o mesmo lugar e só o focus-within z-30 decide quem fica por cima. Medido com Buscar em 768 e 1280 px: a sobreposição é de 239 × 109 px e de 282 × 109 px (canvas-smoke-sobreposicoes.cjs → checarDetalhesDoTerminalComFerramenta). Defeito conhecido: qual fica por cima, ou se os detalhes fecham, é decisão do Felipe. | médio | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
 
 ### Menu Agente (novo terminal)
@@ -1059,7 +1057,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `account-chain:preview-launch`, `account-chain:discard-preview`, `account-chain:confirm`, `cli-accounts:list`, `pty:spawn`
 - **Depende de:** `useAgentConfig`, `AgentConfigFields`, `isFelixoPopoverTarget`, `CanvasToolbar (onAdd, onAddMany, onAddFolder)`
 - **Sobreposição:** Dentro da sidebar (z 26); o flyout é inline (empurra a seção Criar, não flutua). Os menus do FelixoSelect abrem em portal z 1000.
-- **Testes:** `src/features/shared/ipc/ipc-failures.test.ts`, `src/features/canvas/services/agent-launch-preferences.test.ts`, `scripts/canvas-smoke-contas.cjs` → `criarSessaoDaCadeia`, `scripts/canvas-smoke-onboarding.cjs` → `criarCenariosDoTutorial`
+- **Testes:** `src/features/shared/ipc/ipc-failures.test.ts`, `src/features/canvas/services/agent-launch-preferences.test.ts`, `scripts/canvas-smoke-contas.cjs` → `criarSessaoDaCadeia`, `scripts/canvas-smoke-onboarding.cjs` → `criarCenariosDoTutorial`, `src/features/canvas/components/TerminalMenu.test.tsx`
 
 | Estado | Quando |
 | --- | --- |
@@ -1082,7 +1080,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| A fila (adicionar, remover, esvaziar, iniciar N) não é exercitada por nenhum teste. | médio | `3ec91f95-497e-81e8-8f18-e2a529b0568e` |
+| A fila (adicionar, renomear, remover, esvaziar, iniciar N) é exercitada; o descarte das propostas da cadeia dos itens que saem da fila (Remover, Esvaziar) e o Iniciar com itens "Automática (cadeia)" não têm teste. | baixo | `42291f95-497e-81b6-b811-f52c43831eb6` |
 
 ### Campos de configuração do agente
 
@@ -1091,7 +1089,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `cli-accounts:list`, `cli-accounts:create`, `cli-accounts:remove`, `cli-accounts:set-secret`, `openia:list-interfaces`, `openia:list-models`, `openia:key-status`, `openia:set-key`, `agent-models:get`, `agent-models:refresh`, `account-chain:preview-launch`, `projects:pick-folder`, `projects:detect-repos`
 - **Depende de:** `useAgentConfig`, `useAgentModelCatalog`, `useAgentPresets`, `useAccountChain`, `FelixoSelect`, `AgentPresetFields`, `agent-launch-preferences`, `useCanvasProjects`
 - **Sobreposição:** Sem camada própria: vive no flyout do menu Agente (sidebar, z 26) e dentro do HandoffDialog (z 60). Os menus do FelixoSelect abrem em portal z 1000, acima de qualquer modal.
-- **Testes:** `src/features/shared/ipc/ipc-failures-2.test.ts`, `src/features/canvas/services/agent-launch-preferences.test.ts`, `src/features/canvas/services/agent-account-selection.test.ts`, `src/features/canvas/services/account-removal.test.ts`, `src/features/canvas/services/agent-model-overlay.test.ts`, `src/features/canvas/services/agent-launch-options.test.ts`, `src/features/canvas/services/openia-launch-config.test.ts`, `scripts/canvas-smoke-contas.cjs` → `criarSessaoDaCadeia`
+- **Testes:** `src/features/shared/ipc/ipc-failures-2.test.ts`, `src/features/canvas/services/agent-launch-preferences.test.ts`, `src/features/canvas/services/agent-account-selection.test.ts`, `src/features/canvas/services/account-removal.test.ts`, `src/features/canvas/services/agent-model-overlay.test.ts`, `src/features/canvas/services/agent-launch-options.test.ts`, `src/features/canvas/services/openia-launch-config.test.ts`, `scripts/canvas-smoke-contas.cjs` → `criarSessaoDaCadeia`, `src/features/canvas/components/AgentConfigFields.test.tsx`, `src/features/canvas/components/AgentConfigFields.cadeia.test.tsx`
 
 | Estado | Quando |
 | --- | --- |
@@ -1123,7 +1121,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Só Agente e Conta são exercitados (sessão C); Openia, modelo, esforço, arquivo de planejamento, projeto, remover, criar, tentar de novo e recalcular não têm teste de interface. | médio | `3ec91f95-497e-81e8-8f18-e2a529b0568e` |
 | Cada prévia de "Automática (cadeia)" (inclusive Recalcular) cria uma proposta e uma checagem de login no main. | médio | `3e991f95-497e-81b4-ac92-d7db960c9ae0` |
 
 ### Preset de agente no configurador
@@ -1133,7 +1130,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `agent-presets:list`, `agent-presets:save`, `agent-presets:delete`
 - **Depende de:** `useAgentConfig`, `useAgentPresets`, `FelixoSelect`, `agent-preset`
 - **Sobreposição:** Sem camada própria: dentro dos campos do agente (sidebar ou HandoffDialog); o select abre em portal z 1000.
-- **Testes:** `src/features/shared/ipc/ipc-failures.test.ts`, `src/features/canvas/services/agent-preset.test.ts`
+- **Testes:** `src/features/shared/ipc/ipc-failures.test.ts`, `src/features/canvas/services/agent-preset.test.ts`, `src/features/canvas/components/AgentPresetFields.test.tsx`
 
 | Estado | Quando |
 | --- | --- |
@@ -1150,10 +1147,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `Duplicar` (button) | clique | duplicate(active) → agent-presets:save com nome numerado; a cópia não vira a ativa. (desabilitado: some sem preset ativo) | Recusa: error em vermelho. | — |
 | `Excluir` (button) | clique | remove(active.id) → agent-presets:delete sem confirmação; deu certo, o formulário volta ao manual. (desabilitado: some sem preset ativo ou com preset nativo) | Recusa: error em vermelho. | — |
 
-| Lacuna | Risco | Task |
-| --- | --- | --- |
-| Aplicar, salvar, duplicar e excluir preset não têm teste de interface; Excluir apaga do SQLite sem confirmação. | baixo | `3ec91f95-497e-81e8-8f18-e2a529b0568e` |
-
 ### Pedido de agente para abrir página
 
 - **ID:** `agent-browser-request-card` · **Dono:** `src/features/canvas/components/AgentBrowserRequestCard.tsx`
@@ -1161,7 +1154,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `agent-browser:list-requests`, `agent-browser:decide`, `agent-browser:requests`, `agent-browser:open-webpage`
 - **Depende de:** `agent-browser-request`, `describeLinkDestination`, `floating-layer`, `window.felixo.canvas`
 - **Sobreposição:** fixed inset-x-0 top-4 z-50, centralizado (max-w-md), pointer-events só no cartão; acima da topbar (18), da gaveta (20/30) e dos painéis, abaixo dos modais (60). data-felixo-floating-layer: clicar nele não fecha a gaveta. Não rouba o foco.
-- **Testes:** `src/features/shared/ipc/ipc-failures.test.ts`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarPedidoDeNavegadorDoAgente`, `src/features/canvas/components/agent-browser-request.test.ts`, `electron/services/agent-browser-ipc-handlers.test.cjs`, `src/features/shared/focus/floating-layer.test.ts`, `scripts/canvas-smoke-links.cjs` → `criarSessaoDeLinks`
+- **Testes:** `src/features/shared/ipc/ipc-failures.test.ts`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarPedidoDeNavegadorDoAgente`, `src/features/canvas/components/agent-browser-request.test.ts`, `electron/services/agent-browser-ipc-handlers.test.cjs`, `src/features/shared/focus/floating-layer.test.ts`, `scripts/canvas-smoke-links.cjs` → `criarSessaoDeLinks`, `src/features/canvas/components/AgentBrowserRequestCard.test.tsx`
 
 | Estado | Quando |
 | --- | --- |
@@ -1177,10 +1170,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `Abrir como Página Web` (button) | clique | agent-browser:decide (embutido): o main emite agent-browser:open-webpage e o canvas cria o bloco Página Web; o pedido fica "aceito" com o modo escolhido. Na tela do chat (onOpenCanvas) o mesmo botão vira "Ir para o canvas": só troca de tela, sem decidir; o pedido espera lá. (desabilitado: busy, janela de 600 ms ou endereço recusado) | Recusa: role="alert". | `scripts/canvas-smoke-links.cjs` → `criarSessaoDeLinks` |
 | `onClick={onChoose([request], null)}` (button) | clique | Recusar: agent-browser:decide (null) marca o pedido como recusado e o cartão passa ao próximo. (desabilitado: busy ou janela de 600 ms) | Recusa: role="alert"; duplo clique decide só o pedido visto. | `scripts/canvas-smoke-links.cjs` → `criarSessaoDeLinks` |
 | `Recusar todos` (button) | clique | Recusa todos os pedidos em série (um agent-browser:decide por pedido). (desabilitado: busy, janela de 600 ms; só com fila) | Para no primeiro que falhar e mostra o erro dele. | — |
-
-| Lacuna | Risco | Task |
-| --- | --- | --- |
-| Abrir no navegador e Recusar todos não são clicados no smoke (o caminho externo só é testado no handler do main). | baixo | `3ec91f95-497e-81e8-8f18-e2a529b0568e` |
 
 ### Pedido de agente para olhar uma Página Web
 
@@ -1299,7 +1288,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| A saída silenciosa ("encerrou sem produzir saída"), a ponte ausente e store.copy não têm teste no store. | médio | `3ec91f95-497e-81e8-8f18-e2a529b0568e` |
 | Falha do pty:write do texto inicial é engolida (.catch vazio). | médio | `3d791f95-497e-81cd-b05c-c9d6370c81a3` |
 | O erro de spawn só diz para verificar instalação e autenticação; o diagnóstico da CLI não aparece na interface. | baixo | `3e291f95-497e-8109-8851-e4ff2193c4db` |
 | O scrollback do xterm encolhe o histórico; não há arquivo em disco nem "carregar mais". | baixo | `3e991f95-497e-810b-9f94-ed5201606718` |
@@ -2501,7 +2489,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `canvas:list-questions`, `canvas:answer-question`, `canvas:agent-questions`
 - **Depende de:** `agent-question-dialog (pickPendingQuestion, optionIndexForKey, questionKeyAction, questionFocusReturnTarget)`, `keyboard-focus (getFocusableElements, tabTrapTarget)`, `window.felixo.canvas`
 - **Sobreposição:** fixed inset-0 z-60 com fundo bg-black/50, montado no CanvasView; cobre canvas, gaveta e painéis; o card do tutorial fica inert por baixo. Pega o foco no painel (tabIndex -1), prende o Tab, é nokey e camada flutuante (clicar nele não fecha a gaveta solta). Não redimensiona (bloqueante, max-w-md).
-- **Testes:** `src/features/shared/ipc/ipc-failures.test.ts`, `src/features/canvas/components/agent-question-dialog.test.ts`, `electron/services/agent-question-ipc-handlers.test.cjs`, `scripts/canvas-smoke-onboarding.cjs` → `criarCenariosDoTutorial`, `scripts/canvas-smoke-onboarding.cjs` → `conferirPerguntaPrendeOFoco`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarPerguntaDoAgenteSobDialogos`
+- **Testes:** `src/features/shared/ipc/ipc-failures.test.ts`, `src/features/canvas/components/agent-question-dialog.test.ts`, `electron/services/agent-question-ipc-handlers.test.cjs`, `scripts/canvas-smoke-onboarding.cjs` → `criarCenariosDoTutorial`, `scripts/canvas-smoke-onboarding.cjs` → `conferirPerguntaPrendeOFoco`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarPerguntaDoAgenteSobDialogos`, `src/features/canvas/components/AgentQuestionDialog.test.tsx`
 
 | Estado | Quando |
 | --- | --- |
@@ -2518,7 +2506,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Lacuna | Risco | Task |
 | --- | --- | --- |
 | Mesma camada z 60 do HandoffDialog e do AccountSwitchDialog; pela ordem do DOM a pergunta fica por baixo deles. Medido em 1280 px: com o diálogo de passagem aberto, a pergunta do agente fica coberta pelo "Passar responsabilidade" (canvas-smoke-sobreposicoes.cjs → checarPerguntaDoAgenteSobDialogos). Defeito conhecido. O AccountSwitchDialog e as teclas 1–4 por baixo dos diálogos: não medidos. | médio | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
-| O smoke responde pelo teclado; o clique nas opções e em Dispensar não é exercitado. | baixo | `3ec91f95-497e-81e8-8f18-e2a529b0568e` |
 
 ### Passar responsabilidade
 
@@ -2527,7 +2514,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `account-chain:redact-transcript`, `account-chain:record-manual`, `account-chain:confirm`, `pty:spawn`
 - **Depende de:** `useAgentConfig`, `AgentConfigFields`, `useResizableDialog`, `keyboard-focus (tabTrapTarget)`, `CanvasView.passResponsibility`, `buildRedactedHandoffText`, `buildTerminalHandoffPrompt`, `getAccountChainBridge`
 - **Sobreposição:** fixed inset-0 z-60 (nokey), fundo bg-black/60; prende o Tab e fica por cima do tour (verificado no smoke). Redimensionável (max-w-md, max-h 100dvh − 2rem). Divide a camada z 60 com a pergunta de agente: pela ordem do DOM, fica por cima dela.
-- **Testes:** `src/features/shared/ipc/ipc-failures.test.ts`, `src/features/canvas/components/modal-dialogs-keys.test.ts`, `src/features/canvas/services/terminal-handoff.test.ts`, `src/features/canvas/services/account-continuation.test.ts`, `src/features/canvas/terminal/terminal-buffer-reader.test.ts`, `src/features/shared/dialog/dialog-sizing.test.ts`, `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos`, `scripts/canvas-smoke-onboarding.cjs` → `criarCenariosDoTutorial`
+- **Testes:** `src/features/shared/ipc/ipc-failures.test.ts`, `src/features/canvas/components/modal-dialogs-keys.test.ts`, `src/features/canvas/services/terminal-handoff.test.ts`, `src/features/canvas/services/account-continuation.test.ts`, `src/features/canvas/terminal/terminal-buffer-reader.test.ts`, `src/features/shared/dialog/dialog-sizing.test.ts`, `scripts/canvas-smoke.cjs` → `checarElementosAbertosEmViewportsCriticos`, `scripts/canvas-smoke-onboarding.cjs` → `criarCenariosDoTutorial`, `src/features/canvas/components/HandoffDialog.test.tsx`
 
 | Estado | Quando |
 | --- | --- |
@@ -2544,7 +2531,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Os smokes só abrem o diálogo e fecham com Esc: confirmar a passagem (bloco novo + PTY) nunca é exercitado ponta a ponta. | médio | `3ec91f95-497e-81e8-8f18-e2a529b0568e` |
+| Confirmar, Cancelar, o ×, Esc, o erro de criação e o registro da troca por motivo detectado são testados; o bloco novo e o PTY nascendo ponta a ponta (a criação é um callback no teste) só aparecem num app rodando. | baixo | `42291f95-497e-81b6-b811-f52c43831eb6` |
 | Com o Claude na tela alternativa só a tela vai como contexto (avisado ao usuário e ao agente); a conversa inteira exige ler o arquivo da sessão do Claude (.jsonl) em vez do terminal. | médio | `41491f95-497e-81da-a20c-ce16ce0f3b5a` |
 
 ### Trocar de conta?
@@ -2554,7 +2541,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `account-chain:redact-transcript`, `account-chain:confirm`, `account-chain:decline`, `account-chain:set-session-mode`, `account-chain:check-login`, `account-chain:get-state`, `agent-usage:refresh`, `pty:spawn`
 - **Depende de:** `useAccountContinuation`, `useAccountChain`, `useClockTick`, `account-switch-dialog (buildAccountSwitchDialogModel)`, `performContinuation`, `keyboard-focus (tabTrapTarget)`
 - **Sobreposição:** fixed inset-0 z-60 (nokey), max-w-lg, não redimensiona; prende o Tab e devolve o foco a quem abriu. Viewport 375×667 coberto pela sessão C (C12). Divide a camada z 60 com a pergunta de agente, que pela ordem do DOM fica por baixo.
-- **Testes:** `src/features/shared/ipc/ipc-failures-2.test.ts`, `src/features/canvas/components/modal-dialogs-keys.test.ts`, `src/features/canvas/services/account-switch-dialog.test.ts`, `src/features/canvas/services/account-continuation.test.ts`, `src/features/canvas/terminal/terminal-session-store.test.ts`, `src/features/canvas/terminal/terminal-screen-state.test.ts`, `electron/services/account-chain-ipc-handlers.test.cjs`, `scripts/canvas-smoke-contas.cjs` → `criarSessaoDaCadeia`
+- **Testes:** `src/features/shared/ipc/ipc-failures-2.test.ts`, `src/features/canvas/components/modal-dialogs-keys.test.ts`, `src/features/canvas/services/account-switch-dialog.test.ts`, `src/features/canvas/services/account-continuation.test.ts`, `src/features/canvas/terminal/terminal-session-store.test.ts`, `src/features/canvas/terminal/terminal-screen-state.test.ts`, `electron/services/account-chain-ipc-handlers.test.cjs`, `scripts/canvas-smoke-contas.cjs` → `criarSessaoDaCadeia`, `src/features/canvas/components/AccountSwitchDialog.test.tsx`
 
 | Estado | Quando |
 | --- | --- |
@@ -2581,7 +2568,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Conferir login, Configurar cadeia, Fechar, Medir agora, Ir para o terminal antigo, Cancelar a continuação automática, Fixar e Não era limite não são clicados em nenhum teste (a sessão C confirma e usa Esc). A caixa "Yolo no bloco novo" só aparece com destino em outro provedor, que a sessão C (só contas Codex) não tem: ela é coberta pelo HTML renderizado e pelo modelo, não por clique. | médio | `3ec91f95-497e-81e8-8f18-e2a529b0568e` |
+| Todos os botões, a caixa "Yolo no bloco novo" (destino de outro provedor), o reconhecimento da origem ativa e "Cancelar a continuação automática" são clicados em teste; ficam sem teste a faixa "Possível limite… Tratar como limite?" (TerminalNode), "Configurar cadeia" com o painel Limites e uso já aberto (trocar para a aba Cadeia e levar o foco) e o segundo horário da espera. | médio | `42291f95-497e-81b6-b811-f52c43831eb6` |
 | Não bloqueantes de acessibilidade da interface da cadeia. | baixo | `3e991f95-497e-815c-845c-da8829970c0c` |
 | O aviso de continuação automática do Claude no terminal antigo não oferece cancelar. | médio | `3e991f95-497e-812d-b877-e7bb0162a60f` |
 
@@ -3074,7 +3061,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3ec91f95-497e-8122-a08b-d26d4991acca` — 1 lacuna
 - `3ec91f95-497e-818f-b9f2-f9710605c303` — 2 lacunas
 - `3ec91f95-497e-81ca-8319-ee657b0b6492` — 7 lacunas
-- `3ec91f95-497e-81e8-8f18-e2a529b0568e` — 11 lacunas
 - `3ed91f95-497e-8114-a246-f72c73ae50c4` — 1 lacuna
 - `3f291f95-497e-81fe-8670-fe2fc871318d` — 1 lacuna
 - `3f491f95-497e-8126-b0ec-fab2a600214a` — 1 lacuna
@@ -3104,3 +3090,4 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `41c91f95-497e-81de-8abd-db0dae1455d6` — 1 lacuna
 - `41c91f95-497e-81f9-9edf-eb89e07ee070` — 1 lacuna
 - `42291f95-497e-8199-99e2-e7703485d803` — 4 lacunas
+- `42291f95-497e-81b6-b811-f52c43831eb6` — 4 lacunas
