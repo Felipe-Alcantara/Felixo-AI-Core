@@ -509,17 +509,12 @@ async function checarInspectorElementos(page) {
 async function checarTopoLegivelEmLarguras(page) {
   await prepararCenario(page)
   const medidas = []
-  const tamanhoOriginal = await mainEval(page, "(() => { const w = require('electron').BrowserWindow.getAllWindows()[0]; return w ? w.getSize() : null })()").catch(() => null)
   try {
     for (const largura of [1280, 1440, 1600, 1920]) {
-      // Primeiro a janela de verdade (o sistema pode limitar ao tamanho da tela); o que não couber vai por viewport emulado.
-      await mainEval(page, `(() => { const w = require('electron').BrowserWindow.getAllWindows()[0]; if (w) w.setSize(${largura}, 1000) })()`).catch(() => {})
-      await page.waitForTimeout(400)
-      const janelaReal = (await page.evaluate(() => window.innerWidth)) === largura
-      if (!janelaReal) {
-        await page.setViewportSize({ width: largura, height: 1100 })
-        await page.waitForFunction((w) => window.innerWidth === w, largura, { timeout: TIMEOUT_MS, polling: POLLING_MS })
-      }
+      // Viewport emulado, como na captura da sessão F. A janela de verdade não é redimensionada: o app grava o tamanho dela
+      // no perfil, e a sessão seguinte abriria com outra largura (a lista de Prompts da sessão J media 416 em vez de 420).
+      await page.setViewportSize({ width: largura, height: 1100 })
+      await page.waitForFunction((w) => window.innerWidth === w, largura, { timeout: TIMEOUT_MS, polling: POLLING_MS })
       await page.waitForTimeout(300)
       const topo = await page.evaluate(() => {
         const caixa = (el) => {
@@ -540,7 +535,6 @@ async function checarTopoLegivelEmLarguras(page) {
           frente: alvo ? (alvo.closest('.felixo-command-trigger') ? 'busca' : alvo.closest('.felixo-topbar-brand') ? 'marca' : alvo.tagName) : null,
         }
       })
-      topo.origem = janelaReal ? 'janela real' : 'viewport emulado'
       medidas.push(topo)
       if (!topo.marca || !topo.nome || !topo.busca) falhar(`o topo em ${largura} px não tem marca ou busca`, topo)
       if (topo.nome.right > topo.busca.left + 1) falhar(`em ${largura} px a caixa de busca cobre o nome do app`, topo)
@@ -548,9 +542,8 @@ async function checarTopoLegivelEmLarguras(page) {
       if (topo.busca.left < topo.marca.right) falhar(`em ${largura} px a busca começa antes do fim da área da marca`, topo)
       if (topo.busca.right > topo.janela || topo.nome.left < 0) falhar(`em ${largura} px o topo sai da janela`, topo)
     }
-    console.log(`[canvas-smoke:moldura] checarTopoLegivelEmLarguras: ${medidas.map((m) => `${m.janela}px (${m.origem}) nome até ${Math.round(m.nome.right)} / busca de ${Math.round(m.busca.left)}`).join('; ')}`)
+    console.log(`[canvas-smoke:moldura] checarTopoLegivelEmLarguras: ${medidas.map((m) => `${m.janela}px nome até ${Math.round(m.nome.right)} / busca de ${Math.round(m.busca.left)}`).join('; ')}`)
   } finally {
-    if (tamanhoOriginal) await mainEval(page, `(() => { const w = require('electron').BrowserWindow.getAllWindows()[0]; if (w) w.setSize(${tamanhoOriginal[0]}, ${tamanhoOriginal[1]}) })()`).catch(() => {})
     await page.setViewportSize({ width: 1280, height: 800 }).catch(() => {})
   }
 }
