@@ -11,7 +11,7 @@ test('todo check exportado entra na lista que a sessão I executa, sem repetiç�
   const executados = moldura.CHECKS_DA_MOLDURA.map((check) => check.name).sort()
   assert.deepEqual(executados, exportados)
   assert.equal(new Set(executados).size, executados.length)
-  assert.equal(executados.length, 13)
+  assert.equal(executados.length, 14)
 })
 
 test('a sessão I do smoke executa os checks da moldura', () => {

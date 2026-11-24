@@ -580,13 +580,14 @@ export const chromeSurfaces: InventoryElement[] = [
     dependsOn: ['setActiveTool (CanvasView)'],
     tests: [
       { file: 'scripts/canvas-smoke-moldura.cjs', check: 'checarCampoDeComandoDaTopbar' },
+      { file: 'scripts/canvas-smoke-moldura.cjs', check: 'checarTopoLegivelEmLarguras' },
       { file: 'scripts/canvas-smoke.cjs', check: 'checarLandmarksVisiveis' },
       { file: 'scripts/canvas-smoke.cjs', check: 'checarOclusaoDoFixture' },
       { file: 'scripts/canvas-smoke.cjs', check: 'checarMatrizVisual' },
       { file: 'scripts/canvas-smoke-onboarding.cjs', check: 'sa3' },
     ],
     gaps: [],
-    overlap: 'header absolute top 0, largura total (left/right 0 !important), z-18 e overflow: hidden (index.css:3216): fica sob a sidebar (26) à esquerda e recorta tudo que tentar sair dela para baixo (ver o aviso do ditado). pointer-events só nos filhos.',
+    overlap: 'header absolute top 0, largura total (left/right 0 !important), z-18 e overflow: hidden (index.css:3216): fica sob a sidebar (26) à esquerda e recorta tudo que tentar sair dela para baixo (ver o aviso do ditado). pointer-events só nos filhos. A marca (15,75 rem, fixa à esquerda) e a busca (centralizada, min(36vw, 42rem)) não se tocam em 1280, 1440, 1600 e 1920 px (checarTopoLegivelEmLarguras: o nome termina em ~111 px e a busca começa em 410 a 624 px); a sobreposição vista na captura da sessão F, de um viewport emulado de 1600×1100 sobre uma janela de 1280×800, não reproduziu em medição.',
   },
   {
     id: 'chrome-dictation',

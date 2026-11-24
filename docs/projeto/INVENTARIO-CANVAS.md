@@ -189,8 +189,8 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **Persistência:** nenhuma
 - **IPC:** nenhum
 - **Depende de:** `setActiveTool (CanvasView)`
-- **Sobreposição:** header absolute top 0, largura total (left/right 0 !important), z-18 e overflow: hidden (index.css:3216): fica sob a sidebar (26) à esquerda e recorta tudo que tentar sair dela para baixo (ver o aviso do ditado). pointer-events só nos filhos.
-- **Testes:** `scripts/canvas-smoke-moldura.cjs` → `checarCampoDeComandoDaTopbar`, `scripts/canvas-smoke.cjs` → `checarLandmarksVisiveis`, `scripts/canvas-smoke.cjs` → `checarOclusaoDoFixture`, `scripts/canvas-smoke.cjs` → `checarMatrizVisual`, `scripts/canvas-smoke-onboarding.cjs` → `sa3`
+- **Sobreposição:** header absolute top 0, largura total (left/right 0 !important), z-18 e overflow: hidden (index.css:3216): fica sob a sidebar (26) à esquerda e recorta tudo que tentar sair dela para baixo (ver o aviso do ditado). pointer-events só nos filhos. A marca (15,75 rem, fixa à esquerda) e a busca (centralizada, min(36vw, 42rem)) não se tocam em 1280, 1440, 1600 e 1920 px (checarTopoLegivelEmLarguras: o nome termina em ~111 px e a busca começa em 410 a 624 px); a sobreposição vista na captura da sessão F, de um viewport emulado de 1600×1100 sobre uma janela de 1280×800, não reproduziu em medição.
+- **Testes:** `scripts/canvas-smoke-moldura.cjs` → `checarCampoDeComandoDaTopbar`, `scripts/canvas-smoke-moldura.cjs` → `checarTopoLegivelEmLarguras`, `scripts/canvas-smoke.cjs` → `checarLandmarksVisiveis`, `scripts/canvas-smoke.cjs` → `checarOclusaoDoFixture`, `scripts/canvas-smoke.cjs` → `checarMatrizVisual`, `scripts/canvas-smoke-onboarding.cjs` → `sa3`
 
 | Estado | Quando |
 | --- | --- |

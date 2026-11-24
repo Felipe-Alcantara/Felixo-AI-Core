@@ -501,6 +501,60 @@ async function checarInspectorElementos(page) {
   }, aposAlt, 'Shift+↓ não moveu o cursor para outra linha (o Alt+↓ seguinte mexeu na mesma)')
 }
 
+/**
+ * Topo legível em larguras de monitor comuns: o nome "Felixo AI Core" ao lado do logotipo não pode ficar sob a caixa de
+ * busca nem sair da barra. A busca é centralizada (`left: 50%`) e a marca é fixa à esquerda, então o risco é a busca crescer
+ * por cima da marca. Mede em 1280, 1440, 1600 e 1920 px (o viewport maior que a janela é o caso da captura da sessão F).
+ */
+async function checarTopoLegivelEmLarguras(page) {
+  await prepararCenario(page)
+  const medidas = []
+  const tamanhoOriginal = await mainEval(page, "(() => { const w = require('electron').BrowserWindow.getAllWindows()[0]; return w ? w.getSize() : null })()").catch(() => null)
+  try {
+    for (const largura of [1280, 1440, 1600, 1920]) {
+      // Primeiro a janela de verdade (o sistema pode limitar ao tamanho da tela); o que não couber vai por viewport emulado.
+      await mainEval(page, `(() => { const w = require('electron').BrowserWindow.getAllWindows()[0]; if (w) w.setSize(${largura}, 1000) })()`).catch(() => {})
+      await page.waitForTimeout(400)
+      const janelaReal = (await page.evaluate(() => window.innerWidth)) === largura
+      if (!janelaReal) {
+        await page.setViewportSize({ width: largura, height: 1100 })
+        await page.waitForFunction((w) => window.innerWidth === w, largura, { timeout: TIMEOUT_MS, polling: POLLING_MS })
+      }
+      await page.waitForTimeout(300)
+      const topo = await page.evaluate(() => {
+        const caixa = (el) => {
+          const r = el?.getBoundingClientRect()
+          return r ? { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height } : null
+        }
+        const marca = document.querySelector('.felixo-topbar-brand')
+        const busca = document.querySelector('.felixo-command-trigger')
+        const texto = marca?.querySelector('.felixo-lockup-text') ?? marca
+        const r = texto?.getBoundingClientRect()
+        // O que está na frente do meio do nome: tem de ser a própria marca, não a caixa de busca.
+        const alvo = r ? document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) : null
+        return {
+          janela: window.innerWidth,
+          marca: caixa(marca),
+          nome: caixa(texto),
+          busca: caixa(busca),
+          frente: alvo ? (alvo.closest('.felixo-command-trigger') ? 'busca' : alvo.closest('.felixo-topbar-brand') ? 'marca' : alvo.tagName) : null,
+        }
+      })
+      topo.origem = janelaReal ? 'janela real' : 'viewport emulado'
+      medidas.push(topo)
+      if (!topo.marca || !topo.nome || !topo.busca) falhar(`o topo em ${largura} px não tem marca ou busca`, topo)
+      if (topo.nome.right > topo.busca.left + 1) falhar(`em ${largura} px a caixa de busca cobre o nome do app`, topo)
+      if (topo.frente === 'busca') falhar(`em ${largura} px a busca está na frente do nome do app`, topo)
+      if (topo.busca.left < topo.marca.right) falhar(`em ${largura} px a busca começa antes do fim da área da marca`, topo)
+      if (topo.busca.right > topo.janela || topo.nome.left < 0) falhar(`em ${largura} px o topo sai da janela`, topo)
+    }
+    console.log(`[canvas-smoke:moldura] checarTopoLegivelEmLarguras: ${medidas.map((m) => `${m.janela}px (${m.origem}) nome até ${Math.round(m.nome.right)} / busca de ${Math.round(m.busca.left)}`).join('; ')}`)
+  } finally {
+    if (tamanhoOriginal) await mainEval(page, `(() => { const w = require('electron').BrowserWindow.getAllWindows()[0]; if (w) w.setSize(${tamanhoOriginal[0]}, ${tamanhoOriginal[1]}) })()`).catch(() => {})
+    await page.setViewportSize({ width: 1280, height: 800 }).catch(() => {})
+  }
+}
+
 /** Os checks na ordem do smoke: cada um recomeça da fixture (`prepararCenario`), então a ordem não importa. */
 const CHECKS_DA_MOLDURA = [
   checarPainelDeNotificacoes,
@@ -516,6 +570,7 @@ const CHECKS_DA_MOLDURA = [
   checarPilulaDeZoom,
   checarMiniMap,
   checarInspectorElementos,
+  checarTopoLegivelEmLarguras,
 ]
 
 async function executarChecksDaMoldura(page) {
@@ -540,5 +595,6 @@ module.exports = {
   checarPainelDeNotificacoes,
   checarPilulaDeZoom,
   checarRemoverDaBarraDeStatus,
+  checarTopoLegivelEmLarguras,
   checarTrilhoProjetosEConfiguracoes,
 }
