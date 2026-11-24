@@ -115,8 +115,8 @@ describe('AccountSwitchDialog (clique)', () => {
         candidates: [],
         recommendedAccountId: null,
         excluded: [
-          { accountId: 'conta-b', providerId: 'codex', label: 'Trabalho', reason: 'login_expired', reasonText: null },
-          { accountId: 'conta-c', providerId: 'codex', label: 'Reserva', reason: 'login_expired', reasonText: null },
+          { accountId: 'conta-b', providerId: 'codex', label: 'Trabalho', reason: 'sem-chave', reasonText: null },
+          { accountId: 'conta-c', providerId: 'codex', label: 'Reserva', reason: 'sem-chave', reasonText: null },
         ],
       }),
     })

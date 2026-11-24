@@ -104,14 +104,14 @@ describe('HandoffDialog', () => {
   it('a passagem por causa de uma detecção entra no registro de trocas, com o motivo', async () => {
     const { recordManual } = montar({
       sourceSessionId: 'canvas:terminal-1',
-      reason: { failureClass: 'rate_limit', detectedAt: '2026-11-24T12:00:00.000Z' },
+      reason: { failureClass: 'limit', detectedAt: '2026-11-24T12:00:00.000Z' },
     })
     expect(screen.getByText(/Motivo:/)).toBeTruthy()
 
     await clicar(confirmar())
 
     expect(recordManual).toHaveBeenCalledTimes(1)
-    expect(recordManual).toHaveBeenCalledWith(expect.objectContaining({ sourceSessionId: 'canvas:terminal-1', reasonClass: 'rate_limit' }))
+    expect(recordManual).toHaveBeenCalledWith(expect.objectContaining({ sourceSessionId: 'canvas:terminal-1', reasonClass: 'limit' }))
   })
 
   it('sem motivo detectado a passagem não escreve no registro de trocas', async () => {

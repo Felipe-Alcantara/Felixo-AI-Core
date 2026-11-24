@@ -125,7 +125,7 @@ describe('AgentConfigFields (conta)', () => {
   describe('Remover a conta', () => {
     it('depois da confirmação, apaga a conta e ela some da lista', async () => {
       const { cliAccounts } = pontes([{ id: 'a1', providerId: 'claude', label: 'Trabalho' }])
-      const confirmar = vi.fn(() => true)
+      const confirmar = vi.fn((_mensagem: string) => true)
       vi.stubGlobal('confirm', confirmar)
       await montar()
       await escolher('Conta', /Trabalho/)
