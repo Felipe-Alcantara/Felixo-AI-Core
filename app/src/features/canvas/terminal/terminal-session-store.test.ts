@@ -3471,3 +3471,121 @@ describe('TerminalSessionStore: o spawn que rejeita', () => {
     expect(harness.store.getSnapshot(SESSION_ID)?.activity).toBe(antes)
   })
 })
+
+describe('TerminalSessionStore: saída silenciosa, ponte ausente e copiar', () => {
+  let harness: Harness | undefined
+
+  beforeEach(() => {
+    harness = undefined
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    harness?.store.clear()
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  it('a CLI que encerra logo ao abrir sem escrever nada vira erro, com o comando e o que verificar', async () => {
+    harness = createHarness('', 'claude')
+    await vi.advanceTimersByTimeAsync(0)
+
+    harness.emitExit({ exitCode: 1 })
+    await vi.advanceTimersByTimeAsync(50)
+
+    const snapshot = harness.store.getSnapshot(SESSION_ID)
+    expect(snapshot?.activity).toBe('error')
+    expect(snapshot?.exitCode).toBe(1)
+    expect(snapshot?.message).toBe('O comando "claude" encerrou sem produzir saída. Verifique a instalação e a autenticação da CLI.')
+  })
+
+  it('se a CLI escreveu algo antes de sair, é uma saída comum e não um erro de instalação', async () => {
+    harness = createHarness('', 'claude')
+    await vi.advanceTimersByTimeAsync(0)
+
+    harness.feed('tchau\r\n')
+    harness.emitExit({ exitCode: 0 })
+    await vi.advanceTimersByTimeAsync(50)
+
+    const snapshot = harness.store.getSnapshot(SESSION_ID)
+    expect(snapshot?.activity).toBe('exited')
+    expect(snapshot?.message).toBeUndefined()
+  })
+
+  it('depois dos primeiros segundos a saída sem texto também é só encerramento', async () => {
+    harness = createHarness('', 'claude')
+    await vi.advanceTimersByTimeAsync(6_000)
+
+    harness.emitExit({ exitCode: 0 })
+    await vi.advanceTimersByTimeAsync(50)
+
+    expect(harness.store.getSnapshot(SESSION_ID)?.activity).toBe('exited')
+  })
+
+  it('sem a ponte do PTY a sessão nasce em erro e diz por quê, sem lançar', () => {
+    ;(globalThis as { window?: unknown }).window = { navigator: { platform: 'Linux x86_64' }, felixo: {} }
+    const store = new TerminalSessionStore()
+    try {
+      store.ensure(SESSION_ID, { command: 'claude', args: [], cwd: '/tmp', initialText: '', terminalCount: 1 })
+      expect(store.getSnapshot(SESSION_ID)).toMatchObject({ activity: 'error', message: 'Bridge PTY indisponível.' })
+    } finally {
+      store.clear()
+    }
+  })
+
+  describe('copy', () => {
+    const terminalDe = (h: Harness) =>
+      (h.store as unknown as { sessions: Map<string, { terminal: Terminal }> }).sessions.get(SESSION_ID)!.terminal
+
+    it('copia a seleção quando há uma e devolve o texto copiado', async () => {
+      const writeText = vi.fn(async () => {})
+      vi.stubGlobal('navigator', { clipboard: { writeText } })
+      harness = createHarness('', 'claude')
+      await vi.advanceTimersByTimeAsync(0)
+      harness.feed('primeira linha\r\nsegunda linha\r\n')
+      await vi.advanceTimersByTimeAsync(50)
+      // Sem terminal aberto no DOM o xterm não seleciona: a seleção do mouse é simulada.
+      vi.spyOn(terminalDe(harness), 'getSelection').mockReturnValue('primeira')
+
+      const copiado = await harness.store.copy(SESSION_ID)
+
+      expect(copiado).toBe('primeira')
+      expect(writeText).toHaveBeenCalledWith('primeira')
+    })
+
+    it('sem seleção copia o que está visível, para o botão nunca ser um clique vazio', async () => {
+      const writeText = vi.fn(async () => {})
+      vi.stubGlobal('navigator', { clipboard: { writeText } })
+      harness = createHarness('', 'claude')
+      await vi.advanceTimersByTimeAsync(0)
+      harness.feed('texto visivel na tela\r\n')
+      await vi.advanceTimersByTimeAsync(50)
+
+      const copiado = await harness.store.copy(SESSION_ID)
+
+      expect(copiado).toContain('texto visivel na tela')
+      expect(writeText).toHaveBeenCalledWith(copiado)
+    })
+
+    it('rejeita quando a área de transferência recusa, para o botão não mostrar um ✓ que não aconteceu', async () => {
+      vi.stubGlobal('navigator', { clipboard: { writeText: vi.fn(async () => { throw new Error('Document is not focused') }) } })
+      harness = createHarness('', 'claude')
+      await vi.advanceTimersByTimeAsync(0)
+      harness.feed('alguma coisa\r\n')
+      await vi.advanceTimersByTimeAsync(50)
+
+      await expect(harness.store.copy(SESSION_ID)).rejects.toThrow('Não foi possível copiar para a área de transferência.')
+    })
+
+    it('rejeita sem área de transferência no ambiente e devolve vazio para uma sessão que não existe', async () => {
+      vi.stubGlobal('navigator', {})
+      harness = createHarness('', 'claude')
+      await vi.advanceTimersByTimeAsync(0)
+      harness.feed('alguma coisa\r\n')
+      await vi.advanceTimersByTimeAsync(50)
+
+      await expect(harness.store.copy(SESSION_ID)).rejects.toThrow('Este ambiente não permite copiar')
+      await expect(harness.store.copy('sessao-que-nao-existe')).resolves.toBe('')
+    })
+  })
+})
