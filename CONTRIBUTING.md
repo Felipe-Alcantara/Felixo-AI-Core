@@ -26,6 +26,8 @@ npm test               # testes Node: processo principal e scripts
 npm run test:frontend  # testes da interface (Vitest)
 ```
 
+Testes de interface de componente (`*.test.tsx`) rodam no vitest com `jsdom` e `@testing-library/react`: o arquivo declara `// @vitest-environment jsdom` na primeira linha e usa os helpers de `app/src/features/shared/test-support/` (`jsdom-storage.ts` para o `localStorage` em memória, `jsdom-shims.ts` para `scrollIntoView` e `ResizeObserver`). O jsdom não calcula layout nem desenha xterm: posição, sobreposição e o terminal de verdade continuam no smoke do canvas (`npm run test:canvas-smoke`). Componentes só de apresentação também podem ser testados em Node, sem DOM, chamando a função e percorrendo a árvore com `test-support/react-tree.ts`.
+
 Durante o trabalho, rode só os arquivos da área que você mexeu (`npx vitest run <arquivo>`, `node --test <arquivo>`) e a suíte inteira uma vez no fim. Se mexeu no launcher Python, na raiz: `python3 -m unittest discover -s tests -t .`. O `npm run test:native` exercita o PTY de verdade e precisa da toolchain C++ do `node-pty`.
 
 ## Regras do projeto
