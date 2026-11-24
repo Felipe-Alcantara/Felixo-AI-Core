@@ -314,13 +314,7 @@ export const overlaySurfaces: InventoryElement[] = [
       { file: SMOKE_TUTORIAL, check: 'conferirTecladoDoMenuAjuda' },
       { file: SMOKE_TUTORIAL, check: 'sb8' },
     ],
-    gaps: [
-      {
-        what: 'Cancelar da confirmação de redefinir nunca é clicado: o SB8 só confere que o foco chega nele e segue para Confirmar.',
-        risk: 'baixo',
-        task: '3ec91f95-497e-81f7-8b12-c5c252d020c7',
-      },
-    ],
+    gaps: [],
     overlap:
       'Portal no fim do body com .felixo-popover-surface (z 1000), à direita do botão Ajuda e contido na janela (max-height = janela − 16 px). Fica acima de tudo, inclusive dos diálogos (60); Esc, Tab para fora e clique fora fecham.',
   },
@@ -525,12 +519,14 @@ export const overlaySurfaces: InventoryElement[] = [
       { file: 'src/features/shared/ipc/ipc-failures.test.ts' },
       { file: 'src/features/updates/update-presentation.test.ts' },
       { file: 'src/features/canvas/components/toolbar-status.test.ts' },
+      { file: 'src/features/updates/UpdateNotice.test.ts' },
+      { file: 'electron/services/auto-updater.test.cjs' },
     ],
     gaps: [
       {
-        what: 'Nenhum teste renderiza ou clica o indicador e electron/services/auto-updater.cjs não tem teste; o ciclo verificar → baixar → reiniciar só é visto no app publicado.',
-        risk: 'médio',
-        task: '3ec91f95-497e-81f7-8b12-c5c252d020c7',
+        what: 'O indicador e os botões são testados na árvore de elementos, e o serviço (auto-updater.cjs) com electron e electron-updater falsos; o ciclo verificar → baixar → reiniciar contra um feed real só existe no app publicado.',
+        risk: 'baixo',
+        task: '42291f95-497e-8199-99e2-e7703485d803',
       },
     ],
     overlap: 'No rodapé da sidebar (z 26), coluna de 288 px; rótulo truncado, nada sobre o canvas. O aviso flutuante de atualização foi para as notificações do canvas (CanvasView).',
@@ -758,12 +754,13 @@ export const overlaySurfaces: InventoryElement[] = [
       { file: 'electron/core/hardware-profile.test.cjs' },
       { file: 'electron/core/gpu-preference.test.cjs' },
       { file: SMOKE_TUTORIAL, check: 'sb1' },
+      { file: 'src/features/shared/hardware/HardwareNotices.test.ts' },
     ],
     gaps: [
       {
-        what: 'O SB1/SB2 só mostram e clicam o aviso quando a máquina do CI recebe a sugestão (poucas CPUs); "Ligar Modo Performance" e o × nunca são clicados em teste.',
-        risk: 'médio',
-        task: '3ec91f95-497e-81f7-8b12-c5c252d020c7',
+        what: '"Ligar Modo Performance", "Agora não" e o × são clicados na árvore do NoticeToast, e a resposta (grava, esconde, liga só no "sim") é testada à parte; o ramo da sugestão, que depende do perfil de CPU vindo de um efeito, nunca é desenhado em teste, e o SB1/SB2 só o veem quando a máquina tem poucas CPUs.',
+        risk: 'baixo',
+        task: '42291f95-497e-8199-99e2-e7703485d803',
       },
       {
         what: 'O aviso da placa de vídeo nunca foi visto rodando: depende de uma volta automática de GPU real.',
@@ -831,12 +828,12 @@ export const overlaySurfaces: InventoryElement[] = [
     persistence: ['localStorage felixo:dialog-size:<id> (no canvas, felixo:dialog-size:handoff)'],
     ipc: [],
     dependsOn: ['useResizableDialog', 'readDialogSize', 'writeDialogSize', 'clearDialogSize', 'clampDialogSize', 'resizeCentered', 'swallowNextClick'],
-    tests: [{ file: 'src/features/canvas/components/block-load-failures.test.ts' }, { file: 'src/features/shared/dialog/dialog-sizing.test.ts' }, { file: 'scripts/canvas-smoke-sobreposicoes.cjs', check: 'checarAlcasDoDialogoSobBotoes' }],
+    tests: [{ file: 'src/features/canvas/components/block-load-failures.test.ts' }, { file: 'src/features/shared/dialog/dialog-sizing.test.ts' }, { file: 'scripts/canvas-smoke-sobreposicoes.cjs', check: 'checarAlcasDoDialogoSobBotoes' }, { file: 'src/features/shared/dialog/DialogResizeHandles.test.ts' }],
     gaps: [
       {
-        what: 'Nenhum smoke arrasta ou usa o teclado nas alças do HandoffDialog; a matemática é testada, a interação não.',
+        what: 'As setas, Home, Enter, o duplo clique, o início do arrasto e o clique que não sobe são testados na árvore das alças; o arrasto real do mouse e as setas no HandoffDialog aberto num app rodando não.',
         risk: 'baixo',
-        task: '3ec91f95-497e-81f7-8b12-c5c252d020c7',
+        task: '42291f95-497e-8199-99e2-e7703485d803',
       },
     ],
     overlap:
@@ -863,12 +860,12 @@ export const overlaySurfaces: InventoryElement[] = [
     persistence: ['nenhuma (o reload relê o canvas salvo pelo processo principal)'],
     ipc: ['qa-logger:log'],
     dependsOn: ['React error boundary (getDerivedStateFromError, componentDidCatch)'],
-    tests: [{ file: SMOKE_TUTORIAL, check: 'sa10' }],
+    tests: [{ file: SMOKE_TUTORIAL, check: 'sa10' }, { file: 'src/RendererRecoveryBoundary.test.ts' }],
     gaps: [
       {
-        what: 'Nenhum teste força a tela de recuperação nem clica "Recarregar interface"; o SA10 só confere que a falha do tutorial NÃO a mostra.',
-        risk: 'médio',
-        task: '3ec91f95-497e-81f7-8b12-c5c252d020c7',
+        what: 'A tela, "Recarregar interface" (window.location.reload) e o registro no QA Logger são testados chamando o boundary; um erro de render real num app rodando nunca é provocado (a renderização no servidor não aciona o boundary), e o SA10 só confere que a falha do tutorial NÃO mostra a tela.',
+        risk: 'baixo',
+        task: '42291f95-497e-8199-99e2-e7703485d803',
       },
     ],
     overlap: 'Substitui a árvore inteira (h-screen w-screen, bg zinc-950): não há sobreposição; os avisos de hardware e de links somem junto com o App.',

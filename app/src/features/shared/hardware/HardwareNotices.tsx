@@ -5,6 +5,7 @@ import { acknowledgeGpuFallback, useGpuStatus } from '../graphics/gpu-status-sto
 import { usePerformanceMode } from '../performance/performance-mode-context'
 import {
   describeLowCpuSuggestion,
+  answerPerformanceSuggestion,
   loadSuggestionAnswered,
   saveSuggestionAnswered,
   shouldSuggestPerformanceMode,
@@ -156,11 +157,8 @@ export function HardwareNotices() {
   }
 
   if (profile && shouldSuggestPerformanceMode({ profile, performanceMode, answered })) {
-    const answer = (enable: boolean) => {
-      saveSuggestionAnswered()
-      setAnswered(true)
-      if (enable) setPerformanceMode(true)
-    }
+    const answer = (enable: boolean) =>
+      answerPerformanceSuggestion(enable, { saveAnswered: saveSuggestionAnswered, markAnswered: () => setAnswered(true), setPerformanceMode })
     return (
       <NoticeToast
         icon={<Gauge size={18} className="text-(--f-core-white-soft)" />}

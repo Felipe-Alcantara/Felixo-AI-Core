@@ -68,3 +68,16 @@ export function describeLowCpuSuggestion(profile: HardwareProfile): string {
     'interface de 16% a 23% mais fluida nas medições do projeto. Dá para mudar depois em Configurações.'
   )
 }
+
+/**
+ * Resposta à sugestão do Modo Performance: grava que foi respondida (a sugestão não volta) e só liga o modo no "sim".
+ * Fora do componente para ser testada sem renderizar.
+ */
+export function answerPerformanceSuggestion(
+  enable: boolean,
+  actions: { saveAnswered: () => void; markAnswered: () => void; setPerformanceMode: (on: boolean) => void },
+) {
+  actions.saveAnswered()
+  actions.markAnswered()
+  if (enable) actions.setPerformanceMode(true)
+}

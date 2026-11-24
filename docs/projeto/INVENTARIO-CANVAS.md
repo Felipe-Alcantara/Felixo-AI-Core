@@ -32,7 +32,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **Elementos:** 115 (10 blocos, 17 ferramentas, 88 outras superfícies)
 - **Controles:** 439, dos quais 92 com teste específico
 - **Elementos sem nenhum teste:** 0
-- **Lacunas:** 131 (alto 1, médio 83, baixo 47), em 72 tasks
+- **Lacunas:** 130 (alto 1, médio 80, baixo 49), em 72 tasks
 
 ## Moldura do canvas
 
@@ -472,7 +472,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `updates:get-status`, `updates:status`, `updates:check`, `updates:install`, `app:get-version`
 - **Depende de:** `useUpdateStatus (CanvasView)`, `useAppVersion (CanvasToolbar)`, `presentUpdateStatus`, `deveMostrarRodapeDeStatus`
 - **Sobreposição:** No rodapé da sidebar (z 26), coluna de 288 px; rótulo truncado, nada sobre o canvas. O aviso flutuante de atualização foi para as notificações do canvas (CanvasView).
-- **Testes:** `src/features/shared/ipc/ipc-failures.test.ts`, `src/features/updates/update-presentation.test.ts`, `src/features/canvas/components/toolbar-status.test.ts`
+- **Testes:** `src/features/shared/ipc/ipc-failures.test.ts`, `src/features/updates/update-presentation.test.ts`, `src/features/canvas/components/toolbar-status.test.ts`, `src/features/updates/UpdateNotice.test.ts`, `electron/services/auto-updater.test.cjs`
 
 | Estado | Quando |
 | --- | --- |
@@ -491,7 +491,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Nenhum teste renderiza ou clica o indicador e electron/services/auto-updater.cjs não tem teste; o ciclo verificar → baixar → reiniciar só é visto no app publicado. | médio | `3ec91f95-497e-81f7-8b12-c5c252d020c7` |
+| O indicador e os botões são testados na árvore de elementos, e o serviço (auto-updater.cjs) com electron e electron-updater falsos; o ciclo verificar → baixar → reiniciar contra um feed real só existe no app publicado. | baixo | `42291f95-497e-8199-99e2-e7703485d803` |
 
 ## Blocos
 
@@ -2592,7 +2592,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** nenhum
 - **Depende de:** `useResizableDialog`, `readDialogSize`, `writeDialogSize`, `clearDialogSize`, `clampDialogSize`, `resizeCentered`, `swallowNextClick`
 - **Sobreposição:** absolute z 10 dentro da moldura do modal (z 60): borda direita (w-2, top-6 bottom-6), inferior (h-2, left-6 right-6) e canto (20 px). swallowNextClick engole o clique de soltar fora da moldura, que fecharia o modal.
-- **Testes:** `src/features/canvas/components/block-load-failures.test.ts`, `src/features/shared/dialog/dialog-sizing.test.ts`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarAlcasDoDialogoSobBotoes`
+- **Testes:** `src/features/canvas/components/block-load-failures.test.ts`, `src/features/shared/dialog/dialog-sizing.test.ts`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarAlcasDoDialogoSobBotoes`, `src/features/shared/dialog/DialogResizeHandles.test.ts`
 
 | Estado | Quando |
 | --- | --- |
@@ -2605,7 +2605,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Nenhum smoke arrasta ou usa o teclado nas alças do HandoffDialog; a matemática é testada, a interação não. | baixo | `3ec91f95-497e-81f7-8b12-c5c252d020c7` |
+| As setas, Home, Enter, o duplo clique, o início do arrasto e o clique que não sobe são testados na árvore das alças; o arrasto real do mouse e as setas no HandoffDialog aberto num app rodando não. | baixo | `42291f95-497e-8199-99e2-e7703485d803` |
 
 ## Overlays e avisos
 
@@ -2814,10 +2814,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `data-felixo-onboarding-action="cancelar-redefinir"` (button) | clique | confirming volta a falso: some a pergunta, volta "Redefinir tutoriais" e o foco vai para ele no quadro seguinte; nada gravado. (desabilitado: só existe durante a confirmação) | Sem falha própria (estado local). | — |
 | `data-felixo-onboarding-action="redefinir"` (button) | clique | Pede confirmação na própria tela (nunca window.confirm): mostra a pergunta com Confirmar e Cancelar e leva o foco a Cancelar; nada gravado ainda. (desabilitado: some enquanto a confirmação está na tela) | Sem falha própria (estado local). | `scripts/canvas-smoke-onboarding.cjs` → `sb8` |
 
-| Lacuna | Risco | Task |
-| --- | --- | --- |
-| Cancelar da confirmação de redefinir nunca é clicado: o SB8 só confere que o foco chega nele e segue para Confirmar. | baixo | `3ec91f95-497e-81f7-8b12-c5c252d020c7` |
-
 ### Aviso flutuante da instalação das CLIs
 
 - **ID:** `cli-setup-aviso` · **Dono:** `src/features/setup/CliSetupNotice.tsx`
@@ -2968,7 +2964,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `hardware:get-profile`, `graphics:get-config`, `graphics:gpu-preference-changed`, `graphics:acknowledge-gpu-fallback`
 - **Depende de:** `useGpuStatus (gpu-status-store)`, `usePerformanceMode (PerformanceModeContext)`, `shouldSuggestPerformanceMode`, `loadSuggestionAnswered`, `saveSuggestionAnswered`, `NoticeToast`
 - **Sobreposição:** Wrapper fixed inset-x-0 bottom-4 z 50 com pointer-events none; a caixa (w-[22rem], pointer-events auto) é [data-felixo-tour-avoid] e o card desvia dela (SB1 confere que os botões continuam clicáveis). Montado no App: vale no canvas e no chat.
-- **Testes:** `src/features/shared/ipc/ipc-failures.test.ts`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarAvisosFlutuantesJuntos`, `src/features/shared/performance/performance-suggestion.test.ts`, `src/features/shared/graphics/gpu-status-store.test.ts`, `electron/core/hardware-profile.test.cjs`, `electron/core/gpu-preference.test.cjs`, `scripts/canvas-smoke-onboarding.cjs` → `sb1`
+- **Testes:** `src/features/shared/ipc/ipc-failures.test.ts`, `scripts/canvas-smoke-sobreposicoes.cjs` → `checarAvisosFlutuantesJuntos`, `src/features/shared/performance/performance-suggestion.test.ts`, `src/features/shared/graphics/gpu-status-store.test.ts`, `electron/core/hardware-profile.test.cjs`, `electron/core/gpu-preference.test.cjs`, `scripts/canvas-smoke-onboarding.cjs` → `sb1`, `src/features/shared/hardware/HardwareNotices.test.ts`
 
 | Estado | Quando |
 | --- | --- |
@@ -2986,7 +2982,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| O SB1/SB2 só mostram e clicam o aviso quando a máquina do CI recebe a sugestão (poucas CPUs); "Ligar Modo Performance" e o × nunca são clicados em teste. | médio | `3ec91f95-497e-81f7-8b12-c5c252d020c7` |
+| "Ligar Modo Performance", "Agora não" e o × são clicados na árvore do NoticeToast, e a resposta (grava, esconde, liga só no "sim") é testada à parte; o ramo da sugestão, que depende do perfil de CPU vindo de um efeito, nunca é desenhado em teste, e o SB1/SB2 só o veem quando a máquina tem poucas CPUs. | baixo | `42291f95-497e-8199-99e2-e7703485d803` |
 | O aviso da placa de vídeo nunca foi visto rodando: depende de uma volta automática de GPU real. | médio | `3d591f95-497e-8192-b911-cdb759933401` |
 | Medido: a sugestão do Modo Performance (22rem, embaixo no centro, z 50) convive com o card do tour (SB1) e foi medida contra o aviso de CLIs e o de link (checarAvisosFlutuantesJuntos: os dois a cobrem em janelas estreitas). Cobria 14 px da barra de status nas três larguras; corrigido subindo os avisos de baixo para bottom-10. A dock (20) no centro de baixo segue sem medida, e a volta da placa de vídeo depende de estado de máquina. | baixo | `3ec91f95-497e-8112-82f9-fd1b86e3ec7d` |
 
@@ -3019,7 +3015,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **IPC:** `qa-logger:log`
 - **Depende de:** `React error boundary (getDerivedStateFromError, componentDidCatch)`
 - **Sobreposição:** Substitui a árvore inteira (h-screen w-screen, bg zinc-950): não há sobreposição; os avisos de hardware e de links somem junto com o App.
-- **Testes:** `scripts/canvas-smoke-onboarding.cjs` → `sa10`
+- **Testes:** `scripts/canvas-smoke-onboarding.cjs` → `sa10`, `src/RendererRecoveryBoundary.test.ts`
 
 | Estado | Quando |
 | --- | --- |
@@ -3032,7 +3028,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| Nenhum teste força a tela de recuperação nem clica "Recarregar interface"; o SA10 só confere que a falha do tutorial NÃO a mostra. | médio | `3ec91f95-497e-81f7-8b12-c5c252d020c7` |
+| A tela, "Recarregar interface" (window.location.reload) e o registro no QA Logger são testados chamando o boundary; um erro de render real num app rodando nunca é provocado (a renderização no servidor não aciona o boundary), e o SA10 só confere que a falha do tutorial NÃO mostra a tela. | baixo | `42291f95-497e-8199-99e2-e7703485d803` |
 
 ## Tasks das lacunas
 
@@ -3079,7 +3075,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3ec91f95-497e-818f-b9f2-f9710605c303` — 2 lacunas
 - `3ec91f95-497e-81ca-8319-ee657b0b6492` — 7 lacunas
 - `3ec91f95-497e-81e8-8f18-e2a529b0568e` — 11 lacunas
-- `3ec91f95-497e-81f7-8b12-c5c252d020c7` — 5 lacunas
 - `3ed91f95-497e-8114-a246-f72c73ae50c4` — 1 lacuna
 - `3f291f95-497e-81fe-8670-fe2fc871318d` — 1 lacuna
 - `3f491f95-497e-8126-b0ec-fab2a600214a` — 1 lacuna
@@ -3108,3 +3103,4 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `41c91f95-497e-81d3-83ab-fc42cd2e80f4` — 1 lacuna
 - `41c91f95-497e-81de-8abd-db0dae1455d6` — 1 lacuna
 - `41c91f95-497e-81f9-9edf-eb89e07ee070` — 1 lacuna
+- `42291f95-497e-8199-99e2-e7703485d803` — 4 lacunas

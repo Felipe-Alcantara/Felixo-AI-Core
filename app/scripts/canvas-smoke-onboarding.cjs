@@ -2044,6 +2044,20 @@ function criarCenariosDoTutorial(deps) {
     await esperar(cenario, 'a confirmação aparecer com o foco em Cancelar', () =>
       document.activeElement?.getAttribute('data-felixo-onboarding-action') === 'cancelar-redefinir',
     )
+    // Cancelar: a confirmação some, o foco volta a "Redefinir tutoriais", o menu segue aberto e nada é gravado.
+    const antesDeCancelar = await lerEstado()
+    await page.locator(`${SEL.menuAjuda} ${acao('cancelar-redefinir')}`).click()
+    await esperar(cenario, 'Cancelar fechar a confirmação e devolver o foco a Redefinir', () =>
+      document.activeElement?.getAttribute('data-felixo-onboarding-action') === 'redefinir' &&
+      document.querySelector('[data-felixo-onboarding-action="confirmar-redefinir"]') === null,
+    )
+    const depoisDeCancelar = await lerEstado()
+    exigir(depoisDeCancelar.revision === antesDeCancelar.revision && !depoisDeCancelar.value?.resetAt, cenario, 'Cancelar gravou ou redefiniu o estado', { antes: antesDeCancelar.revision, depois: depoisDeCancelar.revision, resetAt: depoisDeCancelar.value?.resetAt })
+    exigir(await page.locator(SEL.menuAjuda).isVisible(), cenario, 'Cancelar fechou o menu Ajuda inteiro')
+    await page.locator(`${SEL.menuAjuda} ${acao('redefinir')}`).click()
+    await esperar(cenario, 'a confirmação voltar com o foco em Cancelar', () =>
+      document.activeElement?.getAttribute('data-felixo-onboarding-action') === 'cancelar-redefinir',
+    )
     await page.locator(`${SEL.menuAjuda} ${acao('confirmar-redefinir')}`).click()
     await esperarPasso(cenario, 'projeto')
     await esperar(cenario, 'o foco entrar no card', () => Boolean(document.activeElement?.closest('[data-felixo-onboarding="card"]')))
