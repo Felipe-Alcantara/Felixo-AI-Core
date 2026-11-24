@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const estado = vi.hoisted(() => ({ preview: vi.fn((..._args: unknown[]): unknown => undefined), discard: vi.fn(async (..._args: unknown[]) => {}) }))
+const estado = vi.hoisted(() => ({ preview: vi.fn<(...args: unknown[]) => unknown>(), discard: vi.fn<(...args: unknown[]) => Promise<void>>(async () => {}) }))
 
 // A cadeia ligada, com Claude e Codex como membros: é o que faz a opção "Automática (cadeia)" existir.
 vi.mock('../hooks/useAccountChain', async (original) => {
