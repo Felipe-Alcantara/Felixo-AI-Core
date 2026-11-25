@@ -53,7 +53,7 @@ is_release_input() {
     .gitattributes) return 0 ;;
     # O próprio pipeline de publicação e os scripts que ele carrega.
     .github/workflows/release.yml) return 0 ;;
-    .github/scripts/retry.sh|.github/scripts/release-version.sh|.github/scripts/release-cleanup.sh) return 0 ;;
+    .github/scripts/retry.sh|.github/scripts/release-version.sh|.github/scripts/release-cleanup.sh|.github/scripts/release-notes.sh) return 0 ;;
 
     # 3) Todo o resto (docs, launcher Python, CI, benchmarks, cópias locais).
     *) return 1 ;;

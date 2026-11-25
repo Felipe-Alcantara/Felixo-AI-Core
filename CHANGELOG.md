@@ -1,8 +1,8 @@
 # Novidades
 
-Resumo do que muda no Felixo AI Core, escrito para quem usa o app. Cada bloco cobre um período. As notas técnicas de cada versão estão nas [Releases](https://github.com/Felipe-Alcantara/Felixo-AI-Core/releases), e o histórico completo está no `git log`.
+Resumo do que muda no Felixo AI Core, escrito para quem usa o app. Cada bloco cobre uma atualização publicada: o mais recente fica no topo e é o texto da release dessa versão. As notas técnicas de cada versão estão nas [Releases](https://github.com/Felipe-Alcantara/Felixo-AI-Core/releases), e o histórico completo está no `git log`.
 
-## 18 a 25 de novembro de 2026
+## Atualização de 25 de novembro de 2026 (reúne o que entrou desde 18/11)
 
 ### Novidades
 

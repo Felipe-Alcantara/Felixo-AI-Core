@@ -101,17 +101,26 @@ jobs:
         # `retry.test.sh`) automatiza exatamente esse "rodar de novo".
         run: |
           source "$GITHUB_WORKSPACE/.github/scripts/retry.sh"
+          source "$GITHUB_WORKSPACE/.github/scripts/release-notes.sh"
 
           TAG="${{ steps.release.outputs.release_tag }}"
           TARGET="${{ github.event.workflow_run.head_sha || inputs.commit_sha }}"
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release $TAG já existe; mantendo os artefatos publicados."
           else
+            # As notas já nascem com o texto final (a seção mais recente do
+            # CHANGELOG): a release continua marcada como pré-release
+            # até a promoção, então não precisa de um texto provisório que
+            # ninguém trocava depois (459 de 474 releases ficaram assim).
+            {
+              release_notes_body CHANGELOG.md
+              printf '\nHistórico completo: [CHANGELOG.md](https://github.com/%s/blob/main/CHANGELOG.md)\n' "$GITHUB_REPOSITORY"
+            } > release-notes-base.md
             retry 5 5 -- gh release create "$TAG" \
               --target "$TARGET" \
               --title "$TAG" \
               --prerelease \
-              --notes "Build em publicação; será promovida após os instaladores de Linux, Windows e macOS passarem."
+              --notes-file release-notes-base.md
           fi
 
   publish:

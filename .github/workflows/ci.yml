@@ -368,6 +368,9 @@ jobs:
       - name: Test release-version.sh
         run: bash .github/scripts/release-version.test.sh
 
+      - name: Test release-notes.sh
+        run: bash .github/scripts/release-notes.test.sh
+
       - name: Test release-relevant.sh
         run: bash .github/scripts/release-relevant.test.sh
 

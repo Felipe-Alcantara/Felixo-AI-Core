@@ -46,6 +46,7 @@ O passo a passo do fluxo com branch está no [Guia do Desenvolvedor](docs/guias/
 ## Regras do projeto
 
 - **Commits:** Conventional Commits em português (`feat`, `fix`, `perf`, `docs`, `test`, `chore`), pequenos e um tema por commit. Mensagens como `wip` e `update` não passam.
+- **Novidades:** o [CHANGELOG.md](CHANGELOG.md) ganha uma seção a cada atualização publicada, escrita para quem usa o app (não para quem programa). A seção mais recente vira o texto da release e o link "Ver todas as novidades" da Ajuda do app aponta para esse arquivo. Quem muda algo que a pessoa vê pode propor a linha no próprio pull request.
 - **Histórico linear:** `rebase` e `fast-forward`; a `main` não aceita merge commit nem push forçado.
 - **Antes de enviar:** `npm run lint`, `npm run typecheck` e os testes da área que você mexeu, dentro de `app/`. O CI roda tudo em Windows, macOS e Linux.
 - **Segredos e dados pessoais:** nunca entram em commit, log ou issue. Caminhos de usuário real viram `os.homedir()` ou fixture neutra.
