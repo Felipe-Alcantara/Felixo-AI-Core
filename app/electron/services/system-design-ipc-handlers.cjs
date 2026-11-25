@@ -307,6 +307,58 @@ function registerSystemDesignIpcHandlers(appPaths, options = {}) {
     }
   }
 
+  /**
+   * Fontes que alguma camada ainda usa: a lista do usuário, os guias escolhidos
+   * no app por qualquer projeto e os do arquivo de projeto já confirmado.
+   * `null` quando não dá para saber (arquivo confirmado de uma raiz que sumiu
+   * ou não pôde ser lido): quem limpa não apaga nada nesse caso.
+   */
+  async function usedSourceKeys() {
+    const { config, store } = loadState()
+    const used = new Set(toPublicConfig(config, store).guides.map((guide) => guide.key))
+    for (const [root, settings] of Object.entries(loadProjectStore().projects)) {
+      for (const guide of settings.guides) used.add(sourceKey(guide))
+      if (!settings.confirmedFileHash) continue
+      try {
+        if (!(await fileSystem.stat(root)).isDirectory()) return null
+        const { file } = await inspectProjectRoot(root, { fileSystem })
+        if (file.present && !file.parsed?.hash) return null
+        for (const guide of file.parsed?.guides ?? []) used.add(sourceKey(guide))
+      } catch {
+        return null
+      }
+    }
+    return used
+  }
+
+  /** Apaga índice, estado e clone das fontes que nenhuma camada usa mais. */
+  async function pruneUnusedSources() {
+    const used = await usedSourceKeys()
+    if (!used) return
+    // Fonte sincronizando agora é de quem a pediu: não se mexe nela.
+    const keep = new Set([...used, ...inFlightSyncs.keys()])
+    for (const key of documents.listSourceKeys()) {
+      if (!keep.has(key)) documents.forSource(key).clear()
+    }
+    const store = loadState().store
+    const stale = Object.keys(store.sources).filter((key) => !keep.has(key))
+    if (stale.length) {
+      saveStore({ ...store, sources: Object.fromEntries(Object.entries(store.sources).filter(([key]) => keep.has(key))) })
+    }
+    const keepDirs = new Set([...keep].map(sourceDirName))
+    const sourcesDir = path.join(cacheBaseDir, 'sources')
+    let names = []
+    try {
+      names = await fileSystem.readdir(sourcesDir)
+    } catch {
+      return
+    }
+    for (const name of names) {
+      if (keepDirs.has(name)) continue
+      await fileSystem.rm(path.join(sourcesDir, name), { recursive: true, force: true }).catch(() => {})
+    }
+  }
+
   /** Raiz autorizada para gravar escolhas de projeto (a mesma que o resolve devolve). */
   async function authorizedRoot(root) {
     if (!authorizeProjectDirectory) throw new Error('Projetos indisponíveis nesta instância.')
@@ -397,6 +449,9 @@ function registerSystemDesignIpcHandlers(appPaths, options = {}) {
       for (const guide of guides) {
         results.push(await syncOne(guide, { interactive }))
       }
+      await pruneUnusedSources().catch((error) =>
+        logQaEvent({ level: 'warn', scope: 'system-design:sync', message: `Limpeza de guias fora de uso falhou: ${error?.message ?? error}` }),
+      )
       const failure = results.find((result) => !result.ok)
       return {
         ok: !failure,
@@ -411,9 +466,11 @@ function registerSystemDesignIpcHandlers(appPaths, options = {}) {
     }
   })
 
-  activeIpcMain.handle('system-design:reset-cache', () => {
+  activeIpcMain.handle('system-design:reset-cache', async () => {
     try {
       const cleared = documents.clearAll()
+      // Os clones são só cache: a próxima sincronização refaz cada um.
+      await fileSystem.rm(path.join(cacheBaseDir, 'sources'), { recursive: true, force: true })
       saveStore(recordClearedCache())
       return { ok: true, cleared, config: loadConfig() }
     } catch (error) {

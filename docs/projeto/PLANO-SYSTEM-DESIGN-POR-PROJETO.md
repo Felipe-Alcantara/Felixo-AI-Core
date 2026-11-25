@@ -94,6 +94,10 @@ Task: Felixo AI Core/System Design — camada por projeto na precedência da fon
   grande ou malformado, confirmação por hash, troca de projeto, migração v1/v2 → v3.
 - Integração dos handlers com SQLite real: os documentos antigos migram sem perda, a
   sincronização é por fonte, e nenhum `git clone` acontece para guia de arquivo não confirmado.
+- Limpeza: ao fim de cada sincronização, clone, índice e estado das fontes fora de todas as
+  camadas (lista do usuário, escolha no app de qualquer projeto, arquivo de projeto confirmado)
+  são apagados. Se um arquivo confirmado não puder ser lido (raiz sumiu), nada é apagado. "Limpar
+  cache" também esvazia a pasta `sources/`.
 - App isolado: o lembrete de cada terminal cita os guias e a camada certos, o orquestrador
   separa por projeto, o painel lista por guia, e o console fica sem erros.
 

@@ -26,11 +26,12 @@ const { registerQaLoggerIpcHandlers } = require('./qa-logger.cjs')
 const { createStorageDatabase } = require('./storage/sqlite-database.cjs')
 const { createSystemDesignRepository } = require('./storage/system-design-repository.cjs')
 const { createProjectPathAccess } = require('./projects-path-security.cjs')
-const { sourceKey } = require('../core/system-design-source.cjs')
+const { sourceDirName, sourceKey } = require('../core/system-design-source.cjs')
 Module._load = originalLoad
 
 const DEFAULT_URL = 'https://github.com/Felipe-Alcantara/Felixo-System-Design.git'
 const DOKTOR_URL = 'https://github.com/acme/Doktor-SystemDesign'
+const OTHER_URL = 'https://github.com/acme/Outro-SystemDesign'
 const LEGACY_SHA = 'a'.repeat(40)
 
 function appPaths() {
@@ -350,7 +351,7 @@ test('dois guias: cada um sincroniza no próprio cache, e a falha de um não der
   assert.match(result.config.guides[1].lastError, /sem rede/)
 })
 
-test('a sincronização registra a fonte de fato clonada, mesmo se a lista mudar no meio', async (t) => {
+test('a fonte clonada no meio de uma troca da lista não vira estado da nova fonte e sai na limpeza', async (t) => {
   let release
   const gate = new Promise((resolve) => {
     release = resolve
@@ -370,7 +371,9 @@ test('a sincronização registra a fonte de fato clonada, mesmo se a lista mudar
 
   assert.equal(result.ok, true)
   const store = readSetting(SYSTEM_DESIGN_SYNC_KEY)
-  assert.equal(store.sources[sourceKey({ repoUrl: DEFAULT_URL, branch: 'main' })].sha, 'c'.repeat(40))
+  // A fonte antiga saiu da lista no meio: foi registrada sob a chave dela (não
+  // na da nova) e a limpeza do fim da sincronização a leva embora.
+  assert.deepEqual(store.sources, {})
   assert.equal(result.config.repoUrl, 'https://github.com/acme/outra.git')
   assert.equal(result.config.syncState, 'never-synced', 'a outra fonte ainda não sincronizou')
   assert.equal(readSetting(SYSTEM_DESIGN_CONFIG_KEY).sourceMode, 'custom', 'a escolha feita no meio não foi desfeita')
@@ -398,13 +401,13 @@ test('falha depois de sucesso mantém o fallback offline daquela fonte', async (
   assert.ok(config.lastError)
 })
 
-test('limpar o cache esquece o sincronizado e apaga o índice de todas as fontes', (t) => {
+test('limpar o cache esquece o sincronizado e apaga o índice de todas as fontes', async (t) => {
   const { database } = setupHandlers(t, {
     rawConfig: legacyDefault(),
     legacyDocuments: [{ path: 'core/GUIA.md', title: 'Guia', content: '# Guia' }],
   })
   handlers.get('system-design:get-config')()
-  const result = handlers.get('system-design:reset-cache')()
+  const result = await handlers.get('system-design:reset-cache')()
 
   assert.equal(result.ok, true)
   assert.equal(result.config.delivered, null)
@@ -705,4 +708,84 @@ test('automática durante um clique pega carona nele (um clone só)', async (t) 
 
   assert.ok(results.every((result) => result.ok))
   assert.equal(syncCalls.length, 1)
+})
+
+// ---------------------------------------------------------------------------
+// Limpeza de guias que saíram de todas as listas
+// ---------------------------------------------------------------------------
+
+/** Sincroniza de mentira: grava um arquivo no clone e um documento no índice. */
+function fakeSync(options) {
+  fs.mkdirSync(options.cacheDir, { recursive: true })
+  fs.writeFileSync(path.join(options.cacheDir, 'GUIA.md'), '# Guia')
+  options.repository.save({ path: 'GUIA.md', title: 'Guia', content: '# Guia' })
+  return { headSha: 'e'.repeat(40), indexedCount: 1, removedCount: 0 }
+}
+
+const cloneDirOf = (paths, url) =>
+  path.join(paths.config, 'system-design', 'sources', sourceDirName(sourceKey({ repoUrl: url, branch: 'main' })))
+const hasIndex = (database, url) =>
+  createSystemDesignRepository(database).listSourceKeys().includes(sourceKey({ repoUrl: url, branch: 'main' }))
+
+test('tirar um guia da lista e sincronizar apaga clone, índice e estado dele, e só dele', async (t) => {
+  const { database, paths, readSetting } = setupHandlers(t, { syncSystemDesignRepository: fakeSync })
+  handlers.get('system-design:save-config')(null, {
+    guides: [{ repoUrl: DEFAULT_URL, branch: 'main' }, { repoUrl: DOKTOR_URL, branch: 'main' }],
+  })
+  await handlers.get('system-design:sync')()
+  assert.ok(fs.existsSync(cloneDirOf(paths, DOKTOR_URL)))
+
+  handlers.get('system-design:save-config')(null, { guides: [{ repoUrl: DEFAULT_URL, branch: 'main' }] })
+  const result = await handlers.get('system-design:sync')()
+
+  assert.equal(result.ok, true)
+  assert.equal(fs.existsSync(cloneDirOf(paths, DOKTOR_URL)), false)
+  assert.equal(hasIndex(database, DOKTOR_URL), false)
+  assert.deepEqual(Object.keys(readSetting(SYSTEM_DESIGN_SYNC_KEY).sources), [sourceKey({ repoUrl: DEFAULT_URL, branch: 'main' })])
+  assert.ok(fs.existsSync(cloneDirOf(paths, DEFAULT_URL)), 'o guia que continua na lista não some')
+  assert.ok(hasIndex(database, DEFAULT_URL))
+})
+
+test('guia ainda em uso por projeto (escolha no app ou arquivo confirmado) não é apagado', async (t) => {
+  const { database, paths, projectsRoot } = setupHandlers(t, { syncSystemDesignRepository: fakeSync })
+  const noApp = makeProject(projectsRoot, 'projeto-app')
+  const noArquivo = makeProject(projectsRoot, 'projeto-arquivo', {
+    guideFile: JSON.stringify({ guias: [{ url: OTHER_URL }] }),
+  })
+  await handlers.get('system-design:save-project')(null, noApp, { guides: [{ repoUrl: DOKTOR_URL, branch: 'main' }] })
+  const { project } = await handlers.get('system-design:resolve-project')(null, noArquivo)
+  await handlers.get('system-design:save-project')(null, noArquivo, { confirmFile: project.file.hash })
+  await handlers.get('system-design:sync')(null, { projectRoot: noApp })
+  await handlers.get('system-design:sync')(null, { projectRoot: noArquivo })
+
+  // Sincronizar só o guia do usuário não pode levar embora o dos projetos fechados.
+  await handlers.get('system-design:sync')()
+  for (const url of [DOKTOR_URL, OTHER_URL, DEFAULT_URL]) {
+    assert.ok(fs.existsSync(cloneDirOf(paths, url)), `clone de ${url}`)
+    assert.ok(hasIndex(database, url), `índice de ${url}`)
+  }
+})
+
+test('não sabendo se um guia confirmado ainda existe (raiz sumiu), nada é apagado', async (t) => {
+  const { database, paths, projectsRoot } = setupHandlers(t, { syncSystemDesignRepository: fakeSync })
+  const raiz = makeProject(projectsRoot, 'projeto-sumido', { guideFile: JSON.stringify({ guias: [{ url: OTHER_URL }] }) })
+  const { project } = await handlers.get('system-design:resolve-project')(null, raiz)
+  await handlers.get('system-design:save-project')(null, raiz, { confirmFile: project.file.hash })
+  await handlers.get('system-design:sync')(null, { projectRoot: raiz })
+  fs.rmSync(raiz, { recursive: true, force: true })
+
+  await handlers.get('system-design:sync')()
+  assert.ok(fs.existsSync(cloneDirOf(paths, OTHER_URL)))
+  assert.ok(hasIndex(database, OTHER_URL))
+})
+
+test('limpar o cache também apaga as pastas de clone', async (t) => {
+  const { paths } = setupHandlers(t, { syncSystemDesignRepository: fakeSync })
+  await handlers.get('system-design:sync')()
+  const sourcesDir = path.join(paths.config, 'system-design', 'sources')
+  assert.ok(fs.readdirSync(sourcesDir).length > 0)
+
+  const result = await handlers.get('system-design:reset-cache')()
+  assert.equal(result.ok, true)
+  assert.equal(fs.existsSync(sourcesDir) ? fs.readdirSync(sourcesDir).length : 0, 0)
 })
