@@ -56,6 +56,29 @@ test('removeTreeSync lança quando o arquivo continua lá (o rmSync mudo não pa
   assert.throws(() => removeTreeSync(path.join(base, 'teimoso.txt'), fsMudo), /não consegui apagar/)
 })
 
+test('removeTreeSync tenta de novo quando o Windows segura o arquivo por instantes (EBUSY)', () => {
+  const base = pasta()
+  escrever(base, 'preso.txt')
+  let falhas = 2
+  const fsOcupado = {
+    ...fs,
+    unlinkSync: (alvo) => {
+      if (falhas-- > 0) throw Object.assign(new Error('busy'), { code: 'EBUSY' })
+      fs.unlinkSync(alvo)
+    },
+  }
+  removeTreeSync(path.join(base, 'preso.txt'), fsOcupado)
+  assert.equal(fs.existsSync(path.join(base, 'preso.txt')), false)
+  assert.equal(falhas, -1, 'deveria ter falhado duas vezes e passado na terceira')
+})
+
+test('removeTreeSync desiste e relança se o arquivo nunca solta', () => {
+  const base = pasta()
+  escrever(base, 'preso.txt')
+  const fsPreso = { ...fs, unlinkSync: () => { throw Object.assign(new Error('busy'), { code: 'EBUSY' }) } }
+  assert.throws(() => removeTreeSync(path.join(base, 'preso.txt'), fsPreso), /busy/)
+})
+
 test('o que não saiu deste build é sobra; o emitido e o da pasta public ficam', () => {
   const base = pasta()
   const dist = path.join(base, 'dist')

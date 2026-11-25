@@ -34,18 +34,39 @@ function removeTreeSync(target, fsImpl = fs) {
     for (const entry of fsImpl.readdirSync(target)) {
       removeTreeSync(path.join(target, entry), fsImpl)
     }
-    fsImpl.rmdirSync(target)
+    retryWhileBusy(() => fsImpl.rmdirSync(target))
   } else {
     try {
-      fsImpl.unlinkSync(target)
+      retryWhileBusy(() => fsImpl.unlinkSync(target), BUSY_CODES_FILE)
     } catch (error) {
       // Junção de pasta no Windows: é link, mas sai por rmdir.
       if (error?.code !== 'EPERM' && error?.code !== 'EISDIR') throw error
-      fsImpl.rmdirSync(target)
+      retryWhileBusy(() => fsImpl.rmdirSync(target))
     }
   }
   if (fsImpl.existsSync(target)) {
     throw new Error(`[build-output] não consegui apagar ${target}`)
+  }
+}
+
+const BUSY_CODES = new Set(['EBUSY', 'EPERM', 'ENOTEMPTY', 'EACCES'])
+// No arquivo, EPERM é a junção (cai no `rmdir`), não arquivo preso: não se repete.
+const BUSY_CODES_FILE = new Set(['EBUSY', 'EACCES'])
+
+/**
+ * No Windows, antivírus e indexador seguram o arquivo por instantes e a
+ * exclusão falha (ou fica pendente). Tenta de novo por ~1 s antes de desistir.
+ * Ao esgotar, relança o último erro: não esconde falha de verdade.
+ */
+function retryWhileBusy(operation, codes = BUSY_CODES, attempts = 5, delayMs = 200) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return operation()
+    } catch (error) {
+      if (error?.code === 'ENOENT') return undefined
+      if (!codes.has(error?.code) || attempt >= attempts) throw error
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delayMs)
+    }
   }
 }
 

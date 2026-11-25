@@ -178,6 +178,30 @@ confirma `--offline`, lifecycle scripts, PATH, prefixo, permissões e
 persistência entre processos. O CI roda o mesmo check em Linux, Windows e
 macOS; o `release-smoke` mede a árvore que efetivamente entrou no artefato.
 
+### Empacotar localmente no Windows (`npm run pack`)
+
+- O `beforePack` recria `app/build/npm-runtime` a cada execução (apaga com
+  conferência e repete a exclusão se o antivírus ou o indexador segurarem o
+  arquivo). Pode rodar `npm run pack` várias vezes seguidas sem apagar nada à mão.
+- **Sem Visual Studio (Build Tools C++)** o `npm run pack` para em
+  `@electron/rebuild` ("Could not find any Visual Studio installation"), porque
+  tenta recompilar o `node-pty`. O `node-pty` é N-API e já traz o binário pronto
+  (`prebuilds/win32-x64/`), então dá para pular o rebuild, igual ao CI do
+  Windows:
+
+  ```powershell
+  cd app
+  npm run build
+  npx electron-builder --dir -c.npmRebuild=false
+  ```
+
+  No PowerShell, cite o argumento (`'-c.npmRebuild=false'`) se o shell o partir.
+- Node: o `.nvmrc` fixa 25.9.0 (desenvolvimento) e o CI de release usa 22.x.
+  O empacotamento e o `node-pty` por prebuild funcionam nos dois; o que decide é
+  o Node do Electron empacotado, não o da máquina.
+- Não troque a política do CI: lá o Visual Studio existe e o Linux/macOS seguem
+  com o rebuild padrão.
+
 ### Alternativas ao npm-runtime
 
 Para medir pnpm, Yarn Classic, Yarn moderno e Corepack na mesma máquina:
