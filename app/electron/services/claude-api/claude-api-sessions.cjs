@@ -18,7 +18,9 @@ const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 const MAX_SESSIONS = 20
 const MAX_TRANSCRIPT_ENTRIES = 300
 const MAX_TEXT = 20_000
-const MAX_FILE_BYTES = 50 * 1024 * 1024
+const CHUNK_BYTES = 1024 * 1024
+const BIG_LINE = 100_000
+const BASE64_DATA = /"data":"[A-Za-z0-9+/=]{256,}"/g
 
 function encodeProjectDir(cwd) {
   return cwd.split(path.sep).join('-').replace(/[^A-Za-z0-9_-]/g, '-')
@@ -28,17 +30,41 @@ function projectDir(configDir, cwd) {
   return path.join(configDir, 'projects', encodeProjectDir(cwd))
 }
 
-function parseLines(text) {
-  const entries = []
-  for (const line of text.split('\n')) {
-    if (!line.trim()) continue
+/**
+ * Lê o `.jsonl` por linhas, em blocos de 1 MB, sem carregar o arquivo inteiro. O base64 das
+ * imagens (`"data":"..."`) é esvaziado antes do parse: o bloco só precisa da contagem.
+ */
+function forEachEntry(fileSystem, file, onEntry) {
+  const fd = fileSystem.openSync(file, 'r')
+  const buffer = Buffer.allocUnsafe(CHUNK_BYTES)
+  let pending = []
+  const flush = () => {
+    let line = Buffer.concat(pending).toString('utf8')
+    pending = []
+    if (!line.trim()) return
+    if (line.length > BIG_LINE) line = line.replace(BASE64_DATA, '"data":""')
     try {
-      entries.push(JSON.parse(line))
+      onEntry(JSON.parse(line))
     } catch {
       // Linha cortada no fim de um arquivo ainda em escrita.
     }
   }
-  return entries
+  try {
+    for (;;) {
+      const read = fileSystem.readSync(fd, buffer, 0, CHUNK_BYTES, null)
+      if (read === 0) break
+      let start = 0
+      for (let i = buffer.indexOf(10, 0); i !== -1 && i < read; i = buffer.indexOf(10, start)) {
+        pending.push(Buffer.from(buffer.subarray(start, i)))
+        flush()
+        start = i + 1
+      }
+      if (start < read) pending.push(Buffer.from(buffer.subarray(start, read)))
+    }
+    flush()
+  } finally {
+    fileSystem.closeSync(fd)
+  }
 }
 
 /** Texto do que a pessoa digitou; `null` para resultado de ferramenta e mensagens internas. */
@@ -104,23 +130,24 @@ function listClaudeApiSessions({ configDir, cwd, fileSystem = fs }) {
     } catch {
       continue
     }
-    if (stat.size > MAX_FILE_BYTES) continue
-    let entries
+    let first = null
+    let turns = 0
     try {
-      entries = parseLines(fileSystem.readFileSync(file, 'utf8'))
+      forEachEntry(fileSystem, file, (entry) => {
+        const message = userMessage(entry)
+        if (!message || message.text.startsWith('<')) return
+        turns += 1
+        first ??= message.text || describeImages(message.images)
+      })
     } catch {
       continue
     }
-    const prompts = entries
-      .map(userMessage)
-      .filter((message) => message && !message.text.startsWith('<'))
-      .map((message) => message.text || describeImages(message.images))
-    if (prompts.length === 0) continue
+    if (turns === 0) continue
     sessions.push({
       sessionId,
       updatedAt: stat.mtime.toISOString(),
-      firstPrompt: prompts[0].replace(/\s+/g, ' ').trim().slice(0, 120),
-      turns: prompts.length,
+      firstPrompt: first.replace(/\s+/g, ' ').trim().slice(0, 120),
+      turns,
     })
   }
   return sessions.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, MAX_SESSIONS)
@@ -139,51 +166,50 @@ function listClaudeApiSessions({ configDir, cwd, fileSystem = fs }) {
 function readClaudeApiTranscript({ configDir, cwd, sessionId, fileSystem = fs }) {
   if (!configDir || !cwd || !SESSION_ID.test(sessionId ?? '')) return null
   const file = path.join(projectDir(configDir, cwd), `${sessionId}.jsonl`)
-  let text
+  const out = []
   try {
-    if (fileSystem.statSync(file).size > MAX_FILE_BYTES) return null
-    text = fileSystem.readFileSync(file, 'utf8')
+    forEachEntry(fileSystem, file, (entry) => collect(entry, out))
   } catch {
     return null
   }
-  const out = []
-  for (const entry of parseLines(text)) {
-    if (entry.isSidechain) continue
-    const typed = userMessage(entry)
-    if (typed !== null) {
-      out.push({ role: 'user', text: clip(typed.text), ...(typed.images ? { images: typed.images } : {}) })
-      continue
-    }
-    const content = entry.message?.content
-    if (entry.type === 'user' && Array.isArray(content)) {
-      for (const part of content) {
-        if (part?.type === 'tool_result' && typeof part.tool_use_id === 'string') {
-          const body = typeof part.content === 'string'
-            ? part.content
-            : Array.isArray(part.content)
-              ? part.content.filter((p) => p?.type === 'text').map((p) => p.text).join('\n')
-              : ''
-          out.push({ role: 'tool-result', toolUseId: part.tool_use_id, isError: part.is_error === true, text: clip(body, 4000) })
-        }
+  return out.slice(-MAX_TRANSCRIPT_ENTRIES)
+}
+
+function collect(entry, out) {
+  if (entry.isSidechain) return
+  const typed = userMessage(entry)
+  if (typed !== null) {
+    out.push({ role: 'user', text: clip(typed.text), ...(typed.images ? { images: typed.images } : {}) })
+    return
+  }
+  const content = entry.message?.content
+  if (entry.type === 'user' && Array.isArray(content)) {
+    for (const part of content) {
+      if (part?.type === 'tool_result' && typeof part.tool_use_id === 'string') {
+        const body = typeof part.content === 'string'
+          ? part.content
+          : Array.isArray(part.content)
+            ? part.content.filter((p) => p?.type === 'text').map((p) => p.text).join('\n')
+            : ''
+        out.push({ role: 'tool-result', toolUseId: part.tool_use_id, isError: part.is_error === true, text: clip(body, 4000) })
       }
-      continue
     }
-    if (entry.type === 'assistant' && Array.isArray(content) && entry.message?.model !== '<synthetic>') {
-      for (const part of content) {
-        if (part?.type === 'text' && typeof part.text === 'string' && part.text) {
-          out.push({ role: 'assistant', text: clip(part.text) })
-        } else if (part?.type === 'tool_use' && typeof part.id === 'string') {
-          out.push({
-            role: 'tool',
-            toolUseId: part.id,
-            name: typeof part.name === 'string' ? part.name : 'ferramenta',
-            input: part.input && typeof part.input === 'object' ? part.input : {},
-          })
-        }
+    return
+  }
+  if (entry.type === 'assistant' && Array.isArray(content) && entry.message?.model !== '<synthetic>') {
+    for (const part of content) {
+      if (part?.type === 'text' && typeof part.text === 'string' && part.text) {
+        out.push({ role: 'assistant', text: clip(part.text) })
+      } else if (part?.type === 'tool_use' && typeof part.id === 'string') {
+        out.push({
+          role: 'tool',
+          toolUseId: part.id,
+          name: typeof part.name === 'string' ? part.name : 'ferramenta',
+          input: part.input && typeof part.input === 'object' ? part.input : {},
+        })
       }
     }
   }
-  return out.slice(-MAX_TRANSCRIPT_ENTRIES)
 }
 
 module.exports = {

@@ -96,3 +96,29 @@ test('mensagem com imagem volta com a contagem; conversa que começa só com ima
     env.cleanup()
   }
 })
+
+test('conversa acima de 50 MB de imagens aparece na lista e é lida sem guardar o base64', () => {
+  const env = setup()
+  try {
+    const D = '4e096862-1a3d-43f3-b266-d87604fc9651'
+    const dir = path.join(env.configDir, 'projects', encodeProjectDir(env.cwd))
+    const imagem = { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'A'.repeat(2_500_000) } }
+    const linha = (l) => JSON.stringify(l) + '\n'
+    const fd = fs.openSync(path.join(dir, `${D}.jsonl`), 'w')
+    fs.writeSync(fd, linha({ type: 'user', message: { content: 'Veja estas telas' } }))
+    for (let i = 0; i < 22; i += 1) {
+      fs.writeSync(fd, linha({ type: 'user', message: { role: 'user', content: [imagem, { type: 'text', text: `tela ${i}` }] } }))
+    }
+    fs.closeSync(fd)
+    assert.ok(fs.statSync(path.join(dir, `${D}.jsonl`)).size > 50 * 1024 * 1024)
+
+    const conversa = listClaudeApiSessions({ configDir: env.configDir, cwd: env.cwd }).find((s) => s.sessionId === D)
+    assert.equal(conversa.firstPrompt, 'Veja estas telas')
+    assert.equal(conversa.turns, 23)
+    const entries = readClaudeApiTranscript({ configDir: env.configDir, cwd: env.cwd, sessionId: D })
+    assert.equal(entries.length, 23)
+    assert.deepEqual(entries[22], { role: 'user', text: 'tela 21', images: 1 })
+  } finally {
+    env.cleanup()
+  }
+})
