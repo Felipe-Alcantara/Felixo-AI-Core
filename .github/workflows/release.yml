@@ -63,11 +63,23 @@ jobs:
         shell: bash
         env:
           TARGET_SHA: ${{ github.event.workflow_run.head_sha || inputs.commit_sha }}
+        # O gate dispara este Release no instante em que o CI conclui, e a
+        # listagem do Actions é eventualmente consistente: em 05/10/2026 ela
+        # ainda não mostrava o run verde (37321941730) e o passo falhou, e um
+        # `gh run rerun` minutos depois passou. Repete a leitura (10 s, 20 s,
+        # 40 s, 80 s) antes de desistir; sem CI verde de verdade, falha igual.
         run: |
-          passed="$(gh run list --workflow CI --commit "$TARGET_SHA" --limit 20 \
-            --json status,conclusion \
-            --jq 'any(.[]; .status == "completed" and .conclusion == "success")')"
-          if [[ "$passed" != "true" ]]; then
+          source "$GITHUB_WORKSPACE/.github/scripts/retry.sh"
+
+          ci_verde() {
+            local passed
+            passed="$(gh run list --workflow CI --commit "$TARGET_SHA" --limit 20 \
+              --json status,conclusion \
+              --jq 'any(.[]; .status == "completed" and .conclusion == "success")')" || return 1
+            [[ "$passed" == "true" ]]
+          }
+
+          if ! retry 5 10 -- ci_verde; then
             echo "Nenhuma execução CI verde encontrada para $TARGET_SHA." >&2
             exit 1
           fi
