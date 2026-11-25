@@ -51,7 +51,7 @@ export const terminalSurfaces: InventoryElement[] = [
       {
         locator: 'aria-label="Abrir o terminal em outra janela"',
         kind: 'button',
-        trigger: 'clique no ícone do canto superior direito do terminal',
+        trigger: 'clique no ícone do canto superior esquerdo do terminal',
         effect: 'Abrir o terminal em outra janela: abre a janela auxiliar felixo-aux-t-<sessão> (mesmo renderer) e move o xterm vivo para ela com store.moveTo, sem reiniciar (PID, histórico e digitação seguem). O painel mostra "Este terminal está em outra janela" com o botão "Trazer de volta". O ícone fica no canto do terminal, não no cabeçalho (que não tem espaço em janela pequena). Fechar a janela pelo X também devolve o xterm ao painel (pagehide); fechar o painel fecha a janela. Reiniciar com a janela aberta reencaixa o xterm novo nela.',
         failure: 'Janela negada pelo sistema: o terminal fica no painel e a barra de status mostra "Não foi possível abrir a janela do terminal."',
         test: { file: 'src/features/canvas/components/terminal-detach.test.ts' },

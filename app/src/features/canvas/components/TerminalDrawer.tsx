@@ -1170,12 +1170,12 @@ function TerminalPane({
           inert={readingActive || archiveOpen}
           className="h-full min-w-0 flex-1 overflow-hidden px-1 pb-2 pt-1"
         />
-        {/* No canto do próprio terminal, e não no cabeçalho: ali um ícone a mais empurrava o Fechar para fora da tela em janela pequena. */}
+        {/* No canto esquerdo do próprio terminal, e não no cabeçalho (um ícone a mais empurrava o Fechar para fora da tela) nem à direita (cobria o Copiar texto da Leitura). */}
         {!detachedTerminal && !collapsed && (
           <button
             type="button"
             onClick={openInWindow}
-            className="felixo-btn-icon absolute top-1 right-2 z-10 rounded-sm p-1 text-zinc-500 opacity-60 hover:bg-white/10 hover:text-zinc-100 hover:opacity-100 focus-visible:opacity-100"
+            className="felixo-btn-icon absolute top-1 left-2 z-10 rounded-sm p-1 text-zinc-500 opacity-60 hover:bg-white/10 hover:text-zinc-100 hover:opacity-100 focus-visible:opacity-100"
             aria-label="Abrir o terminal em outra janela"
             title="Abre este terminal numa janela própria; o agente continua rodando, sem reiniciar"
           >
