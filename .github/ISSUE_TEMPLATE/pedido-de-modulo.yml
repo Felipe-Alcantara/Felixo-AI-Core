@@ -1,0 +1,31 @@
+name: Pedir um módulo ou caso de uso
+description: Sugerir um agente ou uma área que o Felixo ainda não cobre.
+title: "[Módulo] "
+labels: ["módulo"]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Área
+      description: Escolha a mais próxima. Se nenhuma servir, marque Outra e explique na descrição.
+      options:
+        - Programação
+        - Criação de conteúdo
+        - Redes sociais
+        - Configuração de sistemas
+        - Imagem e vídeo
+        - Outra
+    validations:
+      required: true
+  - type: textarea
+    id: o-que-faria
+    attributes:
+      label: O que o agente faria
+      description: Descreva a tarefa do começo ao fim, com um exemplo real.
+    validations:
+      required: true
+  - type: textarea
+    id: ferramentas
+    attributes:
+      label: Ferramentas e contas necessárias
+      description: Programas, serviços ou CLIs que o agente usaria. Nunca cole senhas, tokens ou chaves aqui.

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Perguntas e conversas
+    url: https://github.com/Felipe-Alcantara/Felixo-AI-Core/discussions
+    about: Dúvidas de uso e conversas abertas ficam nas Discussions, não em issues.
+  - name: Falha de segurança
+    url: https://github.com/Felipe-Alcantara/Felixo-AI-Core/security/policy
+    about: Não abra issue pública para vulnerabilidade. Siga o SECURITY.md.

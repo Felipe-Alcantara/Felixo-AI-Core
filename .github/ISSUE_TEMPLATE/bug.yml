@@ -1,0 +1,51 @@
+name: Relatar um problema
+description: Algo no app não funciona como deveria.
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Obrigado por relatar. Vulnerabilidade de segurança **não** vai aqui: siga o [SECURITY.md](https://github.com/Felipe-Alcantara/Felixo-AI-Core/security/policy).
+  - type: dropdown
+    id: sistema
+    attributes:
+      label: Sistema operacional
+      options:
+        - Windows
+        - macOS
+        - Linux
+    validations:
+      required: true
+  - type: input
+    id: versao-app
+    attributes:
+      label: Versão do app
+      description: Aparece no rodapé da barra lateral do canvas. O relatório do QA Logger também traz.
+    validations:
+      required: true
+  - type: input
+    id: agente
+    attributes:
+      label: Agente e versão da CLI
+      description: Só se o problema envolve um agente. Por exemplo, Claude Code, Codex ou Gemini CLI, com a saída de `claude --version`, `codex --version` ou `gemini --version`.
+  - type: textarea
+    id: passos
+    attributes:
+      label: Passos para reproduzir
+      description: O que você fez, em ordem, até o problema aparecer.
+    validations:
+      required: true
+  - type: textarea
+    id: esperado
+    attributes:
+      label: O que aconteceu e o que você esperava
+    validations:
+      required: true
+  - type: textarea
+    id: qa-logger
+    attributes:
+      label: Relatório do QA Logger (opcional)
+      description: >-
+        No menu de ferramentas do canvas, abra o QA Logger e clique em "Reportar problema". O pacote já tira tokens e chaves,
+        mas pode manter o e-mail e o nome da pasta do seu usuário. Confira e apague esses dados antes de colar ou anexar.
