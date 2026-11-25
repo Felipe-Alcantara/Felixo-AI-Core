@@ -106,22 +106,37 @@ describe('área livre do canvas', () => {
 })
 
 describe('Mini Map', () => {
-  it('mantém o tamanho quando há espaço', () => {
-    expect(miniMapSize(616)).toEqual({ width: 200, height: 150 })
+  it('mantém o tamanho quando há espaço para ele e para a pílula de zoom', () => {
+    // 200 (mapa) + 32 (margem) + 224 (pílula) = 456 de largura livre.
+    expect(miniMapSize(456)).toEqual({ width: 200, height: 150 })
+    expect(miniMapSize(840)).toEqual({ width: 200, height: 150 })
   })
 
   it('encolhe proporcionalmente quando o painel avança', () => {
     // Era isto que faltava: com o painel largo, o mapa ficava por baixo dele.
-    const mapa = miniMapSize(180)
+    const mapa = miniMapSize(404)
 
     expect(mapa).not.toBeNull()
     expect(mapa!.width).toBe(148)
     expect(mapa!.width / mapa!.height).toBeCloseTo(200 / 150, 1)
   })
 
-  it('some quando nem o tamanho mínimo cabe', () => {
-    expect(miniMapSize(100)).toBeNull()
+  it('some quando nem o tamanho mínimo cabe ao lado da pílula de zoom', () => {
+    // 96 (piso) + 32 + 224 = 352: abaixo disso o mapa cruzaria a pílula.
+    expect(miniMapSize(351)).toBeNull()
+    expect(miniMapSize(352)).toEqual({ width: 96, height: 72 })
     expect(miniMapSize(0)).toBeNull()
+  })
+
+  it('nunca cruza a pílula de zoom: com a sidebar expandida, o mapa não cabe em 768 px e cabe a partir de 1024', () => {
+    const livre = (viewport: number) => freeCanvasArea({ width: viewport, height: 900 }, { toolbar: 288, panel: 0, drawer: 0, inspector: 288 }).width
+    expect(miniMapSize(livre(768))).toBeNull()
+    for (const viewport of [1024, 1280, 1920]) {
+      const mapa = miniMapSize(livre(viewport))
+      expect(mapa).not.toBeNull()
+      // Borda esquerda do mapa (recuado 304 px da direita) depois do fim da pílula (288 + 20 + 208).
+      expect(viewport - 304 - mapa!.width).toBeGreaterThanOrEqual(288 + 20 + 208)
+    }
   })
 })
 describe('divisão de uma vez só entre painel e gaveta (splitHorizontalSpace)', () => {

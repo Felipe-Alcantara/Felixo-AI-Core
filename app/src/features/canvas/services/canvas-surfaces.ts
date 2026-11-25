@@ -229,7 +229,7 @@ export function freeCanvasArea(
  * Tamanho do Mini Map para a largura livre atual.
  *
  * Ele encolhe em vez de sumir — é um mapa, e um mapa menor continua sendo um
- * mapa — mas para de encolher num piso, abaixo do qual não dá para reconhecer
+ * mapa — mas cede espaço à pílula de zoom (`ZOOM_PILL_RESERVE`) e para de encolher num piso, abaixo do qual não dá para reconhecer
  * bloco nenhum. Sem largura livre suficiente nem o piso cabe, e aí ele sai da
  * tela: é a única superfície que pode sumir, porque é a única cuja ausência
  * não impede nenhuma ação.
@@ -237,6 +237,14 @@ export function freeCanvasArea(
 const MINIMAP_DEFAULT = { width: 200, height: 150 }
 const MINIMAP_MIN = { width: 96, height: 72 }
 const MINIMAP_MARGIN = 32
+/**
+ * O que a pílula de zoom (208 px, a 20 px da coluna da esquerda) tira da largura do
+ * Mini Map: os dois ficam no rodapé, um em cada ponta da área livre, e o mapa à direita
+ * recua 16 px além do inspector. Com `largura livre − 256` o mapa pára antes de cruzar a
+ * pílula (folga de 12 px); sem esse espaço o mapa some, como já some quando não cabe.
+ * 224 = 256 − MINIMAP_MARGIN.
+ */
+export const ZOOM_PILL_RESERVE = 224
 
 /** Altura real ocupada pelo dock "Elementos" sobre a base do canvas. */
 export function dockReservedBottom(
@@ -252,7 +260,7 @@ export function dockReservedBottom(
 export function miniMapSize(
   freeWidth: number,
 ): { width: number; height: number } | null {
-  const available = freeWidth - MINIMAP_MARGIN
+  const available = freeWidth - MINIMAP_MARGIN - ZOOM_PILL_RESERVE
 
   if (available < MINIMAP_MIN.width) {
     return null
