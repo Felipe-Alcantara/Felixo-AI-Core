@@ -11,7 +11,8 @@ const { createAppProtocolHandler, MEDIA_PATH_PREFIX } = require('./app-protocol.
 const { parseRange } = require('./media-response.cjs')
 const { createMediaRegistry } = require('../services/media-registry.cjs')
 
-const base = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-midia-'))
+// realpath: no macOS o tmpdir é /var -> /private/var, e o authorize compara caminhos resolvidos.
+const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-midia-')))
 const pastaAutorizada = path.join(base, 'Pasta com acento é espaço')
 const pastaFora = path.join(base, 'fora')
 fs.mkdirSync(pastaAutorizada)
