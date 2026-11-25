@@ -68,7 +68,12 @@ export type RepoCard = {
   archived: boolean
   /** Cartão sem tarefas não abre a tabela: não haveria nada para mostrar. */
   clickable: boolean
+  /** Pasta do projeto do AI Core que casa com o cartão; `null` = sem pasta local; ausente = lista de projetos ainda não carregada. */
+  localPath?: string | null
 }
+
+/** Projeto registrado no AI Core (só o que o casamento lê). */
+export type LocalProject = { name: string; path: string }
 
 export type RepoGroupFilter = {
   property: string
@@ -409,6 +414,25 @@ export function buildRepoCards(input: BuildRepoCardsInput): RepoCard[] {
       : []
 
   return filterRepoCards([...taskCards, ...emptyCards, ...(noGroupCard ? [noGroupCard] : [])], search)
+}
+
+/**
+ * Marca cada cartão com a pasta local do projeto de mesmo nome (nome do projeto ou
+ * última pasta do caminho, com a mesma normalização do Painel). `projects` nulo =
+ * lista ainda não carregada: os cartões ficam sem marca em vez de todos "sem pasta".
+ */
+export function markLocalFolders(cards: RepoCard[], projects: LocalProject[] | null): RepoCard[] {
+  if (!projects) return cards
+  const byName = new Map<string, string>()
+  for (const project of projects) {
+    for (const name of [lastSegment(project.name), lastSegment(project.path.replace(/\\/g, '/'))]) {
+      const key = normalizeName(name)
+      if (key && !byName.has(key)) byName.set(key, project.path)
+    }
+  }
+  return cards.map((item) =>
+    item.key === NO_GROUP_KEY ? item : { ...item, localPath: byName.get(normalizeName(lastSegment(item.label))) ?? null },
+  )
 }
 
 /** Busca do Painel: pelo nome do cartão, sem acento e sem diferença de maiúscula. Barata — a tela a aplica fora do memo do placar. */

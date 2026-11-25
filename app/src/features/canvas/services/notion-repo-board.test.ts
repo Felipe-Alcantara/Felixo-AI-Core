@@ -5,6 +5,7 @@ import {
   NO_GROUP_KEY,
   REPO_BOARD_VIEW,
   buildRepoCards,
+  markLocalFolders,
   filterTasksByGroup,
   listGroupableProperties,
   listRelationProperties,
@@ -311,5 +312,33 @@ describe('preferências do painel', () => {
   it('sem storage ou sem alvo não quebra', () => {
     expect(readRepoBoardSettings('', 'd', memoryStorage())).toEqual(DEFAULT_REPO_BOARD_SETTINGS)
     expect(() => saveRepoBoardSettings('c', 'd', DEFAULT_REPO_BOARD_SETTINGS, undefined)).not.toThrow()
+  })
+})
+
+describe('markLocalFolders', () => {
+  const tasks = [
+    task('1', { Repositório: 'Felixo-AI-Core' }),
+    task('2', { Repositório: 'Ação-Rápida' }),
+    task('3', { Repositório: 'Openia' }),
+    task('4', {}),
+  ]
+  const cards = buildRepoCards({ ...baseInput, details: null, tasks })
+  const localOf = (list: ReturnType<typeof markLocalFolders>) => Object.fromEntries(list.map((item) => [item.key, item.localPath]))
+
+  it('casa pelo nome do projeto ou pela última pasta do caminho, sem acento nem diferença de separador', () => {
+    const marked = markLocalFolders(cards, [
+      { name: 'felixo ai core', path: String.raw`P:\Programação\Github\Felixo-AI-Core` },
+      { name: 'x', path: String.raw`C:\dev\acao_rapida` },
+    ])
+    expect(localOf(marked)).toMatchObject({
+      'Felixo-AI-Core': String.raw`P:\Programação\Github\Felixo-AI-Core`,
+      'Ação-Rápida': String.raw`C:\dev\acao_rapida`,
+      Openia: null,
+    })
+  })
+
+  it('não marca o cartão "Sem coluna" e deixa tudo sem marca enquanto a lista não carregou', () => {
+    expect(localOf(markLocalFolders(cards, []))[NO_GROUP_KEY]).toBeUndefined()
+    expect(markLocalFolders(cards, null)).toBe(cards)
   })
 })

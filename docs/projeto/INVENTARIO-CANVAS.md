@@ -1961,8 +1961,8 @@ Sem controle próprio: as ações vêm de outros elementos.
 
 - **ID:** `painel-repositorios-notion` · **Dono:** `src/features/canvas/components/tools/NotionRepoBoard.tsx`
 - **Persistência:** localStorage felixo:notion-repo-board:<conexão>:<database>; processo principal: SQLite notion_task_cache (snapshot da database de detalhes)
-- **IPC:** `notion:tasks:list`, `notion:tasks:cached`
-- **Depende de:** `NotionTasksPanel (tarefas, schema e preferências)`, `useNotionDetailsSource`, `buildRepoCards / filterRepoCards (notion-repo-board)`, `FelixoSelect`
+- **IPC:** `notion:tasks:list`, `notion:tasks:cached`, `projects:list`
+- **Depende de:** `NotionTasksPanel (tarefas, schema e preferências)`, `useNotionDetailsSource`, `buildRepoCards / filterRepoCards / markLocalFolders (notion-repo-board)`, `FelixoSelect`
 - **Sobreposição:** Mora dentro do bloco Tarefas Notion (overflow-auto), no lugar da tabela. Os FelixoSelect da configuração abrem em portal z 1000; a grade quebra em colunas de no mínimo 13rem.
 - **Testes:** `src/features/canvas/services/notion-repo-board.test.ts`
 

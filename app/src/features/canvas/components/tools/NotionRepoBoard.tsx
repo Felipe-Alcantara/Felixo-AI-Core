@@ -191,6 +191,12 @@ function CardBody({ card }: { card: RepoCard }) {
       ) : (
         <span className="text-[11px] text-zinc-500">sem tarefas</span>
       )}
+      {card.localPath === null && (
+        <span className="text-[10px] text-zinc-500" title="Este repositório não está nos projetos do AI Core">sem pasta local</span>
+      )}
+      {card.localPath && (
+        <span className="truncate text-[10px] text-zinc-500" title={card.localPath}>pasta local · {card.localPath}</span>
+      )}
       {card.tags.length > 0 && (
         <span className="flex flex-wrap gap-1">
           {card.tags.map((tag) => (

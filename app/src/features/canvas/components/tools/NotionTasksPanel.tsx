@@ -79,6 +79,8 @@ import { nextAutoSyncDelayMs } from '../../services/notion-sync-backoff'
 import {
   REPO_BOARD_VIEW,
   buildRepoCards,
+  markLocalFolders,
+  type LocalProject,
   filterRepoCards,
   filterTasksByGroup,
   listGroupableProperties,
@@ -571,7 +573,22 @@ export function NotionTasksPanel({
         : [],
     [isBoard, boardReady, tasks, schema, boardGroupBy, boardDetailsVia, detailsSource.details, tagProperties, boardSettings.showEmpty],
   )
-  const boardCards = useMemo(() => filterRepoCards(allBoardCards, search), [allBoardCards, search])
+  // Lista de projetos que o app já mantém (mesmo IPC do painel Projetos); nada é varrido no disco.
+  const [localProjects, setLocalProjects] = useState<LocalProject[] | null>(null)
+  useEffect(() => {
+    if (!isBoard) return undefined
+    let cancelled = false
+    void window.felixo?.projects?.list().then((result) => {
+      if (!cancelled && result?.ok && Array.isArray(result.projects)) setLocalProjects(result.projects as LocalProject[])
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [isBoard])
+  const boardCards = useMemo(
+    () => filterRepoCards(markLocalFolders(allBoardCards, localProjects), search),
+    [allBoardCards, localProjects, search],
+  )
   const boardGroupOptions = useMemo(
     () => listGroupableProperties(schema).map((name) => ({ value: name, label: name, meta: schema[name]?.type === 'relation' ? 'ligação' : undefined })),
     [schema],

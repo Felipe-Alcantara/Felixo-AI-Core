@@ -1245,8 +1245,8 @@ const notionRepoBoard: InventoryElement = {
     },
   ],
   persistence: ['localStorage felixo:notion-repo-board:<conexão>:<database>', 'processo principal: SQLite notion_task_cache (snapshot da database de detalhes)'],
-  ipc: ['notion:tasks:list', 'notion:tasks:cached'],
-  dependsOn: ['NotionTasksPanel (tarefas, schema e preferências)', 'useNotionDetailsSource', 'buildRepoCards / filterRepoCards (notion-repo-board)', 'FelixoSelect'],
+  ipc: ['notion:tasks:list', 'notion:tasks:cached', 'projects:list'],
+  dependsOn: ['NotionTasksPanel (tarefas, schema e preferências)', 'useNotionDetailsSource', 'buildRepoCards / filterRepoCards / markLocalFolders (notion-repo-board)', 'FelixoSelect'],
   tests: [unit(`${SERVICES}/notion-repo-board.test.ts`)],
   gaps: [
     {
