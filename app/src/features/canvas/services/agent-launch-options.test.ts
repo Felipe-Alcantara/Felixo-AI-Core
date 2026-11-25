@@ -232,3 +232,18 @@ describe('aviso de agente sem modo fast', () => {
     expect(fastModeUnavailableNote(undefined)).toBeNull()
   })
 })
+
+describe('Remote Control do Claude', () => {
+  it('acrescenta --remote-control com o nome só para o Claude', () => {
+    expect(buildAgentArgs({ agentId: 'claude', remoteControl: ' Bloco A ' })).toEqual([
+      '--remote-control',
+      'Bloco A',
+    ])
+    expect(buildAgentArgs({ agentId: 'codex', remoteControl: 'Bloco A' })).toEqual([])
+  })
+
+  it('sem nome ou desligado, o lançamento não muda', () => {
+    expect(buildAgentArgs({ agentId: 'claude' })).toEqual([])
+    expect(buildAgentArgs({ agentId: 'claude', remoteControl: '  ' })).toEqual([])
+  })
+})

@@ -394,6 +394,17 @@ aparecem.
   - O bloco precisa de um **Projeto**.
   - Sem **Yolo**, cada edição ou comando pede **Permitir/Negar** dentro do bloco.
   - O gasto da conversa aparece em US$ no topo do bloco.
+
+- **Acompanhar pelo celular (Remote Control):** no menu do agente Claude, a caixa
+  **Acompanhar pelo celular (Remote Control)** (desligada por padrão) abre o
+  terminal com `--remote-control "<nome do bloco>"`. A sessão aparece no app
+  Claude do celular e em claude.ai/code, e o que você digitar lá chega ao
+  terminal do bloco. Exige login claude.ai (assinatura); contas por chave de API
+  abrem o bloco de conversa e não usam isto. Cuidado: quem entrar na sua conta
+  claude.ai dirige o agente com as permissões que ele tiver no PC, então ative
+  "Require trusted devices" na conta. O computador precisa ficar ligado e o
+  processo vivo; retomar o bloco mantém a opção, e a mensagem digitada pelo
+  celular aparece no histórico como se fosse do terminal.
   - Dá para **colar** (Ctrl+V) ou **soltar** imagens no campo da mensagem, até 10
     por vez.
   - Detalhes no [Guia de Contas e Limites](GUIA-CONTAS-E-LIMITES.md#claude-por-chave-de-api-bloco-de-conversa).

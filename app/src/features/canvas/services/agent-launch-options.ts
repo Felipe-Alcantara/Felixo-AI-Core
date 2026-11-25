@@ -186,6 +186,12 @@ export type AgentLaunchChoices = {
   yolo?: boolean
   /** Modo fast do Codex; ignorado quando o agente/modelo não o suporta. */
   fast?: boolean
+  /**
+   * Remote Control do Claude Code (`--remote-control <nome>`): a sessão aparece no app
+   * Claude do celular e em claude.ai/code. O nome é obrigatório para a flag não engolir
+   * um argumento posicional que venha depois dela.
+   */
+  remoteControl?: string
 }
 
 /**
@@ -221,6 +227,10 @@ export function buildAgentArgs(choices: AgentLaunchChoices): string[] | null {
 
   if (choices.fast && agent.id === 'codex' && supportsFastMode(agent, choices.model ?? '')) {
     args.push('-c', 'service_tier=priority')
+  }
+
+  if (choices.remoteControl?.trim() && agent.id === 'claude') {
+    args.push('--remote-control', choices.remoteControl.trim())
   }
 
   if (choices.yolo) {

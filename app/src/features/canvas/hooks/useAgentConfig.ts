@@ -118,6 +118,8 @@ export function useAgentConfig(
   const [effort, setEffort] = useState(inicial.effort)
   const [yolo, setYolo] = useState(inicial.yolo)
   const [fast, setFast] = useState(inicial.fast)
+  // Só vale para o Claude e nunca é lembrado: expõe o agente na conta claude.ai, então liga-se bloco a bloco.
+  const [remoteControl, setRemoteControl] = useState(false)
   // Preset aplicado + o contexto editável do agente. O contexto é um rascunho
   // próprio (não o do preset): dá para ajustá-lo antes de abrir e salvar o
   // resultado como um preset novo.
@@ -1028,6 +1030,8 @@ export function useAgentConfig(
       effort: (effort || undefined) as EffortLevel | undefined,
       yolo,
       fast: fast && fastSupported,
+      remoteControl:
+        remoteControl && agent.id === 'claude' ? customName || `Felixo · ${place}` : undefined,
     }
     if (agent.isLauncher) {
       const launcherArgs = buildOpeniaRunArgs(
@@ -1093,6 +1097,7 @@ export function useAgentConfig(
     planningFile,
     projectId,
     projects,
+    remoteControl,
     responsible,
     yolo,
   ])
@@ -1141,6 +1146,8 @@ export function useAgentConfig(
     fast,
     setFast,
     fastSupported,
+    remoteControl,
+    setRemoteControl,
     presets: agentPresets,
     activePreset,
     applyPreset,

@@ -421,6 +421,22 @@ export function AgentConfigFields({
                   </span>
                 </label>
               )}
+              {config.agent?.id === 'claude' && (
+                <label className="felixo-checkbox-field mb-3">
+                  <input
+                    type="checkbox"
+                    checked={config.remoteControl}
+                    onChange={(event) => config.setRemoteControl(event.target.checked)}
+                    className="felixo-checkbox"
+                  />
+                  <span className="felixo-checkbox-copy">
+                    <span className="felixo-checkbox-label">Acompanhar pelo celular (Remote Control)</span>
+                    <span className="felixo-checkbox-meta">
+                      Quem entrar na sua conta claude.ai dirige este agente, com as permissões dele
+                    </span>
+                  </span>
+                </label>
+              )}
               {fastNote && <p className="mb-3 text-[11px] leading-relaxed text-zinc-500">{fastNote}</p>}
 
               <label htmlFor={`${prefixo}-planning-file`} className={ROTULO}>
