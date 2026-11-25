@@ -1,6 +1,7 @@
 import { Power } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { FelixoToggle } from '../components/FelixoToggle'
+import { useI18n } from '../../i18n/useI18n'
 
 type AutoStartConfig = {
   supported: boolean
@@ -10,6 +11,7 @@ type AutoStartConfig = {
 }
 
 export function AutoStartSection() {
+  const { t } = useI18n()
   const [config, setConfig] = useState<AutoStartConfig | null>(null)
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
@@ -26,13 +28,13 @@ export function AutoStartSection() {
         setConfig(result.config)
       })
       .catch(() => {
-        if (!cancelled) setMessage('Não foi possível ler a preferência de autostart.')
+        if (!cancelled) setMessage(t('autostart.erroLer'))
       })
 
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [t])
 
   async function toggle() {
     const bridge = window.felixo?.autostart
@@ -44,10 +46,10 @@ export function AutoStartSection() {
       if (result.ok) {
         setConfig({ supported: result.supported, enabled: result.enabled, warning: config.warning })
       } else {
-        setMessage(result.message ?? 'Não foi possível salvar a preferência de autostart.')
+        setMessage(result.message ?? t('autostart.erroSalvar'))
       }
     } catch {
-      setMessage('Não foi possível salvar a preferência de autostart.')
+      setMessage(t('autostart.erroSalvar'))
     } finally {
       setBusy(false)
     }
@@ -61,23 +63,23 @@ export function AutoStartSection() {
     <section className="rounded-2xl border border-white/8 bg-black/10 p-3">
       <div className="mb-2 flex items-center gap-2 text-xs font-medium text-zinc-300">
         <Power size={14} aria-hidden="true" />
-        Iniciar com o sistema
+        {t('autostart.titulo')}
       </div>
       {config.supported ? (
         <div className="flex items-start justify-between gap-3">
           <p className="text-xs leading-relaxed text-zinc-500">
-            Abre o Felixo automaticamente quando você liga o computador.
+            {t('autostart.descricao')}
           </p>
           <FelixoToggle
             checked={config.enabled}
             onChange={() => void toggle()}
             disabled={busy}
-            label="Sempre iniciar com o sistema"
+            label={t('autostart.alternar')}
           />
         </div>
       ) : (
         <p className="text-xs leading-relaxed text-zinc-500">
-          Esta opção não está disponível nesta plataforma.
+          {t('autostart.indisponivel')}
         </p>
       )}
       {config.warning && (

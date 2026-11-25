@@ -11,6 +11,7 @@ import { LazyTerminalOutputPerformanceHarness } from './features/chat/benchmarks
 import { installRendererErrorReporting } from './renderer-error-reporting'
 import { captureOnboardingBootSignals } from './features/onboarding/onboarding-boot-signals'
 import { excalidrawAssetPath } from './excalidraw-asset-path'
+import { initLocale } from './features/i18n/i18n-store'
 
 // As fontes do desenho saem do build, não do CDN do Excalidraw (a CSP não
 // libera rede). Antes do render: o chunk do Excalidraw só carrega depois.
@@ -29,6 +30,9 @@ try {
 } catch {
   // Sem localStorage vale o padrão conservador: o tutorial não abre sozinho.
 }
+
+// Idioma escolhido em Configurações (padrão pt-BR); antes do render, para o `lang` já valer.
+initLocale()
 
 const benchmark = new URLSearchParams(window.location.search).get('benchmark')
 

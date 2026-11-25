@@ -14,6 +14,7 @@ import {
   type QualityStandardSource,
 } from '../../services/quality-standard-prompt'
 import { subscribeSystemDesignConfig } from '../../../shared/system-design/system-design-events'
+import { LanguageField } from '../../../i18n/LanguageField'
 import { AutoStartSection } from '../../../shared/autostart/AutoStartSection'
 import { GraphicsRecoverySection } from '../../../shared/graphics/GraphicsRecoverySection'
 import { PerformanceModeSection } from '../../../shared/performance/PerformanceModeSection'
@@ -69,6 +70,10 @@ export function SettingsPanel({
       {prefersReducedMotion && <ReducedMotionNotice />}
 
       <ThemeField />
+
+      <div className="my-3 border-t border-white/10" />
+
+      <LanguageField />
 
       <div className="my-3 border-t border-white/10" />
 
