@@ -10,7 +10,11 @@ import { attachTerminalFitLifecycle, type TerminalFitStore } from './terminal-fi
 
 export type DetachStore = TerminalFitStore & { moveTo: (sessionId: string, container: HTMLElement) => boolean }
 
+/** `janela`: janela comum ao lado do app. `pip`: pequena, sempre no topo, visível com o app na bandeja. */
+export type DetachMode = 'janela' | 'pip'
+
 export type DetachedTerminal = {
+  modo: DetachMode
   container: HTMLElement
   /** Move o terminal de volta para o painel e fecha a janela. */
   bringBack: () => void
@@ -23,6 +27,7 @@ export type DetachedTerminal = {
 export type DetachOptions = {
   sessionId: string
   title: string
+  modo?: DetachMode
   store: DetachStore
   /** Onde o terminal mora quando não está destacado (o encaixe do painel). */
   getHome: () => HTMLElement | null
@@ -38,29 +43,34 @@ const slug = (value: string) =>
     .replace(/^-|-$/g, '')
     .slice(0, 32) || 'terminal'
 
-/** O id da janela auxiliar deste terminal: o mesmo nome reaproveita a mesma janela. */
-export const auxIdDoTerminal = (sessionId: string) => `t-${slug(sessionId)}`
+/**
+ * O id da janela auxiliar deste terminal: o mesmo nome reaproveita a mesma janela.
+ * O prefixo `pip-` é o que o processo principal lê para abrir pequena e sempre no topo.
+ */
+export const auxIdDoTerminal = (sessionId: string, modo: DetachMode = 'janela') =>
+  `${modo === 'pip' ? 'pip' : 't'}-${slug(sessionId)}`
 
 /** Abre a janela do terminal; devolve null se o processo principal negou. */
 export function detachTerminal({
   sessionId,
   title,
+  modo = 'janela',
   store,
   getHome,
   onClosed,
   open = abrirJanelaAuxiliar,
 }: DetachOptions): DetachedTerminal | null {
-  const win = open(auxIdDoTerminal(sessionId))
+  const win = open(auxIdDoTerminal(sessionId, modo))
   if (!win) return null
 
   const doc = win.document
-  doc.title = `${title} — Felixo AI Core`
+  doc.title = modo === 'pip' ? `${title} — picture-in-picture` : `${title} — Felixo AI Core`
   doc.body.style.cssText = 'margin:0;overflow:hidden;background:#0a0a0a'
   const stopStyles = clonarEstilos(document, doc)
 
   const container = doc.createElement('div')
   container.setAttribute('data-felixo-terminal-mount', '')
-  container.style.cssText = 'box-sizing:border-box;height:100vh;width:100vw;padding:4px 4px 8px'
+  container.style.cssText = `box-sizing:border-box;height:100vh;width:100vw;padding:${modo === 'pip' ? '2px' : '4px 4px 8px'}`
   doc.body.appendChild(container)
 
   // O encaixe usa o rAF e o ResizeObserver da janela onde o terminal está.
@@ -92,6 +102,7 @@ export function detachTerminal({
   win.addEventListener('pagehide', onGone)
 
   return {
+    modo,
     container,
     bringBack() {
       if (!finish()) return

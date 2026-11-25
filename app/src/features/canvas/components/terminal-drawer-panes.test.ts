@@ -2,22 +2,22 @@ import { describe, expect, it } from 'vitest'
 import {
   drawerPaneShortcut,
   MAX_DRAWER_PANES,
-  neighborPane,
   reduceDrawerPanes,
-  resolveDrawerGeometry,
   type DrawerPanes,
   type DrawerPanesAction,
 } from './terminal-drawer-panes'
+import { layoutMosaic, mosaicPaneIds } from './terminal-mosaic'
 
 function run(...actions: DrawerPanesAction[]): DrawerPanes | null {
   return actions.reduce<DrawerPanes | null>((state, action) => reduceDrawerPanes(state, action), null)
 }
 
 const open = (id: string, sideBySide = false): DrawerPanesAction => ({ type: 'open', id, sideBySide })
+const AREA = { x: 0, y: 0, width: 1600, height: 900 }
 
 describe('reduceDrawerPanes', () => {
   it('abre o primeiro agente como painel único em foco', () => {
-    expect(run(open('a'))).toMatchObject({ panes: ['a'], focused: 'a', zoomed: false })
+    expect(run(open('a'))).toMatchObject({ panes: ['a'], focused: 'a', zoomed: false, tree: { kind: 'pane', id: 'a' } })
   })
 
   it('o clique comum troca o painel em foco, como a gaveta sempre fez', () => {
@@ -29,7 +29,7 @@ describe('reduceDrawerPanes', () => {
     expect(state).toMatchObject({ panes: ['a', 'b'], focused: 'b' })
   })
 
-  it('o clique comum com 2 painéis troca só o que está em foco', () => {
+  it('o clique comum com 2 painéis troca só o que está em foco, no mesmo lugar do mosaico', () => {
     const state = run(open('a'), open('b', true), { type: 'focus', id: 'a' }, open('c'))
     expect(state).toMatchObject({ panes: ['c', 'b'], focused: 'c' })
   })
@@ -39,19 +39,38 @@ describe('reduceDrawerPanes', () => {
     expect(state).toMatchObject({ panes: ['a', 'b'], focused: 'a' })
   })
 
-  it('no teto de 4, o 5º pedido troca o painel sem foco usado há mais tempo', () => {
-    const state = run(
-      open('a'),
-      open('b', true),
-      open('c', true),
-      open('d', true),
-      { type: 'focus', id: 'a' },
-      open('e', true),
-    )
-    expect(state?.panes).toHaveLength(MAX_DRAWER_PANES)
-    // a foi tocado por último; b é o mais antigo dos sem foco.
-    expect(state?.panes).toEqual(['a', 'e', 'c', 'd'])
-    expect(state?.focused).toBe('e')
+  it('a lista de painéis é sempre a árvore do mosaico na ordem de leitura', () => {
+    const state = run(open('a'), open('b', true), open('c', true), open('d', true))!
+    expect(state.panes).toEqual(mosaicPaneIds(state.tree))
+    expect([...state.panes].sort()).toEqual(['a', 'b', 'c', 'd'])
+  })
+
+  it('o agente novo divide o painel pedido (beside), não necessariamente o que está em foco', () => {
+    const base = run(open('a'), open('b', true), { type: 'focus', id: 'b' })!
+    const state = reduceDrawerPanes(base, { type: 'open', id: 'c', sideBySide: true, beside: 'a', area: AREA })!
+    const { panes } = layoutMosaic(state.tree, AREA)
+    const a = panes.find((p) => p.id === 'a')!
+    const c = panes.find((p) => p.id === 'c')!
+    // a tinha 797×900 (alto): o c entra embaixo dele, na mesma coluna.
+    expect(c.x).toBe(a.x)
+    expect(c.y).toBeGreaterThan(a.y)
+    expect(state.focused).toBe('c')
+  })
+
+  it(`no teto de ${MAX_DRAWER_PANES}, o pedido seguinte troca o painel sem foco usado há mais tempo`, () => {
+    const ids = Array.from({ length: MAX_DRAWER_PANES }, (_, i) => `p${i}`)
+    const cheio = run(open(ids[0]), ...ids.slice(1).map((id) => open(id, true)), { type: 'focus', id: 'p0' })!
+    expect(cheio.panes).toHaveLength(MAX_DRAWER_PANES)
+
+    const state = reduceDrawerPanes(cheio, open('novo', true))!
+    expect(state.panes).toHaveLength(MAX_DRAWER_PANES)
+    // p0 foi tocado por último; p1 é o mais antigo dos sem foco: o novo fica no lugar dele.
+    expect(state.panes).not.toContain('p1')
+    expect(state.panes).toContain('novo')
+    expect(state.focused).toBe('novo')
+    const antes = layoutMosaic(cheio.tree, AREA).panes.find((p) => p.id === 'p1')
+    const depois = layoutMosaic(state.tree, AREA).panes.find((p) => p.id === 'novo')
+    expect(depois).toMatchObject({ x: antes!.x, y: antes!.y, width: antes!.width, height: antes!.height })
   })
 
   it('fechar o painel em foco passa o foco ao usado mais recentemente', () => {
@@ -59,9 +78,9 @@ describe('reduceDrawerPanes', () => {
     expect(state).toMatchObject({ panes: ['a', 'b'], focused: 'b' })
   })
 
-  it('fechar um painel sem foco não mexe no foco', () => {
+  it('fechar um painel sem foco não mexe no foco e o espaço vai para o vizinho', () => {
     const state = run(open('a'), open('b', true), { type: 'close-pane', id: 'a' })
-    expect(state).toMatchObject({ panes: ['b'], focused: 'b' })
+    expect(state).toMatchObject({ panes: ['b'], focused: 'b', tree: { kind: 'pane', id: 'b' } })
   })
 
   it('fechar o último painel fecha a gaveta', () => {
@@ -77,83 +96,39 @@ describe('reduceDrawerPanes', () => {
 
   it('voltar do zoom devolve o mesmo arranjo', () => {
     const before = run(open('a'), open('b', true), open('c', true))
-    const after = reduceDrawerPanes(
-      reduceDrawerPanes(before, { type: 'toggle-zoom' }),
-      { type: 'toggle-zoom' },
-    )
+    const after = reduceDrawerPanes(reduceDrawerPanes(before, { type: 'toggle-zoom' }), { type: 'toggle-zoom' })
     expect(after).toEqual(before)
   })
 
-  it('foco em id desconhecido e layout repetido não criam estado novo', () => {
+  it('foco em id desconhecido e auto repetido não criam estado novo', () => {
     const state = run(open('a'), open('b', true))
     expect(reduceDrawerPanes(state, { type: 'focus', id: 'zzz' })).toBe(state)
     expect(reduceDrawerPanes(state, { type: 'set-layout', layout: 'auto' })).toBe(state)
   })
-})
 
-describe('resolveDrawerGeometry', () => {
-  const base = { layout: 'auto', zoomed: false } as const
-
-  it('painel único e zoom ocupam a gaveta inteira', () => {
-    expect(resolveDrawerGeometry({ ...base, count: 1 }, 1800)).toEqual({ cols: 1, rows: 1, stacked: false })
-    expect(resolveDrawerGeometry({ ...base, count: 4, zoomed: true }, 1800)).toEqual({ cols: 1, rows: 1, stacked: false })
+  it('um arranjo pronto refaz a árvore com os mesmos agentes e fica marcado', () => {
+    const state = run(open('a'), open('b', true), open('c', true))!
+    const grade = reduceDrawerPanes(state, { type: 'set-layout', layout: 'grade', area: AREA })!
+    expect(grade.layout).toBe('grade')
+    expect([...grade.panes].sort()).toEqual(['a', 'b', 'c'])
+    const linhas = reduceDrawerPanes(grade, { type: 'set-layout', layout: 'linhas', area: AREA })!
+    const rects = layoutMosaic(linhas.tree, AREA).panes
+    expect(new Set(rects.map((r) => r.x))).toEqual(new Set([0]))
   })
 
-  it('maximizada em 1920, 2 agentes ficam lado a lado e 4 viram 2x2', () => {
-    expect(resolveDrawerGeometry({ ...base, count: 2 }, 1800)).toEqual({ cols: 2, rows: 1, stacked: false })
-    expect(resolveDrawerGeometry({ ...base, count: 4 }, 1800)).toEqual({ cols: 2, rows: 2, stacked: false })
-    expect(resolveDrawerGeometry({ ...base, count: 3 }, 1800)).toEqual({ cols: 2, rows: 2, stacked: false })
+  it('arrastar a divisória muda a proporção e mantém os agentes', () => {
+    const state = run(open('a'), open('b', true))!
+    const arrastado = reduceDrawerPanes(state, { type: 'resize', path: '', ratio: 0.3 })!
+    expect(arrastado.tree).toMatchObject({ kind: 'split', ratio: 0.3 })
+    expect(arrastado.panes).toEqual(state.panes)
+    expect(arrastado.focused).toBe(state.focused)
   })
 
-  it('divisão horizontal empilha, qualquer que seja a largura', () => {
-    expect(resolveDrawerGeometry({ layout: 'linhas', zoomed: false, count: 3 }, 1800)).toEqual({ cols: 1, rows: 3, stacked: false })
-  })
-
-  it('abaixo de 440 px por painel (janela 1008x655, gaveta de 453), empilha', () => {
-    expect(resolveDrawerGeometry({ ...base, count: 2 }, 453)).toEqual({ cols: 1, rows: 2, stacked: true })
-    expect(resolveDrawerGeometry({ ...base, count: 4 }, 720)).toEqual({ cols: 1, rows: 4, stacked: true })
-    expect(resolveDrawerGeometry({ layout: 'colunas', zoomed: false, count: 3 }, 1200)).toEqual({ cols: 1, rows: 3, stacked: true })
-  })
-
-  it('exatamente 440 px por painel ainda cabe', () => {
-    expect(resolveDrawerGeometry({ ...base, count: 2 }, 880)).toEqual({ cols: 2, rows: 1, stacked: false })
-  })
-})
-
-describe('neighborPane', () => {
-  const four = ['a', 'b', 'c', 'd']
-
-  it('navega a grade 2x2 nas quatro direções', () => {
-    expect(neighborPane(four, 2, 'a', 'right')).toBe('b')
-    expect(neighborPane(four, 2, 'a', 'down')).toBe('c')
-    expect(neighborPane(four, 2, 'd', 'left')).toBe('c')
-    expect(neighborPane(four, 2, 'd', 'up')).toBe('b')
-  })
-
-  it('não dá a volta nas bordas', () => {
-    expect(neighborPane(four, 2, 'a', 'left')).toBe('a')
-    expect(neighborPane(four, 2, 'a', 'up')).toBe('a')
-    expect(neighborPane(four, 2, 'd', 'right')).toBe('d')
-    expect(neighborPane(four, 2, 'd', 'down')).toBe('d')
-  })
-
-  it('na grade com 3, o último cobre a linha de baixo inteira', () => {
-    const three = ['a', 'b', 'c']
-    expect(neighborPane(three, 2, 'b', 'down')).toBe('c')
-    expect(neighborPane(three, 2, 'c', 'up')).toBe('a')
-    expect(neighborPane(three, 2, 'c', 'right')).toBe('c')
-  })
-
-  it('empilhados (uma coluna), cima e baixo andam pela lista', () => {
-    expect(neighborPane(['a', 'b'], 1, 'a', 'down')).toBe('b')
-    expect(neighborPane(['a', 'b'], 1, 'b', 'up')).toBe('a')
-    expect(neighborPane(['a', 'b'], 1, 'a', 'right')).toBe('a')
-  })
-
-  it('em colunas (uma linha), esquerda e direita andam pela lista', () => {
-    expect(neighborPane(['a', 'b', 'c'], 3, 'b', 'right')).toBe('c')
-    expect(neighborPane(['a', 'b', 'c'], 3, 'b', 'left')).toBe('a')
-    expect(neighborPane(['a', 'b', 'c'], 3, 'b', 'down')).toBe('b')
+  it('trocar dois painéis de lugar troca também a ordem de leitura', () => {
+    const state = run(open('a'), open('b', true))!
+    const trocado = reduceDrawerPanes(state, { type: 'swap', a: 'a', b: 'b' })!
+    expect(trocado.panes).toEqual(['b', 'a'])
+    expect(reduceDrawerPanes(state, { type: 'swap', a: 'a', b: 'zzz' })).toBe(state)
   })
 })
 

@@ -4,7 +4,11 @@ import {
   ChevronLeft,
   ChevronRight,
   Columns2,
-  ExternalLink,
+  AppWindow,
+  CornerDownLeft,
+  Fullscreen,
+  PictureInPicture2,
+  SquarePlus,
   Eye,
   Grid2x2,
   History,
@@ -46,14 +50,21 @@ import type { ListedAgentSession } from '../services/agent-session-list'
 import { useCanvasSurfaces } from '../hooks/canvas-surfaces-context'
 import { DRAWER_MIN_WIDTH } from '../services/canvas-surfaces'
 import { attachTerminalFitLifecycle } from './terminal-fit-lifecycle'
-import { detachTerminal, type DetachedTerminal } from './terminal-detach'
+import { detachTerminal, type DetachedTerminal, type DetachMode } from './terminal-detach'
 import { reportActionFailure } from '../services/canvas-persistence-status'
+import { drawerPaneShortcut, type DrawerLayoutChoice } from './terminal-drawer-panes'
 import {
-  drawerPaneShortcut,
-  neighborPane,
-  resolveDrawerGeometry,
-  type DrawerLayoutChoice,
-} from './terminal-drawer-panes'
+  clampMosaicRatio,
+  layoutMosaic,
+  MOSAIC_MIN_PANE,
+  mosaicPaneIds,
+  neighborMosaicPane,
+  presetMosaic,
+  setMosaicRatio,
+  type MosaicDivider,
+  type MosaicNode,
+  type MosaicRect,
+} from './terminal-mosaic'
 import {
   clampDrawerWidth,
   COLLAPSED_WIDTH,
@@ -137,17 +148,25 @@ export type TerminalDrawerPane = {
 }
 
 type TerminalDrawerProps = {
-  /** De 1 a 4 agentes vivos; um só é a gaveta de sempre. */
+  /** De 1 a 8 agentes vivos; um só é a gaveta de sempre. */
   panes: TerminalDrawerPane[]
+  /** O mosaico: a árvore de divisões cujas folhas são os `panes`. Sem ela, os painéis ficam em colunas. */
+  tree?: MosaicNode
   /** O painel que recebe o teclado e o destino de Prompts, Skills e ditado. */
   focusedId: string
   layout: DrawerLayoutChoice
+  /** Arrastar (ou ajustar pelo teclado) a divisória `path` do mosaico. */
+  onResizeSplit?: (path: string, ratio: number) => void
+  /** Agentes do canvas que ainda não estão na gaveta: o "+" de cada painel os oferece. */
+  addablePanes?: { id: string; title: string }[]
+  /** Põe o agente `id` no mosaico, dividindo o painel `beside`. `area` é o tamanho real da gaveta. */
+  onAddPane?: (id: string, beside: string, area: MosaicRect) => void
   /** O painel em foco ocupa a gaveta inteira; os outros seguem vivos, só não desenham. */
   zoomed: boolean
   onFocusPane: (sessionId: string) => void
   /** Fecha só o painel: o PTY do agente segue e o cartão continua com a prévia. */
   onClosePane: (sessionId: string) => void
-  onLayoutChange: (layout: DrawerLayoutChoice) => void
+  onLayoutChange: (layout: DrawerLayoutChoice, area?: MosaicRect) => void
   onToggleZoom: () => void
   /**
    * Muda a cada pedido de abrir um terminal, inclusive o que já está aberto.
@@ -161,6 +180,210 @@ type TerminalDrawerProps = {
 }
 
 const MIN_WIDTH = DRAWER_MIN_WIDTH
+
+/** O mosaico é calculado num quadrado de 100 000 unidades e desenhado em porcentagem. */
+const MOSAIC_SIZE = 100_000
+const MOSAIC_UNIT: MosaicRect = { x: 0, y: 0, width: MOSAIC_SIZE, height: MOSAIC_SIZE }
+const pct = (value: number) => `${(value / MOSAIC_SIZE) * 100}%`
+const sameMembers = (a: string[], b: string[]) => a.length === b.length && a.every((id) => b.includes(id))
+
+/**
+ * Menu do "+" do painel: os agentes do canvas que ainda não estão na gaveta. O
+ * escolhido divide o painel de onde o menu saiu. Setas andam, Esc e clique fora fecham.
+ */
+function AddBesideMenu({
+  items,
+  onPick,
+  onClose,
+}: {
+  items: { id: string; title: string }[]
+  onPick: (id: string) => void
+  onClose: () => void
+}) {
+  const menuRef = useRef<HTMLDivElement>(null)
+  const sorted = [...items].sort((a, b) => a.title.localeCompare(b.title, 'pt-BR'))
+
+  useEffect(() => {
+    menuRef.current?.querySelector<HTMLButtonElement>('[data-felixo-add-beside-option]')?.focus()
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as Node
+      if (menuRef.current && !menuRef.current.parentElement?.contains(target)) onClose()
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    return () => document.removeEventListener('mousedown', onPointerDown)
+  }, [onClose])
+
+  return (
+    <div
+      ref={menuRef}
+      role="menu"
+      aria-label="Agentes para abrir ao lado"
+      data-felixo-add-beside-menu
+      className="absolute right-0 top-full z-40 mt-1 max-h-72 w-64 overflow-auto rounded-md border border-white/10 bg-(--f-core-structural) py-1 text-sm shadow-lg"
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault()
+          event.stopPropagation()
+          onClose()
+          return
+        }
+        if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+        event.preventDefault()
+        const options = [...(menuRef.current?.querySelectorAll<HTMLButtonElement>('[data-felixo-add-beside-option]') ?? [])]
+        const index = options.indexOf(document.activeElement as HTMLButtonElement)
+        const next = event.key === 'ArrowDown' ? index + 1 : index - 1
+        options[(next + options.length) % options.length]?.focus()
+      }}
+    >
+      {sorted.length === 0 ? (
+        <p className="px-3 py-2 text-xs text-zinc-500">
+          Todos os agentes do canvas já estão aqui. Crie outro pelo botão Agente.
+        </p>
+      ) : (
+        sorted.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            role="menuitem"
+            data-felixo-add-beside-option
+            onClick={() => onPick(item.id)}
+            className="block w-full truncate px-3 py-1.5 text-left text-zinc-200 hover:bg-white/10 focus:bg-white/10 focus:outline-none"
+            title={`Abrir ${item.title} ao lado deste painel`}
+          >
+            {item.title}
+          </button>
+        ))
+      )}
+    </div>
+  )
+}
+
+/** Passo do teclado na divisória: 5% da área (Shift: 15%). */
+const DIVIDER_STEP = 0.05
+const DIVIDER_STEP_LARGE = 0.15
+
+/**
+ * A faixa entre dois painéis do mosaico. Arrastar mostra o novo tamanho na hora
+ * (rascunho local, sem gravar no canvas a cada pixel) e grava ao soltar; setas
+ * ajustam 5% (Shift: 15%), Home e dois cliques dividem ao meio. O piso de cada
+ * lado (`MOSAIC_MIN_PANE`) vale em todos os caminhos.
+ */
+function MosaicDividerHandle({
+  divider,
+  label,
+  bodyRef,
+  onDraft,
+  onCommit,
+}: {
+  divider: MosaicDivider
+  label: string
+  bodyRef: React.RefObject<HTMLDivElement | null>
+  onDraft: (ratio: number) => void
+  onCommit: (ratio: number) => void
+}) {
+  const row = divider.direction === 'row'
+  const draggingRef = useRef(false)
+  const lastRatioRef = useRef(divider.ratio)
+  const [dragging, setDragging] = useState(false)
+
+  // A área que esta divisão reparte, em pixels de tela (o mosaico está em porcentagem).
+  const pixelArea = (): MosaicRect | null => {
+    const box = bodyRef.current?.getBoundingClientRect()
+    if (!box || box.width === 0 || box.height === 0) return null
+    const k = (value: number) => value / MOSAIC_SIZE
+    return {
+      x: box.left + k(divider.area.x) * box.width,
+      y: box.top + k(divider.area.y) * box.height,
+      width: k(divider.area.width) * box.width,
+      height: k(divider.area.height) * box.height,
+    }
+  }
+  const clamp = (ratio: number) => {
+    const area = pixelArea()
+    return area ? clampMosaicRatio({ direction: divider.direction, area }, ratio, 0) : Math.min(0.9, Math.max(0.1, ratio))
+  }
+  const ratioAt = (event: React.PointerEvent) => {
+    const area = pixelArea()
+    if (!area) return divider.ratio
+    const raw = row ? (event.clientX - area.x) / area.width : (event.clientY - area.y) / area.height
+    return clamp(raw)
+  }
+  const stopDragging = () => {
+    draggingRef.current = false
+    setDragging(false)
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+  }
+
+  return (
+    <div
+      role="separator"
+      tabIndex={0}
+      aria-label={label}
+      aria-orientation={row ? 'vertical' : 'horizontal'}
+      aria-valuemin={10}
+      aria-valuemax={90}
+      aria-valuenow={Math.round(divider.ratio * 100)}
+      aria-description={
+        row
+          ? 'Setas para esquerda e direita redimensionam (Shift: passo maior); Home divide ao meio.'
+          : 'Setas para cima e para baixo redimensionam (Shift: passo maior); Home divide ao meio.'
+      }
+      title="Arraste para redimensionar; dois cliques dividem ao meio"
+      data-felixo-mosaic-divider={divider.path || 'raiz'}
+      className={`felixo-mosaic-divider ${row ? 'is-row' : 'is-column'} ${dragging ? 'is-dragging' : ''}`}
+      style={
+        row
+          ? { left: pct(divider.rect.x), top: pct(divider.rect.y), height: pct(divider.rect.height) }
+          : { top: pct(divider.rect.y), left: pct(divider.rect.x), width: pct(divider.rect.width) }
+      }
+      onPointerDown={(event) => {
+        if (event.button !== 0) return
+        event.preventDefault()
+        try {
+          // Sem captura (ponteiro que o navegador já soltou), o arrasto segue pelos eventos da própria faixa.
+          event.currentTarget.setPointerCapture?.(event.pointerId)
+        } catch {
+          /* segue sem captura */
+        }
+        draggingRef.current = true
+        lastRatioRef.current = divider.ratio
+        setDragging(true)
+        document.body.style.cursor = row ? 'col-resize' : 'row-resize'
+        document.body.style.userSelect = 'none'
+      }}
+      onPointerMove={(event) => {
+        if (!draggingRef.current) return
+        lastRatioRef.current = ratioAt(event)
+        onDraft(lastRatioRef.current)
+      }}
+      onPointerUp={() => {
+        if (!draggingRef.current) return
+        stopDragging()
+        onCommit(lastRatioRef.current)
+      }}
+      onPointerCancel={() => {
+        if (!draggingRef.current) return
+        stopDragging()
+        onCommit(lastRatioRef.current)
+      }}
+      onDoubleClick={() => onCommit(clamp(0.5))}
+      onKeyDown={(event) => {
+        const step = event.shiftKey ? DIVIDER_STEP_LARGE : DIVIDER_STEP
+        const less = row ? 'ArrowLeft' : 'ArrowUp'
+        const more = row ? 'ArrowRight' : 'ArrowDown'
+        let next: number | null = null
+        if (event.key === less) next = divider.ratio - step
+        else if (event.key === more) next = divider.ratio + step
+        else if (event.key === 'Home') next = 0.5
+        if (next === null) return
+        event.preventDefault()
+        event.stopPropagation()
+        onCommit(clamp(next))
+      }}
+    />
+  )
+}
 
 /**
  * Right-side drawer that hosts the live, interactive terminals. Each pane
@@ -180,6 +403,7 @@ const LAYOUT_BUTTONS: { choice: DrawerLayoutChoice; label: string; icon: ReactNo
 
 export function TerminalDrawer({
   panes,
+  tree,
   focusedId,
   layout,
   zoomed,
@@ -187,6 +411,9 @@ export function TerminalDrawer({
   onClosePane,
   onLayoutChange,
   onToggleZoom,
+  onResizeSplit,
+  addablePanes = [],
+  onAddPane,
   openRequest = 0,
   onClose,
   onOutsideClickClose,
@@ -219,6 +446,8 @@ export function TerminalDrawer({
   const [collapsed, setCollapsed] = useState(() => readCollapsedPreference(localStorage))
   const { occupancy, reportDrawerWidth } = useCanvasSurfaces()
   const [maximized, setMaximized] = useState(false)
+  // Tela cheia: o mosaico cobre a janela inteira do app (Esc volta). Os agentes não mudam.
+  const [fullscreen, setFullscreen] = useState(false)
 
   const togglePinned = useCallback(() => {
     setPinned((prev) => {
@@ -402,8 +631,35 @@ export function TerminalDrawer({
     updateDrawerWidth(effectiveWidth + direction * (event.shiftKey ? 80 : 24))
   }
 
-  const geometry = resolveDrawerGeometry({ layout, zoomed, count: panes.length }, effectiveWidth)
+  // O mosaico é desenhado em porcentagem da área: a mesma árvore serve para
+  // qualquer largura de gaveta, sem medir nada antes do primeiro quadro.
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const [draftSplit, setDraftSplit] = useState<{ path: string; ratio: number } | null>(null)
+  const ids = panes.map((pane) => pane.sessionId)
+  const baseTree = tree && sameMembers(mosaicPaneIds(tree), ids) ? tree : presetMosaic(ids, 'colunas')!
+  const shownTree = draftSplit ? setMosaicRatio(baseTree, draftSplit.path, draftSplit.ratio) : baseTree
+  // Estreita demais para o arranjo (algum painel abaixo do piso de largura): empilha,
+  // como a gaveta sempre fez. A árvore guardada não muda; maximizar a devolve.
+  const narrowest = Math.min(...layoutMosaic(shownTree, MOSAIC_UNIT, 0).panes.map((rect) => rect.width))
+  const mosaicWidth = fullscreen ? window.innerWidth : effectiveWidth
+  const stacked = !solo && !zoomed && (narrowest / MOSAIC_SIZE) * mosaicWidth < MOSAIC_MIN_PANE.width
+  const displayTree: MosaicNode =
+    zoomed && !solo
+      ? { kind: 'pane', id: focusedPane.sessionId }
+      : stacked
+        ? presetMosaic(ids, 'linhas')!
+        : shownTree
+  const mosaic = layoutMosaic(displayTree, MOSAIC_UNIT, 0)
+  const showDividers = !solo && !zoomed && !stacked && !collapsed
   const visiblePanes = zoomed && !solo ? panes.filter((pane) => pane.sessionId === focusedPane.sessionId) : panes
+  const titleOf = (id: string) => panes.find((pane) => pane.sessionId === id)?.title ?? 'agente'
+  // O tamanho real da gaveta (o lado mais comprido decide se o agente novo entra ao lado ou embaixo).
+  const realArea = (): MosaicRect => ({
+    x: 0,
+    y: 0,
+    width: bodyRef.current?.clientWidth || effectiveWidth,
+    height: bodyRef.current?.clientHeight || window.innerHeight,
+  })
 
   const onShortcut = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (solo || collapsed) return
@@ -416,15 +672,9 @@ export function TerminalDrawer({
       onToggleZoom()
       return
     }
-    const cols = resolveDrawerGeometry({ layout, zoomed: false, count: panes.length }, effectiveWidth).cols
-    onFocusPane(
-      neighborPane(
-        panes.map((pane) => pane.sessionId),
-        cols,
-        focusedPane.sessionId,
-        shortcut.direction,
-      ),
-    )
+    // O vizinho sai da geometria do mosaico, como o focus left/right/up/down do i3.
+    const navTree = stacked ? displayTree : baseTree
+    onFocusPane(neighborMosaicPane(navTree, MOSAIC_UNIT, focusedPane.sessionId, shortcut.direction))
   }
 
   // Controles da gaveta em si. Com um painel só, moram no cabeçalho dele (a
@@ -453,6 +703,24 @@ export function TerminalDrawer({
       title={maximized ? 'Restaurar largura' : 'Maximizar terminal'}
     >
       {maximized ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+    </button>
+  )
+  const fullscreenButton = collapsed ? null : (
+    <button
+      type="button"
+      onClick={() => setFullscreen((current) => !current)}
+      className={`felixo-btn-icon rounded-sm p-1 hover:bg-white/10 hover:text-zinc-100 ${
+        fullscreen ? 'bg-white/10 text-zinc-100' : 'text-zinc-400'
+      }`}
+      aria-label={fullscreen ? 'Sair da tela cheia' : 'Terminais em tela cheia'}
+      aria-pressed={fullscreen}
+      title={
+        fullscreen
+          ? 'Sair da tela cheia (Esc)'
+          : 'Tela cheia: os terminais ocupam a janela inteira, em mosaico (Esc volta)'
+      }
+    >
+      <Fullscreen size={16} />
     </button>
   )
   const pinButton = collapsed ? null : (
@@ -494,17 +762,20 @@ export function TerminalDrawer({
           !(event.target as HTMLElement).closest?.('[data-felixo-terminal-mount]')
         ) {
           event.preventDefault()
-          close()
+          // Em tela cheia, o Esc só volta ao tamanho de antes; fechar é o segundo Esc.
+          if (fullscreen) setFullscreen(false)
+          else close()
         }
       }}
       className={`felixo-terminal-drawer relative z-20 flex h-full flex-col border-l border-white/10 bg-(--f-core-black-surface) focus-within:z-30 ${
         closing ? 'felixo-anim-drawer-out' : 'felixo-anim-drawer-in'
-      }`}
+      } ${fullscreen ? 'felixo-terminal-drawer--fullscreen' : ''}`}
       style={{
         // `effectiveWidth` já vem limitado pelo que o painel da esquerda
         // ocupa; usar a largura crua aqui era o que deixava a gaveta passar
-        // por cima dele mesmo depois de o limite ter sido calculado.
-        width: `${effectiveWidth}px`,
+        // por cima dele mesmo depois de o limite ter sido calculado. Em tela
+        // cheia quem manda é o CSS (fixa, cobrindo a janela).
+        width: fullscreen ? undefined : `${effectiveWidth}px`,
         // Animate the collapse/maximize toggles, but never the resize drag —
         // the edge must track the pointer 1:1.
         transition: resizing ? undefined : 'width 180ms cubic-bezier(0.16,1,0.3,1)',
@@ -512,7 +783,7 @@ export function TerminalDrawer({
     >
       {/* Borda de arrasto. O duplo clique devolve a largura com que a gaveta
           abre — o mesmo que Home, agora também ao alcance do mouse. */}
-      {!collapsed && !maximized && (
+      {!collapsed && !maximized && !fullscreen && (
         <div
           onMouseDown={onMouseDown}
           onDoubleClick={resetDrawerWidth}
@@ -552,10 +823,10 @@ export function TerminalDrawer({
               <h2 id={titleId} className="mr-auto ml-2 truncate font-medium">
                 {panes.length} agentes
               </h2>
-              {geometry.stacked && (
+              {stacked && (
                 <span
                   className="text-[11px] text-zinc-500"
-                  title="A largura da gaveta não comporta os painéis lado a lado (mínimo de 440 px cada). Maximize a gaveta."
+                  title={`A largura da gaveta não comporta o mosaico (mínimo de ${MOSAIC_MIN_PANE.width} px por painel). Maximize a gaveta.`}
                 >
                   empilhados: maximize para lado a lado
                 </span>
@@ -565,7 +836,7 @@ export function TerminalDrawer({
                   <button
                     key={item.choice}
                     type="button"
-                    onClick={() => onLayoutChange(item.choice)}
+                    onClick={() => onLayoutChange(item.choice, realArea())}
                     aria-label={item.label}
                     aria-pressed={layout === item.choice}
                     title={item.label}
@@ -582,6 +853,7 @@ export function TerminalDrawer({
           )}
           <div className={`flex items-center gap-2 ${collapsed ? 'flex-col' : ''}`}>
             {maximizeButton}
+            {fullscreenButton}
             {pinButton}
             {closeButton}
           </div>
@@ -589,31 +861,65 @@ export function TerminalDrawer({
       )}
       {/* Os xterms ficam montados mesmo recolhida (o PTY e o scrollback têm de
           sobreviver); só a caixa some. Com zoom, só o painel em foco desenha:
-          os outros desmontam a tela, mas o agente segue vivo. */}
+          os outros desmontam a tela, mas o agente segue vivo. Cada painel é um
+          retângulo do mosaico, em porcentagem: juntos cobrem a área inteira. */}
       <div
-        className={`grid min-h-0 flex-1 ${collapsed && !solo ? 'invisible w-0' : ''}`}
-        style={{
-          gridTemplateColumns: `repeat(${geometry.cols}, minmax(0, 1fr))`,
-          gridTemplateRows: `repeat(${geometry.rows}, minmax(0, 1fr))`,
-        }}
+        ref={bodyRef}
+        data-felixo-mosaic
+        className={`relative min-h-0 flex-1 ${collapsed && !solo ? 'invisible w-0' : ''}`}
       >
-        {visiblePanes.map((pane, index) => (
-          <TerminalPane
-            key={pane.sessionId}
-            pane={pane}
-            solo={solo}
-            focused={pane.sessionId === focusedPane.sessionId}
-            collapsed={collapsed}
-            effectiveWidth={effectiveWidth}
-            zoomed={zoomed}
-            // Grade com número ímpar: o último painel ocupa a linha inteira.
-            spansRow={geometry.cols === 2 && index === visiblePanes.length - 1 && visiblePanes.length % 2 === 1 && visiblePanes.length > 1}
-            soloHeading={{ id: titleId, leading: collapseButton, maximize: maximizeButton, pin: pinButton, close: closeButton }}
-            onFocus={() => onFocusPane(pane.sessionId)}
-            onClosePane={() => onClosePane(pane.sessionId)}
-            onToggleZoom={onToggleZoom}
-          />
-        ))}
+        {visiblePanes.map((pane) => {
+          const rect = mosaic.panes.find((item) => item.id === pane.sessionId)
+          if (!rect) return null
+          return (
+            <div
+              key={pane.sessionId}
+              data-felixo-mosaic-pane={pane.sessionId}
+              className={`absolute flex ${rect.x > 0 ? 'border-l border-white/10' : ''} ${rect.y > 0 ? 'border-t border-white/10' : ''}`}
+              style={{ left: pct(rect.x), top: pct(rect.y), width: pct(rect.width), height: pct(rect.height) }}
+            >
+              <TerminalPane
+                pane={pane}
+                solo={solo}
+                focused={pane.sessionId === focusedPane.sessionId}
+                collapsed={collapsed}
+                effectiveWidth={effectiveWidth}
+                zoomed={zoomed}
+                soloHeading={{
+                  id: titleId,
+                  leading: collapseButton,
+                  maximize: (
+                    <>
+                      {maximizeButton}
+                      {fullscreenButton}
+                    </>
+                  ),
+                  pin: pinButton,
+                  close: closeButton,
+                }}
+                onFocus={() => onFocusPane(pane.sessionId)}
+                onClosePane={() => onClosePane(pane.sessionId)}
+                onToggleZoom={onToggleZoom}
+                addablePanes={onAddPane ? addablePanes : undefined}
+                onAddBeside={onAddPane ? (id) => onAddPane(id, pane.sessionId, realArea()) : undefined}
+              />
+            </div>
+          )
+        })}
+        {showDividers &&
+          mosaic.dividers.map((divider) => (
+            <MosaicDividerHandle
+              key={divider.path || 'raiz'}
+              divider={divider}
+              label={`Redimensionar entre ${titleOf(divider.before)} e ${titleOf(divider.after)}`}
+              bodyRef={bodyRef}
+              onDraft={(ratio) => setDraftSplit({ path: divider.path, ratio })}
+              onCommit={(ratio) => {
+                setDraftSplit(null)
+                onResizeSplit?.(divider.path, ratio)
+              }}
+            />
+          ))}
       </div>
     </div>
   )
@@ -626,7 +932,6 @@ type TerminalPaneProps = {
   collapsed: boolean
   effectiveWidth: number
   zoomed: boolean
-  spansRow: boolean
   /** Os controles da gaveta, que o único painel leva no próprio cabeçalho. */
   soloHeading: {
     id: string
@@ -638,6 +943,10 @@ type TerminalPaneProps = {
   onFocus: () => void
   onClosePane: () => void
   onToggleZoom: () => void
+  /** Agentes do canvas fora da gaveta. Sem `onAddBeside`, o "+" não aparece. */
+  addablePanes?: { id: string; title: string }[]
+  /** Põe o agente escolhido no mosaico, dividindo este painel (como o split do i3). */
+  onAddBeside?: (id: string) => void
 }
 
 /**
@@ -652,11 +961,12 @@ function TerminalPane({
   collapsed,
   effectiveWidth,
   zoomed,
-  spansRow,
   soloHeading,
   onFocus,
   onClosePane,
   onToggleZoom,
+  addablePanes,
+  onAddBeside,
 }: TerminalPaneProps) {
   const {
     sessionId,
@@ -724,6 +1034,8 @@ function TerminalPane({
   const mountRef = useRef<HTMLDivElement>(null)
   const detachedRef = useRef<DetachedTerminal | null>(null)
   const [detachedTerminal, setDetachedTerminal] = useState<DetachedTerminal | null>(null)
+  const addButtonRef = useRef<HTMLButtonElement>(null)
+  const [addMenuOpen, setAddMenuOpen] = useState(false)
   const paneRef = useRef<HTMLDivElement>(null)
   const ownTitleId = useId()
   const titleId = solo ? soloHeading.id : ownTitleId
@@ -819,10 +1131,11 @@ function TerminalPane({
   // O painel saiu (agente fechado, gaveta recolhida): a janela dele não fica órfã.
   useEffect(() => () => detachedRef.current?.discard(), [])
 
-  const openInWindow = () => {
+  const openInWindow = (modo: DetachMode) => {
     const handle = detachTerminal({
       sessionId,
       title,
+      modo,
       store,
       getHome: () => mountRef.current,
       onClosed: () => {
@@ -831,7 +1144,10 @@ function TerminalPane({
       },
     })
     if (!handle) {
-      reportActionFailure('terminal-window', 'Não foi possível abrir a janela do terminal.')
+      reportActionFailure(
+        'terminal-window',
+        modo === 'pip' ? 'Não foi possível abrir o picture-in-picture.' : 'Não foi possível abrir a janela do terminal.',
+      )
       return
     }
     detachedRef.current = handle
@@ -889,13 +1205,11 @@ function TerminalPane({
       // Clicar ou tabular para dentro do painel o põe em foco.
       onMouseDownCapture={solo ? undefined : onFocus}
       onFocusCapture={solo ? undefined : onFocus}
-      className={`flex min-h-0 min-w-0 flex-col ${solo ? '' : 'border-white/10 [&:not(:first-child)]:border-t'} ${
-        !solo && focused ? 'ring-1 ring-inset ring-(--f-core-active)' : ''
-      } ${spansRow ? 'col-span-2' : ''}`}
+      className={`flex min-h-0 min-w-0 flex-1 flex-col ${!solo && focused ? 'ring-1 ring-inset ring-(--f-core-active)' : ''}`}
     >
       <div
         className={`felixo-terminal-drawer-header flex items-center border-b border-white/10 py-2 text-sm text-zinc-200 ${
-          solo && collapsed ? 'flex-col gap-2 px-1' : 'justify-between px-3'
+          solo && collapsed ? 'flex-col gap-2 px-1' : 'felixo-terminal-pane-header justify-between px-3'
         }`}
       >
         {solo && soloHeading.leading}
@@ -920,7 +1234,7 @@ function TerminalPane({
         )}
         <div className={`flex items-center gap-2 ${solo && collapsed ? 'flex-col' : ''}`}>
           {!collapsed && (
-            <span className="text-xs text-zinc-500" aria-live="polite">
+            <span className="felixo-pane-status text-xs text-zinc-500" aria-live="polite">
               {awaitingResumeChoice
                 ? TERMINAL_RESUME_PENDING_LABEL
                 : snapshot?.activity === 'working'
@@ -934,7 +1248,7 @@ function TerminalPane({
           )}
           {!collapsed && solo && (
             <span
-              className="hidden text-[11px] text-zinc-600 sm:inline"
+              className="felixo-pane-links-hint hidden text-[11px] text-zinc-600 sm:inline"
               title="Ctrl+clique (Windows/Linux), Cmd+clique (macOS) ou clique direito sobre um link: escolher entre navegador, Página Web ou copiar"
             >
               links: Ctrl/Cmd+clique
@@ -954,6 +1268,73 @@ function TerminalPane({
               }`}
               title={snapshot?.activity ?? ''}
             />
+          )}
+          {/* Janela própria e picture-in-picture. Cabem porque, com o cabeçalho
+              estreito, a dica de links some e o status vira só para leitor de
+              tela (`felixo-terminal-pane-header` no index.css). */}
+          {!collapsed && onAddBeside && (
+            <div className="felixo-pane-optional relative">
+              <button
+                ref={addButtonRef}
+                type="button"
+                onClick={() => setAddMenuOpen((open) => !open)}
+                className={`felixo-btn-icon rounded-sm p-1 hover:bg-white/10 hover:text-zinc-100 ${
+                  addMenuOpen ? 'bg-white/10 text-zinc-100' : 'text-zinc-400'
+                }`}
+                aria-label="Abrir outro agente ao lado deste"
+                aria-haspopup="menu"
+                aria-expanded={addMenuOpen}
+                title="Dividir este painel: abrir outro agente ao lado (mosaico)"
+              >
+                <SquarePlus size={16} />
+              </button>
+              {addMenuOpen && (
+                <AddBesideMenu
+                  items={addablePanes ?? []}
+                  onPick={(id) => {
+                    setAddMenuOpen(false)
+                    onAddBeside(id)
+                  }}
+                  onClose={() => {
+                    setAddMenuOpen(false)
+                    addButtonRef.current?.focus()
+                  }}
+                />
+              )}
+            </div>
+          )}
+          {!collapsed && !detachedTerminal && (
+            <>
+              <button
+                type="button"
+                onClick={() => openInWindow('janela')}
+                className="felixo-pane-optional felixo-btn-icon rounded-sm p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+                aria-label="Abrir o terminal em outra janela"
+                title="Abrir em outra janela: o agente continua rodando, sem reiniciar"
+              >
+                <AppWindow size={16} />
+              </button>
+              <button
+                type="button"
+                onClick={() => openInWindow('pip')}
+                className="felixo-pane-optional felixo-btn-icon rounded-sm p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+                aria-label="Abrir o terminal em picture-in-picture"
+                title="Picture-in-picture: o terminal flutua sempre no topo, mesmo com o app na bandeja"
+              >
+                <PictureInPicture2 size={16} />
+              </button>
+            </>
+          )}
+          {!collapsed && detachedTerminal && (
+            <button
+              type="button"
+              onClick={bringBackFromWindow}
+              className="felixo-btn-icon rounded-sm bg-white/10 p-1 text-zinc-100 hover:bg-white/15"
+              aria-label="Trazer o terminal de volta"
+              title="Trazer o terminal de volta para este painel"
+            >
+              <CornerDownLeft size={16} />
+            </button>
           )}
           {!collapsed && <CopyButton onCopy={() => store.copy(sessionId)} />}
           {solo && soloHeading.maximize}
@@ -1170,21 +1551,13 @@ function TerminalPane({
           inert={readingActive || archiveOpen}
           className="h-full min-w-0 flex-1 overflow-hidden px-1 pb-2 pt-1"
         />
-        {/* No canto esquerdo do próprio terminal, e não no cabeçalho (um ícone a mais empurrava o Fechar para fora da tela) nem à direita (cobria o Copiar texto da Leitura). */}
-        {!detachedTerminal && !collapsed && (
-          <button
-            type="button"
-            onClick={openInWindow}
-            className="felixo-btn-icon absolute top-1 left-2 z-10 rounded-sm p-1 text-zinc-500 opacity-60 hover:bg-white/10 hover:text-zinc-100 hover:opacity-100 focus-visible:opacity-100"
-            aria-label="Abrir o terminal em outra janela"
-            title="Abre este terminal numa janela própria; o agente continua rodando, sem reiniciar"
-          >
-            <ExternalLink size={14} />
-          </button>
-        )}
         {detachedTerminal && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-(--f-core-black-surface) text-xs text-zinc-400">
-            <span>Este terminal está em outra janela.</span>
+            <span>
+              {detachedTerminal.modo === 'pip'
+                ? 'Este terminal está em picture-in-picture.'
+                : 'Este terminal está em outra janela.'}
+            </span>
             <button
               type="button"
               onClick={bringBackFromWindow}

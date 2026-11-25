@@ -8,33 +8,55 @@
  * ditado, dock e notificações): `expandedTerminalId` é derivado de `focused`.
  */
 
-/** Teto de painéis vivos: cada um é um xterm desenhando. */
-export const MAX_DRAWER_PANES = 4
+import {
+  insertMosaicPane,
+  mosaicPaneIds,
+  presetMosaic,
+  removeMosaicPane,
+  replaceMosaicPane,
+  setMosaicRatio,
+  swapMosaicPanes,
+  type MosaicNode,
+  type MosaicRect,
+} from './terminal-mosaic'
 
-/** Largura mínima de um painel lado a lado (a TUI do Claude Code pede ~80 colunas). */
-export const MIN_PANE_WIDTH = 440
+/** Teto de painéis vivos: cada um é um xterm desenhando (renderer DOM, sem WebGL). */
+export const MAX_DRAWER_PANES = 8
 
 export type DrawerLayout = 'colunas' | 'linhas' | 'grade'
-/** `auto`: 2 painéis em colunas, 3 ou 4 em grade 2x2. */
+/** `auto`: mosaico livre (cada agente novo divide o painel ao lado do qual entrou). */
 export type DrawerLayoutChoice = 'auto' | DrawerLayout
 
 export type DrawerPanes = {
-  /** Ids dos blocos, na ordem de exibição. De 1 a `MAX_DRAWER_PANES`. */
+  /** Ids dos blocos, na ordem de leitura do mosaico. De 1 a `MAX_DRAWER_PANES`. */
   panes: string[]
+  /** O mosaico: árvore de divisões cujas folhas são `panes`. */
+  tree: MosaicNode
   focused: string
   /** Ids por uso, do mais antigo ao mais recente (último = em foco). */
   recent: string[]
+  /** O último arranjo pronto escolhido (o botão aparece marcado); arrastar não o desmarca. */
   layout: DrawerLayoutChoice
   /** O painel em foco ocupa a gaveta inteira; os outros continuam vivos. */
   zoomed: boolean
 }
 
 export type DrawerPanesAction =
-  | { type: 'open'; id: string; sideBySide?: boolean }
+  /**
+   * `sideBySide`: entra no mosaico dividindo `beside` (sem ele, o painel em
+   * foco). `area` é o tamanho da gaveta: dela sai o lado mais comprido.
+   */
+  | { type: 'open'; id: string; sideBySide?: boolean; beside?: string; area?: MosaicRect }
   | { type: 'close-pane'; id: string }
   | { type: 'focus'; id: string }
-  | { type: 'set-layout'; layout: DrawerLayoutChoice }
+  | { type: 'set-layout'; layout: DrawerLayoutChoice; area?: MosaicRect }
   | { type: 'toggle-zoom' }
+  /** Arrastar a divisória `path` do mosaico. */
+  | { type: 'resize'; path: string; ratio: number }
+  /** Troca dois painéis de lugar. */
+  | { type: 'swap'; a: string; b: string }
+
+const withTree = (state: DrawerPanes, tree: MosaicNode): DrawerPanes => ({ ...state, tree, panes: mosaicPaneIds(tree) })
 
 function touch(recent: string[], id: string): string[] {
   return [...recent.filter((other) => other !== id), id]
@@ -48,99 +70,73 @@ export function reduceDrawerPanes(
   switch (action.type) {
     case 'open': {
       if (!state) {
-        return { panes: [action.id], focused: action.id, recent: [action.id], layout: 'auto', zoomed: false }
+        return {
+          panes: [action.id],
+          tree: { kind: 'pane', id: action.id },
+          focused: action.id,
+          recent: [action.id],
+          layout: 'auto',
+          zoomed: false,
+        }
       }
       if (state.panes.includes(action.id)) {
         return { ...state, focused: action.id, recent: touch(state.recent, action.id) }
       }
-      let panes: string[]
+      let tree: MosaicNode
       let recent = state.recent
       if (!action.sideBySide) {
         // Clique comum: o agente entra no lugar do painel em foco (com um painel
-        // só, é a troca de sempre).
-        panes = state.panes.map((id) => (id === state.focused ? action.id : id))
+        // só, é a troca de sempre), no mesmo pedaço do mosaico.
+        tree = replaceMosaicPane(state.tree, state.focused, action.id)
         recent = recent.filter((id) => id !== state.focused)
       } else if (state.panes.length < MAX_DRAWER_PANES) {
-        panes = [...state.panes, action.id]
+        const beside = action.beside && state.panes.includes(action.beside) ? action.beside : state.focused
+        tree = insertMosaicPane(state.tree, action.id, { target: beside, area: action.area })
       } else {
-        // No teto, sai o painel sem foco usado há mais tempo.
+        // No teto, sai o painel sem foco usado há mais tempo (o novo fica no lugar dele).
         const victim = state.recent.find((id) => id !== state.focused && state.panes.includes(id))
         const replaced = victim ?? state.panes.find((id) => id !== state.focused)!
-        panes = state.panes.map((id) => (id === replaced ? action.id : id))
+        tree = replaceMosaicPane(state.tree, replaced, action.id)
         recent = recent.filter((id) => id !== replaced)
       }
-      return { ...state, panes, focused: action.id, recent: touch(recent, action.id) }
+      return { ...withTree(state, tree), focused: action.id, recent: touch(recent, action.id) }
     }
     case 'close-pane': {
       if (!state || !state.panes.includes(action.id)) return state
-      const panes = state.panes.filter((id) => id !== action.id)
-      if (panes.length === 0) return null
+      const tree = removeMosaicPane(state.tree, action.id)
+      if (!tree) return null
       const recent = state.recent.filter((id) => id !== action.id)
       const focused = state.focused === action.id ? recent[recent.length - 1] : state.focused
-      return { ...state, panes, recent, focused, zoomed: panes.length > 1 && state.zoomed }
+      const next = withTree(state, tree)
+      return { ...next, recent, focused, zoomed: next.panes.length > 1 && state.zoomed }
     }
     case 'focus':
       if (!state || !state.panes.includes(action.id) || state.focused === action.id) return state
       return { ...state, focused: action.id, recent: touch(state.recent, action.id) }
-    case 'set-layout':
-      return state && state.layout !== action.layout ? { ...state, layout: action.layout } : state
+    case 'set-layout': {
+      if (!state) return state
+      // Repetir o mesmo arranjo também refaz (desfaz o que foi arrastado), exceto o auto sem nada a refazer.
+      if (state.layout === action.layout && action.layout === 'auto') return state
+      const tree = presetMosaic(state.panes, action.layout, action.area)
+      return tree ? { ...withTree(state, tree), layout: action.layout } : state
+    }
     case 'toggle-zoom':
       return state && state.panes.length > 1 ? { ...state, zoomed: !state.zoomed } : state
+    case 'resize': {
+      if (!state) return state
+      const tree = setMosaicRatio(state.tree, action.path, action.ratio)
+      return tree === state.tree ? state : { ...state, tree }
+    }
+    case 'swap': {
+      if (!state) return state
+      const tree = swapMosaicPanes(state.tree, action.a, action.b)
+      return tree === state.tree ? state : withTree(state, tree)
+    }
   }
 }
 
-export type DrawerGeometry = {
-  cols: number
-  rows: number
-  /** Pediu lado a lado, mas a largura não comporta: os painéis empilham. */
-  stacked: boolean
-}
-
-/** Grade em que os painéis são desenhados, pela largura que a gaveta tem. */
-export function resolveDrawerGeometry(
-  state: Pick<DrawerPanes, 'layout' | 'zoomed'> & { count: number },
-  widthPx: number,
-): DrawerGeometry {
-  const { count } = state
-  if (count <= 1 || state.zoomed) return { cols: 1, rows: 1, stacked: false }
-  const layout: DrawerLayout =
-    state.layout === 'auto' ? (count === 2 ? 'colunas' : 'grade') : state.layout
-  const wantedCols = layout === 'colunas' ? count : layout === 'grade' ? 2 : 1
-  if (wantedCols > 1 && widthPx / wantedCols < MIN_PANE_WIDTH) {
-    return { cols: 1, rows: count, stacked: true }
-  }
-  return { cols: wantedCols, rows: Math.ceil(count / wantedCols), stacked: false }
-}
-
+/** Direção de navegação entre painéis; o vizinho sai da geometria do mosaico (`neighborMosaicPane`). */
 export type PaneDirection = 'left' | 'right' | 'up' | 'down'
-
-/**
- * Painel vizinho na direção pedida, na ordem em que a grade os desenha. Sem
- * vizinho, devolve o próprio (não dá a volta, como o `select-pane -L` do tmux).
- * Num painel último e sozinho na linha (grade com 3), ele cobre as duas colunas.
- */
-export function neighborPane(
-  ids: string[],
-  cols: number,
-  current: string,
-  direction: PaneDirection,
-): string {
-  const index = ids.indexOf(current)
-  if (index === -1 || ids.length <= 1) return current
-  const lastRow = Math.floor((ids.length - 1) / cols)
-  const spansRow = index === ids.length - 1 && index % cols === 0 && cols > 1
-  const row = Math.floor(index / cols)
-  const col = index % cols
-  let target = index
-  if (direction === 'left') target = spansRow || col === 0 ? index : index - 1
-  if (direction === 'right') target = spansRow || index + 1 >= ids.length || col === cols - 1 ? index : index + 1
-  if (direction === 'up') target = row === 0 ? index : index - cols
-  if (direction === 'down') {
-    if (row >= lastRow) target = index
-    else target = index + cols >= ids.length ? ids.length - 1 : index + cols
-  }
-  return ids[target] ?? current
-}
 
 /** Atalhos do painel (não conflitam com o Alt+↑/↓ do diff do Claude Code). */
 export type DrawerPaneShortcut =

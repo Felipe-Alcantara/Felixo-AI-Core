@@ -75,6 +75,26 @@ describe('detachTerminal', () => {
     expect(handle).toBeNull()
   })
 
+  it('picture-in-picture abre a janela de id pip-<sessão>, que o main faz pequena e sempre no topo', () => {
+    const win = fakeWindow()
+    const abrir = vi.fn(() => win as unknown as Window)
+    const handle = detachTerminal({
+      sessionId: 'agente-1',
+      title: 'Claude da casa',
+      modo: 'pip',
+      store: fakeStore(),
+      getHome: () => null,
+      onClosed: vi.fn(),
+      open: abrir,
+    })
+
+    expect(abrir).toHaveBeenCalledWith('pip-agente-1')
+    expect(handle?.modo).toBe('pip')
+    expect(win.document.title).toBe('Claude da casa — picture-in-picture')
+    expect(auxIdDoTerminal('agente-1')).toBe('t-agente-1')
+    expect(auxIdDoTerminal('agente-1', 'pip')).toBe('pip-agente-1')
+  })
+
   it('o id da janela vem da sessão e só tem o formato que o main aceita', () => {
     expect(auxIdDoTerminal('Agente #1 / Ação')).toBe('t-agente-1-a-o')
     expect(auxIdDoTerminal('???')).toBe('t-terminal')

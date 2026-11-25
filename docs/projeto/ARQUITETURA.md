@@ -2555,5 +2555,15 @@ canvas, terminais e `<webview>` continuam com um estado so e mudam de janela sem
   comportamento de esconder. No macOS o app ja fica no Dock; em desenvolvimento, no release smoke e na
   automacao a bandeja fica desligada (o fechamento precisa encerrar o processo e liberar a porta do Vite);
   so o teste dela liga com `FELIXO_DEVTOOLS_TRAY=1` e porta de depuracao valida.
-- **Ainda nao existe**: reabrir as auxiliares no proximo inicio e destacar nota e painel de ferramenta
+- **Picture-in-picture**: auxiliar de id `pip-<...>` (`aux-windows.cjs`, `isPipId`): nasce com 520x320 no canto
+  inferior direito do monitor principal, `alwaysOnTop` no nivel `floating` e visivel em todas as areas de
+  trabalho, e NAO segue o `hide` da principal (continua com o app na bandeja). Enquanto houver PiP, a principal
+  roda com `setBackgroundThrottling(false)`: e ela quem desenha o xterm, e escondida teria os timers estrangulados.
+- **Mosaico** (`canvas/components/terminal-mosaic.ts`, puro e testado): os paineis da gaveta sao as folhas de uma
+  arvore de divisoes (`split` com direcao e proporcao), como no i3/bspwm. O agente novo divide o painel escolhido
+  pelo lado mais comprido; fechar devolve o espaco ao irmao; a grade usa ceil(sqrt(n)) colunas e a ultima linha
+  estica. `TerminalDrawer` desenha a arvore em porcentagem (`layoutMosaic` num quadrado de 100 000 unidades) e as
+  divisorias como `role="separator"` arrastaveis (rascunho local, gravado ao soltar). `terminal-drawer-panes.ts`
+  guarda `tree` e deriva `panes` dela; teto de 8. "Terminais em tela cheia" faz a gaveta fixa cobrindo a janela.
+- **Ainda nao existe**: reabrir as auxiliares no proximo inicio, lembrar o mosaico entre sessoes e destacar nota e painel de ferramenta
   (tarefas seguintes). Wayland: a posicao salva nao vale (o compositor decide).

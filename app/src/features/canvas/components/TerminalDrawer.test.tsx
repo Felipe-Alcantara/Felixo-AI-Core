@@ -36,6 +36,7 @@ vi.mock('./TerminalArchivePanel', () => ({
 }))
 
 import { TerminalDrawer, type TerminalDrawerPane } from './TerminalDrawer'
+import { presetMosaic } from './terminal-mosaic'
 import { instalarLocalStorageEmMemoria } from '../../shared/test-support/jsdom-storage'
 import { instalarShimsDeLayout } from '../../shared/test-support/jsdom-shims'
 
@@ -135,6 +136,23 @@ describe('TerminalDrawer (controles)', () => {
       expect(screen.queryByText('Este terminal está em outra janela.')).toBeNull()
     })
 
+    it('picture-in-picture abre a janela pip-<sessão> e o botão do cabeçalho vira Trazer de volta', async () => {
+      const janela = janelaFalsa()
+      const abrir = vi.spyOn(window, 'open').mockReturnValue(janela as unknown as Window)
+      montar()
+
+      await clicar('Abrir o terminal em picture-in-picture')
+
+      expect(abrir).toHaveBeenCalledWith('about:blank', 'felixo-aux-pip-no-1')
+      expect(screen.getByText('Este terminal está em picture-in-picture.')).toBeTruthy()
+      expect(screen.queryByRole('button', { name: 'Abrir o terminal em picture-in-picture' })).toBeNull()
+
+      await clicar('Trazer o terminal de volta')
+
+      expect(janela.close).toHaveBeenCalledTimes(1)
+      expect(screen.getByRole('button', { name: 'Abrir o terminal em picture-in-picture' })).toBeTruthy()
+    })
+
     it('janela negada pelo sistema: o terminal fica no painel', async () => {
       vi.spyOn(window, 'open').mockReturnValue(null)
       montar()
@@ -157,6 +175,121 @@ describe('TerminalDrawer (controles)', () => {
       // Só o `moveTo` de ida (para a janela): desmontou, então não há volta para um painel que já não existe.
       expect(estado.store.moveTo).toHaveBeenCalledTimes(1)
       expect(estado.store.moveTo.mock.calls[0][1].ownerDocument).toBe(janela.document)
+    })
+  })
+
+  describe('Mosaico', () => {
+    function montarMosaico(ids: string[], preset: 'colunas' | 'grade' = 'colunas', extra: Record<string, unknown> = {}) {
+      const props = {
+        onFocusPane: vi.fn(),
+        onClosePane: vi.fn(),
+        onLayoutChange: vi.fn(),
+        onToggleZoom: vi.fn(),
+        onClose: vi.fn(),
+        onResizeSplit: vi.fn(),
+        onAddPane: vi.fn(),
+        ...extra,
+      }
+      render(
+        <TerminalDrawer
+          panes={ids.map((id) => painel({ sessionId: id, title: `Agente ${id}` }))}
+          tree={presetMosaic(ids, preset)!}
+          focusedId={ids[0]}
+          layout={preset}
+          zoomed={false}
+          addablePanes={[{ id: 'z', title: 'Agente z' }, { id: 'y', title: 'Agente y' }]}
+          {...props}
+        />,
+      )
+      return props
+    }
+    const caixa = (id: string) => (document.querySelector(`[data-felixo-mosaic-pane="${id}"]`) as HTMLElement).style
+
+    it('cada agente ocupa o seu retângulo do mosaico, em porcentagem, sem célula vazia', () => {
+      montarMosaico(['a', 'b'], 'colunas')
+      expect(caixa('a')).toMatchObject({ left: '0%', top: '0%', width: '50%', height: '100%' })
+      expect(caixa('b')).toMatchObject({ left: '50%', top: '0%', width: '50%', height: '100%' })
+      cleanup()
+
+      montarMosaico(['a', 'b', 'c'], 'grade')
+      // Grade com 3: dois em cima e o terceiro na linha de baixo inteira.
+      expect(caixa('a')).toMatchObject({ width: '50%', height: '50%' })
+      expect(caixa('c')).toMatchObject({ left: '0%', top: '50%', width: '100%', height: '50%' })
+    })
+
+    it('a divisória tem nome e o teclado grava a nova proporção (5%, Shift 15%, Home ao meio)', () => {
+      const props = montarMosaico(['a', 'b'])
+      const divisoria = screen.getByRole('separator', { name: 'Redimensionar entre Agente a e Agente b' })
+      expect(divisoria.getAttribute('aria-valuenow')).toBe('50')
+
+      fireEvent.keyDown(divisoria, { key: 'ArrowRight' })
+      expect(props.onResizeSplit).toHaveBeenLastCalledWith('', 0.55)
+      fireEvent.keyDown(divisoria, { key: 'ArrowLeft', shiftKey: true })
+      expect(props.onResizeSplit.mock.lastCall?.[1]).toBeCloseTo(0.35)
+      fireEvent.keyDown(divisoria, { key: 'Home' })
+      expect(props.onResizeSplit).toHaveBeenLastCalledWith('', 0.5)
+      // A seta da outra direção não é desta divisória (lado a lado: só esquerda e direita).
+      props.onResizeSplit.mockClear()
+      fireEvent.keyDown(divisoria, { key: 'ArrowDown' })
+      expect(props.onResizeSplit).not.toHaveBeenCalled()
+    })
+
+    it('o + do painel lista os agentes fora da gaveta e o escolhido divide aquele painel', async () => {
+      const props = montarMosaico(['a', 'b'])
+      const mais = screen.getAllByRole('button', { name: 'Abrir outro agente ao lado deste' })
+      expect(mais).toHaveLength(2)
+
+      await act(async () => {
+        fireEvent.click(mais[1])
+      })
+      const opcoes = screen.getAllByRole('menuitem')
+      // Em ordem alfabética.
+      expect(opcoes.map((opcao) => opcao.textContent)).toEqual(['Agente y', 'Agente z'])
+
+      await act(async () => {
+        fireEvent.click(opcoes[1])
+      })
+      expect(props.onAddPane).toHaveBeenCalledWith('z', 'b', expect.objectContaining({ x: 0, y: 0 }))
+      expect(screen.queryByRole('menu')).toBeNull()
+    })
+
+    it('o menu do + fecha com Esc e devolve o foco ao botão', async () => {
+      montarMosaico(['a', 'b'])
+      const mais = screen.getAllByRole('button', { name: 'Abrir outro agente ao lado deste' })[0]
+      await act(async () => {
+        fireEvent.click(mais)
+      })
+      const menu = screen.getByRole('menu', { name: 'Agentes para abrir ao lado' })
+      await act(async () => {
+        fireEvent.keyDown(menu, { key: 'Escape' })
+      })
+      expect(screen.queryByRole('menu')).toBeNull()
+      expect(document.activeElement).toBe(mais)
+    })
+
+    it('estreita demais para o arranjo (painel abaixo do piso): empilha e avisa', () => {
+      // A gaveta do teste tem 480 px: três colunas dariam 160 px cada.
+      montarMosaico(['a', 'b', 'c'], 'colunas')
+      expect(screen.getByText('empilhados: maximize para lado a lado')).toBeTruthy()
+      expect(caixa('a')).toMatchObject({ left: '0%', width: '100%' })
+      expect(caixa('c')).toMatchObject({ left: '0%', width: '100%' })
+      // Empilhado, não há divisória para arrastar (a árvore guardada continua a mesma).
+      expect(screen.queryByRole('separator', { name: /Redimensionar entre/ })).toBeNull()
+    })
+
+    it('tela cheia cobre a janela; o Esc volta ao tamanho de antes e só o segundo Esc fecha', async () => {
+      const props = montarMosaico(['a', 'b'])
+      const regiao = document.querySelector('[data-canvas-terminal-drawer]') as HTMLElement
+
+      await clicar('Terminais em tela cheia')
+      expect(regiao.classList.contains('felixo-terminal-drawer--fullscreen')).toBe(true)
+      expect(screen.getByRole('button', { name: 'Sair da tela cheia' }).getAttribute('aria-pressed')).toBe('true')
+
+      await act(async () => {
+        fireEvent.keyDown(regiao, { key: 'Escape' })
+      })
+      expect(regiao.classList.contains('felixo-terminal-drawer--fullscreen')).toBe(false)
+      expect(props.onClose).not.toHaveBeenCalled()
     })
   })
 

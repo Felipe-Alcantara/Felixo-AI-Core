@@ -2178,6 +2178,101 @@
   padding: 0.35rem;
 }
 
+/* Cabeçalho do painel de terminal: os botões (janela, picture-in-picture,
+   Reiniciar, Fechar...) nunca podem sair da tela. Com o cabeçalho estreito, a
+   dica de links sai e o status fica só para leitor de tela (segue aria-live). */
+.felixo-terminal-pane-header {
+  container: felixo-pane-header / inline-size;
+}
+
+@container felixo-pane-header (width < 46rem) {
+  .felixo-pane-links-hint {
+    display: none;
+  }
+}
+
+/* Painel muito estreito no mosaico (3 ou mais lado a lado): saem o "+", a janela e o
+   picture-in-picture; o zoom do painel (Alt+Shift+Z) devolve a largura e os botões. */
+@container felixo-pane-header (width < 22rem) {
+  .felixo-pane-optional {
+    display: none;
+  }
+}
+
+/* Mosaico em tela cheia: a gaveta cobre a janela inteira do app (o botão ou Esc volta).
+   A largura reportada às outras superfícies não muda: elas ficam por baixo, intactas. */
+.felixo-terminal-drawer.felixo-terminal-drawer--fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  border-left: 0;
+}
+
+/* Divisória do mosaico: a faixa arrastável fica centrada na junção de dois painéis
+   e só acende ao passar o mouse, arrastar ou focar pelo teclado. */
+.felixo-mosaic-divider {
+  position: absolute;
+  z-index: 15;
+  touch-action: none;
+}
+
+.felixo-mosaic-divider.is-row {
+  width: 9px;
+  transform: translateX(-50%);
+  cursor: col-resize;
+}
+
+.felixo-mosaic-divider.is-column {
+  height: 9px;
+  transform: translateY(-50%);
+  cursor: row-resize;
+}
+
+.felixo-mosaic-divider::after {
+  content: '';
+  position: absolute;
+  background: transparent;
+  transition: background-color 120ms ease;
+}
+
+.felixo-mosaic-divider.is-row::after {
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 3px;
+}
+
+.felixo-mosaic-divider.is-column::after {
+  left: 0;
+  right: 0;
+  top: 3px;
+  height: 3px;
+}
+
+.felixo-mosaic-divider:hover::after,
+.felixo-mosaic-divider.is-dragging::after,
+.felixo-mosaic-divider:focus-visible::after {
+  background: var(--f-core-active);
+}
+
+.felixo-mosaic-divider:focus-visible {
+  outline: none;
+}
+
+@container felixo-pane-header (width < 30rem) {
+  .felixo-pane-status {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .felixo-anim-drawer-in,
   .felixo-anim-drawer-out,

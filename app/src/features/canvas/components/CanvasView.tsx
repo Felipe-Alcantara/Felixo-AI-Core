@@ -54,6 +54,7 @@ import {
   type DrawerPanes,
   type DrawerPanesAction,
 } from './terminal-drawer-panes'
+import type { MosaicRect } from './terminal-mosaic'
 import { readingProfileFor } from '../terminal/reading/reading-profiles'
 import { TerminalDetailsPanel } from './TerminalDetailsPanel'
 import { NODE_DRAG_HANDLE_CLASS } from './NodeHeader'
@@ -534,7 +535,7 @@ function CanvasInner({
   // aqui, então visitar o agente limpa a marca na hora em vez de deixar uma
   // notificação fantasma que só o painel sabia apagar.
   const openTerminal = useCallback(
-    (nodeId: string, options?: { sideBySide?: boolean }) => {
+    (nodeId: string, options?: { sideBySide?: boolean; beside?: string; area?: MosaicRect }) => {
       const active = document.activeElement
       const trigger = Array.from(
         document.querySelectorAll<HTMLElement>('[data-terminal-expand-trigger]'),
@@ -553,7 +554,13 @@ function CanvasInner({
         terminalFocusReturnRef.current = active
       }
       dispatchNodeMountLatch({ type: 'drawer-opened' })
-      commitDrawerPanes({ type: 'open', id: nodeId, sideBySide: options?.sideBySide })
+      commitDrawerPanes({
+        type: 'open',
+        id: nodeId,
+        sideBySide: options?.sideBySide,
+        beside: options?.beside,
+        area: options?.area,
+      })
       setTerminalOpenRequest((current) => current + 1)
       acknowledgeNodeNotifications(nodeId)
       setNotificationHistory((current) =>
@@ -2514,6 +2521,12 @@ function CanvasInner({
       readingProfile: readingProfileFor(data?.providerId, data?.command),
     }
   })
+  // O "+" de cada painel: os agentes (terminais) do canvas que ainda não estão na gaveta.
+  const addableDrawerPanes = drawerPanes
+    ? renderedNodes
+        .filter((node) => node.type === 'terminal' && !drawerPanes.panes.includes(node.id))
+        .map((node) => ({ id: node.id, title: (node.data as TerminalNodeData | undefined)?.label ?? 'Terminal' }))
+    : []
   const arrangeableCount = countArrangeableNodes(nodes)
   // Tipos de bloco presentes, só quando o catálogo do tutorial tem gatilho de
   // canvas (o v1 não tem): sem isso, arrastar um bloco nem monta a chave.
@@ -2853,13 +2866,17 @@ function CanvasInner({
       {drawerPanes && (
         <TerminalDrawer
           panes={drawerPaneProps}
+          tree={drawerPanes.tree}
           focusedId={drawerPanes.focused}
           layout={drawerPanes.layout}
           zoomed={drawerPanes.zoomed}
           onFocusPane={(id) => commitDrawerPanes({ type: 'focus', id })}
           onClosePane={(id) => commitDrawerPanes({ type: 'close-pane', id })}
-          onLayoutChange={(layout) => commitDrawerPanes({ type: 'set-layout', layout })}
+          onLayoutChange={(layout, area) => commitDrawerPanes({ type: 'set-layout', layout, area })}
           onToggleZoom={() => commitDrawerPanes({ type: 'toggle-zoom' })}
+          onResizeSplit={(path, ratio) => commitDrawerPanes({ type: 'resize', path, ratio })}
+          addablePanes={addableDrawerPanes}
+          onAddPane={(id, beside, area) => openTerminal(id, { sideBySide: true, beside, area })}
           openRequest={terminalOpenRequest}
           onClose={closeExpandedTerminal}
           onOutsideClickClose={() => {
