@@ -9,6 +9,7 @@ const {
   readCodexIdentity,
   readCodexLocalUsage,
 } = require('./agent-usage-codex-local.cjs')
+const { runLocalProbe } = require('./agent-usage-local-probes.cjs')
 
 function createCodexHome() {
   const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-codex-local-'))
@@ -22,6 +23,7 @@ function rateLimitLine({
   primaryPercent,
   secondaryPercent,
   balance = '0',
+  planType = 'plus',
 }) {
   return JSON.stringify({
     timestamp,
@@ -41,7 +43,7 @@ function rateLimitLine({
           resets_at: 1_788_535_712,
         },
         credits: { has_credits: false, unlimited: false, balance },
-        plan_type: 'plus',
+        plan_type: planType,
       },
     },
   })
@@ -284,6 +286,42 @@ test('codex local usage stays quiet when there is no codex home at all', () => {
 
     assert.equal(result.ok, false)
     assert.deepEqual(result.metrics, [])
+  } finally {
+    fs.rmSync(homeDir, { recursive: true, force: true })
+  }
+})
+
+test('probe do codex mostra o plano da conta, não o nível "free" do limite', () => {
+  const { homeDir, sessionsDir } = createCodexHome()
+
+  try {
+    fs.writeFileSync(
+      path.join(sessionsDir, 'rollout-2026-08-28T20-35-02-abc.jsonl'),
+      rateLimitLine({
+        timestamp: '2026-08-28T23:40:00.000Z',
+        primaryPercent: 11,
+        secondaryPercent: 3,
+        planType: 'free',
+      }),
+      'utf8',
+    )
+    fs.writeFileSync(
+      path.join(homeDir, '.codex', 'auth.json'),
+      JSON.stringify({
+        tokens: {
+          id_token: encodeIdToken({
+            email: 'pessoa@example.com',
+            'https://api.openai.com/auth': { chatgpt_plan_type: 'plus' },
+          }),
+        },
+      }),
+      'utf8',
+    )
+
+    assert.equal(runLocalProbe('codex-rollout', { homeDir }).plan, 'plus')
+
+    fs.rmSync(path.join(homeDir, '.codex', 'auth.json'))
+    assert.equal(runLocalProbe('codex-rollout', { homeDir }).plan, 'free')
   } finally {
     fs.rmSync(homeDir, { recursive: true, force: true })
   }

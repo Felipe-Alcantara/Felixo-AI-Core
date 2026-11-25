@@ -43,7 +43,9 @@ function readCodexProbe(options = {}) {
     collectedAt: usage.collectedAt,
     metrics: usage.metrics,
     identity,
-    plan: usage.plan ?? plan,
+    // O plano da conta (login) vence: o `plan_type` do rollout é o nível do
+    // limite e pode vir "free" numa conta Plus.
+    plan: plan ?? usage.plan,
     message: usage.message,
   }
 }
