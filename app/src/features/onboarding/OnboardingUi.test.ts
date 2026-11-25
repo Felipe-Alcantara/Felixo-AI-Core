@@ -357,6 +357,7 @@ describe('menu Ajuda (todos os estados)', () => {
     const unavailable = renderMenu([entry(), novelty({ status: 'indisponivel' })])
     expect(unavailable).toContain('Indisponível nesta versão')
     expect(actionsOf(unavailable)).toEqual(['iniciar', 'redefinir'])
+    expect(html).toMatch(/<a [^>]*href="[^"]*CHANGELOG\.md"[^>]*target="_blank"[^>]*rel="noreferrer"[^>]*>Ver todas as novidades<\/a>/)
   })
 
   it('redefinir pede confirmação na própria tela, em dois cliques', () => {

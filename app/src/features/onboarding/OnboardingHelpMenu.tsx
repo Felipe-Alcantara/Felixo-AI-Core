@@ -6,6 +6,9 @@ import type { OnboardingStore } from './onboarding-store'
 import { onboardingStore, useOnboardingSnapshot } from './onboarding-store-proxy'
 import { describeHelpMenu, type HelpActionModel, type HelpMenuModel } from './onboarding-ui-model'
 
+/** O resumo por período das novidades vive no CHANGELOG do repositório; a Ajuda só aponta para ele. */
+const CHANGELOG_URL = 'https://github.com/Felipe-Alcantara/Felixo-AI-Core/blob/main/CHANGELOG.md'
+
 export type HelpMenuCloseReason = 'escape' | 'tab' | 'fora' | 'acao'
 
 type ContentProps = {
@@ -92,6 +95,9 @@ export function OnboardingHelpMenuContent({
             </div>
           )
         })}
+        <a className="felixo-onboarding-help__link" href={CHANGELOG_URL} target="_blank" rel="noreferrer">
+          {model.novidades.historico}
+        </a>
       </section>
 
       <div className="felixo-onboarding-help__footer">

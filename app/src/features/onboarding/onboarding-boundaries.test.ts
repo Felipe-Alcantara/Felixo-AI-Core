@@ -91,6 +91,8 @@ describe('fronteiras do tutorial (sonda estática)', () => {
     expect(offenders).toEqual([])
   })
 
+  const CHANGELOG_URL_PERMITIDA = 'https://github.com/Felipe-Alcantara/Felixo-AI-Core/blob/main/CHANGELOG.md'
+
   it('nada de chat, terminal, rede, processo nem ponte fora de onboarding, qaLogger e devtools', () => {
     const offenders = files.flatMap(({ file, source }) => {
       const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
@@ -99,7 +101,8 @@ describe('fronteiras do tutorial (sonda estática)', () => {
       if (/from '[^']*terminal\//.test(code)) found.push('terminal/*')
       if (/\bfetch\s*\(/.test(code)) found.push('fetch')
       if (/XMLHttpRequest|WebSocket|EventSource/.test(code)) found.push('rede')
-      if (/https?:\/\//.test(code)) found.push('URL http(s)')
+      // Único link permitido: o CHANGELOG do repositório, aberto pelo clique da pessoa na Ajuda (não é rede do app).
+      if (/https?:\/\//.test(code.replace(CHANGELOG_URL_PERMITIDA, ''))) found.push('URL http(s)')
       if (/\bwindow\.open\s*\(|\.click\s*\(\s*\)|dispatchEvent\s*\(|scrollIntoView/.test(code)) found.push('ação sintetizada')
       if (/\bpty\b|spawn\s*\(|child_process/i.test(code)) found.push('processo')
       if (/\bconfirm\s*\(|\balert\s*\(|\bprompt\s*\(/.test(code)) found.push('diálogo nativo que trava o renderer')

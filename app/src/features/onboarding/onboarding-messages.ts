@@ -130,6 +130,7 @@ export const PT_BR = {
   'ajuda.acao.recomecar': 'Recomeçar',
   'ajuda.acao.ver': 'Ver',
   'ajuda.novidades.vazio': 'Nenhuma novidade por enquanto.',
+  'ajuda.novidades.historico': 'Ver todas as novidades',
   'ajuda.redefinir': 'Redefinir tutoriais',
   'ajuda.redefinir.pergunta': 'Redefinir o progresso de todos os tutoriais?',
   'ajuda.redefinir.confirmar': 'Redefinir',

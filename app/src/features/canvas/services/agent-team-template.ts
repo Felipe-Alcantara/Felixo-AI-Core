@@ -3,7 +3,7 @@ import type { FrameColor } from '../types'
 import type { NewTerminalOptions } from './new-terminal-options'
 
 /**
- * Template de time de agentes (Fase 1 da Vitis): um coordenador, dois
+ * Template de time de agentes: um coordenador, dois
  * produtores e um checador, já ligados pelo handoff. A estrutura se repete em
  * todo time: um coordenador, um plano compartilhado, entregas definidas e
  * agentes que conferem o trabalho uns dos outros.

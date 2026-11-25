@@ -5332,6 +5332,12 @@
   font-size: 0.8125rem;
 }
 
+.felixo-onboarding-help__link {
+  color: var(--f-core-white-soft);
+  font-size: 0.8125rem;
+  text-decoration: underline;
+}
+
 .felixo-onboarding-help__actions {
   display: flex;
   flex-wrap: wrap;

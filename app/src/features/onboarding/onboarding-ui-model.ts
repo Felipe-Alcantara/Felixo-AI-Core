@@ -162,7 +162,7 @@ export type HelpMenuModel = {
   lang: string
   rotulo: string
   tutorial: { titulo: string; itens: HelpItemModel[] }
-  novidades: { titulo: string; itens: HelpItemModel[]; vazio: string | null }
+  novidades: { titulo: string; itens: HelpItemModel[]; vazio: string | null; historico: string }
   redefinir: { label: string; pergunta: string; confirmar: string; cancelar: string }
   /** Linha discreta quando o progresso não será salvo (sem ponte, leitura falha, versão mais nova). */
   semPersistencia: string | null
@@ -192,6 +192,7 @@ const MENU_KEYS: readonly MessageKey[] = [
   'ajuda.secao.tutorial',
   'ajuda.secao.novidades',
   'ajuda.novidades.vazio',
+  'ajuda.novidades.historico',
   'ajuda.redefinir',
   'ajuda.redefinir.pergunta',
   'ajuda.redefinir.confirmar',
@@ -272,6 +273,7 @@ export function describeHelpMenu(input: {
       titulo: format('ajuda.secao.novidades'),
       itens: novidades,
       vazio: novidades.length === 0 ? format('ajuda.novidades.vazio') : null,
+      historico: format('ajuda.novidades.historico'),
     },
     redefinir: {
       label: format('ajuda.redefinir'),
