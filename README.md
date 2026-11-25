@@ -8,6 +8,7 @@ Felixo AI Core é o núcleo inteligente do ecossistema FelixoVerse: uma aplicaç
 
 ## Índice
 
+- [Para quem não programa](#para-quem-não-programa)
 - [O que é](#o-que-é)
 - [Arquitetura atual](#arquitetura-atual)
 - [Estrutura do repositório](#estrutura-do-repositório)
@@ -21,6 +22,21 @@ Felixo AI Core é o núcleo inteligente do ecossistema FelixoVerse: uma aplicaç
 - [Validação](#validação)
 - [Roadmap](#roadmap)
 - [Licença e contribuições](#licença-e-contribuições)
+
+---
+
+## Para quem não programa
+
+O Felixo AI Core é um aplicativo de computador que reúne, num canvas (uma tela com blocos), as inteligências artificiais de linha de comando que você já usa, como Claude, Codex e Gemini. Cada agente vira um bloco, e os blocos podem trocar contexto entre si e com arquivos e notas.
+
+- **Sistemas:** Windows, macOS 13 ou mais novo, e Linux.
+- **Antes de abrir:** instale pelo menos uma das CLIs (`claude`, `codex` ou `gemini`) e entre com a sua conta nela, no próprio computador. O app usa as CLIs que você já tem.
+- **Baixar:** a página de [Releases](https://github.com/Felipe-Alcantara/Felixo-AI-Core/releases) tem o instalador de cada sistema. Depois de instalado, o app procura atualizações e as instala quando você fecha (no Linux, use o AppImage para isso).
+- **macOS:** os instaladores ainda não são assinados, então a primeira abertura é bloqueada. Os passos estão no [Guia do Usuário](docs/guias/GUIA-USUARIO.md#2-instalação-por-sistema-operacional).
+- **Para onde vai:** o [roadmap](docs/projeto/ROADMAP.md) mostra a direção e as ideias abertas.
+- **Em inglês:** [README.en.md](README.en.md).
+
+Se você é desenvolvedor, pule para [Como rodar](#como-rodar).
 
 ---
 
@@ -533,7 +549,7 @@ Ver [ROADMAP.md](./docs/projeto/ROADMAP.md) para fases, checklists, metas e back
 
 Distribuído sob a licença MIT; o texto completo está em [LICENSE](./LICENSE).
 
-Contribuições são bem-vindas. Comece pelo [CONTRIBUTING.md](./CONTRIBUTING.md): como rodar, como testar e as regras de commit. Falhas de segurança não vão em issue pública: veja o [SECURITY.md](./SECURITY.md). O fluxo de branches e commits (direto na `main` por padrão, branch só nas exceções) está na [política de branch do Guia para Desenvolvedores](./docs/guias/GUIA-DESENVOLVEDOR.md#política-de-branch), e o [Roadmap](./docs/projeto/ROADMAP.md) lista a direção do projeto e as ideias abertas para quem quiser ajudar.
+Contribuições são bem-vindas. Comece pelo [CONTRIBUTING.md](./CONTRIBUTING.md): como rodar, como testar e as regras de commit. Falhas de segurança não vão em issue pública: veja o [SECURITY.md](./SECURITY.md). O fluxo de branches e commits (direto na `main` por padrão, branch só nas exceções) está na [política de branch do Guia para Desenvolvedores](./docs/guias/GUIA-DESENVOLVEDOR.md#política-de-branch), e o [Roadmap](./docs/projeto/ROADMAP.md) lista a direção do projeto e as ideias abertas para quem quiser ajudar. Ao participar, siga o [Código de Conduta](./CODE_OF_CONDUCT.md).
 
 ### Autor
 
