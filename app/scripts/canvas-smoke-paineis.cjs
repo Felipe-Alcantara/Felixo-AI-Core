@@ -469,6 +469,8 @@ async function checarLarguraPorVistaDoPainel(page) {
   try {
     await abrirFerramenta(page, 'Prompts', 'prompts')
     const largura = (painel) => page.evaluate((sel) => document.querySelector(sel)?.getBoundingClientRect().width ?? 0, `[data-felixo-canvas-panel="${painel}"]`)
+    // O painel abre animando a largura (medido: 386 no 1º instante, 420 um segundo depois): espera assentar.
+    await esperar(page, (sel) => Math.abs((document.querySelector(sel)?.getBoundingClientRect().width ?? 0) - 420) <= 2, '[data-felixo-canvas-panel="prompts"]', 'a lista de Prompts não chegou à largura gravada').catch(() => {})
     const lista = Math.round(await largura('prompts'))
     if (Math.abs(lista - 420) > 2) falhar('a lista de Prompts não usou a largura gravada', lista)
     await esperar(page, () => [...document.querySelectorAll('[data-felixo-canvas-panel="prompts"] button')].some((b) => /^Ver$/.test((b.textContent ?? '').trim())), null, 'não há prompt com o botão Ver')
