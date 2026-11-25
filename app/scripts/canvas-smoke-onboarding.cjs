@@ -819,7 +819,8 @@ function criarCenariosDoTutorial(deps) {
           focoNoMenu: Boolean(menu && active && menu.contains(active)),
           acao: active?.getAttribute?.('data-felixo-onboarding-action') ?? null,
           texto: (active?.textContent ?? '').trim().slice(0, 40),
-          botoes: menu ? menu.querySelectorAll('button:not([disabled])').length : 0,
+          // Controles na ordem de Tab: botões e o link para o CHANGELOG.
+          botoes: menu ? menu.querySelectorAll('button:not([disabled]), a[href]').length : 0,
         }
       })
     const abrirPeloTeclado = async (etapa) => {
