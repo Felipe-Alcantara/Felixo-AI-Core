@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { nextDetailsSyncDelayMs } from '../services/notion-sync-backoff'
 import type { RepoBoardDetails } from '../services/notion-repo-board'
 
 type NotionBridge = NonNullable<NonNullable<Window['felixo']>['notion']>
@@ -17,7 +18,9 @@ const IDLE: DetailsSourceState = { details: null, status: 'idle', message: null 
  * Database de detalhes do Painel (a que a coluna de ligação das tarefas
  * aponta). Mesmo caminho das tarefas: mostra o snapshot local na hora e
  * revalida com o Notion; se a rede falhar e houver snapshot, fica com ele.
- * Recarrega quando o alvo muda, quando o Painel abre e a cada `refreshKey`.
+ * Recarrega quando o alvo muda, quando o Painel abre, a cada `refreshKey` e,
+ * com o Painel aberto, num intervalo próprio (10 min, com backoff nas falhas).
+ * Timer próprio: não passa pela fila do coordinator das tarefas.
  */
 export function useNotionDetailsSource({
   api,
@@ -39,6 +42,17 @@ export function useNotionDetailsSource({
   const databaseId = target?.databaseId || undefined
   const key = `${connectionId}::${dataSourceId || ''}::${databaseId || ''}`
   const active = Boolean(enabled && api && connectionId && (dataSourceId || databaseId))
+  const [autoTick, setAutoTick] = useState(0)
+  const failures = useRef(0)
+  const settled = state.key === key && (state.status === 'ready' || state.status === 'error')
+
+  // Depois de cada carga concluída, agenda a próxima; fechar o Painel (active=false) cancela.
+  useEffect(() => {
+    if (!active || !settled) return undefined
+    failures.current = state.status === 'error' ? failures.current + 1 : 0
+    const timer = window.setTimeout(() => setAutoTick((value) => value + 1), nextDetailsSyncDelayMs(failures.current))
+    return () => window.clearTimeout(timer)
+  }, [active, settled, state])
 
   useEffect(() => {
     if (!active || !api) return undefined
@@ -79,7 +93,7 @@ export function useNotionDetailsSource({
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [active, api, connectionId, dataSourceId, databaseId, key, refreshKey])
+  }, [active, api, connectionId, dataSourceId, databaseId, key, refreshKey, autoTick])
 
   if (!active || state.key !== key) return active ? { ...IDLE, status: 'loading' } : IDLE
   return { details: state.details, status: state.status, message: state.message }

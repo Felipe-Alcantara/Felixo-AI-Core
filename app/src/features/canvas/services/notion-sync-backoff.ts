@@ -16,3 +16,12 @@ export function nextAutoSyncDelayMs(consecutiveFailures: number): number {
   const delay = AUTO_SYNC_BASE_INTERVAL_MS * 2 ** consecutiveFailures
   return Math.min(delay, AUTO_SYNC_MAX_INTERVAL_MS)
 }
+
+/** Intervalo da recarga automática da database de detalhes do Painel (muda pouco). */
+export const DETAILS_SYNC_BASE_INTERVAL_MS = 10 * 60_000
+
+/** Mesmo backoff do auto-sync das tarefas, partindo de um intervalo base maior e com o mesmo teto. */
+export function nextDetailsSyncDelayMs(consecutiveFailures: number): number {
+  if (!Number.isFinite(consecutiveFailures) || consecutiveFailures <= 0) return DETAILS_SYNC_BASE_INTERVAL_MS
+  return Math.min(DETAILS_SYNC_BASE_INTERVAL_MS * 2 ** consecutiveFailures, AUTO_SYNC_MAX_INTERVAL_MS)
+}

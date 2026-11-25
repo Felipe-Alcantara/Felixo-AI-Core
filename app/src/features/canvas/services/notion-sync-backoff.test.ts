@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   AUTO_SYNC_BASE_INTERVAL_MS,
   AUTO_SYNC_MAX_INTERVAL_MS,
+  DETAILS_SYNC_BASE_INTERVAL_MS,
   nextAutoSyncDelayMs,
+  nextDetailsSyncDelayMs,
 } from './notion-sync-backoff'
 
 describe('nextAutoSyncDelayMs', () => {
@@ -24,5 +26,14 @@ describe('nextAutoSyncDelayMs', () => {
 
   it('entradas não numéricas caem no intervalo base, em vez de NaN', () => {
     expect(nextAutoSyncDelayMs(Number.NaN)).toBe(AUTO_SYNC_BASE_INTERVAL_MS)
+  })
+})
+
+describe('nextDetailsSyncDelayMs', () => {
+  it('parte de 10 min, dobra por falha e respeita o mesmo teto', () => {
+    expect(nextDetailsSyncDelayMs(0)).toBe(DETAILS_SYNC_BASE_INTERVAL_MS)
+    expect(nextDetailsSyncDelayMs(Number.NaN)).toBe(DETAILS_SYNC_BASE_INTERVAL_MS)
+    expect(nextDetailsSyncDelayMs(1)).toBe(AUTO_SYNC_MAX_INTERVAL_MS)
+    expect(nextDetailsSyncDelayMs(50)).toBe(AUTO_SYNC_MAX_INTERVAL_MS)
   })
 })
