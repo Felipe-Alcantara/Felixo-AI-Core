@@ -578,6 +578,41 @@ test(
   },
 )
 
+test(
+  'os campos do gerador de prompts sobrevivem a ida e volta ao banco',
+  sqliteTestOptions(),
+  () => {
+    const databaseDir = createTempDir('felixo-storage-automation-generator-')
+
+    try {
+      const database = createStorageDatabase({ databaseDir })
+      const repository = createAutomationsRepository(database)
+      const contexto = 'ação "x" com bloco ' + String.fromCharCode(96).repeat(3)
+      const campos = { objetivo: 'Revisar o PR', contexto, lixo: 'ignorado' }
+
+      repository.save({ id: 'gerado', name: 'Gerado', prompt: 'texto', scope: 'chat', generatorFields: campos })
+      repository.save({ id: 'manual', name: 'Manual', prompt: 'texto', scope: 'chat' })
+      database.close()
+
+      const reaberto = createStorageDatabase({ databaseDir })
+      const porId = new Map(
+        createAutomationsRepository(reaberto)
+          .list()
+          .map((automation) => [automation.id, automation]),
+      )
+
+      assert.deepEqual(porId.get('gerado').generatorFields, {
+        objetivo: 'Revisar o PR',
+        contexto,
+      })
+      assert.equal('generatorFields' in porId.get('manual'), false)
+      reaberto.close()
+    } finally {
+      removeTempDir(databaseDir)
+    }
+  },
+)
+
 test('um topico fora da lista continua sendo recusado', () => {
   assert.throws(
     () =>

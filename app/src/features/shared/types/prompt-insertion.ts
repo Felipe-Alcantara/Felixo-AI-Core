@@ -16,6 +16,7 @@ export type PromptInsertionSource =
   | 'collaboration'
   | 'rename'
   | 'preset'
+  | 'generator'
   | 'unknown'
 
 /** The insertion record kept with a live terminal session. */
@@ -49,6 +50,7 @@ const PROMPT_INSERTION_SOURCES = new Set<PromptInsertionSource>([
   'collaboration',
   'rename',
   'preset',
+  'generator',
   'unknown',
 ])
 
@@ -193,6 +195,19 @@ export function createCatalogPromptInsertion(
   })
 }
 
+/** Prompt montado no gerador do painel Prompts (ainda não salvo no catálogo). */
+export function createGeneratedPromptInsertion(
+  prompt: { name: string; content: string },
+  options: Pick<PromptInsertionInput, 'autoSubmit' | 'timestamp'> = {},
+): PromptInsertion {
+  return createPromptInsertion({
+    name: prompt.name,
+    source: 'generator',
+    content: prompt.content,
+    ...options,
+  })
+}
+
 export function createSkillPromptInsertion(
   skill: { id: string; name: string },
   content: string,
@@ -276,6 +291,7 @@ const SOURCE_LABELS: Partial<Record<PromptInsertionSource, string>> = {
   collaboration: 'Colaboração entre agentes',
   rename: 'Renomeação do agente',
   preset: 'Preset do agente',
+  generator: 'Prompt do gerador',
 }
 
 const SOURCE_DETAILS: Record<PromptInsertionSource, string> = {
@@ -288,6 +304,7 @@ const SOURCE_DETAILS: Record<PromptInsertionSource, string> = {
   collaboration: 'Colaboração entre agentes',
   rename: 'Renomeação do agente',
   preset: 'Preset do agente',
+  generator: 'Gerador de prompts',
   unknown: 'Origem desconhecida',
 }
 

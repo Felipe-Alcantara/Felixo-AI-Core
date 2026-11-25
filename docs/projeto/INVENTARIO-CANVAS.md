@@ -29,8 +29,8 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 
 ## Números
 
-- **Elementos:** 116 (10 blocos, 17 ferramentas, 89 outras superfícies)
-- **Controles:** 447, dos quais 93 com teste específico
+- **Elementos:** 117 (10 blocos, 17 ferramentas, 90 outras superfícies)
+- **Controles:** 455, dos quais 93 com teste específico
 - **Elementos sem nenhum teste:** 0
 - **Lacunas:** 122 (alto 1, médio 72, baixo 49), em 71 tasks
 
@@ -1526,7 +1526,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - **ID:** `tool-prompts` · **Dono:** `src/features/canvas/components/tools/PromptsPanel.tsx`
 - **Persistência:** processo principal: prompts personalizados e edições de preset (automations:save / automations:delete); arquivos .md que a pessoa exporta ficam onde ela escolher; importar grava pelos mesmos automations:save; canvas salvo: lastPromptInsertion do bloco de terminal (nome e origem, sem o corpo); arquivo temporário de contexto em <userData>/context-deliveries (context-file:write); localStorage felixo:canvas-panel-width:prompts e felixo:canvas-panel-height:prompts; nenhuma para filtro, seleção e rascunho
 - **IPC:** `automations:list`, `automations:save`, `automations:delete`, `context-file:write`, `pty:write`, `files:save-text`, `files:save-text-folder`
-- **Depende de:** `CanvasPanel`, `insertPrompt (CanvasView)`, `terminal-session-store.sendText`, `prompt-overrides`, `prompt-composition`, `prompt-delivery-feedback`, `custom-automation-creation`, `prompt-markdown`, `PromptImportPreview`, `defaultAutomations`, `FelixoSelect`
+- **Depende de:** `CanvasPanel`, `insertPrompt (CanvasView)`, `terminal-session-store.sendText`, `prompt-overrides`, `prompt-composition`, `prompt-delivery-feedback`, `custom-automation-creation`, `prompt-markdown`, `PromptImportPreview`, `PromptGeneratorForm`, `defaultAutomations`, `FelixoSelect`
 - **Sobreposição:** CanvasPanel absolute z-20 (z-30 com foco dentro), top-16, left = 1rem + largura viva da sidebar; abaixo da sidebar (26), dos toasts/overlay isBusy (50), dos diálogos (60) e do FelixoSelect (1000); mesmo z da lista Elementos (z-20, direita). Porte xl (o mais largo); disputa largura com a gaveta fixada e fica sob a lista Elementos em janela pequena
 - **Testes:** `scripts/canvas-smoke-paineis.cjs` → `checarPromptEditadoNaLinha`, `scripts/canvas-smoke-paineis.cjs` → `checarPrompts`, `src/features/shared/ipc/ipc-failures.test.ts`, `scripts/canvas-smoke-prompts.cjs` → `catalogo`, `scripts/canvas-smoke-prompts.cjs` → `combinacao`, `scripts/canvas-smoke-prompts.cjs` → `fallback`, `scripts/canvas-smoke-prompts.cjs` → `semTerminalAberto`, `src/features/canvas/terminal/prompt-origins-e2e.test.ts`, `src/features/canvas/services/prompt-composition.test.ts`, `src/features/canvas/services/prompt-delivery-feedback.test.ts`, `src/features/canvas/services/prompt-overrides.test.ts`, `src/features/canvas/services/custom-automation-creation.test.ts`, `src/features/canvas/services/prompt-markdown.test.ts`, `electron/services/file-export-ipc-handlers.test.cjs`, `src/features/shared/data/automations.test.ts`, `src/features/shared/types/prompt-insertion.test.ts`
 
@@ -1542,6 +1542,8 @@ Sem controle próprio: as ações vêm de outros elementos.
 | Controle | Gatilho | Efeito | Falha conhecida | Teste |
 | --- | --- | --- | --- | --- |
 | `onClick={startCustomAutomation}` (button) | clique | abre o rascunho local "Novo prompt" (escopo chat) acima da lista; nada é gravado ainda (desabilitado: já há um rascunho aberto (sem estilo visual de desabilitado)) | sem falha própria (estado local) | — |
+| `onClick={() => openGenerator(null)}` (button) | clique | abre o gerador de prompts (PromptGeneratorForm) acima da lista: objetivo, contexto, formato de saída e, recolhidos, restrições e critério de aceite viram um prompt por modelo (montarPrompt), sem IA e sem rede, numa prévia editável; fecha o rascunho de Novo prompt | sem falha própria (estado local) | — |
+| `onClick={() => openGenerator(prompt)}` (button) | clique | reabre o gerador com os campos de origem gravados no prompt (generator_fields); salvar atualiza esse mesmo prompt (desabilitado: só aparece em prompt personalizado que nasceu no gerador) | sem falha própria (estado local) | — |
 | `aria-label="Cancelar novo prompt"` (button) | clique | descarta o rascunho sem gravar | sem falha própria (estado local) | — |
 | `value={draft.scope}` (select) | clique | muda o escopo do rascunho (updateDraft); só vale ao criar | sem falha própria (estado local) | — |
 | `onClick={() => void createDraftAutomation()}` (button) | clique | createCustomAutomation recusa texto vazio ("Preencha o texto do prompt para criá-lo."); senão automations:save e, com ok, o prompt entra na lista e o rascunho fecha (desabilitado: criação em andamento (isCreatingDraft)) | IPC recusado ou rejeitado: "Não foi possível criar este prompt. Tente novamente." abaixo do rascunho, que continua aberto | — |
@@ -2034,6 +2036,33 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `aria-label={`O que fazer com` (select) | clique | escolhe a ação do arquivo: novo cria ou pula; já existe com mudanças sobrescreve (mantém o id, então o histórico de inserções não perde a referência), mantém os dois (cria outro id, nome com "(importado)") ou pula; igual pula por padrão (desabilitado: só aparece em arquivo válido) | sem falha própria (estado local) | — |
 | `onClick={onCancel}` (button) | clique | fecha a prévia sem gravar nada (desabilitado: importação em andamento) | sem falha própria (estado local) | — |
 | `data-felixo-prompt-import-confirm` (button) | clique | grava cada arquivo não pulado por automations:save (id do arquivo mantido ao criar e ao sobrescrever; sem id, gera um) e atualiza a lista (desabilitado: nada a gravar (tudo em Pular) ou importando) | IPC recusado ou rejeitado em um arquivo: os demais seguem e o aviso conta quantos falharam | — |
+
+### Prompts — gerador de prompts
+
+- **ID:** `tool-prompts-generator` · **Dono:** `src/features/canvas/components/tools/PromptGeneratorForm.tsx`
+- **Persistência:** processo principal: automations:save, com os campos de origem na coluna generator_fields (migração 027); nada é gravado antes de "Salvar no catálogo"
+- **IPC:** `automations:save`
+- **Depende de:** `prompt-generator`, `prompt-delivery-feedback`, `custom-automation-creation`, `FelixoSelect`, `PromptsPanel`, `i18n (useI18n)`
+- **Sobreposição:** Dentro do painel Prompts (porte xl), acima da lista
+- **Testes:** `src/features/canvas/components/tools/PromptGeneratorForm.test.tsx`, `src/features/canvas/services/prompt-generator.test.ts`
+
+| Estado | Quando |
+| --- | --- |
+| normal | aparece no topo do painel Prompts ao clicar em "Gerar prompt" (ou "Editar no gerador" num prompt salvo por ele): objetivo (obrigatório), contexto e formato de saída, e recolhidos restrições e critério de aceite; a prévia (montarPrompt) acompanha os campos e é editável; a tela diz que monta tudo neste computador, sem IA e sem rede |
+| empty | sem objetivo: a prévia fica vazia ("Preencha o objetivo para ver o prompt.") e as três ações travadas |
+| error | clipboard recusado, terminal que não confirma ou gravação recusada: aviso em vermelho no próprio gerador, que continua aberto com o texto |
+| pending | envio: "Enviando…" no botão; gravação: "Salvando…"; os dois travam as ações enquanto durar |
+| success | aviso role=status: "Prompt copiado para a área de transferência.", o aviso de entrega do catálogo (digitado no terminal ou copiado quando não há terminal) ou "Prompt salvo no catálogo." |
+| disabled | Copiar e Enviar sem texto na prévia; Salvar sem objetivo; Enviar e Salvar enquanto um deles roda |
+
+| Controle | Gatilho | Efeito | Falha conhecida | Teste |
+| --- | --- | --- | --- | --- |
+| `onClick={onClose}` (button) | clique | fecha o gerador sem gravar nada; os campos digitados se perdem | sem falha própria (estado local) | — |
+| `onClick={() => setEditedText(null)}` (button) | clique | descarta o texto editado à mão na prévia e volta a montá-lo a partir dos campos (desabilitado: só aparece depois de editar a prévia) | sem falha própria (estado local) | — |
+| `onChange={(value) => setScope(value as AutomationScope)}` (select) | clique | escolhe o tópico com que o prompt será salvo no catálogo; não muda o texto | sem falha própria (estado local) | — |
+| `onClick={() => void copy()}` (button) | clique | navigator.clipboard.writeText com o texto exato da prévia (desabilitado: prévia vazia (sem objetivo)) | clipboard recusado: "Não foi possível copiar. Selecione o texto da prévia e copie à mão." | — |
+| `onClick={() => void send()}` (button) | clique | onInsertPrompt com a inserção de origem "generator" e autoSubmit=false: o mesmo envio do catálogo (digita no terminal expandido, sem Enter; sem terminal, copia e avisa); o texto não vai para log nem telemetria (desabilitado: prévia vazia ou envio/gravação em andamento) | mesmos avisos do Inserir (describeSingleInsertFeedback), em vermelho quando o terminal não confirma | — |
+| `onClick={() => void save()}` (button) | clique | createCustomAutomation grava o prompt personalizado (nome sugerido pela primeira linha do objetivo, tópico escolhido) junto com os campos de origem (coluna generator_fields); salvar de novo atualiza o mesmo prompt; "Editar no gerador" na lista reabre com os campos (desabilitado: sem objetivo ou envio/gravação em andamento) | IPC recusado: "Não foi possível criar este prompt. Tente novamente." no próprio gerador | — |
 
 ### Hospedeiro dos painéis de ferramenta
 

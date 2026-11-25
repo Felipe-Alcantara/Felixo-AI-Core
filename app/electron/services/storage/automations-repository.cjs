@@ -45,9 +45,10 @@ function createAutomationsRepository(database) {
              is_default,
              created_at,
              updated_at,
+             generator_fields,
              archived_at
            )
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
            ON CONFLICT(id) DO UPDATE SET
              name = excluded.name,
              description = excluded.description,
@@ -55,6 +56,7 @@ function createAutomationsRepository(database) {
              scope = excluded.scope,
              is_default = excluded.is_default,
              updated_at = excluded.updated_at,
+             generator_fields = excluded.generator_fields,
              archived_at = NULL`,
         )
         .run(
@@ -66,6 +68,7 @@ function createAutomationsRepository(database) {
           normalized.isDefault ? 1 : 0,
           normalized.createdAt ?? now,
           normalized.updatedAt ?? now,
+          normalized.generatorFields ? JSON.stringify(normalized.generatorFields) : null,
         )
 
       return {
@@ -104,6 +107,8 @@ function normalizeAutomation(automation) {
     throw new Error(`Scope de automation invalido: ${automation.scope}.`)
   }
 
+  const generatorFields = normalizeGeneratorFields(automation.generatorFields)
+
   return {
     id,
     name,
@@ -113,10 +118,33 @@ function normalizeAutomation(automation) {
     isDefault: Boolean(automation.isDefault),
     createdAt: getOptionalIsoString(automation.createdAt),
     updatedAt: getOptionalIsoString(automation.updatedAt),
+    ...(generatorFields ? { generatorFields } : {}),
+  }
+}
+
+// Só texto: o JSON vem do renderer e volta a ele, então nada além das chaves conhecidas é guardado.
+const GENERATOR_FIELD_KEYS = ['objetivo', 'contexto', 'formatoSaida', 'restricoes', 'criterioAceite']
+
+function normalizeGeneratorFields(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const fields = {}
+  for (const key of GENERATOR_FIELD_KEYS) {
+    if (typeof value[key] === 'string' && value[key].trim()) fields[key] = value[key]
+  }
+  return fields.objetivo ? fields : undefined
+}
+
+function parseGeneratorFields(raw) {
+  if (typeof raw !== 'string' || !raw) return undefined
+  try {
+    return normalizeGeneratorFields(JSON.parse(raw))
+  } catch {
+    return undefined
   }
 }
 
 function mapAutomationRow(row) {
+  const generatorFields = parseGeneratorFields(row.generator_fields)
   return {
     id: row.id,
     name: row.name,
@@ -126,6 +154,7 @@ function mapAutomationRow(row) {
     isDefault: row.is_default === 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    ...(generatorFields ? { generatorFields } : {}),
   }
 }
 

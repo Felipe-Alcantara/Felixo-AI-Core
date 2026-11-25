@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { reportActionFailure } from '../../services/canvas-persistence-status'
 import { resultadoDeIpc } from '../../../shared/ipc/ipc-result'
-import { Check, CircleAlert, Download, Eye, FolderUp, ListFilter, Plus, SendHorizontal, Sparkles, Trash2, Upload } from 'lucide-react'
+import { Check, CircleAlert, Download, Eye, FolderUp, ListFilter, Plus, SendHorizontal, Sparkles, Trash2, Upload, Wand2 } from 'lucide-react'
 import { CanvasPanel } from './CanvasPanel'
 import { createDebouncedSaveQueue } from '../../services/debounced-save-queue'
 import { FelixoSelect, type FelixoSelectOption } from '../../../shared/components/FelixoSelect'
 import { PromptDetailPanel } from './PromptDetailPanel'
+import { PromptGeneratorForm } from './PromptGeneratorForm'
+import { useI18n } from '../../../i18n/useI18n'
 import { PromptImportPreview } from './PromptImportPreview'
 import { defaultAutomations } from '../../../shared/data/automations'
 import {
@@ -16,13 +18,14 @@ import {
   upsertPresetOverride,
 } from '../../services/prompt-overrides'
 import { AUTOMATION_SCOPE_LABELS, AUTOMATION_SCOPES } from '../../../shared/types/automations'
-import type { AutomationDefinition, AutomationScope } from '../../../shared/types/automations'
+import type { AutomationDefinition, AutomationScope, PromptGeneratorFields } from '../../../shared/types/automations'
 import type { SkillActivationResult } from './SkillsPanel'
 import {
   composeSelectedPromptInsertion,
 } from '../../services/prompt-composition'
 import {
   createCatalogPromptInsertion,
+  createGeneratedPromptInsertion,
   type PromptInsertion,
 } from '../../../shared/types/prompt-insertion'
 import {
@@ -91,7 +94,10 @@ export function PromptsPanel({
   onInsertPrompt,
   toolsMenuOpen,
 }: PromptsPanelProps) {
+  const { t } = useI18n()
   const [custom, setCustom] = useState<AutomationDefinition[]>([])
+  // Gerador aberto: `source` é o prompt salvo que ele edita (null = novo); `run` remonta o formulário.
+  const [generator, setGenerator] = useState<{ source: AutomationDefinition | null; run: number } | null>(null)
   const [draft, setDraft] = useState<AutomationDefinition | null>(null)
   const [isCreatingDraft, setIsCreatingDraft] = useState(false)
   const [feedbackId, setFeedbackId] = useState<string | null>(null)
@@ -419,6 +425,7 @@ export function PromptsPanel({
   const startCustomAutomation = useCallback(() => {
     const now = new Date().toISOString()
     setFeedbackId(null)
+    setGenerator(null)
     setIsCreatingDraft(false)
     setDraft({
       id: createAutomationId(),
@@ -454,6 +461,57 @@ export function PromptsPanel({
       setIsCreatingDraft(false)
     }
   }, [draft, isCreatingDraft])
+
+  const openGenerator = useCallback((source: AutomationDefinition | null) => {
+    setDraft(null)
+    setGenerator((current) => ({ source, run: (current?.run ?? 0) + 1 }))
+  }, [])
+
+  const sendGenerated = useCallback(
+    (prompt: { name: string; content: string }) =>
+      // Só digita, sem Enter, como o catálogo: a pessoa revisa e envia.
+      onInsertPrompt(createGeneratedPromptInsertion(prompt, { autoSubmit: false })),
+    [onInsertPrompt],
+  )
+
+  const saveGenerated = useCallback(
+    async (input: {
+      name: string
+      content: string
+      scope: AutomationScope
+      fields: PromptGeneratorFields
+    }): Promise<string | null> => {
+      const now = new Date().toISOString()
+      const source = generator?.source
+      const id = source?.id ?? createAutomationId()
+      // Uma edição inline pendente do mesmo prompt gravaria por cima do que acabou de sair do gerador.
+      saveQueue.cancel(id)
+      const result = await createCustomAutomation(
+        {
+          id,
+          name: input.name,
+          description: source?.description ?? '',
+          prompt: input.content,
+          scope: input.scope,
+          generatorFields: input.fields,
+          createdAt: source?.createdAt ?? now,
+          updatedAt: now,
+        },
+        async (automation) => window.felixo?.automations?.save(automation),
+      )
+      if (result.status !== 'saved') return result.message
+      const saved = result.automation
+      setCustom((current) =>
+        current.some((automation) => automation.id === saved.id)
+          ? current.map((automation) => (automation.id === saved.id ? saved : automation))
+          : [...current, saved],
+      )
+      // Salvar de novo atualiza este prompt, em vez de criar outro igual.
+      setGenerator((current) => (current ? { ...current, source: saved } : current))
+      return null
+    },
+    [generator?.source, saveQueue],
+  )
 
   const updateDraft = useCallback((patch: Partial<AutomationDefinition>) => {
     setFeedbackId((id) => (id === 'draft' ? null : id))
@@ -534,6 +592,14 @@ export function PromptsPanel({
         </button>
         <button
           type="button"
+          onClick={() => openGenerator(null)}
+          className="felixo-btn flex items-center gap-1 rounded-sm px-2 py-1.5 text-xs text-zinc-300 hover:bg-white/10"
+        >
+          <Wand2 size={13} />
+          {t('gerador.abrir')}
+        </button>
+        <button
+          type="button"
           onClick={() => void exportPrompts()}
           className="felixo-btn flex items-center gap-1 rounded-sm px-2 py-1.5 text-xs text-zinc-300 hover:bg-white/10"
           title="Salva como .md os prompts marcados; sem nenhum marcado, o catálogo inteiro"
@@ -593,6 +659,20 @@ export function PromptsPanel({
           }
           onConfirm={() => void confirmImport()}
           onCancel={() => setImportRows(null)}
+        />
+      )}
+
+      {generator && (
+        <PromptGeneratorForm
+          key={generator.run}
+          initialFields={generator.source?.generatorFields}
+          initialName={generator.source?.name}
+          initialScope={generator.source?.scope}
+          editing={Boolean(generator.source)}
+          scopeOptions={SCOPE_OPTIONS}
+          onSend={sendGenerated}
+          onSave={saveGenerated}
+          onClose={() => setGenerator(null)}
         />
       )}
 
@@ -790,6 +870,16 @@ export function PromptsPanel({
                     </>
                   )}
                 </button>
+                {isFreeCustom && prompt.generatorFields && (
+                  <button
+                    type="button"
+                    onClick={() => openGenerator(prompt)}
+                    className="felixo-btn flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-xs text-zinc-300 hover:bg-white/10"
+                  >
+                    <Wand2 size={13} />
+                    {t('gerador.editarNoGerador')}
+                  </button>
+                )}
                 {isFreeCustom && (
                   <button
                     type="button"

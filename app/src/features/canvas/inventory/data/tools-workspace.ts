@@ -339,6 +339,20 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
         disabledWhen: 'já há um rascunho aberto (sem estilo visual de desabilitado)',
       },
       {
+        locator: 'onClick={() => openGenerator(null)}',
+        kind: 'button',
+        effect:
+          'abre o gerador de prompts (PromptGeneratorForm) acima da lista: objetivo, contexto, formato de saída e, recolhidos, restrições e critério de aceite viram um prompt por modelo (montarPrompt), sem IA e sem rede, numa prévia editável; fecha o rascunho de Novo prompt',
+        failure: 'sem falha própria (estado local)',
+      },
+      {
+        locator: 'onClick={() => openGenerator(prompt)}',
+        kind: 'button',
+        effect: 'reabre o gerador com os campos de origem gravados no prompt (generator_fields); salvar atualiza esse mesmo prompt',
+        failure: 'sem falha própria (estado local)',
+        disabledWhen: 'só aparece em prompt personalizado que nasceu no gerador',
+      },
+      {
         locator: 'aria-label="Cancelar novo prompt"',
         kind: 'button',
         effect: 'descarta o rascunho sem gravar',
@@ -427,6 +441,7 @@ export const workspaceTools: Record<WorkspaceTool, InventoryElement> = {
       'custom-automation-creation',
       'prompt-markdown',
       'PromptImportPreview',
+      'PromptGeneratorForm',
       'defaultAutomations',
       'FelixoSelect',
     ],
@@ -778,6 +793,75 @@ export const workspaceToolSurfaces: InventoryElement[] = [
     tests: [{ file: 'src/features/canvas/services/prompt-markdown.test.ts' }],
     gaps: [],
     overlap: `Dentro do painel Prompts (porte xl), acima da lista`,
+  },
+
+  {
+    id: 'tool-prompts-generator',
+    name: 'Prompts — gerador de prompts',
+    layer: 'panel',
+    owner: `${TOOLS}/PromptGeneratorForm.tsx`,
+    states: {
+      normal:
+        'aparece no topo do painel Prompts ao clicar em "Gerar prompt" (ou "Editar no gerador" num prompt salvo por ele): objetivo (obrigatório), contexto e formato de saída, e recolhidos restrições e critério de aceite; a prévia (montarPrompt) acompanha os campos e é editável; a tela diz que monta tudo neste computador, sem IA e sem rede',
+      empty: 'sem objetivo: a prévia fica vazia ("Preencha o objetivo para ver o prompt.") e as três ações travadas',
+      pending: 'envio: "Enviando…" no botão; gravação: "Salvando…"; os dois travam as ações enquanto durar',
+      success: 'aviso role=status: "Prompt copiado para a área de transferência.", o aviso de entrega do catálogo (digitado no terminal ou copiado quando não há terminal) ou "Prompt salvo no catálogo."',
+      error: 'clipboard recusado, terminal que não confirma ou gravação recusada: aviso em vermelho no próprio gerador, que continua aberto com o texto',
+      disabled: 'Copiar e Enviar sem texto na prévia; Salvar sem objetivo; Enviar e Salvar enquanto um deles roda',
+    },
+    controls: [
+      {
+        locator: 'onClick={onClose}',
+        kind: 'button',
+        effect: 'fecha o gerador sem gravar nada; os campos digitados se perdem',
+        failure: 'sem falha própria (estado local)',
+      },
+      {
+        locator: 'onClick={() => setEditedText(null)}',
+        kind: 'button',
+        effect: 'descarta o texto editado à mão na prévia e volta a montá-lo a partir dos campos',
+        failure: 'sem falha própria (estado local)',
+        disabledWhen: 'só aparece depois de editar a prévia',
+      },
+      {
+        locator: 'onChange={(value) => setScope(value as AutomationScope)}',
+        kind: 'select',
+        effect: 'escolhe o tópico com que o prompt será salvo no catálogo; não muda o texto',
+        failure: 'sem falha própria (estado local)',
+      },
+      {
+        locator: 'onClick={() => void copy()}',
+        kind: 'button',
+        effect: 'navigator.clipboard.writeText com o texto exato da prévia',
+        failure: 'clipboard recusado: "Não foi possível copiar. Selecione o texto da prévia e copie à mão."',
+        disabledWhen: 'prévia vazia (sem objetivo)',
+      },
+      {
+        locator: 'onClick={() => void send()}',
+        kind: 'button',
+        effect:
+          'onInsertPrompt com a inserção de origem "generator" e autoSubmit=false: o mesmo envio do catálogo (digita no terminal expandido, sem Enter; sem terminal, copia e avisa); o texto não vai para log nem telemetria',
+        failure: 'mesmos avisos do Inserir (describeSingleInsertFeedback), em vermelho quando o terminal não confirma',
+        disabledWhen: 'prévia vazia ou envio/gravação em andamento',
+      },
+      {
+        locator: 'onClick={() => void save()}',
+        kind: 'button',
+        effect:
+          'createCustomAutomation grava o prompt personalizado (nome sugerido pela primeira linha do objetivo, tópico escolhido) junto com os campos de origem (coluna generator_fields); salvar de novo atualiza o mesmo prompt; "Editar no gerador" na lista reabre com os campos',
+        failure: 'IPC recusado: "Não foi possível criar este prompt. Tente novamente." no próprio gerador',
+        disabledWhen: 'sem objetivo ou envio/gravação em andamento',
+      },
+    ],
+    persistence: ['processo principal: automations:save, com os campos de origem na coluna generator_fields (migração 027); nada é gravado antes de "Salvar no catálogo"'],
+    ipc: ['automations:save'],
+    dependsOn: ['prompt-generator', 'prompt-delivery-feedback', 'custom-automation-creation', 'FelixoSelect', 'PromptsPanel', 'i18n (useI18n)'],
+    tests: [
+      { file: 'src/features/canvas/components/tools/PromptGeneratorForm.test.tsx' },
+      { file: 'src/features/canvas/services/prompt-generator.test.ts' },
+    ],
+    gaps: [],
+    overlap: 'Dentro do painel Prompts (porte xl), acima da lista',
   },
 
   {

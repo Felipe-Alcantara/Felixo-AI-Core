@@ -42,6 +42,15 @@ export const AUTOMATION_SCOPE_LABELS: Record<AutomationScope, string> = {
   security: 'Segurança',
 }
 
+/** Campos que o gerador de prompts transformou em texto; guardados para reabrir e ajustar. */
+export type PromptGeneratorFields = {
+  objetivo: string
+  contexto?: string
+  formatoSaida?: string
+  restricoes?: string
+  criterioAceite?: string
+}
+
 export type AutomationDefinition = {
   id: string
   name: string
@@ -51,4 +60,6 @@ export type AutomationDefinition = {
   isDefault?: boolean
   createdAt?: string
   updatedAt?: string
+  /** Presente só nos prompts que nasceram no gerador. */
+  generatorFields?: PromptGeneratorFields
 }
