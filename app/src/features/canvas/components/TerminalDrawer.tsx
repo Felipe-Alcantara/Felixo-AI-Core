@@ -1014,6 +1014,8 @@ function TerminalPane({
             </button>
           )}
           {solo && soloHeading.pin}
+          {/* Em gaveta estreita o cabeçalho não tem espaço: o botão sai e o "Trazer de volta" do aviso cobre a volta. */}
+          {(effectiveWidth >= 420 || detachedTerminal) && (
           <button
             type="button"
             onClick={detachedTerminal ? bringBackFromWindow : openInWindow}
@@ -1027,6 +1029,7 @@ function TerminalPane({
           >
             {detachedTerminal ? <CornerDownLeft size={16} /> : <ExternalLink size={16} />}
           </button>
+          )}
           {!solo && (
             <>
               <button

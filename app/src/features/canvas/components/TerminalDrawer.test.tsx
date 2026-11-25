@@ -23,7 +23,7 @@ vi.mock('../terminal/terminal-session-context', () => ({
   useSessionSnapshot: () => estado.snapshot,
 }))
 vi.mock('../hooks/canvas-surfaces-context', () => ({
-  useCanvasSurfaces: () => ({ occupancy: { panel: 0, drawer: 0, toolbar: 288, inspector: 0 }, reportDrawerWidth: estado.reportDrawerWidth, viewport: { width: 1280, height: 800 } }),
+  useCanvasSurfaces: () => ({ occupancy: { panel: 0, drawer: 480, toolbar: 288, inspector: 0 }, reportDrawerWidth: estado.reportDrawerWidth, viewport: { width: 1280, height: 800 } }),
 }))
 vi.mock('./terminal-fit-lifecycle', () => ({ attachTerminalFitLifecycle: () => () => {} }))
 vi.mock('../hooks/useClaudeScrollRail', () => ({ useClaudeScrollRail: () => ({ scrolledUp: false }) }))
