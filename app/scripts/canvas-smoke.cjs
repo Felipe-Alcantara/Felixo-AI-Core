@@ -583,31 +583,58 @@ async function checarBarraComGaveta(page) {
   const original = await page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }))
   const problemas = []
   try {
-    for (const viewport of STATUSBAR_DRAWER_VIEWPORTS) {
-      await page.setViewportSize(viewport)
-      await waitForViewport(page, viewport)
-      await esperarAte(
-        async () => findStatusbarProblems(await page.evaluate(medirBarraDeStatus)).length === 0,
-        { timeoutMs: INTERACTION_TIMEOUT_MS },
-      )
-      const medida = await page.evaluate(medirBarraDeStatus)
-      const achados = findStatusbarProblems(medida)
-      const label = 'gaveta-barra-' + viewport.width + 'x' + viewport.height
-      await recordVisualEvidence(
-        page,
-        label,
-        ['.felixo-canvas-statusbar', '[data-canvas-terminal-drawer]'],
-        { event: 'drawer-statusbar', requestedViewport: viewport, statusbar: medida, problems: achados },
-      )
-      for (const achado of achados) problemas.push({ caso: label, ...achado })
+    for (const mode of ['normal', 'maximizada']) {
+      if (mode === 'maximizada') {
+        await page.getByRole('button', { name: 'Maximizar terminal' }).click()
+      }
+      for (const viewport of STATUSBAR_DRAWER_VIEWPORTS) {
+        await page.setViewportSize(viewport)
+        await waitForViewport(page, viewport)
+        const label = `gaveta-${mode}-${viewport.width}x${viewport.height}`
+        await page.waitForTimeout(240)
+        const statusbar = await page.evaluate(medirBarraDeStatus)
+        const statusbarProblems = findStatusbarProblems(statusbar)
+        const matrixCase = { viewport }
+        const surfaces = await lerSuperficies(page)
+        const overlaps = findSurfaceOverlaps(surfaces, matrixCase)
+        const focusedDrawerMode = mode === 'maximizada' || viewport.width <= 980
+        const missing = findMissingSurfaces(surfaces, matrixCase, {
+          requiredSurfaces: ['drawer'],
+          optionalSurfaces: focusedDrawerMode ? ['zoom', 'inspector', 'inspector-puck'] : [],
+          requireInspector: !focusedDrawerMode,
+        })
+        const visibleSelectors = MATRIX_SURFACES
+          .filter((surface) => surfaces.some((item) => item.name === surface.name && item.visible &&
+            item.rect.left >= 0 && item.rect.top >= 0 &&
+            item.rect.right <= viewport.width && item.rect.bottom <= viewport.height))
+          .map((surface) => surface.selector)
+        await recordVisualEvidence(page, label, visibleSelectors, {
+          event: 'drawer-surfaces',
+          mode,
+          requestedViewport: viewport,
+          surfaces,
+          overlaps,
+          missing,
+          statusbar,
+          statusbarProblems,
+        })
+        for (const problem of statusbarProblems) problemas.push({ caso: label, tipo: 'statusbar', ...problem })
+        for (const problem of overlaps) problemas.push({ caso: label, tipo: 'sobreposicao', detalhe: problem })
+        for (const problem of missing) problemas.push({ caso: label, tipo: 'superficie', detalhe: problem })
+        console.log('[canvas-gaveta] ' + label + ': ' + surfaces.filter((item) => item.visible).length +
+          ' superfícies, ' + overlaps.length + ' sobreposições, ' + missing.length + ' ausências, ' +
+          statusbarProblems.length + ' problemas na barra')
+      }
     }
   } finally {
+    const restoreButton = page.getByRole('button', { name: 'Restaurar largura' })
+    if (await restoreButton.count()) await restoreButton.click()
     await page.setViewportSize(original)
     await waitForViewport(page, original)
   }
   if (problemas.length) {
-    visualReport.failure = { scenario: 'barra-com-gaveta', message: problemas.length + ' problemas' }
-    throw new Error('[canvas-smoke] barra de status com a gaveta aberta: ' + JSON.stringify(problemas))
+    visualReport.failure = { scenario: 'superficies-com-gaveta', message: problemas.length + ' problemas' }
+    throw new Error('[canvas-smoke] superfícies com a gaveta aberta: ' + JSON.stringify(problemas))
   }
 }
 
@@ -1775,12 +1802,17 @@ async function checarFaixaDeRetomada(page) {
  */
 async function checarDockRecolhidaSemBloqueio(page) {
   await page.setViewportSize({ width: 1280, height: 800 })
+  await waitForViewport(page, { width: 1280, height: 800 })
   const recolher = page.getByRole('button', { name: 'Recolher elementos' })
   const abrir = page.getByRole('button', { name: 'Abrir elementos' })
+  // Pelo estado, não por `isVisible`: recolhida, a lista fica com opacity 0 e `inert`, e o Playwright ainda a dá por visível.
+  // Em 480 px ou menos ela nasce recolhida; só em largura maior há o que recolher antes de medir.
+  const expandida = async () => (await page.locator('.felixo-elements-inspector.felixo-anim-corner-dock-expanded').count()) > 0
   for (const width of [320, 768]) {
-    await recolher.click()
+    if (!(await expandida())) await abrir.click()
     await page.setViewportSize({ width, height: 640 })
     await waitForViewport(page, { width, height: 640 })
+    if (await expandida()) await recolher.click()
     await page.evaluate(() => {
       const dock = document.querySelector('[data-terminals-dock]')
       const alvo = document.createElement('button')
@@ -1816,10 +1848,9 @@ async function checarElementosAbertosEmViewportsCriticos(page) {
     await waitForViewport(page, viewport)
     const suffix = viewport.width + 'x' + viewport.height
 
-    // A sidebar não colapsa sozinha por viewport (achado real: com ela
-    // aberta, o topbar sai da tela em 320px — ver nota de acompanhamento
-    // na task de origem). Reproduz o uso esperado numa tela pequena:
-    // colapsar primeiro, como a pessoa faria; reverte ao sair do viewport.
+    // Com a sidebar aberta o topbar saía da tela em 320px (achado real). Abaixo de
+    // 480 px ela agora nasce recolhida; em 768 px segue o que a pessoa gravou.
+    // Garante o recolhido, como a pessoa faria, e reverte ao sair do viewport.
     // O botão fixo dentro de .felixo-sidebar-content some (fica inert) assim
     // que a sidebar colapsa, e "Recolher sidebar" tem DOIS elementos com o
     // mesmo aria-label (esse e o da rail lateral) — ambíguo para getByRole
@@ -1830,7 +1861,11 @@ async function checarElementosAbertosEmViewportsCriticos(page) {
       .getByRole('button', { name: /Recolher sidebar|Expandir sidebar/ })
     const collapseSidebar = viewport.width < 768
     if (collapseSidebar) {
-      await sidebarToggle.click()
+      // Abaixo de 480 px a sidebar já nasce recolhida (`sidebar-narrow.ts`); clicar de novo a expandiria.
+      const jaRecolhida = await page.evaluate(
+        () => document.querySelector('.felixo-sidebar-content')?.getAttribute('aria-hidden') === 'true',
+      )
+      if (!jaRecolhida) await sidebarToggle.click()
       await page.waitForFunction(
         () => document.querySelector('.felixo-sidebar-content')?.getAttribute('aria-hidden') === 'true',
         null,
