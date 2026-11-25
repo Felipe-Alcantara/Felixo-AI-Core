@@ -59,10 +59,22 @@ function dataDeCriacaoDoArtefato(name) {
 }
 
 /**
- * O que o agente lê quando o conteúdo não existe mais em lugar nenhum. É uma
- * instrução, não só um diagnóstico: o texto de entrega manda ler antes de agir,
- * e sem esta liberação explícita o agente fica parado esperando um arquivo que
- * não volta.
+ * A única mensagem para um nome válido cujo arquivo não existe mais em lugar
+ * nenhum. É uma instrução, não só um diagnóstico: o texto de entrega manda ler
+ * antes de agir, e sem esta liberação explícita o agente fica parado esperando
+ * um arquivo que não volta.
+ *
+ * A ausência é um estado esperado: o app apaga os artefatos quando o terminal
+ * do agente termina (fechar o app, auto-atualização do Codex, reiniciar o
+ * bloco) e os antigos na abertura, enquanto a conversa é retomada com a
+ * instrução original ("leia antes de agir") ainda no histórico. Quando a
+ * mensagem só mandava "informar o erro", o agente obedecia ao pé da letra e
+ * parava — visto em relato real (Windows + Codex) — e pedia à pessoa que
+ * "disponibilizasse de novo" arquivos que ela não controla. A regra de não
+ * trocar por outro artefato continua: um agente já leu um arquivo
+ * "equivalente" de outra sessão sem avisar. Sem o número de horas de
+ * propósito: este módulo não carrega o Electron, e uma cópia da constante do
+ * app divergiria em silêncio.
  *
  * @param {string} name
  * @returns {string}
@@ -71,8 +83,8 @@ function mensagemDeArtefatoPerdido(name) {
   const data = dataDeCriacaoDoArtefato(name)
   return [
     `Artefato de contexto não encontrado: ${name}.`,
-    `${data ? `Ele foi gerado em ${data} e não` : 'Ele não'} existe mais neste perfil: os artefatos são temporários e a cópia guardada pelo app também já expirou.`,
-    'Isso não impede o trabalho: se você já leu este contexto nesta conversa, continue com o que tem; se não leu, siga as regras do repositório e a tarefa pedida, e avise a pessoa, com este nome, de que o contexto não pôde ser lido.',
+    `${data ? `Ele foi gerado em ${data} e não` : 'Ele não'} existe mais neste perfil: os artefatos são temporários (o Felixo os apaga quando o terminal do agente é encerrado ou reiniciado e limpa os antigos ao abrir o app) e a cópia guardada pelo app também já expirou.`,
+    'Isso não impede o trabalho: se você já leu este contexto nesta conversa (ele deve estar no histórico, lido no início), continue o pedido atual a partir dele, sem esperar o arquivo reaparecer e sem pedir à pessoa que o disponibilize de novo; se não leu, não invente: siga as regras do repositório e a tarefa pedida, e avise a pessoa, com este nome, de que o contexto expirou.',
     'Não substitua por outro artefato e não repita esta leitura.',
   ].join(' ')
 }
@@ -119,36 +131,6 @@ function resolverCaminhoDoArtefato(contextDir, name) {
     throw new Error('Nome de artefato fora da pasta de contexto.')
   }
   return filePath
-}
-
-/**
- * Erro para um nome válido cujo arquivo não existe mais.
- *
- * A ausência é um estado esperado, não só uma falha: o app apaga os artefatos
- * quando o terminal do agente termina (fechar o app, auto-atualização do
- * Codex, reiniciar o bloco) e os antigos na abertura. A conversa do agente,
- * por outro lado, é retomada com a instrução original ("leia antes de agir")
- * ainda no histórico. Quando esta mensagem só mandava "informar o erro", o
- * agente obedecia ao pé da letra e parava — visto em relato real (Windows +
- * Codex): três artefatos de uma execução anterior, pedido da pessoa não
- * executado, e um pedido para ela "disponibilizar novamente" arquivos que
- * ela não controla.
- *
- * A regra de não trocar por outro artefato continua: ela existe porque um
- * agente já leu um arquivo "equivalente" de outra sessão sem avisar. Sem o
- * número de horas de propósito — este módulo não carrega o Electron, e uma
- * cópia da constante do app divergiria em silêncio.
- *
- * @param {string} name
- * @returns {string}
- */
-function mensagemDeArtefatoAusente(name) {
-  return [
-    `Artefato de contexto não encontrado: ${name}. Não substitua por outro artefato; informe este nome e o erro exato.`,
-    'Esses arquivos são temporários: o Felixo os apaga quando o terminal do agente é encerrado ou reiniciado (fechar o app, atualização do agente, reinício do bloco) e limpa os antigos ao abrir o app.',
-    'Se esta conversa foi retomada, o conteúdo deste artefato deve estar no histórico dela, lido no início: continue o pedido atual a partir dele, sem esperar o arquivo reaparecer e sem pedir à pessoa que o disponibilize de novo.',
-    'Se o histórico não tiver o conteúdo, não invente: avise a pessoa de que o contexto expirou; iniciar uma nova conversa neste bloco do Felixo gera um contexto novo.',
-  ].join('\n')
 }
 
 /**
@@ -264,7 +246,7 @@ async function executarContexto(argumentos, dependencies = {}) {
     if (error?.code === 'ENOENT') {
       return {
         saida: '',
-        erro: `${mensagemDeArtefatoAusente(name)}\n${mensagemDeArtefatoPerdido(name)}`,
+        erro: `${mensagemDeArtefatoPerdido(name)}`,
         codigo: 1,
       }
     }

@@ -262,8 +262,11 @@ test('sem artefato vivo nem cópia guardada, desiste depois de três tentativas 
     assert.ok(result.erro.startsWith(`Artefato de contexto não encontrado: ${name}.`))
     assert.match(result.erro, /gerado em 2026-10-05/)
     assert.match(result.erro, /Isso não impede o trabalho/)
-    assert.match(result.erro, /continue com o que tem/)
+    assert.match(result.erro, /continue o pedido atual a partir dele/)
     assert.match(result.erro, /Não substitua por outro artefato e não repita esta leitura/)
+    // Uma única mensagem: a frase de abertura e as instruções não se repetem.
+    assert.equal(result.erro.split('Artefato de contexto não encontrado').length - 1, 1)
+    assert.equal(result.erro.split('Não substitua por outro artefato').length - 1, 1)
     assert.equal(esperas.length, 2)
   } finally {
     await fsp.rm(contextDir, { recursive: true, force: true })
