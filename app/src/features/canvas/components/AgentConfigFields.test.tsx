@@ -312,4 +312,20 @@ describe('AgentConfigFields (Openia)', () => {
     // Com a chave guardada o campo esvazia e o texto passa a dizer que ela já está configurada.
     expect(screen.getByText(/Chave do login do sistema configurada/)).toBeTruthy()
   })
+
+  it('perfil novo: modelos vazios antes da chave são recarregados ao salvar a chave e a ausência é explicada', async () => {
+    const openia = ponteOpenia()
+    openia.listModels.mockResolvedValueOnce({ ok: true, models: [] })
+    await abrirOpenia()
+    expect(screen.getByText(/lista de modelos do OpenRouter não carregou/)).toBeTruthy()
+    openia.listModels.mockClear()
+
+    fireEvent.change(screen.getByPlaceholderText('sk-or-…'), { target: { value: 'sk-or-teste' } })
+    await clicar(screen.getByRole('button', { name: 'Salvar' }))
+
+    expect(openia.listModels).toHaveBeenCalledWith({ refresh: true })
+    await escolher('Modelo Openia', /Claude Y/)
+    expect(screen.getByRole('combobox', { name: 'Modelo Openia' }).textContent).toContain('Claude Y')
+    expect(screen.queryByText(/lista de modelos do OpenRouter não carregou/)).toBeNull()
+  })
 })

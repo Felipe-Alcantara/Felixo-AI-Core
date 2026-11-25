@@ -740,6 +740,9 @@ export function useAgentConfig(
       openiaKeyConfiguredRef.current = true
       setOpeniaKeyConfiguredState(true)
       setOpeniaKeyDraft('')
+      // A lista de modelos pode ter vindo vazia antes da chave existir (perfil novo):
+      // recarrega sem o usuário precisar clicar em "Atualizar".
+      void loadOpenia(true)
       return true
     } catch (error) {
       setOpeniaError(
@@ -749,7 +752,7 @@ export function useAgentConfig(
     } finally {
       setOpeniaSaving(false)
     }
-  }, [carregarContas, openiaKeyDraft])
+  }, [carregarContas, loadOpenia, openiaKeyDraft])
 
   /**
    * Garante que a configuração da interface já foi feita antes de criar o node.

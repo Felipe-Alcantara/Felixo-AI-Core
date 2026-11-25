@@ -285,7 +285,9 @@ export function AgentConfigFields({
                 className="mb-2"
               />
               <p className="mb-2 text-[11px] leading-relaxed text-zinc-500">
-                {selectedOpeniaInterface?.supportsModelSelection
+                {!config.openiaLoading && config.openiaModels.length === 0
+                  ? 'A lista de modelos do OpenRouter não carregou (sem rede ou Openia indisponível). Use o botão de atualizar acima para tentar de novo.'
+                  : selectedOpeniaInterface?.supportsModelSelection
                   ? 'O modelo escolhido será aplicado automaticamente antes da interface abrir.'
                   : 'Esta interface usa a configuração própria dela; o Openia abrirá com o modelo padrão.'}
               </p>

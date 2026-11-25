@@ -582,7 +582,7 @@ export const terminalSurfaces: InventoryElement[] = [
       {
         locator: 'onClick={() => void config.saveOpeniaKey()}',
         kind: 'button',
-        effect: 'saveOpeniaKey: com conta escolhida, cli-accounts:set-secret (cifrada no perfil); no login do sistema, openia:set-key. Limpa o rascunho e marca a chave como configurada.',
+        effect: 'saveOpeniaKey: com conta escolhida, cli-accounts:set-secret (cifrada no perfil); no login do sistema, openia:set-key. Limpa o rascunho, marca a chave como configurada e recarrega interfaces e modelos (refresh).',
         failure: 'Recusa ou exceção: openiaError com a mensagem.',
         disabledWhen: 'openiaSaving ou rascunho vazio',
       },
