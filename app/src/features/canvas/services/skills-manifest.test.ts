@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildSkillsManifestPrompt } from './skills-manifest'
+import { buildSkillsManifestPrompt, skillsForAgent } from './skills-manifest'
 import type { CanvasSkill } from '../types'
 
 const skill = (extra: Partial<CanvasSkill> = {}): CanvasSkill => ({
@@ -73,5 +73,19 @@ describe('buildSkillsManifestPrompt', () => {
 
     expect(texto).toContain('não leia todas por precaução')
     expect(texto).toContain('a lista é oferta, não obrigação')
+  })
+})
+
+describe('skillsForAgent', () => {
+  const docx = skill({ id: 'docx', agents: ['claude'] })
+  const livre = skill({ id: 'livre' })
+
+  it('skill restrita ao Claude só chega no Claude', () => {
+    expect(skillsForAgent([docx, livre], 'claude')).toHaveLength(2)
+    expect(skillsForAgent([docx, livre], 'C:/bin/claude.exe')).toHaveLength(2)
+    expect(skillsForAgent([docx, livre], 'C:\\bin\\claude.cmd')).toHaveLength(2)
+    expect(skillsForAgent([docx, livre], 'codex').map((s) => s.id)).toEqual(['livre'])
+    expect(skillsForAgent([docx, livre], 'gemini').map((s) => s.id)).toEqual(['livre'])
+    expect(skillsForAgent([docx, livre], undefined).map((s) => s.id)).toEqual(['livre'])
   })
 })

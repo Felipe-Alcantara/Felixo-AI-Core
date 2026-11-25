@@ -25,6 +25,16 @@ const RODAPE = [
   'Se nenhuma servir, siga normalmente; a lista é oferta, não obrigação.',
 ].join('\n')
 
+/**
+ * Skills que o agente do `command` pode receber. Skill com `agents` é
+ * restrita pela licença ao agente do fornecedor; comando desconhecido
+ * (shell, launcher) só recebe as sem restrição.
+ */
+export function skillsForAgent(skills: readonly CanvasSkill[], command?: string): CanvasSkill[] {
+  const agent = command?.split(/[\\/]/).pop()?.toLowerCase().replace(/\.(exe|cmd|bat)$/, '')
+  return skills.filter((skill) => !skill.agents || (agent !== undefined && skill.agents.includes(agent)))
+}
+
 function descreverOrigem(skill: CanvasSkill): string {
   if (skill.source === 'community') {
     return skill.origin ? ` [terceiros: ${skill.origin}]` : ' [terceiros]'

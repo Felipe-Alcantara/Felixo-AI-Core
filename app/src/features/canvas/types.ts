@@ -129,6 +129,8 @@ export type CanvasSkill = {
   source?: 'builtin' | 'community' | 'user'
   /** For third-party skills, the repository/site it comes from. */
   origin?: string
+  /** Agentes que podem receber a skill (ids de AgentId); ausente = todos. Licença do fornecedor. */
+  agents?: string[]
 }
 
 /** Outcome of an on-demand repo-diagnosis request from a file block. */

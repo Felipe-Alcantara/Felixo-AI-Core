@@ -7,6 +7,7 @@ import {
   buildQualityStandardMessage,
   composeTerminalInitialText,
 } from './quality-standard-prompt'
+import { skillsForAgent } from './skills-manifest'
 import { toSubmittedTerminalText } from '../terminal/terminal-input'
 import type { CanvasSkill } from '../types'
 
@@ -30,8 +31,10 @@ type TerminalNodeDataContext = {
  */
 export function buildTerminalNodeData(
   options: TerminalNodeDataOptions,
-  { quality, qualityPrompt, availableSkills }: TerminalNodeDataContext,
+  { quality, qualityPrompt, availableSkills: allSkills }: TerminalNodeDataContext,
 ) {
+  // Skill de documentos da Anthropic só vai para agente Claude (licença).
+  const availableSkills = skillsForAgent(allSkills, options.command)
   // Agent terminals get the standing quality-standard instruction (if on)
   // plus their canvas identity (name, cwd, multi-agent setting); a plain
   // shell does not (there's no agent to read it).

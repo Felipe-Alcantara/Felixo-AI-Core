@@ -90,3 +90,20 @@ describe('buildTerminalNodeData', () => {
     },
   )
 })
+
+describe('skills restritas por licença', () => {
+  const skills = [
+    { id: 'community-anthropic-docx', name: 'DOCX (Anthropic)', description: 'Word', path: 'https://x/docx', agents: ['claude'] },
+    { id: 'livre', name: 'Livre', description: 'Qualquer um', path: 'https://x/livre' },
+  ]
+  const com = { ...ligado, availableSkills: skills }
+
+  it('Codex e Gemini não recebem a skill de documentos; Claude recebe', () => {
+    for (const command of ['codex', 'gemini']) {
+      const texto = buildTerminalNodeData({ label: 'A', command }, com).initialText ?? ''
+      expect(texto).toContain('Livre')
+      expect(texto).not.toContain('DOCX (Anthropic)')
+    }
+    expect(buildTerminalNodeData({ label: 'A', command: 'claude' }, com).initialText).toContain('DOCX (Anthropic)')
+  })
+})

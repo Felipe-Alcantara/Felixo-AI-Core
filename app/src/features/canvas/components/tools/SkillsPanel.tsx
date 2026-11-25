@@ -71,10 +71,11 @@ function focusTargetAfterRemoval(
 }
 
 /** Marca de skill de terceiros, com o repositório de onde ela vem. */
-function CommunityBadge({ origin }: { origin?: string }) {
+function CommunityBadge({ origin, agents }: { origin?: string; agents?: string[] }) {
   return (
     <span className="shrink-0 rounded-sm bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-1 text-[10px] text-(--color-warning)">
       {origin ?? 'terceiros'}
+      {agents?.includes('claude') && agents.length === 1 ? ' · só Claude' : ''}
     </span>
   )
 }
@@ -323,7 +324,7 @@ export function SkillsPanel({
               <span className="truncate text-zinc-300" title={item.description}>
                 {item.name}
               </span>
-              {item.source === 'community' && <CommunityBadge origin={item.origin} />}
+              {item.source === 'community' && <CommunityBadge origin={item.origin} agents={item.agents} />}
               <button
                 type="button"
                 data-felixo-skill-activate
@@ -400,7 +401,7 @@ export function SkillsPanel({
                     >
                       {item.name}
                     </span>
-                    {item.source === 'community' && <CommunityBadge origin={item.origin} />}
+                    {item.source === 'community' && <CommunityBadge origin={item.origin} agents={item.agents} />}
                     <button
                       type="button"
                       data-skill-action="restaurar"

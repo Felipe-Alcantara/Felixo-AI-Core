@@ -254,3 +254,15 @@ test('todo built-in do catalogo tem nome e descricao', () => {
     assert.ok(skill.description.length > 60, `descricao curta em ${skill.slug}`)
   }
 })
+
+test('skills de documentos da Anthropic so vao para o Claude e toda skill de terceiros tem licenca', () => {
+  for (const skill of COMMUNITY_SKILLS) {
+    assert.ok(skill.licenca, `sem licenca em ${skill.id}`)
+  }
+  const docs = ['pdf', 'docx', 'xlsx', 'pptx'].map((n) => `community-anthropic-${n}`)
+  const skills = listAvailableSkills({ resolveBuiltinPath })
+  for (const id of docs) {
+    assert.deepEqual(skills.find((s) => s.id === id).agents, ['claude'])
+  }
+  assert.equal(skills.find((s) => s.id === 'community-anthropic-mcp-builder').agents, undefined)
+})

@@ -178,6 +178,9 @@ const COMMUNITY_SKILLS = [
       'Ler, extrair, preencher e gerar PDF — inclusive formularios e extracao de texto/tabela de documento escaneado.',
     url: 'https://github.com/anthropics/skills/tree/main/skills/pdf',
     origin: 'anthropics/skills',
+    // Licenca source-available: uso restrito aos servicos da Anthropic, so agentes Claude.
+    agents: ["claude"],
+    licenca: "source-available, restrita aos servicos da Anthropic",
   },
   {
     id: 'community-anthropic-docx',
@@ -186,6 +189,9 @@ const COMMUNITY_SKILLS = [
       'Criar e editar documentos Word preservando formatacao, estilos e controle de alteracoes.',
     url: 'https://github.com/anthropics/skills/tree/main/skills/docx',
     origin: 'anthropics/skills',
+    // Licenca source-available: uso restrito aos servicos da Anthropic, so agentes Claude.
+    agents: ["claude"],
+    licenca: "source-available, restrita aos servicos da Anthropic",
   },
   {
     id: 'community-anthropic-xlsx',
@@ -194,6 +200,9 @@ const COMMUNITY_SKILLS = [
       'Ler e escrever planilhas Excel com formulas, formatacao e multiplas abas.',
     url: 'https://github.com/anthropics/skills/tree/main/skills/xlsx',
     origin: 'anthropics/skills',
+    // Licenca source-available: uso restrito aos servicos da Anthropic, so agentes Claude.
+    agents: ["claude"],
+    licenca: "source-available, restrita aos servicos da Anthropic",
   },
   {
     id: 'community-anthropic-pptx',
@@ -201,6 +210,9 @@ const COMMUNITY_SKILLS = [
     description: 'Criar e editar apresentacoes PowerPoint a partir de conteudo estruturado.',
     url: 'https://github.com/anthropics/skills/tree/main/skills/pptx',
     origin: 'anthropics/skills',
+    // Licenca source-available: uso restrito aos servicos da Anthropic, so agentes Claude.
+    agents: ["claude"],
+    licenca: "source-available, restrita aos servicos da Anthropic",
   },
   {
     id: 'community-anthropic-mcp-builder',
@@ -209,6 +221,7 @@ const COMMUNITY_SKILLS = [
       'Construir um servidor MCP do zero: ferramentas, esquemas, transporte e empacotamento.',
     url: 'https://github.com/anthropics/skills/tree/main/skills/mcp-builder',
     origin: 'anthropics/skills',
+    licenca: "Apache-2.0",
   },
   {
     id: 'community-anthropic-webapp-testing',
@@ -217,6 +230,7 @@ const COMMUNITY_SKILLS = [
       'Dirigir um navegador para testar uma aplicacao web de verdade: fluxo, screenshot e verificacao do que o usuario ve.',
     url: 'https://github.com/anthropics/skills/tree/main/skills/webapp-testing',
     origin: 'anthropics/skills',
+    licenca: "Apache-2.0",
   },
   {
     id: 'community-anthropic-frontend-design',
@@ -225,6 +239,7 @@ const COMMUNITY_SKILLS = [
       'Decisoes de interface com criterio: hierarquia, espacamento, tipografia, estados e acessibilidade.',
     url: 'https://github.com/anthropics/skills/tree/main/skills/frontend-design',
     origin: 'anthropics/skills',
+    licenca: "Apache-2.0",
   },
   {
     id: 'community-anthropic-skill-creator',
@@ -233,6 +248,7 @@ const COMMUNITY_SKILLS = [
       'Escrever uma skill nova no padrao Agent Skills, com frontmatter, descricao que dispara na hora certa e progressive disclosure.',
     url: 'https://github.com/anthropics/skills/tree/main/skills/skill-creator',
     origin: 'anthropics/skills',
+    licenca: "Apache-2.0",
   },
 ]
 
@@ -275,6 +291,7 @@ function listSystemSkills(options = {}) {
         path: skill.url,
         source: 'community',
         origin: skill.origin,
+        ...(skill.agents ? { agents: skill.agents } : {}),
       }))
     : []
 
