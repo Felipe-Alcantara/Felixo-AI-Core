@@ -50,7 +50,7 @@ test('o Gemini troca HOME e leva o XDG junto', () => {
 })
 
 test('trocar HOME exige espelhar o que o trabalho no repositório precisa', () => {
-  assert.deepEqual(getMirrorEntries('gemini'), ['.gitconfig', '.ssh', '.npmrc'])
+  assert.deepEqual(getMirrorEntries('gemini'), ['.gitconfig', '.npmrc'])
   // Quem isola por variável dedicada não mexe na home, então não espelha nada.
   assert.deepEqual(getMirrorEntries('codex'), [])
 })

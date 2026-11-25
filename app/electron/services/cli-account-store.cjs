@@ -8,6 +8,7 @@ const {
   CLAUDE_API_KEY_AUTH_KIND,
   buildProfileEnv,
   getMirrorEntries,
+  getIsolation,
   getProfileDir,
   isClaudeApiKeyAccount,
   supportsProfiles,
@@ -774,10 +775,58 @@ function createCliAccountStore({
   }
 
   /**
+   * Apaga a cópia de `.ssh` que versões antigas espelhavam para dentro dos
+   * perfis com HOME próprio (levava as chaves privadas). Só mexe em
+   * `<pasta de dados>/cli-profiles/<cli>/<id>/.ssh`; se `.ssh` for um link,
+   * remove o link e nunca o destino. Melhor esforço: falha não impede o app.
+   */
+  function scrubMirroredSsh() {
+    let accounts
+    try {
+      accounts = readStore()
+    } catch {
+      return
+    }
+
+    for (const account of accounts) {
+      if (getIsolation(account.providerId)?.kind !== 'env-home') {
+        continue
+      }
+
+      try {
+        removeTree(path.join(getProfileDir(userData, account.providerId, account.id), '.ssh'))
+      } catch {
+        // Melhor esforço; tenta de novo na próxima abertura.
+      }
+    }
+  }
+
+  function removeTree(target) {
+    let stat
+    try {
+      stat = fileSystem.lstatSync(target)
+    } catch {
+      return
+    }
+
+    if (!stat.isDirectory()) {
+      fileSystem.unlinkSync(target)
+      return
+    }
+
+    // `rmSync` já falhou em silêncio em caminho com acento; remove arquivo a arquivo.
+    for (const name of fileSystem.readdirSync(target)) {
+      removeTree(path.join(target, name))
+    }
+    fileSystem.rmdirSync(target)
+  }
+
+  /**
    * Copia da home real o que um perfil com HOME próprio precisa para o
-   * trabalho continuar funcionando: identidade do git, chaves ssh, registro do
-   * npm. Cópia, e não link, porque link para `.ssh` fora do controle do app
-   * seria uma superfície a mais para vazar credencial por engano.
+   * trabalho continuar funcionando: identidade do git e registro do npm. O
+   * `.ssh` fica de fora de propósito: copiá-lo duplicava as chaves privadas na
+   * pasta de dados do app (backup, sincronização). O ssh do git lê o `~/.ssh`
+   * real por `GIT_SSH_COMMAND` (cli-account-profiles.cjs).
    */
   function mirrorHomeEntries(providerId, profileDir) {
     for (const entry of getMirrorEntries(providerId)) {
@@ -1024,6 +1073,7 @@ function createCliAccountStore({
   }
 
   migrateStoredDuplicates()
+  scrubMirroredSsh()
 
   return {
     buildEnv,

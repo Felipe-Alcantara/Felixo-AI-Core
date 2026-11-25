@@ -295,7 +295,7 @@ Como cada CLI isola o login (medido, não presumido):
 |-----|-----------|------------|
 | Codex | `CODEX_HOME` | variável dedicada |
 | Claude Code | `CLAUDE_CONFIG_DIR` | variável dedicada |
-| Gemini | `HOME` próprio | não tem variável dedicada; o perfil recebe cópia de `.gitconfig`, `.ssh` e `.npmrc` para o trabalho no repositório continuar funcionando |
+| Gemini | `HOME` próprio | não tem variável dedicada; o perfil recebe cópia de `.gitconfig` e `.npmrc`; o `.ssh` não é copiado (levaria as chaves privadas): o git usa o `~/.ssh` real por `GIT_SSH_COMMAND`, e perfis antigos têm a cópia apagada ao abrir o app |
 | Antigravity | nenhum | o login fica no cofre do sistema (no Windows, a entrada `gemini:antigravity` do Gerenciador de Credenciais), não na `HOME`: trocar a `HOME` não troca a conta (medido na 1.5.8). Por isso não há conta com pasta de login própria nem lugar na cadeia |
 | Openia | `OPENROUTER_API_KEY` por conta; chave global sem conta | é o único caso em que o app guarda um segredo, cifrado pelo `safeStorage` do sistema; sem chaveiro disponível, o app recusa guardar em vez de salvar em texto |
 

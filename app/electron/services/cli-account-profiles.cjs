@@ -1,5 +1,6 @@
 'use strict'
 
+const fs = require('node:fs')
 const path = require('node:path')
 
 /**
@@ -36,7 +37,7 @@ const ISOLATION = Object.freeze({
   // shortcut: isola por HOME, o que arrasta git, ssh e npm (espelho abaixo);
   // GEMINI_CLI_HOME também muda o ~/.gemini no 0.69.0-preview.0, trocar quando
   // o login isolado por ela for testado.
-  gemini: { kind: 'env-home', mirror: ['.gitconfig', '.ssh', '.npmrc'] },
+  gemini: { kind: 'env-home', mirror: ['.gitconfig', '.npmrc'] },
   openia: { kind: 'env-secret', variable: 'OPENROUTER_API_KEY' },
 })
 
@@ -188,7 +189,45 @@ function buildProfileEnv({ providerId, profileDir, secret, homeDir, authKind }) 
     // outra home; sem isso a pessoa descobre pelo git falhando.
     FELIXO_PROFILE_HOME: profileDir,
     ...(homeDir ? { FELIXO_REAL_HOME: homeDir } : {}),
+    ...buildGitSshEnv(homeDir),
   }
+}
+
+/** Chaves padrão que o ssh procuraria em `~/.ssh` se o HOME fosse o real. */
+const DEFAULT_SSH_KEYS = ['id_ed25519', 'id_ecdsa', 'id_rsa']
+
+/**
+ * `GIT_SSH_COMMAND` que aponta o ssh do git para o `~/.ssh` REAL, em vez de
+ * copiar a pasta (com as chaves privadas) para dentro do perfil. Só caminhos
+ * são lidos; o conteúdo das chaves nunca passa pelo app. Sem `~/.ssh` real,
+ * não define nada.
+ */
+function buildGitSshEnv(homeDir) {
+  const sshDir = homeDir ? path.join(homeDir, '.ssh') : null
+
+  if (!sshDir || !fs.existsSync(sshDir)) {
+    return {}
+  }
+
+  const quote = (file) => `"${file.split('\\').join('/')}"`
+  const args = ['ssh']
+  const config = path.join(sshDir, 'config')
+  const knownHosts = path.join(sshDir, 'known_hosts')
+
+  if (fs.existsSync(config)) {
+    args.push('-F', quote(config))
+  }
+  if (fs.existsSync(knownHosts)) {
+    args.push('-o', `UserKnownHostsFile=${quote(knownHosts)}`)
+  }
+  for (const name of DEFAULT_SSH_KEYS) {
+    const key = path.join(sshDir, name)
+    if (fs.existsSync(key)) {
+      args.push('-i', quote(key))
+    }
+  }
+
+  return { GIT_SSH_COMMAND: args.join(' ') }
 }
 
 /** Nomes das credenciais herdadas que um perfil do provedor remove. */
@@ -274,8 +313,10 @@ function buildAccountProcessEnv(baseEnv, { providerId, profileEnv = {} }, platfo
  * Arquivos da home real que devem existir dentro de um perfil `env-home`.
  *
  * Trocar HOME faz o git perder `user.name`, o ssh perder as chaves e o npm
- * perder o registro configurado. Espelhar esses três é o que mantém o terminal
- * utilizável para o trabalho que o agente vai fazer ali.
+ * perder o registro configurado. Espelhar esses dois é o que mantém o terminal
+ * utilizável para o trabalho que o agente vai fazer ali. O `.ssh` NÃO é
+ * espelhado (levaria as chaves privadas para a pasta de dados do app): o ssh do
+ * git aponta para a pasta real por `GIT_SSH_COMMAND` (`buildGitSshEnv`).
  */
 function getMirrorEntries(providerId) {
   const isolation = getIsolation(providerId)

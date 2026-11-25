@@ -40,6 +40,8 @@ function createEnvironment({
     fs.writeFileSync(path.join(homeDir, '.gitconfig'), '[user]\n  name = Pessoa\n', 'utf8')
     fs.mkdirSync(path.join(homeDir, '.ssh'), { recursive: true })
     fs.writeFileSync(path.join(homeDir, '.ssh', 'config'), 'Host *\n', 'utf8')
+    fs.writeFileSync(path.join(homeDir, '.ssh', 'known_hosts'), 'host ssh-ed25519 AAAA\n', 'utf8')
+    fs.writeFileSync(path.join(homeDir, '.ssh', 'id_ed25519'), 'CHAVE-PRIVADA-SINTETICA', 'utf8')
   }
 
   return {
@@ -131,8 +133,8 @@ test('valida a conta contra o provedor antes de montar o ambiente', () => {
   }
 })
 
-test('perfil com HOME próprio recebe git e ssh espelhados da home real', () => {
-  // Sem isso, o terminal do Gemini perderia identidade do git e chave ssh.
+test('perfil com HOME próprio recebe o git, mas nunca copia o .ssh', () => {
+  // A chave privada duplicada na pasta de dados do app vazaria por backup.
   const env = createEnvironment({ comHome: true })
 
   try {
@@ -140,8 +142,56 @@ test('perfil com HOME próprio recebe git e ssh espelhados da home real', () => 
     const dir = path.join(env.userData, 'cli-profiles', 'gemini', conta.id)
 
     assert.equal(fs.existsSync(path.join(dir, '.gitconfig')), true)
-    assert.equal(fs.existsSync(path.join(dir, '.ssh', 'config')), true)
+    assert.equal(fs.existsSync(path.join(dir, '.ssh')), false)
     assert.equal(env.store.buildEnv(conta.id).HOME, dir)
+    // O git por ssh continua funcionando: aponta para a pasta real.
+    const comando = env.store.buildEnv(conta.id).GIT_SSH_COMMAND
+    const real = path.join(env.homeDir, '.ssh').split(path.sep).join('/')
+    assert.match(comando, new RegExp(`-F "${real}/config"`))
+    assert.match(comando, new RegExp(`UserKnownHostsFile="${real}/known_hosts"`))
+    assert.match(comando, new RegExp(`-i "${real}/id_ed25519"`))
+  } finally {
+    env.cleanup()
+  }
+})
+
+test('ao abrir, apaga a cópia de .ssh deixada em perfis antigos, só dentro do perfil', () => {
+  const env = createEnvironment({ comHome: true })
+
+  try {
+    const conta = env.store.create({ providerId: 'gemini', label: 'pessoal' })
+    const dir = path.join(env.userData, 'cli-profiles', 'gemini', conta.id)
+    // Como versões antigas deixavam: cópia recursiva, chave privada inclusa.
+    fs.cpSync(path.join(env.homeDir, '.ssh'), path.join(dir, '.ssh'), { recursive: true })
+    assert.equal(fs.existsSync(path.join(dir, '.ssh', 'id_ed25519')), true)
+
+    createCliAccountStore({
+      userData: env.userData,
+      homeDir: env.homeDir,
+      safeStorage: fakeSafeStorage('kwallet'),
+    })
+
+    assert.equal(fs.existsSync(path.join(dir, '.ssh')), false)
+    assert.equal(fs.existsSync(path.join(dir, '.gitconfig')), true)
+    // A pasta real não é tocada.
+    assert.equal(fs.readFileSync(path.join(env.homeDir, '.ssh', 'id_ed25519'), 'utf8'), 'CHAVE-PRIVADA-SINTETICA')
+  } finally {
+    env.cleanup()
+  }
+})
+
+test('a limpeza do .ssh antigo remove o link e preserva o destino', () => {
+  const env = createEnvironment({ comHome: true })
+
+  try {
+    const conta = env.store.create({ providerId: 'gemini', label: 'pessoal' })
+    const dir = path.join(env.userData, 'cli-profiles', 'gemini', conta.id)
+    fs.symlinkSync(path.join(env.homeDir, '.ssh'), path.join(dir, '.ssh'), 'junction')
+
+    createCliAccountStore({ userData: env.userData, homeDir: env.homeDir, safeStorage: fakeSafeStorage('kwallet') })
+
+    assert.equal(fs.existsSync(path.join(dir, '.ssh')), false)
+    assert.equal(fs.existsSync(path.join(env.homeDir, '.ssh', 'id_ed25519')), true)
   } finally {
     env.cleanup()
   }
