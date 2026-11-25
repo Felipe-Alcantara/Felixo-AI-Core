@@ -462,6 +462,16 @@ async function checarInspectorElementos(page) {
   if ((await campos()) !== 0) falhar('o modo em massa já começou ligado')
   await exigirClique(page, 'body', /^Alternar modo de enviar mensagens em massa$/, 'modo em massa')
   await esperar(page, () => document.querySelectorAll('[aria-label^="Mensagem para"]').length > 0, null, 'o modo em massa não mostrou os campos de mensagem')
+  // Mesma mensagem: campo único, uma caixa por terminal, e o envio só habilita com texto e marcados.
+  const mesma = () => page.evaluate(() => ({
+    campo: Boolean(document.querySelector('textarea[aria-label="Mesma mensagem para os selecionados"]')),
+    caixas: document.querySelectorAll('input[type="checkbox"][aria-label$="na mesma mensagem"]').length,
+    enviar: [...document.querySelectorAll('[data-terminals-dock] button')].find((b) => /^Enviar para \d+ selecionado/.test(b.textContent.trim()))?.disabled,
+  }))
+  const antesMesma = await mesma()
+  if (!antesMesma.campo || antesMesma.caixas === 0 || antesMesma.enviar !== true) falhar('a mesma mensagem não apareceu no modo em massa', antesMesma)
+  await exigirClique(page, 'body', /^Selecionar todos$/, 'selecionar todos')
+  await esperar(page, () => [...document.querySelectorAll('input[type="checkbox"][aria-label$="na mesma mensagem"]')].some((c) => c.checked), null, 'selecionar todos não marcou os terminais')
   await exigirClique(page, 'body', /^Alternar modo de enviar mensagens em massa$/, 'modo em massa (desligar)')
   await esperar(page, () => document.querySelectorAll('[aria-label^="Mensagem para"]').length === 0, null, 'alternar de novo não escondeu os campos')
 

@@ -38,6 +38,15 @@ import { INSPECTOR_WIDTH } from '../../services/canvas-surfaces'
 import { nextActiveIndex, shouldHandleGlobalShiftArrow } from './terminals-panel-navigation'
 import { pendingDraftNodeIds, type TerminalDrafts } from './terminals-panel-drafts'
 import {
+  broadcastSequentially,
+  bulkSelectableIds,
+  isWaitingApproval,
+  needsBroadcastConfirmation,
+  toggleGroup,
+  toggleSelected,
+  type BroadcastResults,
+} from './terminals-panel-broadcast'
+import {
   clamp,
   draggedRowIndex,
   moveById,
@@ -54,6 +63,7 @@ import {
   writeDockCollapsed,
 } from './terminals-panel-collapse'
 import { ProviderMark } from '../../../shared/brand/ProviderMark'
+import { providerIdentity } from '../../../shared/brand/provider-identity'
 
 type TerminalsPanelProps = {
   nodes: Node<CanvasNodeData>[]
@@ -220,6 +230,58 @@ export function TerminalsPanel({
     // Só limpa se a pessoa não digitou mais nada enquanto a entrega esperava.
     setDrafts((current) => (current[nodeId]?.trim() === trimmed ? { ...current, [nodeId]: '' } : current))
   }
+
+  // "Mesma mensagem": um texto só para os terminais marcados, em sequência.
+  const [broadcastText, setBroadcastText] = useState('')
+  const [selected, setSelected] = useState<string[]>([])
+  const [broadcastResults, setBroadcastResults] = useState<BroadcastResults>({})
+  const [confirming, setConfirming] = useState(false)
+  const [broadcasting, setBroadcasting] = useState(false)
+  const terminalTargets = () =>
+    elements
+      .filter((node) => node.type === 'terminal')
+      .map((node) => ({ id: node.id, activity: store.getSnapshot(node.id)?.activity ?? 'starting' }))
+  // Só terminais que ainda existem: um agente fechado depois de marcado sai da lista.
+  const liveSelected = selected.filter((id) => elements.some((node) => node.id === id))
+  const runBroadcast = async () => {
+    const text = broadcastText.trim()
+    const ids = liveSelected
+    if (!text || ids.length === 0 || broadcasting) return
+    setConfirming(false)
+    setBroadcasting(true)
+    const results = await broadcastSequentially(
+      ids,
+      async (id) => {
+        const ok = await store
+          .sendText(id, toSubmittedTerminalText(text), { kind: 'manual-prompt' })
+          .then((result) => result.delivered, () => false)
+        if (!ok) reportActionFailure(`enviar-mesma-mensagem:${id}`, 'A mensagem não chegou a um terminal: o texto foi mantido.')
+        return ok
+      },
+      setBroadcastResults,
+    )
+    setBroadcasting(false)
+    const failed = ids.filter((id) => results[id] === 'failed')
+    // Falhou: o texto fica e a seleção encolhe para quem não recebeu, pronta para reenviar.
+    setSelected(failed)
+    if (failed.length === 0) setBroadcastText((current) => (current.trim() === text ? '' : current))
+  }
+  const requestBroadcast = () =>
+    needsBroadcastConfirmation(liveSelected.length) ? setConfirming(true) : void runBroadcast()
+  const selectGroupIds = (groupNodes: { node: Node<CanvasNodeData> }[]) =>
+    bulkSelectableIds(terminalTargets().filter((t) => groupNodes.some((entry) => entry.node.id === t.id)))
+  const confirmationLines = liveSelected.map((id) => {
+    const node = elements.find((element) => element.id === id)
+    return {
+      id,
+      title: node ? elementTitle(node) : id,
+      provider: providerIdentity((node?.data as { command?: string } | undefined)?.command).label,
+    }
+  })
+  const providerCounts = confirmationLines.reduce<Record<string, number>>(
+    (acc, line) => ({ ...acc, [line.provider]: (acc[line.provider] ?? 0) + 1 }),
+    {},
+  )
 
   const pendingIds = pendingDraftNodeIds(drafts)
   const sendAllDrafts = () => {
@@ -546,7 +608,57 @@ export function TerminalsPanel({
         </button>
       </div>
       {composeMode && (
-        <div className="felixo-anim-sequential-panel border-b border-white/10 px-3 py-2">
+        <div className="felixo-anim-sequential-panel flex flex-col gap-1.5 border-b border-white/10 px-3 py-2">
+          <textarea
+            value={broadcastText}
+            onChange={(event) => setBroadcastText(event.target.value)}
+            rows={2}
+            placeholder="Mesma mensagem para os selecionados…"
+            aria-label="Mesma mensagem para os selecionados"
+            className="w-full resize-none rounded-sm bg-zinc-900 px-2 py-1 text-xs text-zinc-100 outline-hidden ring-1 ring-white/10 placeholder:text-zinc-600 focus:ring-white/40"
+          />
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setSelected((current) => toggleGroup(current, bulkSelectableIds(terminalTargets())))}
+              className="felixo-btn rounded-sm px-1.5 py-1 text-[11px] text-zinc-300 hover:bg-white/10"
+            >
+              Selecionar todos
+            </button>
+            <button
+              type="button"
+              onClick={requestBroadcast}
+              disabled={broadcasting || liveSelected.length === 0 || !broadcastText.trim()}
+              className="felixo-btn ml-auto flex items-center gap-1.5 rounded-sm felixo-primary-action px-2 py-1 text-xs font-medium text-white disabled:cursor-not-allowed disabled:bg-zinc-700! disabled:opacity-50"
+            >
+              <Send size={12} />
+              Enviar para {liveSelected.length} selecionado{liveSelected.length === 1 ? '' : 's'}
+            </button>
+          </div>
+          {confirming && (
+            <div role="alertdialog" aria-label="Confirmar envio em massa" className="rounded-sm bg-black/30 p-2 text-[11px] text-zinc-300">
+              <p className="mb-1 font-medium text-zinc-100">
+                Enviar a mesma mensagem para {confirmationLines.length} agentes?
+              </p>
+              <p className="mb-1 text-zinc-400">
+                {Object.entries(providerCounts).map(([label, count]) => `${label}: ${count}`).join(' · ')}
+                {' '}— um comando de barra pode não existir em todas as CLIs.
+              </p>
+              <ul className="mb-1.5 max-h-24 overflow-auto">
+                {confirmationLines.map((line) => (
+                  <li key={line.id} className="truncate">{line.provider} · {line.title}</li>
+                ))}
+              </ul>
+              <div className="flex gap-1.5">
+                <button type="button" onClick={() => void runBroadcast()} className="felixo-btn rounded-sm felixo-primary-action px-2 py-1 text-white">
+                  Confirmar e enviar
+                </button>
+                <button type="button" onClick={() => setConfirming(false)} className="felixo-btn rounded-sm px-2 py-1 hover:bg-white/10">
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
           <button
             type="button"
             onClick={sendAllDrafts}
@@ -597,6 +709,11 @@ export function TerminalsPanel({
                 label={group.label || 'Sem pasta de trabalho'}
                 path={group.key}
                 count={group.nodes.length}
+                onSelectGroup={
+                  composeMode
+                    ? () => setSelected((current) => toggleGroup(current, selectGroupIds(group.nodes)))
+                    : undefined
+                }
               />
             )}
             {group.nodes.map(({ node, index }) => {
@@ -629,6 +746,9 @@ export function TerminalsPanel({
                       : 0
                   }
                   composeMode={composeMode}
+                  checked={liveSelected.includes(node.id)}
+                  onToggleChecked={() => setSelected((current) => toggleSelected(current, node.id))}
+                  broadcastStatus={broadcastResults[node.id]}
                   draft={drafts[node.id] ?? ''}
                   onDraftChange={(text) => setDraft(node.id, text)}
                   onSend={() => sendDraft(node.id)}
@@ -654,10 +774,13 @@ function RepositoryHeading({
   label,
   path,
   count,
+  onSelectGroup,
 }: {
   label: string
   path: string
   count: number
+  /** Só no modo de envio em massa: marca (ou desmarca) os terminais da pasta. */
+  onSelectGroup?: () => void
 }) {
   return (
     <li data-repository-heading role="presentation" className="px-1 pb-0.5 pt-2 first:pt-0">
@@ -670,6 +793,16 @@ function RepositoryHeading({
           {label}
         </span>
         <span className="tabular-nums text-zinc-600">{count}</span>
+        {onSelectGroup && (
+          <button
+            type="button"
+            onClick={onSelectGroup}
+            aria-label={`Selecionar a pasta ${label}`}
+            className="felixo-btn rounded-sm px-1 normal-case tracking-normal text-zinc-300 hover:bg-white/10"
+          >
+            selecionar pasta
+          </button>
+        )}
         <span className="h-px min-w-2 flex-1 bg-white/10" aria-hidden />
       </div>
     </li>
@@ -683,6 +816,9 @@ function ElementRow({
   dragging,
   translateY,
   composeMode,
+  checked,
+  onToggleChecked,
+  broadcastStatus,
   draft,
   onDraftChange,
   onSend,
@@ -700,6 +836,9 @@ function ElementRow({
    * the dragged row, one row height for the ones making room for it. */
   translateY: number
   composeMode: boolean
+  checked: boolean
+  onToggleChecked: () => void
+  broadcastStatus?: 'sending' | 'delivered' | 'failed'
   draft: string
   onDraftChange: (text: string) => void
   onSend: () => void
@@ -726,6 +865,15 @@ function ElementRow({
       }`}
     >
       <div className="flex items-start">
+        {composeMode && isTerminal && (
+          <input
+            type="checkbox"
+            checked={checked}
+            onChange={onToggleChecked}
+            aria-label={`Incluir "${elementTitle(node)}" na mesma mensagem`}
+            className="ml-1 mt-2 shrink-0"
+          />
+        )}
         <span
           // Drag starts on the grip only, so clicking anywhere else in the row
           // still just focuses the block.
@@ -772,6 +920,17 @@ function ElementRow({
             ))}
         </button>
       </div>
+      {composeMode && isTerminal && (isWaitingApproval(activity) || broadcastStatus) && (
+        <p
+          data-broadcast-status={broadcastStatus}
+          className={`px-2 pl-12 text-[10px] ${broadcastStatus === 'failed' ? 'text-theme-error' : 'text-zinc-400'}`}
+        >
+          {broadcastStatus === 'sending' && 'enviando…'}
+          {broadcastStatus === 'delivered' && 'entregue'}
+          {broadcastStatus === 'failed' && 'falhou: o texto foi mantido'}
+          {!broadcastStatus && 'aguardando aprovação: a mensagem viraria resposta à pergunta dele'}
+        </p>
+      )}
       {composeMode && isTerminal && (
         <RowComposer
           terminalTitle={elementTitle(node)}

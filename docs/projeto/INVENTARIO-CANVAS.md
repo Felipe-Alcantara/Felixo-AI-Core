@@ -30,7 +30,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 ## Números
 
 - **Elementos:** 115 (10 blocos, 17 ferramentas, 88 outras superfícies)
-- **Controles:** 441, dos quais 93 com teste específico
+- **Controles:** 446, dos quais 93 com teste específico
 - **Elementos sem nenhum teste:** 0
 - **Lacunas:** 123 (alto 1, médio 73, baixo 49), em 72 tasks
 
@@ -333,7 +333,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 | loading | Terminal trabalhando: spinner na linha. |
 | empty | Sem blocos: "Canvas livre — Crie um agente, arquivo ou grupo para começar a organizar seu fluxo." |
 | error | Terminal com activity "error": ponto vermelho na linha. |
-| pending | Modo de envio em massa com rascunhos: "Enviar para todos (N)". |
+| pending | Modo de envio em massa com rascunhos ("Enviar para todos (N)") ou com a mesma mensagem para os marcados ("Enviar para N selecionados", confirmação acima de 5, resultado por linha). |
 | disabled | "Enviar para todos" sem rascunho e o envio de uma linha com campo vazio ficam desabilitados. |
 
 | Controle | Gatilho | Efeito | Falha conhecida | Teste |
@@ -342,6 +342,11 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `aria-label="Recolher elementos"` (button) | clique | Cabeçalho "Elementos": recolhe para o puck, grava felixo:elements-dock-collapsed = "1" e publica largura 0; painel, gaveta e Mini Map ganham o espaço. As linhas saem do DOM 260 ms depois (fim da dobra) e voltam na hora ao abrir. | Sem localStorage a escolha vale só nesta sessão. | `scripts/canvas-smoke-onboarding.cjs` → `recolherInspector` |
 | `Alternar modo de enviar mensagens em massa` (button) | clique | Liga ou desliga o modo de envio em massa (campo de mensagem sob cada terminal); ligar com o inspector recolhido também o expande. | Sem falha própria; o modo e os rascunhos não persistem. | — |
 | `onClick={sendAllDrafts}` (button) | clique | Enviar para todos: para cada rascunho não vazio, store.sendText com Enter (prompt manual) no PTY do terminal (pty:write) e limpa o rascunho. (desabilitado: nenhum rascunho pendente) | só apaga o rascunho se o terminal recebeu; senão o rascunho fica e a barra de status avisa. | — |
+| `selecionar pasta` (button) | clique | No cabeçalho de cada pasta (modo em massa): marca os terminais da pasta, exceto os que esperam aprovação ou saíram; com todos já marcados, desmarca. | Sem falha própria. | — |
+| `Selecionar todos` (button) | clique | Marca todos os terminais, exceto os que esperam aprovação ou saíram; com todos já marcados, desmarca. | Sem falha própria. | — |
+| `onClick={requestBroadcast}` (button) | clique | Com o campo "Mesma mensagem para os selecionados" e a caixa de seleção de cada terminal (quem espera aprovação nasce desmarcado e a linha avisa que a mensagem viraria resposta à pergunta dele; só recebe se marcado de propósito), envia a mesma mensagem aos marcados, um por vez (store.sendText com Enter, sem rajada de IPC); cada linha mostra enviando, entregue ou falhou. Com mais de 5 destinatários abre antes a confirmação com a lista, o provedor de cada um e a contagem por provedor. (desabilitado: nenhum marcado, campo vazio ou envio em andamento) | Entrega que falha mantém o texto no campo, marca a linha como falhou, avisa na barra de status e deixa só os que falharam selecionados para reenviar. | — |
+| `Confirmar e enviar` (button) | clique | Confirma o envio em massa acima de 5 destinatários e dispara o envio em sequência. | Cancelar fecha a confirmação sem enviar nada. | — |
+| `Cancelar` (button) | clique | Fecha a confirmação do envio em massa sem enviar nada. | Sem falha própria. | — |
 | `onSelect(event.ctrlKey \|\| event.metaKey)` (button) | clique | Linha do bloco: marca a linha ativa, focusNode centraliza e seleciona o bloco e, se for terminal, openTerminal abre a gaveta (Ctrl/Cmd+clique abre ao lado dos agentes já abertos) e marca as notificações dele como lidas. Shift+↑/↓ faz o mesmo de qualquer lugar; Alt+↑/↓ e o grip reordenam dentro da pasta (orderIndex salvo). | Bloco dentro de grupo é centralizado no lugar errado (ver lacuna de foco na área do canvas). | `scripts/canvas-smoke-links.cjs` → `focar` |
 | `Enviar mensagem para` (button) | clique | Envio de uma linha (ou Enter no campo): store.sendText com Enter só para aquele terminal e limpa o rascunho. (desabilitado: campo vazio; só existe no modo de envio em massa) | só apaga o rascunho se o terminal recebeu; senão o rascunho fica e a barra de status avisa. | — |
 
