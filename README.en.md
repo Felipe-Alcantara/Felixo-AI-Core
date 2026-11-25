@@ -1,8 +1,10 @@
 # Felixo AI Core
 
-Felixo AI Core is a desktop app that puts the command-line AI tools you already use (Claude, Codex, Gemini and others) into blocks on a visual canvas. Each agent is a block, and blocks can share context with each other, with files and with notes.
+Teams of AI agents for any field, starting with code and Notion tasks, on a canvas, with the AI accounts you already have.
 
-> **Stop switching between AIs. Start orchestrating them.**
+> **Stop switching AIs. Start orchestrating.**
+
+Felixo AI Core is a desktop app that puts the command-line AI tools you already use (Claude, Codex, Gemini and others) into blocks on a visual canvas. Each agent is a block, and blocks can share context with each other, with files and with notes.
 
 ## For people who don't program
 
@@ -13,3 +15,5 @@ Felixo AI Core is a desktop app that puts the command-line AI tools you already 
 - **Roadmap:** [docs/projeto/ROADMAP.md](./docs/projeto/ROADMAP.md) (in Portuguese).
 
 The developer documentation (setup, tests, architecture) is in Portuguese for now: see [README.md](./README.md).
+
+Felixo AI Core is part of the FelixoVerse ecosystem.

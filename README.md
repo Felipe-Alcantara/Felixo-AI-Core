@@ -1,6 +1,6 @@
 # Felixo AI Core
 
-Felixo AI Core é o núcleo inteligente do ecossistema FelixoVerse: uma aplicação desktop, orientada a canvas, para controlar, organizar e orquestrar múltiplas IAs, agentes, terminais, repositórios e fluxos de trabalho.
+Times de agentes de IA para qualquer área, começando por código e tarefas no Notion, num canvas, com as contas de IA que você já tem.
 
 > **Pare de trocar de IA. Comece a orquestrar.**
 
@@ -550,6 +550,10 @@ Ver [ROADMAP.md](./docs/projeto/ROADMAP.md) para fases, checklists, metas e back
 Distribuído sob a licença MIT; o texto completo está em [LICENSE](./LICENSE).
 
 Contribuições são bem-vindas. Comece pelo [CONTRIBUTING.md](./CONTRIBUTING.md): como rodar, como testar e as regras de commit. Falhas de segurança não vão em issue pública: veja o [SECURITY.md](./SECURITY.md). O fluxo de branches e commits (direto na `main` por padrão, branch só nas exceções) está na [política de branch do Guia para Desenvolvedores](./docs/guias/GUIA-DESENVOLVEDOR.md#política-de-branch), e o [Roadmap](./docs/projeto/ROADMAP.md) lista a direção do projeto e as ideias abertas para quem quiser ajudar. Ao participar, siga o [Código de Conduta](./CODE_OF_CONDUCT.md).
+
+### Sobre
+
+Felixo AI Core é parte do ecossistema FelixoVerse.
 
 ### Autor
 
