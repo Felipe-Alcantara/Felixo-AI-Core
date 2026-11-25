@@ -283,8 +283,10 @@ const FAILURE_REASONS = Object.freeze({
   UNKNOWN: 'unknown',
 })
 
+// O cmd.exe responde na codepage OEM (cp850 no Brasil) e o Node decodifica como
+// UTF-8: "não" chega como "n�o". Por isso o `.` no lugar das vogais acentuadas.
 const SHIM_FAILURE_OUTPUT =
-  /(?:is not recognized|não é reconhecido|cannot find the path|não pode encontrar o caminho|no such file or directory.*(?:node|env))/i
+  /(?:is not recognized|n.o .{1,2}reconhecido|cannot find the path|n.o pode encontrar o caminho|no such file or directory.*(?:node|env))/i
 
 /**
  * Classifica por que `<cli> --version` não respondeu.

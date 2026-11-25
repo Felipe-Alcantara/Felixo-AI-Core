@@ -8,6 +8,8 @@ const {
   formatDetectionSummary,
   detectCli,
   resolveCommandPath,
+  classifyExecutionFailure,
+  FAILURE_REASONS,
 } = require('./cli-detector.cjs')
 
 describe('cli-detector', () => {
@@ -321,5 +323,24 @@ describe('alias .ps1 no Windows', () => {
     } finally {
       fs.rmSync(pasta, { recursive: true, force: true })
     }
+  })
+})
+
+describe('classifyExecutionFailure (saída do cmd.exe)', () => {
+  // Bytes reais medidos no Windows pt-BR: cp850 lido como UTF-8 vira U+FFFD.
+  const casos = [
+    ['pt-BR em UTF-8', 'O sistema não pode encontrar o caminho especificado.'],
+    ['pt-BR em OEM (S1)', 'O sistema n�o pode encontrar o caminho especificado.'],
+    ['pt-BR em OEM (S2)', "'\"node\"' n�o � reconhecido como um comando interno ou externo."],
+    ['inglês', "'\"node\"' is not recognized as an internal or external command"],
+  ]
+  for (const [nome, stderr] of casos) {
+    it(`reconhece atalho quebrado: ${nome}`, () => {
+      assert.equal(classifyExecutionFailure({ code: 1, stderr }), FAILURE_REASONS.SHIM_BROKEN)
+    })
+  }
+
+  it('não confunde saída comum com atalho quebrado', () => {
+    assert.equal(classifyExecutionFailure({ code: 1, stderr: 'error: unknown option' }), FAILURE_REASONS.EXIT_ERROR)
   })
 })
