@@ -320,6 +320,24 @@ export function qualityStandardGuidesFrom(
   }
 }
 
+/** Último parágrafo, comum aos dois modelos do lembrete gerado. */
+const QUALITY_PROMPT_END =
+  'a ferramenta interativa é o que dá ao usuário uma UI de verdade para escolher.'
+
+/**
+ * Troca, num texto de largada já gravado, o lembrete GERADO pelo atual: os
+ * guias confirmados depois da criação do agente chegam quando ele reinicia.
+ * Lembrete personalizado (ou texto que não abre com o lembrete) fica como está.
+ */
+export function refreshGeneratedQualityPrompt(text: string, current: string): string {
+  const end = text.indexOf(QUALITY_PROMPT_END)
+  if (end < 0) return text
+  const cut = end + QUALITY_PROMPT_END.length
+  const head = text.slice(0, cut)
+  if (!getGeneratedDefaultPattern().test(head) && !getGeneratedListPattern().test(head)) return text
+  return current + text.slice(cut)
+}
+
 /** O texto que de fato vai para o agente: a personalização, ou o padrão da fonte atual. */
 export function resolveQualityStandardPrompt(params: {
   stored: string | null | undefined

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import type { SystemDesignGuide, SystemDesignProject } from '../../shared/system-design/types'
 import type { CanvasNodeData } from '../types'
 import type { AgentSessionReference } from './agent-session'
 import { createNodeDataReuse, type NodeDataCacheEntry } from './node-data-cache'
+import { buildDefaultQualityStandardPrompt } from './quality-standard-prompt'
 import {
   resolveTerminalSpawnPlan,
   terminalSpawnCacheDeps,
@@ -160,6 +162,81 @@ describe('Tabela 1: o que cada bloco recebe ao subir', () => {
     expect(limpo).toContain('Contexto do canvas')
     expect(limpo).not.toContain(LEMBRETE)
     expect(comEnter).toBe(limpo)
+  })
+
+  describe('guias confirmados depois da criação do agente', () => {
+    const guia = (label: string, repoUrl: string): SystemDesignGuide => ({
+      key: `${repoUrl}#main`,
+      kind: 'git',
+      repoUrl,
+      branch: 'main',
+      label,
+      origin: 'projeto-arquivo',
+      syncState: 'synced',
+      sha: null,
+      syncedAt: null,
+      lastError: null,
+    })
+    const projeto = {
+      directory: '/repo',
+      root: '/repo',
+      authorized: true,
+      layer: 'projeto',
+      guides: [guia('Guia do Projeto', 'https://github.com/acme/guia-do-projeto')],
+      replaced: [],
+      file: null,
+      folders: [],
+      appGuides: [],
+      useGuideFolders: true,
+    } as SystemDesignProject
+    // O texto gravado na criação: o lembrete geral, antes de o projeto confirmar guias.
+    const gravado = decidir({ command: 'claude', cwd: '/repo' }).campos.initialText as string
+    const lembreteReal = {
+      qualityStandard: { prompt: buildDefaultQualityStandardPrompt(null), enabled: true },
+    }
+    const gravadoReal = decidir({ command: 'claude', cwd: '/repo' }, lembreteReal).campos.initialText as string
+
+    it('o texto gravado com o lembrete geral passa a citar os guias do projeto ao reiniciar', () => {
+      expect(gravadoReal).not.toContain('guia-do-projeto')
+      const { campos } = decidir(
+        { command: 'claude', cwd: '/repo', initialText: gravadoReal },
+        { ...lembreteReal, projectGuides: { projects: { '/repo': projeto }, settled: { '/repo': true } } },
+      )
+
+      expect(campos.initialText).toContain('https://github.com/acme/guia-do-projeto')
+      expect(campos.initialText).toContain('Estes guias são do projeto')
+      expect(campos.initialText).not.toContain('Padrão de qualidade - Felixo System Design/')
+      expect(campos.initialText?.match(/Contexto do canvas/g)).toHaveLength(1)
+    })
+
+    it('com a camada do projeto ainda sem assentar, mantém o texto gravado', () => {
+      const { campos } = decidir(
+        { command: 'claude', cwd: '/repo', initialText: gravadoReal },
+        { ...lembreteReal, projectGuides: { projects: {}, settled: {} } },
+      )
+
+      expect(campos.initialText).toContain('Padrão de qualidade - Felixo System Design/')
+    })
+
+    it('lembrete personalizado gravado no bloco não é reescrito', () => {
+      expect(gravado).toContain(LEMBRETE)
+      const { campos } = decidir(
+        { command: 'claude', cwd: '/repo', initialText: gravado },
+        { projectGuides: { projects: { '/repo': projeto }, settled: { '/repo': true } } },
+      )
+
+      expect(campos.initialText).toContain(LEMBRETE)
+      expect(campos.initialText).not.toContain('guia-do-projeto')
+    })
+
+    it('passagem de responsabilidade não é tocada', () => {
+      const { campos } = decidir(
+        { command: 'claude', cwd: '/repo', handoffText: 'PEDIDO\r' },
+        { projectGuides: { projects: { '/repo': projeto }, settled: { '/repo': true } } },
+      )
+
+      expect(campos.initialText?.startsWith('PEDIDO')).toBe(true)
+    })
   })
 
   it('passagem de responsabilidade vira o texto inicial e é marcada como tal', () => {

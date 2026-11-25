@@ -8,6 +8,7 @@ import { explainAgentResume } from './agent-session'
 import {
   isTerminalInitialTextReady,
   qualityStandardGuidesFrom,
+  refreshGeneratedQualityPrompt,
   resolveQualityStandardPrompt,
   resolveTerminalInitialText,
   type QualityStandardGuides,
@@ -133,6 +134,16 @@ export function resolveTerminalSpawnPlan(data: CanvasNodeData, context: Terminal
   // `ensure()` dele é no-op ou só reanexa ao PTY vivo; a pendência vale
   // para o próximo Reiniciar, que mostra a faixa em vez de subir.
   const holdForResumeChoice = resumePending && restoredAgentTerminals.holdable.has(node.id)
+  // O lembrete gravado no bloco é de quando ele nasceu; guias confirmados
+  // depois entram aqui (ao reiniciar). Só com a camada da pasta assentada,
+  // para não trocar os guias do projeto pelos gerais.
+  const storedInitialText = stripTerminalSubmission(node.data.initialText)
+  const guidesSettled =
+    typeof node.data.cwd !== 'string' || !node.data.cwd || Boolean(projectGuides.settled[node.data.cwd])
+  const refreshedInitialText =
+    storedInitialText && quality.enabled && guidesSettled
+      ? refreshGeneratedQualityPrompt(storedInitialText, qualityPrompt)
+      : storedInitialText
   // Left open from a previous run: whatever it was doing may not have
   // finished, so type "/resume" on this (re)spawn instead of the usual
   // standing instruction — see restoredAgentTerminalIds above. With a
@@ -149,8 +160,7 @@ export function resolveTerminalSpawnPlan(data: CanvasNodeData, context: Terminal
     // contexto. O recorte cobre os blocos salvos antes desta mudança,
     // gravados com o Enter no fim — sem ele, um canvas antigo voltaria a
     // executar sozinho ao reabrir.
-    existingInitialText:
-      node.data.handoffText ?? stripTerminalSubmission(node.data.initialText),
+    existingInitialText: node.data.handoffText ?? refreshedInitialText,
     canvasFilePaths,
     identity: { agentName: node.data.label, cwd: node.data.cwd },
     cwd: node.data.cwd,
