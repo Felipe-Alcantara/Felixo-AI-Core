@@ -167,3 +167,61 @@ test('esconder a principal (bandeja) esconde as auxiliares sem fechá-las; mostr
   ctx.principal.emit('show')
   assert.equal(filha.hidden, false)
 })
+
+function janelaPipFalsa() {
+  const janela = janelaFalsa({ x: 0, y: 0, width: 520, height: 320 })
+  janela.noTopo = null
+  janela.todasAreas = null
+  janela.setAlwaysOnTop = (valor, nivel) => { janela.noTopo = { valor, nivel } }
+  janela.setVisibleOnAllWorkspaces = (valor) => { janela.todasAreas = valor }
+  return janela
+}
+
+test('picture-in-picture: id pip-<...> abre pequena, sempre no topo, no canto inferior direito', () => {
+  const { gerenciador } = montar()
+  const { overrideBrowserWindowOptions: pip } = gerenciador.windowOpenHandler({ url: 'about:blank', frameName: 'felixo-aux-pip-agente-1' })
+  assert.equal(pip.alwaysOnTop, true)
+  assert.equal(pip.width, 520)
+  assert.equal(pip.height, 320)
+  // Canto inferior direito do monitor principal (1920x1080), com margem.
+  assert.equal(pip.x, 1920 - 520 - 24)
+  assert.equal(pip.y, 1080 - 320 - 24)
+  assert.equal(pip.minWidth < 360, true)
+
+  // A janela comum continua como antes: sem sempre no topo.
+  const { overrideBrowserWindowOptions: comum } = gerenciador.windowOpenHandler({ url: 'about:blank', frameName: 'felixo-aux-t-agente-1' })
+  assert.equal(comum.alwaysOnTop, undefined)
+  assert.equal(comum.width, 900)
+})
+
+test('picture-in-picture: a janela criada fica acima das outras em todas as áreas de trabalho', () => {
+  const { gerenciador } = montar()
+  gerenciador.windowOpenHandler({ url: 'about:blank', frameName: 'felixo-aux-pip-a' })
+  const pip = janelaPipFalsa()
+  gerenciador.onDidCreateWindow(pip, { frameName: 'felixo-aux-pip-a' })
+  assert.deepEqual(pip.noTopo, { valor: true, nivel: 'floating' })
+  assert.equal(pip.todasAreas, true)
+})
+
+test('picture-in-picture: segue visível com a principal na bandeja, e a principal não é estrangulada enquanto houver PiP', () => {
+  const ctx = montar()
+  const estrangular = []
+  ctx.principal.webContents.setBackgroundThrottling = (valor) => estrangular.push(valor)
+  ctx.gerenciador.attachTo(ctx.principal)
+
+  ctx.gerenciador.windowOpenHandler({ url: 'about:blank', frameName: 'felixo-aux-pip-a' })
+  const pip = janelaPipFalsa()
+  ctx.principal.webContents.emit('did-create-window', pip, { frameName: 'felixo-aux-pip-a' })
+  ctx.gerenciador.windowOpenHandler({ url: 'about:blank', frameName: 'felixo-aux-t-b' })
+  const comum = janelaFalsa()
+  ctx.principal.webContents.emit('did-create-window', comum, { frameName: 'felixo-aux-t-b' })
+  assert.deepEqual(estrangular, [false])
+
+  ctx.principal.emit('hide')
+  assert.equal(comum.hidden, true)
+  assert.equal(pip.hidden, undefined)
+
+  // Fechar a última PiP devolve o estrangulamento normal da janela escondida.
+  pip.close()
+  assert.deepEqual(estrangular, [false, true])
+})

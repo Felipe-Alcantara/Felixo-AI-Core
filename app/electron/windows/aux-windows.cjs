@@ -21,6 +21,28 @@ const MAX_AUX_WINDOWS = 8
 
 const AUX_DEFAULT_BOUNDS = { width: 900, height: 640 }
 
+/**
+ * Picture-in-picture: auxiliar de id `pip-<...>`, pequena e sempre no topo. Ela
+ * continua visível quando a principal vai para a bandeja (é o motivo de existir:
+ * acompanhar um agente com o app escondido).
+ */
+const PIP_ID_PREFIX = 'pip-'
+const PIP_DEFAULT_SIZE = { width: 520, height: 320 }
+const PIP_MARGIN = 24
+
+const isPipId = (id) => typeof id === 'string' && id.startsWith(PIP_ID_PREFIX)
+
+/** Canto inferior direito da área útil do monitor principal. */
+function pipDefaultBounds(primaryDisplay) {
+  const area = primaryDisplay?.workArea
+  if (!area) return { ...PIP_DEFAULT_SIZE }
+  return {
+    ...PIP_DEFAULT_SIZE,
+    x: Math.round(area.x + area.width - PIP_DEFAULT_SIZE.width - PIP_MARGIN),
+    y: Math.round(area.y + area.height - PIP_DEFAULT_SIZE.height - PIP_MARGIN),
+  }
+}
+
 /** O id da auxiliar a partir do nome do quadro do `window.open`, ou null se o nome não é nosso. */
 function parseAuxFrameName(frameName) {
   if (typeof frameName !== 'string' || !frameName.startsWith(AUX_FRAME_PREFIX)) return null
@@ -33,14 +55,15 @@ function parseAuxFrameName(frameName) {
  * leva preload próprio (a auxiliar só hospeda DOM que a principal escreve), e o
  * `webviewTag` fica porque o bloco "Página Web" pode ser movido para lá.
  */
-function auxWindowOptions(bounds, { show = true, backgroundColor = '#09090b' } = {}) {
+function auxWindowOptions(bounds, { show = true, backgroundColor = '#09090b', pip = false } = {}) {
   return {
     ...bounds,
-    minWidth: 360,
-    minHeight: 240,
+    minWidth: pip ? 280 : 360,
+    minHeight: pip ? 160 : 240,
     show,
     backgroundColor,
     title: 'Felixo AI Core',
+    ...(pip ? { alwaysOnTop: true, fullscreenable: false } : {}),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -74,7 +97,20 @@ function createAuxWindowManager({ settingsRepository, screenApi, applyGuards, sh
   }
 
   function stateFor(id) {
-    return resolveWindowState(readSavedState(id), displays(), screenApi?.getPrimaryDisplay?.(), AUX_DEFAULT_BOUNDS)
+    const primary = screenApi?.getPrimaryDisplay?.()
+    const salvo = readSavedState(id)
+    // PiP nova nasce no canto (o padrão do resolveWindowState centraliza); a que já foi movida volta para onde estava.
+    if (isPipId(id) && !salvo) return { bounds: pipDefaultBounds(primary), isMaximized: false, isFullScreen: false }
+    return resolveWindowState(salvo, displays(), primary, isPipId(id) ? PIP_DEFAULT_SIZE : AUX_DEFAULT_BOUNDS)
+  }
+
+  // A principal desenha o xterm da PiP (mesmo renderer): escondida na bandeja, ela
+  // teria os timers estrangulados e a PiP atualizaria uma vez por segundo.
+  let principal = null
+  const pipsAbertas = () => [...windows.keys()].filter(isPipId).length
+  function ajustarEstrangulamento() {
+    const webContents = principal?.isDestroyed?.() ? null : principal?.webContents
+    webContents?.setBackgroundThrottling?.(pipsAbertas() === 0)
   }
 
   /**
@@ -88,7 +124,14 @@ function createAuxWindowManager({ settingsRepository, screenApi, applyGuards, sh
     if (windows.has(id)) return null
     if (windows.size + reserved.size >= MAX_AUX_WINDOWS && !reserved.has(id)) return { action: 'deny' }
     reserved.add(id)
-    return { action: 'allow', overrideBrowserWindowOptions: auxWindowOptions(stateFor(id).bounds, { show, backgroundColor: readWindowBackground(settingsRepository) }) }
+    return {
+      action: 'allow',
+      overrideBrowserWindowOptions: auxWindowOptions(stateFor(id).bounds, {
+        show,
+        backgroundColor: readWindowBackground(settingsRepository),
+        pip: isPipId(id),
+      }),
+    }
   }
 
   /** `did-create-window` da principal: registra a janela e aplica as guardas. */
@@ -100,10 +143,17 @@ function createAuxWindowManager({ settingsRepository, screenApi, applyGuards, sh
 
     applyGuards(child)
     applyWindowState(child, stateFor(id))
+    if (isPipId(id)) {
+      // 'floating' fica acima das janelas comuns sem cobrir menus e diálogos do sistema.
+      child.setAlwaysOnTop?.(true, 'floating')
+      child.setVisibleOnAllWorkspaces?.(true, { visibleOnFullScreen: true })
+      ajustarEstrangulamento()
+    }
     const stopPersisting = registerWindowStatePersistence(child, settingsRepository, `${AUX_STATE_KEY_PREFIX}${id}.state`)
     child.once('closed', () => {
       stopPersisting()
       if (windows.get(id) === child) windows.delete(id)
+      if (isPipId(id)) ajustarEstrangulamento()
     })
   }
 
@@ -134,12 +184,14 @@ function createAuxWindowManager({ settingsRepository, screenApi, applyGuards, sh
    * todas quando ela fecha e reage a monitor que some ou muda de escala.
    */
   function attachTo(mainWindow) {
+    principal = mainWindow
     mainWindow.webContents.on('did-create-window', onDidCreateWindow)
     screenApi?.on?.('display-removed', reconcileDisplays)
     screenApi?.on?.('display-metrics-changed', reconcileDisplays)
-    // Esconder a principal (bandeja, futuro) leva as auxiliares junto; só destruí-la as fecha.
+    // Esconder a principal (bandeja) leva as auxiliares junto; só destruí-la as fecha.
+    // A PiP fica de fora: ela existe para seguir visível com o app escondido.
     const seguir = (acao) => () => {
-      for (const child of windows.values()) if (!child.isDestroyed?.()) child[acao]()
+      for (const [id, child] of windows) if (!isPipId(id) && !child.isDestroyed?.()) child[acao]()
     }
     mainWindow.on('hide', seguir('hide'))
     mainWindow.on('show', seguir('show'))
@@ -165,7 +217,10 @@ module.exports = {
   AUX_FRAME_PREFIX,
   AUX_STATE_KEY_PREFIX,
   MAX_AUX_WINDOWS,
+  PIP_ID_PREFIX,
   auxWindowOptions,
   createAuxWindowManager,
+  isPipId,
   parseAuxFrameName,
+  pipDefaultBounds,
 }
