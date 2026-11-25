@@ -233,6 +233,11 @@ async function launch(options, deps = {}) {
     FELIXO_DEVTOOLS_HEADLESS: options.visible ? '0' : '1',
   }
   delete env.ELECTRON_RUN_AS_NODE
+  // Sem locale UTF-8 (ex.: `env -i`) o Electron 41 não carrega o preload de caminho com
+  // acento e a ponte `window.felixo` some sem erro algum. Só o ambiente que o devtools
+  // monta recebe o ajuste; o app instalado da pessoa nunca é tocado. Windows não usa locale.
+  const semUtf8 = (deps.platform ?? process.platform) !== 'win32' && !/utf-?8/i.test(env.LC_ALL || env.LC_CTYPE || env.LANG || '')
+  if (semUtf8) { env.LC_ALL = 'C.UTF-8'; env.LANG = 'C.UTF-8' }
   const debugLog = env.FELIXO_DEVTOOLS_DEBUG_LOG || ''
   // Linux: o Chromium checa o sandbox SUID ao iniciar o processo do navegador, ANTES
   // do main.cjs — sem `chrome-sandbox` root/4755 (contêiner, CI, AppImage) ele aborta com
@@ -268,7 +273,29 @@ async function launch(options, deps = {}) {
     removeState(deps)
     throw error
   }
+  const bridge = await (deps.checkBridge ?? checkBridge)(state, deps)
+  if (bridge === false) {
+    killTree(child.pid, deps)
+    if (vitePid) killTree(vitePid, deps)
+    if (!options.realProfile) await removeIsolatedProfile(userData, deps)
+    removeState(deps)
+    throw new Error(`O app abriu, mas a ponte do preload (window.felixo) não carregou. Causa conhecida: locale sem UTF-8 (LANG/LC_ALL=${env.LC_ALL || env.LANG || 'vazio'}) com caminho de app acentuado (${deps.appDir ?? APP_DIR}). Rode com LANG=C.UTF-8.`)
+  }
+  if (semUtf8) state.aviso = 'Locale sem UTF-8 no ambiente: o devtools forçou LANG/LC_ALL=C.UTF-8 para o Electron.'
   return state
+}
+/** true/false se a ponte existe no renderer; null se não deu para conferir (não reprova o launch). */
+async function checkBridge(state, deps = {}) {
+  let conn
+  try { conn = await connect(state, deps) } catch { return null }
+  try {
+    const sleep = deps.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)))
+    for (let i = 0; i < 30; i += 1) {
+      if (await conn.page.evaluate(() => typeof window.felixo === 'object')) return true
+      await sleep(500)
+    }
+    return false
+  } catch { return null } finally { await conn.browser.close().catch(() => {}) }
 }
 async function connect(state, deps = {}) {
   if (!state?.port || !isProcessAlive(state.pid, deps)) throw new Error('Nenhuma sessão DevTools ativa. Rode `felixo devtools launch`.')
@@ -330,7 +357,8 @@ async function executarDevtools(args, deps = {}) {
   const { command, positional, options } = parsed
   try {
     if (!command || command === 'help' || command === '--help') return { saida: AJUDA_DEVTOOLS, codigo: 0 }
-    if (command === 'launch') { const state = await launch(options, deps); return { saida: `Sessão DevTools ativa na porta ${state.port}.\nPerfil: ${state.realProfile ? 'real (explícito)' : 'isolado'}.\nOrigem: ${state.packaged ? `empacotado (${state.packaged})` : 'fonte (dev)'}.`, codigo: 0 } }
+    if (command === 'launch') { const state = await launch(options, deps); return { saida: `Sessão DevTools ativa na porta ${state.port}.\nPerfil: ${state.realProfile ? 'real (explícito)' : 'isolado'}.\nOrigem: ${state.packaged ? `empacotado (${state.packaged})` : 'fonte (dev)'}.${state.aviso ? `
+${state.aviso}` : ''}`, codigo: 0 } }
     const state = readState(deps)
     if (command === 'status') return state ? { saida: formatState(state, isProcessAlive(state.pid, deps)), codigo: isProcessAlive(state.pid, deps) ? 0 : 1 } : { saida: 'Nenhuma sessão DevTools registrada.', codigo: 1 }
     if (command === 'quit') {

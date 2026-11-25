@@ -433,3 +433,29 @@ test('Linux: --no-sandbox vai na LINHA DE COMANDO do Electron (o appendSwitch do
   assert.deepEqual(await argumentosPara('win32'), ['.'])
   assert.deepEqual(await argumentosPara('darwin'), ['.'])
 })
+
+test('launch sem locale UTF-8 força C.UTF-8 no Electron e avisa na saída', async () => {
+  if (process.platform === 'win32') return
+  const env = setup()
+  let spawned
+  const result = await executarDevtools(['launch', '--port', '9333'], launchDeps(env, {
+    env: { LANG: 'C', LC_ALL: '' },
+    spawn: (_c, _a, options) => { spawned = options.env; return { pid: 4321, unref() {}, once() {} } },
+    waitForCdp: async () => {},
+    checkBridge: async () => true,
+  }))
+  assert.equal(spawned.LANG, 'C.UTF-8')
+  assert.equal(spawned.LC_ALL, 'C.UTF-8')
+  assert.match(result.saida, /forçou LANG\/LC_ALL=C\.UTF-8/)
+})
+
+test('launch falha citando locale e caminho quando a ponte do preload não carrega', async () => {
+  const env = setup()
+  const result = await executarDevtools(['launch', '--port', '9333'], launchDeps(env, {
+    spawn: () => ({ pid: 4321, unref() {}, once() {} }),
+    waitForCdp: async () => {},
+    checkBridge: async () => false,
+  }))
+  assert.notEqual(result.codigo, 0)
+  assert.match(result.erro, /ponte do preload.*locale.*UTF-8/s)
+})
