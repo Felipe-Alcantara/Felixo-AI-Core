@@ -71,11 +71,38 @@ test('normalizeArchiveEntry torna caminhos ASAR do Windows portáveis', () => {
   )
 })
 
+// @electron/asar 3.x resolve createPackage antes de gravar o conteudo (end() sem
+// esperar finish); sem esta espera o inventario le zeros no Windows.
+// Tamanho final = 8 (prefixo) + headerSize + soma dos `size` de cada arquivo.
+function somaTamanhos(node) {
+  if (node.files) return Object.values(node.files).reduce((acc, filho) => acc + somaTamanhos(filho), 0)
+  return node.unpacked || node.link ? 0 : Number(node.size) || 0
+}
+
+async function aguardarAsarCompleto(asarPath, limiteMs = 30000) {
+  const fim = Date.now() + limiteMs
+  let ultimo = 'cabecalho ilegivel'
+  while (Date.now() < fim) {
+    try {
+      const { header, headerSize } = asar.getRawHeader(asarPath)
+      const esperado = 8 + headerSize + somaTamanhos(header)
+      const atual = fs.statSync(asarPath).size
+      if (atual >= esperado) return
+      ultimo = `${atual} de ${esperado} bytes`
+    } catch (error) {
+      ultimo = error instanceof Error ? error.message : String(error)
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20))
+  }
+  throw new Error(`app.asar nao terminou de ser gravado em ${limiteMs} ms (${ultimo})`)
+}
+
 test('buildInventory lista app.asar, pacotes e npm-runtime empacotado', async () => {
   const fixture = createTemporaryRelease()
   try {
     fs.mkdirSync(path.dirname(fixture.asarPath), { recursive: true })
     await asar.createPackage(fixture.asarSource, fixture.asarPath)
+    await aguardarAsarCompleto(fixture.asarPath)
 
     const inventory = buildInventory(fixture.release, {
       outputPath: path.join(fixture.root, 'policy', 'inventory.json'),
