@@ -1,6 +1,7 @@
 const { BrowserWindow, dialog, screen } = require('electron')
 const { APP_INDEX_URL } = require('../core/app-protocol.cjs')
 const { mainWindowOptions } = require('../core/window-options.cjs')
+const { readWindowBackground } = require('../core/window-background.cjs')
 const { registrarGuardaDeFechamento } = require('./close-guard.cjs')
 const { applyWindowGuards } = require('./window-guards.cjs')
 const {
@@ -61,7 +62,11 @@ function createMainWindow({ contarSessoesVivas, settingsRepository, screenApi = 
     screenApi?.getPrimaryDisplay?.(),
     mainWindowOptions,
   )
-  const mainWindow = new BrowserWindow({ ...mainWindowOptions, ...state.bounds })
+  const mainWindow = new BrowserWindow({
+    ...mainWindowOptions,
+    ...state.bounds,
+    backgroundColor: readWindowBackground(settingsRepository),
+  })
 
   applyWindowState(mainWindow, state)
   registerWindowStatePersistence(mainWindow, settingsRepository)

@@ -636,6 +636,8 @@ contextBridge.exposeInMainWorld('felixo', {
     loadOrchestrator: () => ipcRenderer.invoke('settings:load-orchestrator'),
     saveOrchestrator: (settings) =>
       ipcRenderer.invoke('settings:save-orchestrator', settings),
+    // Fundo da janela no próximo boot (window-background.cjs).
+    setTheme: (theme) => ipcRenderer.send('settings:set-theme', theme),
   },
   updates: {
     getStatus: () => ipcRenderer.invoke('updates:get-status'),

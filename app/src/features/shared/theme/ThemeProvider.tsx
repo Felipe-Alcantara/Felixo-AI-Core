@@ -16,6 +16,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     document.documentElement.dataset.theme = theme
     saveTheme(theme)
+    window.felixo?.settings?.setTheme?.(theme)
   }, [theme])
 
   const setTheme = useCallback((next: AppTheme) => setThemeState(next), [])

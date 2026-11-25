@@ -1,5 +1,6 @@
 'use strict'
 
+const { readWindowBackground } = require('../core/window-background.cjs')
 const { applyWindowState, registerWindowStatePersistence, resolveWindowState } = require('./window-state.cjs')
 
 /**
@@ -32,13 +33,13 @@ function parseAuxFrameName(frameName) {
  * leva preload próprio (a auxiliar só hospeda DOM que a principal escreve), e o
  * `webviewTag` fica porque o bloco "Página Web" pode ser movido para lá.
  */
-function auxWindowOptions(bounds, { show = true } = {}) {
+function auxWindowOptions(bounds, { show = true, backgroundColor = '#09090b' } = {}) {
   return {
     ...bounds,
     minWidth: 360,
     minHeight: 240,
     show,
-    backgroundColor: '#09090b',
+    backgroundColor,
     title: 'Felixo AI Core',
     webPreferences: {
       contextIsolation: true,
@@ -87,7 +88,7 @@ function createAuxWindowManager({ settingsRepository, screenApi, applyGuards, sh
     if (windows.has(id)) return null
     if (windows.size + reserved.size >= MAX_AUX_WINDOWS && !reserved.has(id)) return { action: 'deny' }
     reserved.add(id)
-    return { action: 'allow', overrideBrowserWindowOptions: auxWindowOptions(stateFor(id).bounds, { show }) }
+    return { action: 'allow', overrideBrowserWindowOptions: auxWindowOptions(stateFor(id).bounds, { show, backgroundColor: readWindowBackground(settingsRepository) }) }
   }
 
   /** `did-create-window` da principal: registra a janela e aplica as guardas. */

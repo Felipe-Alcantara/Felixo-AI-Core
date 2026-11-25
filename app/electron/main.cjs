@@ -16,6 +16,7 @@ const path = require('node:path')
 const fs = require('node:fs')
 const vm = require('node:vm')
 const { createMainWindow } = require('./windows/main-window.cjs')
+const { registerWindowThemeIpc } = require('./core/window-background.cjs')
 const { createAuxWindowManager } = require('./windows/aux-windows.cjs')
 const { applyWindowGuards } = require('./windows/window-guards.cjs')
 const { instalarMenuDoApp } = require('./windows/app-menu.cjs')
@@ -1236,6 +1237,7 @@ app.whenReady().then(async () => {
     appVersion: resolveRuntimeAppVersion(),
   })
   registerOrchestratorSettingsIpcHandlers(appPaths, { database: storageDatabase })
+  registerWindowThemeIpc({ ipcMain, settingsRepository, listWindows: () => BrowserWindow.getAllWindows() })
   // Tutorial do canvas: estado no SQLite com compare-and-set. A instância de
   // automação (com porta de depuração) não abre nem grava nada sozinha, salvo
   // FELIXO_DEVTOOLS_ONBOARDING=1 (mesmo molde do hardware:get-profile).

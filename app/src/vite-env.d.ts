@@ -1379,6 +1379,7 @@ declare global {
         saveOrchestrator: (
           settings: OrchestratorSettings,
         ) => Promise<CliInvokeResult>
+        setTheme?: (theme: string) => void
       }
       updates?: {
         getStatus: () => Promise<CliInvokeResult & { status?: UpdateStatus }>
