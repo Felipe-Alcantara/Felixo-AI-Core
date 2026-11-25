@@ -4,6 +4,7 @@ const {
   dialog,
   Menu,
   ipcMain,
+  nativeImage,
   net,
   powerMonitor,
   protocol,
@@ -11,6 +12,7 @@ const {
   screen,
   session,
   shell,
+  Tray,
 } = require('electron')
 const path = require('node:path')
 const fs = require('node:fs')
@@ -18,6 +20,7 @@ const vm = require('node:vm')
 const { createMainWindow } = require('./windows/main-window.cjs')
 const { registerWindowThemeIpc } = require('./core/window-background.cjs')
 const { createAuxWindowManager } = require('./windows/aux-windows.cjs')
+const { createTrayController, trayEnabled } = require('./windows/tray-controller.cjs')
 const { applyWindowGuards } = require('./windows/window-guards.cjs')
 const { instalarMenuDoApp } = require('./windows/app-menu.cjs')
 const { registerCliIpcHandlers } = require('./services/ipc-handlers.cjs')
@@ -257,6 +260,7 @@ const linkWebviewPopup = (child, parent) => webviewSitePermissions?.linkPopup(ch
 
 let mainWindow = null
 let auxWindows = null
+let trayController = null
 let ptyHandlers = null
 let agentSessionLog = null
 let openiaImageService = null
@@ -760,12 +764,30 @@ app.whenReady().then(async () => {
     show: process.env.FELIXO_DEVTOOLS_HEADLESS !== '1',
     applyGuards: (child) => applyWindowGuards(child, { electronShell: automationShell ?? undefined, onWebviewPopup: linkWebviewPopup }),
   })
+  // O X esconde o app na bandeja e os agentes seguem; o Sair confirma antes de encerrar (Windows e Linux empacotados).
+  trayController = createTrayController({
+    enabled: trayEnabled({
+      platformName: platform.name,
+      isDevelopment: Boolean(process.env.VITE_DEV_SERVER_URL),
+      isReleaseSmoke,
+      devtoolsPort,
+      env: process.env,
+    }),
+    app,
+    Tray,
+    Menu,
+    nativeImage,
+    iconPath: path.join(__dirname, '..', 'public', 'brand', 'logos', 'png', 'felixo-app-icon-dark-64.png'),
+    getMainWindow: () => mainWindow,
+    contarSessoesVivas,
+  })
   mainWindow = createMainWindow({
     contarSessoesVivas,
     settingsRepository,
     electronShell: automationShell ?? undefined,
     onWebviewPopup: linkWebviewPopup,
     auxWindows,
+    trayController,
   })
   // Nunca cai numa auxiliar: os handlers que usam isto assumem a janela do app.
   const getMainWindow = () => mainWindow ?? BrowserWindow.getAllWindows().find((item) => !auxWindows.isAuxWindow(item))
@@ -1402,6 +1424,7 @@ app.whenReady().then(async () => {
     electronShell: automationShell ?? undefined,
     onWebviewPopup: linkWebviewPopup,
     auxWindows,
+    trayController,
   })
     }
   })

@@ -182,3 +182,86 @@ test('desregistrar devolve a janela ao comportamento original', () => {
   desligar()
   assert.equal(janela.disparar(), false)
 })
+
+test('com a bandeja ligada a pergunta fala em Sair e lembra que fechar só a janela mantém os agentes', () => {
+  const comBandeja = montarPergunta(2, { comBandeja: true })
+  assert.match(comBandeja.titulo, /Sair/)
+  assert.match(comBandeja.detalhe, /bandeja/)
+  assert.equal(comBandeja.botoes.length, 2)
+  // Sem bandeja (macOS, desenvolvimento) o texto continua o de sempre.
+  assert.match(montarPergunta(2).titulo, /Fechar/)
+  assert.doesNotMatch(montarPergunta(2).detalhe, /bandeja/)
+})
+
+test('o interceptador que trata o fechamento impede a pergunta, mesmo com agente vivo', async () => {
+  const janela = criarJanelaFalsa()
+  let perguntas = 0
+  registrarGuardaDeFechamento(janela, {
+    contarSessoesVivas: () => 3,
+    perguntar: async () => {
+      perguntas += 1
+      return INDICE_CANCELAR
+    },
+    interceptar: (evento) => {
+      evento.preventDefault()
+      return true
+    },
+  })
+
+  assert.equal(janela.disparar(), true)
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(perguntas, 0)
+})
+
+test('interceptador que devolve false deixa a guarda perguntar normalmente', async () => {
+  const janela = criarJanelaFalsa()
+  let perguntas = 0
+  registrarGuardaDeFechamento(janela, {
+    contarSessoesVivas: () => 1,
+    perguntar: async () => {
+      perguntas += 1
+      return INDICE_CANCELAR
+    },
+    interceptar: () => false,
+  })
+
+  assert.equal(janela.disparar(), true)
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(perguntas, 1)
+})
+
+test('cancelar a pergunta avisa quem escutou (a bandeja volta a esconder no X)', async () => {
+  const janela = criarJanelaFalsa()
+  let cancelamentos = 0
+  registrarGuardaDeFechamento(janela, {
+    contarSessoesVivas: () => 2,
+    perguntar: async () => INDICE_CANCELAR,
+    aoCancelar: () => {
+      cancelamentos += 1
+    },
+  })
+
+  janela.disparar()
+  await new Promise((resolve) => setImmediate(resolve))
+
+  assert.equal(cancelamentos, 1)
+  assert.equal(janela.fechamentos, 0)
+})
+
+test('confirmar o fechamento não conta como cancelamento', async () => {
+  const janela = criarJanelaFalsa()
+  let cancelamentos = 0
+  registrarGuardaDeFechamento(janela, {
+    contarSessoesVivas: () => 2,
+    perguntar: async () => INDICE_FECHAR,
+    aoCancelar: () => {
+      cancelamentos += 1
+    },
+  })
+
+  janela.disparar()
+  await new Promise((resolve) => setImmediate(resolve))
+
+  assert.equal(cancelamentos, 0)
+  assert.equal(janela.fechamentos, 1)
+})

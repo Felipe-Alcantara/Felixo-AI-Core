@@ -43,15 +43,25 @@ function decidirFechamento({ sessoesVivas, jaConfirmado = false }) {
  * @param {number} sessoesVivas
  * @returns {{ titulo: string, mensagem: string, detalhe: string, botoes: string[] }}
  */
-function montarPergunta(sessoesVivas) {
+function montarPergunta(sessoesVivas, { comBandeja = false } = {}) {
   const plural = sessoesVivas === 1 ? '1 terminal ativo' : `${sessoesVivas} terminais ativos`
 
   return {
-    titulo: 'Fechar o Felixo AI Core?',
-    mensagem: `Você tem ${plural}.`,
-    detalhe:
-      'Fechar a janela encerra os agentes em execução e o trabalho em andamento neles se perde.',
-    botoes: ['Cancelar', 'Fechar mesmo assim'],
+    ...(comBandeja
+      ? {
+          titulo: 'Sair do Felixo AI Core?',
+          mensagem: `Você tem ${plural}.`,
+          detalhe:
+            'Sair encerra os agentes em execução e o trabalho em andamento neles se perde. Para mantê-los rodando, feche só a janela: o app fica na bandeja.',
+          botoes: ['Cancelar', 'Sair e encerrar os agentes'],
+        }
+      : {
+          titulo: 'Fechar o Felixo AI Core?',
+          mensagem: `Você tem ${plural}.`,
+          detalhe:
+            'Fechar a janela encerra os agentes em execução e o trabalho em andamento neles se perde.',
+          botoes: ['Cancelar', 'Fechar mesmo assim'],
+        }),
   }
 }
 
@@ -65,15 +75,24 @@ const INDICE_FECHAR = 1
  * @param {object} deps
  * @param {() => number} deps.contarSessoesVivas
  * @param {(pergunta: object) => Promise<number>} deps.perguntar - Devolve o índice do botão.
+ * @param {(evento: { preventDefault: () => void }) => boolean} [deps.interceptar] - Roda antes de tudo; se
+ *   devolver true, o fechamento já foi tratado (a bandeja escondeu a janela) e a guarda não pergunta.
+ * @param {() => void} [deps.aoCancelar] - A pessoa escolheu Cancelar.
+ * @param {boolean} [deps.comBandeja] - A bandeja está ligada: o texto fala em Sair, não em fechar a janela.
  * @returns {() => void} Desliga a guarda.
  */
-function registrarGuardaDeFechamento(browserWindow, { contarSessoesVivas, perguntar }) {
+function registrarGuardaDeFechamento(browserWindow, { contarSessoesVivas, perguntar, interceptar, aoCancelar, comBandeja = false }) {
   // Uma vez confirmado, o segundo `close()` precisa passar reto — senão a
   // guarda pergunta de novo sobre a resposta que a pessoa acabou de dar.
   let confirmado = false
   let perguntando = false
 
   const aoFechar = (evento) => {
+    // A bandeja trata o X antes: esconde a janela e os agentes seguem, sem perguntar.
+    if (interceptar?.(evento)) {
+      return
+    }
+
     const sessoesVivas = Number(contarSessoesVivas?.() ?? 0)
 
     if (decidirFechamento({ sessoesVivas, jaConfirmado: confirmado }) === 'fechar') {
@@ -89,11 +108,13 @@ function registrarGuardaDeFechamento(browserWindow, { contarSessoesVivas, pergun
 
     perguntando = true
 
-    Promise.resolve(perguntar(montarPergunta(sessoesVivas)))
+    Promise.resolve(perguntar(montarPergunta(sessoesVivas, { comBandeja })))
       .then((escolha) => {
         if (escolha === INDICE_FECHAR) {
           confirmado = true
           browserWindow.close()
+        } else {
+          aoCancelar?.()
         }
       })
       .catch(() => {

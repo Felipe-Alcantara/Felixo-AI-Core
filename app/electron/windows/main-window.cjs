@@ -45,11 +45,13 @@ function criarPerguntaNativa(browserWindow) {
  * @param {{ openExternal: (url: string) => Promise<void> }} [options.electronShell] - O
  *   `shell` que abre os links; sem ele, o do Electron. Só a automação troca
  *   (`devtools-shell-open-guard.cjs`).
+ * @param {ReturnType<typeof import('./tray-controller.cjs').createTrayController>} [options.trayController] - Bandeja: o X
+ *   esconde a janela em vez de fechar (Windows e Linux empacotados).
  * @param {ReturnType<typeof import('./aux-windows.cjs').createAuxWindowManager>} [options.auxWindows] - Gerenciador
  *   das janelas auxiliares: sem ele, `window.open` de `about:blank` continua negado.
  * @returns {import('electron').BrowserWindow}
  */
-function createMainWindow({ contarSessoesVivas, settingsRepository, screenApi = screen, electronShell, onWebviewPopup, auxWindows } = {}) {
+function createMainWindow({ contarSessoesVivas, settingsRepository, screenApi = screen, electronShell, onWebviewPopup, auxWindows, trayController } = {}) {
   let savedState = null
   try {
     savedState = settingsRepository?.get('window.main.state') ?? null
@@ -83,6 +85,9 @@ function createMainWindow({ contarSessoesVivas, settingsRepository, screenApi = 
     registrarGuardaDeFechamento(mainWindow, {
       contarSessoesVivas,
       perguntar: criarPerguntaNativa(mainWindow),
+      interceptar: trayController?.interceptar,
+      aoCancelar: trayController?.aoCancelarSaida,
+      comBandeja: Boolean(trayController?.enabled),
     })
   }
 

@@ -2541,5 +2541,19 @@ canvas, terminais e `<webview>` continuam com um estado so e mudam de janela sem
   janela e mover o xterm (`attach`), nunca `remove()` (mata o PTY).
 - **Automacao**: `felixo devtools windows` lista todas as janelas e `--janela <titulo|indice>` escolhe em qual
   o comando roda (sem a opcao, a principal).
-- **Ainda nao existe**: reabrir as auxiliares no proximo inicio, roteamento de `pty:data` por janela e
-  interface para destacar (tarefas seguintes). Wayland: a posicao salva nao vale (o compositor decide).
+- **Terminal em janela propria** (`canvas/components/terminal-detach.ts`): o botao "Abrir o terminal em outra
+  janela" do painel da gaveta abre `felixo-aux-t-<sessao>` e move o xterm vivo com `moveTo` (PID, historico e
+  digitacao seguem). O painel mostra "Este terminal esta em outra janela" com "Trazer de volta"; fechar a
+  janela pelo X (`pagehide`) devolve o xterm, fechar o painel fecha a janela e Reiniciar reencaixa o xterm
+  novo nela. Como o JavaScript do xterm roda sempre no renderer da principal, `pty:data` e `pty:flow` ja
+  chegam ao lugar certo: **nao ha roteamento por janela** nesta arquitetura (so se a decisao A x B for para
+  um renderer por janela).
+- **Bandeja** (`tray-controller.cjs`, Windows e Linux empacotados): o X da janela principal esconde o app na
+  bandeja (as auxiliares vao junto) e NAO encerra os agentes; so excluir o agente do canvas ou o "Sair"
+  confirmado os encerra. O "Sair" do menu da bandeja, o Ctrl+Q e a instalacao de atualizacao passam pela
+  guarda de fechamento (`close-guard.cjs`), que pergunta "encerrar N agentes?"; cancelar devolve o X ao
+  comportamento de esconder. No macOS o app ja fica no Dock; em desenvolvimento, no release smoke e na
+  automacao a bandeja fica desligada (o fechamento precisa encerrar o processo e liberar a porta do Vite);
+  so o teste dela liga com `FELIXO_DEVTOOLS_TRAY=1` e porta de depuracao valida.
+- **Ainda nao existe**: reabrir as auxiliares no proximo inicio e destacar nota e painel de ferramenta
+  (tarefas seguintes). Wayland: a posicao salva nao vale (o compositor decide).
