@@ -398,6 +398,8 @@ function createCliNotFoundMessage(cliName) {
   return `${cli.name} não foi encontrado no sistema. Para instalar, acesse: ${cli.installUrl}`
 }
 
+const BARE_VERSION = /^v?(\d+\.\d+(?:\.\d+)?(?:-[\w.]+)?)$/
+
 /**
  * Parse version string from CLI output.
  *
@@ -406,6 +408,15 @@ function createCliNotFoundMessage(cliName) {
  */
 function parseVersionFromOutput(output) {
   if (!output) return null
+
+  // Saída com ruído antes da versão (o log do pip do launcher legado do Openia
+  // traz "typer-0.27.3-py3"): a última linha que é só a versão vence o primeiro
+  // número solto do texto. Saída de uma linha segue pelo caminho de sempre.
+  const lines = output.split('\n').map((line) => line.trim()).filter(Boolean)
+  if (lines.length > 1) {
+    const bare = [...lines].reverse().find((line) => BARE_VERSION.test(line))
+    if (bare) return bare.match(BARE_VERSION)[1]
+  }
 
   // Match common version patterns like "v1.2.3", "1.2.3", "version 1.2.3"
   const match = output.match(/v?(\d+\.\d+(?:\.\d+)?(?:-[\w.]+)?)/)

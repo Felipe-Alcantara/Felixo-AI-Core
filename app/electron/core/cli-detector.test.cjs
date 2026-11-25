@@ -70,6 +70,20 @@ describe('cli-detector', () => {
       assert.strictEqual(parseVersionFromOutput(null), null)
     })
 
+    it('ignora o log do pip antes da versão do launcher legado do Openia', () => {
+      const saida = [
+        'Collecting typer',
+        '  Downloading typer-0.27.3-py3-none-any.whl (50 kB)',
+        'Successfully installed typer-0.27.3',
+        '0.1.0',
+      ].join('\r\n')
+      assert.strictEqual(parseVersionFromOutput(saida), '0.1.0')
+    })
+
+    it('com várias linhas sem uma só de versão, mantém o primeiro número', () => {
+      assert.strictEqual(parseVersionFromOutput('codex-cli 0.5.1\nupdate available'), '0.5.1')
+    })
+
     it('returns first line for unrecognized format', () => {
       const result = parseVersionFromOutput('some unknown output')
       assert.ok(typeof result === 'string')
