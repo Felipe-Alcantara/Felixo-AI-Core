@@ -689,7 +689,7 @@ contextBridge.exposeInMainWorld('felixo', {
       ipcRenderer.invoke('fetch-all:save-settings', { settings }),
     // Só abre o seletor nativo e devolve as pastas escolhidas; gravar as
     // raízes continua sendo `saveSettings`.
-    pickRoots: () => ipcRenderer.invoke('fetch-all:pick-roots'),
+    pickRoots: (params) => ipcRenderer.invoke('fetch-all:pick-roots', params),
     getScope: () => ipcRenderer.invoke('fetch-all:get-scope'),
     scan: (params) => ipcRenderer.invoke('fetch-all:scan', params),
     execute: (params) => ipcRenderer.invoke('fetch-all:execute', params),

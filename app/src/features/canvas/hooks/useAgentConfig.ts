@@ -14,6 +14,7 @@ import {
   type AgentDefinition,
   type EffortLevel,
 } from '../services/agent-launch-options'
+import type { AgentFolder } from '../services/agent-folders'
 import {
   CHAIN_ACCOUNT_VALUE,
   CLOUD_AGENT_VALUE,
@@ -120,6 +121,8 @@ export function useAgentConfig(
   const [fast, setFast] = useState(inicial.fast)
   // Só vale para o Claude e nunca é lembrado: expõe o agente na conta claude.ai, então liga-se bloco a bloco.
   const [remoteControl, setRemoteControl] = useState(false)
+  // Pastas extras do agente (só Claude). Nunca lembradas nem salvas em preset: o padrão é nenhuma.
+  const [folders, setFolders] = useState<AgentFolder[]>([])
   // Preset aplicado + o contexto editável do agente. O contexto é um rascunho
   // próprio (não o do preset): dá para ajustá-lo antes de abrir e salvar o
   // resultado como um preset novo.
@@ -1032,6 +1035,7 @@ export function useAgentConfig(
       fast: fast && fastSupported,
       remoteControl:
         remoteControl && agent.id === 'claude' ? customName || `Felixo · ${place}` : undefined,
+      folders: agent.id === 'claude' ? folders : undefined,
     }
     if (agent.isLauncher) {
       const launcherArgs = buildOpeniaRunArgs(
@@ -1098,6 +1102,7 @@ export function useAgentConfig(
     projectId,
     projects,
     remoteControl,
+    folders,
     responsible,
     yolo,
   ])
@@ -1148,6 +1153,8 @@ export function useAgentConfig(
     fastSupported,
     remoteControl,
     setRemoteControl,
+    folders,
+    setFolders,
     presets: agentPresets,
     activePreset,
     applyPreset,

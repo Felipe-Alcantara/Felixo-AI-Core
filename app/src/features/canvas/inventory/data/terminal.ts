@@ -738,6 +738,45 @@ export const terminalSurfaces: InventoryElement[] = [
     overlap: 'Sem camada própria: dentro dos campos do agente (sidebar ou HandoffDialog); o select abre em portal z 1000.',
   },
   {
+    id: 'agent-folders-field',
+    name: 'Pastas que o agente pode usar (Claude)',
+    layer: 'terminal',
+    owner: 'src/features/canvas/components/AgentFoldersField.tsx',
+    states: {
+      normal: 'Lista de pastas, cada uma com um select "Só ler" (--add-dir mais --disallowedTools Edit) ou "Ler e alterar" (só --add-dir); padrão é lista vazia (nenhum acesso extra).',
+      empty: 'Sem pastas: só o botão Adicionar pasta.',
+      pending: 'Sem estado de espera próprio.',
+      error: 'Pasta recusada (raiz, sistema, rede, relativa) ou seletor indisponível: texto em vermelho.',
+      disabled: 'Sem estado desabilitado; com yolo ligado aparece o aviso de que a lista não protege nada.',
+    },
+    controls: [
+      {
+        locator: 'Adicionar pasta',
+        kind: 'button',
+        effect: 'fetch-all:pick-roots com título próprio abre o seletor nativo (não concede acesso de projeto); cada pasta válida entra como "Só ler".',
+        failure: 'Pasta inválida ou seletor falhando mostra a mensagem; nada é adicionado.',
+      },
+      {
+        locator: 'aria-label={`Remover ${folder.path}`}',
+        kind: 'button',
+        effect: 'Tira a pasta da lista do próximo lançamento.',
+        failure: 'Sem falha própria.',
+      },
+    ],
+    persistence: ['só em memória: não é lembrado entre aberturas nem entra em preset'],
+    ipc: ['fetch-all:pick-roots'],
+    dependsOn: ['useAgentConfig', 'agent-folders'],
+    tests: [{ file: 'src/features/canvas/services/agent-folders.test.ts' }],
+    gaps: [
+      {
+        what: 'Só o Claude aplica a lista; Codex e Gemini ainda não recebem as pastas, e o main não revalida o caminho.',
+        risk: 'baixo',
+        task: '3fa91f95-497e-8168-bbea-d083896f534a',
+      },
+    ],
+    overlap: 'Sem camada própria: dentro dos campos do agente (sidebar ou HandoffDialog).',
+  },
+  {
     id: 'agent-question-dialog',
     name: 'Pergunta de agente (felixo perguntar)',
     layer: 'modal',

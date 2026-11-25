@@ -75,11 +75,14 @@ function registerFetchAllIpcHandlers(getMainWindow, appPaths, dependencias = {})
   // pasta o acesso de projeto, e escolher onde varrer não é abrir um projeto.
   // Aqui só voltam os caminhos; quem grava é `save-settings`, que já valida e
   // normaliza a lista.
-  ipcMain.handle('fetch-all:pick-roots', () =>
+  ipcMain.handle('fetch-all:pick-roots', (_event, params) =>
     guard('Não foi possível abrir o seletor de pastas.', async () => {
       const window = getMainWindow?.()
       const options = {
-        title: 'Escolher pastas para o Fetch All varrer',
+        title:
+          typeof params?.title === 'string' && params.title.trim()
+            ? params.title.trim().slice(0, 120)
+            : 'Escolher pastas para o Fetch All varrer',
         buttonLabel: 'Adicionar',
         properties: ['openDirectory', 'multiSelections'],
       }

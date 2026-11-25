@@ -26,6 +26,7 @@ import { providerIdentity } from '../../shared/brand/provider-identity'
 import { FelixoSelect, type FelixoSelectOption } from '../../shared/components/FelixoSelect'
 import { OpeniaOutdatedNotice } from '../../setup/OpeniaOutdatedNotice'
 import { AgentPresetFields } from './AgentPresetFields'
+import { AgentFoldersField } from './AgentFoldersField'
 import { CloudSessionConfigFields } from './CloudSessionConfigFields'
 
 type Props = {
@@ -436,6 +437,9 @@ export function AgentConfigFields({
                     </span>
                   </span>
                 </label>
+              )}
+              {config.agent?.id === 'claude' && (
+                <AgentFoldersField folders={config.folders} onChange={config.setFolders} yolo={config.yolo} />
               )}
               {fastNote && <p className="mb-3 text-[11px] leading-relaxed text-zinc-500">{fastNote}</p>}
 

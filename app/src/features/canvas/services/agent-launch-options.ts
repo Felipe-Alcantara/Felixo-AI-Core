@@ -15,6 +15,7 @@
  * model advertises a different effort set, e.g. Terra supports "ultra" but
  * Luna doesn't, so effort options must be looked up per model, not per agent.
  */
+import { buildClaudeFolderArgs, type AgentFolder } from './agent-folders'
 
 export type AgentId = 'claude' | 'codex' | 'gemini' | 'antigravity' | 'openia'
 
@@ -192,6 +193,8 @@ export type AgentLaunchChoices = {
    * um argumento posicional que venha depois dela.
    */
   remoteControl?: string
+  /** Pastas extras liberadas ao agente (só o Claude por enquanto). */
+  folders?: AgentFolder[]
 }
 
 /**
@@ -231,6 +234,10 @@ export function buildAgentArgs(choices: AgentLaunchChoices): string[] | null {
 
   if (choices.remoteControl?.trim() && agent.id === 'claude') {
     args.push('--remote-control', choices.remoteControl.trim())
+  }
+
+  if (agent.id === 'claude') {
+    args.push(...buildClaudeFolderArgs(choices.folders))
   }
 
   if (choices.yolo) {

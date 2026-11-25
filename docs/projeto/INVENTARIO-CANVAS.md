@@ -29,10 +29,10 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 
 ## Números
 
-- **Elementos:** 117 (10 blocos, 17 ferramentas, 90 outras superfícies)
-- **Controles:** 455, dos quais 93 com teste específico
+- **Elementos:** 118 (10 blocos, 17 ferramentas, 91 outras superfícies)
+- **Controles:** 457, dos quais 93 com teste específico
 - **Elementos sem nenhum teste:** 0
-- **Lacunas:** 122 (alto 1, médio 72, baixo 49), em 71 tasks
+- **Lacunas:** 123 (alto 1, médio 72, baixo 50), em 72 tasks
 
 ## Moldura do canvas
 
@@ -1170,6 +1170,32 @@ Sem controle próprio: as ações vêm de outros elementos.
 | `Salvar como preset` (button) | clique | saveAsPreset → agent-presets:save; o evento felixo:agent-presets-changed atualiza as outras instâncias e o preset salvo vira o ativo. (desabilitado: nome vazio, saving, sem agente ou com o Openia) | Recusa: error em vermelho. IPC rejeitado: try/finally sem catch, sem aviso. | — |
 | `Duplicar` (button) | clique | duplicate(active) → agent-presets:save com nome numerado; a cópia não vira a ativa. (desabilitado: some sem preset ativo) | Recusa: error em vermelho. | — |
 | `Excluir` (button) | clique | remove(active.id) → agent-presets:delete sem confirmação; deu certo, o formulário volta ao manual. (desabilitado: some sem preset ativo ou com preset nativo) | Recusa: error em vermelho. | — |
+
+### Pastas que o agente pode usar (Claude)
+
+- **ID:** `agent-folders-field` · **Dono:** `src/features/canvas/components/AgentFoldersField.tsx`
+- **Persistência:** só em memória: não é lembrado entre aberturas nem entra em preset
+- **IPC:** `fetch-all:pick-roots`
+- **Depende de:** `useAgentConfig`, `agent-folders`
+- **Sobreposição:** Sem camada própria: dentro dos campos do agente (sidebar ou HandoffDialog).
+- **Testes:** `src/features/canvas/services/agent-folders.test.ts`
+
+| Estado | Quando |
+| --- | --- |
+| normal | Lista de pastas, cada uma com um select "Só ler" (--add-dir mais --disallowedTools Edit) ou "Ler e alterar" (só --add-dir); padrão é lista vazia (nenhum acesso extra). |
+| empty | Sem pastas: só o botão Adicionar pasta. |
+| error | Pasta recusada (raiz, sistema, rede, relativa) ou seletor indisponível: texto em vermelho. |
+| pending | Sem estado de espera próprio. |
+| disabled | Sem estado desabilitado; com yolo ligado aparece o aviso de que a lista não protege nada. |
+
+| Controle | Gatilho | Efeito | Falha conhecida | Teste |
+| --- | --- | --- | --- | --- |
+| `Adicionar pasta` (button) | clique | fetch-all:pick-roots com título próprio abre o seletor nativo (não concede acesso de projeto); cada pasta válida entra como "Só ler". | Pasta inválida ou seletor falhando mostra a mensagem; nada é adicionado. | — |
+| `aria-label={`Remover ${folder.path}`}` (button) | clique | Tira a pasta da lista do próximo lançamento. | Sem falha própria. | — |
+
+| Lacuna | Risco | Task |
+| --- | --- | --- |
+| Só o Claude aplica a lista; Codex e Gemini ainda não recebem as pastas, e o main não revalida o caminho. | baixo | `3fa91f95-497e-8168-bbea-d083896f534a` |
 
 ### Pedido de agente para abrir página
 
@@ -3118,6 +3144,7 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3ec91f95-497e-81ca-8319-ee657b0b6492` — 7 lacunas
 - `3ed91f95-497e-8114-a246-f72c73ae50c4` — 1 lacuna
 - `3f291f95-497e-81fe-8670-fe2fc871318d` — 1 lacuna
+- `3fa91f95-497e-8168-bbea-d083896f534a` — 1 lacuna
 - `3fa91f95-497e-81fc-b87c-e65a5bdce2a5` — 1 lacuna
 - `41491f95-497e-81da-a20c-ce16ce0f3b5a` — 1 lacuna
 - `41591f95-497e-8166-84cb-cf8af3736c2b` — 1 lacuna
