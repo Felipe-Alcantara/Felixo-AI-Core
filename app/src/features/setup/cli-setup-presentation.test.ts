@@ -112,6 +112,24 @@ describe('aviso discreto de atualização das CLIs', () => {
     ).toBe('Gemini CLI instalada (0.65.0-preview.0)')
   })
 
+  it('a instalação fora do npm diz a origem e o aviso do canal', () => {
+    expect(
+      describeCliUpdates([
+        {
+          id: 'claude',
+          name: 'Claude Code CLI',
+          scope: 'sistema',
+          origin: 'Homebrew',
+          note: 'o canal do Homebrew esta na 2.1.300, abaixo da 2.2.0-next.1',
+          from: '2.1.200',
+          to: '2.1.300',
+        },
+      ]),
+    ).toBe(
+      'Claude Code CLI do sistema (Homebrew) 2.1.200 → 2.1.300 (o canal do Homebrew esta na 2.1.300, abaixo da 2.2.0-next.1)',
+    )
+  })
+
   it('sem atualização o fim continua sendo o aviso de CLIs prontas', () => {
     const presentation = presentCliSetupStatus(createStatus({ state: 'done', message: 'pronto', updates: [] }))
 

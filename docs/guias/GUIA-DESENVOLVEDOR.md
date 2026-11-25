@@ -203,6 +203,19 @@ por `npm root --global` do npm do PATH (`system-cli-update.cjs` e
 `planSystemUpdates`). A do sistema só é atualizada com alvo confirmado no registry,
 nunca é rebaixada e conta como sucesso só com a versão nova no disco.
 
+As CLIs fora do npm (instalador nativo do Claude, Homebrew, pnpm, Volta) entram na
+mesma rodada por `external-cli-update.cjs` e `planExternalUpdates`: a origem vem só
+do caminho do executável no PATH (nada é executado para descobrir), a versão vem de
+`<executável> --version` e a conferência depois também. Comandos, sem shell e sem
+pergunta: `claude update` (em pré-lançamento, antes `claude install <versão>`, com
+queda para o `update` e `note` no aviso), `brew upgrade --cask <cask>`,
+`pnpm add --global <pacote>@<versão>` e `volta install <pacote>@<versão>`.
+`DISABLE_UPDATES`, `DISABLE_AUTOUPDATER` e `minimumVersion` (ambiente e
+`settings*.json`) travam o Claude: o plano devolve `skipped` com `locked` e o status
+avisa. Falha fica em `externo:<origem>:<id>` no estado e não repete no mesmo alvo.
+Testes: `external-cli-update.test.cjs` usa executáveis falsos em pasta temporária
+(`__fixtures__/fake-external-clis.cjs`); nenhum teste chama gerenciador real.
+
 A instalação usa `--prefer-online` sempre que o alvo veio do registry: na cópia do
 app, o `--cache` dela guarda a lista de versões, e com `--prefer-offline` uma lista
 de antes da publicação dava `ETARGET` para a versão que o registry acabara de
@@ -260,7 +273,7 @@ node --test electron/core/managed-cli-manifest.test.cjs \
   electron/services/managed-cli-installer.test.cjs \
   electron/services/cli-auto-install-plan.test.cjs \
   electron/services/cli-auto-install.test.cjs \
-  electron/services/system-cli-update.test.cjs
+  electron/services/system-cli-update.test.cjs \n  electron/services/external-cli-update.test.cjs
 ```
 
 ---

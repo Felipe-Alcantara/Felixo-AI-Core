@@ -37,6 +37,10 @@ export type CliSetupUpdate = {
   id: string
   name: string
   scope: 'app' | 'sistema'
+  /** Quando a instalação do sistema não é do npm: `Homebrew`, `pnpm`, `Volta`, `instalador nativo`. */
+  origin?: string
+  /** O que a pessoa precisa saber, ex.: o canal da instalação não tinha a versão pedida. */
+  note?: string
   /** `null` quando a CLI não existia antes. */
   from: string | null
   to: string
@@ -171,8 +175,9 @@ export function presentCliSetupStatus(
 export function describeCliUpdates(updates: CliSetupUpdate[]): string {
   return updates
     .map((update) => {
-      const name = update.scope === 'sistema' ? `${update.name} do sistema` : update.name
-      return update.from ? `${name} ${update.from} → ${update.to}` : `${name} instalada (${update.to})`
+      const name = update.scope === 'sistema' ? `${update.name} do sistema${update.origin ? ` (${update.origin})` : ''}` : update.name
+      const line = update.from ? `${name} ${update.from} → ${update.to}` : `${name} instalada (${update.to})`
+      return update.note ? `${line} (${update.note})` : line
     })
     .join(' · ')
 }

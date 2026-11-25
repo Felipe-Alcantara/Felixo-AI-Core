@@ -40,11 +40,14 @@ const {
   allDetected,
   getAutoInstallableClis,
   isAutoInstallEnabled,
+  externalStateKey,
   planAutoInstall,
+  planExternalUpdates,
   planSystemUpdates,
   summarizeAutoInstall,
   systemStateKey,
 } = require('./cli-auto-install-plan.cjs')
+const { discoverExternalInstalls, updateExternalInstall } = require('./external-cli-update.cjs')
 const {
   installSystemNpmPackage,
   readSystemNpmInstall,
@@ -111,6 +114,8 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
       readInstall: readSystemNpmInstall,
       install: installSystemNpmPackage,
     },
+    // Instalador nativo do Claude, Homebrew, pnpm e Volta; injetável nos testes.
+    externalCli = { discover: discoverExternalInstalls, update: updateExternalInstall },
   } = options
 
   const layout = getManagedCliLayout({ userData: appPaths.userData })
@@ -383,17 +388,25 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
       reconcileCodexNativeLaunch('instalacao')
     }
 
-    const systemResults = await updateSystemInstalls({
-      catalog,
-      latestPackages,
-      attempts,
-      reason,
-    })
+    const systemResults = [
+      ...(await updateSystemInstalls({ catalog, latestPackages, attempts, reason })),
+      ...(await updateExternalInstalls({ catalog, latestPackages, attempts, reason })),
+    ]
     for (const item of systemResults) {
       if (item.action === 'updated') {
-        updates.push({ id: item.id, name: item.name, scope: 'sistema', from: item.from, to: item.to })
+        updates.push({
+          id: item.id,
+          name: item.name,
+          scope: 'sistema',
+          from: item.from,
+          to: item.to,
+          ...(item.origin ? { origin: item.origin } : {}),
+          ...(item.note ? { note: item.note } : {}),
+        })
       }
     }
+    // Quem desligou a atualização do Claude e o que o app deixou de fazer por isso.
+    const lockedNotices = systemResults.filter((item) => item.locked).map((item) => item.message)
 
     writeState(stateFilePath, attempts)
 
@@ -449,6 +462,7 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
         registryUnavailable
           ? `Registry indisponivel; nova verificacao em ${DEFERRED_RETRY_MINUTES} min.`
           : '',
+        ...lockedNotices,
       ]
         .filter(Boolean)
         .join(' '),
@@ -569,6 +583,107 @@ function registerCliAutoInstallHandlers(getMainWindow, options) {
         },
       })
       results.push({ ...base, action: ok ? 'updated' : 'failed', message })
+    }
+    return results
+  }
+
+  /**
+   * Leva as CLIs instaladas fora do npm (instalador nativo do Claude, Homebrew,
+   * pnpm, Volta) para o alvo. A decisão fica em `planExternalUpdates`; quem
+   * desligou a atualização do Claude é respeitado e o aviso vai para a pessoa.
+   * O que pode dar errado vira resultado, nunca exceção.
+   */
+  async function updateExternalInstalls({ catalog, latestPackages, attempts, reason }) {
+    const externalInstalls = []
+    for (const cli of catalog) {
+      try {
+        externalInstalls.push(await externalCli.discover({ cli, platformName, fileSystem }))
+      } catch {
+        externalInstalls.push([])
+      }
+    }
+    const plan = planExternalUpdates({
+      catalog,
+      externalInstalls,
+      targetVersions: catalog.map((cli) => {
+        const latestPackage = latestPackages.find((item) => item.id === cli.id)
+        return latestPackage?.source === 'registry' ? latestPackage.version : null
+      }),
+      previousState: attempts,
+      appVersion,
+      reason,
+    })
+
+    const redactOptions = { homeDir: os.homedir() }
+    const results = []
+    for (const item of plan) {
+      const { cli, install } = item
+      const base = { id: cli.id, name: cli.name, from: item.from, to: item.to, origin: install.label }
+      if (item.action === 'skipped' && item.locked) {
+        const message = `A atualizacao do ${cli.name} (${install.label}) esta desligada na configuracao do Claude (${item.message}); o app nao mexeu.`
+        results.push({ ...base, action: 'skipped', locked: true, message })
+        continue
+      }
+      if (item.action !== 'update') {
+        results.push({ ...base, action: item.action, message: item.message ?? '' })
+        continue
+      }
+
+      const entry = getManagedCliManifestEntry(cli.id)
+      let result
+      try {
+        result = await withNetworkRetry(
+          () =>
+            externalCli.update({
+              install,
+              npmPackage: entry.npmPackage,
+              to: item.to,
+              from: item.from,
+              platformName,
+            }),
+          networkRetry,
+        )
+      } catch (error) {
+        result = { ok: false, busy: false, message: getErrorMessage(error, 'Falha ao chamar o gerenciador.'), output: '', version: null }
+      }
+      if (!result.ok && result.busy) {
+        results.push({ ...base, action: 'deferred', message: `O ${install.label} encontrou arquivos travados.` })
+        continue
+      }
+
+      const note = result.ok ? result.note : undefined
+      const message = redactDiagnosticText(
+        result.ok
+          ? `${cli.name} (${install.label}) atualizada de ${item.from} para ${result.version}${note ? `; ${note}` : ''}.`
+          : result.message,
+        redactOptions,
+      )
+      attempts[externalStateKey(cli.id, install.origin)] = {
+        version: appVersion,
+        targetVersion: item.to,
+        ok: result.ok,
+        message,
+        at: new Date().toISOString(),
+      }
+      logQaEvent({
+        level: result.ok ? 'info' : 'warn',
+        scope: 'cli:auto-install',
+        message,
+        details: {
+          id: cli.id,
+          scope: 'sistema',
+          origin: install.origin,
+          reason,
+          output: redactDiagnosticText(result.output, redactOptions),
+        },
+      })
+      results.push({
+        ...base,
+        to: result.ok ? result.version : item.to,
+        action: result.ok ? 'updated' : 'failed',
+        message,
+        ...(note ? { note } : {}),
+      })
     }
     return results
   }

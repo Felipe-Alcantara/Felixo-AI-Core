@@ -145,8 +145,13 @@ cada abertura e as leva para a versão mais nova publicada, **inclusive
 pré-lançamento** (canais como `next`, `preview` e `alpha`):
 
 - a cópia que o app mantém na pasta gerenciada dele;
-- a instalação feita pelo **npm global** do sistema (`npm install -g`), quando houver.
-  Instalação nativa, Homebrew, pnpm ou Volta continuam como estão.
+- a instalação feita pelo **npm global** do sistema (`npm install -g`), quando houver;
+- as instalações fora do npm: o **instalador nativo** do Claude (`claude update`), o
+  **Homebrew** (Claude), o **pnpm** e o **Volta**. O app confere a versão no próprio
+  executável depois. Em pré-lançamento, o nativo tenta a versão exata e, se o canal
+  nativo não a tiver, segue o canal da instalação e o aviso diz isso; o Homebrew também
+  segue o canal dele. **Se você desligou a atualização do Claude** (`DISABLE_UPDATES`,
+  `DISABLE_AUTOUPDATER` ou `minimumVersion` no `settings.json`), o app não mexe nele.
 
 Quando algo muda de versão, aparece um aviso curto, por exemplo "Codex CLI 0.150.1 →
 0.163.0-alpha.11" ou "Claude Code CLI do sistema 2.1.287 → 2.1.300". Uma CLI aberta,

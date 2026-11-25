@@ -45,6 +45,14 @@ const SEM_INSTALACAO_DO_SISTEMA = {
   },
 }
 
+/** Máquina sem instalação fora do npm: nenhum gerenciador real é consultado nem executado. */
+const SEM_INSTALACAO_FORA_DO_NPM = {
+  discover: async () => [],
+  update: async () => {
+    throw new Error('a fase fora do npm não deveria atualizar nada neste teste')
+  },
+}
+
 /**
  * Monta um perfil isolado com o layout que o app usa em disco.
  *
@@ -105,6 +113,7 @@ function createRunner(
     // Por padrão nenhum teste toca no npm global da máquina que roda a suíte:
     // sem isto, a fase do sistema atualizaria CLIs de verdade.
     systemCli = SEM_INSTALACAO_DO_SISTEMA,
+    externalCli = SEM_INSTALACAO_FORA_DO_NPM,
     // Sem espera de verdade entre as tentativas de rede: o teste que repete
     // injeta o `sleep`; os outros nunca chegam a esperar.
     networkRetry = { sleep: async () => {} },
@@ -120,6 +129,7 @@ function createRunner(
     platformName,
     arch,
     systemCli,
+    externalCli,
     networkRetry,
     ...(verifyInstallation ? { verifyInstallation } : {}),
     ...(describePath ? { describePath } : {}),
@@ -721,6 +731,134 @@ test('atualiza a CLI do npm global do sistema para o mesmo alvo e avisa no statu
       { id: 'claude', name: status.updates[0].name, scope: 'sistema', from: '2.1.200', to: claude.version },
     ])
     assert.equal(status.state, 'done')
+  } finally {
+    profile.cleanup()
+  }
+})
+
+/** Instalações fora do npm falsas: o gerenciador "atualiza" devolvendo o resultado que o teste manda. */
+function foraDoNpmFalso({ instalacoes, resultado }) {
+  const chamadas = []
+  return {
+    chamadas,
+    externalCli: {
+      discover: async ({ cli }) => (cli.id === 'claude' ? instalacoes : []),
+      update: async (options) => {
+        chamadas.push(`${options.install.origin} ${options.to}`)
+        return resultado(options)
+      },
+    },
+  }
+}
+
+const HOMEBREW = { origin: 'homebrew', label: 'Homebrew', path: '/brew/bin/claude', version: '2.1.200' }
+
+function readAttempts(profile) {
+  return JSON.parse(fs.readFileSync(path.join(profile.userData, 'config', 'cli-auto-install.json'), 'utf8'))
+}
+
+test('atualiza o Claude do Homebrew e do Volta e avisa com a origem e o canal', async () => {
+  const claude = getManagedCliManifestEntry('claude')
+  const profile = createProfile({ managedClis: ['claude'], managedVersions: { claude: claude.version } })
+  const fora = foraDoNpmFalso({
+    instalacoes: [HOMEBREW, { ...HOMEBREW, origin: 'volta', label: 'Volta' }],
+    resultado: ({ install, to }) =>
+      install.origin === 'homebrew'
+        ? { ok: true, busy: false, message: '', output: '', version: '2.1.250', note: 'o canal do Homebrew esta na 2.1.250' }
+        : { ok: true, busy: false, message: '', output: '', version: to },
+  })
+
+  try {
+    const { service } = createRunner(profile, { detect: detectedOnly(['codex', 'claude', 'gemini']), externalCli: fora.externalCli })
+    const status = await service.run('startup')
+    service.stop()
+
+    assertPlanned(status)
+    assert.deepEqual(fora.chamadas, [`homebrew ${claude.version}`, `volta ${claude.version}`])
+    assert.deepEqual(
+      status.updates.map(({ scope, origin, from, to, note }) => ({ scope, origin, from, to, note })),
+      [
+        { scope: 'sistema', origin: 'Homebrew', from: '2.1.200', to: '2.1.250', note: 'o canal do Homebrew esta na 2.1.250' },
+        { scope: 'sistema', origin: 'Volta', from: '2.1.200', to: claude.version, note: undefined },
+      ],
+    )
+    assert.equal(status.state, 'done')
+  } finally {
+    profile.cleanup()
+  }
+})
+
+test('quem desligou a atualização do Claude não é atualizado e a mensagem avisa', async () => {
+  const claude = getManagedCliManifestEntry('claude')
+  const profile = createProfile({ managedClis: ['claude'], managedVersions: { claude: claude.version } })
+  const fora = foraDoNpmFalso({
+    instalacoes: [{ ...HOMEBREW, locked: 'DISABLE_UPDATES esta ligado em settings.json' }],
+    resultado: () => {
+      throw new Error('nao deveria atualizar')
+    },
+  })
+
+  try {
+    const { service } = createRunner(profile, { detect: detectedOnly(['codex', 'claude', 'gemini']), externalCli: fora.externalCli })
+    const status = await service.run('startup')
+    service.stop()
+
+    assertPlanned(status)
+    assert.deepEqual(fora.chamadas, [])
+    assert.deepEqual(status.updates, [])
+    assert.match(status.message, /desligada na configuracao do Claude \(DISABLE_UPDATES esta ligado em settings\.json\); o app nao mexeu/)
+    assert.equal(readAttempts(profile)['externo:homebrew:claude'], undefined)
+  } finally {
+    profile.cleanup()
+  }
+})
+
+test('o gerenciador que não trouxe versão nova registra a falha e não tenta de novo na abertura seguinte', async () => {
+  const claude = getManagedCliManifestEntry('claude')
+  const profile = createProfile({ managedClis: ['claude'], managedVersions: { claude: claude.version } })
+  const fora = foraDoNpmFalso({
+    instalacoes: [HOMEBREW],
+    resultado: () => ({ ok: false, busy: false, message: 'Homebrew nao trouxe versao nova.', output: '', version: '2.1.200' }),
+  })
+
+  try {
+    const first = createRunner(profile, { detect: detectedOnly(['codex', 'claude', 'gemini']), externalCli: fora.externalCli })
+    const status = await first.service.run('startup')
+    first.service.stop()
+    assert.equal(status.systemUpdates[0].action, 'failed')
+    assert.deepEqual(status.updates, [])
+
+    const second = createRunner(profile, { detect: detectedOnly(['codex', 'claude', 'gemini']), externalCli: fora.externalCli })
+    const again = await second.service.run('startup')
+    second.service.stop()
+    assert.equal(again.systemUpdates[0].action, 'skipped')
+    assert.equal(fora.chamadas.length, 1)
+  } finally {
+    profile.cleanup()
+  }
+})
+
+test('arquivo em uso numa instalação fora do npm vira adiamento, sem registrar falha', async () => {
+  const claude = getManagedCliManifestEntry('claude')
+  const profile = createProfile({ managedClis: ['claude'], managedVersions: { claude: claude.version } })
+  const fora = foraDoNpmFalso({
+    instalacoes: [HOMEBREW],
+    resultado: () => ({ ok: false, busy: true, message: 'EBUSY', output: 'EBUSY', version: '2.1.200' }),
+  })
+
+  try {
+    const { service } = createRunner(profile, {
+      detect: detectedOnly(['codex', 'claude', 'gemini']),
+      externalCli: fora.externalCli,
+      setTimeoutFn: () => ({ unref() {} }),
+      clearTimeoutFn: () => {},
+    })
+    const status = await service.run('startup')
+    service.stop()
+
+    assert.equal(status.systemUpdates[0].action, 'deferred')
+    assert.match(status.message, /nova tentativa em 5 min/)
+    assert.equal(readAttempts(profile)['externo:homebrew:claude'], undefined)
   } finally {
     profile.cleanup()
   }

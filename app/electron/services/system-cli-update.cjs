@@ -7,7 +7,8 @@
  * Por decisão da pessoa, a CLI instalada no sistema acompanha a mesma versão-alvo
  * da cópia que o app mantém. Só o npm global entra: é o único instalador cujo
  * pacote e versão dá para ler do disco e atualizar com o mesmo comando em
- * qualquer sistema. Instalação nativa, Homebrew, pnpm ou Volta ficam como estão.
+ * qualquer sistema. Instalação nativa, Homebrew, pnpm e Volta são tratadas em
+ * `external-cli-update`.
  *
  * O npm usado aqui é o do sistema (o do PATH da pessoa), não o que vem com o app:
  * é ele que sabe onde fica o prefixo global dela. A decisão do que atualizar mora

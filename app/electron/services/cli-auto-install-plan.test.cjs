@@ -8,7 +8,9 @@ const {
   isAutoInstallEnabled,
   isManagedCliOutdated,
   isTargetNewer,
+  externalStateKey,
   planAutoInstall,
+  planExternalUpdates,
   planSystemUpdates,
   summarizeAutoInstall,
 } = require('./cli-auto-install-plan.cjs')
@@ -350,6 +352,64 @@ describe('planSystemUpdates', () => {
       'update',
     )
     assert.equal(planSystemUpdates({ ...base, targetVersions: alvo, reason: 'manual' })[0].action, 'update')
+  })
+})
+
+describe('planExternalUpdates', () => {
+  const brew = { origin: 'homebrew', label: 'Homebrew', version: '2.1.200' }
+  const base = (installs, extra = {}) => ({
+    catalog: CATALOG,
+    externalInstalls: [[], installs, []],
+    targetVersions: [null, '2.1.300', null],
+    appVersion: '0.1.470',
+    ...extra,
+  })
+
+  it('atualiza a instalação desatualizada e deixa em paz a que já está no alvo ou acima', () => {
+    const plan = planExternalUpdates(
+      base([brew, { origin: 'pnpm', version: '2.1.300' }, { origin: 'volta', version: '2.2.0' }]),
+    )
+
+    assert.deepEqual(plan.map((item) => item.action), ['update', 'current', 'current'])
+    assert.equal(plan[0].to, '2.1.300')
+  })
+
+  it('sem alvo confirmado ou sem versão lida, não decide nada', () => {
+    assert.deepEqual(planExternalUpdates(base([brew], { targetVersions: [null, null, null] })), [])
+    assert.deepEqual(planExternalUpdates(base([{ origin: 'volta', version: null }])), [])
+  })
+
+  it('respeita quem desligou a atualização, mesmo no "Tentar de novo"', () => {
+    const locked = { ...brew, locked: 'DISABLE_UPDATES esta ligado no ambiente' }
+    for (const reason of ['startup', 'manual']) {
+      const [item] = planExternalUpdates(base([locked], { reason }))
+      assert.equal(item.action, 'skipped')
+      assert.equal(item.locked, true)
+      assert.match(item.message, /DISABLE_UPDATES/)
+    }
+  })
+
+  it('não repete a falha desta versão do app para o mesmo alvo, a não ser pedido pela pessoa', () => {
+    const previousState = {
+      [externalStateKey('claude', 'homebrew')]: {
+        version: '0.1.470',
+        targetVersion: '2.1.300',
+        ok: false,
+        message: 'sem versao nova',
+      },
+    }
+
+    assert.equal(planExternalUpdates(base([brew], { previousState }))[0].action, 'skipped')
+    assert.equal(planExternalUpdates(base([brew], { previousState, reason: 'manual' }))[0].action, 'update')
+    assert.equal(
+      planExternalUpdates(base([brew], { previousState, targetVersions: [null, '2.1.301', null] }))[0].action,
+      'update',
+    )
+    assert.equal(
+      planExternalUpdates(base([{ ...brew, origin: 'pnpm' }], { previousState }))[0].action,
+      'update',
+      'a falha de um gerenciador não vale para outro',
+    )
   })
 })
 

@@ -368,6 +368,60 @@ function planSystemUpdates({
   return plan
 }
 
+/**
+ * Decide o que fazer com cada CLI instalada fora do npm (instalador nativo,
+ * Homebrew, pnpm, Volta). Mesma regra do npm do sistema, mais duas: quem travou
+ * a atualização é respeitado (`locked`) e a versão instalada precisa ser lida
+ * (sem versão, nada a comparar). Nunca rebaixa.
+ *
+ * @param {object} options
+ * @param {Array<{ id: string, name: string }>} options.catalog
+ * @param {Array<Array<{ origin: string, version: string | null, locked?: string }>>} options.externalInstalls - Na ordem do catálogo.
+ * @param {Array<string | null>} options.targetVersions - Alvo confirmado no registry, na ordem do catálogo.
+ * @param {Record<string, object>} [options.previousState]
+ * @param {string} options.appVersion
+ * @param {'startup' | 'manual' | 'retry'} [options.reason]
+ * @returns {Array<{ cli: object, install: object, action: 'update' | 'current' | 'skipped', from: string | null, to: string, locked?: boolean, message?: string }>}
+ */
+function planExternalUpdates({
+  catalog,
+  externalInstalls,
+  targetVersions,
+  previousState = {},
+  appVersion,
+  reason = 'startup',
+}) {
+  const plan = []
+  catalog.forEach((cli, index) => {
+    const to = targetVersions[index]
+    if (!to) return
+    for (const install of externalInstalls[index] ?? []) {
+      const from = install.version ?? null
+      if (!from) continue
+      if (!isTargetNewer(from, to)) {
+        plan.push({ cli, install, action: 'current', from, to })
+        continue
+      }
+      if (install.locked) {
+        plan.push({ cli, install, action: 'skipped', locked: true, from, to, message: install.locked })
+        continue
+      }
+      const stateKey = externalStateKey(cli.id, install.origin)
+      if (reason !== 'manual' && hasFailedForVersion(previousState, stateKey, appVersion, to)) {
+        plan.push({ cli, install, action: 'skipped', from, to, message: previousState[stateKey]?.message ?? '' })
+        continue
+      }
+      plan.push({ cli, install, action: 'update', from, to })
+    }
+  })
+  return plan
+}
+
+/** Chave do registro de tentativas de uma instalação fora do npm. */
+function externalStateKey(id, origin) {
+  return `externo:${origin}:${id}`
+}
+
 /** Chave do registro de tentativas da instalação do sistema, separada da cópia do app. */
 function systemStateKey(id) {
   return `sistema:${id}`
@@ -383,7 +437,9 @@ module.exports = {
   isTargetNewer,
   coreVersion,
   planAutoInstall,
+  planExternalUpdates,
   planSystemUpdates,
+  externalStateKey,
   systemStateKey,
   summarizeAutoInstall,
 }
