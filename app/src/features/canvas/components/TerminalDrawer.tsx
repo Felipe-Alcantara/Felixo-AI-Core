@@ -4,7 +4,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Columns2,
-  CornerDownLeft,
   ExternalLink,
   Eye,
   Grid2x2,
@@ -1014,22 +1013,6 @@ function TerminalPane({
             </button>
           )}
           {solo && soloHeading.pin}
-          {/* Em gaveta estreita o cabeçalho não tem espaço: o botão sai e o "Trazer de volta" do aviso cobre a volta. */}
-          {(effectiveWidth >= 420 || detachedTerminal) && (
-          <button
-            type="button"
-            onClick={detachedTerminal ? bringBackFromWindow : openInWindow}
-            className="felixo-btn-icon rounded-sm p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
-            aria-label={detachedTerminal ? 'Trazer o terminal de volta' : 'Abrir o terminal em outra janela'}
-            title={
-              detachedTerminal
-                ? 'Traz o terminal de volta para este painel'
-                : 'Abre este terminal numa janela própria; o agente continua rodando, sem reiniciar'
-            }
-          >
-            {detachedTerminal ? <CornerDownLeft size={16} /> : <ExternalLink size={16} />}
-          </button>
-          )}
           {!solo && (
             <>
               <button
@@ -1187,6 +1170,18 @@ function TerminalPane({
           inert={readingActive || archiveOpen}
           className="h-full min-w-0 flex-1 overflow-hidden px-1 pb-2 pt-1"
         />
+        {/* No canto do próprio terminal, e não no cabeçalho: ali um ícone a mais empurrava o Fechar para fora da tela em janela pequena. */}
+        {!detachedTerminal && !collapsed && (
+          <button
+            type="button"
+            onClick={openInWindow}
+            className="felixo-btn-icon absolute top-1 right-2 z-10 rounded-sm p-1 text-zinc-500 opacity-60 hover:bg-white/10 hover:text-zinc-100 hover:opacity-100 focus-visible:opacity-100"
+            aria-label="Abrir o terminal em outra janela"
+            title="Abre este terminal numa janela própria; o agente continua rodando, sem reiniciar"
+          >
+            <ExternalLink size={14} />
+          </button>
+        )}
         {detachedTerminal && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-(--f-core-black-surface) text-xs text-zinc-400">
             <span>Este terminal está em outra janela.</span>
