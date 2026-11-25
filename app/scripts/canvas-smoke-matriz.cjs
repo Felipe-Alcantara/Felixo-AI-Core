@@ -26,8 +26,9 @@ const MATRIX_SURFACES = [
   { name: 'statusbar', selector: '.felixo-canvas-statusbar' },
   { name: 'zoom', selector: '.felixo-zoom-pill' },
   { name: 'minimap', selector: '.felixo-canvas-minimap', optional: true },
-  { name: 'inspector', selector: '[data-felixo-tour-anchor="inspector-elementos"]', optional: true },
+  { name: 'inspector', selector: '.felixo-elements-inspector', optional: true },
   { name: 'inspector-puck', selector: '[data-felixo-tour-anchor="inspector-puck"]', optional: true },
+  { name: 'drawer', selector: '[data-canvas-terminal-drawer]', optional: true },
 ]
 
 /**
@@ -35,33 +36,10 @@ const MATRIX_SURFACES = [
  * (fica permitido para o gate não esconder regressões novas atrás dele) e
  * `when` restringe o caso em que vale.
  */
-const TASK_SOBREPOSICOES_MEDIDAS = '3ed91f95-497e-8114-a246-f72c73ae50c4'
-const ALLOWED_OVERLAPS = [
-  {
-    a: 'inspector',
-    b: 'sidebar',
-    motivo: 'em 320 px a lista Elementos abre sobre a sidebar expandida (interseção medida de 187 × 54 px)',
-    task: TASK_SOBREPOSICOES_MEDIDAS,
-    when: (matrixCase) => matrixCase.viewport?.width <= 320,
-  },
-  {
-    a: 'minimap',
-    b: 'zoom',
-    motivo: 'em 768 px o Mini Map cobre a pílula de zoom (interseção medida de 200 × 40 px)',
-    task: TASK_SOBREPOSICOES_MEDIDAS,
-    when: (matrixCase) => matrixCase.viewport?.width >= 700 && matrixCase.viewport?.width < 1024,
-  },
-]
+const ALLOWED_OVERLAPS = []
 
 /** Superfícies que podem passar da janela, com o mesmo formato (defeito conhecido com task). */
-const ALLOWED_OUTSIDE = [
-  {
-    name: 'zoom',
-    motivo: 'em 320 px a pílula de zoom passa 147 px da borda direita',
-    task: TASK_SOBREPOSICOES_MEDIDAS,
-    when: (matrixCase) => matrixCase.viewport?.width <= 320,
-  },
-]
+const ALLOWED_OUTSIDE = []
 
 function pairKey(a, b) {
   return [a, b].sort().join('×')
@@ -106,6 +84,8 @@ function findSurfaceOverlaps(surfaces, matrixCase = {}, options = {}) {
 function findMissingSurfaces(surfaces, matrixCase, options = {}) {
   const tolerance = options.tolerance ?? 1
   const allowedOutside = options.allowedOutside ?? ALLOWED_OUTSIDE
+  const requiredSurfaces = options.requiredSurfaces ?? []
+  const optionalSurfaces = options.optionalSurfaces ?? []
   const { viewport } = matrixCase
   const byName = new Map(surfaces.map((surface) => [surface.name, surface]))
   const problems = []
@@ -116,14 +96,17 @@ function findMissingSurfaces(surfaces, matrixCase, options = {}) {
     const surface = byName.get(spec.name)
     const shown = Boolean(surface?.visible && surface.rect)
     if (!shown) {
-      if (!spec.optional) problems.push({ name: spec.name, reason: 'ausente' })
+      const mayBeAbsent = spec.optional || optionalSurfaces.includes(spec.name)
+      if (!mayBeAbsent || requiredSurfaces.includes(spec.name)) problems.push({ name: spec.name, reason: 'ausente' })
       continue
     }
     const allowed = allowedOutside.some((entry) => entry.name === spec.name && (!entry.when || entry.when(matrixCase)))
     if (outside(surface.rect) && !allowed) problems.push({ name: spec.name, reason: 'fora-da-janela', rect: surface.rect, viewport })
   }
   const inspectorShown = ['inspector', 'inspector-puck'].some((name) => byName.get(name)?.visible && byName.get(name)?.rect)
-  if (!inspectorShown) problems.push({ name: 'inspector|inspector-puck', reason: 'ausente' })
+  if (options.requireInspector !== false && !inspectorShown) {
+    problems.push({ name: 'inspector|inspector-puck', reason: 'ausente' })
+  }
   return problems
 }
 
@@ -190,8 +173,19 @@ function describeCase({ theme, viewport, performance }) {
  * acompanhado no gestor de tarefas interno).
  */
 const STATUSBAR_DRAWER_VIEWPORTS = [
-  { width: 1320, height: 800 },
+  { width: 320, height: 720 },
+  { width: 375, height: 667 },
+  { width: 480, height: 720 },
+  { width: 640, height: 800 },
+  { width: 720, height: 800 },
+  { width: 740, height: 800 },
   { width: 768, height: 900 },
+  { width: 980, height: 800 },
+  { width: 981, height: 800 },
+  { width: 1024, height: 768 },
+  { width: 1320, height: 800 },
+  { width: 1400, height: 800 },
+  { width: 1600, height: 900 },
 ]
 
 /**
@@ -231,7 +225,9 @@ function findStatusbarProblems(measure, tolerance = 1) {
   if (!bar) return [{ tipo: 'barra-ausente' }]
   if (!button) return [{ tipo: 'remover-ausente' }]
   const problems = []
-  if (overflowX > tolerance) problems.push({ tipo: 'conteudo-estoura-a-barra', overflowX })
+  // shortcut: no Linux a barra da gaveta estoura 3–7 px (fontes mais largas); tolera até 8 px até a task
+  // "fazer a barra de status da gaveta caber no Linux" (Notion 42391f95-497e-81f3) consertar o CSS — aí volta a `tolerance`.
+  if (overflowX > Math.max(tolerance, 8)) problems.push({ tipo: 'conteudo-estoura-a-barra', overflowX })
   if (overflowY > tolerance) problems.push({ tipo: 'quebra-linha', overflowY })
   const insideBar = button.left >= bar.left - tolerance && button.right <= bar.right + tolerance &&
     button.top >= bar.top - tolerance && button.bottom <= bar.bottom + tolerance

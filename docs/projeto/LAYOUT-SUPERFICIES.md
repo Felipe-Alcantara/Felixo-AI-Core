@@ -15,7 +15,9 @@ Fonte dos números: `panel-sizing.ts`, `canvas-surfaces.ts`, `terminal-drawer-pi
 ## Regra que não pode ser quebrada
 
 Painel, gaveta do terminal e inspector **disputam a largura**; o que sobra é o
-canvas (`MIN_CANVAS_STRIP` = 160 px). Essa divisão é calculada **numa passada só**
+canvas (`MIN_CANVAS_STRIP` = 160 px no layout normal). Com a gaveta expandida
+abaixo de 1400 px, a sidebar recolhe temporariamente e a conta reserva 240 px
+para zoom e inspector. Essa divisão é calculada **numa passada só**
 por `splitHorizontalSpace` — nunca cada superfície lendo o valor já cortado da
 outra. Foi essa leitura circular que gerou o loop "painel e gaveta se espremendo"
 de 12/09/2026. Qualquer redimensionamento novo na LARGURA passa por
@@ -28,11 +30,26 @@ outras superfícies (a altura do painel) não precisa falar com o coordenador.
 |---|---|---|---|---|
 | Painéis de ferramenta (`CanvasPanel`, ~15) | **sim** (arrasto na borda direita, setas, `Home`/duplo clique = padrão) | **sim, a partir desta fatia** (borda de baixo, setas ↑↓, `Home`/duplo clique = altura do conteúdo) | largura 260–380 por porte (`sm`…`xl`); altura 240 | Largura: `PANEL_SPECS`, teto `min(spec.max, viewport − 340)`. Altura: piso 240, teto `viewport − 112` (`getPanelMaxHeight`). Persistem por painel no `localStorage`. |
 | Painel "workspace" (Tarefas Notion) | não (ocupa a largura livre) | não (altura toda) | — | Página, não janela: por desenho. |
-| Gaveta do terminal (`TerminalDrawer`) | **sim** (`col-resize`) | não — **por decisão** (ver abaixo) | 440 (`DRAWER_MIN_WIDTH`) | Coluna de altura total (`h-full`); só existe com um terminal expandido. Tem recolher e maximizar. |
-| Inspector "Elementos" | não — **por decisão** (288 fixo, `INSPECTOR_WIDTH`) | preenche | 288 | Recolhe para um puck (não reserva espaço). |
-| Sidebar | não (288 expandida / 52 trilho) | preenche | 52 | Recolher/expandir. |
-| Barra de status (`CanvasStatusBar`) | não — ocupa o espaço entre a sidebar e a borda direita da área do canvas | 1,875 rem (`--felixo-statusbar-height`) | ~92 px com o Remover (88 px de barra em 768 px com a gaveta aberta), ícone só no último corte | Nunca quebra linha: o que não cabe sai por cortes de container query (ver "Decisões"). O inspector "Elementos" termina logo acima dela. |
-| Mini Map | encolhe sozinho (200×150 → 96×72) | idem | 96×72 | É a única superfície que **pode sumir** (nenhuma ação depende dele). |
+| Gaveta do terminal (`TerminalDrawer`) | **sim** (`col-resize`) | não — **por decisão** (ver abaixo) | 440 normalmente; pode encolher até 320 quando disputa espaço | Coluna de altura total; em viewports estreitos fica abaixo da topbar e acima da barra de status. Maximizada, ocupa o espaço entre a sidebar e essas duas barras. |
+| Inspector "Elementos" | não — **por decisão** (288 fixo, `INSPECTOR_WIDTH`) | preenche | 288 | Recolhe para um puck. Abaixo de 480 px começa recolhido e o puck fica no alto à direita; em layout estreito ou gaveta maximizada fica oculto até a gaveta fechar. |
+| Sidebar | não (288 expandida / 52 trilho) | preenche | 52 | Recolhe/expande. Com a gaveta expandida abaixo de 1400 px, recolhe temporariamente e restaura a preferência ao fechar a gaveta. |
+| Barra de status (`CanvasStatusBar`) | não — ocupa o espaço entre a sidebar e a borda direita da área do canvas | 1,875 rem (`--felixo-statusbar-height`) | ~92 px com o Remover (88 px de barra em 768 px com a gaveta aberta), ícone só no último corte | Nunca quebra linha: o que não cabe sai por cortes de container query (ver "Decisões"). Continua visível abaixo da gaveta. |
+| Mini Map | encolhe sozinho (200×150 → 96×72) | idem | 96×72 | É a única superfície que pode sumir no canvas normal; também fica oculto enquanto a gaveta ocupa o canvas. |
+
+### Gaveta aberta em viewports estreitos
+
+Revalidado no Electron 45/Windows em 25/11/2026. O smoke mede topbar, sidebar,
+barra de status, zoom, Mini Map, inspector e gaveta em 13 larguras (320 a 1600 px),
+com a gaveta normal e maximizada. As 26 combinações passaram sem superfícies ausentes
+ou sobreposições; o botão Remover permaneceu dentro da barra e recebeu o clique.
+
+Até 980 px, a gaveta normal sai do fluxo horizontal: fica à direita da sidebar, abaixo
+da topbar e acima da barra de status. Zoom, Mini Map, Elementos e o aviso de layout
+ficam ocultos enquanto ela está aberta; voltam ao fechar. Maximizar usa o mesmo modo
+em qualquer largura. Entre 981 e 1399 px, a navegação recolhe temporariamente e a
+conta preserva espaço para zoom e Elementos. Abaixo de 480 px, Elementos também começa
+recolhido para um puck acima da pílula de zoom; abrir a lista nessa largura oculta a
+pílula até recolher a lista.
 
 ## Blocos do canvas (`NodeResizer`, dois eixos)
 
@@ -162,10 +179,10 @@ aberta e um bloco selecionado): sem estouro, uma linha, o Remover recebe o cliqu
 768 px ou mais. Truncar com reticências foi descartado: cortaria o número de blocos no
 meio ("1 bl…"), pior do que tirar a palavra inteira. **Reverte** o comentário antigo do
 `TerminalsPanel` (o inspector ia até a borda de baixo para não sobrar uma faixa vazia de
-canvas sob ele): agora a faixa é a própria barra. **Limite:** abaixo de ~740 px de janela
-com a gaveta aberta, ou com a gaveta maximizada, a área do canvas some e a barra fica sob
-a sidebar; isso é a sobreposição já conhecida de 320 px (acompanhado no gestor de tarefas interno),
-não um defeito da barra.
+canvas sob ele): agora a faixa é a própria barra. Em 25/11/2026, o smoke passou a medir
+essa barra junto das demais superfícies com gaveta normal e maximizada: 320, 375, 480,
+640, 720, 740, 768, 980, 981, 1024, 1320, 1400 e 1600 px. Todas ficaram em uma linha,
+sem transbordar; o Remover permaneceu na barra e recebeu o clique.
 
 **Tarefas Notion: mínimo 480 × 320** (era 760 × 460). O conteúdo do bloco rola por dentro
 e o painel usa colunas flexíveis. O tamanho padrão continua o de sempre (1040 × 680,
