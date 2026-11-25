@@ -1,7 +1,7 @@
 # Felixo AI Core — Roadmap
 
 Status: em desenvolvimento.
-Última revisão: 2026-09-01.
+Última revisão: 2026-11-25.
 
 > Este arquivo descreve direção de produto e ideias de contribuição. O estado
 > entregue deve ser conferido no [`README.md`](../../README.md) e nos registros
@@ -10,13 +10,20 @@ Status: em desenvolvimento.
 
 ## Direção do produto
 
-O Felixo AI Core é uma aplicação desktop Linux-first, agora **canvas-first**:
+O Felixo AI Core é uma aplicação desktop para Linux, Windows e macOS, com o
+**canvas** como superfície principal:
 agentes, terminais, arquivos, notas, grupos e páginas web convivem no mesmo
 espaço e podem compartilhar contexto por conexões e arquivos Markdown.
 
 O modo de chat foi depreciado. Ele continua no produto somente para abrir
 sessões antigas e exportar dados legados. Não é uma frente de evolução: novas
 experiências, ferramentas e capacidades devem nascer no canvas.
+
+## Direção: módulos de agentes
+
+O produto deve servir a áreas além da programação: criação de conteúdo, redes sociais, configuração de sistemas, geração de imagem e vídeo, entre outras. Hoje boa parte do produto está voltada à programação (repositórios, Git e terminais). A definição de um módulo (contrato, inventário do que já existe e áreas-alvo) ainda está em aberto.
+
+Isto é direção, não cronograma. Uma ideia de módulo entra pelo [pedido de módulo](https://github.com/Felipe-Alcantara/Felixo-AI-Core/issues/new/choose).
 
 ## Base entregue
 
@@ -112,6 +119,22 @@ contra o código antes de começar.
 - Documentar skills e adapters com exemplos portáveis e sem dados privados.
 - Criar smoke tests de instalação e atualização para que uma release seja
   reproduzível nos três sistemas suportados.
+- Publicar notas de versão e um changelog legível para quem usa o app, em
+  [CHANGELOG.md](../../CHANGELOG.md).
+
+## Projetos futuros
+
+As frentes prioritárias acima são a direção atual. Os projetos desta seção e as ideias de longo prazo abaixo são **candidatos**: não têm prazo, ordem nem garantia de entrega.
+
+- Relatório automático de sessões longas.
+- Retomar um fluxo de agentes depois de uma queda do computador.
+- Catálogo de papéis de agente, com permissões mínimas, verificação por um checador e custo.
+- Pareamento automático entre um agente que produz e outro que confere.
+- Custo equivalente por projeto e por modelo.
+- Resumo diário do que cada agente fez.
+- Agendamento de agentes em horários fixos.
+- Painel de aprovações pendentes.
+- Modelos de canvas prontos para equipes de agentes.
 
 ## Ideias de longo prazo
 
