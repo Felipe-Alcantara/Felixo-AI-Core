@@ -1,4 +1,5 @@
 'use strict'
+require('./test-support/pasta-do-teste.cjs') // isola o temporário deste arquivo (ver pasta-do-teste.cjs)
 
 /**
  * O lockfile precisa ser uma árvore que o npm aceita (`npm ls` sem `ELSPROBLEMS`),

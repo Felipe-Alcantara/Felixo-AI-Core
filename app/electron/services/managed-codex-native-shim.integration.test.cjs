@@ -1,4 +1,5 @@
 'use strict'
+require('../../scripts/test-support/pasta-do-teste.cjs') // isola o temporário deste arquivo (ver pasta-do-teste.cjs)
 
 /**
  * Integração nativa: em máquina sem Node, o Codex abre com console no terminal

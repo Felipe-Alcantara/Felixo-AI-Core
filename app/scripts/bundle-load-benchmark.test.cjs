@@ -1,4 +1,5 @@
 'use strict'
+require('./test-support/pasta-do-teste.cjs') // isola o temporário deste arquivo (ver pasta-do-teste.cjs)
 
 const fs = require('node:fs')
 const os = require('node:os')

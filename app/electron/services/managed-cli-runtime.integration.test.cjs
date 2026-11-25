@@ -1,4 +1,5 @@
 'use strict'
+require('../../scripts/test-support/pasta-do-teste.cjs') // isola o temporário deste arquivo (ver pasta-do-teste.cjs)
 
 /**
  * Integração real no Windows: o `node.cmd` que o app gera tem de funcionar com

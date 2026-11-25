@@ -1,4 +1,5 @@
 'use strict'
+require('../../scripts/test-support/pasta-do-teste.cjs') // isola o temporário deste arquivo (ver pasta-do-teste.cjs)
 
 /**
  * Este arquivo (`agent-usage-model.cjs`) é a única barreira entre o que uma

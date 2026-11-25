@@ -1,3 +1,4 @@
+require('../../scripts/test-support/pasta-do-teste.cjs') // isola o temporário deste arquivo (ver pasta-do-teste.cjs)
 // Testes de caracterização: capturam o comportamento que `ipc-handlers.cjs`
 // já tinha antes da extração deste módulo, para que a refatoração possa ser
 // verificada em vez de presumida. Escritos a partir da leitura do código

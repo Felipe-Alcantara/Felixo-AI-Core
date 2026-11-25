@@ -1,4 +1,5 @@
 'use strict'
+require('../../scripts/test-support/pasta-do-teste.cjs') // isola o temporário deste arquivo (ver pasta-do-teste.cjs)
 
 /**
  * Carga do "Atualizar" do painel de Limites com muitas contas: teto de consultas

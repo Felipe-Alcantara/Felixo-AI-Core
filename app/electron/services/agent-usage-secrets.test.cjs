@@ -1,4 +1,5 @@
 'use strict'
+require('../../scripts/test-support/pasta-do-teste.cjs') // isola o temporário deste arquivo (ver pasta-do-teste.cjs)
 
 /**
  * Auditoria de segredo do painel de Limites, de ponta a ponta, com canários.

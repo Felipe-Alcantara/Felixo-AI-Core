@@ -1,4 +1,5 @@
 'use strict'
+require('./test-support/pasta-do-teste.cjs') // isola o temporário deste arquivo (ver pasta-do-teste.cjs)
 
 /**
  * Prova a fiação "lado a lado" do TypeScript em cada SO da matriz da CI:

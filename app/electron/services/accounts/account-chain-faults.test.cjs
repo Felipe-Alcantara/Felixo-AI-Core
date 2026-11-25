@@ -1,4 +1,5 @@
 'use strict'
+require('../../../scripts/test-support/pasta-do-teste.cjs') // isola o temporário deste arquivo (ver pasta-do-teste.cjs)
 
 /**
  * Matriz de falhas injetadas da cadeia de contas (plano, §13.2 e §13.3).

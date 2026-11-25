@@ -1,4 +1,5 @@
 'use strict'
+require('../../../scripts/test-support/pasta-do-teste.cjs') // isola o temporário deste arquivo (ver pasta-do-teste.cjs)
 
 /**
  * Cadeia de contas entre DOIS PROCESSOS node reais (I1 e I2 da política).

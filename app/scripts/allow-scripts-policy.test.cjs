@@ -1,4 +1,5 @@
 'use strict'
+require('./test-support/pasta-do-teste.cjs') // isola o temporário deste arquivo (ver pasta-do-teste.cjs)
 
 /**
  * O `allowScripts` do package.json anda junto com o lockfile: todo pacote do lock com script de

@@ -1,4 +1,5 @@
 'use strict'
+require('../../../scripts/test-support/pasta-do-teste.cjs') // isola o temporário deste arquivo (ver pasta-do-teste.cjs)
 
 // O CI roda em UTC; fixar aqui garante que "fuso local" signifique UTC também
 // em quem roda os testes em outro fuso. O node --test isola cada arquivo num

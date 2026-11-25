@@ -1,3 +1,4 @@
+require('../../scripts/test-support/pasta-do-teste.cjs') // isola o temporário deste arquivo (ver pasta-do-teste.cjs)
 const test = require('node:test')
 const assert = require('node:assert/strict')
 const {

@@ -1,4 +1,5 @@
 'use strict'
+require('../../../scripts/test-support/pasta-do-teste.cjs') // isola o temporário deste arquivo (ver pasta-do-teste.cjs)
 
 // Os horários de reset impressos sem fuso são lidos no fuso local; fixar UTC
 // deixa o resultado igual em qualquer máquina. O node --test isola o arquivo.
