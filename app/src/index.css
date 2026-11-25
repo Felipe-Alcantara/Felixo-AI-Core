@@ -1500,55 +1500,6 @@
   right: 1rem;
 }
 
-/* Em janela estreita, a gaveta sai do fluxo horizontal do canvas. Mantemos a
-   navegação, o topo e a barra de status no lugar; os controles do canvas e a
-   lista Elementos voltam quando a gaveta fecha. */
-@media (max-width: 980px) {
-  [data-felixo-canvas-ready]:has([data-canvas-terminal-drawer][data-felixo-terminal-drawer-collapsed="false"]) .felixo-terminal-drawer {
-    position: absolute !important;
-    top: var(--felixo-topbar-height);
-    right: 0;
-    bottom: var(--felixo-statusbar-height);
-    height: auto !important;
-  }
-
-  [data-felixo-canvas-ready]:has([data-canvas-terminal-drawer][data-felixo-terminal-drawer-collapsed="false"]) .felixo-zoom-pill-panel,
-  [data-felixo-canvas-ready]:has([data-canvas-terminal-drawer][data-felixo-terminal-drawer-collapsed="false"]) .felixo-canvas-minimap,
-  [data-felixo-canvas-ready]:has([data-canvas-terminal-drawer][data-felixo-terminal-drawer-collapsed="false"]) .felixo-elements-inspector,
-  [data-felixo-canvas-ready]:has([data-canvas-terminal-drawer][data-felixo-terminal-drawer-collapsed="false"]) [data-felixo-tour-anchor="inspector-puck"],
-  [data-felixo-canvas-ready]:has([data-canvas-terminal-drawer][data-felixo-terminal-drawer-collapsed="false"]) [data-canvas-layout-warning] {
-    display: none !important;
-  }
-}
-
-[data-felixo-canvas-ready]:has([data-canvas-terminal-drawer][data-felixo-terminal-drawer-maximized="true"]) .felixo-terminal-drawer {
-  position: absolute !important;
-  top: var(--felixo-topbar-height);
-  right: 0;
-  bottom: var(--felixo-statusbar-height);
-  width: calc(100vw - var(--felixo-sidebar-width)) !important;
-  height: auto !important;
-}
-
-[data-felixo-canvas-ready]:has([data-felixo-terminal-drawer-maximized="true"]) .felixo-zoom-pill-panel,
-[data-felixo-canvas-ready]:has([data-felixo-terminal-drawer-maximized="true"]) .felixo-canvas-minimap,
-[data-felixo-canvas-ready]:has([data-felixo-terminal-drawer-maximized="true"]) .felixo-elements-inspector,
-[data-felixo-canvas-ready]:has([data-felixo-terminal-drawer-maximized="true"]) [data-felixo-tour-anchor="inspector-puck"],
-[data-felixo-canvas-ready]:has([data-felixo-terminal-drawer-maximized="true"]) [data-canvas-layout-warning] {
-  display: none !important;
-}
-
-@media (max-width: 480px) {
-  [data-felixo-canvas-ready] [data-felixo-tour-anchor="inspector-puck"] {
-    top: calc(var(--felixo-topbar-height) + 0.5rem);
-    bottom: auto !important;
-  }
-
-  [data-felixo-canvas-ready]:has(.felixo-elements-inspector.felixo-anim-corner-dock-expanded) .felixo-zoom-pill-panel {
-    display: none !important;
-  }
-}
-
 .felixo-activity-rail {
   display: flex;
   width: 3.25rem;

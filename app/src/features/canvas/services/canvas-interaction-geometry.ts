@@ -159,9 +159,6 @@ export function safeViewportOffset(
   }
 }
 
-/** Menor lado da área útil que ainda vale como área (px). Abaixo disso o enquadramento usa a janela inteira. */
-export const MIN_SAFE_AREA_SIDE = 120
-
 /**
  * Calcula o viewport que enquadra os bounds dentro da área útil, e não no
  * retângulo inteiro do flow. O `fitView` nativo centraliza no container todo;
@@ -188,9 +185,7 @@ export function viewportForSafeArea(
 
   const safeWidth = Math.max(0, safeArea.right - safeArea.left)
   const safeHeight = Math.max(0, safeArea.bottom - safeArea.top)
-  // Uma fresta não é área útil: centralizar o grafo nela deixa a maior parte para fora da tela
-  // (janela de 320 px com a sidebar recolhida: ~1 px de largura). Quem chama cai no `fitView` comum.
-  if (safeWidth < MIN_SAFE_AREA_SIDE || safeHeight < MIN_SAFE_AREA_SIDE) {
+  if (safeWidth <= 0 || safeHeight <= 0) {
     return undefined
   }
 

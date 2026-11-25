@@ -2,16 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { CanvasSurfacesContext } from '../hooks/canvas-surfaces-context'
 import {
   DRAWER_MIN_WIDTH,
-  DRAWER_SHRINK_FLOOR_WIDTH,
   PANEL_MIN_WIDTH,
-  SIDEBAR_RAIL_WIDTH,
   dockReservedBottom,
   freeCanvasArea,
   miniMapSize,
   splitHorizontalSpace,
 } from '../services/canvas-surfaces'
 import { detectLiveLayoutClamp } from '../services/layout-invariants'
-import { shouldCollapseSidebarForDrawer } from '../services/sidebar-narrow'
 
 /**
  * Mantém quem está ocupando qual pedaço da tela do canvas.
@@ -70,34 +67,19 @@ export function CanvasSurfacesProvider({
     [],
   )
 
-  const responsiveDrawerLayout = shouldCollapseSidebarForDrawer(viewport.width, desiredDrawer)
-  const effectiveToolbarWidth = responsiveDrawerLayout
-    ? SIDEBAR_RAIL_WIDTH
-    : toolbarWidth
-  // Preserve room for the zoom pill and the full Elements inspector while a
-  // normal drawer is open. At very small widths the drawer can shrink to its
-  // existing terminal floor; maximized mode becomes an overlay instead.
-  const minimumCanvasWidth = responsiveDrawerLayout ? 240 : undefined
-  const effectiveMinimumDrawerWidth = responsiveDrawerLayout
-    ? Math.max(
-      DRAWER_SHRINK_FLOOR_WIDTH,
-      Math.min(DRAWER_MIN_WIDTH, viewport.width - effectiveToolbarWidth - inspector - 240),
-    )
-    : DRAWER_MIN_WIDTH
-
   const { panel, drawer } = useMemo(
     () =>
       splitHorizontalSpace(
         viewport.width,
-        effectiveToolbarWidth,
+        toolbarWidth,
         desiredPanel,
         PANEL_MIN_WIDTH,
         desiredDrawer,
-        effectiveMinimumDrawerWidth,
-        minimumCanvasWidth,
+        DRAWER_MIN_WIDTH,
+        undefined,
         inspector,
       ),
-    [desiredDrawer, desiredPanel, effectiveMinimumDrawerWidth, effectiveToolbarWidth, inspector, minimumCanvasWidth, viewport.width],
+    [desiredDrawer, desiredPanel, inspector, toolbarWidth, viewport.width],
   )
 
   // Diagnóstico do clamp: só a transição pra um estado clampado vira log —
@@ -108,7 +90,7 @@ export function CanvasSurfacesProvider({
   const lastLoggedRuleRef = useRef<string | null>(null)
 
   useEffect(() => {
-    const occupancy = { toolbar: effectiveToolbarWidth, panel, drawer, inspector }
+    const occupancy = { toolbar: toolbarWidth, panel, drawer, inspector }
     const clamp = detectLiveLayoutClamp({ viewport, occupancy, dockTop })
 
     if (!clamp) {
@@ -132,10 +114,10 @@ export function CanvasSurfacesProvider({
         // Falha ao gravar o log não pode derrubar o layout em si — na pior
         // das hipóteses, esta ocorrência específica fica sem registro.
       })
-  }, [dockTop, drawer, effectiveToolbarWidth, inspector, panel, viewport])
+  }, [dockTop, drawer, inspector, panel, toolbarWidth, viewport])
 
   const value = useMemo(() => {
-    const occupancy = { toolbar: effectiveToolbarWidth, panel, drawer, inspector }
+    const occupancy = { toolbar: toolbarWidth, panel, drawer, inspector }
     const dockHeight = dockReservedBottom(viewport.height, dockTop)
 
     return {
@@ -158,7 +140,7 @@ export function CanvasSurfacesProvider({
     reportDockTop,
     reportInspectorWidth,
     reportPanelWidth,
-    effectiveToolbarWidth,
+    toolbarWidth,
     viewport,
   ])
 

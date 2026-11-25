@@ -4,7 +4,6 @@ import {
   fitZoomForSafeArea,
   flowCenterForSafeArea,
   getCanvasSafeArea,
-  MIN_SAFE_AREA_SIDE,
   safeViewportOffset,
   viewportForSafeArea,
 } from '../services/canvas-interaction-geometry'
@@ -75,14 +74,11 @@ export function useSafeViewport({ flowContainerRef, flowInstanceRef, occupancy }
       return undefined
     }
 
-    const safeArea = getCanvasSafeArea(
+    return getCanvasSafeArea(
       container.getBoundingClientRect(),
       occupancy,
       { drawerOutsideContainer: true },
     )
-    // Uma fresta (ou uma área invertida) não é área útil: janela de 320 px com sidebar e inspector deixa ~1 px, e
-    // centralizar ou deslocar o grafo nela o joga para fora da tela. Sem área útil, quem chama usa a janela inteira.
-    return safeArea.width < MIN_SAFE_AREA_SIDE || safeArea.height < MIN_SAFE_AREA_SIDE ? undefined : safeArea
   }, [flowContainerRef, occupancy])
 
   const centerNodeInSafeArea = useCallback(

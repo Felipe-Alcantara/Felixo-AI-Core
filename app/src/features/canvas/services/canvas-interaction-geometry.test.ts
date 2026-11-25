@@ -7,7 +7,6 @@ import {
   getCanvasSafeArea,
   safeViewportOffset,
   screenRectsOverlap,
-  MIN_SAFE_AREA_SIDE,
   viewportForSafeArea,
 } from './canvas-interaction-geometry'
 
@@ -116,18 +115,6 @@ describe('área útil de interação do Canvas', () => {
         { left: 320, top: 48, right: 320, bottom: 708 },
       ),
     ).toBeUndefined()
-  })
-
-  it('uma fresta de área útil não vale: janela de 320 px com sidebar recolhida e inspector aberto cai no fitView comum', () => {
-    const grafo = { x: 0, y: 0, width: 1800, height: 1100 }
-    // Rail de 52 px à esquerda e inspector a partir de 53 px: sobra 1 px de largura.
-    const fresta = { left: 52, top: 48, right: 53, bottom: 700 }
-    expect(viewportForSafeArea(grafo, viewport, fresta)).toBeUndefined()
-    // Logo abaixo do piso também não vale; no piso passa a valer.
-    expect(viewportForSafeArea(grafo, viewport, { left: 52, top: 48, right: 52 + MIN_SAFE_AREA_SIDE - 1, bottom: 700 })).toBeUndefined()
-    expect(viewportForSafeArea(grafo, viewport, { left: 52, top: 48, right: 52 + MIN_SAFE_AREA_SIDE, bottom: 700 })).toBeDefined()
-    // Altura pequena demais também.
-    expect(viewportForSafeArea(grafo, viewport, { left: 52, top: 48, right: 400, bottom: 48 + MIN_SAFE_AREA_SIDE - 1 })).toBeUndefined()
   })
 
   it('considera oclusão somente quando há área compartilhada', () => {
