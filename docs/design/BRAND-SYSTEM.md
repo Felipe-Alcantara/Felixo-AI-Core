@@ -1,6 +1,6 @@
 # Felixo AI Core - Brand System
 
-Revisão: 2026-09-12. Fonte: `Felixo-AI-Core-Brand-Kit-v1.0`.
+Revisão: 2026-11-25. Fonte: `Felixo-AI-Core-Brand-Kit-v1.0`.
 
 ## Fonte de verdade
 
@@ -94,10 +94,26 @@ constantes, pulsos permanentes, gradientes neon ou rede decorativa em excesso.
 
 ## App icon e favicon
 
-O empacotamento Electron usa `logos/png/felixo-app-icon-dark-512.png`. O HTML
+O empacotamento Electron usa `logos/png/felixo-cyber-cat-4096.png`. O HTML
 usa `favicons/favicon.ico`, com o export PNG de 32 px e o apple touch icon de
 180 px como complementos. Em escalas pequenas, usar os exports dedicados em
 vez de reduzir o PNG de 1024 px.
+
+## Vitrine pública
+
+Textos que apresentam o produto a quem ainda não o conhece: site, GitHub, README e redes. A frase e a tagline foram aprovadas pelo Felipe em 25/11/2026; só ele as troca.
+
+- **Frase de posicionamento (PT):** Times de agentes de IA para qualquer área, começando por código e tarefas no Notion, num canvas, com as contas de IA que você já tem.
+- **Frase de posicionamento (EN):** Teams of AI agents for any field, starting with code and Notion tasks, on a canvas, with the AI accounts you already have. Tradução do agente, a revisar antes de usar fora do README.
+- **Tagline (PT):** Pare de trocar de IA. Comece a orquestrar.
+- **Tagline (EN):** Stop switching AIs. Start orchestrating.
+
+No README, a frase é a primeira linha de descrição e a tagline vem logo abaixo, em destaque, nos dois idiomas.
+
+- **FelixoVerse:** fica fora da frase, da tagline e da primeira linha. Aparece só no rodapé ou na página "sobre", como "parte do ecossistema FelixoVerse".
+- **Voz:** direta, em segunda pessoa ("você"), frases curtas. Quem não programa lê primeiro: termo técnico só onde o público é de desenvolvedor.
+- **Peças:** ainda não produzidas. Quando existirem, saem dos SVG oficiais em `app/public/brand/logos/svg/`, sem redesenhar a marca, e cada uma leva a tagline aprovada.
+- **GitHub:** a descrição do repositório e os topics ainda são os antigos. A troca é feita à parte, com aprovação do Felipe.
 
 ## Proibições
 
