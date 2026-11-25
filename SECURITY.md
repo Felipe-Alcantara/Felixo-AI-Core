@@ -4,7 +4,7 @@
 
 Não abra uma issue pública. Use o relato privado do GitHub: aba **Security** do repositório, **Report a vulnerability**.
 
-Inclua a versão do app (`Configurações > Sobre`), o sistema operacional, os passos para reproduzir e o que a falha permite.
+Inclua a versão do app (ela aparece no rodapé da barra lateral do canvas), o sistema operacional, os passos para reproduzir e o que a falha permite.
 
 ## O que esperar
 
