@@ -172,6 +172,39 @@ async function esperar(condicao, { timeoutMs = 4000, intervalMs = 40 } = {}) {
   return false
 }
 
+// O pai grava o pid com writeFileSync, então o arquivo existe vazio um instante antes do número:
+// lido nesse instante vira 0, e estaVivo(0) (kill(0, 0)) é sempre verdadeiro. Só aceitamos pid > 0.
+function lerPidDoNeto(pidFile) {
+  try {
+    return Number(fs.readFileSync(pidFile, 'utf8'))
+  } catch {
+    return 0 // o arquivo ainda não existe
+  }
+}
+
+async function esperarPidDoNeto(pidFile) {
+  assert.ok(await esperar(() => lerPidDoNeto(pidFile) > 0), 'o pai não subiu o neto a tempo')
+  return lerPidDoNeto(pidFile)
+}
+
+test('esperarPidDoNeto só devolve o pid depois que o arquivo tem o número, não só depois que ele existe', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-process-tree-'))
+  const pidFile = path.join(dir, 'neto.pid')
+  // O pai faz o que a corrida explora: cria o arquivo vazio e só depois grava o número.
+  const script = `
+    const fs = require('node:fs')
+    const fd = fs.openSync(${JSON.stringify(pidFile)}, 'w')
+    setTimeout(() => { fs.writeSync(fd, '4242'); fs.closeSync(fd) }, 300)
+    setInterval(() => {}, 1000)
+  `
+  const pai = spawn(process.execPath, ['-e', script], { stdio: 'ignore' })
+  try {
+    assert.equal(await esperarPidDoNeto(pidFile), 4242)
+  } finally {
+    pai.kill('SIGKILL')
+  }
+})
+
 test('processo real: matar a raiz sem árvore mata só o pai (prova do bug antes da correção)', { skip: process.platform === 'win32' }, async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-process-tree-'))
   const pidFile = path.join(dir, 'neto.pid')
@@ -184,8 +217,7 @@ test('processo real: matar a raiz sem árvore mata só o pai (prova do bug antes
   // SEM detached: true — reproduz o estado do instalador antes da correção.
   const pai = spawn(process.execPath, ['-e', script], { stdio: 'ignore' })
 
-  assert.ok(await esperar(() => fs.existsSync(pidFile)), 'o pai não subiu o neto a tempo')
-  const netoPid = Number(fs.readFileSync(pidFile, 'utf8'))
+  const netoPid = await esperarPidDoNeto(pidFile)
   assert.ok(estaVivo(netoPid))
 
   pai.kill('SIGKILL')
@@ -212,8 +244,7 @@ test('processo real: killProcessTree mata pai E neto quando o pai nasce detached
     detached: process.platform !== 'win32',
   })
 
-  assert.ok(await esperar(() => fs.existsSync(pidFile)), 'o pai não subiu o neto a tempo')
-  const netoPid = Number(fs.readFileSync(pidFile, 'utf8'))
+  const netoPid = await esperarPidDoNeto(pidFile)
   assert.ok(estaVivo(netoPid))
 
   await killProcessTree({ pid: pai.pid, graceMs: 200 })
