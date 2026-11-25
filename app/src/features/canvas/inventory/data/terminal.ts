@@ -49,6 +49,22 @@ export const terminalSurfaces: InventoryElement[] = [
         test: { file: 'src/features/canvas/components/terminal-drawer-panes.test.ts' },
       },
       {
+        locator: 'aria-label={detachedTerminal ?',
+        kind: 'button',
+        trigger: 'clique',
+        effect: 'Abrir o terminal em outra janela: abre a janela auxiliar felixo-aux-t-<sessão> (mesmo renderer) e move o xterm vivo para ela com store.moveTo, sem reiniciar (PID, histórico e digitação seguem). O painel mostra "Este terminal está em outra janela" e o mesmo botão vira "Trazer o terminal de volta". Fechar a janela pelo X também devolve o xterm ao painel (pagehide); fechar o painel fecha a janela. Reiniciar com a janela aberta reencaixa o xterm novo nela.',
+        failure: 'Janela negada pelo sistema: o terminal fica no painel e a barra de status mostra "Não foi possível abrir a janela do terminal."',
+        test: { file: 'src/features/canvas/components/terminal-detach.test.ts' },
+      },
+      {
+        locator: 'Trazer de volta',
+        kind: 'button',
+        trigger: 'clique; só com o terminal numa janela própria',
+        effect: 'Mesmo efeito do botão do cabeçalho: move o xterm de volta para este painel (store.moveTo) e fecha a janela auxiliar. Fica no aviso "Este terminal está em outra janela", que cobre o encaixe vazio do painel.',
+        failure: 'Sem falha própria.',
+        test: { file: 'src/features/canvas/components/TerminalDrawer.test.tsx' },
+      },
+      {
         locator: 'aria-label="Fechar painel"',
         kind: 'button',
         trigger: 'clique; só com 2 ou mais painéis',

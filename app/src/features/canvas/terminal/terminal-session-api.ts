@@ -138,6 +138,8 @@ export type TerminalSessionStoreApi = {
   restart: (id: string, options?: SessionOptions) => void
   ensure: (id: string, options?: SessionOptions) => void
   attach: (id: string, container: HTMLElement) => void
+  /** Muda o xterm vivo de hospedeiro (de janela, inclusive) sem reiniciar o PTY. */
+  moveTo: (id: string, container: HTMLElement) => boolean
   handleFileDrop: (id: string, files: Iterable<File>) => void
   fit: (id: string) => void
   focus: (id: string) => void

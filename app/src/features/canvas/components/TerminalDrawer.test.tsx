@@ -8,6 +8,7 @@ const estado = vi.hoisted(() => ({
     getTranscript: vi.fn(() => ({ text: 'historico', screenOnly: false })),
     getShellHistory: vi.fn(() => ({ text: '' })),
     fit: vi.fn(),
+    moveTo: vi.fn<(id: string, container: HTMLElement) => boolean>(() => true),
     focus: vi.fn(),
     copy: vi.fn(async () => ''),
     scrollClaude: vi.fn(),
@@ -73,6 +74,91 @@ describe('TerminalDrawer (controles)', () => {
     estado.reportDrawerWidth.mockClear()
   })
   afterEach(() => cleanup())
+
+  describe('Abrir em outra janela', () => {
+    function janelaFalsa() {
+      class Observador {
+        observe() {}
+        disconnect() {}
+      }
+      const ouvintes = new Map<string, Set<() => void>>()
+      return {
+        document: document.implementation.createHTMLDocument('aux'),
+        requestAnimationFrame: () => 1,
+        cancelAnimationFrame: () => {},
+        ResizeObserver: Observador,
+        close: vi.fn(),
+        addEventListener: (nome: string, fn: () => void) => {
+          if (!ouvintes.has(nome)) ouvintes.set(nome, new Set())
+          ouvintes.get(nome)?.add(fn)
+        },
+        removeEventListener: (nome: string, fn: () => void) => ouvintes.get(nome)?.delete(fn),
+        emitir: (nome: string) => ouvintes.get(nome)?.forEach((fn) => fn()),
+      }
+    }
+
+    afterEach(() => vi.restoreAllMocks())
+
+    it('destaca o terminal: avisa no painel, e Trazer de volta devolve o xterm e fecha a janela', async () => {
+      const janela = janelaFalsa()
+      const abrir = vi.spyOn(window, 'open').mockReturnValue(janela as unknown as Window)
+      montar()
+
+      await clicar('Abrir o terminal em outra janela')
+
+      expect(abrir).toHaveBeenCalledWith('about:blank', 'felixo-aux-t-no-1')
+      expect(screen.getByText('Este terminal está em outra janela.')).toBeTruthy()
+      expect(screen.queryByRole('button', { name: 'Abrir o terminal em outra janela' })).toBeNull()
+
+      await clicar('Trazer de volta')
+
+      // Ida (para a janela) e volta (para o painel, no documento principal), nessa ordem.
+      expect(estado.store.moveTo).toHaveBeenCalledTimes(2)
+      expect(estado.store.moveTo.mock.calls[0][1].ownerDocument).toBe(janela.document)
+      expect(estado.store.moveTo.mock.calls[1][1].ownerDocument).toBe(document)
+      expect(janela.close).toHaveBeenCalledTimes(1)
+      expect(screen.queryByText('Este terminal está em outra janela.')).toBeNull()
+      expect(screen.getByRole('button', { name: 'Abrir o terminal em outra janela' })).toBeTruthy()
+    })
+
+    it('fechar a janela pelo X devolve o terminal ao painel sozinho', async () => {
+      const janela = janelaFalsa()
+      vi.spyOn(window, 'open').mockReturnValue(janela as unknown as Window)
+      montar()
+      await clicar('Abrir o terminal em outra janela')
+
+      await act(async () => {
+        janela.emitir('pagehide')
+      })
+
+      expect(estado.store.moveTo).toHaveBeenCalledWith('no-1', expect.any(HTMLElement))
+      expect(screen.queryByText('Este terminal está em outra janela.')).toBeNull()
+    })
+
+    it('janela negada pelo sistema: o terminal fica no painel', async () => {
+      vi.spyOn(window, 'open').mockReturnValue(null)
+      montar()
+
+      await clicar('Abrir o terminal em outra janela')
+
+      expect(screen.queryByText('Este terminal está em outra janela.')).toBeNull()
+      expect(estado.store.moveTo).not.toHaveBeenCalled()
+    })
+
+    it('fechar o painel com a janela aberta não deixa a janela órfã', async () => {
+      const janela = janelaFalsa()
+      vi.spyOn(window, 'open').mockReturnValue(janela as unknown as Window)
+      montar()
+      await clicar('Abrir o terminal em outra janela')
+
+      cleanup()
+
+      expect(janela.close).toHaveBeenCalledTimes(1)
+      // Só o `moveTo` de ida (para a janela): desmontou, então não há volta para um painel que já não existe.
+      expect(estado.store.moveTo).toHaveBeenCalledTimes(1)
+      expect(estado.store.moveTo.mock.calls[0][1].ownerDocument).toBe(janela.document)
+    })
+  })
 
   describe('Recolher e Expandir', () => {
     it('Recolher vira Expandir, recolhe a gaveta e lembra a escolha', async () => {

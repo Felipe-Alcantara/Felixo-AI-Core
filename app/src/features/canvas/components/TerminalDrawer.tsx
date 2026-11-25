@@ -4,6 +4,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Columns2,
+  CornerDownLeft,
+  ExternalLink,
   Eye,
   Grid2x2,
   History,
@@ -45,6 +47,8 @@ import type { ListedAgentSession } from '../services/agent-session-list'
 import { useCanvasSurfaces } from '../hooks/canvas-surfaces-context'
 import { DRAWER_MIN_WIDTH } from '../services/canvas-surfaces'
 import { attachTerminalFitLifecycle } from './terminal-fit-lifecycle'
+import { detachTerminal, type DetachedTerminal } from './terminal-detach'
+import { reportActionFailure } from '../services/canvas-persistence-status'
 import {
   drawerPaneShortcut,
   neighborPane,
@@ -719,6 +723,8 @@ function TerminalPane({
     onResumeAction?.(action)
   }
   const mountRef = useRef<HTMLDivElement>(null)
+  const detachedRef = useRef<DetachedTerminal | null>(null)
+  const [detachedTerminal, setDetachedTerminal] = useState<DetachedTerminal | null>(null)
   const paneRef = useRef<HTMLDivElement>(null)
   const ownTitleId = useId()
   const titleId = solo ? soloHeading.id : ownTitleId
@@ -798,12 +804,45 @@ function TerminalPane({
   // reopened.
   useEffect(() => {
     const container = mountRef.current
-    if (!container) {
+    // Destacado: o xterm mora na janela própria; este encaixe só volta quando ele retorna.
+    if (!container || detachedTerminal) {
       return
     }
 
     return attachTerminalFitLifecycle(container, store, sessionId)
-  }, [store, sessionId, snapshot?.generation])
+  }, [store, sessionId, snapshot?.generation, detachedTerminal])
+
+  // Reiniciar troca o xterm sob o mesmo id: a janela própria o recebe de novo.
+  useEffect(() => {
+    detachedTerminal?.rebind()
+  }, [detachedTerminal, snapshot?.generation])
+
+  // O painel saiu (agente fechado, gaveta recolhida): a janela dele não fica órfã.
+  useEffect(() => () => detachedRef.current?.discard(), [])
+
+  const openInWindow = () => {
+    const handle = detachTerminal({
+      sessionId,
+      title,
+      store,
+      getHome: () => mountRef.current,
+      onClosed: () => {
+        detachedRef.current = null
+        setDetachedTerminal(null)
+      },
+    })
+    if (!handle) {
+      reportActionFailure('terminal-window', 'Não foi possível abrir a janela do terminal.')
+      return
+    }
+    detachedRef.current = handle
+    setDetachedTerminal(handle)
+  }
+  const bringBackFromWindow = () => {
+    detachedRef.current?.bringBack()
+    detachedRef.current = null
+    setDetachedTerminal(null)
+  }
 
   // Keep the terminal fitted as the drawer width changes. Expanding also
   // returns focus to the terminal so the user can type right away — or to the
@@ -975,6 +1014,19 @@ function TerminalPane({
             </button>
           )}
           {solo && soloHeading.pin}
+          <button
+            type="button"
+            onClick={detachedTerminal ? bringBackFromWindow : openInWindow}
+            className="felixo-btn-icon rounded-sm p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+            aria-label={detachedTerminal ? 'Trazer o terminal de volta' : 'Abrir o terminal em outra janela'}
+            title={
+              detachedTerminal
+                ? 'Traz o terminal de volta para este painel'
+                : 'Abre este terminal numa janela própria; o agente continua rodando, sem reiniciar'
+            }
+          >
+            {detachedTerminal ? <CornerDownLeft size={16} /> : <ExternalLink size={16} />}
+          </button>
           {!solo && (
             <>
               <button
@@ -1132,6 +1184,18 @@ function TerminalPane({
           inert={readingActive || archiveOpen}
           className="h-full min-w-0 flex-1 overflow-hidden px-1 pb-2 pt-1"
         />
+        {detachedTerminal && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-(--f-core-black-surface) text-xs text-zinc-400">
+            <span>Este terminal está em outra janela.</span>
+            <button
+              type="button"
+              onClick={bringBackFromWindow}
+              className="rounded-sm border border-white/15 px-2 py-1 text-zinc-200 hover:bg-white/10"
+            >
+              Trazer de volta
+            </button>
+          </div>
+        )}
         {/* Claude em tela cheia: o xterm não tem barra nessa tela, então o app põe a dele ao lado. */}
         {scrollRailPlacement.render && (
           <TerminalScrollRail

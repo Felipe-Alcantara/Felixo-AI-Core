@@ -92,6 +92,12 @@ export class MockTerminalSessionStore implements TerminalSessionStoreApi {
     this.notify(session)
   }
 
+  moveTo(id: string, container: HTMLElement): boolean {
+    if (!this.sessions.has(id)) return false
+    this.attach(id, container)
+    return true
+  }
+
   attach(id: string, container: HTMLElement): void {
     const session = this.sessions.get(id)
     if (!session) {

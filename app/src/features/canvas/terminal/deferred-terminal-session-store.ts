@@ -145,6 +145,15 @@ export class DeferredTerminalSessionStore implements TerminalSessionStoreApi {
     this.runDeferred((store) => store.attach(id, container))
   }
 
+  moveTo(id: string, container: HTMLElement): boolean {
+    if (this.realStore) return this.realStore.moveTo(id, container)
+    // Runtime ainda não carregou: não há xterm vivo para mover; aplica quando chegar.
+    this.runDeferred((store) => {
+      store.moveTo(id, container)
+    })
+    return false
+  }
+
   handleFileDrop(id: string, files: Iterable<File>): void {
     this.runDeferred((store) => store.handleFileDrop(id, files))
   }
