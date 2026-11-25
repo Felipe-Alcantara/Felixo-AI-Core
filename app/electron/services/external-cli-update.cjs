@@ -66,12 +66,13 @@ function classifyExecutable(filePath, { command, platformName, homeDir, env, rea
   const pnpmHome = env.PNPM_HOME ? toSlashes(env.PNPM_HOME, platformName) : null
   if (dir.endsWith('/pnpm') || (pnpmHome && dir === pnpmHome)) return { origin: 'pnpm' }
 
-  if (command === 'claude' && dir === `${home}/.local/bin` && !/\/(?:caskroom|cellar)\//.test(real)) {
+  // O Homebrew grava `Caskroom`/`Cellar` com maiúscula; só no Windows o caminho chega em minúsculas.
+  if (command === 'claude' && dir === `${home}/.local/bin` && !/\/(?:caskroom|cellar)\//i.test(real)) {
     return { origin: 'native' }
   }
 
-  const cask = real.match(/\/caskroom\/([^/]+)\//)
-  if (cask || /\/cellar\//.test(real)) return { origin: 'homebrew', ...(cask ? { cask: cask[1] } : {}) }
+  const cask = real.match(/\/caskroom\/([^/]+)\//i)
+  if (cask || /\/cellar\//i.test(real)) return { origin: 'homebrew', ...(cask ? { cask: cask[1] } : {}) }
   return null
 }
 
