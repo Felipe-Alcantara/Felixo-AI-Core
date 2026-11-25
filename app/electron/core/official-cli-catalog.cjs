@@ -203,6 +203,10 @@ const OFFICIAL_AI_CLIS = Object.freeze([
     command: 'openia',
     windowsAliases: ['openia.exe', 'openia.cmd', 'openia.ps1'],
     versionFlag: '--version',
+    // Versão mínima que o pino abaixo entrega, para o aviso "atualizar": a 0.2.0
+    // traz o teste da chave (sem ele a ferramenta fica calada com chave recusada).
+    // Se o pino subir para uma versão com correção que importa, suba esta junto.
+    minimumVersion: '0.2.0',
     category: 'ai-provider',
     kind: 'launcher',
     isLauncher: true,

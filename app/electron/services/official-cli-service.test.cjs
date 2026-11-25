@@ -3,6 +3,8 @@ const assert = require('node:assert/strict')
 const { EventEmitter } = require('node:events')
 
 const {
+  createCatalogItem,
+  isVersionBelow,
   getOfficialCliAccountStatus,
   installOfficialCli,
   listOfficialCliAccountSessions,
@@ -910,5 +912,28 @@ describe('runBufferedCommand: árvore de processos, cancelamento e saída', () =
     assert.ok(result.stderr.length <= 12000, `guardou ${result.stderr.length} caracteres`)
     assert.ok(result.stderr.endsWith('ERROR: ECONNRESET no fim'))
     assert.match(result.message, /ECONNRESET no fim$/, 'a mensagem mostra o fim da saída, não o começo')
+  })
+})
+
+describe('aviso de Openia desatualizado', () => {
+  const { getOfficialAiCli } = require('../core/official-cli-catalog.cjs')
+  const itemCom = (version) =>
+    createCatalogItem(getOfficialAiCli('openia'), { detected: version !== undefined, version: version ?? null, path: null, error: null })
+
+  it('0.1.0 aparece como desatualizado e 0.2.0 ou mais, não', () => {
+    assert.equal(itemCom('0.1.0').outdated, true)
+    assert.equal(itemCom('0.1.9').outdated, true)
+    assert.equal(itemCom('0.2.0').outdated, false)
+    assert.equal(itemCom('0.2.1').outdated, false)
+    assert.equal(itemCom('0.10.0').outdated, false)
+    assert.equal(itemCom('1.0').outdated, false)
+    assert.equal(itemCom('0.2.0').minimumVersion, '0.2.0')
+  })
+
+  it('versão ilegível, ausente ou CLI sem mínimo não gera aviso', () => {
+    assert.equal(itemCom('openia dev').outdated, false)
+    assert.equal(itemCom(null).outdated, false)
+    assert.equal(isVersionBelow('0.0.1', undefined), false)
+    assert.equal(createCatalogItem(getOfficialAiCli('codex'), { detected: true, version: '0.0.1' }).outdated, false)
   })
 })

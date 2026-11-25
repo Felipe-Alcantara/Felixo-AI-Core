@@ -39,6 +39,7 @@ import {
   CliDiagnosisList,
 } from '../../setup/CliDiagnosisView'
 import { useCliDiagnosis } from '../../setup/useCliDiagnosis'
+import { OpeniaOutdatedNotice } from '../../setup/OpeniaOutdatedNotice'
 
 type ModelManagerModalProps = {
   isOpen: boolean
@@ -56,6 +57,8 @@ type OfficialCliCatalogItem = {
   command: string
   detected: boolean
   version?: string | null
+  minimumVersion?: string | null
+  outdated?: boolean
   path?: string | null
   error?: string | null
   installCommand: string
@@ -760,6 +763,13 @@ export function ModelManagerModal({
                             <p className="mt-1 text-[11px] text-zinc-400">
                               Launcher: interface, modelo e chave são configurados na tela de spawn.
                             </p>
+                          )}
+                          {cli.id === 'openia' && cli.outdated && (
+                            <OpeniaOutdatedNotice
+                              outdated
+                              minimumVersion={cli.minimumVersion}
+                              onUpdated={() => void refreshOfficialDetection()}
+                            />
                           )}
                           {accountStatuses[cli.id] && (
                             <p className="mt-1 text-[11px] text-zinc-400">

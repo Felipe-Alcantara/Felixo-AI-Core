@@ -24,6 +24,7 @@ import { ADD_FOLDER_VALUE, type AgentConfig, type AgentConfigProject } from '../
 import { ProviderMark } from '../../shared/brand/ProviderMark'
 import { providerIdentity } from '../../shared/brand/provider-identity'
 import { FelixoSelect, type FelixoSelectOption } from '../../shared/components/FelixoSelect'
+import { OpeniaOutdatedNotice } from '../../setup/OpeniaOutdatedNotice'
 import { AgentPresetFields } from './AgentPresetFields'
 import { CloudSessionConfigFields } from './CloudSessionConfigFields'
 
@@ -226,6 +227,8 @@ export function AgentConfigFields({
                   <RotateCw size={11} className={config.openiaLoading ? 'animate-spin' : undefined} />
                 </button>
               </div>
+
+              <OpeniaOutdatedNotice onUpdated={config.refreshOpenia} />
 
               <label htmlFor={`${prefixo}-openia-interface`} className={ROTULO}>
                 Interface

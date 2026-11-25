@@ -448,6 +448,19 @@ async function switchOfficialCliAccount(
   }
 }
 
+/** Versão ilegível ou sem mínimo não é "antiga": só avisa quando dá para comparar. */
+function isVersionBelow(version, minimum) {
+  const parse = (value) => (/^\d+(\.\d+)*$/.test(String(value ?? '').trim()) ? String(value).trim().split('.').map(Number) : null)
+  const found = parse(version)
+  const wanted = parse(minimum)
+  if (!found || !wanted) return false
+  for (let i = 0; i < Math.max(found.length, wanted.length); i += 1) {
+    const diff = (found[i] ?? 0) - (wanted[i] ?? 0)
+    if (diff !== 0) return diff < 0
+  }
+  return false
+}
+
 function createCatalogItem(cli, detection) {
   return {
     id: cli.id,
@@ -456,6 +469,8 @@ function createCatalogItem(cli, detection) {
     command: cli.command,
     detected: Boolean(detection.detected),
     version: detection.version,
+    minimumVersion: cli.minimumVersion ?? null,
+    outdated: isVersionBelow(detection.version, cli.minimumVersion),
     path: detection.path,
     error: detection.error,
     installCommand: cli.install.label,
@@ -659,6 +674,7 @@ function createInstallErrorMessage(command, code, signal, stderr) {
 }
 
 module.exports = {
+  isVersionBelow,
   createCatalogItem,
   getOfficialCliAccountStatus,
   installOfficialCli,

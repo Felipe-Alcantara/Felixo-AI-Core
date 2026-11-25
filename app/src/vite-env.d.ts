@@ -306,6 +306,8 @@ type OfficialCliCatalogItem = {
   command: string
   detected: boolean
   version?: string | null
+  minimumVersion?: string | null
+  outdated?: boolean
   path?: string | null
   error?: string | null
   installCommand: string
