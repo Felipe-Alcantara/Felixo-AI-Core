@@ -805,6 +805,7 @@ reais de CLI com `__felixo_smoke_gravacao_<nome>__`).
 | E | `canvas-smoke-prompts.cjs` | caminhos de prompt |
 | F | `canvas-smoke-leitura.cjs` | Leitura do terminal |
 | G | `canvas-smoke-notion.cjs` | painel "Tarefas Notion" com handlers IPC falsos (sem rede e sem token): botão "Uma por repositório" (confirm, mensagem, repetição), chip "Sem <propriedade>" do editor de visualização e a aba criada com ele, concluídas escondidas até "Mostrar tarefas concluídas", e o botão ausente quando o Painel agrupa por uma ligação. Os dados ficam em `canvas-smoke-notion-fixture.cjs` |
+| K | `canvas-smoke-imagem.cjs` | popover "Gerar imagem" com o Openia roteirizado (`FELIXO_DEVTOOLS_FAKE_OPENIA=1`, só na instância de automação; sem OpenRouter e sem Openia real; a marca `[lento]`, `[saldo]` ou `[antigo]` na descrição escolhe o desfecho): Tentar de novo do catálogo, confirmação de custo (Voltar, Confirmar e gerar, "Não perguntar de novo", Voltar a perguntar), exatamente um bloco por geração, Cancelar sem bloco, alerta no gatilho com o popover fechado, falta de créditos e Atualizar o Openia |
 
 **O que reprova (regressão objetiva).** A comparação é estrutural, não pixel
 a pixel (decisão de 01/10/2026): fontes e renderização mudam de um sistema

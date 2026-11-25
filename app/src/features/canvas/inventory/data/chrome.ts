@@ -561,13 +561,12 @@ export const chromeSurfaces: InventoryElement[] = [
       { file: 'src/features/canvas/services/openia-image-store.test.ts' },
       { file: 'src/features/canvas/services/openia-update.test.ts' },
       { file: 'electron/services/openia-image-service.test.cjs' },
+      // Sessão K do smoke, com o Openia roteirizado (FELIXO_DEVTOOLS_FAKE_OPENIA=1): confirmação de custo, Voltar, Gerar, "não perguntar de novo",
+      // Cancelar, Tentar de novo, alerta no gatilho, falta de créditos e Atualizar o Openia. A geração real pela tela só foi vista à mão (09/10/2026).
+      { file: 'scripts/canvas-smoke-imagem.cjs', check: 'checarPopoverGerarImagem' },
+      { file: 'electron/core/devtools-fake-openia-guard.test.cjs' },
     ],
     gaps: [
-      {
-        what: 'O popover não tem teste de interface na CI (abrir, escolher modelo, Gerar, Cancelar, Tentar de novo, alerta no gatilho, Atualizar o Openia); só a store, o serviço do processo principal e a lógica de atualização são testados. A geração real pela tela foi vista em 09/10/2026, num roteiro fora do repositório.',
-        risk: 'médio',
-        task: '3f491f95-497e-8126-b0ec-fab2a600214a',
-      },
       {
         what: 'Fechar o popover por clique fora devolve o foco ao gatilho mesmo quando a pessoa clicou em outro controle.',
         risk: 'baixo',

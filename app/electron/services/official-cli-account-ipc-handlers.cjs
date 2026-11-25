@@ -23,8 +23,9 @@ const { getRequiredString } = require('./cli-event-utils.cjs')
  *   Getter, não instância: os handlers de conta são registrados antes do
  *   gerenciador de PTY existir, e resolver isso na chamada evita inverter a
  *   ordem de inicialização só por causa desta consulta.
+ * @param {typeof installOfficialCli} [dependencies.installOfficial] Só a automação troca (Openia roteirizado do smoke).
  */
-function registerOfficialCliAccountIpcHandlers({ getPtyManager = () => null } = {}) {
+function registerOfficialCliAccountIpcHandlers({ getPtyManager = () => null, installOfficial = installOfficialCli } = {}) {
   ipcMain.handle('cli:list-official', async () => {
     try {
       const clis = await listOfficialCliCatalog()
@@ -58,7 +59,7 @@ function registerOfficialCliAccountIpcHandlers({ getPtyManager = () => null } = 
       message: `Installing official CLI ${id}.`,
     })
 
-    return installOfficialCli(id, {
+    return installOfficial(id, {
       confirmed: params?.confirmed === true,
     })
   })

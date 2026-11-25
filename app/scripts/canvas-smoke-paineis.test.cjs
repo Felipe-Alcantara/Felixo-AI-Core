@@ -17,7 +17,7 @@ test('todo check exportado entra na lista que a sessão J executa, sem repetiç�
 
 test('a sessão J roda por padrão, aponta o seletor de pasta para a fixture e executa a lista', () => {
   const smoke = fs.readFileSync(path.join(__dirname, 'canvas-smoke.cjs'), 'utf8')
-  assert.match(smoke, /'A,B,C,D,E,F,G,H,I,J'/)
+  assert.match(smoke, /'A,B,C,D,E,F,G,H,I,J,K'/)
   assert.match(smoke, /letter: 'J',[\s\S]{0,900}get env\(\) \{\s*return ambienteDosPaineis\(\)\s*\}[\s\S]{0,200}run: \(page\) => executarChecksDosPaineis\(page\)/)
 })
 

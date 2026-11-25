@@ -32,7 +32,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **Elementos:** 116 (10 blocos, 17 ferramentas, 89 outras superfícies)
 - **Controles:** 447, dos quais 93 com teste específico
 - **Elementos sem nenhum teste:** 0
-- **Lacunas:** 123 (alto 1, médio 73, baixo 49), em 72 tasks
+- **Lacunas:** 122 (alto 1, médio 72, baixo 49), em 71 tasks
 
 ## Moldura do canvas
 
@@ -152,7 +152,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 - **IPC:** `openia:image-models`, `openia:image-pricing`, `openia:generate-image`, `openia:cancel-image`, `openia:image-status`, `canvas:image-generated`, `cli:install-official`
 - **Depende de:** `useOpeniaImageGeneration`, `openiaImageStore`, `FelixoSelect`, `addImageNodeFromArtifact (CanvasView)`, `updateOpenia (openia-update)`
 - **Sobreposição:** Popover inline dentro da sidebar (z-26), não flutua sobre o canvas; o menu de modelos (FelixoSelect) abre em portal (z 1000). O Esc que fecha o menu de modelos não fecha o popover junto (defaultPrevented).
-- **Testes:** `src/features/shared/ipc/ipc-failures-2.test.ts`, `src/features/canvas/services/openia-image-store.test.ts`, `src/features/canvas/services/openia-update.test.ts`, `electron/services/openia-image-service.test.cjs`
+- **Testes:** `src/features/shared/ipc/ipc-failures-2.test.ts`, `src/features/canvas/services/openia-image-store.test.ts`, `src/features/canvas/services/openia-update.test.ts`, `electron/services/openia-image-service.test.cjs`, `scripts/canvas-smoke-imagem.cjs` → `checarPopoverGerarImagem`, `electron/core/devtools-fake-openia-guard.test.cjs`
 
 | Estado | Quando |
 | --- | --- |
@@ -180,7 +180,6 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 
 | Lacuna | Risco | Task |
 | --- | --- | --- |
-| O popover não tem teste de interface na CI (abrir, escolher modelo, Gerar, Cancelar, Tentar de novo, alerta no gatilho, Atualizar o Openia); só a store, o serviço do processo principal e a lógica de atualização são testados. A geração real pela tela foi vista em 09/10/2026, num roteiro fora do repositório. | médio | `3f491f95-497e-8126-b0ec-fab2a600214a` |
 | Fechar o popover por clique fora devolve o foco ao gatilho mesmo quando a pessoa clicou em outro controle. | baixo | `3ea91f95-497e-81d9-a3d8-ed3971b18a24` |
 
 ### Barra superior
@@ -3090,7 +3089,6 @@ Sem controle próprio: as ações vêm de outros elementos.
 - `3ec91f95-497e-81ca-8319-ee657b0b6492` — 7 lacunas
 - `3ed91f95-497e-8114-a246-f72c73ae50c4` — 1 lacuna
 - `3f291f95-497e-81fe-8670-fe2fc871318d` — 1 lacuna
-- `3f491f95-497e-8126-b0ec-fab2a600214a` — 1 lacuna
 - `3fa91f95-497e-81fc-b87c-e65a5bdce2a5` — 1 lacuna
 - `41491f95-497e-81da-a20c-ce16ce0f3b5a` — 1 lacuna
 - `41591f95-497e-8166-84cb-cf8af3736c2b` — 1 lacuna

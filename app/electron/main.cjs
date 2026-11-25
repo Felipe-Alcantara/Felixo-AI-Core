@@ -156,6 +156,7 @@ const { registerOnboardingIpcHandlers } = require('./services/onboarding-ipc-han
 const { resolveOnboardingAutomation } = require('./core/onboarding-automation.cjs')
 const { installIpcInvokeProbe } = require('./core/ipc-invoke-probe.cjs')
 const { loadDevtoolsFakeCliPty } = require('./core/devtools-fake-cli-pty-guard.cjs')
+const { loadDevtoolsFakeOpenia } = require('./core/devtools-fake-openia-guard.cjs')
 const { registerDevtoolsMainEval } = require('./core/devtools-main-eval.cjs')
 const { loadAutomationShellOpen } = require('./core/devtools-shell-open-guard.cjs')
 const { loadAutomationProjectDialog } = require('./core/devtools-project-folder-guard.cjs')
@@ -308,6 +309,11 @@ const ipcProbe =
 // smoke da cadeia de contas passa pelo onData real do main sem abrir CLI
 // nenhuma. O app normal recebe null aqui e nunca carrega o módulo.
 const devtoolsFakeCliPty = loadDevtoolsFakeCliPty({ env: process.env, devtoolsPort })
+
+// Openia roteirizado (catálogo, preço, geração, versão e instalação) para o smoke do popover "Gerar imagem", só na
+// instância de automação que pediu (FELIXO_DEVTOOLS_FAKE_OPENIA=1). O app normal recebe null: nada vai à OpenRouter
+// por engano e o módulo nunca é carregado.
+const devtoolsFakeOpenia = loadDevtoolsFakeOpenia({ env: process.env, devtoolsPort })
 
 // `shell.openExternal` que sempre falha, só na instância de automação que
 // pediu (FELIXO_DEVTOOLS_SHELL_OPEN=falha): o smoke prova o aviso de "não foi
@@ -942,6 +948,7 @@ app.whenReady().then(async () => {
   })
   registerOfficialCliAccountIpcHandlers({
     getPtyManager: () => ptyHandlers?.manager ?? null,
+    ...(devtoolsFakeOpenia ? { installOfficial: devtoolsFakeOpenia.installOfficial } : {}),
   })
   registerOpeniaIpcHandlers()
   registerCliAccountIpcHandlers({ store: cliAccounts })
@@ -1101,6 +1108,14 @@ app.whenReady().then(async () => {
     saveImage: (params) =>
       saveGeneratedImage(params, path.join(appPaths.userData, 'generated-images')),
     notify: (artifact) => getMainWindow()?.webContents?.send('canvas:image-generated', artifact),
+    ...(devtoolsFakeOpenia
+      ? {
+          fetchCatalog: devtoolsFakeOpenia.fetchCatalog,
+          fetchPricing: devtoolsFakeOpenia.fetchPricing,
+          runImage: devtoolsFakeOpenia.runImage,
+          readVersion: devtoolsFakeOpenia.readVersion,
+        }
+      : {}),
   })
   registerOpeniaImageIpcHandlers({ service: openiaImageService })
   void openiaImageService.sweepOrphans()

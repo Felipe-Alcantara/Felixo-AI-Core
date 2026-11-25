@@ -61,6 +61,7 @@ const { criarSessaoDoNotion } = require('./canvas-smoke-notion.cjs')
 const { checarSobreposicoesDoInventario } = require('./canvas-smoke-sobreposicoes.cjs')
 const { executarChecksDaMoldura } = require('./canvas-smoke-moldura.cjs')
 const { ambienteDosPaineis, executarChecksDosPaineis } = require('./canvas-smoke-paineis.cjs')
+const { ambienteDaImagem, checarPopoverGerarImagem } = require('./canvas-smoke-imagem.cjs')
 const { checarFocoAoFecharPresetsDeAgente, checarNomesAcessiveisDaSidebar, checarTecladoDoMenuDeCor } = require('./canvas-smoke-teclado.cjs')
 const {
   criarRelatorio,
@@ -109,7 +110,7 @@ const PROMPTS_SESSION_ENV = CONTAS_SESSION_ENV
 // Sessão F: a mesma CLI roteirizada, tocando as gravações reais de CLI.
 const LEITURA_SESSION_ENV = { ...CONTAS_SESSION_ENV, FELIXO_DEVTOOLS_TERMINAL_RECORDINGS: RECORDINGS_DIR }
 const SESSOES = new Set(
-  (process.env.FELIXO_SMOKE_SESSOES || 'A,B,C,D,E,F,G,H,I,J').split(',').map((sessao) => sessao.trim().toUpperCase()),
+  (process.env.FELIXO_SMOKE_SESSOES || 'A,B,C,D,E,F,G,H,I,J,K').split(',').map((sessao) => sessao.trim().toUpperCase()),
 )
 const rodar = (sessao) => SESSOES.has(sessao)
 const DEVTOOLS_LAUNCH_TIMEOUT_MS = 60_000
@@ -2196,6 +2197,17 @@ const SESSIONS = [
       return ambienteDosPaineis()
     },
     run: (page) => executarChecksDosPaineis(page),
+  },
+  {
+    // O popover "Gerar imagem" com o Openia roteirizado (task 3f491f95-497e-8126-b0ec-fab2a600214a), em
+    // canvas-smoke-imagem.cjs: nenhuma chamada à OpenRouter nem ao Openia real.
+    letter: 'K',
+    failureName: 'canvas-smoke-failure-imagem',
+    summary: 'popover Gerar imagem: custo, geração, cancelamento, créditos e atualização do Openia',
+    get env() {
+      return ambienteDaImagem()
+    },
+    run: (page) => checarPopoverGerarImagem(page),
   },
 ]
 

@@ -1800,6 +1800,12 @@ async function executarChecksDosPaineis(page) {
 
 module.exports = {
   CHECKS_DOS_PAINEIS,
+  // Helpers compartilhados com as outras sessões do smoke (canvas-smoke-imagem.cjs).
+  esperar,
+  exigirClique,
+  falhar,
+  prepararJanela,
+  preencher,
   ambienteDosPaineis,
   executarChecksDosPaineis,
   checarBuscaDeBlocos,
