@@ -6,9 +6,9 @@ const path = require('node:path')
 
 const { createMcpRegistry } = require('./mcp-registry.cjs')
 
-function fakeSafeStorage(backend = 'os_crypt') {
+function fakeSafeStorage(backend = 'os_crypt', available = true) {
   return {
-    isEncryptionAvailable: () => true,
+    isEncryptionAvailable: () => available,
     getSelectedStorageBackend: () => backend,
     encryptString: (value) => Buffer.from(value, 'utf8').toString('base64'),
     decryptString: (value) => Buffer.from(Buffer.isBuffer(value) ? value.toString('utf8') : value, 'base64').toString('utf8'),
@@ -93,4 +93,11 @@ test('sem chaveiro seguro o segredo nao e gravado em texto', () => {
     assert.deepEqual(registry.list(), [])
     assert.equal(fs.existsSync(path.join(userData, 'mcp', 'secrets.bin')), false)
   }, fakeSafeStorage('basic'))
+})
+
+test('basic_text do Electron recente (sem criptografia) tambem pede o chaveiro', () => {
+  withRegistry((registry, userData) => {
+    assert.throws(() => registry.save(obs, { OBS_PASSWORD: 's3gredo' }), /chaveiro/)
+    assert.equal(fs.existsSync(path.join(userData, 'mcp', 'secrets.bin')), false)
+  }, fakeSafeStorage('basic_text', false))
 })

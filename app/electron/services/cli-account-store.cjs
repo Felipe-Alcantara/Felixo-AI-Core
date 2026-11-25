@@ -893,12 +893,11 @@ function createCliAccountStore({
    * explicar do que dar a impressão de que está protegida.
    */
   function canStoreSecret() {
-    if (!safeStorage?.isEncryptionAvailable?.()) {
-      return { ok: false, reason: 'O sistema não oferece armazenamento cifrado.' }
-    }
-
+    // `basic_text` é o nome atual (Electron recente) do armazenamento sem
+    // chaveiro, e nele `isEncryptionAvailable()` já é falso: o backend vem antes.
     try {
-      if (safeStorage.getSelectedStorageBackend?.() === 'basic') {
+      const backend = safeStorage?.getSelectedStorageBackend?.()
+      if (backend === 'basic' || backend === 'basic_text') {
         return {
           ok: false,
           reason:
@@ -906,7 +905,11 @@ function createCliAccountStore({
         }
       }
     } catch {
-      // Plataforma sem esse método: o isEncryptionAvailable acima já respondeu.
+      // Plataforma sem esse método: o isEncryptionAvailable abaixo responde.
+    }
+
+    if (!safeStorage?.isEncryptionAvailable?.()) {
+      return { ok: false, reason: 'O sistema não oferece armazenamento cifrado.' }
     }
 
     return { ok: true, reason: null }

@@ -85,15 +85,12 @@ function createNotionConnectionStore({
   }
 
   function canStoreSecret() {
-    if (!safeStorage?.isEncryptionAvailable?.()) {
-      return {
-        ok: false,
-        reason: 'O sistema não oferece armazenamento cifrado para a conexão Notion.',
-      }
-    }
-
+    // O Electron recente chama o armazenamento sem chaveiro de `basic_text` (e
+    // então `isEncryptionAvailable()` já é falso); o `basic` antigo ainda vale.
+    // O backend vem antes: sem chaveiro, a mensagem útil é a do chaveiro.
     try {
-      if (safeStorage.getSelectedStorageBackend?.() === 'basic') {
+      const backend = safeStorage?.getSelectedStorageBackend?.()
+      if (backend === 'basic' || backend === 'basic_text') {
         return {
           ok: false,
           reason:
@@ -102,6 +99,13 @@ function createNotionConnectionStore({
       }
     } catch {
       // `isEncryptionAvailable` is the only capability available on older Electron builds.
+    }
+
+    if (!safeStorage?.isEncryptionAvailable?.()) {
+      return {
+        ok: false,
+        reason: 'O sistema não oferece armazenamento cifrado para a conexão Notion.',
+      }
     }
 
     return { ok: true, reason: null }

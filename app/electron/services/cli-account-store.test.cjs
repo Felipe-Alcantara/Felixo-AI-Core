@@ -10,7 +10,7 @@ const { createCliAccountStore } = require('./cli-account-store.cjs')
 /** `safeStorage` de mentira, com o backend configurável pelo teste. */
 function fakeSafeStorage(backend = 'kwallet') {
   return {
-    isEncryptionAvailable: () => backend !== 'indisponivel',
+    isEncryptionAvailable: () => backend !== 'indisponivel' && backend !== 'basic_text',
     getSelectedStorageBackend: () => backend,
     // Cifra de brinquedo: o teste só precisa distinguir "guardado" de "texto".
     encryptString: (texto) => Buffer.from(`cifrado:${texto}`, 'utf8'),
@@ -301,7 +301,11 @@ test('a barreira aceita Openia com chave e recusa conta sem chave', () => {
 })
 
 test('sem chaveiro real, gravar a chave é recusado em vez de salvar em texto', () => {
-  const env = createEnvironment({ backend: 'basic' })
+  for (const backend of ['basic', 'basic_text']) semChaveiroRecusa(backend)
+})
+
+function semChaveiroRecusa(backend) {
+  const env = createEnvironment({ backend })
 
   try {
     const conta = env.store.create({ providerId: 'openia', label: 'pessoal' })
@@ -318,7 +322,7 @@ test('sem chaveiro real, gravar a chave é recusado em vez de salvar em texto', 
   } finally {
     env.cleanup()
   }
-})
+}
 
 test('remover a conta do Openia esquece a chave dela', () => {
   const env = createEnvironment()

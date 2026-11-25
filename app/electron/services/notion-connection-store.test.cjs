@@ -110,9 +110,24 @@ test('loja recusa salvar quando o chaveiro não é cifrado', () => {
   }
 })
 
-function fakeSafeStorage(backend = 'os_crypt') {
+test('basic_text do Electron recente (sem criptografia) mostra a mensagem do chaveiro', () => {
+  const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-notion-store-basic-text-'))
+  try {
+    const store = createNotionConnectionStore({
+      userData,
+      safeStorage: fakeSafeStorage('basic_text', false),
+    })
+    assert.equal(store.canStoreSecret().ok, false)
+    assert.match(store.canStoreSecret().reason, /chaveiro/)
+    assert.throws(() => store.save({ label: 'Pessoal', token: 'secret_token' }), /chaveiro/)
+  } finally {
+    fs.rmSync(userData, { recursive: true, force: true })
+  }
+})
+
+function fakeSafeStorage(backend = 'os_crypt', available = true) {
   return {
-    isEncryptionAvailable: () => true,
+    isEncryptionAvailable: () => available,
     getSelectedStorageBackend: () => backend,
     encryptString: (value) => Buffer.from(value, 'utf8').toString('base64'),
     decryptString: (value) => Buffer.from(Buffer.isBuffer(value) ? value.toString('utf8') : value, 'base64').toString('utf8'),

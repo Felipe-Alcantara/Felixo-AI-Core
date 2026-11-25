@@ -56,11 +56,14 @@ function createMcpRegistry({ userData, safeStorage, fileSystem = fs } = {}) {
   }
 
   function writeSecrets(secrets) {
+    // `basic_text` é o nome atual do armazenamento sem chaveiro (e nele
+    // `isEncryptionAvailable()` já é falso): o backend vem antes.
+    const backend = safeStorage?.getSelectedStorageBackend?.()
+    if (backend === 'basic' || backend === 'basic_text') {
+      throw new Error('O chaveiro do sistema esta indisponivel (backend basic). Desbloqueie-o para guardar segredos de MCP.')
+    }
     if (!safeStorage?.isEncryptionAvailable?.()) {
       throw new Error('O sistema nao oferece armazenamento cifrado para os segredos do MCP.')
-    }
-    if (safeStorage.getSelectedStorageBackend?.() === 'basic') {
-      throw new Error('O chaveiro do sistema esta indisponivel (backend basic). Desbloqueie-o para guardar segredos de MCP.')
     }
     fileSystem.mkdirSync(dir, { recursive: true })
     fileSystem.writeFileSync(secretsPath, safeStorage.encryptString(JSON.stringify(secrets)), { mode: 0o600 })
