@@ -471,7 +471,11 @@ Escolher um preset no formulario de novo agente so PREENCHE a configuracao
 (`useAgentConfig.applyPreset`); o agente nasce pelo botao de sempre. O contexto
 e as skills do preset entram no `initialText` do terminal
 (`buildPresetInstruction`), que o session-store ja entrega por ARQUIVO — um
-contexto grande de preset nunca e digitado inteiro no PTY. A cor do preset vira
+contexto grande de preset nunca e digitado inteiro no PTY. O
+`splitInitialContext` corta o trecho pelo marcador "Preset deste agente:" e o
+entrega como artefato proprio `agent-preset` (origem `preset` no historico),
+separado do `skills-manifest`; o arquivo de planejamento, que vem depois, tem
+corte proprio para nao cair dentro do preset. A cor do preset vira
 a moldura (`frameColor`) do terminal.
 
 ### Gerenciar presets (fatia 2)

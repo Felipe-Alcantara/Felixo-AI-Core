@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { splitInitialContext } from './context-file-delivery'
 import { buildTerminalNodeData } from './terminal-node-data'
 
 const LEMBRETE = 'Siga o padrão de qualidade do projeto.'
@@ -66,4 +67,26 @@ describe('buildTerminalNodeData', () => {
       ),
     ).toMatchObject({ frameColor: 'sky' })
   })
+
+  it.each([['ligado', ligado], ['desligado', desligado]])(
+    'preset com o padrão de qualidade %s vira artefato agent-preset próprio',
+    (_nome, contexto) => {
+      const data = buildTerminalNodeData(
+        {
+          label: 'Revisor',
+          command: 'claude',
+          planningFile: 'plano.md',
+          preset: { name: 'Revisor de PR', contextPrompt: 'Revise o diff.', skillIds: [] },
+        },
+        contexto,
+      )
+      const parts = splitInitialContext(data.initialText ?? '')
+      const preset = parts.filter((part) => part.kind === 'agent-preset')
+
+      expect(preset).toHaveLength(1)
+      expect(preset[0].content).toBe('Preset deste agente: Revisor de PR' + String.fromCharCode(10, 10) + 'Revise o diff.')
+      expect(parts.filter((part) => part.kind !== 'agent-preset').every((part) => !part.content.includes('Preset deste agente'))).toBe(true)
+      expect(parts.at(-1)?.content).toContain('ARQUIVO DE PLANEJAMENTO OBRIGATÓRIO')
+    },
+  )
 })

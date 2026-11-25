@@ -15,6 +15,7 @@ export type PromptInsertionSource =
   | 'handoff'
   | 'collaboration'
   | 'rename'
+  | 'preset'
   | 'unknown'
 
 /** The insertion record kept with a live terminal session. */
@@ -47,6 +48,7 @@ const PROMPT_INSERTION_SOURCES = new Set<PromptInsertionSource>([
   'handoff',
   'collaboration',
   'rename',
+  'preset',
   'unknown',
 ])
 
@@ -273,6 +275,7 @@ const SOURCE_LABELS: Partial<Record<PromptInsertionSource, string>> = {
   handoff: 'Passagem de responsabilidade',
   collaboration: 'Colaboração entre agentes',
   rename: 'Renomeação do agente',
+  preset: 'Preset do agente',
 }
 
 const SOURCE_DETAILS: Record<PromptInsertionSource, string> = {
@@ -284,6 +287,7 @@ const SOURCE_DETAILS: Record<PromptInsertionSource, string> = {
   handoff: 'Passagem de responsabilidade',
   collaboration: 'Colaboração entre agentes',
   rename: 'Renomeação do agente',
+  preset: 'Preset do agente',
   unknown: 'Origem desconhecida',
 }
 

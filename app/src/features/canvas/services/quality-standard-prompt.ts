@@ -382,6 +382,9 @@ export function buildQualityStandardMessage(template: string): string {
  *  usual standing instruction — see resolveTerminalInitialText. */
 export const RESUME_INITIAL_TEXT = toSubmittedTerminalText('/resume')
 
+/** Primeira linha da instrução do arquivo de planejamento; o `splitInitialContext` corta nela. */
+export const PLANNING_PROMPT_MARKER = 'ARQUIVO DE PLANEJAMENTO OBRIGATÓRIO'
+
 /**
  * Creates the standing instruction for an optional external planning file.
  * The file can have any extension: the agent receives its path and decides how
@@ -396,7 +399,7 @@ export function buildPlanningFileInstruction(
   }
 
   return [
-    'ARQUIVO DE PLANEJAMENTO OBRIGATÓRIO',
+    PLANNING_PROMPT_MARKER,
     'Leia o arquivo a seguir antes de começar e siga as funções, etapas e decisões indicadas nele.',
     'Você é responsável por executar e manter esse plano atualizado quando apropriado.',
     `Caminho: ${quotePromptPath(path)}`,

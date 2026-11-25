@@ -1,12 +1,15 @@
 import { isSubmittedTerminalText, toSubmittedTerminalText } from '../terminal/terminal-input'
 import type { PromptInsertionSource } from '../../shared/types/prompt-insertion'
 import { quotePromptPath } from './prompt-paths'
+import { PRESET_PROMPT_MARKER } from './agent-preset-prompt'
+import { PLANNING_PROMPT_MARKER } from './quality-standard-prompt'
 import { WORKFLOW_PROMPT_MARKER } from './workflow-prompt'
 
 export type ContextFileKind =
   | 'initial-context'
   | 'canvas-context'
   | 'agent-identity'
+  | 'agent-preset'
   | 'skills-manifest'
   | 'workflow'
   | 'handoff'
@@ -36,6 +39,8 @@ export function promptInsertionSourceForContextKind(
       return 'collaboration'
     case 'rename':
       return 'rename'
+    case 'agent-preset':
+      return 'preset'
     case 'initial-context':
     case 'canvas-context':
     case 'agent-identity':
@@ -92,6 +97,9 @@ export function splitInitialContext(text: string): ContextFilePart[] {
     },
     { marker: 'Skills disponíveis neste sistema', kind: 'skills-manifest' },
     { marker: WORKFLOW_PROMPT_MARKER, kind: 'workflow' },
+    { marker: PRESET_PROMPT_MARKER, kind: 'agent-preset' },
+    // Sem este corte, o arquivo de planejamento (sempre depois do preset) cairia dentro do artefato do preset.
+    { marker: PLANNING_PROMPT_MARKER, kind: 'initial-context' },
   ]
   const positions = headings
     .map((heading) => ({ ...heading, index: text.indexOf(heading.marker) }))

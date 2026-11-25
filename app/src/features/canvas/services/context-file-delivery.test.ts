@@ -132,3 +132,31 @@ describe('linha de leitura por sistema', () => {
   })
 })
 
+
+describe('instrução do preset como artefato próprio', () => {
+  const texto = [
+    'Siga o padrão de qualidade.',
+    'Sua identidade no canvas: Revisor',
+    'Skills disponíveis neste sistema (leia a que serve):\n- x',
+    'Preset deste agente: Revisor de PR\n\nRevise o diff.',
+    'ARQUIVO DE PLANEJAMENTO OBRIGATÓRIO\nCaminho: "plano.md"',
+  ].join('\n\n')
+
+  it('corta o preset num artefato agent-preset e tira ele do skills-manifest', () => {
+    const parts = splitInitialContext(texto)
+    const preset = parts.find((part) => part.kind === 'agent-preset')
+    const manifesto = parts.find((part) => part.kind === 'skills-manifest')
+    expect(preset?.content).toBe('Preset deste agente: Revisor de PR\n\nRevise o diff.')
+    expect(manifesto?.content).not.toContain('Preset deste agente')
+  })
+
+  it('o arquivo de planejamento não cai dentro do preset', () => {
+    const parts = splitInitialContext(texto)
+    expect(parts.find((part) => part.kind === 'agent-preset')?.content).not.toContain('PLANEJAMENTO')
+    expect(parts.at(-1)?.content).toContain('ARQUIVO DE PLANEJAMENTO OBRIGATÓRIO')
+  })
+
+  it('a origem do artefato é preset, não sistema', () => {
+    expect(promptInsertionSourceForContextKind('agent-preset')).toBe('preset')
+  })
+})

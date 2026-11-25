@@ -161,6 +161,7 @@ const PROMPT_INSERTION_SOURCES = new Set([
   'handoff',
   'collaboration',
   'rename',
+  'preset',
   'unknown',
 ])
 

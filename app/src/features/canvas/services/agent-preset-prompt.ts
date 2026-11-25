@@ -1,6 +1,9 @@
 import type { CanvasSkill } from '../types'
 import { quotePromptPath } from './prompt-paths'
 
+/** Primeira linha da instrução do preset; o `splitInitialContext` corta nela e entrega o trecho como artefato `agent-preset`. */
+export const PRESET_PROMPT_MARKER = 'Preset deste agente:'
+
 export type PresetForPrompt = {
   name: string
   contextPrompt: string
@@ -32,7 +35,7 @@ export function buildPresetInstruction(
 
   if (!context && skills.length === 0) return undefined
 
-  const sections = [`Preset deste agente: ${preset.name}`]
+  const sections = [`${PRESET_PROMPT_MARKER} ${preset.name}`]
   if (context) sections.push(context)
   if (skills.length > 0) {
     sections.push(
