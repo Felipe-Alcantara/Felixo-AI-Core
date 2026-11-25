@@ -1095,6 +1095,12 @@ declare global {
           automationId: string,
         ) => Promise<CliInvokeResult & { deleted?: boolean }>
       }
+      /** Aviso do sistema operacional (notificação, barra de tarefas, Dock) com o app fora de foco. */
+      desktopAttention?: {
+        notify: (payload: { title: string; body: string; nodeId?: string }) => Promise<{ shown: boolean }>
+        setUnread: (count: number) => Promise<{ count: number }>
+        onOpen: (callback: (payload: { nodeId: string }) => void) => () => void
+      }
       /** Janelas fixas de aprovação (12h e 18h): o main avisa quando uma abre. */
       approvalWindows?: {
         onWindow: (callback: (window: { slotAt: number }) => void) => () => void

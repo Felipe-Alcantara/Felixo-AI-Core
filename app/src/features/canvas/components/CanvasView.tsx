@@ -523,6 +523,8 @@ function CanvasInner({
     setNotificationHistory,
     setNotificationSoundEnabled,
     setNotificationVolume,
+    setSystemNotifications,
+    systemNotifications,
   } = useCanvasNotifications({ hydrated, loadFailed, nodes, store })
 
   // Abrir o terminal É ler a notificação dele. Todo caminho de abertura
@@ -702,6 +704,17 @@ function CanvasInner({
         structuralNodes.filter((node) => node.type === 'terminal').map((node) => node.id),
       ) + (updateNotificationItem ? 1 : 0),
     [notificationHistory, structuralNodes, updateNotificationItem],
+  )
+  // Dock do macOS: número de agentes não lidos (some ao desligar o aviso do sistema).
+  const systemAttentionEnabled = systemNotifications.enabled
+  const unreadAgentCount = notificationCount - (updateNotificationItem ? 1 : 0)
+  useEffect(() => {
+    void window.felixo?.desktopAttention?.setUnread(systemAttentionEnabled ? unreadAgentCount : 0)
+  }, [systemAttentionEnabled, unreadAgentCount])
+  // Clique na notificação do sistema: o main traz a janela e o agente abre aqui.
+  useEffect(
+    () => window.felixo?.desktopAttention?.onOpen(({ nodeId }) => openTerminal(nodeId)),
+    [openTerminal],
   )
   // Rótulo de cada agente no minimapa, por id: antes era um `nodes.find` por
   // bloco desenhado (O(N²), 2 ms por quadro com 1.000 blocos).
@@ -2632,6 +2645,8 @@ function CanvasInner({
             onSoundEnabledChange={setNotificationSoundEnabled}
             volume={notificationVolume}
             onVolumeChange={setNotificationVolume}
+            systemNotifications={systemNotifications}
+            onSystemNotificationsChange={setSystemNotifications}
             onClose={() => setActiveTool(null)}
             onFocusNode={focusNode}
             onExpandNode={openTerminal}

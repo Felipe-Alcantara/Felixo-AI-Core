@@ -1172,6 +1172,19 @@ Enquanto gera, o painel mostra o tempo decorrido, e **Cancelar** interrompe o pe
 O botão **Notificações** registra, enquanto o app estiver aberto, agentes que terminaram um trabalho, encerraram a sessão ou estão aguardando aprovação/resposta. Quando há itens, ele recebe borda vermelha e um contador externo, sem cobrir o ícone ou o texto. O painel abre ao lado do botão com animação; cada item mostra o agente e a última mensagem útil do terminal. Clique nele para abrir o terminal e remover o aviso. O histórico é limpo ao fechar o app.
 Quando uma nova notificação surgir, o app reproduz um alerta sonoro curto; notificações já existentes ao iniciar não repetem o som.
 
+#### Aviso pelo sistema operacional
+
+No painel de Notificações, o interruptor **Avisar pelo sistema com o app fora de foco** vem **desligado**. Ligado, quando um agente novo pede resposta ou falha com o app minimizado ou atrás de outra janela:
+
+- aparece uma notificação do sistema com a categoria e o nome do bloco (nunca texto da saída do terminal, porque ela pode aparecer na tela bloqueada);
+- no Windows e no Linux o ícone pisca na barra de tarefas até o app ganhar foco; no macOS o Dock salta e mostra o número de não lidas;
+- vários agentes no mesmo segundo viram um aviso só ("5 agentes precisam de você");
+- clicar na notificação traz o app para a frente e abre o agente.
+
+Abaixo do interruptor, uma chave por categoria escolhe quem avisa. **Precisa de resposta** e **Falhou** vêm ligadas; **Terminou** vem desligada. Com o app em foco nada disso acontece.
+
+Limites conhecidos: no Windows a notificação só é garantida no app instalado (em `npm run dev` pode não aparecer); no macOS, enquanto o app não for assinado, o sistema pode recusar a notificação e só o Dock funciona; no Linux depende do servidor de notificações do ambiente.
+
 ### Conectar agentes
 
 Ao arrastar uma conexão entre dois blocos de agentes, ambos recebem uma instrução de colaboração. Se usam o mesmo diretório de trabalho, o app informa que atuam no mesmo projeto; caso usem diretórios diferentes, a conexão declara que os contextos são relacionados. A conexão não copia conversas entre terminais: use arquivos `.md` e notas do canvas para coordenar decisões, progresso e bloqueios.

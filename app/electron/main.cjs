@@ -91,6 +91,7 @@ const {
   registerAgentScheduleIpcHandlers,
 } = require('./services/agent-schedule-ipc-handlers.cjs')
 const { createApprovalWindowReminder } = require('./services/approval-window-reminder.cjs')
+const { registerDesktopAttentionIpcHandlers } = require('./services/desktop-attention.cjs')
 const {
   registerModelsIpcHandlers,
 } = require('./services/models-ipc-handlers.cjs')
@@ -1094,6 +1095,12 @@ app.whenReady().then(async () => {
     ...(automationProjectDialog ? { dialog: automationProjectDialog } : {}),
   })
   registerNotesIpcHandlers({ database: storageDatabase })
+  registerDesktopAttentionIpcHandlers({
+    ipcMain,
+    app,
+    Notification: require('electron').Notification,
+    getMainWindow,
+  })
   canvasFilesHandlers = registerCanvasFilesIpcHandlers(getMainWindow, appPaths)
   contextFilesHandlers = registerContextFilesIpcHandlers(appPaths, {
     logDelivery: (entry) => logQaEvent(entry),

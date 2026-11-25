@@ -31,6 +31,20 @@ export const notificationsTool: InventoryElement = {
       failure: 'se o Chromium bloquear o áudio, a barra de status avisa "O som da notificação foi bloqueado pelo sistema" (reportActionFailure); sem localStorage a escolha vale só nesta sessão.',
     },
     {
+      locator: 'Avisar pelo sistema com o app fora de foco',
+      kind: 'toggle',
+      effect: 'Liga ou desliga o aviso do sistema operacional (padrão desligado): com o app fora de foco, um agente novo que pede ação gera notificação nativa, pisca na barra de tarefas (Windows/Linux) ou salta e numera o Dock (macOS). Junta rajadas de 1 s em um aviso; o clique traz o app e abre o agente. O texto leva só a categoria e o nome do bloco, nunca saída de terminal. Grava felixo:notification-preferences.',
+      failure: 'Só aparece no app desktop. macOS sem assinatura pode recusar a notificação (o Dock segue funcionando); no Windows em `npm run dev` a notificação pode não aparecer; no Linux depende do servidor de notificações. Sem localStorage vale só nesta sessão.',
+      test: { file: 'src/features/canvas/services/desktop-attention.test.ts' },
+    },
+    {
+      locator: 'Avisar o sistema: ',
+      kind: 'toggle',
+      effect: 'Uma caixa por categoria (Precisa de resposta, Falhou, Terminou) que escolhe quais avisam o sistema; só aparece com o aviso do sistema ligado. Padrão: Precisa de resposta e Falhou ligadas, Terminou desligada.',
+      failure: 'Sem falha própria (estado local e localStorage best effort).',
+      disabledWhen: 'some com o aviso do sistema desligado',
+    },
+    {
       locator: 'Limpar busca',
       kind: 'button',
       effect: 'Zera o campo "Buscar notificações" (setQuery); a lista volta ao filtro atual sem busca.',
@@ -99,12 +113,13 @@ export const notificationsTool: InventoryElement = {
   ],
   persistence: [
     'localStorage felixo:notification-history (até 200 itens; poda de 7 dias e de blocos que sumiram)',
-    'localStorage felixo:notification-preferences (som ligado e volume)',
+    'localStorage felixo:notification-preferences (som ligado, volume e aviso do sistema)',
     'nenhuma para filtro, busca e "Depois" da atualização (estado de React)',
   ],
-  ipc: ['updates:install'],
+  ipc: ['updates:install', 'desktop-attention:notify', 'desktop-attention:set-unread', 'desktop-attention:open'],
   dependsOn: [
     'CanvasPanel',
+    'desktop-attention (planDesktopAttention)',
     'useUpdateStatus',
     'useAccountContinuation',
     'acknowledgeNodeNotifications (CanvasView)',
@@ -123,6 +138,8 @@ export const notificationsTool: InventoryElement = {
     { file: 'src/features/canvas/terminal/notification-category.test.ts' },
     { file: 'src/features/canvas/services/notification-history-storage.test.ts' },
     { file: 'src/features/canvas/services/notification-preferences.test.ts' },
+    { file: 'src/features/canvas/services/desktop-attention.test.ts' },
+    { file: 'electron/services/desktop-attention.test.cjs' },
     { file: 'src/features/canvas/components/notification-time.test.ts' },
   ],
   gaps: [

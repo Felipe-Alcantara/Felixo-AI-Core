@@ -397,6 +397,15 @@ contextBridge.exposeInMainWorld('felixo', {
       return () => ipcRenderer.removeListener('agent-schedule:due', handler)
     },
   },
+  desktopAttention: {
+    notify: (payload) => ipcRenderer.invoke('desktop-attention:notify', payload),
+    setUnread: (count) => ipcRenderer.invoke('desktop-attention:set-unread', count),
+    onOpen: (callback) => {
+      const handler = (_event, payload) => callback(payload)
+      ipcRenderer.on('desktop-attention:open', handler)
+      return () => ipcRenderer.removeListener('desktop-attention:open', handler)
+    },
+  },
   approvalWindows: {
     onWindow: (callback) => {
       const handler = (_event, window) => callback(window)

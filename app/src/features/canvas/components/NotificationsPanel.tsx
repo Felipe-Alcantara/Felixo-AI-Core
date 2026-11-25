@@ -13,9 +13,11 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import type { Node } from '@xyflow/react'
+import { FelixoToggle } from '../../shared/components/FelixoToggle'
 import { formatRelativeTime } from './notification-time'
 import type { SessionSnapshot } from '../terminal/terminal-session-store'
 import type { CanvasNotification } from '../terminal/canvas-notifications'
+import type { SystemNotificationPreferences } from '../services/notification-preferences'
 import {
   NOTIFICATION_CATEGORY_LABELS,
   notificationCategory,
@@ -54,6 +56,9 @@ type NotificationsPanelProps = {
   onClearRead: () => void
   onSoundEnabledChange: (enabled: boolean) => void
   onVolumeChange: (volume: number) => void
+  /** Aviso pelo sistema operacional; só existe no app desktop (o main fala com o SO). */
+  systemNotifications?: SystemNotificationPreferences
+  onSystemNotificationsChange?: (next: SystemNotificationPreferences) => void
 }
 
 type HistoryFilter = 'unread' | 'all'
@@ -81,6 +86,8 @@ export function NotificationsPanel({
   onClearRead,
   onSoundEnabledChange,
   onVolumeChange,
+  systemNotifications,
+  onSystemNotificationsChange,
 }: NotificationsPanelProps) {
   const [filter, setFilter] = useState<HistoryFilter>('unread')
   const [query, setQuery] = useState('')
@@ -156,6 +163,35 @@ export function NotificationsPanel({
           {soundEnabled ? `${Math.round(volume * 100)}%` : 'Mudo'}
         </span>
       </div>
+
+      {systemNotifications && onSystemNotificationsChange && window.felixo?.desktopAttention && (
+        <div className="flex flex-col gap-1.5 rounded-md border border-white/10 bg-black/20 px-2 py-1.5 text-[11px] text-zinc-400">
+          <div className="flex items-center justify-between gap-2 text-xs text-zinc-200">
+            Avisar pelo sistema com o app fora de foco
+            <FelixoToggle
+              checked={systemNotifications.enabled}
+              onChange={(enabled) => onSystemNotificationsChange({ ...systemNotifications, enabled })}
+              label="Avisar pelo sistema com o app fora de foco"
+            />
+          </div>
+          {systemNotifications.enabled &&
+            (['needs-response', 'failed', 'finished'] as const).map((category) => (
+              <div key={category} className="ml-3 flex items-center justify-between gap-2">
+                {NOTIFICATION_CATEGORY_LABELS[category]}
+                <FelixoToggle
+                  checked={systemNotifications.categories[category]}
+                  onChange={(checked) =>
+                    onSystemNotificationsChange({
+                      ...systemNotifications,
+                      categories: { ...systemNotifications.categories, [category]: checked },
+                    })
+                  }
+                  label={`Avisar o sistema: ${NOTIFICATION_CATEGORY_LABELS[category]}`}
+                />
+              </div>
+            ))}
+        </div>
+      )}
 
       <label className="flex items-center gap-2 rounded-md border border-white/10 bg-black/20 px-2 py-1.5 text-zinc-500 focus-within:border-white/10 focus-within:text-(--f-core-white-soft)">
         <Search size={13} aria-hidden />

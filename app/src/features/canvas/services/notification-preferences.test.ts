@@ -20,7 +20,7 @@ describe('notification preferences', () => {
     const target = storage()
     expect(readNotificationPreferences(target)).toEqual(DEFAULT_NOTIFICATION_PREFERENCES)
 
-    saveNotificationPreferences({ soundEnabled: false, volume: 1 }, target)
+    saveNotificationPreferences({ ...DEFAULT_NOTIFICATION_PREFERENCES, soundEnabled: false, volume: 1 }, target)
     expect(readNotificationPreferences(target).soundEnabled).toBe(false)
   })
 
@@ -33,13 +33,41 @@ describe('notification preferences', () => {
 
   it('persists and clamps the volume', () => {
     const target = storage()
-    saveNotificationPreferences({ soundEnabled: true, volume: 0.4 }, target)
+    saveNotificationPreferences({ ...DEFAULT_NOTIFICATION_PREFERENCES, soundEnabled: true, volume: 0.4 }, target)
     expect(readNotificationPreferences(target).volume).toBe(0.4)
 
-    saveNotificationPreferences({ soundEnabled: true, volume: 5 }, target)
+    saveNotificationPreferences({ ...DEFAULT_NOTIFICATION_PREFERENCES, soundEnabled: true, volume: 5 }, target)
     expect(readNotificationPreferences(target).volume).toBe(1)
 
-    saveNotificationPreferences({ soundEnabled: true, volume: -2 }, target)
+    saveNotificationPreferences({ ...DEFAULT_NOTIFICATION_PREFERENCES, soundEnabled: true, volume: -2 }, target)
     expect(readNotificationPreferences(target).volume).toBe(0)
+  })
+
+  it('keeps the system notification off by default and reads the saved choice', () => {
+    expect(DEFAULT_NOTIFICATION_PREFERENCES.system).toEqual({
+      enabled: false,
+      categories: { 'needs-response': true, failed: true, finished: false },
+    })
+
+    const target = storage()
+    saveNotificationPreferences(
+      {
+        ...DEFAULT_NOTIFICATION_PREFERENCES,
+        system: { enabled: true, categories: { 'needs-response': false, failed: true, finished: true } },
+      },
+      target,
+    )
+    expect(readNotificationPreferences(target).system).toEqual({
+      enabled: true,
+      categories: { 'needs-response': false, failed: true, finished: true },
+    })
+  })
+
+  it('ignores a malformed system block and keeps the defaults', () => {
+    const stored = '{"system":{"enabled":"yes","categories":{"failed":"no","finished":true}}}'
+    expect(readNotificationPreferences(storage(stored)).system).toEqual({
+      enabled: false,
+      categories: { 'needs-response': true, failed: true, finished: true },
+    })
   })
 })

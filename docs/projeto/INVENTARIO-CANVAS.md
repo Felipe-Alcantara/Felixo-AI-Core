@@ -30,7 +30,7 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 ## Números
 
 - **Elementos:** 115 (10 blocos, 17 ferramentas, 88 outras superfícies)
-- **Controles:** 439, dos quais 92 com teste específico
+- **Controles:** 441, dos quais 93 com teste específico
 - **Elementos sem nenhum teste:** 0
 - **Lacunas:** 123 (alto 1, médio 73, baixo 49), em 72 tasks
 
@@ -1850,11 +1850,11 @@ Sem controle próprio: as ações vêm de outros elementos.
 ### Notificações
 
 - **ID:** `tool-notifications` · **Dono:** `src/features/canvas/components/NotificationsPanel.tsx`
-- **Persistência:** localStorage felixo:notification-history (até 200 itens; poda de 7 dias e de blocos que sumiram); localStorage felixo:notification-preferences (som ligado e volume); nenhuma para filtro, busca e "Depois" da atualização (estado de React)
-- **IPC:** `updates:install`
-- **Depende de:** `CanvasPanel`, `useUpdateStatus`, `useAccountContinuation`, `acknowledgeNodeNotifications (CanvasView)`, `canvas-notifications`, `notification-history-storage`, `notification-preferences`, `notification-category`
+- **Persistência:** localStorage felixo:notification-history (até 200 itens; poda de 7 dias e de blocos que sumiram); localStorage felixo:notification-preferences (som ligado, volume e aviso do sistema); nenhuma para filtro, busca e "Depois" da atualização (estado de React)
+- **IPC:** `updates:install`, `desktop-attention:notify`, `desktop-attention:set-unread`, `desktop-attention:open`
+- **Depende de:** `CanvasPanel`, `desktop-attention (planDesktopAttention)`, `useUpdateStatus`, `useAccountContinuation`, `acknowledgeNodeNotifications (CanvasView)`, `canvas-notifications`, `notification-history-storage`, `notification-preferences`, `notification-category`
 - **Sobreposição:** CanvasPanel absolute z-20 (z-30 com foco dentro), top-16, left = sidebar + 1rem; a lista rola por dentro (max-h 38vh). Fica abaixo da sidebar (26) e acima de topbar e statusbar (18) e do aviso de layout (z-10, no mesmo canto: cobre o aviso). Disputa largura com gaveta e inspector por reportPanelWidth (splitHorizontalSpace). Marcar e remover do item só aparecem no hover ou com foco (opacity-0).
-- **Testes:** `scripts/canvas-smoke-moldura.cjs` → `checarPainelDeNotificacoes`, `src/features/shared/ipc/ipc-failures-2.test.ts`, `scripts/canvas-smoke.cjs` → `checarInteracoes`, `scripts/canvas-smoke-contas.cjs` → `checarPropostaENotificacao`, `scripts/canvas-smoke-contas.cjs` → `checarRedeSemItem`, `src/features/canvas/terminal/canvas-notifications.test.ts`, `src/features/canvas/terminal/notification-category.test.ts`, `src/features/canvas/services/notification-history-storage.test.ts`, `src/features/canvas/services/notification-preferences.test.ts`, `src/features/canvas/components/notification-time.test.ts`
+- **Testes:** `scripts/canvas-smoke-moldura.cjs` → `checarPainelDeNotificacoes`, `src/features/shared/ipc/ipc-failures-2.test.ts`, `scripts/canvas-smoke.cjs` → `checarInteracoes`, `scripts/canvas-smoke-contas.cjs` → `checarPropostaENotificacao`, `scripts/canvas-smoke-contas.cjs` → `checarRedeSemItem`, `src/features/canvas/terminal/canvas-notifications.test.ts`, `src/features/canvas/terminal/notification-category.test.ts`, `src/features/canvas/services/notification-history-storage.test.ts`, `src/features/canvas/services/notification-preferences.test.ts`, `src/features/canvas/services/desktop-attention.test.ts`, `electron/services/desktop-attention.test.cjs`, `src/features/canvas/components/notification-time.test.ts`
 
 | Estado | Quando |
 | --- | --- |
@@ -1869,6 +1869,8 @@ Sem controle próprio: as ações vêm de outros elementos.
 | --- | --- | --- | --- | --- |
 | `Marcar todas como lidas` (button) | clique | onMarkAllRead: reconhece cada bloco com notificação não lida (acknowledgeNodeNotifications) e marca todas como lidas (markAllCanvasNotificationsRead). O badge do sino cai para 0 (ou 1, se houver atualização) e o histórico é gravado em felixo:notification-history. (desabilitado: nenhuma notificação não lida (unreadCount === 0)) | Sem falha própria: estado local e localStorage best effort (escrita recusada é ignorada). | — |
 | `Mutar notificações` (button) | clique | Alterna o som (setNotificationSoundEnabled), grava felixo:notification-preferences e liga ou desliga o som que toca quando um agente novo pede ação; aria-pressed indica mudo e o rótulo vira "Ativar som das notificações". | se o Chromium bloquear o áudio, a barra de status avisa "O som da notificação foi bloqueado pelo sistema" (reportActionFailure); sem localStorage a escolha vale só nesta sessão. | — |
+| `Avisar pelo sistema com o app fora de foco` (toggle) | clique | Liga ou desliga o aviso do sistema operacional (padrão desligado): com o app fora de foco, um agente novo que pede ação gera notificação nativa, pisca na barra de tarefas (Windows/Linux) ou salta e numera o Dock (macOS). Junta rajadas de 1 s em um aviso; o clique traz o app e abre o agente. O texto leva só a categoria e o nome do bloco, nunca saída de terminal. Grava felixo:notification-preferences. | Só aparece no app desktop. macOS sem assinatura pode recusar a notificação (o Dock segue funcionando); no Windows em `npm run dev` a notificação pode não aparecer; no Linux depende do servidor de notificações. Sem localStorage vale só nesta sessão. | `src/features/canvas/services/desktop-attention.test.ts` |
+| `Avisar o sistema: ` (toggle) | clique | Uma caixa por categoria (Precisa de resposta, Falhou, Terminou) que escolhe quais avisam o sistema; só aparece com o aviso do sistema ligado. Padrão: Precisa de resposta e Falhou ligadas, Terminou desligada. (desabilitado: some com o aviso do sistema desligado) | Sem falha própria (estado local e localStorage best effort). | — |
 | `Limpar busca` (button) | clique | Zera o campo "Buscar notificações" (setQuery); a lista volta ao filtro atual sem busca. (desabilitado: some com o campo de busca vazio) | Sem falha própria (estado local). | — |
 | `Limpar notificações lidas` (button) | clique | onClearRead: remove do histórico todas as notificações lidas (clearReadCanvasNotifications) e grava felixo:notification-history, sem pedir confirmação. (desabilitado: só aparece no filtro Histórico com pelo menos uma lida) | Sem falha própria; não há desfazer. | — |
 | `onExpandNode(node.id)` (button) | clique | Item do agente: focusNode centraliza o bloco na área útil (zoom 1,2) e o seleciona, openTerminal abre a gaveta do terminal e marca as notificações daquele bloco como lidas, e o painel fecha. | Bloco removido não aparece (a lista filtra terminais vivos). Bloco dentro de grupo é centralizado no lugar errado (ver lacuna de foco no elemento da área do canvas). | — |

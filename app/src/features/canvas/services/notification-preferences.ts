@@ -1,13 +1,50 @@
 const STORAGE_KEY = 'felixo:notification-preferences'
 
+import type { NotificationCategory } from '../terminal/notification-category'
+
+/** Aviso pelo sistema operacional (notificação nativa, barra de tarefas, Dock). */
+export type SystemNotificationPreferences = {
+  enabled: boolean
+  categories: Record<NotificationCategory, boolean>
+}
+
 export type NotificationPreferences = {
   soundEnabled: boolean
   volume: number
+  system: SystemNotificationPreferences
+}
+
+// Desligado por padrão: o aviso do sistema aparece fora do app (até na tela
+// bloqueada) e a pessoa precisa escolher recebê-lo. "Terminou" é a categoria
+// mais frequente e a única que não pede ação, então começa desmarcada.
+export const DEFAULT_SYSTEM_NOTIFICATION_PREFERENCES: SystemNotificationPreferences = {
+  enabled: false,
+  categories: { 'needs-response': true, failed: true, finished: false },
 }
 
 export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   soundEnabled: true,
   volume: 1,
+  system: DEFAULT_SYSTEM_NOTIFICATION_PREFERENCES,
+}
+
+function readSystem(value: unknown): SystemNotificationPreferences {
+  const defaults = DEFAULT_SYSTEM_NOTIFICATION_PREFERENCES
+  const record = typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
+  const categories =
+    typeof record.categories === 'object' && record.categories !== null
+      ? (record.categories as Record<string, unknown>)
+      : {}
+  const pick = (key: NotificationCategory) =>
+    typeof categories[key] === 'boolean' ? categories[key] : defaults.categories[key]
+  return {
+    enabled: record.enabled === true,
+    categories: {
+      'needs-response': pick('needs-response'),
+      failed: pick('failed'),
+      finished: pick('finished'),
+    },
+  }
 }
 
 function clampVolume(value: unknown): number {
@@ -36,6 +73,7 @@ export function readNotificationPreferences(
     return {
       soundEnabled: 'soundEnabled' in record ? record.soundEnabled !== false : true,
       volume: 'volume' in record ? clampVolume(record.volume) : DEFAULT_NOTIFICATION_PREFERENCES.volume,
+      system: readSystem(record.system),
     }
   } catch {
     return DEFAULT_NOTIFICATION_PREFERENCES

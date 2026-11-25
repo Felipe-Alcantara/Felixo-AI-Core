@@ -23,7 +23,14 @@ import {
 import {
   readNotificationPreferences,
   saveNotificationPreferences,
+  type SystemNotificationPreferences,
 } from '../services/notification-preferences'
+import {
+  DESKTOP_ATTENTION_BATCH_MS,
+  planDesktopAttention,
+  type DesktopAttentionItem,
+} from '../services/desktop-attention'
+import { notificationCategory } from '../terminal/notification-category'
 import type { CanvasNodeData } from '../types'
 
 type CanvasNotificationsOptions = {
@@ -65,6 +72,13 @@ export function useCanvasNotifications({
   const [notificationVolume, setNotificationVolume] = useState(
     () => readNotificationPreferences().volume,
   )
+  const [systemNotifications, setSystemNotifications] = useState<SystemNotificationPreferences>(
+    () => readNotificationPreferences().system,
+  )
+  const systemNotificationsRef = useRef(systemNotifications)
+  const nodesRef = useRef(nodes)
+  const attentionQueueRef = useRef<DesktopAttentionItem[]>([])
+  const attentionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Restored ids carry their original sequence numbers; resume past the highest
   // one so a new notification can never reuse an id still in the history.
   const notificationSequenceRef = useRef(
@@ -101,6 +115,18 @@ export function useCanvasNotifications({
       notificationAudioRef.current = null
     }
   }, [])
+
+  useEffect(() => {
+    systemNotificationsRef.current = systemNotifications
+    nodesRef.current = nodes
+  })
+
+  useEffect(
+    () => () => {
+      if (attentionTimerRef.current) clearTimeout(attentionTimerRef.current)
+    },
+    [],
+  )
 
   // Reconciles history against the live canvas once on load: notifications
   // left over from a node deleted in a previous session (or restored from
@@ -159,6 +185,27 @@ export function useCanvasNotifications({
       ).notifications,
     )
 
+    // Aviso do sistema: junta quem avisou dentro da mesma janela curta e só
+    // decide (foco, preferências) na hora de enviar.
+    if (window.felixo?.desktopAttention && systemNotificationsRef.current.enabled) {
+      for (const nodeId of newIds) {
+        const snapshot = sessionSnapshots[nodeId]
+        if (!snapshot) continue
+        const data = nodesRef.current.find((node) => node.id === nodeId)?.data
+        attentionQueueRef.current.push({
+          nodeId,
+          label: String(data?.label || data?.command || nodeId),
+          category: notificationCategory(snapshot),
+        })
+      }
+      attentionTimerRef.current ??= setTimeout(() => {
+        attentionTimerRef.current = null
+        const items = attentionQueueRef.current.splice(0)
+        const plan = planDesktopAttention(items, systemNotificationsRef.current, document.hasFocus())
+        if (plan) void window.felixo?.desktopAttention?.notify(plan).catch(() => {})
+      }, DESKTOP_ATTENTION_BATCH_MS)
+    }
+
     const audio = notificationAudioRef.current
     if (!audio || !notificationSoundEnabled) return
     audio.currentTime = 0
@@ -172,8 +219,12 @@ export function useCanvasNotifications({
     if (notificationAudioRef.current) {
       notificationAudioRef.current.volume = notificationVolume
     }
-    saveNotificationPreferences({ soundEnabled: notificationSoundEnabled, volume: notificationVolume })
-  }, [notificationSoundEnabled, notificationVolume])
+    saveNotificationPreferences({
+      soundEnabled: notificationSoundEnabled,
+      volume: notificationVolume,
+      system: systemNotifications,
+    })
+  }, [notificationSoundEnabled, notificationVolume, systemNotifications])
 
   useEffect(() => {
     saveNotificationHistory(notificationHistory)
@@ -255,5 +306,7 @@ export function useCanvasNotifications({
     setNotificationHistory,
     setNotificationSoundEnabled,
     setNotificationVolume,
+    setSystemNotifications,
+    systemNotifications,
   }
 }
