@@ -569,13 +569,17 @@ por `npm run test:native`.
 O runner roda a suíte com `TEMP`/`TMP`/`TMPDIR` apontando para uma pasta própria
 (`felixo-testes-<pid>-…`, em `scripts/test-support/temporario-dos-testes.cjs`) e a
 apaga no fim, para o `npm test` não deixar `felixo-*` no temporário do sistema.
-Ao terminar, ele imprime quantas entradas os testes deixaram lá dentro e as maiores
-origens: é a lista do que ainda falta limpar em cada teste. Uma execução
-interrompida deixa a pasta, e a próxima apaga as de pids que já não existem. Rodar
-um arquivo direto (`node --test arquivo.test.cjs`) não passa pelo runner e usa o
-temporário real. O teste do `/status` do Codex
+Ao terminar, ele imprime quantas entradas sobraram lá dentro e as maiores origens:
+com os arquivos isolados, o esperado é não sobrar nada. Uma execução interrompida
+deixa a pasta, e a próxima apaga as de pids que já não existem. Rodar um arquivo
+direto (`node --test arquivo.test.cjs`) também fica isolado: cada `*.test.cjs` que mexe
+em temporário começa com `require('…/test-support/pasta-do-teste.cjs')`, que troca
+`TEMP`/`TMP`/`TMPDIR` do processo por uma pasta própria e a apaga ao sair. Teste novo
+que cria pasta temporária deve começar com essa linha. O teste do `/status` do Codex
 (`electron/services/codex-status-screen.test.cjs`) falha quando o `TEMP` passa de
 cerca de 115 caracteres, então não aponte o `TEMP` do runner para um caminho comprido.
+Também não use caminho com espaço: os shims `.cmd` dos testes de instalação não rodam
+(o nome curto do Windows, com `~1` no lugar do nome da pasta do usuário, serve).
 
 No Git Bash, `SSH_ASKPASS` vem definido (`/ucrt64/bin/git-askpass.exe`) e `DISPLAY` vale
 `needs-to-be-defined`. O Git sem clique do System Design (`gitEnvironment` em
