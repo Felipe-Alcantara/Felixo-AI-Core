@@ -45,11 +45,21 @@ const GIT_FAILURE = Object.freeze({
  * `ssh`. Uma variável vazia, mas definida, impede essa busca e faz o Git cair
  * direto em "terminal prompts disabled", o motivo `login` que o app mostra.
  *
+ * As mensagens do Git saem sempre em inglês (`LC_MESSAGES=C`), porque
+ * `classifyGitFailure` as reconhece por texto e um Git traduzido faria toda
+ * falha cair em `other`. Só o idioma muda: `LC_ALL` não pode ficar (mandaria no
+ * `LC_MESSAGES`), e trocá-lo por `LC_ALL=C` mudaria também o `LC_CTYPE` (nomes
+ * de arquivo com acento); por isso o valor dele passa para o `LC_CTYPE`.
+ *
  * @param {{ interactive?: boolean, baseEnv?: NodeJS.ProcessEnv }} options
  * @returns {NodeJS.ProcessEnv}
  */
 function gitEnvironment({ interactive = false, baseEnv = process.env } = {}) {
-  const env = { ...baseEnv, GIT_TERMINAL_PROMPT: '0' }
+  const env = { ...baseEnv, GIT_TERMINAL_PROMPT: '0', LC_MESSAGES: 'C', LANGUAGE: 'C' }
+  if (env.LC_ALL) {
+    env.LC_CTYPE ||= env.LC_ALL
+    delete env.LC_ALL
+  }
   if (!interactive) {
     env.GCM_INTERACTIVE = 'never'
     env.SSH_ASKPASS_REQUIRE = 'never'

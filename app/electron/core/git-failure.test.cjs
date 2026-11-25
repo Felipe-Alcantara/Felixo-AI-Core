@@ -46,6 +46,22 @@ describe('gitEnvironment', () => {
     assert.equal(env.GCM_INTERACTIVE, 'never')
   })
 
+  it('fixa as mensagens do Git em inglês sem mexer no LC_CTYPE (nomes com acento)', () => {
+    for (const interactive of [false, true]) {
+      const env = gitEnvironment({
+        interactive,
+        baseEnv: { LC_ALL: 'pt_BR.UTF-8', LANG: 'pt_BR.UTF-8', LANGUAGE: 'pt_BR:pt' },
+      })
+      assert.equal(env.LC_MESSAGES, 'C')
+      assert.equal(env.LANGUAGE, 'C')
+      assert.equal('LC_ALL' in env, false)
+      assert.equal(env.LC_CTYPE, 'pt_BR.UTF-8')
+    }
+    const own = gitEnvironment({ baseEnv: { LC_ALL: 'pt_BR.UTF-8', LC_CTYPE: 'C.UTF-8' } })
+    assert.equal(own.LC_CTYPE, 'C.UTF-8')
+    assert.equal('LC_CTYPE' in gitEnvironment({ baseEnv: {} }), false)
+  })
+
   it('não altera o ambiente recebido', () => {
     const baseEnv = { PATH: '/bin' }
     gitEnvironment({ interactive: false, baseEnv })
