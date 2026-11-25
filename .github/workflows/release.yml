@@ -417,3 +417,45 @@ jobs:
             gh release edit "$RELEASE_TAG" --prerelease=false
             echo "Release $RELEASE_TAG publicada, mas $CURRENT_LATEST_TAG continua sendo a mais recente (é posterior a esta)."
           fi
+
+  # Release que falha não pode deixar pré-release nem tag para trás: elas
+  # acumularam 43 vezes entre 12/08 e 08/10/2026 e a lista de releases deixou de
+  # dizer quais versões existem de verdade. O motivo vai para o resumo do run, e
+  # os JSON de smoke e inventário já estão nos artefatos (`upload-artifact` com
+  # `if: always()` nos jobs de publicação), então nada de diagnóstico se perde.
+  #
+  # Só apaga a tag deste run e só se ainda for pré-release (ver
+  # `release-cleanup.sh`): release promovida e `Latest` nunca são tocadas.
+  # `failure()` não cobre run cancelado (um Release mais novo cancela o anterior
+  # pelo `concurrency`).
+  #
+  # Depois da limpeza, "Re-run failed jobs" não funciona mais (a release some e
+  # o `prepare` não roda de novo); use "Re-run all jobs", que recria a release.
+  cleanup:
+    name: Apagar pré-release da falha
+    needs: [prepare, publish, finalize]
+    if: ${{ failure() }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || inputs.commit_sha }}
+
+      - name: Registrar o motivo e apagar a pré-release e a tag
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
+        run: |
+          source "$GITHUB_WORKSPACE/.github/scripts/release-cleanup.sh"
+          {
+            resumir_falha "$GITHUB_RUN_ID"
+            echo
+            apagar_prerelease "$RELEASE_TAG"
+          } | tee -a "$GITHUB_STEP_SUMMARY"

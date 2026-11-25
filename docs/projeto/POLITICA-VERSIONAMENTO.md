@@ -79,11 +79,18 @@ Enquanto o projeto estiver em `0.x.x`:
 - Pre-releases podem ser habilitadas no auto-updater via `FELIXO_UPDATE_PRERELEASE=1`.
 
 **Pré-release que fica para trás é publicação que falhou.** Se algum sistema ou
-o smoke do instalador reprova, a release não é promovida e continua como
-pré-release, às vezes sem nenhum arquivo. Ela não é uma versão do produto:
-depois de registrar o motivo (run, commit e erro), apague a release e a tag
-(`gh release delete vX.Y.Z --cleanup-tag`). O número dela não é reaproveitado,
-porque a sequência vem do `run_number`; buraco na numeração é esperado.
+o smoke do instalador reprova, a release não é promovida e continuaria como
+pré-release, às vezes sem nenhum arquivo. Ela não é uma versão do produto, por
+isso o job `Apagar pré-release da falha` do `release.yml` (`if: failure()`)
+registra no resumo do run quais jobs e passos falharam e apaga a release e a tag
+do run (`.github/scripts/release-cleanup.sh`). Ele só apaga a tag calculada pelo
+próprio run e só se a release ainda for pré-release: release promovida e a
+`Latest` nunca são tocadas. Os JSON de smoke e de inventário continuam nos
+artefatos do run. O número da versão não é reaproveitado, porque a sequência vem
+do `run_number`; buraco na numeração é esperado. Run **cancelado** (um Release
+mais novo cancela o anterior) não aciona o job: apague à mão, com
+`gh release delete vX.Y.Z --cleanup-tag`, depois de registrar o motivo.
+Depois da limpeza use "Re-run all jobs": "Re-run failed jobs" não recria a release.
 
 ---
 

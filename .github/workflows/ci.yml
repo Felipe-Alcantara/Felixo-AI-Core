@@ -362,6 +362,9 @@ jobs:
       - name: Test retry.sh
         run: bash .github/scripts/retry.test.sh
 
+      - name: Test release-cleanup.sh
+        run: bash .github/scripts/release-cleanup.test.sh
+
       - name: Test release-version.sh
         run: bash .github/scripts/release-version.test.sh
 
