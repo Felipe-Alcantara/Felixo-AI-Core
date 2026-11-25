@@ -25,6 +25,7 @@ const AJUDA_DEVTOOLS = `felixo devtools — dirige uma instância isolada e invi
 
   felixo devtools launch [--visible] [--real-profile] [--port N] [--timeout MS] [--packaged <executável>]
   felixo devtools status | screenshot [--out arquivo] | buttons | windows | quit
+  felixo devtools <comando> --janela <título|índice>   escolhe a janela (veja \`windows\`); sem ela, a principal
   felixo devtools click <seletor> | click-text <texto> | type <texto> | press <tecla>
   felixo devtools text [seletor] | eval <expressão JavaScript> | main <expressão JavaScript>
   felixo devtools heap-snapshot <arquivo.heapsnapshot> | metrics
@@ -42,19 +43,20 @@ Vite, carregando o \`dist\` real do instalador/CI. É o que prova UI clicada den
 artefato que a pessoa de fato instala, não de uma aproximação de desenvolvimento.`
 
 function parseArgs(args) {
-  const options = { visible: false, realProfile: false, port: null, out: '', packaged: '', timeout: null }
+  const options = { visible: false, realProfile: false, port: null, out: '', packaged: '', timeout: null, janela: '' }
   if (args[0] === '--help') return { command: 'help', positional: [], options }
   const positional = []
   for (let index = 0; index < args.length; index += 1) {
     const value = args[index]
     if (value === '--visible') options.visible = true
     else if (value === '--real-profile') options.realProfile = true
-    else if (value === '--port' || value === '--out' || value === '--packaged' || value === '--timeout') {
+    else if (value === '--port' || value === '--out' || value === '--packaged' || value === '--timeout' || value === '--janela') {
       const next = args[++index]
       if (!next) throw new Error(`${value} exige um valor.`)
       if (value === '--port') options.port = Number(next)
       else if (value === '--out') options.out = next
       else if (value === '--timeout') options.timeout = Number(next)
+      else if (value === '--janela') options.janela = next
       else options.packaged = next
     } else if (value.startsWith('--')) {
       throw new Error(`Opção desconhecida: ${value}`)
@@ -303,9 +305,29 @@ async function connect(state, deps = {}) {
   try { ({ chromium } = deps.playwright ?? require('playwright-core')) } catch { throw new Error('playwright-core não está instalado. Rode `npm install` dentro de app/.') }
   const browser = await chromium.connectOverCDP(`http://127.0.0.1:${state.port}`)
   const pages = browser.contexts().flatMap((context) => context.pages()).filter((page) => !page.url().startsWith('devtools://'))
-  const page = pages[0]
-  if (!page) { await browser.close(); throw new Error('A sessão não expôs uma página do Felixo.') }
+  const page = await escolherPagina(pages, deps.janela)
+  if (!page) { await browser.close(); throw new Error(deps.janela ? `Nenhuma janela casa com "${deps.janela}". Veja \`felixo devtools windows\`.` : 'A sessão não expôs uma página do Felixo.') }
   return { browser, page }
+}
+/**
+ * Escolhe a página pelo seletor de `--janela`: número = índice (0 é a primeira da lista de
+ * `windows`), texto = trecho do título. Sem seletor, a principal: a janela auxiliar nasce em
+ * `about:blank`, então a primeira página com outro endereço (cai na primeira se não houver).
+ */
+async function escolherPagina(pages, seletor) {
+  if (!seletor) return pages.find((page) => page.url() !== 'about:blank') ?? pages[0]
+  if (/^\d+$/.test(seletor)) return pages[Number(seletor)]
+  for (const page of pages) { if ((await page.title()).toLowerCase().includes(seletor.toLowerCase())) return page }
+  return undefined
+}
+/** Todas as janelas da sessão, na ordem em que `--janela <índice>` as enxerga. */
+async function listarJanelas(deps) {
+  const state = readState(deps)
+  const { browser, page } = await connect(state, { ...deps, janela: '0' })
+  try {
+    const pages = browser.contexts().flatMap((context) => context.pages()).filter((item) => !item.url().startsWith('devtools://'))
+    return await Promise.all(pages.map(async (item, indice) => ({ indice, titulo: await item.title(), url: item.url(), principal: item.url() !== 'about:blank' })))
+  } finally { await browser.close() }
 }
 async function withPage(deps, action) { const state = readState(deps); const { browser, page } = await connect(state, deps); try { return await action(page, state) } finally { await browser.close() } }
 
@@ -355,6 +377,7 @@ async function executarDevtools(args, deps = {}) {
   let parsed
   try { parsed = parseArgs(args) } catch (error) { return { saida: '', erro: error.message, codigo: 2 } }
   const { command, positional, options } = parsed
+  deps = { ...deps, janela: options.janela }
   try {
     if (!command || command === 'help' || command === '--help') return { saida: AJUDA_DEVTOOLS, codigo: 0 }
     if (command === 'launch') { const state = await launch(options, deps); return { saida: `Sessão DevTools ativa na porta ${state.port}.\nPerfil: ${state.realProfile ? 'real (explícito)' : 'isolado'}.\nOrigem: ${state.packaged ? `empacotado (${state.packaged})` : 'fonte (dev)'}.${state.aviso ? `
@@ -369,7 +392,7 @@ ${state.aviso}` : ''}`, codigo: 0 } }
     }
     if (command === 'screenshot') { const output = options.out ? path.resolve(options.out) : path.resolve('felixo-devtools.png'); await withPage(deps, async (page) => { const dataUrl = await page.evaluate(() => window.felixo?.devtools?.capturePage()); if (!dataUrl?.startsWith('data:image/png;base64,')) throw new Error('A captura nativa DevTools não está disponível. Reinicie a sessão.'); (deps.fs ?? fs).mkdirSync(path.dirname(output), { recursive: true }); (deps.fs ?? fs).writeFileSync(output, Buffer.from(dataUrl.slice('data:image/png;base64,'.length), 'base64')) }); return { saida: output, codigo: 0 } }
     if (command === 'buttons') { const value = await withPage(deps, (page) => page.locator('button').allTextContents()); return { saida: value.map((item, i) => `${i + 1}. ${item.trim()}`).join('\n'), codigo: 0 } }
-    if (command === 'windows') { const value = await withPage(deps, (page) => page.evaluate(() => ({ title: document.title, url: location.href }))); return { saida: JSON.stringify([value], null, 2), codigo: 0 } }
+    if (command === 'windows') { return { saida: JSON.stringify(await listarJanelas(deps), null, 2), codigo: 0 } }
     if (command === 'click') { if (!positional.length) throw new Error('click exige um seletor.'); await withPage(deps, (page) => page.locator(positional.join(' ')).first().click()); return { saida: 'Clique executado.', codigo: 0 } }
     if (command === 'click-text') { if (!positional.length) throw new Error('click-text exige um texto.'); await withPage(deps, (page) => page.getByText(positional.join(' '), { exact: true }).first().click()); return { saida: 'Clique executado.', codigo: 0 } }
     if (command === 'type') { if (!positional.length) throw new Error('type exige um texto.'); await withPage(deps, (page) => page.keyboard.type(positional.join(' '))); return { saida: 'Texto digitado.', codigo: 0 } }
@@ -383,4 +406,4 @@ ${state.aviso}` : ''}`, codigo: 0 } }
   } catch (error) { return { saida: '', erro: error?.message ?? 'Falha no DevTools.', codigo: 1 } }
 }
 
-module.exports = { AJUDA_DEVTOOLS, STATE_FILE, assertPortAvailable, captureHeapSnapshot, connect, executarDevtools, findFreePort, formatState, isProcessAlive, metricsListToObject, parseArgs, profileLooksInUse, readState, requirePackagedExecutable, waitForCdp, writeState }
+module.exports = { AJUDA_DEVTOOLS, STATE_FILE, assertPortAvailable, captureHeapSnapshot, connect, escolherPagina, executarDevtools, findFreePort, formatState, isProcessAlive, metricsListToObject, parseArgs, profileLooksInUse, readState, requirePackagedExecutable, waitForCdp, writeState }

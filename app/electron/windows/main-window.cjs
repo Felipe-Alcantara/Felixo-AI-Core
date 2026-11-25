@@ -1,16 +1,8 @@
 const { BrowserWindow, dialog, screen } = require('electron')
 const { APP_INDEX_URL } = require('../core/app-protocol.cjs')
 const { mainWindowOptions } = require('../core/window-options.cjs')
-const {
-  EXTERNAL_OPEN_FAILED_CHANNEL,
-  createExternalWindowOpenHandler,
-  openExternalUrl,
-} = require('../services/external-links.cjs')
-const { registerMainWindowNavigationGuard } = require('../services/navigation-guard.cjs')
-const { registerWindowZoomShortcuts } = require('../services/window-zoom-shortcuts.cjs')
-const { registerWindowFocusBridge } = require('../services/window-focus-bridge.cjs')
-const { registerWebviewLifecycle } = require('../services/webview-lifecycle.cjs')
 const { registrarGuardaDeFechamento } = require('./close-guard.cjs')
+const { applyWindowGuards } = require('./window-guards.cjs')
 const {
   applyWindowState,
   registerWindowStatePersistence,
@@ -52,9 +44,11 @@ function criarPerguntaNativa(browserWindow) {
  * @param {{ openExternal: (url: string) => Promise<void> }} [options.electronShell] - O
  *   `shell` que abre os links; sem ele, o do Electron. Só a automação troca
  *   (`devtools-shell-open-guard.cjs`).
+ * @param {ReturnType<typeof import('./aux-windows.cjs').createAuxWindowManager>} [options.auxWindows] - Gerenciador
+ *   das janelas auxiliares: sem ele, `window.open` de `about:blank` continua negado.
  * @returns {import('electron').BrowserWindow}
  */
-function createMainWindow({ contarSessoesVivas, settingsRepository, screenApi = screen, electronShell, onWebviewPopup } = {}) {
+function createMainWindow({ contarSessoesVivas, settingsRepository, screenApi = screen, electronShell, onWebviewPopup, auxWindows } = {}) {
   let savedState = null
   try {
     savedState = settingsRepository?.get('window.main.state') ?? null
@@ -69,32 +63,16 @@ function createMainWindow({ contarSessoesVivas, settingsRepository, screenApi = 
   )
   const mainWindow = new BrowserWindow({ ...mainWindowOptions, ...state.bounds })
 
-  registerWindowFocusBridge(mainWindow)
   applyWindowState(mainWindow, state)
   registerWindowStatePersistence(mainWindow, settingsRepository)
 
-  const openExternal = (url) => openExternalUrl(url, electronShell)
-  mainWindow.webContents.setWindowOpenHandler(
-    createExternalWindowOpenHandler({
-      open: openExternal,
-      // A janela que pediu é a que avisa a pessoa (e oferece copiar o link).
-      notify: (failure) => {
-        if (!mainWindow.isDestroyed()) mainWindow.webContents.send(EXTERNAL_OPEN_FAILED_CHANNEL, failure)
-      },
-    }),
-  )
-  registerMainWindowNavigationGuard(mainWindow.webContents, {
-    appUrl: process.env.VITE_DEV_SERVER_URL || APP_INDEX_URL,
-    openExternal,
+  // As mesmas guardas valem para as auxiliares (fábrica única: window-guards.cjs).
+  applyWindowGuards(mainWindow, {
+    electronShell,
+    onWebviewPopup,
+    abrirAuxiliar: auxWindows?.windowOpenHandler,
   })
-  registerWindowZoomShortcuts(mainWindow)
-  registerWebviewLifecycle(mainWindow, {
-    onPopupCreated: onWebviewPopup,
-    // O bloco que passou do limite de popups mostra o aviso (WebpageNode).
-    onPopupBlocked: (block, max) => {
-      if (!mainWindow.isDestroyed()) mainWindow.webContents.send('webview-popups:blocked', { webContentsId: block.id, max })
-    },
-  })
+  auxWindows?.attachTo(mainWindow)
 
   if (typeof contarSessoesVivas === 'function') {
     registrarGuardaDeFechamento(mainWindow, {

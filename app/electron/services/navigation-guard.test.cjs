@@ -286,33 +286,43 @@ function codeIndexes(source, snippet) {
 // trava, apagar uma linha de fiação desligaria a barreira sem nenhum teste
 // falhar: as funções continuariam testadas, só que ninguém as chamaria.
 
-test('a janela principal nega window.open e liga as guardas antes de carregar o app', () => {
+test('a janela principal liga as guardas (as mesmas da auxiliar) antes de carregar o app', () => {
   const source = readFileSync(path.join(__dirname, '..', 'windows', 'main-window.cjs'), 'utf8')
   const firstCall = (snippet) => codeIndexes(source, snippet)[0] ?? -1
 
-  const denyOpen = firstCall('mainWindow.webContents.setWindowOpenHandler(')
-  const navigationGuard = firstCall('registerMainWindowNavigationGuard(mainWindow.webContents,')
-  const webviewLifecycle = firstCall('registerWebviewLifecycle(mainWindow')
+  const guards = firstCall('applyWindowGuards(mainWindow')
   const loads = [...codeIndexes(source, 'mainWindow.loadFile('), ...codeIndexes(source, 'mainWindow.loadURL(')]
 
-  assert.notEqual(denyOpen, -1, 'main-window.cjs deixou de chamar setWindowOpenHandler')
-  assert.notEqual(navigationGuard, -1, 'main-window.cjs deixou de chamar registerMainWindowNavigationGuard')
-  assert.notEqual(webviewLifecycle, -1, 'main-window.cjs deixou de chamar registerWebviewLifecycle')
+  assert.notEqual(guards, -1, 'main-window.cjs deixou de chamar applyWindowGuards')
   assert.ok(loads.length > 0, 'main-window.cjs não carrega mais o app do jeito esperado; revise esta trava')
-
   // Registrado depois do load, o primeiro documento já poderia abrir janela
   // ou anexar webview sem guarda.
-  const firstLoad = Math.min(...loads)
-  for (const [name, index] of Object.entries({ denyOpen, navigationGuard, webviewLifecycle })) {
-    assert.ok(index < firstLoad, `${name} precisa vir antes do primeiro load`)
-  }
+  assert.ok(guards < Math.min(...loads), 'applyWindowGuards precisa vir antes do primeiro load')
 
-  // O handler de `window.open` nega a janela, abre pelo opener com a política
-  // e avisa a própria janela quando o link não abre.
-  const handlerCall = source.slice(denyOpen, source.indexOf('registerMainWindowNavigationGuard(', denyOpen))
-  assert.match(handlerCall, /createExternalWindowOpenHandler\(/)
-  assert.match(handlerCall, /open: openExternal\b/)
-  assert.match(handlerCall, /notify:[\s\S]*webContents\.send\(EXTERNAL_OPEN_FAILED_CHANNEL/)
+  // A auxiliar recebe a MESMA função (fábrica única): uma janela nova nunca nasce sem guarda.
+  const main = readFileSync(path.join(__dirname, '..', 'main.cjs'), 'utf8')
+  assert.notEqual(codeIndexes(main, 'applyWindowGuards(child').length, 0, 'main.cjs não aplica as guardas às auxiliares')
+})
+
+test('window-guards.cjs nega window.open, guarda a navegação e o attach de webview', () => {
+  const source = readFileSync(path.join(__dirname, '..', 'windows', 'window-guards.cjs'), 'utf8')
+  const firstCall = (snippet) => codeIndexes(source, snippet)[0] ?? -1
+
+  const denyOpen = firstCall('browserWindow.webContents.setWindowOpenHandler(')
+  const navigationGuard = firstCall('registerMainWindowNavigationGuard(browserWindow.webContents,')
+  const webviewLifecycle = firstCall('registerWebviewLifecycle(browserWindow')
+
+  assert.notEqual(denyOpen, -1, 'window-guards.cjs deixou de chamar setWindowOpenHandler')
+  assert.notEqual(navigationGuard, -1, 'window-guards.cjs deixou de chamar registerMainWindowNavigationGuard')
+  assert.notEqual(webviewLifecycle, -1, 'window-guards.cjs deixou de chamar registerWebviewLifecycle')
+
+  // O handler de `window.open` abre pelo opener com a política e avisa a
+  // própria janela quando o link não abre; só a principal pode, antes, devolver
+  // uma janela auxiliar (e só no formato fechado de aux-windows.cjs).
+  assert.match(source, /createExternalWindowOpenHandler\(/)
+  assert.match(source, /open: openExternal\b/)
+  assert.match(source, /notify:[\s\S]*webContents\.send\(EXTERNAL_OPEN_FAILED_CHANNEL/)
+  assert.match(source.slice(denyOpen, navigationGuard), /abrirAuxiliar\?\.\(details\) \?\? aoAbrirLink\(details\)/)
 
   // Os dois (handler e guarda) saem pelo mesmo opener, que passa pela política
   // de URL e pelo shell da instância (o da plataforma ou o da automação).

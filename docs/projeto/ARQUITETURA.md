@@ -2519,3 +2519,27 @@ abertas que casam). O codigo instalado e o do pedido gravado, nunca o que o rend
 `ativar` e `desativar` so reduzem o que roda e o app atende sozinho. O nome do script entra no codigo
 injetado apenas como literal JSON. Limites: sem `GM_xmlhttpRequest`/`GM_getValue`/`@require`, sem tela de
 gerenciamento (so CLI), `document-start` nao existe (roda no `dom-ready`).
+
+## Janelas auxiliares (multijanela, mesmo renderer)
+
+O app tem UM renderer, o da janela principal. Uma janela auxiliar e um `BrowserWindow` que a principal abre
+com `window.open('about:blank', 'felixo-aux-<id>')` e onde desenha por portal do React (modelo do VS Code):
+canvas, terminais e `<webview>` continuam com um estado so e mudam de janela sem reiniciar.
+
+- **Processo principal** (`app/electron/windows/`): `aux-windows.cjs` e o gerenciador (registro por id, opcoes
+  fechadas, estado em `window.aux.<id>.state`, volta para um monitor visivel em `display-removed` e
+  `display-metrics-changed`, fecha junto com a principal). `window-guards.cjs` e a fabrica unica de guardas
+  (links externos, navegacao, `will-attach-webview`, zoom, foco): a principal e toda auxiliar passam por ela.
+  O `setWindowOpenHandler` da principal so aceita `about:blank` com nome de quadro de prefixo fixo e id
+  `[a-z0-9-]{1,40}` (maximo de 8); o resto segue a politica de links. A auxiliar nao tem preload (nao ha
+  `window.felixo` nela), sandbox e contextIsolation ligados, e nao abre outras janelas.
+  `getMainWindow` (`main.cjs`) nunca cai numa auxiliar.
+- **Renderer** (`app/src/features/shared/janelas/multijanela.ts`): `documentoDe(no)` e `janelaDe(no)` dizem em
+  que janela um elemento esta (nao use `document`/`window` globais dentro de algo que muda de janela, nem
+  `instanceof Element`: cada janela tem as suas classes), `abrirJanelaAuxiliar(id)` e `clonarEstilos`.
+- **Dono unico por elemento vivo**: `TerminalSessionStore.hostOf(id)` e `moveTo(id, container)`. Trocar de
+  janela e mover o xterm (`attach`), nunca `remove()` (mata o PTY).
+- **Automacao**: `felixo devtools windows` lista todas as janelas e `--janela <titulo|indice>` escolhe em qual
+  o comando roda (sem a opcao, a principal).
+- **Ainda nao existe**: reabrir as auxiliares no proximo inicio, roteamento de `pty:data` por janela e
+  interface para destacar (tarefas seguintes). Wayland: a posicao salva nao vale (o compositor decide).

@@ -8,6 +8,7 @@ const {
   powerMonitor,
   protocol,
   safeStorage,
+  screen,
   session,
   shell,
 } = require('electron')
@@ -15,6 +16,8 @@ const path = require('node:path')
 const fs = require('node:fs')
 const vm = require('node:vm')
 const { createMainWindow } = require('./windows/main-window.cjs')
+const { createAuxWindowManager } = require('./windows/aux-windows.cjs')
+const { applyWindowGuards } = require('./windows/window-guards.cjs')
 const { instalarMenuDoApp } = require('./windows/app-menu.cjs')
 const { registerCliIpcHandlers } = require('./services/ipc-handlers.cjs')
 const {
@@ -251,6 +254,7 @@ registerSessionSecurity(app, session, console, {
 const linkWebviewPopup = (child, parent) => webviewSitePermissions?.linkPopup(child, parent)
 
 let mainWindow = null
+let auxWindows = null
 let ptyHandlers = null
 let agentSessionLog = null
 let openiaImageService = null
@@ -741,13 +745,22 @@ app.whenReady().then(async () => {
     }
   }
 
+  // Janelas auxiliares (mesmo renderer): nascem na principal com as mesmas guardas dela.
+  auxWindows = createAuxWindowManager({
+    settingsRepository,
+    screenApi: screen,
+    show: process.env.FELIXO_DEVTOOLS_HEADLESS !== '1',
+    applyGuards: (child) => applyWindowGuards(child, { electronShell: automationShell ?? undefined, onWebviewPopup: linkWebviewPopup }),
+  })
   mainWindow = createMainWindow({
     contarSessoesVivas,
     settingsRepository,
     electronShell: automationShell ?? undefined,
     onWebviewPopup: linkWebviewPopup,
+    auxWindows,
   })
-  const getMainWindow = () => mainWindow ?? BrowserWindow.getAllWindows()[0]
+  // Nunca cai numa auxiliar: os handlers que usam isto assumem a janela do app.
+  const getMainWindow = () => mainWindow ?? BrowserWindow.getAllWindows().find((item) => !auxWindows.isAuxWindow(item))
 
   const gpuSession = createGpuPreferenceSession({
     app,
@@ -1370,6 +1383,7 @@ app.whenReady().then(async () => {
     settingsRepository,
     electronShell: automationShell ?? undefined,
     onWebviewPopup: linkWebviewPopup,
+    auxWindows,
   })
     }
   })

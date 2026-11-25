@@ -96,14 +96,14 @@ function applyWindowState(browserWindow, state) {
   }
 }
 
-function registerWindowStatePersistence(browserWindow, settingsRepository) {
+function registerWindowStatePersistence(browserWindow, settingsRepository, key = MAIN_WINDOW_STATE_KEY) {
   if (!settingsRepository) return () => {}
 
   let saveTimer = null
   const save = () => {
     saveTimer = null
     try {
-      settingsRepository.set(MAIN_WINDOW_STATE_KEY, captureWindowState(browserWindow))
+      settingsRepository.set(key, captureWindowState(browserWindow))
     } catch {
       // Persisting convenience state must never prevent closing or moving.
     }

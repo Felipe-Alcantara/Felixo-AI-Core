@@ -8,6 +8,7 @@ const os = require('node:os')
 const path = require('node:path')
 const {
   captureHeapSnapshot,
+  escolherPagina,
   executarDevtools,
   formatState,
   metricsListToObject,
@@ -36,10 +37,10 @@ function setup() {
 
 test('interpreta as opções do DevTools sem transformar texto em flag', () => {
   assert.deepEqual(parseArgs(['launch', '--visible', '--port', '9223']), {
-    command: 'launch', positional: [], options: { visible: true, realProfile: false, port: 9223, out: '', packaged: '', timeout: null },
+    command: 'launch', positional: [], options: { visible: true, realProfile: false, port: 9223, out: '', packaged: '', timeout: null, janela: '' },
   })
   assert.deepEqual(parseArgs(['click-text', 'Abrir', 'agente']), {
-    command: 'click-text', positional: ['Abrir', 'agente'], options: { visible: false, realProfile: false, port: null, out: '', packaged: '', timeout: null },
+    command: 'click-text', positional: ['Abrir', 'agente'], options: { visible: false, realProfile: false, port: null, out: '', packaged: '', timeout: null, janela: '' },
   })
 })
 
@@ -47,7 +48,7 @@ test('parseArgs reconhece --packaged com o mesmo formato de --port/--out', () =>
   assert.deepEqual(parseArgs(['launch', '--packaged', '/opt/Felixo AI Core/felixo-ai-core']), {
     command: 'launch',
     positional: [],
-    options: { visible: false, realProfile: false, port: null, out: '', packaged: '/opt/Felixo AI Core/felixo-ai-core', timeout: null },
+    options: { visible: false, realProfile: false, port: null, out: '', packaged: '/opt/Felixo AI Core/felixo-ai-core', timeout: null, janela: '' },
   })
 })
 
@@ -55,7 +56,7 @@ test('parseArgs reconhece --timeout com o mesmo formato de --port', () => {
   assert.deepEqual(parseArgs(['launch', '--timeout', '60000']), {
     command: 'launch',
     positional: [],
-    options: { visible: false, realProfile: false, port: null, out: '', packaged: '', timeout: 60000 },
+    options: { visible: false, realProfile: false, port: null, out: '', packaged: '', timeout: 60000, janela: '' },
   })
 })
 
@@ -459,4 +460,29 @@ test('launch falha citando locale e caminho quando a ponte do preload não carre
   }))
   assert.notEqual(result.codigo, 0)
   assert.match(result.erro, /ponte do preload.*locale.*UTF-8/s)
+})
+
+const paginaFalsa = (url, titulo) => ({ url: () => url, title: async () => titulo })
+
+test('escolherPagina: sem seletor devolve a principal, mesmo com a auxiliar na frente', async () => {
+  const aux = paginaFalsa('about:blank', 'Auxiliar')
+  const principal = paginaFalsa('app://felixo/index.html', 'Felixo AI Core')
+  assert.equal(await escolherPagina([aux, principal]), principal)
+})
+
+test('escolherPagina: --janela aceita índice e trecho do título, e devolve nada se não casa', async () => {
+  const aux = paginaFalsa('about:blank', 'Terminal destacado')
+  const principal = paginaFalsa('app://felixo/index.html', 'Felixo AI Core')
+  assert.equal(await escolherPagina([principal, aux], '1'), aux)
+  assert.equal(await escolherPagina([principal, aux], 'destacado'), aux)
+  assert.equal(await escolherPagina([principal, aux], 'nada'), undefined)
+})
+
+test('windows lista todas as janelas da sessão e --janela é aceita', async () => {
+  const env = setupWithPage(null)
+  const paginas = [paginaFalsa('app://felixo/index.html', 'Felixo AI Core'), paginaFalsa('about:blank', 'Aux')]
+  env.playwright = { chromium: { connectOverCDP: async () => ({ contexts: () => [{ pages: () => paginas }], close: async () => {} }) } }
+  const result = await executarDevtools(['windows', '--janela', '0'], env)
+  assert.equal(result.codigo, 0)
+  assert.deepEqual(JSON.parse(result.saida).map((j) => [j.indice, j.titulo, j.principal]), [[0, 'Felixo AI Core', true], [1, 'Aux', false]])
 })

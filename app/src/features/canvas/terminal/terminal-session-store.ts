@@ -681,6 +681,14 @@ export function countLineFeeds(data: string): number {
  * O container é só dos terminais: a gaveta o reaproveita entre blocos, e um
  * xterm que ficasse ali continuaria recebendo cliques e teclas.
  */
+/**
+ * `instanceof Element` falha para um nó de outra janela (cada janela tem o seu
+ * `Element`): o xterm movido para uma auxiliar entrega nós que a principal não reconhece.
+ */
+function isElementNode(node: EventTarget | null): node is Element {
+  return (node as Node | null)?.nodeType === 1
+}
+
 function clearTerminalContainer(container: HTMLElement, keep?: Element | null): void {
   for (const child of Array.from(container.children)) {
     if (child !== keep) {
@@ -1326,6 +1334,27 @@ export class TerminalSessionStore {
     this.fit(session)
   }
 
+  /**
+   * Quem hospeda o xterm vivo da sessão agora (o container da gaveta, do bloco
+   * ou de uma janela auxiliar), ou null se não há sessão ou ele não está montado.
+   * Cada xterm tem UM hospedeiro por vez.
+   */
+  hostOf(id: string): HTMLElement | null {
+    return this.sessions.get(id)?.terminal.element?.parentElement ?? null
+  }
+
+  /**
+   * Muda o xterm vivo de hospedeiro (de janela, inclusive) sem reiniciar nada:
+   * é um `attach` que nunca esvazia o destino nem encerra a sessão, então o PID,
+   * o histórico e a digitação continuam os mesmos. NUNCA chame `remove()` para
+   * "trocar de janela": ele mata o PTY. Devolve false se a sessão não existe.
+   */
+  moveTo(id: string, container: HTMLElement): boolean {
+    if (!this.sessions.has(id)) return false
+    this.attach(id, container)
+    return true
+  }
+
   private bindLinkContextMenu(session: Session): void {
     const element = session.terminal.element
     if (!element || session.offLinkContextMenu) return
@@ -1473,11 +1502,15 @@ export class TerminalSessionStore {
     // recebeu nada.
     let pendingDown: MouseEvent | null = null
 
+    // O documento/janela onde o gesto começou: o xterm pode estar numa janela
+    // auxiliar, e o `document` global é o da principal.
+    let gestureDocument: Document | null = null
     const forget = (): void => {
       pendingDown = null
-      document.removeEventListener('mousemove', onDocumentMove, true)
-      document.removeEventListener('mouseup', onDocumentUp, true)
-      window.removeEventListener('blur', onWindowBlur)
+      const doc = gestureDocument ?? document
+      doc.removeEventListener('mousemove', onDocumentMove, true)
+      doc.removeEventListener('mouseup', onDocumentUp, true)
+      ;(doc.defaultView ?? window).removeEventListener('blur', onWindowBlur)
     }
 
     // Andou o bastante: é arrasto. A seleção nasce ancorada em onde o gesto
@@ -1539,7 +1572,7 @@ export class TerminalSessionStore {
       (event) => {
         const pointer = event as PointerEvent
         const target = pointer.target
-        if (pointer.pointerType === 'mouse' || !(target instanceof Element) || target.closest('.xterm-hover')) {
+        if (pointer.pointerType === 'mouse' || !isElementNode(target) || target.closest('.xterm-hover')) {
           return
         }
         const screen = (element.querySelector('.xterm-screen') ?? element).getBoundingClientRect()
@@ -1585,9 +1618,10 @@ export class TerminalSessionStore {
         // No documento, e em captura: o gesto continua valendo se o ponteiro
         // sair do terminal, e a decisão precisa acontecer antes de qualquer
         // outro interessado no mesmo evento.
-        document.addEventListener('mousemove', onDocumentMove, true)
-        document.addEventListener('mouseup', onDocumentUp, true)
-        window.addEventListener('blur', onWindowBlur)
+        const doc = (gestureDocument = element.ownerDocument ?? document)
+        doc.addEventListener('mousemove', onDocumentMove, true)
+        doc.addEventListener('mouseup', onDocumentUp, true)
+        ;(doc.defaultView ?? window).addEventListener('blur', onWindowBlur)
       },
       { capture: true },
     )
