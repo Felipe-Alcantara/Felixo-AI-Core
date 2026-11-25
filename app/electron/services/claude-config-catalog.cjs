@@ -89,6 +89,8 @@ const CLAUDE_CONFIG_OPTIONS = Object.freeze([
   // `~/.claude.json`: com caminho de sessão na CLI, o app aplica; sem, só mostra.
   bool('claudeInChromeDefaultEnabled', 'Claude in Chrome ligado por padrão', null, {
     source: 'global',
+    // Decisão do Felipe (25/11/2026): terminais novos do app abrem com --chrome; a conta pode desligar.
+    appDefault: true,
     override: { flags: { true: ['--chrome'], false: ['--no-chrome'] } },
   }),
   bool('autoConnectIde', 'Conectar ao IDE sozinho (terminal externo)', false, {

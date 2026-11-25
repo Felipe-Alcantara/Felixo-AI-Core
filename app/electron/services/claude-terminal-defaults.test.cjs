@@ -40,7 +40,7 @@ test('sem padrão salvo, o terminal recebe só a status line e nada de flag ou v
     const launch = env.statusline.sessionLaunch({ accountId: null })
     assert.equal(path.basename(launch.settingsPath), 'session-settings.json')
     assert.deepEqual(Object.keys(JSON.parse(fs.readFileSync(launch.settingsPath, 'utf8'))), ['statusLine'])
-    assert.deepEqual(launch.args, [])
+    assert.deepEqual(launch.args, ['--chrome'])
     assert.deepEqual(launch.env, {})
   } finally {
     env.limpar()
@@ -70,7 +70,7 @@ test('o padrão global vai no --settings; a exceção da conta vence e fica em a
     // Terminais de contas diferentes não dividem (nem sobrescrevem) o arquivo um do outro.
     assert.equal(new Set([sistema.settingsPath, contaB.settingsPath, contaC.settingsPath]).size, 3)
     assert.equal(ler(sistema).statusLine.type, 'command')
-    assert.deepEqual(env.terminalDefaults.resolve('conta-b').origins, { theme: 'account', verbose: 'global' })
+    assert.deepEqual(env.terminalDefaults.resolve('conta-b').origins, { claudeInChromeDefaultEnabled: 'global', theme: 'account', verbose: 'global' })
   } finally {
     env.limpar()
   }
@@ -199,6 +199,23 @@ test('modo fast: sem confirmação do terminal não entra no arquivo; confirmado
       assert.equal(ler(env.statusline.sessionLaunch({ accountId: conta, fastModeConfirmed: true })).fastMode, conta === 'conta-b' ? false : undefined)
     }
     assert.equal(describeOptions().find((opcao) => opcao.key === 'fastMode').warning.includes('crédito de uso pago'), true)
+  } finally {
+    env.limpar()
+  }
+})
+
+test('Claude in Chrome nasce ligado; a conta desliga e limpar o global volta a ligado', () => {
+  const env = createEnvironment()
+  try {
+    assert.deepEqual(env.statusline.sessionLaunch({ accountId: null }).args, ['--chrome'])
+    env.terminalDefaults.set({ key: 'claudeInChromeDefaultEnabled', accountId: 'conta-b', value: false })
+    assert.deepEqual(env.statusline.sessionLaunch({ accountId: 'conta-b' }).args, ['--no-chrome'])
+    env.terminalDefaults.set({ key: 'claudeInChromeDefaultEnabled', accountId: 'conta-c', value: null })
+    assert.deepEqual(env.statusline.sessionLaunch({ accountId: 'conta-c' }).args, [])
+    env.terminalDefaults.set({ key: 'claudeInChromeDefaultEnabled', value: false })
+    assert.deepEqual(env.statusline.sessionLaunch({ accountId: null }).args, ['--no-chrome'])
+    env.terminalDefaults.set({ key: 'claudeInChromeDefaultEnabled', clear: true })
+    assert.deepEqual(env.statusline.sessionLaunch({ accountId: null }).args, ['--chrome'])
   } finally {
     env.limpar()
   }

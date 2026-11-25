@@ -2,7 +2,7 @@
 
 const fs = require('node:fs')
 const path = require('node:path')
-const { findOption, isValueApplicable } = require('./claude-config-catalog.cjs')
+const { CLAUDE_CONFIG_OPTIONS, findOption, isValueApplicable } = require('./claude-config-catalog.cjs')
 
 /**
  * Padrão das opções da aba Config para os terminais NOVOS do Claude no app: um conjunto global e
@@ -64,7 +64,7 @@ function createClaudeTerminalDefaults({ baseDir, fileSystem = fs } = {}) {
 
   /**
    * @param {{ key: string, accountId?: string | null, value?: boolean | string | null, clear?: boolean }} change
-   * `clear` remove a entrada (global: volta ao padrão do Claude; conta: volta a seguir o global).
+   * `clear` remove a entrada (global: volta ao padrão do app (o do Claude, se a opção não tiver `appDefault`); conta: volta a seguir o global).
    */
   function set({ key, accountId = null, value, clear = false } = {}) {
     const option = findOption(key)
@@ -96,6 +96,12 @@ function createClaudeTerminalDefaults({ baseDir, fileSystem = fs } = {}) {
   function resolve(accountId = null, { fastModeConfirmed = false } = {}) {
     const state = read()
     const merged = new Map()
+    // Padrão do app: vale enquanto o global não tiver a chave (null no global = "padrão do Claude").
+    for (const option of CLAUDE_CONFIG_OPTIONS) {
+      if (option.appDefault !== undefined && !(option.key in state.global)) {
+        merged.set(option.key, { value: option.appDefault, origin: 'global' })
+      }
+    }
     for (const [key, value] of Object.entries(state.global)) merged.set(key, { value, origin: 'global' })
     const exceptions = accountId && ACCOUNT_ID_PATTERN.test(accountId) ? state.accounts[accountId] ?? {} : {}
     for (const [key, value] of Object.entries(exceptions)) merged.set(key, { value, origin: 'account' })
