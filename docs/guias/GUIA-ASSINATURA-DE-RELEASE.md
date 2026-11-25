@@ -32,7 +32,7 @@ certificado (podem quebrar o `node-pty` e o microfone). Só entram junto com a a
 ```diff
      "mac": {
        "target": ["dmg", "zip"],
-       "category": "public.app-category.developer-tools",
+       "category": "public.app-category.productivity",
 +      "hardenedRuntime": true,
 +      "entitlements": "installer/entitlements.mac.plist",
 +      "entitlementsInherit": "installer/entitlements.mac.plist",

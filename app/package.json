@@ -146,7 +146,7 @@
           ]
         }
       ],
-      "category": "Development",
+      "category": "Office",
       "maintainer": "Felipe Martin",
       "artifactName": "Felixo-AI-Core-${version}-${os}-${arch}.${ext}"
     },
@@ -155,7 +155,7 @@
         "dmg",
         "zip"
       ],
-      "category": "public.app-category.developer-tools",
+      "category": "public.app-category.productivity",
       "minimumSystemVersion": "13.0",
       "entitlements": "installer/entitlements.mac.plist",
       "entitlementsInherit": "installer/entitlements.mac.plist",
