@@ -1,5 +1,9 @@
 # Contribuindo
 
+## Summary (English)
+
+Thanks for wanting to contribute. Fork the repository and branch from `main`; keep each commit small and use Conventional Commits (the messages are written in Portuguese). Before you open a pull request, run `npm run lint` and `npm run typecheck` in `app/`, plus the tests for the area you changed (the full validation list is in the README, section "Validação"). Open the pull request against `main`; maintainers merge with squash or rebase. To report a bug or suggest a module, use the issue forms; questions go to Discussions; security issues must not be reported in public (see [SECURITY.md](SECURITY.md)). The [Code of Conduct](CODE_OF_CONDUCT.md) applies everywhere in the project.
+
 O guia completo está em [`docs/guias/GUIA-DESENVOLVEDOR.md`](docs/guias/GUIA-DESENVOLVEDOR.md). O essencial:
 
 ## Como rodar
@@ -29,6 +33,15 @@ npm run test:frontend  # testes da interface (Vitest)
 Testes de interface de componente (`*.test.tsx`) rodam no vitest com `jsdom` e `@testing-library/react`: o arquivo declara `// @vitest-environment jsdom` na primeira linha e usa os helpers de `app/src/features/shared/test-support/` (`jsdom-storage.ts` para o `localStorage` em memória, `jsdom-shims.ts` para `scrollIntoView` e `ResizeObserver`). O jsdom não calcula layout nem desenha xterm: posição, sobreposição e o terminal de verdade continuam no smoke do canvas (`npm run test:canvas-smoke`). Componentes só de apresentação também podem ser testados em Node, sem DOM, chamando a função e percorrendo a árvore com `test-support/react-tree.ts`.
 
 Durante o trabalho, rode só os arquivos da área que você mexeu (`npx vitest run <arquivo>`, `node --test <arquivo>`) e a suíte inteira uma vez no fim. Se mexeu no launcher Python, na raiz: `python3 -m unittest discover -s tests -t .`. O `npm run test:native` exercita o PTY de verdade e precisa da toolchain C++ do `node-pty`.
+
+## Quem vem de fora: fork e pull request
+
+1. Faça um fork do repositório e crie uma branch a partir da `main`, por exemplo `fix/descricao-curta`.
+2. Faça commits pequenos, seguindo as regras de commit abaixo.
+3. Rode os gates da área que você mexeu. A lista completa de validação está no [README](README.md#validação), na seção "Validação".
+4. Abra o pull request para a `main` e preencha o modelo que aparece na tela. O mantenedor mescla com squash ou rebase, porque a `main` não aceita merge commit.
+
+O passo a passo do fluxo com branch está no [Guia do Desenvolvedor](docs/guias/GUIA-DESENVOLVEDOR.md). Para relatar um problema ou pedir um módulo, use os [formulários de issue](https://github.com/Felipe-Alcantara/Felixo-AI-Core/issues/new/choose). Dúvidas vão para as [Discussions](https://github.com/Felipe-Alcantara/Felixo-AI-Core/discussions). Ao participar, siga o [Código de Conduta](CODE_OF_CONDUCT.md).
 
 ## Regras do projeto
 
