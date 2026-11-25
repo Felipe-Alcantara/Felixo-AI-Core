@@ -214,7 +214,7 @@ export function TerminalDrawer({
   // Collapsed keeps the session running and the terminal mounted — the drawer
   // just shrinks to a rail, so reopening is instant and nothing is lost.
   const [collapsed, setCollapsed] = useState(() => readCollapsedPreference(localStorage))
-  const { occupancy, reportDrawerWidth } = useCanvasSurfaces()
+  const { occupancy, reportDrawerWidth, viewport } = useCanvasSurfaces()
   const [maximized, setMaximized] = useState(false)
 
   const togglePinned = useCallback(() => {
@@ -483,6 +483,8 @@ export function TerminalDrawer({
       role="region"
       aria-labelledby={titleId}
       data-canvas-terminal-drawer
+      data-felixo-terminal-drawer-collapsed={collapsed ? 'true' : 'false'}
+      data-felixo-terminal-drawer-maximized={maximized ? 'true' : 'false'}
       data-felixo-drawer-panes={panes.length}
       onKeyDownCapture={onShortcut}
       onKeyDown={(event) => {
@@ -501,7 +503,9 @@ export function TerminalDrawer({
         // `effectiveWidth` já vem limitado pelo que o painel da esquerda
         // ocupa; usar a largura crua aqui era o que deixava a gaveta passar
         // por cima dele mesmo depois de o limite ter sido calculado.
-        width: `${effectiveWidth}px`,
+        width: viewport.width <= 980
+          ? `min(${effectiveWidth}px, calc(100vw - var(--felixo-sidebar-width)))`
+          : `${effectiveWidth}px`,
         // Animate the collapse/maximize toggles, but never the resize drag —
         // the edge must track the pointer 1:1.
         transition: resizing ? undefined : 'width 180ms cubic-bezier(0.16,1,0.3,1)',

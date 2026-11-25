@@ -35,6 +35,7 @@ import type { SessionActivity } from '../../terminal/terminal-session-store'
 import type { CanvasNodeData, CanvasNodeType } from '../../types'
 import { useCanvasSurfaces } from '../../hooks/canvas-surfaces-context'
 import { INSPECTOR_WIDTH } from '../../services/canvas-surfaces'
+import { NARROW_VIEWPORT_WIDTH } from '../../services/sidebar-narrow'
 import { nextActiveIndex, shouldHandleGlobalShiftArrow } from './terminals-panel-navigation'
 import { pendingDraftNodeIds, type TerminalDrafts } from './terminals-panel-drafts'
 import {
@@ -169,10 +170,14 @@ export function TerminalsPanel({
   // Collapsed the dock is just its title bar, so the canvas' bottom-right
   // corner stays usable. The choice is remembered across sessions.
   const [collapsed, setCollapsed] = useState(() => readDockCollapsed(browserStorage()))
+  const { reportInspectorWidth, viewport } = useCanvasSurfaces()
+  const narrowViewport = viewport.width < NARROW_VIEWPORT_WIDTH
+  const [narrowExpanded, setNarrowExpanded] = useState(false)
+  const effectiveCollapsed = narrowViewport ? !narrowExpanded : collapsed
   // Recolhida, a lista sai do DOM depois da dobra (`felixo-anim-corner-dock`,
   // 220 ms em index.css): cada linha assina a atividade de uma sessão e
   // seguia re-renderizando escondida. Ao abrir, as linhas voltam na hora.
-  const [rowsMounted, setRowsMounted] = useState(() => !collapsed)
+  const [rowsMounted, setRowsMounted] = useState(() => !collapsed && !narrowViewport)
   const [drafts, setDrafts] = useState<TerminalDrafts>({})
   // Reorder-by-drag, driven by pointer events rather than HTML5 drag-and-drop:
   // the row must travel INSIDE the dock, pushing its neighbours aside, instead
@@ -203,12 +208,30 @@ export function TerminalsPanel({
   }
 
   useEffect(() => {
-    if (!collapsed) return
+    const resetNarrowExpansion = () => {
+      if (window.innerWidth >= NARROW_VIEWPORT_WIDTH) {
+        setNarrowExpanded((current) => current ? false : current)
+      }
+    }
+    window.addEventListener('resize', resetNarrowExpansion)
+    return () => window.removeEventListener('resize', resetNarrowExpansion)
+  }, [])
+
+  useEffect(() => {
+    if (!effectiveCollapsed) return
     const timer = window.setTimeout(() => setRowsMounted(false), DOCK_FOLD_MS)
     return () => window.clearTimeout(timer)
-  }, [collapsed])
+  }, [effectiveCollapsed])
 
-  const toggleCollapsed = () => setCollapsedPreference(!collapsed)
+  const toggleCollapsed = () => {
+    if (narrowViewport) {
+      const nextExpanded = !narrowExpanded
+      setNarrowExpanded(nextExpanded)
+      if (nextExpanded) setRowsMounted(true)
+      return
+    }
+    setCollapsedPreference(!collapsed)
+  }
 
   const setDraft = (nodeId: string, text: string) => {
     setDrafts((current) => ({ ...current, [nodeId]: text }))
@@ -475,11 +498,10 @@ export function TerminalsPanel({
   // nada) ou INSPECTOR_WIDTH (expandido) pra quem precisa saber quanto o
   // canvas livre, o Mini Map e o painel de ferramenta encolhem por causa
   // dele — mesmo canal que a gaveta do terminal já usa (`reportDrawerWidth`).
-  const { reportInspectorWidth } = useCanvasSurfaces()
   useEffect(() => {
-    reportInspectorWidth(collapsed ? 0 : INSPECTOR_WIDTH)
+    reportInspectorWidth(effectiveCollapsed ? 0 : INSPECTOR_WIDTH)
     return () => reportInspectorWidth(0)
-  }, [collapsed, reportInspectorWidth])
+  }, [effectiveCollapsed, reportInspectorWidth])
 
   useEffect(() => {
     const onWindowKeyDown = (event: KeyboardEvent) => {
@@ -548,11 +570,11 @@ export function TerminalsPanel({
         title="Abrir elementos"
         aria-label="Abrir elementos"
         aria-expanded={false}
-        aria-hidden={!collapsed}
-        tabIndex={collapsed ? 0 : -1}
+        aria-hidden={!effectiveCollapsed}
+        tabIndex={effectiveCollapsed ? 0 : -1}
         data-felixo-tour-anchor="inspector-puck"
         className={`felixo-btn felixo-anim-corner-puck absolute bottom-2.5 right-3 flex items-center gap-2 rounded-full border border-white/10 bg-zinc-900 px-3 py-2 text-sm font-medium text-zinc-100 shadow-2xl hover:bg-zinc-800 ${
-          collapsed ? 'felixo-anim-corner-puck-shown' : 'felixo-anim-corner-puck-hidden'
+          effectiveCollapsed ? 'felixo-anim-corner-puck-shown' : 'felixo-anim-corner-puck-hidden'
         }`}
       >
         <TerminalIcon size={15} className="shrink-0" />
@@ -561,13 +583,13 @@ export function TerminalsPanel({
       </button>
 
       <div
-        inert={collapsed}
+        inert={effectiveCollapsed}
         className={`felixo-elements-inspector felixo-anim-corner-dock flex h-full w-72 max-w-[calc(100vw-3.25rem)] flex-col overflow-hidden border border-white/10 bg-zinc-900 shadow-2xl ${
-          collapsed
+          effectiveCollapsed
             ? 'felixo-anim-corner-dock-collapsed'
             : 'felixo-anim-corner-dock-expanded'
         }`}
-        aria-hidden={collapsed}
+        aria-hidden={effectiveCollapsed}
       >
       {/* Âncora do tutorial: a linha do cabeçalho "Elementos" (o tour só destaca). */}
       <div
@@ -579,8 +601,8 @@ export function TerminalsPanel({
           onClick={toggleCollapsed}
           title="Recolher elementos"
           aria-label="Recolher elementos"
-          aria-expanded={!collapsed}
-          tabIndex={collapsed ? -1 : 0}
+          aria-expanded={!effectiveCollapsed}
+          tabIndex={effectiveCollapsed ? -1 : 0}
           className="felixo-btn flex min-w-0 flex-1 items-center gap-2 rounded-sm text-left hover:text-white"
         >
           <TerminalIcon size={15} className="shrink-0" />
@@ -595,7 +617,7 @@ export function TerminalsPanel({
           onClick={() => {
             // Turning compose mode on from a collapsed dock must reveal the rows.
             setComposeMode((current) => !current)
-            if (collapsed) setCollapsedPreference(false)
+            if (effectiveCollapsed) toggleCollapsed()
           }}
           title="Enviar mensagens diferentes para vários terminais"
           aria-label="Alternar modo de enviar mensagens em massa"
@@ -672,7 +694,7 @@ export function TerminalsPanel({
       )}
       <ul
         ref={listRef}
-        tabIndex={collapsed ? -1 : 0}
+        tabIndex={effectiveCollapsed ? -1 : 0}
         onKeyDown={(event) => {
           if (event.altKey && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
             event.preventDefault()
@@ -694,7 +716,7 @@ export function TerminalsPanel({
         className={`flex min-h-0 flex-1 flex-col gap-0.5 overflow-auto p-1.5 outline-hidden focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-white/40 ${
           // The stagger plays as the dock unfolds; while a row is being dragged
           // it must not re-run and fight the drag's own transform.
-          collapsed || drag ? '' : 'felixo-anim-stagger-list'
+          effectiveCollapsed || drag ? '' : 'felixo-anim-stagger-list'
         }`}
       >
         {dockGroups.length === 0 ? (
