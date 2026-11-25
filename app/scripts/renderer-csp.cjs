@@ -115,8 +115,11 @@ const RENDERER_CSP_DIRECTIVES = Object.freeze([
   // violação que o smoke de release acusa. O `fetch` das mesmas fontes no
   // export passa pelo `connect-src 'self'`.
   ['font-src', ["'self'", 'data:']],
-  // A única mídia do renderer é o som de notificação empacotado
-  // (`new Audio('./sounds/notification.mp3')`); o microfone do ditado vem de
+  // A mídia do renderer é o som de notificação empacotado
+  // (`new Audio('./sounds/notification.mp3')`) e o áudio/vídeo do bloco de
+  // arquivo, que vem pela rota `app://felixo/__midia/<id>` ('self'): id opaco,
+  // caminho autorizado pelo processo principal, leitura em partes. Nunca
+  // `file:`, `data:` nem `blob:` aqui. O microfone do ditado vem de
   // getUserMedia, que a CSP não governa.
   ['media-src', ["'self'"]],
   // O renderer não fala com a rede: tudo que é remoto passa por IPC no

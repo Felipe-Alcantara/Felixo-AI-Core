@@ -1076,6 +1076,10 @@ declare global {
           path: string
           content: string
         }) => Promise<CliInvokeResult & { path?: string }>
+        /** URL `app://` opaca, tocável em partes, de um áudio/vídeo autorizado. */
+        mediaUrl: (params: {
+          path: string
+        }) => Promise<CliInvokeResult & { url?: string; mimeType?: string }>
         /** Editor de terminal a usar: `$VISUAL`/`$EDITOR`, senão o primeiro do PATH. */
         resolveEditor: () => Promise<
           CliInvokeResult & { editor?: { command: string; args: string[] } }

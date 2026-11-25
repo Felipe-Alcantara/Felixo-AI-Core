@@ -14,7 +14,7 @@
 const MARKDOWN_EXTENSIONS = new Set(['md', 'markdown', 'mdx'])
 
 /** Como o conteúdo deve ser exibido fora do modo de edição. */
-export type FilePreviewKind = 'markdown' | 'plain' | 'image'
+export type FilePreviewKind = 'markdown' | 'plain' | 'image' | 'audio' | 'video'
 
 /**
  * Raster formats are rendered as pixels only. SVG stays available through the
@@ -34,7 +34,18 @@ const SAFE_IMAGE_PREVIEW_MIME_TYPES = new Set([
  * @param fileName - Nome ou caminho do arquivo. Só a extensão importa.
  */
 export function resolvePreviewKind(fileName: string | undefined): FilePreviewKind {
-  return isMarkdownFileName(fileName) ? 'markdown' : 'plain'
+  return resolveMediaKind(fileName) ?? (isMarkdownFileName(fileName) ? 'markdown' : 'plain')
+}
+
+/** Mesmas extensões de `electron/services/media-mime-types.cjs`; o processo principal confere de novo. */
+const AUDIO_EXTENSIONS = new Set(['mp3', 'wav', 'm4a', 'aac', 'ogg', 'oga', 'opus', 'flac'])
+const VIDEO_EXTENSIONS = new Set(['mp4', 'm4v', 'webm', 'ogv', 'mov'])
+
+export function resolveMediaKind(fileName: string | undefined): 'audio' | 'video' | null {
+  const baseName = fileName?.split(/[\\/]/).pop() ?? ''
+  const extension = baseName.includes('.') ? baseName.split('.').pop()!.toLowerCase() : ''
+  if (AUDIO_EXTENSIONS.has(extension)) return 'audio'
+  return VIDEO_EXTENSIONS.has(extension) ? 'video' : null
 }
 
 export function isSafeImagePreviewMimeType(mimeType: string | undefined): boolean {

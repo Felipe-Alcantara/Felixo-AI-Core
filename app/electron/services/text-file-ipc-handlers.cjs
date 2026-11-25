@@ -18,6 +18,8 @@ const fsp = require('node:fs/promises')
 const path = require('node:path')
 const { toErrorResult } = require('./ipc-result.cjs')
 const { createTextFileAccess } = require('./text-file-access.cjs')
+const { createMediaRegistry } = require('./media-registry.cjs')
+const { APP_ORIGIN, MEDIA_PATH_PREFIX } = require('../core/app-protocol.cjs')
 const { resolveEditorCommand } = require('./editor-command.cjs')
 
 /**
@@ -48,10 +50,11 @@ const TEXT_FILE_FILTERS = [
  * @param {() => (import('electron').BrowserWindow | null)} getMainWindow
  * @param {object} options
  * @param {() => string[]} options.listProjectRoots
- * @returns {{ dispose: () => void, revokeAll: () => void, authorizeImageNear: (filePath: string) => string }}
+ * @returns {{ dispose: () => void, revokeAll: () => void, authorizeImageNear: (filePath: string) => string, resolveMedia: (id: string) => ({ filePath: string, mimeType: string } | null) }}
  */
 function registerTextFileIpcHandlers(getMainWindow, options = {}) {
   const access = createTextFileAccess({ listProjectRoots: options.listProjectRoots })
+  const media = createMediaRegistry({ authorize: access.authorize })
   const fileIpcMain = options.ipcMain ?? ipcMain
   const fileDialog = options.dialog ?? dialog
   /** filePath -> listener do fs.watchFile, para nao observar o mesmo arquivo duas vezes. */
@@ -136,6 +139,19 @@ function registerTextFileIpcHandlers(getMainWindow, options = {}) {
   })
 
   /**
+   * URL de reprodução (`app://felixo/__midia/<id>`) de um áudio/vídeo já
+   * autorizado. O id é opaco: o caminho não sai do processo principal.
+   */
+  fileIpcMain.handle('text-file:media-url', (_event, params = {}) => {
+    try {
+      const { id, mimeType } = media.issue(params.path)
+      return { ok: true, url: `${APP_ORIGIN}${MEDIA_PATH_PREFIX}${id}`, mimeType }
+    } catch (error) {
+      return toErrorResult(error, 'Nao foi possivel abrir a midia.')
+    }
+  })
+
+  /**
    * Qual editor usar para abrir um arquivo num terminal. Resolvido aqui porque
    * depende de `process.env` e do PATH, que o renderer nao enxerga.
    */
@@ -193,9 +209,12 @@ function registerTextFileIpcHandlers(getMainWindow, options = {}) {
     revokeAll: () => {
       dispose()
       access.revokeAll()
+      media.clear()
     },
     /** Imagem relativa do Markdown: as mesmas concessoes, pelo caminho real (`app-protocol.cjs`). */
     authorizeImageNear: (filePath) => access.authorizeImageNear(filePath),
+    /** Rota `__midia` do protocolo `app://`: id opaco -> arquivo autorizado. */
+    resolveMedia: (id) => media.resolve(id),
   }
 }
 

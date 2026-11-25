@@ -739,6 +739,8 @@ O bloco não é dono desse arquivo: ele não cria nem apaga nada, só lê e grav
 
 No topo do bloco, o lápis alterna entre editar e visualizar. Em `.md`, `.markdown` e `.mdx` a visualização mostra o markdown formatado; em qualquer outro arquivo mostra o texto como está, em fonte monoespaçada, preservando indentação e quebras de linha — formatar markdown num `.py` comeria justamente a indentação, que ali é o programa.
 
+Um arquivo de áudio (`.mp3`, `.wav`, `.m4a`, `.aac`, `.ogg`, `.opus`, `.flac`) ou de vídeo (`.mp4`, `.m4v`, `.webm`, `.ogv`, `.mov`) aberto assim vira um reprodutor dentro do bloco, com avanço e volta, sem abrir outro programa. O app lê o arquivo em partes, então um vídeo grande começa na hora e não ocupa memória pelo tamanho dele. Nada toca sozinho, e só um bloco toca por vez. Se o formato não for suportado pelo reprodutor do app (um MOV com codec da Apple, por exemplo), o bloco avisa.
+
 O preview de Markdown trata o conteúdo recebido de agentes, arquivos e
 histórico como externo: sequências ANSI de terminal são removidas, o texto é
 limitado a 200.000 caracteres antes do parser e HTML bruto é sanitizado antes

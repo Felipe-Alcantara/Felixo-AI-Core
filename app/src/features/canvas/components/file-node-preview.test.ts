@@ -67,3 +67,14 @@ describe('isSafeImagePreviewMimeType', () => {
     expect(isSafeImagePreviewMimeType(undefined)).toBe(false)
   })
 })
+
+describe('áudio e vídeo', () => {
+  it('reconhece a mídia pela extensão do último segmento do caminho', () => {
+    expect(resolvePreviewKind(String.raw`C:\Users\Felipe Martins\voz.MP3`)).toBe('audio')
+    expect(resolvePreviewKind('/tmp/render final.mp4')).toBe('video')
+    expect(resolvePreviewKind('clip.webm')).toBe('video')
+    expect(resolvePreviewKind('mp3')).toBe('plain')
+    expect(resolvePreviewKind('pasta.mp3/notas.txt')).toBe('plain')
+    expect(resolvePreviewKind('foto.png')).toBe('plain')
+  })
+})

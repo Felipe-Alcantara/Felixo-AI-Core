@@ -31,7 +31,8 @@ import { copiarTexto } from '../../shared/ipc/copy-text'
 import { mensagemDeFalha, resultadoDeIpc } from '../../shared/ipc/ipc-result'
 import { dirnameOf, markdownImageRoot } from '../../shared/components/markdown-image-src'
 import { useProjectRoots } from '../hooks/project-roots-context'
-import { isSafeImagePreviewMimeType, resolvePreviewKind } from './file-node-preview'
+import { isSafeImagePreviewMimeType, resolveMediaKind, resolvePreviewKind } from './file-node-preview'
+import { MediaFilePreview } from './MediaFilePreview'
 import { useFileNodeDocument } from '../hooks/useFileNodeDocument'
 import type {
   CanvasImageMetadata,
@@ -91,17 +92,18 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
     imageMetadata?.kind === 'local-image'
   /** Um arquivo externo é de outra pessoa; o bloco é só uma janela para ele. */
   const isExternal = isImage || Boolean(filePath)
+  const mediaKind = !isImage && filePath ? resolveMediaKind(filePath) : null
   const displayName = isExternal
     ? (nodeData.fileLabel ?? (filePath || 'imagem gerada'))
     : fileName
   const projectRoots = useProjectRoots()
   const document = useFileNodeDocument({
     fileName: isExternal ? undefined : fileName,
-    filePath: isImage ? undefined : isExternal ? filePath : undefined,
+    filePath: isImage || mediaKind ? undefined : isExternal ? filePath : undefined,
   })
   const { content, save } = document
-  const absolutePath = isImage ? filePath : document.absolutePath
-  const previewKind = isImage ? 'image' : resolvePreviewKind(displayName)
+  const absolutePath = isImage || mediaKind ? filePath : document.absolutePath
+  const previewKind = isImage ? 'image' : (mediaKind ?? resolvePreviewKind(displayName))
   const [editing, setEditing] = useState(false)
   const [copied, setCopied] = useState(false)
   const [imageZoom, setImageZoom] = useState(1)
@@ -362,7 +364,7 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
         >
           {copied ? <Check size={13} className="text-(--f-core-white-soft)" /> : <Copy size={13} />}
         </button>
-        {!isImage && (
+        {!isImage && !mediaKind && (
           <button
             type="button"
             className="felixo-btn-icon nodrag rounded-sm p-0.5 opacity-70 hover:bg-black/20 hover:opacity-100"
@@ -477,6 +479,8 @@ function FileNodeComponent({ id, data, selected }: NodeProps) {
           repairing={repairing}
           feedback={imageActionFeedback}
         />
+      ) : mediaKind ? (
+        <MediaFilePreview kind={mediaKind} path={filePath} />
       ) : editing ? (
         <textarea
           value={content}

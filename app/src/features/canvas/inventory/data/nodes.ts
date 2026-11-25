@@ -395,6 +395,7 @@ export const nodeInventory: Record<CanvasNodeType, InventoryElement> = {
       'canvas-file:unwatch',
       'canvas-file:changed',
       'text-file:read',
+      'text-file:media-url',
       'text-file:write',
       'text-file:watch',
       'text-file:unwatch',

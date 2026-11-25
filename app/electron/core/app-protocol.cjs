@@ -15,6 +15,9 @@
  *   Markdown. Quem autoriza é o processo principal (`authorizeLocalImage`, o
  *   mesmo `text-file-access` dos blocos de arquivo), pelo caminho real: um
  *   link simbólico dentro do projeto que aponte para fora é recusado;
+ * - `app://felixo/__midia/<id>`: áudio/vídeo do bloco de arquivo, em partes
+ *   (`Range`/206). O id é opaco e emitido pelo processo principal depois de
+ *   autorizar o caminho (`media-registry.cjs`); o caminho nunca vai na URL;
  * - `app://felixo/__migracao-origem`: página vazia (sem o app) onde o
  *   `localStorage` da origem `file://` é copiado uma vez
  *   (`renderer-origin-migration.cjs`).
@@ -26,12 +29,14 @@
 const fs = require('node:fs')
 const path = require('node:path')
 const { pathToFileURL } = require('node:url')
+const { createMediaResponse } = require('./media-response.cjs')
 
 const APP_SCHEME = 'app'
 const APP_HOST = 'felixo'
 const APP_ORIGIN = `${APP_SCHEME}://${APP_HOST}`
 const APP_INDEX_URL = `${APP_ORIGIN}/index.html`
 const LOCAL_IMAGE_PATH = '/__imagem-local'
+const MEDIA_PATH_PREFIX = '/__midia/'
 const MIGRATION_PAGE_PATH = '/__migracao-origem'
 const MIGRATION_PAGE_URL = `${APP_ORIGIN}${MIGRATION_PAGE_PATH}`
 
@@ -99,9 +104,10 @@ const forbidden = () => new Response('não autorizado', { status: 403 })
  * @param {string} options.distDir - A pasta do build (`dist/`).
  * @param {(filePath: string) => Response | Promise<Response>} options.fetchFile - `net.fetch` de um `file://`.
  * @param {(filePath: string) => string} [options.authorizeLocalImage] - Caminho real autorizado, ou lança.
+ * @param {(id: string) => ({ filePath: string, mimeType: string } | null)} [options.resolveMedia] - id opaco -> arquivo autorizado
  * @param {(filePath: string) => boolean} [options.isFile]
  */
-function createAppProtocolHandler({ distDir, fetchFile, authorizeLocalImage, isFile = defaultIsFile }) {
+function createAppProtocolHandler({ distDir, fetchFile, authorizeLocalImage, resolveMedia, isFile = defaultIsFile }) {
   return async (request) => {
     let url
     try {
@@ -131,6 +137,22 @@ function createAppProtocolHandler({ distDir, fetchFile, authorizeLocalImage, isF
       return fetchOrNotFound(fetchFile, resolved)
     }
 
+    if (url.pathname.startsWith(MEDIA_PATH_PREFIX)) {
+      const method = request.method ?? 'GET'
+      if (method !== 'GET' && method !== 'HEAD') return forbidden()
+      const media = typeof resolveMedia === 'function' ? resolveMedia(url.pathname.slice(MEDIA_PATH_PREFIX.length)) : null
+      if (!media) return forbidden()
+      try {
+        return await createMediaResponse({
+          ...media,
+          method,
+          rangeHeader: request.headers?.get('range') ?? undefined,
+        })
+      } catch {
+        return notFound()
+      }
+    }
+
     const file = resolveBuildFile(request.url, distDir)
     if (!file || !isFile(file)) return notFound()
     return fetchOrNotFound(fetchFile, file)
@@ -154,13 +176,15 @@ async function fetchOrNotFound(fetchFile, filePath) {
  * @param {import('electron').Net} options.net
  * @param {string} options.distDir
  * @param {(filePath: string) => string} [options.authorizeLocalImage]
+ * @param {(id: string) => ({ filePath: string, mimeType: string } | null)} [options.resolveMedia]
  */
-function registerAppProtocol({ protocol, net, distDir, authorizeLocalImage }) {
+function registerAppProtocol({ protocol, net, distDir, authorizeLocalImage, resolveMedia }) {
   protocol.handle(
     APP_SCHEME,
     createAppProtocolHandler({
       distDir,
       authorizeLocalImage,
+      resolveMedia,
       fetchFile: (filePath) => net.fetch(pathToFileURL(filePath).href),
     }),
   )
@@ -182,6 +206,7 @@ module.exports = {
   APP_SCHEME,
   APP_SCHEME_PRIVILEGES,
   LOCAL_IMAGE_PATH,
+  MEDIA_PATH_PREFIX,
   MIGRATION_PAGE_URL,
   createAppProtocolHandler,
   isLocalImageRequest,

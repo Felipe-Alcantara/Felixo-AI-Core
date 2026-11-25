@@ -134,6 +134,8 @@ test('nenhuma diretiva libera file:: o renderer é app://felixo, e a imagem loca
     assert.ok(!values.some((value) => /^file:/i.test(value)), `${name} libera file:`)
   }
   assert.deepEqual(mapa.get('img-src'), ["'self'", 'data:', 'blob:'])
+  // Mídia só pelo protocolo do app: o disco inteiro não pode virar fonte de <video>.
+  assert.deepEqual(mapa.get('media-src'), ["'self'"])
 })
 
 // Regra de 17/11/2026 (substitui a de 16/11, "nenhum host remoto"): a lista

@@ -492,6 +492,7 @@ app.whenReady().then(async () => {
       if (!textFileHandlers) throw new Error('Acesso a arquivos ainda não registrado.')
       return textFileHandlers.authorizeImageNear(filePath)
     },
+    resolveMedia: (id) => textFileHandlers?.resolveMedia(id) ?? null,
   })
 
   if (isReleaseSmoke) {
