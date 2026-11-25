@@ -30,6 +30,7 @@ import { ApprovalPanel } from './ApprovalPanel'
 import { DictationButton } from './DictationButton'
 import { useDictation } from '../hooks/useDictation'
 import { useDictationShortcut } from '../hooks/useDictationShortcut'
+import { useTerminalShortcuts } from '../hooks/useTerminalShortcuts'
 import { formatShortcut, matchesShortcut } from '../services/dictation'
 import { NodeColorMenu } from './NodeColorMenu'
 import { copiarTexto } from '../../shared/ipc/copy-text'
@@ -200,6 +201,7 @@ import {
   type TerminalNodeDataOptions,
 } from '../services/terminal-node-data'
 import { HandoffDialog } from './HandoffDialog'
+import { TerminalShortcutsLayer } from './TerminalShortcutsLayer'
 import { AccountSwitchDialog } from './AccountSwitchDialog'
 import { AccountChainActionsContext } from '../hooks/account-chain-actions-context'
 import { ProjectRootsContext } from '../hooks/project-roots-context'
@@ -1412,6 +1414,14 @@ function CanvasInner({
     },
   })
   const { shortcut: dictationShortcut } = useDictationShortcut()
+  // #N na ordem em que o cartão e o dock numeram os terminais.
+  const terminalIds = useMemo(() => [...countTerminalOrder(structuralNodes).keys()], [structuralNodes])
+  const terminalShortcuts = useTerminalShortcuts({
+    terminalIds,
+    notifications: notificationHistory,
+    openTerminal,
+    enabled: !isBusy,
+  })
   const dictationToggle = dictation.toggle
   useEffect(() => {
     const platform = window.felixo?.platform ?? 'linux'
@@ -2874,6 +2884,14 @@ function CanvasInner({
           onClose={closeHandoff}
         />
       )}
+      <TerminalShortcutsLayer
+        terminalIds={terminalIds}
+        numbersVisible={terminalShortcuts.numbersVisible}
+        message={terminalShortcuts.message}
+        sheetOpen={terminalShortcuts.sheetOpen}
+        onCloseSheet={terminalShortcuts.closeSheet}
+        dictationShortcut={dictationShortcut}
+      />
       {accountContinuation.dialog && (
         <AccountSwitchDialog binding={accountContinuation.dialog} />
       )}

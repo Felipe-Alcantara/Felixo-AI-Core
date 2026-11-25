@@ -1100,4 +1100,31 @@ export const chromeSurfaces: InventoryElement[] = [
     gaps: [],
     overlap: 'Sem superfície própria; o estado aparece na barra de status ("Carregando canvas…"/"Canvas pronto") e em data-felixo-hydrated na raiz do canvas.',
   },
+  {
+    id: 'chrome-terminal-shortcuts',
+    name: 'Atalhos para pular entre agentes e lista de atalhos',
+    layer: 'chrome',
+    owner: 'src/features/canvas/components/TerminalShortcutsLayer.tsx',
+    states: {
+      normal: 'Sem nada na tela. Alt+1..9 abre o agente #N, Alt+N abre o próximo que precisa de você (falhou, depois espera resposta, depois terminou; o mais antigo primeiro) e ? abre a folha "Atalhos do teclado", gerada de CANVAS_SHORTCUTS com as teclas do SO.',
+      pending: 'Alt+Q mostra por 2 s o número grande sobre cada cartão de terminal visível (data-terminal-numbers, aria-hidden); um dígito (dois, a partir de 10 agentes) nesse intervalo abre o agente, Esc dispensa.',
+      empty: 'Alt+N sem notificação não lida mostra "Ninguém esperando você" (role="status") por 2,5 s.',
+      disabled: 'Durante limpar/importar (isBusy) os atalhos esperam; com um diálogo modal aberto só o ? age (alterna a folha).',
+    },
+    controls: [
+      {
+        locator: 'aria-label="Fechar"',
+        kind: 'button',
+        effect: 'Fechar a folha de atalhos (também Esc, clique fora ou ? de novo); o foco volta a quem o tinha.',
+        failure: 'Sem falha própria.',
+        disabledWhen: 'só aparece com a folha aberta',
+      },
+    ],
+    persistence: ['nenhuma'],
+    ipc: [],
+    dependsOn: ['useTerminalShortcuts', 'canvas-shortcuts (shortcutActionFromEvent, nextPendingNode, resolveNumberBuffer)', 'openTerminal', 'useCanvasNotifications'],
+    tests: [{ file: 'src/features/canvas/services/canvas-shortcuts.test.ts' }],
+    gaps: [],
+    overlap: 'Selos de número: z-50 fixo sobre a janela, sem eventos de ponteiro. Aviso: z-50, 3rem acima da base, centralizado. Folha: z-60 modal, acima da gaveta e dos painéis.',
+  },
 ]

@@ -29,8 +29,8 @@ controle foi lido no código e, quando há teste, o teste é citado na linha. Co
 
 ## Números
 
-- **Elementos:** 115 (10 blocos, 17 ferramentas, 88 outras superfícies)
-- **Controles:** 446, dos quais 93 com teste específico
+- **Elementos:** 116 (10 blocos, 17 ferramentas, 89 outras superfícies)
+- **Controles:** 447, dos quais 93 com teste específico
 - **Elementos sem nenhum teste:** 0
 - **Lacunas:** 123 (alto 1, médio 73, baixo 49), em 72 tasks
 
@@ -443,6 +443,26 @@ Sem controle próprio: as ações vêm de outros elementos.
 | empty | canvas:list devolve lista vazia. Falha de leitura (ok:false ou exceção) é outro caso: a barra de status mostra o aviso e o histórico de notificações não é podado contra a lista vazia. |
 
 Sem controle próprio: as ações vêm de outros elementos.
+
+### Atalhos para pular entre agentes e lista de atalhos
+
+- **ID:** `chrome-terminal-shortcuts` · **Dono:** `src/features/canvas/components/TerminalShortcutsLayer.tsx`
+- **Persistência:** nenhuma
+- **IPC:** nenhum
+- **Depende de:** `useTerminalShortcuts`, `canvas-shortcuts (shortcutActionFromEvent, nextPendingNode, resolveNumberBuffer)`, `openTerminal`, `useCanvasNotifications`
+- **Sobreposição:** Selos de número: z-50 fixo sobre a janela, sem eventos de ponteiro. Aviso: z-50, 3rem acima da base, centralizado. Folha: z-60 modal, acima da gaveta e dos painéis.
+- **Testes:** `src/features/canvas/services/canvas-shortcuts.test.ts`
+
+| Estado | Quando |
+| --- | --- |
+| normal | Sem nada na tela. Alt+1..9 abre o agente #N, Alt+N abre o próximo que precisa de você (falhou, depois espera resposta, depois terminou; o mais antigo primeiro) e ? abre a folha "Atalhos do teclado", gerada de CANVAS_SHORTCUTS com as teclas do SO. |
+| empty | Alt+N sem notificação não lida mostra "Ninguém esperando você" (role="status") por 2,5 s. |
+| pending | Alt+Q mostra por 2 s o número grande sobre cada cartão de terminal visível (data-terminal-numbers, aria-hidden); um dígito (dois, a partir de 10 agentes) nesse intervalo abre o agente, Esc dispensa. |
+| disabled | Durante limpar/importar (isBusy) os atalhos esperam; com um diálogo modal aberto só o ? age (alterna a folha). |
+
+| Controle | Gatilho | Efeito | Falha conhecida | Teste |
+| --- | --- | --- | --- | --- |
+| `aria-label="Fechar"` (button) | clique | Fechar a folha de atalhos (também Esc, clique fora ou ? de novo); o foco volta a quem o tinha. (desabilitado: só aparece com a folha aberta) | Sem falha própria. | — |
 
 ### Indicador da instalação das CLIs no rodapé da sidebar
 
