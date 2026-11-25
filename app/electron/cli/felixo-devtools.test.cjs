@@ -440,7 +440,7 @@ test('launch sem locale UTF-8 força C.UTF-8 no Electron e avisa na saída', asy
   const env = setup()
   let spawned
   const result = await executarDevtools(['launch', '--port', '9333'], launchDeps(env, {
-    env: { LANG: 'C', LC_ALL: '' },
+    env: { LANG: 'C', LC_ALL: '', LC_CTYPE: '' }, // o runner do macOS traz LC_CTYPE=UTF-8
     spawn: (_c, _a, options) => { spawned = options.env; return { pid: 4321, unref() {}, once() {} } },
     waitForCdp: async () => {},
     checkBridge: async () => true,
