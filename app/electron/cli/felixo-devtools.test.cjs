@@ -15,6 +15,8 @@ const {
   parseArgs,
   profileLooksInUse,
   readState,
+  stateDir,
+  viteBasePort,
   requirePackagedExecutable,
   waitForCdp,
 } = require('./felixo-devtools.cjs')
@@ -485,4 +487,82 @@ test('windows lista todas as janelas da sessão e --janela é aceita', async () 
   const result = await executarDevtools(['windows', '--janela', '0'], env)
   assert.equal(result.codigo, 0)
   assert.deepEqual(JSON.parse(result.saida).map((j) => [j.indice, j.titulo, j.principal]), [[0, 'Felixo AI Core', true], [1, 'Aux', false]])
+})
+
+test('cada worktree tem a sua pasta de estado e a sua porta de Vite, derivadas do caminho', () => {
+  const a = path.join(os.tmpdir(), 'wt-a', 'app')
+  const b = path.join(os.tmpdir(), 'wt-b', 'app')
+  assert.notEqual(stateDir({ appDir: a }), stateDir({ appDir: b }))
+  assert.equal(stateDir({ appDir: a }), stateDir({ appDir: a }))
+  assert.ok(viteBasePort(a) >= 5200 && viteBasePort(a) < 5900)
+  assert.notEqual(viteBasePort(a), 5173)
+})
+
+test('launch usa a porta do Vite da worktree e a repassa em VITE_DEV_SERVER_URL e no estado', async () => {
+  const env = setup()
+  const esperada = viteBasePort(env.root)
+  let spawned
+  let vitePortUsada
+  const result = await executarDevtools(['launch', '--port', '9333'], launchDeps(env, {
+    probeVite: async () => ({ status: 'down' }),
+    assertPortAvailable: async () => {},
+    spawnVite: (port) => { vitePortUsada = port; return { pid: 777, unref() {} } },
+    waitForVite: async () => {},
+    spawn: (_c, _a, options) => { spawned = options.env; return { pid: 4321, unref() {} } },
+    waitForCdp: async () => {},
+  }))
+  assert.equal(result.codigo, 0)
+  assert.equal(vitePortUsada, esperada)
+  assert.equal(spawned.VITE_DEV_SERVER_URL, `http://127.0.0.1:${esperada}`)
+  const state = readState(env)
+  assert.equal(state.vitePort, esperada)
+  assert.equal(state.vitePid, 777)
+  assert.match(formatState(state, true), new RegExp(`porta Vite: ${esperada}`))
+})
+
+test('Vite de outra worktree (ou de outro programa) na porta é pulado, nunca reaproveitado nem encerrado', async () => {
+  const env = setup()
+  const base = viteBasePort(env.root)
+  const tentadas = []
+  let spawned
+  const result = await executarDevtools(['launch', '--port', '9333'], launchDeps(env, {
+    probeVite: async (port) => { tentadas.push(port); return { status: port === base ? 'foreign' : 'felixo' } },
+    spawn: (_c, _a, options) => { spawned = options.env; return { pid: 4321, unref() {} } },
+    waitForCdp: async () => {},
+  }))
+  assert.equal(result.codigo, 0)
+  assert.deepEqual(tentadas, [base, base + 1])
+  assert.equal(spawned.VITE_DEV_SERVER_URL, `http://127.0.0.1:${base + 1}`)
+})
+
+test('launch falha com mensagem clara se nenhuma porta do intervalo serve', async () => {
+  const env = setup()
+  const result = await executarDevtools(['launch', '--port', '9333'], launchDeps(env, { probeVite: async () => ({ status: 'foreign' }) }))
+  assert.equal(result.codigo, 1)
+  assert.match(result.erro, /Nenhuma porta livre para o Vite desta worktree/)
+})
+
+test('status e quit só enxergam a sessão da própria worktree', async () => {
+  const raiz = fs.mkdtempSync(path.join(os.tmpdir(), 'felixo-devtools-wt-'))
+  const kills = []
+  const base = { fs, platform: 'linux', sleep: async () => {}, kill: (pid, sinal) => { if (sinal !== 0) kills.push(pid) } }
+  const appA = path.join(raiz, 'a', 'app')
+  const appB = path.join(raiz, 'b', 'app')
+  const gravar = (appDir, pid) => {
+    const dir = stateDir({ appDir })
+    fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(path.join(dir, 'session.json'), JSON.stringify({ pid, port: 9333, userData: path.join(dir, 'p'), realProfile: false, createdAt: 'agora' }))
+  }
+  try {
+    gravar(appA, 111)
+    assert.match((await executarDevtools(['status'], { ...base, appDir: appB })).saida, /Nenhuma sessão.*esta worktree/)
+    assert.equal((await executarDevtools(['status'], { ...base, appDir: appA })).codigo, 0)
+    await executarDevtools(['quit'], { ...base, appDir: appB })
+    assert.deepEqual(kills, [])
+    assert.equal(fs.existsSync(path.join(stateDir({ appDir: appA }), 'session.json')), true)
+    await executarDevtools(['quit'], { ...base, appDir: appA })
+    assert.deepEqual(kills, [111])
+  } finally {
+    fs.rmSync(stateDir({ appDir: appA }), { recursive: true, force: true })
+  }
 })

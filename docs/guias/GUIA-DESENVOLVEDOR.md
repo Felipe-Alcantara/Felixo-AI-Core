@@ -892,8 +892,11 @@ FELIXO_SMOKE_SESSOES=A FELIXO_SMOKE_TENTATIVAS=1 npm run test:canvas-smoke
 xvfb-run -a --server-args="-screen 0 1280x800x24" env FELIXO_SMOKE_SESSOES=A FELIXO_SMOKE_TENTATIVAS=1 npm run test:canvas-smoke
 ```
 
-Um `TMPDIR` próprio isola a sessão `felixo devtools` de outra que esteja rodando
-na mesma máquina.
+O `felixo devtools` já isola cada worktree: o estado da sessão fica em
+`<temp>/felixo-ai-core-devtools/<hash do caminho de app/>/session.json` e o Vite sobe numa
+porta própria (a partir de 5200, derivada do mesmo hash, `FELIXO_VITE_PORT`). `status` e
+`quit` só enxergam a sessão da worktree em que rodam, e um Vite que serve outra pasta
+`app/` é pulado, nunca reaproveitado nem encerrado. Não precisa mais apontar `TMPDIR`.
 
 **No app empacotado.** Desde 19/10/2026 a release não roda mais o smoke no
 instalador: ele repetia o do CI e somava ~5 min a cada sistema. O gate do

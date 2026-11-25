@@ -13,12 +13,26 @@ const os = require('node:os')
 const path = require('node:path')
 const net = require('node:net')
 const { spawn, execFileSync } = require('node:child_process')
-const { randomUUID } = require('node:crypto')
+const { randomUUID, createHash } = require('node:crypto')
 const { getAppPaths } = require('../core/app-paths.cjs')
-const { probeFelixoVite, waitForFelixoVite, APP_DIR } = require('../../scripts/dev-runner.cjs')
+const { probeFelixoVite, waitForFelixoVite, fetchMarker, APP_DIR } = require('../../scripts/dev-runner.cjs')
 
-const STATE_DIR = path.join(os.tmpdir(), 'felixo-ai-core-devtools')
-const STATE_FILE = path.join(STATE_DIR, 'session.json')
+const STATE_ROOT = path.join(os.tmpdir(), 'felixo-ai-core-devtools')
+const ROOT_PATH = '/__felixo_dev_root'
+const VITE_PORT_BASE = 5200
+const VITE_PORT_SPAN = 700
+const VITE_PORT_TRIES = 25
+
+/** Identidade da worktree: hash do caminho da pasta app/ (sem diferenciar maiúsculas onde o disco não diferencia). */
+function worktreeHash(appDir = APP_DIR) {
+  const normalized = path.resolve(appDir)
+  const key = process.platform === 'win32' || process.platform === 'darwin' ? normalized.toLowerCase() : normalized
+  return createHash('sha1').update(key).digest('hex')
+}
+/** Pasta de estado própria da worktree: sessão e perfis isolados não se misturam entre agentes. */
+function stateDir(deps = {}) { return path.join(STATE_ROOT, worktreeHash(deps.appDir ?? APP_DIR).slice(0, 12)) }
+/** Porta de partida do Vite da worktree (fora da 5173 do `npm run dev`); se ocupada, ensureVite tenta as seguintes. */
+function viteBasePort(appDir = APP_DIR) { return VITE_PORT_BASE + (parseInt(worktreeHash(appDir).slice(0, 8), 16) % VITE_PORT_SPAN) }
 const DEFAULT_TIMEOUT = 15_000
 
 const AJUDA_DEVTOOLS = `felixo devtools — dirige uma instância isolada e invisível do Felixo AI Core.
@@ -30,6 +44,8 @@ const AJUDA_DEVTOOLS = `felixo devtools — dirige uma instância isolada e invi
   felixo devtools text [seletor] | eval <expressão JavaScript> | main <expressão JavaScript>
   felixo devtools heap-snapshot <arquivo.heapsnapshot> | metrics
 
+Estado da sessão e porta do Vite (FELIXO_VITE_PORT, a partir de 5200) são derivados do caminho da worktree:
+agentes em worktrees diferentes rodam lado a lado, e \`status\`/\`quit\` só enxergam a sessão da própria worktree.
 Por padrão a sessão usa um userData temporário e uma janela invisível, e sobe da fonte
 (o mesmo \`electron .\` do \`npm run dev\`, contra o Vite dev server). --real-profile é
 deliberadamente excepcional e é recusado se o perfil aparentar estar em uso.
@@ -65,7 +81,7 @@ function parseArgs(args) {
   return { command: positional.shift() ?? '', positional, options }
 }
 
-function statePath(deps = {}) { return deps.stateFile ?? STATE_FILE }
+function statePath(deps = {}) { return deps.stateFile ?? path.join(stateDir(deps), 'session.json') }
 function readState(deps = {}) {
   try { return JSON.parse((deps.fs ?? fs).readFileSync(statePath(deps), 'utf8')) } catch { return null }
 }
@@ -174,18 +190,38 @@ function readLogTail(debugLog, deps = {}, maxChars = 4000) {
     return text.length > maxChars ? `…${text.slice(-maxChars)}` : text
   } catch { return '' }
 }
+/** Sonda o Vite da porta: só é 'felixo' se responde o marcador E serve a pasta app/ desta worktree. */
+async function probeViteDaWorktree(port, appDir) {
+  const probe = await probeFelixoVite({ port })
+  if (probe.status !== 'felixo') return probe
+  try {
+    const { body } = await fetchMarker({ port, path: ROOT_PATH })
+    return path.resolve(body.trim()).toLowerCase() === path.resolve(appDir).toLowerCase() ? probe : { status: 'foreign' }
+  } catch { return { status: 'foreign' } }
+}
+/**
+ * Acha o Vite desta worktree: reaproveita o que já serve esta pasta app/ ou sobe um numa porta livre,
+ * começando pela porta derivada do caminho. Vite de outra worktree (ou outro programa) é pulado, nunca encerrado.
+ */
 async function ensureVite(deps = {}) {
-  const probe = deps.probeVite ?? probeFelixoVite
-  const current = await probe()
-  if (current.status === 'felixo') return { pid: null, reused: true }
-  if (current.status === 'foreign') throw new Error('A porta do Vite está ocupada por outro processo; o DevTools não vai encerrá-lo.')
-  // FELIXO_DEVTOOLS_VITE_LOG: arquivo que recebe a saída do Vite (sem ele, silencioso).
-  const debugLog = (deps.env ?? process.env).FELIXO_DEVTOOLS_VITE_LOG || ''
-  const child = deps.spawnVite
-    ? deps.spawnVite()
-    : createDetached(process.execPath, [path.join(APP_DIR, 'node_modules', 'vite', 'bin', 'vite.js'), '--host', '127.0.0.1'], { cwd: APP_DIR, env: process.env, debugLog }, deps)
-  await (deps.waitForVite ?? waitForFelixoVite)({ probe })
-  return { pid: child.pid ?? null, reused: false }
+  const appDir = deps.appDir ?? APP_DIR
+  const probeAt = (port) => (deps.probeVite ? deps.probeVite(port) : probeViteDaWorktree(port, appDir))
+  const base = viteBasePort(appDir)
+  for (let attempt = 0; attempt < VITE_PORT_TRIES; attempt += 1) {
+    const port = VITE_PORT_BASE + ((base - VITE_PORT_BASE + attempt) % VITE_PORT_SPAN)
+    const current = await probeAt(port)
+    if (current.status === 'felixo') return { pid: null, reused: true, port }
+    if (current.status === 'foreign') continue
+    try { await (deps.assertPortAvailable ?? assertPortAvailable)(port) } catch { continue }
+    // FELIXO_DEVTOOLS_VITE_LOG: arquivo que recebe a saída do Vite (sem ele, silencioso).
+    const env = { ...process.env, ...(deps.env ?? {}), FELIXO_VITE_PORT: String(port) }
+    const child = deps.spawnVite
+      ? deps.spawnVite(port)
+      : createDetached(process.execPath, [path.join(APP_DIR, 'node_modules', 'vite', 'bin', 'vite.js'), '--host', '127.0.0.1'], { cwd: APP_DIR, env, debugLog: env.FELIXO_DEVTOOLS_VITE_LOG || '' }, deps)
+    await (deps.waitForVite ?? waitForFelixoVite)({ probe: () => probeAt(port), port })
+    return { pid: child.pid ?? null, reused: false, port }
+  }
+  throw new Error(`Nenhuma porta livre para o Vite desta worktree (${VITE_PORT_TRIES} tentadas a partir de ${viteBasePort(appDir)}).`)
 }
 function electronPath() { return require('electron') }
 /**
@@ -217,19 +253,19 @@ async function launch(options, deps = {}) {
   if (options.realProfile && (deps.profileLooksInUse ?? profileLooksInUse)(realUserData, deps)) {
     throw new Error('O perfil real parece estar em uso por outra instância. Feche o app antes de usar --real-profile.')
   }
-  const userData = options.realProfile ? realUserData : path.join(STATE_DIR, `profile-${randomUUID()}`)
+  const userData = options.realProfile ? realUserData : path.join(stateDir(deps), `profile-${randomUUID()}`)
   const packaged = options.packaged ? requirePackagedExecutable(options.packaged, deps) : ''
 
   // --packaged dirige o binário real: sem Vite (o dist já está dentro do
   // pacote) e sem VITE_DEV_SERVER_URL (a flag que o main process usa para
   // saber se está em modo desenvolvimento — presente, ele tentaria abrir o
   // dev server que não existe ali).
-  const vite = packaged ? { pid: null, reused: true } : await ensureVite(deps)
+  const vite = packaged ? { pid: null, reused: true, port: null } : await ensureVite(deps)
   const vitePid = packaged ? null : (vite.pid ?? (old?.vitePid && isProcessAlive(old.vitePid, deps) ? old.vitePid : null))
   const env = {
     ...process.env,
     ...(deps.env ?? {}),
-    ...(packaged ? {} : { VITE_DEV_SERVER_URL: 'http://127.0.0.1:5173' }),
+    ...(packaged ? {} : { VITE_DEV_SERVER_URL: `http://127.0.0.1:${vite.port}` }),
     FELIXO_DEVTOOLS_PORT: String(port),
     FELIXO_USER_DATA_DIR: userData,
     FELIXO_DEVTOOLS_HEADLESS: options.visible ? '0' : '1',
@@ -252,7 +288,7 @@ async function launch(options, deps = {}) {
   const child = packaged
     ? createDetached(packaged, sandboxArgs, { cwd: deps.appDir ?? APP_DIR, env, windowsHide: !options.visible, debugLog }, deps)
     : createDetached(deps.electronPath ?? electronPath(), ['.', ...sandboxArgs], { cwd: deps.appDir ?? APP_DIR, env, windowsHide: !options.visible, debugLog }, deps)
-  const state = { pid: child.pid, port, userData, realProfile: options.realProfile, packaged: packaged || null, vitePid, createdAt: new Date().toISOString() }
+  const state = { pid: child.pid, port, userData, realProfile: options.realProfile, packaged: packaged || null, vitePid, vitePort: vite.port, worktree: path.resolve(deps.appDir ?? APP_DIR), createdAt: new Date().toISOString() }
   writeState(state, deps)
   // Distingue "o Electron morreu ao subir" de "ficou vivo e mudo": sem isso os dois
   // viravam o mesmo 'fetch failed' no fim do timeout (task de CDP sob Xvfb, 20/09).
@@ -372,7 +408,7 @@ function killTree(pid, deps = {}) {
     return true
   } catch { return false }
 }
-function formatState(state, alive) { return [`sessão: ${alive ? 'ativa' : 'encerrada'}`, `pid: ${state.pid}`, `porta CDP: ${state.port}`, `perfil: ${state.realProfile ? 'real (explícito)' : 'isolado'}`, `origem: ${state.packaged ? `empacotado (${state.packaged})` : 'fonte (dev)'}`, `iniciada: ${state.createdAt}`].join('\n') }
+function formatState(state, alive) { return [`sessão: ${alive ? 'ativa' : 'encerrada'}`, `pid: ${state.pid}`, `porta CDP: ${state.port}`, `perfil: ${state.realProfile ? 'real (explícito)' : 'isolado'}`, `origem: ${state.packaged ? `empacotado (${state.packaged})` : 'fonte (dev)'}`, `iniciada: ${state.createdAt}`, ...(state.vitePort ? [`porta Vite: ${state.vitePort}`] : []), ...(state.worktree ? [`worktree: ${state.worktree}`] : [])].join('\n') }
 async function executarDevtools(args, deps = {}) {
   let parsed
   try { parsed = parseArgs(args) } catch (error) { return { saida: '', erro: error.message, codigo: 2 } }
@@ -383,9 +419,9 @@ async function executarDevtools(args, deps = {}) {
     if (command === 'launch') { const state = await launch(options, deps); return { saida: `Sessão DevTools ativa na porta ${state.port}.\nPerfil: ${state.realProfile ? 'real (explícito)' : 'isolado'}.\nOrigem: ${state.packaged ? `empacotado (${state.packaged})` : 'fonte (dev)'}.${state.aviso ? `
 ${state.aviso}` : ''}`, codigo: 0 } }
     const state = readState(deps)
-    if (command === 'status') return state ? { saida: formatState(state, isProcessAlive(state.pid, deps)), codigo: isProcessAlive(state.pid, deps) ? 0 : 1 } : { saida: 'Nenhuma sessão DevTools registrada.', codigo: 1 }
+    if (command === 'status') return state ? { saida: formatState(state, isProcessAlive(state.pid, deps)), codigo: isProcessAlive(state.pid, deps) ? 0 : 1 } : { saida: 'Nenhuma sessão DevTools registrada para esta worktree.', codigo: 1 }
     if (command === 'quit') {
-      if (!state) return { saida: 'Nenhuma sessão DevTools registrada.', codigo: 0 }
+      if (!state) return { saida: 'Nenhuma sessão DevTools registrada para esta worktree.', codigo: 0 }
       killTree(state.pid, deps); if (state.vitePid) killTree(state.vitePid, deps)
       if (!state.realProfile) await removeIsolatedProfile(state.userData, deps)
       removeState(deps); return { saida: 'Sessão DevTools encerrada.', codigo: 0 }
@@ -406,4 +442,4 @@ ${state.aviso}` : ''}`, codigo: 0 } }
   } catch (error) { return { saida: '', erro: error?.message ?? 'Falha no DevTools.', codigo: 1 } }
 }
 
-module.exports = { AJUDA_DEVTOOLS, STATE_FILE, assertPortAvailable, captureHeapSnapshot, connect, escolherPagina, executarDevtools, findFreePort, formatState, isProcessAlive, metricsListToObject, parseArgs, profileLooksInUse, readState, requirePackagedExecutable, waitForCdp, writeState }
+module.exports = { AJUDA_DEVTOOLS, STATE_ROOT, stateDir, viteBasePort, worktreeHash, assertPortAvailable, captureHeapSnapshot, connect, escolherPagina, executarDevtools, findFreePort, formatState, isProcessAlive, metricsListToObject, parseArgs, profileLooksInUse, readState, requirePackagedExecutable, waitForCdp, writeState }

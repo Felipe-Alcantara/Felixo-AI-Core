@@ -19,6 +19,11 @@ function felixoDevMarkerPlugin(): Plugin {
         res.setHeader('Content-Type', 'text/plain')
         res.end(FELIXO_DEV_MARKER)
       })
+      // Diz de qual pasta app/ este Vite serve: o `felixo devtools` só reaproveita o da própria worktree.
+      server.middlewares.use('/__felixo_dev_root', (_req, res) => {
+        res.setHeader('Content-Type', 'text/plain')
+        res.end(server.config.root)
+      })
     },
   }
 }
@@ -184,7 +189,8 @@ export default defineConfig({
   },
   server: {
     host: '127.0.0.1',
-    port: 5173,
+    // FELIXO_VITE_PORT: o `felixo devtools` dá a cada worktree a sua porta; sem ele, 5173 como sempre.
+    port: Number(process.env.FELIXO_VITE_PORT) || 5173,
     strictPort: true,
   },
 })

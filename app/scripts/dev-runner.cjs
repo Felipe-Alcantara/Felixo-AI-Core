@@ -26,10 +26,10 @@ const REPO_DIR = path.join(APP_DIR, '..')
 const VITE_ENTRY = path.join(APP_DIR, 'node_modules', 'vite', 'bin', 'vite.js')
 const ELECTRON_ENTRY = path.join(__dirname, 'start-electron.cjs')
 
-function fetchMarker({ httpGet = http.get } = {}) {
+function fetchMarker({ httpGet = http.get, port = PORT, path: pathname = MARKER_PATH } = {}) {
   return new Promise((resolve, reject) => {
     const request = httpGet(
-      { host: HOST, port: PORT, path: MARKER_PATH, timeout: 2_000 },
+      { host: HOST, port, path: pathname, timeout: 2_000 },
       (response) => {
         let body = ''
         response.setEncoding?.('utf8')
@@ -49,10 +49,10 @@ function fetchMarker({ httpGet = http.get } = {}) {
   })
 }
 
-async function probeFelixoVite({ fetch = fetchMarker } = {}) {
+async function probeFelixoVite({ fetch = fetchMarker, port = PORT } = {}) {
   let result
   try {
-    result = await fetch()
+    result = await fetch({ port })
   } catch (error) {
     return { status: 'down', error }
   }
@@ -72,6 +72,7 @@ function decidirAcaoDoVite(probe) {
 
 async function waitForFelixoVite({
   probe = probeFelixoVite,
+  port = PORT,
   timeoutMs = TIMEOUT_MS,
   pollIntervalMs = POLL_INTERVAL_MS,
   sleep = (delay) => new Promise((resolve) => setTimeout(resolve, delay)),
@@ -84,7 +85,7 @@ async function waitForFelixoVite({
 
     if (result.status === 'foreign') {
       throw new Error(
-        `A porta ${PORT} está ocupada por outro processo; o marcador do Felixo não respondeu.`,
+        `A porta ${port} está ocupada por outro processo; o marcador do Felixo não respondeu.`,
       )
     }
 
@@ -92,7 +93,7 @@ async function waitForFelixoVite({
   }
 
   throw new Error(
-    `Timeout esperando o Vite do Felixo em http://${HOST}:${PORT}${MARKER_PATH}.`,
+    `Timeout esperando o Vite do Felixo em http://${HOST}:${port}${MARKER_PATH}.`,
   )
 }
 
