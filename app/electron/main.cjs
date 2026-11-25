@@ -197,6 +197,7 @@ const {
 } = require('./core/graphics-mode.cjs')
 const {
   clearGraphicsRecommendation,
+  createGpuCrashRecorder,
   dismissGraphicsRecommendation,
   evaluateGpuAfterReady,
   readGraphicsRecommendation,
@@ -521,6 +522,18 @@ app.whenReady().then(async () => {
       keepWatching: true,
       alreadyUsingSoftwareRendering: useSoftwareRendering,
     }).catch(() => {})
+    // Driver instável derruba o processo de GPU no meio do uso, não no boot:
+    // a 2ª queda da sessão grava a recomendação (a sessão segue como está).
+    if (!useSoftwareRendering) {
+      const gpuCrashRecorder = createGpuCrashRecorder({ userDataPath: app.getPath('userData') })
+      app.on('child-process-gone', (_event, details) => {
+        try {
+          gpuCrashRecorder.record(details)
+        } catch (error) {
+          console.error('[felixo] falha ao gravar a recomendação por queda da GPU:', error)
+        }
+      })
+    }
   }
 
   const appPaths = initAppPaths()

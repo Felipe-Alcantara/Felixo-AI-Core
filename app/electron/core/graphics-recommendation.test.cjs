@@ -8,6 +8,7 @@ const { createGpuInfoWatcher } = require('./gpu-info-watcher.cjs')
 
 const {
   clearGraphicsRecommendation,
+  createGpuCrashRecorder,
   dismissGraphicsRecommendation,
   evaluateGpuAfterReady,
   persistGraphicsRecommendation,
@@ -381,7 +382,10 @@ test('recomendação recusada: o MESMO sinal não volta a incomodar no próximo 
   // A pessoa recusa (equivalente ao IPC graphics:dismiss-recommendation).
   dismissGraphicsRecommendation('/perfil', fileSystem)
   assert.equal(readGraphicsRecommendation('/perfil', fileSystem), null)
-  assert.deepEqual(readDismissedSignal('/perfil', fileSystem), ['gpu_compositing'])
+  assert.deepEqual(readDismissedSignal('/perfil', fileSystem), {
+    reason: 'gpu-feature-disabled',
+    disabledFeatures: ['gpu_compositing'],
+  })
 
   // Boot 2: MESMO sinal (o driver continua exatamente igual) — fica quieto,
   // não persiste recomendação nova nenhuma.
@@ -470,4 +474,60 @@ test('recomendação aceita: persistGraphicsMode grava o que o próximo boot vai
   assert.equal(proximoBoot.mode, 'software')
   assert.equal(proximoBoot.useSoftwareRendering, true)
   assert.equal(proximoBoot.source, 'profile')
+})
+
+const gpuGone = (reason = 'killed') => ({ type: 'GPU', reason })
+
+test('createGpuCrashRecorder: uma queda isolada não recomenda; a segunda grava gpu-process-crashed', () => {
+  const fileSystem = fakeFileSystem()
+  const recorder = createGpuCrashRecorder({ userDataPath: '/perfil', now: () => 'T', fileSystem })
+
+  assert.equal(recorder.record(gpuGone()), false)
+  assert.equal(readGraphicsRecommendation('/perfil', fileSystem), null)
+
+  assert.equal(recorder.record(gpuGone('crashed')), true)
+  assert.deepEqual(readGraphicsRecommendation('/perfil', fileSystem), {
+    reason: 'gpu-process-crashed',
+    disabledFeatures: [],
+    detectedAt: 'T',
+  })
+  assert.equal(recorder.count(), 2)
+})
+
+test('createGpuCrashRecorder: ignora outros processos e saída limpa', () => {
+  const fileSystem = fakeFileSystem()
+  const recorder = createGpuCrashRecorder({ userDataPath: '/perfil', fileSystem })
+  recorder.record({ type: 'Utility', reason: 'crashed' })
+  recorder.record({ type: 'GPU', reason: 'clean-exit' })
+  recorder.record({ type: 'GPU', reason: 'clean-exit' })
+  assert.equal(recorder.count(), 0)
+  assert.equal(readGraphicsRecommendation('/perfil', fileSystem), null)
+})
+
+test('createGpuCrashRecorder: recusa anterior da recomendação por queda mantém silêncio', () => {
+  const fileSystem = fakeFileSystem()
+  const first = createGpuCrashRecorder({ userDataPath: '/perfil', fileSystem })
+  first.record(gpuGone())
+  first.record(gpuGone())
+  dismissGraphicsRecommendation('/perfil', fileSystem)
+
+  const second = createGpuCrashRecorder({ userDataPath: '/perfil', fileSystem })
+  second.record(gpuGone())
+  assert.equal(second.record(gpuGone()), false)
+  assert.equal(readGraphicsRecommendation('/perfil', fileSystem), null)
+})
+
+test('abertura saudável seguinte não apaga a recomendação por queda do processo de GPU', async () => {
+  const fileSystem = fakeFileSystem()
+  const recorder = createGpuCrashRecorder({ userDataPath: '/perfil', fileSystem })
+  recorder.record(gpuGone())
+  recorder.record(gpuGone())
+
+  const verdict = await evaluateGpuAfterReady({
+    userDataPath: '/perfil',
+    getGPUFeatureStatus: () => HEALTHY,
+    fileSystem,
+  })
+  assert.equal(verdict.recommended, false)
+  assert.equal(readGraphicsRecommendation('/perfil', fileSystem)?.reason, 'gpu-process-crashed')
 })

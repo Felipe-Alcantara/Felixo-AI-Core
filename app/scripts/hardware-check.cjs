@@ -51,7 +51,7 @@
  *   "Usar modo compatível", a 3ª abre em software pelo modo salvo no perfil e
  *   "GPU normal" volta ao caminho acelerado; cada abertura mede os pixels da
  *   janela (`screenStats`/`looksBlack`) para provar que não ficou preta.
- * - `gpu-caiu`: derruba o processo de GPU 3 vezes no meio da sessão e mede a
+ * - `gpu-caiu`: derruba o processo de GPU 3 vezes no meio da sessão, exige a recomendação gravada e visível na 2ª abertura, e mede a
  *   janela depois de cada queda; registra o que o Chromium passou a usar e se
  *   o app gravou recomendação.
  *
@@ -1009,6 +1009,16 @@ async function gpuCrashScenario(options) {
     result.cenario = 'gpu-caiu'
     result.cdp = result.quedas.at(-1)?.cdp ?? result.antes.cdp
     result.falhas = []
+    if (!result.recomendacao) {
+      result.falhas.push('as quedas do processo de GPU não gravaram a recomendação do modo compatível')
+    } else {
+      // 2ª abertura: a recomendação gravada pelas quedas aparece em Configurações.
+      result.recomendacaoNaAbertura = await withApp(options, profile, {}, async ({ page }) => {
+        await openRenderingSection(page)
+        return page.evaluate(() => document.body.innerText.includes('Modo compatível recomendado'))
+      })
+      if (!result.recomendacaoNaAbertura) result.falhas.push('a recomendação não apareceu em Configurações na 2ª abertura')
+    }
     if (!result.quedas.some((queda) => queda.mortos?.length)) {
       result.falhas.push('a simulação não achou o processo de GPU para derrubar (cenário sem efeito)')
     }

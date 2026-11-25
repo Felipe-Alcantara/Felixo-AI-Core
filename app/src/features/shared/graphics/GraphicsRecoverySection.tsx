@@ -12,7 +12,7 @@ const GRAPHICS_MODE_OPTIONS: FelixoSelectOption[] = [
 ]
 
 type GraphicsRecommendation = {
-  reason: 'gpu-feature-disabled'
+  reason: 'gpu-feature-disabled' | 'gpu-process-crashed'
   disabledFeatures: string[]
   detectedAt: string | null
 }
@@ -144,10 +144,10 @@ export function GraphicsRecoverySection() {
             Modo compatível recomendado
           </div>
           <p className="mt-1 text-[11px] leading-relaxed text-(--color-warning)">
-            Numa abertura anterior, o driver de vídeo recusou{' '}
-            {config.recommendation.disabledFeatures.join(', ')}. Isso costuma
-            causar tela preta ou travamento na janela. Recomendamos trocar
-            pro modo compatível (sem GPU).
+            {config.recommendation.reason === 'gpu-process-crashed'
+              ? 'Numa abertura anterior, o processo de vídeo do app caiu mais de uma vez. Isso costuma ser driver instável e causar tela preta ou travamento na janela.'
+              : `Numa abertura anterior, o driver de vídeo recusou ${config.recommendation.disabledFeatures.join(', ')}. Isso costuma causar tela preta ou travamento na janela.`}{' '}
+            Recomendamos trocar pro modo compatível (sem GPU).
           </p>
           <div className="mt-2 flex gap-2">
             <button

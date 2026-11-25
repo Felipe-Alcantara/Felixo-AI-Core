@@ -13,6 +13,12 @@ const GRAPHICS_DISMISSED_SIGNAL_FILE = 'graphics-dismissed-signal.json'
 // Medido em 26/09/2026 (Electron 41.10.7, --use-angle=d3d11): o segundo evento
 // chegou 41 ms depois do primeiro, trocando `enabled` por `disabled_software`.
 const GPU_STATUS_SETTLE_MS = 2_000
+// Uma queda isolada do processo de GPU pode ser atualização de driver; a partir
+// de 2 na mesma sessão é driver instável.
+const GPU_CRASH_THRESHOLD = 2
+const REASON_FEATURE_DISABLED = 'gpu-feature-disabled'
+const REASON_PROCESS_CRASHED = 'gpu-process-crashed'
+const KNOWN_REASONS = [REASON_FEATURE_DISABLED, REASON_PROCESS_CRASHED]
 
 /**
  * @module graphics-recommendation
@@ -28,14 +34,14 @@ function getRecommendationPath(userDataPath) {
   return path.join(userDataPath, GRAPHICS_RECOMMENDATION_FILE)
 }
 
-/** @returns {{ reason: 'gpu-feature-disabled', disabledFeatures: string[], detectedAt: string } | null} */
+/** @returns {{ reason: 'gpu-feature-disabled' | 'gpu-process-crashed', disabledFeatures: string[], detectedAt: string } | null} */
 function readGraphicsRecommendation(userDataPath, fileSystem = fs) {
   const filePath = getRecommendationPath(userDataPath)
   if (!filePath) return null
 
   try {
     const payload = JSON.parse(fileSystem.readFileSync(filePath, 'utf8'))
-    if (!payload || typeof payload !== 'object' || payload.reason !== 'gpu-feature-disabled') {
+    if (!payload || typeof payload !== 'object' || !KNOWN_REASONS.includes(payload.reason)) {
       return null
     }
     return {
@@ -78,19 +84,21 @@ function readDismissedSignal(userDataPath, fileSystem = fs) {
   if (!filePath) return null
   try {
     const payload = JSON.parse(fileSystem.readFileSync(filePath, 'utf8'))
-    return Array.isArray(payload?.disabledFeatures) ? payload.disabledFeatures : null
+    if (!Array.isArray(payload?.disabledFeatures)) return null
+    // Arquivos antigos não têm `reason`: eram sempre feature desligada.
+    return { reason: payload.reason ?? REASON_FEATURE_DISABLED, disabledFeatures: payload.disabledFeatures }
   } catch {
     return null
   }
 }
 
-function persistDismissedSignal({ userDataPath, disabledFeatures, fileSystem = fs }) {
+function persistDismissedSignal({ userDataPath, reason, disabledFeatures, fileSystem = fs }) {
   const filePath = getDismissedSignalPath(userDataPath)
   if (!filePath) return
   fileSystem.mkdirSync(path.dirname(filePath), { recursive: true })
   fileSystem.writeFileSync(
     filePath,
-    `${JSON.stringify({ disabledFeatures }, null, 2)}\n`,
+    `${JSON.stringify({ reason, disabledFeatures }, null, 2)}\n`,
     'utf8',
   )
 }
@@ -112,7 +120,12 @@ function dismissGraphicsRecommendation(userDataPath, fileSystem = fs) {
   const current = readGraphicsRecommendation(userDataPath, fileSystem)
   clearGraphicsRecommendation(userDataPath, fileSystem)
   if (current) {
-    persistDismissedSignal({ userDataPath, disabledFeatures: current.disabledFeatures, fileSystem })
+    persistDismissedSignal({
+      userDataPath,
+      reason: current.reason,
+      disabledFeatures: current.disabledFeatures,
+      fileSystem,
+    })
   }
 }
 
@@ -200,8 +213,11 @@ async function evaluateGpuAfterReady({
     }
     // Mesmo sinal que a pessoa já recusou explicitamente — fica quieto. Só um
     // sinal DIFERENTE (outra feature quebrou) justifica perguntar de novo.
-    const dismissedFeatures = readDismissedSignal(userDataPath, fileSystem)
-    if (dismissedFeatures && sameFeatureSet(dismissedFeatures, signal.disabledFeatures)) {
+    const dismissed = readDismissedSignal(userDataPath, fileSystem)
+    if (
+      dismissed?.reason === signal.reason &&
+      sameFeatureSet(dismissed.disabledFeatures, signal.disabledFeatures)
+    ) {
       seen.dismissed = true
       return
     }
@@ -232,7 +248,11 @@ async function evaluateGpuAfterReady({
   else if (seen.dismissed) verdict = { evaluated: true, recommended: false, dismissed: true }
   else if (!seen.healthy) verdict = { evaluated: false, recommended: false }
   else {
-    clearGraphicsRecommendation(userDataPath, fileSystem)
+    // A recomendação por queda do processo de GPU é de uma sessão anterior e
+    // não some só porque esta abertura subiu saudável: só aceite/recusa a tiram.
+    if (readGraphicsRecommendation(userDataPath, fileSystem)?.reason !== REASON_PROCESS_CRASHED) {
+      clearGraphicsRecommendation(userDataPath, fileSystem)
+    }
     verdict = { evaluated: true, recommended: false }
   }
 
@@ -248,7 +268,45 @@ async function evaluateGpuAfterReady({
   return verdict
 }
 
+/**
+ * Conta as quedas do processo de GPU (`app.on('child-process-gone')`) na
+ * sessão e, ao chegar no limite, grava a recomendação — sem aplicar nada na
+ * sessão corrente. Respeita a recusa anterior ("Manter GPU normal").
+ *
+ * @returns {{ record: (details: { type?: string, reason?: string }) => boolean, count: () => number }}
+ */
+function createGpuCrashRecorder({
+  userDataPath,
+  threshold = GPU_CRASH_THRESHOLD,
+  now = () => new Date().toISOString(),
+  fileSystem = fs,
+} = {}) {
+  let crashes = 0
+  return {
+    count: () => crashes,
+    /** @returns {boolean} true se gravou a recomendação nesta chamada. */
+    record(details) {
+      if (details?.type !== 'GPU' || details.reason === 'clean-exit') return false
+      crashes += 1
+      if (crashes < threshold) return false
+      const dismissed = readDismissedSignal(userDataPath, fileSystem)
+      if (dismissed?.reason === REASON_PROCESS_CRASHED) return false
+      if (readGraphicsRecommendation(userDataPath, fileSystem)?.reason === REASON_PROCESS_CRASHED) return false
+      persistGraphicsRecommendation({
+        userDataPath,
+        reason: REASON_PROCESS_CRASHED,
+        disabledFeatures: [],
+        detectedAt: now(),
+        fileSystem,
+      })
+      return true
+    },
+  }
+}
+
 module.exports = {
+  GPU_CRASH_THRESHOLD,
+  createGpuCrashRecorder,
   GPU_STATUS_SETTLE_MS,
   GRAPHICS_DISMISSED_SIGNAL_FILE,
   GRAPHICS_RECOMMENDATION_FILE,

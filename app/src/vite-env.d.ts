@@ -452,7 +452,7 @@ declare global {
             persistedMode: 'auto' | 'hardware' | 'software' | null
             /** Sugestão pendente, detectada num boot anterior por sinal real de GPU — null quando não há nenhuma. */
             recommendation: {
-              reason: 'gpu-feature-disabled'
+              reason: 'gpu-feature-disabled' | 'gpu-process-crashed'
               disabledFeatures: string[]
               detectedAt: string | null
             } | null
