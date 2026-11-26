@@ -197,7 +197,10 @@ principal (`major.minor.patch`) entre eles e, dentro dela, a publicada por últi
 (`chooseNewestPublishedVersion`), inclusive pré-lançamento. Versões que
 são o binário de uma plataforma (o Codex publica `0.162.1-win32-x64` como versão do
 próprio pacote) ficam de fora. O hash vem de `npm view <pacote>@<versão>
-dist.integrity`. O alvo é comparado com o `package.json` da cópia no prefixo
+dist.integrity`. Cada uma dessas consultas tem 30 s
+(`LATEST_LOOKUP_TIMEOUT_MS`) e, se estourar, roda de novo num processo novo com
+90 s; erro do npm não repete. O log `cli:auto-install` guarda a duração quando a
+resposta só veio na segunda consulta ou não veio. O alvo é comparado com o `package.json` da cópia no prefixo
 gerenciado (`planAutoInstall`) e com a instalação do npm global do sistema, achada
 por `npm root --global` do npm do PATH (`system-cli-update.cjs` e
 `planSystemUpdates`). A do sistema só é atualizada com alvo confirmado no registry,

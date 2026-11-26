@@ -782,6 +782,9 @@ async function resolveLatestPackages({
         }
       }
 
+      // A duração vai para o log: é o que falta para saber por que a consulta
+      // da abertura às vezes não responde na primeira janela.
+      const startedAt = Date.now()
       try {
         const latest = await resolveLatestPackage({
           npmPackage: fallback.npmPackage,
@@ -792,6 +795,14 @@ async function resolveLatestPackages({
         })
 
         if (latest?.ok && latest.version && latest.integrity) {
+          if (latest.retried) {
+            logQaEvent({
+              level: 'warn',
+              scope: 'cli:auto-install',
+              message: 'Registry respondeu so na segunda consulta.',
+              details: { id: cli.id, durationMs: Date.now() - startedAt },
+            })
+          }
           return {
             id: cli.id,
             npmPackage: latest.npmPackage ?? fallback.npmPackage,
@@ -801,9 +812,9 @@ async function resolveLatestPackages({
           }
         }
 
-        logLatestFallback(cli.id, latest?.message)
+        logLatestFallback(cli.id, latest?.message, Date.now() - startedAt)
       } catch (error) {
-        logLatestFallback(cli.id, getErrorMessage(error, 'erro desconhecido'))
+        logLatestFallback(cli.id, getErrorMessage(error, 'erro desconhecido'), Date.now() - startedAt)
       }
 
       return {
@@ -817,13 +828,14 @@ async function resolveLatestPackages({
   )
 }
 
-function logLatestFallback(id, reason) {
+function logLatestFallback(id, reason, durationMs) {
   logQaEvent({
     level: 'warn',
     scope: 'cli:auto-install',
     message: 'Registry indisponivel; usando o manifesto de fallback da CLI.',
     details: {
       id,
+      durationMs,
       reason: redactDiagnosticText(reason ?? 'motivo desconhecido', { homeDir: os.homedir() }),
     },
   })

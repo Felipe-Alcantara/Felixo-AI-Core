@@ -21,6 +21,7 @@ const { compareCliVersions, coreVersion } = require('./cli-auto-install-plan.cjs
 
 const INSTALL_TIMEOUT_MS = 10 * 60 * 1000
 const LATEST_LOOKUP_TIMEOUT_MS = 30 * 1000
+const LOOKUP_RETRY_WINDOW_FACTOR = 3
 const OUTPUT_LIMIT = 12000
 
 /**
@@ -256,21 +257,30 @@ async function resolveLatestManagedPackage({
   killTree = killProcessTree,
 }) {
   const env = createManagedInstallEnv({ layout, platformName })
-  const query = (args, successMessage, failureMessage, outputLimit) =>
-    runCommand({
-      outputLimit,
-      command: nodeExecutable,
-      args,
-      env,
-      cwd: layout.root,
-      signal,
-      spawn,
-      timeoutMs,
-      platformName,
-      killTree,
-      successMessage,
-      failureMessage,
-    })
+  let retried = false
+  const query = async (args, successMessage, failureMessage, outputLimit) => {
+    const attempt = (windowMs) =>
+      runCommand({
+        outputLimit,
+        command: nodeExecutable,
+        args,
+        env,
+        cwd: layout.root,
+        signal,
+        spawn,
+        timeoutMs: windowMs,
+        platformName,
+        killTree,
+        successMessage,
+        failureMessage,
+      })
+    const first = await attempt(timeoutMs)
+    if (!first.timedOut) return first
+    // Na abertura a consulta às vezes estoura a janela e responde minutos depois:
+    // um processo novo, com mais tempo, evita cair no manifesto à toa.
+    retried = true
+    return attempt(timeoutMs * LOOKUP_RETRY_WINDOW_FACTOR)
+  }
 
   const tagsResult = await query(
     createNpmViewChannelsArgs({ npmCliPath, npmPackage }),
@@ -315,6 +325,7 @@ async function resolveLatestManagedPackage({
     version: newest.version,
     integrity,
     tag: newest.tag,
+    retried,
     message: `${npmPackage}@${newest.version} é a versão mais nova publicada (canal ${newest.tag}).`,
     // O mapa de datas é enorme e não serve para diagnóstico.
     output: '',

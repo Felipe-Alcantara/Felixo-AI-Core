@@ -331,6 +331,69 @@ describe('managed-cli-installer', () => {
     assert.equal(result.ok, false)
     assert.match(result.message, /hash/)
   })
+
+  const HASH = 'sha512-NWZdi/kxyjv/8EUGFupziGU38YyleugZRM4JXgY5XFH7FUmaFA33NZS2Bmq0HPazf7S3jJQQWsZ/jAK9jsrV3Q=='
+  // `atrasos[n]` é quanto a n-ésima consulta demora; `null` nunca responde.
+  const consultarComAtrasos = async (atrasos, { codigo = 0 } = {}) => {
+    const calls = []
+    const result = await resolveLatestManagedPackage({
+      npmPackage: '@anthropic-ai/claude-code',
+      npmCliPath: '/npm/bin/npm-cli.js',
+      nodeExecutable: '/opt/app/felixo',
+      layout: LAYOUT,
+      timeoutMs: 200,
+      killTree: async () => {},
+      spawn: (command, args) => {
+        const atraso = atrasos[calls.length]
+        calls.push(args)
+        const child = new EventEmitter()
+        child.stdout = new EventEmitter()
+        child.stderr = new EventEmitter()
+        if (atraso !== null) {
+          setTimeout(() => {
+            child.stdout.emit('data', args.includes('dist-tags') ? JSON.stringify(CANAIS_CLAUDE) : `${HASH}\n`)
+            child.emit('close', codigo)
+          }, atraso ?? 0)
+        }
+        return child
+      },
+    })
+    return { result, calls }
+  }
+
+  it('repete a consulta que passou do tempo, com uma janela maior', async () => {
+    // A segunda demora mais que a primeira janela (200) e menos que a segunda (600).
+    const { result, calls } = await consultarComAtrasos([null, 400, 0])
+
+    assert.equal(result.ok, true, result.message)
+    assert.equal(result.version, '2.1.300')
+    assert.equal(result.retried, true)
+    assert.equal(calls.length, 3)
+    assert.deepEqual(calls[1], calls[0])
+  })
+
+  it('repete também a consulta do hash', async () => {
+    const { result, calls } = await consultarComAtrasos([0, null, 0])
+
+    assert.equal(result.ok, true, result.message)
+    assert.equal(result.retried, true)
+    assert.equal(calls.length, 3)
+  })
+
+  it('desiste depois da segunda consulta sem resposta', async () => {
+    const { result, calls } = await consultarComAtrasos([null, null])
+
+    assert.equal(result.ok, false)
+    assert.match(result.message, /tempo limite/)
+    assert.equal(calls.length, 2)
+  })
+
+  it('não repete consulta que falhou por erro do npm', async () => {
+    const { result, calls } = await consultarComAtrasos([0], { codigo: 1 })
+
+    assert.equal(result.ok, false)
+    assert.equal(calls.length, 1)
+  })
 })
 
 // Canais reais medidos no registry em 14/10/2026 (o Codex resumido: ele publica
